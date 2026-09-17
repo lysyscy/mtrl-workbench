@@ -4871,7 +4871,12 @@ function adaptNotice(x) {
        做同值比较，而 `dataset` 出来的永远是字符串。后端给的是数字 ⇒ 不转就会**静默失配**
        （实测：勾选后汇总条恒为 0）⇒ 在这**一处**转，下游一行都不用改。 */
     id: String(x.notice_id), date: x.doc_date, code: x.bill_no,
-    proj: x.project_display || x.project_name, doc: x.bill_name,
+    /* ⚠️⚠️ **必须是「项目全名」**（`project_name`），**不能**用 `project_display`（那是**展示名**）——
+       `ownOf(n)` 拿它做 `PJs.find(p => p.full === n.proj)`（**全名等值**匹配），
+       还会做 `isShellFull(n.proj)`（判是不是壳，靠名字里的「小微」）与 `matchKids(n.proj, n.doc)`。
+       填展示名 ⇒ 三条**全部静默失配** ⇒ 归属判不出 ⇒ 「项目筛选」候选**一个都没有**（实测报障）。
+       ⭐ 归属的权威值走 `x.ownership_id`（见 `reloadNotices()` 灌进 `OWN`），`proj` 只作兜底。 */
+    proj: x.project_name || x.project_display, doc: x.bill_name,
     biz: x.biz_type, recv: x.payee, entry: x.input_by,
     approve: numOr0(x.amount_approved), pay: numOr0(x.pay_amount),
     ss: numOr0(x.stat_settle), sp: numOr0(x.stat_paid),
@@ -4920,7 +4925,17 @@ function adaptTrail(l) {
 /* 写动作成功后**以后端为准**重拉（⛔ 前端不自己造状态 —— 否则前后端各一份、必漂） */
 async function reloadNotices() {
   const nt = await API.notices();
-  NO = (nt.items || []).map(adaptNotice);
+  const items = nt.items || [];
+  NO = items.map(adaptNotice);
+  /* ⭐⭐ 「归属」缓存 `OWN`（`通知书 id → 项目档案行 id`）—— **后端 `ownership_id` 是权威值**，
+     每次重拉都按它重建。⛔ 这里以前是空的（只在原型的手动新增/归集动作里写），
+     后果 = `ownOf(n)` 退化成"拿全名去档案里反查"⇒ 只要全名有一点差异（或还没入库）
+     **归属就判不出** ⇒ 「项目筛选」候选一个都没有（实测报障）。
+     ⚠️ **原地清空**、不 `OWN={}` 重新赋值（防外部持有旧引用 —— 壳里的既有教训）。 */
+  Object.keys(OWN).forEach(k => delete OWN[k]);
+  items.forEach(x => {
+    if (x.ownership_id != null) OWN[String(x.notice_id)] = String(x.ownership_id);
+  });
   render();
 }
 
@@ -5274,9 +5289,7 @@ async function boot() {
   };
   /* ⚠️ 顺序有依赖：`reloadMech`、`reloadInv` 都在 `reloadM05` **之前** —— m05 的机械欠款与
      材料/机械数据由它们派生（顺序写反 ⇒ m05 取到空值，且**不报错**）。 */
-  await soft('付款通知书', async () => {
-    const nt = await API.notices(); NO = (nt.items || []).map(adaptNotice);
-  });
+  await soft('付款通知书', reloadNotices);      /* ⚠️ 走同一个出口：它还会重建「归属」缓存 `OWN` */
   await soft('项目档案', async () => {
     const pj = await API.projects(); PJs = (pj || []).map(adaptProject);
   });
