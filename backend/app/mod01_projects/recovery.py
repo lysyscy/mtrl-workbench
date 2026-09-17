@@ -43,6 +43,16 @@ def _norm(value) -> str:
     return norm_full_name(str(value or ""))
 
 
+def unknown_warehouses(session: Session, rows) -> list[str]:
+    """导出里出现、但**项目档案里没有**的仓库名（《说明书》§2.5「找不到 = 陌生仓库」）。
+
+    ⚠️ **唯一出口** —— 收发结存 / 库存单据两条链路共用这一份（别各写一份差集）。
+    """
+    known = {str(getattr(p, "warehouse_name", "") or "") for p in all_projects(session)}
+    seen = {str(r.get("warehouse_name") or "") for r in (rows or ()) if r.get("warehouse_name")}
+    return sorted(seen - known)
+
+
 def plan_recovery(
     *,
     unknown_wh,
@@ -203,4 +213,27 @@ def recover_unknown_warehouses(
             "unresolved_items": failures, "degraded": False, "message": msg}
 
 
-__all__ = ["PLAN_KEYS", "plan_recovery", "counts_of", "recover_unknown_warehouses"]
+def summary_text(result: dict | None) -> str:
+    """把一次自动建档的摘要变成**回执里给人看的一句**（**没有动作也没有待办 ⇒ 空串**）。
+
+    ⚠️ **逐条列出**（禁静默）：扶正了哪几行、新建了哪几行、还有哪几条要人看 —— 一条不省。
+    """
+    r = result or {}
+    parts: list[str] = []
+    promoted = r.get("promoted") or []
+    created = r.get("created") or []
+    if promoted:
+        parts.append(f"自动扶正 {len(promoted)} 行（{'；'.join(promoted)}）")
+    if created:
+        parts.append(f"自动建档 {len(created)} 行（{'；'.join(created)}）")
+    items = r.get("unresolved_items") or []
+    if items:
+        detail = "；".join(f"{i.get('warehouse_name')}：{i.get('reason')}" for i in items)
+        parts.append(f"⚠️ 待人工 {len(items)} 条（{detail}）")
+    if r.get("degraded") and r.get("message"):
+        parts.append(str(r["message"]))
+    return "；".join(parts)
+
+
+__all__ = ["PLAN_KEYS", "unknown_warehouses", "plan_recovery", "counts_of",
+           "recover_unknown_warehouses", "summary_text"]

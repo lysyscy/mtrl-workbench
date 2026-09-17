@@ -119,4 +119,18 @@ class CommonProjectSource:
         return rows
 
 
-__all__ = ["WarehouseSource", "CommonProjectSource", "WH_PARAMS", "WH_LIMIT"]
+def load_warehouse_rows(client) -> list[dict] | None:
+    """取一次**仓库名单**（`API-05`）—— **复用调用方已有的登录会话**（不额外登录、不重复强踢）。
+
+    ⚠️ **失败返回 `None`、不抛**：调用方（抓取编排）走到这一步时数据**已经入库**，
+       建档只是**补档案**，绝不能反过来把抓取拖挂。
+       口径见《说明书》**§2.4.2 链路 B**（`ACC-PRJ-AUTO-001`）。
+    """
+    try:
+        return WarehouseSource(client).fetch()
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+__all__ = ["WarehouseSource", "CommonProjectSource", "WH_PARAMS", "WH_LIMIT",
+           "load_warehouse_rows"]

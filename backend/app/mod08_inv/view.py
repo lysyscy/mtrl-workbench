@@ -218,12 +218,15 @@ def _flash_html(flash: dict | None) -> str:
     kind = str(flash.get("kind") or "")
     if kind == "ok":
         st = flash.get("stats") or {}
+        # ⭐ 链路 B：陌生仓库**已自动建档 / 扶正**（`ACC-PRJ-AUTO-001`）—— 逐条说出来，禁静默
+        auto = str(flash.get("auto") or "")
         return (
             '<div class="notice ok">抓取成功：<b>%s</b> 共 <b>%s</b> 行 —— '
             "新增 %s · 更新 %s · 删除 %s · <b>因有调整单而保留 %s</b>（§5.2.4：调整单不被 i8 导出覆盖）"
-            "</div>"
+            "%s</div>"
             % (esc(flash.get("ym")), esc(flash.get("rows")), esc(st.get("inserted")),
-               esc(st.get("updated")), esc(st.get("deleted")), esc(st.get("kept_with_adjustment")))
+               esc(st.get("updated")), esc(st.get("deleted")), esc(st.get("kept_with_adjustment")),
+               ("<br>" + esc(auto)) if auto else "")
         )
     if kind == "degraded":
         return ('<div class="notice wn"><b>已降级为手动 Excel 导入</b>（§3.6）—— %s '

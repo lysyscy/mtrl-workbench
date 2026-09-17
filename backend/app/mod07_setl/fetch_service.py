@@ -6,8 +6,11 @@
 - 《技术栈选型分析》**§9.8**（`rep_id` / `dataSetId` / 项目参数 **`pc`** / **`reportName` = 收发结存表**）
 - 用户裁定 **D9**：抓取一律手动（无定时）· **失败不得自动重试登录** · 抓前须**二次确认并告知会强踢**
 
-⚠️ **陌生仓库**（导出里有、项目档案里没有）**不自动建档**（不臆造），只在回执里**显式列出** ——
-   §5.3 的口径是「找不到即陌生仓库 ⇒ 触发建档 / 扶正」，建档动作归 `MOD-01` 的同步入口。
+⭐ **陌生仓库**（导出里有、项目档案里没有）⇒ **自动建档 / 扶正**（《说明书》§2.4.2 **链路 B**，
+   `ACC-PRJ-AUTO-001`）：**复用本次同一个 i8 会话**取一次仓库名单（**不额外登录、不重复强踢**），
+   再交 `MOD-01` 的 `recovery.recover_unknown_warehouses` 能扶正就扶正、扶不了就按全名新建
+   —— **不要求用户点任何东西**。
+⚠️ 这一步**失败绝不拖垮抓取**（数据此时**已入库**）⇒ 降级进回执并说明「可稍后重抓一次」。
 """
 
 from __future__ import annotations
@@ -16,9 +19,14 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+from app.mod01_projects.recovery import (
+    recover_unknown_warehouses,
+    unknown_warehouses as shared_unknown_warehouses,
+)
 from app.mod02_i8 import fetch_task, report_export
 from app.mod02_i8.client import I8Client, serialize_fetch
 from app.mod02_i8.repository import save_run_record
+from app.mod02_i8.sources import load_warehouse_rows
 from app.mod07_setl import importer
 from app.mod07_setl.repository import upsert_month
 
@@ -48,12 +56,23 @@ def project_ids(s: Session) -> str:
 
 
 def unknown_warehouses(s: Session, rows: list[dict]) -> list[str]:
-    """导出里出现、但**项目档案里没有**的仓库（§5.3「陌生仓库」）—— **只报不建**。"""
-    from app.mod01_projects.repository import all_projects
+    """导出里出现、但**项目档案里没有**的仓库（§2.5「陌生仓库」）—— 实体在 `MOD-01`，此处只是**薄名**。"""
+    return shared_unknown_warehouses(s, rows)
 
-    known = {str(getattr(p, "warehouse_name", "") or "") for p in all_projects(s)}
-    seen = {str(r.get("warehouse_name") or "") for r in rows if r.get("warehouse_name")}
-    return sorted(seen - known)
+
+def _load_wh_rows(client) -> list[dict] | None:
+    """取一次**仓库名单**（`API-05`，**复用本次登录会话**）—— 实体在 `mod02_i8.sources`，此处只是**薄名**。"""
+    return load_warehouse_rows(client)
+
+
+def _wh_loader(wh_rows):
+    """把「已经取到的名单」包成 `recovery` 要的 loader（取不到 ⇒ 抛，由编排转成降级说明）。"""
+    def _load() -> list[dict]:
+        if wh_rows is None:
+            raise RuntimeError("仓库名单（API-05）本次没取到")
+        return wh_rows
+
+    return _load
 
 
 def run_fetch(
@@ -83,11 +102,13 @@ def run_fetch(
         c, spec_key=SPEC_KEY, year_month=ym, proj_ids=ids_))
 
     target = f"{SPEC_KEY} {plan['ym']}（{len(ids.split(','))} 个项目）"
+    wh_rows: list[dict] | None = None
     try:
         with serialize_fetch(TABLE):                    # 同表串行（D9）
             client = client_factory()
             try:
                 content = export(client, plan["ym"], ids)
+                wh_rows = _load_wh_rows(client)          # ⭐ 顺手取仓库名单（链路 B 建档要用；失败⇒None）
             finally:
                 close = getattr(client, "close", None)
                 if callable(close):
@@ -113,10 +134,13 @@ def run_fetch(
 
     stats = upsert_month(s, ym=plan["ym"], rows=rows)
     unknown = unknown_warehouses(s, rows)
+    # ⭐ 链路 B：遇陌生仓库 ⇒ **自动**建档 / 扶正（无感；失败降级，不拖垮抓取）
+    recovery_result = recover_unknown_warehouses(
+        s, unknown_wh=unknown, load_warehouse_rows=_wh_loader(wh_rows), operator=operator)
     run = save_run_record(s, **fetch_task.fetch_record_payload(
         object_desc=target, success=len(rows), fail=0), operator=operator)
     return {"ok": True, "degraded": False, "ym": plan["ym"], "rows": len(rows),
-            "stats": stats, "unknown_warehouses": unknown,
+            "stats": stats, "unknown_warehouses": unknown, "recovery": recovery_result,
             "run_record_id": getattr(run, "id", None)}
 
 

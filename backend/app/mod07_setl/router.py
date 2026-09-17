@@ -100,6 +100,7 @@ async def setl_fetch(request: Request):
     回执三态：`ok`（成功，含条数与陌生仓库）/ `warn`（降级 / 空导出，**未改动数据**）
     / `err`（用法错误：非单月 · 未确认 · 无 phid · 报表登记不全 —— **不发请求、不写执行记录**）。
     """
+    from app.mod01_projects.recovery import summary_text
     from app.mod07_setl import fetch_service as FS
 
     form = await request.form()
@@ -117,9 +118,10 @@ async def setl_fetch(request: Request):
         st = result["stats"]
         msg = (f"抓取成功：{result['ym']} 共 {result['rows']} 行明细 —— 新增 {st['inserted']} · "
                f"更新 {st['updated']} · 删除 {st['deleted']} · 保留人工行 {st['kept_manual']}")
-        if result["unknown_warehouses"]:
-            msg += ("；⚠️ **陌生仓库**（项目档案里没有，未自动建档）："
-                    + "、".join(result["unknown_warehouses"]))
+        # ⭐ 链路 B：陌生仓库**已自动建档 / 扶正**（`ACC-PRJ-AUTO-001`）—— 逐条说出来，禁静默
+        auto = summary_text(result.get("recovery"))
+        if auto:
+            msg += "；" + auto
         return _redirect(back, kind="ok", message=msg, period=result["ym"])
     return _redirect(back, kind="warn", message=result["message"], period=result.get("ym") or month)
 

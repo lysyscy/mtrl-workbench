@@ -31,6 +31,14 @@ class _Result:
     def first(self):
         return self._rows[0] if self._rows else None
 
+    def scalar_one_or_none(self):
+        """聚合出口（`select(func.max(...))` 之类）。
+
+        ⚠️ 桩里**没有真聚合能力** ⇒ 一律 `None`（不假装能算）——
+           调用方那类 `int(x or 0) + 1` 的写法会自然取到 **1**，正是「空表从头开始」的语义。
+        """
+        return None
+
 
 class FakeSession:
     """按**模型类型**分发的最小会话桩（只实现 `service` / `repository` 用到的那点 API）。"""

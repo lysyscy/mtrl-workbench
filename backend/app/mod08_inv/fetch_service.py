@@ -7,6 +7,11 @@
 - 用户裁定 **D9**：**抓取一律手动**（无定时）· **失败不得自动重试登录** · 抓前须**二次确认并告知会强踢**
 
 ⛔ 本模块**不落「是否作废」**（`NG-06`）—— 由 `importer` 在解析阶段丢弃。
+
+⭐ **陌生仓库**（导出里有、项目档案里没有）⇒ **自动建档 / 扶正**（《说明书》§2.4.2 **链路 B**，
+   `ACC-PRJ-AUTO-001`）—— 与 `MOD-07` **共用同一份** `MOD-01.recovery`（**唯一出口**）；
+   **复用本次同一个 i8 会话**取仓库名单（**不额外登录、不重复强踢**），**不要求用户点任何东西**。
+⚠️ 这一步**失败绝不拖垮抓取**（数据此时**已入库**）⇒ 降级进回执并说明「可稍后重抓一次」。
 """
 
 from __future__ import annotations
@@ -15,9 +20,14 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+from app.mod01_projects.recovery import (
+    recover_unknown_warehouses,
+    unknown_warehouses,
+)
 from app.mod02_i8 import fetch_task, report_export
 from app.mod02_i8.client import I8Client, serialize_fetch
 from app.mod02_i8.repository import save_run_record
+from app.mod02_i8.sources import load_warehouse_rows
 from app.mod08_inv import importer
 from app.mod08_inv.repository import upsert_details
 
@@ -59,6 +69,16 @@ def group_by_scope(rows: list[dict]) -> dict[tuple[str, str], list[dict]]:
     return out
 
 
+def _wh_loader(wh_rows):
+    """把「已经取到的名单」包成 `recovery` 要的 loader（取不到 ⇒ 抛，由编排转成**降级说明**）。"""
+    def _load() -> list[dict]:
+        if wh_rows is None:
+            raise RuntimeError("仓库名单（API-05）本次没取到")
+        return wh_rows
+
+    return _load
+
+
 def run_fetch(
     s: Session,
     *,
@@ -84,11 +104,13 @@ def run_fetch(
         c, spec_key=SPEC_KEY, year_month=ym, proj_ids=ids_))
 
     target = f"{SPEC_KEY} {plan['ym']}（{len(ids.split(','))} 个项目）"
+    wh_rows: list[dict] | None = None
     try:
         with serialize_fetch(TABLE):             # 同表串行（D9）
             client = client_factory()
             try:
                 content = export(client, plan["ym"], ids)
+                wh_rows = load_warehouse_rows(client)   # ⭐ 顺手取仓库名单（链路 B 建档要用；失败⇒None）
             finally:
                 close = getattr(client, "close", None)
                 if callable(close):
@@ -109,10 +131,16 @@ def run_fetch(
         for k in stats:
             stats[k] += part[k]
 
+    # ⭐ 链路 B：遇陌生仓库 ⇒ **自动**建档 / 扶正（无感；失败降级，不拖垮抓取）
+    unknown = unknown_warehouses(s, rows)
+    recovery_result = recover_unknown_warehouses(
+        s, unknown_wh=unknown, load_warehouse_rows=_wh_loader(wh_rows), operator=operator)
+
     run = save_run_record(s, **fetch_task.fetch_record_payload(
         object_desc=target, success=len(rows), fail=0), operator=operator)
     return {"ok": True, "degraded": False, "ym": plan["ym"], "rows": len(rows),
-            "stats": stats, "run_record_id": getattr(run, "id", None)}
+            "stats": stats, "unknown_warehouses": unknown, "recovery": recovery_result,
+            "run_record_id": getattr(run, "id", None)}
 
 
 __all__ = ["TABLE", "SPEC_KEY", "CONFIRM_TOKEN", "KICK_WARNING",

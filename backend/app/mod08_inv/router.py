@@ -39,12 +39,13 @@ def _safe_back(back: str) -> str:
 
 @router.get("/m08", response_class=HTMLResponse)
 def inv_page(request: Request, fetch: str = "", ym: str = "", rows: str = "", ins: str = "",
-             upd: str = "", deleted: str = "", kept: str = "", msg: str = ""):
+             upd: str = "", deleted: str = "", kept: str = "", msg: str = "", auto: str = ""):
     flash = None
     if fetch == "ok":
         flash = {"kind": "ok", "ym": ym, "rows": rows,
                  "stats": {"inserted": ins, "updated": upd, "deleted": deleted,
-                           "kept_with_adjustment": kept}}
+                           "kept_with_adjustment": kept},
+                 "auto": auto}
     elif fetch == "degraded":
         flash = {"kind": "degraded", "message": msg}
     elif fetch == "err":
@@ -61,6 +62,7 @@ async def inv_fetch(request: Request):
 
     from app.core.errors import MustReportError
     from app.core.identity import current_operator
+    from app.mod01_projects.recovery import summary_text
     from app.mod08_inv import fetch_service as FS
 
     form = await request.form()
@@ -80,6 +82,7 @@ async def inv_fetch(request: Request):
         query = urlencode({"fetch": "ok", "ym": result["ym"], "rows": result["rows"],
                            "ins": st["inserted"], "upd": st["updated"],
                            "deleted": st["deleted"], "kept": st["kept_with_adjustment"],
+                           "auto": summary_text(result.get("recovery")),
                            "period": result["ym"]})
     else:
         query = urlencode({"fetch": "degraded", "msg": result["message"], "period": result["ym"]})

@@ -10,7 +10,8 @@
 - `001-07` 落库**幂等**：同月重抓不产生重复行 · 当月变少**删旧自动行** · **人工行保留**
 - `001-08` **写—读闭环**：抓完该月，页面就读得到（同一份会话）
 - `001-09` 抓前**二次确认**（D9）· 失败**降级 ＋ 不重试**（导出调用**只发生一次**）
-- `001-10` **陌生仓库**（档案里没有）**显式列出**，**不自动建档**
+- `001-10` **陌生仓库**（档案里没有）⇒ **自动建档 / 扶正**（§2.4.2 链路 B），结果**逐条列出**；
+  取不到仓库名单 ⇒ **降级不阻断**（数据照常落库）—— 原「⛔ 不自动建档」与 §2.4.2 相反，**已作废**（2026-09-17）
 """
 
 from __future__ import annotations
@@ -113,10 +114,31 @@ def _xlsx_one(*, order: tuple[str, ...] = COLUMNS, merged: bool = True) -> bytes
                       order=order, merged=merged)
 
 
-def _fake_client():
+def _fake_client(wh_rows=None):
+    """假 i8 client：`close()` ＋ **仓库名单**（`API-05`，链路 B 建档要用；默认空名单）。
+
+    ⚠️ 默认空名单 ⇒ 既有用例的档案**一行都不会被新增**（陌生仓库全走「判不了」分支），
+       故不影响它们；要测自动建档就传 `wh_rows=[(仓库名, 所属项目全名), …]`。
+    """
     class _Client:
         def close(self):
             pass
+
+        def post_json(self, _path, data=None):       # noqa: ANN001, ARG002
+            return {"Record": [{"Whname": w, "PhidPc_EXName": o, "Nullify": "0"}
+                               for w, o in (wh_rows or [])]}
+
+    return _Client()
+
+
+def _broken_client():
+    """假 client：取仓库名单必炸（测「降级不阻断」）。"""
+    class _Client:
+        def close(self):
+            pass
+
+        def post_json(self, _path, data=None):       # noqa: ANN001, ARG002
+            raise RuntimeError("i8 502")
 
     return _Client()
 
@@ -323,23 +345,50 @@ def test_二次确认且失败降级不重试():
 
 
 @acc(CASE, "001-10")
-def test_陌生仓库只列出不建档():
-    from app.mod01_projects.models import Project
+def test_陌生仓库自动建档扶正并逐条列出():
+    """⭐ 口径（2026-09-17 按《说明书》§2.4.2 订正）：陌生仓库 ⇒ **自动建档 / 扶正** —— 无感、不要求用户操作。
 
-    s = FakeSession({Project: [_project(1, "甲仓", "P1")]})
+    ⚠️ 本条原来钉的是「**不自动建档**」，那与 §2.4.2「**B 材料侧扶正**：陌生仓库 → 同步仓库名单 →
+       全名回查占位行 → **扶正改名** → 重跑导入」**相反** ⇒ 该写法已作废（规则主人 =《说明书》）。
+    """
+    from app.mod01_projects.models import Project
+    from app.mod01_projects.repository import all_projects
+
+    s = FakeSession({Project: [_project(1, "甲仓", "P1"),
+                               _project(2, "未建仓-1", "P2")]})      # 2 号 = 占位行，等扶正
     out = FS.run_fetch(s, year_month="2026-08", confirmed=True, operator="测试",
-                       client_factory=_fake_client,
+                       client_factory=lambda: _fake_client(
+                           [("乙仓", "未建仓-1项目"), ("丙仓", "丁项目")]),
                        export=lambda _c, _ym, _ids: build_xlsx([
                            _line(_values(warehouse="甲仓", code="R01")),
                            _line(_values(warehouse="乙仓", code="R01")),
                            _line(_values(warehouse="丙仓", code="R01"))]))
     assert out["ok"] is True
-    # 只报（顺序 = 升序；不在这里替中文排序意淫，直接用 sorted 表达"升序"这个意图）
     assert out["unknown_warehouses"] == sorted(["乙仓", "丙仓"])
 
-    from app.mod01_projects.repository import all_projects
-
-    assert [p.warehouse_name for p in all_projects(s)] == ["甲仓"], "陌生仓库**不得**自动建档"
-    # 页面上照样看得到这三仓（不因为没建档就丢掉数据）
+    rec = out["recovery"]
+    # ✅ 能扶正就扶正：占位行「未建仓-1」→ 真实仓库名「乙仓」（展示名一并跟着换）
+    assert (rec["promote"], rec["create"]) == (1, 0), rec
+    row2 = {p.id: p for p in all_projects(s)}[2]
+    assert (row2.warehouse_name, row2.disp) == ("乙仓", "乙仓")
+    assert any("未建仓-1" in x and "乙仓" in x for x in rec["promoted"]), "结果要**逐条**说出扶正了什么"
+    # ⛔ 判不了的不臆造：「丙仓」的所属项目「丁项目」还没建档 ⇒ 列出来要人看，**不建**
+    assert rec["unresolved"] == 1
+    assert "丙仓" == rec["unresolved_items"][0]["warehouse_name"]
+    # 数据照常落库（建档的事再怎么样也不能丢数据）
     data = build_page_data(s, parse_state({"period": "2026-08"}))
     assert [r["warehouse"] for r in data["rows"]] == ["丙仓", "乙仓", "甲仓"]
+
+    # ⚠️ 取不到仓库名单 ⇒ **降级不阻断**：抓取照样成功、数据照常落库，只在回执里说明
+    s2 = FakeSession({Project: [_project(1, "甲仓", "P1")]})
+    out2 = FS.run_fetch(s2, year_month="2026-08", confirmed=True, operator="测试",
+                        client_factory=_broken_client,
+                        export=lambda _c, _ym, _ids: build_xlsx(
+                            [_line(_values(warehouse="乙仓", code="R01"))]))
+    assert out2["ok"] is True and out2["rows"] == 1, "建档取数失败**不得**把抓取判死"
+    assert out2["recovery"]["degraded"] is True
+    assert "可稍后重抓" in out2["recovery"]["message"]
+    assert [p.warehouse_name for p in all_projects(s2)] == ["甲仓"], "降级时一行也不许乱建"
+    assert [r["warehouse"] for r in build_page_data(
+        s2, parse_state({"period": "2026-08"}))["rows"]] == ["乙仓"]
+
