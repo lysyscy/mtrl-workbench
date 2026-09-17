@@ -1,0 +1,198 @@
+#!/usr/bin/env python
+"""文档漂移自检（doc_audit）—— 把「改完还得人肉重扫一遍」变成一条命令。
+
+**为什么存在**：文档里的**规则**很少变，但**状态描述**（数字 / 术语 / 用例号 / 路径）
+必然随开发过期，而且**过期了不会报错** —— 这是本项目最贵的一类事故
+（已实测两次：`sumrow` 变量未定义静默失效 · 签名漏认静默漏印）。
+
+**只做「机器可判、几乎不误报」的检查**（语义是否还成立，仍需人/模型判断）：
+
+| 代号 | 检查 | 真源 |
+|---|---|---|
+| `T1` | **幽灵用例号** —— 文档提到的 `ACC-*` 在验收基线里不存在 | `验收基线.json` |
+| `T2` | **已废除术语** —— 命中 `RETIRED_TERMS` | `audit_common.py` |
+| `T3` | **幽灵路径** —— 反引号里的仓库内路径两侧都找不到 | 文件系统 |
+| `T4` | **状态数字失配** —— 执行情况「当前版本」行的四态 ≠ 实际 | `artifacts/acc_results.json` |
+| `T5` | **行数超限** —— 单文件 >400（黄 · 须登记）/ >600（红 · 禁合入） | 源文件行数（**输出即登记清单**） |
+| `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `.workbuddy/plans/开发计划-主文档.md` |
+| `T7a`/`T7b` | **判据覆盖** —— 有登记的能力却没判据兜住（**登记档，不判红**） | `cover_gap.py` |
+
+### 怎么避免变成「新噪音源」（三条纪律）
+
+1. **区分「当前状态」与「历史留痕」** —— 留痕里的旧术语是**正确的**，不该报。
+   · 文件级：`LENIENT_GLOBS`（日志、历史计划、已执行的方案）⇒ 命中只报**黄**；
+   · 段级：交接文件用 HTML 注释分区（`doc_audit:current` / `doc_audit:history`），
+     `history` 段只报黄。**未标区**的文件默认整篇按 current。
+2. **豁免窗口 ±2 行** —— 「勘误」常写在下一行，只看当前行会误报。
+3. **强豁免词直接忽略**（`HARD_EXEMPT`）—— 行文本身就在说「它废了」的，不算漂移。
+
+用法：
+    python tools/doc_audit.py              # 人读报告（有红即非零退出）
+    python tools/doc_audit.py -v           # 附命中行上下文
+    python tools/doc_audit.py --ui         # 顺带跑交付面四检（需 node）
+    python tools/doc_audit.py --block      # 打印可粘贴进交接文件的「当前状态」块
+
+⚠️ 本工具**只读**（`--block` 也只打印、不写文件）。
+
+**本文件是薄壳** —— 检查逻辑已拆到同目录三件（`T5` 逼的，本文件曾 597 行）：
+`audit_common.py`（常量 ＋ 扫描基础设施）· `audit_drift.py`（`T1`–`T4`）· `audit_meta.py`（`T5`/`T6`）。
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from collections import Counter
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from audit_common import (                                        # noqa: E402
+    RED, SKIP, YELLOW, delivery_root, iter_docs,
+)
+from audit_drift import (                                         # noqa: E402
+    check_acc_ids, check_paths, check_status_line, check_terms,
+)
+from audit_meta import (                                          # noqa: E402
+    HARD_LIMIT, LINE_LIMIT, check_file_sizes, check_tail_ledger,
+)
+
+
+# ------------------------------------------------------------------- 四检（可选）
+
+
+def run_ui_checks() -> list[str]:
+    node = Path(r"C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-3\node.exe")
+    root = delivery_root()
+    if not node.exists() or not root:
+        return ["  （跳过：找不到 node 或交付面根）"]
+    demo = root / "demo"
+    if not (demo / "_smoke.js").exists():
+        return ["  （跳过：交付面 demo/ 里没有四检脚本）"]
+    out = []
+    for s in ("_smoke", "_doccheck", "_links", "_ids"):
+        js = demo / f"{s}.js"
+        if not js.exists():
+            out.append(f"  {s:<10} （无此脚本）")
+            continue
+        r = subprocess.run([str(node), str(js)], cwd=str(demo), capture_output=True,
+                           text=True, encoding="utf-8", errors="replace")
+        concl = next((l.strip() for l in reversed((r.stdout or "").splitlines())
+                      if "====" in l), "")
+        out.append(f"  {s:<10} 退出码={r.returncode}  {concl[:66]}")
+    return out
+
+
+# ----------------------------------------------------------------------- 主流程
+
+
+def _print_block() -> int:
+    from audit_drift import _actual_states                          # noqa: PLC0415
+    st = _actual_states()
+    if st is None:
+        print("（拿不到真源：先跑全套 pytest 生成 artifacts/acc_results.json）")
+        return 2
+    code = 0 if st["红"] == 0 else 1
+    print("四态 **%d = 绿 %d · 红 %d · 待建 %d · 未绑定 %d**（退出码 %d）"
+          % (st["合计"], st["绿"], st["红"], st["待建"], st["未绑定"], code))
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="文档漂移自检")
+    ap.add_argument("-v", "--verbose", action="store_true", help="附命中行上下文")
+    ap.add_argument("--ui", action="store_true", help="顺带跑交付面四检（需 node）")
+    ap.add_argument("--block", action="store_true", help="打印可粘贴的「当前状态」块")
+    args = ap.parse_args()
+
+    if args.block:
+        return _print_block()
+
+    import acc_report as ar                                    # noqa: PLC0415
+    baseline = ar.load_json(ar.resolve_baseline(None))
+    cases = set(baseline.get("cases") or {})
+    docs = iter_docs()
+
+    sizes = check_file_sizes()          # 单独成节：它输出的是「欠债清单」，与漂移不同性质
+    raw = check_acc_ids(cases, docs) + check_terms(docs) + check_paths(docs)
+    raw += check_status_line()
+    raw += check_tail_ledger(cases)     # `T6` 尾巴台账：格式 / 编号 / 落点 / 计数
+    # `T7` 登记：有能力的口径没被判据兜住（**逻辑在 tools/cover_gap.py** —— 别再内联）
+    from cover_gap import T7_EXEMPT, check_cover_gaps         # noqa: PLC0415
+
+    cover_gaps = check_cover_gaps(delivery_root(), baseline)
+    skipped = [h for h in raw if h["level"] == SKIP]
+    yellows = [h for h in raw if h["level"] == YELLOW]
+    reds = [h for h in raw if h["level"] == RED]
+
+    line = "=" * 78
+    print(line)
+    print(" 文档漂移自检 · doc_audit")
+    print(f" 扫描 {len(docs)} 个文档 · {sum(len(d[3]) for d in docs)} 行 · 用例真源 {len(cases)} 条")
+    print(line)
+    print(f"必须修 {len(reds)} · 疑似 {len(yellows)} · 已豁免 {len(skipped)}"
+          f"（豁免 = 行文本身在说「它废了」）")
+    print()
+
+    for tag, group, agg in (("必须修", reds, False),
+                            ("疑似（都在留痕区 / 已在说明它废了 —— 仅聚合）", yellows, True),
+                            ("已豁免（行文本身在声明它废了）", skipped, True)):
+        if not group or (agg and not args.verbose and group is skipped):
+            continue
+        print(tag)
+        print("-" * 78)
+        if agg and not args.verbose:
+            for rel, n in Counter(h["rel"] for h in group).most_common():
+                print(f"  {n:>3} 条  {rel}")
+        else:
+            for h in group:
+                print(f"  [{h['code']}] {h['side']}·{h['rel']}:{h['line']}  {h['what']}")
+                print(f"        {h['why']} → {h['fix']}")
+                if args.verbose:
+                    print(f"        原文：{h['text'][:150]}")
+        print()
+
+    if not reds and not yellows:
+        print("✅ 无漂移：术语 / 用例号 / 路径 / 状态数字 全部一致")
+        print()
+
+    gaps_a = [h for h in cover_gaps if h["code"] == "T7a"]
+    gaps_b = [h for h in cover_gaps if h["code"] == "T7b"]
+    print(f"判据覆盖 `T7`（**有登记的能力、判据却没兜住** —— 登记档，不判红；"
+          f"豁免 {len(T7_EXEMPT)} 类见代码 `T7_EXEMPT`）")
+    print("-" * 78)
+    print(f"  ⭐ `T7a` 无用例认领（末列没有 `ACC-*`）：{len(gaps_a)} 条"
+          f" ｜ `T7b` 口径无人 cover：{len(gaps_b)} 条")
+    if cover_gaps:
+        for tag, grp in (("T7a · 无用例认领", gaps_a), ("T7b · 口径无人 cover", gaps_b)):
+            if not grp:
+                continue
+            print(f"  -- {tag} --")
+            for h in grp:
+                print(f"  {h['rel'].replace('PRD/02-功能规格/', ''):<11} L{h['line']:<4} {h['what']}")
+    else:
+        print("  （无）")
+    print()
+
+    print(f"文件行数（{LINE_LIMIT} 须登记 · {HARD_LIMIT} 禁合入）—— **这份清单就是登记，别抄进文档**")
+    print("-" * 78)
+    if sizes:
+        for h in sizes:
+            print(f"  {'红' if h['level'] == RED else '黄'}  {h['rel']:<52} {h['what']}")
+    else:
+        print("  （无超限文件）")
+    print()
+
+    if args.ui:
+        print("交付面四检")
+        print("-" * 78)
+        for l in run_ui_checks():
+            print(l)
+        print()
+
+    return 1 if (reds or any(h["level"] == RED for h in sizes)) else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

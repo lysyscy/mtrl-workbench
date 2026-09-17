@@ -1,0 +1,48 @@
+# ===== 凭据（必须进 .gitignore）=====
+.env
+*.env
+!.env.example
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+backend/.venv/
+venv/
+.venv/
+*.egg-info/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# ===== 产物体与日志（可再生成，不单独备份）=====
+artifacts/*
+!artifacts/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# ===== 打印/渲染临时件 =====
+.edge_profile/
+.sigcache/
+.cache/
+output/
+
+# ===== 前端 =====
+node_modules/
+.vite/
+*.local
+
+# ===== 编辑器 / 系统 =====
+.idea/
+.vscode/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+
+# ⚠️ 刻意不排除的：
+#   .workbuddy/   —— 工作区治理目录（计划 / memory / 交接提示词），随仓走
+#   frontend/dist/ —— D7 已定案：构建产物入仓（部署机免 Node）

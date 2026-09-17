@@ -1,0 +1,329 @@
+"""`MOD-05` 组装层 —— 取数 → 跑域内核 → 视图数据（**页面与 API 共用**）。
+
+⚠️ **不重写任何判定**：撤销走 `domain.revoke_flow`、欠款走 `domain.debt_by_category`、台账走
+   `domain.build_ledger`、统计走 `domain.payment_stats`、状态走 `domain.payment_status`
+   —— 本文件只做**取数与装配**。
+⚠️ **付款统计与逐月台账的「付款」列同源**（都经 `domain.sum_pay_stat` / `monthly_aggregate`），
+   不另算一套（§4.5.5「同源互补」）。
+
+口径：《说明书》§4.4.2（付款登记 / 两态）· §4.4.5（撤销必填原因）· §4.5.1（欠款三类）
+      · §4.5.2（期初占位行）· §4.5.4（逐月台账）· §4.5.5（付款统计）。
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.money import to_money
+from app.mod01_projects.models import Project
+from app.mod05_flow import domain as dom
+from app.mod05_flow import repository as repo
+from app.mod05_flow.domain import LedgerRow, NoticeDebtView, OpeningView
+from app.mod05_flow.models import (
+    CATEGORY_JC,
+    CATEGORY_MATERIAL,
+    CATEGORY_MECH,
+    FLOW_EFFECTIVE,
+    FLOW_REVOKED,
+    PAY_METHODS,
+    PaymentFlow,
+)
+
+# 界面上的类别显示名（**只有三类**，§4.2.3）
+CATEGORY_LABELS: dict[str, str] = {
+    CATEGORY_MATERIAL: "辅材",
+    CATEGORY_MECH: "机械",
+    CATEGORY_JC: "集采",
+}
+
+# ⚠️ 机械侧「其他支出金额」的输入源 = **机械费结算金额**，它来自**过程资料**（`MOD-06`，未接）。
+#    在接上前，本层**显式按 0 计**并把这件事标到页面上（**不臆造数值**）。
+MECH_SETTLE_SOURCE_READY = False
+
+
+# ---------------------------------------------------------------- 输入行视图
+
+
+def notice_debt_views(s: Session) -> list[NoticeDebtView]:
+    """付款通知书 → 欠款视图（**欠款 / 台账 / 统计共用同一批行**，同一出口）。"""
+    out: list[NoticeDebtView] = []
+    for n in repo.notice_rows(s):
+        cat = str(n.category or "").strip() or CATEGORY_MATERIAL
+        out.append(
+            NoticeDebtView(
+                notice_id=int(n.id),
+                doc_date=str(n.doc_date or ""),          # 归月依据 = 单据日期
+                category=cat,
+                settle_stat=to_money(n.stat_settle),
+                pay_stat=to_money(n.stat_paid),
+                excluded=bool(n.excluded),               # 剔除记录不计入
+                ownership_id=n.ownership_id,             # 归属（档案行 id）；None = 未判定
+            )
+        )
+    return out
+
+
+def opening_views(s: Session, project_id: int | None = None) -> list[OpeningView]:
+    return [
+        OpeningView(
+            category=str(o.category or ""),
+            project_id=o.project_id,
+            cutoff_ym=str(o.cutoff_ym or ""),
+            settle_amount=to_money(o.settle_amount),
+            paid_amount=to_money(o.paid_amount),
+        )
+        for o in repo.list_openings(s, project_id=project_id)
+    ]
+
+
+def project_index(s: Session) -> dict[int, Project]:
+    return {p.id: p for p in s.execute(select(Project)).scalars().all()}
+
+
+def project_label(p: Project | None) -> str:
+    if p is None:
+        return ""
+    return p.disp or p.warehouse_name or p.name_full or f"#{p.id}"
+
+
+def project_options(s: Session) -> list[dict]:
+    """项目选择器候选（**台账两侧共用同一个选择器**，§4.5.4）。"""
+    return [
+        {"id": p.id, "label": project_label(p), "warehouse_name": p.warehouse_name or ""}
+        for p in sorted(project_index(s).values(), key=lambda x: (x.warehouse_name or "", x.id))
+    ]
+
+
+# ---------------------------------------------------------------- ① 付款流水列表
+
+
+def _flow_dict(f: PaymentFlow, notices: dict[int, object], projects: dict[int, Project]) -> dict:
+    n = notices.get(f.notice_id) if f.notice_id else None
+    return {
+        "id": f.id,
+        "flow_no": f.flow_no,
+        "pay_date": f.pay_date,
+        "notice_id": f.notice_id,
+        "doc_no": str(getattr(n, "bill_no", "") or ""),
+        "project_id": f.project_id,
+        "project_display": project_label(projects.get(f.project_id) if f.project_id else None),
+        "amount": f"{to_money(f.amount):.2f}",
+        "pay_method": f.pay_method,
+        "status": f.status,
+        "status_label": "生效" if f.status == FLOW_EFFECTIVE else "已撤销",
+        "revoke_reason": f.revoke_reason,
+        "revoked_at": f.revoked_at.strftime("%Y-%m-%d %H:%M") if f.revoked_at else "",
+        "request_id": f.request_id,
+        "created_at": f.created_at.strftime("%Y-%m-%d %H:%M") if f.created_at else "",
+    }
+
+
+def build_flows(
+    s: Session,
+    *,
+    year_month: str | None = None,
+    status: str | None = None,
+    pay_method: str | None = None,
+    project_id: int | None = None,
+    keyword: str = "",
+) -> dict:
+    """流水页数据：筛选（**即时生效**）+ 指标 + 合计。
+
+    ⚠️ 默认月 = **北京时间当月**（`domain.default_flow_period`）；列表**不分页**（`FLOW_PAGINATED=False`）。
+    """
+    notices = {int(n.id): n for n in repo.notice_rows(s)}
+    projects = project_index(s)
+    raw = [_flow_dict(f, notices, projects) for f in repo.list_flows(s)]
+
+    # ⚠️ 约定：`None` = 用默认（北京时间当月）；`""` = **全部月份**（与路由同一语义）
+    ym = dom.default_flow_period() if year_month is None else year_month
+    rows = [r for r in raw if not ym or str(r["pay_date"] or "")[:7] == ym]
+    rows = dom.filter_flows(
+        rows, status=status, pay_method=pay_method, project_id=None, keyword=keyword
+    )
+    if project_id is not None:
+        rows = [r for r in rows if r["project_id"] == int(project_id)]
+
+    live = [r for r in rows if r["status"] == FLOW_EFFECTIVE]
+    dead = [r for r in rows if r["status"] == FLOW_REVOKED]
+    return {
+        "year_month": ym,
+        "status": status or "",
+        "pay_method": pay_method or "",
+        "project_id": project_id,
+        "keyword": keyword,
+        "rows": rows,
+        "kpis": [
+            {"k": "生效流水", "v": len(live), "s": "笔"},
+            {"k": "生效金额", "v": f"{sum((Decimal(r['amount']) for r in live), Decimal('0')):.2f}", "s": "元"},
+            {"k": "已撤销", "v": len(dead), "s": "笔"},
+            {"k": "已撤销金额", "v": f"{sum((Decimal(r['amount']) for r in dead), Decimal('0')):.2f}", "s": "元"},
+        ],
+        "summary": {
+            "flow_no": "合计（生效）",
+            "amount": f"{sum((Decimal(r['amount']) for r in live), Decimal('0')):.2f}",
+        },
+        "pay_methods": list(PAY_METHODS),
+        "project_options": project_options(s),
+        "paginated": dom.FLOW_PAGINATED,
+    }
+
+
+# ---------------------------------------------------------------- ② 欠款（三类 + 按项目）
+
+
+def build_debt(s: Session, *, jc_debt=None) -> dict:
+    """「按项目看欠款」+ 三类合计（§4.5.1）。
+
+    - 辅材 = Σ辅助统计结算 − Σ辅助统计付款 ＋ 辅材期初
+    - 机械 = **机械费结算金额** − Σ机械统计付款 ＋ 机械期初
+    - 集采 = **不在本域计算**（由集采台账负责）⇒ 本域只作**合计展示**（`jc_debt` 由调用方注入）
+    """
+    rows = notice_debt_views(s)
+    openings = opening_views(s)
+    by_cat = dom.debt_by_category(rows, openings, mech_settle_total=Decimal("0"), jc_debt=jc_debt)
+    by_project = dom.debt_by_project(rows)
+    names = {pid: project_label(p) for pid, p in project_index(s).items()}
+
+    items = []
+    for key, amount in sorted(by_project.items(), key=lambda kv: str(kv[0])):
+        if key == dom.UNASSIGNED:
+            items.append({"key": "未判定", "label": "未判定（未指定归属）", "amount": f"{amount:.2f}"})
+        else:
+            items.append({
+                "key": str(key), "label": names.get(int(key), f"#{key}"), "amount": f"{amount:.2f}",
+            })
+    return {
+        "by_category": [
+            {"category": c, "label": CATEGORY_LABELS[c], "amount": f"{by_cat[c]:.2f}"}
+            for c in (CATEGORY_MATERIAL, CATEGORY_MECH, CATEGORY_JC)
+        ],
+        "total": f"{dom.total_debt(by_cat):.2f}",
+        "by_project": items,
+        "mech_settle_ready": MECH_SETTLE_SOURCE_READY,
+    }
+
+
+# ---------------------------------------------------------------- ③ 逐月台账
+
+
+def build_ledger(
+    s: Session, *, project_id: int, end_ym: str = "", today: date | None = None
+) -> dict:
+    """逐月台账（§4.5.4）—— **两侧（辅材 / 机械）共用同一个项目选择器**，各自一套行。
+
+    - 第 1 行 = 期初占位行（只带**本口径**的期初；有则给「删除」入口）
+    - 空月也出行（三列记 0）
+    - 机械侧「其他支出金额」= **派生只读**，**无手填入口**（`MECH_HAS_MANUAL_INPUT=False`）
+    """
+    rows = notice_debt_views(s)
+    today = today or date.today()
+    sides = []
+    for cat in dom.LEDGER_SIDES:
+        openings = opening_views(s, project_id=project_id)
+        mine = [o for o in openings if o.category == cat]
+        opening = mine[0] if mine else None
+        monthly = dom.monthly_aggregate(rows, cat, int(project_id))
+        mech_settle = {} if cat != CATEGORY_MECH else {}
+        ledger: list[LedgerRow] = dom.build_ledger(
+            category=cat,
+            monthly=monthly,
+            opening=opening,
+            mech_settle_by_month=mech_settle if cat == CATEGORY_MECH else None,
+            end_ym=end_ym or None,
+            remarks=repo.remarks_map(s, category=cat, project_id=int(project_id)),
+        )
+        opening_row = repo.list_openings(s, project_id=int(project_id), category=cat)
+        sides.append({
+            "category": cat,
+            "label": CATEGORY_LABELS[cat],
+            "opening_id": opening_row[0].id if opening_row else None,
+            "opening_default": dom.opening_defaults(rows, cat, today),
+            "has_manual_input": not (cat == CATEGORY_MECH and not dom.MECH_HAS_MANUAL_INPUT),
+            "rows": [
+                {
+                    "seq": r.seq, "month": r.month,
+                    "other_expense": f"{r.other_expense:.2f}",
+                    "payment": f"{r.payment:.2f}",
+                    "debt": f"{r.debt:.2f}",
+                    "remark": r.remark,
+                    "is_opening": r.is_opening,
+                    "remark_key": dom.ledger_remarks_key(cat, int(project_id), r.month),
+                }
+                for r in ledger
+            ],
+        })
+    return {
+        "project_id": int(project_id),
+        "project_options": project_options(s),
+        "sides": sides,
+        "shared_project_selector": dom.SHARED_PROJECT_SELECTOR,
+        "has_switch_caliber_button": dom.HAS_SWITCH_CALIBER_BUTTON,
+    }
+
+
+# ---------------------------------------------------------------- ④ 付款统计（与台账同源）
+
+
+def _current_bucket(granularity: str, today: date) -> str:
+    return dom.bucket_of(today.isoformat(), granularity)
+
+
+def window_buckets(granularity: str, *, year: int, quarter: int | None, today: date) -> list[str]:
+    """最近 N 个桶（含当期）—— N 取域内核的 `WINDOW`（组装层只做切片，不改口径）。"""
+    allb = dom.time_buckets(granularity, year=year, quarter=quarter)
+    cur = _current_bucket(granularity, today)
+    tail = [b for b in allb if b <= cur] or allb
+    return tail[-dom.WINDOW[granularity]:]
+
+
+def build_stats(
+    s: Session, *, granularity: str = "", year: int | None = None,
+    quarter: int | None = None, project_id: int | None = None, today: date | None = None,
+) -> dict:
+    """付款统计（§4.5.5）：**左栏 = 按项目 · 右栏 = 时间轴**；换粒度**不换口径**。"""
+    today = today or date.today()
+    gran = granularity or dom.DEFAULT_GRANULARITY          # 默认**按周**
+    year = int(year or today.year)
+    if gran == dom.GRAN_WEEK and not quarter:
+        quarter = (today.month - 1) // 3 + 1
+    buckets = window_buckets(gran, year=year, quarter=quarter, today=today)
+
+    rows = notice_debt_views(s)
+    names = {pid: project_label(p) for pid, p in project_index(s).items()}
+    grid = dom.payment_stats(rows, granularity=gran, buckets=set(buckets))
+
+    left = []
+    for key in sorted(grid, key=lambda k: str(k)):
+        label = "未判定" if key == dom.UNASSIGNED else names.get(int(key), f"#{key}")
+        left.append({
+            "label": label,
+            "cells": [f"{to_money(grid[key].get(b, 0)):.2f}" for b in buckets],
+        })
+
+    right = [f"{to_money(sum((grid[k].get(b, 0) for k in grid), Decimal('0'))):.2f}" for b in buckets]
+
+    return {
+        "granularity": gran,
+        "granularity_label": "按周" if gran == dom.GRAN_WEEK else "按月",
+        "year": year,
+        "quarter": quarter,
+        "buckets": buckets,
+        "left": left,
+        "right": right,
+        "total": f"{dom.sum_pay_stat(rows):.2f}",
+        "layout": dom.LAYOUT,
+        "project_id": project_id,
+        "project_options": project_options(s),
+    }
+
+
+__all__ = [
+    "CATEGORY_LABELS", "MECH_SETTLE_SOURCE_READY",
+    "notice_debt_views", "opening_views", "project_index", "project_label", "project_options",
+    "build_flows", "build_debt", "build_ledger", "build_stats", "window_buckets",
+]

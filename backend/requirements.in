@@ -1,0 +1,33 @@
+# 直接依赖（宽松约束，仅用于首次解析）
+# 精确版本 = requirements.txt（由 pip freeze 生成，全 == 锁 —— D10 加固②）
+# 技术栈依据 = 《技术栈选型分析》§3.1
+
+# --- Web 后端 ---
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-multipart
+
+# --- ORM / 迁移 / 驱动（PostgreSQL 16）---
+sqlalchemy
+alembic
+psycopg[binary]
+
+# --- i8 抓取（纯 HTTP · Cookie 会话）---
+httpx
+
+# --- Excel（写模板/导出 + 读入/透视）---
+openpyxl
+pandas
+
+# --- 打印 / PDF（本地渲染）---
+playwright
+
+# --- 日志 ---
+loguru
+
+# --- 测试与依赖审计 ---
+pytest
+pytest-asyncio
+pip-audit

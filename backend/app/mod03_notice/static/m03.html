@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>付款通知书 · 批量打印</title>
+<link rel="stylesheet" href="/static/theme.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--tx);
+         font: 14px/1.6 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 20px 40px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .card { background: var(--sf); border: 1px solid var(--bd); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  button { border: 1px solid var(--bd); background: var(--sf); color: var(--tx);
+           padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  button:hover { border-color: var(--pri); color: var(--pri); }
+  button.primary { background: var(--pri); border-color: var(--pri); color: var(--sf); }
+  button.primary:hover { background: var(--pri-d); color: var(--sf); }
+  button.ghost { background: transparent; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  input[type=text] { border: 1px solid var(--bd); border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 160px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bd); font-size: 13px; }
+  th { color: var(--mut); font-weight: 500; background: var(--sf2); }
+  tbody tr:hover { background: var(--row-hover); }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; }
+  .tag.mech { background: var(--pri-l); color: var(--pri); }
+  .tag.mat { background: var(--ok-l); color: var(--ok); }
+  .hint { color: var(--mut); font-size: 12px; }
+  .empty { color: var(--mut); text-align: center; padding: 28px 0; }
+  .msg { margin-top: 10px; font-size: 13px; }
+  .msg.err { color: var(--dg); }
+  .msg.ok { color: var(--ok); }
+  .msg.warn { color: var(--wn); }
+  .result-list { margin: 8px 0 0; padding-left: 18px; }
+  .result-list li { margin: 3px 0; }
+  a.dl { color: var(--pri); text-decoration: none; }
+  a.dl:hover { text-decoration: underline; }
+  .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none;
+                align-items: center; justify-content: center; z-index: 50; }
+  .modal-mask.show { display: flex; }
+  .modal { background: var(--sf); border-radius: 10px; width: 460px; max-width: 92vw; padding: 18px 20px; }
+  .modal h3 { margin: 0 0 6px; font-size: 16px; }
+  .modal .body { margin: 12px 0; }
+  .modal .foot { display: flex; justify-content: flex-end; gap: 8px; }
+  .kv { color: var(--mut); font-size: 12px; margin-top: 6px; }
+  code { background: var(--sf3); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>付款通知书 · 批量打印</h1>
+    <div class="row">
+      <span class="hint">打印机：<span id="printerLabel">（未配置）</span></span>
+      <button id="btnSettings" class="ghost">设置…</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="row">
+      <span>核算年月</span>
+      <input type="text" id="yearMonth" placeholder="2026-08" />
+      <button id="btnFetch">从 i8 抓取</button>
+      <span class="hint">抓取为纯手动；登录会挤掉该账号其他在线会话（需确认）。</span>
+    </div>
+    <div id="fetchMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:10px;">
+      <strong>单据列表</strong>
+      <span class="hint" id="selInfo">已选 0 张</span>
+      <span class="spacer"></span>
+      <button id="btnReload" class="ghost">刷新</button>
+      <button id="btnPrint" class="primary" disabled>批量打印</button>
+      <button id="btnPdf" disabled>只导出 PDF</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px;"><input type="checkbox" id="chkAll" /></th>
+          <th style="width:180px;">单号</th>
+          <th style="width:90px;">类型</th>
+          <th>项目名称</th>
+          <th style="width:120px;">审批状态</th>
+          <th style="width:110px;">审批金额</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"><tr><td colspan="6" class="empty">加载中…</td></tr></tbody>
+    </table>
+    <div id="batchMsg" class="msg"></div>
+    <div id="batchResult"></div>
+  </div>
+</div>
+
+<div class="modal-mask" id="modal">
+  <div class="modal">
+    <h3>打印机设置</h3>
+    <div class="hint">保存后即时生效，无需重启服务。</div>
+    <div class="body">
+      <input type="text" id="printerInput" style="width:100%;" placeholder="ipp://192.168.5.248" />
+      <div class="kv">例：<code>ipp://192.168.5.248</code> 或 <code>ipp://192.168.5.248:631/printers/xxx</code></div>
+      <div id="settingMsg" class="msg"></div>
+    </div>
+    <div class="foot">
+      <button id="btnSettingCancel" class="ghost">取消</button>
+      <button id="btnSettingSave" class="primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { notices: [], selected: new Set() };
+
+function api(path, opts) {
+  return fetch(path, Object.assign({ headers: { "Content-Type": "application/json" } }, opts))
+    .then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.message || data.detail || ("HTTP " + r.status));
+      return data;
+    });
+}
+
+function typeTag(t) {
+  return t === "mechanical"
+    ? '<span class="tag mech">机械类</span>'
+    : '<span class="tag mat">辅材·集采类</span>';
+}
+const money = (v) => (v ? Number(v).toFixed(2) : "");
+
+function render() {
+  const tb = $("tbody");
+  if (!state.notices.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="empty">暂无单据 —— 可先「从 i8 抓取」。</td></tr>';
+  } else {
+    tb.innerHTML = state.notices.map((n) => `
+      <tr>
+        <td><input type="checkbox" data-id="${n.id}" ${state.selected.has(n.id) ? "checked" : ""} /></td>
+        <td>${escapeHtml(n.bill_no)}</td>
+        <td>${typeTag(n.bill_type)}</td>
+        <td>${escapeHtml(n.project_name)}</td>
+        <td>${escapeHtml(n.approve_status)}</td>
+        <td>${money(n.amount_approved)}</td>
+      </tr>`).join("");
+  }
+  tb.querySelectorAll("input[type=checkbox][data-id]").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const id = Number(cb.dataset.id);
+      cb.checked ? state.selected.add(id) : state.selected.delete(id);
+      syncSel();
+    });
+  });
+  syncSel();
+}
+
+function syncSel() {
+  const n = state.selected.size;
+  $("selInfo").textContent = `已选 ${n} 张`;
+  $("btnPrint").disabled = n === 0;
+  $("btnPdf").disabled = n === 0;
+  $("chkAll").checked = n > 0 && n === state.notices.length;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function loadNotices() {
+  try {
+    state.notices = await api("/api/m03/notices?limit=500");
+    const ids = new Set(state.notices.map((n) => n.id));
+    state.selected = new Set([...state.selected].filter((id) => ids.has(id)));
+    render();
+  } catch (e) {
+    $("tbody").innerHTML = `<tr><td colspan="6" class="empty">加载失败：${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function runBatch(mode) {
+  const ids = [...state.selected];
+  if (!ids.length) return;
+  const label = mode === "print" ? "批量打印" : "只导出 PDF";
+  $("batchMsg").textContent = `正在${label}…（渲染需要时间，请稍候）`;
+  $("batchMsg").className = "msg";
+  $("batchResult").innerHTML = "";
+  $("btnPrint").disabled = $("btnPdf").disabled = true;
+  try {
+    const res = await api("/api/m03/batch", { method: "POST", body: JSON.stringify({ ids, mode }) });
+    showBatchResult(res, label);
+  } catch (e) {
+    $("batchMsg").textContent = `${label}失败：${e.message}`;
+    $("batchMsg").className = "msg err";
+  } finally {
+    syncSel();
+  }
+}
+
+function showBatchResult(res, label) {
+  const ok = res.success, bad = res.failed;
+  $("batchMsg").textContent = `${label}完成：成功 ${ok} 张，未产出 ${bad} 张。`;
+  $("batchMsg").className = "msg " + (bad ? "warn" : "ok");
+  let html = "";
+  if (res.batch_dir) html += `<div class="hint">产物目录：<code>${escapeHtml(res.batch_dir)}</code></div>`;
+  if (bad) {
+    html += '<div class="msg warn">未产出单据（须处理）：</div><ul class="result-list">';
+    res.items.filter((i) => !i.ok).forEach((i) => {
+      html += `<li>${escapeHtml(i.bill_no)} — ${escapeHtml(i.reason || "未知原因")}</li>`;
+    });
+    html += "</ul>";
+  }
+  const files = res.items.filter((i) => i.ok && i.download_url);
+  if (files.length) {
+    html += '<div class="msg ok">可下载产物：</div><ul class="result-list">';
+    files.forEach((i) => {
+      html += `<li><a class="dl" href="${i.download_url}" target="_blank">${escapeHtml(i.bill_no)}.pdf</a></li>`;
+    });
+    html += "</ul>";
+  }
+  $("batchResult").innerHTML = html;
+}
+
+async function doFetch() {
+  const ym = $("yearMonth").value.trim();
+  if (!/^\d{4}-\d{2}$/.test(ym)) {
+    $("fetchMsg").textContent = "请填写形如 2026-08 的核算年月。";
+    $("fetchMsg").className = "msg err";
+    return;
+  }
+  const ok = window.confirm(
+    "⚠️ 抓取会使用 i8 账号登录，可能挤掉该账号在其他电脑上的在线会话（强踢）。\n\n是否继续？");
+  if (!ok) return;
+  $("fetchMsg").textContent = "正在抓取…";
+  $("fetchMsg").className = "msg";
+  try {
+    const res = await api("/api/m03/notices/fetch", {
+      method: "POST", body: JSON.stringify({ year_month: ym, allow_kick: false }),
+    });
+    $("fetchMsg").textContent = `抓取完成：解析 ${res.fetched} 条，入库 ${res.upserted} 条。`;
+    $("fetchMsg").className = "msg ok";
+    await loadNotices();
+  } catch (e) {
+    $("fetchMsg").textContent = `抓取失败：${e.message}`;
+    $("fetchMsg").className = "msg err";
+  }
+}
+
+async function openSettings() {
+  $("settingMsg").textContent = "";
+  try {
+    const res = await api("/api/m03/settings/printer");
+    $("printerInput").value = res.printer_ipp_url || "";
+  } catch (e) { /* 读失败也允许填写 */ }
+  $("modal").classList.add("show");
+}
+
+async function saveSettings() {
+  const url = $("printerInput").value.trim();
+  $("settingMsg").textContent = "保存中…";
+  $("settingMsg").className = "msg";
+  try {
+    const res = await api("/api/m03/settings/printer", {
+      method: "PUT", body: JSON.stringify({ printer_ipp_url: url }),
+    });
+    $("printerLabel").textContent = res.printer_ipp_url;
+    $("settingMsg").textContent = "已保存，即时生效。";
+    $("settingMsg").className = "msg ok";
+    setTimeout(() => $("modal").classList.remove("show"), 600);
+  } catch (e) {
+    $("settingMsg").textContent = "保存失败：" + e.message;
+    $("settingMsg").className = "msg err";
+  }
+}
+
+async function loadPrinterLabel() {
+  try {
+    const res = await api("/api/m03/settings/printer");
+    $("printerLabel").textContent = res.printer_ipp_url || "（未配置）";
+  } catch (e) { /* 忽略 */ }
+}
+
+$("chkAll").addEventListener("change", (e) => {
+  state.selected = e.target.checked ? new Set(state.notices.map((n) => n.id)) : new Set();
+  render();
+});
+$("btnReload").addEventListener("click", loadNotices);
+$("btnFetch").addEventListener("click", doFetch);
+$("btnPrint").addEventListener("click", () => runBatch("print"));
+$("btnPdf").addEventListener("click", () => runBatch("pdf"));
+$("btnSettings").addEventListener("click", openSettings);
+$("btnSettingCancel").addEventListener("click", () => $("modal").classList.remove("show"));
+$("btnSettingSave").addEventListener("click", saveSettings);
+
+loadPrinterLabel();
+loadNotices();
+</script>
+</body>
+</html>

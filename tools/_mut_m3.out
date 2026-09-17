@@ -1,0 +1,25 @@
+M3 反向灵敏度（2026-09-17 08:5x 重跑 · TAIL-23 收口：⑫⑬ 变异点曾指向过时测试件 + ⑫ 断言曾是整页 in）
+[RED ] ✅ ① 批量付款：不可付行不再禁用（check_batch 永远 enabled）
+[RED ] ✅ ② 批量付款：提交时不再整批重算（errors 不阻断、照落半批）
+[RED ] ✅ ③ 批量付款：付款方式取不到不再兜底「现汇」
+[RED ] ✅ ④ 批量付款：撤单行 / 剔除行照样能进付款批次
+[RED ] ✅ ⑤ 移出本次付款：顺手把**其它行**的草稿也清掉（丢已填值）
+[RED ] ✅ ⑥ 再次导入：受保护字段被覆盖（① 主闸 SOURCE_FOLLOWED 塞入受保护键 ＋ ② 兜底 pop 摘掉 —— 两头同破）
+[RED ] ✅ ⑦ 再次导入：审批金额没变也照样重算（值没变就不动 —— 破坏）
+[RED ] ✅ ⑧ 剔除判定：业务类型等值改成「包含」匹配（应误命中带后缀/前缀写法）
+[RED ] ✅ ⑨ 手动行：统计结算金额不再恒 0（跟传入值走）
+[RED ] ✅ ⑩ 手动行：录入人改从表单取（不再 = 当前登录用户）
+[RED ] ✅ ⑪ 手动行：项目候选不再排除小微壳
+[RED ] ✅ ⑫ 查看关联页：集采栏不再注明原因（臆造空值）
+[RED ] ✅ ⑬ 查看关联页：已付金额改按全部流水算（含已撤销）
+
+--- 还原复核 ---
+  OK  app/mod03_notice/domain.py  40a37f8004b58128d10bfcbe74a3c001
+  OK  app/mod03_notice/notice_pay.py  9ef94398d891582a67ede5af0465f6e4
+  OK  app/mod03_notice/merge.py  2ec0d58679a6ff95daf1946e87599e5c
+  OK  app/mod03_notice/classify.py  66c9f4bb43f8e3f46655245a3d9e9ee4
+  OK  app/mod03_notice/notice_actions.py  0ca8ef781f3fa0a82195c423a439d4d0
+  OK  app/mod03_notice/notice_page.py  c74b3db8a6cbf1982281998cd9bd383d
+
+命中 13/13 · 变异点找不到 0 · 变异后仍绿 0
+exit=0

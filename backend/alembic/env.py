@@ -1,0 +1,63 @@
+"""Alembic 迁移环境。
+
+依据：
+- 工程坑 1.2-5：**schema 变更唯一入口 = 迁移**（autogenerate → upgrade）；禁建表 API 改既有库
+- 连接串**从 `.env` 读**（`app.core.config`），**不写进 `alembic.ini`**（凭据禁入版本库）
+"""
+
+from logging.config import fileConfig
+
+from sqlalchemy import engine_from_config, pool
+
+from alembic import context
+
+import app.core.models_registry  # noqa: F401  ← 模型注册（决定 autogenerate 可见性）
+from app.core.config import get_settings
+from app.core.db import Base
+
+config = context.config
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+# 连接串来源 = .env；⚠️ configparser 会做 % 插值，故把 % 转义
+_url = get_settings().database_url or ""
+config.set_main_option("sqlalchemy.url", _url.replace("%", "%%"))
+
+target_metadata = Base.metadata
+
+
+def run_migrations_offline() -> None:
+    context.configure(
+        url=config.get_main_option("sqlalchemy.url"),
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+        compare_server_default=True,
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            compare_server_default=True,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
