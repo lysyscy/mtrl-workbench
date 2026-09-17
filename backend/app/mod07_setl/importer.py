@@ -7,8 +7,10 @@
 - 实现层借鉴 = `PRD素材包-20260911/input/{sfjc_export_http,schema_cols}.py`（⚠️ 只借鉴**解析规则**，口径不得反推）：
   **拆合并单元格填充**（合并区取左上角值）、**剔除「合计」行**、**去千分位逗号**
 
-⚠️ **表头跨 1~2 行**（导出里是合并表头）⇒ 逐列把表头块各行的文字**拼接**成列名（重复片段去重），
-   「期初」＋「数量」⇒ `期初数量`，与导出表头一致。
+⚠️ **表头跨 2 行**（导出里是合并表头）⇒ 逐列**取该列最下面一个有文字的行**作为列名：
+   第 1 行 = 分组名（`期初统计` / `收统计` / `发统计` / `结存统计`，横向合并）· 第 2 行 = **真实列名**
+   （`期初数量` / `收金额`…）。⚠️ 2026-09-17 真机导出实测纠正：原先按"上下拼接"实现 ⇒ 得到
+   `期初统计期初数量`，**关键列一个都认不出**（真机抓取首跑就失败）。
 ⚠️ **关键列缺失 / 数字列非数字 ⇒ 报错不猜**（带行号与原文，不静默丢行）。
 ⛔ 本模块**不连库、不写文件**（落库由 `repository.upsert_month` 负责）。
 """
@@ -92,16 +94,23 @@ def read_grid(content: bytes) -> list[list[str]]:
 
 
 def _column_names(grid: list[list[str]], depth: int) -> list[str]:
-    """表头块（前 `depth` 行）→ 每列一个列名（多行**拼接**，重复片段去重）。"""
-    width = max((len(grid[r]) for r in range(min(depth, len(grid)))), default=0)
+    """表头块（前 `depth` 行）→ 每列一个列名：⭐ **取该列最下面一个有文字的行**。
+
+    ⚠️ **2026-09-17 真机导出实测纠正**：真实表头第 1 行是**分组名**（`期初统计` / `收统计` / `发统计`
+    / `结存统计`），第 2 行才是**真实列名**（`期初数量` / `收金额` …）。
+    原先的"上下拼接"得到 `期初统计期初数量` ⇒ **关键列一个都认不出**（真机抓取首次跑就失败）。
+    ⇒ 多层表头的标准取法 = **叶子行胜出**；该列叶子行为空（只有分组名）时回落到上一行文字。
+    """
+    rows = [grid[r] for r in range(min(depth, len(grid)))]
+    width = max((len(r) for r in rows), default=0)
     out: list[str] = []
     for c in range(width):
-        parts: list[str] = []
-        for r in range(min(depth, len(grid))):
-            v = grid[r][c] if c < len(grid[r]) else ""
-            if v and v not in parts:
-                parts.append(v)
-        out.append("".join(parts))
+        name = ""
+        for row in rows:                       # 自上而下 ⇒ 最后一个非空者胜出
+            v = row[c] if c < len(row) else ""
+            if v:
+                name = v
+        out.append(name)
     return out
 
 

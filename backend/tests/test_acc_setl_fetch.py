@@ -40,12 +40,12 @@ COLUMNS: tuple[str, ...] = (
     "期初数量", "期初金额", "收数量", "收单价", "收金额",
     "发数量", "发单价", "发金额", "结存数量", "结存金额",
 )
-# 两行表头里「组名 → 子列」的对应（导出里是横向合并）
+# 两行表头：**第 1 行 = 分组名（横向合并）· 第 2 行 = 真实列名**（与真机导出一致，2026-09-17 实测）
 GROUPS: dict[str, tuple[str, ...]] = {
-    "期初": ("期初数量", "期初金额"),
-    "收": ("收数量", "收单价", "收金额"),
-    "发": ("发数量", "发单价", "发金额"),
-    "结存": ("结存数量", "结存金额"),
+    "期初统计": ("期初数量", "期初金额"),
+    "收统计": ("收数量", "收单价", "收金额"),
+    "发统计": ("发数量", "发单价", "发金额"),
+    "结存统计": ("结存数量", "结存金额"),
 }
 
 
@@ -62,12 +62,10 @@ def build_xlsx(rows: list[list], *, order: tuple[str, ...] | None = None,
     ws.title = "报表1"
 
     if merged:
-        head1 = [next((g for g, m in GROUPS.items() if c in m), "") if c in COLUMNS else c
-                 for c in order]
-        head2 = [c[len(g):] if (g := next((g for g, m in GROUPS.items() if c in m), "")) else ""
-                 for c in order]
-        ws.append([g if g else c for g, c in zip(head1, order)])
-        ws.append(head2)
+        # 第 1 行 = 分组名（该组首列有值，其余留空后横向合并）；第 2 行 = **真实列名**（照真机导出）
+        head1 = [next((g for g, m in GROUPS.items() if c in m), c) for c in order]
+        ws.append(head1)
+        ws.append(list(order))
         # ⚠️ 必须**先写后并** —— openpyxl 对已合并区域的写会报 cell 只读
         for i, c in enumerate(order, start=1):
             g = next((g for g, m in GROUPS.items() if c in m), "")
@@ -211,10 +209,15 @@ def test_按表头文字认列且关键列缺失报错不猜():
 @acc(CASE, "001-05")
 def test_拆合并表头并剔除合计行():
     rows = importer.parse_rows(_xlsx_one(), ym="2026-08")
-    # 合并表头（「期初」＋「金额」⇒「期初金额」）认得出来 ⇒ 只留 1 条明细（合计行与空行都已剔除）
+    # 合并表头认得出：第 1 行分组名（`期初统计`…）＋ 第 2 行真实列名（`期初金额`…）⇒ **取第 2 行**
+    # （2026-09-17 真机导出实测的形状；原先按"上下拼接"实现，真机一跑就认不出关键列）
     assert len(rows) == 1, f"应只剩 1 条明细，实得 {len(rows)}"
     assert rows[0]["warehouse_name"] == "甲仓"
     assert "合计" not in {r["warehouse_name"] for r in rows}
+    # ⭐ 认列必须**取表头块最下面一行**（叶子行）—— 第 1 行的 `期初统计` 只是分组名
+    index, first = importer.find_header_block(importer.read_grid(_xlsx_one()))
+    assert {"期初金额", "收金额", "发金额", "结存金额"} <= set(index), "合并表头认列取错行"
+    assert first == 2, "数据首行应是表头块之后（第 2 行表头 ⇒ 数据从第 3 行起）"
 
     # 有金额却没仓库名 ⇒ **报错**（不静默丢行）
     orphan = _line(_values(warehouse=""))
