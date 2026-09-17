@@ -67,6 +67,22 @@ class LogOut(BaseModel):
     changed_at: str
 
 
+class TrailOut(BaseModel):
+    """字段留痕（**最近若干条**，供 `m01` 页「修改留痕」卡）。
+
+    ⚠️ 只含 §9.3 规定的两处：**项目全名 / 项目状态**（展示名与 `ord` 不留痕）。
+    """
+
+    at: str
+    project: str = Field(..., description="展示名优先的项目标签")
+    field: str = Field(..., description="name_full / status")
+    field_label: str = Field(..., description="中文列名（前端表格直接显示）")
+    before: str = ""
+    after: str = ""
+    by: str = ""
+    note: str = ""
+
+
 class OwnershipRequest(BaseModel):
     name_full: str = Field(..., description="付款通知书的「付款项目」全名（i8 只给全名）")
     doc_name: str = Field("", description="单据名称（壳全名时用它匹配关键词）")

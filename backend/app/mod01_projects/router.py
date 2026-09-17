@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.core.db import session_scope
 from app.core.errors import MustReportError
+from app.core.identity import current_operator
 from app.mod01_projects import repository as repo
 from app.mod01_projects.domain import build_candidates, ordered, resolve_ownership
 from app.mod01_projects.models import Project
@@ -22,10 +23,14 @@ from app.mod01_projects.schemas import (
     OwnershipResponse,
     ProjectOut,
     StatusRequest,
+    TrailOut,
     UpdateProjectRequest,
 )
 
 router = APIRouter(prefix="/api/m01", tags=["mod01"])
+
+# 留痕字段 → 中文列名（§9.3 只有这两处；未知字段**原样返回**、不吞）
+FIELD_LABEL = {"name_full": "项目全名", "status": "项目状态"}
 
 
 def _out(p: Project) -> ProjectOut:
@@ -103,7 +108,7 @@ def update_project(project_id: int, req: UpdateProjectRequest) -> ProjectOut:
         if p is None:
             raise HTTPException(status_code=404, detail="档案行不存在")
         if req.name_full is not None:
-            repo.rename_full(s, p, req.name_full, changed_by=req.changed_by)
+            repo.rename_full(s, p, req.name_full, changed_by=req.changed_by or current_operator())
         if req.disp is not None:
             repo.set_disp(s, p, req.disp)
         if req.match_keywords is not None:
@@ -118,7 +123,7 @@ def set_status(project_id: int, req: StatusRequest) -> ProjectOut:
         p = repo.get_project(s, project_id)
         if p is None:
             raise HTTPException(status_code=404, detail="档案行不存在")
-        repo.set_status(s, p, req.status, changed_by=req.changed_by)
+        repo.set_status(s, p, req.status, changed_by=req.changed_by or current_operator())
         return _out(p)
 
 
@@ -150,6 +155,28 @@ def project_logs(project_id: int) -> list[LogOut]:
                 changed_at=r.changed_at.isoformat(timespec="seconds"),
             )
             for r in rows
+        ]
+
+
+@router.get("/trails", response_model=list[TrailOut])
+def trails(limit: int = Query(20, ge=1, le=200)) -> list[TrailOut]:
+    """**最近字段留痕**（§9.3：只有项目全名 / 项目状态）—— 供 `m01`「修改留痕」卡。
+
+    ⚠️ 与 `/projects/{id}/logs` 分工：那个是**单行**明细，这个给**跨项目**的最近改动。
+    """
+    with session_scope() as s:
+        return [
+            TrailOut(
+                at=e.changed_at.isoformat(sep=" ", timespec="seconds"),
+                project=label,
+                field=e.field,
+                field_label=FIELD_LABEL.get(e.field, e.field),
+                before=e.old_value,
+                after=e.new_value,
+                by=e.changed_by,
+                note=e.note or "",
+            )
+            for e, label in repo.list_recent_logs(s, limit=limit)
         ]
 
 

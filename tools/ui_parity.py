@@ -12,6 +12,7 @@
 | `U1` | ⭐⭐ **原型逻辑一行不改**（D18 的硬约束）—— 把原型的筛选 / 排序 / 合计 / 勾选逻辑**顺手改掉**，就再没有"规格"可言了 | 壳的每个 `V.<页>` 切片 与原型同名切片**逐行一致**；差异未登记 ⇒ **红**（登记簿 `tools/ui_parity_expected.txt` · **只准变短**） |
 | `U2` | **演示数据与"假话"不得残留**（D18 产品化红线①） | ① 壳里出现原型的三张演示数组（`PJ` / `NT` / `FL`）⇒ **红**；② 壳里必须**同时**存在「已接后端真实数据」与「原型态」两种措辞（缺任一种 ⇒ 顶栏又会**一律**说"全是虚构" = 对已接线页说假话）⇒ **红** |
 | `U3` | **`WIRED` 自洽** | 壳里必须有 `WIRED` 集合，且**它的每个成员都真实存在于 `V`**（防"标了个不存在的页"）⇒ **红** |
+| `U4` | ⭐ **`WIRED` 的页必须真的指向后端**（2026-09-17 补） | `WIRED` 里的每页 `mNN` ⇒ 壳里必须出现 `/api/mNN`。**这只是"接线点存在"，不是"调通了"** —— 但能挡住最廉价的一种假绿：把页标成"已接后端"而壳里**一个该模块的接口都没调**（顶栏就会对真数据说"已接"）⇒ **红** |
 
 ⚠️ **本工具测不了什么（别误当已覆盖）**：**「标了已接后端，其实没接」** ——
     "某一页的数据由谁喂"无法从源码机械判定 ⇒ 那一条靠**真机自检**（`tools/_shell_smoke.py` /
@@ -155,7 +156,21 @@ def main() -> int:
             if k not in s_views:
                 u3.append(f"`WIRED` 里的 `{k}` 在壳里没有对应的 `V.{k}` 切片")
 
-    red = len(u1_new) + len(u2) + len(u3) + len(missing)
+    # ── U4 · `WIRED` 的页必须真的指向后端（接线点存在）
+    #     ⚠️ 判的是 `/api/mNN` 出现在壳里 —— **弱**：它证不了"运行时调通"。
+    #     但强于只看 `WIRED`：标了"已接后端"却一个接口都没调，是**最廉价的一种假绿**。
+    u4: list[str] = []
+    for k in wired:
+        m = re.match(r"^m(\d{2})$", k)
+        if not m:
+            continue                       # `home` 之类没有模块号：本检查不覆盖（记在报告里）
+        if f"/api/m{m.group(1)}" not in shell_text:
+            u4.append(
+                f"`WIRED` 标了 `{k}` 是「已接后端真实数据」，但壳里找不到 `/api/m{m.group(1)}` "
+                f"⇒ 这页其实没接（顶栏在对真数据说假话）"
+            )
+
+    red = len(u1_new) + len(u2) + len(u3) + len(u4) + len(missing)
 
     if args.write_expected:
         head = [
@@ -170,7 +185,8 @@ def main() -> int:
         return 0
 
     if args.json:
-        print(json.dumps({"u1_new": u1_new, "u1_ok": len(u1_ok), "u2": u2, "u3": u3, "missing": missing},
+        print(json.dumps({"u1_new": u1_new, "u1_ok": len(u1_ok), "u2": u2, "u3": u3, "u4": u4,
+                          "missing": missing},
                          ensure_ascii=False, indent=2))
         return 1 if red else 0
 
@@ -189,7 +205,8 @@ def main() -> int:
         print(f"    …还有 {len(u1_new) - 25} 行")
     if missing:
         print(f"─ U1b · 壳里缺切片 —— ⛔ {len(missing)} 个：{', '.join(missing)}")
-    for name, items in (("U2 · 演示数组 / 假话残留", u2), ("U3 · WIRED 自洽", u3)):
+    for name, items in (("U2 · 演示数组 / 假话残留", u2), ("U3 · WIRED 自洽", u3),
+                        ("U4 · WIRED 的页是否真指向后端", u4)):
         print(f"─ {name} —— {'✅ 无' if not items else f'⛔ {len(items)} 条'}")
         for it in items[:10]:
             print("    " + it)

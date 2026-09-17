@@ -308,3 +308,21 @@ def list_logs(session: Session, project_id: int) -> list[ProjectFieldLog]:
             .order_by(ProjectFieldLog.id.desc())
         ).scalars().all()
     )
+
+
+def list_recent_logs(
+    session: Session, *, limit: int = 20
+) -> list[tuple[ProjectFieldLog, str]]:
+    """**全站**最近的字段留痕（新 → 旧），带项目标签。
+
+    为什么要有"全站"版本：`m01` 页的「修改留痕」卡是**跨项目**的最近改动列表
+    （原型 `V.m01` 里读的就是一个全局列表 `PJ_TRAIL`）⇒ 逐项目调 `list_logs` 取不出来。
+    项目标签口径 = **展示名 → 仓库名 → 项目全名**（与 `pjDisp` 一致：屏幕上认哪个名字就用哪个）。
+    """
+    rows = session.execute(
+        select(ProjectFieldLog, Project)
+        .join(Project, Project.id == ProjectFieldLog.project_id)
+        .order_by(ProjectFieldLog.id.desc())
+        .limit(max(1, int(limit)))
+    ).all()
+    return [(log, str(p.disp or p.warehouse_name or p.name_full or "")) for log, p in rows]

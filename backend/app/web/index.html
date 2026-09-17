@@ -1036,7 +1036,7 @@ const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
-const WIRED=new Set(['m03']);
+const WIRED=new Set(['m03','m01']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -3734,9 +3734,11 @@ const ACT={
     }catch(e){ t.value=old; toast(`⚠️ 改分类失败：${esc(String((e&&e.message)||e))}`); } },
  /* 展示名人工修改（默认取仓库名；改它只影响显示，不影响项目归属）
     ⚠️ 不留痕 —— 留痕只给 ENT-01 明确要求的两处：项目全名 / 项目状态 */
- editDisp:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
-   const v=String(t.value).trim(); if(v===p.disp) return;
-   p.disp=v; render(); toast(`展示名已改为 <b>${esc(v)}</b>（只影响显示，不影响项目归属；该字段不留痕）`); },
+  editDisp:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+    const v=String(t.value).trim(); if(v===p.disp) return;
+    /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` —— 展示名**可改、不留痕**（§2.3.1 / §9.3） */
+    pjAct(()=>API.pjUpdate(p.id,{disp:v}),
+      `展示名已改为 <b>${esc(v)}</b>（只影响显示，不影响项目归属；该字段不留痕）`); },
  /* ⭐ 已接后端：`POST /api/m03/actions/exclude`（标记来源 `manual` 由后端定） */
  batchEx:async ()=>{ if(!pickSet.size) return toast('请先勾选要剔除的记录');
    try{
@@ -4077,63 +4079,73 @@ const ACT={
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delLgOk" data-id="${l.id}">确认删除</button>`}); },
  delLgOk:t=>{ const i=LGs.findIndex(l=>l.id===t.dataset.id); if(i>=0) LGs.splice(i,1); closeModal(); render(); toast('期初占位行已删除（软删留痕），欠款合计已重算'); },
 
- /* —— MOD-01 —— */
- editFull:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), v=t.value.trim(); if(v===p.full) return;
-   pushTrail(PJ_TRAIL,{obj:p.name||p.full, field:'项目全名', before:p.full, after:v}); p.full=v; render(); toast(`项目全名已修改并<b>留痕</b>（尾码须经 strip_trailing_code 剥离）`); },
- editStatus:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), v=t.value; if(v===p.status) return;
-   /* 2026-09-13 用户口径：**归档小微壳 ⇔ 壳下具体小微已全部归档**。
-      ① 壳下还有在建小微 → **不许归档壳**，列出来告诉你先归谁（R9/R14：拦了就讲清"为什么 + 怎么解决"，原值保留）。 */
-   if(v==='归档'&&p.type==='shell'){
-     const live=PJs.filter(k=>k.parent===p.id&&k.status==='在建');
-     if(live.length){ render();
-       toast(`<b>不能归档「${esc(p.full)}」</b>：它下面还有 <b>${live.length}</b> 个<b>在建</b>的具体小微 —— ${live.map(k=>esc(pjDisp(k))).join('、')}。<br>请先把这些小微<b>逐个归档</b>，再回来归档壳`,7000); return; }
-   }
-   pushTrail(PJ_TRAIL,{obj:p.name||p.full, field:'项目状态', before:p.status, after:v}); p.status=v;
-   /* ② 对称规则：把壳下**最后一个在建小微**归档 ⇒ 壳自动跟着归档（不变式：壳归档 ⇔ 小微全归档）。
-      壳自己也要留痕，改动原因写清楚，便于事后追责。 */
-   let sh2=null;
-   if(v==='归档'&&p.type==='small'&&p.parent){ const sh=PJs.find(x=>x.id===p.parent);
-     if(sh&&sh.status==='在建'&&!PJs.some(k=>k.parent===sh.id&&k.status==='在建')){
-       pushTrail(PJ_TRAIL,{obj:sh.name||sh.full, field:'项目状态', before:'在建', after:'归档'}); sh.status='归档'; sh2=sh; } }
-   render();
-   toast(`状态改为 <b>${v}</b>（各处筛选默认「在建」）`+(sh2?`<br>壳下已无在建小微 ⇒ 壳「${esc(sh2.full)}」<b>自动一并归档</b>（已留痕）`:'')); },
+  /* —— MOD-01 —— */
+  /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` —— 全名**可改 + 留痕**（§2.3.1 / §9.3）。
+     ⚠️ 尾码剥离（`strip_trailing_code`）在**后端**做：导出 / 仓库同步 / 项目同步**三处共用同一份**。 */
+  editFull:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), v=t.value.trim(); if(!p||v===p.full) return;
+    pjAct(()=>API.pjUpdate(p.id,{name_full:v}),
+      `项目全名已修改并<b>留痕</b>（尾码须经 strip_trailing_code 剥离）`); },
+  /* ⭐ 已接后端：`PUT /api/m01/projects/{id}/status`
+     ⛔ **不变式整段搬到后端**（`domain.apply_status_change` —— 与判据同一份纯函数）：
+        ① 壳下还有在建小微 ⇒ **拒绝归档**并把是谁列出来（原值保留）；
+        ② 归档壳下**最后一个在建小微** ⇒ 壳**自动跟着归档**（各自留痕）。
+     前端只把后端回执显示出来 —— 自己算就有两份规则（D18：判定与落库一律后端）。 */
+  editStatus:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), v=t.value; if(!p||v===p.status) return;
+    const wasSmall=(v==='归档'&&p.type==='small'&&p.parent);
+    pjAct(()=>API.pjStatus(p.id, PJ_STATUS_VALUE[v]||v), ()=>{
+      const sh=wasSmall?PJs.find(x=>x.id===p.parent):null;
+      return `状态改为 <b>${v}</b>（各处筛选默认「在建」）`
+        +((sh&&sh.status==='归档')?`<br>壳下已无在建小微 ⇒ 壳「${esc(sh.full)}」<b>自动一并归档</b>（已留痕）`:'');
+    });
+  },
  /* —— 自定义排序（2026-09-13 用户口径）——
     `ord` 挂在**档案行**（= 仓库，唯一标识 §9.8-4）上：全名 / 仓库名 / 展示名只是同一行的三种叫法，
     **全站各处都按这一条 ord 排**。改完**重编号**保持 1..N 连续无重复。
     ⚠️ **不留痕**：排序只是展示顺序，不是业务口径（与现行留痕范围一致）。 */
- editOrd:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
-   /* 填号 = **插到那个位置**（而不是"把 ord 改成这个数"）—— 后者遇并列时结果取决于原顺序，不直观。
-      做法：把该行从当前序列里取出 → 插到第 v 位 → 全表重编号（1..N 连续）。 */
-   const v=Math.max(1,Math.min(PJs.length,Math.floor(Number(t.value)||1)));
-   const L=pjSortedAll().filter(x=>x.id!==p.id);
-   L.splice(v-1,0,p);
-   let i=1; L.forEach(x=>{ x.ord=i++; });
-   render();
-   toast(`「${esc(p.name||p.full)}」已排到第 <b>${p.ord}</b> 位：全站（选项目 / 选仓库 / 选展示名）顺序同步<br>注：<b>归档项恒在最后</b>，所以填的位次与最终位置可能有偏差`,6000); },
- ordUp:t=>ACT.ordMove(t.dataset.id,-1),
- ordDown:t=>ACT.ordMove(t.dataset.id,1),
- /* ↑ / ↓ = 与**相邻**一行对调（在"当前显示顺序"里，即自定义排序顺序），不是改 ord 数字 */
- ordMove:(id,d)=>{ const p=PJs.find(x=>x.id===id); if(!p) return;
-   const L=pjSortedAll(), i=L.findIndex(x=>x.id===id);
-   if(i<0) return;
-   const j=i+d;
-   if(j<0||j>=L.length){ toast(d<0?'已经在最前面了':'已经在最后面了'); return; }
-   const q=L[j], a=p.ord, b=q.ord; p.ord=b; q.ord=a; renumberPj(); render();
-   toast(`「${esc(p.name||p.full)}」已${d<0?'上移':'下移'}一位（与「${esc(q.name||q.full)}」对调）<br>注：<b>归档项恒在最后</b>，所以移动不会跨过在建 / 归档的分界`); },
+  /* ⭐ 已接后端：`PUT /api/m01/projects/{id}/ord` —— **填号 = 插到第 v 位 ＋ 全表重编号 1..N**（§2.7.3）
+     ⚠️ 重编号与「不跨在建 / 归档分界」都在后端（`domain.reorder`，与判据同一份纯函数），前端只报结果。 */
+  editOrd:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+    const v=Math.max(1,Math.min(PJs.length,Math.floor(Number(t.value)||1)));
+    pjAct(()=>API.pjOrd(p.id,{to_position:v}), ()=>{
+      const np=PJs.find(x=>x.id===p.id);
+      return `「${esc(p.name||p.full)}」已排到第 <b>${np?np.ord:'?'}</b> 位：全站（选项目 / 选仓库 / 选展示名）顺序同步<br>注：<b>归档项恒在最后</b>，所以填的位次与最终位置可能有偏差`;
+    }, 6000); },
+  ordUp:t=>ACT.ordMove(t.dataset.id,-1),
+  ordDown:t=>ACT.ordMove(t.dataset.id,1),
+  /* ↑ / ↓ = 与**相邻**一行对调（在"当前显示顺序"里，即自定义排序顺序），不是改 ord 数字。
+     ⚠️ 「已在最前 / 最后」这类边界**由后端判**（它不动、也不跨分界）⇒ 前端只比 ord 有没有变。 */
+  ordMove:(id,d)=>{ const p=PJs.find(x=>x.id===id); if(!p) return;
+    const before=p.ord;
+    pjAct(()=>API.pjOrd(p.id,{direction:d<0?'up':'down'}), ()=>{
+      const np=PJs.find(x=>x.id===id);
+      if(np&&np.ord===before) return d<0?'已经在最前面了':'已经在最后面了';
+      const L=pjSortedAll(), i=L.findIndex(x=>x.id===id), q=L[i+(d<0?1:-1)];
+      return `「${esc(p.name||p.full)}」已${d<0?'上移':'下移'}一位${q?`（与「${esc(q.name||q.full)}」对调）`:''}<br>注：<b>归档项恒在最后</b>，所以移动不会跨过在建 / 归档的分界`;
+    }); },
  editKw:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
    modal({title:`小微识别关键词 · ${p.name}`,body:`<div class="tip" style="margin-bottom:10px">关键词挂在<b>具体小微的行</b>上，格式 <span class="fc">|词1|词2|</span>；<b>允许重复</b>，命中多个时弹窗让用户选（决策 3/4）。</div>
      <div class="fld"><label>关键词（用 | 分隔）</label><input class="inp" id="kwV" value="${esc(p.kw)}"></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="editKwOk" data-id="${p.id}">保存</button>`}); },
- editKwOk:t=>{ PJs.find(x=>x.id===t.dataset.id).kw=$('#kwV').value; closeModal(); render(); toast('关键词已保存到项目行'); },
+ /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` 的 `match_keywords`。
+    ⚠️ 输入是**竖线串**（`|词1|词2|`）、后端收**数组** ⇒ 在适配层 `kwSplit` / `kwJoin` 转（唯一出口）。 */
+ editKwOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+    const list=kwSplit($('#kwV').value);
+    closeModal();
+    pjAct(()=>API.pjUpdate(p.id,{match_keywords:list}),
+      `关键词已保存：<b>${esc(list.length?kwJoin(list):'（清空）')}</b>`); },
  promote:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
    modal({title:`扶正占位行 · ${p.name}`,body:`<div class="tip" style="margin-bottom:10px"><b>链路 B · 材料侧自动扶正</b>：材料报表遇陌生仓库 → 同步仓库名单 → 用<b>全名</b>回查占位行 → 命中 1 条即扶正改名 → 重跑导入。占位行的 <span class="fc">full_name</span> 就是扶正的<b>钥匙</b>。</div>
      ${kvBlock([['占位名',`<span class="fc">${esc(p.name)}</span>`],['项目全名',`<span style="font-size:11.5px">${esc(p.full)}</span>`],['phid',`<span class="fc">${p.phid||'—'}</span>`]])}
      <div class="fld"><label>同步到的真实仓库名（API-05 返回）</label><select class="inp" id="pmName"><option>新乡化纤差别化氨纶项目仓库</option><option>新乡化纤氨纶二期项目仓库</option></select></div>
      <div class="tip wn" style="margin:0">扶正后：<b>仓库名不可人工修改</b>（仅系统建档/扶正时写入）→ 这是一次<b>系统写入</b>，不是人工改名。</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="promoteOk" data-id="${p.id}">扶正</button>`}); },
- promoteOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), nv=$('#pmName').value; const old=p.name; p.name=nv;
-   closeModal(); render(); toast(`已扶正：<span class="fc">${esc(old)}</span> → <span class="fc">${esc(nv)}</span><br>本次导入已重跑，陌生仓库告警已记录`); },
-
+ /* ⏳ **尚未接通后端 —— 诚实提示（⛔ 不做假成功）**：
+    扶正是**系统写入**（§2.3.1「仓库名不允许人工修改」），它的候选来自 **API-05 同步到的真实仓库名**（要登录 i8）。
+    ⚠️ 落点只到一半：`repository.promote_placeholder()` 已实现并有判据；**缺**的是「取仓库名单」与路由两段
+    ⇒ 与**材料侧扶正链路**（`TAIL-29`-③）一起接通。 */
+ promoteOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), nv=$('#pmName').value;
+    closeModal();
+    toast(`⏳ <b>扶正尚未接通后端</b>：「${esc(p.name)}」→「${esc(nv)}」需要 <b>API-05 同步到的真实仓库名</b>（需登录 i8）；<br>落点已备（<span class="fc">promote_placeholder</span> ＋ 判据）⇒ 随<b>材料侧扶正链路</b>一起接通`,7000); },
  /* —— 链路 C · 归属判定（付款通知书行 → 具体小微）· 2026-09-12 定案 ——
     入口只开在「待指定」标签上；命中 1 个时**自动归集、不弹窗**（ownOf 已算好） */
  ownOpen:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
@@ -4245,23 +4257,25 @@ const ACT={
    modal({title:'删除确认',body:`<div class="tip dg"><b>⚠️ 必须列出删除影响范围</b>（§7.2）</div>
      ${kvBlock([['项目',`<span style="font-size:11.5px">${esc(p.full)}</span>`],
        ['关联付款通知书',`<span class="fc">${NO.filter(n=>n.proj===p.full).length} 条</span>`],
-       ['关联付款流水',`<span class="fc">${FLs.filter(f=>{const n=NO.find(x=>x.id===f.nid); return n&&n.proj===p.full;}).length} 条</span>`],
-       ['关联库存单据行',`<span class="fc">${IVs.filter(iv=>iv.pf===p.full).length} 行</span>`],
-       ['关联集采合同',`<span class="fc">${JCs.filter(j=>j.proj===p.name).length} 条</span>`]]
+       /* ⚠️ 下面三项要**跨模块数**（付款流水 / 库存单据 / 集采合同）⇒ 属 `MOD-13` 跨域能力，尚未落地。
+          ⛔ 不显示 `0` —— 那是**假话**（会让人以为"没有关联"）⇒ 如实标"待接通"。 */
+       ['关联付款流水',`<span class="mut">待接通（跨域能力）</span>`],
+       ['关联库存单据行',`<span class="mut">待接通（跨域能力）</span>`],
+       ['关联集采合同',`<span class="mut">待接通（跨域能力）</span>`]]
        .concat(PJs.filter(x=>x.parent===p.id).length?[['所属小微（仓库名）',`<span class="wn">${PJs.filter(x=>x.parent===p.id).map(x=>esc(x.name)).join(' / ')}</span>`]]:[]))}
      <div class="tip" style="margin:0">项目档案属<b>配置类数据 ⇒ 硬删</b>（§9.4）；被引用的核心业务数据（通知书 / 流水 / 库存单据 / 集采合同）<b>不随删</b> —— 它们仍保留原项目全名，页面上会显示为<b>未建档</b>。</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delPjOk" data-id="${p.id}">确认删除</button>`}); },
- /* ⭐ 2026-09-13 用户口径：这一处**真删** —— 原先「确认删除」挂的是 `data-act="silent"`（点了只弹提示、不做事）。
-    项目档案 = **配置类数据 ⇒ 硬删**（§9.4）；「删除前列影响范围」由上面的确认弹窗承担（§7.2）。
-    ⚠️ 只删**该行本身**：不连带其下小微、也不删被引用的通知书 / 流水 / 库存单据 / 集采合同
-       —— 《说明书》没有规定"连带删除"，**不擅自立规则**（那些数据仍保留原全名，页面显示「未建档」）。 */
+ /* ⏳ **尚未接通后端（诚实提示，⛔ 不做假成功）** —— 删除本身（配置类硬删 §9.4）不难，
+    难的是**先列影响范围**（§7.2）：要数关联的付款通知书 / 流水 / 库存单据 / 集采合同 = **跨模块统计**，
+    属 `MOD-13` 跨域能力。⇒ 在"列得出影响范围"之前**不接删除**，否则 §7.2 就成了一句空话。 */
  delPjOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
-   const i=PJs.indexOf(p); if(i<0) return;
-   PJs.splice(i,1);
-   closeModal(); render();
-   toast(`项目 <b>${esc(p.disp||p.name)}</b> 已删除（配置类 = 硬删，§9.4）—— 被引用的通知书 / 流水 / 库存单据 / 集采合同<b>未随删</b>，页面上会显示为「未建档」`,6400); },
- syncWh:()=>toast('已同步仓库名单（API-05）：8 个仓库；<b>尾码剥离</b>统一用 strip_trailing_code()'),
- syncPj:()=>toast('已同步常用项目列表（API-06）：9 个项目，phid 已写入；三态同步完成'),
+    closeModal();
+    toast(`⏳ <b>删除尚未接通后端</b>：「${esc(p.disp||p.name)}」—— 删除前必须<b>列出影响范围</b>（§7.2），那是<b>跨模块统计</b>；<br>该能力未落地前不接删除 —— 避免"列不出影响范围就删了"`,7000); },
+ /* ⏳ **尚未接通前端** —— 两个同步都要**登录 i8**（会**强踢**该账号的在线用户，D9）。
+    后端端点已存在（`/api/m02/sync/*`）；缺的是**抓前二次确认**（抓前必须告知会顶号）。
+    ⚠️ 开通时先跟业务方确认时段 —— 这也是今天没接的原因。 */
+ syncWh:()=>toast('⏳ <b>尚未接通</b>：同步仓库名单要登录 i8（会<b>强踢</b>在线用户）—— 接通前需先确认时段（D9）',6000),
+ syncPj:()=>toast('⏳ <b>尚未接通</b>：同步常用项目列表同上（登录 i8 ⇒ 强踢在线用户）',6000),
 
  /* —— MOD-06 —— */
  procPjToggle:()=>{ procPjOpen=!procPjOpen; render(); },
@@ -4853,13 +4867,37 @@ const API = {
     if (!r.ok) throw new Error(`POST ${url} → HTTP ${r.status}`);
     return r.json();              /* ⚠️ 恒 HTTP 200 —— 成败看 `ok` 标志（见 notice_api_router） */
   },
+  /* ⭐ `PUT` 等其余方法走这个 —— ⚠️ **失败时把后端的 `message` 原样抛出**：
+     `MOD-01` 的状态不变式是「拦了就讲清**为什么 + 怎么解决**」（§2.7.2），
+     若只抛 `HTTP 400`，那句"壳下还有 3 个在建小微：A、B、C"就丢了 ⇒ 用户只看到"保存失败"。
+     ⛔ 由 `core/errors.py::AppError` 统一转成 `{code, message}` + 对应状态码。 */
+  async send(method, url, body) {
+    const r = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    const text = await r.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+    if (!r.ok) throw new Error((data && (data.message || data.detail)) || text || `HTTP ${r.status}`);
+    return data;
+  },
   /* `period=""` ⇒ **全量**（口径见后端 `notice_filters`）—— 筛选用前端 `ntHit` 原样做 */
   notices: () => API.get('/api/m03/notice-list?period='),
-  projects: () => API.get('/api/m01/projects'),
+  /* ⚠️ `status=all`：原型的筛选**含归档**（默认值只是"在建"，候选里归档项排最后并标注，§2.7/§2.7.1）
+     ⇒ 取数必须**全量**，筛选项由原型自己的 `fPj` 逻辑做（⛔ 别把默认值当"只取在建"）。 */
+  projects: () => API.get('/api/m01/projects?status=all'),
+  /* 修改留痕（§9.3 只有"项目全名 / 项目状态"）—— 供 `m01` 的「修改留痕」卡 */
+  trails: () => API.get('/api/m01/trails?limit=20'),
   setCategory: (ids, category) =>
     API.post('/api/m03/actions/category', { ids, category: CAT_API[category] || category }),
   exclude: ids => API.post('/api/m03/actions/exclude', { ids }),
   restore: ids => API.post('/api/m03/actions/restore', { ids }),
+  /* ---- MOD-01 写动作（⛔ 判定与落库一律后端：状态不变式 / 排序重编号 / 全名留痕） ---- */
+  pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
+  pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),
+  pjOrd: (id, body) => API.send('PUT', `/api/m01/projects/${id}/ord`, body),
 };
 
 /* ---------- 字段适配：后端**语义字段** → 原型字段名（`NT_COLS` / `PJ_COLS`） ----------
@@ -4887,13 +4925,35 @@ function adaptNotice(x) {
   };
 }
 
+/* 项目状态：**内部值（后端）↔ 显示值（原型）**的唯一出口（§2.7 的枚举在前端是中文）。
+   ⛔ 不转的后果（实测口径）：`fPj.status`（`'在建'`）与 `p.status`（`'active'`）**永不相等**
+   ⇒ 项目档案页**恒为空**，且状态列的 `<select>` 一个都不选中 —— **静默、不报错**。 */
+const PJ_STATUS_LABEL = { active: '在建', archived: '归档' };
+const PJ_STATUS_VALUE = { '在建': 'active', '归档': 'archived' };
+/* 关键词：后端是**数组**、原型是**竖线串**（`|词1|词2|`，`editKw` 的输入框就是它）——
+   在同一个出口转，两侧都不改。 */
+const kwJoin = list => (list && list.length) ? '|' + list.join('|') + '|' : '';
+const kwSplit = s => String(s == null ? '' : s).split('|').map(x => x.trim()).filter(Boolean);
+
 function adaptProject(p) {
   return {
     id: String(p.id), name: p.warehouse_name || '', disp: p.disp || p.warehouse_name || '',
-    full: p.name_full || '', phid: p.phid || '', status: p.status || '',
-    type: p.project_type || '', parent: p.parent_shell_id,
-    kw: p.match_keywords || [], ord: p.ord,
+    full: p.name_full || '', phid: p.phid || '',
+    status: PJ_STATUS_LABEL[p.status] || p.status || '',
+    type: p.project_type || '',
+    /* ⚠️ `parent` 必须 `String()` —— 原型到处 `x.parent === p.id` 做**同值比较**，
+       而 `p.id` 是字符串、`parent_shell_id` 是数字 ⇒ 不转则**壳与小微永远对不上**
+       （具体小微显示不出所属壳，归档不变式也判不了）。与 `id` 同一条纪律。 */
+    parent: (p.parent_shell_id == null ? null : String(p.parent_shell_id)),
+    kw: kwJoin(p.match_keywords), ord: p.ord,
   };
+}
+
+/* 留痕：后端的**语义对象** → 「修改留痕」卡要的**六元数组**。
+   ⚠️ 为什么是数组：那张卡的渲染在 `V.m01` 里（原型**一行不改**），它按下标取
+   `[时间, 项目, 字段, 改前值, 改后值, 改动人]` ⇒ 转换只能落在适配层。 */
+function adaptTrail(l) {
+  return [l.at, l.project, l.field_label, l.before, l.after, l.by];
 }
 
 /* 写动作成功后**以后端为准**重拉（⛔ 前端不自己造状态 —— 否则前后端各一份、必漂） */
@@ -4903,13 +4963,36 @@ async function reloadNotices() {
   render();
 }
 
+async function reloadProjects() {
+  const [pj, tr] = await Promise.all([API.projects(), API.trails()]);
+  PJs = (pj || []).map(adaptProject);
+  PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
+  render();
+}
+
+/* 写动作的统一外壳：⛔ 后端拒绝时**把原因原样给用户**（如"壳下还有 N 个在建小微：A、B"），
+   并把界面**恢复成后端真实状态**（本地不保留任何乐观改动）—— 「原值保留」是 §2.7.2 的明确要求。 */
+async function pjAct(fn, okMsg, ms) {
+  try {
+    const r = await fn();
+    await reloadProjects();
+    toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, ms);
+    return r;
+  } catch (e) {
+    try { await reloadProjects(); } catch (_) { /* 取数也失败 ⇒ 交给 bootErrorBanner 的常驻提示 */ }
+    toast(`<b>没能改成</b>：${esc(String((e && e.message) || e))}`, 7000);
+    return null;
+  }
+}
+
 /* ---------- 启动：拉真数据 → 渲染；失败**降级成可读提示**（⛔ 不白屏、不静默） ---------- */
 let BOOT_ERROR = '';
 async function boot() {
   try {
-    const [nt, pj] = await Promise.all([API.notices(), API.projects()]);
+    const [nt, pj, tr] = await Promise.all([API.notices(), API.projects(), API.trails()]);
     NO = (nt.items || []).map(adaptNotice);
     PJs = (pj || []).map(adaptProject);
+    PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
   } catch (e) {
     BOOT_ERROR = String((e && e.message) || e);
   }
