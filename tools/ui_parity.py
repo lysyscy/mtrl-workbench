@@ -142,6 +142,19 @@ def main() -> int:
     if PROTO_TEXT not in shell_text:
         u2.append(f"壳里找不到「{PROTO_TEXT}」⇒ 未接线的页不再标明数据是模拟值")
 
+    # ── U2b · **已接线的页，它的演示数组必须已删**（"接线即清"，机器看管）
+    #     ⚠️ 只查 `WIRED` 里的页：未接线的页**正需要**演示数据（否则页面空着）。
+    DEMO_BY_PAGE = {"m03": "NT", "m01": "PJ", "m04": "PL"}
+    _mw = WIRED_RE.search(shell_text)
+    _wired_now = re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", _mw.group(1)) if _mw else []
+    for _page in _wired_now:
+        _arr = DEMO_BY_PAGE.get(_page)
+        if _arr and re.search(rf"const\s+{_arr}\s*=", shell_text):
+            u2.append(
+                f"`{_page}` 已标「已接后端真实数据」，但演示数组 `{_arr}` 还在壳里 "
+                f"⇒ 接线要连演示数据一起清（一份内容只许一个主人）"
+            )
+
     # ── U3 · WIRED 自洽
     u3: list[str] = []
     wired: list[str] = []

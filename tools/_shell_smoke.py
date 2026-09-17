@@ -90,6 +90,35 @@ def main() -> int:
             if not ok:
                 errors.append("m01 自检未通过：" + what)
 
+        # ---- m04 付款计划：结构件在线 ＋ 空库时给**空态**（⛔ 不是"表都没了"）
+        page.click('[data-k="m04"]')
+        page.wait_for_timeout(600)
+        m04 = page.evaluate("""() => {
+            const pills=[...document.querySelectorAll('#view .pill')].map(x=>x.innerText).join(' | ');
+            const m=pills.match(/显示\\s*(\\d+)\\s*条/);
+            return {
+              plans: PLs.length,
+              tables: document.querySelectorAll('#view table').length,
+              kpis: document.querySelectorAll('#view .kpi').length,
+              rows: document.querySelectorAll('#view tbody tr').length,
+              shown: m?Number(m[1]):null,
+              wiredLabel: document.querySelector('#ttl em').innerText,
+            };
+        }""")
+        print("⑥ m04 =", m04)
+        # ⚠️ `V.m04` **没有空态行**（原型如此）⇒ 不能断言"至少一行"；
+        #    改断**筛选条报出的条数 == 数据源条数** —— 这才是"页面真接上了数据源"的可观测证据。
+        oks2 = [
+            (m04["tables"] >= 1 and m04["kpis"] == 6, "结构件在线（表 ＋ 6 张判定卡）"),
+            ("已接后端" in m04["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            (m04["shown"] is not None and m04["shown"] == m04["plans"],
+             f"筛选条条数 == 数据源条数（{m04['shown']} vs {m04['plans']}）"),
+        ]
+        for ok, what in oks2:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("m04 自检未通过：" + what)
+
     print("\n=== console / page 错误 ===")
     if errors:
         for e in errors[:20]:
