@@ -1,17 +1,21 @@
 # 链路对账 · 认领表（chain_expected.txt）
 #
-# **真源** = 交付面「全自动建档-实施计划.md」**§三 三条链路**的每个分支。
-# 为什么要这张表（用户 2026-09-17 反思的结论）：**完成定义只到"零件"，接缝没人守** ——
-#   判据测纯函数、真机只看条数/报错、doc_audit 只查"能力行/口径节"⇒ **"业务句子有没有落地"没人盯**。
-#   同一天暴露 3 个接缝缺陷（剔除顺序 / 链路 C 弹窗 / 链路 A 接线），形态不同、同一类。
+# **真源** = `tools/chain_sources.txt` 注册的**每条链路各一节**（不是单一文档的一节）。
+# 契约原文（`PRD/05-任务分解.md` §二）：**「垂直切片（每片 = 一条需求能端到端跑通）」** ——
+#   **切片本来就是"链路"**；执行时被降解成「该切片名下 `ACC-*` 全绿」，而那些判据**全钉在模块内纯函数**上
+#   ⇒ **链路的中间环节没有人守**。本表 = 把"端到端"落成可机读的**认领**。
 #
 # 状态（**只准变短** —— 分支落地了就把状态改成「已接」）：
-#   已接     = 绿：落点存在且真的在这条链路上被调用（**由 wiring_audit 兜装配**）
+#   已接     = 绿：落点存在，**且已核过生产调用方就在这条链路内**（`wiring_audit` 另兜"零调用方"）
 #   接线缺   = **红**：零件写好了，但链路上没人调用它
 #   缺       = **红**：这一步**根本没有落点**
 #   形态不同 = 黄：实现了，但与文档写的那一步**形态不一样** ⇒ **待用户追认**（⛔ 不静默放过）
 #
-# 格式：`<链路>|<分支>|<文档锚（文档里的一段原文，归一化后匹配）>|<落点 path 或 path::名字 或 —>|<判据>|<状态>`
+# 格式：`<链路>|<分支>|<文档锚（真源里的一段原文，归一化后匹配）>|<落点 path 或 path::名字 或 —>|<判据>|<状态>`
+#   ⚠️ 判据写 `缺：…` ⇒ 该行本身就是一条**待补判据**的缺口（红）；写 `不可断言:…` ⇒ 黄。
+#   ⚠️ 文档锚写**短而独特的原句**（归一化后是子串即可）；写错 ⇒ `C2` 报红，**这正是"文档改了"的哨**。
+# ============================================================
+# ① 建档 / 归属（A/B/C · 真源 = 全自动建档-实施计划 §三）
 A|① 全名已在档案 ⇒ 归集、结束|全名是否已在档案中|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
 A|② 全名命中壳 ⇒ 走链路 C（小微拆解）|全名是否命中某个「壳」|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
 A|③ 启动建档（抓 phid → 抓仓库 → 建档 / 占位）|③ 启动建档|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
@@ -20,6 +24,8 @@ A|③-b 仓库命中 1 个 ⇒ 建档完成（真实仓库名）|抓到 1 个|ba
 A|③-b 仓库命中多个 ⇒ 列出让用户选，只建选中的那个|列出让用户选，只建选中的那个|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|形态不同
 A|③-b 仓库一个都没命中 ⇒ 占位名「未建仓-序号」|未建仓-序号|backend/app/mod01_projects/repository.py::next_placeholder|ACC-PRJ-ARCH-001|接线缺
 A|⭐ **整条链路的触发方**：抓付款通知书时自动走链路 A|付款侧自动建档|—|缺：需补判据（链路级）|缺
+A|③-a 子步：抓 phid（常用项目列表）|抓 phid（常用项目列表）|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
+A|③-b 子步：抓仓库信息（仓库列表按全名反查）|抓仓库信息（仓库列表按全名反查）|backend/app/mod01_projects/archive.py::warehouses_by_owner|ACC-PRJ-ARCH-001|接线缺
 B|① 记录一条「陌生仓库告警」（业务事实监测点）|记录一条「陌生仓库告警」|backend/app/mod01_projects/recovery.py::summary_text|ACC-PRJ-AUTO-001|形态不同
 B|② 自动跑一次「抓仓库名单」同步|自动跑一次「抓仓库名单」同步|backend/app/mod02_i8/sources.py::load_warehouse_rows|ACC-PRJ-AUTO-001|已接
 B|③ 用全名回查占位行：命中 1 条 ⇒ 扶正改名|用**全名**回查占位行|backend/app/mod01_projects/repository.py::promote_placeholder|ACC-PRJ-AUTO-001|已接
@@ -31,7 +37,26 @@ C|壳已建档 · 命中多个 ⇒ 弹窗让用户选（选中后关键词追加
 C|壳已建档 · 未命中 ⇒ **弹窗列表**（在建小微 ＋ 每个右侧必填词 ／ 末行「新小微」）|弹窗列表|—|缺：需补判据（链路级）|缺
 C|壳已建档 · 选「新小微」⇒ 抓仓库信息 → 建小微行 ＋ 录关键词|抓仓库信息 → 建小微行 + 录关键词|—|缺：需补判据（链路级）|缺
 C|壳未建档 ⇒ 先建壳（走链路 A ③）→ 抓仓库 → 录关键词 → 建具体小微行|先建壳（走链路 A 的 ③）|backend/app/mod01_projects/recovery.py::plan_recovery|ACC-PRJ-AUTO-001|形态不同
-A|③-a 子步：抓 phid（常用项目列表）|抓 phid（常用项目列表）|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
-A|③-b 子步：抓仓库信息（仓库列表按全名反查）|抓仓库信息（仓库列表按全名反查）|backend/app/mod01_projects/archive.py::warehouses_by_owner|ACC-PRJ-ARCH-001|接线缺
 C|未命中弹窗的**内容①**：在建的具体小微（每个右侧必填框，内容须出现在单据名中）|目前在建的具体小微（每个右侧必填框，内容必须出现在单据名中）|—|缺：需补判据（链路级）|缺
 C|未命中弹窗的**内容②**：末行「该项目属于新小微」|最后一行「该项目属于新小微」|—|缺：需补判据（链路级）|缺
+# ============================================================
+# ② P1 付款通知书：抓 → 剔除 → 分类 → 归属 → 落库 → 列表可见（真源 = 说明书 §4.7）
+P1|① 触发抓取（手动点击 ⇒ 调 i8 拉通知书 · 不走定时）|① 触发抓取|backend/app/mod03_notice/router.py::notices/fetch|ACC-I8-FETCH-001|已接
+P1|② 自动处理 · 剔除（4 类规则 · 命中即不入统计）|② 自动处理|backend/app/mod03_notice/classify.py::is_excluded|ACC-PAY-EXCL-001|已接
+P1|② 自动处理 · 分类（机械 / 集采 / 辅材）|② 自动处理|backend/app/mod03_notice/classify.py::decide_placement|ACC-PAY-CAT-001|已接
+P1|② 自动处理 · 落库（新行 / 已有行走再次导入合并）|再次导入的合并规则|backend/app/mod03_notice/router.py::apply_fetched_row|ACC-PAY-MERGE-001|已接
+P1|③ 人工修正 · 批量改分类（**保护不被覆盖**）|③ 人工修正 ── 批量改分类（保护不被覆盖）|backend/app/mod03_notice/notice_api_router.py::api_category|ACC-PAY-ACTION-001|已接
+P1|归属：项目全名 → 壳 / 具体小微（走链路 A/B/C）|付款项目命中某个壳|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
+P1|整批前哨：归属未走完 ⇒ **整批不入库**（§2.7.4）|归属未走完|backend/app/mod01_projects/domain.py::ensure_batch_settled|ACC-PRJ-OWN-001|已接
+P1|⭐ 整批校验**前**先剔掉规则剔除行（⛔ 文档未写 · 由 §4.2.2 含义推出 ⇒ 剔除行不参与整批校验）|指定项目不在统计范围|—|缺：需补判据（链路级）|缺
+P1|列表可见（未归属的行只在「全部项目」下可见）|只在「全部项目」下可见|backend/app/mod03_notice/notice_router.py::@page_router.get("/api/m03/notice-list")|ACC-PAY-LIST-001|已接
+# ============================================================
+# ③ P5 批量打印与只导出 PDF：勾选 → 取版式 → 渲染 PDF → IPP 出纸（真源 = 说明书 §4.6 / §4.7 ⑧）
+P5|勾选通知书 → 点「批量打印」（与只导出 PDF **共用同一次勾选**）|勾选通知书 → 点「批量打印」|backend/app/mod03_notice/router.py::get_batch_executor|ACC-PAY-PRINT-001|已接
+P5|取 i8 版式（**两类 `printId` 分流** · 不自绘版式）|取 i8 版式渲染 PDF 并推送打印机|backend/app/core/config.py::print_id_for_bill_type|ACC-PAY-PRINT-001|已接
+P5|版式里「不支持的件」被用到 ⇒ **显式报出**（不静默印错）|取 i8 版式渲染 PDF 并推送打印机|backend/app/mod03_notice/print/template.py::unsupported_in_use|ACC-PAY-PRINT-001|已接
+P5|渲染 HTML → PDF（**全工程唯一渲染入口**）|取 i8 版式渲染 PDF 并推送打印机|backend/app/mod03_notice/service.py::render_notice_html|ACC-PAY-PRINT-001|已接
+P5|签名槽位按审批节点绑定（有槽无数据留空 · 有数据零命中 ⇒ **停单报错**）|取 i8 版式渲染 PDF 并推送打印机|backend/app/mod03_notice/print/signatures.py::check_signature_coverage|ACC-PAY-PRINT-001|已接
+P5|出纸：PDF → **IPP 直投**打印机（失败显式报出）|推送打印机|backend/app/mod03_notice/print/ipp.py::send_pdf|ACC-PAY-PRINT-001|已接
+P5|**只导出 PDF**（与打印共用勾选 · 只落盘、**不投递**）|取 i8 版式渲染 PDF 并推送打印机|backend/app/mod03_notice/service.py::run_batch|ACC-PAY-PDF-001|已接
+P5|打印机地址设置（改完**即时生效·无需重启**）|推送打印机|backend/app/mod03_notice/router.py::set_printer_setting|ACC-PAY-SETUP-001|已接
