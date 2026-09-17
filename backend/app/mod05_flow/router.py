@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Callable
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.core.db import session_scope
@@ -201,11 +201,15 @@ def page_stats(
 
 @router.post("/m05/revoke")
 def act_revoke(
-    flow_id: int = Query(...), reason: str = Query(""),
-    year_month: str = Query(""), status: str = Query(""), pay_method: str = Query(""),
-    project_id: str = Query(""), keyword: str = Query(""),
+    flow_id: int = Form(...), reason: str = Form(""),
+    year_month: str = Form(""), status: str = Form(""), pay_method: str = Form(""),
+    project_id: str = Form(""), keyword: str = Form(""),
 ) -> RedirectResponse:
-    """撤销 → 303 回**流水页**原查询（**空原因被拒绝**，原因原样回报）。"""
+    """撤销 → 303 回**流水页**原查询（**空原因被拒绝**，原因原样回报）。
+
+    ⚠️ **参数一律 `Form`**：输入来自 `<form method="post">` 的 **body**（`view._hidden(q)` 的 hidden inputs）。
+       此前声明为 `Query` ⇒ 真机 `POST /m05/revoke` = **422**（2026-09-17 实测）⇒ **撤销按钮点了没反应**。
+    """
     q = {"year_month": year_month, "status": status, "pay_method": pay_method,
          "project_id": project_id, "keyword": keyword}
     try:
@@ -221,11 +225,14 @@ def act_revoke(
 
 @router.post("/m05/opening")
 def act_opening(
-    category: str = Query(...), project_id: int = Query(...), cutoff_ym: str = Query(""),
-    settle_amount: str = Query(""), paid_amount: str = Query(""), remark: str = Query(""),
-    end_ym: str = Query(""),
+    category: str = Form(...), project_id: int = Form(...), cutoff_ym: str = Form(""),
+    settle_amount: str = Form(""), paid_amount: str = Form(""), remark: str = Form(""),
+    end_ym: str = Form(""),
 ) -> RedirectResponse:
-    """录入 / 覆盖**期初占位行**（同一「口径 + 项目 + 截止年月」重复录入 = 覆盖）→ 303 回**台账页**。"""
+    """录入 / 覆盖**期初占位行**（同一「口径 + 项目 + 截止年月」重复录入 = 覆盖）→ 303 回**台账页**。
+
+    ⚠️ **参数一律 `Form`**（同上：期初表单的输入全在 body）。
+    """
     q = {"project_id": project_id, "end_ym": end_ym}
     try:
         if not str(cutoff_ym).strip():
@@ -242,8 +249,9 @@ def act_opening(
 
 @router.post("/m05/opening/delete")
 def act_opening_delete(
-    opening_id: int = Query(...), project_id: int = Query(0), end_ym: str = Query("")
+    opening_id: int = Form(...), project_id: int = Form(0), end_ym: str = Form("")
 ) -> RedirectResponse:
+    """删除期初占位行 → 303 回台账页。⚠️ **参数一律 `Form`**（同上）。"""
     q = {"project_id": project_id, "end_ym": end_ym}
     with session_scope() as s:
         n = repo.delete_opening(s, opening_id)
@@ -252,10 +260,13 @@ def act_opening_delete(
 
 @router.post("/m05/ledger/remark")
 def act_remark(
-    category: str = Query(...), project_id: int = Query(...), ym: str = Query(""),
-    remark: str = Query(""), end_ym: str = Query(""),
+    category: str = Form(...), project_id: int = Form(...), ym: str = Form(""),
+    remark: str = Form(""), end_ym: str = Form(""),
 ) -> RedirectResponse:
-    """写 / 清台账备注（**空串 = 清除该格**；键 = 口径 + 项目 + 月）→ 303 回**台账页**。"""
+    """写 / 清台账备注（**空串 = 清除该格**；键 = 口径 + 项目 + 月）→ 303 回**台账页**。
+
+    ⚠️ **参数一律 `Form`**（同上）。
+    """
     with session_scope() as s:
         text = repo.set_remark(s, category=category, project_id=int(project_id), ym=ym, remark=remark)
     tip = "已清除该格备注" if not text else f"备注已存：{text}"

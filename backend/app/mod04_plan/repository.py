@@ -31,6 +31,18 @@ def set_cell(s: Session, row: PlanRow, column: str, value: str) -> None:
     setattr(row, column, str(value or "").strip())
 
 
+def set_force(s: Session, row: PlanRow, *, forced: bool, remark: str = "") -> None:
+    """**强制通过 / 取消**落库（§4.3.4 · `ACC-PLAN-AUDIT-001`-09）。
+
+    ⚠️ **判定不在这里**：放行要走 `domain.force_through(remark)`（**空备注即拒**）、
+       取消要走 `domain.cancel_force()` —— 本函数**只落两列**（`forced_through` / `forced_remark`）。
+    ⚠️ 取消 = 回到原判定且备注清空、**不产生留痕**（§4.3.4）⇒ `forced=False` 时 `remark` 传空。
+    ⚠️ 两列都在 `KEEP_ON_REIMPORT` 里 ⇒ **再次导入不会把手动放行冲掉**。
+    """
+    row.forced_through = bool(forced)
+    row.forced_remark = str(remark or "").strip()
+
+
 def delete_by_ids(s: Session, ids: list[int]) -> int:
     """按 id 删除（只删该行）—— **只影响付款计划表**（§4.3.6）。"""
     if not ids:

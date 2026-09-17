@@ -158,8 +158,32 @@ def _row_html(data: dict, row: dict) -> str:
         f'<button type="submit" title="就地变草稿行（不新增行）">编辑</button></form>'
         if row.get("is_manual") else ""
     )
+    # 强制通过（§4.3.4）—— 语义照原型 `PL` 页：**只提示不拦截 · 放行必须写备注 · 取消不留痕**。
+    # ⚠️ 本页是**服务端渲染的过渡形态**（无 JS 弹窗 ⇒ 备注改为行内输入）；接壳时按原型改成弹窗。
+    force_html = ""
+    if matched:
+        force_html = '<span class="mut sm">无需处理</span>'
+    elif row["forced_through"]:
+        force_html = (
+            f'<span class="mut sm" title="{esc(row["forced_remark"])}">'
+            f'{esc(row["forced_remark"])}</span>'
+            f'<form class="inline" method="post" action="/m04/force-cancel">'
+            f'<input type="hidden" name="row_id" value="{int(row["id"])}">{hidden_filters(data)}'
+            f'<button type="submit" title="取消强制通过 → 回到原判定、备注清空（不产生留痕）">'
+            f"取消强制通过</button></form>"
+        )
+    else:
+        force_html = (
+            f'<form class="inline" method="post" action="/m04/force">'
+            f'<input type="hidden" name="row_id" value="{int(row["id"])}">{hidden_filters(data)}'
+            f'<input class="cell" name="remark" placeholder="放行理由（必填）" '
+            f'title="强制通过必须写备注（§4.3.4）—— 空备注会被拒绝">'
+            f'<button type="submit" title="系统只提示、不拦截；放行必须写备注（留痕）">强制通过</button>'
+            f"</form>"
+        )
     op = (
-        edit_btn
+        force_html
+        + edit_btn
         + ("" if matched else f'<form class="inline" method="post" action="/m04/re-match">'
          f'<input type="hidden" name="row_id" value="{int(row["id"])}">{hidden_filters(data)}'
          f'<button type="submit" title="按当前单据号重新比对 i8 通知书">再次匹配</button></form>')

@@ -70,7 +70,7 @@ P2|手动导入 Excel（**导入前先选「年月」** ⇒ 本批归入所选�
 P2|项目列**唯一匹配**档案（命中 0 ⇒ 标「未匹配」／多条 ⇒ 标「重名 N 条」）|命中 0 条 → 标「未匹配」|backend/app/mod04_plan/domain.py::match_project|ACC-PLAN-IMPORT-001|已接
 P2|**6 种审查判定**（完全匹配 / 金额不符 / 号查不到 / 无号 / 重复上报 / 超过未付）|比对结果共 6 种|backend/app/mod04_plan/domain.py::audit_rows|ACC-PLAN-AUDIT-001|已接
 P2|判重：同月同单据号（**空单据号不参与判重**）|同一月份内、同一单据号出现 ≥2 次|backend/app/mod04_plan/domain.py::duplicate_keys|ACC-PLAN-NODOC-001|已接
-P2|⭐ **强制通过**（确认无误后放行 · **必须写备注**留痕）|用户确认无误后可强制通过|backend/app/mod04_plan/domain.py::force_through|ACC-PLAN-AUDIT-001|接线缺
+P2|⭐ **强制通过**（确认无误后放行 · **必须写备注**留痕）|用户确认无误后可强制通过|backend/app/mod04_plan/router.py::act_force|ACC-PLAN-AUDIT-001|已接
 P2|可手改列（付款时间 / 付款方式 / 备注；**单据号只对未匹配行开放**）|单据号只对「未匹配」行开放修改|backend/app/mod04_plan/plan_ui.py::inline_edit|ACC-PLAN-UI-001|已接
 P2|「**再次匹配**」（改完单据号后重判该行）|改完点「再次匹配」重新比对|backend/app/mod04_plan/plan_ui.py::re_match|ACC-PLAN-UI-001|已接
 P2|**手动行**（本地补录 · ⭐ **一样要被审查**）|付款计划要手动行，而且手动行一样要被审查|backend/app/mod04_plan/plan_manual.py::manual_row_payload|ACC-PLAN-MANUAL-001|已接
