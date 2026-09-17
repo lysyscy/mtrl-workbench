@@ -166,16 +166,25 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         try:
             ensure_batch_settled(decisions)
         except MustReportError as exc:
+            # ⚠️ 报错**必须说清是哪几行** —— 只报数量等于没报：用户正是要据此去
+            #    「建档 / 补小微关键词」，不给名字他就无从下手（§2.5.1 链路 C 的出路）。
+            unsettled = [(r, d) for r, d in zip(rows, decisions) if not d.settled]
+            detail = "；".join(
+                f"{r.get('project_name') or '(项目名为空)'}（{d.kind}）" for r, d in unsettled[:10]
+            )
+            more = f"…等共 {len(unsettled)} 行" if len(unsettled) > 10 else ""
+            message = f"{exc}｜未走完的项目：{detail}{more}"
             with session_scope() as session:          # 另开一个 session 记失败（与上面抓取失败同款）
                 rec = create_run_record(session, run_type="fetch", target=year_month,
                                         total=len(rows))
                 finish_run_record(
                     session, rec, status="failed", success=0, fail=len(rows),
                     detail={"reason": "ownership_unsettled",
-                            "unsettled": sum(1 for d in decisions if not d.settled)},
-                    error_message=str(exc),
+                            "unsettled": len(unsettled),
+                            "projects": [str(r.get("project_name") or "") for r, _ in unsettled]},
+                    error_message=message,
                 )
-            raise
+            raise MustReportError(message) from exc
 
         with session_scope() as session:
             rec = create_run_record(session, run_type="fetch", target=year_month, total=len(rows))
