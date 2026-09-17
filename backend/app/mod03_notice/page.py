@@ -429,7 +429,11 @@ def render_list_page(
     """
     cols = [dict(c) for c in columns]
     rows = list(rows or ())
-    summaries = [summary] if isinstance(summary, dict) else list(summary or ())
+    # ⚠️ **空 dict 视为"没有合计行"**（2026-09-17 修）：调用方常写 `summary=calc(...)`，而 calc 在
+    #    「不该有合计行」时返回 `{}`（如 m03 切到「分类 = 剔除」⇒ 视图全为剔除行 ⇒ 不给一排 0）。
+    #    若不滤掉，会渲染出一行**格子全空**的 `<tr class="sum sumrow">` —— 比一排 0 更难看出问题。
+    _raw_summaries = [summary] if isinstance(summary, dict) else list(summary or ())
+    summaries = [s for s in _raw_summaries if s]
     return "\n".join(
         [
             f'<section class="view" data-view="{esc(page_id)}">',

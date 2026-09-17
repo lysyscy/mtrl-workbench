@@ -158,3 +158,44 @@ def test_API_的_items_不含HTML():
     assert "pick" not in item
     assert not any("<input" in str(v) for v in item.values())
     assert item["category_label"] == "辅材"                            # 分类是中文标签
+
+
+# ---------------------------------------------------------------- 表内合计行（001-09）
+
+CASE_LIST = "ACC-PAY-LIST-001"
+
+
+@acc(CASE_LIST, "001-09")
+def test_表内合计行只算非剔除行且全剔除时不给():
+    """`ACC-PAY-LIST-001/001-09`（2026-09-17 **新增**）：表内**合计行** —— 用户口径「**求和一律落在表内**」。
+
+    ⚠️ 这是 `m03` 列表页补的**结构判据**：该用例原有 8 点**全是数据口径**、无一条讲页面结构
+       ⇒ 实测（`tools/ui_parity.py` 拿原型源码比对）发现这一页**连合计行都没有**，而
+       `m04`/`m05`/`m08` 都传了 `summary=` —— 属"同一口径只做了一半"。
+    """
+    import re
+
+    from app.mod03_notice.notice_page import summary_row
+
+    # ① 一行正常 + 一行剔除（剔除行金额很大）⇒ **剔除行不得计入**
+    d = _data([
+        _notice(1, amount_approved=Decimal("10000.00")),
+        _notice(2, amount_approved=Decimal("999999.00"), excluded=True, exclude_source="manual"),
+    ])
+    html = render_notice_page(d)
+    assert '<tr class="sum sumrow" data-pin="1">' in html, "合计行须在 tbody 内、钉在表尾（不参与排序）"
+    row = summary_row(d)
+    assert row[columns()[0]["key"]] == "合计", "首格写「合计」（与 m08 同款）"
+    assert row["amount_approved_text"] == "10,000.00", \
+        f"剔除行不得计入合计，实得 {row['amount_approved_text']}"
+    # ② 5 个金额列逐列有合计（与原型 `sumRowOf` 的下标 10…14 一一对应）
+    for key in ("amount_approved_text", "pay_amount_text", "amount_paid_text",
+                "stat_settle_text", "stat_paid_text"):
+        assert row[key], key
+    # ③ 随筛选变动（只留一行 ⇒ 合计就是该行）
+    d1 = _data([_notice(1, amount_approved=Decimal("10000.00"))])
+    assert summary_row(d1)["amount_approved_text"] == "10,000.00"
+    # ④ 切「分类 = 剔除」⇒ 该视图**全为剔除行** ⇒ **不给合计行**（不给一排 0，免得看着像坏了）
+    d2 = _data([_notice(3, excluded=True, exclude_source="manual")], category=CATEGORY_EXCLUDE)
+    assert summary_row(d2) == {}, "全剔除视图不得给合计行"
+    assert not re.search(r'<tr class="sum sumrow"', render_notice_page(d2))

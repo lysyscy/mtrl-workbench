@@ -48,12 +48,17 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PROTO = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\demo\材料报表自动化工作台-交互原型.html")
 
-# 视图 → 实现路由（未实现的视图照样列出来，标「未开工」——不是失败）
+# 视图 → **实现里的正式页面路由**（⚠️ 2026-09-17 纠偏：**必须核实，不能按视图名猜**）
+#   · `m01` / `m02` / `m03` 是**旧的静态单文件页**（`static/m0N.html`，切片 MVP 形态，`main.py::_PAGES`）；
+#   · ⚠️ **`/m03` ≠ 付款通知书列表页** —— 那个路径是**静态打印 / PDF / 设置页**；
+#     列表页在 **`/m03/notices`**（服务端渲染，`main.py` 147 行有注明）。
+#     ⇒ 第一版核对器就栽在这里：拿静态页去比原型 ⇒ **假红**（把"测错对象"当成"实现不符"）。
+#   · `m04` 起（含 `home`）都是**服务端渲染**。
 PAGES: list[tuple[str, str, str]] = [
     ("home", "/", "看板 · 待办"),
     ("m01", "/m01", "项目档案"),
     ("m02", "/m02", "i8 接入层"),
-    ("m03", "/m03", "付款通知书"),
+    ("m03", "/m03/notices", "付款通知书"),
     ("m04", "/m04", "付款计划"),
     ("m05", "/m05", "付款流水与欠款统计"),
     ("m06", "/m06", "过程资料"),
@@ -63,20 +68,45 @@ PAGES: list[tuple[str, str, str]] = [
     ("m11", "/m11", "集采台账"),
     ("m12", "/m12", "差异登记"),
     ("m13", "/m13", "跨域能力"),
-    ("m14", "/m14", "规则配置"),
+    ("m14", "/m14/settings", "规则配置"),
     ("m15", "/m15", "用户管理"),
 ]
 
-# 结构件口径：键 → (原型侧正则, 实现侧正则)  —— 两侧同口径，避免"数法不同"的假差异
-PROBES: list[tuple[str, str]] = [
-    ("表", r"<table"),
-    ("筛", r'class="fbar"'),
-    ("卡", r"kpis"),
-    ("折", r"<details"),
-    ("合计", r"sumrow|sumRowOf"),
-    ("排序", r"data-sort"),
-    ("项目面板", r"pjwrap"),
+# 结构件口径：键 → (原型侧正则, 实现侧正则)
+#   ⚠️ **两侧形态本就可能不同**（原型是单文件演示版、实现是服务端渲染）⇒ 口径写"两侧各自的形态"，
+#      但**判据相同**：**这个页面该不该有这件东西**。
+#   ⚠️ 计数**必须剥掉 `<style>` / `<script>`**（见 `strip_assets`）—— 否则 CSS 里的 `.fbar{…}`
+#      会被当成"页面有筛选栏" ⇒ **第一版就栽在这里（假红一大片）**。
+PROBES: list[tuple[str, str, str]] = [
+    ("表", r"<table", r"<table"),
+    ("筛", r'class="fbar"', r'class="fbar"'),
+    ("卡", r'class="kpis"', r'class="kpis"'),          # ⚠️ 不用裸 `kpis`：`data-seg="kpis"` 是**段位占位**
+    ("折", r"<details", r"<details"),
+    ("合计", r"sumRowOf\(", r"sumrow"),
+    ("排序", r"<table[^>]*\sdata-sort[\s>]", r"data-sort-col"),
+    ("项目面板", r"pjwrap", r"pjwrap"),
 ]
+
+# 「比有无」而不比个数的键 —— 两侧**实现形态**天然不同（原型：表级 `data-sort` 一个属性；
+# 实现：逐列 `data-sort-col`）⇒ 数量不可比，**功能意图**（这页表格可不可排）才可比。
+BOOL_KEYS: frozenset[str] = frozenset({"排序"})
+
+# **依赖"页面上有数据"才渲染**的件 —— 空表时无从核对（不算差异）。
+# 实测教训（2026-09-17）：`m03` 补好合计行后，`/m03/notices` 因**库里没有通知书数据**而只渲染空态行
+# ⇒ 核对器报"合计不对齐"，其实**正确行为就是不给合计行**（不给一排 0）。
+# ⚠️ 豁免的代价：**空数据页看不出"这件到底做了没有"** ⇒ 一旦有数据，复跑核对器即可验。
+DATA_DEPENDENT: frozenset[str] = frozenset({"合计"})
+
+
+_ASSETS = re.compile(r"<style\b.*?</style>|<script\b.*?</script>", re.S | re.I)
+
+
+def strip_assets(html: str) -> str:
+    """剥掉 `<style>` / `<script>` 块 —— **只留 HTML 标记**再做结构计数。
+
+    ⚠️ 不剥 ⇒ 页面内联的 CSS 声明（`.fbar` / `.kpis` / `.sumrow` 都是类名）会被计入 ⇒ **假差异**。
+    """
+    return _ASSETS.sub("", html or "")
 
 # ⚠️ **所有结构件都要求对齐**（用户 2026-09-17 裁定：结构 / 布局 / 交互必须照原型，纯视觉才由实现方发挥）
 #   ⇒ 任一结构件不符且**未登记** ⇒ 报红。下面这个元组只是**修补优先级**（先修表/筛/卡）。
@@ -160,15 +190,27 @@ def main(argv: list[str] | None = None) -> int:
         gaps: list[str] = []
         pending: list[str] = []          # 已登记 ⇒ 只提示
         blocking: list[str] = []         # 未登记 ⇒ 报红
-        for key, pattern in PROBES:
-            p, i = count(proto_slice, pattern), count(html, pattern)
-            ok = p == i
+        impl_html = strip_assets(html)
+        page_empty = 'class="empty"' in impl_html
+        for key, proto_re, impl_re in PROBES:
+            p, i = count(proto_slice, proto_re), count(impl_html, impl_re)
+            if key in BOOL_KEYS:
+                ok = (p > 0) == (i > 0)
+            else:
+                ok = p == i
+            if not ok and key in DATA_DEPENDENT and page_empty and p > 0 and i == 0:
+                # 只豁免「原型有、实现 0」且**当前页空态**（= 可能只是没数据）。
+                # ⚠️ 若实现**已经有但数量不等**（如原型 2 / 实现 1）⇒ **那是真差异，不豁免**。
+                dims[key] = {"proto": p, "impl": i, "ok": True, "known": False, "skipped_empty": True}
+                continue
             known = f"{view}:{key}" in expected
             dims[key] = {"proto": p, "impl": i, "ok": ok, "known": known}
             if not ok:
                 gaps.append(f"{key}(原型 {p} / 实现 {i})")
                 (pending if known else blocking).append(key)
-        stale = [k for k, d in dims.items() if d["ok"] and f"{view}:{k}" in expected]
+        # 「可消号」只认**真的核对过且已对齐**的项 —— 空态豁免的不算（否则会误导成"已补齐"）
+        stale = [k for k, d in dims.items()
+                 if d["ok"] and not d.get("skipped_empty") and f"{view}:{k}" in expected]
         rows.append({"view": view, "route": route, "label": label,
                      "state": "不对齐" if gaps else "✅ 对齐",
                      "blocking": blocking, "pending": pending, "stale": stale,
@@ -180,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
         print("=" * 96)
         print("逐页对齐核对（真源 = demo/ 原型源码 · 比对 = 实现页面 HTML）")
         print("=" * 96)
-        head = "".join(f"{k:>9}" for k, _ in PROBES)
+        head = "".join(f"{k:>9}" for k, _, _ in PROBES)
         print(f"{'视图':<6}{'路由':<7}{'页面':<22}{head}")
         print("-" * 96)
         for r in rows:

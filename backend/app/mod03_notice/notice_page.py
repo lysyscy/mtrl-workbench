@@ -126,6 +126,36 @@ def _row_dict(row) -> dict:
     }
 
 
+def summary_row(data: dict) -> dict:
+    """表内合计行（用户 2026-09-13 口径「**求和一律落在表内**」· 设计规则 `R7`）—— **只算非剔除行**。
+
+    5 个数值列 = 审批金额 / 付款金额 / 已付金额 / 统计结算金额 / 统计付款金额
+    （列序与原型 `sumRowOf(NT_THEAD, …)` 给的下标 `10…14` **一一对应**）。
+
+    ⚠️ **口径与欠款一致**：剔除行**不计入**（原型 `sumRows = list.filter(ntLive)`）。
+    ⚠️ 切到「分类 = 剔除」时该视图**全是剔除行** ⇒ **不给合计行**（不给一排 0，免得看着像坏了）。
+    ⚠️ 首格写「合计」（与 `m08` 同款）；排序时该行由 `data-pin="1"` **钉在表尾**。
+    """
+    cols = columns()
+    live = [
+        rec["_row"] for rec in (data.get("rows") or ())
+        if rec.get("_row") is not None and not bool(getattr(rec["_row"], "excluded", False))
+    ]
+    if not live:
+        return {}
+    out: dict[str, str] = {c["key"]: "" for c in cols}
+    out[cols[0]["key"]] = "合计"
+    for key, attr in (
+        ("amount_approved_text", "amount_approved"),
+        ("pay_amount_text", "pay_amount"),
+        ("amount_paid_text", "amount_paid"),
+        ("stat_settle_text", "stat_settle"),
+        ("stat_paid_text", "stat_paid"),
+    ):
+        out[key] = _amt(sum((getattr(r, attr) or 0) for r in live))
+    return out
+
+
 def _filter_controls(data: dict) -> list[dict]:
     """6 项筛选（原型同款）：年月（**统一控件取值语法**）/ 单据日期区间 / 项目 / 分类 / 审批状态 / 付款状态。"""
     f: NoticeFilters = data["filters"]
@@ -391,6 +421,7 @@ def render_notice_page(data: dict, *, message: str = "", message_kind: str = "ok
         rows_html=_render_rows_html(data),
         empty_text="当前筛选没有付款通知书（可切「分类 = 剔除」查看被剔除 / 已撤单的行）",
         sort_key=SORT_KEY,
+        summary=summary_row(data),
     )
     notice = ""
     if message:
