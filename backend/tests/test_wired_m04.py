@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from tests.acc_plugin import acc
@@ -20,6 +21,29 @@ from tests.acc_plugin import acc
 SHELL = (Path(__file__).resolve().parents[1] / "app" / "web" / "index.html").read_text(
     encoding="utf-8"
 )
+
+
+def _act(name: str, limit: int = 6000) -> str:
+    """取 `ACT` 里 `<name>:async ()=>{…}` 的**函数体**（⚠️ 必须**花括号配平**）。
+
+    ⚠️ 别用「起点 + 固定字符数」—— 那是**假绿/假红的温床**：截短了断言看不到要查的代码，
+       截长了会**吃进下一个动作**（反向灵敏度实测踩到：`plRowSave` 的 2400 字符窗口
+       把后面的 `plRowCancel` 吃了进来 ⇒ 「失败时不许清草稿」这条**误判**）。
+    """
+    i = SHELL.find(f"{name}:async ()=>{{")
+    assert i > 0, f"找不到 `{name}:async ()=>{{`"
+    depth, k = 0, SHELL.find("{", i)
+    while k < len(SHELL):
+        if SHELL[k] == "{":
+            depth += 1
+        elif SHELL[k] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        k += 1
+    body = SHELL[i:k + 1]
+    assert len(body) < limit, f"`{name}` 取到 {len(body)} 字符 —— 配平可能跑偏"
+    return body
 
 
 # --------------------------------------------------------------- 接线点（正向）
@@ -83,7 +107,88 @@ def test_已接线页的演示数组必须已删():
 
 
 @acc()
-def test_未接通的动作不得假装成功():
-    """Excel 导入 / 手动行（本轮不接）⇒ 必须如实说未接通（⛔ 不留半拉子入口）。"""
-    assert SHELL.count("尚未接通") >= 6
-    assert "plRowEditId=PL_NEW_ID" not in SHELL, "手动行还在进草稿态（填了却存不进去）"
+def test_导入与手动行已接通():
+    """⭐ `TAIL-35` 接线后**改写的断言** —— 旧断言钉的是「**未接通**」这个**临时状态**。
+
+    ⚠️ 改写理由（不是「把绿改红」，是**守的状态变了**）：`TAIL-35` 的定义就是「随 `TAIL-27` 其余页接」，
+       现在接了 ⇒ 「必须如实说未接通」这条使命完成。**反向内核保留**：
+       ⛔ 不许留任何「说了未接通、却在别处假装成功」的入口（旧的造演示行也仍在禁列）。
+    """
+    assert "导入尚未接通壳" not in SHELL, "导入还挂着「未接通」提示（已接线）"
+    assert "手动行尚未接通壳" not in SHELL, "手动行还挂着「未接通」提示（已接线）"
+    # 反向内核（照旧）：不许造演示行冒充成功
+    assert "plAlert" not in SHELL and "plNextIds('PL',3)" not in SHELL, "旧的造演示行还在"
+
+
+@acc()
+def test_导入与手动行走后端():
+    """⭐ 接线点：导入 = **multipart** → `/api/m04/import`；手动行 = JSON → `/api/m04/plans`。"""
+    assert "m04Import: async (year_month, file) =>" in SHELL, "导入没写 multipart 客户端"
+    assert "new FormData()" in SHELL, "导入没用 `FormData`（multipart 只能这么传）"
+    assert "plImportOk:async ()=>" in SHELL, "`plImportOk` 没改成 async（那还是假导入）"
+    assert "API.m04Import(" in SHELL, "`plImportOk` 没走 `/api/m04/import`"
+    assert "m04PlanSave: body => API.post('/api/m04/plans', body)" in SHELL, (
+        "手动行没走 `/api/m04/plans`"
+    )
+    assert "plRowSave:async ()=>" in SHELL, "`plRowSave` 没改成 async"
+
+
+@acc()
+def test_手动行判据不得在前端复写():
+    """⭐ 反向：手动行的校验（年月 / 项目 / 金额）**一律后端**（`plan_manual.manual_row_payload`）。
+
+    前端只把**原值**送上去 —— 复写任何一道 = **第二份口径**（`D18`：判定一律后端）。
+    """
+    body = _act("plRowSave")
+    assert "API.m04PlanSave(" in body, "`plRowSave` 没调后端"
+    for bad, why in (
+        ("badMoney(", "还在前端复写**金额**校验"),
+        ("pjRowOf(d.proj)", "还在前端复写「**项目必选**」"),
+    ):
+        assert bad not in body, f"`plRowSave` {why}（⇒ 第二份口径）"
+
+
+@acc()
+def test_手动行失败时保留已填内容():
+    """§4.3.3.1：**校验失败 ⇒ 保留已填内容**（不清空重填）⇒ 失败分支**不许**清草稿层。"""
+    body = _act("plRowSave")
+    assert "plRowEditId=''; plD={};" in body, "成功后没清草稿（行已落库，该清）"
+    j = body.find("}catch(e){")
+    assert j > 0, "`plRowSave` 没有 catch 分支"
+    assert "plD={}" not in body[j:], "失败时把草稿清空了（§4.3.3.1 要求**保留已填内容**）"
+
+
+@acc()
+def test_手动行三个本地动作已恢复原型():
+    """⭐ `plRowAdd` / `plRowEdit` 是**本地草稿层**（**不落库**）⇒ 接线后恢复原型实现即可、无需改。"""
+    assert "plRowEditId=PL_NEW_ID; plD=plBlank(); render();" in SHELL, "`plRowAdd` 没恢复原型"
+    assert "plD={ym:p.ym, proj:plProjKey(p.proj)" in SHELL, "`plRowEdit` 没恢复原型"
+    assert "编辑只对「手动行」开放" in SHELL, "「只有手动行可编辑」的提示丢了（§4.3.3.1）"
+
+
+@acc()
+def test_后端两个新端点存在():
+    """`TAIL-35` 的后端落点：手动行 JSON 端点 ＋ 导入 multipart 端点。
+
+    ⚠️ 端点**已搬到 `plan_api_router.py`** —— `router.py` 加了这两段后涨到 **668 行 > 600**（禁合入硬线）
+       ⇒ 按本仓纪律**拆件**（`router.py` 只留页面端点，用 `include_router` 汇总）。
+    ⚠️ 断言必须**进各自函数体**取切片 —— 只写「文件里含 `manual_row_payload(`」是**假绿**
+       （反向灵敏度实测：改成 `_` 前缀后照样通过 —— **子串喂饱**）。
+    """
+    base = Path(__file__).resolve().parents[1] / "app" / "mod04_plan"
+    api = (base / "plan_api_router.py").read_text(encoding="utf-8")
+    router = (base / "router.py").read_text(encoding="utf-8")
+    assert '@router.post("/api/m04/plans")' in api, "后端缺 `POST /api/m04/plans`"
+    assert '@router.post("/api/m04/import")' in api, "后端缺 `POST /api/m04/import`"
+    assert "router.include_router(plan_api_router)" in router, "`router.py` 没汇总 API 路由（端点会 404）"
+    for fn, needle, why in (
+        ("def api_plan_row_save(", r"(?<![A-Za-z_])manual_row_payload\(",
+         "手动行端点没走 `manual_row_payload`（判定该与 PRG 端点复用**同一出口**）"),
+        ("def api_plan_import(", r"(?<![A-Za-z_])repo\.merge_month\(",
+         "导入端点没走 `repo.merge_month`（§9.5 幂等就没了）"),
+    ):
+        i = api.find(fn)
+        assert i > 0, f"`plan_api_router.py` 里找不到 `{fn}`"
+        j = api.find("\n@router.", i)                     # 到下一个路由为止（函数体边界）
+        body = api[i:j if j > i else i + 2500]
+        assert re.search(needle, body), why

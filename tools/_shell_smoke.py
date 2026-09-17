@@ -119,6 +119,26 @@ def main() -> int:
             if not ok:
                 errors.append("m04 自检未通过：" + what)
 
+        # ---- m04 手动行（`TAIL-35`）：⭐ 真机验「入口真的能开出草稿行」（**不落库**，验完收起）
+        page.click('[data-act="plRowAdd"]')
+        page.wait_for_timeout(400)
+        m04d = page.evaluate("""() => ({
+            draft: !!document.querySelector('[data-act="plRowSave"]'),
+            setCells: document.querySelectorAll('#view [data-act="plRowSet"]').length,
+        })""")
+        print("⑥b m04 手动行草稿 =", m04d)
+        for ok, what in [
+            (m04d["draft"], "⭐ 点「＋ 手动新增计划行」**真的开出草稿行**（接线前只是一句 toast 提示）"),
+            (m04d["setCells"] >= 5, f"⭐ 草稿行的可填格已就位（{m04d['setCells']} 格）"),
+        ]:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("m04 手动行自检未通过：" + what)
+        if m04d["draft"]:
+            page.click('[data-act="plRowCancel"]')      # ⚠️ 收起草稿 —— **不落库**（写库验证走 curl 那边）
+            page.wait_for_timeout(300)
+            print("  ℹ️ 草稿已收起（未落库）")
+
         # ---- m05 付款流水与欠款：四张 KPI ＋ 三张表；⭐ **KPI 的数必须来自后端**（可观测证据）
         page.click('[data-k="m05"]')
         page.wait_for_timeout(700)

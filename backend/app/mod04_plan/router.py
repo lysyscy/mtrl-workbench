@@ -40,6 +40,8 @@ from app.mod04_plan.plan_manual import (
     is_manual_row,
     manual_row_payload,
 )
+from app.mod04_plan.plan_api_router import router as plan_api_router
+from app.mod04_plan.project_views import project_briefs, project_label
 from app.mod04_plan.plan_ui import (
     delete_impact,
     delete_rows,
@@ -50,6 +52,8 @@ from app.mod04_plan.plan_ui import (
 from app.mod04_plan.view import render_delete_confirm, render_m04
 
 router = APIRouter(tags=["mod04"])
+# ⭐ 前端壳的 **JSON API**（`TAIL-35`：手动行 ＋ 导入）—— 独立路由件，由本文件汇总
+router.include_router(plan_api_router)
 
 
 def get_db() -> Iterator[Session]:
@@ -318,7 +322,7 @@ def act_row_save(
         )
         values = dict(payload.values)
         if values.get("project_id") is not None:
-            values["project_input"] = _project_label(session, values["project_id"])
+            values["project_input"] = project_label(session, values["project_id"])
 
         if str(row_id or "").strip().isdigit():
             row = repo.get_row(session, int(row_id))
@@ -337,13 +341,6 @@ def act_row_save(
         keep = str(row_id or "").strip() or "new"
         return _back(year_month, project, review, sort, dir, exc.message, kind="err", draft=keep)
 
-
-def _project_label(session: Session, project_id: int) -> str:
-    """项目 id → **填报值**（记展示名；拿不到则用仓库名）—— 与导入的「项目」列同一含义。"""
-    for p in session.execute(select(Project)).scalars().all():
-        if p.id == int(project_id):
-            return p.disp or p.warehouse_name or p.name_full or ""
-    return ""
 
 
 @router.get("/m04/delete", response_class=HTMLResponse)
@@ -498,17 +495,6 @@ def act_force_cancel(
 # --------------------------------------------------------------- 导入（§4.3.3 · §9.5）
 
 
-def _project_briefs(session: Session) -> list[ProjectBrief]:
-    """档案行 → 匹配用视图（**只带匹配所需的三个字段**）。"""
-    from sqlalchemy import select
-
-    return [
-        ProjectBrief(
-            id=p.id, disp=p.disp or "", warehouse_name=p.warehouse_name, name_full=p.name_full or ""
-        )
-        for p in session.execute(select(Project)).scalars().all()
-    ]
-
 
 @router.get("/m04/import", response_class=HTMLResponse)
 def page_import(msg: str = Query(""), msgkind: str = Query("ok")) -> HTMLResponse:
@@ -534,7 +520,7 @@ async def act_import(
     try:
         data = await file.read()
         parsed = parse_workbook(data)
-        rows = attach_projects(parsed.rows, _project_briefs(session))
+        rows = attach_projects(parsed.rows, project_briefs(session))
         result = repo.merge_month(session, year_month=year_month, rows=rows)
     except MustReportError as exc:
         return RedirectResponse(
