@@ -20,6 +20,7 @@ ROUTER = B / "app" / "mod04_plan" / "router.py"
 REPO = B / "app" / "mod04_plan" / "repository.py"
 DOMAIN = B / "app" / "mod04_plan" / "domain.py"
 VIEW = B / "app" / "mod04_plan" / "view.py"
+MANUAL = B / "app" / "mod04_plan" / "plan_manual.py"
 
 CASES: list[tuple[str, Path, str, str]] = [
     ("M1 端点参数退回 Query（表单提交即 422）", ROUTER,
@@ -34,6 +35,9 @@ CASES: list[tuple[str, Path, str, str]] = [
     ("M4 页面不再给出强制通过入口", VIEW,
      'action="/m04/force">\'',
      'action="/m04/forceX">\''),
+    ("M5 归月字段改回同名（与筛选月撞名 ⇒ 归月被静默忽略）", MANUAL,
+     'text("row_ym", ym,',
+     'text("year_month", ym,'),
 ]
 
 
@@ -50,7 +54,7 @@ def md5(path: Path) -> str:
 
 
 def main() -> int:
-    before = {p: (p.read_bytes(), md5(p)) for p in (ROUTER, REPO, DOMAIN, VIEW)}
+    before = {p: (p.read_bytes(), md5(p)) for p in (ROUTER, REPO, DOMAIN, VIEW, MANUAL)}
     _, failed0 = run_tests()
     print(f"  基线：全部通过 = {not failed0}")
     if failed0:
@@ -70,7 +74,7 @@ def main() -> int:
         hits += 1 if failed else 0
 
     ok = all(md5(p) == before[p][1] for p in before)
-    print(f"\n  复原校验（MD5 逐字节）：{'✅ 4/4' if ok else '❌ 有文件没复原'}")
+    print(f"\n  复原校验（MD5 逐字节）：{'✅ ' + str(len(before)) + '/' + str(len(before)) if ok else '❌ 有文件没复原'}")
     print(f"  反向灵敏度：**{hits}/{len(CASES)} 命中**")
     return 0 if (hits == len(CASES) and ok) else 1
 

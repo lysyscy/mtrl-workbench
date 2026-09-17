@@ -260,10 +260,14 @@ def page_m04(
 def act_row_draft(
     new: str = Form(""),
     row_id: str = Form(""),
-    year_month: str = Query(""), project: list[str] = Query(default=[]),
-    review: str = Query(BUCKET_ALL), sort: str = Query(""), dir: int = Query(SORT_NONE),
+    year_month: str = Form(""), project: list[str] = Form(default=[]),
+    review: str = Form(BUCKET_ALL), sort: str = Form(""), dir: int = Form(SORT_NONE),
 ) -> RedirectResponse:
-    """开草稿行（**表内增行**，不弹窗）：`new=1` 新增 / `row_id=<id>` 原地编辑该手动行。"""
+    """开草稿行（**表内增行**，不弹窗）：`new=1` 新增 / `row_id=<id>` 原地编辑该手动行。
+
+    ⚠️ **参数一律 `Form`**：筛选来自 `hidden_filters(data)`（**body**）⇒ 声明成 `Query` 会**静默丢掉筛选**
+       （回跳回不到原查询）。
+    """
     token = str(row_id or "").strip() or ("new" if str(new or "").strip() else "")
     if not token:
         return _back(year_month, project, review, sort, dir, "没有指定要新增还是编辑", kind="err")
@@ -276,17 +280,17 @@ def act_row_draft(
 
 @router.post("/m04/row/cancel")
 def act_row_cancel(
-    year_month: str = Query(""), project: list[str] = Query(default=[]),
-    review: str = Query(BUCKET_ALL), sort: str = Query(""), dir: int = Query(SORT_NONE),
+    year_month: str = Form(""), project: list[str] = Form(default=[]),
+    review: str = Form(BUCKET_ALL), sort: str = Form(""), dir: int = Form(SORT_NONE),
 ) -> RedirectResponse:
-    """取消草稿行 —— **不留任何数据**（每步可中断，§9.5）。"""
+    """取消草稿行 —— **不留任何数据**（每步可中断，§9.5）。⚠️ 参数一律 `Form`（同上）。"""
     return _back(year_month, project, review, sort, dir, "已取消草稿行（未写入任何数据）", kind="wn")
 
 
 @router.post("/m04/row/save")
 def act_row_save(
     row_id: str = Form(""),
-    year_month: str = Form(""),
+    row_ym: str = Form(""),
     project_id: str = Form(""),
     doc_no: str = Form(""),
     flow_amount: str = Form(""),
@@ -294,19 +298,21 @@ def act_row_save(
     pay_date: str = Form(""),
     pay_method: str = Form(""),
     remark: str = Form(""),
-    q_year_month: str = Query("", alias="year_month"),
-    project: list[str] = Query(default=[]),
-    review: str = Query(BUCKET_ALL), sort: str = Query(""), dir: int = Query(SORT_NONE),
+    year_month: str = Form(""),
+    project: list[str] = Form(default=[]),
+    review: str = Form(BUCKET_ALL), sort: str = Form(""), dir: int = Form(SORT_NONE),
     session: Session = DBSession,
 ) -> RedirectResponse:
     """保存手动计划行（**新增与编辑共用同一套**）—— 判定走 `plan_manual.manual_row_payload`。
 
-    ⚠️ Query 里的 `year_month` 与表单里的同名：**表单的是"这一行归哪个月"，Query 的是"筛选项"**
-       ⇒ 表单字段用 `year_month`、筛选回跳用别名 `q_year_month`（同名字段不许混）。
+    ⚠️ **`row_ym`（这一行归哪个月）与 `year_month`（筛选项）必须分开命名**：
+       两者同名时，`hidden_filters` 放进 body 的**筛选月在前** ⇒ `FormData` 只取**第一个**
+       ⇒ **用户填的「归月」被静默忽略**（2026-09-17 修；表单字段见 `plan_manual.draft_row_html`）。
+    ⚠️ 筛选参数一律 `Form`（同 `act_row_draft`：它们来自 body 的 `hidden_filters`，不是 query string）。
     """
     try:
         payload = manual_row_payload(
-            year_month=year_month, project_id=project_id, doc_no=doc_no,
+            year_month=row_ym, project_id=project_id, doc_no=doc_no,
             flow_amount=flow_amount, planned_amount=planned_amount,
             pay_date=pay_date, pay_method=pay_method, remark=remark,
         )
@@ -325,11 +331,11 @@ def act_row_save(
             row = repo.create_manual_row(session, values)
             msg = f"已新增 1 行手动付款计划（行号 {row.id}）"
         msg += "；" + "；".join(payload.notes)
-        return _back(q_year_month, project, review, sort, dir, msg)
+        return _back(year_month, project, review, sort, dir, msg)
     except MustReportError as exc:
         # 校验不过 ⇒ **保留草稿行**让用户改（不清空已填内容）
         keep = str(row_id or "").strip() or "new"
-        return _back(q_year_month, project, review, sort, dir, exc.message, kind="err", draft=keep)
+        return _back(year_month, project, review, sort, dir, exc.message, kind="err", draft=keep)
 
 
 def _project_label(session: Session, project_id: int) -> str:

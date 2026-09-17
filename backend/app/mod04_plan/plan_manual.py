@@ -176,7 +176,9 @@ def draft_row_html(
 
     cells = [
         "＋",
-        text("year_month", ym, extra=' placeholder="2026-09" required'),
+        # ⚠️ 字段名用 `row_ym`（**不是** `year_month`）：同一个表单里 `hidden_filters` 已经把**筛选月**
+        #    也放进了 body，两者同名时 `FormData` 只取**第一个**（= 筛选月）⇒ 用户填的「归月」会被静默忽略。
+        text("row_ym", ym, extra=' placeholder="2026-09" required'),
         project_select(r.get("project_id"), project_options),
         text("doc_no", r.get("doc_no"), extra=' placeholder="可空"'),
         text("flow_amount", r.get("flow_amount") or "0.00", cls="cell num"),

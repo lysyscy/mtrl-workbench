@@ -231,7 +231,7 @@ def test_路由_新增手动行落库并标is_manual():
     client, fake = _client(projects=[Project(id=11, project_type="normal", name_full="甲全名",
                                              warehouse_name="甲仓库", disp="甲仓库")])
     r = client.post("/m04/row/save", data={
-        "year_month": "2026-09", "project_id": "11", "doc_no": "D1",
+        "row_ym": "2026-09", "project_id": "11", "doc_no": "D1",
         "flow_amount": "1000", "planned_amount": "800", "pay_method": "承兑",
     }, follow_redirects=False)
     assert r.status_code == 303 and "msgkind=err" not in r.headers["location"]
@@ -244,7 +244,7 @@ def test_路由_新增手动行落库并标is_manual():
 @acc("ACC-PLAN-MANUAL-001", "001-07")
 def test_路由_校验失败保留草稿行():
     client, fake = _client()
-    r = client.post("/m04/row/save", data={"year_month": "2026", "flow_amount": "1"},
+    r = client.post("/m04/row/save", data={"row_ym": "2026", "flow_amount": "1"},
                     follow_redirects=False)
     assert r.status_code == 303 and "msgkind=err" in r.headers["location"]
     assert "draft=new" in r.headers["location"] and fake.added == []
@@ -254,7 +254,7 @@ def test_路由_校验失败保留草稿行():
 def test_路由_编辑导入行被拒():
     client, fake = _client(plan_rows=[make_plan_row(1, doc_no="D1", project_id=11)])
     r = client.post("/m04/row/save", data={
-        "row_id": "1", "year_month": "2026-09", "flow_amount": "1", "planned_amount": "1",
+        "row_id": "1", "row_ym": "2026-09", "flow_amount": "1", "planned_amount": "1",
     }, follow_redirects=False)
     assert r.status_code == 303 and "msgkind=err" in r.headers["location"]
     assert fake.added == []
@@ -264,7 +264,7 @@ def test_路由_编辑导入行被拒():
 def test_路由_编辑手动行成功():
     client, fake = _client(plan_rows=[_manual(id=90)])
     r = client.post("/m04/row/save", data={
-        "row_id": "90", "year_month": "2026-09", "flow_amount": "1200", "planned_amount": "500",
+        "row_id": "90", "row_ym": "2026-09", "flow_amount": "1200", "planned_amount": "500",
     }, follow_redirects=False)
     assert r.status_code == 303 and "msgkind=err" not in r.headers["location"]
     row = fake.by_model[PlanRow][0]
@@ -305,3 +305,24 @@ def test_路由_编辑手动行走id而不是new():
     client, _ = _client(plan_rows=[_manual(id=90)])
     r = client.post("/m04/row/draft", data={"row_id": "90"}, follow_redirects=False)
     assert r.status_code == 303 and "draft=90" in r.headers["location"]
+
+@acc()
+def test_路由_归月与筛选月分开命名不再同名():
+    """⭐ 请求级：body 里**同时**有筛选月（`hidden_filters` 同款）与归月（草稿行字段）时，
+    归月必须取自 `row_ym`。
+
+    ⛔ 为什么必须分开（2026-09-17 修）：字段同名时 `FormData` 只取**第一个**，而 `hidden_filters`
+       排在表单**前面** ⇒ 取到的是**筛选月** ⇒ **用户填的「归月」被静默忽略**（存到错误月份）。
+    """
+    client, fake = _client(projects=[Project(id=11, project_type="normal", name_full="甲全名",
+                                             warehouse_name="甲仓库", disp="甲仓库")])
+    r = client.post("/m04/row/save", data={
+        "row_ym": "2026-08",                       # 用户填的归月
+        "year_month": "2026-09",                   # 筛选月（hidden_filters 同款，排在前）
+        "project_id": "11", "doc_no": "D1",
+        "flow_amount": "1000", "planned_amount": "800",
+    }, follow_redirects=False)
+    assert r.status_code == 303 and "msgkind=err" not in r.headers["location"]
+    added = [x for x in fake.added if isinstance(x, PlanRow)]
+    assert len(added) == 1
+    assert added[0].year_month == "2026-08", f"归月被筛选月覆盖了：{added[0].year_month}"

@@ -31,6 +31,8 @@ DECO = re.compile(r'@\w+\.post\(\s*"([^"]+)"')
 SIG_END = re.compile(r"\)\s*->|\)\s*:")
 HARD = re.compile(r"=\s*Query\(\s*\.\.\.\s*\)")   # 必填 ⇒ 422
 SOFT = re.compile(r"=\s*Query\(")                 # 可选 ⇒ 丢筛选
+# ⚠️ 真实 URL = `APIRouter(prefix=…)` ＋ 装饰器里的路径 —— 不算 prefix 会把 `/api/*` 误判成 PRG 页
+PREFIX = re.compile(r'APIRouter\([^)]*?prefix\s*=\s*"([^"]+)"', re.S)
 
 
 def main() -> int:
@@ -41,13 +43,15 @@ def main() -> int:
         if "__pycache__" in str(path):
             continue
         lines = path.read_text(encoding="utf-8").splitlines()
+        pm = PREFIX.search("\n".join(lines))
+        prefix = pm.group(1) if pm else ""
         for i, ln in enumerate(lines):
             m = DECO.search(ln.strip())
             if not m:
                 continue
             route = m.group(1)
-            if route.startswith("/api/"):
-                continue
+            if (prefix + route).startswith("/api/"):
+                continue                       # JSON 端点：前端 fetch 可带 query string
             sig: list[str] = []
             for j in range(i + 1, min(i + 40, len(lines))):
                 sig.append(lines[j].strip())
@@ -56,7 +60,7 @@ def main() -> int:
             body = " ".join(sig)
             fn = re.search(r"def\s+(\w+)", body)
             rel = path.relative_to(ROOT.parent.parent).as_posix()
-            head = f"{rel}:{i + 1}  POST {route}  →  {fn.group(1) if fn else '?'}"
+            head = f"{rel}:{i + 1}  POST {prefix + route}  →  {fn.group(1) if fn else '?'}"
             scanned += 1
             if HARD.search(body):
                 hard.append(head)

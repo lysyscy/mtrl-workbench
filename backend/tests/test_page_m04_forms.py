@@ -118,6 +118,18 @@ def test_PRG表单端点必须接受body编码():
 
 
 @acc()
+def test_草稿行的归月字段不与筛选月同名():
+    """⭐ 防复发：草稿行的「归月」字段名必须是 `row_ym`。
+
+    ⛔ 若叫 `year_month`，会与 `hidden_filters` 放进同一表单 body 的**筛选月**撞名 ⇒
+       `FormData` 只取**第一个**（筛选值）⇒ **用户填的「归月」被静默忽略**（2026-09-17 修）。
+    """
+    client, _ = _client()
+    html = client.get("/m04", params={"year_month": "2026-09", "draft": "new"}).text
+    assert 'name="row_ym"' in html, "草稿行的「归月」字段名不是 row_ym ⇒ 会与筛选月撞名"
+
+
+@acc()
 def test_强制通过入口按行态呈现():
     """页面入口三态（照原型 `PL` 页）：完全匹配 ⇒ 无需处理；已放行 ⇒ 备注 ＋ 取消；否则 ⇒ 强制通过。"""
     client, _ = _client(plan_rows=[_row(id=2, doc_no="D9")])
