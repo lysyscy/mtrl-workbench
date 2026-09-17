@@ -1,0 +1,88 @@
+# 装配审查 · 白名单（wiring_expected.txt）
+# ⚠️ **只准变短** —— 补完调用 / 删掉死代码 ⇒ 删掉对应行（脚本会提示「可消号」）。
+# 格式：`W1 <文件>:<名字>`  口径性函数零调用方（生产+测试都没人调 · **红** · 必须修）
+#       `W1b <文件>:<名字>` 只有测试调用（**黄** · 要人甄别：防回归 or 没装上车）
+#       `W2 <文件>:<名字>`  公共函数/类全站零引用（**黄** · 死代码台账）
+
+# ── W2 · 死代码台账
+#    ⭐ 用户口径（2026-09-17）：「**一个区做完，遗留的无用代码也要跟着清除**」
+#    ⇒ 处置方式 = **随区清理**：做到哪个域，就顺手把那个域的行删掉（删行 = 进度）。
+W2 backend/app/core/app_settings.py:is_overridden
+W2 backend/app/core/config.py:i8_base
+W2 backend/app/core/config.py:i8_endpoint
+W2 backend/app/core/db.py:dispose_engine
+W2 backend/app/core/errors.py:DataConflictError
+W2 backend/app/core/money.py:try_money
+W2 backend/app/core/money.py:sub_money
+W2 backend/app/core/money.py:is_equal
+W2 backend/app/core/money.py:to_cents
+W2 backend/app/core/money.py:require_positive
+W2 backend/app/core/timing.py:default_ym_payment
+W2 backend/app/core/timing.py:default_ym_report
+W2 backend/app/core/timing.py:validate_closed_range
+W2 backend/app/core/timing.py:ym_to_closed_range
+W2 backend/app/mod01_projects/domain.py:derive_type_from_warehouse
+W2 backend/app/mod01_projects/domain.py:order_key
+W2 backend/app/mod03_notice/classify.py:validate_rules
+W2 backend/app/mod03_notice/domain.py:derived_pay_amount
+W2 backend/app/mod03_notice/domain.py:apply_trace
+W2 backend/app/mod03_notice/domain.py:recompute_debt
+W2 backend/app/mod03_notice/domain.py:verify_row
+W2 backend/app/mod03_notice/domain.py:remove_from_batch
+W2 backend/app/mod03_notice/notice_http.py:parse_ids
+W2 backend/app/mod03_notice/notice_pay_router.py:page_pay
+W2 backend/app/mod03_notice/notice_pay_router.py:act_pay
+W2 backend/app/mod03_notice/notice_pay_router.py:act_revoke_flow
+W2 backend/app/mod03_notice/notice_pay_router.py:page_trace
+W2 backend/app/mod03_notice/page.py:pay_domain_nav
+W2 backend/app/mod03_notice/page.py:nav_violations
+W2 backend/app/mod03_notice/page.py:tip_block_count
+W2 backend/app/mod03_notice/page.py:segment_sequence
+W2 backend/app/mod03_notice/page.py:is_sortable
+W2 backend/app/mod03_notice/page.py:next_sort_direction
+W2 backend/app/mod03_notice/print/fields.py:uncovered_field_ids
+W2 backend/app/mod04_plan/domain.py:outstanding
+W2 backend/app/mod04_plan/domain.py:column_order_ok
+W2 backend/app/mod04_plan/plan_ui.py:period_filter_modes
+W2 backend/app/mod04_plan/plan_ui.py:period_filter_is_shared_control
+W2 backend/app/mod04_plan/repository.py:delete_row
+W2 backend/app/mod04_plan/router.py:get_row_loader
+W2 backend/app/mod05_flow/importer.py:months_of
+W2 backend/app/mod05_flow/repository.py:get_opening
+W2 backend/app/mod06_proc/domain.py:column_editable
+W2 backend/app/mod06_proc/domain.py:boundary_violations
+W2 backend/app/mod07_setl/big_domain.py:main_material_total
+W2 backend/app/mod07_setl/big_domain.py:boundary_violations
+W2 backend/app/mod07_setl/big_service.py:set_main_material_port
+W2 backend/app/mod07_setl/domain.py:boundary_violations
+W2 backend/app/mod07_setl/extract.py:extract_rules
+W2 backend/app/mod07_setl/service.py:state_to_query
+W2 backend/app/mod08_inv/domain.py:grid_index
+W2 backend/app/mod08_inv/domain.py:distinct_values
+W2 backend/app/mod08_inv/domain.py:make_adjustment
+W2 backend/app/mod08_inv/domain.py:with_adjustment
+W2 backend/app/mod08_inv/domain.py:boundary_violations
+W2 backend/app/mod08_inv/repository.py:clear_adjustment
+W2 backend/app/mod08_inv/service.py:state_to_query
+W2 backend/app/mod14_config/repository.py:read_values
+
+# ── W1b · 只有测试调用
+#    已甄别：多为**交互流程尚未做到那一步**（如「用户指定归属时补关键词」的校验）——
+#    不是「忘了接」，随对应功能落地时接进链路。
+# ⭐ 已甄别为「**防回归 / 配置守卫**」—— 它检查的是**常量**（不是运行数据）⇒ **测试调用就够了**，
+#    生产链路本来就不需要调用它（它守的是"没人偷偷接第二个数据源"）。
+W1b backend/app/mod02_i8/fetch_task.py:assert_single_external_source
+W1b backend/app/core/period.py:export_filename
+W1b backend/app/mod01_projects/domain.py:validate_keyword_in_doc
+W1b backend/app/mod01_projects/domain.py:append_keyword_dedup
+W1b backend/app/mod01_projects/domain.py:multi_select_keys
+W1b backend/app/mod01_projects/domain.py:combine_filters
+W1b backend/app/mod01_projects/domain.py:resolve_display
+W1b backend/app/mod04_plan/domain.py:derived_columns
+W1b backend/app/mod04_plan/domain.py:force_through
+W1b backend/app/mod04_plan/domain.py:cancel_force
+W1b backend/app/mod05_flow/domain.py:empty_state_colspan
+W1b backend/app/mod05_flow/domain.py:project_labels
+W1b backend/app/mod05_flow/domain.py:is_date_like
+W1b backend/app/mod05_flow/domain.py:toggle_project_filter
+W1b backend/app/mod06_proc/domain.py:column_source
