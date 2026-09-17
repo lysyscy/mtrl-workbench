@@ -27,6 +27,7 @@ from app.home.router import router as home_router
 from app.mod01_projects.router import router as mod01_router
 from app.mod02_i8.router import router as mod02_router
 from app.mod03_notice.page import THEME_CSS
+from app.mod03_notice.notice_api_router import api_router as mod03_api_router
 from app.mod03_notice.router import page_router as mod03_page_router
 from app.mod03_notice.router import router as mod03_router
 from app.mod04_plan.router import router as mod04_router
@@ -147,6 +148,8 @@ def create_app() -> FastAPI:
     # MOD-03 的**列表页**（`/m03/notices`）走服务端渲染（与 MOD-04/05 同款）；
     # ⚠️ 静态 `static/m03.html`（打印 / PDF / 设置）**保留不动**（用户 2026-09-15 裁定 A）。
     app.include_router(mod03_page_router)
+    # ⭐ **JSON 动作 API**（前端壳 `app/web/` 用）：改分类 / 剔除 / 恢复 —— 与表单向共用同一批纯函数
+    app.include_router(mod03_api_router)
     # MOD-04 起：页面也由模块路由**服务端渲染**（`/m04` 在本 router 内，不走 _PAGES 静态托管）
     app.include_router(mod04_router)
     # MOD-05 同款：`/m05` · `/m05/debt` · `/m05/ledger` · `/m05/stats` 都在本 router 内
@@ -170,6 +173,12 @@ def create_app() -> FastAPI:
         return Response(
             content=THEME_CSS, media_type="text/css", headers={"Cache-Control": "no-cache"}
         )
+
+    # ⭐ **新前端壳**（`app/web/index.html`）—— 走「原型直接接数据」（用户 2026-09-17 裁定）。
+    #    ⚠️ 挂在 `/app`（**不抢 `/`**）：打样期间与旧服务端渲染页**并存** ⇒ 逐页切换、随时可停。
+    @app.get("/app", include_in_schema=False)
+    def web_shell() -> FileResponse:
+        return FileResponse(_APP_DIR / "web" / "index.html", media_type="text/html")
 
     # 各模块页面（单进程托管；切片 MVP）
     for _name, _path in _PAGES.items():

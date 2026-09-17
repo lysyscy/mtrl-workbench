@@ -126,6 +126,40 @@ def page_notices(
     return HTMLResponse(render_notice_page(data, message=msg, message_kind=msgkind))
 
 
+def _api_item(rec: dict) -> dict:
+    """一行 → API 载荷 = **显示值**（既有，服务端渲染页与前端壳共用）
+    ＋ **状态字段**（前端壳要靠它判"能不能勾选 / 是否剔除 / 是否手动行"）。
+
+    ⚠️ 补的是**语义字段**（`is_excluded` / `is_manual` / …），**不是**原型字段名 ——
+       字段名映射由前端适配层做（`app/web/index.html` 的 `adaptNotice`）⇒ API 不为某个前端定制。
+    ⛔ 页面专用 HTML（`PAGE_ONLY_KEYS`）**仍然不进 API**。
+    ⚠️ 金额一律 **str**（Decimal 直接 JSON 化会变 float ⇒ 金额精度不可控；
+       前端只拿它显示与求和，**落库的值一律由后端判定**）。
+    """
+    row = rec.get("_row")
+    out = {k: v for k, v in rec.items() if k != "_row" and k not in PAGE_ONLY_KEYS}
+    if row is None:
+        return out
+    out.update({
+        "category": row.category,
+        "project_name": row.project_name,
+        "ownership_id": row.ownership_id,
+        "is_excluded": bool(row.excluded),
+        "exclude_source": row.exclude_source,
+        "is_revoked": bool(row.i8_revoked),
+        "is_manual": bool(row.is_manual),
+        "edited_fields": list(row.edited_fields or ()),
+        "amount_approved": str(row.amount_approved),
+        "amount_paid": str(row.amount_paid),
+        "pay_amount": str(row.pay_amount),
+        "stat_settle": str(row.stat_settle),
+        "stat_paid": str(row.stat_paid),
+        "has_effective_flow": bool(row.effective_flows),
+        "has_link": bool(row.has_link),
+    })
+    return out
+
+
 @page_router.get("/api/m03/notice-list")
 def get_notice_list(
     period: str | None = Query(None),
@@ -158,10 +192,7 @@ def get_notice_list(
             "revoked": c.revoked, "excluded_by": c.excluded_by, "text": c.text(),
         },
         # ⚠️ **页面专用**的列（「操作」列是按钮 / 表单 HTML）**不进 API** —— 本端点只吐纯数据
-        "items": [
-            {k: v for k, v in rec.items() if k != "_row" and k not in PAGE_ONLY_KEYS}
-            for rec in data["rows"]
-        ],
+        "items": [_api_item(rec) for rec in data["rows"]],
     }
 
 
