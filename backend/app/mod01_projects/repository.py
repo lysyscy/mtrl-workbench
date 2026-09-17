@@ -213,6 +213,33 @@ def rename_full(
     session.flush()
 
 
+def promote_placeholder(
+    session: Session, project: Project, real_warehouse_name: str
+) -> None:
+    """**系统专用**：占位行扶正 —— 占位名（`未建仓-N`）→ 真实仓库名（§2.4.2 链路 B）。
+
+    ⛔ **人工改名一律拒绝**（§2.3.1「仓库名不允许人工修改」/`ACC-PRJ-NAME-001/001-06`）：
+       本函数**只认占位名**；拿到真实名的行 ⇒ 抛 `MustReportError`（**不静默改**）。
+    ⚠️ 按 §9.3（留痕范围 = **项目全名 / 项目状态**）**不留痕** —— 扶正结果由调用方在
+       **抓取回执 / 告警**里显式列出（§2.4.2 监测点「被打破时必须能察觉」）。
+    ⚠️ 展示名若是沿用占位名的（建档时 `disp` 缺省取仓库名）⇒ **一并跟着换**，
+       否则屏幕上会一直挂着「未建仓-1」（`ACC-PRJ-NAME-001/001-08`：展示名默认取仓库名）。
+    """
+    old = str(project.warehouse_name or "")
+    if not old.startswith(PLACEHOLDER_PREFIX):
+        raise MustReportError(
+            f"只有占位行（{PLACEHOLDER_PREFIX}N）才能被系统扶正；"
+            f"该行仓库名 = {old or '（空）'} ⇒ 人工不得修改仓库名（§2.3.1）"
+        )
+    real = (real_warehouse_name or "").strip()
+    if not real:
+        raise MustReportError("扶正目标仓库名为空 ⇒ 拒绝（不把真实名清成空）")
+    if str(project.disp or "") == old:
+        project.disp = real
+    project.warehouse_name = real
+    session.flush()
+
+
 def set_disp(session: Session, project: Project, disp: str) -> None:
     """改展示名（**可改、不留痕**，§9.3）。"""
     project.disp = (disp or "").strip()
