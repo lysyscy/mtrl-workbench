@@ -10,10 +10,12 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel
 
 from app.core import preview_store
 from app.core.db import session_scope
@@ -259,6 +261,47 @@ def api_mech() -> dict:
                 vals.append(0.0)
         out.setdefault(wh, {})[ym] = vals
     return {"mech": out, "count": len(rows), "columns": list(D.MECH_COLUMNS)}
+
+
+class MechSaveRequest(BaseModel):
+    """手录机械 6 列（项目键 = 仓库名；`ym` = 核算月；`values` = `{mech_0…mech_5: 原值}`）。"""
+
+    warehouse: str = ""
+    ym: str = ""
+    values: dict[str, Any] = {}
+
+
+@router.post("/api/m06/mech")
+def api_mech_save(req: MechSaveRequest) -> dict:
+    """⭐ **`TAIL-38`：「录机械费」的写入口** —— 壳侧面板（原型 `V.m06` 没画这个入口，§5.2.5 ③）。
+
+    ⚠️ 校验**唯一出口 = `mech_ui.parse_mech_values`**（空 ⇒ 0；非数字 / 负数 ⇒ 拒）——
+      与 PRG 端点（`POST /m06/mech`）**同一份判定**，⛔ 不在本层另写一套。
+
+    ⚠️ 手录值落**旁路载体**（`proc_mech_manual`）⇒ 重抓 i8 / 重导历史**都不覆盖它**（§5.2.5 ③）。
+    ⚠️ 失败 **抛 `MustReportError`** ⇒ 400 ＋ 原样原因（壳侧把它给用户，不静默）。
+    """
+    warehouse = str(req.warehouse or "").strip()
+    if not warehouse:
+        raise MustReportError("没有选中项目 —— 项目键 = 仓库名。")
+    ym = D.normalize_ym(req.ym)
+    if not ym:
+        raise MustReportError(f"核算月认不出：{req.ym or '（空）'} —— 请写 2026-08 这种形态。")
+    try:
+        values = mech_ui.parse_mech_values(req.values)
+    except ValueError as exc:
+        raise MustReportError(f"未保存：{exc}") from exc
+
+    with session_scope() as s:
+        repo.save_mech(s, ym=ym, warehouse=warehouse,
+                       values={k: Decimal(v) for k, v in values.items()},
+                       project_id=None)
+    return {
+        "ok": True, "ym": ym, "warehouse": warehouse,
+        "columns": list(D.MECH_COLUMNS),
+        "message": f"已保存 {ym} 的机械 {len(D.MECH_COLUMNS)} 列手录值"
+                   "（旁路载体，重抓 / 重导都不会覆盖它）",
+    }
 
 
 __all__ = ["router"]

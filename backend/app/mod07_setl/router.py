@@ -200,4 +200,10 @@ async def big_move(request: Request):
     return _redirect("/m07/big", kind="ok", message=res["message"], period=month)
 
 
+# ⭐ 前端壳的 **JSON API**（原型直接接数据，`D18`）—— 独立路由件，由本文件汇总（`main.py` 不用改）
+from app.mod07_setl.api import router as api_router      # noqa: E402
+
+router.include_router(api_router)
+
+
 __all__ = ["router"]

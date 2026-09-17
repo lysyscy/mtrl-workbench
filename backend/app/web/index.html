@@ -349,16 +349,10 @@ const WH = [
    ① 「实际不需要显示单独的表」—— 这部分数据的**唯一去向就是活动大表**（大表那两列 = 系统自动填）；
    ② 本页那张表退化为**核对工具**（"防止数据出问题、还是要一个表格来把控"），不再是独立产出；
    ③ `EXTM[核算年月] = { 焊材:[…], 气体:[…] }`，每项 = `[仓库名, 金额]`。
-   ⭐ `EXTRACT` **保留 = `EXTM['2026-08']` 的别名** —— 它是 §5.3.3 的**已验收基线**
-      （焊材 83,306.25 / 气体 45,428.89），且活动大表的 `pickExtra` 与既有断言都取它。 */
-const EXTM = {};
-EXTM['2026-08'] = { 焊材:[['临沂钢铁余热发电项目仓库',8608.37],['内蒙乌兰察布风光储一体化项目仓库',67831.87],['安徽滁州垃圾焚烧发电项目仓库',665.00],['山西长治焦化升级改造项目仓库',2379.65],['河南漯河食品产业园供热项目仓库',3821.36]],
-                    气体:[['临沂钢铁余热发电项目仓库',8008.85],['内蒙乌兰察布风光储一体化项目仓库',20867.74],['安徽滁州垃圾焚烧发电项目仓库',3832.75],['江苏新沂生物质发电项目仓库',12719.55]] };
-EXTM['2026-07'] = { 焊材:[['临沂钢铁余热发电项目仓库',7920.50],['内蒙乌兰察布风光储一体化项目仓库',61200.40],['山西长治焦化升级改造项目仓库',2100.00],['河南漯河食品产业园供热项目仓库',3150.80]],
-                    气体:[['临沂钢铁余热发电项目仓库',7500.20],['内蒙乌兰察布风光储一体化项目仓库',19800.30],['安徽滁州垃圾焚烧发电项目仓库',3400.00],['江苏新沂生物质发电项目仓库',11200.00]] };
-EXTM['2026-06'] = { 焊材:[['临沂钢铁余热发电项目仓库',7100.00],['内蒙乌兰察布风光储一体化项目仓库',58000.00],['山西长治焦化升级改造项目仓库',1900.00]],
-                    气体:[['临沂钢铁余热发电项目仓库',6900.00],['内蒙乌兰察布风光储一体化项目仓库',18200.00],['安徽滁州垃圾焚烧发电项目仓库',3100.00]] };
-const EXTRACT = EXTM['2026-08'];
+   ⚠️ 原先这里还有 `EXTRACT = EXTM['2026-08']` 的**已验收基线别名** —— 已随演示块一并删除
+      （它指向的正是演示数据；取数口径现在**唯一出口 = 后端 `/api/m07/extract`**）。 */
+let EXTM = {};   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/extract` 转形填充
+   （演示块 3 个月 ＋ 已失效的 `EXTRACT` 别名一并删除；取数口径唯一出口 = 后端 `extract`）。 */
 
 /* ---------- 付款通知书（ENT-02） MOD-03 ---------- */
 /* manual = 「手动新增行」标记（2026-09-12 新增）：i8 抓取行为 undefined、手动新增行为 true。
@@ -507,24 +501,9 @@ const BIGFMT  = ['ym','m','m','m','m','t'];
    · **长治**：本月未录、且 `2026-07` 也没有它 ⇒ 应**回退两级**取 `2026-06`；
    · **新沂**：三个月都没有 ⇒ **留空待填**。
    其余在建项目（邹平 / 唐山海港 / 菏泽 / 未建仓-01 / 潍坊 / 泰州 / 廊坊 / 海阳 / 湛江）全空。 */
-const BIGVAL = {};
-BIGVAL['2026-08'] = {
-  '华能德州热电联产项目仓库':['2024-03',1991500.00,133162400.00,122806888.00,115000.00,''],
-  '临沂钢铁余热发电项目仓库':['2025-01',980000.00,null,null,null,null],
-  '内蒙乌兰察布风光储一体化项目仓库':['2024-06',2400000.00,55636780.00,38630000.00,270000.00,'25T 吊车 4 台'],
-  '安徽滁州垃圾焚烧发电项目仓库':['2025-06',1668000.00,2699790.00,14000.00,3000.00,'']
-};
-BIGVAL['2026-07'] = {
-  '华能德州热电联产项目仓库':['2024-03',1860000.00,133162400.00,118000000.00,108000.00,''],
-  '临沂钢铁余热发电项目仓库':['2025-01',960000.00,58540000.00,54100000.00,79000.00,''],
-  '内蒙乌兰察布风光储一体化项目仓库':['2024-06',2280000.00,55636780.00,35200000.00,255000.00,''],
-  '安徽滁州垃圾焚烧发电项目仓库':['2025-06',1520000.00,2699790.00,0,2000.00,'']
-};
-BIGVAL['2026-06'] = {
-  '华能德州热电联产项目仓库':['2024-03',1750000.00,133162400.00,112000000.00,98000.00,''],
-  '内蒙乌兰察布风光储一体化项目仓库':['2024-06',2100000.00,55636780.00,31000000.00,240000.00,''],
-  '山西长治焦化升级改造项目仓库':['2023-11',560000.00,8162782.00,4200000.00,0,'']
-};
+let BIGVAL = {};   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/big` 的 `manual` 转形填充
+   （演示块 3 个月已删；⚠️ **全量月份**都要填 —— 「上次值带入」`OPEN-05` 要向更早月份取最近一次录入值）。 */
+
 /* ---------- 特殊费用月报表（§5.5，1 自动项 + N 手填项、可增项、项名可改） MOD-09 ----------
 /* ⭐ 2026-09-13（裁定⑤·甲）**按月存**；**同日再裁定（本批）加一层「项目」** ⇒
    `AWF[核算年月][项目键] = [[项名, 金额], …]`，**项目键 = 仓库名**（§2.7.4 全站唯一键）。
@@ -574,29 +553,9 @@ const WHs=WH.map(r=>O(r,['id','name','rows','begin','in','out','end']));
      按月取数一律走 **`whRows(ym)`**。
    · 数据自洽：`end = begin + in − out`，且**上月结存 = 本月期初**（跨月连贯）。
    · 2026-08 = §5.3.2 **已验收基线**（675 行 / 8 仓 / 9 文件），**不得改动**。 */
-const WHM = {
-  '2026-08': WHs,
-  '2026-07': [
-    ['W1','华能德州热电联产项目仓库',35,900.00,39000.00,38889.22,1010.78],
-    ['W2','临沂钢铁余热发电项目仓库',195,18500.00,108000.00,106210.43,20289.57],
-    ['W3','江苏新沂生物质发电项目仓库',20,0,25000.00,25000.00,0],
-    ['W4','内蒙乌兰察布风光储一体化项目仓库',66,0,940000.00,940000.02,-0.02],
-    ['W5','山西长治焦化升级改造项目仓库',34,0,170000.00,170000.00,0],
-    ['W6','安徽滁州垃圾焚烧发电项目仓库',142,0,258000.00,257999.98,0.02],
-    ['W7','河南漯河食品产业园供热项目仓库',138,0,212000.00,211999.97,0.03],
-    ['W8','山东邹平铝业项目仓库',1,0,1400.00,1400.00,0]
-  ].map(r=>O(r,['id','name','rows','begin','in','out','end'])),
-  '2026-06': [
-    ['W1','华能德州热电联产项目仓库',30,0,36000.00,35100.00,900.00],
-    ['W2','临沂钢铁余热发电项目仓库',180,0,100000.00,81500.00,18500.00],
-    ['W3','江苏新沂生物质发电项目仓库',18,0,23000.00,23000.00,0],
-    ['W4','内蒙乌兰察布风光储一体化项目仓库',60,0,880000.00,880000.00,0],
-    ['W5','山西长治焦化升级改造项目仓库',30,0,160000.00,160000.00,0],
-    ['W6','安徽滁州垃圾焚烧发电项目仓库',130,0,240000.00,240000.00,0],
-    ['W7','河南漯河食品产业园供热项目仓库',126,0,198000.00,198000.00,0],
-    ['W8','山东邹平铝业项目仓库',1,0,1200.00,1200.00,0]
-  ].map(r=>O(r,['id','name','rows','begin','in','out','end']))
-};
+let WHM = {};   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/settlement` **原地填充**
+   （演示块 3 个月已删 —— 原先它是 `2026-08/07/06` 的模拟分仓库结存）。
+   ⚠️ 对象身份不变：`whRows(ym)` 与 `V.m07` 都按**当前核算年月**取数（`fWhYm`）。 */
 const whRows = ym => WHM[ym] || [];                 /* 收发结存的**按月取数出口**（`MOD-07` 用） */
 let fWhYm = bjMonth(-1);                            /* 默认 = 北京时间上月（§9.2） */
 /* 自定义排序号的初值 = 建档顺序 1..N（此后由 `editOrd` / `ordUp` / `ordDown` 维护，且始终重编号保持连续） */
@@ -618,7 +577,9 @@ function r2(x){ if(!isFinite(x)||Math.abs(x)>=1e15) return x;
   let n=Number(s.slice(0,i)+s.slice(i+1,i+3));
   if(Number(s.charAt(i+3))>=5) n+=1;
   return (neg?-1:1)*(n/100); }
-const M=n=>{const v=r2(Number(n)||0); const s=Math.abs(v).toFixed(2); return (v<0?'-':'')+s.replace(/\B(?=(\d{3})+(?!\d))/g,',')};
+/* ⚠️ `null` / `undefined` ⇒ 「—」（**不可得 ≠ 0** —— 与后端口径一致：大表的「主材累计」取数口未接入时给 null，若按 `Number(null)||0` 会显示「0.00」= 冒充「确实没有」）。
+   ⭐ 对**数字入参**行为**完全不变**（`M(0)`→`0.00` · `M(-1.5)`→`-1.50` · `M(1234.5)`→`1,234.50`）。 */
+const M=n=>{if(n==null) return '—'; const v=r2(Number(n)||0); const s=Math.abs(v).toFixed(2); return (v<0?'-':'')+s.replace(/\B(?=(\d{3})+(?!\d))/g,',');};
 /* 金额规整：NaN 必须原样透出，绝不能被当成 0（否则非法输入会静默把金额清成 0） */
 const N2=n=>{const x=Number(n); return isNaN(x)?NaN:r2(x);};
 const PCT=n=>(Number(n)*100).toFixed(1)+'%';
@@ -904,7 +865,7 @@ const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
-const WIRED=new Set(['m03','m01','m04','m05','m06','m08']);
+const WIRED=new Set(['m03','m01','m04','m05','m06','m07','m08']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -2626,7 +2587,7 @@ V.m06=()=>{
    候选 = 项目档案里 `status==='在建'` 且**非壳**的行（`pjNoShell`），键 = **仓库名**（§2.7.4）。
    `BIGSET` = 有序数组，是这份集合的**唯一存储**；改动只走选题动作（`ACT.*`）。 */
 const bigCands = () => pjKeysOfRows(pjNoShell().filter(p=>p.status==='在建'));   /* 候选 = 在建 · 非壳（实时算） */
-let BIGSET = bigCands();     /* 有序 · **唯一存储**（默认 = 全部候选；增删改只走选题动作） */
+let BIGSET = [];   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/big` 的 `selected` 原地填充（行序 = 大表自己的顺序；未选题时后端给「全部候选」，与原型同款） */
 let BIGDRAFT = null;         /* 选题弹窗的**草稿**（「确定」前的临时顺序） */
 /* ⭐ 大表每一格的取数（**唯一出口**：页面渲染 / 导出共用）。
    `ym` = 核算月（默认 `bjMonth(-1)`，§9.2 材料报表类）。
@@ -2648,7 +2609,8 @@ const bigHWCum = wh => extTotal('焊材', wh), bigQTCum = wh => extTotal('气体
      · ⭐ **只计「纳入台账」的合同**（用户 2026-09-13 裁定「甲」）—— 与 `MOD-11` 的「Σ 结算金额」KPI **同口径**；
      · 键 = 仓库名（§2.7.4）；项目恒有值 ⇒ 不需要"未指定"档。
    ⚠️ 视图 / 导出**一律走本出口**，不要在渲染里内联求和。 */
-const bigMatCum = wh => N2(JCs.filter(j => j.tag === '纳入台账' && j.proj === wh).reduce((a, j) => a + jcSettle(j), 0));
+/* ⚠️ 「主材累计（含税）」的取数口**集采台账属 M5**：未接入时给 `null`（页面显「—」），⛔ 不写 0 冒充「确实没有」（`TAIL-25`；口径 = 后端 `mat_available`）。 */
+const bigMatCum = wh => MAT_OK ? N2(JCs.filter(j => j.tag === '纳入台账' && j.proj === wh).reduce((a, j) => a + jcSettle(j), 0)) : null;
 /* （原 `TOK` / `pickExtra` 已废：大表不再按"项目全名关键词"匹配，改按**仓库名**走上面的出口。） */
 /* ---------- 焊材 / 气体提取的**取数出口**（2026-09-13） ----------
    · `extWhs(kind)` = 该类别下出现过的仓库（**排序走共性出口 `pjSort`**）。
@@ -2738,7 +2700,7 @@ V.m07=()=>{
         {cells:{6:`<td class="ctr">${tagOf(totBal)}</td>`}})
     :`<tr><td colspan="${thCount(WH_THEAD)}" class="ctr mut" style="padding:22px"><b>${tmLabel(fWhYm)}</b> 没有收发结存数据 —— 换个「核算年月」，或点左上角「抓取 i8」</td></tr>`}
     </tbody></table></div>
-    <div class="bd"><div class="tip ok" style="margin:0"><b>已验收基线：</b>2026-08 基准 = <b>${sums(WHM['2026-08'],'rows')} 行 / ${WHM['2026-08'].length} 仓 / ${WHM['2026-08'].length+1} 文件</b>（内含 ${WHM['2026-08'].length} 个分仓库 xlsx + 1 个总表），金额按 2 位小数对平、<b>容差 0</b>。本页数据为模拟值，量级与结构一致。</div></div>
+    <div class="bd"><div class="tip ok" style="margin:0"><b>交付形态：</b><b>${rows.length}</b> 个分仓库 xlsx ＋ 1 个总表 = <b>${rows.length + 1}</b> 个文件打包 zip；金额按 2 位小数对平、<b>容差 0</b>。</div></div>
   </div>
   <div class="grid2">
     <div class="card"><h4>焊材 / 气体提取（R22 · §5.3.3）<span class="sp">
@@ -3570,6 +3532,7 @@ const ACT={
       `wh` / `iv` 两条（材料域）仍走原型演示逻辑 —— 它们还没接线，别在这里假装成功。 */
    if(k==='nt') return ntFetchBackend(m);
    if(k==='iv') return ivFetchBackend(m);
+   if(k==='wh') return whFetchBackend(m);   /* ⭐ 收发结存（API-02）已接后端；`nt` 走 `/api/m03/notices/fetch`（见 fetchNtOk） */
    const NM={nt:'付款通知书',wh:'收发结存表',iv:'库存单据明细表'}[k]||'付款通知书';
    const API={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
    closeModal();
@@ -4210,11 +4173,12 @@ const ACT={
  goInvAdj:t=>{ invWhs.length=0; invWhs.push(t.dataset.wh); invOnlyAdj=true; go('m08'); setTimeout(()=>toast(`已跳转库存单据页并自动筛出：<b>${esc(t.dataset.wh)}</b> 被调整过的行`),120); },
 
  /* —— MOD-07 —— */
- zipSfjc:()=>{ const rows=pjSort(whRows(fWhYm)); const files=rows.map(w=>[w.name+'.xlsx',Math.round(6000+(w.rows*90)+1000)]); files.push(['第四工程公司'+fWhYm+'收发结存表.xlsx',103703]);
-   modal({title:'导出分仓库收发结存 zip',reopen:()=>ACT.zipSfjc(),body:`<div class="tip ok" style="margin-bottom:10px">已生成 <b>第四工程公司${fWhYm}收发结存表.zip</b>（${files.length} 个文件）。总表内含<b>真·可操作数据透视表</b>（求和项：期初/收/发/结存金额）。</div>
-     <table class="dt cond" data-sort data-sort-key="modal:zipSfjc"><thead><tr><th>#</th><th>文件</th><th>大小(字节)</th></tr></thead><tbody>
-     ${files.map((f,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(f[0])}</td><td class="num">${M(f[1])}</td></tr>`).join('')}</tbody></table>`,
-     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="exp" data-t="收发结存zip">保存到本地</button>`}); },
+ zipSfjc:()=>{ const rows=pjSort(whRows(fWhYm));
+   /* ⛔ **不做假成功**（原型这里报「已生成 .zip」却拿不到文件）：真实的成品文件写出属 `TAIL-04`
+      （方法已定案 = **模板法**：以用户手作成品 xlsx 为基底做 `zip` 字节替换），与本页接线分开做。 */
+   toast(`⏳ <b>导出尚未落地</b>（属 TAIL-04）：本页按 <b>${tmLabel(fWhYm)}</b> 应导出 `
+     + `<b>${rows.length}</b> 个分仓库 xlsx ＋ 1 个总表 = <b>${rows.length+1}</b> 个文件（zip 打包，走<b>模板法</b>）；`
+     + `方法与实测结论已就绪、只差移植。`, 8600); },
  whReset:()=>{ fWhYm=bjMonth(-1); render(); toast(`已重置：核算年月回到 <b>${tmLabel(fWhYm)}</b>（材料报表 = 北京时间上月，§9.2）`); },
  /* —— 焊材 / 气体提取（**核对工具**；数据唯一去向 = 活动大表）—— */
  fExtStatus:t=>{ fExt.status=t.value; render(); },
@@ -4233,21 +4197,21 @@ const ACT={
      footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="exp" data-t="焊材气体提取（项目×月份）">保存到本地</button>`}); },
  /* 大表手填录入（OPEN-05）：当月未录入的格子先带入、再就地改正 → 转为本月正常录入。
     列型三种：`ym` 年月（`YYYY-MM`）· `m` 金额（元 · **非负**）· `t` 文本（备注）。手填值不参与欠款计算。 */
- bigEdit:t=>{ const wh=t.dataset.p, i=+t.dataset.i, NAME=BIGCOLS[i], F=BIGFMT[i], raw=String(t.value).trim();
-   if(!BIGVAL[bjMonth(-1)]) BIGVAL[bjMonth(-1)]={};
-   if(raw===''){ const r=BIGVAL[bjMonth(-1)][wh]; if(r) r[i]=null;    /* 清空 = 撤回本月录入，回到「带入」状态 */
-     render(); toast(`已清空 <b>${NAME}</b>（${bjMonth(-1)}），该格回到「上次值带入」状态`); return; }
-   const v=bigStore(raw,i);
-   if(F==='m'&&badMoney(v)){ toast(badMoneyMsg(NAME,{unit:'元，2 位小数'})); render(); return; }
-   if(F==='ym'&&v===null){ toast(`<b>${NAME}不合法</b>：请填 <b>YYYY-MM</b>（如 2024-03），已保留原值`); render(); return; }
+ bigEdit:async t=>{ const wh=t.dataset.p, i=+t.dataset.i, NAME=BIGCOLS[i], raw=String(t.value).trim();
+   /* ⭐ 接线：**判定与落库一律后端**（`big_service.save_manual_cell` ⇒ `big_domain.parse_manual`）——
+      金额非负 / 开工时间 `YYYY-MM` 的校验不再在前端复写（否则 = 第二份口径）。
+      ⛔ 也不本地改 `BIGVAL` 冒充落库：成功后**以后端为准重拉**（`reloadM07()`）。 */
    const was=bigCell(wh,bjMonth(-1),i);
-   if(!BIGVAL[bjMonth(-1)][wh]) BIGVAL[bjMonth(-1)][wh]=BIGCOLS.map(()=>null);   /* 只落这一格；同行未改的格仍保持带入 */
-   BIGVAL[bjMonth(-1)][wh][i]=v;
-   render();
-   const show=F==='m'?M(v):esc(String(v));
+   let r=null;
+   try{ r=await API.m07BigCell({month:bjMonth(-1),warehouse:wh,key:BIG_MKEYS[i],raw:raw}); }
+   catch(e){ return bgFailed(NAME,{message:String((e&&e.message)||e)}); }
+   if(!r||r.ok===false) return bgFailed(NAME,r);
+   await reloadM07();
+   if(raw===''){ toast(`已清空 <b>${esc(NAME)}</b>（${bjMonth(-1)}），该格回到「上次值带入」状态`); return; }
+   const show=(BIGFMT[i]==='m')?M(r.value):esc(String(r.value==null?raw:r.value));
    toast(was.from
-     ? `<b>${NAME}</b>已录入 <b>${show}</b><br>原值带入自 ${was.from}，该格已转为本月正常录入（白底）`
-     : `<b>${NAME}</b>已录入 <b>${show}</b>（${bjMonth(-1)}）`); },
+     ? `<b>${esc(NAME)}</b>已录入 <b>${show}</b><br>原值带入自 ${was.from}，该格已转为本月正常录入（白底）`
+     : `<b>${esc(NAME)}</b>已录入 <b>${show}</b>（${bjMonth(-1)}）`); },
  /* ---- 活动大表「选题」：多选 + 自定义顺序（2026-09-13 用户口径）----
     弹窗内的操作只改**草稿** `BIGDRAFT`，点「确定」才写回 `BIGSET` —— 弹窗每步都重建 HTML，
     不备草稿层的话"勾一个就冲掉上一个"。 */
@@ -4272,8 +4236,35 @@ const ACT={
  bigSelNone:()=>{ BIGDRAFT=[]; ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}); },
  /* ⚠️ 写回必须**原地替换内容**（`BIGSET.length=0` + push），**不能** `BIGSET=…` 重新赋值 ——
     外部（自检 / 导出）拿到的是这个数组的**引用**，重新赋值会让引用失效（同 BIGVAL / AWF 的教训）。 */
- bigPickOk:()=>{ BIGSET.length=0; BIGDRAFT.forEach(k=>BIGSET.push(k)); closeModal(); render();
+ bigPickOk:async ()=>{ const picked=BIGDRAFT.slice();
+   /* ⭐ 接线：选题与顺序**落库走后端**（`big_service.save_selection`）—— 弹窗内仍是原型的草稿层 */
+   try{ await API.m07BigSelection(picked); }
+   catch(e){ closeModal(); await reloadM07();
+     return toast(`<b>选题没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
+   closeModal(); await reloadM07();
    toast(`活动大表已按所选 <b>${BIGSET.length}</b> 个项目出表（行序即刚才设置的行序）`); },
+
+ /* ⭐ `TAIL-38`：录机械费（`m06` 的机械 6 列是**旁路载体**；原型没画入口 ⇒ §5.2.5 ③ 自行设计）。
+    判定与落库**全在后端**：空 ⇒ 0、负数 / 非数字 ⇒ 拒且不写库（`mech_ui.parse_mech_values`）。 */
+ mechOpen:()=>{ const cands=(typeof PROC_PJS==='object'&&PROC_PJS&&PROC_PJS.length)?PROC_PJS:bigCands();
+   const wh=(cands.indexOf(procPj)>=0?procPj:(cands[0]||''));
+   const ym=bjMonth(-1);                                   /* 材料报表类默认 = 北京时间上月（§9.2） */
+   const vals=((MACH6[wh]||{})[ym]||[]);
+   modal({title:'录机械费 · 手录 6 列',reopen:()=>ACT.mechOpen(),
+     body:`<div class="tip" style="margin-bottom:8px">机械 6 列是<b>旁路载体</b>：重抓 i8 / 重导历史<b>都不覆盖</b>它（§5.2.5 ③）。<br>空 ⇒ 0；<b>负数 / 非数字一律拒绝且不写库</b>（判定在后端，原值不变）。</div>
+       <div class="fbar" style="border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px">
+         <div class="fi"><label>项目</label><select class="inp" id="mechPj">${cands.map(k=>`<option value="${esc(k)}"${k===wh?' selected':''}>${esc(k)}</option>`).join('')||'<option value="">（没有候选项目）</option>'}</select></div>
+         <div class="fi"><label>核算月</label><input class="inp" id="mechYm" value="${esc(ym)}" placeholder="YYYY-MM"></div>
+       </div>
+       <div class="grid2">${MECH_LABELS.map((nm,i)=>`<div class="fi"><label>${esc(nm)}</label><input class="inp num" id="mechIn${i}" value="${esc(vals[i]==null?'':String(vals[i]))}"></div>`).join('')}</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="mechOk">保存</button>`}); },
+ mechOk:async ()=>{ const g=id=>document.getElementById(id);
+   const wh=String(((g('mechPj')||{}).value)||''), ym=String(((g('mechYm')||{}).value)||'').trim();
+   const values={}; MECH_LABELS.forEach((_,i)=>{ values['mech_'+i]=String(((g('mechIn'+i)||{}).value)||''); });
+   try{ const r=await API.m06MechSave({warehouse:wh,ym:ym,values:values});
+     closeModal(); await reloadMech(); await reloadM07(); render();
+     toast(esc((r&&r.message)||'已保存'));
+   }catch(e){ toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); } },
 
  /* —— MOD-08 —— */
  /* 「项目」筛选（**通用控件** = 共用项目面板，**多选**；2026-09-13 用户口径）—— 键 = 仓库名（§2.7.4）。 */
@@ -4618,7 +4609,7 @@ const ACT={
    if(sc==='awf'){ awfYm=v; mp.open=null; render(); toast(`特殊费用月报表已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }
    if(sc==='iv'){ fIvYm=v; mp.open=null; render();
      toast(v==='全部'?`库存单据已切到 <b>全部时间</b>（不限单据日期）`:`库存单据已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }
-   if(sc==='wh'){ fWhYm=v; mp.open=null; render(); toast(`收发结存已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }
+   if(sc==='wh'){ fWhYm=v; mp.open=null; reloadM07(); toast(`收发结存已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（`WHM[月]` 现在来自后端；只 `render()` 会看到空表） */
    if(sc==='ext'){ fExt.ym=v; mp.open=null; render(); toast(`提取「金额」列已切到 <b>${tmLabel(v)}</b>`); return; }
    if(sc==='pstb'){ pst.ym=v; mp.open=null; render(); return; }                                   /* 付款统计·左栏「按项目」的桶 */
    if(sc==='psta'){ if(/^\d{4}$/.test(v)) pst.year=+v; else if(/^\d{4}Q[1-4]$/.test(v)) pst.q=v;
@@ -4813,6 +4804,23 @@ const API = {
   unresolved: () => API.get('/api/m03/notices/unresolved'),
   assignOwnership: body => API.post('/api/m03/notices/ownership-assign', body),
 
+  /* ---- MOD-07 收发结存与活动大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
+  m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
+  m07Extract: () => API.get('/api/m07/extract'),
+  m07Big: () => API.get('/api/m07/big'),
+  m07BigCell: body => API.post('/api/m07/big/cell', body),
+  m07BigSelection: selected => API.post('/api/m07/big/selection', { selected }),
+  /* ⭐ 抓取：**失败也要看回执**（降级说明在 `message` 里）⇒ 不 throw，由调用方判 `ok`。 */
+  m07Fetch: async month => {
+    const r = await fetch('/api/m07/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month, confirm: true }),
+    });
+    const body = await r.json().catch(() => ({}));
+    return r.ok ? { ok: true, ...body } : { ok: false, ...body };
+  },
+
   /* ---- MOD-04 付款计划（⚠️ 后端这几个端点收 **query 参数**，不是 JSON body ⇒ 照它调用） ---- */
   plans: () => API.get('/api/m04/plans?year_month='),
   plDeleteImpact: ids =>
@@ -4859,6 +4867,9 @@ const API = {
 
   /* ---- MOD-06 过程资料：机械 6 列手录值（旁路表，全量） ---- */
   m06Mech: () => API.get('/api/m06/mech'),
+  /* ⭐ `TAIL-38`：「录机械费」写入口 —— 校验与落库**全在后端**
+     （`mech_ui.parse_mech_values` ＋ `repository.save_mech`），与 PRG 端点同一份判定。 */
+  m06MechSave: body => API.post('/api/m06/mech', body),
 };
 
 /* ---------- 字段适配：后端**语义字段** → 原型字段名（`NT_COLS` / `PJ_COLS`） ----------
@@ -5272,11 +5283,150 @@ async function ivFetchBackend(month) {
   }
 }
 
+/* ============ MOD-07 收发结存与活动大表（前端壳接线 · `TAIL-27`）============
+   ⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 这里**一律过 `N0()`**：
+      不过的话壳里的求和会变成**字符串拼接**（`'100.00' + '1.00'`），而且**不报错**。 */
+let MAT_OK = false;            /* 「主材累计（含税）」取数口是否已接入（后端 `mat_available`） */
+/* 手填 6 列的 key 与格式 —— ⚠️ **顺序与列型的主人是后端**（`big_domain.BIG_MANUAL`），
+   由 `reloadM07()` 按 `manual_keys` / `manual_fmts` 覆盖；这里只是**取数前的兜底**。 */
+const BIG_MKEYS = ['open_ym', 'mech_est', 'contract', 'output_cum', 'oil', 'note'];
+let BIG_MFMTS = ['ym', 'money', 'money', 'money', 'money', 'text'];
+
+/* 手填值：后端 `{月:{仓库:{key:值}}}` → 原型 `BIGVAL[月][仓库] = [6 个值]`（与 `BIGCOLS` 同序）。
+   ⭐ 哪几列是金额**由后端 `manual_fmts` 决定**（⛔ 前端不硬编码列序 / 列型）；
+      金额转数字（否则手填列的合计 `typeof v === 'number'` 判假 ⇒ **恒 0**）；
+      `开工时间 / 备注` 保持字符串；`null` 保持 `null`（= 未录入，交给「带入」逻辑）。 */
+function adaptManual(manual, keys, fmts) {
+  const out = {};
+  const isMoney = i => String((fmts || BIG_MFMTS)[i] || '') === 'money';
+  Object.keys(manual || {}).forEach(ym => {
+    out[ym] = {};
+    Object.keys(manual[ym] || {}).forEach(wh => {
+      const src = manual[ym][wh] || {};
+      out[ym][wh] = keys.map((k, i) => {
+        const v = src[k];
+        if (isMoney(i)) return (v == null || v === '') ? null : N0(v);
+        return (v == null) ? null : String(v);
+      });
+    });
+  });
+  return out;
+}
+
+/* 提取：后端 `{类别:{仓库:{月:金额}}}` → 原型 `EXTM[月][类别] = [[仓库, 金额], …]`
+   （原型 `extMon` 按 `x[0] === 仓库` 找 ⇒ 转形在适配层做，`V.m07` 一行不改）。 */
+function adaptExtract(amounts) {
+  const out = {};
+  Object.keys(amounts || {}).forEach(kind => {
+    const byWh = amounts[kind] || {};
+    Object.keys(byWh).forEach(wh => {
+      const months = byWh[wh] || {};
+      Object.keys(months).forEach(ym => {
+        const bucket = (out[ym] = out[ym] || {});
+        (bucket[kind] = bucket[kind] || []).push([wh, N0(months[ym])]);
+      });
+    });
+  });
+  return out;
+}
+
+/* 收发结存行：后端 `{name, rows, begin, in, out, end}` → 原型同名字段（`id` 取仓库名 —— 全站唯一键就是它）。 */
+const adaptWh = r => ({
+  id: String(r.name || ''), name: r.name || '', rows: N0(r.rows),
+  begin: N0(r.begin), in: N0(r.in), out: N0(r.out), end: N0(r.end),
+});
+
+/* ⭐ **重拉（唯一出口）**：写动作 / 切换核算年月之后一律走它 —— 以后端为准，⛔ 前端不自己造状态。
+   ⚠️ `WHM` / `EXTM` / `BIGVAL` 一律**原地清空再填**（对象身份不变 —— 外部持有的是引用）。 */
+async function reloadM07() {
+  const [st, ex, bg] = await Promise.all([
+    API.m07Settlement(fWhYm), API.m07Extract(), API.m07Big(),
+  ]);
+  const ym = (st && st.ym) || fWhYm;
+  Object.keys(WHM).forEach(k => delete WHM[k]);
+  (st.rows || []).forEach((r, i) => { (WHM[ym] = WHM[ym] || []).push(adaptWh(r)); });
+  const ext = adaptExtract(ex && ex.amounts);
+  Object.keys(EXTM).forEach(k => delete EXTM[k]);
+  Object.keys(ext).forEach(k => { EXTM[k] = ext[k]; });
+  if (bg) {
+    if (bg.manual_keys && bg.manual_keys.length) {
+      BIG_MKEYS.length = 0; bg.manual_keys.forEach(k => BIG_MKEYS.push(k));
+    }
+    if (bg.manual_fmts && bg.manual_fmts.length) BIG_MFMTS = bg.manual_fmts;
+    const man = adaptManual(bg.manual, BIG_MKEYS, BIG_MFMTS);
+    Object.keys(BIGVAL).forEach(k => delete BIGVAL[k]);
+    Object.keys(man).forEach(k => { BIGVAL[k] = man[k]; });
+    BIGSET.length = 0;
+    (bg.selected || []).forEach(k => BIGSET.push(k));
+    MAT_OK = !!bg.mat_available;
+  }
+  /* ⚠️ 大表月份 = `bjMonth(-1)`（原型写死「北京时间上月」，§9.2 材料报表类）——
+     与后端 `default_month()` 同口径；后端 `selected` 已是「大表自己的顺序」，不需前端重排。
+     ⛔ **不要在这里给 `BIGSET` 兜底「空了就填全部候选」**：后端的选题有**标记行**区分
+        「从未选题」（⇒ 后端已给全部候选）与「选了空」（⇒ 表里 0 个项目）——
+        前端兜底会把用户的「清空」**悄悄改回全部候选**（假成功，且不报错）。 */
+  render();
+}
+
+/* 写动作统一外壳：**失败把后端原因原样给用户**（不吞、不换句话），成败都回后端真实状态。 */
+async function bgFailed(name, r) {
+  await reloadM07();
+  toast(`<b>${esc(name)}没能保存</b>：${esc((r && r.message) || '后端未说明原因')}`, 7000);
+}
+
+/* 抓收发结存（`API-02`）—— ⚠️ **会登录 i8 并强踢在线用户**（D9 的二次确认由抓取弹窗承担）。 */
+async function whFetchBackend(month) {
+  closeModal();
+  try {
+    const r = await API.m07Fetch(month);
+    if (r.ok === false) {                    /* 降级：i8 侧失败 ⇒ 走手动 Excel 导入（§3.6） */
+      await reloadM07();
+      return toast(`<b>抓取没能完成</b>，已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
+        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`, 9000);
+    }
+    await reloadM07();
+    const st = r.stats || {};
+    let msg = `已按 <b>${esc(month)}</b> 抓取收发结存（API-02）：解析 <b>${r.rows || 0}</b> 行 —— `
+      + `新增 <b>${st.inserted || 0}</b> · 更新 <b>${st.updated || 0}</b> · 删除 <b>${st.deleted || 0}</b>`;
+    toast(msg + `<br><span class="mut sm">⚠️ 解析条数与落库条数不一致时先怀疑幂等范围（见 ops 实测结论）</span>`, 7600);
+  } catch (e) {
+    await reloadM07();
+    toast(`<b>抓取没能完成</b>：${esc(String((e && e.message) || e))}<br>`
+      + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试</span>`, 8600);
+  }
+}
+
 /* 机械 6 列（**旁路表**的手录值）—— ⚠️ 不 `render()`：由 `boot()` 后面的 `reloadM05()` 统一渲染。 */
+/* 机械 6 列的**列名兜底**（真值由 `reloadMech()` 从 `/api/m06/mech` 的 `columns` 覆盖 ——
+   ⚠️ 列名的**唯一主人 = 后端** `domain.MECH_COLUMNS`，⛔ 前端不硬编码）。 */
+const MECH_LABELS = ['租分公司设备', '内租设备', '外租零租含税', '外租包月含税',
+  '外租零租不含税', '外租包月不含税'];
+
 async function reloadMech() {
   const d = await API.m06Mech();
   MACH6 = d.mech || {};
+  if (d.columns && d.columns.length) {
+    MECH_LABELS.length = 0;
+    d.columns.forEach(x => MECH_LABELS.push(x));
+  }
 }
+
+/* ⭐⭐ `TAIL-38`：「录机械费」入口 —— 原型 `V.m06` **没画**这个入口（机械 6 列在原型里是**只读**的），
+   而服务端页 `/m06` 才有 PRG 写入口 ⇒ 壳里**没法录**（机械欠款会长期停在 0）。按 §5.2.5 ③ 自行设计。
+   ⛔ **不改 `V.m06` 一行**：走原型自己的 `BIND` 钩子（渲染后往页首注入一条工具栏）——
+      判定与落库全在后端（`POST /api/m06/mech`）。⚠️ 机械值是**旁路载体**，重抓 / 重导都不覆盖它。 */
+BIND.m06 = function () {
+  const host = document.querySelector('#view');
+  if (!host || document.getElementById('mechEntry')) return;
+  const bar = document.createElement('div');
+  bar.id = 'mechEntry';
+  bar.className = 'fbar';
+  bar.style.cssText = 'border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px';
+  bar.innerHTML = '<div class="fi"><label>机械费手录（§5.2.5 ③）</label>'
+    + '<span class="mut sm">机械 6 列是<b>旁路载体</b> —— 重抓 i8 / 重导历史都<b>不覆盖</b>它</span></div>'
+    + '<button class="btn pri" data-act="mechOpen">录机械费</button>';
+  host.prepend(bar);
+};
 
 async function boot() {
   /* ⚠️ **每一路取数独立容错**：任何一路失败（某端点临时 500 / 还没上线 / 网络抖）**不得拖垮其他页**。
@@ -5302,6 +5452,7 @@ async function boot() {
   });
   await soft('机械 6 列', reloadMech);
   await soft('库存单据', reloadInv);
+  await soft('收发结存与大表', reloadM07);   /* ⚠️ 必须在 reloadMech / reloadInv **之后**：大表的机械与焊材/气体列取它们 */
   await soft('付款域', reloadM05);          /* 内部各自 render 一次 */
   BOOT_ERROR = fails.join('；');
   render();

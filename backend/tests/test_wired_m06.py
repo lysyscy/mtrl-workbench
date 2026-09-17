@@ -94,3 +94,59 @@ def test_视图切片未被改动():
     body = _view_body("V.m06")
     assert 3000 < len(body) < 12000, f"`V.m06` 切片长度 {len(body)} 可疑 —— 配平可能跑偏"
     assert "API." not in body, "`V.m06` 里出现了 API 调用 ⇒ 原型渲染逻辑被改（该走适配层）"
+
+
+# ============================================================== `TAIL-38` · 录机械费入口
+
+
+@acc()
+def test_录机械费入口挂在BIND钩子且不改切片():
+    """⭐ 原型 `V.m06` **没画**「录机械费」入口（机械 6 列在原型里是只读的）⇒ 按 §5.2.5 ③ 自行设计。
+
+    ⛔ **不改 `V.m06` 一行**：走原型自己的 `BIND` 钩子（渲染后往页首注入一条工具栏）。
+    """
+    assert "BIND.m06 = function ()" in SHELL, "壳里没有 `BIND.m06`（录机械费入口没挂上）"
+    assert 'data-act="mechOpen"' in SHELL, "入口按钮没挂 `mechOpen` 动作"
+    body = _view_body("V.m06")
+    assert "mechOpen" not in body, "入口被塞进了 `V.m06` 切片（应走**切片外**的 `BIND` 钩子）"
+
+
+@acc()
+def test_录机械费走后端且不在前端复写判据():
+    """⭐ 反向：不许本地改 `MACH6` 冒充落库（假成功）；校验（负数 / 非数字）也不在前端复写。"""
+    i = SHELL.find("mechOk:async ()=>{")
+    assert i > 0, "`mechOk` 没改成 async（异步走后端）"
+    body = SHELL[i:i + 900]
+    assert "API.m06MechSave(" in body, "`mechOk` 没走 `/api/m06/mech`"
+    assert "MACH6[" not in body, "`mechOk` 还在本地改 `MACH6` 冒充落库（假成功）"
+    assert "reloadMech()" in body, "`mechOk` 成功后没「以后端为准重拉」"
+
+
+@acc()
+def test_机械列名由后端给():
+    """⚠️ 列名的**唯一主人 = 后端** `domain.MECH_COLUMNS` ⇒ 壳里的 `MECH_LABELS` 只是兜底。
+
+    ⚠️ 断言必须**钉在 `reloadMech` 体内、且要求覆盖动作有前置条件**（= 条件来自后端响应）——
+       只写「壳里含 `d.columns`」是**假绿**：同一函数里 `d.columns.forEach(...)` 也在，
+       把前置条件改成 `false`（覆盖永不生效）照样能过。
+    """
+    i = SHELL.find("async function reloadMech()")
+    assert i > 0, "壳里找不到 `async function reloadMech()`"
+    body = SHELL[i:][:700]
+    assert "MECH_LABELS" in body, "`reloadMech()` 里没有列名覆盖"
+    assert re.search(r"if\s*\(\s*d\.columns", body), (
+        "列名覆盖的前置条件不是来自后端响应（可能整个不生效 ⇒ 前端硬编码列名）"
+    )
+
+
+@acc()
+def test_后端机械写端点存在():
+    assert '@router.post("/api/m06/mech")' in ROUTER, "后端缺 `POST /api/m06/mech`（`TAIL-38` 的写入口）"
+    # ⚠️ 必须**看 API 端点自己的函数体** —— 只写「文件里含 `mech_ui.parse_mech_values(`」是**假绿**：
+    #    PRG 端点（`POST /m06/mech`）里也有一处 ⇒ 变异掉 API 端点那一处照样能过。
+    i = ROUTER.find("def api_mech_save(")
+    assert i > 0, "后端缺 `def api_mech_save(`"
+    body = ROUTER[i:i + 2000]
+    assert "mech_ui.parse_mech_values(" in body, (
+        "写端点没走 `mech_ui.parse_mech_values`（判定该与 PRG 端点复用**同一出口**，不另写一套）"
+    )
