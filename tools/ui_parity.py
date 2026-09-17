@@ -81,7 +81,8 @@ PROBES: list[tuple[str, str, str]] = [
     ("表", r"<table", r"<table"),
     ("筛", r'class="fbar"', r'class="fbar"'),
     ("卡", r'class="kpis"', r'class="kpis"'),          # ⚠️ 不用裸 `kpis`：`data-seg="kpis"` 是**段位占位**
-    ("折", r"<details", r"<details"),
+    ("折", r'<details class="tip"', r'<details class="tip"'),   # ⚠️ 口径收准：`R1` 的折叠说明 = `<details class="tip">`
+                                                                #（不能数任意 `<details>` —— 面板/弹窗也用 details 承载）
     ("合计", r"sumRowOf\(", r"sumrow"),
     ("排序", r"<table[^>]*\sdata-sort[\s>]", r"data-sort-col"),
     ("项目面板", r"pjwrap", r"pjwrap"),

@@ -172,6 +172,15 @@ details.tip ul{margin:6px 0 0;padding-left:18px;line-height:1.8}
 .fi label{font-size:12px;color:var(--mut)}
 .fi input,.fi select{border:1px solid var(--bd3);border-radius:5px;padding:5px 8px;font-size:13px;min-height:30px}
 .fi select[multiple]{min-height:64px}
+/* 项目选择器（共用件 `proj_panel_html()`）—— 类名照原型（`.fi.pjwrap` ＋ `.pjsel`），样式只此一处 */
+.pjwrap{position:relative}
+.pjwrap>details>summary{list-style:none;display:inline-flex;align-items:center;gap:8px;min-width:126px}
+.pjwrap>details>summary::-webkit-details-marker{display:none}
+.pjwrap>details[open]>summary{border-color:var(--pri);color:var(--pri)}
+.pjsel{position:absolute;z-index:5;top:calc(100% + 2px);left:0;min-width:220px;max-height:260px;overflow:auto;
+       background:var(--sf);border:1px solid var(--bd3);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.12);
+       padding:6px 8px;display:flex;flex-direction:column;gap:4px}
+.pjsel label{display:flex;gap:6px;align-items:center;font-size:12.5px;white-space:nowrap;color:var(--tx)}
 .tw{overflow:auto;max-height:calc(100vh - 330px);min-height:220px;border:1px solid var(--bd);border-radius:6px;background:var(--sf)}
 table.dt{width:100%;border-collapse:collapse}
 .dt th,.dt td{padding:6px 9px;border-bottom:1px solid var(--bd2);font-size:12.5px;text-align:left;white-space:nowrap}
@@ -280,7 +289,11 @@ def _render_filter_bar(filters, action: str = "") -> str:
     """
     items: list[str] = []
     for f in filters or ():
-        if f.get("html"):
+        if f.get("raw"):
+            # 调用方给**整段**（自己已含 `.fi` ＋ `<label>`，如共用件 `proj_panel_html()`）。
+            # ⚠️ 不给这个口子 ⇒ 外面再包一层 ⇒ **`<label>` 出现两次**（原型只有一层）。
+            items.append(f["html"])
+        elif f.get("html"):
             items.append(f'<div class="fi"><label>{esc(f.get("label"))}</label>{f["html"]}</div>')
         else:
             items.append(

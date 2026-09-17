@@ -163,11 +163,12 @@ def _filter_controls(data: dict) -> list[dict]:
     rng = f"{start or '—'} ~ {end or '—'}"
     modes = " / ".join(_PERIOD_MODES[m] for m in (MODE_MONTH, MODE_SPAN, MODE_YEAR, MODE_ALL))
 
-    proj_opts = "".join(
-        f'<option value="{esc(o["key"])}"{" selected" if o["key"] in set(f.project_ids) else ""}>'
-        f'{esc(o["label"] or o["key"])}</option>'
-        for o in data["project_options"]
-    )
+    # ⭐ 项目选择器走**共用件**（原型 `projPanel(...)` 的服务端等价物）——
+    #    此前是本页自造的 `<select multiple size="3">` ⇒ 与原型结构对不上（`pjwrap` 恒为 0）。
+    from app.mod03_notice.proj_panel import proj_panel_html
+
+    proj_html = proj_panel_html(data["project_options"], selected=f.project_ids,
+                                form="f-m03", label="项目")
     cat_opts = "".join(
         f'<option value="{esc(c)}"{" selected" if c == f.category else ""}>{esc(CATEGORY_LABELS[c])}</option>'
         for c in CATEGORY_OPTIONS
@@ -185,8 +186,7 @@ def _filter_controls(data: dict) -> list[dict]:
          "html": f'<input name="period" value="{esc(f.period)}" placeholder="2026-09" form="f-m03">'},
         {"key": "range", "label": "对应单据日期（闭区间）",
          "html": f'<input readonly value="{esc(rng)}" form="f-m03">'},
-        {"key": "project_ids", "label": "项目（可多选）",
-         "html": f'<select name="project" multiple size="3" form="f-m03">{proj_opts}</select>'},
+        {"key": "project_ids", "raw": True, "html": proj_html},
         {"key": "category", "label": "分类",
          "html": f'<select name="category" form="f-m03">{cat_opts}</select>'},
         {"key": "approve_status", "label": "审批状态",

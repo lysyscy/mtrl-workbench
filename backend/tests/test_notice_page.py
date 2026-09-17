@@ -199,3 +199,32 @@ def test_表内合计行只算非剔除行且全剔除时不给():
     d2 = _data([_notice(3, excluded=True, exclude_source="manual")], category=CATEGORY_EXCLUDE)
     assert summary_row(d2) == {}, "全剔除视图不得给合计行"
     assert not re.search(r'<tr class="sum sumrow"', render_notice_page(d2))
+
+
+# ---------------------------------------------------------------- 项目选择器走共用件（001-07 加强）
+
+
+@acc(CASE_LIST, "001-07")
+def test_项目选择器走共用件且不得套两层label():
+    """`001-07` **加强**（2026-09-17）：项目选择器 = **全站共用件**（原型 `projPanel` 的等价物）。
+
+    依据：设计规则 **§8.2 复用点**（「项目选择器」只有一个出口）＋ 用户 2026-09-17 裁定
+    「**结构 / 布局 / 交互必须照原型**」—— 实测（`tools/ui_parity.py`）实现里 `pjwrap` **恒为 0**：
+    `m03` 用 `<select multiple>`、`m06`/`m07`/`m09` 各写一份 `.pjsel` ⇒ 7 页七个样。
+    """
+    from app.mod03_notice.proj_panel import proj_panel_html
+
+    # ① 页面结构：走共用件（原型类名）、且**不得套两层 `.fi`**（`_render_filter_bar` 的 `raw` 口子）
+    html = render_notice_page(_data([_notice(1)]))
+    assert 'class="fi pjwrap"' in html, "项目选择器须用共用件（原型类名 .fi.pjwrap）"
+    assert html.count("<label>项目（可多选）</label>") == 1, "label 只出现一次（套两层就重复了）"
+    assert 'data-seg="filter"' in html
+    # ② 纯函数层：多选 / 单选 / 选中态 / 空候选（**钉逻辑本身**，不依赖页面数据）
+    opts = [{"key": "甲仓", "label": "甲项目"}, {"key": "乙仓", "label": "乙项目"}]
+    h = proj_panel_html(opts, selected=["甲仓"], form="f-m03")
+    assert h.count('type="checkbox"') == 2 and h.count('form="f-m03"') == 2
+    assert 'value="甲仓" checked' in h and 'value="乙仓" checked' not in h
+    assert "已选 1 个" in h
+    h1 = proj_panel_html(opts, multiple=False)
+    assert 'type="radio"' in h1 and "全部项目" in h1, "空选中态显示「全部项目」（原型同款）"
+    assert "为空" in proj_panel_html([]), "候选为空要给提示，不假装有数据"
