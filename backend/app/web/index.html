@@ -4914,7 +4914,24 @@ async function boot() {
     BOOT_ERROR = String((e && e.message) || e);
   }
   render();
-  if (BOOT_ERROR) toast(`⚠️ 取数失败（页面仍是原型态）：${esc(BOOT_ERROR)}`);
+  if (BOOT_ERROR) bootErrorBanner();
+}
+
+/* ⚠️ 取数失败 ⇒ **在页面上常驻说明**（⛔ 不只 toast —— 它一闪而过，用户只看到"页面是空的"、
+   还以为功能没做）。最常见原因 = **用 `file://` 双击打开了这个文件**：浏览器禁止 `file://`
+   页面读后端接口 ⇒ 数据必然空。⭐ 实测踩到：展示壳时预览面板打开的正是
+   `file:///…/app/web/index.html`，于是"看起来和原型没区别、还没有数据"。 */
+function bootErrorBanner() {
+  const why = location.protocol === 'file:'
+    ? '你正在用 <b>file:// 直接打开这个 HTML 文件</b> —— 浏览器不许它读后端接口，所以页面是空的。'
+    : `取数失败：${esc(BOOT_ERROR)}`;
+  const el = document.createElement('div');
+  el.className = 'tip dg';
+  el.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:9999;margin:0;border-radius:0';
+  el.innerHTML = `⚠️ <b>没拿到数据</b> —— ${why}<br>`
+    + '请改用<b>服务地址</b>打开：<b>http://127.0.0.1:8000/app</b>'
+    + '（粘到浏览器地址栏回车；⛔ 不要双击 HTML 文件）';
+  document.body.prepend(el);
 }
 
 /* 启动 */
