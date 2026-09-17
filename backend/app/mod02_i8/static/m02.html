@@ -147,9 +147,21 @@ async function sync(path, label){
   setMsg("syncMsg", `正在同步${label}…`, "");
   try{
     const d = await api(path + (kick ? "?allow_kick=true" : ""), {method:"POST"});
-    if(d.degraded) setMsg("syncMsg", `${label}失败（已留痕）：${d.message}`, "warn");
-    else setMsg("syncMsg", (d.message || `${label}完成：${d.count} 条。`)
-      + (d.sample&&d.sample.length?` ⚠️ 待处理例：${esc(JSON.stringify(d.sample[0]))}`:""), "ok");
+    if(d.degraded){
+      setMsg("syncMsg", `${label}失败（已留痕）：${d.message}`, "warn");
+    } else {
+      // ⭐ 待处理项**全部逐条列出**。原先只印 `sample[0]` 的裸 JSON ⇒ 等于静默：
+      //    本轮实测「兰考金不换前置车间项目」正是这样看不到的（它排在第 2 条以后）。
+      //    口径 = 链路 A：「要人定的**显式列出**、不静默跳过」（`ACC-PRJ-SYNC-001/001-06`）。
+      const pending = d.sample || [];
+      const head = d.message || `${label}完成：${d.count} 条。`;
+      const lines = pending.map(s=>{
+        const extra = s.reason || (s.warehouses ? "仓库：" + s.warehouses.join("、") : "");
+        return `⚠️ 待处理：${esc(s.name_full)}${extra ? " —— " + esc(extra) : ""}`;
+      });
+      $("syncMsg").innerHTML = esc(head) + lines.map(t=>"<br>" + t).join("");
+      $("syncMsg").className = "msg " + (pending.length ? "warn" : "ok");
+    }
     loadRecords();
   }catch(e){ setMsg("syncMsg", `${label}失败：${e.message}`, "err"); }
 }

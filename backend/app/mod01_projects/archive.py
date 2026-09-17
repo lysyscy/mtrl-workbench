@@ -80,6 +80,11 @@ def plan_archive(
     manual: list[dict] = []
     seen_common: set[str] = set()
 
+    def _shell_reason(whs: list[str], *, already: bool) -> str:
+        head = "壳已在档，但壳下" if already else "壳下"
+        return (f"{head}具体小微（{len(whs)} 个仓库：{'、'.join(whs)}）"
+                "需配「出现在单据名里」的关键词 —— 走建档向导人工建")
+
     for row in common_rows or ():
         name = str(row.get("name_full") or "").strip()
         phid = str(row.get("phid") or "").strip()
@@ -87,22 +92,28 @@ def plan_archive(
             continue                                     # 没 phid 就没法抓数 ⇒ 不进 plan（由 no_phid 侧兜）
         seen_common.add(name)
 
-        if name in existing_names:                       # 链路 A ①：归集、结束
-            exists.append({"name_full": name, "phid": phid})
-            continue
-
         whs = by_owner.get(name, [])
         kind = classify_name(name, whs, small_keyword=shell_keyword)
+        # ⚠️ 只看**尚未有档案行**的仓库（按「仓库名是唯一标识」判在不在档）——
+        #    已经建过行的小微不该被反复列出。⚠️ 必须在 ① 之前算，否则会被下面的短路吞掉。
+        gap_whs = [w for w in whs if w not in taken]
+
+        if name in existing_names:                       # 链路 A ①：归集、结束
+            exists.append({"name_full": name, "phid": phid})
+            # ⭐ **归集「结束」≠ 壳下具体小微也结束了** —— 001-06 的「显式列出」与壳在不在档**无关**：
+            #    壳早就在档、而它名下的仓库还没建行（本轮实测：`兰考金不换前置车间项目` 就是这样
+            #    被静默吞掉的）⇒ 仍要列出，否则新仓库永远只在报表里、不在档案里。
+            if kind == TYPE_SHELL and gap_whs:
+                manual.append({"name_full": name, "phid": phid,
+                               "reason": _shell_reason(gap_whs, already=True)})
+            continue
 
         if kind == TYPE_SHELL:
             create.append({"name_full": name, "phid": phid,
                            "project_type": TYPE_SHELL, "warehouse_name": None})
-            if whs:                                      # 壳下的仓库 = **具体小微** ⇒ 人工
-                manual.append({
-                    "name_full": name, "phid": phid,
-                    "reason": f"壳下具体小微（{len(whs)} 个仓库：{'、'.join(whs)}）"
-                              "需配「出现在单据名里」的关键词 —— 走建档向导人工建",
-                })
+            if gap_whs:                                  # 壳下的仓库 = **具体小微** ⇒ 人工
+                manual.append({"name_full": name, "phid": phid,
+                               "reason": _shell_reason(gap_whs, already=False)})
             continue
 
         if len(whs) >= 2:                                # 原口径：列出让用户选

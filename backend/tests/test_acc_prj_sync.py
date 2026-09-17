@@ -124,6 +124,20 @@ def test_壳下仓库即具体小微不自动建():
     row = _by_name(plan["manual"], P_SHELL)
     assert "小微" in row["reason"] and "关键词" in row["reason"]
 
+    # ⭐ **壳已在档 ≠ 壳下小微也结束了** —— 「显式列出」与壳在不在档**无关**。
+    #    `001-08` 的"归集结束"只管**不重复建壳**，**不得**把壳下未建档的仓库一并吞掉；
+    #    本轮真机实测：`兰考金不换前置车间项目`（挂在已建档的「2026年小微」壳下）就是这样
+    #    被静默吞掉的 —— 报表里天天有它，档案里永远没有，提取页默认「在建」还筛不到。
+    plan2 = _plan(existing={P_SHELL})
+    assert _by_name(plan2["exists"], P_SHELL)                              # 壳照旧归集
+    assert not [c for c in plan2["create"] if c["name_full"] == P_SHELL]   # 且不重复建（幂等）
+    row2 = _by_name(plan2["manual"], P_SHELL)                              # 但**必须**仍列出
+    assert "壳下仓" in row2["reason"] and "关键词" in row2["reason"]
+
+    # 反向：**已经建过行**的小微不再反复催（判据 = 「仓库名是唯一标识」）
+    plan3 = _plan(existing={P_SHELL}, taken={"壳下仓"})
+    assert not [m for m in plan3["manual"] if m["name_full"] == P_SHELL]
+
 
 # ----------------------------------------------------------------- 001-07
 @acc(CASE, "001-07")

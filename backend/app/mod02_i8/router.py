@@ -211,7 +211,9 @@ def sync_common_projects(
         count=counts["create"],
         counts=counts,
         # `sample` 放**待人工 / 缺 phid**（比放新建的行更有用：那是"还要人去做什么"）
-        sample=(out["plan"]["manual"] + out["plan"]["no_phid"])[:5],
+        # ⚠️ **不截断** —— 截断会把排在第 2 条以后的待办**静默吞掉**（本轮实测踩到）：
+        #    这两类列表本身很小（受项目数上界），全给；口径 = 「显式列出、禁静默」。
+        sample=(out["plan"]["manual"] + out["plan"]["no_phid"]),
         message=(f"建档 {counts['create']} 条 · 已在档案 {counts['exists']} 条 · "
                  f"待人工 {counts['manual']} 条 · 缺 phid {counts['no_phid']} 条"),
     )
