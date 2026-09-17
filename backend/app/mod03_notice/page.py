@@ -181,6 +181,19 @@ details.tip ul{margin:6px 0 0;padding-left:18px;line-height:1.8}
        background:var(--sf);border:1px solid var(--bd3);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.12);
        padding:6px 8px;display:flex;flex-direction:column;gap:4px}
 .pjsel label{display:flex;gap:6px;align-items:center;font-size:12.5px;white-space:nowrap;color:var(--tx)}
+/* 全站分组侧栏导航（唯一出口 `nav_html()`）—— **固定定位** ⇒ 调用方不必改 HTML 结构 */
+.sbar{position:fixed;left:0;top:0;bottom:0;width:196px;overflow:auto;z-index:20;
+      background:var(--sf);border-right:1px solid var(--bd);padding:10px 8px;font-size:12.5px}
+.sbar .sb-h{font-weight:700;font-size:13px;margin:2px 0 8px 4px}
+.sbar .sb-g{margin:9px 0 3px 4px;font-size:11px;color:var(--mut)}
+.sbar .sb-i{display:flex;gap:6px;align-items:center;padding:4px 8px;border-radius:6px;color:var(--tx);
+            text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbar .sb-i:hover{background:var(--bd)}
+.sbar .sb-i.on{background:var(--pri);color:var(--on)}
+.sbar .sb-i.on .m{color:var(--on);opacity:.85}
+.sbar .sb-i.dis{color:var(--mut);cursor:not-allowed}
+.sbar .m{font-size:10px;color:var(--mut)}
+body:has(>.sbar){padding-left:204px}
 .tw{overflow:auto;max-height:calc(100vh - 330px);min-height:220px;border:1px solid var(--bd);border-radius:6px;background:var(--sf)}
 table.dt{width:100%;border-collapse:collapse}
 .dt th,.dt td{padding:6px 9px;border-bottom:1px solid var(--bd2);font-size:12.5px;text-align:left;white-space:nowrap}
@@ -408,6 +421,37 @@ def _render_data(
     )
 
 
+def nav_html(current: str = "") -> str:
+    """全站**分组侧栏导航**（照原型：概览 / 主数据 · 基础 / 付款域 / 报表域 / 集采域 / 全局）。
+
+    - `current` —— 当前页路由，**命中即高亮**（`on`，原型同款）
+    - ⭐ **唯一渲染出口**：各页别再自己拼 `<nav>` —— 此前 `mod05` / `mod06` / `mod07` / `mod08`
+      **各写一份**（`core/nav.py` 里那句"收成一处"只收了**数据**、没收**渲染**）
+    - ⚠️ **未实现的页面照原样列出并标「未开工」**（`dis`、不可点）—— 用户要能**看见有哪些页面**
+    - 形态 = `position:fixed` 侧栏 ＋ `body:has(>.sbar)` 让出左边距 ⇒ **调用方不必改 HTML 结构**
+    """
+    from app.core.nav import NAV_GROUPS
+
+    blocks: list[str] = []
+    for group, items in NAV_GROUPS:
+        links: list[str] = []
+        for href, label, module, ready in items:
+            mod = f'<span class="m">{esc(module)}</span>'
+            if not ready:
+                links.append(
+                    f'<span class="sb-i dis" title="该模块尚未开工">{mod}'
+                    f"<span>{esc(label)}</span><span class=\"m\">未开工</span></span>"
+                )
+                continue
+            on = " on" if href == (current or "") else ""
+            links.append(f'<a class="sb-i{on}" href="{esc(href)}">{mod}<span>{esc(label)}</span></a>')
+        blocks.append(f'<div class="sb-g">{esc(group)}</div>' + "".join(links))
+    return (
+        '<aside class="sbar" aria-label="全站导航">'
+        '<div class="sb-h">材料报表工作台</div>' + "".join(blocks) + "</aside>"
+    )
+
+
 def render_list_page(
     *,
     page_id: str,
@@ -424,6 +468,7 @@ def render_list_page(
     summary=None,
     summary_sticky: bool = True,
     filter_action: str = "",
+    nav_current: str = "",
 ) -> str:
     """装配一个列表页：**固定五段**（口径说明 → 指标区 → 筛选栏 → 数据区 → 空态提示行）。
 
@@ -449,6 +494,10 @@ def render_list_page(
     summaries = [s for s in _raw_summaries if s]
     return "\n".join(
         [
+            # ⭐ **全站导航**（唯一出口）：放在每页最前 ⇒ **凡用本骨架渲染的页都自动有导航**
+            #    （2026-09-17 加：此前各页各写一份、首页干脆没有 ⇒ 用户说"根本不知道都有哪些页面"）
+            # ⚠️ `nav_current` 由调用方给**自己的路由**（给了才高亮；不给 = 不高亮，**不猜**）
+            nav_html(nav_current),
             f'<section class="view" data-view="{esc(page_id)}">',
             f"<h3>{esc(title)}</h3>",
             _render_tip(tips),

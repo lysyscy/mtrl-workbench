@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from app.mod03_notice.page import BASE_CSS, esc
+from app.mod03_notice.page import BASE_CSS, esc, nav_html
 
 PAGE_ID = "home"
 TITLE = "看板 · 待办"
@@ -56,6 +56,8 @@ def render_home(rows: list[dict], *, errors: dict | None = None) -> str:
     return (
         "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
         f"<title>{esc(TITLE)}</title><style>{BASE_CSS}{EXTRA_CSS}</style></head><body>"
+        # ⭐ 全站导航（唯一出口）—— **本页是默认落地页，没有它用户进来就不知道有哪些页面**
+        f"{nav_html('/')}"
         f'<section class="view" data-view="{PAGE_ID}">'
         f"<h3>{esc(TITLE)}</h3>"
         f'<ul class="mini">{tips}</ul>'

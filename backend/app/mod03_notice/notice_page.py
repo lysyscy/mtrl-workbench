@@ -422,6 +422,8 @@ def render_notice_page(data: dict, *, message: str = "", message_kind: str = "ok
         empty_text="当前筛选没有付款通知书（可切「分类 = 剔除」查看被剔除 / 已撤单的行）",
         sort_key=SORT_KEY,
         summary=summary_row(data),
+        nav_current="/m03/notices",        # ⭐ 导航高亮（唯一出口 `page.nav_html`）
+
     )
     notice = ""
     if message:

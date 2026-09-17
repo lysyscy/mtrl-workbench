@@ -86,11 +86,18 @@ PROBES: list[tuple[str, str, str]] = [
     ("合计", r"sumRowOf\(", r"sumrow"),
     ("排序", r"<table[^>]*\sdata-sort[\s>]", r"data-sort-col"),
     ("项目面板", r"pjwrap", r"pjwrap"),
+    # 「导航」—— 2026-09-17 加：用户说"**根本不知道都有哪些页面**" ⇒ 首页当时**没有导航**。
+    # 口径 = 侧栏项类名（原型 `sb-i`；实现同款，唯一出口 `page.nav_html()`），**比有无**。
+    ("导航", r"sb-i", r"sb-i"),
 ]
 
 # 「比有无」而不比个数的键 —— 两侧**实现形态**天然不同（原型：表级 `data-sort` 一个属性；
 # 实现：逐列 `data-sort-col`）⇒ 数量不可比，**功能意图**（这页表格可不可排）才可比。
-BOOL_KEYS: frozenset[str] = frozenset({"排序"})
+BOOL_KEYS: frozenset[str] = frozenset({"排序", "导航"})
+
+# **全局件**：在原型里是**所有视图共用**的（如侧栏导航 —— 它**不在任何 `V.<view>` 切片内**）
+# ⇒ 原型侧必须拿**整个文件**去数，否则切片里恒为 0 ⇒ **又一整批假红**（2026-09-17 实测）。
+GLOBAL_KEYS: frozenset[str] = frozenset({"导航"})
 
 # **依赖"页面上有数据"才渲染**的件 —— 空表时无从核对（不算差异）。
 # 实测教训（2026-09-17）：`m03` 补好合计行后，`/m03/notices` 因**库里没有通知书数据**而只渲染空态行
@@ -194,7 +201,8 @@ def main(argv: list[str] | None = None) -> int:
         impl_html = strip_assets(html)
         page_empty = 'class="empty"' in impl_html
         for key, proto_re, impl_re in PROBES:
-            p, i = count(proto_slice, proto_re), count(impl_html, impl_re)
+            proto_scope = src if key in GLOBAL_KEYS else proto_slice
+            p, i = count(proto_scope, proto_re), count(impl_html, impl_re)
             if key in BOOL_KEYS:
                 ok = (p > 0) == (i > 0)
             else:
