@@ -74,6 +74,11 @@
   ⇒ 全站守卫 = `tests/router_refs.py`（按 glob 扫 **全站** `*router*.py` 的 `引用名.属性`）；
   ⚠️ **不带 `as` 的导入也必须查**（实测出错的恰恰是那种：`mech_ui.normalize_ym`）。
 - ⭐ **导入页「预览不写库」的暂存只许一份** = `app/core/preview_store.py`（`MOD-05`/`MOD-06`/`MOD-08` 共用）；⛔ 别各写一份 `_dump/_load`。
+- ⭐ **远端已配通** = `origin` → gitee `s-cy/mtrl-workbench`（2026-09-17 首推）⇒ **每轮收尾提交 ＋ 推送**（本地单点教训：`.git` 整库损坏过一次）。
+- ⚠️ **后台进程会被回收** —— Bash 的 `nohup … &` 与 PowerShell 的 `Start-Process -WindowStyle Hidden` **都活不过一轮**
+  （日志已打 "Uvicorn running" 但端口随即消失）⇒ **要常驻就落「计划任务 / 服务」**（现用 `mtrl-workbench-server`，M7 换 NSSM）。
+- ★ **两个材料报表的成品文件怎么生成** → 工程仓 `ops/模板法导出-实测结论.md`：**模板法 = 以用户手作成品 xlsx 为基底做 `zip` 字节替换**
+  （sharedStrings / 数据 sheet / pivotCache 两件 / pivotTable ＋ `refreshOnLoad`）＋ **缓存级对账**；⚠️ **模板本体是运行时依赖**（须当交付物）。
 - ⛔ **提交消息别用反引号**（bash 会把它当命令替换执行）；⛔ **别用 `git stash`**（本仓不用它 —— 要临时回退就用变异脚本那种 bytes 复原）。
 - ⭐ **真机抓取是唯一能发现「导出形态 / 落库范围」类缺陷的手段**（2026-09-17 一次抓取抓出两处）⇒ 抓完必看
   **「解析条数 vs 落库条数」**：不等 ⇒ 先怀疑**幂等范围**（范围漏了分组键就会互相删行）。
