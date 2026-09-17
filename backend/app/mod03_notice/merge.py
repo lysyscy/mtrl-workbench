@@ -128,7 +128,8 @@ def plan_merge(
     return plan
 
 
-def apply_placement_to_new(placement, incoming: dict, *, paid_total=0) -> dict:
+def apply_placement_to_new(placement, incoming: dict, *, paid_total=0,
+                           ownership_id: int | None = None) -> dict:
     """**新行**的初始赋值：分类 / 剔除 / 剔除来源（§4.2.2 / §4.2.3）
     ＋ **统计两金额的初值**（§4.2.5 / §4.4.7：统计结算金额 = 审批金额、
     ⭐ 统计付款金额 = **已付金额**（`paid_total`，该单已有的有效流水汇总 —— 首次落库通常是 0，
@@ -144,6 +145,10 @@ def apply_placement_to_new(placement, incoming: dict, *, paid_total=0) -> dict:
         "category": placement.category,
         "excluded": placement.excluded,
         "exclude_source": placement.exclude_source,
+        # ⭐ **归属**（§2.5.1 链路 C）—— 落在 `**incoming` **之后**，确保它说了算。
+        #    抓取链路已在**入库前**整批校验「归属未走完 ⇒ 整批不入库」（§2.7.4 / `ACC-PRJ-OWN-001`），
+        #    所以走到这里的一定是**已判定**的 id（小微或普通项目）——⛔ 不会是 None。
+        "ownership_id": ownership_id,
         "stat_settle": default_stat_value(F_STAT_SETTLE, approved=approved, paid_total=paid_total),
         "stat_paid": default_stat_value(F_STAT_PAID, approved=approved, paid_total=paid_total),
     }

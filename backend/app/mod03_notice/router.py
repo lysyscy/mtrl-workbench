@@ -20,7 +20,10 @@ from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
 from app.core.db import session_scope
+from app.core.errors import MustReportError
 from app.core.logging import get_logger
+from app.mod01_projects.domain import ensure_batch_settled, resolve_ownership
+from app.mod01_projects.repository import all_projects
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02（2026-09-15 归位）
 from app.mod03_notice.models import PaymentNotice
@@ -95,17 +98,22 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
     return _exec
 
 
-def apply_fetched_row(session, row: dict) -> tuple[bool, bool]:
+def apply_fetched_row(session, row: dict, *,
+                      ownership_id: int | None = None) -> tuple[bool, bool]:
     """把一条抓取记录落库 —— 返回 `(是否新行, 是否有改动)`。
 
-    - **新行**：跑剔除判定（§4.2.2）与分类（§4.2.3）后落库；
+    - **新行**：跑剔除判定（§4.2.2）与分类（§4.2.3）后落库，**并带上归属**（§2.5.1 链路 C）；
     - **已有行**：按**再次导入合并**（§4.2.7）—— 源字段跟随 i8、统计两金额按留痕、
       **分类 / 剔除 / 撤单 / 归属一律不被覆盖**（见 `merge.PROTECTED`）。
+
+    ⚠️ `ownership_id` **只对新行生效**（已有行的归属由人指定过，不被再次导入冲掉）；
+       它由调用方在**整批校验通过后**传入 —— 见 `get_fetch_executor`。
     """
     existing = get_notice_by_ph_id(session, row["ph_id"])
     if existing is None:
         placement = decide_placement(row)
-        upsert_notice(session, **apply_placement_to_new(placement, row))
+        upsert_notice(session, **apply_placement_to_new(placement, row,
+                                                        ownership_id=ownership_id))
         return True, True
 
     plan = plan_merge(
@@ -139,11 +147,42 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         finally:
             client.close()
 
+        # ⭐⭐ **落库前整批校验归属**（§2.7.4 · §2.5.1 链路 C · `ACC-PRJ-OWN-001`）：
+        #     **归属未走完 ⇒ 整批不入库**（一行都不落），并**显式留痕 + 报出**。
+        #     ⚠️ 这一步**必须在写库之前** —— 否则库里就会躺着「待指定 / 未建档」的行，
+        #        那正是本条口径要杜绝的，也正是"事后还得给旧单据补归属"那套补救逻辑的根源。
+        #     ⚠️ 判定输入只有两样：**项目全名**（i8 的 `PhidPc_EXName`）＋ **单据名**（`fields.BillName`）
+        #        —— 全名撞上壳 ⇒ 再看单据名命中了壳下哪个小微的关键词。
+        with session_scope() as session:
+            projects = all_projects(session)
+            decisions = [
+                resolve_ownership(
+                    name_full=str(row.get("project_name") or ""),
+                    doc_name=str((row.get("fields") or {}).get("BillName") or ""),
+                    projects=projects,
+                )
+                for row in rows
+            ]
+        try:
+            ensure_batch_settled(decisions)
+        except MustReportError as exc:
+            with session_scope() as session:          # 另开一个 session 记失败（与上面抓取失败同款）
+                rec = create_run_record(session, run_type="fetch", target=year_month,
+                                        total=len(rows))
+                finish_run_record(
+                    session, rec, status="failed", success=0, fail=len(rows),
+                    detail={"reason": "ownership_unsettled",
+                            "unsettled": sum(1 for d in decisions if not d.settled)},
+                    error_message=str(exc),
+                )
+            raise
+
         with session_scope() as session:
             rec = create_run_record(session, run_type="fetch", target=year_month, total=len(rows))
             created = updated = 0
-            for row in rows:
-                is_new, changed = apply_fetched_row(session, row)
+            for row, decision in zip(rows, decisions):
+                is_new, changed = apply_fetched_row(session, row,
+                                                    ownership_id=decision.target_id)
                 if is_new:
                     created += 1
                 elif changed:
