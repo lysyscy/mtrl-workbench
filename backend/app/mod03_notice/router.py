@@ -22,12 +22,17 @@ from app.core.config import get_settings
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.logging import get_logger
-from app.mod01_projects.domain import ensure_batch_settled, resolve_ownership
+from app.mod01_projects.domain import (
+    OwnershipDecision,
+    ensure_batch_settled,
+    needs_archive,
+    resolve_ownership,
+)
 from app.mod01_projects.repository import all_projects
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02（2026-09-15 归位）
 from app.mod03_notice.models import PaymentNotice
-from app.mod03_notice.classify import decide_placement
+from app.mod03_notice.classify import decide_placement, rows_needing_ownership
 from app.mod03_notice.merge import apply_placement_to_new, plan_merge
 from app.mod03_notice.repository import (
     create_run_record,
@@ -153,22 +158,66 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         #        那正是本条口径要杜绝的，也正是"事后还得给旧单据补归属"那套补救逻辑的根源。
         #     ⚠️ 判定输入只有两样：**项目全名**（i8 的 `PhidPc_EXName`）＋ **单据名**（`fields.BillName`）
         #        —— 全名撞上壳 ⇒ 再看单据名命中了壳下哪个小微的关键词。
-        with session_scope() as session:
-            projects = all_projects(session)
-            decisions = [
-                resolve_ownership(
-                    name_full=str(row.get("project_name") or ""),
-                    doc_name=str((row.get("fields") or {}).get("BillName") or ""),
-                    projects=projects,
+        # ⭐ **（`TAIL-29`-①）先剔掉「规则剔除行」，再校验归属** ——
+        #    §4.2.2「指定项目不在统计范围」的行**与本域无关、天生没有归属**；
+        #    让它们参与「整批校验」会把**整批误拦**。实测：2026-09 的 61 行里，
+        #    「集团公司第四分公司机关工程」×2 行就把 61 行**全拦下** ⇒ 该月一条都进不来。
+        #    ⛔ **判定必须用同一份规则源**（`classify.is_excluded` → `match_exclude_rule` → `DEFAULT_RULES`）
+        #       —— **不许在编排层另写一份剔除判定**（「同一件事被实现两遍」是本项目反复踩的坑）。
+        #    ⇒ 剔除行**照旧落库**（落库时 `decide_placement` 会给它打 `exclude_source=rule`），
+        #      只是**不参与归属校验**、`ownership_id=None`。
+        need_own = rows_needing_ownership(rows)          # `[(原序号, 行)]` —— 剔除行已被排除
+        n_excluded = len(rows) - len(need_own)
+
+        def _judge() -> list[tuple[int, dict, OwnershipDecision]]:
+            """对 `need_own` 跑一遍归属判定（**每次都读最新档案** —— 建档后要重判）。"""
+            with session_scope() as session:
+                projects = all_projects(session)
+                return [
+                    (
+                        i,
+                        row,
+                        resolve_ownership(
+                            name_full=str(row.get("project_name") or ""),
+                            doc_name=str((row.get("fields") or {}).get("BillName") or ""),
+                            projects=projects,
+                        ),
+                    )
+                    for i, row in need_own
+                ]
+
+        judged = _judge()
+
+        # ⭐ **（`TAIL-29`-③）付款侧「自动建档」**（§2.5.1 链路 A）—— 有 `not_archived` 就**就地建档**：
+        #    用**同一个 i8 会话**取「常用项目列表（`API-06`，`phid` 权威）＋ 仓库名单（`API-05`）」，
+        #    再走 `sync_and_archive`（链路 A 的完整实现：`plan_archive` 计划 → **幂等落库**）。
+        #    ⇒ 建完**重新判定**一次（新档案立刻生效，免得"抓到了却建不了"）。
+        #    ⚠️ 代码落点早就写好且有判据（`ACC-PRJ-SYNC-001`）—— 之前从没被这条链路调用，
+        #       正是「**判据绿 ≠ 链路对**」的标本（`TAIL-29`-③）。
+        #    ⚠️ **只建「能自动定的」**：普通项目带真实仓库名；**壳下的具体小微仍需关键词**
+        #       ⇒ 那部分留给链路 C 弹窗（`TAIL-29`-②），本步**不猜**。
+        #    ⚠️ 失败**不改本地档案**（`sync_and_archive` 内部保证：取数抛错 ⇒ `plan=None` 一行不写）。
+        if needs_archive([d for _, _, d in judged]):
+            from app.mod01_projects.sync_service import sync_and_archive          # noqa: PLC0415
+            from app.mod02_i8.router import get_common_project_rows, get_warehouse_rows  # noqa: PLC0415
+
+            cp_loader = get_common_project_rows()
+            wh_loader = get_warehouse_rows()
+            with session_scope() as session:
+                archive_out = sync_and_archive(
+                    session,
+                    load_common=lambda: cp_loader(allow_kick, client),      # ⭐ 复用**同一个**会话
+                    load_warehouses=lambda: wh_loader(allow_kick, client),
                 )
-                for row in rows
-            ]
+            if not archive_out.get("degraded"):
+                judged = _judge()
+
         try:
-            ensure_batch_settled(decisions)
+            ensure_batch_settled([d for _, _, d in judged])
         except MustReportError as exc:
             # ⚠️ 报错**必须说清是哪几行** —— 只报数量等于没报：用户正是要据此去
             #    「建档 / 补小微关键词」，不给名字他就无从下手（§2.5.1 链路 C 的出路）。
-            unsettled = [(r, d) for r, d in zip(rows, decisions) if not d.settled]
+            unsettled = [(r, d) for _, r, d in judged if not d.settled]
             detail = "；".join(
                 f"{r.get('project_name') or '(项目名为空)'}（{d.kind}）" for r, d in unsettled[:10]
             )
@@ -181,17 +230,21 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
                     session, rec, status="failed", success=0, fail=len(rows),
                     detail={"reason": "ownership_unsettled",
                             "unsettled": len(unsettled),
+                            "excluded": n_excluded,
                             "projects": [str(r.get("project_name") or "") for r, _ in unsettled]},
                     error_message=message,
                 )
             raise MustReportError(message) from exc
 
+        # 行序号 → 归属（**剔除行恒为 None**）；按**原顺序**落库，不打乱行序语义
+        ownership_of: dict[int, int | None] = {i: d.target_id for i, _, d in judged}
+
         with session_scope() as session:
             rec = create_run_record(session, run_type="fetch", target=year_month, total=len(rows))
             created = updated = 0
-            for row, decision in zip(rows, decisions):
+            for i, row in enumerate(rows):
                 is_new, changed = apply_fetched_row(session, row,
-                                                    ownership_id=decision.target_id)
+                                                    ownership_id=ownership_of.get(i))
                 if is_new:
                     created += 1
                 elif changed:
@@ -199,7 +252,8 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
             upserted = created + updated
             finish_run_record(
                 session, rec, status="success", success=upserted, fail=0,
-                detail={"created": created, "updated": updated, "total": len(rows)},
+                detail={"created": created, "updated": updated, "total": len(rows),
+                        "excluded": n_excluded},
             )
         return len(rows), upserted
 

@@ -52,7 +52,7 @@ P1|② 自动处理 · 落库（新行 / 已有行走再次导入合并）|再�
 P1|③ 人工修正 · 批量改分类（**保护不被覆盖**）|③ 人工修正 ── 批量改分类（保护不被覆盖）|backend/app/mod03_notice/notice_api_router.py::api_category|ACC-PAY-ACTION-001|已接
 P1|归属：项目全名 → 壳 / 具体小微（走链路 A/B/C）|付款项目命中某个壳|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
 P1|整批前哨：归属未走完 ⇒ **整批不入库**（§2.7.4）|归属未走完|backend/app/mod01_projects/domain.py::ensure_batch_settled|ACC-PRJ-OWN-001|已接
-P1|⭐ 整批校验**前**先剔掉规则剔除行（⛔ 文档未写 · 由 §4.2.2 含义推出 ⇒ 剔除行不参与整批校验）|指定项目不在统计范围|—|缺：需补判据（链路级）|缺
+P1|⭐ 整批校验**前**先剔掉规则剔除行（§4.2.2「指定项目不在统计范围」⇒ 剔除行不参与整批校验）|指定项目不在统计范围|backend/app/mod03_notice/classify.py::rows_needing_ownership|ACC-PRJ-OWN-001|已接
 P1|列表可见（未归属的行只在「全部项目」下可见）|只在「全部项目」下可见|backend/app/mod03_notice/notice_router.py::@page_router.get("/api/m03/notice-list")|ACC-PAY-LIST-001|已接
 # ============================================================
 # ③ P5 批量打印与只导出 PDF：勾选 → 取版式 → 渲染 PDF → IPP 出纸（真源 = 说明书 §4.6 / §4.7 ⑧）

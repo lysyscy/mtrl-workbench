@@ -149,6 +149,21 @@ def is_excluded(rec: dict, rules=DEFAULT_RULES) -> bool:
     return match_exclude_rule(rec, rules) is not None
 
 
+def rows_needing_ownership(rows: list[dict], rules=DEFAULT_RULES) -> list[tuple[int, dict]]:
+    """挑出**需要走归属校验**的行 → `(原序号, 行)`（`TAIL-29`-①）。
+
+    ⚠️ **规则剔除行不需要归属**：§4.2.2「指定项目不在统计范围」的行**与本域无关**
+       （落库时 `decide_placement` 会给它们打上 `exclude_source=rule`）。
+       拿它们去跑「整批校验」会把**整批误拦** —— 实测：2026-09 抓 61 行，
+       「集团公司第四分公司机关工程」×2 行就把 61 行**全拦下**，该月一条都进不来。
+
+    ⛔ **判定必须走 `is_excluded`（同一份 `DEFAULT_RULES`）** —— 不许在编排层另写一份
+       剔除判定（「同一件事被实现两遍」是本项目反复踩的坑）。
+    ✅ 保留**原序号**，让调用方仍能按抓取顺序落库（剔除行照旧落库，只是 `ownership_id=None`）。
+    """
+    return [(i, row) for i, row in enumerate(rows or ()) if not is_excluded(row, rules)]
+
+
 # ---------------------------------------------------------------- 分类 + 剔除的落库赋值
 
 
@@ -276,7 +291,7 @@ __all__ = [
     "KIND_BIZ_TYPE", "KIND_PROJECT_NAME", "KIND_BILL_NAME", "KIND_INPUT_BY", "KIND_PAYEE",
     "KIND_LABELS", "FORBIDDEN_PAYEE_VALUE",
     "ExcludeRule", "DEFAULT_RULES", "validate_rules",
-    "match_exclude_rule", "is_excluded",
+    "match_exclude_rule", "is_excluded", "rows_needing_ownership",
     "Placement", "decide_placement",
     "RestoreReport", "restore_excluded", "apply_manual_exclude",
 ]

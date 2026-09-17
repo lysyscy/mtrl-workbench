@@ -12,6 +12,12 @@ from app.mod01_projects.domain import (
     validate_keyword_in_doc,
 )
 from app.mod01_projects.models import STATUS_ARCHIVED, TYPE_SHELL, TYPE_SMALL
+from app.mod03_notice.classify import (
+    DEFAULT_RULES,
+    KIND_PROJECT_NAME,
+    decide_placement,
+    rows_needing_ownership,
+)
 from tests.acc_plugin import acc
 from tests.m01_helpers import make_project
 
@@ -118,3 +124,63 @@ def test_归属未走完则整批不入库():
         ensure_batch_settled(decisions)
     # 全部走完 ⇒ 放行
     ensure_batch_settled([decisions[0]])
+
+
+# ============================================================ 001-09（2026-09-17 新增 · `TAIL-29`-①）
+
+
+def _rule_hit_row(kind: str = KIND_PROJECT_NAME) -> dict:
+    """按**现有规则**造一行「必被规则命中」的记录（⚠️ **不硬编码任何业务取值**）。"""
+    rule = next(r for r in DEFAULT_RULES if r.kind == kind)
+    return {kind: str(rule.values[0]), "fields": {"BillName": "材料款"}}
+
+
+@acc("ACC-PRJ-OWN-001", "001-09")
+def test_规则剔除行不参与归属校验():
+    """§4.2.2「指定项目不在统计范围」的行**天生没有归属** ⇒ 不得拦下整批。
+
+    实测由来：2026-09 真机抓 **61 行**，其中「集团公司第四分公司机关工程」×2 行
+    （该值**本来就在** `DEFAULT_RULES` 的「付款项目名」命中值里）**参与了整批校验**
+    ⇒ **61 行全被拦下**，该月一条都进不来。
+    """
+    rows = [
+        {"project_name": "某在建项目", "fields": {"BillName": "材料款"}},
+        _rule_hit_row(),
+    ]
+    need = rows_needing_ownership(rows)
+    assert [i for i, _ in need] == [0], f"剔除行没被排除：{[i for i, _ in need]}"
+
+
+@acc("ACC-PRJ-OWN-001", "001-09")
+def test_剔除行只是不参与校验_其余行原序号不被挪动():
+    """⚠️ 剔除行**不是不落库**（落库时 `decide_placement` 会给它打 `exclude_source=rule`）；
+    这里只断言「它不进校验」＋「**其余行的原序号不被挪动**」—— 序号错了落库会串行。"""
+    rows = [
+        _rule_hit_row(),                                                  # 0：剔除
+        {"project_name": "某在建项目", "fields": {"BillName": "材料款"}},    # 1：需归属
+        _rule_hit_row(),                                                  # 2：剔除
+    ]
+    assert [i for i, _ in rows_needing_ownership(rows)] == [1]
+
+
+@acc("ACC-PRJ-OWN-001", "001-09")
+def test_两条判定同源_不许另写一份剔除判定():
+    """⭐ 钉住「**同一份规则源**」：`rows_needing_ownership` 与 `decide_placement` 对同一行
+    的剔除结论必须**完全一致** —— 谁在编排层抄一份判定，这条就红。"""
+    rows = [
+        _rule_hit_row(),
+        {"project_name": "某在建项目", "fields": {"BillName": "材料款"}},
+        {"project_name": "", "fields": {"BillName": ""}},
+    ]
+    need_idx = {i for i, _ in rows_needing_ownership(rows)}
+    for i, row in enumerate(rows):
+        assert decide_placement(row).excluded == (i not in need_idx), f"第 {i} 行两条判定不一致"
+
+
+@acc("ACC-PRJ-OWN-001", "001-09")
+def test_整批全是剔除行时校验直接放行():
+    """边界：全是被剔除的行 ⇒ **没有需要归属的行** ⇒ 不报错、整批可落库。"""
+    rows = [_rule_hit_row(), _rule_hit_row()]
+    assert rows_needing_ownership(rows) == []
+    ensure_batch_settled([])          # 不抛 ⇒ 放行
+    assert all(decide_placement(r).excluded for r in rows)

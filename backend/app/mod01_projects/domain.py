@@ -199,6 +199,16 @@ def ensure_batch_settled(decisions: list[OwnershipDecision]) -> None:
         )
 
 
+def needs_archive(decisions: list[OwnershipDecision]) -> bool:
+    """有没有行需要走**链路 A 建档**（`not_archived`）—— 抓取链路据此决定要不要就地建档。
+
+    ⚠️ 只回答「要不要」，**不回答「怎么建」**（建档规则主人 = `archive.plan_archive`）。
+    ⭐ 本函数存在的意义：让「抓取链路有没有接建档」这一环**可离线断言**
+       （否则它埋在 `_exec` 里，只能靠真机撞见 —— 正是 `TAIL-29`-③ 的成因）。
+    """
+    return any(d.kind == "not_archived" for d in decisions)
+
+
 # ============================================================ §2.7.2 归档不变式
 
 

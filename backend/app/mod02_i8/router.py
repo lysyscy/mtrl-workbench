@@ -56,27 +56,38 @@ def get_notice_rows() -> Callable[[str, bool], list[dict]]:
 
 
 def get_warehouse_rows() -> Callable[..., list[dict]]:
-    """仓库名单取数（`API-05`）。`allow_kick` 默认 `False`（**D9：强踢必须显式授权**）。"""
+    """仓库名单取数（`API-05`）。`allow_kick` 默认 `False`（**D9：强踢必须显式授权**）。
 
-    def _fetch(allow_kick: bool = False) -> list[dict]:
-        client = I8Client(allow_kick=allow_kick)
+    ⭐ 传入 `client` ⇒ **复用该会话**（不新建、不关闭）：让「抓一次」只登录一次
+       （抓取链路要顺带取名单来建档，见 `TAIL-29`-③；⛔ 否则一次抓取会登录 3 次 = 顶号 3 次）。
+    """
+
+    def _fetch(allow_kick: bool = False, client: I8Client | None = None) -> list[dict]:
+        own = client is None
+        c = client if client is not None else I8Client(allow_kick=allow_kick)
         try:
-            return WarehouseSource(client).fetch()
+            return WarehouseSource(c).fetch()
         finally:
-            client.close()
+            if own:
+                c.close()
 
     return _fetch
 
 
 def get_common_project_rows() -> Callable[..., list[dict]]:
-    """常用项目列表取数（`API-06`）。`allow_kick` 默认 `False`（**D9**）。"""
+    """常用项目列表取数（`API-06`）。`allow_kick` 默认 `False`（**D9**）。
 
-    def _fetch(allow_kick: bool = False) -> list[dict]:
-        client = I8Client(allow_kick=allow_kick)
+    ⭐ 同 `get_warehouse_rows`：可传 `client` **复用会话**。
+    """
+
+    def _fetch(allow_kick: bool = False, client: I8Client | None = None) -> list[dict]:
+        own = client is None
+        c = client if client is not None else I8Client(allow_kick=allow_kick)
         try:
-            return CommonProjectSource(client).fetch()
+            return CommonProjectSource(c).fetch()
         finally:
-            client.close()
+            if own:
+                c.close()
 
     return _fetch
 
