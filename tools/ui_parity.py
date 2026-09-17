@@ -1,268 +1,203 @@
-"""**逐页对齐核对器**（原型 → 实现）· **纯 Python · 不依赖浏览器**。
+"""**壳一致性核对器**（原型 ⇄ 前端壳）· **纯 Python · 不依赖浏览器**。
 
-**为什么有它**（2026-09-17 用户裁定）：计划 §5/§125 明写「交互规格 → `demo/` 原型本身」
-「前端**照 `demo` 原型做**」，但工程验收（`ACC-*`）**全部**来自《说明书》的业务口径
-⇒ **页面结构漂了既不报红也没人知道**（实测：`/m03` 付款通知书连「合计 / 折叠说明 / 筛选栏 / 排序」
-都没有，而它是定义了 `R1`–`R19` 的**全站参照页**）。
+**为什么换了定义**（2026-09-17 · 用户裁定 `D18`）：
+    旧定义是「**服务端渲染页**逐页对齐原型」—— 但前端已改成「**原型直接接数据**」：
+    壳 = `demo/` 交互原型的**整体复制**，**只换数据源**。⇒ 结构对齐已由**构造**保证，
+    再去数「表 / 筛 / 卡 / 折 / 合计 / 排序」**已经没有意义**（数的是同一份代码）。
+    ⚠️ **旧口径（服务端页逐页对齐）已作废**；它原来盯的那批服务端渲染页，本身就在 `TAIL-27` 里要删掉。
 
-**用户裁定（2026-09-17）**：
-1. **结构 / 布局 / 交互必须照原型**；**纯视觉**（配色 / 字号 / 圆角 / 间距微调）由实现方发挥（§1.3 授权范围）；
-2. **先补齐已做页面**，再往前走；
-3. **阻断式**：不对齐 ⇒ 非零退出码，不补齐不许合入。
+**风险没有消失，只是挪了位置** ⇒ 本工具现在守三件事：
+| 代号 | 守什么 | 判据 |
+|---|---|---|
+| `U1` | ⭐⭐ **原型逻辑一行不改**（D18 的硬约束）—— 把原型的筛选 / 排序 / 合计 / 勾选逻辑**顺手改掉**，就再没有"规格"可言了 | 壳的每个 `V.<页>` 切片 与原型同名切片**逐行一致**；差异未登记 ⇒ **红**（登记簿 `tools/ui_parity_expected.txt` · **只准变短**） |
+| `U2` | **演示数据与"假话"不得残留**（D18 产品化红线①） | ① 壳里出现原型的三张演示数组（`PJ` / `NT` / `FL`）⇒ **红**；② 壳里必须**同时**存在「已接后端真实数据」与「原型态」两种措辞（缺任一种 ⇒ 顶栏又会**一律**说"全是虚构" = 对已接线页说假话）⇒ **红** |
+| `U3` | **`WIRED` 自洽** | 壳里必须有 `WIRED` 集合，且**它的每个成员都真实存在于 `V`**（防"标了个不存在的页"）⇒ **红** |
 
-**口径（本节即定义，别处不要另立）**：
-- 真源 = **原型源码**（切片 `V.<视图>` 到下一个 `V.` / `BIND.` 定义之间）—— **静态抽取**，
-  可复现、不依赖手抄（⚠️ 导读 §2.1 那几个"表N 筛N 卡N"是**运行时**数字，二者可能有条件分支差异；
-  本工具以**源码**为准，因为它可复现且能定位到行）。
-- 实现侧 = **服务端渲染的页面 HTML**（`/m03` 这类路由）。
-- **结构件**（逐项计数，口径写死）：
-  | 键 | 原型里的形态 | 说明 |
-  |---|---|---|
-  | `表` | `<table` | 数据表 |
-  | `筛` | `class="fbar"` | `R4` 筛选栏 |
-  | `卡` | 类名含 `kpis` | `R2` 指标卡区（**只在"域级总览"页该有**） |
-  | `折` | `<details` | `R1` 页首说明折叠 |
-  | `合计` | `sumrow` / `sumRowOf` | 用户 2026-09-13 口径「求和一律落在表内」 |
-  | `排序` | `data-sort` | `R13` 表头排序 |
-  | `共用项目面板` | `pjwrap` | `§8.2 复用点`：项目选择器**唯一出口** |
-
-⚠️ **本工具以"原型类名/结构"为准** —— 实现换个名字起等价物 ⇒ **仍判不对齐**
-（因为用户要求的就是"结构照原型"；换名会让后续所有核对与维护失去共同语言）。
+⚠️ **本工具测不了什么（别误当已覆盖）**：**「标了已接后端，其实没接」** ——
+    "某一页的数据由谁喂"无法从源码机械判定 ⇒ 那一条靠**真机自检**（`tools/_shell_smoke.py` /
+   `tools/_shell_render_check.py`）与 `WIRED` 的人工维护。**「断言测不了」这句本身就是要害。**
 
 跑法：
-  `backend/.venv/Scripts/python.exe tools/ui_parity.py`            # 人读表（阻断式：有必须对齐项不符 ⇒ rc=1）
-  `backend/.venv/Scripts/python.exe tools/ui_parity.py --json`     # 机读
-⚠️ 需先起服务（默认 `http://127.0.0.1:8000`，可用 `--base` 改）。
+  `backend/.venv/Scripts/python.exe tools/ui_parity.py`          # 人读表（有未登记漂移 ⇒ rc=1）
+  `backend/.venv/Scripts/python.exe tools/ui_parity.py --json`   # 机读
+  `... --write-expected`                                          # 把当前漂移**登记**下来（人先审过再用）
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
 import re
 import sys
-import urllib.error
-import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PROTO = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\demo\材料报表自动化工作台-交互原型.html")
-
-# 视图 → **实现里的正式页面路由**（⚠️ 2026-09-17 纠偏：**必须核实，不能按视图名猜**）
-#   · `m01` / `m02` / `m03` 是**旧的静态单文件页**（`static/m0N.html`，切片 MVP 形态，`main.py::_PAGES`）；
-#   · ⚠️ **`/m03` ≠ 付款通知书列表页** —— 那个路径是**静态打印 / PDF / 设置页**；
-#     列表页在 **`/m03/notices`**（服务端渲染，`main.py` 147 行有注明）。
-#     ⇒ 第一版核对器就栽在这里：拿静态页去比原型 ⇒ **假红**（把"测错对象"当成"实现不符"）。
-#   · `m04` 起（含 `home`）都是**服务端渲染**。
-PAGES: list[tuple[str, str, str]] = [
-    ("home", "/", "看板 · 待办"),
-    ("m01", "/m01", "项目档案"),
-    ("m02", "/m02", "i8 接入层"),
-    ("m03", "/m03/notices", "付款通知书"),
-    ("m04", "/m04", "付款计划"),
-    ("m05", "/m05", "付款流水与欠款统计"),
-    ("m06", "/m06", "过程资料"),
-    ("m07", "/m07", "收发结存与活动大表"),
-    ("m08", "/m08", "库存单据与调整单"),
-    ("m09", "/m09", "特殊费用月报表"),
-    ("m11", "/m11", "集采台账"),
-    ("m12", "/m12", "差异登记"),
-    ("m13", "/m13", "跨域能力"),
-    ("m14", "/m14/settings", "规则配置"),
-    ("m15", "/m15", "用户管理"),
-]
-
-# 结构件口径：键 → (原型侧正则, 实现侧正则)
-#   ⚠️ **两侧形态本就可能不同**（原型是单文件演示版、实现是服务端渲染）⇒ 口径写"两侧各自的形态"，
-#      但**判据相同**：**这个页面该不该有这件东西**。
-#   ⚠️ 计数**必须剥掉 `<style>` / `<script>`**（见 `strip_assets`）—— 否则 CSS 里的 `.fbar{…}`
-#      会被当成"页面有筛选栏" ⇒ **第一版就栽在这里（假红一大片）**。
-PROBES: list[tuple[str, str, str]] = [
-    ("表", r"<table", r"<table"),
-    ("筛", r'class="fbar"', r'class="fbar"'),
-    ("卡", r'class="kpis"', r'class="kpis"'),          # ⚠️ 不用裸 `kpis`：`data-seg="kpis"` 是**段位占位**
-    ("折", r'<details class="tip"', r'<details class="tip"'),   # ⚠️ 口径收准：`R1` 的折叠说明 = `<details class="tip">`
-                                                                #（不能数任意 `<details>` —— 面板/弹窗也用 details 承载）
-    ("合计", r"sumRowOf\(", r"sumrow"),
-    ("排序", r"<table[^>]*\sdata-sort[\s>]", r"data-sort-col"),
-    ("项目面板", r"pjwrap", r"pjwrap"),
-    # 「导航」—— 2026-09-17 加：用户说"**根本不知道都有哪些页面**" ⇒ 首页当时**没有导航**。
-    # 口径 = 侧栏项类名（原型 `sb-i`；实现同款，唯一出口 `page.nav_html()`），**比有无**。
-    ("导航", r"sb-i", r"sb-i"),
-]
-
-# 「比有无」而不比个数的键 —— 两侧**实现形态**天然不同（原型：表级 `data-sort` 一个属性；
-# 实现：逐列 `data-sort-col`）⇒ 数量不可比，**功能意图**（这页表格可不可排）才可比。
-BOOL_KEYS: frozenset[str] = frozenset({"排序", "导航"})
-
-# **全局件**：在原型里是**所有视图共用**的（如侧栏导航 —— 它**不在任何 `V.<view>` 切片内**）
-# ⇒ 原型侧必须拿**整个文件**去数，否则切片里恒为 0 ⇒ **又一整批假红**（2026-09-17 实测）。
-GLOBAL_KEYS: frozenset[str] = frozenset({"导航"})
-
-# **依赖"页面上有数据"才渲染**的件 —— 空表时无从核对（不算差异）。
-# 实测教训（2026-09-17）：`m03` 补好合计行后，`/m03/notices` 因**库里没有通知书数据**而只渲染空态行
-# ⇒ 核对器报"合计不对齐"，其实**正确行为就是不给合计行**（不给一排 0）。
-# ⚠️ 豁免的代价：**空数据页看不出"这件到底做了没有"** ⇒ 一旦有数据，复跑核对器即可验。
-DATA_DEPENDENT: frozenset[str] = frozenset({"合计"})
-
-
-_ASSETS = re.compile(r"<style\b.*?</style>|<script\b.*?</script>", re.S | re.I)
-
-
-def strip_assets(html: str) -> str:
-    """剥掉 `<style>` / `<script>` 块 —— **只留 HTML 标记**再做结构计数。
-
-    ⚠️ 不剥 ⇒ 页面内联的 CSS 声明（`.fbar` / `.kpis` / `.sumrow` 都是类名）会被计入 ⇒ **假差异**。
-    """
-    return _ASSETS.sub("", html or "")
-
-# ⚠️ **所有结构件都要求对齐**（用户 2026-09-17 裁定：结构 / 布局 / 交互必须照原型，纯视觉才由实现方发挥）
-#   ⇒ 任一结构件不符且**未登记** ⇒ 报红。下面这个元组只是**修补优先级**（先修表/筛/卡）。
-BLOCKING = ("表", "筛", "卡")
-
-# ⭐ **已登记缺口**（豁免清单）—— 与 `tools/t7_expected.txt`（`doc_audit` 的 `T7a`）同款做法：
-#   · 在清单里 ⇒ **只提示"待补"**（不报红，否则 10 页全红 ⇒ 什么都合不进去）；
-#   · 不在清单里 ⇒ **报红（rc=1）** ⇒ 挡住"新产生的漂移"；
-#   · 清单里的项**已对齐** ⇒ 提示"可消号"（防清单变成永久挡箭牌）。
-# 格式：每行 `视图:结构件`，`#` 开头 = 注释。
+SHELL = ROOT / "backend" / "app" / "web" / "index.html"
 EXPECTED = ROOT / "tools" / "ui_parity_expected.txt"
 
+# 切片起点：行首的 `V.<名字> =`（壳与原型同构）
+VIEW_RE = re.compile(r"^V\.([A-Za-z0-9_]+)\s*=")
+# 切片终点：下一个 `V.` / `BIND.` / 顶层 `const` / `function` / 顶层 `let`|`var`
+END_RE = re.compile(r"^(V\.[A-Za-z0-9_]+\s*=|BIND\.|const |function |let |var )")
+WIRED_RE = re.compile(r"const\s+WIRED\s*=\s*new\s+Set\(\s*\[([^\]]*)\]")
 
-def load_expected() -> set[str]:
-    if not EXPECTED.exists():
-        return set()
-    out: set[str] = set()
-    for line in EXPECTED.read_text(encoding="utf-8").splitlines():
-        line = line.split("#", 1)[0].strip()
-        if line:
-            out.add(line)
+# U2 · 演示数组（原型里的三张假数据表）—— 接后端之后它们必须消失
+DEMO_RE = re.compile(r"const\s+(PJ|NT|FL)\s*=")
+# U2b ·「按页说实话」的两种措辞必须都在（⛔ 注意：那句"全为虚构"的文案**本身留着是对的** ——
+#        未接线的页正需要它；**坏的是对已接线的页也说它**。所以判的是"两种措辞齐不齐"，不是"有没有那句"）
+WIRED_TEXT = "已接后端真实数据"
+PROTO_TEXT = "原型态"
+
+
+def read_lines(p: pathlib.Path) -> list[str]:
+    return p.read_text(encoding="utf-8").replace("\r\n", "\n").split("\n")
+
+
+def slices(lines: list[str]) -> dict[str, list[str]]:
+    """按行首 `V.<名字>=` 切片，直到下一个 `V.` / `BIND.` / 顶层声明。"""
+    out: dict[str, list[str]] = {}
+    cur: str | None = None
+    for ln in lines:
+        m = VIEW_RE.match(ln)
+        if m:
+            cur = m.group(1)
+            out[cur] = [ln]
+            continue
+        if cur is None:
+            continue
+        if END_RE.match(ln):
+            cur = None
+            continue
+        out[cur].append(ln)
     return out
 
 
-def slice_view(src: str, view: str) -> str:
-    """切出 `V.<view>=…` 到下一个 `V.` / `BIND.` 定义之间的源码（找不到 ⇒ 空串）。"""
-    m = re.search(rf"^V\.{view}\s*=\s*", src, re.M)
-    if not m:
-        return ""
-    rest = src[m.end():]
-    nxt = re.search(r"^(?:V|BIND)\.\w+\s*=", rest, re.M)
-    return rest[: nxt.start()] if nxt else rest
+def fp(text: str) -> str:
+    return hashlib.md5(text.encode("utf-8")).hexdigest()[:8]
 
 
-def count(text: str, pattern: str) -> int:
-    return len(re.findall(pattern, text))
+def load_expected() -> dict[str, set[str]]:
+    """返回 {页: {指纹}}；文件格式 `<页> <指纹> [备注]`，`#` 开头为注释。"""
+    exp: dict[str, set[str]] = {}
+    if not EXPECTED.exists():
+        return exp
+    for raw in read_lines(EXPECTED):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            exp.setdefault(parts[0], set()).add(parts[1])
+    return exp
 
 
-def fetch(base: str, route: str) -> str | None:
-    """取实现页面 HTML；404 ⇒ `None`（= 未开工）。"""
-    req = urllib.request.Request(base + route, headers={"User-Agent": "ui-parity"})
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return resp.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return None
-        raise
-
-
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="逐页对齐核对（原型 → 实现）")
-    ap.add_argument("--base", default="http://127.0.0.1:8000")
+def main() -> int:
+    ap = argparse.ArgumentParser(description="壳一致性核对器")
     ap.add_argument("--json", action="store_true")
-    args = ap.parse_args(argv)
+    ap.add_argument("--write-expected", action="store_true", help="把当前漂移登记进白名单")
+    args = ap.parse_args()
 
     if not PROTO.exists():
-        print(f"⛔ 找不到原型：{PROTO}", file=sys.stderr)
-        return 2
-    src = PROTO.read_text(encoding="utf-8")
-    expected = load_expected()
+        print(f"⛔ 找不到原型：{PROTO}（它不在工程仓里，属交付面）")
+        return 1
+    if not SHELL.exists():
+        print(f"⛔ 找不到前端壳：{SHELL}")
+        return 1
 
-    rows: list[dict] = []
-    for view, route, label in PAGES:
-        proto_slice = slice_view(src, view)
-        if not proto_slice:
-            rows.append({"view": view, "route": route, "label": label,
-                         "state": "原型里没有该视图", "dims": {}, "gaps": []})
+    p_views = slices(read_lines(PROTO))
+    shell_lines = read_lines(SHELL)
+    s_views = slices(shell_lines)
+    exp = load_expected()
+
+    # ── U1 · 视图切片逐行一致
+    u1: list[dict] = []
+    missing: list[str] = []
+    for key, plines in p_views.items():
+        slines = s_views.get(key)
+        if slines is None:
+            missing.append(key)
             continue
-        try:
-            html = fetch(args.base, route)
-        except Exception as exc:                                # noqa: BLE001
-            rows.append({"view": view, "route": route, "label": label,
-                         "state": f"取页面失败：{type(exc).__name__}", "dims": {}, "gaps": []})
-            continue
-        if html is None:
-            rows.append({"view": view, "route": route, "label": label,
-                         "state": "未开工（404）", "dims": {}, "gaps": []})
-            continue
-        dims: dict[str, dict] = {}
-        gaps: list[str] = []
-        pending: list[str] = []          # 已登记 ⇒ 只提示
-        blocking: list[str] = []         # 未登记 ⇒ 报红
-        impl_html = strip_assets(html)
-        page_empty = 'class="empty"' in impl_html
-        for key, proto_re, impl_re in PROBES:
-            proto_scope = src if key in GLOBAL_KEYS else proto_slice
-            p, i = count(proto_scope, proto_re), count(impl_html, impl_re)
-            if key in BOOL_KEYS:
-                ok = (p > 0) == (i > 0)
-            else:
-                ok = p == i
-            if not ok and key in DATA_DEPENDENT and page_empty and p > 0 and i == 0:
-                # 只豁免「原型有、实现 0」且**当前页空态**（= 可能只是没数据）。
-                # ⚠️ 若实现**已经有但数量不等**（如原型 2 / 实现 1）⇒ **那是真差异，不豁免**。
-                dims[key] = {"proto": p, "impl": i, "ok": True, "known": False, "skipped_empty": True}
-                continue
-            known = f"{view}:{key}" in expected
-            dims[key] = {"proto": p, "impl": i, "ok": ok, "known": known}
-            if not ok:
-                gaps.append(f"{key}(原型 {p} / 实现 {i})")
-                (pending if known else blocking).append(key)
-        # 「可消号」只认**真的核对过且已对齐**的项 —— 空态豁免的不算（否则会误导成"已补齐"）
-        stale = [k for k, d in dims.items()
-                 if d["ok"] and not d.get("skipped_empty") and f"{view}:{k}" in expected]
-        rows.append({"view": view, "route": route, "label": label,
-                     "state": "不对齐" if gaps else "✅ 对齐",
-                     "blocking": blocking, "pending": pending, "stale": stale,
-                     "dims": dims, "gaps": gaps})
+        for i in range(max(len(plines), len(slines))):
+            a = plines[i].rstrip() if i < len(plines) else "<无此行>"
+            b = slines[i].rstrip() if i < len(slines) else "<无此行>"
+            if a != b:
+                u1.append({"key": key, "line": i + 1, "proto": a[:160], "shell": b[:160],
+                           "fp": fp(a + "||" + b)})
+
+    u1_new = [d for d in u1 if d["fp"] not in exp.get(d["key"], set())]
+    u1_ok = [d for d in u1 if d["fp"] in exp.get(d["key"], set())]
+
+    # ── U2 · 演示数组（红线①：假数据不得混进产物）＋「按页说实话」两种措辞
+    u2: list[str] = []
+    for i, ln in enumerate(shell_lines, 1):
+        m = DEMO_RE.search(ln)
+        if m:
+            u2.append(f"L{i} 残留演示数组 {m.group(1)}：{ln.strip()[:70]}")
+    shell_text = "\n".join(shell_lines)
+    if WIRED_TEXT not in shell_text:
+        u2.append(f"壳里找不到「{WIRED_TEXT}」⇒ 已接线的页会被说成原型态（界面对真数据说了假话）")
+    if PROTO_TEXT not in shell_text:
+        u2.append(f"壳里找不到「{PROTO_TEXT}」⇒ 未接线的页不再标明数据是模拟值")
+
+    # ── U3 · WIRED 自洽
+    u3: list[str] = []
+    wired: list[str] = []
+    m = WIRED_RE.search("\n".join(shell_lines))
+    if not m:
+        u3.append("壳里找不到 `const WIRED = new Set([...])`")
+    else:
+        wired = re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", m.group(1))
+        if not wired:
+            u3.append("`WIRED` 是空集合（一页都没接后端？）")
+        for k in wired:
+            if k not in s_views:
+                u3.append(f"`WIRED` 里的 `{k}` 在壳里没有对应的 `V.{k}` 切片")
+
+    red = len(u1_new) + len(u2) + len(u3) + len(missing)
+
+    if args.write_expected:
+        head = [
+            "# 壳一致性核对器 · 已登记漂移（ui_parity_expected.txt）",
+            "# ⚠️ **只准变短** —— 补回原型逻辑 / 删掉多余的改动 ⇒ 删掉对应行（脚本会提示「可消号」）。",
+            "# 格式：`<页> <指纹> [备注]`；指纹 = md5(原型行 + '||' + 壳行)[:8]。",
+            "",
+        ]
+        body = [f"{d['key']} {d['fp']}  # 原型: {d['proto'][:50]}｜壳: {d['shell'][:50]}" for d in u1]
+        EXPECTED.write_text("\n".join(head + body) + "\n", encoding="utf-8")
+        print(f"已登记 {len(body)} 条漂移 ⇒ {EXPECTED.name}")
+        return 0
 
     if args.json:
-        print(json.dumps(rows, ensure_ascii=False, indent=1))
-    else:
-        print("=" * 96)
-        print("逐页对齐核对（真源 = demo/ 原型源码 · 比对 = 实现页面 HTML）")
-        print("=" * 96)
-        head = "".join(f"{k:>9}" for k, _, _ in PROBES)
-        print(f"{'视图':<6}{'路由':<7}{'页面':<22}{head}")
-        print("-" * 96)
-        for r in rows:
-            if r["state"] in ("未开工（404）",) or r["state"].startswith(("原型里", "取页面")):
-                print(f"{r['view']:<6}{r['route']:<7}{r['label']:<22}{r['state']}")
-                continue
-            cells = "".join(
-                f"{(str(d['proto']) + '/' + str(d['impl'])).rjust(9) if not d['ok'] else '✓'.rjust(9)}"
-                for _, d in r["dims"].items()
-            )
-            print(f"{r['view']:<6}{r['route']:<7}{r['label']:<22}{cells}")
-        print("-" * 96)
-        print("说明：单元格 = 原型/实现（不等就显数字，相等显 ✓）· 阻断项 =", "、".join(BLOCKING))
-        bad = [r for r in rows if r.get("blocking")]
-        pend = [r for r in rows if r.get("pending")]
-        stale = [(r["view"], k) for r in rows for k in (r.get("stale") or [])]
-        print(f"\n🚫 必须修（**未登记**的阻断项不符）：{len(bad)} 页 —— "
-              + (", ".join(f"{r['view']}({r['route']})：{'、'.join(r['blocking'])}" for r in bad)
-                 if bad else "无 ✅"))
-        print(f"⏳ 已登记待补（不阻断）：{len(pend)} 页 —— "
-              + (", ".join(f"{r['view']}({'、'.join(r['pending'])})" for r in pend) if pend else "无"))
-        if stale:
-            print(f"♻️ 可消号（已对齐但还在清单里）：{', '.join(f'{v}:{k}' for v, k in stale)}")
-        detail = [r for r in rows if r.get("gaps")]
-        if detail:
-            print("\n全部差异明细：")
-            for r in detail:
-                print(f"  · {r['view']:<5}{r['route']:<7}{r['label']:<20}{'；'.join(r['gaps'])}")
+        print(json.dumps({"u1_new": u1_new, "u1_ok": len(u1_ok), "u2": u2, "u3": u3, "missing": missing},
+                         ensure_ascii=False, indent=2))
+        return 1 if red else 0
 
-    return 1 if any(r.get("blocking") for r in rows) else 0
+    print("=" * 78)
+    print(" 壳一致性核对器 · ui_parity —— 「原型逻辑一行不改 ／ 演示数据不留 ／ WIRED 别乱标」")
+    print("=" * 78)
+    print(f" 原型 {PROTO.name}（{len(p_views)} 个视图）  ⇄  壳 index.html（{len(s_views)} 个视图）")
+    print(f" 已登记放行 {sum(len(v) for v in exp.values())} 条 · `WIRED` = {wired or '（未取到）'}")
+    print()
+    print(f"─ U1 · 视图切片逐行一致 —— "
+          f"{'✅ 无未登记漂移' if not u1_new else f'⛔ {len(u1_new)} 行未登记'}（已登记放行 {len(u1_ok)} 行）")
+    for d in u1_new[:25]:
+        print(f"    [{d['key']} L{d['line']}] 原型: {d['proto'][:70]}")
+        print(f"    {' ' * len(d['key'])}   {' ' * 6} 壳  : {d['shell'][:70]}")
+    if len(u1_new) > 25:
+        print(f"    …还有 {len(u1_new) - 25} 行")
+    if missing:
+        print(f"─ U1b · 壳里缺切片 —— ⛔ {len(missing)} 个：{', '.join(missing)}")
+    for name, items in (("U2 · 演示数组 / 假话残留", u2), ("U3 · WIRED 自洽", u3)):
+        print(f"─ {name} —— {'✅ 无' if not items else f'⛔ {len(items)} 条'}")
+        for it in items[:10]:
+            print("    " + it)
+    print()
+    print(f"结论：**必须修 {red}**" + ("（有红 ⇒ 非零退出）" if red else "（rc=0）"))
+    print("⚠️ 它**测不了**「标了已接后端其实没接」—— 那一条靠真机自检 `tools/_shell_smoke.py`。")
+    return 1 if red else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())
