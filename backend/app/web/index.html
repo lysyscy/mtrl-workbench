@@ -391,10 +391,6 @@ const PL_COLS = ['id','ym','proj','docNo','flowAmt','monthAmt','date','method','
    `cutoff` = **截止年月**（"截止 YYYY 年 M 月底"）：它是逐月欠款台账的**第 1 行**，也是**逐月的起点**
               （台账从 cutoff 的**次月**开始按月出行）。 */
 const LG_COLS = ['id','proj','cat','settle','paid','cutoff','remark','op','date'];
-const LG = [
-  ['LG01','华能德州热电联产项目#2机组建筑及安装工程','辅材',480000.00,350000.00,'2026-06','系统上线前已发生，无付款通知书','张伟','2026-07-01'],
-  ['LG02','临沂钢铁集团余热发电项目土建及安装工程','机械',96000.00,0,'2026-06','系统上线前已发生，无付款通知书','张伟','2026-07-01']
-];
 
 /* ---------- 库存单据明细（§3.4） MOD-08 ---------- */
 const IV_COLS = ['id','docNo','seq','dir','mat','spec','unit','qty','px','pi','amt','tax','biz','cp','dd','ad','wbs','cbs','wh','pf','c5'];
@@ -670,7 +666,7 @@ let NO=[], PJs=[], FLs=[];
    ⚠️ 刻意**不写成 USERS[0] 的引用** —— 自检回滚会整体替换 USERS 的内容，引用会失效（同「原地复位」的教训）。 */
 let CUR={id:'U01',acc:'zhangwei',name:'张伟',role:'admin'};
 const IVs=IV.map(r=>O(r,IV_COLS)), ADs=AD.map(r=>O(r,AD_COLS));   /* ⚠️ 未接线（原型态） */
-const JCs=JC.map(r=>O(r,JC_COLS)), DFs=DF.map(r=>O(r,DF_COLS)), LGs=LG.map(r=>O(r,LG_COLS));
+const JCs=JC.map(r=>O(r,JC_COLS)), DFs=DF.map(r=>O(r,DF_COLS)), LGs=[]   /* ⭐ 已接后端：由 `reloadM05()` 从 `/api/m05/debt` 的 `openings` **原地填充**（原先由演示数组 `LG` 生成 —— 已删）；⚠️ 它是 `const` ⇒ 只许 `splice` 原地改 */;
 const WHs=WH.map(r=>O(r,['id','name','rows','begin','in','out','end']));
 /* ---------- 收发结存：**按月存**（2026-09-13 新增「核算年月」选择，§5.3.2「每个月出一份分仓库表」） ----------
    默认年月 = **材料报表类 = 北京时间上月**（§9.2）⇒ 由 `fWhYm` 承载（初值 `bjMonth(-1)`）。
@@ -761,19 +757,16 @@ const jcSettle=j=>N2(j.tradeCo?jcTradeInvSum(j):jcInvSum(j));
 const jcPay=j=>N2((j.payments||[]).reduce((a,p)=>a+p[1],0));
 const jcDebt=j=>N2(jcSettle(j)-jcPay(j));
 function debts(){
-  const y=NO.filter(ntLive), f=c=>y.filter(n=>n.cat===c);
-  const fb=f('辅材'), jx=f('机械');
-  const machSettle=N2(Object.keys(MACH6).reduce((a,wh)=>a+machSettleOf(wh),0)), machPaid=N2(jx.reduce((a,n)=>a+n.sp,0));
-  const jc=N2(JCs.filter(j=>j.tag==='纳入台账').reduce((a,j)=>a+jcDebt(j),0));
-  /* 期初占位行**按其分类**并入对应的欠款池（2026-09-12 用户裁定「卡片要并」）——
-     合计因此**不再单列**「期初」一项：原来的四类（辅材 / 机械 / 集采 / 期初）收成**三类**。
-     ⚠️ 这条口径改的是**数值归属**：合计不变，但「辅材」「机械」两个数各自含了本分类的期初。 */
-  const lgF=N2(LGs.filter(l=>l.cat==='辅材').reduce((a,l)=>a+l.settle-l.paid,0));
-  const lgJ=N2(LGs.filter(l=>l.cat==='机械').reduce((a,l)=>a+l.settle-l.paid,0));
-  const F=N2(fb.reduce((a,n)=>a+n.ss,0)), FP=N2(fb.reduce((a,n)=>a+n.sp,0));
-  const 辅材=N2(F-FP+lgF), 机械=N2(machSettle-machPaid+lgJ);
-  return { 辅材,辅材S:F,辅材P:FP,lg辅材:lgF, 机械,machSettle,machPaid,lg机械:lgJ, 集采:jc,
-           合计:N2(辅材+机械+jc) };
+  /* ⭐ 已接后端：三类 ＋ 合计**一律读 `/api/m05/debt`**（§4.5.1 的唯一出口）。
+     ⛔ 原实现在浏览器里按 `NO`/`MACH6`/`JCs`/`LGs` 现算 —— 那是**第二份口径**，
+        而且机械会读到**演示数据**（与后端 KPI 打架）。 */
+  const d = M05.debt || {};
+  const get = c => numOr0(((d.by_category || []).find(x => x.category === c) || {}).amount);
+  return {
+    辅材: get('material'), 机械: get('mechanical'), 集采: get('jc'), 合计: numOr0(d.total),
+    /* 兼容旧字段（别的页可能读）：一律 0（后端不单列这几项了） */
+    辅材S: 0, 辅材P: 0, lg辅材: 0, machSettle: 0, machPaid: 0, lg机械: 0,
+  };
 }
 function sums(rows,k){ return N2(rows.reduce((a,r)=>a+(r[k]||0),0)); }
 
@@ -1013,7 +1006,7 @@ const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
-const WIRED=new Set(['m03','m01','m04']);
+const WIRED=new Set(['m03','m01','m04','m05']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -2156,10 +2149,11 @@ const lgEarliest=(key,cat)=>{ const ms=[];
   return ms.filter(Boolean).sort()[0]||''; };
 const lgCutFor=(v,cat)=>{ const e=lgEarliest(pjKey(pjRowOf(v)),cat); return e?prevYm(e):bjMonth(-1); };
 const ledCutLabel=m=>/^\d{4}-\d{2}$/.test(String(m||''))?`截止 ${m.slice(0,4)} 年 ${Number(m.slice(5,7))} 月底`:'截止时间未填';
-/* 台账可选项目 = 该口径下**有数据**的项目（通知书 / 机械 6 列）+ **该口径的**期初占位行。**键 = 仓库名** */
+/* 台账可选项目 = 该口径下**有数据**的项目（通知书；机械结算源未接线 ⇒ 暂不计）+ **该口径的**期初占位行。**键 = 仓库名**
+   ⚠️ 原第 2 行按**演示** `MACH6` 的键补候选 —— 那是演示数据 ⇒ 会往选择器里塞**幻影项目**（真库里没有的仓库名）。
+      机械结算源（过程资料机械 6 列）接线时，这里应改成读**后端的机械结算口**。 */
 const LED_PROJS=sc=>{ const s=new Set();
   NO.filter(n=>ntLive(n)&&n.cat===sc).forEach(n=>s.add(ntProjKey(n)));
-  if(sc==='机械') Object.keys(MACH6).forEach(wh=>s.add(wh));
   LGs.filter(l=>l.cat===sc).forEach(l=>s.add(lgProjKeyOf(l.proj)));
   s.delete('');                                        /* 未归属的行落不到任何项目上（真系统里不会有） */
   return [...s].sort(); };
@@ -2169,7 +2163,12 @@ const ledSettle=(sc,proj,ym)=> sc==='辅材'
   : N2(machExtRent(proj,ym));   /* ⭐ 换口径只改这一行：机械 = 机械费结算（外租含税两列，**派生只读**） */
 /* 该月的「付款」= Σ 同月 · 同项目 · 同分类 的统计付款金额 */
 const ledPay=(sc,proj,ym)=>N2(NO.filter(n=>ntLive(n)&&n.cat===sc&&ntYm(n)===ym&&ntProjKey(n)===proj).reduce((a,n)=>a+n.sp,0));
-const ledOpen=(sc,proj)=>LGs.find(l=>l.cat===sc&&lgProjKeyOf(l.proj)===proj)||null;   /* 期初占位行**按分类**取 */
+/* ⭐ 已接后端：期初占位行 / 逐月台账行**一律读 `/api/m05/ledger`**（§4.5.4 的唯一出口）。
+   ⛔ 原实现按 `LGs` / `NO` / `MACH6` 现算月份区间并逐月求值 —— 第二份口径（机械还读演示数据）。 */
+const ledOpen=(sc,proj)=>{ const side=m05Side(sc); if(!side) return null;
+  const r=(side.rows||[]).find(x=>x.is_opening); if(!r) return null;
+  return { id:side.opening_id, cat:side.label, cutoff:r.month, settle:numOr0(r.other_expense),
+           paid:numOr0(r.payment), remark:r.remark||'' }; };
 /* 台账「项目」候选（两侧共用同一个选择器）＝ **两个口径的并集** —— 否则只有单侧数据的项目就选不出来 */
 const ledProjs=()=>pjSort(uniqBy([...LED_PROJS('辅材'),...LED_PROJS('机械')],v=>v));
 /* 当前生效的台账项目（选的这个项目若不在候选里，回落到第一个） */
@@ -2226,19 +2225,10 @@ const lgStrip=()=>`<div class="fbar" style="margin-bottom:6px;border:1px solid v
       <span class="pill" style="margin-left:auto">${esc(ledCutLabel(lgCut))} ｜ 保存后为本栏<b>第 1 行</b></span>
     </div>`;
 /* 造行：期初行 + 从「期初次月」到「最近一个有数据的月」逐月一行（空月也出行） */
-const ledRows=(sc,proj)=>{ const op=ledOpen(sc,proj), rows=[];
-  if(op) rows.push({ym:op.cutoff||'', open:true, id:op.id, cat:op.cat, s:N2(op.settle), p:N2(op.paid), note:op.remark||''});
-  const ms=NO.filter(n=>ntLive(n)&&n.cat===sc&&ntProjKey(n)===proj).map(ntYm);
-  if(sc==='机械') Object.keys(MACH6[proj]||{}).forEach(k=>ms.push(k));
-  const all=ms.filter(Boolean).sort();
-  const last=all.length?all[all.length-1]:'';
-  const start=op&&op.cutoff?nextYm(op.cutoff):(all[0]||'');
-  if(start&&last){
-    for(let m=start;last&&m<=last;m=nextYm(m)){
-      rows.push({ym:m, s:ledSettle(sc,proj,m), p:ledPay(sc,proj,m), note:LEDNOTE[sc+'|'+proj+'|'+m]||''});
-      if(m===last) break;
-    } }
-  return rows; };
+const ledRows=(sc,proj)=>{ const side=m05Side(sc); if(!side) return [];
+  return (side.rows||[]).map(r=>({ ym:r.month, open:!!r.is_opening,
+    id: r.is_opening ? side.opening_id : r.seq, cat: side.label,
+    s: numOr0(r.other_expense), p: numOr0(r.payment), note: r.remark||'' })); };
 /* —— 付款流水（**实际付款记录**）的筛选出口 ——
    ⚠️ 与逐月台账的「付款」列**不是一回事**：台账那一列取「统计付款金额」（欠款口径的旁路字段），
       这里筛的是**实际付款流水**（「已付金额」的来源，§4.4.2）。两个口径并存是**有意**的。 */
@@ -2284,19 +2274,41 @@ const pstLatest=g=>{ const ks=[...new Set(NO.filter(ntLive).map(n=>pstBucket(n,g
 const pstY=()=>pst.ym||pstLatest(pst.gran);
 const pstYear=()=>pst.year||Number(SYS_YM.slice(0,4));
 const pstQq=()=>/^\d{4}Q[1-4]$/.test(pst.q||'')?pst.q:tmQNow();
-const pstData=()=>{ const g=pst.gran, bk=pstY(), ax=(g==='周'?pstQq():String(pstYear()));
-  const wq=g==='周'?[Number(ax.slice(0,4)),Number(ax.slice(5))]:null;
-  const wks=wq?tmWeeksOfQ(wq[0],wq[1]):null;
-  const keys=wq?wks.map(w=>w[0]):pstMonthsOfYear(pstYear());
-  const labels=wq?wks.map(w=>w[0].slice(5)+' ~ '+w[1].slice(5)):keys.map(m=>Number(m.slice(5,7))+' 月');
-  const rowsB=pstAt(g,bk);
-  const series=keys.map(k=>[k,pstSum(pstAt(g,k))]);
-  return { g, bk, ax, keys, labels, series,
-    bkLabel:g==='周'?(bk.slice(5)+' ~ '+tmSun(bk).slice(5)):bk,
-    axLabel:g==='周'?`${wq[0]} 年 Q${wq[1]}（${(wq[1]-1)*3+1}–${wq[1]*3} 月）`:`${pstYear()} 年`,
-    title:g==='周'?`${wq[0]} 年 Q${wq[1]}`:`${pstYear()} 年`,
-    byPj:pjSort(uniqBy(rowsB,n=>ntProjKey(n))).map(p=>[p,pstSum(rowsB.filter(n=>ntProjKey(n)===p))]).sort((a,b)=>b[1]-a[1]),
-    bkTotal:pstSum(rowsB), bkCnt:rowsB.length, n:NO.filter(ntLive).length }; };
+/* ⭐ 已接后端：付款统计**读 `/api/m05/stats`**（§4.5.5 的唯一出口，与欠款同源互补）。
+   ⚠️ 桶（周 / 月）与粒度由后端给；前端只做「当前桶 → 按项目条」这一层**显示**映射。 */
+const m05BucketKey=()=>{ const now=new Date();
+  const p=n=>String(n).padStart(2,'0');
+  const ymd=`${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())}`;
+  if(pst.gran!=='周') return ymd.slice(0,7)+'-01';
+  const d=new Date(`${ymd}T00:00:00`); const wd=(d.getDay()+6)%7;    /* 周一为一周之始 */
+  d.setDate(d.getDate()-wd);
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
+const m05Sun=b=>{ const d=new Date(`${b}T00:00:00`); d.setDate(d.getDate()+6);
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
+const m05InBucket=(date,bk,g)=>{ const s=String(date||''); if(!s||!bk) return false;
+  return g==='周' ? (s>=bk && s<=m05Sun(bk)) : s.slice(0,7)===bk.slice(0,7); };
+const pstData=()=>{ const st=M05.stats||{};
+  const g=M05_GRAN_UI[st.granularity]||pst.gran;
+  const buckets=st.buckets||[], right=st.right||[], left=st.left||[];
+  let bi=buckets.indexOf(m05BucketKey()); if(bi<0) bi=buckets.length-1;
+  const bk=bi>=0?buckets[bi]:'';
+  const year=st.year||pstYear(), q=st.quarter||pstQq();
+  const live=FLs.filter(f=>!f.voided);
+  const bkRows=live.filter(f=>m05InBucket(f.date,bk,g));
+  return { g, bk, ax: g==='周'?`${year}-${q}`:String(year),
+    keys:buckets,
+    labels: g==='周' ? buckets.map(b=>b.slice(5)+' ~ '+m05Sun(b).slice(5))
+                     : buckets.map(b=>Number(b.slice(5,7))+' 月'),
+    series: buckets.map((b,i)=>[b, numOr0(right[i])]),
+    bkLabel: g==='周'&&bk ? (bk.slice(5)+' ~ '+m05Sun(bk).slice(5)) : bk,
+    axLabel: g==='周' ? `${year} 年 Q${q}（${(q-1)*3+1}–${q*3} 月）` : `${year} 年`,
+    title: g==='周' ? `${year} 年 Q${q}` : `${year} 年`,
+    byPj: left.map(r=>[r.key||r.label, numOr0((r.cells||[])[bi])])
+             .filter(x=>x[0]).sort((a,b)=>b[1]-a[1]),
+    bkTotal: N2(bkRows.reduce((a,f)=>a+f.amt,0)), bkCnt: bkRows.length,
+    n: !!(left.length || numOr0(st.total)) };
+};
 V.m05=()=>{
   const d=debts();
   /* 「按项目看欠款」= **左右两张**（左辅材 / 右机械），口径与顶部 KPI 严格同源：
@@ -2310,11 +2322,11 @@ V.m05=()=>{
     const lg=N2(LGs.filter(l=>l.cat===sc&&lgProjKeyOf(l.proj)===k).reduce((a,l)=>a+l.settle-l.paid,0));
     return sc==='辅材'
       ? N2(NO.filter(n=>ntLive(n)&&n.cat==='辅材'&&ntProjKey(n)===k).reduce((a,n)=>a+(n.ss-n.sp),0)+lg)
-      : N2(machSettleOf(k)
+      : N2(m05MechSettle(k)
            -NO.filter(n=>ntLive(n)&&n.cat==='机械'&&ntProjKey(n)===k).reduce((a,n)=>a+n.sp,0)+lg); };
   const barsOf=sc=>{ const ks=new Set();
     if(sc==='辅材') NO.filter(n=>ntLive(n)&&n.cat==='辅材').forEach(n=>ks.add(ntProjKey(n)));
-    else Object.keys(MACH6).forEach(wh=>ks.add(wh));
+    else NO.filter(n=>ntLive(n)&&n.cat==='机械').forEach(n=>ks.add(ntProjKey(n)));
     LGs.filter(l=>l.cat===sc).forEach(l=>ks.add(lgProjKeyOf(l.proj)));
     ks.delete('');
     return [...ks].map(k=>[k,projValOf(sc,k)]).sort((a,b)=>b[1]-a[1]); };
@@ -3454,7 +3466,11 @@ const ACT={
    else render(); },
 
  /* 导出 / 通用 */
- exp:t=>toast(`已导出 <b>${esc(t.dataset.t)}_${bjMonth()}.xlsx</b>，内容与当前筛选一致（R1）${t.dataset.sub?` · 取数 = ${esc(t.dataset.sub)}`:''}`),
+ /* ⏳ **导出尚未落地（诚实提示）**：原型这里报「已导出 <文件名>.xlsx」，但**没有任何文件产生**
+    ⇒ 对用户是**假成功**（已接线的页尤其不能这么说）。真落地方案见 `ops/模板法导出-实测结论.md`，
+    属 `TAIL-04`（真实文件落盘 / 打包）。 */
+ exp:t=>toast(`⏳ <b>导出尚未落地</b>（属 TAIL-04）：本页按当前筛选应导出 <b>${esc(t.dataset.t)}</b>，`
+   + `但**还没有真实文件生成**；<br>落地方案见 ops/模板法导出-实测结论.md（模板法 ＋ 缓存级对账）`,7000),
  silent:()=>toast('（原型演示）该动作只走流程、<b>不改动演示数据</b>；正式实现按本页口径生效'),
  silent2:()=>modal({title:'一期 Non-goals',body:'<div class="tip" style="margin:0">见本页「一期 Non-goals 汇总」表。附件体系 R4 一期不做、R5 二期。</div>'}),
  /* 已删除（2026-09-12）：一键抓取（fetchAll）—— 用户不需要该模块；接口清单页保留逐接口「触发」与「手动导入」。 */
@@ -3607,13 +3623,14 @@ const ACT={
        ['实际付款方式',enumTag('payMethod',f.method)]])}
      <div class="fld"><label>撤销原因 <b>*</b></label><input class="inp" id="rReason" placeholder="例：收款单位变更，需重付"></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="revOk" data-fid="${f.id}">确认撤销</button>`}); },
+ /* ⭐ 已接后端：`POST /api/m05/flows/{id}/revoke?reason=`（§4.4.5 —— **原因必填由后端把关**；
+    撤销后已付金额回退、状态按 §4.4.2 重判，都在后端做） */
  revOk:t=>{ const f=FLs.find(x=>x.id===t.dataset.fid); if(!f) return;
-   const rs=(($('#rReason')&&$('#rReason').value)||'').trim();
-   if(!rs) return toast('<b>撤销原因必填</b>（撤销留痕）');
-   f.voided=true; f.reason=rs;
-   const n=NO.find(x=>x.id===f.nid);
-   closeModal(); render();
-   toast(`已撤销流水 <b>${f.id}</b>（原因：${esc(rs)}）${n?`<br>${n.code} 已付金额已回退，状态为 <b>${statOf(n)}</b>`:''}`); },
+    const rs=(($('#rReason')&&$('#rReason').value)||'').trim();
+    if(!rs) return toast('<b>撤销原因必填</b>（撤销留痕）');
+    closeModal();
+    m05Act(()=>API.flowRevoke(f.id, rs),
+      `已撤销流水 <b>${f.id}</b>（原因：${esc(rs)}）<br>该单据「已付金额」已回退，状态按 §4.4.2 重判`); },
  /* 抓取 i8 —— 一律**按月抓取**（2026-09-13 用户口径：三个入口都抓「所选月份」的数据；
     收发结存表 / 库存单据明细表打开弹窗时**默认月份 = 本页「核算年月」当前所选**）。
     界面只选「核算年月」；i8 侧的入参是「单据日期起止」（闭区间），由系统自动换算后传入。
@@ -4024,14 +4041,17 @@ const ACT={
   lgPjName=v; lgPjOpen=false; render();
   toast(`期初占位行的项目已切到 <b>${esc(pjLabel(v))}</b>（截止年月仍按当前「分类」单独算）`); },
  /* 保存 = 原弹窗的「保存」——**只读草稿层**，不再从 DOM 取值（增行模式：没有弹窗可读） */
+ /* ⭐ 已接后端：`POST /m05/opening`（PRG 表单端点 · 同一「口径 + 项目 + 截止年月」重复录入 = **覆盖**）
+    ⚠️ 草稿层（`lgD`）的取数方式不变，只是**落库不再由前端 push**。 */
  addLgOk:()=>{ const pj=lgPjName; if(!pj){ toast('<b>请先选「项目」</b>（点展开区里的「项目」按钮）'); return; }
-   LGs.push(O(['LG'+String(LGs.length+1).padStart(2,'0'),pj,lgCat,N2(parseFloat(lgD.s)||0),N2(parseFloat(lgD.p)||0),lgCut,lgD.r,CUR.name,'2026-09-11'],LG_COLS));
-   /* ⭐ 2026-09-12 修复「录入后逐月欠款台账无反应」：录入完必须把台账**项目选择器切到该行所属项目**
-      —— 否则台账仍停在别的项目上，刚录入的期初行落在看不见的那一页（表现为"毫无反应"）。
-      切换后两侧（辅材 / 机械）同步切到该项目，期初行只在**分类与之相同**的那一侧出现。 */
-   ledProj=lgProjKeyOf(pj)||pj;
-   lgOn=false; lgPjOpen=false; render();
-   toast(`期初占位行已录入（<b>${lgCat}</b> · ${esc(ledCutLabel(lgCut))}），台账已切到 <b>${esc(pjLabel(ledCur()))}</b>，欠款合计与逐月台账已重算`); },
+    const row=pjRowOf(pj);
+    if(!row||!row.id){ toast('<b>项目没对上档案</b>（请重选）—— 未写入任何数据'); return; }
+    m05Act(()=>API.postForm('/m05/opening', {
+        category: CAT_API[lgCat] || lgCat, project_id: row.id,
+        cutoff_ym: lgCut, settle_amount: String(lgD.s||''), paid_amount: String(lgD.p||''),
+        remark: String(lgD.r||''), end_ym: '',
+      }), ()=>{ ledProj=pj; return `期初占位行已录入（<b>${lgCat}</b> · ${esc(ledCutLabel(lgCut))}）`
+                 + `，台账已切到 <b>${esc(pjLabel(ledCur()))}</b>，欠款与台账已由后端重算`; }); },
  /* 删除前必须列出影响范围（§7.2 / §9.4）：核心业务数据「软删留痕 + 统计重算」 */
  delLg:t=>{ const l=LGs.find(x=>x.id===t.dataset.id); if(!l) return;
    const dd=N2(l.settle-l.paid);
@@ -4039,7 +4059,11 @@ const ACT={
      ${kvBlock([['项目',`<span style="font-size:11.5px">${esc(l.proj)}</span>`],['统计结算金额',`<span class="fc">${M(l.settle)}</span>`],['统计付款金额',`<span class="fc">${M(l.paid)}</span>`],['该行欠款',`<span class="fc">${M(dd)}</span>`]])}
      <div class="tip" style="margin:0">删除后：<b>期初占位欠款 ${M(dd)} → 0</b>，<b>欠款合计</b>同步重算；该行按<b>软删留痕</b>处理（属核心业务数据）。</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delLgOk" data-id="${l.id}">确认删除</button>`}); },
- delLgOk:t=>{ const i=LGs.findIndex(l=>l.id===t.dataset.id); if(i>=0) LGs.splice(i,1); closeModal(); render(); toast('期初占位行已删除（软删留痕），欠款合计已重算'); },
+ /* ⭐ 已接后端：`POST /m05/opening/delete`（软删留痕 ＋ 统计重算由后端做） */
+ delLgOk:t=>{ const id=t.dataset.id; if(!id) return;
+    closeModal();
+    m05Act(()=>API.postForm('/m05/opening/delete', { opening_id:id, project_id:'', end_ym:'' }),
+      '期初占位行已删除（软删留痕），欠款与台账已由后端重算'); },
 
   /* —— MOD-01 —— */
   /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` —— 全名**可改 + 留痕**（§2.3.1 / §9.3）。
@@ -4436,10 +4460,15 @@ const ACT={
         </tbody></table>`;
    modal({title:'导出 · 逐月欠款台账（每项目一个工作簿）',body,
      footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="exp" data-t="逐月欠款台账">保存到本地</button>`}); },
- ledNote:t=>{ const k=t.dataset.sc+'|'+t.dataset.proj+'|'+t.dataset.m;
-   const v=String(t.value==null?'':t.value).trim();
-   if(v) LEDNOTE[k]=v; else delete LEDNOTE[k];
-   render(); toast(v?`台账备注已记录（${esc(t.dataset.m)}）`:'台账备注已清空'); },
+ /* ⭐ 已接后端：`POST /m05/ledger/remark`（键 = 口径 + 项目 + 月；**空串 = 清除该格**）。
+    ⚠️ 备注输入框是 `change` 事件 ⇒ 失焦才落库（与原型一致），用完以后端为准重拉。 */
+ ledNote:t=>{ const sc=t.dataset.sc, pjKey=t.dataset.proj, m=t.dataset.m;
+    const v=String(t.value==null?'':t.value).trim();
+    const row=pjRowOf(pjKey);
+    if(!row||!row.id){ toast('<b>项目没对上档案</b> —— 备注未写入'); return; }
+    m05Act(()=>API.postForm('/m05/ledger/remark', {
+        category: CAT_API[sc] || sc, project_id: row.id, ym: m, remark: v, end_ym: '',
+      }), v ? `台账备注已记录（${esc(m)}）` : '台账备注已清空'); },
  /* `expLed`（左右两栏各自的「导出 Excel」）已按 2026-09-13 用户口径**删除** ——
     改为卡头**一个**导出入口（`ledExpToggle` → 展开区多选项目 → `ledExpOk`）：
     导出形态 = **每个项目一个工作簿**（3 个工作表：辅材欠款 / 机械欠款 / 特殊费用月报表）；≥2 个项目打 zip。 */
@@ -4870,6 +4899,26 @@ const API = {
   plRematch: id => API.send('POST', `/api/m04/plans/${id}/re-match`, null),
   plForce: (id, remark) =>
     API.send('POST', `/api/m04/plans/${id}/force?remark=${encodeURIComponent(remark || '')}`, null),
+  /* ---- MOD-05 付款流水与欠款（读 4 个端点；写：撤销走 JSON、期初/备注走 PRG 表单端点） ---- */
+  flows: () => API.get('/api/m05/flows?year_month='),
+  debt: () => API.get('/api/m05/debt'),
+  stats: q => API.get('/api/m05/stats?granularity=' + encodeURIComponent(q.granularity || 'week')
+    + '&year=' + (q.year || 0) + '&quarter=' + (q.quarter || 0)),
+  ledger: pid => API.get('/api/m05/ledger?project_id=' + pid),
+  flowRevoke: (id, reason) => API.send('POST',
+    `/api/m05/flows/${id}/revoke?reason=${encodeURIComponent(reason || '')}`, null),
+  /* ⚠️ 期初录入 / 期初删除 / 台账备注 **目前只有 PRG 表单端点**（收 `Form`）⇒ 用表单编码发；
+     它们回 303，我们**不看那页 HTML**，改「重拉数据 ＋ 自己的回执」（同一批落库出口）。 */
+  postForm: async (url, obj) => {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(obj || {}).toString(),
+      redirect: 'follow',
+    });
+    if (!r.ok) throw new Error(`POST ${url} → HTTP ${r.status}`);
+    return true;
+  },
   plForceCancel: id => API.send('POST', `/api/m04/plans/${id}/force-cancel`, null),
   /* ⚠️ `confirmed=true` 只在**用户已在确认弹窗里看过影响范围**之后才传（§4.3.6 的两步） */
   plDelete: ids =>
@@ -4962,6 +5011,88 @@ async function pjAct(fn, okMsg, ms) {
   }
 }
 
+/* ---------- MOD-05 付款流水与欠款（⭐ **判定一律后端**：欠款 / 台账 / 付款统计都由后端算） ----------
+   ⚠️ 原型在**浏览器里**自算这三块（`debts()` / `ledRows()` / `pstData()`）⇒ 接线后**只读后端**；
+      前端保留的只有**筛选 / 排序 / 显示**（D18：判定与落库一律后端，别留第二份口径）。 */
+const M05 = { debt: null, stats: null, ledger: null };      /* 四块数据的缓存（`reloadM05` 填） */
+const M05_GRAN_API = { '周': 'week', '月': 'month' };
+const M05_GRAN_UI = { week: '周', month: '月' };
+/* ⏳ **机械结算源未接线**（= 过程资料机械 6 列，属材料域）⇒ 与后端一致取 **0**；
+   ⛔ 不取原型的演示 `MACH6`（那会让本页的机械数**与后端 KPI 打架**）。接线时只改这一行。 */
+const m05MechSettle = () => 0;
+
+function adaptFlow(x) {
+  return {
+    id: String(x.id), nid: (x.notice_id == null ? '' : String(x.notice_id)),
+    date: x.pay_date || '', amt: numOr0(x.amount), method: x.pay_method || '',
+    remark: x.remark || '', op: x.created_at || '',
+    voided: x.status !== 'effective', reason: x.revoke_reason || '',
+    projKey: x.project_key || '', proj: x.project_display || '', doc: x.doc_no || '',
+  };
+}
+/* 期初行：只喂「按项目看欠款」的柱子（台账行改读后端）⇒ 按原型 `LG_COLS` 的关键字段给 */
+function adaptOpening(x) {
+  return {
+    id: '', proj: x.project_key || x.project_label || '', cat: x.category_label || '',
+    settle: numOr0(x.settle), paid: numOr0(x.paid), cutoff: x.cutoff || '', remark: '',
+  };
+}
+
+/* 一次拉齐四块（台账按**当前选中项目**）—— 换项目 / 换粒度 / 换轴 / 写动作之后都走它 */
+const M05_FETCHED = { gran: '', year: 0, quarter: 0, pj: '' };   /* 上次**成功取到**的参数 */
+/* ⚠️ `pstQq()` 返回的是 `'2026Q3'` 这种**字符串**，而后端 `quarter` 是 int ⇒ **必须解析**
+   （不解析就是 422，整页取数全挂 —— 实测踩到过）。 */
+const m05Params = () => ({
+  granularity: M05_GRAN_API[pst.gran] || 'week',
+  year: Number(pstYear()) || 0,
+  quarter: Number(String(pstQq()).slice(5)) || 0,
+  pj: ledCur(),
+});
+let m05Refetching = false;
+async function reloadM05() {
+  const p = m05Params();
+  const row = p.pj ? pjRowOf(p.pj) : null;
+  const [fl, debt, st, lg] = await Promise.all([
+    API.flows(), API.debt(), API.stats(p),
+    (row && row.id) ? API.ledger(row.id) : Promise.resolve(null),
+  ]);
+  FLs = (fl.rows || []).map(adaptFlow);
+  LGs.splice(0, LGs.length, ...((debt.openings || []).map(adaptOpening)));   /* `const` ⇒ 原地改 */
+  M05.debt = debt; M05.stats = st; M05.ledger = lg;
+  M05_FETCHED.gran = p.granularity; M05_FETCHED.year = p.year;
+  M05_FETCHED.quarter = p.quarter; M05_FETCHED.pj = p.pj;
+  render();
+}
+/* 参数（粒度 / 轴 / 台账项目）变了就**自动补拉** —— 收敛成一个点，
+   ⛔ 不必给每个选择器（`pstGran` / 时间轴 / `ledPjPick`）各挂一个钩子。 */
+async function m05Sync() {
+  if (m05Refetching) return;
+  const p = m05Params();
+  if (p.granularity === M05_FETCHED.gran && p.year === M05_FETCHED.year
+      && p.quarter === M05_FETCHED.quarter && p.pj === M05_FETCHED.pj) return;
+  m05Refetching = true;
+  try { await reloadM05(); } catch (e) { /* 取数失败 ⇒ 交给常驻提示 */ } finally { m05Refetching = false; }
+}
+/* ⭐ 把 `render` 包一层：渲染完顺手对账 m05 的参数（变了就补拉）。
+   ⚠️ 这是**取数钩子**、不是改交互 —— `V.*` 一个切片都没碰（`ui_parity` U1 仍只认那 2 条已登记漂移）。 */
+const _renderProto = render;
+render = function () { _renderProto.apply(this, arguments); m05Sync(); };
+
+/* 写动作外壳（与 `pjAct` / `plAct` 同款：失败**原样显示后端原因**并回滚到后端真实状态） */
+async function m05Act(fn, okMsg, ms) {
+  try {
+    const r = await fn();
+    await reloadM05();
+    toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, ms);
+    return r;
+  } catch (e) {
+    try { await reloadM05(); } catch (_) { }
+    toast(`<b>没能改成</b>：${esc(String((e && e.message) || e))}`, 7000);
+    return null;
+  }
+}
+/* 台账当前项目在**后端**的那一侧（按中文分类名找） */
+const m05Side = sc => { const lg = M05.ledger; return lg ? ((lg.sides || []).find(x => x.label === sc) || null) : null; };
 /* ---------- MOD-04 付款计划：后端语义字段 → 原型字段名（`PL_COLS`） ----------
    ⚠️ 行内可改列的**列名映射**（原型的 `data-f` → 后端列名）—— 只在适配层转一次 */
 const PL_COL_API = { docNo: 'doc_no', date: 'pay_date', method: 'pay_method', remark: 'remark' };
@@ -5025,6 +5156,8 @@ async function boot() {
     PJs = (pj || []).map(adaptProject);
     PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
     PLs = (pl.rows || []).map(adaptPlan);
+    await reloadM05();          /* ⭐ m05 的四块（流水 / 欠款 / 统计 / 台账）—— 内部会 render 一次 */
+    return;                     /* ⛔ 别再 render：`reloadM05` 已经渲染过（避免闪一下空表） */
   } catch (e) {
     BOOT_ERROR = String((e && e.message) || e);
   }

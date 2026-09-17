@@ -90,6 +90,18 @@ def project_label(p: Project | None) -> str:
     return p.disp or p.warehouse_name or p.name_full or f"#{p.id}"
 
 
+def project_key(p: Project | None) -> str:
+    """项目**归并键 = 仓库名**（§2.7.4）；缺失时退化为 `#id`（**不猜**）。
+
+    ⚠️ 本函数与 `mod04_plan/service.py` 的同名函数**当前是两份实现**（本模块早先也已自带
+       `project_label`/`project_index`）⇒ 口径一致但**代码重复**。真正该做的是把它们上提到
+       `app/core/`（一份主人）；已登记为尾巴，本轮**先保持两处行为一致**。
+    """
+    if p is None:
+        return ""
+    return p.warehouse_name or f"#{p.id}"
+
+
 def project_options(s: Session) -> list[dict]:
     """项目选择器候选（**台账两侧共用同一个选择器**，§4.5.4）。"""
     return [
@@ -111,8 +123,12 @@ def _flow_dict(f: PaymentFlow, notices: dict[int, object], projects: dict[int, P
         "doc_no": str(getattr(n, "bill_no", "") or ""),
         "project_id": f.project_id,
         "project_display": project_label(projects.get(f.project_id) if f.project_id else None),
+        # ⚠️ `project_key` = **仓库名**（§2.7.4 的归并键）：前端「付款项目」筛选与付款统计
+        #    联动都按它对齐（展示名只是显示名 ⇒ 拿它当键会**静默失配**）。
+        "project_key": project_key(projects.get(f.project_id) if f.project_id else None),
         "amount": f"{to_money(f.amount):.2f}",
         "pay_method": f.pay_method,
+        "remark": f.remark,
         "status": f.status,
         "status_label": "生效" if f.status == FLOW_EFFECTIVE else "已撤销",
         "revoke_reason": f.revoke_reason,
@@ -187,7 +203,8 @@ def build_debt(s: Session, *, jc_debt=None) -> dict:
     openings = opening_views(s)
     by_cat = dom.debt_by_category(rows, openings, mech_settle_total=Decimal("0"), jc_debt=jc_debt)
     by_project = dom.debt_by_project(rows)
-    names = {pid: project_label(p) for pid, p in project_index(s).items()}
+    index = project_index(s)                       # ⚠️ 取一次（`names` 与 `openings` 共用）
+    names = {pid: project_label(p) for pid, p in index.items()}
 
     items = []
     for key, amount in sorted(by_project.items(), key=lambda kv: str(kv[0])):
@@ -205,6 +222,21 @@ def build_debt(s: Session, *, jc_debt=None) -> dict:
         "total": f"{dom.total_debt(by_cat):.2f}",
         "by_project": items,
         "mech_settle_ready": MECH_SETTLE_SOURCE_READY,
+        # ⭐ 期初占位行**逐条**给前端：前端「按项目看欠款」的柱子要按期初并入（§4.5.2 用户裁定
+        #    「卡片要并」）—— 只给 `by_category` 的聚合数，前端就没法按期初修正柱子 ⇒ **与 KPI 打架**。
+        "openings": [
+            {
+                "category": o.category,
+                "category_label": CATEGORY_LABELS.get(o.category, o.category),
+                "project_id": o.project_id,
+                "project_key": project_key(index.get(int(o.project_id)) if o.project_id else None),
+                "project_label": project_label(index.get(int(o.project_id)) if o.project_id else None),
+                "cutoff": o.cutoff_ym,
+                "settle": f"{o.settle_amount:.2f}",
+                "paid": f"{o.paid_amount:.2f}",
+            }
+            for o in opening_views(s)
+        ],
     }
 
 
@@ -294,13 +326,17 @@ def build_stats(
     buckets = window_buckets(gran, year=year, quarter=quarter, today=today)
 
     rows = notice_debt_views(s)
-    names = {pid: project_label(p) for pid, p in project_index(s).items()}
+    index = project_index(s)                      # ⚠️ 循环外取一次（别在循环里回查 = 伪 N+1）
+    names = {pid: project_label(p) for pid, p in index.items()}
     grid = dom.payment_stats(rows, granularity=gran, buckets=set(buckets))
 
     left = []
     for key in sorted(grid, key=lambda k: str(k)):
         label = "未判定" if key == dom.UNASSIGNED else names.get(int(key), f"#{key}")
         left.append({
+            # ⭐ `key` = **仓库名**（§2.7.4 归并键）——前端「点条目 → 按该项目筛流水」要用它，
+            #    ⛔ 用展示名当键会**静默失配**（两者不是一回事）。
+            "key": "" if key == dom.UNASSIGNED else project_key(index.get(int(key))),
             "label": label,
             "cells": [f"{to_money(grid[key].get(b, 0)):.2f}" for b in buckets],
         })

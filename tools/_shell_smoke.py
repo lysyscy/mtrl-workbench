@@ -119,6 +119,35 @@ def main() -> int:
             if not ok:
                 errors.append("m04 自检未通过：" + what)
 
+        # ---- m05 付款流水与欠款：四张 KPI ＋ 三张表；⭐ **KPI 的数必须来自后端**（可观测证据）
+        page.click('[data-k="m05"]')
+        page.wait_for_timeout(700)
+        m05 = page.evaluate("""() => {
+            const kpis=[...document.querySelectorAll('#view .kpi')].map(x=>x.innerText.replace(/\\s+/g,' '));
+            const num=s=>{ const m=String(s).replace(/[^\\d.-]/g,''); return m?Number(m):null; };
+            return {
+              kpis: kpis.length,
+              kpiTotal: kpis.length?num(kpis[0]):null,
+              debtTotal: M05.debt?Number(M05.debt.total):null,
+              flows: FLs.length, openings: LGs.length,
+              tables: document.querySelectorAll('#view table').length,
+              wiredLabel: document.querySelector('#ttl em').innerText,
+            };
+        }""")
+        print("⑦ m05 =", m05)
+        oks3 = [
+            (m05["kpis"] == 4, "四张 KPI（合计 / 辅材 / 机械 / 集采）"),
+            (m05["tables"] >= 2, "表在线（按项目欠款 ×2 ＋ 台账 ＋ 流水）"),
+            ("已接后端" in m05["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            (m05["kpiTotal"] is not None and m05["debtTotal"] is not None
+             and abs(m05["kpiTotal"] - m05["debtTotal"]) < 0.01,
+             f"⭐ KPI「欠款合计」== 后端 `/api/m05/debt.total`（{m05['kpiTotal']} vs {m05['debtTotal']}）"),
+        ]
+        for ok, what in oks3:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("m05 自检未通过：" + what)
+
     print("\n=== console / page 错误 ===")
     if errors:
         for e in errors[:20]:

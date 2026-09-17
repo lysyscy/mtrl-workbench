@@ -1,7 +1,6 @@
 # 壳一致性核对器 · 已登记漂移（ui_parity_expected.txt）
 # ⚠️ **只准变短** —— 补回原型逻辑 / 删掉多余的改动 ⇒ 删掉对应行（脚本会提示「可消号」）。
 # 格式：`<页> <指纹> [备注]`；指纹 = md5(原型行 + '||' + 壳行)[:8]。
-#
-# ⚠️ 首次启用时（2026-09-17）实测 **0 条漂移** —— 16 个视图的切片与原型**逐行一致**
-#    ⇒ 「原型逻辑一行不改」（`D18` 硬约束）当前成立。本文件保持为空即最好状态。
-# 登记新漂移：先审过报告，再跑 `python tools/ui_parity.py --write-expected`。
+
+m05 4519963a  # 原型:       : N2(machSettleOf(k)｜壳:       : N2(m05MechSettle(k)
+m05 e431740b  # 原型:     else Object.keys(MACH6).forEach(wh=>ks.add(wh)｜壳:     else NO.filter(n=>ntLive(n)&&n.cat==='机械').for
