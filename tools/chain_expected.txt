@@ -36,13 +36,13 @@ B|③ 用全名回查占位行：命中 1 条 ⇒ 扶正改名|用**全名**回�
 B|③ 命中多条 ⇒ 弹窗让用户指认|弹窗让用户指认|backend/app/mod01_projects/recovery.py::plan_recovery|ACC-PRJ-AUTO-001|形态不同
 B|③ 未命中 ⇒ 新建行（真实仓库名）|新建行（真实仓库名）|backend/app/mod01_projects/recovery.py::plan_recovery|ACC-PRJ-AUTO-001|已接
 B|④ **无需「重跑」步骤**（导入过程中即同步扶正 ⇒ 不存在"先落库再回头改"）|导入过程中即同步扶正|backend/app/mod01_projects/recovery.py::recover_unknown_warehouses|ACC-PRJ-AUTO-001|已接
-C|壳已建档 · 命中 1 个小微 ⇒ 归集到它 ＋ 关键词去重追加|关键词去重追加|backend/app/mod01_projects/domain.py::append_keyword_dedup|ACC-PRJ-OWN-001|接线缺
-C|壳已建档 · 命中多个 ⇒ 弹窗让用户选（选中后关键词追加）|弹窗让用户选（选中后关键词追加）|—|缺：需补判据（链路级）|缺
-C|壳已建档 · 未命中 ⇒ **弹窗列表**（在建小微 ＋ 每个右侧必填词 ／ 末行「新小微」）|弹窗列表|—|缺：需补判据（链路级）|缺
-C|壳已建档 · 选「新小微」⇒ 抓仓库信息 → 建小微行 ＋ 录关键词|抓仓库信息 → 建小微行 + 录关键词|—|缺：需补判据（链路级）|缺
-C|壳未建档 ⇒ 先建壳（走链路 A ③）→ 抓仓库 → 录关键词 → 建具体小微行|先建壳（走链路 A 的 ③）|backend/app/mod01_projects/recovery.py::plan_recovery|ACC-PRJ-AUTO-001|接线缺
-C|未命中弹窗的**内容①**：在建的具体小微（每个右侧必填框，内容须出现在单据名中）|目前在建的具体小微（每个右侧必填框，内容必须出现在单据名中）|—|缺：需补判据（链路级）|缺
-C|未命中弹窗的**内容②**：末行「该项目属于新小微」|最后一行「该项目属于新小微」|—|缺：需补判据（链路级）|缺
+C|壳已建档 · 命中 1 个小微 ⇒ 归集到它 ＋ 关键词去重追加|关键词去重追加|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
+C|壳已建档 · 命中多个 ⇒ 弹窗让用户选（选中后关键词追加）|弹窗让用户选（选中后关键词追加）|backend/app/mod03_notice/router.py::unresolved_notices|ACC-PRJ-OWN-001|已接
+C|壳已建档 · 未命中 ⇒ **弹窗列表**（在建小微 ＋ 每个右侧必填词 ／ 末行「新小微」）|弹窗列表|backend/app/mod03_notice/router.py::unresolved_notices|ACC-PRJ-OWN-001|已接
+C|壳已建档 · 选「新小微」⇒ 抓仓库信息 → 建小微行 ＋ 录关键词|抓仓库信息 → 建小微行 + 录关键词|backend/app/mod03_notice/router.py::assign_ownership|ACC-PRJ-OWN-001|形态不同
+C|壳未建档 ⇒ 先建壳（走链路 A ③）→ 抓仓库 → 录关键词 → 建具体小微行|先建壳（走链路 A 的 ③）|backend/app/mod03_notice/router.py::get_fetch_executor|ACC-PRJ-SYNC-001|已接
+C|未命中弹窗的**内容①**：在建的具体小微（每个右侧必填框，内容须出现在单据名中）|目前在建的具体小微（每个右侧必填框，内容必须出现在单据名中）|backend/app/mod01_projects/domain.py::candidates_of|ACC-PRJ-OWN-001|已接
+C|未命中弹窗的**内容②**：末行「该项目属于新小微」|最后一行「该项目属于新小微」|backend/app/web/index.html::openOwnDialog|ACC-PRJ-OWN-001|已接
 # ============================================================
 # ② P1 付款通知书：抓 → 剔除 → 分类 → 归属 → 落库 → 列表可见（真源 = 说明书 §4.7）
 P1|① 触发抓取（手动点击 ⇒ 调 i8 拉通知书 · 不走定时）|① 触发抓取|backend/app/mod03_notice/router.py::notices/fetch|ACC-I8-FETCH-001|已接

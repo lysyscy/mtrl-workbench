@@ -3635,6 +3635,7 @@ const ACT={
     收发结存表 / 库存单据明细表打开弹窗时**默认月份 = 本页「核算年月」当前所选**）。
     界面只选「核算年月」；i8 侧的入参是「单据日期起止」（闭区间），由系统自动换算后传入。
     ⚠️ `fetchDlg` 的 **nt 分支文案一字未改**（既有断言钉着它）；wh / iv 两个分支另写。 */
+ ownAssign:t=>ownAssignSubmit(Number(t.dataset.i), t.dataset.pid),
  fetchNt:()=>{ fetchKind='nt'; return ACT.fetchDlg(); },
  fetchWh:()=>{ fetchKind='wh'; fetchM=fWhYm; return ACT.fetchDlg(); },   /* 默认 = 本页「核算年月」当前所选 */
  fetchIv:()=>{ fetchKind='iv'; fetchM=fIvYm; return ACT.fetchDlg(); },   /* 同上 */
@@ -3661,6 +3662,9 @@ const ACT={
       <div class="tip ok" style="margin:0">抓取会<b>全量刷新该月 · 该项目</b>的源数据；<b>手工值与调整单不被覆盖</b>（§9.5 幂等）。<br>要抓别的月份，改上面的月份即可 —— <b>默认就是本页当前所选的那个月</b>。</div>`,
      footer:foot}); },
  fetchNtOk:()=>{ const k=fetchKind, m=fetchM, from=m+'-01', to=monthEnd(m);
+   /* ⭐ **接线（`TAIL-29`-② ④）**：付款通知书走**真抓**（后端 `/api/m03/notices/fetch`）；
+      `wh` / `iv` 两条（材料域）仍走原型演示逻辑 —— 它们还没接线，别在这里假装成功。 */
+   if(k==='nt') return ntFetchBackend(m);
    const NM={nt:'付款通知书',wh:'收发结存表',iv:'库存单据明细表'}[k]||'付款通知书';
    const API={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
    closeModal();
@@ -4889,6 +4893,22 @@ const API = {
   pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
   pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),
   pjOrd: (id, body) => API.send('PUT', `/api/m01/projects/${id}/ord`, body),
+
+  /* ---- MOD-03 · 抓取 ＋ 链路 C 弹窗（`TAIL-29`-② ④） ---- */
+  /* ⭐ 抓取：**失败也要看回执** —— 「归属未走完」是**可预期的失败**（要拿它开弹窗）
+     ⇒ 这里**不 throw**，把 body 原样返回，由调用方判 `ok`。 */
+  fetchNotices: async year_month => {
+    const r = await fetch('/api/m03/notices/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year_month, allow_kick: true }),
+    });
+    const body = await r.json().catch(() => ({}));
+    return r.ok ? { ok: true, ...body } : { ok: false, ...body };
+  },
+  unresolved: () => API.get('/api/m03/notices/unresolved'),
+  assignOwnership: body => API.post('/api/m03/notices/ownership-assign', body),
+
   /* ---- MOD-04 付款计划（⚠️ 后端这几个端点收 **query 参数**，不是 JSON body ⇒ 照它调用） ---- */
   plans: () => API.get('/api/m04/plans?year_month='),
   plDeleteImpact: ids =>
@@ -5147,6 +5167,94 @@ async function plAct(fn, okMsg, ms) {
 
 /* ---------- 启动：拉真数据 → 渲染；失败**降级成可读提示**（⛔ 不白屏、不静默） ---------- */
 let BOOT_ERROR = '';
+/* =====================================================================
+   ⭐ 链路 C：抓取被拒 ⇒ 「未命中清单」弹窗（`TAIL-29`-② ④）
+   形态照原型 `V.m03` 的 `ownOpen`：候选小微逐行 ＋ 每行关键词必填 ＋ 末行「属于新小微」。
+   ⛔ 判定与落库一律后端（`validate_keyword_in_doc` / `append_keyword_dedup`）；本层只显示与转发。
+   ⭐ 用户裁定 `B`：**不暂存整批数据** —— 弹窗只用「单据名 ＋ 候选小微」，
+     补完词**再抓一次**即自动命中落库。
+   ===================================================================== */
+async function ntFetchBackend(m) {
+  closeModal();
+  toast(`正在抓取 <b>${m}</b> 的付款通知书（会登录 i8：<b>可能顶掉在线用户</b>）…`, 4000);
+  let r;
+  try { r = await API.fetchNotices(m); }
+  catch (e) { return toast(`⚠️ 抓取失败：${esc(String((e && e.message) || e))}`, 8000); }
+  if (r.ok) {
+    await reloadNotices();
+    return toast(`已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，落库 <b>${r.upserted}</b> 条`, 6000);
+  }
+  /* 失败：把后端原因**原样**给用户（后端已写成中文）；属「归属未走完」⇒ 直接开补词弹窗 */
+  toast(`<b>抓取被拒</b>：${esc(r.message || '未知原因')}`, 9000);
+  try { await openOwnDialog(); } catch (e) { /* 打不开弹窗也不影响上面那句原因 */ }
+}
+
+async function openOwnDialog() {
+  const d = await API.unresolved();
+  const items = (d && d.items) || [];
+  if (!items.length) return;
+  const box = items.map((it, i) => {
+    const cands = it.candidates || [];
+    const rows = cands.map(c => `<div style="display:flex;align-items:center;gap:9px;padding:7px 8px;border:1px solid var(--bd);border-radius:7px;margin-bottom:7px">
+      <button class="btn sm pri" style="flex:0 0 auto" data-act="ownAssign" data-i="${i}" data-pid="${c.id}">归集到它</button>
+      <span style="flex:1;min-width:0">${esc(c.disp)} <span class="mut sm">· 仓库名 ${esc(c.warehouse_name || '—')} · 关键词 ${esc((c.keywords || []).join('、') || '—')}</span></span>
+      <input class="inp" style="width:148px;flex:0 0 auto" id="ownKw_${i}_${c.id}" placeholder="关键词">
+    </div>`).join('');
+    const note = it.kind === 'needs_keyword' ? '（单据名未命中该壳下任何小微 ⇒ 选一个并补词即可）'
+      : it.kind === 'needs_choice' ? '（单据名命中该壳下多个小微 ⇒ 选一个并补词）'
+        : it.kind === 'not_archived'
+          ? '⛔ <b>未建档</b>（且不在 i8 常用项目列表）⇒ 请把它<b>加入 i8 常用项目列表</b>，下次抓取会自动建档 —— <b>不要</b>在这里新建小微'
+          : `（${esc(it.kind)}）`;
+    return `<div style="border:1px solid var(--bd2);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div class="sm" style="margin-bottom:6px"><b>${esc(it.project_name)}</b> <span class="mut">${note}</span></div>
+      ${kvBlock([['单据编码', `<span class="fc">${esc(it.bill_no || '—')}</span>`], ['单据名称', `<span class="fc">${esc(it.doc_name || '—')}</span>`]])}
+      <p style="font-size:12px;margin:6px 0 8px">选已有小微时，<b>须填一个出现在上面单据名里的关键词</b>（选中后<b>去重追加</b>到该小微名下，供下次自动命中）；填不出说明不是它。</p>
+      ${rows || '<div class="tip wn" style="margin:0 0 9px">该壳下<b>暂无具体小微</b> → 只能走下面的「新小微」。</div>'}
+      <div style="padding:9px;border:1px dashed var(--bd);border-radius:7px;margin-top:8px">
+        <div class="mut sm" style="margin-bottom:7px">属于<b>新小微</b> → 录「仓库名 ＋ 关键词」建档</div>
+        <div class="fld"><label>新小微的仓库名</label><input class="inp" id="ownNewName_${i}" placeholder="如：河南南阳热电项目仓库"></div>
+        <div class="fld" style="margin-top:6px"><label>识别关键词（须出现在单据名里）</label><input class="inp" id="ownNewKw_${i}" placeholder="如：南阳"></div>
+        <div style="margin-top:8px"><button class="btn" data-act="ownAssign" data-i="${i}" data-pid="__new">建档并归集</button></div>
+      </div>
+    </div>`;
+  }).join('');
+  modal({
+    title: `待指定归属 · ${items.length} 条`,
+    wide: true,
+    body: `<div class="tip" style="margin-bottom:10px"><b>链路 C</b>：付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并落库。</div>${box}`,
+    footer: `<button class="btn" data-act="closeModal">关闭</button>`,
+  });
+}
+
+/* 提交：补词到小微（后端校验「词须出现在单据名里」＋ 去重追加；本层只转发） */
+async function ownAssignSubmit(i, pid) {
+  const d = await API.unresolved();
+  const it = ((d && d.items) || [])[i];
+  if (!it) return toast('清单已过期，请重新抓取');   /* ⚠️ 清单按**当前档案**现算 ⇒ 索引可能已变 */
+  let body;
+  if (pid === '__new') {
+    body = {
+      doc_name: it.doc_name,
+      keyword: (($('#ownNewKw_' + i) || {}).value || ''),
+      shell_id: it.shell_id,
+      new_small_name: (($('#ownNewName_' + i) || {}).value || ''),
+    };
+  } else {
+    body = {
+      doc_name: it.doc_name,
+      keyword: (($('#ownKw_' + i + '_' + pid) || {}).value || ''),
+      small_id: Number(pid),
+    };
+  }
+  let r;
+  try { r = await API.assignOwnership(body); }
+  catch (e) { return toast(`⚠️ 提交失败：${esc(String((e && e.message) || e))}`, 8000); }
+  if (!r.ok) return toast(`<b>没补上</b>：${esc(r.message)}`, 8000);
+  await reloadProjects();
+  closeModal();
+  toast(esc(r.message), 8000);
+}
+
 async function boot() {
   try {
     const [nt, pj, tr, pl] = await Promise.all(

@@ -209,6 +209,25 @@ def needs_archive(decisions: list[OwnershipDecision]) -> bool:
     return any(d.kind == "not_archived" for d in decisions)
 
 
+def candidates_of(shell_id: int, projects: list[Project]) -> list[dict]:
+    """**壳下的候选具体小微**（链路 C 弹窗的数据源，§2.5.1）。
+
+    ⚠️ **含已归档的小微**（001-07：壳归档后仍可能有新单据，只匹配在建会阻塞导入）。
+    ⚠️ 键一律给 **`id`**（写操作按 id 定位，⛔ 不用全名反查 —— §9.8-6）；`disp` 只用于显示。
+    """
+    return [
+        {
+            "id": p.id,
+            "disp": p.disp or p.warehouse_name or p.name_full or f"#{p.id}",
+            "warehouse_name": p.warehouse_name or "",
+            "keywords": list(p.match_keywords or []),
+            "status": p.status,
+        }
+        for p in projects
+        if p.parent_shell_id == shell_id
+    ]
+
+
 # ============================================================ §2.7.2 归档不变式
 
 

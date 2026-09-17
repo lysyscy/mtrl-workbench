@@ -56,6 +56,58 @@ class FetchResponse(BaseModel):
     upserted: int
 
 
+# --------------------------------------------------------------- 链路 C 弹窗（`TAIL-29`-② ④）
+
+
+class SmallCandidateOut(BaseModel):
+    """候选具体小微（弹窗逐行显示）。⚠️ 写操作一律按 **`id`** 定位，⛔ 不用全名反查。"""
+
+    id: int
+    disp: str = ""
+    warehouse_name: str = ""
+    keywords: list[str] = []
+    status: str = ""
+
+
+class UnresolvedItemOut(BaseModel):
+    """一条「归属未走完」的记录 —— 链路口径：**弹窗的全部输入**。"""
+
+    project_name: str = ""
+    doc_name: str = ""
+    bill_no: str = ""
+    kind: str = ""
+    shell_id: int | None = None
+    candidates: list[SmallCandidateOut] = []
+
+
+class UnresolvedResponse(BaseModel):
+    """最近一次「归属未走完」的抓取 ⇒ **未命中清单**。
+
+    ⛔ 这里**不暂存整批数据**（用户 2026-09-18 裁定 `B`：补完关键词**再抓一次**）。
+    """
+
+    items: list[UnresolvedItemOut] = []
+
+
+class AssignRequest(BaseModel):
+    """补词 / 选小微（链路 C 弹窗提交，形态与原型 `ownOk` 一致）。
+
+    - **选已有小微** ⇒ `small_id` ＋ `keyword`（关键词**必须出现在单据名里**）
+    - **属于新小微** ⇒ `shell_id` ＋ `new_small_name` ＋ `keyword`
+    """
+
+    doc_name: str = ""
+    keyword: str = ""
+    small_id: int | None = None
+    shell_id: int | None = None
+    new_small_name: str = ""
+
+
+class AssignResponse(BaseModel):
+    ok: bool = False
+    message: str = ""
+
+
 class PrinterSettingRequest(BaseModel):
     printer_ipp_url: str = Field(..., description="打印机地址，形如 ipp://192.168.5.248")
 

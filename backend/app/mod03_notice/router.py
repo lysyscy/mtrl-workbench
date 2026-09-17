@@ -22,12 +22,17 @@ from app.core.config import get_settings
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.logging import get_logger
+from app.mod01_projects import repository as proj_repo
 from app.mod01_projects.domain import (
     OwnershipDecision,
+    append_keyword_dedup,
+    candidates_of,
     ensure_batch_settled,
     needs_archive,
     resolve_ownership,
+    validate_keyword_in_doc,
 )
+from app.mod01_projects.models import TYPE_SMALL
 from app.mod01_projects.repository import all_projects
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02（2026-09-15 归位）
@@ -39,12 +44,15 @@ from app.mod03_notice.repository import (
     finish_run_record,
     get_notice_by_ph_id,
     get_notices_by_ids,
+    latest_unresolved,
     list_notices,
     list_stat_traces,
     notice_as_dict,
     upsert_notice,
 )
 from app.mod03_notice.schemas import (
+    AssignRequest,
+    AssignResponse,
     BatchRequest,
     BatchResponse,
     FetchRequest,
@@ -52,6 +60,7 @@ from app.mod03_notice.schemas import (
     ItemOutcomeOut,
     PrinterSettingRequest,
     PrinterSettingResponse,
+    UnresolvedResponse,
 )
 from app.mod03_notice.service import MODE_PRINT, BatchResult, run_batch
 from app.mod03_notice.print.design import DesignFetcher
@@ -231,7 +240,20 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
                     detail={"reason": "ownership_unsettled",
                             "unsettled": len(unsettled),
                             "excluded": n_excluded,
-                            "projects": [str(r.get("project_name") or "") for r, _ in unsettled]},
+                            "projects": [str(r.get("project_name") or "") for r, _ in unsettled],
+                            # ⭐ **结构化「未命中清单」**（`TAIL-29`-② 弹窗的**唯一数据源**）：
+                            #    只记「判定与显示需要的字段」—— ⛔ **不暂存整批数据**
+                            #    （用户裁定 `B`：补完关键词**再抓一次**，那时自动命中并落库）。
+                            "unresolved": [
+                                {
+                                    "project_name": str(r.get("project_name") or ""),
+                                    "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
+                                    "bill_no": str(r.get("bill_no") or ""),
+                                    "kind": d.kind,
+                                    "shell_id": d.shell_id,
+                                }
+                                for r, d in unsettled
+                            ]},
                     error_message=message,
                 )
             raise MustReportError(message) from exc
@@ -293,6 +315,92 @@ def fetch_notices(
     """
     fetched, upserted = executor(req.year_month, req.allow_kick)
     return FetchResponse(year_month=req.year_month, fetched=fetched, upserted=upserted)
+
+
+@router.get("/notices/unresolved", response_model=UnresolvedResponse)
+def unresolved_notices() -> UnresolvedResponse:
+    """最近一次「归属未走完」的抓取 ⇒ **未命中清单 ＋ 该壳下的候选小微**（`TAIL-29`-② 弹窗的数据源）。
+
+    ⭐ **弹窗的唯一数据源** —— ⛔ 不暂存整批抓取数据（用户 2026-09-18 裁定 `B`：
+       补完关键词**再抓一次**，那时 `resolve_ownership` 会自动命中并落库，库里不留半成品）。
+    ⚠️ 候选小微按**当前档案现算**：用户可能刚建过小微 / 刚补过词 ⇒ 清单必须新鲜。
+    """
+    with session_scope() as session:
+        items = latest_unresolved(session)
+        projects = all_projects(session)
+        out = [
+            {
+                **it,
+                "candidates": (
+                    candidates_of(int(it["shell_id"]), projects) if it.get("shell_id") else []
+                ),
+            }
+            for it in items
+        ]
+    return UnresolvedResponse(items=out)
+
+
+@router.post("/notices/ownership-assign", response_model=AssignResponse)
+def assign_ownership(req: AssignRequest) -> AssignResponse:
+    """把「关键词」补到某个具体小微名下（**去重追加**）⇒ 用户**再抓一次**即自动命中（链路 C）。
+
+    口径（§2.5.1 链路 C · 原型 `ownOk` 三态）：
+    - ⛔ 关键词**必须出现在单据名里**（`validate_keyword_in_doc`）—— **填不出说明不是它**（不猜）
+    - **选已有小微** ⇒ `append_keyword_dedup` 追加（**只动 `match_keywords`**，别的字段一律不碰）
+    - **属于新小微** ⇒ 壳 ＋ 仓库名 ＋ 关键词；⚠️ **已归档的壳下不许新建**
+      （新小微必然「在建」⇒ 会当场破坏「壳归档 ⇔ 小微全归档」；该判定由 `create_project` 内部出口负责，此处只把它翻译成中文回执）
+    - ⛔ 本端点**不写任何通知书数据** —— 本批已被拒、库里没有它的行（§2.7.4）
+
+    ⚠️ 本动作**只补档案**，补完必须**再抓一次**（回执里讲清这一点，别让用户以为已经落库）。
+    """
+    try:
+        keyword = validate_keyword_in_doc(req.keyword, req.doc_name)
+    except MustReportError as exc:
+        return AssignResponse(ok=False, message=str(exc))
+
+    with session_scope() as session:
+        projects = all_projects(session)
+
+        if req.small_id:
+            small = next((p for p in projects if p.id == req.small_id), None)
+            if small is None:
+                return AssignResponse(ok=False, message=f"具体小微 {req.small_id} 不存在")
+            proj_repo.set_keywords(
+                session, small, append_keyword_dedup(small.match_keywords, keyword)
+            )
+            label = small.disp or small.warehouse_name or small.name_full
+            return AssignResponse(
+                ok=True,
+                message=(
+                    f"关键词「{keyword}」已去重追加到 <b>{label}</b>。"
+                    "请**再抓一次** —— 这次会自动命中并落库。"
+                ),
+            )
+
+        name = (req.new_small_name or "").strip()
+        if not name:
+            return AssignResponse(ok=False, message="新建小微需要填「仓库名」")
+        shell = next((p for p in projects if p.id == req.shell_id), None)
+        if shell is None:
+            return AssignResponse(ok=False, message="壳未建档 ⇒ 必须先有壳后有微（链路 A）")
+        try:
+            proj_repo.create_project(
+                session,
+                project_type=TYPE_SMALL,
+                name_full=shell.name_full,
+                warehouse_name=name,
+                parent_shell_id=shell.id,
+                match_keywords=[keyword],
+            )
+        except MustReportError as exc:      # 已归档的壳下不许新建 —— 原样把原因给用户
+            return AssignResponse(ok=False, message=str(exc))
+        return AssignResponse(
+            ok=True,
+            message=(
+                f"已建档并归集：<b>{name}</b>（关键词「{keyword}」）。"
+                "请**再抓一次** —— 这次会自动命中并落库。"
+            ),
+        )
 
 
 @router.post("/batch", response_model=BatchResponse)

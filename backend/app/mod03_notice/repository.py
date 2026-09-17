@@ -13,6 +13,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.mod02_i8.models import RunRecord
 from app.mod02_i8.repository import (  # noqa: F401  ← 运行记录仓储归 MOD-02，此处再导出
     create_run_record,
     finish_run_record,
@@ -23,6 +24,29 @@ from app.mod03_notice.models import NoticeStatLog, PaymentNotice
 
 def get_notice(session: Session, notice_id: int) -> PaymentNotice | None:
     return session.get(PaymentNotice, notice_id)
+
+
+def latest_unresolved(session: Session, *, lookback: int = 20) -> list[dict]:
+    """最近一次「**归属未走完**」的抓取记录里带的**未命中清单**（`TAIL-29`-② 弹窗的数据源）。
+
+    ⚠️ 只认 `reason == "ownership_unsettled"` 的记录 —— 别的失败（例如 i8 不可用）**没有清单**。
+    ⚠️ 记录里存的是**当时的判定**；调用方必须拿它对照**当前档案现算**候选小微
+       （用户可能刚建过小微、刚补过词 ⇒ 清单要新鲜）。
+    ⛔ 这里**不涉及任何暂存**（用户裁定 `B`：补完词**再抓一次**，不在库里留半成品）。
+    """
+    recs = session.execute(
+        select(RunRecord)
+        .where(RunRecord.run_type == "fetch")
+        .order_by(RunRecord.id.desc())
+        .limit(lookback)
+    ).scalars().all()
+    for r in recs:
+        detail = r.detail or {}
+        if isinstance(detail, dict) and detail.get("reason") == "ownership_unsettled":
+            items = detail.get("unresolved") or []
+            if items:
+                return list(items)
+    return []
 
 
 def get_notice_by_ph_id(session: Session, ph_id: str) -> PaymentNotice | None:
