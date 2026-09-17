@@ -50,6 +50,31 @@ def all_projects(session: Session) -> list[Project]:
     return list(session.execute(select(Project)).scalars().all())
 
 
+def export_phids(session: Session) -> str:
+    """导出用的项目 id 串（i8 报表参数，技术栈 §9.8：`xmid` / `pc`）—— **保序去重**。
+
+    ⭐ **唯一出口**：`MOD-07`（收发结存）/ `MOD-08`（库存单据）两条抓取链路共用这一份
+    （此前两边各写一遍，且都漏了去重）。
+
+    ⚠️ **必须去重**：`phid` 是 **i8 侧项目编号**，而**具体小微是壳下的仓、与壳共享同一个 `phid`**
+    （`ACC-PRJ-AUTO-001/001-03` 建档就是这么建的）⇒ 不去重会把同一个项目**导出两遍**。
+    真机实测（2026-09-17）：自动建了兰考那条小微后，13 条档案只剩 **12 个唯一 phid**。
+
+    ⚠️ 空 ⇒ **报错不臆造**（没有项目就没法按项目导出）。
+    """
+    seen: list[str] = []
+    for p in all_projects(session):
+        phid = str(getattr(p, "phid", "") or "").strip()
+        if phid and phid not in seen:
+            seen.append(phid)
+    if not seen:
+        raise MustReportError(
+            "本地项目档案里没有可用 phid（i8 项目编号）⇒ 无法按项目导出。"
+            "请先「同步常用项目列表」（API-06）建档。"
+        )
+    return ",".join(seen)
+
+
 def get_project(session: Session, project_id: int) -> Project | None:
     return session.get(Project, project_id)
 

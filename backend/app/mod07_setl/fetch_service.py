@@ -23,6 +23,7 @@ from app.mod01_projects.recovery import (
     recover_unknown_warehouses,
     unknown_warehouses as shared_unknown_warehouses,
 )
+from app.mod01_projects.repository import export_phids
 from app.mod02_i8 import fetch_task, report_export
 from app.mod02_i8.client import I8Client, serialize_fetch
 from app.mod02_i8.repository import save_run_record
@@ -43,16 +44,12 @@ def build_plan(year_month: str) -> dict:
 
 
 def project_ids(s: Session) -> str:
-    """导出用的项目 id 串（**由本地项目档案提供**，§9.8）—— 空则报错，不臆造。"""
-    from app.mod01_projects.repository import all_projects
+    """导出用的项目 id 串 —— 实体在 `MOD-01`（`repository.export_phids`：**保序去重**），此处只是**薄名**。
 
-    ids = [str(p.phid) for p in all_projects(s) if str(getattr(p, "phid", "") or "").strip()]
-    if not ids:
-        raise MustReportError(
-            "本地项目档案里没有可用 phid（i8 项目编号）⇒ 无法按项目导出。"
-            "请先「同步常用项目列表」（API-06）建档。"
-        )
-    return ",".join(ids)
+    ⚠️ 别在本模块再写一份拼接：壳与其下的**具体小微**共享同一个 `phid`，不去重就会把项目导出两遍
+       （`ACC-PRJ-AUTO-001/001-03`；真机实测 2026-09-17）。
+    """
+    return export_phids(s)
 
 
 def unknown_warehouses(s: Session, rows: list[dict]) -> list[str]:
