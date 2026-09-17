@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.money import to_money
+from app.core.projects import project_index, project_key, project_label
 from app.mod01_projects.models import Project
 from app.mod05_flow import domain as dom
 from app.mod05_flow import repository as repo
@@ -78,28 +79,6 @@ def opening_views(s: Session, project_id: int | None = None) -> list[OpeningView
         )
         for o in repo.list_openings(s, project_id=project_id)
     ]
-
-
-def project_index(s: Session) -> dict[int, Project]:
-    return {p.id: p for p in s.execute(select(Project)).scalars().all()}
-
-
-def project_label(p: Project | None) -> str:
-    if p is None:
-        return ""
-    return p.disp or p.warehouse_name or p.name_full or f"#{p.id}"
-
-
-def project_key(p: Project | None) -> str:
-    """项目**归并键 = 仓库名**（§2.7.4）；缺失时退化为 `#id`（**不猜**）。
-
-    ⚠️ 本函数与 `mod04_plan/service.py` 的同名函数**当前是两份实现**（本模块早先也已自带
-       `project_label`/`project_index`）⇒ 口径一致但**代码重复**。真正该做的是把它们上提到
-       `app/core/`（一份主人）；已登记为尾巴，本轮**先保持两处行为一致**。
-    """
-    if p is None:
-        return ""
-    return p.warehouse_name or f"#{p.id}"
 
 
 def project_options(s: Session) -> list[dict]:

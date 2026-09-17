@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.money import to_money
+from app.core.projects import project_index, project_key, project_label
 from app.mod01_projects.models import Project
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.page import sort_rows
@@ -62,23 +63,6 @@ def notice_amounts(s: Session) -> dict[str, NoticeAmounts]:
             paid=flow_domain.effective_total(grouped.get(n.id, [])),
         )
     return out
-
-
-def project_index(s: Session) -> dict[int, Project]:
-    return {p.id: p for p in s.execute(select(Project)).scalars().all()}
-
-
-def project_key(p: Project | None) -> str:
-    """项目归并键 = **仓库名**（§2.7.4）；缺失时退化为 `#id`（**不猜**）。"""
-    if p is None:
-        return ""
-    return p.warehouse_name or f"#{p.id}"
-
-
-def project_label(p: Project | None) -> str:
-    if p is None:
-        return ""
-    return p.disp or p.warehouse_name or p.name_full or f"#{p.id}"
 
 
 def row_to_dict(r, projects: dict[int, Project], results: dict[int, str], notices: dict[str, NoticeAmounts]) -> dict:
