@@ -85,17 +85,18 @@ def test_写动作不許用本地赋值冒充落库():
 
 
 @acc()
-def test_机械结算源未接线时必须取零而不是演示数据():
-    """⏳ 机械结算源 = 过程资料机械 6 列（属材料域）⇒ 与后端一致取 **0**。
+def test_机械结算源已接线_读真源():
+    """⭐ **本轮改动**（`TAIL-27` 第 6 页 · `MOD-06` 机械源接线）：机械结算源 = 过程资料机械 6 列，
+    现已接后端（`/api/m06/mech` ⇒ 壳里 `MACH6`）⇒ `V.m05` 的机械结算项**恢复原型写法**
+    `machSettleOf(k)`，与原型**逐字一致**（那条 `ui_parity` 登记漂移已消号）。
 
-    ⛔ 取原型的演示 `MACH6` 会让本页机械数与后端 KPI 打架（真假混用）。接线时只改这一行。
+    ⚠️ 本条断言**原先钉的是「未接线 ⇒ 取 0」的临时态**（那时取演示 `MACH6` 会让本页机械数
+       与后端 KPI 打架）—— 接线完成后**按事实反转**：必须读真源，且取零出口必须消失。
     """
-    assert "const m05MechSettle = () => 0;" in SHELL
-    assert "N2(m05MechSettle(k)" in SHELL, "`V.m05` 的机械结算项没换成取零出口"
+    assert "m05MechSettle" not in SHELL, "取零出口 `m05MechSettle` 还在（临时态没清）"
+    assert "N2(machSettleOf(k)" in SHELL, "`V.m05` 的机械结算项没接真源"
     # ⚠️ 不要用「从 `V.m05=` 扫到 `V.m06=`」这种切片 —— 中间夹着 MOD-06 的**顶层助手函数**
-    #    （本文件第一次就是这么切歪的）。**钉具体串**更准：
-    assert "machSettleOf(k)" not in SHELL, "`V.m05` 的机械结算项还在读演示结算"
-    assert "Object.keys(MACH6).forEach" not in SHELL, "机械柱子的候选还在读演示 `MACH6`（会出现幻影项目）"
+    #    （本文件第一次就是这么切歪的）。**钉具体串**更准。
 
 
 @acc()

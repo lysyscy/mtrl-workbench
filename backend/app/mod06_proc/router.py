@@ -229,4 +229,36 @@ def import_rollback(batch: str = Form(...), pj: str = Form("")):
             data, message=f"回滚失败：{type(exc).__name__}: {exc}", kind="err"))
 
 
+# ============================================================ JSON API（前端壳：原型直接接数据）
+
+
+@router.get("/api/m06/mech")
+def api_mech() -> dict:
+    """机械 6 列手录值（**全量**）→ 按「仓库名 → 核算月 → [6 列]」聚合。
+
+    ⭐ **出参形状刻意与原型 `MACH6` 一致** ⇒ 壳里那十几处引用（过程资料 17 列的机械 6 列 /
+    活动大表 / 机械结算 / 台账项目候选）**一行不用改**，只换数据来源。
+
+    ⚠️ 机械费是**旁路载体**（`proc_mech_manual`）：重抓 i8 / 重导历史**都不覆盖它**（§5.2.5 ③）。
+    ⭐ 本表是 **`m05` 机械欠款的结算源** —— 接上它，`m05` 的「机械欠款」才会从 0 变成真数。
+    """
+    with session_scope() as s:
+        rows = repo.load_mech(s)
+
+    out: dict[str, dict[str, list[float]]] = {}
+    for r in rows:
+        wh = str(r.get("warehouse") or "").strip()
+        ym = str(r.get("ym") or "").strip()
+        if not wh or not ym:
+            continue                      # 键不全的行落不到任何项目/月份上（真库里不会有）
+        vals = []
+        for i in range(len(D.MECH_COLUMNS)):
+            try:
+                vals.append(round(float(r.get(f"mech_{i}") or 0), 2))
+            except (TypeError, ValueError):
+                vals.append(0.0)
+        out.setdefault(wh, {})[ym] = vals
+    return {"mech": out, "count": len(rows), "columns": list(D.MECH_COLUMNS)}
+
+
 __all__ = ["router"]

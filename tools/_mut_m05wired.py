@@ -38,16 +38,10 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
         "test_写动作不許用本地赋值冒充落库",
     ),
     (
-        "M4 机械结算项又读回演示结算函数",
-        ": N2(m05MechSettle(k)",
+        "M4 机械结算项**又退回取零出口**（接线后必须读真源）",
         ": N2(machSettleOf(k)",
-        "test_机械结算源未接线时必须取零而不是演示数据",
-    ),
-    (
-        "M5 机械柱子候选又读演示 MACH6",
-        "    else NO.filter(n=>ntLive(n)&&n.cat==='机械').forEach(n=>ks.add(ntProjKey(n)));",
-        "    else Object.keys(MACH6).forEach(wh=>ks.add(wh));",
-        "test_机械结算源未接线时必须取零而不是演示数据",
+        ": N2(m05MechSettle(k)",
+        "test_机械结算源已接线_读真源",
     ),
 ]
 

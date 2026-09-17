@@ -148,6 +148,61 @@ def main() -> int:
             if not ok:
                 errors.append("m05 自检未通过：" + what)
 
+        # ---- m08 库存单据与调整单：⭐ **全量行数必须等于后端**（可观测证据；表内渲染随筛选走）
+        page.click('[data-k="m08"]')
+        page.wait_for_timeout(700)
+        m08 = page.evaluate("""() => {
+            const pill=(document.querySelector('#view .pill')||{}).innerText||'';
+            const m=String(pill).match(/(\\d+)\\s*行/);
+            return {
+              ivs: IVs.length, adjs: ADs.length,
+              pill: pill.replace(/\\s+/g,' ').slice(0, 90),
+              listed: m ? Number(m[1]) : -1,       /* 筛选条报出的条数 */
+              rows: document.querySelectorAll('#view tbody tr').length,
+              tables: document.querySelectorAll('#view table').length,
+              wiredLabel: document.querySelector('#ttl em').innerText,
+              firstDoc: (IVs[0]||{}).docNo||'',
+            };
+        }""")
+        print("⑧ m08 =", m08)
+        oks4 = [
+            (m08["tables"] >= 1, "表在线（单据明细总表）"),
+            ("已接后端" in m08["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            (m08["ivs"] > 0, f"库存单据**全量到手**（{m08['ivs']} 行 —— 后端真数据，不是演示数组）"),
+            (m08["listed"] >= 0 and m08["rows"] == m08["listed"] + 1,
+             f"表内渲染 = 筛选条报出的条数 ＋ 合计行（{m08['rows']} = {m08['listed']} ＋ 1）"),
+        ]
+        for ok, what in oks4:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("m08 自检未通过：" + what)
+
+        # ---- m06 过程资料：机械源已接后端 ⇒ ⭐ **`procPj` 必须有值**（证明「加载时求值」的坑已修）
+        page.click('[data-k="m06"]')
+        page.wait_for_timeout(700)
+        m06 = page.evaluate("""() => ({
+            mach6Wh: Object.keys(MACH6).length,
+            ivs: IVs.length,
+            procPj: (typeof procPj === 'string') ? procPj : String(procPj),
+            pjCands: (typeof PROC_PJS === 'object' && PROC_PJS) ? PROC_PJS.length : -1,
+            tabs: document.querySelectorAll('#view .tb2').length,
+            tables: document.querySelectorAll('#view table').length,
+            wiredLabel: document.querySelector('#ttl em').innerText,
+        })""")
+        print("⑨ m06 =", m06)
+        oks5 = [
+            (m06["tables"] >= 1 and m06["tabs"] == 3, "三张表签（表① / 表② / 差异表）＋ 表在线"),
+            ("已接后端" in m06["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            (m06["ivs"] > 0, f"材料侧取数已通（库存单据 {m06['ivs']} 行）"),
+            (bool(m06["procPj"]) and m06["pjCands"] > 0,
+             f"⭐ 项目候选已落定（procPj={m06['procPj'][:18]!r} · 候选 {m06['pjCands']} 个）"
+             " —— 若仍是「加载时求值」，这里会是空的"),
+        ]
+        for ok, what in oks5:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("m06 自检未通过：" + what)
+
     print("\n=== console / page 错误 ===")
     if errors:
         for e in errors[:20]:

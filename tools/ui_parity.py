@@ -144,7 +144,7 @@ def main() -> int:
 
     # ── U2b · **已接线的页，它的演示数组必须已删**（"接线即清"，机器看管）
     #     ⚠️ 只查 `WIRED` 里的页：未接线的页**正需要**演示数据（否则页面空着）。
-    DEMO_BY_PAGE = {"m03": "NT", "m01": "PJ", "m04": "PL", "m05": "LG"}
+    DEMO_BY_PAGE = {"m03": "NT", "m01": "PJ", "m04": "PL", "m05": "LG", "m06": "MACH6", "m08": "IV"}
     _mw = WIRED_RE.search(shell_text)
     _wired_now = re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", _mw.group(1)) if _mw else []
     for _page in _wired_now:
