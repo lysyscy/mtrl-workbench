@@ -287,9 +287,9 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
       `V.m12` 差异登记 · `V.m11` 集采台账 · `V.m13` / `V.m14` 跨域能力与规则配置 · `V.m15` 用户管理
    ── ③ 动作与事件：`18. 交互处理器`（`const ACT=` —— 全部交互动作都在这）· `事件委托`（click / change→`CHG` /
       keydown · 点面板外收起）· 文件最末的「启动」区块（搜 `render()` 的首次调用）
-   ── ④ 演示数据（都在文件前半段）：`const JC =` 集采合同 · `const BIGVAL` 大表手填 ·
-      `const AWF` 特殊费用手填
-      ⚠️ **付款通知书 / 项目档案 / 付款流水 / 付款计划 / 库存单据（含调整单）的演示数据已删除**
+   ── ④ 演示数据（都在文件前半段）：`const JC =` 集采合同 · `const BIGVAL` 大表手填
+      ⚠️ **付款通知书 / 项目档案 / 付款流水 / 付款计划 / 库存单据（含调整单）/ 收发结存（含活动大表）/
+      特殊费用手填（`AWF`）的演示数据已删除**
       —— 改由 `boot()` 或各自的 `reload*()` 从后端 API 取，见文件末尾「后端适配层」；
       **哪些页已接线看 `WIRED`**（未接线的页在侧栏与顶栏标「原型态」）。
    ── ⑤ 「改一处要顺手同步」的（漏了会**静默失效**、不报错）：`const CHG=`（表单类动作漏登记 ⇒ change 被丢弃）·
@@ -505,27 +505,30 @@ let BIGVAL = {};   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/big` �
    （演示块 3 个月已删；⚠️ **全量月份**都要填 —— 「上次值带入」`OPEN-05` 要向更早月份取最近一次录入值）。 */
 
 /* ---------- 特殊费用月报表（§5.5，1 自动项 + N 手填项、可增项、项名可改） MOD-09 ----------
-/* ⭐ 2026-09-13（裁定⑤·甲）**按月存**；**同日再裁定（本批）加一层「项目」** ⇒
-   `AWF[核算年月][项目键] = [[项名, 金额], …]`，**项目键 = 仓库名**（§2.7.4 全站唯一键）。
-   ⚠️ 「未录」= **该键不存在**（不是空数组）；本页**只开放「月」一种模式**（与「抓取 / 导入」同款）。
-   ⭐ **不带入**：未录的 (月, 项目) 手填区为**空**（只有自动项）。 */
-let AWF = {
-  '2026-06': { '华能德州热电联产项目仓库': [['油卡使用',74400.00],['运费',39200.00],['临建',132000.00],['其他',9800.00]] },
-  '2026-07': { '华能德州热电联产项目仓库': [['油卡使用',80100.00],['运费',41500.00],['临建',144000.00],['其他',11600.00]] },
-  '2026-08': { '华能德州热电联产项目仓库': [['油卡使用',86200.00],['运费',43800.00],['临建',156000.00],['其他',12400.00]] }
-};
-let awfYm = bjMonth(-1);                       /* 默认 = 北京时间上月（§9.2） */
-/* ⚠️ 「项目」**单选**的当前值 —— 默认值**必须在候选出口定义之后**再赋（`const` 有 TDZ，
-   在这里直接调 `ntPjList()` 会 ReferenceError）；赋值点在 `ntPjList` 定义之后。 */
+   ⭐ **已接后端**（`TAIL-27`）：本页数据**全部来自 `/api/m09/fee`**（由 `reloadM09()` 填）——
+      演示容器 `AWF[核算年月][项目键] = [[项名, 金额], …]`（含 3 个月演示值）**已删**。
+   ⚠️ **对外的形状不变**：`awfList()` 仍返回 `[[项名, 金额], …]`
+      （原型切片按 `r[0]` / `r[1].toFixed(2)` 取用）⇒ **`V.m09` 切片一行不用改**，转形只发生在这一层。
+   ⚠️ 金额后端出**字符串** ⇒ 这里**一律过 `N0()`**：不然 `r[1].toFixed` 直接 TypeError **整页崩**。
+   ⭐ **判定一律后端**：自动项取数 / 合计 / 金额合法性 / 项名改法，前端**不再自算**（`awfTotal` 直接读后端回包）。
+   ⭐ **「项目」候选与默认项目 `AWF_PJS` / `awfPj` 也只由 `reloadM09()` 落定** ——
+      候选与写路径**同源**（后端 `build_candidates` ⇒ 键 = 仓库名 ⇒ `project_by_key` 认得到）：**选得到就写得了**。
+      ⚠️ 原先候选读 `pjKeysOfRows(ntPjList())`（档案表全部）——"能显示"但不保证后端认；
+      ⚠️ 原先默认项目在**加载时**求值（`(pjSort(ntPjList())[0]||{name:''}).name`）—— `PJs` 异步填充 ⇒
+        取数回来时它早已定死成空（**静默失去默认项目**，不报错）⇒ 改由后端回包的 `project` 落定
+        （后端 `service._resolve` 已把"没给 / 给了无效值"归一成候选第一个；候选为空时才是空串）。 */
+let awfYm = bjMonth(-1);                       /* 默认 = 北京时间上月（§9.2，与后端 `domain.default_ym` 同口径） */
 let awfPj = '', awfPjOpen = false;
-const awfMonth = () => AWF[awfYm] || (AWF[awfYm] = {});        /* 该核算月那一层（必要时建） */
-const awfList = () => awfMonth()[awfPj] || [];                 /* 该月 · 该项目的手填项；**未录 = 空列表** */
-const awfMut = () => awfMonth()[awfPj] || (awfMonth()[awfPj] = []);   /* 写路径专用：拿"真实那个数组"（必要时建） */
-/* 特殊费用月报表的**取数唯一出口**（页面渲染与增删改动作的反馈**共用同一份**）：
-   `awfAuto(ym,pj)` = 该核算月 **· 该项目**的自动项（库存单据 `CBS-安文费` 的**出库**金额，按 `iv.wh` 取）；
-   `awfTotal(ym,pj)` = 自动项 ＋ Σ 该月 · 该项目的手填项。不传参时用当前所选「核算年月 / 项目」。 */
-const awfAuto = (ym, pj) => N2(IVs.filter(iv => iv.cbs === 'CBS-安文费' && iv.dir === '出库' && iv.wh === (pj === undefined ? awfPj : pj) && tmIn(ym || awfYm, iv.dd)).reduce((a, iv) => a + iv.amt, 0));
-const awfTotal = (ym, pj) => { const k = (pj === undefined ? awfPj : pj); return N2(awfAuto(ym, k) + ((AWF[ym || awfYm] || {})[k] || []).reduce((a, r) => a + r[1], 0)); };
+/* ⚠️ 下面这些**只能由 `reloadM09()` 落定** —— `PJs` 是**异步填充**的，
+   若仍写成加载时求值（`const x = f(异步变量)`），取数回来时它早已定死成空（**静默空表 / 静默失去候选**，不报错）。 */
+let AWF_ROWS = [];        /* 手填项（后端 `manuals`）：`[{index,id,item,amount,…}]` */
+let AWF_AUTO = 0;         /* 自动项金额（后端 `auto.amount` = 该核算年月 ＋ 该项目的 `CBS-安文费` 出库） */
+let AWF_TOTAL = 0;        /* 合计（后端 `total`）—— 与后端**同一份**算法 */
+let AWF_PJS = [];         /* 项目候选（后端 `projects`）—— 键 = **仓库名**（§2.7.4） */
+let AWF_CAN_EDIT = false; /* 没有档案行 ⇒ 没有可写的那一份（后端 `can_edit`） */
+const awfList = () => AWF_ROWS.map(r => [r.item, N0(r.amount)]);   /* 喂给原型切片的 `[[项名, 金额], …]` */
+const awfAuto = () => AWF_AUTO;   /* ⚠️ 原先是前端按 `iv.dd`（**单据日期**）算；口径要的是**核算年月**（`inv_detail.ym`） */
+const awfTotal = () => AWF_TOTAL;
 /* =====================================================================
    1. 工具层
    ===================================================================== */
@@ -536,8 +539,8 @@ const USERS=U_RAW.map(r=>O(r,U_COLS));
      · `NO` 付款通知书 ← `GET /api/m03/notice-list?period=`（**全量**，筛选用前端 `ntHit` 原样做）
      · `PJs` 项目档案    ← `GET /api/m01/projects`
      · `FLs` 付款流水    ← `GET /api/m05/flows`
-   ⚠️ 其余表（`PLs`/`IVs`/`JCs`/`ADs`/`DFs`/`LGs`/`WHs`/`MACH6`/`AWF`/`BIGVAL`…）**仍是原型模拟数据** ——
-      对应视图尚未接线（侧栏标「原型态」）。本轮只接 `MOD-03`（打样）。 */
+   ⚠️ 其余表（`JCs`/`DFs`/`WHs`… 以及 **集采 / 跨域 / 用户** 各域）**仍是原型模拟数据** ——
+      对应视图尚未接线（侧栏标「原型态」）。**已接线：`m03`/`m01`/`m04`/`m05`/`m06`/`m07`/`m08`/`m09`**（看 `WIRED`）。 */
 let NO=[], PJs=[], FLs=[];
 /* 当前登录用户：原型固定为管理员本人（§1.5.1「用户本人为管理员」）；正式实现由登录态提供。
    ⚠️ 刻意**不写成 USERS[0] 的引用** —— 自检回滚会整体替换 USERS 的内容，引用会失效（同「原地复位」的教训）。 */
@@ -865,7 +868,7 @@ const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
-const WIRED=new Set(['m03','m01','m04','m05','m06','m07','m08']);
+const WIRED=new Set(['m03','m01','m04','m05','m06','m07','m08','m09']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -1119,7 +1122,7 @@ const kidsAll=sid=>pjSort(PJs.filter(p=>p.parent===sid));
      · 付款流水「付款项目」筛选      → `flProjs()`           （流水按**归属**归集 ⇒ 仓库名；共用面板 **多选**；
                                                               面板候选 = 流水里的项目 **∪ 当前已选的**）
      · 集采台账「项目」筛选          → `JC_PROJ_LIST()`       （集采合同 `proj` 去重 ⇒ 仓库名；合同**必有项目**）
-     · 特殊费用月报表「项目」筛选    → `ntPjList()`           （档案表全部，**排壳**；共用面板 **单选**）
+     · 特殊费用月报表「项目」筛选    → `AWF_PJS`             （后端 `/api/m09/fee` 的 `projects` ⇒ 仓库名；共用面板 **单选**）
    ⚠️⚠️ **`projPanel` 的 `list` 必须是「候选键（仓库名）」，不是「档案行对象」**（2026-09-13 修：
       上面几处凡是拿到**档案行**的（如 `ntPjList()`），**必须过一层 `pjKeysOfRows()` 转成键**；
       否则 `data-pj="[object Object]"` ⇒ 选完一点就查不到该行 ⇒ 显示「未建档」。）
@@ -2924,9 +2927,11 @@ V.m08=()=>{
    `ntPjList()` 返回的是**档案行**（`V.m03` / 集采手工新增等处要取 `.name`，**不能改它**）
    ⇒ 这里必须过一层 `pjKeysOfRows()` 把「行」转成「键」。
    （2026-09-13 修 bug：原先直接传行对象 ⇒ `data-pj="[object Object]"` ⇒ 选完一点就变「未建档」。） */
-const awfPjPanel=()=>projPanel({list:()=>pjKeysOfRows(ntPjList()),selected:()=>[awfPj],pickAct:'awfPjPick',meta:PROJ_META_KEY,single:true});
-/* ⚠️ 默认项目 = 候选第一个 —— **赋值点必须落在 `ntPjList` 定义之后**（`const` 有 TDZ，写在数据层会 ReferenceError） */
-awfPj = (pjSort(ntPjList())[0] || { name: '' }).name;
+const awfPjPanel=()=>projPanel({list:()=>AWF_PJS,selected:()=>[awfPj],pickAct:'awfPjPick',meta:PROJ_META_KEY,single:true});
+/* ⚠️ 默认项目**不在这里赋** —— 原先写 `(pjSort(ntPjList())[0]||{name:''}).name`，那是**加载时求值**：
+   `PJs` 异步填充 ⇒ 取数回来时它早已定死成空（**静默失去默认项目**，且不报错）。
+   ⇒ 改由 `reloadM09()` 按后端回包的 `project` 落定（后端 `service._resolve` 已把"没给 / 给了无效值"
+     归一成候选第一个；候选为空时才是空串）。 */
 V.m09=()=>{
   const auto=awfAuto();
   const total=awfTotal();
@@ -4354,22 +4359,24 @@ const ACT={
   /* —— MOD-09（手填项**按「核算年月 ＋ 项目」各存一份**：写路径都落在「当前所选核算年月 · 当前所选项目」那一份上） —— */
   /* 「项目」**单选**面板（第 6 个 `projPanel` 调用点）：点一下即切换并收起（与 `MOD-06` 同款） */
   awfPjToggle:()=>{ awfPjOpen=!awfPjOpen; render(); },
-  awfPjPick:t=>{ const v=t.dataset.pj; if(!v) return; awfPj=v; awfPjOpen=false; render();
-    toast(`特殊费用月报表已切到项目 <b>${esc(PROJ_META_KEY(v).nm)}</b>（自动项与手填项都只算该项目）`); },
-  awfAdd:()=>{ awfMut().push(['新项',0]); render();
-    toast(`已在 <b>${tmLabel(awfYm)}</b> · <b>${esc(PROJ_META_KEY(awfPj).nm)}</b> 增加手填项：<b>名称可改、金额可填</b>（§5.5）`); },
-  awfDel:t=>{ const L=awfMut(), i=+t.dataset.i, r=L[i]; if(!r) return;
-    /* R9：删除也要说清「做了什么 + 影响多少」（合计随之重算）—— 与旁边的 awfAdd 同款反馈 */
-    L.splice(i,1); render();
-    toast(`已删除 <b>${tmLabel(awfYm)}</b> · <b>${esc(PROJ_META_KEY(awfPj).nm)}</b> 的手填项「<b>${esc(r[0]||'未命名')}</b>」（原 ${M(r[1])}）—— 合计重算为 <b>${M(awfTotal())}</b>（§5.5）`); },
-  awfName:t=>{ const r=awfMut()[+t.dataset.i]; if(!r) return; r[0]=t.value; render(); },
-  awfAmt:t=>{ const r=awfMut()[+t.dataset.i]; if(!r) return;
-    const v=numOf(t.value,{empty0:1});
-    if(isNaN(v)){ toast(badMoneyMsg('金额')); render(); return; }
-    r[1]=v; render(); },
-  /* 重置 = 回到默认核算年月 ＋ 默认项目（候选第一个）—— R4 要求列表 / 报表页提供「重置」 */
-  awfReset:()=>{ awfYm=bjMonth(-1); awfPj=(pjSort(ntPjList())[0]||{name:''}).name; awfPjOpen=false; render();
-    toast(`特殊费用月报表已重置：核算年月回到 <b>${tmLabel(bjMonth(-1))}</b>、项目回到 <b>${esc(PROJ_META_KEY(awfPj).nm)}</b>（材料报表类默认 = 上月，§9.2）`); },
+  awfPjPick:t=>{ const v=t.dataset.pj; if(!v) return; awfPj=v; awfPjOpen=false;
+    /* ⭐ 切项目 ⇒ **按 (核算年月, 项目) 重取那一份**（手填项是"每项目每月各存一份"，§5.5） */
+    reloadM09().then(()=>toast(`特殊费用月报表已切到项目 <b>${esc(PROJ_META_KEY(v).nm)}</b>（自动项与手填项都只算该项目）`)); },
+  /* ⭐ 接线：四个写动作**全部走后端**（`/api/m09/fee/*`，与 PRG 端点 `/m09/add` `/m09/cell`
+     **同一出口** `service.act_*`）—— ⛔ 前端不再本地改数据冒充落库（原先直接改本地的那个演示容器），
+     也**不在前端复写判定**。回执里的中文说明（含 §引用）**原样给用户**，失败亦然。 */
+  awfAdd:()=>awfAct(()=>API.m09Add({ym:awfYm, project:awfPj}), r=>r.message
+    || `已在 <b>${tmLabel(awfYm)}</b> · <b>${esc(PROJ_META_KEY(awfPj).nm)}</b> 增加手填项：<b>名称可改、金额可填</b>（§5.5）`),
+  /* `R9`：删除也要说清「做了什么 + 影响多少」—— 后端回执里**带重算后的合计** */
+  awfDel:t=>awfAct(()=>API.m09Delete({ym:awfYm, project:awfPj, index:+t.dataset.i}), r=>r.message),
+  awfName:t=>awfAct(()=>API.m09Name({ym:awfYm, project:awfPj, index:+t.dataset.i, value:t.value}), r=>r.message),
+  /* ⚠️ **前端不判金额合法与否** —— §5.5 的判据唯一出口是后端 `domain.amount_problem`
+     （只拦"非数字"、**允许 0 与负数**）；前端再写一遍 = 第二份口径。
+     非法 ⇒ 后端拒绝且**原值不变**，重拉后输入框回到库里那个值。 */
+  awfAmt:t=>awfAct(()=>API.m09Amount({ym:awfYm, project:awfPj, index:+t.dataset.i, value:t.value}), r=>r.message),
+  /* 重置 = 回到默认核算年月 ＋ 默认项目（候选第一个）—— `R4` 要求列表 / 报表页提供「重置」 */
+  awfReset:()=>{ awfYm=bjMonth(-1); awfPj=AWF_PJS[0]||''; awfPjOpen=false;
+    reloadM09().then(()=>toast(`特殊费用月报表已重置：核算年月回到 <b>${tmLabel(bjMonth(-1))}</b>、项目回到 <b>${esc(PROJ_META_KEY(awfPj).nm)}</b>（材料报表类默认 = 上月，§9.2）`)); },
 
  /* —— MOD-05 · 逐月欠款台账（2026-09-12 用户口径）——
     两台账**左右并排**（左辅材 / 右机械）、**共用同一个「项目」选择器**、**同一套逻辑**，
@@ -4648,7 +4655,7 @@ const ACT={
    if(sc==='plimp'){ plImportM=v; mp.open=null; ACT.plImport(); return; }          /* 导入弹窗内选月 → 重建弹窗回显 */
    if(sc==='lg'){ lgCut=v; mp.open=null; render(); return; }                        /* 期初展开区内选「截止年月」→ **只重绘**（不重算默认值） */
    if(sc==='fl'){ flf.ym=v; mp.open=null; render(); toast(`付款流水已切到 <b>${tmLabel(v)}</b>`); return; }
-   if(sc==='awf'){ awfYm=v; mp.open=null; render(); toast(`特殊费用月报表已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }
+   if(sc==='awf'){ awfYm=v; mp.open=null; reloadM09(); toast(`特殊费用月报表已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（手填项按「核算年月 ＋ 项目」各存一份；只 `render()` 会看到上一月那一份） */
    if(sc==='iv'){ fIvYm=v; mp.open=null; render();
      toast(v==='全部'?`库存单据已切到 <b>全部时间</b>（不限单据日期）`:`库存单据已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }
    if(sc==='wh'){ fWhYm=v; mp.open=null; reloadM07(); toast(`收发结存已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（`WHM[月]` 现在来自后端；只 `render()` 会看到空表） */
@@ -4928,6 +4935,14 @@ const API = {
   /* ⭐ `TAIL-38`：「录机械费」写入口 —— 校验与落库**全在后端**
      （`mech_ui.parse_mech_values` ＋ `repository.save_mech`），与 PRG 端点同一份判定。 */
   m06MechSave: body => API.post('/api/m06/mech', body),
+
+  /* ---- MOD-09 特殊费用月报表（`TAIL-27`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
+  m09Fee: (ym, pj) => API.get(`/api/m09/fee?ym=${encodeURIComponent(ym || '')}`
+    + `&pj=${encodeURIComponent(pj || '')}`),
+  m09Add: body => API.post('/api/m09/fee/add', body),
+  m09Name: body => API.post('/api/m09/fee/name', body),
+  m09Amount: body => API.post('/api/m09/fee/amount', body),
+  m09Delete: body => API.post('/api/m09/fee/delete', body),
 };
 
 /* ---------- 字段适配：后端**语义字段** → 原型字段名（`NT_COLS` / `PJ_COLS`） ----------
@@ -5486,6 +5501,38 @@ BIND.m06 = function () {
   host.prepend(bar);
 };
 
+/* ============ MOD-09 特殊费用月报表（前端壳接线 · `TAIL-27`）============
+   ⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 这里**一律过 `N0()`**：
+      原型切片里有 `r[1].toFixed(2)`，字符串会**直接 TypeError 整页崩**（而且不报错地坏）。
+   ⚠️ 候选 / 默认项目 / 合计 / 自动项 **全部以后端回包为准**（⛔ 前端不再自算，避免第二份口径）。 */
+async function reloadM09() {
+  const d = await API.m09Fee(awfYm, awfPj);
+  awfYm = d.ym || awfYm;                        /* 后端归一后的核算年月（认不出 ⇒ 回落默认月，§9.2） */
+  awfPj = d.project || '';                      /* 后端已把"没给 / 给了无效值"归一成候选第一个 */
+  AWF_PJS = (d.projects || []).map(p => p.key).filter(Boolean);
+  AWF_ROWS = (d.manuals || []).map(r => ({ index: r.index, id: r.id, item: r.item, amount: N0(r.amount) }));
+  AWF_AUTO = N0(d.auto && d.auto.amount);
+  AWF_TOTAL = N0(d.total);
+  AWF_CAN_EDIT = !!d.can_edit;
+  render();
+}
+
+/* 写动作统一走这里：**成功/失败都回后端真实状态**，后端那句中文说明**原样转给用户**（不吞、不换句话）。
+   ⚠️ 后端对「金额不合法」这类**可预期的拒绝**回的是 **HTTP 200 ＋ `ok:false`**（同 `m07` / `m03`）
+      ⇒ 必须**同时**判 `ok === false`，否则那句"金额不合法…"会被当成成功吞掉。 */
+async function awfAct(fn, okMsg) {
+  let r = null;
+  try { r = await fn(); }
+  catch (e) {
+    await reloadM09();
+    return toast(`<b>没能保存</b>：${esc(String((e && e.message) || e))}`, 7000);
+  }
+  await reloadM09();
+  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`, 7000); return null; }
+  toast(typeof okMsg === 'function' ? okMsg(r) : okMsg);
+  return r;
+}
+
 async function boot() {
   /* ⚠️ **每一路取数独立容错**：任何一路失败（某端点临时 500 / 还没上线 / 网络抖）**不得拖垮其他页**。
      ⭐ 实测踩到：`/api/m06/mech` 404（后端加了端点但服务没重启）⇒ 原来的单个 `try` 把后面**全部**跳过，
@@ -5511,6 +5558,9 @@ async function boot() {
   await soft('机械 6 列', reloadMech);
   await soft('库存单据', reloadInv);
   await soft('收发结存与大表', reloadM07);   /* ⚠️ 必须在 reloadMech / reloadInv **之后**：大表的机械与焊材/气体列取它们 */
+  /* ⚠️ `m09` 的自动项与手填项**都由后端自己算**（`mod09_fee/repository.inv_rows` 直读 `inv_detail`）
+     ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序**（但排在它之后无害）。 */
+  await soft('特殊费用月报表', reloadM09);
   await soft('付款域', reloadM05);          /* 内部各自 render 一次 */
   BOOT_ERROR = fails.join('；');
   render();

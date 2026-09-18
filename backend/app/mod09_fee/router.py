@@ -88,4 +88,10 @@ async def fee_cell(request: Request):
     return _redirect(ym=ym, pj=pj, kind=flash["kind"], message=flash["message"])
 
 
+# ⭐ 前端壳的 **JSON API**（原型直接接数据，`D18`）—— 独立路由件，由本文件汇总（`main.py` 不用改）
+from app.mod09_fee.api import router as api_router      # noqa: E402
+
+router.include_router(api_router)
+
+
 __all__ = ["router"]
