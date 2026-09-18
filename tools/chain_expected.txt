@@ -20,16 +20,16 @@
 #   ⚠️ 文档锚写**短而独特的原句**（归一化后是子串即可）；写错 ⇒ `C2` 报红，**这正是"文档改了"的哨**。
 # ============================================================
 # ① 建档 / 归属（A/B/C · 真源 = 全自动建档-实施计划 §三）
-A|① 全名已在档案 ⇒ 归集、结束|全名是否已在档案中|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
+A|① 全名已在档案 ⇒ 归集、结束|全名是否已在档案中|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
 A|② 全名命中壳 ⇒ 走链路 C（小微拆解）|全名是否命中某个「壳」|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
-A|③ 启动建档（抓 phid → 抓仓库 → 建档 / 占位）|③ 启动建档|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
-A|③-a 抓不到 phid ⇒ 提示「请加入 i8 常用项目列表」|请将该未建档项目加入 i8 常用项目列表|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
-A|③-b 仓库命中 1 个 ⇒ 建档完成（真实仓库名）|抓到 1 个|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
-A|③-b 仓库命中多个 ⇒ 列出让用户选，只建选中的那个|列出让用户选，只建选中的那个|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
-A|③-b 仓库一个都没命中 ⇒ 占位名「未建仓-序号」|未建仓-序号|backend/app/mod01_projects/repository.py::next_placeholder|ACC-PRJ-ARCH-001|接线缺
-A|⭐ **整条链路的触发方**：抓付款通知书时自动走链路 A|付款侧自动建档|—|缺：需补判据（链路级）|缺
-A|③-a 子步：抓 phid（常用项目列表）|抓 phid（常用项目列表）|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-ARCH-001|接线缺
-A|③-b 子步：抓仓库信息（仓库列表按全名反查）|抓仓库信息（仓库列表按全名反查）|backend/app/mod01_projects/archive.py::warehouses_by_owner|ACC-PRJ-ARCH-001|接线缺
+A|③ 启动建档（抓 phid → 抓仓库 → 建档 / 占位）|③ 启动建档|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
+A|③-a 抓不到 phid ⇒ 提示「请加入 i8 常用项目列表」|请将该未建档项目加入 i8 常用项目列表|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
+A|③-b 仓库命中 1 个 ⇒ 建档完成（真实仓库名）|抓到 1 个|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
+A|③-b 仓库命中多个 ⇒ 列出让用户选，只建选中的那个|列出让用户选，只建选中的那个|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|接线缺
+A|③-b 仓库一个都没命中 ⇒ 占位名「未建仓-序号」|未建仓-序号|backend/app/mod01_projects/repository.py::next_placeholder|ACC-PRJ-SYNC-001|已接
+A|⭐ **整条链路的触发方**：抓付款通知书时自动走链路 A|付款侧自动建档|backend/app/mod03_notice/router.py::get_fetch_executor|ACC-PRJ-SYNC-001|已接
+A|③-a 子步：抓 phid（常用项目列表）|抓 phid（常用项目列表）|backend/app/mod02_i8/router.py::get_common_project_rows|ACC-PRJ-SYNC-001|已接
+A|③-b 子步：抓仓库信息（仓库列表按全名反查）|抓仓库信息（仓库列表按全名反查）|backend/app/mod02_i8/router.py::get_warehouse_rows|ACC-PRJ-SYNC-001|已接
 B|① 「陌生仓库」事实留痕（看板瓦片「占位行待扶正」＋ 抓取回执列出）|看板瓦片「占位行待扶正」|backend/app/home/service.py::placeholder|ACC-PRJ-AUTO-001|已接
 B|② 自动跑一次「抓仓库名单」同步|自动跑一次「抓仓库名单」同步|backend/app/mod02_i8/sources.py::load_warehouse_rows|ACC-PRJ-AUTO-001|已接
 B|③ 用全名回查占位行：命中 1 条 ⇒ 扶正改名|用**全名**回查占位行|backend/app/mod01_projects/repository.py::promote_placeholder|ACC-PRJ-AUTO-001|已接
@@ -116,25 +116,25 @@ R|③ 库存单据明细总表（含**与项目交来的 Excel 对账 → 差异
 R|③ **特殊费用月报表**（实际是一张独立新报表）|特殊费用月报表|backend/app/mod09_fee/domain.py::total_amount|ACC-FEE-MON-001|已接
 R|④ **生成过程资料（每项目一份）** ⇒ 每月 5–10 号报分公司工程科|④ 生成过程资料（每项目一份）|backend/app/mod06_proc/domain.py::material_by_month|ACC-RPT-PROC-001|已接
 R|经济活动分析大表（焊材/气体**自动填** ＋ 其余**手填**）|经济活动分析大表|backend/app/mod07_setl/big_domain.py::manual_cell|ACC-RPT-BIG-001|已接
-R|经济活动分析大表 · ⛔ **按模板导出**（会上用）|按模板导出|—|缺：需补判据（成品文件 · 见 `TAIL-04`）|缺
-R|每半年 **三账比对** ⇒ 能修的修 → 修不了的**差异登记 ＋ 导出**|三账比对|—|缺：需补判据（链路级）|缺
+R|经济活动分析大表 · ⛔ **按模板导出**（会上用）|按模板导出|backend/app/report_export/service.py::export_big|ACC-RPT-BIG-001|已接
+R|每半年 **三账比对** ⇒ 能修的修 → 修不了的**差异登记 ＋ 导出**|三账比对|—|ACC-DIF-REG-001|缺
 # ============================================================
 # ⑧ J 集采域：抓合同 → 三态 → 发票/付款子表 → 结算欠款 → 台账（真源 = 说明书 §6.2）
 J|⭐ **整体状态：`app/mod11_jc/` 只有 `__init__.py`（空模块）** ⇒ 下列分支**全部没有落点**|本系统只覆盖「合同签订后」的台账管理环节|—|缺：需补判据（链路级）|缺
-J|抓采购合同（`API-04` · **仅人工点击**）|三态标记|—|缺：需补判据（链路级）|缺
-J|集采台账**三态标记**（信息化抓取）|集采台账|—|缺：需补判据（链路级）|缺
-J|发票登记（供应商开票 → 项目走流程 → **科室见票登记台账**）|见票登记集采台账|—|缺：需补判据（链路级）|缺
-J|合同收发登记（**纸质合同**：供应商寄来 → 送资产处盖章 → 存档 ＋ 寄回）|纸质合同|—|缺：需补判据（链路级）|缺
-J|付款引用与实际供应商（§6.6.3 受限子串匹配 · 反向入口在 `m03`）|受限子串匹配|—|缺：需补判据（链路级）|缺
-J|集采**结算欠款**（⛔ 不在付款域计算，**由集采台账负责**）|集采的欠款**不在付款域计算**，由**集采台账**负责|—|缺：需补判据（链路级）|缺
+J|抓采购合同（`API-04` · **仅人工点击**）|三态标记|—|ACC-JC-FETCH-001|缺
+J|集采台账**三态标记**（信息化抓取）|集采台账|—|ACC-JC-FETCH-001|缺
+J|发票登记（供应商开票 → 项目走流程 → **科室见票登记台账**）|见票登记集采台账|—|ACC-JC-UI-001|缺
+J|合同收发登记（**纸质合同**：供应商寄来 → 送资产处盖章 → 存档 ＋ 寄回）|纸质合同|—|ACC-JC-UI-001|缺
+J|付款引用与实际供应商（§6.6.3 受限子串匹配 · 反向入口在 `m03`）|受限子串匹配|—|ACC-JC-PAY-001|缺
+J|集采**结算欠款**（⛔ 不在付款域计算，**由集采台账负责**）|集采的欠款**不在付款域计算**，由**集采台账**负责|—|ACC-JC-UI-001|缺
 # ============================================================
 # ⑨ X 跨域：导出 / 删除 / 用户 / 主题 / 设置 / 历史初始化（真源 = 说明书 §7）
-X|全局导出 Excel（**所有列表页都要** · 行集合/合计/取值与当前筛选**一致**）|所有列表页都要「导出 Excel」按钮|—|缺：需补判据（全站 · 见 `TAIL-04`）|缺
-X|导出**按模板**（模板只定长相 · 数据仍来自页面筛选）|模板只管「长什么样」|—|缺：需补判据（全站 · 见 `TAIL-04`）|缺
-X|模板**数据区起点**识别（读 `DATA_START` 标记文字 · ⛔ 不用「定义名称」）|数据区首行那格的标记文字 DATA_START|—|缺：需补判据（全站 · 见 `TAIL-04`）|缺
-X|模板**尾部行块随行数派生**（合计/小计/脚注按实际行数位移 · ⛔ 不写死行号）|其位置**一律按实际数据行数派生**|—|缺：需补判据（全站 · 见 `TAIL-04`）|缺
-X|全局删除（确认框 **必须列出删除影响范围**：关联数据 / 统计影响）|必须列出删除影响范围|backend/app/mod04_plan/plan_ui.py::delete_impact|ACC-X-DEL-001|缺
-X|账号与权限（系统内 2 账号 · **用户本人为管理员**可管理其他账号）|用户本人为管理员可管理其他账号|—|缺：需补判据（`mod15_user` 空模块）|缺
-X|上线前历史数据初始化（**历史数据不重走**总原则）|历史数据不重走|—|缺：需补判据（链路级）|缺
+X|全局导出 Excel（**所有列表页都要** · 行集合/合计/取值与当前筛选**一致**）|所有列表页都要「导出 Excel」按钮|backend/app/report_export/service.py::export_settlement|ACC-X-EXP-001|接线缺
+X|导出**按模板**（模板只定长相 · 数据仍来自页面筛选）|模板只管「长什么样」|backend/app/report_export/tpl_fill.py::fill_workbook|ACC-X-EXP-001|已接
+X|模板**数据区起点**识别（读 `DATA_START` 标记文字 · ⛔ 不用「定义名称」）|数据区首行那格的标记文字 DATA_START|backend/app/report_export/tpl_fill.py::locate_data_area|ACC-X-EXP-001|已接
+X|模板**尾部行块随行数派生**（合计/小计/脚注按实际行数位移 · ⛔ 不写死行号）|其位置**一律按实际数据行数派生**|backend/app/report_export/tpl_fill.py::tail_end_row|ACC-X-EXP-001|已接
+X|全局删除（确认框 **必须列出删除影响范围**：关联数据 / 统计影响）|必须列出删除影响范围|backend/app/mod04_plan/plan_ui.py::delete_impact|ACC-X-DEL-001|接线缺
+X|账号与权限（系统内 2 账号 · **用户本人为管理员**可管理其他账号）|用户本人为管理员可管理其他账号|—|ACC-USR-MGMT-001|缺
+X|上线前历史数据初始化（**历史数据不重走**总原则）|历史数据不重走|—|ACC-INIT-001|缺
 X|外观主题（地基：唯一真源 `THEME_CSS` 32 变量 · 换主题 = 换取值零 CSS 改动）|外观主题（界面配色）|backend/app/mod03_notice/page.py::THEME_CSS|ACC-UI-THEME-001|已接
 X|系统设置（取值出口唯一 = `app_settings.effective`）|系统设置|backend/app/mod14_config/router.py::settings_page|ACC-CFG-SETUP-001|已接
