@@ -129,6 +129,31 @@ def api_extract() -> dict:
     }
 
 
+@router.get("/api/m07/big/export")
+def api_big_export(period: str = ""):
+    """导出**活动大表成品**（`TAIL-04` 路径① **片 4b**）—— **一份**（全项目一张表 · ⛔ 无 zip）。
+
+    ⚠️ 失败（**一行都没有** · 模板缺失/损坏 · **显示区对账不过**）⇒
+       **JSON 200 ＋ `ok:false` ＋ 中文原因**，壳侧据 `content-type` 分流（同另五条导出）。
+    ⚠️ 月份**原样带给后端**（`period`；空 = 本表默认年月 = 材料报表类上月，§9.2）—— ⛔ 前端不另算。
+    """
+    from urllib.parse import quote
+
+    from fastapi.responses import FileResponse, JSONResponse
+
+    from app.report_export import service as EX
+
+    try:
+        with session_scope() as s:
+            path = EX.export_big(s, str(period or ""))
+    except MustReportError as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=path.name, headers={"X-Export-Filename": quote(path.name)})
+
+
 @router.get("/api/m07/big")
 def api_big(request: Request) -> dict:
     """**经济活动分析大表**（§5.7）—— 行装配 ＋ 手填值 ＋ 候选 ＋ 选题顺序。

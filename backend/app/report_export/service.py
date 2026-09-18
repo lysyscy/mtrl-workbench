@@ -248,5 +248,27 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
         made, out_dir, D.export_manifest(keys, tab=tab_no, ym=report_ym)["zip_name"]))
 
 
+def export_big(session: Session, month: str = "") -> Path:
+    """导出**活动大表成品**（`TAIL-04` 路径① **片 4b**）—— **一份**（全项目在一张表里：⛔ 不是每项目一份、⛔ 无 zip）。
+
+    - ⭐ **行装配 = `mod07_setl.big_service.build_big_data`**（**与页面同一份** ⇒ 两处同序同值，§5.7.3）——
+      本层只做「取数 → 转交 → 报路径」。
+    - 月份：给了就用、**不给 = 本表默认年月**（材料报表类 = 北京时间上月，§9.2）。
+    - ⚠️ **一行都没有 ⇒ 拒做**（⛔ 不产出一张只剩表头与合计的空表 —— 那会被读成「本月真的没有在建项目」）。
+    """
+    from app.mod07_setl import big_service as BS
+    from app.report_export import big_export
+
+    state = BS.parse_state({"period": month} if str(month or "").strip() else {})
+    data = BS.build_big_data(session, state)
+    if not data.get("rows"):
+        raise MustReportError(
+            "导出活动大表：**一行都没有**（该月没有在建项目，或大表还没选题）⇒ 拒做"
+            "（⛔ 不产出一张空表让你以为「本月真的没有项目」）。")
+    ym = str(data["month"])
+    out_dir = EXPORT_ROOT / big_export.FILE_SUFFIX / period_label(ym)
+    return Path(big_export.build_xlsx(data, out_dir, name=big_export.file_name(ym)))
+
+
 __all__ = ["EXPORT_ROOT", "period_label", "setl_rows", "setl_count", "export_settlement",
-           "export_inventory", "export_extract", "export_ledger", "export_proc"]
+           "export_inventory", "export_extract", "export_ledger", "export_proc", "export_big"]

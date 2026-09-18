@@ -305,9 +305,13 @@ def fill_sheet(ws, spec: dict) -> dict:
         if label is not None:
             ws.cell(row=r, column=key_idx).value = label
         for col, value in (cells or {}).items():
-            if value is not None:
-                ws.cell(row=r, column=column_index_from_string(col)).value = value
-                written.add((r, column_index_from_string(col)))
+            ci = column_index_from_string(col)
+            if value == "":                                  # ⭐ **空串 = 显式留空**（清掉模板那格的公式 / 旧值）
+                ws.cell(row=r, column=ci).value = None
+                written.add((r, ci))
+            elif value is not None:
+                ws.cell(row=r, column=ci).value = value
+                written.add((r, ci))
     _check_tail_rows(ws, ds + n, written, max_col)
     # 最后一行 = **尾块终点**（按结构算：覆盖到的行 ∪ 还有内容的行 ∪ 合并区覆盖到的行）；
     # 没有尾块时 = 数据末行；连数据行都没有 ⇒ 表头行（ds-1）
@@ -412,7 +416,8 @@ def _same(got, exp) -> bool:
     ⚠️ 期望值是**金额**（域内核给的是 `Decimal`）⇒ 数值比较必须认 `Decimal`
        —— 只判 `int/float` 会让 `Decimal("0.00")` 掉进字符串比较、报出「0 ≠ 0.00」的假红（实测踩到）。
     """
-    if exp is None:
+    if exp is None or exp == "":
+        # ⚠️ 空串与 `None` 同义 = **该格留空**（`""` 是调用方表达"显式留空"的写法，见 `fill_sheet` 尾块）
         if got is None:
             return True
         return isinstance(got, str) and got.strip() == ""
