@@ -25,7 +25,7 @@ A|② 全名命中壳 ⇒ 走链路 C（小微拆解）|全名是否命中某个
 A|③ 启动建档（抓 phid → 抓仓库 → 建档 / 占位）|③ 启动建档|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
 A|③-a 抓不到 phid ⇒ 提示「请加入 i8 常用项目列表」|请将该未建档项目加入 i8 常用项目列表|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
 A|③-b 仓库命中 1 个 ⇒ 建档完成（真实仓库名）|抓到 1 个|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
-A|③-b 仓库命中多个 ⇒ 列出让用户选，只建选中的那个|列出让用户选，只建选中的那个|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|接线缺
+A|③-b 仓库命中多个 ⇒ 列出让用户选，只建选中的那个|列出让用户选，只建选中的那个|backend/app/mod01_projects/archive_pending.py::pick_row|ACC-PRJ-SYNC-001|已接
 A|③-b 仓库一个都没命中 ⇒ 占位名「未建仓-序号」|未建仓-序号|backend/app/mod01_projects/repository.py::next_placeholder|ACC-PRJ-SYNC-001|已接
 A|⭐ **整条链路的触发方**：抓付款通知书时自动走链路 A|付款侧自动建档|backend/app/mod03_notice/router.py::get_fetch_executor|ACC-PRJ-SYNC-001|已接
 A|③-a 子步：抓 phid（常用项目列表）|抓 phid（常用项目列表）|backend/app/mod02_i8/router.py::get_common_project_rows|ACC-PRJ-SYNC-001|已接

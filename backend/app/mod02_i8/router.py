@@ -215,8 +215,13 @@ def sync_common_projects(
         ))
         return SyncOut(table="common_project", degraded=True, message=out["message"])
     counts = out["counts"]
+    from app.mod01_projects.archive_pending import record_detail as archive_detail  # noqa: PLC0415
     _persist_fetch(run_type="sync", payload=fetch_record_payload(
-        object_desc="常用项目列表", success=counts["create"], fail=0))
+        object_desc="常用项目列表", success=counts["create"], fail=0),
+        # ⭐ **「待人工建档」清单随同步记录落库**（`TAIL-45`）—— 它原先只在回执里出现一次，
+        #    而人得在 `m01` 上把它做掉（选一个仓库 → 建行）⇒ 先留住（读侧 = `archive_pending.live_pending`）。
+        #    ⚠️ 每次**成功**同步都写（哪怕本次没有待人工）⇒ "最近一次"永远指得住。
+        detail=archive_detail(out["plan"]["manual"]))
     return SyncOut(
         table="common_project",
         count=counts["create"],
@@ -256,8 +261,14 @@ def fetch_records(limit: int = Query(20, ge=1, le=200)) -> list[RunRecordOut]:
 # --------------------------------------------------------------- 内部
 
 
-def _persist_fetch(*, payload: dict, run_type: str | None = None) -> None:
-    """写一条执行记录（只写台账，**不参与业务统计**）。"""
+def _persist_fetch(*, payload: dict, run_type: str | None = None,
+                   detail: dict | None = None) -> None:
+    """写一条执行记录（只写台账，**不参与业务统计**）。
+
+    ⚠️ `detail` 是给**页面入口**用的（`TAIL-45`：同步报出的「待人工建档」清单得**留得住**）——
+       原先这里**写死 `detail={}`** ⇒ 那份清单只在 `SyncOut` 回包（回执）里出现一次，**刷新即丢**，
+       `m01` 上就没有可点的入口（与 `TAIL-30`-③ 同一类缺口）。
+    """
     if run_type:
         payload = {**payload, "run_type": run_type}
     with session_scope() as s:
@@ -270,7 +281,7 @@ def _persist_fetch(*, payload: dict, run_type: str | None = None) -> None:
             status=payload["status"],
             success=payload["success_count"],
             fail=payload["fail_count"],
-            detail={},
+            detail=detail or {},
             error_message=payload["error_message"],
         )
 

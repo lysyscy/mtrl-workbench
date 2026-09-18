@@ -119,6 +119,9 @@ def plan_archive(
         if len(whs) >= 2:                                # 原口径：列出让用户选
             manual.append({
                 "name_full": name, "phid": phid,
+                # ⭐ **结构化候选仓库清单**（`TAIL-45`）：只给一句 `reason` 文案，界面**没法让人"选"**
+                #    —— 选定之后要把那个仓库名**原样**交给建档口（⛔ 不许人手打，§9.4：仓库名是 i8 的）。
+                "warehouses": list(whs),
                 "reason": f"挂 {len(whs)} 个仓库（{'、'.join(whs)}）—— 需人工选一个再建",
             })
             continue

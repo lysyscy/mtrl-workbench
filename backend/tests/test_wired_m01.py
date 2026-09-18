@@ -168,6 +168,50 @@ def test_材料侧抓取回执必须露出待人工并给跳转():
 # --------------------------------------------------------------- 端点契约
 
 
+@acc("ACC-PRJ-SYNC-001", "001-12")
+def test_待建档入口与清单同源且与指认那路各报各的():
+    """⭐ `TAIL-45`：链路 A ③-b「≥2 个仓库 ⇒ 选定一个建行」的**入口**。
+
+    清单 = **最近一次成功的「常用项目列表」同步**报出的那几条（原先只在同步回执里报一次、刷新即丢）。
+
+    - 与档案**同源同刷**（刚挑完必须立刻少一条，否则用户以为没生效）；
+    - `boot()` 里是**独立一路**（一路失败不许拖垮档案页）；
+    - ⚠️ 与「待人工指认」（链路 B）**两条链路、两个来源** ⇒ 失败原因**各报各的**
+      （⛔ 不许共用 `PEND_ERR`：那会把"A 这一路坏了"显示成"B 也坏了"）。
+    """
+    assert "API.pjArchPend" in SHELL and "/api/m01/archive-pending" in SHELL
+    assert "async function reloadArchPend()" in SHELL
+    body = SHELL[SHELL.index("async function reloadProjects()"):]
+    body = body[:body.index("async function pjAct(")]
+    assert "await reloadArchPend();" in body, "档案刷新时要**一起**刷待建档清单"
+    assert "catch (e) { ARCP_ERR =" in body, "这一路取不到要记下**自己的**原因（⛔ 别共用 PEND_ERR）"
+    assert "await soft('待人工建档', reloadArchPend)" in SHELL, "boot 里要独立一路（单独容错）"
+    assert "ARCP_ERR ? " in SHELL and "待建档清单没取到" in SHELL, "取不到时页面上要说出来"
+    assert "document.getElementById('archBox')" in SHELL and "host.prepend(abox)" in SHELL, \
+        "卡片要**幂等**注入（先撤旧的再按当前清单重建）"
+    assert "ARCP_SRC" in SHELL, "要如实标清单来源（⛔ 不装作「刚刚」）"
+
+
+@acc("ACC-PRJ-SYNC-001", "001-13")
+def test_建档动作只从后端给的候选里选仓库():
+    """⭐ 仓库名**只能选、不能填**（§9.4：仓库名是 i8 的）＋ 前端**不做第二份判定**（`D18`）。
+
+    - 下拉的选项 = **后端现算给的候选**（`it.whs`）—— 已被别的行占用的名字**不在里面**；
+    - ⛔ **不许**把「当时那份」`stored` 当选项（它含已被占用的 ⇒ 选了必被后端拒 = 让人白填一次）；
+    - ⛔ 弹窗里**不许有手填仓库名的输入框**；⛔ **不许替用户自动挑一个**（系统不猜）；
+    - 写完一律走 `pjAct(...)`（它负责重拉 ⇒ 清单少一条才对）。
+    """
+    dlg = SHELL[SHELL.index("async function openArchDialog("):]
+    dlg = dlg[:dlg.index("async function boot(")]
+    assert "it.whs.map(" in dlg, "候选必须来自后端现算的 `whs`"
+    assert "it.stored.map(" not in dlg, "⛔ 别把「当时那份」（含已占用）当选项 —— 选了必被拒"
+    assert "<input" not in dlg, "⛔ 仓库名不许手填（§9.4）"
+    assert 'id="arcWh"' in dlg
+    assert "whs[0]" not in SHELL, "⛔ 不许替用户自动挑一个（决策 2：这条就要人来定）"
+    assert "API.pjArchRow({full_name:it.full, warehouse_name:wh})" in SHELL
+    assert "pjAct(()=>API.pjArchRow(" in SHELL, "写完必须走统一外壳（重拉清单，少一条才对）"
+
+
 @acc()
 def test_trails端点存在且limit有边界():
     """`GET /api/m01/trails`：存在、且 `limit` 有下上界（越界由 FastAPI 直接 422，不连库）。"""

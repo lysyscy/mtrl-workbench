@@ -21,6 +21,7 @@ import sys
 from playwright.sync_api import sync_playwright
 
 from _shell_pend import check as check_pend   # noqa: E402  ← ⑭ 链路 B「待人工指认」（`TAIL-30`-③）
+from _shell_arch import check as check_arch   # noqa: E402  ← ⑮ 链路 A「多仓库选一个」（`TAIL-45`）
 
 BASE = "http://127.0.0.1:8000"
 errors: list[str] = []
@@ -537,6 +538,9 @@ def main() -> int:
         #      ⚠️ 这一段自己一百多行（**真造库样本 ＋ 真点弹窗 ＋ 复原**）⇒ 挪到 `_shell_pend.py`：
         #         本文件有 **600 行**硬上限（`doc_audit` 的「文件行数」规则 = 红）。
         check_pend(page, errors)
+
+        # ---- ⑮ m01 链路 A ③-b「多仓库 ⇒ 选一个建行」（`TAIL-45`）—— 同上，挪 `_shell_arch.py`。
+        check_arch(page, errors)
 
     print("\n=== console / page 错误 ===")
     if errors:

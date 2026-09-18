@@ -32,6 +32,16 @@ class _Result:
     def first(self):
         return self._rows[0] if self._rows else None
 
+    def scalar_one_or_none(self):
+        """⚠️ 桩件**补缺**（2026-09-18）：`repository._next_ord` 走 `select(func.max(Project.ord))`
+        ⇒ 真库那边返回 NULL ⇒ `None`；不实现它本桩会抛 `AttributeError`（同 `m08_helpers` 那次）。
+        """
+        if not self._rows:
+            return None
+        if len(self._rows) > 1:
+            raise AssertionError(f"scalar_one_or_none 收到 {len(self._rows)} 条（桩只认 0 / 1 条）")
+        return self._rows[0]
+
 
 def _terms(where) -> list[tuple[str, object]]:
     """从 where 子句里抽 `(列名, 值)`；只认 `==`。

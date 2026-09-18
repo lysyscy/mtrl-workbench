@@ -4091,6 +4091,19 @@ const ACT={
        后端还会拿它做一致性守卫（所选行的全名必须与它相同），对不上就**明确拒**。 */
     pjAct(()=>API.pjPromote({project_id:id, warehouse_name:it.wh, full_name:it.full}),
       r=>`<b>${esc((r&&r.message)||'已扶正')}</b>`, 9000); },
+ /* —— 链路 A ③-b「全名对应 ≥2 个仓库 ⇒ 选定一个建行」（`TAIL-45`）——
+    这条原先**只被列出来**（同步回执里报一次、刷新即丢）⇒ 用户看得见、**无处可点**；
+    这里就是那个"可点"的出口（⛔ 判定与落库仍在后端：候选来自那次同步的 i8 名单）。 */
+ pjArchOpen:t=>openArchDialog(Number(t.dataset.arch)),
+ pjArchOk:t=>{ const it=ARCP_DLG; if(!it) return;
+    const sel=$('#arcWh');
+    const wh=String((sel&&sel.value)||'');
+    if(!wh) return toast('<b>请先选择一个仓库</b>');
+    closeModal();
+    /* ⚠️ 提交的这一对（全名 ＋ 仓库名）取**开弹窗时锁定的那一条**（`ARCP_DLG`）—— 清单后来刷新了
+       也不会错位；后端还会按当前档案现算再守卫一次（不在清单里 / 仓库名不在候选里 ⇒ 明确拒）。 */
+    pjAct(()=>API.pjArchRow({full_name:it.full, warehouse_name:wh}),
+      r=>`<b>${esc((r&&r.message)||'已建档')}</b>`, 9000); },
  /* —— 链路 C · 归属判定（付款通知书行 → 具体小微）· 2026-09-12 定案 ——
     入口只开在「待指定」标签上；命中 1 个时**自动归集、不弹窗**（ownOf 已算好） */
  ownOpen:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
@@ -5052,6 +5065,12 @@ const API = {
     `/api/m01/promote-candidates?full=${encodeURIComponent(full || '')}`),
   pjPromote: body => API.post('/api/m01/promote', body),
 
+  /* ---- MOD-01 · 链路 A ③-b「≥2 个仓库 ⇒ 选定一个建行」（`TAIL-45`） ----
+     ⚠️ 清单来自**最近一次成功的「常用项目列表」同步**；原先 `m01` 上**根本没有入口**
+        （那条只在同步回执里报一次、刷新即丢）⇒ 这两个端点就是那个"可点"的出口。 */
+  pjArchPend: () => API.get('/api/m01/archive-pending'),
+  pjArchRow: body => API.post('/api/m01/archive-row', body),
+
   /* ---- MOD-03 · 抓取 ＋ 链路 C 弹窗（`TAIL-29`-② ④） ---- */
   /* ⭐ 抓取：**失败也要看回执** —— 「归属未走完」是**可预期的失败**（要拿它开弹窗）
      ⇒ 这里**不 throw**，把 body 原样返回，由调用方判 `ok`。 */
@@ -5255,6 +5274,8 @@ async function reloadProjects() {
         档案与留痕照常显示（同 `boot()` 的逐路容错口径）。 */
   try { await reloadPending(); }
   catch (e) { PEND_ERR = String((e && e.message) || e); }
+  try { await reloadArchPend(); }   /* ⭐ `TAIL-45`：建档向导那一路（独立容错 —— 别拖垮档案页） */
+  catch (e) { ARCP_ERR = String((e && e.message) || e); }
   render();
 }
 
@@ -5795,6 +5816,10 @@ let PEND = [];          /* 待指认条目（含当前候选行） */
 let PEND_SRC = null;    /* 清单来自哪一次抓取（如实告诉用户，⛔ 不装作"刚刚"） */
 let PEND_ERR = '';      /* 这一路取数失败的原因（在页面上如实说明；⛔ 不静默成"本来就没有"） */
 let PEND_DLG = null;    /* 当前打开的指认弹窗锁定哪一条（⛔ 不用下标：清单刷新后下标会错位） */
+let ARCP = [];          /* 待人工建档条目（链路 A ③-b「≥2 个仓库」，含**当前候选仓库**） */
+let ARCP_SRC = null;    /* 清单来自哪一次同步（如实标来源，⛔ 不装作"刚刚"） */
+let ARCP_ERR = '';      /* 这一路取数失败的原因（页面上如实说明；⛔ 不静默成"没有待办"） */
+let ARCP_DLG = null;    /* 当前弹窗锁定哪一条（⛔ 不用下标：清单刷新后下标会错位） */
 
 /* 后端那些说明串里用 `**…**` 标重点（给人看与进日志都方便）⇒ 显示前转成 `<b>`。
    ⚠️ **先 `esc` 再转**：模板串里的 HTML 一旦漏出去就是一个注入口子。 */
@@ -5820,11 +5845,61 @@ async function reloadPending() {
   PEND_ERR = '';
 }
 
+/* ⭐ `TAIL-45` · 链路 A ③-b：**待人工建档**清单 ——「只认最近一次成功同步」＋「逐条按当前档案现算」
+   两件事都在后端做（`archive_pending.live_pending`），壳侧只转形与展示（⛔ 不在这儿重算一遍）。
+   ⚠️ 与「待人工指认」（链路 B）是**两条链路、两个来源**：B 读**材料侧抓取**，A 读**名单同步**。 */
+function adaptArch(it) {
+  return {
+    full: String(it.full_name || ''),
+    phid: String(it.phid || ''),
+    whs: (it.warehouses || []).map(String),            /* 能选的候选（i8 名单那条 − 已被占用的） */
+    stored: (it.stored_warehouses || []).map(String),  /* 当时那份（留痕：看得见"少了谁"） */
+    reason: String(it.reason || ''),
+  };
+}
+
+async function reloadArchPend() {
+  const d = await API.pjArchPend();
+  ARCP = (d.items || []).map(adaptArch);
+  ARCP_SRC = d.source || null;
+  ARCP_ERR = '';
+}
+
 /* m01 页首的入口 —— ⛔ 不动 `V.m01`；`render()` 画完再注入（同 `BIND.m06`）。
    ⚠️ **幂等**：先撤掉旧的那块再按当前清单重建（清单是异步来的，会重画多次）。 */
 BIND.m01 = function () {
   const host = document.querySelector('#view');
   if (!host) return;
+  /* ⭐ 链路 A ③-b 的入口（`TAIL-45`）—— 同一套注入法（**幂等**：先撤旧的、再按当前清单重建）。
+     ⚠️ 与上面那张卡**两条链路、两个来源**（B：材料侧抓取报出的陌生仓库挂哪一行；
+        A：名单同步报出的"一个全名挂 ≥2 个仓库"选哪一个）⇒ 失败原因**各报各的**。 */
+  const aold = document.getElementById('archBox');
+  if (aold) aold.remove();
+  if (ARCP.length || ARCP_ERR) {
+    const asrc = ARCP_SRC && ARCP_SRC.target
+      ? `清单来自<b>最近一次「常用项目列表」同步</b>：<span class="fc">${esc(ARCP_SRC.target)}</span>`
+        + (ARCP_SRC.at ? ` · ${esc(ARCP_SRC.at)}` : '')
+      : '⚠️ 没找到同步记录（清单可能来自更早的会话）';
+    const arows = ARCP.map((it, i) => `<tr>
+      <td class="sm">${esc(it.full)}</td>
+      <td class="sm">${it.whs.length} 个待选<br><span class="mut sm">${esc(it.whs.join('、'))}</span></td>
+      <td class="sm">${em(it.reason)}</td>
+      <td class="ctr now"><button class="btn sm pri" data-act="pjArchOpen" data-arch="${i}">选一个仓库建行</button></td></tr>`).join('');
+    const abox = document.createElement('div');
+    abox.id = 'archBox';
+    abox.className = 'card';
+    abox.innerHTML = `<h4>待人工建档（链路 A · 多仓库）<span class="sp"><span class="mut sm">共 ${ARCP.length} 条 · ${asrc}</span></span></h4>
+      <div class="bd">
+        ${ARCP_ERR ? `<div class="tip dg" style="margin:0 0 8px">⚠️ <b>待建档清单没取到</b>：${esc(ARCP_ERR)}
+          <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
+        <div class="tip" style="margin:0 0 8px"><b>为什么这里要人来定</b>：这个全名在 i8 名单里挂了
+          <b>≥2 个仓库</b>，而<b>一条普通项目只挂一个仓库</b>（决策 2）⇒ 系统<b>不猜</b> ——
+          请你<b>选定一个</b>，系统按它建行；⚠️ 其余仓库<b>不会</b>再建行。</div>
+        <table class="dt cond"><thead><tr><th>项目全名</th><th>待选仓库</th><th>系统为什么不自己定</th><th></th></tr></thead>
+        <tbody>${arows}</tbody></table>
+      </div>`;
+    host.prepend(abox);
+  }
   const old = document.getElementById('pendBox');
   if (old) old.remove();
   if (!PEND.length && !PEND_ERR) return;        /* 没有待办、也没出错 ⇒ 不占地方 */
@@ -5899,6 +5974,34 @@ async function openPendDialog(i) {
   });
 }
 
+/* 打开「选定仓库 ⇒ 建档」弹窗（`TAIL-45`）—— 形态照上面那个（信息块 ＋ 一个下拉 ＋ 两键），
+   只把语义从「选哪条档案行」换成**「选哪个仓库」**：全名是**已知**的（同步回执给的），
+   缺的是"用哪个仓库名建这一行"（决策 2：一条普通项目只挂一个仓库）。
+   ⚠️ 候选 = **那次同步报出的 i8 名单减去已被占用的**（后端现算给的）⇒ 这里⛔ 不自己过滤、
+      也⛔ 不给"手填仓库名"的口子（§9.4：仓库名以 i8 为准）。 */
+async function openArchDialog(i) {
+  const it = ARCP[i];
+  if (!it) return;
+  const opts = it.whs.map(w => `<option value="${esc(w)}">${esc(w)}</option>`).join('');
+  /* ⚠️ 当时那份里**少了谁**要看得见（否则用户会以为系统漏报了某个仓库） */
+  const gone = it.stored.filter(w => !it.whs.includes(w));
+  ARCP_DLG = it;
+  modal({
+    title: `选定仓库 · ${esc(it.full)}`,
+    body: `<div class="tip" style="margin-bottom:10px"><b>链路 A · 多仓库建档</b>：i8 名单里这个全名挂了
+      <b>${it.stored.length}</b> 个仓库，而<b>一条普通项目只挂一个仓库</b>（决策 2）⇒ <b>系统不猜</b>，
+      请你选定<b>一个</b>，系统按它建行（⛔ 仓库名不许手填，§9.4）。</div>
+      ${kvBlock([['项目全名', `<span style="font-size:11.5px">${esc(it.full)}</span>`],
+                 ['i8 名单里的仓库', `<span style="font-size:11.5px">${esc(it.stored.join('、'))}</span>`],
+                 ['已被别的行占用（不列）', `<span style="font-size:11.5px">${gone.length ? esc(gone.join('、')) : '（无）'}</span>`],
+                 ['系统当时为什么没自己定', `<span style="font-size:11.5px">${em(it.reason)}</span>`]])}
+      <div class="fld"><label>选定一个仓库（候选 = i8 名单里那条，减去已被占用的）</label>
+        <select class="inp" id="arcWh">${opts}</select></div>`,
+    footer: `<button class="btn" data-act="closeModal">取消</button>
+      <button class="btn pri" data-act="pjArchOk">按这个仓库建行</button>`,
+  });
+}
+
 /* ============ MOD-09 特殊费用月报表（前端壳接线 · `TAIL-27`）============
    ⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 这里**一律过 `N0()`**：
       原型切片里有 `r[1].toFixed(2)`，字符串会**直接 TypeError 整页崩**（而且不报错地坏）。
@@ -5947,6 +6050,7 @@ async function boot() {
     const pj = await API.projects(); PJs = (pj || []).map(adaptProject);
   });
   await soft('待人工指认', reloadPending);   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
+  await soft('待人工建档', reloadArchPend);  /* ⭐ `TAIL-45`：链路 A ③-b「多仓库 ⇒ 选定一个」那一路 */
   await soft('修改留痕', async () => {
     const tr = await API.trails();
     PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));

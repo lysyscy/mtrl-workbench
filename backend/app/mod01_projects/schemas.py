@@ -153,3 +153,40 @@ class PromoteOut(BaseModel):
     disp: str = ""
     disp_followed: bool = Field(False, description="展示名原本沿用占位名 ⇒ 一并跟着换了")
     message: str = ""
+
+
+class ArchivePendingOut(BaseModel):
+    """`m01` 入口的「待人工建档」清单（`TAIL-45`）：**链路 A ③-b「≥2 个仓库」那一条**。
+
+    ⚠️ `source` 如实说明来源（⛔ 不装作"刚刚"）：清单来自**最近一次「常用项目列表」同步**；
+       `dropped` = 已被解决（人挑过 / 别处建过）而**当场丢掉**的条数。
+    """
+
+    found: bool = False
+    items: list[dict] = Field(default_factory=list)
+    source: dict = Field(default_factory=dict)
+    dropped: int = 0
+
+
+class ArchiveRowRequest(BaseModel):
+    """**选定一个仓库 ⇒ 建行**（`TAIL-45`）。
+
+    ⚠️ 这里**没有** `project_id`（行还不存在）；定位靠 `full_name` ＋ `warehouse_name` 这一对，
+       而两者都**必须来自清单**（后端按当前档案现算后再校验，⛔ 不是"信前端传什么就写什么"）。
+    """
+
+    full_name: str = Field(..., description="要建哪一条（项目全名，来自「待人工建档」清单）")
+    warehouse_name: str = Field(..., description="选定哪个仓库（**来自 i8 名单的候选**，⛔ 不许手填）")
+
+
+class ArchiveRowOut(BaseModel):
+    """建档结果（**成败都要给人话**：被拒时由 `MustReportError` 出一句中文原因）。"""
+
+    ok: bool = True
+    id: int
+    name_full: str = ""
+    warehouse_name: str = ""
+    project_type: str = ""
+    type_label: str = ""
+    disp: str = ""
+    message: str = ""

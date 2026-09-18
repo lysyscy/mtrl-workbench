@@ -11,11 +11,15 @@ from sqlalchemy import select
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+from app.mod01_projects import archive_pending as AP
 from app.mod01_projects import pending as PE
 from app.mod01_projects import repository as repo
 from app.mod01_projects.domain import build_candidates, norm_full_name, ordered, resolve_ownership
 from app.mod01_projects.models import Project
 from app.mod01_projects.schemas import (
+    ArchivePendingOut,
+    ArchiveRowOut,
+    ArchiveRowRequest,
     CandidateOut,
     CreateProjectRequest,
     LogOut,
@@ -249,6 +253,43 @@ def promote(req: PromoteRequest) -> PromoteOut:
             message=(f"已扶正：占位名「{old}」→ 真实仓库名「{real}」"
                      + ("；展示名一并跟着换" if followed else "（展示名是人工设过的 ⇒ 未动它）")
                      + " —— 这是**系统写入**，不是人工改仓库名（§2.3.1）"),
+        )
+
+
+@router.get("/archive-pending", response_model=ArchivePendingOut)
+def archive_pending() -> ArchivePendingOut:
+    """⭐ **「待人工建档」清单**（`TAIL-45`）—— `m01` 那个入口的数据源。
+
+    **为什么有这条**：链路 A ③-b 的「全名对应 ≥2 个仓库」**必须人选定一个**（系统不猜），
+    而这条原先只在**同步回执**里报一次（一刷新就没了）⇒ `m01` 上**没有可点的入口**
+    （就是 `chain_audit` 里 `A` 链路剩的那条红）。
+
+    ⚠️ 只认**最近一次成功的「常用项目列表」同步**，且**逐条按当前档案现算** ——
+       已挑过 / 已建过行的不再摆着（否则就是让用户对着旧清单白干，`TAIL-41` 同族）。
+    """
+    with session_scope() as s:
+        return ArchivePendingOut(**AP.live_pending(s))
+
+
+@router.post("/archive-row", response_model=ArchiveRowOut)
+def archive_row(req: ArchiveRowRequest) -> ArchiveRowOut:
+    """⭐ **选定一个仓库 ⇒ 就地建行**（`TAIL-45`）：把链路 A ③-b 的「列出」补成「可点」。
+
+    三条守卫 ＋ 建档出口**唯一**（都在 `archive_pending.pick_row` 里，⛔ 本层不重写）：
+    候选必须来自**那次同步报出的 i8 名单** · 该全名**还没有行**（决策 2：1 : 1） ·
+    该仓库名**没被别行占用**。
+    """
+    with session_scope() as s:
+        row = AP.pick_row(s, full_name=req.full_name, warehouse_name=req.warehouse_name)
+        ptype = str(row.project_type or "")
+        return ArchiveRowOut(
+            ok=True, id=row.id, name_full=str(row.name_full or ""),
+            warehouse_name=str(row.warehouse_name or ""),
+            project_type=ptype, type_label=PE.TYPE_LABEL.get(ptype, ptype),
+            disp=str(row.disp or ""),
+            message=(f"已建档：{row.name_full} → 仓库「{row.warehouse_name}」"
+                     f"（{PE.TYPE_LABEL.get(ptype, ptype)}）—— 这是**系统写入**（§9.4 仓库名以 i8 为准）；"
+                     "⚠️ 同一项目的**其余仓库不再建行**（决策 2：一条普通项目只挂一个仓库）"),
         )
 
 
