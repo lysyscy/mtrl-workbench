@@ -51,7 +51,7 @@ def session(*, projects, records):
 # ============================================================ ① 判定口径（唯一出口）
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-09")
 def test_命中处置的类别由唯一出口判定():
     """⭐ `classify_hits` = **判定口径的唯一出口**（`plan_recovery` 与「待指认」清单都吃它）。
 
@@ -67,7 +67,7 @@ def test_命中处置的类别由唯一出口判定():
                             p(2, FULL, "未建仓-01")]) == R.KIND_CREATE_SMALL
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-09")
 def test_归一化后精确相等才算命中():
     """§17.2：**归一化全名精确相等** —— ⛔ 不包含、不模糊、无兜底（「宁报出来给人看，不猜」）。"""
     proj = [p(1, FULL, "未建仓-01")]
@@ -79,7 +79,7 @@ def test_归一化后精确相等才算命中():
     assert R.hits_of_full(by, FULL[2:]) == []
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-09")
 def test_每条unresolved都带kind不靠中文原因串认类别():
     """⛔ **不许用中文 `reason` 串判类别**：文案一改，"挑出要人指认的那一类"就会**静默失效**。"""
     plan = R.plan_recovery(
@@ -95,7 +95,7 @@ def test_每条unresolved都带kind不靠中文原因串认类别():
 # ============================================================ ② 清单从哪来、只认最近一次
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-08")
 def test_两条材料侧链路的登记键都要被认出来():
     """⭐ 防漂：`MATERIAL_TARGETS` 认的是各自 `fetch_service.SPEC_KEY` —— 它一旦改名，
     「最近一次材料侧抓取」就会**静默认不出来**（清单恒空，页面看着像"本来就没有待办"）。
@@ -112,7 +112,7 @@ def test_两条材料侧链路的登记键都要被认出来():
     assert not PE.is_material_target("")
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-08")
 def test_待指认清单只认最近一次材料侧抓取():
     """⭐ **只认最近一次**（与 `latest_unresolved` 同款口径）：
 
@@ -140,7 +140,7 @@ def test_待指认清单只认最近一次材料侧抓取():
     assert got3["run_record_id"] == 4 and got3["items"] == [], "不许信记录传入顺序（按 id 取最新）"
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-08")
 def test_清单条目是两个链路共用一份不会各写一份():
     """收发结存（`setl`）与库存单据（`inv`）**共用同一个键与同一份读法** —— 写侧唯一出口。"""
     d = PE.record_detail([item()])
@@ -157,7 +157,7 @@ def test_清单条目是两个链路共用一份不会各写一份():
 # ============================================================ ③ 读出来必须按当前档案现算
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-08")
 def test_清单逐条按当前档案现算已解决的当场丢掉():
     """清单是**线索**，真相是**档案现在的样子**（`pending` 口径 2）——
 
@@ -187,7 +187,7 @@ def test_清单逐条按当前档案现算已解决的当场丢掉():
     assert len(PE.live_items(s)) == 1
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-08")
 def test_清单里没有全名的条目直接丢掉():
     """仓库名单里查不到全名那一类（`no_owner`）**没有全名** ⇒ 本入口处理不了它（它要人去核对名单）。"""
     s = session(projects=[p(1, FULL, "未建仓-01"), p(2, FULL, "未建仓-02")],
@@ -201,7 +201,7 @@ def test_清单里没有全名的条目直接丢掉():
 # ============================================================ ④ 候选清单（端点①的数据源）
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-09")
 def test_候选清单只含该全名且含归档行并标出占位():
     """§17.2 / §17.4：**只查本地档案表（含归档行）**；字段单 = id / 类型 / 仓库名 / 展示名 / 状态 / phid。"""
     rows = PE.candidates(
@@ -219,7 +219,7 @@ def test_候选清单只含该全名且含归档行并标出占位():
     assert rows[0]["status"] == "active" and "phid" in rows[0]
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-09")
 def test_候选清单与判定吃同一份索引():
     """⭐ 防"系统说命中 2 条、弹窗里只列出 1 条"：两处必须**同一份索引**（`rows_by_full`）。"""
     proj = [p(1, FULL, "未建仓-01"), p(2, FULL, "未建仓-02")]
@@ -230,7 +230,7 @@ def test_候选清单与判定吃同一份索引():
 # ============================================================ ⑤ 端点契约
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-10")
 def test_三个端点都在且写入口按id定位():
     """`TAIL-30`-③ 的三条端点（清单 / 候选行 / 指定扶正）—— **写**必须收 `project_id`（铁律 5/6）。"""
     from app.mod01_projects.router import router as mod01_router
@@ -243,7 +243,7 @@ def test_三个端点都在且写入口按id定位():
     assert "project_id" in PromoteRequest.model_fields, "写入口必须按 id 定位（⛔ 不用名字反查）"
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-10")
 def test_写入口缺参数直接422不进业务():
     """`project_id` 缺失 ⇒ FastAPI 直接 422（**不连库、不落到"猜一个行"**）。"""
     from fastapi.testclient import TestClient
@@ -254,7 +254,7 @@ def test_写入口缺参数直接422不进业务():
     assert client.post("/api/m01/promote", json={"warehouse_name": "甲仓"}).status_code == 422
 
 
-@acc()
+@acc("ACC-PRJ-AUTO-001", "001-10")
 def test_写入口有一致性守卫且落库只走系统扶正出口():
     """⚠️ 端点层要真库才跑得起来 ⇒ **行为**由真机 `tools/_e2e_m01_promote.py` 覆盖（含"跨全名指认被拒"）。
 
