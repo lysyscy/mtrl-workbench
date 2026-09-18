@@ -25,7 +25,8 @@ from app.mod06_proc import domain as D
 from app.mod06_proc import importer, mech_ui, repository as repo
 from app.mod06_proc.import_view import render_import_page
 from app.mod06_proc.service import build_import_data, build_page_data, parse_state
-from app.mod06_proc.view import render_export_preview, render_proc_page
+# ⚠️ 2026-09-18（`§19` 批 2）：`app.mod06_proc.view`（`render_proc_page`/`render_export_preview`）
+#    的导入已随"过程资料页半边"删除 —— ⛔ 别再加回来（那两个渲染件已整体删除）。
 from app.mod08_inv.router import query_params
 
 router = APIRouter(tags=["mod06"])
@@ -33,6 +34,7 @@ router = APIRouter(tags=["mod06"])
 MESSAGE_KINDS = ("ok", "wn", "err")
 
 
+# ⚠️ `MESSAGE_KINDS` 与 `_one` 现在只剩「历史导入」那几个 PRG 在用（过程资料页半边已删）。
 def _one(params: dict, name: str, default: str = "") -> str:
     value = params.get(name, default)
     if isinstance(value, (list, tuple)):
@@ -40,31 +42,12 @@ def _one(params: dict, name: str, default: str = "") -> str:
     return str(value or "").strip()
 
 
-# ---------------------------------------------------------------- 过程资料页
-
-
-@router.get("/m06", response_class=HTMLResponse)
-def proc_page(request: Request):
-    params = query_params(request)
-    with session_scope() as s:
-        data = build_page_data(s, parse_state(params))
-    kind = _one(params, "msgkind") or "ok"
-    return HTMLResponse(render_proc_page(
-        data,
-        message=_one(params, "msg"),
-        kind=kind if kind in MESSAGE_KINDS else "ok",
-        mech_ym=D.normalize_ym(_one(params, "mech_ym")),
-    ))
-
-
-@router.get("/m06/export", response_class=HTMLResponse)
-def proc_export(request: Request):
-    """导出清单预览（§7.1 · 001-01）。
-
-    ⚠️ 本端点**只出清单**（形态与原型一致）；**真实文件**走 `/api/m06/export`（`TAIL-04` 片 4a）。
-    """
-    with session_scope() as s:
-        return HTMLResponse(render_export_preview(build_page_data(s, parse_state(query_params(request)))))
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：**过程资料页半边已删**（授权 `D18`）——
+#    `proc_page`（`GET /m06`）与 `proc_export`（`GET /m06/export` 的清单预览页）都已删除；
+#    导出**真下载**走 `/api/m06/export`（壳在用 ✓，保留）。
+#    ⚠️ **本文件的「历史导入」半边仍在**：`GET /m06/import` ＋ `preview|confirm|rollback` 三个 PRG ——
+#       壳里**没有任何 `m06/import` 引用**（实测）⇒ 那是全站**唯一**的导入入口 ⇒ **暂留**（前置未满足：
+#       要删得先给壳一个"历史导入"入口）。（同 `m14` 的设置页：能力只在旧页，删了就没了。）
 
 
 @router.get("/api/m06/export")
@@ -97,44 +80,10 @@ def api_proc_export(request: Request):
                         headers={"X-Export-Filename": quote(path.name)})
 
 
+# ⚠️ 2026-09-18（`§19` 批 2）：**PRG 版机械手录已删**（`POST /m06/mech` ＋ `mech_save`）——
+#    壳走的是 JSON 版 `POST /api/m06/mech`（与它**同一份判定** `mech_ui.parse_mech_values`
+#    ＋ `repo.save_mech` ✓，见本文件下方）。⛔ 别把"机械手录"整条当成没实现。
 # ---------------------------------------------------------------- ① 机械手录（§5.2.5 ③）
-
-
-@router.post("/m06/mech")
-async def mech_save(request: Request):
-    """保存某「核算月 × 项目」的**机械 6 列手录值**（两段都可录；**负数拒绝且不写库**）。
-
-    ⚠️ 手录值落**旁路载体** ⇒ 重抓 i8 / 重导历史**都不覆盖它**（§5.2.5 ③）。
-    """
-    form = await request.form()
-    warehouse = str(form.get("pj") or "").strip()
-    tab = str(form.get("tab") or "").strip()
-    ym = D.normalize_ym(form.get("ym"))
-    back = "/m06?" + urlencode({"pj": warehouse, "tab": tab})
-
-    def _fail(message: str) -> RedirectResponse:
-        return RedirectResponse(back + "&" + urlencode({"msg": message, "msgkind": "err"}),
-                                status_code=303)
-
-    if not warehouse:
-        return _fail("没有选中项目 —— 先在页面上选一个项目再手录（项目键 = 仓库名）。")
-    if not ym:
-        return _fail(f"核算月认不出：{form.get('ym') or '（空）'} —— 请写 2026-08 这种形态。")
-    try:
-        values = mech_ui.parse_mech_values({f"mech_{i}": form.get(f"mech_{i}")
-                                            for i in range(len(D.MECH_COLUMNS))})
-    except ValueError as exc:
-        return _fail(f"未保存：{exc}")
-
-    with session_scope() as s:
-        repo.save_mech(s, ym=ym, warehouse=warehouse,
-                       values={k: Decimal(v) for k, v in values.items()},
-                       project_id=None)
-    return RedirectResponse(
-        back + "&" + urlencode({"msg": f"已保存 {ym} 的机械 {len(D.MECH_COLUMNS)} 列手录值"
-                                       f"（旁路载体，重抓 / 重导都不会覆盖它）",
-                                "msgkind": "ok", "mech_ym": ym}),
-        status_code=303)
 
 
 # ---------------------------------------------------------------- ② 历史导入（§5.2.5 ①②）

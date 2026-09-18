@@ -187,9 +187,9 @@ def test_材料费只作引用只读且无编辑入口():
 @acc(CASE, "001-09")
 def test_差异行可跳转到库存单据():
     data = _data(pj="甲仓", tab=D.TAB_DIFF)
-    href = D.jump_query(data["diffs"][0])
-    assert href.startswith("/m08?")
-    assert "only_adj=1" in href and "pj=%E7%94%B2%E4%BB%93" in href      # 仓库名 = 项目键
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先这里断言**旧页的 URL 形态**（`D.jump_query` →
+    #    `/m08?pj=…&only_adj=1`）。旧页删（`D18`）后该纯函数已删（只被测试调用 ⇒ W1b 报红），
+    #    同一 claim 由**壳的行内入口**守（见本函数末尾 ✓）—— 差异行仍在（下面 `diffs` 的实质不动）。
     # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 看「跳转链接渲染出来了」；旧页删（`D18`）后
     #    形态搬到壳 —— 壳里同一件事是**行内动作**（`data-act="goInvAdj"` ＋ 带单据 id），
     #    不是整页跳 `/m08?only_adj=1`（那是**旧页的 URL 形态**）。`jump_query` 的纯函数断言上面已钉 ✓。

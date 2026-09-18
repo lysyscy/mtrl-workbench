@@ -19,7 +19,6 @@ from app.mod06_proc import domain as D
 from app.mod06_proc import importer, mech_ui, repository as repo
 from app.mod06_proc.models import ProcHistoryBatch, ProcHistorySnapshot
 from app.mod06_proc.service import build_page_data, build_import_data, parse_state
-from app.mod06_proc.view import render_proc_page
 from app.mod08_inv.models import InvDetail
 from tests.acc_plugin import acc
 from tests.m06_helpers import (
@@ -39,8 +38,8 @@ def _sess() -> FakeSession:
     return FakeSession(copy.deepcopy(dataset_sections()))
 
 
-def _page(s: FakeSession, **kw) -> str:
-    return render_proc_page(build_page_data(s, parse_state({"pj": WAREHOUSE})), **kw)
+# ⚠️ 2026-09-18（`§19` 批 2）：`_page()`（取旧页 html）已随过程资料页删除 ⇒ 整件移除
+#    （它只被上面那两条页面形态用例用过）。
 
 
 def _by_month(s: FakeSession) -> dict[str, dict]:
@@ -52,27 +51,20 @@ def _xlsx(rows: list[list], header=MAT_HEADER) -> bytes:
 
 
 # ============================================================ 机械手录（§5.2.5 ③）
+#
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：过程资料页半边已删（授权 `D18`）——
+#    · 「机械手录区块只给机械列输入框」＝**页面形态** ⇒ 搬壳：`test_wired_m06.py` 的
+#      「机械录入口只送 mech 键 / 材料列没有输入面」；
+#    · 「回执条必须转义」＝**旧页 PRG 的提示文案形态** ⇒ 随页作废（壳的 toast 一律过 `esc()`，
+#      另有全站口径在守；这条旧页形态没有独立 claim）；
+#    · 「历史导入入口在页面上」⇒ 归**仍在的**导入页那一段（见下方「历史导入」小节 ✓）。
+#    保留下来的两条只碰**入参解析/落库**（与页面无关）✓。
 
 
 @acc()
-def test_机械手录区块只给机械列输入框且两段都在():
-    html = _page(_sess())
-    for i in range(len(D.MECH_COLUMNS)):
-        assert f'name="mech_{i}"' in html, f"缺 mech_{i} 输入框"
-    assert 'action="/m06/mech"' in html
-    # ⛔ 材料列一个输入框都不许有（§5.2.3 单向流）
-    assert 'name="in_' not in html and 'name="out_' not in html
-    # 入口：历史导入（历史段唯一修改通道）
-    assert f'href="/m06/import?pj={WAREHOUSE}"' in html
-    # 已手录月份列出来（2026-06/07/10 有手录）
-    assert "已手录 <b>3</b> 个月" in html and "2026-06" in html
-
-
-@acc()
-def test_机械手录回填现值_空按零_负数与非数字报错():
-    html = _page(_sess(), mech_ym="2026-06")
-    assert re.search(r'name="ym" value="2026-06"', html), "核算月没带回"
-    assert re.search(r'name="mech_0" value="7.00"', html), "该月现值没预填"
+def test_机械手录入参解析_空按零_负数与非数字报错():
+    """⚠️ 原先这条还借旧页 html 看「核算月带回 / 现值预填」；那是页面形态，旧页删后随之删掉，
+    留下的**入参解析（空按 0 / 负数与非数字报错）与月份归一**是与页面无关的实质。"""
 
     zeros = {f"mech_{i}": Decimal("0.00") for i in range(len(D.MECH_COLUMNS))}
     assert mech_ui.parse_mech_values({}) == zeros, "空框按 0（0 是合法录入值）"
@@ -107,11 +99,8 @@ def test_机械手录落库后表内取到_且重抓重导都不覆盖():
     assert all(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS)
 
 
-@acc()
-def test_机械手录回执条必须转义():
-    html = _page(_sess(), message="<script>alert(1)</script>", kind="err")
-    assert "<script>alert(1)</script>" not in html
-    assert "&lt;script&gt;" in html
+# ⚠️ 原先还有一条 `test_机械手录回执条必须转义`（旧页 PRG 的 `msg` 参数反射）—— 随页作废：
+#    壳的提示一律过分 `esc()`（全站口径），那条是**旧页形态专用**的回归，没有独立 claim。
 
 
 # ============================================================ 历史导入（§5.2.5 ①②）

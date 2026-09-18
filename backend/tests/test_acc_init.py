@@ -97,7 +97,10 @@ def test_过程资料手录与Excel上传两个入口都在():
        过程资料的**月度口径**归 `ACC-RPT-PROC-001/002` —— 别交叉挂。
     """
     paths = _paths()
-    assert "/m06/mech" in paths                                   # 手录入口
+    # ⚠️ 2026-09-18（`§19` 批 2）：PRG 版手录端点 `POST /m06/mech` 已随**过程资料页**删除（授权 `D18`）——
+    #    它的 claim（「机械手录入口在」）**没删，搬到了壳**：`tests/test_wired_m06.py` 的
+    #    「录机械费入口挂在 `BIND` 钩子」＋「后端机械写端点存在」（`POST /api/m06/mech` ✓）。
+    #    ⚠️ 下面四条**仍在**（历史导入半边**暂留**：壳里没有任何导入入口 ⇒ 删不得）。
     assert {"/m06/import", "/m06/import/preview",
             "/m06/import/confirm", "/m06/import/rollback"} <= paths  # 上传三步 ＋ 纠错通道
     assert any(h == "/m06/import" for h, _t in NAV), "导航里要有这个入口"

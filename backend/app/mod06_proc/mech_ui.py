@@ -40,57 +40,11 @@ def parse_mech_values(raw) -> dict[str, Decimal]:
     return out
 
 
-def _value_of(data: dict, ym: str, key: str) -> str:
-    """该核算月的**现值**（用于回填表单）；没有这一行 ⇒ 空串。"""
-    for row in data.get("rows") or ():
-        if str(row.get(D.YM_KEY)) == ym:
-            value = row.get(key)
-            return "" if value in (None, "") else f"{to_money(value):.2f}"
-    return ""
-
-
-def block_html(data: dict, *, ym: str = "", message: str = "", kind: str = "ok") -> str:
-    """「机械手录」区块（表体下方）——**两段都可录** ＋ **0 合法 / 负数拒绝**的显式说明。
-
-    ⚠️ 输入框只给**机械 6 列**（`mech_*`）：材料列**不得出现输入框**（§5.2.3 · 判据 `ACC-RPT-PROC-001/001-08`）。
-    """
-    state = data["state"]
-    months = list(data.get("mech_months") or ())
-    fields = "".join(
-        f'<div class="fi"><label>{esc(name)}</label>'
-        f'<input class="inp num" name="mech_{i}" value="{esc(_value_of(data, ym, f"mech_{i}"))}" '
-        f'inputmode="decimal" placeholder="0.00"></div>'
-        for i, name in enumerate(D.MECH_COLUMNS)
-    )
-    tip = (f"已手录 <b>{len(months)}</b> 个月：{esc('、'.join(months) or '（还没有）')}。"
-           if months else "该项目还没有手录过机械费 —— 填一个核算月再保存即可。")
-    return (
-        '<details class="mech" data-seg="mech-manual" open>'
-        "<summary>机械手录（机械 6 列 · 两段都可录）…</summary>"
-        f'<form method="post" action="/m06/mech" class="mechf">'
-        f'<input type="hidden" name="pj" value="{esc(state.get("warehouse") or "")}">'
-        f'<input type="hidden" name="tab" value="{esc(state.get("tab"))}">'
-        '<div class="fbar">'
-        '<div class="fi"><label>核算月</label>'
-        f'<input class="inp" name="ym" value="{esc(ym)}" placeholder="{esc(PLACEHOLDER_YM)}"></div>'
-        f"{fields}"
-        '<div class="fi"><label>&nbsp;</label><span>'
-        '<button class="btn sm pri" type="submit">保存本月手录</button></span></div>'
-        "</div>"
-        f'<div class="mut sm" data-seg="mech-tip">{tip}'
-        "机械费报表（`MOD-10`）做好后**只换数据源、页面不动**（§5.2.5 ③）。"
-        "**0 是合法值**；**负数会被拒绝且不写库**。</div>"
-        "</form></details>"
-    )
-
-
-def notice_html(message: str, kind: str = "ok") -> str:
-    """回执条（PRG 回跳后显示）——**一律 `esc`**（消息走查询串 ⇒ 属反射型注入面）。"""
-    if not str(message or ""):
-        return ""
-    k = str(kind or "ok")
-    k = k if k in ("ok", "wn", "err") else "ok"
-    return f'<div class="notice {k}" data-seg="mech-msg">{esc(message)}</div>'
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：本件原先还有三个**页面专用**件 ——
+#    `_value_of`（表单回填现值）· `block_html`（「机械手录」区块）· `notice_html`（PRG 回执条）——
+#    它们只服务**旧服务端页**；旧页整体删除（授权 `D18`）后三者**零调用方**
+#    （`wiring_audit` 的 W1/W2 当场报出来 ✓）⇒ 一并删除。
+#    ⚠️ 剩下的 `parse_mech_values` 才是**口径所在**（空按 0 / 负数与非数字报错 ✓ 壳与 `/api/m06/mech` 共用）；
 
 
 __all__ = ["PLACEHOLDER_YM", "parse_mech_values", "block_html", "notice_html"]

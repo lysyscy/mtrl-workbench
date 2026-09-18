@@ -396,11 +396,11 @@ def diff_totals(rows: list[dict]) -> dict[str, Decimal | None]:
     return out
 
 
-def jump_query(row: dict) -> str:
-    """差异行 → **跳转库存单据页并自动筛出该行**（001-09：处置入口落在库存单据侧）。"""
-    from urllib.parse import urlencode
-
-    return "/m08?" + urlencode({"pj": row.get("warehouse") or "", "only_adj": "1"})
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：`jump_query()`（差异行 → `/m08?pj=…&only_adj=1` 的
+#    **旧页 URL 拼装**）已删除 —— 旧页整体删除（授权 `D18`）后它**只被测试调用**（`wiring_audit` 的
+#    W1b 当场报出来 ✓）。同一 claim（001-09 差异行可跳转到库存单据）现在落在**壳的行内入口**：
+#    `data-act="goInvAdj"`（带单据 id）⇒ 断言在 `tests/test_acc_proc_001.py`（壳）与
+#    `tests/test_wired_m06.py` 那一组里 ✓。⛔ 别再为了"留个纯函数"把它加回来。
 
 
 # ============================================================ 导出（§7.1 · ACC-RPT-EXP-001）
