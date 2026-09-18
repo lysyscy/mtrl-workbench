@@ -139,8 +139,18 @@ class WarehouseCheckOut(BaseModel):
 
 
 class PrinterSettingRequest(BaseModel):
+    """打印机设置（`ACC-PAY-SETUP-001` ＋ `TAIL-46`-③ 的三项：地址 / 出纸通道 / 打印机名）。
+
+    ⚠️ 通道口径照用户调好的 `i8一键打印_新版`：`auto` 依次试 IPP → 系统驱动 → RAW 9100（推荐）；
+    `ipp` 只走标准方式；`driver` 走 Windows 打印驱动（须给打印机名）；`raw` 只走 RAW 9100。
+    """
+
     printer_ipp_url: str = Field(..., description="打印机地址，形如 ipp://192.168.5.248")
+    print_mode: str = Field("auto", description="出纸通道：auto（自动降级）/ ipp / driver / raw")
+    printer_name: str = Field("", description="「系统驱动」通道用的打印机名（选 driver 时必填，其余留空）")
 
 
 class PrinterSettingResponse(BaseModel):
     printer_ipp_url: str
+    print_mode: str = "auto"
+    printer_name: str = ""

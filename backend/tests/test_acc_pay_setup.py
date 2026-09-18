@@ -146,4 +146,16 @@ def test_只改打印机不动其他配置(tmp_path):
     ]
     # 只有打印机那一行变化，其余（i8 账号 / 数据库 / 日志）一字不动
     assert changed == [("PRINTER_IPP_URL=ipp://192.168.5.248", "PRINTER_IPP_URL=ipp://192.168.5.250")]
-    assert len(lines) == len(original_lines)
+    # ⚠️ `TAIL-46`-③（2026-09-18）：打印机设置由「**只写地址**」扩成**三项**（地址 ＋ 出纸通道 ＋ 打印机名）
+    #    ⇒ 原先那句「行数不变」不再成立。**判据的 claim 没有变**（001-05 = 逐行改写、**其余配置一字不动**），
+    #    所以按 claim 改断言：① 原有 5 行里**除地址行外逐字未动**（上面 `changed` 已盯住）；
+    #                    ② 追加的行**只许是打印机设置自己那几个键**（⛔ 不许顺手写别的配置）。
+    _PRINTER_KEYS = ("PRINTER_IPP_URL", "PRINT_MODE", "PRINTER_NAME")
+    extra = [ln for ln in lines[len(original_lines):]]
+    assert extra, "文件里原本没有通道 / 打印机名两项 ⇒ 应当补在末尾"
+    assert all(ln.split("=", 1)[0] in _PRINTER_KEYS for ln in extra), \
+        f"只许追加打印机设置自己的键，实际追加：{extra}"
+    for a, b in zip(original_lines, lines):
+        if a.startswith("PRINTER_IPP_URL="):
+            continue
+        assert a == b, f"不该动的配置被改了：{a!r} → {b!r}"

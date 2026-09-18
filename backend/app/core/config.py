@@ -129,6 +129,11 @@ class Settings(BaseSettings):
 
     # --- 打印机（IPP 直投）---
     printer_ipp_url: str = ""
+    # ⭐ 打印**出纸通道**（`TAIL-46`-③ —— 口径照用户调好的 `i8一键打印_新版`）：
+    #    `auto` 依次试 IPP → 系统驱动 → RAW 9100；`ipp` 只走标准方式；`driver` 走 Windows 打印驱动；
+    #    `raw` 只走 RAW 9100。⚠️ 选 `driver` 时必须给 `printer_name`（同一台机器上驱动与 IP 是两回事）。
+    print_mode: str = "auto"
+    printer_name: str = ""
 
     # --- 当前操作人（留痕 / 手动行录入人；⚠️ `MOD-15` 用户管理落地前的中性占位）---
     operator_name: str = ""

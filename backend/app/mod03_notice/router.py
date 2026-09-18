@@ -559,15 +559,25 @@ def download_pdf(batch: str, name: str) -> FileResponse:
 
 @router.get("/settings/printer", response_model=PrinterSettingResponse)
 def get_printer_setting() -> PrinterSettingResponse:
-    """打印机地址当前值（设置弹窗回填用）。"""
-    return PrinterSettingResponse(printer_ipp_url=get_settings().printer_ipp_url)
+    """打印机设置当前值（设置弹窗回填用）—— **地址 ＋ 出纸通道 ＋ 打印机名**（`TAIL-46`-③）。"""
+    s = get_settings()
+    return PrinterSettingResponse(
+        printer_ipp_url=s.printer_ipp_url,
+        print_mode=s.print_mode or "auto",
+        printer_name=s.printer_name or "",
+    )
 
 
 @router.put("/settings/printer", response_model=PrinterSettingResponse)
 def set_printer_setting(req: PrinterSettingRequest) -> PrinterSettingResponse:
-    """修改打印机地址（SETUP-001）：写 `.env` + `cache_clear()` ⇒ 即时生效、无需重启。"""
-    value = apply_printer_setting(req.printer_ipp_url)
-    return PrinterSettingResponse(printer_ipp_url=value)
+    """修改打印机设置（SETUP-001）：写 `.env` + `cache_clear()` ⇒ **即时生效、无需重启**。
+
+    ⚠️ 三项**一起写**；任一项非法 ⇒ **一个字都不写**（先校验后落盘 —— 不许出现"地址改了、通道没改"的半套）。
+    """
+    out = apply_printer_setting(
+        req.printer_ipp_url, mode=req.print_mode, printer_name=req.printer_name
+    )
+    return PrinterSettingResponse(**out)
 
 
 # --------------------------------------------------------------- 内部

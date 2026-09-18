@@ -3467,11 +3467,16 @@ const ACT={
    return m03RunBatch(rows,'pdf'); },
  /* ⭐ `TAIL-46`：打印机设置的入口与保存（入口由 `BIND.m03` 注入到「批量打印」旁边） */
  m03PrinterOpen:()=>m03PrinterOpen(),
- m03PrinterSave:async ()=>{ const el=$('#m03PrinterUrl'); const v=((el&&el.value)||'').trim();
-   if(!v) return toast('请填打印机地址（形如 <span class="fc">ipp://192.168.5.248</span>）');
-   try { const r = await API.printerSet(v); closeModal();
-     return toast(`打印机地址已保存：<b>${esc(r.printer_ipp_url)}</b>（<b>即时生效</b>，无需重启）`, 8000); }
-   catch (e) { return toast(`<b>没保存上</b>：${esc(String((e && e.message) || e))}`, 9000); } },
+ m03PrinterSave:async ()=>{ const g=id=>((($(id)||{}).value)||'').trim();
+   const url=g('#m03PrinterUrl'), mode=g('#m03PrintMode')||'auto', nm=g('#m03PrinterName');
+   if(!url) return toast('请填打印机地址（形如 <span class="fc">ipp://192.168.5.248</span>）');
+   /* ⚠️ 三项的合法性**全交后端**（`settings_store` 先校验后落盘：任一项非法 ⇒ 一个字都不写）——
+      壳里⛔ 不另写一份校验（那会成第二份口径，且两处迟早不一致）。 */
+   try { const r = await API.printerSet(url, mode, nm); closeModal();
+     return toast(`打印机设置已保存：<b>${esc(r.printer_ipp_url)}</b> · 通道 <b>${esc(r.print_mode)}</b>`
+       + (r.printer_name ? ` · 打印机 <b>${esc(r.printer_name)}</b>` : '')
+       + `（<b>即时生效</b>，无需重启）`, 9000); }
+   catch (e) { return toast(`<b>没保存上</b>：${esc(String((e && e.message) || e))}`, 9500); } },
  batchPay:()=>{ const all=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    /* ⭐ 撤单行**不进付款批次**（走 `ntPayCand`，§4.2.7 方向）：正常路径下它们**根本勾不上**
       （勾选框对撤单行禁用、全选/按计划勾选也走同一出口）；这里再兜一道，
@@ -5164,7 +5169,8 @@ const API = {
      ⚠️ `ids` 必须是**系统内勾选**的通知书 id（001-09 明令：不收文件、不收手输清单）。 */
   m03Batch: (ids, mode) => API.post('/api/m03/batch', {ids, mode}),
   printerGet: () => API.get('/api/m03/settings/printer'),
-  printerSet: url => API.send('PUT', '/api/m03/settings/printer', {printer_ipp_url: url}),
+  printerSet: (url, mode, name) => API.send('PUT', '/api/m03/settings/printer',
+    {printer_ipp_url: url, print_mode: mode, printer_name: name}),
 
   /* ---- MOD-07 收发结存与活动大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
   m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
@@ -5588,15 +5594,33 @@ async function m03RunBatch(rows, mode) {
    ⚠️ 壳的 `V.m03` 切片里**没有**这个入口（改切片会登记漂移）⇒ 由 `BIND.m03` **渲染后注入**。
    ⚠️ 地址读写走 `GET/PUT /api/m03/settings/printer`（后端**写配置 + 清缓存** ⇒ 保存即生效、无需重启）。 */
 async function m03PrinterOpen() {
-  let cur = '';
-  try { cur = ((await API.printerGet()) || {}).printer_ipp_url || ''; }
-  catch (e) { return toast(`⚠️ 读不到当前打印机地址：${esc(String((e && e.message) || e))}`, 8000); }
+  let s = {};
+  try { s = (await API.printerGet()) || {}; }
+  catch (e) { return toast(`⚠️ 读不到当前打印机设置：${esc(String((e && e.message) || e))}`, 8000); }
+  const cur = String(s.printer_ipp_url || ''), mode = String(s.print_mode || 'auto');
+  const nm = String(s.printer_name || '');
+  /* ⚠️ 通道口径照用户调好的 `i8一键打印_新版`（2026-09-18）——**只把说明摆出来**，
+       判定全在后端（`settings_store.validate_print_mode`）。 */
+  const MODES = [
+    ['auto', '自动（推荐）', '依次试：IPP → 系统驱动 → RAW 9100。换任何打印机都能打，不用先知道它的脾气'],
+    ['ipp', 'IPP', '只用标准方式。好处是能确认打印机真的收件、打完了（Ricoh IM 3000 用这个）'],
+    ['driver', '系统驱动', '走 Windows 打印驱动出纸，最稳的一条路 —— ⚠️ 这台电脑必须装过那台打印机的驱动，且下面要选「打印机名」'],
+    ['raw', 'RAW 9100', '只用 RAW 通道。只对"自己能读 PDF"的打印机有意义 —— ⚠️ 多数小型机用它可能打出乱码'],
+  ];
   modal({
     title: '打印机设置',
-    body: `<div class="tip" style="margin:0 0 10px">地址形如 <span class="fc">ipp://192.168.5.248</span>。
-      ⚠️ 保存后<b>即时生效、无需重启</b>（后端写配置并清缓存）—— 打印投递按新地址走。</div>
+    body: `<div class="tip" style="margin:0 0 10px">保存后<b>即时生效、无需重启</b>（后端写配置并清缓存）—— 打印投递按新设置走。</div>
       <div class="fld"><label>打印机 IPP 地址</label>
-        <input class="inp" id="m03PrinterUrl" style="width:100%" value="${esc(cur)}"></div>`,
+        <input class="inp" id="m03PrinterUrl" style="width:100%" value="${esc(cur)}" placeholder="ipp://192.168.5.248"></div>
+      <div class="fld" style="margin-top:8px"><label>出纸通道</label>
+        <select class="inp" id="m03PrintMode" style="width:100%">
+          ${MODES.map(m => `<option value="${m[0]}" ${m[0] === mode ? 'selected' : ''}>${m[1]} —— ${m[2]}</option>`).join('')}
+        </select></div>
+      <div class="tip wn" style="margin:8px 0 0"><b>打不出纸 / 打出乱码时看这里</b>：不同打印机认的投递方式不一样 ——
+      原来能打的（Ricoh）保持<b>自动</b>不用动；换新机器先试<b>自动</b>，若打出来是<b>乱码</b>就改选<b>系统驱动</b>
+      （有的打印机<b>没有 PDF 解释器</b>，只认位图格式，这时 IPP 会被直接拒收、RAW 会收下但打成乱码）。</div>
+      <div class="fld" style="margin-top:8px"><label>打印机名（只有选「系统驱动」才用得上）</label>
+        <input class="inp" id="m03PrinterName" style="width:100%" value="${esc(nm)}" placeholder="如：Ricoh IM 3000（留空＝用系统默认打印机）"></div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="m03PrinterSave">保存</button>`,
   });
