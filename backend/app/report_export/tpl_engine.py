@@ -1,36 +1,31 @@
 # -*- coding: utf-8 -*-
-"""
-模板法重建引擎（通用）—— **逐字移植自交付面素材包**
+"""模板法重建引擎（**编排 ＋ 数据侧**）—— 逐字移植自交付面素材包
 `PRD素材包-20260911/input/common_tpl.py`（⚠️ 只搬**实现**，口径不反推）。
 
 **它做什么**：以「用户手作的那份成品 xlsx」为基底做 `zip` 字节替换，动态重建当月文件：
   1) sharedStrings：保留模板全部字符串 + 追加当月新字符串
   2) 数据 sheet：表头保留模板原样，数据行按模板行样式生成（28 列内通用）
-  3) pivotCacheDefinition：各字段 sharedItems 按当月数据动态（追加新值）
-  4) pivotCacheRecords：记录重建（空值 <x/>，分组空字段按配置）
-  5) pivotTable：location / axisRow items / rowItems 动态 + refreshOnLoad="1"
-  6) 缓存级对账：从新缓存重算 vs 从原数据重算，逐项核对
+  3) pivotCacheDefinition / pivotCacheRecords → `pivot_cache.py`
+  4) pivotTable：location / axisRow items / rowItems 动态
+  5) **透视显示区**（`TAIL-43`）→ `sheet_display.py`
+  6) 对账：数据 ↔ 缓存（`pivot_cache.verify_cache`）＋ 缓存 ↔ 显示区（`sheet_display.verify_display`）
 
-⭐ **本仓的三处适配**（其余与原文件逐字一致，改动处都带 `⭐ 本仓适配` 注释）：
-1. **数据优先由调用方给**（`cfg['data']`）—— 生产环境的数据主人在**库里**（`setl_detail` /
-   `inv_detail` / `mod08` 的解析产物），导出**不该**依赖一份 i8 原始导出件；
+## 拆件（2026-09-18 · `TAIL-43` 之后本文件曾 934 行 > 600 = 禁合入）
+| 文件 | 职责 |
+|---|---|
+| `xl_common.py` | 最底层原语（`NS` / `fmt_num` / `norm_num` / `parse_shared_items`）· **中立件** |
+| `pivot_cache.py` | 缓存两件重建 ＋ **缓存级对账** |
+| `sheet_display.py` | **显示区**重建 ＋ 显示区对账（`TAIL-43`） |
+| `tpl_engine.py` | 本文件 = 编排（`rebuild()`）＋ 数据侧（读数据 / sharedStrings / 数据 sheet / pivotTable） |
+
+⚠️ 三个中立件里的函数**本文件一律再导出**（`from … import …`）—— 全站引用都是
+   `tpl_engine.X` 形式（实测 grep 过），再导出 ⇒ 调用方**零改动**。
+
+⭐ **本仓的三处适配**（其余与原文件逐字一致）：
+1. **数据优先由调用方给**（`cfg['data']`）—— 生产环境的数据主人在**库里**；
    ⛔ 仍保留走 `src` 文件的能力（`cfg` 不给 `data` 时按原逻辑读）。
-   ⚠️ 素材包原版是「先无条件 `read_data(src)` 再用 `cfg['data']` 覆盖」⇒ **不给 `src` 就报错**，
-      这里把那句挪进 `else`。
-2. **对账不过 ⇒ 硬失败**（素材包只是打印出来给人看；生产里必须 `raise`，
-   ⛔ 绝不允许静默产出一个数字对不上的成品文件）。
-3. **删掉模块级 `warnings.filterwarnings('ignore')`** —— 那是**库**，import 就全局静音全站告警
-   （副作用太大）；确需静音的调用方自己在自己的作用域里做。
-
-用法：各具体表写薄配置脚本，调用 rebuild()：
-    cfg = {
-        'data_sheet': {...},   # 读原数据（给 `data` 时只用它的 col_count / num_cols）
-        'shared': {...},       # 数据 sheet 生成
-        'cache': {...},        # 缓存字段定义
-        'pivots': [...],       # 每个透视的动态规则
-        'verify': [...],       # 对账规则
-        'template': ..., 'src': ..., 'out': ...,
-    }
+2. **对账不过 ⇒ 硬失败**（素材包只是打印；生产里必须 `raise`）。
+3. **删掉模块级 `warnings.filterwarnings('ignore')`** —— 那是**库**，import 就全局静音全站告警。
 """
 import re
 import zipfile
@@ -41,44 +36,11 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 
 from app.core.errors import MustReportError
-
-NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
-
-
-# ================= 基础工具 =================
-def fmt_num(x):
-    s = ('%.10f' % float(x)).rstrip('0').rstrip('.')
-    return s if s not in ('', '-0') else '0'
-
-
-def norm_num(v):
-    """数字/数字字符串 -> float；空 -> None"""
-    if v is None:
-        return None
-    if isinstance(v, (int, float)):
-        return float(v)
-    s = str(v).replace(',', '').strip()
-    if s == '' or s == '-':
-        return None
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def parse_shared_items(seg):
-    """从 cacheField 的 sharedItems 段解析 -> (typ, [values], attrs)"""
-    si = re.search(r'<sharedItems([^>]*)>(.*?)</sharedItems>', seg, re.S)
-    if not si:
-        return None, [], {}
-    attrs = dict(re.findall(r'(\w+)="([^"]*)"', si.group(1)))
-    body = si.group(2)
-    vals = []
-    typ = None
-    for m in re.finditer(r'<(n|s|b|d)\s[^>]*v="([^"]*)"', body):
-        typ = m.group(1)
-        vals.append(unescape(m.group(2)))
-    return typ, vals, attrs
+# ⭐ 再导出：全站引用都是 `tpl_engine.X` ⇒ 拆件对外**零改动**
+from app.report_export.pivot_cache import rebuild_cache_def, rebuild_records, verify_cache
+from app.report_export.sheet_display import (pivot_column_specs, pivot_page_filter,
+                                            render_pivot_sheet, verify_display)
+from app.report_export.xl_common import NS, fmt_num, norm_num, parse_shared_items
 
 
 # ================= 读原数据 =================
@@ -124,6 +86,7 @@ def read_data(src, sheet_names=('报表1', 'Sheet1'), header_keywords=('序号',
     return hdr, data
 
 
+
 # ================= sharedStrings =================
 def build_sharedstrings(tpl_ss_xml, data):
     """模板 sharedStrings + 追加新字符串 -> (strs列表, str->idx映射)"""
@@ -148,6 +111,7 @@ def ss_xml(strs):
     return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             '<sst xmlns="%s" count="%d" uniqueCount="%d">%s</sst>'
             % (NS, len(strs), len(strs), ''.join(parts)))
+
 
 
 # ================= 数据 sheet 生成 =================
@@ -196,143 +160,6 @@ def gen_data_sheet(tpl_sheet, data, str_idx, num_cols, col_count,
                  new)
     return new
 
-
-# ================= 透视缓存重建 =================
-def rebuild_cache_def(tpl_pcd, data, num_cols, field_count, empty_fields=()):
-    """重建 pivotCacheDefinition：字段 sharedItems 按当月数据动态；返回 (xml, field_maps[value->idx])"""
-    fields = re.findall(r'<cacheField\b([^>]*)>(.*?)</cacheField>', tpl_pcd, re.S)
-    assert len(fields) == field_count, '模板 cacheField 数=%d 期望 %d' % (len(fields), field_count)
-    field_maps = []
-    new_parts = []
-    for i, (attrs, body) in enumerate(fields):
-        if i in empty_fields:
-            field_maps.append(None)
-            new_parts.append(body)
-            continue
-        typ0, seen0, _ = parse_shared_items(body)
-        is_num = i in num_cols
-        col_vals = []
-        for row in data:
-            v = row[i]
-            if is_num:
-                nv = norm_num(v)
-                col_vals.append(nv if nv is not None else '')
-            else:
-                col_vals.append(str(v) if v is not None and str(v).strip() != '' else '')
-        if not seen0:
-            if any(v != '' for v in col_vals):
-                typ = 'n' if is_num else 's'
-                seen = []
-            else:
-                new_parts.append(body)
-                field_maps.append({})
-                continue
-        else:
-            if is_num:
-                seen = []
-                for x in seen0:
-                    if x in ('-', ''):
-                        continue
-                    try:
-                        seen.append(float(x))
-                    except ValueError:
-                        pass
-            else:
-                seen = [str(x) for x in seen0]
-            typ = 'n' if is_num else 's'
-            if is_num and not seen and not any(v != '' for v in col_vals):
-                new_parts.append(body)
-                field_maps.append({})
-                continue
-        idx = {}
-        if typ == 'n':
-            for j, v in enumerate(seen):
-                idx[float(v)] = j
-            added = []
-            for v in col_vals:
-                if v == '':
-                    continue
-                f = float(v)
-                if f not in idx:
-                    idx[f] = len(seen)
-                    seen.append(f)
-                    added.append(f)
-            extra = ''.join('<n v="%s"/>' % fmt_num(k) for k in added)
-            new_seg = body
-            nums = [float(x) for x in seen]
-            m = re.search(r'<sharedItems([^>]*)>', new_seg)
-            if m:
-                a2 = dict(re.findall(r'(\w+)="([^"]*)"', m.group(1)))
-                if nums:
-                    a2['minValue'] = fmt_num(min(nums))
-                    a2['maxValue'] = fmt_num(max(nums))
-                a2['count'] = str(len(nums))
-                attr_s = ''.join(' %s="%s"' % (k, v) for k, v in a2.items())
-                new_seg = new_seg[:m.start()] + '<sharedItems%s>' % attr_s + new_seg[m.end():]
-            new_seg = re.sub(r'count="\d+"', 'count="%d"' % len(nums), new_seg)
-            if added:
-                new_seg = new_seg[:-len('</sharedItems>')] + extra + '</sharedItems>'
-        else:
-            for j, v in enumerate(seen):
-                idx[str(v)] = j
-            added = []
-            for v in col_vals:
-                if v == '':
-                    continue
-                sv = str(v)
-                if sv not in idx:
-                    idx[sv] = len(seen)
-                    seen.append(sv)
-                    added.append(sv)
-            extra = ''.join('<s v="%s"/>'
-                            % escape(str(k), {chr(34): '&quot;', chr(39): '&apos;'}) for k in added)
-            new_seg = re.sub(r'count="\d+"', 'count="%d"' % len(seen), body)
-            if added:
-                new_seg = new_seg[:-len('</sharedItems>')] + extra + '</sharedItems>'
-        field_maps.append(idx)
-        new_parts.append(new_seg)
-    names = []
-    for a, _ in fields:
-        m = re.search(r'name="([^"]*)"', a)
-        names.append(m.group(1) if m else 'f')
-    m = re.search(r'<cacheFields count="\d+">(.*?)</cacheFields>', tpl_pcd, re.S)
-    new_cd = (tpl_pcd[:m.start()]
-              + '<cacheFields count="%d">' % field_count
-              + ''.join('<cacheField name="%s" numFmtId="0">%s</cacheField>'
-                        % (escape(nm, {chr(34): '&quot;', chr(39): '&apos;'}), seg)
-                        for nm, seg in zip(names, new_parts))
-              + '</cacheFields>' + tpl_pcd[m.end():])
-    new_cd = re.sub(r'recordCount="\d+"', 'recordCount="%d"' % len(data), new_cd)
-    new_cd = re.sub(r'ref="[^"]*"', 'ref="A1:AB%d"' % (len(data) + 1), new_cd)
-    return new_cd, field_maps
-
-
-def rebuild_records(data, field_maps, num_cols, empty_fields=()):
-    rows = []
-    for i, row in enumerate(data, start=1):
-        xs = []
-        for f in range(len(field_maps)):
-            if f in empty_fields or field_maps[f] is None:
-                xs.append('<x v="0"/>' if f in empty_fields else '<x/>')
-                continue
-            idx = field_maps[f]
-            if f in num_cols:
-                nv = norm_num(row[f])
-                if nv is None:
-                    xs.append('<x/>')
-                else:
-                    xs.append('<x v="%d"/>' % idx[float(nv)])
-            else:
-                v = row[f]
-                sv = str(v) if v is not None and str(v).strip() != '' else ''
-                if sv == '':
-                    xs.append('<x/>')
-                else:
-                    xs.append('<x v="%d"/>' % idx[sv])
-        rows.append('<r>%s</r>' % ''.join(xs))
-    return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-            '<pivotCacheRecords xmlns="%s" count="%d">%s</pivotCacheRecords>'
-            % (NS, len(data), ''.join(rows)))
 
 
 # ================= pivotTable 动态 =================
@@ -392,92 +219,6 @@ def warehouse_order(tpl_wh_order, wh_set):
     return order
 
 
-# ================= 对账 =================
-def verify_cache(out_path, data, verify_rules, empty_fields=()):
-    """从新文件缓存重算 vs 原数据重算。
-    verify_rules: [{name, row, cols:(...), value, group_map:{旧:新}, filter:(字段,值), filter_cols:(...)}]"""
-    import xml.etree.ElementTree as ET
-    problems = []
-    zf = zipfile.ZipFile(out_path)
-    for name in ('xl/pivotCache/pivotCacheDefinition1.xml', 'xl/pivotCache/pivotCacheRecords1.xml'):
-        try:
-            ET.fromstring(zf.read(name))
-        except Exception as e:
-            problems.append('%s: %s' % (name, e))
-            zf.close()
-            return problems
-    cd = ET.fromstring(zf.read('xl/pivotCache/pivotCacheDefinition1.xml'))
-    cr = ET.fromstring(zf.read('xl/pivotCache/pivotCacheRecords1.xml'))
-    fields = cd.findall('{%s}cacheFields/{%s}cacheField' % (NS, NS))
-    fvals = []
-    for f in fields:
-        si = f.find('{%s}sharedItems' % NS)
-        vals = []
-        if si is not None:
-            for ch in si:
-                if ch.tag.endswith('n'):
-                    vals.append(float(ch.get('v')))
-                else:
-                    vals.append(str(ch.get('v')))
-        fvals.append(vals)
-
-    def _gv(xs, f):
-        v = xs[f].get('v')
-        if v is None or f >= len(fvals):
-            return None
-        return fvals[f][int(v)]
-
-    for rule in verify_rules:
-        cache_sum = {}
-        for r in cr.findall('{%s}r' % NS):
-            xs = r.findall('{%s}x' % NS)
-            if len(xs) < len(fvals):
-                continue
-            if rule.get('filter'):
-                ff, fv = rule['filter']
-                if _gv(xs, ff) != fv:
-                    continue
-            rowv = _gv(xs, rule['row'])
-            amt = _gv(xs, rule['value'])
-            if rowv is None or amt is None:
-                continue
-            gm = rule.get('group_map')
-            colv = []
-            for c in rule.get('cols', ()):
-                v = _gv(xs, c)
-                if v is not None and gm and v in gm:
-                    v = gm[v]
-                colv.append(v)
-            key = (rowv,) + tuple(colv)
-            cache_sum[key] = cache_sum.get(key, 0.0) + amt
-        data_sum = {}
-        for row in data:
-            amt = norm_num(row[rule['value']])
-            if amt is None:
-                continue
-            if rule.get('filter'):
-                if str(row[rule['filter'][0]]).strip() != rule['filter'][1]:
-                    continue
-            rowv = str(row[rule['row']]).strip()
-            colv = []
-            for c in rule.get('cols', ()):
-                v = str(row[c]).strip()
-                gm = rule.get('group_map')
-                if gm and v in gm:
-                    v = gm[v]
-                colv.append(v)
-            key = (rowv,) + tuple(colv)
-            data_sum[key] = data_sum.get(key, 0.0) + amt
-        for key in set(cache_sum) | set(data_sum):
-            got = round(cache_sum.get(key, 0.0), 2)
-            exp = round(data_sum.get(key, 0.0), 2)
-            if abs(got - exp) > 0.01:
-                problems.append('%s 对账失败 %s: %.2f vs %.2f' % (rule.get('name', '?'), key, got, exp))
-    if len(data) != len(cr.findall('{%s}r' % NS)):
-        problems.append('记录数 %d != 数据行 %d' % (len(cr.findall('{%s}r' % NS)), len(data)))
-    zf.close()
-    return problems
-
 
 # ================= 高层入口 =================
 def rebuild(cfg):
@@ -524,16 +265,20 @@ def rebuild(cfg):
     # 仓库顺序（模板优先）
     wh_field = ca.get('wh_field', 18)
     tpl_order = template_wh_order(tpl_pcd, tpl_pt1, wh_field)
-    wh_set = set()
+    # ⚠️ **按首次出现顺序去重**，⛔ 不用 `set` —— `set` 的迭代顺序对字符串是**进程内的
+    #    哈希顺序**（`PYTHONHASHSEED` 一变就变）⇒ 模板里没有的新仓库，行顺序会**每次跑不一样**。
+    #    以前只影响透视定义，`TAIL-43` 之后它**直接决定显示区每行的位置** ⇒ 必须确定。
+    wh_set = {}
     for row in data:
         w = str(row[wh_field]).strip()
         if w:
-            wh_set.add(w)
-    order = warehouse_order(tpl_order, wh_set)
+            wh_set.setdefault(w, None)
+    order = warehouse_order(tpl_order, list(wh_set))
     print('仓库(%d): %s' % (len(order), order))
     wh_cache_idx = field_maps[wh_field]
 
     new_pivots = {}
+    wh_order = {}
     for pv in cfg['pivots']:
         z2 = zipfile.ZipFile(template)
         tpl_pt = z2.read(pv['file']).decode('utf-8')
@@ -547,6 +292,7 @@ def rebuild(cfg):
         loc = pv['location_ref'](len(whs)) if callable(pv['location_ref']) else pv['location_ref']
         new_pivots[pv['file']] = patch_pivot_row(tpl_pt, whs, wh_cache_idx, loc,
                                                  pv.get('rowitems_mode', 'leading_empty'))
+        wh_order[pv['file']] = whs
 
     # ⭐ 本仓适配：「打开即刷新」写进 **`pivotCacheDefinition`**（唯一合法归属 —— 见
     #    `patch_pivot_row` 末尾那段实测纠正）。幂等：已带 `refreshOnLoad` 的不再重复加。
@@ -555,12 +301,30 @@ def rebuild(cfg):
 
     zin = zipfile.ZipFile(template)
     zout = zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED)
+    # ⭐ `TAIL-43`：**显示区重建** —— 见本节顶部那段实测根因。
+    #    ⚠️ 标签的顺序由引擎定（= 上面算出的 `whs`，与 `rowItems` 同序），**格子的值由调用方给**
+    #    （域内核只知道"数是多少"，不知道"哪一格"；`by_label` 以标签为键）。
+    new_sheets, display_specs = {}, []
+    for sp in cfg.get('sheets', []):
+        tz = zipfile.ZipFile(template)
+        try:
+            tpl_sheet = tz.read(sp['sheet_file']).decode('utf-8')
+        finally:
+            tz.close()
+        rows = [(str(w).strip(), sp['by_label'].get(str(w).strip(), {}))
+                for w in (sp.get('labels') or wh_order[sp['pivot']])]
+        full = dict(sp, rows=rows,
+                    total=(sp.get('total_label', '总计'), sp.get('total', {})))
+        new_sheets[sp['sheet_file']] = render_pivot_sheet(tpl_sheet, full, str_idx).encode('utf-8')
+        display_specs.append(full)
     for item in zin.infolist():
         db = zin.read(item.filename)
         if item.filename == 'xl/sharedStrings.xml':
             db = ss_xml(strs).encode('utf-8')
         elif item.filename == sh['sheet_file']:
             db = new_sheet.encode('utf-8')
+        elif item.filename in new_sheets:
+            db = new_sheets[item.filename]
         elif item.filename == 'xl/pivotCache/pivotCacheDefinition1.xml':
             db = cd.encode('utf-8')
         elif item.filename == 'xl/pivotCache/pivotCacheRecords1.xml':
@@ -573,6 +337,7 @@ def rebuild(cfg):
     print('输出:', out)
 
     problems = verify_cache(out, data, cfg.get('verify', []), ca.get('empty_fields', ()))
+    problems += verify_display(out, display_specs)      # ⭐ `TAIL-43` 独立第二条路径
     # ⭐ 本仓适配：对账不过 ⇒ **硬失败**（素材包只是打印；生产里静默交付一个对不上的成品
     #    是最坏的失败形态 —— 文件看着正常、数字是错的）。
     if problems:
@@ -581,5 +346,5 @@ def rebuild(cfg):
             + '；'.join(problems[:5])
             + ('' if len(problems) <= 5 else '（等共 %d 条）' % len(problems))
         )
-    print('✓ 缓存对账全部通过')
+    print('✓ 缓存对账 ＋ 显示区对账 全部通过')
     return out

@@ -11,6 +11,17 @@
    本仓的明细已在 `setl_detail`（17 列与导出表头一一对应）⇒ 不必留原始文件、
    也能导出**历史月份**与**手动导入**来的月份。
 2. **删掉模块级 `warnings.filterwarnings('ignore')`** —— 理由同 `tpl_engine`（库不该全局静音）。
+
+⚠️⚠️ **`TAIL-43` 同族缺陷（2026-09-18 一并复核并修）**：`Sheet1` 就是**透视的显示区**。
+   本表**原实现已经会写显示区**（`update_sheet_data` 用 openpyxl 逐行写 仓库 ＋ 4 个金额），
+   所以**当时没暴露** —— 2026-09 的仓库数（8）比模板（7）多，行是"长出来"的，没有旧行残留。
+   但它**只写新行、不清旧行** ⇒ 一旦某月仓库**变少**，模板旧渲染行就落到了新 `location`
+   之外（`patch_pivot` 只改 `location`/`rowItems`，Excel 只重画 `location` 之内），
+   **任何应用都不会去清它们** ⇒ 用户读到**上个月**的数。
+   ⇒ 已补：写完后**删掉新显示区之外的行**，并在 `verify()` 里加**「显示区之外不许再有行」**守卫。
+   ⚠️ **和库存单据表的差异（有意不同）**：那张走 `tpl_engine.render_pivot_sheet`（整块换
+   `<sheetData>`、`zip` 字节替换）；本表走 **openpyxl 直接改单元格 ＋ `delete_rows`** ——
+   两条路都能满足"显示区之外不留旧值"，本表**不改动既有机制**（已验收面，最小改动）。
 """
 
 from __future__ import annotations
@@ -160,6 +171,15 @@ def update_sheet_data(df, out_path, show_order):
     ws1.cell(row=r_grand, column=1).value = '总计'
     for j, m in enumerate(MONEY_FIELDS):
         ws1.cell(row=r_grand, column=2 + j).value = float(grand[m])
+    # ⚠️⚠️ `TAIL-43` 同族缺陷（2026-09-18 实测查实 · **本表当时靠"仓库数没变"侥幸没犯**）：
+    #    这张 `Sheet1` 就是**透视的显示区**。只写新行**不清旧行**的话，本月仓库**变少**时，
+    #    模板旧渲染行会留在新 `location` **之外** —— 而 `patch_pivot` 只改 `location`/`rowItems`，
+    #    Excel 只会重画 `location` 之内 ⇒ 区域外的旧值**任何应用都不会去清**，
+    #    用户打开就读到**上个月**的数（`TAIL-43` 在库存单据表上就是这么暴露的）。
+    #    ⇒ 这里必须把「新显示区之外的行」**删掉**（不是清空 —— 留着空行仍会撑大 `dimension`）。
+    last = r_grand
+    if ws1.max_row > last:
+        ws1.delete_rows(last + 1, ws1.max_row - last)
     wb.save(out_path)
     return pv, grand
 
@@ -336,6 +356,17 @@ def verify(out_path, df, pv, grand, show_order):
         if abs(round(sum(sums[m].values()), 2) - round(grand[m], 2)) > 0.01:
             problems.append(f'总计对账失败 {m}')
     zf.close()
+    # ⭐ `TAIL-43` 同族守卫：**显示区之外不许再有行**（否则就是模板旧渲染值残留）。
+    wb = openpyxl.load_workbook(out_path)
+    try:
+        ws = wb['Sheet1']
+        last = 4 + len(show_order)                    # 行 3 = 表头、4..(3+n) = 各仓、4+n = 总计
+        if ws.max_row > last:
+            problems.append(
+                'Sheet1 显示区之外还有 %d 行（僵尸旧值）：max_row=%d > %d'
+                % (ws.max_row - last, ws.max_row, last))
+    finally:
+        wb.close()
     return problems
 
 
