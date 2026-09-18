@@ -261,6 +261,41 @@ def main() -> int:
             if not ok:
                 errors.append("m07 自检未通过：" + what)
 
+        # ---- ⭐ 2026-09-18（用户裁定「甲」）提取表「结余」列：列 +1 ｜ 每行一个可编辑格 ｜ 值 == 后端
+        #      ⚠️ **本段只读** —— 写路径的真机验证走 `tools/_e2e_m07bal.py`（冒烟脚本不写库、可反复跑）。
+        m07b = page.evaluate("""async () => {
+            const be = await (await fetch('/api/m07/extract')).json();
+            const tbl = [...document.querySelectorAll('#view table')]
+                          .find(t => t.dataset.sortKey === 'm07:kinds');
+            if (!tbl) return {found: false};
+            const ths = [...tbl.querySelectorAll('thead th')].map(x => x.innerText.trim());
+            const ins = [...tbl.querySelectorAll('td input[data-act="extBal"]')];
+            const bad = [];
+            ins.forEach(i => {
+              const b = ((be.balances || {})[i.dataset.k] || {})[i.dataset.p];
+              const want = (b == null) ? '' : String(Number(b));
+              if (String(i.value) !== want) {
+                bad.push(i.dataset.k + '|' + i.dataset.p + ': ' + i.value + ' ≠ ' + want);
+              }
+            });
+            return {found: true, ths: ths, n: ins.length, bad: bad,
+                    empty: !!tbl.querySelector('tbody td[colspan]')};
+        }""")
+        print("⑩b m07 结余列 =", m07b)
+        oks7 = [
+            (bool(m07b.get("found")) and len(m07b.get("ths") or []) == 5
+             and "结余" in "".join(m07b.get("ths") or []),
+             f"⭐ 「结余」列就位（表头 5 列）：{m07b.get('ths')}"),
+            (m07b.get("n", 0) >= 1 or m07b.get("empty"),
+             "⭐ 每个数据行都有可编辑的「结余」格（该筛选下没有数据时如实给空态行）"),
+            (m07b.get("bad") == [],
+             f"⭐ 页面结余格逐格 == 后端 `balances`（未录入 ⇒ 空）：{m07b.get('bad')}"),
+        ]
+        for ok, what in oks7:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("m07 结余列自检未通过：" + what)
+
         # ---- m09 特殊费用月报表：⭐ 可观测证据 = **页面的数 == 当场重取后端的数** ＋ 演示容器已消失
         #      ⚠️ **只读**：写动作（增/改/删）的真机验证走 curl（见 `TAIL-27` 的收尾记录），
         #         这里**不写库** —— 冒烟脚本要能被反复跑，不留下残留数据。
