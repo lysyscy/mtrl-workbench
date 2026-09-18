@@ -239,6 +239,8 @@ def test_服务端渲染页与静态页拿到的是同一份变量():
     assert served.status_code == 200
     assert served.headers["content-type"].startswith("text/css")
     assert served.text == page.THEME_CSS          # 端点返回的就是那一份，不是副本
-    for path in ("/m04", "/m05", "/m03/notices"):   # 服务端渲染页内联的也是它
+    # ⚠️ 2026-09-18（`§19` 批 2）：`/m04` 已随旧渲染层删除（授权 `D18`）⇒ 从这一组里去掉
+    #    （⛔ 不是把断言写松：剩下这两页仍各自证明"服务端渲染页内联的就是那一份真源"）。
+    for path in ("/m05", "/m03/notices"):   # 服务端渲染页内联的也是它
         assert page.THEME_CSS in client.get(path).text, path
 

@@ -168,51 +168,8 @@ def attach_projects(rows: list[dict], projects: list[ProjectBrief]) -> list[dict
     return out
 
 
-__all__ = ["ParsedSheet", "parse_workbook", "attach_projects", "render_import_page"]
+__all__ = ["ParsedSheet", "parse_workbook", "attach_projects"]
 
-
-# ---------------------------------------------------------------- 导入页（服务端渲染）
-
-
-def render_import_page(*, message: str = "", message_kind: str = "ok", default_ym: str = "") -> str:
-    """付款计划**导入页**（`/m04/import`）—— 口径说明 ＋ 「先选月份 ＋ 选文件」。
-
-    ⚠️ 原型里导入是**弹窗**；服务端渲染下做成独立页（同一件事，且天然可分享 URL、无 JS）。
-    """
-    from app.mod03_notice.page import BASE_CSS, esc
-
-    notice = f'<div class="notice {esc(message_kind)}">{esc(message)}</div>' if message else ""
-    tips = [
-        "**导入前先选「年月」**：本批数据**一律归入所选月份**（按月归档，§4.3.6）。",
-        "**有效列**：项目 / 材料（其他支出·资产处·贸易公司）编号 / 外租机械（付款通知书）编号 / "
-        "该流程金额 / 本月预付款金额 / 付款时间 / 付款方式 / 备注。",
-        "**无效列**（科目 · 费用日期 · 收款单位 · 已付款金额 · 剩余付款金额）**原样入库、不参与审查、不要求修正**（§4.3.3）。",
-        "**「项目」列**是**用户导入前手工添加**的，按**展示名 / 仓库名**唯一匹配档案："
-        "命中 1 条 = 正常；0 条 = 标「未匹配」；多条 = 标「重名 N 条」。",
-        "**导入幂等**（§9.5）：重复导入**覆盖同源数据、不产生重复行**；换月 / 减行**不留残影**；"
-        "**可手改列**（付款时间 / 付款方式 / 备注）**不被导入覆盖**。",
-        "⚠️ **同月同单据号两行不是导入的错** —— 那是审查里的「重复上报」判定：**导入照收、审查暴露、用户逐行删**（§4.3.4）。",
-    ]
-    li = "".join(f"<li>{t}</li>" for t in tips)
-    return f"""<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>导入付款计划</title>
-<style>{BASE_CSS}
-form.imp{{background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:14px;display:flex;
-        flex-wrap:wrap;gap:14px;align-items:flex-end}}
-form.imp label{{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}}
-form.imp input{{border:1px solid var(--bd3);border-radius:5px;padding:6px 8px;font-size:13px}}
-</style></head><body>
-<div class="wrap">
-<nav class="nav"><a href="/m04">← 返回付款计划</a></nav>
-{notice}
-<section class="view"><h3>导入付款计划（Excel）</h3>
-<details class="tip" open><summary>口径说明 · {len(tips)} 条</summary><ul>{li}</ul></details>
-<form class="imp" method="post" action="/m04/import" enctype="multipart/form-data">
-<label>归入年月（先选月份）<input type="month" name="year_month" value="{esc(default_ym)}" required></label>
-<label>付款计划文件（.xlsx）<input type="file" name="file" accept=".xlsx,.xlsm" required></label>
-<button class="pri">开始导入</button>
-</form>
-</section></div>
-</body></html>"""
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：**导入页 `render_import_page` 已随旧渲染层删除**（授权 `D18`）——
+#    那是**页面件**；本文件保留的两件是**业务**（解析工作簿 / 挂项目），新壳的导入走
+#    `POST /api/m04/import`（multipart）。⚠️ 原型里导入是**弹窗** ⇒ 不再需要服务端渲染的独立页。

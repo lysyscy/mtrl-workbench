@@ -231,42 +231,63 @@ def _client(rows=(), projects=()):
     return TestClient(app), fake
 
 
-@acc()
-def test_导入页给出先选月份与口径说明():
-    client, _ = _client()
-    html = client.get("/m04/import").text
-    assert 'name="year_month"' in html and 'type="month"' in html
-    assert 'type="file"' in html
-    assert "导入前先选「年月」" in html
-    assert "原样入库、不参与审查、不要求修正" in html
-    assert "重复上报" in html                                     # 明确"这不是导入要拦的错"
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：旧**导入页**（`GET /m04/import`）与其 PRG 端点
+#    （`POST /m04/import`）已随旧渲染层删除（授权 `D18`）⇒ 原来钉在它们上的三条**搬了断言**：
+#    · 「导入页给出先选月份与口径说明」= **纯页面形态** ⇒ 随页作废（那几句口径现在写在**壳**的导入弹窗里，
+#      由 `tests/test_wired_m04.py::test_导入与手动行走后端` 的接线断言守）；
+#    · 「导入成功回报四个数」与「月份缺失显式报错」= **产品 claim** ⇒ 改指新壳在用的
+#      `POST /api/m04/import`（见下两条，**claim 一字未改**）。
+
+
+def _api_client(monkeypatch):
+    """离线 client：把 `plan_api_router.session_scope` 换成**假上下文**（yield 假写会话）。
+
+    ⚠️ JSON 端点走 `session_scope()`（**不是** `get_db` 依赖）⇒ 上面那个 `_client`（PRG 用）帮不上忙，
+       只能 monkeypatch **模块里的名字**（同 `tests/test_api_m04_force.py`）。
+    """
+    from contextlib import contextmanager
+
+    import app.mod04_plan.plan_api_router as m04_api
+    from tests.m03_action_helpers import FakeWriteSession
+
+    # ⚠️ 导入这条链只要 `PlanRow`（写入）与 `Project`（`project_briefs` 挂项目）—— ⛔ 不必凑齐各模型
+    fake = FakeWriteSession({PlanRow: [], Project: []})
+
+    @contextmanager
+    def _scope():
+        yield fake
+
+    monkeypatch.setattr(m04_api, "session_scope", _scope)
+    return TestClient(create_app(), raise_server_exceptions=False), fake
 
 
 @acc()
-def test_路由_导入成功回报四个数():
-    client, fake = _client()
+def test_导入端点_成功回报四个数(monkeypatch):
+    """⭐ claim 不变：导入成功 ⇒ **报出四个数**（新建 / 复用更新 / 删除残影 / 手动行未触碰）＋ 无效列原样入库。"""
+    client, fake = _api_client(monkeypatch)
     resp = client.post(
-        "/m04/import",
+        "/api/m04/import",
         data={"year_month": "2026-09"},
-        files={"file": ("plan.xlsx", _xlsx([_row()]), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
-        follow_redirects=False,
+        files={"file": ("plan.xlsx", _xlsx([_row()]),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )
-    assert resp.status_code == 303
-    loc = resp.headers["location"]
-    assert loc.startswith("/m04?")
+    assert resp.status_code == 200, resp.text[:200]
+    j = resp.json()
+    assert {"created", "updated", "deleted", "manual_kept"} <= set(j["stats"]), j["stats"]
+    assert j["rows"] == 1 and j["year_month"] == "2026-09"
     assert fake.added and isinstance(fake.added[0], PlanRow)
     assert fake.added[0].year_month == "2026-09"
     assert fake.added[0].raw["科目"] == "辅材费"                   # 无效列原样入库
 
 
 @acc()
-def test_路由_月份缺失回报错误():
-    client, _ = _client()
+def test_导入端点_月份缺失显式报错(monkeypatch):
+    """⭐ claim 不变：**没选月份 ⇒ 显式报错**（⛔ 不静默按当月导入 —— 归错月比报错更糟）。"""
+    client, _ = _api_client(monkeypatch)
     resp = client.post(
-        "/m04/import",
+        "/api/m04/import",
         data={"year_month": ""},
         files={"file": ("plan.xlsx", _xlsx([_row()]), "application/octet-stream")},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303
-    assert "/m04/import?" in resp.headers["location"] and "err" in resp.headers["location"]
+    assert resp.status_code >= 400, f"要**显式拒**（实际 {resp.status_code}）"
+    assert "月" in resp.text, f"要把原因说清：{resp.text[:160]}"

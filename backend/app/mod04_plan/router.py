@@ -1,22 +1,18 @@
-"""`MOD-04` 路由 —— **API（JSON）＋ 页面（服务端渲染 · PRG）**。
+"""`MOD-04` 路由 —— **只服务 JSON API**（旧页面/PRG 半边已于 2026-09-18 随 `§19` 批 2 删除）。
 
-⚠️ 薄层：判定与形态全在 `domain.py` / `plan_ui.py`；组装在 `service.py`；页面在 `view.py`。
+⚠️ 薄层：判定与形态全在 `domain.py` / `plan_ui.py`；组装在 `service.py`。
 ⚠️ 取数经 `Depends` 暴露 ⇒ 自检可注入桩（**不连库**），与 `MOD-02` 同款。
 
 口径：《说明书》§4.3.3（可手改列 / 单据号仅未匹配行）· §4.3.4（审查与两档归并）· §4.3.6（列表内删除）
-      · §4.3.7（生效窗口）。**页面交互与 API 走同一份组装出口**（`service.build_page_data`）。
+      · §4.3.7（生效窗口）。**新壳与 API 走同一份组装出口**（`service.build_page_data`）。
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import date
 from typing import Callable
-from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
@@ -29,19 +25,11 @@ from app.mod04_plan.domain import (
     BUCKET_ALL,
     R_MATCHED,
     NoticeAmounts,
-    ProjectBrief,
     audit_rows,
     cancel_force,
     force_through,
 )
-from app.mod04_plan.importer import attach_projects, parse_workbook, render_import_page
-from app.mod04_plan.plan_manual import (
-    assert_manual_editable,
-    is_manual_row,
-    manual_row_payload,
-)
 from app.mod04_plan.plan_api_router import router as plan_api_router
-from app.mod04_plan.project_views import project_briefs, project_label
 from app.mod04_plan.plan_ui import (
     delete_impact,
     delete_rows,
@@ -49,7 +37,15 @@ from app.mod04_plan.plan_ui import (
     inline_editable_columns,
     re_match,
 )
-from app.mod04_plan.view import render_delete_confirm, render_m04
+# ⚠️ 2026-09-18（`§19` 批 2）：页面/PRG 半边删除后**清掉**的 import（⛔ 别再加回来）——
+#    `File`/`Form`/`UploadFile`（表单）· `HTMLResponse`/`RedirectResponse`（页面与 PRG）·
+#    `urlencode`（PRG 回跳）· `select`（唯一用处是页面取数）· `date`（页面日期控件）·
+#    `importer`（`parse_workbook`/`attach_projects` 只剩页面在调）· `plan_manual`（手动行的页面表单）·
+#    `project_views`（页面展示件）· `view`（渲染件整体已删）· `ProjectBrief`（只页面用）。
+#    ⚠️ **必须留着**（⛔ 别当页面件删）：`Callable`（`PageData = Callable[..., dict]`，**API 依赖的类型别名** ——
+#    我第一版按"只给页面用"删了它，结果整套测试 collection error）· `get_db`（`tests/test_plan_import.py`·
+#    `test_plan_manual.py` 覆盖的依赖）· `session_scope`（JSON API 的会话口，`test_api_m04_force.py` 也 patch 它）·
+#    `SORT_NONE`（`api_list` 的 `dir` 默认值）· `Session`/`Iterator`（`get_db` 签名）。
 
 router = APIRouter(tags=["mod04"])
 # ⭐ 前端壳的 **JSON API**（`TAIL-35`：手动行 ＋ 导入）—— 独立路由件，由本文件汇总
@@ -57,12 +53,15 @@ router.include_router(plan_api_router)
 
 
 def get_db() -> Iterator[Session]:
-    """导入动作的会话（经 `Depends` 暴露 ⇒ 自检可注入假会话）。"""
+    """写动作的会话（经 `Depends` 暴露 ⇒ 自检可注入假会话）。
+
+    ⚠️ 2026-09-18（`§19` 批 2）：原先另有 `DBSession = Depends(get_db)` 这个别名，只给**页面**用
+       ⇒ 已随页面删除；`get_db` 本身**留着**（`tests/test_plan_import.py`·`test_plan_manual.py` 在覆盖它）。
+    """
     with session_scope() as session:
         yield session
 
 
-DBSession = Depends(get_db)
 
 
 # --------------------------------------------------------------- 依赖（可注入）
@@ -217,325 +216,21 @@ def api_cancel_force(row_id: int) -> dict:
     return {"row_id": row_id, **payload}
 
 
-# --------------------------------------------------------------- 页面（服务端渲染 · PRG）
-
-
-def get_row_loader() -> Callable[..., object]:
-    """按 id 取一条计划行（**惰性**：只有真的要开草稿时才查库）。测试可覆盖此依赖。"""
-
-    def _get(row_id: int):
-        with session_scope() as s:
-            return repo.get_row(s, row_id)
-
-    return _get
-
-
-@router.get("/m04", response_class=HTMLResponse)
-def page_m04(
-    year_month: str | None = Query(None, description="YYYY-MM / YYYY-MM~YYYY-MM / YYYY / **空=全部**"),
-    project: list[str] = Query(default=[]),
-    review: str = Query(BUCKET_ALL),
-    sort: str = Query(""),
-    dir: int = Query(SORT_NONE),
-    draft: str = Query("", description="new = 新增草稿行；<id> = 编辑该**手动**行"),
-    msg: str = Query(""),
-    msgkind: str = Query("ok"),
-    load: PageData = Depends(get_page_data),
-) -> HTMLResponse:
-    """付款计划页（五段骨架由 `page.render_list_page` 统一装配，**本页不手写骨架**）。
-
-    ⚠️ **「未传参」与「显式传空」语义不同**（否则用户没法选「全部月份」）：
-       · **未传** `year_month`（首次进页）⇒ 用**默认值**（付款侧 = 当月，§9.2）；
-       · **显式传空**（`?year_month=`，即清空输入框后提交）⇒ **全部月份**（与控件取值语法一致）。
-
-    ⚠️ `draft` 是**令牌**（`new` / 行号），解析在 `service.build_page_data` 内完成 ——
-       这样"离线自检注入假会话"能覆盖到草稿行这条路径（不另设一个只在真库下工作的依赖）。
-    """
-    if year_month is None:
-        year_month = svc.default_filters()["year_month"]
-    data = load(**_filters(year_month, project, review), sort_col=sort, sort_dir=dir, draft=draft)
-    return HTMLResponse(render_m04(data, message=msg, message_kind=msgkind))
-
-
-# --------------------------------------------------------------- 手动行（§4.3 ＋ 用户 2026-09-16）
-
-
-@router.post("/m04/row/draft")
-def act_row_draft(
-    new: str = Form(""),
-    row_id: str = Form(""),
-    year_month: str = Form(""), project: list[str] = Form(default=[]),
-    review: str = Form(BUCKET_ALL), sort: str = Form(""), dir: int = Form(SORT_NONE),
-) -> RedirectResponse:
-    """开草稿行（**表内增行**，不弹窗）：`new=1` 新增 / `row_id=<id>` 原地编辑该手动行。
-
-    ⚠️ **参数一律 `Form`**：筛选来自 `hidden_filters(data)`（**body**）⇒ 声明成 `Query` 会**静默丢掉筛选**
-       （回跳回不到原查询）。
-    """
-    token = str(row_id or "").strip() or ("new" if str(new or "").strip() else "")
-    if not token:
-        return _back(year_month, project, review, sort, dir, "没有指定要新增还是编辑", kind="err")
-    return _back(
-        year_month, project, review, sort, dir,
-        "已就绪：填完点「保存」（手动行不被导入清理，但一样参与 6 种审查判定）", kind="wn",
-        draft=token,
-    )
-
-
-@router.post("/m04/row/cancel")
-def act_row_cancel(
-    year_month: str = Form(""), project: list[str] = Form(default=[]),
-    review: str = Form(BUCKET_ALL), sort: str = Form(""), dir: int = Form(SORT_NONE),
-) -> RedirectResponse:
-    """取消草稿行 —— **不留任何数据**（每步可中断，§9.5）。⚠️ 参数一律 `Form`（同上）。"""
-    return _back(year_month, project, review, sort, dir, "已取消草稿行（未写入任何数据）", kind="wn")
-
-
-@router.post("/m04/row/save")
-def act_row_save(
-    row_id: str = Form(""),
-    row_ym: str = Form(""),
-    project_id: str = Form(""),
-    doc_no: str = Form(""),
-    flow_amount: str = Form(""),
-    planned_amount: str = Form(""),
-    pay_date: str = Form(""),
-    pay_method: str = Form(""),
-    remark: str = Form(""),
-    year_month: str = Form(""),
-    project: list[str] = Form(default=[]),
-    review: str = Form(BUCKET_ALL), sort: str = Form(""), dir: int = Form(SORT_NONE),
-    session: Session = DBSession,
-) -> RedirectResponse:
-    """保存手动计划行（**新增与编辑共用同一套**）—— 判定走 `plan_manual.manual_row_payload`。
-
-    ⚠️ **`row_ym`（这一行归哪个月）与 `year_month`（筛选项）必须分开命名**：
-       两者同名时，`hidden_filters` 放进 body 的**筛选月在前** ⇒ `FormData` 只取**第一个**
-       ⇒ **用户填的「归月」被静默忽略**（2026-09-17 修；表单字段见 `plan_manual.draft_row_html`）。
-    ⚠️ 筛选参数一律 `Form`（同 `act_row_draft`：它们来自 body 的 `hidden_filters`，不是 query string）。
-    """
-    try:
-        payload = manual_row_payload(
-            year_month=row_ym, project_id=project_id, doc_no=doc_no,
-            flow_amount=flow_amount, planned_amount=planned_amount,
-            pay_date=pay_date, pay_method=pay_method, remark=remark,
-        )
-        values = dict(payload.values)
-        if values.get("project_id") is not None:
-            values["project_input"] = project_label(session, values["project_id"])
-
-        if str(row_id or "").strip().isdigit():
-            row = repo.get_row(session, int(row_id))
-            if row is None:
-                raise MustReportError(f"要保存的计划行 {row_id} 不存在")
-            assert_manual_editable(row)
-            touched = repo.update_manual_row(session, row, values)
-            msg = f"已保存手动行 {row.id}（改动 {len(touched)} 个字段：{'、'.join(touched) or '无'}）"
-        else:
-            row = repo.create_manual_row(session, values)
-            msg = f"已新增 1 行手动付款计划（行号 {row.id}）"
-        msg += "；" + "；".join(payload.notes)
-        return _back(year_month, project, review, sort, dir, msg)
-    except MustReportError as exc:
-        # 校验不过 ⇒ **保留草稿行**让用户改（不清空已填内容）
-        keep = str(row_id or "").strip() or "new"
-        return _back(year_month, project, review, sort, dir, exc.message, kind="err", draft=keep)
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：**本模块的页面/PRG 半边已整体删除**（授权 `D18`）——
+#    `page_m04` / `act_row_*` / `page_delete_confirm` / `act_cell` / `act_delete` / `act_re_match` /
+#    `act_force` / `act_force_cancel` / `page_import` / `act_import` ＋ `get_row_loader` ＋ `_back`。
+#    ⇒ 本文件此后**只服务 JSON API**（新壳 `m04` 在用）。
+# ⚠️ 留存的内部件（⛔ 别当页面件顺手删）：`get_page_data`（**7 个 API 路由的依赖**）、`_parse_ids`、
+#    `_row_dict`、`_audit_one`（API 复用）；`plan_ui`/`plan_manual`/`project_views` 是**业务纯函数**；
+#    `importer.parse_workbook`/`attach_projects` 是**业务**（`render_import_page` 已随页删）。
+# ⚠️ 判据点**没跟着删** —— 按 `§19` 铁律搬了断言：
+#    `ACC-PLAN-AUDIT-001/001-09` → `tests/test_api_m04_force.py`（先搬、后删，2026-09-18）；
+#    `ACC-PLAN-MANUAL-001/001-05`·`001-07` → `tests/test_api_m04_manual.py`；
+#    `001-06`（手动行徽标）与「失败保留已填内容」→ `tests/test_wired_m04.py`（壳侧）。
 
 
 
-@router.get("/m04/delete", response_class=HTMLResponse)
-def page_delete_confirm(
-    ids: str = Query(...),
-    year_month: str = Query(""), project: list[str] = Query(default=[]),
-    review: str = Query(BUCKET_ALL), sort: str = Query(""), dir: int = Query(SORT_NONE),
-    load: PageData = Depends(get_page_data),
-) -> HTMLResponse:
-    """删除确认页：**先列影响范围**（§4.3.6）。"""
-    data = load(**_filters(year_month, project, review), sort_col=sort, sort_dir=dir)
-    targets = _parse_ids(ids)
-    impacts = delete_impact(data["rows"], targets, {r["id"]: r["audit_result"] for r in data["rows"]})
-    query = urlencode(
-        {"year_month": year_month, "project": list(project or ()), "review": review,
-         "sort": sort, "dir": int(dir), "ids": ids},
-        doseq=True,
-    )
-    return HTMLResponse(render_delete_confirm(data, impacts, query))
 
-
-@router.post("/m04/cell")
-def act_cell(
-    row_id: int = Form(...), column: str = Form(...), value: str = Form(""),
-    year_month: str = Form(""), project: list[str] = Form(default=[]), review: str = Form(BUCKET_ALL),
-    sort: str = Form(""), dir: int = Form(SORT_NONE),
-    load: PageData = Depends(get_page_data),
-    db: Session = Depends(get_db),
-) -> RedirectResponse:
-    """提交一格（立刻落库）→ 303 回原查询（PRG）。
-
-    ⚠️ **参数一律 `Form`**：本端点的输入来自 `<form method="post">` 的 **body**（`_cell_form` 的
-       hidden inputs）。此前声明为 `Query` ⇒ 表单提交**永远 422**（真机实测：`POST /m04/cell` = 422，
-       而同样形态的 `/m04/row/draft` 用 `Form` = 303 正常）。**离线断言看不见**（它直接调函数）。
-    """
-    try:
-        row = repo.get_row(db, row_id)
-        if row is None:
-            raise MustReportError(f"计划行 {row_id} 不存在")
-        result = _audit_one(row, svc.notice_amounts(db))
-        edit = inline_edit(
-            row_id=row_id, column=column, value=value, allowed=inline_editable_columns(result)
-        )
-        repo.set_cell(db, row, edit.column, edit.value)
-        db.commit()   # ⚠️ **PRG 必须在响应之前提交**（否则回跳的 GET 可能读到旧值）
-        msg = f"{row_id} 的「{edit.column}」已保存为「{edit.value or '（空）'}」（立刻落库、不留痕）"
-        if edit.column == "doc_no":
-            msg += " —— 点该行「再次匹配」重新比对 i8 通知书"
-        return _back(year_month, project, review, sort, dir, msg)
-    except MustReportError as exc:
-        return _back(year_month, project, review, sort, dir, exc.message, kind="err")
-
-
-@router.post("/m04/delete")
-def act_delete(
-    ids: str = Form(...),
-    year_month: str = Form(""), project: list[str] = Form(default=[]), review: str = Form(BUCKET_ALL),
-    sort: str = Form(""), dir: int = Form(SORT_NONE),
-    load: PageData = Depends(get_page_data),
-    db: Session = Depends(get_db),
-) -> RedirectResponse:
-    """确认后执行删除（**只影响付款计划表**）→ 303 回原查询。
-
-    ⚠️ **参数一律 `Form`**（同上：确认页 `render_delete_confirm` 的 `ids` 是 hidden input）。
-    """
-    targets = _parse_ids(ids)
-    n = repo.delete_by_ids(db, targets)
-    db.commit()   # ⚠️ **PRG 必须在响应之前提交**（否则回跳的 GET 可能读到旧值）
-    return _back(year_month, project, review, sort, dir, f"已删除 {n} 行付款计划（只影响付款计划表）", kind="wn")
-
-
-@router.post("/m04/re-match")
-def act_re_match(
-    row_id: int = Form(...),
-    year_month: str = Form(""), project: list[str] = Form(default=[]), review: str = Form(BUCKET_ALL),
-    sort: str = Form(""), dir: int = Form(SORT_NONE),
-    load: PageData = Depends(get_page_data),
-    db: Session = Depends(get_db),
-) -> RedirectResponse:
-    """再次匹配 → 303 回原查询并回报新的审查结果。
-
-    ⚠️ **参数一律 `Form`**（同上：`row_id` 是行内表单的 hidden input）。
-    """
-    row = repo.get_row(db, row_id)
-    if row is None:
-        return _back(year_month, project, review, sort, dir, f"计划行 {row_id} 不存在", kind="err")
-    r = re_match(_row_dict(row), svc.notice_amounts(db))
-    extra = "（该行转入「无需处理」）" if r.result == R_MATCHED else ""
-    return _back(
-        year_month, project, review, sort, dir,
-        f"{row_id} 已按单据号「{r.doc_no or '（空）'}」重新比对 → 审查结果：{r.result}{extra}",
-    )
-
-
-# --------------------------------------------------------------- 强制通过（§4.3.4 · PRG）
-#
-# ⚠️ **本组是「过渡形态」**：服务端渲染层按 D18 将被原型壳替换 ⇒ 接壳时按原型 `PL` 页的
-#    **弹窗**（`强制通过 · <审查结果>` ＋ 备注必填 ＋ 取消不留痕）重做，但**语义已在此固化**：
-#    **只提示不拦截 · 放行必须写备注（留痕）· 取消不留痕**。
-
-
-@router.post("/m04/force")
-def act_force(
-    row_id: int = Form(...),
-    remark: str = Form(""),
-    year_month: str = Form(""), project: list[str] = Form(default=[]), review: str = Form(BUCKET_ALL),
-    sort: str = Form(""), dir: int = Form(SORT_NONE),
-    load: PageData = Depends(get_page_data),
-    db: Session = Depends(get_db),
-) -> RedirectResponse:
-    """**强制通过**（§4.3.4）→ 303 回原查询。**空备注 ⇒ 不落库**（显式报错回执）。
-
-    ⚠️ 判定走 `domain.force_through`（**唯一出口**），本层只落库 ＋ 回执。
-    ⚠️ 会话走 `Depends(get_db)`（不用 `session_scope()`）⇒ 离线断言可注入假会话。
-    """
-    try:
-        payload = force_through(remark)
-    except MustReportError as exc:
-        return _back(year_month, project, review, sort, dir, str(exc), kind="err")
-    row = repo.get_row(db, row_id)
-    if row is None:
-        return _back(year_month, project, review, sort, dir, f"计划行 {row_id} 不存在", kind="err")
-    repo.set_force(db, row, forced=True, remark=payload["forced_remark"])
-    db.commit()      # ⚠️ **PRG 必须在响应之前提交** —— 否则 303 回跳的 GET 可能读到旧值
-    return _back(
-        year_month, project, review, sort, dir,
-        f"计划行 {row_id} 已强制通过并留痕（备注：{payload['forced_remark']}）",
-    )
-
-
-@router.post("/m04/force-cancel")
-def act_force_cancel(
-    row_id: int = Form(...),
-    year_month: str = Form(""), project: list[str] = Form(default=[]), review: str = Form(BUCKET_ALL),
-    sort: str = Form(""), dir: int = Form(SORT_NONE),
-    load: PageData = Depends(get_page_data),
-    db: Session = Depends(get_db),
-) -> RedirectResponse:
-    """**取消强制通过** → 303 回原查询。回到原判定且备注清空；**取消不留痕**（§4.3.4）。"""
-    payload = cancel_force()
-    row = repo.get_row(db, row_id)
-    if row is None:
-        return _back(year_month, project, review, sort, dir, f"计划行 {row_id} 不存在", kind="err")
-    repo.set_force(db, row, forced=False)
-    db.commit()      # ⚠️ 同上：**先提交再回跳**（本轮真机端到端实测：不提交则回跳读到旧值）
-    return _back(
-        year_month, project, review, sort, dir,
-        f"计划行 {row_id} 已取消强制通过 —— 回到原判定、备注清空（取消不留痕）",
-    )
-
-
-# --------------------------------------------------------------- 导入（§4.3.3 · §9.5）
-
-
-
-@router.get("/m04/import", response_class=HTMLResponse)
-def page_import(msg: str = Query(""), msgkind: str = Query("ok")) -> HTMLResponse:
-    """导入页（先选月份 ＋ 选文件）。"""
-    return HTMLResponse(
-        render_import_page(
-            message=msg, message_kind=msgkind,
-            default_ym=str(svc.default_filters().get("year_month") or ""),
-        )
-    )
-
-
-@router.post("/m04/import")
-async def act_import(
-    year_month: str = Form(""),
-    file: UploadFile = File(...),
-    session: Session = DBSession,
-) -> RedirectResponse:
-    """**导入付款计划**（§4.3.3）：按所选月份「**清该月自动行 → 重写该批**」（§9.5 幂等）。
-
-    ⚠️ **不做判重拦截** —— 同月同单据号两行是 §4.3.4 的「重复上报」，导入照收、审查暴露。
-    """
-    try:
-        data = await file.read()
-        parsed = parse_workbook(data)
-        rows = attach_projects(parsed.rows, project_briefs(session))
-        result = repo.merge_month(session, year_month=year_month, rows=rows)
-    except MustReportError as exc:
-        return RedirectResponse(
-            f"/m04/import?{urlencode({'msg': exc.message, 'msgkind': 'err'})}", status_code=303
-        )
-
-    msg = (
-        f"已导入 {len(rows)} 行到 {year_month}：新建 {result['created']} · 复用更新 {result['updated']}"
-        f" · 删除该月残影 {result['deleted']}"
-        f"（可手改列一律保留；该月手动行 {result['manual_kept']} 行未被触碰）"
-    )
-    if parsed.alerts:
-        msg += "；提示：" + "；".join(parsed.alerts[:3])
-    q = urlencode({"year_month": year_month, "msg": msg, "msgkind": "wn"})
-    return RedirectResponse(f"/m04?{q}", status_code=303)
 
 
 # --------------------------------------------------------------- 内部
@@ -558,18 +253,6 @@ def _row_dict(row) -> dict:
 def _audit_one(row, notices: dict[str, NoticeAmounts]) -> str:
     """单行判定（**复用审查引擎**，不另写）。"""
     return audit_rows([_row_dict(row)], notices)[0]
-
-
-def _back(year_month, project, review, sort, dir, msg: str, *, kind: str = "ok",
-          draft: str = "") -> RedirectResponse:
-    """303 回原查询（PRG）—— 防止刷新重放提交。"""
-    q = {
-        "year_month": year_month, "project": list(project or ()), "review": review,
-        "sort": sort, "dir": int(dir), "msg": msg, "msgkind": kind,
-    }
-    if draft:
-        q["draft"] = draft
-    return RedirectResponse(f"/m04?{urlencode(q, doseq=True)}", status_code=303)
 
 
 __all__ = ["router"]

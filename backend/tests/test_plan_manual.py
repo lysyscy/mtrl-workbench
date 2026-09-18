@@ -1,10 +1,19 @@
-"""付款计划**手动行**的工程自检（离线 · 不连库）。
+"""付款计划**手动行**的工程自检（离线 · 不连库）—— **判定与口径**那一半。
 
 用户 2026-09-16 裁定：**① 付款计划要手动行，而且手动行一样要被审查**。
 
 ⇒ 本文件守两件事：
-1. 手动行**能增能改**、且**不被导入清理**（落在 `merge_month`，`test_plan_import` 也有一条）；
+1. 手动行**能增能改**（校验出口 `plan_manual.manual_row_payload`）且**不被导入清理**（`merge_month`，
+   `test_plan_import` 也有一条）；
 2. ⭐ **手动行与导入行走完全同一条审查链路** —— 同样 6 种判定、同样进两档筛选、同样计 KPI 与合计。
+
+⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：旧**服务端页**的观测面（`render_m04` / `/m04/*` 的 PRG 请求）
+   已随旧渲染层删除（授权 `D18`）⇒ 原来钉在页面形态上的那些用例**按 `§19` 铁律搬了断言**，⛔ 不是删判据：
+   · **端点半边** → `tests/test_api_m04_manual.py`（`POST /api/m04/plans`：编辑只对手动行开放 `001-05`、
+     校验失败 ⇒ 拒 ＋ 原样原因 ＋ 不落库 `001-07`、新增 ⇒ 落库并标 `is_manual`）；
+   · **壳半边** → `tests/test_wired_m04.py`（手动行徽标只对 `p.manual` 出现 `001-06`、失败保留已填内容
+     `001-07`、本地草稿动作、不在前端复写判定）。
+   本文件此后**只守纯判定与组装口径** —— 断言全部打 `build_page_data` 的 `data`（与页面无关）。
 """
 
 from __future__ import annotations
@@ -12,12 +21,10 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.core.errors import MustReportError
-from app.main import create_app
 from app.mod01_projects.models import Project
-from app.mod04_plan import repository as repo
+from app.mod03_notice.models import PaymentNotice
 from app.mod04_plan.domain import (
     BUCKET_MATCHED,
     BUCKET_UNMATCHED,
@@ -32,14 +39,10 @@ from app.mod04_plan.plan_manual import (
     is_manual_row,
     manual_row_payload,
 )
-from app.mod04_plan.router import get_db, get_page_data
 from app.mod04_plan.service import build_page_data
-from app.mod03_notice.models import PaymentNotice
-from app.mod04_plan.view import render_m04
 from app.mod05_flow.models import PaymentFlow
 from tests.acc_plugin import acc
 from tests.m04_helpers import FakeSession, make_notice, make_plan_row
-from tests.m03_action_helpers import FakeWriteSession
 
 
 def _manual(**kw) -> PlanRow:
@@ -109,12 +112,17 @@ def test_单据号可空且会提示():
 
 
 def _render(plan_rows, notices=(), flows=()):
+    """只出 `build_page_data` 的 `data`（**页面渲染件已删** ⇒ 观测面就是组装结果本身）。
+
+    ⚠️ 保留 `(data, None)` 的**二元返回形态**：调用处一律 `data, _ = _render(...)`
+       （⛔ 少改一处就是 `TypeError: cannot unpack`）。
+    """
     session = FakeSession({PlanRow: list(plan_rows), PaymentNotice: list(notices),
                            PaymentFlow: list(flows),
                            Project: [Project(id=11, project_type="normal", name_full="甲全名",
                                              warehouse_name="甲仓库", disp="甲仓库")]})
     data = build_page_data(session, year_month="", sort_col="", sort_dir=0)
-    return data, render_m04(data)
+    return data, None
 
 
 @acc("ACC-PLAN-MANUAL-001", "001-01")
@@ -172,157 +180,3 @@ def test_手动行计入表内合计():
     b = make_plan_row(1, doc_no="D1", planned_amount="200.00", project_id=11)
     data, _ = _render([a, b])
     assert data["summary"]["planned_amount"] == "1000.00"       # 800 + 200，**手动行照算**
-
-
-# ============================================================ 页面
-
-
-@acc()
-def test_页面有手动新增入口且草稿行列数一致():
-    from app.mod04_plan.view import COLUMNS
-
-    data, html = _render([])
-    assert "＋ 手动新增计划行" in html
-
-    session = FakeSession({PlanRow: [], PaymentNotice: [], PaymentFlow: [], Project: []})
-    data = build_page_data(session, year_month="2026-09", sort_col="", sort_dir=0, draft="new")
-    html = render_m04(data)
-    assert 'class="draftrow"' in html
-    assert '<form id="f-row" method="post" action="/m04/row/save">' in html
-    assert html.count('<tr class="draftrow"') == 1
-    # 列数一致（草稿行每格一个 <td>）
-    seg = html.split('<tr class="draftrow"')[1].split("</tr>")[0]
-    assert seg.count("<td") == len(COLUMNS)
-
-
-@acc("ACC-PLAN-MANUAL-001", "001-06")
-def test_页面上手动行有徽标与编辑_导入行没有():
-    manual = _manual(id=90)
-    auto = make_plan_row(1, doc_no="D1", project_id=11)
-    _, html = _render([manual, auto])
-    mrow = next(r for r in _rows(html) if ">90<" in r)
-    arow = next(r for r in _rows(html) if ">1<" in r)
-    assert "手动</span>" in mrow and "/m04/row/draft" in mrow
-    assert "手动</span>" not in arow and "/m04/row/draft" not in arow
-    assert ">删除<" in arow                                     # 删除**所有行都有**（§4.3.6）
-    assert ">删除<" in mrow                                     # ⭐ 手动行同样可删（不得照抄「i8 行永不删」）
-
-
-def _rows(html: str) -> list[str]:
-    import re
-
-    body = re.search(r"<tbody\b[^>]*>([\s\S]*?)</tbody>", html)
-    return re.findall(r"<tr\b[^>]*>[\s\S]*?</tr>", body.group(1) if body else "")
-
-
-# ============================================================ 路由（PRG）
-
-
-def _client(plan_rows=(), projects=()):
-    app = create_app()
-    fake = FakeWriteSession({PlanRow: list(plan_rows), Project: list(projects),
-                             PaymentFlow: [], PaymentNotice: []})
-    app.dependency_overrides[get_db] = lambda: fake
-    return TestClient(app), fake
-
-
-@acc()
-def test_路由_新增手动行落库并标is_manual():
-    client, fake = _client(projects=[Project(id=11, project_type="normal", name_full="甲全名",
-                                             warehouse_name="甲仓库", disp="甲仓库")])
-    r = client.post("/m04/row/save", data={
-        "row_ym": "2026-09", "project_id": "11", "doc_no": "D1",
-        "flow_amount": "1000", "planned_amount": "800", "pay_method": "承兑",
-    }, follow_redirects=False)
-    assert r.status_code == 303 and "msgkind=err" not in r.headers["location"]
-    added = [x for x in fake.added if isinstance(x, PlanRow)]
-    assert len(added) == 1 and added[0].is_manual is True
-    assert added[0].project_input == "甲仓库"                    # 项目 id → 填报值（展示名）
-    assert added[0].match_status == "matched"
-
-
-@acc("ACC-PLAN-MANUAL-001", "001-07")
-def test_路由_校验失败保留草稿行():
-    client, fake = _client()
-    r = client.post("/m04/row/save", data={"row_ym": "2026", "flow_amount": "1"},
-                    follow_redirects=False)
-    assert r.status_code == 303 and "msgkind=err" in r.headers["location"]
-    assert "draft=new" in r.headers["location"] and fake.added == []
-
-
-@acc()
-def test_路由_编辑导入行被拒():
-    client, fake = _client(plan_rows=[make_plan_row(1, doc_no="D1", project_id=11)])
-    r = client.post("/m04/row/save", data={
-        "row_id": "1", "row_ym": "2026-09", "flow_amount": "1", "planned_amount": "1",
-    }, follow_redirects=False)
-    assert r.status_code == 303 and "msgkind=err" in r.headers["location"]
-    assert fake.added == []
-
-
-@acc()
-def test_路由_编辑手动行成功():
-    client, fake = _client(plan_rows=[_manual(id=90)])
-    r = client.post("/m04/row/save", data={
-        "row_id": "90", "row_ym": "2026-09", "flow_amount": "1200", "planned_amount": "500",
-    }, follow_redirects=False)
-    assert r.status_code == 303 and "msgkind=err" not in r.headers["location"]
-    row = fake.by_model[PlanRow][0]
-    assert row.planned_amount == Decimal("500.00") and row.is_manual is True
-
-
-@acc()
-def test_路由_取消不留数据():
-    client, fake = _client()
-    r = client.post("/m04/row/cancel", data={}, follow_redirects=False)
-    assert r.status_code == 303
-    assert fake.added == [] and fake.deleted == []
-
-
-@acc("ACC-PLAN-MANUAL-001", "001-05")
-def test_路由_请求编辑导入行的草稿被拒并说明():
-    """⚠️ 回归：`draft=1` 必须被当成**编辑行号 1**，**不能**被当成"新增"（曾把 "1" 当新增别名）。"""
-    app = create_app()
-    app.dependency_overrides[get_page_data] = lambda: (
-        lambda **kw: build_page_data(FakeSession({PlanRow: [make_plan_row(1, doc_no="D1")],
-                                                  PaymentNotice: [], PaymentFlow: [], Project: []}), **kw)
-    )
-    html = TestClient(app).get("/m04", params={"year_month": "2026-09", "draft": "1"}).text
-    assert "编辑只对**手动新增的计划行**开放" in html
-    assert 'class="draftrow"' not in html                       # 不是"新增草稿行"
-
-
-@acc()
-def test_路由_新增按钮真的开到新增草稿():
-    """页头「＋ 手动新增计划行」⇒ POST `/m04/row/draft`（`new=1`）⇒ 303 带 `draft=new`。"""
-    client, _ = _client()
-    r = client.post("/m04/row/draft", data={"new": "1"}, follow_redirects=False)
-    assert r.status_code == 303 and "draft=new" in r.headers["location"]
-
-
-@acc()
-def test_路由_编辑手动行走id而不是new():
-    client, _ = _client(plan_rows=[_manual(id=90)])
-    r = client.post("/m04/row/draft", data={"row_id": "90"}, follow_redirects=False)
-    assert r.status_code == 303 and "draft=90" in r.headers["location"]
-
-@acc()
-def test_路由_归月与筛选月分开命名不再同名():
-    """⭐ 请求级：body 里**同时**有筛选月（`hidden_filters` 同款）与归月（草稿行字段）时，
-    归月必须取自 `row_ym`。
-
-    ⛔ 为什么必须分开（2026-09-17 修）：字段同名时 `FormData` 只取**第一个**，而 `hidden_filters`
-       排在表单**前面** ⇒ 取到的是**筛选月** ⇒ **用户填的「归月」被静默忽略**（存到错误月份）。
-    """
-    client, fake = _client(projects=[Project(id=11, project_type="normal", name_full="甲全名",
-                                             warehouse_name="甲仓库", disp="甲仓库")])
-    r = client.post("/m04/row/save", data={
-        "row_ym": "2026-08",                       # 用户填的归月
-        "year_month": "2026-09",                   # 筛选月（hidden_filters 同款，排在前）
-        "project_id": "11", "doc_no": "D1",
-        "flow_amount": "1000", "planned_amount": "800",
-    }, follow_redirects=False)
-    assert r.status_code == 303 and "msgkind=err" not in r.headers["location"]
-    added = [x for x in fake.added if isinstance(x, PlanRow)]
-    assert len(added) == 1
-    assert added[0].year_month == "2026-08", f"归月被筛选月覆盖了：{added[0].year_month}"

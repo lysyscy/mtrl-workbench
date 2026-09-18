@@ -3746,9 +3746,10 @@ const ACT={
      closeModal(); plf.ym=m; await reloadPlans();
      toast(`<b>${esc(m)}</b> 导入完成：${esc(r.message||'')}`,9000);
    }catch(e){ toast(`<b>导入没能完成</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">已选文件不合法或表头认不出时会这样报；草稿/筛选均未改动</span>`,9000); } },
- /* ⏳ **未接通（诚实提示，⛔ 不进草稿态、不留假数据）**：手动行（§4.3.3.1）在**服务端页**已实现
-    （`plan_manual.manual_row_payload` ＋ `POST /m04/row/save` ＋ 判据 `ACC-PLAN-MANUAL-001`），
-    壳里还缺一个 **JSON 端点**（`POST /api/m04/plans`）⇒ 本轮不接 —— 避免「填了却存不进去」的半拉子入口。 */
+ /* ⭐ 2026-09-18：**已接通**（`TAIL-35` ＋ `TAIL-27` 批 2）—— 手动行走 JSON 端点 `POST /api/m04/plans`
+    （`plan_api_router.py`；与旧 PRG 端点**同一份判定** `plan_manual.manual_row_payload`）。
+    ⚠️ 旧服务端页（`POST /m04/row/save` ＋ `render_m04`）已随 `§19` 批 2 删除 ⇒ **壳是唯一入口**；
+    判据点 `ACC-PLAN-MANUAL-001` 已搬到 `tests/test_api_m04_manual.py`（端点）与 `test_wired_m04.py`（壳）。 */
  plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>它落库后**与导入行同住一表、同样要被审查**，且**导入不会清理它**（§9.5）',5600); },
  plRowEdit:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
    if(!p.manual){ toast('<b>编辑只对「手动行」开放</b> —— 导入行是项目端报来的<b>源数据</b>：要改请<b>重新导入</b>（它在 §4.3.3 唯一的例外口 = 该行「再次匹配」）',6400); return; }
