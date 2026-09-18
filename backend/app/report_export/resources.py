@@ -7,6 +7,10 @@
   ⇒ 本模块把它落成代码里的闸门：**每次导出前核对**，不一致就**显式拒做**并说清怎么办。
 
 ⛔ 路径只在本模块写一次（`mod07`/`mod08` 两条导出链路共用）—— 各写一份必然走形。
+
+⭐ **本模块管的是「全部 6 份模板」**：路径②（模板法 · `zip` 字节替换）= 收发结存 · 库存单据明细表；
+路径①（模板填充 · `openpyxl` 读） = 逐月欠款台账 · 过程资料 · 焊材气体 · 开会大表 ——
+**两类都要「缺失 / 损坏 ⇒ 显式拒做」**（它们都是产物生成的基底本体，不是"形态样例"）。
 """
 
 from __future__ import annotations
@@ -24,12 +28,34 @@ SETL_TEMPLATE: Path = TEMPLATE_DIR / "模板_收发结存表.xlsx"
 #: 库存单据明细表模板（`API-03` 的成品基底）
 KCDJ_TEMPLATE: Path = TEMPLATE_DIR / "模板_库存单据明细表.xlsx"
 
-#: 登记的 SHA256（**唯一登记处** = 实测结论文档 §五 那张表；改模板必须同时改这里）
+#: ⭐ **路径①（模板填充）的 4 个模板** —— 名字与交付面 `demo/模板/` 逐字一致。
+#: 来源 = 交付面 `demo/模板/`（那份 `模板清单.md` §二 是它们的**唯一登记处**）；
+#: ⚠️ 它们与上面两份同理：**要被 `openpyxl` 读**，所以是**运行时依赖**（必须随代码走、进 git）。
+#: 明细（每个模板含哪些 sheet / `DATA_START` 在哪 / 列映射）**一律回 `demo/模板/模板清单.md`**，
+#: ⛔ 本文件不复述（复述必漂）。
+LEDGER_TEMPLATE: Path = TEMPLATE_DIR / "模板-逐月欠款台账.xlsx"      # sheet: 辅材 / 机械 / 特殊费用月报表
+PROC_TEMPLATE: Path = TEMPLATE_DIR / "模板-过程资料.xlsx"            # sheet: 汇总表
+WELD_TEMPLATE: Path = TEMPLATE_DIR / "模板-焊材气体.xlsx"            # sheet: 焊材 / 气
+BIG_TEMPLATE: Path = TEMPLATE_DIR / "模板-开会大表.xlsx"             # sheet: Sheet1
+
+#: 路径① 的 4 份（供"登记齐全性"断言与批量闸门用；顺序 = 由外到内阅读顺序）
+PATH1_TEMPLATES: tuple[Path, ...] = (LEDGER_TEMPLATE, PROC_TEMPLATE, WELD_TEMPLATE, BIG_TEMPLATE)
+
+#: 登记的 SHA256（**唯一登记处** = `ops/模板法导出-实测结论.md` §五 那张表；改模板必须同时改这里）
 EXPECTED_SHA256: dict[str, str] = {
     "模板_收发结存表.xlsx":
         "eab1c626dce769ac979408564cbffa52a8ca3bc42d80c76c40e0335f8c46d323",
     "模板_库存单据明细表.xlsx":
         "6803d01b1b0793f02543b281e737f9de42c9b955b7f45da0d55547e15b5e6bd2",
+    # --- 路径①（2026-09-18 从交付面 `demo/模板/` 入库）---
+    "模板-逐月欠款台账.xlsx":
+        "6b8568d48a7e5e254dd258c5f3c7b91b6ba0ebd18d77e6b546a24e7e9bc14d74",
+    "模板-过程资料.xlsx":
+        "74cc3db92a5c4926a2e29ed1be60c4fe1a5625c9e1a0025dc80037186a087eb4",
+    "模板-焊材气体.xlsx":
+        "8214be459fdb1e200230d4db26d2cd5bf65ed7842163a2a3ceb5d830d653580e",
+    "模板-开会大表.xlsx":
+        "5d4620f523898e3c6f62fd1f1a72c88854374c6565f41e7a16c094be27e3dd90",
 }
 
 _OPS_DOC = "ops/模板法导出-实测结论.md §五"
@@ -66,5 +92,6 @@ def require_template(path: Path) -> Path:
     return p
 
 
-__all__ = ["TEMPLATE_DIR", "SETL_TEMPLATE", "KCDJ_TEMPLATE", "EXPECTED_SHA256",
+__all__ = ["TEMPLATE_DIR", "SETL_TEMPLATE", "KCDJ_TEMPLATE", "LEDGER_TEMPLATE", "PROC_TEMPLATE",
+           "WELD_TEMPLATE", "BIG_TEMPLATE", "PATH1_TEMPLATES", "EXPECTED_SHA256",
            "sha256_of", "require_template"]
