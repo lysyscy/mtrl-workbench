@@ -15,10 +15,11 @@ from app.mod08_inv.import_router import _apply, _groups_of, _payload, _rows_of
 from app.mod08_inv.import_view import render_import_page
 from app.mod08_inv.models import InvAdjustment, InvDetail
 from app.mod08_inv.repository import load_rows
-from app.mod08_inv.service import build_page_data, parse_state
-from app.mod08_inv.view import _flash_html, fetch_dialog_html, render_inv_page
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` 批 2）：`app.mod08_inv.view` 已随「明细总表页半边」整体删除
+#    （授权 `D18`）⇒ 本文件此后只测**仍在的东西**：导入那半边（`import_view`/`import_router`/`importer`）
+#    与解析管线 —— ⛔ 判据没删，形态那半边已搬到 `tests/test_wired_m08.py`。
 from tests.acc_plugin import acc
-from tests.m08_helpers import FakeSession, dataset
+from tests.m08_helpers import FakeSession
 
 HEADER = ("序号", "核算年", "核算月", "业务类型", "项目名称", "单据编号", "供应商", "安全费用",
           "物料名称", "计量单位", "规格型号", "物料性质", "数量", "不含税单价", "含税单价",
@@ -99,11 +100,10 @@ def test_手动导入照样不动有调整单的行():
 def test_入口在页面与降级回执里都真的给出来了():
     assert 'action="/m08/import/preview"' in render_import_page()
     assert "报表1" in render_import_page()                  # 说明里写了读哪张工作表
-    # ① 明细页工具栏有入口
-    html = render_inv_page(build_page_data(FakeSession(dataset()), parse_state({})))
-    assert 'href="/m08/import"' in html and "手动导入 Excel" in html
-    # ② 抓取失败 ⇒ 降级回执**必须给出这条通道**（§3.6：降级要显式说明）
-    flash = _flash_html({"kind": "degraded", "message": "i8 接口 500"})
-    assert "已降级为手动 Excel 导入" in flash and 'href="/m08/import"' in flash
-    # ③ 抓取弹窗仍然只走抓取（不把两条路混在一个按钮里）
-    assert 'method="post" action="/m08/fetch"' in fetch_dialog_html("2026-08")
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先这里还有三条 —— 明细页工具栏有入口 / 降级回执给出这条通道 /
+    #    抓取弹窗只走抓取 —— 它们借**旧明细页**（`render_inv_page`/`_flash_html`/`fetch_dialog_html`）观测；
+    #    旧页整体删除（`D18`）后那半边随之作废：
+    #    · 「降级后用户确实有手动导入这条路」⇒ 由上面第 1 行的 `render_import_page()`（**导入页仍在**）
+    #      ＋ `test_acc_inv_fetch.py` 的 001-08（导入端点真的存在）保住 ✓；
+    #    · 「抓取弹窗只走抓取 / 会强踢要告知」⇒ 形态搬到壳
+    #      （`test_wired_m08.py::test_抓取弹窗默认取本页核算年月且讲清强踢` ✓）。

@@ -134,7 +134,9 @@ def test_库存单据可补抓历史月份():
     for bad in ("2025-12,2026-01", "2025", ""):        # 跨月 / 整年 / 空：一律拒绝
         with pytest.raises(MustReportError):
             report_export.single_month(bad)
-    assert {"/m08/fetch-dialog", "/m08/fetch"} <= _paths()
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先断言两个 **PRG** 路由（`/m08/fetch-dialog`·`/m08/fetch`）存在；
+    #    旧页删除（`D18`）后那条路走 **JSON API**（壳在用）⇒ 按 claim（"库存单据能从 i8 补抓"）改指 API。
+    assert "/api/m08/fetch" in _paths()
 
 
 # ============================================================ 原则 · 不重走审批
