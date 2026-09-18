@@ -15,17 +15,14 @@
 from __future__ import annotations
 
 import pathlib
-import re
 import tempfile
 import zipfile
 from datetime import date, timedelta
 from decimal import Decimal
 
-from app.mod02_i8.fetch_task import CONFIRM_TOKEN
 from app.mod07_setl import domain as D
 from app.mod07_setl.models import SetlDetail
 from app.mod07_setl.service import build_page_data, parse_state
-from app.mod07_setl.view import render_setl_page
 from app.report_export import service as _EX
 from app.report_export import setl_export as _SE
 from tests.acc_plugin import acc
@@ -44,82 +41,21 @@ MONTHS = ("2026-08", "2026-07", "2026-06")
 
 
 # ============================================================ 工具（都**不借实现自证**）
-
-_TABLE_RE = re.compile(
-    r'<table class="dt" data-sort data-sort-key="m07:warehouses">(.*?)</table>', re.S
-)
-
-
-def _page(*, period: str | None = None, params: dict | None = None) -> str:
-    p = dict(params or {})
-    if period is not None:
-        p["period"] = period
-    return render_setl_page(build_page_data(FakeSession(dataset()), parse_state(p)))
+#
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 2**）：原先这里有一整套**页面观测辅助件** ——
+#    `_page()`（取旧页 HTML）· `_table`/`_TABLE_RE`/`_trs`/`_rows`/`_data_rows`/`_thead_count`/
+#    `_empty_row`/`_sum_row`/`_dialog`/`_num`（从旧页 HTML 里抠表体 / 合计行 / 空态行 / 弹窗 / 数字）。
+#    旧页整体删除（授权 `D18`）后它们**零调用**（逐个数过 ✓）⇒ 一并移除；本文件此后**只读数据出口**
+#    （`_data()`），形态 claim 全部在 `tests/test_wired_m07.py` 里立 ✓（表体每仓一行 / 合计行由共用出口出 /
+#    空态 colspan 由表头派生 / 抓取弹窗 / 产出物清单 / 对平显示与合计校验 …）。⛔ 判据一条没删。
 
 
 def _data(*, period: str | None = None, params: dict | None = None) -> dict:
+    """本表当页**数据**（旧页渲染前的那份 `build_page_data` 出口；⛔ 不碰任何页面形态）。"""
     p = dict(params or {})
     if period is not None:
         p["period"] = period
     return build_page_data(FakeSession(dataset()), parse_state(p))
-
-
-def _table(html: str) -> str:
-    m = _TABLE_RE.search(html)
-    assert m, "没找到结存表（`data-sort-key=\"m07:warehouses\"`）"
-    return m.group(1)
-
-
-def _thead_count(html: str) -> int:
-    """**独立数**表头 `<th>` 个数（不用实现里的列数）。"""
-    return len(re.findall(r"<th\b", _table(html)))
-
-
-def _trs(html: str) -> list[tuple[str, list[str]]]:
-    """表体每一行 → `(<tr> 的属性串, 各格文字)`——属性串留着判「空态行 / 合计行」。"""
-    body = re.search(r"<tbody>(.*?)</tbody>", _table(html), re.S).group(1)
-    out: list[tuple[str, list[str]]] = []
-    for attrs, inner in re.findall(r"<tr\b([^>]*)>(.*?)</tr>", body, re.S):
-        out.append((
-            attrs,
-            [re.sub(r"<[^>]*>", "", c).strip()
-             for c in re.findall(r"<td\b[^>]*>(.*?)</td>", inner, re.S)],
-        ))
-    return out
-
-
-def _rows(html: str) -> list[list[str]]:
-    return [cells for _attrs, cells in _trs(html)]
-
-
-def _data_rows(html: str) -> list[list[str]]:
-    """**数据行**：不含合计行、不含空态提示行。"""
-    return [cells for attrs, cells in _trs(html)
-            if "empty" not in attrs and cells and cells[0] != D.TOTAL_LABEL]
-
-
-def _empty_row(html: str) -> str:
-    """空态提示行**整行 HTML**（要读它的 `colspan` 与文字）。"""
-    m = re.search(r"<tr[^>]*\bempty\b[^>]*>(.*?)</tr>", _table(html), re.S)
-    assert m, "空月没有空态提示行（tbody 直接空白）"
-    return m.group(1)
-
-
-def _sum_row(html: str) -> list[str]:
-    for cells in _rows(html):
-        if cells and cells[0] == D.TOTAL_LABEL:
-            return cells
-    raise AssertionError("表尾没有「合计」行")
-
-
-def _dialog(html: str, dlg_id: str) -> str:
-    m = re.search(rf'<dialog[^>]*id="{dlg_id}"[^>]*>.*?</dialog>', html, re.S)
-    assert m, f"没有 {dlg_id} 弹窗"
-    return m.group(0)
-
-
-def _num(text: str) -> Decimal:
-    return Decimal(re.sub(r"[^\d.\-]", "", text) or "0")
 
 
 # ============================================================ 判据点
@@ -127,23 +63,26 @@ def _num(text: str) -> Decimal:
 
 @acc(CASE, "001-01")
 def test_表体每仓一行且行数合计等于各仓行数之和():
-    html = _page(period="2026-08")
-    rows = _data_rows(html)
-    names = [r[0] for r in rows]
+    data = _data(period="2026-08")
+    rows, summary = data["rows"], data["summary"]
+    names = [r["warehouse"] for r in rows]
 
     assert names == indep_warehouses("2026-08"), "表体不是「每仓一行」或行序不稳"
     assert len(names) == len(set(names)), "同一仓库出现了多行"
 
     # 各仓行数 = 手写期望表；**行数合计 = 各仓行数之和**（独立复算）
-    assert [int(_num(r[1])) for r in rows] == [EXPECT["2026-08"][w]["rows"] for w in names]
-    total = _sum_row(html)
-    assert int(_num(total[1])) == indep_row_total("2026-08")
-    assert int(_num(total[1])) == sum(int(_num(r[1])) for r in rows)
+    assert [r["rows"] for r in rows] == [EXPECT["2026-08"][w]["rows"] for w in names]
+    assert summary["rows"] == indep_row_total("2026-08")
+    assert summary["rows"] == sum(r["rows"] for r in rows)
 
     # 四个金额列各有合计，且与独立复算一致（列序 = 表头顺序）
     assert [c["key"] for c in D.SETL_COLUMNS[2:6]] == list(D.AMOUNT_KEYS)
-    for i, key in enumerate(D.AMOUNT_KEYS, start=2):
-        assert _num(total[i]) == indep_amount_total("2026-08", key), f"{key} 合计不对"
+    for key in D.AMOUNT_KEYS:
+        assert summary[key] == indep_amount_total("2026-08", key), f"{key} 合计不对"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先这些是从**旧页**表体/合计行的 `<td>` 里抠出来的；
+    # 旧页删除（授权 `D18`）后**形态**搬到壳 —— `test_wired_m07.py::test_壳里表体每仓一行且合计行
+    # 由共用出口出`（`sumRowOf(WH_THEAD, rows, …)` ⇒ 行数与四个金额列的合计都按行派生 ✓）。
+    # 这里改走**数据出口**（页面只是印它），口径与独立复算一字未动。
 
 
 @acc(CASE, "001-02")
@@ -162,14 +101,16 @@ def test_默认核算年月为北京时间上月():
 def test_切月后表数据跟着换且各月互不相同():
     totals: dict[str, int] = {}
     for ym in MONTHS:
-        html = _page(period=ym)
-        rows = _data_rows(html)
-        assert [r[0] for r in rows] == indep_warehouses(ym), f"{ym} 的仓集合不对"
-        got = int(_num(_sum_row(html)[1]))
+        data = _data(period=ym)
+        rows = data["rows"]
+        assert [r["warehouse"] for r in rows] == indep_warehouses(ym), f"{ym} 的仓集合不对"
+        got = data["summary"]["rows"]
         assert got == indep_row_total(ym), f"{ym} 行数合计 {got} ≠ 独立复算 {indep_row_total(ym)}"
         totals[ym] = got
     # 各月数据互不相同 ⇒ 这条断言有区分力（否则"切月"可以什么都不做也过）
     assert len(set(totals.values())) == len(totals), f"演示数据三个月重复：{totals}"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先这两条借**旧页**的表体行与合计行观测；旧页删除（授权 `D18`）后
+    # 形态搬到壳（见上面 001-01 的说明 ＋ `test_wired_m07.py` 的「切月重取数」），这里改走数据出口。
 
 
 @acc(CASE, "001-04")
@@ -237,10 +178,9 @@ def test_产出物为分仓库工作簿加总表且份数随仓数实时算():
         assert len(manifest) == len(wh) + 1
         counts.append(len(wh))
 
-        # 页面上的 zip 弹窗渲染的就是这份清单（清单条数 = 份数）
-        dlg = _dialog(_page(period=ym), "zipDlg")
-        assert dlg.count("<td>分仓库工作簿</td>") == len(wh)
-        assert f"共 <b>{len(manifest)}</b> 个文件" in dlg
+        # ⚠️ 2026-09-19（`§19` 批 2）：原先这里看**旧页** zip 弹窗渲染出来的清单（条数 = 份数）；
+        # 旧页删除（授权 `D18`）后形态搬到壳 ——
+        # `test_wired_m07.py::test_壳里产出物清单按仓数加总表且真导出`（壳的产出物清单逐项 ✓）。
 
     assert len(set(counts)) > 1, f"三个月份数完全相同 ⇒ 疑似写死：{counts}"
     # 空月：只剩总表 1 份
@@ -274,15 +214,17 @@ def test_对平判据按两位小数归一后判等且动态判定():
     assert D.balance(off) == Decimal("-0.01")
     assert D.is_balanced(off) is False
 
-    # ④ 页面上按**动态判定**显示：同一页里既有「已对平」也有「差 X」
-    html = _page(period="2026-07")
-    assert "已对平" in html and "差 0.50" in html
+    # ④⑤⑥ 的**形态**半边（页面按动态判定显示「已对平 / 差 X」、**合计行的校验格**是对
+    #   **合计值本身**再判一次）：⚠️ 2026-09-19（`§19` 批 2）原先借**旧页**观测，旧页删除（`D18`）后
+    #   形态搬到壳 —— `test_wired_m07.py::test_壳里对平显示与合计行校验`（`tagOf(balOf(w))` 逐行 ＋
+    #   合计行的 `tagOf(totBal)` ✓）。下面改用**数据出口**把同一批事实再钉一遍（判据没丢）：
+    #   本桩里 丙仓 +0.50 / 戊仓 -0.20 / **合计 +0.30**，三个数互不相同。
+    row_bals = [D.balance(r) for r in _data(period="2026-07")["rows"]]
+    assert Decimal("0.50") in row_bals and Decimal("-0.20") in row_bals, f"样本行差额变了：{row_bals}"
+    tot_bal = D.balance(_data(period="2026-07")["summary"])
+    assert tot_bal == Decimal("0.30"), f"合计行的校验不是对**合计值本身**判的：{tot_bal}"
+    assert tot_bal not in row_bals, "合计校验格抄了某一行（应当独立判定）"
 
-    # ⑤ 合计行的校验 = **对合计值本身**再判一次（不是抄某一行）——
-    #    本桩里 丙仓 +0.50 / 戊仓 -0.20 / **合计 +0.30**，三个数互不相同
-    total = _sum_row(html)
-    assert total[6] == "差 0.30", f"合计行校验格 = {total[6]}（应是对合计值本身判定）"
-    assert total[6] not in ("差 0.50", "差 -0.20")
-
-    # ⑥ 全部对平的月份 ⇒ 合计也是「已对平」
-    assert _sum_row(_page(period="2026-08"))[6] == D.BALANCE_OK
+    # ⑥ 全部对平的月份 ⇒ `balance_ok` 为真（同一个口径，不再借页面）
+    assert _data(period="2026-08")["balance_ok"] is True
+    assert _data(period="2026-07")["balance_ok"] is False

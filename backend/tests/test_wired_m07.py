@@ -85,6 +85,15 @@ def test_壳里提取页重置回在建与上月():
     assert "fExtReset:()=>{ fExt.status='在建'; fExt.ym=bjMonth(-1);" in SHELL, "提取页重置没回默认"
 
 
+@acc("ACC-SETL-001", "001-01")
+def test_壳里表体每仓一行且合计行由共用出口出():
+    """表体 = **每仓一行**（逐行算校验）；合计行由 `sumRowOf(WH_THEAD, rows, …)` 出 —— 行数与
+    四个金额列的合计都**按行派生**（⭐ 校验格另算，见 001-09）。"""
+    s = _slice("m07")
+    assert "sumRowOf(WH_THEAD, rows," in s, "合计行不是由共用出口按行派生的"
+    assert "balOf(w)" in s, "表体没逐行渲染"
+
+
 @acc("ACC-SETL-001", "001-02")
 def test_壳里核算年月默认上月且可切():
     """默认 = **北京时间上月**（§9.2）；并由 `whMonth` 控件承载（切了重取数，另有断言）。"""
@@ -110,6 +119,23 @@ def test_壳里抓取弹窗默认取本页年月且讲清强踢():
 def test_壳里文件数恒为仓数加一():
     """「分仓库工作簿 ＋ **1 个总表**」⇒ 文件数恒 = 仓数 ＋ 1（回执里两个数同源算出，⛔ 不写死）。"""
     assert "个分仓库 xlsx ＋ 1 个总表（zip）" in SHELL, "回执没按「仓数 ＋ 1」说清产出物"
+
+
+@acc("ACC-SETL-001", "001-08")
+def test_壳里产出物清单按仓数加总表且真导出():
+    """「分仓库工作簿 ＋ 1 个总表」：产出物清单**逐项**列出（分仓库那份按仓数、总表一份），
+    且导出走**真端点**（⛔ 不是死按钮）。"""
+    assert "个分仓库 xlsx（每仓一个）" in SHELL, "产出物清单没按仓数列出分仓库工作簿"
+    assert "收发结存表.xlsx" in SHELL, "产出物清单没列总表"
+    assert "zipSfjc" in SHELL and "/api/m07/settlement/export?period=" in SHELL, "导出没走真端点"
+
+
+@acc("ACC-SETL-001", "001-09")
+def test_壳里对平显示与合计行校验():
+    """校验列按两位小数归一判等：对平写「已对平」、不平写「差 X」；且**合计行的校验格**
+    是对**合计值本身**再判一次（`tagOf(totBal)`），⛔ 不是抄某一行。"""
+    assert '已对平' in SHELL and "tagOf(balOf(w))" in SHELL, "逐行的对平/差额显示出口没了"
+    assert "tagOf(totBal)" in SHELL, "合计行的校验格不是对合计值本身判定的"
 
 
 # ============================================================== 1 · 演示数据已清
