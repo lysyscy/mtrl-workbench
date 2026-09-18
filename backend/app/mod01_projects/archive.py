@@ -63,16 +63,21 @@ def plan_archive(
     warehouse_rows: list[dict] | None,
     existing: set[str] | frozenset[str] | None = None,
     taken_names: set[str] | frozenset[str] | None = None,
+    shell_names_in_archive: set[str] | frozenset[str] | None = None,
     shell_keyword: str = DEFAULT_SMALL_KEYWORD,
 ) -> dict:
     """→ 计划 `{create, exists, manual, no_phid}`（四类都给）。
 
     - `existing` = **已在档案的项目全名**（幂等依据：链路 A ①「全名已在档案 ⇒ 归集、结束」）
     - `taken_names` = **已占用的仓库名**（占位名取号用；含已有的占位行）
+    - `shell_names_in_archive` = **档案里已经是「小微壳」的项目全名**（`TAIL-42` 的人工覆盖"粘住"：
+      有的壳的**全名不含「小微」**（正是"本该是壳、被误判成普通项目"那条根因）⇒ 人在 `m01` 上纠正过一次，
+      这里就要**一直算数**，否则下次同步又会把同族的仓库按普通项目建出来）。
     """
     by_owner = warehouses_by_owner(warehouse_rows)
     existing_names = {str(x).strip() for x in (existing or ()) if str(x).strip()}
     taken = {str(x).strip() for x in (taken_names or ()) if str(x).strip()}
+    shells_in_archive = {str(x).strip() for x in (shell_names_in_archive or ()) if str(x).strip()}
     shell_names = {n for n in by_owner if shell_keyword and shell_keyword in n}
 
     create: list[dict] = []
@@ -93,7 +98,11 @@ def plan_archive(
         seen_common.add(name)
 
         whs = by_owner.get(name, [])
-        kind = classify_name(name, whs, small_keyword=shell_keyword)
+        # ⭐ **人工覆盖要"粘住"**（`TAIL-42`）：该全名在档案里**已有壳行** ⇒ 这一条**按壳判**
+        #    （人把它纠正成壳之后，同族的仓库就该走"壳下具体小微"那条人工路，⛔ 不再当普通项目建出来）。
+        #    ⚠️ 仍然走判定**唯一出口**（`manual_override` 是它自己的参数）—— ⛔ 不在这儿另写一条规则。
+        manual_override = TYPE_SHELL if name in shells_in_archive else None
+        kind = classify_name(name, whs, small_keyword=shell_keyword, manual_override=manual_override)
         # ⚠️ 只看**尚未有档案行**的仓库（按「仓库名是唯一标识」判在不在档）——
         #    已经建过行的小微不该被反复列出。⚠️ 必须在 ① 之前算，否则会被下面的短路吞掉。
         gap_whs = [w for w in whs if w not in taken]

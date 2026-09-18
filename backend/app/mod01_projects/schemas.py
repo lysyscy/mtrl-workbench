@@ -57,6 +57,22 @@ class UpdateProjectRequest(BaseModel):
     changed_by: str = ""
 
 
+class TypeRequest(BaseModel):
+    """人工改**类型**（`TAIL-42`）—— 三类判定的**人工覆盖**路径。
+
+    ⚠️ 合法域 = `normal` / `shell`（= 判定唯一出口 `classify_name` 的 `manual_override` 域）：
+       **`small`（具体小微）不由人工指定** —— 它得挂在一个壳下面、还占一个仓库名，由链路产生。
+    ⚠️ 改成「普通项目」时**必须**给 `warehouse_name`（普通项目靠仓库名做候选键，§2.7.4）——
+       壳本身没有仓库名，⛔ 不许猜一个填上。
+    """
+
+    project_type: Literal["normal", "shell"]
+    warehouse_name: str | None = Field(
+        None, description="改成「普通项目」时必须给（该行挂哪个仓库；壳 → 普通只有这一条路）"
+    )
+    changed_by: str = ""
+
+
 class LogOut(BaseModel):
     id: int
     field: str

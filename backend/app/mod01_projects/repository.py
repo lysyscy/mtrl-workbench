@@ -23,6 +23,7 @@ from app.mod01_projects.models import (
     PLACEHOLDER_PREFIX,
     STATUS_ACTIVE,
     STATUS_ARCHIVED,
+    TYPE_NORMAL,
     TYPE_SHELL,
     TYPE_SMALL,
     Project,
@@ -169,6 +170,78 @@ def log_field(
     session.add(entry)
     session.flush()
     return entry
+
+
+def set_type(
+    session: Session,
+    project: Project,
+    new_type: str,
+    *,
+    warehouse_name: str | None = None,
+    changed_by: str,
+) -> Project:
+    """人工把一条档案行的**类型**改掉（三类判定的**人工覆盖** · `TAIL-42`）—— **唯一出口**。
+
+    - **只收 `normal` / `shell`**（= 判定唯一出口 `classify_name` 的 `manual_override` 域）：
+      ⛔ 不收 `small` —— 具体小微得挂在一个壳下面、还占一个仓库名，由链路产生，人工指定只会造出挂不上的行。
+    - `normal → shell`：壳**不挂仓库** ⇒ `warehouse_name` 置 NULL（⚠️ 该列有唯一约束，多个 NULL 允许）。
+    - `shell → normal`：普通项目**必须**挂一个仓库名（候选键，§2.7.4）⇒ **必须显式给出**（⛔ 不猜、不自动填）；
+      仓库名被占用 ⇒ 拒（唯一标识）。
+    - **有具体小微挂在它名下**的行不许改成别的类型（§2.7.2 的壳 ⇄ 小微不变式）⇒ 先处理那些小微信。
+    - **留痕**记 `project_type` 前后值：人工介入判定是**例外**，例外要有据（否则日后看不出这行为什么跟同名的别行不一样）。
+    """
+    if new_type not in (TYPE_NORMAL, TYPE_SHELL):
+        raise MustReportError(
+            f"类型只能人工改成「普通项目」或「小微壳」；收到 {new_type!r}"
+            "（「具体小微」由链路产生 —— 它要挂在壳下并占一个仓库名，不由人工指定）"
+        )
+    if project.project_type == new_type:
+        raise MustReportError(f"这一行已经是「{_type_label(new_type)}」了 —— 无需纠正")
+
+    children = [p for p in all_projects(session) if p.parent_shell_id == project.id]
+    if children:
+        names = "、".join(sorted(str(c.warehouse_name or c.disp or c.name_full) for c in children))
+        raise MustReportError(
+            f"这一行下有 {len(children)} 个具体小微（{names}），不能改类型 —— "
+            "先处理它们（§2.7.2：壳归档 ⇔ 壳下具体小微全部归档）"
+        )
+
+    old = project.project_type
+    if new_type == TYPE_SHELL:
+        project.warehouse_name = None
+    else:
+        wh = str(warehouse_name or "").strip()
+        if not wh:
+            raise MustReportError(
+                "改成「普通项目」必须给出它挂的仓库名（普通项目靠仓库名做候选键，§2.7.4）—— "
+                "这一行原先不挂仓库，系统无从得知，⛔ 不猜一个填上"
+            )
+        taken = {
+            str(p.warehouse_name or "").strip()
+            for p in all_projects(session)
+            if p.id != project.id
+        }
+        if wh in taken:
+            raise MustReportError(f"仓库名「{wh}」已被占用（仓库名是唯一标识，§2.7.4）")
+        project.warehouse_name = wh
+
+    project.project_type = new_type
+    log_field(
+        session,
+        project,
+        field="project_type",
+        old_value=old,
+        new_value=new_type,
+        changed_by=changed_by,
+        note="人工覆盖三类判定（TAIL-42）",
+    )
+    session.flush()
+    return project
+
+
+def _type_label(t: str) -> str:
+    """类型字面量 → 中文（**只给人看**；取值口径回 §2.2）。"""
+    return {"normal": "普通项目", "shell": "小微壳", "small": "具体小微"}.get(t, t)
 
 
 def set_status(

@@ -30,8 +30,10 @@ STATUS_ARCHIVED = "archived"    # 归档
 # 占位仓库名前缀（决策 5：靠前缀判定，不加字段）
 PLACEHOLDER_PREFIX = "未建仓-"
 
-# 留痕字段白名单（§9.3：**只有**项目全名与项目状态留痕；展示名 / ord **不留痕**）
-LOGGED_FIELDS: tuple[str, ...] = ("name_full", "status")
+# 留痕字段白名单（§9.3：项目全名与项目状态留痕；展示名 / ord **不留痕**）
+# ⚠️ 2026-09-18 加 `project_type`（`TAIL-42`）：**人工覆盖三类判定**这件事必须留痕 ——
+#    否则日后看不出"这一行为什么跟同名的别行不一样"（判定的口径在 §2.2.1，人工介入是例外，例外要有据）。
+LOGGED_FIELDS: tuple[str, ...] = ("name_full", "status", "project_type")
 
 
 class Project(Base):

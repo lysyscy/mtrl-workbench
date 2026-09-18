@@ -4115,6 +4115,23 @@ const ACT={
        也不会错位；后端还会按当前档案现算再守卫一次（不在清单里 / 仓库名不在候选里 ⇒ 明确拒）。 */
     pjAct(()=>API.pjArchRow({full_name:it.full, warehouse_name:wh}),
       r=>`<b>${esc((r&&r.message)||'已建档')}</b>`, 9000); },
+ /* ---- ⭐ `TAIL-42`：**人工覆盖三类判定**（把被误判成普通项目的壳纠正成壳）--------------------
+    根因：三类判定（§2.2.1）里"是不是壳"**只看全名里有没有「小微」** ⇒ 有的壳全名不含它（图纸上的叫法）
+    ⇒ 被误判成**普通项目**；材料侧再遇同族仓库时就按普通项目那条路重复处理。
+    ⚠️ 判定与落库**全在后端**（`classify_name(manual_override=…)` 是判定唯一出口；改类型也只有一个出口）
+       ⇒ 壳里只做"问用户选哪个"＋"把答案送过去"，⛔ 不在这儿再写一份三类判定。 */
+ pjTypeOpen:t=>{ const p=PJs.find(x=>String(x.id)===String(t.dataset.id)); if(!p) return;
+   pjTypeCur=p; pjTypeNew=''; pjTypeDlg(); },
+ pjTypePick:t=>{ pjTypeNew=String(t.dataset.t||''); pjTypeDlg(); },
+ pjTypeOk:t=>{ const p=pjTypeCur; if(!p) return;
+   if(!pjTypeNew) return toast('先选一个目标类型（普通项目 / 小微壳）');
+   const inp=$('#pjTypeWh');
+   const wh=((inp&&inp.value)||'').trim();
+   if(pjTypeNew==='normal'&&!wh) return toast('<b>改成「普通项目」必须填仓库名</b>：普通项目靠仓库名做候选键（§2.7.4），而壳原本不挂仓库 ⇒ 系统无从得知，⛔ 不猜一个填上',8500);
+   closeModal();
+   return pjAct(()=>API.pjType(p.id, pjTypeNew, wh),
+     r=>`已把「${esc(pjDisp(p))}」改成 <b>${esc(PJ_TYPE_LABEL[pjTypeNew]||pjTypeNew)}</b>`
+        +((r&&r.warehouse_name)?`（挂仓库 <b>${esc(r.warehouse_name)}</b>）`:''), 9000); },
  /* —— 链路 C · 归属判定（付款通知书行 → 具体小微）· 2026-09-12 定案 ——
     入口只开在「待指定」标签上；命中 1 个时**自动归集、不弹窗**（ownOf 已算好） */
  ownOpen:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
@@ -5095,6 +5112,12 @@ const API = {
         （那条只在同步回执里报一次、刷新即丢）⇒ 这两个端点就是那个"可点"的出口。 */
   pjArchPend: () => API.get('/api/m01/archive-pending'),
   pjArchRow: body => API.post('/api/m01/archive-row', body),
+  /* 人工改**类型**（`TAIL-42`）—— 三类判定的**人工覆盖**；⚠️ 合法域只有 `normal` / `shell`
+     （「具体小微」由链路产生）⇒ 后端也会拒，壳里⛔ 不另写一份判定。 */
+  pjType: (id, project_type, warehouse_name) => API.send(
+    'PUT', `/api/m01/projects/${id}/type`,
+    {project_type, warehouse_name: warehouse_name || null},
+  ),
 
   /* ---- MOD-02 · i8 接入层（`TAIL-27`）----
      ⭐ 「抓取结果回显」与「抓取任务日志」的**唯一数据源 = 执行记录**（原先两张卡是模拟值/硬编码行）。
@@ -5314,6 +5337,31 @@ async function reloadProjects() {
 
 /* 写动作的统一外壳：⛔ 后端拒绝时**把原因原样给用户**（如"壳下还有 N 个在建小微：A、B"），
    并把界面**恢复成后端真实状态**（本地不保留任何乐观改动）—— 「原值保留」是 §2.7.2 的明确要求。 */
+/* 类型纠正弹窗（`TAIL-42`）—— 可选只有两个，其余是把口径讲清（⛔ 判定不在壳里） */
+const PJ_TYPE_LABEL = {normal: '普通项目', shell: '小微壳', small: '具体小微'};
+let pjTypeCur = null, pjTypeNew = '';
+
+function pjTypeDlg() {
+  const p = pjTypeCur;
+  if (!p) return;
+  const opt = (k, desc) => `<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--bd);border-radius:7px;margin-bottom:7px">
+      <button class="btn sm ${pjTypeNew === k ? 'pri' : 'gost'}" style="flex:0 0 auto" data-act="pjTypePick" data-t="${k}">${pjTypeNew === k ? '已选' : '选它'}</button>
+      <span style="flex:1;min-width:0"><b>${esc(PJ_TYPE_LABEL[k])}</b> <span class="mut sm">· ${desc}</span></span></div>`;
+  modal({
+    title: `改类型 · ${esc(pjDisp(p))}`,
+    body: `<div class="tip" style="margin-bottom:10px">当前类型：<b>${esc(PJ_TYPE_LABEL[p.type] || p.type)}</b>。
+      三类判定（§2.2.1）本来是<b>自动</b>的：全名含「小微」⇒ <b>小微壳</b>；同一全名挂 <b>≥2 个仓库</b> ⇒ 待人工确认；其余算<b>普通项目</b>。
+      ⚠️ 有的壳的全名里<b>没有「小微」</b>（图纸上的叫法就是这样）⇒ 会被误判成普通项目 —— <b>这里就是人工纠正的入口</b>
+      （改动<b>会留痕</b>，在「修改留痕」卡里可查）。</div>
+      <div class="tip wn" style="margin-bottom:10px">⛔ <b>不能选「具体小微」</b>：它得挂在一个壳下面、还占一个仓库名，由链路产生（人工指定只会造出挂不上的行）。</div>
+      ${opt('shell', '不挂仓库；它名下的仓库 = 具体小微（今后走这条路）')}
+      ${opt('normal', '要挂一个仓库名（候选键）—— 选了它，下面会让你填')}
+      ${pjTypeNew === 'normal' ? `<div style="margin-top:6px"><div class="sm mut" style="margin-bottom:4px">仓库名（普通项目必填）</div>
+        <input class="inp" id="pjTypeWh" style="width:100%" value="${esc(p.name || '')}" placeholder="填这一行挂的仓库名"></div>` : ''}`,
+    footer: `<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="pjTypeOk">确认改类型</button>`,
+  });
+}
+
 async function pjAct(fn, okMsg, ms) {
   try {
     const r = await fn();
@@ -5921,6 +5969,26 @@ BIND.m02 = function () {
 };
 
 BIND.m01 = function () {
+  /* ---- ⭐ `TAIL-42`：**类型列的人工覆盖入口**（三类判定的纠正）--------------------------------
+     ⚠️ 为什么由钩子注入：`V.m01` 切片里那一格是 `${typeTag(p.type)}`（**只读**，没有动作），
+        给它加 `data-act` = 改切片那一行 ⇒ 会登记一处偏离；而**注入属性**正好是「渲染后注入」的活。
+     ⚠️ 只给**真的档案行**注入（判据 = 该行有 `editStatus` 那个带 `data-id` 的按钮 ⇒ 与别处同一把尺子），
+        列位置靠**单元格文字**认（三个类型标签之一）⇒ ⛔ 不赌列序号（列序变了这里也不会错）。
+     ⚠️ **不在壳里筛类型**（"具体小微不给改"是后端的判定）—— 壳里再写一份就成第二份口径了。 */
+  (function injectTypeEdit() {
+    const TYPES = ['普通项目', '小微壳', '具体小微'];
+    document.querySelectorAll('#view tr').forEach(tr => {
+      const btn = tr.querySelector('[data-act="editStatus"][data-id]');
+      if (!btn) return;
+      const td = [...tr.children].find(c => TYPES.includes((c.textContent || '').trim()));
+      if (!td) return;
+      td.setAttribute('data-act', 'pjTypeOpen');
+      td.setAttribute('data-id', btn.dataset.id);
+      td.setAttribute('title', '点一下改类型（人工覆盖自动判定 · §2.2.1）');
+      td.style.cursor = 'pointer';
+    });
+  })();
+
   const host = document.querySelector('#view');
   if (!host) return;
   /* ⭐ 链路 A ③-b 的入口（`TAIL-45`）—— 同一套注入法（**幂等**：先撤旧的、再按当前清单重建）。

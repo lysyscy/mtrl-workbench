@@ -34,13 +34,14 @@ from app.mod01_projects.schemas import (
     PromoteRowOut,
     StatusRequest,
     TrailOut,
+    TypeRequest,
     UpdateProjectRequest,
 )
 
 router = APIRouter(prefix="/api/m01", tags=["mod01"])
 
-# 留痕字段 → 中文列名（§9.3 只有这两处；未知字段**原样返回**、不吞）
-FIELD_LABEL = {"name_full": "项目全名", "status": "项目状态"}
+# 留痕字段 → 中文列名（§9.3 的那两处 ＋ `project_type`（人工覆盖判定，`TAIL-42`）；未知字段**原样返回**、不吞）
+FIELD_LABEL = {"name_full": "项目全名", "status": "项目状态", "project_type": "项目类型"}
 
 
 def _out(p: Project) -> ProjectOut:
@@ -134,6 +135,28 @@ def set_status(project_id: int, req: StatusRequest) -> ProjectOut:
         if p is None:
             raise HTTPException(status_code=404, detail="档案行不存在")
         repo.set_status(s, p, req.status, changed_by=req.changed_by or current_operator())
+        return _out(p)
+
+
+@router.put("/projects/{project_id}/type", response_model=ProjectOut)
+def set_project_type(project_id: int, req: TypeRequest) -> ProjectOut:
+    """**人工覆盖三类判定**（`TAIL-42`）：把一条行在「普通项目 ⇄ 小微壳」之间纠正。
+
+    ⚠️ 这是**人工介入自动判定**的唯一出口 —— 判定口径与优先级仍在 `domain.classify_name`
+       （`manual_override` 是它自己的参数）；本层只负责"把人的选择落库"＋仓库名的一致性
+       （普通项目要仓库名、壳不要）＋留痕。⛔ `small` 不受理（具体小微由链路产生）。
+    """
+    with session_scope() as s:
+        p = repo.get_project(s, project_id)
+        if p is None:
+            raise HTTPException(status_code=404, detail="档案行不存在")
+        repo.set_type(
+            s,
+            p,
+            req.project_type,
+            warehouse_name=req.warehouse_name,
+            changed_by=req.changed_by or current_operator(),
+        )
         return _out(p)
 
 
