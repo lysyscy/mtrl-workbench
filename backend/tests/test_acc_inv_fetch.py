@@ -28,7 +28,6 @@ from app.mod08_inv import fetch_service as FS
 from app.mod08_inv import importer
 from app.mod08_inv.models import InvAdjustment, InvDetail
 from app.mod08_inv.repository import load_rows
-from app.mod08_inv.view import fetch_dialog_html
 from tests.acc_plugin import acc
 from tests.m04_helpers import make_project
 from tests.m08_helpers import FakeSession
@@ -236,9 +235,10 @@ def test_重抓不动调整单且消失的有调整行被保留():
 
 @acc(CASE, "001-08")
 def test_未二次确认即拒且失败降级且不自动重试登录():
-    assert FS.CONFIRM_TOKEN in fetch_dialog_html("2026-08")
-    assert "强踢" in fetch_dialog_html("2026-08")
-    assert 'method="post" action="/m08/fetch"' in fetch_dialog_html("2026-08")
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先这三条借**旧页**的抓取弹窗 html 观测（确认 token、「强踢」告知、
+    # 表单 action）；旧页删除（`D18`）后形态搬到壳 ——
+    # `test_wired_m08.py::test_抓取弹窗默认取本页核算年月且讲清强踢` ✓。
+    # 下面「未二次确认即拒」是**服务层**的实质（`FS.CONFIRM_TOKEN` ＋ `confirmed=False` ⇒ 拒），留着。
 
     s = _sess()
     with pytest.raises(MustReportError):
@@ -254,15 +254,14 @@ def test_未二次确认即拒且失败降级且不自动重试登录():
     assert out["excel_import_available"] is True
     assert len(calls) == 1, "失败不得自动重试（更不得重试登录）"
 
-    # ⭐ **降级通道真的在**（`TAIL-01`）：不只印一句「已降级」，入口与回执都要指向它
+    # ⭐ **降级通道真的在**（`TAIL-01`）：不只印一句「已降级」，那条路要**真的存在**
     from app.main import create_app
-
-    from app.mod08_inv.view import _flash_html
 
     paths = set(create_app().openapi()["paths"])
     assert {"/m08/import", "/m08/import/preview", "/m08/import/confirm"} <= paths
-    flash = _flash_html({"kind": "degraded", "message": out["message"]})
-    assert 'href="/m08/import"' in flash, "降级回执必须给出手动导入通道"
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先还拿**旧页**的 `_flash_html` 渲染一遍、断言回执里有
+    # `href="/m08/import"`；旧页删除（`D18`）后那一半随之作废 —— 上面那条「导入端点**真的存在**」
+    # 才是这条 claim 的实质（降级后用户**确实有**手动导入这条路），留着。
     # 同一条解析管线：手动上传的就是 i8 导出的那个 xlsx（**同一个解析器**）
     assert importer.parse_rows is FS.importer.parse_rows
 

@@ -28,7 +28,6 @@ from app.mod08_inv import domain as D
 from app.mod08_inv.models import InvDetail
 from app.mod08_inv.repository import load_rows, save_adjustment
 from app.mod08_inv.service import build_page_data, parse_state
-from app.mod08_inv.view import render_inv_page
 from tests.acc_plugin import acc
 from tests.m08_helpers import FakeSession, dataset
 
@@ -39,21 +38,11 @@ def _sess() -> FakeSession:
     return FakeSession(dataset())
 
 
-def _page(**params) -> str:
-    return render_inv_page(build_page_data(_sess(), parse_state(params)))
-
-
-def _sum_cells(html: str) -> list[str]:
-    """合计行（`<tr class="sum…" data-pin="1">`）里的各格原文。"""
-    m = re.search(r'<tr class="sum[^"]*"[^>]*>(.*?)</tr>', html, re.S)
-    assert m, "页面里没有合计行"
-    return re.findall(r"<td[^>]*>(.*?)</td>", m.group(1), re.S)
-
-
-def _th_labels(html: str) -> list[str]:
-    head = re.search(r"<thead>(.*?)</thead>", html, re.S).group(1)
-    raw = [re.sub(r"<[^>]*>", "", x) for x in re.findall(r"<th[^>]*>(.*?)</th>", head, re.S)]
-    return [x.replace("&#8597;", "").strip() for x in raw]      # 去掉排序箭头（骨架自带）
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：原先这里有三个**页面观测辅助件** ——
+#    `_page()`（取旧页 html）· `_sum_cells()`（抠合计行各格）· `_th_labels()`（抠表头文字）。
+#    旧页整体删除（授权 `D18`）后三者**零调用**（逐个数过 ✓）⇒ 一并移除；对应的**形态** claim
+#    已搬到 `tests/test_wired_m08.py`（表头出口 / 合计行由表头派生 / 空态 colspan / 两种导出 /
+#    列筛选 / 抓取弹窗 / 壳内边界 ✓）—— ⛔ 判据没删，只是换了观测面。
 
 
 # ------------------------------------------------------------ 001-01 列结构
@@ -62,11 +51,11 @@ def _th_labels(html: str) -> list[str]:
 @acc(CASE, "001-01")
 def test_列结构以主人为准且只有一个定义处():
     labels = [c["label"] for c in D.INV_TABLE_COLUMNS]
-    html = _page(period="2026-08")
 
-    # ① 渲染出来的表头 = 唯一出口给的那份（列数派生，**不写死数字**）
-    assert _th_labels(html) == labels
-    assert len(_th_labels(html)) == len(D.INV_TABLE_COLUMNS)
+    # ① ⚠️ 2026-09-18（`§19` 批 2）：原先拿**旧页**渲染出的表头逐列比对 `INV_TABLE_COLUMNS`
+    #    （「列数派生、不写死数字」）；旧页删除（`D18`）后形态搬到壳 ——
+    #    `test_wired_m08.py::test_表头出口在且可筛列数由列元数据派生`（`ivThead()` ＋ `IV_COLN=IV_FCOL.length`）。
+    #    下面 ②③ 是**列结构归属**的实质（关键字段落点 / 末列「操作」恒定且不可排），留着。
 
     # ② §3.4「关键字段」逐项都有落点；**刻意不建的**必须显式登记为 None
     for name, key in D.KEY_FIELD_MAP:
@@ -96,8 +85,8 @@ def test_切全部行数变多且重置回到默认():
     month = D.filter_rows(rows, ym="2026-08")
     everything = D.filter_rows(rows, ym="")
     assert len(everything) > len(month), "「全部」应比单月多"
-    # 重置 = 回到默认（页面上「重置」指向不带参数的 /m08）
-    assert 'href="/m08"' in _page(period="2026-01~2026-06")
+    # 重置 = 回到默认（⚠️ 2026-09-18 `§19` 批 2：这一条原先借**旧页**的 `href="/m08"` 观测；
+    # 旧页删除（`D18`）后形态搬到壳 —— `test_wired_m08.py::test_重置回默认年月`（`fIvReset`）✓）。
 
 
 # ------------------------------------------------------------ 001-03 / 004 粗筛
@@ -129,12 +118,10 @@ def test_按出入库方向筛选():
 
 @acc(CASE, "001-05")
 def test_除操作列外每列都有筛选入口():
-    html = _page(period="2026-08")
     assert set(D.filterable_keys()) == {c["key"] for c in D.INV_TABLE_COLUMNS} - set(D.PAGE_ONLY_KEYS)
-    for key in D.filterable_keys():
-        has = f'name="f_{key}"' in html or f'name="f_{key}_v"' in html
-        assert has, f"「{key}」列没有筛选入口"
-    assert 'name="f_ops"' not in html, "末列「操作」不该有筛选入口"
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先还逐列去旧页 html 里找 `name="f_<key>"` 输入框；
+    # 旧页删除（`D18`）后形态搬到壳 —— `test_wired_m08.py::test_每列筛选由后端列键驱动`
+    # （壳的列筛选由 `IV_FCOL` 驱动，⛔ 前端不另立一份列清单）。上面的**列清单归属**是实质，留着。
 
 
 @acc(CASE, "001-05")
@@ -168,10 +155,8 @@ def test_数值列既给区间也给值清单且勾选真的生效():
     both = D.filter_rows(rows, ym="2026-08", col_filters={"amount": {"min": "50", "v": ["100.00"]}})
     assert [r["amount"] for r in both] == [Decimal("100.00")]
 
-    # 页面：数值列同时有 ≥/≤ 与值清单
-    html = _page(period="2026-08")
-    assert 'name="f_amount_min"' in html and 'name="f_amount_max"' in html
-    assert 'name="f_amount_v"' in html
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先还看旧页 html 里有没有 `f_amount_min/max/v` 三个输入框；
+    # 旧页删除（`D18`）后形态搬到壳 —— `test_wired_m08.py::test_数值列既给区间也给值清单` ✓。
     assert D.distinct_values(rows, "amount", ym="2026-08") == ["100.00", "200.00", "40.00"]
 
 
@@ -198,27 +183,19 @@ def test_合计行逐列独立复算且随筛选变():
     assert narrowed["amount"] == Decimal("300.00") != sums["amount"]
 
 
-@acc(CASE, "001-07")
-def test_合计行在表内且列数对齐():
-    html = _page(period="2026-08")
-    tbody = re.search(r"<tbody>(.*)</tbody>", html, re.S).group(1)
-    assert 'class="sum' in tbody, "合计行必须在 tbody 内"
-    cells = _sum_cells(html)
-    assert len(cells) == len(D.INV_TABLE_COLUMNS), "合计行的格数必须 = 表头列数（不写死数字）"
-    assert cells[0] == "合计"                                            # 首格写「合计」
-    idx = {c["key"]: i for i, c in enumerate(D.INV_TABLE_COLUMNS)}
-    assert cells[idx["price_excl"]] == "" and cells[idx["price_incl"]] == ""   # 单价列留空
-    assert cells[idx["amount"]] == "340.00"
+# ⚠️ 2026-09-18（`§19` 批 2）：原先这条（`test_合计行在表内且列数对齐`）逐格数**旧页**渲染出来的
+#    合计行；旧页删除（`D18`）后**形态**搬到壳 —— `test_wired_m08.py::test_合计行由表头派生且单价列不求和`
+#    （新壳 `sumRowOf(INV_THEAD, …)`：格数**结构性**由表头派生，且说明里点明两个单价列不求和 ✓）——
+#    上面那条 `test_合计行逐列独立复算且随筛选变` 是**逐列独立复算**的实质，留着。
 
 
 # ------------------------------------------------------------ 001-08 空态
 
 
-@acc(CASE, "001-08")
-def test_筛选为空必须有空态提示行():
-    html = _page(period="2026-08", pj=["不存在的仓库"])
-    assert "没有库存单据明细" in html
-    assert f'colspan="{len(D.INV_TABLE_COLUMNS)}"' in html, "空态行跨列数由表头派生"
+# ⚠️ 2026-09-18（`§19` 批 2）：原先这条（`test_筛选为空必须有空态提示行`）看**旧页**渲染出来的空态行
+#    与它的 `colspan`；旧页删除（`D18`）后**形态**搬到壳 ——
+#    `test_wired_m08.py::test_空态行跨列数由表头派生`（`colspan="${thCount(INV_THEAD)}"` ＋ 文案 ✓）。
+#    ⚠️ 「筛选为空 ⇒ 结果为空」这条**实质**在上面 001-03/004 的 `filter_rows` 断言里 ✓。
 
 
 # ------------------------------------------------------------ 001-09 / 010 调整单
@@ -257,11 +234,9 @@ def test_调整后金额负值被拦零合法():
 
 @acc(CASE, "001-11")
 def test_抓取弹窗默认月份等于本页当前所选核算年月():
-    html = _page(period="2026-07")
-    m = re.search(r'id="fetchMonth"[^>]*value="([^"]*)"', html)
-    assert m and m.group(1) == "2026-07"
-    assert "强踢" in html, "抓取前必须告知会登录 i8 强踢在线用户（D9）"
-    # 当前所选不是单月 ⇒ 回落到本表默认年月（抓取只允许单月，§9.2）
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先还去旧页 html 里抠 `id="fetchMonth"` 的默认值与「强踢」文案；
+    # 旧页删除（`D18`）后形态搬到壳 —— `test_wired_m08.py::test_抓取弹窗默认取本页核算年月且讲清强踢` ✓。
+    # 下面这条是**回落口径**的实质（当前所选不是单月 ⇒ 回落到本表默认年月，抓取只允许单月 §9.2）。
     assert D.fetch_dialog_default("2026-01~2026-06") == default_period("inventory")
 
 
@@ -270,8 +245,8 @@ def test_抓取弹窗默认月份等于本页当前所选核算年月():
 
 @acc(CASE, "001-12")
 def test_两种导出并存且透视提示与模板形态一致():
-    html = _page(period="2026-08")
-    assert 'data-act="exp"' in html and 'data-act="expPivot"' in html, "两种导出必须并存"
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先还看旧页 html 里两个导出入口在不在；旧页删除（`D18`）后
+    # 形态搬到壳 —— `test_wired_m08.py::test_两种导出并存且透视那份写明独立通道` ✓。下面是**清单与文案**的实质。
     kinds = {k["id"]: k for k in D.export_kinds()}
     assert set(kinds) == {D.EXPORT_PLAIN, D.EXPORT_PIVOT}
     # 后者提示必须逐项写明工作簿形态（主人 = demo/模板/模板清单.md §二 第 10–12 行）
@@ -292,7 +267,6 @@ def test_不新增删除入口且不建是否作废字段():
     assert D.boundary_violations(column_keys=("amount", "void_flag"), action_ids=()) == []  # 未登记的列不炸
     assert D.boundary_violations(column_keys=("是否作废",), action_ids=()) != []
 
-    html = _page(period="2026-08")
-    assert "是否作废" not in html
-    for act in D.FORBIDDEN_ACTIONS:
-        assert f'data-act="{act}"' not in html, f"本页不得出现删除入口：{act}"
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先还扫**旧页** html（「是否作废」与删除入口）；旧页删除（`D18`）后
+    # 形态搬到壳 —— `test_wired_m08.py::test_壳里不出现删除入口与是否作废`（拿**同一把尺子**扫壳全文 ✓）。
+    # 上面那三条 `boundary_violations(...)` 是**域内核**这把尺子自己的实质（含反向否证），留着。

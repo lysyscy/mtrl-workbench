@@ -52,6 +52,82 @@ def _shell_list(const: str) -> list[str]:
 # ============================================================== 1 · 数据源已换后端
 
 
+# ----------------------------------- `ACC-INV-001` 的**形态**半边（搬家 · `§19` 批 2）
+#
+# 原先钉在**旧服务端页** `render_inv_page` 渲染出的 HTML 上；旧页删除（授权 `D18`）⇒
+# 形态那半边**改指新壳**（⛔ 判据不删）。实质（判定/取数/口径）仍留在 `tests/test_acc_inv.py`。
+
+
+@acc("ACC-INV-001", "001-01")
+def test_表头出口在且可筛列数由列元数据派生():
+    """旧页：断言渲染出的表头逐列 = **后端** `INV_TABLE_COLUMNS`（列结构的唯一主人）。
+    新壳：表头出口 `ivThead()`（**逐列插筛选入口**）＋ 可筛列数 `IV_COLN = IV_FCOL.length`
+    —— `IV_FCOL` 是列元数据的**唯一出处**（末列「操作」不参与筛选）。"""
+    assert "const ivThead=()=>{" in SHELL, "表头渲染出口没了"
+    assert "const IV_COLN=IV_FCOL.length;" in SHELL, "可筛列数不是由列元数据派生的"
+
+
+@acc("ACC-INV-001", "001-02")
+def test_重置回默认年月():
+    """旧页：`href="/m08"`（不带参数）就是「重置」。新壳：`fIvReset` 把核算年月重置回**默认月**（上月）。"""
+    assert "fIvReset:()=>{" in SHELL and "fIvYm=bjMonth(-1)" in SHELL, "重置没回到默认年月"
+
+
+@acc("ACC-INV-001", "001-05")
+def test_每列筛选由后端列键驱动():
+    """旧页：每个可筛列都有 `name="f_<key>"`，末列「操作」没有。新壳：列筛选由 `IV_FCOL`（**后端给的列键**）
+    驱动 ⇒ ⛔ 前端不另立一份列清单（列清单的主人 = 后端 `domain.INV_TABLE_COLUMNS`）。"""
+    assert "IV_FCOL" in SHELL and "ivColPass" in SHELL, "壳里没有列筛选通道"
+
+
+@acc("ACC-INV-001", "001-06")
+def test_数值列既给区间也给值清单():
+    """旧页：数值列同时给「区间」与「值清单」。新壳：`ivColMin`/`ivColMax`（区间）＋ `ivColVal`（值清单）并存。"""
+    for k in ("ivColMin", "ivColMax", "ivColVal"):
+        assert k in SHELL, f"壳里没有 {k}（数值列的区间 / 值清单少了一条）"
+
+
+@acc("ACC-INV-001", "001-07")
+def test_合计行由表头派生且单价列不求和():
+    """旧页：合计行在 `<tbody>` 内、格数 = 表头列数（**派生**）、两个单价列留空。
+    新壳：`sumRowOf(INV_THEAD, …)` ⇒ 格数**由表头派生**（结构性保证 ✓）＋ 说明里点明两个单价列不求和。"""
+    assert "sumRowOf(INV_THEAD,list,invSums,{tip:'" in SHELL, "合计行不是由表头派生的"
+    assert "两个单价列不求和" in SHELL, "「单价列不求和」这条没说清"
+
+
+@acc("ACC-INV-001", "001-08")
+def test_空态行跨列数由表头派生():
+    """旧页：空态提示行的 `colspan` 由表头列数派生。新壳同款：`colspan="${thCount(INV_THEAD)}"`。"""
+    assert 'colspan="${thCount(INV_THEAD)}"' in SHELL, "空态行的跨列数不再由表头派生"
+    assert "没有库存单据明细" in SHELL, "空态文案丢了"
+
+
+@acc("ACC-INV-001", "001-11")
+def test_抓取弹窗默认取本页核算年月且讲清强踢():
+    """旧页：`id="fetchMonth"` 的默认值 = 本页当前所选核算年月；且弹窗里必须讲清**会登录 i8 强踢**（`D9`）。"""
+    assert "fetchIv:()=>{ fetchKind='iv'; fetchM=fIvYm;" in SHELL, "抓取弹窗没取本页当前年月"
+    assert "强踢" in SHELL, "D9（会强踢在线用户）没告知"
+
+
+@acc("ACC-INV-001", "001-12")
+def test_两种导出并存且透视那份写明独立通道():
+    """旧页：`data-act="exp"` 与 `data-act="expPivot"` **并存**，后者写明工作簿形态与「主表那份不受影响」。"""
+    assert 'data-act="expPivot"' in SHELL, "透视导出没接"
+    assert "主表那份朴素导出不受影响" in SHELL, "没写明透视是**独立通道**"
+    assert 'data-t="库存单据明细总表"' in SHELL, "朴素导出（R1）没接"
+
+
+@acc("ACC-INV-001", "001-13")
+def test_壳里不出现删除入口与是否作废():
+    """旧页：拿 `boundary_violations` 扫 HTML ＋ 页面上不得出现删除入口 /「是否作废」列。
+    新壳同理 —— 直接拿**域内核那把尺子**去扫**壳全文**（同一把尺子、更难糊弄的对象）。"""
+    from app.mod08_inv.domain import FORBIDDEN_ACTIONS
+
+    for act in FORBIDDEN_ACTIONS:
+        assert f'data-act="{act}"' not in SHELL, f"壳里出现了删除入口：{act}"
+    assert "是否作废" not in SHELL, "壳里出现了「是否作废」（不许建这个字段/列）"
+
+
 @acc()
 def test_演示数组已删():
     """两张演示数组必须**物理删除**（留着就永远渲染演示数据 —— `ui_parity` 的 `U2b` 也查）。"""
