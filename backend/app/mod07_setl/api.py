@@ -27,7 +27,7 @@ from app.mod07_setl import extract as X
 from app.mod07_setl import service as S
 from app.mod07_setl.big_repository import load_manual
 from app.mod07_setl.domain import AMOUNT_KEYS, ROWCOUNT_KEY, WAREHOUSE_KEY, default_month
-from app.mod07_setl.repository import load_rows
+from app.mod07_setl.repository import load_balances, load_rows
 
 router = APIRouter(tags=["mod07"])
 
@@ -102,13 +102,16 @@ def api_settlement(request: Request) -> dict:
 
 @router.get("/api/m07/extract")
 def api_extract() -> dict:
-    """**焊材 / 气体提取**（§5.3.3）→ `{类别: {仓库: {核算月: 金额}}}`。
+    """**焊材 / 气体提取**（§5.3.3）→ `{类别: {仓库: {核算月: 金额}}}` ＋ 「结余」录入值。
 
     ⭐ 口径（关键词 / 白名单 / 排除子串）**唯一出口 = `extract.extract_amounts`** ——
       壳里的「总金额（累计）」与「金额（按所选月份）」两列都从这一份取数派生（`D18`：不在前端重算规则）。
+    ⭐ `balances` = 「结余」手工录入值（**唯一取数出口 = `repository.load_balances`**，
+      粒度 = 类别 × 仓库 · 不按月）；**未录入的键不出现**（≠ 0 —— 0 是合法录入值）。
     """
     with session_scope() as s:
         amounts = X.extract_amounts(load_rows(s))
+        balances = load_balances(s)
     out: dict[str, dict[str, dict[str, object]]] = {}
     for kind in X.KINDS:
         by_wh = (amounts or {}).get(kind) or {}
@@ -116,7 +119,14 @@ def api_extract() -> dict:
             str(wh): {str(ym): _s(v) for ym, v in (months or {}).items()}
             for wh, months in by_wh.items()
         }
-    return {"amounts": out, "kinds": list(X.KINDS)}
+    return {
+        "amounts": out,
+        "kinds": list(X.KINDS),
+        "balances": {
+            str(kind): {str(wh): _s(v) for wh, v in ((balances or {}).get(kind) or {}).items()}
+            for kind in X.KINDS
+        },
+    }
 
 
 @router.get("/api/m07/big")
@@ -204,6 +214,32 @@ def api_big_cell(req: CellRequest) -> dict:
         return BS.save_manual_cell(
             s, month=req.month, warehouse=req.warehouse, key=req.key,
             raw=req.raw, cands=_cands(s),
+        )
+
+
+class BalanceRequest(BaseModel):
+    """「结余」一格（`kind` / `warehouse` / 原始输入 `raw`）。
+
+    ⚠️ `raw` 一律**原样**传（**不预先转数字**）：格式判定是域内核的职责
+       （空 ⇒ 清空；非数字 / 负数 ⇒ 拒）；前端先转会把非法输入变成 `NaN` 而**看不出错**。
+    """
+
+    kind: str = ""
+    warehouse: str = ""
+    raw: object | None = None
+
+
+@router.post("/api/m07/extract/balance")
+def api_extract_balance(req: BalanceRequest) -> dict:
+    """保存提取页**「结余」一格**（历史结余 · 手工录入 · 2026-09-18 用户裁定）。
+
+    - 判定与落库**唯一出口 = `service.save_balance_cell`**（其下游 = `extract.parse_balance`）；
+    - 失败**不写库、原值不变**，回执带中文原因（`ok=False` ＋ `message`）⇒ 壳里如实报出，不静默；
+    - ⚠️ 出参 `value`：**已录入给数字串**、**清空给 `None`** —— 两者**语义不同**，壳侧要分开处理。
+    """
+    with session_scope() as s:
+        return S.save_balance_cell(
+            s, kind=req.kind, warehouse=req.warehouse, raw=req.raw
         )
 
 

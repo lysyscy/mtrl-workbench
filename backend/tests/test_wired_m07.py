@@ -199,11 +199,92 @@ def test_导出已落地为真下载():
 
 # ============================================================== 4 · 后端端点 + 接线自洽
 
+# ============================================================== 5 · 「结余」录入（2026-09-18 用户裁定「甲」）
+
 @acc()
-def test_后端七个端点都在():
+def test_结余录入走后端且不在前端复写判据():
+    """⭐ 反向：`extBal` 不许在前端复写「金额非负 / 空 = 清空」判据，也不许本地改 `BAL_EX` 冒充落库。"""
+    i = SHELL.find("extBal:async t=>{")
+    assert i > 0, "`extBal` 没改成 async（异步走后端）"
+    j = SHELL.find("\n expExt:", i)
+    body = SHELL[i:j if j > i else i + 1600]
+    assert "API.m07BalCell(" in body, "`extBal` 没走 `/api/m07/extract/balance`"
+    assert "raw:" in body, "没把**原始输入**交给后端（前端先转数字 ⇒ 非法输入变成 NaN、看不出错）"
+    assert "badMoney(" not in body and "numOf(" not in body, \
+        "`extBal` 还在前端复写金额判据（⇒ 第二份口径）"
+    # ⚠️ 判据只认**代码形态**（`BAL_EX[`）—— 别写成「不含『不本地改』这句话」：
+    #    那段说明文字**本身**就写在函数上方，用文案判会**被自己的注释喂饱**（假绿）。
+    assert "BAL_EX[" not in body, "`extBal` 还在本地改 `BAL_EX` 冒充落库（假成功）"
+    assert "reloadM07()" in body, "`extBal` 成功后没「以后端为准重拉」"
+
+
+@acc()
+def test_结余是表单类动作已登记CHG():
+    """⛔ 漏登记 `CHG` ⇒ `change` 事件被静默丢弃（输入框「点了没反应」）。"""
+    m = re.search(r"const CHG=\[([^\]]*)\]", SHELL)
+    assert m, "壳里找不到 `CHG` 数组"
+    assert "'extBal'" in m.group(1), "`extBal` 没登记进 `CHG`"
+
+
+@acc()
+def test_结余演示容器已清成空容器():
+    assert "const BAL_EX = {" not in SHELL, "结余演示块 `const BAL_EX = {` 还在"
+    assert "let BAL_EX = {};" in SHELL, "`BAL_EX` 没改成「空容器 + 后端填充」"
+
+
+@acc()
+def test_结余适配层过N0且不给未录入补值():
+    """⚠️ 后端金额出**字符串**（不过 `N0()` 会显示成带引号的串）；
+    ⛔ **不给未录入补 0** —— 一补，「没填」与「填了 0」就再也分不开。"""
+    body = _body("adaptBalances")
+    assert "N0(v)" in body, "结余没过 `N0()`"
+    assert re.search(r"if \(v == null \|\| v === ''\) return;", body), \
+        "空值（未录入）没被跳过 ⇒ 会给未录入补一个值（0 与「未录入」就分不开了）"
+
+
+@acc()
+def test_reloadM07填充结余():
+    """⭐ 重拉是**唯一出口**：`BAL_EX` 必须由 `reloadM07()` 从后端 `balances` 原地填。"""
+    body = _body("reloadM07")
+    assert "adaptBalances(ex && ex.balances)" in body, "没读 `/api/m07/extract` 的 `balances`"
+    assert "Object.keys(BAL_EX).forEach(k => delete BAL_EX[k]);" in body, \
+        "`BAL_EX` 没「原地清空再填」（外部持有的引用会指向旧对象）"
+
+
+@acc()
+def test_结余列渲染成可编辑输入且合计下标跟着移():
+    """「点格即改」的形态判据 ＋ ⚠️ **加列后合计行的列下标必须跟着移**（否则合计算到「结余」列上）。"""
+    body = _body("extBlock")
+    assert 'data-act="extBal"' in body, "「结余」列没渲染成可编辑输入"
+    assert "extBalOf(" in body, "结余格没走取数出口"
+    assert "v == null ? ''" in body, "未录入没给空值（⛔ 不写 0）"
+    assert "{3:rs=>" in body and "4:rs=>" in body, "合计行的列下标没跟着移（列 +1 之后仍按旧下标）"
+    assert "{2:rs=>" not in body, "合计行还在按旧下标取列"
+
+
+@acc()
+def test_表头含结余列且列序照模板():
+    m = re.search(r"const EXT_THEAD=`([^`]*)`", SHELL)
+    assert m, "找不到 `EXT_THEAD`"
+    head = m.group(1)
+    assert head.count("<th") == 5, f"提取表表头应为 5 列（加「结余」），实得 {head.count('<th')}"
+    assert head.index("仓库") < head.index("结余") < head.index("总金额"), \
+        f"「结余」列的位置不对（应照成品模板：仓库之后、金额之前）：{head}"
+
+
+@acc()
+def test_后端结余端点读写都在():
+    assert '@router.post("/api/m07/extract/balance")' in API, "后端缺写端点"
+    assert "S.save_balance_cell(" in API, "写端点没走服务层出口（判定会散到路由里）"
+    assert "load_balances(s)" in API, "读端点没带上结余（壳里永远空）"
+
+
+@acc()
+def test_后端关键端点都在():
     for path, verb in (
         ("/api/m07/settlement", "get"), ("/api/m07/extract", "get"), ("/api/m07/big", "get"),
         ("/api/m07/big/cell", "post"), ("/api/m07/big/selection", "post"),
+        ("/api/m07/extract/balance", "post"),
         ("/api/m07/fetch", "post"),
     ):
         assert f'@router.{verb}("{path}")' in API, f"后端缺端点 {verb.upper()} {path}"

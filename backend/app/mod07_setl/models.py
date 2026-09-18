@@ -68,6 +68,31 @@ class SetlDetail(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
+class WeldGasBalance(Base):
+    """焊材 / 气体提取成品的**「结余」列**（§5.3.3 · `模板清单` §五 的 **B 类**）。
+
+    ⭐ **2026-09-18 用户裁定：结余 = 历史结余、由用户手工录入** —— 系统**没有任何来源**
+       （⛔ 不是收发结存的 `end_amt` 派生，那条口径已被作废）。本表就是那份录入值的落点。
+
+    ⚠️ **粒度 = 类别 × 仓库 · 不按月**（用户维护的是"当前的结存"，改一次覆盖一次）；
+       将来若要按月留痕 ⇒ 加 `ym` 列 ＋ 改唯一键（一次迁移）—— **现在不提前加**。
+    ⚠️ **未录入 = 库里没有这一行**（域值 `None`）⇒ 导出里**如实留空**；
+       **0 是合法录入值**（有行、`amount = 0`），⛔ 两者不得混为一谈。
+    """
+
+    __tablename__ = "weldgas_balance"
+    __table_args__ = (
+        UniqueConstraint("kind", "warehouse_name", name="uq_weldgas_balance_kind_wh"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(16), index=True, default="")              # 取值域 = extract.KINDS
+    warehouse_name: Mapped[str] = mapped_column(String(128), index=True, default="")   # 键 = 仓库名（§2.7.4）
+    amount: Mapped[float] = mapped_column(MONEY, default=0)                            # 结余（元 · 2 位小数）
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
 class AnalysisBigProject(Base):
     """**活动大表自己的项目集合与顺序**（§5.7.3）。
 
@@ -120,4 +145,5 @@ class AnalysisBigManual(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
-__all__ = ["SetlDetail", "AnalysisBigProject", "AnalysisBigManual", "SOURCE_AUTO", "NUMERIC_COLUMNS"]
+__all__ = ["SetlDetail", "WeldGasBalance", "AnalysisBigProject", "AnalysisBigManual",
+           "SOURCE_AUTO", "NUMERIC_COLUMNS"]

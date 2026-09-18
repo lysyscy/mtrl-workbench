@@ -353,6 +353,15 @@ const WH = [
       （它指向的正是演示数据；取数口径现在**唯一出口 = 后端 `/api/m07/extract`**）。 */
 let EXTM = {};   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/extract` 转形填充
    （演示块 3 个月 ＋ 已失效的 `EXTRACT` 别名一并删除；取数口径唯一出口 = 后端 `extract`）。 */
+/* 提取表「结余」列的**手工录入值**（2026-09-18 用户裁定 甲：结余 = **历史结余 · 由用户手工录入**，
+   系统没有任何来源）—— 与 `EXTM` 分开：⚠️ 粒度 = **类别 × 仓库 · 不按月**。
+   ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/extract` 的 `balances` 转形填充（演示值不搬进来）；
+   ⭐ **未录入的键不出现**（域值 `null`）⇒ 导出里如实留空；**`0` 是合法录入值**。 */
+let BAL_EX = {};
+/* 结余列的性质说明 —— **唯一出口**（表格 `title` 与表下说明都用它，⛔ 别在别处再写一遍）。 */
+const EXT_BAL_NOTE = '结余 = 历史结余 · 由用户手工录入（未录入 ⇒ 导出里如实留空；0 是合法值）';
+/* 结余取数出口：**未录入给 `null`**（不是 0 —— 0 会被读成"确实为 0"）。 */
+const extBalOf = (kind, wh) => { const m = BAL_EX[kind]; const v = m ? m[wh] : undefined; return v === undefined ? null : v; };
 
 /* ---------- 付款通知书（ENT-02） MOD-03 ---------- */
 /* manual = 「手动新增行」标记（2026-09-12 新增）：i8 抓取行为 undefined、手动新增行为 true。
@@ -1430,8 +1439,9 @@ const JC_THEAD=`
 const AWF_THEAD=`<th>数据项</th><th>来源</th><th>金额</th><th>占合计</th><th>操作</th>`;
 /* MOD-07 收发结存的表头（第 11 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(WH_THEAD)`），不写死 */
 const WH_THEAD=`<th>仓库名</th><th>行数</th><th>期初金额</th><th>收金额</th><th>发金额</th><th>结存金额</th><th>校验</th>`;
-/* MOD-07 焊材 / 气体提取的表头（第 12 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(EXT_THEAD)`） */
-const EXT_THEAD=`<th>类别</th><th>仓库</th><th>总金额<b class="mut">（累计）</b></th><th>金额<b class="mut">（按所选月份）</b></th>`;
+/* MOD-07 焊材 / 气体提取的表头（第 12 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(EXT_THEAD)`）。
+   ⭐ 2026-09-18 用户裁定（甲）：本表**加一列「结余」**（位置照成品模板 = 仓库之后、金额之前），**点格即改**。 */
+const EXT_THEAD=`<th>类别</th><th>仓库</th><th>结余<b class="mut">（手工录入）</b></th><th>总金额<b class="mut">（累计）</b></th><th>金额<b class="mut">（按所选月份）</b></th>`;
 /* MOD-07 活动大表的表头（第 13 张抽出来的表）—— 用户给的**最终模板**（20 列 · **两行表头**）。
    ⚠️ 两行表头的 `<th>` 总数（24）≠ 数据列数（20）⇒ 本表**刻意不可排**：
       `applySorts` 按 `thead` 里 `<th>` 的下标定位列（`data-i`），两行表头会整体错位。 */
@@ -2639,8 +2649,11 @@ const extTotal = (kind, wh) => N2(extMons().reduce((a, m) => a + extMon(kind, wh
 function extBlock(kind){
   const list = extVisible(kind), tagCls = kind === '焊材' ? 't-wn' : 't-pri';
   if (!list.length) return `<tr><td colspan="${thCount(EXT_THEAD)}" class="ctr mut" style="padding:14px">当前筛选条件下没有${kind}数据 —— 换个「项目状态」或月份</td></tr>`;
-  const rows = list.map(w => `<tr><td><span class="tag ${tagCls}">${kind}</span></td><td class="sm">${esc(w)}</td><td class="num">${M(extTotal(kind, w))}</td><td class="num">${M(extSum(kind, w))}</td></tr>`).join('');
-  return rows + sumRowOf(EXT_THEAD, list, {2:rs=>N2(rs.reduce((a,w)=>a+extTotal(kind,w),0)),3:rs=>N2(rs.reduce((a,w)=>a+extSum(kind,w),0))}, {lead:kind+'合计',sticky:false});
+  /* 结余格 = **点格即改**（`ACT.extBal`）：未录入 ⇒ 空 + 「待填」占位（⛔ 不写 0）；`0` 照写 `0`（合法值）。 */
+  const balCell = w => { const v = extBalOf(kind, w);
+    return `<td class="num"><input class="inp num" data-act="extBal" data-k="${esc(kind)}" data-p="${esc(w)}" value="${v == null ? '' : esc(String(v))}" placeholder="待填" title="${esc(EXT_BAL_NOTE)}"></td>`; };
+  const rows = list.map(w => `<tr><td><span class="tag ${tagCls}">${kind}</span></td><td class="sm">${esc(w)}</td>${balCell(w)}<td class="num">${M(extTotal(kind, w))}</td><td class="num">${M(extSum(kind, w))}</td></tr>`).join('');
+  return rows + sumRowOf(EXT_THEAD, list, {3:rs=>N2(rs.reduce((a,w)=>a+extTotal(kind,w),0)),4:rs=>N2(rs.reduce((a,w)=>a+extSum(kind,w),0))}, {lead:kind+'合计',sticky:false});
 }
 /* 手填值解析（OPEN-05）：当月已录入 → 用当月值（无标记）；否则向更早月份取「最近一次录入值」带入（标来源月）。
    注意用 != null 判断：0 是合法录入值，不能被当作「未录入」。 */
@@ -2726,7 +2739,7 @@ V.m07=()=>{
       <table class="dt cond" data-sort-key="m07:kinds"><thead><tr>${EXT_THEAD}</tr></thead><tbody>
       ${extBlock('焊材')}${extBlock('气体')}
       </tbody></table>
-      <div class="sm mut" style="margin-top:8px">提取口径：气体按<b>白名单精确匹配</b>；焊材按<b>关键词 + 排除子串</b>。「<b>总金额</b>」= 全部月份累计（不随筛选变）；「<b>金额</b>」= 所选月份范围内的金额（走统一年月控件）。各「合计」行<b>紧贴</b>本类数据行。</div>
+      <div class="sm mut" style="margin-top:8px">提取口径：气体按<b>白名单精确匹配</b>；焊材按<b>关键词 + 排除子串</b>。「<b>总金额</b>」= 全部月份累计（不随筛选变）；「<b>金额</b>」= 所选月份范围内的金额（走统一年月控件）。各「合计」行<b>紧贴</b>本类数据行。<br><b>结余</b>：${EXT_BAL_NOTE} —— <b>点格即改</b>（粒度 = 类别 × 仓库、不按月）。</div>
     </div></div>
     <div class="card"><h4>输出产物（§5.3.2）</h4><div class="bd">
       <div class="flowline">导出分仓库 zip 包
@@ -4284,6 +4297,19 @@ const ACT={
  /* —— 焊材 / 气体提取（**核对工具**；数据唯一去向 = 活动大表）—— */
  fExtStatus:t=>{ fExt.status=t.value; render(); },
  fExtReset:()=>{ fExt.status='在建'; fExt.ym=bjMonth(-1); render(); toast(`已重置：项目状态回到「在建」、金额月份回到 <b>${tmLabel(fExt.ym)}</b>（§9.2）`); },
+ /* 「结余」点格即改（2026-09-18 用户裁定 甲）：粒度 = **类别 × 仓库 · 不按月**（维护的是"当前的结存"）。
+    ⭐ 接线：**判定与落库一律后端**（`service.save_balance_cell` ⇒ `extract.parse_balance`）——
+      空 ⇒ 清空 / 非数字 / 负数 都由后端判，⛔ 前端不复写判据；
+      ⛔ 也不本地改 `BAL_EX` 冒充落库：成功后**以后端为准重拉**（`reloadM07()`）。 */
+ extBal:async t=>{ const kind=t.dataset.k, wh=t.dataset.p, raw=String(t.value==null?'':t.value).trim();
+   const NAME=`结余（${kind} · ${wh}）`;
+   let r=null;
+   try{ r=await API.m07BalCell({kind:kind,warehouse:wh,raw:raw}); }
+   catch(e){ return bgFailed(NAME,{message:String((e&&e.message)||e)}); }
+   if(!r||r.ok===false) return bgFailed(NAME,r);
+   await reloadM07();
+   if(raw===''){ toast(`已清空 <b>${esc(NAME)}</b> ⇒ 导出里该格<b>如实留空</b>`); return; }
+   toast(`已保存 <b>${esc(NAME)}</b> = ${M(r.value)}<br><span class="mut sm">历史结余 · 手工录入 —— 导出时按类别 × 仓库带上</span>`); },
  /* 导出：行 = **所筛选项目** · 列 = 项目 → 最早有数据的月 → …（逐月连续）→ 求和（用户口径） */
  expExt:()=>{ const ms=extMons();
    const blk=kind=>{ const list=extVisible(kind);
@@ -4807,7 +4833,7 @@ const ACT={
 };
 
 /* 事件委托 */
-const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup','editCat','filterNt','pjPick','procPjPick','invWh','invOnlyAdj','ivColQ','ivColMin','ivColMax','ivColVal','awfName','awfAmt','awfPjPick','ledNote','ledPjPick','lgPjPick','lgCat','lgS','lgP','lgR','flFilter','flPjPick','jcMethod','jcArchNo','jcRetDate','jcRemark','jcFilter','jcPjPick','bigEdit','bigSelTog','payDraft','fPjStatus','fPjType','fPjQ','fIvDir','fExtStatus','plFilter','plPick','plPickAll','plPjPick','plCell','plRowSet','jcPick','jcPickAll','ntRowSet','editApprove','editOrd','jcLinkPick','jcNSet','jcNPjPick','jcSubSet','ledExpPjPick','procExpPjPick','dfSet','dfFilter','supPick'];
+const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup','editCat','filterNt','pjPick','procPjPick','invWh','invOnlyAdj','ivColQ','ivColMin','ivColMax','ivColVal','awfName','awfAmt','awfPjPick','ledNote','ledPjPick','lgPjPick','lgCat','lgS','lgP','lgR','flFilter','flPjPick','jcMethod','jcArchNo','jcRetDate','jcRemark','jcFilter','jcPjPick','bigEdit','bigSelTog','payDraft','fPjStatus','fPjType','fPjQ','fIvDir','fExtStatus','extBal','plFilter','plPick','plPickAll','plPjPick','plCell','plRowSet','jcPick','jcPickAll','ntRowSet','editApprove','editOrd','jcLinkPick','jcNSet','jcNPjPick','jcSubSet','ledExpPjPick','procExpPjPick','dfSet','dfFilter','supPick'];
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]'); if(!t) return;
   const nm=t.tagName.toLowerCase();
@@ -4933,6 +4959,7 @@ const API = {
   /* ---- MOD-07 收发结存与活动大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
   m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
   m07Extract: () => API.get('/api/m07/extract'),
+  m07BalCell: body => API.post('/api/m07/extract/balance', body),
   m07Big: () => API.get('/api/m07/big'),
   m07BigCell: body => API.post('/api/m07/big/cell', body),
   m07BigSelection: selected => API.post('/api/m07/big/selection', { selected }),
@@ -5488,6 +5515,23 @@ function adaptExtract(amounts) {
   return out;
 }
 
+/* 结余：后端 `{类别: {仓库: 金额字符串}}` → 壳的 `BAL_EX[类别][仓库] = 数字`。
+   ⚠️ 必须过 `N0()`（后端金额出**字符串**，不过就会让 `String(v)` 显示成一个带引号的串）；
+   ⛔ **不给未录入补 0** —— 未录入的键**不出现**（域值 `null`；`0` 是**合法录入值**，两者不同）。 */
+function adaptBalances(balances) {
+  const out = {};
+  Object.keys(balances || {}).forEach(kind => {
+    const byWh = balances[kind] || {};
+    out[kind] = {};
+    Object.keys(byWh).forEach(wh => {
+      const v = byWh[wh];
+      if (v == null || v === '') return;                 /* 空 ⇒ 未录入（不建键） */
+      out[kind][wh] = N0(v);
+    });
+  });
+  return out;
+}
+
 /* 收发结存行：后端 `{name, rows, begin, in, out, end}` → 原型同名字段（`id` 取仓库名 —— 全站唯一键就是它）。 */
 const adaptWh = r => ({
   id: String(r.name || ''), name: r.name || '', rows: N0(r.rows),
@@ -5506,6 +5550,10 @@ async function reloadM07() {
   const ext = adaptExtract(ex && ex.amounts);
   Object.keys(EXTM).forEach(k => delete EXTM[k]);
   Object.keys(ext).forEach(k => { EXTM[k] = ext[k]; });
+  /* 「结余」手工录入值（唯一取数出口 = 后端 `balances`）—— 同法**原地清空再填**（保对象引用）。 */
+  const bal = adaptBalances(ex && ex.balances);
+  Object.keys(BAL_EX).forEach(k => delete BAL_EX[k]);
+  Object.keys(bal).forEach(k => { BAL_EX[k] = bal[k]; });
   if (bg) {
     if (bg.manual_keys && bg.manual_keys.length) {
       BIG_MKEYS.length = 0; bg.manual_keys.forEach(k => BIG_MKEYS.push(k));

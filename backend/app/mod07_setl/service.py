@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.mod07_setl import domain as D
 from app.mod07_setl import extract as X
-from app.mod07_setl.repository import load_rows
+from app.mod07_setl.repository import load_balances, load_rows, save_balance
 
 
 def _one(p: dict, name: str, default: str = "") -> str:
@@ -147,12 +147,13 @@ def build_extract_export(s: Session, state: dict | None = None) -> dict:
     - **行 = 所筛选项目**（项目状态 ＋ 档案顺序）—— 与页面 `build_extract_data` **同一份口径**
       （`_visible`）⇒ 导出的行集合永远与页面看到的一致（⛔ 不各写一份筛选）；
     - 月份列 = **报告年**的 12 个月（`模板清单` 裁定④：模板表头没写年份 ⇒ 都属该年）；
-    - 「结余」= ⚠️ **历史结余、由用户手动录入**（2026-09-18 用户裁定）⇒ **系统没有来源**，
-      本轮**留空**；录入入口落地后在这里把 `balances` 传进 `extract_template_grid`（接缝已留）。
+    - 「结余」= ⚠️ **历史结余、由用户手工录入**（2026-09-18 用户裁定）⇒ 取自 `load_balances`
+      （**唯一取数出口**）；未录入 ⇒ `None` ⇒ 产物该格**如实留空**（⛔ 不写 0）。
     """
     st = dict(state or parse_extract_state())
     details = load_rows(s)
     amounts = X.extract_amounts(details)
+    balances = load_balances(s)
     statuses, order = _project_context(s)
     report_ym = export_report_ym(st["period"], X.extract_months(amounts))
     grids = {}
@@ -160,11 +161,33 @@ def build_extract_export(s: Session, state: dict | None = None) -> dict:
         grids[kind] = X.extract_template_grid(
             amounts, kind,
             warehouses=_visible(amounts, kind, st, statuses, order),
-            year=report_ym[:4] if report_ym else "", balances=None)
+            year=report_ym[:4] if report_ym else "", balances=balances)
     return {"state": st, "report_ym": report_ym, "year": report_ym[:4] if report_ym else "",
             "grids": grids}
 
 
+def save_balance_cell(s: Session, *, kind: str, warehouse: str, raw) -> dict:
+    """保存提取页**「结余」一格的录入值** → `{"ok", "message", "value"}`。
+
+    ⛔ **判定一律在域内核**（`extract.parse_balance`）：非法输入（非数字 / 负数）**不写库、原值不变**；
+    ⭐ **只动这一格**（粒度 = 类别 × 仓库，不按月）；空输入 ⇒ **清空**（删行 ⇒ 导出如实留空）。
+    ⚠️ `warehouse` 只校验**非空** —— 「结余」挂在**仓库名**上（§2.7.4），陌生仓库**也可能有**结余
+       （档案里没有它 ≠ 它没有物料账）⇒ 这里**不拿档案当闸门**（那会把陌生仓库的录入挡掉）。
+    """
+    if str(kind or "") not in X.KINDS:
+        return {"ok": False, "message": X.MSG_BAL_NO_KIND, "value": None}
+    wh = str(warehouse or "").strip()
+    if not wh:
+        return {"ok": False, "message": X.MSG_BAL_NO_WH, "value": None}
+    parsed = X.parse_balance(raw)
+    if not parsed["ok"]:
+        return {"ok": False, "message": parsed["message"], "value": None}
+    save_balance(s, kind=str(kind), warehouse=wh, amount=parsed["value"])
+    return {"ok": True,
+            "message": X.MSG_BAL_SAVED if parsed["value"] is not None else X.MSG_BAL_CLEARED,
+            "value": parsed["value"]}
+
+
 __all__ = ["parse_state", "state_to_query", "build_page_data",
            "parse_extract_state", "build_extract_data",
-           "export_report_ym", "build_extract_export"]
+           "export_report_ym", "build_extract_export", "save_balance_cell"]

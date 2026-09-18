@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.mod07_setl.models import SOURCE_AUTO, SetlDetail
+from app.mod07_setl.models import SOURCE_AUTO, SetlDetail, WeldGasBalance
 from tests.m08_helpers import FakeSession  # noqa: F401  —— 会话桩共用（不另写一份）
 
 # 三个核算月；**行数合计互不相同**（17 / 18 / 4）⇒ 001-03 的"切月有区分力"成立
@@ -130,8 +130,12 @@ EXTRACT_DETAILS: tuple[tuple[str, str, str, str, str], ...] = (
 )
 
 
-def extract_dataset() -> dict:
-    """提取页用的桩：**明细 + 项目档案**（状态 / ord 决定筛选与行序）。"""
+def extract_dataset(with_balances: bool = False) -> dict:
+    """提取页用的桩：**明细 + 项目档案**（状态 / ord 决定筛选与行序）。
+
+    `with_balances=True` 时**额外**带上 `BALANCE_EXPECT` 那几行「结余」录入值
+    （默认**不带** —— 便于造"完全没有录入"的场景）。
+    """
     from app.mod01_projects.models import Project
 
     details: list[SetlDetail] = []
@@ -151,7 +155,43 @@ def extract_dataset() -> dict:
                 status=cfg["status"], ord=cfg["ord"])
         for i, (wh, cfg) in enumerate(PROJECTS.items(), start=1)
     ]
-    return {SetlDetail: details, Project: projects}
+    data: dict = {SetlDetail: details, Project: projects}
+    if with_balances:
+        data.update(balance_dataset())
+    return data
+
+
+# ------------------------------------------------------------ 「结余」手工录入（2026-09-18 裁定「甲」）
+
+# 结余期望表（**手写**）：`{类别: {仓库: 金额}}` —— 粒度 = **类别 × 仓库 · 不按月**。
+# ⭐ 两处刻意的样本：
+#   · **焊材 · 乙仓 = 0** ⇒ `0` 是**合法录入值**（与"未录入"两件事；导出里写 0、不写空）；
+#   · **气体只有甲仓** ⇒ 乙仓**没有键** = 未录入 ⇒ 导出里**如实留空**（⛔ 不写 0）。
+BALANCE_EXPECT: dict[str, dict[str, str]] = {
+    "焊材": {"甲仓": "1200.00", "乙仓": "0.00"},
+    "气体": {"甲仓": "88.50"},
+}
+
+
+def balance_rows() -> list[WeldGasBalance]:
+    """把 `BALANCE_EXPECT` 变成 ORM 行（**从手写期望表派生**，⛔ 不另写一份值）。"""
+    out: list[WeldGasBalance] = []
+    for kind, by_wh in BALANCE_EXPECT.items():
+        for wh, amount in by_wh.items():
+            out.append(WeldGasBalance(id=len(out) + 1, kind=kind,
+                                      warehouse_name=wh, amount=Decimal(amount)))
+    return out
+
+
+def balance_dataset() -> dict:
+    """结余的桩（单独一份 —— 便于"只有结余、没有明细"这类场景）。"""
+    return {WeldGasBalance: balance_rows()}
+
+
+def indep_balance(kind: str, warehouse: str):
+    """**独立复算**该格的结余：未录入 ⇒ `None`（⛔ 不是 0）。"""
+    raw = BALANCE_EXPECT.get(kind, {}).get(warehouse)
+    return None if raw is None else Decimal(raw)
 
 
 def indep_extract_total(kind: str, warehouse: str) -> Decimal:
@@ -173,6 +213,7 @@ def indep_extract_kind_total(kind: str) -> Decimal:
 
 
 __all__ = ["FakeSession", "EXPECT", "EMPTY_MONTH", "SetlDetail", "SOURCE_AUTO",
+           "WeldGasBalance", "BALANCE_EXPECT", "balance_rows", "balance_dataset", "indep_balance",
            "split_amount", "dataset",
            "indep_row_total", "indep_warehouses", "indep_amount_total",
            "PROJECTS", "ARCHIVED_WAREHOUSE", "EXTRACT_EXPECT", "EXTRACT_MONTHS",

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.core.money import sum_money
+from app.core.money import MoneyError, require_non_negative, sum_money
 from app.mod07_setl.domain import TOTAL_LABEL, WAREHOUSE_KEY
 
 # ⚠️ 本表**刻意不可排**（`sortable=False`）：一排序，分组合计就被卷到表尾（001-03）
@@ -173,6 +173,35 @@ def extract_block(amounts, kind: str, *, warehouses, period: str) -> dict:
     return {"kind": kind, "rows": rows, "total_row": total_row}
 
 
+# ============================================================ 「结余」手工录入（2026-09-18 裁定）
+
+#: 该列的**性质说明**（页面提示 / 导出弹窗 / 断言的**唯一出口**，⛔ 别在别处再写一遍）
+BALANCE_NOTE = "历史结余 · 由用户手工录入（系统没有来源）"
+
+MSG_BAL_SAVED = "已保存结余（历史结余 · 手工录入）"
+MSG_BAL_CLEARED = "已清空结余 ⇒ 该格**如实留空**（导出里也不写 0）"
+MSG_BAL_BAD = "结余要填数字（2 位小数 · 不得为负）；本次未保存，原值不变"
+MSG_BAL_NO_KIND = "认不出的类别（只认 焊材 / 气体）"
+MSG_BAL_NO_WH = "没找到这个仓库（键 = 仓库名）"
+
+
+def parse_balance(raw) -> dict:
+    """「结余」一格的输入解析 → `{"ok", "value", "message"}`（**唯一出口**）。
+
+    - **空** ⇒ `ok=True, value=None` = **清空**（回到"未录入" ⇒ 导出如实留空）；
+    - 数字 · 2 位小数 · **不得为负**（`core.money` 是全站金额的唯一出口，⛔ 此处不另写解析）；
+    - ⭐ **`0` 是合法录入值**（与"未录入"是两件事 —— 0 会真的写出一个 0）。
+    """
+    s = "" if raw is None else str(raw).strip()
+    if s == "":
+        return {"ok": True, "value": None, "message": ""}
+    try:
+        v = require_non_negative(s, field="结余")
+    except MoneyError:                                  # 非数字 / 负数 ⇒ 一律拒（不猜、不静默变 0）
+        return {"ok": False, "value": None, "message": MSG_BAL_BAD}
+    return {"ok": True, "value": v, "message": ""}
+
+
 # ============================================================ 成品导出（路径① 模板填充）
 
 #: 模板的月份列数（`1月`…`12月`）
@@ -193,8 +222,8 @@ def extract_template_grid(amounts, kind: str, *, warehouses, year: str, balances
     - 行 = `warehouses`（调用方已按**项目状态 + 档案顺序**筛好 —— 与页面同一份口径）；
     - `结余` = `balances[kind][仓库]` —— ⚠️ **2026-09-18 用户裁定：结余 = 历史结余、由用户手动录入**
       ⇒ **系统没有任何来源**（⛔ 不是收发结存的 `end_amt` 派生，那是错的）；
-      未录入 / 尚无录入入口 ⇒ `None` ⇒ 实现层**写空**（⛔ 既不写 0、也不把模板里的示例值带走）。
-      ⇒ `balances` 是**留好的接缝**：录入入口落地后由调用方传进来，本函数不动。
+      **未录入 ⇒ `None`** ⇒ 实现层**写空**（⛔ 既不写 0、也不把模板里的示例值带走）；
+      ⭐ `balances` 的唯一主人 = `repository.load_balances`（录入入口 = 提取页「结余」列）。
     - 月份格 = 该月金额（**该月无数据 ⇒ `None`**，⛔ 不写 0 —— 0 会被读成"确实为 0"）；
     - `合计` = **该年 12 个月之和**（= 模板「合计」列 / 页面「总金额（累计）」在该年的口径；
       与页面 `extract_total` 的差别只在于**限年**，而 12 列本身就是该年 ⇒ 两者同源）；
@@ -244,7 +273,8 @@ __all__ = [
     "EXTRACT_COLUMNS", "KINDS", "EXTRACT_FIELD",
     "STATUS_LABELS", "STATUS_DEFAULT", "STATUS_ALL", "STATUS_OPTIONS",
     "DEFAULT_GAS_LIST", "DEFAULT_WELD_KEYWORDS", "DEFAULT_NOT_WELD",
-    "YEAR_MONTHS",
+    "YEAR_MONTHS", "BALANCE_NOTE", "MSG_BAL_SAVED", "MSG_BAL_CLEARED", "MSG_BAL_BAD",
+    "MSG_BAL_NO_KIND", "MSG_BAL_NO_WH", "parse_balance",
     "default_rules", "extract_rules", "match_kind", "extract_amounts", "extract_months",
     "month_in_period", "extract_total", "extract_sum", "order_warehouses",
     "visible_warehouses", "extract_block", "extract_export_matrix",

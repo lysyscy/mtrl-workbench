@@ -144,29 +144,31 @@ def main() -> int:
 
     # ── U2b · **已接线的页，它的演示数组必须已删**（"接线即清"，机器看管）
     #     ⚠️ 只查 `WIRED` 里的页：未接线的页**正需要**演示数据（否则页面空着）。
-    #     ⚠️⚠️ **声明关键字必须逐页写明**（`(数组名, 关键字正则)`），不能一律 `const` 也不能一律放宽：
+    #     ⚠️⚠️ **声明关键字必须逐页写明**（`((数组名, 关键字正则), …)`，一页可登记多个容器），
+    #        不能一律 `const` 也不能一律放宽：
     #        · 原型里**演示数据**用 `const` 声明（`const NT=[…]`），而**接后端后的活容器**是 `let`（`let WHM = {}`）
     #          ⇒ 一律放宽会**误报活容器**（实测：`let MACH6 = {}` / `let WHM = {}` 被当成残留演示数据）；
     #        · 但 `m09` 的 `AWF` 在原型里**本身就是 `let`**（`let AWF = {…}`）⇒ 只认 `const` 会**漏掉它**。
     #        两种坑都踩过 ⇒ 逐页显式登记 + 后面「必须带内容才算演示」的兜底。
-    DEMO_BY_PAGE = {"m03": ("NT", "const"), "m01": ("PJ", "const"), "m04": ("PL", "const"),
-                    "m05": ("LG", "const"), "m06": ("MACH6", "const"),
-                    "m07": ("WHM", "const"), "m08": ("IV", "const"),
-                    "m09": ("AWF", "const|let|var"), "m14": ("RULE_EX", "const|let|var")}
+    #     ⭐ 2026-09-18：值改成**一组**规格（一页可能有**多个**演示容器）—— `m07` 除了 `WHM`
+    #        2026-09-18 起还有「结余」录入容器 `BAL_EX`（原型里是 `const BAL_EX = {…}` 演示值，
+    #        接线后壳里必须是 `let BAL_EX = {}` **空容器**）。
+    DEMO_BY_PAGE = {"m03": (("NT", "const"),), "m01": (("PJ", "const"),), "m04": (("PL", "const"),),
+                    "m05": (("LG", "const"),), "m06": (("MACH6", "const"),),
+                    "m07": (("WHM", "const"), ("BAL_EX", "const|let|var")),
+                    "m08": (("IV", "const"),),
+                    "m09": (("AWF", "const|let|var"),), "m14": (("RULE_EX", "const|let|var"),)}
     _mw = WIRED_RE.search(shell_text)
     _wired_now = re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", _mw.group(1)) if _mw else []
     for _page in _wired_now:
-        _spec = DEMO_BY_PAGE.get(_page)
-        if not _spec:
-            continue
-        _arr, _kw = _spec
-        # ⚠️ 还要**带内容**才算演示数据：`= {}` / `= []` 是**空容器**（后端填充用），不是残留演示值。
-        _re_pat = rf"(?:{_kw})\s+{_arr}\s*=\s*(?:\{{\s*[^\s}}]|\[\s*[^\s\]])"
-        if re.search(_re_pat, shell_text):
-            u2.append(
-                f"`{_page}` 已标「已接后端真实数据」，但演示数组 `{_arr}` 还在壳里 "
-                f"⇒ 接线要连演示数据一起清（一份内容只许一个主人）"
-            )
+        for _arr, _kw in DEMO_BY_PAGE.get(_page, ()):
+            # ⚠️ 还要**带内容**才算演示数据：`= {}` / `= []` 是**空容器**（后端填充用），不是残留演示值。
+            _re_pat = rf"(?:{_kw})\s+{_arr}\s*=\s*(?:\{{\s*[^\s}}]|\[\s*[^\s\]])"
+            if re.search(_re_pat, shell_text):
+                u2.append(
+                    f"`{_page}` 已标「已接后端真实数据」，但演示数组 `{_arr}` 还在壳里 "
+                    f"⇒ 接线要连演示数据一起清（一份内容只许一个主人）"
+                )
 
     # ── U3 · WIRED 自洽
     u3: list[str] = []

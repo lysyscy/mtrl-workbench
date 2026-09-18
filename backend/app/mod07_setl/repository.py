@@ -1,7 +1,10 @@
 """`MOD-07` 收发结存的读写。
 
 - **明细行**（`setl_detail`）是唯一存储形态；按仓汇总在域内核做（`domain.aggregate_by_warehouse`）。
-- 写入路径**只有抓取落库**（`upsert_month`）—— 本页**没有人工改数的入口**（§5.3.1：用途仅两个）。
+- 明细分文的写入路径**只有抓取落库**（`upsert_month`）—— 收发结存页**没有人工改数的入口**（§5.3.1：用途仅两个）。
+- ⭐ **另有一处人工写入**：焊材 / 气体提取成品的**「结余」列**（`weldgas_balance`）——
+  2026-09-18 用户裁定 = **历史结余、由用户手工录入**（系统没有来源）⇒ 见本文件末段的
+  `load_balances` / `save_balance`（**粒度 = 类别 × 仓库 · 不按月**）。两者**互不相干**，⛔ 别混。
 
 ⚠️ 幂等语义（照素材包 `app/importer.py::import_sfjc` 的实测结论）：**先看该月、再对齐**——
    否则「当月数据变少 / 换月」时旧行会残留（素材包实测过：9 月库里混进 636 行 8 月残留）。
@@ -11,11 +14,13 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.mod07_setl.models import SOURCE_AUTO, SetlDetail
+from app.core.money import to_money
+from app.mod07_setl.models import SOURCE_AUTO, SetlDetail, WeldGasBalance
 
 # 域内 key → 库列名（**唯一映射处**；domain 永远不认列名）
 AMOUNT_FIELDS: dict[str, str] = {
@@ -119,4 +124,53 @@ def upsert_month(s: Session, *, ym: str, rows: list[dict]) -> dict:
             "deleted": deleted, "kept_manual": kept_manual}
 
 
-__all__ = ["AMOUNT_FIELDS", "SOURCE_FIELDS", "to_row", "load_rows", "upsert_month"]
+# ============================================================ 焊材 / 气体「结余」（手工录入）
+
+def load_balances(s: Session) -> dict[str, dict[str, Decimal]]:
+    """「结余」手工录入值 → `{类别: {仓库名: 金额}}`（**唯一取数出口**）。
+
+    ⚠️ **未录入的 `(类别, 仓库)` 键不出现**（域值 = `None`）—— 导出里据此**如实留空**；
+       **0 是合法录入值**（有行、金额 `0.00`），照常出现。两者**不得混为一谈**。
+    """
+    out: dict[str, dict[str, Decimal]] = {}
+    for r in s.execute(select(WeldGasBalance)).scalars():
+        kind = str(r.kind or "")
+        warehouse = str(r.warehouse_name or "")
+        if not kind or not warehouse:
+            continue                                  # 键不完整的行无从使用 ⇒ 跳过（不臆造归属）
+        out.setdefault(kind, {})[warehouse] = to_money(r.amount)
+    return out
+
+
+def save_balance(s: Session, *, kind: str, warehouse: str, amount) -> WeldGasBalance | None:
+    """写**一格**「结余」⇒ 返回该行（`amount is None` ⇒ **删掉该行**、返回 `None`）。
+
+    ⚠️ 粒度 = **类别 × 仓库（不按月）** ⇒ 同一格重复保存 = **覆盖**，不会产生第二行。
+    ⚠️ 金额一律过 `to_money`（2 位小数、HALF_UP）—— 非负判据在服务层（`big_domain.parse_manual`）。
+    """
+    row = _find_balance(s, kind, warehouse)
+    if amount is None:                                 # 清空 ⇒ 回到"未录入"（行都没有 = 导出留空）
+        if row is not None:
+            s.delete(row)
+            s.flush()
+        return None
+    if row is None:
+        row = WeldGasBalance(kind=str(kind), warehouse_name=str(warehouse))
+        s.add(row)
+    row.kind = str(kind)
+    row.warehouse_name = str(warehouse)
+    row.amount = to_money(amount)
+    row.updated_at = datetime.now()
+    s.flush()
+    return row
+
+
+def _find_balance(s: Session, kind: str, warehouse: str) -> WeldGasBalance | None:
+    for r in s.execute(select(WeldGasBalance)).scalars():
+        if str(r.kind or "") == str(kind) and str(r.warehouse_name or "") == str(warehouse):
+            return r
+    return None
+
+
+__all__ = ["AMOUNT_FIELDS", "SOURCE_FIELDS", "to_row", "load_rows", "upsert_month",
+           "load_balances", "save_balance"]
