@@ -23,6 +23,32 @@ from app.mod05_flow.models import PAY_METHODS
 
 _ZERO = to_money(0)
 
+# ============================================================ 未命中清单的「新鲜度」（`TAIL-41`）
+
+
+def still_unsettled(items, projects, *, resolve=None) -> list[dict]:
+    """把「未命中清单」按**当前档案现算**，**丢掉已经走完的那些**（`TAIL-41`）。
+
+    **为什么需要**：清单是**当时那一刻的判定**（存在那次抓取的运行记录里）；而用户拿到清单之后
+    会去**补关键词 / 建小微** —— 补完之后那些行**已经能归属了**，若清单照旧摆着，用户就会
+    对着**已经解决**的清单白干一场（甚至把关键词塞到别的壳下 ⇒ 往档案里塞错行）。
+
+    ⚠️ 判定**复用链路 C 的同一个出口** `resolve_ownership`（⛔ 不在这里另写一份"够不够格"）；
+    ⚠️ `resolve=` 只为测试注入，生产一律用默认的那个。
+    """
+    from app.mod01_projects.domain import resolve_ownership       # 局部 import：本模块保持"纯函数 + 零环"
+    resolve = resolve or resolve_ownership
+    out: list[dict] = []
+    for it in items or ():
+        d = resolve(
+            name_full=str(it.get("project_name") or ""),
+            doc_name=str(it.get("doc_name") or ""),
+            projects=projects,
+        )
+        if not getattr(d, "settled", False):
+            out.append(it)
+    return out
+
 # ============================================================ §4.2.5 三个金额字段
 
 F_APPROVED = "amount_approved"     # 审批金额（i8 源；只读、不被人工改覆盖）

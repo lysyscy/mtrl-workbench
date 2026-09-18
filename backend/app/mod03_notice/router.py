@@ -38,10 +38,12 @@ from app.mod02_i8.client import I8Client
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02（2026-09-15 归位）
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.classify import DEFAULT_RULES, decide_placement, rows_needing_ownership
+from app.mod03_notice.domain import still_unsettled
 from app.mod03_notice.rules_repository import effective_rules
 from app.mod03_notice.merge import apply_placement_to_new, plan_merge
 from app.mod03_notice.repository import (
     create_run_record,
+    fetch_detail,
     finish_run_record,
     get_notice_by_ph_id,
     get_notices_by_ids,
@@ -158,8 +160,11 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         except Exception as exc:  # noqa: BLE001
             with session_scope() as session:
                 rec = create_run_record(session, run_type="fetch", target=year_month, total=0)
+                # ⚠️ **取数失败也要写标记**（`TAIL-41`）：漏了这条，"最近一次付款通知书抓取"就指不住，
+                #    读侧会掉回更早的记录 ⇒ 又变成"抓取之后仍摆着旧清单"。
                 finish_run_record(
-                    session, rec, status="failed", success=0, fail=0, detail={}, error_message=str(exc)
+                    session, rec, status="failed", success=0, fail=0,
+                    detail=fetch_detail(), error_message=str(exc),
                 )
             raise
         finally:
@@ -246,23 +251,24 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
                                         total=len(rows))
                 finish_run_record(
                     session, rec, status="failed", success=0, fail=len(rows),
-                    detail={"reason": "ownership_unsettled",
-                            "unsettled": len(unsettled),
-                            "excluded": n_excluded,
-                            "projects": [str(r.get("project_name") or "") for r, _ in unsettled],
-                            # ⭐ **结构化「未命中清单」**（`TAIL-29`-② 弹窗的**唯一数据源**）：
-                            #    只记「判定与显示需要的字段」—— ⛔ **不暂存整批数据**
-                            #    （用户裁定 `B`：补完关键词**再抓一次**，那时自动命中并落库）。
-                            "unresolved": [
-                                {
-                                    "project_name": str(r.get("project_name") or ""),
-                                    "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
-                                    "bill_no": str(r.get("bill_no") or ""),
-                                    "kind": d.kind,
-                                    "shell_id": d.shell_id,
-                                }
-                                for r, d in unsettled
-                            ]},
+                    detail=fetch_detail(
+                        reason="ownership_unsettled",
+                        unsettled=len(unsettled),
+                        excluded=n_excluded,
+                        projects=[str(r.get("project_name") or "") for r, _ in unsettled],
+                        # ⭐ **结构化「未命中清单」**（`TAIL-29`-② 弹窗的**唯一数据源**）：
+                        #    只记「判定与显示需要的字段」—— ⛔ **不暂存整批数据**
+                        #    （用户裁定 `B`：补完关键词**再抓一次**，那时自动命中并落库）。
+                        unresolved=[
+                            {
+                                "project_name": str(r.get("project_name") or ""),
+                                "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
+                                "bill_no": str(r.get("bill_no") or ""),
+                                "kind": d.kind,
+                                "shell_id": d.shell_id,
+                            }
+                            for r, d in unsettled
+                        ]),
                     error_message=message,
                 )
             raise MustReportError(message) from exc
@@ -284,8 +290,10 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
             upserted = created + updated
             finish_run_record(
                 session, rec, status="success", success=upserted, fail=0,
-                detail={"created": created, "updated": updated, "total": len(rows),
-                        "excluded": n_excluded},
+                # ⭐ **成功也要写标记**（`TAIL-41` 的关键一条）：它就是"最近一次"—— 没有 `reason`
+                #    ⇒ 读侧据此判定"本次已走完 ⇒ 没有未命中清单"（⛔ 不再回溯更早那条）。
+                detail=fetch_detail(created=created, updated=updated, total=len(rows),
+                                    excluded=n_excluded),
             )
         return len(rows), upserted
 
@@ -329,15 +337,18 @@ def fetch_notices(
 
 @router.get("/notices/unresolved", response_model=UnresolvedResponse)
 def unresolved_notices() -> UnresolvedResponse:
-    """最近一次「归属未走完」的抓取 ⇒ **未命中清单 ＋ 该壳下的候选小微**（`TAIL-29`-② 弹窗的数据源）。
+    """**最近一次付款通知书抓取**的未命中清单 ＋ 该壳下的候选小微（`TAIL-29`-② 弹窗的数据源）。
 
     ⭐ **弹窗的唯一数据源** —— ⛔ 不暂存整批抓取数据（用户 2026-09-18 裁定 `B`：
        补完关键词**再抓一次**，那时 `resolve_ownership` 会自动命中并落库，库里不留半成品）。
-    ⚠️ 候选小微按**当前档案现算**：用户可能刚建过小微 / 刚补过词 ⇒ 清单必须新鲜。
+    ⚠️⚠️ **两层"新鲜度"**（`TAIL-41` 修复，2026-09-18）：
+       ① **只认最近一次抓取**（`repository.latest_unresolved`）：抓取**成功之后**就不该再有清单；
+       ② 清单里每一条还要**按当前档案现算**（`domain.still_unsettled`）—— 用户可能**刚补过词 /
+          刚建过小微**，那些行**已经能归属了** ⇒ **当场不再出现**（否则对着已解决的清单白干）。
     """
     with session_scope() as session:
-        items = latest_unresolved(session)
         projects = all_projects(session)
+        items = still_unsettled(latest_unresolved(session), projects)
         out = [
             {
                 **it,

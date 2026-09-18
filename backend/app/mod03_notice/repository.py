@@ -26,26 +26,49 @@ def get_notice(session: Session, notice_id: int) -> PaymentNotice | None:
     return session.get(PaymentNotice, notice_id)
 
 
-def latest_unresolved(session: Session, *, lookback: int = 20) -> list[dict]:
-    """最近一次「**归属未走完**」的抓取记录里带的**未命中清单**（`TAIL-29`-② 弹窗的数据源）。
+#: 运行记录 `detail` 里的「**这是付款通知书抓取**」标记 —— 读侧靠它认"最近一次"（⛔ 不靠 `target` 猜）
+FETCH_MARK = "notice_fetch"
 
-    ⚠️ 只认 `reason == "ownership_unsettled"` 的记录 —— 别的失败（例如 i8 不可用）**没有清单**。
-    ⚠️ 记录里存的是**当时的判定**；调用方必须拿它对照**当前档案现算**候选小微
-       （用户可能刚建过小微、刚补过词 ⇒ 清单要新鲜）。
+#: 找"最近一次付款通知书抓取"时**最多回看**多少条运行记录（技术台账，量很小；够用即可）
+LOOKBACK = 50
+
+
+def fetch_detail(**extra) -> dict:
+    """付款通知书抓取**每条运行记录**的 `detail`（**写侧唯一出口**）：一律带标记 ＋ 本次的附加字段。
+
+    ⚠️ **三种结局都必须写**（i8 取数失败 / 归属未走完 / 抓取成功）—— 漏掉任何一条，
+       "最近一次"就指不住，读侧会掉回**更早**的记录 ⇒ 那正是 `TAIL-41`：
+       **抓取成功之后仍摆着上一次的未命中清单**，用户对着已解决的清单白干。
+    """
+    return {FETCH_MARK: True, **extra}
+
+
+def latest_unresolved(session: Session) -> list[dict]:
+    """**最近一次付款通知书抓取**带的**未命中清单**（`TAIL-29`-② 弹窗的数据源）。
+
+    ⚠️⚠️ **只认最近一次**（`TAIL-41` 修复 · 2026-09-18）：原先**回溯 20 条** `run_type=fetch`、
+       取最新一条 `reason=ownership_unsettled` 的 —— 那条记录会**长期留着** ⇒ 抓取**成功之后**
+       仍可能把它当"当前待办"（用户白干一场，还可能往档案里塞错行）。
+       现在只认「**最近一条带 `notice_fetch` 标记的记录**」：它**不是**未走完 ⇒ **没有清单**
+       （⛔ 不回溯更早的记录；材料侧的 `pending.latest_pending` 是同一条口径）。
+    ⚠️ 清单里存的是**当时的判定** ⇒ 调用方必须按**当前档案现算**（`domain.still_unsettled`）。
     ⛔ 这里**不涉及任何暂存**（用户裁定 `B`：补完词**再抓一次**，不在库里留半成品）。
     """
-    recs = session.execute(
+    recs = list(session.execute(
         select(RunRecord)
         .where(RunRecord.run_type == "fetch")
         .order_by(RunRecord.id.desc())
-        .limit(lookback)
-    ).scalars().all()
-    for r in recs:
-        detail = r.detail or {}
-        if isinstance(detail, dict) and detail.get("reason") == "ownership_unsettled":
-            items = detail.get("unresolved") or []
-            if items:
-                return list(items)
+        .limit(LOOKBACK)
+    ).scalars().all())
+    # ⚠️ 离线桩（`tests.m09_helpers.M09Session`）**不处理 `order_by`** ⇒ 再显式按 id 倒序一次
+    #    （真库本来就有序 ⇒ 语义不变，只是让断言与真机走同一条路）。
+    for r in sorted(recs, key=lambda x: getattr(x, "id", 0) or 0, reverse=True):
+        detail = getattr(r, "detail", None) or {}
+        if not isinstance(detail, dict) or not detail.get(FETCH_MARK):
+            continue                       # 不是付款通知书抓取的记录（材料侧 / 手工抓取）⇒ 跳过
+        if detail.get("reason") != "ownership_unsettled":
+            return []                      # ⭐ 最近一次**已走完** ⇒ 没有清单（⛔ 不回溯更早的）
+        return list(detail.get("unresolved") or [])
     return []
 
 
