@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
 from app.core.db import session_scope
+from app.mod02_i8 import wh_cache
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.fetch_task import (
     CONFIRM_CLOSES_DIALOG,
@@ -66,10 +67,16 @@ def get_warehouse_rows() -> Callable[..., list[dict]]:
         own = client is None
         c = client if client is not None else I8Client(allow_kick=allow_kick)
         try:
-            return WarehouseSource(c).fetch()
+            rows = WarehouseSource(c).fetch()
         finally:
             if own:
                 c.close()
+        # ⭐ 抓成功就**落一份缓存**（`TAIL-39` 照交付面素材包 `warehouse_sync.save_cache` 的做法）：
+        #    查名单**要登录 i8、可能顶号**（`D9`）⇒ i8 不可用时还能用**上一次**的名单接着判。
+        #    ⚠️ 只有这一处落盘 ⇒ 所有取名单的路径（抓取链路 A/B、两个同步、兜底前那一查）都覆盖到。
+        #    ⚠️ 用它的地方**必须**把"这份是几点的"说出来（见 `wh_cache` 的纪律 2）。
+        wh_cache.save(rows, source="api05")
+        return rows
 
     return _fetch
 

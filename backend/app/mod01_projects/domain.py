@@ -296,6 +296,43 @@ def apply_status_change(project: Project, new_status: str, projects: list[Projec
     return StatusChange(allowed=True, writes=[_status_write(project.id, new_status)])
 
 
+def i8_warehouse_lookup(name: str, warehouse_rows: list[dict] | None) -> dict:
+    """查一个**仓库名**在 i8 仓库名单里**有没有**、以及它挂在哪个项目全名下（`TAIL-39`）。
+
+    为什么要有这一个出口（用户 2026-09-18 口述裁定）：「**在兜底前，系统的设计里应该有去仓库跑了一环这个逻辑，
+    而且如果跑完没结果要在界面上提醒用户**」—— 兜底 = 手填仓库名新建具体小微；用户若**凭猜**填，
+    就留下一条与 i8 不符的**假档案行**，日后 i8 真建了仓库 ⇒ 系统**再建一行**（重复）。
+
+    i8 名单每行形如 `{"warehouse_name": …, "owner_full_name": …}`（`API-05`，`mod02_i8.sources.WarehouseSource`）。
+
+    返回：`{"found", "owners", "matched", "total"}` ——
+    - `found` 为假时，`owners` 必为空（⛔ 不许编一个"猜的所属项目"）；
+    - **同名挂多个全名** ⇒ `owners` 如实全给（同一类事实口径见 `needs_confirm`：⛔ 不替用户选一个）；
+    - `matched` = 名单里**同名**的仓库名（去重后），`total` = 名单行数。
+
+    ⚠️ **比较 = 去首尾空白后精确比**：⛔ 不剥尾码 —— §2.3.2 的尾码剥离是给**项目全名**的，
+       仓库名是「唯一标识 / 候选键」（§2.7.4），剥了就认错行。
+    ⚠️ 名单取不到（`None` / 空）⇒ 只是"**没查到**"，**不等于"没有"** ⇒ 由调用方如实区分（禁静默）。
+    """
+    want = str(name or "").strip()
+    owners: list[str] = []
+    matched: list[str] = []
+    total = 0
+    for row in warehouse_rows or ():
+        wh = str(row.get("warehouse_name") or "").strip()
+        if not wh:
+            continue
+        total += 1
+        if wh != want:
+            continue
+        if wh not in matched:
+            matched.append(wh)
+        owner = str(row.get("owner_full_name") or "").strip()
+        if owner and owner not in owners:
+            owners.append(owner)
+    return {"found": bool(matched), "owners": owners, "matched": matched, "total": total}
+
+
 def can_create_small(shell: Project) -> None:
     """**已归档的壳下不许新建具体小微**（会当场破坏不变式）⇒ 拦截（001-05）。"""
     if shell.project_type == TYPE_SHELL and shell.status == STATUS_ARCHIVED:

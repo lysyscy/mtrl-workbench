@@ -39,7 +39,7 @@ B|④ **无需「重跑」步骤**（导入过程中即同步扶正 ⇒ 不存�
 C|壳已建档 · 命中 1 个小微 ⇒ 归集到它 ＋ 关键词去重追加|关键词去重追加|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
 C|壳已建档 · 命中多个 ⇒ 弹窗让用户选（选中后关键词追加）|弹窗让用户选（选中后关键词追加）|backend/app/mod03_notice/router.py::unresolved_notices|ACC-PRJ-OWN-001|已接
 C|壳已建档 · 未命中 ⇒ **弹窗列表**（在建小微 ＋ 每个右侧必填词 ／ 末行「新小微」）|弹窗列表|backend/app/mod03_notice/router.py::unresolved_notices|ACC-PRJ-OWN-001|已接
-C|壳已建档 · 选「新小微」⇒ 抓仓库信息 → 建小微行 ＋ 录关键词|抓仓库信息 → 建小微行 + 录关键词|backend/app/mod03_notice/router.py::assign_ownership|ACC-PRJ-OWN-001|形态不同
+C|壳已建档 · 选「新小微」⇒ 抓仓库信息 → 建小微行 ＋ 录关键词|抓仓库信息 → 建小微行 + 录关键词|backend/app/mod03_notice/router.py::assign_ownership|ACC-PRJ-OWN-001|已接
 C|壳未建档 ⇒ 先建壳（走链路 A ③）→ 抓仓库 → 录关键词 → 建具体小微行|先建壳（走链路 A 的 ③）|backend/app/mod03_notice/router.py::get_fetch_executor|ACC-PRJ-SYNC-001|已接
 C|未命中弹窗的**内容①**：在建的具体小微（每个右侧必填框，内容须出现在单据名中）|目前在建的具体小微（每个右侧必填框，内容必须出现在单据名中）|backend/app/mod01_projects/domain.py::candidates_of|ACC-PRJ-OWN-001|已接
 C|未命中弹窗的**内容②**：末行「该项目属于新小微」|最后一行「该项目属于新小微」|backend/app/web/index.html::openOwnDialog|ACC-PRJ-OWN-001|已接

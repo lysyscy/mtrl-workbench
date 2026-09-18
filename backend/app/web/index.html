@@ -3548,6 +3548,9 @@ const ACT={
     界面只选「核算年月」；i8 侧的入参是「单据日期起止」（闭区间），由系统自动换算后传入。
     ⚠️ `fetchDlg` 的 **nt 分支文案一字未改**（既有断言钉着它）；wh / iv 两个分支另写。 */
  ownAssign:t=>ownAssignSubmit(Number(t.dataset.i), t.dataset.pid),
+ /* `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（问 → 二次确认 → 就地显示结果）；判定全在后端 */
+ ownWhCheck:t=>ownWhCheck(Number(t.dataset.i)),
+ ownWhOk:t=>ownWhOk(Number(t.dataset.i)),
  fetchNt:()=>{ fetchKind='nt'; return ACT.fetchDlg(); },
  fetchWh:()=>{ fetchKind='wh'; fetchM=fWhYm; return ACT.fetchDlg(); },   /* 默认 = 本页「核算年月」当前所选 */
  fetchIv:()=>{ fetchKind='iv'; fetchM=fIvYm; return ACT.fetchDlg(); },   /* 同上 */
@@ -5141,6 +5144,9 @@ const API = {
   },
   unresolved: () => API.get('/api/m03/notices/unresolved'),
   assignOwnership: body => API.post('/api/m03/notices/ownership-assign', body),
+  /* ⭐ `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（`API-05`）—— ⚠️ 会登录 i8、可能**强踢**（`D9`）
+     ⇒ `allow_kick=true` 只允许在**二次确认之后**传（`ownWhCheck` 那个弹窗就是那道闸）。只查**不落库**。 */
+  whCheck: body => API.post('/api/m03/notices/warehouse-check', body),
 
   /* ---- MOD-07 收发结存与活动大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
   m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
@@ -5537,6 +5543,7 @@ async function openOwnDialog() {
   const items = (d && d.items) || [];
   if (!items.length) return;
   const box = items.map((it, i) => {
+    OWN_CTX[i] = it.project_name || '';          /* `TAIL-39`：查名单后用来核"是不是同一个壳" */
     const cands = it.candidates || [];
     const rows = cands.map(c => `<div style="display:flex;align-items:center;gap:9px;padding:7px 8px;border:1px solid var(--bd);border-radius:7px;margin-bottom:7px">
       <button class="btn sm pri" style="flex:0 0 auto" data-act="ownAssign" data-i="${i}" data-pid="${c.id}">归集到它</button>
@@ -5557,6 +5564,12 @@ async function openOwnDialog() {
         <div class="mut sm" style="margin-bottom:7px">属于<b>新小微</b> → 录「仓库名 ＋ 关键词」建档</div>
         <div class="fld"><label>新小微的仓库名</label><input class="inp" id="ownNewName_${i}" placeholder="如：河南南阳热电项目仓库"></div>
         <div class="fld" style="margin-top:6px"><label>识别关键词（须出现在单据名里）</label><input class="inp" id="ownNewKw_${i}" placeholder="如：南阳"></div>
+        <div style="margin-top:8px">
+          <button class="btn gost" data-act="ownWhCheck" data-i="${i}">① 先查 i8 仓库名单</button>
+          <span id="ownWhRes_${i}" class="sm" style="margin-left:8px"></span>
+        </div>
+        <div class="mut sm" style="margin-top:6px">⭐ <b>建档前必须先跑这一环</b>（用户 2026-09-18 口述裁定）——
+          不查就建＝凭猜填仓库名，会留下与 i8 不符的<b>假档案行</b>。⚠️ 查名单要登录 i8，<b>会顶号</b>，故要二次确认。</div>
         <div style="margin-top:8px"><button class="btn" data-act="ownAssign" data-i="${i}" data-pid="__new">建档并归集</button></div>
       </div>
     </div>`;
@@ -5569,6 +5582,59 @@ async function openOwnDialog() {
   });
 }
 
+/* ⭐ `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（用户 2026-09-18 口述裁定）。
+   为什么：兜底 = 手填仓库名新建具体小微 ⇒ 用户**凭猜**填 ⇒ 留下与 i8 不符的**假档案行**；
+   日后 i8 真建了这个仓库 ⇒ 系统**再建一行**（重复）。所以**建之前先问 i8**。
+   ⚠️ 判定**全在后端**（`domain.i8_warehouse_lookup` ＋ `/api/m03/notices/warehouse-check`）；
+      壳里只做三件事：**问**（按钮）· **显示**（就地结果）· **拦**（没查过 / 没命中没确认 ⇒ 不许提交）。
+   ⚠️ **四态要分清**：`found` 真 = 名单里有 ｜ `found` 假且**不降级** = 名单里确实没有 ｜ `degraded` = **没取到**
+      （⛔ 「没取到」**不等于**「没有」—— 文案必须分开，别把取数失败说成名单里没有）。 */
+let OWN_WH = {};      /* `{条目下标: {found, owners, total, degraded, message}}` —— 本次查的结果 */
+let OWN_CTX = {};     /* `{条目下标: 该条上写的壳全名}` —— 用来提醒"这条仓库其实属于另一个壳" */
+
+async function ownWhCheck(i) {
+  const el = $('#ownNewName_' + i);
+  const name = String((el && el.value) || '').trim();
+  if (!name) return toast('先填<b>仓库名</b>，再查 i8 名单');
+  /* ⚠️ `D9`：查名单**要登录 i8**（可能**强踢**在线用户）⇒ 先二次确认，确认之后才发请求。 */
+  modal({
+    title: `查 i8 仓库名单 · ${esc(name)}`,
+    body: `<div class="tip dg" style="margin:0 0 10px"><b>⚠️ 这一步会登录 i8，可能<b>强制踢掉</b>该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）—— 若同事正在用 i8，请先<b>择时</b>。</div>
+      <div class="tip" style="margin:0">查什么：i8 仓库名单（<span class="fc">API-05</span>）里**有没有**「${esc(name)}」，以及它**挂在哪个项目全名**下 ——
+      用来判断该走「选已有小微」还是「只能手填」。⚠️ 只查**不落库**（名单本身不留档）。</div>`,
+    footer: `<button class="btn" data-act="closeModal">取消</button>
+      <button class="btn pri" data-act="ownWhOk" data-i="${i}">确认查询（会顶号）</button>`,
+  });
+}
+
+async function ownWhOk(i) {
+  const el = $('#ownNewName_' + i);
+  const name = String((el && el.value) || '').trim();
+  closeModal();
+  let r = null;
+  try {
+    r = await API.whCheck({warehouse_name: name, allow_kick: true});
+  } catch (e) {
+    return toast(`⚠️ 查名单失败：${esc(String((e && e.message) || e))}`, 8000);
+  }
+  OWN_WH[i] = r;
+  const host = $('#ownWhRes_' + i);
+  if (host) {
+    if (r.degraded) {
+      host.innerHTML = `⚠️ <b>没取到名单</b>（⛔ 这不等于「名单里没有」）：${esc(r.message || '')}`
+        + `<br><label><input type="checkbox" id="ownWhForce_${i}"> <b>我知道这是「没取到」、不是「名单里没有」</b>，仍要建档</label>`;
+    } else if (r.found) {
+      const inside = (r.owners || []).some(o => o === (OWN_CTX[i] || ''));
+      host.innerHTML = `✅ i8 名单里<b>有</b>「${esc(name)}」，挂在 <b>${esc((r.owners || []).join('、') || '（没写所属项目）')}</b> 下（名单 ${r.total} 条）`
+        + (inside ? ' ✓ <b>与本条壳一致</b>' : '<br>⚠️ <b>它挂的项目全名与条目上的壳不一致</b> —— 先确认是不是同一个壳，别建错行');
+    } else {
+      host.innerHTML = `⚠️ i8 名单里<b>没有</b>「${esc(name)}」（名单 ${r.total} 条）—— 将来 i8 建了这个仓库，系统<b>会再建一行</b>。`
+        + `<br><label><input type="checkbox" id="ownWhForce_${i}"> <b>我确认现在就要按这个名字建</b>（将来会重复）</label>`;
+    }
+  }
+  return null;
+}
+
 /* 提交：补词到小微（后端校验「词须出现在单据名里」＋ 去重追加；本层只转发） */
 async function ownAssignSubmit(i, pid) {
   const d = await API.unresolved();
@@ -5576,6 +5642,20 @@ async function ownAssignSubmit(i, pid) {
   if (!it) return toast('清单已过期，请重新抓取');   /* ⚠️ 清单按**当前档案**现算 ⇒ 索引可能已变 */
   let body;
   if (pid === '__new') {
+    /* ⭐ `TAIL-39`：**兜底前必须先跑这一环** —— 没查过 / 查了没命中又没确认 ⇒ 当场拦下（⛔ 不静默建档）。
+       ⚠️ 拦在**壳侧**是"提醒到位"，后端不为此加硬门槛（它不知道用户看没看见）—— 台账里写明这个取舍。 */
+    const seen = OWN_WH[i];
+    if (!seen) {
+      return toast('先点「<b>① 先查 i8 仓库名单</b>」—— 不查就建 = 凭猜填仓库名，会留下与 i8 不符的<b>假档案行</b>', 9000);
+    }
+    if (!seen.found || seen.degraded) {
+      const ck = $('#ownWhForce_' + i);
+      if (!ck || !ck.checked) {
+        return toast(seen.degraded
+          ? '⚠️ <b>没取到名单</b>（⛔ 这不等于「名单里没有」）—— 仍要按这个名字建，请先在上面方框里<b>确认</b>'
+          : '⚠️ <b>i8 名单里没有</b>这个仓库 —— 将来 i8 建了，系统会<b>再建一行</b>；仍要现在建，请先在上面方框里<b>确认</b>', 9500);
+      }
+    }
     body = {
       doc_name: it.doc_name,
       keyword: (($('#ownNewKw_' + i) || {}).value || ''),

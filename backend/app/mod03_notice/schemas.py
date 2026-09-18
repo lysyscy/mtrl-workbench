@@ -108,6 +108,32 @@ class AssignResponse(BaseModel):
     message: str = ""
 
 
+class WarehouseCheckRequest(BaseModel):
+    """**兜底前先跑一次 i8 仓库名单**（`TAIL-39`）。
+
+    ⚠️ `allow_kick` 默认 `False`（`D9`）：取名单**要登录 i8**、可能**强踢**在线用户
+       ⇒ 壳侧**必须在二次确认之后**才允许传 `True`。
+    """
+
+    warehouse_name: str = ""
+    allow_kick: bool = False
+
+
+class WarehouseCheckOut(BaseModel):
+    """查一次的结果 —— ⚠️ 四态要分清（禁静默）：
+    `found` 真 = 名单里有它 ｜ `found` 假且**没降级** = 名单里确实没有 ｜ `degraded` 真 = **没取到名单**（≠ 没有）。
+    """
+
+    warehouse_name: str
+    found: bool = False
+    owners: list[str] = []
+    total: int = 0
+    degraded: bool = False
+    from_cache: bool = Field(False, description="这份结论用的是**上一次抓到的名单**（⛔ 不是刚抓的）")
+    cached_at: str = Field("", description="上面那份缓存的抓取时间（`from_cache` 为真时必须一起说给用户）")
+    message: str = ""
+
+
 class PrinterSettingRequest(BaseModel):
     printer_ipp_url: str = Field(..., description="打印机地址，形如 ipp://192.168.5.248")
 

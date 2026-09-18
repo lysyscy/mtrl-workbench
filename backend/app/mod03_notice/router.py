@@ -28,12 +28,14 @@ from app.mod01_projects.domain import (
     append_keyword_dedup,
     candidates_of,
     ensure_batch_settled,
+    i8_warehouse_lookup,
     needs_archive,
     resolve_ownership,
     validate_keyword_in_doc,
 )
 from app.mod01_projects.models import TYPE_SMALL
 from app.mod01_projects.repository import all_projects
+from app.mod02_i8 import wh_cache
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02（2026-09-15 归位）
 from app.mod03_notice.models import PaymentNotice
@@ -64,6 +66,8 @@ from app.mod03_notice.schemas import (
     PrinterSettingRequest,
     PrinterSettingResponse,
     UnresolvedResponse,
+    WarehouseCheckOut,
+    WarehouseCheckRequest,
 )
 from app.mod03_notice.service import MODE_PRINT, BatchResult, run_batch
 from app.mod03_notice.print.design import DesignFetcher
@@ -422,6 +426,85 @@ def assign_ownership(req: AssignRequest) -> AssignResponse:
                 "请**再抓一次** —— 这次会自动命中并落库。"
             ),
         )
+
+
+def _wh_loader_dep() -> Callable[..., list[dict]]:
+    """仓库名单取数（`API-05`）—— ⚠️ **局部导入** `mod02_i8.router`（与 `get_fetch_executor` 同款，
+    避开模块级循环依赖）；测试用 `app.dependency_overrides[_wh_loader_dep]` 注入桩（**不连 i8**）。"""
+    from app.mod02_i8.router import get_warehouse_rows  # noqa: PLC0415
+
+    return get_warehouse_rows()
+
+
+@router.post("/notices/warehouse-check", response_model=WarehouseCheckOut)
+def warehouse_check(
+    req: WarehouseCheckRequest,
+    wh_loader: Callable[..., list[dict]] = Depends(_wh_loader_dep),
+) -> WarehouseCheckOut:
+    """**兜底前先跑一次 i8 仓库名单**（`TAIL-39` · 用户 2026-09-18 口述裁定）。
+
+    原话：「**在兜底前，系统的设计里应该有去仓库跑了一环这个逻辑，而且如果跑完没结果要在界面上提醒用户**」。
+    为什么要这一环：链路 C 的兜底 = **手填仓库名**新建具体小微 ⇒ 用户若**凭猜**填，就留下一条与 i8 不符的
+    **假档案行**；日后 i8 真建了仓库 ⇒ 系统**再建一行**（重复）。
+
+    ⚠️ **只读**：不落库、不建档（名单本身也不留档 —— 与 `POST /api/m02/sync/warehouses` 同一口径）；
+       判定走 `mod01_projects.domain.i8_warehouse_lookup`（**唯一出口**），本层只组装回执。
+    ⚠️ 取名单**要登录 i8**、可能**强踢**在线用户 ⇒ `allow_kick` 默认 `False`，壳侧必须**二次确认之后**才传 `True`（`D9`）。
+    ⚠️ **禁静默**：取不到 ⇒ `degraded=True` ＋ 中文说明，⛔ **不许把"没取到"说成"名单里没有"**（那是两回事）。
+    """
+    name = str(req.warehouse_name or "").strip()
+    if not name:
+        return WarehouseCheckOut(warehouse_name="", degraded=True, message="请先填「仓库名」再查")
+
+    cached_at = ""
+    head = ""
+    try:
+        rows = wh_loader(req.allow_kick)
+    except Exception as exc:                              # noqa: BLE001
+        # ⭐ `TAIL-39`：抓不到 ⇒ **回退到上一次的名单**接着判（缓存是优化、不是功能），
+        #    但**必须说清"这是几点抓的"** —— ⛔ 不许把旧名单说成刚抓的（`wh_cache` 纪律 2）。
+        rows, cached_at = wh_cache.load()
+        if not rows:
+            return WarehouseCheckOut(
+                warehouse_name=name,
+                degraded=True,
+                message=(
+                    f"没取到 i8 仓库名单：{type(exc).__name__}: {exc}"
+                    "（⚠️ 这只是**没查到**，**不等于名单里没有**；也没有可用的上次名单 —— 可稍后重试）"
+                ),
+            )
+        head = (f"⚠️ 这次**没取到**名单（{type(exc).__name__}）⇒ 下面用的是 "
+                f"**{cached_at or '未知时间'}** 那份缓存（{len(rows)} 条）：<br>")
+
+    info = i8_warehouse_lookup(name, rows)
+    total = int(info["total"])
+    if info["found"]:
+        owners = info["owners"]
+        more = "（⚠️ 同名挂多条全名 ⇒ 要人来定，系统不替选）" if len(owners) > 1 else ""
+        return WarehouseCheckOut(
+            warehouse_name=name,
+            found=True,
+            owners=owners,
+            total=total,
+            from_cache=bool(cached_at),
+            cached_at=cached_at,
+            message=head + (
+                f"i8 名单里**有**「{name}」，挂在 "
+                + ("、".join(f"「{o}」" for o in owners) if owners else "（名单里这行没写所属项目）")
+                + f" 下{more}（名单共 {total} 条）"
+            ),
+        )
+    return WarehouseCheckOut(
+        warehouse_name=name,
+        found=False,
+        total=total,
+        from_cache=bool(cached_at),
+        cached_at=cached_at,
+        message=head + (
+            f"⚠️ i8 名单里**没有**「{name}」（名单共 {total} 条）—— 若现在按这个名字建具体小微，"
+            "日后 i8 真建了这个仓库，系统会**再建一行**（重复）。**要建请显式确认**。"
+        ),
+    )
 
 
 @router.post("/batch", response_model=BatchResponse)

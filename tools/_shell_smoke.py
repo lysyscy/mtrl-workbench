@@ -24,6 +24,7 @@ from _shell_pend import check as check_pend   # noqa: E402  ← ⑭ 链路 B「�
 from _shell_arch import check as check_arch   # noqa: E402  ← ⑮ 链路 A「多仓库选一个」（`TAIL-45`）
 from _shell_m02 import check as check_m02     # noqa: E402  ← ⑯ i8 接入层回显/日志（`TAIL-27`）
 from _shell_m01type import check as check_type  # noqa: E402  ← ⑰ m01 类型列人工覆盖（`TAIL-42`）
+from _shell_ownwh import check as check_ownwh  # noqa: E402  ← ⑱ 链路 C 兜底前查 i8 名单（`TAIL-39`）
 
 BASE = "http://127.0.0.1:8000"
 errors: list[str] = []
@@ -549,6 +550,9 @@ def main() -> int:
 
         # ---- ⑰ m01 类型列人工覆盖（`TAIL-42`）—— 类型格可点 ＋ 弹窗口径 ＋ 只看不点，挪 `_shell_m01type.py`。
         check_type(page, errors)
+
+        # ---- ⑱ 链路 C「兜底前先查 i8 仓库名单」（`TAIL-39`）—— 入口在 ＋ 二次确认在 ＋ 没查过被拦，挪 `_shell_ownwh.py`。
+        check_ownwh(page, errors)
 
     print("\n=== console / page 错误 ===")
     if errors:
