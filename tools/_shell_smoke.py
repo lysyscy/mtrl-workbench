@@ -20,6 +20,8 @@ import sys
 
 from playwright.sync_api import sync_playwright
 
+from _shell_pend import check as check_pend   # noqa: E402  ← ⑭ 链路 B「待人工指认」（`TAIL-30`-③）
+
 BASE = "http://127.0.0.1:8000"
 errors: list[str] = []
 
@@ -530,6 +532,11 @@ def main() -> int:
             print(("  ✅ " if ok else "  ⛔ ") + what)
             if not ok:
                 errors.append("TAIL-04 导出自检未通过：" + what)
+
+        # ---- ⑭ m01 链路 B「待人工指认」（`TAIL-30`-③）——
+        #      ⚠️ 这一段自己一百多行（**真造库样本 ＋ 真点弹窗 ＋ 复原**）⇒ 挪到 `_shell_pend.py`：
+        #         本文件有 **600 行**硬上限（`doc_audit` 的「文件行数」规则 = 红）。
+        check_pend(page, errors)
 
     print("\n=== console / page 错误 ===")
     if errors:

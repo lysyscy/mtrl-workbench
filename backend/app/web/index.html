@@ -4068,19 +4068,29 @@ const ACT={
     closeModal();
     pjAct(()=>API.pjUpdate(p.id,{match_keywords:list}),
       `关键词已保存：<b>${esc(list.length?kwJoin(list):'（清空）')}</b>`); },
- promote:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
-   modal({title:`扶正占位行 · ${p.name}`,body:`<div class="tip" style="margin-bottom:10px"><b>链路 B · 材料侧自动扶正</b>：材料报表遇陌生仓库 → 同步仓库名单 → 用<b>全名</b>回查占位行 → 命中 1 条即扶正改名 → 重跑导入。占位行的 <span class="fc">full_name</span> 就是扶正的<b>钥匙</b>。</div>
-     ${kvBlock([['占位名',`<span class="fc">${esc(p.name)}</span>`],['项目全名',`<span style="font-size:11.5px">${esc(p.full)}</span>`],['phid',`<span class="fc">${p.phid||'—'}</span>`]])}
-     <div class="fld"><label>同步到的真实仓库名（API-05 返回）</label><select class="inp" id="pmName"><option>新乡化纤差别化氨纶项目仓库</option><option>新乡化纤氨纶二期项目仓库</option></select></div>
-     <div class="tip wn" style="margin:0">扶正后：<b>仓库名不可人工修改</b>（仅系统建档/扶正时写入）→ 这是一次<b>系统写入</b>，不是人工改名。</div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="promoteOk" data-id="${p.id}">扶正</button>`}); },
- /* ⏳ **尚未接通后端 —— 诚实提示（⛔ 不做假成功）**：
-    扶正是**系统写入**（§2.3.1「仓库名不允许人工修改」），它的候选来自 **API-05 同步到的真实仓库名**（要登录 i8）。
-    ⚠️ 落点只到一半：`repository.promote_placeholder()` 已实现并有判据；**缺**的是「取仓库名单」与路由两段
-    ⇒ 与**材料侧扶正链路**（`TAIL-29`-③）一起接通。 */
- promoteOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), nv=$('#pmName').value;
+ promote:t=>{ const p=PJs.find(x=>x.id===String(t.dataset.id)); if(!p) return;
+    /* ⭐ **已接后端**（`TAIL-30`-③）：行内「扶正」＝ 指认弹窗的**另一个入口**（原型本来就画在这一列）。
+       ⚠️ 匹配靠**候选行的 id**（后端给的），⛔ 不在前端拿全名去比对 —— 那要复刻一份
+          `norm_full_name`（剥尾码 / 压缩空白），两份归一化早晚分叉 = 静默失配。 */
+    const i=PEND.findIndex(x=>(x.candidates||[]).some(c=>c.id===String(p.id)));
+    if(i<0) return toast(`「${esc(p.name||p.full)}」这一行<b>当前没有待指认的事</b>：`
+      + `<br>只有<b>材料报表里出现陌生仓库</b>、且它的全名在档案里命中 <b>≥2 条</b>非壳行时，才需要人来指认"挂哪一行"；`
+      + `命中 <b>1 条</b>占位行时，系统在抓取时<b>已经自动扶正</b>（不需要人工点）。`
+      + `<br><span class="mut sm">刚抓过材料报表却没有待指认条目 ⇒ 本次没有这类情形；待办清单在本页顶部</span>`, 9000);
+    openPendDialog(i); },
+ /* ⭐ 人工指认的**落库出口**（`TAIL-30`-③）：⭐ 按 `project_id` 定位（铁律 5/6：⛔ 不用名字反查）。
+    ⚠️ 成功/失败**都回后端真实状态**：被拒时后端给一句中文原因（如"只有占位行才能被系统扶正"）
+       ⇒ `pjAct` 原样转给用户、并重新拉档案与待办清单（清单少一条才对）。 */
+ pjPromoteOpen:t=>openPendDialog(Number(t.dataset.pend)),
+ pjPromoteOk:t=>{ const it=PEND_DLG; if(!it) return;
+    const sel=$('#pmRow');
+    const id=Number(sel && sel.value);
+    if(!id) return toast('<b>请先选择要写到哪一行</b>');
     closeModal();
-    toast(`⏳ <b>扶正尚未接通后端</b>：「${esc(p.name)}」→「${esc(nv)}」需要 <b>API-05 同步到的真实仓库名</b>（需登录 i8）；<br>落点已备（<span class="fc">promote_placeholder</span> ＋ 判据）⇒ 随<b>材料侧扶正链路</b>一起接通`,7000); },
+    /* ⚠️ 提交的 `full_name` 取**开弹窗时锁定的那一条**（`PEND_DLG`）—— 清单后来刷新了也不会错位；
+       后端还会拿它做一致性守卫（所选行的全名必须与它相同），对不上就**明确拒**。 */
+    pjAct(()=>API.pjPromote({project_id:id, warehouse_name:it.wh, full_name:it.full}),
+      r=>`<b>${esc((r&&r.message)||'已扶正')}</b>`, 9000); },
  /* —— 链路 C · 归属判定（付款通知书行 → 具体小微）· 2026-09-12 定案 ——
     入口只开在「待指定」标签上；命中 1 个时**自动归集、不弹窗**（ownOf 已算好） */
  ownOpen:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
@@ -5034,6 +5044,13 @@ const API = {
   pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
   pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),
   pjOrd: (id, body) => API.send('PUT', `/api/m01/projects/${id}/ord`, body),
+  /* ---- MOD-01 · ⭐ 链路 B「人工指认」（`TAIL-30`-③）----
+     ⚠️ 候选行按**全名**查（这是**读**）；**写**一律传 `project_id` 按 id 定位
+        （铁律 5/6：禁止用名字反查 —— 一个全名可能对应多行）。 */
+  pjPromotePending: () => API.get('/api/m01/promote-pending'),
+  pjPromoteCandidates: full => API.get(
+    `/api/m01/promote-candidates?full=${encodeURIComponent(full || '')}`),
+  pjPromote: body => API.post('/api/m01/promote', body),
 
   /* ---- MOD-03 · 抓取 ＋ 链路 C 弹窗（`TAIL-29`-② ④） ---- */
   /* ⭐ 抓取：**失败也要看回执** —— 「归属未走完」是**可预期的失败**（要拿它开弹窗）
@@ -5233,6 +5250,11 @@ async function reloadProjects() {
   const [pj, tr] = await Promise.all([API.projects(), API.trails()]);
   PJs = (pj || []).map(adaptProject);
   PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
+  /* ⭐ 待人工指认清单与档案**同源同刷**（刚扶正完必须立刻少一条，否则用户会以为没生效）——
+     ⚠️ 但**不许**它拖垮档案页：这一路取不到时只是清单缺失，页面**如实说明**（`PEND_ERR`），
+        档案与留痕照常显示（同 `boot()` 的逐路容错口径）。 */
+  try { await reloadPending(); }
+  catch (e) { PEND_ERR = String((e && e.message) || e); }
   render();
 }
 
@@ -5685,10 +5707,26 @@ async function whFetchBackend(month) {
         + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`, 9000);
     }
     await reloadM07();
+    /* ⭐ 链路 B 的回执**必须露出来**（`TAIL-30`-③ 补的缺口）：原先这一路只报条数，
+       回包里的 `recovery`（扶正了谁 / 新建了谁 / **还有哪几条要人指认**）**根本没露** ⇒
+       用户在壳上抓完收发结存，**看不到"待人工 N 条"**，也就不知道该去 `m01` 处理。 */
+    try { await reloadPending(); } catch (_) { /* 清单这一路失败 ⇒ 下面的回执里如实说明 */ }
     const st = r.stats || {};
     let msg = `已按 <b>${esc(month)}</b> 抓取收发结存（API-02）：解析 <b>${r.rows || 0}</b> 行 —— `
       + `新增 <b>${st.inserted || 0}</b> · 更新 <b>${st.updated || 0}</b> · 删除 <b>${st.deleted || 0}</b>`;
-    toast(msg + `<br><span class="mut sm">⚠️ 解析条数与落库条数不一致时先怀疑幂等范围（见 ops 实测结论）</span>`, 7600);
+    const rc = r.recovery || {};
+    const pro = (rc.promoted || []).length, cre = (rc.created || []).length;
+    if (pro || cre) msg += `<br>链路 B：自动扶正 <b>${pro}</b> 行 · 自动建档 <b>${cre}</b> 行`
+      + (pro ? `<br><span class="mut sm">${esc((rc.promoted || []).join('；'))}</span>` : '');
+    const pend = rc.unresolved_items || [];
+    if (pend.length) {
+      msg += `<br>⚠️ <b>待人工 ${pend.length} 条</b>：`
+        + esc(pend.map(x => `${x.warehouse_name}：${x.reason}`).join('；'))
+        + `<br>⇒ <span class="link" data-act="go" data-k="m01" tabindex="0" role="button">去项目档案指认到哪一行 →</span>`;
+    }
+    if (rc.degraded && rc.message) msg += `<br>⚠️ ${esc(rc.message)}`;
+    toast(msg + `<br><span class="mut sm">⚠️ 解析条数与落库条数不一致时先怀疑幂等范围（见 ops 实测结论）</span>`,
+      pend.length ? 15000 : 7600);
   } catch (e) {
     await reloadM07();
     toast(`<b>抓取没能完成</b>：${esc(String((e && e.message) || e))}<br>`
@@ -5740,6 +5778,127 @@ BIND.m06 = function () {
   host.prepend(bar);
 };
 
+/* ============================================================ ⭐⭐ 链路 B ·「待人工指认」（`TAIL-30`-③）
+   **它是什么**：材料报表里出现**陌生仓库**，而它的全名在档案里命中 **≥2 条非壳行**时 ——
+   系统**不猜**（决策 1 兜底），必须由人指明"这条真实仓库名该写到**哪一行**"。
+   ⚠️ 链路 B 另外两类（命中 1 条占位行 ⇒ 扶正改名 · 命中壳 ⇒ 新建具体小微）是**系统自己做**的
+      （抓取过程中无感完成）⇒ 本页的入口**只服务**"要人指认"这一类。
+
+   **清单从哪来**：抓取回执里那句话`只出现一次`（页面一刷新就没了）⇒ 后端把它存进**那次抓取的
+   运行记录**，这里从**最近一次材料侧抓取**（`setl` / `inv`）读回来（`GET /api/m01/promote-pending`）。
+   ⚠️ 后端还会**逐条按当前档案现算**：已经解决的不再返回（⛔ 不摆着让人对着旧清单白干）。
+
+   ⚠️⚠️ **前端不算任何判定**（D18）：候选行有哪些、哪几行是占位行、条目还成不成立，全由后端给；
+      写入口一律传 `project_id`（铁律 5/6：⛔ 不用名字反查）。
+   ⛔ **不改 `V.m01` 一行**：入口走原型自己的 `BIND` 钩子注入（同 `BIND.m06`）。 */
+let PEND = [];          /* 待指认条目（含当前候选行） */
+let PEND_SRC = null;    /* 清单来自哪一次抓取（如实告诉用户，⛔ 不装作"刚刚"） */
+let PEND_ERR = '';      /* 这一路取数失败的原因（在页面上如实说明；⛔ 不静默成"本来就没有"） */
+let PEND_DLG = null;    /* 当前打开的指认弹窗锁定哪一条（⛔ 不用下标：清单刷新后下标会错位） */
+
+/* 后端那些说明串里用 `**…**` 标重点（给人看与进日志都方便）⇒ 显示前转成 `<b>`。
+   ⚠️ **先 `esc` 再转**：模板串里的 HTML 一旦漏出去就是一个注入口子。 */
+const em = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+
+function adaptPend(x) {
+  return {
+    wh: x.warehouse_name || '',
+    full: x.full_name || '',
+    reason: x.reason || '',
+    /* ⚠️ `id` 一律转字符串 —— 原型全站 `x.id===t.dataset.id` 都是**字符串同值比较** */
+    candidates: (x.candidates || []).map(c => ({
+      id: String(c.id), typeLabel: c.type_label || '', name: c.warehouse_name || '',
+      disp: c.disp || '', status: c.status || '', phid: c.phid || '', ph: !!c.is_placeholder,
+    })),
+  };
+}
+
+async function reloadPending() {
+  const d = await API.pjPromotePending();
+  PEND = (d.items || []).map(adaptPend);
+  PEND_SRC = d.source || null;
+  PEND_ERR = '';
+}
+
+/* m01 页首的入口 —— ⛔ 不动 `V.m01`；`render()` 画完再注入（同 `BIND.m06`）。
+   ⚠️ **幂等**：先撤掉旧的那块再按当前清单重建（清单是异步来的，会重画多次）。 */
+BIND.m01 = function () {
+  const host = document.querySelector('#view');
+  if (!host) return;
+  const old = document.getElementById('pendBox');
+  if (old) old.remove();
+  if (!PEND.length && !PEND_ERR) return;        /* 没有待办、也没出错 ⇒ 不占地方 */
+  const src = PEND_SRC && PEND_SRC.target
+    ? `清单来自<b>最近一次材料侧抓取</b>：<span class="fc">${esc(PEND_SRC.target)}</span>`
+      + (PEND_SRC.at ? ` · ${esc(PEND_SRC.at)}` : '')
+    : '⚠️ 没找到材料侧抓取记录（清单可能来自更早的会话）';
+  const rows = PEND.map((it, i) => {
+    const ph = it.candidates.filter(c => c.ph).length;
+    const list = it.candidates.map(c => `#${c.id} ${esc(c.name || '（壳无仓库）')}`
+      + (c.ph ? '<span class="tag t-wn">占位</span>' : '')).join('、');
+    return `<tr><td><span class="fc">${esc(it.wh)}</span></td>
+      <td class="sm">${esc(it.full)}</td>
+      <td class="sm">${it.candidates.length} 条（占位 ${ph}）<br><span class="mut sm">${list}</span></td>
+      <td class="sm">${em(it.reason)}</td>
+      <td class="ctr now"><button class="btn sm pri" data-act="pjPromoteOpen" data-pend="${i}">指认到哪一行</button></td></tr>`;
+  }).join('');
+  const box = document.createElement('div');
+  box.id = 'pendBox';
+  box.className = 'card';
+  box.innerHTML = `<h4>待人工指认（链路 B）<span class="sp"><span class="mut sm">共 ${PEND.length} 条 · ${src}</span></span></h4>
+    <div class="bd">
+      ${PEND_ERR ? `<div class="tip dg" style="margin:0 0 8px">⚠️ <b>待指认清单没取到</b>：${esc(PEND_ERR)}
+        <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
+      <div class="tip" style="margin:0 0 8px"><b>为什么这里要人来定</b>：材料报表出现了<b>陌生仓库</b>，
+        而它的全名在档案里命中 <b>≥2 条</b>非壳行 ⇒ 系统<b>无法自己决定</b>挂哪一条、也<b>不该猜</b>
+        （决策 1 兜底）—— 请你指明这条<b>真实仓库名</b>该写到<b>哪一行</b>上。
+        ⚠️ 只改仓库名（系统写入）；<b>类型纠正</b>不在这里做。</div>
+      <table class="dt cond"><thead><tr><th>陌生仓库名</th><th>项目全名</th><th>同名档案行</th><th>系统为什么不自己定</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>`;
+  host.prepend(box);
+};
+
+/* 打开「人工指认」弹窗 —— **两个入口共用**（页首清单 / 占位行的「扶正」按钮）。
+   形态照原型那个 `promote` 弹窗（信息块 ＋ 一个下拉 ＋ 取消/确认两键），
+   只把下拉的语义从「选真实仓库名」换成**「选哪条档案行」**：仓库名是**已知**的（抓取回执给的），
+   缺的是"挂哪一行"（§17.4）。 */
+async function openPendDialog(i) {
+  const it = PEND[i];
+  if (!it) return;
+  let d;
+  try { d = await API.pjPromoteCandidates(it.full); }
+  catch (e) { return toast(`<b>候选档案行没取到</b>：${esc(String((e && e.message) || e))}`, 7000); }
+  const rows = (d.rows || []).map(c => ({
+    id: String(c.id), typeLabel: c.type_label || '', name: c.warehouse_name || '',
+    disp: c.disp || '', status: c.status || '', ph: !!c.is_placeholder,
+  }));
+  /* ⚠️ **只有占位行能被扶正**（§2.3.1「仓库名不可人工修改」）⇒ 非占位行**列出来但不可选**：
+     让人看见"为什么有 ≥2 条"，而不是把它们藏起来让人以为只有 1 条。 */
+  const usable = rows.filter(r => r.ph);
+  const opts = rows.map(r => `<option value="${r.id}"${r.ph ? '' : ' disabled'}>`
+    + `#${r.id} · ${esc(r.typeLabel)} · ${esc(r.name || '（壳无仓库）')}`
+    + `${r.ph ? '（占位行 ✅ 可扶正）' : '（⛔ 已有真实仓库名，不可改）'}`
+    + ` · ${esc(r.status === 'archived' ? '归档' : '在建')}</option>`).join('');
+  PEND_DLG = it;
+  modal({
+    title: `人工指认 · ${it.wh}`,
+    body: `<div class="tip" style="margin-bottom:10px"><b>链路 B · 材料侧扶正</b>：材料报表里出现了
+      <b>陌生仓库</b>，而它的全名在档案里命中 <b>${rows.length}</b> 条非壳行 ⇒ <b>系统不猜</b>（决策 1 兜底），
+      请你指明这条仓库名该写到<b>哪一行</b>。⚠️ 这是**系统写入**（不是人工改仓库名，§2.3.1）；
+      <b>类型纠正</b>不在这里做（另立）。</div>
+      ${kvBlock([['陌生仓库名', `<span class="fc">${esc(it.wh)}</span>`],
+                 ['项目全名', `<span style="font-size:11.5px">${esc(it.full)}</span>`],
+                 ['系统当时为什么没自己定', `<span style="font-size:11.5px">${em(it.reason)}</span>`]])}
+      <div class="fld"><label>写到哪一行（候选 = 该全名下的档案行，含归档行）</label>
+        <select class="inp" id="pmRow">${opts}</select></div>
+      ${usable.length ? '' : `<div class="tip dg" style="margin:0">⚠️ 这几行<b>都不是占位行</b>（都已有真实仓库名）
+        ⇒ 按决策 2（普通项目 ↔ 仓库 = 1 : 1）**不能靠扶正解决** —— 需要人工核对档案，属另一件事。</div>`}`,
+    footer: `<button class="btn" data-act="closeModal">取消</button>
+      <button class="btn pri" data-act="pjPromoteOk"${usable.length ? '' : ' disabled'}>按这一行扶正</button>`,
+  });
+}
+
 /* ============ MOD-09 特殊费用月报表（前端壳接线 · `TAIL-27`）============
    ⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 这里**一律过 `N0()`**：
       原型切片里有 `r[1].toFixed(2)`，字符串会**直接 TypeError 整页崩**（而且不报错地坏）。
@@ -5787,6 +5946,7 @@ async function boot() {
   await soft('项目档案', async () => {
     const pj = await API.projects(); PJs = (pj || []).map(adaptProject);
   });
+  await soft('待人工指认', reloadPending);   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
   await soft('修改留痕', async () => {
     const tr = await API.trails();
     PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));

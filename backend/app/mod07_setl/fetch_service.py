@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+from app.mod01_projects.pending import record_detail
 from app.mod01_projects.recovery import (
     recover_unknown_warehouses,
     unknown_warehouses as shared_unknown_warehouses,
@@ -116,14 +117,15 @@ def run_fetch(
         run = save_run_record(s, **fetch_task.fetch_record_payload(
             object_desc=target, success=0, fail=1,        # fail=1 ⇒ status=failed（这一批失败）
             error_message=f"{type(exc).__name__}: {exc}"),
-            operator=operator)
+            detail=record_detail(), operator=operator)    # ⭐ 「待人工」清单：本次没有 ⇒ 写空（见 pending 口径 1）
         return {"ok": False, "degraded": True, "message": notice["message"],
                 "excel_import_available": True, "ym": plan["ym"],
                 "run_record_id": getattr(run, "id", None)}
 
     if not rows:
         run = save_run_record(s, **fetch_task.fetch_record_payload(
-            object_desc=target, success=0, fail=0), operator=operator)
+            object_desc=target, success=0, fail=0),
+            detail=record_detail(), operator=operator)    # 一行都没抓到 ⇒ 没有待人工
         return {"ok": False, "degraded": False, "empty": True, "ym": plan["ym"],
                 "message": (f"{plan['ym']} 的导出里**一行明细都没有** ⇒ **未改动本地数据**"
                             "（不拿空结果去清已有数据）—— 请核对导出条件后再抓。"),
@@ -135,7 +137,10 @@ def run_fetch(
     recovery_result = recover_unknown_warehouses(
         s, unknown_wh=unknown, load_warehouse_rows=_wh_loader(wh_rows), operator=operator)
     run = save_run_record(s, **fetch_task.fetch_record_payload(
-        object_desc=target, success=len(rows), fail=0), operator=operator)
+        object_desc=target, success=len(rows), fail=0),
+        # ⭐ 「待人工」清单随抓取记录落库（`TAIL-30`-③）—— 回执里那句话**只出现一次**，
+        #    而人要在 `m01` 上处理它 ⇒ 得先留住（读侧 = `pending.live_pending`）。
+        detail=record_detail(recovery_result.get("unresolved_items")), operator=operator)
     return {"ok": True, "degraded": False, "ym": plan["ym"], "rows": len(rows),
             "stats": stats, "unknown_warehouses": unknown, "recovery": recovery_result,
             "run_record_id": getattr(run, "id", None)}

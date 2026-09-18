@@ -16,7 +16,9 @@
   （提示"先跑一次「同步常用项目列表」"），**不臆造**（这条正好挡住"i8 里的历史老项目"被污染进来）。
 - **普通项目 ↔ 仓库 = 1 : 1**（决策 2）⇒ 全名命中「1 条**非壳**行」且它已有**真实**仓库名 ≠ 本次仓库名
   ⇒ 异常，进 `unresolved`（**不静默改**）。
-- 全名命中「≥2 条非壳行」⇒ 疑似「名字没带小微的壳」（决策 1 兜底）⇒ 进 `unresolved` 要人确认。
+- 全名命中「≥2 条非壳行」⇒ 疑似「名字没带「小微」的壳」（决策 1 兜底）⇒ 进 `unresolved` 要人确认。
+  ⭐ **这一类有主人**（`TAIL-30`-③ · 用户 2026-09-18 批准）：由人在 `m01` 档案页**指认到哪一行**
+  —— 清单与指认入口在 `app.mod01_projects.pending`（⛔ 本模块只**报出来**，不猜、不自动挂）。
 - 全名命中**壳** ⇒ 这条仓库是**具体小微** ⇒ 新建 `small` 行（`parent_shell_id` = 壳）。
   ⚠️ **关键词留空**（材料侧按**仓库名**取数，不需要关键词；关键词是**付款侧**链路 C 才要的）
   —— 不臆造、不阻塞；告警里注明"关键词待补"。
@@ -27,7 +29,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.mod01_projects.domain import DEFAULT_SMALL_KEYWORD, norm_full_name
-from app.mod01_projects.models import PLACEHOLDER_PREFIX, TYPE_SHELL, TYPE_SMALL
+from app.mod01_projects.models import TYPE_SHELL, TYPE_SMALL
 from app.mod01_projects.repository import (
     all_projects,
     create_project,
@@ -37,10 +39,67 @@ from app.mod01_projects.repository import (
 
 PLAN_KEYS: tuple[str, ...] = ("promote", "create", "unresolved")
 
+# ------------------------------------------------------------------ 处置类别（`kind`）
+# ⚠️ 每一条 `unresolved` 条目都带 `kind`：`reason` 给人看、`kind` 给机器认。
+#    ⛔ **别用中文原因串去判断类别** —— 文案一改（或被人顺口改一个字），"挑出要人指认的那一类"
+#    就会**静默失效**（而它恰好是本入口的唯一数据源）。`TAIL-30`-③ 起成为对外契约。
+KIND_NO_OWNER = "no_owner"                     # 仓库名单里查不到它的所属项目全名
+KIND_NOT_ARCHIVED = "not_archived"             # 该全名还没建档（安全绳：不许臆造）
+KIND_MULTI = "multi_non_shell"                 # ⭐ 命中 ≥2 条非壳行 ⇒ **要人指认挂哪一行**（本入口服务的就是它）
+KIND_WAREHOUSE_MISMATCH = "warehouse_mismatch"  # 1 条真实仓库名 ≠ 本次（决策 2：普通项目 ↔ 仓库 1 : 1）
+KIND_CREATE_SMALL = "create_small"             # 命中壳 ⇒ 新建具体小微（**系统自己做**，不进 unresolved）
+KIND_PROMOTE = "promote"                       # 1 条占位行 ⇒ 系统扶正（**系统自己做**，不进 unresolved）
+KIND_REAL_WAREHOUSE = "real_warehouse"         # 1 条已有真实仓库名（≠ 本次 ⇒ 异常）
+
+#: 三类处置的**类别**（`plan_recovery` 的键）—— `kind → 落到哪个键`
+BUCKET_OF_KIND: dict[str, str] = {
+    KIND_PROMOTE: "promote",
+    KIND_CREATE_SMALL: "create",
+    KIND_NO_OWNER: "unresolved",
+    KIND_NOT_ARCHIVED: "unresolved",
+    KIND_MULTI: "unresolved",
+    KIND_WAREHOUSE_MISMATCH: "unresolved",
+    KIND_REAL_WAREHOUSE: "unresolved",
+}
+
 
 def _norm(value) -> str:
     """全名比较一律走**归一出入口**（剥尾码 ＋ 压缩空白，`ACC-PRJ-NAME-001/001-05`）。"""
     return norm_full_name(str(value or ""))
+
+
+def rows_by_full(projects) -> dict[str, list]:
+    """**归一化全名 → 档案行**（含归档行；不筛状态 —— §17.2「查本地档案表」）。
+
+    ⭐ **唯一出口**：`plan_recovery`（判定）与「人工指认」的候选清单（展示）**共用一份索引** ——
+      两处各建一份的话，"系统说命中了 2 条、弹窗里只列出 1 条"这类**对不上**会静默发生。
+    """
+    out: dict[str, list] = {}
+    for p in projects or ():
+        out.setdefault(_norm(getattr(p, "name_full", "")), []).append(p)
+    return out
+
+
+def hits_of_full(by_full: dict, full) -> list:
+    """某全名命中的档案行（**归一化后精确相等**，⛔ 不包含 / 不模糊 / 无兜底）。"""
+    return list((by_full or {}).get(_norm(full), []))
+
+
+def classify_hits(hits) -> str:
+    """命中行 → 处置类别（`KIND_*`）。⭐ **唯一出口** —— 判定与「待指认」清单不许各写一份。
+
+    规则（§17.2 / §17.3，顺序即优先级）：
+      ① 无命中 ⇒ 没建档　② **先判壳**：命中里有壳 ⇒ 这条仓库是具体小微（新建，不进 `≥2` 分支）
+      ③ ≥2 条非壳行 ⇒ **要人指认**　④ 1 条占位行 ⇒ 系统扶正　⑤ 1 条已有真实仓库名 ⇒ 异常
+    """
+    rows = list(hits or ())
+    if not rows:
+        return KIND_NOT_ARCHIVED
+    if any(getattr(p, "project_type", "") == TYPE_SHELL for p in rows):
+        return KIND_CREATE_SMALL
+    if len(rows) > 1:
+        return KIND_MULTI
+    return KIND_PROMOTE if getattr(rows[0], "is_placeholder", False) else KIND_REAL_WAREHOUSE
 
 
 def unknown_warehouses(session: Session, rows) -> list[str]:
@@ -73,9 +132,7 @@ def plan_recovery(
         if wh and owner:
             owner_of.setdefault(wh, owner)
 
-    rows_by_full: dict[str, list] = {}
-    for p in projects or ():
-        rows_by_full.setdefault(_norm(getattr(p, "name_full", "")), []).append(p)
+    by_full = rows_by_full(projects)
 
     promote: list[dict] = []
     create: list[dict] = []
@@ -85,24 +142,27 @@ def plan_recovery(
         full = owner_of.get(wh, "")
         if not full:
             unresolved.append({
+                "kind": KIND_NO_OWNER,
                 "warehouse_name": wh,
                 "reason": "仓库名单里查不到它的所属项目全名（可能已作废或名单未更新）"
                           "—— 不臆造，请人工核对",
             })
             continue
 
-        hits = rows_by_full.get(_norm(full), [])
-        if not hits:
+        hits = hits_of_full(by_full, full)
+        kind = classify_hits(hits)
+
+        if kind == KIND_NOT_ARCHIVED:
             unresolved.append({
+                "kind": kind,
                 "warehouse_name": wh, "owner_full_name": full,
                 "reason": "所属项目还**没建档** —— i8 侧要先把它加入「常用项目列表」，"
                           "再跑一次「同步常用项目列表」；本次数据已照常入库",
             })
             continue
 
-        shells = [p for p in hits if getattr(p, "project_type", "") == TYPE_SHELL]
-        if shells:
-            shell = shells[0]
+        if kind == KIND_CREATE_SMALL:
+            shell = next(p for p in hits if getattr(p, "project_type", "") == TYPE_SHELL)
             create.append({
                 "warehouse_name": wh, "name_full": full,
                 "project_type": TYPE_SMALL, "parent_shell_id": shell.id,
@@ -111,8 +171,9 @@ def plan_recovery(
             })
             continue
 
-        if len(hits) > 1:
+        if kind == KIND_MULTI:
             unresolved.append({
+                "kind": kind,
                 "warehouse_name": wh, "owner_full_name": full,
                 "reason": f"同一全名命中 {len(hits)} 条非壳档案 —— 疑似名字没带「小微」的壳，"
                           "需人工确认类型（决策 1 兜底）",
@@ -121,7 +182,7 @@ def plan_recovery(
 
         only = hits[0]
         current = str(getattr(only, "warehouse_name", "") or "")
-        if current.startswith(PLACEHOLDER_PREFIX):
+        if kind == KIND_PROMOTE:
             promote.append({
                 "warehouse_name": wh, "project_id": only.id,
                 "name_full": full, "old_placeholder": current,
@@ -129,6 +190,7 @@ def plan_recovery(
             continue
 
         unresolved.append({
+            "kind": KIND_WAREHOUSE_MISMATCH,
             "warehouse_name": wh, "owner_full_name": full,
             "reason": f"该全名的档案行仓库名 = 「{current}」，本次报表里出现的是「{wh}」"
                       "—— 一条普通项目只能挂一个仓库（决策 2：普通项目 ↔ 仓库 = 1 : 1），需人工核对",
@@ -235,5 +297,9 @@ def summary_text(result: dict | None) -> str:
     return "；".join(parts)
 
 
-__all__ = ["PLAN_KEYS", "unknown_warehouses", "plan_recovery", "counts_of",
+__all__ = ["PLAN_KEYS", "KIND_NO_OWNER", "KIND_NOT_ARCHIVED", "KIND_MULTI",
+           "KIND_WAREHOUSE_MISMATCH", "KIND_CREATE_SMALL", "KIND_PROMOTE",
+           "KIND_REAL_WAREHOUSE", "BUCKET_OF_KIND",
+           "rows_by_full", "hits_of_full", "classify_hits",
+           "unknown_warehouses", "plan_recovery", "counts_of",
            "recover_unknown_warehouses", "summary_text"]

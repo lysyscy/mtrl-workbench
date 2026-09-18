@@ -33,7 +33,7 @@ A|③-b 子步：抓仓库信息（仓库列表按全名反查）|抓仓库信�
 B|① 「陌生仓库」事实留痕（看板瓦片「占位行待扶正」＋ 抓取回执列出）|看板瓦片「占位行待扶正」|backend/app/home/service.py::placeholder|ACC-PRJ-AUTO-001|已接
 B|② 自动跑一次「抓仓库名单」同步|自动跑一次「抓仓库名单」同步|backend/app/mod02_i8/sources.py::load_warehouse_rows|ACC-PRJ-AUTO-001|已接
 B|③ 用全名回查占位行：命中 1 条 ⇒ 扶正改名|用**全名**回查占位行|backend/app/mod01_projects/repository.py::promote_placeholder|ACC-PRJ-AUTO-001|已接
-B|③ 命中多条 ⇒ 弹窗让用户指认|弹窗让用户指认|backend/app/mod01_projects/recovery.py::plan_recovery|ACC-PRJ-AUTO-001|形态不同
+B|③ 命中多条 ⇒ 弹窗让用户指认|弹窗让用户指认|backend/app/web/index.html::openPendDialog|ACC-PRJ-AUTO-001|已接
 B|③ 未命中 ⇒ 新建行（真实仓库名）|新建行（真实仓库名）|backend/app/mod01_projects/recovery.py::plan_recovery|ACC-PRJ-AUTO-001|已接
 B|④ **无需「重跑」步骤**（导入过程中即同步扶正 ⇒ 不存在"先落库再回头改"）|导入过程中即同步扶正|backend/app/mod01_projects/recovery.py::recover_unknown_warehouses|ACC-PRJ-AUTO-001|已接
 C|壳已建档 · 命中 1 个小微 ⇒ 归集到它 ＋ 关键词去重追加|关键词去重追加|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接

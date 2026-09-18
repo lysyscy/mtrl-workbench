@@ -11,8 +11,9 @@ from sqlalchemy import select
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+from app.mod01_projects import pending as PE
 from app.mod01_projects import repository as repo
-from app.mod01_projects.domain import build_candidates, ordered, resolve_ownership
+from app.mod01_projects.domain import build_candidates, norm_full_name, ordered, resolve_ownership
 from app.mod01_projects.models import Project
 from app.mod01_projects.schemas import (
     CandidateOut,
@@ -22,6 +23,11 @@ from app.mod01_projects.schemas import (
     OwnershipRequest,
     OwnershipResponse,
     ProjectOut,
+    PromoteCandidatesOut,
+    PromoteOut,
+    PromotePendingOut,
+    PromoteRequest,
+    PromoteRowOut,
     StatusRequest,
     TrailOut,
     UpdateProjectRequest,
@@ -178,6 +184,72 @@ def trails(limit: int = Query(20, ge=1, le=200)) -> list[TrailOut]:
             )
             for e, label in repo.list_recent_logs(s, limit=limit)
         ]
+
+
+@router.get("/promote-pending", response_model=PromotePendingOut)
+def promote_pending() -> PromotePendingOut:
+    """⭐ **「待人工指认」清单**（`TAIL-30`-③）—— `m01` 档案页的入口源。
+
+    **为什么有这条**：链路 B 里「命中 ≥2 条非壳行 ⇒ 挂到哪一行」**必须人来做**（系统不猜），
+    而这几条原本只在**抓取回执里出现一次**（一刷新就没了）⇒ `m01` 上没有入口。
+
+    ⚠️ 只认**最近一次材料侧抓取**（`setl` / `inv`），且**逐条按当前档案现算** ——
+       已经解决的不再摆着（否则就是让用户对着旧清单白干，`TAIL-41` 同族）。
+    """
+    with session_scope() as s:
+        return PromotePendingOut(**PE.live_pending(s))
+
+
+@router.get("/promote-candidates", response_model=PromoteCandidatesOut)
+def promote_candidates(
+    full: str = Query("", description="项目全名 —— **归一化后精确相等**（§17.2：不包含 / 不模糊）"),
+) -> PromoteCandidatesOut:
+    """该全名下的**候选档案行**（含归档行）—— 人工指认要先看见"有哪些行、哪几行是占位行"。
+
+    ⚠️ 这是**读**（可按全名查候选）；**写**一律按 `id` 定位（铁律 5/6：禁止用名字反查）。
+    ⚠️ 判定口径（先判壳 / ≥2 条）**不在本层重写** —— 它属于 `recovery.classify_hits`。
+    """
+    with session_scope() as s:
+        rows = PE.candidates(s, full)
+    return PromoteCandidatesOut(
+        full_name=full, count=len(rows), rows=[PromoteRowOut(**r) for r in rows]
+    )
+
+
+@router.post("/promote", response_model=PromoteOut)
+def promote(req: PromoteRequest) -> PromoteOut:
+    """⭐ **人工指认的落库出口**（`TAIL-30`-③ 端点②）：把这条**真实仓库名**写到用户指定的那一行。
+
+    判定与落库**唯一出口 = `repository.promote_placeholder`**（⛔ 本层不另写一份）：
+      · 只有**占位行**（`未建仓-N`）能被扶正 —— 非占位行 ⇒ 明确拒（§2.3.1「仓库名不可人工修改」）；
+      · 展示名若沿用占位名的 ⇒ 一并跟着换（否则屏幕一直挂「未建仓-N」）。
+
+    ⚠️ **只做「指定到哪一行」**（用户 2026-09-18 裁定）：命中行**本该是壳**时的**类型纠正**另立 `TAIL-42`。
+    ⚠️ 一致性守卫：这一行必须是**本次指认的那个全名**下的行（防"张冠李戴"）。
+    """
+    with session_scope() as s:
+        row = repo.get_project(s, req.project_id)
+        if row is None:
+            raise MustReportError(f"档案行不存在（id={req.project_id}）—— 请刷新后重试")
+        want_full = (req.full_name or "").strip()
+        if want_full and norm_full_name(row.name_full) != norm_full_name(want_full):
+            raise MustReportError(
+                f"指认的行对不上：所选行 id={row.id} 的全名 = 「{row.name_full}」，"
+                f"而本次要指认的全名是「{want_full}」—— 按 id 定位，⛔ 不用名字反查（铁律 5/6）"
+            )
+        old = str(row.warehouse_name or "")
+        # 展示名**原本沿用占位名**的 ⇒ 扶正时会一并跟着换（`repository.promote_placeholder` 的口径）；
+        # 人工设过展示名的 ⇒ 不动它。先记下来，好让回执说清到底动没动。
+        followed = str(row.disp or "") == old
+        repo.promote_placeholder(s, row, req.warehouse_name)
+        real = str(row.warehouse_name or "")
+        return PromoteOut(
+            ok=True, id=row.id, old_warehouse_name=old, warehouse_name=real,
+            disp=str(row.disp or ""), disp_followed=followed,
+            message=(f"已扶正：占位名「{old}」→ 真实仓库名「{real}」"
+                     + ("；展示名一并跟着换" if followed else "（展示名是人工设过的 ⇒ 未动它）")
+                     + " —— 这是**系统写入**，不是人工改仓库名（§2.3.1）"),
+        )
 
 
 @router.post("/ownership", response_model=OwnershipResponse)
