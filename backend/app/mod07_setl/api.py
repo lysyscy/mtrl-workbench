@@ -271,4 +271,38 @@ def api_export_settlement(request: Request):
     )
 
 
+@router.get("/api/m07/extract/export")
+def api_export_extract(request: Request):
+    """导出**焊材 / 气体提取**成品 xlsx（`TAIL-04` **路径① = 模板填充**）—— 浏览器直接下载。
+
+    口径 = **模板填充**：以交付面 `demo/模板/模板清单.md` 登记的 `模板-焊材气体.xlsx` 为基底，
+    认标记文字 `DATA_START` 定位数据区、**尾块随行数派生**（《说明书》§7.1）。
+
+    ⚠️ 三个筛选参数与页面**同名同义**（⛔ 不在前端另筛一遍）：
+      `status` = 项目状态（缺省「在建」）；`period` = 金额月份（**缺省上月**；**显式传空串 = 全部**）。
+    ⚠️ 失败（模板缺失/损坏 · 拿不到报告月 · **显示区对账不过**）⇒ **JSON 200 ＋ `ok:false` ＋ 中文原因**，
+       壳侧据 `content-type` 分流（同另两条导出）。
+    """
+    from fastapi.responses import FileResponse, JSONResponse
+    from urllib.parse import quote
+
+    from app.report_export import service as EX
+
+    q = query_params(request)
+    period = q.get("period")
+    if isinstance(period, list):
+        period = period[0] if period else ""
+    try:
+        with session_scope() as s:
+            path = EX.export_extract(s, period, str(q.get("status") or ""))
+    except MustReportError as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=path.name,
+        headers={"X-Export-Filename": quote(path.name)},
+    )
+
+
 __all__ = ["router", "MustReportError"]

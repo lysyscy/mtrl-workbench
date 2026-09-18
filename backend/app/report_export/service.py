@@ -123,5 +123,22 @@ def export_inventory(session: Session, period: str, *, export_bytes=None,
     return Path(kcdj_export.build_xlsx(content, out_dir))
 
 
+def export_extract(session: Session, period: str, status: str = "") -> Path:
+    """导出一份**焊材 / 气体提取**成品 xlsx（`TAIL-04` **路径① = 模板填充**）→ 成品绝对路径。
+
+    - 取数 = `mod07_setl.service.build_extract_export`（**行集合与页面同一份口径**）；
+    - 摆位 / 落点 = `weldgas_export.build_xlsx`（模板闸门 ＋ 显示区对账都在里面）；
+    - ⚠️ 本层只做「筛选状态 → 取数 → 转交 → 报路径」，⛔ 不在这里算金额、不在这里拼文件名。
+    """
+    from app.mod07_setl import service as M7
+    from app.report_export import weldgas_export
+
+    raw: dict = {"status": str(status or "")}
+    if period is not None:                       # ⚠️「不带 period」与「显式传空」是两件事（同页面）
+        raw["ext_period"] = str(period)
+    plan = M7.build_extract_export(session, M7.parse_extract_state(raw))
+    return Path(weldgas_export.build_xlsx(plan["grids"], EXPORT_ROOT, plan["report_ym"]))
+
+
 __all__ = ["EXPORT_ROOT", "period_label", "setl_rows", "setl_count", "export_settlement",
-           "export_inventory"]
+           "export_inventory", "export_extract"]

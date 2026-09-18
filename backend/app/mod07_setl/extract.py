@@ -173,6 +173,52 @@ def extract_block(amounts, kind: str, *, warehouses, period: str) -> dict:
     return {"kind": kind, "rows": rows, "total_row": total_row}
 
 
+# ============================================================ 成品导出（路径① 模板填充）
+
+#: 模板的月份列数（`1月`…`12月`）
+YEAR_MONTHS = 12
+
+
+def month_columns(year: str) -> list[str]:
+    """一年的 **12 个月**（`YYYY-MM` 升序）—— 模板 `1月`…`12月` 那 12 列。
+
+    ⚠️ 模板表头**没写年份**（裁定④：月份列都属**该年**）⇒ 年份由调用方按报告期给。
+    """
+    return ["%s-%02d" % (str(year or "").strip(), m) for m in range(1, YEAR_MONTHS + 1)]
+
+
+def extract_template_grid(amounts, kind: str, *, warehouses, year: str, balances=None) -> dict:
+    """**模板形态**的显示网格（行 = 项目 · 列 = `结余` ＋ 该年 12 个月 ＋ `合计`）。
+
+    - 行 = `warehouses`（调用方已按**项目状态 + 档案顺序**筛好 —— 与页面同一份口径）；
+    - `结余` = `balances[kind][仓库]` —— ⚠️ **2026-09-18 用户裁定：结余 = 历史结余、由用户手动录入**
+      ⇒ **系统没有任何来源**（⛔ 不是收发结存的 `end_amt` 派生，那是错的）；
+      未录入 / 尚无录入入口 ⇒ `None` ⇒ 实现层**写空**（⛔ 既不写 0、也不把模板里的示例值带走）。
+      ⇒ `balances` 是**留好的接缝**：录入入口落地后由调用方传进来，本函数不动。
+    - 月份格 = 该月金额（**该月无数据 ⇒ `None`**，⛔ 不写 0 —— 0 会被读成"确实为 0"）；
+    - `合计` = **该年 12 个月之和**（= 模板「合计」列 / 页面「总金额（累计）」在该年的口径；
+      与页面 `extract_total` 的差别只在于**限年**，而 12 列本身就是该年 ⇒ 两者同源）；
+    - `sum_row` = 各月列之和 ＋ 合计列之和（模板合计行那一行）。⚠️ `结余` 列**不参与**（模板即如此）。
+    """
+    months = month_columns(year)
+    by_ym_all = (amounts or {}).get(kind) or {}
+    bal = (balances or {}).get(kind) or {}
+    rows: list[dict] = []
+    for w in warehouses or ():
+        by_ym = by_ym_all.get(w) or {}
+        cells = [(by_ym.get(m) or None) for m in months]
+        rows.append({
+            "warehouse": w,
+            "balance": bal.get(w),
+            "cells": cells,
+            "total": sum_money([c for c in cells if c is not None]),
+        })
+    sums = [sum_money([r["cells"][i] for r in rows if r["cells"][i] is not None])
+            for i in range(len(months))]
+    return {"kind": kind, "year": str(year or ""), "months": months, "rows": rows,
+            "sum_row": sums + [sum_money([r["total"] for r in rows])]}
+
+
 def extract_export_matrix(amounts, kind: str, *, warehouses) -> dict:
     """导出矩阵（001-06）：**行 = 所筛选项目 · 列 = 项目 → 最早有数据的月 → …（逐月连续）→ 求和**。
 
@@ -198,7 +244,9 @@ __all__ = [
     "EXTRACT_COLUMNS", "KINDS", "EXTRACT_FIELD",
     "STATUS_LABELS", "STATUS_DEFAULT", "STATUS_ALL", "STATUS_OPTIONS",
     "DEFAULT_GAS_LIST", "DEFAULT_WELD_KEYWORDS", "DEFAULT_NOT_WELD",
+    "YEAR_MONTHS",
     "default_rules", "extract_rules", "match_kind", "extract_amounts", "extract_months",
     "month_in_period", "extract_total", "extract_sum", "order_warehouses",
     "visible_warehouses", "extract_block", "extract_export_matrix",
+    "month_columns", "extract_template_grid",
 ]

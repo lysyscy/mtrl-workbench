@@ -4294,8 +4294,31 @@ const ACT={
        :`<tr><td colspan="${ms.length+2}" class="ctr mut">当前筛选条件下没有${kind}数据</td></tr>`;
      return `<div class="tip" style="margin:10px 0 6px"><b>${kind}</b> · 项目 × 月份</div><div class="tw"><table class="dt cond" data-sort-key="modal:expExt-${kind}"><thead>${head}</thead><tbody>${body}</tbody></table></div>`; };
    modal({title:'导出 · 焊材 / 气体提取（按 项目 × 月份）',body:
-     `<div class="tip ok" style="margin-bottom:8px">导出内容 = <b>当前筛选出的项目</b>；列从左到右 = <b>项目 → ${ms[0]||'—'} → … → 求和</b>（月份自「最早有数据的月」起<b>逐月连续</b>）。</div>`+blk('焊材')+blk('气体'),
-     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="exp" data-t="焊材气体提取（项目×月份）">保存到本地</button>`}); },
+     `<div class="tip ok" style="margin-bottom:8px">将导出 <b>1 个工作簿</b>（<b>2 个工作表</b>：<b>焊材</b> / <b>气</b>），每表 = <b>项目 | 结余 | 1月…12月 | 合计</b>（按模板填充）。<br>下表是<b>按月核对视图</b>（列 = <b>${ms[0]||'—'} → … → 求和</b>，自「最早有数据的月」起<b>逐月连续</b>），<b>不是</b>成品的列结构。</div>`+blk('焊材')+blk('气体'),
+     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="saveExt">保存到本地</button>`}); },
+ /* ⭐ 接线（`TAIL-04` 路径① · 片 1）：成品由**后端模板填充**生成（`模板-焊材气体.xlsx` 的两个 sheet）。
+    失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（模板缺失/损坏 · 拿不到报告月 · **显示区对账不过**）
+    ⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+    ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）；
+    ⚠️ 筛选**原样带给后端**（`status` / `period`）—— ⛔ 不在前端另筛一遍（否则又是第二份口径）。 */
+ saveExt:async ()=>{
+   const url='/api/m07/extract/export?status='+encodeURIComponent(fExt.status)
+     +'&period='+encodeURIComponent(fExt.ym);
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'焊材气体提取表.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   toast(`已导出 <b>${esc(fn)}</b>：<b>工作表 1</b> = 焊材、<b>工作表 2</b> = 气；每表 = 项目 | 结余 | 1月…12月 | 合计。⚠️「结余」是<b>历史结余</b>，系统暂无录入入口 ⇒ 该列<b>如实为空</b>`,8600); },
  /* 大表手填录入（OPEN-05）：当月未录入的格子先带入、再就地改正 → 转为本月正常录入。
     列型三种：`ym` 年月（`YYYY-MM`）· `m` 金额（元 · **非负**）· `t` 文本（备注）。手填值不参与欠款计算。 */
  bigEdit:async t=>{ const wh=t.dataset.p, i=+t.dataset.i, NAME=BIGCOLS[i], raw=String(t.value).trim();

@@ -40,6 +40,47 @@ EXTRA_CSS = """
 .warn{border:1px solid var(--wn-bd);background:var(--wn-l);color:var(--wn-d);padding:8px 12px;border-radius:6px;margin:8px 0}
 """
 
+#: 真下载助手（**服务端渲染页共用**）—— ⛔ 不自己拼文件名（命名规则的主人在后端，
+#: 经 `X-Export-Filename` 带出）；失败按 `content-type` 分流，把**中文原因**显示出来
+#: （同另两条导出：JSON 200 ＋ `ok:false` ⇒ 弹原因；否则当文件下载）。
+#: ⚠️ 这是**纯 JS 字符串**（⛔ 不是 f-string —— `{}` 会被当占位符）。
+DOWNLOAD_JS = """
+<script>
+function _t(s){return String(s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+async function dl(url, fb, mid){
+  var el = mid ? document.getElementById(mid) : null;
+  var say = function(t){ if(el){ el.innerHTML = t; } };
+  say('导出中…');
+  var r; try{ r = await fetch(url); }
+  catch(e){ return say('<b>导出没能完成</b>：' + _t(String((e && e.message) || e))); }
+  var ct = r.headers.get('content-type') || '';
+  if(ct.indexOf('application/json') >= 0){
+    var d = {}; try{ d = await r.json(); }catch(e){}
+    return say('<b>导出没能完成</b>：' + _t(d.message || '后端没给原因'));
+  }
+  if(!r.ok){ return say('<b>导出没能完成</b>：HTTP ' + r.status); }
+  var fn = decodeURIComponent(r.headers.get('x-export-filename') || '') || fb;
+  var b = await r.blob(), a = document.createElement('a');
+  a.href = URL.createObjectURL(b); a.download = fn;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
+  say('已导出 <b>' + _t(fn) + '</b>');
+}
+</script>
+"""
+
+
+def _dl_footer(msg_id: str, url: str, fallback: str, label: str) -> str:
+    """弹窗底部：**关闭 ＋ 真下载**（`dl(...)` 在页尾脚本里）＋ 一行结果位。"""
+    return (
+        f'<div class="mut sm" id="{esc(msg_id)}" style="margin-top:8px"></div>'
+        '<div style="margin-top:10px"><button class="btn" type="button" '
+        'onclick="this.closest(\'dialog\').close()">关闭</button> '
+        f'<button class="btn pri" type="button" onclick="dl(\'{esc(url)}\','
+        f'\'{esc(fallback)}\',\'{esc(msg_id)}\')">{esc(label)}</button></div>'
+    )
+
 
 def money_text(value) -> str:
     """金额显示（千分位 · 2 位小数）；空值 ⇒ 空串（**不臆造 0**）。"""
@@ -132,8 +173,12 @@ def fetch_dialog_html(default_month: str, back: str = "/m07") -> str:
     )
 
 
-def zip_dialog_html(manifest: list[dict], zip_name: str) -> str:
-    """「导出分仓库 zip」弹窗 —— 列出**产出物清单**（份数随仓数实时算，001-08）。"""
+def zip_dialog_html(manifest: list[dict], zip_name: str, period: str = "") -> str:
+    """「导出分仓库 zip」弹窗 —— 列出**产出物清单**（份数随仓数实时算，001-08）。
+
+    ⭐ 「保存到本地」= **真下载**（`GET /api/m07/settlement/export`）——
+    ⚠️ 沿用 `period` 的**同一个核算年月**（清单与产出的期间必须是同一个值）。
+    """
     items = "".join(
         f'<tr><td class="ctr">{i}</td><td>{esc(m["name"])}</td>'
         f'<td>{"分仓库工作簿" if m["kind"] == "warehouse" else "总表（含透视表）"}</td></tr>'
@@ -147,9 +192,10 @@ def zip_dialog_html(manifest: list[dict], zip_name: str) -> str:
         '<div class="tw" style="max-height:300px"><table class="dt">'
         "<thead><tr><th>#</th><th>文件</th><th>类别</th></tr></thead>"
         f"<tbody>{items}</tbody></table></div>"
-        '<div style="margin-top:10px"><button class="btn" type="button" '
-        'onclick="document.getElementById(\'zipDlg\').close()">关闭</button></div>'
-        "</dialog>"
+        + _dl_footer("zipDlgMsg",
+                     "/api/m07/settlement/export?period=%s" % (period or ""),
+                     zip_name or "收发结存.zip", "保存到本地")
+        + "</dialog>"
     )
 
 
@@ -242,9 +288,17 @@ def _extract_period_input(state: dict) -> str:
     )
 
 
-def export_dialog_html(matrices: list[dict]) -> str:
+def export_dialog_html(matrices: list[dict], state: dict | None = None) -> str:
     """导出弹窗：**行 = 所筛选项目 · 列 = 项目 → 各月（逐月连续）→ 求和**（001-06）。
-    ⚠️ 本处只给**矩阵内容**（导出为文件的动作归 `ACC-X-EXP-001`）。"""
+
+    ⚠️ 弹窗里的表是**按月的核对视图**；**成品的列结构 = 模板**（`模板-焊材气体.xlsx` 的
+       `焊材` / `气` 两个工作表：项目 | 结余 | 1月…12月 | 合计）——
+       提示语必须说清这一点（`ACC-X-EXP-001/001-05`：⛔ 不得声称与实例不符的列 / 工作表结构）。
+    ⭐ 「保存到本地」= **真下载**（`GET /api/m07/extract/export`）。
+    """
+    st = dict(state or {})
+    url = "/api/m07/extract/export?status=%s&period=%s" % (st.get("status") or "",
+                                                          st.get("period") or "")
     blocks: list[str] = []
     for m in matrices:
         head = ["项目", *m["months"], "求和"]
@@ -272,12 +326,22 @@ def export_dialog_html(matrices: list[dict]) -> str:
     return (
         '<dialog class="dlg" id="expDlg">'
         "<h4>导出 · 焊材 / 气体提取（按 项目 × 月份）</h4>"
-        '<div class="mut">导出内容 = <b>当前筛选出的项目</b>；列从左到右 = '
-        "<b>项目 → 各月（自最早有数据的月起逐月连续）→ 求和</b>。</div>"
+        '<div class="mut">将导出 <b>1 个工作簿</b>（<b>2 个工作表</b>：'
+        + " / ".join(f'<b>{esc(s)}</b>' for s in _sheet_names())
+        + "），每表 = <b>项目 | 结余 | 1月…12月 | 合计</b>（按模板填充）。<br>"
+        "下表是<b>按月核对视图</b>（行 = 当前筛选出的项目 · 列 = 自最早有数据的月起"
+        "<b>逐月连续</b> → 求和），<b>不是</b>成品的列结构。</div>"
         + "".join(blocks)
-        + '<div style="margin-top:10px"><button class="btn" type="button" '
-        'onclick="document.getElementById(\'expDlg\').close()">关闭</button></div></dialog>'
+        + _dl_footer("expDlgMsg", url, "焊材气体提取表.xlsx", "保存到本地")
+        + "</dialog>"
     )
+
+
+def _sheet_names() -> list[str]:
+    """成品的工作表名（**模板登记**：`焊材` / `气`）—— ⛔ 本页不另写一份映射。"""
+    from app.report_export.weldgas_export import SHEET_OF_KIND
+
+    return [SHEET_OF_KIND[k] for k in X.KINDS if k in SHEET_OF_KIND]
 
 
 def render_extract_page(data: dict) -> str:
@@ -307,8 +371,8 @@ def render_extract_page(data: dict) -> str:
         f"<title>{esc(EXTRACT_TITLE)} · 材料报表自动化工作台</title>"
         f"<style>{BASE_CSS}{EXTRA_CSS}</style></head><body><div class=\"wrap\">"
         f'<div class="hd"><h1>收发结存与活动大表</h1><nav>{_nav_html()}</nav></div>'
-        f"{section}{export_dialog_html(data['export'])}"
-        "</div></body></html>"
+        f"{section}{export_dialog_html(data['export'], st)}"
+        "</div>" + DOWNLOAD_JS + "</body></html>"
     )
 
 
@@ -342,7 +406,7 @@ def render_setl_page(data: dict, flash: dict | None = None) -> str:
     extra = (
         _flash_html(flash)
         + fetch_dialog_html(data["fetch_default_month"])
-        + zip_dialog_html(data["manifest"], data["zip_name"])
+        + zip_dialog_html(data["manifest"], data["zip_name"], state.get("period") or "")
         + '<div class="mut sm" style="margin-top:6px">校验列 = 期初 ＋ 收 － 发 － 结存，'
           '按 <b>2 位小数归一后判等（容差 0）</b>；合计行的校验格是**对合计值本身**再判一次。</div>'
     )
@@ -352,7 +416,7 @@ def render_setl_page(data: dict, flash: dict | None = None) -> str:
         f"<style>{BASE_CSS}{EXTRA_CSS}</style></head><body><div class=\"wrap\">"
         f'<div class="hd"><h1>收发结存与活动大表</h1><nav>{_nav_html()}</nav></div>'
         f"{section}{extra}"
-        "</div></body></html>"
+        "</div>" + DOWNLOAD_JS + "</body></html>"
     )
 
 

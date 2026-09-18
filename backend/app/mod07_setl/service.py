@@ -127,5 +127,44 @@ def build_extract_data(s: Session, state: dict | None = None) -> dict:
     }
 
 
+def export_report_ym(period: str, months) -> str:
+    """导出的**报告月**（`YYYY-MM`）：**止月** —— 单月取该月 · 跨月取止月 · 年取 12 月；
+    **「全部」⇒ 取数据里的最新一期**（⛔ 不回落成"本月"，那会把一个不存在的月份当报告期）。
+
+    ⚠️ 时间口径走 `core.period`（唯一主人），本处不另解一遍。
+    """
+    from app.core.period import period_range
+
+    _start, end = period_range(period)
+    if end is None:
+        return max(months) if months else ""
+    return end[:7]
+
+
+def build_extract_export(s: Session, state: dict | None = None) -> dict:
+    """导出（**路径① 模板填充**）所需的一切：两个类别各一份**年度网格** ＋ 期间口径。
+
+    - **行 = 所筛选项目**（项目状态 ＋ 档案顺序）—— 与页面 `build_extract_data` **同一份口径**
+      （`_visible`）⇒ 导出的行集合永远与页面看到的一致（⛔ 不各写一份筛选）；
+    - 月份列 = **报告年**的 12 个月（`模板清单` 裁定④：模板表头没写年份 ⇒ 都属该年）；
+    - 「结余」= ⚠️ **历史结余、由用户手动录入**（2026-09-18 用户裁定）⇒ **系统没有来源**，
+      本轮**留空**；录入入口落地后在这里把 `balances` 传进 `extract_template_grid`（接缝已留）。
+    """
+    st = dict(state or parse_extract_state())
+    details = load_rows(s)
+    amounts = X.extract_amounts(details)
+    statuses, order = _project_context(s)
+    report_ym = export_report_ym(st["period"], X.extract_months(amounts))
+    grids = {}
+    for kind in X.KINDS:
+        grids[kind] = X.extract_template_grid(
+            amounts, kind,
+            warehouses=_visible(amounts, kind, st, statuses, order),
+            year=report_ym[:4] if report_ym else "", balances=None)
+    return {"state": st, "report_ym": report_ym, "year": report_ym[:4] if report_ym else "",
+            "grids": grids}
+
+
 __all__ = ["parse_state", "state_to_query", "build_page_data",
-           "parse_extract_state", "build_extract_data"]
+           "parse_extract_state", "build_extract_data",
+           "export_report_ym", "build_extract_export"]

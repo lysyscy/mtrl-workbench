@@ -90,7 +90,7 @@ def zip_manifest(period: str = ""):
     ym = D.fetch_dialog_default(period)
     with session_scope() as s:
         rows = D.warehouse_rows(load_rows(s), ym)
-    return HTMLResponse(zip_dialog_html(D.zip_manifest(rows, ym), D.zip_name(ym)))
+    return HTMLResponse(zip_dialog_html(D.zip_manifest(rows, ym), D.zip_name(ym), ym))
 
 
 @router.post("/m07/fetch")
