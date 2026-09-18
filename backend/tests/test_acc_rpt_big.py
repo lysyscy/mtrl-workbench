@@ -111,21 +111,20 @@ def test_列结构为用户最终模板_且不含已裁掉的列():
     leaves = sum(len(subs) if subs else 1 for _g, subs in B.BIG_HEADER)
     assert leaves == len(B.BIG_COLUMNS) == 20
     # ⚠️ 已裁掉的列不得出现；而「辅材使用（不含税）」是**保留**的组标签（别把两者搞混）
-    assert B.boundary_violations(html=V._thead()) == [], "表头里出现了不得有的列"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先拿**旧页表头**（`V._thead()`）去扫；旧页删除（授权 `D18`）后
+    # 改扫**壳的表头** —— `test_wired_m07.py::test_壳里表头不含已裁掉的列`（同一个 `boundary_violations` ✓）。
 
 
 @acc(CASE, "001-03")
 def test_输入框只出现在手填列_自动与派生列一律只读():
     """§5.7.1：**手填输入框只出现在手填列上**；材料 / 机械的取数列与派生列一律只读。"""
-    html = _html()
     rows = len(_rows(_data()))
-    assert html.count('class="inp ') == rows * 6, "输入框数 ≠ 行数 × 6 ⇒ 有列多给了输入框"
-    # 逐列核对：手填列有 `name="value"`，其余列**一个都没有**
-    for col in B.BIG_COLUMNS:
-        chunk = html
-        has_input = f'name="key" value="{col["key"]}"' in chunk
-        assert has_input == (col["kind"] == B.KIND_HAND), (
-            f"{col['key']}（{col['kind']}）: 输入框存在性 = {has_input} —— 与列性质不符")
+    assert sum(c["kind"] == B.KIND_HAND for c in B.BIG_COLUMNS) == 6, "手填列不是 6 个"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先在**旧页** HTML 里数 `class="inp "` 与逐列找输入框；
+    # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里输入框只出现在手填列`
+    # （壳只经一个 `cell()` 生成器渲染输入框、且只调 `cell(0)…cell(5)` ⇒ ⛔ 没有第 7 个 ✓），
+    # 上面那句「手填列恰好 6 个」是数据侧的实质。
+    assert rows > 0
 
 
 # ============================================================ 派生列（001-04 / 001-05）
@@ -153,10 +152,9 @@ def test_派生列独立复算():
     assert B.use_rate(Decimal("100.00"), Decimal("0.00")) is None
     assert B.output_rate(Decimal("100.00"), None) is None
     assert B.output_rate(Decimal("100.00"), Decimal("0.00")) is None
-    # 派生列**只读**：页面里那几格不是输入框
-    html = _html()
-    for key in ("total_cum", "use_rate", "output_rate"):
-        assert f'name="key" value="{key}"' not in html, f"派生列 {key} 竟然有输入框"
+    # 派生列**只读**：⚠️ 2026-09-19（`§19` 批 2）原先在**旧页** HTML 里查那几格有没有输入框；
+    # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里派生列是纯文本格`
+    # （壳里合计/使用率/产值完成率走 `M(...)`/`pct(...)`，⛔ 不经手填 `cell()` ✓）。
 
 
 @acc(CASE, "001-05")
@@ -177,9 +175,11 @@ def test_主材累计取集采结算额_只计纳入台账():
     assert B.main_material_total(contracts, project_key=WH_D) == Decimal("0.00")
     # ⚠️ 取数口未接入（M5 集采台账未落地）⇒ 页面显「—」，**不得写 0**（那会冒充"确实没有"）
     assert S.MAIN_MATERIAL_PORT is None
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先拿**旧页**的 `_cell_html` 渲染那一格、断言里面是「—」不是 `0.00`；
+    # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里主材累计走金额出口且取数口未接入`
+    # （壳里它是**派生文本格**（`M(r.matC)`），⛔ 不是手填输入框；「0.00 与取数口没接」两件事不许混 ✓）。
     mat = next(c for c in B.BIG_COLUMNS if c["key"] == "mat_cum")
-    cell = V._cell_html(_rows(_data())[WH_A], mat, month=YM_NOW)
-    assert "—" in cell and "0.00" not in cell
+    assert mat["kind"] == B.KIND_DERIVED, "主材累计不是派生列了"
 
 
 # ============================================================ 手填与写入语义（001-06 / 001-07 / 001-08）
@@ -248,10 +248,9 @@ def test_零是合法录入值_不得被误判成未录入():
     got = B.manual_cell(own, YM_NOW, WH_C, "oil")
     assert got == {"value": Decimal("0.00"), "from": ""}, "0 被当成「未录入」了（会重新带入）"
     # ⚠️ 这条是**判据本身**：判「未录入」必须用 `is None`，不能用真值判断（`if not v` 会把 0 吃掉）
-    # 页面上那一格是「本月值 0」⇒ **没有带入标记**
-    html = _html()
-    assert "↺" not in _cell(html, WH_C, "oil"), "0 的格子被标成了带入"
-    assert 'value="0.00"' in html, "0 没被写进输入框"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先在**旧页** HTML 里查那一格有没有带入标记、值有没有写进输入框；
+    # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里零与未录入在输入框上分得开`
+    # （壳的 `bigDisp` 用**严格 `==null`** 判空 ⇒ 合法的 `0` **不会被吞掉**；带入标记只看 `c.from` ✓）。
 
 
 @acc(CASE, "001-10")
@@ -298,13 +297,13 @@ def test_带入是只读派生_历史月份录入值不被改写():
 @acc(CASE, "001-12")
 def test_带入格在页面上可辨_仍是可编辑输入框且带来源月():
     """§5.7.2：带入格在页面上**可辨** —— 金额带入格**仍是可编辑输入框**，并带**来源月标记**。"""
-    html = _html()
-    chunk = _cell(html, WH_A, "oil")
-    assert 'class="inp' in chunk and "ed" in chunk, "带入格不是可编辑输入框 / 没有带入态样式"
-    assert f"↺{YM_PREV[5:]}月" in chunk, "带入格没有来源月标记"
-    assert 'name="value"' in chunk and 'value="100.00"' in chunk, "带入值没预填"
-    # 非带入格：没有来源月标记
-    assert "↺" not in _cell(html, WH_C, "oil"), "本月已录的格子被标成了带入"
+    # 数据侧：带入态与值
+    a_row = _rows(_data())[WH_A]
+    assert a_row["manual"]["oil"]["from"] == YM_PREV, "样本里油卡那格不是带入态"        # 预期
+    assert _rows(_data())[WH_C]["manual"]["oil"]["from"] == "", "本月已录的格子被标成了带入"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先在**旧页** HTML 里看那一格是不是可编辑输入框、有没有「↺MM月」标记、
+    # 值有没有预填；旧页删除（授权 `D18`）后形态搬到壳 ——
+    # `test_wired_m07.py::test_壳里带入格可辨且带来源月`（壳的 `c.from?' ed':''` ＋ `↺${c.from.slice(5)}月` ✓）。
 
 
 @acc()
@@ -355,15 +354,15 @@ def test_项目集合与顺序_候选在建非壳_顺序由大表自己定():
     # 越界不动（不抛异常、不绕圈）
     assert B.move_in_list([WH_A, WH_C], WH_A, "up") == [WH_A, WH_C]
     assert B.move_in_list([WH_A, WH_C], WH_C, "down") == [WH_A, WH_C]
-    # 页面行序 = 装配行序（**同一份出口**）；导出页**同一份行装配** ⇒ 两处同序
+    # 行序 = **装配行序**（⚠️ 2026-09-19 `§19` 批 2：原先这里比**旧页**与**旧导出页**两串 HTML 谁先谁后；
+    # 旧页删除（授权 `D18`）后，「两处同序」改成守**同一份装配**）：
+    # · **数据侧**（这里）：行序就是 `big_service` 的装配顺序 ✓；
+    # · **壳侧**：表体与合计行都只从 `bigRows(...)` 一处装配、导出走 `/api/m07/big/export`（同一个装配），
+    #   见 `test_wired_m07.py::test_壳里行只由一份装配出` ✓。
     s2 = _session(order=make_order([WH_B, WH_A]))
-    page, export = V.render_big_page(_data(s2)), V.render_export_page(_data(s2))
-    # ⚠️ 只看**表体**：整页 `index` 会被「选题面板」里的候选顺序带偏（本页有两处项目名）
-    body, ex_body = _table(page), _table(export)
-    assert body.index(WH_B) < body.index(WH_A), "页面没按大表自己的顺序排"
-    # ⚠️ 导出页**不渲染行的隐藏域**（它只是清单）⇒ 那一页要看**展示名**的顺序
-    assert ex_body.index("乙公司项目") < ex_body.index("甲公司项目"), "导出与页面不同序（§5.7.3 一致性）"
-    assert len(_rows(_data(s2))) == 2
+    rows_s2 = _rows(_data(s2))
+    assert list(rows_s2) == [WH_B, WH_A], "装配没按大表自己的顺序排"
+    assert len(rows_s2) == 2
 
 
 # ============================================================ 边界（001-14 / 001-15）
@@ -393,19 +392,14 @@ def test_手填值不参与欠款计算():
 @acc(CASE, "001-15")
 def test_出纸走按模板导出_且没有打印通道入口():
     """§5.7.2 · §1.4.1：出纸走「**按模板导出 → Excel 打印**」，且**不再有 A3 打印通道入口**。"""
-    page, export = _html(), V.render_export_page(_data())
-    for html in (page, export):
-        assert B.PRINT_CHANNEL in html, "页面没写明出纸方式"
-        assert "Excel 打印" in html
-        assert "A3" not in html, "还留着 A3 打印通道"
-    # 导出**入口**在页面上（不是"没有出口"）
-    assert "/m07/big/export" in page
-    # 路由层面：大表**没有**任何打印 / A3 入口
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先这里看**旧页**与**旧导出页**有没有写出纸方式、有没有 A3、
+    # 导出入口在不在，以及 `NAV` 里有没有 `/m07/big`；旧页删除（授权 `D18`）后形态搬到壳 ——
+    # `test_wired_m07.py::test_壳里出纸走按模板导出且没有打印通道`（壳的 `bigExport` ＋「Excel 打印」
+    # ＋ ⛔ 无 A3 ＋ 新壳侧栏里有本页 ✓）。下面这条**路由层面**的守卫是实质（API 侧不许有 print/a3）：
+    assert B.PRINT_CHANNEL and "Excel 打印" in B.PRINT_CHANNEL, "域内核里的出纸口径丢了"
     from app.main import create_app
 
     paths = [p for p in create_app().openapi()["paths"] if "big" in p]
     assert paths and not any(("print" in p or "a3" in p.lower()) for p in paths), paths
-    # 导航里有本页
-    assert any(h == "/m07/big" for h, _t in NAV)
     # ⚠️ 证明这条判据**咬得住**：真塞一个 A3 入口 ⇒ 自检必须报出来
     assert B.boundary_violations(html="<h4>活动大表（A3 打印）</h4>", actions=("print",))
