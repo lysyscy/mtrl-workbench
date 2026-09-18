@@ -25,7 +25,7 @@ from app.mod02_i8.fetch_task import CONFIRM_TOKEN
 from app.mod07_setl import domain as D
 from app.mod07_setl.models import SetlDetail
 from app.mod07_setl.service import build_page_data, parse_state
-from app.mod07_setl.view import fetch_dialog_html, render_setl_page
+from app.mod07_setl.view import render_setl_page
 from app.report_export import service as _EX
 from app.report_export import setl_export as _SE
 from tests.acc_plugin import acc
@@ -153,10 +153,9 @@ def test_默认核算年月为北京时间上月():
 
     assert D.default_month() == want
     assert parse_state({})["period"] == want
-    # 不带参数打开本页 ⇒ 展示的就是这个月（输入框里就是它）
-    html = _page()
-    box = re.search(r'<input[^>]*name="period"[^>]*>', html)
-    assert box and f'value="{want}"' in box.group(0)
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先还查旧页 `name="period"` 输入框里是不是这个月；旧页删除
+    # （授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里核算年月默认上月且可切` ✓。
+    # 上面两条**取数口径**（默认月怎么算、不给参数落哪儿）是实质，留着。
 
 
 @acc(CASE, "001-03")
@@ -184,40 +183,20 @@ def test_重置回到默认上月且不产生跨页状态():
 
 @acc(CASE, "001-05")
 def test_空月的空态提示行跨列数等于表头列数():
-    html = _page(period=EMPTY_MONTH)
-    assert _data_rows(html) == [], "空月不该有数据行"
-    assert not any(r[0] == D.TOTAL_LABEL for r in _rows(html)), "空月不该有合计行"
-
-    ths = _thead_count(html)                     # 独立数表头
-    m = re.search(r'<td colspan="(\d+)"[^>]*>(.*?)</td>', _empty_row(html), re.S)
-    assert m, "空态提示行没有跨列单元格"
-    assert int(m.group(1)) == ths, f"空态跨列数 {m.group(1)} ≠ 表头列数 {ths}"
-    text = re.sub(r"<[^>]*>", "", m.group(2)).strip()
-    assert text, "空态行是空白的"
-    assert EMPTY_MONTH in text, "空态提示没点名是哪个月"
+    empty = _data(period=EMPTY_MONTH)
+    assert empty["rows"] == [], "空月不该有数据行"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先在这里从**旧页**抠"空态提示行 / 跨列数 = 表头列数 /
+    # 提示里点名了那个月"；旧页删除（授权 `D18`）后形态搬到壳 ——
+    # `test_wired_m07.py::test_壳里空态跨列数由表头派生`（`colspan="${thCount(WH_THEAD)}"` ＋
+    # 提示里带 `<b>${tmLabel(fWhYm)}</b>` ✓）。「空月不该有合计行」由 `empty["rows"] == []` 蕴含 ✓。
 
 
 @acc(CASE, "001-06")
 def test_抓取弹窗默认月份等于当前所选且可改():
-    html = _page(period="2026-07")
-    dlg = _dialog(html, "fetchDlg")
-
-    m = re.search(r'<input[^>]*id="fetchMonth"[^>]*>', dlg)
-    assert m, "弹窗里没有月份输入框"
-    box = m.group(0)
-    assert 'value="2026-07"' in box, "弹窗默认月份 ≠ 页面当前所选核算年月"
-    assert "readonly" not in box and "disabled" not in box, "默认月份必须是**可改**的"
-    assert 'name="month"' in box
-    assert 'method="post"' in dlg and 'action="/m07/fetch"' in dlg
-    # 抓前必须二次确认，且**明写会强踢**（D9）
-    assert f'value="{CONFIRM_TOKEN}"' in dlg
-    assert "强踢" in dlg
-    # 页面上的入口真的能打开它
-    assert "getElementById('fetchDlg').showModal()" in html
-
-    # 端点同源：换一个当前所选，弹窗默认月随之换
-    assert 'value="2026-03"' in fetch_dialog_html(D.fetch_dialog_default("2026-03"))
-    # 非单月 / 空 ⇒ 回落本表默认年月（抓取只允许单月，§9.2）
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先这一整段查**旧页**的抓取弹窗（月份输入框 = 当前所选、
+    # 可改、表单 action、二次确认 token、写没写「强踢」、入口能不能打开弹窗）；旧页删除（授权 `D18`）后
+    # 形态搬到壳 —— `test_wired_m07.py::test_壳里抓取弹窗默认取本页年月且讲清强踢`（`fetchWh` ✓）。
+    # 下面两条是**回落口径**的实质（抓取只允许单月 §9.2）：
     assert D.fetch_dialog_default("2026-01~2026-06") == D.default_month()
     assert D.fetch_dialog_default("") == D.default_month()
 
@@ -226,15 +205,17 @@ def test_抓取弹窗默认月份等于当前所选且可改():
 def test_行仓文件三项计数随数据实时算():
     seen: list[tuple[int, int, int]] = []
     for ym in MONTHS:
-        html = _page(period=ym)
-        pill = re.search(r'<span class="pill">(.*?)</span>', html, re.S).group(1)
-        nums = tuple(int(x) for x in re.findall(r"\d+", pill))
+        c = _data(period=ym)["counts"]
+        nums = (c["warehouses"], c["rows"], c["files"])
         want = (len(indep_warehouses(ym)), indep_row_total(ym), len(indep_warehouses(ym)) + 1)
         assert nums == want, f"{ym} 的三项计数 {nums} ≠ {want}"
         assert nums[2] == nums[0] + 1, "文件数恒 = 仓数 ＋ 1（总表）"
         seen.append(nums)
     # 三项都跟着数据变 ⇒ 不是写死的数字
     assert len(set(seen)) == len(seen), f"三个月计数完全相同 ⇒ 疑似写死：{seen}"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先这三项是从**旧页**那颗 `<span class="pill">` 里抠出来的；
+    # 旧页删除（授权 `D18`）后本项的出口就是 `data["counts"]`（页面只是印它 ✓），
+    # 壳侧对应断言见 `test_wired_m07.py::test_壳里文件数恒为仓数加一`（`zipSfjc` 的回执 ✓）。
 
     # 空月：0 仓 / 0 行 / **1 文件**（总表仍在）—— 计数不因空态变成 0 或空白
     empty = _data(period=EMPTY_MONTH)["counts"]

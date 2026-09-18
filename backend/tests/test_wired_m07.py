@@ -85,6 +85,33 @@ def test_壳里提取页重置回在建与上月():
     assert "fExtReset:()=>{ fExt.status='在建'; fExt.ym=bjMonth(-1);" in SHELL, "提取页重置没回默认"
 
 
+@acc("ACC-SETL-001", "001-02")
+def test_壳里核算年月默认上月且可切():
+    """默认 = **北京时间上月**（§9.2）；并由 `whMonth` 控件承载（切了重取数，另有断言）。"""
+    assert "let fWhYm = bjMonth(-1);" in SHELL, "默认没落成上月"
+    assert "tmBtn('whMonth',{scope:'wh',val:fWhYm" in SHELL, "没有核算年月控件（或没绑到本页状态）"
+
+
+@acc("ACC-SETL-001", "001-05")
+def test_壳里空态跨列数由表头派生():
+    """空月 ⇒ 空态提示行，`colspan` **由表头列数派生**，且提示里点名是哪个年月。"""
+    assert 'colspan="${thCount(WH_THEAD)}"' in SHELL, "空态行跨列数不再由表头派生"
+    assert "没有收发结存数据" in SHELL, "空月没有提示"
+
+
+@acc("ACC-SETL-001", "001-06")
+def test_壳里抓取弹窗默认取本页年月且讲清强踢():
+    """抓取弹窗默认月 = **本页当前所选核算年月**（可改）；且须讲清**会登录 i8 强踢**（`D9`）。"""
+    assert "fetchWh:()=>{ fetchKind='wh'; fetchM=fWhYm;" in SHELL, "抓取弹窗没取本页当前年月"
+    assert "强踢" in SHELL, "D9（会强踢在线用户）没告知"
+
+
+@acc("ACC-SETL-001", "001-07")
+def test_壳里文件数恒为仓数加一():
+    """「分仓库工作簿 ＋ **1 个总表**」⇒ 文件数恒 = 仓数 ＋ 1（回执里两个数同源算出，⛔ 不写死）。"""
+    assert "个分仓库 xlsx ＋ 1 个总表（zip）" in SHELL, "回执没按「仓数 ＋ 1」说清产出物"
+
+
 # ============================================================== 1 · 演示数据已清
 
 @acc()
