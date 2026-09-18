@@ -15,17 +15,20 @@
 
 from __future__ import annotations
 
-import re
 from decimal import Decimal
+from pathlib import Path
 
 from app.mod06_proc import domain as D
 from app.mod06_proc.service import build_page_data, parse_state
-from app.mod06_proc.view import render_proc_page
 from tests.acc_plugin import acc
 from tests.m06_helpers import FakeSession, dataset
 
 CASE = "ACC-RPT-PROC-001"
 TWO = Decimal("2")
+
+#: 新壳全文（`§19` 批 2 起，"材料费只读"与"差异行跳转"这两条的**观测对象**从旧页换成了壳）
+_SHELL = (Path(__file__).resolve().parents[1] / "app" / "web" / "index.html").read_text(
+    encoding="utf-8")
 
 
 def _sess() -> FakeSession:
@@ -36,37 +39,10 @@ def _data(**params) -> dict:
     return build_page_data(_sess(), parse_state(params))
 
 
-def _page(**params) -> str:
-    return render_proc_page(_data(**params))
-
-
-def _rows(html: str, kind: str) -> str:
-    """取某类行（`sumrow` 合计 / `tot` 总求和）的整段 `<tr>…</tr>`。"""
-    m = re.search(rf'<tr class="{kind}[^"]*"[^>]*>(.*?)</tr>', html, re.S)
-    assert m, f"页面里没有 {kind} 行"
-    return m.group(1)
-
-
-def _span_sum(row_html: str) -> int:
-    """一行里各格 `colspan` 之和（缺省 1）。"""
-    total = 0
-    for cell in re.findall(r"<td[^>]*>", row_html):
-        m = re.search(r'colspan="(\d+)"', cell)
-        total += int(m.group(1)) if m else 1
-    return total
-
-
-def _filter_bar(html: str) -> str:
-    """**筛选栏那一段**（`data-seg="filter"` → 数据区之前）。
-
-    ⚠️ 本页有**两套「项目」UI**：筛选栏 = 单选（radio），导出展开区 = 多选（checkbox）。
-       整页 `in` / `not in` 断言**分不开这两套** —— 2026-09-17 加导出展开区（`ACC-RPT-EXP-001`）
-       时实测把「不给多选」那条整页断言撞红。凡断言"筛选栏里怎样"就绑到这一段。
-    """
-    i = html.index('data-seg="filter"')
-    j = min(html.index('data-seg="exp-strip"'), html.index('<div class="tw"'))
-    assert i < j, "筛选栏不在数据区之前"
-    return html[i:j]
+# ⚠️ 2026-09-18（`§19` 批 2）：原先有 4 个**页面观测辅助件**（`_page` 取旧页 html、`_rows`/`_span_sum`
+#    按 `colspan` 取格子、`_filter_bar` 切筛选栏那一段）。旧页整体删除（授权 `D18`）后，它们
+#    **一处都不再被用**（逐个数过 ✓）⇒ 随之删除；那些"形态"claim 已搬到 `tests/test_wired_m06.py`
+#    （默认表 / 单选即收起 / 无只读年月框 / 合计行格数由表头派生 / 空态破折号 / 导出面板口径）。
 
 
 # ------------------------------------------------------------ 001-01 三表齐备
@@ -141,10 +117,9 @@ def test_表一二每个数据列下方给合计行():
     for tab in (D.TAB_RAW, D.TAB_ADJUSTED):
         data = _data(pj="甲仓", tab=tab)
         assert set(data["totals"]) == set(D.DATA_KEYS), "合计必须覆盖每一个数据列"
-        html = render_proc_page(data)
-        row = _rows(html, "sumrow")
-        assert _span_sum(row) == len(D.PROC_COLUMNS), "合计行的格数必须 = 表头列数（派生，不写死）"
-        assert re.search(r"<td[^>]*>合计</td>", row)
+        # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 数 `colspan` 之和验「跨列数 = 表头列数」；
+        #    旧页删（`D18`）后壳把这条做成了**结构**（`sumRowOf` 的格数由 `thCols(thead)` 派生 ✓）
+        #    ⇒ 形态由 `test_wired_m06.py::test_合计行格数由表头派生` 守，上面 `totals` 是实质。
 
 
 # ------------------------------------------------------------ 001-06 总求和分段
@@ -160,11 +135,9 @@ def test_总求和按四段给出且跨列数与分段一致():
     assert got["机械"] == Decimal("10.00") and got["不含税"] == Decimal("11.00")
     assert adj["grand_total"] == Decimal("251.00")
 
-    html = render_proc_page(adj)
-    tot_row = _rows(html, "tot")
-    assert _span_sum(tot_row) == len(D.PROC_COLUMNS), "总求和行的跨列数之和 = 表头列数"
-    for name in got:
-        assert f"{name}合计" in tot_row
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 看「总求和行的跨列数之和 = 表头列数」与各段名；
+    #    旧页删（`D18`）后形态搬到壳（`test_wired_m06.py::test_合计行格数由表头派生` ✓）
+    #    —— 上面 `segments`（四段 span 与各自金额）与 `grand_total` 是实质。
 
     # ⭐ 调整后与原始的**入库合计必须不同**（证明确实跟着当前显示的那批走）
     raw = _data(pj="甲仓", tab=D.TAB_RAW)
@@ -184,9 +157,9 @@ def test_差异表合计只求三列且跨列数对齐():
     assert D.DIFF_SUM_KEYS == ("before", "after", "delta")
     assert all(v is None for k, v in data["diff_totals"].items() if k not in D.DIFF_SUM_KEYS)
 
-    html = render_proc_page(data)
-    row = _rows(html, "sumrow")
-    assert _span_sum(row) == len(D.DIFF_COLUMNS), "差异表合计行跨列数 = 表头列数"
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 看「差异表合计行跨列数 = 表头列数」；
+    #    旧页删（`D18`）后形态搬到壳（`test_wired_m06.py::test_合计行格数由表头派生` ✓）——
+    #    上面 `diffs` / `DIFF_SUM_KEYS` / `diff_totals` 是实质。
 
 
 # ------------------------------------------------------------ 001-08 材料费只读
@@ -197,13 +170,16 @@ def test_材料费只作引用只读且无编辑入口():
     assert all(D.COLUMN_SOURCE[k] == D.SOURCE_MANUAL for k in D.MECH_KEYS)
     assert D.MATERIAL_READONLY is True
 
-    for tab in (D.TAB_RAW, D.TAB_ADJUSTED, D.TAB_DIFF):
-        html = render_proc_page(_data(pj="甲仓", tab=tab))
-        assert D.boundary_violations(html) == []
-        assert "理论上" not in html
-        assert 'name="in_' not in html and 'name="out_' not in html, "材料列不得有输入框"
-        assert D.boundary_violations(html, action_ids=("editMaterial",)) != []
-        assert D.boundary_violations("材料费 理论上 = 100") != []
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先拿**旧服务端页**渲染结果喂 `D.boundary_violations` 扫描；
+    #    旧页删（`D18`）后**改扫新壳**（`backend/app/web/index.html` 全文）—— 同一把尺子、
+    #    **换了个更难糊弄的对象**（壳才是现在唯一会渲染材料费的地方 ✓）。
+    assert D.boundary_violations(_SHELL) == [], "壳里出现了材料费「理论上 =」或材料费编辑入口"
+    # ⚠️ 别用**整壳子串**去扫「理论上」—— 壳里别处的注释就有这三个字（实测撞红 ✗）。
+    #    精确的判据是 `D.boundary_violations`（它找的是"材料费 理论上 ="这种**成对**形态 ✓）。
+    assert 'name="in_' not in _SHELL and 'name="out_' not in _SHELL, "材料列不得有输入框"
+    # 反向：这把尺子**真的会抓**（否证它）
+    assert D.boundary_violations(_SHELL, action_ids=("editMaterial",)) != [], "尺子失灵"
+    assert D.boundary_violations("材料费 理论上 = 100") != []
 
 
 # ------------------------------------------------------------ 001-09 差异行跳转
@@ -214,6 +190,8 @@ def test_差异行可跳转到库存单据():
     href = D.jump_query(data["diffs"][0])
     assert href.startswith("/m08?")
     assert "only_adj=1" in href and "pj=%E7%94%B2%E4%BB%93" in href      # 仓库名 = 项目键
-    html = render_proc_page(data)
-    assert href.replace("&", "&amp;") in html or href in html
-    assert "查看原始行" in html
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 看「跳转链接渲染出来了」；旧页删（`D18`）后
+    #    形态搬到壳 —— 壳里同一件事是**行内动作**（`data-act="goInvAdj"` ＋ 带单据 id），
+    #    不是整页跳 `/m08?only_adj=1`（那是**旧页的 URL 形态**）。`jump_query` 的纯函数断言上面已钉 ✓。
+    assert 'data-act="goInvAdj"' in _SHELL and "查看原始行" in _SHELL, \
+        "壳里没有「差异行 → 库存单据」的入口"
