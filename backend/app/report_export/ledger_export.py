@@ -59,8 +59,8 @@ FEE_COL = {"item": "A", "month": "B", "total": "C"}
 
 #: 期初占位行的月份文本（**照原型** `ledCutLabel`：空格与「年月」写法一字不差）
 CUT_MONTH_FMT = "截止 {y} 年 {m} 月底"
-#: 写文本前先设的**数字格式**（`模板清单` §四-4：模板那列是日期/数值格式）
-TEXT_FMT = "@"
+#: 写文本前先设的**数字格式**（唯一主人 = 引擎 `tpl_fill.TEXT_FMT`；此处只为兼容既有引用而转发）
+TEXT_FMT = tpl_fill.TEXT_FMT
 
 #: 月份表头的识别（`3月份` / `9月份` …）—— 认**结构**，⛔ 不抄列字母
 _MONTH_HEADER = re.compile(r"^\d+月份$")
@@ -163,14 +163,14 @@ def file_name(display: str, ym: str) -> str:
 
 
 def _set_text_fmt(ws, plan: dict, months_col: str) -> None:
-    """把「月份」列的**数据行**格设为文本格式（`模板清单` §四-4；⛔ 先写值、后设格式，别让 Excel 反解）。
+    """把「月份」列的**数据行**格设为文本格式（`模板清单` §四-4）。
 
+    ⚠️ 本条实现在 `TAIL-04` 片 4a 时**提到了引擎**（`tpl_fill.set_text_format`）—— 那是同一个坑的
+       **第二次**出现（台账「月份」列 ＋ 过程资料「时间」列）⇒ 口径归引擎，这里只做转发。
     ⚠️ `months_col` 从 **spec** 传进来（`fill_sheet` 返回的对账计划里**没有**它 ——
        它只回引擎自己认得的键）。
     """
-    col = column_index_from_string(months_col)
-    for i in range(len(plan["data_rows"])):
-        ws.cell(row=plan["data_start"] + i, column=col).number_format = TEXT_FMT
+    tpl_fill.set_text_format(ws, plan, months_col)
 
 
 def build_xlsx(sections: dict, out_dir, *, display: str, ym: str) -> str:

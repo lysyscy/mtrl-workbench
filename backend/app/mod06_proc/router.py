@@ -61,10 +61,39 @@ def proc_page(request: Request):
 def proc_export(request: Request):
     """导出清单预览（§7.1 · 001-01）。
 
-    ⚠️ 本端点**只出清单**（与原型一致）；**真实文件写出**归切片 6 的 `ACC-X-EXP-001`。
+    ⚠️ 本端点**只出清单**（形态与原型一致）；**真实文件**走 `/api/m06/export`（`TAIL-04` 片 4a）。
     """
     with session_scope() as s:
         return HTMLResponse(render_export_preview(build_page_data(s, parse_state(query_params(request)))))
+
+
+@router.get("/api/m06/export")
+def api_proc_export(request: Request):
+    """导出**过程资料成品**（`TAIL-04` 路径① 片 4a）—— **每个项目一本工作簿**；
+    选 ≥2 个项目 ⇒ 打成一个 zip。
+
+    ⚠️ 失败（**一个项目都没选** · 当前停在**差异表**（模板没登记那张形态）· 项目**没有数据** ·
+      模板缺失/损坏 · **显示区对账不过**）⇒ **JSON 200 ＋ `ok:false` ＋ 中文原因**，
+      壳侧据 `content-type` 分流（同另四条导出）。⛔ 不回 4xx：那样用户只看到 `HTTP 400`。
+    ⚠️ 取数**跟随当前所显示的那张表**（`tab`，001-04）—— 壳侧原样带过来，⛔ 不在前端另算。
+    """
+    from urllib.parse import quote
+
+    from fastapi.responses import FileResponse, JSONResponse
+
+    from app.report_export import service as EX
+
+    params = query_params(request)
+    keys = [k.strip() for k in str(_one(params, "projects") or "").split(",") if k.strip()]
+    try:
+        with session_scope() as s:
+            path = EX.export_proc(s, keys, D.tab_of(_one(params, "tab")), _one(params, "ym"))
+    except MustReportError as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
+    media = ("application/zip" if path.suffix == ".zip"
+             else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    return FileResponse(path, media_type=media, filename=path.name,
+                        headers={"X-Export-Filename": quote(path.name)})
 
 
 # ---------------------------------------------------------------- ① 机械手录（§5.2.5 ③）

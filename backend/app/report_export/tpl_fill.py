@@ -42,6 +42,23 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 #: 数据区起点的**标记文字**（方案 A：认文字，不认坐标/定义名称）
 MARKER = "DATA_START"
 
+#: 写文本前先设的**数字格式**（`模板清单` §四-4：模板那几列原本是**日期 / 数值格式**，
+#: 不先改就会被 Excel 反解 —— `2026-07` 被吃成日期）
+TEXT_FMT = "@"
+
+
+def set_text_format(ws, plan: dict, col: str) -> int:
+    """把 `col` 列的**数据行**格设成**文本格式** ⇒ 返回改了几格。
+
+    ⭐ 为什么在引擎里：**同一个坑已经踩过两次** —— 台账的「月份」列、过程资料的「时间」列
+       （`模板清单` §四-4 那一条裁定管的就是这两列）⇒ 口径提到引擎，⛔ 实现层别再各写一份。
+    ⚠️ 必须在 `fill_sheet` **之后**调用（它要 `plan` 里的 `data_start` / `data_rows`）。
+    """
+    ci = column_index_from_string(col)
+    for i in range(len(plan["data_rows"])):
+        ws.cell(row=plan["data_start"] + i, column=ci).number_format = TEXT_FMT
+    return len(plan["data_rows"])
+
 #: 「回指数据区」的汇总公式：形如 `=SUM(C3:C18)` / `=SUBTOTAL(9,O2:O8)`，
 #: ⚠️ 必须**跨多行**且**起于数据区首行** —— 否则数据行里的 `=SUM(B2:N2)` 会被误判成尾块（实测）。
 _SUM_REF = re.compile(r"(?P<c1>\$?[A-Z]{1,3})\$?(?P<r1>\d+)\s*:\s*(?P<c2>\$?[A-Z]{1,3})\$?(?P<r2>\d+)")
@@ -159,12 +176,40 @@ def _copy_row_style(ws, src_row: int, dst_row: int, max_col: int) -> None:
 
 
 def _shift_merges(ws, from_row: int, offset: int) -> None:
-    """把 `from_row` 及以下的合并区按 `offset` 平移（⚠️ `openpyxl` 自己**不搬**，实测 3.1.5）。"""
+    """把 `from_row` 及以下的合并区按 `offset` 平移（⚠️ `openpyxl` 自己**不搬**，实测 3.1.5）。
+
+    ⚠️⚠️ **别用 `ws.unmerge_cells(str(rng))`**（2026-09-18 实测踩到 · 片 4a 第一次真用本函数时）：
+      它会对区间里**每一个**格执行 `del self._cells[(row, col)]`，**不管那格有没有被创建过**
+       ⇒ 只要区间里有一个"从没被访问过的影子格"就抛 `KeyError: (r, c)`
+      （实测：过程资料 `Q13:R13` 的 `R13`）。⇒ 直接改 `merged_cells.ranges`（**纯几何登记**，
+      不碰单元格本体）：旧范围移除、新范围登记。
+      ⭐ 通法：**合并区的"几何"与"单元格本体"是两套账** —— 挪位置只该动前者。
+    """
     moved = [rng for rng in list(ws.merged_cells.ranges) if rng.min_row >= from_row]
     for rng in moved:
         box = (rng.min_col, rng.min_row + offset, rng.max_col, rng.max_row + offset)
-        ws.unmerge_cells(str(rng))
+        ws.merged_cells.ranges.remove(rng)
         ws.merge_cells(start_column=box[0], start_row=box[1], end_column=box[2], end_row=box[3])
+
+
+def tail_end_row(ws, tail_start: int, max_col: int) -> int:
+    """尾块的**终点行** = 从尾块首行往下**最后一行还有内容**（有值 或 被合并区覆盖到）。
+
+    ⚠️ 为什么必须按结构算：尾块里可能有**不归调用方覆盖**的行 —— 过程资料的**固定脚注**
+       （`A14:R15` 跨两行合并块，清单 §四-5）就是。只按"调用方覆盖了哪几行"算终点的话，
+       脚注会被 `verify_filled` 当**残留**报红（实测踩到：`汇总表!第 7 行（尾块以下）还有内容`）。
+    ⭐ 认结构、不抄行数：脚注几行**不问调用方**，问 sheet 自己（值 ＋ 合并区几何）。
+
+    没东西 ⇒ 返回 `tail_start - 1`（= 数据区末行，调用方据此得"没有尾块"）。
+    """
+    end = tail_start - 1
+    for r in range(tail_start, ws.max_row + 1):
+        if any(ws.cell(row=r, column=c).value is not None for c in range(1, max_col + 1)):
+            end = r
+    for rng in ws.merged_cells.ranges:
+        if rng.min_row >= tail_start:
+            end = max(end, rng.max_row)
+    return end
 
 
 def _clear_row(ws, r: int, max_col: int) -> None:
@@ -174,14 +219,19 @@ def _clear_row(ws, r: int, max_col: int) -> None:
 
 
 def _trim_row_dims(ws, last_row: int) -> None:
-    """删掉 `last_row` 以下的**行属性空壳**。
+    """删掉 `last_row` 以下的**空行壳**（行属性 ＋ 空单元格登记）。
 
-    ⚠️ 实测（openpyxl 3.1.5）：`delete_rows` 搬走了值与样式，但**留下空的 `<row>` 元素**
-       —— 产物 `dimension` 是对的，可 Excel 的 `UsedRange` 会多算几行
-       （用户看到"数据下面还空着 5 行"，也会进打印范围）。⇒ 删完再清一遍行属性。
+    ⚠️ 壳有**两种**（2026-09-18 实测踩到两种，过程资料 `UsedRange` 报成 `A1:R11` 而内容只到第 8 行）：
+      ① `delete_rows` 搬走值与样式后**留下空的 `<row>` 元素** ⇒ `row_dimensions` 里还挂着它；
+      ② 模板里本来就有 `<row>` 元素、**没有值**的空行（过程资料模板 R16~R18 就是）——
+         它们会跟着 `delete_rows` **上移**，成为"**有行无值**"的壳。
+    两种都会让 Excel 的 `UsedRange` 多算几行 ⇒ 用户看到"数据下面还空着几行"、还会进打印范围
+    （与 `TAIL-43` 同族：**"新数据区之外不留残留"**）。
     """
+    if ws.max_row > last_row:
+        ws.delete_rows(last_row + 1, ws.max_row - last_row)      # 先删行（连空单元格登记一起）
     for r in [x for x in ws.row_dimensions if x > last_row]:
-        ws.row_dimensions.pop(r, None)
+        ws.row_dimensions.pop(r, None)                          # 再清行属性（`delete_rows` 不保证清它）
 
 
 def _check_tail_rows(ws, tail_start: int, written: set, max_col: int) -> None:
@@ -259,8 +309,10 @@ def fill_sheet(ws, spec: dict) -> dict:
                 ws.cell(row=r, column=column_index_from_string(col)).value = value
                 written.add((r, column_index_from_string(col)))
     _check_tail_rows(ws, ds + n, written, max_col)
-    # 最后一行 = 尾块末行；没有尾块时 = 数据末行；连数据行都没有 ⇒ 表头行（ds-1）
-    last_row = max([ds + n - 1, ds - 1] + [ds + n + int(off) for off in tail])
+    # 最后一行 = **尾块终点**（按结构算：覆盖到的行 ∪ 还有内容的行 ∪ 合并区覆盖到的行）；
+    # 没有尾块时 = 数据末行；连数据行都没有 ⇒ 表头行（ds-1）
+    tail_end = tail_end_row(ws, ds + n, max_col)
+    last_row = max([ds + n - 1, ds - 1, tail_end] + [ds + n + int(off) for off in tail])
     _trim_row_dims(ws, last_row)
 
     return {"sheet": ws.title, "key_col": key_col, "max_col": max_col,
@@ -327,7 +379,7 @@ def verify_filled(path, plan) -> list[str]:
                     if not _same(got, exp):
                         problems.append("%s!%s%d（尾块）与期望不符：%r ≠ %r"
                                         % (sp["sheet"], letter, r, got, exp))
-            last = max([ds + n - 1] + [r for r, _l, _c in sp["tail"]])
+            last = sp["last_row"]          # 单一出口：`fill_sheet` 已按**结构**算好（含脚注那种不覆盖的行）
             for r in range(last + 1, raw.max_row + 1):          # ③ 残留（含公式残留）
                 if any(raw.cell(row=r, column=c).value is not None for c in range(1, max_col + 1)):
                     problems.append("%s!第 %d 行（尾块以下）还有内容 ⇒ **模板旧值残留**"
@@ -337,6 +389,11 @@ def verify_filled(path, plan) -> list[str]:
             if shells:
                 problems.append("%s!第 %s 行还留着**行属性空壳** ⇒ 打开时数据下面多出几行空的"
                                 % (sp["sheet"], shells[:6]))
+            # ③c 行壳：`max_row` 超过末行（"有行无值"的空行）⇒ `UsedRange` 同样会多算
+            if raw.max_row > last:
+                problems.append("%s!末行以下还有**行壳**（max_row=%d > 末行 %d）⇒ "
+                                "打开时 UsedRange 会多算几行（与 TAIL-43 同族）"
+                                % (sp["sheet"], raw.max_row, last))
             for r in range(ds, last + 1):                       # ④ 值覆盖不彻底
                 for c in range(1, max_col + 1):
                     v = raw.cell(row=r, column=c).value
@@ -369,5 +426,5 @@ def _same(got, exp) -> bool:
     return str(got) == str(exp)
 
 
-__all__ = ["MARKER", "keep_only_columns", "locate_data_area", "fill_sheet", "fill_workbook",
-           "verify_filled"]
+__all__ = ["MARKER", "TEXT_FMT", "set_text_format", "keep_only_columns", "locate_data_area",
+           "fill_sheet", "fill_workbook", "verify_filled"]

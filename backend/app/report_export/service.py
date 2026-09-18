@@ -183,5 +183,56 @@ def export_ledger(session: Session, projects, ym: str = "") -> Path:
         made, out_dir, "%s_%s.zip" % (ledger_export.FILE_SUFFIX, period_label(report_ym))))
 
 
+def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
+    """导出**过程资料成品**（`TAIL-04` 路径① **片 4a**）—— **每个项目一本工作簿**；
+    选 ≥2 个项目 ⇒ 打成一个 zip ⇒ 返回成品（或 zip）的绝对路径。
+
+    - **取数跟随当前所显示的那张表**（`ACC-RPT-EXP-001/001-04`）：表①原始 ⇒ `adjusted=False`；
+      表②调整后 ⇒ `adjusted=True`。
+    - ⚠️ **差异表**没有对应的模板形态（清单 §5.3 只登记了 `汇总表` 这一张 18 列形态）
+      ⇒ **显式拒做**（⛔ 不猜、也⛔ 不拿另一张表顶替 —— 清单 §六-3 的"清单里没有的 ⇒ 报错不猜"同理）。
+    - 每个项目各自的**截止核算月**（分界 = 截止核算月，§5.2.5）—— ⛔ 不共用一个。
+    - 文件名 / zip 名**唯一出口** = `mod06_proc.domain.export_file_name` / `export_manifest`
+      （页面清单预览用的就是它 ⇒ 预览与真实产物同名）。
+    - `ym` = 文件名里的**当前年月**（§7.1「文件名含日期」；⚠️ 本页**不按年月筛数据** —— 表体是
+      逐月全量，`ym` 只进文件名）。
+    """
+    from app.core.timing import today_cn, ym_of
+    from app.mod06_proc import domain as D
+    from app.mod06_proc import repository as R
+    from app.mod06_proc import service as M6
+    from app.report_export import process_export
+
+    keys = [str(k) for k in (projects or ()) if str(k or "").strip()]
+    if not keys:
+        raise MustReportError("导出过程资料：**一个项目都没选** —— 请先在展开区里勾选要导出的项目。")
+    tab_no = D.tab_of(tab)
+    if tab_no == D.TAB_DIFF:
+        raise MustReportError(
+            "导出过程资料：当前停在**差异表**，而模板只登记了「汇总表」这一张形态"
+            "（清单 §5.3）⇒ **不猜**：请切到「表① 原始表」或「表② 调整后表」再导。")
+    report_ym = str(ym or "").strip() or ym_of(today_cn())
+    inv_rows = R.load_inv_rows(session)
+    mech_rows = R.load_mech(session)
+    history_rows = R.load_history(session)
+    known = M6.projects_of(inv_rows, history_rows)      # ⭐ 候选**唯一出口**（⛔ 不各写一份）
+    out_dir = EXPORT_ROOT / process_export.FILE_SUFFIX / period_label(report_ym)
+    made: list[str] = []
+    for key in keys:
+        if key not in known:
+            raise MustReportError(
+                f"导出过程资料：项目「{key}」**没有数据**（库存单据与历史段里都没有它）⇒ 拒做"
+                "（⛔ 不导出一份空表，免得被读成「这个项目本来就是空的」）。")
+        rows = D.build_matrix(
+            inv_rows=inv_rows, manual_rows=mech_rows, history_rows=history_rows,
+            warehouse=key, adjusted=(tab_no == D.TAB_ADJUSTED),
+            cutoff_ym=R.load_cutoff(session, warehouse=key))
+        made.append(process_export.build_xlsx(rows, out_dir, project=key, tab=tab_no, ym=report_ym))
+    if len(made) == 1:
+        return Path(made[0])
+    return Path(process_export.build_zip(
+        made, out_dir, D.export_manifest(keys, tab=tab_no, ym=report_ym)["zip_name"]))
+
+
 __all__ = ["EXPORT_ROOT", "period_label", "setl_rows", "setl_count", "export_settlement",
-           "export_inventory", "export_extract", "export_ledger"]
+           "export_inventory", "export_extract", "export_ledger", "export_proc"]
