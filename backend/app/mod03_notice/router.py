@@ -93,7 +93,11 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
         target = ",".join((n.bill_no or str(n.id)) for n in notices)[:512]
         run_type = "print" if mode == MODE_PRINT else "export_pdf"
 
-        client = I8Client(allow_kick=False)
+        # ⭐ 2026-09-18 **用户口述授权**：「打印你设置的不能强踢？不要设置这个，**强踢就强踢**，
+        #    我打印的时候会看着的，不会受损失」⇒ 打印这条链路**允许强踢**（`allow_kick=True`）。
+        #    ⚠️ `D9` 的原意是"**不许悄悄踢**"（要有人在场、要显式授权）—— 打印**本来就是人工点击、
+        #    人就在机器旁** ⇒ 这里就是那次显式授权；⛔ 抓取那条链路仍按各自入参（默认不踢）。
+        client = I8Client(allow_kick=True)
         renderer = PdfRenderer()
         try:
             result = run_batch(

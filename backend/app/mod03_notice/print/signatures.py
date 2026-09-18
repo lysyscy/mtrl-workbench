@@ -228,7 +228,12 @@ class SignatureStore:
     def _download(self, rel: str) -> bytes:
         from app.core.config import get_settings
 
-        base = i8_base_of(get_settings())
+            # ⚠️⚠️ 2026-09-18 修：**本文件原先漏了这行 import** —— `i8_base_of` 只在别处被 import，
+    #    本文件直接用了它 ⇒ **真机取签名图那一步**抛 `NameError: name 'i8_base_of' is not defined`
+    #    （离线测试全用桩、盖不到这条路径；是接线后"逐条如实"的打印回执把它顶出来的）。
+    from app.core.config import i8_base_of  # noqa: PLC0415
+
+    base = i8_base_of(get_settings())
         url = rel if rel.startswith("http") else f"{base}/{rel.lstrip('/')}"
         try:
             resp = self._client.request("GET", url)
