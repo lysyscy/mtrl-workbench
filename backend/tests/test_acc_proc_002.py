@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import copy
-import re
 from decimal import Decimal
 
 import pytest
@@ -24,7 +23,6 @@ from app.mod06_proc import importer, mech_ui
 from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot
 from app.mod06_proc.repository import import_snapshot, load_cutoff, rollback_batch, save_mech
 from app.mod06_proc.service import build_page_data, parse_state
-from app.mod06_proc.view import render_proc_page
 from app.mod08_inv.models import InvDetail
 from tests.acc_plugin import acc
 from tests.m06_helpers import (
@@ -41,10 +39,6 @@ CASE = "ACC-RPT-PROC-002"
 
 def _sess() -> FakeSession:
     return FakeSession(copy.deepcopy(dataset_sections()))
-
-
-def _page(s: FakeSession) -> str:
-    return render_proc_page(build_page_data(s, parse_state({"pj": WAREHOUSE})))
 
 
 def _by_month(s: FakeSession) -> dict[str, dict]:
@@ -103,12 +97,13 @@ def test_机械六列全段可手录含历史段():
     assert all(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS)
     assert not any(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MATERIAL_KEYS)
 
-    # ⭐ **录入口真的在页面上**（此前只有「域出口说可编辑」，页面根本没有录入口 —— `TAIL-03`）
-    html = _page(_sess())
-    assert all(f'name="mech_{i}"' in html for i in range(len(D.MECH_COLUMNS))), "机械列没有输入框"
-    assert 'action="/m06/mech"' in html
-    # ⛔ 材料列**仍然一个输入框都不能有**（机械列可录 ≠ 材料列可录）
-    assert 'name="in_' not in html and 'name="out_' not in html
+    # ⭐ **录入口真的在界面上**（此前只有「域出口说可编辑」、界面根本没有录入口 —— `TAIL-03`）。
+    #    ⚠️ 2026-09-18（`§19` **批 2**）：这一段原先借**旧服务端页**的 HTML 观测（`name="mech_i"`
+    #    输入框 / `action="/m06/mech"`）⇒ 旧页整体删除（授权 `D18`）后 **claim 没删、观测面搬了**：
+    #    · 「录入口在」＋「走后端、不在前端复写判据」⇒ `tests/test_wired_m06.py` 的壳侧断言；
+    #    · 「机械列可录 / **材料列不可录**」⇒ 上面 `column_editable` 两条**域出口**断言 ＋
+    #      `test_wired_m06.py::test_机械录入口只送mech键_材料列没有输入面` 各占一半 ✓
+    #    （⛔ 不再借页面 html 复述一遍 —— 同一 claim 写成两份，改坏一处仍会全绿）。
 
     # ⭐ **两段都真的录得进**（历史段 + 正式段），0 是合法值、负数被拦
     s = _sess()
@@ -183,9 +178,10 @@ def test_截止核算月默认取导入数据的最大核算月():
 def test_历史段不提供行内编辑入口():
     s = _sess()
     assert build_page_data(s, parse_state({}))["can_edit_history"] is False
-    html = _page(s)
-    assert "历史段不提供行内编辑" in html
-    assert 'name="in_' not in html and 'name="out_' not in html, "材料列不得有输入框（含历史段）"
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先还借旧页 html 看「历史段不提供行内编辑」这句提示与
+    #    「材料列无输入框」；旧页删（`D18`）后 —— 前者是**页面文案**、后者已由壳侧
+    #    `test_wired_m06.py::test_机械录入口只送mech键_材料列没有输入面` 与上面域出口断言合围 ✓
+    #    （`can_edit_history is False` 这条**实质**就在本行 ✓ 不动）。
 
     # 回滚是「再导一次」的配套动作（置状态、**不物理删**）
     assert rollback_batch(s, batch_no="H20260916-01") == 2
@@ -219,9 +215,10 @@ def test_机械列与材料列同构且数据源可插拔():
     assert hist == {D.SOURCE_SNAPSHOT} and formal == {D.SOURCE_INV}
     assert mech_h == mech_f == {D.SOURCE_MANUAL}
     assert D.column_source(D.MATERIAL_KEYS[0], ym="2026-06", cutoff_ym="") == D.SOURCE_INV
-    # 两类列**同一张表、同一套渲染出口** ⇒ 换机械费数据源时不动页面
-    html = _page(_sess())
-    assert html.count('class="tw"') == 1
+    # 两类列**同一张表、同一套渲染出口** ⇒ 换机械费数据源时不动界面。
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 的 `class="tw"` 计数观测；旧页删（`D18`）后
+    #    这条的**实质**由上面 `column_source` 四条 ✓ ＋ 壳侧「合计行格数由表头派生」
+    #    （`test_wired_m06.py`）合围 —— 「同一张表」在新壳里是**结构**（一张表 ＋ 一个表头派生通道）。
 
 
 # ------------------------------------------------------------ 001-08 正式段空态
@@ -234,10 +231,8 @@ def test_正式段无i8数据时给空态不臆造零():
     assert all(row[k] is None for k in D.MATERIAL_KEYS), "材料列必须留空，不得臆造 0"
     assert row["mech_0"] == Decimal("9.00"), "同一行的机械列照常显示手录值"
 
-    html = _page(_sess())
-    assert "不臆造 0" in html
-    line = re.search(r"<tr>(?:(?!</tr>).)*2026-10(?:(?!</tr>).)*</tr>", html, re.S)
-    assert line, "2026-10 那一行必须在表里"
-    assert "—" in line.group(0), "空态格渲染为「—」而不是 0.00"
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先还借旧页 html 看「—而不是 0.00」；旧页删（`D18`）后
+    #    那条形态 claim 搬到壳：`test_wired_m06.py::test_正式段空态在壳里渲染成破折号而不是零`
+    #    （钉壳的金额格式器 `M()` 的 `null ⇒ —` 分支 ✓）。上面 `is None` 三条是**实质** ✓ 不动。
     # 整列全空 ⇒ 合计留空（不臆造 0）
     assert D.column_totals([{"in_主辅材": None}])["in_主辅材"] is None

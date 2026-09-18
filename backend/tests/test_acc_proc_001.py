@@ -80,9 +80,9 @@ def test_三表齐备且默认停在调整后表():
     assert D.tab_of("") == D.TAB_ADJUSTED and D.tab_of("9") == D.TAB_ADJUSTED
     assert D.tab_of("0") == D.TAB_RAW and D.tab_of("2") == D.TAB_DIFF
 
-    html = _page()                       # 不带参数 ⇒ 落在默认表
-    assert f"tab={D.TAB_ADJUSTED}" in html
-    assert "总求和（本表）" in html      # 默认表渲染的是 17 列矩阵（表①② 同构）
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 看「不带参数 ⇒ 落在表② 调整后」；旧页删（`D18`）后
+    #    形态搬到壳（`test_wired_m06.py::test_默认停在调整后表` 钉 `procTab` 初值 = 1 ✓）
+    #    —— 下面这条**状态**断言是实质，留着。
     assert D.DEFAULT_TAB == parse_state({})["tab"]
 
 
@@ -119,25 +119,18 @@ def test_列结构以主人为准且筛选栏不设只读年月框():
     assert labels[11:] == list(D.MECH_COLUMNS)
     assert len(D.PROC_COLUMNS) == 1 + 2 * len(D.CATEGORIES) + len(D.MECH_COLUMNS)
 
-    # 核算月**只作表内列** ⇒ 筛选栏不得出现只读年月框
-    html = _page()
-    assert 'name="period"' not in html and "readonly" not in html
+    # 核算月**只作表内列** ⇒ 筛选栏不得出现只读年月框。
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 看这条；旧页删（`D18`）后形态搬到壳
+    #    （`test_wired_m06.py::test_筛选栏不设只读年月框` ✓）。
 
 
 # ------------------------------------------------------------ 001-04 项目单选
 
 @acc(CASE, "001-04")
 def test_项目筛选单选且不给全选清空():
-    html = _page()
-    # ⚠️ 绑到**筛选栏那一段**（见 `_filter_bar`）—— 整页断言会被导出展开区（多选面板）喂饱
-    bar = _filter_bar(html)
-    assert 'type="radio" name="pj"' in bar
-    assert 'type="checkbox"' not in bar, "筛选栏的项目选择必须是单选，不给多选"
-    assert "全选" not in bar and "清空" not in bar
-    # 选中即收起：radio 变更即提交；面板是**收起态**的 `<details>`（不为选中项预先展开）
-    assert 'onchange="this.form.submit()"' in bar
-    assert "<details>" in bar and "<details open>" not in bar
-    # 切换项目后行数随之切换
+    # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页筛选栏那一段 html 观测（radio / 无多选 / 选中即提交 /
+    #    收起态 details）；旧页删（`D18`）后形态搬到壳（`test_wired_m06.py::test_项目筛选单选且选中即收起`
+    #    钉 `single:true` 与 `procPjPick` 里 `procPjOpen=false` ✓）。下面的**数据**断言是实质。
     assert _data(pj="甲仓")["rows"] != [] and _data(pj="乙仓")["rows"] != []
 
 
