@@ -482,6 +482,16 @@ def main() -> int:
             if not ok:
                 errors.append("m14 写路径自检未通过：" + what)
 
+        # ⚠️ 默认月那一条**必须是两态断言**（2026-09-18 实测踩到 · 假红）：
+        #    材料报表的默认月 = **上月**，而"上月到底有没有数据"是**数据状态**、不是代码保证
+        #    ⇒ 若只写"没数据 ⇒ 回中文原因"那一态，则默认月**真有了数据**时这条会**误报红**
+        #    （实测：2026-08 有 8 个仓、198 KB 的真 zip ⇒ `d.json` 为空 ⇒ 旧断言直接判红 ✗）。
+        def _def_month_ok(x: dict) -> bool:
+            if x.get("json"):                      # 没数据 ⇒ 必须是**中文原因**（⛔ 不是崩）
+                return bool(x.get("ok") is False and (x.get("message") or "").strip())
+            return (x.get("ct") == "application/zip"   # 有数据 ⇒ 必须是**真 zip**
+                    and x.get("magic") == "PK" and x.get("size", 0) > 0)
+
         # ---- m07 导出（`TAIL-04`）：⭐ 可观测证据 = **从页面上下文真拉一次 zip**。
         #      ⚠️ 两件事分开验（都是真事实）：
         #        ① **默认月没数据**时（材料报表默认 = 上月，而真机数据可能落在别的月）
@@ -520,8 +530,16 @@ def main() -> int:
         print("                 有数据的月：", exp.get("hit"))
         d, h = exp.get("def") or {}, exp.get("hit") or {}
         oks11 = [
-            (bool(d.get("json")) and d.get("ok") is False and "明细" in (d.get("message") or ""),
-             f"① 默认月（{d.get('period')}）没数据时回**中文原因**、不是崩：{(d.get('message') or '')[:40]}…"),
+            (
+                _def_month_ok(d),
+                "① 默认月（{}）**要么**回中文原因（那个月没数据）、**要么**给真 zip（有数据）"
+                "—— 唯独不许是崩 / 空壳 ⇒ 实测：{}".format(
+                    d.get("period"),
+                    (f"真 zip {d.get('size')} B · {d.get('warehouses')} 仓")
+                    if not d.get("json")
+                    else f"中文原因「{(d.get('message') or '')[:36]}」",
+                ),
+            ),
             (bool(h), f"② 近 4 个月里至少有一个月导得出（试过 {exp.get('tried')}）"),
             (bool(h) and h.get("ct") == "application/zip",
              f"② content-type = application/zip（{h.get('ct')}）"),
