@@ -5,10 +5,16 @@
 - `ACC-X-EXP-001/001-08`（**导出内容须与当前筛选一致**）—— 成品的行 = 所筛选项目（项目状态 ＋ 档案顺序），
   与页面 `build_extract_data` **同一份口径**；
 - `ACC-X-EXP-001/001-05`（**导出成品 / 提示语必须与模板实际形态一致**）—— 1 个工作簿 ＋ 2 个工作表
-  （`焊材` / `气`），每表 15 列 = 项目 | 结余 | 1月…12月 | 合计；⛔ 提示语不得声称不符的结构。
+  （`焊材` / `气`），每表 15 列 = 项目 | 结余 | 1月…12月 | 合计；⛔ 提示语不得声称不符的结构；
+- `ACC-X-EXP-001/001-09`（**数据区定位与尾块派生**）：起点认**标记文字** `DATA_START`（⛔ 不写死行号）；
+  尾块随数据行数派生（n=0 时只剩「表头 ＋ 尾块」、不留空壳行）；
+- `ACC-X-EXP-001/001-10`（**零残留**）：模板自带的示例数据（项目名 / 数字）一格都不得进成品；
+- `ACC-X-EXP-001/001-11`（**以数值覆盖**）：显示区一律算好的**数值**（⛔ 不留公式）；算出来是 0 的格子**留空**；
+- `ACC-X-EXP-001/001-12`（**拒做**）：拿不到报告期 / 数据为空 / 对账不过 ⇒ 显式报中文原因、**不产出文件**。
 
-⚠️ 其余（尾块随行数派生 · 零残留 · 值覆盖 · 拒做 · 结余留空）用 `@acc()` **显式声明不绑定**
-   —— 路径① 目前**没有专属判据点**，新增要动交付面契约（§四 四处同步）⇒ 属扩范围，先回报再动。
+⚠️ 其余三条用 `@acc()` **显式声明不绑定**：
+· 「结余」列当前**如实留空**（手填列、录入入口待建 —— 属**临时口径**，进判据反而会绊住以后）；
+· `export_report_ym` 的四种时间模式（纯函数口径）；· 收发结存 zip 弹窗的接线（**胶水**，无独立口径）。
 
 ⚠️ 三处易踩的坑（本片实测）：
 1. **模板里带着示例数据** —— 只写前 n 行、不清尾部 ⇒ 用户读到**示例 / 上月**的数（`TAIL-43` 同族）；
@@ -144,7 +150,7 @@ def test_成品行即所筛选项目且与页面同一份口径(tmp_path):
 # ============================================================ 逐格对账（独立手写期望）
 
 
-@acc()
+@acc(CASE, "001-11")
 def test_成品显示区逐格等于独立复算(tmp_path):
     """**两条独立路径**：① `m07_helpers.EXTRACT_EXPECT`（手写期望，不问实现）；
     ② 从成品显示区读回 —— 各月 / 合计 / 合计行必须逐格相同。"""
@@ -195,7 +201,7 @@ def test_结余列无来源时如实为空(tmp_path):
 # ============================================================ 引擎：尾块随行数派生 ＋ 零残留
 
 
-@acc()
+@acc(CASE, "001-10")
 def test_模板自带的示例值一格不留(tmp_path):
     """⭐ 与 `TAIL-43` 同族的守卫：模板里那份**示例数据**（项目名 / 数字）**一格都不许**进产物。
 
@@ -239,7 +245,7 @@ def test_模板自带的示例值一格不留(tmp_path):
         wb.close()
 
 
-@acc()
+@acc(CASE, "001-09")
 def test_数据区起点认标记文字而不是抄坐标():
     """⭐ 方案 A（《说明书》§7.1）：起点认 `DATA_START` 这串**文字** —— 把标记挪一行，定位就得跟着挪。
 
@@ -260,7 +266,7 @@ def test_数据区起点认标记文字而不是抄坐标():
         wb.close()
 
 
-@acc()
+@acc(CASE, "001-09")
 def test_引擎_尾块随行数派生且零行也不留残骸(tmp_path):
     """引擎级：n = 0 / 1 / 7（= 样板行数）/ 12 四种行数都要**尾块紧贴、下面一格不留**。
 
@@ -293,27 +299,42 @@ def test_引擎_尾块随行数派生且零行也不留残骸(tmp_path):
         assert not shells, f"n={n} 还有行属性空壳：{shells}"
 
 
-@acc()
-def test_显示区对账抓得出残留与公式(tmp_path):
-    """**尺子的区分力**：把产物故意弄坏 ⇒ `verify_filled` 必须报红（⛔ 不能是"看着对"）。"""
-    plan = _plan()
-    out = Path(_build(tmp_path, plan))
-    specs = W.build_specs(plan["grids"])
-    good = tpl_fill.fill_workbook(R.WELD_TEMPLATE, out, specs)
-    assert tpl_fill.verify_filled(out, good) == [], "干净的产物应当对账通过"
-
-    wb = openpyxl.load_workbook(out)
-    ws = wb["焊材"]
-    ws.cell(row=ws.max_row + 2, column=1).value = "上一版的仓库"      # ① 尾块以下残留
-    ws.cell(row=2, column=13).value = "=SUM(B2:N2)"                   # ② 值覆盖不彻底
-    wb.save(out)
-    wb.close()
-    problems = tpl_fill.verify_filled(out, good)
+@acc(CASE, "001-10")
+def test_显示区对账抓得出残留(tmp_path):
+    """绑 `001-10`（零残留）：尾块以下塞一个旧值 ⇒ `verify_filled` 必须报红。"""
+    problems = _corrupt(tmp_path, _put_residue)
     assert any("尾块以下" in x for x in problems), f"没抓住残留：{problems[:3]}"
+
+
+@acc(CASE, "001-11")
+def test_显示区对账抓得出公式残留(tmp_path):
+    """绑 `001-11`（以数值覆盖）：数据格里留公式 ⇒ `verify_filled` 必须报红。"""
+    problems = _corrupt(tmp_path, _put_formula)
     assert any("还是公式" in x for x in problems), f"没抓住公式残留：{problems[:3]}"
 
 
-@acc()
+def _put_residue(ws) -> None:
+    ws.cell(row=ws.max_row + 2, column=1).value = "上一版的仓库"
+
+
+def _put_formula(ws) -> None:
+    ws.cell(row=2, column=13).value = "=SUM(B2:N2)"
+
+
+def _corrupt(tmp_path, mutate) -> list[str]:
+    """造一份产物 → 按 `mutate` 故意弄坏 → 返回守卫报出的问题（⛔ 不能是"看着对"）。"""
+    plan = _plan()
+    out = Path(_build(tmp_path, plan))
+    good = tpl_fill.fill_workbook(R.WELD_TEMPLATE, out, W.build_specs(plan["grids"]))
+    assert tpl_fill.verify_filled(out, good) == [], "干净的产物应当对账通过"
+    wb = openpyxl.load_workbook(out)
+    mutate(wb["焊材"])
+    wb.save(out)
+    wb.close()
+    return tpl_fill.verify_filled(out, good)
+
+
+@acc(CASE, "001-12")
 def test_拿不到报告月时显式拒做(tmp_path):
     """⛔ 绝不静默交付：报告月拿不到（该筛选下没有数据）⇒ 中文原因、**不产出文件**。"""
     plan = _plan()
