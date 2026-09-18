@@ -114,10 +114,13 @@ def body_spec(rows: list[dict]) -> dict:
     sub = {COL_OF_KEY[k]: totals[k] for k in D.DATA_KEYS if totals.get(k) is not None}
     segments = D.segment_totals(list(rows or ()))
     total = {anchor: seg["total"] for anchor, seg in zip(TOTAL_ANCHORS, segments)}
+    # ⚠️ 尾块的**标签写在 B 列**（`小计` / `合计：`），⛔ **不是**引擎的 `label`（那会落到 A 列）——
+    #    A 列是**序号**（B 类）：模板里小计 / 合计行**不编号**（清单 §5.3 明写）⇒ `label=None`。
     return {
         "sheet": SHEET,
         "rows": data,
-        "tail": {OFF_SUB: ("小计", sub), OFF_TOTAL: ("合计：", total)},
+        "tail": {OFF_SUB: (None, {TIME_COL: "小计", **sub}),
+                 OFF_TOTAL: (None, {TIME_COL: "合计：", **total})},
     }
 
 

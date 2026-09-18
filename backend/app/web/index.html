@@ -4227,15 +4227,50 @@ const ACT={
  procExpPjNone:()=>{ procExpPjs=[]; render(); },
  procExpCancel:()=>{ procExpOn=false; procExpPjOpen=false; procExpPjs=[]; render(); toast('已收起导出面板（<b>未导出任何文件</b>）'); },
  procExpOk:()=>{ const pjs=procExpPjs.slice(); if(!pjs.length) return toast('请先选择要导出的项目');
-   const ym=bjMonth(), fnOf=k=>`${pjLabel(k)}_过程资料_${ym}.xlsx`;
+   /* ⚠️ 文件名 = **展示名 ＋ 域 ＋ 表名 ＋ 年月**（与后端 `domain.export_file_name` 同构）——
+      ⚠️ **表名进文件名**：三张表（表① / 表② / 差异表）**同一形态**，只有数据与文件名不同
+      （用户 2026-09-18 裁）；导出**跟随当前所显示的那张表**。 */
+   const ym=bjMonth(), fnOf=k=>`${pjLabel(k)}_过程资料_${procTabName()}_${ym}.xlsx`;
    const body = pjs.length===1
-     ? `<div class="tip ok" style="margin:0">将生成 <b>1 个文件</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>内容 = <b>17 列模板</b>（核算月 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列），报<b>分公司工程科</b>（§5.2.2）。</div>`
-     : `<div class="tip ok" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">过程资料_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个文件（每个 = 一个项目的 17 列模板）。</div>
-        <table class="dt cond" style="margin-top:8px"><thead><tr><th>#</th><th>文件（每项目一份）</th></tr></thead><tbody>
-        ${pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`).join('')}
-        </tbody></table>`;
+     ? `<div class="tip ok" style="margin:0">将生成 <b>1 个文件</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>内容 = <b>当前所显示的那张表</b>（<b>${procTabName()}</b>）按 <b>17 列模板</b>填充（核算月 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列），报<b>分公司工程科</b>（§5.2.2）。</div>`
+     : `<div class="tip ok" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">过程资料_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个文件（每个 = 一个项目的 <b>${procTabName()}</b>）。</div>
+       <table class="dt cond" style="margin-top:8px"><thead><tr><th>#</th><th>文件（每项目一份）</th></tr></thead><tbody>
+       ${pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`).join('')}
+       </tbody></table>`;
    modal({title:'导出 · 过程资料（按模板 · 每项目一份）',body,
-     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="exp" data-t="过程资料（按模板）">保存到本地</button>`}); },
+     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="procExpSave">保存到本地</button>`}); },
+ /* ⭐ 接线（`TAIL-04` 路径① · 片 4a）：成品由**后端模板填充**生成 —— 每个项目**一本工作簿**
+   （`汇总表` 18 列：序号 ｜ 时间 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列 ＋ 小计 / 合计 / 脚注尾块）；
+   选 **≥2 个项目** ⇒ 打成一个 zip。
+   ⚠️ **取数跟随当前所显示的那张表**（`tab` ＝ 0 表①原始 / 1 表②调整后 / 2 差异表）——
+      壳侧**原样带过去**，⛔ 不在前端另算（差异表 = 逐格「调整后 − 原始」）。
+   ⚠️ 失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（**一个项目都没选** · 项目**没有数据** ·
+      项目**不在档案里**（取不到展示名）· 模板缺失/损坏 · **显示区对账不过**）
+      ⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+   ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）。 */
+ procExpSave:async ()=>{
+   const pjs=procExpPjs.slice();
+   if(!pjs.length) return toast('请先选择要导出的项目');
+   const url='/api/m06/export?projects='+encodeURIComponent(pjs.join(','))
+     +'&tab='+encodeURIComponent(procTab);
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'过程资料.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   closeModal();
+   toast(pjs.length===1
+     ? `已导出 <b>${esc(fn)}</b>：<b>${procTabName()}</b> · 一本工作簿（<b>汇总表</b> 18 列 ＋ 小计 / 合计 / 脚注）`
+     : `已导出 <b>${esc(fn)}</b>：<b>${pjs.length}</b> 个项目 ⇒ 一个 zip（每项目一本 · 每本 = <b>${procTabName()}</b>）`,8600); },
  procTab:t=>{ procTab=+t.dataset.i; render(); },
  /* `exportProc` 已按 2026-09-13 用户口径**删除**（原按钮只演示一份）——
     改为 `procExpToggle` 展开区：**多选项目** → 每项目一份 → ≥2 个打成 zip（`procExpOk` 给清单预览）。 */

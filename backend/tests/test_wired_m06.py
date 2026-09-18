@@ -150,3 +150,36 @@ def test_后端机械写端点存在():
     assert "mech_ui.parse_mech_values(" in body, (
         "写端点没走 `mech_ui.parse_mech_values`（判定该与 PRG 端点复用**同一出口**，不另写一套）"
     )
+
+
+# --------------------------------------------------------------- 按模板导出（`TAIL-04` 片 4a）
+
+
+@acc("ACC-RPT-EXP-001", "001-08")
+def test_按模板导出走真下载而不是假成功():
+    """⭐ `TAIL-04` **片 4a**：过程资料成品由后端模板填充生成 ⇒ 壳侧必须是**真下载**。
+
+    ⚠️ 原型那个「保存到本地」是 `data-act="exp"`（诚实占位：**没有文件产生**）——
+       接线后必须换成过程资料自己的动作，否则又变成"点了像成功、其实没文件"。
+    """
+    assert "procExpSave:async ()=>{" in SHELL, "缺真下载动作 `procExpSave`"
+    assert "/api/m06/export?projects=" in SHELL, "没走过程资料导出端点"
+    assert "'&tab='+encodeURIComponent(procTab)" in SHELL, \
+        "没把**当前所显示的那张表**带给后端（001-04：取数跟随当前表，⛔ 不在前端另算）"
+    assert "x-export-filename" in SHELL, "文件名没从 `X-Export-Filename` 带出（命名规则的主人在后端）"
+    # ⛔ 旧的**假成功**必须消失
+    assert 'data-act="exp" data-t="过程资料（按模板）"' not in SHELL, "预览弹窗还留着假成功的 `exp`"
+    assert 'data-act="procExpSave"' in SHELL, "预览弹窗的「保存到本地」没接到 `procExpSave`"
+
+
+@acc("ACC-RPT-EXP-001", "001-08")
+def test_按模板导出失败必须给人原因不静默():
+    """后端失败回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（没选项目 / 项目没数据 / 取不到展示名 /
+    模板坏 / **显示区对账不过**）⇒ 壳必须**弹原因**，⛔ 不能静默、也不能当文件下载。"""
+    i = SHELL.index("procExpSave:async ()=>{")
+    body = SHELL[i:SHELL.index("\n procTab:t=>{", i)]        # 终点锚用**下一个动作名**（纯 ASCII）
+    assert 400 < len(body) < 2500, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
+    assert "ct.includes('application/json')" in body, "没按 content-type 分流"
+    assert "d.message||'后端没给原因'" in body, "失败时没把后端的中文原因给用户"
+    assert "if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`" in body, \
+        "非 2xx 没显式报错（会静默产出空文件）"
