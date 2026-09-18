@@ -5171,6 +5171,8 @@ const API = {
   printerGet: () => API.get('/api/m03/settings/printer'),
   printerSet: (url, mode, name) => API.send('PUT', '/api/m03/settings/printer',
     {printer_ipp_url: url, print_mode: mode, printer_name: name}),
+  /* 本机装了驱动的打印机名（选「系统驱动」通道时**名字要一字不差**）—— 拿不到即空表，⛔ 不是错误 */
+  printerList: () => API.get('/api/m03/settings/printers'),
 
   /* ---- MOD-07 收发结存与活动大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
   m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
@@ -5594,9 +5596,11 @@ async function m03RunBatch(rows, mode) {
    ⚠️ 壳的 `V.m03` 切片里**没有**这个入口（改切片会登记漂移）⇒ 由 `BIND.m03` **渲染后注入**。
    ⚠️ 地址读写走 `GET/PUT /api/m03/settings/printer`（后端**写配置 + 清缓存** ⇒ 保存即生效、无需重启）。 */
 async function m03PrinterOpen() {
-  let s = {};
+  let s = {}, prs = [];
   try { s = (await API.printerGet()) || {}; }
   catch (e) { return toast(`⚠️ 读不到当前打印机设置：${esc(String((e && e.message) || e))}`, 8000); }
+  /* ⚠️ 本机打印机名取不到**不算错**（没装 pywin32 / 不是 Windows）⇒ 只影响"给不给提示" */
+  try { prs = (await API.printerList()) || []; } catch (_) { prs = []; }
   const cur = String(s.printer_ipp_url || ''), mode = String(s.print_mode || 'auto');
   const nm = String(s.printer_name || '');
   /* ⚠️ 通道口径照用户调好的 `i8一键打印_新版`（2026-09-18）——**只把说明摆出来**，
@@ -5620,7 +5624,11 @@ async function m03PrinterOpen() {
       原来能打的（Ricoh）保持<b>自动</b>不用动；换新机器先试<b>自动</b>，若打出来是<b>乱码</b>就改选<b>系统驱动</b>
       （有的打印机<b>没有 PDF 解释器</b>，只认位图格式，这时 IPP 会被直接拒收、RAW 会收下但打成乱码）。</div>
       <div class="fld" style="margin-top:8px"><label>打印机名（只有选「系统驱动」才用得上）</label>
-        <input class="inp" id="m03PrinterName" style="width:100%" value="${esc(nm)}" placeholder="如：Ricoh IM 3000（留空＝用系统默认打印机）"></div>`,
+        <input class="inp" id="m03PrinterName" list="m03PrinterNames" style="width:100%" value="${esc(nm)}" placeholder="如：RICOH IM 3000 PCL 6（名字要**一字不差**）">
+        <datalist id="m03PrinterNames">${prs.map(p => `<option value="${esc(p)}"></option>`).join('')}</datalist>
+        <div class="mut sm" style="margin-top:4px">${prs.length
+          ? `本机装了驱动的打印机有 <b>${prs.length}</b> 台（点输入框可选）：${esc(prs.slice(0, 4).join(' / '))}${prs.length > 4 ? ' …' : ''}`
+          : '⚠️ 没取到本机打印机名（这台机器没装 <span class="fc">pywin32</span> 或不是 Windows）⇒ 名字要手填'}</div></div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="m03PrinterSave">保存</button>`,
   });

@@ -71,7 +71,7 @@ from app.mod03_notice.schemas import (
 )
 from app.mod03_notice.service import MODE_PRINT, BatchResult, run_batch
 from app.mod03_notice.print.design import DesignFetcher
-from app.mod03_notice.print.ipp import send_pdf
+from app.mod03_notice.print.dispatch import dispatch_pdf as print_dispatch, list_printers
 from app.mod03_notice.print.render import PdfRenderer
 from app.mod03_notice.print.signatures import SignatureStore
 from app.mod03_notice.settings_store import apply_printer_setting
@@ -111,7 +111,9 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
                     client, cache_dir=get_settings().artifacts_path / ".sigcache"
                 ),
                 render_pdf=renderer.render_html_to_pdf,
-                dispatch_pdf=(send_pdf if mode == MODE_PRINT else None),
+                # ⭐ 2026-09-18（`TAIL-46`-②）：投递走**通道分流**（`auto` = IPP → 系统驱动 → RAW 9100；
+                #    设置里选的通道**当场生效** —— 分流器每次都现读设置）。⛔ 这里不再是裸 `send_pdf`。
+                dispatch_pdf=(print_dispatch if mode == MODE_PRINT else None),
             )
         finally:
             renderer.close()
@@ -555,6 +557,15 @@ def download_pdf(batch: str, name: str) -> FileResponse:
     if not str(target).startswith(str(root)) or not target.is_file():
         raise HTTPException(status_code=404, detail="产物不存在")
     return FileResponse(target, media_type="application/pdf", filename=name)
+
+
+@router.get("/settings/printers", response_model=list[str])
+def list_local_printers() -> list[str]:
+    """本机装了驱动的打印机名（给设置弹窗选 —— 选「系统驱动」通道时**名字要一字不差**）。
+
+    ⚠️ 拿不到就回**空表**（没装 `pywin32` / 不是 Windows）：说明"给不了提示"，⛔ 不是错误、⛔ 不猜名字。
+    """
+    return list_printers()
 
 
 @router.get("/settings/printer", response_model=PrinterSettingResponse)
