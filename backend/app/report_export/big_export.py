@@ -137,11 +137,11 @@ def build_xlsx(data: dict, out_dir, *, name: str) -> str:
 def file_name(ym: str) -> str:
     """成品文件名（**唯一出口**）：`经济活动分析大表_{期间标签}.xlsx`。
 
-    ⚠️ 报表名取**页面/预览页**的 `big_view.TITLE`（「经济活动分析大表」）—— 那是它唯一的出处，
+    ⚠️ 报表名取**域内核**的 `big_domain.TITLE`（「经济活动分析大表」）—— 那是它唯一的出处，
        ⛔ 不在这里再写一遍字面量；期间标签主人 = `mod07_setl.domain.period_label`。
     """
+    from app.mod07_setl.big_domain import TITLE
     from app.mod07_setl.domain import period_label
-    from app.mod07_setl.big_view import TITLE
 
     return f"{TITLE}_{period_label(str(ym))}.xlsx"
 

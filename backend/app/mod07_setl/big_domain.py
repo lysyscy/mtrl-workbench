@@ -21,6 +21,11 @@ from app.core.money import sum_money, to_money
 from app.core.period import default_period
 from app.mod01_projects.domain import build_candidates
 
+#: ⭐ **报表名**（唯一出处）—— 页面标题与导出文件名都用它。
+#: ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：原先长在**页面件** `big_view.py` 里 ⇒ 导出（留守件）
+#:    反过来依赖**页面**件 ✗；而"报表叫什么名字"是**业务常量** ⇒ 主人就该是域内核（这里）。
+TITLE = "经济活动分析大表"
+
 # ============================================================ 列结构（§5.7.1 · 20 列 · 两行表头）
 
 #: **两行表头**（逐条照原型 `BIG_THEAD`）：`(组标签, 子列标签…)`；**子列为空 ⇒ 该列跨两行**。

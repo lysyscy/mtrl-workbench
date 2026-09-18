@@ -20,7 +20,7 @@ from app.mod07_setl import big_domain as B
 from app.mod07_setl.view import money_text
 
 PAGE_ID = "m07-big"
-TITLE = "经济活动分析大表"
+from app.mod07_setl.big_domain import TITLE  # noqa: F401  ← 唯一出处已搬到域内核（`§19` 批 2）
 
 TIPS = (
     "**手填 6 列**：开工时间（`YYYY-MM`）/ 机械费测算 / 合同（预估）价 / 产值累计（含税）/ 工程用油 / 备注；"
