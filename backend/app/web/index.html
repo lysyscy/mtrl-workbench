@@ -882,7 +882,7 @@ const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
-const WIRED=new Set(['m03','m01','m04','m05','m06','m07','m08','m09','m14']);
+const WIRED=new Set(['m03','m01','m02','m04','m05','m06','m07','m08','m09','m14']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -2434,7 +2434,7 @@ V.m02=()=>`
     <div class="bd"><div class="tip" style="margin:0"><b>本表为什么不列齐《说明书》附录 E.1 的 8 条：</b><span class="fc">API-07</span>「付款通知书批量打印」是<b>出发型</b>动作 —— 不是抓取、<b>没有 Excel 降级</b>（§4.6 明说"接口不可用即砍、<b>不做自建打印模板</b>"）⇒ 它的入口在 <span class="fc">MOD-03</span> 的「<b>批量打印</b>」；<span class="fc">API-08</span>「班组设备使用报表」<b>近期不做、全部手填</b>（§5.6.2）。两者都在附录 E.1 有登记。<br><b>时间口径（§9.2）：</b>对外一律 <span class="fc">start_date</span> / <span class="fc">end_date</span>，<b>ISO 闭区间</b>；「核算期」参数仅作兼容保留。付款通知书<b>按时间全量抓、不选项目、不分页</b>（§4.2.1）。</div></div>
   </div>
   <div class="grid2">
-    <div class="card"><h4>抓取结果回显（模拟）</h4><div class="bd">
+    <div class="card"><h4>抓取结果回显<span class="sp"><span class="mut sm">按<b>执行记录</b>里每类接口<b>最近一次</b>的结果（⛔ 不是某页上的实时数）</span></span></h4><div class="bd">
       <div class="kv"><dt>付款通知书</dt><dd>${NO.length} 条（剔除 ${NO.filter(n=>n.excl).length} · i8 已撤单 ${NO.filter(n=>ntVoid(n)).length} · 有效 ${NO.filter(ntLive).length}）</dd>
         <dt>收发结存</dt><dd>${sums(WHs,'rows')} 行 / ${WHs.length} 仓</dd>
         <dt>库存单据明细</dt><dd>${IVs.length} 行（模拟裁剪）</dd>
@@ -3371,8 +3371,19 @@ const ACT={
    if(api==='API-01'||tt==='付款通知书') return ACT.fetchNt();
    if(api==='API-02'||tt==='收发结存表') return ACT.fetchWh();
    if(api==='API-03'||tt==='库存单据明细表') return ACT.fetchIv();
-   toast(`已触发抓取：<b>${esc(tt)}</b>（模拟）→ 成功；左侧「抓取结果回显」展示的是<b>当前数据快照</b>（原型为静态数据，点击不改变它）`); },
- manualUp:t=>toast(`「${esc(t.dataset.t)}」走<b>降级路径</b>：手动下载 Excel → 上传导入（<b>原型阶段只演示流程、不含上传控件</b>）；解析后与抓取走<b>同一套处理管线</b>（§3.6 降级）`),
+   /* ⭐ 2026-09-18 接线（`TAIL-27`）：API-05/06 现在是**真同步**（走 `m02Sync` 的二次确认 —— 会顶号）。
+      ⛔ API-04（采购合同信息）**没有落点** —— 属**集采域（M5，未开工）** ⇒ 如实说不接，⛔ 不假装成功。 */
+   if(api==='API-05'||tt==='仓库列表') return m02Sync('warehouses');
+   if(api==='API-06'||tt==='常用项目列表') return m02Sync('common-projects');
+   toast(`⏳ <b>「${esc(tt)}」尚未接通</b>：它的落点在<b>集采域</b>（M5 未开工）—— 在此之前⛔ 不假装成功`,7000); },
+ /* ⭐ 降级路径（§3.6）的**真实入口在各自那一页**（与抓取走**同一套解析 / 落库管线**）
+    ⇒ 这里只**把人送过去**，⛔ 不在这张表里再做一个上传控件（一份能力只许一个主人）。 */
+ manualUp:t=>{ const tt=t.dataset.t||'';
+   const map={'收发结存表':'m07','库存单据明细表':'m08','过程资料':'m06'};
+   const k=map[tt];
+   if(k){ go(k);
+     return toast(`「${esc(tt)}」的降级路径 = <b>在那一页的「导入」入口</b>上传 i8 导出的 Excel（与抓取<b>同一套解析 / 落库</b>，§3.6）—— 已跳过去`,7500); }
+   toast(`⏳ <b>「${esc(tt)}」的手动导入入口尚未接通</b>：降级路径要有对应页面的导入入口（与全站其它导入走同一套管线）—— 在此之前⛔ 不演示假上传`,7500); },
  /* MOD-14 剔除规则：**真增 / 删 / 改**（2026-09-13 P6 裁定①·乙）。
     ⚠️ 只改这张**演示表**（`RULE_EX`）；**不重算**已产生的剔除标记（`NO[].exrule`）—— 页内已写明。
     配置类数据按 §9.4 = **硬删、不留痕**；弹窗内输入由「保存」按钮一次性读取（不挂 data-act ⇒ 不进 `CHG`）。 */
@@ -4229,11 +4240,25 @@ const ACT={
  delPjOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
     closeModal();
     toast(`⏳ <b>删除尚未接通后端</b>：「${esc(p.disp||p.name)}」—— 删除前必须<b>列出影响范围</b>（§7.2），那是<b>跨模块统计</b>；<br>该能力未落地前不接删除 —— 避免"列不出影响范围就删了"`,7000); },
- /* ⏳ **尚未接通前端** —— 两个同步都要**登录 i8**（会**强踢**该账号的在线用户，D9）。
-    后端端点已存在（`/api/m02/sync/*`）；缺的是**抓前二次确认**（抓前必须告知会顶号）。
-    ⚠️ 开通时先跟业务方确认时段 —— 这也是今天没接的原因。 */
- syncWh:()=>toast('⏳ <b>尚未接通</b>：同步仓库名单要登录 i8（会<b>强踢</b>在线用户）—— 接通前需先确认时段（D9）',6000),
- syncPj:()=>toast('⏳ <b>尚未接通</b>：同步常用项目列表同上（登录 i8 ⇒ 强踢在线用户）',6000),
+ /* ⭐ 2026-09-18 接通（`TAIL-27`）：两个同步都是**登录 i8**（会**强踢**该账号在线用户，D9）
+    ⇒ 统一走 `m02Sync()` —— 它先弹**二次确认**（这是 D9 那道闸），确认后才发请求。
+    ⚠️ 与 `m02` 表里 API-05/06 两行的「触发」**共用同一个入口**（一份能力只许一个主人）。 */
+ syncWh:()=>m02Sync('warehouses'),
+ syncPj:()=>m02Sync('common-projects'),
+ /* ⭐ 二次确认之后的**唯一出口**：成功/失败都回后端真实状态，把回执**原样**转给用户（⛔ 不吞、不换句话）。 */
+ m02SyncOk:async t=>{ const which=String(t.dataset.which||''); const isWh=which!=='common-projects';
+    closeModal();
+    let r=null;
+    try { r = await (isWh ? API.m02SyncWh() : API.m02SyncPj()); }
+    catch(e){ try{ await reloadM02(); }catch(_){}
+      return toast(`<b>同步没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+    try { await reloadM02(); } catch(_){ /* 取数失败 ⇒ 日志卡里会如实说 */ }
+    /* 同步「常用项目列表」会**真的建档**（`ACC-PRJ-SYNC-001`）⇒ 档案与「待人工建档」卡都得跟着刷 */
+    if(!isWh){ try{ await reloadProjects(); }catch(_){} }
+    if(r && r.degraded) return toast(`⚠️ <b>i8 侧不可用，未改动本地档案</b>：${esc(r.message||'')}`,9000);
+    const ct=(r&&r.counts)||{};
+    const more=(!isWh && ct.manual) ? `<br>⇒ 有 <b>${ct.manual}</b> 条「一个全名挂多个仓库」需人工选定 —— 去 <b>m01</b> 的「待人工建档」卡处理` : '';
+    toast(`✅ <b>${isWh?'仓库名单':'常用项目列表'}已同步</b>：${esc((r&&r.message)||('取到 '+((r&&r.count)||0)+' 条'))}${more}`,9000); },
 
  /* —— MOD-06 —— */
  procPjToggle:()=>{ procPjOpen=!procPjOpen; render(); },
@@ -5071,6 +5096,14 @@ const API = {
   pjArchPend: () => API.get('/api/m01/archive-pending'),
   pjArchRow: body => API.post('/api/m01/archive-row', body),
 
+  /* ---- MOD-02 · i8 接入层（`TAIL-27`）----
+     ⭐ 「抓取结果回显」与「抓取任务日志」的**唯一数据源 = 执行记录**（原先两张卡是模拟值/硬编码行）。
+     ⚠️ 两个同步都会**登录 i8 并强踢该账号在线用户**（D9）⇒ `allow_kick=true` 只允许在
+        界面**二次确认**之后传 —— 下面 `m02Sync()` 里那个弹窗就是那道闸（⛔ 不确认就不发请求）。 */
+  m02Records: (limit = 50) => API.get(`/api/m02/fetch/records?limit=${limit}`),
+  m02SyncWh: () => API.post('/api/m02/sync/warehouses?allow_kick=true', {}),
+  m02SyncPj: () => API.post('/api/m02/sync/common-projects?allow_kick=true', {}),
+
   /* ---- MOD-03 · 抓取 ＋ 链路 C 弹窗（`TAIL-29`-② ④） ---- */
   /* ⭐ 抓取：**失败也要看回执** —— 「归属未走完」是**可预期的失败**（要拿它开弹窗）
      ⇒ 这里**不 throw**，把 body 原样返回，由调用方判 `ok`。 */
@@ -5867,6 +5900,26 @@ async function reloadArchPend() {
 
 /* m01 页首的入口 —— ⛔ 不动 `V.m01`；`render()` 画完再注入（同 `BIND.m06`）。
    ⚠️ **幂等**：先撤掉旧的那块再按当前清单重建（清单是异步来的，会重画多次）。 */
+/* ============ MOD-02 i8 接入层（前端壳接线 · `TAIL-27`）============
+   ⭐ **`V.m02` 一行不改**（原型切片一行不动是本仓铁律）：两张卡的内容都由本钩子在 `render()` 之后
+      **就地纠正** ——
+      · 「抓取结果回显」：那 6 行原先是**演示表达式**（`NO`/`WHs`/`IVs`/`JCs`/`PJs`，其中 `WHs`/`JCs`
+        本身就是**演示数组** ⇒ 显示出来是假话）⇒ 换成**执行记录**里每类接口最近一次的结果；
+      · 「抓取任务日志」：`tbody` 那 8 行是**硬编码演示行** ⇒ 换成真记录（时间 / 接口 / 结果 / 耗时）。
+   ⚠️ 为什么要在这里做（而不是改切片）：切片是**逐行对位**核对的，删一行就会让后面**全部报漂移**；
+      而 `BIND` 钩子正是本仓「渲染后注入」的既定位置（`BIND.m01` 那两张卡同款）。
+   ⚠️ **幂等**：`render()` 会重画多次 ⇒ 每次重算、⛔ 不叠加。
+   ⚠️ 卡片标题里那个「（模拟）」在切片里**已改准并登记**（`ui_parity_expected.txt` 的 `m02` 那行）——
+      那是**一处**显式偏离，其余一律不动切片。 */
+BIND.m02 = function () {
+  const host = document.querySelector('#view');
+  if (!host) return;
+  const kv = host.querySelector('.kv');
+  if (kv) kv.innerHTML = m02EchoKv();
+  const tb = host.querySelector('table[data-sort-key="m02:logs"] tbody');
+  if (tb) tb.innerHTML = m02LogRows();
+};
+
 BIND.m01 = function () {
   const host = document.querySelector('#view');
   if (!host) return;
@@ -6002,6 +6055,119 @@ async function openArchDialog(i) {
   });
 }
 
+/* ============ MOD-02 i8 接入层（前端壳接线 · `TAIL-27`）============
+   ⭐ **「抓取结果回显」与「抓取任务日志」的唯一数据源 = 执行记录**（`/api/m02/fetch/records`）：
+      原先两张卡是**模拟值 ＋ 硬编码行**（还读着演示数组 `WHs`/`JCs`）⇒ 接线后一律读真记录，
+      ⛔ 不读任何演示数组（那两份数据的主人分别是 m07 的演示与集采域的原型页）。
+   ⚠️ **接口清单表（`TASK`）刻意不接** —— 它是**口径文档式静态表**（《说明书》附录 E.1 的**子集**），
+      数据源就是**文档本身**，不是运行数据；它的「触发 / 手动导入」两个按钮才走下面这些入口。
+   ⚠️ 「采购合同信息」（`API-04`）**没有落点** —— 属**集采域（M5，未开工）** ⇒ 卡片上如实标「待接通」，
+      ⛔ 不写 0（那是假话：会让人以为"抓过、没有"）。 */
+let M02_RECS = [];        /* 执行记录（**新 → 旧**），由 `reloadM02()` 填 */
+let M02_ERR = '';         /* 这一路取数失败的原因（页面上如实说；⛔ 不静默成"没有记录"） */
+
+/* 回显卡：一行一个接口 → 在**执行记录**里认它的 `target`。
+   ⚠️ 材料侧两条抓取的 `target` 是 `<SPEC_KEY> <年月>…`（`setl` / `inv`）—— 与 `m07`/`m08` 同源，
+      而付款通知书是「付款通知书 <年月>」（见 `mod02_i8/router.py` 的 `fetch_run`）。 */
+const M02_IFACES = [
+  {label: '付款通知书', api: 'API-01', keys: ['付款通知书'], bare_month: true},
+  {label: '收发结存表', api: 'API-02', keys: ['setl', '收发结存表']},
+  {label: '库存单据明细表', api: 'API-03', keys: ['inv', '库存单据明细表']},
+  {label: '采购合同信息', api: 'API-04', keys: ['采购合同']},
+  {label: '仓库列表', api: 'API-05', keys: ['仓库列表']},
+  {label: '常用项目列表', api: 'API-06', keys: ['常用项目列表']},
+];
+
+/* ⭐ 一条记录属不属于这个接口 —— **认得出才归**，认不出**不猜**。
+   ⚠️ 付款通知书那条链路的执行记录**只写「年月」**（`mod03_notice/router.py` 里 `target=year_month`）
+      ⇒ 纯 `YYYY-MM` 就是它（别的接口都带前缀：`setl …` / `inv …` / `仓库列表` …）。
+      2026-09-18 真机实测踩到：不认它 ⇒ 回显卡对**已经抓过**的付款通知书说「还没有执行记录」（假话）。 */
+function m02IsIf(it, r) {
+  if (it.keys.some(k => r.target.indexOf(k) >= 0)) return true;
+  return !!it.bare_month && /^\d{4}-\d{2}$/.test(String(r.target).trim());
+}
+
+function m02Latest(it) {
+  return M02_RECS.find(r => m02IsIf(it, r)) || null;
+}
+
+function m02When(r) {
+  return String(r.at || '').replace('T', ' ').slice(5, 16);     /* MM-DD HH:MM */
+}
+
+function m02Dur(r) {
+  if (!r.at || !r.fin) return '—';
+  const d = (new Date(String(r.fin).replace(' ', 'T')) - new Date(String(r.at).replace(' ', 'T'))) / 1000;
+  if (!isFinite(d) || d < 0) return '—';
+  return (d < 10 ? d.toFixed(1) : String(Math.round(d))) + 's';
+}
+
+function m02StatusTag(r) {
+  if (r.status === 'success') return `<span class="tag t-ok">成功 ${r.ok} 条</span>`;
+  if (r.status === 'failed') return `<span class="tag t-dg">失败</span>`;
+  return `<span class="tag t-wn">部分成功 ${r.ok} / ${r.ok + r.fail}</span>`;
+}
+
+/* 回显卡那 6 行（`V.m02` 里原先是模拟表达式 ⇒ 换成这一个出口） */
+function m02EchoKv() {
+  return M02_IFACES.map(it => {
+    const r = m02Latest(it);
+    let dd;
+    if (it.api === 'API-04') dd = '<span class="mut">待接通 —— 该接口属<b>集采域</b>（M5 未开工）</span>';
+    else if (M02_ERR) dd = '<span class="dg">⚠️ 执行记录没取到（见下方日志卡）</span>';
+    else if (!r) dd = '<span class="mut">还没有执行记录（抓过 / 同步过就有了）</span>';
+    else dd = `${m02StatusTag(r)} <span class="mut sm">${esc(m02When(r))}</span>`
+      + (r.err ? `<br><span class="dg sm">${esc(r.err)}</span>` : '');
+    return `<dt>${esc(it.label)}</dt><dd>${dd}</dd>`;
+  }).join('');
+}
+
+/* 任务日志卡的行（时间 / 接口 / 结果 / 耗时 —— 后两项由适配层从记录算，⛔ 后端不为此加字段） */
+function m02LogRows() {
+  if (M02_ERR) return `<tr><td colspan="4" class="dg">⚠️ <b>执行记录没取到</b>：${esc(M02_ERR)}
+    <br><span class="mut">其余页照常可用（这一路失败不拖垮本页）—— 可刷新页面重试。</span></td></tr>`;
+  if (!M02_RECS.length) return '<tr><td colspan="4" class="mut">还没有执行记录 —— 抓过 / 同步过之后这里就有（按时间倒序）</td></tr>';
+  return M02_RECS.map(r => `<tr><td class="fc">${esc(String(r.at).replace('T', ' '))}</td>
+    <td>${esc(m02LabelOf(r))}</td><td>${m02StatusTag(r)}${r.err ? `<br><span class="dg sm">${esc(r.err)}</span>` : ''}</td>
+    <td class="fc">${esc(m02Dur(r))}</td></tr>`).join('');
+}
+
+function m02LabelOf(r) {
+  const it = M02_IFACES.find(x => m02IsIf(x, r));
+  return it ? `${it.api} ${it.label}` : r.target;      /* 认不出的走原文（⛔ 不猜成某一类） */
+}
+
+async function reloadM02() {
+  const recs = await API.m02Records(50);
+  M02_RECS = (recs || []).map(r => ({
+    id: r.id, type: r.run_type || '', target: String(r.target || ''), status: String(r.status || ''),
+    ok: Number(r.success_count || 0), fail: Number(r.fail_count || 0),
+    err: String(r.error_message || ''), at: r.started_at || '', fin: r.finished_at || '',
+  }));
+  M02_ERR = '';
+}
+
+/* ⭐ 两个同步（`API-05` / `API-06`）的**唯一入口** —— 壳里三处入口共用它：
+   `m02` 表里 API-05/06 两行的「触发」＋ `m01` 页首那两个「同步…」按钮。
+   ⚠️ **D9：会强踢该账号的在线用户** ⇒ ① 先弹**二次确认**（讲清顶号与时段），⛔ 不确认不发请求；
+      ② 失败 / 降级 ⇒ 后端那句中文说明**原样**转给用户；③ 成功 ⇒ 刷新执行记录（回显与日志跟着变），
+      同步**常用项目列表**还会**真的建档** ⇒ 顺手刷新档案与「待人工建档」卡（`TAIL-45`）。
+   签发给谁：本函数的两种入参就是那两个端点（`warehouses` / `common-projects`）。 */
+async function m02Sync(which) {
+  const isWh = which === 'warehouses';
+  const name = isWh ? '仓库名单（API-05）' : '常用项目列表（API-06）';
+  const tail = isWh ? '仓库名单本身**不落库**（它是建档的输入）；建档请用「常用项目列表」那一行'
+                    : '会按 phid **幂等建档**，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
+  modal({
+    title: `同步 ${name}`,
+    body: `<div class="tip dg" style="margin:0 0 10px"><b>⚠️ 这一步会登录 i8，并强制踢掉该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）——
+      若其他同事正在用 i8，请先<b>择时</b>；系统<b>不会</b>自动重试登录。</div>
+      <div class="tip" style="margin:0">${tail}</div>`,
+    footer: `<button class="btn" data-act="closeModal">取消</button>
+      <button class="btn pri" data-act="m02SyncOk" data-which="${which}">确认同步（会顶号）</button>`,
+  });
+}
+
 /* ============ MOD-09 特殊费用月报表（前端壳接线 · `TAIL-27`）============
    ⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 这里**一律过 `N0()`**：
       原型切片里有 `r[1].toFixed(2)`，字符串会**直接 TypeError 整页崩**（而且不报错地坏）。
@@ -6051,6 +6217,7 @@ async function boot() {
   });
   await soft('待人工指认', reloadPending);   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
   await soft('待人工建档', reloadArchPend);  /* ⭐ `TAIL-45`：链路 A ③-b「多仓库 ⇒ 选定一个」那一路 */
+  await soft('i8 执行记录', reloadM02);     /* ⭐ `TAIL-27`：`m02` 回显与任务日志的唯一数据源 */
   await soft('修改留痕', async () => {
     const tr = await API.trails();
     PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
