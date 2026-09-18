@@ -99,7 +99,6 @@ class NoticeStatLog(Base):
 
     ⚠️ 写入只走 `domain.adjust_stat` 的返回值，**不**在别处补写第二套排法。
     """
-
     __tablename__ = "notice_stat_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -112,3 +111,29 @@ class NoticeStatLog(Base):
     changed_by: Mapped[str] = mapped_column(String(64), default="")  # 改动人
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)   # 时间
     note: Mapped[str] = mapped_column(String(512), default="")
+
+
+class ExcludeRuleRow(Base):
+    """**剔除规则的落库行**（§4.2.2 · 系统配置）—— `TAIL-40`。
+
+    ⚠️ 与 `classify.ExcludeRule`（判定用的**不可变值对象**）**有意分开**：
+       本类只管"存"（可变、有 `id`、有业务含义列）；判定一律由 `rules_repository` 转成
+       `ExcludeRule` 后交给 `classify.match_exclude_rule`（**唯一判定出口**，⛔ 不分叉）。
+
+    ⚠️ **命中值分隔符 = 全角 `｜`**（《说明书》§4.2.2 表内写法，与原型演示常量同款）；
+       ⚠️ **解析时半角 `|` 也认**（手输常见）—— 写入统一规整成全角（唯一写法）。
+
+    ⚠️ 配置类数据 ⇒ **硬删、不留痕**（§9.4）—— 与 `AppSetting` 的留痕**有意不同**。
+
+    ⚠️ **本站不重算历史**：改规则**不改**已产生的剔除标记（§4.2.2）⇒ 本表无需版本 / 生效时间戳。
+    """
+
+    __tablename__ = "exclude_rule"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True, server_default="")
+    values: Mapped[str] = mapped_column(String(512), server_default="")     # 命中值原文（全角 ｜ 分隔）
+    meaning: Mapped[str] = mapped_column(String(256), server_default="")    # 业务含义（**纯展示**，不参与判定）
+    ord: Mapped[int] = mapped_column(Integer, server_default="0")           # 行序（同 §4.2.2 表序）
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

@@ -59,4 +59,12 @@ async def settings_save(request: Request):
     return RedirectResponse("/m14/settings?ok=1", status_code=303)
 
 
+# ⭐ 前端壳的 **剔除规则 JSON API**（`TAIL-40`）—— 独立路由件，由本文件汇总（`main.py` 不用改）
+#    ⚠️ 数据主人是**付款域**（`mod03_notice.rules_repository`）：§4.2.2 原文即「剔除规则本身属付款域」
+#       ⇒ 依赖单向 `mod14_config → mod03_notice`，不成环。
+from app.mod14_config.rules_api import router as rules_router      # noqa: E402
+
+router.include_router(rules_router)
+
+
 __all__ = ["router"]

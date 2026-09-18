@@ -37,7 +37,8 @@ from app.mod01_projects.repository import all_projects
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02（2026-09-15 归位）
 from app.mod03_notice.models import PaymentNotice
-from app.mod03_notice.classify import decide_placement, rows_needing_ownership
+from app.mod03_notice.classify import DEFAULT_RULES, decide_placement, rows_needing_ownership
+from app.mod03_notice.rules_repository import effective_rules
 from app.mod03_notice.merge import apply_placement_to_new, plan_merge
 from app.mod03_notice.repository import (
     create_run_record,
@@ -113,7 +114,8 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
 
 
 def apply_fetched_row(session, row: dict, *,
-                      ownership_id: int | None = None) -> tuple[bool, bool]:
+                      ownership_id: int | None = None,
+                      rules=None) -> tuple[bool, bool]:
     """把一条抓取记录落库 —— 返回 `(是否新行, 是否有改动)`。
 
     - **新行**：跑剔除判定（§4.2.2）与分类（§4.2.3）后落库，**并带上归属**（§2.5.1 链路 C）；
@@ -122,10 +124,12 @@ def apply_fetched_row(session, row: dict, *,
 
     ⚠️ `ownership_id` **只对新行生效**（已有行的归属由人指定过，不被再次导入冲掉）；
        它由调用方在**整批校验通过后**传入 —— 见 `get_fetch_executor`。
+    ⚠️ `rules` = 本次抓取用的**生效规则集**（`rules_repository.effective_rules` 的唯一出口）；
+       由调用方**读一次传进来**（⛔ 不在这里每次现读 —— 同一批要保证判据一致）。
     """
     existing = get_notice_by_ph_id(session, row["ph_id"])
     if existing is None:
-        placement = decide_placement(row)
+        placement = decide_placement(row, rules=rules if rules is not None else DEFAULT_RULES)
         upsert_notice(session, **apply_placement_to_new(placement, row,
                                                         ownership_id=ownership_id))
         return True, True
@@ -175,7 +179,12 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         #       —— **不许在编排层另写一份剔除判定**（「同一件事被实现两遍」是本项目反复踩的坑）。
         #    ⇒ 剔除行**照旧落库**（落库时 `decide_placement` 会给它打 `exclude_source=rule`），
         #      只是**不参与归属校验**、`ownership_id=None`。
-        need_own = rows_needing_ownership(rows)          # `[(原序号, 行)]` —— 剔除行已被排除
+        # ⭐ **（`TAIL-40`）规则来源改为「库 → 出厂默认」**：本批**读一次**生效规则集，随后
+        #    **同时**喂给「挑需校验的行」与「落库时的剔除判定」—— 一处读取、两处同一份
+        #    （⛔ 不许在编排层另写一份剔除判定，也不许两处各读一次）。
+        with session_scope() as session:
+            rules = effective_rules(session)
+        need_own = rows_needing_ownership(rows, rules)   # `[(原序号, 行)]` —— 剔除行已被排除
         n_excluded = len(rows) - len(need_own)
 
         def _judge() -> list[tuple[int, dict, OwnershipDecision]]:
@@ -266,7 +275,8 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
             created = updated = 0
             for i, row in enumerate(rows):
                 is_new, changed = apply_fetched_row(session, row,
-                                                    ownership_id=ownership_of.get(i))
+                                                    ownership_id=ownership_of.get(i),
+                                                    rules=rules)
                 if is_new:
                     created += 1
                 elif changed:
