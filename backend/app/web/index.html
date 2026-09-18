@@ -4233,7 +4233,28 @@ const ACT={
     +「**过程资料**」透视（按仓 × 出入库方向 × 物料性质）+「**安全文明施工费**」透视（按仓 × 金额）。
     ⚠️ 2026-09-14 更正：旧文案写「明细（列与页面一致）· 工作表 2 = 透视（按项目 × 月份）」—— **两处都错**
        （路径②不套模板骨架、列随 i8 源文件；透视也不是"按项目 × 月份"那一张）。 */
- expPivot:()=>toast('已导出「库存单据明细（含数据透视表）」：<b>工作表 1</b> = 明细（<b>列随 i8 源文件</b>，与页面列不同）；<b>工作表 2</b> = <b>「过程资料」透视</b>（按仓 × 出入库方向 × 物料性质）；<b>工作表 3</b> = <b>「安全文明施工费」透视</b>（按仓 × 金额）<br>⚠️ 这份走<b>路径②</b>（脚本直接改 i8 导出源文件、含真·透视表）：<b>不套模板骨架、不认 DATA_START</b>；主表的「导出 Excel（R1）」不受影响',6400),
+ expPivot:async ()=>{
+   /* ⭐ 接线（`TAIL-04` 第二片）：成品由**后端模板法**生成（库存单据明细表 xlsx，含两张真透视 ——
+      过程资料 / 安全文明施工费）。失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**
+      （模板缺失/损坏 · 该月没有明细 · **缓存级对账不过**）⇒ 据 `content-type` 分流：
+      JSON ⇒ 弹原因；否则当文件下载。⛔ 前端不自己拼文件名（命名规则的主人在后端，
+      经 `X-Export-Filename` 带出）。 */
+   const url='/api/m08/inventory/export?period='+encodeURIComponent(fIvYm);
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'库存单据明细表.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   toast('已导出「库存单据明细（含数据透视表）」：<b>工作表 1</b> = 明细（<b>列随 i8 源文件</b>，与页面列不同）；<b>工作表 2</b> = <b>「过程资料」透视</b>（按仓 × 出入库方向 × 物料性质）；<b>工作表 3</b> = <b>「安全文明施工费」透视</b>（按仓 × 金额）<br>⚠️ 这份走<b>路径②</b>（脚本直接改 i8 导出源文件、含真·透视表）：<b>不套模板骨架、不认 DATA_START</b>；主表的「导出 Excel（R1）」不受影响',6400); },
  goInvAdj:t=>{ invWhs.length=0; invWhs.push(t.dataset.wh); invOnlyAdj=true; go('m08'); setTimeout(()=>toast(`已跳转库存单据页并自动筛出：<b>${esc(t.dataset.wh)}</b> 被调整过的行`),120); },
 
  /* —— MOD-07 —— */

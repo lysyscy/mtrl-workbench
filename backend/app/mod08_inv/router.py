@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
@@ -275,6 +275,48 @@ def api_fetch(req: FetchRequest) -> dict:
         return FS.run_fetch(
             s, year_month=req.month, confirmed=req.confirm, operator=current_operator()
         )
+
+
+@router.get("/api/m08/inventory/export")
+def api_export_inventory(
+    request: Request,
+    allow_kick: bool = Query(
+        False, description="⭐ 须用户在界面二次确认后才为 true（D9：强踢该账号其他在线会话）"
+    ),
+):
+    """导出库存单据明细表**成品 xlsx**（含「过程资料」「安全文明施工费」两张真透视）—— 浏览器直接下载（`TAIL-04`）。
+
+    口径 = **模板法**：以「用户手作成品 xlsx」为基底做 `zip` 字节替换
+    （`ops/模板法导出-实测结论.md`）；两张透视与数据缓存**逐项对账**（容差 0.01）。
+
+    - 取数 = **HTTP 现导**（`report_export.export`，`spec_key='inv'`）；期间缺省 = 本页默认月（§9.2）。
+    - ⭐ **`allow_kick`**（query，**默认 `false`**）透传给 `I8Client`：cookie 有效 / **命中磁盘缓存**时
+      **不重登、不顶号**；仅当缓存与登录都拿不到可用会话、且**界面已二次确认**时才允许强踢（D9）。
+      ⛔ **绝不擅自踢人** —— 不传即 `false`。⚠️ 本轮只把该能力备好，**壳侧交互不改**（后续再定）。
+    - ⚠️ 三种失败（模板缺失/损坏 · 该月没有明细 · **缓存级对账不过**）⇒ **不产出文件**，
+       改成 **JSON 200 ＋ `ok:false` ＋ 中文原因** —— 壳侧据 `content-type` 分流：
+       `application/json` ⇒ 弹原因；否则当文件下载。
+       （⛔ 不回 4xx：那样用户只看到一句 `HTTP 400`，而"该月没有数据"这种话必须给人看。）
+    """
+    from fastapi.responses import FileResponse, JSONResponse
+    from urllib.parse import quote
+
+    from app.report_export import service as EX
+
+    period = str(request.query_params.get("period") or "").strip() or D.default_month()
+    try:
+        with session_scope() as s:
+            path = EX.export_inventory(s, period, allow_kick=allow_kick)
+    except MustReportError as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
+    # ⚠️ 文件名**由后端带出**（`X-Export-Filename`，UTF-8 percent-encoded）——
+    #    ⛔ 不让壳自己拼：命名规则一旦两处各写一份，改一处就会静默走形。
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=path.name,
+        headers={"X-Export-Filename": quote(path.name)},
+    )
 
 
 __all__ = ["router"]

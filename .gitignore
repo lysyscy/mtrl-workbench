@@ -2,6 +2,8 @@
 .env
 *.env
 !.env.example
+# ⭐ i8 Cookie 磁盘缓存同样是**凭证** —— 其忽略规则见下方「产物体与日志」段
+#   （那儿排在 `artifacts/*` 之后 ⇒ 是**真正定夺**的那条，`git check-ignore` 会点到它）。
 
 # ===== Python =====
 __pycache__/
@@ -21,6 +23,8 @@ htmlcov/
 # ===== 产物体与日志（可再生成，不单独备份）=====
 artifacts/*
 !artifacts/.gitkeep
+# ⭐ i8 Cookie 磁盘缓存是**凭证** —— 随 `artifacts/*` 忽略；再显式钉一次（排在其后 ⇒ 由它定夺）
+artifacts/i8_cookie/
 logs/*
 !logs/.gitkeep
 

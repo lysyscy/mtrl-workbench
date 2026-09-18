@@ -1,7 +1,12 @@
-"""`TAIL-04` 成品文件写出（模板法）—— 收发结存切片的**离线接线断言**。
+"""`TAIL-04` 成品文件写出（模板法）—— 收发结存 ＋ **库存单据明细表**两片切片的**离线接线断言**。
 
-绑 `ACC-X-EXP-001/001-02`（导出文件名用**当前年月**、不得硬编码成某个固定月份）；
-其余接线断言用 `@acc()` 显式声明不绑定（避免被"未绑定测试体检"误报）。
+- **第一片（收发结存）**：绑 `ACC-X-EXP-001/001-02`（导出文件名用**当前年月**、不得硬编码成某个固定月份）。
+- **第二片（库存单据明细表成品 xlsx，含两张真透视）**：
+  · 绑 `ACC-X-EXP-001/001-05`（导出**成品形态 / 提示语必须与模板实际形态一致** —— 3 张 sheet =
+    `报表1` +「过程资料」透视 +「安全文明施工费」透视；⛔ 不得声称与实例不符的结构）；
+  · 绑 `ACC-INV-001/001-12`（**MOD-08 专属**：主表朴素导出与「含数据透视表」**并存互不影响** ＋
+    后者提示与模板实际形态一致 —— 比通用点 001-05 多了「两者并存互不影响」那半句）。
+- 其余接线断言用 `@acc()` 显式声明不绑定（避免被"未绑定测试体检"误报）。
 
 ⚠️ 这里钉的三件事（都踩过）：
 1. **成品名只有一处主人** —— 页面清单（`domain.zip_manifest`）与实际产出的文件名必须**同一个来源**；
@@ -10,20 +15,26 @@
 3. **三种失败都不产出文件、且把中文原因带回**（模板缺失/损坏 · 该月无数据 · 缓存级对账不过）
    —— ⛔ 绝不静默交付一个空文件或数字对不上的文件。
 
+⚠️ 两片都走**离线**（不连 i8、不顶号）：库存单据那片喂的是 i8 源文件**字节**
+（优先仓里现成的真机导出件 `artifacts/_diag/inv_2026-09.xlsx`，缺则现造一份）。
+
 真机验证在 `tools/_verify_tail04.py`（连库跑 SQL 与成品逐分对账，**第三条独立路径**）与
 `tools/_shell_smoke.py`（第 ⑬ 段，走 HTTP 真下载）。
 """
 
 from __future__ import annotations
 
+import re
 import zipfile
 from pathlib import Path
 
+import openpyxl
 import pytest
 
 from app.core.errors import MustReportError
 from app.mod07_setl import domain as D
 from app.mod07_setl.models import SetlDetail
+from app.report_export import kcdj_export as KE
 from app.report_export import resources as R
 from app.report_export import service as EX
 from app.report_export import setl_export as SE
@@ -33,6 +44,8 @@ from tests.m07_helpers import dataset
 ROOT = Path(__file__).resolve().parents[2]
 SHELL = (ROOT / "backend" / "app" / "web" / "index.html").read_text(encoding="utf-8")
 API = (ROOT / "backend" / "app" / "mod07_setl" / "api.py").read_text(encoding="utf-8")
+INV_API = (ROOT / "backend" / "app" / "mod08_inv" / "router.py").read_text(encoding="utf-8")
+DIAG_INV = ROOT / "artifacts" / "_diag" / "inv_2026-09.xlsx"
 
 
 def _act(name: str) -> str:
@@ -161,3 +174,319 @@ def test_壳侧导出按钮已接线且按content_type分流():
     # 后端两条分支都要在：成功给 zip、失败给 JSON＋中文原因
     assert "application/zip" in API, "成功分支不是 zip"
     assert '"ok": False' in API.replace("'", '"'), "失败分支没回 `ok:false`（壳就分不出流）"
+
+
+# ============================================================== 库存单据明细表成品（第二片 · ACC-X-EXP-001/001-05）
+
+
+def _synth_i8_bytes(with_safe: bool = True) -> bytes:
+    """造一份**最小 i8 库存单据源**（28 列，两张透视要的分组数据齐）—— 仅当仓里没有 diag 件时用。
+
+    `with_safe=False` ⇒ 一行安全文明施工费都没有 ⇒ `safe_wh` 为**空集**（钉「空集 ≠ 未传」用）。
+    """
+    import io as _io
+
+    from app.report_export.schema_cols import KCDJ_COLS
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "报表1"
+    ws.append(["库存单据明细表"] + [""] * 27)               # 标题行（引擎会跳过）
+    ws.append([KCDJ_COLS[i] for i in range(28)])            # 表头行（含「序号」「金额」）
+
+    def _row(seq, qty, amt, prop, direction, wh, cbs):
+        r = [""] * 28
+        r[0], r[1], r[2] = seq, "2026", "9"
+        r[4], r[9], r[10], r[11] = "某项目", "个", "规格", prop
+        r[12], r[13], r[14], r[15], r[16] = qty, "1.0", "1.0", amt, amt
+        r[17], r[18], r[27] = direction, wh, cbs
+        return r
+
+    safe = KE.SAFE_CBS if with_safe else ""      # ⚠️ 值必须与 `kcdj_export.SAFE_CBS` **同一个来源**
+    ws.append(_row("1", "10", "100.00", "主材", "入库", "甲仓", safe))
+    ws.append(_row("2", "5", "50.00", "辅材", "出库", "甲仓", safe))
+    ws.append(_row("3", "20", "200.00", "主材", "入库", "乙仓", ""))
+    ws.append(_row("4", "3", "30.00", "辅材", "出库", "乙仓", ""))
+    buf = _io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _kcdj_source() -> bytes:
+    """离线 i8 源：**优先仓里现成的真机导出件**（`_diag/inv_2026-09.xlsx`），缺则现造一份。"""
+    return DIAG_INV.read_bytes() if DIAG_INV.exists() else _synth_i8_bytes()
+
+
+@acc("ACC-X-EXP-001", "001-05")
+def test_库存单据明细表成品形态与模板一致且两张透视齐备():
+    """绑 `ACC-X-EXP-001/001-05` —— **导出成品形态 / 提示语必须与模板实际形态一致**。
+
+    判据对应：`验收基线.json` 的 `ACC-X-EXP-001/001-05`
+    （「导出提示语必须与模板的实际形态一致（不得声称与实例不符的列 / 工作表结构）」）。
+    成品实际那 3 张 sheet = `报表1` ＋「过程资料」透视 ＋「安全文明施工费」透视 —— 断言**真读回的文件**
+    （⛔ 不是断言「提示语自称」的形态）。
+
+    ⚠️ **离线**驱动：喂 i8 源文件**字节**（⛔ 不连 i8、不顶号）。
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="t04-kcdj-") as td:
+        out = Path(KE.build_xlsx(_kcdj_source(), Path(td) / KE.FILE_PREFIX / "2026年9月"))
+        # ① 命名规则照素材包不变：`库存单据明细表_<期间标签>.xlsx`
+        assert out.name == f"{KE.FILE_PREFIX}_2026年9月.xlsx", f"命名跑偏：{out.name}"
+
+        # ② 两张真透视的部件必须在
+        z = zipfile.ZipFile(out)
+        parts = z.namelist()
+        for part in ("xl/pivotTables/pivotTable1.xml", "xl/pivotTables/pivotTable2.xml"):
+            assert part in parts, f"成品缺透视部件：{part}"
+        # ③ 结构正确性：`refreshOnLoad` **只在** `pivotCacheDefinition` 上（⛔ 跑上 `pivotTable` = 不合 schema）
+        assert "refreshOnLoad" in z.read("xl/pivotCache/pivotCacheDefinition1.xml").decode("utf-8")
+        for pt in ("xl/pivotTables/pivotTable1.xml", "xl/pivotTables/pivotTable2.xml"):
+            assert "refreshOnLoad" not in z.read(pt).decode("utf-8"), \
+                "`refreshOnLoad` 跑到 `pivotTable` 上了（不合 OOXML schema）"
+        z.close()
+
+        # ④ 真读回（⚠️ 必须 `read_only=True`，见 `kcdj_export._structural_gate`）
+        wb = openpyxl.load_workbook(out, read_only=True, data_only=True)
+        try:
+            sheets = list(wb.sheetnames)
+        finally:
+            wb.close()
+    for sn in KE.OUTPUT_SHEETS:
+        assert sn in sheets, f"成品缺工作表：{sn}（现有：{sheets}）"
+
+
+@acc("ACC-X-EXP-001", "001-05")
+def test_库存单据成品空源硬失败且不带出文件():
+    """绑 `ACC-X-EXP-001/001-05`（must-report 侧）：该月**没有明细** ⇒ **显式报中文原因、不产出文件**。
+
+    ⛔ 绝不静默交付一个空文件（它会被当成「交付了」，比不导出更坏）。
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="t04-kcdj-empty-") as td:
+        out_dir = Path(td) / KE.FILE_PREFIX / "2026年9月"
+        with pytest.raises(MustReportError) as e:
+            KE.build_xlsx(b"", out_dir)
+        assert "内容为空" in str(e.value), f"空源没给中文原因：{e.value}"
+        assert not list(out_dir.glob("*.xlsx")) if out_dir.exists() else True, "拒做时不该留下成品"
+
+
+@acc("ACC-X-EXP-001", "001-05")
+def test_壳侧透视导出按钮真下载且端点按content_type分流():
+    """绑 `ACC-X-EXP-001/001-05`：`expPivot` 必须**真下载**（不再只弹提示），且**提示语与模板形态一致**。
+
+    ⚠️ 断言**只钉 `expPivot` 这个动作自己的作用域**（`_act` 取花括号配平区间）——
+       别处的同名 `toast(...)` 不得喂饱它。
+    """
+    act = _act("expPivot")
+    assert "createObjectURL" in act and ".download" in act, "没真的触发下载（拿不到文件）"
+    assert "/api/m08/inventory/export?period=" in act, "`expPivot` 没打导出端点（拿不到文件）"
+    assert "x-export-filename" in act, "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
+    assert "'application/json'" in act, "没按 `content-type` 分流失败原因"
+    # ⭐ 提示语必须与**模板实际形态**一致（两张透视名逐字对上；主表那份不受影响）
+    for pivot in ("「过程资料」透视", "「安全文明施工费」透视"):
+        assert pivot in act, f"壳侧提示缺工作表：{pivot}"
+    assert "路径②" in act and "不受影响" in act, "必须写明它是独立通道、主表那份不受影响"
+
+    # 后端两条分支：成功给 xlsx、失败给 JSON＋中文原因
+    assert "/api/m08/inventory/export" in INV_API
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in INV_API, "成功分支不是 xlsx"
+    assert '"ok": False' in INV_API.replace("'", '"'), "失败分支没回 `ok:false`（壳就分不出流）"
+    assert "default_month()" in INV_API, "端点没把「本页默认月」用作期间缺省"
+
+
+@acc()
+def test_库存导出编排落点与期间标签唯一出口(monkeypatch):
+    """接线（不绑判据点）：`export_inventory` 的**落点**与**期间标签**都走唯一出口。
+
+    - 落点 = `EXPORT_ROOT / "库存单据明细表" / <期间标签>`；期间标签**唯一出口** = `domain.period_label`。
+    - 期间格式非法 ⇒ **显式报错**（⛔ 不猜默认月）。
+    - 此处**注入源字节**（`export_bytes`）⇒ ⛔ **不连 i8**。
+    """
+    import tempfile
+
+    src = _kcdj_source()
+    with tempfile.TemporaryDirectory(prefix="t04-inv-orch-") as td:
+        monkeypatch.setattr(EX, "EXPORT_ROOT", Path(td))
+        from app.core.db import session_scope
+
+        with session_scope() as s:
+            p = EX.export_inventory(s, "2026-09", export_bytes=lambda: src)
+            assert p.parent.name == D.period_label("2026-09") == "2026年9月"
+            assert p.parent.parent.name == KE.FILE_PREFIX, "落点目录名跑偏"
+            assert p.name == f"{KE.FILE_PREFIX}_2026年9月.xlsx"
+            assert p.exists()
+            with pytest.raises(MustReportError) as e:
+                EX.export_inventory(s, "九月", export_bytes=lambda: src)
+            assert "格式不对" in str(e.value)
+
+
+# ============================================================== 库存单据：两种导出并存（第二片 · ACC-INV-001/001-12）
+
+
+def _m08_card_head() -> str:
+    """库存单据明细总表那张卡的卡头 `<h4>…</h4>`（含两个导出按钮）——**只取这一段**，防别处同名串喂饱。"""
+    i = SHELL.find("库存单据明细总表")
+    assert i >= 0, "壳里找不到「库存单据明细总表」卡头"
+    a, b = SHELL.rfind("<h4", 0, i), SHELL.find("</h4>", i)
+    assert a >= 0 and b > a, "卡头区间取不到"
+    return SHELL[a:b]
+
+
+def _action_text(name: str) -> str:
+    """ACT 里某个动作的**文本区间**：`\\n <名>:` 起，到**下一个 ACT 条目**（`\\n <标识符>:`）止。
+
+    ⚠️ 与 `_act` 不同：后者靠**花括号配平**，只适用**带花括号**的 async 动作；
+       隐式返回的 `t=>toast(\\`…${}…\\`)` 里有模板字面量占位 `${…}` ⇒ 配平法会被那个 `{` 骗到。
+    """
+    m = re.search(rf"\n {re.escape(name)}:", SHELL)
+    assert m, f"壳里找不到动作 `{name}:`"
+    nxt = re.search(r"\n [A-Za-z_][A-Za-z0-9_]*:", SHELL[m.end():])
+    end = m.end() + nxt.start() if nxt else len(SHELL)
+    body = SHELL[m.start():end]
+    assert len(body) < 3000, f"`{name}` 取到 {len(body)} 字符 —— 切点可能跑偏"
+    return body
+
+
+@acc("ACC-INV-001", "001-12")
+def test_库存单据两种导出并存互不影响且透视提示与模板形态一致():
+    """绑 `ACC-INV-001/001-12` —— **主表的朴素导出与「导出（含数据透视表）」并存互不影响；
+    后者提示必须与模板实际形态一致**（逐字 claim 见 `PRD/验收/验收基线.json`）。
+
+    ⚠️ **诚实边界**：m08 页的朴素那份（`data-act="exp"`「导出 Excel（R1）」）**仍是全站通用导出动作**
+    （`exp:t=>toast('⏳ …导出尚未落地…')`），属 `TAIL-04` 的**另一片（路径①模板填充）**，**不在本片范围**
+    ⇒ ⛔ 断言**不**声称「朴素那份已出文件 / 两个都能下载」。本片只把**含透视那份**（`expPivot`）接成真下载，
+    并钉「两者**并存且实现不同**」。
+    """
+    import tempfile
+
+    # ① 库存单据卡头里**两个导出按钮并存**（各一处、都在同一张卡头内）
+    head = _m08_card_head()
+    assert head.count('data-act="exp"') == 1, "朴素导出按钮缺 / 重复"
+    assert head.count('data-act="expPivot"') == 1, "含透视导出按钮缺 / 重复"
+
+    # ② 两者走**不同实现**（"互不影响"的实质）：朴素那份仍是通用 `exp`，⛔ 不得被并进 `expPivot`
+    exp_act = _action_text("exp")
+    pivot_act = _act("expPivot")
+    assert "导出尚未落地" in exp_act, "通用 `exp` 不再是那条「尚未落地」的诚实提示了（被谁改走了？）"
+    assert "/api/m08/inventory/export" not in exp_act, \
+        "朴素导出被改成了与 `expPivot` 同一份实现 ⇒ 不再是「互不影响」"
+    assert pivot_act != exp_act
+
+    # ③ `expPivot` 那份**真产出文件**（端点 ＋ 壳侧真下载：`content-type` 分流 + `x-export-filename`）
+    assert "/api/m08/inventory/export" in INV_API
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in INV_API, "成功分支不是 xlsx"
+    assert "'application/json'" in pivot_act and "x-export-filename" in pivot_act
+    assert "createObjectURL" in pivot_act and ".download" in pivot_act, "没真的触发下载"
+
+    # ④ 提示语声明的表 ↔ **真产出**的结构闸门（`kcdj_export.OUTPUT_SHEETS`）对账（⛔ 不是两处各写一份）
+    with tempfile.TemporaryDirectory(prefix="t04-inv-x-") as td:
+        out = Path(KE.build_xlsx(_kcdj_source(), Path(td) / KE.FILE_PREFIX / "2026年9月"))
+        wb = openpyxl.load_workbook(out, read_only=True, data_only=True)
+        try:
+            real = list(wb.sheetnames)
+            header = tuple(next(iter(wb[KE.OUTPUT_SHEETS[0]].iter_rows(values_only=True))))
+        finally:
+            wb.close()
+    # 声明的张数（提示语里「工作表 N」出现次数）== 真产出张数 == OUTPUT_SHEETS 张数
+    assert len(re.findall(r"工作表 \d", pivot_act)) == len(KE.OUTPUT_SHEETS) == len(real)
+    # 两张透视：**声明名与真产出 sheet 名逐字一致**
+    for pivot in KE.OUTPUT_SHEETS[1:]:
+        assert pivot in real, f"真产出缺透视表：{pivot}"
+        assert pivot in pivot_act, f"提示语声明与实例不符：缺 {pivot}"
+    # 数据表：OUTPUT_SHEETS[0]（真名 `报表1`）在提示语里用其**角色「明细」**称它 —— 二者由**真产出表头**钉死
+    assert KE.OUTPUT_SHEETS[0] in real
+    assert "序号" in header and "金额" in header, "`报表1` 不是「明细」那张（声明与实例不符）"
+    assert "明细" in pivot_act, "提示语没说明第 1 张表是明细表"
+
+
+# ============================================================== 空集 ≠ 未传（缺陷回归）
+
+
+def _pivot_rows(path, part: str):
+    """读回某张透视表 → `(location, axis_items_count, 仓库行项数, rowItems_count, 行项数)`。
+
+    - `axis_items_count` = `<pivotField axis="axisRow">` 里 `<items count="C">` 的 C（含 default）；
+    - `仓库行项数` = `<item x="N"/>` 的个数（⛔ 不含 `<item t="default"/>`）；
+    - `rowItems_count` = `<rowItems count="C">` 的 C；`行项数` = 其中 `<i…>` 元素个数（含 grand）。
+    """
+    xml = zipfile.ZipFile(path).read(part).decode("utf-8")
+    loc = re.search(r'<location ref="([^"]*)"', xml)
+    assert loc, f"{part} 里没有 <location>"
+    ax = re.search(r'<pivotField axis="axisRow"[^>]*><items count="(\d+)">(.*?)</items>', xml, re.S)
+    assert ax, f"{part} 里没有 axisRow 的 <items>"
+    wh_items = len(re.findall(r'<item x="\d+"/>', ax.group(2)))
+    ri = re.search(r'<rowItems count="(\d+)">(.*?)</rowItems>', xml, re.S)
+    assert ri, f"{part} 里没有 <rowItems>"
+    ri_rows = len(re.findall(r"<i[ >]", ri.group(2)))
+    return loc.group(1), int(ax.group(1)), wh_items, int(ri.group(1)), ri_rows
+
+
+@acc()
+def test_空集与未传语义相反_空集得0行项未传用全部仓库():
+    """⭐ 缺陷回归：`warehouses=set()`（**空集**）≠ `warehouses=None`（**未传**）—— 判据在**真产出**里。
+
+    - **空集** ⇒ 该透视**确实一个仓库都没有** ⇒ pivot2 应 **0 行项**、`location=A3:B4`；
+      ⛔ 旧实现用 falsy 判断 ⇒ 空集被当"未传" ⇒ pivot2 凭空冒出**全部**仓库（`A3:B6`）。
+    - **未传**（pivot1 无 `warehouses` 键）⇒ 仍用**全部**仓库（护栏：修复别把这条也弄坏）。
+
+    数据源用**受控合成源**（非 diag）⇒ 期望值确定：有安全文明费 ⇒ 仅 `甲仓`（1 行项）；
+    无 ⇒ 空集（0 行项）；两张透视的仓库全集都 = `{甲仓, 乙仓}`（2 行项）。
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="t04-pivot-sem-") as td:
+        p_empty = Path(KE.build_xlsx(_synth_i8_bytes(with_safe=False),
+                                     Path(td) / "empty" / "2026年9月"))
+        p_safe = Path(KE.build_xlsx(_synth_i8_bytes(with_safe=True),
+                                    Path(td) / "safe" / "2026年9月"))
+
+        # ① 空集 ⇒ pivot2 **0 行项**、`A3:B4`（钉死"空集不是未传"）
+        loc, ax_c, wh, ri_c, ri_rows = _pivot_rows(p_empty, "xl/pivotTables/pivotTable2.xml")
+        assert loc == "A3:B4", f"空集 pivot2 的 location 应为 A3:B4，实得 {loc}（空集被当成未传？）"
+        assert wh == 0, f"空集 pivot2 应 0 个仓库行项，实得 {wh}（空集被当成未传 ⇒ 冒出了全部仓库）"
+        assert ax_c == wh + 1 and ri_c == wh + 1 and ri_rows == wh + 1, \
+            f"空集 pivot2 的行项数不自洽：axis={ax_c} rowItems={ri_c} 行项={ri_rows}"
+
+        # ② 有安全文明费 ⇒ pivot2 只用**有该费用的仓库**（甲仓，1 行项）、`A3:B5`
+        loc2, _, wh2, _, _ = _pivot_rows(p_safe, "xl/pivotTables/pivotTable2.xml")
+        assert loc2 == "A3:B5" and wh2 == 1, f"有费用时 pivot2 应 1 行项 / A3:B5，实得 {wh2} / {loc2}"
+
+        # ③ **未传** warehouses 的 pivot1 ⇒ 仍用**全部**仓库（两种源都 2 行项、`A3:N9`）
+        for p in (p_empty, p_safe):
+            locp, _, whp, _, _ = _pivot_rows(p, "xl/pivotTables/pivotTable1.xml")
+            assert locp == "A3:N9" and whp == 2, \
+                f"未传 warehouses 的 pivot1 应用全部仓库（2 行项 / A3:N9），实得 {whp} / {locp}"
+
+
+@acc()
+def test_安全文明对账_空集明说未验证而非通过():
+    """⭐ 缺陷回归：该月**没有**安全文明施工费数据 ⇒ 该条对账必须**明说「未验证 / 不适用」**，
+    ⛔ **绝不**因为"空 == 空"就静默报"通过"（最贵的假绿）。
+
+    ⚠️ 用**词边界**正则钉「有没有被报成通过」—— 别让别处的 `…✓ 通过`（如通用的"缓存对账全部通过"）喂饱。
+    """
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+
+    def _log(src: bytes) -> str:
+        buf = io.StringIO()
+        with tempfile.TemporaryDirectory(prefix="t04-safe-log-") as td:
+            with redirect_stdout(buf):
+                KE.build_xlsx(src, Path(td) / KE.FILE_PREFIX / "2026年9月")
+        return buf.getvalue()
+
+    # ① 空集 ⇒ 明说「未验证 / 不适用」，且**没有**把该条报成「通过」
+    empty_log = _log(_synth_i8_bytes(with_safe=False))
+    assert re.search(r"未验证\s*/\s*不适用", empty_log), \
+        f"空集没明说「未验证 / 不适用」：\n{empty_log}"
+    assert not re.search(r"安全文明施工费透视[^\n]{0,16}✓", empty_log), \
+        f"空集时把该条对账报成了「通过」⇒ 空 == 空的静默假绿：\n{empty_log}"
+
+    # ② 反向对照（证明 ① 的判据**有区分力**，不是恒绿）：有数据时**必须**报该条「✓ 通过」
+    safe_log = _log(_synth_i8_bytes(with_safe=True))
+    assert re.search(r"安全文明施工费透视[^\n]{0,16}✓", safe_log), \
+        f"有安全文明费时没报该条「✓ 通过」：\n{safe_log}"

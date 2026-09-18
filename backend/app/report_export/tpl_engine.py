@@ -539,7 +539,11 @@ def rebuild(cfg):
         tpl_pt = z2.read(pv['file']).decode('utf-8')
         z2.close()
         # 透视可用仓库：默认全部；可配置子集（按 order 顺序过滤）
-        whs = order if not pv.get('warehouses') else [w for w in order if w in pv['warehouses']]
+        # ⛔ **不能用 falsy 判断**（`if not pv.get('warehouses')`）—— 空集(`set()`) 是
+        #    "**这个透视确实一个仓库都没有**"（应得 **0 行项**），⛔ 不是"**未配置**"（未配置才用全部）；
+        #    两者语义相反，falsy 会把空集误当"未传" ⇒ 该透视凭空冒出**全部**仓库。
+        pvw = pv.get('warehouses')
+        whs = order if pvw is None else [w for w in order if w in pvw]
         loc = pv['location_ref'](len(whs)) if callable(pv['location_ref']) else pv['location_ref']
         new_pivots[pv['file']] = patch_pivot_row(tpl_pt, whs, wh_cache_idx, loc,
                                                  pv.get('rowitems_mode', 'leading_empty'))

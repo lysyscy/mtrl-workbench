@@ -327,12 +327,21 @@ def with_adjustment(row: dict, adj: dict) -> dict:
 # ============================================================ 抓取弹窗（001-11）
 
 
+def default_month(now=None) -> str:
+    """本表**默认核算年月** = **北京时间上月**（§9.2；材料报表类）。
+
+    ⚠️ 它是本页「默认月」的**唯一出口** —— 抓取弹窗（`fetch_dialog_default`）与
+       **导出端点**的「期间缺省」都吃它（⛔ 不各写一份）。取值主人仍是 `core.period.default_period`。
+    """
+    return default_period("inventory", now)
+
+
 def fetch_dialog_default(current_period: str) -> str:
     """「按月抓取」弹窗的**默认月份** = **本页当前所选核算年月**（001-11）。
 
     ⚠️ 抓取只允许「单月」（§9.2）；当前所选不是单月（跨月 / 整年 / 全部）时，回落到本表的默认年月。
     """
-    return month_of(current_period) or default_period("inventory")
+    return month_of(current_period) or default_month()
 
 
 # ============================================================ 导出（001-12）
