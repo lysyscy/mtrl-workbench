@@ -3456,10 +3456,22 @@ const ACT={
     ⛔ DEV-P-07 明令：**不自建打印模板**、只调 i8 接口、**接口不可用即砍功能**（非阻塞项）。
     ⇒ 本动作刻意**不调 window.print()**、不做打印预览 / 本地排版 / 导出，
       也**不清空勾选**（打印不改数据，属 R14 的"非消费型"动作，与"就地改值型"同侧）。
-    原型里 i8 接口是模拟的 ⇒ 只回一条"已调用接口（模拟）→ 成功"的提示（与 syncWh 同款）。 */
- ntPrint:()=>{ const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+    ⭐ 2026-09-18 接线（`TAIL-46`）：原来只回一条「（模拟）→ 成功」（与 syncWh 同款）⇒ 现在**真调**
+      `POST /api/m03/batch`，结果**逐条如实**（成功 N / 失败 M / **未产出单号显式列出**）—— 见 `m03RunBatch`。 */
+ ntPrint:async ()=>{ const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    if(!rows.length) return toast('请先勾选要打印的付款通知书');   /* 防御：按钮在未勾选时已禁用 */
-   toast(`已调用 i8 批量打印接口（API-07）（模拟）→ 成功：共 <b>${rows.length}</b> 条通知书（${esc(rows.map(n=>n.code).join('、'))}）已送打印<br><span class="sm mut">本系统只负责把勾选的通知书交给 i8，<b>不自建打印模板</b>（DEV-P-07）</span>`,5200); },
+   return m03RunBatch(rows,'print'); },
+ /* 只导出 PDF：与批量打印**同一次勾选**，只换 `mode`（后端 `MODE_PRINT` 分流）—— 入口由 `BIND.m03` 注入 */
+ ntPdf:async ()=>{ const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+   if(!rows.length) return toast('请先勾选要导出的付款通知书');
+   return m03RunBatch(rows,'pdf'); },
+ /* ⭐ `TAIL-46`：打印机设置的入口与保存（入口由 `BIND.m03` 注入到「批量打印」旁边） */
+ m03PrinterOpen:()=>m03PrinterOpen(),
+ m03PrinterSave:async ()=>{ const el=$('#m03PrinterUrl'); const v=((el&&el.value)||'').trim();
+   if(!v) return toast('请填打印机地址（形如 <span class="fc">ipp://192.168.5.248</span>）');
+   try { const r = await API.printerSet(v); closeModal();
+     return toast(`打印机地址已保存：<b>${esc(r.printer_ipp_url)}</b>（<b>即时生效</b>，无需重启）`, 8000); }
+   catch (e) { return toast(`<b>没保存上</b>：${esc(String((e && e.message) || e))}`, 9000); } },
  batchPay:()=>{ const all=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    /* ⭐ 撤单行**不进付款批次**（走 `ntPayCand`，§4.2.7 方向）：正常路径下它们**根本勾不上**
       （勾选框对撤单行禁用、全选/按计划勾选也走同一出口）；这里再兜一道，
@@ -5147,6 +5159,12 @@ const API = {
   /* ⭐ `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（`API-05`）—— ⚠️ 会登录 i8、可能**强踢**（`D9`）
      ⇒ `allow_kick=true` 只允许在**二次确认之后**传（`ownWhCheck` 那个弹窗就是那道闸）。只查**不落库**。 */
   whCheck: body => API.post('/api/m03/notices/warehouse-check', body),
+  /* ⭐ `TAIL-46`：批量打印 / 只导出 PDF / 打印机设置（`MOD-03` 三条**真出口**）——
+     这三件事原先**只有旧页 `mod03_notice/static/m03.html` 能做**；接上之后才谈删旧页（§19 批 4.5）。
+     ⚠️ `ids` 必须是**系统内勾选**的通知书 id（001-09 明令：不收文件、不收手输清单）。 */
+  m03Batch: (ids, mode) => API.post('/api/m03/batch', {ids, mode}),
+  printerGet: () => API.get('/api/m03/settings/printer'),
+  printerSet: url => API.send('PUT', '/api/m03/settings/printer', {printer_ipp_url: url}),
 
   /* ---- MOD-07 收发结存与活动大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
   m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
@@ -5536,6 +5554,46 @@ async function ntFetchBackend(m) {
   /* 失败：把后端原因**原样**给用户（后端已写成中文）；属「归属未走完」⇒ 直接开补词弹窗 */
   toast(`<b>抓取被拒</b>：${esc(r.message || '未知原因')}`, 9000);
   try { await openOwnDialog(); } catch (e) { /* 打不开弹窗也不影响上面那句原因 */ }
+}
+
+/* ⭐ `TAIL-46`：批量打印 / 只导出 PDF 的**唯一出口** —— 壳里两个入口（`ntPrint` / `ntPdf`）共用。
+   ⚠️ 结果必须**逐条如实**：失败带原因、**未产出的单号显式列出**（001-07 / PDF-001-06 都要求）。
+   ⛔ 不吞错、⛔ 不把"失败"说成"成功"；⛔ 不做本地打印/排版（DEV-P-07：接口不可用即砍这条功能）。 */
+async function m03RunBatch(rows, mode) {
+  const ids = rows.map(n => Number(n.id)).filter(x => Number.isFinite(x));
+  if (!ids.length) return toast('这些行缺少后端 id ⇒ 请先刷新页面再试');
+  const what = mode === 'print' ? '批量打印' : '只导出 PDF';
+  toast(`正在${what} <b>${ids.length}</b> 条 ……`, 4000);
+  let r = null;
+  try { r = await API.m03Batch(ids, mode); }
+  catch (e) { return toast(`⚠️ <b>${what}没能完成</b>：${esc(String((e && e.message) || e))}`, 9000); }
+  const bad = (r.items || []).filter(x => !x.ok);
+  const unprinted = r.unprinted_bill_nos || [];
+  return toast([
+    `<b>${what}完成</b>：成功 <b>${r.success}</b> / 共 ${r.total}`,
+    r.failed ? ` · 失败 <b>${r.failed}</b>` : '',
+    unprinted.length ? `<br>⚠️ <b>未产出的单号</b>：${esc(unprinted.join('、'))}` : '',
+    bad.length ? `<br><span class="sm">失败原因：${esc(bad.slice(0, 3).map(x => `${x.bill_no || x.notice_id}：${x.reason || '未说明'}`).join('；'))}${bad.length > 3 ? ` …另 ${bad.length - 3} 条` : ''}</span>` : '',
+    mode === 'print' ? '<br><span class="sm mut">本系统只把勾选的通知书交给 i8（<b>不自建打印模板</b> · DEV-P-07）</span>' : '',
+  ].join(''), 9500);
+}
+
+/* ⭐ `TAIL-46`：**打印机设置**入口（旧页 `m03.html` 那个 `btnSettings` 的事）——
+   ⚠️ 壳的 `V.m03` 切片里**没有**这个入口（改切片会登记漂移）⇒ 由 `BIND.m03` **渲染后注入**。
+   ⚠️ 地址读写走 `GET/PUT /api/m03/settings/printer`（后端**写配置 + 清缓存** ⇒ 保存即生效、无需重启）。 */
+async function m03PrinterOpen() {
+  let cur = '';
+  try { cur = ((await API.printerGet()) || {}).printer_ipp_url || ''; }
+  catch (e) { return toast(`⚠️ 读不到当前打印机地址：${esc(String((e && e.message) || e))}`, 8000); }
+  modal({
+    title: '打印机设置',
+    body: `<div class="tip" style="margin:0 0 10px">地址形如 <span class="fc">ipp://192.168.5.248</span>。
+      ⚠️ 保存后<b>即时生效、无需重启</b>（后端写配置并清缓存）—— 打印投递按新地址走。</div>
+      <div class="fld"><label>打印机 IPP 地址</label>
+        <input class="inp" id="m03PrinterUrl" style="width:100%" value="${esc(cur)}"></div>`,
+    footer: `<button class="btn" data-act="closeModal">取消</button>
+      <button class="btn pri" data-act="m03PrinterSave">保存</button>`,
+  });
 }
 
 async function openOwnDialog() {
@@ -6039,6 +6097,26 @@ async function reloadArchPend() {
    ⚠️ **幂等**：`render()` 会重画多次 ⇒ 每次重算、⛔ 不叠加。
    ⚠️ 卡片标题里那个「（模拟）」在切片里**已改准并登记**（`ui_parity_expected.txt` 的 `m02` 那行）——
       那是**一处**显式偏离，其余一律不动切片。 */
+/* ============ MOD-03 · 打印那两个入口（前端壳接线 · `TAIL-46`）============
+   ⭐ **为什么由钩子注入**：`V.m03` 切片里只有「批量打印」一个出口（那三件事原先全在旧页
+   `mod03_notice/static/m03.html` 上）⇒ 给切片加按钮 = 登记漂移；而"渲染后注入"正是 `BIND` 的活。
+   ⚠️ **幂等**（`render()` 会重画多次）：靠 `dataset.m03More` 打标，⛔ 不叠加。
+   ⚠️ 保留别的 `BIND.m03`（若有）：先调旧的，再注入（⛔ 不覆盖）。 */
+const _BIND_M03_OLD = BIND.m03;
+BIND.m03 = function () {
+  if (typeof _BIND_M03_OLD === 'function') _BIND_M03_OLD();
+  const host = document.querySelector('#view');
+  if (!host) return;
+  const anchor = host.querySelector('[data-act="ntPrint"]');
+  if (!anchor || anchor.dataset.m03More) return;
+  anchor.dataset.m03More = '1';
+  const box = document.createElement('span');
+  box.className = 'sp';
+  box.innerHTML = `<button class="btn" data-act="ntPdf" title="与批量打印同一次勾选，只换成「只产出 PDF」">只导出 PDF</button>
+    <button class="btn gost" data-act="m03PrinterOpen" title="打印机地址（保存后即时生效、无需重启）">打印机设置</button>`;
+  anchor.insertAdjacentElement('afterend', box);
+};
+
 BIND.m02 = function () {
   const host = document.querySelector('#view');
   if (!host) return;
