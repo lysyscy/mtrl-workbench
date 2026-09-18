@@ -1,8 +1,11 @@
 """`MOD-14` 剔除规则落库（`TAIL-40`）—— **后端侧**断言。
 
 ⚠️ 本文件只钉**后端**：命中值结构与分隔符 · 「库 → 出厂默认」语义 · 幂等初始化 ·
-   **抓取管线保持纯读** · 依赖单向（不给 `mod03` 引 `mod14`）· 端点已注册。
-   **页面侧的 5 个判据点**（`ACC-CFG-RULE-001/001-01…05`）要等壳接线完再绑 —— 见 §16 实施顺序。
+   **抓取管线保持纯读** · 依赖单向（不给 `mod03` 引 `mod14`）· 端点已注册 · **写侧拒绝路径**。
+⭐ **判据点**（2026-09-18 补点 —— 原先页面侧 5 点已由 `test_wired_m14.py` 绑住，本文件补**落库那半边**）：
+   · `ACC-CFG-RULE-001/001-06` = 库 → 出厂默认 ＋ 幂等初始化 ＋ 抓取路径不写
+   · `ACC-CFG-RULE-001/001-07` = 判定唯一出口（同一批只读一次、两处共用）＋ 依赖单向
+   · `ACC-CFG-RULE-001/001-08` = 非法写法明确拒 ＋ 写侧恒 200
 
 ⚠️ 库级断言**一律非破坏**（本机测试会连到**同一个库**）：
    ⛔ 不删、不清空、不假设"库是空的" —— 只做**幂等**与**读一致性**的核对。
@@ -12,6 +15,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
+import pytest
 
 from app.mod03_notice import classify
 from app.mod03_notice import rules_repository as RR
@@ -64,7 +69,7 @@ def test_库行转判定值时对象是_excludeRule():
 # ============================================================== 2 · 「库 → 出厂默认」语义
 
 
-@acc()
+@acc("ACC-CFG-RULE-001", "001-06")
 def test_库空回落到出厂默认():
     """⭐ 用户 2026-09-18 裁定：**库里有 ⇒ 以库为准；库空 ⇒ 回落 `DEFAULT_RULES`（＝ §4.2.2 那张表）**。
 
@@ -90,7 +95,7 @@ def test_库空回落到出厂默认():
         RR.all_rows = orig                    # type: ignore[assignment]
 
 
-@acc()
+@acc("ACC-CFG-RULE-001", "001-06")
 def test_幂等初始化不会重复落库():
     """`ensure_seeded` 只在**库空**时写一次；库非空时**返回 0 且一行不加**（幂等）。
 
@@ -125,7 +130,7 @@ def test_出厂默认本身必须合法():
 # ============================================================== 3 · 抓取管线保持纯读 + 依赖单向
 
 
-@acc()
+@acc("ACC-CFG-RULE-001", "001-07")
 def test_抓取管线读到规则并同时喂给两处():
     """⭐ **一处读取、两处同一份**：`rows_needing_ownership`（挑需校验的行）与
     `apply_fetched_row`（落库时打剔除标记）必须用**同一批**规则 ——
@@ -140,7 +145,7 @@ def test_抓取管线读到规则并同时喂给两处():
         "`apply_fetched_row` 自己又读了一次规则（同一批要保证判据一致）"
 
 
-@acc()
+@acc("ACC-CFG-RULE-001", "001-06")
 def test_抓取管线不得调幂等初始化():
     """⛔ **抓取路径必须保持纯读**：`ensure_seeded`（会写库）只许由**配置页**触达。
 
@@ -151,7 +156,7 @@ def test_抓取管线不得调幂等初始化():
     assert "ensure_seeded" in RULES_API.read_text(encoding="utf-8"), "配置页端点没做初始化"
 
 
-@acc()
+@acc("ACC-CFG-RULE-001", "001-07")
 def test_付款域不反向依赖配置域():
     """依赖方向**单向** `mod14_config → mod03_notice`（§4.2.2：规则本身属付款域）。
 
@@ -171,7 +176,7 @@ def test_付款域不反向依赖配置域():
 # ============================================================== 4 · 端点已注册
 
 
-@acc()
+@acc("ACC-CFG-RULE-001", "001-08")
 def test_规则端点已注册且写侧恒200():
     """4 个端点齐；写侧**恒 HTTP 200 ＋ `ok` 标志**（拒绝是可预期的，那句中文必须给用户看）。"""
     from app.main import create_app
@@ -182,3 +187,36 @@ def test_规则端点已注册且写侧恒200():
     api = RULES_API.read_text(encoding="utf-8")
     assert "MustReportError" in api, "写侧没接住规则校验的拒绝（会变成一句 HTTP 500/400，原因丢失）"
     assert not re.search(r"status_code\s*=\s*4\d\d", api), "写侧不该返回 4xx（约定：恒 200 ＋ ok 标志）"
+
+
+# ============================================================== 5 · 写侧拒绝路径
+
+
+@acc("ACC-CFG-RULE-001", "001-08")
+def test_非法写法一律拒并给人话():
+    """`001-08` 写侧**拒绝路径** —— ⛔ 不静默忽略、更不静默写进去。
+
+    四种非法写法：① 未知类别 ② **按「收款单位」**（§4.2.2：集采走分类、不走剔除）
+    ③ 命中值为空 ④ 命中值＝「资产处集中采购」（`FORBIDDEN_PAYEE_VALUE`）。
+
+    ⚠️ **非破坏**：`_validate` 在 `s.add` **之前**抛 ⇒ 一条都没落库（本机连同一个库，
+       所以这条可以放心跑、不会污染配置表）—— 末尾那句 `len(all_rows)` 就是钉这一点的。
+    ⚠️ 拒绝必须**给人话**：只断言"抛了"是不够的 —— 抛个空异常同样是"拒了"，而用户看不到原因
+       （`MustReportError` 的中文原文会一路端到页面）。
+    """
+    from app.core.db import session_scope
+    from app.core.errors import MustReportError
+
+    bad = [
+        ("不存在的类别", "某值", "未知的剔除规则类别"),
+        (classify.KIND_PAYEE, "某公司", "按「收款单位」"),
+        (classify.KIND_BILL_NAME, "", "没有任何命中值"),
+        (classify.KIND_PROJECT_NAME, classify.FORBIDDEN_PAYEE_VALUE, "走分类、不走剔除"),
+    ]
+    with session_scope() as s:
+        before = len(RR.all_rows(s))
+        for kind, values, why in bad:
+            with pytest.raises(MustReportError) as e:
+                RR.add_row(s, kind=kind, values=values)
+            assert why in str(e.value), f"拒绝理由没说清（{kind} / {values!r}）：{e.value}"
+        assert len(RR.all_rows(s)) == before, "拒绝之后居然落了行（校验必须在写之前）"

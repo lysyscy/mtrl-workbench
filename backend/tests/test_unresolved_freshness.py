@@ -12,7 +12,9 @@
 
 ⚠️ 行为（真库 · 三条写侧结局都真的写到记录里）由 `tools/_e2e_unresolved_freshness.py` 覆盖；
    本文件测的是**纯逻辑 ＋ 读侧口径**。
-⚠️ **判据点**：`ACC-PRJ-OWN-001` 的加点属**扩范围** ⇒ 本文件一律 `@acc()` **显式不绑定**。
+⭐ **判据点**（2026-09-18 用户批「判据补充直接添加、无需再报」）：
+   · `ACC-PRJ-OWN-001/001-10` = **只认最近一次**（含反证：最近一次又变未走完 ⇒ 清单回来）
+   · `ACC-PRJ-OWN-001/001-11` = **逐条按当前档案现算**（复用链路 C 同一出口 ＋ 读端点必须过它）
 """
 
 from __future__ import annotations
@@ -57,7 +59,7 @@ def sess(records):
 # ============================================================ ① 只认最近一次
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-10")
 def test_抓取成功之后就没有未命中清单了():
     """⭐ `TAIL-41` 的正题：**最近一次**抓取已走完 ⇒ 清单为空（⛔ 不再回溯更早那条"未走完"的）。
 
@@ -70,7 +72,7 @@ def test_抓取成功之后就没有未命中清单了():
     assert R.latest_unresolved(sess([new])) == []
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-10")
 def test_最近一次未走完就给它的清单():
     old_ok = rec(1)
     new_bad = rec(2, at="2026-09-18 11:00:00", reason="ownership_unsettled", items=[item()])
@@ -79,7 +81,7 @@ def test_最近一次未走完就给它的清单():
     assert got[0]["kind"] == "no_keyword_hit", "条目字段原样带出（弹窗要用）"
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-10")
 def test_只认付款通知书抓取的记录():
     """⭐ 靠运行记录里的 `notice_fetch` 标记认人（⛔ 不看 `target` 猜）：
 
@@ -93,7 +95,7 @@ def test_只认付款通知书抓取的记录():
     assert R.latest_unresolved(sess([other])) == []
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-10")
 def test_最近一次要按id判不许信传入顺序():
     """⚠️ 离线桩（`M09Session`）不处理 `order_by` ⇒ 读侧必须**显式按 id 倒序**：
 
@@ -105,7 +107,7 @@ def test_最近一次要按id判不许信传入顺序():
     assert R.latest_unresolved(sess([new_ok, old_bad])) == []
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-10")
 def test_三条结局都要写标记():
     """⭐ **写侧**（`repository.fetch_detail` = 唯一出口）：付款通知书抓取的**三种结局**
     —— i8 取数失败 / 归属未走完 / 抓取成功 —— **都必须带 `notice_fetch` 标记**。
@@ -129,7 +131,7 @@ def test_三条结局都要写标记():
 # ============================================================ ② 逐条按当前档案现算
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-11")
 def test_已经补过词的行不再出现在清单里():
     """⭐ 清单是**当时的判定**，真相是**档案现在的样子**（`domain.still_unsettled`）：
 
@@ -147,7 +149,7 @@ def test_已经补过词的行不再出现在清单里():
     assert D.still_unsettled([item(MISS_DOC, full=SHELL_FULL)], projects) == []
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-11")
 def test_还没建档的行照旧留着():
     """安全绳那一条（全名查不到任何行）也是"没走完"⇒ **必须留着**（它要人去同步常用项目列表）。"""
     projects = [p(10, SHELL_FULL, None, ptype="shell")]
@@ -156,7 +158,7 @@ def test_还没建档的行照旧留着():
     assert D.still_unsettled([], projects) == [] and D.still_unsettled(None, projects) == []
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-11")
 def test_读端点必须走现算过滤():
     """⭐ 端点那一层也不许"把记录里那份当时的判定直接端出去" —— 必须过 `still_unsettled`。
 
@@ -172,7 +174,7 @@ def test_读端点必须走现算过滤():
         "过滤要包在**读清单**外面（⛔ 别读一份、端一份）"
 
 
-@acc()
+@acc("ACC-PRJ-OWN-001", "001-11")
 def test_现算走的是链路C同一个出口():
     """⛔ 不许在读侧另写一份"够不够格"：判定必须就是链路 C 的 `resolve_ownership`。"""
     import inspect
