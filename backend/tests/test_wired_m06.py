@@ -122,6 +122,30 @@ def test_录机械费走后端且不在前端复写判据():
     assert "reloadMech()" in body, "`mechOk` 成功后没「以后端为准重拉」"
 
 
+@acc("ACC-RPT-PROC-002", "001-08")
+def test_正式段空态在壳里渲染成破折号而不是零():
+    """⭐ 判据点**搬家**（`§19` 批 2）：原先钉在**旧服务端页**那一格（`render_proc_page` 的输出里
+    空态渲染成「—」而不是 `0.00`）。旧页整体删除（授权 `D18`）⇒ 改指**新壳**（⛔ 判据不删）。
+
+    ⚠️ 认法：壳的金额格式器 `M()` **对 `null` 直接回「—」** —— 这就是「**不臆造 0**」（`001-08`）
+       在界面上唯一的落点；把它的 `null` 分支钉住（⛔ 不许退化成 `Number(null)||0`）。
+    """
+    assert "const M=n=>{if(n==null) return '—'" in SHELL, \
+        "壳的金额格式器没有「null ⇒ —」这一支 ⇒ 空态会被渲染成 0（正是 001-08 要防的「臆造 0」）"
+
+
+@acc("ACC-RPT-PROC-002", "001-03")
+def test_机械录入口只送mech键_材料列没有输入面():
+    """⭐ 判据点**搬家**（`§19` 批 2）：原先钉在旧页 html（`name="mech_i"` 有、`name="in_/out_"` 没有）。
+    改指**新壳**的「录机械费」弹窗：它**只**由 `MECH_LABELS`（**后端**给的列名）生成 `mech_` 键，
+    ⛔ 不产生任何**材料列**的输入面（机械列可录 ≠ 材料列可录 —— §5.2）。
+    """
+    assert "values['mech_'+i]" in SHELL, "机械值没按 `mech_` 键组装"
+    assert 'id="mechIn' in SHELL, "机械列没有输入框"
+    for bad in ("values['in_", "values['out_", 'id="in_', 'id="out_'):
+        assert bad not in SHELL, f"壳里出现了材料列的输入面：{bad}（材料列只读是铁律）"
+
+
 @acc()
 def test_机械列名由后端给():
     """⚠️ 列名的**唯一主人 = 后端** `domain.MECH_COLUMNS` ⇒ 壳里的 `MECH_LABELS` 只是兜底。
