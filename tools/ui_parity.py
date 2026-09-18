@@ -152,7 +152,7 @@ def main() -> int:
     DEMO_BY_PAGE = {"m03": ("NT", "const"), "m01": ("PJ", "const"), "m04": ("PL", "const"),
                     "m05": ("LG", "const"), "m06": ("MACH6", "const"),
                     "m07": ("WHM", "const"), "m08": ("IV", "const"),
-                    "m09": ("AWF", "const|let|var")}
+                    "m09": ("AWF", "const|let|var"), "m14": ("RULE_EX", "const|let|var")}
     _mw = WIRED_RE.search(shell_text)
     _wired_now = re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", _mw.group(1)) if _mw else []
     for _page in _wired_now:

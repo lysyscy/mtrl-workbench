@@ -19,13 +19,14 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from app.core.db import session_scope
+from app.core.errors import MustReportError
 from app.core.identity import current_operator
 from app.mod07_setl import big_domain as B
 from app.mod07_setl import big_service as BS
 from app.mod07_setl import extract as X
 from app.mod07_setl import service as S
 from app.mod07_setl.big_repository import load_manual
-from app.mod07_setl.domain import AMOUNT_KEYS, ROWCOUNT_KEY, WAREHOUSE_KEY
+from app.mod07_setl.domain import AMOUNT_KEYS, ROWCOUNT_KEY, WAREHOUSE_KEY, default_month
 from app.mod07_setl.repository import load_rows
 
 router = APIRouter(tags=["mod07"])
@@ -235,6 +236,39 @@ def api_fetch(req: FetchRequest) -> dict:
         return FS.run_fetch(
             s, year_month=req.month, confirmed=req.confirm, operator=current_operator()
         )
+
+
+@router.get("/api/m07/settlement/export")
+def api_export_settlement(request: Request):
+    """导出收发结存**成品 zip**（分仓库 xlsx ＋ 总表）—— 浏览器直接下载（`TAIL-04`）。
+
+    口径 = **模板法**：以「用户手作成品 xlsx」为基底做 `zip` 字节替换
+    （`ops/模板法导出-实测结论.md`）；金额按 2 位小数对平、**容差 0**。
+
+    ⚠️ 三种失败（模板缺失/损坏 · 该月没有明细 · **缓存级对账不过**）⇒ **不产出文件**，
+       改成 **JSON 200 ＋ `ok:false` ＋ 中文原因** ——
+       壳侧据 `content-type` 分流：`application/json` ⇒ 弹原因；否则当文件下载。
+       （⛔ 不回 4xx：那样用户只看到一句 `HTTP 400`，而"该月没有数据"这种话必须给人看。）
+    """
+    from fastapi.responses import FileResponse, JSONResponse
+    from urllib.parse import quote
+
+    from app.report_export import service as EX
+
+    period = str(request.query_params.get("period") or "").strip() or default_month()
+    try:
+        with session_scope() as s:
+            path = EX.export_settlement(s, period)
+    except MustReportError as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
+    # ⚠️ 文件名**由后端带出**（`X-Export-Filename`，UTF-8 percent-encoded）——
+    #    ⛔ 不让壳自己拼：命名规则一旦两处各写一份，改一处就会静默走形。
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename=path.name,
+        headers={"X-Export-Filename": quote(path.name)},
+    )
 
 
 __all__ = ["router", "MustReportError"]

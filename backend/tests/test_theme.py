@@ -22,6 +22,11 @@ APP_DIR = Path(__file__).resolve().parent.parent / "app"
 THEME_SOURCE = APP_DIR / "mod03_notice" / "page.py"
 # ⛔ 打印件（印在纸上的样子）—— 它的颜色**不属于**站点主题，必须排除
 PRINT_DIR = APP_DIR / "mod03_notice" / "print"
+# ⛔ **成品件**（导出给 Excel 的工作簿样式，如 `report_export/setl_export.py` 里的表头底色
+#    `#ED7D31`）—— 与打印件**同一条理由**（§十一：「⛔ 打印件颜色不属于站点主题」）：
+#    那是**交付出去的成品文件**的样式，不是页面的样式。把它拉进主题真源
+#    = 让站点主题去管一个离线 Excel 文件 —— 方向就错了。
+EXPORT_DIR = APP_DIR / "report_export"
 
 # 三个**静态页**：自己不带 `:root`，改 `<link>` 引唯一真源（C2 方案）
 STATIC_PAGES: dict[str, Path] = {
@@ -41,7 +46,7 @@ def _theme_vars() -> dict[str, str]:
 
 def _iter_app_py():
     for f in sorted(APP_DIR.rglob("*.py")):
-        if PRINT_DIR in f.parents:
+        if PRINT_DIR in f.parents or EXPORT_DIR in f.parents:
             continue
         yield f
 

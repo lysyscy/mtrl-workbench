@@ -178,13 +178,23 @@ def test_m07抓取分支接后端():
 
 
 @acc()
-def test_导出如实标注未落地():
-    """⛔ 原型这里报「已生成 .zip」却拿不到文件 —— 接线后必须**如实说**（属 `TAIL-04`）。"""
+def test_导出已落地为真下载():
+    """`TAIL-04` 落地后：`zipSfjc` 不再是「如实标注未落地」，而是**真的产出并下载文件**。
+
+    ⚠️ 这条断言**换过一次方向**：
+      · 接线前它钉的是「必须如实说未落地」（当时 `TAIL-04` 没做，报"已生成"就是**假成功**）；
+      · `TAIL-04` 落地后，同一处必须改成「真的产出文件」——
+        **钉临时状态的断言要跟着状态走**，否则它会把"已经做好的功能"判成红
+        （本轮实测：它当场变红，正是提示"该改断言了"的信号，不是实现错）。
+    """
     i = SHELL.find("zipSfjc:")
     assert i > 0, "壳里找不到 `zipSfjc`"
-    body = SHELL[i:i + 900]
-    assert "TAIL-04" in body, "`zipSfjc` 没标注「属 TAIL-04 尚未落地」"
-    assert "已生成 <b>第四工程公司" not in body, "`zipSfjc` 还在报「已生成 .zip」的假成功"
+    j = SHELL.find("whReset:()", i)
+    body = SHELL[i:j if j > i else i + 1600]
+    assert "/api/m07/settlement/export?period=" in body, "`zipSfjc` 没打导出端点"
+    assert "尚未落地" not in body, "`TAIL-04` 已落地，还在说「尚未落地」"
+    assert "createObjectURL" in body and ".download" in body, "没真的触发下载"
+    assert "已生成 <b>第四工程公司" not in body, "还在报「已生成 .zip」的假成功"
 
 
 # ============================================================== 4 · 后端端点 + 接线自洽

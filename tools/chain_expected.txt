@@ -110,7 +110,7 @@ P4|**超付处置**：实付 > 审批金额 ⇒ **流水照记**（事实不得�
 R|① 触发导出（**手动点击** ⇒ 系统抓 i8 · 不走定时）|① 触发导出|backend/app/mod07_setl/fetch_service.py::run_fetch|ACC-SETL-FETCH-001|已接
 R|① 库存单据明细抓取（另一条数据源 · `API-03`）|③ 库存单据明细|backend/app/mod08_inv/fetch_service.py::run_fetch|ACC-INV-FETCH-001|已接
 R|② 收发结存月报 · **分仓库表**（按仓库聚合）|② 收发结存月报|backend/app/mod07_setl/domain.py::warehouse_rows|ACC-SETL-001|已接
-R|② 收发结存 · ⛔ **打包 zip 交资产处**（成品文件写出）|② 收发结存月报|—|缺：需补判据（成品文件 · 见 `TAIL-04`）|缺
+R|② 收发结存 · ⛔ **打包 zip 交资产处**（成品文件写出）|② 收发结存月报|backend/app/report_export/setl_export.py::build_zip|ACC-X-EXP-001|已接
 R|② **焊材 / 气体提取** ⇒ 活动大表|焊材/气体提取|backend/app/mod07_setl/extract.py::extract_amounts|ACC-RPT-BIG-001|已接
 R|③ 库存单据明细总表（含**与项目交来的 Excel 对账 → 差异 → 打调整单**留痕）|与项目交来的 Excel 对账|backend/app/mod08_inv/domain.py::filter_rows|ACC-INV-001|已接
 R|③ **特殊费用月报表**（实际是一张独立新报表）|特殊费用月报表|backend/app/mod09_fee/domain.py::total_amount|ACC-FEE-MON-001|已接

@@ -360,6 +360,142 @@ def main() -> int:
             if not ok:
                 errors.append("m09 写路径自检未通过：" + what)
 
+        # ---- m14 规则配置：⭐ 可观测证据 = **页面的规则条数 == 当场重取后端的条数**
+        #      ＋ 类别下拉与后端同源 ＋ 来源如实显示 ＋ 卡头条数实时算
+        #      ⭐ ⑫b **写路径净零往返**：新增一条探针 ⇒ 条数 +1 ⇒ **按 id 差集**删掉它 ⇒ 回到原样。
+        #         ⚠️ 净零 ⇒ 可反复跑、库不留残留；用「id 差集」而不是"删最后一条"，
+        #            免得删除失败时**误删真规则**。
+        page.click('[data-k="m14"]')
+        page.wait_for_timeout(800)
+        m14 = page.evaluate("""async () => {
+            const rulesBe = async () => (await (await fetch('/api/m14/rules')).json());
+            const be0 = await rulesBe();
+            const tbls = [...document.querySelectorAll('#view table')];
+            const t = tbls[0] || null;
+            const out = {
+              rules: RULE_EX.length, beRules: (be0.rules || []).length,
+              raw: RULE_RAW.length,
+              kinds: RULE_KINDS.length, beKinds: (be0.kinds || []).length,
+              kindKeys: RULE_KINDS.map(k => k.kind),
+              src: RULE_SRC, beSrc: be0.source_label,
+              tbody: t ? t.querySelectorAll('tbody tr').length : 0,
+              wiredLabel: document.querySelector('#ttl em').innerText,
+              headCount: (document.querySelector('#view h4 b') || {}).innerText || '',
+            };
+            /* ⭐ 写路径：经**后端**新增一条探针规则 ⇒ 再按 **id 差集**删掉它（净零） */
+            const before = new Set((be0.rules || []).map(r => r.id));
+            const add = await (await fetch('/api/m14/rules', {method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({kind: 'input_by', values: '__smoke_probe__',
+                                    meaning: '冒烟探针（跑完即删）'})})).json();
+            const be1 = await rulesBe();
+            const fresh = (be1.rules || []).find(r => !before.has(r.id));
+            await reloadM14(); render();
+            out.addedUi = RULE_EX.length;
+            let del = null;
+            if (fresh) {
+              del = await (await fetch('/api/m14/rules/' + fresh.id, {method: 'DELETE'})).json();
+            }
+            await reloadM14(); render();
+            const be2 = await rulesBe();
+            out.add = {ok: add.ok, msg: (add.message || '').slice(0, 70)};
+            out.del = del ? {ok: del.ok, msg: (del.message || '').slice(0, 90)} : null;
+            out.after = RULE_EX.length;
+            out.beAfter = (be2.rules || []).length;
+            return out;
+        }""")
+        print("⑫ m14 =", m14)
+        oks9 = [
+            ("已接后端" in m14["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            (m14["rules"] == m14["beRules"] and m14["rules"] > 0 and m14["raw"] == m14["beRules"],
+             f"⭐ 页面的规则条数 == 后端（{m14['rules']} vs {m14['beRules']}）"
+             " —— 若 `RULE_EX` 还硬编码，这里就对不上"),
+            (m14["tbody"] == m14["beRules"],
+             f"表内渲染行数 == 后端条数（{m14['tbody']}）"),
+            (m14["kinds"] == m14["beKinds"] and m14["kinds"] > 0
+             and "payee" not in m14["kindKeys"],
+             f"⭐ 可选类别来自后端、且**不含「收款单位」**（{m14['kinds']} vs {m14['beKinds']}）"),
+            (m14["src"] == m14["beSrc"] and bool(m14["src"]),
+             f"⭐ 页面如实显示当前值的来源（{m14['src']!r}）"),
+            (m14["headCount"] == str(m14["beRules"]),
+             f"⭐ 卡头条数**实时算**（卡头 {m14['headCount']!r} vs 后端 {m14['beRules']}）"),
+        ]
+        for ok, what in oks9:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("m14 自检未通过：" + what)
+
+        oks10 = [
+            ((m14.get("add") or {}).get("ok") is True,
+             f"⭐ 新增**真的落库**：{(m14.get('add') or {}).get('msg')}"),
+            (m14.get("addedUi") == m14.get("beRules", -99) + 1,
+             f"⭐ 新增后页面条数 +1（{m14.get('rules')} → {m14.get('addedUi')}）—— 证明是全链路不是本地改"),
+            ((m14.get("del") or {}).get("ok") is True,
+             f"⭐ 探针已删除：{(m14.get('del') or {}).get('msg')}"),
+            (m14.get("after") == m14.get("rules") and m14.get("beAfter") == m14.get("rules"),
+             f"⭐ 跑完**回到原样、库无残留**（页面 {m14.get('after')} · 后端 {m14.get('beAfter')}"
+             f" · 原 {m14.get('rules')}）"),
+        ]
+        for ok, what in oks10:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("m14 写路径自检未通过：" + what)
+
+        # ---- m07 导出（`TAIL-04`）：⭐ 可观测证据 = **从页面上下文真拉一次 zip**。
+        #      ⚠️ 两件事分开验（都是真事实）：
+        #        ① **默认月没数据**时（材料报表默认 = 上月，而真机数据可能落在别的月）
+        #           ⇒ 必须回**中文原因**、⛔ 不能崩、不能产出空文件；
+        #        ② 换到**有数据的月份** ⇒ 必须真拿到 zip，且文件名含**那个月份**。
+        exp = page.evaluate("""async () => {
+            const label = p => { const [y, m] = p.split('-'); return Number(y) + '年' + Number(m) + '月'; };
+            const grab = async p => {
+                const r = await fetch('/api/m07/settlement/export?period=' + encodeURIComponent(p));
+                const ct = r.headers.get('content-type') || '';
+                if (ct.includes('application/json')) {
+                    const d = await r.json();
+                    return { period: p, json: true, ct: ct, ok: d.ok, message: (d.message || '').slice(0, 90) };
+                }
+                const b = await r.blob();
+                const u8 = new Uint8Array(await b.slice(0, 2).arrayBuffer());
+                return { period: p, ct: ct, label: label(p),
+                         fn: decodeURIComponent(r.headers.get('x-export-filename') || ''),
+                         size: b.size, magic: String.fromCharCode(u8[0], u8[1]),
+                         warehouses: pjSort(whRows(p)).length };
+            };
+            const def = await grab(fWhYm);                 /* ① 默认月（可能就是没数据的那个月） */
+            const cands = [];
+            for (let i = 0; i <= 3; i++) {
+                const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+                cands.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+            }
+            let hit = null;
+            for (const p of cands) {
+                const r = await grab(p);
+                if (!r.json) { hit = r; break; }
+            }
+            return { def: def, hit: hit, tried: cands };
+        }""")
+        print("⑬ 导出（TAIL-04）= 默认月：", exp.get("def"))
+        print("                 有数据的月：", exp.get("hit"))
+        d, h = exp.get("def") or {}, exp.get("hit") or {}
+        oks11 = [
+            (bool(d.get("json")) and d.get("ok") is False and "明细" in (d.get("message") or ""),
+             f"① 默认月（{d.get('period')}）没数据时回**中文原因**、不是崩：{(d.get('message') or '')[:40]}…"),
+            (bool(h), f"② 近 4 个月里至少有一个月导得出（试过 {exp.get('tried')}）"),
+            (bool(h) and h.get("ct") == "application/zip",
+             f"② content-type = application/zip（{h.get('ct')}）"),
+            (bool(h) and h.get("magic") == "PK",
+             "② 内容以 `PK` 开头 ⇒ **真的是 zip**（不是空壳 / 错误页）"),
+            (bool(h) and h.get("label") in (h.get("fn") or ""),
+             f"⭐ 文件名由后端带出、且含**该月份**：{h.get('fn')}"),
+            (bool(h) and h.get("size", 0) > 20000,
+             f"② 大小 {h.get('size')} B（应含 {h.get('warehouses')} 个分仓库表 ＋ 总表）"),
+        ]
+        for ok, what in oks11:
+            print(("  ✅ " if ok else "  ⛔ ") + what)
+            if not ok:
+                errors.append("TAIL-04 导出自检未通过：" + what)
+
     print("\n=== console / page 错误 ===")
     if errors:
         for e in errors[:20]:

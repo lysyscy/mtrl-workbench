@@ -470,16 +470,21 @@ const TASK = [
   ['API-06','常用项目列表 GetCommonUseList','纯 HTTP','无','phid 权威来源、项目建档','建档时','手动维护']
 ];
 /* ---------- 规则配置 MOD-14 ----------
-   ⭐ 2026-09-13（P6 裁定①·乙）：「剔除规则」支持**真增 / 删 / 改**（`RULE_EX` 由 `const` 改 `let`）。
-   ⚠️ 关键事实：`RULE_EX` / `RULE_CA` 是**纯展示用的演示常量** —— 剔除的**实际判定结果**存在
-      `NO[].excl` / `NO[].exrule`、分类存在 `NO[].cat`，**这两个常量不参与任何逻辑**
-      ⇒ 做成可编辑**不牵动任何业务取值**。配置类数据按 §9.4 = **硬删**（不留痕）。
+   ⭐ 2026-09-18 接线（`TAIL-40`）：**剔除规则的唯一主人在后端** —— `exclude_rule` 表，
+      经 `/api/m14/rules` 读写；⚠️ **库空 ⇒ 出厂默认**（=《说明书》§4.2.2 那张表）。
+   ⚠️ `RULE_EX` = **展示三元组**（规则类别 / 命中值 / 业务含义）—— `V.m14` 直接吃这个形状，
+      所以**切片一行未改**；`RULE_RAW` 保留后端原始行（**写动作要 `id`**）；
+      `RULE_KINDS` = 可选类别（下拉与真数据同源，⛔ 不用自由文本填类别）。
+   ⚠️ **改规则不重算历史**：已产生的剔除标记（`exclude_source=rule`）不受影响、也不重算（§4.2.2）
+      —— 后端不重算，前端也不许补一个。
+   配置类数据按 §9.4 = **硬删**（不留痕）。
    ⚠️ 分类规则（`RULE_CA`）与小微识别关键字**保持只读**：前者是 §4.2.3 的业务口径（可编辑=允许改口径），
       后者的主人在**项目行**（`MOD-01` 可改），本页只是只读展示。 */
-let RULE_EX = [['业务类型','付劳务公司款｜付分包工程款｜付劳务工工资｜付材料采购款｜付其他款','不属于材料/机械付款域'],
-                 ['付款项目名','第四分公司机关办公楼维修工程｜第四分公司机关后勤维修工程','指定项目不在统计范围'],
-                 ['单据名称关键字','水电｜水费｜电费｜房租','期间费用，非材料/机械'],
-                 ['录入人','王丽佳','指定录入人的单据不计入']];
+let RULE_EX = [];
+let RULE_RAW = [];
+let RULE_KINDS = [];
+/*: 当前规则值从哪来（`系统配置` / `出厂默认（§4.2.2）`）—— 页面要**如实**告诉用户 */
+let RULE_SRC = '';
 const RULE_CA = [['①','业务类型 = 付设备租赁款','机械'],['②','收款单位 = 资产处集中采购','集采'],['③','以上都不满足','辅材']];
 /* ---------- 活动大表（§5.7）MOD-07 ----------
    ⭐ 2026-09-13 用户口径（**大改**）：列结构以用户给的**最终模板**为准（20 列，见 `BIG_THEAD`）。
@@ -540,7 +545,7 @@ const USERS=U_RAW.map(r=>O(r,U_COLS));
      · `PJs` 项目档案    ← `GET /api/m01/projects`
      · `FLs` 付款流水    ← `GET /api/m05/flows`
    ⚠️ 其余表（`JCs`/`DFs`/`WHs`… 以及 **集采 / 跨域 / 用户** 各域）**仍是原型模拟数据** ——
-      对应视图尚未接线（侧栏标「原型态」）。**已接线：`m03`/`m01`/`m04`/`m05`/`m06`/`m07`/`m08`/`m09`**（看 `WIRED`）。 */
+      对应视图尚未接线（侧栏标「原型态」）。**已接线：`m03`/`m01`/`m04`/`m05`/`m06`/`m07`/`m08`/`m09`/`m14`**（看 `WIRED`）。 */
 let NO=[], PJs=[], FLs=[];
 /* 当前登录用户：原型固定为管理员本人（§1.5.1「用户本人为管理员」）；正式实现由登录态提供。
    ⚠️ 刻意**不写成 USERS[0] 的引用** —— 自检回滚会整体替换 USERS 的内容，引用会失效（同「原地复位」的教训）。 */
@@ -868,7 +873,7 @@ const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
-const WIRED=new Set(['m03','m01','m04','m05','m06','m07','m08','m09']);
+const WIRED=new Set(['m03','m01','m04','m05','m06','m07','m08','m09','m14']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -3256,7 +3261,7 @@ V.m14=()=>`
       <td class="ctr"><button class="btn sm" data-act="ruleEdit" data-i="${i}" title="改这条规则的「规则类别 / 命中值 / 业务含义」">编辑</button> <button class="btn sm dg" data-act="ruleDel" data-i="${i}" title="删除这条规则（配置类数据 = 硬删、不留痕，§9.4）">删除</button></td></tr>`).join('')}
     </tbody></table></div>
     <div class="bd"><div class="tip wn" style="margin:0"><b>剔除规则中不得配置「收款单位 = 资产处集中采购」</b>：集采<b>不走剔除</b>，而是参与<b>分类</b>（第 ② 步）。</div>
-      <div class="tip" style="margin:6px 0 0"><b>本页各条「命中值」为演示值</b>（原型数据全虚构）；<b>真实业务配置值一律以《说明书》§4.2.2 为准</b>。<br>⭐ 本表<b>可增 / 删 / 改</b>（配置类数据 = 硬删、不留痕，§9.4）；<b>改的只是这张演示表本身</b>，已产生的剔除标记（exrule）不受影响、也不重算。</div></div>
+      <div class="tip" style="margin:6px 0 0"><b>本页「命中值」以系统配置为准</b>（当前来源：${esc(RULE_SRC)}）；初始即《说明书》§4.2.2 那张表。<br>⭐ 本表<b>可增 / 删 / 改</b>（配置类数据 = 硬删、不留痕，§9.4）；改动<b>只影响后续抓取</b>，已产生的剔除标记不受影响、也不重算。</div></div>
   </div>
   <div class="grid2">
     <div class="card"><h4>分类规则（判定顺序）</h4><div class="bd np"><table class="dt"><thead><tr><th>顺序</th><th>条件</th><th>归入分类</th></tr></thead><tbody>
@@ -3360,25 +3365,37 @@ const ACT={
     配置类数据按 §9.4 = **硬删、不留痕**；弹窗内输入由「保存」按钮一次性读取（不挂 data-act ⇒ 不进 `CHG`）。 */
  ruleAdd:()=>ACT.ruleForm(-1),
  ruleEdit:t=>ACT.ruleForm(+t.dataset.i),
- ruleForm:i=>{ const r=i>=0?RULE_EX[i]:['','','']; if(!r) return;
+ ruleForm:i=>{ const r=i>=0?RULE_EX[i]:null; if(i>=0&&!r) return;
+   /* ⚠️ 规则类别必须是**后端认的四个 key 之一** ⇒ 用后端给的 `kinds` 做下拉。
+      ⛔ 不用自由文本：填个「收款单位」后端会拒（§4.2.2 硬约束），填个错别字就更看不出问题。 */
+   if(!RULE_KINDS.length) return toast('<b>规则类别还没取到</b> —— 页面顶部有取数失败的提示；请刷新后重试');
+   const cur=i>=0?(RULE_RAW[i]||{}):{};
+   const sel = `<select class="inp" id="rxKind">`
+     + RULE_KINDS.map(k=>`<option value="${esc(k.kind)}"${k.kind===cur.kind?' selected':''}>${esc(k.label)}</option>`).join('')
+     + `</select>`;
    modal({title:i>=0?`编辑剔除规则 · ${esc(r[0])}`:'新增剔除规则',
-     body:`<div class="tip" style="margin-bottom:10px">配置类数据<b>硬删</b>、不留痕（§9.4）；本页是<b>演示值</b>，<b>真实业务配置值一律以《说明书》§4.2.2 为准</b>。</div>
-       <div class="fld"><label>规则类别 <b>*</b></label><input class="inp" id="rxCat" value="${esc(r[0])}" placeholder="例：业务类型 / 付款项目名 / 单据名称关键字 / 录入人"></div>
-       <div class="fld"><label>命中值 <b>*</b>（多个用 ｜ 分隔）</label><input class="inp" id="rxHit" value="${esc(r[1])}" placeholder="例：水电｜水费｜电费"></div>
-       <div class="fld"><label>剔除的业务含义</label><input class="inp" id="rxWhy" value="${esc(r[2])}" placeholder="例：期间费用，非材料/机械"></div>`,
+     body:`<div class="tip" style="margin-bottom:10px">配置类数据<b>硬删</b>、不留痕（§9.4）；改规则<b>只影响后续抓取</b>，已产生的剔除标记<b>不重算</b>（§4.2.2）。</div>
+       <div class="fld"><label>规则类别 <b>*</b></label>${sel}</div>
+       <div class="fld"><label>命中值 <b>*</b>（多个用 ｜ 分隔）</label><input class="inp" id="rxHit" value="${esc(i>=0?r[1]:'')}" placeholder="例：水电｜水费｜电费"></div>
+       <div class="fld"><label>剔除的业务含义</label><input class="inp" id="rxWhy" value="${esc(i>=0?r[2]:'')}" placeholder="例：期间费用，非材料/机械"></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="ruleSave" data-i="${i}">${i>=0?'保存修改':'新增'}</button>`}); },
- ruleSave:t=>{ const i=+t.dataset.i;
-   const v=[$('#rxCat').value.trim(), $('#rxHit').value.trim(), $('#rxWhy').value.trim()];
-   if(!v[0]) return toast('<b>规则类别不能为空</b> —— 弹窗未关闭，已填内容都在');
-   if(!v[1]) return toast('<b>命中值不能为空</b> —— 弹窗未关闭，已填内容都在');
-   const isNew=i<0;
-   if(isNew) RULE_EX.push(v); else RULE_EX[i]=v;
-   closeModal(); render();
-   toast(isNew?`已新增剔除规则「<b>${esc(v[0])}</b>」—— 本表现有 <b>${RULE_EX.length}</b> 类有效`
-              :`已修改剔除规则「<b>${esc(v[0])}</b>」（配置类数据不留痕，§9.4）`); },
- ruleDel:t=>{ const i=+t.dataset.i, r=RULE_EX[i]; if(!r) return;
-   RULE_EX.splice(i,1); render();
-   toast(`已删除剔除规则「<b>${esc(r[0])}</b>」（配置类数据<b>硬删</b>、不留痕，§9.4）—— 本表现有 <b>${RULE_EX.length}</b> 类有效`); },
+ /* ⭐ **落库走后端**：回执一律用后端那句中文原话（含「不重算」提醒）；失败**不关弹窗** ⇒ 已填内容都在。 */
+ ruleSave:async t=>{ const i=+t.dataset.i;
+   const body={kind:$('#rxKind').value, values:$('#rxHit').value.trim(), meaning:$('#rxWhy').value.trim()};
+   if(!body.values) return toast('<b>命中值不能为空</b> —— 弹窗未关闭，已填内容都在');
+   try{
+     const res = i>=0 ? await API.m14RuleSet((RULE_RAW[i]||{}).id, body) : await API.m14RuleAdd(body);
+     if(res.ok===false) return toast(`<b>没能保存</b>：${esc(res.message||'')}`, 8000);
+     closeModal(); await reloadM14(); render();
+     toast(esc(res.message||'已保存'), 7000);
+   }catch(e){ toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`, 8000); } },
+ ruleDel:async t=>{ const i=+t.dataset.i, r=RULE_EX[i]; if(!r) return;
+   try{
+     const res = await API.m14RuleDel((RULE_RAW[i]||{}).id);
+     if(res.ok===false) return toast(`<b>没能删除</b>：${esc(res.message||'')}`, 8000);
+     await reloadM14(); render();
+     toast(esc(res.message||'已删除'), 7000);
+   }catch(e){ toast(`<b>没能删除</b>：${esc(String((e&&e.message)||e))}`, 8000); } },
 
  /* —— MOD-03 付款通知书 —— */
  pick:t=>{ const id=t.dataset.id; t.checked?pickSet.add(id):pickSet.delete(id); render(); },
@@ -4220,12 +4237,28 @@ const ACT={
  goInvAdj:t=>{ invWhs.length=0; invWhs.push(t.dataset.wh); invOnlyAdj=true; go('m08'); setTimeout(()=>toast(`已跳转库存单据页并自动筛出：<b>${esc(t.dataset.wh)}</b> 被调整过的行`),120); },
 
  /* —— MOD-07 —— */
- zipSfjc:()=>{ const rows=pjSort(whRows(fWhYm));
-   /* ⛔ **不做假成功**（原型这里报「已生成 .zip」却拿不到文件）：真实的成品文件写出属 `TAIL-04`
-      （方法已定案 = **模板法**：以用户手作成品 xlsx 为基底做 `zip` 字节替换），与本页接线分开做。 */
-   toast(`⏳ <b>导出尚未落地</b>（属 TAIL-04）：本页按 <b>${tmLabel(fWhYm)}</b> 应导出 `
-     + `<b>${rows.length}</b> 个分仓库 xlsx ＋ 1 个总表 = <b>${rows.length+1}</b> 个文件（zip 打包，走<b>模板法</b>）；`
-     + `方法与实测结论已就绪、只差移植。`, 8600); },
+ /* ⭐ 接线（`TAIL-04`）：成品由**后端模板法**生成 —— 分仓库 xlsx ＋ 1 个总表打成**一个 zip**。
+    ⚠️ 失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（模板缺失/损坏 · 该月没有明细 ·
+       **缓存级对账不过**）⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+    ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）。 */
+ zipSfjc:async ()=>{
+   const url='/api/m07/settlement/export?period='+encodeURIComponent(fWhYm);
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'收发结存表.zip';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   toast(`已导出<b>${pjSort(whRows(fWhYm)).length}</b> 个分仓库 xlsx ＋ 1 个总表（zip）；`
+     + `走<b>模板法</b>（成品 = 以手作成品 xlsx 为基底）—— 金额按 <b>2 位小数对平、容差 0</b>`,7600); },
  whReset:()=>{ fWhYm=bjMonth(-1); render(); toast(`已重置：核算年月回到 <b>${tmLabel(fWhYm)}</b>（材料报表 = 北京时间上月，§9.2）`); },
  /* —— 焊材 / 气体提取（**核对工具**；数据唯一去向 = 活动大表）—— */
  fExtStatus:t=>{ fExt.status=t.value; render(); },
@@ -4936,6 +4969,14 @@ const API = {
      （`mech_ui.parse_mech_values` ＋ `repository.save_mech`），与 PRG 端点同一份判定。 */
   m06MechSave: body => API.post('/api/m06/mech', body),
 
+  /* ---- MOD-14 剔除规则（`TAIL-40`）⚠️ 唯一主人在库；⛔ 前端不做任何本地改数据冒充落库 ---- */
+  m14Rules: () => API.get('/api/m14/rules'),
+  m14RuleAdd: body => API.post('/api/m14/rules', body),
+  m14RuleSet: (id, body) => API.send('PUT', `/api/m14/rules/${id}`, body),
+  /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok` —— 规则不合法是 §4.2.2 的可预期拒绝，
+     后端那句中文必须原样给用户看。 */
+  m14RuleDel: id => API.send('DELETE', `/api/m14/rules/${id}`, null),
+
   /* ---- MOD-09 特殊费用月报表（`TAIL-27`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
   m09Fee: (ym, pj) => API.get(`/api/m09/fee?ym=${encodeURIComponent(ym || '')}`
     + `&pj=${encodeURIComponent(pj || '')}`),
@@ -5475,6 +5516,18 @@ async function whFetchBackend(month) {
 const MECH_LABELS = ['租分公司设备', '内租设备', '外租零租含税', '外租包月含税',
   '外租零租不含税', '外租包月不含税'];
 
+/* 规则配置（`MOD-14`）—— 剔除规则读后端（**唯一主人在库**）。
+   ⚠️ 「加载时算出来的派生量」一律在**本函数里重算**（本项目反复踩的坑：写在数据层 ⇒ 静默空）。 */
+async function reloadM14() {
+  const d = await API.m14Rules();
+  RULE_RAW = d.rules || [];
+  RULE_KINDS = d.kinds || [];
+  RULE_SRC = d.source_label || '';
+  /* ⚠️ 后端给 `kind_label`（**展示名**）—— 本页只展示，故用展示名；
+     写动作要的是 `kind`（内部值）⇒ 从 `RULE_RAW[i]` 取，别从展示三元组反推。 */
+  RULE_EX = RULE_RAW.map(r => [r.kind_label, r.values, r.meaning]);
+}
+
 async function reloadMech() {
   const d = await API.m06Mech();
   MACH6 = d.mech || {};
@@ -5561,6 +5614,7 @@ async function boot() {
   /* ⚠️ `m09` 的自动项与手填项**都由后端自己算**（`mod09_fee/repository.inv_rows` 直读 `inv_detail`）
      ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序**（但排在它之后无害）。 */
   await soft('特殊费用月报表', reloadM09);
+  await soft('规则配置', reloadM14);   /* 独立取数 ⇒ 无顺序依赖 */
   await soft('付款域', reloadM05);          /* 内部各自 render 一次 */
   BOOT_ERROR = fails.join('；');
   render();

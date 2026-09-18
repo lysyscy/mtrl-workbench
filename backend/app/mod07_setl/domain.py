@@ -201,12 +201,26 @@ def file_count(warehouse_n: int) -> int:
     return int(warehouse_n) + 1
 
 
+def period_label(ym: str) -> str:
+    """`2026-09` → `2026年9月`（成品文件名里的**期间标签**）—— ⛔ **只此一处转换**。
+
+    ⚠️ 它与 `core.period.export_filename`（`表名-YYYY-MM` 那**另一族**命名）**不是一回事**：
+       收发结存的成品名照**用户手作成品**的写法 —— 2026-09-17 真机跑通的那次产出就是
+       `第四工程公司2026年9月收发结存表.zip`（`ops/模板法导出-实测结论.md` §二）。
+    ⚠️ 传进来的若不是干净的 `YYYY-MM` ⇒ **原样返回**（⛔ 不抛、也不臆造一个月份）。
+    """
+    s = str(ym or "").strip()
+    if len(s) == 7 and s[4] == "-" and s[:4].isdigit() and s[5:].isdigit():
+        return f"{int(s[:4])}年{int(s[5:])}月"
+    return s
+
+
 def total_workbook_name(ym: str) -> str:
-    return f"{ORG_NAME}{ym}收发结存表.xlsx"
+    return f"{ORG_NAME}{period_label(ym)}收发结存表.xlsx"
 
 
 def zip_name(ym: str) -> str:
-    return f"{ORG_NAME}{ym}收发结存表.zip"
+    return f"{ORG_NAME}{period_label(ym)}收发结存表.zip"
 
 
 def zip_manifest(rows, ym: str) -> list[dict]:
@@ -257,7 +271,7 @@ __all__ = [
     "default_month", "rows_of", "aggregate_by_warehouse", "warehouse_rows",
     "row_total", "warehouse_count",
     "balance", "is_balanced", "check_text", "check_level",
-    "sum_row", "counts", "file_count", "total_workbook_name", "zip_name", "zip_manifest",
+    "sum_row", "counts", "file_count", "period_label", "total_workbook_name", "zip_name", "zip_manifest",
     "fetch_dialog_default", "empty_text",
     # 焊材 / 气体提取（§5.3.3）的出口**不在这里** ⇒ 见 `app/mod07_setl/extract.py`
 ]

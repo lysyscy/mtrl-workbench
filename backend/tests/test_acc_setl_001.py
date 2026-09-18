@@ -14,14 +14,20 @@
 
 from __future__ import annotations
 
+import pathlib
 import re
+import tempfile
+import zipfile
 from datetime import date, timedelta
 from decimal import Decimal
 
 from app.mod02_i8.fetch_task import CONFIRM_TOKEN
 from app.mod07_setl import domain as D
+from app.mod07_setl.models import SetlDetail
 from app.mod07_setl.service import build_page_data, parse_state
 from app.mod07_setl.view import fetch_dialog_html, render_setl_page
+from app.report_export import service as _EX
+from app.report_export import setl_export as _SE
 from tests.acc_plugin import acc
 from tests.m07_helpers import (
     EMPTY_MONTH,
@@ -261,6 +267,21 @@ def test_产出物为分仓库工作簿加总表且份数随仓数实时算():
     assert len(set(counts)) > 1, f"三个月份数完全相同 ⇒ 疑似写死：{counts}"
     # 空月：只剩总表 1 份
     assert len(_data(period=EMPTY_MONTH)["manifest"]) == 1
+
+    # ⭐ `TAIL-04` 起：「产出物」不再只是一张清单 —— **清单必须与实际产出的 zip 成员一致**。
+    #    ⚠️ 为什么补这一段：本判据点原文写的是「**产出物** = 分仓库工作簿 ＋ 1 个总表」，
+    #       而在此之前它只查了 `manifest`（**清单自己说自己**）⇒ **导出根本没实现也照样绿**
+    #       （实测：`TAIL-04` 落地前，导出按钮按下去拿不到任何文件，本条却一直是绿的）。
+    #    做法：拿**同一份桩明细**真跑一次成品写出，再核对 zip 成员 == 清单。
+    rows = dataset((MONTHS[0],))[SetlDetail]
+    with tempfile.TemporaryDirectory(prefix="acc-setl-108-") as td:
+        zip_path = _SE.build_zip(rows, pathlib.Path(td) / "out", _EX.period_label(MONTHS[0]))
+        members = sorted(zipfile.ZipFile(zip_path).namelist())
+    manifest = _data(period=MONTHS[0])["manifest"]
+    assert members == sorted(m["name"] for m in manifest), (
+        f"zip 成员与清单不一致：{members} vs {[m['name'] for m in manifest]}"
+    )
+    assert len(members) == len(indep_warehouses(MONTHS[0])) + 1
 
 
 @acc(CASE, "001-09")
