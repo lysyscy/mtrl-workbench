@@ -2754,7 +2754,7 @@ V.m07=()=>{
   <div class="card" style="margin-bottom:0"><h4>经济活动分析大表（§5.7）<span class="sp">
     <span class="mut sm">核算月 ${bjMonth(-1)}</span>
     <button class="btn" data-act="bigPick">选题（${BIGSET.length} 项 · 可调顺序）</button>
-    <button class="btn pri" data-act="exp" data-t="经济活动分析大表（按模板）">导出 Excel（R1）</button></span></h4>
+    <button class="btn pri" data-act="bigExport" title="按模板导出：一份（全项目在一张表里 · 20 列 · 三级表头 ＋ 合计行）">按模板导出 Excel</button></span></h4>
     <div class="tw"><table class="dt" data-sort-key="m07:bigtable" style="min-width:1620px"><thead>${BIG_THEAD}</thead><tbody>
     ${bigRows(bjMonth(-1)).map((r,ri)=>{
       const cell=(i,extra)=>{ const c=r.cells[i], f=BIGFMT[i];
@@ -4592,6 +4592,31 @@ const ACT={
  /* `expLed`（左右两栏各自的「导出 Excel」）已按 2026-09-13 用户口径**删除** ——
     改为卡头**一个**导出入口（`ledExpToggle` → 展开区多选项目 → `ledExpOk`）：
     导出形态 = **每个项目一个工作簿**（3 个工作表：辅材欠款 / 机械欠款 / 特殊费用月报表）；≥2 个项目打 zip。 */
+
+ /* ⭐ 接线（`TAIL-04` 路径① · 片 4b）：**活动大表**成品由**后端模板填充**生成 ——
+   **一份**（全项目在一张表里：⛔ 不是每项目一份、⛔ 无 zip）· `Sheet1` 20 列（三级表头 ＋ 合计行）。
+   ⚠️ 失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（**一行都没有** · 模板缺失/损坏 ·
+      **显示区对账不过**）⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+   ⚠️ 月份**原样带给后端**（`bjMonth(-1)` = 材料报表类默认 = 上月，§9.2）—— ⛔ 不在前端另算。
+   ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）。 */
+ bigExport:async ()=>{
+   const url='/api/m07/big/export?period='+encodeURIComponent(bjMonth(-1));
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'经济活动分析大表.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   toast(`已导出 <b>${esc(fn)}</b>：一份（全项目一张表）· <b>20 列</b>（三级表头 ＋ 合计行）；`
+     + `派生列与合计**已算成数值**（⛔ 不留公式）`,8600); },
 
  /* —— MOD-12 —— */
  dfOk:t=>{ const d=DFs.find(x=>x.id===t.dataset.id); d.status='已核对'; render(); toast(`${d.id} 已标记「已核对」`); },

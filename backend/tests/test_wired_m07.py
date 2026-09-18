@@ -364,3 +364,35 @@ def test_金额格式化认null():
 def test_主材累计不可得时不写0():
     body = SHELL[SHELL.find("const bigMatCum = wh =>"):][:400]
     assert "MAT_OK ?" in body and ": null" in body, "`bigMatCum` 取数口未接入时没给 `null`（会写 0）"
+
+
+# --------------------------------------------------------------- 活动大表导出（`TAIL-04` 片 4b）
+
+
+@acc("ACC-RPT-BIG-001", "001-19")
+def test_活动大表导出走真下载而不是假成功():
+    """⭐ `TAIL-04` **片 4b**：大表成品由后端模板填充生成 ⇒ 壳侧必须是**真下载**。
+
+    ⚠️ 原型那个按钮是 `data-act="exp"`（诚实占位：**没有文件产生**）—— 接线后必须换成大表自己的动作。
+    """
+    assert "bigExport:async ()=>{" in SHELL, "缺真下载动作 `bigExport`"
+    assert "/api/m07/big/export?period=" in SHELL, "没走活动大表导出端点"
+    assert "encodeURIComponent(bjMonth(-1))" in SHELL, \
+        "月份没原样带给后端（§9.2 材料报表类默认 = 上月；⛔ 前端不另算）"
+    assert "x-export-filename" in SHELL, "文件名没从 `X-Export-Filename` 带出（命名规则的主人在后端）"
+    # ⛔ 旧的**假成功**按钮必须消失（大表卡头那一个）
+    assert 'data-act="exp" data-t="经济活动分析大表（按模板）"' not in SHELL, "大表卡头还留着假成功的 `exp`"
+    assert 'data-act="bigExport"' in SHELL, "大表卡头的按钮没接到 `bigExport`"
+
+
+@acc("ACC-RPT-BIG-001", "001-19")
+def test_活动大表导出失败必须给人原因不静默():
+    """后端失败回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（一行都没有 / 模板坏 / **显示区对账不过**）
+    ⇒ 壳必须**弹原因**，⛔ 不能静默、也不能当文件下载。"""
+    i = SHELL.index("bigExport:async ()=>{")
+    body = SHELL[i:SHELL.index("\n /* —— MOD-12 —— */", i)]     # 终点锚用**下一段注释头**（纯 ASCII）
+    assert 400 < len(body) < 2200, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
+    assert "ct.includes('application/json')" in body, "没按 content-type 分流"
+    assert "d.message||'后端没给原因'" in body, "失败时没把后端的中文原因给用户"
+    assert "if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`" in body, \
+        "非 2xx 没显式报错（会静默产出空文件）"
