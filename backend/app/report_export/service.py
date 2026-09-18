@@ -140,5 +140,48 @@ def export_extract(session: Session, period: str, status: str = "") -> Path:
     return Path(weldgas_export.build_xlsx(plan["grids"], EXPORT_ROOT, plan["report_ym"]))
 
 
+def export_ledger(session: Session, projects, ym: str = "") -> Path:
+    """导出**台账成品**（`TAIL-04` 路径① **片 2＋3**）—— 每个项目**一本工作簿 / 三个 sheet**
+    （`辅材` / `机械` / `特殊费用月报表`）；≥2 个项目 ⇒ 打一个 zip ⇒ 返回成品（或 zip）的绝对路径。
+
+    - 取数：台账两侧 = `mod05_flow.service.build_ledger`（**行集合与页面同一份口径**）；
+      「特殊费用月报表」= `mod09_fee.service.build_page_data`（1 自动项 ＋ N 手填项）。
+    - ⚠️ **全本只有一个报告月**（`ym`）：台账的**止月**与「特殊费用月报表」的**月份列**必须是同一个月
+      —— 否则一本工作簿里两张表说的不是同一期间（用户在同一个文件里看到两个期间，必然读错）。
+    - ⚠️ **三个 sheet 一次做齐**：只填两个就交付，第三张会把模板里**别的项目**的示例数据留给用户
+      （`TAIL-43` 同族）⇒ 本函数**不提供"只导两个 sheet"的入口**。
+    - 项目**必须在档案里**（拿不到展示名 ⇒ **显式拒做**，⛔ 不猜、不臆造归属）。
+    """
+    from app.mod05_flow import service as M5
+    from app.mod09_fee import domain as M9D
+    from app.mod09_fee import repository as M9R
+    from app.mod09_fee import service as M9
+    from app.report_export import ledger_export
+
+    keys = [str(k) for k in (projects or ()) if str(k or "").strip()]
+    if not keys:
+        raise MustReportError("导出台账：**一个项目都没选** —— 请先在展开区里勾选要导出的项目。")
+    report_ym = str(ym or "").strip() or M9D.default_ym()
+    display_of = {c.key: c.display for c in M9.candidates(session)}
+    out_dir = EXPORT_ROOT / ledger_export.FILE_SUFFIX / period_label(report_ym)
+    made: list[str] = []
+    for key in keys:
+        pj = M9R.project_by_key(session, key)
+        if pj is None:
+            raise MustReportError(
+                f"导出台账：项目「{key}」**不在档案里** ⇒ 先建档再导（⛔ 不猜项目名、不臆造归属）。")
+        display = display_of.get(key) or key
+        sides = {s["category"]: s
+                 for s in M5.build_ledger(session, project_id=pj.id, end_ym=report_ym)["sides"]}
+        fee = M9.build_page_data(session, {"ym": report_ym, "pj": key})
+        sections = {cat: sides.get(cat) for cat in ledger_export.SHEET_OF_CATEGORY}
+        sections[ledger_export.SHEET_FEE] = fee
+        made.append(ledger_export.build_xlsx(sections, out_dir, display=display, ym=report_ym))
+    if len(made) == 1:
+        return Path(made[0])
+    return Path(ledger_export.build_zip(
+        made, out_dir, "%s_%s.zip" % (ledger_export.FILE_SUFFIX, period_label(report_ym))))
+
+
 __all__ = ["EXPORT_ROOT", "period_label", "setl_rows", "setl_count", "export_settlement",
-           "export_inventory", "export_extract"]
+           "export_inventory", "export_extract", "export_ledger"]

@@ -51,6 +51,54 @@ def _row_values(ws, r, max_col):
     return [ws.cell(row=r, column=c).value for c in range(1, max_col + 1)]
 
 
+def keep_only_columns(ws, *, keep: str, drop) -> dict:
+    """把模板里的若干列**压成一列**：删掉 `drop`（列字母），只留 `keep`（列字母）。
+
+    ⭐ 为什么需要它：`模板清单` **§5.2** 对台账「特殊费用月报表」的裁定（①丙）= **月份列由系统按
+       「当前核算月」生成**（模板的 `3月份`…`8月份` 只是示例、会被替换）⇒ 单月导出时要把那几列压成一列。
+       ⛔ 这不是"多写一份填充逻辑" —— 行维度仍交 `fill_sheet`，本函数**只挪列**（结构级、不认业务）。
+
+    ⚠️ 三条**实测**（与 `insert_rows` / `delete_rows` 是同一族坑）：
+      1. `delete_cols` **不搬合并区** ⇒ 跨列合并（如标题 `A1:H1`）必须**自己按新几何重算**；
+      2. `delete_cols` 会留下**列属性空壳**（末列以右的 `column_dimensions`）⇒ 删完清掉；
+      3. ⭐ **必须在 `fill_sheet` 之前调用** —— 数据区 / 尾块的定位都基于列，先填后删会把对账计划全打乱。
+
+    返回 `{"kept": 列字母, "dropped": [...], "max_col": 新列数, "merges": [(新合并区字符串), …]}`。
+    """
+    from openpyxl.utils import column_index_from_string, get_column_letter
+
+    ki = column_index_from_string(keep)
+    di = sorted({column_index_from_string(c) for c in drop})
+    if not di:
+        return {"kept": keep, "dropped": [], "max_col": ws.max_column,
+                "merges": [str(r) for r in ws.merged_cells.ranges]}
+    if min(di) <= ki:
+        raise ValueError("只支持把**右侧**的列并在左侧那一列上（`keep` = %s 必须在 `drop` 左边）" % keep)
+
+    before = [(r.min_col, r.min_row, r.max_col, r.max_row) for r in ws.merged_cells.ranges]
+    for rng in [str(r) for r in ws.merged_cells.ranges]:      # 先全拆，删完按新几何重并
+        ws.unmerge_cells(rng)
+
+    for ci in reversed(di):                                   # ⚠️ **从右往左**删（高索引先做 ⇒ 低索引不受影响）
+        ws.delete_cols(ci, 1)
+
+    merges: list[str] = []
+    for mn, mr, mx, xr in before:
+        new_mn = mn - sum(1 for ci in di if ci < mn)
+        new_mx = mx - sum(1 for ci in di if ci <= mx)
+        if new_mx < new_mn:
+            continue                                          # 整块都在被删的列里 ⇒ 无处可并
+        ws.merge_cells(start_column=new_mn, start_row=mr, end_column=new_mx, end_row=xr)
+        merges.append(
+            "%s%d:%s%d" % (get_column_letter(new_mn), mr, get_column_letter(new_mx), xr))
+
+    for c in [x for x in ws.column_dimensions if x and column_index_from_string(x) > ws.max_column]:
+        ws.column_dimensions.pop(c, None)                    # 清掉末列以右的列属性空壳
+
+    return {"kept": keep, "dropped": [get_column_letter(ci) for ci in di],
+            "max_col": ws.max_column, "merges": merges}
+
+
 def locate_data_area(ws, *, marker: str = MARKER, key_col: str = "A") -> dict:
     """定位**数据区**与**尾块**。
 
@@ -321,4 +369,5 @@ def _same(got, exp) -> bool:
     return str(got) == str(exp)
 
 
-__all__ = ["MARKER", "locate_data_area", "fill_sheet", "fill_workbook", "verify_filled"]
+__all__ = ["MARKER", "keep_only_columns", "locate_data_area", "fill_sheet", "fill_workbook",
+           "verify_filled"]

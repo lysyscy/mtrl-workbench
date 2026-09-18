@@ -164,6 +164,36 @@ def page_debt(
     return HTMLResponse(render_m05_debt(load(), message=msg, message_kind=msgkind))
 
 
+@router.get("/api/m05/ledger/export")
+def api_ledger_export(
+    projects: str = Query("", description="项目（**仓库名** = 候选键，逗号分隔；≥2 个 ⇒ 打一个 zip）"),
+    ym: str = Query("", description="报告月 `YYYY-MM`（空 = 材料报表类默认 = 上月，§9.2）"),
+):
+    """导出**逐月欠款台账成品**（`TAIL-04` 路径①）—— **每个项目一本工作簿 / 三个 sheet**
+    （`辅材` / `机械` / `特殊费用月报表`）；选 ≥2 个项目 ⇒ 打成一个 zip。
+
+    ⚠️ 失败（**一个项目都没选** · 项目**不在档案里** · 模板缺失/损坏 · **显示区对账不过**）⇒
+       **JSON 200 ＋ `ok:false` ＋ 中文原因**，壳侧据 `content-type` 分流（同另三条导出）。
+       ⛔ 不回 4xx：那样用户只看到一句 `HTTP 400`，而"没选项目""该项目没建档"这类话必须给人看。
+    """
+    from urllib.parse import quote
+
+    from fastapi.responses import FileResponse, JSONResponse
+
+    from app.report_export import service as EX
+
+    keys = [k.strip() for k in str(projects or "").split(",") if k.strip()]
+    try:
+        with session_scope() as s:
+            path = EX.export_ledger(s, keys, ym)
+    except MustReportError as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
+    media = ("application/zip" if path.suffix == ".zip"
+             else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    return FileResponse(path, media_type=media, filename=path.name,
+                        headers={"X-Export-Filename": quote(path.name)})
+
+
 @router.get("/m05/ledger", response_class=HTMLResponse)
 def page_ledger(
     project_id: int = Query(0), end_ym: str = Query(""),
