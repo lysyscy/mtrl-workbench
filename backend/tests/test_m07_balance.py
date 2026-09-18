@@ -8,8 +8,12 @@
 - 形态 = **甲**：提取页主表加一列「结余」＋ **点格即改**；
   ⭐ 粒度 = **类别 × 仓库 · 不按月**（用户维护的是「当前的结存」，改一次覆盖一次）。
 
-⚠️ 本片**尚未新立判据点**（「要不要新立」属**扩范围** ⇒ 先回报，别自建 —— 片 1 那 4 条是用户批过的）
-   ⇒ 本文件一律用 `@acc()` **显式声明不绑定**。
+⭐ **判据点（2026-09-18 用户批「立」）**：挂在 `ACC-SETL-EXT-001` 下 **5 点** ——
+`001-07` 未录入 ⇒ 成品留空（⛔ 不写 0）· 该列不参与合计行 ｜ `001-08` **`0` 是合法录入值** ｜
+`001-09` 录入入口 = **点格即改** · 粒度 = **类别 × 仓库 · 不按月** · 清空 ⇒ 回到未录入 ｜
+`001-10` 非法输入（非数字 / 负数 / 认不出的类别 / 空仓库）**一律拒、不落库、原值不变** ｜
+`001-11` 已录入值**随导出带上**（导出与页面**同一份取数出口**）。
+（⚠️ **加点 = 只动 `验收基线.json` 一处**；「四处同步」是**新增用例**的规矩。）
 
 ⭐ 三条最容易写错的：
 1. **未录入 ≠ 0**：未录入 ⇒ 库里**没有那一行** ⇒ 导出**如实留空**；`0` 是**合法录入值**（写 0）。
@@ -43,6 +47,7 @@ from tests.m07_helpers import (
 )
 
 MODDIR = Path(__file__).resolve().parents[1] / "app" / "mod07_setl"
+CASE = "ACC-SETL-EXT-001"
 PARAMS = {"status": "在建", "ext_period": "2026-08"}
 
 
@@ -87,7 +92,7 @@ def _warehouses(plan: dict, kind: str) -> list[str]:
 
 # ============================================================ 取数：未录入 ≠ 0
 
-@acc()
+@acc(CASE, "001-07")
 def test_未录入的键不出现而不是0():
     """⭐ `load_balances` 的**形状**：未录入的 `(类别, 仓库)` **键不出现**（域值 `None`）。
 
@@ -99,7 +104,7 @@ def test_未录入的键不出现而不是0():
     assert (bals.get("焊材") or {}).get("甲仓") == Decimal("1200.00")
 
 
-@acc()
+@acc(CASE, "001-08")
 def test_0是合法录入值会照常出现():
     """⭐ `0` 与「未录入」是**两件事**：`0` 是合法录入值 ⇒ 它**必须出现在字典里**（值 = 0）。"""
     bals = load_balances(_session())
@@ -107,7 +112,7 @@ def test_0是合法录入值会照常出现():
     assert bals["焊材"]["乙仓"] == Decimal("0.00")
 
 
-@acc()
+@acc(CASE, "001-11")
 def test_取数出口只有一份实现():
     """⭐ 要证明「只有一份」，就得断言**同一性**（`is`），⛔ 不是「两边都能调」（各包一层照样过）。"""
     assert S.load_balances is R.load_balances, "服务层又包了一层 ⇒ 改动仍会分叉"
@@ -122,7 +127,7 @@ def test_取数出口只有一份实现():
 
 # ============================================================ 导出：带值 / 留空 / 0 照写
 
-@acc()
+@acc(CASE, "001-11")
 def test_录入后导出按类别仓库带上该值(tmp_path):
     """「录入生效」这一维：成品的「结余」列逐格 = **独立手写期望表**（不问实现）。"""
     plan = _plan()
@@ -137,7 +142,7 @@ def test_录入后导出按类别仓库带上该值(tmp_path):
                 f"[{kind}] {wh}：{value} ≠ 独立复算 {want}"
 
 
-@acc()
+@acc(CASE, "001-07")
 def test_未录入时导出该格如实留空(tmp_path):
     """⭐ 与 `TAIL-43` 同族的那条：**没有来源就留空** —— ⛔ 不写 0、⛔ 不带模板示例值。"""
     plan = _plan(with_balances=False)                     # 库里一条结余都没有
@@ -147,7 +152,7 @@ def test_未录入时导出该格如实留空(tmp_path):
         assert all(v in (None, "") for v in values), f"[{kind}] 未录入却写出了值：{values}"
 
 
-@acc()
+@acc(CASE, "001-08")
 def test_0照写0而不是留空(tmp_path):
     """⭐ `0` 是**合法录入值** ⇒ 成品里那一格必须是 `0`（与「未录入的空白」可区分）。"""
     plan = _plan()
@@ -157,7 +162,7 @@ def test_0照写0而不是留空(tmp_path):
     assert abs(Decimal(str(got)) - Decimal("0.00")) < Decimal("0.005"), f"0 被写成了 {got!r}"
 
 
-@acc()
+@acc(CASE, "001-07")
 def test_结余列不参与合计行(tmp_path):
     """照模板：**合计行**的「结余」格留空（各仓结余相加没有业务含义 —— 模板即如此）。"""
     plan = _plan()
@@ -171,7 +176,7 @@ def test_结余列不参与合计行(tmp_path):
 
 # ============================================================ 写动作（点格即改）
 
-@acc()
+@acc(CASE, "001-09")
 def test_保存一格只动这一格且粒度不按月():
     """粒度 = **类别 × 仓库**：改一格不影响别的格。"""
     s = _session()
@@ -183,7 +188,7 @@ def test_保存一格只动这一格且粒度不按月():
     assert bals["气体"]["甲仓"] == Decimal("88.50"), "别的类别被带改了"
 
 
-@acc()
+@acc(CASE, "001-09")
 def test_重复保存是覆盖不长出第二行():
     """⭐ **不按月**的结构性判据：同一格存两次 ⇒ 覆盖（行数不变）。"""
     s = _session()
@@ -195,7 +200,7 @@ def test_重复保存是覆盖不长出第二行():
     assert load_balances(s)["焊材"]["甲仓"] == Decimal("2.00")
 
 
-@acc()
+@acc(CASE, "001-09")
 def test_写动作签名里没有月份参数():
     """⭐ **不按月**的接口层面判据：签名里不该出现月份（出现 = 粒度偷偷变成按月）。"""
     params = set(inspect.signature(save_balance_cell).parameters)
@@ -203,7 +208,7 @@ def test_写动作签名里没有月份参数():
         f"结余的粒度是「类别 × 仓库 · 不按月」，签名里却出现了月份参数：{sorted(params)}"
 
 
-@acc()
+@acc(CASE, "001-09")
 def test_清空后回到未录入():
     """清空 ⇒ **回到未录入**（导出里如实留空），⛔ 不是写成 0。"""
     s = _session()
@@ -220,7 +225,7 @@ def test_清空后回到未录入():
     assert plan["grids"]["焊材"]["rows"][whs.index("甲仓")]["balance"] is None
 
 
-@acc()
+@acc(CASE, "001-10")
 def test_非数字被拒不写库原值不变():
     s = _session()
     before = load_balances(s)
@@ -229,7 +234,7 @@ def test_非数字被拒不写库原值不变():
     assert load_balances(s) == before, "非法输入却改了库（⛔ 也不许静默变 0）"
 
 
-@acc()
+@acc(CASE, "001-10")
 def test_负数被拒不写库原值不变():
     s = _session()
     before = load_balances(s)
@@ -238,7 +243,7 @@ def test_负数被拒不写库原值不变():
     assert load_balances(s) == before
 
 
-@acc()
+@acc(CASE, "001-10")
 def test_认不出的类别被拒():
     s = _session()
     r = save_balance_cell(s, kind="电缆", warehouse="甲仓", raw="1.00")
@@ -246,7 +251,7 @@ def test_认不出的类别被拒():
     assert load_balances(s) == load_balances(_session()), "被拒的类别却落了库"
 
 
-@acc()
+@acc(CASE, "001-10")
 def test_空仓库被拒():
     s = _session()
     r = save_balance_cell(s, kind="焊材", warehouse="   ", raw="1.00")
@@ -254,7 +259,7 @@ def test_空仓库被拒():
     assert not (load_balances(s).get("焊材") or {}).get(""), "空仓库名被落了库"
 
 
-@acc()
+@acc(CASE, "001-10")
 def test_千分位与空格的输入照常解析():
     """金额解析**唯一出口 = `core.money`**（剥千分位 / 去空白）⇒ 界面上粘贴带逗号的数也能存。"""
     s = _session()
@@ -264,7 +269,7 @@ def test_千分位与空格的输入照常解析():
 
 # ============================================================ 装配（零件齐 ≠ 接线上了）
 
-@acc()
+@acc(CASE, "001-11")
 def test_导出真的去读了库里的结余():
     """⭐ 与「零件齐、装配缺」同款的反向守卫：`build_extract_export` 必须**真的调用**取数出口，
     且在**组装网格之前** —— ⛔ 漏了这一环会让整条链「看着对、永远留空」。"""

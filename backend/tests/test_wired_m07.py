@@ -201,7 +201,7 @@ def test_导出已落地为真下载():
 
 # ============================================================== 5 · 「结余」录入（2026-09-18 用户裁定「甲」）
 
-@acc()
+@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余录入走后端且不在前端复写判据():
     """⭐ 反向：`extBal` 不许在前端复写「金额非负 / 空 = 清空」判据，也不许本地改 `BAL_EX` 冒充落库。"""
     i = SHELL.find("extBal:async t=>{")
@@ -218,7 +218,7 @@ def test_结余录入走后端且不在前端复写判据():
     assert "reloadM07()" in body, "`extBal` 成功后没「以后端为准重拉」"
 
 
-@acc()
+@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余是表单类动作已登记CHG():
     """⛔ 漏登记 `CHG` ⇒ `change` 事件被静默丢弃（输入框「点了没反应」）。"""
     m = re.search(r"const CHG=\[([^\]]*)\]", SHELL)
@@ -226,13 +226,13 @@ def test_结余是表单类动作已登记CHG():
     assert "'extBal'" in m.group(1), "`extBal` 没登记进 `CHG`"
 
 
-@acc()
+@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余演示容器已清成空容器():
     assert "const BAL_EX = {" not in SHELL, "结余演示块 `const BAL_EX = {` 还在"
     assert "let BAL_EX = {};" in SHELL, "`BAL_EX` 没改成「空容器 + 后端填充」"
 
 
-@acc()
+@acc("ACC-SETL-EXT-001", "001-07")
 def test_结余适配层过N0且不给未录入补值():
     """⚠️ 后端金额出**字符串**（不过 `N0()` 会显示成带引号的串）；
     ⛔ **不给未录入补 0** —— 一补，「没填」与「填了 0」就再也分不开。"""
@@ -242,7 +242,7 @@ def test_结余适配层过N0且不给未录入补值():
         "空值（未录入）没被跳过 ⇒ 会给未录入补一个值（0 与「未录入」就分不开了）"
 
 
-@acc()
+@acc("ACC-SETL-EXT-001", "001-11")
 def test_reloadM07填充结余():
     """⭐ 重拉是**唯一出口**：`BAL_EX` 必须由 `reloadM07()` 从后端 `balances` 原地填。"""
     body = _body("reloadM07")
@@ -251,7 +251,7 @@ def test_reloadM07填充结余():
         "`BAL_EX` 没「原地清空再填」（外部持有的引用会指向旧对象）"
 
 
-@acc()
+@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余列渲染成可编辑输入且合计下标跟着移():
     """「点格即改」的形态判据 ＋ ⚠️ **加列后合计行的列下标必须跟着移**（否则合计算到「结余」列上）。"""
     body = _body("extBlock")
@@ -262,7 +262,7 @@ def test_结余列渲染成可编辑输入且合计下标跟着移():
     assert "{2:rs=>" not in body, "合计行还在按旧下标取列"
 
 
-@acc()
+@acc("ACC-SETL-EXT-001", "001-09")
 def test_表头含结余列且列序照模板():
     m = re.search(r"const EXT_THEAD=`([^`]*)`", SHELL)
     assert m, "找不到 `EXT_THEAD`"
@@ -272,7 +272,7 @@ def test_表头含结余列且列序照模板():
         f"「结余」列的位置不对（应照成品模板：仓库之后、金额之前）：{head}"
 
 
-@acc()
+@acc("ACC-SETL-EXT-001", "001-09")
 def test_后端结余端点读写都在():
     assert '@router.post("/api/m07/extract/balance")' in API, "后端缺写端点"
     assert "S.save_balance_cell(" in API, "写端点没走服务层出口（判定会散到路由里）"
