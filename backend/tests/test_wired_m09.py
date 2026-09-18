@@ -91,6 +91,81 @@ def _act(name: str) -> str:
     return body
 
 
+# ================================ `ACC-FEE-MON-001` 的**形态**半边（`§19` 批 2 搬家）
+#
+# 原先钉在**旧服务端页** `render_fee_page` 渲染出的 HTML 上；旧页删除（授权 `D18`）⇒ 形态改指新壳
+# （⛔ 判据不删）。实质（取数 / 判定 / 独立复算）仍留在 `tests/test_acc_fee_mon.py`。
+
+_AWF_THEAD_RE = re.compile(r"const AWF_THEAD=`([^`]*)`;")
+
+
+def _awf_heads() -> list[str]:
+    """壳里本表表头（`AWF_THEAD`）的**列标签**（去掉标签里的 HTML）。"""
+    m = _AWF_THEAD_RE.search(SHELL)
+    assert m, "壳里找不到 `const AWF_THEAD=`"
+    return [re.sub(r"<[^>]*>", "", h).strip()
+            for h in re.findall(r"<th[^>]*>([\s\S]*?)</th>", m.group(1))]
+
+
+@acc("ACC-FEE-MON-001", "001-01")
+def test_壳里自动项与手填项同桌():
+    """§5.5：**1 个固定自动项行 ＋ N 个手填项行**，同一张表（`data-sort-key="m09:awf"`）。"""
+    s = _slice("m09")
+    assert 'data-sort-key="m09:awf"' in s, "壳里这张表不是「特殊费用月报表」"
+    assert "安全文明施工费</b>（按 CBS 分类）" in s, "自动项那一行没了"
+    assert "${list.length?list.map(" in s, "手填项没有由后端 `list` 渲染"
+
+
+@acc("ACC-FEE-MON-001", "001-02")
+def test_壳里合计行由共用出口出():
+    """合计行的**金额格**由 `sumRowOf(AWF_THEAD, …)` 的 `{2:…}` 给出 —— 走全站唯一金额出口
+    （**千分位**由它统一出，页面不再自己拼字符串）。"""
+    assert "sumRowOf(AWF_THEAD, list, {2:()=>total" in SHELL, "合计行不是由共用出口出的"
+
+
+@acc("ACC-FEE-MON-001", "001-04")
+def test_壳里重置回默认月与默认项目():
+    """「重置」= 核算年月回**默认月**（上月）＋ 项目回**默认项目**（候选第一个）。"""
+    assert "awfReset:()=>{ awfYm=bjMonth(-1); awfPj=AWF_PJS[0]||'';" in SHELL, "重置没回默认"
+
+
+@acc("ACC-FEE-MON-001", "001-05")
+def test_壳里空态行跨列数由表头派生():
+    """未录的那一份 ⇒ 空态提示行，`colspan` **由表头列数派生**（⛔ 不写死数字）。"""
+    assert 'colspan="${thCount(AWF_THEAD)}"' in SHELL, "空态行的跨列数不再由表头派生"
+    assert "还没有手填项" in SHELL, "未录的月没有提示"
+
+
+@acc("ACC-FEE-MON-001", "001-06")
+def test_壳里项目面板是单选且候选键来自后端():
+    """§2.7.4：候选**键 = 仓库名**（后端 `projects` 的 `key`）；面板**单选**（`single:true` ⇒ 无全选/清空）；
+    ⚠️ 传进 `projPanel` 的必须是**候选键**（`AWF_PJS`）而不是档案行对象（否则 `data-pj="[object Object]"`）。"""
+    assert "const awfPjPanel=()=>projPanel({list:()=>AWF_PJS" in SHELL and "single:true})" in SHELL, \
+        "项目面板不是单选、或候选不是那份键清单"
+    assert "AWF_PJS = (d.projects || []).map(p => p.key)" in SHELL, "候选不是由后端落定（键 = 仓库名）"
+
+
+@acc("ACC-FEE-MON-001", "001-09")
+def test_壳里本页不设导出入口且写明随台账导出():
+    """§7.1 / §5.5：本表**随「逐月欠款台账」导出**、**本页不设单独导出按钮**。"""
+    s = _slice("m09")
+    assert "逐月欠款台账" in s, "没写明它随台账导出"
+    assert "export" not in s.lower(), "壳的 m09 视图里出现了导出入口（本页不该有）"
+
+
+@acc("ACC-FEE-MON-001", "001-10")
+def test_壳里表头是本表自己的列而非库存单据透视形态():
+    """`DEV-R-04`：本表 = **独立新报表**。壳的表头 = `AWF_THEAD`（自家列出口）：含库存单据没有的
+    **数据项 / 来源 / 占合计**，且**列数比库存单据少** —— 透视表不可能长这样。"""
+    from app.mod08_inv.domain import INV_TABLE_COLUMNS
+    from app.mod09_fee import domain as D
+
+    mine = _awf_heads()
+    assert mine == [c["label"] for c in D.AWF_COLUMNS], f"壳表头 ≠ 本表列出口：{mine}"
+    assert set(mine) - {c["label"] for c in INV_TABLE_COLUMNS} == {"数据项", "来源", "占合计"}
+    assert len(mine) < len(INV_TABLE_COLUMNS)
+
+
 # ============================================================== 1 · 演示数据已清
 
 @acc()

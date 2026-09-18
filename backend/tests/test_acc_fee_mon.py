@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import re
 from datetime import date
 from decimal import Decimal
 
@@ -19,48 +18,22 @@ from app.mod08_inv.domain import INV_TABLE_COLUMNS
 from app.mod08_inv.models import InvDetail
 from app.mod09_fee import domain as D
 from app.mod09_fee import service as S
-from app.mod09_fee import view as V
 from app.mod09_fee.models import FeeManualItem
 from tests.acc_plugin import acc
 from tests.m09_helpers import WH_A, WH_B, YM_NOW, YM_OTHER, session
 
-# ============================================================ HTML 取格子（**按格取，不整页撞**）
-
-_TABLE_RE = re.compile(r'<table class="dt" data-sort-key="m09:awf">')
-_TBODY_RE = re.compile(r"<tbody>([\s\S]*?)</tbody>")
-
-
-def _tbody(html: str) -> str:
-    start = _TABLE_RE.search(html)
-    assert start is not None, "页面上找不到本表（data-sort-key=m09:awf）"
-    body = _TBODY_RE.search(html[start.start():])
-    assert body is not None, "本表没有 tbody"
-    return body.group(1)
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 2**）：原先这里有一整组**页面观测辅助件**
+#    （`_tbody` / `_heads` / `_sum_cells` / `_empty_row` / `_page`）。旧页整体删除（授权 `D18`）
+#    后它们**零调用**（逐个数过 ✓）⇒ 一并移除；对应的**形态** claim 已搬到
+#    `tests/test_wired_m09.py`（自动项与手填项同桌 / 合计行由共用出口出 / 重置回默认 /
+#    空态跨列派生 / 项目面板单选 / 本页不设导出入口 / 表头是本表自己的列 ✓）。
+#    ⛔ 判据没删：下面每条只剩**取数、判定、独立复算**的实质，且都改走 `S.build_page_data(...)`。
 
 
-def _heads(html: str) -> list[str]:
-    start = _TABLE_RE.search(html)
-    assert start is not None
-    return [re.sub(r"<[^>]*>", "", h).strip()
-            for h in re.findall(r"<th[^>]*>([\s\S]*?)</th>", html[start.start():])]
-
-
-def _sum_cells(html: str) -> list[str]:
-    m = re.search(r'<tr class="sumrow">([\s\S]*?)</tr>', _tbody(html))
-    assert m is not None, "本表没有合计行（sumrow）"
-    return [re.sub(r"<[^>]*>", "", c).strip() for c in re.findall(r"<td[^>]*>([\s\S]*?)</td>", m.group(1))]
-
-
-def _empty_row(html: str) -> tuple[int, str]:
-    m = re.search(r'<tr class="empty"[^>]*>\s*<td colspan="(\d+)"[^>]*>([\s\S]*?)</td>', _tbody(html))
-    assert m is not None, "未录的那一份没有提示行"
-    return int(m.group(1)), re.sub(r"<[^>]*>", "", m.group(2)).strip()
-
-
-def _page(ym: str, wh: str = WH_A, sess=None) -> tuple[dict, str]:
+def _data(ym: str, wh: str = WH_A, sess=None) -> dict:
+    """本表当页**数据**（= 旧页渲染前的那份 `build_page_data` 出口；⛔ 不碰任何页面形态）。"""
     s = sess if sess is not None else session()
-    data = S.build_page_data(s, {"ym": ym, "project": wh})
-    return data, V.render_fee_page(data)
+    return S.build_page_data(s, {"ym": ym, "project": wh})
 
 
 # ============================================================ 001-01 两类同桌 · 都只统计所选项目
@@ -73,19 +46,15 @@ def test_自动项与手填项同桌且都只算所选项目():
     ⚠️ 样本里故意埋了四类"不该算"的库存单据行（入库 / 别的 CBS / 别的仓库 / 别的月），
        所以「只算所选项目」这一条**真的会被验到**（不是靠"恰好没有别的数据"）。
     """
-    data, html = _page(YM_NOW, WH_A)
+    data = S.build_page_data(session(), {"ym": YM_NOW, "project": WH_A})
     # 自动项取数：只认 该月 · 该仓库 · CBS-安文费 · 出库
     assert data["auto"]["amount"] == Decimal("1000.00")
     assert [m["item"] for m in data["manuals"]] == ["油卡使用", "运费"]
 
-    body = _tbody(html)
-    assert body.count('data-kind="auto"') == 1 and body.count('data-kind="manual"') == 2
-
     # 换项目 ⇒ 自动项与手填项**都换**（手填项那一份是空的，自动项换成乙仓库的 2000）
-    other, other_html = _page(YM_NOW, WH_B)
+    other = S.build_page_data(session(), {"ym": YM_NOW, "project": WH_B})
     assert other["auto"]["amount"] == Decimal("2000.00")
     assert other["manuals"] == []
-    assert "油卡使用" not in other_html
 
     # ⭐ **直接钉域内核本身**（不借道 `repository` 那条 SQL 过滤）：
     #    否则「只算该月 · 该仓库 · 该 CBS · 出库」四条**一条都没真被验到** ——
@@ -112,7 +81,7 @@ def test_合计等于自动项加手填项且独立复算():
        并且**再钉一次页面上的那一格**（合计行的金额格）—— 结果对 ≠ 页面印对了。
     """
     s = session()
-    data, html = _page(YM_NOW, WH_A, s)
+    data = S.build_page_data(s, {"ym": YM_NOW, "project": WH_A})
     inv = s.by_model[InvDetail]
     items = s.by_model[FeeManualItem]
     auto_want = sum(Decimal(str(r.amount)) for r in inv
@@ -121,7 +90,8 @@ def test_合计等于自动项加手填项且独立复算():
     manual_want = sum(Decimal(str(r.amount)) for r in items
                       if r.ym == YM_NOW and r.project_id == 11)
     assert data["total"] == auto_want + manual_want == Decimal("1300.00")
-    assert _sum_cells(html)[2] == "1,300.00"        # 合计行的**金额格**（千分位形态）
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先还钉「合计行的金额格 = `1,300.00`」（千分位形态，借旧页）；
+    # 旧页删除（`D18`）后形态搬到壳 —— `test_wired_m09.py::test_壳里合计行由共用出口出` ✓。
 
 
 # ============================================================ 001-03 按「核算年月 ＋ 项目」各存一份
@@ -131,27 +101,27 @@ def test_合计等于自动项加手填项且独立复算():
 def test_增改删只落在那一份上():
     """§5.5：手填项按「核算年月 ＋ 项目」**各存一份** —— 写路径不得波及其它月份或其它项目。"""
     s = session()
-    jia_now = len(_page(YM_NOW, WH_A, s)[0]["manuals"])
-    jia_other = len(_page(YM_OTHER, WH_A, s)[0]["manuals"])
+    jia_now = len(_data(YM_NOW, WH_A, s)["manuals"])
+    jia_other = len(_data(YM_OTHER, WH_A, s)["manuals"])
 
     S.act_add(s, ym=YM_NOW, project_key=WH_B)
     S.act_rename(s, ym=YM_NOW, project_key=WH_B, index=0, value="__断言用项名__")
     S.act_set_amount(s, ym=YM_NOW, project_key=WH_B, index=0, raw="123.45")
-    yi = _page(YM_NOW, WH_B, s)[0]["manuals"]
+    yi = _data(YM_NOW, WH_B, s)["manuals"]
     assert len(yi) == 1 and yi[0]["item"] == "__断言用项名__" and yi[0]["amount"] == Decimal("123.45")
 
-    assert len(_page(YM_NOW, WH_A, s)[0]["manuals"]) == jia_now          # 别的项目一行不动
-    assert len(_page(YM_OTHER, WH_A, s)[0]["manuals"]) == jia_other      # 别的月一行不动
+    assert len(_data(YM_NOW, WH_A, s)["manuals"]) == jia_now          # 别的项目一行不动
+    assert len(_data(YM_OTHER, WH_A, s)["manuals"]) == jia_other      # 别的月一行不动
 
     # 删除也只删那一份
     S.act_delete(s, ym=YM_NOW, project_key=WH_B, index=0)
-    assert _page(YM_NOW, WH_B, s)[0]["manuals"] == []
-    assert len(_page(YM_NOW, WH_A, s)[0]["manuals"]) == jia_now
+    assert _data(YM_NOW, WH_B, s)["manuals"] == []
+    assert len(_data(YM_NOW, WH_A, s)["manuals"]) == jia_now
 
     # 越界下标 ⇒ 显式报错，且不误删别份
     flash = S.act_delete(s, ym=YM_OTHER, project_key=WH_B, index=0)
     assert flash["kind"] == "err"
-    assert len(_page(YM_NOW, WH_A, s)[0]["manuals"]) == jia_now
+    assert len(_data(YM_NOW, WH_A, s)["manuals"]) == jia_now
 
 
 # ============================================================ 001-04 默认年月 ＋ 重置
@@ -171,9 +141,9 @@ def test_默认核算年月为上月且重置回默认():
     assert default["ym"] == D.default_ym()
     assert default["project"] == default["projects"][0].key       # 默认项目 = 候选第一个
 
-    # 页面的「重置」= 回本站根（丢掉 ym / pj 两个参数 ⇒ 回到默认月份 ＋ 默认项目）
-    html = V.render_fee_page(S.build_page_data(s, {"ym": YM_OTHER, "project": WH_B}))
-    assert 'href="/m09"' in html
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先还看旧页的「重置」链接（`href="/m09"` 丢掉两个参数）；
+    # 旧页删除（`D18`）后形态搬到壳 —— `test_wired_m09.py::test_壳里重置回默认月与默认项目`
+    # （`awfReset`：回默认月 ＋ 默认项目 ✓）。上面「默认项目 = 候选第一个」是实质，留着。
 
 
 # ============================================================ 001-05 未录 ⇒ 空 ＋ 提示行
@@ -182,13 +152,13 @@ def test_默认核算年月为上月且重置回默认():
 @acc("ACC-FEE-MON-001", "001-05")
 def test_未录的月份项目为空并给提示行():
     """§5.5：未录的（月 · 项目）⇒ 手填区为空 ＋ 提示行（**跨列数 = 表头列数**）；合计 = 只有自动项。"""
-    data, html = _page(YM_OTHER, WH_A)
+    data = _data(YM_OTHER, WH_A)
     assert data["manuals"] == []
-    span, text = _empty_row(html)
-    assert span == len(D.AWF_COLUMNS) == len(_heads(html))       # 派生自表头列数，不写死
-    assert text                                                  # 只验"不是空白"，**不绑措辞**
     assert data["total"] == Decimal("3000.00")                   # 只有该月该项目的自动项
-    assert _sum_cells(html)[2] == "3,000.00"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先还从旧页抠空态行的 `colspan`（= 表头列数，派生不写死）与合计行的
+    # 金额格；旧页删除（`D18`）后形态搬到壳 ——
+    # `test_wired_m09.py::test_壳里空态行跨列数由表头派生`（`colspan="${thCount(AWF_THEAD)}"` ✓）＋
+    # `…test_壳里合计行由共用出口出` ✓。
 
 
 # ============================================================ 001-06 项目面板（单选 · 键 = 仓库名）
@@ -197,14 +167,14 @@ def test_未录的月份项目为空并给提示行():
 @acc("ACC-FEE-MON-001", "001-06")
 def test_项目筛选是单选且候选键为仓库名():
     """§2.7.4：候选**键 = 仓库名**、**显示 = 展示名**；面板**单选**（无全选 / 清空）；**壳不进候选**。"""
-    _, html = _page(YM_NOW, WH_A)
-    radios = re.findall(r'<input type="radio"[^>]*name="pj"[^>]*>', html)
-    assert len(radios) == 2                                      # 甲 / 乙；壳（无仓库）不进候选
-    assert sum('checked' in r for r in radios) == 1              # **单选**：恰好一个被选中
-    assert 'value="甲仓库"' in html and 'value="乙仓库"' in html   # 值 = 仓库名（键）
-    assert "甲公司项目" in html and "某壳" not in html            # 显示 = 展示名；壳不出现
-    assert "[object Object]" not in html                         # 不得渲染成对象字面量
-    assert "全选" not in html and "清空" not in html
+    data = _data(YM_NOW, WH_A)
+    keys = [p.key for p in data["projects"]]
+    assert keys == [WH_A, WH_B], f"候选键必须 = **仓库名**（壳不进候选）：{keys}"
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先还数旧页 html 里的 radio 组（**单选**恰好一个 checked、
+    # 值 = 仓库名、显示 = 展示名、`[object Object]` 守卫、无「全选 / 清空」）；旧页删除（`D18`）后
+    # 形态搬到壳 —— `test_wired_m09.py::test_壳里项目面板是单选且候选键来自后端` ✓
+    # （`single:true` ⇒ 渲染 radio、⛔ 不给全选/清空；候选由后端 `projects` 的 `key` 落定 ⇒ 不会
+    # `[object Object]`；显示名由壳的 `PROJ_META_KEY` 出）。
 
 
 # ============================================================ 001-07 金额非法 ⇒ 拒绝且原值不变
@@ -214,14 +184,14 @@ def test_项目筛选是单选且候选键为仓库名():
 def test_手填金额非法被拒绝且原值不变():
     """§8.4 第 ③ 档：手填项**只拦「非数字」，允许 0 与负数**；非法 ⇒ 拒绝 ＋ 原值不变。"""
     s = session()
-    before = _page(YM_NOW, WH_A, s)[0]["manuals"][0]["amount"]
+    before = _data(YM_NOW, WH_A, s)["manuals"][0]["amount"]
     flash = S.act_set_amount(s, ym=YM_NOW, project_key=WH_A, index=0, raw="oops")
     assert flash["kind"] == "err" and D.MSG_BAD_AMOUNT in flash["message"]
-    assert _page(YM_NOW, WH_A, s)[0]["manuals"][0]["amount"] == before      # **绑那一格**，不看 kind
+    assert _data(YM_NOW, WH_A, s)["manuals"][0]["amount"] == before      # **绑那一格**，不看 kind
 
     for ok in ("0", "-500.25"):                                  # 0 与负数**合法**（此处有意最宽松）
         assert S.act_set_amount(s, ym=YM_NOW, project_key=WH_A, index=0, raw=ok)["kind"] == "ok"
-        assert _page(YM_NOW, WH_A, s)[0]["manuals"][0]["amount"] == Decimal(ok)
+        assert _data(YM_NOW, WH_A, s)["manuals"][0]["amount"] == Decimal(ok)
 
 
 # ============================================================ 001-08 删除反馈带重算后的合计
@@ -246,12 +216,10 @@ def test_删除给反馈且带重算后的合计():
 @acc("ACC-FEE-MON-001", "001-09")
 def test_随逐月欠款台账导出且本页不设导出按钮():
     """§7.1 / §5.5：本表**随「逐月欠款台账」导出**，页面须说明；**本页不设单独导出按钮**。"""
-    _, html = _page(YM_NOW, WH_A)
-    assert "逐月欠款台账" in html and "特殊费用月报表" in html          # 说明里点了台账与三个工作表
-    actions = re.findall(r'<form[^>]*action="([^"]*)"', html)
-    assert actions, "页面应有表单（筛选 / 增删改）"
-    assert all("export" not in a for a in actions)                      # **没有**导出入口
-    assert not re.search(r'(?:action|href)="[^"]*export', html)
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先在旧页 html 里找「说明点了台账」与「**没有**导出入口」
+    # （扫 `form action` / `href` 里有没有 `export`）；旧页删除（`D18`）后形态搬到壳 ——
+    # `test_wired_m09.py::test_壳里本页不设导出入口且写明随台账导出` ✓（壳的 m09 视图里写明
+    # 「随「逐月欠款台账」导出」、且**不含**任何导出动作）。
 
 
 # ============================================================ 001-10 独立新报表（不是透视表形态）
@@ -265,16 +233,16 @@ def test_是独立新报表而非库存单据透视形态():
     （数据项 / 来源 / 占合计）且**不含任何库存单据的特征列**（单据编号 / 物料 / 数量 / 仓库 /
     `cbs 名称` / 价税合计 …）—— 透视表不可能长这样。
     """
-    _, html = _page(YM_NOW, WH_A)
     mine = [c["label"] for c in D.AWF_COLUMNS]
-    assert _heads(html) == mine
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先拿**旧页**渲染出的表头比对（`_heads(html) == mine`），
+    # 还看页面上有没有「独立 / 透视」两词；旧页删除（`D18`）后形态搬到壳 ——
+    # `test_wired_m09.py::test_壳里表头是本表自己的列而非库存单据透视形态` ✓（比 `AWF_THEAD`）。
     assert set(mine) - {c["label"] for c in INV_TABLE_COLUMNS} == {"数据项", "来源", "占合计"}
     assert not (set(mine) & {"单据编号", "序号", "方向", "物料", "规格", "单位", "数量",
                              "不含税单价", "含税单价", "调整后金额", "价税合计",
                              "业务类型", "供应商 / 班组", "单据日期", "审核日期", "仓库",
                              "wbs 名称", "cbs 名称"})
     assert len(mine) < len(INV_TABLE_COLUMNS)
-    assert "独立" in html and "透视" in html
 
 
 # ============================================================ 001-11 不做「上次值带入」
@@ -284,8 +252,10 @@ def test_是独立新报表而非库存单据透视形态():
 def test_手填项不带入上月值():
     """§5.7.2：带入**只属活动大表** ⇒ 本表未录的月**就是空**（不预填、不标注来源月份）。"""
     s = session()
-    data, html = _page(YM_OTHER, WH_A, s)
+    data = _data(YM_OTHER, WH_A, s)
     assert data["manuals"] == []
-    assert _tbody(html).count('data-kind="manual"') == 0        # 一个预填行都没有
-    assert "油卡使用" not in html and "运费" not in html          # 别月的项名不得被带过来
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先还数旧页 tbody 里的手填行（`data-kind="manual"`）= 0；
+    # 旧页删除（`D18`）后形态搬到壳 —— 壳的手填行**只由后端 `list` 渲染**、`list` 为空时只余空态行
+    # （`test_wired_m09.py` 的 001-01 / 001-05 ✓）⇒ 未录的月**一个预填行都没有**
+    # ——「别月的项名不得被带过来」这条**实质**就是上面那句 `data["manuals"] == []` ✓。
     assert data["auto"]["amount"] == Decimal("3000.00")         # 自动项照旧按"该月 · 该项目"取
