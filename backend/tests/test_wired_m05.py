@@ -103,3 +103,38 @@ def test_机械结算源已接线_读真源():
 def test_已接线页的演示数组必须已删():
     assert "const LG = [" not in SHELL
     assert "LG.map(r=>O(r,LG_COLS))" not in SHELL
+
+
+# --------------------------------------------------------------- 台账导出（`TAIL-04` 片 2＋3）
+
+
+@acc()
+def test_台账导出走真下载而不是假成功():
+    """⭐ `TAIL-04` **片 2＋3**：台账成品由后端模板填充生成 ⇒ 壳侧必须是**真下载**。
+
+    ⚠️ 原型那个「保存到本地」是 `data-act="exp"`（诚实占位：**没有文件产生**）——
+       接线后**必须换成**本页自己的动作，否则又变成"点了像成功、其实没文件"。
+    """
+    assert "ledExpSave:async ()=>{" in SHELL, "缺真下载动作 `ledExpSave`"
+    assert "/api/m05/ledger/export?projects=" in SHELL, "没走台账导出端点"
+    assert "'&ym='+encodeURIComponent(bjMonth(-1))" in SHELL, \
+        "报告月没原样带给后端（§9.2 材料报表类默认 = 上月；⛔ 前端不另算一份期间）"
+    assert "x-export-filename" in SHELL, "文件名没从 `X-Export-Filename` 带出（命名规则的主人在后端）"
+    # ⛔ 旧的**假成功**必须消失
+    assert 'data-act="exp" data-t="逐月欠款台账"' not in SHELL, "预览弹窗还留着假成功的 `exp`"
+    assert 'data-act="ledExpSave"' in SHELL, "预览弹窗的「保存到本地」没接到 `ledExpSave`"
+
+
+@acc()
+def test_台账导出失败必须给人原因不静默():
+    """后端失败回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（没选项目 / 项目不在档案 / 模板坏 /
+    **显示区对账不过**）⇒ 壳必须**弹原因**，⛔ 不能静默、也不能当文件下载。"""
+    # ⚠️ 取体的**终点锚**用**下一个动作名**（`ledNote`，纯 ASCII）—— 别用中文注释当锚：
+    #    中文注释里哪怕一个标点不同就找不到（本文件实测踩到一次），而动作名是代码结构。
+    i = SHELL.index("ledExpSave:async ()=>{")
+    body = SHELL[i:SHELL.index("\n ledNote:t=>{", i)]
+    assert 400 < len(body) < 2500, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
+    assert "ct.includes('application/json')" in body, "没按 content-type 分流"
+    assert "d.message||'后端没给原因'" in body, "失败时没把后端的中文原因给用户"
+    assert "if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`" in body, \
+        "非 2xx 没显式报错（会静默产出空文件）"

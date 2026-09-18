@@ -101,7 +101,9 @@ def ledger_spec(sheet: str, side: dict, *, display: str) -> dict:
             LEDGER_COL["other"]: money(r.get("other_expense")),
             LEDGER_COL["pay"]: money(r.get("payment")),
             LEDGER_COL["debt"]: money(r.get("debt")),
-            LEDGER_COL["remark"]: str(r.get("remark") or ""),
+            # ⚠️ 空备注给 `None`（⛔ 不给 `""`）：空串存回 Excel 会变成"有格无值"，
+            #    与 `verify_filled` 期望的 `None` 不符 ⇒ 对账会**误报**（实测踩到，8 条）。
+            LEDGER_COL["remark"]: (str(r.get("remark") or "").strip() or None),
         })
         for r in rows
     ]
@@ -121,7 +123,7 @@ def fee_spec(fee: dict, *, display: str, ym: str) -> dict:
     """特殊费用月报表 → 引擎 `spec`（**单月列**；「合计」列 = 该月值，§5.2 标注）。"""
     items = [fee.get("auto") or {}] + list(fee.get("manuals") or [])
     data = [
-        (str(it.get("item") or ""), {
+        (str(it.get("item") or "").strip() or None, {      # ⚠️ 同上：空项名给 `None`，不给 `""`
             FEE_COL["month"]: money(it.get("amount")),
             FEE_COL["total"]: money(it.get("amount")),      # 单月列 ⇒ 合计 = 该月值
         })
@@ -160,9 +162,13 @@ def file_name(display: str, ym: str) -> str:
     return "%s%s_%s.xlsx" % (display or "", FILE_SUFFIX, period_label(str(ym or "").strip()))
 
 
-def _set_text_fmt(ws, plan: dict) -> None:
-    """把「月份」列的**数据行**格设为文本格式（`模板清单` §四-4；⛔ 先写值、后设格式，别让 Excel 反解）。"""
-    col = column_index_from_string(plan.pop("months_col"))
+def _set_text_fmt(ws, plan: dict, months_col: str) -> None:
+    """把「月份」列的**数据行**格设为文本格式（`模板清单` §四-4；⛔ 先写值、后设格式，别让 Excel 反解）。
+
+    ⚠️ `months_col` 从 **spec** 传进来（`fill_sheet` 返回的对账计划里**没有**它 ——
+       它只回引擎自己认得的键）。
+    """
+    col = column_index_from_string(months_col)
     for i in range(len(plan["data_rows"])):
         ws.cell(row=plan["data_start"] + i, column=col).number_format = TEXT_FMT
 
@@ -197,7 +203,7 @@ def build_xlsx(sections: dict, out_dir, *, display: str, ym: str) -> str:
         for sp in specs:
             ws = wb[sp["sheet"]]
             sheet_plan = tpl_fill.fill_sheet(ws, sp)
-            _set_text_fmt(ws, sheet_plan)
+            _set_text_fmt(ws, sheet_plan, sp["months_col"])
             plan.append(sheet_plan)
         Path(out).parent.mkdir(parents=True, exist_ok=True)
         wb.save(str(out))
