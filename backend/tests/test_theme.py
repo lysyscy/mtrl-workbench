@@ -30,10 +30,9 @@ EXPORT_DIR = APP_DIR / "report_export"
 
 # ⚠️ 2026-09-18（`§19` **批 1**）：**m01 / m02 两个静态页已删**（授权 `D18`）⇒ 这里只余 `m03`
 #    （它归**批 4**：前置「打印 / 导出接进新壳」已于 2026-09-18 补齐 —— `TAIL-46`）。
-# 静态页：自己不带 `:root`，改 `<link>` 引唯一真源（C2 方案）
-STATIC_PAGES: dict[str, Path] = {
-    "m03": APP_DIR / "mod03_notice" / "static" / "m03.html",
-}
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 4**）：`STATIC_PAGES` 已随**最后一个静态页 `m03.html`**
+#    一起消失（`m01`/`m02` 在批 1 删 ✓）—— 旧静态页托管（`main.py` 的 `_PAGES`）同批删掉。
+#    ⛔ 判据没丢：主题真源与「同源」这条**绑定判据**在下面（`ACC-UI-THEME-001/001-05`）。
 
 _HEX_RE = re.compile(r"(?<!&)#[0-9a-fA-F]{6}\b")   # ⚠️ 前面不是 `&` —— 排除 `&#8597;` 这类 HTML 实体
 _VAR_DEF_RE = re.compile(r"(--[a-z0-9-]+):")
@@ -216,15 +215,9 @@ def test_mut与sm是唯一真源_不许页级再抄一份():
 # ---------------------------------------------------------------- 静态页 / 服务端页同源
 
 
-@acc()
-def test_静态页引用同一份真源_不自带root():
-    """⚠️ 静态页曾经的 `:root` 是**另一套命名**（`--primary/--panel/--line`）⇒ 等于第二份副本。
-    现在它们只 `<link>` 唯一真源，**自己的 `:root` 已删** —— 换主题不必再改三处。"""
-    for name, path in STATIC_PAGES.items():
-        text = path.read_text(encoding="utf-8")
-        assert '<link rel="stylesheet" href="/static/theme.css">' in text, f"{name} 没引真源"
-        assert ":root" not in text.replace(" ", ""), f"{name} 仍自带 :root（第二份副本）"
-        assert not _HEX_RE.findall(text), f"{name} 里还有色值字面量"
+# ⚠️ 2026-09-19（`§19` 批 4）：原先这里有一条「**静态页**引用同一份真源、不自带 `:root`」的守卫；
+#    最后一个静态页 `m03.html` 删除（授权 `D18`）后它**没有观测对象了** ⇒ 随之移除
+#    （它是 `@acc()` **未绑定**的守卫，不是判据点 ✓）。下面的 `001-05` 是**绑定**判据，一字未动。
 
 
 @acc("ACC-UI-THEME-001", "001-05")

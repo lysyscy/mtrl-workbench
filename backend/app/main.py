@@ -43,11 +43,11 @@ _APP_DIR = Path(__file__).resolve().parent
 # ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 1**）：**m01 / m02 已删** —— 这两页的读全部走
 #    `/api/m01/*` · `/api/m02/*`（新壳 `WIRED` 已在用），**无独有能力** ⇒ 旧静态页整体删除
 #    （授权 `D18`：工作区删干净、不留档；git 历史保留）。
-# ⚠️ **`m03` 仍留**：它的「批量打印 / 只导出 PDF / 打印机设置」曾经**只有**它能做（新壳那三个按钮
-#    原是模拟 toast）—— 该前置**已于 2026-09-18 补齐**（`TAIL-46`）⇒ 它归 `§19` **批 4** 处理，⛔ 不在这批。
-_PAGES: dict[str, Path] = {
-    "m03": _APP_DIR / "mod03_notice" / "static" / "m03.html",
-}
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 4**）：**最后一个静态页 `m03.html` 已删**（授权 `D18`）——
+#    它的「批量打印 / 只导出 PDF / 打印机设置」前置已于 2026-09-18 补齐（`TAIL-46`：新壳真调
+#    `POST /api/m03/batch` 与 `/api/m03/settings/printer`，**不再是模拟 toast**）⇒ 无独有能力。
+#    ⇒ 旧静态页托管机制（`_PAGES` ＋ 下面的 `add_api_route` 循环）**整体删除**。
+#    全站页面现在只有两条路：**新壳**（`/` ＝ `web/index.html`）与**模块路由的服务端渲染页**。
 
 
 def _client_ip(request: Request) -> str:
@@ -149,15 +149,10 @@ def create_app() -> FastAPI:
     app.include_router(mod02_router)
     app.include_router(mod03_router)
     # MOD-03 的**列表页**（`/m03/notices`）走服务端渲染（与 MOD-04/05 同款）；
-    # ⚠️ 静态 `static/m03.html`（打印 / PDF / 设置）：**按 `D18` 属于「旧服务端渲染层整体删除」的范围**
-    #    （用户 **2026-09-17** 拍板 —— 「旧服务端渲染层整体删除（工作区删干净、不留档；git 历史保留）」，
-    #    见 `技术栈选型分析.md` §6 · `OPEN-T14`）。
-    #    ⚠️ **删之前必须先补一件事**：把「批量打印 / 只导出 PDF / 打印机设置」接进新壳
-    #    （`app/web/index.html` 现在这三个还是**模拟 toast**，没调 `/api/m03/batch`）
-    #    —— 否则全站**唯一能真打印的入口**没了，判据 `ACC-PAY-SETUP-001` 也钉着这个文件。
-    #    ⚠️ **更正（2026-09-18，用户当场对质）**：2026-09-15 那条「裁定 A」的对象是**前端形态**
-    #    （保留后端托管单页 MVP · 不启用 Vue3 工程 · **后续阶段再评估**），**不是**"本文件永远保留" ——
-    #    此前写成「（用户裁定 A）保留不动」是**张冠李戴**（裁定的对象被换掉了），详见计划 §19。
+    # ⚠️ 2026-09-19（`§19` 批 4）：静态 `static/m03.html`（打印 / PDF / 设置）**已删**（授权 `D18`）——
+    #    前置已补齐（`TAIL-46`：新壳真调 `POST /api/m03/batch` 与 `/api/m03/settings/printer` ✓）。
+    #    ⛔ 此前那条「本文件永远保留 / 用户裁定 A」是**张冠李戴**（裁定的对象是**前端形态**：
+    #    保留后端托管单页 MVP · 不启用 Vue3 工程 · 后续阶段再评估），2026-09-18 已当场更正 ⇒ 归入删除范围。
     app.include_router(mod03_page_router)
     # ⭐ **JSON 动作 API**（前端壳 `app/web/` 用）：改分类 / 剔除 / 恢复 —— 与表单向共用同一批纯函数
     app.include_router(mod03_api_router)
@@ -191,15 +186,10 @@ def create_app() -> FastAPI:
     def web_shell() -> FileResponse:
         return FileResponse(_APP_DIR / "web" / "index.html", media_type="text/html")
 
-    # 各模块页面（单进程托管；切片 MVP）
-    for _name, _path in _PAGES.items():
-        def _make(page_path: Path):
-            def _serve() -> FileResponse:
-                return FileResponse(page_path, media_type="text/html")
-
-            return _serve
-
-        app.add_api_route(f"/{_name}", _make(_path), include_in_schema=False, methods=["GET"])
+    # ⚠️ 2026-09-19（`§19` 批 4）：原先这里按 `_PAGES` 逐个托管**旧静态页**（切片 MVP）——
+    #    最后一个（`m03`）已删 ⇒ **整段移除**（连同上面的 `_PAGES` 定义）。
+    #    ⛔ 别再注册"按名字托管的静态页"：新页面要么进**新壳**（`web/index.html`），
+    #    要么走**模块路由的服务端渲染** —— 两条路都留了断言，加第三种会绕开它们。
 
     # ⚠️ 根路径 `/` 已由 `home_router`（看板）接管，**别再注册第二个 `/`** ——
     #    FastAPI 按注册顺序匹配（先注册的赢），多注册一个会让人以为是它在生效。

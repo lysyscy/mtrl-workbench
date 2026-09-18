@@ -11,7 +11,8 @@ from app.core.errors import MustReportError
 from app.mod03_notice.settings_store import apply_printer_setting, validate_printer_uri
 from tests.acc_plugin import acc
 
-_MOD03_HTML = Path(__file__).resolve().parents[1] / "app" / "mod03_notice" / "static" / "m03.html"
+# ⚠️ 2026-09-19（`§19` 批 4）：`_MOD03_HTML` 已随旧静态页 `m03.html` 一起消失（本处已无引用）——
+#    本文件的断言自 `TAIL-46`（2026-09-18）起就**只打新壳**（`app/web/index.html`）。
 
 
 @pytest.fixture(autouse=True)
