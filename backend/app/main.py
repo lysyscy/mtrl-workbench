@@ -40,9 +40,12 @@ from app.mod14_config.router import router as mod14_router
 
 # 各模块页面（单文件，托管在本进程；切片 MVP，完整前端在后续阶段）
 _APP_DIR = Path(__file__).resolve().parent
+# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 1**）：**m01 / m02 已删** —— 这两页的读全部走
+#    `/api/m01/*` · `/api/m02/*`（新壳 `WIRED` 已在用），**无独有能力** ⇒ 旧静态页整体删除
+#    （授权 `D18`：工作区删干净、不留档；git 历史保留）。
+# ⚠️ **`m03` 仍留**：它的「批量打印 / 只导出 PDF / 打印机设置」曾经**只有**它能做（新壳那三个按钮
+#    原是模拟 toast）—— 该前置**已于 2026-09-18 补齐**（`TAIL-46`）⇒ 它归 `§19` **批 4** 处理，⛔ 不在这批。
 _PAGES: dict[str, Path] = {
-    "m01": _APP_DIR / "mod01_projects" / "static" / "m01.html",
-    "m02": _APP_DIR / "mod02_i8" / "static" / "m02.html",
     "m03": _APP_DIR / "mod03_notice" / "static" / "m03.html",
 }
 

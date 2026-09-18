@@ -28,10 +28,10 @@ PRINT_DIR = APP_DIR / "mod03_notice" / "print"
 #    = 让站点主题去管一个离线 Excel 文件 —— 方向就错了。
 EXPORT_DIR = APP_DIR / "report_export"
 
-# 三个**静态页**：自己不带 `:root`，改 `<link>` 引唯一真源（C2 方案）
+# ⚠️ 2026-09-18（`§19` **批 1**）：**m01 / m02 两个静态页已删**（授权 `D18`）⇒ 这里只余 `m03`
+#    （它归**批 4**：前置「打印 / 导出接进新壳」已于 2026-09-18 补齐 —— `TAIL-46`）。
+# 静态页：自己不带 `:root`，改 `<link>` 引唯一真源（C2 方案）
 STATIC_PAGES: dict[str, Path] = {
-    "m01": APP_DIR / "mod01_projects" / "static" / "m01.html",
-    "m02": APP_DIR / "mod02_i8" / "static" / "m02.html",
     "m03": APP_DIR / "mod03_notice" / "static" / "m03.html",
 }
 
