@@ -188,10 +188,13 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
     选 ≥2 个项目 ⇒ 打成一个 zip ⇒ 返回成品（或 zip）的绝对路径。
 
     - **取数跟随当前所显示的那张表**（`ACC-RPT-EXP-001/001-04`）：表①原始 ⇒ `adjusted=False`；
-      表②调整后 ⇒ `adjusted=True`。
-    - ⚠️ **差异表**没有对应的模板形态（清单 §5.3 只登记了 `汇总表` 这一张 18 列形态）
-      ⇒ **显式拒做**（⛔ 不猜、也⛔ 不拿另一张表顶替 —— 清单 §六-3 的"清单里没有的 ⇒ 报错不猜"同理）。
+      表②调整后 ⇒ `adjusted=True`；⭐ **差异表** ⇒ **逐格差额（调整后 − 原始）**
+      —— 用户 **2026-09-18 裁定**：「差异表和汇总表的**形态完全相同**，就是数据不一样，
+      最多是导出的文件名不一样」⇒ 三张表**共用同一张模板 / 同一套列映射与尾块**，
+      只在**取数**（`domain.difference_rows`）与**文件名**上不同。
     - 每个项目各自的**截止核算月**（分界 = 截止核算月，§5.2.5）—— ⛔ 不共用一个。
+    - ⭐ **标题与文件名一律用「展示名」**（用户 2026-09-18 裁）：取不到（该项目还没建档）⇒ **拒做**
+      （⛔ 不拿仓库名冒充展示名）；页面清单预览同源（`mod06_proc.service.displays_by_key`）。
     - 文件名 / zip 名**唯一出口** = `mod06_proc.domain.export_file_name` / `export_manifest`
       （页面清单预览用的就是它 ⇒ 预览与真实产物同名）。
     - `ym` = 文件名里的**当前年月**（§7.1「文件名含日期」；⚠️ 本页**不按年月筛数据** —— 表体是
@@ -207,15 +210,12 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
     if not keys:
         raise MustReportError("导出过程资料：**一个项目都没选** —— 请先在展开区里勾选要导出的项目。")
     tab_no = D.tab_of(tab)
-    if tab_no == D.TAB_DIFF:
-        raise MustReportError(
-            "导出过程资料：当前停在**差异表**，而模板只登记了「汇总表」这一张形态"
-            "（清单 §5.3）⇒ **不猜**：请切到「表① 原始表」或「表② 调整后表」再导。")
     report_ym = str(ym or "").strip() or ym_of(today_cn())
     inv_rows = R.load_inv_rows(session)
     mech_rows = R.load_mech(session)
     history_rows = R.load_history(session)
     known = M6.projects_of(inv_rows, history_rows)      # ⭐ 候选**唯一出口**（⛔ 不各写一份）
+    displays = M6.displays_by_key(session)              # ⭐ 键→展示名（标题与文件名都用它）
     out_dir = EXPORT_ROOT / process_export.FILE_SUFFIX / period_label(report_ym)
     made: list[str] = []
     for key in keys:
@@ -223,11 +223,25 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
             raise MustReportError(
                 f"导出过程资料：项目「{key}」**没有数据**（库存单据与历史段里都没有它）⇒ 拒做"
                 "（⛔ 不导出一份空表，免得被读成「这个项目本来就是空的」）。")
-        rows = D.build_matrix(
-            inv_rows=inv_rows, manual_rows=mech_rows, history_rows=history_rows,
-            warehouse=key, adjusted=(tab_no == D.TAB_ADJUSTED),
-            cutoff_ym=R.load_cutoff(session, warehouse=key))
-        made.append(process_export.build_xlsx(rows, out_dir, project=key, tab=tab_no, ym=report_ym))
+        display = displays.get(key) or ""
+        if not display:
+            raise MustReportError(
+                f"导出过程资料：项目「{key}」**不在档案里**（取不到展示名）⇒ 先建档再导"
+                "（⛔ 不拿仓库名冒充展示名）。")
+        cutoff = R.load_cutoff(session, warehouse=key)
+        raw = D.build_matrix(inv_rows=inv_rows, manual_rows=mech_rows, history_rows=history_rows,
+                             warehouse=key, adjusted=False, cutoff_ym=cutoff)
+        if tab_no == D.TAB_RAW:
+            rows = raw
+        else:
+            adjusted = D.build_matrix(inv_rows=inv_rows, manual_rows=mech_rows,
+                                      history_rows=history_rows, warehouse=key,
+                                      adjusted=True, cutoff_ym=cutoff)
+            # ⭐ **差异表**（用户 2026-09-18 裁）= 与另两张**同形态**，只有**取数**不同：
+            #    逐格 = 调整后 − 原始 ⇒ 见 `domain.difference_rows`（⛔ 不在实现层再差一次）
+            rows = adjusted if tab_no == D.TAB_ADJUSTED else D.difference_rows(raw, adjusted)
+        made.append(process_export.build_xlsx(rows, out_dir, display=display, tab=tab_no,
+                                              ym=report_ym))
     if len(made) == 1:
         return Path(made[0])
     return Path(process_export.build_zip(

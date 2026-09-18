@@ -71,13 +71,14 @@ OFF_TOTAL = 1
 TOTAL_ANCHORS: tuple[str, ...] = tuple(COL_OF_KEY[keys[0]] for _name, keys in D.SUM_SEGMENTS)
 
 
-def title_of(project: str) -> str:
-    """标题 = **项目名 ＋ 模板后缀**。
+def title_of(display: str) -> str:
+    """标题 = **展示名 ＋ 模板后缀**。
 
-    ⚠️ 项目名取**页面所显示的那个**（本页项目键 = 仓库名，清单 §5.3 / `domain.export_file_name` 同口径）
-       —— ⛔ 不另造一份"展示名"（那会让标题与文件名/清单预览三处对不上）。
+    ⚠️ 用**展示名**（§2.7.4 的 `display`）—— 用户 **2026-09-18 裁定**（与台账同口径）；
+       文件名同源，页面清单预览也同源（`mod06_proc.service.displays_by_key`）。
+       ⛔ 不拿仓库名冒充展示名：取不到展示名 ⇒ 调用方（`service.export_proc`）**拒做**。
     """
-    return f"{project or ''}{TITLE_SUFFIX}"
+    return f"{display or ''}{TITLE_SUFFIX}"
 
 
 def _num(value) -> Decimal | None:
@@ -91,11 +92,13 @@ def _num(value) -> Decimal | None:
     return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
-def body_spec(rows: list[dict], *, project: str) -> dict:
+def body_spec(rows: list[dict]) -> dict:
     """表体 → 引擎 `spec`：数据行（`label` = **序号**）＋ **4 行尾块**（小计 / 合计 / 脚注×2）。
 
     ⚠️ 尾块只给**我方要覆盖的格**（小计 16 列 ＋ 合计 4 个锚点）—— 脚注那两行**原样留着**
        （引擎的守卫允许尾块里有**文本**，但**公式 / 数字**必须被覆盖，否则拒产）。
+    ⚠️ 三张表（原始 / 调整后 / 差异）**共用本函数** —— 用户 2026-09-18 裁「形态完全相同，只有数据不一样」，
+       所以差异在这里由**取数**承担（`domain.difference_rows`），不在形态上分叉。
     """
     data: list[tuple] = []
     for i, row in enumerate(rows or (), start=1):
@@ -118,19 +121,20 @@ def body_spec(rows: list[dict], *, project: str) -> dict:
     }
 
 
-def build_xlsx(rows: list[dict], out_dir, *, project: str, tab, ym: str) -> str:
+def build_xlsx(rows: list[dict], out_dir, *, display: str, tab, ym: str) -> str:
     """表体 → **一本 xlsx** ⇒ 返回成品绝对路径（文件名主人 = `domain.export_file_name`）。
 
     - 模板走 `resources.require_template`（缺失 / 被回退 ⇒ **显式拒做**）；
-    - 产物一律过 `tpl_fill.verify_filled`（逐格 / 尾块以下残留 / 值覆盖不彻底 / 行属性空壳）。
+    - 产物一律过 `tpl_fill.verify_filled`（逐格 / 尾块以下残留 / 值覆盖不彻底 / 空行壳）；
+    - ⚠️ `display` = **展示名**（标题与文件名都用它；取不到展示名 ⇒ 调用方**拒做**）。
     """
     template = resources.require_template(resources.PROC_TEMPLATE)
-    out = Path(out_dir) / D.export_file_name(project, tab=tab, ym=ym)
+    out = Path(out_dir) / D.export_file_name(display, tab=tab, ym=ym)
     wb = openpyxl.load_workbook(str(template))
     try:
         ws = wb[SHEET]
-        ws["A1"] = title_of(project)                        # 模板标题里写着**别的项目名** ⇒ 整格换掉
-        spec = body_spec(rows, project=project)
+        ws["A1"] = title_of(display)                        # 模板标题里写着**别的项目名** ⇒ 整格换掉
+        spec = body_spec(rows)
         sheet_plan = tpl_fill.fill_sheet(ws, spec)
         tpl_fill.set_text_format(ws, sheet_plan, TIME_COL)  # 「时间」列：写文本前先设文本格式
         Path(out).parent.mkdir(parents=True, exist_ok=True)

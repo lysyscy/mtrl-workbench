@@ -285,6 +285,32 @@ def build_matrix(
     return rows
 
 
+def difference_rows(raw_rows: list[dict], adjusted_rows: list[dict]) -> list[dict]:
+    """**导出的「差异表」** = 两张表**逐格之差**（调整后 − 原始），行形状与 `build_matrix` **完全一致**。
+
+    ⚠️ 与页面的**差异表**（`diff_rows`：逐**单据**列原值 / 调整后 / 差额）是**两个东西**，别混：
+       · 页面那张 = 「**哪几张单据被改过**」的明细入口（§5.2.4「差异表是入口不是死表」）；
+       · 导出这份 = **逐月逐列的差额网格** —— 用户 **2026-09-18 裁定**：
+         「差异表和汇总表的**形态完全相同**，就是数据不一样，最多是导出的文件名不一样」
+         ⇒ 同一张 `汇总表` 模板 ＋ 同一套列映射 ＋ 同一套尾块，**只有取数不同**。
+    ⚠️ 两表的月集合同源同口径 ⇒ 按月对齐；某一格**两边都空**（空态）⇒ 差额也**空**（⛔ 不写 0）。
+    """
+    raw_by = {str(r.get(YM_KEY) or ""): r for r in raw_rows or ()}
+    adj_by = {str(r.get(YM_KEY) or ""): r for r in adjusted_rows or ()}
+    out: list[dict] = []
+    for ym in sorted(set(raw_by) | set(adj_by)):
+        raw, adj = raw_by.get(ym) or {}, adj_by.get(ym) or {}
+        row: dict = {YM_KEY: ym, "section": raw.get("section") or adj.get("section") or "",
+                     "material_empty": bool(raw.get("material_empty") and adj.get("material_empty"))}
+        for key in DATA_KEYS:
+            left, right = raw.get(key), adj.get(key)
+            row[key] = None if left is None and right is None else to_money(
+                (right if right is not None else Decimal("0.00"))
+                - (left if left is not None else Decimal("0.00")))
+        out.append(row)
+    return out
+
+
 # ============================================================ 合计 / 总求和（001-05 · 001-06）
 
 
@@ -460,6 +486,7 @@ __all__ = [
     "FORBIDDEN_PHRASES", "FORBIDDEN_ACTIONS", "column_meta", "to_category", "normalize_ym",
     "row_material_amount", "material_by_month", "mech_by_month",
     "TAB_RAW", "TAB_ADJUSTED", "TAB_DIFF", "TABS", "DEFAULT_TAB", "tab_of", "build_matrix",
+    "difference_rows",
     "column_totals", "segment_totals", "grand_total",
     "DIFF_COLUMNS", "DIFF_SUM_KEYS", "DIFF_PAGE_ONLY_KEYS", "diff_rows", "diff_totals", "jump_query",
     "EXPORT_DOMAIN", "tab_name", "export_selection", "export_file_name", "export_manifest",

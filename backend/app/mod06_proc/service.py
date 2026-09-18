@@ -68,6 +68,22 @@ def projects_of(inv_rows: list[dict], history_rows: list[dict]) -> list[str]:
     return sorted(out)
 
 
+def displays_by_key(s: Session) -> dict[str, str]:
+    """**键（仓库名）→ 展示名**（§2.7.4）—— 唯一出口 = `mod01_projects.domain.build_candidates`
+    （⛔ 不在这里另立一套"从档案里取展示名"）。
+
+    ⭐ 用途：导出成品的**标题与文件名**一律用**展示名**（用户 2026-09-18 裁），
+       且**页面清单预览**与**真实产物**必须同名（`ACC-RPT-EXP-001/001-01`）⇒ 两边共用本函数。
+    """
+    from sqlalchemy import select
+
+    from app.mod01_projects import domain as PJ
+    from app.mod01_projects.models import Project
+
+    return {c.key: c.display
+            for c in PJ.build_candidates(list(s.execute(select(Project)).scalars().all()))}
+
+
 def build_import_data(s: Session, *, warehouse: str = "") -> dict:
     """**历史导入页**的数据（§5.2.5 ①②）—— 项目候选 ＋ 当前截止核算月 ＋ 已登记批次。
 
@@ -118,20 +134,25 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
         # 机械手录：**已手录的月份**（录入口要显示「录过哪几个月」，2026-09-17）
         "mech_months": sorted(D.mech_by_month(mech_rows, warehouse=warehouse)),
         "can_edit_history": False,
-        "export": _export_data(st, projects=projects, warehouse=warehouse),
+        "export": _export_data(st, projects=projects, warehouse=warehouse,
+                               displays=displays_by_key(s)),
     }
 
 
-def _export_data(state: dict, *, projects: list[str], warehouse: str) -> dict:
+def _export_data(state: dict, *, projects: list[str], warehouse: str,
+                 displays: dict[str, str] | None = None) -> dict:
     """导出展开区的状态 ＋ 清单（§7.1 · `ACC-RPT-EXP-001`）。
 
     - **默认选中本页当前项目**（001-02）—— 只认「展开区没被提交过」这一次；
     - 全选 / 清空（`expset`）优先于逐项勾选；
     - ⚠️ 只认**真候选**（URL 里塞进来的陌生项目一律丢弃 ⇒ 不导出不存在的东西）；
-    - 年月取**北京时间当月**（§7.1「文件名含日期」）。
+    - 年月取**北京时间当月**（§7.1「文件名含日期」）；
+    - ⭐ **清单里的文件名用「展示名」**（用户 2026-09-18 裁）——与真实产物同名（001-01）；
+      取不到展示名（该项目还没建档）时回落成键，真实导出那一步会**拒做并给中文原因**。
     """
     from app.core.timing import today_cn, ym_of
 
+    disp = dict(displays or {})
     set_kind = str(state.get("exp_set") or "")
     if set_kind == "all":
         selected = list(projects)
@@ -144,11 +165,11 @@ def _export_data(state: dict, *, projects: list[str], warehouse: str) -> dict:
     selected = [p for p in selected if p in projects]
     ym = ym_of(today_cn())
     return {
-        **D.export_manifest(selected, tab=state.get("tab"), ym=ym),
+        **D.export_manifest([disp.get(p) or p for p in selected], tab=state.get("tab"), ym=ym),
         "projects": projects,
         "selected": selected,
         "open": bool(state.get("exp_open")),
     }
 
 
-__all__ = ["parse_state", "build_page_data", "build_import_data", "projects_of"]
+__all__ = ["parse_state", "build_page_data", "build_import_data", "projects_of", "displays_by_key"]
