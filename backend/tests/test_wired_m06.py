@@ -122,6 +122,49 @@ def test_录机械费走后端且不在前端复写判据():
     assert "reloadMech()" in body, "`mechOk` 成功后没「以后端为准重拉」"
 
 
+# --------------------------------------- `ACC-RPT-PROC-001` 的**形态**半边（搬家 · §19 批 2）
+#
+# 这 9 条判据原先有 6 条带"页面形态"观测（`tab=` / 筛选栏 radio / 合计行 `colspan` 之和 /
+# `tot` 行 …）。旧页删除（`D18`）⇒ 形态那半边**改指新壳**（⛔ 判据不删）。
+# ⭐ 新壳把这些做成了**结构**（格数由表头派生 / 单选面板 / 选中即收起）—— 比逐格数更硬。
+
+
+@acc("ACC-RPT-PROC-001", "001-01")
+def test_默认停在调整后表():
+    """旧页断言：不带参数 ⇒ `tab=1`（**表② 调整后**）。新壳对应 `procTab` 的**初值 = 1**
+    ⇒ ⛔ 不许改成 0（原始）或 2（差异）。"""
+    assert "let procPj='', procTab=1" in SHELL, "壳里 `procTab` 初值不是 1（表② 调整后）"
+
+
+@acc("ACC-RPT-PROC-001", "001-04")
+def test_项目筛选单选且选中即收起():
+    """旧页：`type="radio"` ＋ `onchange` 提交 ＋ 收起态 `<details>`（且不给「全选 / 清空」）。
+    新壳换成**单选面板** ⇒ claim 不变：**只单选** ＋ **选中即收起**。"""
+    panel = SHELL[SHELL.index("const procPjPanel="):]
+    panel = panel[:panel.index("\n")]
+    assert "pickAct:'procPjPick'" in panel and "single:true" in panel, \
+        "m06 的项目面板不是单选（`single:true`）—— 「不给多选」这条保证没了"
+    assert "procPjPick:t=>{ procPj=t.dataset.pj; procPjOpen=false; render(); }" in SHELL, \
+        "选完项目没有收起面板"
+
+
+@acc("ACC-RPT-PROC-001", "001-03")
+def test_筛选栏不设只读年月框():
+    """旧页断言筛选栏没有 `name="period"` / `readonly`。新壳同理：**核算月只作表内列**
+    （§5.2.2）⇒ ⛔ 不给一个只读的年月框当摆设。"""
+    assert 'name="period"' not in SHELL, "壳里出现了名为 `period` 的年月框"
+
+
+@acc("ACC-RPT-PROC-001", "001-05")
+def test_合计行格数由表头派生():
+    """⭐ **三条判据点的共同形态**（`001-05` 逐列合计 · `001-06` 总求和各段 · `001-07` 差异表合计）：
+    「**跨列数 = 表头列数**」。旧页靠"数 `colspan` 之和"验证；新壳把这条**做成了结构** ——
+    `sumRowOf` 的格数 `n` **由 `thCols(thead)` 派生** ⇒ ⛔ 不可能与表头不一致（比逐格数更硬）。"""
+    assert "const sumRowOf=(thead,rows,sums,opt={})=>" in SHELL
+    assert "const n=thCols(thead)" in SHELL, \
+        "合计行的格数不再由表头派生 ⇒「跨列数 = 表头列数」这条保证没了"
+
+
 @acc("ACC-RPT-PROC-002", "001-08")
 def test_正式段空态在壳里渲染成破折号而不是零():
     """⭐ 判据点**搬家**（`§19` 批 2）：原先钉在**旧服务端页**那一格（`render_proc_page` 的输出里
