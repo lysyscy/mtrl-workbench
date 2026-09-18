@@ -129,6 +129,43 @@ def test_录机械费走后端且不在前端复写判据():
 # ⭐ 新壳把这些做成了**结构**（格数由表头派生 / 单选面板 / 选中即收起）—— 比逐格数更硬。
 
 
+@acc("ACC-RPT-EXP-001", "001-01")
+def test_导出展开区是多选_每项目一份_多项目打zip():
+    """⭐ 判据点**搬家**（`§19` 批 2）：旧页的展开区是 checkbox ＋ 全选/清空（**区域内不得出现 radio**）
+    ＋ 每项目一份、≥2 个打成 zip。新壳对应：`procExpPjs` **数组 ＋ 多选面板**
+    （`selected:()=>procExpPjs`、**不带 `single:true`**、`allAct`/`noneAct` 给全选/清空）＋ 面板写明口径。"""
+    panel = SHELL[SHELL.index("const procExpPjPanel="):]
+    panel = panel[:panel.index("\n")]
+    assert "selected:()=>procExpPjs" in panel and "single:true" not in panel, \
+        "导出项目面板不是多选（或混进了单选 `single:true`）"
+    assert "allAct:'procExpPjAll'" in panel and "noneAct:'procExpPjNone'" in panel, \
+        "多选面板缺「全选 / 清空」"
+    assert "每项目一份" in SHELL and "zip" in SHELL, "面板没写清「每项目一份 / ≥2 打成 zip」"
+
+
+@acc("ACC-RPT-EXP-001", "001-01")
+def test_一个项目都没选时导出按钮禁用():
+    """旧页：清空后导出按钮 **disabled** —— ⛔ 不静默退回"当前项目"（那是一次用户没要求的导出）。"""
+    assert "${procExpPjs.length?'':'disabled'}" in SHELL, "0 个项目时导出按钮没有禁用"
+
+
+@acc("ACC-RPT-EXP-001", "001-04")
+def test_导出取数跟随当前所显示的表():
+    """旧页：切表后「导出取数」提示逐一对上（`data-exp-tab`）。新壳对应：**导出 URL 带上当前表签**
+    ⇒ 取数跟着用户眼前那张表走（⛔ 不许固定成表②）。"""
+    assert "'&tab='+encodeURIComponent(procTab)" in SHELL, \
+        "导出请求没带当前表签 ⇒ 会导出与眼前不一致的表"
+
+
+@acc("ACC-RPT-EXP-001", "001-02")
+def test_导出展开区默认选中本页当前项目():
+    """⭐ 判据点**搬家**（`§19` 批 2）：原先钉在旧页的导出展开区（未动过 ⇒ 勾选 = 本页当前项目；
+    且**不改动**页面那个单选项目）。新壳对应一句：**展开区没选过东西时，默认取当前项目** ⇒
+    ⛔ 不许默认取"第一个候选"或空（那会导出用户没选的项目）。"""
+    assert ("if(procExpOn&&!procExpPjs.length&&procPj) procExpPjs=[procPj];" in SHELL), \
+        "导出展开区没默认选中本页当前项目"
+
+
 @acc("ACC-RPT-PROC-001", "001-01")
 def test_默认停在调整后表():
     """旧页断言：不带参数 ⇒ `tab=1`（**表② 调整后**）。新壳对应 `procTab` 的**初值 = 1**
