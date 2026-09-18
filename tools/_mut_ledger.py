@@ -21,6 +21,7 @@ BACKEND = ROOT / "backend"
 PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 
 L = "backend/app/report_export/ledger_export.py"
+S = "backend/app/report_export/service.py"
 T = "tests/test_ledger_export.py"
 
 MUTS = [
@@ -63,6 +64,17 @@ MUTS = [
      "        for p in paths:\n            zf.write(str(p), Path(p).name)\n",
      "        for p in list(paths)[:1]:\n            zf.write(str(p), Path(p).name)\n",
      [T + "::test_两个项目打成一个zip"]),
+
+    ("M9 台账止月没钉住（不传 end_ym ⇒ 跑到数据里最大的那个月）", S,
+     '                 for s in M5.build_ledger(session, project_id=pj.id, end_ym=report_ym)["sides"]}\n',
+     '                 for s in M5.build_ledger(session, project_id=pj.id, end_ym="")["sides"]}\n',
+     [T + "::test_全本只有一个报告月", T + "::test_台账两侧逐格等于手写期望",
+      T + "::test_合计行等于各数据行之和且紧随其后"]),
+
+    ("M10 全本两个期间（台账给报告月、特殊费用月报表给别的月）", S,
+     '        fee = M9.build_page_data(session, {"ym": report_ym, "pj": key})\n',
+     '        fee = M9.build_page_data(session, {"ym": "2026-07", "pj": key})\n',
+     [T + "::test_特殊费用月报表逐格等于手写期望"]),
 ]
 
 
@@ -77,7 +89,7 @@ def _fit(rel: str, text: str) -> bytes:
 
 
 def main() -> int:
-    base = {rel: _read(rel) for rel in {L}}
+    base = {rel: _read(rel) for rel in {L, S}}
     before = {rel: hashlib.md5(d).hexdigest() for rel, d in base.items()}
     print("基线 MD5:")
     for rel, h in before.items():
