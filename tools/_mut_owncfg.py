@@ -22,7 +22,9 @@ BE = ROOT / "backend"
 
 #: 变异跑 pytest 时**另写一份结果文件** —— ⛔ 别把全套的 `artifacts/acc_results.json` 冲掉
 #: （冲掉之后 `acc_report` 会把大半判据点读成"未绑定"，看起来像出了大事）。
-MUT_RESULTS = "artifacts/_mut_acc_results.json"
+#: ⚠️ **必须给绝对路径**：pytest 的 cwd = `backend/` ⇒ 相对路径会落到 `backend/artifacts/`，
+#:    而本脚本按仓根删（两边对不上 ⇒ 临时文件留在库里、还会被 `git add -A` 带进提交 —— 实测踩到一次）。
+MUT_RESULTS = str(ROOT / "artifacts" / "_mut_acc_results.json")
 
 MUTATIONS: list[dict] = [
     {
