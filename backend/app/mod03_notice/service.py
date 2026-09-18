@@ -80,6 +80,9 @@ class ItemOutcome:
     notice_id: int
     bill_no: str
     ok: bool
+    unverified: bool = False
+    """⭐ **已投递但无法核实**（`TAIL-46`-①）：`ok=True` 且本进程说不清"到底出纸没有"。
+    ⚠️ 它**不是失败** —— 用户 2026-09-18 实测教训：「假失败比假成功更危险」（报失败 ⇒ 人重复打印白浪费纸）。"""
     reason: str = ""
     pdf_path: str = ""
 
@@ -149,8 +152,12 @@ def run_batch(
             html = render_notice_html(notice, design.tpl, detail_fetcher, signature_store)
             pdf = render_pdf(html)
             if mode == MODE_PRINT:
-                dispatch_pdf(pdf)  # type: ignore[misc]
-                result.outcomes.append(ItemOutcome(notice.id, bill_no, True))
+                # ⭐ `TAIL-46`-①：投递实现**返回一句"投递说明"**（空串 = 已核实；非空 = 已投递无法核实）。
+                #    ⚠️ "说不清"**不算失败**（`ok=True, unverified=True`）—— 报失败会让人重复打印。
+                note = str(dispatch_pdf(pdf) or "")  # type: ignore[misc]
+                result.outcomes.append(ItemOutcome(
+                    notice.id, bill_no, True, unverified=bool(note), reason=note
+                ))
             else:
                 path = _write_pdf(base, bill_no, pdf, used_names)  # type: ignore[arg-type]
                 result.outcomes.append(ItemOutcome(notice.id, bill_no, True, pdf_path=str(path)))

@@ -5568,10 +5568,16 @@ async function m03RunBatch(rows, mode) {
   try { r = await API.m03Batch(ids, mode); }
   catch (e) { return toast(`⚠️ <b>${what}没能完成</b>：${esc(String((e && e.message) || e))}`, 9000); }
   const bad = (r.items || []).filter(x => !x.ok);
+  /* ⭐ `TAIL-46`-①：**已投递但无法核实**（`ok=true, unverified=true`）**不算失败** ——
+     ⚠️ 用户 2026-09-18 实测教训：「假失败比假成功更危险」：报失败 ⇒ 人以为没打、**重复再打白浪费纸**。
+     ⇒ 单独说出来 ＋ 叫人**去看打印机**，⛔ 不并进"失败"。 */
+  const unver = (r.items || []).filter(x => x.ok && x.unverified);
   const unprinted = r.unprinted_bill_nos || [];
   return toast([
     `<b>${what}完成</b>：成功 <b>${r.success}</b> / 共 ${r.total}`,
+    unver.length ? `（其中 <b>${unver.length}</b> 条**已投递但未核实**）` : '',
     r.failed ? ` · 失败 <b>${r.failed}</b>` : '',
+    unver.length ? `<br>⚠️ <b>已投递但未核实</b>的 ${unver.length} 条：请**看打印机实际出纸**，⛔ <b>别重复打印</b>` : '',
     unprinted.length ? `<br>⚠️ <b>未产出的单号</b>：${esc(unprinted.join('、'))}` : '',
     bad.length ? `<br><span class="sm">失败原因：${esc(bad.slice(0, 3).map(x => `${x.bill_no || x.notice_id}：${x.reason || '未说明'}`).join('；'))}${bad.length > 3 ? ` …另 ${bad.length - 3} 条` : ''}</span>` : '',
     mode === 'print' ? '<br><span class="sm mut">本系统只把勾选的通知书交给 i8（<b>不自建打印模板</b> · DEV-P-07）</span>' : '',

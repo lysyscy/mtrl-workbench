@@ -25,6 +25,10 @@ class ItemOutcomeOut(BaseModel):
     notice_id: int
     bill_no: str
     ok: bool
+    unverified: bool = Field(
+        False,
+        description="**已投递但无法核实**（`ok=True` 时为「说不清」）—— ⚠️ 它不是失败：报失败会让人重复打印",
+    )
     reason: str = ""
     pdf_path: str = ""
     download_url: str = ""

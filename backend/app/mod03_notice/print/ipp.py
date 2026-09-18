@@ -63,8 +63,16 @@ def _to_http_uri(ipp_uri: str) -> str:
     return ipp_uri
 
 
-def send_pdf(pdf: bytes, printer_uri: str | None = None) -> None:
-    """把 PDF 经 IPP 投到打印机。**任何失败都显式报错（001-08），不静默丢弃。**"""
+def send_pdf(pdf: bytes, printer_uri: str | None = None) -> str:
+    """把 PDF 经 IPP 投到打印机 → **返回一句"投递说明"**（空串 = 已核实；非空 = 已投递但无法核实）。
+
+    ⚠️ **失败一律显式报错（001-08），不静默丢弃**；但「**说不清**」≠「失败」：
+    - `successful-ok` ⇒ **作业已被打印机接收** —— 但本实现**不去轮询作业状态** ⇒ 无法核实"到底打完没有"
+      ⇒ 返回一句说明（⛔ 不谎报"打完"，也⛔ **不算失败**）。
+    - 真失败（连不上 / 非 IPP 响应 / IPP 报 4xx-5xx 状态）⇒ 抛 `MustReportError`（原样不变）。
+    ⭐ 依据 = 用户 2026-09-18 实测教训：「**假失败比假成功更危险**」—— 读不到队列就报失败 ⇒
+      人会以为没打、**重复再打，白浪费纸**。⇒ 只有明确错误才算失败；"说不清"一律按"已投递（无法核实）"。
+    """
     uri = printer_uri or effective_of("printer_ipp_url", get_settings().printer_ipp_url)
     if not uri:
         raise NotConfiguredError("PRINTER_IPP_URL 未配置（见 .env；用户确认默认 192.168.5.248）")
@@ -96,6 +104,9 @@ def send_pdf(pdf: bytes, printer_uri: str | None = None) -> None:
             + (f"—— 打印机说明：「{detail}」" if detail else "")
             + "。单据未投递，请检查打印机状态/地址。"
         )
+    # ⭐ 状态 = `successful-ok`（作业被接收）⇒ **已投递**；但本实现不轮询作业状态 ⇒ **无法核实"打完没有"**。
+    #    ⛔ 不许把它说成"已完成"（那是假成功），⛔ 更不许说成"失败"（那是假失败，会让人重复打印）。
+    return "已投递（打印机已接收作业；本进程未核实是否打印完成 —— 请看打印机出纸，⛔ 别重打）"
 
 
 _STATUS_NAME = {
