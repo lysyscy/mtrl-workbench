@@ -175,14 +175,11 @@ def test_切月后表数据跟着换且各月互不相同():
 
 @acc(CASE, "001-04")
 def test_重置回到默认上月且不产生跨页状态():
-    html = _page(period="2026-07")
-    # 「重置」= 回到**不带参数**的本页 ⇒ 月份回到默认上月
-    assert 'class="btn" href="/m07"' in html
     assert parse_state({})["period"] == D.default_month()
-    # ⚠️ 跨页污染防线：本页**不得**渲染 `MOD-08` 的「项目」筛选（各页各自取数，无共享状态）
-    assert 'name="pj"' not in html
-    # 且切月不会把"仓库候选"这类跨页状态一起换掉（本页压根没有这个概念）
-    assert "invWh" not in html
+    # ⚠️ 2026-09-19（`TAIL-27` · `§19` 批 2）：原先这里看**旧页**的三件事 —— 「重置」链接
+    # （`href="/m07"`）· 「本页不得渲染 MOD-08 的『项目』筛选」· 「不得带 `invWh` 这类跨页状态」；
+    # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里重置回默认月且不串页`
+    # （`whReset` ＋ **本页切片**里不含别模块的筛选状态 ✓）。上面那条**取数口径**是实质，留着。
 
 
 @acc(CASE, "001-05")

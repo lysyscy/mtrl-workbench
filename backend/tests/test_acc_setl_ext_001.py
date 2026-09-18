@@ -201,8 +201,8 @@ def test_项目状态默认在建且归档下给空态提示行():
 
 @acc(CASE, "001-05")
 def test_重置回到默认月份与在建():
-    html = _page(status="归档", period="2026-06")
-    assert 'href="/m07/extract"' in html                    # 「重置」= 回到不带参数的本页
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先这里看**旧页**的「重置」链接（`href="/m07/extract"`）；
+    # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里提取页重置回在建与上月` ✓。
 
     default = parse_extract_state({})
     assert default["status"] == "在建" == X.STATUS_DEFAULT
@@ -212,8 +212,9 @@ def test_重置回到默认月份与在建():
     assert st == {"status": "全部", "period": "2026-06", "explicit": True}
     # 认不出的状态取值 ⇒ 回落默认，不臆造
     assert parse_extract_state({"status": "瞎写"})["status"] == X.STATUS_DEFAULT
-    # 筛选栏**必须包在表单里**，否则「查询」按钮是死的
-    assert '<form method="get" action="/m07/extract">' in html
+    # ⚠️ 2026-09-19（`§19` 批 2）：原先这条查旧页「筛选栏必须包在表单里，否则『查询』按钮是死的」；
+    # 新壳**没有表单 / 查询按钮**这一层 —— 筛选控件直接绑状态、一改就重取数（见 `test_wired_m07.py`
+    # 的「切月份切项目都重取数」）⇒ 那个形态问题在壳里**不存在**，随页移除。
 
 
 @acc(CASE, "001-06")

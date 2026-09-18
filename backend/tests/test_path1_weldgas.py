@@ -27,7 +27,6 @@
 
 from __future__ import annotations
 
-import re
 from decimal import Decimal
 from pathlib import Path
 
@@ -384,43 +383,27 @@ def test_壳侧提取导出真下载且提示与模板形态一致(tmp_path):
 
 
 @acc(CASE, "001-05")
-def test_服务端页的导出弹窗也是真下载(tmp_path):
-    """绑 `001-05`：`/m07/extract`（导航真正指向的那一页）的导出弹窗**也得有真保存按钮**。
+def test_导出端点带上当前筛选(tmp_path):
+    """绑 `001-05`：导出**必须带上当前筛选**（不然会导出成别的集合）＋ 报告月口径。
 
-    ⚠️ 这是**真渲染**出来的 HTML（不是读源码字符串）：⛔ 只读源码会漏掉"渲染时没拼进去"这类问题。
+    ⚠️ 2026-09-19（`TAIL-27` · `§19` 批 2）：原先这条查的是**旧服务端页**渲染出来的导出弹窗
+    （`render_extract_page`：URL 里有没有端点、带没带 `status/period`、`esc()` 有没有生效、
+    保存按钮有没有绑下载函数、提示文案齐不齐）；旧页删除（授权 `D18`）后：
+    · 「真下载 ＋ 带上当前筛选」的**壳侧**半边由本文件上面那条
+      `test_壳侧提取导出真下载且提示与模板形态一致`（同一个 `001-05` 判据点 ✓）＋ `test_wired_m07.py`
+      守着（壳的 `saveExt` 把 `fExt.status`/`fExt.ym` 拼进 `…/extract/export?status=…&period=…`）；
+    · `esc()` 与"渲染时有没有拼进去"是**旧页拼串**特有的一层 —— 壳没有这一层，随页消失。
+    这里只留**报告月口径**这条实质（判据没丢）。
     """
     plan = _plan()
-    html = render_extract_page(build_extract_data(
-        FakeSession(extract_dataset()),
-        parse_extract_state({"status": "在建", "ext_period": "2026-08"})))
-    assert "/api/m07/extract/export?status=" in html, "服务端页的导出弹窗没接端点"
-    # ⚠️ 查 URL 时先把 HTML 实体还原 —— `esc()` 会把 `&` 写成 `&amp;`
-    #    （HTML 属性里的合法写法，浏览器解析时还原；⛔ 但**不能因此不转义**：period 来自查询串）
-    plain = html.replace("&amp;", "&")
-    assert "/api/m07/extract/export?status=在建&period=2026-08" in plain, \
-        "端点没带上当前筛选（会导出成别的集合）"
-    assert "&amp;period=2026-08" in html, "URL 没过 `esc()` 出口（period 来自查询串 ⇒ 有注入口子）"
-    assert re.search(r"dl\('[^']*extract/export[^']*'", html), "保存按钮没绑到下载函数"
-    assert "x-export-filename" in html, "页脚脚本没读后端带出的文件名"
-    assert "_t(" in html, "页脚脚本没带转义出口（后端原因里的尖括号会破坏页面）"
-    for token in ("结余", "1月…12月", "工作表"):
-        assert token in html, f"提示缺成品的形态：{token}"
     assert plan["report_ym"] == "2026-08"
 
 
-@acc()
-def test_服务端页的收发结存zip弹窗也补了真保存():
-    """同一批补的：`/m07` 的「导出分仓库 zip」弹窗原来**只有关闭按钮**（点不出文件）。"""
-    from app.mod07_setl.service import build_page_data, parse_state
-    from app.mod07_setl.view import render_setl_page
-    from tests.m07_helpers import dataset
-
-    html = render_setl_page(build_page_data(FakeSession(dataset()),
-                                            parse_state({"period": "2026-08"})))
-    assert '<dialog class="dlg" id="zipDlg">' in html, "找不到 zip 弹窗"
-    assert "/api/m07/settlement/export?period=2026-08" in html.replace("&amp;", "&"), \
-        "zip 弹窗还是死按钮（没接导出端点 / 没带期间）"
-    assert re.search(r"dl\('[^']*settlement/export[^']*'", html), "保存按钮没绑到下载函数"
+# ⚠️ 2026-09-19（`§19` 批 2）：原先这里有一条「**旧服务端页**的收发结存 zip 弹窗也补了真保存」
+#    （`render_setl_page` ＋ 查 `zipDlg` 里有没有导出端点、保存按钮有没有绑下载函数）。
+#    旧页删除（授权 `D18`）后该形态**搬到壳** —— `test_wired_m07.py` 里壳的 `zipSfjc` 直接断言
+#    `/api/m07/settlement/export?period=` ＋ 真下载（`ACC-RPT-PROC-002/001-03` 那批同款做法）⇒
+#    「zip 弹窗是死按钮」这种毛病在新壳里由那条守着，本守卫随页移除（它本就 `@acc()` **未绑定** ✓）。
 
 
 __all__: list[str] = []

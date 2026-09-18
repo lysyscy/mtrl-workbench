@@ -65,6 +65,26 @@ def _slice(name: str, limit: int = 12000) -> str:
     return body
 
 
+# ============== `ACC-SETL-001` / `ACC-SETL-EXT-001` 的**形态**半边（`§19` 批 2 搬家）
+#
+# 原先钉在**旧服务端页**（`render_setl_page` / `render_extract_page`）渲染出的 HTML 上；
+# 旧页删除（授权 `D18`）⇒ 形态**改指新壳**（⛔ 判据不删）。
+
+
+@acc("ACC-SETL-001", "001-04")
+def test_壳里重置回默认月且不串页():
+    """「重置」= 核算年月回**默认月**（上月）；且本页**不得**带上别模块的筛选状态（跨页污染防线）。"""
+    assert "whReset:()=>{ fWhYm=bjMonth(-1);" in SHELL, "重置没回到默认月"
+    s = _slice("m07")
+    assert 'name="pj"' not in s and "invWh" not in s, "本页串进了别模块的筛选状态"
+
+
+@acc("ACC-SETL-EXT-001", "001-05")
+def test_壳里提取页重置回在建与上月():
+    """「重置」= 项目状态回**默认**（在建）＋ 金额月份回**默认**（上月）。"""
+    assert "fExtReset:()=>{ fExt.status='在建'; fExt.ym=bjMonth(-1);" in SHELL, "提取页重置没回默认"
+
+
 # ============================================================== 1 · 演示数据已清
 
 @acc()
