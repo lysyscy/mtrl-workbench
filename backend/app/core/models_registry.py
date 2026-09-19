@@ -17,7 +17,7 @@ from app.mod06_proc import models as _m06  # noqa: F401  ← M4 报表域 2026-0
 from app.mod07_setl import models as _m07  # noqa: F401  ← M4 报表域 2026-09-16 启用
 from app.mod08_inv import models as _m08  # noqa: F401  ← M4 报表域 2026-09-16 启用
 from app.mod09_fee import models as _m09  # noqa: F401  ← M4 报表域 2026-09-17 启用
-# from app.mod11_jc import models as _m11  # noqa: F401
+from app.mod11_jc import models as _m11  # noqa: F401  ← M5 切片 5 启用（2026-09-19：集采台账三张表）
 # from app.mod12_diff import models as _m12  # noqa: F401
 from app.mod14_config import models as _m14  # noqa: F401  ← M6 系统设置 2026-09-16 启用
 # from app.mod15_user import models as _m15  # noqa: F401
