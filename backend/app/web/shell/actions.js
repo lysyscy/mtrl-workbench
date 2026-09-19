@@ -1479,7 +1479,8 @@ jcFetchOk:async()=>{ closeModal();
  /* 子表弹窗**拆开**（2026-09-13 用户口径）：三个弹窗各装**一张**子表，
     入口就近放在「**发票金额 / 贸易公司发票金额 / 付款金额**」三列右侧的「子表」按钮上。
     ⇒ 原「一个按钮装三张子表」的 `jcDetail` 已删除。 */
- jcInvDlg:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);
+ jcInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+  await jcLoadSub(j);                       /* ⭐ 子表明细**不在列表接口里** ⇒ 开弹窗前拉一次 */
    modal({title:`供应商发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcInvDlg({dataset:{id:j.id}}),body:
      `<table class="dt cond" data-sort data-sort-key="modal:jcInv"><thead><tr>${JCINV_THEAD}</tr></thead><tbody>
       ${j.invoices.length?j.invoices.map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):`<tr><td colspan="${thCount(JCINV_THEAD)}" class="ctr mut">暂无发票</td></tr>`}
@@ -1487,7 +1488,8 @@ jcFetchOk:async()=>{ closeModal();
       ${sumRowOf(JCINV_THEAD, [], {2:[()=>jcInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})}</tbody></table>
       <div style="margin-top:8px"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="inv">＋ 增加一张发票</button></div>
       <div class="tip" style="margin:12px 0 0"><b>发票子表（ENT-07）</b>：一合同 <b>1..N</b> 张、<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>（§6.4.1）。<br>${j.tradeCo?'本合同<b>有贸易公司</b> ⇒ <b>结算取「贸易公司发票」子表合计</b>，本子表<b>只作供应商侧台账</b>（§6.4.1）。':'本合同<b>无贸易公司</b> ⇒ <b>结算取本子表合计</b>（§6.4.1）。'}</div>`}); },
- jcTInvDlg:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);
+ jcTInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+  await jcLoadSub(j);
    modal({title:`贸易公司发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcTInvDlg({dataset:{id:j.id}}),body:
      (j.tradeCo?`<table class="dt cond" data-sort data-sort-key="modal:jcTInv"><thead><tr>${JCINV_THEAD}</tr></thead><tbody>
       ${(j.tradeInvoices||[]).length?(j.tradeInvoices||[]).map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcTInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):`<tr><td colspan="${thCount(JCINV_THEAD)}" class="ctr mut">暂无发票</td></tr>`}
@@ -1496,7 +1498,8 @@ jcFetchOk:async()=>{ closeModal();
       <div style="margin-top:8px"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="tinv">＋ 增加一张发票</button></div>
       <div class="tip" style="margin:12px 0 0"><b>贸易公司发票子表（ENT-07 同款）</b>：<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>。<br>有贸易公司 ⇒ <b>结算取本子表合计</b>（与供应商侧<b>同一套逻辑</b>，§6.4.1）。</div>`
       :`<div class="tip wn" style="margin:0">本合同<b>无贸易公司</b> ⇒ <b>不启用该子表</b>（结算取供应商发票合计，§6.4.1）。</div>`)}); },
- jcPayDlg:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);
+ jcPayDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+  await jcLoadSub(j);                       /* ⭐ 付款子表同理：列表不给明细 */
    modal({title:`付款子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcPayDlg({dataset:{id:j.id}}),body:
      `<table class="dt cond" data-sort data-sort-key="modal:jcPay"><thead><tr>${JCPAY_THEAD}</tr></thead><tbody>
       ${j.payments.length?j.payments.map((p,i)=>`<tr><td class="fc" style="white-space:nowrap">${esc(p[0]||'')}</td><td class="num">${M(p[1])}</td><td>${p[2]==='付款域引用'?tag('付款域引用','pri'):tag('手工','in')}</td><td class="ctr"><button class="btn sm dg" data-act="jcPayDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):`<tr><td colspan="${thCount(JCPAY_THEAD)}" class="ctr mut">暂无付款</td></tr>`}
@@ -1516,21 +1519,45 @@ jcFetchOk:async()=>{ closeModal();
  jcSubSet:t=>{ if(!jcSubKind) return; jcSubD[t.dataset.k]=t.value; },   /* 写草稿层，**不重绘**（避免每改一格就把焦点丢掉） */
  jcSubCancel:()=>{ const k=jcSubKind, id=jcSubId; if(!k) return; jcSubReset(); jcSubDlg(k,id);
    toast('已取消 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
- jcSubSave:()=>{ const j=JCs.find(x=>x.id===jcSubId), kind=jcSubKind; if(!j||!kind) return jcSubReset();
+ /* 子表增行 ⇒ `POST /api/m11/invoice/add` / `payment/add`。
+    ⭐ `M5-7`：⛔ 原先这里是**本地 push 进数组**冒充落库（刷新就没了）⇒ 改为走后端 + 重拉明细。
+    ⚠️⚠️ `jcAct` 内部会 `reloadM11()` ⇒ **行对象被重建**（`JCs` 是原地换内容）⇒ 之后必须**重取**那一行，
+    否则 `jcLoadSub` 会写到一个已经不在表里的旧对象上 —— **静默失效**（弹窗看着"没变化"）。 */
+ jcSubSave:async()=>{ const j=JCs.find(x=>x.id===jcSubId), kind=jcSubKind; if(!j||!kind) return jcSubReset();
    const dt=String(jcSubD.date||'').trim(), nm=(kind==='pay'?'付款金额':'发票金额'), dn=(kind==='pay'?'付款日期':'发票日期');
    if(!/^\d{4}-\d{2}-\d{2}$/.test(dt)) return toast(`<b>请先填「${dn}」</b>：本子表录入<b>必须填日期</b>（草稿行第一个框）`);
    const v=numOf(jcSubD.amt); if(badMoney(v,{positive:1})) return toast(badMoneyMsg(nm,{positive:1}));
    /* 金额**不设上限**（2026-09-13 用户口径）—— 这里**刻意不接** `overCap`（与「统计两金额 ≤ 审批金额」那条无关）。 */
-   if(kind==='pay'){ if(!j.payments) j.payments=[]; j.payments.push([dt,v,'手工',null]); }
-   else if(kind==='tinv'){ if(!j.tradeInvoices) j.tradeInvoices=[]; j.tradeInvoices.push([dt,v]); }
-   else { if(!j.invoices) j.invoices=[]; j.invoices.push([dt,v]); }
-   jcSubReset(); render(); jcSubDlg(kind,j.id);
-   if(kind==='pay') toast(`已录入付款 <b>${M(v)}</b>（${dt}）→ 欠款 ${M(jcDebt(j))}`);
-   else if(kind==='tinv') toast(`已增加贸易公司发票 <b>${M(v)}</b>（${dt}）→ 结算金额 ${M(jcSettle(j))}`);
-   else toast(`已增加发票 <b>${M(v)}</b>（${dt}）→ 发票合计 ${M(jcInvSum(j))}`); },
- jcInvDel:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.invoices.splice(+t.dataset.i,1); render(); ACT.jcInvDlg({dataset:{id:j.id}}); },
- jcTInvDel:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); (j.tradeInvoices||[]).splice(+t.dataset.i,1); render(); ACT.jcTInvDlg({dataset:{id:j.id}}); },
- jcPayDel:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.payments.splice(+t.dataset.i,1); render(); ACT.jcPayDlg({dataset:{id:j.id}}); },
+   const r=await jcAct(
+     () => (kind==='pay' ? API.m11PayAdd({id:j.id, date:dt, amount:String(v)})
+           : API.m11InvAdd({id:j.id, kind:(kind==='tinv'?'trade':'supplier'), date:dt, amount:String(v)})),
+     () => (kind==='pay' ? `已录入付款 <b>${M(v)}</b>（${dt}）`
+           : (kind==='tinv' ? `已增加贸易公司发票 <b>${M(v)}</b>（${dt}）` : `已增加发票 <b>${M(v)}</b>（${dt}）`)));
+   if(!r) return;
+   const j2=JCs.find(x=>x.id===j.id); if(!j2) return;      /* ⚠️ 见上方：`jcAct` 重建了行 ⇒ 重取 */
+   jcSubReset();
+   await jcLoadSub(j2);                                     /* ⭐ 派生金额一律回后端算（⛔ 不前端现算） */
+   render();
+   if(JCSUB_KIND[kind]) jcSubDlg(kind,j2.id);               /* 重开弹窗，让新行露面 */
+   if(kind==='pay') toast(`已录入付款 <b>${M(v)}</b>（${dt}）→ 欠款 ${M(jcDebt(j2))}`);
+   else if(kind==='tinv') toast(`已增加贸易公司发票 <b>${M(v)}</b>（${dt}）→ 结算金额 ${M(jcSettle(j2))}`);
+   else toast(`已增加发票 <b>${M(v)}</b>（${dt}）→ 发票合计 ${M(jcInvSum(j2))}`); },
+ /* 子表删行 ⇒ `POST /api/m11/invoice/del` / `payment/del`（按**下标**取 id —— 见 `jcLoadSub` 里的 `j._ids`）。 */
+ jcInvDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+   const rid=((j._ids||{}).inv||[])[+t.dataset.i]; if(!rid) return toast('这行还没从后端载入，请关掉弹窗重开');
+   if(!await jcAct(()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行')) return;
+   const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
+   await jcLoadSub(j2); ACT.jcInvDlg({dataset:{id:j2.id}}); render(); },
+ jcTInvDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+   const rid=((j._ids||{}).tinv||[])[+t.dataset.i]; if(!rid) return toast('这行还没从后端载入，请关掉弹窗重开');
+   if(!await jcAct(()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行')) return;
+   const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
+   await jcLoadSub(j2); ACT.jcTInvDlg({dataset:{id:j2.id}}); render(); },
+ jcPayDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+   const rid=((j._ids||{}).pay||[])[+t.dataset.i]; if(!rid) return toast('这行还没从后端载入，请关掉弹窗重开');
+   if(!await jcAct(()=>API.m11PayDel({row_id:Number(rid)}), '已删除该付款行')) return;
+   const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
+   await jcLoadSub(j2); ACT.jcPayDlg({dataset:{id:j2.id}}); render(); },
  /* 从付款域引用（R8）：**不做任何自动匹配**（DEV-J-01 已否掉标题 / 名字匹配）→ 纯人工选择；
     且**同一笔通知书只能引用一次**（去重，防付款重复计入） */
  jcPayRef:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);
@@ -1541,7 +1568,7 @@ jcFetchOk:async()=>{ closeModal();
    modal({title:'从付款域引用付款记录（R8）',body:`<div class="tip" style="margin-bottom:10px">集采台账的付款信息可从付款域<b>一键关联引用</b>。因为供应商名不可靠，<b>不做自动匹配</b>（DEV-J-01），由你按「<b>集采实际供应商</b>」人工判断（§6.6.2）；<b>同一笔通知书只能引用一次</b>。</div>
      <div class="fld"><label>选择付款域中分类为「集采」的通知书</label><select class="inp" id="refId">${cam.length?cam.map(n=>`<option value="${n.id}">${esc(n.code)} · ${esc(n.sup||'未录入供应商')} · ${M(n.sp)}</option>`).join(''):'<option value="">（无可引用：已被引用过，或本月无集采单据）</option>'}</select></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcPayRefOk" data-id="${j.id}">引用</button>`}); },
- /* ⭐ `M5-7`：⛔ 原先这里是**本地 `j.payments.push(...)` 冒充落库**（刷新就没了）⇒ 改为如实说明。
+ /* ⭐ `M5-7`：⛔ 原先这里是**本地 push 进付款数组**冒充落库（刷新就没了）⇒ 改为如实说明。
     它归 `M5-5`（付款域双向引用）—— 那一片会接 `POST /api/m11/payment/add`（`source=notice` +
     **全库去重**由后端 `domain.dedup_blocked` ＋ 唯一键 `uq_jc_payment_notice` 双保险）。 */
  jcPayRefOk:t=>{ closeModal();

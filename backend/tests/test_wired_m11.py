@@ -37,8 +37,12 @@ def test_适配层把后端字符串金额转成数字():
     s = _sh()
     assert "function adaptJc" in s, "要有适配层（⛔ 不许把转形散落到 `V.m11` 里）"
     for frag in ("contractAmt: N0(x.contract_amt)", "settle: N0(x.settle)",
-                 "pay: N0(x.pay)", "debt: N0(x.debt)"):
+                 "pay_sum: N0(x.pay_sum)", "debt: N0(x.debt)"):
         assert frag in s, f"适配层漏了 `{frag}`"
+    # ⚠️⚠️ 键名以 `domain.DERIVED_MONEY_KEYS` 为准：**是 `pay_sum`，⛔ 不是 `pay`**。
+    #    写成 `x.pay` ⇒ 拿到 `undefined` ⇒ `N0()` 变 0 ⇒ **页面金额恒 0、且不报错**（实测踩到过）。
+    #    （⚠️ 断言要**写精确**：别处 `adaptNotice` 里有个 `pay: numOr0(x.pay_amount)` 也含 `x.pay`。）
+    assert "pay: N0(x.pay)" not in s, "⛔ 别把付款合计的键名写成 `pay`（后端叫 `pay_sum`）"
     assert "id: String(x.id)" in s, "⛔ id 必须转字符串（原型到处 `x.id===t.dataset.id`）"
     assert "proj: x.project_key" in s, "「项目」的键必须是**仓库名**（§2.7.4）"
     assert "notice_ids: (x.notice_ids || []).map(String)" in s, \
@@ -52,7 +56,7 @@ def test_反向_判定搬家_金额读后端不再前端现算():
     """⭐ 反向断言①：**不许再自己算不变式**（那是第二份口径，早晚与后端分叉）。"""
     s = _sh()
     assert "const jcSettle=j=>N2(j.settle);" in s, "结算必须读后端字段"
-    assert "const jcPay=j=>N2(j.pay);" in s
+    assert "const jcPay=j=>N2(j.pay_sum);" in s, "付款合计的键名是 `pay_sum`（后端 `DERIVED_MONEY_KEYS`）"
     assert "const jcDebt=j=>N2(j.debt);" in s
     assert "jcTradeInvSum(j):jcInvSum(j)" not in s, \
         "⛔ 不许再按子表现算结算（原实现 = 第二份口径）"
@@ -77,6 +81,26 @@ def test_反向_没接的动作不假装成功():
     assert "已抓取采购合同信息（API-04）：新增" not in s, "⛔ 抓取按钮不许再报假的「已抓取」"
     assert "尚未接通" in s, "没接的动作必须**如实**说明（技能第 4 步：不得假装成功）"
     assert "M5-5" in s, "取消关联要说明它归 `M5-5`（⛔ 不留给用户一个沉默的按钮）"
+
+
+@acc()
+def test_子表弹窗按需拉明细_增删走_api():
+    """⭐ 子表半片：`/api/m11/list` **不给子表明细** ⇒ 弹窗开前必须拉 `/api/m11/detail`。
+
+    ⚠️ 另钉一条**最容易静默失效**的：`jcAct` 内部会 `reloadM11()` ⇒ `JCs` 是**原地换内容**、
+      行对象被**重建** ⇒ 之后必须**重取**那一行，否则 `jcLoadSub` 写到一个已不在表里的旧对象上
+      （弹窗看着"没变化"，且**不报错**）。
+    """
+    s = _sh()
+    assert "async function jcLoadSub" in s, "要有子表按需载入器（唯一数据来源）"
+    assert s.count("await jcLoadSub(") >= 4, "三个弹窗 ＋ 增删之后都要重拉明细"
+    for frag in ("API.m11InvAdd({id:j.id,", "API.m11PayAdd({id:j.id,",
+                 "API.m11InvDel({row_id:Number(rid)})", "API.m11PayDel({row_id:Number(rid)})"):
+        assert frag in s, f"子表动作没接上 API：{frag}"
+    assert "const j2=JCs.find(x=>x.id===j.id)" in s, \
+        "⛔ `jcAct` 重建行对象后必须**重取**（否则静默写到废弃对象上）"
+    for bad in ("j.invoices.push(", "j.payments.push(", "j.invoices.splice(", "j.payments.splice("):
+        assert bad not in s, f"⛔ 不许再本地改子表冒充落库：{bad}"
 
 
 @acc()

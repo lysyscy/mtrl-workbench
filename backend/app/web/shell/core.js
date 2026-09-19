@@ -1398,8 +1398,11 @@ function adaptJc(x) {
        列表的金额列一律读下面的 `settle`/`pay`（后端派生），⛔ 不靠这两个数组现算。 */
     invoices: [], tradeInvoices: [], payments: [],
     proj: x.project_key || '',                                   /* ⭐ 键 = **仓库名**（§2.7.4） */
-    /* ⭐ 派生金额**读后端**（判定搬家 —— 见 `jcSettle`/`jcPay`/`jcDebt`） */
-    settle: N0(x.settle), pay: N0(x.pay), debt: N0(x.debt),
+    /* ⭐ 派生金额**读后端**（判定搬家 —— 见 `jcSettle`/`jcPay`/`jcDebt`）。
+       ⚠️⚠️ 键名以 `domain.DERIVED_MONEY_KEYS` 为准：是 **`pay_sum`**，⛔ 不是 `pay`！
+       （写成 `x.pay` 会拿到 `undefined` ⇒ `N0()` 变 0 ⇒ **页面金额恒 0 而且不报错** —— 实测踩到过。） */
+    inv_sum: N0(x.inv_sum), settle: N0(x.settle),
+    trade_inv_sum: N0(x.trade_inv_sum), pay_sum: N0(x.pay_sum), debt: N0(x.debt),
     /* ⭐ 本行引用过的付款通知书 id（**字符串** —— `m03` 的 `jcUsedNids` 拿它跟 `n.id` 比） */
     notice_ids: (x.notice_ids || []).map(String),
   };
@@ -1413,6 +1416,29 @@ async function reloadM11() {
   rows.forEach(r => JCs.push(r));
   pruneJcPick();                        /* 数据换了 ⇒ 勾选按**当前筛选结果**重裁（判据 `001-06`） */
   render();
+}
+
+/* ⭐ 子表按需载入（三个子表弹窗的**唯一**数据来源）。
+   ⚠️ 为什么必须"打开时拉"：`/api/m11/list` 每行**只给派生汇总**（settle/pay/debt），**不给子表明细**
+      （那是 `/api/m11/detail` 的活）⇒ `adaptJc` 里的三个子表数组是**空的** ⇒ 不拉就显示"暂无发票"。
+   ✅ **原地写回 `JCs` 那一行**（`j.invoices` / `j.tradeInvoices` / `j.payments`）⇒ 弹窗的渲染代码**一行不用改**。
+   ⚠️ 删除动作按**下标**定位（原型就是 `data-i`）⇒ 这里把每张子表行的 **id** 按**同序**存进 `j._ids`
+      （⛔ 不新开顶层变量 —— 那要同步 `_smoke.js` 的 `__X`，能用行字段就别开）。 */
+async function jcLoadSub(j) {
+  /* ⚠️ `/api/m11/detail` 的返回是 `{ok, kind, message, data}` —— 明细在 **`data`** 里（实测确认过键名，
+     ⛔ 别凭印象写；少读一层 `data` 就会静默拿不到东西、弹窗永远显示"暂无"）。 */
+  const resp = await API.m11Detail(j.id);
+  const d = (resp && resp.data) || {};
+  const money = r => [r.invoice_date, N0(r.amount)];
+  j.invoices = (d.supplier_invoices || []).map(money);
+  j.tradeInvoices = (d.trade_invoices || []).map(money);
+  j.payments = (d.payments || []).map(r => [r.pay_date, N0(r.amount),
+    (r.source === 'notice' ? '付款域引用' : '手工'), (r.notice_id == null ? null : String(r.notice_id))]);
+  j._ids = {
+    inv: (d.supplier_invoices || []).map(r => String(r.id)),
+    tinv: (d.trade_invoices || []).map(r => String(r.id)),
+    pay: (d.payments || []).map(r => String(r.id)),
+  };
 }
 
 /* 写动作统一外壳（照 `awfAct`）：成功/失败**都回后端真实状态**，后端那句中文**原样**给用户。

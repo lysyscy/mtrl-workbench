@@ -617,7 +617,7 @@ const jcTradeInvSum=j=>N2((j.tradeInvoices||[]).reduce((a,i)=>a+(+i[1]||0),0));
    ⚠️ 后端金额出**字符串** ⇒ 过 `N2()`（漏了会让"求和"变**字符串拼接**、合计安静地错）。
    上方的 `jcInvSum`/`jcTradeInvSum` 仍留着 —— **子表弹窗**要按行渲染它们（那走 `/api/m11/detail`）。 */
 const jcSettle=j=>N2(j.settle);
-const jcPay=j=>N2(j.pay);
+const jcPay=j=>N2(j.pay_sum);            /* ⚠️ 后端键名是 `pay_sum`（`domain.DERIVED_MONEY_KEYS`），⛔ 不是 `pay` */
 const jcDebt=j=>N2(j.debt);
 function debts(){
   /* ⭐ 已接后端：三类 ＋ 合计**一律读 `/api/m05/debt`**（§4.5.1 的唯一出口）。
