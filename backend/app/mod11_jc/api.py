@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
 
 from app.core.db import session_scope
 from app.mod11_jc import domain as D
@@ -91,6 +92,110 @@ def api_detail(id: int) -> dict:
         ]
     d = {k: (v if k not in D.DERIVED_MONEY_KEYS and k not in D.SUM_KEYS else _s(v)) for k, v in d.items()}
     return {"ok": True, "kind": "ok", "message": "", "data": d}
+
+
+# ============================================================ 写端点（`M5-4`）
+# ⚠️ 本层**不写判定**：编排在 `service.act_*`（那里才调 `domain` 的校验 / 归一出口）。
+# ⚠️ 回执形状与读端点不同：写动作回 `{"ok","kind","message",...}`（`data` 省略即可），
+#    `ok=False` 时 `kind="err"` ⇒ 壳据 `ok` 决定 toast 的语气（⛔ 别只看 message 文案）。
+
+
+class AddIn(BaseModel):
+    """手工新增合同入参（判据 `001-13`）—— ⚠️ `project_id` **必填**（§6.4.1「合同必有项目」）。"""
+
+    project_id: int
+    contract_date: str = ""
+    material_name: str = ""
+    supplier: str = ""
+    contract_amt: str = "0"
+    trade_co: str | None = None
+    trade_contract_amt: str | None = None
+    tag: str = ""                     # 留空 ⇒ 服务层按「手工新增 = 纳入台账」填（判据 `001-07`）
+    method: str = ""
+    remark: str = ""
+
+
+class TagIn(BaseModel):
+    """三态标记入参：给 `id` = 单条；给 `ids` = **批量**（判据 `001-03`）。"""
+
+    id: int | None = None
+    ids: list[int] = Field(default_factory=list)
+    tag: str = ""
+
+
+class FieldsIn(BaseModel):
+    """主表可改列入参（判据 `001-12`）—— 白名单外一律忽略（见 `repository.EDITABLE_COLS`）。"""
+
+    id: int
+    fields: dict = Field(default_factory=dict)
+
+
+class SubRowIn(BaseModel):
+    """子表增删入参（发票 / 付款**同款**）—— 增行用 `id` ＋ `date`/`amount`，删行用 `row_id`。"""
+
+    id: int = 0                       # 合同 id（增行用）
+    row_id: int | None = None         # 子表行 id（删行用）
+    kind: str = "supplier"            # `supplier` | `trade`（仅发票用）
+    date: str = ""
+    amount: str = "0"
+    source: str = "manual"            # `manual` | `notice`（仅付款用）
+    notice_id: int | None = None
+
+
+@router.post("/api/m11/add")
+def api_add(payload: AddIn) -> dict:
+    """手工新增合同 ⇒ **真的建档**（判据 `001-13`）；三态默认「纳入台账」（判据 `001-07`）。"""
+    with session_scope() as s:
+        return SV.act_add_contract(s, **payload.model_dump())
+
+
+@router.post("/api/m11/tag")
+def api_tag(payload: TagIn) -> dict:
+    """三态标记（判据 `001-03` / `001-05`）：给 `ids` ⇒ 批量（返回 `affected_ids` 供壳清空勾选）。"""
+    with session_scope() as s:
+        if payload.ids:
+            return SV.act_batch_tag(s, contract_ids=payload.ids, tag=payload.tag)
+        if payload.id is None:
+            return {"ok": False, "kind": "err", "message": "要给 id（单条）或 ids（批量）"}
+        return SV.act_set_tag(s, contract_id=int(payload.id), tag=payload.tag)
+
+
+@router.post("/api/m11/fields")
+def api_fields(payload: FieldsIn) -> dict:
+    """主表可改列（备注 / 付款方式 / 收发登记三列 / 金额）—— 判据 `001-12`。"""
+    with session_scope() as s:
+        return SV.act_update_contract(s, contract_id=int(payload.id), **(payload.fields or {}))
+
+
+@router.post("/api/m11/invoice/add")
+def api_inv_add(payload: SubRowIn) -> dict:
+    """发票子表增行 —— **日期必填**（判据 `001-05`，校验在域层）。"""
+    with session_scope() as s:
+        return SV.act_add_invoice(s, contract_id=int(payload.id), kind=payload.kind,
+                                  date=payload.date, amount=payload.amount)
+
+
+@router.post("/api/m11/invoice/del")
+def api_inv_del(payload: SubRowIn) -> dict:
+    """发票子表删行。"""
+    with session_scope() as s:
+        return SV.act_del_invoice(s, invoice_id=int(payload.row_id or 0))
+
+
+@router.post("/api/m11/payment/add")
+def api_pay_add(payload: SubRowIn) -> dict:
+    """付款子表增行 —— 引用付款域时先过**全库去重**（§6.6.2）。"""
+    with session_scope() as s:
+        return SV.act_add_payment(s, contract_id=int(payload.id), date=payload.date,
+                                  amount=payload.amount, source=payload.source,
+                                  notice_id=payload.notice_id)
+
+
+@router.post("/api/m11/payment/del")
+def api_pay_del(payload: SubRowIn) -> dict:
+    """付款子表删行。"""
+    with session_scope() as s:
+        return SV.act_del_payment(s, payment_id=int(payload.row_id or 0))
 
 
 __all__ = ["router"]

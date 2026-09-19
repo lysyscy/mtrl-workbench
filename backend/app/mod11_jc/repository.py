@@ -8,11 +8,13 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from decimal import Decimal
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.mod01_projects.models import Project
-from app.mod11_jc.models import JcContract, JcInvoice, JcPayment
+from app.mod11_jc.models import SRC_MANUAL, TAG_PENDING, JcContract, JcInvoice, JcPayment
 
 
 def _project_key(s: Session, project_id: int) -> tuple[str, str]:
@@ -139,7 +141,149 @@ def project_choices(s: Session) -> list[dict]:
     ]
 
 
+# ============================================================ 写动作（`M5-4`）
+# ⚠️ 本层只落库、**不写判定**：三态归一走 `domain.normalize_tag`、子表校验走
+#   `domain.invoice_problem` / `payment_problem`（调用方 = `service`）⇒ ⛔ 别在这里再判一遍。
+# ⚠️ 白名单之外的列**一律不改**（`EDITABLE_COLS`）—— 防"顺手改了金额 / 三态"绕过各自出口。
+
+#: 可手改列的白名单（判据 `001-12`「三列 ＋ 备注可手改并落值」＋ 用户 2026-09-19「合同金额可能不对」）。
+#: ⚠️ **三态不在其中** —— 它有专门出口 `set_tag` / `set_tags`（标记与编辑分开，免得互相绕过）。
+EDITABLE_COLS: tuple[str, ...] = (
+    "contract_date", "material_name", "supplier", "contract_amt",
+    "trade_co", "trade_contract_amt", "method", "remark",
+    "arch", "arch_no", "ret_date",
+)
+
+
+def insert_contract(s: Session, *, project_id: int, contract_date: str = "",
+                    material_name: str = "", supplier: str = "", contract_amt=0,
+                    trade_co=None, trade_contract_amt=None, tag: str = TAG_PENDING,
+                    method: str = "", remark: str = "") -> JcContract:
+    """手工新增合同 ⇒ **真的建档**（判据 `ACC-JC-UI-001/001-13`）。
+
+    ⚠️ 三态由**调用方**给（`service.act_add_contract` 按"手工新增 ⇒ 纳入台账"填，见判据 `001-07`）
+    —— 本层⛔ 不替业务拍默认值。
+    """
+    row = JcContract(
+        project_id=int(project_id),
+        contract_date=str(contract_date or "")[:10],
+        material_name=str(material_name or "")[:128],
+        supplier=str(supplier or "")[:128],
+        contract_amt=Decimal(str(contract_amt or 0)),
+        trade_co=(str(trade_co) if trade_co not in (None, "") else None),
+        trade_contract_amt=(Decimal(str(trade_contract_amt))
+                            if trade_contract_amt not in (None, "") else None),
+        tag=str(tag or TAG_PENDING),
+        method=str(method or "")[:64],
+        remark=str(remark or "")[:255],
+    )
+    s.add(row)
+    s.flush()
+    return row
+
+
+def set_tag(s: Session, contract_id: int, tag: str) -> int:
+    """单条三态标记 ⇒ 受影响行数（`0` = 没这条合同）。判据 `ACC-JC-FETCH-001/001-03`。"""
+    row = s.get(JcContract, int(contract_id))
+    if row is None:
+        return 0
+    row.tag = str(tag)
+    s.flush()
+    return 1
+
+
+def set_tags(s: Session, contract_ids, tag: str) -> list[int]:
+    """**批量**三态标记 ⇒ **实际改到的 id 列表**（判据 `001-05`）。
+
+    ⭐ 那条判据的三件事都由本函数保证：
+    ① **只作用于给定 id**（`WHERE id IN (...)`）；
+    ② **不新建 / 不删除**任何行（只改 `tag`）⇒ **行数不变**；
+    ③ 返回 `affected` ⇒ **壳拿它清空勾选**（⛔ 不是"清空所有勾选"，是清掉刚标过的那些）。
+    """
+    ids = [int(i) for i in (contract_ids or ())]
+    if not ids:
+        return []
+    rows = list(s.execute(select(JcContract).where(JcContract.id.in_(ids))).scalars())
+    for r in rows:
+        r.tag = str(tag)
+    s.flush()
+    return [int(r.id) for r in rows]
+
+
+def update_contract(s: Session, contract_id: int, **cols) -> int:
+    """按**白名单**改主表列（判据 `001-12`「三列 ＋ 备注可手改并落值」）⇒ 受影响行数。
+
+    ⛔ 非白名单键一律忽略（含三态 —— 它走 `set_tag`）；⚠️ **传了空串 = 清空**（与"没传"不同：
+    没传的键**不动**）⇒ 调用方只传要改的列。
+    """
+    row = s.get(JcContract, int(contract_id))
+    if row is None:
+        return 0
+    for key, val in (cols or {}).items():
+        if key not in EDITABLE_COLS:
+            continue
+        if key in ("contract_amt", "trade_contract_amt"):
+            if val in (None, ""):
+                val = None if key == "trade_contract_amt" else Decimal("0")
+            else:
+                val = Decimal(str(val))
+        setattr(row, key, val)
+    s.flush()
+    return 1
+
+
+def insert_invoice(s: Session, *, contract_id: int, kind: str, invoice_date: str, amount) -> JcInvoice:
+    """发票子表增行（供应商 / 贸易公司**同款**）—— 校验在 `domain.invoice_problem`（调用方先判）。"""
+    row = JcInvoice(contract_id=int(contract_id), kind=str(kind),
+                    invoice_date=str(invoice_date or "")[:10], amount=Decimal(str(amount or 0)))
+    s.add(row)
+    s.flush()
+    return row
+
+
+def delete_invoice(s: Session, invoice_id: int) -> int:
+    """发票子表删行 ⇒ 受影响行数（`0` = 没有这条）。"""
+    row = s.get(JcInvoice, int(invoice_id))
+    if row is None:
+        return 0
+    s.delete(row)
+    s.flush()
+    return 1
+
+
+def insert_payment(s: Session, *, contract_id: int, pay_date: str, amount,
+                   source: str = SRC_MANUAL, notice_id=None) -> JcPayment:
+    """付款子表增行（手工录入 / 引用付款域）。
+
+    ⚠️ `notice_id` 带**全库唯一键**（`uq_jc_payment_notice`）⇒ 真重复了数据库会直接拒；
+    域层 `dedup_blocked` 只是**提前给一句好话**（⛔ 不是唯一防线）。
+    """
+    row = JcPayment(contract_id=int(contract_id), pay_date=str(pay_date or "")[:10],
+                    amount=Decimal(str(amount or 0)), source=str(source),
+                    notice_id=(int(notice_id) if notice_id not in (None, "") else None))
+    s.add(row)
+    s.flush()
+    return row
+
+
+def delete_payment(s: Session, payment_id: int) -> int:
+    """付款子表删行 ⇒ 受影响行数。"""
+    row = s.get(JcPayment, int(payment_id))
+    if row is None:
+        return 0
+    s.delete(row)
+    s.flush()
+    return 1
+
+
+def count_contracts(s: Session) -> int:
+    """全表合同行数 —— 判据 `001-05`「**不改行数**」要**独立复算**时用它（⛔ 不靠接口自证）。"""
+    return int(s.execute(select(func.count()).select_from(JcContract)).scalar_one())
+
+
 __all__ = [
     "list_contracts", "contract_of", "invoices_of", "payments_of",
     "invoices_of_many", "payments_of_many", "notice_ids_used", "project_choices",
+    "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
+    "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
 ]

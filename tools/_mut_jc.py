@@ -27,6 +27,7 @@ PY = BE / ".venv" / "Scripts" / "python.exe"
 SRC = BE / "app" / "mod11_jc" / "domain.py"
 TEST = "tests/test_acc_jc_domain.py"
 TEST_LIST = "tests/test_acc_jc_list.py"
+TEST_WRITE = "tests/test_acc_jc_write.py"          # ⭐ M5-4 写路径（2026-09-19 追加）
 
 #: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
 TARGETS: list[Path] = [
@@ -141,6 +142,28 @@ MUTS: list[tuple[str, str, str, str]] = [
 ]
 
 
+#: ⭐ **M5-4 写路径**（2026-09-19 追加）—— 4 条，逐条钉住那条判据的**唯一**实现点。
+#: ⚠️ 前三条都在"**默认值 / 范围 / 白名单**"上：它们正是**最容易被人顺手改坏、而测试若只测 happy path 就发现不了**的地方。
+MUTS += [
+    ("手工新增的三态默认被改成「待确认」（与抓取默认同源了）",
+     "DEFAULT_TAG_ON_CREATE = TAG_IN",
+     'DEFAULT_TAG_ON_CREATE = "待确认"',
+     "test_手工新增的三态默认是纳入台账"),                      # 001-07
+    ("批量标记丢掉 id 过滤（一次改全表 —— 越过了只作用勾选行）",
+     "select(JcContract).where(JcContract.id.in_(ids))",
+     "select(JcContract)",
+     "test_批量标记只作用勾选行"),                              # 001-05
+    ("白名单里混进 `tag`（三态被主表编辑口子绕过）",
+     '    "arch", "arch_no", "ret_date",\n)',
+     '    "arch", "arch_no", "ret_date", "tag",\n)',
+     "test_收发登记三列与备注可手改并落值"),                     # 001-12
+    ("发票校验被短路（缺日期也落库）",
+     "    bad = D.invoice_problem(date, amount)",
+     "    bad = None  # 故意短路",
+     "test_发票子表字段是日期加金额"),                            # 001-04
+]
+
+
 def md5(p: Path) -> str:
     return hashlib.md5(p.read_bytes()).hexdigest()
 
@@ -163,7 +186,7 @@ def run_one(case: str) -> bool:
         env = dict(os.environ)
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
-            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST],
+            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0
