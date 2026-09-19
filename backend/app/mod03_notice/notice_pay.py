@@ -57,12 +57,10 @@ SKIP_REVOKED = "i8 已撤单行不参与付款（该单据在 i8 侧已被删除
 SKIP_EXCLUDED = "已剔除的行**不参与付款**（它与本域无关、不进统计；用户 2026-09-16 裁定 —— §4.2.2）"
 
 
-def default_pay_method(bill_no: str, plan_methods: dict) -> str:
-    """**实际付款方式的默认值**（§4.4.2，**唯一出口**）：先取付款计划的值、取不到兜底「现汇」。
-
-    ⚠️ 窗口渲染与提交重算**必须走同一个出口** —— 否则会出现"页面上显示承兑、提交时说付款方式为空"。
-    """
-    return str((plan_methods or {}).get(str(bill_no or "").strip()) or "") or "现汇"
+# ⚠️ 2026-09-19（`§19` 批 4 · **S3a**）：`default_pay_method` 已**搬进存活件** `notice_actions.py`
+#    （本件是**会被删**的页面件 ✗）—— 这里**反向 import** 它，保持本模块的对外行为一字不变 ✓。
+#    ⛔ 别再在本文件里重写一份（两份实现是本仓的老毛病）。
+from app.mod03_notice.notice_actions import default_pay_method  # noqa: E402,F401
 
 
 def build_pay_window(

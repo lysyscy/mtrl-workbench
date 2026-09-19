@@ -403,6 +403,16 @@ def apply_manual_save(session, *, row_id: str = "", entered_by: str, fields: dic
     return row, msg
 
 
+def default_pay_method(bill_no: str, plan_methods: dict) -> str:
+    """**实际付款方式的默认值**（§4.4.2，**唯一出口**）：先取付款计划的值、取不到兜底「现汇」。
+
+    ⚠️ 窗口渲染与提交重算**必须走同一个出口** —— 否则会出现"页面上显示承兑、提交时说付款方式为空"。
+    ⚠️ 2026-09-19（`§19` 批 4 · S3a）：**从 `notice_pay.py` 搬到这里**（那是**会被删**的页面件，本件是存活件 ✓）
+    —— `notice_pay.py` 现在反向 import 它（临时，随删页一起消失 ✓）。⛔ 别在两边各留一份实现。
+    """
+    return str((plan_methods or {}).get(str(bill_no or "").strip()) or "") or "现汇"
+
+
 def manual_delete_impact(session, notice_id: int) -> dict:
     """**删除前的影响范围**（§7.2 / §9.4）的**唯一出口** —— ⛔ 前端不许自己拼这段文字。
 
