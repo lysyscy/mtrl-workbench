@@ -216,4 +216,48 @@ def api_manual_delete(req: NoticeIdIn, session: Session = DBSession) -> dict:
     return {"ok": True, "notice_id": int(row.id), "message": message}
 
 
+class BatchPayIn(BaseModel):
+    """**批量付款**的入参（§4.4.4）。
+
+    `drafts` = `{notice_id: {"pay_method": str, "amount": str}}`（表单/输入框的原值，金额由**后端**解析）；
+    `request_id` = **幂等号**（前端每次提交生成一个 ⇒ 服务端据它拒重复提交，§4.4.4）。
+    """
+
+    ids: list[int] = Field(default_factory=list)
+    drafts: dict[str, dict] = Field(default_factory=dict)
+    pay_date: str = ""
+    remark: str = ""
+    request_id: str = ""
+
+
+@api_router.post("/api/m03/actions/batch-pay")
+def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
+    """**批量付款**（§4.4.4）—— 整批重算，任一不过 ⇒ **整批不产生任何流水**（不落半批）；
+    `request_id` 重复 ⇒ **拒绝重复提交**。
+
+    ⚠️ 与 PRG `POST /m03/pay` **共用** `notice_actions.apply_batch_pay` ——
+       本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ 不重复、不另写任何判定或文案。
+    ⚠️ `parse_amount` / `plan_methods_for_pay` 暂从**页面件** `notice_http` 取（与 PRG 同一份 ✓），
+       它们搬家的活留给删页那一步（S4）。
+    """
+    from app.mod03_notice.notice_actions import apply_batch_pay
+    from app.mod03_notice.notice_http import parse_amount, plan_methods_for_pay
+
+    drafts = {
+        int(k): {"pay_method": str((v or {}).get("pay_method") or ""),
+                 "amount": parse_amount((v or {}).get("amount"))}
+        for k, v in (req.drafts or {}).items()
+    }
+    try:
+        created, message = apply_batch_pay(
+            session, ids=list(req.ids), drafts=drafts,
+            pay_date=req.pay_date, remark=req.remark, request_id=req.request_id,
+            plan_methods=plan_methods_for_pay(session),
+        )
+    except MustReportError as exc:
+        return {"ok": False, "created": [], "message": exc.message}
+
+    return {"ok": True, "created": created, "count": len(created), "message": message}
+
+
 __all__ = ["api_router"]

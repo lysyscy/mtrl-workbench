@@ -231,3 +231,26 @@ def test_壳里手动行删除前的影响范围来自后端且删除走真接�
     assert "imp.message" in reg and "imp.effects" in reg, "没把后端给的影响范围原样显示"
     assert "API.manualDelete({notice_id:id})" in reg, "删除还是本地删（没走后端）"
     assert "NO.splice(i,1)" not in reg, "还在本地 `splice` 冒充删除"
+
+
+@acc()
+def test_壳里批量付款走真接口且带幂等号():
+    """`§19` 批 4 · **S3③ 接线**：批量付款必须**落库走后端**（整批重算 / 整批不落半批 / 幂等都在服务端）
+    —— ⛔ 前端不再本地往 `FLs` 塞流水冒充落库。
+
+    ⭐⭐ **幂等号是这条链的命门**：提交时必须带 `request_id`，服务端据它**拒重复提交**（§4.4.4）
+    —— 没有这一行，「重复提交被拒」永远不可能成立（这正是它原先**卡着没法搬**的原因）。
+
+    ⚠️ 同时是 `wiring_audit` 的「零件装上车」证据：新端点在壳里**有调用点**。
+    """
+    assert "batchPay: body => API.post('/api/m03/actions/batch-pay', body)," in SHELL, "壳没接批量付款接口"
+    i = SHELL.find("batchPayOk:")
+    assert i >= 0, "找不到 `batchPayOk` 处理器"
+    reg = SHELL[i:i + 3000]
+    assert "API.batchPay({" in reg, "批量付款还是本地塞流水（没走后端）"
+    assert "FLs.push(" not in reg, "还在本地 `FLs.push` 冒充落库"
+    assert "request_id:rid" in reg and "crypto.randomUUID" in reg, "提交没带幂等号（重复提交拦不住）"
+    assert "if(!r.ok)" in reg, "没按 `ok` 标志分流（后端拦下时会当成成功）"
+    assert "reloadNotices()" in reg, "提交成功没重拉列表（已付金额 / 状态刷不出来）"
+    # §4.4.4：动作改走后端后，「取消」= **不调接口**（不再有服务端状态要回滚）
+    assert "batchPayCancel:" in SHELL, "「取消」按钮的处理器没了"

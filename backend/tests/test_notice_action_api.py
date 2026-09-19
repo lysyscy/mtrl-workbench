@@ -357,3 +357,85 @@ def test_PRG与JSON_API共用手动行删除的唯一出口():
         src = (root / "backend" / "app" / "mod03_notice" / rel).read_text(encoding="utf-8")
         assert "apply_manual_delete(" in src, f"{name} 没走手动行删除的唯一出口"
         assert "repo.delete_notice(" not in src, f"{name} 内联了删除（应共用唯一出口）"
+
+
+# ------------------------------------------------ `§19` 批 4 · S3：批量付款走 **JSON API**
+# 这四条原先**卡着**（壳里没有落库 ⇒ 搬过去就是假绿）⇒ 接真接口后才**如实**落到这里。
+# ⚠️ 语义变化要说清：动作改走后端之后，「取消」= **不调接口**（不再有服务端状态要回滚）。
+
+
+@acc("ACC-PAY-BATCH-001", "001-07")
+def test_API_批量付款落流水且一条付款一条流水():
+    """**落库**：一条勾选 ⇒ **一条**独立流水，金额 / 方式 / 单据号 / **`request_id`** 都要对。"""
+    from app.mod05_flow.models import PaymentFlow
+
+    client, fake = _client([_notice(1, bill_no="D1")])
+    r = client.post("/api/m03/actions/batch-pay", json={
+        "ids": [1], "drafts": {"1": {"pay_method": "承兑", "amount": "300"}},
+        "pay_date": "2026-09-10", "request_id": "R-1",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and body["count"] == 1
+    flows = [f for f in fake.added if isinstance(f, PaymentFlow)]
+    assert len(flows) == 1, "接口说成功但没落流水"
+    assert flows[0].amount == Decimal("300.00") and flows[0].notice_id == 1
+    assert flows[0].pay_method == "承兑" and flows[0].request_id == "R-1"
+    assert "已登记 1 条付款流水" in body["message"]
+
+
+@acc("ACC-PAY-BATCH-001", "001-11")
+def test_API_重复提交被拒():
+    """§4.4.4：**同一个 `request_id` 再提交 ⇒ 拒绝**，且**只产生一条**流水（幂等的意义就在这）。"""
+    from app.mod05_flow.models import PaymentFlow
+
+    client, fake = _client([_notice(1)])
+    payload = {"ids": [1], "drafts": {"1": {"amount": "10"}},
+               "pay_date": "2026-09-10", "request_id": "R-5"}
+    assert client.post("/api/m03/actions/batch-pay", json=payload).json()["ok"] is True
+    second = client.post("/api/m03/actions/batch-pay", json=payload).json()
+    assert second["ok"] is False and "重复提交" in second["message"]
+    assert len([f for f in fake.added if isinstance(f, PaymentFlow)]) == 1
+
+
+@acc("ACC-PAY-BATCH-001", "001-08")
+def test_API_提交时库中已变不可付则整批不落():
+    """兜底：窗口打开时是「已批」、提交时库里已变「未批」⇒ **整批不落**（不产生任何流水）。"""
+    from app.mod05_flow.models import PaymentFlow
+
+    client, fake = _client([_notice(1, approve_status="未批")])
+    body = client.post("/api/m03/actions/batch-pay", json={
+        "ids": [1], "drafts": {"1": {"amount": "100"}},
+        "pay_date": "2026-09-10", "request_id": "R-2",
+    }).json()
+    assert body["ok"] is False and body["message"]
+    assert [f for f in fake.added if isinstance(f, PaymentFlow)] == []
+
+
+@acc("ACC-PAY-BATCH-001", "001-03")
+def test_API_付款方式缺省时兜底现汇():
+    """§4.4.2：**默认取付款计划的值、取不到兜底「现汇」** —— 这里守"兜底"那半边
+    （取计划那半边由 `default_pay_method` 的纯函数断言守着，见 `test_notice_pay.py`）。"""
+    from app.mod05_flow.models import PaymentFlow
+
+    client, fake = _client([_notice(1, bill_no="没有计划的行")])
+    body = client.post("/api/m03/actions/batch-pay", json={
+        "ids": [1], "drafts": {"1": {"amount": "10"}},
+        "pay_date": "2026-09-10", "request_id": "R-6",
+    }).json()
+    assert body["ok"] is True
+    flows = [f for f in fake.added if isinstance(f, PaymentFlow)]
+    assert flows and flows[0].pay_method == "现汇", "取不到计划值时应兜底「现汇」"
+
+
+@acc()
+def test_PRG与JSON_API共用批量付款的唯一出口():
+    """⛔ **防分叉**：批量付款的整条管线（重算 / 落半批 / 幂等 / 落流水）只许一份。"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    for name, rel in (("PRG", "notice_pay_router.py"), ("JSON API", "notice_api_router.py")):
+        src = (root / "backend" / "app" / "mod03_notice" / rel).read_text(encoding="utf-8")
+        assert "apply_batch_pay(" in src, f"{name} 没走批量付款的唯一出口"
+        assert "flow_repo.create_flow(" not in src, f"{name} 内联了落流水（应共用唯一出口）"
+        assert "confirm_batch(" not in src, f"{name} 内联了判定（应共用唯一出口）"
