@@ -3161,7 +3161,7 @@ V.m11=()=>{
     ${jcRows.map(j=>`<tr class="${j.tag==='待确认'?'hl':j.tag==='不纳入'?'ex':''}">
       <td class="ctr"><input type="checkbox" class="chk" data-act="jcPick" data-id="${j.id}" ${jcPick.has(j.id)?'checked':''}></td>
       <td class="fc">${j.id}</td><td class="now">${j.date}</td><td>${esc(j.material)}</td><td class="sm">${esc(j.supplier)}</td>
-      <td class="num">${M(j.contractAmt)}</td>
+      <td class="num">${j.contractAmt?M(j.contractAmt):'<span class="mut" title="供应商合同价为空 —— 若是贸易公司合同，需从 Excel 的「供应商线」手工填进来（填完不被抓取覆盖）">— 待补</span>'}</td>
       <td class="num" style="white-space:nowrap">${M(jcInvSum(j))} <button class="btn sm" data-act="jcInvDlg" data-id="${j.id}" title="打开「供应商发票子表」（ENT-07 · 发票日期 + 金额 · 1..N 张）">子表</button></td>
       <td class="sm">${j.tradeCo?esc(j.tradeCo):'<span class="mut">—</span>'}</td>
       <td class="num">${j.tradeContractAmt?M(j.tradeContractAmt):'<span class="mut">—</span>'}</td>

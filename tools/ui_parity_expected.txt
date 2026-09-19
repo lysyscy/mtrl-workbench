@@ -6,4 +6,5 @@ m05 e431740b  # 原型:     else Object.keys(MACH6).forEach(wh=>ks.add(wh)｜壳
 m02 644f5c09  # 原型:     <div class="card"><h4>抓取结果回显（模拟）</h4><div clas｜壳:     <div class="card"><h4>抓取结果回显<span class="sp"><
 m07 0c8fa1d8  # 原型:     <div class="bd"><div class="tip ok" style="mar｜壳:     <div class="bd"><div class="tip ok" style="mar
 m07 d50e5783  # 原型:     <button class="btn pri" data-act="exp" data-t=｜壳:     <button class="btn pri" data-act="bigExport" t
+m11 a7f20236  # 原型:       <td class="num">${M(j.contractAmt)}</td>｜壳:       <td class="num">${j.contractAmt?M(j.contract
 m14 8cdd95a7  # 原型:       <div class="tip" style="margin:6px 0 0"><b>本｜壳:       <div class="tip" style="margin:6px 0 0"><b>本
