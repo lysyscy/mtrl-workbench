@@ -270,12 +270,14 @@ def test_boot逐路容错():
     """
     i = SHELL.find("async function boot() {")
     body = SHELL[i:SHELL.find("function bootErrorBanner()", i)]
-    assert "const soft = async" in body, "`boot()` 没有逐路容错（一路失败会拖垮全站）"
+    # ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉（改成「进哪页拉哪页」）⇒ 判据搬到**取数表**上
+    #    （⛔ 判据一字未改：**每一路都得有取数出口、且都走 `soft()`** —— 一路失败不许拖垮全站）。
+    from tests.shell_load_helpers import loaders as _loaders   # noqa: PLC0415
+    assert "const soft = async (label, fn) =>" in SHELL, "壳里没有逐路容错出口 `soft()`"
+    ls = _loaders()
     for label in ("付款通知书", "项目档案", "修改留痕", "付款计划", "机械 6 列", "库存单据", "付款域"):
-        assert f"soft('{label}'" in body, f"`boot()` 里「{label}」没走 `soft()`"
-    # ⚠️ 2026-09-19（性能 `P2`）：`boot()` 改成分组并行 ⇒ 计数口径从 `await soft(` 换成 `soft(`
-    #    （第一组 11 路 ＋ 第二组 2 路 = 13）。判据不变：**每一路都得走 `soft()`**（一路失败不许拖垮全站）。
-    assert body.count("soft('") >= 13, "逐路容错覆盖不全"
+        assert label in ls, f"「{label}」这一路取数不见了"
+    assert len(ls) >= 13, f"取数路只剩 {len(ls)} 条 —— 逐路覆盖不全"
 
 
 @acc()

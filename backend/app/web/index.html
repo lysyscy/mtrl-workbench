@@ -854,7 +854,7 @@ const NAV=[
 ];
 const TITLE={home:'看板 · 待办',m01:'项目档案',m02:'i8 接入层',m03:'付款通知书',m04:'付款计划',m05:'付款流水与欠款统计',m06:'过程资料',m07:'收发结存与活动大表',m08:'库存单据与调整单',m09:'特殊费用月报表',m10:'机械费（暂缓）',m11:'集采台账',m12:'差异登记',m13:'跨域能力',m14:'规则配置',m15:'用户管理'};
 let VIEW='home';
-function go(k){ if(VIEW==='m03') pickSet.clear(); VIEW=k; render(); $('.view').scrollTop=0; }
+function go(k){ if(VIEW==='m03') pickSet.clear(); VIEW=k; render(); $('.view').scrollTop=0; loadPaths(PAGE_LOAD[k]||[]); }   /* ⭐ `P3` 主体：进了哪页就（首次）拉哪页 —— ⛔ 不成环：`loadPaths` 只 render，不再调 `go` */
 function render(){
   $('#nav').innerHTML=NAV.map(g=>`<div class="sb-g"><h5>${g.g}</h5>${g.items.map(([k,n,c])=>
     `<div class="sb-i ${VIEW===k?'on':''} ${k==='m10'?'dis':''}" data-act="go" data-k="${k}" tabindex="0" role="button"><span class="c">${c}</span><span>${n}</span>${k==='m10'?'<span class="m">暂缓</span>':(WIRED.has(k)?'':'<span class="m">原型态</span>')}</div>`).join('')}</div>`).join('');
@@ -5509,7 +5509,11 @@ async function reloadM05() {
 /* 参数（粒度 / 轴 / 台账项目）变了就**自动补拉** —— 收敛成一个点，
    ⛔ 不必给每个选择器（`pstGran` / 时间轴 / `ledPjPick`）各挂一个钩子。 */
 async function m05Sync() {
-  if (BOOTING || m05Refetching) return;
+  /* ⏳ `P3` 主体（2026-09-19）：**这一页的取数还没发生**时不补拉 —— 否则启动收尾那次 render 会
+     顺手把 m05 那 4 路拉回来（用户还在 `home`，纯浪费；实测约 180 ms），且 `go('m05')` 时
+     会与 `loadPaths` 的取数**并发重复**。`LOADED` 只在**取数完成后**才记名 ⇒ 这一条同时挡住两家。
+     ⚠️ 参数驱动补拉（粒度 / 轴 / 台账项目）只在 m05 页上有意义 ⇒ 那时 `付款域` 必然已 LOADED ✓。 */
+  if (BOOTING || m05Refetching || !LOADED.has('付款域')) return;
   const p = m05Params();
   if (p.granularity === M05_FETCHED.gran && p.year === M05_FETCHED.year
       && p.quarter === M05_FETCHED.quarter && p.pj === M05_FETCHED.pj) return;
@@ -6512,51 +6516,84 @@ async function awfAct(fn, okMsg) {
   return r;
 }
 
-async function boot() {
-  /* ⚠️ **每一路取数独立容错**：任何一路失败（某端点临时 500 / 还没上线 / 网络抖）**不得拖垮其他页**。
-     ⭐ 实测踩到：`/api/m06/mech` 404（后端加了端点但服务没重启）⇒ 原来的单个 `try` 把后面**全部**跳过，
-        `m08`/`m05` 明明已接线却显示空表 —— **看起来像功能没做**（假故障、最难查的那类）。
-     ⇒ 现在逐路 `soft()`：坏的那路在顶部横幅里点名，其余页**照常可用**。
-     ⭐ 2026-09-19（性能 `P2` · `TAIL-48`）：**改成两组并行** —— 原先 14 路一路一等（首屏耗时 = 各路之和）。
-        逐条核过各路**真实数据依赖**后只有一条：`reloadM07` / `reloadM05` 要在 `reloadMech` ＋ `reloadInv`
-        **之后**（大表的机械 / 焊材·气体列、m05 的机械欠款由它们派生）；其余 11 路互不相干。
-        ⇒ 第一组并行发起，**第二组等第一组完成**再并行。⛔ 动结构必须保住「逐路 `soft()` 容错 ＋ 失败点名」。 */
-  const fails = [];
-  const soft = async (label, fn) => {
-    try { await fn(); } catch (e) { fails.push(`${label}：${String((e && e.message) || e)}`); }
-  };
-  /* ---- 第一组：**互不相干**的 11 路（组内并发；`soft` 各自吞异常 ⇒ 一路失败不影响别人） ---- */
-  await Promise.all([
-    soft('付款通知书', reloadNotices),      /* ⚠️ 走同一个出口：它还会重建「归属」缓存 `OWN` */
-    soft('项目档案', async () => {
-      const pj = await API.projects(); PJs = (pj || []).map(adaptProject);
-    }),
-    soft('待人工指认', reloadPending),   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
-    soft('待人工建档', reloadArchPend),  /* ⭐ `TAIL-45`：链路 A ③-b「多仓库 ⇒ 选定一个」那一路 */
-    soft('i8 执行记录', reloadM02),     /* ⭐ `TAIL-27`：`m02` 回显与任务日志的唯一数据源 */
-    soft('修改留痕', async () => {
-      const tr = await API.trails();
-      PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
-    }),
-    soft('付款计划', async () => {
-      const pl = await API.plans(); PLs = (pl.rows || []).map(adaptPlan);
-    }),
-    soft('机械 6 列', reloadMech),
-    soft('库存单据', reloadInv),
-    /* ⚠️ `m09` 的自动项与手填项**都由后端自己算**（`mod09_fee/repository.inv_rows` 直读 `inv_detail`）
-       ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序** ⇒ 放在本组没问题。 */
-    soft('特殊费用月报表', reloadM09),
-    soft('规则配置', reloadM14),   /* 独立取数 ⇒ 无顺序依赖 */
-  ]);
-  /* ---- 第二组：**吃第一组产物**的两路（组间串行、组内并发）----
-     · `reloadM07`：大表的机械列 / 焊材·气体列取 `MACH6`（`reloadMech` 填）与库存（`reloadInv` 填）；
-     · `reloadM05`：机械欠款同理由 `MACH6` 派生。
-     ⚠️ 顺序写反 ⇒ 这两页**取到空值，且不报错**（`test_wired_m07.py` / `test_wired_m06.py` 钉着）。 */
-  await Promise.all([
-    soft('收发结存与大表', reloadM07),
-    soft('付款域', reloadM05),          /* 内部各自 render 一次 */
-  ]);
+/* ⭐⭐ 性能 `P3` 主体 · **页级按需取数**（2026-09-19 · 用户批准的 A 方案）
+   —— 打开页面**不再**把 13 路全量拉一遍，而是「**进哪页拉哪页**」（含该页会读到的全局所属的取数路）。
+   ⚠️ 实测依据：13 路合计 ≈ 1971 ms（一路一等）；**初始视图是 `home`**（`let VIEW='home'`）而它只读
+      `NO`/`PJs`/`PLs` ⇒ 首屏从「13 路后台全拉」降到「3 路」；`m07` 三条 / `m09` / `m08` 这些重活
+      改为**进那页才拉**（实测请求数 25 → 18 是 `P3`① 的成果，本表是 `P3` 主体的成果）。
+   ⛔ **三条不许动的红线**：① 逐路 `soft()` 容错 ＋ **失败点名**；② `收发结存与大表` / `付款域` 必须**等**
+      `机械 6 列` ＋ `库存单据`（大表机械 / 焊材·气体列与 m05 机械欠款由它们派生）；
+      ③ 写动作后**必须**回后端真实状态（各写动作自己的 `reload*()` 一字未动）。
+   ⚠️ 缓存口径：`LOADED` 记"这路拉过了" ⇒ **同一页反复进出不重复拉**（与改前一致：改前是 boot 拉一次）。
+      跨页写操作的陈旧性与改前**同级**（改前写 m03 也不会自动刷新 m05）；真要更强 = 写动作标脏，另立件。 */
+const PAGE_LOAD = {
+  home: ['付款通知书', '项目档案', '付款计划'],
+  m01: ['项目档案', '待人工指认', '待人工建档', '修改留痕'],
+  m02: ['i8 执行记录', '库存单据'],      /* `V.m02` 的回显卡读 `IVs`/`ADs` */
+  m03: ['付款通知书', '付款计划', '项目档案'],
+  m04: ['付款计划', '付款通知书', '付款域', '机械 6 列'],
+  m05: ['付款域', '修改留痕', '机械 6 列'],
+  m06: ['机械 6 列', '库存单据', '收发结存与大表'],   /* 过程资料读 `MACH6`/`IVs`/`EXTM`/`BIGVAL` */
+  m07: ['机械 6 列', '库存单据', '收发结存与大表'],
+  m08: ['库存单据'],
+  m09: ['特殊费用月报表'],
+  m14: ['规则配置'],
+};
+/* 标签 → 取数函数（标签进顶部横幅的**失败点名** —— ⛔ 一字不许改，它们是给用户看的） */
+const LOADERS = {
+  '付款通知书': reloadNotices,      /* ⚠️ 走同一个出口：它还会重建「归属」缓存 `OWN` */
+  '项目档案': async () => {
+    const pj = await API.projects(); PJs = (pj || []).map(adaptProject);
+  },
+  '待人工指认': reloadPending,   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
+  '待人工建档': reloadArchPend,  /* ⭐ `TAIL-45`：链路 A ③-b「多仓库 ⇒ 选定一个」那一路 */
+  'i8 执行记录': reloadM02,     /* ⭐ `TAIL-27`：`m02` 回显与任务日志的唯一数据源 */
+  '修改留痕': async () => {
+    const tr = await API.trails();
+    PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
+  },
+  '付款计划': async () => {
+    const pl = await API.plans(); PLs = (pl.rows || []).map(adaptPlan);
+  },
+  '机械 6 列': reloadMech,
+  '库存单据': reloadInv,
+  /* ⚠️ `m09` 的自动项与手填项**都由后端自己算**（`mod09_fee/repository.inv_rows` 直读 `inv_detail`）
+     ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序**。 */
+  '特殊费用月报表': reloadM09,
+  '规则配置': reloadM14,        /* 独立取数 ⇒ 无顺序依赖 */
+  '收发结存与大表': reloadM07,   /* ⚠️ 吃 `MACH6`/`IVs` ⇒ 见 `LOAD_DEP` */
+  '付款域': reloadM05,          /* ⚠️ 机械欠款派生自 `MACH6` ⇒ 见 `LOAD_DEP` */
+};
+/* ⚠️ **依赖屏障**：这两路必须等 `机械 6 列` ＋ `库存单据`（组间串行、组内并发）。
+   顺序写反 ⇒ 大表机械列 / 机械欠款**取到空值，且不报错**（`test_wired_boot.py` 有结构性断言）。 */
+const LOAD_DEP = new Set(['收发结存与大表', '付款域']);
+
+const fails = [];
+/* ⚠️ **每一路取数独立容错**：任何一路失败（某端点临时 500 / 还没上线 / 网络抖）**不得拖垮其他页**。
+   ⭐ 实测踩到：`/api/m06/mech` 404（后端加了端点但服务没重启）⇒ 原来的单个 `try` 把后面**全部**跳过，
+      `m08`/`m05` 明明已接线却显示空表 —— **看起来像功能没做**（假故障、最难查的那类）。
+   ⇒ 逐路 `soft()`：坏的那路在顶部横幅里**点名**，其余页**照常可用**。 */
+const soft = async (label, fn) => {
+  try { await fn(); } catch (e) { fails.push(`${label}：${String((e && e.message) || e)}`); }
+};
+const LOADED = new Set();          /* 已经拉过的路（同一页反复进出不重复拉） */
+
+/** 按需取数：把 `labels` 里**还没拉过**的几路拉回来（依赖路放**第二组**）。 */
+async function loadPaths(labels) {
+  const fresh = (labels || []).filter(l => !LOADED.has(l));
+  if (!fresh.length) return;
+  await Promise.all(fresh.filter(l => !LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));
+  await Promise.all(fresh.filter(l => LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));
+  fresh.forEach(l => LOADED.add(l));
   BOOT_ERROR = fails.join('；');
+  render();                          /* 各路内部多数已 render 一次；这里兜一次（幂等） */
+  if (BOOT_ERROR) bootErrorBanner();
+}
+
+async function boot() {
+  /* 首屏只拉**初始视图**要的那几路（`home` ⇒ 3 路；其余页在 `go()` 里按需拉）。
+     ⚠️ `BOOTING` 的声明在 `m05Sync` 上方（`P3`① 加的，⛔ 别在这里重复声明 —— 会 SyntaxError）。 */
+  await loadPaths(PAGE_LOAD[VIEW] || []);
   BOOTING = false;        /* ⏳ `P3`①：启动收尾才允许 `m05Sync()` 补拉（见它的注释） */
   render();
   if (BOOT_ERROR) bootErrorBanner();

@@ -38,4 +38,7 @@ def test_归属缓存由后端的ownership_id重建():
     assert "OWN[String(x.notice_id)]" in body, "没把归属灌进 `OWN`（键要 String，与档案 id 对齐）"
     assert "Object.keys(OWN).forEach" in body, "没**原地清空** `OWN`（不能 `OWN={}` —— 会切断外部引用）"
     # boot 必须走同一个出口（否则启动路径不填 OWN）
-    assert "soft('付款通知书', reloadNotices)" in SHELL, "`boot()` 没走 `reloadNotices()`（两条路径会各写一套）"
+    # ⚠️ 2026-09-19（`P3` 主体）：取数改成「进哪页拉哪页」⇒ 判据搬到**取数表**
+    #    （⛔ 判据一字未改：两条路径必须走**同一个**出口 `reloadNotices()`，不许各写一套）。
+    from tests.shell_load_helpers import loaders as _loaders   # noqa: PLC0415
+    assert "付款通知书" in _loaders(), "取数表里没有「付款通知书」这一路（两条路径会各写一套）"

@@ -23,6 +23,9 @@ from tests.acc_plugin import acc
 
 from tests.m07_shell_helpers import API, ROUTER, SHELL, _body, _slice  # noqa: F401
 
+# ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉 ⇒ 下面那条判据改在**取数表**上证（判据不变）。
+from tests.shell_load_helpers import DEP_BEFORE, load_dep, loaders, page_load  # noqa: F401
+
 # ============== `ACC-SETL-001` / `ACC-SETL-EXT-001` 的**形态**半边（`§19` 批 2 搬家）
 #
 # 原先钉在**旧服务端页**（`render_setl_page` / `render_extract_page`）渲染出的 HTML 上；
@@ -370,26 +373,19 @@ def test_大表手填校验走服务层出口():
 
 @acc()
 def test_boot含m07且逐路容错():
-    i = SHELL.find("async function boot() {")
-    body = SHELL[i:SHELL.find("function bootErrorBanner()", i)]
-    assert "soft('收发结存与大表'" in body, "`boot()` 里「收发结存与大表」没走 `soft()`"
-    # ⚠️ 顺序有依赖：大表的机械 / 焊材·气体列取 `reloadMech` / `reloadInv`。
-    # ⚠️ 必须用**完整调用语句**比较位置 —— 用 `body.index("reloadMech")` 会被**注释里**那句
-    #    「顺序有依赖：`reloadMech`、`reloadInv` 都在 `reloadM05` 之前」喂饱
-    #    （反向灵敏度实测：那样写时，把 `reloadM07` 挪到 `reloadMech` 之前**照样绿** —— 假绿）。
-    # ⭐ 2026-09-19（性能 `P2`）：`boot()` 改成**两组并行** ⇒ 形态从「一路一等」搬成「组内并发」。
-    #    判据**一字未变**（`reloadM07` 必须等 `reloadMech` / `reloadInv`），只是改成按**组**证：
-    #    ① 两条调用语句还都在；② 文本次序不变；③ ⭐ `reloadM07` 必须落在**第二组**里
-    #    （放进第一组 = 与 mech/inv 并行 ⇒ 大表机械列取空，正是这条要挡的）。
-    i_mech = body.find("soft('机械 6 列', reloadMech)")
-    i_m07 = body.find("soft('收发结存与大表', reloadM07)")
-    assert i_mech >= 0, "`boot()` 里没有 `reloadMech` 那一路"
-    assert i_m07 >= 0, "`boot()` 里没有 `reloadM07` 那一路"
-    assert i_mech < i_m07, "`reloadM07` 排在 `reloadMech` 之前（大表的机械列会取到空值）"
-    i_g2 = body.find("await Promise.all(", body.find("await Promise.all(") + 1)
-    assert i_g2 > 0, "`boot()` 不是**两组** `await Promise.all([...])`（第二组没了 ⇒ 依赖屏障也丢了）"
-    assert i_g2 < i_m07, "`reloadM07` 没放进第二组 ⇒ 与 `reloadMech`/`reloadInv` 并行（大表机械列会取空）"
-    assert i_mech < i_g2, "`reloadMech` 不在第一组（它不该等 m07）"
+    """⚠️ 2026-09-19（性能 `P3` 主体）：`boot()` 不再**逐路拉**（改成「进哪页拉哪页」）
+    ⇒ 判据**一字未变地搬到取数表上**（原来证的是「`reloadM07` 必须等在 `reloadMech`/`reloadInv` 之后」）：
+    ① `收发结存与大表` 这一路在 `LOADERS` 里；② 它在 `LOAD_DEP`（＝必须等前置路）；
+    ③ ⭐ **凡吃到它的页，清单里必须同时列前置两路**（`机械 6 列` ＋ `库存单据`）—— 这是**行为级**断言，
+       比原来的"文本次序"更强：次序写反 / 清单漏项 / 依赖组被拆掉，它都会红。
+    """
+    assert "收发结存与大表" in loaders(), "没有「收发结存与大表」这一路取数"
+    assert "收发结存与大表" in load_dep(), "它不在 `LOAD_DEP` 里（依赖屏障丢了）"
+    for page, labels in page_load().items():
+        if "收发结存与大表" in labels:
+            for need in DEP_BEFORE["收发结存与大表"]:
+                assert need in labels, \
+                    f"`PAGE_LOAD['{page}']` 吃了大表却没列前置的「{need}」（机械列 / 焊材气体列会取空）"
 
 
 @acc()

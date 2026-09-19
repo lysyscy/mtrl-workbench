@@ -314,7 +314,9 @@ def test_m09已进WIRED与boot():
     m = re.search(r"const WIRED=new Set\(\[([^\]]*)\]\)", SHELL)
     assert m, "壳里找不到 `const WIRED=new Set([...])`"
     assert "'m09'" in m.group(1), "`WIRED` 里没有 m09（侧栏仍标「原型态」）"
-    assert "soft('特殊费用月报表', reloadM09)" in _body("boot"), "`boot()` 里「特殊费用月报表」没走 `soft()`"
+    # ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉 ⇒ 判据搬到**取数表**（⛔ 判据不变：m09 得有取数出口）
+    from tests.shell_load_helpers import loaders as _loaders   # noqa: PLC0415
+    assert "特殊费用月报表" in _loaders(), "「特殊费用月报表」这一路取数不见了"
 
 
 # ============================================================== 6 · 后端端点

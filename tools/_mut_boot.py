@@ -1,4 +1,4 @@
-"""**反向灵敏度**：证明 `tests/test_wired_boot.py`（性能 `P2` · `TAIL-48` 的 3 条壳侧断言）**真有区分力**。
+"""**反向灵敏度**：证明 `tests/test_wired_boot.py`（性能 `P2` 分组并行 ＋ `P3` 页级按需取数）**真有区分力**。
 
 做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。
 ⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿** ⇒ 脚本报错退出。
@@ -6,7 +6,7 @@
 ⚠️ 一律走 **bytes**（`index.html` = **CRLF**）：按目标文件行尾归一后再替换，还原也用**原 bytes**
    —— 用 `write_text(newline=…)` 会把 CRLF 静默换成 LF ⇒ MD5 假 BAD。
 ⚠️ 子进程必须设 `ACC_RESULTS_PATH`（否则每处变异把权威 `acc_results.json` 冲成单条）
-   与 `PYTHONIOENCODING=utf-8`（否则 Windows 上 GBK 解码假红）—— 见 `_mut_m03list.py` 的说明。
+   与 `PYTHONIOENCODING=utf-8`（否则 Windows 上 GBK 解码假红）。
 """
 
 from __future__ import annotations
@@ -39,36 +39,40 @@ def _fit(fragment: bytes, sample: bytes) -> bytes:
 # (说明, 文件, 原文（LF）, 改成（LF）, 应变红的用例名)
 MUTS: list[tuple[str, Path, bytes, bytes, str]] = [
     (
-        "M1 第二组退回串行（分组结构没了 ⇒ `P2` 白做）",
+        "M1 依赖组被拆掉（`收发结存与大表`/`付款域` 与前置路并行 ⇒ 大表机械列取空）",
         SHELL,
-        _b("""  await Promise.all([
-    soft('收发结存与大表', reloadM07),
-    soft('付款域', reloadM05),          /* 内部各自 render 一次 */
-  ]);"""),
-        _b("""  await soft('收发结存与大表', reloadM07);
-  await soft('付款域', reloadM05);"""),
-        "test_boot分两组并行且每一路都在组内",
+        _b("  await Promise.all(fresh.filter(l => !LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));\n"
+           "  await Promise.all(fresh.filter(l => LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));\n"),
+        _b("  await Promise.all(fresh.map(l => soft(l, LOADERS[l])));\n"),
+        "test_依赖路必须等机械与库存",
     ),
     (
-        "M2 把 reloadM07 挪进第一组（依赖屏障丢失 ⇒ 大表机械列取空）",
+        "M2 `m07` 的清单里漏掉「机械 6 列」（吃大表却不等机械 ⇒ 那一列会取空）",
         SHELL,
-        _b("    soft('机械 6 列', reloadMech),\n"),
-        _b("    soft('收发结存与大表', reloadM07),\n    soft('机械 6 列', reloadMech),\n"),
-        "test_boot第一组不含吃依赖的两路",
+        _b("  m07: ['机械 6 列', '库存单据', '收发结存与大表'],\n"),
+        _b("  m07: ['库存单据', '收发结存与大表'],\n"),
+        "test_依赖路必须等机械与库存",
     ),
     (
         "M3 逐路容错被破（失败不再记进 fails ⇒ 横幅点不了名）",
         SHELL,
-        _b("    try { await fn(); } catch (e) { fails.push(`${label}：${String((e && e.message) || e)}`); }\n"),
-        _b("    try { await fn(); } catch (e) { /* 吞掉 */ }\n"),
-        "test_boot逐路容错未破",
+        _b("  try { await fn(); } catch (e) { fails.push(`${label}：${String((e && e.message) || e)}`); }\n"),
+        _b("  try { await fn(); } catch (e) { /* 吞掉 */ }\n"),
+        "test_逐路容错未破",
     ),
     (
-        "M4 启动期的补拉守卫被拿掉（`/api/m05/*` 又会连拉 3 次）",
+        "M4 `m05Sync` 的两道闸被拿掉（启动期 / 该页没取过数时又会白白连拉）",
         SHELL,
-        _b("  if (BOOTING || m05Refetching) return;\n"),
+        _b("  if (BOOTING || m05Refetching || !LOADED.has('付款域')) return;\n"),
         _b("  if (m05Refetching) return;\n"),
-        "test_启动期间不补拉",
+        "test_没到位就不补拉",
+    ),
+    (
+        "M5 `boot()` 退回「全量拉 13 路」（`P3` 白做 —— 首屏又变成秒级）",
+        SHELL,
+        _b("  await loadPaths(PAGE_LOAD[VIEW] || []);\n"),
+        _b("  await loadPaths(Object.keys(LOADERS));\n"),
+        "test_boot只拉初始视图而go按需拉",
     ),
 ]
 

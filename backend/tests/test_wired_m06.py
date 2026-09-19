@@ -51,11 +51,15 @@ def test_机械值来自后端且boot会拉():
     assert "m06Mech: () => API.get('/api/m06/mech')" in SHELL, "API 层没有 `m06Mech`"
     assert "async function reloadMech()" in SHELL, "没有 `reloadMech()`"
     assert "MACH6 = d.mech || {};" in SHELL, "`reloadMech()` 没把后端结果写进 `MACH6`"
-    boot = SHELL[SHELL.find("async function boot() {"):][:2600]
-    assert "soft('机械 6 列', reloadMech)" in boot, "`boot()` 没拉机械值"
-    # ⚠️ 顺序：m05 的机械欠款由它派生 ⇒ 必须先于付款域那一路
-    assert boot.find("soft('机械 6 列', reloadMech)") < boot.find("soft('付款域', reloadM05)"), \
-        "`reloadMech` 必须在 `reloadM05` **之前**（m05 的机械欠款由它派生）"
+    # ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉（改成「进哪页拉哪页」）⇒ 判据**搬到取数表**上
+    #    （⛔ 判据一字未改：机械值必须有取数出口；且**吃它的那几路必须等它**）。
+    from tests.shell_load_helpers import (  # noqa: PLC0415
+        DEP_BEFORE as _DEP, loaders as _loaders, page_load as _pl,
+    )
+    assert "机械 6 列" in _loaders(), "机械值没有取数出口"
+    for page in ("m04", "m05", "m06", "m07"):
+        assert "机械 6 列" in _pl()[page], f"`PAGE_LOAD['{page}']` 没拉机械值"
+    assert "机械 6 列" in _DEP["付款域"], "`付款域` 不再等机械值（m05 的机械欠款会取到空）"
 
 
 @acc()

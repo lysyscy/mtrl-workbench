@@ -26,6 +26,10 @@ def check(page, errors: list[str]) -> None:
         page.click('[data-k="m02"]')
         page.wait_for_function(
             "() => document.querySelector('table[data-sort-key=\"m02:logs\"]')", timeout=15000)
+        # ⚠️ 2026-09-19（`P3` 主体）：进页**才**取数 ⇒ 表壳先出现、数据随后到
+        #    ⇒ 必须等**数据**（等表格元素会读到空表 —— 实测把"34 条"读成 1 条，整支 rc=1）。
+        page.wait_for_function(
+            "() => (typeof M02_RECS !== 'undefined') && M02_RECS.length > 0", timeout=15000)
         stage = "读两张卡"
         got = page.evaluate("""async () => {
             const tb = document.querySelector('table[data-sort-key="m02:logs"] tbody');
