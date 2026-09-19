@@ -174,6 +174,36 @@ def test_去重集合是全库的_跨合同也算已引用():
         s.rollback()
 
 
+@acc()
+def test_列表每行带引用过的通知书id_否则m03的集采关联会静默变空():
+    """`M5-7` 接线前补的实现层自检（⛔ 不绑判据点）。
+
+    ⚠️ 这条守的是一个**静默失效点**：`m03`（付款通知书页）的「集采关联」是**反查**的 ——
+    `jcUsedNids`（全库已引用集合）· `jcRefOf`（这条被哪张合同引用）都按"合同行的付款子表里有没有这个 id"判。
+    列表接口**不带**它 ⇒ 接上壳之后候选列表会**静默变空**（页面看着只是"没数据"，不报错）。
+    """
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod11_jc import repository as R
+
+    with session_scope() as s:
+        p = _project(s, WH_A)
+        c1 = _contract(s, project_id=p.id, date="2026-09-18", supplier="业祥", amount="100")
+        c2 = _contract(s, project_id=p.id, date="2026-09-18", supplier="尚坤", amount="200")
+        n1 = PaymentNotice(ph_id="__自检_ph_集采_甲__")
+        s.add(n1)
+        s.flush()
+        _payment(s, c1.id, "2026-09-18", "50", source="notice", notice_id=n1.id)
+        _payment(s, c2.id, "2026-09-18", "70")            # 手工录入 ⇒ 无 id ⇒ 不进 notice_ids
+
+        rows = {r["id"]: r for r in SV.build_list(s, project_key=WH_A)["rows"]}
+        assert rows[c1.id]["notice_ids"] == [n1.id], "引用了通知书的行必须带出它的 id"
+        assert rows[c2.id]["notice_ids"] == [], "手工录入的付款（无通知书 id）不进 notice_ids"
+
+        # 与"全库已引用集合"口径一致（壳侧 `jcUsedNids` 就是从这里派生）
+        assert set(rows[c1.id]["notice_ids"]) <= R.notice_ids_used(s)
+        s.rollback()
+
+
 @acc("ACC-JC-UI-001", "001-01")
 def test_主表字段数19列且列清单与三态取值域只有一个出口():
     """判据 `001-01`「主表字段数与字段名以 §6.4.1 为准」的**可机器化部分**：

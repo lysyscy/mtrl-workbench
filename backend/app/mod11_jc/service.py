@@ -39,6 +39,14 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
             payments=pay_map.get(r["id"], []),
         )
         row = {**r, **amounts}
+        # ⭐ **本行引用过的付款通知书 id**（`M5-7` 接线时补 —— 子表**本来就在内存里**，只差带出来）。
+        # ⚠️ 为什么必须带：`m03`（付款通知书页）的「集采关联」是**反查**的 ——
+        #    `jcUsedNids`（全库已引用集合）· `jcRefOf`（这条被哪张合同引用）· `jcLinkCands`（候选）
+        #    全都按"合同行的付款子表里有没有这个通知书 id"来判。**不带 ⇒ 它们静默变空**
+        #    （候选列表消失，页面看起来只是"没数据"，不报错）—— 这正是"接后端时最该防"的那类错。
+        # ⛔ 只给 **id 集合**，⛔ 不搬整张子表（那是 `/api/m11/detail` 的活）。
+        row["notice_ids"] = [int(p["notice_id"]) for p in (pay_map.get(r["id"]) or [])
+                             if p.get("notice_id") is not None]
         for k in D.SUM_KEYS:
             totals[k] = totals[k] + Decimal(str(row.get(k) or 0))
         out.append(row)
