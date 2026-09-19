@@ -28,6 +28,7 @@ from app.core.errors import NotConfiguredError
 from app.core.logging import get_logger
 from app.mod02_i8.client import I8Client, serialize_fetch
 from app.mod02_i8.notice_source import (  # noqa: PLC2701 —— 同层复用，见模块头
+    APPROVE_STATUS_DONE,
     _amount,
     _extract_records,
     _first,
@@ -50,6 +51,10 @@ PAGE_ID = "Web:PMS3.PCM.PCM_INFO_List7"
 #:   `I8Client` 默认 `timeout=30s` ⇒ **必然 ReadTimeout**（2026-09-19 实测踩到）⇒ 此处显式放大。
 LIST_TIMEOUT = 200.0
 
+#: ⭐ **未审批的不抓**（用户 2026-09-19 定）：实测 355 条里有 8 条 `AppStatus=0`（未审批）⇒ 丢弃。
+#:   ⚠️ 丢弃数会**进日志与概要**（禁静默 —— 否则"抓了 355 却只落了 347"没人知道为什么）。
+ONLY_APPROVED = True
+
 #: 取数串行锁的键（D9：同一张表抓取互斥）。
 TABLE = "jc_contract"
 
@@ -66,6 +71,8 @@ class ContractFetcher:
 
     def __init__(self, client: I8Client) -> None:
         self._client = client
+        #: 本次因「未审批」丢弃的条数（回执要报，⛔ 不静默）
+        self.last_unapproved = 0
 
     def fetch_all(self) -> list[dict]:
         """全量取一次（**人工触发**）⇒ 映射后的行列表（无法识别编号的**已丢弃**，见 `_map_record`）。"""
@@ -84,11 +91,18 @@ class ContractFetcher:
                 logger.warning("i8 采购合同返回 0 条 —— 再确认一次（防偶发回有效空 ⇒ 整批漏抓）")
                 time.sleep(EMPTY_RETRY_SLEEP)
         mapped: list[dict] = []
+        unapproved = 0
         for rec in records:
             row = _map_record(rec)
-            if row is not None:
-                mapped.append(row)
-        logger.info("采购合同取数：取到 {} 条 / 可落库 {} 条", len(records), len(mapped))
+            if row is None:
+                continue
+            if ONLY_APPROVED and row["approve_status"] != APPROVE_STATUS_DONE:
+                unapproved += 1                 # ⭐ 未审批不抓（但**必须计数并报出来**，禁静默）
+                continue
+            mapped.append(row)
+        logger.info("采购合同取数：取到 {} 条 / 可落库 {} 条（未审批丢弃 {} 条）",
+                    len(records), len(mapped), unapproved)
+        self.last_unapproved = unapproved       # 供回执取用（⛔ 不静默丢数据）
         return mapped
 
 

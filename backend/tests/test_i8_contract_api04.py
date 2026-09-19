@@ -148,3 +148,19 @@ def test_BillName段数不足不抛():
 def test_概要给出条数与项目清单():
     s = cs.summary([{"project_name": "A"}, {"project_name": "A"}, {"project_name": "B"}, {}])
     assert s["total"] == 4 and s["projects"] == ["(无项目)", "A", "B"]
+
+
+@acc()
+def test_未审批的不抓且计数不静默(monkeypatch):  # noqa: ANN001
+    """⭐ 用户 2026-09-19 定：未审批不抓 —— 但**丢弃数必须报出来**（禁静默丢数据）。
+
+    实测背景：355 条里有 8 条 `AppStatus=0` ⇒ 落库 347 条。
+    """
+    _patch(monkeypatch, "http://i8/api04")
+    unapproved = {**REC, "BillNo": "CGHT-BAD-1", "AppStatus": 0}
+    ok = {**REC, "BillNo": "CGHT-OK-1", "AppStatus": 1}
+    fake = _FakeClient({"Record": [unapproved, ok]})
+    fetcher = cs.ContractFetcher(fake)                          # type: ignore[arg-type]
+    rows = fetcher.fetch_all()
+    assert [r["contract_no"] for r in rows] == ["CGHT-OK-1"], "未审批的必须丢弃"
+    assert fetcher.last_unapproved == 1, "丢弃数必须计数（回执要报，⛔ 不静默）"
