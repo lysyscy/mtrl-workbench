@@ -32,6 +32,7 @@ TEST_FETCH = "tests/test_acc_jc_fetch.py"          # ⭐ M5-6 抓取落库（202
 TEST_ORCH = "tests/test_acc_jc_fetch_orch.py"      # ⭐ M5-6 抓取编排（2026-09-19 追加）
 TEST_PAYLINK = "tests/test_acc_jc_pay_link.py"     # ⭐ M5-5 双向引用（2026-09-19 追加）
 TEST_SUP = "tests/test_acc_sup_match.py"           # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
+TEST_IMPORT = "tests/test_acc_jc_import.py"        # ⭐ M5-8 Excel 解析层（2026-09-19 追加）
 
 #: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
 TARGETS: list[Path] = [
@@ -40,6 +41,7 @@ TARGETS: list[Path] = [
     BE / "app" / "mod11_jc" / "fetch_service.py",      # ⭐ M5-6 抓取编排（2026-09-19 追加）
     BE / "app" / "mod03_notice" / "list_view.py",      # ⭐ M5-5 关联态的**唯一接入点**（2026-09-19 追加）
     BE / "app" / "mod03_notice" / "sup_match.py",      # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
+    BE / "app" / "mod11_jc" / "excel_parse.py",        # ⭐ M5-8 Excel 解析层（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "service.py",
     BE / "app" / "mod11_jc" / "models.py",
 ]
@@ -206,6 +208,17 @@ MUTS += [
      "    for level in range(1, MAX_LEVEL + 1):",
      "    for level in range(MAX_LEVEL, 0, -1):",
      "test_先长后短"),                                            # 一个文件里的多个用例按 -k 一起跑
+    # ---- M5-8 Excel 解析层（2026-09-19 追加）
+    ("合并格**不铺满**（`供应商合同总价` 那一支整支丢掉，却不报错）",
+     "    out = [[str(v or \"\").strip() for v in row] for row in grid]\n"
+     "    for r1, r2, c1, c2 in merges:",
+     "    out = [[str(v or \"\").strip() for v in row] for row in grid]\n"
+     "    for r1, r2, c1, c2 in []:",
+     "test_合并格要按真实合并区铺满"),
+    ("表头探测改回「数**单元格**个数」（被重复列名骗 ⇒ 认成第 3 行）",
+     "        return len({h for v in row for h in HEADER_HINTS if h in str(v)})",
+     "        return sum(1 for v in row for h in HEADER_HINTS if h in str(v))",
+     "test_表头探测按不同词计数"),
 ]
 
 
@@ -232,7 +245,7 @@ def run_one(case: str) -> bool:
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
             [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH, TEST_ORCH,
-             TEST_PAYLINK, TEST_SUP],
+             TEST_PAYLINK, TEST_SUP, TEST_IMPORT],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0
