@@ -78,15 +78,15 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
 
     handbook = REPO_ROOT / HANDBOOK_REL
     hand_text = handbook.read_text(encoding="utf-8", errors="replace") if handbook.exists() else ""
-    # ⚠️ **不能只查「文档里提到过台账」** —— §⑧ 收尾要求里本来就会提到它，两处提到 ⇒
-    #    把 §③ 必读清单里的引用删掉后检查**仍然通过**（本轮实测踩到，反向灵敏度逼出来的）。
-    #    ⇒ 必须落在 **§③ 必读清单那一段内**：新会话是照着那段读文件的。
-    m3 = re.search(r"(?ms)^##\s*③.*?(?=^##\s|\Z)", hand_text)
-    if LEDGER_NAME not in (m3.group(0) if m3 else ""):
+    # ⚠️ **2026-09-19 改落点**：原来查「简略版 §③ 必读清单里有没有计划名」—— 但简略版已改成
+    #    **给用户看的一页**（不再有 AI 侧的 §③ 必读清单；那份清单搬进了计划 §21.3）。
+    #    ⇒ 现在只要求：**简略版里必须指向计划**（它是人/新会话读到的第一份，必须能把人引到台账）。
+    #    ⛔ 别退回「不检查」：台账没人指着 = 没人看的文件（这正是本条存在的理由）。
+    if LEDGER_NAME not in hand_text:
         hits.append(_t6(HANDBOOK_REL, 1,
-                        f"§③ 必读清单里没有「{LEDGER_NAME}」",
-                        "新会话照必读清单读文件 ⇒ 读不到台账，台账就成了没人看的文件",
-                        "把它加进 §③ 必读清单（§⑧ 收尾要求里也要有）"))
+                        f"简略版里没有指向「{LEDGER_NAME}」",
+                        "人/新会话先读简略版 ⇒ 读不到台账，台账就成了没人看的文件",
+                        "在简略版顶部写一句「完整工程台账见 开发计划-主文档.md」"))
 
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     # ⚠️ **只扫「尾巴台账」那一段** —— 台账已并入计划（整份计划里还有大量别的表格，
