@@ -311,6 +311,13 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
 
 
 def get_notice_lister() -> Callable[..., list[PaymentNotice]]:
+    """⚠️ 仍在用（`tests/test_acc_pay_print.py` 直接拿它做"系统内勾选"端到端）⇒ **别随路由一起删** ✓。
+
+    2026-09-19 实测教训：删路由时我按 **URL 文本**搜了一遍"没人引用"就动手 ✗，漏了**按符号**被 import 的这条
+    ⇒ 被 `test_acc_pay_print.py` 当场抓住。⇒ **删任何公开符号前，两种搜法都要用：URL/字符串 ＋ 符号名。（本仓的
+    `grep` 只覆盖文本 ⇒ 符号引用得另搜一次。）**
+    """
+
     def _list(bill_type: str | None = None, limit: int = 200) -> list[PaymentNotice]:
         with session_scope() as session:
             return list(list_notices(session, bill_type=bill_type, limit=limit))
@@ -318,17 +325,14 @@ def get_notice_lister() -> Callable[..., list[PaymentNotice]]:
     return _list
 
 
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 4** 遗留①）：**死路由已删** ——
+#    `GET /api/m03/notices`（"m03 页表格数据源 / 勾选打印的对象"）＋ 它的取数器 `get_notice_lister()`。
+#    它的**唯一消费者是旧静态页 `m03.html`**（2026-09-19 `§19` 批 4.5 已删，授权 `D18`）⇒ 删除前实测：
+#    全仓只有 `notice_router.py` 里一句**注释**提到它，壳 / 测试 / `tools/*_expected.txt` **都没有引用** ✓。
+#    ⛔ 别再注册"给旧静态页用的取数端点" —— 新页面要么进**新壳**（`web/index.html`），要么走**模块路由的服务端渲染**。
+
+
 # --------------------------------------------------------------- 路由
-
-
-@router.get("/notices")
-def get_notices(
-    bill_type: str | None = Query(None, description="按单据类型过滤：mechanical / material"),
-    limit: int = Query(200, ge=1, le=1000),
-    lister: Callable[..., list[PaymentNotice]] = Depends(get_notice_lister),
-) -> list[dict]:
-    """m03 页表格数据源（勾选打印的对象）。"""
-    return [_row(n) for n in lister(bill_type=bill_type, limit=limit)]
 
 
 @router.post("/notices/fetch", response_model=FetchResponse)
