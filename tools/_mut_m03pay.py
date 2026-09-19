@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BE = ROOT / "backend"
-SHELL = BE / "app" / "web" / "index.html"
+from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
 ACTIONS = BE / "app" / "mod03_notice" / "notice_actions.py"
 PY = BE / ".venv" / "Scripts" / "python.exe"
 TEST = "tests/test_wired_m03_pay.py"

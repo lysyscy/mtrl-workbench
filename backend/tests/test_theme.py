@@ -41,7 +41,7 @@ _VAR_USE_RE = re.compile(r"var\((--[a-z0-9-]+)\)")
 # ⭐ 2026-09-19（`§19` 性能 · **主题②**）：**前端壳也是主题真源的消费者**（第三路，经 `/static/theme.css`）
 #    ⇒ 它同样受「颜色只经变量出口 / 引用的变量必须有定义」这两条管。
 #    ⚠️ 壳用**更严**的正则：3~8 位（否则 `#fff9`、`#0f172a26` 这类短写法／带 alpha 的**溜过去**）。
-SHELL = APP_DIR / "web" / "index.html"
+from tests.shell_src import SHELL, parts_text  # noqa: F401  ← `P4`① 读取点收敛
 SHELL_THEME_LINK = '<link rel="stylesheet" href="/static/theme.css">'
 _HEX_RE_ANY = re.compile(r"(?<!&)#[0-9a-fA-F]{3,8}\b")
 
@@ -51,7 +51,9 @@ def _theme_vars() -> dict[str, str]:
 
 
 def _iter_html():
-    yield SHELL
+    """壳的**每一件**，产出 `(相对路径, 文本)` —— `P4`① 之后壳是多件（`index.html` ＋ `web/shell/*.js`），
+    ⚠️ 只扫 `index.html` 会**静默漏掉接线层**（那正是色值最容易溜进去的一段）。"""
+    return parts_text()
 
 
 def _iter_app_py():
@@ -92,8 +94,8 @@ def test_全工程引用的变量都有定义_引用了没定义会静默失效(
     for f in _iter_app_py():
         used |= set(_VAR_USE_RE.findall(f.read_text(encoding="utf-8")))
     # ⭐ 2026-09-19（主题②）：壳（HTML）也在这条口径里 —— 它引用的变量同样必须由真源定义
-    for f in _iter_html():
-        used |= set(_VAR_USE_RE.findall(f.read_text(encoding="utf-8")))
+    for _name, text in _iter_html():
+        used |= set(_VAR_USE_RE.findall(text))
     assert used, "全工程居然一个主题变量都没用？"
     assert not (used - defined), f"引用了但未定义（会静默失效）：{sorted(used - defined)}"
 
@@ -120,9 +122,9 @@ def test_除主题表本身外_全工程CSS不再出现色值字面量():
             text = head + rest
         for hit in _HEX_RE.findall(text):
             seen.append(f"{f.relative_to(APP_DIR.parent)}: {hit}")
-    for f in _iter_html():
-        for hit in _HEX_RE_ANY.findall(f.read_text(encoding="utf-8")):
-            seen.append(f"{f.relative_to(APP_DIR.parent)}: {hit}")
+    for _name, text in _iter_html():
+        for hit in _HEX_RE_ANY.findall(text):
+            seen.append(f"{_name}: {hit}")
     assert not seen, "CSS 里又出现色值字面量了（应改走 var(--…)）：\n  " + "\n  ".join(seen)
 
 
@@ -264,7 +266,7 @@ def test_服务端渲染页与静态页拿到的是同一份变量():
         assert page.THEME_CSS in client.get(path).text, path
     # ⭐ 第三路 = **前端壳**：它必须 `<link>` 到同一个端点，且**不得自带 `:root`**
     #    （同特异度下文档里靠后的那份胜 ⇒ 自带一份就等于第二份真源，换主题必然漂）。
-    shell = SHELL.read_text(encoding="utf-8")
+    shell = SHELL
     assert SHELL_THEME_LINK in shell, "壳没接主题真源（缺 `<link href=/static/theme.css>`）"
     assert ":root{" not in shell, "壳又自带 `:root` 了（那是第二份真源 ⇒ 换主题会漂）"
 

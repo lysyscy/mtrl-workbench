@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 BE = ROOT / "backend"
-SHELL = "backend/app/web/index.html"
+from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
 MUT_RESULTS = str(ROOT / "artifacts" / "_mut_acc_results.json")
 
 MUTATIONS: list[dict] = [

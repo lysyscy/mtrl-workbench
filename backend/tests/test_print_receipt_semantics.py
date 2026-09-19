@@ -25,9 +25,7 @@ from app.mod03_notice import service as S
 from app.mod03_notice.print import ipp
 from tests.acc_plugin import acc
 
-SHELL = (Path(__file__).resolve().parents[1] / "app" / "web" / "index.html").read_text(
-    encoding="utf-8"
-)
+from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 
 class _Resp:

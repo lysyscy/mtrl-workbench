@@ -20,7 +20,7 @@ PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 DISPATCH = ROOT / "backend" / "app" / "mod03_notice" / "print" / "dispatch.py"
 STORE = ROOT / "backend" / "app" / "mod03_notice" / "settings_store.py"
 SERVICE = ROOT / "backend" / "app" / "mod03_notice" / "service.py"
-SHELL = ROOT / "backend" / "app" / "web" / "index.html"
+from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
 #: 变异跑的**结果另写**一处（⛔ 别冲掉全套的 `artifacts/acc_results.json` —— 见 `_run` 里的告警）
 MUT_RESULTS = ROOT / "artifacts" / "_mut_acc_results.json"
 

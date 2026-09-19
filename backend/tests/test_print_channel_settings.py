@@ -19,9 +19,7 @@ from app.core.errors import MustReportError
 from app.mod03_notice import settings_store as SS
 from tests.acc_plugin import acc
 
-SHELL = (Path(__file__).resolve().parents[1] / "app" / "web" / "index.html").read_text(
-    encoding="utf-8"
-)
+from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 
 def _env(tmp_path: Path) -> Path:

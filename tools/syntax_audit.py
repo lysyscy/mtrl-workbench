@@ -10,7 +10,7 @@
 | 规则 | 判红条件 |
 |---|---|
 | `Q1` | `backend/app` / `backend/tests` / `tools` 下**任一 `.py` 编译不过**（含"中文串里夹裸双引号"那一族） |
-| `Q2` | 壳 `backend/app/web/index.html` 的 `<script>` **过不了 `node --check`**（如模板串里塞了反引号） |
+| `Q2` | 壳的**每一件**（`backend/app/web/index.html` 的内联 `<script>` ＋ `backend/app/web/shell/*.js`）**过不了 `node --check`**（如模板串里塞了反引号） |
 
 ⚠️ **本哨只查语法**（⛔ 不做风格评审）：能编译 / 能解析就不是它管的事
 （"内层引号一律「」"那条是**人写文时的规矩**，不是机器判据 —— 机器只认"它到底能不能跑"）。
@@ -41,7 +41,10 @@ PY_ROOTS = [ROOT / "backend" / "app", ROOT / "backend" / "tests", ROOT / "tools"
 #: 排除目录（虚拟环境 / 缓存 / 产物：不是本仓手写的源码）
 SKIP_DIRS = {".venv", "__pycache__", "node_modules", "artifacts", ".git", ".pytest_cache"}
 
-SHELL = ROOT / "backend" / "app" / "web" / "index.html"
+# ⚠️ 2026-09-19（`P4`① 读取点收敛）：壳的件清单来自唯一出口 `shell_source`（顺序 = 浏览器执行顺序）。
+#    `SHELL` 仍指 `index.html` 本体（存在性检查 / 单件模式用）。
+from shell_source import SHELL_PARTS, SHELL_PATH  # noqa: E402  ← `P4`① 读取点收敛
+SHELL = SHELL_PATH
 
 
 def iter_py() -> list[Path]:
@@ -84,31 +87,43 @@ def _extract_script(html: str) -> str:
 
 
 def rule_q2(shell: Path | None = None) -> tuple[list[str], str]:
-    """`Q2` —— 壳的 `<script>` 必须过 `node --check`。返回 `(红清单, 说明)`；无 node ⇒ 红清单为空 + 说明里讲明。"""
+    """`Q2` —— 壳的**每一件**都必须过 `node --check`。
+
+    ⚠️ 2026-09-19（`P4`① 读取点收敛）：壳已按 `web/shell/*.js` 拆件 ⇒ **只查 `index.html` 会静默漏掉接线层**
+    （而那正是最容易写错、又最贵的一段）。⇒ 默认逐件查：`index.html` 取它的内联 `<script>`，
+    外链件（`.js`）整文件就是脚本。传 `shell=` 时退化成"只查这一件"（`--selftest` 用）。
+
+    返回 `(红清单, 说明)`；无 node ⇒ 红清单为空 ＋ 说明里讲明（⛔ 不是通过）。
+    """
     node = shutil.which("node")
     if not node:
         return [], "⛔ 机器上没有 `node` ⇒ **跳过 Q2**（⛔ 不是通过 —— 请装 node 或人工跑 `node --check`）"
-    target = shell or SHELL
-    if not target.exists():
-        return [f"找不到壳文件：{target}"], ""
-    js = _extract_script(target.read_text(encoding="utf-8"))
-    if not js.strip():
-        return [f"{target.name}：没找到 `<script>` 块"], ""
-    tmp = Path(tempfile.mkdtemp(prefix="syntax_audit_")) / "shell.js"
+    parts = [shell] if shell is not None else SHELL_PARTS
+    tmpdir = Path(tempfile.mkdtemp(prefix="syntax_audit_"))
     bad: list[str] = []
     try:
-        tmp.write_text(js, encoding="utf-8")
-        r = subprocess.run([node, "--check", str(tmp)], capture_output=True, text=True,
-                           encoding="utf-8", errors="replace")
-        if r.returncode != 0:
-            err = (r.stderr or "").strip().splitlines()
-            head = next((x for x in err if "SyntaxError" in x), err[0] if err else "未知")
-            where = next((x for x in err if re.match(r"^\s*\^+\s*$", x)), "")
-            bad.append(f"{target.name} 的 <script> 过不了 `node --check`：{head.strip()[:120]}")
-            if where:
-                bad[-1] += f"（提示行：{where.strip()[:60]}）"
+        for target in parts:
+            if not target.exists():
+                bad.append(f"找不到壳的某一件：{target}")
+                continue
+            text = target.read_text(encoding="utf-8")
+            js = _extract_script(text) if target.suffix == ".html" else text
+            if not js.strip():
+                bad.append(f"{target.name}：{'没找到 `<script>` 块' if target.suffix == '.html' else '是空件'}")
+                continue
+            tmp = tmpdir / f"{target.stem}.js"
+            tmp.write_text(js, encoding="utf-8")
+            r = subprocess.run([node, "--check", str(tmp)], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
+            if r.returncode != 0:
+                err = (r.stderr or "").strip().splitlines()
+                head = next((x for x in err if "SyntaxError" in x), err[0] if err else "未知")
+                where = next((x for x in err if re.match(r"^\s*\^+\s*$", x)), "")
+                bad.append(f"{target.name} 过不了 `node --check`：{head.strip()[:120]}")
+                if where:
+                    bad[-1] += f"（提示行：{where.strip()[:60]}）"
     finally:
-        shutil.rmtree(tmp.parent, ignore_errors=True)
+        shutil.rmtree(tmpdir, ignore_errors=True)
     return bad, ""
 
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from tests.acc_plugin import acc  # noqa: F401  ← 五个使用方都要它
 
 ROOT = Path(__file__).resolve().parents[2]
-SHELL = (ROOT / "backend" / "app" / "web" / "index.html").read_text(encoding="utf-8")
+from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 #: 已接后端的十页（`WIRED`）＋ 初始视图 `home`
 PAGES = ("home", "m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09", "m14")

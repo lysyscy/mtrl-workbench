@@ -23,11 +23,12 @@ import hashlib
 import subprocess
 import sys
 from pathlib import Path
+from shell_source import SHELL_PATH  # noqa: E402  ← `P4`① 读取点收敛
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 FILES = {
-    "shell": ROOT / "backend" / "app" / "web" / "index.html",
+    "shell": SHELL_PATH,
     "api": ROOT / "backend" / "app" / "mod07_setl" / "api.py",
     "m06r": ROOT / "backend" / "app" / "mod06_proc" / "router.py",
 }
@@ -72,11 +73,14 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
     ("WIRED 去掉 m07",
      "shell", "'m06','m07','m08'", "'m06','m08'",
      "test_WIRED含m07"),
-    # ⚠️ 2026-09-19（性能 `P2`）：`boot()` 改成分组并行 ⇒ 变异形态随之搬（**意图不变**：
-    #    把 `reloadM07` 挪到 `reloadMech` 之前 ⇒ 大表机械列会取空）。
-    ("boot() 里 reloadM07 排到 reloadMech 之前（取到空值）",
-     "shell", "    soft('机械 6 列', reloadMech),\n",
-     "    soft('收发结存与大表', reloadM07),\n    soft('机械 6 列', reloadMech),\n",
+    # ⚠️ 2026-09-19（性能 `P3` 主体）：`boot()` **不再逐路拉**（改成"进哪页拉哪页"）⇒ 原锚点
+    #    （`boot()` 里那两句 `soft(...)`）**已不存在**（脚本会报 SKIP＝未验证）。
+    #    改指**取数表的同类意图**：`m07` 的清单里漏掉前置的「库存单据」⇒ 大表那些列会取空。
+    #    由 `test_boot含m07且逐路容错` 的「凡吃大表的页必须列前置两路」钉住（⚠️ 与 `_mut_boot.py`
+    #    的 M1「依赖组被拆」是**两条不同的变异**：那条动分组结构，这条动清单内容）。
+    ("m07 的取数清单漏掉前置「库存单据」（大表相关列会取空）",
+     "shell", "  m07: ['机械 6 列', '库存单据', '收发结存与大表'],\n",
+     "  m07: ['机械 6 列', '收发结存与大表'],\n",
      "test_boot含m07且逐路容错"),
     ("月份切换不再重新取数（只 render ⇒ 空表）",
      "shell", "if(sc==='wh'){ fWhYm=v; mp.open=null; reloadM07();",

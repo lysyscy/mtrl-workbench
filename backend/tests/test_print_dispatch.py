@@ -18,9 +18,7 @@ from app.mod03_notice.print import dispatch as D
 from tests.acc_plugin import acc
 
 PDF = b"%PDF-1.4 fake"
-SHELL = (Path(__file__).resolve().parents[1] / "app" / "web" / "index.html").read_text(
-    encoding="utf-8"
-)
+from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 # ⚠️ 2026-09-19（`T5` 拆件）：批量执行器的**实体**已搬到 `notice_executors.py`（`router.py` 只再导出它）
 #    ⇒ 读源码的断言**改指新件**（⛔ 判据一字未改：「投递必须走分流器、不许退回裸 send_pdf」）。
 EXEC = (Path(__file__).resolve().parents[1] / "app" / "mod03_notice" / "notice_executors.py").read_text(

@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-SHELL = BACKEND / "app" / "web" / "index.html"
+from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
 ROUTER = BACKEND / "app" / "mod01_projects" / "router.py"
 PY = str(BACKEND / ".venv" / "Scripts" / "python.exe")
 

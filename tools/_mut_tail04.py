@@ -15,11 +15,12 @@ import hashlib
 import subprocess
 import sys
 from pathlib import Path
+from shell_source import SHELL_PATH  # noqa: E402  ← `P4`① 读取点收敛
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 FILES = {
-    "shell": ROOT / "backend" / "app" / "web" / "index.html",
+    "shell": SHELL_PATH,
     "api": ROOT / "backend" / "app" / "mod07_setl" / "api.py",
     "domain": ROOT / "backend" / "app" / "mod07_setl" / "domain.py",
     "res": ROOT / "backend" / "app" / "report_export" / "resources.py",

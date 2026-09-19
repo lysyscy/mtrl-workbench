@@ -27,8 +27,7 @@ CASE = "ACC-RPT-PROC-001"
 TWO = Decimal("2")
 
 #: 新壳全文（`§19` 批 2 起，"材料费只读"与"差异行跳转"这两条的**观测对象**从旧页换成了壳）
-_SHELL = (Path(__file__).resolve().parents[1] / "app" / "web" / "index.html").read_text(
-    encoding="utf-8")
+from tests.shell_src import SHELL as _SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 
 def _sess() -> FakeSession:

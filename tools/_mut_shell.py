@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "backend" / "app" / "web" / "index.html"
+from shell_source import SHELL_PATH as TARGET  # noqa: F401  ← `P4`① 读取点收敛
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 TOOL = str(ROOT / "tools" / "ui_parity.py")
 

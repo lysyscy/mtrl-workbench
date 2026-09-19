@@ -33,9 +33,14 @@ import pathlib
 import re
 import sys
 
+from shell_source import SHELL_PATH, read_shell  # noqa: E402  ← `P4`① 读取点收敛
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PROTO = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\demo\材料报表自动化工作台-交互原型.html")
-SHELL = ROOT / "backend" / "app" / "web" / "index.html"
+# ⚠️ 2026-09-19（`P4`① 读取点收敛）：壳要拆成多件 ⇒ 源码一律走 `shell_source`。
+#    `SHELL` 仍留作**存在性检查**（指 `index.html` 本体）；**读文本则用 `read_shell()`**（合并后的全部件）
+#    —— 否则 `U2`（演示数组残留）与 `U4`（`/api/mNN` 在不在）会**静默**只看原型切片那一件。
+SHELL = SHELL_PATH
 EXPECTED = ROOT / "tools" / "ui_parity_expected.txt"
 
 # 切片起点：行首的 `V.<名字> =`（壳与原型同构）
@@ -108,7 +113,7 @@ def main() -> int:
         return 1
 
     p_views = slices(read_lines(PROTO))
-    shell_lines = read_lines(SHELL)
+    shell_lines = read_shell().replace("\r\n", "\n").split("\n")   # ← `P4`①：合并后的**全部件**
     s_views = slices(shell_lines)
     exp = load_expected()
 

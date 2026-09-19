@@ -27,7 +27,7 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-SHELL = (ROOT / "backend" / "app" / "web" / "index.html").read_text(encoding="utf-8")
+from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 RULES_API = (ROOT / "backend" / "app" / "mod14_config" / "rules_api.py").read_text(encoding="utf-8")
 REPO = (ROOT / "backend" / "app" / "mod03_notice" / "rules_repository.py").read_text(encoding="utf-8")
 CLASSIFY = (ROOT / "backend" / "app" / "mod03_notice" / "classify.py").read_text(encoding="utf-8")

@@ -25,7 +25,7 @@ PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 REC = "backend/app/mod01_projects/recovery.py"
 PEND = "backend/app/mod01_projects/pending.py"
 RT = "backend/app/mod01_projects/router.py"
-SHELL = "backend/app/web/index.html"
+from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
 T = "tests/test_promote_pending.py"
 TW = "tests/test_wired_m01.py"
 

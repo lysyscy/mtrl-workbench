@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BE = ROOT / "backend"
-SHELL = BE / "app" / "web" / "index.html"
+from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
 PY = BE / ".venv" / "Scripts" / "python.exe"
 TEST = "tests/test_wired_boot.py"
 

@@ -26,11 +26,12 @@ import hashlib
 import subprocess
 import sys
 from pathlib import Path
+from shell_source import SHELL_PATH  # noqa: E402  ← `P4`① 读取点收敛
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 FILES = {
-    "shell": ROOT / "backend" / "app" / "web" / "index.html",
+    "shell": SHELL_PATH,
     "api": ROOT / "backend" / "app" / "mod09_fee" / "api.py",
 }
 
@@ -78,9 +79,11 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
     ("WIRED 去掉 m09",
      "shell", "'m08','m09'", "'m08'",
      "test_m09已进WIRED与boot"),
-    # ⚠️ 2026-09-19（性能 `P2`）：`boot()` 分组并行 ⇒ 形态从 `await soft(...)` → 组内 `soft(...)`（意图不变）
-    ("boot() 里没给 m09 走 soft()",
-     "shell", "soft('特殊费用月报表', reloadM09),", "soft('特殊费用月报表X', reloadM09),",
+    # ⚠️ 2026-09-19（性能 `P3` 主体）：`boot()` **不再逐路拉** ⇒ 原锚点（`soft('特殊费用月报表', reloadM09)`）
+    #    **已不存在**（脚本会报 SKIP＝未验证）。改指**取数表**里的同一个意图：m09 没有取数出口 ⇒
+    #    `test_m09已进WIRED与boot` 的「`LOADERS` 里有「特殊费用月报表」」会红。
+    ("取数表里没有 m09 这一路（那页永远空）",
+     "shell", "  '特殊费用月报表': reloadM09,", "  '特殊费用月报表X': reloadM09,",
      "test_m09已进WIRED与boot"),
     ("后端读端点不走 _payload",
      "api", 'return _payload(s, ym=str(p.get("ym") or ""), pj=str(p.get("pj") or ""))',

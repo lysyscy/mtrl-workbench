@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from shell_source import SHELL_PATH  # noqa: E402  ← `P4`① 读取点收敛
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
@@ -22,7 +23,7 @@ MUT_RESULTS = str(ROOT / "artifacts" / "_mut_acc_results.json")
 
 MUTATIONS: list[dict] = [
     {
-        "id": "M1", "file": "backend/app/web/index.html",
+        "id": "M1", "file": str(SHELL_PATH),
         "old": "    const seen = OWN_WH[i];\n    if (!seen) {\n      return toast('先点「<b>① 先查 i8 仓库名单</b>」",
         "new": "    const seen = OWN_WH[i];\n    if (false) {\n      return toast('先点「<b>① 先查 i8 仓库名单</b>」",
         "test": "tests/test_wired_own_wh.py", "k": "没查过不许建",
