@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     # --- i8 业务接口（**契约待确认**：PRD 仅给接口名 getPrintDesign/API-01，未给 URL 与参数口径）---
     # 端点 URL 一律走配置，不硬编码；以下为空 ⇒ 由 NotConfiguredError 显式报错（不得静默）
     i8_payment_notice_url: str = ""  # API-01：付款通知书取数（D4 最小取数）
+    # API-04：采购合同列表（集采抓取）—— ⚠️ 2026-09-19 **实测确认 = POST**（GET 会 500「method 'GET' is not supported」；
+    #   无会话会 401「No SessionInfo found」）⇒ 必须走登录后的 client，⛔ 不能当普通 GET 打。
+    i8_contract_list_url: str = ""
     i8_print_design_url: str = ""  # API-07：取版式 getPrintDesign
     # 两类分流（机械类 / 辅材·集采类）的 printId（**取值待确认**，从配置读、不写死）
     i8_print_id_mechanical: str = ""
