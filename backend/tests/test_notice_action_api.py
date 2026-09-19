@@ -1,11 +1,16 @@
-"""`MOD-03` **端点面**的验收断言（`/api/*` 出参 · PRG 动作路由）。
+"""`MOD-03` **端点面**的验收断言（`/api/m03/*` JSON 动作与列表查询）。
 
 - `ACC-PAY-ACTION-001` —— API 必须剔除「操作」列（按钮 / 表单 HTML 只在页面上成立）⇒ `§4.4.5`
-- `ACC-PAY-CAT-001`    —— 批量改分类 / 恢复剔除的动作路由（303 + 回报类型）⇒ `§4.2.4`
-- `ACC-PAY-MANUAL-001` —— 手动行新增 / 删除 / 校验失败保留草稿行 ⇒ `§4.2.6`
-- `ACC-PAY-STAT-001`   —— 统计手改的 API 形态与动作路由（落库 + 留痕 / 超上限拦截）⇒ `§4.5.3`
+- `ACC-PAY-CAT-001`    —— 批量改分类 / 恢复剔除的**动作**（落库 ＋ 回报）⇒ `§4.2.4` / `§4.2.2`
+- `ACC-PAY-MANUAL-001` —— 手动行新增 / 删除 / 校验失败不落库 ⇒ `§4.2.6`
+- `ACC-PAY-STAT-001`   —— 统计手改（落库 ＋ 留痕 / 超上限拦截）⇒ `§4.5.3`
+- `ACC-PAY-BATCH-001`  —— 批量付款（落流水 / 幂等 / 整批不落半批 / 兜底现汇）⇒ `§4.4.4`
 
 ⚠️ 2026-09-16 自 `test_notice_actions.py` 拆出（**断言一字未改**）。
+⚠️ 2026-09-19（`§19` 批 4 · **S4⑤**）：旧页删净（授权 `D18`）⇒ 原先的 **PRG 表单向用例**随之作废
+   （`/m03/notices/*` 那批路由已删）。处置分两类，一条判据都没丢：
+   ① 那些**已在新 JSON 端点上有对应件**的（手动行 / 统计手改 / 批量付款）⇒ 直接删掉 PRG 那半边；
+   ② 「批量改分类 / 恢复剔除」三条**原先只有 PRG 面** ⇒ 本轮**如实改指 JSON API**（同一实质、换观测面）。
 """
 
 from __future__ import annotations
@@ -13,8 +18,8 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.mod01_projects.models import Project
+from app.mod03_notice.list_data import build_page_data
 from app.mod03_notice.models import PaymentNotice
-from app.mod03_notice.notice_page import build_page_data
 from app.mod05_flow.models import PaymentFlow
 from tests.acc_plugin import acc
 from tests.m03_action_helpers import _client, _notice, FakeWriteSession
@@ -36,79 +41,47 @@ def test_API把操作列剔除掉():
     assert "actions" not in items[0]
 
 
-# ============================================================ 动作端点（PRG）
+# ============================================================ 动作端点（JSON API）
+# ⚠️ 2026-09-19（`§19` 批 4 · S4⑤）：这一段原先打的是 **PRG**（`/m03/notices/*` → 303 回跳），
+#    旧页删净 ⇒ 同一实质改指 JSON API。其中「手动行」与「统计手改」的新端点件本就在下文
+#    （`S1`/`S2a`/`S2b` 各轮已补），故那几条 PRG 用例**直接删除**（判据由对应 API 用例承载）。
 
 
 @acc("ACC-PAY-CAT-001", "001-11")
-def test_路由_批量改分类返回303并回报():
+def test_API_批量改分类落库并回报():
+    """**批量改分类**（§4.2.4）：真的落库 ＋ 回一句**可直接给人看**的中文（前端原样显示）。
+
+    ⚠️ 新壳的下拉框值是**中文标签**（辅材/机械/集采），服务端只认**键**（material/…）⇒
+       壳侧做映射（`CAT_API`）。本用例按服务端契约**只认键**。
+    """
     client, fake = _client([_notice(1)])
-    r = client.post("/m03/notices/category", data={"category": "mechanical", "ids": ["1"]},
-                    follow_redirects=False)
-    assert r.status_code == 303
-    assert "mechanical" not in r.headers["location"] or True
-    assert "%E6%94%B9" in r.headers["location"]            # 「改」的 URL 编码 ⇒ 回报里有中文
-    assert fake.by_model[PaymentNotice][0].category == "mechanical"
+    r = client.post("/api/m03/actions/category", json={"category": "mechanical", "ids": [1]})
+    assert r.status_code == 200, "JSON 动作 API 一律恒 200（成败看 ok）"
+    body = r.json()
+    assert body["ok"] is True and body["changed"] == [1] and body["category"] == "mechanical"
+    assert "改" in body["message"] and "机械" in body["message"], f"回执没给中文说明：{body['message']!r}"
+    assert fake.by_model[PaymentNotice][0].category == "mechanical"      # 真落库
 
 
 @acc("ACC-PAY-CAT-001", "001-12")
-def test_路由_未勾选时回报错误且不改库():
-    client, _ = _client([_notice(1)])
-    r = client.post("/m03/notices/category", data={"category": "mechanical"},
-                    follow_redirects=False)
-    assert r.status_code == 303
-    assert "err" in r.headers["location"]                  # 回报类型 = 错误
+def test_API_未勾选改分类被拒且不改库():
+    """⛔ **必须先勾选**（§4.2.4：批量 = 对勾选集操作，不是对整表操作）—— 空勾选 ⇒ 拒绝且一行不动。"""
+    client, fake = _client([_notice(1)])
+    body = client.post("/api/m03/actions/category",
+                       json={"category": "mechanical", "ids": []}).json()
+    assert body["ok"] is False and "勾选" in body["message"]
+    assert fake.by_model[PaymentNotice][0].category == "material"        # 原分类不变
 
 
 @acc("ACC-PAY-CAT-001", "001-13")
-def test_路由_未勾选恢复剔除被拦():
+def test_API_未勾选恢复剔除被拦():
+    """「恢复剔除」同样**必须先勾选**（§4.2.2：不做整表一键放回）—— 空勾选 ⇒ 拒绝并给原因。"""
     client, _ = _client([_notice(1)])
-    r = client.post("/m03/notices/restore", data={}, follow_redirects=False)
-    assert r.status_code == 303 and "err" in r.headers["location"]
+    body = client.post("/api/m03/actions/restore", json={"ids": []}).json()
+    assert body["ok"] is False and "勾选" in body["message"]
 
 
-@acc("ACC-PAY-MANUAL-001", "001-08")
-def test_路由_新增手动行落库():
-    client, fake = _client([_notice(1)])
-    r = client.post(
-        "/m03/notices/save",
-        data={"doc_date": "2026-09-01", "amount_approved": "50000", "stat_paid": "20000",
-              "ownership_id": "11"},
-        follow_redirects=False,
-    )
-    assert r.status_code == 303
-    added = [n for n in fake.added if isinstance(n, PaymentNotice)]
-    assert len(added) == 1
-    assert added[0].is_manual is True and added[0].stat_settle == Decimal("0.00")
-    assert added[0].input_by == "科室用户"          # 登录体系未落地时的中性占位（MOD-15 接管）
-
-
-@acc("ACC-PAY-MANUAL-001", "001-09")
-def test_路由_删除i8行被拒():
-    client, fake = _client([_notice(1, ph_id="3700000000123", is_manual=False)])
-    r = client.post("/m03/notices/delete", data={"id": "1"}, follow_redirects=False)
-    assert r.status_code == 303 and "err" in r.headers["location"]
-    assert fake.deleted == []                     # 一行都没删
-
-
-@acc("ACC-PAY-MANUAL-001", "001-10")
-def test_路由_删除手动行成功():
-    client, fake = _client([_notice(2, ph_id="MANUAL-abc", is_manual=True)])
-    r = client.post("/m03/notices/delete", data={"id": "2"}, follow_redirects=False)
-    assert r.status_code == 303 and "err" not in r.headers["location"]
-    assert len(fake.deleted) == 1
-
-
-@acc("ACC-PAY-MANUAL-001", "001-11")
-def test_路由_保存校验失败保留草稿行():
-    client, _ = _client([_notice(1)])
-    r = client.post("/m03/notices/save", data={"doc_date": "", "amount_approved": "10"},
-                    follow_redirects=False)
-    assert r.status_code == 303
-    assert "err" in r.headers["location"]
-    assert "draft=new" in r.headers["location"]           # 草稿行保留（不清空已填内容，R14③）
-
-
-# ============================================================ 能力 11 · 统计金额手改（§4.5.3）
+# ============================================================ 列表查询（能力 11 · 统计列的纯度）
 
 
 @acc("ACC-PAY-STAT-001", "001-10")
@@ -119,37 +92,6 @@ def test_API的统计列仍不含HTML():
     item = {k: v for k, v in data["rows"][0].items() if k != "_row"}
     assert item["stat_settle_text"] == "10,000.00"
     assert not any("<input" in str(v) for v in item.values())
-
-
-@acc("ACC-PAY-STAT-001", "001-11")
-def test_路由_统计手改落库并留痕():
-    from app.mod03_notice.models import NoticeStatLog
-
-    client, fake = _client([_notice(1)])
-    fake.by_model.setdefault(NoticeStatLog, [])
-    r = client.post("/m03/notices/stat",
-                    data={"target": "1:stat_settle", "v_1_stat_settle": "8000"},
-                    follow_redirects=False)
-    assert r.status_code == 303 and "err" not in r.headers["location"]
-    assert fake.by_model[PaymentNotice][0].stat_settle == Decimal("8000.00")
-    logs = [x for x in fake.added if isinstance(x, NoticeStatLog)]
-    assert len(logs) == 1
-    assert logs[0].before_amount == Decimal("10000.00") and logs[0].after_amount == Decimal("8000.00")
-    assert "欠款已实时重算" in r.headers["location"] or True
-
-
-@acc("ACC-PAY-STAT-001", "001-12")
-def test_路由_统计手改超上限被拦且保留原值():
-    from app.mod03_notice.models import NoticeStatLog
-
-    client, fake = _client([_notice(1, amount_approved=Decimal("100.00"))])
-    fake.by_model.setdefault(NoticeStatLog, [])
-    r = client.post("/m03/notices/stat",
-                    data={"target": "1:stat_paid", "v_1_stat_paid": "200"},
-                    follow_redirects=False)
-    assert r.status_code == 303 and "err" in r.headers["location"]
-    assert fake.by_model[PaymentNotice][0].stat_paid == Decimal("10000.00")   # 原值不变
-    assert [x for x in fake.added if isinstance(x, NoticeStatLog)] == []      # 不留痕
 
 
 # ------------------------------------------------ `§19` 批 4 · S1：同上两条实质，改指 **JSON API**
@@ -210,20 +152,19 @@ def test_API_统计手改值没变时说清什么都没做():
 
 
 @acc()
-def test_PRG与JSON_API共用统计手改的唯一出口():
-    """⛔ **防分叉**：判定 / 落库 / 文案只许一份 —— PRG 与 JSON API 都必须调
-    `notice_actions.apply_stat_change`，任何一边**内联**判定或另写文案都算违规。
+def test_统计手改的API只许走唯一出口():
+    """⛔ **防分叉**：判定 / 落库 / 文案只许一份 —— JSON API 必须调
+    `notice_actions.apply_stat_change`，⛔ 不许内联 `repo.adjust_notice_stat`。
 
     （本仓的老毛病："同一口径只做了一半" / "两份实现悄悄漂移" ⇒ 这条就是给它立的阀门。）
+    ⚠️ `§19` 批 4 · S4⑤：原先还查 PRG 那半边；旧页删净 ⇒ 观测面收敛到本 API。
     """
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
-    prg = (root / "backend" / "app" / "mod03_notice" / "notice_actions_router.py").read_text(encoding="utf-8")
     api = (root / "backend" / "app" / "mod03_notice" / "notice_api_router.py").read_text(encoding="utf-8")
-    for name, src in (("PRG", prg), ("JSON API", api)):
-        assert "apply_stat_change(" in src, f"{name} 没走统计手改的唯一出口"
-        assert "repo.adjust_notice_stat(" not in src, f"{name} 内联了落库/判定（应共用唯一出口）"
+    assert "apply_stat_change(" in api, "统计手改的 API 没走唯一出口"
+    assert "repo.adjust_notice_stat(" not in api, "API 内联了落库/判定（应共用唯一出口）"
     assert "def apply_stat_change(" in (
         root / "backend" / "app" / "mod03_notice" / "notice_actions.py"
     ).read_text(encoding="utf-8"), "唯一出口本身没了"
@@ -286,18 +227,16 @@ def test_API_编辑手动行按改动字段回报():
 
 
 @acc()
-def test_PRG与JSON_API共用手动行保存的唯一出口():
-    """⛔ **防分叉**：手动行的校验 / 落库 / 文案只许一份 —— 两个出口都必须调
-    `notice_actions.apply_manual_save`，谁都不许内联 `repo.create_manual_notice` / `update_manual_notice`。"""
+def test_手动行保存的API只许走唯一出口():
+    """⛔ **防分叉**：手动行的校验 / 落库 / 文案只许一份 —— JSON API 必须调
+    `notice_actions.apply_manual_save`，⛔ 不许内联 `repo.create_manual_notice` / `update_manual_notice`。"""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
-    prg = (root / "backend" / "app" / "mod03_notice" / "notice_actions_router.py").read_text(encoding="utf-8")
     api = (root / "backend" / "app" / "mod03_notice" / "notice_api_router.py").read_text(encoding="utf-8")
-    for name, src in (("PRG", prg), ("JSON API", api)):
-        assert "apply_manual_save(" in src, f"{name} 没走手动行保存的唯一出口"
-        for banned in ("repo.create_manual_notice(", "repo.update_manual_notice("):
-            assert banned not in src, f"{name} 内联了落库（应共用唯一出口）：{banned}"
+    assert "apply_manual_save(" in api, "手动行保存的 API 没走唯一出口"
+    for banned in ("repo.create_manual_notice(", "repo.update_manual_notice("):
+        assert banned not in api, f"API 内联了落库（应共用唯一出口）：{banned}"
 
 
 # ------------------------------------------------ `§19` 批 4 · S2b：删除 ＋ **删除前的影响范围**
@@ -347,16 +286,15 @@ def test_API_删除影响范围由后端给():
 
 
 @acc()
-def test_PRG与JSON_API共用手动行删除的唯一出口():
-    """⛔ **防分叉**：删除的校验 / 落库 / 文案只许一份 —— 两个出口都必须调
-    `notice_actions.apply_manual_delete`，谁都不许内联 `repo.delete_notice`。"""
+def test_手动行删除的API只许走唯一出口():
+    """⛔ **防分叉**：删除的校验 / 落库 / 文案只许一份 —— JSON API 必须调
+    `notice_actions.apply_manual_delete`，⛔ 不许内联 `repo.delete_notice`。"""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
-    for name, rel in (("PRG", "notice_actions_router.py"), ("JSON API", "notice_api_router.py")):
-        src = (root / "backend" / "app" / "mod03_notice" / rel).read_text(encoding="utf-8")
-        assert "apply_manual_delete(" in src, f"{name} 没走手动行删除的唯一出口"
-        assert "repo.delete_notice(" not in src, f"{name} 内联了删除（应共用唯一出口）"
+    api = (root / "backend" / "app" / "mod03_notice" / "notice_api_router.py").read_text(encoding="utf-8")
+    assert "apply_manual_delete(" in api, "手动行删除的 API 没走唯一出口"
+    assert "repo.delete_notice(" not in api, "API 内联了删除（应共用唯一出口）"
 
 
 # ------------------------------------------------ `§19` 批 4 · S3：批量付款走 **JSON API**
@@ -415,7 +353,7 @@ def test_API_提交时库中已变不可付则整批不落():
 @acc("ACC-PAY-BATCH-001", "001-03")
 def test_API_付款方式缺省时兜底现汇():
     """§4.4.2：**默认取付款计划的值、取不到兜底「现汇」** —— 这里守"兜底"那半边
-    （取计划那半边由 `default_pay_method` 的纯函数断言守着，见 `test_notice_pay.py`）。"""
+    （取计划那半边由 `default_pay_method` 的纯函数断言守着，见 `test_wired_m03_pay.py`）。"""
     from app.mod05_flow.models import PaymentFlow
 
     client, fake = _client([_notice(1, bill_no="没有计划的行")])
@@ -429,13 +367,16 @@ def test_API_付款方式缺省时兜底现汇():
 
 
 @acc()
-def test_PRG与JSON_API共用批量付款的唯一出口():
-    """⛔ **防分叉**：批量付款的整条管线（重算 / 落半批 / 幂等 / 落流水）只许一份。"""
+def test_批量付款的API只许走唯一出口():
+    """⛔ **防分叉**：批量付款的整条管线（整批重算 / 不落半批 / 幂等 / 落流水）只许一份
+    —— JSON API 必须调 `notice_actions.apply_batch_pay`。
+
+    ⚠️ `§19` 批 4 · S4⑤：原先还查 PRG（`notice_pay_router.py`）那半边；旧页删净 ⇒ 收敛到本 API。
+    """
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
-    for name, rel in (("PRG", "notice_pay_router.py"), ("JSON API", "notice_api_router.py")):
-        src = (root / "backend" / "app" / "mod03_notice" / rel).read_text(encoding="utf-8")
-        assert "apply_batch_pay(" in src, f"{name} 没走批量付款的唯一出口"
-        assert "flow_repo.create_flow(" not in src, f"{name} 内联了落流水（应共用唯一出口）"
-        assert "confirm_batch(" not in src, f"{name} 内联了判定（应共用唯一出口）"
+    api = (root / "backend" / "app" / "mod03_notice" / "notice_api_router.py").read_text(encoding="utf-8")
+    assert "apply_batch_pay(" in api, "批量付款的 API 没走唯一出口"
+    assert "flow_repo.create_flow(" not in api, "API 内联了落流水（应共用唯一出口）"
+    assert "confirm_batch(" not in api, "API 内联了判定（应共用唯一出口）"

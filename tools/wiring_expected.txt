@@ -29,10 +29,14 @@ W2 backend/app/mod03_notice/domain.py:apply_trace
 W2 backend/app/mod03_notice/domain.py:recompute_debt
 W2 backend/app/mod03_notice/domain.py:verify_row
 W2 backend/app/mod03_notice/domain.py:remove_from_batch
-W2 backend/app/mod03_notice/notice_pay_router.py:page_pay
-W2 backend/app/mod03_notice/notice_pay_router.py:act_pay
-W2 backend/app/mod03_notice/notice_pay_router.py:act_revoke_flow
-W2 backend/app/mod03_notice/notice_pay_router.py:page_trace
+# ⭐ 2026-09-19（`§19` 批 4 · S4⑤）：旧页删净 ⇒ 两个**口径锚**失去生产调用方（**保留不删**）：
+#    · `check_batch` —— 窗口「不可付 ⇒ 先禁用」的判定出口；生产调用方（服务端渲染的付款窗口）
+#      已随页删除，新壳在客户端就地实现同一判定。它**仍是 `P3` 链路的认领落点**（`chain_expected` 钉着）
+#      且判据 `ACC-PAY-VERIFY-001` / `ACC-PAY-BATCH-001` 由 `test_acc_pay_verify.py` 直接守着。
+#    · `render_list_page` —— 五段骨架装配（`ACC-PAY-IA-001` 的直接实现），由 `test_page_shell.py` /
+#      `test_acc_pay_ia.py` 直接守着；主题真源（`THEME_CSS` 等）与它同一件 ⇒ 随 §19 收尾统一处置。
+W2 backend/app/mod03_notice/domain.py:check_batch
+W2 backend/app/mod03_notice/page.py:render_list_page
 W2 backend/app/mod03_notice/page.py:pay_domain_nav
 W2 backend/app/mod03_notice/page.py:nav_violations
 W2 backend/app/mod03_notice/page.py:tip_block_count

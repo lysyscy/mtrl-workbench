@@ -1,11 +1,15 @@
-"""`MOD-03` **行级动作 / 操作列 / 统计手改**验收断言的公共桩（**离线：不连库**）。
+"""`MOD-03` **动作 / 列表 API** 验收断言的公共桩（**离线：不连库**）。
 
 拆因：`test_notice_actions.py` 涨到 527 行（贴近 `T5` 硬上限）⇒ 桩件抽到本文件，
-测试按「域内核 / 渲染面 / 端点」拆成三件（**断言一字未改，只搬位置**）：
+测试按「域内核 / 端点」两件（**断言一字未改，只搬位置**）：
 
-- `test_notice_actions.py`       —— 域内核纯函数（批量改分类 / 剔除恢复 / 手动行载荷）
-- `test_notice_action_page.py`   —— 页面渲染（操作列 / 草稿行 / 查看关联页 / 统计可改格）
-- `test_notice_action_api.py`    —— 端点（`/api/*` 与 PRG 动作路由）
+- `test_notice_actions.py`    —— 域内核纯函数（批量改分类 / 剔除恢复 / 手动行载荷）
+- `test_notice_action_api.py` —— 端点（`/api/m03/*` 动作与列表查询）
+
+⭐ 2026-09-19（`§19` 批 4 · **S4⑤**）：旧页删净（授权 `D18`）⇒ 原来的**页面渲染桩**
+（`_render` / `_rows` / `_row_of` / `_cell_of` / `_render_with_traces`，都靠抠 HTML 观测）
+**随页删除** —— 它们守的形态判据已由 `test_wired_m03_*.py` 在**新壳侧**承载 ✓。
+本件此后只留**离线会话与取数桩**（假会话 / 造行 / 带注入的 client）。
 
 `FakeWriteSession` 在 `m04_helpers.FakeSession` 上加**写**能力，让 `repository` 的真实代码跑起来，
 只是数据来自内存。
@@ -20,8 +24,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.mod01_projects.models import Project
 from app.mod03_notice.models import PaymentNotice
-from app.mod03_notice.notice_page import build_page_data, render_notice_page
-from app.mod03_notice.notice_router import get_session
+from app.mod03_notice.notice_api_router import get_session
 from app.mod05_flow.models import PaymentFlow
 from tests.m04_helpers import FakeSession
 
@@ -77,49 +80,4 @@ def _client(notices, projects=(), flows=()) -> tuple[TestClient, FakeWriteSessio
     return TestClient(app), fake
 
 
-def _cell_of(html: str, label: str) -> str:
-    """从渲染页里取出**某一格**的值 —— `<b>标签</b><span>值</span>` 结构。
-
-    ⚠️ **只读页的断言必须按格取值，不能用整页 `in`** —— 同页「统计付款金额」与「已付金额」
-       数值不同、但字符串会互相喂饱整页断言（实测：把已付金额改成"全部流水汇总"后
-       `"3000.00" in html` 仍然通过，因为另一个字段印了 3000）。
-    """
-    import re
-
-    m = re.search(
-        r"<b>\s*" + re.escape(label) + r"\s*</b>\s*<span>([^<]*)</span>", html
-    )
-    assert m is not None, f"页面上找不到格子「{label}」"
-    return m.group(1).strip()
-
-
-def _render(notices, flows=None, *, draft=None):
-    session = FakeWriteSession({PaymentNotice: list(notices), Project: [], PaymentFlow: []})
-    flows_map = flows or {}
-    data = build_page_data(
-        session, sort_col="", sort_dir=0, draft=draft,
-        flows_of=lambda nid: flows_map.get(nid, []),
-    )
-    return render_notice_page(data)
-
-
-def _rows(html: str) -> list[str]:
-    """取数据区里的每一行 `<tr>`（用于按行断言「操作」列，而不是拿整页去撞关键词）。"""
-    import re
-
-    body = re.search(r"<tbody\b[^>]*>([\s\S]*?)</tbody>", html)
-    return re.findall(r"<tr\b[^>]*>[\s\S]*?</tr>", body.group(1) if body else "")
-
-
-def _row_of(html: str, bill_no: str) -> str:
-    return next(r for r in _rows(html) if f">{bill_no}<" in r)
-
-
-def _render_with_traces(notices, traces=None):
-    session = FakeWriteSession({PaymentNotice: list(notices), Project: [], PaymentFlow: []})
-    idx = traces or {}
-    data = build_page_data(
-        session, sort_col="", sort_dir=0,
-        flows_of=lambda nid: [], traces_of=lambda nid: idx.get(nid, []),
-    )
-    return render_notice_page(data)
+__all__ = ["FakeWriteSession", "_notice", "_client"]

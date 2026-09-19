@@ -5,8 +5,9 @@
 ⚠️ 依赖一律经 `Depends` 暴露 —— 测试用 `app.dependency_overrides` 注入桩，
    使「系统内勾选 → 单选/多选端到端」（001-09）可在不连库、不启浏览器下断言。
 
-⚠️ **页面与行级动作已拆到 `notice_router.py`**（`/m03/notices` 列表页 · 批量动作 · 草稿行 · 撤销 · 查看关联）——
-   本文件只服务「勾选 → 输出」这条链路与设置入口，**别把页面再写回来**（一文件一职责，行数也守得住）。
+⚠️ 本文件只服务「勾选 → 输出」这条链路与设置入口；**列表查询与行级动作在 `notice_api_router.py`**。
+   ⚠️ 2026-09-19（`§19` 批 4）：MOD-03 的**服务端渲染页已全部删除** ⇒ **别把页面再写回来**
+   （新页面一律进新壳 `app/web/index.html`）。
 """
 
 from __future__ import annotations
@@ -638,11 +639,9 @@ def _persist_run(*, run_type: str, target: str, result: BatchResult) -> None:
         )
 
 
-# --------------------------------------------------------------- 页面（服务端渲染）
+# ⚠️ 2026-09-19（`§19` 批 4 · **S4⑤**）：本文件原先还在底部**兼容再导出**一个页面 router
+#    （`page_router`，实体在 `notice_router.py`）—— 页面已全部删除（授权 `D18`），该再导出随之删掉。
+#    MOD-03 对外的可调用面 = 本 router（`/api/m03/*` 抓取 / 打印 / PDF / 设置）
+#    ＋ `notice_api_router`（`/api/m03/*` 列表与行级动作）。⛔ 别再往这里挂页面。
 
-# ⚠️ 页面 router **不带 `/api/m03` 前缀**（与 MOD-04 一致）—— 页面路径是 `/m03/notices`。
-# ⚠️ **已迁到 `notice_router.py`**（列表页 + 行级动作 + 草稿行 + 撤销 + 查看关联），
-#    这里再导出一份只是为了 `__all__` 里不出现悬空名（历史调用方兼容）。
-from app.mod03_notice.notice_router import page_router  # noqa: E402,F401  ← 兼容再导出
-
-__all__ = ["router", "page_router", "apply_fetched_row"]
+__all__ = ["router", "apply_fetched_row"]

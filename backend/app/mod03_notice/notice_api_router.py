@@ -1,32 +1,71 @@
-"""`MOD-03` **JSON 动作 API** —— 供前端壳（`app/web/`）用 `fetch` 调用。
+"""`MOD-03` **JSON API 汇总** —— 供前端壳（`app/web/`）用 `fetch` 调用。
 
-⚠️ 与 `notice_actions_router`（表单向 · PRG 303 回跳）**共用同一批纯函数出口**
-   （`notice_actions.change_category` / `manual_exclude` / `restore_excluded`，
-   落库走同一个 `repository`）—— 本文件只做「取数 → 判定 → 落库 → 回 JSON」，
-   ⛔ **不重复、不另写任何判定**（一份内容只许一个主人）。
+⚠️ 判定一律调**纯函数出口**（`notice_actions.*` / `domain.*`，落库走同一个 `repository`）——
+   本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ **不重复、不另写任何判定**
+   （一份内容只许一个主人）。
 
 ⚠️ 回执形状：HTTP **恒 200**，用 `ok` 标志区分成败 —— 前端壳是"就地改、即时反馈"，
    靠 HTTP 状态码分流会逼它写第二套错误分支（与本项目「内部工具、简单优先」不符）。
    失败时 `message` 一定是**可直接给人看**的一句中文（判定函数已经这么产出了）。
+
+⭐ 2026-09-19（`§19` 批 4 · **S4⑤**）：列表查询端点 `GET /api/m03/notice-list` 从
+   `notice_router.py` 搬到这里（那是**页面 router**，随删页消失）；**关系件**（会话依赖 /
+   筛选解析 / API 必须剔除的页面专用列）也一并归到本件 —— 旧页删净后，MOD-03 对外的
+   **可调用面只剩 JSON API**，故 `notice_http.py`（会话 ＋ 筛选）也随之并入本文件。
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from collections.abc import Iterator
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.db import session_scope
 from app.core.errors import MustReportError
+from app.core.period import default_period
 from app.mod03_notice import repository as repo
+from app.mod03_notice.list_data import PERIOD_DEFAULT_KEY, build_page_data
+from app.mod03_notice.list_view import CATEGORY_ALL, NoticeFilters
 from app.mod03_notice.models import EXCLUDE_BY_MANUAL, EXCLUDE_NONE
 from app.mod03_notice.notice_actions import (
     change_category,
     manual_exclude,
     restore_excluded,
 )
-from app.mod03_notice.notice_http import DBSession
+from app.mod03_notice.page import SORT_NONE
 
 api_router = APIRouter(tags=["mod03-json"])
+
+# ⚠️ **只在页面上成立**的列（值是按钮 / 表单 HTML）—— API 必须剔除，否则就"吐 HTML"了
+PAGE_ONLY_KEYS: tuple[str, ...] = ("actions", "_picked")
+
+
+# --------------------------------------------------------------- 会话 / 筛选（可注入 ⇒ 离线自检）
+
+
+def get_session() -> Iterator[Session]:
+    """查询 / 动作共用的会话（**短事务**）—— 经 `Depends` 暴露 ⇒ 自检可注入假会话（不连库）。"""
+    with session_scope() as session:
+        yield session
+
+
+DBSession = Depends(get_session)
+
+
+def notice_filters(period, project, category, approve_status, pay_status) -> NoticeFilters:
+    """列表查询共用的筛选解析。
+
+    ⚠️ 与其它页同一约定：**`period=None` ⇒ 用默认（北京时间当月）；`period=""` ⇒ 全部**。
+    """
+    return NoticeFilters(
+        period=default_period(PERIOD_DEFAULT_KEY) if period is None else period,
+        project_ids=tuple(project or ()),
+        category=category or CATEGORY_ALL,
+        approve_status=approve_status,
+        pay_status=pay_status,
+    )
 
 
 class IdsIn(BaseModel):
@@ -263,4 +302,76 @@ def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
     return {"ok": True, "created": created, "count": len(created), "message": message}
 
 
-__all__ = ["api_router"]
+# --------------------------------------------------------------- 列表查询（新壳 m03 页的数据源）
+
+
+def _api_item(rec: dict) -> dict:
+    """一行 → API 载荷 = **显示值**（`list_data._row_dict` 产的）
+    ＋ **状态字段**（前端壳要靠它判"能不能勾选 / 是否剔除 / 是否手动行"）。
+
+    ⚠️ 补的是**语义字段**（`is_excluded` / `is_manual` / …），**不是**原型字段名 ——
+       字段名映射由前端适配层做（`app/web/index.html` 的 `adaptNotice`）⇒ API 不为某个前端定制。
+    ⛔ 页面专用 HTML（`PAGE_ONLY_KEYS`）**仍然不进 API**。
+    ⚠️ 金额一律 **str**（Decimal 直接 JSON 化会变 float ⇒ 金额精度不可控；
+       前端只拿它显示与求和，**落库的值一律由后端判定**）。
+    """
+    row = rec.get("_row")
+    out = {k: v for k, v in rec.items() if k != "_row" and k not in PAGE_ONLY_KEYS}
+    if row is None:
+        return out
+    out.update({
+        "category": row.category,
+        "project_name": row.project_name,
+        "ownership_id": row.ownership_id,
+        "is_excluded": bool(row.excluded),
+        "exclude_source": row.exclude_source,
+        "is_revoked": bool(row.i8_revoked),
+        "is_manual": bool(row.is_manual),
+        "edited_fields": list(row.edited_fields or ()),
+        "amount_approved": str(row.amount_approved),
+        "amount_paid": str(row.amount_paid),
+        "pay_amount": str(row.pay_amount),
+        "stat_settle": str(row.stat_settle),
+        "stat_paid": str(row.stat_paid),
+        "has_effective_flow": bool(row.effective_flows),
+        "has_link": bool(row.has_link),
+    })
+    return out
+
+
+@api_router.get("/api/m03/notice-list")
+def get_notice_list(
+    period: str | None = Query(None),
+    project: list[str] = Query(default=[]),
+    category: str = Query(""),
+    approve_status: str = Query(""),
+    pay_status: str = Query(""),
+    sort: str = Query(""),
+    dir: int = Query(SORT_NONE),
+    session: Session = DBSession,
+) -> dict:
+    """付款通知书列表的数据源（含筛选与计数）—— 四金额 / 分类 / 剔除 / 付款状态 / 计数都在这里。
+
+    ⚠️ 与页面件无关：数据组装在 `list_data.build_page_data`（唯一出口），本端点只做**形状转换**。
+    """
+    filters = notice_filters(period, project, category, approve_status, pay_status)
+    data = build_page_data(session, filters=filters, sort_col=sort, sort_dir=dir)
+    c = data["counters"]
+    return {
+        "filters": {
+            "period": filters.period,
+            "project_ids": list(filters.project_ids),
+            "category": filters.category,
+            "approve_status": filters.approve_status,
+            "pay_status": filters.pay_status,
+        },
+        "counters": {
+            "shown": c.shown, "effective": c.effective, "excluded": c.excluded,
+            "revoked": c.revoked, "excluded_by": c.excluded_by, "text": c.text(),
+        },
+        # ⚠️ **页面专用**的列（「操作」列是按钮 / 表单 HTML）**不进 API** —— 本端点只吐纯数据
+        "items": [_api_item(rec) for rec in data["rows"]],
+    }
+
+
+__all__ = ["api_router", "get_session"]

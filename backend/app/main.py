@@ -32,7 +32,6 @@ from app.mod01_projects.router import router as mod01_router
 from app.mod02_i8.router import router as mod02_router
 from app.mod03_notice.page import THEME_CSS
 from app.mod03_notice.notice_api_router import api_router as mod03_api_router
-from app.mod03_notice.router import page_router as mod03_page_router
 from app.mod03_notice.router import router as mod03_router
 from app.mod04_plan.router import router as mod04_router
 from app.mod05_flow.router import router as mod05_router
@@ -159,13 +158,13 @@ def create_app() -> FastAPI:
     app.include_router(mod01_router)
     app.include_router(mod02_router)
     app.include_router(mod03_router)
-    # MOD-03 的**列表页**（`/m03/notices`）走服务端渲染（与 MOD-04/05 同款）；
-    # ⚠️ 2026-09-19（`§19` 批 4）：静态 `static/m03.html`（打印 / PDF / 设置）**已删**（授权 `D18`）——
-    #    前置已补齐（`TAIL-46`：新壳真调 `POST /api/m03/batch` 与 `/api/m03/settings/printer` ✓）。
-    #    ⛔ 此前那条「本文件永远保留 / 用户裁定 A」是**张冠李戴**（裁定的对象是**前端形态**：
-    #    保留后端托管单页 MVP · 不启用 Vue3 工程 · 后续阶段再评估），2026-09-18 已当场更正 ⇒ 归入删除范围。
-    app.include_router(mod03_page_router)
-    # ⭐ **JSON 动作 API**（前端壳 `app/web/` 用）：改分类 / 剔除 / 恢复 —— 与表单向共用同一批纯函数
+    # ⭐ **JSON API 汇总**（前端壳 `app/web/` 用）：列表查询 ＋ 改分类 / 剔除 / 恢复 / 统计手改 /
+    #    手动行增删 / 批量付款 —— 判定一律共用同一批纯函数出口。
+    # ⚠️ 2026-09-19（`§19` 批 4 · **S4⑤**）：MOD-03 的**服务端渲染页已全部删除**（授权 `D18`）——
+    #    静态页 `m03.html`（批 4.5）＋ 列表页 `/m03/notices` / 批量付款窗口 `/m03/pay` /
+    #    查看关联 `/m03/notices/trace` ＋ 9 条行级 PRG（`notice_actions_router` / `notice_pay_router`）。
+    #    ⛔ 此前的「本文件永远保留 / 用户裁定 A」是**张冠李戴**（裁定的对象是**前端形态**：
+    #    保留后端托管单页 MVP · 不启用 Vue3 工程），2026-09-18 已当场更正 ⇒ 归入删除范围。
     app.include_router(mod03_api_router)
     # MOD-04 起：页面也由模块路由**服务端渲染**（`/m04` 在本 router 内，不走 _PAGES 静态托管）
     app.include_router(mod04_router)
