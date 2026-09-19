@@ -1105,7 +1105,11 @@ function jcImportShow(){
   const sk = (s.skipped || []).slice(0, 8).map(x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`).join('');
   const pjs = (typeof PROJ_LIST === 'function' ? PROJ_LIST() : []);
   modal({title:'集采台账 Excel 导入 · ② 预览并核对列名', reopen: jcImportShow,
-    body:`<div class="tip" style="margin-bottom:8px">⛔ 系统<b>不猜列名</b> —— 认不出的摆出来让你点；<b>已存在的行不会被动</b>。</div>
+    body:`<div class="tip" style="margin-bottom:8px">⛔ 系统<b>不猜列名</b> —— 认不出的摆出来让你点。</div>
+      <div class="tip wn" style="margin-bottom:8px">⭐ <b>落库口径</b>：按 <b>「合同价」（含税）</b> 在<b>本项目内</b>找到对应的合同并
+        <b>更新它</b>（Excel 只动<b>材料名 / 发票额 / 存档 / 存档号 / 寄回日期 / 备注</b>）；
+        i8 的地盘（合同价 / 供应商 / 日期 / 甲方）<b>一个字都不动</b>。
+        ⚠️ 配不上的（合同价空 / 项目里没这个价 / 同价两条）<b>一律列出来</b>，⛔ 不替你新建。</div>
       <div class="fld"><label>工作表（✅ = 看着像主台账）</label><div style="display:flex;flex-wrap:wrap;gap:6px">${tabs}</div></div>
       <div class="fld"><label>③ 这份台账属于哪个项目（⛔ 系统不替你猜）</label>
         <select class="inp" data-act="jcImportPj"><option value="">（请选择…）</option>${
@@ -1116,18 +1120,26 @@ function jcImportShow(){
     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcImportOk">③ 确认导入</button>`});
 }
 
-/* ⭐ `M5-8` ③ 结果回执（⛔ 四类都要列出来：新增 / 已存在 / 不合格 / 提醒 —— 少一类就等于静默丢）。 */
+/* ⭐ `M5-8` ③ 结果回执（⛔ **四类都要列出来**：更新 / 配不上 / 同价冲突 / 提醒 —— 少一类 = 静默丢）。
+   ⚠️ 2026-09-20 **口径改了**：不再是"新增 / 已存在"，而是「**按合同价匹配上并更新**」——
+      因为流程是「**先抓 i8、再导 Excel**」⇒ Excel 是来**补信息**的，⛔ 不是来建合同的。
+   ⚠️ 所以 `updated` / `unmatched` / `ambiguous` **一个都不能省**：
+      "配不上"必须看得见（否则人以为导成功了，其实一条都没对上）。 */
 function jcImpResult(d){
   const li = (arr, f) => (arr || []).length
     ? `<ul style="margin:4px 0 0;padding-left:18px;line-height:1.7">${(arr || []).slice(0, 20).map(f).join('')}</ul>`
     : '<div class="mut sm">（无）</div>';
-  return `<div class="tip" style="margin-bottom:8px"><b>${esc(d.message || '')}</b></div>
+  const why = (x, extra) => `<li>第 ${x.row_no} 行${x.amount ? ` · 合同价 <b>${esc(String(x.amount))}</b>` : ''}${extra || ''}<br><span class="mut">${esc(x.why)}</span></li>`;
+  return `<div class="tip ${d.updated ? 'ok' : 'wn'}" style="margin-bottom:8px"><b>${esc(d.message || '')}</b></div>
     <div class="sm" style="line-height:1.9;margin-bottom:6px">文件 <b>${esc(d.file)}</b> · 工作表 <b>${esc(d.sheet)}</b> · 项目 <b>${esc(pjLabel(d.project_key) || d.project_key)}</b></div>
-    <div class="fld"><label>新增（${d.added}）</label>${li(d.items, x => `<li>第 ${x.row_no} 行 · ${esc(x.material_name || '')} · ${esc(String(x.contract_amt))}</li>`)}</div>
-    <div class="fld"><label>已存在（${d.exists}，不动）</label>${li(d.exists_items, x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`)}</div>
-    <div class="fld"><label>不合格（${d.bad}）</label>${li(d.bad_items, x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`)}</div>
-    <div class="fld"><label>提醒（${d.warned}）</label>${li(d.warn_items, x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`)}</div>
-    <div class="fld"><label>解析时跳过（${(d.skipped_rows || []).length}）</label>${li(d.skipped_rows, x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`)}</div>`;
+    <div class="fld"><label>✅ 按合同价匹配上并更新（${d.updated}）</label>${li(d.items,
+      x => `<li>合同 <b>#${x.id}</b> · 第 ${x.row_no} 行 · 合同价 <b>${esc(String(x.amount))}</b>${x.material_name ? ` · ${esc(x.material_name)}` : ''}<br><span class="mut">更新了：${esc((x.fields || []).join(' / ') || '（无）')}</span></li>`)}</div>
+    <div class="fld"><label>⚠️ 配不上（${d.unmatched}）—— ⛔ 系统**没有**替你新建</label>${li(d.unmatched_items, x => why(x))}</div>
+    <div class="fld"><label>⚠️ 同价冲突（${d.ambiguous}）—— **不猜**，请你人工定</label>${li(d.ambiguous_items,
+      x => `<li>第 ${x.row_no} 行 · 合同价 <b>${esc(String(x.amount))}</b> ⇒ 项目内有 <b>${(x.ids || []).length}</b> 条同价（#${(x.ids || []).join(' / #')}）<br><span class="mut">${esc(x.why)}</span></li>`)}</div>
+    <div class="fld"><label>不合格（${d.bad}）</label>${li(d.bad_items, x => why(x))}</div>
+    <div class="fld"><label>提醒（${d.warned}）</label>${li(d.warn_items, x => why(x))}</div>
+    <div class="fld"><label>解析时跳过（${(d.skipped_rows || []).length}）</label>${li(d.skipped_rows, x => why(x))}</div>`;
 }
 
 const _BIND_M11_OLD = BIND.m11;
@@ -1141,7 +1153,8 @@ BIND.m11 = function () {
   const btn = document.createElement('button');
   btn.className = 'btn';
   btn.dataset.act = 'jcImportOpen';
-  btn.title = '直接上传你原来的集采台账 Excel（⛔ 不用照模板重填）：选文件 → 选工作表 → 核对列名 → 确认落库；已存在的行不动';
+  btn.title = '直接上传你原来的集采台账 Excel（⛔ 不用照模板重填）：选文件 → 选工作表 → 核对列名 → 确认落库；'
+    + '按「合同价」匹配已有合同并更新（i8 的地盘一个字不动）';
   btn.textContent = '⬆ Excel 导入台账';
   anchor.insertAdjacentElement('afterend', btn);
 };

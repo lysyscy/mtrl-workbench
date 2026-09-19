@@ -1489,7 +1489,12 @@ const ACT={
 jcImportOpen:()=>{ jcImpFile=null; jcImpB64=null; jcImpRes=null; jcImpK=0; jcImpMap={}; jcImpPj='';
   modal({title:'集采台账 Excel 导入 · ① 选择文件',
     body:`<div class="tip" style="margin-bottom:10px">直接<b>上传你原来的台账</b>就行 —— ⛔ 不用照模板重填。<br>
-      下一步会让你<b>选工作表</b>并<b>核对列名</b>，确认无误才落库；<b>已存在的行不动</b>。</div>
+     下一步会让你<b>选工作表</b>并<b>核对列名</b>，确认无误才落库。</div>
+     <div class="tip wn" style="margin-bottom:10px">⭐ <b>落库口径</b>（2026-09-20 定）：<b>先抓 i8、再导 Excel</b> ——
+       Excel 是来<b>补信息</b>的。系统按 <b>「合同价」（含税）</b> 在<b>本项目内</b>找到对应的那份合同，
+       然后用 Excel 的 <b>材料名 / 发票金额 / 存档 / 存档号 / 寄回日期 / 备注</b> <b>更新它</b>。<br>
+       ⚠️ <b>两边互不覆盖</b>：i8 的地盘（合同价 / 供应商 / 合同日期 / 甲方单位）Excel <b>一个字都不动</b>。<br>
+       ⚠️ 找不到对应合同的（合同价为空、或项目里没这个价、或同价两条）<b>一律列出来给你看</b>，⛔ 不会替你新建。</div>
       <div class="fld"><label>选择文件（.xls / .xlsx）</label>
       <input type="file" class="inp" id="jcImpFile" data-act="jcImportPick" accept=".xls,.xlsx,.xlsm"></div>`,
     footer:`<button class="btn" data-act="closeModal">取消</button>
