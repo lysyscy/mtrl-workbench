@@ -25,7 +25,7 @@ PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 REC = "backend/app/mod01_projects/recovery.py"
 PEND = "backend/app/mod01_projects/pending.py"
 RT = "backend/app/mod01_projects/router.py"
-from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
 T = "tests/test_promote_pending.py"
 TW = "tests/test_wired_m01.py"
 
@@ -118,6 +118,9 @@ def main() -> int:
     ok = fail = 0
     env = dict(os.environ, CODEBUDDY_SAFE_DELETE_ENABLED="0", PYTHONIOENCODING="utf-8")
     for name, rel, old, new, tests in MUTS:
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
+        rel = pick(rel, old, new)
+        before.setdefault(rel, (rel.read_bytes(), hashlib.md5(rel.read_bytes()).hexdigest()))
         path = ROOT / rel
         ob, nb = _fit(rel, old), _fit(rel, new)
         cur = path.read_bytes()

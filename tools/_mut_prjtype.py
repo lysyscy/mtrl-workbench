@@ -65,6 +65,8 @@ def main() -> int:
     ok = bad = 0
     for m in MUTATIONS:
         f = ROOT / m["file"]
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
+        f = pick(f, m["old"], m["new"])
         before = md5(f)
         raw = f.read_bytes()
         eol = b"\r\n" if b"\r\n" in raw else b"\n"

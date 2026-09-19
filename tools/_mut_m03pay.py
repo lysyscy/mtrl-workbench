@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BE = ROOT / "backend"
-from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
 ACTIONS = BE / "app" / "mod03_notice" / "notice_actions.py"
 PY = BE / ".venv" / "Scripts" / "python.exe"
 TEST = "tests/test_wired_m03_pay.py"
@@ -128,6 +128,9 @@ def main() -> int:
     before = {p: (p.read_bytes(), md5(p)) for p in {m[1] for m in MUTS}}
     hit = 0
     for desc, path, old_lf, new_lf, case in MUTS:
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
+        path = pick(path, old_lf, new_lf)
+        before.setdefault(path, (path.read_bytes(), hashlib.md5(path.read_bytes()).hexdigest()))
         src = path.read_bytes()
         old, new = _fit(old_lf, src), _fit(new_lf, src)
         n = src.count(old)

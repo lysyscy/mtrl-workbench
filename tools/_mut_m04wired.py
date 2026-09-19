@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
 PY = str(BACKEND / ".venv" / "Scripts" / "python.exe")
 
 MUTATIONS: list[tuple[str, str, str, str]] = [
@@ -65,14 +65,19 @@ def main() -> int:
     before = SHELL.read_bytes()
     hits = 0
     for name, old, new, test_name in MUTATIONS:
-        text = SHELL.read_text(encoding="utf-8")
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ **锚点在哪件就改哪件**。
+        #    ⛔ 复原必须用**那一件的**原字节：拿 `index.html` 的字节写进 js 件会把件写坏。
+        #    （下面的 `before` 仍只用于**末尾**对 `index.html` 的还原校验 —— 无害。）
+        sh = pick(SHELL, old, new)
+        sh0 = sh.read_bytes()
+        text = sh.read_text(encoding="utf-8")
         if old not in text:
             print(f"⛔ {name}：**变异串没找到**（实现已改？）—— 本项作废")
-            SHELL.write_bytes(before)
+            sh.write_bytes(sh0)
             continue
-        SHELL.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+        sh.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
         passed, tail = run_one(test_name)
-        SHELL.write_bytes(before)                    # 每条改完立刻复原，避免互相污染
+        sh.write_bytes(sh0)                          # 每条改完立刻复原，避免互相污染
         if passed:
             print(f"❌ {name}：改坏了却**仍然全绿** ⇒ 该断言是假绿\n{tail}")
         else:

@@ -20,7 +20,7 @@ PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 DISPATCH = ROOT / "backend" / "app" / "mod03_notice" / "print" / "dispatch.py"
 STORE = ROOT / "backend" / "app" / "mod03_notice" / "settings_store.py"
 SERVICE = ROOT / "backend" / "app" / "mod03_notice" / "service.py"
-from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
 #: 变异跑的**结果另写**一处（⛔ 别冲掉全套的 `artifacts/acc_results.json` —— 见 `_run` 里的告警）
 MUT_RESULTS = ROOT / "artifacts" / "_mut_acc_results.json"
 
@@ -124,7 +124,8 @@ def _run(test: str) -> int:
 def main() -> int:
     bad = 0
     for i, m in enumerate(MUTS, 1):
-        path = Path(m["file"])
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
+        path = pick(Path(m["file"]), m["old"], m["new"])
         before = path.read_bytes()
         digest = hashlib.md5(before).hexdigest()
         text = before.decode("utf-8")

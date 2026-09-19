@@ -196,6 +196,30 @@ def create_app() -> FastAPI:
     def web_shell() -> FileResponse:
         return FileResponse(_APP_DIR / "web" / "index.html", media_type="text/html")
 
+    # ⭐ **壳的外链件**（`web/shell/*.js`）—— 性能 `P4`② 三刀真拆（2026-09-19）之后，壳的**接线层**在这三件里。
+    #    ⚠️ 路由名与文件名**必须**是 `/static/shell/<name>.js`：`tools/shell_source.py`（读壳的**唯一出口**）
+    #       正是按这个形态反查文件的 ⇒ 换目录 / 换形态要**同批**改那里（否则测试读到的 ≠ 浏览器执行的）。
+    #    ⚠️ **逐条显式注册**（⛔ 不用通配 `{name}` 参数）：只有这三件、零路径穿越风险；加第四件要**同时**改这里
+    #       与 `index.html` 的 `<script src>`（`syntax_audit` 会逐件 `node --check`，漏一件就红）。
+    def _shell_js(name: str) -> FileResponse:
+        return FileResponse(
+            _APP_DIR / "web" / "shell" / name,
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.get("/static/shell/actions.js", include_in_schema=False)
+    def shell_actions_js() -> FileResponse:
+        return _shell_js("actions.js")
+
+    @app.get("/static/shell/core.js", include_in_schema=False)
+    def shell_core_js() -> FileResponse:
+        return _shell_js("core.js")
+
+    @app.get("/static/shell/print-export.js", include_in_schema=False)
+    def shell_print_export_js() -> FileResponse:
+        return _shell_js("print-export.js")
+
     # ⚠️ 2026-09-19（`§19` 批 4）：原先这里按 `_PAGES` 逐个托管**旧静态页**（切片 MVP）——
     #    最后一个（`m03`）已删 ⇒ **整段移除**（连同上面的 `_PAGES` 定义）。
     #    ⛔ 别再注册"按名字托管的静态页"：新页面要么进**新壳**（`web/index.html`），

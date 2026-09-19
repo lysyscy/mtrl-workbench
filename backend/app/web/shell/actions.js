@@ -1,0 +1,1774 @@
+/* shell/actions.js —— 壳接线层①：**写动作与交互**
+ *
+ * 来源：`index.html` 的第 L3329–L5095 行（`P4`② 三刀真拆 · 2026-09-19），**原文逐字搬出、顺序未改**。
+ * 内容：`ACT` 表（表驱动的按钮 / 单元格动作）· `CHG`（变更事件白名单）· 4 个全局事件委托。
+ * 加载顺序：**紧跟 `index.html` 的内联脚本之后**（见那里的 `<script src>`）；`boot();` 在三件都加载完之后。
+ * ⛔ 改这里前先看 §23：`index.html` 里 258–3285 那一段（公共外壳 ＋ 原型切片 `V.*`）**不许搬**。
+ */
+/* =====================================================================
+   18. 交互处理器（`ACT.*` —— 全部交互动作的映射；`data-act="名"` → `ACT.名`）
+   ⚠️ 漏登记 `CHG` ⇒ 表单类元素的 change 被**静默丢弃**（见目录 ⑤）
+   ===================================================================== */
+const ACT={
+ /* 导航 */
+ go:t=>go(t.dataset.k),
+ closeModal:()=>closeModal(),
+ maskBg:(t,e)=>{ if(e.target.classList.contains('mask')) closeModal(); },
+ /* 表头点击排序：同一列 升序 → 降序 → 原序；换一列则从该列升序开始（三态可反复切换） */
+ headSort:t=>{ const k=t.dataset.tk, i=+t.dataset.i; const s=SORT[k]||(SORT[k]={i:-1,d:0});
+   if(s.i!==i){ s.i=i; s.d=1; } else { s.d=(s.d===1)?-1:((s.d===-1)?0:1); }
+   /* 弹窗内的表要重绘弹窗（render() 只重画 #view，不会更新弹窗内容） */
+   if(String(k).indexOf('modal:')===0&&lastModal){ (lastModal.reopen||(()=>modal(lastModal)))(); }
+   else render(); },
+
+ /* 导出 / 通用 */
+ /* ⏳ **导出尚未落地（诚实提示）**：原型这里报「已导出 <文件名>.xlsx」，但**没有任何文件产生**
+    ⇒ 对用户是**假成功**（已接线的页尤其不能这么说）。真落地方案见 `ops/模板法导出-实测结论.md`，
+    属 `TAIL-04`（真实文件落盘 / 打包）。 */
+ exp:t=>toast(`⏳ <b>导出尚未落地</b>（属 TAIL-04）：本页按当前筛选应导出 <b>${esc(t.dataset.t)}</b>，`
+   + `但**还没有真实文件生成**；<br>落地方案见 ops/模板法导出-实测结论.md（模板法 ＋ 缓存级对账）`,7000),
+ silent:()=>toast('（原型演示）该动作只走流程、<b>不改动演示数据</b>；正式实现按本页口径生效'),
+ silent2:()=>modal({title:'一期 Non-goals',body:'<div class="tip" style="margin:0">见本页「一期 Non-goals 汇总」表。附件体系 R4 一期不做、R5 二期。</div>'}),
+ /* 已删除（2026-09-12）：一键抓取（fetchAll）—— 用户不需要该模块；接口清单页保留逐接口「触发」与「手动导入」。 */
+ /* 触发：三个**按月抓取**的真入口（同一个弹窗形态、同一份口径）——
+    `API-01` 付款通知书（默认「北京时间当月」）· `API-02` 收发结存表 / `API-03` 库存单据明细表
+    （2026-09-13 用户口径：后两者**默认抓取本页所选核算年月**的数据）。
+    ⚠️ 其余接口没有对应的抓取交互 ⇒ 保持"模拟成功"提示（用户拍板 2026-09-13：抓取入口行为必须一致）。 */
+ fetchOne:t=>{ const api=t.dataset.api||'', tt=t.dataset.t||'';
+   if(api==='API-01'||tt==='付款通知书') return ACT.fetchNt();
+   if(api==='API-02'||tt==='收发结存表') return ACT.fetchWh();
+   if(api==='API-03'||tt==='库存单据明细表') return ACT.fetchIv();
+   /* ⭐ 2026-09-18 接线（`TAIL-27`）：API-05/06 现在是**真同步**（走 `m02Sync` 的二次确认 —— 会顶号）。
+      ⛔ API-04（采购合同信息）**没有落点** —— 属**集采域（M5，未开工）** ⇒ 如实说不接，⛔ 不假装成功。 */
+   if(api==='API-05'||tt==='仓库列表') return m02Sync('warehouses');
+   if(api==='API-06'||tt==='常用项目列表') return m02Sync('common-projects');
+   toast(`⏳ <b>「${esc(tt)}」尚未接通</b>：它的落点在<b>集采域</b>（M5 未开工）—— 在此之前⛔ 不假装成功`,7000); },
+ /* ⭐ 降级路径（§3.6）的**真实入口在各自那一页**（与抓取走**同一套解析 / 落库管线**）
+    ⇒ 这里只**把人送过去**，⛔ 不在这张表里再做一个上传控件（一份能力只许一个主人）。 */
+ manualUp:t=>{ const tt=t.dataset.t||'';
+   const map={'收发结存表':'m07','库存单据明细表':'m08','过程资料':'m06'};
+   const k=map[tt];
+   if(k){ go(k);
+     return toast(`「${esc(tt)}」的降级路径 = <b>在那一页的「导入」入口</b>上传 i8 导出的 Excel（与抓取<b>同一套解析 / 落库</b>，§3.6）—— 已跳过去`,7500); }
+   toast(`⏳ <b>「${esc(tt)}」的手动导入入口尚未接通</b>：降级路径要有对应页面的导入入口（与全站其它导入走同一套管线）—— 在此之前⛔ 不演示假上传`,7500); },
+ /* MOD-14 剔除规则：**真增 / 删 / 改**（2026-09-13 P6 裁定①·乙）。
+    ⚠️ 只改这张**演示表**（`RULE_EX`）；**不重算**已产生的剔除标记（`NO[].exrule`）—— 页内已写明。
+    配置类数据按 §9.4 = **硬删、不留痕**；弹窗内输入由「保存」按钮一次性读取（不挂 data-act ⇒ 不进 `CHG`）。 */
+ ruleAdd:()=>ACT.ruleForm(-1),
+ ruleEdit:t=>ACT.ruleForm(+t.dataset.i),
+ ruleForm:i=>{ const r=i>=0?RULE_EX[i]:null; if(i>=0&&!r) return;
+   /* ⚠️ 规则类别必须是**后端认的四个 key 之一** ⇒ 用后端给的 `kinds` 做下拉。
+      ⛔ 不用自由文本：填个「收款单位」后端会拒（§4.2.2 硬约束），填个错别字就更看不出问题。 */
+   if(!RULE_KINDS.length) return toast('<b>规则类别还没取到</b> —— 页面顶部有取数失败的提示；请刷新后重试');
+   const cur=i>=0?(RULE_RAW[i]||{}):{};
+   const sel = `<select class="inp" id="rxKind">`
+     + RULE_KINDS.map(k=>`<option value="${esc(k.kind)}"${k.kind===cur.kind?' selected':''}>${esc(k.label)}</option>`).join('')
+     + `</select>`;
+   modal({title:i>=0?`编辑剔除规则 · ${esc(r[0])}`:'新增剔除规则',
+     body:`<div class="tip" style="margin-bottom:10px">配置类数据<b>硬删</b>、不留痕（§9.4）；改规则<b>只影响后续抓取</b>，已产生的剔除标记<b>不重算</b>（§4.2.2）。</div>
+       <div class="fld"><label>规则类别 <b>*</b></label>${sel}</div>
+       <div class="fld"><label>命中值 <b>*</b>（多个用 ｜ 分隔）</label><input class="inp" id="rxHit" value="${esc(i>=0?r[1]:'')}" placeholder="例：水电｜水费｜电费"></div>
+       <div class="fld"><label>剔除的业务含义</label><input class="inp" id="rxWhy" value="${esc(i>=0?r[2]:'')}" placeholder="例：期间费用，非材料/机械"></div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="ruleSave" data-i="${i}">${i>=0?'保存修改':'新增'}</button>`}); },
+ /* ⭐ **落库走后端**：回执一律用后端那句中文原话（含「不重算」提醒）；失败**不关弹窗** ⇒ 已填内容都在。 */
+ ruleSave:async t=>{ const i=+t.dataset.i;
+   const body={kind:$('#rxKind').value, values:$('#rxHit').value.trim(), meaning:$('#rxWhy').value.trim()};
+   if(!body.values) return toast('<b>命中值不能为空</b> —— 弹窗未关闭，已填内容都在');
+   try{
+     const res = i>=0 ? await API.m14RuleSet((RULE_RAW[i]||{}).id, body) : await API.m14RuleAdd(body);
+     if(res.ok===false) return toast(`<b>没能保存</b>：${esc(res.message||'')}`, 8000);
+     closeModal(); await reloadM14(); render();
+     toast(esc(res.message||'已保存'), 7000);
+   }catch(e){ toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`, 8000); } },
+ ruleDel:async t=>{ const i=+t.dataset.i, r=RULE_EX[i]; if(!r) return;
+   try{
+     const res = await API.m14RuleDel((RULE_RAW[i]||{}).id);
+     if(res.ok===false) return toast(`<b>没能删除</b>：${esc(res.message||'')}`, 8000);
+     await reloadM14(); render();
+     toast(esc(res.message||'已删除'), 7000);
+   }catch(e){ toast(`<b>没能删除</b>：${esc(String((e&&e.message)||e))}`, 8000); } },
+
+ /* —— MOD-03 付款通知书 —— */
+ pick:t=>{ const id=t.dataset.id; t.checked?pickSet.add(id):pickSet.delete(id); render(); },
+ /* 全选：范围 = 【当前筛选结果里的可勾选行】，而不是全库（否则会选中看不见的行） */
+ pickAll:t=>{ const ids=ntHit(fNt).filter(ntPayCand).map(n=>n.id);
+   if(t.checked) ids.forEach(i=>pickSet.add(i)); else ids.forEach(i=>pickSet.delete(i));
+   render(); },
+ /* 金额编辑：审批金额只读（i8 源数据）；付款金额（会话级覆盖，**不留痕**）/ 统计结算金额 / 统计付款金额（旁路字段，留痕 + 不被导入覆盖）可手改 */
+ editss:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+   const LAB={pay:'付款金额',ss:'统计结算金额',sp:'统计付款金额'};
+   const k=t.dataset.k, NAME=LAB[k]||k;
+   const old=k==='pay'?payEff(n):n[k], v=numOf(t.value);
+   if(badMoney(v)){ toast(badMoneyMsg(NAME)+` ${M(old)}`); render(); return; }
+   /* 统计字段只能「往小调」：按发票走，只能少付不能多付 → 上限 = 审批金额 */
+   if((k==='ss'||k==='sp') && overCap(v,n.approve)){
+     toast(`<b>${NAME}不能超过审批金额 ${M(n.approve)}</b><br>按发票走，<b>只能往下调（少付），不能往上调（多付）</b>。已保留原值 ${M(old)}`,4600);
+     render(); return;
+   }
+   if(v===old) return;
+   /* 付款金额：只做本次会话的临时覆盖 —— 不写 i8 原值、不影响统计口径与欠款，刷新即恢复默认。
+      ⚠️ 会话级覆盖**不留痕**（口径 2026-09-12 定案：留痕只给统计两金额与调整单）。 */
+   if(k==='pay'){
+     n.payOv=v;
+     render();
+     toast(`<b>付款金额</b>已临时改为 ${M(v)}（原 ${M(old)}）<br>这是<b>本次会话的覆盖</b>，<b>刷新页面后会恢复为「审批金额 − 已付金额」</b><br>i8 原值 ${M(n.pay)} 与「统计付款金额」<b>均未改动</b>（会话级覆盖不留痕）`,5400);
+     return;
+   }
+   /* ⭐ 2026-09-19 接线（`§19` 批 4 · S1）：统计两金额**走后端** `POST /api/m03/actions/stat` ——
+      上限 / 留痕 / 欠款重算全在后端**同一出口**（`notice_actions.apply_stat_change`）；
+      ⛔ 前端不再本地改值 + 本地留痕冒充落库（原先 `n[k]=v; pushTrail(...); debts()` 就是那个毛病）。
+      回执里的中文说明（含欠款重算）**原样给用户**，失败亦然。
+      ⚠️ 成功后 `reloadNotices()` 重拉列表：**黄底**由后端的 `edited_fields` 还原
+         （适配层 `adaptNotice` 已把它映射成 `trail`，`hasT` 按列名判 —— 前端无需自己记留痕）✓ */
+   const FIELD={ss:'stat_settle', sp:'stat_paid'}[k];
+   API.statCell({notice_id:Number(t.dataset.id), field:FIELD, value:String(t.value)})
+     .then(r=>{ toast(r.message, r.changed?4800:4600); return reloadNotices(); })
+     .catch(e=>{ toast(`<b>保存失败</b>：${esc(e.message||e)}`); render(); }); },
+ /* ⭐ 批量打印付款通知书（§4.6 场景五 · REQ-R6 · API-07）—— 2026-09-14 补出口：
+    口径 = **勾选通知书 → 人工点击 → 调 i8 接口批量打印**（入参就是勾选的通知书）。
+    ⛔ DEV-P-07 明令：**不自建打印模板**、只调 i8 接口、**接口不可用即砍功能**（非阻塞项）。
+    ⇒ 本动作刻意**不调 window.print()**、不做打印预览 / 本地排版 / 导出，
+      也**不清空勾选**（打印不改数据，属 R14 的"非消费型"动作，与"就地改值型"同侧）。
+    ⭐ 2026-09-18 接线（`TAIL-46`）：原来只回一条「（模拟）→ 成功」（与 syncWh 同款）⇒ 现在**真调**
+      `POST /api/m03/batch`，结果**逐条如实**（成功 N / 失败 M / **未产出单号显式列出**）—— 见 `m03RunBatch`。 */
+ ntPrint:async ()=>{ const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+   if(!rows.length) return toast('请先勾选要打印的付款通知书');   /* 防御：按钮在未勾选时已禁用 */
+   return m03RunBatch(rows,'print'); },
+ /* 只导出 PDF：与批量打印**同一次勾选**，只换 `mode`（后端 `MODE_PRINT` 分流）—— 入口由 `BIND.m03` 注入 */
+ ntPdf:async ()=>{ const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+   if(!rows.length) return toast('请先勾选要导出的付款通知书');
+   return m03RunBatch(rows,'pdf'); },
+ /* ⭐ `TAIL-46`：打印机设置的入口与保存（入口由 `BIND.m03` 注入到「批量打印」旁边） */
+ m03PrinterOpen:()=>m03PrinterOpen(),
+ m03PrinterSave:async ()=>{ const g=id=>((($(id)||{}).value)||'').trim();
+   const url=g('#m03PrinterUrl'), mode=g('#m03PrintMode')||'auto', nm=g('#m03PrinterName');
+   if(!url) return toast('请填打印机地址（形如 <span class="fc">ipp://192.168.5.248</span>）');
+   /* ⚠️ 三项的合法性**全交后端**（`settings_store` 先校验后落盘：任一项非法 ⇒ 一个字都不写）——
+      壳里⛔ 不另写一份校验（那会成第二份口径，且两处迟早不一致）。 */
+   try { const r = await API.printerSet(url, mode, nm); closeModal();
+     return toast(`打印机设置已保存：<b>${esc(r.printer_ipp_url)}</b> · 通道 <b>${esc(r.print_mode)}</b>`
+       + (r.printer_name ? ` · 打印机 <b>${esc(r.printer_name)}</b>` : '')
+       + `（<b>即时生效</b>，无需重启）`, 9000); }
+   catch (e) { return toast(`<b>没保存上</b>：${esc(String((e && e.message) || e))}`, 9500); } },
+ batchPay:()=>{ const all=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+   /* ⭐ 撤单行**不进付款批次**（走 `ntPayCand`，§4.2.7 方向）：正常路径下它们**根本勾不上**
+      （勾选框对撤单行禁用、全选/按计划勾选也走同一出口）；这里再兜一道，
+      防的是"勾上之后才被标撤单"这类**状态错位**把一张已作废的单送进付款。 */
+   const rows=all.filter(ntPayCand), drop=all.filter(n=>!ntPayCand(n));
+   if(!rows.length){ closeModal(); return toast('请先勾选要付款的记录'); }
+   /* 不可付 = 未审批 或 本次应付 ≤ 0（已付清）。存在任一条时「确认付款」直接禁用（不是点了才拦） */
+   const bad=rows.filter(n=>!(n.astat==='已批'&&payEff(n)>0));
+   Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });   /* 清掉已不在批次里的草稿 */
+   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 已自动排除 ${drop.length} 条「i8 已撤单」的通知书</b>（${esc(drop.map(n=>n.code).join('、'))}）—— 它们的单据在 <b>i8 侧已被删除</b>，<b>不该再产生付款</b>；请先<b>撤销已付 / 解绑关联</b>（§4.2.7）。</div>`:''}<div class="tip" style="margin-bottom:10px">已勾选 <b>${rows.length}</b> 条。<b>本次应付 = 付款金额</b>（默认 = 审批金额 − 已付金额；人工改过则以人工值为准）；「本次付款金额」<b>默认等于本次应付</b>，可改小。校验：<b>未审批</b>不可付（DEV-P-06）；<b>超出本次应付</b>被拦截（防超付）；付款方式选「其他」须填备注（DEV-P-01）。<b>任一校验不通过，整批不产生流水。</b></div>
+     ${bad.length?`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>请点该行的「<b>删除</b>」把它移出本次付款，或关闭后调整勾选 —— <b>删除会同时取消该行的勾选</b>，<b>已填的方式与金额不会丢</b>。</div>`:''}
+     <div class="tw" style="max-height:44vh"><table class="dt cond" data-sort data-sort-key="modal:batchPay"><thead><tr>${BP_THEAD}</tr></thead><tbody>
+     ${rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=n.astat==='已批'&&can>0;
+       const plan=PLs.find(pl=>pl.docNo===n.code), dm=plan?plan.method:'现汇';
+       const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);
+       return `<tr class="${ok?'':'hl'}"><td class="fc">${n.code}</td>
+       <td class="now" title="付款项目全名：${esc(n.proj)}">${dispCell(n.proj,n)}</td>
+       <td class="ctr">${astatTag(n.astat)}</td>
+       <td class="num">${M(n.approve)}</td><td class="num">${M(p)}</td>
+       <td class="num" style="${can>0?'':'color:var(--ok)'}"><b>${M(can)}</b></td>
+       <td>${ok?`<select class="inp" id="bm${i}" data-act="payDraft" data-id="${n.id}" data-f="m">${optsOf(enumVals('payMethod'),curM)}</select>`:'<span class="mut sm">不可付</span>'}</td>
+       <td class="num">${ok?`<input class="inp num" id="ba${i}" data-act="payDraft" data-id="${n.id}" data-f="a" value="${curA}">`:'<span class="mut">—</span>'}</td>
+       <td class="ctr now"><button class="btn sm dg" data-act="batchPayDel" data-id="${n.id}">删除</button></td></tr>`}).join('')}
+     ${rows.length?sumRowOf(BP_THEAD,rows,{5:rs=>N2(rs.reduce((a,n)=>a+payEff(n),0)),7:rs=>N2(rs.reduce((a,n)=>a+Number((payDraft[n.id]&&payDraft[n.id].a)||payEff(n)),0))},{tip:'本次应付 / 本次付款金额 合计；「本次付款金额」按当前已填值合计（改金额后重绘刷新）'}):''}
+     </tbody></table></div>
+     <div class="f2" style="margin-top:11px">
+       <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" value="${SYS_TODAY}"></div>
+       <div class="fld"><label>备注</label><input class="inp" id="bRemark" placeholder="选「其他」付款方式时必填"></div>
+     </div>
+     <div class="tip ok" style="margin:0"><b>提交后：</b>每条写入一条<b>独立付款流水</b> → 「已付金额」累加 → 状态按 <span class="fc">已付金额 ≥ 审批金额</span> 自动判定（无「部分付」中间态，DEV-P-02）。</div>`;
+   modal({wide:true,title:`批量付款 · 已勾选 ${rows.length} 条`,body,reopen:()=>ACT.batchPay(),
+     footer:`<button class="btn" data-act="batchPayCancel">取消</button><button class="btn pri" data-act="batchPayOk"${bad.length?` disabled title="有 ${bad.length} 条不可付，请先删除这些行"`:''}>确认付款</button>`}); },
+ /* 草稿记录：行内的付款方式 / 金额一改就存下，重建弹窗（删除行、排序）时不丢 */
+ payDraft:t=>{ const id=t.dataset.id; const d=payDraft[id]||(payDraft[id]={});
+   if(t.dataset.f==='m') d.m=t.value; else d.a=t.value; },
+ batchPayCancel:()=>{ payDraft={}; closeModal(); },
+ /* 删除行：从本次付款中移出该行（= 取消该行勾选），并重建弹窗 */
+ batchPayDel:t=>{ const id=t.dataset.id, n=NO.find(x=>x.id===id);
+   pickSet.delete(id); render();
+   if(pickSet.size){ toast(`已把 <b>${n?n.code:id}</b> 移出本次付款（同时取消该行勾选）`); ACT.batchPay(); }
+   else { closeModal(); toast('已移除全部记录，本次付款未提交'); } },
+ batchPayOk:t=>{ if(busy) return;
+   /* ⭐ 与 `batchPay` 同一道闸：撤单行**不得产生付款流水**（窗口里已排除，这里兜底防状态错位） */
+   const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean).filter(ntPayCand);
+   if(!rows.length) return toast('没有可付款的记录');
+   const dt=($('#bDate')&&$('#bDate').value)||SYS_TODAY;
+   const rm=(($('#bRemark')&&$('#bRemark').value)||'').trim();
+   const batch=[], errs=[];
+   rows.forEach((n,i)=>{
+     const can=payEff(n);      /* 本次应付 = 付款金额（默认 = 审批金额 − 已付金额） */
+     if(n.astat!=='已批'){ errs.push(`${n.code} · 审批状态非「已批」，不可付款`); return; }
+     if(can<=0){ errs.push(`${n.code} · 本次应付为 0（审批金额 − 已付金额）`); return; }
+     const mEl=$('#bm'+i), aEl=$('#ba'+i);
+     const m=(mEl&&mEl.value)||'现汇';
+     const amt=numOf(aEl?aEl.value:'');
+     if(badMoney(amt,{positive:1})){ errs.push(`${n.code} · 付款金额不合法`); return; }
+     if(amt>can){ errs.push(`${n.code} · 本次 ${M(amt)} 超出本次应付 ${M(can)}`); return; }
+     if(m==='其他'&&!rm){ errs.push(`${n.code} · 付款方式选「其他」必须填备注`); return; }
+     batch.push({n,amt,m});
+   });
+   if(errs.length) return toast(`<b>已拦截 ${errs.length} 条，整批不产生任何流水</b><br>${errs.slice(0,3).map(esc).join('<br>')}${errs.length>3?`<br>…还有 ${errs.length-3} 条`:''}`,5600);
+   /* ⭐ 2026-09-19 接线（`§19` 批 4 · **S3③**）：**落库走后端** `POST /api/m03/actions/batch-pay` ——
+      整批重算 / 整批不落半批 / 幂等 全在服务端（`notice_actions.apply_batch_pay`）；
+      ⛔ 前端不再本地往 `FLs` 塞流水冒充落库（原先就是这样，刷新即丢 ✗）。
+      ⭐ **必须带幂等号** `request_id`：提交按钮按下即锁定，服务端据它**拒重复提交**（§4.4.4）
+      —— 「重复提交被拒」那条判据能成立，全靠这一行。 */
+   const rid=(self.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2);
+   const drafts={}; rows.forEach((n,i)=>{ const mEl=$('#bm'+i), aEl=$('#ba'+i);
+     drafts[String(n.id)]={pay_method:(mEl&&mEl.value)||'', amount:(aEl?aEl.value:'')}; });
+   busy=true; if(t){ t.disabled=true; t.textContent='提交中…'; }
+   const unlock=()=>{ busy=false; if(t){ t.disabled=false; t.textContent='确认付款'; } };
+   API.batchPay({ids:rows.map(n=>Number(n.id)), drafts, pay_date:dt, remark:rm, request_id:rid})
+     .then(r=>{ if(!r.ok){ unlock(); return toast(`<b>提交被拦下，整批未产生任何流水</b><br>${esc(r.message)}`,6000); }
+       unlock(); pickSet.clear(); payDraft={}; closeModal();
+       toast(r.message,5200); return reloadNotices(); })
+     .catch(e=>{ unlock(); return toast(`<b>提交失败</b>：${esc(e.message||e)}`,6000); }); },
+ revDlg:t=>{ const f=FLs.find(x=>x.id===t.dataset.fid); if(!f) return;
+   const n=NO.find(x=>x.id===f.nid)||{};
+   modal({title:`撤销付款流水 · ${f.id}`,body:`<div class="tip dg" style="margin-bottom:10px"><b>撤销必须填写原因</b>（留痕）。撤销后该通知书的「已付金额」随之减少、状态<b>自动回退</b>（按 §4.4.2 判定基准 = <b>审批金额</b> 重判）。</div>
+     ${kvBlock([['流水号',`<span class="fc">${f.id}</span>`],['单据编码',`<span class="fc">${n.code||'—'}</span>`],
+       ['付款项目',`<span style="font-size:11.5px">${esc(n.proj||'—')}</span>`],
+       ['付款金额',`<span class="fc">${M(f.amt)}</span>`],['付款日期',`<span class="fc">${f.date}</span>`],
+       ['实际付款方式',enumTag('payMethod',f.method)]])}
+     <div class="fld"><label>撤销原因 <b>*</b></label><input class="inp" id="rReason" placeholder="例：收款单位变更，需重付"></div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="revOk" data-fid="${f.id}">确认撤销</button>`}); },
+ /* ⭐ 已接后端：`POST /api/m05/flows/{id}/revoke?reason=`（§4.4.5 —— **原因必填由后端把关**；
+    撤销后已付金额回退、状态按 §4.4.2 重判，都在后端做） */
+ revOk:t=>{ const f=FLs.find(x=>x.id===t.dataset.fid); if(!f) return;
+    const rs=(($('#rReason')&&$('#rReason').value)||'').trim();
+    if(!rs) return toast('<b>撤销原因必填</b>（撤销留痕）');
+    closeModal();
+    m05Act(()=>API.flowRevoke(f.id, rs),
+      `已撤销流水 <b>${f.id}</b>（原因：${esc(rs)}）<br>该单据「已付金额」已回退，状态按 §4.4.2 重判`); },
+ /* 抓取 i8 —— 一律**按月抓取**（2026-09-13 用户口径：三个入口都抓「所选月份」的数据；
+    收发结存表 / 库存单据明细表打开弹窗时**默认月份 = 本页「核算年月」当前所选**）。
+    界面只选「核算年月」；i8 侧的入参是「单据日期起止」（闭区间），由系统自动换算后传入。
+    ⚠️ `fetchDlg` 的 **nt 分支文案一字未改**（既有断言钉着它）；wh / iv 两个分支另写。 */
+ ownAssign:t=>ownAssignSubmit(Number(t.dataset.i), t.dataset.pid),
+ /* `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（问 → 二次确认 → 就地显示结果）；判定全在后端 */
+ ownWhCheck:t=>ownWhCheck(Number(t.dataset.i)),
+ ownWhOk:t=>ownWhOk(Number(t.dataset.i)),
+ fetchNt:()=>{ fetchKind='nt'; return ACT.fetchDlg(); },
+ fetchWh:()=>{ fetchKind='wh'; fetchM=fWhYm; return ACT.fetchDlg(); },   /* 默认 = 本页「核算年月」当前所选 */
+ fetchIv:()=>{ fetchKind='iv'; fetchM=fIvYm; return ACT.fetchDlg(); },   /* 同上 */
+ fetchDlg:()=>{ const k=fetchKind, m=fetchM, from=m+'-01', to=monthEnd(m);
+   const NM={nt:'付款通知书',wh:'收发结存表',iv:'库存单据明细表'}[k]||'付款通知书';
+   const API={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
+   const box=`<div class="fbar" style="border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px">
+        <div class="fi"><label>抓取月份</label>${tmBtn('fetchMonth',{scope:'fetch',val:m,modes:['月']})}</div>
+        <div class="fi"><label>换算后传给 i8 的入参（只读）</label><div class="inp" style="background:var(--sf2);color:var(--tx2);border-style:dashed;font-family:var(--fm);white-space:nowrap">单据日期 ${from} ~ ${to}</div></div>
+      </div>`;
+   const foot=`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="fetchNtOk">按 ${m} 抓取</button>`;
+   if(k==='nt'){ const hit=NO.filter(n=>n.date>=from&&n.date<=to);
+     const okN=hit.filter(ntLive).length, exN=hit.filter(n=>n.excl).length;
+     const vdN=hit.filter(ntVoid).length;
+     const unN=hit.filter(n=>ntLive(n)&&n.astat==='未批').length;
+     return modal({title:'抓取 i8 付款通知书（按月）',reopen:()=>ACT.fetchDlg(),body:
+       `<div class="tip" style="margin-bottom:10px">i8 侧的抓取实现是<b>选择「单据日期」起止时间</b>；这里只需选<b>月份</b>（默认「北京时间当月」），系统自动换算为<b>当月 1 号 ~ 末日</b>（<b>闭区间</b>），并<b>全量、不选项目、不分页</b>（API-01 · §4.2.1）。</div>
+      ${box}
+      <div class="tip ok" style="margin:0"><b>${m}</b> 目前有 <b>${hit.length}</b> 条：有效 <b>${okN}</b> · 剔除 <b>${exN}</b> · i8 已撤单 <b>${vdN}</b>${unN?` · 其中未审批 <b>${unN}</b>`:''}。<br>抓取会<b>全量刷新源数据</b>，但<b>旁路值不受影响</b>（统计结算/统计付款金额 · 分类 · 集采实际供应商 · 调整单 —— 均不被导入覆盖）。</div>`,
+       footer:foot}); }
+   return modal({title:`抓取 i8 ${NM}（按月）`,reopen:()=>ACT.fetchDlg(),body:
+     `<div class="tip" style="margin-bottom:10px">i8 侧的抓取实现是<b>选择「单据日期」起止时间</b>；这里只需选<b>月份</b>（<b>默认 = 本页「核算年月」当前所选</b>，可改），系统自动换算为<b>当月 1 号 ~ 末日</b>（<b>闭区间</b>），并按<b>项目（phid 筛）</b>抓取（${API} · §9.2）。</div>
+      ${box}
+      <div class="tip ok" style="margin:0">抓取会<b>全量刷新该月 · 该项目</b>的源数据；<b>手工值与调整单不被覆盖</b>（§9.5 幂等）。<br>要抓别的月份，改上面的月份即可 —— <b>默认就是本页当前所选的那个月</b>。</div>`,
+     footer:foot}); },
+ fetchNtOk:()=>{ const k=fetchKind, m=fetchM, from=m+'-01', to=monthEnd(m);
+   /* ⭐ **接线（`TAIL-29`-② ④）**：付款通知书走**真抓**（后端 `/api/m03/notices/fetch`）；
+      `wh` / `iv` 两条（材料域）仍走原型演示逻辑 —— 它们还没接线，别在这里假装成功。 */
+   if(k==='nt') return ntFetchBackend(m);
+   if(k==='iv') return ivFetchBackend(m);
+   if(k==='wh') return whFetchBackend(m);   /* ⭐ 收发结存（API-02）已接后端；`nt` 走 `/api/m03/notices/fetch`（见 fetchNtOk） */
+   const NM={nt:'付款通知书',wh:'收发结存表',iv:'库存单据明细表'}[k]||'付款通知书';
+   const API={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
+   closeModal();
+   if(k==='nt'){ const hit=NO.filter(n=>n.date>=from&&n.date<=to);
+     /* ⭐ 再次导入的合并（§4.2.7 · 方案乙）：**模拟 i8 那边"这一批的单据有改动"** ——
+        演示数据里 N05 的 i8 审批金额被调小（用来触发"越界提醒"），N08 未被手改（用来触发"跟随"）。
+        ⚠️ 演示数据是**自造**的：`IMP_DEMO` 模拟"本次 i8 返回的源值"，只对**已存在的抓取范围**生效。 */
+     const changed=[], warned=[], followed=[];
+     hit.forEach(n=>{
+       const newAp=impDemoAp(n);                    /* 模拟 i8 本次返回的审批金额（见下） */
+       if(newAp==null||N2(newAp)===N2(n.approve)) return;
+       const wasMan=impManSS(n)||impManSP(n);
+       const msgs=impMerge(n,{approve:newAp,pay:n.pay});
+       if(msgs.length) warned.push(n.code||n.id);
+       else if(wasMan) changed.push(n.code||n.id);
+       else followed.push(n.code||n.id);
+     });
+     /* ⭐ i8 撤单：演示里把**两行**当作 i8 本轮不再返回（标 IMP_GONE、不硬删），覆盖两个分叉：
+        · `N19` —— **有牵涉**（已挂付款流水 F9）⇒ 硬拦、仍参与统计、带警示
+        · `N24` —— **无牵涉**（无流水无关联）⇒ 正常退出统计
+        口径（§4.2.7 定案 2026-09-14）：i8 侧**真删**了该单据 ⇒ 标「i8 已撤单」保留可查，
+        但**退出全部统计**；单据号必变 ⇒ 撤单标记 = **终态**（不做"下次抓回来自动复原"）。
+        ⚠️ 有牵涉（已挂付款流水 / 集采关联）⇒ **硬拦**：不许静默退出统计，提示"请先撤销付款 / 解绑关联"。 */
+     const GONE_DEMO=['N19','N24'];
+     GONE_DEMO.forEach(gid=>{ const gn=NO.find(n=>n.id===gid);
+       if(gn&&!gn.manual&&!impHasGone(gn)) IMP_GONE[gn.id]={date:gn.date,code:gn.code,doc:gn.doc}; });
+     render();
+     const gw=Object.keys(IMP_WARN).length, gg=Object.keys(IMP_GONE).length;
+     const gv=NO.filter(ntVoid), gBlocked=gv.filter(ntVoidJoint), gFree=gv.filter(n=>!ntVoidJoint(n));
+     return toast(`已按 <b>${m}</b> 抓取付款通知书（API-01）：传入 i8 的入参 = <span class="fc">单据日期 ${from} ~ ${to}</span>（闭区间）→ <b>${hit.length}</b> 条<br>`
+       + `<b>再次导入的合并（方案乙）</b>：未手改的统计金额<b>跟随</b>新审批金额 <b>${followed.length}</b> 条`
+       + `${changed.length?` · 已手改<b>保留人工值</b> ${changed.length} 条`:''}`
+       + `${warned.length?`<br><span style="color:var(--wn)">⚠️ <b>${warned.length}</b> 条人工值越界（已保留原值、挂提醒）：${warned.slice(0,3).map(esc).join(' · ')}${warned.length>3?' …':''}</span>`:''}`
+       + `${gg?`<br>⚠️ <b>i8 已撤单 ${gg} 条</b> —— 其中 <b>${gFree.length}</b> 条<b>已退出全部统计</b>（保留可查、终态不可复原，切「分类 = 剔除」可见）`
+            + `${gBlocked.length?`；<b>${gBlocked.length}</b> 条<b>有牵涉 · 已硬拦</b>（仍参与统计）：请先<b>撤销付款 / 解绑关联</b>，处理完它才退出统计`  :''}`
+            + `<br><span class="mut sm">不做「删除付款通知书」按钮 —— i8 行是源数据、永不删除，排除撤单靠的是「退出统计」（§4.2.7）</span>`:''}`
+       + `<br><span class="mut sm">旁路值（分类 / 集采实际供应商 / 调整单）不被覆盖</span>`,7200); }
+   toast(`已按 <b>${m}</b> 抓取 ${NM}（${API}）：入参 = <span class="fc">核算年月 ${m}</span> → 单据日期 ${from} ~ ${to}（闭区间）＋ <b>项目（phid 筛）</b><br>该月源数据已全量刷新；<b>调整单 / 手工值不被覆盖</b>`,5600); },
+  /* 批量改分类（重做）：勾选 → 点一次「→ 辅材 / → 机械 / → 集采」即完成，不再走弹窗
+     ⭐ 改为「集采」时顺带**自动匹配供应商**（§6.6.3 触发时机）；离开集采时清空待确认标记 */
+  /* ⭐ 已接后端：判定与落库全在后端（`POST /api/m03/actions/category`），前端只发勾选集 + 显示回执 */
+  batchCatApply:async t=>{ const c=t.dataset.c; if(!c) return;
+    if(!pickSet.size) return toast('请先勾选要改分类的记录');
+    try{
+      const r=await API.setCategory([...pickSet],c);
+      if(!r.ok) return toast(`⚠️ 改分类失败：${esc(r.message)}`);
+      await reloadNotices();
+      toast(`${esc(r.message)}<br>人工判断优先，重新抓取<b>分类不被覆盖</b>（§4.2.4）`,5200);
+    }catch(e){ toast(`⚠️ 改分类失败：${esc(String((e&&e.message)||e))}`); } },
+  /* 单行改分类：直接在下拉的「分类」列里改，零额外点击
+     ⭐ 改为「集采」时顺带**自动匹配供应商**（§6.6.3 触发时机） */
+  /* ⭐ 已接后端：单行改分类与批量**走同一条路**（只传一个 id）—— 前端不另写一套判定 */
+  editCat:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    const c=t.value, old=n.cat; if(c===old) return;
+    try{
+      const r=await API.setCategory([n.id],c);
+      if(!r.ok){ t.value=old; return toast(`⚠️ 改分类失败：${esc(r.message)}`); }
+      await reloadNotices();
+      toast(`分类已改为 <b>${esc(c)}</b>（原 ${esc(old)}）<br>人工判断优先，重新抓取不被覆盖`,5600);
+    }catch(e){ t.value=old; toast(`⚠️ 改分类失败：${esc(String((e&&e.message)||e))}`); } },
+ /* 展示名人工修改（默认取仓库名；改它只影响显示，不影响项目归属）
+    ⚠️ 不留痕 —— 留痕只给 ENT-01 明确要求的两处：项目全名 / 项目状态 */
+  editDisp:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+    const v=String(t.value).trim(); if(v===p.disp) return;
+    /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` —— 展示名**可改、不留痕**（§2.3.1 / §9.3） */
+    pjAct(()=>API.pjUpdate(p.id,{disp:v}),
+      `展示名已改为 <b>${esc(v)}</b>（只影响显示，不影响项目归属；该字段不留痕）`); },
+ /* ⭐ 已接后端：`POST /api/m03/actions/exclude`（标记来源 `manual` 由后端定） */
+ batchEx:async ()=>{ if(!pickSet.size) return toast('请先勾选要剔除的记录');
+   try{
+     const r=await API.exclude([...pickSet]);
+     if(!r.ok) return toast(`⚠️ 剔除失败：${esc(r.message)}`);
+     pickSet.clear();
+     await reloadNotices();
+     toast(`${esc(r.message)}<br>剔除行<b>默认不显示</b>，把「分类」切到 <b>剔除</b> 即可复查或恢复`,4600);
+   }catch(e){ toast(`⚠️ 剔除失败：${esc(String((e&&e.message)||e))}`); } },
+ /* 恢复剔除（2026-09-14 用户口径修正）：**必须勾选才恢复** —— 只恢复「已勾选 且 人工批量剔除」的行。
+   ⚠️ 旧实现是 `NO.forEach` **无差别恢复全部人工剔除行**（点一下就把别人剔除的都放回来了）——
+      与「剔除 / 恢复是一对**按行生效**的操作」不符，也与「批量」二字矛盾（批量 = 对勾选集操作）。
+   ⚠️ 规则命中的剔除**任何情况下都不恢复**（§4.2.2「命中即剔除」语义靠这行保住）。
+   ⚠️ 三个分母分开报：**勾选数 / 可恢复数（勾选∩人工剔除） / 不可恢复数（勾选∩规则剔除）** ——
+      只报一个数会让用户以为"点了没反应"（勾了一堆规则剔除的行时，n 必然是 0）。 */
+ /* ⭐ 已接后端：`POST /api/m03/actions/restore` —— 「只恢复人工剔除、规则命中不恢复」由后端保（§4.2.2），
+    ⚠️ 三档分母（勾选 / 可恢复 / 规则命中）也已由后端的回执分开报，前端不再自己拼。 */
+ batchUnEx:async ()=>{ if(!pickSet.size) return toast('请先勾选要恢复的剔除行 —— 「恢复剔除」<b>只对勾选行生效</b><br><span class="mut sm">（不能一键把所有人工剔除的行都放回来）</span>',5200);
+   try{
+     const r=await API.restore([...pickSet]);
+     if(!r.ok) return toast(`⚠️ 恢复失败：${esc(r.message)}`);
+     pickSet.clear();
+     await reloadNotices();
+     toast(`${esc(r.message)}<br><span class="mut sm">恢复后需把「分类」切回对应分类（或「全部」）才看得到</span>`,6000);
+   }catch(e){ toast(`⚠️ 恢复失败：${esc(String((e&&e.message)||e))}`); } },
+
+ /* —— MOD-04 付款计划：筛选 + 行多选 + 多选删除 + 选月份导入（2026-09-12 新增）—— */
+ plFilter:()=>{ const el=$('#plReview'); plf.review=(el&&el.value)||'全部'; prunePlPick(); render(); },
+ plFilterReset:()=>{ plf.ym=bjMonth(); plf.projs=[]; plf.review='全部'; plPjOpen=false; prunePlPick(); render();
+   toast('付款计划筛选已重置（年月回到「北京时间当月」，审查结果回到「全部」）'); },
+ plPjToggle:()=>{ plPjOpen=!plPjOpen; render(); },
+ plPjPick:t=>{ const f=t.dataset.pj; const i=plf.projs.indexOf(f); if(i>=0) plf.projs.splice(i,1); else plf.projs.push(f); prunePlPick(); render(); },
+ plPjAll:()=>{ plf.projs=PL_PROJ_LIST(); prunePlPick(); render(); },
+ plPjNone:()=>{ plf.projs=[]; prunePlPick(); render(); },
+ /* 行多选：范围 = 当前筛选结果（与付款通知书页同款语义） */
+ plPick:t=>{ const id=t.dataset.id; if(!id) return; if(plPick.has(id)) plPick.delete(id); else plPick.add(id); render(); },
+ plPickAll:()=>{ const cur=plVisible(); const hit=cur.filter(p=>plPick.has(p.id)).length;
+   if(hit===0){ cur.forEach(p=>plPick.add(p.id)); } else { cur.forEach(p=>plPick.delete(p.id)); } render(); },
+ /* ⭐ 删除（逐行 / 批量**共用**）—— §4.3.6 的**两步**：先取**后端影响范围**，用户确认后再删。
+    ⚠️ 影响范围**必须来自后端**（`/api/m04/delete-impact`）：它是硬要求、不是装饰；
+       取不到就**不删**（宁可不动，也不做「看不见影响范围的删除」）。 */
+ plConfirm:async ids=>{ if(!ids.length) return;
+    let imp=null;
+    try { imp=await API.plDeleteImpact(ids); }
+    catch(e){ toast(`⚠️ 取不到「删除影响范围」：${esc(String((e&&e.message)||e))}<br><b>未删除任何数据</b>`,6400); return; }
+    plDelIds=ids.slice();
+    const impList=(imp.impacts||[]);
+    const rows=impList.slice(0,15).map(r=>`<tr><td class="fc">${esc(String(r.row_id))}</td>`
+      +`<td class="fc">${esc(String(r.year_month||''))}</td>`
+      +`<td>${esc(String(r.result||''))}</td></tr>`).join('');
+    modal({title:'删除付款计划行确认',body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 将删除 <span class="fc">${ids.length}</span> 行付款计划数据</b>。删除后需重新导入才能恢复。</div>
+      ${kvBlock([['删除行数',`<span class="fc">${ids.length} 行</span>`],['影响范围','只影响付款计划表；<b>不影响付款通知书与欠款统计</b>']])}
+      <div class="tw" style="max-height:220px"><table class="dt cond"><thead><tr><th>行号</th><th>年月</th><th>审查结果</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="mut sm" style="margin-top:6px">后端报出 ${impList.length} 行影响 · 涉及表：${esc(String((imp.affected_tables||['plan_row']).join('、')))}</div>`,
+      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="plDelOk">确认删除</button>`}); },
+ /* ⭐ 逐行删除：与批量删除**走同一套**（先取后端影响范围 → 确认 → 删） */
+ plDelRow:t=>{ const id=t.dataset.id; if(!id) return; ACT.plConfirm([id]); },
+ plDel:()=>{ const ids=[...plPick]; if(!ids.length){ toast('请先勾选要删除的行'); return; } ACT.plConfirm(ids); },
+ plDelOk:()=>{ const ids=plDelIds.slice(); plDelIds=[]; closeModal();
+    if(!ids.length) return;
+    plAct(()=>API.plDelete(ids), `已删除 <b>${ids.length}</b> 行付款计划（只影响付款计划表）`); },
+ /* ⏳ **未接通（诚实提示，⛔ 不造假）**：Excel 导入是「**选文件 → 预览 → 确认**」三步（§4.3.3），
+    属**表单型页**（与服务端三步页同一形态）⇒ 壳里的导入入口**下一轮再接**；
+    本轮**不保留**「造几行演示数据」的假成功。落点已在：`mod04_plan/importer.py` ＋ PRG 端点。 */
+ plImport:()=>{ modal({title:'导入付款计划 Excel',reopen:()=>ACT.plImport(),body:`<div class="tip" style="margin-bottom:10px">请先选择<b>本次导入数据的月份</b>；导入后本批全部行都归入该年月（<b>按月归档</b>）。<br><b>同一月份允许存在完全相同的行，且不被覆盖</b>（重复由「重复上报」提示，不靠自动去重掩盖）。</div>
+       <div class="fbar" style="border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px">
+         <div class="fi"><label>导入数据的年月</label>${tmBtn('plImportMonth',{scope:'plimp',val:plImportM,modes:['月']})}</div>
+         <div class="fi"><label>Excel 文件</label><input class="inp" type="file" id="plImpFile" accept=".xlsx,.xls" style="padding:4px"></div>
+       </div>
+       <div class="tip ok" style="margin:0">导入按所选月份「<b>清该月自动行 → 重写该批</b>」（§9.5 幂等）；<b>可手改列一律保留</b>、<b>该月手动行不被触碰</b>。</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="plImportOk">导入</button>`}); },
+ /* ⭐ 接线：**真上传**（`multipart`）—— ⛔ 不再造演示行（旧「造几行演示数据」的假成功已撤）。
+    原型形态 = **一步式**（弹窗选月 → 选文件 → 导入）；**没有「预览」这一步**（按原型，不发明）。 */
+ plImportOk:async ()=>{ const m=plImportM; const el=document.getElementById('plImpFile');
+   const f=el&&el.files&&el.files[0];
+   if(!f) return toast('<b>请先选择要导入的 Excel 文件</b>',5200);
+   try{ const r=await API.m04Import(m,f);
+     closeModal(); plf.ym=m; await reloadPlans();
+     toast(`<b>${esc(m)}</b> 导入完成：${esc(r.message||'')}`,9000);
+   }catch(e){ toast(`<b>导入没能完成</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">已选文件不合法或表头认不出时会这样报；草稿/筛选均未改动</span>`,9000); } },
+ /* ⭐ 2026-09-18：**已接通**（`TAIL-35` ＋ `TAIL-27` 批 2）—— 手动行走 JSON 端点 `POST /api/m04/plans`
+    （`plan_api_router.py`；与旧 PRG 端点**同一份判定** `plan_manual.manual_row_payload`）。
+    ⚠️ 旧服务端页（`POST /m04/row/save` ＋ `render_m04`）已随 `§19` 批 2 删除 ⇒ **壳是唯一入口**；
+    判据点 `ACC-PLAN-MANUAL-001` 已搬到 `tests/test_api_m04_manual.py`（端点）与 `test_wired_m04.py`（壳）。 */
+ plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>它落库后**与导入行同住一表、同样要被审查**，且**导入不会清理它**（§9.5）',5600); },
+ plRowEdit:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
+   if(!p.manual){ toast('<b>编辑只对「手动行」开放</b> —— 导入行是项目端报来的<b>源数据</b>：要改请<b>重新导入</b>（它在 §4.3.3 唯一的例外口 = 该行「再次匹配」）',6400); return; }
+   plRowEditId=p.id;
+   plD={ym:p.ym, proj:plProjKey(p.proj), docNo:p.docNo||'', flowAmt:String(p.flowAmt), monthAmt:String(p.monthAmt),
+        date:p.date||'', method:p.method||'现汇', remark:p.remark||''};
+   render();
+   toast(`正在<b>原地编辑</b>手动行 <b>${esc(p.id)}</b> —— 点「保存」落库、点「取消」保持原样`,5200); },
+ plRowSave:async ()=>{ const d=plD;
+   /* ⭐ 接线：**判定与落库一律后端**（`plan_manual.manual_row_payload` → `/api/m04/plans`）——
+      ⛔ 前端不再复写「年月必填 / 项目必选 / 金额非负」那三道校验（那是**第二份口径**）。
+      ⚠️ 校验不过 ⇒ 后端 400 ＋ 原样原因；**草稿与已填内容一律保留**（§4.3.3.1：显式报错、不清空重填）。 */
+   const isNew=(plRowEditId===PL_NEW_ID);
+   try{
+     const r=await API.m04PlanSave({
+       row_id: isNew ? '' : String(plRowEditId||''),
+       row_ym: String(d.ym||''), project_id: String(d.proj==null?'':d.proj),
+       doc_no: String(d.docNo||''),
+       flow_amount: String(d.flowAmt==null?'':d.flowAmt),
+       planned_amount: String(d.monthAmt==null?'':d.monthAmt),
+       pay_date: String(d.date||''), pay_method: String(d.method||''), remark: String(d.remark||''),
+     });
+     plf.ym=String(d.ym||plf.ym);     /* 保存后保证看得见（切到该行年月）；⚠️「项目」筛选一律不动 */
+     plRowEditId=''; plD={};
+     await reloadPlans();
+     toast(`${esc(r.message||'已保存')} —— 已切到 <b>${esc(plf.ym)}</b>；它<b>与导入行同样参与审查</b>（§4.3.4），合计与 KPI 随之重算`,7600);
+   }catch(e){
+     await reloadPlans();          /* 回后端真实状态；⚠️ **`plD` 不动** ⇒ 草稿行与已填内容仍在（§4.3.3.1） */
+     toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">已填内容保留，改完再存（§4.3.3.1）</span>`,9000);
+   } },
+ /* （旧「导入付款计划 Excel」弹窗 ＋ `plImportOk`（造演示行）已撤 —— 见上方 `plImport` 的诚实提示） */
+ /* —— MOD-04 · 手动行 = **表内增行模式**（§4.3.3.1 · 2026-09-16 用户口述新增 + 同日追认细节 6 项）——
+    用途：项目端报来的计划**漏项 / 临时补报**时提供**不依赖 Excel 的补录入口**。
+    ⚠️ 落库后**与导入行同住一表、走同一条审查链路**（判定一律 `plRev()` 实时派生、不看来源）；
+       **导入只清并重写自动行 ⇒ 手动行不被触碰**（§9.5）。 */
+ /* 草稿层写入口（表单元素走 `change`，已登记在 `CHG`）
+    ⚠️ 本动作**不重绘** —— 免得每改一格就把焦点丢掉（与 `ntRowSet` 同款，只有需要联动时才重绘） */
+ plRowSet:t=>{ const k=t.dataset.k; if(!k) return; plD[k]=String(t.value==null?'':t.value); },
+ plRowCancel:()=>{ const was=(plRowEditId&&plRowEditId!==PL_NEW_ID)?plRowEditId:'';
+   plRowEditId=''; plD={}; render();
+   toast(was?`已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未落库）`:'已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
+ /* 「编辑」= 该行**原地变草稿行**（不新增行；文案与校验与新增共用 `plRowSave`）。
+    ⚠️ **只有手动行可编辑**：对导入行请求编辑时**显式说明原因**（不静默忽略、不当作新增 —— §4.3.3.1） */
+ /* 保存（新增 / 编辑**共用**）：年月必填且月度形态 → 项目必选 → 金额校验（非法 / 负数）
+    ⚠️ 校验不过 ⇒ **保留草稿行与已填内容**（§4.3.3.1：显式报错 + 不清空重填） */
+ force:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); const rv=plRev(p,PLs);
+   modal({title:`强制通过 · ${rv}`,body:`<div class="tip wn" style="margin-bottom:10px">审查结果 = <b>${rv}</b>。系统<b>只提示、不拦截</b>；强制通过<b>必须写备注</b>（留痕），发现问题由用户<b>追问项目</b>。<br><span class="mut sm">强制通过后如需撤回，可在该行点「取消强制通过」回到「未处理」态。</span></div>
+     ${kvBlock([['项目',`<span style="font-size:11.5px">${dispCell(p.proj)}</span>`],['单据号',p.docNo||'<span class="tag t-dg">未填</span>'],['i8 流程金额',M(p.flowAmt)],['本月预付款金额',M(p.monthAmt)]])}
+     <div class="fld"><label>强制通过备注 <b>*</b></label><input class="inp" id="fRemark" placeholder="例：已向项目核实，金额无误"></div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="forceOk" data-id="${p.id}">强制通过</button>`}); },
+ /* ⭐ 已接后端：`POST /api/m04/plans/{id}/force` —— **空备注由后端拒**（§4.3.4）。
+    ⚠️ 前端那一道只为**即时反馈**；真正把关在后端（口径只许一个出口）。 */
+ forceOk:t=>{ const rs=$('#fRemark').value.trim(); if(!rs) return toast('<b>强制通过必须写备注</b>（§4.3.4）');
+    const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
+    closeModal();
+    plAct(()=>API.plForce(p.id, rs), `已强制通过 <b>${p.id}</b> 并留痕（备注：${esc(rs)}）`); },
+ /* 取消强制通过：回到「未处理」态。**不弹确认、不产生留痕**（取消 = 撤回一次人工放行，不产生新事实） */
+ /* ⭐ 已接后端：`POST /api/m04/plans/{id}/force-cancel` —— 回到原判定、备注清空（§4.3.4） */
+ unforce:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p||!p.forced) return;
+    plAct(()=>API.plForceCancel(p.id), ()=>{
+      const np=PLs.find(x=>x.id===p.id)||p;
+      return `已取消 <b>${p.id}</b> 的强制通过 —— 回到「未处理」，审查结果仍为 <b>${plRev(np)}</b>，可重新处理`;
+    }); },
+ /* 行内可改列：付款时间 / 付款方式 / 备注 / （仅未匹配行的）单据号
+    ⚠️ 改动**立刻写回数据**（不是草稿层）—— 全量重渲染后 value 仍由数据生成，所以不会冲掉；
+       持久性口径：**落库 + 不被导入覆盖 + 不留痕**（与「统计两金额」那类旁路字段同族，但**不留痕**）。 */
+ /* ⭐ 已接后端：`POST /api/m04/plans/{id}/cell` —— §4.3.3 **立刻落库 · 不被导入覆盖 · 不留痕**。
+    ⚠️ 可改范围**由后端判**（单据号只对「未匹配」行开放）⇒ 前端不再自己把关。 */
+ plCell:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
+    const f=t.dataset.f, F={docNo:'单据号',date:'付款时间',method:'付款方式',remark:'备注'};
+    if(!F[f]) return;
+    const v=String(t.value==null?'':t.value).trim();
+    plAct(()=>API.plCell(p.id, PL_COL_API[f], v),
+      `<b>${p.id}</b> 的${F[f]}已改为 <b>${esc(v)||'（空）'}</b>${f==='docNo'?' —— 点该行「再次匹配」重新比对 i8 通知书':''}`); },
+ /* 再次匹配：审查结果是实时派生的，按当前单据号重跑一次即可（并给出新的审查结果） */
+ /* ⭐ 已接后端：`POST /api/m04/plans/{id}/re-match` —— 重跑**同一个审查引擎**（§4.3.3） */
+ plRematch:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
+    const code=esc(String(p.docNo||'').trim())||'（空）';
+    plAct(()=>API.plRematch(p.id), ()=>{
+      const rv=plRev(PLs.find(x=>x.id===p.id)||p);
+      return `<b>${p.id}</b> 已按单据号 <b>${code}</b> 重新比对 → 审查结果：<b>${rv}</b>${rv==='完全匹配'?'（该行转入「无需处理」）':''}`;
+    }); },
+ /* 逐行删除：与批量删除同款确认（删除前列影响范围）；删掉的 id 同时从勾选集合里移除 */
+ /* 按付款计划勾选：入口在付款通知书页（勾选与付款在同一处）。**2026-09-12 定案**：
+   · **只在付款计划生效窗口（当月 10 号 → 月末，§4.3.2）内可点**；窗口外按钮先禁用（R14）
+   · 月份来源 = **北京时间当月**（不可自选）
+   · 计划行指向的通知书**可能落在别的月份**（当月计划里混着上月/更早的通知书）
+     ⇒ 做法：把**视图参数**（单据年月 / 分类 / 审批状态 / 付款状态）放宽到「全部月份 + 未付清」，
+       使当月计划命中的通知书**全部落在当前筛选结果内**，再一次性勾选 ——
+       这样「只勾当前筛选结果内的行」（§4.3.5）**依然成立**，且勾中的行都能在页面上看到、逐步核对。
+   · ⚠️ **「项目」筛选一律不动**（用户口径 2026-09-12）—— 它是用户表达的业务范围，
+       勾选范围**尊重已选项目**；因此被项目筛选挡掉的行会跳过并在提示里报数。
+   · 剔除行 / **撤单行一律不勾**（判据 = 付款候选 `ntPayCand`；撤单的单据 i8 已删，不许再产生付款）；未命中的计划行在提示里说明。 */
+ planPick:()=>{ const win=plWin();
+   if(!win.open){ toast(`<b>付款计划 ${win.from} 号起生效、月末截止</b>（§4.3.2）—— 模拟今天 <b>${SYS_TODAY}</b>，不在付款窗口内，暂不可勾选`,4800); return; }
+   const ym=win.ym;
+   /* ⚠️ 只放宽「视图参数」；**不碰 fNt.projs**（项目筛选是用户选定的业务范围） */
+   fNt.month='全部'; fNt.cat='全部'; fNt.astat='全部'; fNt.stat='未付清'; pjOpen=false; mp.open=null;
+   pickSet.clear();
+   const plan=PLs.filter(p=>p.ym===ym);
+   let hit=0, miss=0;
+   plan.forEach(p=>{ const c=String(p.docNo||'').trim();
+     const n=c?NO.find(x=>x.code===c&&ntPayCand(x)):null;
+     if(!n){ miss++; return; }
+     hit++; pickSet.add(n.id); });
+   const before=pickSet.size;
+   VIEW='m03'; prunePick(); render();
+   const cut=before-pickSet.size;                 /* 被「项目」筛选等挡掉、未能勾上的条数 */
+   const months={}; [...pickSet].forEach(i=>{ const m=NO.find(n=>n.id===i).date.slice(0,7); months[m]=(months[m]||0)+1; });
+   const other=Object.keys(months).filter(m=>m!==ym).sort();
+   const cx=other.reduce((a,m)=>a+months[m],0);
+   toast(`已按 <b>${ym}</b> 付款计划勾选 <b>${pickSet.size}</b> 条（计划命中 <b>${hit}</b> 条${miss?`，另 <b>${miss}</b> 行无单据号 / 编号查不到`:''}${cut?`；<b>${cut}</b> 条不在你选定的「项目」范围内，已跳过`:''}${cx?`；含<b>跨月 ${cx}</b> 条（${other.map(m=>`${m} ×${months[m]}`).join('、')}）`:''}）<br><b>「项目」筛选未被改动</b>；已放宽「单据年月 / 分类 / 审批状态」并把付款状态置为「未付清」，便于逐条核对 —— <b>实际付什么、付多少由用户自行修改</b>`,7000); },
+
+ /* —— MOD-03 · 手动新增 / 编辑付款通知书 = **表内增行模式**（2026-09-13 用户口径）——
+    用途不变：付「期初占位行」的款 —— 那笔钱没有 i8 单据，只能手工补一行。
+    ⭐ 2026-09-13 用户拍板：「手动新增 / 编辑」**弹窗取消**，改为**表内增行**（甲案：草稿行不落 `NO`）。
+    草稿层仍是 `naD`（键与 `NT_COLS` 同名，另加 `pid`）⇒ "改一格不会冲掉别的格"这条老教训照旧成立。 */
+ ntRowAdd:()=>{ naEditId=NT_NEW_ID; naD=ntBlank(); ntReveal(); render();
+   toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>已放宽「单据年月 / 分类 / 审批状态 / 付款状态」以便看见草稿行；<b>「项目」筛选未改动</b>',5600); },
+ /* 草稿层写入口：输入即记录（表单元素走 `change`，已登记在 `CHG`）；
+    ⚠️ 只有「分类」变了需要重绘（它决定「集采实际供应商」是否可填）—— 其余字段不重绘，
+       免得每改一格就把焦点丢掉。 */
+ ntRowSet:t=>{ const k=t.dataset.k, v=t.value;
+   /* 「付款项目」的候选值是**仓库名**（§2.7.4）⇒ 落草稿前解析成**档案 id**（§9.8-5 按 id 不按名）。
+      宽容输入：直接给 id 也认（先按 id 找，再按 仓库名 / 展示名 / 全名 解析）。 */
+   naD[k]=(k==='pid')?((PJs.find(x=>x.id===v)||pjRowOf(v)||{}).id||''):v;
+   if(k==='cat') render(); },
+ ntRowCancel:()=>{ const was=(naEditId&&naEditId!==NT_NEW_ID)?naEditId:''; naEditId=''; naD={}; render();
+   toast(was?`已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未落库）`:'已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
+ /* 「编辑」= 该行**原地变草稿行**（不新增行；文案/校验与新增共用 `ntRowSave`） */
+ ntEdit:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n||!n.manual) return;
+   naEditId=n.id;
+   naD={date:n.date, code:n.code, pid:((ownOf(n)||{}).id)||'',
+     doc:n.doc, biz:n.biz, recv:n.recv, cat:n.cat, astat:n.astat,
+     approve:String(n.approve), sp:String(n.sp), sup:n.sup||''};
+   ntReveal(); render();
+   toast(`正在<b>原地编辑</b>手动行 <b>${esc(n.id)}</b> —— 该行已变为草稿态；点「保存」落库、点「取消」保持原样`,5200); },
+ /* 保存 = 原弹窗的「确认新增 / 保存修改」——校验链**一字未改**（项目必选 → badMoney → overCap 拦截并保留原值） */
+ ntRowSave:()=>{ const pj=PJs.find(p=>p.id===naD.pid);
+   if(!pj){ toast('<b>请先选「付款项目」</b>：候选 = 全部已建档项目（含归档；壳除外，§六-9）'); return; }
+   const ap=naNum(naD.approve), sp=naNum(naD.sp);
+   if(badMoney(ap)){ toast(badMoneyMsg('审批金额')); return; }
+   if(badMoney(sp)){ toast(badMoneyMsg('统计付款金额')); return; }
+   if(overCap(sp,ap)){ toast(`<b>统计付款金额超上限</b>：全站口径「按发票走、只能少不能多」⇒ 上限 = 审批金额 <b>${M(ap)}</b>。<br>要付 <b>${M(sp)}</b> 就把<b>审批金额</b>也填到 <b>${M(sp)}</b>（手动行没有 i8 结算、审批金额由你定），已保留原值`,7000); return; }
+   const cat=naD.cat||'辅材';
+   const dt=/^\d{4}-\d{2}-\d{2}$/.test(String(naD.date||''))?naD.date:naDefDate();
+   const f={date:dt, code:String(naD.code||'').trim(), doc:String(naD.doc||'').trim(), biz:String(naD.biz||'').trim(),
+     recv:String(naD.recv||'').trim(), cat, astat:naD.astat||'已批', approve:ap, sp,
+     sup:(cat==='集采')?String(naD.sup||'').trim():''};
+   /* ⭐ 2026-09-19 接线（`§19` 批 4 · **S2a**）：手动行**新增 / 编辑一律落库走后端**
+      `POST /api/m03/actions/manual-save` —— 校验（录入人取当前登录用户 · 统计结算恒 0 ·
+      全站「统计两金额 ≤ 审批金额」· 是不是手动行…）**只在后端一处**（`manual_row_payload` ＋ `assert_manual_editable`）。
+      ⛔ 前端不再本地改对象 / 本地塞数组冒充落库（原先就是这样，刷新即丢）。
+      回执里的中文说明**原样给用户**；失败 ⇒ `ok=False` ⇒ 提示并把**草稿行保留**（R14③，不清空已填内容）。 */
+   const body={ row_id:(naEditId&&naEditId!==NT_NEW_ID)?String(naEditId):'',
+     doc_date:f.date, bill_no:f.code, bill_name:f.doc, biz_type:f.biz, payee:f.recv,
+     /* ⚠️ 分类：下拉框的值是**中文标签**（`ENUMS.cat`），而服务端只认**键** ⇒ 必须映射
+       （照 `setCategory` 的既有做法 `CAT_API`）—— 不映射会被后端按「分类不合法」拒掉。 */
+    category:CAT_API[f.cat]||f.cat, amount_approved:String(naD.approve||''), stat_paid:String(naD.sp||''),
+     ownership_id:String(pj.id) };
+   API.manualSave(body)
+     .then(r=>{ naEditId=''; naD={};
+       /* 新增后**保证看得见**（同「按付款计划勾选」的做法）：切到该行年月 + 放宽三档筛选；「项目」筛选一律不动 */
+       fNt.month=String(f.date).slice(0,7); fNt.cat='全部'; fNt.astat='全部'; fNt.stat='全部'; prunePick();
+       toast(r.message,5200); return reloadNotices(); })
+     .catch(e=>{ toast(`<b>保存失败</b>：${esc(e.message||e)}<br>草稿行已保留，改完再点「保存」`,6000); }); },
+ /* 手动行的「审批金额」表内可改（i8 抓取行该列仍只读） */
+ editApprove:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n||!n.manual) return;
+   const v=naNum(t.value);
+   if(badMoney(v)){ toast(badMoneyMsg('审批金额')+` ${M(n.approve)}`); render(); return; }
+   if(overCap(n.sp,v)){ toast(`<b>审批金额不能低于「统计付款金额」</b>：全站口径「统计两金额 ≤ 审批金额」⇒ 至少 <b>${M(n.sp)}</b>（先把统计付款金额调小，或把审批金额填大），已保留原值 ${M(n.approve)}`,6000); render(); return; }
+   n.approve=v; render();
+   toast(`手动行 <b>${n.id}</b> 审批金额已改为 <b>${M(v)}</b> —— 「付款金额（本次应付）」与付款状态已实时重判`); },
+ /* ⭐ 2026-09-19 接线（`§19` 批 4 · **S2b**）：**删除前的影响范围由后端给**（§7.2 / §9.4 是硬要求）——
+    项目 / 统计付款金额 / 已付金额 / 「欠款回增」那句全由 `/api/m03/actions/manual-delete-impact` 出，
+    ⛔ 前端不再自己拼这段文字（原先正是本地拼的 ✗）。⚠️ i8 抓取行连"影响范围"都不给看（§4.2.7）。 */
+ ntDel:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n||!n.manual) return;
+  const id=Number(n.id);
+  API.manualDeleteImpact({notice_id:id})
+    .then(imp=>{ if(!imp.ok) return toast(imp.message);
+      modal({title:'删除确认 · 手动新增付款通知书',
+        body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 删除前必须列出影响范围</b>（关联数据、统计影响）—— §7.2 / §9.4。<br>${imp.message}</div>
+    ${kvBlock([['单据',`<span class="fc">${esc(imp.label)}</span>`],['项目',`<span style="font-size:11.5px">${esc(imp.project_name)}</span>`],['单据日期',`<span class="fc">${esc(imp.doc_date)}</span>`],['统计结算金额',`<span class="fc">${esc(imp.stat_settle)}</span>（恒 0）`],['统计付款金额',`<span class="fc">${esc(imp.stat_paid)}</span>`],['已付金额（流水）',`<span class="fc">${esc(imp.amount_paid)}</span>`]])}
+    <div class="tip" style="margin:0">${imp.effects.map(x=>`· ${esc(x)}`).join('<br>')}</div>`,
+        footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="ntDelOk" data-id="${id}">确认删除</button>`}); })
+    .catch(e=>toast(`<b>取删除影响范围失败</b>：${esc(e.message||e)}`)); },
+ /* ⭐ 删除**落库走后端**（S2b）：⛔ 前端不再本地 `splice` 冒充删除 */
+ ntDelOk:t=>{ const id=Number(t.dataset.id);
+  API.manualDelete({notice_id:id})
+    .then(r=>{ if(!r.ok) return toast(r.message);
+      pickSet.delete(id); if(String(naEditId)===String(id)) naEditId='';
+      closeModal(); toast(r.message); return reloadNotices(); })
+    .catch(e=>toast(`<b>删除失败</b>：${esc(e.message||e)}`)); },
+
+ /* ⭐ 撤销付款（2026-09-14 新增）：**付款通知书页的就近入口** —— 把 §4.4.5 的能力搬到用户发现问题的位置。
+   ⚠️ **不新开口径**：撤销逻辑与「付款流水与欠款统计」页的 `revDlg` / `revOk` **完全同一套**
+      （原因必填 + 留痕 + 已付金额回退 + 按审批金额重判）⇒ 这里只负责"找到该撤哪条 / 分流到哪"。
+   ① 该行**只有 1 条生效流水** ⇒ 直接开撤销弹窗（省一次跳转；复用 `revDlg`）。
+   ② 该行**有多条生效流水** ⇒ 跳「付款流水与欠款统计」页并**只筛出这一单**（`ntFlows` 落筛选）——
+      不做"一次撤全部"（撤销是**逐条**留痕的动作，批量撤会让每条的原因被糊成一个）。
+   ③ 该行**没有生效流水**（理论上不会走到，按钮只在 `paidOf>0` 时出现）⇒ 提示并返回。 */
+ ntRevoke:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+   const live=FLs.filter(f=>f.nid===n.id&&!f.voided);
+   if(!live.length){ toast('这行通知书当前<b>没有生效的付款流水</b> —— 无需撤销'); render(); return; }
+   if(live.length===1) return ACT.revDlg({ dataset:{fid:live[0].id}, tagName:'BUTTON' });
+   /* 多条：跳到流水页并只筛这一单（流水页有"关键词"筛选，用它把单据编码填进去） */
+   flf.ym=fNt.month; flf.projs=[]; flf.method='全部'; flf.state='全部'; flf.q=n.code||'';
+   flPjOpen=false;   /* 面板收起（变量名是 `flPjOpen`，交互路径与 `rollback` 都用它） */
+   go('m05');   /* `go` 内部已 render + 滚动到顶；离开 m03 它会自动 clear pickSet */
+   toast(`该行有 <b>${live.length}</b> 条生效流水 —— 已跳到「付款流水与欠款统计」并筛出 <b>${esc(n.code||n.id)}</b><br>请逐条点「撤销」并分别填写原因（撤销是<b>逐条留痕</b>的动作，不做一次撤全部）`,6800); },
+
+ /* ⭐ 查看关联（2026-09-14 新增）：**纯只读** —— 从通知书反查"这笔钱付到哪去了"。
+   内容两块：① 集采合同关联（`jcRefOf`，写的是集采合同付款子表那份记录）；
+             ② 已登记付款流水（生效 + 已撤销都列，撤销的显示原因 —— 这才是"去向"的完整视图）。
+   ⚠️ 零口径风险：不写任何数据、不改任何状态；两个弹窗按钮一律「关闭」。 */
+ ntTrace:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+   const j=jcRefOf(n.id);
+   const flows=FLs.filter(f=>f.nid===n.id);
+   const live=flows.filter(f=>!f.voided), voided=flows.filter(f=>f.voided);
+   const amtLive=N2(live.reduce((a,f)=>a+f.amt,0));
+   const jcRow=j?`${esc(j.id)} · ${esc(j.material||'')} · ${esc(j.supplier||'')} · 欠款 <span class="fc">${M(jcDebt(j))}</span>`:'<span class="mut">未关联集采合同（仅「集采」分类的行可关联）</span>';
+   const flRow=flows.length
+     ? `<div class="tw" style="max-height:34vh"><table class="dt cond"><thead><tr><th>流水号</th><th>付款日期</th><th>金额</th><th>方式</th><th>操作人</th><th>状态</th></tr></thead><tbody>`
+       + flows.map(f=>`<tr class="${f.voided?'ex':''}"><td class="fc">${f.id}</td><td class="now">${f.date}</td><td class="num">${M(f.amt)}</td><td>${enumTag('payMethod',f.method)}</td><td class="sm">${esc(f.op)}</td><td>${f.voided?enumTag('flowState','已撤销')+' <span class="mut sm">'+esc(f.reason)+'</span>':enumTag('flowState','生效')}</td></tr>`).join('')
+       + `</tbody></table></div>`
+     : '<div class="tip" style="margin:0">这行通知书<b>还没有付款流水</b> —— 尚未付款（或流水已全被撤销）。</div>';
+   modal({title:`查看关联 · ${n.code||n.id}`,body:
+     `<div class="tip" style="margin-bottom:10px"><b>只读视图</b> —— 看这行通知书的<b>关联与去向</b>：关联了哪张集采合同、已产生哪些付款流水。<b>不改任何数据</b>。</div>
+      ${kvBlock([['单据',`<span class="fc">${esc(n.id)} · ${esc(n.code||'（未填编码）')}</span>`],
+        ['付款项目',`<span style="font-size:11.5px">${esc(n.proj)}</span>`],
+        ['单据名称',`<span style="font-size:11.5px">${esc(n.doc||'—')}</span>`],
+        ['分类 / 审批状态',`${ntArchTag(n)||esc(n.cat)} ｜ ${astatTag(n.astat)}`],
+        ['集采实际供应商',n.sup?`<span class="fc">${esc(n.sup)}</span>`+(supHas(n)?' '+tag('自动匹配 · 待确认','wn'):''):'<span class="mut">—</span>'],
+        ['集采合同关联',jcRow],
+        ['审批金额',`<span class="fc">${M(n.approve)}</span>`],
+        ['已付金额（生效流水合计）',`<span class="fc">${M(amtLive)}</span>${voided.length?`<span class="mut sm">（另有 ${voided.length} 条已撤销，不计入）</span>`:''}`],
+        ['付款状态',stTag(statOf(n))]])}
+      <div style="margin-top:4px"><b>付款流水</b>（生效 ${live.length} 条${voided.length?` · 已撤销 ${voided.length} 条`:''}）</div>
+      <div style="margin-top:6px">${flRow}</div>`,
+     footer:`<button class="btn" data-act="closeModal">关闭</button>`}); },
+
+ /* —— MOD-05 —— */
+ /* data-sc = 从哪一栏点进来的 —— 作为「分类」的预选值（仍可在展开区里改）
+    ⭐ 2026-09-13 增行模式（用户拍板 C-1 / C-7）：**「录入期初占位行」弹窗取消** ⇒
+       改为**栏内展开区**，且整条展开区渲染在 `.tw` **之外**（表格上方的独立条带）。 */
+ addLg:t=>{ const sc=t&&t.dataset?t.dataset.sc:''; if(sc) lgCat=sc;
+  /* 项目默认 = **欠款台账当前选中的项目**；截止年月默认 = **该项目「该分类」已有数据的最早月 − 1**（2026-09-13 口径）。
+     ⚠️ 只在「进入增行态」时算一次；展开区内重绘（选截止年月 / 改分类）**不重算** —— 否则会把用户选的值冲掉。
+        唯一例外：**改「分类」**要重算 —— 辅材 / 机械 的最早数据月各算各的，不重算就会给出错的默认值。 */
+  lgPjName=lgDefPjName(); lgCut=lgCutFor(lgPjName,lgCat);
+  lgD.s='0.00'; lgD.p='0.00'; lgD.r=LG_R_DEF;                 /* 新开一次 → 草稿复位（原地改字段） */
+  lgOn=true; lgPjOpen=false; render();
+  toast(`已在「<b>${esc(lgCat)}</b>」栏上方展开期初占位行录入区 —— 填完点「保存」落库、点「取消」丢弃（<b>草稿不入库</b>）`,5400); },
+ lgCancel:()=>{ lgOn=false; lgPjOpen=false; render();
+  toast('已取消期初占位行录入 —— <b>未写入任何数据</b>'); },
+ /* 草稿层写入口：输入立即记下，展开区重绘时不丢 */
+ lgS:t=>{ lgD.s=String((t&&t.value)!=null?t.value:''); },
+ lgP:t=>{ lgD.p=String((t&&t.value)!=null?t.value:''); },
+ lgR:t=>{ lgD.r=String((t&&t.value)!=null?t.value:''); },
+ lgCat:t=>{ lgCat=String((t&&t.value)||lgCat);
+  lgCut=lgCutFor(lgPjName,lgCat); render(); },   /* 改「分类」→ 截止年月按新分类重算（**唯一会重算的入口**） */
+ /* —— 付款流水的筛选（R4：改动即时生效、不设「应用」按钮） ——
+    ⚠️ 复位一律【原地改字段】，不要 `flf={...}` 重新赋值（同 `fJc` / `BIGVAL` 的教训）
+    ⚠️ ⭐ 「付款项目」自 2026-09-13 起是**共用面板（多选）** ⇒ 本动作**不再读 `#flPj`**（该控件已不存在），
+       只联动「实际付款方式 / 状态」两个下拉；项目那一路走 `flPjPick` / `flPjAll` / `flPjNone`。 */
+ flFilter:()=>{ const b=$('#flMethod'), c=$('#flState');
+  flf.method=(b&&b.value)||'全部'; flf.state=(c&&c.value)||'全部'; render(); },
+ /* —— 付款流水「付款项目」共用面板（能力由调用点声明：**多选**） —— */
+ flPjToggle:()=>{ flPjOpen=!flPjOpen; render(); },
+ flPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
+  const i=flf.projs.indexOf(v); if(i>=0) flf.projs.splice(i,1); else flf.projs.push(v); render(); },
+ flPjAll:()=>{ const all=flProjs(); flf.projs.length=0; all.forEach(v=>flf.projs.push(v)); render(); },
+ flPjNone:()=>{ flf.projs.length=0; render(); },
+ /* ⭐ 关键词**只在这一个按钮里生效**（输入框不挂 data-act、也不在 CHG 里）—— 别的动作不会带着它去搜 */
+ flSearch:()=>{ const i=$('#flQ'); flf.q=String((i&&i.value)||'').trim(); render();
+  toast(flf.q?`付款流水已按关键词 <b>${esc(flf.q)}</b> 搜索`:'已清空关键词'); },
+ flReset:()=>{ flf.ym=bjMonth(); flf.projs.length=0; flf.method='全部'; flf.state='全部'; flf.q=''; flPjOpen=false; render();
+  toast('付款流水筛选已重置（年月回到默认「当月」，§9.2）'); },
+ /* —— 付款统计（§4.5「付款」侧）—— 粒度切换 · 点项目条联动下方流水 —— */
+ pstGran:t=>{ pst.gran=(t&&t.dataset&&t.dataset.g)||'周'; pst.ym=''; mp.open=null; render(); },   /* 换粒度 → 桶回到该粒度下"最新有数据"的那个（兜底也随默认值走「周」） */
+ pstPj:t=>{ const k=(t&&t.dataset&&t.dataset.pj)||''; if(!k) return;
+  /* 联动 = 把该项目**并进 / 移出**「付款流水」的「付款项目」**多选**（语义不变：再点一次 = 取消） */
+  const i=flf.projs.indexOf(k); if(i>=0) flf.projs.splice(i,1); else flf.projs.push(k); render();
+  toast(i>=0?`付款统计 → 下方「付款流水」已取消 <b>${esc(pjLabel(k))}</b> 的筛选`:`付款统计 → 下方「付款流水」已加选 <b>${esc(pjLabel(k))}</b>`); },
+ /* 「项目」共用面板（**单选** —— 能力由调用点声明，与 `MOD-09` / 台账主选择器同款：点一下即切换并收起） */
+ lgPjToggle:()=>{ lgPjOpen=!lgPjOpen; render(); },
+ lgPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
+  lgPjName=v; lgPjOpen=false; render();
+  toast(`期初占位行的项目已切到 <b>${esc(pjLabel(v))}</b>（截止年月仍按当前「分类」单独算）`); },
+ /* 保存 = 原弹窗的「保存」——**只读草稿层**，不再从 DOM 取值（增行模式：没有弹窗可读） */
+ /* ⭐ 已接后端：`POST /m05/opening`（PRG 表单端点 · 同一「口径 + 项目 + 截止年月」重复录入 = **覆盖**）
+    ⚠️ 草稿层（`lgD`）的取数方式不变，只是**落库不再由前端 push**。 */
+ addLgOk:()=>{ const pj=lgPjName; if(!pj){ toast('<b>请先选「项目」</b>（点展开区里的「项目」按钮）'); return; }
+    const row=pjRowOf(pj);
+    if(!row||!row.id){ toast('<b>项目没对上档案</b>（请重选）—— 未写入任何数据'); return; }
+    m05Act(()=>API.postForm('/m05/opening', {
+        category: CAT_API[lgCat] || lgCat, project_id: row.id,
+        cutoff_ym: lgCut, settle_amount: String(lgD.s||''), paid_amount: String(lgD.p||''),
+        remark: String(lgD.r||''), end_ym: '',
+      }), ()=>{ ledProj=pj; return `期初占位行已录入（<b>${lgCat}</b> · ${esc(ledCutLabel(lgCut))}）`
+                 + `，台账已切到 <b>${esc(pjLabel(ledCur()))}</b>，欠款与台账已由后端重算`; }); },
+ /* 删除前必须列出影响范围（§7.2 / §9.4）：核心业务数据「软删留痕 + 统计重算」 */
+ delLg:t=>{ const l=LGs.find(x=>x.id===t.dataset.id); if(!l) return;
+   const dd=N2(l.settle-l.paid);
+   modal({title:'删除确认 · 期初占位行',body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 删除前必须列出影响范围</b>（关联数据、统计影响）—— §7.2 / §9.4。</div>
+     ${kvBlock([['项目',`<span style="font-size:11.5px">${esc(l.proj)}</span>`],['统计结算金额',`<span class="fc">${M(l.settle)}</span>`],['统计付款金额',`<span class="fc">${M(l.paid)}</span>`],['该行欠款',`<span class="fc">${M(dd)}</span>`]])}
+     <div class="tip" style="margin:0">删除后：<b>期初占位欠款 ${M(dd)} → 0</b>，<b>欠款合计</b>同步重算；该行按<b>软删留痕</b>处理（属核心业务数据）。</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delLgOk" data-id="${l.id}">确认删除</button>`}); },
+ /* ⭐ 已接后端：`POST /m05/opening/delete`（软删留痕 ＋ 统计重算由后端做） */
+ delLgOk:t=>{ const id=t.dataset.id; if(!id) return;
+    closeModal();
+    m05Act(()=>API.postForm('/m05/opening/delete', { opening_id:id, project_id:'', end_ym:'' }),
+      '期初占位行已删除（软删留痕），欠款与台账已由后端重算'); },
+
+  /* —— MOD-01 —— */
+  /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` —— 全名**可改 + 留痕**（§2.3.1 / §9.3）。
+     ⚠️ 尾码剥离（`strip_trailing_code`）在**后端**做：导出 / 仓库同步 / 项目同步**三处共用同一份**。 */
+  editFull:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), v=t.value.trim(); if(!p||v===p.full) return;
+    pjAct(()=>API.pjUpdate(p.id,{name_full:v}),
+      `项目全名已修改并<b>留痕</b>（尾码须经 strip_trailing_code 剥离）`); },
+  /* ⭐ 已接后端：`PUT /api/m01/projects/{id}/status`
+     ⛔ **不变式整段搬到后端**（`domain.apply_status_change` —— 与判据同一份纯函数）：
+        ① 壳下还有在建小微 ⇒ **拒绝归档**并把是谁列出来（原值保留）；
+        ② 归档壳下**最后一个在建小微** ⇒ 壳**自动跟着归档**（各自留痕）。
+     前端只把后端回执显示出来 —— 自己算就有两份规则（D18：判定与落库一律后端）。 */
+  editStatus:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), v=t.value; if(!p||v===p.status) return;
+    const wasSmall=(v==='归档'&&p.type==='small'&&p.parent);
+    pjAct(()=>API.pjStatus(p.id, PJ_STATUS_VALUE[v]||v), ()=>{
+      const sh=wasSmall?PJs.find(x=>x.id===p.parent):null;
+      return `状态改为 <b>${v}</b>（各处筛选默认「在建」）`
+        +((sh&&sh.status==='归档')?`<br>壳下已无在建小微 ⇒ 壳「${esc(sh.full)}」<b>自动一并归档</b>（已留痕）`:'');
+    });
+  },
+ /* —— 自定义排序（2026-09-13 用户口径）——
+    `ord` 挂在**档案行**（= 仓库，唯一标识 §9.8-4）上：全名 / 仓库名 / 展示名只是同一行的三种叫法，
+    **全站各处都按这一条 ord 排**。改完**重编号**保持 1..N 连续无重复。
+    ⚠️ **不留痕**：排序只是展示顺序，不是业务口径（与现行留痕范围一致）。 */
+  /* ⭐ 已接后端：`PUT /api/m01/projects/{id}/ord` —— **填号 = 插到第 v 位 ＋ 全表重编号 1..N**（§2.7.3）
+     ⚠️ 重编号与「不跨在建 / 归档分界」都在后端（`domain.reorder`，与判据同一份纯函数），前端只报结果。 */
+  editOrd:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+    const v=Math.max(1,Math.min(PJs.length,Math.floor(Number(t.value)||1)));
+    pjAct(()=>API.pjOrd(p.id,{to_position:v}), ()=>{
+      const np=PJs.find(x=>x.id===p.id);
+      return `「${esc(p.name||p.full)}」已排到第 <b>${np?np.ord:'?'}</b> 位：全站（选项目 / 选仓库 / 选展示名）顺序同步<br>注：<b>归档项恒在最后</b>，所以填的位次与最终位置可能有偏差`;
+    }, 6000); },
+  ordUp:t=>ACT.ordMove(t.dataset.id,-1),
+  ordDown:t=>ACT.ordMove(t.dataset.id,1),
+  /* ↑ / ↓ = 与**相邻**一行对调（在"当前显示顺序"里，即自定义排序顺序），不是改 ord 数字。
+     ⚠️ 「已在最前 / 最后」这类边界**由后端判**（它不动、也不跨分界）⇒ 前端只比 ord 有没有变。 */
+  ordMove:(id,d)=>{ const p=PJs.find(x=>x.id===id); if(!p) return;
+    const before=p.ord;
+    pjAct(()=>API.pjOrd(p.id,{direction:d<0?'up':'down'}), ()=>{
+      const np=PJs.find(x=>x.id===id);
+      if(np&&np.ord===before) return d<0?'已经在最前面了':'已经在最后面了';
+      const L=pjSortedAll(), i=L.findIndex(x=>x.id===id), q=L[i+(d<0?1:-1)];
+      return `「${esc(p.name||p.full)}」已${d<0?'上移':'下移'}一位${q?`（与「${esc(q.name||q.full)}」对调）`:''}<br>注：<b>归档项恒在最后</b>，所以移动不会跨过在建 / 归档的分界`;
+    }); },
+ editKw:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
+   modal({title:`小微识别关键词 · ${p.name}`,body:`<div class="tip" style="margin-bottom:10px">关键词挂在<b>具体小微的行</b>上，格式 <span class="fc">|词1|词2|</span>；<b>允许重复</b>，命中多个时弹窗让用户选（决策 3/4）。</div>
+     <div class="fld"><label>关键词（用 | 分隔）</label><input class="inp" id="kwV" value="${esc(p.kw)}"></div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="editKwOk" data-id="${p.id}">保存</button>`}); },
+ /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` 的 `match_keywords`。
+    ⚠️ 输入是**竖线串**（`|词1|词2|`）、后端收**数组** ⇒ 在适配层 `kwSplit` / `kwJoin` 转（唯一出口）。 */
+ editKwOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+    const list=kwSplit($('#kwV').value);
+    closeModal();
+    pjAct(()=>API.pjUpdate(p.id,{match_keywords:list}),
+      `关键词已保存：<b>${esc(list.length?kwJoin(list):'（清空）')}</b>`); },
+ promote:t=>{ const p=PJs.find(x=>x.id===String(t.dataset.id)); if(!p) return;
+    /* ⭐ **已接后端**（`TAIL-30`-③）：行内「扶正」＝ 指认弹窗的**另一个入口**（原型本来就画在这一列）。
+       ⚠️ 匹配靠**候选行的 id**（后端给的），⛔ 不在前端拿全名去比对 —— 那要复刻一份
+          `norm_full_name`（剥尾码 / 压缩空白），两份归一化早晚分叉 = 静默失配。 */
+    const i=PEND.findIndex(x=>(x.candidates||[]).some(c=>c.id===String(p.id)));
+    if(i<0) return toast(`「${esc(p.name||p.full)}」这一行<b>当前没有待指认的事</b>：`
+      + `<br>只有<b>材料报表里出现陌生仓库</b>、且它的全名在档案里命中 <b>≥2 条</b>非壳行时，才需要人来指认"挂哪一行"；`
+      + `命中 <b>1 条</b>占位行时，系统在抓取时<b>已经自动扶正</b>（不需要人工点）。`
+      + `<br><span class="mut sm">刚抓过材料报表却没有待指认条目 ⇒ 本次没有这类情形；待办清单在本页顶部</span>`, 9000);
+    openPendDialog(i); },
+ /* ⭐ 人工指认的**落库出口**（`TAIL-30`-③）：⭐ 按 `project_id` 定位（铁律 5/6：⛔ 不用名字反查）。
+    ⚠️ 成功/失败**都回后端真实状态**：被拒时后端给一句中文原因（如"只有占位行才能被系统扶正"）
+       ⇒ `pjAct` 原样转给用户、并重新拉档案与待办清单（清单少一条才对）。 */
+ pjPromoteOpen:t=>openPendDialog(Number(t.dataset.pend)),
+ pjPromoteOk:t=>{ const it=PEND_DLG; if(!it) return;
+    const sel=$('#pmRow');
+    const id=Number(sel && sel.value);
+    if(!id) return toast('<b>请先选择要写到哪一行</b>');
+    closeModal();
+    /* ⚠️ 提交的 `full_name` 取**开弹窗时锁定的那一条**（`PEND_DLG`）—— 清单后来刷新了也不会错位；
+       后端还会拿它做一致性守卫（所选行的全名必须与它相同），对不上就**明确拒**。 */
+    pjAct(()=>API.pjPromote({project_id:id, warehouse_name:it.wh, full_name:it.full}),
+      r=>`<b>${esc((r&&r.message)||'已扶正')}</b>`, 9000); },
+ /* —— 链路 A ③-b「全名对应 ≥2 个仓库 ⇒ 选定一个建行」（`TAIL-45`）——
+    这条原先**只被列出来**（同步回执里报一次、刷新即丢）⇒ 用户看得见、**无处可点**；
+    这里就是那个"可点"的出口（⛔ 判定与落库仍在后端：候选来自那次同步的 i8 名单）。 */
+ pjArchOpen:t=>openArchDialog(Number(t.dataset.arch)),
+ pjArchOk:t=>{ const it=ARCP_DLG; if(!it) return;
+    const sel=$('#arcWh');
+    const wh=String((sel&&sel.value)||'');
+    if(!wh) return toast('<b>请先选择一个仓库</b>');
+    closeModal();
+    /* ⚠️ 提交的这一对（全名 ＋ 仓库名）取**开弹窗时锁定的那一条**（`ARCP_DLG`）—— 清单后来刷新了
+       也不会错位；后端还会按当前档案现算再守卫一次（不在清单里 / 仓库名不在候选里 ⇒ 明确拒）。 */
+    pjAct(()=>API.pjArchRow({full_name:it.full, warehouse_name:wh}),
+      r=>`<b>${esc((r&&r.message)||'已建档')}</b>`, 9000); },
+ /* ---- ⭐ `TAIL-42`：**人工覆盖三类判定**（把被误判成普通项目的壳纠正成壳）--------------------
+    根因：三类判定（§2.2.1）里"是不是壳"**只看全名里有没有「小微」** ⇒ 有的壳全名不含它（图纸上的叫法）
+    ⇒ 被误判成**普通项目**；材料侧再遇同族仓库时就按普通项目那条路重复处理。
+    ⚠️ 判定与落库**全在后端**（`classify_name(manual_override=…)` 是判定唯一出口；改类型也只有一个出口）
+       ⇒ 壳里只做"问用户选哪个"＋"把答案送过去"，⛔ 不在这儿再写一份三类判定。 */
+ pjTypeOpen:t=>{ const p=PJs.find(x=>String(x.id)===String(t.dataset.id)); if(!p) return;
+   pjTypeCur=p; pjTypeNew=''; pjTypeDlg(); },
+ pjTypePick:t=>{ pjTypeNew=String(t.dataset.t||''); pjTypeDlg(); },
+ pjTypeOk:t=>{ const p=pjTypeCur; if(!p) return;
+   if(!pjTypeNew) return toast('先选一个目标类型（普通项目 / 小微壳）');
+   const inp=$('#pjTypeWh');
+   const wh=((inp&&inp.value)||'').trim();
+   if(pjTypeNew==='normal'&&!wh) return toast('<b>改成「普通项目」必须填仓库名</b>：普通项目靠仓库名做候选键（§2.7.4），而壳原本不挂仓库 ⇒ 系统无从得知，⛔ 不猜一个填上',8500);
+   closeModal();
+   return pjAct(()=>API.pjType(p.id, pjTypeNew, wh),
+     r=>`已把「${esc(pjDisp(p))}」改成 <b>${esc(PJ_TYPE_LABEL[pjTypeNew]||pjTypeNew)}</b>`
+        +((r&&r.warehouse_name)?`（挂仓库 <b>${esc(r.warehouse_name)}</b>）`:''), 9000); },
+ /* —— 链路 C · 归属判定（付款通知书行 → 具体小微）· 2026-09-12 定案 ——
+    入口只开在「待指定」标签上；命中 1 个时**自动归集、不弹窗**（ownOf 已算好） */
+ ownOpen:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+   const cands=ownCands(n), hit=matchKids(n.proj,n.doc), tot=projMatches(n.proj).length;
+   modal({title:`指定归属 · ${esc(n.proj)}`,wide:true,
+     body:`<div class="tip" style="margin-bottom:10px"><b>链路 C</b>：这张通知书的付款项目是<b>壳的全名</b>，同一全名下共 ${tot} 条档案（1 个壳 + ${tot-1} 个具体小微），系统<b>不猜</b>（铁律 5/6）。
+       本次用「单据名称」在<b>该壳下</b>的关键词里匹配，命中 <b>${hit.length}</b> 个${hit.length===0?' → 需人工指定':''}。关键词允许重复（决策 4）；<b>匹配范围限定在该壳下</b>，不跨壳（否则别的壳会把钱抢走）。</div>
+       ${kvBlock([['单据编码',`<span class="fc">${esc(n.code)}</span>`],['单据名称',`<span class="fc">${esc(n.doc)}</span>`],['本次应付',M(payEff(n))]])}
+       <p style="font-size:12px;margin:0 0 8px">选已有小微时，<b>须填一个出现在上面单据名里的关键词</b>（选中后<b>去重追加</b>到该小微名下，供下次自动命中）；填不出说明不是它。</p>
+       ${cands.map(p=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 8px;border:1px solid var(--bd);border-radius:7px;margin-bottom:7px">
+         <button class="btn sm pri" style="flex:0 0 auto" data-act="ownOk" data-id="${n.id}" data-pid="${p.id}">归集到它</button>
+         <span style="flex:1;min-width:0">${esc(pjDisp(p))}${pjArcMark(p)} <span class="mut sm">· 仓库名 ${esc(p.name)} · 关键词 ${esc(p.kw||'—')}${hit.some(h=>h.id===p.id)?' · <b>已命中</b>':''}</span></span>
+         <input class="inp" style="width:148px;flex:0 0 auto" id="ownKw_${p.id}" placeholder="关键词">
+       </div>`).join('')}
+       ${cands.length?'':'<div class="tip wn" style="margin:0 0 9px">该壳下<b>暂无在建的具体小微</b> → 只能走下面的「新小微」建档。</div>'}
+       <div style="padding:9px;border:1px dashed var(--bd);border-radius:7px">
+         <div class="mut sm" style="margin-bottom:7px">属于<b>新小微</b> → 录关键词并建档（原型演示：<b>仓库名手输</b>；正式实现由「抓仓库信息」带出）</div>
+         <div class="fld"><label>新小微的仓库名</label><input class="inp" id="ownNewName" placeholder="如：河南南阳热电项目仓库"></div>
+         <div class="fld" style="margin-top:6px"><label>识别关键词（须出现在单据名里）</label><input class="inp" id="ownNewKw" placeholder="如：南阳"></div>
+         <div style="margin-top:8px"><button class="btn pri" data-act="ownOk" data-id="${n.id}" data-pid="__new">建档并归集</button></div>
+       </div>`,
+     footer:`<button class="btn" data-act="closeModal">取消（保持「待指定」）</button>`}); },
+ /* 归集：写 OWN[单据id] = 档案 id；选已有小微时把关键词去重追加（§九：重心在「不出错」） */
+ ownOk:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return; const pid=t.dataset.pid;
+   if(pid==='__new'){
+     const nm=($('#ownNewName').value||'').trim(), kw=($('#ownNewKw').value||'').trim();
+     if(!nm||!kw){ toast('<b>新建小微需要「仓库名」与「关键词」都填写</b>，本次未建档'); return; }
+     if(n.doc.indexOf(kw)<0){ toast(`关键词 <b>${esc(kw)}</b> 未出现在单据名「${esc(n.doc)}」里，<b>不予建档</b>`); return; }
+     const sh=shellOf(n.proj);
+     if(!sh){ toast('<b>壳未建档</b>：必须先有壳后有微（铁律 7）'); return; }
+     /* 2026-09-13 用户口径：**已归档的壳下不许新建具体小微** ——
+        新建出来必然是「在建」，当场破坏「壳归档 ⇔ 小微全归档」这条不变式。要新建，先把壳改回在建。 */
+     if(arcOf(sh)){ toast(`<b>壳「${esc(sh.full)}」已归档</b>：不允许在已归档的壳下<b>新建</b>具体小微 —— 新小微必然是「在建」，会破坏「壳归档 ⇔ 小微全归档」。<br>确实要新建，请先把壳改回「在建」`,7000); return; }
+     const nid='P'+String(PJs.reduce((mx,p)=>Math.max(mx,parseInt(String(p.id).replace(/\D/g,''),10)||0),0)+1).padStart(2,'0');
+     PJs.push(O([nid,nm,nm,n.proj,'','在建','small',sh.id,'|'+kw+'|'],PJ_COLS));
+     OWN[n.id]=nid; closeModal(); render();
+     toast(`已建档并归集：<b>${esc(nm)}</b>（关键词 <span class="fc">${esc(kw)}</span>）→ 展示名从此<b>按 id 取</b>，不再「待指定」`); return; }
+   const p=PJs.find(x=>x.id===pid); if(!p){ toast('未找到该具体小微'); return; }
+   const kwEl=$('#ownKw_'+pid), kw=(kwEl&&kwEl.value?kwEl.value:'').trim();
+   if(!kw){ toast('<b>须填一个出现在单据名里的关键词</b>才能归集（填不出说明这条不属于它）'); return; }
+   if(n.doc.indexOf(kw)<0){ toast(`关键词 <b>${esc(kw)}</b> 未出现在单据名「${esc(n.doc)}」里，<b>不予归集</b>`); return; }
+   const added=addKw(pid,kw);
+   OWN[n.id]=pid; closeModal(); render();
+   toast(`已归集到 <b>${esc(pjDisp(p))}</b>${added?`；关键词 <span class="fc">${esc(kw)}</span> 已去重追加`:'；该关键词已存在、未重复追加'}`); },
+
+ /* —— MOD-15 用户管理（§1.5）——
+    管理动作共 5 类：新增账号 / 改密 / 停用启用 / 删除用户（软删）/ 转让管理员。
+    ⚠️ 2026-09-12 用户口径：①新增「授权转让」；②**取消账号名与密码的格式限制**
+       （账号「非空 + 不重复」即可、密码无要求且可为空）；③新增「删除用户」= 软删；
+       ④「不能停用自己」改为「**不能停用 / 删除最后一个在用管理员**」。 */
+ userAdd:()=>{ modal({title:'新增账号',body:`<div class="tip" style="margin-bottom:10px">管理员可<b>建号</b>（§1.5.1）。新增账号一律是<b>普通用户</b> —— 两人权限无区别，<b>不需要选角色</b>。</div>
+   <div class="fld"><label>登录账号（非空、不重复即可）</label><input class="inp" id="uAcc" placeholder="如 wanglijia"></div>
+   <div class="fld" style="margin-top:6px"><label>姓名</label><input class="inp" id="uName" placeholder="如 王丽佳"></div>
+   <div class="fld" style="margin-top:6px"><label>初始密码（可为空）</label><input class="inp" id="uPwd" placeholder="留空即可；无格式要求"></div>`,
+   footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userAddOk">创建</button>`}); },
+ userAddOk:()=>{ const acc=($('#uAcc').value||'').trim(), nm=($('#uName').value||'').trim(), pd=($('#uPwd').value||'').trim();
+   if(!acc||!nm){ toast('<b>登录账号与姓名都要填</b>（账号非空即可，不限格式与长度），本次未创建'); return; }
+   if(USERS.some(u=>u.acc===acc)){ toast(`登录账号 <b>${esc(acc)}</b> 已存在，本次未创建`); return; }
+   USERS.push(O(['U'+String(USERS.length+1).padStart(2,'0'),acc,nm,'user','在用','—',pd],U_COLS));
+   closeModal(); render(); toast(`已创建普通用户 <b>${esc(nm)}</b>（${esc(acc)}）${pd?'':' · <b>密码为空</b>'}· 权限与现有账号<b>无区别</b>（§1.5.1）`); },
+ userTransfer:()=>{ const cands=USERS.filter(u=>u.id!==CUR.id&&u.status==='在用');
+   if(!cands.length){ toast('没有可转让的在用账号（先新增或启用一个）'); return; }
+   modal({title:'转让管理员（授权转让）',body:`<div class="tip wn" style="margin-bottom:10px"><b>授权转让</b>：转让后对方成为<b>管理员</b>、你自己转为<b>普通用户</b> —— 系统内<b>始终只保留一个管理员</b>（防锁死）。</div>
+     <div class="fld"><label>转让给（限在用账号）</label><select class="inp" id="utId">${cands.map(u=>`<option value="${u.id}">${esc(u.name)}（${esc(u.acc)}）</option>`).join('')}</select></div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userTransferOk">确认转让</button>`}); },
+ userTransferOk:()=>{ const el=$('#utId'); const u=el&&USERS.find(x=>x.id===el.value); if(!u){ toast('未选择转让对象'); return; }
+   USERS.forEach(x=>{ if(x.role==='admin') x.role='user'; });      /* 先全部降级，再升目标 ⇒ 恒只有一个管理员 */
+   u.role='admin'; CUR.role='user';                                 /* ⚠️ 原地改字段，勿重新赋值（外部持有引用） */
+   closeModal(); render();
+   toast(`管理员已转让给 <b>${esc(u.name)}</b>；<b>${esc(CUR.name)}</b> 现在是普通用户，不再能管理账号`); },
+ userPwd:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
+   if(CUR.role!=='admin'){ toast('只有管理员能管理账号'); return; }
+   modal({title:`修改密码 · ${esc(u.name)}`,body:`<div class="tip" style="margin-bottom:10px">${u.id===CUR.id?'改<b>自己的</b>密码。':'管理员<b>重置他人密码</b>（§1.5.1「可管理其他账号」）。'}<b>无格式要求、可留空</b>；原型不接真实鉴权，<b>仅演示流程</b>。</div>
+     <div class="fld"><label>新密码（可为空）</label><input class="inp" id="upV" placeholder="留空即清空该账号密码"></div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userPwdOk" data-id="${u.id}">保存</button>`}); },
+ userPwdOk:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return; const v=($('#upV').value||'').trim();
+   u.pwd=v; closeModal(); render(); toast(`<b>${esc(u.name)}</b> 的密码已更新${v?'':'（已清空 · 可空）'}`); },
+ userToggle:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
+   if(CUR.role!=='admin'){ toast('只有管理员能停用 / 启用账号'); return; }
+   if(u.status==='在用'&&u.role==='admin'&&USERS.filter(x=>x.role==='admin'&&x.status==='在用').length<=1){
+     toast('<b>不能停用最后一个管理员</b> —— 会把管理入口锁死（请先转让或新增一个管理员）'); return; }
+   const wasOn=u.status==='在用';
+   u.status=wasOn?'已停用':'在用'; render();
+   toast(wasOn?`账号 <b>${esc(u.name)}</b> 已停用 · <b>停用不删除</b>，历史留痕里仍能认出这个人`:`账号 <b>${esc(u.name)}</b> 已启用`); },
+ userDel:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
+   if(CUR.role!=='admin'){ toast('只有管理员能删除账号'); return; }
+   if(u.id===CUR.id){ toast('<b>不能删除自己</b>（当前登录账号）'); return; }
+   if(u.status==='在用'&&u.role==='admin'&&USERS.filter(x=>x.role==='admin'&&x.status==='在用').length<=1){
+     toast('<b>不能删除最后一个管理员</b>（防锁死）'); return; }
+   modal({title:'删除账号确认',body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 删除 = 软删除</b>：账号名保留、不销毁数据 —— 历史留痕（改前人 / 操作人）里的这个人名<b>仍然认得出来</b>，必要时可恢复。</div>
+     ${kvBlock([['登录账号',`<span class="fc">${esc(u.acc)}</span>`],['姓名',`<span class="fc">${esc(u.name)}</span>`],['角色',u.role==='admin'?'管理员':'普通用户'],['影响','不再能登录；<b>已产生的留痕记录不受影响</b>']])}`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="userDelOk" data-id="${u.id}">确认删除</button>`}); },
+ userDelOk:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u||u.status==='已删除') return;
+   if(CUR.role!=='admin'){ toast('只有管理员能删除账号'); return; }
+   if(u.id===CUR.id){ toast('<b>不能删除自己</b>（当前登录账号）'); return; }
+   if(u.role==='admin'&&u.status==='在用'&&USERS.filter(x=>x.role==='admin'&&x.status==='在用').length<=1){
+     toast('<b>不能删除最后一个管理员</b>（防锁死）'); return; }
+   u.status='已删除'; closeModal(); render();
+   toast(`账号 <b>${esc(u.name)}</b> 已删除（软删）· 账号名保留，历史留痕里仍能认出这个人`); },
+ userRestore:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
+   if(CUR.role!=='admin'){ toast('只有管理员能恢复账号'); return; }
+   u.status='在用'; render(); toast(`账号 <b>${esc(u.name)}</b> 已恢复启用`); },
+ /* 登出：原型不接真实鉴权，只演示流程；正式实现退出后回到登录页 */
+ logout:()=>{ modal({title:'退出登录',body:`<div class="tip" style="margin-bottom:10px">当前登录 <b>${esc(CUR.name)}</b>（${CUR.role==='admin'?'管理员':'普通用户'}）。原型不接真实鉴权，<b>仅演示流程</b>。</div>
+     <div class="tip wn" style="margin:0">正式实现：退出后回到<b>登录页</b>，登录态失效，<b>业务数据不受影响</b>。</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="logoutOk">确认登出</button>`}); },
+ logoutOk:()=>{ closeModal(); toast('已退出登录（原型演示）· 正式实现退出后回到登录页'); },
+ delPj:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
+   modal({title:'删除确认',body:`<div class="tip dg"><b>⚠️ 必须列出删除影响范围</b>（§7.2）</div>
+     ${kvBlock([['项目',`<span style="font-size:11.5px">${esc(p.full)}</span>`],
+       ['关联付款通知书',`<span class="fc">${NO.filter(n=>n.proj===p.full).length} 条</span>`],
+       /* ⚠️ 下面三项要**跨模块数**（付款流水 / 库存单据 / 集采合同）⇒ 属 `MOD-13` 跨域能力，尚未落地。
+          ⛔ 不显示 `0` —— 那是**假话**（会让人以为"没有关联"）⇒ 如实标"待接通"。 */
+       ['关联付款流水',`<span class="mut">待接通（跨域能力）</span>`],
+       ['关联库存单据行',`<span class="mut">待接通（跨域能力）</span>`],
+       ['关联集采合同',`<span class="mut">待接通（跨域能力）</span>`]]
+       .concat(PJs.filter(x=>x.parent===p.id).length?[['所属小微（仓库名）',`<span class="wn">${PJs.filter(x=>x.parent===p.id).map(x=>esc(x.name)).join(' / ')}</span>`]]:[]))}
+     <div class="tip" style="margin:0">项目档案属<b>配置类数据 ⇒ 硬删</b>（§9.4）；被引用的核心业务数据（通知书 / 流水 / 库存单据 / 集采合同）<b>不随删</b> —— 它们仍保留原项目全名，页面上会显示为<b>未建档</b>。</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delPjOk" data-id="${p.id}">确认删除</button>`}); },
+ /* ⏳ **尚未接通后端（诚实提示，⛔ 不做假成功）** —— 删除本身（配置类硬删 §9.4）不难，
+    难的是**先列影响范围**（§7.2）：要数关联的付款通知书 / 流水 / 库存单据 / 集采合同 = **跨模块统计**，
+    属 `MOD-13` 跨域能力。⇒ 在"列得出影响范围"之前**不接删除**，否则 §7.2 就成了一句空话。 */
+ delPjOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+    closeModal();
+    toast(`⏳ <b>删除尚未接通后端</b>：「${esc(p.disp||p.name)}」—— 删除前必须<b>列出影响范围</b>（§7.2），那是<b>跨模块统计</b>；<br>该能力未落地前不接删除 —— 避免"列不出影响范围就删了"`,7000); },
+ /* ⭐ 2026-09-18 接通（`TAIL-27`）：两个同步都是**登录 i8**（会**强踢**该账号在线用户，D9）
+    ⇒ 统一走 `m02Sync()` —— 它先弹**二次确认**（这是 D9 那道闸），确认后才发请求。
+    ⚠️ 与 `m02` 表里 API-05/06 两行的「触发」**共用同一个入口**（一份能力只许一个主人）。 */
+ syncWh:()=>m02Sync('warehouses'),
+ syncPj:()=>m02Sync('common-projects'),
+ /* ⭐ 二次确认之后的**唯一出口**：成功/失败都回后端真实状态，把回执**原样**转给用户（⛔ 不吞、不换句话）。 */
+ m02SyncOk:async t=>{ const which=String(t.dataset.which||''); const isWh=which!=='common-projects';
+    closeModal();
+    let r=null;
+    try { r = await (isWh ? API.m02SyncWh() : API.m02SyncPj()); }
+    catch(e){ try{ await reloadM02(); }catch(_){}
+      return toast(`<b>同步没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+    try { await reloadM02(); } catch(_){ /* 取数失败 ⇒ 日志卡里会如实说 */ }
+    /* 同步「常用项目列表」会**真的建档**（`ACC-PRJ-SYNC-001`）⇒ 档案与「待人工建档」卡都得跟着刷 */
+    if(!isWh){ try{ await reloadProjects(); }catch(_){} }
+    if(r && r.degraded) return toast(`⚠️ <b>i8 侧不可用，未改动本地档案</b>：${esc(r.message||'')}`,9000);
+    const ct=(r&&r.counts)||{};
+    const more=(!isWh && ct.manual) ? `<br>⇒ 有 <b>${ct.manual}</b> 条「一个全名挂多个仓库」需人工选定 —— 去 <b>m01</b> 的「待人工建档」卡处理` : '';
+    toast(`✅ <b>${isWh?'仓库名单':'常用项目列表'}已同步</b>：${esc((r&&r.message)||('取到 '+((r&&r.count)||0)+' 条'))}${more}`,9000); },
+
+ /* —— MOD-06 —— */
+ procPjToggle:()=>{ procPjOpen=!procPjOpen; render(); },
+ procPjPick:t=>{ procPj=t.dataset.pj; procPjOpen=false; render(); },
+ /* —— 过程资料「按模板导出」展开区（2026-09-13：多选项目 · 每项目一份 · ≥2 打 zip）—— */
+ procExpToggle:()=>{ procExpOn=!procExpOn; procExpPjOpen=false;
+   if(procExpOn&&!procExpPjs.length&&procPj) procExpPjs=[procPj];   /* 默认 = 本页当前所选项目 */
+   render();
+   if(procExpOn) toast('已展开「按模板导出」：<b>默认选中本页当前项目</b>（可多选）—— 每项目一份 17 列模板；选 2 个以上打成 zip',6200); },
+ procExpPjToggle:()=>{ procExpPjOpen=!procExpPjOpen; render(); },
+ procExpPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
+   const i=procExpPjs.indexOf(v); if(i>=0) procExpPjs.splice(i,1); else procExpPjs.push(v); render(); },
+ procExpPjAll:()=>{ procExpPjs=pjSort(PROC_PJS).slice(); render(); },
+ procExpPjNone:()=>{ procExpPjs=[]; render(); },
+ procExpCancel:()=>{ procExpOn=false; procExpPjOpen=false; procExpPjs=[]; render(); toast('已收起导出面板（<b>未导出任何文件</b>）'); },
+ procExpOk:()=>{ const pjs=procExpPjs.slice(); if(!pjs.length) return toast('请先选择要导出的项目');
+   /* ⚠️ 文件名 = **展示名 ＋ 域 ＋ 表名 ＋ 年月**（与后端 `domain.export_file_name` 同构）——
+      ⚠️ **表名进文件名**：三张表（表① / 表② / 差异表）**同一形态**，只有数据与文件名不同
+      （用户 2026-09-18 裁）；导出**跟随当前所显示的那张表**。 */
+   const ym=bjMonth(), fnOf=k=>`${pjLabel(k)}_过程资料_${procTabName()}_${ym}.xlsx`;
+   const body = pjs.length===1
+     ? `<div class="tip ok" style="margin:0">将生成 <b>1 个文件</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>内容 = <b>当前所显示的那张表</b>（<b>${procTabName()}</b>）按 <b>17 列模板</b>填充（核算月 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列），报<b>分公司工程科</b>（§5.2.2）。</div>`
+     : `<div class="tip ok" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">过程资料_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个文件（每个 = 一个项目的 <b>${procTabName()}</b>）。</div>
+       <table class="dt cond" style="margin-top:8px"><thead><tr><th>#</th><th>文件（每项目一份）</th></tr></thead><tbody>
+       ${pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`).join('')}
+       </tbody></table>`;
+   modal({title:'导出 · 过程资料（按模板 · 每项目一份）',body,
+     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="procExpSave">保存到本地</button>`}); },
+ /* ⭐ 接线（`TAIL-04` 路径① · 片 4a）：成品由**后端模板填充**生成 —— 每个项目**一本工作簿**
+   （`汇总表` 18 列：序号 ｜ 时间 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列 ＋ 小计 / 合计 / 脚注尾块）；
+   选 **≥2 个项目** ⇒ 打成一个 zip。
+   ⚠️ **取数跟随当前所显示的那张表**（`tab` ＝ 0 表①原始 / 1 表②调整后 / 2 差异表）——
+      壳侧**原样带过去**，⛔ 不在前端另算（差异表 = 逐格「调整后 − 原始」）。
+   ⚠️ 失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（**一个项目都没选** · 项目**没有数据** ·
+      项目**不在档案里**（取不到展示名）· 模板缺失/损坏 · **显示区对账不过**）
+      ⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+   ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）。 */
+ procExpSave:async ()=>{
+   const pjs=procExpPjs.slice();
+   if(!pjs.length) return toast('请先选择要导出的项目');
+   const url='/api/m06/export?projects='+encodeURIComponent(pjs.join(','))
+     +'&tab='+encodeURIComponent(procTab);
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'过程资料.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   closeModal();
+   toast(pjs.length===1
+     ? `已导出 <b>${esc(fn)}</b>：<b>${procTabName()}</b> · 一本工作簿（<b>汇总表</b> 18 列 ＋ 小计 / 合计 / 脚注）`
+     : `已导出 <b>${esc(fn)}</b>：<b>${pjs.length}</b> 个项目 ⇒ 一个 zip（每项目一本 · 每本 = <b>${procTabName()}</b>）`,8600); },
+ procTab:t=>{ procTab=+t.dataset.i; render(); },
+ /* `exportProc` 已按 2026-09-13 用户口径**删除**（原按钮只演示一份）——
+    改为 `procExpToggle` 展开区：**多选项目** → 每项目一份 → ≥2 个打成 zip（`procExpOk` 给清单预览）。 */
+ /* 库存单据明细：**额外**一份「含数据透视表」的导出（用户口径 2026-09-13）——
+    ⚠️ 它**不影响**主表那份朴素导出（「导出 Excel（R1）」照旧）。 */
+ /* ⭐ 「含数据透视表」那份 = 走**路径②**（脚本直接改 i8 导出源文件，§7.1 / `模板清单` §一）——
+    形态**以 `模板_库存单据明细表.xlsx` 为准**：3 张 sheet = 明细（**列随 i8 源文件**，与页面列不同）
+    +「**过程资料**」透视（按仓 × 出入库方向 × 物料性质）+「**安全文明施工费**」透视（按仓 × 金额）。
+    ⚠️ 2026-09-14 更正：旧文案写「明细（列与页面一致）· 工作表 2 = 透视（按项目 × 月份）」—— **两处都错**
+       （路径②不套模板骨架、列随 i8 源文件；透视也不是"按项目 × 月份"那一张）。 */
+ expPivot:async ()=>{
+   /* ⭐ 接线（`TAIL-04` 第二片）：成品由**后端模板法**生成（库存单据明细表 xlsx，含两张真透视 ——
+      过程资料 / 安全文明施工费）。失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**
+      （模板缺失/损坏 · 该月没有明细 · **缓存级对账不过**）⇒ 据 `content-type` 分流：
+      JSON ⇒ 弹原因；否则当文件下载。⛔ 前端不自己拼文件名（命名规则的主人在后端，
+      经 `X-Export-Filename` 带出）。 */
+   const url='/api/m08/inventory/export?period='+encodeURIComponent(fIvYm);
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'库存单据明细表.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   toast('已导出「库存单据明细（含数据透视表）」：<b>工作表 1</b> = 明细（<b>列随 i8 源文件</b>，与页面列不同）；<b>工作表 2</b> = <b>「过程资料」透视</b>（按仓 × 出入库方向 × 物料性质）；<b>工作表 3</b> = <b>「安全文明施工费」透视</b>（按仓 × 金额）<br>⚠️ 这份走<b>路径②</b>（脚本直接改 i8 导出源文件、含真·透视表）：<b>不套模板骨架、不认 DATA_START</b>；主表的「导出 Excel（R1）」不受影响',6400); },
+ goInvAdj:t=>{ invWhs.length=0; invWhs.push(t.dataset.wh); invOnlyAdj=true; go('m08'); setTimeout(()=>toast(`已跳转库存单据页并自动筛出：<b>${esc(t.dataset.wh)}</b> 被调整过的行`),120); },
+
+ /* —— MOD-07 —— */
+ /* ⭐ 接线（`TAIL-04`）：成品由**后端模板法**生成 —— 分仓库 xlsx ＋ 1 个总表打成**一个 zip**。
+    ⚠️ 失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（模板缺失/损坏 · 该月没有明细 ·
+       **缓存级对账不过**）⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+    ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）。 */
+ zipSfjc:async ()=>{
+   const url='/api/m07/settlement/export?period='+encodeURIComponent(fWhYm);
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'收发结存表.zip';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   toast(`已导出<b>${pjSort(whRows(fWhYm)).length}</b> 个分仓库 xlsx ＋ 1 个总表（zip）；`
+     + `走<b>模板法</b>（成品 = 以手作成品 xlsx 为基底）—— 金额按 <b>2 位小数对平、容差 0</b>`,7600); },
+ whReset:()=>{ fWhYm=bjMonth(-1); render(); toast(`已重置：核算年月回到 <b>${tmLabel(fWhYm)}</b>（材料报表 = 北京时间上月，§9.2）`); },
+ /* —— 焊材 / 气体提取（**核对工具**；数据唯一去向 = 活动大表）—— */
+ fExtStatus:t=>{ fExt.status=t.value; render(); },
+ fExtReset:()=>{ fExt.status='在建'; fExt.ym=bjMonth(-1); render(); toast(`已重置：项目状态回到「在建」、金额月份回到 <b>${tmLabel(fExt.ym)}</b>（§9.2）`); },
+ /* 「结余」点格即改（2026-09-18 用户裁定 甲）：粒度 = **类别 × 仓库 · 不按月**（维护的是"当前的结存"）。
+    ⭐ 接线：**判定与落库一律后端**（`service.save_balance_cell` ⇒ `extract.parse_balance`）——
+      空 ⇒ 清空 / 非数字 / 负数 都由后端判，⛔ 前端不复写判据；
+      ⛔ 也不本地改 `BAL_EX` 冒充落库：成功后**以后端为准重拉**（`reloadM07()`）。 */
+ extBal:async t=>{ const kind=t.dataset.k, wh=t.dataset.p, raw=String(t.value==null?'':t.value).trim();
+   const NAME=`结余（${kind} · ${wh}）`;
+   let r=null;
+   try{ r=await API.m07BalCell({kind:kind,warehouse:wh,raw:raw}); }
+   catch(e){ return bgFailed(NAME,{message:String((e&&e.message)||e)}); }
+   if(!r||r.ok===false) return bgFailed(NAME,r);
+   await reloadM07();
+   if(raw===''){ toast(`已清空 <b>${esc(NAME)}</b> ⇒ 导出里该格<b>如实留空</b>`); return; }
+   toast(`已保存 <b>${esc(NAME)}</b> = ${M(r.value)}<br><span class="mut sm">历史结余 · 手工录入 —— 导出时按类别 × 仓库带上</span>`); },
+ /* 导出：行 = **所筛选项目** · 列 = 项目 → 最早有数据的月 → …（逐月连续）→ 求和（用户口径） */
+ expExt:()=>{ const ms=extMons();
+   const blk=kind=>{ const list=extVisible(kind);
+     const head=`<tr><th>项目</th>${ms.map(m=>`<th>${m}</th>`).join('')}<th>求和</th></tr>`;
+     const body=list.length?list.map(w=>`<tr><td class="sm">${esc(w)}</td>${ms.map(m=>{const v=extMon(kind,w,m);return `<td class="num">${v?M(v):'<span class="mut">—</span>'}</td>`;}).join('')}<td class="num">${M(extTotal(kind,w))}</td></tr>`).join('')
+       + sumRowOf(head, list, Object.assign({[ms.length+1]:rs=>N2(rs.reduce((a,w)=>a+extTotal(kind,w),0))},
+           ...ms.map((m,i)=>({[i+1]:rs=>N2(rs.reduce((a,w)=>a+extMon(kind,w,m),0))}))))
+       :`<tr><td colspan="${ms.length+2}" class="ctr mut">当前筛选条件下没有${kind}数据</td></tr>`;
+     return `<div class="tip" style="margin:10px 0 6px"><b>${kind}</b> · 项目 × 月份</div><div class="tw"><table class="dt cond" data-sort-key="modal:expExt-${kind}"><thead>${head}</thead><tbody>${body}</tbody></table></div>`; };
+   modal({title:'导出 · 焊材 / 气体提取（按 项目 × 月份）',body:
+     `<div class="tip ok" style="margin-bottom:8px">将导出 <b>1 个工作簿</b>（<b>2 个工作表</b>：<b>焊材</b> / <b>气</b>），每表 = <b>项目 | 结余 | 1月…12月 | 合计</b>（按模板填充）。<br>下表是<b>按月核对视图</b>（列 = <b>${ms[0]||'—'} → … → 求和</b>，自「最早有数据的月」起<b>逐月连续</b>），<b>不是</b>成品的列结构。</div>`+blk('焊材')+blk('气体'),
+     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="saveExt">保存到本地</button>`}); },
+ /* ⭐ 接线（`TAIL-04` 路径① · 片 1）：成品由**后端模板填充**生成（`模板-焊材气体.xlsx` 的两个 sheet）。
+    失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（模板缺失/损坏 · 拿不到报告月 · **显示区对账不过**）
+    ⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+    ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）；
+    ⚠️ 筛选**原样带给后端**（`status` / `period`）—— ⛔ 不在前端另筛一遍（否则又是第二份口径）。 */
+ saveExt:async ()=>{
+   const url='/api/m07/extract/export?status='+encodeURIComponent(fExt.status)
+     +'&period='+encodeURIComponent(fExt.ym);
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'焊材气体提取表.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   toast(`已导出 <b>${esc(fn)}</b>：<b>工作表 1</b> = 焊材、<b>工作表 2</b> = 气；每表 = 项目 | 结余 | 1月…12月 | 合计。` +
+     `⚠️「结余」= <b>历史结余 · 由用户手工录入</b>（录入入口 = 本页「结余」列<b>点格即改</b>）；` +
+     `<b>未录入 ⇒ 该格如实留空</b>（⛔ 不写 0）、<b>0 是合法录入值</b>`,8600); },
+ /* 大表手填录入（OPEN-05）：当月未录入的格子先带入、再就地改正 → 转为本月正常录入。
+    列型三种：`ym` 年月（`YYYY-MM`）· `m` 金额（元 · **非负**）· `t` 文本（备注）。手填值不参与欠款计算。 */
+ bigEdit:async t=>{ const wh=t.dataset.p, i=+t.dataset.i, NAME=BIGCOLS[i], raw=String(t.value).trim();
+   /* ⭐ 接线：**判定与落库一律后端**（`big_service.save_manual_cell` ⇒ `big_domain.parse_manual`）——
+      金额非负 / 开工时间 `YYYY-MM` 的校验不再在前端复写（否则 = 第二份口径）。
+      ⛔ 也不本地改 `BIGVAL` 冒充落库：成功后**以后端为准重拉**（`reloadM07()`）。 */
+   const was=bigCell(wh,bjMonth(-1),i);
+   let r=null;
+   try{ r=await API.m07BigCell({month:bjMonth(-1),warehouse:wh,key:BIG_MKEYS[i],raw:raw}); }
+   catch(e){ return bgFailed(NAME,{message:String((e&&e.message)||e)}); }
+   if(!r||r.ok===false) return bgFailed(NAME,r);
+   await reloadM07();
+   if(raw===''){ toast(`已清空 <b>${esc(NAME)}</b>（${bjMonth(-1)}），该格回到「上次值带入」状态`); return; }
+   const show=(BIGFMT[i]==='m')?M(r.value):esc(String(r.value==null?raw:r.value));
+   toast(was.from
+     ? `<b>${esc(NAME)}</b>已录入 <b>${show}</b><br>原值带入自 ${was.from}，该格已转为本月正常录入（白底）`
+     : `<b>${esc(NAME)}</b>已录入 <b>${show}</b>（${bjMonth(-1)}）`); },
+ /* ---- 活动大表「选题」：多选 + 自定义顺序（2026-09-13 用户口径）----
+    弹窗内的操作只改**草稿** `BIGDRAFT`，点「确定」才写回 `BIGSET` —— 弹窗每步都重建 HTML，
+    不备草稿层的话"勾一个就冲掉上一个"。 */
+ bigPick:t=>{ if(!t||!t.dataset||t.dataset.keep!=='1') BIGDRAFT=BIGSET.slice();
+   modal({ title:`选题 · 活动大表的项目（已选 ${BIGDRAFT.length} / 候选 ${bigCands().length}）`,
+     reopen:()=>ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}),
+     body:`<div class="tip" style="margin-bottom:8px">勾选要上表的项目；<b>已选的</b>可用 <b>↑ / ↓</b> 调顺序。点「确定」后 <b>大表 / 导出</b> 两处一律按这个顺序。</div>
+       <div style="max-height:52vh;overflow:auto"><table class="dt cond" data-sort-key="modal:bigPick"><thead><tr><th style="width:34px">选</th><th style="width:40px">序</th><th>项目（候选 = 项目档案里「在建」的项目）</th><th style="width:82px">调顺序</th></tr></thead><tbody>
+       ${bigCands().map(wh=>{ const k=BIGDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
+         return `<tr><td class="ctr"><input type="checkbox" data-act="bigSelTog" data-wh="${esc(wh)}"${on?' checked':''}></td>
+         <td class="fc">${on?k+1:''}</td><td class="sm">${esc(p?pjDispOr(p,wh):wh)}</td>
+         <td class="ctr now"><button class="btn sm" data-act="bigSelUp" data-wh="${esc(wh)}"${(on&&k>0)?'':' disabled'}>↑</button> <button class="btn sm" data-act="bigSelDown" data-wh="${esc(wh)}"${(on&&k<BIGDRAFT.length-1)?'':' disabled'}>↓</button></td></tr>`; }).join('')}
+       </tbody></table></div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="bigSelNone">清空</button><button class="btn pri" data-act="bigPickOk">确定</button>`}); },
+ bigSelTog:t=>{ const wh=t.dataset.wh, k=BIGDRAFT.indexOf(wh);
+   if(k>=0) BIGDRAFT.splice(k,1); else BIGDRAFT.push(wh);        /* 新勾选的**追加到末尾**（顺序可再调） */
+   ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}); },
+ bigSelUp:t=>{ const wh=t.dataset.wh, k=BIGDRAFT.indexOf(wh); if(k>0){ BIGDRAFT.splice(k,1); BIGDRAFT.splice(k-1,0,wh); }
+   ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}); },
+ bigSelDown:t=>{ const wh=t.dataset.wh, k=BIGDRAFT.indexOf(wh); if(k>=0&&k<BIGDRAFT.length-1){ BIGDRAFT.splice(k,1); BIGDRAFT.splice(k+1,0,wh); }
+   ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}); },
+ bigSelNone:()=>{ BIGDRAFT=[]; ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}); },
+ /* ⚠️ 写回必须**原地替换内容**（`BIGSET.length=0` + push），**不能** `BIGSET=…` 重新赋值 ——
+    外部（自检 / 导出）拿到的是这个数组的**引用**，重新赋值会让引用失效（同 BIGVAL / AWF 的教训）。 */
+ bigPickOk:async ()=>{ const picked=BIGDRAFT.slice();
+   /* ⭐ 接线：选题与顺序**落库走后端**（`big_service.save_selection`）—— 弹窗内仍是原型的草稿层 */
+   try{ await API.m07BigSelection(picked); }
+   catch(e){ closeModal(); await reloadM07();
+     return toast(`<b>选题没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
+   closeModal(); await reloadM07();
+   toast(`活动大表已按所选 <b>${BIGSET.length}</b> 个项目出表（行序即刚才设置的行序）`); },
+
+ /* ⭐ `TAIL-38`：录机械费（`m06` 的机械 6 列是**旁路载体**；原型没画入口 ⇒ §5.2.5 ③ 自行设计）。
+    判定与落库**全在后端**：空 ⇒ 0、负数 / 非数字 ⇒ 拒且不写库（`mech_ui.parse_mech_values`）。 */
+ mechOpen:()=>{ const cands=(typeof PROC_PJS==='object'&&PROC_PJS&&PROC_PJS.length)?PROC_PJS:bigCands();
+   const wh=(cands.indexOf(procPj)>=0?procPj:(cands[0]||''));
+   const ym=bjMonth(-1);                                   /* 材料报表类默认 = 北京时间上月（§9.2） */
+   const vals=((MACH6[wh]||{})[ym]||[]);
+   modal({title:'录机械费 · 手录 6 列',reopen:()=>ACT.mechOpen(),
+     body:`<div class="tip" style="margin-bottom:8px">机械 6 列是<b>旁路载体</b>：重抓 i8 / 重导历史<b>都不覆盖</b>它（§5.2.5 ③）。<br>空 ⇒ 0；<b>负数 / 非数字一律拒绝且不写库</b>（判定在后端，原值不变）。</div>
+       <div class="fbar" style="border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px">
+         <div class="fi"><label>项目</label><select class="inp" id="mechPj">${cands.map(k=>`<option value="${esc(k)}"${k===wh?' selected':''}>${esc(k)}</option>`).join('')||'<option value="">（没有候选项目）</option>'}</select></div>
+         <div class="fi"><label>核算月</label><input class="inp" id="mechYm" value="${esc(ym)}" placeholder="YYYY-MM"></div>
+       </div>
+       <div class="grid2">${MECH_LABELS.map((nm,i)=>`<div class="fi"><label>${esc(nm)}</label><input class="inp num" id="mechIn${i}" value="${esc(vals[i]==null?'':String(vals[i]))}"></div>`).join('')}</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="mechOk">保存</button>`}); },
+ mechOk:async ()=>{ const g=id=>document.getElementById(id);
+   const wh=String(((g('mechPj')||{}).value)||''), ym=String(((g('mechYm')||{}).value)||'').trim();
+   const values={}; MECH_LABELS.forEach((_,i)=>{ values['mech_'+i]=String(((g('mechIn'+i)||{}).value)||''); });
+   try{ const r=await API.m06MechSave({warehouse:wh,ym:ym,values:values});
+     closeModal(); await reloadMech(); await reloadM07(); render();
+     toast(esc((r&&r.message)||'已保存'));
+   }catch(e){ toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); } },
+
+ /* —— MOD-08 —— */
+ /* 「项目」筛选（**通用控件** = 共用项目面板，**多选**；2026-09-13 用户口径）—— 键 = 仓库名（§2.7.4）。 */
+ invWhToggle:()=>{ invWhOpen=!invWhOpen; render(); },
+ invWh:t=>{ const v=t.dataset.pj; const k=invWhs.indexOf(v); if(k>=0) invWhs.splice(k,1); else invWhs.push(v); render(); },
+ invWhAll:()=>{ invWhs.length=0; PROC_PJS.forEach(v=>invWhs.push(v)); render(); },   /* 同款：候选必须与数据源一致（原用演示 `WHs`） */
+ invWhNone:()=>{ invWhs.length=0; render(); },
+ /* —— 「每列可筛」（Excel 式）—— 全部**从动作进去**；其中 4 个挂在表单元素上 ⇒ **必须进 `CHG`** —— */
+ ivColOpen:t=>{ const c=String(t.dataset.c); invColOpen=(invColOpen===c?'':c); render(); },
+ ivColClose:()=>{ invColOpen=''; render(); },
+ ivColClear:t=>{ delete fIvCol[String(t.dataset.c)]; render(); },
+ ivColClearAll:()=>{ fIvCol={}; invColOpen=''; render(); toast('已清除全部列筛选'); },
+ ivColQ:t=>{ const c=String(t.dataset.c); (fIvCol[c]=fIvCol[c]||{}).q=String(t.value==null?'':t.value).trim(); render(); },
+ ivColMin:t=>{ const c=String(t.dataset.c); (fIvCol[c]=fIvCol[c]||{}).min=String(t.value==null?'':t.value).trim(); render(); },
+ ivColMax:t=>{ const c=String(t.dataset.c); (fIvCol[c]=fIvCol[c]||{}).max=String(t.value==null?'':t.value).trim(); render(); },
+ ivColVal:t=>{ const c=String(t.dataset.c), v=t.dataset.v; const f=(fIvCol[c]=fIvCol[c]||{}); f.v=f.v||[]; const k=f.v.indexOf(v); if(k>=0) f.v.splice(k,1); else f.v.push(v); render(); },
+ invOnlyAdj:t=>{ invOnlyAdj=t.value==='1'; render(); },
+ clearInvAdj:()=>{ invOnlyAdj=false; invWhs.length=0; fIvCol={}; invColOpen=''; render(); toast('已清除筛选，显示全部行'); },
+ adjDlg:t=>{ const iv=IVs.find(x=>x.id===t.dataset.iv), a=adjOf(iv);
+   modal({title:`调整单 · ${iv.docNo} #${iv.seq}`,body:
+     kvBlock([['物料',`${esc(iv.mat)} ${esc(iv.spec)}`],['仓库',esc(iv.wh)],['项目全名',`<span style="font-size:11.5px">${esc(iv.pf)}</span>`],['i8 原始金额',`<span class="fc">${M(iv.amt)}</span>`]])
+    +`<div class="f2"><div class="fld"><label>调整后金额 <b>*</b></label><input class="inp num" id="adjAmt" value="${(a?a.newAmt:iv.amt).toFixed(2)}"></div>
+      <div class="fld"><label>差额</label><input class="inp num" id="adjDiff" readonly value="0.00"></div></div>
+     <div class="fld"><label>调整备注 <b>*</b></label><input class="inp" id="adjRemark" value="${esc(a?a.remark:'')}" placeholder="说明为什么调"></div>
+     ${a?`<div class="tip" style="margin:0"><b>留痕：</b>${a.trail.map(x=>`${x.field} ${M(x.before)} → ${M(x.after)}`).join('；')}<br><b>操作人 / 时间：</b>${esc(a.op)} · ${a.time}</div>`:'<div class="tip wn" style="margin:0">调整单<b>打在单据行上</b>，<b>不被 i8 导出覆盖</b>，必须留痕 + 留备注。</div>'}`,
+     footer:`<button class="btn" data-act="closeModal">取消</button>${a?'<button class="btn dg" data-act="adjDel" data-iv="'+iv.id+'">撤销调整单</button>':''}<button class="btn pri" data-act="adjOk" data-iv="${iv.id}">保存调整单</button>`});
+   setTimeout(()=>{ const f=$('#adjAmt'),g=$('#adjDiff'); if(f&&g){ f.oninput=()=>g.value=SIG(N2(parseFloat(f.value)||0)-iv.amt); f.dispatchEvent(new Event('input')); } },0); },
+ /* ⭐ **已接后端**：判定与落库一律后端（`POST /api/m08/adjust`）——
+    前端只提交「调整后金额 ＋ 备注」，**判据不在前端复写**（金额 ≥ 0 / 备注必填
+    由 `domain.adjustment_problem` 一把管）⇒ 失败时把**后端的原因原样**给用户。
+    ⚠️ 「留痕」的改前 / 改后 / 操作人 / 时间全部由后端出（前端算不出来）。 */
+ adjOk:async t=>{ const iv=IVs.find(x=>x.id===t.dataset.iv); if(!iv) return;
+   const v=String($('#adjAmt').value||'').trim(), rs=$('#adjRemark').value.trim();
+   closeModal();
+   await ivAct(()=>API.m08Adjust(iv.id,{amount:v,remark:rs}),
+     r=>`调整单已保存：${esc(iv.docNo)} #${esc(iv.seq)} ${M(iv.amt)} → <b>${M(r.amount)}</b>（已留痕）<br>过程资料「调整后表」与「差异表」已同步更新`); },
+ /* ⭐ 已接后端：撤销调整单（回到 i8 原始金额）—— 落点 `POST /api/m08/adjust/clear`。
+    ⚠️ 调整单与 `inv_detail` **物理分离** ⇒ 撤销只删调整单，原始数据本来就没被动过。 */
+ adjDel:async t=>{ const iv=IVs.find(x=>x.id===t.dataset.iv); if(!iv) return;
+   closeModal();
+   await ivAct(()=>API.m08AdjustClear(iv.id), ()=>`已撤销该调整单，<b>原始数据未受影响</b>（回到 i8 值）`); },
+ /* `reimport`（「重新导入 i8 数据」按钮）已按用户 2026-09-13 口径**删除**（原话："没啥用，删了吧"）。
+    它演示的「重导不覆盖调整单」这条口径本身仍然成立（§9.5 幂等 / `ENT-04`），只是不再单独设按钮。 */
+
+  /* —— MOD-09（手填项**按「核算年月 ＋ 项目」各存一份**：写路径都落在「当前所选核算年月 · 当前所选项目」那一份上） —— */
+  /* 「项目」**单选**面板（第 6 个 `projPanel` 调用点）：点一下即切换并收起（与 `MOD-06` 同款） */
+  awfPjToggle:()=>{ awfPjOpen=!awfPjOpen; render(); },
+  awfPjPick:t=>{ const v=t.dataset.pj; if(!v) return; awfPj=v; awfPjOpen=false;
+    /* ⭐ 切项目 ⇒ **按 (核算年月, 项目) 重取那一份**（手填项是"每项目每月各存一份"，§5.5） */
+    reloadM09().then(()=>toast(`特殊费用月报表已切到项目 <b>${esc(PROJ_META_KEY(v).nm)}</b>（自动项与手填项都只算该项目）`)); },
+  /* ⭐ 接线：四个写动作**全部走后端**（`/api/m09/fee/*` —— 2026-09-19 `§19` 批 2 起旧 PRG 端点
+     `/m09/add` `/m09/cell` **已随旧页删除**，这条 API 就是**唯一出口** `service.act_*`）——
+     ⛔ 前端不再本地改数据冒充落库（原先直接改本地的那个演示容器），也**不在前端复写判定**。
+     回执里的中文说明（含 §引用）**原样给用户**，失败亦然。 */
+  awfAdd:()=>awfAct(()=>API.m09Add({ym:awfYm, project:awfPj}), r=>r.message
+    || `已在 <b>${tmLabel(awfYm)}</b> · <b>${esc(PROJ_META_KEY(awfPj).nm)}</b> 增加手填项：<b>名称可改、金额可填</b>（§5.5）`),
+  /* `R9`：删除也要说清「做了什么 + 影响多少」—— 后端回执里**带重算后的合计** */
+  awfDel:t=>awfAct(()=>API.m09Delete({ym:awfYm, project:awfPj, index:+t.dataset.i}), r=>r.message),
+  awfName:t=>awfAct(()=>API.m09Name({ym:awfYm, project:awfPj, index:+t.dataset.i, value:t.value}), r=>r.message),
+  /* ⚠️ **前端不判金额合法与否** —— §5.5 的判据唯一出口是后端 `domain.amount_problem`
+     （只拦"非数字"、**允许 0 与负数**）；前端再写一遍 = 第二份口径。
+     非法 ⇒ 后端拒绝且**原值不变**，重拉后输入框回到库里那个值。 */
+  awfAmt:t=>awfAct(()=>API.m09Amount({ym:awfYm, project:awfPj, index:+t.dataset.i, value:t.value}), r=>r.message),
+  /* 重置 = 回到默认核算年月 ＋ 默认项目（候选第一个）—— `R4` 要求列表 / 报表页提供「重置」 */
+  awfReset:()=>{ awfYm=bjMonth(-1); awfPj=AWF_PJS[0]||''; awfPjOpen=false;
+    reloadM09().then(()=>toast(`特殊费用月报表已重置：核算年月回到 <b>${tmLabel(bjMonth(-1))}</b>、项目回到 <b>${esc(PROJ_META_KEY(awfPj).nm)}</b>（材料报表类默认 = 上月，§9.2）`)); },
+
+ /* —— MOD-05 · 逐月欠款台账（2026-09-12 用户口径）——
+    两台账**左右并排**（左辅材 / 右机械）、**共用同一个「项目」选择器**、**同一套逻辑**，
+   只有「其他支出金额」的取数不同（见 `ledSettle`）；**没有「切换口径」动作**（两侧同时在场）。
+    ⚠️「机械」口径下的手填值原先是 MOD-10 的 `machAmt`（按项目一个数）——已升格为**按月**，
+       故本动作取代它；MOD-10 改为只读合计。 */
+ /* 台账「项目」= 共用面板（单选）：开/收 + 选（选谁都切两侧，语义与原来的下拉一致） */
+ ledPjToggle:()=>{ ledPjOpen=!ledPjOpen; render(); },
+ ledPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; ledProj=v; ledPjOpen=false; render(); },
+ /* —— 「导出逐月欠款台账」展开区（2026-09-13 用户口径：一个入口 + 多选项目 + 每项目一簿三表）—— */
+ ledExpToggle:()=>{ ledExpOn=!ledExpOn; ledExpPjOpen=false;
+   /* 首次打开：**默认选中本页当前所选项目**（用户口径"要想办法实现自选项目"，默认值取当前是为了少点一下） */
+   if(ledExpOn&&!ledExpPjs.length){ const c=ledCur(); ledExpPjs=c?[c]:[]; }
+   render();
+   if(ledExpOn) toast('已展开「导出欠款台账」：<b>默认选中本页当前项目</b>（可多选）—— 导出 = <b>每个项目一个工作簿</b>（辅材欠款 / 机械欠款 / 特殊费用月报表）；选 2 个以上打 zip',6200); },
+ ledExpPjToggle:()=>{ ledExpPjOpen=!ledExpPjOpen; render(); },
+ ledExpPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
+   const i=ledExpPjs.indexOf(v); if(i>=0) ledExpPjs.splice(i,1); else ledExpPjs.push(v); render(); },
+ ledExpPjAll:()=>{ ledExpPjs=ledProjs().slice(); render(); },
+ ledExpPjNone:()=>{ ledExpPjs=[]; render(); },
+ ledExpCancel:()=>{ ledExpOn=false; ledExpPjOpen=false; ledExpPjs=[]; render(); toast('已收起导出面板（<b>未导出任何文件</b>）'); },
+ ledExpOk:()=>{ const pjs=ledExpPjs.slice(); if(!pjs.length) return toast('请先选择要导出的项目');
+   /* ⚠️ 报告月 = **材料报表类默认 = 上月**（§9.2）：台账/特殊费用月报表都**没有「止月」选择器**
+      （台账跨月连续、特殊费用月报表是单月列由系统生成）⇒ 这里的「当前年月」就是上月。
+      （2026-09-18 修正：原写 `bjMonth()` = 当月，与 §9.2 及后端默认不一致。） */
+   const ym=bjMonth(-1), fnOf=k=>`${pjLabel(k)}_欠款台账_${ym}.xlsx`;
+   const body = pjs.length===1
+     ? `<div class="tip ok" style="margin:0">将生成 <b>1 个工作簿</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>工作簿内 <b>3 个工作表</b>：<b>辅材欠款</b> · <b>机械欠款</b> · <b>特殊费用月报表</b></div>`
+     : `<div class="tip ok" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">逐月欠款台账_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个工作簿（每个 <b>3 个工作表</b>）。</div>
+        <table class="dt cond" style="margin-top:8px"><thead><tr><th>#</th><th>工作簿（每项目一个）</th><th>工作表</th></tr></thead><tbody>
+        ${pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td><td class="sm">辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>`).join('')}
+        </tbody></table>`;
+   modal({title:'导出 · 逐月欠款台账（每项目一个工作簿）',body,
+     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="ledExpSave">保存到本地</button>`}); },
+ /* ⭐ 接线（`TAIL-04` 路径① · **片 2＋3**）：成品由**后端模板填充**生成 —— 每个项目**一本工作簿**
+   （3 个 sheet：`辅材` / `机械` / `特殊费用月报表`），选 **≥2 个项目** ⇒ 打成一个 zip。
+   ⚠️ 失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（**一个项目都没选** · 项目**不在档案里** ·
+      模板缺失/损坏 · **显示区对账不过**）⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+   ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）；
+   ⚠️ 报告月**原样带给后端**（`ym` = 上月，§9.2）—— ⛔ 不在前端另算一份期间。 */
+ ledExpSave:async ()=>{
+   const pjs=ledExpPjs.slice();
+   if(!pjs.length) return toast('请先选择要导出的项目');
+   const url='/api/m05/ledger/export?projects='+encodeURIComponent(pjs.join(','))
+     +'&ym='+encodeURIComponent(bjMonth(-1));
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'欠款台账.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   closeModal();
+   toast(pjs.length===1
+     ? `已导出 <b>${esc(fn)}</b>：一本工作簿 / <b>3 个工作表</b>（辅材 / 机械 / 特殊费用月报表）`
+     : `已导出 <b>${esc(fn)}</b>：<b>${pjs.length}</b> 个项目 ⇒ 一个 zip（每项目一本工作簿 · 每本 3 个工作表）`,8600); },
+ /* ⭐ 已接后端：`POST /m05/ledger/remark`（键 = 口径 + 项目 + 月；**空串 = 清除该格**）。
+    ⚠️ 备注输入框是 `change` 事件 ⇒ 失焦才落库（与原型一致），用完以后端为准重拉。 */
+ ledNote:t=>{ const sc=t.dataset.sc, pjKey=t.dataset.proj, m=t.dataset.m;
+    const v=String(t.value==null?'':t.value).trim();
+    const row=pjRowOf(pjKey);
+    if(!row||!row.id){ toast('<b>项目没对上档案</b> —— 备注未写入'); return; }
+    m05Act(()=>API.postForm('/m05/ledger/remark', {
+        category: CAT_API[sc] || sc, project_id: row.id, ym: m, remark: v, end_ym: '',
+      }), v ? `台账备注已记录（${esc(m)}）` : '台账备注已清空'); },
+ /* `expLed`（左右两栏各自的「导出 Excel」）已按 2026-09-13 用户口径**删除** ——
+    改为卡头**一个**导出入口（`ledExpToggle` → 展开区多选项目 → `ledExpOk`）：
+    导出形态 = **每个项目一个工作簿**（3 个工作表：辅材欠款 / 机械欠款 / 特殊费用月报表）；≥2 个项目打 zip。 */
+
+ /* ⭐ 接线（`TAIL-04` 路径① · 片 4b）：**活动大表**成品由**后端模板填充**生成 ——
+   **一份**（全项目在一张表里：⛔ 不是每项目一份、⛔ 无 zip）· `Sheet1` 20 列（三级表头 ＋ 合计行）。
+   ⚠️ 失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（**一行都没有** · 模板缺失/损坏 ·
+      **显示区对账不过**）⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
+   ⚠️ 月份**原样带给后端**（`bjMonth(-1)` = 材料报表类默认 = 上月，§9.2）—— ⛔ 不在前端另算。
+   ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）。 */
+ bigExport:async ()=>{
+   const url='/api/m07/big/export?period='+encodeURIComponent(bjMonth(-1));
+   let r;
+   try{ r=await fetch(url); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'经济活动分析大表.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   toast(`已导出 <b>${esc(fn)}</b>：一份（全项目一张表）· <b>20 列</b>（三级表头 ＋ 合计行）；`
+     + `派生列与合计**已算成数值**（⛔ 不留公式）`,8600); },
+
+ /* —— MOD-12 —— */
+ dfOk:t=>{ const d=DFs.find(x=>x.id===t.dataset.id); d.status='已核对'; render(); toast(`${d.id} 已标记「已核对」`); },
+ /* —— MOD-12 手工登记（2026-09-13 用户拍板「都改」）：新增 / 录入 / 保存 / 取消 / 删除 / 筛选 / 重置 ——
+    范式与 `MOD-03` 手动行、集采子表**同款**：草稿层（`dfD`，键=字段名）+ 表内增行 + 保存才落库。 */
+ dfAdd:()=>{ dfNewOn=true; dfClear(); render();
+   toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>「归属」恒为<b>库存单据</b>（§5.8.3）；金额<b>可正可负</b>（+ 上调 / − 下调）',6000); },
+ dfSet:t=>{ dfD[t.dataset.k]=t.value; },   /* 草稿层写入口（表单元素走 change，已登记在 CHG）；不重绘，免得每改一格丢焦点 */
+ dfCancel:()=>{ dfNewOn=false; dfClear(); render(); toast('已取消登记 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
+ dfSave:()=>{
+   if(!/^\d{4}-\d{2}$/.test(String(dfD.month||''))){ toast('<b>请先选「核算月」</b>：决定这笔差异归到哪个月（对账按核算月看）'); return; }
+   if(!String(dfD.proj||'').trim()){ toast('<b>请先选「项目」</b>：候选 = 全部已建档项目（含归档；壳除外，§六-9）'); return; }
+   if(!String(dfD.detail||'').trim()){ toast('<b>请填「差异内容」</b>：一句话说明差在哪（半年度对账时要能看懂）'); return; }
+   const amt=numOf(dfD.amount);
+   if(badMoney(amt,{signed:1})){ toast(badMoneyMsg('差异金额',{signed:1})); return; }   /* 唯一出口；**刻意不接 overCap**（差异金额无上限概念） */
+   const id=nextDfId(), proj=String(dfD.proj).trim(), ym=dfD.month;
+   DFs.push(O([id,ym,'库存单据',proj,String(dfD.detail).trim(),amt,dfD.status||'待核对',String(dfD.remark||'').trim()],DF_COLS));
+   dfNewOn=false; dfClear(); render();
+   toast(`已登记差异 <b>${id}</b>（${esc(ym)} · ${esc(pjDispOr(pjRowOf(proj),proj))} · ${M(amt)} · ${amt>0?'+ 上调':(amt<0?'− 下调':'平')}）—— 归属<b>库存单据</b>；清单与导出已含该笔`,6000); },
+ dfDel:t=>{ const i=DFs.findIndex(x=>x.id===t.dataset.id); if(i<0) return;
+   const id=DFs[i].id, d=DFs[i]; DFs.splice(i,1); render();
+   toast(`已删除差异 <b>${id}</b>（${esc(d.detail)}）—— 本页是<b>手工清单</b>，删除即不再跟踪该笔`,5200); },
+ dfFilter:t=>{ fDf.stat=t.value; render(); },
+ dfReset:()=>{ fDf.ym='全部'; fDf.stat='全部'; mp.open=null; render();
+   toast('差异登记筛选已重置 —— 核算月与状态都回到<b>全部</b>'); },
+
+ /* —— MOD-11 集采 —— */
+ jcFetch:()=>toast('已抓取采购合同信息（API-04）：新增 <b>3 条</b>，默认标记为「<b>待确认</b>」。<b>已手动标记的合同持久保留、不被覆盖</b>（§6.5.3）'),
+ /* 批量标记的前置：勾选（范围 = 当前筛选结果）；筛选变化 → 裁剪不可见的勾选（R10/R14） */
+ jcPick:t=>{ const id=t.dataset.id; if(!id) return; if(jcPick.has(id)) jcPick.delete(id); else jcPick.add(id); render(); },
+ jcPickAll:()=>{ const cur=jcVisible(); const hit=cur.filter(j=>jcPick.has(j.id)).length;
+   if(hit===0){ cur.forEach(j=>jcPick.add(j.id)); } else { cur.forEach(j=>jcPick.delete(j.id)); } render(); },
+ /* 批量标记三态（§6.5.3）：勾选后**一次动作**；人工标记优先，后续全量抓取**不被覆盖** */
+ jcBatchTag:t=>{ const v=t.dataset.v; if(!jcPick.size){ toast('请先勾选要标记的行'); return; }
+   let n=0; JCs.forEach(j=>{ if(jcPick.has(j.id)){ j.tag=v; n++; } }); jcPick.clear(); render();
+   toast(`已把 <b>${n}</b> 条合同批量标记为 <b>${esc(v)}</b> —— 人工标记优先，后续全量抓取<b>不被覆盖</b>（§6.5.3）`,4600); },
+ jcTag:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.tag=t.dataset.v; render();
+   toast(`合同 <b>${j.id}</b> 已标记为「<b>${j.tag}</b>」${j.tag==='纳入台账'?'，集采欠款已重算：<b>'+M(debts().集采)+'</b>':''}`); },
+ jcArch:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.arch=j.arch==='未存档'?'资产处':j.arch==='资产处'?'已存档':'未存档';
+   if(j.arch==='资产处'&&!j.archNo) j.archNo='JD-2026-'+String(1000+Math.floor(Math.random()*900));
+   render(); toast(`合同存档情况推进为「<b>${j.arch}</b>」（未存档 → 资产处 → 已存档，§6.7.2）`); },
+ /* 主表「发票金额 / 贸易公司发票金额 / 付款金额」已改为**只读汇总**（= 各自子表合计）——
+    录入一律走「子表」，因此不再有主表直改动作（口径 2026-09-12 定案，取代原 jcPay） */
+ jcMethod:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.method=t.value; render(); toast('付款方式为<b>自由文本、不限值</b>，不做枚举约束（DEV-J-03）'); },
+ /* 合同收发登记（§6.7）**改为可手改**（2026-09-13 用户口径）：存档号 / 寄回日期 / 备注三列。
+    ⚠️ 按 §9.3 的留痕清单（只给 统计两金额 / 调整单 / 项目全名与状态）⇒ 这三列**不留痕**（照既有口径、不新增）。
+    ⚠️ 寄回日期用 `type="date"`（要的是**完整日期**；R6 只管"选年月"那种滚轮控件）。 */
+ jcArchNo:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.archNo=String(t.value==null?'':t.value).trim(); render(); toast(`合同 <b>${j.id}</b> 存档号已保存`); },
+ jcRetDate:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.retDate=String(t.value==null?'':t.value).trim(); render();
+   toast(`合同 <b>${j.id}</b> 寄回日期已保存${j.retDate?`：<b>${esc(j.retDate)}</b>`:'（已清空）'}`); },
+ jcRemark:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.remark=String(t.value==null?'':t.value).trim(); render(); },
+ /* 子表弹窗**拆开**（2026-09-13 用户口径）：三个弹窗各装**一张**子表，
+    入口就近放在「**发票金额 / 贸易公司发票金额 / 付款金额**」三列右侧的「子表」按钮上。
+    ⇒ 原「一个按钮装三张子表」的 `jcDetail` 已删除。 */
+ jcInvDlg:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);
+   modal({title:`供应商发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcInvDlg({dataset:{id:j.id}}),body:
+     `<table class="dt cond" data-sort data-sort-key="modal:jcInv"><thead><tr>${JCINV_THEAD}</tr></thead><tbody>
+      ${j.invoices.length?j.invoices.map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):`<tr><td colspan="${thCount(JCINV_THEAD)}" class="ctr mut">暂无发票</td></tr>`}
+      ${jcSubOn('inv',j.id)?jcSubRow():''}
+      ${sumRowOf(JCINV_THEAD, [], {2:[()=>jcInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})}</tbody></table>
+      <div style="margin-top:8px"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="inv">＋ 增加一张发票</button></div>
+      <div class="tip" style="margin:12px 0 0"><b>发票子表（ENT-07）</b>：一合同 <b>1..N</b> 张、<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>（§6.4.1）。<br>${j.tradeCo?'本合同<b>有贸易公司</b> ⇒ <b>结算取「贸易公司发票」子表合计</b>，本子表<b>只作供应商侧台账</b>（§6.4.1）。':'本合同<b>无贸易公司</b> ⇒ <b>结算取本子表合计</b>（§6.4.1）。'}</div>`}); },
+ jcTInvDlg:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);
+   modal({title:`贸易公司发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcTInvDlg({dataset:{id:j.id}}),body:
+     (j.tradeCo?`<table class="dt cond" data-sort data-sort-key="modal:jcTInv"><thead><tr>${JCINV_THEAD}</tr></thead><tbody>
+      ${(j.tradeInvoices||[]).length?(j.tradeInvoices||[]).map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcTInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):`<tr><td colspan="${thCount(JCINV_THEAD)}" class="ctr mut">暂无发票</td></tr>`}
+      ${jcSubOn('tinv',j.id)?jcSubRow():''}
+      ${sumRowOf(JCINV_THEAD, [], {2:[()=>jcTradeInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})}</tbody></table>
+      <div style="margin-top:8px"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="tinv">＋ 增加一张发票</button></div>
+      <div class="tip" style="margin:12px 0 0"><b>贸易公司发票子表（ENT-07 同款）</b>：<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>。<br>有贸易公司 ⇒ <b>结算取本子表合计</b>（与供应商侧<b>同一套逻辑</b>，§6.4.1）。</div>`
+      :`<div class="tip wn" style="margin:0">本合同<b>无贸易公司</b> ⇒ <b>不启用该子表</b>（结算取供应商发票合计，§6.4.1）。</div>`)}); },
+ jcPayDlg:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);
+   modal({title:`付款子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcPayDlg({dataset:{id:j.id}}),body:
+     `<table class="dt cond" data-sort data-sort-key="modal:jcPay"><thead><tr>${JCPAY_THEAD}</tr></thead><tbody>
+      ${j.payments.length?j.payments.map((p,i)=>`<tr><td class="fc" style="white-space:nowrap">${esc(p[0]||'')}</td><td class="num">${M(p[1])}</td><td>${p[2]==='付款域引用'?tag('付款域引用','pri'):tag('手工','in')}</td><td class="ctr"><button class="btn sm dg" data-act="jcPayDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):`<tr><td colspan="${thCount(JCPAY_THEAD)}" class="ctr mut">暂无付款</td></tr>`}
+      ${jcSubOn('pay',j.id)?jcSubRow():''}
+      ${sumRowOf(JCPAY_THEAD, [], {1:[()=>jcPay(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})}</tbody></table>
+      <div style="margin-top:8px;display:flex;gap:6px"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="pay">＋ 手工录入</button>
+        <button class="btn sm pri" data-act="jcPayRef" data-id="${j.id}">从付款域引用（R8）</button></div>
+      <div class="sm mut" style="margin-top:7px">集采付款通知书的收款方都是「资产处集中采购」，真实供应商靠<b>人工录入的「集采实际供应商」</b>做关联锚点；<b>同一笔通知书不可重复引用</b>。</div>
+      <div class="tip" style="margin:12px 0 0"><b>付款子表（ENT-08）</b>：一合同 <b>0 / 1 / 多</b> 次，手工录入 + 可从付款域引用。<br><b>欠款口径（§6.4.4）：</b>${j.tradeCo?`有贸易公司 → 贸易公司发票合计 ${M(jcTradeInvSum(j))}`:`无贸易公司 → 供应商发票合计 ${M(jcInvSum(j))}`} − 付款合计 ${M(jcPay(j))} = <b style="color:var(--dg)">${M(jcDebt(j))}</b>（<b>合同级实时，不拆月度</b>）</div>`}); },
+ /* —— 集采三张子表的录入 = **表内增行**（2026-09-13 用户口径：发票子表录入要填日期；**取代原先那种浏览器原生输入小窗**）——
+    `jcSubAdd` 进增行态（草稿只存 `jcSubD`）· `jcSubSet` 写草稿层（走 `CHG`）· `jcSubSave` 校验后落库 · `jcSubCancel` 丢弃。
+    ⚠️ 旧动作 `jcInvAdd` / `jcTInvAdd` / `jcPayAdd`（`prompt` 单值录入）已删除。 */
+ jcSubAdd:t=>{ const j=JCs.find(x=>x.id===t.dataset.id), kind=t.dataset.kind; if(!j||!JCSUB_KIND[kind]) return;
+   jcSubKind=kind; jcSubId=j.id; jcSubD={date:(kind==='pay'?SYS_TODAY:''),amt:''};
+   jcSubDlg(kind,j.id);
+   toast(`已在子表末尾生成<b>一行草稿</b>（尚未保存）—— ${kind==='pay'?'付款日期默认取系统当日，可改':'<b>发票日期必填</b>'}；填完点「保存」落库、点「取消」丢弃`,5600); },
+ jcSubSet:t=>{ if(!jcSubKind) return; jcSubD[t.dataset.k]=t.value; },   /* 写草稿层，**不重绘**（避免每改一格就把焦点丢掉） */
+ jcSubCancel:()=>{ const k=jcSubKind, id=jcSubId; if(!k) return; jcSubReset(); jcSubDlg(k,id);
+   toast('已取消 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
+ jcSubSave:()=>{ const j=JCs.find(x=>x.id===jcSubId), kind=jcSubKind; if(!j||!kind) return jcSubReset();
+   const dt=String(jcSubD.date||'').trim(), nm=(kind==='pay'?'付款金额':'发票金额'), dn=(kind==='pay'?'付款日期':'发票日期');
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(dt)) return toast(`<b>请先填「${dn}」</b>：本子表录入<b>必须填日期</b>（草稿行第一个框）`);
+   const v=numOf(jcSubD.amt); if(badMoney(v,{positive:1})) return toast(badMoneyMsg(nm,{positive:1}));
+   /* 金额**不设上限**（2026-09-13 用户口径）—— 这里**刻意不接** `overCap`（与「统计两金额 ≤ 审批金额」那条无关）。 */
+   if(kind==='pay'){ if(!j.payments) j.payments=[]; j.payments.push([dt,v,'手工',null]); }
+   else if(kind==='tinv'){ if(!j.tradeInvoices) j.tradeInvoices=[]; j.tradeInvoices.push([dt,v]); }
+   else { if(!j.invoices) j.invoices=[]; j.invoices.push([dt,v]); }
+   jcSubReset(); render(); jcSubDlg(kind,j.id);
+   if(kind==='pay') toast(`已录入付款 <b>${M(v)}</b>（${dt}）→ 欠款 ${M(jcDebt(j))}`);
+   else if(kind==='tinv') toast(`已增加贸易公司发票 <b>${M(v)}</b>（${dt}）→ 结算金额 ${M(jcSettle(j))}`);
+   else toast(`已增加发票 <b>${M(v)}</b>（${dt}）→ 发票合计 ${M(jcInvSum(j))}`); },
+ jcInvDel:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.invoices.splice(+t.dataset.i,1); render(); ACT.jcInvDlg({dataset:{id:j.id}}); },
+ jcTInvDel:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); (j.tradeInvoices||[]).splice(+t.dataset.i,1); render(); ACT.jcTInvDlg({dataset:{id:j.id}}); },
+ jcPayDel:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.payments.splice(+t.dataset.i,1); render(); ACT.jcPayDlg({dataset:{id:j.id}}); },
+ /* 从付款域引用（R8）：**不做任何自动匹配**（DEV-J-01 已否掉标题 / 名字匹配）→ 纯人工选择；
+    且**同一笔通知书只能引用一次**（去重，防付款重复计入） */
+ jcPayRef:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);
+   /* ⚠️ 去重范围 = **全库**（§6.6.2「同一笔付款通知书只能被引用一次」）—— 原实现只按**单个合同**去重，
+      会让同一笔被两个合同各引一次、**付款重复计入** ⇒ 2026-09-13 收敛到全库。 */
+   const used=jcUsedNids();
+   const cam=NO.filter(n=>ntLive(n)&&n.cat==='集采'&&!used.has(n.id));
+   modal({title:'从付款域引用付款记录（R8）',body:`<div class="tip" style="margin-bottom:10px">集采台账的付款信息可从付款域<b>一键关联引用</b>。因为供应商名不可靠，<b>不做自动匹配</b>（DEV-J-01），由你按「<b>集采实际供应商</b>」人工判断（§6.6.2）；<b>同一笔通知书只能引用一次</b>。</div>
+     <div class="fld"><label>选择付款域中分类为「集采」的通知书</label><select class="inp" id="refId">${cam.length?cam.map(n=>`<option value="${n.id}">${esc(n.code)} · ${esc(n.sup||'未录入供应商')} · ${M(n.sp)}</option>`).join(''):'<option value="">（无可引用：已被引用过，或本月无集采单据）</option>'}</select></div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcPayRefOk" data-id="${j.id}">引用</button>`}); },
+ jcPayRefOk:t=>{ const j=JCs.find(x=>x.id===t.dataset.id), n=NO.find(x=>x.id===$('#refId').value);
+   if(!n) return toast('无可引用的付款记录（已被引用过，或未选择）');
+   if(jcUsedNids().has(n.id)){ closeModal(); return toast(`<b>${n.code} 已被引用过</b> —— 同一笔通知书<b>在全库范围内不可重复引用</b>（不分公司，防付款重复计入）`,4200); }
+   j.payments.push(['2026-09-11',n.sp,'付款域引用',n.id]); closeModal(); render();
+   toast(`已从付款域引用 <b>${n.code}</b> 的付款记录 ${M(n.sp)} → 集采欠款 ${M(jcDebt(j))} · 合计 ${M(debts().集采)}`); },
+ /* —— 「关联集采合同」反向入口的动作（2026-09-13 用户裁定）——
+    一对一 · 与 R8 共用同一份记录 · 去重按全库 · 金额不一致只提示不拦 · 关联 / 解绑**不留痕**。
+    弹窗内所选合同走草稿 `jcLinkSel`：改选择要**重绘弹窗**（金额比对随之更新）。 */
+ jcLink:t=>{ const n=NO.find(x=>x.id===t.dataset.id);
+   if(!n) return;
+   if(!ntLive(n)||n.cat!=='集采'){ toast('仅「集采」分类的记录可关联集采合同'); return; }
+   const cur=jcRefOf(n.id), cands=jcLinkCands(n), pk=ntProjKey(n);
+   if(!jcLinkSel||!cands.some(j=>j.id===jcLinkSel)) jcLinkSel=cur?cur.id:((cands[0]&&cands[0].id)||null);
+   const sel=cands.find(j=>j.id===jcLinkSel)||null;
+   const same=sel?N2(jcDebt(sel))===N2(n.sp):false;
+   modal({title:`关联集采合同 · ${n.code}`,reopen:()=>ACT.jcLink({dataset:{id:n.id}}),body:
+     `<div class="tip" style="margin-bottom:10px">把这行<b>集采通知书</b>关联到一张<b>集采合同</b> —— 这是「从付款域引用（R8）」的<b>反向入口</b>，两者<b>写同一份记录</b>（集采合同的付款子表）⇒ <b>双向可见</b>。<br>⚠️ <b>一条通知书只能关联一张合同</b>；<b>同一笔在全库范围内不可重复引用</b>（防付款重复计入）。<br>⭐ <b>候选只列本项目（仓库）的合同</b> —— 本行项目 = <b>${esc(pjLabel(pk)||'（未指定归属）')}</b>${pk?`（仓库名 <span class="fc">${esc(pk)}</span>）`:''}。</div>
+     ${cands.length?`<div class="fld"><label>选择集采合同（仅本项目）</label><select class="inp" id="jcLinkId" data-act="jcLinkPick" data-id="${n.id}">${cands.map(j=>`<option value="${j.id}" ${sel&&sel.id===j.id?'selected':''}>${j.id} · ${esc(j.material)} · 欠款 ${M(jcDebt(j))}${j.proj===pk?'':' · 他项目（当前已关联）'}</option>`).join('')}</select></div>`
+       :`<div class="tip wn" style="margin:0"><b>本项目下暂无集采合同</b> —— 请先到「集采台账」页为 <b>${esc(pjLabel(pk)||'该项目')}</b> 建档（或抓到 i8 合同），再回来关联。<br><span class="mut sm">本行项目：${esc(pjLabel(pk)||'（未指定归属）')}${pk?`（仓库名 ${esc(pk)}）`:''}</span></div>`}
+     ${sel?`<div class="fld"><label>金额比对（只提示，不拦截）</label><div class="sm" style="line-height:1.8">本行统计付款金额 <b>${M(n.sp)}</b> ｜ ${sel.id} 当前欠款 <b>${M(jcDebt(sel))}</b>${same?' '+tag('一致','ok'):' '+tag('不一致 · 仍可关联','wn')}</div></div>`:''}`,
+     footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消关联（${cur.id}）</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${cands.length?'':'disabled'} title="${cands.length?'':'本项目下没有可选合同 —— 先到「集采台账」建档'}">${cur?'改关联到所选合同':'关联'}</button>`}); },
+ jcLinkPick:t=>{ jcLinkSel=t.value; render(); if(lastModal&&lastModal.reopen) lastModal.reopen(); },
+ jcLinkOk:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+   const j=JCs.find(x=>x.id===jcLinkSel); if(!j) return toast('没有可关联的集采合同');
+   const cur=jcRefOf(n.id);
+   /* ⚠️ 2026-09-13 口径「只能关联本项目的合同」**不需要在这里再拦一道** —— 它由两件事闭合：
+      ① 候选只从 `jcLinkCands(n)`（= 本项目合同 ∪ 当前已关联那张）来；
+      ② `jcLinkPick` 记录选择后**立即重开弹窗**，`jcLink` 会拿候选集再校验一次 `jcLinkSel`
+         ⇒ 任何"他项目"的 id 都会被**回落**成合法候选，走不到这里。
+      （曾经在这里写过一道 `j.proj!==pk` 兜底，实测**不可达** ⇒ 按"不留死代码"删掉，
+        改由 `_smoke` 的 `T5` 直接断言 ② 那个"回落"行为。） */
+   /* 一对一：换合同 = 先把旧合同上那一行**原地**摘掉（`length=0` + push，保数组引用） */
+   if(cur&&cur.id!==j.id){ const kept=cur.payments.filter(p=>p[3]!==n.id); cur.payments.length=0; kept.forEach(p=>cur.payments.push(p)); }
+   if(!j.payments.some(p=>p[3]===n.id)) j.payments.push([SYS_TODAY,n.sp,'付款域引用',n.id]);
+   closeModal(); render();
+   const mis=N2(jcDebt(j))!==N2(n.sp);
+   toast(`已把这行通知书关联到集采合同 <b>${j.id}</b>（付款子表 +1 笔）→ ${j.id} 欠款 ${M(jcDebt(j))} · 集采欠款合计 ${M(debts().集采)}`+(mis?`<br><span style="color:var(--wn)">⚠️ 本行金额 ${M(n.sp)} 与该合同当前欠款 ${M(jcDebt(j))} 不一致 —— 已按「金额不校验」放行</span>`:''),5400); },
+ jcUnlink:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+   const cur=jcRefOf(n.id);
+   if(!cur){ closeModal(); return toast('这行通知书当前没有关联集采合同'); }
+   const kept=cur.payments.filter(p=>p[3]!==n.id); cur.payments.length=0; kept.forEach(p=>cur.payments.push(p));
+   closeModal(); render();
+   toast(`已取消与集采合同 <b>${cur.id}</b> 的关联（付款子表 −1 笔）→ ${cur.id} 欠款 ${M(jcDebt(cur))} · 集采欠款合计 ${M(debts().集采)}`,4600); },
+ /* —— MOD-11 · 手工新增集采合同 = **表内增行（展开区）**（2026-09-13 用户口径）——
+    ⚠️ 原来这个动作只开弹窗，而弹窗的「保存」挂的是 `data-act="silent"`（**根本没有落库动作**）
+       ⇒ 本次改制时**补上真正的建档动作 `jcRowSave`**（草稿层 `jcND`，与既有 `naD` / `lgD` 同源）。 */
+ jcAdd:()=>{ const cands=pjKeysOfRows(ntPjList());
+   jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',
+     pj:(fJc.projs.length===1?fJc.projs[0]:(cands[0]||''))};   /* 项目默认 = 当前筛选唯一项，否则候选第一个 */
+   jcNewOn=true; jcNPjOpen=false; render();
+   toast('已在表格上方展开「手工新增合同」录入区 —— 填完点「保存」建档、点「取消」丢弃（<b>草稿不入库</b>）<br><span class="mut sm">发票金额 / 贸易公司发票金额 / 付款金额 = 各自子表合计（建档后在各列右侧「子表」里录）</span>',6000); },
+ jcRowCancel:()=>{ jcNewOn=false; jcNPjOpen=false; render(); toast('已取消手工新增合同 —— <b>未写入任何数据</b>'); },
+ /* 草稿写入口（不重绘 —— 免得每改一格就丢焦点；本展开区没有"改一格要连带重绘"的字段） */
+ jcNSet:t=>{ const k=t.dataset.k; if(k) jcND[k]=t.value; },
+ /* 「项目」共用面板（**单选**）—— 第 10 个 `projPanel` 调用点 */
+ jcNPjToggle:()=>{ jcNPjOpen=!jcNPjOpen; render(); },
+ jcNPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; jcND.pj=v; jcNPjOpen=false; render();
+   toast(`新增合同的项目已定为 <b>${esc(pjLabel(v))}</b>`); },
+ /* 建档（替代原弹窗那句挂 `silent` 的空"保存"） */
+ jcRowSave:()=>{ if(!jcND.pj){ toast('<b>请先选「项目」</b>（点「项目」按钮展开候选）'); return; }
+   const amt=numOf(jcND.contractAmt,{empty0:1});
+   if(badMoney(amt)){ toast(badMoneyMsg('合同金额')); return; }
+   const tAmt=(String(jcND.tradeContractAmt||'').trim()==='')?0:numOf(jcND.tradeContractAmt,{empty0:1});
+   if(badMoney(tAmt)){ toast(badMoneyMsg('贸易公司合同金额')); return; }
+   const dt=/^\d{4}-\d{2}-\d{2}$/.test(String(jcND.date||''))?jcND.date:SYS_TODAY;
+   const id='JM'+String(JCs.filter(x=>/^JM/.test(x.id)).length+1).padStart(2,'0');
+   const j=O([id,dt,String(jcND.material||'').trim(),String(jcND.supplier||'').trim(),amt,
+     String(jcND.tradeCo||'').trim(),tAmt,
+     '未存档','','',String(jcND.method||'').trim(),String(jcND.remark||'').trim(),
+     '待确认',[],[],[],jcND.pj],JC_COLS);
+   JCs.push(j);
+   /* 新增后**保证看得见**（同 MOD-03 / MOD-04 的做法）：放宽三档筛选；
+      该行项目不在「项目」筛选里就**并进去**（否则刚建的合同被自己的筛选挡住）。 */
+   if(fJc.tag!=='全部') fJc.tag='全部';
+   if(fJc.arch!=='全部') fJc.arch='全部';
+   if(fJc.sup) fJc.sup='';
+   if(fJc.projs.length&&fJc.projs.indexOf(j.proj)<0) fJc.projs.push(j.proj);
+   jcNewOn=false; jcNPjOpen=false; render();
+   toast(`已新增集采合同 <b>${id}</b>（${esc(pjLabel(j.proj))} · ${esc(j.material||'（未填材料名）')} · 合同金额 ${M(amt)}）—— 三态默认 <b>待确认</b>，需「纳入台账」后才计入欠款统计<br>发票 / 付款金额请在该行对应列右侧的「子表」里录入（主表只读汇总）`,7000); },
+
+ /* —— MOD-13 —— */
+ delDemo:()=>modal({title:'删除确认（R2 · 必须列出影响范围）',body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 删除前必须列出删除影响范围</b>（关联数据、统计影响），确认后执行删除并刷新列表（§7.2 / §9.4）。</div>
+   ${kvBlock([['待删记录','付款通知书 BZLL-202608-01'],['关联付款流水','<span class="fc">1 条（128,600.00）</span>'],['影响欠款统计','辅材欠款 <span class="fc">+0.00</span>（该行已付清）'],['所属项目','<span style="font-size:11.5px">华能德州热电联产项目#2机组建筑及安装工程</span>']])}
+   <div class="tip" style="margin:0">核心业务数据为<b>软删留痕 + 统计重算</b>；配置类数据<b>硬删</b>（§9.4）。</div>`,
+   footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delOk">确认删除</button>`}),
+ delOk:()=>{ closeModal(); toast('（演示）核心数据为<b>软删留痕</b>：记录标记 defered_at / deleted_by，统计已重算'); },
+
+ /* —— 筛选 —— */
+ /* 筛选项改动即时生效（不设独立「应用筛选」按钮；时间筛选由 tmBtn 统一组件驱动） */
+ filterNt:()=>{
+   const cEl=$('#fCat'), aEl=$('#fAstat'), sEl=$('#fStat');
+   fNt.cat=(cEl&&cEl.value)||'全部';
+   fNt.astat=(aEl&&aEl.value)||'全部'; fNt.stat=(sEl&&sEl.value)||'全部';
+   prunePick(); render();
+ },
+ filterReset:()=>{ fNt={month:fNt.month,cat:'全部',astat:'全部',stat:'未付清',projs:[]}; pjOpen=false; prunePick(); render(); toast(`筛选条件已重置（年月保留 ${fNt.month}，付款状态回到默认「未付清」）`); },
+ /* 项目多选 */
+ pjToggle:()=>{ pjOpen=!pjOpen; render(); },
+ pjPick:t=>{ const f=t.dataset.pj; const i=fNt.projs.indexOf(f); if(i>=0) fNt.projs.splice(i,1); else fNt.projs.push(f); prunePick(); render(); },
+ pjAll:()=>{ fNt.projs=PROJ_LIST(); prunePick(); render(); },
+ pjNone:()=>{ fNt.projs=[]; prunePick(); render(); },
+ /* 统一「年月选择器」组件 */
+ /* 年月组件重绘：页面上的调 render()；弹窗内的（scope=fetch）必须重建弹窗，否则面板不刷新 */
+ mpRefresh:sc=>{ if((sc==='fetch'||sc==='plimp')&&lastModal&&lastModal.reopen) lastModal.reopen(); else render(); },   /* ⚠️ `'lg'` 已移出：期初的截止年月现在在**展开区**（不是弹窗）⇒ 走 render() */
+ mpToggle:t=>{ const id=t.dataset.id; mp.open=mp.open===id?null:id; mp.mode=''; mp.a=''; mp.b=''; mp.wq='';
+   mp.year=Number(String(t.dataset.val).slice(0,4))||mp.year; ACT.mpRefresh(t.dataset.scope); },
+ mpYear:t=>{ mp.year=(mp.year||Number(String(t.dataset.val).slice(0,4)))+(+t.dataset.d); ACT.mpRefresh(t.dataset.scope); },
+ mpMode:t=>{ mp.mode=t.dataset.m; mp.a=''; mp.b=''; mp.wq=''; ACT.mpRefresh(t.dataset.scope); },   /* 面板内切模式（面板有哪些模式由**调用点**声明） */
+ mpWQ:t=>{ mp.wq=t.dataset.qy+'Q'+t.dataset.qq; ACT.mpRefresh(t.dataset.scope); },                  /* 周面板：先选季度 → 换该季度的周列表 */
+ mpPick:t=>{ const sc=t.dataset.scope, m=t.dataset.m; let v=t.dataset.val;
+   if(m==='跨月'){ const a=mp.a||'', b=mp.b||'';                     /* 两击选区间：先点起点、再点终点（只同年内） */
+     if(!a||b||v<a){ mp.a=v; mp.b=''; ACT.mpRefresh(sc); return; }
+     v=mp.a+'~'+v; }
+   mp.a=''; mp.b=''; mp.mode='';
+   if(sc==='fetch'){ fetchM=v; mp.open=null; render(); ACT.fetchDlg(); return; }   /* 抓取弹窗内选月 → 重建弹窗回显（三个抓取入口共用） */
+   if(sc==='pl'){ plf.ym=v; mp.open=null; prunePlPick(); render(); toast(`付款计划已切到 <b>${tmLabel(v)}</b>`); return; }
+   if(sc==='plimp'){ plImportM=v; mp.open=null; ACT.plImport(); return; }          /* 导入弹窗内选月 → 重建弹窗回显 */
+   if(sc==='lg'){ lgCut=v; mp.open=null; render(); return; }                        /* 期初展开区内选「截止年月」→ **只重绘**（不重算默认值） */
+   if(sc==='fl'){ flf.ym=v; mp.open=null; render(); toast(`付款流水已切到 <b>${tmLabel(v)}</b>`); return; }
+   if(sc==='awf'){ awfYm=v; mp.open=null; reloadM09(); toast(`特殊费用月报表已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（手填项按「核算年月 ＋ 项目」各存一份；只 `render()` 会看到上一月那一份） */
+   if(sc==='iv'){ fIvYm=v; mp.open=null; render();
+     toast(v==='全部'?`库存单据已切到 <b>全部时间</b>（不限单据日期）`:`库存单据已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }
+   if(sc==='wh'){ fWhYm=v; mp.open=null; reloadM07(); toast(`收发结存已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（`WHM[月]` 现在来自后端；只 `render()` 会看到空表） */
+   if(sc==='ext'){ fExt.ym=v; mp.open=null; render(); toast(`提取「金额」列已切到 <b>${tmLabel(v)}</b>`); return; }
+   if(sc==='pstb'){ pst.ym=v; mp.open=null; render(); return; }                                   /* 付款统计·左栏「按项目」的桶 */
+   if(sc==='psta'){ if(/^\d{4}$/.test(v)) pst.year=+v; else if(/^\d{4}Q[1-4]$/.test(v)) pst.q=v;
+     mp.open=null; render(); return; }                                                            /* 付款统计·右栏 年 / 季度 */
+  if(sc==='df'){ fDf.ym=v; mp.open=null; render(); toast(`差异登记已切到 <b>${tmLabel(v)}</b>（核算月）`); return; }
+  fNt.month=v;   /* 已取消「全局核算期」：年月只作用于本表自身的筛选 */
+  mp.open=null; prunePick(); render();
+  toast(v==='全部'?`已切换到 <b>全部时间</b>（不限单据日期）`
+    :`已切换到 <b>${tmLabel(v)}</b>${/^\d{4}-\d{2}$/.test(v)?`（单据日期区间 ${v}-01 ~ ${monthEnd(v)}，闭区间）`:''}`); },
+ mpClose:t=>{ mp.open=null; ACT.mpRefresh(t&&t.dataset?t.dataset.scope:null); },
+  editSup:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    if(!ntLive(n)||n.cat!=='集采'){ toast('<b>仅「集采」分类的记录可填集采实际供应商</b>（DEV-P-04）'); render(); return; }
+    n.sup=String(t.value).trim(); delete SUP_SUG[n.id];   /* 人工改一次 = 对自动预填值的**确认 / 否决**，待确认标记随之消失 */
+    render();
+    toast(n.sup?`已录入集采实际供应商：<b>${esc(n.sup)}</b><br>该字段是「按供应商统计欠款」与集采台账付款引用的<b>关联锚点</b>`:'已清空集采实际供应商'); },
+  /* ===== 集采供应商自动匹配（§6.6.3）=====
+     ⭐ 分叉：1 家 → 预填 + 「自动匹配 · 待确认」（**不静默落库**，须点「采用」）；
+             ≥2 家 → 弹窗让用户从命中集里选（**绝不取最长 / 第一个 / 相似度最高的**）；
+             0 家 → 手动指定（允许自由录入）。 */
+  supMatchRun:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    if(!ntLive(n)||n.cat!=='集采'){ toast('仅「集采」分类的记录可自动匹配供应商'); return; }
+    const pool=supPool(n), {lvl,cands}=supMatch(n);
+    if(!pool.length){ closeModal(); render();
+      return toast(`<b>本项目下暂无集采合同供应商</b> —— 请先到「集采台账」页为 <b>${esc(pjLabel(ntProjKey(n))||'该项目')}</b> 建档，再回来匹配<br><span class="mut sm">§6.6.3 前提④：正常流程下一定先有集采合同</span>`,5200); }
+    if(cands.length===1){                 /* 1 家：预填 + 待确认（2 字等级同样只预填，不直填） */
+      const hit=cands[0]; n.sup=hit; SUP_SUG[n.id]=hit; render();
+      const weaken=lvl===4?`<br><span style="color:var(--wn)">⚠️ 仅 <b>2 字片段</b>命中 —— 证据最弱，请务必确认</span>`:'';
+      return toast(`按 <b>${SUP_LVL_NAME[lvl]}</b> 命中 <b>1</b> 家：<b>${esc(hit)}</b><br>已<b>预填</b>并标「<b>自动匹配 · 待确认</b>」—— 点「采用」转正式值，或直接改一下${weaken}`,5600); }
+    /* ≥2 家：开弹窗让用户选（候选 = 歧义集本身） */
+    supSel=null;
+    modal({title:`选择供应商 · ${n.code}`,reopen:()=>ACT.supMatchRun({dataset:{id:n.id}}),
+      body:`<div class="tip wn" style="margin-bottom:10px">按 <b>${SUP_LVL_NAME[lvl]}</b> 命中 <b>${cands.length}</b> 家 —— <b>同等级内的多命中构成歧义</b>，<b>不猜</b>，请你选。<br>⚠️ 系统<b>绝不</b>取"最长的 / 第一个 / 最像的"（§6.6.3「明确不做」）。</div>
+      <div class="fld"><label>这些是本项目集采合同里，其「${SUP_LVL_NAME[lvl]}」出现在单据名中的供应商</label>
+      <select class="inp" id="supPickId" data-act="supPick" data-id="${n.id}">${cands.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select></div>
+      <div class="sm mut">单据名称：<span class="fc">${esc(n.doc)}</span><br>本项目供应商池（${pool.length} 家）：${pool.map(esc).join(' · ')}</div>`,
+      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="supOk" data-id="${n.id}">采用所选供应商</button>`});
+    toast(`按 <b>${SUP_LVL_NAME[lvl]}</b> 命中 <b>${cands.length}</b> 家 —— 已列出让你选（多命中<b>不让系统猜</b>）`,5200); },
+  supPick:t=>{ supSel=t.value; },
+  supOk:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return; if(!supSel) return toast('请先选择一家供应商');
+    const v=String(supSel).trim(); if(!v) return;
+    n.sup=v; SUP_SUG[n.id]=v; closeModal(); render();
+    toast(`已把「集采实际供应商」设为 <b>${esc(v)}</b>（来自多命中候选 · 已标「自动匹配 · 待确认」—— 点「采用」转正式值）`,5200); },
+  supAccept:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    if(!supHas(n)){ toast('这条没有待确认的自动匹配值'); return; }
+    delete SUP_SUG[n.id]; render();
+    toast(`已确认「集采实际供应商」= <b>${esc(n.sup)}</b> —— 「自动匹配 · 待确认」标记已消除，转为正式值<br>该字段是「按供应商统计欠款」的关联锚点（§4.4.3）`,4600); },
+  supReject:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    delete SUP_SUG[n.id]; n.sup=''; render();
+    toast('已放弃自动匹配值 —— 该字段回到手工录入 / 可重新匹配'); },
+ /* —— MOD-11 / MOD-01 / MOD-08 筛选：改动即时生效（R4，无「应用」按钮） —— */
+ jcFilter:()=>{ const a=$('#fTag'), b=$('#fArch'), c=$('#fSup');
+   fJc.tag=(a&&a.value)||'全部'; fJc.arch=(b&&b.value)||'全部'; fJc.sup=(c&&c.value)||''; pruneJcPick(); render(); },
+ /* ⚠️ 复位一律【原地改字段】，不要 `fJc={...}` 重新赋值 —— 外部（自检）持有的是对象引用，
+    重新赋值会让引用失效（同 BIGVAL 的教训） */
+ jcReset:()=>{ fJc.tag='纳入台账'; fJc.arch='全部'; fJc.sup=''; fJc.projs.length=0; jcPjOpen=false; pruneJcPick(); render(); toast('集采台账筛选条件已重置（三态回到默认「纳入台账」）'); },
+ /* 「项目」筛选（**通用控件** = 共用项目面板 `projPanel`，多选）—— 与 MOD-03 / MOD-04 同款，只是动作命名空间不同。
+    ⚠️ 一律**原地改数组内容**（不要 `fJc.projs=…` 重新赋值）—— 外部持有的是那个数组的引用。 */
+ jcPjToggle:()=>{ jcPjOpen=!jcPjOpen; render(); },
+ jcPjPick:t=>{ const v=t.dataset.pj; const i=fJc.projs.indexOf(v); if(i>=0) fJc.projs.splice(i,1); else fJc.projs.push(v); pruneJcPick(); render(); },
+ jcPjAll:()=>{ fJc.projs.length=0; fJc.projs.push(...JC_PROJ_LIST()); pruneJcPick(); render(); },
+ jcPjNone:()=>{ fJc.projs.length=0; pruneJcPick(); render(); },
+ fPjStatus:t=>{ fPj.status=t.value||'在建'; render(); },
+ fPjType:t=>{ fPj.type=t.value||'全部'; render(); },
+ fPjQ:t=>{ fPj.q=t.value||''; render(); },
+ fPjReset:()=>{ fPj.status='在建'; fPj.type='全部'; fPj.q=''; render(); toast('项目档案筛选已重置（状态回到默认「在建」，§2.7）'); },
+ fIvDir:t=>{ fIvDir=t.value||'全部'; render(); },
+ fIvReset:()=>{ invWhs.length=0; invWhOpen=false; invOnlyAdj=false; fIvDir='全部'; fIvYm=bjMonth(-1); fIvCol={}; invColOpen=''; render();
+   toast(`库存单据筛选已重置 —— 核算年月回到默认的 <b>${tmLabel(bjMonth(-1))}</b>（材料报表类默认 = 上月，§9.2）`); }
+};
+
+/* 事件委托 */
+const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup','editCat','filterNt','pjPick','procPjPick','invWh','invOnlyAdj','ivColQ','ivColMin','ivColMax','ivColVal','awfName','awfAmt','awfPjPick','ledNote','ledPjPick','lgPjPick','lgCat','lgS','lgP','lgR','flFilter','flPjPick','jcMethod','jcArchNo','jcRetDate','jcRemark','jcFilter','jcPjPick','bigEdit','bigSelTog','payDraft','fPjStatus','fPjType','fPjQ','fIvDir','fExtStatus','extBal','plFilter','plPick','plPickAll','plPjPick','plCell','plRowSet','jcPick','jcPickAll','ntRowSet','editApprove','editOrd','jcLinkPick','jcNSet','jcNPjPick','jcSubSet','ledExpPjPick','procExpPjPick','dfSet','dfFilter','supPick'];
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]'); if(!t) return;
+  const nm=t.tagName.toLowerCase();
+  if(nm==='input'||nm==='select'||nm==='textarea') return;   /* 表单元素交给 change */
+  const a=t.dataset.act; if(!a||!ACT[a]) return;
+  if(a==='maskBg'){ ACT.maskBg(t,e); return; }
+  e.preventDefault(); ACT[a](t,e);
+});
+document.addEventListener('change',e=>{
+  const t=e.target.closest('[data-act]'); if(!t) return;
+  const a=t.dataset.act; if(ACT[a]&&CHG.includes(a)) ACT[a](t,e);
+});
+/* 点面板外部自动收起（年月选择器 / 项目面板）—— 在委托处理之后再跑，点自身不会被误关。
+   ⚠️ **十个项目面板**（MOD-03 pjOpen / MOD-04 plPjOpen / MOD-05 付款流水 flPjOpen / MOD-05 台账 ledPjOpen /
+      MOD-05 期初展开区 lgPjOpen · MOD-11 集采新增展开区 jcNPjOpen（2026-09-13 增行模式新增 —— 都在 `.tw` 之外，不会被裁） /
+      MOD-06 procPjOpen / MOD-08 invWhOpen / MOD-09 awfPjOpen / MOD-11 jcPjOpen）都要在这里登记，
+   都要在这里登记，否则"点空白处不收起"（MOD-04、MOD-08、MOD-11 都曾漏登记）。 */
+document.addEventListener('click',e=>{
+  if(!pjOpen && !plPjOpen && !flPjOpen && !procPjOpen && !jcPjOpen && !invWhOpen && !awfPjOpen && !ledPjOpen && !lgPjOpen && !jcNPjOpen && !ledExpPjOpen && !procExpPjOpen && mp.open===null) return;
+  const inEl=cls=>!!(e.target&&e.target.closest&&e.target.closest(cls));
+  let ch=false;
+  if(pjOpen && !inEl('.pjwrap')){ pjOpen=false; ch=true; }
+  if(plPjOpen && !inEl('.pjwrap')){ plPjOpen=false; ch=true; }
+  if(procPjOpen && !inEl('.pjwrap')){ procPjOpen=false; ch=true; }
+  if(jcPjOpen && !inEl('.pjwrap')){ jcPjOpen=false; ch=true; }
+  if(invWhOpen && !inEl('.pjwrap')){ invWhOpen=false; ch=true; }
+  if(awfPjOpen && !inEl('.pjwrap')){ awfPjOpen=false; ch=true; }
+  if(flPjOpen && !inEl('.pjwrap')){ flPjOpen=false; ch=true; }
+  if(ledPjOpen && !inEl('.pjwrap')){ ledPjOpen=false; ch=true; }
+  if(ledExpPjOpen && !inEl('.pjwrap')){ ledExpPjOpen=false; ch=true; }
+  if(procExpPjOpen && !inEl('.pjwrap')){ procExpPjOpen=false; ch=true; }
+  if(lgPjOpen && !inEl('.pjwrap')){ lgPjOpen=false; ch=true; }
+  if(jcNPjOpen && !inEl('.pjwrap')){ jcNPjOpen=false; ch=true; }
+  if(mp.open!==null && !inEl('.mpwrap')){ mp.open=null; ch=true; }
+  if(ch){ render(); if(lastModal&&lastModal.reopen) lastModal.reopen(); }
+});
+document.addEventListener('keydown',e=>{
+  /* 「非按钮但可点」元素的键盘等价操作 —— **通用一条，不逐个点名**：
+     元素只要声明 `data-act` + `role="button"` + `tabindex="0"`，回车 / 空格即等价于点击
+     （焦点框样式见样式表里的 `[data-act][role="button"]:focus-visible`）。
+     ⚠️ 真实 `<button>` **不需要**这条（浏览器原生支持回车 / 空格）⇒ 只认带 `role="button"` 的元素，
+        否则会与原生行为重复触发。新增可点元素时的做法 = 补那三个属性，**不要再来这里加选择器**。 */
+  if(e.key==='Enter'||e.key===' '){
+    const t=e.target&&e.target.closest&&e.target.closest('[data-act][role="button"]');
+    if(t&&ACT[t.dataset.act]){ e.preventDefault(); ACT[t.dataset.act](t,e); return; }
+  }
+  if(e.key!=='Escape') return;
+  if(pjOpen||plPjOpen||flPjOpen||ledPjOpen||procPjOpen||jcPjOpen||invWhOpen||awfPjOpen||lgPjOpen||jcNPjOpen||ledExpPjOpen||procExpPjOpen||invColOpen!==''||mp.open!==null){ pjOpen=false; plPjOpen=false; flPjOpen=false; ledPjOpen=false; procPjOpen=false; jcPjOpen=false; invWhOpen=false; awfPjOpen=false; lgPjOpen=false; jcNPjOpen=false; ledExpPjOpen=false; procExpPjOpen=false; invColOpen=''; mp.open=null; render(); }
+  closeModal(); });
+
+/* =====================================================================
+   ⭐⭐ 后端适配层（前端壳）—— 「**原型直接接数据**」的唯一出入口。
+   ⛔ 前端**不做任何业务判定**：改分类 / 剔除 / 恢复 一律 POST 给后端，
+      由后端**同一批纯函数**（`notice_actions`）判定并落库 —— 一份内容只许一个主人。
+   ⚠️ 前端保留的只有**显示逻辑**（筛选 / 排序 / 合计 / 勾选态），它与后端判定**不重叠**。
+   ===================================================================== */

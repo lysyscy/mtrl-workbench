@@ -12,7 +12,7 @@ import hashlib
 import subprocess
 import sys
 from pathlib import Path
-from shell_source import SHELL_PATH  # noqa: E402  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH, pick  # noqa: E402  ← `P4`① 读取点收敛
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
@@ -71,6 +71,13 @@ def main() -> int:
 
     hit = miss = 0
     for i, (label, fkey, old, new, test_name) in enumerate(MUTATIONS, 1):
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳是多件 ⇒ 锚点在哪件就改哪件（⛔ 仍逐字节复原）。
+        #    ⚠️ 判断基准一律用**原始** `SHELL_PATH`：`FILES["shell"]` 已被上一条改成别的件，
+        #    拿它当基准会**累积失效**（实测：第 6 条起全 SKIP）。
+        if fkey == "shell":
+            FILES["shell"] = pick(SHELL_PATH, old, new)
+            orig["shell"] = FILES["shell"].read_bytes()
+            md5_before["shell"] = hashlib.md5(FILES["shell"].read_bytes()).hexdigest()
         target = orig[fkey]
         o, n = _fit(old.encode("utf-8"), target), _fit(new.encode("utf-8"), target)
         cnt = target.count(o)

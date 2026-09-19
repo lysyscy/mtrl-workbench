@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 TEST = "tests/test_wired_m06.py"
 
@@ -23,8 +23,11 @@ MUTS: list[tuple[str, str, str, str]] = [
         "test_机械演示数组已删",
     ),
     (
+        # ⚠️ 2026-09-19（性能 `P3` 主体）：`boot()` **不再逐路拉**（改成"进哪页拉哪页"）⇒ 原锚点
+        #    （`boot()` 里那句 `await reloadMech();`）**已不存在**（脚本会报 SKIP＝未验证）。
+        #    改指**取数表**里的同一意图：`LOADERS` 里没有「机械 6 列」这一路 ⇒ MACH6 恒空 ⇒ 机械欠款恒 0。
         "M2 `boot()` 不再拉机械值（MACH6 恒空 ⇒ 机械欠款恒 0）",
-        "    await reloadMech();",
+        "  '机械 6 列': reloadMech,",
         "",
         "test_机械值来自后端且boot会拉",
     ),
@@ -51,16 +54,20 @@ def main() -> int:
     before = (SHELL.read_bytes(), md5(SHELL))
     hit = 0
     for desc, old, new, case in MUTS:
-        t = SHELL.read_text(encoding="utf-8")
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ **锚点在哪件就改哪件**；
+        #    ⛔ 复原用**那一件的**原字节（`before[0]` 是 `index.html` 的 —— 写进 js 件会把件写坏）。
+        sh = pick(SHELL, old, new)
+        sh0 = sh.read_bytes()
+        t = sh.read_text(encoding="utf-8")
         if t.count(old) != 1:
             print(f"  ⛔ {desc} —— 锚点命中 {t.count(old)} 次（期望 1）⇒ **未验证**")
             continue
-        SHELL.write_text(t.replace(old, new), encoding="utf-8", newline="\n")
+        sh.write_text(t.replace(old, new), encoding="utf-8", newline="\n")
         r = subprocess.run([str(PY), "-m", "pytest", "-q", f"{TEST}::{case}"],
                            cwd=str(ROOT / "backend"), capture_output=True, text=True,
                            encoding="utf-8", errors="replace")
         red = r.returncode != 0
-        SHELL.write_text(before[0].decode("utf-8"), encoding="utf-8", newline="\n")
+        sh.write_text(sh0.decode("utf-8"), encoding="utf-8", newline="\n")
         print(("  ✅ " if red else "  ⛔ 未命中 ") + desc + f"  → `{case}` " + ("变红" if red else "**仍是绿的**"))
         hit += red
 

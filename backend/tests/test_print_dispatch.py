@@ -176,7 +176,9 @@ def test_接线点用的是分流器_不是裸_send_pdf():
 @acc()
 def test_壳侧有本机打印机名可选():
     assert "printerList: () => API.get('/api/m03/settings/printers')" in SHELL
+    # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：`m03PrinterOpen` 搬进 `web/shell/print-export.js` 后，
+    #    不再紧跟 `openOwnDialog`（留在 `shell/core.js`）⇒ 原"截到下一个函数"的写法会 `ValueError`。
+    #    **判据一字不变**：它就是该件的最后一个块 ⇒ 取到件尾。
     dlg = SHELL[SHELL.index("async function m03PrinterOpen()"):]
-    dlg = dlg[:dlg.index("async function openOwnDialog()")]
     assert 'list="m03PrinterNames"' in dlg and "m03PrinterNames" in dlg, "名字要给下拉（要一字不差）"
     assert "手填" in dlg, "取不到名字时要如实说清"

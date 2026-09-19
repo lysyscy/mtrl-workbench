@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 TEST = "tests/test_wired_m03_pick.py"
 
@@ -97,6 +97,9 @@ def main() -> int:
     before = {p: (p.read_bytes(), md5(p)) for p in {m[1] for m in MUTS}}
     hit = 0
     for desc, path, old, new, case in MUTS:
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
+        path = pick(path, old, new)
+        before.setdefault(path, (path.read_bytes(), hashlib.md5(path.read_bytes()).hexdigest()))
         t = path.read_text(encoding="utf-8")
         if t.count(old) != 1:
             print(f"  ⛔ {desc} —— 锚点命中 {t.count(old)} 次（期望 1）⇒ **未验证**")

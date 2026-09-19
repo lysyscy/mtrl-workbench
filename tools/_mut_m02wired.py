@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 BE = ROOT / "backend"
-from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
 MUT_RESULTS = str(ROOT / "artifacts" / "_mut_acc_results.json")
 T = "tests/test_wired_m02.py"
 
@@ -81,6 +81,8 @@ def main() -> int:
     ok, bad = 0, 0
     for m in MUTATIONS:
         f = ROOT / m["file"]
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
+        f = pick(f, m["old"], m["new"])
         before = md5(f)
         raw = f.read_bytes()
         eol = b"\r\n" if b"\r\n" in raw else b"\n"

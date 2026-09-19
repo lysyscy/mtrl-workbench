@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-from shell_source import SHELL_PATH as SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
 ROUTER = BACKEND / "app" / "mod01_projects" / "router.py"
 PY = str(BACKEND / ".venv" / "Scripts" / "python.exe")
 
@@ -68,6 +68,9 @@ def main() -> int:
     before = {p: (p.read_bytes(), md5(p)) for p in {m[1] for m in MUTATIONS}}
     hits = 0
     for name, path, old, new, test_name in MUTATIONS:
+        # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
+        path = pick(path, old, new)
+        before.setdefault(path, (path.read_bytes(), hashlib.md5(path.read_bytes()).hexdigest()))
         text = path.read_text(encoding="utf-8")
         if old not in text:
             print(f"⛔ {name}：**变异串没找到**（实现已改？）—— 本项作废")

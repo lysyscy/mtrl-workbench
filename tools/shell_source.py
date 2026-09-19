@@ -71,7 +71,39 @@ def parts_text() -> list[tuple[str, str]]:
     return out
 
 
-#: `index.html` **本体**的路径（⚠️ 只给"改字节"的变异脚本用；读源码请用 `SHELL`）
+def resolve(anchor: str) -> Path:
+    """锚点文本**当前在哪一件**里 ⇒ 返回那一件的路径（⚠️ `P4`② 拆件后，锚点可能落在 `web/shell/*.js`）。
+
+    ⛔ **找不到 / 多处命中都抛** —— ⛔ 绝不许静默回落到 `index.html`：
+    那会让变异"改了个没人看的地方"却报成功（比 SKIP 更坏 —— SKIP 至少是**看得见**的未验证）。
+    """
+    hits = [p for p in part_paths() if anchor in p.read_text(encoding="utf-8")]
+    if len(hits) != 1:
+        raise LookupError(f"锚点在壳的 {len(hits)} 件里命中（期望 1）：{anchor[:70]!r}")
+    return hits[0]
+
+
+def pick(path: Path, *anchors: str) -> Path:
+    """变异脚本专用：`path` 若是**壳的本体**（拆件前的 `SHELL_PATH`）⇒ 按锚点改判到**那一件**。
+
+    用法：`path = pick(path, old, new)` —— 依次试各锚点（变异脚本只保证**旧**片段在壳里 ⇒ 旧的放前面）。
+    `path` 不是壳本体（如后端 `.py`）⇒ 原样返回。
+    """
+    if path != INDEX_HTML:
+        return path
+    for a in anchors:
+        try:
+            return resolve(a)
+        except LookupError:
+            continue
+    # ⚠️ 都找不到 ⇒ **回落到原 path**（`index.html`）：让调用方照常走"锚点命中 0 次 ⇒ **SKIP（未验证）**"
+    #    那条路（⛔ 看得见的失败）。**不抛异常** —— 抛了会把整个脚本崩掉、连累同一脚本里其余的变异
+    #    （2026-09-19 实测踩到：一条过期锚点让 `_mut_m06wired.py` 第 2 条起全没跑）。
+    return path
+
+
+#: `index.html` **本体**的路径（⚠️ `P4`② 之后**只有"拆件前"的老脚本**还用；
+#:  新写的"改字节"脚本请用 `pick(path, old, new)` —— 壳是多件，锚点在哪件就改哪件）
 SHELL_PATH: Path = INDEX_HTML
 #: 壳的逐件路径（顺序 = 浏览器执行顺序）
 SHELL_PARTS: list[Path] = part_paths()
