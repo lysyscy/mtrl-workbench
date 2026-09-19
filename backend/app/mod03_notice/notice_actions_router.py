@@ -184,31 +184,18 @@ async def act_stat(
     value = form.get(f"v_{notice_id}_{field}")
 
     try:
-        notice = repo.get_notice(session, int(notice_id))
-        if notice is None:
-            raise MustReportError(f"通知书 {notice_id} 不存在")
-        trace = repo.adjust_notice_stat(
-            session, notice, field=field, value=value, changed_by=current_operator()
-        )
-        if trace is None:
-            return back(
-                st,
-                f"「{notice_id}」的该格没有变化 —— **什么都没做**（§4.2.7：不做无意义的重算、不留空痕）",
-                kind="wn",
-            )
-        # 手改后**欠款实时重算**（§4.5.3）—— 复用 MOD-05 的同一个出口，不另写算法
-        from app.mod05_flow import service as flow_service
+        # ⚠️ 2026-09-19（`§19` 批 4 · S1）：判定 / 落库 / 留痕 / 欠款重算 / 回执文案一律走**唯一出口**
+        #    `notice_actions.apply_stat_change`（与 JSON API `/api/m03/actions/stat` **共用**）——
+        #    ⛔ 别在这里重写判定或另写一句文案（一份内容只许一个主人）。
+        from app.mod03_notice.notice_actions import apply_stat_change
 
-        debt = flow_service.build_debt(session)
-        parts = " · ".join(f"{d['label']} {d['amount']}" for d in debt["by_category"])
-        note = "" if debt.get("mech_settle_ready") else "（机械侧结算额来自过程资料 MOD-06，尚未落地 ⇒ 按 0 计）"
-        return back(
-            st,
-            f"{trace.label}已由 {trace.before} 改为 {trace.after}（改动人 {trace.changed_by}、已留痕）；"
-            f"欠款已实时重算：{parts} · 合计 {debt['total']}{note}",
+        trace, message = apply_stat_change(
+            session, int(notice_id), field=field, value=value, changed_by=current_operator()
         )
     except MustReportError as exc:
         return back(st, exc.message, kind="err")
+    # 值没变 ⇒ 提示走 `wn`（原样照搬原来的那句「什么都没做」）；改了 ⇒ 正常回执
+    return back(st, message, kind="ok" if trace is not None else "wn")
 
 
 # --------------------------------------------------------------- 能力 6 · 按本月计划勾选（§4.3.5）

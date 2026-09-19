@@ -314,6 +314,51 @@ def manual_project_options(projects) -> list[dict]:
     return out
 
 
+def apply_stat_change(
+    session,
+    notice_id: int,
+    *,
+    field: str,
+    value: object,
+    changed_by: str,
+) -> tuple[object | None, str]:
+    """**统计金额手改**（§4.5.3）的**唯一出口** —— PRG（`POST /m03/notices/stat`）与 JSON API
+    （`POST /api/m03/actions/stat`）**共用这一份**：⛔ 不许两份判定、不许两份文案。
+
+    分三层，各有各的主人（本函数只做"接线"）：
+      · **判定**：`domain.adjust_stat` —— 四种拒绝（非法金额 / 非旁路字段 / **超上限** / 值没变）；
+      · **落库 + 留痕**：`repository.adjust_notice_stat`（留痕 = 壳判「黄底」的唯一事实来源）；
+      · **欠款重算**：MOD-05 的 `service.build_debt`（⛔ 不另写算法）。
+
+    返回 `(trace, message)`：
+      · `trace is None` ⇒ **值没变、什么都没做**（§4.2.7：不做无意义的重算，也不产生空留痕）；
+      · `message` 一律是**可直接给人看**的中文（改前改后 / 改动人 / 欠款重算结果 / 那条例外说明）。
+    """
+    from app.mod03_notice import repository as repo
+    from app.mod05_flow import service as flow_service
+
+    notice = repo.get_notice(session, int(notice_id))
+    if notice is None:
+        raise MustReportError(f"通知书 {notice_id} 不存在")
+
+    trace = repo.adjust_notice_stat(
+        session, notice, field=field, value=value, changed_by=changed_by
+    )
+    if trace is None:
+        return None, (
+            f"「{notice_id}」的该格没有变化 —— **什么都没做**"
+            "（§4.2.7：不做无意义的重算、不留空痕）"
+        )
+
+    debt = flow_service.build_debt(session)
+    parts = " · ".join(f"{d['label']} {d['amount']}" for d in debt["by_category"])
+    note = "" if debt.get("mech_settle_ready") else "（机械侧结算额来自过程资料 MOD-06，尚未落地 ⇒ 按 0 计）"
+    return trace, (
+        f"{trace.label}已由 {trace.before} 改为 {trace.after}（改动人 {trace.changed_by}、已留痕）；"
+        f"欠款已实时重算：{parts} · 合计 {debt['total']}{note}"
+    )
+
+
 __all__ = [
     "CATEGORY_NAMES", "CATEGORY_CHOICES", "category_name",
     "CategoryChange", "change_category",
@@ -322,5 +367,6 @@ __all__ = [
     "MANUAL_PH_PREFIX", "STAT_SETTLE_FIXED",
     "new_manual_ph_id", "is_manual_ph_id", "is_manual_row", "assert_manual_editable",
     "ManualRow", "manual_row_payload", "manual_project_options",
+    "apply_stat_change",
     "EXCLUDE_BY_MANUAL", "EXCLUDE_BY_RULE", "EXCLUDE_NONE", "CATEGORY_MATERIAL",
 ]

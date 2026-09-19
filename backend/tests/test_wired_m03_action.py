@@ -168,3 +168,21 @@ def test_壳里手改过的统计格黄底且判据是留痕():
         "黄底不是由**留痕**判的"
     # ⚠️ 上界提示：手改值 > 审批金额时要有「导入提醒」的越界标记（同一处留痕机制的延伸）
     assert "impHasWarn(n)" in SHELL, "越界（手改值 > 审批金额）没有提醒入口"
+
+
+@acc()
+def test_壳里统计手改走真接口而不是本地改():
+    """`§19` 批 4 · **S1 接线**：统计两金额必须**走后端**（上限 / 留痕 / 欠款重算都在服务端唯一出口
+    `notice_actions.apply_stat_change`）—— ⛔ 前端不再本地改值 + 本地留痕冒充落库。
+
+    ⚠️ 这条同时是 `wiring_audit` 的「**零件装上车**」证据：新端点 `POST /api/m03/actions/stat`
+    在壳里**真的有调用点**（后端加了端点而壳不调 = 测了零件没装上车，`W1b` 会拦）。
+    """
+    assert "statCell: body => API.post('/api/m03/actions/stat', body)," in SHELL, "壳没接统计手改接口"
+    i = SHELL.find("editss:t=>{")
+    assert i >= 0, "找不到 `editss` 处理器"
+    reg = SHELL[i:i + 3000]
+    assert "API.statCell({" in reg, "统计手改仍然是本地改（没走后端）"
+    assert "{ss:'stat_settle', sp:'stat_paid'}" in reg, "壳的短名没映射到后端旁路字段名"
+    assert "pushTrail(n.trail,{obj:n.code||n.id, field:NAME" not in reg, "还在本地写留痕冒充落库"
+    assert "reloadNotices()" in reg, "改完没重拉列表（黄底 / 欠款就刷不出来）"

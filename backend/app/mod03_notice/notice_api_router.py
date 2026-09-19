@@ -78,4 +78,50 @@ def api_restore(req: IdsIn, session: Session = DBSession) -> dict:
         return {"ok": False, "restored": [], "message": exc.message}
 
 
+class StatIn(BaseModel):
+    """**统计金额手改**的入参（§4.5.3）。
+
+    ⚠️ 字段名用**后端的旁路字段名**（`stat_settle` / `stat_paid`），不用壳里的短名（`ss` / `sp`）
+       —— 名字映射由壳的适配层做（照既有的 `CAT_API` 做法），⛔ 后端不为某个前端改名。
+    """
+
+    notice_id: int
+    field: str
+    value: str
+
+
+@api_router.post("/api/m03/actions/stat")
+def api_stat(req: StatIn, session: Session = DBSession) -> dict:
+    """**统计金额手改**（§4.5.3）—— 上限 = 审批金额；超额**拦截并保留原值**；**留痕**；欠款**实时重算**。
+
+    ⚠️ 与 PRG `POST /m03/notices/stat` **共用** `notice_actions.apply_stat_change` ——
+       本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ **不重复、不另写任何判定或文案**。
+    ⚠️ 值没变时 `ok=True, changed=False`（**什么都没做**，§4.2.7）—— 前端也照常提示那句中文。
+    """
+    from app.core.identity import current_operator
+    from app.mod03_notice.notice_actions import apply_stat_change
+
+    try:
+        trace, message = apply_stat_change(
+            session, req.notice_id, field=req.field, value=req.value,
+            changed_by=current_operator(),
+        )
+    except MustReportError as exc:
+        return {"ok": False, "changed": False, "message": exc.message}
+
+    if trace is None:
+        return {"ok": True, "changed": False, "message": message}
+
+    return {
+        "ok": True,
+        "changed": True,
+        "notice_id": req.notice_id,
+        "field": req.field,
+        "before": str(trace.before),
+        "after": str(trace.after),
+        "label": trace.label,
+        "message": message,
+    }
+
+
 __all__ = ["api_router"]

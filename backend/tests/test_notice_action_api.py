@@ -150,3 +150,80 @@ def test_路由_统计手改超上限被拦且保留原值():
     assert r.status_code == 303 and "err" in r.headers["location"]
     assert fake.by_model[PaymentNotice][0].stat_paid == Decimal("10000.00")   # 原值不变
     assert [x for x in fake.added if isinstance(x, NoticeStatLog)] == []      # 不留痕
+
+
+# ------------------------------------------------ `§19` 批 4 · S1：同上两条实质，改指 **JSON API**
+# 原委：壳的统计手改原来只在**前端本地**改值 + 本地留痕（不落库 ✗）⇒ 接真接口 `POST /api/m03/actions/stat`；
+# 旧页删除（授权 `D18`）后 PRG（上面那两条）随页消失，故**同样的实质**必须在新接口上有着落。
+
+
+@acc("ACC-PAY-STAT-001", "001-11")
+def test_API_统计手改落库并留痕():
+    """**统计手改走 JSON API**：值真的落库 ＋ 留痕真的写进库（壳判「黄底」的唯一事实来源）。"""
+    from app.mod03_notice.models import NoticeStatLog
+
+    client, fake = _client([_notice(1)])
+    fake.by_model.setdefault(NoticeStatLog, [])
+    r = client.post("/api/m03/actions/stat",
+                    json={"notice_id": 1, "field": "stat_settle", "value": "8000"})
+    assert r.status_code == 200, "JSON 动作 API 一律恒 200（成败看 `ok`）"
+    body = r.json()
+    assert body["ok"] is True and body["changed"] is True
+    assert body["before"] == "10000.00" and body["after"] == "8000.00"
+    assert fake.by_model[PaymentNotice][0].stat_settle == Decimal("8000.00")     # 落库
+    logs = [x for x in fake.added if isinstance(x, NoticeStatLog)]
+    assert len(logs) == 1, "没留痕（壳里的「黄底」就判不出来了）"
+    # 回执里的中文说明**原样给用户**（含留痕与欠款重算）—— 前端不自己拼
+    assert "已留痕" in body["message"] and "欠款已实时重算" in body["message"]
+
+
+@acc("ACC-PAY-STAT-001", "001-12")
+def test_API_统计手改超上限被拦且保留原值():
+    """上限 = 审批金额（§4.5.3「按发票走、只能少不能多」）⇒ **拦下并保留原值**，且**不留痕**。"""
+    from app.mod03_notice.models import NoticeStatLog
+
+    client, fake = _client([_notice(1)])
+    fake.by_model.setdefault(NoticeStatLog, [])
+    r = client.post("/api/m03/actions/stat",
+                    json={"notice_id": 1, "field": "stat_paid", "value": "20000"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False and body["changed"] is False
+    assert "上限" in body["message"] or "审批金额" in body["message"], f"没说清为什么拦：{body['message']}"
+    assert fake.by_model[PaymentNotice][0].stat_paid == Decimal("10000.00")      # 原值不变
+    assert [x for x in fake.added if isinstance(x, NoticeStatLog)] == []         # 不留痕
+
+
+@acc()
+def test_API_统计手改值没变时说清什么都没做():
+    """§4.2.7：值没变 ⇒ **不做无意义的重算、不留空痕** —— 但要让用户看见「什么都没做」（不是静默）。"""
+    from app.mod03_notice.models import NoticeStatLog
+
+    client, fake = _client([_notice(1)])
+    fake.by_model.setdefault(NoticeStatLog, [])
+    r = client.post("/api/m03/actions/stat",
+                    json={"notice_id": 1, "field": "stat_settle", "value": "10000.00"})
+    body = r.json()
+    assert body["ok"] is True and body["changed"] is False
+    assert "什么都没做" in body["message"]
+    assert [x for x in fake.added if isinstance(x, NoticeStatLog)] == []
+
+
+@acc()
+def test_PRG与JSON_API共用统计手改的唯一出口():
+    """⛔ **防分叉**：判定 / 落库 / 文案只许一份 —— PRG 与 JSON API 都必须调
+    `notice_actions.apply_stat_change`，任何一边**内联**判定或另写文案都算违规。
+
+    （本仓的老毛病："同一口径只做了一半" / "两份实现悄悄漂移" ⇒ 这条就是给它立的阀门。）
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    prg = (root / "backend" / "app" / "mod03_notice" / "notice_actions_router.py").read_text(encoding="utf-8")
+    api = (root / "backend" / "app" / "mod03_notice" / "notice_api_router.py").read_text(encoding="utf-8")
+    for name, src in (("PRG", prg), ("JSON API", api)):
+        assert "apply_stat_change(" in src, f"{name} 没走统计手改的唯一出口"
+        assert "repo.adjust_notice_stat(" not in src, f"{name} 内联了落库/判定（应共用唯一出口）"
+    assert "def apply_stat_change(" in (
+        root / "backend" / "app" / "mod03_notice" / "notice_actions.py"
+    ).read_text(encoding="utf-8"), "唯一出口本身没了"

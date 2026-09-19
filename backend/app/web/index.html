@@ -3447,10 +3447,16 @@ const ACT={
      toast(`<b>付款金额</b>已临时改为 ${M(v)}（原 ${M(old)}）<br>这是<b>本次会话的覆盖</b>，<b>刷新页面后会恢复为「审批金额 − 已付金额」</b><br>i8 原值 ${M(n.pay)} 与「统计付款金额」<b>均未改动</b>（会话级覆盖不留痕）`,5400);
      return;
    }
-   n[k]=v;
-   pushTrail(n.trail,{obj:n.code||n.id, field:NAME, before:old, after:v, note:'手工调整（旁路字段）'});
-   const d=debts(); render();
-   toast(`<b>${NAME}</b>：${M(old)} → ${M(v)}（已留痕）<br>欠款已<b>实时重算</b>：辅材 ${M(d.辅材)} · 机械 ${M(d.机械)} · 集采 ${M(d.集采)} · 合计 ${M(d.合计)}`,4800); },
+   /* ⭐ 2026-09-19 接线（`§19` 批 4 · S1）：统计两金额**走后端** `POST /api/m03/actions/stat` ——
+      上限 / 留痕 / 欠款重算全在后端**同一出口**（`notice_actions.apply_stat_change`）；
+      ⛔ 前端不再本地改值 + 本地留痕冒充落库（原先 `n[k]=v; pushTrail(...); debts()` 就是那个毛病）。
+      回执里的中文说明（含欠款重算）**原样给用户**，失败亦然。
+      ⚠️ 成功后 `reloadNotices()` 重拉列表：**黄底**由后端的 `edited_fields` 还原
+         （适配层 `adaptNotice` 已把它映射成 `trail`，`hasT` 按列名判 —— 前端无需自己记留痕）✓ */
+   const FIELD={ss:'stat_settle', sp:'stat_paid'}[k];
+   API.statCell({notice_id:Number(t.dataset.id), field:FIELD, value:String(t.value)})
+     .then(r=>{ toast(r.message, r.changed?4800:4600); return reloadNotices(); })
+     .catch(e=>{ toast(`<b>保存失败</b>：${esc(e.message||e)}`); render(); }); },
  /* ⭐ 批量打印付款通知书（§4.6 场景五 · REQ-R6 · API-07）—— 2026-09-14 补出口：
     口径 = **勾选通知书 → 人工点击 → 调 i8 接口批量打印**（入参就是勾选的通知书）。
     ⛔ DEV-P-07 明令：**不自建打印模板**、只调 i8 接口、**接口不可用即砍功能**（非阻塞项）。
@@ -5117,6 +5123,10 @@ const API = {
     API.post('/api/m03/actions/category', { ids, category: CAT_API[category] || category }),
   exclude: ids => API.post('/api/m03/actions/exclude', { ids }),
   restore: ids => API.post('/api/m03/actions/restore', { ids }),
+  /* 统计金额手改（§4.5.3）：上限 / 留痕 / 欠款重算**全在后端**同一出口
+     —— 前端只负责发与显示回执（⛔ 不本地改值、不本地留痕冒充落库）。
+     ⚠️ 字段名是**后端旁路字段名**（`stat_settle` / `stat_paid`），壳里的短名 `ss`/`sp` 在此映射。 */
+  statCell: body => API.post('/api/m03/actions/stat', body),
   /* ---- MOD-01 写动作（⛔ 判定与落库一律后端：状态不变式 / 排序重编号 / 全名留痕） ---- */
   pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
   pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),
