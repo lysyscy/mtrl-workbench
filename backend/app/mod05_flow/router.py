@@ -22,12 +22,8 @@ from app.mod05_flow import service as svc
 from app.mod05_flow.domain import default_flow_period
 # ⭐ 历史付款流水导入（§4.4.6）—— 独立路由件，由本文件汇总（`main.py` 不用改）
 from app.mod05_flow.import_router import router as import_router
-from app.mod05_flow.view import (
-    render_m05,
-    render_m05_debt,
-    render_m05_ledger,
-    render_m05_stats,
-)
+# ⚠️ 2026-09-19（`§19` 批 3）：`app.mod05_flow.view`（四个 `render_m05*`）已随四个旧页整体删除（授权 `D18`）
+#    —— ⛔ 别再加回来（共用件已搬进 `import_view.py` ✓）。
 
 router = APIRouter(tags=["mod05"])
 router.include_router(import_router)
@@ -141,27 +137,17 @@ def api_revoke(
 # --------------------------------------------------------------- 页面（PRG）
 
 
-@router.get("/m05", response_class=HTMLResponse)
-def page_flows(
-    year_month: str | None = Query(None, description=YM_DOC),
-    status: str = Query(""), pay_method: str = Query(""), project_id: str = Query(""),
-    keyword: str = Query(""), msg: str = Query(""), msgkind: str = Query("ok"),
-    load: PageData = Depends(get_flows_data),
-) -> HTMLResponse:
-    """付款流水页（**未传年份 = 当月；显式传空 = 全部月份**）。"""
-    data = load(
-        year_month=_resolve_ym(year_month), status=status or None,
-        pay_method=pay_method or None,
-        project_id=int(project_id) if str(project_id).strip() else None, keyword=keyword,
-    )
-    return HTMLResponse(render_m05(data, message=msg, message_kind=msgkind))
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 3**）：本模块的**四个服务端渲染页已整体删除**（授权 `D18`）——
+#    `GET /m05`（付款流水）· `GET /m05/debt`（欠款）· `GET /m05/ledger`（逐月台账）· `GET /m05/stats`
+#    （付款统计）＋ PRG `POST /m05/revoke`（壳走 `POST /api/m05/flows/{id}/revoke` ✓）＋ **`view.py`（451 行）**。
+#    ⇒ 这四页的读一律走 **JSON API**（`/api/m05/flows` · `/debt` · `/ledger` · `/stats`，壳在用 ✓）；
+#    ⛔ 别再往本文件加页面路由（`D18` 的口径：新页面 = 新壳 + API）。
+# ⚠️ **两个例外（⛔ 不许删）**：「历史付款导入」（`import_router.py` ＋ `import_view.py`，`/m05/import*`）
+#    是**全站唯一**的历史流水导入通道（壳里没有入口 ⇒ 暂留 · 前置未满足）；**三个 PRG**
+#    （`POST /m05/opening` · `/m05/opening/delete` · `/m05/ledger/remark`）**新壳正在用**（另有真机 `_e2e_m05_wired.py`）。
 
 
-@router.get("/m05/debt", response_class=HTMLResponse)
-def page_debt(
-    msg: str = Query(""), msgkind: str = Query("ok"), load: PageData = Depends(get_debt_data)
-) -> HTMLResponse:
-    return HTMLResponse(render_m05_debt(load(), message=msg, message_kind=msgkind))
+
 
 
 @router.get("/api/m05/ledger/export")
@@ -194,63 +180,10 @@ def api_ledger_export(
                         headers={"X-Export-Filename": quote(path.name)})
 
 
-@router.get("/m05/ledger", response_class=HTMLResponse)
-def page_ledger(
-    project_id: int = Query(0), end_ym: str = Query(""),
-    msg: str = Query(""), msgkind: str = Query("ok"),
-    load: PageData = Depends(get_ledger_data),
-) -> HTMLResponse:
-    """台账页：`project_id` 缺省时取**第一个项目**（项目选择器本身在筛选栏）。"""
-    if not project_id:
-        project_id = _first_project_id() or 0
-    if not project_id:
-        # 一个项目都没有 ⇒ 骨架照出，只是数据区为空（**不假装有数据**）
-        data = {
-            "project_id": 0, "project_options": [], "sides": [],
-            "shared_project_selector": True, "has_switch_caliber_button": False,
-        }
-        return HTMLResponse(render_m05_ledger(data, message=msg, message_kind=msgkind))
-    return HTMLResponse(
-        render_m05_ledger(load(project_id=int(project_id), end_ym=end_ym),
-                          message=msg, message_kind=msgkind)
-    )
 
-
-@router.get("/m05/stats", response_class=HTMLResponse)
-def page_stats(
-    granularity: str = Query(""), year: int = Query(0), quarter: int = Query(0),
-    msg: str = Query(""), msgkind: str = Query("ok"),
-    load: PageData = Depends(get_stats_data),
-) -> HTMLResponse:
-    data = load(granularity=granularity, year=year or None, quarter=quarter or None)
-    return HTMLResponse(render_m05_stats(data, message=msg, message_kind=msgkind))
 
 
 # --------------------------------------------------------------- 动作（303 回原查询）
-
-
-@router.post("/m05/revoke")
-def act_revoke(
-    flow_id: int = Form(...), reason: str = Form(""),
-    year_month: str = Form(""), status: str = Form(""), pay_method: str = Form(""),
-    project_id: str = Form(""), keyword: str = Form(""),
-) -> RedirectResponse:
-    """撤销 → 303 回**流水页**原查询（**空原因被拒绝**，原因原样回报）。
-
-    ⚠️ **参数一律 `Form`**：输入来自 `<form method="post">` 的 **body**（`view._hidden(q)` 的 hidden inputs）。
-       此前声明为 `Query` ⇒ 真机 `POST /m05/revoke` = **422**（2026-09-17 实测）⇒ **撤销按钮点了没反应**。
-    """
-    q = {"year_month": year_month, "status": status, "pay_method": pay_method,
-         "project_id": project_id, "keyword": keyword}
-    try:
-        with session_scope() as s:
-            flow = repo.get_flow(s, flow_id)
-            if flow is None:
-                raise MustReportError(f"流水 {flow_id} 不存在")
-            out = repo.revoke(s, flow, reason=reason)
-        return _back(q, f"流水 {out['flow_id']} 已撤销（原因：{out['reason']}）—— 该笔退出统计", kind="wn")
-    except MustReportError as exc:
-        return _back(q, exc.message, kind="err")
 
 
 @router.post("/m05/opening")

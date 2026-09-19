@@ -21,6 +21,56 @@ SHELL = (Path(__file__).resolve().parents[1] / "app" / "web" / "index.html").rea
 )
 
 
+def _slice(name: str, limit: int = 16000) -> str:
+    """取壳里 `V.<name>=()=>{…}` 的切片（花括号配平）。"""
+    i = SHELL.find(f"\nV.{name}=()=>{{")
+    assert i > 0, f"壳里找不到 `V.{name}=()=>{{`"
+    i += 1
+    depth, k = 0, SHELL.find("{", i)
+    while k < len(SHELL):
+        if SHELL[k] == "{":
+            depth += 1
+        elif SHELL[k] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        k += 1
+    body = SHELL[i:k + 1]
+    assert 2000 < len(body) < limit, f"`V.{name}` 切片长度 {len(body)} 可疑 —— 配平可能跑偏"
+    return body
+
+
+# ------------------------------- `§19` 批 3：旧页删除后，几条**形态** claim 由新壳接管
+# 原先在 `tests/test_page_m05.py` 里借**旧服务端页**观测（该文件已改守数据出口 ✓）。
+
+
+@acc()
+def test_台账两侧共用同一个项目选择器且无切换口径():
+    """§4.5.4：台账两侧**共用同一个**项目选择器（切一次两边都换）；⛔ 没有「切换口径」按钮。"""
+    assert "const ledPjPanel=()=>projPanel({list:ledProjs,selected:()=>[ledCur()],pickAct:'ledPjPick'" in SHELL, \
+        "两侧没有共用同一个项目选择器"
+    assert "切换口径" not in _slice("m05"), "壳里出现了「切换口径」按钮"
+
+
+@acc()
+def test_撤销入口只在生效行且必须填原因():
+    """§4.4.5：撤销按钮**只在生效行**出（已撤销那行给「—」）；撤销**必须填原因**（后端把关）。"""
+    s = _slice("m05")
+    assert 'data-act="revDlg"' in s, "流水行没有撤销入口"
+    assert """${f.voided?'<span class="mut sm">—</span>':`<button class="btn sm dg" data-act="revDlg\"""" in s, \
+        "撤销入口不是「只在生效行」出的"
+    assert "撤销原因必填" in SHELL, "没写明撤销必须填原因"
+
+
+@acc()
+def test_流水空态跨列由表头派生且不分页():
+    """空态行的 `colspan` **由表头派生**（⛔ 不写死）；该表**不做分页**（一次给全）。"""
+    s = _slice("m05")
+    assert 'colspan="${thCount(FL_THEAD)}"' in s, "空态行的跨列数不再由表头派生"
+    assert "没有付款流水" in s, "空态提示丢了"
+    assert "不做分页" in s, "没写明「不做分页」"
+
+
 # --------------------------------------------------------------- 接线点（正向）
 
 
