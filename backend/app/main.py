@@ -39,6 +39,7 @@ from app.mod06_proc.router import router as mod06_router
 from app.mod07_setl.router import router as mod07_router
 from app.mod08_inv.router import router as mod08_router
 from app.mod09_fee.router import router as mod09_router
+from app.mod11_jc.router import router as mod11_router
 from app.mod14_config.router import router as mod14_router
 
 # 各模块页面（单文件，托管在本进程；切片 MVP，完整前端在后续阶段）
@@ -176,6 +177,9 @@ def create_app() -> FastAPI:
     app.include_router(mod08_router)
     # MOD-09 特殊费用月报表（独立新报表 = 1 自动项 + N 手填项，§5.5 / `DEV-R-04`）
     app.include_router(mod09_router)
+    # MOD-11 集采台账（M5 切片 5 · 2026-09-19 开工）：**从第一天起就是 JSON API ＋ 新壳**
+    #  ⚠️ 本模块没有服务端渲染页；读 `/api/m11/list` · `/api/m11/detail`（写动作随 M5-4 进）
+    app.include_router(mod11_router)
     app.include_router(mod14_router)
 
     @app.get("/healthz", tags=["meta"])

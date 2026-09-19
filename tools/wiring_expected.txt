@@ -96,8 +96,9 @@ W1b backend/app/mod06_proc/domain.py:column_source
 #    · `tag_after_fetch` → **M5-6 抓取（`API-04`）**
 #    ⛔ **接线后必须删掉对应行**（本文件"只准变短"），别让它们在这儿长住。
 W1b backend/app/mod11_jc/domain.py:payment_problem
-W1b backend/app/mod11_jc/domain.py:contract_amounts
 W1b backend/app/mod11_jc/domain.py:tag_after_fetch
 W1b backend/app/mod11_jc/domain.py:link_hint
 W1b backend/app/mod11_jc/domain.py:dedup_blocked
 W1b backend/app/mod11_jc/domain.py:pick_candidates
+#    · `notice_ids_used`（仓储）→ **M5-5**（付款域引用：取"全库已引用"的全集给 `dedup_blocked` 判重）
+W1b backend/app/mod11_jc/repository.py:notice_ids_used

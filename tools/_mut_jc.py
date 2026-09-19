@@ -26,6 +26,28 @@ BE = ROOT / "backend"
 PY = BE / ".venv" / "Scripts" / "python.exe"
 SRC = BE / "app" / "mod11_jc" / "domain.py"
 TEST = "tests/test_acc_jc_domain.py"
+TEST_LIST = "tests/test_acc_jc_list.py"
+
+#: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
+TARGETS: list[Path] = [
+    SRC,
+    BE / "app" / "mod11_jc" / "repository.py",
+    BE / "app" / "mod11_jc" / "service.py",
+    BE / "app" / "mod11_jc" / "models.py",
+]
+
+
+def locate(anchor: str, srcs: dict[Path, bytes]) -> Path:
+    """锚点**在哪一件**里 ⇒ 就改那一件（⚠️ 锚点必须唯一命中，否则停手）。
+
+    ⚠️ 2026-09-19：判据不只在 `domain.py`（读路径在 `repository.py` / `service.py`）⇒
+       **别把目标文件写死**，否则新加的变异会"永远命中 0 次"（很像锚点写错，实为找错了文件）。
+    """
+    hits = [p for p, b in srcs.items()
+            if anchor.encode("utf-8") in b or anchor.encode("utf-8").replace(b"\n", b"\r\n") in b]
+    if len(hits) != 1:
+        raise LookupError(f"锚点在 {len(hits)} 件里命中（期望 1）：{anchor[:60]!r}")
+    return hits[0]
 
 #: (说明, 老片段, 新片段, 该变红的测试名)
 MUTS: list[tuple[str, str, str, str]] = [
@@ -71,7 +93,7 @@ MUTS: list[tuple[str, str, str, str]] = [
      "test_付款方式自由文本_不得引入枚举校验"),
     # ---- 三态（ACC-JC-FETCH-001/001-10）
     ("抓取把人工标记冲掉（一律回「待确认」）",
-     "    v = str(current if current is not None else \"\").strip()\n    if v in (TAG_IN, \"不纳入\"):\n        return v\n    return TAG_PENDING",
+     "    v = str(current if current is not None else \"\").strip()\n    if v in (TAG_IN, TAG_OUT):\n        return v\n    return TAG_PENDING",
      "    return TAG_PENDING",
      "test_抓取不覆盖已人工标记的行"),
     ("归一函数把认不出的值猜成「纳入台账」",
@@ -103,6 +125,19 @@ MUTS: list[tuple[str, str, str, str]] = [
      "        if str(c.get(\"project_key\") or \"\").strip() != key:\n            continue",
      "        if False:\n            continue",
      "test_候选为空时给提示且不允许提交"),
+    # ---- 读路径（仓储 / 装配）：M5-3
+    ("列表的「项目」筛选被忽略（筛了等于没筛）",
+     "    if str(project_key or \"\").strip():\n        stmt = stmt.where(Project.warehouse_name == str(project_key).strip())",
+     "    if False:\n        stmt = stmt.where(Project.warehouse_name == str(project_key).strip())",
+     "test_项目筛选键是仓库名_且筛选后行数独立复算_复位回全量"),
+    ("列表的合计行漏掉「欠款」列（合计与逐行相加不一致）",
+     "        for k in D.SUM_KEYS:\n            totals[k] = totals[k] + Decimal(str(row.get(k) or 0))",
+     "        for k in D.SUM_KEYS:\n            totals[k] = totals[k] + Decimal(str(row.get(k) or 0))\n        totals[\"debt\"] = D.ZERO  # （变异）欠款列不参与合计",
+     "test_合计行各金额列独立复算"),
+    ("明细里两张发票子表混在一起给（不再按 kind 分）",
+     "        \"supplier_invoices\": [r for r in invoices if r[\"kind\"] != \"trade\"],\n        \"trade_invoices\": [r for r in invoices if r[\"kind\"] == \"trade\"],",
+     "        \"supplier_invoices\": list(invoices),\n        \"trade_invoices\": list(invoices),",
+     "test_派生金额由子表现算_改子表即改欠款"),
 ]
 
 
@@ -128,31 +163,38 @@ def run_one(case: str) -> bool:
         env = dict(os.environ)
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
-            [str(PY), "-m", "pytest", "-q", "-k", case, TEST],
+            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0
 
 
 def main() -> int:
-    src0 = SRC.read_bytes()
-    digest = md5(SRC)
+    srcs = {p: p.read_bytes() for p in TARGETS}
+    digests = {p: hashlib.md5(b).hexdigest() for p, b in srcs.items()}
     hit = miss = 0
     for desc, old, new, case in MUTS:
-        oldb, newb = _fit(old, src0), _fit(new, src0)
-        cnt = src0.count(oldb)
+        try:
+            tgt = locate(old, srcs)
+        except LookupError as exc:
+            print(f"  ⛔ {desc} —— {exc} ⇒ **未验证**")
+            miss += 1
+            continue
+        base = srcs[tgt]
+        oldb, newb = _fit(old, base), _fit(new, base)
+        cnt = base.count(oldb)
         if cnt != 1:
             print(f"  ⛔ {desc} —— 锚点命中 {cnt} 次（期望 1）⇒ **未验证**")
             miss += 1
             continue
-        SRC.write_bytes(src0.replace(oldb, newb, 1))
+        tgt.write_bytes(base.replace(oldb, newb, 1))
         green = run_one(case)
-        SRC.write_bytes(src0)
+        tgt.write_bytes(base)
         red = not green
         print(("  ✅ " if red else "  ⛔ 未命中 ") + desc + f"  → `{case}` " + ("变红" if red else "**仍是绿的**"))
         hit += red
 
-    ok = md5(SRC) == digest and SRC.read_bytes() == src0
+    ok = all(p.read_bytes() == srcs[p] and hashlib.md5(srcs[p]).hexdigest() == digests[p] for p in TARGETS)
     print(f"\n  命中 {hit}/{len(MUTS) - miss}  · SKIP {miss}  · 逐字节复原：{'✅' if ok else '❌ 没复原'}")
     return 0 if (hit == len(MUTS) and ok) else 1
 

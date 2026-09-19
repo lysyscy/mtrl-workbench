@@ -24,6 +24,7 @@ from app.mod11_jc.models import (
     KIND_SUPPLIER,
     KIND_TRADE,
     TAG_IN,
+    TAG_OUT,
     TAG_PENDING,
     TAGS,
 )
@@ -205,7 +206,7 @@ def tag_after_fetch(current) -> str:
     ⚠️ 判据 `ACC-JC-FETCH-001/001-10`（**待建断言**）钉的就是这条 —— 它是"抓取不得覆盖人工判定"的机器化落点。
     """
     v = str(current if current is not None else "").strip()
-    if v in (TAG_IN, "不纳入"):
+    if v in (TAG_IN, TAG_OUT):
         return v
     return TAG_PENDING
 
