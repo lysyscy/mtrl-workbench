@@ -41,6 +41,24 @@ const jcImpCur=()=>{ const s=jcImpSheet(); if(!s) return null;
     if(v) flds[v]=+c; });
   return {sheet:s, fields:flds, labels:mp.labels||s.labels||[]}; };
 
+/* ⭐ `M5-6` 增量抓取：**记住用户填过的「开始日期」**（取消后再开不丢，也不每次重算）。 */
+let jcFetchSinceOn = '';
+/* ⭐ `M5-6`：**默认开始日期** = 集采台账里**最大合同日期 − 3 天**（页面看得见、可改）。
+   ⚠️ 与后端 `default_since` **同一口径** —— 只是壳里拿**已加载的 `JCs`** 算（够用、且立刻可见）；
+      算不出来（库空 / 没有合法日期）⇒ 回空串 ⇒ **交给后端**（后端会走「全量」）。
+   ⚠️ 为什么减 3 天：i8 里**增补合同沿用原单据日期**（实测有 2024 年的合同挂在近期单据下）
+      ⇒ 起点卡在"最后一天"会**漏**；而落库按 `BillNo` **幂等** ⇒ 推早了只是多拿几条、不会重复插。
+   ⚠️⚠️ **必须放在 `ACT` 对象之外**（文件顶层）—— `let` / `function` 放进对象字面量会直接语法错
+      （`syntax_audit` 的 `node --check` 会当场抓到；`jcLinkAct` 那次已踩过一次，这是第二次）。 */
+function jcFetchSinceDefault() {
+  const ds = JCs.map(j => String(j.date || '').slice(0, 10))
+    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  if (!ds.length) return '';
+  const t = new Date(ds[ds.length - 1] + 'T00:00:00');
+  t.setDate(t.getDate() - 3);
+  const p = n => String(n).padStart(2, '0');
+  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
+}
 const ACT={
  /* 导航 */
  go:t=>go(t.dataset.k),
@@ -1508,14 +1526,27 @@ jcImportOk:async()=>{ const cur=jcImpCur(); if(!cur) return;
   await reloadM11();
   modal({title:'导入结果（`M5-8`）',body:jcImpResult(d),footer:`<button class="btn pri" data-act="closeModal">知道了</button>`}); },
 
- /* ⭐ `M5-7`：抓取接通（`POST /api/m11/fetch`）。⚠️ 抓取**会顶号**（`D9`）⇒ **先二次确认**、说清后果。 */
-jcFetch:()=>modal({title:'抓取采购合同信息（API-04）· 二次确认',
+ /* ⭐ `M5-7`：抓取接通（`POST /api/m11/fetch`）。⚠️ 抓取**会顶号**（`D9`）⇒ **先二次确认**、说清后果。
+   ⭐ `M5-6`：加「开始日期」（**增量**）—— 实测全量 40 秒、增量 1~5 秒（差 40~80 倍）。 */
+jcFetch:()=>{ const def = jcFetchSinceOn || jcFetchSinceDefault(); modal({title:'抓取采购合同信息（API-04）· 二次确认',
   body:`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 这一步会登录 i8，可能顶掉该账号其它在线会话</b>（决策 D9）。若同事正在用 i8，请先择时。</div>
-    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>先同步「常用项目列表」</b>（集采也走全自动建档那一环）→ <b>再按项目匹配</b> → 落库（新抓的默认<b>「待确认」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但**落库前会给你一眼看见**。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
-  footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcFetchOk">确认抓取（会顶号）</button>`}),
-jcFetchOk:async()=>{ closeModal();
-  const r=await jcAct(()=>API.m11Fetch(),
-    d=>`已抓取：匹配上 ${d.matched} 条（新增 ${(d.stats||{}).inserted||0}）· 匹配不上 ${d.unmatched} 条`);
+    <div class="fld"><label>开始日期 —— 只抓<b>这之后</b>的单据（<b>增量</b>）</label>
+      <input class="inp" id="jcFetchSince" type="date" value="${esc(def)}">
+      <div class="sm mut" style="margin-top:6px">默认 = 台账里<b>最新合同日期 − 3 天</b>（多留几天：i8 的<b>增补合同会沿用原单据日期</b>，卡太紧会漏；重复的会被幂等挡掉）。<br><b>清空</b> = 全量（<b>约 40 秒</b>，首次建档才需要）；带日期 = 增量（<b>1~5 秒</b>）。</div></div>
+    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 落库（新抓的默认<b>「待确认」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但**落库前会给你一眼看见**。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
+  footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcFetchOk">确认抓取（会顶号）</button>`}); },
+jcFetchOk:async()=>{ const el=$('#jcFetchSince');
+  /* ⚠️ 读不到 / 格式不对 ⇒ 传**空串**（= 交给后端按默认增量走），⛔ 不传一个"看着像日期"的脏值：
+     后端收到脏值会当成过滤条件发给 i8 ⇒ **静默全量**（最坏的那种）。 */
+  const raw = el ? String(el.value || '').trim() : '';
+  const since = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+  jcFetchSinceOn = since;                          /* ⭐ 记住用户这次填的 */
+  closeModal();
+  const r=await jcAct(()=>API.m11Fetch(since),
+    d=>`已抓取：匹配上 ${d.matched} 条（新增 ${(d.stats||{}).inserted||0}）· 匹配不上 ${d.unmatched} 条`
+      + `<br><span class="mut sm">范围：${d.since ? `起点 <b>${esc(d.since)}</b>（增量）` : '<b>全量</b>（未设起点）'}`
+      + ` · 材料名补 <b>${d.material_filled || 0}</b> 条`
+      + `${d.material_blank ? `（<b style="color:var(--wn)">${d.material_blank}</b> 条 i8 也没给材料名）` : ''}</span>`);
   /* ⭐ 落库**之后**照样给一眼匹配预览（`unmatched` 是终态、不会被后续抓取覆盖 ⇒ 人得当场看见）。 */
   if(r) modal({title:'抓取结果 · 匹配预览（§6.5.3）',body:jcFetchPreview(r),
     footer:`<button class="btn pri" data-act="closeModal">知道了</button>`}); },

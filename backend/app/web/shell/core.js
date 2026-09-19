@@ -258,8 +258,10 @@ const API = {
   m11InvDel: body => API.post('/api/m11/invoice/del', body),
   m11PayAdd: body => API.post('/api/m11/payment/add', body),
   m11PayDel: body => API.post('/api/m11/payment/del', body),
-  /* ⚠️ 抓取**会顶号**（`D9`）⇒ `confirm:true` = 用户已在确认弹窗里点过；缺它后端一律拒。 */
-  m11Fetch: () => API.post('/api/m11/fetch', { confirm: true }),
+  /* ⚠️ 抓取**会顶号**（`D9`）⇒ `confirm:true` = 用户已在确认弹窗里点过；缺它后端一律拒。
+     ⭐ `M5-6`：`since`（`YYYY-MM-DD`）= **单据日期起点** ⇒ 空串 = 让后端用 `default_since`
+        （库里最大合同日期 − 3 天）；**实测**增量 1~5 秒 vs 全量 40 秒。 */
+  m11Fetch: (since = '') => API.post('/api/m11/fetch', { confirm: true, since }),
 };
 
 /* ---------- 字段适配：后端**语义字段** → 原型字段名（`NT_COLS` / `PJ_COLS`） ----------
