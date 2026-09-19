@@ -36,7 +36,6 @@ import pytest
 from app.core.errors import MustReportError
 from app.mod07_setl import extract as X
 from app.mod07_setl.service import build_extract_data, build_extract_export, parse_extract_state
-from app.mod07_setl.view import render_extract_page
 from app.report_export import resources as R
 from app.report_export import tpl_fill
 from app.report_export import weldgas_export as W
@@ -51,7 +50,6 @@ from tests.m07_helpers import (
 CASE = "ACC-X-EXP-001"
 ROOT = Path(__file__).resolve().parents[2]
 SHELL = (ROOT / "backend" / "app" / "web" / "index.html").read_text(encoding="utf-8")
-VIEW = (ROOT / "backend" / "app" / "mod07_setl" / "view.py").read_text(encoding="utf-8")
 
 
 def _act(name: str) -> str:

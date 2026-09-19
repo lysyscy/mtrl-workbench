@@ -14,11 +14,9 @@ from __future__ import annotations
 from decimal import Decimal
 from unittest.mock import patch
 
-from app.core.nav import NAV
 from app.mod07_setl import big_domain as B
 from app.mod07_setl import big_repository as R
 from app.mod07_setl import big_service as S
-from app.mod07_setl import big_view as V
 from tests.acc_plugin import acc
 from tests.m07_big_helpers import (
     DEFAULT_ORDER, EXPECT, WH_A, WH_ARCHIVED, WH_B, WH_C, WH_D, WH_SHELL,
@@ -40,36 +38,14 @@ def _data(s=None, month: str = YM_NOW, order=None) -> dict:
     return S.build_big_data(s or _session(order), {"month": month})
 
 
-def _html(s=None, month: str = YM_NOW) -> str:
-    return V.render_big_page(_data(s, month))
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 2**）：原先这里有一组**页面观测辅助件** ——
+#    `_html()`（取旧页 HTML）· `_cell()`（从页面里抠那一格）· `_table()`（抠表体那一段）。
+#    旧页（`big_view`）整体删除（授权 `D18`）后三者**零调用**（逐个数过 ✓）⇒ 一并移除。
+#    ⛔ 判据一条没删：形态 claim 全在 `tests/test_wired_m07.py`（`ACC-RPT-BIG-001` 那 8 条 ✓）。
 
 
 def _rows(data: dict) -> dict[str, dict]:
     return {r["warehouse"]: r for r in data["rows"]}
-
-
-def _cell(html: str, wh: str, key: str) -> str:
-    """从页面里取**那一格**（钉那一格，不用整页 `in` —— 整页 `in` 是假绿温床）。
-
-    ⭐ 手填格各自是一个 `<td class="num bigc">`（内含该格的表单）⇒ 按这两个隐藏域**精确定位**，
-       命中数必须**恰好 1**（多了 = 定位不唯一，少了 = 页面没渲染）。
-    """
-    want = (f'<input type="hidden" name="wh" value="{wh}">',
-            f'<input type="hidden" name="key" value="{key}">')
-    hits = []
-    for seg in html.split('<td class="num bigc">')[1:]:
-        block = '<td class="num bigc">' + seg.split("</td>")[0] + "</td>"
-        if all(m in block for m in want):
-            hits.append(block)
-    assert len(hits) == 1, f"{wh} / {key} 这一格命中 {len(hits)} 次（应恰好 1）"
-    return hits[0]
-
-
-def _table(html: str) -> str:
-    """页面里的**表体那一段**（`data-seg="data"` ⇒ 到空态段为止）—— 断言只看这一段的顺序。"""
-    assert 'data-seg="data"' in html, "页面里没有数据段"
-    seg = html.split('data-seg="data"', 1)[1]
-    return seg.split('data-seg="empty"', 1)[0]
 
 
 def _money(value) -> Decimal:
