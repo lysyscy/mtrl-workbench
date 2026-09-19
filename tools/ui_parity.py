@@ -162,7 +162,10 @@ def main() -> int:
                     "m05": (("LG", "const"),), "m06": (("MACH6", "const"),),
                     "m07": (("WHM", "const"), ("BAL_EX", "const|let|var")),
                     "m08": (("IV", "const"),),
-                    "m09": (("AWF", "const|let|var"),), "m14": (("RULE_EX", "const|let|var"),)}
+                    "m09": (("AWF", "const|let|var"),), "m14": (("RULE_EX", "const|let|var"),),
+                    # ⭐ 2026-09-19（`M5-7`）：集采台账。演示容器 = `JC`（**已删**）+ 列序 `JC_COLS`（**已删**）。
+                    #    登记它 = 让"将来谁把演示数据加回来"被当场抓住（`U2b` 只扫 `WIRED` 里的页）。
+                    "m11": (("JC", "const"), ("JC_COLS", "const"))}
     _mw = WIRED_RE.search(shell_text)
     _wired_now = re.findall(r"['\"]([A-Za-z0-9_]+)['\"]", _mw.group(1)) if _mw else []
     for _page in _wired_now:

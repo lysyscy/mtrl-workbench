@@ -1432,23 +1432,24 @@ const ACT={
    toast('差异登记筛选已重置 —— 核算月与状态都回到<b>全部</b>'); },
 
  /* —— MOD-11 集采 —— */
- jcFetch:()=>toast('已抓取采购合同信息（API-04）：新增 <b>3 条</b>，默认标记为「<b>待确认</b>」。<b>已手动标记的合同持久保留、不被覆盖</b>（§6.5.3）'),
+ /* ⭐ `M5-7` 只读接线：抓取**尚未接通**（后端编排 `mod11_jc.fetch_service.run_fetch` 已就绪，
+   只差一个 `POST /api/m11/fetch` 端点 ＋ 壳侧按钮 ＋ **匹配预览**展示）。
+   ⛔ 原先这里是一句**假 toast**（"已抓取…新增 3 条"）—— 它什么都没干却报成功，是技能明令要改掉的那类。 */
+jcFetch:()=>toast('<b>⏳ 尚未接通</b>：抓取要等壳侧接上 <code>POST /api/m11/fetch</code>（后端编排已就绪：先同步常用项目 → 再匹配 → 落库 → 匹配预览）。<br><span class="mut sm">集采台账的数据本身已是后端真实数据（本页已接线）。</span>',8000),
  /* 批量标记的前置：勾选（范围 = 当前筛选结果）；筛选变化 → 裁剪不可见的勾选（R10/R14） */
  jcPick:t=>{ const id=t.dataset.id; if(!id) return; if(jcPick.has(id)) jcPick.delete(id); else jcPick.add(id); render(); },
  jcPickAll:()=>{ const cur=jcVisible(); const hit=cur.filter(j=>jcPick.has(j.id)).length;
    if(hit===0){ cur.forEach(j=>jcPick.add(j.id)); } else { cur.forEach(j=>jcPick.delete(j.id)); } render(); },
- /* 批量标记三态（§6.5.3）：勾选后**一次动作**；人工标记优先，后续全量抓取**不被覆盖** */
+ /* 批量标记三态（§6.5.3）：勾选后**一次动作**；人工标记优先，后续全量抓取**不被覆盖**。
+    ⭐ `M5-7`：⛔ 原先这里是**本地改数组冒充落库**（`JCs.forEach(...j.tag=v)`）—— 技能三条反向断言之一。
+    后端 `POST /api/m11/tag`（`{ids, tag}`）**已就绪**并回 `affected_ids`（壳据此清空**刚标过的**勾选）。 */
  jcBatchTag:t=>{ const v=t.dataset.v; if(!jcPick.size){ toast('请先勾选要标记的行'); return; }
-   let n=0; JCs.forEach(j=>{ if(jcPick.has(j.id)){ j.tag=v; n++; } }); jcPick.clear(); render();
-   toast(`已把 <b>${n}</b> 条合同批量标记为 <b>${esc(v)}</b> —— 人工标记优先，后续全量抓取<b>不被覆盖</b>（§6.5.3）`,4600); },
- jcTag:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.tag=t.dataset.v; render();
-   toast(`合同 <b>${j.id}</b> 已标记为「<b>${j.tag}</b>」${j.tag==='纳入台账'?'，集采欠款已重算：<b>'+M(debts().集采)+'</b>':''}`); },
- jcArch:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.arch=j.arch==='未存档'?'资产处':j.arch==='资产处'?'已存档':'未存档';
-   if(j.arch==='资产处'&&!j.archNo) j.archNo='JD-2026-'+String(1000+Math.floor(Math.random()*900));
-   render(); toast(`合同存档情况推进为「<b>${j.arch}</b>」（未存档 → 资产处 → 已存档，§6.7.2）`); },
+   toast(`<b>⏳ 尚未接通</b>：批量标记要等壳侧接上 <code>POST /api/m11/tag</code>（后端已就绪，回 <code>affected_ids</code> 供清空勾选）。<br><span class="mut sm">当前勾选 <b>${jcPick.size}</b> 行、目标三态「${esc(v)}」—— 未写入任何数据。</span>`,7000); },
+ jcTag:t=>toast('<b>⏳ 尚未接通</b>：单条标记要等壳侧接上 <code>POST /api/m11/tag</code>（后端已就绪）。<span class="mut sm">未写入任何数据。</span>',7000),
+ jcArch:t=>toast('<b>⏳ 尚未接通</b>：存档推进要等壳侧接上 <code>POST /api/m11/fields</code>（后端已就绪）。<span class="mut sm">未写入任何数据。</span>',7000),
  /* 主表「发票金额 / 贸易公司发票金额 / 付款金额」已改为**只读汇总**（= 各自子表合计）——
     录入一律走「子表」，因此不再有主表直改动作（口径 2026-09-12 定案，取代原 jcPay） */
- jcMethod:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.method=t.value; render(); toast('付款方式为<b>自由文本、不限值</b>，不做枚举约束（DEV-J-03）'); },
+ jcMethod:t=>toast('<b>⏳ 尚未接通</b>：付款方式改值要等壳侧接上 <code>POST /api/m11/fields</code>（后端已就绪）。<span class="mut sm">口径仍是<b>自由文本、不限值</b>（DEV-J-03）；未写入任何数据。</span>',7000),
  /* 合同收发登记（§6.7）**改为可手改**（2026-09-13 用户口径）：存档号 / 寄回日期 / 备注三列。
     ⚠️ 按 §9.3 的留痕清单（只给 统计两金额 / 调整单 / 项目全名与状态）⇒ 这三列**不留痕**（照既有口径、不新增）。
     ⚠️ 寄回日期用 `type="date"`（要的是**完整日期**；R6 只管"选年月"那种滚轮控件）。 */
@@ -1521,11 +1522,11 @@ const ACT={
    modal({title:'从付款域引用付款记录（R8）',body:`<div class="tip" style="margin-bottom:10px">集采台账的付款信息可从付款域<b>一键关联引用</b>。因为供应商名不可靠，<b>不做自动匹配</b>（DEV-J-01），由你按「<b>集采实际供应商</b>」人工判断（§6.6.2）；<b>同一笔通知书只能引用一次</b>。</div>
      <div class="fld"><label>选择付款域中分类为「集采」的通知书</label><select class="inp" id="refId">${cam.length?cam.map(n=>`<option value="${n.id}">${esc(n.code)} · ${esc(n.sup||'未录入供应商')} · ${M(n.sp)}</option>`).join(''):'<option value="">（无可引用：已被引用过，或本月无集采单据）</option>'}</select></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcPayRefOk" data-id="${j.id}">引用</button>`}); },
- jcPayRefOk:t=>{ const j=JCs.find(x=>x.id===t.dataset.id), n=NO.find(x=>x.id===$('#refId').value);
-   if(!n) return toast('无可引用的付款记录（已被引用过，或未选择）');
-   if(jcUsedNids().has(n.id)){ closeModal(); return toast(`<b>${n.code} 已被引用过</b> —— 同一笔通知书<b>在全库范围内不可重复引用</b>（不分公司，防付款重复计入）`,4200); }
-   j.payments.push(['2026-09-11',n.sp,'付款域引用',n.id]); closeModal(); render();
-   toast(`已从付款域引用 <b>${n.code}</b> 的付款记录 ${M(n.sp)} → 集采欠款 ${M(jcDebt(j))} · 合计 ${M(debts().集采)}`); },
+ /* ⭐ `M5-7`：⛔ 原先这里是**本地 `j.payments.push(...)` 冒充落库**（刷新就没了）⇒ 改为如实说明。
+    它归 `M5-5`（付款域双向引用）—— 那一片会接 `POST /api/m11/payment/add`（`source=notice` +
+    **全库去重**由后端 `domain.dedup_blocked` ＋ 唯一键 `uq_jc_payment_notice` 双保险）。 */
+ jcPayRefOk:t=>{ closeModal();
+   toast('<b>⏳ 尚未接通</b>：从付款域引用归 <code>M5-5</code>（付款域双向引用）。<br><span class="mut sm">「同一笔通知书全库只能引用一次」由后端保证，⛔ 不在壳里改数组。未写入任何数据。</span>',8000); },
  /* —— 「关联集采合同」反向入口的动作（2026-09-13 用户裁定）——
     一对一 · 与 R8 共用同一份记录 · 去重按全库 · 金额不一致只提示不拦 · 关联 / 解绑**不留痕**。
     弹窗内所选合同走草稿 `jcLinkSel`：改选择要**重绘弹窗**（金额比对随之更新）。 */
@@ -1552,18 +1553,14 @@ const ACT={
          ⇒ 任何"他项目"的 id 都会被**回落**成合法候选，走不到这里。
       （曾经在这里写过一道 `j.proj!==pk` 兜底，实测**不可达** ⇒ 按"不留死代码"删掉，
         改由 `_smoke` 的 `T5` 直接断言 ② 那个"回落"行为。） */
-   /* 一对一：换合同 = 先把旧合同上那一行**原地**摘掉（`length=0` + push，保数组引用） */
-   if(cur&&cur.id!==j.id){ const kept=cur.payments.filter(p=>p[3]!==n.id); cur.payments.length=0; kept.forEach(p=>cur.payments.push(p)); }
-   if(!j.payments.some(p=>p[3]===n.id)) j.payments.push([SYS_TODAY,n.sp,'付款域引用',n.id]);
-   closeModal(); render();
-   const mis=N2(jcDebt(j))!==N2(n.sp);
-   toast(`已把这行通知书关联到集采合同 <b>${j.id}</b>（付款子表 +1 笔）→ ${j.id} 欠款 ${M(jcDebt(j))} · 集采欠款合计 ${M(debts().集采)}`+(mis?`<br><span style="color:var(--wn)">⚠️ 本行金额 ${M(n.sp)} 与该合同当前欠款 ${M(jcDebt(j))} 不一致 —— 已按「金额不校验」放行</span>`:''),5400); },
- jcUnlink:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
-   const cur=jcRefOf(n.id);
-   if(!cur){ closeModal(); return toast('这行通知书当前没有关联集采合同'); }
-   const kept=cur.payments.filter(p=>p[3]!==n.id); cur.payments.length=0; kept.forEach(p=>cur.payments.push(p));
-   closeModal(); render();
-   toast(`已取消与集采合同 <b>${cur.id}</b> 的关联（付款子表 −1 笔）→ ${cur.id} 欠款 ${M(jcDebt(cur))} · 集采欠款合计 ${M(debts().集采)}`,4600); },
+   /* ⭐ `M5-7`：⛔ 原先这里是**本地改两张合同的 `payments` 冒充落库**（一对一换绑 + 新增一笔）
+      ⇒ 改为如实说明。它归 `M5-5`：后端要保证「一对一」（换合同 = 先解绑再写新）＋ 全库去重。 */
+   closeModal();
+   toast(`<b>⏳ 尚未接通</b>：关联到集采合同归 <code>M5-5</code>（付款域双向引用）。<br><span class="mut sm">已选 ${esc(j.id)} —— 「一对一换绑」与「全库去重」都由后端负责，⛔ 不在壳里改数组。未写入任何数据。</span>`,8000); },
+ /* 取消关联（`m03` 侧）。⭐ `M5-7`：⛔ 原先**本地改 `payments` 数组**冒充落库 ⇒ 改为如实说明。
+    它归 `M5-5`（付款域双向引用）—— 那一片做的时候一并接。 */
+ jcUnlink:t=>{ closeModal();
+   toast('<b>⏳ 尚未接通</b>：取消关联归 <code>M5-5</code>（付款域双向引用）。<br><span class="mut sm">付款子表的两种来源（引用 / 手工）+ 全库去重都由后端负责，⛔ 不在壳里改数组。未写入任何数据。</span>',8000); },
  /* —— MOD-11 · 手工新增集采合同 = **表内增行（展开区）**（2026-09-13 用户口径）——
     ⚠️ 原来这个动作只开弹窗，而弹窗的「保存」挂的是 `data-act="silent"`（**根本没有落库动作**）
        ⇒ 本次改制时**补上真正的建档动作 `jcRowSave`**（草稿层 `jcND`，与既有 `naD` / `lgD` 同源）。 */
@@ -1580,26 +1577,11 @@ const ACT={
  jcNPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; jcND.pj=v; jcNPjOpen=false; render();
    toast(`新增合同的项目已定为 <b>${esc(pjLabel(v))}</b>`); },
  /* 建档（替代原弹窗那句挂 `silent` 的空"保存"） */
+ /* 建档（`M5-4` 的后端动作已在：`POST /api/m11/add`，三态默认「纳入台账」= 判据 `001-07` 原文）。
+    ⭐ `M5-7`：⛔ 原先这里是**本地 `JCs.push(...)` 冒充落库**（而且靠 `JC_COLS` 按位置建行 —— 演示数组已删，
+    那句会直接 ReferenceError）⇒ 现改为**如实说明**，等壳侧接上 `POST /api/m11/add`。 */
  jcRowSave:()=>{ if(!jcND.pj){ toast('<b>请先选「项目」</b>（点「项目」按钮展开候选）'); return; }
-   const amt=numOf(jcND.contractAmt,{empty0:1});
-   if(badMoney(amt)){ toast(badMoneyMsg('合同金额')); return; }
-   const tAmt=(String(jcND.tradeContractAmt||'').trim()==='')?0:numOf(jcND.tradeContractAmt,{empty0:1});
-   if(badMoney(tAmt)){ toast(badMoneyMsg('贸易公司合同金额')); return; }
-   const dt=/^\d{4}-\d{2}-\d{2}$/.test(String(jcND.date||''))?jcND.date:SYS_TODAY;
-   const id='JM'+String(JCs.filter(x=>/^JM/.test(x.id)).length+1).padStart(2,'0');
-   const j=O([id,dt,String(jcND.material||'').trim(),String(jcND.supplier||'').trim(),amt,
-     String(jcND.tradeCo||'').trim(),tAmt,
-     '未存档','','',String(jcND.method||'').trim(),String(jcND.remark||'').trim(),
-     '待确认',[],[],[],jcND.pj],JC_COLS);
-   JCs.push(j);
-   /* 新增后**保证看得见**（同 MOD-03 / MOD-04 的做法）：放宽三档筛选；
-      该行项目不在「项目」筛选里就**并进去**（否则刚建的合同被自己的筛选挡住）。 */
-   if(fJc.tag!=='全部') fJc.tag='全部';
-   if(fJc.arch!=='全部') fJc.arch='全部';
-   if(fJc.sup) fJc.sup='';
-   if(fJc.projs.length&&fJc.projs.indexOf(j.proj)<0) fJc.projs.push(j.proj);
-   jcNewOn=false; jcNPjOpen=false; render();
-   toast(`已新增集采合同 <b>${id}</b>（${esc(pjLabel(j.proj))} · ${esc(j.material||'（未填材料名）')} · 合同金额 ${M(amt)}）—— 三态默认 <b>待确认</b>，需「纳入台账」后才计入欠款统计<br>发票 / 付款金额请在该行对应列右侧的「子表」里录入（主表只读汇总）`,7000); },
+   toast(`<b>⏳ 尚未接通</b>：手工新增要等壳侧接上 <code>POST /api/m11/add</code>（后端已就绪，三态默认「纳入台账」）。<br><span class="mut sm">未写入任何数据（草稿仍在录入区里）。</span>`,8000); },
 
  /* —— MOD-13 —— */
  delDemo:()=>modal({title:'删除确认（R2 · 必须列出影响范围）',body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 删除前必须列出删除影响范围</b>（关联数据、统计影响），确认后执行删除并刷新列表（§7.2 / §9.4）。</div>

@@ -227,6 +227,12 @@ const API = {
   m09Name: body => API.post('/api/m09/fee/name', body),
   m09Amount: body => API.post('/api/m09/fee/amount', body),
   m09Delete: body => API.post('/api/m09/fee/delete', body),
+
+  /* ---- MOD-11 集采台账（`M5-7`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
+  m11List: () => API.get('/api/m11/list'),
+  m11Detail: id => API.get(`/api/m11/detail?id=${encodeURIComponent(id)}`),
+  /* ⚠️ 写端点（`M5-4` 已就绪）**本片暂不接** —— 见 `ACT.jcTag` 那句「尚未接通」的说明；
+     接通时应走 `API.post('/api/m11/tag', {...})` 这一族（⛔ 不许本地改数组冒充落库）。 */
 };
 
 /* ---------- 字段适配：后端**语义字段** → 原型字段名（`NT_COLS` / `PJ_COLS`） ----------
@@ -1360,6 +1366,50 @@ async function awfAct(fn, okMsg) {
   return r;
 }
 
+/* ============ MOD-11 集采台账（前端壳接线 · `M5-7`）============
+   ⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 适配层**一律过 `N0()`**
+      （漏了会让壳里求和变**字符串拼接**、合计安静地错 —— 技能「接后端时必查三件」那条）。
+
+   ⭐ **`JCs` 是跨页共享的**（这是本页接线的价值面，也是风险面）：本页 + **看板** + **大表「主材累计」**
+      （接上即解锁 `TAIL-25`）+ **`m03` 的集采关联**（`jcUsedNids`/`jcRefOf`/`jcLinkCands`/`supPool`）。
+      ⇒ 所以适配层给的字段必须**正好够那些读法**用（尤其 `proj` = 仓库名、`supplier`、`notice_ids`）。 */
+const JC_ARCH_DEFAULT = '未存档';        /* 原型 `JC` 演示行用的初值（§6.7.2：未存档 → 资产处 → 已存档） */
+
+function adaptJc(x) {
+  return {
+    /* ⚠️ id **必须 String** —— 原型到处 `x.id===t.dataset.id`，而 `dataset` 出来永远是字符串。
+       后端给数字 ⇒ 不转就**静默失配**（勾选后汇总恒 0，同 `adaptNotice` 那条教训）。 */
+    id: String(x.id),
+    date: x.date || '', material: x.material || '', supplier: x.supplier || '',
+    contractAmt: N0(x.contract_amt),
+    tradeCo: x.trade_co || '',
+    tradeContractAmt: (x.trade_contract_amt == null ? '' : N0(x.trade_contract_amt)),
+    arch: x.arch || JC_ARCH_DEFAULT, archNo: x.arch_no || '', retDate: x.ret_date || '',
+    method: x.method || '', remark: x.remark || '', tag: x.tag,
+    /* ⚠️ 列表**不给子表明细**（那是 `/api/m11/detail` 的活）⇒ 这里留空数组；
+       列表的金额列一律读下面的 `settle`/`pay`（后端派生），⛔ 不靠这两个数组现算。 */
+    invoices: [], tradeInvoices: [], payments: [],
+    proj: x.project_key || '',                                   /* ⭐ 键 = **仓库名**（§2.7.4） */
+    /* ⭐ 派生金额**读后端**（判定搬家 —— 见 `jcSettle`/`jcPay`/`jcDebt`） */
+    settle: N0(x.settle), pay: N0(x.pay), debt: N0(x.debt),
+    /* ⭐ 本行引用过的付款通知书 id（**字符串** —— `m03` 的 `jcUsedNids` 拿它跟 `n.id` 比） */
+    notice_ids: (x.notice_ids || []).map(String),
+  };
+}
+
+async function reloadM11() {
+  const d = await API.m11List();
+  const rows = (d.rows || []).map(adaptJc);
+  JCs.length = 0;                       /* ⚠️ **原地**替换（`JCs` 是 `const` ⇒ 只许改内容；同 `LGs` 的教训）。
+                                           理由：`JCs` **跨页共享** —— 整支换引用会让 `JC_PROJ_LIST` 等派生量失效。 */
+  rows.forEach(r => JCs.push(r));
+  pruneJcPick();                        /* 数据换了 ⇒ 勾选按**当前筛选结果**重裁（判据 `001-06`） */
+  render();
+}
+
+/* ⚠️ 本片（`M5-7` 只读接线）**故意不加**写动作外壳 `jcAct` —— 它要等接上 `POST /api/m11/*` 才有调用方；
+   现在加上去会被 `wiring_audit`（新函数必须有生产调用方）当场报红。接写动作时照 `awfAct` 的形态补。 */
+
 /* ⭐⭐ 性能 `P3` 主体 · **页级按需取数**（2026-09-19 · 用户批准的 A 方案）
    —— 打开页面**不再**把 13 路全量拉一遍，而是「**进哪页拉哪页**」（含该页会读到的全局所属的取数路）。
    ⚠️ 实测依据：13 路合计 ≈ 1971 ms（一路一等）；**初始视图是 `home`**（`let VIEW='home'`）而它只读
@@ -1382,6 +1432,10 @@ const PAGE_LOAD = {
   m08: ['库存单据'],
   m09: ['特殊费用月报表'],
   m14: ['规则配置'],
+  /* ⭐ `M5-7`：集采台账。⚠️ 它**没有跨页依赖**（不读 `NO`/`PJs`/`PLs`）⇒ 单路即可。
+     但它**自己的数据被别人读**（看板 / 大表主材累计 / m03 集采关联）—— 那些页各自按需拉自己的路，
+     ⛔ 不在这里替它们拉（`P3` 的口径：进哪页拉哪页）。 */
+  m11: ['集采台账'],
 };
 /* 标签 → 取数函数（标签进顶部横幅的**失败点名** —— ⛔ 一字不许改，它们是给用户看的） */
 const LOADERS = {
@@ -1405,6 +1459,7 @@ const LOADERS = {
      ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序**。 */
   '特殊费用月报表': reloadM09,
   '规则配置': reloadM14,        /* 独立取数 ⇒ 无顺序依赖 */
+  '集采台账': reloadM11,        /* ⭐ `M5-7`：`/api/m11/list` ⇒ 原地填 `JCs`（跨页共享，见 `adaptJc` 上方注释） */
   '收发结存与大表': reloadM07,   /* ⚠️ 吃 `MACH6`/`IVs` ⇒ 见 `LOAD_DEP` */
   '付款域': reloadM05,          /* ⚠️ 机械欠款派生自 `MACH6` ⇒ 见 `LOAD_DEP` */
 };
