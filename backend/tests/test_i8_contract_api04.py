@@ -151,6 +151,39 @@ def test_概要给出条数与项目清单():
 
 
 @acc()
+def test_会话失效判据要认body里的NoSessionInfo():
+    """⚠️⚠️ 2026-09-19 修的两处**静默缺陷** —— 症状都是「**抓取成功但 0 条**」。
+
+    ① i8 有时**不用 401**：回 **HTTP 200 ＋ `Msg='No SessionInfo found'`**（错误藏在 body 里）
+       ⇒ 只判 401 ⇒ 不重登、不报错 ⇒ **静默拿到空数据**；
+       ⚠️ 叠加 `cookie_store` 缓存（命中就不登录）后 ⇒ **失效 cookie 被反复使用**（当日实际踩到两次）。
+    ② `Code` 是**字符串**（`'401'`）⇒ 原来拿 int `401` 去比 **恒为假**，那条判断从来没生效过。
+
+    ⚠️ 反向也要钉：**正常响应不许误判** —— 否则每次都会重登，变成"反复顶号"（`D9` 禁止）。
+    """
+    import httpx
+
+    from app.mod02_i8.client import I8Client
+
+    def resp(status: int, body: dict) -> httpx.Response:
+        return httpx.Response(status, json=body)
+
+    # ① HTTP 200 + body 说没会话 ⇒ 必须算失效（这是修的那条）
+    assert I8Client._is_session_invalid(  # noqa: SLF001
+        resp(200, {"Code": "200", "Success": False, "Msg": "No SessionInfo found"})) is True
+    assert I8Client._is_session_invalid(  # noqa: SLF001
+        resp(200, {"Code": "0", "Msg": "No SessionInfo found"})) is True
+    # ② `Code` 是字符串 401 ⇒ 也要认（原来 int 比恒假）
+    assert I8Client._is_session_invalid(resp(200, {"Code": "401"})) is True  # noqa: SLF001
+    # ③ 老路子（HTTP 401）不许退化
+    assert I8Client._is_session_invalid(httpx.Response(401)) is True         # noqa: SLF001
+    # ④ ⛔ 正常响应**不许**误判（否则反复重登 = 反复顶号）
+    assert I8Client._is_session_invalid(  # noqa: SLF001
+        resp(200, {"Code": "200", "Msg": "操作成功", "Record": []})) is False
+    assert I8Client._is_session_invalid(resp(200, {"Code": "0", "Msg": "参数错误"})) is False  # noqa: SLF001
+
+
+@acc()
 def test_未审批的不抓且计数不静默(monkeypatch):  # noqa: ANN001
     """⭐ 用户 2026-09-19 定：未审批不抓 —— 但**丢弃数必须报出来**（禁静默丢数据）。
 

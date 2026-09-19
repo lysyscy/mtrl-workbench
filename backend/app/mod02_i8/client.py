@@ -112,13 +112,29 @@ class I8Client:
 
     @staticmethod
     def _is_session_invalid(resp: httpx.Response) -> bool:
+        """会话是否失效。
+
+        ⚠️⚠️ **2026-09-19 实测修正（两处，都是"静默出错"级）**：
+        ① i8 在某些接口上**不用 401** 表达会话失效 —— 它回
+           **HTTP 200 ＋ `{"Code": 0 或 200, "Success": false, "Msg": "No SessionInfo found"}`**
+           （错误藏在 body 里）。只判 401 ⇒ **cookie 失效时"成功"返回空数据**：
+           不报错、不重登、不提示，表现就是「抓取成功但 0 条」。
+           ⚠️ 叠加 `cookie_store` 缓存后更危险：缓存命中 ⇒ **根本不登录**
+           ⇒ 一个**已失效的 cookie 会被反复使用**（2026-09-19 实际踩到两次）。
+        ② `Code` 是**字符串**（`'200'` / `'0'`），原来的 `body.get("Code") == 401`
+           拿 int 去比 ⇒ **恒为假** ⇒ 那条判断**从来没生效过**。
+        """
         if resp.status_code == 401:
             return True
         try:
             body = resp.json()
         except Exception:  # noqa: BLE001
             return False
-        return isinstance(body, dict) and body.get("Code") == 401
+        if not isinstance(body, dict):
+            return False
+        if str(body.get("Code")) == "401":
+            return True
+        return "no sessioninfo" in str(body.get("Msg") or "").lower()
 
     # --- 公共请求 ---
     def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
@@ -132,7 +148,7 @@ class I8Client:
             resp = session.request(method, path, **kwargs)
             if self._is_session_invalid(resp):
                 # ⚠️ 仅重登一次（D9：不得自动重试登录循环）
-                logger.warning("i8 会话失效（401），尝试重登一次")
+                logger.warning("i8 会话失效（401 或 body 报 No SessionInfo），尝试重登一次")
                 self._login()                       # 成功后已更新缓存
                 self._apply_cookie()
                 resp = session.request(method, path, **kwargs)
