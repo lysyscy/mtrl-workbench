@@ -28,6 +28,7 @@ SRC = BE / "app" / "mod11_jc" / "domain.py"
 TEST = "tests/test_acc_jc_domain.py"
 TEST_LIST = "tests/test_acc_jc_list.py"
 TEST_WRITE = "tests/test_acc_jc_write.py"          # ⭐ M5-4 写路径（2026-09-19 追加）
+TEST_FETCH = "tests/test_acc_jc_fetch.py"          # ⭐ M5-6 抓取落库（2026-09-19 追加）
 
 #: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
 TARGETS: list[Path] = [
@@ -161,6 +162,15 @@ MUTS += [
      "    bad = D.invoice_problem(date, amount)",
      "    bad = None  # 故意短路",
      "test_发票子表字段是日期加金额"),                            # 001-04
+    # ---- M5-6 抓取落库（2026-09-19 追加）
+    ("重抓时把三态一律刷成「待确认」（人工标记被冲掉）",
+     "cur.tag = D.tag_after_fetch(cur.tag)",
+     "cur.tag = TAG_PENDING",
+     "test_再次导入不覆盖旁路字段"),                             # 001-09 / 001-10
+    ("无编号的行被静默丢掉（不计数）",
+     "        if not no:\n            skipped += 1\n            continue",
+     "        if not no:\n            continue",
+     "test_落库幂等_按合同编号"),                                # 实现层自检（禁静默）
 ]
 
 
@@ -186,7 +196,7 @@ def run_one(case: str) -> bool:
         env = dict(os.environ)
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
-            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE],
+            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0

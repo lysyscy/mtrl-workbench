@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.mod01_projects.models import Project
+from app.mod11_jc import domain as D          # ⚠️ 只**调**它的出口（三态归一 / 判定），⛔ 不在本层复写逻辑
 from app.mod11_jc.models import SRC_MANUAL, TAG_PENDING, JcContract, JcInvoice, JcPayment
 
 
@@ -281,9 +282,69 @@ def count_contracts(s: Session) -> int:
     return int(s.execute(select(func.count()).select_from(JcContract)).scalar_one())
 
 
+# ============================================================ 抓取落库（`M5-6`）
+
+#: 「**抓取会刷新**」的列 —— ⛔ 人工字段（三态 / 存档三列 / 备注 / 付款方式 / 贸易公司）**不在其中**：
+#: 那是人的地盘，重抓不许动（判据 `ACC-JC-FETCH-001/001-09`「再次导入**不覆盖旁路字段**」）。
+FETCH_COLS: tuple[str, ...] = ("contract_date", "material_name", "supplier", "contract_amt")
+
+
+def one_by_no(s: Session, contract_no: str) -> JcContract | None:
+    """按**合同编号**取一行（`M5-6` 的**幂等键**）。空编号 ⇒ `None`（不参与幂等）。"""
+    no = str(contract_no or "").strip()
+    if not no:
+        return None
+    return s.execute(select(JcContract).where(JcContract.contract_no == no)).scalars().first()
+
+
+def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -> dict:
+    """抓取结果 → **增量落库**（`M5-6`）⇒ `{"inserted", "refreshed", "skipped"}`。
+
+    ⭐ 幂等键 = **`contract_no`**（i8 的 `BillNo`）：
+
+    - 没编号 ⇒ **跳过并计数**（⛔ 静默丢弃 —— 与 `API-04` 取数层同一口径）；
+    - **不存在** ⇒ 新增，三态 = 「**待确认**」（新抓的那条路；⛔ 不是"纳入台账"——那是手工新增）；
+    - **已存在** ⇒ 只刷 `FETCH_COLS` ＋ 按 `domain.tag_after_fetch` 归一三态
+      ⇒ ⛔ **不碰**存档三列 / 备注 / 付款方式 / 贸易公司（人的地盘）。
+    """
+    inserted = refreshed = skipped = 0
+    for row in rows or ():
+        no = str(row.get("contract_no") or "").strip()
+        if not no:
+            skipped += 1
+            continue
+        cur = one_by_no(s, no)
+        if cur is None:
+            s.add(JcContract(
+                contract_no=no,
+                project_id=int(project_id),
+                contract_date=str(row.get("sign_date") or "")[:10],
+                material_name=str(row.get("material_name") or "")[:128],
+                supplier=str(row.get("supplier_name") or "")[:128],
+                contract_amt=Decimal(str(row.get("contract_amt") or 0)),
+                tag=TAG_PENDING,                       # ⭐ 新抓的默认「待确认」
+                remark=str(row.get("remark") or "")[:255],
+            ))
+            inserted += 1
+        else:
+            for key, val in (("contract_date", str(row.get("sign_date") or "")[:10]),
+                             ("material_name", str(row.get("material_name") or "")[:128]),
+                             ("supplier", str(row.get("supplier_name") or "")[:128]),
+                             ("contract_amt", Decimal(str(row.get("contract_amt") or 0)))):
+                if key in FETCH_COLS:
+                    setattr(cur, key, val)
+            # ⭐ 判据 `001-10`「抓取**不覆盖已人工标记的行**」= 这里只做"归一"：
+            #    原值是人工标过的（≠待确认）⇒ 原样保留；否则回落「待确认」。
+            cur.tag = D.tag_after_fetch(cur.tag)
+            refreshed += 1
+    s.flush()
+    return {"inserted": inserted, "refreshed": refreshed, "skipped": skipped}
+
+
 __all__ = [
     "list_contracts", "contract_of", "invoices_of", "payments_of",
     "invoices_of_many", "payments_of_many", "notice_ids_used", "project_choices",
     "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
     "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
+    "FETCH_COLS", "one_by_no", "upsert_fetched_contracts",
 ]
