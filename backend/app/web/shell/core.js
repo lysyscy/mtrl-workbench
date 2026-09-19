@@ -245,6 +245,11 @@ const API = {
      ⚠️ 一对一（换合同 = **先解绑再写新**）/ 全库去重 / 不校验金额 —— 三条判定全在后端。 */
   m11Link: body => API.post('/api/m11/link', body),
   m11Unlink: body => API.post('/api/m11/unlink', body),
+  /* ⭐ `M5-8` 集采台账 Excel 导入：**预览** / **确认落库**。
+     ⚠️ 走 **base64**（`{filename, content_b64}`）—— 免 multipart 依赖；文件本来也就几十 KB。
+     ⚠️ 两个端点的入参形状**刻意一致** ⇒ 确认时把**同一个文件再传一次**（服务端无状态，见 `import_service`）。 */
+  m11ImportParse: body => API.post('/api/m11/import/parse', body),
+  m11ImportCommit: body => API.post('/api/m11/import/commit', body),
   /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok`（可预期的拒绝 = `ok:false` ＋ 一句中文）。 */
   m11Tag: body => API.post('/api/m11/tag', body),          /* {id, tag} 或 {ids:[…], tag} */
   m11Add: body => API.post('/api/m11/add', body),
@@ -1064,6 +1069,74 @@ async function reloadArchPend() {
    `mod03_notice/static/m03.html` 上）⇒ 给切片加按钮 = 登记漂移；而"渲染后注入"正是 `BIND` 的活。
    ⚠️ **幂等**（`render()` 会重画多次）：靠 `dataset.m03More` 打标，⛔ 不叠加。
    ⚠️ 保留别的 `BIND.m03`（若有）：先调旧的，再注入（⛔ 不覆盖）。 */
+/* ============ MOD-11 · 集采台账「Excel 导入」入口（前端壳接线 · `M5-8`）============
+   ⭐ **为什么由钩子注入**：切片里那排按钮（`jcFetch` / `jcAdd` / 批量标记…）生在"**不许搬**"的切片区
+      ⇒ 给切片加按钮 = 登记漂移；"渲染后注入"正是 `BIND` 的活（同 `BIND.m03` 那两个入口）。
+   ⚠️ **幂等**（`render()` 会重画多次）：靠 `dataset.m8Imp` 打标，⛔ 不叠加。
+   ⚠️ **保留别的 `BIND.m11`**（那个管"全选 / 半选回显"）：先调旧的，再注入。 */
+/* ⭐ `M5-8` ② 预览弹窗（`reopen` 指向本函数 ⇒ 改一格列名**只重绘、不重新解析**）。 */
+function jcImportShow(){
+  const d = jcImpRes, sheets = (d && d.sheets) || [], s = sheets[jcImpK];
+  if (!s) return;
+  const lab = d.field_labels || {}, mp = s.mapping || {};
+  const tabs = sheets.map((x, i) =>
+    `<button class="btn${i === jcImpK ? ' pri' : ''}" data-act="jcImportPickSheet" data-k="${i}">${esc(x.name)}${x.guess ? ' ✅' : ''}</button>`).join(' ');
+  const tgt = (i) => {
+    const ov = jcImpMap[String(i)];
+    if (ov !== undefined) return ov ? `<b>${esc(lab[ov] || ov)}</b>（你改的）` : '<span class="mut">你选择了忽略</span>';
+    const f = Object.keys(mp.fields || {}).find(k => mp.fields[k] === i);
+    if (f) return `<b>${esc(lab[f] || f)}</b> ✅`;
+    const ig = (mp.ignored || []).find(x => x.col === i);
+    if (ig) return `<span class="mut">不导：${esc(ig.why)}</span>`;
+    return `⚠️ <select class="inp" data-act="jcImportMap" data-c="${i}"><option value="">（忽略这一列）</option>${
+      Object.keys(lab).map(k => `<option value="${k}">${esc(lab[k])}</option>`).join('')}</select>`;
+  };
+  const rows = (s.labels || []).map((lb, i) =>
+    `<tr><td class="mut">${i}</td><td>${esc(lb || '（无列名）')}</td><td>${tgt(i)}</td></tr>`).join('');
+  const sk = (s.skipped || []).slice(0, 8).map(x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`).join('');
+  const pjs = (typeof PROJ_LIST === 'function' ? PROJ_LIST() : []);
+  modal({title:'集采台账 Excel 导入 · ② 预览并核对列名', reopen: jcImportShow,
+    body:`<div class="tip" style="margin-bottom:8px">⛔ 系统<b>不猜列名</b> —— 认不出的摆出来让你点；<b>已存在的行不会被动</b>。</div>
+      <div class="fld"><label>工作表（✅ = 看着像主台账）</label><div style="display:flex;flex-wrap:wrap;gap:6px">${tabs}</div></div>
+      <div class="fld"><label>③ 这份台账属于哪个项目（⛔ 系统不替你猜）</label>
+        <select class="inp" data-act="jcImportPj"><option value="">（请选择…）</option>${
+          pjs.map(k => `<option value="${esc(k)}"${k === jcImpPj ? ' selected' : ''}>${esc(pjLabel(k) || k)}</option>`).join('')}</select></div>
+      <div class="fld"><label>列名核对（共 ${s.rows} 行 · 认出数据 ${(s.counts || {}).data || 0} 条 · 解析跳过 ${(s.counts || {}).skipped || 0} 行）</label>
+        <div class="tw" style="max-height:240px"><table class="tbl"><thead><tr><th style="width:38px">列</th><th>你表里的列名</th><th>系统认成</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+      ${sk ? `<div class="tip wn" style="margin-top:8px"><b>解析时跳过的行</b>（⛔ 不是静默丢）：<ul style="margin:4px 0 0;padding-left:18px">${sk}</ul></div>` : ''}`,
+    footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcImportOk">③ 确认导入</button>`});
+}
+
+/* ⭐ `M5-8` ③ 结果回执（⛔ 四类都要列出来：新增 / 已存在 / 不合格 / 提醒 —— 少一类就等于静默丢）。 */
+function jcImpResult(d){
+  const li = (arr, f) => (arr || []).length
+    ? `<ul style="margin:4px 0 0;padding-left:18px;line-height:1.7">${(arr || []).slice(0, 20).map(f).join('')}</ul>`
+    : '<div class="mut sm">（无）</div>';
+  return `<div class="tip" style="margin-bottom:8px"><b>${esc(d.message || '')}</b></div>
+    <div class="sm" style="line-height:1.9;margin-bottom:6px">文件 <b>${esc(d.file)}</b> · 工作表 <b>${esc(d.sheet)}</b> · 项目 <b>${esc(pjLabel(d.project_key) || d.project_key)}</b></div>
+    <div class="fld"><label>新增（${d.added}）</label>${li(d.items, x => `<li>第 ${x.row_no} 行 · ${esc(x.material_name || '')} · ${esc(String(x.contract_amt))}</li>`)}</div>
+    <div class="fld"><label>已存在（${d.exists}，不动）</label>${li(d.exists_items, x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`)}</div>
+    <div class="fld"><label>不合格（${d.bad}）</label>${li(d.bad_items, x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`)}</div>
+    <div class="fld"><label>提醒（${d.warned}）</label>${li(d.warn_items, x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`)}</div>
+    <div class="fld"><label>解析时跳过（${(d.skipped_rows || []).length}）</label>${li(d.skipped_rows, x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`)}</div>`;
+}
+
+const _BIND_M11_OLD = BIND.m11;
+BIND.m11 = function () {
+  if (typeof _BIND_M11_OLD === 'function') _BIND_M11_OLD();
+  const host = document.querySelector('#view');
+  if (!host) return;
+  const anchor = host.querySelector('[data-act="jcFetch"]');
+  if (!anchor || anchor.dataset.m8Imp) return;
+  anchor.dataset.m8Imp = '1';
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.dataset.act = 'jcImportOpen';
+  btn.title = '直接上传你原来的集采台账 Excel（⛔ 不用照模板重填）：选文件 → 选工作表 → 核对列名 → 确认落库；已存在的行不动';
+  btn.textContent = '⬆ Excel 导入台账';
+  anchor.insertAdjacentElement('afterend', btn);
+};
+
 const _BIND_M03_OLD = BIND.m03;
 BIND.m03 = function () {
   if (typeof _BIND_M03_OLD === 'function') _BIND_M03_OLD();

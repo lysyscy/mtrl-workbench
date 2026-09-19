@@ -27,6 +27,20 @@ async function jcLinkAct(fn, okMsg) {
   render();
   return r;
 }
+/* ⭐ `M5-8`：导入的**状态与工具**（⚠️ 必须放在 `ACT` **之外** —— 对象字面量里只能放属性，
+   放 `let`/`const` 进去会直接语法错（这个坑我踩了两次：先 `jcLinkAct`、再这里）。 */
+let jcImpFile=null, jcImpB64=null, jcImpRes=null, jcImpK=0, jcImpMap={}, jcImpPj='';
+const jcImpRead=f=>new Promise((res,rej)=>{ const r=new FileReader();
+  r.onload=()=>res(String(r.result||'')); r.onerror=()=>rej(new Error('文件读不出来')); r.readAsDataURL(f); });
+const jcImpSheet=()=>((jcImpRes&&jcImpRes.sheets)||[])[jcImpK]||null;
+/* 「人改过的映射」= **后端返回的** ∪ **预览页手点的**（⚠️ 人改的**优先** —— 与后端 `map_columns` 同口径）。 */
+const jcImpCur=()=>{ const s=jcImpSheet(); if(!s) return null;
+  const mp=s.mapping||{}; const flds=Object.assign({}, mp.fields||{});
+  Object.keys(jcImpMap||{}).forEach(c=>{ const v=jcImpMap[c];
+    Object.keys(flds).forEach(k=>{ if(flds[k]===+c) delete flds[k]; });
+    if(v) flds[v]=+c; });
+  return {sheet:s, fields:flds, labels:mp.labels||s.labels||[]}; };
+
 const ACT={
  /* 导航 */
  go:t=>go(t.dataset.k),
@@ -1450,6 +1464,50 @@ const ACT={
    toast('差异登记筛选已重置 —— 核算月与状态都回到<b>全部</b>'); },
 
  /* —— MOD-11 集采 —— */
+/* ============ `M5-8` 集采台账 Excel 导入（三步：① 选文件 → ② 预览核对列名 → ③ 确认落库）============
+   ⚠️ 服务端**无状态** ⇒ 这里要**一直留着那个 `File`**（`jcImpB64`），确认时把**同一个文件再传一次**
+      （理由见后端 `import_service` 模块头：没有 tmp 要清理、不怕重启，且数据始终由后端自己解析）。
+   ⚠️ ⛔ 前端**不解析台账**：列名映射 / 条数 / 跳过账**一律后端给** —— 壳只负责"选、显示、转发"。 */
+jcImportOpen:()=>{ jcImpFile=null; jcImpB64=null; jcImpRes=null; jcImpK=0; jcImpMap={}; jcImpPj='';
+  modal({title:'集采台账 Excel 导入 · ① 选择文件',
+    body:`<div class="tip" style="margin-bottom:10px">直接<b>上传你原来的台账</b>就行 —— ⛔ 不用照模板重填。<br>
+      下一步会让你<b>选工作表</b>并<b>核对列名</b>，确认无误才落库；<b>已存在的行不动</b>。</div>
+      <div class="fld"><label>选择文件（.xls / .xlsx）</label>
+      <input type="file" class="inp" id="jcImpFile" data-act="jcImportPick" accept=".xls,.xlsx,.xlsm"></div>`,
+    footer:`<button class="btn" data-act="closeModal">取消</button>
+      <button class="btn pri" data-act="jcImportRun" id="jcImpNext" disabled>② 解析预览</button>`}); },
+
+jcImportPick:async t=>{ const f=(t.files||[])[0]; if(!f) return;
+  jcImpFile=f;
+  try{ jcImpB64=await jcImpRead(f); }catch(e){ return toast(`<b>文件读不出来</b>：${esc(String((e&&e.message)||e))}`,7000); }
+  const b=$('#jcImpNext'); if(b) b.disabled=false;
+  toast(`已选择 <b>${esc(f.name)}</b>（${Math.round(f.size/1024)} KB）—— 点「② 解析预览」`); },
+
+jcImportRun:async()=>{ if(!jcImpB64) return toast('请先选择文件');
+  let d=null;
+  try{ d=await API.m11ImportParse({filename:jcImpFile.name, content_b64:jcImpB64}); }
+  catch(e){ return toast(`<b>解析失败</b>：${esc(String((e&&e.message)||e))}`,7000); }
+  if(!d||d.ok===false) return toast(`<b>解析失败</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
+  jcImpRes=d; jcImpK=0; jcImpMap={}; jcImportShow(); },
+
+jcImportPickSheet:t=>{ jcImpK=+t.dataset.k||0; jcImpMap={}; jcImportShow(); },
+jcImportPj:t=>{ jcImpPj=String(t.value||''); jcImportShow(); },
+/* 📌 列名核对：改一格 ⇒ **重绘弹窗**（`reopen` 指向 `jcImportShow`，⛔ 不重新解析 —— 文件不再读一遍） */
+jcImportMap:t=>{ jcImpMap[String(t.dataset.c)]=String(t.value||''); if(lastModal&&lastModal.reopen) lastModal.reopen(); },
+
+jcImportOk:async()=>{ const cur=jcImpCur(); if(!cur) return;
+  if(!jcImpPj) return toast('<b>请先选「项目」</b> —— 这份台账属于哪个项目（⛔ 系统不替你猜）');
+  const keys=Object.keys(cur.fields||{});
+  if(keys.indexOf('contract_date')<0 && keys.indexOf('material_name')<0)
+    return toast('<b>列名还没对上</b>：至少要认出「合同日期」或「材料名称」才能落库');
+  let d=null;
+  try{ d=await API.m11ImportCommit({filename:jcImpFile.name, content_b64:jcImpB64,
+      sheet:cur.sheet.name, project_key:jcImpPj, mapping:jcImpMap}); }
+  catch(e){ return toast(`<b>没能导入</b>：${esc(String((e&&e.message)||e))}`,7000); }
+  if(!d||d.ok===false) return toast(`<b>没能导入</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
+  await reloadM11();
+  modal({title:'导入结果（`M5-8`）',body:jcImpResult(d),footer:`<button class="btn pri" data-act="closeModal">知道了</button>`}); },
+
  /* ⭐ `M5-7`：抓取接通（`POST /api/m11/fetch`）。⚠️ 抓取**会顶号**（`D9`）⇒ **先二次确认**、说清后果。 */
 jcFetch:()=>modal({title:'抓取采购合同信息（API-04）· 二次确认',
   body:`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 这一步会登录 i8，可能顶掉该账号其它在线会话</b>（决策 D9）。若同事正在用 i8，请先择时。</div>
@@ -1817,7 +1875,10 @@ jcFetchOk:async()=>{ closeModal();
 };
 
 /* 事件委托 */
-const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup','editCat','filterNt','pjPick','procPjPick','invWh','invOnlyAdj','ivColQ','ivColMin','ivColMax','ivColVal','awfName','awfAmt','awfPjPick','ledNote','ledPjPick','lgPjPick','lgCat','lgS','lgP','lgR','flFilter','flPjPick','jcMethod','jcArchNo','jcRetDate','jcRemark','jcFilter','jcPjPick','bigEdit','bigSelTog','payDraft','fPjStatus','fPjType','fPjQ','fIvDir','fExtStatus','extBal','plFilter','plPick','plPickAll','plPjPick','plCell','plRowSet','jcPick','jcPickAll','ntRowSet','editApprove','editOrd','jcLinkPick','jcNSet','jcNPjPick','jcSubSet','ledExpPjPick','procExpPjPick','dfSet','dfFilter','supPick'];
+const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup','editCat','filterNt','pjPick','procPjPick','invWh','invOnlyAdj','ivColQ','ivColMin','ivColMax','ivColVal','awfName','awfAmt','awfPjPick','ledNote','ledPjPick','lgPjPick','lgCat','lgS','lgP','lgR','flFilter','flPjPick','jcMethod','jcArchNo','jcRetDate','jcRemark','jcFilter','jcPjPick','bigEdit','bigSelTog','payDraft','fPjStatus','fPjType','fPjQ','fIvDir','fExtStatus','extBal','plFilter','plPick','plPickAll','plPjPick','plCell','plRowSet','jcPick','jcPickAll','ntRowSet','editApprove','editOrd','jcLinkPick','jcNSet','jcNPjPick','jcSubSet','ledExpPjPick','procExpPjPick','dfSet','dfFilter','supPick',
+  /* ⭐ `M5-8` 导入那三个**都挂在表单元素上**（file / select / select）⇒ **必须进这里**，
+     否则 `change` 被**静默丢弃**：选完文件点「下一步」永远是灰的、改列名没反应（这个坑最容易漏）。 */
+  'jcImportPick','jcImportPj','jcImportMap'];
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]'); if(!t) return;
   const nm=t.tagName.toLowerCase();

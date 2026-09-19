@@ -81,7 +81,8 @@ def preview(data: bytes, filename: str) -> dict:
         sheets.append(info)
     # ⚠️ 只**排序**、不筛选：像主台账的排前面（人选起来快），但每张表都在
     sheets.sort(key=lambda s: (not s.get("guess"), -int(s.get("rows") or 0)))
-    return {"ok": True, "file": filename, "sheets": sheets}
+    # ⚠️ `field_labels` 回给前端**显示用**（"系统认成 合同日期"要给人看中文名，⛔ 不是给码看 `contract_date`）
+    return {"ok": True, "file": filename, "sheets": sheets, "field_labels": P.FIELD_LABELS}
 
 
 # ============================================================ 落库
