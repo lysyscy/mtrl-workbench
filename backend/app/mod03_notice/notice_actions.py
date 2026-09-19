@@ -413,6 +413,90 @@ def default_pay_method(bill_no: str, plan_methods: dict) -> str:
     return str((plan_methods or {}).get(str(bill_no or "").strip()) or "") or "现汇"
 
 
+def apply_batch_pay(
+    session,
+    *,
+    ids,
+    drafts: dict,
+    pay_date: str = "",
+    remark: str = "",
+    request_id: str = "",
+    plan_methods: dict | None = None,
+) -> tuple[list, str]:
+    """提交**批量付款**（§4.4.4）的**唯一出口** —— PRG（`POST /m03/pay`）与 JSON API
+    （`POST /api/m03/actions/batch-pay`）**共用这一份**：⛔ 不许两份判定、不许两份文案。
+
+    管线（与 `act_pay` 原来的逐句一致，只是搬了个家）：
+      ① `build_rows` 取数 ⇒ ② **以库里最新状态重算**（防"勾上之后才被改成不可付"；
+         **撤单 / 剔除行一律排除** §4.2.7）⇒ ③ `confirm_batch` 判定（金额 / 方式 / 备注 / 状态）
+      ⇒ ④ 有错 ⇒ **整批不产生任何流水**（不落半批）⇒ ⑤ **`request_id` 幂等**（拒重复提交）
+      ⇒ ⑥ `flow_repo.create_flow` 逐条落流水（一次付款一条独立流水）。
+
+    `drafts = {notice_id: {"pay_method": str, "amount": Decimal | None}}` —— 表单/JSON 给的值；
+    ⚠️ 金额**已由调用方解析**成 `Decimal`（解析器在 `notice_http.parse_amount`，随删页一起搬 ✓）。
+    `plan_methods` —— `单据号 -> 计划里的付款方式`（§4.4.2 的默认值来源；⛔ 本层不自己去查，
+    免得与页面件耦合）。`cancel` / `move` 属**交互层**，留在调用方。
+
+    返回 `(created, message)`：`created` = 落了流水的 `notice_id` 列表。
+    """
+    from app.core.money import to_money
+    from app.mod03_notice.domain import PayDraft, PayRow, confirm_batch
+    from app.mod03_notice.list_view import build_rows
+    from app.mod05_flow import repository as flow_repo
+
+    by_id = {r.notice_id: r for r in build_rows(session)}
+    targets = [
+        by_id[i] for i in ids
+        if i in by_id and not by_id[i].i8_revoked and not by_id[i].excluded
+    ]
+    if not targets:
+        raise MustReportError("没有可付款的行（勾选的单据可能已撤单 / 已被剔除）")
+
+    pay_rows = [
+        PayRow(notice_id=r.notice_id, approve_status=r.approve_status, payable=r.pay_amount)
+        for r in targets
+    ]
+    plan = plan_methods or {}
+    submitted = {}
+    for r in targets:
+        d = (drafts or {}).get(r.notice_id) or {}
+        submitted[r.notice_id] = PayDraft(
+            # ⚠️ 表单没给 ⇒ 用**与窗口渲染同一个出口**的默认值（§4.4.2）
+            pay_method=str(d.get("pay_method") or default_pay_method(r.bill_no, plan)),
+            amount=d.get("amount"),
+        )
+
+    result = confirm_batch(pay_rows, submitted, pay_date=str(pay_date or ""), remark=str(remark or ""))
+    if result.errors:
+        # **整批不产生任何流水**（不落半批）
+        raise MustReportError("整批未产生任何流水 —— " + "；".join(result.errors[:6]))
+
+    rid = str(request_id or "").strip()
+    if flow_repo.has_request_id(session, rid):
+        raise MustReportError(f"该提交（request_id={rid}）已经登记过流水 —— 已拒绝重复提交（§4.4.4）")
+
+    created: list[int] = []
+    total = Decimal("0")
+    for item in result.flows:
+        row = by_id[int(item["notice_id"])]
+        flow_repo.create_flow(
+            session,
+            notice_id=row.notice_id,
+            project_id=row.ownership_id,
+            amount=item["amount"],
+            pay_date=item["pay_date"],
+            pay_method=item["pay_method"],
+            request_id=rid,
+        )
+        total += to_money(item["amount"])
+        created.append(int(item["notice_id"]))
+
+    return created, (
+        f"已登记 {len(result.flows)} 条付款流水，合计 {total:.2f} 元"
+        "（一次付款一条独立流水）；相关通知书的已付金额与付款状态已随之更新"
+    )
+
+
 def manual_delete_impact(session, notice_id: int) -> dict:
     """**删除前的影响范围**（§7.2 / §9.4）的**唯一出口** —— ⛔ 前端不许自己拼这段文字。
 

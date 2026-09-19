@@ -82,64 +82,24 @@ async def act_pay(request: Request, session: Session = DBSession) -> RedirectRes
         return back_pay(ids, "没有点「确认付款」—— 什么都没做", kind="wn")
 
     try:
-        rows = build_rows(session)
-        by_id = {r.notice_id: r for r in rows}
+        # ⚠️ 2026-09-19（`§19` 批 4 · **S3②**）：整批重算 / 整批不落半批 / `request_id` 幂等 / 落流水
+        #    一律走**唯一出口** `notice_actions.apply_batch_pay`（与 JSON API 共用）—— ⛔ 别在这里重写。
+        #    ⚠️ `parse_amount` / `plan_methods_for_pay` 仍在本文件的老地方（`notice_http`，是**页面件** ✗）
+        #       —— 它们搬家的活留给"删页"那一步（S4），⛔ 别提前删。
+        from app.mod03_notice.notice_actions import apply_batch_pay
 
-        # ⚠️ 兜底：以**库里的最新状态**重算（防"勾上之后才被改成不可付"）；撤单 / 剔除行一律排除
-        targets = [
-            by_id[i]
-            for i in ids
-            if i in by_id and not by_id[i].i8_revoked and not by_id[i].excluded
-        ]
-        if not targets:
-            raise MustReportError("没有可付款的行（勾选的单据可能已撤单 / 已被剔除）")
-
-        pay_rows = [
-            PayRow(notice_id=r.notice_id, approve_status=r.approve_status, payable=r.pay_amount)
-            for r in targets
-        ]
-        plan_methods = plan_methods_for_pay(session)
         drafts = {
-            r.notice_id: PayDraft(
-                # ⚠️ 表单没给 ⇒ 用**与窗口渲染同一个出口**的默认值（§4.4.2）
-                pay_method=str(
-                    form.get(f"m_{r.notice_id}") or default_pay_method(r.bill_no, plan_methods)
-                ),
-                amount=parse_amount(form.get(f"a_{r.notice_id}")),
-            )
-            for r in targets
+            i: {"pay_method": str(form.get(f"m_{i}") or ""),
+                "amount": parse_amount(form.get(f"a_{i}"))}
+            for i in ids
         }
-        result = confirm_batch(
-            pay_rows, drafts,
-            pay_date=str(form.get("pay_date") or ""),
-            remark=str(form.get("remark") or ""),
+        _, msg = apply_batch_pay(
+            session, ids=ids, drafts=drafts,
+            pay_date=str(form.get("pay_date") or ""), remark=str(form.get("remark") or ""),
+            request_id=str(form.get("request_id") or ""),
+            plan_methods=plan_methods_for_pay(session),
         )
-        if result.errors:
-            # **整批不产生任何流水**（不落半批）
-            return back_pay(ids, "整批未产生任何流水 —— " + "；".join(result.errors[:6]), kind="err")
-
-        rid = str(form.get("request_id") or "").strip()
-        if flow_repo.has_request_id(session, rid):
-            raise MustReportError(f"该提交（request_id={rid}）已经登记过流水 —— 已拒绝重复提交（§4.4.4）")
-
-        total = Decimal("0")
-        for item in result.flows:
-            row = by_id[int(item["notice_id"])]
-            flow_repo.create_flow(
-                session,
-                notice_id=row.notice_id,
-                project_id=row.ownership_id,
-                amount=item["amount"],
-                pay_date=item["pay_date"],
-                pay_method=item["pay_method"],
-                request_id=rid,
-            )
-            total += to_money(item["amount"])
-        return back_pay(
-            [],
-            f"已登记 {len(result.flows)} 条付款流水，合计 {total:.2f} 元"
-            "（一次付款一条独立流水）；相关通知书的已付金额与付款状态已随之更新",
-        )
+        return back_pay([], msg)
     except MustReportError as exc:
         return back_pay(ids, exc.message, kind="err")
 
