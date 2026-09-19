@@ -413,6 +413,35 @@ def default_pay_method(bill_no: str, plan_methods: dict) -> str:
     return str((plan_methods or {}).get(str(bill_no or "").strip()) or "") or "现汇"
 
 
+def plan_methods_for_pay(session) -> dict[str, str]:
+    """`单据号 -> 付款计划的付款方式` —— §4.4.2 默认值的**取数出口**（`default_pay_method` 的输入）。
+
+    ⚠️ 2026-09-19（`§19` 批 4 · **S4②**）：**从 `notice_pay.py` 搬到这里**（那是**会被删**的页面件）
+       —— 批量付款的**两个出口**（PRG 与 JSON API）都从本件取它。⛔ 别在别处再写一份同样的查询。
+    ⚠️ 付款计划没导入 / 表还没建时**不该让付款窗口打不开** ⇒ 兜底空表（由 `default_pay_method` 兜「现汇」）。
+    """
+    try:
+        from app.mod04_plan.repository import list_rows
+
+        return {
+            str(r.doc_no or "").strip(): str(r.pay_method or "")
+            for r in list_rows(session)
+            if str(r.doc_no or "").strip() and str(r.pay_method or "").strip()
+        }
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def parse_amount(text):
+    """把表单 / JSON 里的金额文本解析为 `Decimal`（空 ⇒ `None` = 未手改、取「本次应付」）。
+
+    ⚠️ 2026-09-19（`§19` 批 4 · **S4②**）：**从 `notice_http.py` 搬到这里**（那是**会被删**的页面件）。
+    ⚠️ 只做**格式**归一（去千分位），**不做业务判断** —— 上限 / 正负 / 可否为空一律由 `domain` 判。
+    """
+    raw = str(text or "").strip().replace(",", "")
+    return to_money(raw) if raw else None
+
+
 def apply_batch_pay(
     session,
     *,
@@ -433,7 +462,7 @@ def apply_batch_pay(
       ⇒ ⑥ `flow_repo.create_flow` 逐条落流水（一次付款一条独立流水）。
 
     `drafts = {notice_id: {"pay_method": str, "amount": Decimal | None}}` —— 表单/JSON 给的值；
-    ⚠️ 金额**已由调用方解析**成 `Decimal`（解析器在 `notice_http.parse_amount`，随删页一起搬 ✓）。
+    ⚠️ 金额**已由调用方解析**成 `Decimal`（解析器 = 本模块的 `parse_amount` ✓）。
     `plan_methods` —— `单据号 -> 计划里的付款方式`（§4.4.2 的默认值来源；⛔ 本层不自己去查，
     免得与页面件耦合）。`cancel` / `move` 属**交互层**，留在调用方。
 
@@ -564,5 +593,6 @@ __all__ = [
     "new_manual_ph_id", "is_manual_ph_id", "is_manual_row", "assert_manual_editable",
     "ManualRow", "manual_row_payload", "manual_project_options",
     "apply_stat_change",
+    "default_pay_method", "plan_methods_for_pay", "parse_amount",   # 批量付款的入参与默认值（S4② 搬入）
     "EXCLUDE_BY_MANUAL", "EXCLUDE_BY_RULE", "EXCLUDE_NONE", "CATEGORY_MATERIAL",
 ]

@@ -26,7 +26,7 @@ from app.mod03_notice.domain import (
     confirm_batch,
 )
 from app.mod03_notice.list_view import build_rows
-from app.mod03_notice.notice_http import PAY_URL
+from app.mod03_notice.notice_page_http import PAY_URL
 from app.mod03_notice.page import (
     BASE_CSS,
     DEFAULT_EMPTY_TEXT,
@@ -57,10 +57,13 @@ SKIP_REVOKED = "i8 已撤单行不参与付款（该单据在 i8 侧已被删除
 SKIP_EXCLUDED = "已剔除的行**不参与付款**（它与本域无关、不进统计；用户 2026-09-16 裁定 —— §4.2.2）"
 
 
-# ⚠️ 2026-09-19（`§19` 批 4 · **S3a**）：`default_pay_method` 已**搬进存活件** `notice_actions.py`
-#    （本件是**会被删**的页面件 ✗）—— 这里**反向 import** 它，保持本模块的对外行为一字不变 ✓。
-#    ⛔ 别再在本文件里重写一份（两份实现是本仓的老毛病）。
-from app.mod03_notice.notice_actions import default_pay_method  # noqa: E402,F401
+# ⚠️ 2026-09-19（`§19` 批 4 · **S3a / S4②**）：`default_pay_method` 与 `plan_methods_for_pay` 已
+#    **搬进存活件** `notice_actions.py`（本件是**会被删**的页面件 ✗）—— 这里**反向 import** 它们，
+#    保持本模块的对外行为一字不变 ✓。⛔ 别再在本文件里重写一份（两份实现是本仓的老毛病）。
+from app.mod03_notice.notice_actions import (  # noqa: E402,F401
+    default_pay_method,
+    plan_methods_for_pay,
+)
 
 
 def build_pay_window(
@@ -78,7 +81,7 @@ def build_pay_window(
     by_id = {r.notice_id: r for r in rows}
 
     if plan_methods is None:
-        plan_methods = _plan_methods(session)
+        plan_methods = plan_methods_for_pay(session)
 
     selected: list = []
     skipped: list[tuple[int, str]] = []
@@ -132,20 +135,6 @@ def build_pay_window(
         "tips": list(TIPS),
         "approve_done": APPROVE_STATUS_DONE,
     }
-
-
-def _plan_methods(session) -> dict[str, str]:
-    """`单据号 -> 付款计划的付款方式` —— §4.4.2 的默认值来源（查不到就兜底「现汇」）。"""
-    try:
-        from app.mod04_plan.repository import list_rows
-
-        return {
-            str(r.doc_no or "").strip(): str(r.pay_method or "")
-            for r in list_rows(session)
-            if str(r.doc_no or "").strip() and str(r.pay_method or "").strip()
-        }
-    except Exception:  # noqa: BLE001 —— 付款计划未导入/表未建时不该让付款窗口打不开
-        return {}
 
 
 # ---------------------------------------------------------------- 渲染

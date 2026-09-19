@@ -1,7 +1,8 @@
 """`MOD-03` **行级动作路由**（PRG）：改分类 · 剔除 / 恢复 · 手动新增 / 编辑 / 删除 · 统计手改 · 按计划勾选。
 
 拆出来的理由：`notice_router` 一个文件装三件事会越过「单文件硬上限 600 行」（工程纪律）。
-本文件与 `notice_router`（页面 / 列表 API）、`notice_pay_router`（批量付款 / 撤销 / 查看关联）**共用** `notice_http` 的公共件。
+本文件与 `notice_router`（页面 / 列表 API）、`notice_pay_router`（批量付款 / 撤销 / 查看关联）**共用**
+`notice_http`（会话）与 `notice_page_http`（PRG 回跳胶水，**页面专用** ⇒ 随删页消失）的公共件。
 
 ⚠️ **判定一律调纯函数出口**（`notice_actions` / `domain`），本文件只做取数、落库与 303 回跳。
 """
@@ -23,7 +24,8 @@ from app.mod03_notice.notice_actions import (
     manual_row_payload,
     restore_excluded,
 )
-from app.mod03_notice.notice_http import DBSession, QueryState, State, back
+from app.mod03_notice.notice_http import DBSession
+from app.mod03_notice.notice_page_http import QueryState, State, back
 
 actions_router = APIRouter(tags=["mod03-actions"])
 
@@ -204,7 +206,7 @@ def act_pick_plan(st: QueryState = State) -> RedirectResponse:
     from fastapi.responses import RedirectResponse as _RR
 
     from app.core.period import default_period as _dp
-    from app.mod03_notice.notice_http import LIST_URL
+    from app.mod03_notice.notice_page_http import LIST_URL
     from app.mod04_plan.domain import in_effective_window, window_label
 
     today = date.today()

@@ -30,7 +30,8 @@ from app.mod03_notice.notice_http import (  # noqa: F401  ← get_session 再导
     get_session,
     notice_filters,
 )
-from app.mod03_notice.notice_page import build_page_data, render_notice_page
+from app.mod03_notice.list_data import build_page_data
+from app.mod03_notice.notice_page import render_notice_page
 from app.mod03_notice.notice_pay_router import pay_router
 from app.mod03_notice.page import SORT_NONE
 

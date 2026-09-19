@@ -29,7 +29,6 @@ W2 backend/app/mod03_notice/domain.py:apply_trace
 W2 backend/app/mod03_notice/domain.py:recompute_debt
 W2 backend/app/mod03_notice/domain.py:verify_row
 W2 backend/app/mod03_notice/domain.py:remove_from_batch
-W2 backend/app/mod03_notice/notice_http.py:parse_ids
 W2 backend/app/mod03_notice/notice_pay_router.py:page_pay
 W2 backend/app/mod03_notice/notice_pay_router.py:act_pay
 W2 backend/app/mod03_notice/notice_pay_router.py:act_revoke_flow

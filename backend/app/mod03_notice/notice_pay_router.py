@@ -21,15 +21,14 @@ from app.core.money import to_money
 from app.mod03_notice import repository as repo
 from app.mod03_notice.domain import PayDraft, PayRow, confirm_batch
 from app.mod03_notice.list_view import build_rows
-from app.mod03_notice.notice_http import (
-    DBSession,
+from app.mod03_notice.notice_actions import parse_amount, plan_methods_for_pay
+from app.mod03_notice.notice_http import DBSession
+from app.mod03_notice.notice_page_http import (
     LIST_URL,
     PAY_URL,
     QueryState,
     State,
     back_pay,
-    parse_amount,
-    plan_methods_for_pay,
 )
 from app.mod03_notice.notice_page import render_trace_page
 from app.mod03_notice.notice_pay import build_pay_window, default_pay_method, render_pay_page
@@ -84,8 +83,7 @@ async def act_pay(request: Request, session: Session = DBSession) -> RedirectRes
     try:
         # ⚠️ 2026-09-19（`§19` 批 4 · **S3②**）：整批重算 / 整批不落半批 / `request_id` 幂等 / 落流水
         #    一律走**唯一出口** `notice_actions.apply_batch_pay`（与 JSON API 共用）—— ⛔ 别在这里重写。
-        #    ⚠️ `parse_amount` / `plan_methods_for_pay` 仍在本文件的老地方（`notice_http`，是**页面件** ✗）
-        #       —— 它们搬家的活留给"删页"那一步（S4），⛔ 别提前删。
+        #    ⚠️ `parse_amount` / `plan_methods_for_pay` 已搬进**存活件** `notice_actions`（S4② ✓）。
         from app.mod03_notice.notice_actions import apply_batch_pay
 
         drafts = {

@@ -237,11 +237,14 @@ def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
 
     ⚠️ 与 PRG `POST /m03/pay` **共用** `notice_actions.apply_batch_pay` ——
        本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ 不重复、不另写任何判定或文案。
-    ⚠️ `parse_amount` / `plan_methods_for_pay` 暂从**页面件** `notice_http` 取（与 PRG 同一份 ✓），
-       它们搬家的活留给删页那一步（S4）。
+    ⚠️ `parse_amount` / `plan_methods_for_pay` 与 PRG **同一份**（都住**存活件** `notice_actions` ✓，
+       `§19` 批 4 · S4② 搬过来的）。
     """
-    from app.mod03_notice.notice_actions import apply_batch_pay
-    from app.mod03_notice.notice_http import parse_amount, plan_methods_for_pay
+    from app.mod03_notice.notice_actions import (
+        apply_batch_pay,
+        parse_amount,
+        plan_methods_for_pay,
+    )
 
     drafts = {
         int(k): {"pay_method": str((v or {}).get("pay_method") or ""),
