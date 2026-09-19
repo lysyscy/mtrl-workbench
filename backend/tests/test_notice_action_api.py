@@ -227,3 +227,74 @@ def test_PRG与JSON_API共用统计手改的唯一出口():
     assert "def apply_stat_change(" in (
         root / "backend" / "app" / "mod03_notice" / "notice_actions.py"
     ).read_text(encoding="utf-8"), "唯一出口本身没了"
+
+
+# ------------------------------------------------ `§19` 批 4 · S2a：手动行新增/编辑走 **JSON API**
+# 原委：壳的「手动新增 / 编辑」原来只在前端本地 `NO.push` / `Object.assign`（**不落库** ✗）⇒ 接真接口。
+
+
+@acc("ACC-PAY-MANUAL-001", "001-08")
+def test_API_新增手动行落库():
+    """**手动行新增走 JSON API**：真的落库（`is_manual` ＋ **统计结算恒 0** §4.2.6）。"""
+    client, fake = _client([_notice(1)])
+    r = client.post("/api/m03/actions/manual-save", json={
+        "doc_date": "2026-09-01", "bill_no": "MN01", "bill_name": "期初占位",
+        "biz_type": "付其他供应商款", "payee": "某供应商", "category": "material",   # ⚠️ 服务端只认**键**（辅材/机械/集采是显示名）
+        "amount_approved": "50000", "stat_paid": "20000",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and body["is_new"] is True
+    added = [x for x in fake.added if isinstance(x, PaymentNotice)]
+    assert len(added) == 1, "接口说成功但一行都没落库"
+    assert added[0].is_manual is True
+    assert added[0].stat_settle == Decimal("0.00"), "手动行「统计结算金额」必须恒 0（这笔钱没有新结算）"
+    assert added[0].stat_paid == Decimal("20000.00")
+    assert "已新增" in body["message"] and "只影响「付款」" in body["message"]
+
+
+@acc("ACC-PAY-MANUAL-001", "001-11")
+def test_API_保存校验失败不落库():
+    """校验不过 ⇒ `ok=False` 且**一行都不落库**（外壳据此**保留草稿行**让用户改，R14③）。"""
+    client, fake = _client([_notice(1)])
+    before = len(fake.by_model[PaymentNotice])
+    r = client.post("/api/m03/actions/manual-save", json={
+        "doc_date": "不是日期", "amount_approved": "abc", "stat_paid": "1",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False and body["message"], "校验失败必须给一句能给人看的中文"
+    assert [x for x in fake.added if isinstance(x, PaymentNotice)] == []
+    assert len(fake.by_model[PaymentNotice]) == before
+
+
+@acc()
+def test_API_编辑手动行按改动字段回报():
+    """编辑走**同一套**（§4.2.6）：只改传进来的那几列，回执报「改动 N 个字段」。"""
+    client, fake = _client([_notice(1, is_manual=True, ph_id="MN01")])
+    r = client.post("/api/m03/actions/manual-save", json={
+        # ⚠️ 数字必须自洽：全站口径「统计两金额 ≤ 审批金额」（超了后端会正确地拦下）
+        "row_id": "1", "doc_date": "2026-09-05", "stat_paid": "30000",
+        "amount_approved": "50000", "category": "material",
+    })
+    body = r.json()
+    assert body["ok"] is True and body["is_new"] is False
+    assert "改动" in body["message"] and "个字段" in body["message"]
+    row = fake.by_model[PaymentNotice][0]
+    assert row.stat_paid == Decimal("30000.00")
+    assert [x for x in fake.added if isinstance(x, PaymentNotice)] == [], "编辑不该新增行"
+
+
+@acc()
+def test_PRG与JSON_API共用手动行保存的唯一出口():
+    """⛔ **防分叉**：手动行的校验 / 落库 / 文案只许一份 —— 两个出口都必须调
+    `notice_actions.apply_manual_save`，谁都不许内联 `repo.create_manual_notice` / `update_manual_notice`。"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    prg = (root / "backend" / "app" / "mod03_notice" / "notice_actions_router.py").read_text(encoding="utf-8")
+    api = (root / "backend" / "app" / "mod03_notice" / "notice_api_router.py").read_text(encoding="utf-8")
+    for name, src in (("PRG", prg), ("JSON API", api)):
+        assert "apply_manual_save(" in src, f"{name} 没走手动行保存的唯一出口"
+        for banned in ("repo.create_manual_notice(", "repo.update_manual_notice("):
+            assert banned not in src, f"{name} 内联了落库（应共用唯一出口）：{banned}"

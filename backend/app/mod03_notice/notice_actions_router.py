@@ -113,32 +113,18 @@ def act_save(
 ) -> RedirectResponse:
     """保存手动行（**新增与编辑共用同一套**，§4.2.6）—— 判定走 `notice_actions.manual_row_payload`。"""
     try:
-        payload = manual_row_payload(
-            entered_by=current_operator(),           # 录入人 = 当前登录用户（不从表单取）
-            doc_date=doc_date, bill_no=bill_no, bill_name=bill_name,
-            biz_type=biz_type, payee=payee, category=category,
-            amount_approved=amount_approved, stat_paid=stat_paid,
-            ownership_id=int(ownership_id) if str(ownership_id).strip().isdigit() else None,
+        # ⚠️ 2026-09-19（`§19` 批 4 · S2a）：校验 / 落库 / 文案一律走**唯一出口**
+        #    `notice_actions.apply_manual_save`（与 JSON API `/api/m03/actions/manual-save` **共用**）
+        #    —— ⛔ 别在这里重写校验或另写文案（一份内容只许一个主人）。
+        from app.mod03_notice.notice_actions import apply_manual_save
+
+        _, msg = apply_manual_save(
+            session, row_id=id, entered_by=current_operator(),
+            fields=dict(doc_date=doc_date, bill_no=bill_no, bill_name=bill_name,
+                        biz_type=biz_type, payee=payee, category=category,
+                        amount_approved=amount_approved, stat_paid=stat_paid,
+                        ownership_id=ownership_id),
         )
-        values = payload.values
-        if str(id or "").strip().isdigit():
-            row = repo.get_notice(session, int(id))
-            if row is None:
-                raise MustReportError(f"要保存的手动行 {id} 不存在")
-            assert_manual_editable(row)
-            touched = repo.update_manual_notice(session, row, values)
-            msg = (
-                f"已保存手动行 {row.bill_no or row.id}（改动 {len(touched)} 个字段：{'、'.join(touched) or '无'}）"
-                " —— 它参与欠款统计、与 i8 数据无关"
-            )
-        else:
-            row = repo.create_manual_notice(session, values)
-            msg = (
-                f"已新增 1 行手动付款通知书（本地编号 {row.ph_id}）"
-                "；该行**只影响「付款」**、不影响「其他支出金额」"
-            )
-        if payload.notes:
-            msg += "；" + "；".join(payload.notes)
         return back(st, msg)
     except MustReportError as exc:
         # 校验不过 ⇒ **保留草稿行**让用户改（不清空已填内容，R14③）

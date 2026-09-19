@@ -359,6 +359,50 @@ def apply_stat_change(
     )
 
 
+def apply_manual_save(session, *, row_id: str = "", entered_by: str, fields: dict) -> tuple[object, str]:
+    """**手动行新增 / 编辑**（§4.2.6）的**唯一出口** —— PRG（`POST /m03/notices/save`）与 JSON API
+    （`POST /api/m03/actions/manual-save`）**共用这一份**：⛔ 不许两份校验、不许两份文案。
+
+    分三层，各有各的主人（本函数只做"接线"）：
+      · **校验与载荷**：`manual_row_payload`（录入人取当前登录用户、不从表单取；统计结算恒 0 等口径都在那里）；
+      · **是不是手动行**：`assert_manual_editable`（⛔ i8 抓取行永不可改，§4.2.7）；
+      · **落库**：`repository.create_manual_notice` / `update_manual_notice`（编辑返回**被改动的列名**）。
+
+    `row_id` 空 = **新增**；有值 = **编辑该手动行**（「新增与编辑共用同一套」，§4.2.6）。
+    返回 `(row, message)`，`message` 是可直接给人看的中文（含被改字段数 / 只影响「付款」那类说明）。
+    """
+    from app.mod03_notice import repository as repo
+
+    # ⚠️ `ownership_id` 表单/JSON 过来都是**字符串** ⇒ 在这里统一转成 `int | None`（`manual_row_payload`
+    #    那一层的入参口径没变）—— 两个出口谁都不必自己转（一处转，处处一致）。
+    rest = dict(fields or {})
+    oid = str(rest.pop("ownership_id", "") or "").strip()
+    payload = manual_row_payload(
+        entered_by=entered_by, ownership_id=int(oid) if oid.isdigit() else None, **rest
+    )
+    values = payload.values
+    rid = str(row_id or "").strip()
+    if rid.isdigit():
+        row = repo.get_notice(session, int(rid))
+        if row is None:
+            raise MustReportError(f"要保存的手动行 {row_id} 不存在")
+        assert_manual_editable(row)
+        touched = repo.update_manual_notice(session, row, values)
+        msg = (
+            f"已保存手动行 {row.bill_no or row.id}（改动 {len(touched)} 个字段：{'、'.join(touched) or '无'}）"
+            " —— 它参与欠款统计、与 i8 数据无关"
+        )
+    else:
+        row = repo.create_manual_notice(session, values)
+        msg = (
+            f"已新增 1 行手动付款通知书（本地编号 {row.ph_id}）"
+            "；该行**只影响「付款」**、不影响「其他支出金额」"
+        )
+    if payload.notes:
+        msg += "；" + "；".join(payload.notes)
+    return row, msg
+
+
 __all__ = [
     "CATEGORY_NAMES", "CATEGORY_CHOICES", "category_name",
     "CategoryChange", "change_category",

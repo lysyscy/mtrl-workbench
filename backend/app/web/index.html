@@ -3905,17 +3905,23 @@ const ACT={
    const f={date:dt, code:String(naD.code||'').trim(), doc:String(naD.doc||'').trim(), biz:String(naD.biz||'').trim(),
      recv:String(naD.recv||'').trim(), cat, astat:naD.astat||'已批', approve:ap, sp,
      sup:(cat==='集采')?String(naD.sup||'').trim():''};
-   if(naEditId&&naEditId!==NT_NEW_ID){ const n=NO.find(x=>x.id===naEditId); if(!n) return;
-     Object.assign(n,f); n.proj=pj.full; n.ss=0; OWN[n.id]=pj.id;      /* 归属按【档案 id】写死，不按全名反查 */
-     naEditId=''; naD={}; render();       /* 增行模式：保存 = 草稿层复位（不再有弹窗可关） */
-     toast(`手动行 <b>${n.id}</b> 已更新（${esc(pjDisp(pj))} · ${n.date} · 审批 ${M(ap)} · 统计付款 ${M(sp)}）—— 欠款与台账已重算`); return; }
-   const id='MN'+String(NO.filter(x=>/^MN/.test(x.id)).length+1).padStart(2,'0');
-   const n=O([id,f.date,f.code,pj.full,f.doc,f.biz,f.recv,CUR.name,f.approve,0,0,f.sp,f.cat,f.astat,false,'',f.sup,[],'',true],NT_COLS);
-   NO.push(n); OWN[id]=pj.id;
-   /* 新增后**保证看得见**（同「按付款计划勾选」的做法）：切到该行年月 + 放宽三档筛选；「项目」筛选一律不动 */
-   fNt.month=String(n.date).slice(0,7); fNt.cat='全部'; fNt.astat='全部'; fNt.stat='全部'; prunePick();
-   naEditId=''; naD={}; render();         /* 增行模式：保存 = 草稿层复位（不再有弹窗可关） */
-   toast(`已手动新增付款通知书 <b>${id}</b>（${esc(pjDisp(pj))} · ${n.date}）—— <b>统计结算金额恒 0</b>、统计付款金额 <b>${M(sp)}</b> 已计入台账当月「付款」<br>已切到 <b>${fNt.month}</b> 并放宽分类 / 状态筛选；若被「项目」筛选挡着，清一下项目筛选即可见`,7000); },
+   /* ⭐ 2026-09-19 接线（`§19` 批 4 · **S2a**）：手动行**新增 / 编辑一律落库走后端**
+      `POST /api/m03/actions/manual-save` —— 校验（录入人取当前登录用户 · 统计结算恒 0 ·
+      全站「统计两金额 ≤ 审批金额」· 是不是手动行…）**只在后端一处**（`manual_row_payload` ＋ `assert_manual_editable`）。
+      ⛔ 前端不再本地改对象 / 本地塞数组冒充落库（原先就是这样，刷新即丢）。
+      回执里的中文说明**原样给用户**；失败 ⇒ `ok=False` ⇒ 提示并把**草稿行保留**（R14③，不清空已填内容）。 */
+   const body={ row_id:(naEditId&&naEditId!==NT_NEW_ID)?String(naEditId):'',
+     doc_date:f.date, bill_no:f.code, bill_name:f.doc, biz_type:f.biz, payee:f.recv,
+     /* ⚠️ 分类：下拉框的值是**中文标签**（`ENUMS.cat`），而服务端只认**键** ⇒ 必须映射
+       （照 `setCategory` 的既有做法 `CAT_API`）—— 不映射会被后端按「分类不合法」拒掉。 */
+    category:CAT_API[f.cat]||f.cat, amount_approved:String(naD.approve||''), stat_paid:String(naD.sp||''),
+     ownership_id:String(pj.id) };
+   API.manualSave(body)
+     .then(r=>{ naEditId=''; naD={};
+       /* 新增后**保证看得见**（同「按付款计划勾选」的做法）：切到该行年月 + 放宽三档筛选；「项目」筛选一律不动 */
+       fNt.month=String(f.date).slice(0,7); fNt.cat='全部'; fNt.astat='全部'; fNt.stat='全部'; prunePick();
+       toast(r.message,5200); return reloadNotices(); })
+     .catch(e=>{ toast(`<b>保存失败</b>：${esc(e.message||e)}<br>草稿行已保留，改完再点「保存」`,6000); }); },
  /* 手动行的「审批金额」表内可改（i8 抓取行该列仍只读） */
  editApprove:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n||!n.manual) return;
    const v=naNum(t.value);
@@ -5127,6 +5133,10 @@ const API = {
      —— 前端只负责发与显示回执（⛔ 不本地改值、不本地留痕冒充落库）。
      ⚠️ 字段名是**后端旁路字段名**（`stat_settle` / `stat_paid`），壳里的短名 `ss`/`sp` 在此映射。 */
   statCell: body => API.post('/api/m03/actions/stat', body),
+  /* 手动行新增 / 编辑（§4.2.6）：校验与落库**全在后端**（录入人取当前登录用户 / 统计结算恒 0 /
+     全站「统计两金额 ≤ 审批金额」…）—— 前端只管发与显示回执（⛔ 不 `NO.push` 冒充落库）。
+     `row_id` 空 = 新增；有值 = 编辑该手动行。 */
+  manualSave: body => API.post('/api/m03/actions/manual-save', body),
   /* ---- MOD-01 写动作（⛔ 判定与落库一律后端：状态不变式 / 排序重编号 / 全名留痕） ---- */
   pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
   pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),

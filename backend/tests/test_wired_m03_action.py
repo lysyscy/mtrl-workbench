@@ -186,3 +186,27 @@ def test_壳里统计手改走真接口而不是本地改():
     assert "{ss:'stat_settle', sp:'stat_paid'}" in reg, "壳的短名没映射到后端旁路字段名"
     assert "pushTrail(n.trail,{obj:n.code||n.id, field:NAME" not in reg, "还在本地写留痕冒充落库"
     assert "reloadNotices()" in reg, "改完没重拉列表（黄底 / 欠款就刷不出来）"
+
+
+@acc()
+def test_壳里手动行新增编辑走真接口而不是本地塞数组():
+    """`§19` 批 4 · **S2a 接线**：手动行**新增 / 编辑**必须**落库走后端**
+    （`POST /api/m03/actions/manual-save`；校验在后端一处）—— ⛔ 前端不再 `NO.push` / `Object.assign`
+    冒充落库（原先就是这样，刷新即丢）。
+
+    ⚠️ 同时是 `wiring_audit` 的「零件装上车」证据：新端点在壳里**真的有调用点**。
+    """
+    assert "manualSave: body => API.post('/api/m03/actions/manual-save', body)," in SHELL, \
+        "壳没接手动行保存接口"
+    i = SHELL.find("ntRowSave:()=>{")
+    assert i >= 0, "找不到 `ntRowSave` 处理器"
+    reg = SHELL[i:i + 2600]
+    assert "API.manualSave(body)" in reg, "手动行保存仍然是本地塞数组（没走后端）"
+    assert "NO.push(n)" not in reg, "还在本地 `NO.push` 冒充落库"
+    assert "Object.assign(n,f)" not in reg, "还在本地 `Object.assign` 冒充落库"
+    assert "row_id:" in reg, "没把「编辑哪一行」带给后端（会变成永远新增）"
+    # ⚠️⭐ 一个真坑（2026-09-19 接线时撞上）：下拉框的值是**中文标签**（`ENUMS.cat`），
+    #    而服务端只认**键**（material / mechanical / jc）⇒ 必须映射，否则保存**一律被拒**
+    assert "CAT_API[f.cat]" in reg, "分类没从「中文标签」映射成服务端的键（保存会被后端拒掉）"
+    # 失败要**保留草稿行**（不清空已填内容，R14③）
+    assert "草稿行已保留" in reg, "失败时没说清草稿行还在"

@@ -124,4 +124,61 @@ def api_stat(req: StatIn, session: Session = DBSession) -> dict:
     }
 
 
+class ManualSaveIn(BaseModel):
+    """**手动行新增 / 编辑**的入参（§4.2.6）—— 字段名与表单向**同一套**（⛔ 不为前端改名）。
+
+    `row_id` 空 = **新增**；有值 = **编辑该手动行**（「新增与编辑共用同一套」）。
+    ⚠️ 金额都是**字符串**（原样交给 `manual_row_payload` 校验 —— 判定只许有一处）。
+    """
+
+    row_id: str = ""
+    doc_date: str = ""
+    bill_no: str = ""
+    bill_name: str = ""
+    biz_type: str = ""
+    payee: str = ""
+    category: str = ""
+    amount_approved: str = ""
+    stat_paid: str = ""
+    ownership_id: str = ""
+
+
+@api_router.post("/api/m03/actions/manual-save")
+def api_manual_save(req: ManualSaveIn, session: Session = DBSession) -> dict:
+    """**新增 / 编辑手动付款通知书**（§4.2.6）—— 校验不通过 ⇒ `ok=False`（**不落库**），
+    外壳据此**保留草稿行**让用户改（不清空已填内容，R14③）。
+
+    ⚠️ 与 PRG `POST /m03/notices/save` **共用** `notice_actions.apply_manual_save` ——
+       本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ 不重复、不另写任何判定或文案。
+    """
+    from app.core.identity import current_operator
+    from app.mod03_notice.notice_actions import apply_manual_save
+
+    data = req.model_dump()
+    row_id = data.pop("row_id", "")
+    try:
+        row, message = apply_manual_save(
+            session, row_id=row_id, entered_by=current_operator(), fields=data
+        )
+    except MustReportError as exc:
+        return {"ok": False, "row_id": row_id, "message": exc.message}
+
+    return {
+        "ok": True,
+        "row_id": str(row.id),
+        "ph_id": row.ph_id,
+        "is_new": not str(row_id or "").strip().isdigit(),
+        "row": {
+            "bill_no": row.bill_no or "",
+            "doc_date": row.doc_date or "",
+            "category": row.category or "",
+            "amount_approved": str(row.amount_approved),
+            "stat_settle": str(row.stat_settle),
+            "stat_paid": str(row.stat_paid),
+            "ownership_id": row.ownership_id,
+        },
+        "message": message,
+    }
+
+
 __all__ = ["api_router"]
