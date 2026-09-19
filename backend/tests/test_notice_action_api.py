@@ -298,3 +298,62 @@ def test_PRG与JSON_API共用手动行保存的唯一出口():
         assert "apply_manual_save(" in src, f"{name} 没走手动行保存的唯一出口"
         for banned in ("repo.create_manual_notice(", "repo.update_manual_notice("):
             assert banned not in src, f"{name} 内联了落库（应共用唯一出口）：{banned}"
+
+
+# ------------------------------------------------ `§19` 批 4 · S2b：删除 ＋ **删除前的影响范围**
+# §7.2 / §9.4 是硬要求：**删除前必须列出影响范围**（关联数据、统计影响）⇒ 由后端给，壳原样显示。
+
+
+@acc("ACC-PAY-MANUAL-001", "001-10")
+def test_API_删除手动行成功():
+    """**删除手动行走 JSON API**：真的落库（`session.delete`），文案由后端给。"""
+    client, fake = _client([_notice(1, is_manual=True, ph_id="MN01")])
+    r = client.post("/api/m03/actions/manual-delete", json={"notice_id": 1})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and "已删除手动行" in body["message"]
+    assert [x for x in fake.deleted if isinstance(x, PaymentNotice)], "接口说成功但没删"
+    assert fake.by_model[PaymentNotice] == []
+
+
+@acc("ACC-PAY-MANUAL-001", "001-09")
+def test_API_删除i8行被拒且连影响范围都不给():
+    """§4.2.7 铁律：**i8 抓取行永不删**（不提供删除入口）—— 连"删除前的影响范围"都不给看。"""
+    client, fake = _client([_notice(1, is_manual=False)])
+    r = client.post("/api/m03/actions/manual-delete", json={"notice_id": 1})
+    body = r.json()
+    assert body["ok"] is False and body["message"]
+    assert [x for x in fake.deleted if isinstance(x, PaymentNotice)] == []
+    assert fake.by_model[PaymentNotice] != []
+    # 影响范围同样拒（否则等于给了一个"看着能删"的入口）
+    ri = client.post("/api/m03/actions/manual-delete-impact", json={"notice_id": 1})
+    assert ri.json()["ok"] is False
+
+
+@acc()
+def test_API_删除影响范围由后端给():
+    """影响范围 = 后端产出（§7.2/§9.4）：要有「统计付款金额退出台账当月付款列 ⇒ **欠款回增**」这条实质，
+    **并同时说明「已付金额不受影响」**（否则用户会以为流水也跟着没了）。"""
+    client, _ = _client([_notice(1, is_manual=True, ph_id="MN01",
+                                amount_approved=Decimal("50000.00"),
+                                stat_paid=Decimal("30000.00"))])
+    body = client.post("/api/m03/actions/manual-delete-impact", json={"notice_id": 1}).json()
+    assert body["ok"] is True
+    assert body["label"] and body["stat_paid"] == "30000.00" and body["amount_paid"]
+    joined = body["message"] + "".join(body["effects"])
+    assert "欠款" in joined and "回增" in joined, "没讲清「欠款会回增」"
+    assert "已付金额" in joined and "不受影响" in joined, "没讲清「已付金额不受影响」"
+    assert "不做软删" in joined, "没讲清「不做软删」"
+
+
+@acc()
+def test_PRG与JSON_API共用手动行删除的唯一出口():
+    """⛔ **防分叉**：删除的校验 / 落库 / 文案只许一份 —— 两个出口都必须调
+    `notice_actions.apply_manual_delete`，谁都不许内联 `repo.delete_notice`。"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    for name, rel in (("PRG", "notice_actions_router.py"), ("JSON API", "notice_api_router.py")):
+        src = (root / "backend" / "app" / "mod03_notice" / rel).read_text(encoding="utf-8")
+        assert "apply_manual_delete(" in src, f"{name} 没走手动行删除的唯一出口"
+        assert "repo.delete_notice(" not in src, f"{name} 内联了删除（应共用唯一出口）"

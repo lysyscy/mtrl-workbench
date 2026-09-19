@@ -3929,14 +3929,26 @@ const ACT={
    if(overCap(n.sp,v)){ toast(`<b>审批金额不能低于「统计付款金额」</b>：全站口径「统计两金额 ≤ 审批金额」⇒ 至少 <b>${M(n.sp)}</b>（先把统计付款金额调小，或把审批金额填大），已保留原值 ${M(n.approve)}`,6000); render(); return; }
    n.approve=v; render();
    toast(`手动行 <b>${n.id}</b> 审批金额已改为 <b>${M(v)}</b> —— 「付款金额（本次应付）」与付款状态已实时重判`); },
+ /* ⭐ 2026-09-19 接线（`§19` 批 4 · **S2b**）：**删除前的影响范围由后端给**（§7.2 / §9.4 是硬要求）——
+    项目 / 统计付款金额 / 已付金额 / 「欠款回增」那句全由 `/api/m03/actions/manual-delete-impact` 出，
+    ⛔ 前端不再自己拼这段文字（原先正是本地拼的 ✗）。⚠️ i8 抓取行连"影响范围"都不给看（§4.2.7）。 */
  ntDel:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n||!n.manual) return;
-   modal({title:'删除确认 · 手动新增付款通知书',body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 删除前必须列出影响范围</b>（关联数据、统计影响）—— §7.2 / §9.4。</div>
-     ${kvBlock([['单据',`<span class="fc">${esc(n.id)} · ${esc(n.code||'（未填编码）')}</span>`],['项目',`<span style="font-size:11.5px">${esc(n.proj)}</span>`],['单据日期',`<span class="fc">${esc(n.date)}</span>`],['统计结算金额','<span class="fc">0.00</span>（恒 0）'],['统计付款金额',`<span class="fc">${M(n.sp)}</span>`],['已付金额（流水）',`<span class="fc">${M(paidOf(n.id))}</span>`]])}
-     <div class="tip" style="margin:0">删除后：该行的<b>统计付款金额 ${M(n.sp)}</b> 退出「逐月欠款台账」当月「付款」列（欠款<b>回增</b> ${M(n.sp)}）；<b>已付金额不受影响</b>。<br>该行是<b>人工补录</b>的记录，删除即移出列表、<b>不做软删</b>。</div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="ntDelOk" data-id="${n.id}">确认删除</button>`}); },
- ntDelOk:t=>{ const i=NO.findIndex(x=>x.id===t.dataset.id); if(i<0) return; const id=NO[i].id;
-   NO.splice(i,1); delete OWN[id]; pickSet.delete(id); if(naEditId===id) naEditId='';
-   closeModal(); render(); toast(`手动新增的通知书 <b>${id}</b> 已删除 —— 欠款与逐月台账已重算（该行无 i8 单据、不做软删）`); },
+  const id=Number(n.id);
+  API.manualDeleteImpact({notice_id:id})
+    .then(imp=>{ if(!imp.ok) return toast(imp.message);
+      modal({title:'删除确认 · 手动新增付款通知书',
+        body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 删除前必须列出影响范围</b>（关联数据、统计影响）—— §7.2 / §9.4。<br>${imp.message}</div>
+    ${kvBlock([['单据',`<span class="fc">${esc(imp.label)}</span>`],['项目',`<span style="font-size:11.5px">${esc(imp.project_name)}</span>`],['单据日期',`<span class="fc">${esc(imp.doc_date)}</span>`],['统计结算金额',`<span class="fc">${esc(imp.stat_settle)}</span>（恒 0）`],['统计付款金额',`<span class="fc">${esc(imp.stat_paid)}</span>`],['已付金额（流水）',`<span class="fc">${esc(imp.amount_paid)}</span>`]])}
+    <div class="tip" style="margin:0">${imp.effects.map(x=>`· ${esc(x)}`).join('<br>')}</div>`,
+        footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="ntDelOk" data-id="${id}">确认删除</button>`}); })
+    .catch(e=>toast(`<b>取删除影响范围失败</b>：${esc(e.message||e)}`)); },
+ /* ⭐ 删除**落库走后端**（S2b）：⛔ 前端不再本地 `splice` 冒充删除 */
+ ntDelOk:t=>{ const id=Number(t.dataset.id);
+  API.manualDelete({notice_id:id})
+    .then(r=>{ if(!r.ok) return toast(r.message);
+      pickSet.delete(id); if(String(naEditId)===String(id)) naEditId='';
+      closeModal(); toast(r.message); return reloadNotices(); })
+    .catch(e=>toast(`<b>删除失败</b>：${esc(e.message||e)}`)); },
 
  /* ⭐ 撤销付款（2026-09-14 新增）：**付款通知书页的就近入口** —— 把 §4.4.5 的能力搬到用户发现问题的位置。
    ⚠️ **不新开口径**：撤销逻辑与「付款流水与欠款统计」页的 `revDlg` / `revOk` **完全同一套**
@@ -5137,6 +5149,11 @@ const API = {
      全站「统计两金额 ≤ 审批金额」…）—— 前端只管发与显示回执（⛔ 不 `NO.push` 冒充落库）。
      `row_id` 空 = 新增；有值 = 编辑该手动行。 */
   manualSave: body => API.post('/api/m03/actions/manual-save', body),
+  /* 删除前的影响范围（§7.2/§9.4 **硬要求**）：由后端给（项目/统计付款金额/已付金额/「欠款回增」那句）
+     —— ⛔ 前端不自己拼这段文字。 */
+  manualDeleteImpact: body => API.post('/api/m03/actions/manual-delete-impact', body),
+  /* 删除手动行（§4.2.6）：只对手动行开放，i8 抓取行永不可删（§4.2.7）；⛔ 前端不本地 splice 冒充删除 */
+  manualDelete: body => API.post('/api/m03/actions/manual-delete', body),
   /* ---- MOD-01 写动作（⛔ 判定与落库一律后端：状态不变式 / 排序重编号 / 全名留痕） ---- */
   pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
   pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),

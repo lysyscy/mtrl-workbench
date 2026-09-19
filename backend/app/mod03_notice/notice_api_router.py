@@ -181,4 +181,39 @@ def api_manual_save(req: ManualSaveIn, session: Session = DBSession) -> dict:
     }
 
 
+class NoticeIdIn(BaseModel):
+    notice_id: int
+
+
+@api_router.post("/api/m03/actions/manual-delete-impact")
+def api_manual_delete_impact(req: NoticeIdIn, session: Session = DBSession) -> dict:
+    """**删除前的影响范围**（§7.2 / §9.4 —— 硬要求）—— 壳弹确认框时**先取这一段**，⛔ 不自己拼。
+
+    ⚠️ 与删除本身**共用** `notice_actions.manual_delete_impact` / `assert_manual_editable`：
+       **i8 抓取行连"影响范围"都不给看**（§4.2.7：不提供删除入口）。
+    """
+    from app.mod03_notice.notice_actions import manual_delete_impact
+
+    try:
+        return {"ok": True, **manual_delete_impact(session, req.notice_id)}
+    except MustReportError as exc:
+        return {"ok": False, "message": exc.message}
+
+
+@api_router.post("/api/m03/actions/manual-delete")
+def api_manual_delete(req: NoticeIdIn, session: Session = DBSession) -> dict:
+    """**删除一条手动行**（§4.2.6）—— 只对手动行开放；i8 抓取行永不可删（§4.2.7）。
+
+    ⚠️ 与 PRG `POST /m03/notices/delete` **共用** `notice_actions.apply_manual_delete` ——
+       本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ 不重复、不另写任何判定或文案。
+    """
+    from app.mod03_notice.notice_actions import apply_manual_delete
+
+    try:
+        row, message = apply_manual_delete(session, req.notice_id)
+    except MustReportError as exc:
+        return {"ok": False, "notice_id": req.notice_id, "message": exc.message}
+    return {"ok": True, "notice_id": int(row.id), "message": message}
+
+
 __all__ = ["api_router"]

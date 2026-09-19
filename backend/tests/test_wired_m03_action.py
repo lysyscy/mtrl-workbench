@@ -210,3 +210,24 @@ def test_壳里手动行新增编辑走真接口而不是本地塞数组():
     assert "CAT_API[f.cat]" in reg, "分类没从「中文标签」映射成服务端的键（保存会被后端拒掉）"
     # 失败要**保留草稿行**（不清空已填内容，R14③）
     assert "草稿行已保留" in reg, "失败时没说清草稿行还在"
+
+
+@acc()
+def test_壳里手动行删除前的影响范围来自后端且删除走真接口():
+    """`§19` 批 4 · **S2b 接线**：**删除前的影响范围必须由后端给**（§7.2/§9.4 是硬要求）——
+    项目 / 统计付款金额 / 已付金额 / 「欠款回增」那句全由 `/api/m03/actions/manual-delete-impact` 出，
+    ⛔ 前端不再自己拼这段文字；删除本身也走后端（⛔ 不再本地 `splice` 冒充删除）。
+
+    ⚠️ 同时是 `wiring_audit` 的「零件装上车」证据：两个新端点在壳里**都有调用点**。
+    """
+    assert "manualDeleteImpact: body => API.post('/api/m03/actions/manual-delete-impact', body)," in SHELL, \
+        "壳没接「删除影响范围」接口"
+    assert "manualDelete: body => API.post('/api/m03/actions/manual-delete', body)," in SHELL, \
+        "壳没接删除接口"
+    i = SHELL.find("ntDel:t=>{")
+    assert i >= 0, "找不到 `ntDel` 处理器"
+    reg = SHELL[i:i + 3200]
+    assert "API.manualDeleteImpact({notice_id:id})" in reg, "影响范围还是前端自己拼的（没问后端）"
+    assert "imp.message" in reg and "imp.effects" in reg, "没把后端给的影响范围原样显示"
+    assert "API.manualDelete({notice_id:id})" in reg, "删除还是本地删（没走后端）"
+    assert "NO.splice(i,1)" not in reg, "还在本地 `splice` 冒充删除"

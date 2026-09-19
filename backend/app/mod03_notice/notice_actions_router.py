@@ -138,13 +138,12 @@ def act_delete(
 ) -> RedirectResponse:
     """删除一条**手动行**（§4.2.6：只对手动行开放）—— i8 抓取行永不可删（§4.2.7）。"""
     try:
-        row = repo.get_notice(session, int(id))
-        if row is None:
-            raise MustReportError(f"要删除的行 {id} 不存在")
-        assert_manual_editable(row)
-        label = row.bill_no or row.ph_id
-        repo.delete_notice(session, row)
-        return back(st, f"已删除手动行「{label}」（只删这一行；欠款随取数实时重算）", kind="wn")
+        # ⚠️ 2026-09-19（`§19` 批 4 · S2b）：校验 / 落库 / 文案一律走**唯一出口**
+        #    `notice_actions.apply_manual_delete`（与 JSON API 共用）—— ⛔ 别在这里重写。
+        from app.mod03_notice.notice_actions import apply_manual_delete
+
+        _, msg = apply_manual_delete(session, int(id))
+        return back(st, msg, kind="wn")
     except MustReportError as exc:
         return back(st, exc.message, kind="err")
 

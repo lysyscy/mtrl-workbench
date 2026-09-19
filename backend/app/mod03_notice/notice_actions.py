@@ -403,6 +403,64 @@ def apply_manual_save(session, *, row_id: str = "", entered_by: str, fields: dic
     return row, msg
 
 
+def manual_delete_impact(session, notice_id: int) -> dict:
+    """**删除前的影响范围**（§7.2 / §9.4）的**唯一出口** —— ⛔ 前端不许自己拼这段文字。
+
+    这是硬要求：**删除前必须列出影响范围**（关联数据、统计影响）。原先壳在弹窗里**本地算**这段
+    （项目名 / 统计付款金额 / 已付金额 / 「欠款回增」那句）✗ ⇒ 现在由后端给，壳原样显示。
+    ⚠️ 同一条 `assert_manual_editable`：**i8 抓取行永不可删**（§4.2.7）—— 连"影响范围"都不给看。
+    """
+    from app.mod03_notice import repository as repo
+
+    row = repo.get_notice(session, int(notice_id))
+    if row is None:
+        raise MustReportError(f"要删除的行 {notice_id} 不存在")
+    assert_manual_editable(row)
+
+    # ⚠️ 金额列可能是 `None`（未取到 ≠ 0）⇒ 显示成 0.00 而不是抛异常（回执给人看，别 500）
+    money = lambda v: f"{(v if v is not None else _ZERO):.2f}"   # noqa: E731
+    settle = money(row.stat_settle)
+    paid_stat = money(row.stat_paid)
+    label = row.bill_no or row.ph_id
+    return {
+        "notice_id": int(row.id),
+        "label": label,
+        "project_name": row.project_name or "",
+        "doc_date": row.doc_date or "",
+        "stat_settle": settle,
+        "stat_paid": paid_stat,
+        "amount_paid": money(row.amount_paid),
+        "effects": [
+            f"该行的「统计付款金额」{paid_stat} 退出「逐月欠款台账」当月「付款」列（欠款**回增** {paid_stat}）",
+            "「已付金额」不受影响（付款流水是另一份记录、不会跟着消失）",
+            "该行是**人工补录**的记录 ⇒ 删除即移出列表、**不做软删**",
+        ],
+        "message": (
+            f"⚠️ 删除前必须列出影响范围（§7.2 / §9.4）：删除后，该行（{label}）的"
+            f"「统计付款金额」{paid_stat} 退出「逐月欠款台账」当月「付款」列（欠款**回增** {paid_stat}）；"
+            "「已付金额」不受影响；该行是**人工补录**的记录，删除即移出列表、**不做软删**。"
+        ),
+    }
+
+
+def apply_manual_delete(session, notice_id: int) -> tuple[object, str]:
+    """**删除一条手动行**（§4.2.6）的**唯一出口** —— PRG（`POST /m03/notices/delete`）与 JSON API
+    （`POST /api/m03/actions/manual-delete`）**共用这一份**：⛔ 不许两份校验、不许两份文案。
+
+    ⚠️ `assert_manual_editable` 是那道铁律：**i8 抓取回来的行永不删**（§4.2.7 明确"不提供删除
+       付款通知书按钮"）；本动作只服务**人工补录**的行 —— 删它 = 撤回自己的录入，欠款随取数实时重算。
+    """
+    from app.mod03_notice import repository as repo
+
+    row = repo.get_notice(session, int(notice_id))
+    if row is None:
+        raise MustReportError(f"要删除的行 {notice_id} 不存在")
+    assert_manual_editable(row)
+    label = row.bill_no or row.ph_id
+    repo.delete_notice(session, row)
+    return row, f"已删除手动行「{label}」（只删这一行；欠款随取数实时重算）"
+
+
 __all__ = [
     "CATEGORY_NAMES", "CATEGORY_CHOICES", "category_name",
     "CategoryChange", "change_category",
