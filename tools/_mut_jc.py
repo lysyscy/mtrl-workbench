@@ -29,11 +29,13 @@ TEST = "tests/test_acc_jc_domain.py"
 TEST_LIST = "tests/test_acc_jc_list.py"
 TEST_WRITE = "tests/test_acc_jc_write.py"          # ⭐ M5-4 写路径（2026-09-19 追加）
 TEST_FETCH = "tests/test_acc_jc_fetch.py"          # ⭐ M5-6 抓取落库（2026-09-19 追加）
+TEST_ORCH = "tests/test_acc_jc_fetch_orch.py"      # ⭐ M5-6 抓取编排（2026-09-19 追加）
 
 #: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
 TARGETS: list[Path] = [
     SRC,
     BE / "app" / "mod11_jc" / "repository.py",
+    BE / "app" / "mod11_jc" / "fetch_service.py",      # ⭐ M5-6 抓取编排（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "service.py",
     BE / "app" / "mod11_jc" / "models.py",
 ]
@@ -171,6 +173,15 @@ MUTS += [
      "        if not no:\n            skipped += 1\n            continue",
      "        if not no:\n            continue",
      "test_落库幂等_按合同编号"),                                # 实现层自检（禁静默）
+    # ---- M5-6 抓取编排（2026-09-19 追加）
+    ("「先同步常用项目」被跳过（拿旧档案直接判 ⇒ 该纳管的会被判成不需要）",
+     "                do_sync = sync or sync_and_archive",
+     "                do_sync = lambda *a, **k: {}  # 故意不同步",
+     "test_先同步常用项目再匹配"),                               # ⭐ 顺序断言
+    ("同步的兜错只兜窄异常（同步一失败就把整个抓取打掉）",
+     "                except Exception as exc:                        # noqa: BLE001 —— 降级，不抛",
+     "                except ValueError as exc:                       # 故意只兜窄的",
+     "test_同步失败不拖垮抓取"),                                 # ⭐ 安全绳断言
 ]
 
 
@@ -196,7 +207,7 @@ def run_one(case: str) -> bool:
         env = dict(os.environ)
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
-            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH],
+            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH, TEST_ORCH],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0
