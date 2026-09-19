@@ -39,6 +39,17 @@ logger = get_logger()
 #: `model=7` —— ⚠️ **含义待确认**（疑为"单据类型"）。取值以真机为准，⛔ 别在别处再写一份 `7`。
 CONTRACT_MODEL = "7"
 
+#: ⭐ 列表页大小上限 —— ⛔ **必须放进 POST body**：实测 2026-09-19，**不传 `limit` 时 i8 只回 10 条**
+#:   （355 条的全量 = `limit=5000&page=0&start=0` 放在 **body** 里；放 URL 上不生效）。
+LIST_LIMIT = "5000"
+
+#: i8 前端的列表页标识（body 与请求头各带一份；实测服务端**不校验请求头那份** ⇒ 放 body 即可）。
+PAGE_ID = "Web:PMS3.PCM.PCM_INFO_List7"
+
+#: ⚠️⚠️ 本接口**特别慢**：实测**10 条与 355 条都要 ~41 秒** ⇒ **慢在 i8 侧查询、与条数无关**。
+#:   `I8Client` 默认 `timeout=30s` ⇒ **必然 ReadTimeout**（2026-09-19 实测踩到）⇒ 此处显式放大。
+LIST_TIMEOUT = 200.0
+
 #: 取数串行锁的键（D9：同一张表抓取互斥）。
 TABLE = "jc_contract"
 
@@ -60,10 +71,13 @@ class ContractFetcher:
         """全量取一次（**人工触发**）⇒ 映射后的行列表（无法识别编号的**已丢弃**，见 `_map_record`）。"""
         url = configured_url()
         params = build_params()
+        body = build_body()
         with serialize_fetch(TABLE):
             records: list[dict] = []
             for attempt in range(EMPTY_RETRY + 1):
-                resp = self._client.post_json(url, params=params, data={})
+                # ⚠️ `timeout` 必须显式放大（见 `LIST_TIMEOUT`：默认 30s 必超时）
+                resp = self._client.post_json(
+                    url, params=params, data=body, timeout=LIST_TIMEOUT)
                 records = _extract_records(resp)
                 if records or attempt >= EMPTY_RETRY:
                     break
@@ -90,11 +104,29 @@ def configured_url() -> str:
 
 
 def build_params(*, now_ms: int | None = None) -> dict[str, str]:
-    """URL 上的 query 参数（`_dc` = 防缓存时间戳，i8 前端惯例）。"""
+    """**URL 上**的 query 参数（`_dc` = 防缓存时间戳，i8 前端惯例）。"""
     return {
         "model": CONTRACT_MODEL,
         "floatmenuCondition": "",
         "_dc": str(now_ms if now_ms is not None else int(time.time() * 1000)),
+    }
+
+
+def build_body(*, limit: str = LIST_LIMIT) -> dict[str, str]:
+    """**POST body**（form-urlencoded）—— ⭐ 真正的"要全量"就靠它。
+
+    ⛔ `limit` / `page` / `start` / `pageId` 都必须在 **body** 里（放 URL 不生效）：
+    实测不传 `limit` ⇒ i8 只回 **10 条**（默认页）⇒ 会**静默地只抓到一小截**。
+    """
+    return {
+        "pageId": PAGE_ID,
+        "env": "java",
+        "model": CONTRACT_MODEL,
+        "floatmenuCondition": "",
+        "queryfilter": "",
+        "limit": str(limit),
+        "page": "0",
+        "start": "0",
     }
 
 
@@ -146,5 +178,6 @@ def summary(rows: list[dict]) -> dict[str, Any]:
 
 __all__ = [
     "ContractFetcher", "MATCH_FIELD", "TABLE", "CONTRACT_MODEL",
-    "EMPTY_RETRY", "build_params", "configured_url", "summary",
+    "EMPTY_RETRY", "LIST_LIMIT", "LIST_TIMEOUT", "PAGE_ID",
+    "build_body", "build_params", "configured_url", "summary",
 ]

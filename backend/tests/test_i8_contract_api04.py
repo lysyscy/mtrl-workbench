@@ -46,11 +46,11 @@ class _FakeClient:
         return self.payloads.pop(0) if self.payloads else self.payload
 
     def post_json(self, url, params=None, **kw):  # noqa: ANN001
-        self.calls.append(("POST", url, params, kw.get("data")))
+        self.calls.append(("POST", url, params, kw.get("data"), kw.get("timeout")))
         return self._next()
 
     def get_json(self, url, params=None, **kw):  # noqa: ANN001
-        self.calls.append(("GET", url, params, None))
+        self.calls.append(("GET", url, params, None, None))
         return self._next()
 
 
@@ -69,13 +69,24 @@ def _fetch(monkeypatch, payload=None, *, payloads=None, url="http://i8/api04"): 
 @acc()
 def test_请求形态是POST且query挂在url上(monkeypatch):  # noqa: ANN001
     rows, fake = _fetch(monkeypatch, {"Record": [REC]})
-    method, url, params, data = fake.calls[0]
+    method, url, params, data, timeout = fake.calls[0]
     assert method == "POST", "API-04 必须是 POST（GET 会被 i8 拒：500）"
     assert url == "http://i8/api04"
     assert params["model"] == cs.CONTRACT_MODEL == "7"
     assert "floatmenuCondition" in params and "_dc" in params
-    assert data == {}, "body 应为空（参数挂在 URL 上）"
     assert len(rows) == 1
+
+
+@acc()
+def test_必须传limit否则只回10条(monkeypatch):  # noqa: ANN001
+    """⛔ 2026-09-19 实测坑：`limit` 不放 body ⇒ i8 只回 **10 条**（默认页）⇒ 静默只抓一小截。"""
+    _rows, fake = _fetch(monkeypatch, {"Record": [REC]})
+    _m, _u, _p, data, timeout = fake.calls[0]
+    assert data["limit"] == cs.LIST_LIMIT == "5000", "limit 必须在 **body** 里"
+    assert data["pageId"] == cs.PAGE_ID and data["page"] == "0" and data["start"] == "0"
+    assert data["queryfilter"] == ""
+    # ⚠️ 本接口实测要 ~41 秒 ⇒ 默认 30s 必超时 ⇒ 必须显式放大
+    assert timeout == cs.LIST_TIMEOUT and timeout > 30, "必须放大 timeout（默认 30s 会超时）"
 
 
 @acc()
