@@ -89,3 +89,15 @@ W1b backend/app/mod05_flow/domain.py:project_labels
 W1b backend/app/mod05_flow/domain.py:is_date_like
 W1b backend/app/mod05_flow/domain.py:toggle_project_filter
 W1b backend/app/mod06_proc/domain.py:column_source
+# ⭐ 2026-09-19（M5 集采域 · 域内核先行）：下面 6 个是**本单元刻意先写、后接**的口径函数 ——
+#    它们已有验收断言（`test_acc_jc_domain.py`，反向灵敏度 17/17），生产调用方随这三个单元落地：
+#    · `payment_problem` / `contract_amounts` → **M5-3 仓储 + 读端点**
+#    · `dedup_blocked` / `link_hint` / `pick_candidates` → **M5-5 付款域双向引用**
+#    · `tag_after_fetch` → **M5-6 抓取（`API-04`）**
+#    ⛔ **接线后必须删掉对应行**（本文件"只准变短"），别让它们在这儿长住。
+W1b backend/app/mod11_jc/domain.py:payment_problem
+W1b backend/app/mod11_jc/domain.py:contract_amounts
+W1b backend/app/mod11_jc/domain.py:tag_after_fetch
+W1b backend/app/mod11_jc/domain.py:link_hint
+W1b backend/app/mod11_jc/domain.py:dedup_blocked
+W1b backend/app/mod11_jc/domain.py:pick_candidates
