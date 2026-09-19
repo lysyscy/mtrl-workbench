@@ -6,8 +6,49 @@
 
 from __future__ import annotations
 
+from app.mod03_notice.page import BASE_CSS, STICKY_BOTTOM_CSS, VSEP_CSS, esc
+from app.core.nav import NAV
 from app.mod05_flow.importer import COLUMNS
-from app.mod05_flow.view import _notice, _shell, esc
+
+# ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 3**）：下面这四个是**共用件**（`EXTRA_CSS` ＋ `_nav`/`_shell`/
+#    `_notice`）—— 原先住在 `mod05_flow/view.py`（本模块的**页面渲染件**，随本批删除）；因为
+#    **本页（历史付款导入 = m05 的暂留件 ✓）要复用**它们 ⇒ **搬到这里**。
+#    ⛔ 别再往已删的 `view.py` 里加东西；要加共用件请放本文件或 `mod03_notice/page.py`。
+
+EXTRA_CSS = """
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.two>div{min-width:0}
+.side h4{font-size:13.5px;margin:0 0 6px;font-weight:500;color:var(--tx2)}
+.ok{color:var(--ok-d)}.wn{color:var(--wn-d)}.dg{color:var(--dg-d)}
+.gridwrap{overflow:auto;max-height:none;border:1px solid var(--bd);border-radius:6px;background:var(--sf)}
+.pick{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;background:var(--sf);border:1px solid var(--bd);border-radius:6px;padding:10px 12px;margin-bottom:10px}
+"""
+
+
+def _nav(current: str) -> str:
+    out = []
+    for href, label in NAV:
+        bold = ' style="font-weight:600"' if href == current else ""
+        out.append(f'<a href="{esc(href)}"{bold}>{esc(label)}</a>')
+    return "".join(out)
+
+
+def _shell(*, title: str, body: str, current: str, notice: str = "", extra: str = "") -> str:
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(title)} · 材料报表自动化工作台</title>
+<style>{BASE_CSS}{STICKY_BOTTOM_CSS}{VSEP_CSS}{EXTRA_CSS}
+nav a{{margin-right:12px;font-size:13px;color:var(--pri);text-decoration:none}}
+{extra}</style></head><body><div class="wrap">
+<header><h1>{esc(title)}</h1><nav>{_nav(current)}</nav></header>
+{notice}
+{body}
+</div></body></html>"""
+
+
+def _notice(message: str, kind: str) -> str:
+    return f'<div class="notice {esc(kind)}">{message}</div>' if message else ""
 
 _STEPS = (
     ("①", "列说明 ＋ 选文件", "按固定列序填：A 单据号 · B 付款金额 · C 付款时间 · D 付款方式 · E 备注；"
