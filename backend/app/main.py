@@ -6,6 +6,9 @@ Starlette 的中间件是"**后 add 的先执行**"，所以实际 add 顺序必
 
 ⚠️ **不引入反向代理**（D1=A）⇒ **一律不信任 `X-Forwarded-For`**，只认 TCP 对端地址，
 避免伪造头绕过白名单。
+
+⚠️ **压缩（GZip）放最内层**：它只压"真正进到应用"的正常响应 —— 被白名单拦掉的 403 不经它
+（本来就不必压，省一层 CPU）。⇒ 见 `create_app` 里的 add 顺序。
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
@@ -136,6 +140,13 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.app_env == "dev" else None,
         redoc_url=None,
     )
+
+    # ⭐ 压缩（性能 P1 · 2026-09-19）：新壳 `index.html` 未压缩 ≈ 620 KB ⇒ 首屏白等；GZip 后 ≈ 1/5。
+    #    ⚠️ 位置：**最早 add ⇒ 最内层**（本文件 docstring 那条顺序规矩）—— 只压"真正进到应用"的
+    #    正常响应；被白名单拦掉的 403 不经它（本来就不必压）。⚠️ 它是**纯 ASGI** 中间件，
+    #    与外围的 `BaseHTTPMiddleware`（CORS / request_id / 白名单）叠加是安全组合。
+    #    `minimum_size` 以下不压：小响应压了反而更大（多一层 gzip 头）。
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     # ⚠️ add 顺序 = CORS → request_id → 白名单（运行期执行顺序相反，见模块 docstring）
     _install_cors(app)

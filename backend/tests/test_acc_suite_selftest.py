@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,13 @@ def test_四态报表可运行且能读出判据总数():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        # ⚠️ 本机坑（2026-09-19）：**不显式给子进程 UTF-8 就会假红** —— Windows 上子进程默认按
+        #    GBK(cp936) 写 stdout，读取线程 `decode('utf-8')` 直接抛 `UnicodeDecodeError`
+        #    ⇒ `result.stdout` 变成 **None** ⇒ 下一条 `json.loads` 报 `TypeError`，看起来像
+        #    "报表坏了"，其实是**父进程没设 `PYTHONIOENCODING`**（我 2026-09-19 忘设一次就中招）。
+        #    ⇒ 这里**强制**子进程输出 UTF-8；`errors="replace"` 再兜一层（宁可看到乱码也不要 None）。
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        errors="replace",
     )
     # 有红 = 1、无红 = 0；两者都算"跑得起来"
     assert result.returncode in (0, 1), f"报表异常退出：{result.stderr}"
