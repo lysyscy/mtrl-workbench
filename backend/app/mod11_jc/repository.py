@@ -133,6 +133,17 @@ def notice_ids_used(s: Session) -> set[int]:
     return {int(x) for x in s.execute(stmt).scalars().all() if x is not None}
 
 
+def project_id_by_key(s: Session, project_key: str) -> int | None:
+    """**仓库名 → 档案 id**（写动作要 id，而前后端之间「项目」一律以**仓库名**为键 · §2.7.4）。
+
+    ⚠️ 这是"键 → 内部 id"的**唯一**翻译口；返回 `None` = 查不到（调用方必须**显式报错**，⛔ 不静默）。
+    """
+    key = str(project_key or "").strip()
+    if not key:
+        return None
+    return s.execute(select(Project.id).where(Project.warehouse_name == key)).scalars().first()
+
+
 def project_choices(s: Session) -> list[dict]:
     """「项目」筛选 / 新增合同的候选（键 = 仓库名 · 展示名另给）—— 同 `MOD-09` 的口径：**唯一出口**。"""
     stmt = select(Project).order_by(Project.ord, Project.id)
@@ -344,6 +355,7 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
 __all__ = [
     "list_contracts", "contract_of", "invoices_of", "payments_of",
     "invoices_of_many", "payments_of_many", "notice_ids_used", "project_choices",
+    "project_id_by_key",
     "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
     "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
     "FETCH_COLS", "one_by_no", "upsert_fetched_contracts",

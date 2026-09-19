@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 
 from app.core.db import session_scope
 from app.mod11_jc import domain as D
+from app.mod11_jc import fetch_service as FS
+from app.mod11_jc import repository as R
 from app.mod11_jc import service as SV
 
 router = APIRouter(tags=["mod11"])
@@ -101,9 +103,13 @@ def api_detail(id: int) -> dict:
 
 
 class AddIn(BaseModel):
-    """手工新增合同入参（判据 `001-13`）—— ⚠️ `project_id` **必填**（§6.4.1「合同必有项目」）。"""
+    """手工新增合同入参（判据 `001-13`）。
 
-    project_id: int
+    ⚠️ 收的是 **`project_key`（= 仓库名）**，⛔ 不是 `project_id` —— 本仓前后端之间「项目」一律以
+    **仓库名**为键（§2.7.4）；`/api/m11/list` 的 `projects` 也只给 `key`/`display`。翻译成 id 在服务端点内做。
+    """
+
+    project_key: str = ""
     contract_date: str = ""
     material_name: str = ""
     supplier: str = ""
@@ -113,6 +119,12 @@ class AddIn(BaseModel):
     tag: str = ""                     # 留空 ⇒ 服务层按「手工新增 = 纳入台账」填（判据 `001-07`）
     method: str = ""
     remark: str = ""
+
+
+class FetchIn(BaseModel):
+    """抓取入参 —— ⚠️ `confirm` **必须为真**（防静默抓取，`D9`；同 `m08` 的口径）。"""
+
+    confirm: bool = False
 
 
 class TagIn(BaseModel):
@@ -142,11 +154,29 @@ class SubRowIn(BaseModel):
     notice_id: int | None = None
 
 
+@router.post("/api/m11/fetch")
+def api_fetch(payload: FetchIn) -> dict:
+    """抓采购合同（`API-04`）⇒ 回执（含**匹配预览**：匹配上 / 匹配不上的项目分布）。
+
+    ⭐ 编排在 `fetch_service.run_fetch`：抓合同 → **先同步常用项目** → 再匹配 → 落库。
+    ⚠️ 抓取**会顶号**（`D9`：登录 i8 会踢掉该账号其它在线会话）⇒ ⛔ 缺 `confirm` 一律拒（防静默抓取）。
+    """
+    if not payload.confirm:
+        return {"ok": False, "kind": "err",
+                "message": "抓取前必须二次确认（这一步会登录 i8，可能顶掉该账号的其它会话）"}
+    with session_scope() as s:
+        return FS.run_fetch(s, confirmed=True)
+
+
 @router.post("/api/m11/add")
 def api_add(payload: AddIn) -> dict:
     """手工新增合同 ⇒ **真的建档**（判据 `001-13`）；三态默认「纳入台账」（判据 `001-07`）。"""
     with session_scope() as s:
-        return SV.act_add_contract(s, **payload.model_dump())
+        pid = R.project_id_by_key(s, payload.project_key)
+        if not pid:
+            return {"ok": False, "kind": "err",
+                    "message": f"找不到项目（仓库名）：{payload.project_key or '（空）'}"}
+        return SV.act_add_contract(s, **payload.model_dump(exclude={"project_key"}))
 
 
 @router.post("/api/m11/tag")

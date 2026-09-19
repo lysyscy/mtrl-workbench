@@ -231,8 +231,16 @@ const API = {
   /* ---- MOD-11 集采台账（`M5-7`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
   m11List: () => API.get('/api/m11/list'),
   m11Detail: id => API.get(`/api/m11/detail?id=${encodeURIComponent(id)}`),
-  /* ⚠️ 写端点（`M5-4` 已就绪）**本片暂不接** —— 见 `ACT.jcTag` 那句「尚未接通」的说明；
-     接通时应走 `API.post('/api/m11/tag', {...})` 这一族（⛔ 不许本地改数组冒充落库）。 */
+  /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok`（可预期的拒绝 = `ok:false` ＋ 一句中文）。 */
+  m11Tag: body => API.post('/api/m11/tag', body),          /* {id, tag} 或 {ids:[…], tag} */
+  m11Add: body => API.post('/api/m11/add', body),
+  m11Fields: body => API.post('/api/m11/fields', body),    /* {id, fields:{…}}（白名单列） */
+  m11InvAdd: body => API.post('/api/m11/invoice/add', body),
+  m11InvDel: body => API.post('/api/m11/invoice/del', body),
+  m11PayAdd: body => API.post('/api/m11/payment/add', body),
+  m11PayDel: body => API.post('/api/m11/payment/del', body),
+  /* ⚠️ 抓取**会顶号**（`D9`）⇒ `confirm:true` = 用户已在确认弹窗里点过；缺它后端一律拒。 */
+  m11Fetch: () => API.post('/api/m11/fetch', { confirm: true }),
 };
 
 /* ---------- 字段适配：后端**语义字段** → 原型字段名（`NT_COLS` / `PJ_COLS`） ----------
@@ -1407,8 +1415,41 @@ async function reloadM11() {
   render();
 }
 
-/* ⚠️ 本片（`M5-7` 只读接线）**故意不加**写动作外壳 `jcAct` —— 它要等接上 `POST /api/m11/*` 才有调用方；
-   现在加上去会被 `wiring_audit`（新函数必须有生产调用方）当场报红。接写动作时照 `awfAct` 的形态补。 */
+/* 写动作统一外壳（照 `awfAct`）：成功/失败**都回后端真实状态**，后端那句中文**原样**给用户。
+   ⚠️ 后端对"可预期的拒绝"回 **HTTP 200 ＋ `ok:false`** ⇒ 必须**同时**判 `ok === false`。 */
+async function jcAct(fn, okMsg) {
+  let r = null;
+  try { r = await fn(); }
+  catch (e) {
+    await reloadM11();
+    return toast(`<b>没能保存</b>：${esc(String((e && e.message) || e))}`, 7000);
+  }
+  await reloadM11();
+  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`, 7000); return null; }
+  toast(typeof okMsg === 'function' ? okMsg(r) : okMsg);
+  return r;
+}
+
+/* ⭐ 抓取回执的**匹配预览**（`M5-6` 编排的 `matched_projects`/`unmatched_projects`）。
+   ⚠️ 这不是"好看"——它是**唯一**能拦住"漏匹配被静默埋掉"的手段：
+   匹配不上的按口径 = **不纳入**（终态、不会被后续抓取覆盖）⇒ 人必须**当场看一眼**再落。 */
+function jcFetchPreview(d) {
+  const list = (rows) => rows.length
+    ? `<ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">${rows.slice(0, 15).map(
+      p => `<li><b>${p.count}</b> 条 · ${esc(p.name)}</li>`).join('')}</ul>`
+      + (rows.length > 15 ? `<div class="mut sm">…另有 ${rows.length - 15} 个项目</div>` : '')
+    : '<div class="mut sm">（无）</div>';
+  const syn = d.sync || {};
+  const warn = syn.degraded ? `<div class="tip wn" style="margin-top:10px">⚠️ ${esc(syn.message || '')}</div>` : '';
+  return `<div class="tip ok" style="margin-bottom:10px"><b>抓取完成</b>：${esc(d.message || '')}</div>
+    ${warn}
+    <div style="font-size:12.5px">
+      <div><b>匹配上</b>（已落库 · 默认「待确认」）· ${d.matched} 条${d.multi ? `（其中 ${d.multi} 条的档案里有重名行，取的是第一条 —— 请核对）` : ''}</div>
+      ${list(d.matched_projects || [])}
+      <div style="margin-top:10px"><b>匹配不上</b>（i8 常用列表里也没有 ⇒ 按口径**不纳入**、未落库）· ${d.unmatched} 条</div>
+      ${list(d.unmatched_projects || [])}
+    </div>`;
+}
 
 /* ⭐⭐ 性能 `P3` 主体 · **页级按需取数**（2026-09-19 · 用户批准的 A 方案）
    —— 打开页面**不再**把 13 路全量拉一遍，而是「**进哪页拉哪页**」（含该页会读到的全局所属的取数路）。

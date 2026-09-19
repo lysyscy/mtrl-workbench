@@ -87,7 +87,21 @@ def test_演示数组已清干净():
 
 
 @acc()
-def test_注册齐了但没有半截函数():
-    """⚠️ `jcAct` 这种"写了却没人调"的写动作外壳**本片故意不加** —— 加了会被 `wiring_audit` 报红。"""
+def test_写动作接上了_api_且抓取要二次确认():
+    """⭐ 写动作半片：标记 / 批量 / 存档 / 付款方式 / 手工新增 都走 API（⛔ 不许本地改数组）。
+
+    ⚠️ 抓取另加两条：**必须先二次确认**（会顶号，`D9`）· 且走真端点（原先是假 toast）。
+    ⚠️ 手工新增的项目键 = **仓库名**（§2.7.4），⛔ 不是 `project_id`（列表接口也不给 id）。
+    """
     s = _sh()
-    assert "async function jcAct" not in s, "本片（只读接线）不写动作用不到的写外壳"
+    assert "async function jcAct" in s, "写动作要有统一外壳（照 `awfAct`：成败都回后端真实状态）"
+    for frag in ("API.m11Tag({id:j.id, tag:t.dataset.v})",     # 单条标记
+                 "API.m11Tag({ids, tag:v})",                    # 批量标记
+                 "API.m11Fields({id:j.id, fields:{method:t.value}})",   # 付款方式（自由文本）
+                 "fields:{arch:next}",                          # 存档推进
+                 "API.m11Add({"):                               # 手工新增
+        assert frag in s, f"动作没接上 API：{frag}"
+    assert "project_key:jcND.pj" in s, "手工新增要传 `project_key`（仓库名），⛔ 不是 project_id"
+    assert "API.m11Fetch()" in s and "jcFetchOk" in s, "抓取要走 `POST /api/m11/fetch`"
+    assert "这一步会登录 i8" in s, "抓取前必须讲清会顶号（D9）"
+    assert "jcFetchPreview" in s, "抓取回执要展示**匹配预览**（否则漏匹配会被静默埋掉）"
