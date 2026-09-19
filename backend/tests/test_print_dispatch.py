@@ -21,7 +21,9 @@ PDF = b"%PDF-1.4 fake"
 SHELL = (Path(__file__).resolve().parents[1] / "app" / "web" / "index.html").read_text(
     encoding="utf-8"
 )
-ROUTER = (Path(__file__).resolve().parents[1] / "app" / "mod03_notice" / "router.py").read_text(
+# ⚠️ 2026-09-19（`T5` 拆件）：批量执行器的**实体**已搬到 `notice_executors.py`（`router.py` 只再导出它）
+#    ⇒ 读源码的断言**改指新件**（⛔ 判据一字未改：「投递必须走分流器、不许退回裸 send_pdf」）。
+EXEC = (Path(__file__).resolve().parents[1] / "app" / "mod03_notice" / "notice_executors.py").read_text(
     encoding="utf-8"
 )
 
@@ -169,8 +171,8 @@ def test_通道按当前设置走_不用重启(monkeypatch):
 
 @acc()
 def test_接线点用的是分流器_不是裸_send_pdf():
-    assert "print_dispatch if mode == MODE_PRINT" in ROUTER, "排版那条路投递必须走分流器（②）"
-    assert "dispatch_pdf=(send_pdf" not in ROUTER, "⛔ 别退回裸 `send_pdf`（那样通道就白设了）"
+    assert "print_dispatch if mode == MODE_PRINT" in EXEC, "排版那条路投递必须走分流器（②）"
+    assert "dispatch_pdf=(send_pdf" not in EXEC, "⛔ 别退回裸 `send_pdf`（那样通道就白设了）"
 
 
 @acc()

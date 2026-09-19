@@ -22,6 +22,9 @@ PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 REPO = "backend/app/mod03_notice/repository.py"
 DOM = "backend/app/mod03_notice/domain.py"
 RT = "backend/app/mod03_notice/router.py"
+# ⚠️ 2026-09-19（`T5` 拆件）：`get_fetch_executor` 的**实体**已搬到 `notice_executors.py`
+#    （`router.py` 只再导出它）⇒ **动它执行器体内的变异要指新件**，⛔ 别再指 `router.py`（那会报"锚点未命中"＝未验证）。
+EXEC = "backend/app/mod03_notice/notice_executors.py"
 T = "tests/test_unresolved_freshness.py"
 
 MUTS = [
@@ -52,7 +55,7 @@ MUTS = [
      "        items = latest_unresolved(session)\n",
      [T + "::test_读端点必须走现算过滤"]),
 
-    ("M6 成功那一条结局绕过写侧出口（裸 `detail={...}` ⇒ 漏写标记）", RT,
+    ("M6 成功那一条结局绕过写侧出口（裸 `detail={...}` ⇒ 漏写标记）", EXEC,
      "                detail=fetch_detail(created=created, updated=updated, total=len(rows),\n"
      "                                    excluded=n_excluded),\n",
      '                detail={"created": created, "updated": updated, "total": len(rows),\n'
@@ -72,7 +75,7 @@ def _fit(rel: str, text: str) -> bytes:
 
 
 def main() -> int:
-    rels = {REPO, DOM, RT}
+    rels = {REPO, DOM, RT, EXEC}
     base = {rel: _read(rel) for rel in rels}
     before = {rel: hashlib.md5(d).hexdigest() for rel, d in base.items()}
     print("基线 MD5:")

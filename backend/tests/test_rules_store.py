@@ -25,6 +25,9 @@ from tests.acc_plugin import acc
 ROOT = Path(__file__).resolve().parents[2]
 REPO = ROOT / "backend" / "app" / "mod03_notice" / "rules_repository.py"
 ROUTER = ROOT / "backend" / "app" / "mod03_notice" / "router.py"
+# ⚠️ 2026-09-19（`T5` 拆件）：**抓取管线的实体**（`get_fetch_executor` / `apply_fetched_row`）已搬到
+#    `notice_executors.py`（`router.py` 只再导出）⇒ 读源码的断言**改指新件**（⛔ 判据一字未改）。
+EXEC = ROOT / "backend" / "app" / "mod03_notice" / "notice_executors.py"
 RULES_API = ROOT / "backend" / "app" / "mod14_config" / "rules_api.py"
 
 
@@ -136,7 +139,7 @@ def test_抓取管线读到规则并同时喂给两处():
     `apply_fetched_row`（落库时打剔除标记）必须用**同一批**规则 ——
     ⛔ 两处各读一次会让"这批到底按哪份规则判的"说不清；⛔ 更不许在编排层另写一份剔除判定。
     """
-    src = ROUTER.read_text(encoding="utf-8")
+    src = EXEC.read_text(encoding="utf-8")
     assert "rules = effective_rules(session)" in src, "抓取管线没读生效规则集"
     assert "rows_needing_ownership(rows, rules)" in src, "挑行那处没拿到规则"
     assert "rules=rules" in src, "落库那处没拿到规则（两处会分叉）"
@@ -151,7 +154,7 @@ def test_抓取管线不得调幂等初始化():
 
     否则"抓一次"会顺手改配置表 —— 排查问题时谁都想不到那儿会变。
     """
-    router = ROUTER.read_text(encoding="utf-8")
+    router = ROUTER.read_text(encoding="utf-8") + EXEC.read_text(encoding="utf-8")
     assert "ensure_seeded" not in router, "抓取管线里出现了写库的初始化"
     assert "ensure_seeded" in RULES_API.read_text(encoding="utf-8"), "配置页端点没做初始化"
 
