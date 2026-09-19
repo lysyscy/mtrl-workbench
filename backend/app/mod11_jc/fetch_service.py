@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Callable
 
 from sqlalchemy.orm import Session
@@ -31,7 +32,7 @@ from app.mod01_projects.pending import record_detail
 from app.mod01_projects.repository import all_projects
 from app.mod01_projects.sync_service import sync_and_archive
 from app.mod02_i8 import fetch_task
-from app.mod02_i8.client import I8Client, serialize_fetch
+from app.mod02_i8.client import I8Client
 from app.mod02_i8.contract_source import ContractFetcher
 from app.mod02_i8.repository import save_run_record
 from app.mod02_i8.sources import CommonProjectSource, load_warehouse_rows
@@ -118,7 +119,12 @@ def run_fetch(
     sync_result: dict = {}
     degraded = ""
     try:
-        with serialize_fetch(TABLE):
+        # ⛔⛔ **本层刻意**不再加 `serialize_fetch(TABLE)` —— `ContractFetcher.fetch_all()` 内部**已经锁了** `jc_contract`，
+        #    而那把锁**不可重入** ⇒ 套两层就是**自己等自己**。
+        #    ⚠️ 实测（2026-09-19）：症状是**等满 600 秒**后降级成「i8 接口不可用…已降级为手动 Excel 导入」——
+        #    那句话**极具误导性**（看着像 i8 挂了 / 账号有问题，其实是我们自己锁死的）。
+        #    ⇒ 同表串行的**唯一**落点 = `ContractFetcher.fetch_all`（`TABLE` 常量两边**是同一个值**，靠它对齐）。
+        with nullcontext():
             client = client_factory()
             try:
                 fetcher = ContractFetcher(client)
