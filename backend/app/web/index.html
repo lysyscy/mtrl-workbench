@@ -1479,25 +1479,14 @@ const jcLinkCell=n=>{ const j=jcRefOf(n.id);
    探测等级（先长后短，取**命中的最高等级**那一批）：① 全名整体 ② 4 字片段 ③ 3 字片段 ④ 2 字片段。
    ⚠️ 准确**不靠算法**、靠"多命中必须问人"这道闸 —— 假阳性的代价只是**多问一次**，不会填错。 */
 const SUP_LVL_NAME=['','全名','4 字片段','3 字片段','2 字片段'];
-/* 候选池：本项目已有供应商（按**全名去重** —— 同一供应商多份合同不重复计数，否则一家被数成多家） */
-const supPool=n=>{ const k=ntProjKey(n); const seen=new Set(); const out=[];
-  JCs.forEach(j=>{ if(j.proj===k){ const s=String(j.supplier||'').trim(); if(s&&!seen.has(s)){ seen.add(s); out.push(s); } } });
-  return out; };
-/* 全名 → 该等级的连续片段（level=1 全名整体；否则**定长滑窗**：②4 字 · ③3 字 · ④2 字）
-   ⚠️ **片段长度 = 6 − level**（2→4 / 3→3 / 4→2）—— 写错这里会**静默改变等级语义**
-   （曾写成 `level+2` ⇒ ③ 变 5 字、④ 变 6 字，等级越高片段越长 ⇒ 探测顺序失去意义）。
-   长度不足（全名比片段还短）⇒ 返回空，该等级天然不可能命中。 */
-const supFrags=(full,lvl)=>{ if(lvl===1) return [full];
-  const len=6-lvl; if(full.length<len) return [];
-  const out=[]; for(let i=0;i+len<=full.length;i++) out.push(full.slice(i,i+len)); return out; };
-/* 探测单据名：返回命中集（按命中等级最高的一批）；`lvl` = 该批次等级，`cands` = 该批供应商全名 */
-const supMatch=n=>{ const doc=String(n.doc||''); if(!doc) return {lvl:0,cands:[]};
-  const pool=supPool(n);
-  for(let lvl=1;lvl<=4;lvl++){
-    const hit=pool.filter(full=>supFrags(full,lvl).some(f=>doc.indexOf(f)>=0));
-    if(hit.length) return {lvl,cands:hit};               /* 先长后短：高等级一命中就返回，低等级一律不看 */
-  }
-  return {lvl:0,cands:[]}; };
+/* ⭐ `M5-5`（2026-09-19）：**候选池 / 片段 / 探测这三个函数已从壳里删掉** ——
+   判定搬到了后端 `app/mod03_notice/sup_match.py`（端点 `POST /api/m03/actions/sup-match`）。
+   ⛔ **别再在壳里写第二份**：
+   ① 两份判定 = 迟早漂移（改一处忘另一处，谁都不知道哪个对）；
+   ② 这套规则里有一条**"写错不报错、只是悄悄换了语义"**的（片段长度 = `6 − level`）——
+      壳里**真写错过**成 `level + 2`（⇒ 等级越高片段越长、"先长后短"失去意义）而**代码照样跑**；
+      那种错**只有后端断言钉得住**。
+   ⚠️ `SUP_LVL_NAME` **保留**：仅作**兜底**（后端正常会回 `level_name`；保险起见给个本地名）。 */
 /* 待确认标记（**不静默落库**）：id → 自动预填值。点「确认」才转正式值；改一次、重抓、改分类都清 */
 const SUP_SUG={};
 /* MOD-03 自动化入口按钮（放在「集采实际供应商」列内，与关联区同格） */

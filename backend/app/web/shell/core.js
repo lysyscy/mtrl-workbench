@@ -72,6 +72,11 @@ const API = {
   /* ⭐ `M5-5`「集采实际供应商」（§6.6.3）：判定（**仅「集采」分类可填**）与落库都在后端
      （`notice_actions.jc_supplier_problem` 是唯一出口）—— 前端只负责发与显示回执（⛔ 不本地改 `n.sup`）。 */
   jcSupplier: body => API.post('/api/m03/actions/jc-supplier', body),
+  /* ⭐ `M5-5` 供应商**自动匹配**（§6.6.3）：判定**在后端**（`mod03_notice/sup_match.py`）——
+     拿**本项目候选池**去探测**单据名**，返回 `{pool, level, level_name, cands}`。
+     ⚠️ **只算不写**：1 家预填 / ≥2 家让选 / 0 家手动，三条分叉与"预填须经人采用"由壳编排；
+        落库一律走上面的 `jcSupplier`。⛔ 壳里**不再自带**一套片段/等级算法（两份 = 迟早漂移）。 */
+  m03SupMatch: body => API.post('/api/m03/actions/sup-match', body),
   /* ---- MOD-01 写动作（⛔ 判定与落库一律后端：状态不变式 / 排序重编号 / 全名留痕） ---- */
   pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
   pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),
@@ -1388,7 +1393,8 @@ async function awfAct(fn, okMsg) {
       （漏了会让壳里求和变**字符串拼接**、合计安静地错 —— 技能「接后端时必查三件」那条）。
 
    ⭐ **`JCs` 是跨页共享的**（这是本页接线的价值面，也是风险面）：本页 + **看板** + **大表「主材累计」**
-      （接上即解锁 `TAIL-25`）+ **`m03` 的集采关联**（`jcUsedNids`/`jcRefOf`/`jcLinkCands`/`supPool`）。
+      （接上即解锁 `TAIL-25`）+ **`m03` 的集采关联区**（`jcUsedNids`/`jcRefOf`/`jcLinkCands`）。
+      ⚠️ 但 **供应商自动匹配不再读它**（`M5-5` 已把判定搬到后端 `sup_match.py`）—— 那一路走 API。
       ⇒ 所以适配层给的字段必须**正好够那些读法**用（尤其 `proj` = 仓库名、`supplier`、`notice_ids`）。 */
 const JC_ARCH_DEFAULT = '未存档';        /* 原型 `JC` 演示行用的初值（§6.7.2：未存档 → 资产处 → 已存档） */
 
@@ -1501,7 +1507,7 @@ const PAGE_LOAD = {
   m01: ['项目档案', '待人工指认', '待人工建档', '修改留痕'],
   m02: ['i8 执行记录', '库存单据'],      /* `V.m02` 的回显卡读 `IVs`/`ADs` */
   /* ⭐ `M5-5`：m03 页**也要读 `JCs`** —— 「集采实际供应商」那一格的关联区（`jcRefOf` 反查"被哪张合同引用了"、
-     `jcLinkCands` 出候选、`supPool` 出自动匹配池）全靠它。⛔ **不后置**到写动作时再拉：
+     `jcLinkCands` 出候选）全靠它。⛔ **不后置**到写动作时再拉：
      首屏就得判"这行有没有被关联 / 有哪些候选"，否则按钮会先显示错的态再跳一下。 */
   m03: ['付款通知书', '付款计划', '项目档案', '集采台账'],
   m04: ['付款计划', '付款通知书', '付款域', '机械 6 列'],

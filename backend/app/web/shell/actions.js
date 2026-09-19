@@ -1738,24 +1738,42 @@ jcFetchOk:async()=>{ closeModal();
      ⭐ 分叉：1 家 → 预填 + 「自动匹配 · 待确认」（**不静默落库**，须点「采用」）；
              ≥2 家 → 弹窗让用户从命中集里选（**绝不取最长 / 第一个 / 相似度最高的**）；
              0 家 → 手动指定（允许自由录入）。 */
-  supMatchRun:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
-    if(!ntLive(n)||n.cat!=='集采'){ toast('仅「集采」分类的记录可自动匹配供应商'); return; }
-    const pool=supPool(n), {lvl,cands}=supMatch(n);
+  supMatchRun:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    /* ⚠️ 这里只留**显示层**前置（已剔除 / 已撤单不可匹配）；「仅集采分类」由后端再拦一道。 */
+    if(!ntLive(n)){ toast('这行已剔除 / 已撤单，不能自动匹配供应商'); return; }
+    /* ⭐ `M5-5`：判定**从壳里搬走**（原先这里调前端的 `supPool`/`supMatch`）——
+       现一律问后端 `POST /api/m03/actions/sup-match`（`mod03_notice/sup_match.py`）。
+       ⛔ 壳里不再自带第二份片段/等级算法（两份判定 = 迟早漂移）。 */
+    let d=null;
+    try { d=await API.m03SupMatch({notice_id:Number(n.id)}); }
+    catch(e){ return toast(`<b>没能匹配</b>：${esc(String((e&&e.message)||e))}`,7000); }
+    if(!d||d.ok===false){ return toast(`<b>没能匹配</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000); }
+    const pool=d.pool||[], cands=d.cands||[], lvl=Number(d.level)||0;
+    const lvlName=d.level_name||SUP_LVL_NAME[lvl]||'';     /* ⚠️ 后端为准，本地名只兜底 */
     if(!pool.length){ closeModal(); render();
-      return toast(`<b>本项目下暂无集采合同供应商</b> —— 请先到「集采台账」页为 <b>${esc(pjLabel(ntProjKey(n))||'该项目')}</b> 建档，再回来匹配<br><span class="mut sm">§6.6.3 前提④：正常流程下一定先有集采合同</span>`,5200); }
+      return toast(`<b>本项目下暂无集采合同供应商</b> —— 请先到「集采台账」页为 <b>${esc(pjLabel(d.project_key||ntProjKey(n))||'该项目')}</b> 建档，再回来匹配<br><span class="mut sm">§6.6.3 前提④：正常流程下一定先有集采合同</span>`,5200); }
+    /* ⚠️ **0 家命中**（池非空但四级全不中）⇒ 走「手动指定」—— ⛔ 原先这条会掉进下面的多命中弹窗，
+       开出一个**空候选**、点「采用」永远提示"请先选一家"（死路）。 */
+    if(!cands.length){ closeModal(); render();
+      return toast(`按 <b>全名 → 4 字 → 3 字 → 2 字</b> 四级探测<b>都没命中</b> —— 本项目供应商池共 <b>${pool.length}</b> 家<br><span class="mut sm">${pool.map(esc).join(' · ')}<br>请<b>手工录入</b>，或先到「集采台账」补齐该供应商的合同</span>`,8000); }
     if(cands.length===1){                 /* 1 家：预填 + 待确认（2 字等级同样只预填，不直填） */
-      const hit=cands[0]; n.sup=hit; SUP_SUG[n.id]=hit; render();
+      const hit=cands[0];
+      /* ⚠️ 预填**也要落库**（原先只改本地 `n.sup` ⇒ 刷新就没了）—— 但**仍标「待确认」**：
+         它是"系统猜的"，点「采用」才转正式值（⛔ 不静默落库成正式值）。 */
       const weaken=lvl===4?`<br><span style="color:var(--wn)">⚠️ 仅 <b>2 字片段</b>命中 —— 证据最弱，请务必确认</span>`:'';
-      return toast(`按 <b>${SUP_LVL_NAME[lvl]}</b> 命中 <b>1</b> 家：<b>${esc(hit)}</b><br>已<b>预填</b>并标「<b>自动匹配 · 待确认</b>」—— 点「采用」转正式值，或直接改一下${weaken}`,5600); }
+      const r=await jcLinkAct(()=>API.jcSupplier({notice_id:Number(n.id), supplier:hit}),
+        `按 <b>${esc(lvlName)}</b> 命中 <b>1</b> 家：<b>${esc(hit)}</b><br>已<b>预填</b>并标「<b>自动匹配 · 待确认</b>」—— 点「采用」转正式值，或直接改一下${weaken}`);
+      if(r) SUP_SUG[n.id]=hit;            /* ⚠️ reload 之后才标（值以后端为准） */
+      return; }
     /* ≥2 家：开弹窗让用户选（候选 = 歧义集本身） */
     supSel=null;
     modal({title:`选择供应商 · ${n.code}`,reopen:()=>ACT.supMatchRun({dataset:{id:n.id}}),
-      body:`<div class="tip wn" style="margin-bottom:10px">按 <b>${SUP_LVL_NAME[lvl]}</b> 命中 <b>${cands.length}</b> 家 —— <b>同等级内的多命中构成歧义</b>，<b>不猜</b>，请你选。<br>⚠️ 系统<b>绝不</b>取"最长的 / 第一个 / 最像的"（§6.6.3「明确不做」）。</div>
-      <div class="fld"><label>这些是本项目集采合同里，其「${SUP_LVL_NAME[lvl]}」出现在单据名中的供应商</label>
+      body:`<div class="tip wn" style="margin-bottom:10px">按 <b>${esc(lvlName)}</b> 命中 <b>${cands.length}</b> 家 —— <b>同等级内的多命中构成歧义</b>，<b>不猜</b>，请你选。<br>⚠️ 系统<b>绝不</b>取"最长的 / 第一个 / 最像的"（§6.6.3「明确不做」）。</div>
+      <div class="fld"><label>这些是本项目集采合同里，其「${esc(lvlName)}」出现在单据名中的供应商</label>
       <select class="inp" id="supPickId" data-act="supPick" data-id="${n.id}">${cands.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select></div>
       <div class="sm mut">单据名称：<span class="fc">${esc(n.doc)}</span><br>本项目供应商池（${pool.length} 家）：${pool.map(esc).join(' · ')}</div>`,
       footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="supOk" data-id="${n.id}">采用所选供应商</button>`});
-    toast(`按 <b>${SUP_LVL_NAME[lvl]}</b> 命中 <b>${cands.length}</b> 家 —— 已列出让你选（多命中<b>不让系统猜</b>）`,5200); },
+    toast(`按 <b>${esc(lvlName)}</b> 命中 <b>${cands.length}</b> 家 —— 已列出让你选（多命中<b>不让系统猜</b>）`,5200); },
   supPick:t=>{ supSel=t.value; },
   supOk:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return; if(!supSel) return toast('请先选择一家供应商');
     const v=String(supSel).trim(); if(!v) return;
