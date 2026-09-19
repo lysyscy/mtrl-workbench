@@ -69,6 +69,9 @@ const API = {
      （`notice_actions.apply_batch_pay`）—— 前端只管发与显示回执（⛔ 不本地往 FLs 塞流水冒充落库）。
      ⚠️ 必须带 `request_id`（幂等号）：服务端据它**拒重复提交**。 */
   batchPay: body => API.post('/api/m03/actions/batch-pay', body),
+  /* ⭐ `M5-5`「集采实际供应商」（§6.6.3）：判定（**仅「集采」分类可填**）与落库都在后端
+     （`notice_actions.jc_supplier_problem` 是唯一出口）—— 前端只负责发与显示回执（⛔ 不本地改 `n.sup`）。 */
+  jcSupplier: body => API.post('/api/m03/actions/jc-supplier', body),
   /* ---- MOD-01 写动作（⛔ 判定与落库一律后端：状态不变式 / 排序重编号 / 全名留痕） ---- */
   pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
   pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),
@@ -231,6 +234,12 @@ const API = {
   /* ---- MOD-11 集采台账（`M5-7`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
   m11List: () => API.get('/api/m11/list'),
   m11Detail: id => API.get(`/api/m11/detail?id=${encodeURIComponent(id)}`),
+  /* ⭐ `M5-5` 付款域双向引用：**关联 / 解绑**。
+     ⚠️ 关联关系**不另建表** —— 就写进合同的**付款子表**（`source=notice` ＋ `notice_id`）⇒
+        与「从付款域引用（R8）」是**同一份记录** ⇒ 两个入口调的是**同一个端点**（`ACC-JC-PAY-001/001-01`）。
+     ⚠️ 一对一（换合同 = **先解绑再写新**）/ 全库去重 / 不校验金额 —— 三条判定全在后端。 */
+  m11Link: body => API.post('/api/m11/link', body),
+  m11Unlink: body => API.post('/api/m11/unlink', body),
   /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok`（可预期的拒绝 = `ok:false` ＋ 一句中文）。 */
   m11Tag: body => API.post('/api/m11/tag', body),          /* {id, tag} 或 {ids:[…], tag} */
   m11Add: body => API.post('/api/m11/add', body),
@@ -1491,7 +1500,10 @@ const PAGE_LOAD = {
   home: ['付款通知书', '项目档案', '付款计划'],
   m01: ['项目档案', '待人工指认', '待人工建档', '修改留痕'],
   m02: ['i8 执行记录', '库存单据'],      /* `V.m02` 的回显卡读 `IVs`/`ADs` */
-  m03: ['付款通知书', '付款计划', '项目档案'],
+  /* ⭐ `M5-5`：m03 页**也要读 `JCs`** —— 「集采实际供应商」那一格的关联区（`jcRefOf` 反查"被哪张合同引用了"、
+     `jcLinkCands` 出候选、`supPool` 出自动匹配池）全靠它。⛔ **不后置**到写动作时再拉：
+     首屏就得判"这行有没有被关联 / 有哪些候选"，否则按钮会先显示错的态再跳一下。 */
+  m03: ['付款通知书', '付款计划', '项目档案', '集采台账'],
   m04: ['付款计划', '付款通知书', '付款域', '机械 6 列'],
   m05: ['付款域', '修改留痕', '机械 6 列'],
   m06: ['机械 6 列', '库存单据', '收发结存与大表'],   /* 过程资料读 `MACH6`/`IVs`/`EXTM`/`BIGVAL` */

@@ -9,6 +9,24 @@
    18. 交互处理器（`ACT.*` —— 全部交互动作的映射；`data-act="名"` → `ACT.名`）
    ⚠️ 漏登记 `CHG` ⇒ 表单类元素的 change 被**静默丢弃**（见目录 ⑤）
    ===================================================================== */
+/* ⭐ `M5-5`：跨页写动作的**统一包装**（关联 / 解绑 / 集采实际供应商）—— 成功后**两侧同刷**。
+   ⚠️ 为什么不复用集采页的 `jcAct`：那个只重建 `JCs`（集采页专用）。而这三件事都是**跨页**的 ——
+      m03 的「关联区」与集采台账的「付款子表」是**同一份记录**（判据 `ACC-JC-PAY-001/001-01`）
+      ⇒ **两侧都要重拉**，"双向可见"才算落到界面上；少刷一侧 = 用户看着像"没生效"。
+   ⚠️ 成败一律**看 `ok`**：后端对可预期的拒绝回 **HTTP 200 ＋ `ok:false` ＋ 一句中文**（同 `m07`/`m03`）
+      ⇒ 只 catch 异常不够，那句中文会被当成成功吞掉。
+   ⚠️ **必须放在 `ACT` 对象之外**（文件顶层）—— 它是函数声明，放进对象字面量会直接语法错（实测踩到）。 */
+async function jcLinkAct(fn, okMsg) {
+  let r = null;
+  try { r = await fn(); }
+  catch (e) { return toast(`<b>没能保存</b>：${esc(String((e && e.message) || e))}`, 7000); }
+  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`, 7000); return null; }
+  toast(typeof okMsg === 'function' ? okMsg(r) : okMsg);
+  await reloadNotices();     /* 付款域侧（m03 行上那个"已关联"态） */
+  await reloadM11();         /* 集采侧（合同的付款子表） */
+  render();
+  return r;
+}
 const ACT={
  /* 导航 */
  go:t=>go(t.dataset.k),
@@ -1571,8 +1589,12 @@ jcFetchOk:async()=>{ closeModal();
  /* ⭐ `M5-7`：⛔ 原先这里是**本地 push 进付款数组**冒充落库（刷新就没了）⇒ 改为如实说明。
     它归 `M5-5`（付款域双向引用）—— 那一片会接 `POST /api/m11/payment/add`（`source=notice` +
     **全库去重**由后端 `domain.dedup_blocked` ＋ 唯一键 `uq_jc_payment_notice` 双保险）。 */
- jcPayRefOk:t=>{ closeModal();
-   toast('<b>⏳ 尚未接通</b>：从付款域引用归 <code>M5-5</code>（付款域双向引用）。<br><span class="mut sm">「同一笔通知书全库只能引用一次」由后端保证，⛔ 不在壳里改数组。未写入任何数据。</span>',8000); },
+ jcPayRefOk:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+   const sel=$('#refId'); const nid=sel&&sel.value; if(!nid) return toast('没有可引用的通知书');
+   closeModal();
+   /* ⭐ `M5-5`：与 m03 侧「关联集采合同」调**同一个端点** —— 方向不同、**落点相同**（同一份记录）。 */
+   await jcLinkAct(()=>API.m11Link({notice_id:Number(nid), contract_id:Number(j.id)}),
+     x=>`已把付款通知书引用到集采合同 <b>#${j.id}</b>${x.moved_from?`（原关联 #${x.moved_from} 已解除）`:''}<br><span class="mut sm">两侧同时可见（同一份记录）· 同一笔通知书全库只能引用一次</span>`); },
  /* —— 「关联集采合同」反向入口的动作（2026-09-13 用户裁定）——
     一对一 · 与 R8 共用同一份记录 · 去重按全库 · 金额不一致只提示不拦 · 关联 / 解绑**不留痕**。
     弹窗内所选合同走草稿 `jcLinkSel`：改选择要**重绘弹窗**（金额比对随之更新）。 */
@@ -1590,23 +1612,23 @@ jcFetchOk:async()=>{ closeModal();
      ${sel?`<div class="fld"><label>金额比对（只提示，不拦截）</label><div class="sm" style="line-height:1.8">本行统计付款金额 <b>${M(n.sp)}</b> ｜ ${sel.id} 当前欠款 <b>${M(jcDebt(sel))}</b>${same?' '+tag('一致','ok'):' '+tag('不一致 · 仍可关联','wn')}</div></div>`:''}`,
      footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消关联（${cur.id}）</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${cands.length?'':'disabled'} title="${cands.length?'':'本项目下没有可选合同 —— 先到「集采台账」建档'}">${cur?'改关联到所选合同':'关联'}</button>`}); },
  jcLinkPick:t=>{ jcLinkSel=t.value; render(); if(lastModal&&lastModal.reopen) lastModal.reopen(); },
- jcLinkOk:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+ jcLinkOk:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
    const j=JCs.find(x=>x.id===jcLinkSel); if(!j) return toast('没有可关联的集采合同');
-   const cur=jcRefOf(n.id);
    /* ⚠️ 2026-09-13 口径「只能关联本项目的合同」**不需要在这里再拦一道** —— 它由两件事闭合：
       ① 候选只从 `jcLinkCands(n)`（= 本项目合同 ∪ 当前已关联那张）来；
       ② `jcLinkPick` 记录选择后**立即重开弹窗**，`jcLink` 会拿候选集再校验一次 `jcLinkSel`
          ⇒ 任何"他项目"的 id 都会被**回落**成合法候选，走不到这里。
       （曾经在这里写过一道 `j.proj!==pk` 兜底，实测**不可达** ⇒ 按"不留死代码"删掉，
-        改由 `_smoke` 的 `T5` 直接断言 ② 那个"回落"行为。） */
-   /* ⭐ `M5-7`：⛔ 原先这里是**本地改两张合同的 `payments` 冒充落库**（一对一换绑 + 新增一笔）
-      ⇒ 改为如实说明。它归 `M5-5`：后端要保证「一对一」（换合同 = 先解绑再写新）＋ 全库去重。 */
+         改由 `_smoke` 的 `T5` 直接断言 ② 那个"回落"行为。） */
    closeModal();
-   toast(`<b>⏳ 尚未接通</b>：关联到集采合同归 <code>M5-5</code>（付款域双向引用）。<br><span class="mut sm">已选 ${esc(j.id)} —— 「一对一换绑」与「全库去重」都由后端负责，⛔ 不在壳里改数组。未写入任何数据。</span>`,8000); },
- /* 取消关联（`m03` 侧）。⭐ `M5-7`：⛔ 原先**本地改 `payments` 数组**冒充落库 ⇒ 改为如实说明。
-    它归 `M5-5`（付款域双向引用）—— 那一片做的时候一并接。 */
- jcUnlink:t=>{ closeModal();
-   toast('<b>⏳ 尚未接通</b>：取消关联归 <code>M5-5</code>（付款域双向引用）。<br><span class="mut sm">付款子表的两种来源（引用 / 手工）+ 全库去重都由后端负责，⛔ 不在壳里改数组。未写入任何数据。</span>',8000); },
+   /* ⭐ `M5-5`：后端保证「一对一」（换合同 = **先解绑再写新**）＋ 全库去重；⛔ 壳里不碰任何数组。 */
+   await jcLinkAct(()=>API.m11Link({notice_id:Number(n.id), contract_id:Number(j.id)}),
+     x=>`已关联到集采合同 <b>#${j.id}</b>${x.moved_from?`（原关联 #${x.moved_from} 已解除）`:''}<br><span class="mut sm">两侧同时可见（同一份记录）· 金额不一致只提示不拦</span>`); },
+ /* 取消关联（`m03` 侧）。⭐ `M5-5`：解绑 = 摘掉那条关联记录 ⇒ **两侧同时**变回"未关联"（只有一份记录）。 */
+ jcUnlink:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+   closeModal();
+   await jcLinkAct(()=>API.m11Unlink({notice_id:Number(n.id)}),
+     x=>`已取消与集采合同 <b>#${x.contract_id}</b> 的关联（两侧同时解除）`); },
  /* —— MOD-11 · 手工新增集采合同 = **表内增行（展开区）**（2026-09-13 用户口径）——
     ⚠️ 原来这个动作只开弹窗，而弹窗的「保存」挂的是 `data-act="silent"`（**根本没有落库动作**）
        ⇒ 本次改制时**补上真正的建档动作 `jcRowSave`**（草稿层 `jcND`，与既有 `naD` / `lgD` 同源）。 */
@@ -1702,11 +1724,16 @@ jcFetchOk:async()=>{ closeModal();
   toast(v==='全部'?`已切换到 <b>全部时间</b>（不限单据日期）`
     :`已切换到 <b>${tmLabel(v)}</b>${/^\d{4}-\d{2}$/.test(v)?`（单据日期区间 ${v}-01 ~ ${monthEnd(v)}，闭区间）`:''}`); },
  mpClose:t=>{ mp.open=null; ACT.mpRefresh(t&&t.dataset?t.dataset.scope:null); },
-  editSup:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
-    if(!ntLive(n)||n.cat!=='集采'){ toast('<b>仅「集采」分类的记录可填集采实际供应商</b>（DEV-P-04）'); render(); return; }
-    n.sup=String(t.value).trim(); delete SUP_SUG[n.id];   /* 人工改一次 = 对自动预填值的**确认 / 否决**，待确认标记随之消失 */
-    render();
-    toast(n.sup?`已录入集采实际供应商：<b>${esc(n.sup)}</b><br>该字段是「按供应商统计欠款」与集采台账付款引用的<b>关联锚点</b>`:'已清空集采实际供应商'); },
+  editSup:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    /* ⚠️ **业务判定不在壳里**：「仅「集采」分类可填」由后端 `notice_actions.jc_supplier_problem` 判
+       （唯一出口）。这里只留**显示层**的前置（已剔除 / 已撤单的行不该可编辑）—— 后端那道照样会再拦一次。 */
+    if(!ntLive(n)){ toast('这行已剔除 / 已撤单，不能改集采实际供应商'); render(); return; }
+    /* ⭐ `M5-5`：⛔ **不本地改 `n.sup`**（那会与后端漂移、刷新就没了）。
+       人工改一次 = 对自动预填值的**确认 / 否决** ⇒ 待确认标记（`SUP_SUG`）随之消失 ——
+       但要等**后端真收下**才清（否则"改了没存上、标记却没了"）。 */
+    const r=await jcLinkAct(()=>API.jcSupplier({notice_id:Number(n.id), supplier:String(t.value).trim()}),
+      x=>x.supplier?`已录入集采实际供应商：<b>${esc(x.supplier)}</b> —— 它是「按供应商统计欠款」与集采台账付款引用的<b>关联锚点</b>`:'已清空集采实际供应商');
+    if(r) delete SUP_SUG[n.id]; },
   /* ===== 集采供应商自动匹配（§6.6.3）=====
      ⭐ 分叉：1 家 → 预填 + 「自动匹配 · 待确认」（**不静默落库**，须点「采用」）；
              ≥2 家 → 弹窗让用户从命中集里选（**绝不取最长 / 第一个 / 相似度最高的**）；
