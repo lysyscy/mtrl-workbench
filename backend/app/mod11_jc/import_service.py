@@ -9,13 +9,29 @@
    ⇒ 服务端**无状态**：没有 tmp 文件要清理、不怕重启、不怕并发；而且**数据始终由后端自己解析**
      （⛔ 前端回传的"行数据"一律不信 —— 那才是最容易埋雷的做法）。
 
-⚠️ **幂等** = **已存在的行不动**（同 `m04` 计划导入 / `m08` 库存导入的既有套路）。
-   集采合同**没有合同编号**（用户台账里就没有）⇒ 幂等键 = **自然键**
-   `(合同日期, 材料名称, 供应商, 合同金额)`，**范围 = 该项目内**（不同项目同材料同金额是正常的）。
+⭐⭐ **落库口径（2026-09-20 用户定案，覆盖 09-19 的"已存在不动"）**：
 
-⚠️ **只建主表行 ＋ 两条汇总发票行**（用户 2026-09-19 定：「直接把台账中的数导入到发票子表里的一条里，
-   没必要再重新录了」）。付款**不导**（付款有它自己的两条来源：引用付款流水 / 手工录入，
-   见 `M5-5` —— 台账里的"付款"列是**派生**出来的，导它会**重复计入**）。
+> 用户原话：「以**合同价为唯一锚点**，做到**两者互不覆盖**……单个项目同合同价的，就可以进行匹配，
+> 用 excel 里的**材料名、发票金额、贸易公司发票金额、备注、存档、存档序号、寄回情况**来**覆盖** i8 抓出来的数据」
+
+⇒ 流程是「**先抓 i8**（合同已在库里）→ **再导 Excel**（Excel 是来**补信息**的）」
+  ⇒ 所以 **锚点 = 含税合同价**（`contract_amt`），**范围 = 单个项目内**（实测 347 条里只有 1 组同价：
+  许昌安彩 `178600.00` 两条 —— 那是**同一份合同录了两遍**，不是"系统允许同价"）。
+
+| Excel 行 | 动作 |
+|---|---|
+| 合同价**为空** | ⛔ **不参与匹配**（空值不许去撞任何行）⇒ 列进"配不上" |
+| 命中 **1** 条 | ✅ **更新那条**：材料名 / 备注 / 存档三列 ＋ **汇总发票行**（用户列的字段） |
+| 命中 **0** 条 | ⚠️ 列进"配不上"（⛔ **不静默新增** —— 锚点找不到 = 有问题，得先看） |
+| 命中 **≥2** 条 | ⚠️ 列进"同价冲突"（**不猜** —— 和人挑供应商同一个道理） |
+
+⚠️ **"互不覆盖"的机器化落点**：Excel **只动**它自己的地盘那几列；
+  i8 的事实列（合同价 / 供应商 / 合同日期 / 甲方单位）**一个字都不碰**
+  （反向由 `repository.FETCH_*` 三分法保证：i8 抓取也不碰 Excel 的地盘）。
+
+⚠️ **发票汇总行**（用户 2026-09-19 定：「直接把台账中的数导入到发票子表里的一条里」）：
+  ⛔ **不重复加** —— 该合同**已有同 kind 的发票行** ⇒ 跳过并**报出来**（再导一次不会翻倍）。
+  付款**不导**（台账里的"付款"列是**派生**的，导它会**重复计入**，见 `M5-5`）。
 """
 
 from __future__ import annotations
@@ -31,10 +47,9 @@ SAMPLE_ROWS = 3
 #: 预览里最多列几条"跳过的行"（全量太长没人看；落库回执里会给全量）。
 SKIP_SHOW = 12
 
-#: 主表字段 → `insert_contract` 的入参名（同名，这里只为"读起来一眼能对上"）。
-#: ⚠️ 存档三列（`arch` / `arch_no` / `ret_date`）**不在** `insert_contract` 里 ⇒ 走白名单 `update_contract`。
-_CORE = ("contract_date", "material_name", "supplier", "contract_amt",
-         "trade_co", "trade_contract_amt", "remark")
+#: ⚠️ 存档三列**走白名单** `update_contract`（它们不在 i8 抓取的刷新范围里 —— 那是**人的地盘**）。
+#: ⚠️ 原先还有一个 `_CORE`（"主表字段 → `insert_contract` 入参名"），**2026-09-20 随口径改成
+#: "锚点匹配 ⇒ 更新已有"后就没用了** ⇒ **删掉**（本仓纪律：⛔ 不留"已废弃但仍能被调用"的死代码）。
 _EXTRA = ("arch", "arch_no", "ret_date")
 
 
@@ -87,19 +102,23 @@ def preview(data: bytes, filename: str) -> dict:
 
 # ============================================================ 落库
 
-def _natural_key(row: dict) -> tuple:
-    """幂等键（**项目内**比较）：`(合同日期, 材料名称, 供应商, 合同金额)`。
+def _amount_key(v) -> str:
+    """**锚点键**：金额归一成两位小数的字符串 —— `"100"` 与 `"100.00"` 必须是**同一个锚点**。
 
-    ⚠️ 集采合同**没有合同编号**（用户台账里就没有这一列）⇒ 只能用**自然键**。
-    ⚠️ 金额归一成 `Decimal` 再比（`"100"` 与 `"100.00"` 必须算同一行），空 ⇒ `0`。
+    ⚠️ **空 / 0 / 不是数 ⇒ 回空串**（= **不参与匹配**）：
+       ⛔ 绝不让一个空锚点去"撞"库里任何一行 —— 那是"静默张冠李戴"最省事的做法。
+    ⚠️ 用**字符串**做字典键（`Decimal` 可哈希但 `100` 与 `100.0` 不等价，字符串化后才稳）。
     """
-    amt = row.get("contract_amt")
-    return (
-        str(row.get("contract_date") or "").strip(),
-        str(row.get("material_name") or "").strip(),
-        str(row.get("supplier") or "").strip(),
-        str(Decimal(str(amt)) if amt not in (None, "") else Decimal("0")),
-    )
+    raw = str(v if v is not None else "").strip().replace(",", "").replace("¥", "")
+    if raw == "":
+        return ""
+    try:
+        d = Decimal(raw)
+    except Exception:                       # noqa: BLE001 —— 认不出 ⇒ 当"没有锚点"，不是抛错
+        return ""
+    if d == 0:
+        return ""
+    return str(d.quantize(Decimal("0.01")))
 
 
 def _row_problem(row: dict) -> str:
@@ -137,70 +156,105 @@ def commit(s, data: bytes, filename: str, *, sheet: str, project_key: str,
     parsed = P.parse_rows(grid, row2=r2, fields=fields)
     rows = parsed["rows"]
 
-    # 幂等键集合：该项目**已有**的行（一次查完，⛔ 不逐行查、⛔ 不猜 `list_contracts` 的参数名）
     from sqlalchemy import select
 
-    from app.mod11_jc.models import JcContract
+    from app.mod11_jc.models import JcContract, JcInvoice
 
-    seen: set[tuple] = set()
+    # ⭐⭐ **锚点索引**：该项目内已有合同的 `合同价 -> [合同…]`（**一次查完** ⇒ ⛔ 不逐行查 = N+1）。
+    by_amt: dict[str, list] = {}
     for c in s.execute(select(JcContract).where(JcContract.project_id == int(project_id))).scalars():
-        seen.add(_natural_key({"contract_date": c.contract_date, "material_name": c.material_name,
-                               "supplier": c.supplier, "contract_amt": c.contract_amt}))
+        k = _amount_key(c.contract_amt)
+        if k:
+            by_amt.setdefault(k, []).append(c)
 
-    added: list[dict] = []
-    exists: list[dict] = []
+    updated: list[dict] = []
+    unmatched: list[dict] = []
+    ambiguous: list[dict] = []
     bad: list[dict] = []
     warned: list[dict] = []
     for n, row in enumerate(rows, start=1):
-        key = _natural_key(row)
-        if key in seen:
-            exists.append({"row_no": n, "why": "库里已经有这一条了（**不动它**）"})
+        raw_amt = row.get("contract_amt")
+        key = _amount_key(raw_amt)
+        if not key:
+            unmatched.append({"row_no": n, "amount": str(raw_amt or ""),
+                              "material_name": str(row.get("material_name") or ""),
+                              "why": "**合同价为空 / 为 0** ⇒ 不参与匹配（⛔ 空值不许去撞库里任何一行）"})
             continue
+        cands = by_amt.get(key) or []
+        if len(cands) == 0:
+            unmatched.append({"row_no": n, "amount": key,
+                              "material_name": str(row.get("material_name") or ""),
+                              "why": f"该项目内**没有**合同价 = {key} 的合同（⛔ 不静默新增 —— 锚点找不到先看）"})
+            continue
+        if len(cands) > 1:
+            ambiguous.append({"row_no": n, "amount": key,
+                              "ids": [int(c.id) for c in cands],
+                              "why": f"该项目内有 **{len(cands)}** 条同价合同 ⇒ **不猜**（和人挑供应商同一个道理）"})
+            continue
+
+        cur = cands[0]
+        cid = int(cur.id)
         problem = _row_problem(row)
         if problem:
             bad.append({"row_no": n, "why": problem})
             continue
 
-        kwargs = {k: row.get(k) for k in _CORE if k in fields}
-        kwargs["project_id"] = int(project_id)
-        res = _add_contract(s, kwargs)
-        if not res.get("ok"):
-            bad.append({"row_no": n, "why": str(res.get("message") or "落库失败")})
-            continue
-        cid = int(res["id"])
-        # 存档三列走**白名单** update（`insert_contract` 不收它们）
-        extra = {k: row.get(k) for k in _EXTRA if k in fields}
-        if extra:
-            R.update_contract(s, cid, **extra)
-        # 两条**汇总发票行**（用户定的：台账里的发票额就落一条，⛔ 不必逐张重录）
+        # ⭐ **只更"Excel 的地盘"那几列**（用户 2026-09-20 列的字段）——
+        #    ⛔ 合同价 / 供应商 / 合同日期 / 甲方单位**一个字都不碰**（那是 i8 的事实，两边互不覆盖）。
+        cols: dict = {}
+        for k in ("material_name", "remark"):
+            if k in fields:
+                cols[k] = str(row.get(k) or "")
+        for k in _EXTRA:                                    # 存档三列（走白名单 update）
+            if k in fields:
+                cols[k] = row.get(k)
+        if cols:
+            R.update_contract(s, cid, **cols)
+
+        # ⭐ **汇总发票行**：⛔ **不重复加** —— 已有同 kind 的发票行 ⇒ 跳过并报出来（再导一次不会翻倍）。
+        already = {str(x) for x in s.execute(
+            select(JcInvoice.kind).where(JcInvoice.contract_id == cid)).scalars()}
         for fld, kind, label in (("inv_sum", "supplier", "供应商"),
                                  ("trade_inv_sum", "trade", "贸易公司")):
             amt = row.get(fld)
             if amt in (None, ""):
                 continue
-            date = str(row.get("contract_date") or "").strip()
+            if kind in already:
+                warned.append({"row_no": n, "why": f"合同 #{cid} 已有「{label}发票」行 ⇒ **未重复导入**"
+                                                   f"（发票子表是一合同 1..N 张，重导会翻倍）"})
+                continue
+            date = str(row.get("contract_date") or "").strip() or str(cur.contract_date or "").strip()
             if not date:
-                warned.append({"row_no": n, "why": f"{label}发票额没落 —— 这条没有合同日期可用作发票日期"})
+                warned.append({"row_no": n, "why": f"{label}发票额没落 —— 这张合同没有日期可用作发票日期"})
                 continue
             inv = _add_invoice(s, cid, kind=kind, date=date, amount=amt)
             if not inv.get("ok"):
                 warned.append({"row_no": n, "why": f"{label}发票额没落：{inv.get('message')}"})
-        seen.add(key)
-        added.append({"id": cid, "row_no": n,
-                      "material_name": row.get("material_name"), "contract_amt": str(row.get("contract_amt") or 0)})
+            else:
+                already.add(kind)
+
+        # ⚠️ 落地后**从索引里摘掉**：同一份 Excel 里两行撞同一个锚点 ⇒ 后一行必须被判"已配对"，
+        #    ⛔ 不然两行都会去写同一条合同（后写的把先写的**静默覆盖**）。
+        by_amt[key] = [c for c in cands if int(c.id) != cid]
+        updated.append({"id": cid, "row_no": n, "amount": key,
+                        "material_name": str(row.get("material_name") or cur.material_name or ""),
+                        "fields": sorted(cols)})
 
     return {
         "ok": True, "kind": "ok",
         "file": filename, "sheet": sheet, "project_key": project_key,
-        "added": len(added), "exists": len(exists), "bad": len(bad), "warned": len(warned),
+        "updated": len(updated), "unmatched": len(unmatched),
+        "ambiguous": len(ambiguous), "bad": len(bad), "warned": len(warned),
         "header": {"row1": r1 + 1, "row2": r2 + 1},
         "mapping": m,
-        "items": added,
-        "exists_items": exists,
+        "items": updated,
+        "unmatched_items": unmatched,
+        "ambiguous_items": ambiguous,
         "bad_items": bad,
         "warn_items": warned,
         "skipped_rows": parsed["skipped"],
-        "message": (f"导入完成：新增 {len(added)} 条 · 已存在 {len(exists)} 条（未动）"
+        "message": (f"导入完成：**按合同价匹配上并更新 {len(updated)} 条**"
+                    f" · 配不上 {len(unmatched)} 条 · 同价冲突 {len(ambiguous)} 条"
                     f" · 不合格 {len(bad)} 条 · 提醒 {len(warned)} 条"),
     }
 

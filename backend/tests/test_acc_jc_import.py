@@ -142,34 +142,93 @@ def test_预览给出列名映射与条数_合计行不计():
 
 
 @acc()
-def test_落库幂等_再导一次不重复():
-    """⚠️ **幂等 = 已存在的行不动**（同 `m04`/`m08` 的既有套路）—— 重传同一个文件不能翻倍。"""
+def test_落库按合同价匹配并更新_且与i8互不覆盖():
+    """⭐⭐ **本片核心**（用户 2026-09-20 口径）：**先抓 i8（合同已在库）→ 再导 Excel（补信息）**。
+
+    ⇒ **锚点 = 含税合同价**，在**单个项目内**匹配**已有**合同，**更新它**
+      （材料名 / 备注 / 存档三列 ＋ 汇总发票行）。
+    ⚠️ 关键断言：**i8 的事实列（合同价 / 供应商）一个字都不许被 Excel 动** = "两者互不覆盖"。
+    """
+    from decimal import Decimal
+
+    from sqlalchemy import select
+
     from app.core.db import session_scope
     from app.mod01_projects import repository as pj_repo
     from app.mod01_projects.models import TYPE_NORMAL
-    from app.mod11_jc.import_service import commit
+    from app.mod11_jc.import_service import commit, preview
+    from app.mod11_jc.models import JcContract, JcInvoice
 
     data = _xlsx_bytes()
+    sh = preview(data, "自检.xlsx")["sheets"][0]
+    samples = sh["sample"]
+    assert len(samples) == 2, f"预览样例要够我建两条锚点，实际={len(samples)}"
+
     with session_scope() as s:
         p = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full="__自检_导入项目__",
                                    warehouse_name="__自检仓_导入__", phid="")
         s.flush()
-        kw = dict(sheet="某项目", project_key="__自检仓_导入__")
-        first = commit(s, data, "自检.xlsx", **kw)
-        assert first["ok"] is True, first
-        assert first["added"] == 2 and first["exists"] == 0, first
-        second = commit(s, data, "自检.xlsx", **kw)
-        assert second["added"] == 0 and second["exists"] == 2, f"重导必须一条都不新增，实际={second}"
-        from app.mod11_jc.models import JcContract
+        pid = int(p.id)
+        # 先造"i8 抓来的"两条：**金额 = Excel 的金额（= 锚点）**，材料名/供应商**故意与 Excel 不同**
+        #   —— 这样才能验出"Excel 到底动了哪些列"。
+        anchor_amts = []
+        for i, r in enumerate(samples):
+            amt = Decimal(str(r["contract_amt"]))
+            anchor_amts.append(amt)
+            s.add(JcContract(contract_no=f"__自检_IMP_{i}__", project_id=pid,
+                             contract_date="2026-01-01", material_name="i8给的材料名",
+                             supplier="i8给的供应商", contract_amt=amt, bill_name="i8单据名"))
+        s.flush()
 
-        assert len(R_ids(s, int(p.id))) == 2, "库里仍只有两条"
+        kw = dict(sheet=sh["name"], project_key="__自检仓_导入__")
+        res = commit(s, data, "自检.xlsx", **kw)
+        assert res["ok"] is True, res
+        assert res["updated"] == 2, f"两条都该按合同价匹配上（`updated`=2），实际={res}"
+        assert res["unmatched"] == 0 and res["ambiguous"] == 0, res
+
+        rows = list(s.execute(select(JcContract).where(JcContract.project_id == pid)).scalars())
+        assert len(rows) == 2, "⛔ **不许新增** —— 锚点匹配到的是已有合同（多出来就是重复建档）"
+        for c in rows:
+            assert c.material_name != "i8给的材料名", "材料名要被 Excel 覆盖（用户列的字段之一）"
+            assert c.supplier == "i8给的供应商", "⛔ 供应商是 **i8 的事实** ⇒ Excel 一个字都不许动"
+            assert str(c.contract_no).startswith("__自检_IMP_"), "⛔ 不许换成 Excel 的行"
+        assert sorted(Decimal(str(c.contract_amt)) for c in rows) == sorted(anchor_amts), \
+            "⛔ 合同价是**锚点本身** ⇒ 更不许被 Excel 改（改了下次就再也匹配不上了）"
+
+        # 汇总发票行：落了一条（用户 2026-09-19 定：台账的发票额落**一条**）
+        invs = list(s.execute(select(JcInvoice).where(
+            JcInvoice.contract_id == int(rows[0].id))).scalars())
+        assert len(invs) >= 1, "发票额要落成汇总行"
+
+        # ⭐ **再导一次**：发票**不许翻倍**（发票子表是一合同 1..N 张，重导会翻倍）
+        again = commit(s, data, "自检.xlsx", **kw)
+        assert again["ok"] is True, again
+        invs2 = list(s.execute(select(JcInvoice).where(
+            JcInvoice.contract_id == int(rows[0].id))).scalars())
+        assert len(invs2) == len(invs), f"重导**不许**给发票子表翻倍（{len(invs)} -> {len(invs2)}）"
+        assert any("已有" in w["why"] for w in again["warn_items"]), \
+            f"跳过发票要**报出来**（禁静默），实际={again['warn_items']}"
+
+        # ⭐ **锚点找不到** ⇒ 列进"配不上"，⛔ **不静默新增**
+        lone = commit(s, data, "自检.xlsx", sheet=sh["name"],
+                      project_key="__自检仓_导入__", mapping=None)
+        assert lone["ok"] is True
+        # 换一个"库里没有任何合同"的项目 ⇒ 全部配不上、且一条都不许建
+        p2 = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full="__自检_空项目__",
+                                    warehouse_name="__自检仓_空__", phid="")
+        s.flush()
+        empty = commit(s, data, "自检.xlsx", sheet=sh["name"], project_key="__自检仓_空__")
+        assert empty["ok"] is True and empty["updated"] == 0, empty
+        assert empty["unmatched"] == 2, f"锚点找不到要逐条报出来，实际={empty}"
+        assert not list(s.execute(select(JcContract).where(JcContract.project_id == int(p2.id))).scalars()), \
+            "⛔ 配不上的行**不许**被静默建成新合同"
 
         # 列名没对上 ⇒ **明确拒绝**（⛔ 不许"什么都不导"还回成功）
-        bad = commit(s, data, "自检.xlsx", sheet="某项目", project_key="__自检仓_导入__",
+        bad = commit(s, data, "自检.xlsx", sheet=sh["name"], project_key="__自检仓_导入__",
                      mapping={str(i): "" for i in range(7)})
         assert bad["ok"] is False and "列名" in bad["message"], bad
         # 项目不存在 ⇒ 明确拒绝
-        noproj = commit(s, data, "自检.xlsx", sheet="某项目", project_key="__不存在的仓__")
+        noproj = commit(s, data, "自检.xlsx", sheet=sh["name"], project_key="__不存在的仓__")
         assert noproj["ok"] is False and "找不到项目" in noproj["message"], noproj
         s.rollback()
 
