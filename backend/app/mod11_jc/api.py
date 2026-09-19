@@ -122,9 +122,14 @@ class AddIn(BaseModel):
 
 
 class FetchIn(BaseModel):
-    """抓取入参 —— ⚠️ `confirm` **必须为真**（防静默抓取，`D9`；同 `m08` 的口径）。"""
+    """抓取入参 —— ⚠️ `confirm` **必须为真**（防静默抓取，`D9`；同 `m08` 的口径）。
+
+    ⭐ `since`（`YYYY-MM-DD`）= **单据日期起点** ⇒ 空 = 让后端用 `default_since`（增量），
+       显式传 `""` 也走增量（想**全量**请传一个很早的日期，如 `2000-01-01`）。
+    """
 
     confirm: bool = False
+    since: str | None = None          # `None` = 没传（用默认）；`""` = 显式要默认；有值 = 用它
 
 
 class TagIn(BaseModel):
@@ -158,14 +163,18 @@ class SubRowIn(BaseModel):
 def api_fetch(payload: FetchIn) -> dict:
     """抓采购合同（`API-04`）⇒ 回执（含**匹配预览**：匹配上 / 匹配不上的项目分布）。
 
-    ⭐ 编排在 `fetch_service.run_fetch`：抓合同 → **先同步常用项目** → 再匹配 → 落库。
+    ⭐ 编排在 `fetch_service.run_fetch`：抓合同 → **补材料名** → **同步常用项目** → 再匹配 → 落库。
+    ⭐ **增量**：`since` 不传 ⇒ 后端用 `default_since`（库里最大合同日期 **− 3 天**）
+       ⇒ 日常抓取 **1~5 秒**（实测：无过滤 40.4s vs 带日期 0.5~1.0s）；
+       库空（首次）⇒ 自动全量（~40 秒）＋ 逐条补材料名（就这一次）。
     ⚠️ 抓取**会顶号**（`D9`：登录 i8 会踢掉该账号其它在线会话）⇒ ⛔ 缺 `confirm` 一律拒（防静默抓取）。
     """
     if not payload.confirm:
         return {"ok": False, "kind": "err",
                 "message": "抓取前必须二次确认（这一步会登录 i8，可能顶掉该账号的其它会话）"}
     with session_scope() as s:
-        return FS.run_fetch(s, confirmed=True)
+        since = payload.since if payload.since is not None else FS.default_since(s)
+        return FS.run_fetch(s, confirmed=True, since=str(since or ""))
 
 
 @router.post("/api/m11/add")

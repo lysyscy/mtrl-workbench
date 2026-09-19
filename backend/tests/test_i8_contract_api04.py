@@ -99,8 +99,11 @@ def test_字段真名映射到落库字段(monkeypatch):  # noqa: ANN001
     assert row["project_name"] == "晋江市污泥处置中心一期工程核心设备安装工程"
     assert row["contract_amt"] == 27269.82
     assert row["bill_name"].startswith("四分晋江污泥处置项目/主材钢材"), "⭐ i8 原文必须留存（可回溯）"
-    # ⚠️ 材料名：**只在 5/6 段**时取单据名第 2 段（见 `_material_from_bill_name`）
-    assert row["material_name"] == "主材钢材"
+    # ⚠️ 材料名**不在这里取**：i8 列表接口**没有**材料字段（88 个字段全查过）
+    #    ⇒ 由 `fetch_service` 落库前**逐条问详情**（`GetCntMInfoFirst` → `Data.Grid.results[0].ItemName`）。
+    #    ⛔ 曾经这里拆单据名第 2 段 —— 实测拿 12 条真合同对照 i8 详情页，**只看对 2 条** ⇒ 已废。
+    assert row["material_name"] == "", "取数层**故意留空** —— 材料名由编排层逐条补（见 fetch_service）"
+    assert (row.get("fields") or {}).get("PhId"), "详情查询要靠 fields 里的 PhId ⇒ 必须留着"
     # ⚠️ 供应商：取 i8 的 **`_EXName`**（⛔ 不是拆单据名第 3 段 —— 那只是人写的简称、段位还不固定）
     assert row["supplier_name"] == "洛阳市业祥商贸有限公司"
     assert row["supplier_name"] != "业祥", "⛔ 不得回到「拆单据名第 3 段」的老路"
@@ -144,27 +147,61 @@ def test_没有合同编号的行被丢弃():
 
 
 @acc()
-def test_材料名只认5或6段_其余留空():
-    """⚠️⚠️ 钉住「**无脑取第 2 段会张冠李戴**」（2026-09-19 实测 347 条得出）：
+def test_日期过滤必须包一层queryFilter():
+    """⚠️⚠️ 钉住那个「**写错不报错**」的日期过滤写法（2026-09-19 用户给真机 body 才试出来）。
 
-    | 段数 | 第 2 段实际是 | 例 |
+    日期过滤**必须包一层**：
+    ```
+    queryfilter = {"queryFilter": "{\"BillDt*date*ge*1\":\"2026-09-06\"}"}
+                        ↑ 外层包一层；内层才是过滤条件
+    ```
+    ⛔ 直接把**内层**放上去 ⇒ 接口**照样返回全量、也不报错** —— 实测连试 5 种类型名/格式，
+       全是"**成功但没过滤**"（那种错最坏：看着抓成功，其实每次都全量拉 40 秒，
+       而且**没人会发现**）。⇒ 所以这条值得一个**专门的反向灵敏度变异**。
+
+    ⭐ 实测依据（同接口、同账号、同日）：
+
+    | 过滤 | 耗时 | 命中 |
     |---|---|---|
-    | 5/6 段 | ✅ 材料 | `四分晋江污泥处置项目/`**`主材钢材`**`/业祥/河南安装/27269.82元` |
-    | 3 段 | ⚠️ **供应商** | `内蒙宜化项目/`**`中圣园`**`/材料设备合同（1309322元）` |
-    | 4 段 | ⚠️ **项目** | `第四工程公司/`**`龙源项目`**`/绿林/蒸压加气混凝土砌块（337500元）` |
-    | 1 段 | 连分隔符都没有 | `四分新疆慧能项目焊材采购合同（安装-泰佳）` |
+    | 无过滤（全量 355） | **40.4s** | 355 |
+    | `BillDt >= 2026-09-06` | **1.0s** | 3 |
+    | `>= 2026-09-01` | 1.2s | 5 |
+    | `>= 2026-06-01` | 4.9s | 22 |
 
-    ⇒ 3 段/4 段那两条**"看着也像材料名"** ⇒ 机器分不出来 ⇒ 所以**只认 5/6 段**，其余**留空**。
+    ⇒ 耗时**与命中条数成正比** ⇒ 慢在 **i8 侧扫描匹配**（不是网络）⇒ 增量抓才能 1~5 秒。
     """
-    assert cs._material_from_bill_name("") == ""
-    assert cs._material_from_bill_name("只有一个项目名") == "", "1 段 ⇒ 没有材料"
-    # ✅ 5 段 / 6 段 ⇒ 第 2 段就是材料
-    assert cs._material_from_bill_name("四分晋江污泥项目/主材钢材/业祥/河南安装/27269.82元") == "主材钢材"
-    assert cs._material_from_bill_name("A/主材油漆/B/C/D/增补说明") == "主材油漆"
-    # ⛔ 3 段：第 2 段是**供应商** ⇒ 不许当材料（这是最容易错的那种）
-    assert cs._material_from_bill_name("内蒙宜化项目/中圣园/材料设备合同（1309322元）") == ""
-    # ⛔ 4 段：第 2 段是**项目** ⇒ 不许当材料
-    assert cs._material_from_bill_name("第四工程公司/龙源项目/绿林/蒸压加气混凝土砌块（337500元）") == ""
+    import json
+
+    b = cs.build_body(since="2026-09-06")
+    outer = json.loads(b["queryfilter"])
+    assert list(outer) == ["queryFilter"], f"必须是**单键** `queryFilter`，实际={list(outer)}"
+    assert json.loads(outer["queryFilter"]) == {"BillDt*date*ge*1": "2026-09-06"}, "内层才是过滤条件"
+
+    # 不带 `since` ⇒ **空串**（全量）⇒ ⛔ 不许残留一个"看着能过滤"的空壳
+    full = cs.build_body()
+    assert full["queryfilter"] == "", "全量时 queryfilter 必须是空串"
+    # ⚠️ 组织范围（clientfilter）与 ng3_logid **照真机原样带上**：缺了可能拿到**别组织**的数据
+    #    （那种错会静默混进台账 —— 比"抓不到"危险得多）。
+    assert full["clientfilter"] == cs.CLIENT_FILTER and full["ng3_logid"] == cs.LOG_ID
+    # 全量不许只抓一页（实测不传 limit ⇒ i8 只回 10 条）
+    assert full["limit"] == cs.LIST_LIMIT and full["page"] == "0" and full["start"] == "0"
+
+
+@acc()
+def test_供应商取EXName而不是拆单据名():
+    """⭐ `M5-6` 修正：供应商取 i8 的 **`_EXName`**（i8 自己给的名字）—— ⛔ 不再拆单据名。
+
+    ⚠️ 原先拆第 3 段：实测那只是人随手写的**简称**（同一段里出现过 `钢材采购合同（业祥157944.48元）`
+       这种整句话、`配电柜` 这种材料名），而且**段位不固定**（3 段时第 3 段是材料、5 段时才是供应商）。
+    ⚠️ 拆出来的值与真名**差很远**（`业祥` vs `洛阳市业祥商贸有限公司`）⇒ 会污染下游一切按供应商的统计。
+    """
+    assert cs._supplier_of({"PhidSupplyEnt_EXName": "洛阳市业祥商贸有限公司"}) == "洛阳市业祥商贸有限公司"
+    # 四个字段实测取值一致 ⇒ 按序回退（主字段缺了才轮到后面那几个）
+    assert cs._supplier_of({"PhidInvComp_EXName": "洛阳锐亿自动化工程技术有限公司"}) == "洛阳锐亿自动化工程技术有限公司"
+    assert cs._supplier_of({}) == "", "一个都没有 ⇒ 空串（⛔ 不猜、⛔ 不从单据名拆）"
+    # ⛔⚠️ **只有 id、没有名字 ⇒ 留空** —— 这正是当初踩的坑：`PhidSupplyEnt` 只有数字 id，
+    #     拿它去别处换名字会换错（实测换成 `图木舒克市诚汇建材`，而真名是 `洛阳市业祥商贸`）。
+    assert cs._supplier_of({"PhidSupplyEnt": "3700000000025311"}) == "", "⛔ 只有 id ⇒ 留空，不拿 id 冒充名字"
 
 
 @acc()

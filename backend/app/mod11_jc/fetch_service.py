@@ -92,17 +92,53 @@ def default_loaders(client):
             lambda: load_warehouse_rows(client) or [])
 
 
+#: 增量抓的**回看天数**（默认起点 = 库里最大合同日期 − 这个数）。
+SINCE_LOOKBACK_DAYS = 3
+
+
+def default_since(s: Session) -> str:
+    """增量抓的**默认起点**（`YYYY-MM-DD`）= 库里**最大合同日期 − 3 天**；库空 ⇒ `""`（= 全量）。
+
+    ⭐ **为什么不另存"上次抓取日期"这个状态**：那要**再开一份状态**（新表 / 新设置项），
+      而状态会**漂移** —— 清了库、换了机器、手改了数据 ⇒ 状态就**假了**，而且是静默地假。
+      直接**从数据本身推**（`max(contract_date)`）⇒ **自愈**：台账在，起点就对。
+    ⚠️ **必须往前推几天**：i8 里**增补合同会沿用原单据日期**（实测确有 `2024` 年的合同挂在近期单据下）
+      ⇒ 起点卡在"最后一天"会**漏掉它们**。而落库按 `BillNo` **幂等** ⇒ 推早只是多拿几条、**不会重复插**。
+    ⚠️ 库空（首次抓取）⇒ 回空串 ⇒ 走**全量**（~40 秒）；此后都是 **1~5 秒**。
+    """
+    from datetime import date, timedelta
+
+    from sqlalchemy import func, select
+
+    from app.mod11_jc.models import JcContract
+
+    latest = str(s.execute(select(func.max(JcContract.contract_date))).scalar() or "").strip()[:10]
+    if not latest:
+        return ""
+    try:
+        return (date.fromisoformat(latest) - timedelta(days=SINCE_LOOKBACK_DAYS)).isoformat()
+    except ValueError:
+        # ⚠️ 日期不认 ⇒ **保守全量**（⛔ 不猜、也⛔ 不静默少抓 —— 少抓是最坏的一类错）
+        logger.warning("合同日期 {:r} 不像日期 ⇒ 增量起点回落「全量」", latest)
+        return ""
+
+
 def run_fetch(
     s: Session,
     *,
     confirmed: bool,
     operator: str = "",
+    since: str = "",
     client_factory: Callable = None,        # type: ignore[assignment]
     fetch: Callable | None = None,          # type: ignore[type-arg]
     sync: Callable | None = None,           # type: ignore[type-arg]
     loaders: tuple[Callable, Callable] | None = None,
 ) -> dict:
     """跑一次抓取（**人工触发**）⇒ 回执字典。
+
+    ⭐ `since`（`YYYY-MM-DD`）= **单据日期起点** ⇒ 空 = **全量**（首次），有值 = **增量**（日常）。
+    ⚠️ 起点由**调用方**算（默认 = 库里最大合同日期 **− 3 天**，见 `default_since`）——
+       i8 里**增补合同会沿用原单据日期** ⇒ 卡太紧会**漏**；落库按 `BillNo` 幂等 ⇒ 推早了无害。
 
     ⚠️ 走到网络**之前**就失败的（未二次确认）⇒ **不写执行记录**（那是用法错误，不是业务失败）；
     之后任何一步失败 ⇒ **降级进回执**（禁静默），**绝不自动重试登录**（`D9`）。
@@ -116,6 +152,8 @@ def run_fetch(
 
     rows: list[dict] = []
     dropped = 0
+    material_filled = 0
+    material_blank = 0
     sync_result: dict = {}
     degraded = ""
     try:
@@ -129,10 +167,31 @@ def run_fetch(
             try:
                 fetcher = ContractFetcher(client)
                 if fetch is None:
-                    rows = fetcher.fetch_all()
+                    rows = fetcher.fetch_all(since=since)
                 else:
                     rows = fetch(client)
                 dropped = int(getattr(fetcher, "last_unapproved", 0) or 0)
+                # ⭐⭐ **补材料名**（`M5-6`）：i8 **列表接口没有材料字段**（88 个字段全查过）
+                #    ⇒ 只能**逐条问详情**（`GetCntMInfoFirst` → `Data.Grid.results[0].ItemName`）。
+                #    ⚠️⚠️ **只补「库里还没有的」** —— 这是这件事能用的前提：
+                #       全量首次约 347 次请求（几分钟，**就这一次**）；之后增量新增只有几条 ⇒ **秒级**。
+                #       若每次都对全量补，日常抓取就永远是几分钟（而"刷新已有行的材料名"毫无意义）。
+                #    ⚠️ 必须**在 `client` 关闭之前**做（下面 `finally` 会 close）。
+                #    ⚠️ 单条失败 ⇒ 该条留空并**计数报出**（禁静默，见回执 `material_blank`）。
+                if fetch is None and rows:
+                    known = R.existing_contract_nos(
+                        s, [str(r.get("contract_no") or "") for r in rows])
+                    for r in rows:
+                        no = str(r.get("contract_no") or "").strip()
+                        if not no or no in known:
+                            continue
+                        name = fetcher.fetch_item_name(
+                            str((r.get("fields") or {}).get("PhId") or ""))
+                        if name:
+                            r["material_name"] = name
+                            material_filled += 1
+                        else:
+                            material_blank += 1
                 # ⭐ **先同步常用项目列表**（复用同一会话）—— 失败**不拖垮**抓取，只降级
                 load_common, load_wh = loaders if loaders_given else default_loaders(client)
                 do_sync = sync or sync_and_archive       # ⚠️ 可注入（测试不连 i8）
@@ -175,7 +234,10 @@ def run_fetch(
         detail=record_detail(), operator=operator)
     return {
         "ok": True, "degraded": False,
+        "since": since,                                  # ⭐ 本次的日期起点（空 = 全量）
         "fetched": len(rows), "dropped_unapproved": dropped,
+        # ⭐ 材料名的补数情况（⛔ 禁静默：补不上多少条必须让人看见）
+        "material_filled": material_filled, "material_blank": material_blank,
         "matched": len(m["matched"]), "unmatched": len(m["unmatched"]), "multi": m["multi"],
         "stats": stats,
         # ⭐ **匹配预览**（落库前就该让人看见的那两块；这里随回执一起回，壳直接用）

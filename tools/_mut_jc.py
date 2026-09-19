@@ -227,10 +227,15 @@ MUTS += [
      "    return (\n        str(id(row)),  # 故意的：每次都不一样",
      "test_落库幂等"),
     # ---- API-04 取数层（2026-09-19 追加）
-    ("材料名回归「无脑取第 2 段」（3 段时把**供应商**当材料、4 段时把**项目**当材料）",
-     "    if len(parts) in (5, 6) and parts[1]:",
-     "    if len(parts) > 1 and parts[1]:",
-     "test_材料名只认5或6段"),
+    # ⚠️ 原先这条是「材料名回归无脑取第 2 段」—— **已随函数一起删掉**：
+    #    2026-09-19 定案材料名不再拆单据名（改**逐条问详情** → `ItemName`），
+    #    `_material_from_bill_name` 整个函数没了 ⇒ 那条变异的锚点必然失效。
+    #    ⛔ **不能让失效的变异留在清单里**（会永远 SKIP，把"没验过"伪装成"验过了"）。
+    # ⚠️ 也别把它改成指向新测试 —— 那是**两回事**：新测试钉的是"日期过滤要包一层"。
+    ("日期过滤**少包一层**（`queryfilter` 直接放内层 ⇒ i8 照样返回全量、**也不报错**）",
+     "    query = json.dumps({\"queryFilter\": inner}, ensure_ascii=False) if since else \"\"",
+     "    query = inner if since else \"\"",
+     "test_日期过滤必须包一层queryFilter"),
 ]
 
 

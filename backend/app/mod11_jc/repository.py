@@ -314,6 +314,20 @@ def payment_of_notice(s: Session, notice_id: int) -> JcPayment | None:
     return s.execute(select(JcPayment).where(JcPayment.notice_id == nid)).scalars().first()
 
 
+def existing_contract_nos(s: Session, nos: list[str]) -> set[str]:
+    """给定一批合同编号 ⇒ **库里已存在的**那些（`set`）—— `M5-6` 增量补材料名用。
+
+    ⚠️ **一次查完**（⛔ 不逐条 `one_by_no` = N+1）：抓取时动辄几百条，逐条查会把"省下来的时间"还回去。
+    ⚠️ 空串 / 空白编号**不参与**（它们本来就不落库，见 `upsert_fetched_contracts`）。
+    """
+    wanted = [str(n or "").strip() for n in (nos or ())]
+    wanted = [n for n in wanted if n]
+    if not wanted:
+        return set()
+    stmt = select(JcContract.contract_no).where(JcContract.contract_no.in_(wanted))
+    return {str(x) for x in s.execute(stmt).scalars() if x}
+
+
 def one_by_no(s: Session, contract_no: str) -> JcContract | None:
     """按**合同编号**取一行（`M5-6` 的**幂等键**）。空编号 ⇒ `None`（不参与幂等）。"""
     no = str(contract_no or "").strip()
@@ -374,5 +388,5 @@ __all__ = [
     "project_id_by_key",
     "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
     "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
-    "FETCH_COLS", "one_by_no", "upsert_fetched_contracts", "payment_of_notice",
+    "FETCH_COLS", "one_by_no", "existing_contract_nos", "upsert_fetched_contracts", "payment_of_notice",
 ]
