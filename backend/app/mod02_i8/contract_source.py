@@ -144,16 +144,46 @@ def build_body(*, limit: str = LIST_LIMIT) -> dict[str, str]:
     }
 
 
-def _parse_bill_name(bill_name: str) -> tuple[str, str]:
-    """i8 的 `BillName`（`项目/物资/供应商/施工单位/金额（…）`）→ `(材料名称, 供应商简称)`。
+def _material_from_bill_name(bill_name: str) -> str:
+    """从 i8 单据名里取**材料名**（§6.4.1 的「材料名称」）—— ⚠️ **只在 5/6 段时成立**。
 
-    ⚠️ **尽力而为**（段数不够 ⇒ 返回空串，⛔ 不抛）—— 它只是**辅助列**：
-    **项目匹配不依赖它**（走 `MATCH_FIELD`）。
+    ⚠️⚠️ **为什么必须限段数**（2026-09-19 实测 347 条）：
+    | 段数 | 第 2 段实际是 | 例 |
+    |---|---|---|
+    | 5 段（135 条） | ✅ **材料** | `四分晋江污泥处置项目/`**`主材钢材`**`/业祥/河南安装/27269.82元` |
+    | 6 段（3 条） | ✅ 材料 | `四分内蒙宜化项目/`**`主材油漆`**`/桐玺/河南安装/179776.00/…` |
+    | 3 段（29 条） | ⚠️ **供应商** | `内蒙宜化项目/`**`中圣园`**`/材料设备合同（1309322元）` |
+    | 4 段（85 条） | ⚠️ **项目** | `第四工程公司/`**`龙源项目`**`/绿林/蒸压加气混凝土砌块（337500元）` |
+    | 1 段（92 条） | 连分隔符都没有 | `四分新疆慧能项目焊材采购合同（安装-泰佳）` |
+
+    ⇒ 无脑取第 2 段会把**供应商 / 项目**当材料（而且它们"看着都像材料名"，机器分不出来）
+      ⇒ 故**只认 5/6 段**，其余**留空**（宁可空着 —— 材料名填错比空着危险，人会拿它去对账）。
+
+    ⚠️ i8 **不提供**材料字段：88 个字段全查过（`AuxItems1/2/3`、`ItemResource` **恒空**；
+       `_EXName` 一族只有 合同类型 / 人 / 组织 / 供应商 / 项目 —— **没有材料**）
+       ⇒ 单据名是**唯一**来源（i8 详情页显示的"材料"也是它前端自己拆的）。
     """
     parts = [p.strip() for p in str(bill_name or "").split("/")]
-    material = parts[1] if len(parts) > 1 else ""
-    supplier = parts[2] if len(parts) > 2 else ""
-    return material, supplier
+    if len(parts) in (5, 6) and parts[1]:
+        return parts[1][:128]
+    return ""
+
+
+def _supplier_of(rec: dict) -> str:
+    """供应商全名 —— ⭐ 取 i8 的 **`_EXName`** 字段（**i8 自己给的名字**）。
+
+    ⚠️⚠️ **2026-09-19 修正**：⛔ **别再拆单据名的第 3 段**当供应商 —— 那只是人随手写的简称
+       （实测同一段里出现过 `钢材采购合同（业祥157944.48元）` 这种整句话、`配电柜` 这种材料名），
+       而且**段位还不固定**（3 段时第 3 段是材料、5 段时才是供应商）。
+
+    正解是 i8 的命名约定「**id 字段 ＋ `_EXName` ＝ 名字**」——
+    实测 `PhidSupplyEnt_EXName`：覆盖 **344/347**、去重 **94 家**、**id ↔ 名字一一对应**、
+    且**与单据名里那段完全对得上**（`业祥` ⇒ `洛阳市业祥商贸有限公司`）。
+    ⚠️ 四个字段实测取值**完全一致**（`PhidSupplyEnt` / `PhidInvComp` / `PhidSenComp` / `InvoiceCmp`）
+       ⇒ 按序回退，取到就用（⛔ 不拼、不改写、不猜）。
+    """
+    return _first(rec, "PhidSupplyEnt_EXName", "PhidInvComp_EXName",
+                  "PhidSenComp_EXName", "InvoiceCmp_EXName")
 
 
 def _map_record(rec: dict) -> dict | None:
@@ -165,13 +195,15 @@ def _map_record(rec: dict) -> dict | None:
     contract_no = _first(rec, "BillNo", "billNo", "合同编号")
     if not contract_no:
         return None
-    material, supplier = _parse_bill_name(_first(rec, "BillName"))
+    bill_name = _first(rec, "BillName")
     return {
         "contract_no": contract_no,                              # ⭐ 去重 / 增量键
         "project_name": _first(rec, MATCH_FIELD, "projectName"),  # ⭐ 匹配字段（同 API-01）
-        "bill_name": _first(rec, "BillName"),
-        "material_name": material,
-        "supplier_name": supplier,
+        "bill_name": bill_name,                                  # ⭐ i8 原文（落库保留，可回溯）
+        # ⚠️ 材料：从单据名**第 2 段**取，**仅 5/6 段**（见 `_material_from_bill_name` 的表）
+        "material_name": _material_from_bill_name(bill_name),
+        # ⭐ 供应商：取 i8 的 `_EXName`（⛔ 不再拆第 3 段 —— 那只是人写的简称、段位还不固定）
+        "supplier_name": _supplier_of(rec),
         "sign_date": _first(rec, "BillDt", "billDt")[:10],
         "contract_amt": _amount(rec, "CntSumVat", "CntOrgSumVat", "合同金额"),
         "cnt_type": _first(rec, "CntType_EXName", "CntType"),

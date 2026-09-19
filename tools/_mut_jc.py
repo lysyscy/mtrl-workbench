@@ -33,6 +33,7 @@ TEST_ORCH = "tests/test_acc_jc_fetch_orch.py"      # ⭐ M5-6 抓取编排（202
 TEST_PAYLINK = "tests/test_acc_jc_pay_link.py"     # ⭐ M5-5 双向引用（2026-09-19 追加）
 TEST_SUP = "tests/test_acc_sup_match.py"           # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
 TEST_IMPORT = "tests/test_acc_jc_import.py"        # ⭐ M5-8 Excel 解析层（2026-09-19 追加）
+TEST_API04 = "tests/test_i8_contract_api04.py"     # ⭐ API-04 取数层（2026-09-19 追加）
 
 #: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
 TARGETS: list[Path] = [
@@ -43,6 +44,7 @@ TARGETS: list[Path] = [
     BE / "app" / "mod03_notice" / "sup_match.py",      # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "excel_parse.py",        # ⭐ M5-8 Excel 解析层（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "import_service.py",     # ⭐ M5-8 导入服务（2026-09-19 追加）
+    BE / "app" / "mod02_i8" / "contract_source.py",    # ⭐ API-04 取数层（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "service.py",
     BE / "app" / "mod11_jc" / "models.py",
 ]
@@ -224,6 +226,11 @@ MUTS += [
      "    return (\n        str(row.get(\"contract_date\") or \"\").strip(),",
      "    return (\n        str(id(row)),  # 故意的：每次都不一样",
      "test_落库幂等"),
+    # ---- API-04 取数层（2026-09-19 追加）
+    ("材料名回归「无脑取第 2 段」（3 段时把**供应商**当材料、4 段时把**项目**当材料）",
+     "    if len(parts) in (5, 6) and parts[1]:",
+     "    if len(parts) > 1 and parts[1]:",
+     "test_材料名只认5或6段"),
 ]
 
 
@@ -250,7 +257,7 @@ def run_one(case: str) -> bool:
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
             [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH, TEST_ORCH,
-             TEST_PAYLINK, TEST_SUP, TEST_IMPORT],
+             TEST_PAYLINK, TEST_SUP, TEST_IMPORT, TEST_API04],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0

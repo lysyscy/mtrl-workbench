@@ -26,6 +26,8 @@ REC = {
     "CntSumVat": 27269.82,
     "CntSum": 24132.58,
     "PhidSupplyEnt": "3700000000025311",
+    # ⭐ 供应商**名字**在带 `_EXName` 后缀的字段里（i8 约定：id 字段 + `_EXName` = 名字）
+    "PhidSupplyEnt_EXName": "洛阳市业祥商贸有限公司",
     "AppStatus": 1,
     "PhidOrg": "3700000000000014",
     "Remarks": "增补原合同：CGHT2026030048，原合同金额：99646.56元，单价一致。",
@@ -96,8 +98,12 @@ def test_字段真名映射到落库字段(monkeypatch):  # noqa: ANN001
     assert row["contract_no"] == "CGHT2026090188"              # ⭐ 幂等键
     assert row["project_name"] == "晋江市污泥处置中心一期工程核心设备安装工程"
     assert row["contract_amt"] == 27269.82
-    assert row["material_name"] == "主材钢材"                  # 由 BillName 第 2 段解析（**辅助列**）
-    assert row["supplier_name"] == "业祥"                      # 第 3 段
+    assert row["bill_name"].startswith("四分晋江污泥处置项目/主材钢材"), "⭐ i8 原文必须留存（可回溯）"
+    # ⚠️ 材料名：**只在 5/6 段**时取单据名第 2 段（见 `_material_from_bill_name`）
+    assert row["material_name"] == "主材钢材"
+    # ⚠️ 供应商：取 i8 的 **`_EXName`**（⛔ 不是拆单据名第 3 段 —— 那只是人写的简称、段位还不固定）
+    assert row["supplier_name"] == "洛阳市业祥商贸有限公司"
+    assert row["supplier_name"] != "业祥", "⛔ 不得回到「拆单据名第 3 段」的老路"
     assert row["sign_date"] == "2026-09-15"
     assert row["cnt_type"] == "物资采购合同"
     assert row["approve_status"] == "已批"                     # AppStatus=1 ⇒ 复用 API-01 的判定
@@ -138,10 +144,27 @@ def test_没有合同编号的行被丢弃():
 
 
 @acc()
-def test_BillName段数不足不抛():
-    assert cs._parse_bill_name("只有一个项目名") == ("", "")
-    assert cs._parse_bill_name("") == ("", "")
-    assert cs._parse_bill_name("项目/材料") == ("材料", "")
+def test_材料名只认5或6段_其余留空():
+    """⚠️⚠️ 钉住「**无脑取第 2 段会张冠李戴**」（2026-09-19 实测 347 条得出）：
+
+    | 段数 | 第 2 段实际是 | 例 |
+    |---|---|---|
+    | 5/6 段 | ✅ 材料 | `四分晋江污泥处置项目/`**`主材钢材`**`/业祥/河南安装/27269.82元` |
+    | 3 段 | ⚠️ **供应商** | `内蒙宜化项目/`**`中圣园`**`/材料设备合同（1309322元）` |
+    | 4 段 | ⚠️ **项目** | `第四工程公司/`**`龙源项目`**`/绿林/蒸压加气混凝土砌块（337500元）` |
+    | 1 段 | 连分隔符都没有 | `四分新疆慧能项目焊材采购合同（安装-泰佳）` |
+
+    ⇒ 3 段/4 段那两条**"看着也像材料名"** ⇒ 机器分不出来 ⇒ 所以**只认 5/6 段**，其余**留空**。
+    """
+    assert cs._material_from_bill_name("") == ""
+    assert cs._material_from_bill_name("只有一个项目名") == "", "1 段 ⇒ 没有材料"
+    # ✅ 5 段 / 6 段 ⇒ 第 2 段就是材料
+    assert cs._material_from_bill_name("四分晋江污泥项目/主材钢材/业祥/河南安装/27269.82元") == "主材钢材"
+    assert cs._material_from_bill_name("A/主材油漆/B/C/D/增补说明") == "主材油漆"
+    # ⛔ 3 段：第 2 段是**供应商** ⇒ 不许当材料（这是最容易错的那种）
+    assert cs._material_from_bill_name("内蒙宜化项目/中圣园/材料设备合同（1309322元）") == ""
+    # ⛔ 4 段：第 2 段是**项目** ⇒ 不许当材料
+    assert cs._material_from_bill_name("第四工程公司/龙源项目/绿林/蒸压加气混凝土砌块（337500元）") == ""
 
 
 @acc()

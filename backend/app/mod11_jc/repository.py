@@ -297,7 +297,9 @@ def count_contracts(s: Session) -> int:
 
 #: 「**抓取会刷新**」的列 —— ⛔ 人工字段（三态 / 存档三列 / 备注 / 付款方式 / 贸易公司）**不在其中**：
 #: 那是人的地盘，重抓不许动（判据 `ACC-JC-FETCH-001/001-09`「再次导入**不覆盖旁路字段**」）。
-FETCH_COLS: tuple[str, ...] = ("contract_date", "material_name", "supplier", "contract_amt")
+#: ⭐ `bill_name`（i8 单据名原文）**在列里**：它是 i8 的原文、不是人的地盘 ⇒ 重抓要刷新它。
+#:   ⚠️ 2026-09-19 补 —— 原先没带上它 ⇒ 落库时**静默丢掉原文**（材料名/供应商从此无法回溯）。
+FETCH_COLS: tuple[str, ...] = ("contract_date", "material_name", "supplier", "contract_amt", "bill_name")
 
 
 def payment_of_notice(s: Session, notice_id: int) -> JcPayment | None:
@@ -345,6 +347,7 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
                 material_name=str(row.get("material_name") or "")[:128],
                 supplier=str(row.get("supplier_name") or "")[:128],
                 contract_amt=Decimal(str(row.get("contract_amt") or 0)),
+                bill_name=str(row.get("bill_name") or "")[:255],   # ⭐ i8 原文（可回溯）
                 tag=TAG_PENDING,                       # ⭐ 新抓的默认「待确认」
                 remark=str(row.get("remark") or "")[:255],
             ))
@@ -353,7 +356,8 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
             for key, val in (("contract_date", str(row.get("sign_date") or "")[:10]),
                              ("material_name", str(row.get("material_name") or "")[:128]),
                              ("supplier", str(row.get("supplier_name") or "")[:128]),
-                             ("contract_amt", Decimal(str(row.get("contract_amt") or 0)))):
+                             ("contract_amt", Decimal(str(row.get("contract_amt") or 0))),
+                             ("bill_name", str(row.get("bill_name") or "")[:255])):
                 if key in FETCH_COLS:
                     setattr(cur, key, val)
             # ⭐ 判据 `001-10`「抓取**不覆盖已人工标记的行**」= 这里只做"归一"：

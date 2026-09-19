@@ -69,6 +69,13 @@ class JcContract(Base):
     #    （与 `jc_payment.notice_id` 的多 `NULL` 同理）⇒ 去重在**落库时按值判**，⛔ 不靠数据库拦。
     contract_no: Mapped[str] = mapped_column(String(64), index=True, default="")         # 合同编号（i8）
     contract_date: Mapped[str] = mapped_column(String(10), index=True, default="")      # 合同日期（抓取）
+    #: ⭐ **i8 单据名原文**（`BillName`，如 `四分晋江污泥项目/主材钢材/业祥/河南安装/27269.82元`）。
+    #:   ⚠️⚠️ **2026-09-19 补**：原先**丢了它** —— `_map_record` 的注释写着"整条原样留在 `fields`
+    #:   （不丢信息）"，但本表**没有那个列**、`FETCH_COLS` 也没带它 ⇒ **静默丢掉**。
+    #:   后果很实在：「拆出来的材料名 / 供应商对不对」**无法回溯**，只能**重抓一次**才能验证（当日实际发生）。
+    #:   ⇒ 定位 = **原始凭证**（⛔ 不是给人看的显示列，页面不必展示）：材料名是从它拆的、供应商是拿它对照的。
+    #:   ⚠️ 在 `FETCH_COLS` 里 ⇒ 重抓会刷新（它是 i8 的原文，⛔ 不是人的地盘）。
+    bill_name: Mapped[str] = mapped_column(String(255), default="")                     # i8 单据名原文
     material_name: Mapped[str] = mapped_column(String(128), index=True, default="")     # 材料名（抓取）
     supplier: Mapped[str] = mapped_column(String(128), index=True, default="")          # 供应商（抓取）
     contract_amt: Mapped[float] = mapped_column(MONEY, default=0)                       # 合同金额（唯一可抓的金额）
