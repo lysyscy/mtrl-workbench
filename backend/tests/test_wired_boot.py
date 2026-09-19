@@ -88,3 +88,24 @@ def test_boot逐路容错未破():
     assert "BOOT_ERROR = fails.join(" in boot and "if (BOOT_ERROR) bootErrorBanner();" in boot, \
         "失败没有汇总成常驻横幅（只弹 toast 会一闪而过，用户只看到'页面是空的'）"
     assert "render();" in boot, "`boot()` 结尾没有统一渲染"
+
+
+@acc()
+def test_启动期间不补拉():
+    """⏳ 性能 `P3`①（2026-09-19）：`boot()` 期间 `m05Sync()` **一律不补拉**。
+
+    **为什么**（实测，不是推测）：`m05Sync()` 挂在 `render` 上，而它的参数里有 `ledCur()`（依赖
+    `ledProjs()`）；`boot()` 那 13 路**陆续到位**时每次 `render()` 都看到参数在变
+    ⇒ 实测同一页加载里 `/api/m05/{flows,stats,debt}` 各发 **3 次**、`ledger` 2 次（约 **420 ms** 纯重复）。
+    ⛔ `m05Refetching` 挡不住这个 —— 它是"串行"、不是"合并"。
+    ⭐ 放开必须在**第二组之后**（那里有一次**显式** `reloadM05()`；那时参数已稳定）。
+    """
+    boot = _boot()
+    assert "let BOOTING = true;" in SHELL, "没有 `BOOTING` 标志（启动期的补拉会照旧连发）"
+    assert "if (BOOTING || m05Refetching) return;" in SHELL, "`m05Sync()` 没在启动期被拦住"
+    i_off = boot.find("BOOTING = false;")
+    i_g2 = boot.find("await Promise.all(", boot.find("await Promise.all(") + 1)
+    assert i_off > 0, "`boot()` 收尾没有放开补拉（那 `m05` 之后就不刷新了 —— 反向的坑）"
+    assert i_g2 > 0 and i_off > i_g2, \
+        "放开得太早：必须在**第二组**（含显式 `reloadM05()`）**之后**"
+

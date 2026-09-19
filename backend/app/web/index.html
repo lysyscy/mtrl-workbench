@@ -5485,6 +5485,13 @@ const m05Params = () => ({
   pj: ledCur(),
 });
 let m05Refetching = false;
+/* ⏳ **启动期间不补拉**（性能 `P3`① · 2026-09-19）：`boot()` 里那 13 路**陆续到位**时，
+   每路都会 `render()`，而 `m05Sync()` 挂在 `render` 上 —— 它的参数里有 `ledCur()`（依赖 `ledProjs()`，
+   随项目数据到位而**变**）⇒ 实测同一页加载里 `/api/m05/{flows,stats,debt}` 各发了 **3 次**、
+   `/api/m05/ledger` 2 次（合计约 **420 ms** 的**纯重复**请求 + 同等后端算力）。
+   ⛔ `m05Refetching` 挡不住这个（它是"串行"、不是"合并"）。
+   ⇒ `boot()` 期间一律不补拉；boot 末尾**本就有一次显式 `reloadM05()`**（第二组）✓，参数那时已稳定。 */
+let BOOTING = true;
 async function reloadM05() {
   const p = m05Params();
   const row = p.pj ? pjRowOf(p.pj) : null;
@@ -5502,7 +5509,7 @@ async function reloadM05() {
 /* 参数（粒度 / 轴 / 台账项目）变了就**自动补拉** —— 收敛成一个点，
    ⛔ 不必给每个选择器（`pstGran` / 时间轴 / `ledPjPick`）各挂一个钩子。 */
 async function m05Sync() {
-  if (m05Refetching) return;
+  if (BOOTING || m05Refetching) return;
   const p = m05Params();
   if (p.granularity === M05_FETCHED.gran && p.year === M05_FETCHED.year
       && p.quarter === M05_FETCHED.quarter && p.pj === M05_FETCHED.pj) return;
@@ -6550,6 +6557,7 @@ async function boot() {
     soft('付款域', reloadM05),          /* 内部各自 render 一次 */
   ]);
   BOOT_ERROR = fails.join('；');
+  BOOTING = false;        /* ⏳ `P3`①：启动收尾才允许 `m05Sync()` 补拉（见它的注释） */
   render();
   if (BOOT_ERROR) bootErrorBanner();
 }

@@ -63,6 +63,13 @@ MUTS: list[tuple[str, Path, bytes, bytes, str]] = [
         _b("    try { await fn(); } catch (e) { /* 吞掉 */ }\n"),
         "test_boot逐路容错未破",
     ),
+    (
+        "M4 启动期的补拉守卫被拿掉（`/api/m05/*` 又会连拉 3 次）",
+        SHELL,
+        _b("  if (BOOTING || m05Refetching) return;\n"),
+        _b("  if (m05Refetching) return;\n"),
+        "test_启动期间不补拉",
+    ),
 ]
 
 
