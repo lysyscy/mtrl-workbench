@@ -90,6 +90,14 @@ class PaymentNotice(Base):
         ForeignKey("project.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
+    # ---------------- M5 切片 5：集采域字段（`MOD-11` 的付款域一侧） ----------------
+    #: ⭐ **集采实际供应商**（§6.6.3 · 判据 `ACC-JC-PAY-001` 族）：i8 **不提供**该字段 ⇒
+    #:   只能**人工录入**（或由「供应商自动匹配」预填后经人确认 —— ⛔ 自动预填**不静默落库**）。
+    #:   它是两件事的**关联锚点**：①「按供应商统计欠款」② 集采台账付款引用的**候选收窄**。
+    #:   ⚠️ **不受再次导入覆盖**（i8 源数据里没有它 ⇒ 被覆盖就等于抹掉人工劳动）⇒ 已并入 `merge.PROTECTED`。
+    #: ⚠️ `server_default` 是**给存量行**的（迁移要带它，否则已有数据的库加 `NOT NULL` 列会 NotNullViolation）。
+    jc_supplier: Mapped[str] = mapped_column(String(128), default="", server_default="")
+
 
 class NoticeStatLog(Base):
     """统计金额手改**留痕**（§4.5.3 · §9.3）—— 改前值 / 改后值 / 改动人 / 时间。

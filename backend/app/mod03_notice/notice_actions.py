@@ -41,6 +41,22 @@ CATEGORY_NAMES: dict[str, str] = {
 CATEGORY_CHOICES: tuple[str, ...] = CATEGORIES
 
 
+def jc_supplier_problem(row) -> str | None:
+    """「**集采实际供应商**」能否写（§6.6.3 · `DEV-P-04`）⇒ `None` = 可写。
+
+    ⚠️ **只有「集采」分类的通知书**能填 —— 该字段是「按供应商统计欠款」与
+       **集采台账付款引用的候选收窄**两件事的**关联锚点**；别的分类填了没有意义。
+    ⛔ 判定**只许有这一处**（这个出口 + API 端点调它）：前端不许再自行判定后"假装成功"。
+    """
+    from app.mod03_notice.list_view import CATEGORY_JC
+
+    if row is None:
+        return "找不到该付款通知书"
+    if str(getattr(row, "category", "") or "") != CATEGORY_JC:
+        return "仅「集采」分类的记录可填集采实际供应商（DEV-P-04）"
+    return None
+
+
 def category_name(value: str) -> str:
     return CATEGORY_NAMES.get(str(value or "").strip(), str(value or "").strip() or "—")
 

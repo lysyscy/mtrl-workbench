@@ -305,6 +305,37 @@ def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
 # --------------------------------------------------------------- 列表查询（新壳 m03 页的数据源）
 
 
+class JcSupplierIn(BaseModel):
+    """「集采实际供应商」入参（§6.6.3 · `M5-5`）。"""
+
+    notice_id: int
+    supplier: str = ""
+
+
+@api_router.post("/api/m03/actions/jc-supplier")
+def api_jc_supplier(req: JcSupplierIn, session: Session = DBSession) -> dict:
+    """设置「**集采实际供应商**」（§6.6.3 · `DEV-P-04`）—— ⭐ `M5-5`。
+
+    ⚠️ 判定**搬到这里**（原先在壳里 `editSup` 那句话）：**只有「集采」分类的通知书**才允许填 ——
+       该字段是「按供应商统计欠款」与**集采台账付款引用的候选收窄**两件事的**关联锚点**，
+       别的分类填了没有意义。⛔ 前端不许再自行判定后"假装成功"。
+    ⚠️ 该字段 i8 **不提供** ⇒ 只能是人工值 ⇒ **不受再次导入覆盖**（`merge.PROTECTED`）。
+    """
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod03_notice.notice_actions import jc_supplier_problem
+
+    row = session.get(PaymentNotice, int(req.notice_id))
+    # ⚠️ 判定**只有一处**（`notice_actions.jc_supplier_problem`）—— 本层只负责"取数 → 判 → 落库 → 回 JSON"
+    problem = jc_supplier_problem(row)
+    if problem:
+        return {"ok": False, "message": problem}
+    row.jc_supplier = str(req.supplier or "").strip()[:128]
+    session.commit()
+    return {"ok": True, "notice_id": int(row.id), "supplier": row.jc_supplier,
+            "message": (f"已录入集采实际供应商：{row.jc_supplier}"
+                        if row.jc_supplier else "已清空集采实际供应商")}
+
+
 def _api_item(rec: dict) -> dict:
     """一行 → API 载荷 = **显示值**（`list_data._row_dict` 产的）
     ＋ **状态字段**（前端壳要靠它判"能不能勾选 / 是否剔除 / 是否手动行"）。

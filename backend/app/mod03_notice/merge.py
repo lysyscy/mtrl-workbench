@@ -48,6 +48,10 @@ SOURCE_FOLLOWED: tuple[str, ...] = (
 PROTECTED: tuple[str, ...] = (
     "category", "excluded", "exclude_source", "i8_revoked", "revoked_joint",
     "ownership_id",
+    # ⭐ 2026-09-19（`M5-5`）：**集采实际供应商**并入 —— i8 源数据里**没有**这个字段，
+    #    它只能是人工录入 / 由「供应商自动匹配」预填后经人确认的值 ⇒ 再次导入**绝不能覆盖**它
+    #    （覆盖就等于把人工劳动抹掉，§4.2.7）。
+    "jc_supplier",
 )
 
 # 按留痕判定的两个旁路统计字段

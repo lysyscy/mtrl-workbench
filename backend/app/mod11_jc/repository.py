@@ -300,6 +300,18 @@ def count_contracts(s: Session) -> int:
 FETCH_COLS: tuple[str, ...] = ("contract_date", "material_name", "supplier", "contract_amt")
 
 
+def payment_of_notice(s: Session, notice_id: int) -> JcPayment | None:
+    """按**通知书 id** 取那条**关联记录**（`source=notice` 的付款子表行）—— 「一对一」与「解绑」的定位口。
+
+    ⭐ 关联关系**不另建表**：它就在这张付款子表里 ⇒ 这是"两个方向写同一份记录"的机器化落点。
+    ⚠️ 全库唯一键 `uq_jc_payment_notice` 保证**最多一条** ⇒ `first()` 不是"随便挑一条"。
+    """
+    nid = int(notice_id) if notice_id not in (None, "") else None
+    if nid is None:
+        return None
+    return s.execute(select(JcPayment).where(JcPayment.notice_id == nid)).scalars().first()
+
+
 def one_by_no(s: Session, contract_no: str) -> JcContract | None:
     """按**合同编号**取一行（`M5-6` 的**幂等键**）。空编号 ⇒ `None`（不参与幂等）。"""
     no = str(contract_no or "").strip()
@@ -358,5 +370,5 @@ __all__ = [
     "project_id_by_key",
     "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
     "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
-    "FETCH_COLS", "one_by_no", "upsert_fetched_contracts",
+    "FETCH_COLS", "one_by_no", "upsert_fetched_contracts", "payment_of_notice",
 ]

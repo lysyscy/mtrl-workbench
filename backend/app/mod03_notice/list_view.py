@@ -219,12 +219,27 @@ def _flows_by_notice(session):
 
 
 def _links_by_notice(session):
-    """`notice_id -> 是否已关联集采合同`。
+    """`notice_id -> 关联的集采合同 id 列表`（`MOD-11` 的**付款子表** = 关联关系的唯一载体）。
 
-    ⚠️ **`MOD-11`（集采台账）尚未落地** ⇒ 关联表还不存在，当前恒为「无关联」。
-       本函数是**唯一的接入点**：M5 落地时只改这里，页面与 API 不必动（R18 的「查看关联」随即生效）。
+    ⭐ 2026-09-19（`M5-5`）落地 —— 原注释那句「**本函数是唯一的接入点**：M5 落地时只改这里，
+       页面与 API 不必动」正是为此留的，这次就**只改这里**（页面与 API 一个字没动）。
+
+    关联关系**不另建表**：它就存在 `jc_contract` 的**付款子表**里（`source=notice` ＋ `notice_id`）——
+    与「从付款域引用（R8）」写的是**同一份记录** ⇒ **双向可见**（判据 `ACC-JC-PAY-001/001-01`）
+    是这个设计的**自然结果**，⛔ 不需要"两边各写一遍再同步"。
+
+    ⚠️ **一次查完**（⛔ 不逐行查 = N+1；列表页每行都要问一次）。
     """
-    return lambda notice_id: False
+    from sqlalchemy import select
+
+    from app.mod11_jc.models import JcPayment
+
+    grouped: dict[int, list[int]] = {}
+    stmt = select(JcPayment.notice_id, JcPayment.contract_id).where(JcPayment.notice_id.is_not(None))
+    for nid, cid in session.execute(stmt).all():
+        if nid is not None:
+            grouped.setdefault(int(nid), []).append(int(cid))
+    return lambda notice_id: grouped.get(int(notice_id), [])
 
 
 # ---------------------------------------------------------------- 筛选（§4.2）

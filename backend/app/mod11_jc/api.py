@@ -197,6 +197,35 @@ def api_fields(payload: FieldsIn) -> dict:
         return SV.act_update_contract(s, contract_id=int(payload.id), **(payload.fields or {}))
 
 
+class LinkIn(BaseModel):
+    """「关联集采合同」入参 —— ⭐ **两个方向共用这一个端点**（判据 `ACC-JC-PAY-001/001-01`）。"""
+
+    notice_id: int
+    contract_id: int
+
+
+class UnlinkIn(BaseModel):
+    notice_id: int
+
+
+@router.post("/api/m11/link")
+def api_link(payload: LinkIn) -> dict:
+    """关联（`M5-5`）：`m03` 侧「关联集采合同」与集采侧「从付款域引用（R8）」**写同一份记录**。
+
+    ⚠️ 一对一（换合同 = 先解绑再写新）· 全库去重 · **不做金额校验**（只提示不拦）—— 三条判定全在 `service`/`domain`。
+    """
+    with session_scope() as s:
+        return SV.act_link_notice(s, notice_id=int(payload.notice_id),
+                                  contract_id=int(payload.contract_id))
+
+
+@router.post("/api/m11/unlink")
+def api_unlink(payload: UnlinkIn) -> dict:
+    """解绑（`M5-5`）：摘掉那条关联记录 ⇒ **两侧同时**变回"未关联"（只有一份记录）。"""
+    with session_scope() as s:
+        return SV.act_unlink_notice(s, notice_id=int(payload.notice_id))
+
+
 @router.post("/api/m11/invoice/add")
 def api_inv_add(payload: SubRowIn) -> dict:
     """发票子表增行 —— **日期必填**（判据 `001-05`，校验在域层）。"""

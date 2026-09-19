@@ -197,9 +197,70 @@ def act_del_payment(s: Session, *, payment_id: int) -> dict:
     return {"ok": True, "kind": "ok", "message": "已删除"}
 
 
+# ---------------------------------------------------------------- 付款域双向引用（`M5-5`）
+
+def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
+    """**关联**：把这笔集采付款通知书关联到一张集采合同 ⇒ 写合同的**付款子表**（`source=notice`）。
+
+    ⭐ 判据 `ACC-JC-PAY-001/001-01`「两个方向写**同一份**关联记录、**双向可见**」——
+       本函数就是那两个方向（`m03` 侧「关联集采合同」与集采侧「从付款域引用 R8」）的**唯一落库口**；
+       `m03` 那边的"已关联"态由 `list_view._links_by_notice` **读同一张付款子表**得出 ⇒ 双向可见是**自然结果**。
+    ⭐ 判据 `001-03`「一条通知书**只能关联一个合同**（换合同 = **先解绑再写新**）」⇒ 见下面第 1 步。
+    ⚠️ **⛔ 不做金额校验**（判据 `001-04`：通知书金额与合同欠款不一致 ⇒ **只提示、不拦**）。
+       注意这与"子表**手工录入**金额必须 > 0"**不冲突** —— 那条管的是**录入**，这里是**引用既有付款事实**：
+       金额取通知书的**统计付款金额**（没填就退到审批金额），**为 0 也允许**（关系先建上，金额以后核）。
+    """
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod11_jc.models import JcContract
+
+    if s.get(PaymentNotice, int(notice_id)) is None:
+        return {"ok": False, "kind": "err", "message": f"找不到付款通知书 {notice_id}"}
+    if s.get(JcContract, int(contract_id)) is None:
+        return {"ok": False, "kind": "err", "message": f"找不到集采合同 {contract_id}"}
+
+    # 1) **一对一**：换合同 ⇒ 先把旧的那条关联记录摘掉（判据 `001-03`「先解绑再写新」）
+    old = R.payment_of_notice(s, notice_id)
+    moved_from = None
+    if old is not None:
+        if int(old.contract_id) == int(contract_id):
+            return {"ok": True, "kind": "ok", "contract_id": int(contract_id), "changed": False,
+                    "message": f"这行通知书已经关联在集采合同 #{contract_id} 上（未重复关联）"}
+        moved_from = int(old.contract_id)
+        R.delete_payment(s, old.id)
+
+    # 2) 兜底再判一次**全库去重**（域内核出口；正常在上面已摘干净 ⇒ 这里只在边界上护一道）
+    if D.dedup_blocked(notice_id=notice_id, existing_notice_ids=R.notice_ids_used(s)):
+        return {"ok": False, "kind": "err",
+                "message": "该付款通知书已被引用过（全库去重，不分合同）—— 请刷新后重试"}
+
+    n = s.get(PaymentNotice, int(notice_id))
+    amount = Decimal(str(getattr(n, "stat_paid", 0) or 0)) or Decimal(str(getattr(n, "amount_approved", 0) or 0))
+    row = R.insert_payment(s, contract_id=int(contract_id), pay_date=str(getattr(n, "doc_date", "") or "")[:10],
+                           amount=amount, source=SRC_NOTICE, notice_id=int(notice_id))
+    return {"ok": True, "kind": "ok", "changed": True, "payment_id": int(row.id),
+            "contract_id": int(contract_id), "moved_from": moved_from,
+            "message": (f"已从集采合同 #{moved_from} 改关联到 #{contract_id}"
+                        if moved_from else f"已关联到集采合同 #{contract_id}")}
+
+
+def act_unlink_notice(s: Session, *, notice_id: int) -> dict:
+    """**解绑**：摘掉这条通知书的关联记录（= 删合同的付款子表里那条 `source=notice` 行）。
+
+    ⚠️ 解绑后**两侧同时**变回"未关联"（因为只有一份记录）—— 这正是双向可见的另一面。
+    """
+    old = R.payment_of_notice(s, notice_id)
+    if old is None:
+        return {"ok": False, "kind": "err", "message": "这行通知书当前没有关联集采合同"}
+    cid = int(old.contract_id)
+    R.delete_payment(s, old.id)
+    return {"ok": True, "kind": "ok", "contract_id": cid,
+            "message": f"已取消与集采合同 #{cid} 的关联（两侧同时解除）"}
+
+
 __all__ = [
     "build_list", "build_detail",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
     "act_update_contract", "act_add_invoice", "act_del_invoice",
     "act_add_payment", "act_del_payment",
+    "act_link_notice", "act_unlink_notice",
 ]

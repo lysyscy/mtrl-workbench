@@ -83,7 +83,8 @@ def _row_dict(row) -> dict:
         "bill_name": row.bill_name,
         "biz_type": row.biz_type,
         "payee": row.payee,
-        "jc_supplier": "",                      # 集采实际供应商属 M5（MOD-11），本单元留空
+        # ⭐ 2026-09-19（`M5-5`）：不再是空占位 —— 该字段已随 M5 落地（人工录入 / 匹配确认，不受导入覆盖）
+        "jc_supplier": str(getattr(row, "jc_supplier", "") or ""),
         "input_by": row.input_by,
         "amount_approved_text": _amt(row.amount_approved),
         "pay_amount_text": _amt(row.pay_amount),

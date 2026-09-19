@@ -30,12 +30,14 @@ TEST_LIST = "tests/test_acc_jc_list.py"
 TEST_WRITE = "tests/test_acc_jc_write.py"          # ⭐ M5-4 写路径（2026-09-19 追加）
 TEST_FETCH = "tests/test_acc_jc_fetch.py"          # ⭐ M5-6 抓取落库（2026-09-19 追加）
 TEST_ORCH = "tests/test_acc_jc_fetch_orch.py"      # ⭐ M5-6 抓取编排（2026-09-19 追加）
+TEST_PAYLINK = "tests/test_acc_jc_pay_link.py"     # ⭐ M5-5 双向引用（2026-09-19 追加）
 
 #: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
 TARGETS: list[Path] = [
     SRC,
     BE / "app" / "mod11_jc" / "repository.py",
     BE / "app" / "mod11_jc" / "fetch_service.py",      # ⭐ M5-6 抓取编排（2026-09-19 追加）
+    BE / "app" / "mod03_notice" / "list_view.py",      # ⭐ M5-5 关联态的**唯一接入点**（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "service.py",
     BE / "app" / "mod11_jc" / "models.py",
 ]
@@ -182,6 +184,17 @@ MUTS += [
      "                except Exception as exc:                        # noqa: BLE001 —— 降级，不抛",
      "                except ValueError as exc:                       # 故意只兜窄的",
      "test_同步失败不拖垮抓取"),                                 # ⭐ 安全绳断言
+    # ---- M5-5 付款域双向引用（2026-09-19 追加）
+    ("换合同时**不摘旧的**（一条通知书挂上两张合同 = 破掉一对一）",
+     "        moved_from = int(old.contract_id)\n        R.delete_payment(s, old.id)",
+     "        moved_from = int(old.contract_id)\n        pass  # 故意不摘旧的",
+     "test_一对一_换合同先解绑再写新"),                            # 001-03
+    ("关联态的接入点退回「恒为无关联」（双向可见那一侧就断了）",
+     "        if nid is not None:\n            grouped.setdefault(int(nid), []).append(int(cid))\n"
+     "    return lambda notice_id: grouped.get(int(notice_id), [])",
+     "        if nid is not None:\n            grouped.setdefault(int(nid), []).append(int(cid))\n"
+     "    return lambda notice_id: False  # 故意退回恒 False",
+     "test_两个方向写同一份记录"),                                # 001-01
 ]
 
 
@@ -207,7 +220,8 @@ def run_one(case: str) -> bool:
         env = dict(os.environ)
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
-            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH, TEST_ORCH],
+            [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH, TEST_ORCH,
+             TEST_PAYLINK],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0
