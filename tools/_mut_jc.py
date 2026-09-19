@@ -42,6 +42,7 @@ TARGETS: list[Path] = [
     BE / "app" / "mod03_notice" / "list_view.py",      # ⭐ M5-5 关联态的**唯一接入点**（2026-09-19 追加）
     BE / "app" / "mod03_notice" / "sup_match.py",      # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "excel_parse.py",        # ⭐ M5-8 Excel 解析层（2026-09-19 追加）
+    BE / "app" / "mod11_jc" / "import_service.py",     # ⭐ M5-8 导入服务（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "service.py",
     BE / "app" / "mod11_jc" / "models.py",
 ]
@@ -219,6 +220,10 @@ MUTS += [
      "        return len({h for v in row for h in HEADER_HINTS if h in str(v)})",
      "        return sum(1 for v in row for h in HEADER_HINTS if h in str(v))",
      "test_表头探测按不同词计数"),
+    ("幂等键**恒不相等**（重传同一个文件 ⇒ 合同翻倍）",
+     "    return (\n        str(row.get(\"contract_date\") or \"\").strip(),",
+     "    return (\n        str(id(row)),  # 故意的：每次都不一样",
+     "test_落库幂等"),
 ]
 
 

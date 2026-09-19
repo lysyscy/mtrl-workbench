@@ -101,6 +101,87 @@ def test_合计行必须挡掉_否则合计凭空翻倍():
     assert any("合计" in w for w in why) and any("不像日期" in w for w in why), why
 
 
+def _xlsx_bytes() -> bytes:
+    """现造一个**小 xlsx**（⛔ 不依赖任何真实文件）—— 形态照用户台账：大标题 ＋ 表头 ＋ 数据 ＋ 合计。"""
+    import io
+
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "某项目"
+    ws.append(["某项目集中采购台账"])
+    ws.append(["序号", "合同日期", "材料名称", "供应商", "合同总价", "发票金额", "结算"])
+    ws.append(["1", "20240723", "钢材", "亿管通", "42799.80", "40731.17", "0"])
+    ws.append(["2", "20250326", "钢材", "洛阳业祥", "301040.74", "311211.67", "0"])
+    ws.append(["", "合计：", "", "", "343840.54", "351942.84", "0"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _b64(data: bytes) -> str:
+    import base64
+
+    return base64.b64encode(data).decode()
+
+
+@acc()
+def test_预览给出列名映射与条数_合计行不计():
+    from app.mod11_jc.import_service import preview
+
+    d = preview(_xlsx_bytes(), "自检.xlsx")
+    assert d["ok"] is True and len(d["sheets"]) == 1
+    s = d["sheets"][0]
+    assert s["guess"] is True and s["counts"]["data"] == 2, f"合计行不该算数据，实际={s['counts']}"
+    assert s["counts"]["skipped"] == 1 and "合计" in s["skipped"][0]["why"]
+    assert s["mapping"]["fields"]["contract_amt"] == 4 and s["mapping"]["fields"]["material_name"] == 2
+    # ⚠️ 「结算」是**派生**列 ⇒ 必须**明确告诉人"为什么不导"**，⛔ 不是静默丢掉
+    assert any(x["label"] == "结算" and "算出来" in x["why"] for x in s["mapping"]["ignored"]), s["mapping"]
+    assert s["header"] == {"row1": 2, "row2": 2}, "两级表头同在一行时要认成同一行（1 基给人看）"
+
+
+@acc()
+def test_落库幂等_再导一次不重复():
+    """⚠️ **幂等 = 已存在的行不动**（同 `m04`/`m08` 的既有套路）—— 重传同一个文件不能翻倍。"""
+    from app.core.db import session_scope
+    from app.mod01_projects import repository as pj_repo
+    from app.mod01_projects.models import TYPE_NORMAL
+    from app.mod11_jc.import_service import commit
+
+    data = _xlsx_bytes()
+    with session_scope() as s:
+        p = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full="__自检_导入项目__",
+                                   warehouse_name="__自检仓_导入__", phid="")
+        s.flush()
+        kw = dict(sheet="某项目", project_key="__自检仓_导入__")
+        first = commit(s, data, "自检.xlsx", **kw)
+        assert first["ok"] is True, first
+        assert first["added"] == 2 and first["exists"] == 0, first
+        second = commit(s, data, "自检.xlsx", **kw)
+        assert second["added"] == 0 and second["exists"] == 2, f"重导必须一条都不新增，实际={second}"
+        from app.mod11_jc.models import JcContract
+
+        assert len(R_ids(s, int(p.id))) == 2, "库里仍只有两条"
+
+        # 列名没对上 ⇒ **明确拒绝**（⛔ 不许"什么都不导"还回成功）
+        bad = commit(s, data, "自检.xlsx", sheet="某项目", project_key="__自检仓_导入__",
+                     mapping={str(i): "" for i in range(7)})
+        assert bad["ok"] is False and "列名" in bad["message"], bad
+        # 项目不存在 ⇒ 明确拒绝
+        noproj = commit(s, data, "自检.xlsx", sheet="某项目", project_key="__不存在的仓__")
+        assert noproj["ok"] is False and "找不到项目" in noproj["message"], noproj
+        s.rollback()
+
+
+def R_ids(s, project_id: int) -> list:
+    from sqlalchemy import select
+
+    from app.mod11_jc.models import JcContract
+
+    return list(s.execute(select(JcContract).where(JcContract.project_id == int(project_id))).scalars())
+
+
 @acc()
 def test_金额空是None不是0_日期归一():
     """⚠️ "没填" 与 "填了 0" 是两回事 —— 一律当 0 会把"没填"伪装成"欠款 0"。"""
