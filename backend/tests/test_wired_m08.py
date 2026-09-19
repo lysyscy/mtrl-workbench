@@ -273,7 +273,9 @@ def test_boot逐路容错():
     assert "const soft = async" in body, "`boot()` 没有逐路容错（一路失败会拖垮全站）"
     for label in ("付款通知书", "项目档案", "修改留痕", "付款计划", "机械 6 列", "库存单据", "付款域"):
         assert f"soft('{label}'" in body, f"`boot()` 里「{label}」没走 `soft()`"
-    assert body.count("await soft(") >= 7, "逐路容错覆盖不全"
+    # ⚠️ 2026-09-19（性能 `P2`）：`boot()` 改成分组并行 ⇒ 计数口径从 `await soft(` 换成 `soft(`
+    #    （第一组 11 路 ＋ 第二组 2 路 = 13）。判据不变：**每一路都得走 `soft()`**（一路失败不许拖垮全站）。
+    assert body.count("soft('") >= 13, "逐路容错覆盖不全"
 
 
 @acc()

@@ -57,20 +57,26 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "shell", "await API.m07BigSelection(picked);",
      "BIGSET.length=0; picked.forEach(k=>BIGSET.push(k));",
      "test_选题落库走后端"),
-    ("zipSfjc 回到假成功（报「已生成」）",
+    # ⚠️ 2026-09-19 订正（顺手清一条**过时**变异）：原锚点是 `zipSfjc` 的「导出尚未落地」提示，
+    #    而 `TAIL-04` 落地后 `zipSfjc` 已改成**真产出并下载**（`test_wired_m07.py` 现在断言的是相反方向）
+    #    ⇒ 原锚点/原测试名都不复存在（脚本报 SKIP = **未验证**）。现改指**仍然活着**的那条同族主张：
+    #    全站通用导出动作 `exp` **必须仍是那条诚实提示**（`test_tail04_export.py` 钉着）。
+    ("通用 exp 回到假成功（谎报已生成文件）",
      "shell",
-     "toast(`⏳ <b>导出尚未落地</b>（属 TAIL-04）：本页按 <b>${tmLabel(fWhYm)}</b>",
-     "toast(`已生成 <b>第四工程公司${fWhYm}收发结存表.zip</b>",
-     "test_导出如实标注未落地"),
+     "⏳ <b>导出尚未落地</b>（属 TAIL-04）：本页按当前筛选应导出",
+     "已生成 <b>导出结果.xlsx</b>（假成功）：本页按当前筛选应导出",
+     "test_库存单据两种导出并存互不影响且透视提示与模板形态一致"),
     ("抓取端点不要求二次确认（D9 形同虚设）",
      "api", "confirmed=req.confirm", "confirmed=True",
      "test_抓取端点必须显式确认"),
     ("WIRED 去掉 m07",
      "shell", "'m06','m07','m08'", "'m06','m08'",
      "test_WIRED含m07"),
+    # ⚠️ 2026-09-19（性能 `P2`）：`boot()` 改成分组并行 ⇒ 变异形态随之搬（**意图不变**：
+    #    把 `reloadM07` 挪到 `reloadMech` 之前 ⇒ 大表机械列会取空）。
     ("boot() 里 reloadM07 排到 reloadMech 之前（取到空值）",
-     "shell", "  await soft('机械 6 列', reloadMech);\n",
-     "  await soft('收发结存与大表', reloadM07);\n",
+     "shell", "    soft('机械 6 列', reloadMech),\n",
+     "    soft('收发结存与大表', reloadM07),\n    soft('机械 6 列', reloadMech),\n",
      "test_boot含m07且逐路容错"),
     ("月份切换不再重新取数（只 render ⇒ 空表）",
      "shell", "if(sc==='wh'){ fWhYm=v; mp.open=null; reloadM07();",

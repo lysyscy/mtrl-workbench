@@ -520,11 +520,19 @@ def test_boot含m07且逐路容错():
     # ⚠️ 必须用**完整调用语句**比较位置 —— 用 `body.index("reloadMech")` 会被**注释里**那句
     #    「顺序有依赖：`reloadMech`、`reloadInv` 都在 `reloadM05` 之前」喂饱
     #    （反向灵敏度实测：那样写时，把 `reloadM07` 挪到 `reloadMech` 之前**照样绿** —— 假绿）。
-    i_mech = body.find("await soft('机械 6 列', reloadMech);")
-    i_m07 = body.find("await soft('收发结存与大表', reloadM07);")
+    # ⭐ 2026-09-19（性能 `P2`）：`boot()` 改成**两组并行** ⇒ 形态从「一路一等」搬成「组内并发」。
+    #    判据**一字未变**（`reloadM07` 必须等 `reloadMech` / `reloadInv`），只是改成按**组**证：
+    #    ① 两条调用语句还都在；② 文本次序不变；③ ⭐ `reloadM07` 必须落在**第二组**里
+    #    （放进第一组 = 与 mech/inv 并行 ⇒ 大表机械列取空，正是这条要挡的）。
+    i_mech = body.find("soft('机械 6 列', reloadMech)")
+    i_m07 = body.find("soft('收发结存与大表', reloadM07)")
     assert i_mech >= 0, "`boot()` 里没有 `reloadMech` 那一路"
     assert i_m07 >= 0, "`boot()` 里没有 `reloadM07` 那一路"
     assert i_mech < i_m07, "`reloadM07` 排在 `reloadMech` 之前（大表的机械列会取到空值）"
+    i_g2 = body.find("await Promise.all(", body.find("await Promise.all(") + 1)
+    assert i_g2 > 0, "`boot()` 不是**两组** `await Promise.all([...])`（第二组没了 ⇒ 依赖屏障也丢了）"
+    assert i_g2 < i_m07, "`reloadM07` 没放进第二组 ⇒ 与 `reloadMech`/`reloadInv` 并行（大表机械列会取空）"
+    assert i_mech < i_g2, "`reloadMech` 不在第一组（它不该等 m07）"
 
 
 @acc()

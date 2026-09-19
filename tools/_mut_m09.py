@@ -78,8 +78,9 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
     ("WIRED 去掉 m09",
      "shell", "'m08','m09'", "'m08'",
      "test_m09已进WIRED与boot"),
+    # ⚠️ 2026-09-19（性能 `P2`）：`boot()` 分组并行 ⇒ 形态从 `await soft(...)` → 组内 `soft(...)`（意图不变）
     ("boot() 里没给 m09 走 soft()",
-     "shell", "await soft('特殊费用月报表', reloadM09);", "await soft('特殊费用月报表X', reloadM09);",
+     "shell", "soft('特殊费用月报表', reloadM09),", "soft('特殊费用月报表X', reloadM09),",
      "test_m09已进WIRED与boot"),
     ("后端读端点不走 _payload",
      "api", 'return _payload(s, ym=str(p.get("ym") or ""), pj=str(p.get("pj") or ""))',

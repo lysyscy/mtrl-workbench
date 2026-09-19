@@ -39,7 +39,8 @@ def test_壳把m02标为已接后端并指向真实端点():
     """`WIRED` 含 `m02`，且壳里真的出现该模块的端点。"""
     assert "'m02'" in SHELL[SHELL.index("const WIRED=new Set("):][:120], "`WIRED` 没含 m02"
     assert "/api/m02/fetch/records" in SHELL, "执行记录端点没接"
-    assert "async function reloadM02()" in SHELL and "await soft('i8 执行记录', reloadM02)" in SHELL, \
+    # ⚠️ 2026-09-19（性能 `P2`）：`boot()` 分组并行 ⇒ 形态从 `await soft(...)` → 组内 `soft(...)`（判据不变）
+    assert "async function reloadM02()" in SHELL and "soft('i8 执行记录', reloadM02)" in SHELL, \
         "`boot` 里要独立一路（一路失败不许拖垮别页）"
 
 

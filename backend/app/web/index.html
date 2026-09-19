@@ -6509,35 +6509,46 @@ async function boot() {
   /* ⚠️ **每一路取数独立容错**：任何一路失败（某端点临时 500 / 还没上线 / 网络抖）**不得拖垮其他页**。
      ⭐ 实测踩到：`/api/m06/mech` 404（后端加了端点但服务没重启）⇒ 原来的单个 `try` 把后面**全部**跳过，
         `m08`/`m05` 明明已接线却显示空表 —— **看起来像功能没做**（假故障、最难查的那类）。
-     ⇒ 现在逐路 `soft()`：坏的那路在顶部横幅里点名，其余页**照常可用**。 */
+     ⇒ 现在逐路 `soft()`：坏的那路在顶部横幅里点名，其余页**照常可用**。
+     ⭐ 2026-09-19（性能 `P2` · `TAIL-48`）：**改成两组并行** —— 原先 14 路一路一等（首屏耗时 = 各路之和）。
+        逐条核过各路**真实数据依赖**后只有一条：`reloadM07` / `reloadM05` 要在 `reloadMech` ＋ `reloadInv`
+        **之后**（大表的机械 / 焊材·气体列、m05 的机械欠款由它们派生）；其余 11 路互不相干。
+        ⇒ 第一组并行发起，**第二组等第一组完成**再并行。⛔ 动结构必须保住「逐路 `soft()` 容错 ＋ 失败点名」。 */
   const fails = [];
   const soft = async (label, fn) => {
     try { await fn(); } catch (e) { fails.push(`${label}：${String((e && e.message) || e)}`); }
   };
-  /* ⚠️ 顺序有依赖：`reloadMech`、`reloadInv` 都在 `reloadM05` **之前** —— m05 的机械欠款与
-     材料/机械数据由它们派生（顺序写反 ⇒ m05 取到空值，且**不报错**）。 */
-  await soft('付款通知书', reloadNotices);      /* ⚠️ 走同一个出口：它还会重建「归属」缓存 `OWN` */
-  await soft('项目档案', async () => {
-    const pj = await API.projects(); PJs = (pj || []).map(adaptProject);
-  });
-  await soft('待人工指认', reloadPending);   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
-  await soft('待人工建档', reloadArchPend);  /* ⭐ `TAIL-45`：链路 A ③-b「多仓库 ⇒ 选定一个」那一路 */
-  await soft('i8 执行记录', reloadM02);     /* ⭐ `TAIL-27`：`m02` 回显与任务日志的唯一数据源 */
-  await soft('修改留痕', async () => {
-    const tr = await API.trails();
-    PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
-  });
-  await soft('付款计划', async () => {
-    const pl = await API.plans(); PLs = (pl.rows || []).map(adaptPlan);
-  });
-  await soft('机械 6 列', reloadMech);
-  await soft('库存单据', reloadInv);
-  await soft('收发结存与大表', reloadM07);   /* ⚠️ 必须在 reloadMech / reloadInv **之后**：大表的机械与焊材/气体列取它们 */
-  /* ⚠️ `m09` 的自动项与手填项**都由后端自己算**（`mod09_fee/repository.inv_rows` 直读 `inv_detail`）
-     ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序**（但排在它之后无害）。 */
-  await soft('特殊费用月报表', reloadM09);
-  await soft('规则配置', reloadM14);   /* 独立取数 ⇒ 无顺序依赖 */
-  await soft('付款域', reloadM05);          /* 内部各自 render 一次 */
+  /* ---- 第一组：**互不相干**的 11 路（组内并发；`soft` 各自吞异常 ⇒ 一路失败不影响别人） ---- */
+  await Promise.all([
+    soft('付款通知书', reloadNotices),      /* ⚠️ 走同一个出口：它还会重建「归属」缓存 `OWN` */
+    soft('项目档案', async () => {
+      const pj = await API.projects(); PJs = (pj || []).map(adaptProject);
+    }),
+    soft('待人工指认', reloadPending),   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
+    soft('待人工建档', reloadArchPend),  /* ⭐ `TAIL-45`：链路 A ③-b「多仓库 ⇒ 选定一个」那一路 */
+    soft('i8 执行记录', reloadM02),     /* ⭐ `TAIL-27`：`m02` 回显与任务日志的唯一数据源 */
+    soft('修改留痕', async () => {
+      const tr = await API.trails();
+      PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
+    }),
+    soft('付款计划', async () => {
+      const pl = await API.plans(); PLs = (pl.rows || []).map(adaptPlan);
+    }),
+    soft('机械 6 列', reloadMech),
+    soft('库存单据', reloadInv),
+    /* ⚠️ `m09` 的自动项与手填项**都由后端自己算**（`mod09_fee/repository.inv_rows` 直读 `inv_detail`）
+       ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序** ⇒ 放在本组没问题。 */
+    soft('特殊费用月报表', reloadM09),
+    soft('规则配置', reloadM14),   /* 独立取数 ⇒ 无顺序依赖 */
+  ]);
+  /* ---- 第二组：**吃第一组产物**的两路（组间串行、组内并发）----
+     · `reloadM07`：大表的机械列 / 焊材·气体列取 `MACH6`（`reloadMech` 填）与库存（`reloadInv` 填）；
+     · `reloadM05`：机械欠款同理由 `MACH6` 派生。
+     ⚠️ 顺序写反 ⇒ 这两页**取到空值，且不报错**（`test_wired_m07.py` / `test_wired_m06.py` 钉着）。 */
+  await Promise.all([
+    soft('收发结存与大表', reloadM07),
+    soft('付款域', reloadM05),          /* 内部各自 render 一次 */
+  ]);
   BOOT_ERROR = fails.join('；');
   render();
   if (BOOT_ERROR) bootErrorBanner();

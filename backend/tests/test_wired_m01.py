@@ -128,7 +128,9 @@ def test_待人工指认清单与档案同源同刷且单独容错():
     body = body[:body.index("async function pjAct(")]
     assert "await reloadPending();" in body, "档案刷新时要**一起**刷待办清单"
     assert "catch (e) { PEND_ERR =" in body, "清单取不到要**记下原因**（页面上如实说明）"
-    assert "await soft('待人工指认', reloadPending)" in SHELL, "boot 里要独立一路（单独容错）"
+    # ⚠️ 2026-09-19（性能 `P2`）：`boot()` 改成分组并行 ⇒ 调用形态从 `await soft(...)` 变成
+    #    组内的 `soft(...)`。**判据一字未变**（这一路要独立、单独容错），只搬形态。
+    assert "soft('待人工指认', reloadPending)" in SHELL, "boot 里要独立一路（单独容错）"
     assert "PEND_ERR ? " in SHELL and "待指认清单没取到" in SHELL, "取不到时页面上要说出来"
 
 
@@ -185,7 +187,8 @@ def test_待建档入口与清单同源且与指认那路各报各的():
     body = body[:body.index("async function pjAct(")]
     assert "await reloadArchPend();" in body, "档案刷新时要**一起**刷待建档清单"
     assert "catch (e) { ARCP_ERR =" in body, "这一路取不到要记下**自己的**原因（⛔ 别共用 PEND_ERR）"
-    assert "await soft('待人工建档', reloadArchPend)" in SHELL, "boot 里要独立一路（单独容错）"
+    # ⚠️ 同上（`P2` 并行分组 ⇒ 形态换成组内 `soft(...)`，判据不变）
+    assert "soft('待人工建档', reloadArchPend)" in SHELL, "boot 里要独立一路（单独容错）"
     assert "ARCP_ERR ? " in SHELL and "待建档清单没取到" in SHELL, "取不到时页面上要说出来"
     assert "document.getElementById('archBox')" in SHELL and "host.prepend(abox)" in SHELL, \
         "卡片要**幂等**注入（先撤旧的再按当前清单重建）"
