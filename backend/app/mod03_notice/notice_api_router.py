@@ -305,6 +305,47 @@ def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
 # --------------------------------------------------------------- 列表查询（新壳 m03 页的数据源）
 
 
+class SupMatchIn(BaseModel):
+    """「集采供应商自动匹配」入参（§6.6.3 · `M5-5`）。"""
+
+    notice_id: int
+
+
+@api_router.post("/api/m03/actions/sup-match")
+def api_sup_match(req: SupMatchIn, session: Session = DBSession) -> dict:
+    """集采供应商**自动匹配**（§6.6.3）—— 拿**本项目候选池**去探测**本行单据名**。
+
+    ⭐ `M5-5`：判定**从壳里搬到后端**（原先在 `index.html` 的 `supPool`/`supFrags`/`supMatch`）——
+       它是业务判定（决定"预填 / 让选 / 手动"三条分叉），且含一条"写错不报错"的片段长度规则。
+    ⚠️ **只算不写**（⛔ 本端点不落库）：三条分叉（1 家预填 / ≥2 家让选 / 0 家手动）与
+       "预填值须经人**采用**才转正式"都由壳侧编排 ⇒ 落库一律走 `jc-supplier` 那个端点。
+    ⚠️ 项目键 = 该行**归属档案行的仓库名**（§2.7.4），与集采合同的项目键**同一空间** ⇒ 直接判等。
+    """
+    from sqlalchemy import select
+
+    from app.mod01_projects.models import Project
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod03_notice.sup_match import LVL_NAMES, match_of, pool_of, row_pool_rows
+
+    row = session.get(PaymentNotice, int(req.notice_id))
+    if row is None:
+        return {"ok": False, "message": f"找不到付款通知书 {req.notice_id}"}
+    key = ""
+    if row.ownership_id is not None:
+        proj = session.execute(
+            select(Project.warehouse_name).where(Project.id == int(row.ownership_id))
+        ).scalar()
+        key = str(proj or "")
+    pool = pool_of(row_pool_rows(session), project_key=key)
+    # ⚠️ **单据名称在 `fields["BillName"]` 里**（`payment_notice` 表**没有独立列** —— 同 `list_view` 的 `NoticeRow.bill_name`）。
+    #    ⛔ 别写 `getattr(row, "bill_name")`：那永远取不到、会**静默变成"永不匹配"**。
+    doc = str((row.fields or {}).get("BillName") or "")
+    hit = match_of(doc, pool)
+    return {"ok": True, "notice_id": int(row.id), "project_key": key, "pool": pool,
+            "level": hit["level"], "level_name": hit["level_name"] or LVL_NAMES[0],
+            "cands": hit["cands"]}
+
+
 class JcSupplierIn(BaseModel):
     """「集采实际供应商」入参（§6.6.3 · `M5-5`）。"""
 

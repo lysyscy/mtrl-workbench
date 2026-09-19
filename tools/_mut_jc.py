@@ -31,6 +31,7 @@ TEST_WRITE = "tests/test_acc_jc_write.py"          # ⭐ M5-4 写路径（2026-0
 TEST_FETCH = "tests/test_acc_jc_fetch.py"          # ⭐ M5-6 抓取落库（2026-09-19 追加）
 TEST_ORCH = "tests/test_acc_jc_fetch_orch.py"      # ⭐ M5-6 抓取编排（2026-09-19 追加）
 TEST_PAYLINK = "tests/test_acc_jc_pay_link.py"     # ⭐ M5-5 双向引用（2026-09-19 追加）
+TEST_SUP = "tests/test_acc_sup_match.py"           # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
 
 #: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
 TARGETS: list[Path] = [
@@ -38,6 +39,7 @@ TARGETS: list[Path] = [
     BE / "app" / "mod11_jc" / "repository.py",
     BE / "app" / "mod11_jc" / "fetch_service.py",      # ⭐ M5-6 抓取编排（2026-09-19 追加）
     BE / "app" / "mod03_notice" / "list_view.py",      # ⭐ M5-5 关联态的**唯一接入点**（2026-09-19 追加）
+    BE / "app" / "mod03_notice" / "sup_match.py",      # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "service.py",
     BE / "app" / "mod11_jc" / "models.py",
 ]
@@ -195,6 +197,15 @@ MUTS += [
      "        if nid is not None:\n            grouped.setdefault(int(nid), []).append(int(cid))\n"
      "    return lambda notice_id: False  # 故意退回恒 False",
      "test_两个方向写同一份记录"),                                # 001-01
+    # ---- M5-5 供应商自动匹配（2026-09-19 追加）
+    ("片段长度写成 `level + 2`（**复刻壳里真出现过的那个 bug**：等级越高片段越长，却不报错）",
+     "    n = FRAG_LEN_OFFSET - level",
+     "    n = level + 2",
+     "test_片段长度必须等于6减等级"),
+    ("探测顺序**反了**（先短后长 ⇒ 2 字片段把一堆无关供应商扯进来）",
+     "    for level in range(1, MAX_LEVEL + 1):",
+     "    for level in range(MAX_LEVEL, 0, -1):",
+     "test_先长后短"),                                            # 一个文件里的多个用例按 -k 一起跑
 ]
 
 
@@ -221,7 +232,7 @@ def run_one(case: str) -> bool:
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
             [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH, TEST_ORCH,
-             TEST_PAYLINK],
+             TEST_PAYLINK, TEST_SUP],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0

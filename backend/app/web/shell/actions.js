@@ -1757,17 +1757,26 @@ jcFetchOk:async()=>{ closeModal();
       footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="supOk" data-id="${n.id}">采用所选供应商</button>`});
     toast(`按 <b>${SUP_LVL_NAME[lvl]}</b> 命中 <b>${cands.length}</b> 家 —— 已列出让你选（多命中<b>不让系统猜</b>）`,5200); },
   supPick:t=>{ supSel=t.value; },
-  supOk:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return; if(!supSel) return toast('请先选择一家供应商');
+  supOk:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return; if(!supSel) return toast('请先选择一家供应商');
     const v=String(supSel).trim(); if(!v) return;
-    n.sup=v; SUP_SUG[n.id]=v; closeModal(); render();
-    toast(`已把「集采实际供应商」设为 <b>${esc(v)}</b>（来自多命中候选 · 已标「自动匹配 · 待确认」—— 点「采用」转正式值）`,5200); },
-  supAccept:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    /* ⭐ `M5-5`：⛔ 原先这里只改本地 `n.sup`（**刷新就没了**）⇒ 现落库。
+       ⚠️ 落库后还要**标「待确认」**：因为这是"多命中里你选的一家"，仍是**预填**语义（点「采用」才转正式值）。 */
+    closeModal();
+    const r=await jcLinkAct(()=>API.jcSupplier({notice_id:Number(n.id), supplier:v}),
+      `已把「集采实际供应商」设为 <b>${esc(v)}</b>（来自多命中候选 · 已标「自动匹配 · 待确认」—— 点「采用」转正式值）`);
+    if(r) SUP_SUG[n.id]=v; },
+  supAccept:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
     if(!supHas(n)){ toast('这条没有待确认的自动匹配值'); return; }
-    delete SUP_SUG[n.id]; render();
-    toast(`已确认「集采实际供应商」= <b>${esc(n.sup)}</b> —— 「自动匹配 · 待确认」标记已消除，转为正式值<br>该字段是「按供应商统计欠款」的关联锚点（§4.4.3）`,4600); },
-  supReject:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
-    delete SUP_SUG[n.id]; n.sup=''; render();
-    toast('已放弃自动匹配值 —— 该字段回到手工录入 / 可重新匹配'); },
+    const v=String(n.sup||'').trim();            /* ⚠️ reload 后 `NO` 会重建 ⇒ 先把值取出来 */
+    /* ⭐ `M5-5`：⛔ 原先这里只 `delete SUP_SUG`（**值根本没进库**，刷新就丢）⇒ 现落库。 */
+    const r=await jcLinkAct(()=>API.jcSupplier({notice_id:Number(n.id), supplier:v}),
+      `已确认「集采实际供应商」= <b>${esc(v)}</b> —— 「自动匹配 · 待确认」标记已消除，转为正式值<br><span class="mut sm">该字段是「按供应商统计欠款」的关联锚点（§4.4.3）</span>`);
+    if(r) delete SUP_SUG[n.id]; },
+  supReject:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
+    /* ⭐ `M5-5`：⛔ 原先这里只清本地（**后端还留着旧值**，刷新就回来）⇒ 现落库清空。 */
+    const r=await jcLinkAct(()=>API.jcSupplier({notice_id:Number(n.id), supplier:''}),
+      '已放弃自动匹配值 —— 该字段回到手工录入 / 可重新匹配');
+    if(r) delete SUP_SUG[n.id]; },
  /* —— MOD-11 / MOD-01 / MOD-08 筛选：改动即时生效（R4，无「应用」按钮） —— */
  jcFilter:()=>{ const a=$('#fTag'), b=$('#fArch'), c=$('#fSup');
    fJc.tag=(a&&a.value)||'全部'; fJc.arch=(b&&b.value)||'全部'; fJc.sup=(c&&c.value)||''; pruneJcPick(); render(); },
