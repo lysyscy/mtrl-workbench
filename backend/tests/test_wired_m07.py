@@ -85,6 +85,42 @@ def test_壳里提取页重置回在建与上月():
     assert "fExtReset:()=>{ fExt.status='在建'; fExt.ym=bjMonth(-1);" in SHELL, "提取页重置没回默认"
 
 
+@acc("ACC-SETL-EXT-001", "001-03")
+def test_壳里提取表两类按序且合计行紧贴():
+    """两类按 `extBlock('焊材')` → `extBlock('气体')` 渲染；**每块的合计行在该块之内**（紧贴本类数据行）；
+    该表**刻意不可排**（⛔ 不带 `data-sort`）。"""
+    s = _slice("m07")
+    assert "${extBlock('焊材')}${extBlock('气体')}" in s, "两类的渲染顺序变了"
+    # ⚠️ 合计行在 **`extBlock` 的体内**（不在 `V.m07` 切片里 ⇒ 要取函数体）
+    b = _body("extBlock")
+    assert "sumRowOf(EXT_THEAD, list, {3:" in b and "lead:kind+'合计'" in b, \
+        "块的合计行不在本块内 / 不是由共用出口出的"
+    assert '<table class="dt cond" data-sort-key="m07:kinds">' in s, \
+        "提取表带了 `data-sort`（它必须**刻意不可排**）"
+
+
+@acc("ACC-SETL-EXT-001", "001-04")
+def test_壳里按项目状态过滤且空态跨列派生():
+    """① 可见行按**项目状态**过滤（`extVisible`）；③ 该状态下没有数据 ⇒ 空态提示行，
+    `colspan` **由表头派生**，并点名是哪一类。"""
+    assert "const extVisible = kind => extWhs(kind).filter(w => fExt.status === '全部'" in SHELL, \
+        "可见行不再按项目状态过滤"
+    assert 'colspan="${thCount(EXT_THEAD)}"' in SHELL, "空态行的跨列数不再由表头派生"
+    assert "当前筛选条件下没有" in SHELL and "数据 —— 换个「项目状态」或月份" in SHELL, "空态提示丢了"
+
+
+@acc("ACC-SETL-EXT-001", "001-06")
+def test_壳里导出走真下载且带当前筛选():
+    """导出矩阵走 `saveExt` → `/api/m07/extract/export?status=…&period=…`（带上**当前筛选**）。"""
+    # ⚠️ 「保存到本地」按钮在 **`ACT`**（不在 `V.m07` 切片里）⇒ 查全文
+    assert 'data-act="saveExt"' in SHELL, "导出弹窗没有真保存按钮"
+    assert "'/api/m07/extract/export?status='+encodeURIComponent(fExt.status)" in SHELL, \
+        "导出端点没带上当前筛选"
+
+
+# ---- `ACC-RPT-BIG-001`（活动大表）的形态半边
+
+
 # ============== `ACC-RPT-BIG-001`（活动大表）的**形态**半边（`§19` 批 2 搬家）
 #
 # 原先钉在**旧服务端页**（`big_view.render_big_page` / `render_export_page` / `_cell_html` / `_thead`）
