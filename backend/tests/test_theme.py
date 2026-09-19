@@ -38,9 +38,20 @@ _HEX_RE = re.compile(r"(?<!&)#[0-9a-fA-F]{6}\b")   # ⚠️ 前面不是 `&` —
 _VAR_DEF_RE = re.compile(r"(--[a-z0-9-]+):")
 _VAR_USE_RE = re.compile(r"var\((--[a-z0-9-]+)\)")
 
+# ⭐ 2026-09-19（`§19` 性能 · **主题②**）：**前端壳也是主题真源的消费者**（第三路，经 `/static/theme.css`）
+#    ⇒ 它同样受「颜色只经变量出口 / 引用的变量必须有定义」这两条管。
+#    ⚠️ 壳用**更严**的正则：3~8 位（否则 `#fff9`、`#0f172a26` 这类短写法／带 alpha 的**溜过去**）。
+SHELL = APP_DIR / "web" / "index.html"
+SHELL_THEME_LINK = '<link rel="stylesheet" href="/static/theme.css">'
+_HEX_RE_ANY = re.compile(r"(?<!&)#[0-9a-fA-F]{3,8}\b")
+
 
 def _theme_vars() -> dict[str, str]:
     return dict(re.findall(r"(--[a-z0-9-]+):\s*([^;\n]+);", page.THEME_CSS))
+
+
+def _iter_html():
+    yield SHELL
 
 
 def _iter_app_py():
@@ -80,6 +91,9 @@ def test_全工程引用的变量都有定义_引用了没定义会静默失效(
     used: set[str] = set()
     for f in _iter_app_py():
         used |= set(_VAR_USE_RE.findall(f.read_text(encoding="utf-8")))
+    # ⭐ 2026-09-19（主题②）：壳（HTML）也在这条口径里 —— 它引用的变量同样必须由真源定义
+    for f in _iter_html():
+        used |= set(_VAR_USE_RE.findall(f.read_text(encoding="utf-8")))
     assert used, "全工程居然一个主题变量都没用？"
     assert not (used - defined), f"引用了但未定义（会静默失效）：{sorted(used - defined)}"
 
@@ -93,6 +107,8 @@ def test_除主题表本身外_全工程CSS不再出现色值字面量():
 
     - `page.py` 的 `THEME_CSS` 段 = 唯一的色值定义处（白名单）；
     - `print/` 目录 = 打印件，**故意排除**（它的颜色不属于站点主题）。
+    - ⭐ 2026-09-19（主题②）：**前端壳**（`app/web/index.html`）也一并扫 —— 同一判据点、加宽观测面
+      （它原先自带一份 `:root`，是**第二份真源**：同名变量取值都与真源不同）。
     """
     seen: list[str] = []
     for f in _iter_app_py():
@@ -103,6 +119,9 @@ def test_除主题表本身外_全工程CSS不再出现色值字面量():
             theme_body, _, rest = tail.partition('"""')
             text = head + rest
         for hit in _HEX_RE.findall(text):
+            seen.append(f"{f.relative_to(APP_DIR.parent)}: {hit}")
+    for f in _iter_html():
+        for hit in _HEX_RE_ANY.findall(f.read_text(encoding="utf-8")):
             seen.append(f"{f.relative_to(APP_DIR.parent)}: {hit}")
     assert not seen, "CSS 里又出现色值字面量了（应改走 var(--…)）：\n  " + "\n  ".join(seen)
 
@@ -222,7 +241,11 @@ def test_mut与sm是唯一真源_不许页级再抄一份():
 
 @acc("ACC-UI-THEME-001", "001-05")
 def test_服务端渲染页与静态页拿到的是同一份变量():
-    """两边**同源**：静态页 `<link>` 的端点 = 服务端页内联的常量 = `page.THEME_CSS`。"""
+    """**三路同源**：`<link>` 的端点 = 服务端页内联的常量 = 前端壳 `<link>` 的那一份 = `page.THEME_CSS`。
+
+    ⭐ 2026-09-19（`§19` 性能 · **主题②**）：加上**壳**这一路。壳先前自带一份同名 `:root`
+    （16 个取值全与真源不同）⇒ 它是**第二份真源**；现改为只 `<link>` 真源、本地零定义。
+    """
     from fastapi.testclient import TestClient
 
     from app.main import create_app
@@ -239,4 +262,9 @@ def test_服务端渲染页与静态页拿到的是同一份变量():
     #    此处列的是**此刻仍在**的服务端渲染页 = 三个**暂留**的导入页（它们是全站唯一的导入入口）。
     for path in ("/m05/import", "/m06/import", "/m08/import"):
         assert page.THEME_CSS in client.get(path).text, path
+    # ⭐ 第三路 = **前端壳**：它必须 `<link>` 到同一个端点，且**不得自带 `:root`**
+    #    （同特异度下文档里靠后的那份胜 ⇒ 自带一份就等于第二份真源，换主题必然漂）。
+    shell = SHELL.read_text(encoding="utf-8")
+    assert SHELL_THEME_LINK in shell, "壳没接主题真源（缺 `<link href=/static/theme.css>`）"
+    assert ":root{" not in shell, "壳又自带 `:root` 了（那是第二份真源 ⇒ 换主题会漂）"
 

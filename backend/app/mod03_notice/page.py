@@ -127,16 +127,45 @@ DEFAULT_EMPTY_TEXT = "当前筛选没有数据"
 #    ② **成对颜色必须成组**：状态色按「主色 / 深字 / 浅底 / 浅边框」四档一组
 #       （`--ok` `--ok-d` `--ok-l` `--ok-bd`），否则第 2 套会出现"新绿字配旧浅绿底"；
 #    ③ **换主题 = 换这一份取值** ⇒ 零 CSS 改动（一套主题 ≈ 下面这段 `:root`）。
+# ⭐ 2026-09-19（`§19` 性能·**主题②**）：**取值本尊换成了 `demo/` 原型那一套**（此前是另一套
+#    「站点配色」）。原委：本表的**第三路消费者 = 前端壳** `backend/app/web/index.html`
+#    （经 `GET /static/theme.css`）—— 壳原先自带一份 `:root`（同名的 16 个取值都不同），
+#    那是**第二份真源**；用户 2026-09-19 裁定「**服务端渲染页迟早删干净、只看壳**」⇒ 以**壳现值**
+#    为准（观感零变化），服务端那几页跟着变（它们本就在删除清单上）。同时把壳需要的角色
+#    （中性档 `--in-*` / 特殊档 `--vi-*` / 侧栏 `--sb-*` / 阴影 `--shadow-*` / 几何与字体
+#    `--r` `--r2` `--fs` `--fm`）**一并收进本表** ⇒ 壳此后**零本地变量定义**（只有一条 `<link>`）。
+#    ⛔ 再往壳里写色值字面量或自带 `:root` ⇒ `test_theme.py` 的红灯（已扫壳）。
 THEME_CSS = """
 :root{
-  --bg:#f5f7fa; --sf:#fff; --sf2:#fafafa; --sf3:#f4f4f5;
-  --bd:#e4e7ed; --bd2:#ebeef5; --bd3:#dcdfe6;
-  --tx:#303133; --tx2:#606266; --mut:#909399; --mut2:#c0c4cc;
-  --pri:#409eff; --pri-d:#337ecc; --pri-l:#ecf5ff; --on:#fff;
-  --ok:#67c23a; --ok-d:#529b2e; --ok-l:#f0f9eb; --ok-bd:#e1f3d8;
-  --wn:#e6a23c; --wn-d:#b88230; --wn-l:#fdf6ec; --wn-bd:#faecd8;
-  --dg:#f56c6c; --dg-d:#c45656; --dg-l:#fef0f0; --dg-bd:#fde2e2;
-  --hl:#fff8f0; --draft:#fffdf5; --edit-l:#fffbe6; --row-hover:#f8fbff; --shadow:rgba(0,0,0,.12);
+  /* 中性 / 表面 */
+  --bg:#f4f6f9; --sf:#fff; --sf2:#f8fafc; --sf3:#f4f4f5;
+  --bd:#e3e8ef; --bd2:#eef1f5; --bd3:#c4ccd8;
+  --tx:#1f2329; --tx2:#5c6675; --mut:#8b95a5; --mut2:#c9d0da;
+  --on:#fff;
+  /* 主色（四档 ＋ 高亮档） */
+  --pri:#2563eb; --pri-d:#1d4ed8; --pri-l:#eff5ff; --pri-bd:#dbeafe; --pri-hl:#93c5fd;
+  /* 状态色：绿 / 琥珀 / 红 —— 各四档成组 */
+  --ok:#16a34a; --ok-d:#15803d; --ok-l:#f0fdf4; --ok-bd:#bbf7d0;
+  --wn:#d97706; --wn-d:#92400e; --wn-l:#fffbeb; --wn-bd:#fde68a;
+  --dg:#dc2626; --dg-d:#991b1b; --dg-l:#fef2f2; --dg-bd:#fecaca;
+  /* 中性档（普通 / 未付款）与特殊档（集采 / 紫）—— 同样四档成组 */
+  --in:#64748b; --in-d:#475569; --in-l:#f1f5f9; --in-bd:#e2e8f0;
+  --vi:#7c3aed; --vi-d:#6d28d9; --vi-l:#f5f3ff; --vi-bd:#ddd6fe;
+  /* 行态 / 可改格 */
+  --row-hover:#fafbfc; --ex-bg:#fafafa; --hl:#fff8f0; --hl-hover:#fef3c7;
+  --sel:#e0e7ff; --void-bg:#fffbf5; --draft:#fffdf5; --edit-l:#fffbeb; --edit-bd:#fcd34d;
+  --th-hover:#e9eef5; --del-line:#d4d4d4;
+  /* 侧栏（深色面板）与提示条 */
+  --sb:#1e293b; --sb-bd:#334155; --sb-tx:#cbd5e1; --sb-mut:#7c8ba1; --sb-dis:#4b5563;
+  --sb-hover:#273449; --sb-on:#0f172a; --sb-on-hl:#60a5fa;
+  --toast-bg:#1e293b; --code-bg:#fff9;
+  /* 阴影 / 遮罩 */
+  --shadow:0 1px 2px #0f172a12; --shadow-pop:0 8px 24px #0f172a26;
+  --shadow-md:0 12px 32px #0f172a2e; --shadow-toast:0 8px 22px #0f172a3d; --mask:#0f172a66;
+  /* 几何与字体（非颜色；壳与页面共用同一份，故一并收进真源） */
+  --r:8px; --r2:12px;
+  --fs:'Microsoft YaHei','PingFang SC',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --fm:ui-monospace,'Cascadia Mono',Consolas,monospace;
 }
 """
 
