@@ -3078,7 +3078,11 @@ V.m12=()=>{
 /* MOD-11 筛选状态（R4：改动即时生效）
    ⭐ 2026-09-13 用户口径：**「三态标记」默认 = 「纳入台账」**（本页是台账，默认只看已纳入的合同）。
    ⚠️ 「项目」筛选是**第一个**控件（放在最左，用户口径 2026-09-13）。 */
-let fJc={tag:'纳入台账',arch:'全部',sup:'',projs:[]};
+/* ⭐ 2026-09-20 加 `amt`：「合同金额」为空 / 非空（`M5-6b` 配套）。
+   ⚠️ **为什么必须有个筛选项**（而不是"排序就行"）：`applySorts` 里**空值恒排末尾**、
+      且**不随升降序翻转** ⇒ 要找"待补供应商价"的行（金额为空 = 贸易公司合同还没填）
+      ⇒ 排序**够不着**（它们全沉在表格底部）⇒ 只能靠筛选把它们捞出来。 */
+let fJc={tag:'纳入台账',arch:'全部',sup:'',projs:[],amt:''};
 let jcPjOpen=false;                 /* 「项目」多选面板的展开态（第 4 个 projPanel 调用点） */
 /* 集采三态「批量标记」的勾选集合（§6.5.3）：范围 = **当前筛选结果**，筛选变化时裁剪 */
 let jcPick=new Set();
@@ -3114,6 +3118,9 @@ const jcNewStrip=()=>`<div class="fbar" style="margin-bottom:6px;border:1px soli
 const jcVisible=()=>JCs.filter(j=>(fJc.tag==='全部'||j.tag===fJc.tag)
   &&(fJc.arch==='全部'||j.arch===fJc.arch)
   &&(!fJc.projs.length||fJc.projs.includes(j.proj))
+  /* ⭐ 「待补供应商价」= `contract_amt` 为 0/空 —— 主要是**贸易公司合同**（i8 那个价落进
+     `trade_contract_amt` 了，真供应商价要人工从 Excel 供应商线补）。`0` 即"没填"（前端已显示「— 待补」）。 */
+  &&(fJc.amt===''||(fJc.amt==='blank'?!j.contractAmt:!!j.contractAmt))
   &&(!fJc.sup.trim()||(j.supplier||'').includes(fJc.sup.trim())));
 const pruneJcPick=()=>{ const vis=new Set(jcVisible().map(j=>j.id)); [...jcPick].forEach(id=>{ if(!vis.has(id)) jcPick.delete(id); }); };
 V.m11=()=>{
@@ -3153,6 +3160,11 @@ V.m11=()=>{
       <div class="fi"><label>三态标记</label><select class="inp" id="fTag" data-act="jcFilter">${enumOpts('jcTag',fJc.tag,1)}</select></div>
       <div class="fi"><label>合同存档情况</label><select class="inp" id="fArch" data-act="jcFilter">${enumOpts('jcArch',fJc.arch,1)}</select></div>
       <div class="fi"><label>供应商</label><input class="inp" id="fSup" data-act="jcFilter" value="${esc(fJc.sup)}" placeholder="模糊搜索"></div>
+      <div class="fi"><label>合同金额</label><select class="inp" id="fAmt" data-act="jcAmt" title="「为空」= 待补供应商价（贸易公司合同；i8 给的价落在「贸易公司合同金额」列）">
+        <option value=""${fJc.amt===''?' selected':''}>全部</option>
+        <option value="blank"${fJc.amt==='blank'?' selected':''}>为空（待补）</option>
+        <option value="filled"${fJc.amt==='filled'?' selected':''}>非空</option></select></div>
+      <button class="btn" data-act="jcPartyDlg" title="甲方单位分类 —— 它决定「i8 抓来的合同价是谁的价」">甲方单位分类</button>
       <button class="btn" data-act="jcReset">重置</button>
       <span class="pill" style="margin-left:auto">已勾选 <b>${jcPick.size}</b> 行 ｜ 显示 <b>${jcRows.length}</b> 条 ｜ 已手动标记的合同，后续全量抓取<b style="margin-left:3px">持久保留、不被覆盖</b></span>
     </div>

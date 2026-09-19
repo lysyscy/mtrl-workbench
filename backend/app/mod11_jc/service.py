@@ -257,10 +257,62 @@ def act_unlink_notice(s: Session, *, notice_id: int) -> dict:
             "message": f"已取消与集采合同 #{cid} 的关联（两侧同时解除）"}
 
 
+# ---------------------------------------------------------------- 甲方单位分类（`M5-6b`）
+
+def party_kinds(s: Session) -> dict:
+    """甲方单位分类清单 ＋ **每类下的合同条数** —— `M5-6b` 的读出口（页面用）。
+
+    ⚠️ 条数**现场算**（⛔ 不落库）：落库就是第二份真相（本模块一贯口径）。
+    ⭐ `unknown` 排在**最前**（`R.list_party_kinds` 保证）—— 那批正是**要人去指定**的。
+    """
+    from sqlalchemy import select
+
+    from app.mod11_jc.models import KIND_PARTY_UNKNOWN, PARTY_KIND_NAMES, PARTY_KINDS, JcContract
+
+    items = R.list_party_kinds(s)
+    by_party: dict[str, int] = {}
+    for nm in s.execute(select(JcContract.party_name)).scalars():
+        key = str(nm or "").strip()
+        if key:
+            by_party[key] = by_party.get(key, 0) + 1
+    for it in items:
+        it["count"] = by_party.get(it["name"], 0)
+    # ⚠️ **在册合同里出现过、但分类表里没有**的甲方（理论上不该有 —— 抓取时会 `ensure`）
+    #    ⇒ 若真出现（如手工新增 / Excel 导入带进来的甲方名），**列出来**，⛔ 不静默忽略。
+    listed = {it["name"] for it in items}
+    for nm, cnt in sorted(by_party.items()):
+        if nm not in listed:
+            items.append({"name": nm, "kind": KIND_PARTY_UNKNOWN,
+                          "kind_name": PARTY_KIND_NAMES[KIND_PARTY_UNKNOWN], "count": cnt})
+    unknown = sum(1 for it in items if it["kind"] == KIND_PARTY_UNKNOWN)
+    return {"ok": True, "items": items, "unknown": unknown,
+            "kinds": list(PARTY_KINDS), "kind_names": PARTY_KIND_NAMES}
+
+
+def act_set_party_kind(s: Session, *, name: str, kind: str) -> dict:
+    """指定某甲方单位的类型（`M5-6b`）—— ⛔ 类型非法一律拒（判定**在后端**，前端不自行判）。
+
+    ⚠️ ⚠️ **只改分类，不回头重算已有合同的金额落位** —— 这与 §4.2.2「改规则不重算历史」同款：
+       已经落错列的行，改完分类后**由人重抓一次或手改**（页面对这类行会提示）。
+       ⛔ 别在这里补一个"顺便重算"—— 那会**静默改动历史金额**，是本项目最忌的一类动作。
+    """
+    from app.mod11_jc.models import PARTY_KIND_NAMES, PARTY_KINDS
+
+    nm = str(name or "").strip()
+    if kind not in PARTY_KINDS:
+        return {"ok": False, "kind": "err", "message": f"未知的甲方类型：{kind}"}
+    if not nm:
+        return {"ok": False, "kind": "err", "message": "甲方单位名不能为空"}
+    R.set_party_kind(s, nm, kind)
+    return {"ok": True, "kind": "ok", "name": nm, "party_kind": kind,
+            "message": f"已把「{nm}」标为「{PARTY_KIND_NAMES.get(kind, kind)}」"}
+
+
 __all__ = [
     "build_list", "build_detail",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
     "act_update_contract", "act_add_invoice", "act_del_invoice",
     "act_add_payment", "act_del_payment",
     "act_link_notice", "act_unlink_notice",
+    "party_kinds", "act_set_party_kind",
 ]

@@ -245,6 +245,13 @@ const API = {
      ⚠️ 一对一（换合同 = **先解绑再写新**）/ 全库去重 / 不校验金额 —— 三条判定全在后端。 */
   m11Link: body => API.post('/api/m11/link', body),
   m11Unlink: body => API.post('/api/m11/unlink', body),
+  /* ⭐ `M5-6b` 甲方单位分类：它决定「i8 抓来的那个合同价是谁的价」。
+     ⚠️ 正常甲方 ⇒ i8 的价 = **供应商价**（落 `contract_amt` · **锚点**）；
+        贸易公司甲方 ⇒ i8 的价 = **贸易公司的价**（落 `trade_contract_amt`），
+        而真供应商价 i8 里**没有** ⇒ 要人工从 Excel 供应商线补进 `contract_amt`。
+     ⚠️ 没见过的甲方抓取时会**自动落成「未指定」**（⛔ 不静默当成正常）⇒ 页面得能指定。 */
+  m11PartyKinds: () => API.get('/api/m11/party-kinds'),
+  m11SetPartyKind: body => API.post('/api/m11/party-kind', body),
   /* ⭐ `M5-8` 集采台账 Excel 导入：**预览** / **确认落库**。
      ⚠️ 走 **base64**（`{filename, content_b64}`）—— 免 multipart 依赖；文件本来也就几十 KB。
      ⚠️ 两个端点的入参形状**刻意一致** ⇒ 确认时把**同一个文件再传一次**（服务端无状态，见 `import_service`）。 */

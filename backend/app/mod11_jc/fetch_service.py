@@ -37,6 +37,7 @@ from app.mod02_i8.contract_source import ContractFetcher
 from app.mod02_i8.repository import save_run_record
 from app.mod02_i8.sources import CommonProjectSource, load_warehouse_rows
 from app.mod11_jc import repository as R
+from app.mod11_jc.models import KIND_PARTY_UNKNOWN
 
 #: 同表抓取串行锁的键（`D9`：同一张表抓取互斥）。
 TABLE = "jc_contract"
@@ -218,6 +219,14 @@ def run_fetch(
     # ⭐ **再匹配**（档案已被上一步补过）
     m = match_projects(rows, all_projects(s))
 
+    # ⭐⭐ **甲方单位归类**（`M5-6b` · 用户 2026-09-20 口径）—— 落库前必须先有它：
+    #    `upsert_fetched_contracts` 靠 `row["party_kind"]` 决定**金额落哪一列**。
+    #    ⚠️ **没见过的甲方先落 `unknown` 等人指定**（⛔ 不静默当成"正常"），并**在回执里报出来**。
+    new_parties = R.ensure_party_kinds(s, [str(r.get("party_name") or "") for r in rows])
+    _kmap = R.party_kind_map(s)
+    for _r in rows:
+        _r["party_kind"] = _kmap.get(str(_r.get("party_name") or "").strip(), KIND_PARTY_UNKNOWN)
+
     # ⭐ 分开落库：一张合同必有项目（§6.4.1）⇒ 只落**匹配上**的；匹配不上 = i8 常用列表里也没有 = 不需要
     stats = {"inserted": 0, "refreshed": 0, "skipped": 0}
     by_pid: dict[int, list[dict]] = {}
@@ -238,6 +247,9 @@ def run_fetch(
         "fetched": len(rows), "dropped_unapproved": dropped,
         # ⭐ 材料名的补数情况（⛔ 禁静默：补不上多少条必须让人看见）
         "material_filled": material_filled, "material_blank": material_blank,
+        # ⭐ `M5-6b`：这一次**新遇到的甲方单位**（已落成"未指定"）—— ⛔ 必须报出来让人去指定，
+        #    否则它们的金额会按"正常"落 `contract_amt`（可逆，但**不指定就一直不对**）。
+        "new_parties": new_parties,
         "matched": len(m["matched"]), "unmatched": len(m["unmatched"]), "multi": m["multi"],
         "stats": stats,
         # ⭐ **匹配预览**（落库前就该让人看见的那两块；这里随回执一起回，壳直接用）

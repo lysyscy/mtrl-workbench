@@ -54,6 +54,28 @@ INVOICE_KINDS: tuple[str, ...] = (KIND_SUPPLIER, KIND_TRADE)
 SRC_MANUAL = "manual"
 SRC_NOTICE = "notice"
 
+# ---------------------------------------------------------------- 甲方单位分类（`M5-6b`）
+#: 甲方单位的三类（用户 **2026-09-20** 口径）—— ⭐ 它决定"**i8 抓来的那个合同价，是谁的价**"。
+#:
+#: **为什么必须有这个概念**（实测 `CGHT202509270005`）：
+#: ```
+#: PhidCustomerEnt_EXName = 洛阳维萨工程技术有限公司     ← 甲方 = 贸易公司
+#: PhidSupplyEnt_EXName   = 哈密市鑫盛发物资有限责任公司  ← 乙方 = **真供应商**
+#: CntSumVat              = 171983.28                  ← ⚠️ 这是【维萨的价】
+#:                                                       真供应商的价 i8 里【没有】
+#: ```
+#: ⇒ 正常甲方 ⇒ i8 的价就是**供应商价** ⇒ 落 `contract_amt`；
+#:   贸易公司甲方 ⇒ i8 的价是**贸易公司的价** ⇒ 落 `trade_contract_amt`，
+#:   而 `contract_amt`（供应商价）**要人工从 Excel 的供应商线补填**（i8 抓不到）。
+#: ⛔ 判错了 = **金额落错列**，而且**不会报错**（数字看着都合理）—— 这是本表存在的唯一理由。
+KIND_PARTY_NORMAL = "normal"        # 正常甲方（第四工程公司 / 河南省安装集团…）
+KIND_PARTY_TRADE = "trade"          # 贸易公司（洛阳维萨…）—— 是"供应商与我公司之间的桥梁"
+KIND_PARTY_UNKNOWN = "unknown"      # **没见过的甲方** ⇒ 抓到时自动登记，等人指定（⛔ 不静默归类）
+PARTY_KINDS: tuple[str, ...] = (KIND_PARTY_NORMAL, KIND_PARTY_TRADE, KIND_PARTY_UNKNOWN)
+PARTY_KIND_NAMES: dict[str, str] = {
+    KIND_PARTY_NORMAL: "正常", KIND_PARTY_TRADE: "贸易公司", KIND_PARTY_UNKNOWN: "未指定",
+}
+
 
 class JcContract(Base):
     """集采**合同主表**一行（= §6.4.1 的 19 字段里落库的那 14 个）。"""
@@ -79,6 +101,11 @@ class JcContract(Base):
     material_name: Mapped[str] = mapped_column(String(128), index=True, default="")     # 材料名（抓取）
     supplier: Mapped[str] = mapped_column(String(128), index=True, default="")          # 供应商（抓取）
     contract_amt: Mapped[float] = mapped_column(MONEY, default=0)                       # 合同金额（唯一可抓的金额）
+    #: ⭐ **甲方单位**（i8 的 `PhidCustomerEnt_EXName`）—— 用户 2026-09-20 口径的**判据列**。
+    #:   ⚠️ 它**只在贸易公司合同上决定 `contract_amt` 是谁的价**（见 `KIND_PARTY_*` 那段）。
+    #:   ⚠️ 人**不手改**它（i8 的事实）⇒ 在 `FETCH_COLS` 里、重抓刷新。
+    #:   ⚠️ 存量行**必须带 `server_default=''`**（已有数据的库加 `NOT NULL` 列会 NotNullViolation —— 2026-09-19 踩过）。
+    party_name: Mapped[str] = mapped_column(String(128), default="", server_default="", index=True)
     trade_co: Mapped[str | None] = mapped_column(String(128), nullable=True)            # 贸易公司名（手工 · 可空）
     trade_contract_amt: Mapped[float | None] = mapped_column(MONEY, nullable=True)      # 贸易公司合同金额（可空）
     tag: Mapped[str] = mapped_column(String(8), index=True, default=TAG_PENDING)        # 三态（默认「待确认」）
@@ -147,9 +174,29 @@ class JcPayment(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class JcPartyKind(Base):
+    """**甲方单位分类**（`M5-6b`）—— 一张小表，键 = 甲方单位**全名**。
+
+    ⭐ 存在的理由见 `KIND_PARTY_*` 那段注释（决定 i8 的金额落哪一列）。
+    ⚠️ **为什么不硬编码"维萨"两个字**：换一家贸易公司就得改代码、发版。名单配在这里，改数据即可。
+    ⚠️ **为什么不写"两个名单"**（正常名单 + 贸易公司名单）：名单会**漏** —— 冒出一个没见过的甲方
+       ⇒ 落在两个名单**之外** ⇒ 规则**没有出口** ⇒ 只能瞎猜（最坏的一类错）。
+       ⇒ 做成**分类表**：没见过的甲方**自动落成 `unknown`**（抓取时 `ensure_party_kinds` 登记）
+         ⇒ 页面**列出来等人指定**，⛔ 不静默归类。
+    """
+
+    __tablename__ = "jc_party_kind"
+
+    name: Mapped[str] = mapped_column(String(128), primary_key=True)   # 甲方单位全名（i8 的 `PhidCustomerEnt_EXName`）
+    kind: Mapped[str] = mapped_column(String(8), index=True, default=KIND_PARTY_UNKNOWN)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 __all__ = [
-    "JcContract", "JcInvoice", "JcPayment",
+    "JcContract", "JcInvoice", "JcPayment", "JcPartyKind",
     "TAG_PENDING", "TAG_IN", "TAG_OUT", "TAGS",
     "KIND_SUPPLIER", "KIND_TRADE", "INVOICE_KINDS",
     "SRC_MANUAL", "SRC_NOTICE",
+    "KIND_PARTY_NORMAL", "KIND_PARTY_TRADE", "KIND_PARTY_UNKNOWN",
+    "PARTY_KINDS", "PARTY_KIND_NAMES",
 ]

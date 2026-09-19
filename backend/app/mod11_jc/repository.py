@@ -15,7 +15,17 @@ from sqlalchemy.orm import Session
 
 from app.mod01_projects.models import Project
 from app.mod11_jc import domain as D          # ⚠️ 只**调**它的出口（三态归一 / 判定），⛔ 不在本层复写逻辑
-from app.mod11_jc.models import SRC_MANUAL, TAG_PENDING, JcContract, JcInvoice, JcPayment
+from app.mod11_jc.models import (
+    KIND_PARTY_TRADE,
+    KIND_PARTY_UNKNOWN,
+    PARTY_KIND_NAMES,
+    SRC_MANUAL,
+    TAG_PENDING,
+    JcContract,
+    JcInvoice,
+    JcPartyKind,
+    JcPayment,
+)
 
 
 def _project_key(s: Session, project_id: int) -> tuple[str, str]:
@@ -295,11 +305,27 @@ def count_contracts(s: Session) -> int:
 
 # ============================================================ 抓取落库（`M5-6`）
 
-#: 「**抓取会刷新**」的列 —— ⛔ 人工字段（三态 / 存档三列 / 备注 / 付款方式 / 贸易公司）**不在其中**：
-#: 那是人的地盘，重抓不许动（判据 `ACC-JC-FETCH-001/001-09`「再次导入**不覆盖旁路字段**」）。
+#: 「**抓取会刷新**」的列 —— i8 的**事实**，人改它没意义 ⇒ 重抓一律以 i8 为准。
+#: ⛔ 人工字段（三态 / 存档三列 / 备注 / 付款方式）**不在其中**：那是人的地盘，重抓不许动
+#:   （判据 `ACC-JC-FETCH-001/001-09`「再次导入**不覆盖旁路字段**」）。
 #: ⭐ `bill_name`（i8 单据名原文）**在列里**：它是 i8 的原文、不是人的地盘 ⇒ 重抓要刷新它。
 #:   ⚠️ 2026-09-19 补 —— 原先没带上它 ⇒ 落库时**静默丢掉原文**（材料名/供应商从此无法回溯）。
-FETCH_COLS: tuple[str, ...] = ("contract_date", "material_name", "supplier", "contract_amt", "bill_name")
+#: ⭐ 2026-09-20（`M5-6b`）补 `party_name`（甲方单位）—— 它是"金额落哪一列"的判据（见下）。
+FETCH_COLS: tuple[str, ...] = ("contract_date", "supplier", "bill_name", "party_name")
+
+#: ⭐⭐ 「**空才填**」的列（`M5-6b` · 用户 2026-09-20 口径）—— 人工可改，**已有值就绝不覆盖**：
+#:   - `material_name`：i8 的 `ItemName` **有错**（实测确有 `g'c` / `hong's模板` 这种），用户会**逐一手改**
+#:     ⇒ 重抓把它覆盖掉 = 抹掉人工劳动（这就是用户那句"**已经不为空就不要被覆盖**"）。
+FETCH_ONLY_WHEN_BLANK: tuple[str, ...] = ("material_name",)
+
+#: ⭐⭐ 「**按甲方类型分叉**」的列（`M5-6b`）—— 它们的刷法**取决于这张合同的甲方是不是贸易公司**，
+#:   判据在 `upsert_fetched_contracts` 里（⛔ 不能像 `FETCH_COLS` 那样无脑刷）。
+#:   | 列 | 正常甲方 | 贸易公司甲方 |
+#:   |---|---|---|
+#:   | `contract_amt`（**锚点** · 供应商价） | i8 刷新 | ⛔ **绝不自动动**（人工从 Excel 供应商线补） |
+#:   | `trade_contract_amt`（贸易公司的价） | 空 | **首次写** i8 的值（那正是贸易公司价），之后不动 |
+#:   | `trade_co`（贸易公司名） | 空 | **首次写**（= 甲方单位名） |
+FETCH_BY_PARTY_COLS: tuple[str, ...] = ("contract_amt", "trade_contract_amt", "trade_co")
 
 
 def payment_of_notice(s: Session, notice_id: int) -> JcPayment | None:
@@ -353,6 +379,10 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
             skipped += 1
             continue
         cur = one_by_no(s, no)
+        _amt = Decimal(str(row.get("contract_amt") or 0))
+        _party = str(row.get("party_kind") or KIND_PARTY_UNKNOWN)
+        _is_trade = _party == KIND_PARTY_TRADE
+        _party_name = str(row.get("party_name") or "")[:128]
         if cur is None:
             s.add(JcContract(
                 contract_no=no,
@@ -360,20 +390,46 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
                 contract_date=str(row.get("sign_date") or "")[:10],
                 material_name=str(row.get("material_name") or "")[:128],
                 supplier=str(row.get("supplier_name") or "")[:128],
-                contract_amt=Decimal(str(row.get("contract_amt") or 0)),
+                party_name=_party_name,                # ⭐ i8 的甲方单位（判据列）
+                # ⭐⭐ **金额落位**（`M5-6b`）：贸易公司合同 ⇒ i8 这个价是**贸易公司的价**
+                #    ⇒ 落 `trade_contract_amt`，而 `contract_amt`（**锚点** · 真供应商价）
+                #    **留 0 等人从 Excel 供应商线补**（i8 里根本没有那个数）。
+                contract_amt=Decimal("0") if _is_trade else _amt,
+                trade_co=(_party_name or None) if _is_trade else None,
+                trade_contract_amt=(_amt if _is_trade else None),
                 bill_name=str(row.get("bill_name") or "")[:255],   # ⭐ i8 原文（可回溯）
                 tag=TAG_PENDING,                       # ⭐ 新抓的默认「待确认」
                 remark=str(row.get("remark") or "")[:255],
             ))
             inserted += 1
         else:
+            # ① i8 的**事实列**：无脑刷新
             for key, val in (("contract_date", str(row.get("sign_date") or "")[:10]),
-                             ("material_name", str(row.get("material_name") or "")[:128]),
                              ("supplier", str(row.get("supplier_name") or "")[:128]),
-                             ("contract_amt", Decimal(str(row.get("contract_amt") or 0))),
-                             ("bill_name", str(row.get("bill_name") or "")[:255])):
+                             ("bill_name", str(row.get("bill_name") or "")[:255]),
+                             ("party_name", _party_name)):
                 if key in FETCH_COLS:
                     setattr(cur, key, val)
+            # ② **空才填**的列：有人工值就留住（用户手改过 i8 的错材料名）
+            _mat = str(row.get("material_name") or "")[:128]
+            if _mat and not str(cur.material_name or "").strip():
+                cur.material_name = _mat
+            # ③ ⭐⭐ **按甲方类型分叉**（这一支写错 = 金额落错列**且不报错**）：
+            if _is_trade:
+                # 贸易公司合同：i8 这个价 ⇒ `trade_contract_amt`（**首次**写；之后不动，那是人的地盘）；
+                # ⛔⛔ **绝不碰 `contract_amt`** —— 那是用户从 Excel 供应商线补的**真供应商价**，
+                #      被覆盖 = 把人工劳动抹掉，而且**下次抓取才发现**（典型静默出错）。
+                if not str(cur.trade_co or "").strip():
+                    cur.trade_co = _party_name or cur.trade_co
+                if cur.trade_contract_amt is None:
+                    cur.trade_contract_amt = _amt
+            else:
+                # 正常甲方 **以及 `unknown`**（未指定）⇒ 金额落 `contract_amt`。
+                # ⚠️ 为什么 `unknown` 也按"正常"走：这个选择是**可逆**的（金额就在正常合同的落点，
+                #    用户指定成贸易公司后一眼能看见、也好还原）；反之若按贸易公司落
+                #    ⇒ 会把供应商价塞进 `trade_contract_amt`，更难发现也更难还原。
+                #    ⇒ 但 `unknown` **必须在回执/页面里报出来**（见 `fetch_service` 与分类页）。
+                cur.contract_amt = _amt
             # ⭐ 判据 `001-10`「抓取**不覆盖已人工标记的行**」= 这里只做"归一"：
             #    原值是人工标过的（≠待确认）⇒ 原样保留；否则回落「待确认」。
             cur.tag = D.tag_after_fetch(cur.tag)
@@ -382,11 +438,63 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
     return {"inserted": inserted, "refreshed": refreshed, "skipped": skipped}
 
 
+# ============================================================ 甲方单位分类（`M5-6b`）
+
+def list_party_kinds(s: Session) -> list[dict]:
+    """全部甲方分类（未指定排前面 —— 那批是**要人去指定**的）—— 页面用。"""
+    rows = s.execute(select(JcPartyKind)).scalars().all()
+    out = [{"name": str(r.name), "kind": str(r.kind),
+            "kind_name": PARTY_KIND_NAMES.get(str(r.kind), str(r.kind))} for r in rows]
+    out.sort(key=lambda d: (d["kind"] != KIND_PARTY_UNKNOWN, d["name"]))
+    return out
+
+
+def party_kind_map(s: Session) -> dict[str, str]:
+    """`甲方全名 -> 类型` —— ⚠️ **一次查完**（⛔ 不逐条查 = N+1；抓取时几百条都要问）。"""
+    return {str(r.name): str(r.kind) for r in s.execute(select(JcPartyKind)).scalars()}
+
+
+def ensure_party_kinds(s: Session, names: list[str]) -> list[str]:
+    """把**没见过的**甲方登记成 `unknown` ⇒ 返回**新登记的**名字（供回执报出，⛔ 禁静默）。
+
+    ⭐ 这是"**未知甲方自动露头**"的机器化落点：抓取遇到新甲方 ⇒ 先落一行 `unknown`
+      ⇒ 分类页列出来**等人指定**；⛔ 绝不静默当成"正常"（那会把贸易公司的价落错列）。
+    """
+    known = {str(x) for x in s.execute(select(JcPartyKind.name)).scalars()}
+    added: list[str] = []
+    for raw in names or ():
+        nm = str(raw or "").strip()
+        if not nm or nm in known:
+            continue
+        s.add(JcPartyKind(name=nm[:128], kind=KIND_PARTY_UNKNOWN))
+        known.add(nm)
+        added.append(nm)
+    if added:
+        s.flush()
+    return added
+
+
+def set_party_kind(s: Session, name: str, kind: str) -> bool:
+    """指定某甲方的类型（不存在就建）⇒ 是否落库。⛔ 类型合法性由调用方（`service`）先判。"""
+    nm = str(name or "").strip()
+    if not nm:
+        return False
+    row = s.get(JcPartyKind, nm[:128])
+    if row is None:
+        s.add(JcPartyKind(name=nm[:128], kind=kind))
+    else:
+        row.kind = kind
+    s.flush()
+    return True
+
+
 __all__ = [
     "list_contracts", "contract_of", "invoices_of", "payments_of",
     "invoices_of_many", "payments_of_many", "notice_ids_used", "project_choices",
     "project_id_by_key",
     "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
     "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
-    "FETCH_COLS", "one_by_no", "existing_contract_nos", "upsert_fetched_contracts", "payment_of_notice",
+    "FETCH_COLS", "FETCH_ONLY_WHEN_BLANK", "FETCH_BY_PARTY_COLS",
+    "one_by_no", "existing_contract_nos", "upsert_fetched_contracts", "payment_of_notice",
+    "list_party_kinds", "party_kind_map", "ensure_party_kinds", "set_party_kind",
 ]

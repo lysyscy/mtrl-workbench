@@ -288,6 +288,14 @@ def _map_record(rec: dict) -> dict | None:
         "approve_status": approve_status_of(rec),
         "remark": _first(rec, "Remarks", "Remark"),
         "supply_ent": _first(rec, "PhidSupplyEnt"),
+        # ⭐ **甲方单位**（`M5-6b` · 用户 2026-09-20 口径）—— 它决定"**i8 这个合同价是谁的价**"：
+        #    甲方是**贸易公司**（维萨）⇒ 这个价是贸易公司的价，真供应商的价 i8 里**没有**。
+        #    ⚠️ 实测（347 条）取值只有 5 种：第四工程公司 219 / 河南省安装集团 46 /
+        #       洛阳盟岳 38 / **洛阳维萨 24** / 化工工程事业部 20 ⇒ 它确实是"甲方（客户方）"。
+        #    ⚠️ `PhidRecComp_EXName` 实测与它**逐一相同**（互为印证）；⛔ 别改用
+        #       `PhidTickComp_EXName` / `InvoiceSen_EXName` —— 那两个多出「河南省安装集团本部×2」，
+        #       与"甲方"不是同一个口径（用错就多出一类甲方，还得人工收拾）。
+        "party_name": _first(rec, "PhidCustomerEnt_EXName"),
         "fields": rec,
     }
 

@@ -126,6 +126,9 @@ def test_写动作接上了_api_且抓取要二次确认():
                  "API.m11Add({"):                               # 手工新增
         assert frag in s, f"动作没接上 API：{frag}"
     assert "project_key:jcND.pj" in s, "手工新增要传 `project_key`（仓库名），⛔ 不是 project_id"
-    assert "API.m11Fetch()" in s and "jcFetchOk" in s, "抓取要走 `POST /api/m11/fetch`"
+    assert "API.m11Fetch(" in s and "jcFetchOk" in s, "抓取要走 `POST /api/m11/fetch`"
+    # ⭐ `M5-6`（2026-09-20）：抓取弹窗要能设「**开始日期**」（增量）——
+    #    实测全量 40.4 秒 vs 增量 1~5 秒（i8 的耗时与命中条数成正比）⇒ ⛔ 不能只剩"全量"一条路。
+    assert "jcFetchSince" in s, "抓取要能设「开始日期」（增量），⛔ 不能只支持全量"
     assert "这一步会登录 i8" in s, "抓取前必须讲清会顶号（D9）"
     assert "jcFetchPreview" in s, "抓取回执要展示**匹配预览**（否则漏匹配会被静默埋掉）"

@@ -177,6 +177,31 @@ def api_fetch(payload: FetchIn) -> dict:
         return FS.run_fetch(s, confirmed=True, since=str(since or ""))
 
 
+class PartyKindIn(BaseModel):
+    """「甲方单位分类」入参（`M5-6b`）。"""
+
+    name: str
+    kind: str
+
+
+@router.get("/api/m11/party-kinds")
+def api_party_kinds() -> dict:
+    """甲方单位分类清单（＋每类合同数）—— `M5-6b`。
+
+    ⭐ 它决定"i8 抓来的合同价是谁的价"：正常甲方 ⇒ 供应商价；**贸易公司甲方** ⇒ 贸易公司的价
+      （真供应商价 i8 里没有，要人工从 Excel 供应商线补）。⇒ 页面要能改它。
+    """
+    with session_scope() as s:
+        return SV.party_kinds(s)
+
+
+@router.post("/api/m11/party-kind")
+def api_set_party_kind(payload: PartyKindIn) -> dict:
+    """指定某甲方单位的类型（`M5-6b`）—— 判定（类型合法 / 名字非空）在后端。"""
+    with session_scope() as s:
+        return SV.act_set_party_kind(s, name=payload.name, kind=payload.kind)
+
+
 @router.post("/api/m11/add")
 def api_add(payload: AddIn) -> dict:
     """手工新增合同 ⇒ **真的建档**（判据 `001-13`）；三态默认「纳入台账」（判据 `001-07`）。"""

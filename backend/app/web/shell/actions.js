@@ -1526,7 +1526,48 @@ jcImportOk:async()=>{ const cur=jcImpCur(); if(!cur) return;
   await reloadM11();
   modal({title:'导入结果（`M5-8`）',body:jcImpResult(d),footer:`<button class="btn pri" data-act="closeModal">知道了</button>`}); },
 
- /* ⭐ `M5-7`：抓取接通（`POST /api/m11/fetch`）。⚠️ 抓取**会顶号**（`D9`）⇒ **先二次确认**、说清后果。
+ /* ⭐ `M5-6b`：「合同金额」筛选（为空 = **待补供应商价**）。
+   ⚠️ 这个筛选项是**必需的**，不是锦上添花：`applySorts` 里**空值恒排末尾且不随升降序翻转**
+      ⇒ 待补的行**全部沉在表格底部**，"点一下排序"**够不着**它们（用户原以为排序就行）。 */
+jcAmt:t=>{ fJc.amt=String(t.value||''); pruneJcPick(); render(); },
+/* ⭐ `M5-6b` **甲方单位分类**弹窗 —— 它决定「i8 抓来的合同价是谁的价」：
+   正常甲方 ⇒ i8 的价 = 供应商价（落 `contract_amt` · **锚点**）；
+   贸易公司甲方 ⇒ i8 的价 = 贸易公司的价（落 `trade_contract_amt`），真供应商价 i8 里没有
+     ⇒ 要人工从 Excel 供应商线补进 `contract_amt`。
+   ⚠️ **没见过的甲方**抓取时会自动落成「未指定」⇒ 这个弹窗把它们**排在最前面**等人指定。 */
+jcPartyDlg:async()=>{ let d=null;
+  try{ d=await API.m11PartyKinds(); }
+  catch(e){ return toast(`<b>没能取到甲方分类</b>：${esc(String((e&&e.message)||e))}`,7000); }
+  if(!d||d.ok===false) return toast(`<b>没能取到甲方分类</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
+  const items=d.items||[], kn=d.kind_names||{};
+  const opt=k=>d.kinds.map(x=>`<option value="${x}"${x===k?' selected':''}>${esc(kn[x]||x)}</option>`).join('');
+  const body=`<div class="tip${d.unknown?' wn':' ok'}" style="margin-bottom:10px">${
+      d.unknown?`<b>⚠️ 有 ${d.unknown} 个甲方还没指定类型</b> —— 它们**排在最前面**。在指定之前，
+        它们的金额按「<b>正常</b>」落进「合同金额」列（这个选择**可逆**：指定后会一眼看出对不对）。`
+      :'全部甲方都已指定类型 ✅'}
+    <br><span class="mut sm">规则：<b>正常甲方</b> ⇒ i8 合同价 = <b>供应商价</b>（落「合同金额」）；<b>贸易公司甲方</b> ⇒ i8 合同价 = <b>贸易公司的价</b>（落「贸易公司合同金额」），而<b>真供应商价 i8 里没有</b> ⇒ 要人工从 Excel 的供应商线补进「合同金额」。</span></div>
+    <div class="tw" style="max-height:50vh"><table class="dt cond" data-sort data-sort-key="modal:jcParty"><thead><tr>
+      <th>甲方单位（i8 的「甲方单位」原样）</th><th style="width:150px">类型</th><th style="width:88px">合同数</th></tr></thead><tbody>
+    ${items.length?items.map(it=>`<tr class="${it.kind==='unknown'?'hl':''}">
+      <td>${esc(it.name)}</td>
+      <td><select class="inp" data-act="jcPartySet" data-name="${esc(it.name)}"${it.kind==='unknown'?' style="border-color:var(--wn)"':''}>${opt(it.kind)}</select></td>
+      <td class="num">${it.count||0}</td></tr>`).join('')
+      :`<tr><td colspan="3" class="ctr mut" style="padding:18px">还没有甲方记录 —— 抓取一次后，i8 里的甲方单位会自动出现在这里</td></tr>`}
+    </tbody></table></div>
+    <div class="tip" style="margin:12px 0 0"><b>⚠️ 改类型**不会**回头重算已有合同的金额</b> —— 与「改规则不重算历史」同款口径。
+      已经落错列的行，改完分类后请<b>重抓一次</b>（贸易公司的价会被重新落位）或<b>手工改</b>。</div>`;
+  modal({title:'甲方单位分类（决定合同价是谁的价）', wide:true, body,
+    footer:`<button class="btn pri" data-act="closeModal">关闭</button>`}); },
+jcPartySet:async t=>{ const nm=String(t.dataset.name||''), k=String(t.value||'');
+  if(!nm||!k) return;
+  let d=null;
+  try{ d=await API.m11SetPartyKind({name:nm, kind:k}); }
+  catch(e){ return toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
+  if(!d||d.ok===false) return toast(`<b>没能保存</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
+  toast(esc(d.message||'已保存')+`<br><span class="mut sm">⚠️ 已有的合同**不会**重算金额落位 ⇒ 需要时请重抓一次或手改</span>`);
+  /* ⚠️ 重开弹窗（刷新那行）—— `jcPartyDlg` 是 async ⇒ 不复用 `modal.reopen`（那只接同步表达式）。 */
+  await ACT.jcPartyDlg(); },
+/* ⭐ `M5-7`：抓取接通（`POST /api/m11/fetch`）。⚠️ 抓取**会顶号**（`D9`）⇒ **先二次确认**、说清后果。
    ⭐ `M5-6`：加「开始日期」（**增量**）—— 实测全量 40 秒、增量 1~5 秒（差 40~80 倍）。 */
 jcFetch:()=>{ const def = jcFetchSinceOn || jcFetchSinceDefault(); modal({title:'抓取采购合同信息（API-04）· 二次确认',
   body:`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 这一步会登录 i8，可能顶掉该账号其它在线会话</b>（决策 D9）。若同事正在用 i8，请先择时。</div>
@@ -1889,7 +1930,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    fJc.tag=(a&&a.value)||'全部'; fJc.arch=(b&&b.value)||'全部'; fJc.sup=(c&&c.value)||''; pruneJcPick(); render(); },
  /* ⚠️ 复位一律【原地改字段】，不要 `fJc={...}` 重新赋值 —— 外部（自检）持有的是对象引用，
     重新赋值会让引用失效（同 BIGVAL 的教训） */
- jcReset:()=>{ fJc.tag='纳入台账'; fJc.arch='全部'; fJc.sup=''; fJc.projs.length=0; jcPjOpen=false; pruneJcPick(); render(); toast('集采台账筛选条件已重置（三态回到默认「纳入台账」）'); },
+ jcReset:()=>{ fJc.tag='纳入台账'; fJc.arch='全部'; fJc.sup=''; fJc.amt=''; fJc.projs.length=0; jcPjOpen=false; pruneJcPick(); render(); toast('集采台账筛选条件已重置（三态回到默认「纳入台账」）'); },
  /* 「项目」筛选（**通用控件** = 共用项目面板 `projPanel`，多选）—— 与 MOD-03 / MOD-04 同款，只是动作命名空间不同。
     ⚠️ 一律**原地改数组内容**（不要 `fJc.projs=…` 重新赋值）—— 外部持有的是那个数组的引用。 */
  jcPjToggle:()=>{ jcPjOpen=!jcPjOpen; render(); },
