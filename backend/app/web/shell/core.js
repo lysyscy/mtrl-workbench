@@ -248,6 +248,12 @@ const API = {
   m14Rules: () => API.get('/api/m14/rules'),
   m14RuleAdd: body => API.post('/api/m14/rules', body),
   m14RuleSet: (id, body) => API.send('PUT', `/api/m14/rules/${id}`, body),
+  /* ⭐ `MOD-15` 用户管理（§1.5）：整页数据 = 列表 ＋ **当前登录用户** ＋ 三态计数。
+     ⚠️ 它是 `CUR`（"当前登录用户"）的**唯一来源** —— 别再另开一个"我是谁"的取数口。 */
+  users: () => API.get('/api/m15/users'),
+  m15Theme: () => API.get('/api/m15/theme'),
+  m15ThemeSet: theme => API.post('/api/m15/theme', { theme }),
+  m15Password: id => API.get(`/api/m15/password?id=${encodeURIComponent(id)}`),
   /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok` —— 规则不合法是 §4.2.2 的可预期拒绝，
      后端那句中文必须原样给用户看。 */
   m14RuleDel: id => API.send('DELETE', `/api/m14/rules/${id}`, null),
@@ -1020,6 +1026,40 @@ async function reloadM14() {
   RULE_EX = RULE_RAW.map(r => [r.kind_label, r.values, r.meaning]);
 }
 
+/* 用户管理（`MOD-15` · §1.5）—— 读 `/api/m15/users`（**列表 ＋ 当前登录用户 ＋ 三态计数**）。
+   ⚠️ 与已接线的其它页同一个形态：**空数组起手、boot 时用 API 原地填**。
+   ⛔ 别整支换引用（`USERS` 是 `const`，且 `V.m15` 与自检回滚都按**原地**处理）。 */
+function adaptUser(x) {
+  return {
+    id: x.id,
+    acc: x.account,
+    name: x.name,
+    role: x.role,
+    /* ⭐ 后端出的是**三态**（在用 / 已停用 / **已删除**）—— 与 `V.m15` 里用的词**完全一致**
+       ⇒ 壳这边**不做映射**（⛔ 一映射就多一处"哪些值算已删"的判定，必漂）。 */
+    status: x.state,
+    /* 最近登录（`§1.5.1` 补口径）：**空串 = 从未登录过**（⛔ 不是"数据没取到"）。
+       ⚠️ 别拿建号时间或 `—` 冒充 —— `V.m15` 对空串显示「从未登录」，那才是实话。 */
+    last: x.last_login_at || '',
+    /* ⛔ **列表不带密码**：要看密码走「查看密码」动作（单独端点、指名要哪一个）。
+       ⇒ 这里先给空串；`V.m15` 的「改密」按钮本来就不读它。 */
+    pwd: '',
+  };
+}
+
+async function reloadM15() {
+  const d = await API.users();
+  USERS.splice(0, USERS.length, ...((d.users || []).map(adaptUser)));
+  /* ⚠️ 当前登录用户**逐字段赋值**，⛔ 不换 `CUR` 的引用 ——
+     本文件的既有教训（L536 那条注释）：自检回滚 / 刷新会整体替换 `USERS` 的内容，
+     任何"指向 USERS[i] 的引用"都会失效。 */
+  const me = d.me || {};
+  CUR.id = me.id;
+  CUR.acc = me.account;
+  CUR.name = me.name;
+  CUR.role = me.role;
+}
+
 async function reloadMech() {
   const d = await API.m06Mech();
   MACH6 = d.mech || {};
@@ -1779,7 +1819,12 @@ const PAGE_LOAD = {
      但它**自己的数据被别人读**（看板 / 大表主材累计 / m03 集采关联）—— 那些页各自按需拉自己的路，
      ⛔ 不在这里替它们拉（`P3` 的口径：进哪页拉哪页）。 */
   m11: ['集采台账'],
-};
+  /* ⭐ `m15`（`MOD-15` 用户管理）：**单路**（只读 `/api/m15/users`）——
+     ⚠️ 它**不依赖**任何别的域（`V.m15` 只吃 `USERS`/`CUR`）⇒ 不进 `LOAD_DEP`。
+     ⚠️ 但它**被别的页间接依赖**：`CUR`/`USERS` 是「当前登录用户」的来源，
+       ⛔ 别把它排到需要"谁登录了"的页后面（目前无此依赖，登记在此备查）。 */
+  m15: ['用户管理'],
+  };
 /* 标签 → 取数函数（标签进顶部横幅的**失败点名** —— ⛔ 一字不许改，它们是给用户看的） */
 const LOADERS = {
   '付款通知书': reloadNotices,      /* ⚠️ 走同一个出口：它还会重建「归属」缓存 `OWN` */
@@ -1802,6 +1847,7 @@ const LOADERS = {
      ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序**。 */
   '特殊费用月报表': reloadM09,
   '规则配置': reloadM14,        /* 独立取数 ⇒ 无顺序依赖 */
+  '用户管理': reloadM15,        /* ⭐ `m15`：`/api/m15/users` 单路，同样无顺序依赖 */
   '集采台账': reloadM11,        /* ⭐ `M5-7`：`/api/m11/list` ⇒ 原地填 `JCs`（跨页共享，见 `adaptJc` 上方注释） */
   /* ⛔ `'差异登记': reloadM12` 已删（2026-09-20 撤页）；`reloadM12` / `adaptDf` 也已删。 */
   '收发结存与大表': reloadM07,   /* ⚠️ 吃 `MACH6`/`IVs` ⇒ 见 `LOAD_DEP` */

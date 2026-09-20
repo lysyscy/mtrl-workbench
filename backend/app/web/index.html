@@ -318,10 +318,12 @@ const PJ_COLS = ['id','name','disp','full','phid','status','type','parent','kw',
    §1.5.2：系统外（项目端 / 会计 / 资产处 / 大领导 / 供应商 / 班组）**一律不设账号**。
    ⇒ 故本页**不设角色 / 权限配置** —— 权限无区别，配了也没有区别。 */
 const U_COLS=['id','acc','name','role','status','last','pwd'];
-const U_RAW=[
-  ['U01','zhangwei','张伟','admin','在用','2026-09-12 08:31','zw@2026'],
-  ['U02','wanglijia','王丽佳','user','在用','2026-09-11 17:02','wlj@2026']
-];
+/* ⚠️ 行形状（`adaptUser` 产出，与 `U_COLS` **逐位对应**）：`id · acc · name · role · status · last · pwd`
+   ⚠️ `U_COLS` **暂留** —— 它还被 `ACT.userAddOk`（**原型**建号写路径）用着；
+      那个动作在**片 4b** 改成调 `/api/m15/actions/create` 之后，`U_COLS` 才能删。
+   ⭐ **2026-09-20 `m15` 已接后端** ⇒ 原先的演示数组 `U_RAW` **已删**
+   （⛔ 不用原型模拟数据：那会让人以为"页面上看到的就是库里的"）。
+   ⛔ `pwd` **永远是空串** —— 列表接口**不带密码**（要看走「查看密码」动作，§1.5.1 明文裁定的唯一出口）。 */
 /* ---------- 仓库 / 收发结存（§5.3.2） MOD-07 ---------- */
 const WH = [
   ['W1','华能德州热电联产项目仓库',37,1010.78,41700.94,41700.94,1010.78],
@@ -524,7 +526,7 @@ const awfTotal = () => AWF_TOTAL;
    ===================================================================== */
 const O=(r,c)=>{const o={};c.forEach((k,i)=>o[k]=r[i]);return o};
 let PLs=[];   /* ⭐ 已接后端：由 `reloadPlans()` 从 `/api/m04/plans` 填充（原先由演示数组 `PL` 生成 —— 已删） */
-const USERS=U_RAW.map(r=>O(r,U_COLS));
+const USERS=[];   /* ⭐ 已接后端：由 `reloadM15()` 从 `/api/m15/users` **原地填充**（演示数组 `U_RAW` 已删） */
 /* ⭐⭐ 以下三张表**已接后端**（前端壳）：空数组起手，由 `boot()` 用 API 填 —— ⛔ 不用原型模拟数据。
      · `NO` 付款通知书 ← `GET /api/m03/notice-list?period=`（**全量**，筛选用前端 `ntHit` 原样做）
      · `PJs` 项目档案    ← `GET /api/m01/projects`
@@ -532,7 +534,8 @@ const USERS=U_RAW.map(r=>O(r,U_COLS));
    ⚠️ 其余表（`JCs`/`DFs`/`WHs`… 以及 **集采 / 跨域 / 用户** 各域）**仍是原型模拟数据** ——
       对应视图尚未接线（侧栏标「原型态」）。**已接线：`m03`/`m01`/`m04`/`m05`/`m06`/`m07`/`m08`/`m09`/`m14`**（看 `WIRED`）。 */
 let NO=[], PJs=[], FLs=[];
-/* 当前登录用户：原型固定为管理员本人（§1.5.1「用户本人为管理员」）；正式实现由登录态提供。
+/* 当前登录用户：⭐ **由 `reloadM15()` 从 `/api/m15/users` 的 `me` 填充**（§1.5.1「用户本人为管理员」）。
+   ⚠️ 这里的初值只是"**首屏还没取到数据**"时的占位 —— 真实身份来自后端（登录态）。
    ⚠️ 刻意**不写成 USERS[0] 的引用** —— 自检回滚会整体替换 USERS 的内容，引用会失效（同「原地复位」的教训）。 */
 let CUR={id:'U01',acc:'zhangwei',name:'张伟',role:'admin'};
 let IVs=[], ADs=[];   /* ⭐ 已接后端：由 `reloadInv()` 从 `/api/m08/inventory` 填充（原先由演示数组 `IV`/`AD` 生成 —— 已删） */
@@ -869,7 +872,7 @@ const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
-const WIRED=new Set(['m03','m01','m02','m04','m05','m06','m07','m08','m09','m14','m11']);
+const WIRED=new Set(['m03','m01','m02','m04','m05','m06','m07','m08','m09','m14','m11','m15']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -3330,7 +3333,7 @@ V.m15=()=>{
       <td>${esc(u.name)}${u.id===CUR.id?' <span class="mut sm">（当前登录）</span>':''}</td>
       <td>${u.role==='admin'?tag('管理员','vi'):tag('普通用户','in')}</td>
       <td>${u.status==='在用'?tag('在用','ok'):u.status==='已停用'?tag('已停用','wn'):tag('已删除','dg')}</td>
-      <td class="now sm mut">${esc(u.last||'—')}</td>
+      <td class="now sm mut">${u.last?esc(u.last):'<span class="mut">从未登录</span>'}</td>
       <td class="ctr now">${u.status==='已删除'
         ? `<button class="btn sm" data-act="userRestore" data-id="${u.id}" ${iAmAdmin?'':'disabled'}>恢复</button>`
         : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${iAmAdmin?'':'disabled'}>改密</button>

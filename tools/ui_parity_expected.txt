@@ -10,3 +10,6 @@ m14 8cdd95a7  # 原型:       <div class="tip" style="margin:6px 0 0"><b>本｜�
 # ⭐ 2026-09-20（`ACC-PRJ-LIST-001/001-07` 走 (b) 完整版：名字格按内容定宽，⛔ 不再写死 min-width ⇒ 长名字不再被切）
 m01 94d4a54d  # 原型: <td>${p.type==='shell'?'<span class="mut sm"｜壳: <td>${p.type==='shell'?'<span class="mut sm"
 m01 4a4c1622  # 原型: <td><input class="inp plain" style="min-widt｜壳: <td><input class="inp plain" style="${nameW(
+# ⭐ 2026-09-20（`m15` 片 4a：列表接线后，「最近登录」列**如实**显示 ——
+#   空串 = 从未登录 ⇒ 显「从未登录」，⛔ 不再用 `—` 冒充「数据没取到」）
+m15 566cf405  # 原型: <td class="now sm mut">${esc(u.last||'—')}</｜壳: <td class="now sm mut">${u.last?esc(u.last):
