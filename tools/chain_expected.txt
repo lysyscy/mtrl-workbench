@@ -134,7 +134,7 @@ X|导出**按模板**（模板只定长相 · 数据仍来自页面筛选）|模
 X|模板**数据区起点**识别（读 `DATA_START` 标记文字 · ⛔ 不用「定义名称」）|数据区首行那格的标记文字 DATA_START|backend/app/report_export/tpl_fill.py::locate_data_area|ACC-X-EXP-001|已接
 X|模板**尾部行块随行数派生**（合计/小计/脚注按实际行数位移 · ⛔ 不写死行号）|其位置**一律按实际数据行数派生**|backend/app/report_export/tpl_fill.py::tail_end_row|ACC-X-EXP-001|已接
 X|全局删除（确认框 **必须列出删除影响范围**：关联数据 / 统计影响）|必须列出删除影响范围|backend/app/mod04_plan/plan_ui.py::delete_impact|ACC-X-DEL-001|接线缺
-X|账号与权限（系统内 2 账号 · **用户本人为管理员**可管理其他账号）|用户本人为管理员可管理其他账号|—|ACC-USR-MGMT-001|缺
+X|账号与权限（系统内 2 账号 · **用户本人为管理员**可管理其他账号）|用户本人为管理员可管理其他账号|backend/app/mod15_user/api.py::api_create|ACC-USR-MGMT-001|已接
 X|上线前历史数据初始化（**历史数据不重走**总原则）|历史数据不重走|—|ACC-INIT-001|缺
 X|外观主题（地基：唯一真源 `THEME_CSS` 32 变量 · 换主题 = 换取值零 CSS 改动）|外观主题（界面配色）|backend/app/mod03_notice/page.py::THEME_CSS|ACC-UI-THEME-001|已接
 X|系统设置（取值出口唯一 = `app_settings.effective`）|系统设置|backend/app/mod14_config/router.py::settings_page|ACC-CFG-SETUP-001|已接
