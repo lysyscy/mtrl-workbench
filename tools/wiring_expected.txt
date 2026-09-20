@@ -78,7 +78,7 @@ W2 backend/app/mod14_config/repository.py:read_values
 #         `soft_delete` 属**第②类「功能尚未做到那一步」** —— 它是**业务写操作**（⛔ 不是守卫），
 #         现在只有断言在调；**片 2 的 JSON API 一接上就有生产调用者** ⇒ 那时**删掉下一行**
 #         （⚠️ 本白名单**只准变短**，这行是"临时过桥"，⛔ 不是长期豁免）。
-W1b backend/app/mod15_user/repository.py:soft_delete
+# ⭐ 2026-09-20 已消号：`soft_delete` 随 **片 2（JSON API）** 上线而有了生产调用者 ⇒ 登记行删除 ✓
 W1b backend/app/mod02_i8/fetch_task.py:assert_single_external_source
 W1b backend/app/core/period.py:export_filename
 W1b backend/app/mod01_projects/domain.py:validate_keyword_in_doc

@@ -336,6 +336,83 @@ def test_密码无长度限制可清空且建号改密同一规则():
         s.rollback()
 
 
+@acc("ACC-USR-MGMT-001", "001-02")
+def test_管理动作齐备且不设业务权限配置():
+    """claim：「**管理动作齐备**（建号 / 改密 / 停用启用 / 删除 / 转让管理员），
+    且**不设业务权限配置界面**」（§1.5.1 —— 「两人业务权限**无区别**」）
+
+    ⚠️ 两半各钉各的：
+    **① 「齐备」** ⇒ 钉在 **`APIRouter` 自己的路由表**上（⛔ 不是"我搜了一眼源码里有这些函数"）——
+       函数存在 ≠ 挂上了端点；只有当**每个动作都有可调用的端点**时，"齐备"才成立。
+    **② 「不设业务权限配置」** ⇒ ⭐ 钉在 **建号入口的字段集**上：
+       若 `CreateIn` 里出现 `role`/`perm*`，那"两人权限无区别"就**当场被推翻**
+       （有字段就迟早有界面）⇒ 这一条比"扫一遍页面找权限设置控件"**硬得多、也稳得多**。
+    """
+    from app.mod15_user.api import CreateIn, router as m15_router
+
+    paths = {getattr(r, "path", "") for r in m15_router.routes}
+    actions = {
+        "建号": "/api/m15/actions/create",
+        "改密": "/api/m15/actions/password",
+        "停用启用": "/api/m15/actions/status",
+        "删除": "/api/m15/actions/delete",
+        "转让管理员": "/api/m15/actions/transfer",
+    }
+    missing = [name for name, p in actions.items() if p not in paths]
+    assert not missing, (
+        f"这些管理动作**没有端点**：{missing}（claim 要求「管理动作齐备」）"
+        f"\n  实际端点：{sorted(paths)}")
+    assert "/api/m15/users" in paths, "没有整页数据的读端点"
+
+    # ② ⛔ 不设业务权限配置 —— 建号入口**不许有角色/权限字段**
+    fields = set(CreateIn.model_fields.keys())
+    forbid = {f for f in fields if f == "role" or f.startswith(("perm", "can_", "allow_", "scope"))}
+    assert not forbid, (
+        f"建号入口出现了 {sorted(forbid)} —— §1.5.1「两人业务权限**无区别**」"
+        "⇒ 新增账号**一律普通用户**、**不需要选角色**（claim `001-02` 后半句）。"
+        "⚠️ 有字段就迟早有界面 —— 这是「不设权限配置」最靠前的那道闸。")
+    assert fields >= {"account", "name", "password"}, f"建号入口字段不全：{sorted(fields)}"
+
+    # ②b 整个 mod15 模块里⛔ 不得出现"权限配置"类端点
+    import pathlib
+
+    import app
+    mod = pathlib.Path(app.__file__).resolve().parent / "mod15_user"
+    import re
+    bad = []
+    for p in sorted(mod.glob("*.py")):
+        for k, ln in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"@router\.(get|post)\([^)]*(perm|scope|role[s]?/)", ln, re.I):
+                bad.append(f"{p.name}:{k}  {ln.strip()[:60]}")
+    assert not bad, f"mod15 里出现了权限配置端点：{bad}"
+
+    # ③ ⭐ 「齐备」还意味着**真的可用**：用户能触发到的拒绝必须是 `MustReportError`
+    #    （API 把它转成 `ok=False` ＋ 原文给用户看），⛔ 不是 `ValueError` —— 那会变成 **HTTP 500**，
+    #    用户只看到"请求失败"、原因全丢了。
+    #    ⭐ 这条是**真机冒烟抓出来的**：拿一个不存在的 id 调改密 ⇒ 500（而不是"账号不存在"）。
+    import inspect
+
+    from app.mod15_user import api as API
+    src = inspect.getsource(API._run)
+    assert "except AppError" in src, (
+        "写动作的兜底没在吞 `AppError` ⇒ 业务拒绝会变成 500（原文就丢给用户看不见了）")
+    with session_scope() as s:
+        _admin(s)
+        actor = D.active_admins(R.all_users(s))[0]
+        for label, call in (
+            ("改密", lambda: R.set_password(s, 999999, "x")),
+            ("停用", lambda: R.set_status(s, 999999, D.STATUS_DISABLED)),
+            ("删除", lambda: R.soft_delete(s, 999999, actor=actor)),
+            ("恢复", lambda: R.restore(s, 999999)),
+            ("状态取值非法", lambda: R.set_status(s, actor.id, "已删除")),
+        ):
+            # ⚠️ 逐个点名：`pytest.raises(MustReportError)` 会在抛别的异常时**照样红**，
+            #    所以这里不需要额外断言"不是 ValueError" —— 它**本来就**只放行这一种。
+            with pytest.raises(MustReportError):
+                call()
+        s.rollback()
+
+
 @acc("ACC-USR-MGMT-001", "001-11")
 def test_当前登录用户是唯一出口且不得写死人名():
     """claim：「「当前登录用户」的供给：**留痕的改前人与录入人一律取当前登录用户**，

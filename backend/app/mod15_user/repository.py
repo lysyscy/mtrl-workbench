@@ -12,8 +12,16 @@ import datetime as _dt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.errors import MustReportError
 from app.mod15_user import domain as D
 from app.mod15_user.models import UserAccount
+
+# ⚠️⚠️ **本层的拒绝一律用 `MustReportError`（⛔ 不是 `ValueError`）** ——
+#    理由不是风格，是**用户看不看得见**：JSON API 只把 `AppError` 转成
+#    「`ok=False` ＋ 原文」，其余的异常会变成 **HTTP 500**，用户只看到"请求失败"、原因丢了。
+#    ⭐ 这条是**真机冒烟抓出来的**：拿一个不存在的 id 调改密 ⇒ 500（而不是一句"账号不存在"）。
+#    ⇒ 判据：**用户能触发到的拒绝**，一律 `MustReportError`；
+#      `ValueError` 只留给"调用方写错了"（那种本该 500）。
 
 #: 系统**首个**管理员的账号名（`ensure_seeded` 用）。
 #: ⚠️ 只预置**一个**，⛔ 不预置"第二个人" —— §1.5.1 说「2 人使用」是**使用现状**、
@@ -75,7 +83,7 @@ def set_password(s: Session, uid: int, password: str, *,
     """
     row = s.get(UserAccount, uid)
     if row is None:
-        raise ValueError(f"账号不存在：id={uid}")
+        raise MustReportError(f"账号不存在：id={uid}")
     row.password = password if password is not None else ""
     if i8_user is not None:
         row.i8_user = i8_user
@@ -109,10 +117,10 @@ def set_status(s: Session, uid: int, status: str) -> UserAccount:
     ⚠️ 停用**最后一个在用管理员**会被 `domain` 拦下（防锁死）。
     """
     if status not in D.STATUSES:
-        raise ValueError(f"状态取值非法：{status!r}（只允许 {D.STATUSES}）")
+        raise MustReportError(f"状态取值非法：{status!r}（只允许 {D.STATUSES}）")
     row = s.get(UserAccount, uid)
     if row is None:
-        raise ValueError(f"账号不存在：id={uid}")
+        raise MustReportError(f"账号不存在：id={uid}")
     if status == D.STATUS_DISABLED:
         D.assert_last_admin_protected(all_users(s), row)
     row.status = status
@@ -130,7 +138,7 @@ def soft_delete(s: Session, uid: int, *, actor: UserAccount) -> UserAccount:
     """
     row = s.get(UserAccount, uid)
     if row is None:
-        raise ValueError(f"账号不存在：id={uid}")
+        raise MustReportError(f"账号不存在：id={uid}")
     D.assert_not_self_delete(actor, row)
     D.assert_last_admin_protected(all_users(s), row)
     row.deleted_at = _dt.datetime.now()
@@ -147,7 +155,7 @@ def restore(s: Session, uid: int) -> UserAccount:
     """
     row = s.get(UserAccount, uid)
     if row is None:
-        raise ValueError(f"账号不存在：id={uid}")
+        raise MustReportError(f"账号不存在：id={uid}")
     row.deleted_at = None
     row.deleted_by = ""
     s.flush()

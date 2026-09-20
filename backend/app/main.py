@@ -45,6 +45,10 @@ from app.mod11_jc.router import router as mod11_router
 #    差异的**载体 = 调整单**（`m08`）、**产出 = 差异表**（`m06`，系统按调整单算）⇒ 无独立页。
 #    ⇒ 包与路由都已删除；能力判据改由 `ACC-DIF-REG-001`（4 条）指着 `m08`/`m06` 的真落点。
 from app.mod14_config.router import router as mod14_router
+# MOD-15：**从第一天起就是 JSON API ＋ 新壳**（⛔ 没有服务端渲染页）—— 同 `mod11` 的做法。
+# ⚠️ 本模块还顺手把 `core/identity.py` 的「当前登录用户」对到了**真实账号**
+#    （§1.5.1 末行：留痕的改前人 / 录入人「统一取当前登录用户」＝ 账号体系与业务字段的**唯一接点**）。
+from app.mod15_user.api import router as mod15_api_router
 
 # 各模块页面（单文件，托管在本进程；切片 MVP，完整前端在后续阶段）
 _APP_DIR = Path(__file__).resolve().parent
@@ -186,6 +190,10 @@ def create_app() -> FastAPI:
     app.include_router(mod11_router)
     # ⛔ 原 `mod12_router`（差异登记的 JSON API）已撤 —— 见上方 import 处的说明（2026-09-20 用户裁定）
     app.include_router(mod14_router)
+    # MOD-15 用户管理（`MOD-15` · §1.5）：**从第一天起就是 JSON API ＋ 新壳**（⛔ 无服务端渲染页）
+    #  ⚠️ 本模块还顺手把 `core/identity.py` 的「当前登录用户」对到了**真实账号**
+    #     （§1.5.1 末行：留痕的改前人 / 录入人「统一取当前登录用户」＝ 账号体系与业务字段的唯一接点）
+    app.include_router(mod15_api_router)
 
     @app.get("/healthz", tags=["meta"])
     def healthz() -> dict[str, str]:
