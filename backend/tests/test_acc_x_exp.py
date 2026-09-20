@@ -97,4 +97,129 @@ def test_有数据的页面都有导出入口():
         assert k in exempt_ok, f"{k} 声明了豁免，但页面上找不到『不单独导出』的说明"
 
 
-__all__ = ["NON_DATA_VIEWS", "EXPORT_EXEMPT"]
+def _actions() -> str:
+    return (_shell_dir() / "shell" / "actions.js").read_text(encoding="utf-8")
+
+
+def _fn_body(src: str, name: str, end: str) -> str:
+    """抽 `name:` 起、到 `end` 止的一段（段内断言用，避免全文件宽松命中）。"""
+    i = src.index(name)
+    return src[i:src.index(end, i)]
+
+
+def _strip_js_comments(seg: str) -> str:
+    """去掉 JS 注释（`/* … */` 与 `// …`）——
+
+    ⚠️ 必须去：渲染面的**源码**里到处是 `**加粗**` 之类的**注释写法**（本仓中文注释的习惯），
+       不去掉的话"无 Markdown 泄漏"这条断言会被自己的注释判红（**假红**）。
+    ⚠️ 第二条 `sub` 是**兜未闭合的块注释**：截段窗口若正好切在一个 `/* …` 中间，
+       第一条（要求有 `*/`）就匹配不上、注释会留在段里 ⇒ **又会假红**。
+       （我第一版正是死在这：按固定字符数截段，截进了下一个注释块。）
+    """
+    seg = re.sub(r"/\*.*?\*/", "", seg, flags=re.S)
+    seg = re.sub(r"/\*.*$", "", seg, flags=re.S)
+    return re.sub(r"//[^\n]*", "", seg)
+
+
+#: 渲染面：`name → (定义锚点, 终止标记)`。
+#: ⚠️⚠️ 必须用**定义锚点**找人，⛔ 不能按"哪个文件包含这个名字"选文件 ——
+#:   `ledExpOk` 这个名字在 `index.html` 里**也**出现（`data-act="ledExpOk"` 那个按钮）⇒
+#:   按包含关系会选到 `index.html`，然后在里面找 `ledExpSave` **找不到**（我第二版就栽在这）。
+#: ⚠️ 也⛔ 别用"固定字符数"截段：会截进后面的注释块，而那段注释若没闭合，
+#:   去注释的正则匹配不上 ⇒ 注释里的 `**` 会被当成泄漏（我第一版栽在这）。
+RENDER_SEGMENTS = {
+    "ledExpStrip": ("ledExpStrip=()=>", "\n/*"),
+    "procExpStrip": ("procExpStrip=()=>", "\n/*"),
+    "ledExpOk": ("ledExpOk:()=>", "ledExpSave"),
+    "procExpOk": ("procExpOk:()=>", "procExpSave"),
+}
+
+
+#: 导出相关的**渲染面**（001-07 要核的就是这几段产出的字符串）
+EXPORT_RENDERERS = tuple(RENDER_SEGMENTS)
+
+
+@acc("ACC-X-EXP-001", "001-04")
+def test_导出展开区在滚动容器之外且全页恰好一处():
+    """claim：「导出展开区**渲染在滚动容器之外**，且**全页恰好一处**」。
+
+    ⚠️ 「滚动容器」在这个壳里是**具体的**：`.tw{overflow:auto;max-height:…}`（表格包裹层）。
+       代码自己的注释就写着（`index.html` L2048 / L2055）：
+       > 「面板必须渲染在 `.tw` **之外**（浮层才不被滚动容器裁）」
+       ⇒ 所以判据 = **展开区的渲染点在同一个卡片里第一个 `<div class="tw">` 之前**。
+       ⭐ 这不是我发明的标准，是**代码注释里已经写着的意图** —— 判据只是把它变成可执行的。
+    ⚠️ 「恰好一处」= 每个展开区**全页只被渲染一次**（`${ledExpOn?…}` 出现 1 次）——
+       ⛔ 两处渲染会让同一份状态画两份，点一个另一个不动。
+    """
+    html = _index()
+    slices = _view_slices(html)
+    for strip, flag in (("ledExpStrip", "ledExpOn"), ("procExpStrip", "procExpOn")):
+        call = f"${{{flag}?{strip}():''}}"
+        assert html.count(call) == 1, (
+            f"`{strip}` 的渲染点在**全页出现 {html.count(call)} 次** —— claim 要求**恰好一处**"
+            "（两处渲染 = 同一份状态画两份，点一个另一个不动）")
+
+        site = html.index(call)
+        view = next((k for k, seg in slices.items()
+                     if seg.find(call) >= 0), None)
+        assert view, f"`{strip}` 的渲染点不在任何视图切片里 —— 解析大概失效了"
+        seg = slices[view]
+        idx = seg.index(call)
+        near = seg[max(0, idx - 400):idx]
+        assert '<div class="tw"' not in near, (
+            f"`{strip}` 的渲染点前面就是 `.tw`（滚动容器）开标签 ⇒ 展开区**被塞进了表格容器**，"
+            "会被滚动容器裁掉（浮层面板会被切断）—— 代码注释里写着它必须渲染在 `.tw` 之外。"
+            f"\n  ⚠️ 注意：**不能**用「该片里第一个 `.tw` 在不在前面」来判 —— `{view}` 里"
+            "前面还有别的卡片（也带 `.tw`），那样会**假红**。")
+
+
+@acc("ACC-X-EXP-001", "001-03")
+def test_多项目导出的清单预览有单多两条形态():
+    """claim：「多项目导出的**清单预览**：**单项目 = 一个工作簿（多工作表）**，
+    **多项目 = zip ＋ 每项目一行清单**」。
+
+    ⚠️ 落点 = 两个导出确认弹窗 `ledExpOk`（逐月欠款台账）/ `procExpOk`（过程资料）的 `body`
+       —— 它们都是 `pjs.length===1 ? 单 : 多` 的**两条形态**。
+    ⚠️ 「每项目一行清单」**必须真的是"一行一项目"**（`pjs.map`）——
+       ⛔ 只写一句"内含 N 个"（数字）**不算清单**：用户要看的是**哪几个项目**在里面。
+    """
+    for key, end, unit in (("ledExpOk:", "ledExpSave", "工作表"),
+                           ("procExpOk:", "procExpSave", "个文件")):
+        seg = _fn_body(_actions(), key, end)
+        assert "pjs.length===1" in seg, f"`{key}` 没有**单/多**两条形态（claim 要求两条都在）"
+        # ⚠️ 切三元分支要认**行首那个 `:`** —— 按"第一个 `:`"切会在 `style="margin:0"` 上断开
+        parts = re.split(r"\n\s*:\s*", seg.split("pjs.length===1", 1)[1], maxsplit=1)
+        assert len(parts) == 2, f"`{key}` 的单/多两条形态切不开（三元的 `:` 大概换写法了）"
+        single, multi = parts
+        assert "1 " in single and ("工作簿" in single or "文件" in single), \
+            f"`{key}` 的**单项目**分支没说清生成什么（应是「1 个工作簿/文件」）"
+        assert unit in single, f"`{key}` 的单项目分支没说明**内含多张工作表**（应出现 `{unit}`）"
+        assert "<table" in multi, (
+            f"`{key}` 的**多项目**分支没有清单表 ⇒ 用户看不到「哪几个项目」进了 zip"
+            "（claim 明确要求「**每项目一行清单**」）")
+        assert "pjs.map" in multi, f"`{key}` 的清单表不是**逐项目一行**（`pjs.map` 不在其中）"
+        assert "zip" in multi.lower(), f"`{key}` 的多项目分支没说明**打成 zip**"
+
+
+@acc("ACC-X-EXP-001", "001-07")
+def test_导出相关渲染面无Markdown泄漏():
+    """claim：「导出相关**渲染面无 Markdown 泄漏**」。
+
+    ⚠️ "泄漏" = 本该渲染成**格式**的写法（`**粗体**` / `| 表格 |` / `## 标题`）被当成**字面文本**吐到界面上。
+       落点 = 导出相关的那几段**渲染面**（`ledExpStrip` / `procExpStrip` / `ledExpOk` / `procExpOk`）。
+    ⚠️⚠️ 必须先**去掉 JS 注释**再查 —— 本仓中文注释里 `**加粗**` 是习惯写法，
+       不去注释这条断言会被**自己的注释**判红（假红，而且极难查）。
+    ⚠️ **覆盖面的诚实交代**：这是**静态**检查（核模板串），
+       ⛔ **不等于**真机 DOM 上没有泄漏 —— 真机那层由 `tools/_shell_smoke.py` 兜（它读 console/page 错误）。
+    """
+    # ⚠️ 渲染面**不在同一个文件**：两个展开区在 `index.html`、两个确认弹窗在 `actions.js`
+    for name, (anchor, end) in RENDER_SEGMENTS.items():
+        src = next((s for s in (_index(), _actions()) if anchor in s), None)
+        assert src, f"找不到 `{name}` 的定义（锚点 `{anchor}`）—— 落点变了，先核对再改断言"
+        seg = _strip_js_comments(_fn_body(src, anchor, end))
+        assert "**" not in seg, f"`{name}` 的渲染面出现 `**`（Markdown 粗体泄漏到界面）"
+        assert not re.search(r"(?m)^\s*\|\s*\S", seg), f"`{name}` 的渲染面出现 Markdown 表格行（`| … |`）"
+        assert not re.search(r"(?m)^\s*#{1,4}\s", seg), f"`{name}` 的渲染面出现 Markdown 标题（`## …`）"
+
+
+__all__ = ["NON_DATA_VIEWS", "EXPORT_EXEMPT", "EXPORT_RENDERERS"]
