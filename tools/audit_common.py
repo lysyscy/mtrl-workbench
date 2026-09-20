@@ -182,6 +182,10 @@ TAIL_SCHEDULE_RE = re.compile(r"^#{2,3}\s*[\d.]*\s*逐条排期")
 PATH_ROOTS: tuple[str, ...] = ("", "backend/", "backend/app/")
 
 SCAN_GLOBS: tuple[str, ...] = (
+    # ⭐ `CLAUDE.md`（2026-09-20 换工具时新建的 AI 入口）**也纳入扫描** ——
+    #    它是"开工前必读"文件，⚠️ 一旦里面的用例号 / 路径 / 数字过期，**危害比别处更大**
+    #    （新来的 AI 第一眼读它）⇒ ⭐ 让它受同样的 `T1`/`T2`/`T3`/`T4` 看管。
+    "CLAUDE.md",
     "README.md", "ops/*.md", ".workbuddy/plans/*.md",
     ".workbuddy/memory/MEMORY.md", ".workbuddy/memory/CHANGELOG.md",
 )
