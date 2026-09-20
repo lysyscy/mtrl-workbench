@@ -4,17 +4,22 @@
 
 ⚠️ 本用例只钉「**入口存在** ＋ **初始化原则**」：
 - ✅ `001-05`（过程资料**手录 ＋ Excel 上传**）—— 2026-09-17 入口落地（`/m06/mech` · `/m06/import*`）后**已绑**。
-- ⏳ `001-06`（集采台账手录）对应的域**尚未实现**（M5）⇒ 那一点走「未绑定」态，
-  不在此文件造假断言（`ACC-RPT-PROC-001` 管过程资料的**月度**口径，本用例管**上线前初始化**这一层，别交叉挂）。
+- ✅ `001-06`（集采台账手录）—— **2026-09-20 已钉**（原先写"对应的域尚未实现（M5）"，
+  那是 09-17 的判断、**现已过期**：`m11` 上三个手录入口齐备）。
 - 库存单据的**抓取动作**细判据归 `ACC-INV-FETCH-001`；本用例只钉「**过去月份可补抓**」这一点。
+- ⚠️ `ACC-RPT-PROC-001` 管过程资料的**月度**口径，本用例管**上线前初始化**这一层，别交叉挂。
 """
 
 from __future__ import annotations
+
+import pathlib
+import re
 
 from decimal import Decimal
 
 import pytest
 
+import app
 from app.core.errors import MustReportError
 from app.core.nav import NAV
 from app.main import create_app
@@ -167,3 +172,34 @@ def test_不重走审批不等于不补录_付款事实落库且审批状态不�
     assert res["written"] == 1
     assert len([x for x in fake.added if type(x).__name__ == "PaymentFlow"]) == 1   # 事实确实落库
     assert notice.approve_status == "已批"                                          # 审批状态一字未改
+
+
+@acc("ACC-INIT-001", "001-06")
+def test_集采台账手录入口在():
+    """claim：「集采台账：**手录**入口在（该域所有数据均手录）」。
+
+    ✅ **2026-09-20 已钉** —— ⚠️ 本文件原先写着"对应的域**尚未实现**（M5）⇒ 走未绑定态，
+       不造假断言"，那是 **09-17 当时的判断，现已过期**：`M5` 集采域已开工，
+       `m11` 上的手录入口齐备。⇒ 那句过期说明**同批删掉**（⛔ 留着就是"文档说一套、实现做一套"，
+       而且会让下一个人以为这两点还不能钉）。
+
+    ⚠️ 「该域所有数据均手录」⇒ **三个入口一个都不能少**（合同主表 / 发票 / 付款）：
+       少一个，那个域的数据就得绕道别的页去录，"均手录"就不成立。
+    ⚠️ 付款另有一条「**从付款域引用**」的旁路（`jcPayRef`）—— 它是"引用**已发生**的付款事实"，
+       ⛔ **不是**手录的替代：两条并存（手录借据 / 引用付款域）。
+    """
+    web = pathlib.Path(app.__file__).resolve().parent / "web"
+    all_shell = "\n".join([
+        (web / "index.html").read_text(encoding="utf-8"),
+        (web / "shell" / "core.js").read_text(encoding="utf-8"),
+        (web / "shell" / "actions.js").read_text(encoding="utf-8"),
+    ])
+
+    assert 'data-act="jcAdd"' in all_shell, "集采**合同主表**没有手录入口（`jcAdd`，手工新增合同）"
+    kinds = set(re.findall(r'data-act="jcSubAdd"[^>]*data-kind="(\w+)"', all_shell))
+    assert kinds == {"inv", "tinv", "pay"}, (
+        f"集采子表的手录入口不全：只找到 {sorted(kinds)} —— 「该域所有数据均手录」要求"
+        "**合同 / 供应商发票 / 贸易公司发票 / 付款**四条都能手录，⛔ 少一条就得绕道别的页去录")
+    assert 'data-act="jcPayRef"' in all_shell, (
+        "付款的「从付款域引用」入口不见了 —— ⚠️ 它**不是**手录的替代（两条并存），"
+        "但少了它，已发生过的付款事实就无法在集采域挂上")
