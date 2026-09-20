@@ -20,10 +20,16 @@ from __future__ import annotations
 from decimal import Decimal
 from io import BytesIO
 
+#: 「序号」这一列**没有对应的行字典键** —— 它是**屏幕上的行号**（1,2,3…），不是数据库 `id`。
+#: ⚠️⚠️ 用户 **2026-09-20 提过两次**（第一次被别的事岔开忘了）：页面上那格显示的必须是**序号**。
+#:   早先页面渲染的是 `${j.id}`（数据库主键，形如 `1135`）—— 在人眼里那根本不是"第几行"，
+#:   所以这次页面与导出**一起改成行号**（⛔ 别直接把 `id` 当序号导出去）。
+SEQ_KEY = "__seq__"
+
 #: 导出的列（**顺序 = 页面表头顺序**去掉「勾选 / 操作」）⇒ 导出的表与屏幕**并排看能对上**。
-#: 第二项 = 行字典里的键（`mod11_jc.service.build_list` 的输出直接可用）。
+#: 第二项 = 行字典里的键（`mod11_jc.service.build_list` 的输出直接可用）；`SEQ_KEY` 是特例（行号）。
 COLUMNS: tuple[tuple[str, str], ...] = (
-    ("序号", "id"),
+    ("序号", SEQ_KEY),
     ("合同日期", "date"),
     ("材料名", "material"),
     ("供应商", "supplier"),
@@ -82,11 +88,16 @@ def build_xlsx(rows: list[dict]) -> bytes:
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal="center")
 
-    for r in rows or ():
-        ws.append([
-            (_money(r.get(key)) if key in MONEY_KEYS else r.get(key))
-            for _, key in COLUMNS
-        ])
+    for n, r in enumerate(rows or (), start=1):
+        vals = []
+        for _, key in COLUMNS:
+            if key == SEQ_KEY:
+                vals.append(n)                       # ⭐ **行号**（屏幕上的序号 · 见 `SEQ_KEY`）
+            elif key in MONEY_KEYS:
+                vals.append(_money(r.get(key)))
+            else:
+                vals.append(r.get(key))
+        ws.append(vals)
 
     # 合计行（**只合金额列**）—— 放最后，并在首列写明是合计（⛔ 不让人误当成一行数据）
     if rows:

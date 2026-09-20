@@ -1184,12 +1184,29 @@ BIND.m11 = function () {
   btn.insertAdjacentElement('afterend', hidBtn);
   jcApplyHide();                       /* ⚠️ 表是刚重建的 ⇒ 把"隐藏"偏好重新落上去（见 `jcApplyHide`） */
 
-  const expBtn = document.createElement('button');
-  expBtn.className = 'btn';
-  expBtn.dataset.act = 'jcExport';
-  expBtn.title = '导出**当前屏幕上这些行**（含筛选）为 Excel —— ⭐ 列是**全列**（隐藏列也会导出）';
-  expBtn.textContent = '⬇ 导出 Excel';
-  hidBtn.insertAdjacentElement('afterend', expBtn);
+  /* ⭐⭐ `M5-9` 导出：**接管页面已有的那个「导出 Excel（R1）」按钮**，⛔ **不新建一个**。
+     ⚠️ 2026-09-20 用户实测：「导出的按钮现在有俩了，你合并一下，把无色的合并到有颜色的按钮里」
+        —— 页面上原本就有 `<button class="btn pri" data-act="exp">导出 Excel（R1）</button>`（**有颜色**），
+        我又 `createElement` 了一个无色的 ⇒ 两个按钮干同一件事。
+     ⚠️ **为什么"改它的 `data-act`"而不是去改切片里那行**：切片一行不改是硬约束（`ui_parity`）；
+        而**渲染后注入属性**正是本层（`BIND`）该干的活 —— 同 `injectTypeEdit` 那套（那里也是注入属性、
+        不改切片）。⛔ 不要为了省事去动 `V.m11` 那一行。
+     ⚠️ 取**最后一个** `[data-act="exp"]`：m11 页里只有这一个，但按"最后一个"取更稳
+        （将来若有人在前面的卡头再加一个，也不会误改到别的卡上）。 */
+  const expOld = [...host.querySelectorAll('[data-act="exp"]')].pop();
+  if (expOld) {
+    expOld.dataset.act = 'jcExport';
+    expOld.title = '导出**当前屏幕上这些行**（含筛选）为 Excel —— ⭐ 列是**全列**（隐藏列也会导出）';
+    expOld.textContent = '⬇ 导出 Excel';
+  } else {
+    // ⚠️ 兜底：万一页面结构变了、找不到那个按钮 ⇒ **补一个**（⛔ 不能"导出功能凭空消失"而不报错）
+    const b = document.createElement('button');
+    b.className = 'btn pri';
+    b.dataset.act = 'jcExport';
+    b.title = '导出**当前屏幕上这些行**（含筛选）为 Excel —— ⭐ 列是**全列**（隐藏列也会导出）';
+    b.textContent = '⬇ 导出 Excel';
+    hidBtn.insertAdjacentElement('afterend', b);
+  }
 };
 
 const _BIND_M03_OLD = BIND.m03;

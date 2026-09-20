@@ -20,9 +20,9 @@ m11 501a88a3  # 原型:       <td class="ctr"><input type="checkbox" class｜壳
 m11 4ea3db10  # 原型:       <td class="fc">${j.id}</td><td class="now">$｜壳:     </div>
 m11 313bebe9  # 原型:       <td class="num">${M(j.contractAmt)}</td>｜壳:     ${jcNewOn?jcNewStrip():''}
 m11 5b46644e  # 原型:       <td class="num" style="white-space:nowrap">$｜壳:     <div class="tw"><table class="dt" data-sort da
-m11 13863ba4  # 原型:       <td class="sm">${j.tradeCo?esc(j.tradeCo):'<｜壳:     ${jcRows.map(j=>`<tr class="${j.tag==='待确认'?'h
+m11 4196162d  # 原型:       <td class="sm">${j.tradeCo?esc(j.tradeCo):'<｜壳:     ${jcRows.map((j,i)=>`<tr class="${j.tag==='待确认
 m11 4abf0a8a  # 原型:       <td class="num">${j.tradeContractAmt?M(j.tra｜壳:       <td class="ctr"><input type="checkbox" class
-m11 90f79bb5  # 原型:       <td class="num" style="white-space:nowrap">$｜壳:       <td class="fc">${j.id}</td><td class="now">$
+m11 64a79c06  # 原型:       <td class="num" style="white-space:nowrap">$｜壳:       <td class="fc" title="序号 = 当前筛选下的行号（⛔ 不是数据库 
 m11 2ed22cbe  # 原型:       <td class="num"><b>${M(jcSettle(j))}</b></td｜壳:       <td class="num">${j.contractAmt?M(j.contract
 m11 0308101d  # 原型:       <td class="num" style="white-space:nowrap"><｜壳:       <td class="num" style="white-space:nowrap">$
 m11 78d544de  # 原型:       <td class="num" style="color:${jcDebt(j)>0?'｜壳:       <td class="sm">${j.tradeCo?esc(j.tradeCo):'<
