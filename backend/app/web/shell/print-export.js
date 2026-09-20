@@ -33,7 +33,7 @@ async function m03RunBatch(rows, mode) {
      ⇒ 单独说出来 ＋ 叫人**去看打印机**，⛔ 不并进"失败"。 */
   const unver = (r.items || []).filter(x => x.ok && x.unverified);
   const unprinted = r.unprinted_bill_nos || [];
-  return toast([
+  const msg = [
     `<b>${what}完成</b>：成功 <b>${r.success}</b> / 共 ${r.total}`,
     unver.length ? `（其中 <b>${unver.length}</b> 条**已投递但未核实**）` : '',
     r.failed ? ` · 失败 <b>${r.failed}</b>` : '',
@@ -41,7 +41,44 @@ async function m03RunBatch(rows, mode) {
     unprinted.length ? `<br>⚠️ <b>未产出的单号</b>：${esc(unprinted.join('、'))}` : '',
     bad.length ? `<br><span class="sm">失败原因：${esc(bad.slice(0, 3).map(x => `${x.bill_no || x.notice_id}：${x.reason || '未说明'}`).join('；'))}${bad.length > 3 ? ` …另 ${bad.length - 3} 条` : ''}</span>` : '',
     mode === 'print' ? '<br><span class="sm mut">本系统只把勾选的通知书交给 i8（<b>不自建打印模板</b> · DEV-P-07）</span>' : '',
-  ].join(''), 9500);
+  ].join('');
+  /* ⭐⭐ 2026-09-20 **导出改浏览器下载**（用户口径：「如果导出的话，换成浏览器下载吧」）——
+     后端**不再往本机写文件**（旧做法攒了 884 个、壳里还压根没用那条路径）；
+     这批字节现在停在服务端 `pdf_cache` 里等我们**取一次**（单张 = PDF / 多张 = 打包 zip）。
+     ⚠️ **一张都没成** ⇒ 没有产物可下 ⇒ 只把原因如实报出来（⛔ 别去下一个空文件）。
+     ⚠️ **部分失败** ⇒ 成功的那些**照样下载**（人点导出就是要拿到能出的那几张），
+        失败的照实写在**同一条提示**里 —— 两件事都不瞒（禁静默）。 */
+  if (mode !== 'pdf') return toast(msg, 9500);
+  if (!r.success) return toast(msg, 12000);
+  return m03Download(((r.items || []).find(x => x.download_url) || {}).download_url, msg);
+}
+
+/* ⭐ 浏览器下载（照 `procExpSave` / `expPivot` 那套：`fetch → 看 content-type → blob → <a download>`）。
+   ⚠️⚠️ **必须先看 `content-type`**：后端"过期 / 重启过"时回的是 **JSON 200 ＋ 中文**
+      —— 若直接当文件存下来，用户会拿到一个**打不开的「PDF」**、还不知道为什么。
+   ⚠️ 文件名**由后端带出**（`X-Export-Filename`，UTF-8 percent-encoded）⇒ ⛔ 壳里不自己拼
+      （命名规则一旦两处各写一份，改一处就会静默走形 · 同 `m06`/`m07`/`m08` 口径）。
+   ⚠️ **文件顶层的函数** ⇒ ⛔ 不许塞进 `ACT` 对象字面量（那个坑踩过三次：`jcLinkAct` /
+      `jcFetchSinceOn` / `jcHideTrade`）。 */
+async function m03Download(url, okMsg) {
+  if (!url) return toast(`<b>下载没能开始</b>：后端没给下载地址${okMsg ? `<br>${okMsg}` : ''}`, 10000);
+  let r;
+  try { r = await fetch(url); }
+  catch (e) { return toast(`<b>下载没能完成</b>：${esc(String((e && e.message) || e))}`, 9000); }
+  const ct = r.headers.get('content-type') || '';
+  if (ct.includes('application/json')) {
+    let d = {};
+    try { d = await r.json(); } catch (e) { /* 读不出就算了，下面统一报 */ }
+    /* ⚠️ FastAPI 的 `HTTPException` 回的是 `{detail: …}`，自己回的 `ok:false` 是 `{message: …}` —— 两个都认。 */
+    return toast(`<b>下载没能完成</b>：${esc(d.message || d.detail || '后端没给原因')}`, 10000);
+  }
+  if (!r.ok) return toast(`<b>下载没能完成</b>：HTTP ${r.status}`, 9000);
+  const fn = decodeURIComponent(r.headers.get('x-export-filename') || '') || '付款通知书.pdf';
+  const blob = await r.blob(), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = fn;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);   /* ⚠️ 不 revoke 会漏内存（每次导出都漏一份） */
+  return toast(`${okMsg}<br>已开始下载 <b>${esc(fn)}</b>`, 11000);
 }
 
 /* ⭐ `TAIL-46`：**打印机设置**入口（旧页 `m03.html` 那个 `btnSettings` 的事）——

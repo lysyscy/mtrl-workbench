@@ -18,11 +18,15 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.core.config import get_settings
 from app.core.db import session_scope
@@ -38,6 +42,7 @@ from app.mod01_projects.domain import (
 from app.mod01_projects.models import TYPE_SMALL
 from app.mod01_projects.repository import all_projects
 from app.mod02_i8 import wh_cache
+from app.mod03_notice import pdf_cache
 from app.mod03_notice.domain import still_unsettled
 from app.mod03_notice.print.dispatch import list_printers
 from app.mod03_notice.repository import latest_unresolved
@@ -290,6 +295,10 @@ def batch(
             "ok": False,
             "message": f"批量执行失败：{type(exc).__name__}: {exc}",
         })
+    # ⭐⭐ **导出不再落盘**（用户 2026-09-20：「导出换成浏览器下载」）⇒ 把这一批的字节交给
+    #    `pdf_cache` 拿一个 token；前端凭下面这个 `download_url` 取一次
+    #    （单张 = PDF / 多张 = 打包 zip），**取完就在浏览器里，本机不留文件**。
+    token = pdf_cache.put(result.files) if result.files else ""
     batch_name = Path(result.batch_dir).name if result.batch_dir else ""
     items = [
         ItemOutcomeOut(
@@ -299,7 +308,10 @@ def batch(
             reason=o.reason,
             pdf_path=o.pdf_path,
             download_url=(
-                f"/api/m03/pdf/{batch_name}/{Path(o.pdf_path).name}" if o.pdf_path and batch_name else ""
+                f"/api/m03/pdf/{token}" if token
+                # ⚠️ 兜底：**显式给了目录**（工具 / 自检）那种走旧路径 —— 生产路径已不落盘
+                else (f"/api/m03/pdf/{batch_name}/{Path(o.pdf_path).name}"
+                      if o.pdf_path and batch_name else "")
             ),
         )
         for o in result.outcomes
@@ -327,6 +339,46 @@ def download_pdf(batch: str, name: str) -> FileResponse:
     if not str(target).startswith(str(root)) or not target.is_file():
         raise HTTPException(status_code=404, detail="产物不存在")
     return FileResponse(target, media_type="application/pdf", filename=name)
+
+
+@router.get("/pdf/{token}")
+def download_batch(token: str) -> Response:
+    """把**这一批**导出产物交给浏览器（`PDF-001-04` 的新形态 · 2026-09-20）。
+
+    - **单张** ⇒ 直接回那个 PDF；**多张** ⇒ **打包成一个 zip** 一次下载
+      （⚠️ 浏览器不允许一次响应触发 N 个下载 ⇒ 多张只能打包，这是唯一的办法）。
+    - ⭐ 字节来自 `pdf_cache`（**不落盘**）—— 渲染出来就趁热交给浏览器，
+      **本机不留文件**（用户 2026-09-20 口径）。
+    - ⚠️ 取不到（过期 / 服务重启过 / token 是伪造的）⇒ **404 ＋ 中文**，
+      ⛔ **绝不静默回一个空文件/空 zip** —— 那会让人以为"导出成功但里面没东西"，是最难查的一类。
+    - ⚠️ 文件名**由后端带出**（`X-Export-Filename`，UTF-8 percent-encoded）——
+      ⛔ 不让壳自己拼：命名规则一旦两处各写一份，改一处就会静默走形（同 `m06`/`m07`/`m08` 的口径）。
+    """
+    files = pdf_cache.get(token)
+    if not files:
+        raise HTTPException(
+            status_code=404,
+            detail="导出产物已过期（或服务重启过）—— 请重新点一次「只导出 PDF」",
+        )
+    if len(files) == 1:
+        name, blob = next(iter(files.items()))
+        return Response(content=blob, media_type="application/pdf", headers=_download_headers(name))
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, blob in files.items():
+            zf.writestr(name, blob)
+    zip_name = f"付款通知书_{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
+    return Response(content=buf.getvalue(), media_type="application/zip",
+                    headers=_download_headers(zip_name))
+
+
+def _download_headers(name: str) -> dict[str, str]:
+    """浏览器下载头。⚠️ 中文名走 **RFC 5987**（`filename*=UTF-8''…`）—— 裸 `filename=` 遇中文会乱码。"""
+    return {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}",
+        "X-Export-Filename": quote(name),
+    }
 
 
 @router.get("/settings/printers", response_model=list[str])

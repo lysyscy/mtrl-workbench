@@ -25,6 +25,9 @@ import os
 import re
 import socket
 import tempfile
+import threading
+import time
+from pathlib import Path
 from typing import Callable
 
 from app.core.config import effective_of, get_settings
@@ -37,6 +40,62 @@ AUTO_ORDER: tuple[str, ...] = ("ipp", "driver", "raw")
 
 _RAW_PORT = 9100  # ⚠️ RAW 的标准端口；地址里那个端口（如 631）是 **IPP** 用的，两者不是一回事
 _URI_HOST_RE = re.compile(r"^(?:ipp|ipps|https?|raw)://([^/\s:@]+)", re.IGNORECASE)
+
+# ---------------------------------------------------------------- 打印落地件（`driver` 通道）
+#: ⭐⭐ 用户 **2026-09-20** 口径：「**如果打印的话，不要在本地留文件**」。
+#:   本来只有 `driver` 通道会在 `%TEMP%` 落一份 PDF（`ipp` / `raw` 是**整卷发字节**、零文件）。
+#: ⚠️⚠️ **不能写完就删**：Windows 驱动是**异步**读盘的，删早了会印出**空白件**（2026-09 实测教训）。
+#:   ⇒ 两条一起上：① **到点自删**（`_TMP_KEEP_SECONDS`）；② **下次打印前扫一遍**兜底
+#:   （进程被杀 / 崩溃时定时器没机会跑，靠这个收尾）。
+_TMP_KEEP_SECONDS = 90.0
+_TMP_PREFIX = "m03print_"
+
+
+def sweep_temp_files(now: float | None = None) -> int:
+    """清掉**上次遗留**的打印落地件 ⇒ 返回清掉几个。
+
+    ⚠️ 只按**时间**判（⛔ 绝不删"刚建的那份"）—— 那可能正是驱动在读的。
+    ⚠️ 这是**兜底**，不是常规路（常规路是 `_drop_later` 的定时删除）。
+    """
+    t = time.time() if now is None else now
+    dropped = 0
+    for path in Path(tempfile.gettempdir()).glob(f"{_TMP_PREFIX}*.pdf"):
+        try:
+            if t - path.stat().st_mtime > _TMP_KEEP_SECONDS:
+                path.unlink(missing_ok=True)
+                dropped += 1
+        except OSError:                                  # noqa: PERF203 —— 单个删不掉不影响别的
+            continue
+    return dropped
+
+
+def _drop_later(path: str, delay: float | None = None) -> None:
+    """到点自删（⚠️ 驱动异步读盘 ⇒ **不能立刻删**，见 `_TMP_KEEP_SECONDS` 那段）。
+
+    ⚠️ `delay` 的默认值**不能在形参上写 `=_TMP_KEEP_SECONDS`** —— 那是**定义时**求值，
+       自检改不动它（`monkeypatch` 模块常量无效）；这里改成**调用时**取。
+    ⚠️ 在**写完文件之后马上**调（⛔ 不是"投递成功之后"）：这样连
+       `ShellExecute` / `startfile` **抛异常**那条路也覆盖得到（否则那份文件会永久留下）。
+    ⚠️ `daemon=True` —— ⛔ 不许这个定时器把进程退出拖住。
+    """
+    wait = _TMP_KEEP_SECONDS if delay is None else delay
+    timer = threading.Timer(wait, lambda: Path(path).unlink(missing_ok=True))
+    timer.daemon = True
+    timer.start()
+
+
+def _stage_pdf(pdf: bytes) -> str:
+    """把 PDF 落成一份**待自删**的临时件 ⇒ 返回路径（**`driver` 通道唯一的落盘处**）。
+
+    ⭐ 抽成独立函数是为了**可测**：`send_driver` 会**真出纸**，⛔ 自检绝不能调它；
+       而"写完就排上自删"这件事必须被钉住 —— 否则「打印不留文件」只是一句空话。
+    """
+    sweep_temp_files()                                    # 顺手收上次的尾（⛔ 不碰"刚建的那份"）
+    fd, path = tempfile.mkstemp(suffix=".pdf", prefix=_TMP_PREFIX)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(pdf)
+    _drop_later(path)                                     # ⭐ 写完就排上自删（异常路径也覆盖）
+    return path
 
 
 def raw_target(printer_uri: str) -> tuple[str, int]:
@@ -98,12 +157,12 @@ def send_driver(pdf: bytes, printer_name: str = "") -> str:
       ⇒ 这时若用户指定了名字，**如实说清没指定上**（⛔ 不假装指定成功）。
     - ⚠️ 「交给驱动」≠「打完了」（驱动是**异步**的）⇒ 一律「已投递（未核实）」。
 
-    ⚠️ 落地的临时 PDF **故意不删**：驱动是异步读盘的，删早了会印出空白件（交给系统临时目录自己清）。
+    ⭐ 落地的临时 PDF **到点自删**（用户 2026-09-20 口径：**打印不在本地留文件**）——
+       ⚠️ 但**不能立刻删**（驱动异步读盘，删早了印空白件）⇒ 见 `_TMP_KEEP_SECONDS` 那两段：
+       **到点自删** ＋ **下次打印前扫残留**。
     """
     name = str(printer_name or "").strip()
-    fd, path = tempfile.mkstemp(suffix=".pdf", prefix="m03print_")
-    with os.fdopen(fd, "wb") as handle:
-        handle.write(pdf)
+    path = _stage_pdf(pdf)
 
     try:
         win32api = importlib.import_module("win32api")

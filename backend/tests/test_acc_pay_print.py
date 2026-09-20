@@ -13,6 +13,10 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+import time
+from pathlib import Path
 
 import httpx
 import pytest
@@ -516,3 +520,48 @@ def test_出纸失败要带出打印机自报的原因(monkeypatch):
         ipp.send_pdf(b"%PDF-1.4", printer_uri="ipp://192.168.5.248:631/ipp/print")
     msg = str(ei.value)
     assert "0x0400" in msg and "client-error-bad-request" in msg and "报文被拒" in msg
+
+
+@acc("ACC-PAY-PRINT-001", "001-12")
+def test_打印不在本机留文件(monkeypatch):
+    """⭐ 用户 **2026-09-20** 口径：「**如果打印的话，不要在本地留文件**」。
+
+    ⚠️ 出纸三条通道里，**只有 `driver`**（交 Windows 打印驱动）会落一份 PDF ——
+       `ipp` / `raw` 都是**整卷发字节**，零文件。
+    ⚠️⚠️ 但那份临时件**不能写完就删**：驱动是**异步**读盘的，删早了会印出**空白件**（2026-09 实测）。
+       ⇒ 两条一起上：① **到点自删**（`_drop_later`）；② **下次打印前扫残留**
+       （`sweep_temp_files`，兜"进程被杀 / 崩溃"时定时器没机会跑）。
+    ⚠️ 本用例**刻意不调 `send_driver`** —— 它会**真出纸**！只钉它唯一的落盘处 `_stage_pdf`
+       （那是为可测而抽出来的，见其 docstring）。
+    """
+    from app.mod03_notice.print import dispatch as D
+
+    tmp = Path(tempfile.gettempdir())
+
+    # ① **清扫只删过期的**：刚建的（驱动可能正在读）**一根汗毛都不许动**
+    stale = tmp / f"{D._TMP_PREFIX}自检_过期.pdf"
+    fresh = tmp / f"{D._TMP_PREFIX}自检_刚建.pdf"
+    stale.write_bytes(b"%PDF-1.4 stale")
+    fresh.write_bytes(b"%PDF-1.4 fresh")
+    try:
+        old_t = time.time() - (D._TMP_KEEP_SECONDS + 30)
+        os.utime(stale, (old_t, old_t))
+        assert D.sweep_temp_files() >= 1, "过期的残留要被清掉"
+        assert not stale.exists(), "过期的必须清掉"
+        assert fresh.exists(), "⚠️ **刚建的绝不许动** —— 那可能正是驱动在读的那一份"
+    finally:
+        stale.unlink(missing_ok=True)
+        fresh.unlink(missing_ok=True)
+
+    # ② `_stage_pdf`（`driver` 通道**唯一**的落盘处）⇒ 文件名合规、**当场就排上了自删**
+    path = D._stage_pdf(b"%PDF-1.4 fake")
+    assert Path(path).exists(), "_stage_pdf 要真的落出文件（要给驱动读）"
+    assert Path(path).name.startswith(D._TMP_PREFIX), "要用约定的前缀（清扫靠它认）"
+    Path(path).unlink(missing_ok=True)
+
+    # ③ 「**到点自删**」不是句空话 —— 把 90 秒的宽限短路成 0.05 秒，看它真消失
+    monkeypatch.setattr(D, "_TMP_KEEP_SECONDS", 0.05)
+    short = D._stage_pdf(b"%PDF-1.4 fake2")
+    assert Path(short).exists()
+    time.sleep(0.8)
+    assert not Path(short).exists(), "到点没删 ⇒ 「打印不留文件」就是一句空话"

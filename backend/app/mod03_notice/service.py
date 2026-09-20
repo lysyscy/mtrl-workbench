@@ -92,6 +92,16 @@ class BatchResult:
     mode: str
     outcomes: list[ItemOutcome] = field(default_factory=list)
     batch_dir: str = ""
+    """⚠️ 只有**显式传了 `batch_dir`**（工具/自检）才有值 —— 生产路径**不再落盘**（见 `files`）。"""
+    files: list[tuple[str, bytes]] = field(default_factory=list)
+    """⭐⭐ **本批产物的字节**（`(文件名, 字节)`，按单据顺序）—— **不落盘**：
+
+    用户 2026-09-20 口径：「**导出的话，换成浏览器下载**」。
+    ⚠️ 旧的"写进 `artifacts/pdf/<批次>/` 再给个路径"会在本机**越攒越多** ——
+       实测 09-15 起已攒 **884 个 / 7.7MB**，而且用户还得**自己去翻目录**（壳里压根没用那些 URL）。
+    ⇒ 渲染出的字节**只在这里停一下**，由 `pdf_cache` 交给 `GET /api/m03/pdf/{token}` 流给浏览器。
+    ⚠️ 放**字节**而不是路径 ⇒ 从根上没有"文件留在本机"这回事。
+    """
 
     @property
     def total(self) -> int:
@@ -136,9 +146,12 @@ def run_batch(
 
     result = BatchResult(mode=mode)
 
+    # ⚠️⚠️ **生产路径不落盘**（用户 2026-09-20 口径：「导出换成浏览器下载」）——
+    #    只有**显式传了 `batch_dir`**（工具 / 自检）才写盘；不传 ⇒ 字节收进 `result.files`，
+    #    由 `pdf_cache` 交给 `GET /api/m03/pdf/{token}` **流给浏览器**。
     base: Path | None = None
-    if mode == MODE_PDF:
-        base = Path(batch_dir) if batch_dir is not None else _new_batch_dir()
+    if mode == MODE_PDF and batch_dir is not None:
+        base = Path(batch_dir)
         base.mkdir(parents=True, exist_ok=True)
         result.batch_dir = str(base.resolve())
 
@@ -159,8 +172,15 @@ def run_batch(
                     notice.id, bill_no, True, unverified=bool(note), reason=note
                 ))
             else:
-                path = _write_pdf(base, bill_no, pdf, used_names)  # type: ignore[arg-type]
-                result.outcomes.append(ItemOutcome(notice.id, bill_no, True, pdf_path=str(path)))
+                name = _unique_name(bill_no, used_names)
+                if base is not None:
+                    result.outcomes.append(ItemOutcome(
+                        notice.id, bill_no, True, pdf_path=str(_write_pdf(base, name, pdf))))
+                else:
+                    # ⭐ **不落盘**：只把字节收住。⚠️ `pdf_path` 这里给的是**文件名**，
+                    #    ⛔ 不是本机路径 —— 它只用来在 zip 里当条目名 / 单张下载时当文件名。
+                    result.files.append((name, pdf))
+                    result.outcomes.append(ItemOutcome(notice.id, bill_no, True, pdf_path=name))
         except Exception as exc:  # noqa: BLE001 —— 逐单据兜住，转成"未出 + 原因"，绝不静默
             reason = _reason(exc)
             logger.warning("批量{} 未产出：单号={} 原因={}", mode, bill_no, reason)
@@ -219,24 +239,28 @@ def _get_design(cache: dict[str, object], fetcher: DesignLike, bill_type: str):
     return value
 
 
-def _new_batch_dir() -> Path:
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return get_settings().pdf_export_path / ts
-
-
 def _safe_name(bill_no: str) -> str:
     cleaned = _UNSAFE_NAME_RE.sub("_", bill_no).strip(" .")
     return cleaned or "未命名单据"
 
 
-def _write_pdf(base: Path, bill_no: str, pdf: bytes, used: set[str]) -> Path:
+def _unique_name(bill_no: str, used: set[str]) -> str:
+    """单号 → 批内**不重名**的文件名（如同一单号被重复勾选 ⇒ `X.pdf` / `X_2.pdf`）。
+
+    ⚠️ 从 `_write_pdf` 里拆出来：现在**不落盘**那条路也要用它（zip 里同样不能重名）。
+    """
     stem = _safe_name(bill_no)
     name = f"{stem}.pdf"
     seq = 2
-    while name in used:  # 批内重名（如同一单号重复勾选）不覆盖
+    while name in used:
         name = f"{stem}_{seq}.pdf"
         seq += 1
     used.add(name)
+    return name
+
+
+def _write_pdf(base: Path, name: str, pdf: bytes) -> Path:
+    """落盘（⚠️ **只有显式给了目录才走这里** —— 工具/自检；生产路径不落盘）。"""
     path = base / name
     path.write_bytes(pdf)
     return path.resolve()
