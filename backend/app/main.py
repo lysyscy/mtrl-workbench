@@ -30,7 +30,7 @@ from app.core.logging import get_logger, setup_logging
 from app.home.router import router as home_router
 from app.mod01_projects.router import router as mod01_router
 from app.mod02_i8.router import router as mod02_router
-from app.mod03_notice.page import THEME_CSS
+from app.mod03_notice.page import DEFAULT_THEME as _DEFAULT_THEME
 from app.mod03_notice.notice_api_router import api_router as mod03_api_router
 from app.mod03_notice.router import router as mod03_router
 from app.mod04_plan.router import router as mod04_router
@@ -223,10 +223,29 @@ def create_app() -> FastAPI:
 
     # ★ 主题真源（**唯一入口**）：静态页用 `<link>` 引它、服务端渲染页内联同一常量
     #   ⇒ 换主题只改 `page.THEME_CSS` **一处**；`no-cache` 保证改完即时生效（不必重启/清浏览器缓存）
+    #
+    # ⭐ 2026-09-20（`ACC-UI-THEME-001/001-06`「主题选择**按用户隔离**」）：
+    #   本端点改为**按当前登录用户**出主题 —— 同一个 URL、不同的会话 cookie，
+    #   拿到**不同的 CSS** ⇒ 「A 与 B 各自的选择互不影响」就是这一句的直接含义。
+    #   ⚠️ **未登录 / 未设置 / 账号已删** 一律回落**默认套**（⛔ 未登录也必须有样式，不能白屏）。
+    #   ⚠️ **只有"取哪一套"按用户** —— **主题定义本身**仍然只有一处（`page.THEMES`，
+    #      `001-03`「单一真源」钉着它）⇒ 这里⛔ 不会、也不许长出第二份取值。
     @app.get("/static/theme.css", include_in_schema=False)
-    def theme_css() -> Response:
+    def theme_css(request: Request) -> Response:
+        from app.core import session as SESS
+        from app.core.db import session_scope
+        from app.mod03_notice.page import render_theme
+        from app.mod15_user import repository as USR
+
+        who = SESS.read(request.cookies.get(SESS.COOKIE_NAME))
+        if who:
+            with session_scope() as s:
+                name = USR.theme_by_account(s, who)
+        else:
+            name = _DEFAULT_THEME
         return Response(
-            content=THEME_CSS, media_type="text/css", headers={"Cache-Control": "no-cache"}
+            content=render_theme(name), media_type="text/css",
+            headers={"Cache-Control": "no-cache"},
         )
 
     # ⭐ **新前端壳**（`app/web/index.html`）—— 走「原型直接接数据」（用户 2026-09-17 裁定）。

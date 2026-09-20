@@ -72,22 +72,17 @@ def _row(u: UserAccount) -> dict:
 
 
 def _me(s) -> UserAccount | None:
-    """**当前登录用户** → 账号行。
+    """**当前登录用户** → 账号行（走 `repository.by_identity` —— 那是**唯一**的身份判定出口）。
 
-    ⚠️ 现在的"登录态"其实还不存在 ⇒ 按 `core/identity.py` 取当前操作人，
-       先按**姓名**、再按**账号**去匹配；都对不上（占位「科室用户」）就回落到
-       **首个在用管理员** —— §1.5.1「**用户本人为管理员**」⇒ 过渡期的合理默认。
-    ⚠️ 这**不是**"写死成管理员"：`current_operator()` 一旦接上登录态，这里自然就对了。
+    ⚠️ 匹配规则**不在本函数里**：登录态未接时 `current_operator()` 会给 `.env` 的名字或中性占位，
+       接上后给会话里的**姓名** ⇒ 两种都得能落到账号上（见 `by_identity` 的注释）。
+    ⚠️ 都对不上（占位「科室用户」）就回落到**首个在用管理员** —— §1.5.1「**用户本人为管理员**」
+       ⇒ 过渡期的合理默认（⛔ 不是"写死成管理员"：登录态一接上，这条分支自然不再走）。
     """
-    who = current_operator().strip()
-    users = R.all_users(s)
-    for u in users:
-        if not D.is_deleted(u) and (u.name or "").strip() == who:
-            return u
-    for u in users:
-        if not D.is_deleted(u) and (u.account or "").strip() == who:
-            return u
-    admins = D.active_admins(users)
+    me = R.by_identity(s, current_operator())
+    if me is not None:
+        return me
+    admins = D.active_admins(R.all_users(s))
     return admins[0] if admins else None
 
 
@@ -193,6 +188,51 @@ def api_logout(request: Request) -> dict:  # noqa: ARG001 —— 与别的写动
     out = JSONResponse({"ok": True, "kind": "ok", "message": "已退出登录"})
     out.delete_cookie(SESS.COOKIE_NAME, path="/")
     return out
+
+
+# ============================================================ 主题（`ACC-UI-THEME-001/001-06`）
+
+
+@router.get("/api/m15/theme")
+def api_theme() -> dict:
+    """**当前登录用户**的主题（＋ 可选清单）。
+
+    ⚠️ 返回的是"**该用哪套**"（`domain.effective_theme` 已经把"未设置 ⇒ 默认"判完了），
+        ⛔ 不是原样回 `u.theme` —— 后者会在"未设置"时回一个空串，壳还得再判一次
+        （那就又把那条口径复制到前端去了）。
+    """
+    from app.mod03_notice import page as P
+
+    with session_scope() as s:
+        return {
+            "ok": True,
+            "theme": D.effective_theme(_me(s)),
+            "themes": list(P.THEME_SEEDS),
+            "default": P.DEFAULT_THEME,
+        }
+
+
+class ThemeIn(BaseModel):
+    """主题名；⭐ **空串合法** = 回到"未设置"（⇒ 跟着默认套走）。"""
+
+    theme: str = ""
+
+
+@router.post("/api/m15/theme")
+def api_set_theme(req: ThemeIn) -> dict:
+    """存**自己的**主题偏好。
+
+    ⚠️⚠️ **不接 `id`** —— 本动作只能改**当前登录用户自己**的那一行，这正是
+       「A 与 B 各自的选择**互不影响**」的另一半（前半在"读的时候各读各的"）。
+       ⛔ 别"顺手"加一个可选 `id`（那会立刻变成"管理员能改别人主题"，
+         而口径里没有这条，且它会让这条判据**测不出隔离**）。
+    """
+    with session_scope() as s:
+        me = _me(s)
+        if me is None:
+            return _flash("err", "没有当前登录用户 —— 请先登录再选主题。")
+        R.set_theme(s, me.id, req.theme)
+        return _flash("ok", f"主题已改为「{D.effective_theme(me)}」")
 
 
 # ============================================================ 读

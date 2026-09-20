@@ -100,6 +100,18 @@ class UserAccount(Base):
     #:   ⛔ 别用"建号时间"冒充（那是假话）。
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
+    #: **主题偏好**（`ACC-UI-THEME-001/001-06`：主题选择**按用户隔离**）。
+    #:
+    #: ⚠️ **空串 = 未设置** ⇒ 回落**默认套**（`ACC-UI-THEME-001/001-06` 后半句
+    #:   「未设置时回落默认套」）—— ⛔ 别在写入时"顺手补一个默认值"：
+    #:   那样"**没选过**"与"**选了默认套**"就分不出来了（前者应当跟着以后改默认而变，
+    #:   后者是用户的明确选择、不该被改）—— 这是本列**唯一**值得小心的地方。
+    #:
+    #: ⚠️ **不在写入时校验主题名**：非法名一律由 `mod03_notice.page.render_theme` **显式回落**
+    #:   （那是 `001-07` 已经钉住的口径：「回落默认套 **或** 显式报错，两者择一」—— 本仓选了"回落"）
+    #:   ⇒ ⛔ 这里再加一道校验 = 两道口径、且会互相漂。
+    theme: Mapped[str] = mapped_column(String(32), default="", server_default="")
+
     #: ⭐ **软删标记**（§1.5.1「删除 = 软删除」）—— 非空 = 已删除。
     #: ⚠️ 这是**全仓第一个真软删**（`ACC-X-DEL-001/001-08` 的"软删档双向开"断言在这里**落地**）。
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)

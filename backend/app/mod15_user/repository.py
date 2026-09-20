@@ -109,6 +109,54 @@ def ensure_seeded(s: Session) -> UserAccount:
     return row
 
 
+def set_theme(s: Session, uid: int, theme: str) -> UserAccount:
+    """**存主题偏好**（`ACC-UI-THEME-001/001-06`：按用户隔离）。
+
+    ⚠️ **空串是合法输入** = "回到未设置"（⇒ 回落默认套）—— ⛔ 别把空串当成"没传"而拒掉：
+       那是**唯一**能表达"我要跟着默认走（以后默认改了我跟着改）"的写法。
+    ⚠️ ⛔ **不校验主题名**（非法名由 `page.render_theme` 显式回落 —— 见 `models.theme` 的注释）。
+    """
+    row = s.get(UserAccount, uid)
+    if row is None:
+        raise MustReportError(f"账号不存在：id={uid}")
+    row.theme = (theme or "").strip()
+    s.flush()
+    return row
+
+
+def by_identity(s: Session, who: str) -> UserAccount | None:
+    """按「**姓名 或 账号**」找**未删除**的账号 —— **"当前登录用户是哪一个"的唯一判定出口**。
+
+    ⚠️⚠️ 为什么必须两种都认：会话 cookie 里存的是**姓名**（`login` 那边写的是 `name or account`，
+       因为业务留痕要的是**人名**不是账号），而账号本身是 `account` ⇒ 两种写法都得落到同一行。
+       ⛔ **别只认一种** —— 认错时的形态极其难查：**登录成功、权限也对**，
+       但"按身份取的数据"（主题 / 我的账号…）**静默地取了默认值**。
+       ⭐ 这不是推理出来的，是 `ACC-UI-THEME-001/001-06` 的断言**当场抓出来的**：
+         预置账号 `admin` 的姓名是「管理员」⇒ 只按账号名找**永远找不到** ⇒ 主题永远不生效。
+
+    ⚠️ 先比**姓名**（更可能命中，且姓名是"业务上的人"）⇒ 再比账号。
+    ⚠️ **已删除的不参与**（§1.5.1：软删 = 账号名保留但不可用）。
+    """
+    who = (who or "").strip()
+    if not who:
+        return None
+    alive = [u for u in all_users(s) if not D.is_deleted(u)]
+    for u in alive:
+        if (u.name or "").strip() == who:
+            return u
+    return next((u for u in alive if (u.account or "").strip() == who), None)
+
+
+def theme_by_account(s: Session, who: str) -> str:
+    """取"这个**登录身份**该用哪套主题" —— 给 `/static/theme.css` 用。
+
+    ⚠️ 走 `by_identity`（姓名**或**账号）—— ⛔ 别在这里另写一套查找：
+       那就会重演"两处判定各自漂"的老毛病（本 bug 正是这么来的）。
+    ⚠️ 找不到 / 已删 ⇒ 回落默认套（⛔ 不给"已删除的人"留一个可被探测的偏好）。
+    """
+    return D.effective_theme(by_identity(s, who))
+
+
 def touch_login(s: Session, uid: int) -> UserAccount:
     """记「**最近登录**」（§1.5.1 补口径 · 2026-09-20）。
 
@@ -193,6 +241,6 @@ def transfer_admin(s: Session, actor: UserAccount, target: UserAccount) -> tuple
 
 __all__ = [
     "SEED_ACCOUNT", "SEED_NAME", "all_users", "by_account", "create", "ensure_seeded",
-    "get", "restore", "set_password", "set_status", "soft_delete", "touch_login",
-    "transfer_admin",
+    "by_identity", "get", "restore", "set_password", "set_status", "set_theme",
+    "soft_delete", "theme_by_account", "touch_login", "transfer_admin",
 ]

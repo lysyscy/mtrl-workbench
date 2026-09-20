@@ -77,6 +77,27 @@ def assert_not_self_delete(actor, target) -> None:
         raise MustReportError("不能删除自己（§1.5.1 防锁死）—— 请让另一个管理员来删。")
 
 
+def effective_theme(u) -> str:
+    """这个账号**实际该用**的主题名（`ACC-UI-THEME-001/001-06`）。
+
+    ⚠️ 三件事在这里一次说清（⛔ 别让调用方各自判）：
+      ① **未设置**（`theme` 为空）⇒ 回落默认套；
+      ② **非法名** ⇒ 也回落默认套（那条口径已由 `page.render_theme` 实现，这里只是**跟上**
+         它的裁决 —— ⚠️ 判断题只有一处：`render_theme`；本函数只负责"给出该用哪个名字"）；
+      ③ `u` 为 `None`（**没登录**）⇒ 回落默认套（未登录也要有样式，⛔ 不能白屏）。
+
+    ⚠️ ⛔ **别在这里再判一遍"名字合不合法"** —— 那会造出第二份"哪些名字算合法"，
+       而它迟早和 `page.THEME_SEEDS` 漂（新加一套主题时最容易漏掉这里）。
+       本函数只做**取值**（空 ⇒ 默认），合法性交给**唯一的那个出口**。
+    """
+    from app.mod03_notice import page as P
+
+    if u is None:
+        return P.DEFAULT_THEME
+    got = (getattr(u, "theme", "") or "").strip()
+    return got or P.DEFAULT_THEME
+
+
 def normalize_account(account: str | None) -> str:
     """登录账号**只做去空白**（§1.5.1：*不限制字符与长度*）—— ⛔ 不校验格式。
 
@@ -133,5 +154,6 @@ __all__ = [
     "ROLE_ADMIN", "ROLE_USER", "ROLES",
     "STATUS_ACTIVE", "STATUS_DISABLED", "STATUSES", "STATE_DELETED",
     "active_admins", "assert_account_usable", "assert_last_admin_protected",
-    "assert_not_self_delete", "is_deleted", "normalize_account", "state_of", "transfer_plan",
+    "assert_not_self_delete", "effective_theme", "is_deleted", "normalize_account",
+    "state_of", "transfer_plan",
 ]
