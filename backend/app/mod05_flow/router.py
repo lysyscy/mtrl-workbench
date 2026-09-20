@@ -180,6 +180,39 @@ def api_ledger_export(
                         headers={"X-Export-Filename": quote(path.name)})
 
 
+@router.get("/api/m05/debt/export")
+def api_export_total_debt():
+    """导出**总欠款表**（用户 2026-09-20 定）—— 每个项目一行：`集采 / 辅材 / 机械`。
+
+    - ⭐ 列序**由用户指定**：**A 序号 · B 项目展示名 · C 集采 · D 辅材 · E 机械**
+      （⛔ 别"顺手优化"成别的顺序）。
+    - ⚠️ 口径**全部复用现场那两个函数**（辅材/机械 = `debt_by_category`；集采 = `build_list`）
+      ⇒ 这张表与页面上看到的欠款**必然是同一个数**（⛔ 不另写一套算钱的 —— 那迟早走形）。
+    - ⚠️ **机械欠款不含机械费结算**（来源在 `MOD-06`、未接通）⇒ **表尾写了同一句说明**：
+      文件一旦离开页面，读到的人还得知道这件事（否则就是"看着正常的错数"）。
+    - ⚠️ 失败（一条都算不出来）⇒ **JSON 200 ＋ `ok:false` ＋ 中文**，
+      壳侧据 `content-type` 分流（同另四条导出）—— ⛔ 不回 4xx。
+    """
+    from urllib.parse import quote
+
+    from fastapi.responses import FileResponse, JSONResponse
+
+    from app.mod05_flow import service as svc
+
+    try:
+        with session_scope() as s:
+            path, _note = svc.export_total_debt(s)
+    except MustReportError as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=path.name,
+        # ⚠️ 文件名**由后端带出**（⛔ 不让壳自己拼：命名规则两处各写一份，改一处就会静默走形）
+        headers={"X-Export-Filename": quote(path.name)},
+    )
+
+
 
 
 

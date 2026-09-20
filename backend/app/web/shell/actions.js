@@ -1439,6 +1439,30 @@ const ACT={
  /* 台账「项目」= 共用面板（单选）：开/收 + 选（选谁都切两侧，语义与原来的下拉一致） */
  ledPjToggle:()=>{ ledPjOpen=!ledPjOpen; render(); },
  ledPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; ledProj=v; ledPjOpen=false; render(); },
+ /* ⭐⭐ 2026-09-20 用户定：**总欠款导出** —— 每个项目一行：
+    **A 序号 · B 项目展示名 · C 集采 · D 辅材 · E 机械**（⛔ 列序是用户指定的，别"顺手优化"）。
+    ⚠️ 后端**失败时回 JSON 200 ＋ `ok:false` ＋ 中文**（一条都算不出来）⇒ 必须**先看 `content-type`**，
+       否则会把一段 JSON 当成 xlsx 存下来（用户拿到一个打不开的文件、还不知道为什么 · 同 `procExpSave`）。
+    ⚠️ 文件名的**主人是后端**（`X-Export-Filename`），⛔ 壳里不自己拼。
+    ⚠️ 口径提示一起说出去：**「机械」未含机械费结算**（该来源未接通）—— 表尾也写了同一句。 */
+ debtExpAll:async ()=>{
+   let r;
+   try{ r=await fetch('/api/m05/debt/export'); }
+   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   const ct=r.headers.get('content-type')||'';
+   if(ct.includes('application/json')){
+     let d={}; try{ d=await r.json(); }catch(e){}
+     return toast(`<b>导出没能完成</b>：${esc(d.message||d.detail||'后端没给原因')}`,9600);
+   }
+   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
+   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'总欠款.xlsx';
+   const blob=await r.blob(), a=document.createElement('a');
+   a.href=URL.createObjectURL(blob); a.download=fn;
+   document.body.appendChild(a); a.click(); a.remove();
+   setTimeout(()=>URL.revokeObjectURL(a.href),5000);      /* ⚠️ 不 revoke 会漏内存 */
+   return toast(`已导出 <b>${esc(fn)}</b>：每项目一行 · C 集采 / D 辅材 / E 机械`
+     + `<br><span class="sm mut">⚠️「机械」未含机械费结算（该来源未接通）—— 表尾也写了这一句</span>`, 11000);
+ },
  /* —— 「导出逐月欠款台账」展开区（2026-09-13 用户口径：一个入口 + 多选项目 + 每项目一簿三表）—— */
  ledExpToggle:()=>{ ledExpOn=!ledExpOn; ledExpPjOpen=false;
    /* 首次打开：**默认选中本页当前所选项目**（用户口径"要想办法实现自选项目"，默认值取当前是为了少点一下） */

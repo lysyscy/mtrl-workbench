@@ -1224,6 +1224,27 @@ BIND.m03 = function () {
   anchor.insertAdjacentElement('afterend', box);
 };
 
+/* ⭐⭐ 2026-09-20 用户定：**总欠款导出**入口 —— 用 `BIND` **注入**按钮，⛔ **不写进 `V.m05`**。
+   ⚠️⚠️ 为什么不能写进 `V.m05`：`ui_parity` 是**按 `V.` 切片逐行比**的 —— 往里插 1 行
+      ⇒ 该切片**后面全部位移** ⇒ 一次报 **67 行未登记**（实测）。
+   ⚠️⚠️ 而"把 `V.m05` 整片同步给原型"**又是危险的**：那片里有一行是
+      「**壳接后端**（`ntLive`）/ **原型演示**（`MACH6`）」的**逻辑差异** ⇒ 整体同步会
+      **改掉原型逻辑**（`D18` 硬约束：原型逻辑一行不改）。
+   ⇒ `BIND` **不属于 `V.` 切片** ⇒ 注入按钮**零漂移**（同 `BIND.m03` 注入「只导出 PDF / 打印机设置」）。 */
+BIND.m05 = function () {
+  const host = document.querySelector('#view');
+  if (!host) return;
+  const anchor = host.querySelector('[data-act="ledExpToggle"]');
+  if (!anchor || anchor.dataset.debtExp) return;
+  anchor.dataset.debtExp = '1';
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.dataset.act = 'debtExpAll';
+  btn.title = '导出「总欠款」表（所有项目各一行）：A 序号 · B 项目展示名 · C 集采 · D 辅材 · E 机械（实时口径）';
+  btn.textContent = '导出总欠款';
+  anchor.insertAdjacentElement('afterend', btn);
+};
+
 BIND.m02 = function () {
   const host = document.querySelector('#view');
   if (!host) return;

@@ -18,6 +18,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.errors import MustReportError
 from app.core.money import to_money
 from app.core.projects import project_index, project_key, project_label
 from app.mod01_projects.models import Project
@@ -222,6 +223,89 @@ def build_debt(s: Session, *, jc_debt=None) -> dict:
 # ---------------------------------------------------------------- ③ 逐月台账
 
 
+# ---------------------------------------------------------------- ④ 总欠款表（用户 2026-09-20）
+
+def total_debt_rows(s: Session) -> dict:
+    """**总欠款**（按项目 × 集采 / 辅材 / 机械）—— 供 `debt_export.build_xlsx` 写表。
+
+    ⭐ **口径一律复用现场那两个函数**（⛔ 绝不在这里另写一套算钱的）：
+      · 辅材 / 机械 ⇒ **逐项目**调 `dom.debt_by_category(...)`
+        —— 与「按项目看欠款」**同一个函数、同一份口径**（只是把行先按项目切开）；
+      · 集采 ⇒ `mod11_jc.service.build_list(...)` 的行
+        —— 与**集采台账页**同一个函数（`debt` 就是那一页显示的欠款）。
+
+    ⚠️ 机械欠款**不含机械费结算**（那个来源在 `MOD-06`、还没接通，见 `MECH_SETTLE_SOURCE_READY`）
+      ⇒ 本函数**照实算**、把 `mech_settle_ready` 一并回出去，由调用方**显式标在表尾**（禁静默）。
+    ⚠️ 集采只计「**纳入台账**」的行（「待确认 / 不纳入」按定义不进台账）；
+       排除了几条**一并回出来**（⛔ 禁静默少算）。
+    ⚠️ 项目**只从名册里认**（`project_index`）—— 展示名的主人是档案，⛔ 不自己拼名字。
+    """
+    rows = notice_debt_views(s)
+    openings = opening_views(s)
+    index = project_index(s)
+    by_wh = {str(getattr(p, "warehouse_name", "") or ""): pid for pid, p in index.items()}
+
+    # ① 辅材 / 机械：**逐项目**复用 `debt_by_category`（⚠️ 是内存里切行，不是逐条查库 = 无 N+1）
+    per: dict[int, dict[str, Decimal]] = {}
+    for pid in index:
+        mine = [r for r in rows if r.ownership_id == pid]
+        mine_open = [o for o in openings if o.project_id == pid]
+        if not mine and not mine_open:
+            continue                                    # 该项目两边都没数 ⇒ 不出行（⛔ 别刷一屏 0）
+        by_cat = dom.debt_by_category(mine, mine_open, mech_settle_total=Decimal("0"))
+        per[pid] = {CATEGORY_MATERIAL: by_cat[CATEGORY_MATERIAL],
+                    CATEGORY_MECH: by_cat[CATEGORY_MECH]}
+
+    # ② 集采：与集采台账页同一个函数（`build_list` 不给筛选 = 全量）
+    from app.mod11_jc import service as M11
+    from app.mod11_jc.models import TAG_IN
+
+    jc: dict[int, Decimal] = {}
+    jc_skipped = 0
+    for r in M11.build_list(s)["rows"]:
+        pid = by_wh.get(str(r.get("project_key") or ""))
+        if str(r.get("tag") or "") != TAG_IN or pid is None:
+            jc_skipped += 1                             # 不是"纳入台账" / 项目不在名册 ⇒ 不计
+            continue
+        jc[pid] = jc.get(pid, Decimal("0")) + Decimal(str(r.get("debt") or 0))
+
+    pids = sorted(set(per) | set(jc),
+                  key=lambda p: (project_label(index.get(p)) or "", int(p)))
+    items = [
+        {
+            "index": n,
+            "project": project_label(index.get(pid)),
+            "jc": jc.get(pid, Decimal("0")),
+            "material": (per.get(pid) or {}).get(CATEGORY_MATERIAL, Decimal("0")),
+            "mech": (per.get(pid) or {}).get(CATEGORY_MECH, Decimal("0")),
+        }
+        for n, pid in enumerate(pids, start=1)
+    ]
+    return {"items": items, "jc_skipped": jc_skipped, "mech_settle_ready": MECH_SETTLE_SOURCE_READY}
+
+
+def export_total_debt(s: Session) -> tuple[str, dict]:
+    """导出**总欠款表** ⇒ `(绝对路径, 回执说明)`。
+
+    ⚠️ 回执里必须带三件事（禁静默）：① 出了几行；② 集采**排除了几条**（不是"纳入台账"的）；
+      ③ 机械口径**未接通**这件事（表尾也写了同一句 —— 文件离开页面后还得说清）。
+    """
+    from app.core.config import PROJECT_ROOT
+    from app.mod05_flow import debt_export as X
+
+    data = total_debt_rows(s)
+    if not data["items"]:
+        raise MustReportError("总欠款：**一个项目的欠款都算不出来**（通知书与集采合同都还没数据）"
+                              "—— 请先抓取 / 导入，再导出。")
+    out_dir = PROJECT_ROOT / "artifacts" / "exports" / X.FILE_PREFIX
+    path = X.build_xlsx(data["items"], out_dir, mark_mech=not data["mech_settle_ready"])
+    return path, {
+        "rows": len(data["items"]),
+        "jc_skipped": int(data["jc_skipped"]),
+        "mech_settle_ready": bool(data["mech_settle_ready"]),
+    }
+
+
 def build_ledger(
     s: Session, *, project_id: int, end_ym: str = "", today: date | None = None
 ) -> dict:
@@ -341,4 +425,5 @@ __all__ = [
     "CATEGORY_LABELS", "MECH_SETTLE_SOURCE_READY",
     "notice_debt_views", "opening_views", "project_index", "project_label", "project_options",
     "build_flows", "build_debt", "build_ledger", "build_stats", "window_buckets",
+    "total_debt_rows", "export_total_debt",
 ]

@@ -92,6 +92,14 @@ def preview(data: bytes, filename: str) -> dict:
             "skipped": parsed["skipped"][:SKIP_SHOW],
             # 「像主台账」= 认出了字段 **且** 真有数据行
             "guess": bool(mapping["fields"]) and len(parsed["rows"]) > 0,
+            # ⚠️⚠️ 认不出**锚点列**（合同价）⇒ 其它列认得再全，也**一条都配不上**
+            #    （用户 2026-09-20：「有的合同里根本没有贸易公司合同金额和发票金额这两列，
+            #     要注意匹配的问题」）⇒ 提前标出来。
+            #    ⭐ `commit` 侧**还会再拦一次**（那里才是真动手的地方，见那段注释）。
+            "anchor_missing": (bool(mapping["fields"]) and "contract_amt" not in mapping["fields"]),
+            "note": ("⚠️ 没认出「合同价」列（供应商合同总价 / 合同总价 / 合同金额）"
+                     "—— 它是**匹配锚点**，认不到就会**一条都配不上**"
+                     if mapping["fields"] and "contract_amt" not in mapping["fields"] else ""),
         })
         sheets.append(info)
     # ⚠️ 只**排序**、不筛选：像主台账的排前面（人选起来快），但每张表都在
@@ -152,6 +160,19 @@ def commit(s, data: bytes, filename: str, *, sheet: str, project_key: str,
     if "contract_date" not in fields and "material_name" not in fields:
         return {"ok": False, "kind": "err",
                 "message": "列名还没对上：至少要认出「合同日期」或「材料名称」—— 请在预览页把列名点对"}
+
+    # ⭐⭐ **锚点列必须在**（用户 2026-09-20：「有的合同里根本没有贸易公司合同金额和发票金额这两列，
+    #     要注意匹配的问题」）—— 匹配锚点 = **含税合同价**（`contract_amt`），范围 = 单个项目内。
+    #     ⚠️⚠️ 认不到它 ⇒ **每一行都会走进 "配不上"** ⇒ 回执是一大片"配不上"，而人**看不出根因是列没认对**
+    #        （会以为"这些合同库里都没有"）⇒ 必须**在动手之前**拦住并说清（禁静默）。
+    #     ⚠️ 注意：**缺「贸易公司那两列」不是错**（实测兰考 / 内蒙宜化 / 周口太康就是那样）——
+    #        那两列只是"不更新"而已；真正致命的是缺**锚点**这一列。
+    if "contract_amt" not in fields:
+        return {"ok": False, "kind": "err", "message": (
+            "这张表**没认出「合同价」列**（认得的写法：供应商合同总价 / 合同总价 / 合同金额）—— "
+            "它是**匹配用的锚点**（在同一个项目里按它找已有合同），认不到就会**一条都配不上**。"
+            "请在预览页把那一列点成「供应商合同总价」；若这张表本来就**没有**合同价列，"
+            "那它导不了（没有锚点就无从判断该更新哪一条）。")}
 
     parsed = P.parse_rows(grid, row2=r2, fields=fields)
     rows = parsed["rows"]

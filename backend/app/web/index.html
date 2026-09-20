@@ -3189,7 +3189,7 @@ V.m11=()=>{
       <td class="num"><b>${M(jcSettle(j))}</b></td>
       <td class="num" style="white-space:nowrap"><b>${M(jcPay(j))}</b> <button class="btn sm" data-act="jcPayDlg" data-id="${j.id}" title="打开「付款子表」（ENT-08 · 手工录入 / 从付款域引用）">子表</button></td>
       <td class="num" style="color:${jcDebt(j)>0?'var(--dg)':'var(--ok)'}"><b>${M(jcDebt(j))}</b></td>
-      <td><input class="inp plain" style="min-width:110px" data-act="jcMethod" data-id="${j.id}" value="${esc(j.method)}" placeholder="自由文本"></td>
+      <td><input class="inp plain" style="min-width:110px" data-act="jcMethod" data-id="${j.id}" value="${esc(j.method)}" title="${esc(j.method)}" placeholder="自由文本"></td>
       <td><input class="inp" style="min-width:104px" data-act="jcRemark" data-id="${j.id}" value="${esc(j.remark)}" placeholder="可填"></td>
       <td class="ctr">${tagChip(j.tag)}</td>
       <td class="ctr">${archChip(j.arch)}</td>
