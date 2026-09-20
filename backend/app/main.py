@@ -40,6 +40,8 @@ from app.mod07_setl.router import router as mod07_router
 from app.mod08_inv.router import router as mod08_router
 from app.mod09_fee.router import router as mod09_router
 from app.mod11_jc.router import router as mod11_router
+# ⭐ M6 跨域（2026-09-20 开工）：`MOD-12` 差异登记 —— 手工清单，判据 `ACC-DIF-REG-001`（12 点）
+from app.mod12_diff.router import router as mod12_router
 from app.mod14_config.router import router as mod14_router
 
 # 各模块页面（单文件，托管在本进程；切片 MVP，完整前端在后续阶段）
@@ -180,6 +182,8 @@ def create_app() -> FastAPI:
     # MOD-11 集采台账（M5 切片 5 · 2026-09-19 开工）：**从第一天起就是 JSON API ＋ 新壳**
     #  ⚠️ 本模块没有服务端渲染页；读 `/api/m11/list` · `/api/m11/detail`（写动作随 M5-4 进）
     app.include_router(mod11_router)
+    # MOD-12 差异登记（M6 跨域第一片）：**从第一天起就是 JSON API ＋ 新壳**（同 MOD-11，无服务端渲染页）
+    app.include_router(mod12_router)
     app.include_router(mod14_router)
 
     @app.get("/healthz", tags=["meta"])

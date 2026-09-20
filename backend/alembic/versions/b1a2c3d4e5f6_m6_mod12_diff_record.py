@@ -1,0 +1,61 @@
+"""M6 跨域 · MOD-12 差异登记建表（`diff_record`）
+
+Revision ID: b1a2c3d4e5f6
+Revises: cf8e4f1dc7ee
+Create Date: 2026-09-20
+
+⚠️ **只建表，不动任何既有表**（差异登记此前**从未有过载体** —— 无 Excel / 纸质 / 系统，
+   《说明书》§5.8.3 的 `OPEN-03` 用户口述 2026-09-13 确认）⇒ 本迁移**没有数据搬迁**，
+   是纯 `create_table`，**可安全 `downgrade`**。
+
+⭐ 两处值得写下来的列设计：
+· `seq` 与 `code` **分两列**：编号要"不撞既有行"，而本页**可以删行** ⇒ 序号取 `max(seq)+1`、
+  删行不回退（拿"条数 + 1"会撞号）。`code` 唯一约束是**最后一道闸**。
+· `owner` **独立成列**（虽然恒为「库存单据」）：让"它只能取这一个值"这件事在**数据里看得见**，
+  ⛔ 而不是靠"反正没人写别的"（判据点 `ACC-DIF-REG-001/001-10`）。
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+
+from alembic import op
+
+revision = "b1a2c3d4e5f6"
+down_revision = "cf8e4f1dc7ee"
+branch_labels = None
+depends_on = None
+
+OWNER_INV = "库存单据"          # 与 `app/mod12_diff/domain.py::OWNER_INV` 同值（迁移里不 import 业务代码）
+
+
+def upgrade() -> None:
+    op.create_table(
+        "diff_record",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("seq", sa.Integer(), nullable=False),
+        sa.Column("code", sa.String(length=16), nullable=False),
+        sa.Column("month", sa.String(length=7), nullable=False),
+        sa.Column("owner", sa.String(length=16), nullable=False, server_default=OWNER_INV),
+        sa.Column("project_name", sa.String(length=256), nullable=False),
+        sa.Column("detail", sa.Text(), nullable=False),
+        sa.Column("amount", sa.Numeric(precision=18, scale=2), nullable=False),
+        sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("remark", sa.Text(), nullable=False, server_default=""),
+        sa.Column("created_by", sa.String(length=64), nullable=False, server_default=""),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("code", name="uq_diff_record_code"),
+    )
+    op.create_index("ix_diff_record_seq", "diff_record", ["seq"], unique=False)
+    op.create_index("ix_diff_record_code", "diff_record", ["code"], unique=False)
+    op.create_index("ix_diff_record_month", "diff_record", ["month"], unique=False)
+    op.create_index("ix_diff_record_status", "diff_record", ["status"], unique=False)
+
+
+def downgrade() -> None:
+    op.drop_index("ix_diff_record_status", table_name="diff_record")
+    op.drop_index("ix_diff_record_month", table_name="diff_record")
+    op.drop_index("ix_diff_record_code", table_name="diff_record")
+    op.drop_index("ix_diff_record_seq", table_name="diff_record")
+    op.drop_table("diff_record")
