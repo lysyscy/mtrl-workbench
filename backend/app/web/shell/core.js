@@ -246,6 +246,10 @@ const API = {
   m11Link: body => API.post('/api/m11/link', body),
   m11Unlink: body => API.post('/api/m11/unlink', body),
 
+  /* ⛔ `MOD-12` 差异登的四个接口（`m12List` / `m12Create` / `m12Delete` / `m12Status`）
+     **已于 2026-09-20 删除**（用户裁定撤页 —— 依据见 `backend/app/main.py` 的 import 处注释）。
+     ⛔ 别再加回来：差异的载体是**调整单**（`API.m08Adjust`），差异表由后端按调整单算（`m06`）。 */
+
   /* ---- MOD-12 差异登记（M6 跨域第一片 · 2026-09-20 接线）⚠️ 金额后端出**字符串** ⇒ 过 `N0()` ---- */
   m12List: () => API.get('/api/m12/list'),
   /* ⚠️ 写动作**恒 HTTP 200 ＋ `ok` 标志**（同 m03/m07/m09/m14）⇒ **成败看 `ok`**，⛔ 别只靠 try/catch。
@@ -1647,39 +1651,11 @@ function adaptJc(x) {
   };
 }
 
-/* =====================================================================
-   MOD-12 差异登记（M6 跨域第一片 · 2026-09-20 接线）
-   ⭐ **适配层**：后端行 → 「`DF_COLS` 时代」的行形状（`V.m12` **一行不改** —— 同 `adaptJc` 的做法）。
-   ⚠️ `id` **必须 String**：原型到处 `d.id===t.dataset.id`（如 `dfOk` / `dfDel`），
-      而 `dataset` 出来**永远是字符串** ⇒ 后端给数字时不转就**静默失配**（按钮点了没反应）。
-      ⇒ `id` 放**业务编号**（`DF01`，字符串）；后端主键另存 `_dbId` —— ⚠️ 写动作**必须用 `_dbId`**
-      （§9.8.2-5「写操作按 id 定位」；业务编号**可以被人改**、主键不行）。
-   ⚠️ `type` = 后端 `owner`（归属）—— 名字沿用原型列名，取值**恒为「库存单据」**（§5.8.3）。
-   ⚠️ 金额后端出**字符串**（`numeric(18,2)` 精度保护）⇒ 必须过 `N0()`；
-      漏了会让本页合计变成**字符串拼接**、安静地错（本项目反复踩的坑）。 */
-function adaptDf(x) {
-  return {
-    id: String(x.code || ''),
-    _dbId: Number(x.id),
-    month: x.month || '',
-    type: x.owner || '库存单据',
-    proj: x.project_name || '',
-    detail: x.detail || '',
-    amount: N0(x.amount),
-    status: x.status || '待核对',
-    remark: x.remark || '',
-  };
-}
-
-async function reloadM12() {
-  const d = await API.m12List();
-  const rows = (d.items || []).map(adaptDf);
-  /* ⚠️ **原地**替换（`DFs` 是 `const`，且它与 `JCs`/`LGs` 写在同一行声明里 ⇒ 只许改内容）；
-     理由同 `JCs`：`nextDfId` / `dfMonthOpts` / 看板的 `nDf` 都读它，整支换引用会失效。 */
-  DFs.length = 0;
-  rows.forEach(r => DFs.push(r));
-  render();
-}
+/* ⛔ 这里曾有 `adaptDf` ＋ `reloadM12()`（2026-09-20 为 `MOD-12` 差异登一页接的后端）。
+   **已整段删除**（用户裁定撤页）—— 依据：§5.8.3 明写「差异归属「库存单据」（**不独立成模块**）」。
+   ⭐ `DFs` 这个数组**留着**（`V.m12` 是**原型切片**、`ui_parity` 按它逐行对位）⇒ 让它保持
+      **空数组**即可：页已从侧栏撤下、数据源已断，`V.m12` 渲染出的是空表（⛔ 不再是演示数据）。
+   ⛔ 别再加回 `reloadM12` / `adaptDf`：差异的载体是**调整单**（`m08`）、产出是**差异表**（`m06`）。 */
 
 async function reloadM11() {
   const d = await API.m11List();
@@ -1779,10 +1755,6 @@ const PAGE_LOAD = {
      但它**自己的数据被别人读**（看板 / 大表主材累计 / m03 集采关联）—— 那些页各自按需拉自己的路，
      ⛔ 不在这里替它们拉（`P3` 的口径：进哪页拉哪页）。 */
   m11: ['集采台账'],
-  /* ⭐ `M6` 第一片（2026-09-20）：差异登记。⚠️ 单路即可 —— `V.m12` 只读 `DFs`
-     （`dfMonthOpts` 读 `DFs` 自己的月份、`dfPjOpts` 读 `PJs` 项目候选 ⇒ 后者由 `pjs` 那一路供，
-     但那是**候选下拉**、不是本页数据；本页**没有它也能看**，故不进 `PAGE_LOAD`）。 */
-  m12: ['差异登记'],
 };
 /* 标签 → 取数函数（标签进顶部横幅的**失败点名** —— ⛔ 一字不许改，它们是给用户看的） */
 const LOADERS = {
@@ -1807,7 +1779,7 @@ const LOADERS = {
   '特殊费用月报表': reloadM09,
   '规则配置': reloadM14,        /* 独立取数 ⇒ 无顺序依赖 */
   '集采台账': reloadM11,        /* ⭐ `M5-7`：`/api/m11/list` ⇒ 原地填 `JCs`（跨页共享，见 `adaptJc` 上方注释） */
-  '差异登记': reloadM12,        /* ⭐ `M6` 第一片：`/api/m12/list` ⇒ 原地填 `DFs`（见 `adaptDf` 上方注释） */
+  /* ⛔ `'差异登记': reloadM12` 已删（2026-09-20 撤页）；`reloadM12` / `adaptDf` 也已删。 */
   '收发结存与大表': reloadM07,   /* ⚠️ 吃 `MACH6`/`IVs` ⇒ 见 `LOAD_DEP` */
   '付款域': reloadM05,          /* ⚠️ 机械欠款派生自 `MACH6` ⇒ 见 `LOAD_DEP` */
 };
