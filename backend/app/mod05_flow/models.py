@@ -62,6 +62,13 @@ class PaymentFlow(Base):
     revoke_reason: Mapped[str] = mapped_column(String(512), default="")        # ⚠️ 撤销**必填**
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     request_id: Mapped[str] = mapped_column(String(64), default="")            # 防重复提交（§4.4.4）
+    #: ⭐ **操作人**（§1.5.1 末行：「留痕的**改前人 / 录入人**一律取**当前登录用户**」）。
+    #: ⚠️ **本列是 2026-09-20 补的**（迁移 `d1f3a5c7e9b2`）—— 在此之前页面上那一列
+    #:   `FL_THEAD`「操作人」**显示的是 `created_at`（时间）**，因为这张表根本没记人
+    #:   （`core.js::adaptFlow` 的 `op: x.created_at` **不是笔误，是没字段可填**）。
+    #: ⚠️ **取值一律走唯一出口** `core/identity.py::current_operator()`（⛔ 不写死名字）；
+    #:   老行为**空串** = **如实表示"当时没记"**（⛔ 不要为它编一个名字）。
+    created_by: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 

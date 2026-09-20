@@ -14,6 +14,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.identity import current_operator
 from app.core.money import to_money
 from app.mod03_notice.models import NoticeStatLog, PaymentNotice
 from app.mod05_flow.domain import effective_total, revoke_flow
@@ -98,11 +99,18 @@ def create_flow(
     request_id: str = "",
     source: str = FLOW_SOURCE_MANUAL,
     import_batch: str = "", remark: str = "",
+    created_by: str = "",
 ) -> PaymentFlow:
     """登记**一条**付款流水（§4.4.2：**一次付款一条独立流水**，不做金额累计覆盖）。
 
     ⚠️ 金额与付款方式的**合法性判定不在此层** —— 由 `mod03_notice.domain.confirm_batch` 把关
        （禁用是预防、校验是兜底；本层只落已通过的批次）。
+
+    ⭐ **`created_by`（操作人）**：§1.5.1 末行「留痕的改前人 / 录入人**一律取当前登录用户**」。
+    ⚠️ 传空时**就地兜** `current_operator()` —— 而不是让每个调用方自己记得传：
+       这条流水**必然**是"某个人在界面上点的"（历史导入由 `commit_plan` 单独写 `operator`），
+       漏传的后果是**留痕字段变空串**，而那种错**不报错、只静默**（本项目最贵的一类）。
+    ⛔ 兜底**也不是写死名字** —— `current_operator()` 是唯一出口（登录态 → `.env` → 中性占位）。
     """
     row = PaymentFlow(
         flow_no=next_flow_no(),
@@ -116,6 +124,7 @@ def create_flow(
         source=str(source or FLOW_SOURCE_MANUAL),
         import_batch=str(import_batch or ""),
         remark=str(remark or ""),
+        created_by=str(created_by or "") or current_operator(),
     )
     s.add(row)
     s.flush()
