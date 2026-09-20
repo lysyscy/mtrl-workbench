@@ -1,0 +1,137 @@
+"""`MOD-15` 账号域的**规则出口**（《说明书》§1.5.1）。
+
+⚠️ 本模块是**纯函数**（⛔ 不碰会话、不落库）—— 规则在这里、落库在 `repository.py`，
+   这样"**直接调写操作也必须被拦**"（claim `001-07` 的硬要求）能靠**同一个出口**保证：
+   仓储与将来的 JSON API **都调这里的断言**，⛔ 不各写一份。
+
+⚠️ **旧口径一律按作废处理**（§1.5.1 明确列出）：
+   ⛔ 账号名「字母开头且 ≥3 位」· ⛔ 密码「≥6 位」· ⛔「只停用、不物理删除」· ⛔ **「不能停用自己」**。
+   ⭐ 最后一条特别容易"顺手加回来"（看着像防误操作）—— 但口径明写废了它，⛔ 不加。
+"""
+
+from __future__ import annotations
+
+from typing import Iterable
+
+from app.core.errors import MustReportError
+
+ROLE_ADMIN = "admin"
+ROLE_USER = "user"
+ROLES = (ROLE_ADMIN, ROLE_USER)
+
+STATUS_ACTIVE = "在用"
+STATUS_DISABLED = "已停用"
+STATUSES = (STATUS_ACTIVE, STATUS_DISABLED)
+
+#: 三态里的第三态（⛔ 不是 `status` 的取值，是「`deleted_at` 非空」的**显示名**）
+STATE_DELETED = "已删除"
+
+
+def is_deleted(u) -> bool:
+    """软删 = `deleted_at` 非空（⚠️ 判据**只看这一处**，⛔ 别各处自己写 `status == '已删除'`）。"""
+    return getattr(u, "deleted_at", None) is not None
+
+
+def state_of(u) -> str:
+    """三态显示名：已删除 / 已停用 / 在用（⚠️ 「删除」优先于「停用」—— 两个标记同时为真时它算已删）。"""
+    if is_deleted(u):
+        return STATE_DELETED
+    return STATUS_DISABLED if u.status == STATUS_DISABLED else STATUS_ACTIVE
+
+
+def active_admins(users: Iterable) -> list:
+    """**在用的管理员**（既没被删、也没被停用）—— 防锁死判据的**唯一**依据。
+
+    ⚠️ 「在用」= `status == 在用` **且** `deleted_at is None`，**两个条件都要**
+       —— 只查 `role == admin` 会把"已停用的管理员"也算进去 ⇒ **防锁死就失效了**。
+    """
+    return [u for u in users if u.role == ROLE_ADMIN and u.status == STATUS_ACTIVE and not is_deleted(u)]
+
+
+def assert_last_admin_protected(users: Iterable, target) -> None:
+    """⛔ **不能停用 / 删除「最后一个在用管理员」**（§1.5.1「防锁死」）。
+
+    ⚠️ 为什么必须**在域层拦**（⛔ 不能只靠壳把按钮禁用）：claim `001-07` 明写
+       「**直接调写操作也必须被拦，不只靠按钮禁用**」—— 壳的 `disabled` 只是**体验**，
+       真正的防线在这里（JSON API / 将来的批处理都会走这里）。
+    ⚠️ 只在**真的会减少**在用管理员时才拦：动一个**普通用户**、或动一个**本来就不是在用管理员**的账号
+       ⇒ 不拦（否则"停用普通用户"也会报错，那是另一种错）。
+    """
+    if target.role != ROLE_ADMIN or target.status != STATUS_ACTIVE or is_deleted(target):
+        return
+    remaining = [u for u in active_admins(users) if u is not target and getattr(u, "id", None) != getattr(target, "id", None)]
+    if not remaining:
+        raise MustReportError(
+            "不能停用 / 删除**最后一个在用管理员** —— 那会**把系统锁死**（§1.5.1 防锁死）："
+            "没人能再管理账号，也就没人能把它改回来。"
+            "⇒ 先把管理员**转让**给另一个在用账号，再来动它。")
+
+
+def assert_not_self_delete(actor, target) -> None:
+    """⛔ **不能删除自己**（§1.5.1「防锁死」后半句）。
+
+    ⚠️ 注意**只有"删除"这一条** —— 旧口径里的「不能停用自己」**已作废**（§1.5.1 明列），
+       ⛔ 别把它一起加上（那会让"停用自己"这个合法动作被拒）。
+    """
+    if getattr(actor, "id", None) is not None and actor.id == target.id:
+        raise MustReportError("不能删除自己（§1.5.1 防锁死）—— 请让另一个管理员来删。")
+
+
+def normalize_account(account: str | None) -> str:
+    """登录账号**只做去空白**（§1.5.1：*不限制字符与长度*）—— ⛔ 不校验格式。
+
+    ⚠️ 「去空白」不算"限制格式"：它保证" 张伟 "与"张伟"**不成为两个账号**（那是**重复**，
+       而"不重复"是口径明写的）；⛔ 此外一律原样（大小写、符号、长度都保持用户所写）。
+    """
+    return (account or "").strip()
+
+
+def assert_account_usable(account: str, existing: Iterable) -> str:
+    """账号**非空 + 不重复**（§1.5.1）⇒ 返回归一化后的账号，不合格当场报错。
+
+    ⚠️⚠️ 判"重复"时 **`existing` 必须包含已删除的行** —— §1.5.1 说软删**保留账号名**
+       （"必要时可恢复"），所以那个名字**还在占用**；claim `001-05` 也要求
+       「登录账号重复或为空时必须拒绝创建（**不得新增行**）」。
+       ⛔ 若这里只比对"在用的"，就制造了一个**恢复时会撞名**的坑。
+    """
+    acc = normalize_account(account)
+    if not acc:
+        raise MustReportError("登录账号**不能为空**（§1.5.1）—— 请填一个账号名。")
+    for u in existing:
+        if normalize_account(u.account) == acc:
+            if is_deleted(u):
+                raise MustReportError(
+                    f"账号「{acc}」**已被一个已删除的账号占用** —— §1.5.1 规定软删**保留账号名**"
+                    "（历史留痕里的人名要认得出来、且必要时可恢复）⇒ 换个名字，"
+                    "或先把那个账号**恢复**出来再用。")
+            raise MustReportError(f"账号「{acc}」**已存在**（§1.5.1：账号名非空 + 不重复）。")
+    return acc
+
+
+def transfer_plan(actor, target) -> dict:
+    """**转让管理员**：返回"谁改成什么"（⛔ 不落库 —— 落库在仓储层）。
+
+    §1.5.1：「管理员可把管理员身份**转让**给另一个**在用**账号；转让后对方为管理员、
+    自己转为普通用户 ⇒ 系统内**恒只有一个管理员**」。
+    ⚠️ 三条都要拦（少一条转让就会把系统搞成两个管理员或零个）：
+      ① 目标必须是**在用**（"在用"含未删未停用 —— ⛔ 不能转给一个停用/已删的账号）；
+      ② 目标不能是**自己**（自己转给自己 = 什么都不变，却会被当成"转让成功"）；
+      ③ **执行者必须是在用管理员**（否则普通用户也能把自己提成管理员）。
+    """
+    if actor.role != ROLE_ADMIN or actor.status != STATUS_ACTIVE or is_deleted(actor):
+        raise MustReportError("只有**在用的管理员**才能转让管理员身份（§1.5.1）。")
+    if target.id == actor.id:
+        raise MustReportError("不能把管理员身份**转让给自己**（§1.5.1）—— 请选另一个在用账号。")
+    if target.status != STATUS_ACTIVE or is_deleted(target):
+        raise MustReportError(
+            f"不能把管理员转让给「{state_of(target)}」的账号 —— §1.5.1 要求目标是**在用**账号"
+            "（否则一转让就是零个在用管理员 ⇒ 系统锁死）。")
+    return {"promote": target, "demote": actor}
+
+
+__all__ = [
+    "ROLE_ADMIN", "ROLE_USER", "ROLES",
+    "STATUS_ACTIVE", "STATUS_DISABLED", "STATUSES", "STATE_DELETED",
+    "active_admins", "assert_account_usable", "assert_last_admin_protected",
+    "assert_not_self_delete", "is_deleted", "normalize_account", "state_of", "transfer_plan",
+]

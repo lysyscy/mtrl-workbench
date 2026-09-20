@@ -74,6 +74,11 @@ W2 backend/app/mod14_config/repository.py:read_values
 #    不是「忘了接」，随对应功能落地时接进链路。
 # ⭐ 已甄别为「**防回归 / 配置守卫**」—— 它检查的是**常量**（不是运行数据）⇒ **测试调用就够了**，
 #    生产链路本来就不需要调用它（它守的是"没人偷偷接第二个数据源"）。
+#      ⭐ 2026-09-20（m15 用户管理 · **片 1「域 ＋ 存储」做完、片 2/3「API ＋ 壳接线」未做**）：
+#         `soft_delete` 属**第②类「功能尚未做到那一步」** —— 它是**业务写操作**（⛔ 不是守卫），
+#         现在只有断言在调；**片 2 的 JSON API 一接上就有生产调用者** ⇒ 那时**删掉下一行**
+#         （⚠️ 本白名单**只准变短**，这行是"临时过桥"，⛔ 不是长期豁免）。
+W1b backend/app/mod15_user/repository.py:soft_delete
 W1b backend/app/mod02_i8/fetch_task.py:assert_single_external_source
 W1b backend/app/core/period.py:export_filename
 W1b backend/app/mod01_projects/domain.py:validate_keyword_in_doc
