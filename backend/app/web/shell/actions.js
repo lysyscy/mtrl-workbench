@@ -1131,11 +1131,17 @@ const ACT={
    /* ⚠️ 文件名 = **展示名 ＋ 域 ＋ 表名 ＋ 年月**（与后端 `domain.export_file_name` 同构）——
       ⚠️ **表名进文件名**：三张表（表① / 表② / 差异表）**同一形态**，只有数据与文件名不同
       （用户 2026-09-18 裁）；导出**跟随当前所显示的那张表**。 */
-   const ym=bjMonth(), fnOf=k=>`${pjLabel(k)}_过程资料_${procTabName()}_${ym}.xlsx`;
+      const ym=bjMonth(), fnOf=k=>`${pjLabel(k)}_过程资料_${procTabName()}_${ym}.xlsx`;
+      /* ⭐ 2026-09-20 用户裁定：**导出清单弹窗里的表要可排序**（判据 `ACC-X-EXP-001/001-06`）。
+      ⚠️⚠️ 排序的**开关是 `data-sort`（无值属性）**，⛔ **不是** `data-sort-key`：
+        `data-sort-key` 只是**排序状态的键（表的身份）**。`index.html` 里那段注入逻辑
+        **精确匹配 `data-sort`**（就是为此专门写过一版修正，见那里的注释）⇒
+        **只加 `data-sort-key` 的话表照样点不动** —— 那就是"看着改了、其实没生效"。
+      ⛔ 别照着 `modal:expExt-*` 抄：那张是**刻意不可排**的（`INDEX` 里点名的分组表，合计行要 pin 在表尾）。 */
    const body = pjs.length===1
      ? `<div class="tip ok" style="margin:0">将生成 <b>1 个文件</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>内容 = <b>当前所显示的那张表</b>（<b>${procTabName()}</b>）按 <b>17 列模板</b>填充（核算月 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列），报<b>分公司工程科</b>（§5.2.2）。</div>`
      : `<div class="tip ok" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">过程资料_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个文件（每个 = 一个项目的 <b>${procTabName()}</b>）。</div>
-       <table class="dt cond" style="margin-top:8px"><thead><tr><th>#</th><th>文件（每项目一份）</th></tr></thead><tbody>
+       <table class="dt cond" data-sort data-sort-key="modal:procExp" style="margin-top:8px"><thead><tr><th>#</th><th>文件（每项目一份）</th></tr></thead><tbody>
        ${pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`).join('')}
        </tbody></table>`;
    modal({title:'导出 · 过程资料（按模板 · 每项目一份）',body,
@@ -1480,10 +1486,12 @@ const ACT={
       （台账跨月连续、特殊费用月报表是单月列由系统生成）⇒ 这里的「当前年月」就是上月。
       （2026-09-18 修正：原写 `bjMonth()` = 当月，与 §9.2 及后端默认不一致。） */
    const ym=bjMonth(-1), fnOf=k=>`${pjLabel(k)}_欠款台账_${ym}.xlsx`;
+   /* ⭐ 2026-09-20 用户裁定：导出清单弹窗里的表**要可排序**（判据 `ACC-X-EXP-001/001-06`）。
+      ⚠️ 开关是 **`data-sort`**、`data-sort-key` 只是**身份** —— 两个都要（理由见 `procExpOk` 那段，⛔ 不复述）。 */
    const body = pjs.length===1
      ? `<div class="tip ok" style="margin:0">将生成 <b>1 个工作簿</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>工作簿内 <b>3 个工作表</b>：<b>辅材欠款</b> · <b>机械欠款</b> · <b>特殊费用月报表</b></div>`
      : `<div class="tip ok" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">逐月欠款台账_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个工作簿（每个 <b>3 个工作表</b>）。</div>
-        <table class="dt cond" style="margin-top:8px"><thead><tr><th>#</th><th>工作簿（每项目一个）</th><th>工作表</th></tr></thead><tbody>
+        <table class="dt cond" data-sort data-sort-key="modal:ledExp" style="margin-top:8px"><thead><tr><th>#</th><th>工作簿（每项目一个）</th><th>工作表</th></tr></thead><tbody>
         ${pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td><td class="sm">辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>`).join('')}
         </tbody></table>`;
    modal({title:'导出 · 逐月欠款台账（每项目一个工作簿）',body,

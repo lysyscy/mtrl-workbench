@@ -222,4 +222,55 @@ def test_导出相关渲染面无Markdown泄漏():
         assert not re.search(r"(?m)^\s*#{1,4}\s", seg), f"`{name}` 的渲染面出现 Markdown 标题（`## …`）"
 
 
-__all__ = ["NON_DATA_VIEWS", "EXPORT_EXEMPT", "EXPORT_RENDERERS"]
+#: 导出清单弹窗里的表（`001-06`）：`弹窗名 → (标题片段, 排序键)`
+EXPORT_MODAL_TABLES = {
+    "procExpOk": ("导出 · 过程资料", "modal:procExp"),
+    "ledExpOk": ("导出 · 逐月欠款台账", "modal:ledExp"),
+}
+#: ⚠️ **刻意不可排**的表 —— `index.html` 注释里点名的（`MOD-07` 焊材/气体提取的**分组表**）：
+#:   它只写 `data-sort-key`，是因为**合计行要 pin 在表尾**，注入了排序入口反而会坏。
+NOT_SORTABLE_BY_DESIGN = ("modal:expExt",)
+
+
+@acc("ACC-X-EXP-001", "001-06")
+def test_导出清单弹窗里的表可排序():
+    """claim：「导出**清单弹窗**里的表**可排序**」。
+
+    ⚠️⚠️ **这条判据的命门是那个开关叫 `data-sort`，⛔ 不是 `data-sort-key`** ——
+       壳里注入排序入口的逻辑**精确匹配 `data-sort` 属性本身**（`index.html` 里那段正则，
+       还专门为此改过一版：老的 `\\bdata-sort\\b` 会把 `data-sort-key` 也算成「可排」，
+       `-` 是词边界）。`data-sort-key` 只是**排序状态的键（表的身份）**。
+    ⇒ 所以断言**两头都要**：① 表上有 **`data-sort`**（真开关）；② 有 `data-sort-key`（身份 · 本仓「新表一律声明」）。
+       ⛔ 只钉 `data-sort-key` = 盯着一堆**不生效**的属性看 —— 典型的「看着改了、其实没生效」。
+       ⚠️ 这条我是**踩过**的：第一版找"同类里能排的那张"去对齐，认错了对象
+       （`modal:expExt` 有 key 但**没** `data-sort`，它是**刻意不可排**的）——
+       所以反面也一并钉住。
+    """
+    acts = _actions()
+    for name, (title, key) in EXPORT_MODAL_TABLES.items():
+        assert title in acts, f"找不到导出弹窗「{title}」（{name}）—— 落点变了"
+        m = re.search(r'<table\b[^>]*data-sort-key="' + re.escape(key) + r'"[^>]*>', acts)
+        assert m, f"「{title}」的清单表没有 `data-sort-key=\"{key}\"`（表的**身份**，本仓约定新表一律声明）"
+        tag = m.group(0)
+        assert re.search(r"\sdata-sort[\s>]", tag), (
+            f"「{title}」的清单表**没有 `data-sort`**（真开关）⇒ 表头点了不动。\n"
+            f"  ⚠️⚠️ 光有 `data-sort-key` **不生效** —— 壳里精确匹配的是 `data-sort` 本身。\n"
+            f"  实际标签：{tag[:150]}")
+
+    # ⭐ 把**机制**也钉住：⛔ 别把"认 `data-sort`"放宽成"认 `data-sort-key` 也行"
+    html = _index()
+    assert "\\sdata-sort[\\s>]" in html, (
+        "注入排序入口的逻辑不再精确匹配 `data-sort` —— ⚠️ 一旦放宽成「有 `data-sort-key` 也算可排」，"
+        "**刻意不可排**的表（分组表：合计行要 pin 在表尾）会被**误注入**排序入口 ⇒ 那是**有意的设计**，别动。")
+
+    # ⭐ 反面：刻意不可排的表 **不许**被"顺手对齐"加上 `data-sort`
+    for key in NOT_SORTABLE_BY_DESIGN:
+        m = re.search(r'<table\b[^>]*data-sort-key="' + re.escape(key) + r'[^"]*"[^>]*>', acts)
+        assert m, f"找不到 `{key}` 那张刻意不可排的表 —— 落点变了"
+        assert not re.search(r"\sdata-sort[\s>]", m.group(0)), (
+            f"`{key}` 那张表被加上了 `data-sort` —— ⛔ 它是**刻意不可排**的"
+            "（分组表：合计行要 pin 在表尾 ⇒ 注入排序入口会坏）")
+
+
+__all__ = ["NON_DATA_VIEWS", "EXPORT_EXEMPT", "EXPORT_RENDERERS",
+           "EXPORT_MODAL_TABLES", "NOT_SORTABLE_BY_DESIGN"]
