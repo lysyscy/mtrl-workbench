@@ -251,3 +251,57 @@ def test_金额空是None不是0_日期归一():
     assert to_date("2025/3/6") == "2025-03-06"
     assert to_date("205260323") == "205260323", "认不出就**原样**留着（⛔ 不猜成别的日子）"
     assert to_date("") == ""
+
+
+@acc()
+def test_Excel能覆盖的列必须都在白名单里且含付款方式():
+    """⚠️⚠️ **2026-09-20 真机实测踩到**（用户报的「还是没有详细付款方式这一列」）。
+
+    用户表里那列的表头叫「**详细付款方式**」；预览页**认出来了**、白名单 `EDITABLE_COLS` 里
+    **也有** `method` —— 但 `commit` 拼 `cols` 时**只拼了 `material_name` / `remark` / 三存档列**
+    ⇒ **认得出、白名单放行、就是不写**，而且**全程不报错**。
+
+    ⚠️ 这类漏法可怕在：**三个环节各自都"对"**，坏在**它们之间的衔接**上 ——
+       预览页明说「已认成 付款方式 ✅」，人会以为成了，导完才发现台账里一个都没有。
+
+    ⇒ 两条一起钉：
+      ① 能覆盖的列里**必须有** `method`；
+      ② **每一个** `EXCEL_COLS` 都必须在 `R.EDITABLE_COLS` 里 ——
+         ⛔ 否则 `update_contract` 会**静默忽略**它（白写，同样不报错）。
+    """
+    from app.mod11_jc import import_service as IE
+    from app.mod11_jc import repository as R
+
+    assert "method" in IE.EXCEL_COLS, (
+        "「付款方式」必须能被 Excel 覆盖 —— 用户表里那列的表头叫「详细付款方式」")
+    missing = [k for k in IE.EXCEL_COLS if k not in R.EDITABLE_COLS]
+    assert not missing, f"这些列会被 `update_contract` **静默忽略**（白名单里没有）：{missing}"
+    # ⛔ i8 的事实列**不许**进这张表（"两边互不覆盖"是硬口径）
+    for k in ("contract_amt", "supplier", "contract_date", "party_name"):
+        assert k not in IE.EXCEL_COLS, f"「{k}」是 i8 的事实列 ⇒ Excel ⛔ 不许覆盖它"
+
+
+@acc()
+def test_付款方式列宽够装真实条款():
+    """⚠️⚠️ **2026-09-20 实测踩到（第二层）**：`method` 原先只有 `varchar(64)`，
+    而用户台账里「详细付款方式」那种**整段付款条款**最长 **95 字**
+    （"货到验收合格后，银行承兑付款，货到现场验收合格并开具全额发票后支付 50% 货款…"）
+    ⇒ Postgres 直接 `value too long for type character varying(64)` ⇒ **落值失败**。
+
+    ⚠️ 讽刺的是：这条列在**模型头上本来就写着**「自由文本 ⇒ **列宽给足**」—— 只是当时没给足。
+
+    ⚠️ 为什么值得一条断言：这类错**长得不像列宽问题** —— 症状是"导入了但那一列空的"，
+       人会去查导入逻辑、查列名映射，唯独想不到是**数据库列太窄**。
+    ⇒ 钉一个**下限**（`>= 512`）：512 是实测 95 字的 5 倍余量 —— 将来**加宽是允许的**，
+      ⛔ **缩回去不行**（付款条款只会更长）。
+    """
+    from sqlalchemy import String
+
+    from app.mod11_jc.models import JcContract
+
+    col = JcContract.__table__.columns["method"]
+    assert isinstance(col.type, String) and col.type.length, \
+        "付款方式是自由文本 ⇒ 不许变成无长度 / 枚举类型（`DEV-J-03`）"
+    assert col.type.length >= 512, (
+        f"付款方式列宽只有 {col.type.length} —— 实测用户那条整段条款就有 **95 字**，"
+        "64 装不下（会被数据库拒；而且错在导入那一步，很难一眼看出是列宽问题）")

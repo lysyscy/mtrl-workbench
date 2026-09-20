@@ -50,7 +50,27 @@ SKIP_SHOW = 12
 #: ⚠️ 存档三列**走白名单** `update_contract`（它们不在 i8 抓取的刷新范围里 —— 那是**人的地盘**）。
 #: ⚠️ 原先还有一个 `_CORE`（"主表字段 → `insert_contract` 入参名"），**2026-09-20 随口径改成
 #: "锚点匹配 ⇒ 更新已有"后就没用了** ⇒ **删掉**（本仓纪律：⛔ 不留"已废弃但仍能被调用"的死代码）。
-_EXTRA = ("arch", "arch_no", "ret_date")
+#: ⚠️ 同理，`_EXTRA = ("arch","arch_no","ret_date")` 也随下面的 `EXCEL_COLS` **一起删了** ——
+#: 它俩本来就是同一件事的两半，留一半只会让下一个人**再漏一次**（2026-09-20）。
+
+#: ⭐⭐ **Excel 能覆盖的主表列**（= "Excel 的地盘"）—— 用户 2026-09-20 列的字段。
+#:
+#: | 列 | 用户当时的说法 |
+#: |---|---|
+#: | `material_name` | 材料名 |
+#: | `method` | **付款方式** —— ⚠️ 他表里那列的表头叫「**详细付款方式**」（2026-09-20 晚补加） |
+#: | `remark` | 备注 |
+#: | `arch` / `arch_no` / `ret_date` | 存档 / 存档序号 / 寄回情况 |
+#:
+#: ⛔ **不在其中**的 = 来自 i8 的事实列（`contract_amt` / `supplier` / `contract_date` / `party_name`）
+#:    —— 两边**互不覆盖**，见模块头。
+#:
+#: ⚠️⚠️ 为什么要抽成一个常量（而不是像原先那样在循环里写死 `("material_name", "remark")`）：
+#:    **漏一列 = 那一列"认得出、白名单也放行、就是不写"，且全程不报错**。
+#:    2026-09-20 真机就踩了：`method` 没在里面 ⇒ 用户导完发现"付款方式一个都没进来"。
+#:    ⇒ 列的**唯一主人**在这儿；⚠️ 它与 `R.EDITABLE_COLS` 必须**是子集关系**（否则会被静默忽略），
+#:    已由 `tests/test_acc_jc_import.py` 的一条断言钉住。
+EXCEL_COLS: tuple[str, ...] = ("material_name", "method", "remark", "arch", "arch_no", "ret_date")
 
 
 # ============================================================ 预览
@@ -222,11 +242,12 @@ def commit(s, data: bytes, filename: str, *, sheet: str, project_key: str,
 
         # ⭐ **只更"Excel 的地盘"那几列**（用户 2026-09-20 列的字段）——
         #    ⛔ 合同价 / 供应商 / 合同日期 / 甲方单位**一个字都不碰**（那是 i8 的事实，两边互不覆盖）。
+        # ⚠️⚠️ 必读：**拼 cols 这一步漏一列 = 那一列"认得出、白名单也放行、就是不写"**，
+        #    而且**全程不报错**（2026-09-20 真机踩到：`method` 就是这么丢的 ——
+        #    用户表里那列叫「详细付款方式」，预览页显示"已认成 付款方式"，
+        #    落库后**台账里却一个都没有**）。⇒ 列的**唯一主人** = `EXCEL_COLS`，⛔ 别再散在循环里写死。
         cols: dict = {}
-        for k in ("material_name", "remark"):
-            if k in fields:
-                cols[k] = str(row.get(k) or "")
-        for k in _EXTRA:                                    # 存档三列（走白名单 update）
+        for k in EXCEL_COLS:
             if k in fields:
                 cols[k] = row.get(k)
         if cols:
@@ -294,4 +315,4 @@ def _add_invoice(s, contract_id: int, *, kind: str, date: str, amount) -> dict:
     return SV.act_add_invoice(s, contract_id=contract_id, kind=kind, date=date, amount=amount)
 
 
-__all__ = ["SAMPLE_ROWS", "SKIP_SHOW", "preview", "commit"]
+__all__ = ["SAMPLE_ROWS", "SKIP_SHOW", "EXCEL_COLS", "preview", "commit"]

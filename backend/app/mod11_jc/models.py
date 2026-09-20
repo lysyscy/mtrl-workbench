@@ -112,7 +112,13 @@ class JcContract(Base):
     arch: Mapped[str] = mapped_column(String(8), default="")                            # 合同存档情况（手工）
     arch_no: Mapped[str] = mapped_column(String(64), default="")                        # 合同存档号（手工）
     ret_date: Mapped[str | None] = mapped_column(String(10), nullable=True)             # 合同寄回日期（可空）
-    method: Mapped[str] = mapped_column(String(64), default="")                         # 付款方式（**自由文本**）
+    #: ⚠️⚠️ **2026-09-20 实测从 64 放宽到 512**：用户台账里「详细付款方式」那种**整段付款条款**
+    #:    最长 **95 字**（"货到验收合格后，银行承兑付款，货到现场验收合格并开具全额发票后支付 50% 货款…"）
+    #:    ⇒ 64 装不下 ⇒ Postgres 直接 `value too long for type character varying(64)`。
+    #:    ⚠️ 而这条列**本来就是这个模型头上写着的**「自由文本 ⇒ **列宽给足**」—— 只是当时没给足。
+    #:    512 = 实测 95 字的 5 倍余量（付款条款只会更长、不会更短）。
+    #:    ⚠️ 判据 `ACC-JC-UI-001/001-12`（三列可手改并落值）也管这一列 ⇒ 装不下就是**落值失败**。
+    method: Mapped[str] = mapped_column(String(512), default="")                        # 付款方式（**自由文本**）
     remark: Mapped[str] = mapped_column(String(255), default="")                        # 备注（手工）
     project_id: Mapped[int] = mapped_column(
         # ⚠️ 外键**必须命名**（迁移纪律）；⛔ 不随项目级联删：合同是业务事实，
