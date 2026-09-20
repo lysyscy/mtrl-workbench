@@ -82,11 +82,21 @@ def save_run_record(
     error_message: str = "",
     detail: dict | None = None,
     operator: str = "",
+    started_at: datetime | None = None,
 ) -> RunRecord:
     """**一步写一条**已完成的执行记录（§3.1.3）—— 供"一次抓取一条"的调用方直接用。
 
     ⚠️ 与 `create_run_record` / `finish_run_record` 的分工：那两个给**长任务**（先建 running、
     结束再补结果）；本函数给**一次成型的短任务**，避免调用方自己拼状态机。
+
+    ⚠️⚠️ **`started_at` 与 `create_run_record` 同口径**：必须由调用方给"动作开始前"那一刻。
+       不传 ⇒ `started_at`（列默认 `datetime.now`）与这里的 `finished_at` **同刻** ⇒ **耗时恒 0**。
+
+    ⚠️⚠️⚠️ 本函数是**第二个"写执行记录"的出口**（`mod07_setl` / `mod08_inv` 的抓取走这里）——
+       **"耗时"这一个口径在两处实现**。2026-09-20 修"耗时恒 0"时，第一轮**只改了
+       `create_run_record`**、把这里漏了 ⇒ 收发结存 / 库存单据那两条**照旧恒 0**。
+       这正是本项目最贵的一类错（同一个口径两处实现，改一处 = 静默分叉）。
+       ⇒ 守卫已扩到**两个出口都查**（见 `tests/test_run_record_timing.py`）。
     """
     rec = RunRecord(
         run_type=run_type, target=target, status=status,
@@ -94,6 +104,8 @@ def save_run_record(
         error_message=error_message, detail=detail or {},
         triggered_by=operator or "manual", finished_at=datetime.now(),
     )
+    if started_at is not None:
+        rec.started_at = started_at          # ⚠️ 显式值**覆盖**列默认（列上是 `default=datetime.now`）
     session.add(rec)
     session.flush()
     return rec

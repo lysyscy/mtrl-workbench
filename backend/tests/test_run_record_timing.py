@@ -24,6 +24,10 @@ from app.core.db import session_scope
 from app.mod02_i8 import repository as R
 from tests.acc_plugin import acc
 
+#: 写执行记录的**两个出口**（⚠️ 别再只认一个 —— 2026-09-20 第一轮就栽在这上面：
+#: `mod07`/`mod08`/`mod11` 的抓取全走 `save_run_record`，只改 `create_run_record` 覆盖不到它们）
+EXITS = ("create_run_record", "save_run_record")
+
 
 def _calls(text: str, name: str) -> list[str]:
     """取出所有 `name(...)` 调用的**完整实参文本**。
@@ -68,24 +72,35 @@ def test_执行记录记得出真实耗时():
 
 @acc()
 def test_所有执行记录的调用点都要传耗时起点():
-    """**结构性守卫**：⛔ 不许再出现"建 `run_record` 时不传 `started_at`"的调用点。
+    """**结构性守卫**：⛔ 不许再出现"写 `run_record` 时不传 `started_at`"的调用点。
 
     ⚠️ 为什么值得一条**源码级**断言：这个坑**行为测试抓不住**（每条链路的测试都注入假执行器，
        真实现不被调用 ⇒ 永远不会真建记录）⇒ 只能从**结构**上守。
        与 `tests/test_wiring_guards.py::test_全仓没有一个未定义的名字_拆件漏 import` 同一族：
        **不看行为、只看源码**。
+
+    ⚠️⚠️ **必须覆盖"两个出口"** —— 2026-09-20 第一轮修这个坑时，**我只改了 `create_run_record`**，
+       把 `save_run_record` 漏了 ⇒ **收发结存 / 库存单据 / 集采台账那三条抓取照旧恒 0**
+       （它们走的是后者）。这正是"同一个口径两处实现、改一处 = 静默分叉"的老病 ⇒
+       本断言把**两个出口一起**钉住，并**断言真的扫到了预期条数的调用点**（⛔ 防"一个都没匹配到"式假绿）。
     """
     root = pathlib.Path(app.__file__).resolve().parent
-    bad: list[str] = []
+    ok, bad = 0, []
     for p in sorted(root.rglob("*.py")):
         text = p.read_text(encoding="utf-8")
-        if "create_run_record(" not in text:
-            continue
         if p.name == "repository.py" and p.parent.name == "mod02_i8":
-            continue            # 定义处（它本身就是收 `started_at` 的那个）—— ⛔ 不算调用点
-        for args in _calls(text, "create_run_record"):
-            if "started_at" not in args:
-                bad.append(f"{p.relative_to(root)}：create_run_record({args.strip()[:64]}…)")
+            continue            # 定义处（它就是收 `started_at` 的那两个）—— ⛔ 不算调用点
+        for name in EXITS:
+            if f"{name}(" not in text:
+                continue
+            for args in _calls(text, name):
+                if "started_at" not in args:
+                    bad.append(f"{p.relative_to(root)}：{name}({args.strip()[:56]}…)")
+                else:
+                    ok += 1
     assert not bad, (
         "这些调用点**没传 `started_at`** ⇒ 那条记录耗时恒 0"
         "（用户 2026-09-20 实测的『耗时一直是 0 秒』）：\n  " + "\n  ".join(bad))
+    assert ok >= 12, (
+        f"只扫到 {ok} 个「传了起点」的调用点 —— 比预期的少 ⇒ 要么有人漏传（上面会报），"
+        "要么**本断言的解析失效了**（⛔ 空匹配不许当绿灯）")

@@ -566,12 +566,17 @@ async function ntFetchBackend(m) {
   toast(`正在抓取 <b>${m}</b> 的付款通知书（会登录 i8：<b>可能顶掉在线用户</b>）…`, 4000);
   let r;
   try { r = await API.fetchNotices(m); }
-  catch (e) { return toast(`⚠️ 抓取失败：${esc(String((e && e.message) || e))}`, 8000); }
+  catch (e) {
+    await reloadM02IfOn();     /* ⚠️ 抓取失败**也写了一条执行记录**（`_persist_fetch` 的失败路径）⇒ 卡也要变 */
+    return toast(`⚠️ 抓取失败：${esc(String((e && e.message) || e))}`, 8000);
+  }
   if (r.ok) {
     await reloadNotices();
+    await reloadM02IfOn();     /* ⭐ 刚写的那条记录要**立刻**在记录卡上看到（见 `reloadM02IfOn`） */
     return toast(`已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，落库 <b>${r.upserted}</b> 条`, 6000);
   }
   /* 失败：把后端原因**原样**给用户（后端已写成中文）；属「归属未走完」⇒ 直接开补词弹窗 */
+  await reloadM02IfOn();       /* ⚠️ 「抓取被拒」同样是**一条真记录**（`failed`）⇒ 卡上要能看到 */
   toast(`<b>抓取被拒</b>：${esc(r.message || '未知原因')}`, 9000);
   try { await openOwnDialog(); } catch (e) { /* 打不开弹窗也不影响上面那句原因 */ }
 }
@@ -788,10 +793,12 @@ async function ivFetchBackend(month) {
     const r = await API.m08Fetch(month);
     if (r.ok === false) {                    /* 降级：i8 侧失败 ⇒ 走手动 Excel 导入（§3.6） */
       await reloadInv();
+      await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
       return toast(`<b>抓取没能完成</b>，已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
         + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`, 9000);
     }
     await reloadInv();
+    await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
     const st = r.stats || {};
     toast(`已按 <b>${esc(month)}</b> 抓取库存单据明细（API-03）：<br>`
       + `本次插入 <b>${st.inserted || 0}</b> · 更新 <b>${st.updated || 0}</b>`
@@ -800,6 +807,7 @@ async function ivFetchBackend(month) {
       + `<br><span class="mut sm">调整单独立存储、不被导入覆盖（ENT-04）</span>`, 7200);
   } catch (e) {
     await reloadInv();
+    await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
     toast(`<b>抓取没能完成</b>：${esc(String((e && e.message) || e))}<br>`
       + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试</span>`, 8600);
   }
@@ -924,10 +932,12 @@ async function whFetchBackend(month) {
     const r = await API.m07Fetch(month);
     if (r.ok === false) {                    /* 降级：i8 侧失败 ⇒ 走手动 Excel 导入（§3.6） */
       await reloadM07();
+      await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
       return toast(`<b>抓取没能完成</b>，已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
         + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`, 9000);
     }
     await reloadM07();
+    await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
     /* ⭐ 链路 B 的回执**必须露出来**（`TAIL-30`-③ 补的缺口）：原先这一路只报条数，
        回包里的 `recovery`（扶正了谁 / 新建了谁 / **还有哪几条要人指认**）**根本没露** ⇒
        用户在壳上抓完收发结存，**看不到"待人工 N 条"**，也就不知道该去 `m01` 处理。 */
@@ -950,6 +960,7 @@ async function whFetchBackend(month) {
       pend.length ? 15000 : 7600);
   } catch (e) {
     await reloadM07();
+    await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
     toast(`<b>抓取没能完成</b>：${esc(String((e && e.message) || e))}<br>`
       + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试</span>`, 8600);
   }
@@ -1528,6 +1539,18 @@ async function reloadM02() {
   M02_ERR = '';
 }
 
+/* ⭐ 2026-09-20：**某个动作刚写完一条执行记录 ⇒ 若此刻正开着 `m02`，就地刷那两张卡**。
+   ⚠️ 用户实测：「**执行记录并不会自动刷新**」——
+      在 `m02` 页点「触发」抓完，回显卡与记录卡**都还是旧的**（得离开再回来才更新）。
+   ⚠️ 为什么判 `VIEW`：⛔ 不在别的页白拉那 50 条（别页根本看不到这张卡）；
+      等用户切回 `m02` 时，`ALWAYS_FRESH` 会保证重拉一次 —— 两条合起来才没有缝。
+   ⚠️ 取数失败**不吞**：`reloadM02` 抛的话由 `M02_ERR` 在卡里如实说（与它本来的口径一致）。 */
+async function reloadM02IfOn() {
+  if (VIEW !== 'm02') return;
+  try { await reloadM02(); } catch (_) { /* 卡里会如实说（`M02_ERR`） */ }
+  render();
+}
+
 /* ⭐ 两个同步（`API-05` / `API-06`）的**唯一入口** —— 壳里三处入口共用它：
    `m02` 表里 API-05/06 两行的「触发」＋ `m01` 页首那两个「同步…」按钮。
    ⚠️ **D9：会强踢该账号的在线用户** ⇒ ① 先弹**二次确认**（讲清顶号与时段），⛔ 不确认不发请求；
@@ -1754,10 +1777,20 @@ const soft = async (label, fn) => {
   try { await fn(); } catch (e) { fails.push(`${label}：${String((e && e.message) || e)}`); }
 };
 const LOADED = new Set();          /* 已经拉过的路（同一页反复进出不重复拉） */
+/* ⭐⭐ 2026-09-20：**台账类取数不许被 `LOADED` 缓存住** —— 用户实测：「**执行记录并不会自动刷新**」。
+   ⚠️ 缓存口径「同一页反复进出不重复拉」对**台账页**正好是错的：「i8 执行记录」的内容
+      **由别的动作产生**（抓取 / 同步 / 批量打印 / 只导出 PDF 都往 `run_record` 里写一条），
+      而用户看这一页**就是要看"刚刚那次跑完没"** ⇒ 缓存住的必然是**旧**的（在用户眼里就是假话）。
+   ⇒ 列在这里的那几路：**每次进页都重拉**（它只是一次 50 条的 GET，代价可忽略）。
+   ⛔ **不是**把 `LOADED` 删掉 —— 那会把 `机械 6 列` / `集采台账` / `收发结存与大表` 这些重活
+      也拖成"每次进出都拉一遍"（`P3` 的性能收益白做）。只列「**内容由别人产生、且看它就是为了看新**」的。
+   ⚠️ 这一条只解决"**切回 m02 时**看到的是新的"；"**人已经站在 m02 上**、从这页点触发"
+      那一路由 `reloadM02IfOn()` 负责（见 `reloadM02` 下方）。 */
+const ALWAYS_FRESH = new Set(['i8 执行记录']);
 
 /** 按需取数：把 `labels` 里**还没拉过**的几路拉回来（依赖路放**第二组**）。 */
 async function loadPaths(labels) {
-  const fresh = (labels || []).filter(l => !LOADED.has(l));
+  const fresh = (labels || []).filter(l => ALWAYS_FRESH.has(l) || !LOADED.has(l));
   if (!fresh.length) return;
   await Promise.all(fresh.filter(l => !LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));
   await Promise.all(fresh.filter(l => LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));

@@ -21,6 +21,9 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+# ⚠️ 2026-09-20：`run_fetch` 要取"动作开始前"的时刻给 `save_run_record`（见它的 `started_at` 那段
+#    —— 不传 ⇒ 耗时恒 0，用户实测报过）
+from datetime import datetime
 from typing import Callable
 
 from sqlalchemy.orm import Session
@@ -153,6 +156,9 @@ def run_fetch(
     """
     if not confirmed:
         raise MustReportError(f"抓取前必须二次确认：{KICK_WARNING}")
+    # ⚠️ **耗时的起点**：二次确认之后、任何导出 / 网络动作**之前**
+    #    （见 `save_run_record` 的 `started_at` 那段 —— 不传 ⇒ 耗时恒 0）
+    t0 = datetime.now()
 
     operator = operator or current_operator()
     client_factory = client_factory or (lambda: I8Client(allow_kick=True))
@@ -219,7 +225,7 @@ def run_fetch(
         run = save_run_record(s, **fetch_task.fetch_record_payload(
             object_desc=f"{TABLE} 全量", success=0, fail=1,
             error_message=f"{type(exc).__name__}: {exc}"),
-            detail=record_detail(), operator=operator)
+            detail=record_detail(), operator=operator, started_at=t0)
         return {"ok": False, "degraded": True, "message": notice["message"],
                 "excel_import_available": True, "run_record_id": getattr(run, "id", None)}
 
@@ -247,7 +253,7 @@ def run_fetch(
     run = save_run_record(s, **fetch_task.fetch_record_payload(
         object_desc=f"{TABLE} 全量（{len(rows)} 条）",
         success=len(m["matched"]), fail=0),
-        detail=record_detail(), operator=operator)
+        detail=record_detail(), operator=operator, started_at=t0)
     return {
         "ok": True, "degraded": False,
         "since": since,                                  # ⭐ 本次的日期起点（空 = 全量）

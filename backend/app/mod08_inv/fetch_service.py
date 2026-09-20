@@ -16,10 +16,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+# ⚠️ 2026-09-20：`run_fetch` 要取"动作开始前"的时刻给 `save_run_record`（见它的 `started_at` 那段
+#    —— 不传 ⇒ 耗时恒 0，用户实测报过）
 from app.mod01_projects.pending import record_detail
 from app.mod01_projects.recovery import (
     recover_unknown_warehouses,
@@ -91,6 +95,8 @@ def run_fetch(
     ⚠️ 失败 ⇒ **降级为手动 Excel 导入并显式说明**（§3.6），**绝不自动重试登录**（D9）。
     ⚠️ 只要走到网络之前就失败的（未确认 / 非单月 / 无 phid），**不写执行记录**也**不降级**（那是用法错误）。
     """
+    # ⚠️ **耗时的起点**：必须在任何导出 / 网络动作**之前**（见 `save_run_record` 的 `started_at` 那段）
+    t0 = datetime.now()
     plan = build_plan(year_month)                 # 非单月 ⇒ 这里就抛
     if not confirmed:
         raise MustReportError(f"抓取前必须二次确认：{KICK_WARNING}")
@@ -119,7 +125,8 @@ def run_fetch(
         run = save_run_record(s, **fetch_task.fetch_record_payload(
             object_desc=target, success=0, fail=1,          # fail=1 ⇒ status=failed（这一批失败）
             error_message=f"{type(exc).__name__}: {exc}"),
-            detail=record_detail(), operator=operator)      # ⭐ 「待人工」清单：本次没有 ⇒ 写空（pending 口径 1）
+            detail=record_detail(), operator=operator,      # ⭐ 「待人工」清单：本次没有 ⇒ 写空（pending 口径 1）
+            started_at=t0)
         return {"ok": False, "degraded": True, "message": notice["message"],
                 "excel_import_available": True, "run_record_id": getattr(run, "id", None)}
 
@@ -138,7 +145,8 @@ def run_fetch(
         object_desc=target, success=len(rows), fail=0),
         # ⭐ 「待人工」清单随抓取记录落库（`TAIL-30`-③）—— 回执里那句话**只出现一次**，
         #    而人要在 `m01` 上处理它 ⇒ 得先留住（读侧 = `pending.live_pending`）。
-        detail=record_detail(recovery_result.get("unresolved_items")), operator=operator)
+        detail=record_detail(recovery_result.get("unresolved_items")), operator=operator,
+        started_at=t0)
     return {"ok": True, "degraded": False, "ym": plan["ym"], "rows": len(rows),
             "stats": stats, "unknown_warehouses": unknown, "recovery": recovery_result,
             "run_record_id": getattr(run, "id", None)}
