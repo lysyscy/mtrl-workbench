@@ -177,6 +177,36 @@ def api_fetch(payload: FetchIn) -> dict:
         return FS.run_fetch(s, confirmed=True, since=str(since or ""))
 
 
+class ExportIn(BaseModel):
+    """导出入参（`M5-9`）：**页面上当前看到的那些行的 id**。
+
+    ⚠️ 收 id ⛔ 不收"筛选条件"—— 页面的筛选是**前端**算的（含"合同金额为空/非空"这种
+       后端没有的条件）⇒ 传条件就得在服务端再实现一遍 ⇒ **两套口径必打架**。
+    ⚠️ 走 **POST**（id 可能几百个 ⇒ GET 的 query 会超长），回来的是 **base64**（同导入那套），
+       前端造 `Blob` 下载 —— 这样**不受 URL 长度限制**。
+    """
+
+    ids: list[int] = Field(default_factory=list)
+
+
+@router.post("/api/m11/export")
+def api_export(payload: ExportIn) -> dict:
+    """导出集采台账（`M5-9`）⇒ `{ok, filename, content_b64}`。
+
+    ⭐ **行** = 传入的那些 id（= **屏幕上看到的**）；**列** = **全列**（含「贸易公司」3 列）。
+       用户 2026-09-20 选的口径是 **(B)**：屏幕上的"隐藏列"**只是屏幕的事**，
+       导出的表**永远是完整的**（Excel 里列宽/显隐由他自己）。
+    """
+    import base64
+    from datetime import date
+
+    with session_scope() as s:
+        blob = SV.export_xlsx(s, ids=list(payload.ids or []))
+    name = f"集采台账_{date.today().strftime('%Y%m%d')}.xlsx"
+    return {"ok": True, "filename": name, "rows": len(payload.ids or []),
+            "content_b64": base64.b64encode(blob).decode("ascii")}
+
+
 class PartyKindIn(BaseModel):
     """「甲方单位分类」入参（`M5-6b`）。"""
 

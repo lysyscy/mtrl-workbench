@@ -257,6 +257,29 @@ def act_unlink_notice(s: Session, *, notice_id: int) -> dict:
             "message": f"已取消与集采合同 #{cid} 的关联（两侧同时解除）"}
 
 
+# ---------------------------------------------------------------- 导出（`M5-9`）
+
+def export_xlsx(s: Session, *, ids: list[int]) -> bytes:
+    """把**页面上当前看到的那些行**导出成一本 xlsx ⇒ 字节。
+
+    ⭐ **为什么收 `ids` 而不是"筛选条件"**：页面的筛选是**前端**算的（还含「合同金额为空/非空」
+      这种 `build_list` 里没有的条件）⇒ 传条件就得在后端**再实现一遍** ⇒ **两套口径必打架**。
+       传 id ⇒ **行集合就是前端看到的那些**，口径 100% 一致。
+    ⚠️ 所以这里先 `build_list(s)`（**不带筛选 = 全量**，拿到派生金额）再**按 id 收窄**：
+       多算了一点，但换到的是"导出与屏幕**逐行一致**"——这笔账在本项目永远划算。
+    ⚠️ 空 `ids` ⇒ **空表**（不回落全量）：⛔ "我一列都没勾/筛出 0 行，却导出了整本台账" 是最坏的一种意外。
+    """
+    from app.report_export import jc_export
+
+    want = {int(x) for x in (ids or ())}
+    if not want:
+        return jc_export.build_xlsx([])
+    data = build_list(s)
+    all_rows = data.get("rows") or data.get("items") or []
+    rows = [r for r in all_rows if int(r.get("id") or 0) in want]
+    return jc_export.build_xlsx(rows)
+
+
 # ---------------------------------------------------------------- 甲方单位分类（`M5-6b`）
 
 def party_kinds(s: Session) -> dict:

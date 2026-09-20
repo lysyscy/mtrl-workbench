@@ -59,6 +59,55 @@ function jcFetchSinceDefault() {
   const p = n => String(n).padStart(2, '0');
   return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
 }
+/* ⭐⭐ `M5-9`：集采台账的「隐藏贸易公司三列」开关状态（**纯屏幕** · 刷新即回默认「显示」）。
+   ⚠️ **不持久化**：它是显示偏好，不是业务数据（`SORT` 也是运行态、同样不持久化 —— 两者一致）。 */
+let jcHideTrade=false;
+
+/* ⭐ `M5-9`：把「隐藏贸易公司列」这个**屏幕偏好**落到表上。
+   ⚠️⚠️ **不能只在 `BIND.m11` 里做一次** —— `render()` 会**重建整张表**（class 随之丢掉）
+      ⇒ 每渲染一次都要重新落（否则一改筛选，隐藏就"自己弹回来了"，而且**不报错**）。
+   ⚠️ `classList.toggle(cls, 布尔)` 一次搞定"加上/去掉"，⛔ 不用 if/else 两行（那种写法忘掉一支就静默）。 */
+function jcApplyHide(){
+  const tbl=document.querySelector('#view table[data-sort-key="m11:jc"]');
+  if(tbl){
+    /* ⚠️ 用**内联 `display`**，⛔ **不写 CSS 规则**：CSS 得放进真正的 `<style>` 段，而本页样式与脚本
+       在同一文件里 —— 我上次把规则插进了 `<script>` 段 ⇒ 那句 CSS 成了**语法错** ⇒ **整段脚本崩掉**
+       （症状是 `PJs is not defined`；`syntax_audit` 查的是壳的 JS 件、**没覆盖**这段 ⇒ 没拦住）。
+       ⚠️ 列号 8/9/10 是**位置**：贸易公司名 / 贸易公司合同金额 / 贸易公司发票金额
+          ⇒ **改 `JC_THEAD` 列序要同步改这里**（这也是"通用列管理"该按列的**稳定身份**定位的原因）。
+       ⚠️ `display:none` ⇒ 剩下的列**自动变宽**（`table.dt` 是 `width:100%` + `table-layout:auto`）
+          ＝ 用户要的「隐藏后其他列宽跟着自适应」。⛔ 别用 `visibility:hidden`（那**留着宽度**，白搭）。 */
+    tbl.querySelectorAll(
+      'thead > tr > th:nth-child(8), thead > tr > th:nth-child(9), thead > tr > th:nth-child(10),'
+      + ' tbody > tr > td:nth-child(8), tbody > tr > td:nth-child(9), tbody > tr > td:nth-child(10)'
+    ).forEach(el => { el.style.display = jcHideTrade ? 'none' : ''; });
+  }
+  const b=document.querySelector('#jcTradeBtn');
+  if(b) b.textContent = jcHideTrade ? '👁 显示贸易公司列' : '🙈 隐藏贸易公司列';
+}
+
+/* ⭐ `M5-9` base64 ⇒ 浏览器下载。
+   ⚠️ 必须 `Blob` + `URL.createObjectURL`：把 base64 直接塞进 `<a href>` 在几百 KB 时会
+      **静默失败**（URL 长度上限，而失败时**不会有任何提示** —— 那种"点了没反应"最难查）。 */
+function jcDownload(name, b64) {
+  try {
+    const bin = atob(String(b64 || ''));
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([buf], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = String(name || 'export.xlsx');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);      /* ⚠️ 不 revoke 会漏内存（每次导出都漏一份） */
+  } catch (e) { toast(`<b>下载失败</b>：${esc(String((e && e.message) || e))}`, 7000); }
+}
+
+/* ⚠️⚠️⚠️ **放这里的东西一律是"文件顶层的函数/变量"** —— 上面这三段（`jcHideTrade` / `jcApplyHide` /
+   `jcDownload`）我**又**先插进了 `ACT` 对象字面量里，`syntax_audit` 的 `node --check` 当场报
+   `SyntaxError: Unexpected identifier 'jcHideTrade'`。
+   ⭐ **这是同一个坑的第三次**（前两次：`jcLinkAct`、`jcFetchSinceOn`）——
+      **凡 `let` / `const` / `function` 声明，只能放"文件顶层"或"函数体里"，⛔ 绝不能放 `const ACT={…}` 内部。** */
 const ACT={
  /* 导航 */
  go:t=>go(t.dataset.k),
@@ -1531,7 +1580,31 @@ jcImportOk:async()=>{ const cur=jcImpCur(); if(!cur) return;
   await reloadM11();
   modal({title:'导入结果（`M5-8`）',body:jcImpResult(d),footer:`<button class="btn pri" data-act="closeModal">知道了</button>`}); },
 
- /* ⭐ `M5-6b`：「合同金额」筛选（为空 = **待补供应商价**）。
+ /* ⭐ `M5-9` 导出：**行** = 屏幕上看到的（复用 `jcVisible()` ⇒ ⛔ 不另写一套筛选 —— 两套必打架）；
+   **列** = 全列（后端给，含贸易公司 3 列 —— 用户选的口径 (B)）。
+   ⚠️ 空行集 ⇒ **明确拦**：⛔ 不导一本空表让人以为坏了，也⛔ 不悄悄改成"导全量"。 */
+jcExport:async()=>{ const rows=jcVisible();
+  if(!rows.length) return toast('当前筛选下**一行都没有** —— 没什么可导的（先点「重置」看全部）');
+  let d=null;
+  try{ d=await API.m11Export({ids:rows.map(j=>Number(j.id))}); }
+  catch(e){ return toast(`<b>导出失败</b>：${esc(String((e&&e.message)||e))}`,7000); }
+  if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
+  jcDownload(d.filename, d.content_b64);
+  toast(`已导出 <b>${rows.length}</b> 行 ⇒ <b>${esc(d.filename)}</b>`
+    + '<br><span class="mut sm">列是**全列**（含贸易公司 3 列）—— 屏幕上的隐藏只影响屏幕</span>'); },
+
+/* ⭐ `M5-9` 隐藏 / 显示「贸易公司」三列（**纯屏幕**）。
+   ⚠️⚠️ **切换时必须清该表的排序状态**：若用户先按「贸易公司合同金额」（第 9 列）排了序、再隐藏，
+      `SORT.i` 仍是 9 ⇒ 界面还在对一列**看不见**的列排序 ⇒ 看着像"排序坏了"（静默错）。 */
+jcToggleTrade:()=>{ jcHideTrade=!jcHideTrade;
+  SORT['m11:jc']={i:-1,d:0};
+  render();
+  jcApplyHide();                       /* ⚠️ **必须**：`render()` 重建了整张表 ⇒ 偏好得重新落一次 */
+  toast(jcHideTrade
+    ? '已隐藏「贸易公司」三列（剩下的列会**自动变宽**）<br><span class="mut sm">只是屏幕上的事 —— 导出永远是全列</span>'
+    : '已显示「贸易公司」三列'); },
+
+/* ⭐ `M5-6b`：「合同金额」筛选（为空 = **待补供应商价**）。
    ⚠️ 这个筛选项是**必需的**，不是锦上添花：`applySorts` 里**空值恒排末尾且不随升降序翻转**
       ⇒ 待补的行**全部沉在表格底部**，"点一下排序"**够不着**它们（用户原以为排序就行）。 */
 jcAmt:t=>{ fJc.amt=String(t.value||''); pruneJcPick(); render(); },

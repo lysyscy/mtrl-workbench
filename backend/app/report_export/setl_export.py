@@ -38,9 +38,17 @@ import pandas as pd
 import xlsxwriter
 
 from app.core.errors import MustReportError
+from app.core.logging import get_logger
 from app.report_export.resources import SETL_TEMPLATE, require_template
 from app.report_export.schema_cols import (SFJC_COL_WIDTHS, SFJC_HEADER,
                                           SFJC_NUM_FIELDS, SFJC_TEXT_FIELDS)
+
+#: ⚠️⚠️ **本文件原先用 `print` 输出进度**（素材包移植过来的脚本习惯）——
+#:   2026-09-20 实测踩到：`print('✓ …')` 在 **Windows 控制台（GBK）** 下抛
+#:   `UnicodeEncodeError: 'gbk' codec can't encode character '\u2713'`
+#:   ⇒ **整条导出 500** ⇒ 页面上只是"导不出来"，而**日志里才看得到真因**。
+#:   ⇒ 一律改走 `logger`（它走 UTF-8 的文件 handler，⛔ 不看控制台编码的脸色）。
+logger = get_logger()
 
 # ===== 列定义（唯一来源 = `schema_cols`，⛔ 本模块不另抄一份） =====
 HEADER_COLS = SFJC_HEADER
@@ -395,7 +403,7 @@ def build_zip(rows_or_df, out_dir, label):
                 pass
     os.makedirs(out_dir, exist_ok=True)
     show_order = [w for w in df['仓库'].unique() if w == w]
-    print('数据:', len(df), '行 | 仓库(%d):' % len(show_order), show_order)
+    logger.info("收发结存导出：%d 行 | 仓库 %d 个：%s", len(df), len(show_order), show_order)
 
     files = []
     for wh in show_order:
@@ -403,7 +411,7 @@ def build_zip(rows_or_df, out_dir, label):
         fn = os.path.join(out_dir, f'{wh}.xlsx')
         write_warehouse_file(sub, fn)
         files.append(fn)
-        print('  分仓库:', os.path.basename(fn), len(sub), '行')
+        logger.info("  分仓库 %s：%d 行", os.path.basename(fn), len(sub))
 
     work = os.path.join(out_dir, '_work.xlsx')
     main_fn = os.path.join(out_dir, f'第四工程公司{label}收发结存表.xlsx')
@@ -421,19 +429,19 @@ def build_zip(rows_or_df, out_dir, label):
             + '；'.join(problems[:5])
             + ('' if len(problems) <= 5 else '（等共 %d 条）' % len(problems))
         )
-    print('✓ 透视表对账全部通过 | 总计: 期初%.2f 收%.2f 发%.2f 结存%.2f' % (
-        grand['期初金额'], grand['收金额'], grand['发金额'], grand['结存金额']))
+    logger.info("✓ 透视表对账全部通过 | 总计: 期初%.2f 收%.2f 发%.2f 结存%.2f",
+                grand["期初金额"], grand["收金额"], grand["发金额"], grand["结存金额"])
 
     zip_fn = os.path.join(out_dir, f'第四工程公司{label}收发结存表.zip')
     with zipfile.ZipFile(zip_fn, 'w', zipfile.ZIP_DEFLATED) as zf:
         for fn in files:
             zf.write(fn, os.path.basename(fn))
-    print('✓ 打包:', os.path.basename(zip_fn))
+    logger.info("✓ 打包: %s", os.path.basename(zip_fn))
     # 输出目录只保留 zip（分仓库/总表已进 zip，删除中间 xlsx）
     for fn in files:
         try:
             os.remove(fn)
-            print('  清理中间文件:', os.path.basename(fn))
+            logger.info("  清理中间文件: %s", os.path.basename(fn))
         except OSError:
             pass
     return zip_fn

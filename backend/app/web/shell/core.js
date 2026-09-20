@@ -252,6 +252,11 @@ const API = {
      ⚠️ 没见过的甲方抓取时会**自动落成「未指定」**（⛔ 不静默当成正常）⇒ 页面得能指定。 */
   m11PartyKinds: () => API.get('/api/m11/party-kinds'),
   m11SetPartyKind: body => API.post('/api/m11/party-kind', body),
+  /* ⭐ `M5-9` 集采台账导出（2026-09-20 用户定）：
+     **行** = 页面上当前看到的那些（传 id ⇒ 口径与屏幕 100% 一致）；
+     **列** = **全列**（含「贸易公司」3 列）—— 用户选 **(B)**：屏幕上的"隐藏列"**只是屏幕的事**。
+     ⚠️ 走 POST 回来的是 **base64**（id 可能几百个 ⇒ GET 的 URL 会超长）⇒ 前端造 Blob 下载。 */
+  m11Export: body => API.post('/api/m11/export', body),
   /* ⭐ `M5-8` 集采台账 Excel 导入：**预览** / **确认落库**。
      ⚠️ 走 **base64**（`{filename, content_b64}`）—— 免 multipart 依赖；文件本来也就几十 KB。
      ⚠️ 两个端点的入参形状**刻意一致** ⇒ 确认时把**同一个文件再传一次**（服务端无状态，见 `import_service`）。 */
@@ -1157,6 +1162,34 @@ BIND.m11 = function () {
     + '按「合同价」匹配已有合同并更新（i8 的地盘一个字不动）';
   btn.textContent = '⬆ Excel 导入台账';
   anchor.insertAdjacentElement('afterend', btn);
+
+  /* ⭐ `M5-9`：① **导出**（按屏幕上这些行 · **列全给**）
+     ② ⭐ **隐藏「贸易公司」三列**（用户 2026-09-20：「列太多了，贸易公司那 3 列不常用」）
+
+     ⚠️ **为什么用 CSS 隐藏（`nth-child`）而不是改表头/行渲染**：
+        裁列要同时动**三处**（表头 `JC_THEAD` / 行 / **合计行**）＋ 清排序状态；
+        而 `display:none` **一次覆盖三处**，且 `table-layout:auto` 会让**剩下的列自动变宽**
+        —— 正好是用户要的"隐藏后其他列宽跟着自适应"。⛔ 不用 `visibility:hidden`（那**留着宽度**，白搭）。
+     ⚠️⚠️ **切换时必须清该表的排序状态**（`SORT['m11:jc']`）：
+        若用户**先**按「贸易公司合同金额」（第 9 列）排了序、**再**隐藏 ⇒ `SORT.i=9` 仍在生效
+        （对一列**看不见**的列排序）⇒ 界面看着"没排序"，人会以为排序坏了。
+     ⚠️ 列号是**写死的位置**（8/9/10）—— 它跟着 `JC_THEAD` 的列序走；⚠️ **改表头列序要同步改这里**
+        （这也是"通用列管理"值得单独做一次的原因：通用件该按列的**稳定身份**定位，而不是位置）。 */
+  const hidBtn = document.createElement('button');
+  hidBtn.className = 'btn';
+  hidBtn.dataset.act = 'jcToggleTrade';
+  hidBtn.id = 'jcTradeBtn';
+  hidBtn.title = '隐藏 / 显示「贸易公司名 · 贸易公司合同金额 · 贸易公司发票金额」三列'
+    + '（只影响屏幕；⭐ **导出永远是全列**）';
+  btn.insertAdjacentElement('afterend', hidBtn);
+  jcApplyHide();                       /* ⚠️ 表是刚重建的 ⇒ 把"隐藏"偏好重新落上去（见 `jcApplyHide`） */
+
+  const expBtn = document.createElement('button');
+  expBtn.className = 'btn';
+  expBtn.dataset.act = 'jcExport';
+  expBtn.title = '导出**当前屏幕上这些行**（含筛选）为 Excel —— ⭐ 列是**全列**（隐藏列也会导出）';
+  expBtn.textContent = '⬇ 导出 Excel';
+  hidBtn.insertAdjacentElement('afterend', expBtn);
 };
 
 const _BIND_M03_OLD = BIND.m03;
