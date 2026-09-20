@@ -1622,6 +1622,12 @@ jcImportOk:async()=>{ const cur=jcImpCur(); if(!cur) return;
   const keys=Object.keys(cur.fields||{});
   if(keys.indexOf('contract_date')<0 && keys.indexOf('material_name')<0)
     return toast('<b>列名还没对上</b>：至少要认出「合同日期」或「材料名称」才能落库');
+  /* ⭐ 2026-09-20 补：**锚点列**（合同价）必须先认出来 —— 匹配就是按它找已有合同的。
+     ⚠️ 后端 `commit` **也会拦**（那条才是最终闸门），这里只是**别让用户白点一次③**，
+        并把话说到"该去点哪一列"（只报"配不上"会让人以为库里没有这些合同）。 */
+  if(keys.indexOf('contract_amt')<0)
+    return toast('<b>没认出「合同价」列</b>（供应商合同总价 / 合同总价 / 合同金额）—— '
+      + '它是<b>匹配锚点</b>，认不到会<b>一条都配不上</b>。请在上面的「列名核对」里把那一列点成「供应商合同总价」', 10000);
   let d=null;
   try{ d=await API.m11ImportCommit({filename:jcImpFile.name, content_b64:jcImpB64,
       sheet:cur.sheet.name, project_key:jcImpPj, mapping:jcImpMap}); }

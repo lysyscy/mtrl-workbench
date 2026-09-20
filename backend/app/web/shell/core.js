@@ -1115,6 +1115,7 @@ function jcImportShow(){
         <b>更新它</b>（Excel 只动<b>材料名 / 发票额 / 存档 / 存档号 / 寄回日期 / 备注</b>）；
         i8 的地盘（合同价 / 供应商 / 日期 / 甲方）<b>一个字都不动</b>。
         ⚠️ 配不上的（合同价空 / 项目里没这个价 / 同价两条）<b>一律列出来</b>，⛔ 不替你新建。</div>
+      ${s.note ? `<div class="tip wn" style="margin-bottom:8px">⚠️ ${esc(s.note)}</div>` : ''}
       <div class="fld"><label>工作表（✅ = 看着像主台账）</label><div style="display:flex;flex-wrap:wrap;gap:6px">${tabs}</div></div>
       <div class="fld"><label>③ 这份台账属于哪个项目（⛔ 系统不替你猜）</label>
         <select class="inp" data-act="jcImportPj"><option value="">（请选择…）</option>${
