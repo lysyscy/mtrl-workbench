@@ -16,6 +16,17 @@ async function m03RunBatch(rows, mode) {
   let r = null;
   try { r = await API.m03Batch(ids, mode); }
   catch (e) { return toast(`⚠️ <b>${what}没能完成</b>：${esc(String((e && e.message) || e))}`, 9000); }
+  /* ⚠️⚠️ **必须先看 `ok`**（2026-09-20 用户实测修）：
+     后端对**执行失败**回的是 `{ok:false, message:"批量执行失败：…"}` ——
+     ⚠️ 它走的是 **HTTP 200**（全站口径：成败看 `ok`，不看状态码）⇒ `API.post` **不会抛**。
+     原先这里**不看 `ok`** 就直接读 `r.success` / `r.total` ⇒ 失败会显示成
+     「**完成**：成功 `undefined` / 共 `undefined`」
+     ⇒ **把失败说成完成**（本项目最忌的那类假成功），而且**真因那句话被整个丢掉** ——
+        用户只能看到两个 undefined，既报不准、我也查不动。
+     ⇒ 现在就把它顶掉：失败**第一句就是中文真因**。 */
+  if (!r || r.ok === false) {
+    return toast(`⚠️ <b>${what}没能完成</b>：${esc((r && r.message) || '后端未返回原因')}`, 12000);
+  }
   const bad = (r.items || []).filter(x => !x.ok);
   /* ⭐ `TAIL-46`-①：**已投递但无法核实**（`ok=true, unverified=true`）**不算失败** ——
      ⚠️ 用户 2026-09-18 实测教训：「假失败比假成功更危险」：报失败 ⇒ 人以为没打、**重复再打白浪费纸**。
