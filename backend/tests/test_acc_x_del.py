@@ -24,9 +24,12 @@
 from __future__ import annotations
 
 import pathlib
+import re
 from decimal import Decimal
 
 import pytest
+
+import app
 
 from app.core.errors import MustReportError
 from app.core.errors import MustReportError as _MRE       # noqa: F401  （显式见于断言）
@@ -234,3 +237,95 @@ def test_撤销调整单只删该条且源数据不动():
     assert cleared["amount"] == before["amount"] == Decimal("500.00"), \
         "撤销调整单**绝不能**碰到 i8 原始金额（源数据永不删、永不改）"
     assert raw == before, "连传入的源行都不该被就地改"
+
+
+# ---------------------------------------------------------- `001-08` 分档本身
+
+#: **软删 + 留痕**那一档的**物证**（§9.4 原文：「软删除 + 留痕」⇒ 得有"痕"这个字段）
+SOFT_MARKS = ("deleted_at", "is_deleted", "voided_at", "archived_at", "defered_at", "removed_at")
+#: **硬删**那一档的物证（真把行从表里拿掉）
+HARD_MARKS = (".delete(", "sa_delete(")
+#: 落库动作（用来区分"真在改库"与"只是算一算 / 变换内存数据"）
+WRITE_MARKS = (".add(", ".flush(", ".delete(", ".execute(", "sa_delete(", ".merge(", ".commit(")
+
+
+def _funcs(text: str) -> dict[str, str]:
+    """顶层 `def` → 函数体（到下一个顶层 `def` / `class` 为止）。
+
+    ⚠️ 必须**连 `class` 一起切** —— 只按 `def` 切的话，`class` 后面那些**方法**会被算进
+       上一个顶层函数体内（方法那层有缩进、`^def` 不匹配）⇒ 顺手把别人的删除语句算到自己头上。
+    """
+    out: dict[str, str] = {}
+    for part in re.split(r"(?m)^(?=def \w+\s*\(|class \w+)", text):
+        m = re.match(r"def (\w+)\s*\(", part)
+        if m:
+            out[m.group(1)] = part
+    return out
+
+
+@acc("ACC-X-DEL-001", "001-08")
+def test_删除分档穷尽且不交叉():
+    """§9.4 的**分档清单本身**（claim 原文：「哪些软删 / 哪些硬删 / 哪些不能删」）。
+
+    ⚠️ 判据钉的**不是**某一档的行为（那是 `001-02` / `001-04` 的活），而是**这张表本身**：
+
+    ① **穷尽** —— 全仓每个"名字像删除"的函数都必须能归到某一档。
+       ⛔ 最该防的是**第四种语义**：既不是真删库、也不是标记字段，而是"把 `status` 写成 `'deleted'`"
+       之类 —— 那种删除**界面上看不出、统计也不重算**，是这条线上**最难查**的错。
+    ② **不交叉** —— 声明"禁删"的模块**必须真的没有**删除出口
+       （⛔ 防"`NG-03` 声明还在、实现里偷偷加一个 `delete_row`"）。
+    ③ ⭐ **软删档双向开** —— 「有标记字段 ⇔ 有软删出口」。
+       现在全仓标记字段 **0 处**（删的都是真删），这条现在**绿**；而 `m15` 用户管理落地
+       （账号软删，§7.9 L480）时它**自动仍然成立**，⛔ 不用回来改断言 ——
+       这才是"判据不绑死当前实现"的写法（⚠️ 反例：写死「软删出口必须 ≥ 1」⇒ 今天红、且今天**没有**可得的东西）。
+    ④ **实档都得有人** —— ⛔ 防"清单里写了、实现里一个都没有"式假绿。
+    """
+    root = pathlib.Path(app.__file__).resolve().parent
+    hard, soft, pure, unclear = [], [], [], []
+    for p in sorted(root.rglob("*.py")):
+        rel = str(p.relative_to(root))
+        for name, body in _funcs(p.read_text(encoding="utf-8")).items():
+            if "delete" not in name.lower() and "remove" not in name.lower():
+                continue
+            where = f"{rel}::{name}"
+            rest = body.replace(f"def {name}", "", 1)          # ⚠️ 先去掉自身签名，免得数到函数名自己
+            if any(k in body for k in HARD_MARKS):
+                hard.append(where)                             # 真删（把行从表里拿掉）
+            elif re.search(r"\b\w*delete\w+\s*\(", rest):
+                pass                                           # 委派给别的删除出口（如 `apply_manual_delete`）
+            elif any(k in body for k in SOFT_MARKS):
+                soft.append(where)                             # 软删 + 留痕
+            elif not any(k in body for k in WRITE_MARKS):
+                pure.append(where)                             # 只读 / 纯内存变换 ⇒ **压根不是删除出口**
+            else:
+                unclear.append(where)
+
+    # ① 穷尽：⛔ 不许有"落了库、但说不清算哪一档"的删除
+    assert not unclear, (
+        "这些函数名里有 delete/remove、又**真的在动库**，却既不是真删、也没有留痕字段"
+        " ⇒ 归属不明（第四种删除语义）：\n  " + "\n  ".join(unclear)
+        + "\n  ⇒ 要么改成 `s.delete`（硬删档），要么加留痕字段（软删档），要么它其实只该是只读。")
+
+    # ② 不交叉：`NG-03` 说库存单据页不新增删除入口 ⇒ 那个模块里就不许有删除出口
+    inv_bad = [f"{p.relative_to(root)}::{n}"
+               for p in sorted((root / "mod08_inv").rglob("*.py"))
+               for n in _funcs(p.read_text(encoding="utf-8"))
+               if "delete" in n.lower() or "remove" in n.lower()]
+    assert not inv_bad, (
+        "`mod08_inv` 声明了 `NG-03`（本页不新增删除入口）却出现了删除出口：\n  "
+        + "\n  ".join(inv_bad) + "\n  ⇒ 分档**交叉**了：声明禁删，实现却在删。")
+
+    # ③ 软删档双向开（今天 0 处标记字段 ⇔ 今天没有软删出口；`m15` 落地后 ⇔ 自动反过来）
+    with_marks = [f"{p.relative_to(root)}" for p in sorted(root.rglob("*.py"))
+                  if any(k in p.read_text(encoding="utf-8") for k in SOFT_MARKS)]
+    assert bool(soft) == bool(with_marks), (
+        f"软删档**两半对不上**：留痕字段 {len(with_marks)} 处、软删出口 {len(soft)} 个"
+        f" —— 要么有字段没用（那 `§9.4` 的\"软删 + 留痕\"白写）、要么有软删没留痕（那就不是软删）"
+        f"\n  有字段的文件：{with_marks}\n  软删出口：{soft}")
+
+    # ④ 实档都得有人（⛔ 防空清单假绿）
+    assert len(hard) >= 6, f"硬删档只有 {len(hard)} 个出口 —— 太少，解析可能失效了：{hard}"
+    assert len(pure) >= 3, (
+        f"「名字像删除、其实不是删除出口」只认了 {len(pure)} 个 —— 太少。"
+        "⚠️ 这一类**必须存在**（`delete_impact` 只算影响、`delete_rows` 是视图层纯变换、"
+        "`remove_from_batch` 是移出付款批次），它们被误当成删除出口正是分档最容易错的地方。")
