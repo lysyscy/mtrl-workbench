@@ -48,7 +48,7 @@ def _calls(text: str, name: str) -> list[str]:
     return out
 
 
-@acc()
+@acc("ACC-I8-FETCH-001", "001-10")
 def test_执行记录记得出真实耗时():
     """行为断言：`started_at` 传进去就**真的**用它 ⇒ `finished_at − started_at` 是那个差。
 
@@ -70,7 +70,7 @@ def test_执行记录记得出真实耗时():
         s.rollback()
 
 
-@acc()
+@acc("ACC-I8-FETCH-001", "001-10")
 def test_所有执行记录的调用点都要传耗时起点():
     """**结构性守卫**：⛔ 不许再出现"写 `run_record` 时不传 `started_at`"的调用点。
 

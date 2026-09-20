@@ -23,7 +23,7 @@ from app.mod03_notice.notice_api_router import notice_filters
 from tests.acc_plugin import acc
 
 
-@acc()
+@acc("ACC-PAY-LIST-001", "001-10")
 def test_接口筛选解析标了取数层给全():
     """**结构**：`/api/m03/notice-list` 的筛选解析必须声明"这是取数层、要给全"。
 
@@ -36,7 +36,7 @@ def test_接口筛选解析标了取数层给全():
         "壳里没有它们 ⇒ 切「分类 = 剔除」全空（用户 2026-09-20 实测：库 200 行 → 接口 129 行）")
 
 
-@acc()
+@acc("ACC-PAY-LIST-001", "001-10")
 def test_开了给全开关就多出剔除与撤单行():
     """**行为**：同一批行，`include_archived=True` 必须把「剔除 / i8 已撤单」那些行**原样带上**。
 
