@@ -41,11 +41,15 @@ def by_account(s: Session, account: str) -> UserAccount | None:
     return next((u for u in all_users(s) if D.normalize_account(u.account) == want), None)
 
 
-def create(s: Session, *, account: str, name: str, role: str = D.ROLE_USER,
-           actor: str = "") -> UserAccount:
+def create(s: Session, *, account: str, name: str = "", role: str = D.ROLE_USER,
+           password: str = "", i8_user: str = "", i8_password: str = "") -> UserAccount:
     """建号。⚠️ 规则：**非空 + 不重复**（含已删行）；claim `001-04` 另要求
     「新增账号一律「**在用 · 普通用户**」」—— 所以 `role` **默认就是普通用户**，
     ⛔ 建号时**不给**"直接建成管理员"的入口（管理员只能靠**转让**产生，§1.5.1「恒只有一个」）。
+
+    ⚠️ **密码走 `set_password` 这同一个出口**（⛔ 不在这里另写一遍赋值）——
+       §1.5.1 那句「**建号与改密同一规则**」的机械化落点就是**同一个函数**；
+       两处各写一遍 = 迟早一处加校验、另一处没加（那就违反"同一规则"了）。
     """
     acc = D.assert_account_usable(account, all_users(s))
     if role not in D.ROLES:
@@ -53,6 +57,30 @@ def create(s: Session, *, account: str, name: str, role: str = D.ROLE_USER,
     row = UserAccount(account=acc, name=(name or "").strip(),
                       role=role, status=D.STATUS_ACTIVE, deleted_at=None, deleted_by="")
     s.add(row)
+    s.flush()
+    set_password(s, row.id, password, i8_user=i8_user, i8_password=i8_password)
+    return row
+
+
+def set_password(s: Session, uid: int, password: str, *,
+                 i8_user: str | None = None, i8_password: str | None = None) -> UserAccount:
+    """**改密（＝建号设密的同一个出口）** —— §1.5.1「无格式要求、可为空（**建号与改密同一规则**）」。
+
+    ⚠️⚠️ **本函数刻意"什么都不校验"** —— 这不是漏写，是**口径要求**：
+       claim `001-06` 明写「密码**无长度限制**、**可清空**（建号与改密**都不拦**）」。
+       ⇒ ⛔ 别"顺手"加 `len() >= 6`、别加非空校验、别 strip（⚠️ 前后空格也是密码的一部分）。
+       ⚠️ 旧口径里的「密码 ≥6 位」**已作废**（§1.5.1 明列）—— 那是最容易"顺手加回来"的一条。
+
+    ⚠️ i8 凭证与登录密码**分开传**（`None` = 本次不动它）—— 改登录密码**不该顺手把 i8 密码清了**。
+    """
+    row = s.get(UserAccount, uid)
+    if row is None:
+        raise ValueError(f"账号不存在：id={uid}")
+    row.password = password if password is not None else ""
+    if i8_user is not None:
+        row.i8_user = i8_user
+    if i8_password is not None:
+        row.i8_password = i8_password
     s.flush()
     return row
 
@@ -142,5 +170,5 @@ def transfer_admin(s: Session, actor: UserAccount, target: UserAccount) -> tuple
 
 __all__ = [
     "SEED_ACCOUNT", "SEED_NAME", "all_users", "by_account", "create", "ensure_seeded",
-    "get", "restore", "set_status", "soft_delete", "transfer_admin",
+    "get", "restore", "set_password", "set_status", "soft_delete", "transfer_admin",
 ]

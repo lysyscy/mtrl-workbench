@@ -195,3 +195,202 @@ def test_防锁死_最后一个在用管理员不能停用也不能删除():
         assert D.is_deleted(a)
         assert len(D.active_admins(R.all_users(s))) == 1, "折腾一圈后管理员数变了"
         s.rollback()
+
+
+# ---------------------------------------------------------- 密码（⭐ 用户裁定「明文」后可钉）
+
+
+@acc("ACC-USR-MGMT-001", "001-04")
+def test_新增账号一律在用普通用户且账号不限格式密码可为空():
+    """claim：「新增账号一律「**在用 · 普通用户**」；登录账号**不限格式**、密码**可为空**」（§1.5.1）。
+
+    ⚠️ 「一律」两个字是重点 —— 所以要证明**建不出**别的形态（⛔ 不是"我没去建"）：
+       `create` 的 `role` 默认是普通用户、`status` 直接写死在在用；
+       ⚠️ 真传一个 `role="admin"` 进去会怎样？—— 本函数**不测它**（那是"建号能不能直接造管理员"，
+       属 `001-10` 转让那一条的边界）；这里钉的是**默认行为**就是"在用 · 普通用户"。
+
+    ⚠️ 「登录账号**不限格式**」= ⛔ 不得有"字母开头 / ≥3 位 / 只能字母数字"这类校验
+       （§1.5.1 把「账号名：字母开头且 ≥3 位」**明确列为已作废**）⇒
+       用**一串很丑但合法**的账号名去打它：`2人·共用（甲）`（数字开头 ＋ 符号 ＋ 中文）。
+    ⚠️ 「密码**可为空**」⇒ 不传密码也能建号成功（空串是**合法状态**，不是"未完成的表单"）。
+    """
+    with session_scope() as s:
+        _admin(s)
+        # ① 默认就是「在用 · 普通用户」（不传 role / status）
+        u = R.create(s, account="2人·共用（甲）")            # ⚠️ 数字开头 ＋ 符号 ＋ 中文
+        assert u.role == D.ROLE_USER, "新增账号默认不是普通用户（claim 明写「一律」）"
+        assert u.status == D.STATUS_ACTIVE, "新增账号默认不是在用"
+        assert u.deleted_at is None
+        # ② 密码可为空（不传）
+        assert (u.password or "") == "", "密码默认应当为空（§1.5.1「可为空」）"
+        # ③ 「不限格式」：上面那个丑账号名**真的建成了**（没被任何格式校验拦掉）
+        assert u.account == "2人·共用（甲）"
+        s.rollback()
+
+
+@acc("ACC-USR-MGMT-001", "001-05")
+def test_账号重复或为空必须拒绝创建且不得新增行():
+    """claim：「登录账号**重复或为空**时必须拒绝创建（**不得新增行**）」（§1.5.1）。
+
+    ⚠️ 括号里那半句「**不得新增行**」是本条的重点：`create` 里**先校验再 `s.add`**，
+       如果实现顺序反了（先 add 再校验、靠异常回滚），**同一会话里 `all_users()` 就已经多了一行**
+       —— 那种"看起来报了错、其实脏了一行"的形态最难查。
+       ⇒ 所以每次失败后都**立刻数一遍行数**。
+
+    ⚠️ 还钉一个**最容易漏**的边界：**已软删的账号名不能再被用**
+       （§1.5.1 说软删**保留账号名**、必要时可恢复 ⇒ 那名字**还在占用**；
+       ⛔ 若这里只比对"在用的"，就埋了一个"恢复时会撞名"的坑）。
+    """
+    with session_scope() as s:
+        _admin(s)
+        R.create(s, account="__自检_唯一__")
+        n0 = len(R.all_users(s))
+
+        # ① 重复 ⇒ 拒 ＋ 行数不变
+        with pytest.raises(MustReportError) as ei_live:
+            R.create(s, account="__自检_唯一__")
+        assert len(R.all_users(s)) == n0, "拒绝创建却**新增了行** —— 那就是「先 add 再校验」写反了"
+
+        # ② 空 / 全空白 ⇒ 拒 ＋ 行数不变
+        for blank in ("", "   ", "\t"):
+            with pytest.raises(MustReportError):
+                R.create(s, account=blank)
+            assert len(R.all_users(s)) == n0, f"空账号 {blank!r} 被拒绝却新增了行"
+
+        # ③ ⭐ 已软删的名字**仍然占用**（否则"恢复"会撞名）
+        actor = _admin(s)
+        victim = R.create(s, account="__自检_删了还用__")
+        R.soft_delete(s, victim.id, actor=actor)
+        n1 = len(R.all_users(s))
+        with pytest.raises(MustReportError) as ei_del:
+            R.create(s, account="__自检_删了还用__")
+        assert len(R.all_users(s)) == n1, "用已删除账号的名字建号被拒，却新增了行"
+
+        # ⚠️⚠️ 这一条是**变异测试替我补上的**：光断"被拒"**不够** ——
+        #    因为"在用重名"与"被已删账号占着"**如果实现里不区分**，两边都会抛
+        #    `MustReportError`，于是"被拒"这半**看起来也绿**。我第一版就是这么写漏的
+        #    （把 `if is_deleted(u):` 改成 `if False:` 后，测试**仍然全绿**）。
+        # ⭐ 两件事必须**看得出区别**：
+        #    ① 用户得被告知"这名字被一个**已删除**的账号占着，你可以先把它恢复出来" ——
+        #       否则他只会看到"已存在"，然后满页找不到那个账号（它已经不显示了）；
+        #    ② 这层区分**正是"软删保留账号名"这条口径在代码里的唯一落点**。
+        assert "已删除" in str(ei_del.value), (
+            "被已删账号占用时，提示里**没说是「已删除」占着** —— 用户会看到一个页面上根本不存在的账号名"
+            f"（实际提示：{str(ei_del.value)[:60]}…）")
+        assert str(ei_del.value) != str(ei_live.value), (
+            "「在用重名」与「被**已删除**账号占着」给了**同一句话** ⇒ 实现里这两种情况没区分开"
+            "（§1.5.1 说软删**保留账号名**、必要时可恢复 ⇒ 这一层必须看得见）")
+        s.rollback()
+
+
+@acc("ACC-USR-MGMT-001", "001-06")
+def test_密码无长度限制可清空且建号改密同一规则():
+    """claim：「密码**无长度限制**、**可清空**（**建号与改密都不拦**）」（§1.5.1）。
+
+    ⚠️ 「无长度限制」要**真拿一个很长的密码**去打（⛔ 不是"我看了代码没有 `len()`"）——
+       断言必须能证明**写入路径真的照收**，包括能读回来。
+
+    ⚠️⚠️ 「**建号与改密同一规则**」是这条里最值得机械化的一半：
+       它的落点是 **`create` 必须走 `set_password` 这同一个出口**（⛔ 不各写一遍赋值）。
+       用法：把 `set_password` **换成一个会记账的替身** ⇒ 若 `create` 自己赋值、
+       没走这个出口，下面的断言就**当场变红** ✓
+       ⭐ 这样钉的才是"同一规则"这件事本身，而不是"两个函数恰好都没写校验"。
+    """
+    with session_scope() as s:
+        _admin(s)
+        long_pw = "长" * 300 + "!@#45"
+
+        # ① 建号时长密码照收
+        u = R.create(s, account="__自检_长密码__", password=long_pw)
+        assert u.password == long_pw, f"建号把 {len(long_pw)} 字符的密码截了 —— claim 明写「无长度限制」"
+
+        # ② 改密：同样照收；**空串 = 清空**，也必须照收
+        back = R.set_password(s, u.id, "短")
+        assert back.password == "短"
+        R.set_password(s, u.id, long_pw)
+        assert R.get(s, u.id).password == long_pw
+        R.set_password(s, u.id, "")                    # ⭐ 清空
+        assert R.get(s, u.id).password == "", "密码清不掉 —— claim 明写「可清空」"
+
+        # ③ ⭐ 「建号与改密同一规则」⇒ 建号**必须走 `set_password` 这个出口**
+        calls = []
+        real = R.set_password
+
+        def _spy(sess, uid, password, **kw):
+            calls.append(password)
+            return real(sess, uid, password, **kw)
+
+        R.set_password = _spy
+        try:
+            u2 = R.create(s, account="__自检_同规则__", password="走出口的密码")
+        finally:
+            R.set_password = real
+        assert calls == ["走出口的密码"], (
+            "建号**没走** `set_password` 这个出口（§1.5.1 要求「建号与改密**同一规则**」）"
+            "⇒ 两处各写一遍赋值，迟早一处加校验、另一处没加 —— 那就不是同一规则了")
+        assert u2.password == "走出口的密码"
+
+        # ④ 空密码也能建号（与 ② 的"可清空"是同一条规则的两个入口）
+        u3 = R.create(s, account="__自检_空密码__")
+        assert (u3.password or "") == ""
+        s.rollback()
+
+
+@acc("ACC-USR-MGMT-001", "001-11")
+def test_当前登录用户是唯一出口且不得写死人名():
+    """claim：「「当前登录用户」的供给：**留痕的改前人与录入人一律取当前登录用户**，
+    **不得写死成某个名字**」（§1.5.1 末行 —— 它自称是"账号体系与业务字段的**唯一接点**"）。
+
+    ⚠️ 这条**现在就能钉**（不依赖登录态）：唯一的出口（`core/identity.py::current_operator`）
+       **从第一天就立好了**，而 `MOD-15` 落地时**只改那一个文件** ⇒
+       ⛔ 所以现在要钉的是**"不许绕过它写死人名"**，而不是"登录态已经接上了"。
+
+    四半：
+    ① **唯一出口**：`current_operator` 全仓**只有一处定义**（⛔ 别各模块自己实现一份）；
+    ② **接线到位**：会写留痕 / 录入人的那些模块**都引了它**（⚠️ 对着实体清单，⛔ 不是"我搜了一眼"）；
+    ③ ⛔ **没有写死的操作人字面量**：形如 `operator="张三"` 的赋值**全仓不得出现**
+       —— 这才是"不得写死成某个名字"的机械化落点；
+    ④ ⭐ **占位也不是人名**：未接登录态时的占位必须是**中性词**（`科室用户`），
+       ⛔ 不能是"一个人名占位"（那种更难清理 —— 它长得像正常值，搜不出来）。
+    """
+    import pathlib
+    import re
+
+    import app
+    from app.core import identity as ID
+
+    root = pathlib.Path(app.__file__).resolve().parent
+
+    # ① 唯一出口（⚠️ 路径一律转 POSIX —— 在 Windows 上 `relative_to` 给的是反斜杠，
+    #    直接跟 "core/identity.py" 比会**因为分隔符**而红，那是假的失败）
+    defs = [p.relative_to(root).as_posix() for p in root.rglob("*.py")
+            if re.search(r"^def current_operator\s*\(", p.read_text(encoding="utf-8"), re.M)]
+    assert defs == ["core/identity.py"], (
+        f"`current_operator` 的定义出现在 {defs} —— 必须是**唯一出口**"
+        "（§1.5.1：「统一取当前登录用户」；两份实现必然漂）")
+
+    # ② 接线到位：会写留痕 / 录入人的模块都得引它
+    must = ["mod01_projects/router.py", "mod03_notice/list_data.py", "mod07_setl/api.py",
+            "mod08_inv/router.py", "mod11_jc/fetch_service.py", "mod14_config/router.py"]
+    missing = [m for m in must
+               if "current_operator" not in (root / m).read_text(encoding="utf-8")]
+    assert not missing, (
+        f"这些模块会写留痕 / 录入人，却没走 `current_operator`：{missing}"
+        " ⇒ 它们很可能在写死名字（§1.5.1 明写「不再是一个写死的名字」）")
+
+    # ③ ⛔ 全仓不得出现"写死的操作人字面量"
+    bad = []
+    pat = re.compile(r"(?:operator|改前人|录入人|改动?人)\s*=\s*[\"']([^\"']{1,12})[\"']")
+    for p in sorted(root.rglob("*.py")):
+        for k, ln in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            m = pat.search(ln)
+            if m and m.group(1) != "":
+                bad.append(f"{p.relative_to(root)}:{k}  → {m.group(0)}")
+    assert not bad, (
+        "出现**写死的操作人**（§1.5.1：一律取当前登录用户）：\n  " + "\n  ".join(bad))
+
+    # ④ 占位是中性词（⛔ 不是人名占位）
+    assert ID.PLACEHOLDER_OPERATOR == "科室用户", (
+        f"占位变成了 {ID.PLACEHOLDER_OPERATOR!r} —— 它必须是**中性词**"
+        "（⛔ 不能用「一个人名」占位：那种形态最难清理，因为它长得像正常值）")
+    assert ID.current_operator().strip(), "取不到当前操作人（不许返回空 —— 留痕字段会变成空串）"
