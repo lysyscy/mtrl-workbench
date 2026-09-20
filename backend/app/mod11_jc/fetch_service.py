@@ -27,6 +27,11 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+# ⚠️⚠️ 2026-09-20 补：`default_since` 里调了 `logger.warning(...)` 但**本文件从没有 logger**
+#    ⇒ 一旦"库里最大合同日期"不是个合法日期（手改过 / 脏数据），那一步会抛
+#    `NameError: name 'logger' is not defined` —— 而那句话的**本意**是"保守回落全量、并留个印子"。
+#    ⇒ 静默地把"留痕"变成"炸掉"。已补 logger（与全仓同一口径：`get_logger()`）。
+from app.core.logging import get_logger
 from app.mod01_projects.domain import norm_full_name
 from app.mod01_projects.pending import record_detail
 from app.mod01_projects.repository import all_projects
@@ -46,6 +51,8 @@ TABLE = "jc_contract"
 #: 这里再导出一份，保持既有引用不变（同 `mod08`）。
 CONFIRM_TOKEN = fetch_task.CONFIRM_TOKEN
 KICK_WARNING = fetch_task.KICK_WARNING
+
+logger = get_logger()
 
 
 def match_projects(rows: list[dict], projects: list) -> dict:

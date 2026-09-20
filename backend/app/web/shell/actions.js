@@ -221,7 +221,15 @@ const ACT={
          （适配层 `adaptNotice` 已把它映射成 `trail`，`hasT` 按列名判 —— 前端无需自己记留痕）✓ */
    const FIELD={ss:'stat_settle', sp:'stat_paid'}[k];
    API.statCell({notice_id:Number(t.dataset.id), field:FIELD, value:String(t.value)})
-     .then(r=>{ toast(r.message, r.changed?4800:4600); return reloadNotices(); })
+     /* ⚠️⚠️ 2026-09-20 补：`m03` 对**可预期拒绝**（如统计两金额越界）回 **200 ＋ `ok:false` ＋ 中文**
+        ⇒ 不会抛。原先这里**直接 toast `r.message`** —— 失败那句中文看着和成功没什么两样
+        （而且后面还会 `reloadNotices()` 把用户刚输入的值刷回去，人只会觉得"白输了"）。
+        ⇒ **先判 `ok`**，失败就把话说清楚（并说明输入被还原是为什么）。 */
+     .then(r=>{ if(!r || r.ok === false){
+         toast(`<b>保存失败</b>：${esc((r && r.message) || '后端未返回原因')}`
+           + `<br><span class="mut sm">这一格已还原成原来的值（后端没写进去）</span>`, 7000);
+         return reloadNotices(); }
+       toast(r.message, r.changed?4800:4600); return reloadNotices(); })
      .catch(e=>{ toast(`<b>保存失败</b>：${esc(e.message||e)}`); render(); }); },
  /* ⭐ 批量打印付款通知书（§4.6 场景五 · REQ-R6 · API-07）—— 2026-09-14 补出口：
     口径 = **勾选通知书 → 人工点击 → 调 i8 接口批量打印**（入参就是勾选的通知书）。
@@ -693,7 +701,14 @@ const ACT={
     category:CAT_API[f.cat]||f.cat, amount_approved:String(naD.approve||''), stat_paid:String(naD.sp||''),
      ownership_id:String(pj.id) };
    API.manualSave(body)
-     .then(r=>{ naEditId=''; naD={};
+     /* ⚠️⚠️ 2026-09-20 补：**先判 `ok` 再清草稿**。原先不管成败都先 `naEditId=''; naD={}`
+        ⇒ 后端拒了（200 ＋ `ok:false`）也把**用户刚填的一整行草稿丢掉**了
+        ⇒ 人只会看到"点了保存、填的东西没了"，还得重填一遍。 */
+     .then(r=>{ if(!r || r.ok === false){
+         toast(`<b>保存失败</b>：${esc((r && r.message) || '后端未返回原因')}`
+           + `<br>草稿行已保留，改完再点「保存」`, 6000);
+         return reloadNotices(); }
+       naEditId=''; naD={};
        /* 新增后**保证看得见**（同「按付款计划勾选」的做法）：切到该行年月 + 放宽三档筛选；「项目」筛选一律不动 */
        fNt.month=String(f.date).slice(0,7); fNt.cat='全部'; fNt.astat='全部'; fNt.stat='全部'; prunePick();
        toast(r.message,5200); return reloadNotices(); })
@@ -1311,9 +1326,15 @@ const ACT={
     外部（自检 / 导出）拿到的是这个数组的**引用**，重新赋值会让引用失效（同 BIGVAL / AWF 的教训）。 */
  bigPickOk:async ()=>{ const picked=BIGDRAFT.slice();
    /* ⭐ 接线：选题与顺序**落库走后端**（`big_service.save_selection`）—— 弹窗内仍是原型的草稿层 */
-   try{ await API.m07BigSelection(picked); }
+   let r = null;
+   try{ r = await API.m07BigSelection(picked); }
    catch(e){ closeModal(); await reloadM07();
      return toast(`<b>选题没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
+   /* ⚠️⚠️ 2026-09-20 补：`m07` 对**可预期拒绝**回 **HTTP 200 ＋ `ok:false`**（全站口径）⇒ 不会抛。
+      原先这里**只看 catch** ⇒ 失败时**照样往下走**、还 toast「已按所选 N 个项目出表」
+      ⇒ **把失败说成成功，而且一句原因都不给**（这一处最坏：失败完全静默）。 */
+   if(!r || r.ok === false){ closeModal(); await reloadM07();
+     return toast(`<b>选题没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`,7000); }
    closeModal(); await reloadM07();
    toast(`活动大表已按所选 <b>${BIGSET.length}</b> 个项目出表（行序即刚才设置的行序）`); },
 
@@ -1334,10 +1355,15 @@ const ACT={
  mechOk:async ()=>{ const g=id=>document.getElementById(id);
    const wh=String(((g('mechPj')||{}).value)||''), ym=String(((g('mechYm')||{}).value)||'').trim();
    const values={}; MECH_LABELS.forEach((_,i)=>{ values['mech_'+i]=String(((g('mechIn'+i)||{}).value)||''); });
-   try{ const r=await API.m06MechSave({warehouse:wh,ym:ym,values:values});
-     closeModal(); await reloadMech(); await reloadM07(); render();
-     toast(esc((r&&r.message)||'已保存'));
-   }catch(e){ toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); } },
+   let r = null;
+   try{ r=await API.m06MechSave({warehouse:wh,ym:ym,values:values}); }
+   catch(e){ return toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
+   /* ⚠️⚠️ 2026-09-20 补：原来写的是 `toast((r&&r.message)||'已保存')` ——
+      若那次 `ok:false` **恰好没带 `message`** ⇒ 会把**失败显示成「已保存」**（真假成功）。
+      ⛔ 别拿"有没有 message"当成败判据；**成败只看 `ok`**。 */
+   if(!r || r.ok === false){ return toast(`<b>没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`,7000); }
+   closeModal(); await reloadMech(); await reloadM07(); render();
+   toast(esc(r.message || '已保存')); },
 
  /* —— MOD-08 —— */
  /* 「项目」筛选（**通用控件** = 共用项目面板，**多选**；2026-09-13 用户口径）—— 键 = 仓库名（§2.7.4）。 */

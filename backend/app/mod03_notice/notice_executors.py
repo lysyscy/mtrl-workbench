@@ -21,6 +21,11 @@ from typing import Callable
 
 from app.core.config import get_settings
 from app.core.db import session_scope
+# ⚠️⚠️ 2026-09-20 补：`get_fetch_executor` 里 `ensure_batch_settled(...)` 抛的就是它，
+#    而拆件时**同样漏了 import** ⇒ 抓取遇到"归属未结清"时不是给中文原因、而是
+#    `NameError: name 'MustReportError' is not defined`（**把一句能指路的话，换成一句废话**）。
+#    ⇒ 与 `get_notices_by_ids` 是同一次拆件留下的同一种病（见 `repository` 那段 import 的注释）。
+from app.core.errors import MustReportError
 from app.core.logging import get_logger
 from app.mod01_projects.domain import (
     OwnershipDecision,
@@ -39,6 +44,12 @@ from app.mod03_notice.repository import (
     fetch_detail,
     finish_run_record,
     get_notice_by_ph_id,
+    # ⚠️⚠️ 2026-09-20 补：`_exec` 里用了它，但**拆件时漏了 import** ⇒
+    #    `NameError: name 'get_notices_by_ids' is not defined` ⇒ 每次点「批量打印 / 只导出 PDF」
+    #    都炸（表现为 HTTP 500；加兜底后才在界面上看到真因）。**这条链路从 09-19 拆件起就是坏的。**
+    #    ⚠️ 测试抓不到它：测试全用 `dependency_overrides` 注入**假执行器** ⇒ 真实现**从不被调用**
+    #    ⇒ 已补一条「拆件漏 import」守卫（`tests/test_wiring_guards.py::test_模块里没有未定义的名字`）。
+    get_notices_by_ids,
     list_notices,
     list_stat_traces,
     notice_as_dict,

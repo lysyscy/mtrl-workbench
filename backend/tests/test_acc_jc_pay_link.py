@@ -149,3 +149,64 @@ def test_解绑_零金额引用_与非集采分类不许填供应商():
         nj = _notice(s, ph="__自检_ph_分类集采__")
         assert jc_supplier_problem(nj) is None, "集采分类放行"
         s.rollback()
+
+
+@acc("ACC-JC-PAY-001", "001-07")
+def test_集采走付款域同一通道_识别方式只认收款单位():
+    """⭐ `DEV-P-05`（§4.4.3）：**集采付款走付款计划、⛔ 不独立成通道**；
+    识别方式 = **收款单位「资产处集中采购」**。2026-09-20 由「口径侧登记（待回问）」转为判据点。
+
+    ⚠️ 这条此前**缺**，不是"测试没写"，而是**口径本身**没写死"怎么认" —— 基线 `C_dev_boundary`
+       自己记着「真缺口是**口径本身缺一条可观测判据**（该补的是口径、不是测试）」，
+       计划 §7.3 也明令「`DEV-P-05` 我不自行补判据 …… ⛔ 不在工程里臆造」。
+       口径 **2026-09-19 已定**（§4.4.3）⇒ 现在才谈得上落判据。
+
+    钉的是**这条链**（⛔ 不重复已有的三条：分类三类 / 禁配剔除规则 / 双向关联）：
+
+    ```
+    收款单位「资产处集中采购」
+      ⇒ 付款域出口   mod05_flow.domain.classify            = 集采
+      ⇒ 通知书域出口 mod03_notice.classify.decide_placement = 集采，且 excluded=False（不参与剔除）
+      ⇒ 两域说的"集采"是【同一个值】⇒ 走的是【同一条通道】，⛔ 没有第二条
+      ⇒ 且该行真的能走完付款域那条路（可关联集采合同 / 可填集采实际供应商）
+    ```
+
+    ⚠️⚠️ 为什么值得一条判据：这里有 **两个字面量 + 两个出口**，只要有一处独立漂移，
+       "**怎么认**"就**静默分叉** —— 分类说它是集采、禁配规则按另一串认、关联又是第三套
+       ⇒ 界面上一切正常，只有真机撞上才发现（本项目最贵的一类错）。
+    """
+    from app.mod03_notice import classify as NC
+    from app.mod03_notice.notice_actions import jc_supplier_problem
+    from app.mod05_flow import domain as FD
+    # ⚠️ 复用**同一个**记录构造器（`tests.test_classify._rec`）⇒ ⛔ 不另造一份"记录形状"，
+    #    否则两处形状一漂，这条断言测的就不是同一种输入了。
+    from tests.test_classify import _rec
+
+    # ① **识别字面量只有一份** —— 两处必须就是同一串（⛔ 不是"碰巧相等、将来可能各改一半"）
+    assert FD.PAYEE_JC == NC.FORBIDDEN_PAYEE_VALUE == "资产处集中采购", (
+        f"「集采」的识别方式在两处分叉了：mod05={FD.PAYEE_JC!r} · mod03={NC.FORBIDDEN_PAYEE_VALUE!r}")
+
+    # ② **付款域出口**：识别靠「收款单位」；优先级 = 机械 > 集采 > 辅材（§4.2.3 的顺序）
+    assert FD.classify("", FD.PAYEE_JC) == FD.CATEGORY_JC, "收款单位 = 资产处集中采购 ⇒ 集采"
+    assert FD.classify("付设备租赁款", FD.PAYEE_JC) == FD.CATEGORY_MECH, (
+        "「付设备租赁款」**优先于**集采收款单位（§4.2.3 的三档顺序）")
+    assert FD.classify("", "某某公司") == FD.CATEGORY_MATERIAL, "其余 ⇒ 辅材（⛔ 没有第四类）"
+
+    # ③ **通知书域出口**：同一行必须给**同一个分类**，且**不参与剔除**
+    pl = NC.decide_placement(_rec(payee=NC.FORBIDDEN_PAYEE_VALUE))
+    assert pl.category == FD.CATEGORY_JC, (
+        f"付款域与通知书域对同一行给了不同分类：{pl.category!r} vs {FD.CATEGORY_JC!r}")
+    assert pl.excluded is False, "集采**不走剔除**（§4.2.2：它参与分类）"
+
+    # ④ **"同一条通道"的机器化落点**：集采分类的行**能**走完付款域那条路 ——
+    #    可关联集采合同 ＋ 可填「集采实际供应商」。⛔ 没有"集采专用"的第二条路。
+    with session_scope() as s:
+        p = _project(s)
+        c = _contract(s, project_id=p.id)
+        n = _notice(s, ph="__自检_ph_集采通道__")
+        assert jc_supplier_problem(n) is None, "集采分类的行要能填「集采实际供应商」"
+        r = SV.act_link_notice(s, notice_id=n.id, contract_id=c.id)
+        assert r["ok"] is True, f"集采分类的行要能关联集采合同（走的就是付款域那条路）：{r}"
+        assert R.payment_of_notice(s, n.id) is not None
+        assert _links_by_notice(s)(n.id), "付款域侧也要看得到（双向可见）"
+        s.rollback()
