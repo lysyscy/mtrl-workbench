@@ -259,13 +259,37 @@ def warehouse_check(
     )
 
 
-@router.post("/batch", response_model=BatchResponse)
+@router.post("/batch", response_model=None)
 def batch(
     req: BatchRequest,
     executor: Callable[[list[int], str], BatchResult] = Depends(get_batch_executor),
-) -> BatchResponse:
-    """批量打印 / 仅导出 PDF（共用同一次勾选，由 `mode` 分流）。"""
-    result = executor(req.ids, req.mode)
+):  # type: ignore[no-untyped-def]
+    """批量打印 / 仅导出 PDF（共用同一次勾选，由 `mode` 分流）。
+
+    ⚠️⚠️ **2026-09-20 加异常兜底**（用户实测踩到）：原先这里是
+    `result = executor(...)` **裸调、不兜异常** ⇒ 链路里**任何一步抛**（i8 登录 / `PdfRenderer`
+    起浏览器 / 取数 / 渲染 / 投递）都会变成 **HTTP 500** ⇒ 界面上只显示"500"，
+    **真因只在服务端 stderr 里**（用户点「只导出 PDF」看到的就是这个，只能来问我"是不是登录的问题"）。
+    ⇒ 现在把**可预期的**失败（`MustReportError`）与**未预期的**异常**都兜住**，
+      按本项目一贯口径回「**200 ＋ `ok:false` ＋ 一句中文**」，并把**类型名**一并带出
+      —— ⛔ 界面上**不许只显示一个状态码**：那样用户既报不准、我也查不动。
+
+    ⚠️ 为什么 `response_model` 从 `BatchResponse` 改成 `None`：兜底分支要回 `JSONResponse`，
+       而 `response_model` 会**按模型校验并改写**返回体 ⇒ 失败分支会被它改成 500。
+       （成功分支**仍然回 `BatchResponse`**，形状一字未变 ⇒ 前端不受影响。）
+    """
+    from fastapi.responses import JSONResponse
+
+    try:
+        result = executor(req.ids, req.mode)
+    except MustReportError as exc:
+        return JSONResponse(status_code=200, content={"ok": False, "message": exc.message})
+    except Exception as exc:                      # noqa: BLE001 —— 见 docstring：一律兜住、带回真因
+        logger.exception("批量%s 失败（未预期异常）", req.mode)
+        return JSONResponse(status_code=200, content={
+            "ok": False,
+            "message": f"批量执行失败：{type(exc).__name__}: {exc}",
+        })
     batch_name = Path(result.batch_dir).name if result.batch_dir else ""
     items = [
         ItemOutcomeOut(

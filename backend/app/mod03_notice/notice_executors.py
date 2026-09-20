@@ -68,8 +68,13 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
         #    ⚠️ `D9` 的原意是"**不许悄悄踢**"（要有人在场、要显式授权）—— 打印**本来就是人工点击、
         #    人就在机器旁** ⇒ 这里就是那次显式授权；⛔ 抓取那条链路仍按各自入参（默认不踢）。
         client = I8Client(allow_kick=True)
-        renderer = PdfRenderer()
+        # ⚠️⚠️ `PdfRenderer()` **必须在 `try` 之内**（2026-09-20 修）：它要起 Playwright 浏览器，
+        #    起不来时会**抛**。原先它写在 `try` **之外** ⇒ 它抛 ⇒ `finally` 里的 `client.close()`
+        #    **不会执行** ⇒ **i8 会话就那样挂在那儿**（连接泄漏；且下一次还会撞同一个会话）。
+        #    ⇒ 用 `renderer=None` 打底 + `finally` 里判空关闭。
+        renderer = None
         try:
+            renderer = PdfRenderer()
             result = run_batch(
                 notices,
                 mode=mode,
@@ -86,7 +91,10 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
                 dispatch_pdf=(print_dispatch if mode == MODE_PRINT else None),
             )
         finally:
-            renderer.close()
+            # ⚠️ 判空：`PdfRenderer()` 自己抛时它还是 `None`（见上）—— ⛔ 别在这里 NPE，
+            #    那会把**真因**（浏览器起不来）盖成"AttributeError: NoneType"（更难查）。
+            if renderer is not None:
+                renderer.close()
             client.close()
 
         _persist_run(run_type=run_type, target=target, result=result)
