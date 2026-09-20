@@ -1955,7 +1955,11 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
 const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup','editCat','filterNt','pjPick','procPjPick','invWh','invOnlyAdj','ivColQ','ivColMin','ivColMax','ivColVal','awfName','awfAmt','awfPjPick','ledNote','ledPjPick','lgPjPick','lgCat','lgS','lgP','lgR','flFilter','flPjPick','jcMethod','jcArchNo','jcRetDate','jcRemark','jcFilter','jcPjPick','bigEdit','bigSelTog','payDraft','fPjStatus','fPjType','fPjQ','fIvDir','fExtStatus','extBal','plFilter','plPick','plPickAll','plPjPick','plCell','plRowSet','jcPick','jcPickAll','ntRowSet','editApprove','editOrd','jcLinkPick','jcNSet','jcNPjPick','jcSubSet','ledExpPjPick','procExpPjPick','dfSet','dfFilter','supPick',
   /* ⭐ `M5-8` 导入那三个**都挂在表单元素上**（file / select / select）⇒ **必须进这里**，
      否则 `change` 被**静默丢弃**：选完文件点「下一步」永远是灰的、改列名没反应（这个坑最容易漏）。 */
-  'jcImportPick','jcImportPj','jcImportMap'];
+  'jcImportPick','jcImportPj','jcImportMap',
+  /* ⚠️⚠️ `M5-6b` **甲方单位分类那个 `select` 也挂在表单元素上** —— 漏了它，
+     选完类型**什么都不会发生**（`change` 被静默丢弃）：看着像"没有保存键"，其实是**事件没接上**。
+     ⭐ 2026-09-20 用户实测反馈「甲方单位分类你没有给保存键」⇒ 就是这个。 */
+  'jcPartySet','jcAmt'];
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]'); if(!t) return;
   const nm=t.tagName.toLowerCase();
