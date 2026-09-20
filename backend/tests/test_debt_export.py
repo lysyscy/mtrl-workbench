@@ -69,6 +69,29 @@ def test_总欠款表写出形态_金额是数值且带表尾说明(tmp_path: Pa
 
 
 @acc("ACC-FLOW-DEBT-001", "001-06")
+def test_导出返回的是Path而不是str(monkeypatch):
+    """⚠️⚠️ **2026-09-20 真机实测踩到**：`export_total_debt` 回的是 **`str`**，
+    而端点那边写的是 `path.name` ⇒ 一调就 `AttributeError: 'str' object has no attribute 'name'`
+    ＋ **HTTP 500**。
+
+    ⚠️ 为什么当时三条断言**全绿**：它们都在测 `debt_export.build_xlsx`（**纯函数**），
+       **没有一条跨过「实现 → 端点」那道缝** —— 这正是"接缝处最容易漏测"的典型样子。
+    ⇒ 这条钉住那个**类型契约**：必须回 `Path`（端点要用 `.name` / `.suffix` 决定文件名与媒体类型）。
+    """
+    monkeypatch.setattr(S, "total_debt_rows", lambda _s: {
+        "items": [{"index": 1, "project": "自检项目", "jc": Decimal("1"),
+                   "material": Decimal("2"), "mech": Decimal("3")}],
+        "jc_skipped": 0, "mech_settle_ready": False,
+    })
+    path, note = S.export_total_debt(None)          # ⚠️ 会话已被打桩，不需要真库
+    assert isinstance(path, Path), (
+        "端点要 `path.name` ⇒ 实现必须回 `Path`；回 `str` 会 **HTTP 500**（真机踩过）")
+    assert path.name.endswith(".xlsx")
+    assert path.is_file(), "要真写出文件（端点直接把它流给浏览器）"
+    assert note["rows"] == 1 and note["mech_settle_ready"] is False
+
+
+@acc("ACC-FLOW-DEBT-001", "001-06")
 def test_总欠款的口径与页面同源():
     """⚠️ `total_debt_rows` **必须**用现场那两个出口算，⛔ 不许自己另写一套算钱的。
 

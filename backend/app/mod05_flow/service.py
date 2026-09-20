@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -284,8 +285,12 @@ def total_debt_rows(s: Session) -> dict:
     return {"items": items, "jc_skipped": jc_skipped, "mech_settle_ready": MECH_SETTLE_SOURCE_READY}
 
 
-def export_total_debt(s: Session) -> tuple[str, dict]:
+def export_total_debt(s: Session) -> tuple[Path, dict]:
     """导出**总欠款表** ⇒ `(绝对路径, 回执说明)`。
+
+    ⚠️⚠️ 回的是 **`Path`**，⛔ **不是 `str`** —— 端点那边要 `path.name`：
+       `2026-09-20` **真机实测踩到**（回 `str` ⇒ 一调就 `AttributeError` ＋ **HTTP 500**，
+       而单测全绿，因为没人跨过"返回值 → 端点"这道缝）。
 
     ⚠️ 回执里必须带三件事（禁静默）：① 出了几行；② 集采**排除了几条**（不是"纳入台账"的）；
       ③ 机械口径**未接通**这件事（表尾也写了同一句 —— 文件离开页面后还得说清）。
@@ -298,7 +303,7 @@ def export_total_debt(s: Session) -> tuple[str, dict]:
         raise MustReportError("总欠款：**一个项目的欠款都算不出来**（通知书与集采合同都还没数据）"
                               "—— 请先抓取 / 导入，再导出。")
     out_dir = PROJECT_ROOT / "artifacts" / "exports" / X.FILE_PREFIX
-    path = X.build_xlsx(data["items"], out_dir, mark_mech=not data["mech_settle_ready"])
+    path = Path(X.build_xlsx(data["items"], out_dir, mark_mech=not data["mech_settle_ready"]))
     return path, {
         "rows": len(data["items"]),
         "jc_skipped": int(data["jc_skipped"]),
