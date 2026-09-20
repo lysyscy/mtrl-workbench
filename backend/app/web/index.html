@@ -3027,8 +3027,17 @@ const dfClear=()=>{ Object.keys(dfD).forEach(k=>delete dfD[k]); Object.assign(df
       （与「活动大表开工时间」同源的技术理由；§六-30 那条「凡选时间一律用 tmBtn」的既有例外）。 */
 const dfMonthOpts=()=>optsOf([...new Set([...DFs.map(d=>d.month),bjMonth(-1),bjMonth()])].filter(m=>/^\d{4}-\d{2}$/.test(m)).sort().reverse(),dfD.month);
 /* 「项目」候选 = **复用 MOD-03 手动行的同一出口** `ntPjList()`（全部已建档 · 含归档 · 不含壳，§六-9）；
-   落库写**全名**（与差异登记既有数据形状一致），显示走 `pjDisp` + `pjArcMark` 两个共性出口。 */
-const dfPjOpts=()=>pjSort(ntPjList()).map(p=>`<option value="${esc(p.full)}" ${dfD.proj===p.full?'selected':''}>${esc(pjDisp(p))}${pjArcMark(p,1)}</option>`).join('');
+   落库写**全名**（与差异登记既有数据形状一致），显示走 `pjDisp` + `pjArcMark` 两个共性出口。
+⚠️⚠️ 2026-09-20 修（用户实测：「手动增行**默认项目已经选了**，但点保存显示**未选择项目**不能保存」）：
+   **必须有空占位项** —— `<select>` 里没有任何 `selected` 时，**浏览器会把第一个选项「显示」成已选**，
+   而草稿层 `dfD.proj` 仍是空串 ⇒ **显示骗了人**：用户以为选了、状态里没有 ⇒ 保存必被拒（且看不出为什么）。
+   ⇒ 照**已跑通的兄弟页**（`m04` 的 `plProjOptions`）加 `<option value="">（请选择项目）</option>` 并默认选它。
+   ⛔ **不是**"把第一个候选塞进 `dfD.proj`" —— 那会让人在**没选**的情况下，
+      把差异**静默记到第一个项目头上**（记错账比记不上更贵：账面上多了一笔不属于它的差异）。
+   ⭐ 这条也顺带让判据点 `001-03`（项目必填）**在界面上真的够得着** —— 否则它永远只在后端被"想象"着测。 */
+const dfPjList=()=>pjSort(ntPjList());
+const dfPjOpts=()=>`<option value=""${dfD.proj?'':' selected'}>（请选择项目）</option>`
+  + dfPjList().map(p=>`<option value="${esc(p.full)}" ${dfD.proj===p.full?'selected':''}>${esc(pjDisp(p))}${pjArcMark(p,1)}</option>`).join('');
 /* 草稿行：**列对齐**（`<td>` 数 = 表头列数）· 挂 `draftrow`（`applySorts` 把它钉在数据行之后、合计行之前）。
    「归属」恒为「库存单据」（§5.8.3）⇒ 只显示、不可选。 */
 const dfDraftRow=()=>`<tr class="draftrow">
