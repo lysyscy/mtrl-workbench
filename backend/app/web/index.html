@@ -3062,6 +3062,12 @@ const dfDraftRow=()=>`<tr class="draftrow">
   <td><input class="inp" style="min-width:130px" data-act="dfSet" data-k="remark" value="${esc(dfD.remark)}" placeholder="备注"></td>
   <td class="ctr now"><button class="btn sm pri" data-act="dfSave" title="校验通过后落库（归属恒为「库存单据」）">保存</button> <button class="btn sm" data-act="dfCancel" title="丢弃这一行草稿（不入库）">取消</button></td></tr>`;
 V.m12=()=>{
+  /* ⛔⛔ **本页「MOD-12 差异登记」已取消**（用户 2026-09-20 裁定）—— ⛔ 别照着它做。
+     依据：《说明书》§5.8.3「差异归属恒为「**库存单据**」（**不独立成模块**）」——
+     差异的载体 = **调整单**（`m08`），差异表由后端按调整单算（`m06`）。
+     ⭐ **本切片保留是刻意的**：① 原型是**规格的留痕**——改它等于抹掉"当初为什么会撤"的证据；
+     ② 它是 `ui_parity` 的**逐行对位基准** ⇒ 仓 / 面**两边必须同样保留**（⛔ 单边删会立刻报红）。
+     ⭐ 守卫：`tools/audit_common.py::CANCELLED` ＋ `doc_audit` 的 `T8`。 */
   const vis=DFs.filter(d=>(fDf.ym==='全部'||d.month===fDf.ym)&&(fDf.stat==='全部'||d.status===fDf.stat));
   const ok=vis.filter(d=>d.status==='已核对').length;
   return `
