@@ -40,9 +40,11 @@ from app.mod07_setl.router import router as mod07_router
 from app.mod08_inv.router import router as mod08_router
 from app.mod09_fee.router import router as mod09_router
 from app.mod11_jc.router import router as mod11_router
-# ⛔ `MOD-12` 差异登**撤页**（2026-09-20 用户裁定）—— 曾短暂存在过 `mod12_diff` 包与路由，
-#    依据是「独立一页」，而《说明书》§5.8.3 明写「**归属「库存单据」（不独立成模块）**」⇒
+# ⛔ `MOD-12` 差异登**已取消（已撤页）**（2026-09-20 用户裁定）—— 曾短暂存在过 `mod12_diff`
+#    包与路由，依据是「独立一页」，而《说明书》§5.8.3 明写「**归属「库存单据」（不独立成模块）**」⇒
 #    差异的**载体 = 调整单**（`m08`）、**产出 = 差异表**（`m06`，系统按调整单算）⇒ 无独立页。
+#    ⭐ 这段注释是**撤项记录**；`doc_audit` 的 `T8` 守卫会在有人试图把它加回来时报红
+#      （真源 = `tools/audit_common.py::CANCELLED`）。
 #    ⇒ 包与路由都已删除；能力判据改由 `ACC-DIF-REG-001`（4 条）指着 `m08`/`m06` 的真落点。
 from app.mod14_config.router import router as mod14_router
 # MOD-15：**从第一天起就是 JSON API ＋ 新壳**（⛔ 没有服务端渲染页）—— 同 `mod11` 的做法。

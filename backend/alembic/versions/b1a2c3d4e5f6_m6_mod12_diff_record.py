@@ -41,7 +41,12 @@ down_revision = "cf8e4f1dc7ee"
 branch_labels = None
 depends_on = None
 
-OWNER_INV = "库存单据"          # 与 `app/mod12_diff/domain.py::OWNER_INV` 同值（迁移里不 import 业务代码）
+#: ⚠️ 原注写「与 `app/mod12_diff/domain.py::OWNER_INV` 同值」—— 那个模块**已取消**
+#:   （2026-09-20 用户裁定：`MOD-12` 差异登整页撤掉 ⇒ 见 `tools/audit_common.py::CANCELLED`）。
+#: ⚠️ 本迁移**已应用到两个库** ⇒ **⛔ 不得修改它的 upgrade/downgrade**（改已应用的迁移是经典错误）；
+#:   本行只改注释。⚠️ 表 `diff_record` 现状 = **保留但已作废、⛔ 不得再读写**
+#:   （要不要 drop，待用户裁定 —— 见开发计划待裁定清单）。
+OWNER_INV = "库存单据"          # 迁移里不 import 业务代码 ⇒ 值就地写死
 
 
 def upgrade() -> None:

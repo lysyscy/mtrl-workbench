@@ -9,7 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from audit_common import (
-    HANDBOOK_REL, KNOWN_ABSENT, LEDGER_REL, PATH_ROOTS, REPO_ROOT, RETIRED_TERMS, TOP_DIRS, YELLOW, RED,
+    CANCELLED, CANCELLED_SCAN_GLOBS, CANCELLED_SKIP_RELS,
+    HANDBOOK_REL, HARD_EXEMPT, KNOWN_ABSENT, LEDGER_REL, PATH_ROOTS, REPO_ROOT,
+    RETIRED_TERMS, SOFT_EXEMPT, TOP_DIRS, YELLOW, RED,
     _ACC_ID_RE, _ACC_RE, _PATH_RE, _PLACEHOLDER, _STATUS_RE,
     _hit, delivery_root,
 )
@@ -44,6 +46,54 @@ def check_terms(docs: list) -> list[dict]:
                     hits.append(_hit("T2", side, rel, path, i, lines, zones,
                                      what=term, why=why, fix=f"改为：{now}"))
     return hits
+
+
+# --------------------------------------------------------------- T8 已撤项复活
+#
+# ⭐⭐ 这条回答的是「**如何标记才能永久记住某功能已被取消**」：
+#    真正的答案是「**别靠记忆，靠机器每次跑批把它端到你面前**」。
+#
+# ⚠️ 为什么必须有它（`T2` 不够）：`T2` 扫的是 **`.md` 文档**，而"复活"总是发生在**代码**里
+#    （新建模块目录 / 把接口加回壳 / 把页面渲回来）⇒ 文档全对、代码已经长回来了。
+# ⭐ 本项的判定**沿用同一套豁免纪律**（`HARD_EXEMPT` / `SOFT_EXEMPT` / 文件级 `LENIENT_GLOBS`）——
+#    ⛔ 否则「为说'别再加回来'而提到它」的注释会被自己判红（那正是撤项最初的记录方式）。
+def check_cancelled() -> list[dict]:
+    """`T8` · **已撤项不得在代码里复活**（真源 = `audit_common.CANCELLED`）。
+
+    `clean=True` 的：命中 ⇒ **红**（已清干净还出现 = 复活）。
+    `clean=False` 的：命中 ⇒ **黄**（还有残骸，提醒去清 —— ⛔ 不是"这条错了"）。
+    """
+    out: list[dict] = []
+    for pat in CANCELLED_SCAN_GLOBS:
+        for p in sorted(REPO_ROOT.glob(pat)):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(REPO_ROOT).as_posix()
+            if rel in CANCELLED_SKIP_RELS:
+                continue
+            try:
+                lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                continue
+            zones = ["current"] * len(lines)
+            for i, line in enumerate(lines):
+                for token, (why, fix, clean) in CANCELLED.items():
+                    if token not in line:
+                        continue
+                    h = _hit("T8", "仓", rel, p, i, lines, zones,
+                             what=f"已撤项 `{token}`", why=why, fix=f"改为：{fix}")
+                    # ⭐ `clean` 档位**覆盖**豁免判定（豁免只管"行文在说它废了"，
+                    #    而"还没清干净"这件事**与行文怎么写无关**）——
+                    #    ⚠️ 但**行文本身在说它废了**的，仍不该报（那是撤项记录本身）。
+                    if h["level"] == "忽略":
+                        continue
+                    h["level"] = RED if clean else YELLOW
+                    if clean:
+                        h["why"] = why + "；**该项已确认清干净** ⇒ 再出现即复活"
+                    else:
+                        h["why"] = why + "；⚠️ **残骸尚未清完**（黄）—— 清掉后把 `CANCELLED` 里该位改 `True`"
+                    out.append(h)
+    return out
 
 
 # ------------------------------------------------------------------- T3 路径

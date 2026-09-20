@@ -16,6 +16,12 @@
 | `T5` | **行数超限** —— 单文件 >400（黄 · 须登记）/ >600（红 · 禁合入） | 源文件行数（**输出即登记清单**） |
 | `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `.workbuddy/plans/开发计划-主文档.md` |
 | `T7a`/`T7b` | **判据覆盖** —— 有登记的能力却没判据兜住（**登记档，不判红**） | `cover_gap.py` |
+| `T8` | ⭐ **已撤项复活** —— 用户裁定取消的东西**不得在代码里长回来** | `audit_common.CANCELLED` |
+
+> ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
+> 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
+> ⚠️ 理由：撤项目前只写在**代码注释**里，而**注释没人每次读** ⇒ 下次照着一片残骸再做一遍
+> （已发生过：`mod12_diff` 撤了，但判据还在、目录还在、壳里还渲染）。
 
 ### 怎么避免变成「新噪音源」（三条纪律）
 
@@ -52,7 +58,7 @@ from audit_common import (                                        # noqa: E402
     RED, SKIP, YELLOW, delivery_root, iter_docs,
 )
 from audit_drift import (                                         # noqa: E402
-    check_acc_ids, check_paths, check_status_line, check_terms,
+    check_acc_ids, check_cancelled, check_paths, check_status_line, check_terms,
 )
 from audit_meta import (                                          # noqa: E402
     HARD_LIMIT, LINE_LIMIT, check_file_sizes, check_tail_ledger,
@@ -117,6 +123,10 @@ def main() -> int:
     sizes = check_file_sizes()          # 单独成节：它输出的是「欠债清单」，与漂移不同性质
     raw = check_acc_ids(cases, docs) + check_terms(docs) + check_paths(docs)
     raw += check_status_line()
+    # `T8`：**已撤项不得在代码里复活**（真源 = `audit_common.CANCELLED`）。
+    # ⭐ 这条是「**如何标记才能永久记住某功能已被取消**」的机器化答案 ——
+    #    撤项登记在那张表里，`T8` 每次跑批都扫代码面 ⇒ ⛔ 不靠人记得。
+    raw += check_cancelled()
     raw += check_tail_ledger(cases)     # `T6` 尾巴台账：格式 / 编号 / 落点 / 计数
     # `T7` 登记：有能力的口径没被判据兜住（**逻辑在 tools/cover_gap.py** —— 别再内联）
     from cover_gap import T7_EXEMPT, check_cover_gaps         # noqa: PLC0415
