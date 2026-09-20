@@ -14,7 +14,9 @@ from app.core.identity import current_operator
 from app.mod01_projects import archive_pending as AP
 from app.mod01_projects import pending as PE
 from app.mod01_projects import repository as repo
-from app.mod01_projects.domain import build_candidates, norm_full_name, ordered, resolve_ownership
+from app.mod01_projects.domain import (
+    build_candidates, norm_full_name, ordered, resolve_ownership, status_label,
+)
 from app.mod01_projects.models import Project
 from app.mod01_projects.schemas import (
     ArchivePendingOut,
@@ -31,12 +33,19 @@ from app.mod01_projects.schemas import (
     PromoteOut,
     PromotePendingOut,
     PromoteRequest,
+    ProjectExportIn,
     PromoteRowOut,
     StatusRequest,
     TrailOut,
     TypeRequest,
     UpdateProjectRequest,
 )
+
+#: 「项目类型」的**中文文案** —— ⚠️ 与壳的 `pjType.text`（`index.html` 的枚举表）**同一份口径**。
+#: ⚠️ 放在路由层是**有意的**：它是**展示层**的事（"给人看什么字"），不是领域判定
+#:    （`domain.py` 只认 `normal/shell/small` 三个值本身）。
+#: ⭐ 单独立在这里、⛔ 不散在导出端点里，是为了让下一个加端点的人一眼看见"只有一份"。
+TYPE_TEXT = {"normal": "普通项目", "shell": "小微壳", "small": "具体小微"}
 
 router = APIRouter(prefix="/api/m01", tags=["mod01"])
 
@@ -68,6 +77,51 @@ def list_projects(
     st = None if status == "all" else status
     with session_scope() as s:
         return [_out(p) for p in repo.list_projects(s, status=st, keyword=keyword)]
+
+
+@router.post("/projects/export")
+def export_projects(payload: ProjectExportIn) -> dict:
+    """导出项目档案（`TAIL-04` · `REQ-R1` · §7.1）⇒ `{ok, filename, rows, content_b64}`。
+
+    ⭐ **行** = 传入的那些 id（= **屏幕上看到的**，**连它的顺序一起**）；
+    **列** = 页面表头去掉「操作」；**取值** = **页面显示的那个值**。
+    ⚠️ 所以这里要先把三处"外键 / 英文枚举"换成**人看的字**（§7.1「取值一律与页面一致」）：
+      · `project_type`（`normal/shell/small`）⇒ 中文（`TYPE_TEXT`，与壳的枚举表同一份）
+      · `status`（`active/archived`）⇒ 中文（`domain.status_label` —— **它本来就有**，⛔ 别再写一份）
+      · `parent_shell_id` ⇒ **父项目的全名**（页面上那格显示的就是全名）
+      · `match_keywords`（列表）⇒ 顿号连接（页面上就是一串）
+
+    ⚠️ **为什么取数是"全表捞一遍再按 id 挑"**：项目档案是**几十行**的小表（§2），
+       一次 `select` 拿全量再按传入 id 过滤 + **保持传入顺序**，比逐 id 查更简单也更稳
+       （逐 id 查要么 N 次查询、要么丢掉顺序）。⚠️ 表大了再改成 `WHERE id IN (...)` ＋ 排序。
+    """
+    import base64
+    from datetime import date
+
+    from app.report_export import pj_export as X
+
+    ids = [int(i) for i in (payload.ids or [])]
+    with session_scope() as s:
+        rows = list(s.execute(select(Project)).scalars().all())
+    by_id = {p.id: p for p in rows}
+    # ⚠️ **按传入的 id 顺序**出行（⛔ 不是按库里的顺序）—— 那是**屏幕上的行序**
+    picked = [by_id[i] for i in ids if i in by_id]
+    out = [{
+        "ord": p.ord,
+        "type_text": TYPE_TEXT.get(p.project_type, p.project_type),
+        "disp": p.disp or "",
+        "warehouse_name": p.warehouse_name or "",
+        "name_full": p.name_full or "",
+        "phid": p.phid or "",
+        "status": status_label(p.status),
+        "parent_full": (by_id[p.parent_shell_id].name_full
+                        if p.parent_shell_id in by_id else ""),
+        "keywords": "、".join(p.match_keywords or []),
+    } for p in picked]
+    blob = X.build_xlsx(out)
+    name = f"项目档案_{date.today().strftime('%Y%m%d')}.xlsx"
+    return {"ok": True, "filename": name, "rows": len(out),
+            "content_b64": base64.b64encode(blob).decode("ascii")}
 
 
 @router.get("/candidates", response_model=list[CandidateOut])

@@ -30,6 +30,18 @@ class CandidateOut(BaseModel):
     placeholder: bool = False
 
 
+class ProjectExportIn(BaseModel):
+    """导出请求（`TAIL-04` · §7.1）。
+
+    ⚠️ **收 id 列表，⛔ 不收"筛选条件"** —— 页面的筛选（状态 / 类型 / 全名·仓库名·展示名模糊搜）
+      与**排序**（`pjSort`：自定义 `ord` ＋ 归档后置）都是**前端**算的 ⇒
+      传条件就得在后端**再实现一遍** ⇒ **两套口径必打架**（本项目的旧账）。
+      ⭐ 传 id 还顺带把**顺序**带上了（导出的行序 = 屏幕上的行序）。
+    """
+
+    ids: list[int] = Field(default_factory=list)
+
+
 class CreateProjectRequest(BaseModel):
     project_type: Literal["normal", "shell", "small"]
     name_full: str = Field(..., description="项目全名")
