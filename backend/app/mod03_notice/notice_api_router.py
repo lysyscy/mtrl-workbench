@@ -58,6 +58,12 @@ def notice_filters(period, project, category, approve_status, pay_status) -> Not
     """列表查询共用的筛选解析。
 
     ⚠️ 与其它页同一约定：**`period=None` ⇒ 用默认（北京时间当月）；`period=""` ⇒ 全部**。
+
+    ⚠️⚠️ **`include_archived=True` —— 这是"取数层"，不是"页面筛选层"**（2026-09-20 修）：
+       本函数只服务 `/api/m03/notice-list`，而它的调用方是**壳**（壳拿全量、自己再筛 `ntHit`）。
+       ⛔ 取数层**先按页面的"默认隐藏"砍一刀** ⇒ 壳里根本没有剔除行 ⇒ 切「分类 = 剔除」**必然全空**
+          （用户 2026-09-20 实测；库里 200 行 → 接口只回 129 行 = 200 − 71）。
+       ⚠️ 依赖注入时给的桩若自己造 `NoticeFilters`，记得也要给这个字段（默认 `False`）。
     """
     return NoticeFilters(
         period=default_period(PERIOD_DEFAULT_KEY) if period is None else period,
@@ -65,6 +71,7 @@ def notice_filters(period, project, category, approve_status, pay_status) -> Not
         category=category or CATEGORY_ALL,
         approve_status=approve_status,
         pay_status=pay_status,
+        include_archived=True,          # ⭐ 取数层给全 —— 默认隐藏是**筛选层**（壳的 `ntHit`）的事
     )
 
 

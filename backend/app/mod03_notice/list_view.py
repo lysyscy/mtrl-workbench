@@ -252,6 +252,19 @@ class NoticeFilters:
     category: str = CATEGORY_ALL            # 全部 / 辅材 / 机械 / 集采 / **剔除**
     approve_status: str = ""                # 空 = 全部
     pay_status: str = ""                    # 空 = 全部
+    include_archived: bool = False
+    """⚠️⚠️ **要不要把「剔除 / i8 已撤单」行一起给出来**（2026-09-20 新增）。
+
+    默认 `False` = **页面视图**的口径（§4.2.2：剔除行默认隐藏、只在「分类 = 剔除」里出现）。
+
+    ⭐ 但 `GET /api/m03/notice-list`（**壳的数据源**）必须传 `True` ——
+       因为壳**自己还要筛一遍**（`ntHit`，含「分类 = 剔除」那个专用视图）。
+       取数层若先按页面的"默认隐藏"砍一刀 ⇒ **壳里根本没有剔除行** ⇒ 切「分类 = 剔除」必然全空。
+       这正是用户 2026-09-20 报的「**筛选剔除后全是空的**」（实测：库 200 行 → 接口只回 129 行 = 200 − 71）。
+       ⚠️ 口径依据是本仓**早已写明**的那条（`repository.notice_rows` 的 docstring）：
+          「剔除与撤单行的『默认隐藏』是**筛选层**的事 —— **取数层必须给全**」。
+          本字段就是给"取数层"和"页面筛选层"分开用的那个开关。
+    """
 
 
 def filter_rows(rows: list[NoticeRow], f: NoticeFilters, *, project_key=None) -> list[NoticeRow]:
@@ -260,6 +273,7 @@ def filter_rows(rows: list[NoticeRow], f: NoticeFilters, *, project_key=None) ->
     ⚠️ **「分类 = 剔除」是不受其它筛选约束的专用视图**（§4.2.2 明文）——
        切到它时只按**时间 ＋ 项目**筛，**审批状态 / 付款状态一律放开**
        （否则默认的「付款状态 = 未付清」会把剔除行全部挡掉，该视图形同失效）。
+    ⚠️ `f.include_archived=True`（取数层）⇒ **不做"默认隐藏"那一刀**，其余照旧。
     """
     keys = {str(k) for k in (f.project_ids or ())}
 
@@ -278,7 +292,7 @@ def filter_rows(rows: list[NoticeRow], f: NoticeFilters, *, project_key=None) ->
     for r in rows:
         if not (_period_ok(r) and _project_ok(r)):
             continue
-        if r.in_exclude_view:
+        if r.in_exclude_view and not f.include_archived:
             continue                        # 剔除 / 撤单行**只在专用视图里出现**（默认隐藏）
         if f.category and r.category != f.category:
             continue
