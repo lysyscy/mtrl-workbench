@@ -45,6 +45,117 @@ def _fn(src: str, anchor: str, end: str) -> str:
     return src[i:src.index(end, i)]
 
 
+@acc("ACC-JC-UI-001", "001-03")
+def test_空态行跨列数派生且全选框回显三态():
+    """claim：「**筛选无结果时必须给空态提示行**（跨列数 = 表头列数）；
+    **表头全选框必须回显状态**（全选 → 勾选，取消一行 → 半选）」。
+
+    ⚠️ 两半都要钉，而且都有"最容易偷懒"的写法：
+       ① 空态行的 `colspan` **必须由表头派生**（`thCount(JC_THEAD)`）—— ⛔ 写死一个数字，
+          表头一改列就错位（多一块/少一块），而且**空态时才看得见** ⇒ 平时测不出来；
+       ② 全选框**要有三种态**：全选中 → `checked`；部分选中 → `indeterminate`（半选）；
+          一个没选 → 都不是。⛔ 只做 `checked` 的话，用户筛了一半勾选时看不出"还差几条"。
+    """
+    html = _index()
+    empty = [ln for ln in html.splitlines() if "当前筛选条件下没有集采合同" in ln]
+    assert empty, "找不到集采台账的空态提示行 —— 落点变了"
+    assert "colspan=\"${thCount(JC_THEAD)}\"" in empty[0], (
+        "空态行的跨列数**没有由表头派生** —— ⛔ 写死的数字在表头改列后会错位，"
+        "而且只有「筛到空」时才看得见：\n  " + empty[0].strip()[:160])
+
+    bind = _fn(html, "BIND.m11=", "/* ====")
+    assert "box.checked" in bind and "hit===vis.length" in bind, (
+        "全选框的 `checked` 不是「全中」才勾 —— 那会出现「勾着的其实没全选」")
+    assert "box.indeterminate" in bind and "hit>0" in bind, (
+        "全选框**没有半选态**（`indeterminate`）—— 取消一行后它会显示成「完全没选」，"
+        "用户看不出「其实还选中了别的」")
+
+
+@acc("ACC-JC-UI-001", "001-07")
+def test_付款子表日期默认系统当日且草稿可改():
+    """claim：「**付款子表**录入日期默认取**系统当日**，且**草稿可改**」。
+
+    ⚠️ 三条容易做错的地方，一条一条钉：
+       ① **只有付款子表**默认当日 —— 发票侧（`inv`/`tinv`）**必须留空**：
+          「发票日期必填」是有意的（⛔ 替用户填一个默认值等于**帮他做了一个该他自己做的判断**）；
+       ② 默认值**不许写死日期字面量** —— 必须取"今天"那个变量（正式实现换系统日期即可）；
+       ③ 草稿**可改**：改了要进**草稿层**（`jcSubD`），⛔ 不是改完就当落库。
+    """
+    acts = _actions()
+    add = _fn(acts, "jcSubAdd:", "jcSubSet:")
+    assert "kind==='pay'?SYS_TODAY:''" in add.replace(" ", ""), (
+        "付款子表的默认日期不是「只有 pay 才给当日、发票侧留空」这个形态 ——\n"
+        "  ⚠️ 发票日期是**必填**（该用户自己判断归哪个月），⛔ 别替他填默认值。\n"
+        f"  实际：{add.strip()[:180]}")
+    assert "SYS_TODAY" in add and "'2026-" not in add, (
+        "默认日期里出现了**写死的日期字面量** —— 必须取「今天」那个变量"
+        "（正式实现只换它的取值，⛔ 不许在业务代码里埋死日期）")
+
+    # ⚠️ `jcSubSet` 是 `ACT` 上的**动作**（`jcSubSet:t=>{…}`），⛔ 不是 `const jcSubSet=`
+    m = re.search(r"jcSubSet:t=>[^\n]*", acts)
+    assert m, "找不到 `jcSubSet`（写草稿层的动作）—— 落点变了"
+    assert "jcSubD" in m.group(0), (
+        "`jcSubSet` 没有写**草稿层** `jcSubD` —— 那用户改的那一格要么丢了、要么直接落库了，"
+        "两种都不对（草稿就该只在草稿层）")
+
+
+@acc("ACC-JC-UI-001", "001-08")
+def test_子表草稿行列对齐且钉在合计行之前取消不入库():
+    """claim：「子表草稿行**列对齐**并**钉在「数据行之后、合计行之前」**；
+    **取消 = 草稿丢弃不入库、增行态复位**」。
+
+    ⚠️ 「钉在…之前」这句在本壳里是**两层**保证（缺一层，排序一开就乱）：
+       ① **渲染顺序**：草稿行就写在数据行与合计行**之间**；
+       ② **行级 `draftrow`**：它并入排序的 pin 通道（钉表尾、不参与排序）——
+          ⚠️ 没有②的话，用户一点表头排序，草稿行就会被排走、合计行窜到它前面。
+    ⚠️ 「取消不入库」要**反向**钉：`jcSubCancel` 那段里**不许出现任何落库调用**。
+    """
+    html = _index()
+    for dlg, table in (("jcInvDlg:", "modal:jcInv"), ("jcTInvDlg:", "modal:jcTInv"),
+                       ("jcPayDlg:", "modal:jcPay")):
+        seg = _fn(_all_shell(), dlg, "jcSubAdd" if dlg == "jcPayDlg:" else "＋ 增加一张发票</button>")
+        i_rows = seg.index(".map((v,i)") if ".map((v,i)" in seg else seg.index(".map((p,i)")
+        i_draft = seg.index("jcSubRow()")
+        i_sum = seg.index("sumRowOf(")
+        assert i_rows < i_draft < i_sum, (
+            f"`{dlg}`（{table}）里三段的顺序不对 ⇒ 草稿行没有钉在「**数据行之后、合计行之前**」。"
+            f"\n  实际位置：数据行 {i_rows} / 草稿行 {i_draft} / 合计行 {i_sum}")
+
+    row = _fn(html, "const jcSubRow=", "/* MOD-11 集采台账的表头")
+    assert 'class="draftrow"' in row, (
+        "草稿行没有 `draftrow` 这个类 ⇒ 它**不会被 pin 到表尾**：用户一点表头排序，"
+        "草稿行就会被排走、合计行窜到它前面（「钉在合计行之前」就破了）")
+    assert row.count("<td") == row.count("</td>"), "草稿行的 `<td>` 没有闭合（列会错位）"
+    for branch, want in (("jcSubKind==='pay'", 4), ("return `<tr class=\"draftrow\"><td class=\"fc\">新增</td>", 4)):
+        assert branch in row, f"找不到草稿行的这个分支：{branch[:40]!r}"
+    assert "jcSubD" in row, "草稿行的输入框没有接到草稿层 `jcSubD`"
+
+    cancel = _fn(_actions(), "jcSubCancel:", "/* 子表增行")
+    assert "jcSubReset()" in cancel, "取消后**没有复位增行态**（`jcSubReset`）⇒ 草稿行会一直挂着"
+    assert "API." not in cancel and "jcAct(" not in cancel, (
+        "`jcSubCancel` 里出现了落库调用 —— **取消 = 草稿丢弃、不入库**，⛔ 一个字节都不该写进去")
+    assert "未写入任何数据" in cancel, "取消的提示没有明说「未写入任何数据」（用户得知道确实没落库）"
+
+
+@acc("ACC-JC-UI-001", "001-14")
+def test_筛选栏控件齐备且项目是第一个():
+    """claim：「筛选栏控件齐备（**项目 / 三态 / 存档 / 供应商 + 重置**），
+    且「**项目**」是**本页第一个控件**、走**多选面板**」。
+
+    ⚠️ 「项目是第一个控件」不是排版喜好：项目是**业务范围**（先定范围再看别的），
+       而且它在这一页是**多选**（与别的页的单选项目控件**不是一个形态**）⇒ 两件都要钉。
+    """
+    html = _index()
+    bar = _fn(html, '<div class="fbar">', '${jcNewOn?jcNewStrip()')
+    order = [k for k in ("jcPjToggle", "id=\"fTag\"", "id=\"fArch\"", "id=\"fSup\"", "jcReset")
+             if k in bar]
+    assert len(order) == 5, f"筛选栏控件不全（缺 {set(['jcPjToggle','fTag','fArch','fSup','jcReset']) - set(order)}）"
+    assert order == ["jcPjToggle", "id=\"fTag\"", "id=\"fArch\"", "id=\"fSup\"", "jcReset"], (
+        "筛选栏控件顺序变了 —— 「**项目**」必须是**第一个**（它定的是业务范围）；实际顺序：" + str(order))
+    assert "jcPjPanel()" in bar, "「项目」没有走**多选面板**（`jcPjPanel`）—— 与本页「项目可多选」的口径不符"
+    assert "可多选" in bar, "「项目」控件的标签没写明「可多选」"
+
+
 @acc("ACC-JC-FETCH-001", "001-01")
 def test_触发方式写明且执行记录含定时自动那条():
     """claim：「**触发方式写明**「人工点击 + 定时自动（一期启用）」，且**执行记录含定时自动触发那一条**」。
