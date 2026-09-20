@@ -1251,8 +1251,23 @@ BIND.m02 = function () {
   if (!host) return;
   const kv = host.querySelector('.kv');
   if (kv) kv.innerHTML = m02EchoKv();
-  const tb = host.querySelector('table[data-sort-key="m02:logs"] tbody');
+  const tbl = host.querySelector('table[data-sort-key="m02:logs"]');
+  const tb = tbl && tbl.querySelector('tbody');
   if (tb) tb.innerHTML = m02LogRows();
+  /* ⭐ 2026-09-20 用户口径：「**卡名改准**」+「里面显示的**接口名不直观**，换成直观的」。
+     ① 卡名：这张表现在装的是**全部执行记录**（抓取 / 同步 / 打印 / 导出 PDF **都**写进来）
+        ⇒ 叫「抓取任务日志」**名不副实**（用户就是据此说"任务日志里还没有吧" —— 他找的是"抓取"）。
+        ⚠️ 改的是 **DOM 文本**（⛔ **不动 `V.m02` 切片**）：切片是**逐行对位**核对的，
+           改一个字会让该片后面**全部报漂移**（实测插 1 行 = 67 行）；而 `BIND` 正是本仓
+           「渲染后注入」的既定位置（`BIND.m01`/`m03`/`m11` 同款）。
+     ② 表头「接口」→「动作 / 接口」：因为现在里面既有**抓取接口**、也有**打印/导出**这类"动作"。 */
+  if (tbl) {
+    const card = tbl.closest('.card');
+    const h4 = card && card.querySelector('h4');
+    if (h4) h4.textContent = '执行记录';
+    const th = tbl.tHead && tbl.tHead.rows[0] && tbl.tHead.rows[0].cells[1];
+    if (th) th.textContent = '动作 / 接口';
+  }
 };
 
 BIND.m01 = function () {
@@ -1483,13 +1498,24 @@ function m02LogRows() {
     <br><span class="mut">其余页照常可用（这一路失败不拖垮本页）—— 可刷新页面重试。</span></td></tr>`;
   if (!M02_RECS.length) return '<tr><td colspan="4" class="mut">还没有执行记录 —— 抓过 / 同步过之后这里就有（按时间倒序）</td></tr>';
   return M02_RECS.map(r => `<tr><td class="fc">${esc(String(r.at).replace('T', ' '))}</td>
-    <td>${esc(m02LabelOf(r))}</td><td>${m02StatusTag(r)}${r.err ? `<br><span class="dg sm">${esc(r.err)}</span>` : ''}</td>
+    <td title="${esc(String(r.target || ''))}">${esc(m02LabelOf(r))}</td>
+    <td>${m02StatusTag(r)}${r.err ? `<br><span class="dg sm">${esc(r.err)}</span>` : ''}</td>
     <td class="fc">${esc(m02Dur(r))}</td></tr>`).join('');
 }
 
 function m02LabelOf(r) {
   const it = M02_IFACES.find(x => m02IsIf(x, r));
-  return it ? `${it.api} ${it.label}` : r.target;      /* 认不出的走原文（⛔ 不猜成某一类） */
+  /* ⚠️ 抓取接口给「名字（型号）」，⛔ 不再把 `API-0x` 顶在前面 —— 用户 2026-09-20：
+     「里面显示的**接口名不直观**，换成直观的」。 */
+  if (it) return `${it.label}（${it.api}）`;
+  /* ⚠️⚠️ 2026-09-20 补：**打印 / 只导出 PDF 的记录不在 `M02_IFACES` 里**（那是"抓取接口"清单）
+     ⇒ 原先 fallback 成 `r.target`，而那是**一长串单号**（`FKTZS…,FKTZS…`，最多 512 字符）
+     ⇒ 界面上就是"完全看不出这是干什么的"。⇒ 按 `run_type` 给人话，单号只给**个数**、
+     全文放进那一格的 `title`（悬停看，⛔ 不把一长串塞进格子里）。 */
+  const RUN = {print: '批量打印', export_pdf: '只导出 PDF', fetch: '抓取付款通知书', sync: '同步 i8 名单'};
+  const n = String(r.target || '').split(',').filter(Boolean).length;
+  if (RUN[r.type]) return `${RUN[r.type]}${n ? ` · ${n} 张` : ''}`;
+  return r.target;                                     /* 真认不出的走原文（⛔ 不猜成某一类） */
 }
 
 async function reloadM02() {

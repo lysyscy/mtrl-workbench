@@ -130,7 +130,15 @@ def test_纯年月的执行记录也算付款通知书():
     assert "bare_month" in isif and "/^\\d{4}-\\d{2}$/" in isif, "纯年月那条判据没写"
     assert "付款通知书" in SHELL and "bare_month: true" in SHELL
     label = _fn("function m02LabelOf(r)", "\n\n")
-    assert "it ? " in label and ": r.target" in label, "认不出的要走原文（⛔ 不猜成某一类）"
+    # ⚠️ 2026-09-20：断言从"钉旧写法的字面"（原先是 `it ? … : r.target`）改成**钉意图** ——
+    #    用户要求「里面显示的**接口名不直观**，换成直观的」⇒ 抓取接口改成「名字（型号）」，
+    #    并且要给**打印 / 只导出 PDF** 那两类也补一层人话映射。
+    assert "M02_IFACES.find" in label, "抓取接口仍要认得出（走正常映射）"
+    assert "return r.target" in label, "认不出的要走原文（⛔ 不猜成某一类）"
+    # ⭐ 打印 / 导出**不在 `M02_IFACES` 里**（那是"抓取接口"清单）⇒ 必须另给人话，
+    #    否则 fallback 成 `r.target` = **一长串单号**、界面上看不出这是什么（用户实测反馈）。
+    assert "print" in label and "export_pdf" in label, \
+        "打印 / 只导出 PDF 的记录要给人话标签（⛔ 别把一长串单号直接摆在格子里）"
 
 
 @acc()

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Callable
 
 from fastapi import APIRouter, Depends, Query
@@ -158,17 +159,20 @@ def fetch_run(
     ⚠️ 失败**不自动重试登录**（D9）；接口不可用 ⇒ **降级为手动 Excel 导入并显式说明**（001-06）。
     """
     target = f"付款通知书 {req.year_month}"
+    t0 = datetime.now()          # ⚠️ 见 `create_run_record`：动作**开始前**取时刻，否则耗时恒 0
     try:
         rows = rows_loader(req.year_month, req.allow_kick)
     except Exception as exc:  # noqa: BLE001
         info = degrade_to_excel(exc)
         _persist_fetch(
-            payload=fetch_record_payload(object_desc=target, success=0, fail=0, error_message=str(exc))
+            payload=fetch_record_payload(object_desc=target, success=0, fail=0, error_message=str(exc)),
+            started=t0,
         )
         return FetchRunOut(
             year_month=req.year_month, fetched=0, status="failed", degraded=True, message=info["message"]
         )
-    _persist_fetch(payload=fetch_record_payload(object_desc=target, success=len(rows), fail=0))
+    _persist_fetch(payload=fetch_record_payload(object_desc=target, success=len(rows), fail=0),
+                   started=t0)
     return FetchRunOut(year_month=req.year_month, fetched=len(rows), status="success")
 
 
@@ -182,14 +186,17 @@ def sync_warehouses(
     ⚠️ 仓库名单**本身不落库**（它是「仓库名 ↔ 所属项目全名」的**映射**、不是档案行）——
        它是**建档的输入**；要建档请点「**同步常用项目列表**」（`ACC-PRJ-SYNC-001`）。
     """
+    t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时要有起点
     try:
         rows = rows_loader(allow_kick)
     except Exception as exc:  # noqa: BLE001
         _persist_fetch(run_type="sync", payload=fetch_record_payload(
             object_desc="仓库列表", success=0, fail=0, error_message=str(exc)
-        ))
+        ), started=t0)
         return SyncOut(table="warehouse_list", degraded=True, message=str(exc))
-    _persist_fetch(run_type="sync", payload=fetch_record_payload(object_desc="仓库列表", success=len(rows), fail=0))
+    _persist_fetch(run_type="sync",
+                   payload=fetch_record_payload(object_desc="仓库列表", success=len(rows), fail=0),
+                   started=t0)
     return SyncOut(table="warehouse_list", count=len(rows), sample=rows[:5])
 
 
@@ -210,6 +217,7 @@ def sync_common_projects(
     """
     from app.mod01_projects.sync_service import sync_and_archive      # noqa: PLC0415
 
+    t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时的起点（本次同步要拉两个名单，通常是最慢的一条）
     with session_scope() as s:
         out = sync_and_archive(
             s,
@@ -219,7 +227,7 @@ def sync_common_projects(
     if out["degraded"]:
         _persist_fetch(run_type="sync", payload=fetch_record_payload(
             object_desc="常用项目列表", success=0, fail=0, error_message=out["message"]
-        ))
+        ), started=t0)
         return SyncOut(table="common_project", degraded=True, message=out["message"])
     counts = out["counts"]
     from app.mod01_projects.archive_pending import record_detail as archive_detail  # noqa: PLC0415
@@ -269,18 +277,23 @@ def fetch_records(limit: int = Query(20, ge=1, le=200)) -> list[RunRecordOut]:
 
 
 def _persist_fetch(*, payload: dict, run_type: str | None = None,
-                   detail: dict | None = None) -> None:
+                   detail: dict | None = None, started: datetime | None = None) -> None:
     """写一条执行记录（只写台账，**不参与业务统计**）。
 
     ⚠️ `detail` 是给**页面入口**用的（`TAIL-45`：同步报出的「待人工建档」清单得**留得住**）——
        原先这里**写死 `detail={}`** ⇒ 那份清单只在 `SyncOut` 回包（回执）里出现一次，**刷新即丢**，
        `m01` 上就没有可点的入口（与 `TAIL-30`-③ 同一类缺口）。
+
+    ⚠️⚠️ `started` = 这次动作**开始前**的时刻（各调用点自己取 `t0`）——
+       本函数是**动作做完才被调**的 ⇒ 不传的话 `started_at` 与 `finished_at` 同刻、**耗时恒 0**
+       （用户 2026-09-20 实测报的「耗时一直是 0 秒」，根因见 `repository.create_run_record`）。
     """
     if run_type:
         payload = {**payload, "run_type": run_type}
     with session_scope() as s:
         rec = create_run_record(
-            s, run_type=payload["run_type"], target=payload["target"], total=payload["total_count"]
+            s, run_type=payload["run_type"], target=payload["target"],
+            total=payload["total_count"], started_at=started,
         )
         finish_run_record(
             s,

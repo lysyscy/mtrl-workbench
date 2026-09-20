@@ -12,8 +12,26 @@ from sqlalchemy.orm import Session
 from app.mod02_i8.models import RunRecord
 
 
-def create_run_record(session: Session, *, run_type: str, target: str, total: int = 0) -> RunRecord:
+def create_run_record(session: Session, *, run_type: str, target: str, total: int = 0,
+                      started_at: datetime | None = None) -> RunRecord:
+    """建一条执行记录（`status="running"`，由 `finish_run_record` 收尾）。
+
+    ⚠️⚠️ **`started_at` 必须由调用方给"动作开始前"那一刻** —— 用户 2026-09-20 实测反馈：
+
+    > 「（任务日志里）**耗时也一直是 0 秒**」
+
+    真因**不是精度**，而是：**所有调用点都是"动作做完了才建记录、然后紧接着 finish"**
+    （`mod02_i8.router._persist_fetch` / `notice_executors._persist_run` 都如此）
+    ⇒ `started_at`（建记录那一刻）与 `finished_at`（下一行 finish）**几乎同刻** ⇒ 差恒 ≈ 0。
+
+    ⇒ 正解 = 调用方在**动作开始前**取一个时刻传进来（各入口的 `t0 = datetime.now()`）。
+    ⚠️ 不传 ⇒ 退回"建记录那刻"（= 旧的恒 0 行为）—— **只该给不关心耗时的地方用**。
+    ⛔ 别把这里改成 `min(现在, 传入值)` 之类"兜底"：那会把"调用方忘了传"这件事**藏起来**，
+       而"忘了传 ⇒ 耗时恒 0"正是这次要根除的那个坑。
+    """
     rec = RunRecord(run_type=run_type, target=target, total_count=total, status="running")
+    if started_at is not None:
+        rec.started_at = started_at          # ⚠️ 显式值**覆盖**列默认（列上是 `default=datetime.now`）
     session.add(rec)
     session.flush()
     return rec

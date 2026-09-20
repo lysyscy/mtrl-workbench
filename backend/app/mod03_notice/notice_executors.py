@@ -69,6 +69,9 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
     """批量执行器：真实实现（连库 + i8 + 浏览器 + 打印机）。测试可覆盖。"""
 
     def _exec(ids: list[int], mode: str) -> BatchResult:
+        # ⚠️ 耗时的**起点**：必须在`I8Client` / 浏览器起来**之前**（见 `create_run_record` 那段
+        #    —— 记录是"做完才建"的 ⇒ 不显式给起点，耗时恒 0，用户 2026-09-20 实测报的）。
+        t0 = datetime.now()
         with session_scope() as session:
             notices = list(get_notices_by_ids(session, ids))
         target = ",".join((n.bill_no or str(n.id)) for n in notices)[:512]
@@ -108,7 +111,7 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
                 renderer.close()
             client.close()
 
-        _persist_run(run_type=run_type, target=target, result=result)
+        _persist_run(run_type=run_type, target=target, result=result, started=t0)
         return result
 
     return _exec
@@ -153,12 +156,15 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
     """抓取执行器（D4 最小取数）。测试可覆盖。"""
 
     def _exec(year_month: str, allow_kick: bool) -> tuple[int, int]:
+        # ⚠️ 耗时的**起点**：必须在 `I8Client` 登录 i8 **之前**（见 `create_run_record` 那段）
+        t0 = datetime.now()
         client = I8Client(allow_kick=allow_kick)
         try:
             rows = NoticeFetcher(client).fetch_month(year_month)
         except Exception as exc:  # noqa: BLE001
             with session_scope() as session:
-                rec = create_run_record(session, run_type="fetch", target=year_month, total=0)
+                rec = create_run_record(session, run_type="fetch", target=year_month, total=0,
+                                        started_at=t0)
                 # ⚠️ **取数失败也要写标记**（`TAIL-41`）：漏了这条，"最近一次付款通知书抓取"就指不住，
                 #    读侧会掉回更早的记录 ⇒ 又变成"抓取之后仍摆着旧清单"。
                 finish_run_record(
@@ -247,7 +253,7 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
             message = f"{exc}｜未走完的项目：{detail}{more}"
             with session_scope() as session:          # 另开一个 session 记失败（与上面抓取失败同款）
                 rec = create_run_record(session, run_type="fetch", target=year_month,
-                                        total=len(rows))
+                                        total=len(rows), started_at=t0)
                 finish_run_record(
                     session, rec, status="failed", success=0, fail=len(rows),
                     detail=fetch_detail(
@@ -276,7 +282,8 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         ownership_of: dict[int, int | None] = {i: d.target_id for i, _, d in judged}
 
         with session_scope() as session:
-            rec = create_run_record(session, run_type="fetch", target=year_month, total=len(rows))
+            rec = create_run_record(session, run_type="fetch", target=year_month, total=len(rows),
+                                    started_at=t0)
             created = updated = 0
             for i, row in enumerate(rows):
                 is_new, changed = apply_fetched_row(session, row,
@@ -314,7 +321,14 @@ def get_notice_lister() -> Callable[..., list[PaymentNotice]]:
     return _list
 
 
-def _persist_run(*, run_type: str, target: str, result: BatchResult) -> None:
+def _persist_run(*, run_type: str, target: str, result: BatchResult,
+                 started: datetime | None = None) -> None:
+    """落一条执行记录。
+
+    ⚠️⚠️ `started` = 本次动作**开始前**的时刻（调用方取）——
+       本函数是**做完才被调**的 ⇒ 不传 ⇒ `started_at` 与 `finished_at` 同刻、**耗时恒 0**
+       （用户 2026-09-20 实测「耗时一直是 0 秒」的根因，详见 `mod02_i8.repository.create_run_record`）。
+    """
     detail = {
         "items": [
             {
@@ -330,7 +344,8 @@ def _persist_run(*, run_type: str, target: str, result: BatchResult) -> None:
     status = "success" if not result.failed else ("failed" if not result.success else "partial")
     error_message = "" if not result.failed else "未产出单号：" + "、".join(result.unprinted_bill_nos)
     with session_scope() as session:
-        rec = create_run_record(session, run_type=run_type, target=target, total=result.total)
+        rec = create_run_record(session, run_type=run_type, target=target, total=result.total,
+                                started_at=started)
         finish_run_record(
             session,
             rec,
