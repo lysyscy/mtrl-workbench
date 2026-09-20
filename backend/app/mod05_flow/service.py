@@ -110,6 +110,10 @@ def _flow_dict(f: PaymentFlow, notices: dict[int, object], projects: dict[int, P
         "amount": f"{to_money(f.amount):.2f}",
         "pay_method": f.pay_method,
         "remark": f.remark,
+        # ⭐ **操作人**（§1.5.1 末行）—— 2026-09-20 补的列（迁移 `d1f3a5c7e9b2`）。
+        # ⚠️ 在此之前页面上那一列显示的是 `created_at`（`core.js::adaptFlow` 的 `op`），
+        #    因为表里根本没这个字段。⚠️ 老行是**空串**（如实表示"当时没记"，⛔ 不是编的）。
+        "created_by": f.created_by,
         "status": f.status,
         "status_label": "生效" if f.status == FLOW_EFFECTIVE else "已撤销",
         "revoke_reason": f.revoke_reason,

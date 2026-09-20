@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel, Field
 
 from app.core.db import session_scope
 from app.core.errors import MustReportError
@@ -75,6 +76,68 @@ def _resolve_ym(value: str | None) -> str:
 
 
 # --------------------------------------------------------------- API（JSON）
+
+
+class FlowExportIn(BaseModel):
+    """导出请求（`TAIL-04` · §7.1）。
+
+    ⚠️ **收 id 列表，⛔ 不收"筛选条件"** —— 页面的筛选（年月 / **多选**项目 / 付款方式 /
+      状态 / 关键词）是**前端**算的 ⇒ 传条件就得在后端**再实现一遍** ⇒ **两套口径必打架**。
+    ⭐ 传 id 还顺带把**顺序**带上了（导出的行序 = 屏幕上的行序）。
+    """
+
+    ids: list[int] = Field(default_factory=list)
+
+
+@router.post("/api/m05/flows/export")
+def export_flows(payload: FlowExportIn, load: PageData = Depends(get_flows_data)) -> dict:
+    """导出**付款流水**（`TAIL-04` · `REQ-R1` · §7.1）⇒ `{ok, filename, rows, content_b64}`。
+
+    ⭐ **行** = 传入的那些 id（= **屏幕上看到的**，**连它的顺序一起**）；
+    **列** = 页面表头 `FL_THEAD` 去掉「操作」⇒ 9 列；**取值** = **页面显示的那个值**。
+
+    ⚠️ **本端点不用 join 通知书 / 项目** —— `/api/m05/flows` 的 `rows` 里**已经有**：
+      · `doc_no`（单据编码，= 通知书的 `bill_no`）
+      · `project_display`（付款项目 = **展示名**，由 `service._flow_dict` 走
+        `core.projects.project_label` 算好 —— ⛔ 不是仓库名那个"键"、更不是 `project_id`）
+      · `status_label`（**已给中文**「生效 / 已撤销」）
+      ⇒ ⭐ **取数端本来就够**，本端点只做"按 id 挑 ＋ 换列名 ＋ 拼状态文案"。
+
+    ⚠️ **状态那格**：页面把「撤销原因」**并进状态格里**（`已撤销 ＋ 原因`）⇒
+       导出也**并进去**（保持 9 列与页面一致）；⛔ 另开一列会让表与屏幕**对不上号**。
+    """
+    import base64
+    from datetime import date
+
+    from app.report_export import fl_export as X
+
+    data = load()                       # ⭐ 空参 = **全量**（本端点的"筛选"靠传入的 id）
+    all_rows = data.get("rows") or []
+    by_id = {int(r["id"]): r for r in all_rows if r.get("id") is not None}
+    ids = [int(i) for i in (payload.ids or [])]
+    # ⚠️ **按传入的 id 顺序**出行（⛔ 不是按库里的顺序）—— 那是**屏幕上的行序**
+    picked = [by_id[i] for i in ids if i in by_id]
+
+    def _status(r: dict) -> str:
+        txt = str(r.get("status_label") or "")
+        reason = str(r.get("revoke_reason") or "").strip()
+        return f"{txt}（{reason}）" if reason else txt
+
+    out = [{
+        "id": r.get("id"),
+        "doc_no": r.get("doc_no") or "",
+        "project_display": r.get("project_display") or "",
+        "pay_date": r.get("pay_date") or "",
+        "amount": r.get("amount"),
+        "pay_method": r.get("pay_method") or "",
+        "remark": r.get("remark") or "",
+        "created_by": r.get("created_by") or "",
+        "status_text": _status(r),
+    } for r in picked]
+    blob = X.build_xlsx(out)
+    name = f"付款流水_{date.today().strftime('%Y%m%d')}.xlsx"
+    return {"ok": True, "filename": name, "rows": len(out),
+            "content_b64": base64.b64encode(blob).decode("ascii")}
 
 
 @router.get("/api/m05/flows")
