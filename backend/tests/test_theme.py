@@ -120,6 +120,13 @@ def test_除主题表本身外_全工程CSS不再出现色值字面量():
             head, _, tail = text.partition('THEME_CSS = """')
             theme_body, _, rest = tail.partition('"""')
             text = head + rest
+            # ⭐ 2026-09-20（多主题）：**主题定义区**（`THEME-DEF BEGIN/END`）也放行 ——
+            #    它装的是**种子色**（`THEME_SEEDS` 一行一套）与派生用的纯色常量。
+            #    ⚠️ §7.7 说的「一份主题变量表统管」就是它 ⇒ 它**是那个出口**，不是违规。
+            #    ⛔ 按标记断区（而不是"放行整个 page.py"）：区外的色值**仍然会红**。
+            before, _, tail2 = text.partition("THEME-DEF BEGIN")
+            _, _, after = tail2.partition("THEME-DEF END")
+            text = before + after
         for hit in _HEX_RE.findall(text):
             seen.append(f"{f.relative_to(APP_DIR.parent)}: {hit}")
     for _name, text in _iter_html():
@@ -269,4 +276,75 @@ def test_服务端渲染页与静态页拿到的是同一份变量():
     shell = SHELL
     assert SHELL_THEME_LINK in shell, "壳没接主题真源（缺 `<link href=/static/theme.css>`）"
     assert ":root{" not in shell, "壳又自带 `:root` 了（那是第二份真源 ⇒ 换主题会漂）"
+
+
+# ---------------------------------------------------------------- 多主题（《说明书》§7.7 · 2026-09-20）
+
+
+@acc("ACC-UI-THEME-001", "001-02")
+def test_主题清单可列举且每套覆盖同一组变量名():
+    """claim：「**主题清单可列举**，且每套主题必须**覆盖同一组变量名**
+    （**缺项即显式报错**，不得静默沿用旧值）」。
+
+    ⚠️⚠️ 「缺项即显式报错」是这条的**命门**：CSS 里 `var(--x)` 引用了**没定义**的变量，
+       **不报错、只静默失效** ⇒ 页面上少一块样式（合计行没底色、分段竖线不见、标签没色），
+       而**没有任何错误信号** —— 这正是 `page.py` 里那段注释记着的历史 bug（`sumrow`/`vsep` 抄了
+       原型却**没抄 `:root`**）。⇒ 判据**不能**只数"清单里有几个名字"，
+       必须**真的逐套比对变量名集合**。
+
+    ⚠️ 另加一条**防空**：基准集合本身必须**够大** —— 否则"每套都是空集合的子集"也恒成立，
+       覆盖面校验就变成了摆设（这类"恒真断言"比红更难发现）。
+    """
+    names = page.theme_names()
+    # §7.7：用户 2026-09-20 定「清单 ≥10 套，换着玩」
+    assert len(names) >= 10, f"预置主题清单只有 {len(names)} 套 —— §7.7 用户裁定「至少 10 套」"
+    assert page.DEFAULT_THEME in names, "回落默认套必须**自己也在清单里**（否则它是个影子）"
+
+    base = page._var_names()
+    assert len(base) >= 60, (
+        f"变量名基准集只有 {len(base)} 个 —— ⚠️ 基准太小（甚至为空）会让"
+        "「每套都覆盖同一组」**恒真**，覆盖面校验就成了摆设。")
+    assert page.THEME_CSS.count("--") >= 60, "默认套自己的变量数不对 —— 基准取错了源"
+
+    # ⚠️ 先看"构造期有没有报错"：`render_theme` 缺项是**显式抛错**的，模块级构造会接住并记下原因
+    assert not page._THEME_BUILD_ERROR, (
+        "主题清单构造时就报错了（缺项）—— 原因：\n  " + page._THEME_BUILD_ERROR)
+
+    gaps = page.theme_coverage_gaps()
+    assert not gaps, (
+        "这些主题**缺变量** ⇒ 引用它们的声明会**静默失效**（页面少一块样式、且不报错）：\n  "
+        + "\n  ".join(f"{k}: 缺 {v}" for k, v in gaps.items()))
+
+    # ⭐ 每套都真的能产出（不是"清单里写了、渲染不出来"）
+    #    ⚠️ `page.THEME_CSS` 那段字面量**开头带一个换行**（`"""` 后面直接换行）⇒ 用 `lstrip()` 比。
+    for n in names:
+        css = page.render_theme(n)
+        assert css.lstrip().startswith(":root{") and css.rstrip().endswith("}"), \
+            f"「{n}」产出的 CSS 形态不对"
+
+
+@acc("ACC-UI-THEME-001", "001-07")
+def test_非法主题名显式处理_回落默认套():
+    """claim：「未知 / 非法主题名必须**显式处理**（回落默认套或显式报错，**两者择一**；
+    不得白屏或半套样式）」。
+
+    ⚠️ 本实现选的是「**回落默认套**」这一支（§7.7 ④「未设置时回落默认套」）。
+    ⚠️ 三类输入都要覆盖，缺一类就会漏：
+       ① **未设置**（`None` / 空串）；② **不认识的名字**；③ **路径穿越式**的名字。
+       ⛔ ③ 尤其要紧：主题名会进 URL（`/static/theme.css?theme=…`），
+       若拿它去拼路径（`open(f"themes/{name}.css")`）就是**任意文件读取**。
+       本实现是**字典查表**（⛔ 不拼路径）⇒ 天然安全 —— 这条断言就是**把"查表"钉住**，
+       防哪天被改成拼路径（那时它会红）。
+    """
+    default = page.THEME_CSS
+    for bad in (None, "", "  ", "不存在的主题", "../page", "../../etc/passwd",
+                "默认 ", "默认\n", "'; drop table", "<script>"):
+        got = page.render_theme(bad)                       # type: ignore[arg-type]
+        assert got == default, (
+            f"非法/未知主题名 {bad!r} **没有显式回落默认套** ⇒ 会白屏或半套样式"
+            "（`render_theme` 必须查表回落，⛔ 不许拿主题名去拼路径或抛裸异常）")
+    # ⭐ 反过来：合法名**不许**被回落掉（否则"回落"就成了"永远默认"—— 那清单白列了）
+    for good in page.theme_names():
+        assert page.render_theme(good) == page.THEMES[good], f"合法主题「{good}」被误回落了"
+    assert page.render_theme("深色") != default, "「深色」与默认套产出相同 ⇒ 派生没起作用（清单是假的）"
 

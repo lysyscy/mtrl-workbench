@@ -169,6 +169,228 @@ THEME_CSS = """
 }
 """
 
+# ============================================================ 多主题（《说明书》§7.7）
+# ⭐ 用户 2026-09-20 定：预置主题清单**≥10 套**（"换着玩"）。
+#
+# ⚠️⚠️ **为什么是"种子 + 派生"而不是 12 份手抄**：
+#   一套主题 = **67 个变量**（色值 ＋ 几何/字体）⇒ 12 套手抄 = **800 多个值**，
+#   必然出现**漏项**（引用了没定义 ⇒ 整条声明静默失效）与**跨套漂移**（第 3 套的
+#   `--ok-l` 忘了跟着 `--ok` 改 ⇒ "新绿字配旧浅绿底"，§7.7 明确要防的就是这个）。
+#   ⇒ 改成**一行种子 → 派生整套**：清单再长，**产出形态不变**（仍是"一份变量取值"），
+#     而"每套覆盖同一组变量名"**由构造保证**（不是靠人记）。
+#
+# ⚠️ **默认套不走派生** —— 它**原样沿用**下面那段 `THEME_CSS` 字面量 ⇒ **观感零变化**，
+#    `BASE_CSS` / `test_theme.py` 的既有断言**一个字都不用动**（零破坏）。
+
+
+def _rgb(c: str) -> tuple[int, int, int]:
+    c = str(c).lstrip("#")
+    if len(c) == 3:
+        c = "".join(ch * 2 for ch in c)
+    return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+
+
+def _hex(x) -> str:
+    return "#%02x%02x%02x" % tuple(max(0, min(255, round(v))) for v in x)
+
+
+def _mix(a: str, b: str, t: float) -> str:
+    """线性混色：`t=0` 全取 `a`、`t=1` 全取 `b`。
+
+    ⚠️ **`--x-l`（浅底）要朝"本套的底色"混、⛔ 不是朝白色混** —— 否则深色主题会派生出一堆
+       白底浅色块（深色主题里的"浅底"必须是"比底色稍亮"）。
+    """
+    ca, cb = _rgb(a), _rgb(b)
+    return _hex(tuple(x + (y - x) * t for x, y in zip(ca, cb)))
+
+
+def _lum(c: str) -> float:
+    r, g, b = _rgb(c)
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+
+
+def _on(c: str) -> str:
+    """该色**上面**的前景色（黑或白）—— 按亮度选，保证能看清。
+
+    ⚠️ 区外函数 ⇒ 只许用区里那两个常量（⛔ 不写字面量）。
+    """
+    return _PURE_WHITE if _lum(c) < 0.58 else _PURE_BLACK
+
+
+# ==== 主题定义区（THEME-DEF BEGIN）====
+# ⚠️⚠️ **本区是"颜色字面量"唯一允许出现的地方**（`test_theme.py` 按这两个标记断区）
+#   —— §7.7 说的「一份主题变量表统管」就是它。⛔ 别把色值写到区外。
+_PURE_BLACK = "#000000"
+_PURE_WHITE = "#ffffff"
+
+#: 三个状态色 ＋ 中性档 ＋ 特殊档的**种子**（每套主题一样，只有色相不同）
+_STATE_SEEDS = {"ok": "#16a34a", "wn": "#d97706", "dg": "#dc2626",
+                "in": "#64748b", "vi": "#7c3aed"}
+
+
+def _derive(seed: dict) -> dict[str, str]:
+    """种子 → **整套变量**（67 个）。每套都由这一个函数产出 ⇒ 覆盖面天然一致。"""
+    bg, sf, tx = seed["bg"], seed["sf"], seed["tx"]
+    pri = seed["pri"]
+    dark = bool(seed.get("dark"))
+    # 表面 / 中性：深色套往**更亮**走、浅色套往**更暗**走
+    step = -1 if dark else 1
+    v = {
+        "--bg": bg,
+        "--sf": sf,
+        "--sf2": _mix(sf, bg, 0.45),
+        "--sf3": _mix(sf, bg, 0.85),
+        "--bd": _mix(bg, tx, 0.14),
+        "--bd2": _mix(bg, tx, 0.07),
+        "--bd3": _mix(bg, tx, 0.32),
+        "--tx": tx,
+        "--tx2": _mix(tx, bg, 0.32),
+        "--mut": _mix(tx, bg, 0.55),
+        "--mut2": _mix(tx, bg, 0.78),
+        "--on": _on(pri),
+    }
+    # 主色四档 ＋ 高亮档（浅底朝**底色**混 ⇒ 深色套自动得到"暗底"）
+    v["--pri"] = pri
+    v["--pri-d"] = _mix(pri, "#000000" if not dark else "#ffffff", 0.22)
+    v["--pri-l"] = _mix(pri, bg, 0.90 if not dark else 0.86)
+    v["--pri-bd"] = _mix(pri, bg, 0.66 if not dark else 0.72)
+    v["--pri-hl"] = _mix(pri, bg, 0.35 if not dark else 0.45)
+    # 状态 / 中性档 / 特殊档：各四档成组（§7.7 硬要求）
+    for k, c in _STATE_SEEDS.items():
+        v[f"--{k}"] = c
+        v[f"--{k}-d"] = _mix(c, "#000000" if not dark else "#ffffff", 0.28)
+        v[f"--{k}-l"] = _mix(c, bg, 0.90 if not dark else 0.84)
+        v[f"--{k}-bd"] = _mix(c, bg, 0.66 if not dark else 0.72)
+    # 行态 / 可改格
+    v["--row-hover"] = _mix(sf, pri, 0.06)
+    v["--ex-bg"] = _mix(sf, bg, 0.75)
+    v["--hl"] = _mix(bg, "#d97706", 0.10 if not dark else 0.14)
+    v["--hl-hover"] = _mix(bg, "#d97706", 0.20 if not dark else 0.24)
+    v["--sel"] = _mix(bg, pri, 0.22 if not dark else 0.30)
+    v["--void-bg"] = _mix(bg, "#dc2626", 0.06 if not dark else 0.10)
+    v["--draft"] = _mix(bg, "#d97706", 0.05 if not dark else 0.09)
+    v["--edit-l"] = _mix(bg, "#d97706", 0.12 if not dark else 0.16)
+    v["--edit-bd"] = _mix(bg, "#d97706", 0.42)
+    v["--th-hover"] = _mix(bg, pri, 0.10 if not dark else 0.16)
+    v["--del-line"] = _mix(tx, bg, 0.70)
+    # 侧栏（深色面板 —— 与内容区**拉开**，故从 tx 往黑走）
+    sb = _mix(tx, "#0b1220", 0.62) if not dark else _mix(bg, "#000000", 0.45)
+    v["--sb"] = sb
+    v["--sb-bd"] = _mix(sb, "#ffffff", 0.14)
+    v["--sb-tx"] = _mix(sb, "#ffffff", 0.72)
+    v["--sb-mut"] = _mix(sb, "#ffffff", 0.48)
+    v["--sb-dis"] = _mix(sb, "#ffffff", 0.28)
+    v["--sb-hover"] = _mix(sb, "#ffffff", 0.10)
+    v["--sb-on"] = _mix(sb, "#000000", 0.35)
+    v["--sb-on-hl"] = _mix(pri, "#ffffff", 0.35)
+    v["--toast-bg"] = sb if not dark else _mix(bg, "#ffffff", 0.10)
+    v["--code-bg"] = "#fff9" if not dark else "#ffffff14"
+    # 阴影 / 遮罩（透明度固定，深浅由"叠在什么底上"决定）
+    v["--shadow"] = "0 1px 2px #0f172a12" if not dark else "0 1px 2px #00000040"
+    v["--shadow-pop"] = "0 8px 24px #0f172a26" if not dark else "0 8px 24px #00000059"
+    v["--shadow-md"] = "0 12px 32px #0f172a2e" if not dark else "0 12px 32px #00000066"
+    v["--shadow-toast"] = "0 8px 22px #0f172a3d" if not dark else "0 8px 22px #00000073"
+    v["--mask"] = "#0f172a66" if not dark else "#000000a6"
+    return v
+
+
+#: 几何与字体 —— **所有主题共用**（不是颜色；换主题不该改变尺寸与字号）
+GEOMETRY = {
+    "--r": "8px", "--r2": "12px",
+    "--fs": "'Microsoft YaHei','PingFang SC',system-ui,-apple-system,'Segoe UI',sans-serif",
+    "--fm": "ui-monospace,'Cascadia Mono',Consolas,monospace",
+}
+
+#: ⭐ **预置主题清单的种子表**（加一套 = 加一行；《说明书》§7.7 列了清单与取向）
+THEME_SEEDS: dict[str, dict] = {
+    "默认": {},                                            # ⚠️ 空 = 用下面那段字面量（观感零变化）
+    "靛青": {"bg": "#f5f6fb", "sf": "#ffffff", "tx": "#1e1b33", "pri": "#4f46e5"},
+    "松绿": {"bg": "#f4f8f6", "sf": "#ffffff", "tx": "#16241f", "pri": "#0d9488"},
+    "琥珀": {"bg": "#fbf7f1", "sf": "#ffffff", "tx": "#2a2117", "pri": "#d97706"},
+    "绛红": {"bg": "#fbf5f5", "sf": "#ffffff", "tx": "#2a1a1a", "pri": "#dc2626"},
+    "石墨": {"bg": "#f4f5f7", "sf": "#ffffff", "tx": "#22252a", "pri": "#475569"},
+    "米黄": {"bg": "#faf6ee", "sf": "#fffdf8", "tx": "#2b2418", "pri": "#8b5e34"},
+    "蓝灰工控": {"bg": "#eef1f5", "sf": "#fbfcfe", "tx": "#1b2430", "pri": "#1e40af"},
+    "深色": {"bg": "#0f172a", "sf": "#172033", "tx": "#e2e8f0", "pri": "#60a5fa", "dark": True},
+    "深色·松绿": {"bg": "#0d1b19", "sf": "#142623", "tx": "#d7e8e3", "pri": "#2dd4bf", "dark": True},
+    "深色·琥珀": {"bg": "#1c1917", "sf": "#262220", "tx": "#e7e0d8", "pri": "#fbbf24", "dark": True},
+    "深色·靛青": {"bg": "#12111f", "sf": "#1b1a2e", "tx": "#e0def0", "pri": "#818cf8", "dark": True},
+    "高对比": {"bg": "#ffffff", "sf": "#ffffff", "tx": "#000000", "pri": "#0000ee"},
+}
+# ==== /主题定义区（THEME-DEF END）====
+
+
+#: 未设置时的回落套（§7.7 ④）—— ⚠️ **必须在 `THEMES` 构造之前定义**：`render_theme` 会读它，
+#:   而 `THEMES = {… render_theme(n) …}` 是**模块级立即求值** ⇒ 定义晚了就是 `NameError`。
+DEFAULT_THEME = "默认"
+
+
+def render_theme(name: str) -> str:
+    """主题名 → CSS（**唯一产出出口**）。⚠️ **非法名 / 未设置 ⇒ 显式回落默认套**（§7.7）。"""
+    if name == DEFAULT_THEME or name not in THEME_SEEDS:
+        return THEME_CSS
+    seed = THEME_SEEDS[name]
+    if not seed:
+        return THEME_CSS
+    v = _derive(seed)
+    v.update(GEOMETRY)
+    missing = [k for k in _var_names() if k not in v]
+    # ⚠️⚠️ §7.7「缺项即**显式报错**，不得静默沿用旧值」—— 这里**必须报**，⛔ 不能 `if k in v` 跳过：
+    #    跳过 = 引用那条变量的声明**静默失效**（页面少一块样式、且**没有任何错误信号**），
+    #    正是 §7.7 要防的那类错。报错**要带名字**（裸 `KeyError` 只说一个键、看不出是哪套主题缺的）。
+    if missing:
+        raise ValueError(
+            f"主题「{name}」缺变量 {missing} —— §7.7：每套必须覆盖同一组变量名，缺项即显式报错"
+            "（⛔ 不得静默沿用旧值）")
+    body = "\n".join(f"  {k}:{v[k]};" for k in _var_names())
+    return ":root{\n" + body + "\n}\n"
+
+
+def _var_names() -> list[str]:
+    """变量**名**的基准序（取自默认套）—— ⛔ 顺序也由它定，免得多套之间漂。"""
+    return list(re.findall(r"(--[a-z0-9-]+):", THEME_CSS))
+
+
+def theme_coverage_gaps() -> dict[str, list[str]]:
+    """**覆盖面校验**：每套主题缺哪些变量名（空 dict = 全部齐）。
+
+    ⚠️ 这是 §7.7「每套必须覆盖同一组变量名，**缺项即显式报错、不得静默沿用旧值**」的落点 ——
+       缺项时引用它的那条声明 **不报错、只是静默失效**（页面少一块样式），是最难查的一类错。
+    """
+    base = set(_var_names())
+    out: dict[str, list[str]] = {}
+    for name, seed in THEME_SEEDS.items():
+        if not seed:                                  # 「默认」= 走字面量，本身就是基准
+            continue
+        # ⚠️ **直接算派生结果的键**，⛔ 不靠"渲染一遍再正则抠" ——
+        #    渲染会在缺项时**抛错**（那是对的），但那样这个函数就成了"要么空、要么崩"，
+        #    没法给出"缺哪些"的清单。
+        got = set(_derive(seed)) | set(GEOMETRY)
+        if got != base:
+            out[name] = sorted(base - got) + [f"+多余 {x}" for x in sorted(got - base)]
+    return out
+
+
+def theme_names() -> list[str]:
+    """预置主题清单（**可列举** —— §7.7 判据的一条）。"""
+    return list(THEME_SEEDS)
+
+
+#: 清单 → 成品 CSS（**唯一真源的成品形态**）
+#:
+#: ⚠️⚠️ `render_theme` 在**缺变量**时是**显式抛错**的（那是 §7.7 的要求）——
+#:    但这里是**模块级立即构造**，抛出来就是**导入即崩** ⇒ 那时连"哪套缺哪个变量"都看不到。
+#:    ⇒ 所以这里**接住它、把原因记下来**（`_THEME_BUILD_ERROR`），让调用方/判据能**读出原因**。
+#:    ⛔ 这**不是把错误吞掉**：`render_theme(name)` 该抛还抛（运行时照样显式报错），
+#:       而且 `test_theme.py` 会断言 `_THEME_BUILD_ERROR` 为空 ⇒ 有缺项**必定变红**。
+_THEME_BUILD_ERROR = ""
+try:
+    THEMES: dict[str, str] = {n: render_theme(n) for n in THEME_SEEDS}
+except ValueError as _exc:                          # pragma: no cover —— 正常永远不进来
+    THEMES = {}
+    _THEME_BUILD_ERROR = str(_exc)
+
+
 STICKY_BOTTOM_CSS = (
     ".dt tbody tr.sumrow{position:sticky;bottom:0;z-index:2}"
     ".dt tbody tr.sumrow>td{background:var(--sf2);box-shadow:inset 0 1px 0 var(--bd)}"
