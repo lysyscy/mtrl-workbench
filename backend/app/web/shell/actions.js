@@ -1556,26 +1556,57 @@ const ACT={
      + `派生列与合计**已算成数值**（⛔ 不留公式）`,8600); },
 
  /* —— MOD-12 —— */
- dfOk:t=>{ const d=DFs.find(x=>x.id===t.dataset.id); d.status='已核对'; render(); toast(`${d.id} 已标记「已核对」`); },
+ /* ⭐ 2026-09-20（`M6` 第一片）**本段三个写动作全部接后端**。
+    ⚠️⚠️ **上面那行段标记注释一个字都没改** —— 它是**锚点**：`tests/test_wired_m07_big.py` 拿
+       「换行 ＋ 空格 ＋ 那个 MOD-12 段标记」（**纯 ASCII**）当**上一段（`bigExport`）的终点**。
+       ⇒ 谁改它，就会把**别的模块**的断言切歪（本次实测踩到：`ValueError: substring not found`）。
+       ⛔ 要写说明就写在标记**下面**（像这几行），别动标记本身。
+       ⚠️ 另注：本块注释里**不能出现注释结束符本身**（本次还顺带踩了一次：写了它会把注释提前闭合，
+          后半句直接变成代码 ⇒ `node --check` 报 SyntaxError；`syntax_audit` 当场抓住）。
+    ⚠️ 三个写动作**一律**：发请求 → **先判 `ok`**（`API.post` 恒 HTTP 200）→ 再刷本页。
+    ⛔ 不再本地 `push` / `splice` 冒充落库（那是"刷新就没了"的假成功 —— 用户 2026-09-20 刚教过这条）。
+    ⚠️ 定位一律用行的 **`_dbId`**（后端主键）：§9.8.2-5「写操作按 id 定位」——
+       显示用的 `id` 是**业务编号**，它可读、但**不该当定位键**（拿它去写会把动作打到别的行上）。 */
+ dfOk:async t=>{ const d=DFs.find(x=>String(x.id)===String(t.dataset.id)); if(!d) return;
+    let r=null;
+    try{ r = await API.m12Status({id:d._dbId, status:'已核对'}); }
+    catch(e){ await reloadM12(); return toast(`<b>没能改状态</b>：${esc(String((e&&e.message)||e))}`,7000); }
+    await reloadM12();
+    if(!r || r.ok === false) return toast(`<b>没能改状态</b>：${esc((r&&r.message)||'后端未返回原因')}`,7000);
+    toast(esc(r.message||`${d.id} 已标记「已核对」`)); },
  /* —— MOD-12 手工登记（2026-09-13 用户拍板「都改」）：新增 / 录入 / 保存 / 取消 / 删除 / 筛选 / 重置 ——
     范式与 `MOD-03` 手动行、集采子表**同款**：草稿层（`dfD`，键=字段名）+ 表内增行 + 保存才落库。 */
  dfAdd:()=>{ dfNewOn=true; dfClear(); render();
    toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>「归属」恒为<b>库存单据</b>（§5.8.3）；金额<b>可正可负</b>（+ 上调 / − 下调）',6000); },
  dfSet:t=>{ dfD[t.dataset.k]=t.value; },   /* 草稿层写入口（表单元素走 change，已登记在 CHG）；不重绘，免得每改一格丢焦点 */
  dfCancel:()=>{ dfNewOn=false; dfClear(); render(); toast('已取消登记 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
- dfSave:()=>{
-   if(!/^\d{4}-\d{2}$/.test(String(dfD.month||''))){ toast('<b>请先选「核算月」</b>：决定这笔差异归到哪个月（对账按核算月看）'); return; }
-   if(!String(dfD.proj||'').trim()){ toast('<b>请先选「项目」</b>：候选 = 全部已建档项目（含归档；壳除外，§六-9）'); return; }
-   if(!String(dfD.detail||'').trim()){ toast('<b>请填「差异内容」</b>：一句话说明差在哪（半年度对账时要能看懂）'); return; }
-   const amt=numOf(dfD.amount);
-   if(badMoney(amt,{signed:1})){ toast(badMoneyMsg('差异金额',{signed:1})); return; }   /* 唯一出口；**刻意不接 overCap**（差异金额无上限概念） */
-   const id=nextDfId(), proj=String(dfD.proj).trim(), ym=dfD.month;
-   DFs.push(O([id,ym,'库存单据',proj,String(dfD.detail).trim(),amt,dfD.status||'待核对',String(dfD.remark||'').trim()],DF_COLS));
-   dfNewOn=false; dfClear(); render();
-   toast(`已登记差异 <b>${id}</b>（${esc(ym)} · ${esc(pjDispOr(pjRowOf(proj),proj))} · ${M(amt)} · ${amt>0?'+ 上调':(amt<0?'− 下调':'平')}）—— 归属<b>库存单据</b>；清单与导出已含该笔`,6000); },
- dfDel:t=>{ const i=DFs.findIndex(x=>x.id===t.dataset.id); if(i<0) return;
-   const id=DFs[i].id, d=DFs[i]; DFs.splice(i,1); render();
-   toast(`已删除差异 <b>${id}</b>（${esc(d.detail)}）—— 本页是<b>手工清单</b>，删除即不再跟踪该笔`,5200); },
+ dfSave:async ()=>{
+    /* ⚠️⚠️ **本页不再自己校验** —— 必填三项与金额的判定**唯一主人 = 后端 `mod12_diff.domain`**
+       （与 `m03` 手动行 `manualSave` 同款：一处判定、一处措辞）。
+       原先壳里有四条本地校验，那是"同一件事实现两遍"⇒ 迟早分叉（本次已删，
+       后端那四句提示就是照原型 `dfSave` 的措辞写的，用户看到的字**一字未变**）。
+       ⭐ 与 `001-03` / `001-04` 的关系：那两条判据钉的是**行为**（缺一即拒 / 负数放行），
+          ⛔ 不规定"在哪一层判" —— 而"能拒住"这件事**只有后端能保证**（壳改一行就绕过去了）。 */
+    let r=null;
+    try{ r = await API.m12Create({ month:dfD.month, project_name:dfD.proj, detail:dfD.detail,
+                                   amount:dfD.amount, status:dfD.status, remark:dfD.remark }); }
+    catch(e){ return toast(`<b>没能登记</b>：${esc(String((e&&e.message)||e))}`,7000); }
+    if(!r || r.ok === false){
+      /* ⚠️⚠️ 失败**不清草稿**（`dfClear` 在下面）—— 人刚填的一整行不能丢（与 `m03` `manualSave` 同口径，
+         那是用户 2026-09-20 实测「点了保存、填的东西没了」之后定的）。 */
+      return toast(`<b>没能登记</b>：${esc((r&&r.message)||'后端未返回原因')}`,8000); }
+    const rec=(r&&r.record)||{};
+    dfNewOn=false; dfClear();
+    await reloadM12();                    /* ⚠️ 成功才清草稿 + 刷本页（真落库了才让它消失） */
+    const amt=N0(rec.amount), proj=String(rec.project_name||'');
+    toast(`已登记差异 <b>${esc(rec.code||'')}</b>（${esc(rec.month||'')} · ${esc(pjDispOr(pjRowOf(proj),proj))} · ${M(amt)} · ${amt>0?'+ 上调':(amt<0?'− 下调':'平')}）—— 归属<b>库存单据</b>；清单与导出已含该笔`,6000); },
+ dfDel:async t=>{ const d=DFs.find(x=>String(x.id)===String(t.dataset.id)); if(!d) return;
+    let r=null;
+    try{ r = await API.m12Delete({id:d._dbId}); }
+    catch(e){ await reloadM12(); return toast(`<b>没能删除</b>：${esc(String((e&&e.message)||e))}`,7000); }
+    await reloadM12();
+    if(!r || r.ok === false) return toast(`<b>没能删除</b>：${esc((r&&r.message)||'后端未返回原因')}`,7000);
+    toast(esc(r.message||`已删除差异 ${d.id}`),5200); },
  dfFilter:t=>{ fDf.stat=t.value; render(); },
  dfReset:()=>{ fDf.ym='全部'; fDf.stat='全部'; mp.open=null; render();
    toast('差异登记筛选已重置 —— 核算月与状态都回到<b>全部</b>'); },
