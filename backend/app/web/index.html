@@ -2374,9 +2374,9 @@ V.m01=()=>{
       <td class="ctr now"><input class="inp num" style="width:46px" data-act="editOrd" data-id="${p.id}" value="${p.ord}" title="自定义排序号：改它 → 全站（项目 / 仓库 / 展示名）的顺序都跟着变；序号会自动重编号保持连续">
         <button class="btn sm" data-act="ordUp" data-id="${p.id}" title="上移一位">↑</button><button class="btn sm" data-act="ordDown" data-id="${p.id}" title="下移一位">↓</button></td>
       <td>${typeTag(p.type)}</td>
-      <td>${p.type==='shell'?'<span class="mut sm">壳无展示名</span>':`<input class="inp plain" style="min-width:162px" data-act="editDisp" data-id="${p.id}" value="${esc(p.disp)}" placeholder="默认取仓库名">`}</td>
+      <td>${p.type==='shell'?'<span class="mut sm">壳无展示名</span>':`<input class="inp plain" style="${nameW(p.disp||p.name,162)}" data-act="editDisp" data-id="${p.id}" value="${esc(p.disp)}" placeholder="默认取仓库名">`}</td>
       <td class="sm">${p.name?(p.name.startsWith('未建仓-')?`<span class="tag t-wn">占位</span> <span class="fc">${esc(p.name)}</span>`:`<span class="fc">${esc(p.name)}</span>`):'<span class="mut">壳无仓库</span>'}</td>
-      <td><input class="inp plain" style="min-width:240px" data-act="editFull" data-id="${p.id}" value="${esc(p.full)}" ${p.parent?'readonly':''} title="${p.parent?'具体小微借壳全名，不可单独修改':''}"></td>
+      <td><input class="inp plain" style="${nameW(p.full,240)}" data-act="editFull" data-id="${p.id}" value="${esc(p.full)}" ${p.parent?'readonly':''} title="${p.parent?'具体小微借壳全名，不可单独修改':''}"></td>
       <td class="fc sm">${p.phid||'<span class="mut">无</span>'}</td>
       <td><select class="inp plain" style="width:auto" data-act="editStatus" data-id="${p.id}">${optsOf(enumVals('pjStatus'),p.status)}</select></td>
       <td class="sm">${p.parent?esc((PJs.find(x=>x.id===p.parent)||{}).full||''):'<span class="mut">—</span>'}</td>

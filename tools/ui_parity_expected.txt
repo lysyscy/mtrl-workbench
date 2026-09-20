@@ -7,3 +7,6 @@ m02 644f5c09  # 原型:     <div class="card"><h4>抓取结果回显（模拟）
 m07 0c8fa1d8  # 原型:     <div class="bd"><div class="tip ok" style="mar｜壳:     <div class="bd"><div class="tip ok" style="mar
 m07 d50e5783  # 原型:     <button class="btn pri" data-act="exp" data-t=｜壳:     <button class="btn pri" data-act="bigExport" t
 m14 8cdd95a7  # 原型:       <div class="tip" style="margin:6px 0 0"><b>本｜壳:       <div class="tip" style="margin:6px 0 0"><b>本
+# ⭐ 2026-09-20（`ACC-PRJ-LIST-001/001-07` 走 (b) 完整版：名字格按内容定宽，⛔ 不再写死 min-width ⇒ 长名字不再被切）
+m01 94d4a54d  # 原型: <td>${p.type==='shell'?'<span class="mut sm"｜壳: <td>${p.type==='shell'?'<span class="mut sm"
+m01 4a4c1622  # 原型: <td><input class="inp plain" style="min-widt｜壳: <td><input class="inp plain" style="${nameW(

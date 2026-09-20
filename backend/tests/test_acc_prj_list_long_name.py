@@ -172,6 +172,13 @@ def test_长项目名完整可读_真机量一遍不许被裁切():
                               clipCells: cells.filter(c => c.scrollWidth > c.clientWidth + 1).length,
                               clipInputs: [...hit.querySelectorAll('input')]
                                   .filter(i => i.scrollWidth > i.clientWidth + 1).length,
+                              // ⚠️ 被切的具体是哪几格（红的时候要能一眼看出是哪一格、差多少）
+                              clipped: [...hit.querySelectorAll('input')]
+                                  .filter(i => i.scrollWidth > i.clientWidth + 1)
+                                  .map(i => ({
+                                      len: (i.value || '').length,
+                                      sw: i.scrollWidth, cw: i.clientWidth,
+                                  })),
                             };
                         }""", LONG_NAME)
                 finally:
@@ -195,9 +202,15 @@ def test_长项目名完整可读_真机量一遍不许被裁切():
     assert not got["readonly"], (
         "名字格是只读的 ⇒ 用户**没法读全**被框挡住的部分（那才真的不可读）")
 
-    # ③ ⭐ **实测报告**（⛔ 不判红绿 —— 见文件头与计划里的「待裁定」）：
-    #    input 的宽度由 CSS 决定、不由内容决定 ⇒ 长值**必然**视觉溢出。
-    #    「不得被容器硬切」这句话在 **input 形态**下要重新裁一次（收窄 claim 还是改实现）。
-    print(f"\n  ℹ️ 实测：那一行 **{got['clipInputs']} 个可编辑格**视觉溢出"
-          f"（input.scrollWidth > clientWidth；它的外层 <td> 溢出 {got['clipCells']} 个）"
-          f" —— ⚠️ 项 ③ 不作红绿，登记待裁定")
+    # ③ ⭐ **不得被容器硬切**（claim 的第二半）—— **硬断言**，⛔ 不再是"实测报告"。
+    #    ⚠️ 2026-09-20 用户裁定：走 **(b) 完整版**（**改实现去够口径**，⛔ 不是把 claim 收窄成
+    #       "可点入读全"）⇒ 实现侧已改成**名字格按内容定宽**（`shell/core.js::nameW`）
+    #       ⇒ 本节从"只报数不判"升级为**必须为 0** ✓
+    #    ⚠️ 要量 **input 本身**、不是它外面的 `<td>`：量错了会得到"0 个溢出"的**假象**
+    #       （⭐ 我第一版正是这么量的 —— 那时还以为"不切"）。
+    assert got["clipInputs"] == 0, (
+        f"那一行有 **{got['clipInputs']} 个可编辑格**的内容比框还宽（被容器硬切了）：\n"
+        f"  {got['clipped']}\n"
+        "  ⇒ claim 明写「**不得被容器硬切**」—— 名字必须完整可读。\n"
+        "  ⭐ 这一条**只能**这么测（DOM 里文本一个字符都不少，只有渲染宽度看得出被切）；\n"
+        f"  ⚠️ 注意量的是 `input` 自身（它的外层 `<td>` 溢出 {got['clipCells']} 个 —— 那不是判据）")
