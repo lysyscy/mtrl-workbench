@@ -67,6 +67,25 @@ def assert_last_admin_protected(users: Iterable, target) -> None:
             "⇒ 先把管理员**转让**给另一个在用账号，再来动它。")
 
 
+def assert_is_admin(actor) -> None:
+    """⛔ **只有「在用的管理员」能管理账号**（§1.5.1「**管理员** | 用户本人为管理员，**可管理其他账号**」）。
+
+    ⚠️⚠️ 为什么这条必须**在后端**、⛔ 不能只写在壳里（`CUR.role!=='admin'`）：
+       壳里那句只是**体验**（早点告诉用户"你不行"、别让他填完表单才被拒）；
+       真正拦人的地方在这里 —— ⭐ 与 claim `001-07` 那句
+       「**直接调写操作也必须被拦，不只靠按钮禁用**」是同一个道理：
+       JSON API / 将来的批处理 / 命令行都会走到这一层，⛔ 别处没有第二道闸。
+    ⚠️ 这一步**之前**没有 —— 2026-09-20 片 4b 接壳时才发现的：原型只在壳里判了角色，
+       后端 6 个写动作**谁调都执行**（⭐ 这是"接壳"顺带照出来的一处口径缺口）。
+    ⚠️ `actor` 为 `None`（**取不到当前登录用户**）时**一律拒** —— ⛔ 别"没人就当管理员"。
+    """
+    if actor is None or actor.role != ROLE_ADMIN or actor.status != STATUS_ACTIVE or is_deleted(actor):
+        who = "（取不到当前登录用户）" if actor is None else f"「{actor.account}」"
+        raise MustReportError(
+            f"只有**在用的管理员**能管理账号（§1.5.1）—— 当前登录用户 {who} 不是管理员。"
+            "⇒ 请让管理员来操作，或先**转让管理员**给你。")
+
+
 def assert_not_self_delete(actor, target) -> None:
     """⛔ **不能删除自己**（§1.5.1「防锁死」后半句）。
 
@@ -153,7 +172,7 @@ def transfer_plan(actor, target) -> dict:
 __all__ = [
     "ROLE_ADMIN", "ROLE_USER", "ROLES",
     "STATUS_ACTIVE", "STATUS_DISABLED", "STATUSES", "STATE_DELETED",
-    "active_admins", "assert_account_usable", "assert_last_admin_protected",
-    "assert_not_self_delete", "effective_theme", "is_deleted", "normalize_account",
-    "state_of", "transfer_plan",
+    "active_admins", "assert_account_usable", "assert_is_admin",
+    "assert_last_admin_protected", "assert_not_self_delete", "effective_theme",
+    "is_deleted", "normalize_account", "state_of", "transfer_plan",
 ]

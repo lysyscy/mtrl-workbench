@@ -1017,41 +1017,95 @@ const ACT={
     管理动作共 5 类：新增账号 / 改密 / 停用启用 / 删除用户（软删）/ 转让管理员。
     ⚠️ 2026-09-12 用户口径：①新增「授权转让」；②**取消账号名与密码的格式限制**
        （账号「非空 + 不重复」即可、密码无要求且可为空）；③新增「删除用户」= 软删；
-       ④「不能停用自己」改为「**不能停用 / 删除最后一个在用管理员**」。 */
+       ④「不能停用自己」改为「**不能停用 / 删除最后一个在用管理员**」。
+
+    ⭐ 2026-09-20（**片 4b**）：**6 个写动作全部改成调后端** ——
+       ⛔ 原来那些"本地改数组 / 改字段"的写法是**假生效**：看着变了、刷新就回去，
+          **而且不留痕**（本系统做账号体系就是为了让"谁改的"有出处）。
+       ⚠️ 每个动作的成败看 **`res.ok`**（后端恒 HTTP 200，见 `api.py` 顶部）⇒
+          失败时把 `res.message` **原样**给用户看（那是 §1.5.1 那句"必须让用户看见"的原话）。
+       ⚠️ 壳里那些 `CUR.role!=='admin'` 只是**体验**（早点说"你不行"、别等填完表单才被拒）；
+          真正的防线在**后端**（`domain.assert_is_admin` ＋ 防锁死）——
+          ⛔ 别以为按钮 `disabled` 就等于拦住了（claim `001-07`：「直接调写操作也必须被拦」）。
+       ⚠️ 写完之后一律 `await reloadM15(); render();` —— ⛔ **不手工往 `USERS` 里塞行**：
+          库才是真相，壳照它重画（不然就会出现"壳里有一条、库里没有"）。 */
  userAdd:()=>{ modal({title:'新增账号',body:`<div class="tip" style="margin-bottom:10px">管理员可<b>建号</b>（§1.5.1）。新增账号一律是<b>普通用户</b> —— 两人权限无区别，<b>不需要选角色</b>。</div>
    <div class="fld"><label>登录账号（非空、不重复即可）</label><input class="inp" id="uAcc" placeholder="如 wanglijia"></div>
    <div class="fld" style="margin-top:6px"><label>姓名</label><input class="inp" id="uName" placeholder="如 王丽佳"></div>
    <div class="fld" style="margin-top:6px"><label>初始密码（可为空）</label><input class="inp" id="uPwd" placeholder="留空即可；无格式要求"></div>`,
    footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userAddOk">创建</button>`}); },
- userAddOk:()=>{ const acc=($('#uAcc').value||'').trim(), nm=($('#uName').value||'').trim(), pd=($('#uPwd').value||'').trim();
+ userAddOk:async()=>{ const acc=($('#uAcc').value||'').trim(), nm=($('#uName').value||'').trim(), pd=($('#uPwd').value||'').trim();
+   /* ⚠️ 这里的两条前端校验**保留**（体验：不必往返一趟才知道"没填账号"）；
+      ⛔ 但它们**不是判据** —— 重名 / 空账号**最终由后端拒**（`assert_account_usable`）。 */
    if(!acc||!nm){ toast('<b>登录账号与姓名都要填</b>（账号非空即可，不限格式与长度），本次未创建'); return; }
-   if(USERS.some(u=>u.acc===acc)){ toast(`登录账号 <b>${esc(acc)}</b> 已存在，本次未创建`); return; }
-   USERS.push(O(['U'+String(USERS.length+1).padStart(2,'0'),acc,nm,'user','在用','—',pd],U_COLS));
-   closeModal(); render(); toast(`已创建普通用户 <b>${esc(nm)}</b>（${esc(acc)}）${pd?'':' · <b>密码为空</b>'}· 权限与现有账号<b>无区别</b>（§1.5.1）`); },
+   try{
+     const res = await API.m15Create(acc, nm, pd);
+     if(res.ok===false) return toast(`<b>没能创建</b>：${esc(res.message||'')}`, 9000);
+     closeModal(); await reloadM15(); render();
+     toast(esc(res.message||'已创建'), 7000);
+   }catch(e){ toast(`<b>没能创建</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  userTransfer:()=>{ const cands=USERS.filter(u=>u.id!==CUR.id&&u.status==='在用');
    if(!cands.length){ toast('没有可转让的在用账号（先新增或启用一个）'); return; }
    modal({title:'转让管理员（授权转让）',body:`<div class="tip wn" style="margin-bottom:10px"><b>授权转让</b>：转让后对方成为<b>管理员</b>、你自己转为<b>普通用户</b> —— 系统内<b>始终只保留一个管理员</b>（防锁死）。</div>
      <div class="fld"><label>转让给（限在用账号）</label><select class="inp" id="utId">${cands.map(u=>`<option value="${u.id}">${esc(u.name)}（${esc(u.acc)}）</option>`).join('')}</select></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userTransferOk">确认转让</button>`}); },
- userTransferOk:()=>{ const el=$('#utId'); const u=el&&USERS.find(x=>x.id===el.value); if(!u){ toast('未选择转让对象'); return; }
-   USERS.forEach(x=>{ if(x.role==='admin') x.role='user'; });      /* 先全部降级，再升目标 ⇒ 恒只有一个管理员 */
-   u.role='admin'; CUR.role='user';                                 /* ⚠️ 原地改字段，勿重新赋值（外部持有引用） */
-   closeModal(); render();
-   toast(`管理员已转让给 <b>${esc(u.name)}</b>；<b>${esc(CUR.name)}</b> 现在是普通用户，不再能管理账号`); },
+ userTransferOk:async()=>{ const el=$('#utId'); const u=el&&USERS.find(x=>String(x.id)===String(el.value)); if(!u){ toast('未选择转让对象'); return; }
+   /* ⚠️ 原来这里是「先全部降级、再升目标」的**本地**写法 —— 已经删掉：
+      改成调后端（后端在**同一个事务里**改两行 ⇒ 中间态"两个管理员"不可能被看到）。
+      ⛔ 别在壳里再补一遍"降级"：那会让壳和库各有一份"谁是管理员"。 */
+   try{
+     const res = await API.m15Transfer(u.id);
+     if(res.ok===false) return toast(`<b>没能转让</b>：${esc(res.message||'')}`, 9000);
+     closeModal(); await reloadM15(); render();
+     toast(esc(res.message||'已转让'), 8000);
+   }catch(e){ toast(`<b>没能转让</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  userPwd:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
    if(CUR.role!=='admin'){ toast('只有管理员能管理账号'); return; }
-   modal({title:`修改密码 · ${esc(u.name)}`,body:`<div class="tip" style="margin-bottom:10px">${u.id===CUR.id?'改<b>自己的</b>密码。':'管理员<b>重置他人密码</b>（§1.5.1「可管理其他账号」）。'}<b>无格式要求、可留空</b>；原型不接真实鉴权，<b>仅演示流程</b>。</div>
+   modal({title:`修改密码 · ${esc(u.name)}`,body:`<div class="tip" style="margin-bottom:10px">${u.id===CUR.id?'改<b>自己的</b>密码。':'管理员<b>重置他人密码</b>（§1.5.1「可管理其他账号」）。'}<b>无格式要求、可留空</b>（留空 = 清空该账号密码，空密码即可登录）。</div>
      <div class="fld"><label>新密码（可为空）</label><input class="inp" id="upV" placeholder="留空即清空该账号密码"></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userPwdOk" data-id="${u.id}">保存</button>`}); },
- userPwdOk:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return; const v=($('#upV').value||'').trim();
-   u.pwd=v; closeModal(); render(); toast(`<b>${esc(u.name)}</b> 的密码已更新${v?'':'（已清空 · 可空）'}`); },
- userToggle:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
+ userPwdOk:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u) return;
+   /* ⚠️ ⛔ **不 `.trim()`**：§1.5.1 说密码「无格式要求」⇒ 前后的空格**也是密码的一部分**。
+      原来这里 trim 了 —— 那会在"用户故意用空格当密码"时**静默改掉他的密码**。 */
+   const v = ($('#upV').value||'');
+   try{
+     const res = await API.m15Pwd(u.id, v);
+     if(res.ok===false) return toast(`<b>没能改密</b>：${esc(res.message||'')}`, 9000);
+     closeModal(); await reloadM15(); render();
+     toast(esc(res.message||('已更新 ' + u.name + ' 的密码')), 7000);
+   }catch(e){ toast(`<b>没能改密</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
+ /* ⭐ 「查看密码」—— **明文裁定的显式出口**（2026-09-20 用户裁定「要加」）。
+    ⚠️ 为什么是"指名要一个"的单独动作、⛔ 不是列表里带出来：列表一打开就全在屏上
+       （还容易被截图）；单独动作多一道"用户确实是来看这个的"。
+    ⚠️ 出的是**明文** —— 因为本系统是科室内部 2 人的局域网工具，管理员**要能念给同事听**
+       （那正是选明文的原因之一）。 */
+ userPwdView:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u) return;
+   try{
+     const res = await API.m15Password(u.id);
+     if(res.ok===false) return toast(`<b>看不到密码</b>：${esc(res.message||'')}`, 9000);
+     const pw = res.password||'';
+     modal({title:`查看密码 · ${esc(u.name)}`, body:
+       `<div class="tip">§1.5.1：密码<b>无格式要求、可为空</b>；本系统为科室内部 2 人使用，<b>明文保存</b>（管理员要能念给同事听）。</div>
+        <div class="fld" style="margin-top:10px"><label>登录账号</label><input class="inp" value="${esc(res.account||u.acc)}" readonly></div>
+        <div class="fld" style="margin-top:6px"><label>当前密码</label>
+          <input class="inp" id="viewPw" value="${esc(pw)}" readonly>
+          ${pw?'':'<div class="mut sm" style="margin-top:4px">该账号<b>没有设密码</b>（空密码即可登录 · §1.5.1「可为空」）</div>'}</div>`,
+       footer:`<button class="btn" data-act="closeModal">关闭</button>`});
+   }catch(e){ toast(`<b>看不到密码</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
+ userToggle:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u) return;
    if(CUR.role!=='admin'){ toast('只有管理员能停用 / 启用账号'); return; }
+   /* ⚠️ 「不能停用最后一个管理员」这句**前端保留**（体验：点了立刻知道，不必往返）；
+      ⛔ 但它**不是判据** —— 真拦人的是后端 `domain.assert_last_admin_protected`
+      （并在 `001-07` 里被钉住：**直接调写操作也必须被拦**）。 */
    if(u.status==='在用'&&u.role==='admin'&&USERS.filter(x=>x.role==='admin'&&x.status==='在用').length<=1){
      toast('<b>不能停用最后一个管理员</b> —— 会把管理入口锁死（请先转让或新增一个管理员）'); return; }
-   const wasOn=u.status==='在用';
-   u.status=wasOn?'已停用':'在用'; render();
-   toast(wasOn?`账号 <b>${esc(u.name)}</b> 已停用 · <b>停用不删除</b>，历史留痕里仍能认出这个人`:`账号 <b>${esc(u.name)}</b> 已启用`); },
+   const next = u.status==='在用' ? '已停用' : '在用';
+   try{
+     const res = await API.m15Status(u.id, next);
+     if(res.ok===false) return toast(`<b>没能切换</b>：${esc(res.message||'')}`, 9000);
+     await reloadM15(); render();
+     toast(esc(res.message||'已切换状态'), 7000);
+   }catch(e){ toast(`<b>没能切换</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  userDel:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
    if(CUR.role!=='admin'){ toast('只有管理员能删除账号'); return; }
    if(u.id===CUR.id){ toast('<b>不能删除自己</b>（当前登录账号）'); return; }
@@ -1060,21 +1114,43 @@ const ACT={
    modal({title:'删除账号确认',body:`<div class="tip dg" style="margin-bottom:10px"><b>⚠️ 删除 = 软删除</b>：账号名保留、不销毁数据 —— 历史留痕（改前人 / 操作人）里的这个人名<b>仍然认得出来</b>，必要时可恢复。</div>
      ${kvBlock([['登录账号',`<span class="fc">${esc(u.acc)}</span>`],['姓名',`<span class="fc">${esc(u.name)}</span>`],['角色',u.role==='admin'?'管理员':'普通用户'],['影响','不再能登录；<b>已产生的留痕记录不受影响</b>']])}`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="userDelOk" data-id="${u.id}">确认删除</button>`}); },
- userDelOk:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u||u.status==='已删除') return;
+ userDelOk:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u||u.status==='已删除') return;
    if(CUR.role!=='admin'){ toast('只有管理员能删除账号'); return; }
    if(u.id===CUR.id){ toast('<b>不能删除自己</b>（当前登录账号）'); return; }
    if(u.role==='admin'&&u.status==='在用'&&USERS.filter(x=>x.role==='admin'&&x.status==='在用').length<=1){
      toast('<b>不能删除最后一个管理员</b>（防锁死）'); return; }
-   u.status='已删除'; closeModal(); render();
-   toast(`账号 <b>${esc(u.name)}</b> 已删除（软删）· 账号名保留，历史留痕里仍能认出这个人`); },
- userRestore:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
+   try{
+     const res = await API.m15Delete(u.id);
+     if(res.ok===false) return toast(`<b>没能删除</b>：${esc(res.message||'')}`, 9000);
+     closeModal(); await reloadM15(); render();
+     toast(esc(res.message||'已删除（软删）'), 7000);
+   }catch(e){ toast(`<b>没能删除</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
+ userRestore:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u) return;
    if(CUR.role!=='admin'){ toast('只有管理员能恢复账号'); return; }
-   u.status='在用'; render(); toast(`账号 <b>${esc(u.name)}</b> 已恢复启用`); },
- /* 登出：原型不接真实鉴权，只演示流程；正式实现退出后回到登录页 */
- logout:()=>{ modal({title:'退出登录',body:`<div class="tip" style="margin-bottom:10px">当前登录 <b>${esc(CUR.name)}</b>（${CUR.role==='admin'?'管理员':'普通用户'}）。原型不接真实鉴权，<b>仅演示流程</b>。</div>
-     <div class="tip wn" style="margin:0">正式实现：退出后回到<b>登录页</b>，登录态失效，<b>业务数据不受影响</b>。</div>`,
+   try{
+     const res = await API.m15Restore(u.id);
+     if(res.ok===false) return toast(`<b>没能恢复</b>：${esc(res.message||'')}`, 9000);
+     await reloadM15(); render();
+     toast(esc(res.message||'已恢复'), 7000);
+   }catch(e){ toast(`<b>没能恢复</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
+ /* 登出（§1.5.1）：**退出后回到登录页**，业务数据不受影响。
+    ⭐ 2026-09-20 片 4b：**接上真鉴权** —— 调 `/api/m15/logout`（**后端清 cookie**），
+       成功后**跳 `/login`**（⛔ 不再只弹个 toast 说"已退出"那种假动作）。 */
+ logout:()=>{ modal({title:'退出登录',body:`<div class="tip" style="margin-bottom:10px">当前登录 <b>${esc(CUR.name)}</b>（${CUR.role==='admin'?'管理员':'普通用户'}）。</div>
+     <div class="tip wn" style="margin:0">退出后回到<b>登录页</b>，登录态失效，<b>业务数据不受影响</b>（§1.5.1）。</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="logoutOk">确认登出</button>`}); },
- logoutOk:()=>{ closeModal(); toast('已退出登录（原型演示）· 正式实现退出后回到登录页'); },
+ logoutOk:async()=>{ closeModal();
+   try{ await API.m15Logout(); }catch(e){ /* ⚠️ 登出即便请求失败也要把人送回登录页（⛔ 别把人卡在壳里） */ }
+   location.href = '/login'; },
+ /* ⭐ 主题选择（`ACC-UI-THEME-001/001-06`）：**按用户隔离** ⇒ 存的是"我这个账号用哪套"，
+    由 `/static/theme.css` 按会话取出。⚠️ 改完**整页刷新**才生效 ——
+    因为主题是 `<link rel=stylesheet>` 拉的一整份 CSS（⛔ 不是几个变量，改不动内存里的那份）。 */
+ themeSet:async t=>{ const name=t.value||'';
+   try{
+     const res = await API.m15ThemeSet(name);
+     if(res.ok===false) return toast(`<b>没能换主题</b>：${esc(res.message||'')}`, 9000);
+     location.reload();
+   }catch(e){ toast(`<b>没能换主题</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  delPj:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
    modal({title:'删除确认',body:`<div class="tip dg"><b>⚠️ 必须列出删除影响范围</b>（§7.2）</div>
      ${kvBlock([['项目',`<span style="font-size:11.5px">${esc(p.full)}</span>`],
@@ -2104,7 +2180,11 @@ const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup
   /* ⚠️⚠️ `M5-6b` **甲方单位分类那个 `select` 也挂在表单元素上** —— 漏了它，
      选完类型**什么都不会发生**（`change` 被静默丢弃）：看着像"没有保存键"，其实是**事件没接上**。
      ⭐ 2026-09-20 用户实测反馈「甲方单位分类你没有给保存键」⇒ 就是这个。 */
-  'jcPartySet','jcAmt'];
+  'jcPartySet','jcAmt',
+  /* ⭐ `m15` 的主题选择器也是**表单元素**（`<select>`）⇒ **必须进这里** ——
+     漏了它，换主题**什么都不会发生**（`change` 被静默丢弃），
+     ⚠️ 而且它"看起来有个下拉框"，比别的漏登记**更像"功能坏了"**。 */
+  'themeSet'];
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]'); if(!t) return;
   const nm=t.tagName.toLowerCase();

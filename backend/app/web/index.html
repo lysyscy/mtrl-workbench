@@ -538,6 +538,10 @@ let NO=[], PJs=[], FLs=[];
    ⚠️ 这里的初值只是"**首屏还没取到数据**"时的占位 —— 真实身份来自后端（登录态）。
    ⚠️ 刻意**不写成 USERS[0] 的引用** —— 自检回滚会整体替换 USERS 的内容，引用会失效（同「原地复位」的教训）。 */
 let CUR={id:'U01',acc:'zhangwei',name:'张伟',role:'admin'};
+/* ⭐ 主题（`ACC-UI-THEME-001/001-06` 按用户隔离）：**可选清单** ＋ **我这个账号当前用哪套**，
+   都由 `reloadM15()` 从 `/api/m15/theme` 填 —— ⛔ 壳里**不写死**主题名单
+   （那是第二份真相：后端加一套主题，这里不同步就"选不到"）。 */
+let THEMES_LIST=[], CUR_THEME='';
 let IVs=[], ADs=[];   /* ⭐ 已接后端：由 `reloadInv()` 从 `/api/m08/inventory` 填充（原先由演示数组 `IV`/`AD` 生成 —— 已删） */
 /* ⭐ `M5-7` 起：`JCs` 由 `reloadM11()` 从 `/api/m11/list` **原地填充**（原先的演示数组 `JC` 与列序 `JC_COLS` **已删**；
    行形状见 `adaptJc` —— 字段名与 `JC_COLS` 时代**一致**，所以 `V.m11` 一行没改）。
@@ -3326,7 +3330,7 @@ V.m15=()=>{
     <span class="sp"><span class="mut sm">当前登录 <b>${esc(CUR.name)}</b>（${iAmAdmin?'管理员':'普通用户'}）· 在用 <b>${on.length}</b> · 停用 <b>${offN}</b> · 已删除 <b>${delN}</b></span></span>
     ${iAmAdmin?`<button class="btn" data-act="userTransfer">转让管理员</button>`:''}
     <button class="btn pri" data-act="userAdd" ${iAmAdmin?'':'disabled'} title="${iAmAdmin?'':'只有管理员可管理账号'}">＋ 新增账号</button>
-    <button class="btn" data-act="logout">登出</button></h4>
+    <select class="inp" style="width:auto" data-act="themeSet" title="主题（§7.7）—— 按用户隔离：只改你自己看到的样子，⛔ 不影响别人">${THEMES_LIST.map(n=>`<option ${n===CUR_THEME?'selected':''}>${esc(n)}</option>`).join('')}</select><button class="btn" data-act="logout">登出</button></h4>
     <div class="tw"><table class="dt" data-sort data-sort-key="m15:users"><thead><tr><th>登录账号</th><th>姓名</th><th>角色</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead><tbody>
     ${USERS.map(u=>`<tr class="${u.status==='在用'?'':'ex'}">
       <td class="fc">${esc(u.acc)}</td>
@@ -3336,7 +3340,7 @@ V.m15=()=>{
       <td class="now sm mut">${u.last?esc(u.last):'<span class="mut">从未登录</span>'}</td>
       <td class="ctr now">${u.status==='已删除'
         ? `<button class="btn sm" data-act="userRestore" data-id="${u.id}" ${iAmAdmin?'':'disabled'}>恢复</button>`
-        : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${iAmAdmin?'':'disabled'}>改密</button>
+        : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${iAmAdmin?'':'disabled'}>改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
            <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
            ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
     </tr>`).join('')}

@@ -254,6 +254,17 @@ const API = {
   m15Theme: () => API.get('/api/m15/theme'),
   m15ThemeSet: theme => API.post('/api/m15/theme', { theme }),
   m15Password: id => API.get(`/api/m15/password?id=${encodeURIComponent(id)}`),
+  /* ⚠️ 6 个写动作**逐个对应后端端点**（⛔ 不在壳里拼一个"通用动作"——
+     那样参数一多就分不清谁是谁，且后端加校验时看不出该改哪儿）。 */
+  m15Create: (account, name, password) =>
+    API.post('/api/m15/actions/create', { account, name, password }),
+  m15Pwd: (id, password) => API.post('/api/m15/actions/password', { id, password }),
+  m15Status: (id, status) => API.post('/api/m15/actions/status', { id, status }),
+  m15Delete: id => API.post('/api/m15/actions/delete', { id }),
+  m15Restore: id => API.post('/api/m15/actions/restore', { id }),
+  m15Transfer: id => API.post('/api/m15/actions/transfer', { id }),
+  /* ⚠️ 登出**由后端清 cookie**（`delete_cookie`）⇒ 壳这边只管**跳登录页**。 */
+  m15Logout: () => API.post('/api/m15/logout', {}),
   /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok` —— 规则不合法是 §4.2.2 的可预期拒绝，
      后端那句中文必须原样给用户看。 */
   m14RuleDel: id => API.send('DELETE', `/api/m14/rules/${id}`, null),
@@ -1031,7 +1042,13 @@ async function reloadM14() {
    ⛔ 别整支换引用（`USERS` 是 `const`，且 `V.m15` 与自检回滚都按**原地**处理）。 */
 function adaptUser(x) {
   return {
-    id: x.id,
+    /* ⚠️⚠️ **`id` 必须 `String()`** —— 这是本文件**全仓适配器的统一纪律**
+       （看 `adaptProject`：`id: String(p.id)`，那里也写了注释）。
+       原因：壳里到处是 `x.id === t.dataset.id` 的**同值比较**，而 `dataset.id` **永远是字符串**；
+       后端出的 `id` 是**数字** ⇒ 不转则 `===` **永远不成立** ⇒
+       动作**静默什么都不做**（⭐ 2026-09-20 片 4b 就是这么被抓到的：点「删除」毫无反应）。
+       ⛔ 别图省事写 `id: x.id` —— 那不会报错，只会"按钮点了没反应"。 */
+    id: String(x.id),
     acc: x.account,
     name: x.name,
     role: x.role,
@@ -1050,11 +1067,21 @@ function adaptUser(x) {
 async function reloadM15() {
   const d = await API.users();
   USERS.splice(0, USERS.length, ...((d.users || []).map(adaptUser)));
+  /* ⭐ 主题（`001-06`）：**可选清单 ＋ 我这个账号当前用哪套**，一并取 ——
+     `V.m15` 的选择器就是照这两样画的（⛔ 壳里不写死名单）。 */
+  try {
+    const th = await API.m15Theme();
+    THEMES_LIST.splice(0, THEMES_LIST.length, ...((th.themes || [])));
+    CUR_THEME = th.theme || th.default || '';
+  } catch (e) {
+    /* ⚠️ 主题取不到**不该让整页报错**（账号管理才是这一页的正事）——
+       选择器显示空清单即可，⛔ 别把异常抛上去。 */
+  }
   /* ⚠️ 当前登录用户**逐字段赋值**，⛔ 不换 `CUR` 的引用 ——
      本文件的既有教训（L536 那条注释）：自检回滚 / 刷新会整体替换 `USERS` 的内容，
      任何"指向 USERS[i] 的引用"都会失效。 */
   const me = d.me || {};
-  CUR.id = me.id;
+  CUR.id = String(me.id);            /* ⚠️ 同上：`V.m15` 里是 `u.id===CUR.id` ⇒ 两边都必须是字符串 */
   CUR.acc = me.account;
   CUR.name = me.name;
   CUR.role = me.role;

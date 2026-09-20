@@ -326,6 +326,7 @@ def api_create(req: CreateIn) -> dict:
     """
     def go() -> str:
         with session_scope() as s:
+            D.assert_is_admin(_me(s))
             u = R.create(s, account=req.account, name=req.name, password=req.password)
             return f"已创建普通用户 {u.name or u.account}（{u.account}）"
     return _run(go)
@@ -336,7 +337,13 @@ def api_password(req: PwdIn) -> dict:
     """**改密**（建号设密与它**同一个出口** ⇒ 「建号与改密同一规则」，claim `001-06`）。"""
     def go() -> str:
         with session_scope() as s:
-            u = R.set_password(s, _uid(req.id), req.password)
+            me = _me(s)
+            uid = _uid(req.id)
+            # ⚠️ **改自己的密码**不受"必须是管理员"限制（§1.5.1 只要求管理员**能管理其他账号**）
+            #    ⇒ 改**别人**的才要闸；⛔ 别把这条收得太紧（普通用户改不了自己的密码是另一种错）。
+            if me is None or me.id != uid:
+                D.assert_is_admin(me)
+            u = R.set_password(s, uid, req.password)
             return f"{u.name or u.account} 的密码已更新" + ("" if req.password else "（已清空 · 密码可为空）")
     return _run(go)
 
@@ -346,6 +353,7 @@ def api_status(req: StatusIn) -> dict:
     """**停用 / 启用**（§1.5.1）—— ⚠️ 与"删除"是两回事（claim `001-08`：只碰 `status`）。"""
     def go() -> str:
         with session_scope() as s:
+            D.assert_is_admin(_me(s))
             u = R.set_status(s, _uid(req.id), req.status)
             return (f"账号 {u.name or u.account} 已停用 · 停用不删除，历史留痕里仍能认出这个人"
                     if u.status == D.STATUS_DISABLED
@@ -363,7 +371,11 @@ def api_delete(req: IdIn) -> dict:
     def go() -> str:
         with session_scope() as s:
             actor = _me(s)
-            u = R.soft_delete(s, _uid(req.id), actor=actor or R.ensure_seeded(s))
+            D.assert_is_admin(actor)
+            # ⚠️ ⛔ **不要**再写 `actor or R.ensure_seeded(s)` 那种兜底 ——
+            #    那会在"取不到当前登录用户"时**悄悄拿首个管理员顶替**，
+            #    于是刚加的那道 `assert_is_admin` **等于没有**（兜底把闸口绕过去了）。
+            u = R.soft_delete(s, _uid(req.id), actor=actor)
             return f"账号 {u.name or u.account} 已删除（软删）· 账号名保留，历史留痕里仍能认出这个人"
     return _run(go)
 
@@ -373,6 +385,7 @@ def api_restore(req: IdIn) -> dict:
     """**恢复**软删的账号（§1.5.1「必要时可恢复」）—— ⚠️ 恢复**不改 `status`**（停用是另一回事）。"""
     def go() -> str:
         with session_scope() as s:
+            D.assert_is_admin(_me(s))
             u = R.restore(s, _uid(req.id))
             return f"账号 {u.name or u.account} 已恢复" + ("" if u.status == D.STATUS_ACTIVE else "（该账号仍是「已停用」）")
     return _run(go)
@@ -383,7 +396,8 @@ def api_transfer(req: IdIn) -> dict:
     """**转让管理员**（§1.5.1）—— 转让后对方为管理员、自己转为普通用户 ⇒ **恒只有一个管理员**。"""
     def go() -> str:
         with session_scope() as s:
-            actor = _me(s) or R.ensure_seeded(s)
+            actor = _me(s)
+            D.assert_is_admin(actor)          # ⚠️ 同样⛔ 不用 `or ensure_seeded` 兜底（会把闸口绕过去）
             target = R.get(s, _uid(req.id))
             if target is None:
                 raise AppError(f"账号不存在：id={req.id!r}")

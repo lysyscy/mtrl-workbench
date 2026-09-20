@@ -624,6 +624,56 @@ def test_管理动作齐备且不设业务权限配置():
         s.rollback()
 
 
+@acc("ACC-USR-MGMT-001", "001-02")
+def test_只有在用管理员能管理账号_且不靠按钮禁用():
+    """claim：「**管理员** | 用户本人为管理员，**可管理其他账号**」（§1.5.1）—— 由 `001-02` 认领。
+
+    ⚠️⚠️ 这条是**片 4b 接壳时照出来的一处口径缺口**：原型只在**壳里**判 `CUR.role!=='admin'`，
+       而后端 6 个写动作**谁调都执行** ⇒ ⭐ 正是 claim `001-07` 说的
+       「**直接调写操作也必须被拦，不只靠按钮禁用**」的同一个道理。
+       ⇒ 本轮补上 `domain.assert_is_admin`，并在这里钉住它。
+
+    ⚠️ 两半都要钉：**非管理员**要拒；**在用管理员**要放行（⛔ 否则就成了"一律拒"的摆设）。
+    ⚠️ 还有一条**最容易漏的**：`actor` 取不到时**必须拒**（⛔ 不能"没人就当管理员"）——
+       而它偏偏最容易在"兜底"里被放行：片 4b 之前，`delete`/`transfer` 写的是
+       `actor or R.ensure_seeded(s)` ⇒ **取不到当前用户就拿首个管理员顶替** ⇒
+       那道闸**等于没有**（⭐ 已删掉那个兜底）。
+    """
+    from app.mod15_user import api as API
+
+    with session_scope() as s:
+        R.ensure_seeded(s)
+        admin = D.active_admins(R.all_users(s))[0]
+        plain = R.create(s, account="__自检_非管理员__", name="非管理员", password="")
+        deleted = R.create(s, account="__自检_已删管理员__", name="已删管理员")
+        deleted.role = D.ROLE_ADMIN                         # ⚠️ 直接改字段：`transfer` 那条路有"恒一个"约束，这里只想造个"已删的管理员"
+        R.soft_delete(s, deleted.id, actor=admin)           # 已删的管理员
+        disabled = R.create(s, account="__自检_停用管理员__", name="停用管理员")
+        disabled.role = D.ROLE_ADMIN
+        R.set_status(s, disabled.id, D.STATUS_DISABLED)
+        s.flush()
+
+        # ① 非管理员 / 已删 / 已停用 / 取不到 —— **四种都要拒**
+        for label, who in (("普通用户", plain), ("已删除的管理员", deleted),
+                           ("已停用的管理员", disabled), ("取不到当前用户", None)):
+            with pytest.raises(MustReportError) as e:
+                D.assert_is_admin(who)
+            assert "管理员" in str(e.value), f"{label} 被拒了，但提示里没说要管理员"
+        # ② 在用的管理员 ⇒ 放行（⛔ 不然就是"一律拒"）
+        D.assert_is_admin(admin)
+
+        # ③ ⭐ **走 API 那一层**也要被拦（⛔ 不只是 domain 函数会拒）
+        real = API._me
+        API._me = lambda _s: plain                          # 冒充普通用户在调接口
+        try:
+            res = API.api_create(API.CreateIn(account="__自检_不该建成__"))
+        finally:
+            API._me = real
+        assert res["ok"] is False, "普通用户**通过 API** 建号竟然成功了 —— 后端没设闸"
+        assert "__自检_不该建成__" not in [u.account for u in R.all_users(s)], "被拒了却真建了行"
+        s.rollback()
+
+
 @acc("ACC-USR-MGMT-001", "001-11")
 def test_当前登录用户是唯一出口且不得写死人名():
     """claim：「「当前登录用户」的供给：**留痕的改前人与录入人一律取当前登录用户**，
