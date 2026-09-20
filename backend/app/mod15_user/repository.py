@@ -109,6 +109,21 @@ def ensure_seeded(s: Session) -> UserAccount:
     return row
 
 
+def touch_login(s: Session, uid: int) -> UserAccount:
+    """记「**最近登录**」（§1.5.1 补口径 · 2026-09-20）。
+
+    ⚠️ **只在登录成功那一刻调一次**（⛔ 不要挂到"每个请求"上）——
+       那样记的是"最后活动时间"，与"最近登录"是两回事：前者一刷新就变，
+       看不出"谁长期没登录"（而那正是这一列的用途）。
+    """
+    row = s.get(UserAccount, uid)
+    if row is None:
+        raise MustReportError(f"账号不存在：id={uid}")
+    row.last_login_at = _dt.datetime.now()
+    s.flush()
+    return row
+
+
 def set_status(s: Session, uid: int, status: str) -> UserAccount:
     """停用 / 启用（**≤ 两个动作**：`在用` ⇄ `已停用`）。
 
@@ -178,5 +193,6 @@ def transfer_admin(s: Session, actor: UserAccount, target: UserAccount) -> tuple
 
 __all__ = [
     "SEED_ACCOUNT", "SEED_NAME", "all_users", "by_account", "create", "ensure_seeded",
-    "get", "restore", "set_password", "set_status", "soft_delete", "transfer_admin",
+    "get", "restore", "set_password", "set_status", "soft_delete", "touch_login",
+    "transfer_admin",
 ]

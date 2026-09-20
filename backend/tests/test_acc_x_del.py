@@ -18,7 +18,12 @@
 
 ⏳ **尚未钉（落点已找到，留给下一轮）**：`001-02` 配置类硬删（`rules_repository.delete_row`）·
 `001-05` 手动行删除同步清归属与勾选（`notice_actions.apply_manual_delete`）·
-`001-08` §9.4 分档清单本身。⚠️ **`001-03`（账号软删）等 `m15`** —— 那里还没开工。
+`001-08` §9.4 分档清单本身。
+
+⭐ **`001-03`（账号软删 = 行保留 / 可识别 / 可恢复）** —— 它一直卡在「等 `m15` 开工」（本仓那时
+  全仓**0 处软删字段**）⇒ **`m15` 片 1 一落地它就解锁了**，本文件已补上。
+  ⚠️ 与 `ACC-USR-MGMT-001/001-09`（同一件事）的分工：那边钉**函数行为**（同会话内存对象），
+  本文件钉**分档归属 ＋ 真库往返**（换一个 session 再查）—— **两边都钉，⛔ 不复述对方**。
 """
 
 from __future__ import annotations
@@ -212,6 +217,61 @@ def test_只删选中行且未确认就拒():
 
     # ⑤ ⚠️ 本动作**只影响付款计划表**（§4.3.6）—— 碰了别的表就是越界
     assert U.AFFECTED_TABLES == ("plan_row",), f"删除的影响面被放大了：{U.AFFECTED_TABLES}"
+
+
+# ---------------------------------------------------------- `001-03` 账号软删（等 m15 的那条）
+
+
+@acc("ACC-X-DEL-001", "001-03")
+def test_软删档的账号_行保留可识别可恢复且走真库往返():
+    """claim：「**软删类（账号）= 行保留 / 可识别 / 可恢复**」（§9.4 的**软删那一档**）。
+
+    ⚠️ 本条与 `ACC-USR-MGMT-001/001-09` 是**同一件事**，但**测法刻意不同**（⛔ 不复述对方）：
+    - `001-09` 钉**函数行为**：调 `R.soft_delete(row)` 后看**同一个会话里的那个对象**；
+    - 本文件钉**分档归属 ＋ 真库往返**：从「删除分档」那一侧确认
+      **账号确实归在"软删"档**，而且**换一个会话再查**（⇒ 落的是库、不是内存）。
+
+    ⭐ 为什么"换会话再查"是**必要**的、不是重复：`001-09` 那种同会话断言，
+      在实现改成"只改内存、没 flush"时**照样绿**（对象上的字段当然变了）
+      —— 而那种实现在真机上等于**没删也没留痕**。真库往返才能排除它。
+    """
+    from app.core.db import session_scope
+    from app.mod15_user import domain as D
+    from app.mod15_user import repository as R
+    from app.mod15_user.models import UserAccount
+    from sqlalchemy import func, select
+
+    with session_scope() as s:
+        R.ensure_seeded(s)
+        actor = D.active_admins(R.all_users(s))[0]
+        u = R.create(s, account="__自检_分档软删__", name="分档自检人", password="p")
+        uid, name, acc = u.id, u.name, u.account
+        n0 = len(R.all_users(s))
+        R.soft_delete(s, uid, actor=actor)
+        s.commit()                                   # ⚠️ 交给**真库**（下面要换会话查）
+
+    # ⭐ 真库往返：**新会话**里逐条验三性
+    with session_scope() as s:
+        row = s.get(UserAccount, uid)
+        # ① 行保留（⛔ 不是 `s.delete`）
+        assert row is not None, "软删之后行没了 —— 那是硬删，不是 §9.4 的软删档"
+        assert len(R.all_users(s)) == n0, "软删改了行数"
+        # ② 可识别（账号名与人名都还在 —— 历史留痕里的人名要认得出来）
+        assert row.account == acc and row.name == name, "软删改了账号名/姓名 —— 留痕里的人名会认不出来"
+        assert R.by_account(s, acc) is not None, "按账号名找不到这一行了"
+        # ③ 留痕（§9.4「软删除 **+ 留痕**」）
+        assert row.deleted_at is not None and (row.deleted_by or "").strip(), "有删无痕"
+        # ④ 可恢复（**在另一个会话里**恢复，再换会话确认）
+        R.restore(s, uid)
+        s.commit()
+    with session_scope() as s:
+        assert s.get(UserAccount, uid).deleted_at is None, "跨会话恢复不回来"
+        # ⑤ 清理：本条**故意落库**（要跨会话）⇒ 必须自己收拾干净，⛔ 不能留给下一个用例
+        R.soft_delete(s, uid, actor=actor)
+        s.delete(s.get(UserAccount, uid))
+        s.commit()
+        assert s.scalar(select(func.count()).select_from(UserAccount)
+                        .where(UserAccount.account == acc)) == 0, "自检行没清干净"
 
 
 # ---------------------------------------------------------- `001-07` 撤销调整单

@@ -99,6 +99,27 @@ def _install_ip_allowlist(app: FastAPI) -> None:
         return await call_next(request)
 
 
+def _install_session(app: FastAPI) -> None:
+    """把**会话 cookie** 解成「当前登录用户」，放进 `core/session.py` 的 `ContextVar`。
+
+    ⚠️ 这是**登录态进业务字段的唯一通道**：`core/identity.current_operator()` 读那个
+       `ContextVar`（⛔ 业务模块一处都不用改 —— `identity.py` 模块头的承诺）。
+
+    ⚠️⚠️ **每个请求必须先清空再写入**：`ContextVar` 在**线程/任务复用**时会把上一个请求的值
+       带过来 ⇒ 一旦某请求没带 cookie（或 cookie 过期），它就会**继承上一个人的名字** ——
+       那种错**不报错**、只是留痕里的人名**是别人的**，是全系统最难查的一类。
+    """
+    from app.core import session as SESS
+
+    @app.middleware("http")
+    async def session_loader(request: Request, call_next):
+        SESS.set_current_name("")                              # ⚠️ 先清（见上）
+        who = SESS.read(request.cookies.get(SESS.COOKIE_NAME))
+        if who:
+            SESS.set_current_name(who)
+        return await call_next(request)
+
+
 def _install_request_id(app: FastAPI) -> None:
     @app.middleware("http")
     async def request_id(request: Request, call_next):
@@ -159,6 +180,7 @@ def create_app() -> FastAPI:
     # ⚠️ add 顺序 = CORS → request_id → 白名单（运行期执行顺序相反，见模块 docstring）
     _install_cors(app)
     _install_request_id(app)
+    _install_session(app)
     _install_ip_allowlist(app)
     _install_error_handlers(app)
 

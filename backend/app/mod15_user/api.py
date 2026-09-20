@@ -25,15 +25,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
+from app.core import session as SESS
 from app.core.db import session_scope
 from app.core.errors import AppError
 from app.core.identity import current_operator
 from app.mod15_user import domain as D
+from app.mod15_user import login as LG
 from app.mod15_user import repository as R
 from app.mod15_user.models import UserAccount
+from app.mod15_user.page import login_html
 
 router = APIRouter(tags=["mod15"])
 
@@ -60,6 +64,10 @@ def _row(u: UserAccount) -> dict:
         # ⚠️ i8 账号**只出账号名、不出密码**（§7.8：每人一份 ⇒ 界面要能看出"还没填"）
         "i8_user": u.i8_user or "",
         "i8_bound": bool((u.i8_user or "").strip()),
+        # 最近登录（⭐ 2026-09-20 补口径）：**空串 = 从未登录过**。
+        # ⚠️ 空串与"有值"要区分得出来 —— ⛔ 别用建号时间冒充（那是假话），
+        #    也别把"从未登录"渲染成 `—`（那长得像"数据没取到"）。
+        "last_login_at": (u.last_login_at.strftime("%Y-%m-%d %H:%M") if u.last_login_at else ""),
     }
 
 
@@ -122,6 +130,71 @@ def _run(fn) -> dict:
         return _flash("err", e.message)
 
 
+# ============================================================ 登录 / 登出（§1.5.1）
+
+
+def _safe_next(raw: str) -> str:
+    """把 `?next=` **收窄到站内路径**（⛔ 防开放跳转）。
+
+    ⚠️ 只放行**以单个 `/` 开头**的值 —— `//evil.com` 与 `https://evil.com` 都要拒掉：
+       前者在浏览器里会被当成**协议相对的绝对地址**（`//host/path`），是开放跳转的经典绕过。
+    """
+    v = (raw or "").strip()
+    if v.startswith("/") and not v.startswith("//"):
+        return v
+    return "/app"
+
+
+@router.get("/login", response_class=HTMLResponse, include_in_schema=False)
+def api_login_page(next: str = "/app") -> HTMLResponse:  # noqa: A002 —— 名字照 §1.5.1 的用法
+    """登录页（§1.5.1「退出后**回到登录页**」）。"""
+    return HTMLResponse(login_html(next_url=_safe_next(next)))
+
+
+@router.post("/m15/login", include_in_schema=False)
+def api_do_login(account: str = Form(""), password: str = Form(""),
+                 next: str = Form("/app")) -> Response:  # noqa: A002
+    """**登录动作**（纯表单 POST ⇒ 303 回跳；⛔ 不用 JS —— 见 `page.py` 顶部说明）。
+
+    ⚠️ 失败时**回登录页并带一句原因**（⛔ 不是 JSON）—— 这是**表单**路径，
+       浏览器只会显示返回的 HTML；回 JSON 的话用户看到一屏 `{"ok":false,...}`。
+    """
+    target = _safe_next(next)
+    try:
+        with session_scope() as s:
+            row = LG.sign_in(s, account=account, password=password)
+            name = row.name or row.account
+    except AppError as e:
+        return HTMLResponse(login_html(error=e.message, next_url=target),
+                            status_code=200)                 # ⚠️ 200：浏览器要正常渲染这一页
+    resp = RedirectResponse(target, status_code=303)          # 303 = POST 之后换 GET（PRG）
+    resp.set_cookie(
+        SESS.COOKIE_NAME, SESS.make(name),
+        max_age=SESS.SESSION_HOURS * 3600,
+        httponly=True,          # ⛔ JS 读不到（壳里不需要读它）
+        samesite="lax",         # ⛔ 跨站请求不带它（CSRF 的第一道）
+        # ⚠️ `secure=False`：本系统是**局域网 http**（§技术栈：内网部署）——
+        #    设 True 会让 cookie 在 http 下**完全不发**，那是"配了安全、结果登不上"。
+        secure=False,
+        path="/",
+    )
+    return resp
+
+
+@router.post("/api/m15/logout")
+def api_logout(request: Request) -> dict:  # noqa: ARG001 —— 与别的写动作同形
+    """**登出**（§1.5.1）—— ⚠️ 只清 cookie，**不碰任何业务数据**（"退出后业务数据不受影响"）。
+
+    ⚠️ 返回 `{ok, message}` 同本模块其它写动作；⭐ **清 cookie 由本端点自己做**
+       （壳那边只管发请求、看到 `ok` 就跳登录页 —— 让壳去清 cookie 就多一份"清法"）。
+    """
+    from fastapi.responses import JSONResponse
+
+    out = JSONResponse({"ok": True, "kind": "ok", "message": "已退出登录"})
+    out.delete_cookie(SESS.COOKIE_NAME, path="/")
+    return out
+
+
 # ============================================================ 读
 
 
@@ -130,6 +203,40 @@ def api_users(request: Request) -> dict:  # noqa: ARG001 —— 形状与别的�
     """账号列表 ＋ 当前登录用户（`MOD-15` 的整页数据）。"""
     with session_scope() as s:
         return _payload(s)
+
+
+# ⭐ 「查看密码」—— **明文裁定的显式出口**（2026-09-20 用户裁定「要加」）
+#
+# ⚠️ 为什么它是一个**单独的动作**、而不是让列表直接带出密码来：
+#   ① **列表是最容易被看到的地方** —— 打开页面就全在屏上（还容易被截图/转发）；
+#      单独动作则要**指名要哪一个**，多一道"用户确实是来看这个的"。
+#   ② 密码是**明文**（用户裁定）⇒ 它**必须能被管理员读出来告诉同事**（这也是选明文的原因之一）
+#      —— 那就得有一个**说得清**的出口，⛔ 而不是"藏在某个大对象里顺带泄出去"。
+#   ③ 出参形状上它与列表**互不影响** ⇒ 将来要加"看密码要留痕"之类，改这一个端点即可。
+
+
+@router.get("/api/m15/password")
+def api_view_password(id: Any = 0) -> dict:
+    """**查看某个账号的密码**（明文 —— 供管理员告诉同事）。
+
+    ⚠️ 这是**有意的**出口：本系统是科室内部 2 人的局域网工具（§1.5.1），
+       密码是管理员**帮同事建号/重置**的产物 ⇒ "读出来念给他"是**正常运维动作**。
+    ⚠️ 但它**只出一个账号的密码**（⛔ 不提供"列出全部密码"）——
+       "看一个"与"一次拿到全表"的风险差一个量级，⛔ 别顺手加后者。
+    """
+    def go():
+        with session_scope() as s:
+            row = R.get(s, _uid(id))
+            if row is None:
+                raise AppError(f"账号不存在：id={id!r}")
+            if D.is_deleted(row):
+                raise AppError(f"账号「{row.account}」**已删除** —— 先恢复它再看密码。")
+            return {"ok": True, "kind": "ok", "account": row.account, "name": row.name,
+                    "password": row.password or "", "has_password": bool(row.password or "")}
+    try:
+        return go()
+    except AppError as e:
+        return _flash("err", e.message)
 
 
 # ============================================================ 写（5 类管理动作 · §1.5.1）

@@ -20,16 +20,27 @@ PLACEHOLDER_OPERATOR = "科室用户"
 def current_operator() -> str:
     """当前操作人（用于留痕 / 录入人）。
 
-    - 登录体系（`MOD-15`）落地前：读 `.env` 的 `OPERATOR_NAME`，缺省返回中性占位；
-    - 落地后：本函数改为返回登录态里的用户名 —— **调用方无需改动**。
+    ⭐ **2026-09-20 接上登录态**（`MOD-15` 片 3）—— ⚠️ **只改本文件**，正是模块头那句承诺：
+       `mod01` / `mod03` / `mod07` / `mod08` / `mod11` / `mod14` 那 13 处调用方**一行没动**。
+
+    取值顺序（**第一个非空**为准）：
+    ① **登录态**（`core/session.py` 由中间件从会话 cookie 解出的用户名）—— 正常路径；
+    ② `.env` 的 `OPERATOR_NAME` —— ⚠️ **过渡期的兜底**（未登录 / 定时任务 / 测试进程仍要能留痕）；
+    ③ 中性占位 `科室用户` —— ⛔ **绝不是人名**（见常量注释）。
+
+    ⚠️ ⛔ **别把 ② 删掉**：本系统有大量**不带 cookie** 的路径（定时抓取 / 命令行脚本 /
+       测试进程）—— 删了兜底，它们会把留痕写成占位。
     """
     from app.core.config import get_settings
+    from app.core.session import current_name
 
-    try:
-        name = str(get_settings().operator_name or "").strip()
-    except Exception:  # noqa: BLE001 —— 配置异常不应让"取个名字"变成故障
-        name = ""
-    return name or PLACEHOLDER_OPERATOR
+    name = (current_name() or "").strip()          # ① 登录态
+    if not name:
+        try:
+            name = str(get_settings().operator_name or "").strip()    # ② .env 兜底
+        except Exception:  # noqa: BLE001 —— 配置异常不应让"取个名字"变成故障
+            name = ""
+    return name or PLACEHOLDER_OPERATOR            # ③ 中性占位
 
 
 def is_placeholder() -> bool:

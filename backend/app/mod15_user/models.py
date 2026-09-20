@@ -92,6 +92,14 @@ class UserAccount(Base):
     #: ⚠️ 同样用 `Text`（i8 侧对密码长度**没有**任何已知约束 ⇒ ⛔ 别在这边自己编一个上限）。
     i8_password: Mapped[str] = mapped_column(Text, default="", server_default="")
 
+    #: **最近登录时间** —— ⭐ 口径 2026-09-20 补（原型的账号列表本来就有这一列，
+    #:   而 §1.5.1 当时没写 ⇒ 用户裁定「**口径加上**」）。
+    #: ⚠️ 由**登录成功**那一刻写入（见 `session.py::sign_in`），⛔ 不是"每次请求都刷"——
+    #:   那是"最后活动时间"，不是"最近登录"（两回事：前者一刷新就变，看不出谁长期没登录）。
+    #: ⚠️ 为空 = **从未登录过**（新号、或建号后一直没登）—— 界面上要能看出这个区别，
+    #:   ⛔ 别用"建号时间"冒充（那是假话）。
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
     #: ⭐ **软删标记**（§1.5.1「删除 = 软删除」）—— 非空 = 已删除。
     #: ⚠️ 这是**全仓第一个真软删**（`ACC-X-DEL-001/001-08` 的"软删档双向开"断言在这里**落地**）。
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)

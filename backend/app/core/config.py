@@ -141,6 +141,11 @@ class Settings(BaseSettings):
     # --- 当前操作人（留痕 / 手动行录入人；⚠️ `MOD-15` 用户管理落地前的中性占位）---
     operator_name: str = ""
 
+    # --- 登录会话签名密钥（`MOD-15` · 见 `core/session.py`）---
+    # ⚠️ **不允许有硬编码默认值**（本文件开篇的底线：凭据只来自环境变量 / `.env`）——
+    #    留空时由 `session.secret()` **生成一个并写回 `.env`**（只做一次）。
+    session_secret: str = ""
+
     # --- 产物体与日志 ---
     artifacts_dir: str = "artifacts"
     logs_dir: str = "logs"
