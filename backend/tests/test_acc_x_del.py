@@ -23,14 +23,26 @@
 
 from __future__ import annotations
 
+import pathlib
 from decimal import Decimal
 
 import pytest
 
 from app.core.errors import MustReportError
+from app.core.errors import MustReportError as _MRE       # noqa: F401  （显式见于断言）
+from app.mod03_notice import notice_actions as NA
+from app.mod03_notice import rules_repository as RR
 from app.mod04_plan import plan_ui as U
 from app.mod08_inv import domain as I
 from tests.acc_plugin import acc
+
+from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+
+
+def _fn(name: str, end: str) -> str:
+    """取壳里某段（`name` 起、`end` 止）—— 段内断言用，避免全文件宽松命中。"""
+    body = SHELL[SHELL.index(name):]
+    return body[:body.index(end)]
 
 
 def _rows() -> list[dict]:
@@ -87,6 +99,84 @@ def test_i8源数据行一律无删除入口():
     assert I.boundary_violations(column_keys=("amount", "warehouse", "adj_amount")) == [], \
         "正常列被误判成违规 ⇒ 这个守卫会变成噪音、人就不看了"
     assert I.FORBIDDEN_ACTIONS == ("delete", "del"), "禁用的动作清单变了（要同批改本件与文档）"
+
+
+# ---------------------------------------------------------- `001-02` 配置类硬删
+
+
+@acc("ACC-X-DEL-001", "001-02")
+def test_配置类数据硬删且被引用数据不随删():
+    """§9.4 原文：「**配置类数据**（项目配置、规则配置等）→ **硬删除**」。
+
+    ⚠️ 这条判据有两半，**两半都要钉**：
+    - 「行数 −1」= 真的是硬删（⛔ 不是打标记 —— 打标记是**核心业务数据**那一档的做法）；
+    - 「**被引用数据不随删**」= 删规则**不许顺手去改历史剔除标记** —— §4.2.2 明文
+      「**改规则不重算历史**：已产生的剔除标记（`exclude_source=rule`）不受影响、也不重算」。
+      ⚠️ 这一半最容易被"顺手补一个重算"给破坏（看着像做好事），所以用**真库计数**钉。
+    """
+    from app.core.db import session_scope
+    from app.mod03_notice.models import PaymentNotice
+    from sqlalchemy import func, select                                            # noqa: PLC0415
+
+    # ① 硬删 = `s.delete(row)`（⛔ 不是"打一个 deleted 标记"）
+    src = pathlib.Path(RR.__file__).read_text(encoding="utf-8")
+    assert "s.delete(row)" in src, "配置类删除不是硬删（§9.4）"
+    assert "deleted_at" not in src and "is_deleted" not in src, \
+        "配置类出现软删字段 —— §9.4 的两档被搞混了"
+
+    # ② 真删：加一条 → 删它 → 库里查不到
+    with session_scope() as s:
+        RR.ensure_seeded(s)                     # 库空则落出厂默认（幂等）
+        n0 = len(RR.all_rows(s))
+        row = RR.add_row(s, kind="biz_type", values="付款测试值", meaning="__自检__")
+        rid = int(row.id)
+        assert len(RR.all_rows(s)) == n0 + 1
+        RR.delete_row(s, RR.get_row(s, rid))
+        assert RR.get_row(s, rid) is None, "删完还查得到 ⇒ 不是硬删"
+        assert len(RR.all_rows(s)) == n0, "行数没回到原值"
+
+        # ③ 「被引用数据不随删」：删规则**不动**已有的剔除标记
+        before = s.scalar(select(func.count()).select_from(PaymentNotice)
+                          .where(PaymentNotice.excluded.is_(True)))
+        RR.delete_row(s, RR.add_row(s, kind="biz_type", values="付款又一条", meaning="__自检__"))
+        after = s.scalar(select(func.count()).select_from(PaymentNotice)
+                         .where(PaymentNotice.excluded.is_(True)))
+        assert after == before, (
+            f"删规则把历史剔除标记改了（{before} → {after}）—— §4.2.2 明写「**改规则不重算历史**」"
+            "；剔除行是**另一批数据**（`payment_notice.excluded`），删配置不该碰它")
+        s.rollback()
+
+
+# ---------------------------------------------------------- `001-05` 手动行删除
+
+
+@acc("ACC-X-DEL-001", "001-05")
+def test_手动行删除只删该行且清归属与勾选():
+    """§4.2.6：「编辑 / 删除**只对手动新增行**开放；i8 抓取回来的行不受影响」。
+
+    ⚠️ 三件一起看（缺一件就有一条路漏）：
+    ① **唯一出口**：PRG 与 JSON API **共用** `apply_manual_delete`（⛔ 不许两份校验、不许两份文案）；
+    ② **只删该行**：i8 行**连门都摸不到**（`assert_manual_editable` 当场拒）；
+    ③ **壳侧同步**：删掉的 id 必须从这个会话的**勾选集**里退出来
+       —— 否则汇总条会继续把它算进去（勾选一个**已经不存在的行**）。
+    """
+    # ① 唯一出口（两处都调它）
+    assert "def apply_manual_delete(session, notice_id: int)" in \
+        pathlib.Path(NA.__file__).read_text(encoding="utf-8"), "删除手动行没有唯一出口"
+    api = pathlib.Path(NA.__file__).resolve().parents[0] / "notice_api_router.py"
+    assert "apply_manual_delete" in api.read_text(encoding="utf-8"), \
+        "JSON API 没走同一个出口（那就有了第二份校验/文案）"
+
+    # ② i8 行**连门都摸不到**：`assert_manual_editable` 当场拒（不是"删了再报错"）
+    with pytest.raises(MustReportError):
+        NA.assert_manual_editable({"ph_id": "PH20260801001", "bill_no": "FKTZS001"})
+    NA.assert_manual_editable({"ph_id": "MANUAL-abc123", "bill_no": ""})   # 手动行放行
+
+    # ③ 壳侧：删完把 id 从勾选集里退出来；⛔ 且不许本地 splice 冒充删除
+    ok = _fn("ntDelOk:t=>{", "/* ⭐ 撤销付款")
+    assert "pickSet.delete(id)" in ok, "删完没退出勾选集（汇总条会继续算一个不存在的行）"
+    assert "splice" not in ok, "⛔ 壳里还在本地 splice 冒充落库"
+    assert "API.manualDelete(" in ok, "删除没走后端端点"
 
 
 # ---------------------------------------------------------- `001-06` 只删选中行
