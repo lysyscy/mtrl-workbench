@@ -1,155 +1,140 @@
-"""`ACC-DIF-REG-001` 差异登记（`MOD-12`）· **单元 1 = 后端判定与落库**。
+"""`ACC-DIF-REG-001` 差异登记 —— **2026-09-20 按用户裁定重写**：从「一个页面的 12 条形态」
+改成「**差异这个能力**的 4 条」。
 
-依据（⛔ 不自己发明口径）：
-· 《说明书》**§5.8.3**（差异登记正文）· **§8.3**（状态机）· §5.10 `DEV-R-06`
-· `PRD/02-功能规格/MOD-12.md`（契约 · 只给节号）
-· 原型 `V.m12` ＋ `ACT.dfSave`（**交互规格**：校验顺序与那句提示的措辞都照它）
+## ⚠️ 为什么重写（用户原话）
 
-⚠️ **本文件只覆盖 5 个判据点**（`001-02` `001-03` `001-04` `001-06` `001-10`）——
-   其余 7 点钉的是**页面形态**（草稿行类名 / 筛选 / 空态 / 合计 / 展示名 / 默认值），
-   要等**单元 2（壳取真数据）**之后才有意义：
-   ⚠️ 现在就在**演示数据**上证形态 = **假绿**（数据都不是真的，形状对有什么用）。
+> 「落点独立一页，**说实话不是我设计的，是 AI 擅自加的**，我后面也没仔细看」
+> 「差异**由人登记到调整单**；我今天说对比出来，指**系统自动根据调整单产出差异表**」
+> 「兜底这个，**没什么必要**，我对账对完了，哪些有差距才回去系统打调整单」
+
+⭐ 而《说明书》§5.8.3 **自己就写着**：「**机制归属** ✅ **归属「库存单据」**（**不独立成模块**）」
+⇒ 独立成一页**本来就与它相悖**。差异的真实载体 = **调整单**（人登记在这里）；
+**差异表 = 系统按调整单算出来的**。
+
+## 本文件钉什么（4 条，全部指**真实存在**的落点）
+
+| 点 | 钉的事实 | 真落点 |
+|---|---|---|
+| `001-01` | 差异的**载体 = 调整单**；撤单 ⇒ 退出差异表、**原始值一字未改** | `mod08_inv` ＋ `mod06_proc` |
+| `001-02` | 差异 = **逐格「调整后 − 原始」**（符号 / 空态） | `mod06_proc.domain.difference_rows` |
+| `001-03` | 差异表是**入口**：点差异行 ⇒ **跳库存单据、自动筛出改过的行** | 壳 `goInvAdj` ＋ `m08` 的 `invOnlyAdj` |
+| `001-04` | **归属恒为「库存单据」**：⛔ 不按「发现位置」分过程资料 / 库存单据 | 差异表的**列清单里没有**「归属」这一列 |
+
+⚠️ **不重复造**：`001-02` 的算法细节另有一份**更硬的**在 `test_process_export.py`
+（`ACC-RPT-EXP-001/001-06`，用**合成矩阵**验负数与空态）；`001-03` 的同一事实在
+`test_acc_proc_001.py`（`ACC-RPT-PROC-001/001-09`）也钉着 —— 那两处是**形态更全的主人**，
+本文件保留这三条是为了让「差异登记」这个**能力**仍有户口（用例号不变 ⇒ 文档引用照旧有效）。
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
-
-from app.core.db import session_scope
-from app.core.errors import MustReportError
-from app.mod12_diff import domain as D
-from app.mod12_diff import repository as R
+from app.mod06_proc import domain as P
+from app.mod08_inv import domain as I
 from tests.acc_plugin import acc
 
-
-def _ok(**over) -> dict:
-    """一份**合法**登记（各条用例只改自己关心的那格 ⇒ 失败时一眼看得出是谁的问题）。"""
-    p = {"month": "2026-08", "project_name": "第四工程公司2026年小微项目",
-         "detail": "__自检_差异__", "amount": "-220.00", "status": "待核对", "remark": ""}
-    p.update(over)
-    return p
+from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 
-# --------------------------------------------------------- `001-03` 必填校验
+def _raw_row(**over) -> dict:
+    """一行库存单据（i8 原始）—— 只给这几条判据要用的列。"""
+    row = {"id": "IV-1", "doc_no": "CK001", "seq": 3, "material": "焊接钢管",
+           "warehouse": "甲仓", "amount": Decimal("100.00")}
+    row.update(over)
+    return row
 
 
-@acc("ACC-DIF-REG-001", "001-03")
-def test_必填缺一即拒且金额合法不替它挡枪():
-    """⭐ 判据原文特别加的那半句：「**金额即便合法也不得替它挡枪**」。
+# ------------------------------------------------ `001-01` 载体 = 调整单（不是别处再登一份）
 
-    ⚠️ 为什么值得单独钉：把校验写成"金额合法就放行"是很自然的写法（三个 if 合成一个），
-       而它的后果是**缺了核算月的行也会进库** —— 之后对账按核算月归不了月，人也不知道它该算哪个月。
+
+@acc("ACC-DIF-REG-001", "001-01")
+def test_差异载体是调整单_撤单即退出差异表且原始值不变():
+    """⭐ 判据的实质：**差异不是"人另外登记的一份数据"，而是"调整单的产物"**。
+
+    ⚠️ 为什么这条值得留：它是这次口径变更的**核心** ——
+       旧落点让人在独立页**再登一份**差异（与调整单**两处记同一件事**，必然对不上）；
+       新口径 = **调整单是唯一载体**，差异表**从它派生**。
+    ⇒ 所以断言要看的是：**有调整单 ⇒ 差异表里有它；撤销 ⇒ 差异表里就没有它；而 i8 原始值全程未动**。
     """
-    for missing in ("month", "project_name", "detail"):
-        with pytest.raises(MustReportError):
-            D.validate(_ok(**{missing: ""}))
-        with pytest.raises(MustReportError):
-            D.validate(_ok(**{missing: "   "}))          # 全空格也算缺（⛔ 不靠 strip 之外的宽放）
+    raw = _raw_row()
+    before = dict(raw)                                   # 快照：全程不许被改
 
-    # ⭐ 金额**合法**（甚至是合法负数）⇒ 三个必填照样各判各的
-    for missing in ("month", "project_name", "detail"):
-        with pytest.raises(MustReportError):
-            D.validate(_ok(**{missing: "", "amount": "-220.00"}))
+    # ① 没有调整单 ⇒ 这一行**不算"调过"** ⇒ 进不了差异表
+    assert I.is_adjusted(I.with_adjustment(raw, {})) is False
 
-    # 核算月还要**格式**对（`YYYY-MM`）—— 只判非空会把 `2026/8` 放进去
-    with pytest.raises(MustReportError):
-        D.validate(_ok(month="2026/8"))
-    D.validate(_ok())                                    # 正例：合法的那份必须过
+    # ② 打了调整单 ⇒ 算"调过"；且**原始值未被覆盖**（只是多出一个派生列）
+    adj = I.make_adjustment(raw, Decimal("80.00"), "价差", operator="张伟")
+    merged = I.with_adjustment(raw, adj)
+    assert I.is_adjusted(merged) is True
+    assert merged["amount"] == Decimal("100.00"), \
+        "调整单**只改派生列**，原始金额不许被动（§9.3 源数据永不被人工改）"
+    assert merged[I.ADJ_KEY] == Decimal("80.00")
+    assert raw == before, "`with_adjustment` 不该改传入的行（它返回新 dict）"
 
-
-# --------------------------------------------------------- `001-04` 金额出口
-
-
-@acc("ACC-DIF-REG-001", "001-04")
-def test_金额非数字被拒且负数必须放行():
-    """§5.8.3：「差异金额的形态 = **带符号**（+ 上调 / − 下调）」。
-
-    ⚠️ **负数必须放行**是这条判据的重点 —— 直觉上"金额不该是负的"，
-       而差异金额**天生就是带符号的**（同 `MOD-08` 调整单差额「调整后 − i8 原始」）。
-       `−220` 是**下调**，不是输入错误。
-    """
-    for bad in ("abc", "", "  ", "1,234", "--5", "NaN", "Infinity"):
-        with pytest.raises(MustReportError):
-            D.parse_amount(bad)
-
-    assert D.parse_amount("-220.50") == Decimal("-220.50"), "负数（下调）必须放行"
-    assert D.parse_amount("+1400") == Decimal("1400"), "显式正号（上调）必须放行"
-    assert D.parse_amount("0") == Decimal("0")
-    # ⛔ 无上限：差异金额**不设 cap**（与"统计两金额 ≤ 审批金额"那条不是一回事）
-    assert D.parse_amount("999999999.99") == Decimal("999999999.99")
+    # ③ 撤销调整单 ⇒ 退出差异表；原始值**仍然一字未改**
+    back = I.with_adjustment(raw, {})
+    assert I.is_adjusted(back) is False, "撤销后仍被判成「调过」⇒ 差异表会留一条幽灵"
+    assert back["amount"] == before["amount"], "撤销调整单**绝不能**碰到原始值"
 
 
-# --------------------------------------------------------- `001-10` 归属恒定
-
-
-@acc("ACC-DIF-REG-001", "001-10")
-def test_归属恒为库存单据且不存在过程资料归属():
-    """§5.8.3：「差异归属枚举**恒为「库存单据」** —— 不再按「发现位置」区分过程资料 / 库存单据」。
-
-    ⚠️ 判据钉的是「**不存在**归属为过程资料的记录」⇒ 光"默认值是库存单据"不够：
-       得让它**传不进去**（⛔ 不写成 `payload.get("owner") or OWNER_INV` —— 那是留了个口子）。
-    """
-    assert D.OWNER_INV == "库存单据"
-    for sneaky in ({"owner": "过程资料"}, {"owner": ""}, {"owner": "库存单"},
-                   {"type": "过程资料"}, {"发现位置": "过程资料"}):
-        rec = D.to_record(D.validate(_ok(**sneaky)))
-        assert rec["owner"] == D.OWNER_INV, f"归属被调用方改了：{sneaky}"
-
-    # 库里也不许出现别的取值
-    with session_scope() as s:
-        row = R.create_record(s, D.validate(_ok(detail="__自检_归属__", owner="过程资料")))
-        assert row.owner == D.OWNER_INV
-        assert {r.owner for r in R.list_records(s)} <= {D.OWNER_INV}, \
-            "库里出现了非「库存单据」的归属 —— 口径「恒为库存单据」已破"
-        s.rollback()
-
-
-# --------------------------------------------------- `001-02` 登记 / 编号 / 默认态
+# ------------------------------------------------ `001-02` 差异 = 逐格「调整后 − 原始」
 
 
 @acc("ACC-DIF-REG-001", "001-02")
-def test_登记落库编号不撞且默认待核对():
-    """登记一条 = 落库 +1 · **编号不撞既有行** · 默认状态 = **待核对**。
+def test_差异是逐格调整后减原始_带符号且空态留空():
+    """§5.8.3：「与 `MOD-08` 调整单的**差额同源、同形态**（都是「**调整后 − i8 原始**」）」。"""
+    # ⚠️ 入参是**按月对齐的两张表**（`ym` 为键）—— ⛔ 不是单行；`difference_rows` 按 `ym` 配对
+    raw = [{"ym": "2026-08", "in_工具": Decimal("100.00"),
+            "in_临时设施": Decimal("200.00"), "in_主辅材": None}]
+    adj = [{"ym": "2026-08", "in_工具": Decimal("130.00"),
+            "in_临时设施": Decimal("150.00"), "in_主辅材": None}]
+    rows = P.difference_rows(raw, adj)
+    assert len(rows) == 1 and rows[0]["ym"] == "2026-08", "按月对齐（两表同源的月集合）"
+    r = rows[0]
+    assert r["in_工具"] == Decimal("30.00"), "上调 ⇒ 正"
+    assert r["in_临时设施"] == Decimal("-50.00"), "下调 ⇒ **负**（差异是带符号的）"
+    assert r["in_主辅材"] is None, "两边都空 ⇒ 留空（⛔ 不写 0 —— 0 与「没有」是两件事）"
 
-    ⚠️⚠️ 「不撞号」这条**必须删着行验**：本页**可以删行**，
-       若拿"条数 + 1"当编号 ⇒ 登记 3 条删掉中间那条再登记 ⇒ 又发一个已存在的号。
-       所以这里**真的删一条再登记**，而不是只 check 递增。
+
+# ------------------------------------------------ `001-03` 差异表是入口（不是死表）
+
+
+@acc("ACC-DIF-REG-001", "001-03")
+def test_差异行可跳转到库存单据并自动筛出改过的行():
+    """§5.8.3 的闭环追溯：点差异行 ⇒ 跳到库存单据、**自动筛出被调整单改过的行**。
+
+    ⚠️ 这条是「差异表**有用**」的关键 —— 没有它，差异表只是一张纸；
+       有了它，才能从"这笔对不上"一步走到"去改它"（处置入口落在库存单据侧）。
     """
-    with session_scope() as s:
-        before = len(R.list_records(s))
-        a = R.create_record(s, D.validate(_ok(month="2026-01", detail="__自检_A__")))
-        b = R.create_record(s, D.validate(_ok(month="2026-01", detail="__自检_B__")))
-        c = R.create_record(s, D.validate(_ok(month="2026-01", detail="__自检_C__")))
-        assert len(R.list_records(s)) == before + 3, "登记一条要落库 +1"
-        assert b.status == D.STATUS_PENDING, "新登记的默认状态 = 待核对（§8.3）"
-
-        R.delete_record(s, b)                      # ⭐ 删中间那条
-        d = R.create_record(s, D.validate(_ok(month="2026-01", detail="__自检_D__")))
-        codes = [r.code for r in R.list_records(s)]
-        assert len(set(codes)) == len(codes), f"编号撞号了：{codes}"
-        assert d.code not in (a.code, c.code), "删行后新登记的编号撞上了现存行"
-        s.rollback()
+    assert 'data-act="goInvAdj"' in SHELL, "壳里没有「差异行 → 库存单据」的入口"
+    assert "查看原始行" in SHELL, "入口的文案没了（用户靠它知道点了会去哪）"
+    # 跳过去之后**要自动筛出改过的行**（否则落在一张全量总表上、还得自己找）
+    assert "invOnlyAdj" in SHELL, "跳转后没有「只看被调整过的行」这个筛选项"
+    assert I.is_adjusted is not None, "「被调整过」的判据必须在域内（⛔ 不前端自己判）"
 
 
-# --------------------------------------------------------- `001-06` 删除
+# ------------------------------------------------ `001-04` 归属恒为「库存单据」
 
 
-@acc("ACC-DIF-REG-001", "001-06")
-def test_删除只删该行其余一行不动():
-    """判据：「删除只删该行，**其余行一行不动**」—— ⛔ 不是"删完重排"、更不是"清表重建"。"""
-    with session_scope() as s:
-        r1 = R.create_record(s, D.validate(_ok(month="2026-02", detail="__自检_删1__")))
-        r2 = R.create_record(s, D.validate(_ok(month="2026-02", detail="__自检_删2__")))
-        r3 = R.create_record(s, D.validate(_ok(month="2026-02", detail="__自检_删3__")))
-        snapshot = {r.id: (r.code, r.seq, r.detail, r.status, str(r.amount))
-                    for r in R.list_records(s)}
+@acc("ACC-DIF-REG-001", "001-04")
+def test_归属恒为库存单据且不按发现位置分列():
+    """§5.8.3：「差异归属枚举**恒为「库存单据」** —— **不再按「发现位置」区分过程资料 / 库存单据**」。
 
-        R.delete_record(s, r2)
-        left = {r.id: (r.code, r.seq, r.detail, r.status, str(r.amount))
-                for r in R.list_records(s)}
-        assert r2.id not in left, "目标行没删掉"
-        for rid in (r1.id, r3.id):
-            assert left[rid] == snapshot[rid], f"删一行动了别的行（id={rid}）"
-        s.rollback()
+    ⚠️ 判据的落点是**"不出现"**：差异表的列里**没有「归属」这一列** ——
+       因为一旦有这一列，人就会去填「过程资料」，而那正是这条口径要禁的
+       （理由见 §5.8.3 原文：过程资料的材料费**引用**自库存单据 ⇒ 两边的差异**必然是同一批**）。
+    ⇒ 所以断言 = **列清单里不存在归属 / 发现位置 / 来源**这类列。
+    """
+    cols = getattr(P, "DIFF_COLS", None) or getattr(P, "DIFF_HEAD", None) or ()
+    if not cols:
+        # 列清单在壳侧的常量里（`DIFF_THEAD`）—— 两条路都查，⛔ 不许"查不到就当通过"
+        import re
+        m = re.search(r"const DIFF_THEAD\s*=\s*(.+)", SHELL)
+        assert m, "找不到差异表的表头定义（形态变了就同批改本件）"
+        cols = m.group(1)
+    text = str(cols)
+    for banned in ("归属", "发现位置", "来源位置"):
+        assert banned not in text, f"差异表出现了「{banned}」列 —— 归属恒为库存单据，⛔ 不按发现位置分"
+    # 而「库存单据」这个唯一的归属，在页面上**以库名/单据的形式**体现（差异表列里有单据号/仓库）
+    assert "仓库" in text or "warehouse" in text, "差异表要能看出是哪张单据（归属=库存单据的落点）"
