@@ -57,7 +57,15 @@ CANCELLED: dict[str, tuple[str, str, bool]] = {
     #    ⇒ 差异**从来不该有自己的页面**；它只是**调整单的产物**。
     "mod12_diff": ("已撤（2026-09-20 用户裁定）· §5.8.3「差异归属「库存单据」（**不独立成模块**）」",
                    "差异去**库存单据打调整单**（`API.m08Adjust`）；差异表由后端按调整单算（`m06`）", True),
-    "m12List": ("同上 —— 这 4 个接口指向已撤的页", "`m08Adjust`（写调整单）＋ `m06` 的差异表（读）", False),
+    "m12List": ("同上 —— 这 4 个接口指向已撤的页", "`m08Adjust`（写调整单）＋ `m06` 的差异表（读）", True),
+    "m12Create": ("同上", "`m08Adjust`", True),
+    "m12Delete": ("同上", "调整单的撤销走 `m08` 自己的路", True),
+    "m12Status": ("同上", "差异状态由调整单派生，⛔ 不单独存", True),
+    # ⭐ 表 `diff_record` 也已按用户裁定 drop（迁移 `c9e5f1a3b7d2`）。
+    #   ⚠️ 登记它**不是**为了"禁提这个名字"（迁移文件里必然还要写），
+    #   而是提醒：**谁要是再建这张表 / 再给它配接口，就是复活已撤的页**。
+    "diff_record": ("表已 drop（用户 2026-09-20 夜裁定）· 迁移 `c9e5f1a3b7d2`",
+                    "⛔ 不重建：差异的载体是**调整单**（`m08`），产出是**差异表**（`m06` 按调整单算）", True),
     "m12Create": ("同上", "`m08Adjust`", False),
     "m12Delete": ("同上", "调整单的撤销走 `m08` 自己的路", False),
     "m12Status": ("同上", "差异状态由调整单派生，⛔ 不单独存", False),
@@ -65,9 +73,13 @@ CANCELLED: dict[str, tuple[str, str, bool]] = {
 
 #: `T8` 扫描面 —— **只扫代码**（文档面由 `T2`/`RETIRED_TERMS` 管）。
 #: ⚠️ `demo/`（原型）**故意不在内** —— 原型是**历史留痕**，它留着 `V.m12` 是**正确的**。
+#: ⚠️⚠️ **`backend/alembic/versions/` 也故意不在内** —— ⭐ 实测踩过：
+#:   把迁移链扫进来后，**表名在迁移里出现是正常的**（`create_table` / `drop_table` 必然要写它），
+#:   结果一条撤项登记凭空多出 **25 条黄**、还夹 1 条红（红在"新迁移的文件名"那句上）。
+#:   ⇒ ⭐ **迁移链是"历史记录"，不是"复活"** ⇒ 本守卫⛔ 不扫它。
 CANCELLED_SCAN_GLOBS: tuple[str, ...] = (
     "backend/app/**/*.py", "backend/app/**/*.js", "backend/app/**/*.html",
-    "backend/tests/*.py", "tools/*.py", "backend/alembic/versions/*.py",
+    "backend/tests/*.py", "tools/*.py",
 )
 
 #: `T8` 跳过本机制自己（这张表与它两个使用者**必然**要写出那些标识符）

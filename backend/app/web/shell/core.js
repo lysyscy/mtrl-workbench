@@ -289,15 +289,9 @@ const API = {
 
   /* ⛔ `MOD-12` 差异登的四个接口（`m12List` / `m12Create` / `m12Delete` / `m12Status`）
      **已于 2026-09-20 删除**（用户裁定撤页 —— 依据见 `backend/app/main.py` 的 import 处注释）。
-     ⛔ 别再加回来：差异的载体是**调整单**（`API.m08Adjust`），差异表由后端按调整单算（`m06`）。 */
-
-  /* ---- MOD-12 差异登记（M6 跨域第一片 · 2026-09-20 接线）⚠️ 金额后端出**字符串** ⇒ 过 `N0()` ---- */
-  m12List: () => API.get('/api/m12/list'),
-  /* ⚠️ 写动作**恒 HTTP 200 ＋ `ok` 标志**（同 m03/m07/m09/m14）⇒ **成败看 `ok`**，⛔ 别只靠 try/catch。
-     ⛔ 三个写动作**都不传归属** —— 归属恒为「库存单据」，由后端定死（判据点 `ACC-DIF-REG-001/001-10`）。 */
-  m12Create: body => API.post('/api/m12/create', body),
-  m12Delete: body => API.post('/api/m12/delete', body),
-  m12Status: body => API.post('/api/m12/status', body),
+     ⛔ 别再加回来：差异的载体是**调整单**（`API.m08Adjust`），差异表由后端按调整单算（`m06`）。
+     ⭐ 这四行方法体**已于 2026-09-20 夜一并删掉**（原来只剩说明、代码还挂着 ⇒ 越挂越像"还在用"）；
+        守卫：`tools/audit_common.py::CANCELLED` ＋ `doc_audit` 的 `T8`。 */
   /* ⭐ `M5-6b` 甲方单位分类：它决定「i8 抓来的那个合同价是谁的价」。
      ⚠️ 正常甲方 ⇒ i8 的价 = **供应商价**（落 `contract_amt` · **锚点**）；
         贸易公司甲方 ⇒ i8 的价 = **贸易公司的价**（落 `trade_contract_amt`），
