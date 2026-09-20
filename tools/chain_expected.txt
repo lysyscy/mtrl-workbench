@@ -33,7 +33,10 @@ A|③-b 子步：抓仓库信息（仓库列表按全名反查）|抓仓库信�
 B|① 「陌生仓库」事实留痕（看板瓦片「占位行待扶正」＋ 抓取回执列出）|看板瓦片「占位行待扶正」|backend/app/home/service.py::placeholder|ACC-PRJ-AUTO-001|已接
 B|② 自动跑一次「抓仓库名单」同步|自动跑一次「抓仓库名单」同步|backend/app/mod02_i8/sources.py::load_warehouse_rows|ACC-PRJ-AUTO-001|已接
 B|③ 用全名回查占位行：命中 1 条 ⇒ 扶正改名|用**全名**回查占位行|backend/app/mod01_projects/repository.py::promote_placeholder|ACC-PRJ-AUTO-001|已接
-B|③ 命中多条 ⇒ 弹窗让用户指认|弹窗让用户指认|backend/app/web/index.html::openPendDialog|ACC-PRJ-AUTO-001|已接
+# ⚠️ 2026-09-20：落点原写 `index.html::openPendDialog` ⇒ **C3 报"落点名字在文件里找不到"**。
+#    真因：壳拆分（`P4②` 三刀真拆）时该函数**搬到了 `shell/core.js`**，而本表没跟着改。
+#    ⇒ 凡落点是**壳里的函数名**的，拆分后都要重指一次（⛔ 这类滞后不报错、只静默失效）。
+B|③ 命中多条 ⇒ 弹窗让用户指认|弹窗让用户指认|backend/app/web/shell/core.js::openPendDialog|ACC-PRJ-AUTO-001|已接
 B|③ 未命中 ⇒ 新建行（真实仓库名）|新建行（真实仓库名）|backend/app/mod01_projects/recovery.py::plan_recovery|ACC-PRJ-AUTO-001|已接
 B|④ **无需「重跑」步骤**（导入过程中即同步扶正 ⇒ 不存在"先落库再回头改"）|导入过程中即同步扶正|backend/app/mod01_projects/recovery.py::recover_unknown_warehouses|ACC-PRJ-AUTO-001|已接
 C|壳已建档 · 命中 1 个小微 ⇒ 归集到它 ＋ 关键词去重追加|关键词去重追加|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
@@ -42,7 +45,7 @@ C|壳已建档 · 未命中 ⇒ **弹窗列表**（在建小微 ＋ 每个右侧
 C|壳已建档 · 选「新小微」⇒ 抓仓库信息 → 建小微行 ＋ 录关键词|抓仓库信息 → 建小微行 + 录关键词|backend/app/mod03_notice/router.py::assign_ownership|ACC-PRJ-OWN-001|已接
 C|壳未建档 ⇒ 先建壳（走链路 A ③）→ 抓仓库 → 录关键词 → 建具体小微行|先建壳（走链路 A 的 ③）|backend/app/mod03_notice/router.py::get_fetch_executor|ACC-PRJ-SYNC-001|已接
 C|未命中弹窗的**内容①**：在建的具体小微（每个右侧必填框，内容须出现在单据名中）|目前在建的具体小微（每个右侧必填框，内容必须出现在单据名中）|backend/app/mod01_projects/domain.py::candidates_of|ACC-PRJ-OWN-001|已接
-C|未命中弹窗的**内容②**：末行「该项目属于新小微」|最后一行「该项目属于新小微」|backend/app/web/index.html::openOwnDialog|ACC-PRJ-OWN-001|已接
+C|未命中弹窗的**内容②**：末行「该项目属于新小微」|最后一行「该项目属于新小微」|backend/app/web/shell/core.js::openOwnDialog|ACC-PRJ-OWN-001|已接
 # ============================================================
 # ② P1 付款通知书：抓 → 剔除 → 分类 → 归属 → 落库 → 列表可见（真源 = 说明书 §4.7）
 P1|① 触发抓取（手动点击 ⇒ 调 i8 拉通知书 · 不走定时）|① 触发抓取|backend/app/mod03_notice/router.py::notices/fetch|ACC-I8-FETCH-001|已接
@@ -113,7 +116,10 @@ P4|⭐ **核对报告**：该批涉及月份里、**一条流水都没有的通�
 #    ③ ⚠️ **缺**：`report_export/` 里**零**「超付」字样 ⇒ 报告单上没有这一列
 #    ⇒ ⛔ 所以我**没把它改绿**：三半只落实了 1 半。⭐ 但这条现在**可执行**了 ——
 #      要做的事很明确：给「流水驱动写入」那条路补 ②，并给报告单补 ③。
-P4|**超付处置**：实付 > 审批金额 ⇒ **流水照记**（事实不得篡改）＋ 挂提醒 ＋ 报告单列|流水照记|backend/app/mod05_flow/repository.py（仅 ① 流水照记；②挂提醒 ③报告单列 **缺**）|缺：②③ 待做（① 已有落点）|缺
+#    ⚠️⚠️ **落点列只能写「真实存在的路径」或 `—`**（`chain_audit` 的 C3 会去 `check_target`）——
+#    我一开始把括号说明写进了落点列 ⇒ 被判「落点不存在」，凭空多出 2 条红。
+#    ⇒ 散文一律放 `#` 注释里，⛔ 别塞进字段。
+P4|**超付处置**：实付 > 审批金额 ⇒ **流水照记**（事实不得篡改）＋ 挂提醒 ＋ 报告单列|流水照记|backend/app/mod05_flow/repository.py|缺：②③ 待做（① 已有落点）|缺
 # ============================================================
 # ⑦ R 报表域：抓 → 解析 → 落库 → 过程表 / 大表 → 导出成品（真源 = 说明书 §5.9）
 R|① 触发导出（**手动点击** ⇒ 系统抓 i8 · 不走定时）|① 触发导出|backend/app/mod07_setl/fetch_service.py::run_fetch|ACC-SETL-FETCH-001|已接
@@ -148,7 +154,17 @@ J|付款引用与实际供应商（§6.6.3 受限子串匹配 · 反向入口在
 J|集采**结算欠款**（⛔ 不在付款域计算，**由集采台账负责**）|集采的欠款**不在付款域计算**，由**集采台账**负责|backend/app/mod11_jc/domain.py::contract_amounts|ACC-JC-UI-001|已接
 # ============================================================
 # ⑨ X 跨域：导出 / 删除 / 用户 / 主题 / 设置 / 历史初始化（真源 = 说明书 §7）
-X|全局导出 Excel（**所有列表页都要** · 行集合/合计/取值与当前筛选**一致**）|所有列表页都要「导出 Excel」按钮|backend/app/report_export/service.py::export_settlement|ACC-X-EXP-001|接线缺
+# ⭐⭐ 2026-09-20 逐页核过 —— 原写「接线缺」（零件写好了、链路上没人调用它）⇒ ⚠️ **这个判断不准确**：
+#    真实情况是 **8/14 页已经有真导出**（且那 8 个端点**壳全都在调**），
+#    ⚠️ 缺的不是"接线"，而是 **6 个列表页后端压根没有导出端点**。
+#    ⇒ 唯一完成度口径 = **一页一页数**。现状（§7.1「**所有列表页都要**」）：
+#      ✅ 有真导出（8）：逐月欠款台账 · 总欠款 · 过程资料 · 经济活动分析大表 ·
+#                       结算 · 提取（项目×月份）· 库存单据明细总表 · 集采台账
+#      ⚠️ 没有（6）：**MOD-01 项目档案** · **MOD-02 i8 接口清单** · **MOD-03 付款通知书台账** ·
+#                    **MOD-04 付款计划审查结果** · **MOD-05 付款流水** · **MOD-12 差异清单**
+#    ⚠️ 那 6 页现在走 `actions.js` 的 ⏳ 兜底 —— ⭐ 而那句兜底**是对的做法**（诚实告知），
+#       因为原型在这里报「已导出 x.xlsx」但**没有任何文件产生**（对用户是**假成功**）。
+X|全局导出 Excel（**所有列表页都要** · 行集合/合计/取值与当前筛选**一致**）|所有列表页都要「导出 Excel」按钮|backend/app/report_export/service.py|缺：还剩 **6 页**（MOD-01/02/03/04 · MOD-05 付款流水 · MOD-12）|缺
 X|导出**按模板**（模板只定长相 · 数据仍来自页面筛选）|模板只管「长什么样」|backend/app/report_export/tpl_fill.py::fill_workbook|ACC-X-EXP-001|已接
 X|模板**数据区起点**识别（读 `DATA_START` 标记文字 · ⛔ 不用「定义名称」）|数据区首行那格的标记文字 DATA_START|backend/app/report_export/tpl_fill.py::locate_data_area|ACC-X-EXP-001|已接
 X|模板**尾部行块随行数派生**（合计/小计/脚注按实际行数位移 · ⛔ 不写死行号）|其位置**一律按实际数据行数派生**|backend/app/report_export/tpl_fill.py::tail_end_row|ACC-X-EXP-001|已接
