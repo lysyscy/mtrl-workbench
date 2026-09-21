@@ -20,13 +20,15 @@ from app.mod08_inv.repository import (
     load_rows,
     save_adjustment,
 )
-# ⭐ 降级通道（§3.6）：手动 Excel 导入 —— 独立路由件，由本文件汇总（`main.py` 不用改）
-from app.mod08_inv.import_router import router as import_router
+# ⭐ 降级通道（§3.6）：手动 Excel 导入 —— 独立路由件，由本文件汇总（`main.py` 不用改）。
+# ⚠️ 2026-09-21（`§19` 四个暂留件收口）：`import_router.py`（三条 PRG）＋ `import_view.py`（服务端渲染页）
+#    **已整体删除** —— 能力原样搬成 JSON API `import_api.py`（壳 `V.m08imp` 在用），旧页无独有能力。
+from app.mod08_inv.import_api import router as import_api_router
 # ⚠️ 2026-09-19（`§19` 批 2）：`app.mod08_inv.view`（`render_inv_page`/`fetch_dialog_html`/`render_adjust_page`）
 #    已随「明细总表页半边」整体删除（授权 `D18`）—— ⛔ 别再加回来。
 
 router = APIRouter(tags=["mod08"])
-router.include_router(import_router)
+router.include_router(import_api_router)
 
 
 def query_params(request: Request) -> dict:
@@ -43,10 +45,8 @@ def query_params(request: Request) -> dict:
 #    `adjust_page` / `adjust_save`（`/m08/adjust/{row_id}`）＋ `_safe_back` ＋ `view.py`（327 行）。
 #    ⇒ 壳走的是 **JSON API**（`/api/m08/inventory` · `/api/m08/adjust` · `/api/m08/adjust/clear` ·
 #      `/api/m08/fetch` · `/api/m08/inventory/export` —— 五个都在本文件下方 ✓）。
-# ⚠️ **「手动 Excel 导入」半边仍在**（`import_router.py` ＋ `import_view.py`，`/m08/import*`）：
-#    壳里**没有**导入入口（实测）⇒ 那是全站**唯一**的库存单据导入通道 ⇒ **暂留**（前置未满足：
-#    要删得先给壳一个导入入口；同 `m06`/`m14`）。⚠️ 因此 `nav.py` 的那条入口**已改指 `/m08/import`** ——
-#    ⛔ 别再指回 `/m08`（那一页已经没有了）。
+# ⚠️ **「手动 Excel 导入」半边** —— ⭐ **2026-09-21 已搬进新壳**（`import_api.py` ＋ 壳 `V.m08imp`）⇒
+#    服务端渲染页与三条 PRG 已删 ✓（`nav.py` 里那条服务端渲染入口同批删除 —— 壳侧栏有「库存单据导入」）。
 
 
 # ============================================================ JSON API（前端壳：原型直接接数据）

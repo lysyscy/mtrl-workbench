@@ -3,7 +3,7 @@
 ## ⚠️ 这一片的性质：**不是"写新功能"，是"给已有的删除出口补判据"**
 
 取证（2026-09-20）发现：这条用例 8 个点原本 **0/8 全未绑定**，但**落点早就都在了** ——
-`mod04_plan.plan_ui.delete_impact` / `delete_rows` · `mod03_notice.notice_actions.apply_manual_delete` ·
+`mod04_plan.plan_ui.delete_impact` / `delete_rows` · `mod03_notice.notice_manual_actions.apply_manual_delete` ·
 `mod03_notice.rules_repository.delete_row` · `mod08_inv.domain.boundary_violations` …
 ⇒ 缺的只是**断言**（`§9.4` 那套分档从没被机器钉过）。
 
@@ -17,8 +17,10 @@
 | `001-07` | **撤销调整单只删该条**：i8 源数据一行不动、该行退出差异表 | `mod08_inv.domain` |
 
 ⏳ **尚未钉（落点已找到，留给下一轮）**：`001-02` 配置类硬删（`rules_repository.delete_row`）·
-`001-05` 手动行删除同步清归属与勾选（`notice_actions.apply_manual_delete`）·
 `001-08` §9.4 分档清单本身。
+
+✅ `001-05`（手动行删除同步清归属与勾选）**已钉** —— 落点 `notice_manual_actions.apply_manual_delete`
+（⚠️ 2026-09-21 · `T5` 拆分：自 `notice_actions` 整块搬来，判定与文案一字未变）。
 
 ⭐ **`001-03`（账号软删 = 行保留 / 可识别 / 可恢复）** —— 它一直卡在「等 `m15` 开工」（本仓那时
   全仓**0 处软删字段**）⇒ **`m15` 片 1 一落地它就解锁了**，本文件已补上。
@@ -38,7 +40,7 @@ import app
 
 from app.core.errors import MustReportError
 from app.core.errors import MustReportError as _MRE       # noqa: F401  （显式见于断言）
-from app.mod03_notice import notice_actions as NA
+from app.mod03_notice import notice_manual_actions as NA
 from app.mod03_notice import rules_repository as RR
 from app.mod04_plan import plan_ui as U
 from app.mod08_inv import domain as I

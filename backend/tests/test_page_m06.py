@@ -201,8 +201,10 @@ def test_预览暂存不落库且两个导入页共用同一载具():
     with pytest.raises(MustReportError):
         preview_store.load("../etc/passwd")            # 路径穿越 ⇒ 直接拒
     # `MOD-05` 的付款导入走**同一个**载具（此前是它自己的一份 `_dump/_load`）
+    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：这两个编排函数随导入页收口搬进了 `import_api.py`
+    #    （**逐字**搬，⛔ 判定一行没变）⇒ 本行只换落点，测的还是同一件事。
     from app.mod05_flow import importer as m05
-    from app.mod05_flow.import_router import _known, _payload, _plan_of
+    from app.mod05_flow.import_api import _known, _payload, _plan_of
 
     plan = m05.parse_rows([["FKTZS2026090466", "3000.00", "2026-08-05", "现汇", ""]])
     again = _plan_of(_payload(plan))
@@ -216,13 +218,26 @@ def test_预览暂存不落库且两个导入页共用同一载具():
 
 @acc()
 def test_历史导入页三步齐备且带项目与截止月():
-    from app.mod06_proc.import_view import render_import_page
+    """导入页**齐全**：三步（选文件 → 预览 → 确认）＋ 项目（键 = 仓库名）＋ 当前截止核算月 ＋ 列说明。
+
+    ⚠️ 2026-09-21（`§19` 四个暂留件收口）：页面搬进新壳 ⇒ 分两半钉住（同「形态变、判据不变」）：
+      ① **后端给的数据**（项目候选 / 截止核算月 / 列说明）—— 来自 `service.build_import_data`
+         ＋ `import_api`（⛔ 壳里不许另算一份）；
+      ② **壳把三步与这些数据都画出来**、且上传走 `/api/m06/import/parse`。
+    """
+    from app.mod06_proc import import_api
+    from tests.shell_src import SHELL            # noqa: PLC0415  ← `P4`① 读取点收敛
 
     s = _sess()
-    html = render_import_page(build_import_data(s, warehouse=WAREHOUSE))
-    assert 'action="/m06/import/preview"' in html
-    assert f'name="pj" value="{WAREHOUSE}"' in html
-    assert "核算月" in html and "入库主辅材" in html
-    assert "机械 6 列不导入" in html
-    assert CUTOFF_YM in html, "当前截止核算月要显示出来"
-    assert "不提供行内编辑" in html
+    data = build_import_data(s, warehouse=WAREHOUSE)
+    assert data["warehouse"] == WAREHOUSE, "项目（键 = 仓库名）没带出来"
+    assert data["cutoff_ym"] == CUTOFF_YM, "当前截止核算月要显示出来"
+
+    meta = import_api.api_meta()
+    mats = meta["material_labels"]
+    assert "入库主辅材" in mats, "材料列清单要从域口径出（壳里不许另抄一份）"
+    assert set(meta["mech_labels"]) == set(D.MECH_COLUMNS)
+
+    assert "/api/m06/import/parse" in SHELL, "壳的上传口没接上解析端点"
+    for must in ("核算月", "机械 6 列不导入", "不提供行内编辑", "截止核算月"):
+        assert must in SHELL, f"壳的导入页少了这一段文字：{must}"

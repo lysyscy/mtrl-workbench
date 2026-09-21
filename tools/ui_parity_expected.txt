@@ -16,3 +16,7 @@ m15 566cf405  # 原型: <td class="now sm mut">${esc(u.last||'—')}</｜壳: <t
 # ⭐ 2026-09-20（m15 片 4b：① 表头加主题选择器（按用户隔离，接 /api/m15/theme）② 操作列加「看密码」（明文裁定的显式出口））
 m15 58918bf0  # 原型: <button class="btn" data-act="logout">登出</bu｜壳: <select class="inp" style="width:auto" data-
 m15 118d0ddb  # 原型: : `<button class="btn sm" data-act="userPwd"｜壳: : `<button class="btn sm" data-act="userPwd"
+# ⭐ 2026-09-21（`§19` 批 5 · 看板接真数据：`home` 进 `WIRED` ⇒ 它那一格"这页是真是假"必须按页说实话。
+#   原型那一句**必须**留着「所有数据均为虚构模拟值」；壳那一句必须说真话 ⇒ 这是**唯一**一处**有意**的行差。
+#   ⚠️ `V.home` 其余 45 行**逐字相同**（取自数抽成两边同名不同体的 `homeCounts()`，定义在切片之外）
+home fcd29e76  # 原型: <div class="tip">本页为<b>待办页</b>…所有数据均为虚构模拟值。｜壳: <div class="tip">本页为<b>待办页</b>…⭐ <b>本页数据全部来自后端真实数据</b>

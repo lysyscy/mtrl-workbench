@@ -106,11 +106,17 @@ def summary_row(data: dict) -> dict:
     ⚠️ **口径与欠款一致**：剔除行**不计入**（原型 `sumRows = list.filter(ntLive)`）。
     ⚠️ 切到「分类 = 剔除」时该视图**全是剔除行** ⇒ **不给合计行**（不给一排 0，免得看着像坏了）。
     ⚠️ 首格写「合计」（与 `m08` 同款）；排序时该行由 `data-pin="1"` **钉在表尾**。
+
+    ⚠️⚠️ **2026-09-20 修**：判据改成 `NoticeRow.is_live`（**唯一出口**）。
+       本函数原先手写 `not excluded` —— 比 `ntLive` **少算**了「**撤单但有牵涉**」那一档
+       （§4.2.7：i8 侧单据被删、但本系统里还挂着付款流水 / 集采关联 ⇒ 不许静默丢账，仍要计入）。
+       注释里写着"与原型的 `ntLive` 一致"，实现却不是 ⇒ **这正是"同一事实多处写"那类静默错**：
+       合计行会**悄悄少几笔**，而且只在"有撤单牵涉行"时才对不上，平时看不出来。
     """
     cols = columns()
     live = [
         rec["_row"] for rec in (data.get("rows") or ())
-        if rec.get("_row") is not None and not bool(getattr(rec["_row"], "excluded", False))
+        if rec.get("_row") is not None and bool(rec["_row"].is_live)
     ]
     if not live:
         return {}
@@ -148,7 +154,7 @@ def build_page_data(
        命中的行在本页**预勾选**，并回报"因项目筛选被跳过几条"。
     """
     from app.core.identity import current_operator
-    from app.mod03_notice.notice_actions import manual_project_options
+    from app.mod03_notice.notice_manual_actions import manual_project_options
 
     f = filters or NoticeFilters(period=default_period(PERIOD_DEFAULT_KEY))
     rows = build_rows(session, flows_of=flows_of, links_of=links_of, traces_of=traces_of)

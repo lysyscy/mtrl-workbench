@@ -25,6 +25,10 @@ from _shell_arch import check as check_arch   # noqa: E402  ← ⑮ 链路 A「�
 from _shell_m02 import check as check_m02     # noqa: E402  ← ⑯ i8 接入层回显/日志（`TAIL-27`）
 from _shell_m01type import check as check_type  # noqa: E402  ← ⑰ m01 类型列人工覆盖（`TAIL-42`）
 from _shell_ownwh import check as check_ownwh  # noqa: E402  ← ⑱ 链路 C 兜底前查 i8 名单（`TAIL-39`）
+from _shell_home import check as check_home    # noqa: E402  ← ⑲ 看板接真数据（`§19` 批 5）
+
+from _shell_exp import check as check_exp        # noqa: E402  ← ⑬ m07 导出（`TAIL-04`）—— 2026-09-21 外移（本文件逼近 600 行红线）
+from _shell_legacy import check as check_legacy  # noqa: E402  ← ⑳ 四个暂留件收口的壳内四页（`§19`）
 
 BASE = "http://127.0.0.1:8000"
 errors: list[str] = []
@@ -482,78 +486,9 @@ def main() -> int:
             if not ok:
                 errors.append("m14 写路径自检未通过：" + what)
 
-        # ⚠️ 默认月那一条**必须是两态断言**（2026-09-18 实测踩到 · 假红）：
-        #    材料报表的默认月 = **上月**，而"上月到底有没有数据"是**数据状态**、不是代码保证
-        #    ⇒ 若只写"没数据 ⇒ 回中文原因"那一态，则默认月**真有了数据**时这条会**误报红**
-        #    （实测：2026-08 有 8 个仓、198 KB 的真 zip ⇒ `d.json` 为空 ⇒ 旧断言直接判红 ✗）。
-        def _def_month_ok(x: dict) -> bool:
-            if x.get("json"):                      # 没数据 ⇒ 必须是**中文原因**（⛔ 不是崩）
-                return bool(x.get("ok") is False and (x.get("message") or "").strip())
-            return (x.get("ct") == "application/zip"   # 有数据 ⇒ 必须是**真 zip**
-                    and x.get("magic") == "PK" and x.get("size", 0) > 0)
-
-        # ---- m07 导出（`TAIL-04`）：⭐ 可观测证据 = **从页面上下文真拉一次 zip**。
-        #      ⚠️ 两件事分开验（都是真事实）：
-        #        ① **默认月没数据**时（材料报表默认 = 上月，而真机数据可能落在别的月）
-        #           ⇒ 必须回**中文原因**、⛔ 不能崩、不能产出空文件；
-        #        ② 换到**有数据的月份** ⇒ 必须真拿到 zip，且文件名含**那个月份**。
-        exp = page.evaluate("""async () => {
-            const label = p => { const [y, m] = p.split('-'); return Number(y) + '年' + Number(m) + '月'; };
-            const grab = async p => {
-                const r = await fetch('/api/m07/settlement/export?period=' + encodeURIComponent(p));
-                const ct = r.headers.get('content-type') || '';
-                if (ct.includes('application/json')) {
-                    const d = await r.json();
-                    return { period: p, json: true, ct: ct, ok: d.ok, message: (d.message || '').slice(0, 90) };
-                }
-                const b = await r.blob();
-                const u8 = new Uint8Array(await b.slice(0, 2).arrayBuffer());
-                return { period: p, ct: ct, label: label(p),
-                         fn: decodeURIComponent(r.headers.get('x-export-filename') || ''),
-                         size: b.size, magic: String.fromCharCode(u8[0], u8[1]),
-                         warehouses: pjSort(whRows(p)).length };
-            };
-            const def = await grab(fWhYm);                 /* ① 默认月（可能就是没数据的那个月） */
-            const cands = [];
-            for (let i = 0; i <= 3; i++) {
-                const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
-                cands.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
-            }
-            let hit = null;
-            for (const p of cands) {
-                const r = await grab(p);
-                if (!r.json) { hit = r; break; }
-            }
-            return { def: def, hit: hit, tried: cands };
-        }""")
-        print("⑬ 导出（TAIL-04）= 默认月：", exp.get("def"))
-        print("                 有数据的月：", exp.get("hit"))
-        d, h = exp.get("def") or {}, exp.get("hit") or {}
-        oks11 = [
-            (
-                _def_month_ok(d),
-                "① 默认月（{}）**要么**回中文原因（那个月没数据）、**要么**给真 zip（有数据）"
-                "—— 唯独不许是崩 / 空壳 ⇒ 实测：{}".format(
-                    d.get("period"),
-                    (f"真 zip {d.get('size')} B · {d.get('warehouses')} 仓")
-                    if not d.get("json")
-                    else f"中文原因「{(d.get('message') or '')[:36]}」",
-                ),
-            ),
-            (bool(h), f"② 近 4 个月里至少有一个月导得出（试过 {exp.get('tried')}）"),
-            (bool(h) and h.get("ct") == "application/zip",
-             f"② content-type = application/zip（{h.get('ct')}）"),
-            (bool(h) and h.get("magic") == "PK",
-             "② 内容以 `PK` 开头 ⇒ **真的是 zip**（不是空壳 / 错误页）"),
-            (bool(h) and h.get("label") in (h.get("fn") or ""),
-             f"⭐ 文件名由后端带出、且含**该月份**：{h.get('fn')}"),
-            (bool(h) and h.get("size", 0) > 20000,
-             f"② 大小 {h.get('size')} B（应含 {h.get('warehouses')} 个分仓库表 ＋ 总表）"),
-        ]
-        for ok, what in oks11:
-            print(("  ✅ " if ok else "  ⛔ ") + what)
-            if not ok:
-                errors.append("TAIL-04 导出自检未通过：" + what)
+        # ---- m07 导出（`TAIL-04`）：**从页面上下文真拉一次 zip**（默认月 ＋ 有数据的月，两态都验）。
+        #      ⚠️ 这一段自己七十多行 ⇒ 挪 `_shell_exp.py`：本文件有 **600 行**硬上限（`doc_audit` 的 `T5` = 红）。
+        check_exp(page, errors)
 
         # ---- ⑭ m01 链路 B「待人工指认」（`TAIL-30`-③）——
         #      ⚠️ 这一段自己一百多行（**真造库样本 ＋ 真点弹窗 ＋ 复原**）⇒ 挪到 `_shell_pend.py`：
@@ -571,6 +506,13 @@ def main() -> int:
 
         # ---- ⑱ 链路 C「兜底前先查 i8 仓库名单」（`TAIL-39`）—— 入口在 ＋ 二次确认在 ＋ 没查过被拦，挪 `_shell_ownwh.py`。
         check_ownwh(page, errors)
+
+        # ---- ⑲ 看板接真数据（`§19` 批 5）—— 9 项待办 ＋ 三个记账数与后端对齐 ＋ 那句假话已不在，挪 `_shell_home.py`。
+        check_home(page, errors)
+
+        # ---- ⑳ 四个暂留件收口（`§19` · 2026-09-21）—— 设置 ＋ 三个历史导入：四页渲染 ＋
+        #      **无死控件**（真机版的 `data-act`/`CHG` 守卫）＋ 页内容是后端的，挪 `_shell_legacy.py`。
+        check_legacy(page, errors)
 
     print("\n=== console / page 错误 ===")
     if errors:

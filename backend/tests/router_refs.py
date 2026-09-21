@@ -30,10 +30,18 @@ def app_dir() -> pathlib.Path:
 
 
 def router_modules() -> list[tuple[str, ModuleType]]:
-    """全站路由件：`(相对路径, 模块)` —— 文件名**含 `router`** 的都算（`import_router.py` 等分件也在内）。"""
+    """全站路由件：`(相对路径, 模块)` —— 文件名**含 `router` 或 `api`** 的都算。
+
+    ⚠️ **2026-09-21 加宽**（`§19` 四个暂留件收口）：新加的四个模块端点件叫 `*_api.py`
+       （`settings_api.py` / `import_api.py`）—— 只扫 `*router*` 会**漏掉它们**，
+       而本守卫的全部价值就在「**按形态发现、新加的路由件不许漏网**」（见模块头）。
+    ⚠️ `notice_api_router.py` 两个模式都命中 ⇒ **必须去重**（否则同一个模块被扫两遍、
+       报告里出现重复条目，人就看不出到底有几件）。
+    """
     root = app_dir()
+    paths = {p for pat in ("**/*router*.py", "**/*api*.py") for p in root.glob(pat)}
     out: list[tuple[str, ModuleType]] = []
-    for path in sorted(root.glob("**/*router*.py")):
+    for path in sorted(paths):
         rel = path.relative_to(root.parent).with_suffix("")
         name = ".".join(rel.parts)
         out.append((str(path.relative_to(root.parent)), importlib.import_module(name)))

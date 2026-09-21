@@ -258,7 +258,10 @@ def test_未二次确认即拒且失败降级且不自动重试登录():
     from app.main import create_app
 
     paths = set(create_app().openapi()["paths"])
-    assert {"/m08/import", "/m08/import/preview", "/m08/import/confirm"} <= paths
+    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：手动导入页搬进新壳 ⇒ 服务端渲染的三条 PRG 已删，
+    #    同一件事由**新壳的 JSON 端点**承接（`import_api.py`）—— 判词不变：
+    #    「降级后用户**确实有**手动导入这条路」（页在壳里 `V.m08imp`，上传走 parse → confirm）。
+    assert {"/api/m08/import/parse", "/api/m08/import/confirm"} <= paths
     # ⚠️ 2026-09-18（`§19` 批 2）：原先还拿**旧页**的 `_flash_html` 渲染一遍、断言回执里有
     # `href="/m08/import"`；旧页删除（`D18`）后那一半随之作废 —— 上面那条「导入端点**真的存在**」
     # 才是这条 claim 的实质（降级后用户**确实有**手动导入这条路），留着。

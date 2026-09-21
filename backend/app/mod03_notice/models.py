@@ -71,7 +71,7 @@ class PaymentNotice(Base):
     exclude_source: Mapped[str] = mapped_column(String(16), default=EXCLUDE_NONE)
 
     # 手动新增行（§4.2.6）：**只对手动行开放编辑 / 删除**；i8 抓取回来的行恒为 False（源数据只读）
-    # ⚠️ 手动行的 `ph_id` 带 `MANUAL-` 前缀、**不是 i8 单据**（见 `notice_actions.MANUAL_PH_PREFIX`）
+    # ⚠️ 手动行的 `ph_id` 带 `MANUAL-` 前缀、**不是 i8 单据**（见 `notice_manual_actions.MANUAL_PH_PREFIX`）
     is_manual: Mapped[bool] = mapped_column(Boolean, index=True, default=False)
 
     # ⚠️ 原「**付款金额（源）**」（`pay_amount_src`）**已于 2026-09-16 取消**（§4.2.5）——

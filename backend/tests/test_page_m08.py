@@ -11,13 +11,14 @@ from decimal import Decimal
 from io import BytesIO
 
 from app.mod08_inv import importer
-from app.mod08_inv.import_router import _apply, _groups_of, _payload, _rows_of
-from app.mod08_inv.import_view import render_import_page
+from app.mod08_inv.import_api import _apply, _groups_of, _payload, _rows_of
 from app.mod08_inv.models import InvAdjustment, InvDetail
 from app.mod08_inv.repository import load_rows
 # ⚠️ 2026-09-19（`TAIL-27` · `§19` 批 2）：`app.mod08_inv.view` 已随「明细总表页半边」整体删除
-#    （授权 `D18`）⇒ 本文件此后只测**仍在的东西**：导入那半边（`import_view`/`import_router`/`importer`）
-#    与解析管线 —— ⛔ 判据没删，形态那半边已搬到 `tests/test_wired_m08.py`。
+#    （授权 `D18`）⇒ 本文件此后只测**仍在的东西**：导入那半边（`importer` ＋ 编排）与解析管线
+#    —— ⛔ 判据没删，形态那半边已搬到 `tests/test_wired_m08.py`。
+# ⚠️ 2026-09-21（`§19` 四个暂留件收口）：导入页搬进新壳 ⇒ `import_router.py` / `import_view.py`
+#    已删，编排（`_payload` / `_rows_of` / `_groups_of` / `_apply`）**原样**搬进 `import_api.py`。
 from tests.acc_plugin import acc
 from tests.m08_helpers import FakeSession
 
@@ -98,12 +99,28 @@ def test_手动导入照样不动有调整单的行():
 
 @acc()
 def test_入口在页面与降级回执里都真的给出来了():
-    assert 'action="/m08/import/preview"' in render_import_page()
-    assert "报表1" in render_import_page()                  # 说明里写了读哪张工作表
+    """入口真的在：**页面上能选文件去解析**（壳）＋ **解析端点存在**（后端）。
+
+    ⚠️ 2026-09-21（`§19` 四个暂留件收口）：原先这条看的是服务端渲染页的 `action="/m08/import/preview"`；
+       导入页搬进新壳后，**同一件事**改由两半合起来钉住 ——
+       ① 壳 `V.m08imp` 有选文件 ＋ 「解析并预览」入口，且上传走 `/api/m08/import/parse`；
+       ② 那份"文件要求"（必有列 / 刻意不采的源列）由后端 `import_api` 给（⛔ 壳里不许另抄一份）。
+    """
+    from app.mod08_inv import import_api
+    from tests.shell_src import SHELL            # noqa: PLC0415  ← `P4`① 读取点收敛
+
+    meta = import_api.api_meta()
+    assert meta["ok"] and set(meta["required_headers"]) == set(importer.REQUIRED_HEADERS)
+    assert set(meta["ignored_headers"]) == set(importer.IGNORED_HEADERS)
+
+    assert "/api/m08/import/parse" in SHELL, "壳的导入入口没接上解析端点"
+    assert "imp08Parse" in SHELL and "data-act=\"imp08Ok\"" in SHELL, \
+        "壳里缺「解析并预览」/「确认导入」两个入口（用户没有手动通道）"
+    assert "imp08Pick" in SHELL, "壳里缺选文件的入口"
     # ⚠️ 2026-09-19（`§19` 批 2）：原先这里还有三条 —— 明细页工具栏有入口 / 降级回执给出这条通道 /
     #    抓取弹窗只走抓取 —— 它们借**旧明细页**（`render_inv_page`/`_flash_html`/`fetch_dialog_html`）观测；
     #    旧页整体删除（`D18`）后那半边随之作废：
-    #    · 「降级后用户确实有手动导入这条路」⇒ 由上面第 1 行的 `render_import_page()`（**导入页仍在**）
+    #    · 「降级后用户确实有手动导入这条路」⇒ 由上面那几条（**壳里两个入口 ＋ 解析端点**）
     #      ＋ `test_acc_inv_fetch.py` 的 001-08（导入端点真的存在）保住 ✓；
     #    · 「抓取弹窗只走抓取 / 会强踢要告知」⇒ 形态搬到壳
     #      （`test_wired_m08.py::test_抓取弹窗默认取本页核算年月且讲清强踢` ✓）。

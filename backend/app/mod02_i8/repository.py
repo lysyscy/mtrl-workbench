@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.mod02_i8.models import RunRecord
+from app.mod02_i8.schemas import RunRecordOut
 
 
 def create_run_record(session: Session, *, run_type: str, target: str, total: int = 0,
@@ -57,7 +58,11 @@ def finish_run_record(
 
 
 def recent_fetch_failures(session: Session, *, run_type: str = "fetch", limit: int = 5) -> list[RunRecord]:
-    """最近的失败记录（供看板「最近一次抓取失败」提示）。"""
+    """最近的失败记录（供看板「最近一次抓取失败」提示）。
+
+    ⚠️ 「失败」= `status IN ('failed','partial')` —— **部分成功也算失败**（`TAIL-46` 的三态里
+       「已投递（未核实）」不并进"失败"，但本函数的用途是**提示有人要去看一眼**，故收进来）。
+    """
     from sqlalchemy import select
 
     return list(
@@ -67,6 +72,25 @@ def recent_fetch_failures(session: Session, *, run_type: str = "fetch", limit: i
             .order_by(RunRecord.id.desc())
             .limit(limit)
         ).scalars().all()
+    )
+
+
+def run_record_out(r: RunRecord) -> RunRecordOut:
+    """执行记录 → 出参（**唯一出口**）。
+
+    ⚠️ 2026-09-21 提取：原先这段换算**内联在 `mod02_i8/router.py::fetch_records` 里**，
+       看板记账端点要用同一形状 ⇒ 抽成一份（否则两处各写一遍，字段一改必漂）。
+    """
+    return RunRecordOut(
+        id=r.id,
+        run_type=r.run_type,
+        target=r.target,
+        status=r.status,
+        success_count=r.success_count,
+        fail_count=r.fail_count,
+        error_message=r.error_message,
+        started_at=r.started_at.isoformat(timespec="seconds"),
+        finished_at=r.finished_at.isoformat(timespec="seconds") if r.finished_at else None,
     )
 
 
@@ -111,4 +135,5 @@ def save_run_record(
     return rec
 
 
-__all__ = ["create_run_record", "finish_run_record", "recent_fetch_failures", "save_run_record"]
+__all__ = ["create_run_record", "finish_run_record", "recent_fetch_failures", "run_record_out",
+           "save_run_record"]

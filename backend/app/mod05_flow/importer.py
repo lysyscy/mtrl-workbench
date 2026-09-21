@@ -255,11 +255,22 @@ def rollback(s, batch: str, *, changed_by: str = "") -> dict:
 
 
 def check_report(s, batch: str) -> dict:
-    """⭐ **核对报告**（§4.4.6）：该批月份里、**一条生效流水都没有**的通知书。"""
+    """⭐ **核对报告**（§4.4.6）—— 两部分，都由该批流水的**月份**划定范围：
+
+    ① `rows` / `count` —— 该批月份里、**一条生效流水都没有**的通知书（供发现 **Excel 漏记**）；
+    ② `overpaid` / `overpaid_count` —— 该批月份里、**实付合计 > 审批金额**的通知书
+       （§4.4.6 第一句的第三半「**核对报告单列**」：`P4` 超付处置三半的最后一半；
+       ⚠️ 与界面上的「超付」提醒是**同一判据的两处落点** —— 提醒那半在
+       `mod03_notice/list_view.NoticeRow.is_overpaid` → 壳 `V.m03`，见 `TAIL-49`）。
+
+    ⚠️ 两块**都从该批月份的流水算起**（`flows_in_batch`）⇒ 回滚后重算同一个批次，两块一起变。
+    """
     months = sorted({str(f.pay_date or "")[:7] for f in repo.flows_in_batch(s, batch)
                      if str(f.pay_date or "").strip()})
     rows = repo.notices_without_flow(s, months)
-    return {"batch": batch, "months": months, "count": len(rows), "rows": rows}
+    overpaid = repo.notices_overpaid(s, months)
+    return {"batch": batch, "months": months, "count": len(rows), "rows": rows,
+            "overpaid": overpaid, "overpaid_count": len(overpaid)}
 
 
 __all__ = [

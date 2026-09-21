@@ -3,7 +3,7 @@
 做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。
 ⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿** ⇒ 脚本报错退出。
 
-⚠️ 一律走 **bytes**（`index.html` = **CRLF**；`notice_actions.py` = **LF**）：按目标文件行尾归一后再替换，
+⚠️ 一律走 **bytes**（`index.html` = **CRLF**；`notice_pay_actions.py` = **LF**）：按目标文件行尾归一后再替换，
    还原也用**原 bytes** —— 用 `write_text(newline=…)` 会把 CRLF 静默换成 LF ⇒ MD5 假 BAD。
 ⚠️ 子进程必须设 `ACC_RESULTS_PATH`（否则每处变异把权威 `acc_results.json` 冲成单条）
    与 `PYTHONIOENCODING=utf-8`（否则 Windows 上 GBK 解码假红）—— 见 `_mut_m03list.py` 的说明。
@@ -20,7 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BE = ROOT / "backend"
 from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
-ACTIONS = BE / "app" / "mod03_notice" / "notice_actions.py"
+# ⚠️ 2026-09-21（`T5` 拆分）：`default_pay_method` 自 `notice_actions.py` 挪进 `notice_pay_actions.py`
+#    ⇒ 路径跟着改（⛔ 别看漏：锚点找不到 = 变异**静默失效**、那条断言有没有区分力就没人知道了）。
+ACTIONS = BE / "app" / "mod03_notice" / "notice_pay_actions.py"
 PY = BE / ".venv" / "Scripts" / "python.exe"
 TEST = "tests/test_wired_m03_pay.py"
 
@@ -129,7 +131,10 @@ def main() -> int:
     hit = 0
     for desc, path, old_lf, new_lf, case in MUTS:
         # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
-        path = pick(path, old_lf, new_lf)
+        # ⚠️⚠️ 2026-09-21 修：`pick()` 收的是 **str** 锚点，而本脚本的 `_b()` 给的是 **bytes**
+        #    ⇒ `pick(path, old_lf, new_lf)` **一跑就 TypeError 崩掉**（`P4`② 加 `pick` 那天起就这样）。
+        #    崩掉的"复跑守卫"= **静默失效**：没人复跑 ⇒ 那几条断言有没有区分力**没人知道**。
+        path = pick(path, old_lf.decode("utf-8"), new_lf.decode("utf-8"))
         before.setdefault(path, (path.read_bytes(), hashlib.md5(path.read_bytes()).hexdigest()))
         src = path.read_bytes()
         old, new = _fit(old_lf, src), _fit(new_lf, src)

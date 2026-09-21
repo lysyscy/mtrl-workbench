@@ -95,12 +95,13 @@ def test_壳里本次应付为0也不可付():
 
 @acc("ACC-PAY-BATCH-001", "001-03")
 def test_付款方式默认取付款计划取不到兜底现汇():
-    """§4.4.2 的**唯一出口** `notice_actions.default_pay_method`：先取付款计划的值、取不到兜底「现汇」。
+    """§4.4.2 的**唯一出口** `notice_pay_actions.default_pay_method`：先取付款计划的值、取不到兜底「现汇」。
 
     ⚠️ 「取计划」那半边原先只在旧页的 `test_notice_pay.py` 里；那件随页删除 ⇒ 这里守住纯函数本身
        （API 那半边＝"缺省时兜底现汇"由 `test_notice_action_api.py` 的用例守着）。
     """
-    from app.mod03_notice.notice_actions import default_pay_method
+    # ⚠️ 2026-09-21（`T5` 拆分）：自 `notice_actions` 挪进 `notice_pay_actions` —— **判定一行未变**。
+    from app.mod03_notice.notice_pay_actions import default_pay_method
 
     assert default_pay_method("D1", {"D1": "承兑"}) == "承兑", "取不到计划值"
     assert default_pay_method("D2", {"D1": "承兑"}) == "现汇", "计划里没有该单据号时没兜底「现汇」"
@@ -115,19 +116,34 @@ def test_付款方式默认取付款计划取不到兜底现汇():
 
 @acc("ACC-PAY-BATCH-001", "001-04")
 def test_壳里撤单行与剔除行不得进入付款():
-    """**撤单行**（i8 侧已删，§4.2.7）与**剔除行**（与本域无关，§4.2.2 用户 2026-09-16 裁定）
-    一律**不得进入付款批次** —— 准入判据收敛到一个出口 `ntPayCand`：
+    """**撤单行**（i8 侧已删，§4.2.7）与**剔除行**（§4.2.2）一律**不得进入付款批次**
+    —— 付款准入的唯一出口仍是 `ntPayCand`：全选 / 按计划勾选过滤 · 窗口组装 · 提交再兜一道。
 
-    · 勾选框：不可勾（`disabled`）；· 全选 / 按计划勾选：同一出口过滤；
-    · 窗口组装与提交：**再各兜一道**（防"勾上之后才被标撤单"的状态错位 ⇒ 已作废的单被送进付款）。
+    ⚠️⚠️ **2026-09-21 按形态变化重指**（**claim 一字未改**：仍是「两者都不进付款批次
+       ＋ 显式告知、不得静默少几行」）。原先这里还断言「勾选框对非付款候选 `disabled`」——
+       那是把 claim 的「**不进付款批次**」**过度施加到勾选框上**了，后果是 **剔除行永远勾不上**，
+       而「恢复剔除」又要求「必须先勾选」（`ACC-PAY-CAT-001/001-10`）⇒
+       **两道门互锁、恢复这条路根本走不通**（用户 2026-09-21 报障）。
+       ⭐ 澄清：2026-09-16 那次裁定说的是「**归属校验**前先剔掉规则剔除行」（`ACC-PRJ-OWN-001/001-09`），
+          **不是**勾选框 —— 勾选 ≠ 能付款：勾选集服务「批量付款」与「恢复剔除」两件事。
+       ⭐ claim 后半句「**显式告知（不得静默少几行）**」在旧形态下**根本测不到**
+          （剔除行压根进不了勾选集，那条提示只有撤单行会触发）⇒ 本次一并补上。
     """
     assert "const ntLive=n=>!n.excl&&" in SHELL, "有效行口径没排除**剔除行**"
     assert "const ntPayCand=n=>ntLive(n)&&!ntVoid(n);" in SHELL, "付款准入的唯一出口 `ntPayCand` 变了"
-    assert "${ntPayCand(n)?'':'disabled'}" in SHELL, "勾选框没有对「非付款候选」禁用"
+    # ⭐ 勾选框走**可勾选**出口（= 付款候选 ∪ 剔除行）；⛔ 付款闸不许搬回勾选框（那会再上锁）
+    assert "const ntSelectable=n=>ntPayCand(n)||!!n.excl;" in SHELL, \
+        "可勾选出口没把**剔除行**放进来 ⇒ 「恢复剔除」又无路可走"
+    assert "${ntSelectable(n)?'':'disabled'}" in SHELL, "勾选框没走可勾选出口"
+    assert "${ntPayCand(n)?'':'disabled'}" not in SHELL, \
+        "勾选框又被钉回 `ntPayCand` 上了 —— 与「恢复剔除必须先勾选」互锁"
     reg = _batch_pay()
     assert "const rows=all.filter(ntPayCand), drop=all.filter(n=>!ntPayCand(n));" in reg, \
-        "窗口组装没有走准入唯一出口"
-    assert "已自动排除 ${drop.length} 条「i8 已撤单」的通知书" in reg, "排除撤单行时没显式告知"
+        "窗口组装没有走付款准入唯一出口"
+    # ⭐ claim 的「显式告知」：**按行说真因** —— 剔除与撤单是两回事，⛔ 不能一律写成"i8 已撤单"
+    assert "const whyOf=n=>ntVoid(n)?'i8 已撤单':'已剔除';" in reg, "排除提示没按行区分真因"
+    assert "已自动排除 ${drop.length} 条不可付款的记录" in reg, "排除时没显式告知（会静默少几行）"
+    assert "恢复剔除 / 撤销已付 / 解绑关联" in reg, "没给解决路径（只说不行、不说怎么办）"
     assert ".filter(Boolean).filter(ntPayCand);" in _batch_pay_ok(), "提交时没有兜底复检准入"
 
 

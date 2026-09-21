@@ -107,9 +107,45 @@ class NoticeRow:
         return payment_status(self.amount_paid, self.amount_approved)
 
     @property
+    def is_overpaid(self) -> bool:
+        """⭐ **超付**：已付金额 **>** 审批金额（`P4` 链路 · 《说明书》§4.4.6「超付的处置」）。
+
+        ⚠️ 它是**纯派生**、⛔ **不落库** —— 同 `pay_status` 那条的理由：做成字段就给
+           "字段值与事实不一致"留了口子（改一处忘了同步另一处，**静默**且只在超付时才暴露）。
+        ⚠️ 判定用 **`>`**（⛔ 不是 `>=`）：实付 == 审批金额 = **付清**，不是超付。
+        ⚠️ **超付是既成事实，不是错误**：NC 侧确实付了 ⇒ 流水照记、统计照实不封顶
+           （`mod05_flow.repository.sync_stat_paid`），**系统只挂提醒**（§4.4.6），
+           ⛔ 不封顶、⛔ 不改写、⛔ 不自动冲销。
+        ⚠️ 它与「付款动作禁止超付」（§4.4.4）**不冲突**：那条约束的是**动作**。
+        ⚠️ 这里**只回答"这一单超没超"** —— 超付**从哪来**（历史导入 / i8 把审批金额改小…）
+           **不由本属性区分**：无论来源，事实一致、处置一致（挂提醒）。
+        """
+        return to_money(self.amount_paid) > to_money(self.amount_approved)
+
+    @property
     def in_exclude_view(self) -> bool:
         """是否属于「分类 = 剔除」专用视图（§4.2.2：剔除行 **＋** i8 已撤单行）。"""
         return bool(self.excluded or self.i8_revoked)
+
+    @property
+    def is_live(self) -> bool:
+        """⭐ **统计口径的「有效行」** —— 页面的 `ntLive(n)` 在后端的**唯一对应物**。
+
+        = **未剔除** 且（**未撤单** 或 **撤单但有牵涉**）。
+
+        ⚠️ 两条都不能省，而且是**互相反向**的两件事：
+          · **剔除行不计入**（§4.2.2 —— 剔除就是"别算我"）；
+          · ⚠️ **有牵涉的撤单行仍要计入**（§4.2.7 —— i8 侧单据被删了，但本系统里**还挂着付款流水 /
+            集采关联** ⇒ **不许静默丢账**，得等人先撤销付款 / 解绑关联；处理完它才退场）。
+        ⚠️ 「有牵涉」的判据 = **已付金额 > 0 或 有关联集采合同** —— 与页面 `ntVoidJoint` 逐字同条件
+          （那里写的是 `paidOf(n.id)>0 || jcRefOf(n.id)`；`amount_paid` 就是生效流水汇总 ⇒ 同一个数）。
+        ⚠️ **凡统计出口（合计行 / 欠款 / 计数）一律用它，⛔ 不要再手写 `not excluded`** ——
+           `list_data.summary_row` 原先就是这么写的（少算了"有牵涉的撤单行"），
+           而那正是本项目反复踩的「同一事实多处写」。
+        """
+        return (not self.excluded) and (
+            (not self.i8_revoked) or (self.amount_paid > 0 or self.has_link)
+        )
 
     @property
     def exclude_reason(self) -> str:

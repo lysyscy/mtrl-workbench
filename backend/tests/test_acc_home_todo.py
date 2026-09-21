@@ -3,34 +3,196 @@
 判据 → `PRD/验收/验收基线.json` 的 `cases["ACC-HOME-TODO-001"]`。
 ⚠️ **看板不占模块号**（原型导读）⇒ 本页交互规格主人 = 原型 `V.home`（`demo/`）。
 
-做法：`gather()` 内部是**函数级 import**（每次调用才从各域模块取出口）⇒ 测试用 `monkeypatch`
-      替换**各域出口**即可，**不连库、不连 i8**。
+⭐⭐ **2026-09-21 判据搬家（`§19` 批 5 · 看板接真数据）**：看板原先有**服务端渲染页**
+   （`app/home/view.py` ＋ `home/domain.py` ＋ `home/service.gather`），10 点全钉在那半边。
+   看板现已进壳（`WIRED` 含 `home`）⇒ 旧页与那三个出口**已于 2026-09-21 删除**，
+   断言**改指新壳**（⛔ 判据一条不删、编号不变 —— 这就是"形态变、判据不变"）：
+
+| 点 | 现在的落点 |
+|---|---|
+| `001-01` `001-02` `001-03` `001-06` `001-07` `001-08` `001-09` `001-10` | 壳 `index.html` 的 `V.home` 切片（**A 段**） |
+| `001-04` `001-05` | 后端 `GET /api/home/run-counts`（`app/home/service.py::run_counts`，**B 段**） |
+
+⭐ **为什么 ⑦⑬⑭ 那两点落在后端**（不是偷懒）：`run_record` 是**流水表**
+   （2026-09-21 实测 5 天 49 条 ≈ **10 条/天** ⇒ 一个月 ≈300 条），而记录端点是**窗口**
+   （`limit ≤ 200`）⇒「本月有没有成功抓取」在窗口里**会漏**、**而且漏了不报错**
+   （症状 = 看板说"本月未抓" ⇒ 用户照着去重抓 ⇒ **白顶一次 i8 的号**）。
+   ⇒ 判据要求"取自执行记录"，那就必须**跨全表** ⇒ 只有后端能答。
+
+⚠️ 只读壳源码（`SHELL`）；A 段的断言一律在 **`V.home` 切片**里找 ——
+   不到全文里撞（`data-todo` / `tile(` 这类写法在别的页也有 ⇒ 会**假命中**）。
 """
 
 from __future__ import annotations
 
 import re
+from datetime import datetime
+from pathlib import Path
 
-import pytest
-
-from app.home import domain as D
-from app.home import service as S
-from app.home.view import render_home
 from tests.acc_plugin import acc
+from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+
+from app.home import service as S
 
 CASE = "ACC-HOME-TODO-001"
 
+#: 9 项把手（**顺序也是契约** —— 看板按此序展示）
+KEYS = ("ntUnapproved", "ownership", "planUnmatched", "jcPending", "dfPending",
+        "placeholder", "fetchDue", "fetchFail", "printFail")
 
-# ----------------------------------------------------------------- 桩件
-class _P:
-    """假档案行（只带本页用到的字段）。"""
+#: 每项的去向页（`data-k`）—— ⚠️ `dfPending` 2026-09-21 由 `m12`（已撤页）改指 `m08`
+DEST = {"ntUnapproved": "m03", "ownership": "m03", "planUnmatched": "m04", "jcPending": "m11",
+        "dfPending": "m08", "placeholder": "m01", "fetchDue": "m02", "fetchFail": "m02",
+        "printFail": "m03"}
 
-    def __init__(self, pid, ptype, wh="", parent=None):
-        self.id, self.project_type, self.warehouse_name, self.parent_shell_id = pid, ptype, wh, parent
+
+def _home() -> str:
+    """`V.home` 的**推导段**（口径表达式 ＋ 9 个瓦片）—— 到 `return \\`` 为止。"""
+    i = SHELL.find("V.home=()=>{")
+    assert i >= 0, "壳里找不到 `V.home`"
+    j = SHELL.find("  return `", i)
+    assert j > i, "找不到 `V.home` 推导段的终点（`  return \\``）"
+    return SHELL[i:j]
+
+
+def _calls(block: str) -> dict[str, str]:
+    """9 个瓦片调用的**实参串**：`{把手: "键,数,色,标题,显示值,说明,去向,链接文字"}`。
+
+    ⚠️ 按行取（每个瓦片调用都独占一行、以 `),` 收尾）；⚠️ 实参里**不含逗号**
+       （说明文字里用的都是 `、` / `·`）⇒ 直接 `split(',')` 就是 8 段 ——
+       谁哪天往说明里塞了个逗号，本函数**当场报错**（⛔ 不静默错位）。
+    """
+    out: dict[str, str] = {}
+    for m in re.finditer(r"^\s*(?:run)?[Tt]ile\('(\w+)',(.+)\),?\s*$", block, re.M):
+        key, args = m.group(1), f"'{m.group(1)}',{m.group(2)}"
+        parts = args.split(",")
+        assert len(parts) == 8, f"{key} 的实参切成了 {len(parts)} 段（应为 8）：{args[:90]}"
+        out[key] = args
+    return out
+
+
+# ================================================================ A 段 · 壳（`V.home`）
+
+
+# ----------------------------------------------------------------- 001-01
+@acc(CASE, "001-01")
+def test_九项待办把手齐全不重不漏():
+    """⭐ **9 项**、把手集合固定、**顺序即契约**。"""
+    block = _home()
+    got = [m.group(1) for m in re.finditer(r"(?:run)?[Tt]ile\('(\w+)',", block)]
+    assert got == list(KEYS), f"页面把手 = {got}"
+    assert len(set(got)) == 9, "把手有重复"
+    assert set(_calls(block)) == set(KEYS)
+
+
+# ----------------------------------------------------------------- 001-02
+@acc(CASE, "001-02")
+def test_每项数字都来自数据源不得写死():
+    """⭐ 数字 = **对应数据域的出口**（⛔ 不写死、⛔ 不拿本页自己自证）。
+
+    ⚠️ 断言方式：逐项钉住「**把手 → 用来算它的那个表达式**」。
+       把数字改成字面量、或把口径改到别处 ⇒ **当场变红**。
+    """
+    block = _home()
+    calls = _calls(block)
+    # ①–⑥ 与 ⑤ 的表达式名（每一行都是**该域的出口**，不是本页另算的中间量）
+    want_expr = {
+        "ntUnapproved": "nUn", "ownership": "nOwn", "planUnmatched": "nPl", "jcPending": "nJc",
+        "dfPending": "nAdj", "placeholder": "ph.length",
+    }
+    for key, expr in want_expr.items():
+        assert calls[key].split(",")[1] == expr, f"{key} 的数不是取自 {expr}：{calls[key][:70]}"
+    # ⑦⑬⑭ 走 `runTile`（后端取数）—— 数字必须引 `fDone` / `fFail` / `pFail`，⛔ 不写死
+    assert "fDone?0:1" in calls["fetchDue"]
+    assert "fFail?1:0" in calls["fetchFail"]
+    assert "pFail?1:0" in calls["printFail"]
+    # ⭐ 逐条钉住**口径表达式本身**（谁把口径改了/换成写死的数 ⇒ 红）
+    for line in (
+        "nUn=NO.filter(n=>ntLive(n)&&n.astat==='未批').length;",
+        "const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;",
+        "const nPl =PLs.filter(p=>plRev(p,PLs)!=='完全匹配').length;",
+        "const nJc =JCs.filter(j=>j.tag==='待确认').length;",
+        "const nAdj=IVs.filter(iv=>adjOf(iv)).length;",
+        "const ph=PJs.filter(p=>p.name.startsWith('未建仓-'));",
+    ):
+        assert line in block, f"口径表达式的唯一出口不见了：{line}"
+    # ⚠️ 反向：这些瓦片的数字**不得**出现字面量写法（`tile('x',3,` 这种）
+    for key, args in calls.items():
+        assert not re.fullmatch(r"\d+", args.split(",")[1]), f"{key} 的数字像是写死的：{args[:60]}"
+
+
+# ----------------------------------------------------------------- 001-03
+@acc(CASE, "001-03")
+def test_九项都可点击跳到对应页():
+    """⭐ 每一项都能**点进去处理**（不是只读展示）＋ 键盘可达（R13 无障碍）。"""
+    block = _home()
+    calls = _calls(block)
+    for key in KEYS:
+        pg = calls[key].split(",")[6]
+        assert pg == f"'{DEST[key]}'", f"{key} 的去向 = {pg}（应为 'm{DEST[key][1:]}'）"
+    # 瓦片出口必须**自带**可点三件套（否则 9 个瓦片全是死块）
+    tmpl = block[block.find("const tile=(k,n,cls,t,v,s,pg,tx)=>"):]
+    for bit in ('data-act="go"', 'data-k="\'+pg+\'"', 'tabindex="0"', 'role="button"'):
+        assert bit in tmpl[:400], f"瓦片出口缺「可点」要件：{bit}"
+
+
+# ----------------------------------------------------------------- 001-06
+@acc(CASE, "001-06")
+def test_未审批只计有效且未审批():
+    """⭐ 「未审批」= **有效且未审批**（撤单 / 剔除行不计）—— 出口是 `ntLive`（唯一判据）。"""
+    assert "nUn=NO.filter(n=>ntLive(n)&&n.astat==='未批').length;" in _home()
+
+
+# ----------------------------------------------------------------- 001-07
+@acc(CASE, "001-07")
+def test_归属待判定计壳且未定具体小微():
+    """⭐ 「归属待判定」= 壳全名 且 **尚未指定具体小微**（`isShellFull` ＋ `ntProjKey`）。"""
+    assert "const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;" in _home()
+
+
+# ----------------------------------------------------------------- 001-08
+@acc(CASE, "001-08")
+def test_计划未匹配走本域审查出口():
+    """⭐ 「计划未匹配」的判定**回 `MOD-04`**（`plRev`），⛔ 本页不另算一套。"""
+    block = _home()
+    assert "const nPl =PLs.filter(p=>plRev(p,PLs)!=='完全匹配').length;" in block
+    # 反向：不许在本页重写审查判定（出现 `audit`/`完全匹配` 的另起写法即红）
+    assert "audit_rows" not in block, "本页自己实现了审查判定 —— 应回 MOD-04 的出口"
+
+
+# ----------------------------------------------------------------- 001-09
+@acc(CASE, "001-09")
+def test_集采与差异各取本域出口且不臆造不隐藏():
+    """⭐ 2026-09-21 重写口径：两项**都已实现**，各自取本域出口；⛔ 不臆造、⛔ 不把项藏起来。
+
+    ⚠️ 原文写的是「该域**未实现时**记 0 并标注」—— 那个条件现在**不成立**了：
+       · 「集采待确认」自 `M5` 起就是**真数**（`JCs` 三态，`m11` 已接线）；
+       · 「差异」自 `MOD-12` 撤页后**载体 = 库存单据的调整单**（§5.8.3）⇒ 数 = 有调整单的行数。
+       ⛔ 别退回"恒 0 ＋ 该域未实现"（那会让看板去谎报一个不存在的待办）。
+    """
+    block = _home()
+    assert "const nJc =JCs.filter(j=>j.tag==='待确认').length;" in block
+    assert "const nAdj=IVs.filter(iv=>adjOf(iv)).length;" in block
+    # ⛔ **已撤页的数据源不许长回来**（`DFs` 是 m12 的留痕残留、恒空 ⇒ 拿它当"待核对"就是谎报）
+    assert "DFs" not in block, "看板又读起了 `DFs`（那是已撤的 `m12` 的残片，恒空）"
+    assert "待核对" not in block, "看板又写起了「差异待核对」（该状态已无载体）"
+    # 两项都**在**（⛔ 不隐藏）
+    calls = _calls(block)
+    assert "jcPending" in calls and "dfPending" in calls
+
+
+# ----------------------------------------------------------------- 001-10
+@acc(CASE, "001-10")
+def test_占位行按占位前缀计():
+    """⭐ 「占位行」= 仓库名以占位前缀开头（`未建仓-`）的档案行数。"""
+    assert "const ph=PJs.filter(p=>p.name.startsWith('未建仓-'));" in _home()
+
+
+# ================================================================ B 段 · 后端（记账端点）
 
 
 class _Sess:
-    """极简 Session：只为 `fetch_due` 的**计数查询**服务。"""
+    """极简 Session：只为 `fetch_due` 的**计数查询**服务（与旧断言同款桩件）。"""
 
     def __init__(self, success_rows=0):
         self._n = success_rows
@@ -45,153 +207,123 @@ class _Sess:
         return _R()
 
 
-def _patch_all(monkeypatch, *, notices=None, projects=None, plan_rows=0,
-               fetch_fail=0, print_fail=0, success_rows=1):
-    monkeypatch.setattr("app.mod03_notice.repository.notices_as_dicts",
-                        lambda s, **k: list(notices or []))
-    monkeypatch.setattr("app.mod01_projects.repository.all_projects",
-                        lambda s: list(projects or []))
-    monkeypatch.setattr("app.mod02_i8.repository.recent_fetch_failures",
-                        lambda s, *, run_type="fetch", limit=5: [object()] *
-                        (print_fail if run_type == "print" else fetch_fail))
-    monkeypatch.setattr("app.mod04_plan.repository.list_rows", lambda s: [])
+class _Rec:
+    """假执行记录（`run_record_out` 只读属性 ⇒ 鸭子类型即可）。"""
 
-    class _Row:
-        def __init__(self):
-            self.id = 1
-
-        @property
-        def __table__(self):
-            class T:
-                columns = []
-
-            return T()
-
-    monkeypatch.setattr("app.mod04_plan.repository.list_rows",
-                        lambda s: [_Row()] * plan_rows)
-    monkeypatch.setattr("app.mod04_plan.service.notice_amounts", lambda s: {})
+    def __init__(self, run_type="fetch", target="付款通知书", status="failed"):
+        self.id, self.run_type, self.target, self.status = 1, run_type, target, status
+        self.success_count, self.fail_count = 0, 1
+        self.error_message = "i8 接口超时"
+        self.started_at = datetime(2026, 9, 14, 9, 12, 7)
+        self.finished_at = datetime(2026, 9, 14, 9, 12, 38)
 
 
-def _html(rows) -> str:
-    return render_home(rows)
-
-
-def _todos(html: str) -> list[tuple[str, int]]:
-    return [(m.group(1), int(m.group(2))) for m in
-            re.finditer(r'data-todo="([^"]+)"[^>]*data-n="(\d+)"', html)]
-
-
-# ----------------------------------------------------------------- 001-01
-@acc(CASE, "001-01")
-def test_九项待办把手齐全不重不漏():
-    keys = D.todo_keys()
-    assert len(keys) == 9 and len(set(keys)) == 9
-    assert keys == ("ntUnapproved", "ownership", "planUnmatched", "jcPending", "dfPending",
-                    "placeholder", "fetchDue", "fetchFail", "printFail")
-    html = _html(D.dashboard({}))
-    got = [k for k, _ in _todos(html)]
-    assert got == list(keys), f"页面把手 = {got}"          # 顺序也是契约
-    assert html.count('data-todo="') == 9
-
-
-# ----------------------------------------------------------------- 001-02
-@acc(CASE, "001-02")
-def test_把手数字与可见数字一致(monkeypatch):
-    _patch_all(monkeypatch, projects=[_P(1, "normal", "未建仓-1"), _P(2, "normal", "未建仓-2")])
-    out = S.gather(_Sess())
-    rows = D.dashboard(out["counts"])
-    assert out["counts"]["placeholder"] == 2               # 数字来自域出口（不是本页自证）
-    html = _html(rows)
-    # ⭐ 同一行里：`data-n` 与可见 `<div class="v">` 必须同值（把手与显示同源）
-    for seg in re.findall(r'data-todo="[^"]+"[^>]*>.*?</a>', html, re.S):
-        n = int(re.search(r'data-n="(\d+)"', seg).group(1))
-        v = int(re.search(r'<div class="v">(\d+)</div>', seg).group(1))
-        assert n == v, seg[:80]
-
-
-# ----------------------------------------------------------------- 001-03
-@acc(CASE, "001-03")
-def test_九项都可点击跳到对应页():
-    html = _html(D.dashboard({}))
-    for m in re.finditer(r'<a class="todo[^"]*" href="([^"]+)"[^>]*data-act="go"', html):
-        assert m.group(1).startswith("/m"), m.group(1)
-    assert len(re.findall(r'data-act="go"', html)) == 9
+def _patch(monkeypatch, *, fetch_fail=0, print_fail=0):
+    """按 `run_type` 分别给失败记录（⛔ 两类**不得混用**）。"""
+    monkeypatch.setattr(
+        "app.mod02_i8.repository.recent_fetch_failures",
+        lambda s, *, run_type="fetch", limit=5:
+            ([_Rec(run_type)] if (print_fail if run_type == "print" else fetch_fail) else []),
+    )
 
 
 # ----------------------------------------------------------------- 001-04
 @acc(CASE, "001-04")
 def test_抓取到期与失败取自执行记录(monkeypatch):
-    _patch_all(monkeypatch, fetch_fail=2, success_rows=0)
-    out = S.gather(_Sess(success_rows=0))
-    assert out["counts"]["fetchFail"] == 2
-    assert not out["errors"], f"取数有错被吞：{out['errors']}"      # ⛔ 不许静默吞错
-    assert out["counts"]["fetchDue"] == 1                  # 本月无成功记录 ⇒ 提示
-    out2 = S.gather(_Sess(success_rows=3))                 # 有成功记录 ⇒ 不提示
+    """⭐ 「本月尚未抓取」＝ 本月**有没有成功**的抓取；「最近一次抓取失败」＝ 最近那条失败记录。
+
+    ⚠️ 判据原文要求「含**表名与时间**」⇒ 端点必须把**那条记录**带回来（⛔ 不只是给个 0/1）。
+    """
+    _patch(monkeypatch, fetch_fail=2)
+    out = S.run_counts(_Sess(success_rows=0))
+    assert out["counts"]["fetchFail"] == 1                      # 0/1 待办数
+    assert out["counts"]["fetchDue"] == 1                       # 本月无成功记录 ⇒ 提示
+    assert not out["errors"], f"取数有错被吞：{out['errors']}"    # ⛔ 不许静默吞错
+    rec = out["latest"]["fetchFail"]
+    assert rec is not None and rec.target and rec.started_at, "失败记录没带回来（判据要「表名 ＋ 时间」）"
+
+    out2 = S.run_counts(_Sess(success_rows=3))                  # 有成功记录 ⇒ 不提示
     assert out2["counts"]["fetchDue"] == 0
+
+    # ⭐ 结构：壳必须**问后端**（⛔ 不许在壳里扫记录窗口 —— 那会漏，且漏了不报错）
+    # ⚠️⚠️ **必须钉「代码行」而不是钉关键词** —— 本节三条断言第一版就是栽在这：
+    #    · `'看板计数' in SHELL` ⇒ 把 `LOADERS` 的键改名、而 `PAGE_LOAD` 里那个字符串还在 ⇒ **仍是绿的**；
+    #    · `'runFailInfo' in SHELL` ⇒ 改名成 `runFailInfoX` 后**子串仍命中** ⇒ **仍是绿的**；
+    #    · `'/api/home/run-counts' in SHELL` ⇒ 注释里也写着这个串 ⇒ **仍是绿的**。
+    #    ⇒ 三条全落空（`tools/_mut_home_wired.py` 的 M5/M6/M7 实测无区分力）。
+    for line in ("  homeRunCounts: () => API.get('/api/home/run-counts'),",
+                 "  '看板计数': reloadHome,",
+                 "function runFailInfo(rec) {"):
+        assert line in SHELL, f"壳里少了这条代码（⛔ 注释里写着不算）：{line}"
+    assert "RUNLOG" not in _home(), "`V.home` 又读起了写死的演示记录数组"
+    assert "home: ['付款通知书', '项目档案', '付款计划', '看板计数']," in SHELL, \
+        "看板没把记账这一路加进取数表"
+    # ⚠️ **补盲区**：上面两条用的是 `_Sess` 桩件，而桩件的 `execute()` **直接返一个数**
+    #    ⇒ 那句 SQL（按 run_type / status / **本月**筛）在桩件下**永远是对的**。
+    #    这里按结构再钉一遍：三个条件一个都不能少（去掉「本月」那句 ⇒ 看板会拿旧月份报"已抓"）。
+    _svc = Path(S.__file__).read_text(encoding="utf-8")
+    for bit in ("RunRecord.run_type == RUN_FETCH", 'RunRecord.status == "success"',
+                'datetime.strptime(ym + "-01", "%Y-%m-%d")'):
+        assert bit in _svc, f"记账端点的 SQL 少了这条条件：{bit}"
+
+
+class _BadSess:
+    """取数就炸的 Session（只为走**失败路径**）。"""
+
+    def execute(self, *_a, **_k):
+        raise RuntimeError("boom")
+
+
+# ----------------------------------------------------------------- 001-04（反面）
+@acc(CASE, "001-04")
+def test_取数失败必须如实报错不许静默吞(monkeypatch):
+    """⛔ **反面用例**（没有它，`assert not out["errors"]` 就是一句空话 —— 永远为真）。
+
+    铁律「禁静默」：某一路取不到 ⇒ **记 0 ＋ 把原因说出来**（看板那三格据此显「—」），
+    ⛔ 不是悄悄当成"没有待办"（那会让用户以为本月抓过了）。
+    """
+    out = S.run_counts(_BadSess())
+    assert out["errors"].get("fetchDue"), f"本月抓取那一路取数失败被吞了：{out['errors']}"
+    assert out["counts"]["fetchDue"] == 0, "取不到数时不该凭空报 1"
+
+    monkeypatch.setattr(
+        "app.mod02_i8.repository.recent_fetch_failures",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    out2 = S.run_counts(_Sess())
+    assert set(out2["errors"]) == {"fetchFail", "printFail"}, f"两路失败都被吞了：{out2['errors']}"
+    assert out2["latest"]["fetchFail"] is None and out2["latest"]["printFail"] is None
 
 
 # ----------------------------------------------------------------- 001-05
 @acc(CASE, "001-05")
 def test_打印失败取自打印执行记录(monkeypatch):
-    _patch_all(monkeypatch, print_fail=3, fetch_fail=0)
-    out = S.gather(_Sess())
-    assert out["counts"]["printFail"] == 3
-    assert out["counts"]["fetchFail"] == 0                 # 两种记录**不混用**
+    """⭐ 「打印投递失败」取自**打印**记录 —— 与抓取**不混用**（§4.6）。"""
+    _patch(monkeypatch, print_fail=3, fetch_fail=0)
+    out = S.run_counts(_Sess())
+    assert out["counts"]["printFail"] == 1
+    assert out["counts"]["fetchFail"] == 0                      # 两种记录**不混用**
+    assert out["latest"]["printFail"].run_type == "print"
+    assert out["latest"]["fetchFail"] is None
+    # ⚠️ 时间必须与 m02 页同一展示口径（`T` 换空格），且**标签走 `m02LabelOf`**（同一个出口）
+    #    ⇒ ⛔ 只写 `"runFailInfo" in SHELL` 是**假绿**：改名成 `runFailInfoX` 子串照样命中（实测 M6 未命中）。
+    for line in ("function runFailInfo(rec) {",
+                 "  return { obj: m02LabelOf({ type: rec.run_type, target: rec.target }),",
+                 "           at: String(rec.started_at || '').replace('T', ' ') };"):
+        assert line in SHELL, f"壳里少了这条代码（⛔ 注释里写着不算）：{line}"
 
 
-# ----------------------------------------------------------------- 001-06
-@acc(CASE, "001-06")
-def test_未审批只计有效且未审批(monkeypatch):
-    notices = [
-        {"approve_status": "未批", "excluded": False, "i8_revoked": False},   # ✅ 计
-        {"approve_status": "已批", "excluded": False, "i8_revoked": False},   # ✗ 已批
-        {"approve_status": "未批", "excluded": True, "i8_revoked": False},    # ✗ 已剔除
-        {"approve_status": "未批", "excluded": False, "i8_revoked": True},    # ✗ 已撤单
-    ]
-    _patch_all(monkeypatch, notices=notices)
-    assert S.gather(_Sess())["counts"]["ntUnapproved"] == 1
+# ================================================================ 附 · 旧渲染出口的坟
 
 
-# ----------------------------------------------------------------- 001-07
-@acc(CASE, "001-07")
-def test_归属待判定计壳且未定具体小微(monkeypatch):
-    projects = [
-        _P(10, "shell"),                       # ✅ 壳下无具体小微 ⇒ 计
-        _P(11, "shell"),                       # ✗ 下面有具体小微
-        _P(12, "small", parent=11),
-        _P(13, "normal", "甲仓"),
-    ]
-    _patch_all(monkeypatch, projects=projects)
-    assert S.gather(_Sess())["counts"]["ownership"] == 1
+@acc()
+def test_旧看板渲染层不得复活():
+    """⛔ 旧的服务端渲染看板（`render_home`，已于 2026-09-21 删除）不许长回来。
 
-
-# ----------------------------------------------------------------- 001-08
-@acc(CASE, "001-08")
-def test_计划未匹配走本域审查出口(monkeypatch):
-    _patch_all(monkeypatch, plan_rows=3)
-    out = S.gather(_Sess())
-    assert out["counts"]["planUnmatched"] >= 0
-    assert "planUnmatched" not in out["errors"]            # 取数没坏（口径在 MOD-04）
-    src = (S.gather.__doc__ or "") + open(S.__file__, encoding="utf-8").read()
-    assert "audit_rows" in src, "计划审查必须调 MOD-04 的审查出口，不得本页另算"
-
-
-# ----------------------------------------------------------------- 001-09
-@acc(CASE, "001-09")
-def test_未实现域记零并显式标注():
-    assert set(D.UNIMPLEMENTED) == {"jcPending", "dfPending"}
-    html = _html(D.dashboard({}))
-    assert html.count("该域未实现") == 2                    # ⛔ 不隐藏、不臆造
-    rows = {r["key"]: r for r in D.dashboard({"jcPending": 5})}
-    assert rows["jcPending"]["count"] == 0 and rows["jcPending"]["unsupported"] is True
-
-
-# ----------------------------------------------------------------- 001-10
-@acc(CASE, "001-10")
-def test_占位行按占位前缀计(monkeypatch):
-    projects = [
-        _P(1, "normal", "未建仓-1"), _P(2, "normal", "未建仓-2"),
-        _P(3, "normal", "甲仓"), _P(4, "shell", ""),
-    ]
-    _patch_all(monkeypatch, projects=projects)
-    assert S.gather(_Sess())["counts"]["placeholder"] == 2
+    ⚠️ 这不是"多此一举"：本页曾经**整块存在过**（`home/view.py` 68 行），
+       而壳接管之后它若再出现，就会出现"两个看板、数还不一样"。
+       `T8` 那张 `CANCELLED` 表也登记了同一个名字（每次跑批都会端到面前）。
+    """
+    home_dir = Path(__file__).resolve().parents[1] / "app" / "home"
+    assert not (home_dir / "view.py").exists(), "旧看板渲染页 `view.py` 又回来了"
+    assert not (home_dir / "domain.py").exists(), "旧看板的 9 项口径出口 `domain.py` 又回来了"

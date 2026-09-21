@@ -99,7 +99,10 @@ def main() -> int:
     hit = 0
     for desc, path, old_lf, new_lf, case in MUTS:
         # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：壳已拆成多件（`web/shell/*.js`）⇒ 锚点在哪件就改哪件。
-        path = pick(path, old_lf, new_lf)
+        # ⚠️⚠️ 2026-09-21 修：`pick()` 收的是 **str** 锚点，而 `_b()` 给的是 **bytes**
+        #    ⇒ 原写法 `pick(path, old_lf, new_lf)` **一跑就 TypeError 崩掉**（加 `pick` 那天起就这样）。
+        #    ⇒ 崩掉的"复跑守卫"= **静默失效**（没人复跑 ⇒ 那几条断言的区分力没人知道）。
+        path = pick(path, old_lf.decode("utf-8"), new_lf.decode("utf-8"))
         before.setdefault(path, (path.read_bytes(), hashlib.md5(path.read_bytes()).hexdigest()))
         src = path.read_bytes()
         old, new = _fit(old_lf, src), _fit(new_lf, src)

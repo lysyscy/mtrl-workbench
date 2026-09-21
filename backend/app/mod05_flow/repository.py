@@ -260,6 +260,35 @@ def notices_without_flow(s: Session, months: list[str]) -> list[dict]:
     return out
 
 
+def notices_overpaid(s: Session, months: list[str]) -> list[dict]:
+    """⭐ **超付清单**（§4.4.6 第一句的第三半「**核对报告单列**」）：这些月份里
+    **实付合计 > 审批金额** 的通知书。
+
+    ⚠️ 口径三半（《说明书》§4.4.6「超付的处置」）：**流水照记**（事实不得篡改）＋
+      `统计付款金额` 照实、不封顶（§4.4.7）＋ **该单挂提醒** ＋ **核对报告单列** —— 本函数是第四半。
+    ⚠️ 判定基准 = **`>` 不是 `>=`**：实付 == 审批金额 = 付清（§4.4.2 只有两态），**不是超付**。
+      与 `mod03_notice/list_view.NoticeRow.is_overpaid`（界面提醒那一半）**同一判据** ——
+      ⛔ 两处必须同口径，改一处要改另一处（有断言钉着：`ACC-PAY-STAT-002/002-06`）。
+    ⚠️ 月份按**单据日期**归月（§9.2），与「一条流水都没有」那张表同款。
+    """
+    wanted = {str(m)[:7] for m in months if str(m or "").strip()}
+    if not wanted:
+        return []
+    out: list[dict] = []
+    for n in notice_rows(s):
+        if str(n.doc_date or "")[:7] not in wanted:
+            continue
+        approved = to_money(n.amount_approved)
+        paid = to_money(effective_total_of(s, int(n.id)))
+        if paid <= approved:                      # ⚠️ `>` 才是超付（== 是「付清」）
+            continue
+        out.append({"notice_id": int(n.id), "bill_no": str(n.bill_no or ""),
+                    "doc_date": str(n.doc_date or ""), "project_name": str(n.project_name or ""),
+                    "amount_approved": approved, "amount_paid": paid,
+                    "over_amount": paid - approved})
+    return out
+
+
 # ---------------------------------------------------------------- 期初占位行
 
 
@@ -365,7 +394,7 @@ __all__ = [
     "list_flows", "get_flow", "list_flows_of_notice", "next_flow_no", "has_request_id",
     "create_flow", "revoke",
     "effective_total_of", "sync_stat_paid",
-    "flows_in_batch", "rollback_batch", "notices_without_flow",
+    "flows_in_batch", "rollback_batch", "notices_without_flow", "notices_overpaid",
     "FLOW_SOURCE_MANUAL", "FLOW_SOURCE_IMPORTED", "FLOW_EFFECTIVE", "FLOW_REVOKED",
     "list_openings", "get_opening", "upsert_opening", "delete_opening",
     "remarks_map", "set_remark", "notice_rows",

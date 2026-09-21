@@ -194,11 +194,12 @@ def api_manual_save(req: ManualSaveIn, session: Session = DBSession) -> dict:
     """**新增 / 编辑手动付款通知书**（§4.2.6）—— 校验不通过 ⇒ `ok=False`（**不落库**），
     外壳据此**保留草稿行**让用户改（不清空已填内容，R14③）。
 
-    ⚠️ 与 PRG `POST /m03/notices/save` **共用** `notice_actions.apply_manual_save` ——
+    ⚠️ 出口 = `notice_manual_actions.apply_manual_save`（§4.2.6 的校验 / 落库 / 文案**只此一份**）——
        本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ 不重复、不另写任何判定或文案。
+       （⚠️ 旧页 PRG `POST /m03/notices/save` 已随 `§19` 删除 ⇒ 观测面就是本端点。）
     """
     from app.core.identity import current_operator
-    from app.mod03_notice.notice_actions import apply_manual_save
+    from app.mod03_notice.notice_manual_actions import apply_manual_save
 
     data = req.model_dump()
     row_id = data.pop("row_id", "")
@@ -235,10 +236,10 @@ class NoticeIdIn(BaseModel):
 def api_manual_delete_impact(req: NoticeIdIn, session: Session = DBSession) -> dict:
     """**删除前的影响范围**（§7.2 / §9.4 —— 硬要求）—— 壳弹确认框时**先取这一段**，⛔ 不自己拼。
 
-    ⚠️ 与删除本身**共用** `notice_actions.manual_delete_impact` / `assert_manual_editable`：
+    ⚠️ 与删除本身**共用** `notice_manual_actions.manual_delete_impact` / `assert_manual_editable`：
        **i8 抓取行连"影响范围"都不给看**（§4.2.7：不提供删除入口）。
     """
-    from app.mod03_notice.notice_actions import manual_delete_impact
+    from app.mod03_notice.notice_manual_actions import manual_delete_impact
 
     try:
         return {"ok": True, **manual_delete_impact(session, req.notice_id)}
@@ -250,10 +251,11 @@ def api_manual_delete_impact(req: NoticeIdIn, session: Session = DBSession) -> d
 def api_manual_delete(req: NoticeIdIn, session: Session = DBSession) -> dict:
     """**删除一条手动行**（§4.2.6）—— 只对手动行开放；i8 抓取行永不可删（§4.2.7）。
 
-    ⚠️ 与 PRG `POST /m03/notices/delete` **共用** `notice_actions.apply_manual_delete` ——
+    ⚠️ 出口 = `notice_manual_actions.apply_manual_delete`（校验 / 落库 / 文案**只此一份**）——
        本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ 不重复、不另写任何判定或文案。
+       （⚠️ 旧页 PRG `POST /m03/notices/delete` 已随 `§19` 删除 ⇒ 观测面就是本端点。）
     """
-    from app.mod03_notice.notice_actions import apply_manual_delete
+    from app.mod03_notice.notice_manual_actions import apply_manual_delete
 
     try:
         row, message = apply_manual_delete(session, req.notice_id)
@@ -281,12 +283,12 @@ def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
     """**批量付款**（§4.4.4）—— 整批重算，任一不过 ⇒ **整批不产生任何流水**（不落半批）；
     `request_id` 重复 ⇒ **拒绝重复提交**。
 
-    ⚠️ 与 PRG `POST /m03/pay` **共用** `notice_actions.apply_batch_pay` ——
+    ⚠️ 出口 = `notice_pay_actions.apply_batch_pay`（§4.4.4 的判定 / 落库 / 文案**只此一份**）——
        本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ 不重复、不另写任何判定或文案。
-    ⚠️ `parse_amount` / `plan_methods_for_pay` 与 PRG **同一份**（都住**存活件** `notice_actions` ✓，
-       `§19` 批 4 · S4② 搬过来的）。
+       （⚠️ 旧页 PRG `POST /m03/pay` 已随 `§19` 删除 ⇒ 观测面就是本端点。）
+    ⚠️ `parse_amount` / `plan_methods_for_pay` 与它**同住** `notice_pay_actions` ✓（§4.4.2 的同一份口径）。
     """
-    from app.mod03_notice.notice_actions import (
+    from app.mod03_notice.notice_pay_actions import (
         apply_batch_pay,
         parse_amount,
         plan_methods_for_pay,
@@ -414,6 +416,9 @@ def _api_item(rec: dict) -> dict:
         "stat_paid": str(row.stat_paid),
         "has_effective_flow": bool(row.effective_flows),
         "has_link": bool(row.has_link),
+        # ⭐ `P4` 超付（§4.4.6）：**判定在后端**（`NoticeRow.is_overpaid`），壳侧只负责把
+        #    「超付」标记渲出来 —— ⛔ 壳里不许再算一遍 `amount_paid > amount_approved`。
+        "is_overpaid": bool(row.is_overpaid),
     })
     return out
 
@@ -451,6 +456,96 @@ def get_notice_list(
         # ⚠️ **页面专用**的列（「操作」列是按钮 / 表单 HTML）**不进 API** —— 本端点只吐纯数据
         "items": [_api_item(rec) for rec in data["rows"]],
     }
+
+
+class ExportIn(BaseModel):
+    """导出请求（`TAIL-04` · §7.1）。
+
+    ⚠️ **收 id 列表，⛔ 不收"筛选条件"** —— 页面的筛选（年月 / **多选**项目 / 分类 / 审批状态 /
+      付款状态）是**前端**算的 ⇒ 传条件就得在后端**再实现一遍** ⇒ **两套口径必打架**。
+    ⭐ 传 id 还顺带把**顺序**带上了（导出的行序 = 屏幕上的行序）。
+    """
+
+    ids: list[int] = Field(default_factory=list)
+
+
+def _export_row(rec: dict) -> dict:
+    """一行 → **导出值**（键 = `nt_export.COLUMNS` 的第二项）。
+
+    ⚠️ 本函数**只做「页面显示值」的对齐**，⛔ **不在这里判定业务**（剔除 / 撤单 / 派生的判定全在
+       `list_view` / `domain` 里）—— 判定搬进导出层 = 又一份口径。
+    ⚠️ 金额一律给**原始数值串**（⛔ 不用列表里的 `*_text`：那是**千分位排版**，
+       Excel 里要的是数字 —— 口径见 `naive_export` 模块头「取值」）。
+    """
+    it = _api_item(rec)
+    row = rec.get("_row")
+    # 「分类」那格：页面 `ntArchTag` **先判剔除、后判撤单**，两者都不是才显示分类 ⇒ 顺序照抄
+    if it.get("is_excluded"):
+        category_text = "剔除"
+    elif it.get("is_revoked"):
+        category_text = "i8 已撤单"
+    else:
+        category_text = it.get("category_label") or ""
+    return {
+        "doc_date": it.get("doc_date") or "",
+        "bill_no": it.get("bill_no") or "",
+        "project_display": it.get("project_display") or "",
+        "category_text": category_text,
+        "bill_name": it.get("bill_name") or "",
+        "biz_type": it.get("biz_type") or "",
+        "payee": it.get("payee") or "",
+        "jc_supplier": it.get("jc_supplier") or "",
+        "input_by": it.get("input_by") or "",
+        "amount_approved": str(getattr(row, "amount_approved", "") or ""),
+        "pay_amount": str(getattr(row, "pay_amount", "") or ""),
+        "amount_paid": str(getattr(row, "amount_paid", "") or ""),
+        "stat_settle": str(getattr(row, "stat_settle", "") or ""),
+        "stat_paid": str(getattr(row, "stat_paid", "") or ""),
+        "approve_status": it.get("approve_status") or "",
+        "pay_status": it.get("pay_status") or "",
+    }
+
+
+@api_router.post("/api/m03/notices/export")
+def export_notices(req: ExportIn, session: Session = DBSession) -> dict:
+    """导出**付款通知书台账**（`TAIL-04` · `REQ-R1` · §7.1）⇒ `{ok, filename, rows, content_b64}`。
+
+    ⭐ **行** = 传入的那些 id（= **屏幕上看到的**，**连它的顺序一起**）；
+    **列** = 页面表头 `NT_THEAD` 去掉「勾选 / 操作」⇒ 16 列；**取值** = **页面显示的那个值**
+    （逐列口径见 `report_export/nt_export.py` 的模块头）。
+
+    ⚠️ **取数是"全量捞一遍再按 id 挑"**：本端点的"筛选"**全靠传入的 id**
+       ⇒ 所以这里的 `NoticeFilters` 是**全开**的（`period=""` 全部 / 无项目 / 无分类 /
+       无审批状态 / 无付款状态 / `include_archived=True`），⛔ **不是**页面的默认筛选。
+       若这里跟着页面默认走（默认隐藏剔除行），用户切到「分类 = 剔除」导出的就会**是空的** ——
+       页面的"默认隐藏"是**筛选层**的事，不是取数层（同 `notice_filters` 那条注释的口径）。
+
+    ⚠️ **合计行**：`live_rows` 只放**有效行**（`NoticeRow.is_live`）—— 剔除行不计入、
+       ⚠️ 但「有牵涉的撤单行」**仍计入**（§4.2.7 不许静默丢账）；一行有效行都没有 ⇒ 不写合计行
+       （与页面同口径，见 `nt_export` 模块头）。
+    """
+    import base64
+    from datetime import date
+
+    from app.report_export import nt_export as X
+
+    # ⚠️ **取数层给全量**（见 docstring）—— 每一档都显式写出来，⛔ 别用 `notice_filters()` 的默认值
+    filters = NoticeFilters(
+        period="", project_ids=(), category=CATEGORY_ALL,
+        approve_status="", pay_status="", include_archived=True,
+    )
+    data = build_page_data(session, filters=filters)
+    by_id = {int(rec["notice_id"]): rec for rec in (data.get("rows") or ())}
+    ids = [int(i) for i in (req.ids or [])]
+    # ⚠️ **按传入的 id 顺序**出行（⛔ 不是按库里的顺序）—— 那是**屏幕上的行序**
+    pairs = [(_rec, _export_row(_rec)) for _rec in (by_id[i] for i in ids if i in by_id)]
+    out = [r for _, r in pairs]
+    live = [r for rec, r in pairs
+            if rec.get("_row") is not None and bool(rec["_row"].is_live)]
+    blob = X.build_xlsx(out, live_rows=live)
+    name = f"付款通知书台账_{date.today().strftime('%Y%m%d')}.xlsx"
+    return {"ok": True, "filename": name, "rows": len(out),
+            "content_b64": base64.b64encode(blob).decode("ascii")}
 
 
 __all__ = ["api_router", "get_session"]

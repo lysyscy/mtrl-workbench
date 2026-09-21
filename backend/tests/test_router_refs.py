@@ -16,6 +16,8 @@ from tests.router_refs import broken_refs, router_modules
 def test_全站所有模块路由引用的域出口都真实存在():
     modules = router_modules()
     # ① 守卫本身不许退化成"什么都没扫"（发现不到路由 = 这个自检失效了）
+    #    ⚠️ 2026-09-21：扫描面加宽到 `*api*.py`（四个暂留件收口后新加 `settings_api.py` /
+    #       `import_api.py` 等件）—— 实际件数**只会变多**；这里的下限只作"发现逻辑坏了"的信号。
     assert len(modules) >= 15, f"只扫到 {len(modules)} 个路由件 —— 发现逻辑坏了"
     # ② 逐个核对 `别名.属性`
     bad: list[str] = []
@@ -27,13 +29,18 @@ def test_全站所有模块路由引用的域出口都真实存在():
 
 @acc()
 def test_导入类页面引用的暂存载具是同一份():
-    """「预览不写库」的载具**只许一份**（`preview_store`）—— 两个导入页共用，不各写一份。"""
+    """「预览不写库」的载具**只许一份**（`preview_store`）—— 三个导入页共用，不各写一份。
+
+    ⚠️ 2026-09-21（`§19` 四个暂留件收口）：落点从「服务端渲染页的路由件」（`import_router.py`）
+       改成**JSON API 件**（`import_api.py`）—— 载具与口径**一字未变**，只是形态换了
+       （同「形态变、判据不变」的既定做法）。
+    """
     import pathlib
 
     from app.core import preview_store
-    from app.mod05_flow import import_router as m05
-    from app.mod06_proc import router as m06
-    from app.mod08_inv import import_router as m08
+    from app.mod05_flow import import_api as m05
+    from app.mod06_proc import import_api as m06
+    from app.mod08_inv import import_api as m08
 
     for module in (m05, m06, m08):
         src = pathlib.Path(module.__file__).read_text(encoding="utf-8")

@@ -55,8 +55,9 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     ("backend/app/mod02_i8/report_export.py", "补抓历史月份时年份取当前年（而不是该月所属年）",
      "    return ym[:4], str(month), ym[:4], str(month)",
      "    return str(__import__('datetime').date.today().year), str(month), ym[:4], str(month)"),
-    ("backend/app/mod05_flow/import_router.py", "历史流水导入三步少一步（预览路由改名）",
-     '@router.post("/m05/import/preview"', '@router.post("/m05/import/preview-x"'),
+    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：落点从 PRG 路由件搬到 JSON API 件（**逐字**搬）。
+    ("backend/app/mod05_flow/import_api.py", "历史流水导入三步少一步（预览端点改名）",
+     '@router.post("/api/m05/import/parse"', '@router.post("/api/m05/import/parse-x"'),
 ]
 
 

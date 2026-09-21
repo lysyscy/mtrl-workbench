@@ -227,7 +227,7 @@ def set_excluded(session: Session, ids: list[int], *, excluded: bool, source: st
 
 
 def create_manual_notice(session: Session, values: dict) -> PaymentNotice:
-    """落一条**手动新增**付款通知书行（字段由 `notice_actions.manual_row_payload` 组装）。"""
+    """落一条**手动新增**付款通知书行（字段由 `notice_manual_actions.manual_row_payload` 组装）。"""
     row = PaymentNotice(**values)
     session.add(row)
     session.flush()
@@ -248,7 +248,7 @@ def update_manual_notice(session: Session, notice: PaymentNotice, values: dict) 
 
 
 def delete_notice(session: Session, notice: PaymentNotice) -> int:
-    """删除一条**手动行** —— 只删该行（调用方须先过 `notice_actions.assert_manual_editable`）。
+    """删除一条**手动行** —— 只删该行（调用方须先过 `notice_manual_actions.assert_manual_editable`）。
 
     ⚠️ i8 抓取回来的行**永不删**（§4.2.7 明确"不提供删除付款通知书按钮"）；
        本函数只服务手动行（人工补录的数据，删除 = 撤回自己的录入，欠款随取数实时重算）。

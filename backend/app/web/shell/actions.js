@@ -108,6 +108,34 @@ function jcDownload(name, b64) {
    `SyntaxError: Unexpected identifier 'jcHideTrade'`。
    ⭐ **这是同一个坑的第三次**（前两次：`jcLinkAct`、`jcFetchSinceOn`）——
       **凡 `let` / `const` / `function` 声明，只能放"文件顶层"或"函数体里"，⛔ 绝不能放 `const ACT={…}` 内部。** */
+
+/* ===== 「导出 Excel（R1）」的**真分发**（`TAIL-04` · `REQ-R1` · §7.1）=====
+   壳里 10 个按钮共用**同一个动作** `exp`，靠按钮上的 `data-t` 认页 ⇒ 这里就是那张分发**表**。
+
+   ⛔ **本段只动动作体，不动任何 `V.` 切片、⛔ 不改按钮的 `data-act`**：
+      `ACT` / 本表都是**顶层 const**、不在 `V.<页>` 切片内 ⇒ `ui_parity` 的 `U1` 看不见它们
+      （口径见 `CLAUDE.md` §2 与 §6.2；`BIND.m11` 那次改了 `data-act` 才惹出"两个导出按钮"）。
+
+   ⭐ **行 = 屏幕上当前看到的那些** —— 取数一律走**该页自己的可见行出口**
+      （`pjVisible` / `flVisible` / `ntHit(fNt)` / `plVisible`），⛔ **不在这里另写筛选**：
+      两份筛选口径必打架（本项目的旧账）。顺序也由它带过去 —— 后端按传入 id 顺序出行。
+   ⭐ **字节与文件名全由后端给**（`{ok, filename, content_b64}`）—— ⛔ 壳里不自己拼命名。
+
+   ⚠️ **没有落点的页走兜底**（i8 接口清单 = 用户裁定不算列表页 · 库存单据明细总表的**朴素**那份 ·
+      过程资料的**朴素**那份 · 已取消的差异清单 · m13 的演示按钮）⇒ **如实说"还没有真文件"**，
+      ⛔ 绝不假装成功（原型那句「已导出 …」是**假成功**，本项目最忌）。
+   ⛔ **别顺手给这些页编一个落点**：`MOD-08` 的「含透视」那份有自己的按钮（`expPivot`）——
+      把朴素这份也接过去 = 两个按钮干同一件事，还毁掉 `ACC-INV-001/001-12` 的「并存互不影响」
+      （`tests/test_tail04_export.py` 会当场红）。
+   ⛔ `集采台账` 也**不在本表**：`BIND.m11` 渲染时已把它的按钮改指 `jcExport`（走全列口径）⇒ 到不了这里。 */
+const EXP_ROUTES = {
+  /* `data-t`（与按钮上那个**逐字一致**）→ 拿行出口 ＋ 端点 */
+  '项目档案':        { rows: () => pjVisible(), url: '/api/m01/projects/export' },
+  '付款流水':        { rows: () => flVisible(), url: '/api/m05/flows/export' },
+  '付款通知书台账':   { rows: () => ntHit(fNt),  url: '/api/m03/notices/export' },
+  '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },
+};
+
 const ACT={
  /* 导航 */
  go:t=>go(t.dataset.k),
@@ -121,11 +149,27 @@ const ACT={
    else render(); },
 
  /* 导出 / 通用 */
- /* ⏳ **导出尚未落地（诚实提示）**：原型这里报「已导出 <文件名>.xlsx」，但**没有任何文件产生**
-    ⇒ 对用户是**假成功**（已接线的页尤其不能这么说）。真落地方案见 `ops/模板法导出-实测结论.md`，
-    属 `TAIL-04`（真实文件落盘 / 打包）。 */
- exp:t=>toast(`⏳ <b>导出尚未落地</b>（属 TAIL-04）：本页按当前筛选应导出 <b>${esc(t.dataset.t)}</b>，`
-   + `但**还没有真实文件生成**；<br>落地方案见 ops/模板法导出-实测结论.md（模板法 ＋ 缓存级对账）`,7000),
+ /* ⭐ `TAIL-04`：**导出真分发** —— 按按钮上的 `data-t` 查 `EXP_ROUTES`（口径见那张表上面那段）。
+    ⚠️ 原先是**一条诚实提示**（"导出尚未落地"）—— 那时**一个列表页都还没有真端点**。
+       现在 4 页有端点了 ⇒ 它们改走真下载；**没端点的页照旧走兜底**，那句话**留在兜底分支里**
+       （⛔ 别删：它是"这个页确实还没有落点"的唯一说法，删了就只剩沉默或假成功）。
+    ⚠️ **失败一律说中文真因**：`API.post` 恒 HTTP 200（成败看 `ok`）⇒ 只看 `ok`，
+       ⛔ 别去看状态码（那会得到"undefined"这类报不准也查不动的提示 —— `m03RunBatch` 踩过）。
+    ⚠️ **空行集要拦住**：⛔ 不导一本空表让人以为坏了，也⛔ 不悄悄改成"导全量"（那就违背了
+       「行 = 屏幕上看到的那些」）。 */
+ exp:async t=>{ const tt=String(t.dataset.t||''), route=EXP_ROUTES[tt];
+   if(!route) return toast(`⏳ <b>「${esc(tt)}」的导出尚未落地</b>（属 TAIL-04）：`
+     + `这一页**没有对应的导出端点** —— 要么它不设单独导出、要么走它自己的那个入口`
+     + `<br><span class="mut sm">⛔ 这里不假装成功：没有真文件生成，就绝不写「已导出」</span>`,9000);
+   const rows=route.rows();
+   if(!rows.length) return toast(`当前筛选下**一行都没有** —— 没什么可导的（先点「重置」看全部）`);
+   let d=null;
+   try{ d=await API.post(route.url,{ids:rows.map(r=>Number(r.id))}); }
+   catch(e){ return toast(`<b>导出失败</b>：${esc(String((e&&e.message)||e))}`,8000); }
+   if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'后端未返回原因')}`,8000);
+   jcDownload(d.filename,d.content_b64);
+   toast(`已导出 <b>${rows.length}</b> 行 ⇒ <b>${esc(d.filename)}</b>`
+     + `<br><span class="mut sm">行 = 当前筛选下看到的那些（含顺序）· 列 = 页面表头去掉「操作」</span>`); },
  silent:()=>toast('（原型演示）该动作只走流程、<b>不改动演示数据</b>；正式实现按本页口径生效'),
  silent2:()=>modal({title:'一期 Non-goals',body:'<div class="tip" style="margin:0">见本页「一期 Non-goals 汇总」表。附件体系 R4 一期不做、R5 二期。</div>'}),
  /* 已删除（2026-09-12）：一键抓取（fetchAll）—— 用户不需要该模块；接口清单页保留逐接口「触发」与「手动导入」。 */
@@ -190,7 +234,7 @@ const ACT={
  /* —— MOD-03 付款通知书 —— */
  pick:t=>{ const id=t.dataset.id; t.checked?pickSet.add(id):pickSet.delete(id); render(); },
  /* 全选：范围 = 【当前筛选结果里的可勾选行】，而不是全库（否则会选中看不见的行） */
- pickAll:t=>{ const ids=ntHit(fNt).filter(ntPayCand).map(n=>n.id);
+ pickAll:t=>{ const ids=ntHit(fNt).filter(ntSelectable).map(n=>n.id);
    if(t.checked) ids.forEach(i=>pickSet.add(i)); else ids.forEach(i=>pickSet.delete(i));
    render(); },
  /* 金额编辑：审批金额只读（i8 源数据）；付款金额（会话级覆盖，**不留痕**）/ 统计结算金额 / 统计付款金额（旁路字段，留痕 + 不被导入覆盖）可手改 */
@@ -266,7 +310,8 @@ const ACT={
    /* 不可付 = 未审批 或 本次应付 ≤ 0（已付清）。存在任一条时「确认付款」直接禁用（不是点了才拦） */
    const bad=rows.filter(n=>!(n.astat==='已批'&&payEff(n)>0));
    Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });   /* 清掉已不在批次里的草稿 */
-   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 已自动排除 ${drop.length} 条「i8 已撤单」的通知书</b>（${esc(drop.map(n=>n.code).join('、'))}）—— 它们的单据在 <b>i8 侧已被删除</b>，<b>不该再产生付款</b>；请先<b>撤销已付 / 解绑关联</b>（§4.2.7）。</div>`:''}<div class="tip" style="margin-bottom:10px">已勾选 <b>${rows.length}</b> 条。<b>本次应付 = 付款金额</b>（默认 = 审批金额 − 已付金额；人工改过则以人工值为准）；「本次付款金额」<b>默认等于本次应付</b>，可改小。校验：<b>未审批</b>不可付（DEV-P-06）；<b>超出本次应付</b>被拦截（防超付）；付款方式选「其他」须填备注（DEV-P-01）。<b>任一校验不通过，整批不产生流水。</b></div>
+   const whyOf=n=>ntVoid(n)?'i8 已撤单':'已剔除';
+   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）—— <b>剔除行</b>按 §4.2.2 不进统计；<b>i8 已撤单行</b>的单据在 i8 侧已被删除。两者都<b>不该产生付款</b>；请先<b>恢复剔除 / 撤销已付 / 解绑关联</b>。</div>`:''}<div class="tip" style="margin-bottom:10px">已勾选 <b>${rows.length}</b> 条。<b>本次应付 = 付款金额</b>（默认 = 审批金额 − 已付金额；人工改过则以人工值为准）；「本次付款金额」<b>默认等于本次应付</b>，可改小。校验：<b>未审批</b>不可付（DEV-P-06）；<b>超出本次应付</b>被拦截（防超付）；付款方式选「其他」须填备注（DEV-P-01）。<b>任一校验不通过，整批不产生流水。</b></div>
      ${bad.length?`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>请点该行的「<b>删除</b>」把它移出本次付款，或关闭后调整勾选 —— <b>删除会同时取消该行的勾选</b>，<b>已填的方式与金额不会丢</b>。</div>`:''}
      <div class="tw" style="max-height:44vh"><table class="dt cond" data-sort data-sort-key="modal:batchPay"><thead><tr>${BP_THEAD}</tr></thead><tbody>
      ${rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=n.astat==='已批'&&can>0;

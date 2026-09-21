@@ -186,7 +186,9 @@ def create_app() -> FastAPI:
     _install_ip_allowlist(app)
     _install_error_handlers(app)
 
-    # ⭐ 看板 = 默认落地页（**不占模块号** · 原型导读）⇒ 挂在根路径 `/`（`ACC-HOME-TODO-001`）
+    # ⭐ 看板 = 默认落地页（**不占模块号** · 原型导读）—— ⚠️ 2026-09-21 起**看板在壳里**
+    #    （`§19` 批 5 收口：旧服务端渲染页 `home/view.py` 已删）⇒ 本路由现在只剩
+    #    `GET /`（**302 → `/app`**，⛔ 不是 301：301 会被浏览器长期缓存）＋ 记账端点 `/api/home/run-counts`。
     app.include_router(home_router)
     app.include_router(mod01_router)
     app.include_router(mod02_router)
@@ -259,8 +261,9 @@ def create_app() -> FastAPI:
     # ⭐ **壳的外链件**（`web/shell/*.js`）—— 性能 `P4`② 三刀真拆（2026-09-19）之后，壳的**接线层**在这三件里。
     #    ⚠️ 路由名与文件名**必须**是 `/static/shell/<name>.js`：`tools/shell_source.py`（读壳的**唯一出口**）
     #       正是按这个形态反查文件的 ⇒ 换目录 / 换形态要**同批**改那里（否则测试读到的 ≠ 浏览器执行的）。
-    #    ⚠️ **逐条显式注册**（⛔ 不用通配 `{name}` 参数）：只有这三件、零路径穿越风险；加第四件要**同时**改这里
+    #    ⚠️ **逐条显式注册**（⛔ 不用通配 `{name}` 参数）：件数很少、零路径穿越风险；加一件要**同时**改这里
     #       与 `index.html` 的 `<script src>`（`syntax_audit` 会逐件 `node --check`，漏一件就红）。
+    #        ⭐ 2026-09-21（`§19` 四个暂留件收口）新增第 **4** 件 `legacy.js`。
     def _shell_js(name: str) -> FileResponse:
         return FileResponse(
             _APP_DIR / "web" / "shell" / name,
@@ -280,12 +283,17 @@ def create_app() -> FastAPI:
     def shell_print_export_js() -> FileResponse:
         return _shell_js("print-export.js")
 
+    # ⭐ `§19`「四个暂留件收口」（2026-09-21）：设置 ＋ 三个历史导入的**壳内实现**（接线层加件）。
+    @app.get("/static/shell/legacy.js", include_in_schema=False)
+    def shell_legacy_js() -> FileResponse:
+        return _shell_js("legacy.js")
+
     # ⚠️ 2026-09-19（`§19` 批 4）：原先这里按 `_PAGES` 逐个托管**旧静态页**（切片 MVP）——
     #    最后一个（`m03`）已删 ⇒ **整段移除**（连同上面的 `_PAGES` 定义）。
     #    ⛔ 别再注册"按名字托管的静态页"：新页面要么进**新壳**（`web/index.html`），
     #    要么走**模块路由的服务端渲染** —— 两条路都留了断言，加第三种会绕开它们。
 
-    # ⚠️ 根路径 `/` 已由 `home_router`（看板）接管，**别再注册第二个 `/`** ——
+    # ⚠️ 根路径 `/` 已由 `home_router` 接管（**302 → `/app`** —— 看板已进壳），**别再注册第二个 `/`** ——
     #    FastAPI 按注册顺序匹配（先注册的赢），多注册一个会让人以为是它在生效。
 
     return app

@@ -78,38 +78,33 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "    index = {n: i for i, n in enumerate(reversed(names)) if n}",
      "tests/test_page_m06.py"),
 
+    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：⑩⑪⑫ 的落点随导入页**搬家**（服务端渲染 → JSON API ＋ 壳）
+    #    ⇒ 锚点同步改指新件（**逐字**搬过去的文本原样可用 —— 这正是"形态变、判据不变"）。
     ("⑩ 历史导入页的上传口指错端点",
-     "backend/app/mod06_proc/import_view.py",
-     "'<form class=\"upload\" method=\"post\" action=\"/m06/import/preview\" enctype=\"multipart/form-data\">'",
-     "'<form class=\"upload\" method=\"post\" action=\"/m06/import/previews\" enctype=\"multipart/form-data\">'",
+     "backend/app/web/shell/legacy.js",
+     "'/api/m06/import/parse'",
+     "'/api/m06/import/parsx'",
      "tests/test_page_m06.py"),
 
     # ---------------------------------------------------------- TAIL-01 手动导入 Excel
     ("⑪ 手动导入的金额列不转回 `Decimal`（落库拿到字符串）",
-     "backend/app/mod08_inv/import_router.py",
+     "backend/app/mod08_inv/import_api.py",
      "        out.append({k: (Decimal(str(v)) if k in importer.NUMERIC_FIELDS else v)\n"
      "                    for k, v in row.items()})",
      "        out.append({k: v for k, v in row.items()})",
      "tests/test_page_m08.py"),
 
     ("⑫ 手动导入的分组金额漏算（合计只取第一行）",
-     "backend/app/mod08_inv/import_router.py",
+     "backend/app/mod08_inv/import_api.py",
      "                    \"amount\": f'{sum_money([r.get(\"amount\") for r in group]):.2f}'})",
      "                    \"amount\": f'{sum_money([group[0].get(\"amount\")]):.2f}'})",
      "tests/test_page_m08.py"),
 
-    ("⑬ 降级回执不再给手动导入的入口（§3.6 只印一句「已降级」）",
-     "backend/app/mod08_inv/view.py",
-     "                '<a class=\"btn sm\" href=\"/m08/import\" data-act=\"manualImport\">'\n"
-     "                \"去手动导入 Excel →</a></div>\"",
-     "                \"</div>\"",
-     "tests/test_page_m08.py tests/test_acc_inv_fetch.py"),
-
-    ("⑭ 明细页工具栏去掉手动导入入口",
-     "backend/app/mod08_inv/view.py",
-     "        ' <a class=\"btn\" href=\"/m08/import\" data-act=\"manualImport\"'",
-     "        ' <a class=\"btn\" href=\"/m08/importX\" data-act=\"manualImport\"'",
-     "tests/test_page_m08.py"),
+    # ⚠️ 原先的 ⑬⑭ 靶在**旧明细页** `backend/app/mod08_inv/view.py` 上 —— 那个文件已于 2026-09-19
+    #    （`§19` 批 2，授权 `D18`）整体删除 ⇒ 两条变异**既是"命中 0 次的过期锚点"，又会把整个脚本拖崩**
+    #    （`main()` 一开头就对所有靶文件 `read_bytes()` ⇒ 缺件 = `FileNotFoundError`、**一条都跑不了**）。
+    #    ⇒ 2026-09-21 一并删除（留痕在此）。它们守的 claim（**降级后确实有手动导入这条路**）现由
+    #    `tests/test_page_m08.py`（壳里两个入口 ＋ 解析端点）＋ `test_acc_inv_fetch.py::001-08` 承接 ✓
 
     ("⑮ 预览暂存取不到时**回落成空**（而不是显式报错）",
      "backend/app/core/preview_store.py",
@@ -118,10 +113,14 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "tests/test_page_m06.py"),
 
     # ---------------------------------------------------------- 路由静态守卫（全局）
+    # ⚠️ 2026-09-21：⑯ 的锚点原在**历史导入那条 PRG**（`import_mech` 里 `ym = D.normalize_ym(form.get("ym"))`），
+    #    那一段已随四个暂留件收口**切除**（改走 `import_api.py`）⇒ 改指**仍在的**那条写路径
+    #    （`POST /api/m06/mech` 的 `api_mech_save`）—— 守的还是同一件事：
+    #    「路由里把出口挂到**不存在**的模块上 ⇒ `test_router_refs` 必须抓住」。
     ("⑯ 路由把出口挂到错的模块上（`normalize_ym` 其实住在 `domain`）",
      "backend/app/mod06_proc/router.py",
-     "    ym = D.normalize_ym(form.get(\"ym\"))",
-     "    ym = mech_ui.normalize_ym(form.get(\"ym\"))",
+     "    ym = D.normalize_ym(req.ym)",
+     "    ym = mech_ui.normalize_ym(req.ym)",
      "tests/test_router_refs.py tests/test_acc_rpt_big.py"),
 ]
 

@@ -13,6 +13,7 @@ from collections.abc import Iterator
 from typing import Callable
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
@@ -23,6 +24,8 @@ from app.mod04_plan import repository as repo
 from app.mod04_plan import service as svc
 from app.mod04_plan.domain import (
     BUCKET_ALL,
+    MATCH_AMBIGUOUS,
+    MATCH_MATCHED,
     R_MATCHED,
     NoticeAmounts,
     audit_rows,
@@ -101,6 +104,86 @@ def api_list(
 ) -> dict:
     """付款计划列表（筛选 / 排序 / 合计 / 6 种判定计数）。"""
     return load(**_filters(year_month, project, review), sort_col=sort, sort_dir=dir)
+
+
+class PlanExportIn(BaseModel):
+    """导出请求（`TAIL-04` · §7.1）。
+
+    ⚠️ **收 id 列表，⛔ 不收"筛选条件"** —— 页面的筛选（单据年月 / **多选**项目 / 审查结果两档）
+      是**前端**算的 ⇒ 传条件就得在后端**再实现一遍** ⇒ **两套口径必打架**。
+    ⭐ 传 id 还顺带把**顺序**带上了（导出的行序 = 屏幕上的行序）。
+    """
+
+    ids: list[int] = Field(default_factory=list)
+
+
+def _export_row(r: dict) -> dict:
+    """一行计划 → **导出值**（键 = `pl_export.COLUMNS` 的第二项）。
+
+    ⚠️ 本函数**只做「页面显示值」的对齐**，⛔ **不在这里判定业务**（审查结果 / 匹配判定全在
+       `domain` / `service` 里，`row_to_dict` 已经给好了）—— 判定搬进导出层 = 又一份口径。
+    ⚠️ 「处理」那格在页面上是**按钮**，导出改给**状态词** —— 逐条理由见 `pl_export` 模块头。
+    """
+    result = str(r.get("audit_result") or "")
+    forced = bool(r.get("forced_through"))
+    status = str(r.get("match_status") or "")
+    raw = str(r.get("project_input") or "")
+    # 「项目」那格：页面 `plProjCell` —— 唯一命中 ⇒ 展示名；0 命中 ⇒ 填报原值 ＋「未匹配」；
+    # 多命中 ⇒ 填报原值 ＋「重名 N 条」（判定用后端的 match_status，⛔ 不在导出层重算匹配）
+    if status == MATCH_MATCHED:
+        project_text = str(r.get("project_display") or "")
+    elif status == MATCH_AMBIGUOUS:
+        project_text = f"{raw}（重名 {r.get('match_candidates') or 0} 条）"
+    else:
+        project_text = f"{raw}（未匹配）"
+    return {
+        # ⚠️ 页面那格显示的就是 `${p.id}`（＋「手动」徽标）—— ⛔ 别改成行号：本页表头是 `#`、
+        #    值是**计划行 id**，与 `MOD-11` 的「序号」不是一回事（那边用户明确要行号）
+        "id_text": f"{r.get('id')}（手动）" if r.get("is_manual") else str(r.get("id")),
+        "year_month": r.get("year_month") or "",
+        "project_text": project_text,
+        "doc_no": r.get("doc_no") or "",
+        "flow_amount": r.get("flow_amount") or "",
+        "paid_amount": r.get("paid_amount") or "",
+        "unpaid_amount": r.get("unpaid_amount") or "",
+        "planned_amount": r.get("planned_amount") or "",
+        "pay_date": r.get("pay_date") or "",
+        "pay_method": r.get("pay_method") or "",
+        "remark": r.get("remark") or "",
+        "audit_text": result + ("（已强制通过）" if forced else ""),
+        # 「处理」：完全匹配 ⇒ 无需处理；已强制 ⇒ 强制备注；否则 ⇒ 未处理（页面按钮的那一态）
+        "handle_text": ("无需处理" if result == R_MATCHED
+                        else (str(r.get("forced_remark") or "") if forced else "未处理")),
+    }
+
+
+@router.post("/api/m04/plans/export")
+def export_plans(payload: PlanExportIn, load: PageData = Depends(get_page_data)) -> dict:
+    """导出**付款计划审查结果**（`TAIL-04` · `REQ-R1` · §7.1）⇒ `{ok, filename, rows, content_b64}`。
+
+    ⭐ **行** = 传入的那些 id（= **屏幕上看到的**，**连它的顺序一起**）；
+    **列** = 页面表头 `PL_THEAD` 去掉「勾选 / 操作」⇒ 13 列；**取值** = **页面显示的那个值**
+    （逐列口径见 `report_export/pl_export.py` 的模块头）。
+
+    ⚠️ **空参 `load()` = 全量**（本端点的"筛选"靠传入的 id）—— ⛔ 别在这里按页面的年月 / 项目
+       再筛一遍：那会变成**第二份筛选口径**，而且用户切到"跨月 / 全部"时就导不出东西了。
+    """
+    import base64
+    from datetime import date
+
+    from app.report_export import pl_export as X
+
+    data = load()                       # ⭐ 空参 = 全量（见 docstring）
+    all_rows = data.get("rows") or []
+    by_id = {int(r["id"]): r for r in all_rows if r.get("id") is not None}
+    ids = [int(i) for i in (payload.ids or [])]
+    # ⚠️ **按传入的 id 顺序**出行（⛔ 不是按库里的顺序）—— 那是**屏幕上的行序**
+    picked = [by_id[i] for i in ids if i in by_id]
+    out = [_export_row(r) for r in picked]
+    blob = X.build_xlsx(out)
+    name = f"付款计划审查结果_{date.today().strftime('%Y%m%d')}.xlsx"
+    return {"ok": True, "filename": name, "rows": len(out),
+            "content_b64": base64.b64encode(blob).decode("ascii")}
 
 
 @router.get("/api/m04/delete-impact")

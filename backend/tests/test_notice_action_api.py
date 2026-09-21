@@ -229,7 +229,7 @@ def test_API_编辑手动行按改动字段回报():
 @acc()
 def test_手动行保存的API只许走唯一出口():
     """⛔ **防分叉**：手动行的校验 / 落库 / 文案只许一份 —— JSON API 必须调
-    `notice_actions.apply_manual_save`，⛔ 不许内联 `repo.create_manual_notice` / `update_manual_notice`。"""
+    `notice_manual_actions.apply_manual_save`，⛔ 不许内联 `repo.create_manual_notice` / `update_manual_notice`。"""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
@@ -288,7 +288,7 @@ def test_API_删除影响范围由后端给():
 @acc()
 def test_手动行删除的API只许走唯一出口():
     """⛔ **防分叉**：删除的校验 / 落库 / 文案只许一份 —— JSON API 必须调
-    `notice_actions.apply_manual_delete`，⛔ 不许内联 `repo.delete_notice`。"""
+    `notice_manual_actions.apply_manual_delete`，⛔ 不许内联 `repo.delete_notice`。"""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
@@ -369,7 +369,7 @@ def test_API_付款方式缺省时兜底现汇():
 @acc()
 def test_批量付款的API只许走唯一出口():
     """⛔ **防分叉**：批量付款的整条管线（整批重算 / 不落半批 / 幂等 / 落流水）只许一份
-    —— JSON API 必须调 `notice_actions.apply_batch_pay`。
+    —— JSON API 必须调 `notice_pay_actions.apply_batch_pay`。
 
     ⚠️ `§19` 批 4 · S4⑤：原先还查 PRG（`notice_pay_router.py`）那半边；旧页删净 ⇒ 收敛到本 API。
     """

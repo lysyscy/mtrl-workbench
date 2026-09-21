@@ -11,20 +11,20 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
-from urllib.parse import urlencode
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from app.core import preview_store
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
 from app.mod06_proc import domain as D
-from app.mod06_proc import importer, mech_ui, repository as repo
-from app.mod06_proc.import_view import render_import_page
-from app.mod06_proc.service import build_import_data, build_page_data, parse_state
+from app.mod06_proc import mech_ui, repository as repo
+# ⭐ 历史导入三步（§5.2.5 ①②）—— 独立路由件（**JSON API**），由本文件汇总（`main.py` 不用改）。
+# ⚠️ 2026-09-21（`§19` 四个暂留件收口）：原先住在本文件的三条 PRG ＋ `import_view.py`（服务端渲染页）
+#    **已整体删除** —— 能力原样搬成 JSON API `import_api.py`（壳 `V.m06imp` 在用），旧页无独有能力。
+from app.mod06_proc.import_api import router as import_api_router
+from app.mod06_proc.service import build_page_data, parse_state
 # ⚠️ 2026-09-18（`§19` 批 2）：`app.mod06_proc.view`（`render_proc_page`/`render_export_preview`）
 #    的导入已随"过程资料页半边"删除 —— ⛔ 别再加回来（那两个渲染件已整体删除）。
 from app.mod08_inv.router import query_params
@@ -87,127 +87,16 @@ def api_proc_export(request: Request):
 
 
 # ---------------------------------------------------------------- ② 历史导入（§5.2.5 ①②）
-
-
-def _payload(plan: importer.ImportPlan, *, warehouse: str) -> dict:
-    """预览结果 → 可暂存的纯数据（**不含密钥**；`batch` 在预览这一刻定死）。"""
-    return {
-        "warehouse": warehouse,
-        "batch": importer.next_batch(),
-        "rows": [{k: (str(v) if isinstance(v, Decimal) else v) for k, v in row.items()}
-                 for row in plan.rows],
-        "anomalies": plan.anomalies,
-        "ignored_mech": plan.ignored_mech,
-        "unknown_headers": plan.unknown_headers,
-        "default_cutoff": plan.default_cutoff,
-    }
-
-
-def _plan_of(payload: dict) -> importer.ImportPlan:
-    """暂存结果 → `ImportPlan`（确认时重建；**不重新解析文件**）。"""
-    plan = importer.ImportPlan(
-        anomalies=list(payload.get("anomalies") or []),
-        ignored_mech=list(payload.get("ignored_mech") or []),
-        unknown_headers=list(payload.get("unknown_headers") or []),
-    )
-    for row in payload.get("rows") or []:
-        plan.rows.append({k: (Decimal(str(v)) if k != "ym" else str(v)) for k, v in row.items()})
-    return plan
-
-
-@router.get("/m06/import", response_class=HTMLResponse)
-def import_page(request: Request):
-    """历史导入页（三步走 ＋ 列说明 ＋ 批次清单）。"""
-    pj = _one(query_params(request), "pj")
-    with session_scope() as s:
-        data = build_import_data(s, warehouse=pj)
-    return HTMLResponse(render_import_page(data))
-
-
-@router.post("/m06/import/preview", response_class=HTMLResponse)
-async def import_preview(file: UploadFile = File(...), pj: str = Form("")):
-    """解析上传的 `.xlsx` → **预览**（⚠️ **一个字节都不写库**）。"""
-    try:
-        content = await file.read()
-        plan = importer.parse_sheet(content)
-        with session_scope() as s:
-            data = build_import_data(s, warehouse=str(pj or ""))
-        if not data["warehouse"]:
-            raise MustReportError("还没有可导入的项目 —— 先在「库存单据」页抓一次库存单据明细。")
-        token = preview_store.save(_payload(plan, warehouse=data["warehouse"]))
-        preview = {
-            "writable": plan.writable, "months": plan.months,
-            "anomalies": plan.anomalies, "ignored_mech": plan.ignored_mech,
-            "unknown_headers": plan.unknown_headers, "default_cutoff": plan.default_cutoff,
-            "rows": [{k: (f"{v:.2f}" if isinstance(v, Decimal) else v) for k, v in row.items()}
-                     for row in plan.rows],
-        }
-        return HTMLResponse(render_import_page(data, preview=preview, token=token))
-    except MustReportError as exc:
-        with session_scope() as s:
-            data = build_import_data(s, warehouse=str(pj or ""))
-        return HTMLResponse(render_import_page(data, message=exc.message, kind="err"))
-    except Exception as exc:                                    # noqa: BLE001
-        with session_scope() as s:
-            data = build_import_data(s, warehouse=str(pj or ""))
-        return HTMLResponse(render_import_page(
-            data, message=f"解析失败：{type(exc).__name__}: {exc}", kind="err"))
-
-
-@router.post("/m06/import/confirm", response_class=HTMLResponse)
-def import_confirm(token: str = Form(...), pj: str = Form(""), cutoff_ym: str = Form("")):
-    """凭 token 取回解析结果 → **写历史段 ＋ 记批次** → 给**核对报告**。"""
-    try:
-        payload = preview_store.load(token)
-        plan = _plan_of(payload)
-        warehouse = str(pj or payload.get("warehouse") or "")
-        batch = str(payload.get("batch") or importer.next_batch())
-        with session_scope() as s:
-            out = importer.commit(s, plan, warehouse=warehouse, batch=batch,
-                                  operator=current_operator(), cutoff_ym=cutoff_ym)
-            report = importer.check_report(s, warehouse=warehouse, batch_no=out["batch"],
-                                           cutoff_ym=out["cutoff_ym"])
-            data = build_import_data(s, warehouse=warehouse)
-        return HTMLResponse(render_import_page(
-            data, report=report,
-            message=f"已导入 {out['rows']} 个月（批次 {out['batch']}）· 截止核算月 "
-                    f"{out['cutoff_ym'] or '（空）'} —— 历史段材料列改用本批快照；正式段未受影响",
-            kind="ok"))
-    except MustReportError as exc:
-        with session_scope() as s:
-            data = build_import_data(s, warehouse=str(pj or ""))
-        return HTMLResponse(render_import_page(data, message=exc.message, kind="err"))
-    except Exception as exc:                                    # noqa: BLE001
-        with session_scope() as s:
-            data = build_import_data(s, warehouse=str(pj or ""))
-        return HTMLResponse(render_import_page(
-            data, message=f"导入失败：{type(exc).__name__}: {exc}", kind="err"))
-
-
-@router.post("/m06/import/rollback", response_class=HTMLResponse)
-def import_rollback(batch: str = Form(...), pj: str = Form("")):
-    """**整批回滚**（置 `rolled_back` ＋ 留痕，**不物理删**）→ 再给核对报告。"""
-    try:
-        with session_scope() as s:
-            count = importer.rollback(s, batch_no=batch)
-            data = build_import_data(s, warehouse=str(pj or ""))
-            cutoff = data["cutoff_ym"]
-            report = importer.check_report(s, warehouse=data["warehouse"], batch_no=batch,
-                                           cutoff_ym=cutoff)
-        return HTMLResponse(render_import_page(
-            data, report=report,
-            message=f"批次 {batch} 已整批回滚：{count} 行不再计入历史段（留痕、未物理删）"
-                    f"—— 可以重新上传修正后的文件",
-            kind="wn"))
-    except MustReportError as exc:
-        with session_scope() as s:
-            data = build_import_data(s, warehouse=str(pj or ""))
-        return HTMLResponse(render_import_page(data, message=exc.message, kind="err"))
-    except Exception as exc:                                    # noqa: BLE001
-        with session_scope() as s:
-            data = build_import_data(s, warehouse=str(pj or ""))
-        return HTMLResponse(render_import_page(
-            data, message=f"回滚失败：{type(exc).__name__}: {exc}", kind="err"))
+#
+# ⚠️ 2026-09-21（`TAIL-27` · `§19` 四个暂留件收口）：本段原先有三条 **PRG**（`GET /m06/import` ＋
+#    `POST /m06/import/preview|confirm|rollback`）＋ 服务端渲染页 `import_view.py`。
+#    ⭐ 能力已**原样搬成 JSON API**（`import_api.py`：`/api/m06/import/{data,meta,parse,confirm,rollback}`，
+#    壳 `V.m06imp` 在用）⇒ 三条 PRG 与那个渲染件**已整体删除**（授权 `D18`），无独有能力被丢：
+#      · 解析 / 落库 / 核对报告 = `importer.py`（**一行没动**）；
+#      · 「预览不写库」的载具 = `core.preview_store`（与付款域导入**同一份**，§5.2.5 ②）；
+#      · 候选项目 / 截止月 / 批次 = `service.build_import_data`（**同一个出口**）。
+#    ⛔ 别再往本文件加页面路由（`D18` 口径：新页面 = 新壳 ＋ JSON API）。
+router.include_router(import_api_router)
 
 
 # ============================================================ JSON API（前端壳：原型直接接数据）

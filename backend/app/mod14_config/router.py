@@ -1,62 +1,21 @@
-"""`MOD-14` 系统设置的路由（`/m14/settings`）—— §7.8。
+"""`MOD-14` 系统设置的路由 —— §7.8。
 
-⚠️ 保存走 **PRG**（POST → 303 → GET），与全站一致；校验失败**不写库**、原地回显错误。
+⚠️ 2026-09-21（`TAIL-27` · `§19` 四个暂留件收口）：**服务端渲染的设置页已删**
+（`GET /m14/settings` ＋ PRG `POST /m14/settings/save` ＋ `view.py`）—— 能力**原样搬成 JSON API**
+（`settings_api.py`，壳 `V.set` 在用）：设置项 / 提示 / 留痕 / 保存 / 校验全都在那边，
+**判定一行没变**（`app_settings.SPECS` · `validate` · `repository.save` · `invalidate`）。
+⚠️ 本文件此后只做**汇总**：剔除规则 API（`TAIL-40`）＋ 系统设置 API。
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter
 
-from app.core.app_settings import (
-    SETTING_KEYS,
-    SPECS,
-    invalidate,
-    validate,
-)
-from app.core.config import get_settings
-from app.core.db import session_scope
-from app.core.identity import current_operator
-from app.mod14_config.repository import recent_logs, save
-from app.mod14_config.view import render_settings_page
+# ⭐ 前端壳的 **系统设置 JSON API**（`§19` 四个暂留件收口）—— 独立路由件，由本文件汇总
+from app.mod14_config.settings_api import router as settings_api_router
 
 router = APIRouter(tags=["mod14"])
-
-
-def _env_values() -> dict[str, str]:
-    """`.env` 侧的值（按 `SPECS.env_attr` 取；仅用于展示「回落值」）。"""
-    st = get_settings()
-    return {s.key: str(getattr(st, s.env_attr, "") or "") for s in SPECS}
-
-
-@router.get("/m14/settings", response_class=HTMLResponse)
-def settings_page(ok: str = "", err: str = ""):
-    with session_scope() as s:
-        logs = recent_logs(s)
-    flash = "已保存（改动已留痕）" if ok == "1" else ""
-    errors = [err] if err else []
-    return HTMLResponse(render_settings_page(env_values=_env_values(), logs=logs,
-                                             flash=flash, errors=errors))
-
-
-@router.post("/m14/settings/save")
-async def settings_save(request: Request):
-    form = await request.form()
-    values = {k: str(form.get(k) or "") for k in SETTING_KEYS}
-
-    errors = [e for e in (validate(k, v) for k, v in values.items()) if e]
-    if errors:
-        with session_scope() as s:
-            logs = recent_logs(s)
-        return HTMLResponse(
-            render_settings_page(env_values=_env_values(), logs=logs, errors=errors),
-            status_code=400,
-        )
-
-    with session_scope() as s:
-        save(s, values=values, operator=current_operator())
-    invalidate()                      # ⭐ 清缓存 —— 否则页面改了不生效
-    return RedirectResponse("/m14/settings?ok=1", status_code=303)
+router.include_router(settings_api_router)
 
 
 # ⭐ 前端壳的 **剔除规则 JSON API**（`TAIL-40`）—— 独立路由件，由本文件汇总（`main.py` 不用改）

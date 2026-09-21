@@ -26,7 +26,7 @@ from app.mod02_i8.fetch_task import (
 )
 from app.mod02_i8.models import RunRecord
 from app.mod02_i8.notice_source import NoticeFetcher
-from app.mod02_i8.repository import create_run_record, finish_run_record
+from app.mod02_i8.repository import create_run_record, finish_run_record, run_record_out
 from app.mod02_i8.schemas import (
     FetchPlanOut,
     FetchPreviewOut,
@@ -252,25 +252,17 @@ def sync_common_projects(
 
 @router.get("/fetch/records", response_model=list[RunRecordOut])
 def fetch_records(limit: int = Query(20, ge=1, le=200)) -> list[RunRecordOut]:
-    """最近执行记录（供看板「本月尚未抓取 / 最近一次抓取失败」）。"""
+    """最近执行记录（`m02` 的回显卡与任务日志卡）。
+
+    ⚠️ **本端点是"窗口"（≤200 条），⛔ 不是"全表"** ⇒ ⛔ **看板的三个待办别用它算**
+       —— `run_record` 是流水表（实测 ≈10 条/天 ⇒ 一个月 ≈300 条），窗口里**会漏掉**
+       「本月有没有成功抓取」这类**跨全表**的问题。看板走 `/api/home/run-counts`（SQL 全表）。
+    """
     with session_scope() as s:
         rows = list(
             s.execute(select(RunRecord).order_by(RunRecord.id.desc()).limit(limit)).scalars().all()
         )
-        return [
-            RunRecordOut(
-                id=r.id,
-                run_type=r.run_type,
-                target=r.target,
-                status=r.status,
-                success_count=r.success_count,
-                fail_count=r.fail_count,
-                error_message=r.error_message,
-                started_at=r.started_at.isoformat(timespec="seconds"),
-                finished_at=r.finished_at.isoformat(timespec="seconds") if r.finished_at else None,
-            )
-            for r in rows
-        ]
+        return [run_record_out(r) for r in rows]
 
 
 # --------------------------------------------------------------- 内部

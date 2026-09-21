@@ -132,6 +132,11 @@ const API = {
   m02Records: (limit = 50) => API.get(`/api/m02/fetch/records?limit=${limit}`),
   m02SyncWh: () => API.post('/api/m02/sync/warehouses?allow_kick=true', {}),
   m02SyncPj: () => API.post('/api/m02/sync/common-projects?allow_kick=true', {}),
+  /* ⭐ 看板 ⑦⑬⑭ 的取数口（2026-09-21 接线）—— ⚠️ **另起一个端点、⛔ 不复用 `m02Records`**：
+     那个是**窗口**（`limit ≤ 200`），而 `run_record` 是**流水表**（≈10 条/天 ⇒ 一个月 ≈300 条）
+     ⇒ 用窗口算「本月有没有成功抓取」**会漏、且漏了不报错**。
+     本端点在后端走 **SQL 全表**（`app/home/service.py::run_counts`）。 */
+  homeRunCounts: () => API.get('/api/home/run-counts'),
 
   /* ---- MOD-03 · 抓取 ＋ 链路 C 弹窗（`TAIL-29`-② ④） ---- */
   /* ⭐ 抓取：**失败也要看回执** —— 「归属未走完」是**可预期的失败**（要拿它开弹窗）
@@ -321,6 +326,34 @@ const API = {
      ⭐ `M5-6`：`since`（`YYYY-MM-DD`）= **单据日期起点** ⇒ 空串 = 让后端用 `default_since`
         （库里最大合同日期 − 3 天）；**实测**增量 1~5 秒 vs 全量 40 秒。 */
   m11Fetch: (since = '') => API.post('/api/m11/fetch', { confirm: true, since }),
+
+  /* ---- ⭐ `§19`「四个暂留件收口」（2026-09-21）：系统设置 ＋ 三个历史导入 ----
+     ⚠️ 这四页原先**只有服务端渲染页**（壳里零入口 ⇒ 一直删不掉）—— 现在能力搬进壳
+        （页在 `web/shell/legacy.js`），服务端那四个渲染件与它们的 PRG 已删。
+     ⚠️ 判定**一行都不在壳里**：格式校验 / 留痕 / 落库 / 批量回滚 / 幂等刷新全在后端。
+     ⚠️ 四个端点**恒 HTTP 200 ＋ `ok` 标志**（可预期的拒绝也是 `ok:false` ＋ 一句中文）——
+        ⛔ 别把它们当成"抛异常"来写，否则后端那句原因会被吞掉。 */
+  /* 系统设置（§7.8）：列表 = 设置项 ＋ 提示 ＋ 变更留痕；保存 = 只处理传进来的 key。 */
+  m14Settings: () => API.get('/api/m14/settings'),
+  m14SettingsSave: body => API.post('/api/m14/settings', body),
+  /* 历史付款流水导入（§4.4.6）：列契约 ＋ 三步（预览不写库 → 确认 → 核对报告含**超付单列**）。 */
+  m05ImpMeta: () => API.get('/api/m05/import/meta'),
+  /* 过程资料历史导入（§5.2.5 ①②）：项目候选 / 截止核算月 / 批次 ＋ 列说明。 */
+  m06ImpMeta: () => API.get('/api/m06/import/meta'),
+  m06ImpData: pj => API.get('/api/m06/import/data?pj=' + encodeURIComponent(pj || '')),
+  /* 库存单据手动导入（§3.6 降级通道）：必有列 / 刻意不采的源列。 */
+  m08ImpMeta: () => API.get('/api/m08/import/meta'),
+  /* ⚠️ 三个导入的「解析」都是 **multipart/form-data**（⛔ 不是 JSON）⇒ `FormData` ＋ **不手动设
+     Content-Type**（浏览器要自己带 boundary；手设会把 boundary 写丢 ⇒ 后端收不到文件）。
+     此件即 `m04Import` 那段逻辑的共用出口（⛔ 别在调用方各写一遍）。 */
+  postFile: async (url, fd) => {
+    const r = await fetch(url, { method: 'POST', body: fd });
+    const text = await r.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+    if (!r.ok) throw new Error((data && (data.message || data.detail)) || text || `HTTP ${r.status}`);
+    return data;
+  },
 };
 
 /* ---------- 字段适配：后端**语义字段** → 原型字段名（`NT_COLS` / `PJ_COLS`） ----------
@@ -350,6 +383,8 @@ function adaptNotice(x) {
     /* 后端算好的三个状态值**直接带上**（前端不重算）：已付 / 是否撤单 / 有无生效流水 */
     paidApi: numOr0(x.amount_paid), revoked: !!x.is_revoked,
     hasFlow: !!x.has_effective_flow, oid: x.ownership_id,
+    /* ⭐ `P4` 超付（§4.4.6）：**判定在后端**（`NoticeRow.is_overpaid`）—— 壳只拿来渲染 */
+    over: !!x.is_overpaid,
   };
 }
 
@@ -362,6 +397,25 @@ const PJ_STATUS_VALUE = { '在建': 'active', '归档': 'archived' };
    在同一个出口转，两侧都不改。 */
 const kwJoin = list => (list && list.length) ? '|' + list.join('|') + '|' : '';
 const kwSplit = s => String(s == null ? '' : s).split('|').map(x => x.trim()).filter(Boolean);
+
+/* ⭐ MOD-01 项目档案「**当前筛选下可见的行**」—— 导出（`TAIL-04` · `ACT.exp`）要用。
+   ⚠️⚠️ **它是 `V.m01` 里那段内联筛选的镜像**：`V.m01` 里是
+       `const TYPE=…; const q=…; const rows=pjSort(PJs.filter(p=>…));`（逐字见下）。
+   ⛔ **为什么不直接把 `V.m01` 改成调本函数**（那样就只有一份了）：`V.` 切片是 `ui_parity` 的 `U1`
+      逐行比对的**原件**，而**配对的原型在「面」**（`demo/…-交互原型.html`）——改一处要同改另一处，
+      还会连带**原型导读的逐页「行号区间 + 行数」表**、`_smoke` 的四检断言、追溯表、验收基线一起重算
+      （`audit_common.CANCELLED_KEEP_IN_PROTO_AND_DOCS` 那段注释里记着这笔账）。
+      ⇒ 本仓既定做法：**接线层可以加件，原型切片一行不动**（同 `BIND.m11` 接管导出按钮那次）。
+   ⚠️ **所以这是"故意存在的第二份"**，靠 `tests/test_tail04_pages.py` 把**两份钉死**：
+      谁只改一处，测试当场点名（⛔ 别把那条测试当成"重复代码告警"删掉 —— 它就是这个重复的保险）。
+   ⛔ 改筛选条件 ⇒ **两处一起改**。 */
+const pjVisible = () => {
+  const TYPE = { 普通项目: 'normal', 小微壳: 'shell', 具体小微: 'small' }[fPj.type] || '';
+  const q = fPj.q.trim();
+  return pjSort(PJs.filter(p => (fPj.status === '全部' || p.status === fPj.status)
+    && (!TYPE || p.type === TYPE)
+    && (!q || (p.name || '').includes(q) || (p.full || '').includes(q) || (p.disp || '').includes(q))));
+};
 
 function adaptProject(p) {
   return {
@@ -1648,6 +1702,46 @@ async function reloadM02IfOn() {
   render();
 }
 
+/* ⭐ 看板 ⑦⑬⑭ 的取数（`/api/home/run-counts` · 2026-09-21 接线）——
+   原先那两个瓦片读**写死的演示数组** `RUNLOG` ⇒ 看板成了全站唯一还显示模拟数据的页。
+   ⚠️⚠️ ⛔ **别改回"扫 `m02Records` 最近 N 条"**：那个端点是**窗口**（`limit ≤ 200`），
+      而 `run_record` 是**流水表**（实测 ≈10 条/天 ⇒ 一个月 ≈300 条）⇒ **会漏，且漏了不报错**
+      （症状 = 看板说"本月未抓" ⇒ 用户照着去重抓 ⇒ **白顶一次 i8 的号**）。
+   ⭐ 后端走 **SQL 全表**（`app/home/service.py::run_counts`）⇒ 答案与表有多大**无关**。 */
+/* ⭐⭐ 看板 ⑦⑬⑭ 的**取数接口**（`V.home` 只认这一个）—— ⚠️ 原型里有**同名同形**的一份，
+   两份都定义在 `V.home` **切片之外**，所以 `ui_parity` 的逐行比对不受影响（切片本身逐字一致）。
+   壳这一份 = **后端算好的**（`HOME`）；原型那一份 = 用它的演示记录现算。
+   ⛔ 别把这里改成"在壳里扫 `m02Records` 最近 N 条"——那会漏（窗口），且**漏了不报错**。 */
+function homeCounts() {
+  return { counts: { fetchDue: HOME.counts.fetchDue, fetchFail: HOME.counts.fetchFail,
+                     printFail: HOME.counts.printFail },
+           latest: { fetchFail: HOME.latest.fetchFail, printFail: HOME.latest.printFail },
+           err: HOME_ERR };
+}
+function runFailInfo(rec) {
+  if (!rec) return null;
+  /* 「表名 ＋ 时间」：标签走 `m02LabelOf`（与 `m02` 页**同一个出口**，⛔ 不在这儿另拼一套人话）；
+     时间与 `m02LogRows` 同一展示口径（ISO ⇒ `T` 换空格）。 */
+  return { obj: m02LabelOf({ type: rec.run_type, target: rec.target }),
+           at: String(rec.started_at || '').replace('T', ' ') };
+}
+async function reloadHome() {
+  try {
+    const d = await API.homeRunCounts();
+    const c = (d && d.counts) || {}, L = (d && d.latest) || {};
+    HOME = {
+      counts: { fetchDue: c.fetchDue ? 1 : 0, fetchFail: c.fetchFail ? 1 : 0,
+                printFail: c.printFail ? 1 : 0 },
+      latest: { fetchFail: runFailInfo(L.fetchFail), printFail: runFailInfo(L.printFail) },
+    };
+    HOME_ERR = '';
+  } catch (e) {
+    /* ⚠️ 记下来（三格要显「—」）**并且照常抛** —— 横幅得按路名点出这一路失败（`soft()` 的口径）。 */
+    HOME_ERR = String((e && e.message) || e);
+    throw e;
+  }
+}
+
 /* ⭐ 两个同步（`API-05` / `API-06`）的**唯一入口** —— 壳里三处入口共用它：
    `m02` 表里 API-05/06 两行的「触发」＋ `m01` 页首那两个「同步…」按钮。
    ⚠️ **D9：会强踢该账号的在线用户** ⇒ ① 先弹**二次确认**（讲清顶号与时段），⛔ 不确认不发请求；
@@ -1822,7 +1916,9 @@ function jcFetchPreview(d) {
    ⚠️ 缓存口径：`LOADED` 记"这路拉过了" ⇒ **同一页反复进出不重复拉**（与改前一致：改前是 boot 拉一次）。
       跨页写操作的陈旧性与改前**同级**（改前写 m03 也不会自动刷新 m05）；真要更强 = 写动作标脏，另立件。 */
 const PAGE_LOAD = {
-  home: ['付款通知书', '项目档案', '付款计划'],
+  /* ⭐ `home`（看板）：前三路供 ①–⑥ 与欠款卡；⭐ **第四路 `看板计数`** = ⑦⑬⑭ —— 它**只能问后端**
+     （跨全表执行记录，见 `reloadHome` 上方那段为什么不能用记录窗口）。 */
+  home: ['付款通知书', '项目档案', '付款计划', '看板计数'],
   m01: ['项目档案', '待人工指认', '待人工建档', '修改留痕'],
   m02: ['i8 执行记录', '库存单据'],      /* `V.m02` 的回显卡读 `IVs`/`ADs` */
   /* ⭐ `M5-5`：m03 页**也要读 `JCs`** —— 「集采实际供应商」那一格的关联区（`jcRefOf` 反查"被哪张合同引用了"、
@@ -1845,6 +1941,13 @@ const PAGE_LOAD = {
      ⚠️ 但它**被别的页间接依赖**：`CUR`/`USERS` 是「当前登录用户」的来源，
        ⛔ 别把它排到需要"谁登录了"的页后面（目前无此依赖，登记在此备查）。 */
   m15: ['用户管理'],
+  /* ⭐ `§19`「四个暂留件收口」（2026-09-21）：四页**各自一路**，都无跨页依赖（不读 `NO`/`PJs`/`PLs`）
+     ⇒ ⛔ 不进 `LOAD_DEP`、也⛔ 不替别的页预拉。
+     ⚠️ 它们的取数口**只在进这页时才发**（`go(k)` 触发）—— 与其余页同一条口径（`P3` 主体）。 */
+  set: ['系统设置'],
+  m05imp: ['付款导入'],
+  m06imp: ['过程资料导入'],
+  m08imp: ['库存导入'],
   };
 /* 标签 → 取数函数（标签进顶部横幅的**失败点名** —— ⛔ 一字不许改，它们是给用户看的） */
 const LOADERS = {
@@ -1855,6 +1958,7 @@ const LOADERS = {
   '待人工指认': reloadPending,   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
   '待人工建档': reloadArchPend,  /* ⭐ `TAIL-45`：链路 A ③-b「多仓库 ⇒ 选定一个」那一路 */
   'i8 执行记录': reloadM02,     /* ⭐ `TAIL-27`：`m02` 回显与任务日志的唯一数据源 */
+  '看板计数': reloadHome,       /* ⭐ 看板 ⑦⑬⑭：**全表**记账（⛔ 与上面那路`窗口`是两回事，别合并） */
   '修改留痕': async () => {
     const tr = await API.trails();
     PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
@@ -1870,6 +1974,11 @@ const LOADERS = {
   '规则配置': reloadM14,        /* 独立取数 ⇒ 无顺序依赖 */
   '用户管理': reloadM15,        /* ⭐ `m15`：`/api/m15/users` 单路，同样无顺序依赖 */
   '集采台账': reloadM11,        /* ⭐ `M5-7`：`/api/m11/list` ⇒ 原地填 `JCs`（跨页共享，见 `adaptJc` 上方注释） */
+  /* ⭐ `§19`「四个暂留件收口」（2026-09-21）—— 实现在 `web/shell/legacy.js`（四页与其取数同处一件）。 */
+  '系统设置': reloadSet,
+  '付款导入': reloadImp05,
+  '过程资料导入': reloadImp06,
+  '库存导入': reloadImp08,
   /* ⛔ `'差异登记': reloadM12` 已删（2026-09-20 撤页）；`reloadM12` / `adaptDf` 也已删。 */
   '收发结存与大表': reloadM07,   /* ⚠️ 吃 `MACH6`/`IVs` ⇒ 见 `LOAD_DEP` */
   '付款域': reloadM05,          /* ⚠️ 机械欠款派生自 `MACH6` ⇒ 见 `LOAD_DEP` */

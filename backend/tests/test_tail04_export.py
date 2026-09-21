@@ -40,6 +40,7 @@ from app.report_export import service as EX
 from app.report_export import setl_export as SE
 from tests.acc_plugin import acc
 from tests.m07_helpers import dataset
+from tests.shell_load_helpers import exp_routes
 
 ROOT = Path(__file__).resolve().parents[2]
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
@@ -367,13 +368,22 @@ def test_库存单据两种导出并存互不影响且透视提示与模板形�
     assert head.count('data-act="exp"') == 1, "朴素导出按钮缺 / 重复"
     assert head.count('data-act="expPivot"') == 1, "含透视导出按钮缺 / 重复"
 
-    # ② 两者走**不同实现**（"互不影响"的实质）：朴素那份仍是通用 `exp`，⛔ 不得被并进 `expPivot`
+    # ② 两者走**不同实现**（"互不影响"的实质）：朴素那份仍走**通用 `exp`**，⛔ 不得被并进 `expPivot`
     exp_act = _action_text("exp")
     pivot_act = _act("expPivot")
-    assert "导出尚未落地" in exp_act, "通用 `exp` 不再是那条「尚未落地」的诚实提示了（被谁改走了？）"
-    assert "/api/m08/inventory/export" not in exp_act, \
-        "朴素导出被改成了与 `expPivot` 同一份实现 ⇒ 不再是「互不影响」"
+    assert "尚未落地" in exp_act, "通用 `exp` 不再有那条「还没有真文件」的诚实兜底了（被谁改走了？）"
     assert pivot_act != exp_act
+    # ⭐⭐ 2026-09-20（`TAIL-04` 收尾）：`exp` 从"一条诚实提示"改成了**按 `data-t` 真分发**
+    #    ⇒ 端点串**搬进了分发表 `EXP_ROUTES`**，光看 `exp` 动作体已经**看不出**
+    #      "朴素那份有没有被并进透视那份" ⇒ 断言改看**表**。
+    #    ⚠️ **形态变了、判据一字未改**：claim 仍是「两者**并存互不影响**」。
+    #    ⚠️ 这也是本条断言**唯一**还守得住的地方：`EXP_ROUTES` 是那张表，
+    #       谁把「库存单据明细总表」加进去（或指到透视端点），这里当场红。
+    routes = exp_routes()
+    assert "库存单据明细总表" not in routes, \
+        "库存单据明细总表的**朴素**那份被接进了导出分发表 ⇒ 与「含透视」那份（`expPivot`）重复"
+    assert "/api/m08/inventory/export" not in routes.values(), \
+        "朴素那份被接到了**透视端点** ⇒ 不再是「两种导出并存互不影响」"
 
     # ③ `expPivot` 那份**真产出文件**（端点 ＋ 壳侧真下载：`content-type` 分流 + `x-export-filename`）
     assert "/api/m08/inventory/export" in INV_API

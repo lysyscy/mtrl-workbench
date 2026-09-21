@@ -87,11 +87,16 @@ def test_期初与i8期间流水不重叠且台账自截止月起排行():
 
 @acc("ACC-INIT-001", "001-03")
 def test_i8期间两条入口都在_抓通知书与Excel导入历史流水():
-    """§9.7 第 2 行：i8 侧**没有付款记录** ⇒ **Excel 是付款的唯一来源**；通知书走抓取。"""
+    """§9.7 第 2 行：i8 侧**没有付款记录** ⇒ **Excel 是付款的唯一来源**；通知书走抓取。
+
+    ⚠️ 2026-09-21（`§19` 四个暂留件收口）：导入页搬进新壳 ⇒ 三步与纠错通道改由**JSON 端点**承接
+       （`import_api.py`）—— **判词一字未变**（"Excel 导入的历史流水这条路真的存在"）。
+    """
     paths = _paths()
     assert "/api/m02/fetch/run" in paths                                  # 抓通知书
-    assert {"/m05/import", "/m05/import/preview", "/m05/import/confirm"} <= paths   # Excel 导入三步
-    assert "/m05/import/rollback" in paths                                # 同批整批回滚（初始化的纠错通道）
+    assert {"/api/m05/import/parse", "/api/m05/import/confirm",
+            "/api/m05/import/meta"} <= paths                              # Excel 导入三步（＋列契约）
+    assert "/api/m05/import/rollback" in paths                            # 同批整批回滚（初始化的纠错通道）
 
 
 @acc("ACC-INIT-001", "001-05")
@@ -105,10 +110,13 @@ def test_过程资料手录与Excel上传两个入口都在():
     # ⚠️ 2026-09-18（`§19` 批 2）：PRG 版手录端点 `POST /m06/mech` 已随**过程资料页**删除（授权 `D18`）——
     #    它的 claim（「机械手录入口在」）**没删，搬到了壳**：`tests/test_wired_m06.py` 的
     #    「录机械费入口挂在 `BIND` 钩子」＋「后端机械写端点存在」（`POST /api/m06/mech` ✓）。
-    #    ⚠️ 下面四条**仍在**（历史导入半边**暂留**：壳里没有任何导入入口 ⇒ 删不得）。
-    assert {"/m06/import", "/m06/import/preview",
-            "/m06/import/confirm", "/m06/import/rollback"} <= paths  # 上传三步 ＋ 纠错通道
-    assert any(h == "/m06/import" for h, _t in NAV), "导航里要有这个入口"
+    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：历史导入半边**也搬进了新壳** ⇒ 三条 PRG 已删、
+    #    `core/nav.py` 里那条入口同批清掉（那是指向已删路由的**幽灵导航**）；
+    #    **判词不变**（"Excel 上传这条路真的存在"）—— 改由下面两半钉住：
+    assert {"/api/m06/import/parse", "/api/m06/import/confirm",
+            "/api/m06/import/rollback"} <= paths                     # 上传三步 ＋ 纠错通道
+    from tests.shell_src import SHELL                                # noqa: PLC0415
+    assert "m06imp" in SHELL and "/api/m06/import/data" in SHELL, "壳侧栏要有这个入口（导航已搬进壳）"
 
     # ① 手录**真的落得进**（旁路载体：无审批、不受源数据约束）
     st = FakeSession({ProcMechManual: []})
