@@ -14,7 +14,7 @@ import struct
 
 import httpx
 
-from app.core.config import effective_of, get_settings
+from app.core.config import get_settings
 from app.core.errors import MustReportError, NotConfiguredError
 
 
@@ -73,7 +73,9 @@ def send_pdf(pdf: bytes, printer_uri: str | None = None) -> str:
     ⭐ 依据 = 用户 2026-09-18 实测教训：「**假失败比假成功更危险**」—— 读不到队列就报失败 ⇒
       人会以为没打、**重复再打，白浪费纸**。⇒ 只有明确错误才算失败；"说不清"一律按"已投递（无法核实）"。
     """
-    uri = printer_uri or effective_of("printer_ipp_url", get_settings().printer_ipp_url)
+    # ⚠️ 打印机地址**只读 `.env`**（2026-09-21 用户裁定：单一入口 = m03「打印机设置」弹窗、单一存储 = `.env`）
+    #   —— ⛔ 不再走 `effective_of`（那是"库优先"）:库里若残留旧值，就出现「弹窗改了不生效、回执却说即时生效」。
+    uri = printer_uri or get_settings().printer_ipp_url
     if not uri:
         raise NotConfiguredError("PRINTER_IPP_URL 未配置（见 .env；用户确认默认 192.168.5.248）")
 

@@ -352,3 +352,146 @@ def test_非法主题名显式处理_回落默认套():
         assert page.render_theme(good) == page.THEMES[good], f"合法主题「{good}」被误回落了"
     assert page.render_theme("深色") != default, "「深色」与默认套产出相同 ⇒ 派生没起作用（清单是假的）"
 
+
+# ---------------------------------------------------------------- 主题规范表（2026-09-21 · 用户裁定）
+# ⭐⭐ 用户原话：「重新设计并交付 **10 个完整、独立、可切换**的主题方案，每个主题需明确其
+#    **适用场景与设计风格**，并提供**统一的结构规范**以保证一致性与可维护性」。
+#    ⇒ 落成两条可执行的东西：① 清单**恰好 10 套**且有场景/风格（`THEME_SPEC`）
+#      ② **对比度下限**（下面那条 —— "视觉平衡"没法直接断言，但"看不清"可以量化）。
+
+
+@acc("ACC-UI-THEME-001", "001-02")
+def test_主题清单恰好十套且每套都有适用场景与设计风格():
+    """claim（`001-02`）：「主题清单**可列举**」—— ⭐ 2026-09-21 加严：可列举 ⇒ **每套都要说得清
+    "它是干什么用的"**（场景）与"它长什么样"（风格）。⛔ 只有名字的清单 = 用户无从选择。
+
+    ⚠️ 为什么钉"**恰好 10 套**"：用户 2026-09-21 裁定的口径是「**10 个完整、独立**的方案」——
+       原来 13 套里有 3 套是「深色·X」**变体**（不独立）⇒ 已删。多一套少一套都要**改口径**，
+       ⛔ 不是"顺手加一行"。
+    """
+    names = page.theme_names()
+    assert len(names) == 10, (
+        f"主题清单是 {len(names)} 套 —— 用户 2026-09-21 裁定「恰好 **10** 个完整、独立的方案」"
+        f"（多/少都要改口径，⛔ 不是顺手加一行）：{names}")
+    assert set(page.THEME_SPEC) == set(names), (
+        "`THEME_SPEC`（场景/风格）与 `THEME_SEEDS`（种子）**键集不同** —— "
+        f"只加了种子忘了写规范：{sorted(set(names) ^ set(page.THEME_SPEC))}")
+    scenes: list[str] = []
+    for n in names:
+        spec = page.THEME_SPEC[n]
+        assert spec.get("scene", "").strip(), f"「{n}」没写**适用场景** ⇒ 用户不知道该选哪套"
+        assert spec.get("style", "").strip(), f"「{n}」没写**设计风格**"
+    scenes = [page.THEME_SPEC[n]["scene"] for n in names]
+    assert len(set(scenes)) == len(scenes), (
+        f"有两套主题的**适用场景一模一样** ⇒ 它们其实是一套：{[s for s in scenes if scenes.count(s) > 1]}")
+
+
+#: ⭐ **可读性下限**：配对照 `backend/app/web/index.html` 的 `<style>` **逐条抄**（⛔ 不是"哪个色配哪个色"）。
+#: ⚠️ 阈值就一条线：**凡是"给人读的文字"一律 4.5**（WCAG AA 的 3.0 只放行 ≥24px 或 ≥18.66px 粗体，
+#:    本仓没有那个字号）⇒ ⛔ 别拿"它是次要文字"当降标准的理由 —— 用户已经两次报"看不清 / 不平衡"。
+#: 只有**纯装饰**（分隔线）按可辨性 1.15。
+_CONTRAST_PAIRS: list[tuple[str, str, str, float]] = [
+    ("正文", "--tx", "--bg", 4.5),
+    ("正文/卡片", "--tx", "--sf", 4.5),
+    ("次正文", "--tx2", "--sf", 4.5),
+    ("弱化文字（空态/提示）", "--mut", "--sf", 4.5),
+    ("主色作链接字", "--pri", "--bg", 4.5),
+    ("按钮字", "--on", "--pri", 4.5),
+    ("⭐侧栏-普通项", "--sb-tx", "--sb", 4.5),
+    ("⭐侧栏-品牌/悬停项", "--sb-hd", "--sb", 4.5),
+    ("⭐侧栏-编号·分组·页脚", "--sb-mut", "--sb", 4.5),
+    ("⭐侧栏-悬停底上的字", "--sb-hd", "--sb-hover", 4.5),
+    ("⭐侧栏-选中项", "--on", "--sb-on", 4.5),
+    ("⭐侧栏-选中项里的编号", "--sb-on-hl", "--sb-on", 4.5),
+    ("侧栏分隔线可辨", "--sb-bd", "--sb", 1.15),
+    ("标签-主色", "--pri-d", "--pri-l", 4.5),
+    ("标签-成功", "--ok-d", "--ok-l", 4.5),
+    ("标签-提醒", "--wn-d", "--wn-l", 4.5),
+    ("标签-危险", "--dg-d", "--dg-l", 4.5),
+    ("标签-中性", "--in-d", "--in-l", 4.5),
+    ("标签-特殊", "--vi-d", "--vi-l", 4.5),
+]
+
+
+def _srgb_lin(c: float) -> float:
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _rel_lum(hex_color: str) -> float:
+    """⚠️ 用**真正的 WCAG 相对亮度**（sRGB → 线性 → 0.2126R+0.7152G+0.0722B）。
+    ⛔ 别用 `page._lum()`：那是给 `_on()` 选黑白用的**粗略加权**，两者混用会算出假达标。"""
+    h = hex_color.lstrip("#")
+    if len(h) == 3:
+        h = "".join(ch * 2 for ch in h)
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    return 0.2126 * _srgb_lin(r) + 0.7152 * _srgb_lin(g) + 0.0722 * _srgb_lin(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    la, lb = _rel_lum(a), _rel_lum(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+def _theme_vars_of(name: str) -> dict[str, str]:
+    return {("--" + m.group(1)): m.group(2).strip()
+            for m in re.finditer(r"--([a-z0-9-]+):\s*([^;\n]+);", page.render_theme(name))}
+
+
+@acc("ACC-UI-THEME-001", "001-09")
+def test_每套主题的关键配对都过对比度AA():
+    """⭐⭐ **把"视觉平衡/看不清"变成可测的数字**（2026-09-21 用户报「左侧页面选择栏在各类主题下
+    视觉不平衡」⇒ 排查发现**硬故障**：4 个深色套的侧栏选中项是**黑字压近黑底**，实测对比度 **1.05**）。
+
+    ⚠️ 为什么不靠肉眼：观感是主观的，但"**文字与底的对比度**"是客观量 —— 低于 AA 就是**看不清**，
+       不需要争论。⚠️ 这条**测不了**"好不好看"（那要人眼），它测的是"**能不能看清**"这条底线。
+
+    ⚠️ 本断言当前是 `@acc()` **未绑定**（属工程守卫）：把它升成判据点要先在交付面新建一条
+       （口径由用户 2026-09-21 的话直接给出，但**新建判据点 = 契约层动作**）。
+    """
+    rows: list[str] = []
+    bad: list[str] = []
+    for name in page.theme_names():
+        v = _theme_vars_of(name)
+        for label, fg, bg, need in _CONTRAST_PAIRS:
+            if fg not in v or bg not in v:
+                bad.append(f"{name}｜{label}：变量缺失（{fg} / {bg}）")
+                continue
+            r = _contrast(v[fg], v[bg])
+            if r < need:
+                bad.append(f"{name}｜{label}：{v[fg]} on {v[bg]} = {r:.2f} < {need}")
+            rows.append(f"{name:8s} {label:22s} {v[fg]:>9s} on {v[bg]:>9s} = {r:5.2f} (需 {need})")
+    assert not bad, (
+        "这些主题/配对**读不清**（阈值：文字 4.5 / 装饰 1.15）—— ⛔ 别调低阈值，去调 `_derive`／种子：\n  "
+        + "\n  ".join(bad) + "\n\n全部实测：\n  " + "\n  ".join(rows))
+
+
+@acc()
+def test_侧栏不借用与本角色无关的变量():
+    """⛔ **侧栏文字不许借 `--on` / `--in`**（2026-09-21 修的正是这个）：
+    `--on` 的语义是「**主色之上**的前景」（深色套里它是**黑**），`--in` 是**状态档的中性色** ——
+    两者都与"深色面板上的文字"无关。借用的后果实测过：深色套的侧栏品牌名/悬停项变**黑字压深面板**。
+
+    ⚠️ 唯一合法的 `--on` 用法 = **选中项**（那一项的背景就是主色 `--sb-on`）——
+    所以断言按"**选择器行**"判，⛔ 不是全文件搜一遍（那样连注释都会算进去）。
+    """
+    css = SHELL
+    i = css.find(".sb-brand{")
+    j = css.find(".sb-foot{")
+    assert i > 0 and j > i, "找不到侧栏那段 CSS —— 选择器改名了？本断言要跟着改"
+    block = css[i:j]
+    # 逐行看：带 `.sb` 选择器的行里，除了 `.sb-i.on`，不许出现 `--on` / `--in`
+    for ln in block.splitlines():
+        s = ln.strip()
+        if not s.startswith(".sb"):
+            continue
+        if ".sb-i.on" in s:
+            continue
+        for role in ("var(--on)", "var(--in)"):
+            assert role not in s, (
+                f"侧栏样式借了与本角色无关的变量：{role}\n  行：{s}\n"
+                "  ⛔ 侧栏三档文字用 `--sb-hd` / `--sb-tx` / `--sb-mut`；"
+                "`--on` 只许出现在**选中项**（它的底就是主色）")
+    for need in (".sb-brand b{display:block;color:var(--sb-hd)",
+                 ".sb-i:hover{background:var(--sb-hover);color:var(--sb-hd)"):
+        assert need in block, f"侧栏缺了这条（三档文字规范）：`{need}`"
+

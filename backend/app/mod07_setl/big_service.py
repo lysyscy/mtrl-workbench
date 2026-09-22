@@ -20,8 +20,8 @@ from app.mod06_proc.repository import load_mech
 from app.mod07_setl.repository import load_rows
 
 #: 主材累计（含税）的**取数口** —— 签名 `(仓库名) -> Decimal | None`。
-#: ⚠️ **集采台账（`MOD-11`）属 M5，尚未落地** ⇒ 默认 `None` = 不可得（页面显「—」，**绝不写 0**）。
-#:    M5 落地后只需在此注册：`set_main_material_port(lambda wh: B.main_material_total(rows_of(wh), project_key=wh))`。
+#: ⭐ **2026-09-21（`TAIL-25`）已接入**（M5 集采台账已落地）—— 见下方 `_main_material_port`；
+#:    显式传 `None`（`set_main_material_port(None)`）可退回"不可得"（页面显「—」，**绝不写 0**）。
 MAIN_MATERIAL_PORT: Callable[[str], object] | None = None
 
 
@@ -29,6 +29,33 @@ def set_main_material_port(fn: Callable[[str], object] | None) -> None:
     """注册主材累计的取数口（M5 集采台账接入时调用；传 `None` = 退回"不可得"）。"""
     global MAIN_MATERIAL_PORT
     MAIN_MATERIAL_PORT = fn
+
+
+def _main_material_port(wh: str) -> object:
+    """⭐ 主材累计取数口的**实现**（`TAIL-25` · 2026-09-21 接入）—— 按项目取**集采台账结算额**。
+
+    ⚠️ 与**集采台账页同一个函数**（`mod11_jc.service.build_list`，⛔ 不另立取数）
+       ⇒ 与 `MOD-11` 的「Σ 结算金额」**同口径**（§5.7.1 末条）：**只计「纳入台账」**的合同
+       （判定归 `main_material_total`，本函数只做**行投影**）。
+    ⚠️ 端口签名**无会话** ⇒ 自开一个**只读**会话（调用点在请求会话内，读操作可重入）。
+    ⚠️ `mod11` 在**函数内**导入 —— mod07 是报表聚合层、依赖下层业务域方向正确，
+       但 ⛔ 别放到模块级（装配顺序会反过来）。
+    """
+    from app.core.db import session_scope
+    from app.mod11_jc import service as M11
+    from app.mod11_jc.models import TAG_IN
+
+    with session_scope() as s:
+        contracts = [
+            {"project": r.get("project_key"),
+             "in_ledger": str(r.get("tag") or "") == TAG_IN,
+             "settle": r.get("settle")}
+            for r in M11.build_list(s)["rows"]
+        ]
+    return B.main_material_total(contracts, project_key=wh)
+
+
+set_main_material_port(_main_material_port)
 
 
 def parse_state(params: dict | None = None) -> dict:

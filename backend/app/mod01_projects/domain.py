@@ -369,16 +369,24 @@ def status_label(status: str) -> str:
 
 
 def order_key(index: int):
-    """排序键：**归档后置 > ord > 原序**（§2.7.3）。"""
+    """排序键：**归档后置 > 小微壳置底 > ord > 原序**（§2.7.3 · 2026-09-21 用户裁定「小微壳默认置底」）。
+
+    ⭐ 小微壳（`type='shell'`）本身没有仓库、没有付款单据（§2.2），是**归集用的容器**；
+      项目越多它越碍日常翻找 ⇒ 默认沉底（**归档仍在它之下** —— 归档的显眼度最低）。
+      ⛔ 只影响**默认展示顺序**，`ord`（人工排序值）不动 ⇒ 用户手动上移/下移的口径不受影响。
+    """
     def _k(p: Project):
-        return (p.status == STATUS_ARCHIVED, p.ord or 0, index)
+        return (p.status == STATUS_ARCHIVED,
+                getattr(p, "project_type", "") == TYPE_SHELL, p.ord or 0, index)
     return _k
 
 
 def ordered(projects: list[Project]) -> list[Project]:
-    """按「归档后置 > ord > 原序」返回（全站同一顺序，001-02/001-05）。"""
+    """按「归档后置 > 小微壳置底 > ord > 原序」返回（全站同一顺序，001-02/001-05）。"""
     indexed = list(enumerate(projects))
-    indexed.sort(key=lambda t: (t[1].status == STATUS_ARCHIVED, t[1].ord or 0, t[0]))
+    indexed.sort(key=lambda t: (t[1].status == STATUS_ARCHIVED,
+                                getattr(t[1], "project_type", "") == TYPE_SHELL,
+                                t[1].ord or 0, t[0]))
     return [p for _, p in indexed]
 
 

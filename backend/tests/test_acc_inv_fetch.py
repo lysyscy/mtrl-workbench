@@ -8,8 +8,8 @@
 - `001-05` 核算年月取导出文件的「**核算年 / 核算月**」列，⛔ 不是「单据日期」
 - `001-06` 落库**幂等**：同「核算年月 ＋ 项目」重抓 ⇒ 更新而非重复插入（§9.5）
 - `001-07` ⭐ 重抓**不动调整单**：本次不再出现但有调整单的行**保留**（`ENT-04` / §5.2.4）
-- `001-08` 抓前**二次确认**且**显式告知会强踢**；接口不可用 ⇒ **降级为手动 Excel 导入**且**不静默**；
-          ⛔ **失败不得自动重试登录**（D9 —— 导出调用只发生**一次**）
+- `001-08` 抓前**二次确认**且**显式告知会强踢**；接口不可用 ⇒ **显式报错待人处理**且**不静默**
+         （⚠️ 2026-09-22 用户裁定：手动 Excel 导入兜底**已删**，⛔ 不复活）；⛔ **失败不得自动重试登录**（D9 —— 导出调用只发生**一次**）
 - `001-09` 每次抓取留一条**执行记录**（时间 · 对象 · 结果 · 失败原因）
 """
 
@@ -245,28 +245,21 @@ def test_未二次确认即拒且失败降级且不自动重试登录():
         _run(s, content=_xlsx([_row()]), confirmed=False)
     assert s.by_model[RunRecord] == [], "用法错误不写执行记录"
 
-    # 接口不可用 ⇒ 降级 + 显式说明；⛔ 导出**只调用一次**（D9：不得自动重试登录）
+    # 接口不可用 ⇒ **显式报错待人处理**（2026-09-22 用户裁定：手动导入兜底已删）；⛔ 导出**只调用一次**（D9）
     calls: list = []
     s2 = _sess()
     out = _run(s2, boom=RuntimeError("i8 接口 500"), calls=calls)
     assert out["ok"] is False and out["degraded"] is True
-    assert "降级为手动 Excel 导入" in out["message"]
-    assert out["excel_import_available"] is True
+    assert "i8 接口不可用" in out["message"], out["message"]
+    assert "excel_import_available" not in out, "手动导入已删，不得再承诺这条通道"
     assert len(calls) == 1, "失败不得自动重试（更不得重试登录）"
 
-    # ⭐ **降级通道真的在**（`TAIL-01`）：不只印一句「已降级」，那条路要**真的存在**
+    # ⭐ **撤项守卫**（2026-09-22）：手动导入端点**不得复活**（`T8` 亦守，这里在 OpenAPI 面再钉一道）
     from app.main import create_app
 
     paths = set(create_app().openapi()["paths"])
-    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：手动导入页搬进新壳 ⇒ 服务端渲染的三条 PRG 已删，
-    #    同一件事由**新壳的 JSON 端点**承接（`import_api.py`）—— 判词不变：
-    #    「降级后用户**确实有**手动导入这条路」（页在壳里 `V.m08imp`，上传走 parse → confirm）。
-    assert {"/api/m08/import/parse", "/api/m08/import/confirm"} <= paths
-    # ⚠️ 2026-09-18（`§19` 批 2）：原先还拿**旧页**的 `_flash_html` 渲染一遍、断言回执里有
-    # `href="/m08/import"`；旧页删除（`D18`）后那一半随之作废 —— 上面那条「导入端点**真的存在**」
-    # 才是这条 claim 的实质（降级后用户**确实有**手动导入这条路），留着。
-    # 同一条解析管线：手动上传的就是 i8 导出的那个 xlsx（**同一个解析器**）
-    assert importer.parse_rows is FS.importer.parse_rows
+    assert not any(p.startswith("/api/m08/import") for p in paths), \
+        "手动导入端点已按用户 2026-09-22 裁定删除 —— ⛔ 别加回来"
 
 
 # ------------------------------------------------------------ 001-09 执行记录

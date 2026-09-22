@@ -1,0 +1,634 @@
+[
+ {
+  "bill_no": "FKTZS2026050366",
+  "ph_id": "3700000000008168",
+  "doc_date": "2026-05-08",
+  "bill_type": "material",
+  "payee_db": "伊宁市健民气体工贸有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "伊宁市健民气体工贸有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "3006022009024566652",
+    "RecAccNo": null,
+    "RecName": "伊宁市健民气体工贸有限公司",
+    "RecAccName": "伊宁市健民气体工贸有限公司",
+    "PhidBank_EXName": null,
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "",
+  "i8_header": "",
+  "verdict": "会印空（明细首行无账号）"
+ },
+ {
+  "bill_no": "FKTZS2026050049",
+  "ph_id": "3700000000007851",
+  "doc_date": "2026-05-05",
+  "bill_type": "material",
+  "payee_db": "乌海市远大恒鑫商贸有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "乌海市远大恒鑫商贸有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "8600003838000188",
+    "RecAccNo": "8600003838000188",
+    "RecName": "乌海市远大恒鑫商贸有限公司",
+    "RecAccName": "乌海市远大恒鑫商贸有限公司",
+    "PhidBank_EXName": "乌海银行股份有限公司乌达支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "8600003838000188",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026050187",
+  "ph_id": "3700000000007989",
+  "doc_date": "2026-05-07",
+  "bill_type": "material",
+  "payee_db": "苏雅拉巴图",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "苏雅拉巴图"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "6229760580500084561",
+    "RecAccNo": "6229760580500084561",
+    "RecName": "苏雅拉巴图",
+    "RecAccName": "苏雅拉巴图",
+    "PhidBank_EXName": "内蒙古鄂托克农村商业银行股份有限公司棋盘井大街支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "6229760580500084561",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026050325",
+  "ph_id": "3700000000008127",
+  "doc_date": "2026-05-08",
+  "bill_type": "material",
+  "payee_db": "洛阳世乾建筑劳务分包有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "洛阳世乾建筑劳务分包有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "8111101013902057084",
+    "RecAccNo": null,
+    "RecName": "洛阳世乾建筑劳务分包有限公司",
+    "RecAccName": "洛阳世乾建筑劳务分包有限公司",
+    "PhidBank_EXName": null,
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "",
+  "i8_header": "",
+  "verdict": "会印空（明细首行无账号）"
+ },
+ {
+  "bill_no": "FKTZS2026050606",
+  "ph_id": "3700000000008408",
+  "doc_date": "2026-05-12",
+  "bill_type": "mechanical",
+  "payee_db": "太康县许楼建材有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "太康县许楼建材有限公司"
+  },
+  "detail_rows": 2,
+  "detail": [
+   {
+    "user_yhzh": "41050170680809886666",
+    "RecAccNo": null,
+    "RecName": "太康县许楼建材有限公司",
+    "RecAccName": "太康县许楼建材有限公司",
+    "PhidBank_EXName": null,
+    "user_skdw_EXName": null
+   },
+   {
+    "user_yhzh": "41050170680809886666",
+    "RecAccNo": null,
+    "RecName": "太康县许楼建材有限公司",
+    "RecAccName": "太康县许楼建材有限公司",
+    "PhidBank_EXName": null,
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "",
+  "i8_header": "",
+  "verdict": "会印空（明细首行无账号）"
+ },
+ {
+  "bill_no": "FKTZS2026050844",
+  "ph_id": "3700000000008646",
+  "doc_date": "2026-05-17",
+  "bill_type": "material",
+  "payee_db": "资产处集中采购",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "资产处集中采购"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "123456",
+    "RecAccNo": null,
+    "RecName": "资产处集中采购",
+    "RecAccName": "资产处集中采购",
+    "PhidBank_EXName": null,
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "",
+  "i8_header": "",
+  "verdict": "会印空（明细首行无账号）"
+ },
+ {
+  "bill_no": "FKTZS2026051068",
+  "ph_id": "3700000000008870",
+  "doc_date": "2026-05-20",
+  "bill_type": "mechanical",
+  "payee_db": "河北华创管道有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "河北华创管道有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "13050169790809444444",
+    "RecAccNo": "13050169790809444444",
+    "RecName": "河北华创管道有限公司",
+    "RecAccName": "河北华创管道有限公司",
+    "PhidBank_EXName": "中国建设银行股份有限公司孟村回族自治县支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "13050169790809444444",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026051364",
+  "ph_id": "3700000000009166",
+  "doc_date": "2026-05-24",
+  "bill_type": "material",
+  "payee_db": "洛阳启盛建筑劳务分包有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "洛阳启盛建筑劳务分包有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "41050168860800002390",
+    "RecAccNo": "41050168860800002390",
+    "RecName": "洛阳启盛建筑劳务分包有限公司",
+    "RecAccName": "洛阳启盛建筑劳务分包有限公司",
+    "PhidBank_EXName": "中国建设银行股份有限公司洛阳分行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "41050168860800002390",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026051481",
+  "ph_id": "3700000000009283",
+  "doc_date": "2026-05-25",
+  "bill_type": "mechanical",
+  "payee_db": "洛阳市尚坤商贸有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "洛阳市尚坤商贸有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "41001518110050213146",
+    "RecAccNo": "41001518110050213146",
+    "RecName": "洛阳市尚坤商贸有限公司",
+    "RecAccName": "洛阳市尚坤商贸有限公司",
+    "PhidBank_EXName": "中国建设银行股份有限公司洛阳王城路支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "41001518110050213146",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026051735",
+  "ph_id": "3700000000009537",
+  "doc_date": "2026-05-27",
+  "bill_type": "material",
+  "payee_db": "洛阳卓益人力资源服务有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "洛阳卓益人力资源服务有限公司"
+  },
+  "detail_rows": 2,
+  "detail": [
+   {
+    "user_yhzh": "41050168860800002125",
+    "RecAccNo": "41050168860800002125",
+    "RecName": "洛阳卓益人力资源服务有限公司",
+    "RecAccName": "洛阳卓益人力资源服务有限公司",
+    "PhidBank_EXName": "中国建设银行洛阳分行营业部",
+    "user_skdw_EXName": null
+   },
+   {
+    "user_yhzh": "41050168860800002125",
+    "RecAccNo": "41050168860800002125",
+    "RecName": "洛阳卓益人力资源服务有限公司",
+    "RecAccName": "洛阳卓益人力资源服务有限公司",
+    "PhidBank_EXName": "中国建设银行洛阳分行营业部",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "41050168860800002125",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026051961",
+  "ph_id": "3700000000009763",
+  "doc_date": "2026-05-30",
+  "bill_type": "mechanical",
+  "payee_db": "宁夏巨兴起重吊装有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "宁夏巨兴起重吊装有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "106064129508",
+    "RecAccNo": "106064129508",
+    "RecName": "宁夏巨兴起重吊装有限公司",
+    "RecAccName": "宁夏巨兴起重吊装有限公司",
+    "PhidBank_EXName": "中国银行股份有限公司吴忠市分行利通南街支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "106064129508",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026080197",
+  "ph_id": "3700000000014487",
+  "doc_date": "2026-08-03",
+  "bill_type": "mechanical",
+  "payee_db": "河南鑫焕建设工程有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "河南鑫焕建设工程有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "41050170283800001788",
+    "RecAccNo": "41050170283800001788",
+    "RecName": "河南鑫焕建设工程有限公司",
+    "RecAccName": "河南鑫焕建设工程有限公司",
+    "PhidBank_EXName": "中国建设银行股份有限公司周口迎宾大道支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "41050170283800001788",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026080464",
+  "ph_id": "3700000000014754",
+  "doc_date": "2026-08-07",
+  "bill_type": "mechanical",
+  "payee_db": "乌鲁木齐经济开发区（头屯河区）郝老弟机械租赁服务部",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "乌鲁木齐经济开发区（头屯河区）郝老弟机械租赁服务部"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "991907192610001",
+    "RecAccNo": "991907192610001",
+    "RecName": "乌鲁木齐经济开发区（头屯河区）郝老弟机械租赁服务部",
+    "RecAccName": "乌鲁木齐经济开发区（头屯河区）郝老弟机械租赁服务部",
+    "PhidBank_EXName": "招商银行股份有限公司乌鲁木齐北京路支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "991907192610001",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026080628",
+  "ph_id": "3700000000014918",
+  "doc_date": "2026-08-10",
+  "bill_type": "mechanical",
+  "payee_db": "霍尔果斯众帮工程机械设备租赁中心",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "霍尔果斯众帮工程机械设备租赁中心"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "3006031209200489887",
+    "RecAccNo": "3006031209200489887",
+    "RecName": "霍尔果斯众帮工程机械设备租赁中心",
+    "RecAccName": "霍尔果斯众帮工程机械设备租赁中心",
+    "PhidBank_EXName": "中国工商银行股份有限公司伊犁霍尔果斯支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "3006031209200489887",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026081089",
+  "ph_id": "3700000000015379",
+  "doc_date": "2026-08-17",
+  "bill_type": "mechanical",
+  "payee_db": "唐山泽盈科技有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "唐山泽盈科技有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "50701001040039778",
+    "RecAccNo": "50701001040039778",
+    "RecName": "唐山泽盈科技有限公司",
+    "RecAccName": "唐山泽盈科技有限公司",
+    "PhidBank_EXName": "中国农业银行股份有限公司唐山丰润支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "50701001040039778",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026081274",
+  "ph_id": "3700000000015564",
+  "doc_date": "2026-08-19",
+  "bill_type": "mechanical",
+  "payee_db": "泉州合鸿机电有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "泉州合鸿机电有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "162317071",
+    "RecAccNo": "162317071",
+    "RecName": "泉州合鸿机电有限公司",
+    "RecAccName": "泉州合鸿机电有限公司",
+    "PhidBank_EXName": "中国民生银行股份有限公司泉州分行营业部",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "162317071",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026081823",
+  "ph_id": "3700000000016113",
+  "doc_date": "2026-08-24",
+  "bill_type": "material",
+  "payee_db": "乌海市远大恒鑫商贸有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "乌海市远大恒鑫商贸有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "8600003838000188",
+    "RecAccNo": "8600003838000188",
+    "RecName": "乌海市远大恒鑫商贸有限公司",
+    "RecAccName": "乌海市远大恒鑫商贸有限公司",
+    "PhidBank_EXName": "乌海银行股份有限公司乌达支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "8600003838000188",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026082108",
+  "ph_id": "3700000000016398",
+  "doc_date": "2026-08-27",
+  "bill_type": "material",
+  "payee_db": "洛阳世乾建筑劳务分包有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "洛阳世乾建筑劳务分包有限公司"
+  },
+  "detail_rows": 2,
+  "detail": [
+   {
+    "user_yhzh": "41050168860800001011",
+    "RecAccNo": "8111101013902057084",
+    "RecName": "洛阳世乾建筑劳务分包有限公司",
+    "RecAccName": "洛阳世乾建筑劳务分包有限公司",
+    "PhidBank_EXName": "中信银行王城支行",
+    "user_skdw_EXName": null
+   },
+   {
+    "user_yhzh": "41050168860800001011",
+    "RecAccNo": "8111101013902057084",
+    "RecName": "洛阳世乾建筑劳务分包有限公司",
+    "RecAccName": "洛阳世乾建筑劳务分包有限公司",
+    "PhidBank_EXName": "中信银行王城支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "8111101013902057084",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026082350",
+  "ph_id": "3700000000016640",
+  "doc_date": "2026-08-29",
+  "bill_type": "mechanical",
+  "payee_db": "太康县奕卓机械租赁有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "太康县奕卓机械租赁有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "1717023609200302795",
+    "RecAccNo": "1717023609200302795",
+    "RecName": "太康县奕卓机械租赁有限公司",
+    "RecAccName": "太康县奕卓机械租赁有限公司",
+    "PhidBank_EXName": "中国工商银行股份有限公司太康支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "1717023609200302795",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026090208",
+  "ph_id": "3700000000016946",
+  "doc_date": "2026-09-02",
+  "bill_type": "mechanical",
+  "payee_db": "河南惠和钢构有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "河南惠和钢构有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "411609010120070801",
+    "RecAccNo": "411609010120070801",
+    "RecName": "河南惠和钢构有限公司",
+    "RecAccName": "河南惠和钢构有限公司",
+    "PhidBank_EXName": "中原银行股份有限公司周口文中支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "411609010120070801",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026081165",
+  "ph_id": "3700000000015455",
+  "doc_date": "2026-09-05",
+  "bill_type": "mechanical",
+  "payee_db": "中工国际建设安装集团有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "中工国际建设安装集团有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "41050163775309777777",
+    "RecAccNo": "41050163775309777777",
+    "RecName": "中工国际建设安装集团有限公司",
+    "RecAccName": "中工国际建设安装集团有限公司",
+    "PhidBank_EXName": "中国建设银行（长垣文武路分理处）",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "41050163775309777777",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026090582",
+  "ph_id": "3700000000017320",
+  "doc_date": "2026-09-07",
+  "bill_type": "material",
+  "payee_db": "河南彬良建设工程有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "河南彬良建设工程有限公司"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "26106001000000263",
+    "RecAccNo": "26106001000000263",
+    "RecName": "河南彬良建设工程有限公司",
+    "RecAccName": "河南彬良建设工程有限公司",
+    "PhidBank_EXName": "河南长垣农村商业银行股份有限公司",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "26106001000000263",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026090993",
+  "ph_id": "3700000000017731",
+  "doc_date": "2026-09-12",
+  "bill_type": "material",
+  "payee_db": "吴计划",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "吴计划"
+  },
+  "detail_rows": 1,
+  "detail": [
+   {
+    "user_yhzh": "6226192380227884",
+    "RecAccNo": "6226192380227884",
+    "RecName": "吴计划",
+    "RecAccName": "吴计划",
+    "PhidBank_EXName": "中国民生银行股份有限公司泉州安海支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "6226192380227884",
+  "i8_header": "",
+  "verdict": "一致"
+ },
+ {
+  "bill_no": "FKTZS2026091503",
+  "ph_id": "3700000000018241",
+  "doc_date": "2026-09-18",
+  "bill_type": "material",
+  "payee_db": "洛阳世乾建筑劳务分包有限公司",
+  "info_keys": 165,
+  "info": {
+   "user_skdw_EXName": "洛阳世乾建筑劳务分包有限公司"
+  },
+  "detail_rows": 2,
+  "detail": [
+   {
+    "user_yhzh": "8111101013902057084",
+    "RecAccNo": "8111101013902057084",
+    "RecName": "洛阳世乾建筑劳务分包有限公司",
+    "RecAccName": "洛阳世乾建筑劳务分包有限公司",
+    "PhidBank_EXName": "中信银行王城支行",
+    "user_skdw_EXName": null
+   },
+   {
+    "user_yhzh": "8111101013902057084",
+    "RecAccNo": "8111101013902057084",
+    "RecName": "洛阳世乾建筑劳务分包有限公司",
+    "RecAccName": "洛阳世乾建筑劳务分包有限公司",
+    "PhidBank_EXName": "中信银行王城支行",
+    "user_skdw_EXName": null
+   }
+  ],
+  "ours": "8111101013902057084",
+  "i8_header": "",
+  "verdict": "一致"
+ }
+]

@@ -18,7 +18,11 @@ logger = logging.getLogger(__name__)
 SETTING_I8_BASE_URL = "i8_base_url"
 SETTING_PRINT_ID_MATERIAL = "i8_print_id_material"
 SETTING_PRINT_ID_MECHANICAL = "i8_print_id_mechanical"
-SETTING_PRINTER_IPP_URL = "printer_ipp_url"
+# ⚠️⚠️ **打印机地址不在本页**（2026-09-21 用户裁定「打印设置从 `MOD-14` 合并进 `MOD-03`」）——
+#   它的**唯一入口** = 付款通知书页的「打印机设置」弹窗（`mod03_notice/settings_store.apply_printer_setting`），
+#   **唯一存储** = `.env`（`PRINTER_IPP_URL` / `PRINT_MODE` / `PRINTER_NAME` 三项）。
+#   ⛔ 别再把它加回 `SPECS`：加回来就是**同一件事两个入口 ＋ 两套存储** ⇒ 会重现那个坑
+#   （库里有值时，弹窗改的**不生效**，而回执还说"即时生效"）。
 
 
 @dataclass(frozen=True)
@@ -53,13 +57,6 @@ SPECS: tuple[SettingSpec, ...] = (
         label="外租机械类打印版式 ID",
         hint="⚠️ ⭐ **与直觉相反**：**外租机械类走的是「付款通知书」版式**（§4.3.3）。",
         kind="text",
-    ),
-    SettingSpec(
-        key=SETTING_PRINTER_IPP_URL,
-        env_attr="printer_ipp_url",
-        label="打印机地址（IPP）",
-        hint="形如 ipp://主机:631/ipp/print。换打印机 / 换 IP 时改这里。",
-        kind="url",
     ),
 )
 
@@ -140,6 +137,6 @@ def validate(key: str, value: str) -> str | None:
 __all__ = [
     "SettingSpec", "SPECS", "SPEC_BY_KEY", "SETTING_KEYS",
     "SETTING_I8_BASE_URL", "SETTING_PRINT_ID_MATERIAL",
-    "SETTING_PRINT_ID_MECHANICAL", "SETTING_PRINTER_IPP_URL",
+    "SETTING_PRINT_ID_MECHANICAL",
     "effective", "stored_value", "is_overridden", "invalidate", "validate",
 ]

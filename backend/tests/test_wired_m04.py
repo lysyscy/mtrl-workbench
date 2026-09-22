@@ -1,8 +1,8 @@
 """`m04`（付款计划）**前端壳接线**断言（离线 · 静态）。
 
 配套：
-- 运行时端到端 = `tools/_e2e_m04_wired.py`（真机 ＋ **真库**，跑完清理）
-- 结构一致性 = `tools/ui_parity.py`（U1 视图逐行一致 / U2b 已接线页不得留演示数组）
+- 运行时端到端 = `tools/probe/_e2e_m04_wired.py`（真机 ＋ **真库**，跑完清理）
+- 结构一致性 = `tools/audit/ui_parity.py`（U1 视图逐行一致 / U2b 已接线页不得留演示数组）
 
 ⚠️ **本文件测不了什么**：它是**静态检查**（壳里有没有那些接线点），**不证明运行时真调通**。
    两把都要 —— 这正是「判据绿 ≠ 链路对」的教训。
@@ -120,11 +120,17 @@ def test_导入与手动行已接通():
 
 @acc()
 def test_导入与手动行走后端():
-    """⭐ 接线点：导入 = **multipart** → `/api/m04/import`；手动行 = JSON → `/api/m04/plans`。"""
-    assert "m04Import: async (year_month, file) =>" in SHELL, "导入没写 multipart 客户端"
+    """⭐ 接线点：导入 = **multipart** → `/api/m04/import/parse|confirm`（`TAIL-69` 两步）；手动行 = JSON → `/api/m04/plans`。
+
+    ⚠️ 2026-09-22（`TAIL-69`）：一步式 `API.m04Import` 已撤 ⇒ 判据改钉**两步**：
+       `plImportOk` = 解析预览（不写库）· `plImportConfirm` = 凭 token 落库。
+    """
+    assert "m04ImportParse: async (year_month, file) =>" in SHELL, "导入没写 multipart 客户端（parse）"
     assert "new FormData()" in SHELL, "导入没用 `FormData`（multipart 只能这么传）"
     assert "plImportOk:async ()=>" in SHELL, "`plImportOk` 没改成 async（那还是假导入）"
-    assert "API.m04Import(" in SHELL, "`plImportOk` 没走 `/api/m04/import`"
+    assert "API.m04ImportParse(" in SHELL, "`plImportOk` 没走 `/api/m04/import/parse`（预览）"
+    assert "API.m04ImportConfirm(" in SHELL, "缺「确认落库」一步（`/api/m04/import/confirm`）"
+    assert "plImportPreview:()=>{" in SHELL, "缺预览弹窗（先看见再确认 —— `TAIL-69` 核心）"
     assert "m04PlanSave: body => API.post('/api/m04/plans', body)" in SHELL, (
         "手动行没走 `/api/m04/plans`"
     )
@@ -193,12 +199,15 @@ def test_后端两个新端点存在():
     api = (base / "plan_api_router.py").read_text(encoding="utf-8")
     router = (base / "router.py").read_text(encoding="utf-8")
     assert '@router.post("/api/m04/plans")' in api, "后端缺 `POST /api/m04/plans`"
-    assert '@router.post("/api/m04/import")' in api, "后端缺 `POST /api/m04/import`"
+    # ⚠️ 2026-09-22（`TAIL-69`）：一步式已软退役（路由留着回"请刷新"）⇒ 判据改钉**两步端点**
+    assert '@router.post("/api/m04/import/parse")' in api, "后端缺 `POST /api/m04/import/parse`（预览）"
+    assert '@router.post("/api/m04/import/confirm")' in api, "后端缺 `POST /api/m04/import/confirm`（落库）"
     assert "router.include_router(plan_api_router)" in router, "`router.py` 没汇总 API 路由（端点会 404）"
     for fn, needle, why in (
         ("def api_plan_row_save(", r"(?<![A-Za-z_])manual_row_payload\(",
          "手动行端点没走 `manual_row_payload`（判定该与 PRG 端点复用**同一出口**）"),
-        ("def api_plan_import(", r"(?<![A-Za-z_])repo\.merge_month\(",
+        # ⚠️ 2026-09-22（`TAIL-69`）：一步式已软退役 ⇒ 幂等落库（merge_month）改钉在 **confirm** 端点体
+        ("def api_plan_import_confirm(", r"(?<![A-Za-z_])repo\.merge_month\(",
          "导入端点没走 `repo.merge_month`（§9.5 幂等就没了）"),
     ):
         i = api.find(fn)

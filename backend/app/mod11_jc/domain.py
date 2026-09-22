@@ -20,6 +20,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.core.money import amount_text            # ⭐ `TAIL-63`：金额洗净的唯一出口
 from app.mod11_jc.models import (
     KIND_SUPPLIER,
     KIND_TRADE,
@@ -93,7 +94,7 @@ def parse_amount(raw) -> Decimal:
 
     ⚠️ 与 `MOD-09` 手填项的口径**刻意不同**（那边允许 0 与负数）—— 别把两套搅在一起。
     """
-    text = str(raw if raw is not None else "").strip().replace(",", "").replace("¥", "").replace("￥", "")
+    text = amount_text(raw)
     if not text:
         raise ValueError(MSG_BAD_AMOUNT)
     try:

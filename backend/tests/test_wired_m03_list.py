@@ -197,7 +197,7 @@ def test_壳里合计行只算非剔除行且无有效行时不给():
 def test_壳里项目选择器走共用件且label只一层():
     """`001-07`（加强）：项目选择器 = **全站共用件**（设计规则 §8.2 复用点：只有一个出口）。
 
-    实测（`tools/ui_parity.py`）曾发现实现里 `pjwrap` **恒为 0**：`m03` 用 `<select multiple>`、
+    实测（`tools/audit/ui_parity.py`）曾发现实现里 `pjwrap` **恒为 0**：`m03` 用 `<select multiple>`、
     `m06`/`m07`/`m09` 各写一份 `.pjsel` ⇒ **7 页七个样**。新壳全部收敛到 `projPanel` 一个出口。
     """
     assert "const projPanel=c=>{" in SHELL, "全站共用的项目面板出口 `projPanel` 没了"

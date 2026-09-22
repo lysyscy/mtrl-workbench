@@ -123,7 +123,7 @@ def build(tmp_path, *, ym: str = YM) -> str:
 
     ⭐ 走的是**唯一出口** `report_export.service.export_ledger` —— ⛔ **不在测试里自己拼 `sections`**：
        那样会把出口里的口径（**全本只有一个报告月** · 拒做 · 落盘位置）整段**漏在断言之外**。
-       ⚠️ 实测教训：本文件第一版就是自己拼的 —— `tools/_mut_ledger.py` 里两条**打出口**的变异
+       ⚠️ 实测教训：本文件第一版就是自己拼的 —— `tools/mut/_mut_ledger.py` 里两条**打出口**的变异
        （止月没钉住 / 两个期间）**都没能变红**，看着像"断言不够狠"，其实是**打偏了**。
     """
     from app.report_export import service as EX

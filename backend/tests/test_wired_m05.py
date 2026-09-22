@@ -1,7 +1,7 @@
 """`m05`（付款流水与欠款）**前端壳接线**断言（离线 · 静态）。
 
-配套：运行时端到端 = `tools/_e2e_m05_wired.py`（真机 ＋ 真库，跑完清理）·
-结构一致性 = `tools/ui_parity.py`（U1 视图一致 ＋ **U2b 已接线页不得留演示数组**；
+配套：运行时端到端 = `tools/probe/_e2e_m05_wired.py`（真机 ＋ 真库，跑完清理）·
+结构一致性 = `tools/audit/ui_parity.py`（U1 视图一致 ＋ **U2b 已接线页不得留演示数组**；
 ⚠️ `m05` 在 U1 里**有 1 条已登记漂移** —— `V.m05` 的机械结算项换数据源，理由写在登记簿里）。
 
 ⚠️ **本文件测不了什么**：静态检查（壳里有没有那些接线点），**不证明运行时真调通**。两把都要。
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 
 
 def _slice(name: str, limit: int = 16000) -> str:
@@ -181,8 +181,9 @@ def test_台账导出失败必须给人原因不静默():
     #    中文注释里哪怕一个标点不同就找不到（本文件实测踩到一次），而动作名是代码结构。
     i = SHELL.index("ledExpSave:async ()=>{")
     body = SHELL[i:SHELL.index("\n ledNote:t=>{", i)]
-    assert 400 < len(body) < 2500, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
-    assert "ct.includes('application/json')" in body, "没按 content-type 分流"
-    assert "d.message||'后端没给原因'" in body, "失败时没把后端的中文原因给用户"
-    assert "if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`" in body, \
+    assert 100 < len(body) < 2500, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
+    _b = with_kernel(body)         # ⭐ `TAIL-67`：错误分类已抽到 `dlExport` 通用件
+    assert "ct.includes('application/json')" in _b, "没按 content-type 分流"
+    assert "后端没给原因" in _b, "失败时没把后端的中文原因给用户"
+    assert "r.ok" in _b and "HTTP ${r.status}" in _b, \
         "非 2xx 没显式报错（会静默产出空文件）"

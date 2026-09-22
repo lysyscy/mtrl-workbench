@@ -18,7 +18,7 @@ import pytest
 from tests.acc_plugin import acc
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ACC_REPORT = REPO_ROOT / "tools" / "acc_report.py"
+ACC_REPORT = REPO_ROOT / "tools" / "audit" / "acc_report.py"      # ⭐ `TAIL-58` 分目录
 
 
 def _load_acc_report():

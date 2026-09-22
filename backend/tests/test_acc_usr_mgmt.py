@@ -123,6 +123,73 @@ def test_删除是软删_行保留可识别可恢复():
         s.rollback()
 
 
+@acc("ACC-USR-MGMT-001", "001-09")
+def test_软删的账号仍带出到界面_且在回收站里单独可见可恢复():
+    """⭐ 2026-09-21（用户裁定「用户管理要加**回收站**：已删账号**从主列表移出**、单独可见可恢复」）。
+
+    补的是 `001-09` 的**界面那一半** —— 上一支只钉了数据那一半（行在库里、可恢复），
+    而"**页面上也要能看见那一行**"此前**只有一句注释、没有断言**（注释不会变红）。
+
+    ⚠️ 两半缺一不可，而且**坏起来是同一个症状**（用户看不到、恢复不了）：
+
+    ① **后端不许过滤**：`GET /api/m15/users` 必须**仍带出**已删账号（`deleted=True`）
+       ＋ `counts.deleted` 是**真数**。⛔ 一过滤就同时坏两件事：
+       「已删除 N」恒 **0**（对用户说**假话**）＋ 回收站**永远空**（claim 的「可恢复」没了入口）。
+       ⇒ `api._payload` 的注释写着"⛔ 别在这里默认过滤掉已删除的"，本条就是那句话的机械化。
+    ② **壳不许改切片**：回收站靠**渲染后搬 DOM**（`BIND.m15`，`:has` 语义的选择器是
+       **已删除行的唯一特征** —— 操作列那个 `userRestore` 按钮）。⛔ 也不许按中文「已删除」文本
+       去匹配：那等于在壳里**再造一份"哪些算已删"的判据**（切片里已经有一份 ⇒ 必然漂）。
+    """
+    import re
+
+    from app.mod15_user import api as API
+    from tests.shell_src import SHELL
+
+    # ---------- ① 后端：软删之后**仍带出来**，且计数是真数 ----------
+    with session_scope() as s:
+        actor = _admin(s)
+        u = _new(s, "__自检_回收站__", name="自检回收站")
+        uid, acc_name = u.id, u.account
+        R.soft_delete(s, uid, actor=actor)
+        s.flush()
+        # ⚠️ 这里调 **`_payload(s)`** 而不是 `api_users()`：后者自己开一个会话（另一条连接），
+        #    而本用例**不提交**（库级断言一律非破坏）⇒ 跨会话看不到 ⇒ 会得到"没过滤"的**假绿**。
+        #    `api_users()` 只是 `with session_scope(): return _payload(s)` 的一行包装。
+        d = API._payload(s)
+
+        row = [x for x in d["users"] if x["id"] == uid]
+        assert row, (
+            "`/api/m15/users` 把已删账号**过滤掉了** —— 回收站会永远空着、"
+            "标题里「已删除 N」还会变成 0（对用户说假话）；claim `001-09` 的「可恢复」也没了入口")
+        assert row[0]["deleted"] is True, f"已删账号带出来了，但 `deleted` 是 {row[0]['deleted']!r}"
+        assert row[0]["account"] == acc_name, "软删改动了账号名 —— 与 `001-09`「账号名可识别」冲突"
+        assert row[0]["state"] == D.STATE_DELETED, f"三态不对：{row[0]['state']!r}"
+        del_n = sum(1 for x in d["users"] if x["deleted"])
+        assert d["counts"]["deleted"] == del_n, (
+            f"计数 {d['counts']['deleted']} 与列表里实际 {del_n} 行对不上 —— "
+            "两个数必须同源（都从全量 `users` 算），否则界面上的数字会说假话")
+        s.rollback()
+
+    # ---------- ② 壳：搬 DOM 的机制在，且壳里没有第二份"哪些算已删"的判据 ----------
+    m = re.search(r"function m15Trash\(\)\s*\{(.*?)\n\}", SHELL, re.S)
+    assert m, "找不到 `m15Trash` —— 回收站没实现（或改了名）"
+    # ⚠️ **先把注释剥掉**再查（本仓的既有教训：注释里会举反例、也会写选择器名 ⇒ 会喂饱/绊倒断言）
+    code = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S)
+    code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
+    assert re.search(r"BIND\.m15\s*=", SHELL), (
+        "回收站没挂到渲染后钩子 `BIND.m15` 上 ⇒ **它根本不会被调用**"
+        "（`render()` 里只有 `if(BIND[VIEW]) BIND[VIEW]()` 这一处调用）")
+    assert """querySelectorAll('[data-act="userRestore"]')""" in code, (
+        "搬行没有按**已删除行的唯一特征**（操作列那个 `userRestore` 按钮）来选 —— "
+        "它是切片 `V.m15` 里判「这一行已删」的**同一处依据**")
+    assert "status" not in code, (
+        "回收站里又按 `status` 判了一遍「哪些算已删」—— ⛔ 切片 `V.m15` 已经判过 ⇒ 两份必漂；"
+        "用 `userRestore` 按钮当选择器就**天然对齐**（那正是切片按同一条件渲染出来的）")
+    assert "${USERS.map(u=>" in SHELL, (
+        "`V.m15` 的切片被改了（主表不再从全量 `USERS` 渲染）—— 回收站**必须**靠搬 DOM 实现，"
+        "⛔ 不许改原型切片：`ui_parity` 的 `U1` 要它与 `demo/` 逐行一致，登记簿**只准变短**")
+
+
 @acc("ACC-USR-MGMT-001", "001-10")
 def test_转让管理员后恒只有一个在用管理员():
     """claim：「**转让管理员**：目标变管理员、自己转为普通用户，**恒只有一个在用管理员**」（§1.5.1）。

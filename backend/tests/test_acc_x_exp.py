@@ -210,7 +210,7 @@ def test_导出相关渲染面无Markdown泄漏():
     ⚠️⚠️ 必须先**去掉 JS 注释**再查 —— 本仓中文注释里 `**加粗**` 是习惯写法，
        不去注释这条断言会被**自己的注释**判红（假红，而且极难查）。
     ⚠️ **覆盖面的诚实交代**：这是**静态**检查（核模板串），
-       ⛔ **不等于**真机 DOM 上没有泄漏 —— 真机那层由 `tools/_shell_smoke.py` 兜（它读 console/page 错误）。
+       ⛔ **不等于**真机 DOM 上没有泄漏 —— 真机那层由 `tools/probe/_shell_smoke.py` 兜（它读 console/page 错误）。
     """
     # ⚠️ 渲染面**不在同一个文件**：两个展开区在 `index.html`、两个确认弹窗在 `actions.js`
     for name, (anchor, end) in RENDER_SEGMENTS.items():

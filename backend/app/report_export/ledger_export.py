@@ -40,6 +40,7 @@ from app.core.errors import MustReportError
 from app.core.money import sum_money
 from app.mod07_setl.domain import period_label
 from app.report_export import resources, tpl_fill
+from app.report_export.save import save_workbook
 
 #: 类别（**内部值 = 英文**，见 `mod05_flow.models`：`material` / `mechanical`）→ 模板里的 sheet 名
 #: （`模板清单` §二 登记；⛔ 不在这里另起名字。⚠️ 别把「显示名（辅材/机械）」当键 —— 那是 `label`）
@@ -205,8 +206,7 @@ def build_xlsx(sections: dict, out_dir, *, display: str, ym: str) -> str:
             sheet_plan = tpl_fill.fill_sheet(ws, sp)
             _set_text_fmt(ws, sheet_plan, sp["months_col"])
             plan.append(sheet_plan)
-        Path(out).parent.mkdir(parents=True, exist_ok=True)
-        wb.save(str(out))
+        save_workbook(wb, out)
     finally:
         wb.close()
     problems = tpl_fill.verify_filled(out, {"path": str(out), "sheets": plan})

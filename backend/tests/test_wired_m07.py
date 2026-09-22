@@ -1,6 +1,6 @@
 """`MOD-07` 收发结存与活动大表 —— **前端壳接线的离线断言**。
 
-真机验证在 `tools/_shell_smoke.py`（第 ⑩ 段：连服务 + 连库），本文件只做**静态接线断言**。
+真机验证在 `tools/probe/_shell_smoke.py`（第 ⑩ 段：连服务 + 连库），本文件只做**静态接线断言**。
 
 ⚠️ 这里钉的是**接线本身**，不是"页面好不好看"：
 1. **演示数据必须已清** —— 留着就永远渲染演示值（`ui_parity` 的 `U2b` 也查 `m07→WHM`）。
@@ -25,6 +25,7 @@ from tests.m07_shell_helpers import API, ROUTER, SHELL, _body, _slice  # noqa: F
 
 # ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉 ⇒ 下面那条判据改在**取数表**上证（判据不变）。
 from tests.shell_load_helpers import DEP_BEFORE, load_dep, loaders, page_load  # noqa: F401
+from tests.shell_src import with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看
 
 # ============== `ACC-SETL-001` / `ACC-SETL-EXT-001` 的**形态**半边（`§19` 批 2 搬家）
 #
@@ -260,7 +261,8 @@ def test_导出已落地为真下载():
     body = SHELL[i:j if j > i else i + 1600]
     assert "/api/m07/settlement/export?period=" in body, "`zipSfjc` 没打导出端点"
     assert "尚未落地" not in body, "`TAIL-04` 已落地，还在说「尚未落地」"
-    assert "createObjectURL" in body and ".download" in body, "没真的触发下载"
+    _a = with_kernel(body)         # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
+    assert "dlExport" in body and "createObjectURL" in _a and ".download" in _a, "没真的触发下载"
     assert "已生成 <b>第四工程公司" not in body, "还在报「已生成 .zip」的假成功"
 
 
@@ -416,7 +418,8 @@ def test_视图切片未被改动():
 
 @acc()
 def test_金额格式化认null():
-    """「主材累计」取数口未接入 ⇒ 后端给 `null` ⇒ 页面显「—」。
+    """后端给 `null`（不可得）⇒ 页面显「—」—— 现在主要发生在「取数口被显式摘除」时
+    （`TAIL-25` 已接入 ⇒ 正常态有真数；⚠️ 这条守卫**必须留着**：兜底路一坏，"不可得"就会显示 0.00）。
 
     ⚠️ `M()` 原本 `Number(null) || 0` ⇒ 会显示「0.00」= **冒充"确实没有"**（`TAIL-25` 明确禁止）。
        ⭐ 对**数字入参**行为必须**完全不变**（这条是反向灵敏度要盯的）。
@@ -430,5 +433,7 @@ def test_金额格式化认null():
 
 @acc()
 def test_主材累计不可得时不写0():
+    """⚠️ `TAIL-25` 接入后正常态有真数；这条守的是**兜底路**（取数口被显式摘除 ⇒ `null` ⇒ 「—」，
+    ⛔ 不写 0 冒充"确实没有"）—— 壳里那个 `MAT_OK ?` 三元**必须留着**，⛔ 别当死代码清掉。"""
     body = SHELL[SHELL.find("const bigMatCum = wh =>"):][:400]
-    assert "MAT_OK ?" in body and ": null" in body, "`bigMatCum` 取数口未接入时没给 `null`（会写 0）"
+    assert "MAT_OK ?" in body and ": null" in body, "`bigMatCum` 取数口不可得时没给 `null`（会写 0）"

@@ -119,6 +119,52 @@ def test_计划总额在无明细时退回单据头():
     assert v[f"{DS_HEADER}.收款单位"] == "资产处集中采购"        # 退回 info.user_skdw_EXName
 
 
+#: ⭐⭐ **真机形态**（2026-09-21 全量取证 · `artifacts/_probe_acct_scan.json` ＋ 诊断
+#: `.workbuddy/work/30-troubleshooting/排查-收款账号印错-20260921.md`）：标准字段（`RecAccNo`/`PhidBank_EXName`）与
+#: 自定义字段（`user_yhzh`/`user_bank_EXName`）**不是一回事** —— 74/353 张不一致，
+#: 其中 **11 张两套都有值且不同**（i8 原生印自定义 = **本单实际收款账号**）。
+#: ⛔ **别拿"单行标准形态"当 fixture** —— 那正是这个 bug 被掩盖多年的原因。
+_TWO_ACCOUNT_SHAPES: tuple[dict, ...] = (
+    # 形态①：标准字段**空**、自定义有值（= 用户报障的 `FKTZS2026050366`）
+    {"ResourceType": "采购入库", "ResourceBillCode": "RK1", "ApplyAmt": 60000.0, "ApplyAmtFc": 60000.0,
+     "ConAmtFc": 0, "RecName": "伊宁市健民气体工贸有限公司", "RecAccName": "伊宁市健民气体工贸有限公司",
+     "RecAccNo": "", "PhidBank_EXName": "",
+     "user_yhzh": "300602200902456652", "user_bank_EXName": "中国工商银行股份有限公司伊犁哈萨克自治州分行"},
+    # 形态②：**两套都有值且不同**（= 11 张"印错值"那类；旧逻辑印出的是错的）
+    {"ResourceType": "采购入库", "ResourceBillCode": "RK2", "ApplyAmt": 21160.0, "ApplyAmtFc": 21160.0,
+     "ConAmtFc": 0, "RecName": "宁夏小巨人起重吊装有限公司", "RecAccName": "宁夏小巨人起重吊装有限公司",
+     "RecAccNo": "8111101013902057084", "PhidBank_EXName": "中信银行王城支行",
+     "user_yhzh": "41050168860800001011", "user_bank_EXName": "中国建设银行股份有限公司洛阳分行"},
+)
+
+
+@acc("ACC-PAY-PRINT-001", "001-13")
+def test_收款账号银行取自定义字段_与i8原生打印同款():
+    """`TAIL-60`（2026-09-21 用户报障「收款账号为空，和 i8 原生打印不符」）。
+
+    ⭐ 判据 = **模板里那格的名字就叫 `user_yhzh`** ⇒ i8 原生打印读自定义字段；
+    全量实测**反向 0 例**（标准有值而自定义为空）⇒ 自定义是超集、方向唯一确定。
+    ⚠️ 这条能红的前提 = fixture 用**真机的两种形态**（① 标准空/自定义有 ② 两套不同值）。
+    """
+    h = DS_HEADER
+    v1 = build_values(INFO, [_TWO_ACCOUNT_SHAPES[0]], now=NOW)
+    assert v1[f"{h}.user_yhzh"] == "300602200902456652"          # 旧逻辑：空串（用户报障形态）
+    assert v1[f"{h}.收款银行1"] == "中国工商银行股份有限公司伊犁哈萨克自治州分行"
+    v2 = build_values(INFO, [_TWO_ACCOUNT_SHAPES[1]], now=NOW)
+    assert v2[f"{h}.user_yhzh"] == "41050168860800001011"        # 旧逻辑：印成档案默认账号（错值）
+    assert v2[f"{h}.收款银行1"] == "中国建设银行股份有限公司洛阳分行"
+
+
+@acc()
+def test_自定义字段缺失时退回标准字段_兜底():
+    """⚠️ 反向 0 例 ⇒ 这条**没有真实数据能证伪**，只是保守行为；⛔ 不拿它当"与 i8 一致"的依据。"""
+    d = {"RecAccNo": "8600003838000188", "PhidBank_EXName": "乌海银行股份有限公司乌达支行"}
+    v = build_values(INFO, [d], now=NOW)
+    h = DS_HEADER
+    assert v[f"{h}.user_yhzh"] == "8600003838000188"
+    assert v[f"{h}.收款银行1"] == "乌海银行股份有限公司乌达支行"
+
+
 # ---------------------------------------------------------------- 明细行
 
 

@@ -13,8 +13,10 @@ m01 4a4c1622  # 原型: <td><input class="inp plain" style="min-widt｜壳: <td>
 # ⭐ 2026-09-20（`m15` 片 4a：列表接线后，「最近登录」列**如实**显示 ——
 #   空串 = 从未登录 ⇒ 显「从未登录」，⛔ 不再用 `—` 冒充「数据没取到」）
 m15 566cf405  # 原型: <td class="now sm mut">${esc(u.last||'—')}</｜壳: <td class="now sm mut">${u.last?esc(u.last):
-# ⭐ 2026-09-20（m15 片 4b：① 表头加主题选择器（按用户隔离，接 /api/m15/theme）② 操作列加「看密码」（明文裁定的显式出口））
-m15 58918bf0  # 原型: <button class="btn" data-act="logout">登出</bu｜壳: <select class="inp" style="width:auto" data-
+# ⭐ 2026-09-20（m15 片 4b：操作列加「看密码」——明文裁定的显式出口）
+# ⭐ 2026-09-21（用户裁定「主题切换器移进 MOD-14 系统设置更符合逻辑」）⇒ **本行已销号**：
+#    原先壳在 `V.m15` 表头塞了一个 `<select data-act="themeSet">`（原型没有 ⇒ 登记漂移）。
+#    现在那段删了 —— 壳那一行**与原型逐字相同**，所以这条登记整行删掉（⚠️ 登记簿只准变短）。
 m15 118d0ddb  # 原型: : `<button class="btn sm" data-act="userPwd"｜壳: : `<button class="btn sm" data-act="userPwd"
 # ⭐ 2026-09-21（`§19` 批 5 · 看板接真数据：`home` 进 `WIRED` ⇒ 它那一格"这页是真是假"必须按页说实话。
 #   原型那一句**必须**留着「所有数据均为虚构模拟值」；壳那一句必须说真话 ⇒ 这是**唯一**一处**有意**的行差。

@@ -38,6 +38,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import openpyxl
+from app.report_export.save import save_workbook
 
 #: 表头（**列序由用户指定**：A 序号 · B 项目 · C 集采 · D 辅材 · E 机械）。
 COLUMNS: tuple[str, ...] = ("序号", "项目", "集采", "辅材", "机械")
@@ -95,12 +96,8 @@ def build_xlsx(items: list[dict], out_dir: Path, *, mark_mech: bool = True,
     for col, width in zip("ABCDE", (6, 46, 16, 16, 16)):
         ws.column_dimensions[col].width = width
 
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / file_name(today)
-    wb.save(str(out))
-    wb.close()
-    return str(out.resolve())
+    out = save_workbook(wb, Path(out_dir) / file_name(today))
+    return str(out)
 
 
 __all__ = ["COLUMNS", "FOOTNOTE", "FILE_PREFIX", "file_name", "build_xlsx"]

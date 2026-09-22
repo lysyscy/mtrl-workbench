@@ -29,7 +29,6 @@ const SET = {items: [], logs: [], tips: [], errs: [], msg: '', kind: 'ok'};   /*
 const IMP05 = {meta: null, file: null, token: '', preview: null, report: null, msg: '', kind: 'ok'};
 const IMP06 = {meta: null, data: null, pj: '', file: null, token: '', preview: null,
                report: null, msg: '', kind: 'ok'};
-const IMP08 = {meta: null, file: null, token: '', preview: null, result: null, msg: '', kind: 'ok'};
 
 /* ============================================================ 取数（标签 → 函数 见 core.js 的 LOADERS） */
 
@@ -39,7 +38,6 @@ async function reloadSet() {
 }
 async function reloadImp05() { IMP05.meta = await API.m05ImpMeta(); }
 async function reloadImp06() { IMP06.meta = await API.m06ImpMeta(); await imp06Load(IMP06.pj); }
-async function reloadImp08() { IMP08.meta = await API.m08ImpMeta(); }
 /* 过程资料导入：切项目 ⇒ 重拉该项目的截止核算月与批次（**候选项目由后端给** —— `service.projects_of`）。 */
 async function imp06Load(pj) {
   const d = await API.m06ImpData(pj || '');
@@ -91,6 +89,40 @@ V.set = () => {
     <td>${esc(l.old) || '（空）'}</td><td>${esc(l.new) || '（空）'}</td><td>${esc(l.operator) || '—'}</td></tr>`).join('');
   const errs = (SET.errs || []).length
     ? `<div class="tip dg">${SET.errs.map(e => esc(e)).join('<br>')}</div>` : '';
+  /* ⭐ **外观主题**（`ACC-UI-THEME-001/001-06`）—— 用户 2026-09-21 两次裁定的合体：
+     ① 「移进 `MOD-14` 更符合逻辑」② 「**不要某一套的色板预览**，要**每一套的主题色**，
+        旁边显示颜色值，颜色点要**圆形**，观感要高级一点」。
+     ⚠️ 它**按用户**保存（判据要的是"A 与 B 各挑各的"）⇒ 所以它**不进** `SET.items`
+        （那是"会变、且与「谁的账号」无关的连接参数"，`ACC-CFG-SETUP-001/001-01`）—— 它只是**住在本页**的一张卡片。
+     ⛔ 也别把它改成系统级配置：那会把「按用户隔离」这条判据做没。
+     ⭐ 切换**就地生效、不刷新页面**（`ACT.themeSet` → `applyThemeLive()`）。
+     ⭐⭐ **每套一张"配色标本"卡**：卡面用它**自己那套**的 底色/文字/边框 画（取值由**后端**从唯一真源解析出来），
+        左边一个**圆形主色点**、旁边是**主色色值** ⇒ 明暗差异**一眼可见**
+        —— 这正是用户"**感觉不到颜色变化**"的解药（浅色那几套只差一个主色，在满屏表格里根本看不出来）。 */
+  const pcard = p => {
+    const on = p.name === CUR_THEME;
+    return `<button class="thcard${on ? ' on' : ''}" data-act="themeSet" data-theme="${esc(p.name)}"
+        title="${esc(p.name)}｜适用：${esc(p.scene)}｜风格：${esc(p.style)}（点了即时生效）"
+        style="background:${p.bg};color:${p.tx};border-color:${on ? p.pri : p.bd}">
+      <span class="thdot" style="background:${p.pri}"></span>
+      <span class="thmeta">
+        <b>${esc(p.name)}</b>
+        <i class="thhex">${esc(p.pri)}</i>
+        <i class="thscene">${esc(p.scene)}</i>
+      </span>
+      ${on ? `<span class="thck" style="color:${p.pri}">✓</span>` : ''}
+    </button>`;
+  };
+  const themeCard = `<div class="card"><h4>外观主题
+    <span class="sp mut sm">按<b>你的账号</b>保存 · 只改你自己看到的样子（§7.7）</span></h4>
+    <div class="bd">
+      <p class="mut sm" style="margin:0 0 9px">点一张卡**立即生效** —— ⛔ 不刷新页面、也不会把你踢回别的页。
+        每张卡用它<b>自己那套的底色与文字色</b>画的 ⇒ 明暗差异一眼可见；左边<b>圆点 = 该套主色</b>，旁边是色值。</p>
+      <div class="thgrid">${THEME_PALETTE.map(pcard).join('')
+        || '<span class="mut">（取不到主题清单 —— 见顶部横幅）</span>'}</div>
+      <p class="mut sm" style="margin-top:9px">当前：<b class="fc">${esc(CUR_THEME) || '默认'}</b>　·　
+        ⚠️ 主题**只管屏幕**：打印件与导出的 Excel 颜色与它无关（§7.7）。</p>
+    </div></div>`;
   return `<details class="tip"><summary>口径说明（§7.8：本页只放会变、且变的时候不该改文件重启的连接参数）</summary>
       <ul style="margin:6px 0 0 18px;line-height:1.8">${tips}</ul></details>
     ${lgNotice(SET)}${errs}
@@ -102,7 +134,8 @@ V.set = () => {
     <div class="card"><h4>变更留痕<span class="sp mut sm">最近 ${(SET.logs || []).length} 条</span></h4>
       <div class="bd np"><div class="tw" style="max-height:320px;min-height:0"><table class="dt"><thead><tr>
         <th>时间</th><th>设置项</th><th>改前</th><th>改后</th><th>改动人</th></tr></thead>
-        <tbody>${rows || lgEmpty(5, '还没有改动记录')}</tbody></table></div></div></div>`;
+        <tbody>${rows || lgEmpty(5, '还没有改动记录')}</tbody></table></div></div></div>
+    ${themeCard}`;
 };
 
 /* ============================================================ `V.m05imp` —— 历史付款流水导入（§4.4.6） */
@@ -253,60 +286,9 @@ V.m06imp = () => {
   return `${lgSteps(IMP06_STEPS, IMP06.preview ? (IMP06.report ? 2 : 1) : 0)}${lgNotice(IMP06)}${body}`;
 };
 
-/* ============================================================ `V.m08imp` —— 库存单据 · 手动导入（§3.6） */
-
-const IMP08_STEPS = ['① 选文件', '② 预览（不写库）', '③ 确认导入（幂等刷新）'];
-
-V.m08imp = () => {
-  const meta = IMP08.meta || {required_headers: [], ignored_headers: []};
-  let body = '';
-  if (IMP08.preview) {
-    const g = (IMP08.preview.groups || []).map(x => `<tr><td class="now">${esc(x.ym)}</td>
-      <td>${esc(x.warehouse)}</td><td class="num">${esc(x.rows)}</td><td class="num">${esc(x.amount)}</td></tr>`).join('');
-    body += `<div class="card"><h4>② 预览 —— 尚未写库</h4><div class="bd">
-      <div class="tip">解析出 <b>${IMP08.preview.rows}</b> 行，落在 <b>${(IMP08.preview.groups || []).length}</b> 个
-        「核算年月 ＋ 仓库」范围里（刷新就按这个范围做幂等）。</div>
-      <div class="tw" style="max-height:320px;min-height:0"><table class="dt"><thead><tr><th>核算年月</th>
-        <th>仓库</th><th class="num">行数</th><th class="num">金额合计</th></tr></thead>
-        <tbody>${g || lgEmpty(4, '（没有可写入的行）')}</tbody></table></div>
-      <div style="margin-top:10px"><button class="btn pri" data-act="imp08Ok">确认导入（写库 · 幂等刷新）</button></div>
-      <p class="mut sm" style="margin-top:6px">同月同仓库重导 = <b>更新</b>（键 = 核算年月 ＋ 仓库 ＋ 单据编号 ＋ 序号）；
-        本次不再出现、且<b>没有调整单</b>的行会被删掉（不留残影）；
-        ⛔ <b>有调整单的行一定保留</b>，调整单本身一行不改（§5.2.4 · ENT-04）。</p>
-      </div></div>`;
-  } else {
-    body += `<div class="card"><h4>① 文件要求（列清单的主人 = i8 导出表头）</h4><div class="bd">
-      <p class="sm">就是 i8「<b>库存单据明细</b>」导出的那个 <b>xlsx</b> —— <b>原样上传</b>即可。
-        表头不在固定行也能认（前 10 行内自动找）；列按下表认名、<b>不按位置</b>。</p>
-      <div class="tw" style="max-height:240px;min-height:0"><table class="dt"><thead><tr>
-        <th>必须有这些列（少一列 ⇒ 整份拒绝并指出缺哪一列）</th></tr></thead><tbody>
-        ${(meta.required_headers || []).map(h => `<tr><td>${esc(h)}</td></tr>`).join('') || lgEmpty(1, '（取不到表头清单）')}
-        </tbody></table></div>
-      <p class="mut sm" style="margin-top:6px">⛔ 以下源列<b>刻意不采</b>：
-        ${esc((meta.ignored_headers || []).join(' / '))}（本系统<b>不为这些源列建字段</b>）。<br>
-        • 核算年月取 <b>「核算年」＋「核算月」两列</b>，<b>不是</b>「单据日期」（§9.2 / §3.4）。<br>
-        • 金额列非数字 ⇒ <b>报错并指出行号</b>，不静默丢行。</p>
-      ${lgPick('i08f', 'imp08Pick', 'imp08Parse', IMP08.file, '只读「报表1 / Sheet1」（没有就取第一个工作表）')}</div></div>`;
-  }
-  if (IMP08.result) {
-    const r = IMP08.result;
-    const g = (r.groups || []).map(x => `<tr><td class="now">${esc(x.ym)}</td><td>${esc(x.warehouse)}</td>
-      <td class="num">${x.rows}</td><td class="num">${x.inserted}</td><td class="num">${x.updated}</td>
-      <td class="num">${x.deleted}</td><td class="num">${x.kept_with_adjustment}</td></tr>`).join('');
-    const t = r.totals || {};
-    body += `<div class="card"><h4>③ 导入结果</h4><div class="bd">
-      <div class="tw" style="max-height:300px;min-height:0"><table class="dt"><thead><tr><th>核算年月</th>
-        <th>仓库</th><th class="num">行数</th><th class="num">新增</th><th class="num">更新</th>
-        <th class="num">删除</th><th class="num">因调整单保留</th></tr></thead>
-        <tbody>${g || lgEmpty(7, '（没有范围）')}</tbody></table></div>
-      <p class="sm" style="margin-top:8px">合计：新增 <b>${t.inserted || 0}</b> · 更新 <b>${t.updated || 0}</b> ·
-        删除 <b>${t.deleted || 0}</b> · <b>因有调整单而保留 ${t.kept_with_adjustment || 0}</b>
-        （共 ${(r.groups || []).length} 个「核算年月 ＋ 仓库」范围）。</p>
-      <p class="mut sm">⚠️ 这批是<b>手动上传</b>的（降级通道）—— 看板「本月是否抓过」看的是<b>抓取</b>执行记录，
-        手动导入不计入。</p></div></div>`;
-  }
-  return `${lgSteps(IMP08_STEPS, IMP08.preview ? (IMP08.result ? 2 : 1) : 0)}${lgNotice(IMP08)}${body}`;
-};
+/* ⛔ **`V.m08imp`（库存单据 · 手动导入）已整体删除**（用户 2026-09-22 裁定「不要了」）——
+   后端 `import_api.py` / `importer.py` 同批删除，`T8` 守卫登记在 `CANCELLED`（复活即红）。
+   i8 不可用时的口径改为：**显式报错待人处理**，⛔ 不做手动兜底入口。 */
 
 /* ============================================================ 动作（**一律追加**到既有 `ACT` / `CHG`） */
 
@@ -394,31 +376,10 @@ ACT.imp06Rollback = async t => {
   if (!r || r.ok === false) { IMP06.msg = (r && r.message) || '回滚失败'; IMP06.kind = 'err'; render(); return; }
   IMP06.msg = r.message; IMP06.kind = 'wn'; IMP06.report = r.report; render();
 };
-/* 库存单据导入：选文件 / 预览 / 确认（⛔ 本页**没有整批回滚** —— 幂等刷新，§9.5）。 */
-ACT.imp08Pick = t => { IMP08.file = (t.files || [])[0] || null; IMP08.msg = ''; render(); };
-ACT.imp08Parse = async () => {
-  if (!IMP08.file) return;
-  IMP08.msg = '正在解析（预览阶段不写库）…'; IMP08.kind = 'ok'; render();
-  const fd = new FormData(); fd.append('file', IMP08.file);
-  let r = null;
-  try { r = await API.postFile('/api/m08/import/parse', fd); }
-  catch (e) { IMP08.msg = `解析失败：${String((e && e.message) || e)}`; IMP08.kind = 'err'; render(); return; }
-  if (!r || r.ok === false) { IMP08.msg = (r && r.message) || '解析失败'; IMP08.kind = 'err'; render(); return; }
-  IMP08.token = r.token; IMP08.preview = r.preview; IMP08.result = null; IMP08.msg = ''; render();
-};
-ACT.imp08Ok = async () => {
-  let r = null;
-  try { r = await API.post('/api/m08/import/confirm', { token: IMP08.token }); }
-  catch (e) { IMP08.msg = `导入失败：${String((e && e.message) || e)}`; IMP08.kind = 'err'; render(); return; }
-  if (!r || r.ok === false) { IMP08.msg = (r && r.message) || '导入失败'; IMP08.kind = 'err'; render(); return; }
-  IMP08.msg = r.message; IMP08.kind = 'ok'; IMP08.result = r.result;
-  IMP08.preview = null; IMP08.token = ''; IMP08.file = null;
-  LOADED.delete('库存单据');                     /* ⭐ 刚落了一批明细 ⇒ 库存单据那路标脏 */
-  render();
-};
+/* ⛔ `imp08*` 三个动作已随「库存单据手动导入」删除（2026-09-22 用户裁定；`T8` 守卫）。 */
 
 /* ⚠️⚠️ **挂在表单元素上的动作必须进 `CHG`** —— 漏了 ⇒ `change` 被**静默丢弃**
    （症状：选完文件"解析"按钮永远是灰的 / 换项目没反应）。本仓踩过三次（`jcAmt` / `jcPartySet` / `themeSet`）。
    ⚠️ 只登记**表单元素**上挂的那几个（`<input type=file>` / `<select>`）——
       「解析并预览」是 `<button>`（走 click 委托），⛔ 不用进这里。 */
-CHG.push('imp05Pick', 'imp06Pick', 'imp06Pj', 'imp08Pick');
+CHG.push('imp05Pick', 'imp06Pick', 'imp06Pj');

@@ -70,36 +70,77 @@ def api_plan_row_save(req: PlanRowRequest) -> dict:
     return {"ok": True, "row_id": row_id, "message": msg + "；" + "；".join(payload.notes)}
 
 
-@router.post("/api/m04/import")
-async def api_plan_import(year_month: str = Form(""), file: UploadFile = File(...)) -> dict:
-    """⭐ **`TAIL-35`：导入付款计划 Excel**（§4.3.3）—— 按所选月份「**清该月自动行 → 重写该批**」（§9.5 幂等）。
+class TokenRequest(BaseModel):
+    token: str
 
-    ⭐ 与 PRG 端点**同一实现链**（`parse_workbook` → `attach_projects` → `repo.merge_month`）。
-    ⚠️ **手动行不被触碰**（§9.5）；⛔ **不做判重拦截** —— 同月同单据号两行是 §4.3.4 的「重复上报」，导入照收、审查暴露。
-    ⚠️ 上传形态 = **multipart/form-data**（⛔ 不是 JSON）⇒ 壳侧必须用 `FormData`。
-    ⚠️ 原型 `V.m04` 的导入是**一步式**（弹窗选月 → 选文件 → 导入）—— **没有「预览」这一步**，
-       所以这里也**不发明**预览（§15 `TAIL-35` 原先写的「三步」是推测，已按原型订正）。
+
+@router.post("/api/m04/import/parse")
+async def api_plan_import_parse(year_month: str = Form(""), file: UploadFile = File(...)) -> dict:
+    """⭐ **`TAIL-69` 第 ① 步：解析并预览**（**一个字节都不写库** —— 校验前不碰库）。
+
+    ⭐ 产出 = `token` ＋ 预览（行数 / 项目匹配盘点 / 解析提示）—— 用户在界面上**先看见再确认**；
+       项目匹配**在解析时完成**（确认时**不重算** ⇒ 「所见即所落」，⛔ 第二份口径）。
+    ⚠️ 与旧一步式端点**同一实现链**（`parse_workbook` → `attach_projects`），只差「写不写库」。
     """
     try:
         data = await file.read()
         with session_scope() as session:
             parsed = parse_workbook(data)
             rows = attach_projects(parsed.rows, project_briefs(session))
-            result = repo.merge_month(session, year_month=year_month, rows=rows)
     except MustReportError:
-        raise                                            # 口径性报错（年月不合法 / 表头认不出）原样透出
+        raise                                            # 口径性报错（表头认不出）原样透出
     except Exception as exc:                             # noqa: BLE001
         raise MustReportError(f"解析失败：{type(exc).__name__}: {exc}") from exc
+    if not str(year_month or "").strip():
+        raise MustReportError("导入前**必须先选「年月」**（本批数据一律归入所选月份，§4.3.3）")
+    from app.import_kit import staging                    # noqa: PLC0415
+    from app.mod04_plan.importer import match_summary, stage_payload
 
+    token = staging.save_preview(stage_payload(parsed, rows, year_month))
+    return {"ok": True, "token": token,
+            "preview": {"year_month": year_month, "columns": dict(parsed.columns),
+                        "header_row": parsed.header_row, "alerts": list(parsed.alerts or []),
+                        "match": match_summary(rows)}}
+
+
+@router.post("/api/m04/import/confirm")
+def api_plan_import_confirm(req: TokenRequest) -> dict:
+    """⭐ **`TAIL-69` 第 ② 步：确认落库**（凭 `parse` 给的 token；幂等口径与旧一步式**一字不差**）。
+
+    ⚠️ token 不存在 / 过期 ⇒ `preview_store` **显式报错**（⛔ 不静默当成空导入 —— 空导入会清掉该月）。
+    """
+    from app.import_kit import staging                    # noqa: PLC0415
+    from app.mod04_plan.importer import restore_rows
+
+    payload = staging.load_preview(req.token)
+    year_month, rows = restore_rows(payload)
+    alerts = list(payload.get("alerts") or [])
+    with session_scope() as session:
+        result = repo.merge_month(session, year_month=year_month, rows=rows)
     msg = (
         f"已导入 {len(rows)} 行到 {year_month}：新建 {result['created']} · 复用更新 {result['updated']}"
         f" · 删除该月残影 {result['deleted']}"
         f"（可手改列一律保留；该月手动行 {result['manual_kept']} 行未被触碰）"
     )
-    if parsed.alerts:
-        msg += "；提示：" + "；".join(parsed.alerts[:3])
+    if alerts:
+        msg += "；提示：" + "；".join(alerts[:3])
     return {"ok": True, "rows": len(rows), "stats": result, "year_month": year_month,
-            "alerts": list(parsed.alerts or []), "message": msg}
+            "alerts": alerts, "message": msg}
+
+
+@router.post("/api/m04/import")
+async def api_plan_import(year_month: str = Form(""), file: UploadFile = File("")) -> dict:
+    """⛔ **已退役**（`TAIL-69` · 2026-09-22）：一步式导入升级为 **`parse` → `confirm` 两步**（预览不写库）。
+
+    ⚠️ **路由先留着、实现先撤**：壳早已切到新端点；留路由是为了**缓存的旧页面**打过来时
+       收到一句**明白话**（"请刷新"），而不是一个没头没脑的 404。
+       ⭐ 判据已全部搬到新出口（`test_plan_import.py` 两步两条，**claim 一字未改**）；
+       下一轮清尾巴时连路由一起删（届时只删路由，判据已在新出口）。
+    """
+    raise MustReportError(
+        "这个导入入口已升级为「**解析预览 → 确认落库**」两步（2026-09-22）。"
+        "请**刷新页面**后在「付款计划」页重新打开导入弹窗。"
+    )
 
 
 __all__ = ["router"]

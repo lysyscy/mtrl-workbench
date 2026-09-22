@@ -15,12 +15,11 @@
 
 from __future__ import annotations
 
-import io
 from dataclasses import dataclass, field
-from datetime import date, datetime
 
 from app.core.errors import MustReportError
-from app.core.money import to_money
+from app.import_kit.parse import amount as _amount          # ⭐ `TAIL-69`：统一解析出口
+from app.import_kit.parse import text as _text
 from app.mod04_plan.domain import ProjectBrief, match_project
 
 # 表头识别用的**包含关键字**（表头是实拍长名，例：「材料：其他支出付资产处/贸易公司（编号）」）
@@ -47,22 +46,6 @@ class ParsedSheet:
     rows: list[dict] = field(default_factory=list)          # 每行：有效列 ＋ `raw`（无效列原样）
     header_row: int = 0                                     # 表头在第几行（1 起，便于回报）
     alerts: list[str] = field(default_factory=list)         # 只提示、不拦截
-
-
-def _text(value) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, datetime):
-        return value.date().isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    return str(value).strip()
-
-
-def _amount(value) -> object:
-    """金额取原文（**禁 float 直传** ⇒ 先转字符串再归一，§9.1）。"""
-    text = _text(value).replace(",", "")
-    return to_money(text) if text else to_money(0)
 
 
 def _classify(header: str) -> str | None:
@@ -93,17 +76,14 @@ def _find_header(grid: list[list]) -> tuple[int, dict[str, int]]:
 
 
 def parse_workbook(data: bytes) -> ParsedSheet:
-    """读 `.xlsx` → 一批计划行（**有效列**抽出，**无效列**原样进 `raw`）。"""
-    from openpyxl import load_workbook
+    """读 `.xlsx` → 一批计划行（**有效列**抽出，**无效列**原样进 `raw`）。
 
-    try:
-        wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
-    except Exception as exc:  # noqa: BLE001
-        raise MustReportError(f"这个文件读不成 Excel（.xlsx）：{exc}") from exc
-    ws = wb.worksheets[0]
-    grid = [list(r) for r in ws.iter_rows(values_only=True)]
-    if not grid:
-        raise MustReportError("这个工作表是空的（第一行就是表头，请确认选对了 sheet）")
+    ⚠️ 读表已收编 `import_kit.readers.read_grid`（`TAIL-69` Phase 2）—— 表头识别仍归本域
+    （`_HINTS` 是付款计划的**领域知识**，⛔ 不塞进底座）。
+    """
+    from app.import_kit.readers import read_grid
+
+    grid, _ = read_grid(data)
 
     header_idx, mapping = _find_header(grid)
     header = grid[header_idx]
@@ -168,7 +148,66 @@ def attach_projects(rows: list[dict], projects: list[ProjectBrief]) -> list[dict
     return out
 
 
-__all__ = ["ParsedSheet", "parse_workbook", "attach_projects"]
+# ----------------------------------------------------------- ⭐ `TAIL-69` 预览态（不写库）
+
+def stage_payload(parsed: ParsedSheet, rows: list[dict], year_month: str) -> dict:
+    """解析结果 → **JSON 安全**的暂存载荷（金额转字符串；确认时还原）。
+
+    ⚠️ 项目匹配**在解析时已完成**（`attach_projects`）—— 确认时**不重算**：
+       暂存里存的是用户在预览界面**看到的那一份**（「所见即所落」，⛔ 确认时偷偷重算 = 第二份口径）。
+    """
+    safe_rows = []
+    for r in rows:
+        item = dict(r)
+        item["flow_amount"] = str(r.get("flow_amount"))
+        item["planned_amount"] = str(r.get("planned_amount"))
+        safe_rows.append(item)
+    return {
+        "year_month": year_month,
+        "columns": dict(parsed.columns),
+        "header_row": parsed.header_row,
+        "alerts": list(parsed.alerts or []),
+        "rows": safe_rows,
+    }
+
+
+def restore_rows(payload: dict) -> tuple[str, list[dict]]:
+    """暂存载荷 → `(年月, rows)`（金额字符串 → `to_money`，与解析时同一出口）。"""
+    from app.import_kit.parse import amount as kit_amount
+
+    ym = str(payload.get("year_month") or "").strip()
+    rows = []
+    for r in payload.get("rows") or []:
+        item = dict(r)
+        item["flow_amount"] = kit_amount(r.get("flow_amount"))
+        item["planned_amount"] = kit_amount(r.get("planned_amount"))
+        rows.append(item)
+    return ym, rows
+
+
+def match_summary(rows: list[dict]) -> dict:
+    """预览用的**项目匹配盘点**（命中 / 未匹配 / 重名 —— 让人先看见再确认）。"""
+    from app.mod04_plan.domain import MATCH_AMBIGUOUS, MATCH_UNMATCHED   # noqa: PLC0415 常量避免循环导入
+
+    unmatched = [
+        {"row": r.get("_row_no"), "project_input": str(r.get("project_input") or "")}
+        for r in rows if r.get("match_status") == MATCH_UNMATCHED
+    ]
+    multi = [
+        {"row": r.get("_row_no"), "project_input": str(r.get("project_input") or ""),
+         "candidates": list(r.get("match_candidates") or [])}
+        for r in rows if r.get("match_status") == MATCH_AMBIGUOUS
+    ]
+    return {
+        "rows_total": len(rows),
+        "matched": len(rows) - len(unmatched) - len(multi),
+        "unmatched": unmatched,
+        "multi": multi,
+    }
+
+
+__all__ = ["ParsedSheet", "parse_workbook", "attach_projects", "stage_payload",
+           "restore_rows", "match_summary"]
 
 # ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：**导入页 `render_import_page` 已随旧渲染层删除**（授权 `D18`）——
 #    那是**页面件**；本文件保留的两件是**业务**（解析工作簿 / 挂项目），新壳的导入走

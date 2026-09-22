@@ -29,7 +29,6 @@
 
 from __future__ import annotations
 
-import io
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -71,15 +70,14 @@ def mech_labels() -> dict[str, str]:
 
 
 def read_sheet(data: bytes) -> list[list]:
-    """xlsx 字节 → 网格（**取第一个工作表**；用户给的定稿文件，不假设表名）。"""
-    from openpyxl import load_workbook
+    """xlsx 字节 → 网格（**取第一个工作表**；用户给的定稿文件，不假设表名）。
 
-    wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
-    try:
-        ws = wb.worksheets[0]
-        return [list(row) for row in ws.iter_rows(values_only=True)][:MAX_ROWS]
-    finally:
-        wb.close()
+    ⚠️ 读表已收编 `import_kit.readers.read_grid`（`TAIL-69` Phase 2）——
+       表头识别（`find_header`/`map_columns`）与核算月归一仍是**本域**口径（§5.2.5）。
+    """
+    from app.import_kit.readers import read_grid
+
+    return read_grid(data, max_rows=MAX_ROWS)[0]
 
 
 @dataclass

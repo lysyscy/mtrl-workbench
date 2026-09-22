@@ -1,4 +1,4 @@
-"""`tests` 侧取壳源码的**唯一出口**（转发 `tools/shell_source.py` · 性能 `P4`① 读取点收敛）。
+"""`tests` 侧取壳源码的**唯一出口**（转发 `tools/audit/shell_source.py` · 性能 `P4`① 读取点收敛）。
 
 **为什么是转发而不是各读各的**：壳要拆成 `web/shell/*.js` 多件（`P4`②）——
 若 26 个测试件各自 `pathlib.read_text("index.html")`，拆完就**静默**读不到接线代码。
@@ -17,8 +17,13 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
+# ⭐ `TAIL-58` 分目录：尺子搬进 `tools/audit/` 后，它们内部的**裸 import**（`from shell_source …`）
+#    依赖"脚本所在目录在 `sys.path`"⇒ 以**包方式**导入尺子（如 `tools.audit.ui_parity`）时必须补这一条。
+_TOOLS_AUDIT = _ROOT / "tools" / "audit"
+if str(_TOOLS_AUDIT) not in sys.path:
+    sys.path.insert(0, str(_TOOLS_AUDIT))
 
-from tools.shell_source import (  # noqa: E402
+from tools.audit.shell_source import (  # noqa: E402
     SHELL,
     SHELL_PARTS,
     SHELL_PATH,
@@ -27,4 +32,27 @@ from tools.shell_source import (  # noqa: E402
     read_shell,
 )
 
-__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "part_paths", "parts_text", "read_shell"]
+def dl_kernel() -> str:
+    """⭐ `TAIL-67`（2026-09-21）：`core.js` 里 **`dlExport` 通用件**的源码。
+
+    为什么要有这个函数：8 处导出原本**逐字重复**「fetch → 错误分类 → blob 落盘」那段；
+    抽成 `dlExport` 之后，**动作里不再有** `createObjectURL` / `.download` / `content-type` 分流
+    ⇒ 那些"钉源码形态"的判据（"必须真下载" / "失败必须给人原因"）就**全部假红**了。
+    ⇒ ⭐ 正确的判据是**两段拼起来看**：动作**委托** `dlExport` ＋ **内核里**真的做了那几件事。
+    ⛔ 别把判据改回"动作里必须有 createObjectURL" —— 那会逼着以后**不许抽通用件**（与 `TAIL-62/67` 相反）。
+    """
+    text = read_shell()                       # 合并后的**全部件**（`P4`① 读取点收敛）
+    i = text.find("async function dlExport")
+    if i < 0:
+        return ""
+    j = text.find("\n}", i)
+    return text[i:j + 2] if j > i else text[i:]
+
+
+def with_kernel(act: str) -> str:
+    """动作的源码 **＋** 它委托的 `dlExport` 内核源码 ⇒ 判据**与结构无关**。"""
+    return f"{act}\n{dl_kernel()}"
+
+
+__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "dl_kernel", "part_paths",
+           "parts_text", "read_shell", "with_kernel"]

@@ -26,13 +26,12 @@
 
 from __future__ import annotations
 
-import io
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-from app.core.money import to_money
+from app.core.money import amount_text, to_money      # ⭐ `amount_text`：`TAIL-63` 金额洗净的唯一出口
 from app.mod05_flow.models import PAY_METHODS
 from app.mod05_flow import repository as repo
 
@@ -101,7 +100,7 @@ def parse_amount(raw) -> Decimal:
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         raise ValueError("付款金额为空")
     if isinstance(raw, str):
-        raw = raw.strip().replace(",", "").replace("¥", "").replace("￥", "").replace(" ", "")
+        raw = amount_text(raw)
     try:
         value = to_money(Decimal(str(raw)))
     except (InvalidOperation, ArithmeticError, ValueError) as exc:
@@ -206,15 +205,14 @@ def split_by_match(plan: ImportPlan, known: dict[str, int]) -> ImportPlan:
 
 
 def read_workbook(data: bytes) -> list[list]:
-    """读 `.xlsx` 的首个工作表（**只取值**）。"""
-    from openpyxl import load_workbook
+    """读 `.xlsx` 的首个工作表（**只取值**）。
 
-    wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
-    try:
-        ws = wb.worksheets[0]
-        return [list(row) for row in ws.iter_rows(values_only=True)][:MAX_ROWS]
-    finally:
-        wb.close()
+    ⚠️ 读表已收编 `import_kit.readers.read_grid`（`TAIL-69` Phase 2）——
+       首行表头判断（`looks_like_bill_no`）与金额/日期的**域内硬判定**仍归本文件（§4.4.6）。
+    """
+    from app.import_kit.readers import read_grid
+
+    return read_grid(data, max_rows=MAX_ROWS)[0]
 
 
 # ---------------------------------------------------------------- 落库 / 回滚 / 报告

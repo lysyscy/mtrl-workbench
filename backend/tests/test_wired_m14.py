@@ -1,6 +1,6 @@
 """`MOD-14` 规则配置 —— **前端壳接线的离线断言**（绑 `ACC-CFG-RULE-001` 的 5 个判据点）。
 
-真机验证在 `tools/_shell_smoke.py`（第 ⑫ / ⑫b 段：连服务 + 连库，含**写路径往返**，
+真机验证在 `tools/probe/_shell_smoke.py`（第 ⑫ / ⑫b 段：连服务 + 连库，含**写路径往返**，
 跑完库回原样）；本文件只做**静态接线断言**。
 
 ⚠️ 这里钉的是**接线本身**（`TAIL-40` 后半），不是"页面好不好看"：
@@ -32,7 +32,7 @@ RULES_API = (ROOT / "backend" / "app" / "mod14_config" / "rules_api.py").read_te
 REPO = (ROOT / "backend" / "app" / "mod03_notice" / "rules_repository.py").read_text(encoding="utf-8")
 CLASSIFY = (ROOT / "backend" / "app" / "mod03_notice" / "classify.py").read_text(encoding="utf-8")
 
-#: 切片切法**必须与 `tools/ui_parity.py` 一致**（`V.<名>=` 起，到下一个顶层声明止）
+#: 切片切法**必须与 `tools/audit/ui_parity.py` 一致**（`V.<名>=` 起，到下一个顶层声明止）
 _END_RE = re.compile(r"^(?:V\.|BIND\.|const |let |function )")
 
 

@@ -27,6 +27,7 @@ from app.core.errors import MustReportError
 from app.mod07_setl.domain import period_label       # ⭐ 期间标签的**唯一主人**在 m07 域内核
 from app.mod07_setl.models import SetlDetail
 from app.report_export import kcdj_export, setl_export
+from app.mod02_i8 import source_cache            # ⭐ 「抓取导出分开」：导出读源文件缓存
 
 #: 成品文件的落点根（**唯一出口**；⛔ 别在 router / service 里各拼一次路径）
 EXPORT_ROOT: Path = PROJECT_ROOT / "artifacts" / "exports"
@@ -78,47 +79,27 @@ def export_settlement(session: Session, period: str) -> Path:
     return Path(setl_export.build_zip(rows, out_dir, period_label(ym)))
 
 
-def _fetch_inventory_bytes(session: Session, ym: str, *, allow_kick: bool = False) -> bytes:
-    """HTTP **现导**一期库存单据明细（`API-03`）→ xlsx 字节。
 
-    - phid 列表**唯一出口** = `mod01_projects.repository.export_phids`（**保序去重**）。
-    - 与抓取**共用同一把表级串行锁**（`inv_detail`，D9）—— 防两人同时导出 ⇒ 双份顶号。
-    - ⚠️ `allow_kick` **默认 `False`**（D9：强踢必须调用方显式授权）：cookie 有效 / **命中磁盘缓存**时
-      **不重登、不顶号**；仅会话失效时按既有策略**重登一次**。
-    """
-    from app.mod01_projects.repository import export_phids
-    from app.mod02_i8 import report_export
-    from app.mod02_i8.client import I8Client, serialize_fetch
-    from app.mod08_inv.fetch_service import TABLE as INV_TABLE
-
-    ids = export_phids(session)
-    with serialize_fetch(INV_TABLE):
-        client = I8Client(allow_kick=allow_kick)
-        try:
-            return report_export.export(client, spec_key="inv", year_month=ym, proj_ids=ids)
-        finally:
-            close = getattr(client, "close", None)
-            if callable(close):
-                close()
-
-
-def export_inventory(session: Session, period: str, *, export_bytes=None,
-                     allow_kick: bool = False) -> Path:
+def export_inventory(session: Session, period: str, *, export_bytes=None) -> Path:
     """导出一期**库存单据明细表成品 xlsx**（含两张真透视）→ 返回成品绝对路径。
 
-    - **src 来源 = HTTP 现导**（`mod02_i8.report_export.export`，`spec_key="inv"`）
-      —— 照素材包 `app/export_runner.py::run_once()` 的 kcdj 分支。
+    - **src 来源 = 最近一次抓取的源文件缓存**（`mod02_i8.source_cache`；2026-09-21 用户裁定
+      「抓取导出分开」—— 抓取时把 i8 源文件按月存档，导出**只读缓存**，⛔ 不再现场登 i8：
+      与 `m07` 同一套心智，「抓取」是全站唯一碰 i8 的动作）。缓存没有 ⇒ **显式报「请先抓取」**。
     - **落点** = `EXPORT_ROOT / "库存单据明细表" / <期间标签>`；成品名 = `库存单据明细表_<期间标签>.xlsx`
       （命名规则照素材包不变）；期间标签**唯一出口** = `period_label`（`2026-09` → `2026年9月`）。
     - ⚠️ 失败（模板缺失/损坏 · 该月无数据 · **缓存级对账不过**）⇒ **实现层显式抛 `MustReportError`**，
       本层**不吞**（由端点转成「200 ＋ `ok:false` ＋ 中文原因」）。
 
-    `export_bytes` 仅**测试注入**用（离线驱动成品生成、**不连 i8**）；缺省走真机现导。
-    `allow_kick` 透传给 `I8Client`（**默认 `False`** —— D9：强踢只能由界面二次确认后显式授权）。
+    `export_bytes` 仅**测试注入**用（离线驱动成品生成、**不连 i8**）；缺省读源文件缓存。
     """
     ym = _require_ym(period)
     content = (export_bytes() if export_bytes is not None
-               else _fetch_inventory_bytes(session, ym, allow_kick=allow_kick))
+               else source_cache.load("inv", ym))
+    if content is None:
+        raise MustReportError(
+            f"{period_label(ym)} 的 i8 源文件不在本地 —— 请先在「库存单据」页抓取一次"
+            "（含透视导出用的是最近一次抓取的源文件，⛔ 不现场登 i8）。")
     out_dir = EXPORT_ROOT / "库存单据明细表" / period_label(ym)
     return Path(kcdj_export.build_xlsx(content, out_dir))
 

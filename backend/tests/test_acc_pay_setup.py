@@ -52,6 +52,35 @@ def test_系统内提供可发现的修改入口():
     assert res.status_code == 200 and "printer_ipp_url" in res.json()
 
 
+@acc("ACC-PAY-SETUP-001", "001-01")
+def test_打印机地址只有这一处入口与一处存储():
+    """⭐⭐ 2026-09-21（用户裁定「打印设置从 `MOD-14` **合并进** `MOD-03`」）——
+    **单一入口 ＋ 单一存储**：⛔ 不许再出现"两个入口 / 两套存储"。
+
+    ⚠️ 为什么单列一条：重复的**实质**不是"两个界面"，而是**两套存储** ——
+       系统设置页写**库**、本页弹窗写 **`.env`**，而打印读取路径原先走 `effective_of`（**库优先**）
+       ⇒ **库里有值时，弹窗改的不生效**，而弹窗回执还说「已保存 · 即时生效」= 对用户说假话。
+       ⇒ 两条都要钉住：① 打印机项**不在** `SPECS`（否则库里又可能被写入）；
+       ② 打印读取路径**不看库**（⛔ 不再 import `effective_of`）。
+    """
+    import inspect
+    import re
+
+    from app.core.app_settings import SPECS
+    from app.mod03_notice.print import dispatch, ipp
+
+    assert not any(s.key == "printer_ipp_url" for s in SPECS), (
+        "打印机地址又回到系统设置页（`SPECS`）了 ⇒ 「两个入口 ＋ 两套存储」的坑会重现")
+    for mod in (dispatch, ipp):
+        # ⭐ 判「有没有那个进口」用**语义**（`hasattr`），⛔ 不用文本搜 —— 否则注释里那句
+        #    「⛔ 别再改回 `effective_of`」会**把断言喂饱**（本仓记过 4 次的坑：注释会绊倒读源码的断言）。
+        assert not hasattr(mod, "effective_of"), (
+            f"`{mod.__name__}` 又把 `effective_of` 导进来了 —— 打印机地址只能读 `.env`；"
+            "「库优先」会让库里的旧值盖住弹窗刚改的值（= 改了不生效）")
+        code = re.sub(r"^\s*#.*$", "", inspect.getsource(mod), flags=re.M)   # ⚠️ 先剥注释再看文本
+        assert "printer_ipp_url" in code, f"`{mod.__name__}` 不再从 `.env` 读打印机地址？"
+
+
 # ------------------------------------------------------------------ 001-02
 
 

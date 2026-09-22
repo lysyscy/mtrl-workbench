@@ -1,0 +1,46 @@
+前端换层：原型直接接数据（m03 打样跑通）
+
+用户裁定（2026-09-17）：同一仓换前端层 · 把该清的全部清干净、不留痕不留档 · 先打样 m03。
+
+根因（查证后确认）：不是"对齐得不够细"，是形态选错了 —— 服务端渲染天生要把
+原型的 JS 逻辑逐条翻译成 Python，翻一次走一次形；而计划里早写着
+「交互规格 → demo/ 原型本身」，这个口径在服务端渲染形态下不可能满足。
+
+做法：不是重画 —— 原型整体复制成前端壳，只把数据源接口化；
+原型的筛选 / 排序 / 合计 / 勾选逻辑一行不改（ntHit / ntPayCand / sumRowOf / ntLive 全原样）。
+
+后端（都复用既有纯函数，不另写判定）：
+- app/mod03_notice/notice_api_router.py（新）：/api/m03/actions/{category,exclude,restore}
+  与表单向共用同一批纯函数 + 同一个 repo；回执恒 HTTP 200 + ok 标志（前端壳要"就地改、即时反馈"）
+- notice-list 只增不删地补语义状态字段（is_excluded / is_manual / is_revoked / amount_paid /
+  edited_fields…）—— 光有显示值，前端判不了"能不能勾选"；页面专用 HTML 仍不进 API
+- main.py：加 /app 指向新壳（不抢 /，与旧服务端页并存，可随时停）
+
+前端（app/web/index.html = 原型整体复制）：
+- 唯一适配层：API（get/post）· adaptNotice / adaptProject（语义字段 → 原型字段名）·
+  reloadNotices（写成功后以后端为准重拉）· boot
+- 4 个写动作（batchCatApply / editCat / batchEx / batchUnEx）改 POST → 重拉 → 用后端 message 回执
+
+两个坑（只有跑起来才暴露）：
+- id 必须 String()：原型 id 是字符串、dataset 也是字符串、后端给数字 ⇒ 不转就静默失配
+  （实测：勾选后汇总条恒为 0，不报错、页面照常渲染）
+- 分类内部值是英文（material/mechanical/jc），中文只是显示名 ⇒ 界面传中文必须映射再 POST
+  通法：显示名与内部值分家的字段，跨层传递一律在唯一出口转换
+- 连带：自检注入样本也必须走适配层（手写数字 id 会把"样本错"误读成"壳有 bug"）
+
+自检（工程自检、不进 pytest）：
+- tools/_shell_smoke.py：加载 /app，抓 console/page 错误，断言导航与 m03 结构件
+- tools/_shell_render_check.py：注入样本（走 adaptNotice、不落库），断言合计行 / 勾选联动 / 写链路真的 POST
+
+验证（Playwright 真机）：侧栏 16 项 · PJs=13（真库档案）· NO=0（库里本无通知书）·
+勾选 1 行 ⇒ 汇总条实时变 · 写链路 POST → 200 + 中文回执 · 零 console/page 错误。
+
+顺手清干净 + 说实话：
+- 删掉原型的 PJ / NT / FL 三个演示数据数组（153 行）—— 三张表改由 API 供数后已无引用，留着就是
+  "假数据混进产物"
+- 顶栏那句"本页所有数据均为虚构模拟值"对已接线的页是假话 ⇒ 改成按页判别：已接线显示
+  "已接后端真实数据"，未接线显示"原型态 · 数据为模拟值（尚未接后端）"；侧栏未接线的项也标
+  "原型态"（新常量 WIRED，接线一页加一个）
+
+四态 485（不变 —— 本轮不新增判据点）· doc_audit 0 · TAIL-27 改写方向（旧定义「服务端页逐页对齐」作废）。
+下一步：删旧渲染层 + 逐页接线；⚠️ 删的顺序必须"删完仍可运行"。

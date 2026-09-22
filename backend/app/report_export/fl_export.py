@@ -62,52 +62,16 @@ def _money(v) -> float | None:
 def build_xlsx(rows: list[dict]) -> bytes:
     """行字典列表 ⇒ 一本 xlsx 的**字节**（不落盘：调用方决定给谁）。
 
+    ⭐ `TAIL-62`（2026-09-21）：**实现已下沉到 `naive_export`**（本件是它的前身之一）⇒
+      这里只留一层**薄委托**。⛔ 列定义 / 金额键**仍在本件**（那是**付款流水页的口径**），
+      下沉的只有"怎么写成 xlsx"这一件事 ⇒ 现在**只有一个主人**。
+
     ⚠️ 表头**加粗**＋**冻结首行**：几十行的表滚起来没有冻结行，人对不上哪列是哪列。
     ⚠️ 金额列写**数字**（⛔ 不写字符串）：这样用户在 Excel 里能直接求和/排序。
     """
-    import openpyxl
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = SHEET_NAME
-
-    ws.append([label for label, _ in COLUMNS])
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="center")
-
-    for r in rows or ():
-        vals = []
-        for _, key in COLUMNS:
-            v = r.get(key)
-            if key in MONEY_KEYS:
-                v = _money(v)
-            vals.append("" if v is None else v)
-        ws.append(vals)
-
-    # 合计行（**只合金额列**）—— 放最后，并在首列写明是合计（⛔ 不让人误当成一行数据）
-    if rows:
-        total = ["" for _ in COLUMNS]
-        total[0] = "合计"
-        for i, (_, key) in enumerate(COLUMNS):
-            if key in MONEY_KEYS:
-                vals = [_money(r.get(key)) for r in rows]
-                total[i] = float(sum(v for v in vals if v is not None))
-        ws.append(total)
-        for cell in ws[ws.max_row]:
-            cell.font = Font(bold=True)
-
-    # 列宽：按内容给个**可读的**初值（⛔ 不写死窄宽 —— 那是"表挤"的另一半原因）
-    for i, (label, _) in enumerate(COLUMNS, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = max(10, min(32, len(label) * 2 + 4))
-
-    ws.freeze_panes = "A2"
-
-    buf = BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    from app.report_export import naive_export as N
+    return N.build_xlsx(rows, columns=COLUMNS, sheet_name=SHEET_NAME,
+                        money_keys=MONEY_KEYS, total_keys=MONEY_KEYS)
 
 
 __all__ = ["COLUMNS", "MONEY_KEYS", "SHEET_NAME", "build_xlsx"]

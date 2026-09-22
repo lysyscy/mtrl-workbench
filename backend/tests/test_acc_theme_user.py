@@ -111,6 +111,98 @@ def test_主题按用户隔离且未设置回落默认套():
 
 
 @acc("ACC-UI-THEME-001", "001-06")
+def test_切换器住系统设置且清单由该页自取且不刷新页面():
+    """⭐ 2026-09-21（用户报障「换主题无效 ＋ 换完被扔回看板」）⇒ 三件事一起钉住：
+
+    ① **入口住 `MOD-14` 系统设置**（用户裁定「移过去更符合逻辑」）+ ⛔ 旧入口不留（壳里只许有一处）；
+    ② ⭐⭐ **主题清单由「系统设置」那一页自己取** —— 这是那个 bug 的真因：
+       清单原先只在 `reloadM15()` 里取，而**系统设置页永不执行它** ⇒ `THEMES_LIST` 恒为空
+       ⇒ 下拉一个选项都没有、`themeSet` 把**空串**写回后端 ⇒ 换主题**看着在做、实际没换**，
+       而且**全程不报错**（判据只能靠这条结构性断言拦）。
+    ③ **就地生效**（`applyThemeLive`）＋ ⛔ **壳里不许再用 `location.reload()` 换主题** ——
+       整页刷新会把壳的视图状态清零 ⇒ 用户在系统设置上点一下，就被**扔回看板**。
+
+    ⚠️ 「用户是否觉得颜色好看」断言测不了；这里钉的是**机制**（进得去、取得到、切得动、不跳页）。
+    """
+    import re
+
+    from tests.shell_load_helpers import loaders, page_load
+    from tests.shell_src import SHELL
+
+    # ① 入口只许一处（搬走之后别把旧的那个留下 —— 两处会各改各的）
+    # ⚠️ 按**标签**数（`<… data-act="themeSet"`），⛔ 不用裸 `in` ——
+    #    注释里提一句"这个动作叫什么"就会把裸计数喂饱（2026-09-21 实测踩到，同类坑第三次）。
+    entries = re.findall(r"""<[^>]*data-act=["']themeSet["']""", SHELL)
+    assert len(entries) == 1, (
+        f"`themeSet` 的入口出现了 {len(entries)} 处（都应是**一个标签**）—— "
+        "必须**只有一处**（2026-09-21 已从「用户管理」搬进「系统设置」）")
+    # ② 那一页要自己取清单
+    pl, ls = page_load(), loaders()
+    assert "外观主题" in pl.get("set", []), (
+        "`PAGE_LOAD['set']` 里没有「外观主题」⇒ 系统设置页取不到主题清单（下拉会是空的）")
+    assert "外观主题" in ls, "`LOADERS` 里没有「外观主题」这一路"
+    m15 = re.search(r"async function reloadM15\(\)\s*\{(.*?)\n\}", SHELL, re.S)
+    assert m15, "找不到 `reloadM15` 的函数体"
+    assert "m15Theme" not in m15.group(1), (
+        "主题清单又被塞回 `reloadM15` 了 —— 系统设置页**不进**那一页 ⇒ 下拉恒为空、"
+        "`themeSet` 写回空串（症状 = 「换主题没用」且**不报错**）")
+    # ②b ⭐⭐ **取主题名必须先认 `data-theme`**（2026-09-21 实测踩到的坑）：
+    #   切换器从 `<select>` 换成 `<button>` 之后，写成"`t.value === undefined` 才用 `data-theme`" ——
+    #   ⚠️ 而 **`<button>` 也有 `value` 属性**（默认 **空串**）⇒ 走 `value` 分支 ⇒ 把**空串**写回后端
+    #   ⇒ 主题回落默认套 ⇒ 症状正是用户报的「**换了没反应**」（而且**全程不报错**）。
+    i_ts = SHELL.find("themeSet:async t=>")
+    assert i_ts > 0, "找不到 `themeSet` 动作 —— 落点变了"
+    # ⚠️⚠️ **先把块注释剥掉再比顺序** —— 这条注释里**必须**提到 `t.value`（就是为了讲这个坑），
+    #    而本断言读的是**文本** ⇒ 不剥注释就会被自己的注释绊倒（同一类坑今天第 4 次）。
+    #    ⭐ 通法：凡"读源码文本"的断言，**先把注释剥掉**，否则它会惩罚"把坑写在注释里的人"。
+    body_ts = re.sub(r"/\*.*?\*/", "", SHELL[i_ts:i_ts + 1200], flags=re.S)
+    i_ds, i_val = body_ts.find("dataset.theme"), body_ts.find("t.value")
+    assert i_ds > 0 and i_val > 0, "`themeSet` 既没读 `data-theme` 也没读 `value` —— 主题名从哪儿来？"
+    assert i_ds < i_val, (
+        "`themeSet` **先读了 `t.value`** ⇒ 按钮那条路上它恒为空串（`<button>` 也有 `value`）"
+        " ⇒ 把空串写回后端、主题回落到默认套（用户看到的是「换了没反应」）")
+
+    # ③ 就地生效、不刷新
+    assert "function applyThemeLive(" in SHELL, "缺「就地换主题」的函数 `applyThemeLive`"
+    assert "applyThemeLive();" in SHELL, "`themeSet` 没有调 `applyThemeLive()`（换了不生效？）"
+    assert not re.search(r"location\.reload\s*\(", SHELL), (
+        "壳里又出现 `location.reload()` —— 用来换主题时它会把用户从当前页**扔回看板**"
+        "（用户 2026-09-21 报的就是这个）")
+
+
+@acc("ACC-UI-THEME-001", "001-06")
+def test_每套主题都给出一份配色标本且主色互不相同():
+    """⭐ 2026-09-21（用户反馈「换主题**感觉不到颜色变化**」）⇒ 把"看得见差异"机械化：
+
+    `GET /api/m15/theme` 除了清单，还要给**每套自己的配色标本**（`palette`）——
+    壳拿它画「每套一张卡」（底色/文字/主色都用该套自己的取值）。
+
+    ⚠️⚠️ **主色必须两两不同**：这是"换一套看得出来"的**最低条件**。实测那次报障的成因里，
+       浅色系几套只差一个主色 ⇒ 真要是**两套主色一样**，换它等于没换（而且**没有任何报错**）。
+    ⚠️ 取值一律来自**唯一真源**（`page.render_theme`）⇒ 这里顺便钉住"没有第二份色值表"。
+    """
+    from app.mod15_user.api import api_theme
+
+    d = api_theme()
+    pal = d.get("palette") or []
+    assert [p["name"] for p in pal] == list(d["themes"]), (
+        "配色标本没有覆盖**全部**主题（或顺序与清单不一致）⇒ 界面上会缺卡")
+    for p in pal:
+        assert p.get("pri", "").startswith("#") and len(p["pri"]) in (4, 7), (
+            f"「{p['name']}」的主色取值不是色值：{p.get('pri')!r} —— ⛔ 别自己拼，回真源取")
+        for k in ("bg", "sf", "bd", "tx", "on"):
+            assert p.get(k, "").startswith("#"), f"「{p['name']}」的 `{k}` 没取到（卡片会缺一块）"
+    pris = [p["pri"] for p in pal]
+    assert len(set(pris)) == len(pris), (
+        "有两套主题的**主色完全相同** ⇒ 换它等于没换（用户会说「没反应」）："
+        f"{[x for x in pris if pris.count(x) > 1]}")
+    # 深浅两族必须真的分得开（否则"卡面用它自己的底色画"这件事没有意义）
+    bgs = {p["name"]: p["bg"] for p in pal}
+    assert bgs[d["default"]] != bgs.get("深色", bgs[d["default"]]), (
+        "「默认」与「深色」的底色一样 ⇒ 深色套没生效（或 seed 写错了）")
+
+
+@acc("ACC-UI-THEME-001", "001-06")
 def test_主题偏好存在账号上而不是进程里():
     """隔离的**结构性**一半：偏好得落在**账号那一行**上（⛔ 不是模块级变量 / 全局缓存）。
 

@@ -40,6 +40,7 @@ import openpyxl
 from app.core.errors import MustReportError
 from app.mod06_proc import domain as D
 from app.report_export import resources, tpl_fill
+from app.report_export.save import save_workbook
 
 #: 该模板的 sheet（`模板清单` §二-4）
 SHEET = "汇总表"
@@ -140,8 +141,7 @@ def build_xlsx(rows: list[dict], out_dir, *, display: str, tab, ym: str) -> str:
         spec = body_spec(rows)
         sheet_plan = tpl_fill.fill_sheet(ws, spec)
         tpl_fill.set_text_format(ws, sheet_plan, TIME_COL)  # 「时间」列：写文本前先设文本格式
-        Path(out).parent.mkdir(parents=True, exist_ok=True)
-        wb.save(str(out))
+        save_workbook(wb, out)
     finally:
         wb.close()
 

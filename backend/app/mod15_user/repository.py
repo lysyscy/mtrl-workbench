@@ -93,6 +93,31 @@ def set_password(s: Session, uid: int, password: str, *,
     return row
 
 
+def set_i8(s: Session, uid: int, *, i8_user: str = "",
+           i8_password: str | None = None) -> UserAccount:
+    """**绑定 / 解绑某个账号的 i8 账号密码**（§7.8：「i8 的账号与密码…绑定到本系统账号、**每人一份**」）。
+
+    ⚠️ 与 `set_password` **分开成两个入口**（⛔ 不是"顺手复用"）：改系统密码与改 i8 绑定是
+       **两件独立的事** —— 复用同一个入口的话，界面上"只改 i8"那一步会**顺手把系统密码清空**
+       （`set_password` 的 `password` 是位置参数、空串 = 清空）。
+    ⚠️⚠️ `i8_password=None`（省略）⇒ **不动密码**，空串 ⇒ 清空。这不是细节：
+       列表出参**不带** i8 密码（脱敏）⇒ 界面上那个框是**空的**；若把"空"当成"清空"，
+       **管理员只想改账号**那一步就会把同事的 i8 密码**静默抹掉**（下次抓取登不上、且没人知道为什么）。
+    ⚠️ **解绑（`i8_user` 为空）⇒ 密码一并清空**：只清账号留密码，是个谁也解释不清的半状态。
+    ⚠️ **密码不 strip**（前后空格也是密码的一部分）；**账号 strip**（那是标识、不 strip 会认不出）。
+    """
+    row = s.get(UserAccount, uid)
+    if row is None:
+        raise MustReportError(f"账号不存在：id={uid}")
+    row.i8_user = (i8_user or "").strip()
+    if not row.i8_user:
+        row.i8_password = ""
+    elif i8_password is not None:
+        row.i8_password = i8_password
+    s.flush()
+    return row
+
+
 def ensure_seeded(s: Session) -> UserAccount:
     """保证**至少有一个在用管理员** —— 否则**谁都进不去、也建不了号**（系统锁死）。
 

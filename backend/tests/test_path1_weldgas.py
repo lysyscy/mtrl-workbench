@@ -49,7 +49,7 @@ from tests.m07_helpers import (
 
 CASE = "ACC-X-EXP-001"
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 
 
 def _act(name: str) -> str:
@@ -368,10 +368,11 @@ def test_壳侧提取导出真下载且提示与模板形态一致(tmp_path):
     """
     dialog = _act("expExt")
     save = _act("saveExt")
-    assert "createObjectURL" in save and ".download" in save, "没真的触发下载（拿不到文件）"
+    _a = with_kernel(save)         # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
+    assert "dlExport" in save and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
     assert "/api/m07/extract/export?status=" in save, "`saveExt` 没打导出端点"
-    assert "x-export-filename" in save, "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
-    assert "'application/json'" in save, "没按 `content-type` 分流失败原因"
+    assert "x-export-filename" in with_kernel(save), "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
+    assert "'application/json'" in with_kernel(save), "没按 `content-type` 分流失败原因"
     assert "fExt.status" in save and "fExt.ym" in save, "筛选没带给后端（会导出成别的集合）"
     # ⭐ 提示语必须与模板实际形态一致：2 个工作表（焊材 / 气）＋ 列 = 项目|结余|1月…12月|合计
     assert "气" in dialog and "工作表" in dialog, f"提示没写工作表结构：{dialog[:120]}"

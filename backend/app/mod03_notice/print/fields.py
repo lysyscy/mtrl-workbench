@@ -92,8 +92,16 @@ def build_values(info: dict, detail: list[dict] | None = None, *, now: datetime 
         f"{h}.项目名称": str(info.get("PhidPc_EXName") or ""),
         # 收款单位：**优先取明细第一条**（明细更精确），退回单据头
         f"{h}.收款单位": str(first.get("RecName") or info.get("user_skdw_EXName") or ""),
-        f"{h}.收款银行1": str(first.get("PhidBank_EXName") or ""),
-        f"{h}.user_yhzh": str(first.get("RecAccNo") or ""),
+        # ⭐⭐ 2026-09-21（`TAIL-60` · 用户报障 `FKTZS2026050366` 账号印空）：**收款账号/银行取
+        #    「自定义字段」优先** —— i8 原生打印读的就是 `user_yhzh` / `user_bank_EXName`
+        #    （**模板里那格的名字就叫 `user_yhzh`**）。标准字段（`RecAccNo`/`PhidBank_EXName`）
+        #    多数单恰好同值，**不一致的那批会印空/印错值**：
+        #    全量 355 张实测（`artifacts/_probe_acct_scan.json`）：**11 张错值 ＋ 63 张空白（74/353 = 21%）**，
+        #    ⭐ **反向 0 例**（标准有值而自定义为空）⇒ 自定义字段是超集，方向唯一确定。
+        #    ⚠️ 标准字段保留为**兜底**（保守起见；因反向 0 例、无数据能证伪它 ⇒ **不作断言**）。
+        #    诊断全文：`.workbuddy/work/30-troubleshooting/排查-收款账号印错-20260921.md`。
+        f"{h}.收款银行1": str(first.get("user_bank_EXName") or first.get("PhidBank_EXName") or ""),
+        f"{h}.user_yhzh": str(first.get("user_yhzh") or first.get("RecAccNo") or ""),
         f"{h}.计划总额": money(plan_total),
         f"{h}.本次支付总额": money(info.get("ApplyAmt")),
         f"{h}.本次结算金额": money(info.get("ApproveAmt")),

@@ -29,20 +29,21 @@ def test_全站所有模块路由引用的域出口都真实存在():
 
 @acc()
 def test_导入类页面引用的暂存载具是同一份():
-    """「预览不写库」的载具**只许一份**（`preview_store`）—— 三个导入页共用，不各写一份。
+    """「预览不写库」的载具**只许一份**（`preview_store`）—— 导入页共用，不各写一份。
 
     ⚠️ 2026-09-21（`§19` 四个暂留件收口）：落点从「服务端渲染页的路由件」（`import_router.py`）
        改成**JSON API 件**（`import_api.py`）—— 载具与口径**一字未变**，只是形态换了
        （同「形态变、判据不变」的既定做法）。
+    ⚠️ 2026-09-22：**m08 的手动导入已按用户裁定删除** ⇒ 只剩 m05 / m06 两家
+       （m11 集采台账导入自带解析暂存，不占 `preview_store` —— 别把它错并进来）。
     """
     import pathlib
 
     from app.core import preview_store
     from app.mod05_flow import import_api as m05
     from app.mod06_proc import import_api as m06
-    from app.mod08_inv import import_api as m08
 
-    for module in (m05, m06, m08):
+    for module in (m05, m06):
         src = pathlib.Path(module.__file__).read_text(encoding="utf-8")
         assert "preview_store" in src, f"{module.__name__} 没走统一载具"
     assert callable(preview_store.save) and callable(preview_store.load)

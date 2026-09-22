@@ -47,9 +47,13 @@ def _settings(**kw) -> types.SimpleNamespace:
 
 @pytest.fixture()
 def wired(monkeypatch):
-    """把"当前设置"换成桩（避免读真实 `.env`），并让 `effective_of` 直接用传入值。"""
+    """把"当前设置"换成桩（避免读真实 `.env`）。
+
+    ⚠️ 2026-09-21：原先这里还 `monkeypatch.setattr(D, "effective_of", …)` ——
+       打印机地址改成**只读 `.env`** 之后（单一存储），`dispatch` **不再 import `effective_of`**
+       ⇒ 那个桩会 `AttributeError`。桩值直接由 `_settings()` 提供（它带 `printer_ipp_url`）。
+    """
     monkeypatch.setattr(D, "get_settings", lambda: _settings())
-    monkeypatch.setattr(D, "effective_of", lambda key, val: val)
 
 
 # ------------------------------------------------------------------ 单通道：只走它
@@ -156,7 +160,6 @@ def test_通道按当前设置走_不用重启(monkeypatch):
     """设置弹窗改完即生效（`001-02`）⇒ 分流器每次都**现读**设置，⛔ 不许把通道缓存在别处。"""
     monkeypatch.setattr(D, "get_settings",
                         lambda: _settings(print_mode="raw", printer_name=""))
-    monkeypatch.setattr(D, "effective_of", lambda key, val: "ipp://h")
     calls, raw = _spy("raw", note="已投递（未核实）—— RAW 发完")
     _c, ipp = _spy("ipp")
     note = D.dispatch_pdf(PDF, ipp=ipp, raw=raw)

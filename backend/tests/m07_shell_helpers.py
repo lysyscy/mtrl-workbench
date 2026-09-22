@@ -1,6 +1,6 @@
 """`MOD-07` 壳接线断言用的**共用件**（自 `test_wired_m07.py` 拆出 · 2026-09-19）。
 
-**为什么拆**：`test_wired_m07.py` 涨到 **613 行 > 600** —— `tools/doc_audit.py` 的 `T5` 写着「禁合入」。
+**为什么拆**：`test_wired_m07.py` 涨到 **613 行 > 600** —— `tools/audit/doc_audit.py` 的 `T5` 写着「禁合入」。
 ⇒ 把「取壳源码的常量与配平取片工具」提到本件（照 `tests/m03_action_helpers.py` 的先例），
 `test_wired_m07.py` 与 `test_wired_m07_big.py` 共用一份（⛔ 别各抄一份 —— 那就是"同一件事两遍"）。
 """

@@ -19,6 +19,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.core.period import default_period
+from app.core.money import amount_text
 
 # ---------------------------------------------------------------- 口径常量（唯一出口）
 
@@ -86,7 +87,7 @@ def parse_ym(raw) -> str | None:
 
 def parse_amount(raw) -> Decimal:
     """手填金额（§5.5 / §8.4 第 ③ 档）：**只拦「非数字」，允许 0 与负数**；空 ⇒ 0。"""
-    text = str(raw if raw is not None else "").strip().replace(",", "").replace("¥", "").replace("￥", "")
+    text = amount_text(raw)
     if not text:
         return ZERO
     try:

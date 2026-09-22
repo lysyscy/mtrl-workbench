@@ -17,7 +17,7 @@ const CAT_API = { '辅材': 'material', '机械': 'mechanical', '集采': 'jc' }
  *    但那是"藏起来"，**不等于"读得到"**。⭐ 2026-09-20 用户裁定走 **(b) 完整版**：
  *    **改实现去够口径**（⛔ 不是把 claim 收窄成"可点入读全"）。
  *
- * ⚠️⚠️ **为什么放在 `core.js`、而不是 `V.m01` 里面**：`tools/ui_parity.py` 是
+ * ⚠️⚠️ **为什么放在 `core.js`、而不是 `V.m01` 里面**：`tools/audit/ui_parity.py` 是
  *    按**行号逐行**把壳和原型切片比对的 ⇒ 在 `V.m01` 里**插一行**，
  *    它后面**每一行都算漂移**（我第一次就是这么干的，一下冒出 66 条"未登记漂移"）。
  *    ⇒ ⭐ **原型切片里只做等行数的原地替换**；新函数一律放本文件（它不参与逐行比对）。
@@ -33,6 +33,53 @@ const nameW = (s, min) => {
   }
   return `width:calc(${u}ch + 24px);min-width:${min}px;`;
 };
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ⭐⭐ **通用件**（`TAIL-67` · 2026-09-21 · 批次 0）—— 本段是**切片外**公共层，
+       不参与 `U1` 的逐行比对 ⇒ 新函数一律放这里（`core.js` 头部就是这么说的）。
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ⭐ **导出下载**（原样重复了 **8 份**：`procExpSave` / `expPivot` / `zipSfjc` / 焊材气体 /
+   总欠款 / 欠款台账 / 经济活动分析大表 / `m03Download`）。
+   ⭐⭐ 抽它的**真理由不是省行数**，而是：**错误分类必须只有一个口径** ——
+     8 份重复的下场是"改了一处的说法，另外 7 处还在说别的话"
+     （与 2026-09-21「收款账号取错字段」同型：**同一件事 N 个主人**）。
+   契约：
+     · 成功 ⇒ 返回**文件名**（⛔ 命名规则的**主人是后端**，`name` 只是后端没给时的兜底）；
+     · 失败 ⇒ 返回 `''`，且**已经弹过 toast** ⇒ ⛔ 调用方**不要再弹一遍**（会弹两条）。
+     · `label` = '导出' / '下载'（只影响失败提示的措辞）；`close` = 成功后关弹窗。
+   ⚠️ 顺序照旧：**先看 `content-type`**（后端失败回的是 **JSON 200**），再看 `r.ok`。
+      ⛔ 反过来会拿一个"打不开的 xlsx/pdf"当文件存下来（2026-09-20 实测过的坑）。 */
+async function dlExport(url, { name = '导出文件', label = '导出', close = false } = {}) {
+  /* ⭐ 2026-09-21 用户口径「点了让人以为没点住」：导出是**重动作**（后端要现场生成文件，
+     几秒很正常）⇒ **先给一句进行中反馈**，成功/失败的明确提示由调用方在完成后给。 */
+  toast(`<b>${label}</b>：正在从服务器准备文件 …（完成后会再提示）`, 4000);
+  let r;
+  try { r = await fetch(url); }
+  catch (e) { toast(`<b>${label}没能完成</b>：${esc(String((e && e.message) || e))}`, 8000); return ''; }
+  const ct = r.headers.get('content-type') || '';
+  if (ct.includes('application/json')) {
+    let d = {};
+    try { d = await r.json(); } catch (e) { /* 读不出 ⇒ 下面统一报「后端没给原因」 */ }
+    /* ⚠️ 两种失败体都认：自己回的 `{message}`（ok:false）· FastAPI 的 `{detail}`（HTTPException）。 */
+    toast(`<b>${label}没能完成</b>：${esc(d.message || d.detail || '后端没给原因')}`, 9600);
+    return '';
+  }
+  if (!r.ok) { toast(`<b>${label}没能完成</b>：HTTP ${r.status}`, 8000); return ''; }
+  const fn = decodeURIComponent(r.headers.get('x-export-filename') || '') || name;
+  const blob = await r.blob(), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = fn;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);   /* ⚠️ 不 revoke ⇒ 每次导出都漏一份内存 */
+  if (close) closeModal();
+  return fn;
+}
+
+/* ⚠️ **日期件 `ymOf` / `ymdOf` 不在这里** —— 它们必须在**壳脚本初始化之前**就存在
+   （`bjMonth()` 在初始化期就被调用），而本件（`shell/*.js`）是**在 `index.html` 的内联脚本之后**加载的
+   ⇒ 放这儿会得到 `ymOf is not defined` ⇒ **整个壳起不来**（2026-09-21 实测，当场白屏一次）。
+   ⇒ 它们落在 `index.html` 的切片外公共层（见那里「通用件」注释）。
+   ⭐ 记这条判据：**切片外还分两层** —— 初始化期要用的 ⇒ `index.html`；只在交互时才用的 ⇒ 本件。 */
 
 const API = {
   async get(url) {
@@ -195,18 +242,16 @@ const API = {
   /* 手动行新增 / 编辑 —— 判定与落库全在后端（`plan_manual.manual_row_payload`）。 */
   m04PlanSave: body => API.post('/api/m04/plans', body),
   /* ⚠️ 导入是 **multipart/form-data**（⛔ 不是 JSON）⇒ 单独写：`FormData` ＋ **不手动设 Content-Type**
-     （浏览器要自己带 boundary；手设会把 boundary 写丢 ⇒ 后端收不到文件）。 */
-  m04Import: async (year_month, file) => {
+     （浏览器要自己带 boundary；手设会把 boundary 写丢 ⇒ 后端收不到文件）。
+     ⭐ `TAIL-69`（2026-09-22）：一步式升级为 **parse（预览不写库）→ confirm（凭 token 落库）** 两步；
+        旧 `m04Import` 已撤（后端一步式端点仍留作兼容，⛔ 别在新代码里调它）。 */
+  m04ImportParse: async (year_month, file) => {
     const fd = new FormData();
     fd.append('year_month', year_month);
     fd.append('file', file);
-    const r = await fetch('/api/m04/import', { method: 'POST', body: fd });
-    const text = await r.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
-    if (!r.ok) throw new Error((data && (data.message || data.detail)) || text || `HTTP ${r.status}`);
-    return data;
+    return API.postFile('/api/m04/import/parse', fd);
   },
+  m04ImportConfirm: body => API.post('/api/m04/import/confirm', body),
   plForce: (id, remark) =>
     API.send('POST', `/api/m04/plans/${id}/force?remark=${encodeURIComponent(remark || '')}`, null),
   /* ---- MOD-05 付款流水与欠款（读 4 个端点；写：撤销走 JSON、期初/备注走 PRG 表单端点） ---- */
@@ -259,6 +304,13 @@ const API = {
   m15Theme: () => API.get('/api/m15/theme'),
   m15ThemeSet: theme => API.post('/api/m15/theme', { theme }),
   m15Password: id => API.get(`/api/m15/password?id=${encodeURIComponent(id)}`),
+  /* ⭐ `§7.8` i8 绑定（每人一份）：**写**出口。
+     ⚠️ `i8Pwd === null` ⇒ 请求里**不带** `i8_password` ⇒ 后端**不改密码**
+        （界面上那个框是空的 = "我没改它"，⛔ 不是"清空它"）。 */
+  m15I8: (id, i8User, i8Pwd) => API.post('/api/m15/actions/i8',
+    i8Pwd === null || i8Pwd === undefined
+      ? { id, i8_user: i8User }
+      : { id, i8_user: i8User, i8_password: i8Pwd }),
   /* ⚠️ 6 个写动作**逐个对应后端端点**（⛔ 不在壳里拼一个"通用动作"——
      那样参数一多就分不清谁是谁，且后端加校验时看不出该改哪儿）。 */
   m15Create: (account, name, password) =>
@@ -296,7 +348,7 @@ const API = {
      **已于 2026-09-20 删除**（用户裁定撤页 —— 依据见 `backend/app/main.py` 的 import 处注释）。
      ⛔ 别再加回来：差异的载体是**调整单**（`API.m08Adjust`），差异表由后端按调整单算（`m06`）。
      ⭐ 这四行方法体**已于 2026-09-20 夜一并删掉**（原来只剩说明、代码还挂着 ⇒ 越挂越像"还在用"）；
-        守卫：`tools/audit_common.py::CANCELLED` ＋ `doc_audit` 的 `T8`。 */
+        守卫：`tools/audit/audit_common.py::CANCELLED` ＋ `doc_audit` 的 `T8`。 */
   /* ⭐ `M5-6b` 甲方单位分类：它决定「i8 抓来的那个合同价是谁的价」。
      ⚠️ 正常甲方 ⇒ i8 的价 = **供应商价**（落 `contract_amt` · **锚点**）；
         贸易公司甲方 ⇒ i8 的价 = **贸易公司的价**（落 `trade_contract_amt`），
@@ -341,8 +393,7 @@ const API = {
   /* 过程资料历史导入（§5.2.5 ①②）：项目候选 / 截止核算月 / 批次 ＋ 列说明。 */
   m06ImpMeta: () => API.get('/api/m06/import/meta'),
   m06ImpData: pj => API.get('/api/m06/import/data?pj=' + encodeURIComponent(pj || '')),
-  /* 库存单据手动导入（§3.6 降级通道）：必有列 / 刻意不采的源列。 */
-  m08ImpMeta: () => API.get('/api/m08/import/meta'),
+  /* ⛔ `m08ImpMeta` 已随「库存单据手动导入」删除（2026-09-22 用户裁定；`T8` 守卫）。 */
   /* ⚠️ 三个导入的「解析」都是 **multipart/form-data**（⛔ 不是 JSON）⇒ `FormData` ＋ **不手动设
      Content-Type**（浏览器要自己带 boundary；手设会把 boundary 写丢 ⇒ 后端收不到文件）。
      此件即 `m04Import` 那段逻辑的共用出口（⛔ 别在调用方各写一遍）。 */
@@ -662,6 +713,14 @@ let BOOT_ERROR = '';
    ⭐ 用户裁定 `B`：**不暂存整批数据** —— 弹窗只用「单据名 ＋ 候选小微」，
      补完词**再抓一次**即自动命中落库。
    ===================================================================== */
+/* ⭐⭐ 2026-09-21 用户口径「统一像集采台账」：**抓取是重动作**（登录 i8 · 可能顶号 · 全量刷新当月），
+   结果**必须弹窗回显**（条数 / 扶正 / 待人工 / 降级原因），⛔ 不是一闪而过的提示条 ——
+   用户要能看完再关。nt / wh / iv 三条抓取已全部改走本件（集采 m11 本来就是弹窗 = 参照形态）。 */
+function fetchResultModal(title, html) {
+  modal({ title, body: `<div class="bd" style="line-height:1.95">${html}</div>`,
+    footer: `<button class="btn pri" data-act="closeModal">知道了</button>` });
+}
+
 async function ntFetchBackend(m) {
   closeModal();
   toast(`正在抓取 <b>${m}</b> 的付款通知书（会登录 i8：<b>可能顶掉在线用户</b>）…`, 4000);
@@ -669,16 +728,19 @@ async function ntFetchBackend(m) {
   try { r = await API.fetchNotices(m); }
   catch (e) {
     await reloadM02IfOn();     /* ⚠️ 抓取失败**也写了一条执行记录**（`_persist_fetch` 的失败路径）⇒ 卡也要变 */
-    return toast(`⚠️ 抓取失败：${esc(String((e && e.message) || e))}`, 8000);
+    return fetchResultModal(`抓取失败 · 付款通知书（API-01）`,
+      `<b style="color:var(--wn)">网络或服务异常</b>：${esc(String((e && e.message) || e))}`);
   }
   if (r.ok) {
     await reloadNotices();
     await reloadM02IfOn();     /* ⭐ 刚写的那条记录要**立刻**在记录卡上看到（见 `reloadM02IfOn`） */
-    return toast(`已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，落库 <b>${r.upserted}</b> 条`, 6000);
+    return fetchResultModal(`抓取结果 · 付款通知书（API-01）`,
+      `已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，落库 <b>${r.upserted}</b> 条。`);
   }
   /* 失败：把后端原因**原样**给用户（后端已写成中文）；属「归属未走完」⇒ 直接开补词弹窗 */
   await reloadM02IfOn();       /* ⚠️ 「抓取被拒」同样是**一条真记录**（`failed`）⇒ 卡上要能看到 */
-  toast(`<b>抓取被拒</b>：${esc(r.message || '未知原因')}`, 9000);
+  fetchResultModal(`抓取被拒 · 付款通知书（API-01）`,
+    `<b style="color:var(--wn)">后端拒绝了这次抓取</b>：${esc(r.message || '未知原因')}`);
   try { await openOwnDialog(); } catch (e) { /* 打不开弹窗也不影响上面那句原因 */ }
 }
 
@@ -895,22 +957,25 @@ async function ivFetchBackend(month) {
     if (r.ok === false) {                    /* 降级：i8 侧失败 ⇒ 走手动 Excel 导入（§3.6） */
       await reloadInv();
       await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
-      return toast(`<b>抓取没能完成</b>，已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
-        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`, 9000);
+      return fetchResultModal(`抓取没能完成 · 收发结存（API-02）`,
+        `已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
+        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`);
     }
     await reloadInv();
     await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
     const st = r.stats || {};
-    toast(`已按 <b>${esc(month)}</b> 抓取库存单据明细（API-03）：<br>`
+    fetchResultModal(`抓取结果 · 库存单据明细（API-03）`,
+      `已按 <b>${esc(month)}</b> 抓取库存单据明细（API-03）：<br>`
       + `本次插入 <b>${st.inserted || 0}</b> · 更新 <b>${st.updated || 0}</b>`
       + ` · i8 侧已删 <b>${st.deleted || 0}</b>`
       + `${st.kept_with_adjustment ? ` · <b>保留调整单 ${st.kept_with_adjustment}</b>` : ''}`
-      + `<br><span class="mut sm">调整单独立存储、不被导入覆盖（ENT-04）</span>`, 7200);
+      + `<br><span class="mut sm">调整单独立存储、不被导入覆盖（ENT-04）</span>`);
   } catch (e) {
     await reloadInv();
     await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
-    toast(`<b>抓取没能完成</b>：${esc(String((e && e.message) || e))}<br>`
-      + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试</span>`, 8600);
+    fetchResultModal(`抓取没能完成`,
+      `<b style="color:var(--wn)">${esc(String((e && e.message) || e))}</b><br>`
+      + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试；接口失败可走「手动导入」降级（解析同一条管线）</span>`);
   }
 }
 
@@ -1034,8 +1099,9 @@ async function whFetchBackend(month) {
     if (r.ok === false) {                    /* 降级：i8 侧失败 ⇒ 走手动 Excel 导入（§3.6） */
       await reloadM07();
       await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
-      return toast(`<b>抓取没能完成</b>，已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
-        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`, 9000);
+      return fetchResultModal(`抓取没能完成 · 库存单据明细（API-03）`,
+        `已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
+        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`);
     }
     await reloadM07();
     await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
@@ -1057,13 +1123,14 @@ async function whFetchBackend(month) {
         + `<br>⇒ <span class="link" data-act="go" data-k="m01" tabindex="0" role="button">去项目档案指认到哪一行 →</span>`;
     }
     if (rc.degraded && rc.message) msg += `<br>⚠️ ${esc(rc.message)}`;
-    toast(msg + `<br><span class="mut sm">⚠️ 解析条数与落库条数不一致时先怀疑幂等范围（见 ops 实测结论）</span>`,
-      pend.length ? 15000 : 7600);
+    fetchResultModal(`抓取结果 · 收发结存（API-02）`,
+      msg + `<br><span class="mut sm">⚠️ 解析条数与落库条数不一致时先怀疑幂等范围（见 ops 实测结论）</span>`);
   } catch (e) {
     await reloadM07();
     await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
-    toast(`<b>抓取没能完成</b>：${esc(String((e && e.message) || e))}<br>`
-      + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试</span>`, 8600);
+    fetchResultModal(`抓取没能完成`,
+      `<b style="color:var(--wn)">${esc(String((e && e.message) || e))}</b><br>`
+      + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试；接口失败可走「手动导入」降级（解析同一条管线）</span>`);
   }
 }
 
@@ -1109,30 +1176,86 @@ function adaptUser(x) {
     /* ⛔ **列表不带密码**：要看密码走「查看密码」动作（单独端点、指名要哪一个）。
        ⇒ 这里先给空串；`V.m15` 的「改密」按钮本来就不读它。 */
     pwd: '',
+    /* ⭐ `§7.8` i8 绑定（每人一份）：列表**只出账号名、不出密码**（同脱敏口径）⇒
+       弹窗里那个密码框是**空的**，提交时"空"表示**不改**（见 `ACT.userPwdOk`）。 */
+    i8: x.i8_user || '',
   };
 }
+
+/* 「当前登录用户」（`CUR`）—— ⭐ **唯一赋值处**：`/api/m15/users` 的 `me`。
+   ⚠️ 为什么单列成两个函数（而不是只在 `reloadM15` 里赋值）：
+      `boot()` 要**首屏**就拿到真身份 —— 顶栏那句从第一帧起就得说真话（⛔ 不许有"假名字占位"），
+      而 `m15` 页另需账号列表 ⇒ 两处**共用同一个赋值体**（⛔ 各写一份 = 迟早只改一处）。
+   ⚠️ 一律**逐字段赋值**、⛔ 不换 `CUR` 的引用 —— 本文件的既有教训（L536 那条注释）：
+      自检回滚 / 刷新会整体替换 `USERS` 的内容，任何"指向 `USERS[i]` 的引用"都会失效。 */
+function applyWho(d) {
+  const me = (d && d.me) || {};
+  /* ⭐ 身份状态（顶栏据此说不同的话，见 `index.html` 里 `WHO_STATE` 的注释）——
+     `'none'` = **后端答了、但没有身份**；取数失败时本函数压根不跑 ⇒ 保持 `''`（"未取到"）。 */
+  WHO_STATE = me.id ? 'in' : 'none';
+  CUR.id = String(me.id);   /* ⚠️ `V.m15` 里是 `u.id===CUR.id` ⇒ 两边都必须是**字符串** */
+  CUR.acc = me.account || '';
+  CUR.name = me.name || '';
+  CUR.role = me.role || '';
+}
+async function reloadWho() { applyWho(await API.users()); }
 
 async function reloadM15() {
   const d = await API.users();
   USERS.splice(0, USERS.length, ...((d.users || []).map(adaptUser)));
-  /* ⭐ 主题（`001-06`）：**可选清单 ＋ 我这个账号当前用哪套**，一并取 ——
-     `V.m15` 的选择器就是照这两样画的（⛔ 壳里不写死名单）。 */
+  applyWho(d);                 /* ⭐ 身份只在这一个地方赋值（`boot` 与 `m15` 共用） */
+}
+
+/* ⭐⭐ **回收站**（2026-09-21 用户裁定：「已删账号**从主列表移出**、单独可见可恢复」）。
+   ⚠️⚠️ 为什么是"**渲染后搬 DOM**"而不是"改 `V.m15` 的模板"：
+     `V.m15` 是**原型切片**（`ui_parity` 的 `U1` 要它与 `demo/` 原型**逐行一致**，而那张登记簿
+     **只准变短**）⇒ 往切片里加一块"回收站"要新登记一串漂移行，把台账越加越长（与纪律反着走）。
+     ⭐ 而原型里"已删除行"的**唯一特征**就是操作列那个 `userRestore` 按钮
+     （切片：`u.status==='已删除' ? 恢复按钮 : 改密/看密码/停用/删除`）⇒ **拿它当选择器天然对齐**；
+     行是**原样搬过去**的（⛔ 不重写模板、⛔ 不在壳里再造一份"哪些算已删"的判据），
+     恢复按钮继续走**同一支** `ACT.userRestore`（⛔ 不新开动作）。
+   ⚠️⚠️ **计数不受影响，因为 `USERS` 仍是全量**：`V.m15` 的「在用 / 停用 / 已删除」三个数都从
+      `USERS` 算（`reloadM15` 照旧灌**全部**账号）⇒ ⛔ **别**为了"主列表不显示"去过滤 `USERS` ——
+      那会让标题里那句「已删除 N」变成 **0（假话）**，而回收站也就永远空了。
+   ⚠️ 幂等：`render()` 每次重建 `#view` ⇒ 本函数每次重跑；先删上一块，⛔ 不叠加。
+   ⚠️ 挂点 `BIND[VIEW]`（`render()` 里 `innerHTML` 之后调用）—— 那是壳**本来就有、一直没人用**的
+      渲染后钩子；⛔ 别把这段塞进 `render()` 本体（那会让"渲染"与"某一页的整理"混在一处）。 */
+function m15Trash() {
+  const view = document.querySelector('#view');
+  if (!view) return;
+  const stale = view.querySelector('#m15Trash');
+  if (stale) stale.remove();
+  const rows = [...view.querySelectorAll('[data-act="userRestore"]')].map(b => b.closest('tr'));
+  if (!rows.length) return;    /* 没有已删账号 ⇒ **不占地方**（标题那句「已删除 0」已经说了实话） */
+  const card = document.createElement('div');
+  card.id = 'm15Trash';
+  card.className = 'card';
+  card.innerHTML = `<h4>回收站 · 已删除账号
+    <span class="sp"><span class="mut sm">删除是<b>软删</b>：账号名保留、数据不销毁 ⇒ 历史留痕里的人名仍认得出来；恢复后回到它**原来的状态**（停用过的仍是「已停用」）</span></span></h4>
+    <div class="tw"><table class="dt"><thead><tr><th>登录账号</th><th>姓名</th><th>角色</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead><tbody></tbody></table></div>`;
+  const tb = card.querySelector('tbody');
+  rows.forEach(tr => tb.appendChild(tr));                  /* ⭐ 原样搬（含恢复按钮） */
+  const listCard = view.querySelector('.card');            /* 账号列表卡 ⇒ 插在它后面 */
+  if (listCard && listCard.parentNode) listCard.parentNode.insertBefore(card, listCard.nextSibling);
+  else view.appendChild(card);
+}
+BIND.m15 = m15Trash;
+
+/* ⭐ 主题（`ACC-UI-THEME-001/001-06`）：**可选清单 ＋ 我这个账号当前用哪套**。
+   ⚠️⚠️ 它必须是**自己的一路**（`LOADERS['外观主题']`），⛔ 不能塞在 `reloadM15` 里 ——
+      切换器住 `V.set`（系统设置）而**那一页从不进** `reloadM15` ⇒ 清单恒为空 ⇒
+      下拉里一个选项都没有、`themeSet` 写回**空串**（症状 = "换主题没用"，
+      而且**全程不报错**；2026-09-21 实测踩到，正是用户报的那个毛病）。
+   ⚠️ 取不到**不该让整页报错** ⇒ 清单空着即可（`V.set` 会写明"清单取不到"），⛔ 别把异常抛上去。 */
+async function reloadTheme() {
   try {
     const th = await API.m15Theme();
     THEMES_LIST.splice(0, THEMES_LIST.length, ...((th.themes || [])));
+    /* ⭐ 每套主题的**配色标本**（`{name,pri,bg,sf,bd,tx,on}`）—— 由后端从唯一真源解析出来，
+       ⛔ 壳里**一个色值都不写**（写死就是第二份真源，`test_theme.py` 会红）。 */
+    THEME_PALETTE.splice(0, THEME_PALETTE.length, ...((th.palette || [])));
     CUR_THEME = th.theme || th.default || '';
-  } catch (e) {
-    /* ⚠️ 主题取不到**不该让整页报错**（账号管理才是这一页的正事）——
-       选择器显示空清单即可，⛔ 别把异常抛上去。 */
-  }
-  /* ⚠️ 当前登录用户**逐字段赋值**，⛔ 不换 `CUR` 的引用 ——
-     本文件的既有教训（L536 那条注释）：自检回滚 / 刷新会整体替换 `USERS` 的内容，
-     任何"指向 USERS[i] 的引用"都会失效。 */
-  const me = d.me || {};
-  CUR.id = String(me.id);            /* ⚠️ 同上：`V.m15` 里是 `u.id===CUR.id` ⇒ 两边都必须是字符串 */
-  CUR.acc = me.account;
-  CUR.name = me.name;
-  CUR.role = me.role;
+  } catch (e) { /* 见上 */ }
 }
 
 async function reloadMech() {
@@ -1944,10 +2067,12 @@ const PAGE_LOAD = {
   /* ⭐ `§19`「四个暂留件收口」（2026-09-21）：四页**各自一路**，都无跨页依赖（不读 `NO`/`PJs`/`PLs`）
      ⇒ ⛔ 不进 `LOAD_DEP`、也⛔ 不替别的页预拉。
      ⚠️ 它们的取数口**只在进这页时才发**（`go(k)` 触发）—— 与其余页同一条口径（`P3` 主体）。 */
-  set: ['系统设置'],
+  /* ⭐ `set`（系统设置）：主题清单是**这一页自己的取数路** —— 切换器住在这里（`MOD-14`），
+     ⚠️ 塞进 `m15` 那一路会"只有进过用户管理才填得上"（见 `reloadTheme` 的注释）。 */
+  set: ['系统设置', '外观主题'],
   m05imp: ['付款导入'],
   m06imp: ['过程资料导入'],
-  m08imp: ['库存导入'],
+  /* ⛔ `m08imp` 已随「库存单据手动导入」删除（2026-09-22 用户裁定）。 */
   };
 /* 标签 → 取数函数（标签进顶部横幅的**失败点名** —— ⛔ 一字不许改，它们是给用户看的） */
 const LOADERS = {
@@ -1976,9 +2101,10 @@ const LOADERS = {
   '集采台账': reloadM11,        /* ⭐ `M5-7`：`/api/m11/list` ⇒ 原地填 `JCs`（跨页共享，见 `adaptJc` 上方注释） */
   /* ⭐ `§19`「四个暂留件收口」（2026-09-21）—— 实现在 `web/shell/legacy.js`（四页与其取数同处一件）。 */
   '系统设置': reloadSet,
+  '外观主题': reloadTheme,      /* ⭐ 住 `V.set`（`MOD-14`）：可选清单 ＋ 我当前用哪套 */
   '付款导入': reloadImp05,
   '过程资料导入': reloadImp06,
-  '库存导入': reloadImp08,
+  /* ⛔ `'库存导入': reloadImp08` 已删（2026-09-22 撤手动导入）。 */
   /* ⛔ `'差异登记': reloadM12` 已删（2026-09-20 撤页）；`reloadM12` / `adaptDf` 也已删。 */
   '收发结存与大表': reloadM07,   /* ⚠️ 吃 `MACH6`/`IVs` ⇒ 见 `LOAD_DEP` */
   '付款域': reloadM05,          /* ⚠️ 机械欠款派生自 `MACH6` ⇒ 见 `LOAD_DEP` */
@@ -2022,7 +2148,14 @@ async function loadPaths(labels) {
 async function boot() {
   /* 首屏只拉**初始视图**要的那几路（`home` ⇒ 3 路；其余页在 `go()` 里按需拉）。
      ⚠️ `BOOTING` 的声明在 `m05Sync` 上方（`P3`① 加的，⛔ 别在这里重复声明 —— 会 SyntaxError）。 */
+  /* ⭐ 顶栏身份（`CUR`）与首屏取数**并发**发起 —— 身份不是"某一页的取数"，全站每一页都要它，
+     所以它⛔ 不进 `PAGE_LOAD`；⛔ 也不用 `Promise.all`（那条红线是防"退回全量拉 13 路"的形态，
+     见 `test_wired_boot.py`）⇒ 先**发起**、首屏拉完再**收**它。 */
+  const who = soft('当前登录用户', reloadWho);
   await loadPaths(PAGE_LOAD[VIEW] || []);
+  await who;
+  /* ⚠️ `loadPaths` 自己也赋了一次 —— 两路并发时"它收尾在前、我这路失败在后"就会被漏掉 ⇒ 这里兜一次 */
+  BOOT_ERROR = fails.join('；');
   BOOTING = false;        /* ⏳ `P3`①：启动收尾才允许 `m05Sync()` 补拉（见它的注释） */
   render();
   if (BOOT_ERROR) bootErrorBanner();

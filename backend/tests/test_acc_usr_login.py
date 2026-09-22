@@ -24,6 +24,8 @@ from app.mod15_user import domain as D
 from app.mod15_user import login as LG
 from app.mod15_user import repository as R
 from tests.acc_plugin import acc
+from tests.shell_load_helpers import boot_body   # ⭐ ⑤⑥ 要读 `boot()` 的函数体
+from tests.shell_src import SHELL                # ⚠️ 壳源码的唯一出口（⛔ 别直接读 index.html）
 
 
 def _me(s):
@@ -36,7 +38,7 @@ def _login_ok(s, u, raw: str):
 
 
 @acc("ACC-USR-MGMT-001", "001-01")
-def test_当前登录用户是管理员且管理员恒一个():
+def test_当前登录用户是管理员且管理员恒一个(monkeypatch):
     """claim：「**账号数与 §1.5.1 一致（数量在此不复述）**；**当前登录用户 = 管理员**」（§1.5.1）。
 
     ⚠️ claim 特意写了「**数量在此不复述**」⇒ ⛔ 判据**不许**把"2"写死成硬指标 ——
@@ -44,7 +46,18 @@ def test_当前登录用户是管理员且管理员恒一个():
        ① 系统**确实有**在用的管理员（否则 §1.5.1「用户本人为管理员」不成立）；
        ② 在用管理员**恒只有一个**（转让那条口径的推论）；
        ③ ⭐ **登录后拿到的"我"就是那个管理员** —— 这才是"当前登录用户 = 管理员"的可执行含义。
+       ⚠️ ③ 要**仿真出会话**才算验到（`_me` 只认登录态）⇒ 本支用 `monkeypatch` 给用户名，
+          等价于"中间件从 cookie 解出名字"那一步。
+
+    ⭐⭐ 2026-09-21（用户裁定「**收紧：未登录不回落首个管理员**」）—— 一并补钉**反向**那一半：
+       ⛔ **没有会话 ⇒ `me` 必须是 `None`**（⛔ 不是"回落成首个管理员"）。
+       ⚠️ 本条此前**正是被那个回落喂饱的**：它调 `_payload(s)` 时**根本没有会话**，
+          却照样拿到管理员 ⇒ 断言是绿的，但它证明的是"**回落有效**"，而不是"登录后是管理员"。
+          而那个回落的代价是**实测过**的：不带 cookie 调 `/api/m15/users`，返回的 `me` 就是管理员行
+          ⇒ 所有写动作的闸（`assert_is_admin(_me(s))`）在未登录时**全部放行**
+          （能建号 / 删号 / 停用 / 转让管理员）。
     """
+    from app.core import session as SESS
     from app.mod15_user.api import _me, _payload
 
     with session_scope() as s:
@@ -57,7 +70,15 @@ def test_当前登录用户是管理员且管理员恒一个():
         assert len(users) >= 1, "一个账号都没有 —— 系统进不去（死锁）"
         assert admins[0] in users
 
-        # ③ 「当前登录用户 = 管理员」：整页数据里的 `me` 得是**在用管理员**
+        # ⓪ **没有会话** ⇒ 「当前登录用户」**取不到**（⛔ 不许回落成首个管理员）
+        monkeypatch.setattr(SESS, "current_name", lambda: "")
+        assert _me(s) is None, (
+            "**没有会话时 `_me` 竟然还给出了一个账号** —— 那就是「回落首个管理员」又回来了："
+            "任何不带 cookie 的请求都会被当成管理员 ⇒ 写动作的闸全部失效（用户 2026-09-21 裁定要掐掉它）")
+        assert _payload(s)["me"] is None, "整页数据里 `me` 也不许在未登录时给出一个人"
+
+        # ③ **有会话** ⇒ 拿到的"我"就是在用管理员
+        monkeypatch.setattr(SESS, "current_name", lambda: admins[0].name or admins[0].account)
         data = _payload(s)
         me = data["me"]
         assert me is not None, "取不到「当前登录用户」—— 壳的顶栏身份标识会空掉"
@@ -68,6 +89,17 @@ def test_当前登录用户是管理员且管理员恒一个():
         c = data["counts"]
         assert c["total"] == c["active"] + c["disabled"] + c["deleted"] == len(users)
         s.rollback()
+
+    # ④ 壳：**"没有身份"**与**"取数失败"**必须分得开 —— ⛔ 别把取数失败说成"你没登录"（那是假话，
+    #    而且用户会照着去登录、白折腾）；同时"没身份"时要说清**怎么办**（按钮全是禁用的）。
+    from tests.shell_src import SHELL
+
+    assert "WHO_STATE = me.id ? 'in' : 'none';" in SHELL, (
+        "壳没有把「后端答了但没身份」记下来 —— 顶栏就没法区分「未登录」与「取数失败」")
+    assert "WHO_STATE==='none'" in SHELL, (
+        "顶栏没按 `WHO_STATE` 分叉 ⇒ 两种情形会显示同一句话（必有一句是假话）")
+    assert 'href="/login"' in SHELL, (
+        "「没身份」时没有**去登录**的出口 —— 用户只会看到按钮全灰、以为页面坏了")
 
 
 @acc("ACC-USR-MGMT-001", "001-03")
@@ -310,3 +342,25 @@ def test_当前登录用户是唯一出口且不得写死人名():
     # 清空后要**回落**（⛔ 不是继续返回上一个人 —— 那是"上一个请求的名字留在了这里"）
     assert ID.current_operator() != "张伟", (
         "清了登录态却仍返回上一个人 ⇒ 不带 cookie 的路径（定时任务 / 测试）会把留痕写成别人的名字")
+
+    # ⑤ ⭐⭐ **壳里也不许有"写死的身份"**（2026-09-21 加宽观测面 —— 原先只扫 `.py`，漏了壳）。
+    #    ⚠️ 实测踩到：壳里 `CUR` 的初值写着 `{id:'U01',acc:'zhangwei',name:'张伟',role:'admin'}`
+    #       —— 而库里根本没有这个账号 ⇒ **顶栏首屏显示的是假人名**，进过一次「用户管理」才变真名。
+    #       用户看到的是"**同一个人两个名字**"，而且**全程没有任何报错** ⇒ 只有这条断言拦得住。
+    m_cur = re.search(r"let CUR\s*=\s*\{([^}]*)\}", SHELL)
+    assert m_cur, "壳里找不到 `CUR`（当前登录用户）的声明 —— 顶栏身份没了着落"
+    # ⚠️ 正则用**三引号原始串**写：它里面要出现引号字符，普通原始串会被转义写法搞乱
+    #    （2026-09-21 实测：那种写法让字符串**提前闭合** ⇒ 报一处莫名其妙的 `unmatched ')'`）。
+    quoted_identity = re.search(r"""(?:id|acc|name|role)\s*:\s*["'][^"']+["']""", m_cur.group(1))
+    assert not quoted_identity, (
+        "壳里 `CUR` 的初值带着**写死的身份**（人名 / 账号 / id / 角色）—— 那是**假值**："
+        f"实际命中 {quoted_identity.group(0) if quoted_identity else m_cur.group(0)}"
+        "  ⇒ 首屏顶栏会先说一个假名字、进过「用户管理」才变真名（必须留空，由后端填）")
+
+    # ⑥ ⭐ **首屏就得是真身份**：`boot()` 里必须去取它
+    #    （⛔ 不是"等用户点进用户管理页才取" —— 那样顶栏第一帧必然是假的或空的）。
+    boot = boot_body()
+    assert "soft('当前登录用户', reloadWho)" in boot, (
+        "`boot()` 没有（逐路容错地）取当前登录用户 ⇒ 顶栏第一帧是空的/假的"
+        "（必须走 `soft('当前登录用户', reloadWho)` —— ⛔ 也不许让它把首屏拖成串行等待）")
+    assert "esc(CUR.name" in SHELL, "顶栏身份没从 `CUR.name` 渲染（那取的是哪儿）"

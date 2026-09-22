@@ -2,7 +2,8 @@
 
 依据：
 - 《说明书》**§3.4**（导出条件 = 核算年月 + 项目）· **§9.2**（报表类按核算年月；**抓取只允许单月**）
-  · **§3.6**（接口不可用 ⇒ **降级为手动 Excel 导入**并**显式说明**）· **§9.5**（导入幂等）
+  · **§9.5**（导入幂等）。⚠️ **2026-09-22 用户裁定**：**「手动 Excel 导入」兜底已删** ——
+   接口不可用 ⇒ **显式报错待人处理**（原因 + 请稍后重试），⛔ 不再指向手动导入（§3.6 降级口径作废）。
 - 《技术栈选型分析》**§9.8**（接口形态：起止年月四个独立值 · `xmid` · `reportName=null`）
 - 用户裁定 **D9**：**抓取一律手动**（无定时）· **失败不得自动重试登录** · 抓前须**二次确认并告知会强踢**
 
@@ -30,7 +31,11 @@ from app.mod01_projects.recovery import (
     unknown_warehouses,
 )
 from app.mod01_projects.repository import export_phids
-from app.mod02_i8 import fetch_task, report_export
+import logging
+
+from app.mod02_i8 import fetch_task, report_export, source_cache
+
+logger = logging.getLogger(__name__)
 from app.mod02_i8.client import I8Client, serialize_fetch
 from app.mod02_i8.repository import save_run_record
 from app.mod02_i8.sources import load_warehouse_rows
@@ -92,7 +97,7 @@ def run_fetch(
 ) -> dict:
     """跑一次抓取（**人工触发**）→ 返回结果字典（含降级说明 / 条数 / 执行记录 id）。
 
-    ⚠️ 失败 ⇒ **降级为手动 Excel 导入并显式说明**（§3.6），**绝不自动重试登录**（D9）。
+    ⚠️ 失败 ⇒ **显式报错待人处理**（原因 + 请稍后重试；⛔ 无手动兜底 —— 2026-09-22 用户裁定），**绝不自动重试登录**（D9）。
     ⚠️ 只要走到网络之前就失败的（未确认 / 非单月 / 无 phid），**不写执行记录**也**不降级**（那是用法错误）。
     """
     # ⚠️ **耗时的起点**：必须在任何导出 / 网络动作**之前**（见 `save_run_record` 的 `started_at` 那段）
@@ -119,16 +124,20 @@ def run_fetch(
                 close = getattr(client, "close", None)
                 if callable(close):
                     close()
+        try:                                   # ⭐ 2026-09-21 用户裁定「抓取导出分开」：
+            source_cache.save(SPEC_KEY, plan["ym"], content)   # 源文件按月存档 ⇒
+        except OSError as cache_exc:           # 「含透视导出」只读这份缓存（⛔ 不再现场登 i8）。
+            logger.warning("i8 源文件存档失败（不影响抓取）：%s", cache_exc)
         rows = importer.parse_rows(content)
     except Exception as exc:                      # noqa: BLE001 —— 一律降级，不静默
-        notice = fetch_task.degrade_to_excel(exc)
+        notice = fetch_task.degrade_no_manual(exc)   # ⭐ m08 无手动兜底（2026-09-22 用户裁定）
         run = save_run_record(s, **fetch_task.fetch_record_payload(
             object_desc=target, success=0, fail=1,          # fail=1 ⇒ status=failed（这一批失败）
             error_message=f"{type(exc).__name__}: {exc}"),
             detail=record_detail(), operator=operator,      # ⭐ 「待人工」清单：本次没有 ⇒ 写空（pending 口径 1）
             started_at=t0)
         return {"ok": False, "degraded": True, "message": notice["message"],
-                "excel_import_available": True, "run_record_id": getattr(run, "id", None)}
+                "run_record_id": getattr(run, "id", None)}
 
     stats = {"inserted": 0, "updated": 0, "deleted": 0, "kept_with_adjustment": 0}
     for (ym, warehouse), group in group_by_scope(rows).items():

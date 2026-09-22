@@ -48,4 +48,41 @@ def is_placeholder() -> bool:
     return current_operator() == PLACEHOLDER_OPERATOR
 
 
-__all__ = ["PLACEHOLDER_OPERATOR", "current_operator", "is_placeholder"]
+def current_i8_credentials() -> tuple[str, str]:
+    """**当前登录用户绑定的 i8 账号 / 密码**（§7.8：「i8 的账号与密码…**绑定到本系统账号、每人一份**」）。
+
+    ⭐ 与 `current_operator()` **同款三段式**（第一个非空为准）：
+      ① **登录态** → 那个账号行上的 `i8_user` / `i8_password`（正常路径）；
+      ② `.env` 的 `I8_USER` / `I8_PASSWORD` —— ⚠️ **过渡期兜底**：
+         未登录的路径（命令行脚本 / 测试进程）与"还没绑过 i8 的账号"都落这里，
+         行为与接入本函数**之前完全一样**（零破坏）；
+      ③ 两者皆空 ⇒ 返回空串，由 `http_login` 显式报「I8_USER 未配置」——
+         ⛔ 不在这里抛：那会把"没配"伪装成一个身份层故障。
+
+    ⚠️⚠️ **账号与密码必须同一个来源**（⛔ 不许"账号取用户行、密码回落 `.env`"这种混搭）：
+       那会拿**甲**的账号配**乙**的密码去登录 ⇒ i8 侧只会说"账号或密码错"，
+       而**没人看得出是混搭出来的** —— 这类"静默错配"正是本仓最贵的一类错。
+
+    ⚠️ **DB 异常不吞**（⛔ 不用裸 `except`）：吞掉就会**悄悄拿 `.env` 的账号去登录**——
+       那是"用错的人顶了号"，比直接报错坏得多。取不到绑定（查无此人）走 ② 是**正常路径**。
+    """
+    from app.core.config import get_settings
+    from app.core.session import current_name
+
+    who = (current_name() or "").strip()
+    if who:
+        from app.core.db import session_scope
+        from app.mod15_user import repository as USR
+
+        with session_scope() as s:
+            row = USR.by_identity(s, who)
+        if row is not None:
+            bound = (row.i8_user or "").strip()
+            if bound:
+                return bound, (row.i8_password or "")     # ⚠️ 密码**不 strip**（前后空格也是密码的一部分）
+
+    env = get_settings()
+    return (env.i8_user or "").strip(), (env.i8_password or "")
+
+
+__all__ = ["PLACEHOLDER_OPERATOR", "current_i8_credentials", "current_operator", "is_placeholder"]

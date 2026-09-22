@@ -71,55 +71,19 @@ def _money(v) -> float | None:
 def build_xlsx(rows: list[dict]) -> bytes:
     """行字典列表 ⇒ 一本 xlsx 的**字节**（不落盘：调用方决定给谁）。
 
+    ⭐ `TAIL-62`（2026-09-21）：**实现已下沉到 `naive_export`**（本件是它的前身之一）⇒ 薄委托。
+      ⛔ 两个**本页口径**必须照旧带给内核：① `SEQ_KEY` = 「序号」列写**行号**；
+      ② 列宽上限 **28**（不是内核默认的 32 —— ⛔ 统一成 32 会**改掉本页导出形态**，
+      本轮是"换实现"，**不是"改口径"**）。
+
     ⚠️ 表头**加粗**＋**冻结首行**：几十行的表滚起来没有冻结行，人对不上哪列是哪列。
     ⚠️ 金额列写**数字**（⛔ 不写字符串）：这样用户在 Excel 里能直接求和/排序
        —— 写成 `"1234.56"` 那种"看着是数、其实是文本"的表，是本项目最讨厌的一类假象。
     """
-    import openpyxl
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = SHEET_NAME
-
-    ws.append([label for label, _ in COLUMNS])
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="center")
-
-    for n, r in enumerate(rows or (), start=1):
-        vals = []
-        for _, key in COLUMNS:
-            if key == SEQ_KEY:
-                vals.append(n)                       # ⭐ **行号**（屏幕上的序号 · 见 `SEQ_KEY`）
-            elif key in MONEY_KEYS:
-                vals.append(_money(r.get(key)))
-            else:
-                vals.append(r.get(key))
-        ws.append(vals)
-
-    # 合计行（**只合金额列**）—— 放最后，并在首列写明是合计（⛔ 不让人误当成一行数据）
-    if rows:
-        total = ["" for _ in COLUMNS]
-        total[0] = "合计"
-        for i, (_, key) in enumerate(COLUMNS):
-            if key in MONEY_KEYS:
-                vals = [_money(r.get(key)) for r in rows]
-                total[i] = float(sum(v for v in vals if v is not None))
-        ws.append(total)
-        for cell in ws[ws.max_row]:
-            cell.font = Font(bold=True)
-
-    # 列宽：按内容给个**可读的**初值（⛔ 不写死窄宽 —— 那是"表挤"的另一半原因）
-    for i, (label, _) in enumerate(COLUMNS, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = max(10, min(28, len(label) * 2 + 4))
-
-    ws.freeze_panes = "A2"
-
-    buf = BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    from app.report_export import naive_export as N
+    return N.build_xlsx(rows, columns=COLUMNS, sheet_name=SHEET_NAME,
+                        money_keys=MONEY_KEYS, total_keys=MONEY_KEYS,
+                        seq_key=SEQ_KEY, width_max=28)
 
 
 __all__ = ["COLUMNS", "MONEY_KEYS", "SHEET_NAME", "build_xlsx"]

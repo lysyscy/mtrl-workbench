@@ -43,6 +43,9 @@ const jcImpCur=()=>{ const s=jcImpSheet(); if(!s) return null;
 
 /* ⭐ `M5-6` 增量抓取：**记住用户填过的「开始日期」**（取消后再开不丢，也不每次重算）。 */
 let jcFetchSinceOn = '';
+/* ⭐ `TAIL-69`（2026-09-22）：m04 导入的**预览态**（⚠️ 必须在 `ACT` 对象之外 —— 同上，`let` 进
+   对象字面量 = `Unexpected identifier` ⇒ 整支 actions.js 失效、壳只剩 home，且离线文本断言全绿）。 */
+let plImportPrev=null;   /* {token, ym, preview} —— 解析成功后暂存；确认 / 重开时消费 */
 /* ⭐ `M5-6`：**默认开始日期** = 集采台账里**最大合同日期 − 3 天**（页面看得见、可改）。
    ⚠️ 与后端 `default_since` **同一口径** —— 只是壳里拿**已加载的 `JCs`** 算（够用、且立刻可见）；
       算不出来（库空 / 没有合法日期）⇒ 回空串 ⇒ **交给后端**（后端会走「全量」）。
@@ -103,6 +106,26 @@ function jcDownload(name, b64) {
   } catch (e) { toast(`<b>下载失败</b>：${esc(String((e && e.message) || e))}`, 7000); }
 }
 
+/* 热替换主题样式（⭐ 2026-09-21 加）——**⛔ 不刷新页面**。
+   ⚠️ 主题是 `<link>` 拉的一整份 CSS（不是几个变量），但**换 URL 就能就地换掉**：
+      新建一个带 cache-bust 查询串的 `<link>`，等它 `load` 完再把旧的那份摘掉
+      ⇒ 全站样式当场换、**当前页与页面状态一个都不动**。
+   ⚠️ 为什么必须这样（⛔ 不能走"整页刷新"那条路）：刷新会把壳的视图状态清零 ⇒
+      用户正在「系统设置」上点、一刷新就被**扔回看板**（还得再点回来）—— 这正是用户报的那个毛病。
+   ⚠️⚠️ **连注释里也别写出"那个 API 的调用形态"** —— `test_acc_theme_user.py` 会扫壳全文找它，
+      把注释里的示例当成真调用报一条假红（同类坑：主题守卫会把注释里那种"变量引用示例"当成真引用）。
+   ⛔ 也**不许**改成"在 JS 里写变量值" —— 那是把主题真源复制成第二份
+      （`test_theme.py` 的「壳不得自带 `:root`」守卫盯着这条）。
+   ⚠️ `onload` 才摘旧的 ⇒ 新 CSS 万一取不到，**旧样式仍在**（不会变成一张没样式的白页）。 */
+function applyThemeLive() {
+  const old = document.querySelector('link[href^="/static/theme.css"]');
+  const nw = document.createElement('link');
+  nw.rel = 'stylesheet';
+  nw.href = '/static/theme.css?v=' + Date.now();
+  nw.onload = () => { if (old && old.parentNode) old.parentNode.removeChild(old); };
+  document.head.appendChild(nw);
+}
+
 /* ⚠️⚠️⚠️ **放这里的东西一律是"文件顶层的函数/变量"** —— 上面这三段（`jcHideTrade` / `jcApplyHide` /
    `jcDownload`）我**又**先插进了 `ACT` 对象字面量里，`syntax_audit` 的 `node --check` 当场报
    `SyntaxError: Unexpected identifier 'jcHideTrade'`。
@@ -114,7 +137,7 @@ function jcDownload(name, b64) {
 
    ⛔ **本段只动动作体，不动任何 `V.` 切片、⛔ 不改按钮的 `data-act`**：
       `ACT` / 本表都是**顶层 const**、不在 `V.<页>` 切片内 ⇒ `ui_parity` 的 `U1` 看不见它们
-      （口径见 `CLAUDE.md` §2 与 §6.2；`BIND.m11` 那次改了 `data-act` 才惹出"两个导出按钮"）。
+      （口径见 `.workbuddy/plans/开发计划-主文档.md` §2 与 §6.2；`BIND.m11` 那次改了 `data-act` 才惹出"两个导出按钮"）。
 
    ⭐ **行 = 屏幕上当前看到的那些** —— 取数一律走**该页自己的可见行出口**
       （`pjVisible` / `flVisible` / `ntHit(fNt)` / `plVisible`），⛔ **不在这里另写筛选**：
@@ -562,25 +585,52 @@ const ACT={
  plDelOk:()=>{ const ids=plDelIds.slice(); plDelIds=[]; closeModal();
     if(!ids.length) return;
     plAct(()=>API.plDelete(ids), `已删除 <b>${ids.length}</b> 行付款计划（只影响付款计划表）`); },
- /* ⏳ **未接通（诚实提示，⛔ 不造假）**：Excel 导入是「**选文件 → 预览 → 确认**」三步（§4.3.3），
-    属**表单型页**（与服务端三步页同一形态）⇒ 壳里的导入入口**下一轮再接**；
-    本轮**不保留**「造几行演示数据」的假成功。落点已在：`mod04_plan/importer.py` ＋ PRG 端点。 */
- plImport:()=>{ modal({title:'导入付款计划 Excel',reopen:()=>ACT.plImport(),body:`<div class="tip" style="margin-bottom:10px">请先选择<b>本次导入数据的月份</b>；导入后本批全部行都归入该年月（<b>按月归档</b>）。<br><b>同一月份允许存在完全相同的行，且不被覆盖</b>（重复由「重复上报」提示，不靠自动去重掩盖）。</div>
+ /* ⭐ `TAIL-69`（2026-09-22）：导入升级为「**选文件 → 解析预览（不写库）→ 确认落库**」——
+    预览里先看见**行数 / 项目匹配盘点（未匹配 / 重名）/ 解析提示**，再决定写不写（⛔ 永不静默猜）。
+    弹窗主体在 `actions.js`（切片外）⇒ `U1` 切片一行未动；后端 = `/api/m04/import/parse|confirm`。
+    ⚠️ `plImportPrev` 的 `let` 声明在本文件**顶层**（对象字面量里 ⛔ 不能放 `let` ——
+       实测：放里面 = `Unexpected identifier` ⇒ **整支 actions.js 失效**、壳白得只剩 home，
+       而离线文本断言全绿（只有真机 / `node --check` 看得见）。 */
+ plImport:()=>{ plImportPrev=null; modal({title:'导入付款计划 Excel',reopen:()=>ACT.plImport(),body:`<div class="tip" style="margin-bottom:10px">请先选择<b>本次导入数据的月份</b>；导入后本批全部行都归入该年月（<b>按月归档</b>）。<br><b>同一月份允许存在完全相同的行，且不被覆盖</b>（重复由「重复上报」提示，不靠自动去重掩盖）。</div>
        <div class="fbar" style="border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px">
          <div class="fi"><label>导入数据的年月</label>${tmBtn('plImportMonth',{scope:'plimp',val:plImportM,modes:['月']})}</div>
          <div class="fi"><label>Excel 文件</label><input class="inp" type="file" id="plImpFile" accept=".xlsx,.xls" style="padding:4px"></div>
        </div>
-       <div class="tip ok" style="margin:0">导入按所选月份「<b>清该月自动行 → 重写该批</b>」（§9.5 幂等）；<b>可手改列一律保留</b>、<b>该月手动行不被触碰</b>。</div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="plImportOk">导入</button>`}); },
- /* ⭐ 接线：**真上传**（`multipart`）—— ⛔ 不再造演示行（旧「造几行演示数据」的假成功已撤）。
-    原型形态 = **一步式**（弹窗选月 → 选文件 → 导入）；**没有「预览」这一步**（按原型，不发明）。 */
+       <div class="tip ok" style="margin:0">点「解析并预览」<b>先看不写库</b>；确认后按所选月份「<b>清该月自动行 → 重写该批</b>」（§9.5 幂等）——<b>可手改列一律保留</b>、<b>该月手动行不被触碰</b>。</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="plImportOk">解析并预览</button>`}); },
+ /* ② 解析预览：**不写库**（暂存进 `preview_store`，凭 token 确认）——失败显式报原因，草稿/筛选不动。 */
  plImportOk:async ()=>{ const m=plImportM; const el=document.getElementById('plImpFile');
    const f=el&&el.files&&el.files[0];
    if(!f) return toast('<b>请先选择要导入的 Excel 文件</b>',5200);
-   try{ const r=await API.m04Import(m,f);
-     closeModal(); plf.ym=m; await reloadPlans();
-     toast(`<b>${esc(m)}</b> 导入完成：${esc(r.message||'')}`,9000);
-   }catch(e){ toast(`<b>导入没能完成</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">已选文件不合法或表头认不出时会这样报；草稿/筛选均未改动</span>`,9000); } },
+   try{ const r=await API.m04ImportParse(m,f);
+     plImportPrev={token:r.token, ym:m, preview:r.preview||{}};
+     ACT.plImportPreview();
+   }catch(e){ toast(`<b>解析没能完成（未写库）</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">文件不合法或表头认不出时会这样报；改好文件再试即可</span>`,9000); } },
+   /* ②' 预览弹窗（`reopen` 复用；内容全部来自后端 parse 的返回，⛔ 壳里不另抄口径）。 */
+   plImportPreview:()=>{ if(!plImportPrev) return ACT.plImport();
+   const pv=plImportPrev.preview||{};
+   const p=pv.match||{};
+   const alerts=pv.alerts||[];
+   const list=(arr,head)=>arr&&arr.length?`<h4 style="font-size:12.5px;margin:10px 0 4px">${head}（${arr.length}）</h4>
+       <div class="tw" style="max-height:180px;min-height:0"><table class="dt"><thead><tr><th>行</th><th>项目列原文</th></tr></thead><tbody>
+       ${arr.map(x=>`<tr><td class="num">${esc(x.row)}</td><td>${esc(x.project_input)||'（空）'}</td></tr>`).join('')}</tbody></table></div>`:'';
+   modal({title:`导入付款计划 Excel · 预览（目标月份 <b>${esc(plImportPrev.ym)}</b> · 尚未写库）`,reopen:()=>ACT.plImportPreview(),
+     body:`<div class="tip">解析出 <b>${esc(p.rows_total)}</b> 行 · 项目匹配：<b>${esc(p.matched)}</b> 命中 ·
+         <b class="${(p.unmatched||[]).length?'wn':''}">${esc((p.unmatched||[]).length)} 未匹配</b> ·
+         <b class="${(p.multi||[]).length?'wn':''}">${esc((p.multi||[]).length)} 重名</b>。
+         未匹配 / 重名的行<b>也照收导入</b>（§4.3.3 不猜），导入后在列表里显式标出、由你处理。</div>
+       ${alerts.length?`<div class="tip wn">解析提示：${alerts.map(esc).join('；')}</div>`:''}
+       ${list(p.unmatched,'未匹配（项目列认不出档案）')}
+       ${list(p.multi,'重名（命中多条档案，需人工核对)')}
+       <div class="tip ok" style="margin:10px 0 0">确认后按月份「<b>清该月自动行 → 重写该批</b>」（幂等）；<b>可手改列保留</b>、<b>手动行不碰</b>。不想导就点「取消」—— 什么都不会发生。</div>`,
+     footer:`<button class="btn" data-act="plImport">← 重新选文件</button><button class="btn pri" data-act="plImportConfirm">确认导入（写库）</button>`}); },
+ /* ③ 确认落库：凭 token；token 过期 ⇒ 后端显式报错（重新解析一次即可）。 */
+ plImportConfirm:async ()=>{ if(!plImportPrev) return;
+   try{ const r=await API.m04ImportConfirm({token:plImportPrev.token});
+     const ym=plImportPrev.ym; plImportPrev=null;
+     closeModal(); plf.ym=ym; await reloadPlans();
+     toast(`<b>${esc(ym)}</b> 导入完成：${esc(r.message||'')}`,9000);
+   }catch(e){ toast(`<b>导入没能完成</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">预览已过期时会这样报 —— 点「← 重新选文件」再解析一次即可</span>`,9000); } },
  /* ⭐ 2026-09-18：**已接通**（`TAIL-35` ＋ `TAIL-27` 批 2）—— 手动行走 JSON 端点 `POST /api/m04/plans`
     （`plan_api_router.py`；与旧 PRG 端点**同一份判定** `plan_manual.manual_row_payload`）。
     ⚠️ 旧服务端页（`POST /m04/row/save` ＋ `render_m04`）已随 `§19` 批 2 删除 ⇒ **壳是唯一入口**；
@@ -1106,19 +1156,36 @@ const ACT={
    }catch(e){ toast(`<b>没能转让</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  userPwd:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
    if(CUR.role!=='admin'){ toast('只有管理员能管理账号'); return; }
-   modal({title:`修改密码 · ${esc(u.name)}`,body:`<div class="tip" style="margin-bottom:10px">${u.id===CUR.id?'改<b>自己的</b>密码。':'管理员<b>重置他人密码</b>（§1.5.1「可管理其他账号」）。'}<b>无格式要求、可留空</b>（留空 = 清空该账号密码，空密码即可登录）。</div>
-     <div class="fld"><label>新密码（可为空）</label><input class="inp" id="upV" placeholder="留空即清空该账号密码"></div>`,
+   modal({title:`密码与 i8 绑定 · ${esc(u.name)}`,body:`<div class="tip" style="margin-bottom:10px">${u.id===CUR.id?'改<b>自己的</b>密码。':'管理员<b>重置他人密码</b>（§1.5.1「可管理其他账号」）。'}<b>无格式要求、可留空</b>（留空 = 清空该账号密码，空密码即可登录）。</div>
+     <div class="fld"><label>新密码（可为空）</label><input class="inp" id="upV" placeholder="留空即清空该账号密码"></div>
+     <div class="fld" style="margin-top:10px"><label>i8 账号（§7.8 · 绑定到本系统账号、每人一份）</label>
+       <input class="inp" id="upI8U" value="${esc(u.i8||'')}" autocomplete="off"
+         placeholder="留空 = 解绑，抓取回落 .env 的 I8_USER"></div>
+     <div class="fld" style="margin-top:6px"><label>i8 密码</label>
+       <input class="inp" id="upI8P" autocomplete="off" placeholder="留空 = 不改（要清空就把上面的账号也清掉）">
+       <div class="mut sm" style="margin-top:4px">⚠️ 明文保存（i8 登录要原样用它，哈希就登不上）；列表里不显示
+         ⇒ <b>这个框默认是空的</b>，空 = 不改它。</div></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userPwdOk" data-id="${u.id}">保存</button>`}); },
  userPwdOk:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u) return;
    /* ⚠️ ⛔ **不 `.trim()`**：§1.5.1 说密码「无格式要求」⇒ 前后的空格**也是密码的一部分**。
       原来这里 trim 了 —— 那会在"用户故意用空格当密码"时**静默改掉他的密码**。 */
    const v = ($('#upV').value||'');
+   const i8u = ($('#upI8U').value||'').trim();       /* 账号是标识 ⇒ 去空白 */
+   const i8pRaw = ($('#upI8P').value||'');
+   /* ⚠️⚠️ **空框 = 不改 i8 密码**（⛔ 不是清空）—— 列表出参不带 i8 密码 ⇒ 这个框默认就是空的，
+      当成"清空"会让"只改账号"这一步**静默抹掉**同事的 i8 密码（下次抓取登不上、且没人知道为什么）。
+      要清空 ⇒ 把 i8 账号也清掉（解绑 = 两样一起清）。 */
+   const i8p = i8pRaw === '' ? null : i8pRaw;
    try{
-     const res = await API.m15Pwd(u.id, v);
-     if(res.ok===false) return toast(`<b>没能改密</b>：${esc(res.message||'')}`, 9000);
+     const r1 = await API.m15Pwd(u.id, v);
+     if(r1.ok===false) return toast(`<b>没能改密</b>：${esc(r1.message||'')}`, 9000);
+     const r2 = await API.m15I8(u.id, i8u, i8p);
+     if(r2.ok===false) return toast(
+       `<b>系统密码已改，但 i8 绑定没存上</b>：${esc(r2.message||'')}<br>
+        <span class="sm">（两步是分开的：改密那一步已经生效了 —— 重开本弹窗再存一次 i8 绑定即可）</span>`, 14000);
      closeModal(); await reloadM15(); render();
-     toast(esc(res.message||('已更新 ' + u.name + ' 的密码')), 7000);
-   }catch(e){ toast(`<b>没能改密</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
+     toast(`${esc(r1.message||'密码已更新')}<br>${esc(r2.message||'')}`, 9000);
+   }catch(e){ toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  /* ⭐ 「查看密码」—— **明文裁定的显式出口**（2026-09-20 用户裁定「要加」）。
     ⚠️ 为什么是"指名要一个"的单独动作、⛔ 不是列表里带出来：列表一打开就全在屏上
        （还容易被截图）；单独动作多一道"用户确实是来看这个的"。
@@ -1129,12 +1196,27 @@ const ACT={
      const res = await API.m15Password(u.id);
      if(res.ok===false) return toast(`<b>看不到密码</b>：${esc(res.message||'')}`, 9000);
      const pw = res.password||'';
-     modal({title:`查看密码 · ${esc(u.name)}`, body:
+     /* ⭐ `§7.8` i8 绑定也在这个出口里（**同一个动作**：对管理员而言"把这个同事的凭据念给他"是一件事）。
+        ⚠️ 未绑定时**明说"回落 .env"**，⛔ 不显示成空框 —— 那会让人以为"数据没取到"。 */
+     const i8u = res.i8_user || '';
+     const i8p = res.i8_password || '';
+     const i8Block = i8u
+       ? `<div class="fld" style="margin-top:6px"><label>i8 账号（§7.8 · 每人一份）</label>
+            <input class="inp" value="${esc(i8u)}" readonly></div>
+          <div class="fld" style="margin-top:6px"><label>i8 密码</label>
+            <input class="inp" value="${esc(i8p)}" readonly>
+            ${i8p?'':'<div class="mut sm" style="margin-top:4px">该账号的 i8 <b>密码为空</b> —— 抓取会拿空密码去登录（会失败）</div>'}</div>`
+       : `<div class="fld" style="margin-top:6px"><label>i8 账号（§7.8 · 每人一份）</label>
+            <input class="inp" value="（未绑定）" readonly>
+            <div class="mut sm" style="margin-top:4px">该账号<b>还没绑 i8</b> ⇒ 抓取回落 <code>.env</code> 的
+              <code>I8_USER</code>（过渡期口径）。在「改密 / i8 绑定」里填上即可。</div></div>`;
+     modal({title:`查看密码与 i8 绑定 · ${esc(u.name)}`, body:
        `<div class="tip">§1.5.1：密码<b>无格式要求、可为空</b>；本系统为科室内部 2 人使用，<b>明文保存</b>（管理员要能念给同事听）。</div>
         <div class="fld" style="margin-top:10px"><label>登录账号</label><input class="inp" value="${esc(res.account||u.acc)}" readonly></div>
         <div class="fld" style="margin-top:6px"><label>当前密码</label>
           <input class="inp" id="viewPw" value="${esc(pw)}" readonly>
-          ${pw?'':'<div class="mut sm" style="margin-top:4px">该账号<b>没有设密码</b>（空密码即可登录 · §1.5.1「可为空」）</div>'}</div>`,
+          ${pw?'':'<div class="mut sm" style="margin-top:4px">该账号<b>没有设密码</b>（空密码即可登录 · §1.5.1「可为空」）</div>'}</div>
+        ${i8Block}`,
        footer:`<button class="btn" data-act="closeModal">关闭</button>`});
    }catch(e){ toast(`<b>看不到密码</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  userToggle:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u) return;
@@ -1187,14 +1269,21 @@ const ACT={
  logoutOk:async()=>{ closeModal();
    try{ await API.m15Logout(); }catch(e){ /* ⚠️ 登出即便请求失败也要把人送回登录页（⛔ 别把人卡在壳里） */ }
    location.href = '/login'; },
- /* ⭐ 主题选择（`ACC-UI-THEME-001/001-06`）：**按用户隔离** ⇒ 存的是"我这个账号用哪套"，
-    由 `/static/theme.css` 按会话取出。⚠️ 改完**整页刷新**才生效 ——
-    因为主题是 `<link rel=stylesheet>` 拉的一整份 CSS（⛔ 不是几个变量，改不动内存里的那份）。 */
- themeSet:async t=>{ const name=t.value||'';
+ /* ⭐ 外观主题（`ACC-UI-THEME-001/001-06`）：**按用户隔离** ⇒ 存的是"我这个账号用哪套"，
+    由 `/static/theme.css` 按会话取出。**入口在 `V.set`（系统设置 ·`MOD-14`）**。 */
+ themeSet:async t=>{
+  /* ⚠️⚠️ **取主题名的顺序不能反**：`data-theme` 优先，`value` 兜底。
+     2026-09-21 实测踩到 —— 写成"`t.value === undefined` 才用 `data-theme`"时，
+     `<button>` **也有 `value` 属性**（默认空串！）⇒ 走的是 `value` 分支 ⇒ 把**空串**写回后端
+     ⇒ 主题回落到默认套 ⇒ 症状就是用户报的「**换了没反应**」（而且全程不报错，非常像"功能坏了"）。
+     ⭐ 通法：**先认最具体的那一个**（`data-*`），别拿"属性存不存在"当判据。 */
+  const name=(t.dataset&&t.dataset.theme)||t.value||'';
    try{
      const res = await API.m15ThemeSet(name);
      if(res.ok===false) return toast(`<b>没能换主题</b>：${esc(res.message||'')}`, 9000);
-     location.reload();
+     applyThemeLive();          /* ⭐ 就地生效（⛔ 不整页刷新 —— 那会把用户扔回看板） */
+     CUR_THEME=name; render();  /* 下拉选中态 / 色板预览随之刷新 */
+     toast(`主题已换成「<b>${esc(name)}</b>」—— 即时生效，<b>不刷新页面</b>`, 4000);
    }catch(e){ toast(`<b>没能换主题</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  delPj:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
    modal({title:'删除确认',body:`<div class="tip dg"><b>⚠️ 必须列出删除影响范围</b>（§7.2）</div>
@@ -1225,14 +1314,17 @@ const ACT={
     let r=null;
     try { r = await (isWh ? API.m02SyncWh() : API.m02SyncPj()); }
     catch(e){ try{ await reloadM02(); }catch(_){}
-      return toast(`<b>同步没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
+      return fetchResultModal(`同步没能完成 · ${isWh?'仓库名单（API-05）':'常用项目列表（API-06）'}`,
+        `<b style="color:var(--wn)">${esc(String((e&&e.message)||e))}</b>`); }
     try { await reloadM02(); } catch(_){ /* 取数失败 ⇒ 日志卡里会如实说 */ }
     /* 同步「常用项目列表」会**真的建档**（`ACC-PRJ-SYNC-001`）⇒ 档案与「待人工建档」卡都得跟着刷 */
     if(!isWh){ try{ await reloadProjects(); }catch(_){} }
-    if(r && r.degraded) return toast(`⚠️ <b>i8 侧不可用，未改动本地档案</b>：${esc(r.message||'')}`,9000);
+    if(r && r.degraded) return fetchResultModal(`同步结果 · ${isWh?'仓库名单（API-05）':'常用项目列表（API-06）'}`,
+      `⚠️ <b>i8 侧不可用，未改动本地档案</b>：${esc(r.message||'')}`);
     const ct=(r&&r.counts)||{};
     const more=(!isWh && ct.manual) ? `<br>⇒ 有 <b>${ct.manual}</b> 条「一个全名挂多个仓库」需人工选定 —— 去 <b>m01</b> 的「待人工建档」卡处理` : '';
-    toast(`✅ <b>${isWh?'仓库名单':'常用项目列表'}已同步</b>：${esc((r&&r.message)||('取到 '+((r&&r.count)||0)+' 条'))}${more}`,9000); },
+    fetchResultModal(`同步结果 · ${isWh?'仓库名单（API-05）':'常用项目列表（API-06）'}`,
+      `✅ <b>已同步</b>：${esc((r&&r.message)||('取到 '+((r&&r.count)||0)+' 条'))}${more}`); },
 
  /* —— MOD-06 —— */
  procPjToggle:()=>{ procPjOpen=!procPjOpen; render(); },
@@ -1281,21 +1373,8 @@ const ACT={
    if(!pjs.length) return toast('请先选择要导出的项目');
    const url='/api/m06/export?projects='+encodeURIComponent(pjs.join(','))
      +'&tab='+encodeURIComponent(procTab);
-   let r;
-   try{ r=await fetch(url); }
-   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
-   const ct=r.headers.get('content-type')||'';
-   if(ct.includes('application/json')){
-     let d={}; try{ d=await r.json(); }catch(e){}
-     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
-   }
-   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
-   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'过程资料.xlsx';
-   const blob=await r.blob(), a=document.createElement('a');
-   a.href=URL.createObjectURL(blob); a.download=fn;
-   document.body.appendChild(a); a.click(); a.remove();
-   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-   closeModal();
+   const fn=await dlExport(url,{name:'过程资料.xlsx',close:true});
+   if(!fn) return;
    toast(pjs.length===1
      ? `已导出 <b>${esc(fn)}</b>：<b>${procTabName()}</b> · 一本工作簿（<b>汇总表</b> 18 列 ＋ 小计 / 合计 / 脚注）`
      : `已导出 <b>${esc(fn)}</b>：<b>${pjs.length}</b> 个项目 ⇒ 一个 zip（每项目一本 · 每本 = <b>${procTabName()}</b>）`,8600); },
@@ -1310,27 +1389,13 @@ const ACT={
     ⚠️ 2026-09-14 更正：旧文案写「明细（列与页面一致）· 工作表 2 = 透视（按项目 × 月份）」—— **两处都错**
        （路径②不套模板骨架、列随 i8 源文件；透视也不是"按项目 × 月份"那一张）。 */
  expPivot:async ()=>{
-   /* ⭐ 接线（`TAIL-04` 第二片）：成品由**后端模板法**生成（库存单据明细表 xlsx，含两张真透视 ——
-      过程资料 / 安全文明施工费）。失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**
-      （模板缺失/损坏 · 该月没有明细 · **缓存级对账不过**）⇒ 据 `content-type` 分流：
-      JSON ⇒ 弹原因；否则当文件下载。⛔ 前端不自己拼文件名（命名规则的主人在后端，
-      经 `X-Export-Filename` 带出）。 */
+   /* ⭐ 2026-09-21 用户裁定「**抓取导出分开**」：这份导出只读**最近一次抓取的源文件缓存**
+      （⛔ 不现场登 i8 ⇒ 不再需要二次确认 / 授权参数 —— D9 的确认都在「抓取」侧，与 m07 同一套心智）。
+      缓存没有（该月还没抓过）⇒ 后端回「请先抓取」，照样弹窗明说。 */
    const url='/api/m08/inventory/export?period='+encodeURIComponent(fIvYm);
-   let r;
-   try{ r=await fetch(url); }
-   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
-   const ct=r.headers.get('content-type')||'';
-   if(ct.includes('application/json')){
-     let d={}; try{ d=await r.json(); }catch(e){}
-     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
-   }
-   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
-   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'库存单据明细表.xlsx';
-   const blob=await r.blob(), a=document.createElement('a');
-   a.href=URL.createObjectURL(blob); a.download=fn;
-   document.body.appendChild(a); a.click(); a.remove();
-   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-   toast('已导出「库存单据明细（含数据透视表）」：<b>工作表 1</b> = 明细（<b>列随 i8 源文件</b>，与页面列不同）；<b>工作表 2</b> = <b>「过程资料」透视</b>（按仓 × 出入库方向 × 物料性质）；<b>工作表 3</b> = <b>「安全文明施工费」透视</b>（按仓 × 金额）<br>⚠️ 这份走<b>路径②</b>（脚本直接改 i8 导出源文件、含真·透视表）：<b>不套模板骨架、不认 DATA_START</b>；主表的「导出 Excel（R1）」不受影响',6400); },
+   const fn=await dlExport(url,{name:'库存单据明细表.xlsx'});
+   if(!fn) return;
+   toast('已导出「库存单据明细（含数据透视表）」：<b>工作表 1</b> = 明细（<b>列随 i8 源文件</b>，与页面列不同）；<b>工作表 2</b> = <b>「过程资料」透视</b>（按仓 × 出入库方向 × 物料性质）；<b>工作表 3</b> = <b>「安全文明施工费」透视</b>（按仓 × 金额）<br>⭐ 用的是<b>最近一次抓取</b>的源文件 —— 若该月有新单据，先抓取再导出<br>⚠️ 这份走<b>路径②</b>（独立通道，主表的「导出 Excel（R1）」<b>不受影响</b>）',6400); },
  goInvAdj:t=>{ invWhs.length=0; invWhs.push(t.dataset.wh); invOnlyAdj=true; go('m08'); setTimeout(()=>toast(`已跳转库存单据页并自动筛出：<b>${esc(t.dataset.wh)}</b> 被调整过的行`),120); },
 
  /* —— MOD-07 —— */
@@ -1340,20 +1405,8 @@ const ACT={
     ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）。 */
  zipSfjc:async ()=>{
    const url='/api/m07/settlement/export?period='+encodeURIComponent(fWhYm);
-   let r;
-   try{ r=await fetch(url); }
-   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
-   const ct=r.headers.get('content-type')||'';
-   if(ct.includes('application/json')){
-     let d={}; try{ d=await r.json(); }catch(e){}
-     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
-   }
-   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
-   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'收发结存表.zip';
-   const blob=await r.blob(), a=document.createElement('a');
-   a.href=URL.createObjectURL(blob); a.download=fn;
-   document.body.appendChild(a); a.click(); a.remove();
-   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   const fn=await dlExport(url,{name:'收发结存表.zip'});
+   if(!fn) return;
    toast(`已导出<b>${pjSort(whRows(fWhYm)).length}</b> 个分仓库 xlsx ＋ 1 个总表（zip）；`
      + `走<b>模板法</b>（成品 = 以手作成品 xlsx 为基底）—— 金额按 <b>2 位小数对平、容差 0</b>`,7600); },
  whReset:()=>{ fWhYm=bjMonth(-1); render(); toast(`已重置：核算年月回到 <b>${tmLabel(fWhYm)}</b>（材料报表 = 北京时间上月，§9.2）`); },
@@ -1393,20 +1446,8 @@ const ACT={
  saveExt:async ()=>{
    const url='/api/m07/extract/export?status='+encodeURIComponent(fExt.status)
      +'&period='+encodeURIComponent(fExt.ym);
-   let r;
-   try{ r=await fetch(url); }
-   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
-   const ct=r.headers.get('content-type')||'';
-   if(ct.includes('application/json')){
-     let d={}; try{ d=await r.json(); }catch(e){}
-     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
-   }
-   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
-   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'焊材气体提取表.xlsx';
-   const blob=await r.blob(), a=document.createElement('a');
-   a.href=URL.createObjectURL(blob); a.download=fn;
-   document.body.appendChild(a); a.click(); a.remove();
-   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   const fn=await dlExport(url,{name:'焊材气体提取表.xlsx'});
+   if(!fn) return;
    toast(`已导出 <b>${esc(fn)}</b>：<b>工作表 1</b> = 焊材、<b>工作表 2</b> = 气；每表 = 项目 | 结余 | 1月…12月 | 合计。` +
      `⚠️「结余」= <b>历史结余 · 由用户手工录入</b>（录入入口 = 本页「结余」列<b>点格即改</b>）；` +
      `<b>未录入 ⇒ 该格如实留空</b>（⛔ 不写 0）、<b>0 是合法录入值</b>`,8600); },
@@ -1573,20 +1614,8 @@ const ACT={
     ⚠️ 文件名的**主人是后端**（`X-Export-Filename`），⛔ 壳里不自己拼。
     ⚠️ 口径提示一起说出去：**「机械」未含机械费结算**（该来源未接通）—— 表尾也写了同一句。 */
  debtExpAll:async ()=>{
-   let r;
-   try{ r=await fetch('/api/m05/debt/export'); }
-   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
-   const ct=r.headers.get('content-type')||'';
-   if(ct.includes('application/json')){
-     let d={}; try{ d=await r.json(); }catch(e){}
-     return toast(`<b>导出没能完成</b>：${esc(d.message||d.detail||'后端没给原因')}`,9600);
-   }
-   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
-   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'总欠款.xlsx';
-   const blob=await r.blob(), a=document.createElement('a');
-   a.href=URL.createObjectURL(blob); a.download=fn;
-   document.body.appendChild(a); a.click(); a.remove();
-   setTimeout(()=>URL.revokeObjectURL(a.href),5000);      /* ⚠️ 不 revoke 会漏内存 */
+   const fn=await dlExport(url,{name:'总欠款.xlsx'});
+   if(!fn) return;
    return toast(`已导出 <b>${esc(fn)}</b>：每项目一行 · C 集采 / D 辅材 / E 机械`
      + `<br><span class="sm mut">⚠️「机械」未含机械费结算（该来源未接通）—— 表尾也写了这一句</span>`, 11000);
  },
@@ -1628,21 +1657,8 @@ const ACT={
    if(!pjs.length) return toast('请先选择要导出的项目');
    const url='/api/m05/ledger/export?projects='+encodeURIComponent(pjs.join(','))
      +'&ym='+encodeURIComponent(bjMonth(-1));
-   let r;
-   try{ r=await fetch(url); }
-   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
-   const ct=r.headers.get('content-type')||'';
-   if(ct.includes('application/json')){
-     let d={}; try{ d=await r.json(); }catch(e){}
-     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
-   }
-   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
-   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'欠款台账.xlsx';
-   const blob=await r.blob(), a=document.createElement('a');
-   a.href=URL.createObjectURL(blob); a.download=fn;
-   document.body.appendChild(a); a.click(); a.remove();
-   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-   closeModal();
+   const fn=await dlExport(url,{name:'欠款台账.xlsx',close:true});
+   if(!fn) return;
    toast(pjs.length===1
      ? `已导出 <b>${esc(fn)}</b>：一本工作簿 / <b>3 个工作表</b>（辅材 / 机械 / 特殊费用月报表）`
      : `已导出 <b>${esc(fn)}</b>：<b>${pjs.length}</b> 个项目 ⇒ 一个 zip（每项目一本工作簿 · 每本 3 个工作表）`,8600); },
@@ -1667,20 +1683,8 @@ const ACT={
    ⛔ 前端不自己拼文件名（命名规则的主人在后端，经 `X-Export-Filename` 带出）。 */
  bigExport:async ()=>{
    const url='/api/m07/big/export?period='+encodeURIComponent(bjMonth(-1));
-   let r;
-   try{ r=await fetch(url); }
-   catch(e){ return toast(`<b>导出没能完成</b>：${esc(String((e&&e.message)||e))}`,8000); }
-   const ct=r.headers.get('content-type')||'';
-   if(ct.includes('application/json')){
-     let d={}; try{ d=await r.json(); }catch(e){}
-     return toast(`<b>导出没能完成</b>：${esc(d.message||'后端没给原因')}`,9600);
-   }
-   if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`,8000);
-   const fn=decodeURIComponent(r.headers.get('x-export-filename')||'')||'经济活动分析大表.xlsx';
-   const blob=await r.blob(), a=document.createElement('a');
-   a.href=URL.createObjectURL(blob); a.download=fn;
-   document.body.appendChild(a); a.click(); a.remove();
-   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+   const fn=await dlExport(url,{name:'经济活动分析大表.xlsx'});
+   if(!fn) return;
    toast(`已导出 <b>${esc(fn)}</b>：一份（全项目一张表）· <b>20 列</b>（三级表头 ＋ 合计行）；`
      + `派生列与合计**已算成数值**（⛔ 不留公式）`,8600); },
 
@@ -2225,11 +2229,14 @@ const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup
   /* ⚠️⚠️ `M5-6b` **甲方单位分类那个 `select` 也挂在表单元素上** —— 漏了它，
      选完类型**什么都不会发生**（`change` 被静默丢弃）：看着像"没有保存键"，其实是**事件没接上**。
      ⭐ 2026-09-20 用户实测反馈「甲方单位分类你没有给保存键」⇒ 就是这个。 */
-  'jcPartySet','jcAmt',
-  /* ⭐ `m15` 的主题选择器也是**表单元素**（`<select>`）⇒ **必须进这里** ——
-     漏了它，换主题**什么都不会发生**（`change` 被静默丢弃），
-     ⚠️ 而且它"看起来有个下拉框"，比别的漏登记**更像"功能坏了"**。 */
-  'themeSet'];
+  'jcPartySet','jcAmt'];
+/* ⚠️ `'themeSet'` **在本列表里出现过、2026-09-21 已移除**：那时它是 `V.m15` 的一个 `<select>`
+   （表单元素 ⇒ 必须进 `CHG`，否则 `change` 被静默丢弃）。
+   现在它是「外观主题」里的**卡片按钮**（一个 `<button>`，动作名仍是 `themeSet`，主题名走 `data-theme`）⇒
+   走**点击委托**那条路，⛔ 不再是表单元素，**留在 `CHG` 里反而会误导**
+   （`tools/probe/_shell_legacy.py` 只要求"表单元素必须在 `CHG` 里"，多登记不报错 —— 但没用的登记就是噪声）。
+   ⚠️ 本注释**刻意不写出那个属性的完整形态**：`test_acc_theme_user.py` 会数"入口只有一处"，
+      而它读的是**文本** ⇒ 注释里的示例会把它喂饱（同类坑踩过三次了）。 */
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]'); if(!t) return;
   const nm=t.tagName.toLowerCase();

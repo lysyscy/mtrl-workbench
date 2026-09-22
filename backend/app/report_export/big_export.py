@@ -34,6 +34,7 @@ from openpyxl.utils import get_column_letter
 from app.core.errors import MustReportError
 from app.mod07_setl import big_domain as B
 from app.report_export import resources, tpl_fill
+from app.report_export.save import save_workbook
 
 #: 该模板的 sheet（`模板清单` §二-7）
 SHEET = "Sheet1"
@@ -121,8 +122,7 @@ def build_xlsx(data: dict, out_dir, *, name: str) -> str:
         spec = body_spec(data)
         sheet_plan = tpl_fill.fill_sheet(ws, spec)
         tpl_fill.set_text_format(ws, sheet_plan, YM_COL)        # 「开工时间」列：写文本前先设文本格式
-        Path(out).parent.mkdir(parents=True, exist_ok=True)
-        wb.save(str(out))
+        save_workbook(wb, out)
     finally:
         wb.close()
 

@@ -1,0 +1,15 @@
+重建基线：原 .git 对象库意外损坏（工作区完好），并入真机抓取发现的两处修复
+
+为什么重建基线：
+2026-09-17 11:29 前后，.git 的对象库与引用被清掉 —— objects/pack/ 下只剩 .idx 没有 .pack、
+refs/ 与 packed-refs 消失，现场留有 objects/maintenance.lock 与 bitmap-ref-tips_*
+（疑为一次被中断的 git 维护 / gc）。后果：git status 报 not a git repository、HEAD 变 bad object。
+⚠️ 本地历史无法恢复：无远端（TAIL-13 一直搁置）· 旧路径 D:\工作\AI\材料工作台 已删 · F:\mtrl-backup 尚未建。
+✅ 工作区文件一字未丢 —— 本提交即以工作区为准重建基线（295 个文件）。
+破损的 .git 已移到 D:\dev\.git-broken-20260917-1130 留证，未删除。
+
+本提交同时收入：
+- 修复（真机抓出）：mod08_inv.repository.upsert_details 的幂等范围漏了「仓库」⇒ 同月多仓库时
+  后一个仓库的刷新会删掉前一个仓库的行（实测：解析 559 行、只落库 18 行）；断言补进 ACC-INV-FETCH-001/001-06
+- 新增 tools/_audit_face.py：交付面结构审查（能力↔用例双向对得上、能力编号连续、幽灵用例号）
+- 交付面（不在本仓）：MOD-06.md 补回被回退丢失的「能力 11 按模板导出」；《说明书》§5.3.3 OPEN-11 追认收口

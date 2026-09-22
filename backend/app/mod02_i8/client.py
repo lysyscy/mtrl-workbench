@@ -24,6 +24,7 @@ import httpx
 
 from app.core.config import get_settings, i8_base_of
 from app.core.errors import ExternalServiceError, NotConfiguredError
+from app.core.identity import current_i8_credentials
 from app.core.logging import get_logger
 from app.mod02_i8 import cookie_store
 from app.mod02_i8.login import http_login
@@ -67,6 +68,22 @@ class I8Client:
         self._cookie: str | None = None
         self._session: httpx.Client | None = None
         self._lock = threading.Lock()
+        # ⭐ i8 凭据**惰性取**（`_creds()`）—— ⛔ 不在 `__init__` 里取：
+        #   9 个生产构造点因此**一行都不用改**，而"用哪份凭据"这件事只有一个出口。
+        self._i8_creds: tuple[str, str] | None = None
+
+    def _creds(self) -> tuple[str, str]:
+        """本次操作用哪个 i8 账号 ＋ 密码 —— ⭐ **当前登录用户绑定的那一份**（§7.8「每人一份」）。
+
+        ⚠️ 未登录 / 该账号没绑过 ⇒ `current_i8_credentials()` 自己回落 `.env`（过渡期口径）。
+        ⚠️ **一个客户端实例只解析一次**：`_ensure_cookie` 与 `_login` 必须用**同一份**凭据，
+           否则 401 重登时可能换了个账号去登（那就是"两个人在同一批数据上互相顶号"）。
+        ⚠️ 它同时决定 **cookie 缓存文件**（`cookie_store` 按账号分文件）⇒
+           **两个账号各缓存各的**：A 的会话不会被 B 用掉，也不会互相顶号。
+        """
+        if self._i8_creds is None:
+            self._i8_creds = current_i8_credentials()
+        return self._i8_creds
 
     # --- 内部 ---
     def _ensure_session(self) -> httpx.Client:
@@ -92,7 +109,7 @@ class I8Client:
         ⚠️ 缓存命中时**根本不登录** ⇒ 自然不涉及强踢 —— 这是对的，与 `allow_kick` 的
            「须显式授权才踢人」授权语义**不冲突、也不绕过**（强踢只可能发生在真正登录那一步）。
         """
-        cached = cookie_store.load()
+        cached = cookie_store.load(self._creds()[0])          # ⭐ 缓存**按账号**分文件（§7.8 每人一份）
         if cached:
             logger.info("i8 会话：命中磁盘缓存（不登录）")
             self._cookie = cached
@@ -100,11 +117,12 @@ class I8Client:
         self._login()
 
     def _login(self) -> None:
-        result = http_login(allow_kick=self._allow_kick)
+        user, password = self._creds()
+        result = http_login(user=user, password=password, allow_kick=self._allow_kick)
         if not result.ok:
             raise ExternalServiceError(f"i8 登录失败：{result.detail}")
         self._cookie = result.cookie
-        cookie_store.save(result.cookie, source="http_login")     # ⭐ 登录成功 ⇒ 落盘复用
+        cookie_store.save(result.cookie, source="http_login", user=user)   # ⭐ 落盘复用（按账号）
 
     def _apply_cookie(self) -> None:
         if self._session is not None and self._cookie:
@@ -155,7 +173,7 @@ class I8Client:
                 if self._is_session_invalid(resp):
                     # 刚写入的 cookie 已知不可用 ⇒ 从缓存抹掉（否则下次进程启动会先拿它白撞一次 401）。
                     # ⚠️ 这不改判定：异常照旧抛，只是顺手清掉一个**已被证伪**的凭证。
-                    cookie_store.clear()
+                    cookie_store.clear(self._creds()[0])
                     raise ExternalServiceError("i8 会话重登后仍无效（401）")
             return resp
 

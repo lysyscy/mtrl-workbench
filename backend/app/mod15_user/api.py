@@ -12,16 +12,19 @@
    （列表列是 登录账号/姓名/角色/状态/最近登录/操作）⇒ ⛔ 我不自己发明一个"查看密码"端点；
    要不要给这个出口**登记待裁定**（见计划）。
 
-⚠️ 关于「**当前登录用户**」：登录态（登录页 ＋ 会话）**还没做** ⇒ 本层按 `core/identity.py` 的
-   既有设计取 `current_operator()`，再**对到一个账号**；对不上就回落到**首个在用管理员**。
-   ⭐ `identity.py` 的模块头写着「等 `MOD-15` 落地时**只改本文件**」——
-   登录态落地时改的是**那里**，本层不用动。
+⚠️ 关于「**当前登录用户**」（⭐ 2026-09-21 更新，旧说明已作废）：
+   登录态已接上（登录页 ＋ 自签 cookie ＋ 中间件）⇒ 本层**只看登录态**
+   （`core/session.current_name()` ＋ `repository.by_identity`）；
+   ⛔ **没有会话就返回 `None`** —— 不再回落到"首个在用管理员"（见 `_me` 的注释：那个回落
+   会让**任何不带 cookie 的请求**拿到管理员权限）。
 
 ⚠️ ⚠️ 本页**不设业务权限配置**（§1.5.1「两人业务权限**无区别**」）⇒ 本文件里⛔ 不会有
    任何 "权限 / perm / scope" 之类的端点或字段 —— claim `001-02` 后半句的机械化落点。
 """
 
 from __future__ import annotations
+
+import re
 
 from typing import Any
 
@@ -32,7 +35,6 @@ from pydantic import BaseModel
 from app.core import session as SESS
 from app.core.db import session_scope
 from app.core.errors import AppError
-from app.core.identity import current_operator
 from app.mod15_user import domain as D
 from app.mod15_user import login as LG
 from app.mod15_user import repository as R
@@ -74,16 +76,31 @@ def _row(u: UserAccount) -> dict:
 def _me(s) -> UserAccount | None:
     """**当前登录用户** → 账号行（走 `repository.by_identity` —— 那是**唯一**的身份判定出口）。
 
-    ⚠️ 匹配规则**不在本函数里**：登录态未接时 `current_operator()` 会给 `.env` 的名字或中性占位，
-       接上后给会话里的**姓名** ⇒ 两种都得能落到账号上（见 `by_identity` 的注释）。
-    ⚠️ 都对不上（占位「科室用户」）就回落到**首个在用管理员** —— §1.5.1「**用户本人为管理员**」
-       ⇒ 过渡期的合理默认（⛔ 不是"写死成管理员"：登录态一接上，这条分支自然不再走）。
+    ⭐⭐ 2026-09-21（用户裁定「**收紧：未登录不回落首个管理员**」）——
+       **身份判定只认登录态**（`core/session.current_name()`）：⛔ 没有会话就**返回 `None`**。
+
+    ⚠️⚠️ 为什么必须掐掉那个回落（**实测复现过**）：原先"名字对不上账号"时会**回落到首个在用管理员**
+       ⇒ 于是**任何人**——**连 cookie 都没有的请求**——都会被当成**管理员**：
+       不带 cookie 调 `/api/m15/users`，返回的 `me` 就是那行 admin。
+       而所有写动作的闸都是 `assert_is_admin(_me(s))` ⇒ **建号 / 删号 / 停用 / 转让管理员全部放行**。
+       登录页上线之后（片 3），这条兜底**只会掩盖"会话丢了"**，不再有任何存在理由。
+
+    ⚠️ 与 `core/identity.py::current_operator()` 的**分工**（⛔ 别把两者混成一件，它们是两套口径）：
+       · `current_operator()` 管「**留痕写谁**」—— 它**保留** `.env` / 占位兜底：
+         定时抓取、命令行脚本、测试进程都不带 cookie，删了兜底它们会把留痕写成人空；
+       · 本函数管「**谁有权**」—— **只认登录态**，⛔ 不碰 `.env`、⛔ 不回落到任何人。
+
+    ⚠️ 取不到会话时**各处行为本来就已经写好了**（本轮**没新增分支**）：写动作被
+       `assert_is_admin(None)` 拒；主题落 `D.effective_theme(None)` = 默认套
+       （那个函数的注释里早就写了"③ `u` 为 `None`（没登录）⇒ 回落默认套"）；
+       壳的 `CUR` 为空 ⇒ 顶栏「身份未取到」＋ 按钮禁用（`V.m15` 也早有这条分支）。
     """
-    me = R.by_identity(s, current_operator())
-    if me is not None:
-        return me
-    admins = D.active_admins(R.all_users(s))
-    return admins[0] if admins else None
+    from app.core.session import current_name
+
+    who = (current_name() or "").strip()
+    if not who:
+        return None
+    return R.by_identity(s, who)
 
 
 def _payload(s) -> dict:
@@ -193,22 +210,51 @@ def api_logout(request: Request) -> dict:  # noqa: ARG001 —— 与别的写动
 # ============================================================ 主题（`ACC-UI-THEME-001/001-06`）
 
 
-@router.get("/api/m15/theme")
-def api_theme() -> dict:
-    """**当前登录用户**的主题（＋ 可选清单）。
+def _palette(name: str) -> dict:
+    """一套主题的**配色标本**（给壳的「每套一张卡」用）—— ⭐ 2026-09-21 加。
 
-    ⚠️ 返回的是"**该用哪套**"（`domain.effective_theme` 已经把"未设置 ⇒ 默认"判完了），
-        ⛔ 不是原样回 `u.theme` —— 后者会在"未设置"时回一个空串，壳还得再判一次
-        （那就又把那条口径复制到前端去了）。
+    ⚠️⚠️ 取值一律从 `page.render_theme(name)` 里**解析**（唯一真源），
+       ⛔ **不在这里、也不在壳里写死任何色值** —— 主题名的合法性、取值都只有一处主人
+       （`mod03_notice.page`，`ACC-UI-THEME-001/001-03`「单一真源」钉着它）。
+    ⚠️ 为什么要给这么几个角色（而不是只给主色）：用户 2026-09-21 反馈「换主题**感觉不到颜色变化**」——
+       真因是**浅色系那几套只差一个主色**，在满屏表格里看不出来。
+       ⇒ 让每一套用它**自己的一小片配色**（底色 / 表面 / 边框 / 文字）画一张卡，
+         明暗差异**一眼可见**（深色系那几套尤其明显）。
     """
     from app.mod03_notice import page as P
 
+    css = P.render_theme(name)
+    out = {"name": name}
+    for key in ("pri", "bg", "sf", "bd", "tx", "on"):
+        m = re.search(rf"--{key}:\s*([^;\n]+);", css)
+        out[key] = (m.group(1).strip() if m else "")
+    # ⭐ **适用场景 / 设计风格**（用户 2026-09-21 要求「每个主题需明确其适用场景与设计风格」）——
+    #   取自 `page.THEME_SPEC`（与种子表**同一处真源**），壳只负责显示。
+    spec = P.THEME_SPEC.get(name) or {}
+    out["scene"] = spec.get("scene", "")
+    out["style"] = spec.get("style", "")
+    return out
+
+
+@router.get("/api/m15/theme")
+def api_theme() -> dict:
+    """**当前登录用户**的主题（＋ 可选清单 ＋ 每套的配色标本）。
+
+    ⚠️ 返回的是"**该用哪套**"（`domain.effective_theme` 已经把"未设置 ⇒ 默认"判完了），
+       ⛔ 不是原样回 `u.theme` —— 后者会在"未设置"时回一个空串，壳还得再判一次
+       （那就又把那条口径复制到前端去了）。
+    """
+    from app.mod03_notice import page as P
+
+    names = list(P.theme_names())
     with session_scope() as s:
         return {
             "ok": True,
             "theme": D.effective_theme(_me(s)),
-            "themes": list(P.THEME_SEEDS),
+            "themes": names,
             "default": P.DEFAULT_THEME,
+            # ⭐ 每套一张"配色标本"卡（见 `_palette` 的注释）—— 壳只负责画，取值全在这儿
+            "palette": [_palette(n) for n in names],
         }
 
 
@@ -272,7 +318,14 @@ def api_view_password(id: Any = 0) -> dict:
             if D.is_deleted(row):
                 raise AppError(f"账号「{row.account}」**已删除** —— 先恢复它再看密码。")
             return {"ok": True, "kind": "ok", "account": row.account, "name": row.name,
-                    "password": row.password or "", "has_password": bool(row.password or "")}
+                    "password": row.password or "", "has_password": bool(row.password or ""),
+                    # ⭐ 2026-09-21：**同一个出口带出 i8 绑定**（§7.8「每人一份」）——
+                    #   ⚠️ 仍只出**一个账号**的、仍要**指名要哪一个**；⛔ 不提供"列出全部"。
+                    #   与系统密码放在同一个动作里，是因为对管理员而言那是**同一件运维事**
+                    #   （"把这个同事的凭据念给他"）—— ⛔ 分成两个弹窗只会更绕。
+                    "i8_user": row.i8_user or "", "i8_password": row.i8_password or "",
+                    "i8_bound": bool((row.i8_user or "").strip()),
+                    "i8_has_password": bool(row.i8_password or "")}
     try:
         return go()
     except AppError as e:
@@ -301,6 +354,47 @@ class PwdIn(BaseModel):
 
     id: Any = 0
     password: str = ""
+
+
+class I8In(BaseModel):
+    """i8 绑定（§7.8）：账号 ＋ 密码。
+
+    ⚠️⚠️ `i8_password=None`（**请求里省略**）⇒ **不改密码**；空串 ⇒ 清空。
+       理由见 `repository.set_i8`：列表出参不带 i8 密码 ⇒ 界面上那个框是空的，
+       把"空"当成"清空"会让"只改账号"这一步**静默抹掉**同事的 i8 密码。
+    ⚠️ `i8_user` 空串 = 解绑（⇒ 抓取回落 `.env`），**密码一并清空**。
+    """
+
+    id: Any = 0
+    i8_user: str = ""
+    i8_password: str | None = None
+
+
+@router.post("/api/m15/actions/i8")
+def api_set_i8(req: I8In) -> dict:
+    """**绑定 / 解绑某个账号的 i8 账号密码**（§7.8：「i8 的账号与密码…**绑定到本系统账号、每人一份**」）。
+
+    ⭐ 这是**"每人一份"的写入出口**；读取出口是 `core/identity.py::current_i8_credentials()`
+      （抓取 / 导出**建会话时**才取 —— 见 `mod02_i8/client.py` 的 `_creds`）。
+
+    ⚠️ 闸与「改密」同款（§1.5.1）：**改自己的**不用管理员（同事要能自己填自己的 i8 账号），
+      改**别人**的要管理员。⛔ 别把这条收得太紧 —— 那会变成"必须麻烦管理员才能填自己的账号"。
+    ⚠️ 出参**不回密码**（同列表口径）：只回一句"已绑定 / 已解绑（未填 ⇒ 抓取回落 .env）"。
+    """
+    def go() -> str:
+        with session_scope() as s:
+            me = _me(s)
+            uid = _uid(req.id)
+            if me is None or me.id != uid:
+                D.assert_is_admin(me)
+            u = R.set_i8(s, uid, i8_user=req.i8_user, i8_password=req.i8_password)
+            who = u.name or u.account
+            if (u.i8_user or "").strip():
+                return f"{who} 的 i8 绑定已保存：账号「{u.i8_user}」" + (
+                    "" if (u.i8_password or "") else
+                    "（i8 密码为空 —— 抓取时会拿它去登录 i8，登录会失败）")
+            return f"{who} 的 i8 绑定已清空 —— 抓取回落 .env 的 I8_USER（过渡期口径，§7.8）"
+    return _run(go)
 
 
 class StatusIn(BaseModel):

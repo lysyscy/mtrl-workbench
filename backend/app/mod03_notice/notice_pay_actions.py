@@ -19,7 +19,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.core.errors import MustReportError
-from app.core.money import to_money
+from app.core.money import amount_text, to_money
 
 
 # ======================================================== 批量付款（§4.4.2 / §4.4.4）
@@ -60,7 +60,7 @@ def parse_amount(text):
     ⚠️ 2026-09-19（`§19` 批 4 · **S4②**）：**从 `notice_http.py` 搬到这里**（那是**会被删**的页面件）。
     ⚠️ 只做**格式**归一（去千分位），**不做业务判断** —— 上限 / 正负 / 可否为空一律由 `domain` 判。
     """
-    raw = str(text or "").strip().replace(",", "")
+    raw = amount_text(text)          # ⭐ `TAIL-63`：洗净归到 `app/core/money.py`（原来只去逗号 ⇒ 带 ¥ 会被拒）
     return to_money(raw) if raw else None
 
 

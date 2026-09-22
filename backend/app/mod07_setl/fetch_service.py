@@ -2,7 +2,8 @@
 
 依据：
 - 《说明书》**§5.3.2**（交付形态）· **§9.2**（报表类按核算年月；**抓取只允许单月**）
-  · **§3.6**（接口不可用 ⇒ **降级为手动 Excel 导入**并**显式说明**）· **§9.5**（导入幂等）
+  · **§9.5**（导入幂等）。⚠️ **2026-09-22（TAIL-69）**：本域**从未建成**手动导入通道 ⇒ 接口不可用 =
+   **显式报错待人处理**（原 §3.6 那句「降级为手动导入」是**悬空承诺**，就此纠正）
 - 《技术栈选型分析》**§9.8**（`rep_id` / `dataSetId` / 项目参数 **`pc`** / **`reportName` = 收发结存表**）
 - 用户裁定 **D9**：抓取一律手动（无定时）· **失败不得自动重试登录** · 抓前须**二次确认并告知会强踢**
 
@@ -88,7 +89,7 @@ def run_fetch(
 ) -> dict:
     """跑一次抓取（**人工触发**）→ 结果字典。
 
-    ⚠️ 失败 ⇒ **降级为手动 Excel 导入并显式说明**（§3.6），**绝不自动重试登录**（D9）。
+    ⚠️ 失败 ⇒ **显式报错待人处理**（原因 + 请稍后重试；本域无手动导入通道 —— 2026-09-22 纠正悬空承诺），**绝不自动重试登录**（D9）。
     ⚠️ 走到网络之前就失败的（未确认 / 非单月 / 无 phid / 报表登记不全）⇒ **不写执行记录**（那是用法错误）。
     ⚠️ 导出**结构完好但一行数据都没有** ⇒ **不动本地数据**，显式报出（防"空导出把已有数据清空"）。
     """
@@ -119,14 +120,14 @@ def run_fetch(
                     close()
         rows = importer.parse_rows(content, ym=plan["ym"])
     except Exception as exc:                            # noqa: BLE001 —— 一律降级，不静默
-        notice = fetch_task.degrade_to_excel(exc)
+        notice = fetch_task.degrade_no_manual(exc)   # ⭐ 本域无手动兜底（纠正悬空承诺，2026-09-22）
         run = save_run_record(s, **fetch_task.fetch_record_payload(
             object_desc=target, success=0, fail=1,        # fail=1 ⇒ status=failed（这一批失败）
             error_message=f"{type(exc).__name__}: {exc}"),
             detail=record_detail(), operator=operator,    # ⭐ 「待人工」清单：本次没有 ⇒ 写空（见 pending 口径 1）
             started_at=t0)
         return {"ok": False, "degraded": True, "message": notice["message"],
-                "excel_import_available": True, "ym": plan["ym"],
+                "ym": plan["ym"],
                 "run_record_id": getattr(run, "id", None)}
 
     if not rows:

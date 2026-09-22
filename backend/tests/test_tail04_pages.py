@@ -34,9 +34,10 @@ from tests.m03_action_helpers import FakeWriteSession, _notice
 from tests.shell_load_helpers import exp_routes
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
-#: 壳里那 10 个 `data-act="exp"` 按钮的 `data-t`（**真源 = `index.html`**，本表只在测试里对账用）。
+#: 壳里的 `data-act="exp"` 按钮的 `data-t`（**真源 = `index.html`**，本表只在测试里对账用）。
+#: ⚠️ 2026-09-21：`i8 接口清单` 的卡片已随「接口清单删除」裁定移除（m02 清单卡）⇒ 从本表摘除。
 BUTTON_T = (
-    "付款通知书台账", "付款计划审查结果", "付款流水", "项目档案", "i8 接口清单",
+    "付款通知书台账", "付款计划审查结果", "付款流水", "项目档案",
     "过程资料", "库存单据明细总表", "差异清单", "集采台账", "全量台账",
 )
 

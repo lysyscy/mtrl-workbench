@@ -149,8 +149,10 @@ def test_主材累计取集采结算额_只计纳入台账():
     assert B.main_material_total(contracts, project_key=WH_B) == Decimal("7.00")
     # 该项目确实没有纳入台账的合同 ⇒ **0**（与"取数口未接入"是两回事）
     assert B.main_material_total(contracts, project_key=WH_D) == Decimal("0.00")
-    # ⚠️ 取数口未接入（M5 集采台账未落地）⇒ 页面显「—」，**不得写 0**（那会冒充"确实没有"）
-    assert S.MAIN_MATERIAL_PORT is None
+    # ⭐ 2026-09-21（`TAIL-25`）取数口**已接入**（M5 集采台账落地）⇒ 该列显示**真数**；
+    #    "不可得 ⇒ `None`"的那条路保留给**显式摘除**（`set_main_material_port(None)`）——
+    #    ⚠️ 两件事不许混：**没合同 = 0**（上面那行），**取不到数 = None**（现在只有显式摘除才发生）。
+    assert S.MAIN_MATERIAL_PORT is not None
     # ⚠️ 2026-09-19（`§19` 批 2）：原先拿**旧页**的 `_cell_html` 渲染那一格、断言里面是「—」不是 `0.00`；
     # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里主材累计走金额出口且取数口未接入`
     # （壳里它是**派生文本格**（`M(r.matC)`），⛔ 不是手填输入框；「0.00 与取数口没接」两件事不许混 ✓）。

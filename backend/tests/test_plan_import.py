@@ -261,33 +261,72 @@ def _api_client(monkeypatch):
     return TestClient(create_app(), raise_server_exceptions=False), fake
 
 
+# ⚠️ **2026-09-22（`TAIL-69`）**：一步式端点 `POST /api/m04/import` **已软退役**
+#    （路由留着回"请刷新"的明白话，防缓存的旧页面打出没头没脑的 404；实现已撤）。
+#    它 originally 钉的两条 claim ——「成功报四个数」与「缺月份显式报错」——
+#    **claim 一字未改**，已搬到两步新出口：`test_两步导入_预览不写库_确认才落库`（四个数 ＋ 无效列原样）
+#    ＋ `test_两步导入_解析缺月份显式报错`（缺月份）。下面这条守**退役回执**本身。
+
+
 @acc()
-def test_导入端点_成功回报四个数(monkeypatch):
-    """⭐ claim 不变：导入成功 ⇒ **报出四个数**（新建 / 复用更新 / 删除残影 / 手动行未触碰）＋ 无效列原样入库。"""
+def test_一步式入口退役回执(monkeypatch):
+    """旧入口打过来 ⇒ **显式说"已升级，请刷新"**（⛔ 不给 404，也不许再真写库）。"""
     client, fake = _api_client(monkeypatch)
     resp = client.post(
         "/api/m04/import",
         data={"year_month": "2026-09"},
-        files={"file": ("plan.xlsx", _xlsx([_row()]),
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={"file": ("plan.xlsx", _xlsx([_row()]), "application/octet-stream")},
     )
-    assert resp.status_code == 200, resp.text[:200]
-    j = resp.json()
-    assert {"created", "updated", "deleted", "manual_kept"} <= set(j["stats"]), j["stats"]
-    assert j["rows"] == 1 and j["year_month"] == "2026-09"
-    assert fake.added and isinstance(fake.added[0], PlanRow)
-    assert fake.added[0].year_month == "2026-09"
-    assert fake.added[0].raw["科目"] == "辅材费"                   # 无效列原样入库
+    assert resp.status_code >= 400, f"退役端点必须**拒**（实际 {resp.status_code}）"
+    assert "升级" in resp.text and "刷新" in resp.text, resp.text[:200]
+    assert not fake.added, "退役端点**不得再写库**"
+
+
+# ============================================================ ⭐ `TAIL-69` 两步导入（预览不写库）
 
 
 @acc()
-def test_导入端点_月份缺失显式报错(monkeypatch):
-    """⭐ claim 不变：**没选月份 ⇒ 显式报错**（⛔ 不静默按当月导入 —— 归错月比报错更糟）。"""
+def test_两步导入_预览不写库_确认才落库(monkeypatch):
+    """⭐ `TAIL-69`：**校验前不碰库** —— `parse` 只出预览＋token；`confirm` 凭 token 才 `merge_month`。"""
+    client, fake = _api_client(monkeypatch)
+    file = {"file": ("plan.xlsx", _xlsx([_row()]),
+                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    resp = client.post("/api/m04/import/parse", data={"year_month": "2026-09"}, files=file)
+    assert resp.status_code == 200, resp.text[:200]
+    j = resp.json()
+    assert j["ok"] and j["token"]
+    m = j["preview"]["match"]
+    # 假会话里**没有项目档案** ⇒ 预览如实报「1 行 · 未匹配」（盘点让人先看见 —— 正是 `TAIL-69` 的目的）
+    assert m["rows_total"] == 1 and m["matched"] == 0
+    assert len(m["unmatched"]) == 1 and m["unmatched"][0]["project_input"] == "甲仓库"
+    assert not fake.added, "预览阶段**一个字节都不写库**（`TAIL-69` 三条硬性之三）"
+    resp2 = client.post("/api/m04/import/confirm", json={"token": j["token"]})
+    assert resp2.status_code == 200, resp2.text[:200]
+    j2 = resp2.json()
+    assert {"created", "updated", "deleted", "manual_kept"} <= set(j2["stats"])
+    assert fake.added and isinstance(fake.added[0], PlanRow)
+    assert fake.added[0].year_month == "2026-09"
+    assert fake.added[0].flow_amount == Decimal("1000.00"), "金额还原走同一出口（§9.1 精度）"
+
+
+@acc()
+def test_两步导入_token不存在显式报错(monkeypatch):
+    """token 不存在 / 过期 ⇒ **显式报错**（⛔ 不静默当成空导入 —— 空导入会把该月清掉）。"""
     client, _ = _api_client(monkeypatch)
+    resp = client.post("/api/m04/import/confirm", json={"token": "deadbeefdeadbeefdeadbeefdeadbeef"})
+    assert resp.status_code >= 400, f"要**显式拒**（实际 {resp.status_code}）"
+    assert "过期" in resp.text or "重新上传" in resp.text, resp.text[:160]
+
+
+@acc()
+def test_两步导入_解析缺月份显式报错(monkeypatch):
+    """parse 阶段就拦「没选年月」（⛔ 不等确认才报 —— 用户多绕一圈）。"""
+    client, fake = _api_client(monkeypatch)
     resp = client.post(
-        "/api/m04/import",
+        "/api/m04/import/parse",
         data={"year_month": ""},
         files={"file": ("plan.xlsx", _xlsx([_row()]), "application/octet-stream")},
     )
-    assert resp.status_code >= 400, f"要**显式拒**（实际 {resp.status_code}）"
-    assert "月" in resp.text, f"要把原因说清：{resp.text[:160]}"
+    assert resp.status_code >= 400
+    assert "月" in resp.text
+    assert not fake.added

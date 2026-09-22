@@ -18,8 +18,8 @@
 ⚠️ 两片都走**离线**（不连 i8、不顶号）：库存单据那片喂的是 i8 源文件**字节**
 （优先仓里现成的真机导出件 `artifacts/_diag/inv_2026-09.xlsx`，缺则现造一份）。
 
-真机验证在 `tools/_verify_tail04.py`（连库跑 SQL 与成品逐分对账，**第三条独立路径**）与
-`tools/_shell_smoke.py`（第 ⑬ 段，走 HTTP 真下载）。
+真机验证在 `tools/oneoff/_verify_tail04.py`（连库跑 SQL 与成品逐分对账，**第三条独立路径**）与
+`tools/probe/_shell_smoke.py`（第 ⑬ 段，走 HTTP 真下载）。
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ from tests.m07_helpers import dataset
 from tests.shell_load_helpers import exp_routes
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 API = (ROOT / "backend" / "app" / "mod07_setl" / "api.py").read_text(encoding="utf-8")
 INV_API = (ROOT / "backend" / "app" / "mod08_inv" / "router.py").read_text(encoding="utf-8")
 DIAG_INV = ROOT / "artifacts" / "_diag" / "inv_2026-09.xlsx"
@@ -169,9 +169,10 @@ def test_壳侧导出按钮已接线且按content_type分流():
     act = _act("zipSfjc")
     assert "尚未落地" not in act, "`zipSfjc` 还是旧提示 ⇒ 按钮按下去拿不到文件"
     assert "/api/m07/settlement/export?period=" in act, "`zipSfjc` 没打导出端点"
-    assert "x-export-filename" in act, "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
-    assert "'application/json'" in act, "没按 `content-type` 分流失败原因"
-    assert "createObjectURL" in act and ".download" in act, "没真的触发下载（拿不到文件）"
+    assert "x-export-filename" in with_kernel(act), "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
+    assert "'application/json'" in with_kernel(act), "没按 `content-type` 分流失败原因"
+    _a = with_kernel(act)          # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
+    assert "dlExport" in act and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
     # 后端两条分支都要在：成功给 zip、失败给 JSON＋中文原因
     assert "application/zip" in API, "成功分支不是 zip"
     assert '"ok": False' in API.replace("'", '"'), "失败分支没回 `ok:false`（壳就分不出流）"
@@ -282,10 +283,11 @@ def test_壳侧透视导出按钮真下载且端点按content_type分流():
        别处的同名 `toast(...)` 不得喂饱它。
     """
     act = _act("expPivot")
-    assert "createObjectURL" in act and ".download" in act, "没真的触发下载（拿不到文件）"
+    _a = with_kernel(act)          # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
+    assert "dlExport" in act and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
     assert "/api/m08/inventory/export?period=" in act, "`expPivot` 没打导出端点（拿不到文件）"
-    assert "x-export-filename" in act, "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
-    assert "'application/json'" in act, "没按 `content-type` 分流失败原因"
+    assert "x-export-filename" in with_kernel(act), "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
+    assert "'application/json'" in with_kernel(act), "没按 `content-type` 分流失败原因"
     # ⭐ 提示语必须与**模板实际形态**一致（两张透视名逐字对上；主表那份不受影响）
     for pivot in ("「过程资料」透视", "「安全文明施工费」透视"):
         assert pivot in act, f"壳侧提示缺工作表：{pivot}"
@@ -388,8 +390,9 @@ def test_库存单据两种导出并存互不影响且透视提示与模板形�
     # ③ `expPivot` 那份**真产出文件**（端点 ＋ 壳侧真下载：`content-type` 分流 + `x-export-filename`）
     assert "/api/m08/inventory/export" in INV_API
     assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in INV_API, "成功分支不是 xlsx"
-    assert "'application/json'" in pivot_act and "x-export-filename" in pivot_act
-    assert "createObjectURL" in pivot_act and ".download" in pivot_act, "没真的触发下载"
+    _p = with_kernel(pivot_act)       # ⭐ `TAIL-67`：分流与文件名已抽到 `dlExport` 通用件
+    assert "'application/json'" in _p and "x-export-filename" in _p
+    assert "dlExport" in pivot_act and "createObjectURL" in _p and ".download" in _p, "没真的触发下载"
 
     # ④ 提示语声明的表 ↔ **真产出**的结构闸门（`kcdj_export.OUTPUT_SHEETS`）对账（⛔ 不是两处各写一份）
     with tempfile.TemporaryDirectory(prefix="t04-inv-x-") as td:

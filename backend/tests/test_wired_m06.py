@@ -18,7 +18,7 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 ROUTER = (ROOT / "backend" / "app" / "mod06_proc" / "router.py").read_text(encoding="utf-8")
 
 
@@ -296,8 +296,9 @@ def test_按模板导出失败必须给人原因不静默():
     模板坏 / **显示区对账不过**）⇒ 壳必须**弹原因**，⛔ 不能静默、也不能当文件下载。"""
     i = SHELL.index("procExpSave:async ()=>{")
     body = SHELL[i:SHELL.index("\n procTab:t=>{", i)]        # 终点锚用**下一个动作名**（纯 ASCII）
-    assert 400 < len(body) < 2500, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
-    assert "ct.includes('application/json')" in body, "没按 content-type 分流"
-    assert "d.message||'后端没给原因'" in body, "失败时没把后端的中文原因给用户"
-    assert "if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`" in body, \
+    assert 100 < len(body) < 2500, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
+    _b = with_kernel(body)         # ⭐ `TAIL-67`：错误分类已抽到 `dlExport` 通用件
+    assert "ct.includes('application/json')" in _b, "没按 content-type 分流"
+    assert "后端没给原因" in _b, "失败时没把后端的中文原因给用户"
+    assert "r.ok" in _b and "HTTP ${r.status}" in _b, \
         "非 2xx 没显式报错（会静默产出空文件）"

@@ -110,9 +110,12 @@ def build_dialog(
 
 
 def degrade_to_excel(exc: BaseException) -> dict:
-    """接口不可用 ⇒ **降级为手动 Excel 导入**，且**必须显式说明处于降级路径**（001-06 / §3.6）。
+    """接口不可用 ⇒ **降级为手动 Excel 导入**，且**必须显式说明处于降级路径**（§3.6）。
 
     ⚠️ **不得静默** —— 返回体里带 `degraded=True` 与说明；调用方必须把它呈给用户。
+    ⚠️ **服务对象 = m02 / m07 / m11**（它们的手动/导入通道仍在）。
+       ⛔ **m08 不在列**：库存手动导入已按用户 2026-09-22 裁定删除 ⇒ m08 用
+       `degrade_no_manual`（显式报错待人处理），**别再把 m08 接回本函数**。
     """
     return {
         "degraded": True,
@@ -120,6 +123,21 @@ def degrade_to_excel(exc: BaseException) -> dict:
         "message": (
             f"i8 接口不可用（{type(exc).__name__}: {exc}）⇒ 已**降级为手动 Excel 导入**路径。"
             "请从 i8 导出该月数据后在本页导入。"
+        ),
+    }
+
+
+def degrade_no_manual(exc: BaseException) -> dict:
+    """接口不可用且**无手动兜底** ⇒ **显式报错待人处理**（m08 专用的降级说明）。
+
+    依据 = 用户 2026-09-22 裁定：「库存单据手动导入给删掉，不要了」⇒ 库存数据唯一入口 = i8 抓取。
+    ⚠️ 同样**不得静默**（`degraded=True` ＋ 原因），但**不得**再承诺"可手动导入"。
+    """
+    return {
+        "degraded": True,
+        "message": (
+            f"i8 接口不可用（{type(exc).__name__}: {exc}）⇒ 本次抓取**失败**（原因见上）。"
+            "请稍后在 i8 可用时重试。"
         ),
     }
 

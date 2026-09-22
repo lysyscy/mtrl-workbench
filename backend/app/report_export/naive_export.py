@@ -45,7 +45,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from io import BytesIO
+
+from app.report_export.save import workbook_bytes      # ⭐ `TAIL-68`：序列化唯一出口
 
 #: 合计行首格写的字（与页面 `sumRowOf` 的 `lead` 默认值**同一个词** —— 页面上就是「合计」）。
 TOTAL_LEAD = "合计"
@@ -73,12 +74,22 @@ def build_xlsx(
     money_keys: frozenset[str] | set[str] = frozenset(),
     total_keys: frozenset[str] | set[str] = frozenset(),
     total_rows: list[dict] | None = None,
+    seq_key: str | None = None,
+    int_keys: frozenset[str] | set[str] = frozenset(),
+    width_max: int = 32,
 ) -> bytes:
     """行字典列表 ⇒ 一本 xlsx 的**字节**（不落盘：调用方决定给谁）。
 
     ⚠️ 表头**加粗**＋**冻结首行**：几十行的表滚起来没有冻结行，人对不上哪列是哪列。
     ⚠️ `money_keys` 里的列写**数字**（⛔ 不写字符串）—— 见模块头「取值」那条。
     ⚠️ 合计行**放最后**并加粗，首格写明「合计」（⛔ 不让人把它误当成一行数据）。
+
+    ⭐ `TAIL-62`（2026-09-21）：为收编 `jc_export` / `pj_export` **新增三个可选参数**
+      （⛔ **默认值与旧行为完全一致** ⇒ 已经在用本件的调用方**零影响**）：
+      · `seq_key` = 这一列写**行号**（1..n）—— 集采台账的「序号」列；
+      · `int_keys` = 这几列写 `int`（认不出就原样）—— 项目档案的「排序」列；
+      · `width_max` = 列宽上限（集采台账口径是 **28**，其余 32）⇒ ⛔ 别统一成 32，
+        那会**改掉集采台账的导出形态**（本轮是"换实现"，不是"改口径"）。
     """
     import openpyxl
     from openpyxl.styles import Alignment, Font
@@ -93,14 +104,21 @@ def build_xlsx(
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal="center")
 
-    def _cell(r: dict, key: str):
+    def _cell(r: dict, key: str, n: int):
+        if seq_key and key == seq_key:
+            return n                                  # ⭐ 序号列（= 屏幕上的行号）
         v = r.get(key)
         if key in money_keys:
             v = money(v)
+        elif key in int_keys and v not in (None, ""):
+            try:
+                v = int(v)
+            except (TypeError, ValueError):
+                pass                                  # 认不出就原样（⛔ 不为一行脏数据毁整表）
         return "" if v is None else v
 
-    for r in rows or ():
-        ws.append([_cell(r, key) for _, key in columns])
+    for n, r in enumerate(rows or (), start=1):
+        ws.append([_cell(r, key, n) for _, key in columns])
 
     # 合计行 —— `total_rows is None` ⇒ 全部行；给空序列 ⇒ **不写**（与页面同口径，见模块头）
     if total_keys and (rows or ()) :
@@ -118,13 +136,11 @@ def build_xlsx(
 
     # 列宽：按表头给个**可读的**初值（⛔ 不写死窄宽 —— 那是"表挤"的另一半原因）
     for i, (label, _) in enumerate(columns, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = max(10, min(32, len(label) * 2 + 4))
+        ws.column_dimensions[get_column_letter(i)].width = max(10, min(width_max, len(label) * 2 + 4))
 
     ws.freeze_panes = "A2"
 
-    buf = BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    return workbook_bytes(wb)          # ⭐ `TAIL-68`：序列化也走唯一出口（全站不再有第二处 `wb.save(`）
 
 
 __all__ = ["TOTAL_LEAD", "build_xlsx", "money"]

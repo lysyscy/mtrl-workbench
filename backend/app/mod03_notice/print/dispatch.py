@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from app.core.config import effective_of, get_settings
+from app.core.config import get_settings
 from app.core.errors import MustReportError
 from app.mod03_notice.print.ipp import send_pdf
 from app.mod03_notice.settings_store import MODE_LABEL, validate_print_mode
@@ -205,9 +205,9 @@ def dispatch_pdf(
     s = get_settings()
     name = str(printer_name if printer_name is not None else s.printer_name or "").strip()
     m = validate_print_mode(mode if mode is not None else (s.print_mode or "auto"), name)
-    uri = printer_uri if printer_uri is not None else effective_of(
-        "printer_ipp_url", s.printer_ipp_url
-    )
+    # ⚠️ 打印机地址**只读 `.env`**（同 `ipp.py` 那条注释：单一入口 ＋ 单一存储，
+    #   2026-09-21 用户裁定）—— ⛔ 别再改回 `effective_of`（"库优先"会重现"改了不生效"）。
+    uri = printer_uri if printer_uri is not None else s.printer_ipp_url
 
     chans: dict[str, Callable[[], str]] = {
         "ipp": lambda: (ipp or send_pdf)(pdf, uri or None),

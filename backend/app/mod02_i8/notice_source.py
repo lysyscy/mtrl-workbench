@@ -150,9 +150,23 @@ class NoticeDetailFetcher:
         return {}
 
     def fetch_detail(self, ph_id: str) -> list[dict]:
-        """明细（`getDetInfo` → `Record[]`）。"""
-        resp = self._client.post_json(DETAIL_PATH, data={"id": str(ph_id)})
-        return _extract_records(resp)
+        """明细（`getDetInfo` → `Record[]`）。⚠️⭐ **空结果再确认一次**（`TAIL-61` · 2026-09-21）：
+
+        与列表抓取、`fetch_flow` **同一条处理** —— i8 会**偶发返回"有效但空"的响应**（模块头注明）。
+        明细回空的后果是**收款账号/银行/明细表整块静默丢失**（而**收款单位靠抬头兜底照旧"正常"**
+        ⇒ 症状只剩"账号空"，极难发现；2026-09-21 全量 355 张里实取到 **2 张明细 0 行**）。
+        ⚠️ 确认真空后**接受空 ＋ 告警**（真有单据没有明细，⛔ 不能死循环）。
+        """
+        for attempt in range(EMPTY_RETRY + 1):
+            resp = self._client.post_json(DETAIL_PATH, data={"id": str(ph_id)})
+            rows = _extract_records(resp)
+            if rows or attempt >= EMPTY_RETRY:
+                if not rows:
+                    logger.warning("明细为空（已确认一次）—— 收款账号/银行/明细表会全部留空，请复核单据 {}", ph_id)
+                return rows
+            logger.warning("明细首次回空，{:.1f}s 后重试确认一次（防收款账号/银行静默丢失）", EMPTY_RETRY_SLEEP)
+            time.sleep(EMPTY_RETRY_SLEEP)
+        return []
 
     def fetch_flow(self, ph_id: str) -> list[dict]:
         """审批流程历史（**签名来源**）。空结果**再确认一次**。"""

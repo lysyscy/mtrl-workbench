@@ -41,7 +41,8 @@ from app.core.errors import MustReportError
 from app.core.logging import get_logger
 from app.report_export.resources import SETL_TEMPLATE, require_template
 from app.report_export.schema_cols import (SFJC_COL_WIDTHS, SFJC_HEADER,
-                                          SFJC_NUM_FIELDS, SFJC_TEXT_FIELDS)
+                                           SFJC_NUM_FIELDS, SFJC_TEXT_FIELDS)
+from app.report_export.save import save_workbook      # ⭐ `TAIL-68`：落盘唯一出口
 
 #: ⚠️⚠️ **本文件原先用 `print` 输出进度**（素材包移植过来的脚本习惯）——
 #:   2026-09-20 实测踩到：`print('✓ …')` 在 **Windows 控制台（GBK）** 下抛
@@ -188,7 +189,7 @@ def update_sheet_data(df, out_path, show_order):
     last = r_grand
     if ws1.max_row > last:
         ws1.delete_rows(last + 1, ws1.max_row - last)
-    wb.save(out_path)
+    save_workbook(wb, out_path)          # ⭐ `TAIL-68`：这里原本**没有 mkdir**（换目录就崩）
     return pv, grand
 
 

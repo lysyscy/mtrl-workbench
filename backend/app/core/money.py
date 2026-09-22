@@ -30,6 +30,30 @@ class MoneyError(ValueError):
     """金额相关的输入非法 —— 必须显式报出，不得静默取 0。"""
 
 
+#: ⭐ `TAIL-63`（2026-09-21）：金额文本里一律清掉的字符（千分位 / 货币符号 / 空白）。
+#: ⛔ 加字符必须同步改 `tests/test_amount_text_parity.py` 的判据（否则口径改了没人知道）。
+_AMOUNT_NOISE: tuple[str, ...] = (",", "，", "¥", "￥", "$", " ", "\u3000")
+
+
+def amount_text(raw: object) -> str:
+    """**金额文本的洗净**（`TAIL-63` 唯一出口）：千分位 / 货币符号 / 空白全去掉；空 ⇒ `''`。
+
+    ⭐ 为什么必须有这一个主人（2026-09-21 **实测到的实害**）：这段原先在 4 个 `parse_amount`
+      （`mod03_notice` / `mod05_flow` / `mod09_fee` / `mod11_jc`）里**各写一份，且写得不一样**
+      ⇒ 同一个 `¥ 1,234.56`：集采台账 / 特殊费用 / 付款流水都能过，
+      **付款通知书手填却报「金额格式非法」**（它那份只去逗号）⇒ 用户在**同一张表单**里
+      手填带 ¥ 的数会被拒 —— 这正是「同一口径 N 个主人」的实害（与当天"收款账号取错字段"同型）。
+
+    ⛔ 本函数**只管洗净**，⛔ **不做任何业务判定**：
+      那 4 处的判定是**刻意不同**的（`MOD-09` 允许 0 与负数、`MOD-11` 必须 > 0，
+      两边注释都写着「别把两套搅在一起」）⇒ 判定**留在各自 `parse_amount`**，本轮一个都不改。
+    """
+    text = str(raw if raw is not None else "")
+    for ch in _AMOUNT_NOISE:
+        text = text.replace(ch, "")
+    return text.strip()
+
+
 def _reject_bool(value: object) -> None:
     # bool 是 int 的子类，混进来基本都是 bug（True -> Decimal(1)）
     if isinstance(value, bool):

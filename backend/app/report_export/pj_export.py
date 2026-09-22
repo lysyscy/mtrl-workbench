@@ -56,45 +56,16 @@ NUMBER_KEYS: frozenset[str] = frozenset({"ord"})
 def build_xlsx(rows: list[dict]) -> bytes:
     """行字典列表 ⇒ 一本 xlsx 的**字节**（不落盘：调用方决定给谁）。
 
+    ⭐ `TAIL-62`（2026-09-21）：**实现已下沉到 `naive_export`**（本件是它的前身之一）⇒ 薄委托。
+      ⚠️ 本页**没有合计行** ⇒ 不传 `total_keys`（⛔ 别"顺手"给它补一个合计 —— 页面没有，导出就**不能**有）。
+
     ⚠️ 表头**加粗**＋**冻结首行**：几十行的表滚起来没有冻结行，人对不上哪列是哪列。
     ⚠️ `ord` 写**数字**（⛔ 不写字符串）：这样用户在 Excel 里能直接排序
        —— 写成 `"3"` 那种"看着是数、其实是文本"的表，是本项目最讨厌的一类假象。
     """
-    import openpyxl
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = SHEET_NAME
-
-    ws.append([label for label, _ in COLUMNS])
-    for cell in ws[1]:
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="center")
-
-    for r in rows or ():
-        vals = []
-        for _, key in COLUMNS:
-            v = r.get(key)
-            # `ord` 是数字 ⇒ 清成 int；其余一律**原样**（空 / None ⇒ 空单元格，⛔ 不写 0）
-            if key in NUMBER_KEYS and v not in (None, ""):
-                try:
-                    v = int(v)
-                except (TypeError, ValueError):
-                    pass
-            vals.append("" if v is None else v)
-        ws.append(vals)
-
-    # 列宽：按内容给个**可读的**初值（⛔ 不写死窄宽 —— 那是"表挤"的另一半原因）
-    for i, (label, _) in enumerate(COLUMNS, start=1):
-        ws.column_dimensions[get_column_letter(i)].width = max(10, min(32, len(label) * 2 + 4))
-
-    ws.freeze_panes = "A2"
-
-    buf = BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    from app.report_export import naive_export as N
+    return N.build_xlsx(rows, columns=COLUMNS, sheet_name=SHEET_NAME,
+                        int_keys=NUMBER_KEYS)
 
 
 __all__ = ["COLUMNS", "NUMBER_KEYS", "SHEET_NAME", "build_xlsx"]

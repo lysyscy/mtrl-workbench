@@ -41,6 +41,11 @@ output/
 # ⛔ 别改成 `%TEMP%`；⛔ 也别把一次性脚本提交进来（本目录整棵被忽略）。
 .workbuddy/scratch/
 
+# ===== 运维二进制（NSSM · 只在本机用，⛔ 不进版本库）=====
+# `ops/nssm/nssm.exe` 是 `ops/nssm_install.ps1` 的**默认查找位**（M7-A 服务化用）。
+# ⛔ 不提交二进制：新机重建时照 `ops/README.md` 的「NSSM 获取」下载一次即可。
+ops/nssm/
+
 # ===== 前端 =====
 node_modules/
 .vite/
@@ -57,3 +62,7 @@ desktop.ini
 # ⚠️ 刻意不排除的：
 #   .workbuddy/   —— 工作区治理目录（计划 / memory / 交接提示词），随仓走
 #   frontend/dist/ —— D7 已定案：构建产物入仓（部署机免 Node）
+
+# ===== 2026-09-22 文档架构审计新增 =====
+.workbuddy/work/00-scratch/          # 临时草稿（TTL 14 天，审计 P2）
+.workbuddy/backups/               # 唯一手工备份点（留 5 份）

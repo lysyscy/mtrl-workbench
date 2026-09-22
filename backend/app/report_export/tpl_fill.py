@@ -38,6 +38,7 @@ from pathlib import Path
 
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter
+from app.report_export.save import save_workbook
 
 #: 数据区起点的**标记文字**（方案 A：认文字，不认坐标/定义名称）
 MARKER = "DATA_START"
@@ -333,8 +334,7 @@ def fill_workbook(template, out_path, specs) -> dict:
     wb = openpyxl.load_workbook(str(template))
     try:
         plan = [fill_sheet(wb[s["sheet"]], s) for s in specs]
-        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        wb.save(str(out_path))
+        save_workbook(wb, out_path)
     finally:
         wb.close()
     return {"path": str(out_path), "sheets": plan}

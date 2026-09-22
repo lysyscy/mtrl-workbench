@@ -11,6 +11,7 @@ import re
 from tests.acc_plugin import acc
 
 from tests.m07_shell_helpers import API, ROUTER, SHELL, _body, _slice  # noqa: F401
+from tests.shell_src import with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看
 
 # ---- `ACC-RPT-BIG-001`（活动大表）的形态半边
 
@@ -58,12 +59,13 @@ def test_壳里派生列是纯文本格():
 
 
 @acc("ACC-RPT-BIG-001", "001-05")
-def test_壳里主材累计走金额出口且取数口未接入():
-    """⚠️ 集采台账取数口**未接入**（M5 未落地，`MAIN_MATERIAL_PORT is None`）⇒ 主材累计在本表是**派生文本格**
-    （`M(r.matC)`，⛔ 不是手填输入框）；`0.00` 与「取数口没接」两件事不许混（⛔ 不写 0 冒充"确实没有"）。"""
+def test_壳里主材累计走金额出口且取数口已接入():
+    """⭐ 2026-09-21（`TAIL-25`）集采台账取数口**已接入**（`MAIN_MATERIAL_PORT is not None`）⇒
+    该列显示**真数**；它在本表仍是**派生文本格**（`M(r.matC)`，⛔ 不是手填输入框）。
+    ⚠️ 旧的"未接入 ⇒ 显「—」"守卫保留在壳里（`MAT_OK ?`），端口被显式摘除时仍会兜住。"""
     from app.mod07_setl import big_service as BS
 
-    assert BS.MAIN_MATERIAL_PORT is None, "取数口已接入 ⇒ 本断言要跟着改（显「—」的前提就是取数口为空）"
+    assert BS.MAIN_MATERIAL_PORT is not None, "取数口被摘掉了 ⇒ 主材累计会退回「—」（接入态不许静默丢）"
     s = _slice("m07")
     assert "M(r.matC)" in s, "主材累计的渲染点变了（它必须是派生文本格，不能变成手填）"
 
@@ -138,8 +140,9 @@ def test_活动大表导出失败必须给人原因不静默():
     ⇒ 壳必须**弹原因**，⛔ 不能静默、也不能当文件下载。"""
     i = SHELL.index("bigExport:async ()=>{")
     body = SHELL[i:SHELL.index("\n /* —— MOD-12 —— */", i)]     # 终点锚用**下一段注释头**（纯 ASCII）
-    assert 400 < len(body) < 2200, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
-    assert "ct.includes('application/json')" in body, "没按 content-type 分流"
-    assert "d.message||'后端没给原因'" in body, "失败时没把后端的中文原因给用户"
-    assert "if(!r.ok) return toast(`<b>导出没能完成</b>：HTTP ${r.status}`" in body, \
+    assert 100 < len(body) < 2200, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
+    _b = with_kernel(body)         # ⭐ `TAIL-67`：错误分类已抽到 `dlExport` 通用件
+    assert "ct.includes('application/json')" in _b, "没按 content-type 分流"
+    assert "后端没给原因" in _b, "失败时没把后端的中文原因给用户"
+    assert "r.ok" in _b and "HTTP ${r.status}" in _b, \
         "非 2xx 没显式报错（会静默产出空文件）"

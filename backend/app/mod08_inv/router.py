@@ -20,15 +20,14 @@ from app.mod08_inv.repository import (
     load_rows,
     save_adjustment,
 )
-# ⭐ 降级通道（§3.6）：手动 Excel 导入 —— 独立路由件，由本文件汇总（`main.py` 不用改）。
-# ⚠️ 2026-09-21（`§19` 四个暂留件收口）：`import_router.py`（三条 PRG）＋ `import_view.py`（服务端渲染页）
-#    **已整体删除** —— 能力原样搬成 JSON API `import_api.py`（壳 `V.m08imp` 在用），旧页无独有能力。
-from app.mod08_inv.import_api import router as import_api_router
+# ⛔ **「手动 Excel 导入」已整体删除**（用户 2026-09-22 裁定：「库存单据手动导入这个模块给删掉，
+#    不要了」—— 降级通道改为：i8 不可用 ⇒ **显式报错待人处理**，⛔ 不做手动兜底入口）。
+#    曾经的 `import_router.py` ＋ `import_view.py` ＋ `import_api.py` ＋ `importer.py` ＋ 壳 `V.m08imp`
+#    **全部已删**（`T8` 守卫登记在 `audit_common.CANCELLED`，复活即红）。
 # ⚠️ 2026-09-19（`§19` 批 2）：`app.mod08_inv.view`（`render_inv_page`/`fetch_dialog_html`/`render_adjust_page`）
 #    已随「明细总表页半边」整体删除（授权 `D18`）—— ⛔ 别再加回来。
 
 router = APIRouter(tags=["mod08"])
-router.include_router(import_api_router)
 
 
 def query_params(request: Request) -> dict:
@@ -45,8 +44,8 @@ def query_params(request: Request) -> dict:
 #    `adjust_page` / `adjust_save`（`/m08/adjust/{row_id}`）＋ `_safe_back` ＋ `view.py`（327 行）。
 #    ⇒ 壳走的是 **JSON API**（`/api/m08/inventory` · `/api/m08/adjust` · `/api/m08/adjust/clear` ·
 #      `/api/m08/fetch` · `/api/m08/inventory/export` —— 五个都在本文件下方 ✓）。
-# ⚠️ **「手动 Excel 导入」半边** —— ⭐ **2026-09-21 已搬进新壳**（`import_api.py` ＋ 壳 `V.m08imp`）⇒
-#    服务端渲染页与三条 PRG 已删 ✓（`nav.py` 里那条服务端渲染入口同批删除 —— 壳侧栏有「库存单据导入」）。
+# ⚠️ **「手动 Excel 导入」半边** —— ⛔ **2026-09-22 已整体删除**（用户裁定「不要了」；
+#    i8 不可用 ⇒ 显式报错待人处理，不做手动兜底）。服务端渲染页与三条 PRG 更早（`D18`）已删 ✓。
 
 
 # ============================================================ JSON API（前端壳：原型直接接数据）
@@ -170,7 +169,7 @@ def api_fetch(req: FetchRequest) -> dict:
     """**按月抓取**库存单据明细（`API-03`）—— 人工触发。
 
     ⚠️ **会登录 i8 并强踢在线用户**（D9）：`confirm` 必须为真（= 用户已在壳的弹窗里确认过）。
-    ⚠️ 失败**降级为手动 Excel 导入并显式说明**（§3.6），**绝不自动重试登录**（D9）。
+    ⚠️ 失败**显式报错待人处理**（原因 + 请稍后重试；⛔ 无手动兜底 —— 2026-09-22 用户裁定），**绝不自动重试登录**（D9）。
     """
     from app.mod08_inv import fetch_service as FS
 
@@ -183,9 +182,6 @@ def api_fetch(req: FetchRequest) -> dict:
 @router.get("/api/m08/inventory/export")
 def api_export_inventory(
     request: Request,
-    allow_kick: bool = Query(
-        False, description="⭐ 须用户在界面二次确认后才为 true（D9：强踢该账号其他在线会话）"
-    ),
 ):
     """导出库存单据明细表**成品 xlsx**（含「过程资料」「安全文明施工费」两张真透视）—— 浏览器直接下载（`TAIL-04`）。
 
@@ -193,9 +189,8 @@ def api_export_inventory(
     （`ops/模板法导出-实测结论.md`）；两张透视与数据缓存**逐项对账**（容差 0.01）。
 
     - 取数 = **HTTP 现导**（`report_export.export`，`spec_key='inv'`）；期间缺省 = 本页默认月（§9.2）。
-    - ⭐ **`allow_kick`**（query，**默认 `false`**）透传给 `I8Client`：cookie 有效 / **命中磁盘缓存**时
-      **不重登、不顶号**；仅当缓存与登录都拿不到可用会话、且**界面已二次确认**时才允许强踢（D9）。
-      ⛔ **绝不擅自踢人** —— 不传即 `false`。⚠️ 本轮只把该能力备好，**壳侧交互不改**（后续再定）。
+    - ⭐ 2026-09-21 用户裁定「抓取导出分开」：src = **最近一次抓取的源文件缓存**（`source_cache`），
+      **导出不碰 i8** ⇒ 不再有 `allow_kick`（D9 的二次确认都在「抓取」侧）。缺缓存 ⇒ 中文报「请先抓取」。
     - ⚠️ 三种失败（模板缺失/损坏 · 该月没有明细 · **缓存级对账不过**）⇒ **不产出文件**，
        改成 **JSON 200 ＋ `ok:false` ＋ 中文原因** —— 壳侧据 `content-type` 分流：
        `application/json` ⇒ 弹原因；否则当文件下载。
@@ -209,7 +204,7 @@ def api_export_inventory(
     period = str(request.query_params.get("period") or "").strip() or D.default_month()
     try:
         with session_scope() as s:
-            path = EX.export_inventory(s, period, allow_kick=allow_kick)
+            path = EX.export_inventory(s, period)
     except MustReportError as exc:
         return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
     # ⚠️ 文件名**由后端带出**（`X-Export-Filename`，UTF-8 percent-encoded）——

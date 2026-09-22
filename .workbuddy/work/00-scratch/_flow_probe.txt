@@ -1,0 +1,78 @@
+[32m2026-09-15 21:37:40.141[0m | [33m[1mWARNING [0m | [36mapp.mod02_i8.login[0m:[36mhttp_login[0m:[36m133[0m - [33m[1mi8 登录：已执行 KillOnlineUser 强踢（user=SCY980803）[0m
+[32m2026-09-15 21:37:46.735[0m | [1mINFO    [0m | [36mapp.mod02_i8.notice_source[0m:[36mfetch_month[0m:[36m97[0m - [1m付款通知书取数：年月=2026-08 解析到 124 条[0m
+⚠️ 即将登录 i8（含强踢）· 取数月份 = 2026-08
+
+【模板】其他支出 · printId=3700000000000215 · printName=其他支出
+  存样本 → i8_print_design_sample.json（67109 字节）
+  8 列 × 20 行 · 79 格 · 字段格 31
+  图片格 7 个（row,col,fieldId,办理节点名）：
+      (14, 1, 'url', '项目经理')
+      (14, 3, 'url', '事业部分部经理')
+      (14, 5, 'url', '工程公司主管审核')
+      (14, 7, '签章', '分公司经理')
+      (15, 3, 'signature', '')
+      (16, 1, 'url', '财务公司经理')
+      (16, 3, 'url', '总经理')
+
+【模板】付款通知书 · printId=3700000000000203 · printName=付款通知书
+  存样本 → i8_print_design_sample_notice.json（60785 字节）
+  8 列 × 18 行 · 73 格 · 字段格 33
+  图片格 8 个（row,col,fieldId,办理节点名）：
+      (12, 1, 'url', '项目经理')
+      (12, 3, 'url', '事业部分部经理')
+      (12, 5, 'url', '分公司常务副经理/事业部分部经理')
+      (12, 7, 'url', '分公司经理')
+      (13, 1, 'url', '资产管理部总经理')
+      (13, 3, '签章', '核算部部长')
+      (13, 5, 'url', '主管领导')
+      (13, 7, 'url', '核算部部长')
+
+== 2026-08 共 124 条 ==
+
+================ material（→ 其他支出模板） ================
+
+【单据】FKTZS2026090065 · 类型=material · 状态=已批 · 明细 1 条 · 流程 9 节点
+  单据头关键字段：PhidRecPayType_EXName='其他支出' · BillName='龙源项目/尚坤/钢筋（102765元）'
+  流程节点（序号 | 候选节点名字段 | 签名字段）：
+     1 {'actionname': '新增', 'task_des': '流程发起', 'nodeid': 'ext-firstautotas', 'username': '王潜森', 'deptname': '项目人员', 'cno': 'WQS981028'}
+       {'signature': '空', 'signcode': '空'}
+     2 {'actionname': '审核', 'task_des': '报工程公司-项目部门审核', 'nodeid': 'ext-gen25157', 'username': '张昆鹏', 'deptname': '项目人员', 'cno': 'ZKP900426'}
+       {'signature': '有(207 字符)', 'signcode': '有(16 字符)'}
+     3 {'actionname': '审核', 'task_des': '项目经理', 'nodeid': 'ext-gen26436', 'username': '张昆鹏', 'deptname': '项目人员', 'cno': 'ZKP900426'}
+       {'signature': '有(207 字符)', 'signcode': '有(16 字符)'}
+     4 {'actionname': '审核', 'task_des': '核算部项目会计', 'nodeid': 'ext-gen27190', 'username': '郭笑', 'deptname': '会计核算三部', 'cno': 'GX811205'}
+       {'signature': '有(211 字符)', 'signcode': '有(16 字符)'}
+     5 {'actionname': '审核', 'task_des': '报工程公司-科室审核', 'nodeid': 'ext-gen28109', 'username': '陈书曼', 'deptname': '第四工程公司工程管理部', 'cno': 'CSM880909'}
+       {'signature': '有(201 字符)', 'signcode': '有(16 字符)'}
+     6 {'actionname': '审核', 'task_des': '工程公司主管审核', 'nodeid': 'ext-gen28829', 'username': '任振华', 'deptname': '第四工程公司领导', 'cno': 'RZH691009'}
+       {'signature': '有(211 字符)', 'signcode': '有(16 字符)'}
+     7 {'actionname': '审核', 'task_des': '分公司经理', 'nodeid': 'ext-gen30085', 'username': '李向超', 'deptname': '第四工程公司领导', 'cno': 'LXC881214'}
+       {'signature': '有(205 字符)', 'signcode': '有(16 字符)'}
+     8 {'actionname': '审批', 'task_des': '核算部部长', 'nodeid': 'ext-gen30604', 'username': '李超', 'deptname': '会计核算四部', 'cno': 'LC710706'}
+       {'signature': '有(209 字符)', 'signcode': '有(16 字符)'}
+     9 {'actionname': '', 'task_des': '流程结束', 'nodeid': '', 'username': '', 'deptname': '', 'cno': ''}
+       {'signature': '空', 'signcode': '空'}
+
+================ mechanical（→ 付款通知书模板） ================
+
+【单据】FKTZS2026082350 · 类型=mechanical · 状态=已批 · 明细 1 条 · 流程 9 节点
+  单据头关键字段：PhidRecPayType_EXName='付款通知书' · BillName='太康项目/奕卓机械挖机/8月零租机械费25550'
+  流程节点（序号 | 候选节点名字段 | 签名字段）：
+     1 {'actionname': '新增', 'task_des': '流程发起', 'nodeid': 'ext-firstautotas', 'username': '王潜森', 'deptname': '项目人员', 'cno': 'WQS981028'}
+       {'signature': '空', 'signcode': '空'}
+     2 {'actionname': '审核', 'task_des': '报工程公司-项目部门审核', 'nodeid': 'ext-gen25157', 'username': '张昆鹏', 'deptname': '项目人员', 'cno': 'ZKP900426'}
+       {'signature': '有(211 字符)', 'signcode': '有(16 字符)'}
+     3 {'actionname': '审核', 'task_des': '项目经理', 'nodeid': 'ext-gen26436', 'username': '张昆鹏', 'deptname': '项目人员', 'cno': 'ZKP900426'}
+       {'signature': '有(211 字符)', 'signcode': '有(16 字符)'}
+     4 {'actionname': '审核', 'task_des': '核算部项目会计', 'nodeid': 'ext-gen27190', 'username': '郭笑', 'deptname': '会计核算三部', 'cno': 'GX811205'}
+       {'signature': '有(207 字符)', 'signcode': '有(16 字符)'}
+     5 {'actionname': '审核', 'task_des': '报工程公司-科室审核', 'nodeid': 'ext-gen28109', 'username': '陈书曼', 'deptname': '第四工程公司工程管理部', 'cno': 'CSM880909'}
+       {'signature': '有(209 字符)', 'signcode': '有(16 字符)'}
+     6 {'actionname': '审核', 'task_des': '工程公司主管审核', 'nodeid': 'ext-gen28829', 'username': '任振华', 'deptname': '第四工程公司领导', 'cno': 'RZH691009'}
+       {'signature': '有(211 字符)', 'signcode': '有(16 字符)'}
+     7 {'actionname': '审核', 'task_des': '分公司经理', 'nodeid': 'ext-gen30085', 'username': '李向超', 'deptname': '第四工程公司领导', 'cno': 'LXC881214'}
+       {'signature': '有(219 字符)', 'signcode': '有(16 字符)'}
+     8 {'actionname': '审批', 'task_des': '核算部部长', 'nodeid': 'ext-gen30604', 'username': '李超', 'deptname': '会计核算四部', 'cno': 'LC710706'}
+       {'signature': '有(203 字符)', 'signcode': '有(16 字符)'}
+     9 {'actionname': '', 'task_des': '流程结束', 'nodeid': '', 'username': '', 'deptname': '', 'cno': ''}
+       {'signature': '空', 'signcode': '空'}

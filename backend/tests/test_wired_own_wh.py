@@ -4,7 +4,7 @@
 ⛔ 判定全在后端（`domain.i8_warehouse_lookup` ＋ `/api/m03/notices/warehouse-check`）；
    壳里自己比对名单 = 第二份口径（本仓铁律）。
 
-⚠️ 静态检查**不证明运行时能跑** ⇒ 那一半由壳真机自检 `tools/_shell_ownwh.py` 覆盖
+⚠️ 静态检查**不证明运行时能跑** ⇒ 那一半由壳真机自检 `tools/probe/_shell_ownwh.py` 覆盖
    （⚠️ 查名单**真会登录 i8 并顶号** ⇒ 真机**只看不点**）。
 """
 

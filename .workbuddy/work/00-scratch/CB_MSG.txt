@@ -1,0 +1,11 @@
+结构检查点：文档架构审计整改落地（D21 · TAIL-72/73）
+
+- 重组收口：tools/audit|mut|probe|oneoff 四目录、根 README/阈值表/journal 全部入库
+- 新增 work/ 五区（Agent 工作记录 · 宪法见 work/README.md）＋ docs/（runbook/architecture/changelog）
+- TAIL-69 统一导入模块：import_kit 底座 ＋ m04 导入两步化（预览不写库）
+- TAIL-70 库存单据手动导入下线（T8 守卫）；m07 悬空降级文案纠正
+- 守卫：T13 主文档过程回潮 · T12 work 五区白名单 · 变异 _mut_impkit/_mut_t13/_mut_t8_m08imp
+- 备份收口：唯一点 .workbuddy/backups/（留 5 份）；scratch/backups 进 gitignore
+- 删除：CLAUDE.md（内容已归档）、frontend/ 空壳、backend/artifacts/（D21 二号裁定）
+
+四态 529 = 绿 529 · 16 项闸门全 0

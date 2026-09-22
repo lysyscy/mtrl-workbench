@@ -62,22 +62,8 @@ async function m03RunBatch(rows, mode) {
       `jcFetchSinceOn` / `jcHideTrade`）。 */
 async function m03Download(url, okMsg) {
   if (!url) return toast(`<b>下载没能开始</b>：后端没给下载地址${okMsg ? `<br>${okMsg}` : ''}`, 10000);
-  let r;
-  try { r = await fetch(url); }
-  catch (e) { return toast(`<b>下载没能完成</b>：${esc(String((e && e.message) || e))}`, 9000); }
-  const ct = r.headers.get('content-type') || '';
-  if (ct.includes('application/json')) {
-    let d = {};
-    try { d = await r.json(); } catch (e) { /* 读不出就算了，下面统一报 */ }
-    /* ⚠️ FastAPI 的 `HTTPException` 回的是 `{detail: …}`，自己回的 `ok:false` 是 `{message: …}` —— 两个都认。 */
-    return toast(`<b>下载没能完成</b>：${esc(d.message || d.detail || '后端没给原因')}`, 10000);
-  }
-  if (!r.ok) return toast(`<b>下载没能完成</b>：HTTP ${r.status}`, 9000);
-  const fn = decodeURIComponent(r.headers.get('x-export-filename') || '') || '付款通知书.pdf';
-  const blob = await r.blob(), a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = fn;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);   /* ⚠️ 不 revoke 会漏内存（每次导出都漏一份） */
+  const fn=await dlExport(url,{name:'付款通知书.pdf',label:'下载'});
+  if(!fn) return;
   return toast(`${okMsg}<br>已开始下载 <b>${esc(fn)}</b>`, 11000);
 }
 

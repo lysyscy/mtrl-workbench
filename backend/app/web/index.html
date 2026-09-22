@@ -13,20 +13,28 @@ body{font-family:var(--fs);font-size:13px;color:var(--tx);background:var(--bg);-
 
 /* ---------- 侧栏 ---------- */
 .sb{width:238px;flex:0 0 238px;background:var(--sb);color:var(--sb-tx);display:flex;flex-direction:column;overflow-y:auto}
+.sb::-webkit-scrollbar{width:8px}
+.sb::-webkit-scrollbar-track{background:none}
+.sb::-webkit-scrollbar-thumb{background:var(--sb-bd);border-radius:4px}
 .sb-brand{padding:14px 16px 12px;border-bottom:1px solid var(--sb-bd)}
-.sb-brand b{display:block;color:var(--on);font-size:13.5px;font-weight:500;letter-spacing:.2px}
+/* ⚠️ 侧栏的**三档文字**各用各的角色（2026-09-21 修）：品牌/悬停 = `--sb-hd`、普通项 = `--sb-tx`、
+   次要（编号/分组/页脚）= `--sb-mut`。⛔ **别再借 `--on`**（它是"主色**之上**的前景"）——
+   原来 `.sb-brand b` 与 `.sb-i:hover` 用 `--on`，在深色套里 `--on` 是**黑** ⇒ 黑字压深面板。 */
+.sb-brand b{display:block;color:var(--sb-hd);font-size:13.5px;font-weight:500;letter-spacing:.2px}
 .sb-brand span{display:block;color:var(--sb-mut);font-size:11px;margin-top:3px}
 .sb-g{padding:10px 0 2px}
-.sb-g>h5{padding:0 16px 6px;font-size:11px;color:var(--in);font-weight:400;letter-spacing:.6px}
+.sb-g>h5{padding:0 16px 6px;font-size:11px;color:var(--sb-mut);font-weight:400;letter-spacing:.6px}
 .sb-i{display:flex;align-items:center;gap:8px;padding:6.5px 16px;cursor:pointer;font-size:12.5px;border-left:2.5px solid transparent;line-height:1.35}
-.sb-i:hover{background:var(--sb-hover);color:var(--on)}
-.sb-i.on{background:var(--sb-on);color:var(--on);border-left-color:var(--pri)}
-.sb-i .c{font-family:var(--fm);font-size:10.5px;color:var(--in);flex:0 0 46px}
+.sb-i:hover{background:var(--sb-hover);color:var(--sb-hd)}
+/* 选中项：底 = **主色本尊**（`--sb-on`），字 = `--on`（"主色之上的前景"）⇒ 语义正好、深浅两族都读得清；
+   左侧亮边用 `--on`（若仍用 `--pri` 就与底同色、等于看不见）。 */
+.sb-i.on{background:var(--sb-on);color:var(--on);border-left-color:var(--on);font-weight:600}
+.sb-i .c{font-family:var(--fm);font-size:10.5px;color:var(--sb-mut);flex:0 0 46px}
 .sb-i.on .c{color:var(--sb-on-hl)}
 .sb-i.dis{color:var(--sb-dis)}   /* 「暂缓」= 语义标注，不是禁用：该项仍可点进 MOD-10 查看说明页 ⇒ 光标保持 pointer（不用 not-allowed，免得"看着点不动、其实能点"） */
 .sb-i.dis:hover{background:none;color:var(--sb-dis)}
-.sb-i .m{margin-left:auto;font-size:10px;color:var(--in)}
-.sb-foot{margin-top:auto;padding:10px 16px;border-top:1px solid var(--sb-bd);font-size:10.5px;color:var(--in);line-height:1.6}
+.sb-i .m{margin-left:auto;font-size:10px;color:var(--sb-mut)}
+.sb-foot{margin-top:auto;padding:10px 16px;border-top:1px solid var(--sb-bd);font-size:10.5px;color:var(--sb-mut);line-height:1.6}
 
 /* ---------- 主体 ---------- */
 main{flex:1;display:flex;flex-direction:column;min-width:0}
@@ -59,7 +67,7 @@ details.tip[open]>summary::before{content:'▾ '}
 .btn:hover{border-color:var(--bd3);background:var(--sf2)}
 .btn.pri{background:var(--pri);border-color:var(--pri);color:var(--on)}
 .btn.pri:hover{background:var(--pri-d)}
-.btn.dg{color:var(--dg);border-color:var(--dg-bd)}
+.btn.dg{color:var(--dg-d);border-color:var(--dg-bd)}
 .btn.dg:hover{background:var(--dg-l)}
 .btn.sm{padding:2.5px 7px;font-size:11.5px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
@@ -133,7 +141,7 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 /* ---------- 活动大表手填项（MOD-07 · OPEN-05「上次值带入」）----------
    带入态 = 输入框黄底（复用 .ed）+ 左上角「↺07月」来源标记；本月已录入则白底无标记。 */
 .dt td.bigc{position:relative}
-.dt td.bigc .ctag{position:absolute;left:5px;top:2px;font-size:9.5px;font-style:normal;color:var(--wn);pointer-events:none}
+.dt td.bigc .ctag{position:absolute;left:5px;top:2px;font-size:9.5px;font-style:normal;color:var(--wn-d);pointer-events:none}
 .dt td.bigc .inp{padding-left:28px}
 .fbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:10px 13px;border-bottom:1px solid var(--bd2);background:var(--sf2)}
 .fbar .fi{display:flex;flex-direction:column;gap:3px}
@@ -158,9 +166,9 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .kpi .k{font-size:11.5px;color:var(--mut);display:flex;align-items:center;gap:4px}
 .kpi .v{font-size:19px;font-weight:500;font-family:var(--fm);margin-top:3px;letter-spacing:-.3px}
 .kpi .s{font-size:11px;color:var(--mut);margin-top:2px}
-.kpi.dg .v{color:var(--dg)}
-.kpi.wn .v{color:var(--wn)}
-.kpi.ok .v{color:var(--ok)}
+.kpi.dg .v{color:var(--dg-d)}
+.kpi.wn .v{color:var(--wn-d)}
+.kpi.ok .v{color:var(--ok-d)}
 .kpi.pri .v{color:var(--pri)}
 
 /* 选中汇总条（付款通知书页：选中上下文指标 + 主操作合并为一条） */
@@ -191,12 +199,12 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .modal.wide{max-width:940px}
 .modal h3{padding:12px 16px;border-bottom:1px solid var(--bd);font-size:13.5px;font-weight:500;display:flex;align-items:center}
 .modal h3 .x{margin-left:auto;cursor:pointer;color:var(--mut);font-size:17px;line-height:1;padding:0 3px}
-.modal h3 .x:hover{color:var(--dg)}
+.modal h3 .x:hover{color:var(--dg-d)}
 .modal .mb{padding:14px 16px;overflow-y:auto}
 .modal .mf{padding:10px 16px;border-top:1px solid var(--bd);display:flex;gap:8px;justify-content:flex-end;background:var(--sf2)}
 .fld{margin-bottom:11px}
 .fld>label{display:block;font-size:11.5px;color:var(--tx2);margin-bottom:4px}
-.fld>label b{color:var(--dg);font-weight:400}
+.fld>label b{color:var(--dg-d);font-weight:400}
 .fld .hint{font-size:11px;color:var(--mut);margin-top:3px;line-height:1.6}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
@@ -210,6 +218,22 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 
 /* 其他 */
 .mut{color:var(--mut)}.sm{font-size:11.5px}.fc{font-family:var(--fm)}
+/* 「外观主题」的**配色标本卡**（`V.set`，2026-09-21）——
+   ⚠️ 卡面的**底色/文字色是逐卡内联的**（各套主题自己的取值，由后端给）⇒ 这里只管**骨架**，
+   ⛔ 一个色值字面量都不写（写了就是第二份真源，`test_theme.py` 会红）。 */
+.thgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(198px,1fr));gap:9px}
+.thcard{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bd);
+  border-radius:var(--r);cursor:pointer;font:inherit;text-align:left;box-shadow:var(--shadow);
+  transition:transform .12s,box-shadow .12s,border-color .12s}
+.thcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.thcard.on{box-shadow:var(--shadow-md);cursor:default}
+.thdot{width:22px;height:22px;border-radius:50%;flex:0 0 auto;box-shadow:inset 0 0 0 1px var(--bd3)}
+.thmeta{display:flex;flex-direction:column;line-height:1.35;min-width:0}
+.thmeta b{font-size:12.5px;font-weight:600}
+.thhex{font-style:normal;font-size:11px;opacity:.72;font-family:var(--fm)}
+.thscene{font-style:normal;font-size:10.5px;opacity:.78;max-width:146px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thck{margin-left:auto;font-size:14px;font-weight:700}
 .hr{height:1px;background:var(--bd2);margin:11px 0}
 .pill{display:inline-flex;align-items:center;gap:5px;background:var(--sf2);border:1px solid var(--bd);border-radius:20px;padding:2px 9px;font-size:11.5px;color:var(--tx2)}
 .steps{display:flex;gap:0;margin:4px 0 12px}
@@ -226,7 +250,7 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 @media(max-width:1180px){.grid2,.grid3{grid-template-columns:1fr}}
-.flowline{font-family:var(--fm);font-size:11.5px;line-height:1.85;background:var(--sf2);border:1px solid var(--bd2);border-radius:6px;padding:10px 13px;white-space:pre;overflow-x:auto;color:var(--sb-bd)}
+.flowline{font-family:var(--fm);font-size:11.5px;line-height:1.85;background:var(--sf2);border:1px solid var(--bd2);border-radius:6px;padding:10px 13px;white-space:pre;overflow-x:auto;color:var(--tx2)}
 .link{color:var(--pri);cursor:pointer;text-decoration:none;border-bottom:1px dashed var(--pri-hl)}
 .link:hover{color:var(--pri-d);border-bottom-style:solid}
 
@@ -297,15 +321,36 @@ const MOCK_NOTE = '本页所有数据均为虚构模拟值，仅用于确认交�
    ⇒ 全前端只留这一个通用函数 bjMonth(偏移月)，各表按需调用：
        · 付款通知书（含其抓取弹窗） → bjMonth(0)   北京时间当月
        · 材料报表类（收发结存等）    → bjMonth(-1)  北京时间上月
-   ⚠️ 本原型的业务快照 = **2026-09**：付款域数据在 9 月（= 当月），材料域数据在 8 月（= 上月），
-      正好对上「付款域取当月、材料域取上月」的口径。模拟时钟固定在 2026-09；
-      正式实现把 SYS_YM 换成按 Asia/Shanghai 取当前时间的值即可，调用点一处都不用动。 */
-const SYS_YM = '2026-09';
-/* 模拟「今天」（精确到日）：付款计划**每月 10 号生效 → 月末**（§4.3.2），
-   「按付款计划勾选」只在窗口内可点；原型固定为窗口内的一天，正式实现换成系统日期即可。 */
-let SYS_TODAY = '2026-09-12';
+   ⚠️ 原型（`demo/`）那边是**固定时钟的演示快照**，⛔ 不去动它；
+      而**本壳必须取真时间** —— 原先这里写死 2026-09，一过月全站默认年月就指到**空月份**
+      （材料域取上月 ⇒ 更早空），看板「本月抓取」还会照着假月份判（`TAIL-51`）。 */
+const _BJ_NOW = (function(){
+  /* 北京时间（`Asia/Shanghai` · 中国无夏令时）。优先用时区库；内核不支持 `timeZone` 参数时
+     退到「UTC+8 固定偏移」兜底（⛔ 不退到本机时区 —— 口径要的是北京时间，不是"这台机的时间"）。 */
+  try {
+    const parts = {};
+    new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Shanghai',
+      year:'numeric', month:'2-digit', day:'2-digit'})
+      .formatToParts(new Date()).forEach(p=>{ parts[p.type]=p.value; });
+    if(parts.year && parts.month && parts.day) return parts;
+  } catch(e){ /* 老内核 ⇒ 走下面的兜底 */ }
+  const t = new Date(Date.now() + 8*3600*1000);
+  return { year:String(t.getUTCFullYear()),
+           month:String(t.getUTCMonth()+1).padStart(2,'0'),
+           day:String(t.getUTCDate()).padStart(2,'0') };
+})();
+const SYS_YM = _BJ_NOW.year + '-' + _BJ_NOW.month;
+/* 「今天」（精确到日）：付款计划**每月 10 号生效 → 月末**（§4.3.2），
+   「按付款计划勾选」只在窗口内可点 ⇒ 与 SYS_YM 同源取真时间。 */
+let SYS_TODAY = SYS_YM + '-' + _BJ_NOW.day;
+/* ⭐ **通用件（日期）**· `TAIL-67`：原先 4 处**逐字相同**地各写一份 ⇒ 抽成一个主人。
+   ⚠️⚠️ **必须放在这里（`index.html` 的切片外公共层）**，⛔ 别放 `shell/core.js` ——
+       `bjMonth()` 在**壳脚本初始化期**就调用它，而 `shell/*.js` 是**内联脚本之后**才加载的
+       ⇒ 放那边 = `ymOf is not defined` ⇒ **整个壳白屏**（2026-09-21 实测踩到一次）。 */
+const ymOf = t => t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
+const ymdOf = t => ymOf(t) + '-' + String(t.getDate()).padStart(2, '0');
 const bjMonth = (off=0)=>{ const [y,m]=SYS_YM.split('-').map(Number); const t=new Date(y, m-1+off, 1);
-  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0'); };
+  return ymOf(t); };
 
 /* ---------- 项目档案（ENT-01） MOD-01 ---------- */
 /* name = 仓库名（唯一标识、不可改）；disp = 展示名（默认取仓库名、可人工改）；壳无仓库亦无展示名 */
@@ -542,14 +587,21 @@ const USERS=[];   /* ⭐ 已接后端：由 `reloadM15()` 从 `/api/m15/users` *
       对位残留（⛔ 别拿它当"差异待核对"的数；差异现在的载体 = **调整单**，看板 ⑤ 数 `IVs` 里
       有调整单的行）。 */
 let NO=[], PJs=[], FLs=[];
-/* 当前登录用户：⭐ **由 `reloadM15()` 从 `/api/m15/users` 的 `me` 填充**（§1.5.1「用户本人为管理员」）。
-   ⚠️ 这里的初值只是"**首屏还没取到数据**"时的占位 —— 真实身份来自后端（登录态）。
+/* 当前登录用户：⭐ **由 `applyWho()` 从 `/api/m15/users` 的 `me` 填充**（§1.5.1「用户本人为管理员」）。
+   ⭐ `boot()` 一进来就调 `reloadWho()` ⇒ **首屏顶栏就是真身份**（⛔ 不必先进一次用户管理页）。
+   ⛔⛔ **初值一律留空，⛔ 不许拿一个人名/账号当占位** —— 本行原先写的是
+      `{id:'U01',acc:'zhangwei',name:'张伟',role:'admin'}`：那是**壳里写死的假身份**
+      （库里根本没有这个账号，见 `ACC-USR-MGMT-001/001-11`「不得写死成某个名字」）。
+      症状 = 用户看到"**同一个人两个名字**"：顶栏先显示「张伟」，进过用户管理页之后才变成真名。
    ⚠️ 刻意**不写成 USERS[0] 的引用** —— 自检回滚会整体替换 USERS 的内容，引用会失效（同「原地复位」的教训）。 */
-let CUR={id:'U01',acc:'zhangwei',name:'张伟',role:'admin'};
+let CUR={id:'',acc:'',name:'',role:''};
 /* ⭐ 主题（`ACC-UI-THEME-001/001-06` 按用户隔离）：**可选清单** ＋ **我这个账号当前用哪套**，
    都由 `reloadM15()` 从 `/api/m15/theme` 填 —— ⛔ 壳里**不写死**主题名单
    （那是第二份真相：后端加一套主题，这里不同步就"选不到"）。 */
 let THEMES_LIST=[], CUR_THEME='';
+/* ⭐ 每套主题的**配色标本**（住 `V.set` 的「外观主题」卡）：由 `reloadTheme()` 从后端填 ——
+   形态 `{name, pri, bg, sf, bd, tx, on}`。⛔ 壳里**不写任何色值**（那是第二份真源）。 */
+let THEME_PALETTE=[];
 let IVs=[], ADs=[];   /* ⭐ 已接后端：由 `reloadInv()` 从 `/api/m08/inventory` 填充（原先由演示数组 `IV`/`AD` 生成 —— 已删） */
 /* ⭐ `M5-7` 起：`JCs` 由 `reloadM11()` 从 `/api/m11/list` **原地填充**（原先的演示数组 `JC` 与列序 `JC_COLS` **已删**；
    行形状见 `adaptJc` —— 字段名与 `JC_COLS` 时代**一致**，所以 `V.m11` 一行没改）。
@@ -862,35 +914,176 @@ const NAV=[
  {g:'概览',items:[['home','看板','—']]},
  {g:'主数据 · 基础',items:[['m01','项目档案','MOD-01'],['m02','i8 接入层','MOD-02']]},
  {g:'付款域',items:[['m03','付款通知书','MOD-03'],['m04','付款计划','MOD-04'],['m05','付款流水与欠款统计','MOD-05'],['m05imp','历史付款导入','MOD-05']]},
- {g:'报表域',items:[['m06','过程资料','MOD-06'],['m06imp','过程资料历史导入','MOD-06'],['m07','收发结存与活动大表','MOD-07'],['m08','库存单据与调整单','MOD-08'],['m08imp','库存单据导入','MOD-08'],['m09','特殊费用月报表','MOD-09'],['m10','机械费（暂缓）','MOD-10']]},
+ {g:'报表域',items:[['m06','过程资料','MOD-06'],['m06imp','过程资料历史导入','MOD-06'],['m07','收发结存与活动大表','MOD-07'],['m08','库存单据与调整单','MOD-08'],['m09','特殊费用月报表','MOD-09'],['m10','机械费（暂缓）','MOD-10']]},
  {g:'集采域',items:[['m11','集采台账','MOD-11']]},
  {g:'全局',items:[['m13','跨域能力','MOD-13'],['m14','规则配置','MOD-14'],['set','系统设置','MOD-14'],['m15','用户管理','MOD-15']]}
 ];
-/* ⚠️ `m05imp` / `m06imp` / `m08imp` / `set` = **四个暂留件收口**后的壳内页面（`§19` · 2026-09-21）——
-   它们**不在 `demo/` 原型里**（原型没有这四个页）⇒ 实现放在 `web/shell/legacy.js`（接线层加件）。
-   ⭐ 这也意味着 `ui_parity` 的 `U1`（只比原型**同名** `V.*` 切片）**不覆盖它们** ⇒ 无"逐行对位"负担。 */
-const TITLE={home:'看板 · 待办',m01:'项目档案',m02:'i8 接入层',m03:'付款通知书',m04:'付款计划',m05:'付款流水与欠款统计',m06:'过程资料',m07:'收发结存与活动大表',m08:'库存单据与调整单',m09:'特殊费用月报表',m10:'机械费（暂缓）',m11:'集采台账',m12:'差异登记',m13:'跨域能力',m14:'规则配置',m15:'用户管理',m05imp:'历史付款流水导入',m06imp:'过程资料历史导入',m08imp:'库存单据 · 手动导入',set:'系统设置'};
+/* ⚠️ `m05imp` / `m06imp` / `set` = **暂留件收口**后的壳内页面（`§19` · 2026-09-21）——
+  它们**不在 `demo/` 原型里**（原型没有这几页）⇒ 实现放在 `web/shell/legacy.js`（接线层加件）。
+  ⭐ 这也意味着 `ui_parity` 的 `U1`（只比原型**同名** `V.*` 切片）**不覆盖它们** ⇒ 无"逐行对位"负担。
+  ⛔ `m08imp`（库存单据导入）已删（2026-09-22 用户裁定「不要了」；`T8` 守卫）。 */
+const TITLE={home:'看板 · 待办',m01:'项目档案',m02:'i8 接入层',m03:'付款通知书',m04:'付款计划',m05:'付款流水与欠款统计',m06:'过程资料',m07:'收发结存与活动大表',m08:'库存单据与调整单',m09:'特殊费用月报表',m10:'机械费（暂缓）',m11:'集采台账',m12:'差异登记',m13:'跨域能力',m14:'规则配置',m15:'用户管理',m05imp:'历史付款流水导入',m06imp:'过程资料历史导入',set:'系统设置'};
 let VIEW='home';
+/* ⭐ **身份状态**（给顶栏"说实话"用）：`'in'` = 拿到了身份；`'none'` = **后端答了、但没有身份**
+   （未登录 / 会话过期 / 名字对不上账号）；`''` = **压根没答上来**（取数失败 ⇒ `applyWho` 没跑）。
+   ⚠️ 后两者**必须分开**：不然取数失败会被写成"你没登录"（那是**假话**，而用户会照着去登录、白折腾）。
+   ⚠️ 由 `core.js` 的 `applyWho` 赋值（那附近有注释）。 */
+let WHO_STATE='';
 function go(k){ if(VIEW==='m03') pickSet.clear(); VIEW=k; render(); $('.view').scrollTop=0; loadPaths(PAGE_LOAD[k]||[]); }   /* ⭐ `P3` 主体：进了哪页就（首次）拉哪页 —— ⛔ 不成环：`loadPaths` 只 render，不再调 `go` */
 function render(){
   $('#nav').innerHTML=NAV.map(g=>`<div class="sb-g"><h5>${g.g}</h5>${g.items.map(([k,n,c])=>
     `<div class="sb-i ${VIEW===k?'on':''} ${k==='m10'?'dis':''}" data-act="go" data-k="${k}" tabindex="0" role="button"><span class="c">${c}</span><span>${n}</span>${k==='m10'?'<span class="m">暂缓</span>':(WIRED.has(k)?'':'<span class="m">原型态</span>')}</div>`).join('')}</div>`).join('');
   /* ⚠️ 顶栏这句**必须按页说实话**：已接后端的页**不是**模拟数据 —— 否则用户会以为整站都是假的 */
   $('#ttl').innerHTML=`${TITLE[VIEW]}<em>${WIRED.has(VIEW)?'已接后端真实数据':'原型态 · 数据为模拟值（尚未接后端）'}</em>`;
-  /* 顶栏身份标识：取当前登录用户（§1.5.1「不得写死人名」）；转让管理员后随之变化 */
-  const who=$('#who'); if(who) who.innerHTML=`<span class="dot d-ok"></span>${esc(CUR.name)}（${CUR.role==='admin'?'管理员':'普通用户'}）`;
+  /* 顶栏身份标识：取当前登录用户（§1.5.1「不得写死人名」）；转让管理员后随之变化。
+     ⚠️ 身份**还没取到**（`boot()` 的那一路失败）时如实说"未取到"，⛔ 不拿人名占位 ——
+        占一个名字就是**假值**，而且用户没法从界面上看出"这是猜的"。 */
+  /* ⚠️ 没有身份时**要说清怎么办**（⭐ 2026-09-21 收紧「未登录不回落管理员」之后尤其重要）：
+     会话缺失/过期 ⇒ 页面各处按钮**都是禁用的** ⇒ 只写"身份未取到"会让人以为**页面坏了**。
+     ⛔ 但**不许**在这里自动跳登录页：那会让"看一眼"也变成强制登录，
+        并且会让不带会话的真机自检 / 其他探针直接白屏。 */
+  const who=$('#who'); if(who) who.innerHTML = CUR.role
+    ? `<span class="dot d-ok"></span>${esc(CUR.name||CUR.acc)}（${CUR.role==='admin'?'管理员':'普通用户'}）`
+    : (WHO_STATE==='none'
+       ? `<span class="dot"></span>未登录 · <a class="link" href="/login">去登录</a>`
+       : `<span class="dot"></span>身份未取到`);
   /* 视图 HTML 先生成、再统一应用表头排序，最后写入页面（排序是纯字符串变换，见 applySorts） */
-  $('#view').innerHTML=applySorts((V[VIEW]||(()=>'<div class="tip">未实现</div>'))(),VIEW);
+  const html=applySorts((V[VIEW]||(()=>'<div class="tip">未实现</div>'))(),VIEW);
+  /* ⭐⭐ 滚动位置保留（2026-09-21 用户报障：m03 勾选一行 ⇒ 列表跳回顶部）：
+     `pick`（actions.js）这类**本页内刷新**走 `render()`，innerHTML 一换 ⇒ 浏览器把 `.view`
+     的 scrollTop 归零（替换瞬间内容高度塌成 0）。⇒ 写入前**记下**滚动、写完**还原**。
+     ⚠️ `go()` 不受影响 —— 它本来就在 `render()` 之后显式 `scrollTop=0`（切页回顶是**故意的**）。 */
+  const scroller=$('.view'); const keep=scroller?scroller.scrollTop:0;
+  /* ⭐⭐ 大表渐进渲染（2026-09-21 用户报障：m08 点进去卡一下 —— 库存明细 1900+ 行，
+     一次 innerHTML = 一次性 parse ＋ 布局，阻塞主线程几百毫秒）：
+     HTML **仍然一次生成**（排序 / 合计行口径不变），但**分帧写入**：先写第一块，余下每帧追一块。
+     ⛔ 切点必须落在行边界（`</tr>`，退而求其次 `>`）—— 半个标签会被浏览器静默吞掉；
+     ⛔ `BIND[VIEW]`（注入按钮 / 渲染后钩子）必须等**最后一块**写完再调；
+     ⛔ 渲染途中用户切页 ⇒ **丢弃剩余块**（`#view` 已是别的页的内容，续写会串页）。 */
+  /* ⭐⭐ 虚拟滚动（2026-09-21 用户裁定「走虚拟滚动」；先只挂 m08 —— 见 `VSCROLL`）。
+     为什么必须做：1374 行 × 20 格 ≈ 2.75 万 DOM 节点，一次 parse＋布局 ⇒ 主线程卡几百毫秒
+     （实测：build 10ms · sorts 8ms · 旧 DOM 拆除 28ms · 新 DOM 解析 52ms，另有布局绘制）。
+     ⛔ 设计红线（2026-09-21 两连败换来的，**别重蹈**）：
+     ① **每次都写"完整片段"**（pre ＋ 垫高行 ＋ 窗口行 ＋ post，**一次 innerHTML**）——
+        绝不往 `#view` 追加表格片段（div 上下文里 `<tr>` 会被解析器**整段吞掉**，实测 211/1374 行）；
+     ② 绝不把一张表拆成多个 `<table>`（列宽 / 表头吸顶会错位）；
+     ③ 行高**实测＋估算混合**（本表 27~91px 共 6 档、会换行 ⇒ 不能假定等高）：
+        渲染过的行**实测回填**，没渲染的按 28 估；`base`（第 0 行的绝对位置）用"窗口首行实测位置"自校正。
+     ⚠️ **全局启用**（2026-09-21 · `TAIL-66`）：只要行数 ≥ 阈值就虚拟化，**不再逐页列名**
+        （⛔ 用户当天的纠正：**不能用"当前数据量小"当判据** —— 没正式用的页以后可能上万行，
+        而名单式的下场是"某个页涨上去、忘了加名单 ⇒ 永远不生效"）。
+        例外见 `VSCROLL`（**只用来"关掉或调阈值"**，⛔ 别再当启用名单用）。 */
+  if(vsOn(VIEW) && startVirtual(html, scroller, keep)) return;
+  $('#view').innerHTML=html;
+  if(scroller) scroller.scrollTop=keep;
   if(BIND[VIEW]) BIND[VIEW]();
+}
+/* ⭐ `TAIL-66` 后的语义：**默认全开**，`VSCROLL` = **例外表** ——
+   `{m07:{off:true}}` = 这页不虚拟化；`{m09:{min:800}}` = 这页阈值调到 800。
+   ⛔ 加例外必须写理由（在这里注释），否则又变回"名单式"的黑洞。 */
+const VS_MIN=400;                 /* 全局默认阈值：≥ 这个行数才虚拟化 */
+const VSCROLL={};                 /* 例外表（现为空 ⇒ **所有大表页一律虚拟化**） */
+function vsOn(v){ const c=VSCROLL[v]; return !(c && c.off); }
+function vsMin(v){ const c=VSCROLL[v]; return (c && c.min) || VS_MIN; }
+/* ⭐⭐ **焦点护栏**（`TAIL-66`）：滚动会**重写 innerHTML** ⇒ 正在编辑的输入框会被"连值带焦点"蒸发
+   （m07 手填 / m11 子表就是这种页）。⇒ 重写前先看：**焦点是不是在本页的可编辑元素里** ——
+   是 ⇒ **推迟重画**（记 `pending`），等焦点离开（`focusout`）或下一次滚动再补画。
+   ⛔ 别改成"照画"：那会让用户"输到一半滚一下就没了"，而且**不报错**（最坏的一类缺陷）。 */
+function vsEditing(){
+  const a=document.activeElement, v=$('#view');
+  if(!a||!v||!v.contains(a)) return false;
+  return a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT'||a.isContentEditable===true;
+}
+let VS=null;                                    /* 当前虚拟态（切页 / 重渲即重建） */
+const EH=28;                                    /* 未渲染行的估算高（本表众数 ≈27px） */
+function splitRows(html){
+  /* ⚠️ 只认 **tbody 里的行**：第一个 `<tr>` 往往是 `<thead>` 的表头行 —— 截在那里，
+     整段窗口会写进 thead 上下文（tbody 空、页面没行 —— 2026-09-21 真机抓到）。 */
+  const TAG=/<(\/?)(tr|tbody)\b[^>]*>/gi, spans=[]; let open=-1, inTbody=0, m;
+  while((m=TAG.exec(html))){
+    const name=m[2].toLowerCase();
+    if(name==='tbody'){ inTbody+= (m[1]==='/' ? -1 : 1); continue; }
+    if(name!=='tr') continue;
+    if(m[1]==='/'){ if(open>=0 && inTbody>0) spans.push([open, m.index+m[0].length]); open=-1; }
+    else if(open<0 && inTbody>0) open=m.index;
+  }
+  if(!spans.length) return null;
+  return { pre:html.slice(0,spans[0][0]), post:html.slice(spans[spans.length-1][1]),
+           rows:spans.map(s=>html.slice(s[0],s[1])) };
+}
+function startVirtual(html, scroller, keep){
+  const sp=splitRows(html);
+  if(!sp || sp.rows.length < vsMin(VIEW)) return false;
+  VS={view:VIEW, pre:sp.pre, post:sp.post, rows:sp.rows, h:new Array(sp.rows.length).fill(0),
+      colN:((sp.pre.match(/<th\b/gi)||[]).length || (sp.rows[0].match(/<td\b/gi)||[]).length || 8),
+      base:0, t:0, pending:false};
+  drawVirtual(true);
+  if(scroller) scroller.scrollTop=keep;
+  scroller.onscroll=()=>{ if(!VS||VS.view!==VIEW) return; clearTimeout(VS.t); VS.t=setTimeout(drawVirtual,30); };
+  /* ⭐ 焦点护栏的**补画**：编辑中被推迟的重画，焦点一离开就补上（否则会留着旧窗口不刷新）。 */
+  if(!scroller._vsFocusBound){
+    scroller._vsFocusBound=true;
+    scroller.addEventListener('focusout',()=>{
+      setTimeout(()=>{ if(VS&&VS.view===VIEW&&VS.pending) drawVirtual(false); },0);
+    });
+  }
+  return true;
+}
+function vSum(i){ let s=0; for(let k=0;k<i;k++) s+=VS.h[k]||EH; return s; }   /* 前缀和（O(N)，千行级可承受） */
+function drawVirtual(first){
+  const sc=$('.view'); if(!sc||!VS) return;
+  /* ⭐⭐ 焦点护栏（`TAIL-66`）：首帧必须画（否则空页）；**滚动重画**时若焦点在本页输入控件里 ⇒ **推迟**。 */
+  if(!first && vsEditing()){ VS.pending=true; return; }
+  VS.pending=false;
+  const n=VS.rows.length, st=sc.scrollTop, scT=sc.getBoundingClientRect().top;
+  /* ⭐ 锚定回拉（动态行高的标准解法）：重画前记下「视口顶上的那一行」的**全局行号**与其视口内偏移；
+     重画＋实测回填后，把它拉回原位 —— 否则估算漂移会让"滚到底"的窗口落错段（真机抓到）。 */
+  let keepIdx=-1, keepOff=0;
+  if(!first && VS.curA!=null){
+    const cur=document.querySelectorAll('#view tbody tr');
+    for(let i=0;i<cur.length;i++){
+      const r=cur[i].getBoundingClientRect();
+      if(r.bottom>scT+1){ const gi=(VS.curA||0)+i-1;   /* −1 = 跳过上垫高行 */
+        if(gi>=0&&gi<n){ keepIdx=gi; keepOff=r.top-scT; } break; }
+    }
+  }
+  let a=(VS.base&&!first)?Math.floor((st-VS.base)/EH)-10:0;
+  a=Math.max(0,Math.min(a,n-1));
+  let b=Math.min(n,a+45);
+  /* ⭐ 底部钳制（虚拟列表标配）：贴底 ⇒ 窗口**必须**收在最后一行（合计行永远如约出现）；
+     不钳制的话，估算漂移会让贴底时的窗口落在中段（真机自检抓到）。 */
+  if(!first && st + sc.clientHeight >= sc.scrollHeight - 60){ b=n; a=Math.max(0,n-45); }
+  if(keepIdx>=0){ a=Math.min(a,Math.max(0,keepIdx-5)); b=Math.max(b,Math.min(n,keepIdx+40)); }
+  const topH=Math.round(vSum(a)), botH=Math.max(0,Math.round(vSum(n)-vSum(b)));
+  /* ⛔ 红线①：一次 innerHTML 写**完整片段**（pre ＋ 上垫高 ＋ 窗口行 ＋ 下垫高 ＋ post）
+     ⚠️ 垫高为 0 就**不写**那行（否则滚到底时"最后一行"是空的 0 高垫底行 —— 真机自检抓到） */
+  let frag=VS.pre;
+  if(topH>0) frag+='<tr style="height:'+topH+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>';
+  frag+=VS.rows.slice(a,b).join('');
+  if(botH>0) frag+='<tr style="height:'+botH+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>';
+  $('#view').innerHTML=frag+VS.post;
+  if(first&&BIND[VIEW]) BIND[VIEW]();
+  /* 红线③：窗口内逐行**实测回填** ＋ baseTop 用窗口首行实测位置自校正 */
+  const trs=$('#view').querySelectorAll('tbody tr');
+  for(let i=1;i<trs.length-1;i++) VS.h[a+i-1]=+trs[i].getBoundingClientRect().height.toFixed(1);
+  if(trs.length>2) VS.base=trs[1].getBoundingClientRect().top - scT + sc.scrollTop - vSum(a);
+  /* 锚定回拉：把锚行拉回它重画前所在的视口位置（偏差 <2px 不动，防抖） */
+  if(keepIdx>=0 && keepIdx>=a && keepIdx<b){
+    const el=trs[1+(keepIdx-a)];
+    if(el){ const now=el.getBoundingClientRect().top - scT, d=now-keepOff;
+            if(Math.abs(d)>2) sc.scrollTop+=d; }
+  }
+  VS.curA=a;
 }
 const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
 const WIRED=new Set(['home','m03','m01','m02','m04','m05','m06','m07','m08','m09','m14','m11','m15',
-  /* ⭐ `§19`「四个暂留件收口」（2026-09-21）：设置 ＋ 三个历史导入 —— 它们**四页全读后端真数据**
-     （`/api/m14/settings` · `/api/m0{5,6,8}/import/*`）⇒ 顶栏照实说「已接后端真实数据」。 */
-  'set','m05imp','m06imp','m08imp']);
+  /* ⭐ `§19`「暂留件收口」（2026-09-21）：设置 ＋ 两个历史导入 —— 它们**全读后端真数据**
+     （`/api/m14/settings` · `/api/m0{5,6}/import/*`）⇒ 顶栏照实说「已接后端真实数据」。
+     ⛔ `m08imp` 已删（2026-09-22 用户裁定）。 */
+  'set','m05imp','m06imp']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -1264,7 +1457,7 @@ const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
   ${c.list().map(v=>{const on=c.selected().includes(v), mt=meta(v);
     return `<label title="${esc(mt.title)}" style="display:flex;gap:7px;align-items:center;padding:5px 6px;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap">
       <input type="${single?'radio':'checkbox'}"${single?' name="projPanelSingle"':''} class="chk" style="flex:0 0 auto" data-act="${c.pickAct}" data-pj="${esc(v)}" ${on?'checked':''}>
-      <span${mt.warn?' style="color:var(--wn)"':''}>${esc(mt.nm)}</span>${mt.arc?' '+arcTag():''}</label>`}).join('')}
+      <span${mt.warn?' style="color:var(--wn-d)"':''}>${esc(mt.nm)}</span>${mt.arc?' '+arcTag():''}</label>`}).join('')}
 </div>`; };
 const pjPanel=()=>projPanel({list:PROJ_LIST,selected:()=>fNt.projs,allAct:'pjAll',noneAct:'pjNone',pickAct:'pjPick',meta:PROJ_META_KEY});
 
@@ -2023,9 +2216,9 @@ const ntYm=n=>String(n.date||'').slice(0,7);
 /* 期初占位行存的是**项目全名** → 归一到**仓库名**（候选键，§2.7.4），才能与台账的项目键对上 */
 const lgProjKeyOf=v=>pjKey(pjRowOf(v));
 const nextYm=m=>{ const [y,mm]=String(m).split('-').map(Number); const t=new Date(y,mm,1);
-  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0'); };
+  return ymOf(t); };
 const prevYm=m=>{ const [y,mm]=String(m).split('-').map(Number); const t=new Date(y,mm-2,1);
-  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0'); };
+  return ymOf(t); };
 /* ---------- 「录入期初占位行」的两个默认值（2026-09-12 口径 + 2026-09-13 细化）----------
    ① 项目默认 = **欠款台账当前选中的项目**（同屏已有上下文，不必再选一遍）
    ② 截止年月默认 = **该项目「该分类」已有数据的最早月的前一月**（期初＝上线前的余额 ⇒ 落在第一笔账之前）
@@ -2157,7 +2350,7 @@ const flPjPanel=()=>projPanel({list:()=>pjSort(uniqBy([...flProjs(),...flf.projs
       **右栏趋势**：月粒度看**选定年的 12 个月**、周粒度看**选定季度的全部周**。 */
 const wkMon=d=>{ const t=new Date(d+'T00:00:00'); if(isNaN(t.getTime())) return '';
   t.setDate(t.getDate()-((t.getDay()+6)%7));
-  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); };
+  return ymdOf(t); };
 const tmSun=mon=>tmD(new Date(new Date(mon+'T00:00:00').getTime()+6*864e5));     /* 该周周日 */
 const pstMonthsOfYear=y=>Array.from({length:12},(_,i)=>y+'-'+tp2(i+1));
 const pstBucket=(n,g)=>{ const d=String(n.date||'').slice(0,10); return d?(g==='周'?wkMon(d):d.slice(0,7)):''; };
@@ -2441,17 +2634,8 @@ V.m02=()=>`
       <li><b>时间参数</b>对外一律 <span class="fc">start_date</span> / <span class="fc">end_date</span>（ISO <b>闭区间</b>），「核算期」仅作兼容保留。</li>
       <li><b>统一降级方案（§3.6）</b>：任何接口不可用 → <b>手动下载 Excel → 系统导入 → 自动处理</b>。抓取与「Excel 导入」走<b>同一套解析 / 落库服务</b>，接口失败即切导入。</li>
       <li><b>集采合同抓取：一期启用「定时自动」</b>（技术栈选型 §3.1 · <span class="fc">OPEN-T9</span>）：<span class="fc">APScheduler</span> 随 Windows 服务同进程运行（Session 0）→ <b>一律走纯 HTTP 抓取、禁用浏览器自动化</b>；必须 <span class="fc">max_instances=1 + coalesce=True</span>，并与<b>手动触发共用同一把任务锁</b>（对齐 §9.5 每步可中断 / 导入幂等）。</li>
+      <li><b>本页不单独提供导出（2026-09-21 用户裁定删除接口清单）</b> —— 各接口的触发与导出在各自业务页（通知书 / 收发结存 / 库存明细 / 集采；05-06 同步在项目档案）。</li>
     </ul></details>
-  <div class="card"><h4>i8 <b>抓取类</b>数据接口清单<span class="sp"><span class="mut sm">附录 E.1 的 <b>子集</b> —— 只列<b>可触发 / 可降级导入</b>的接口</span>
-    <button class="btn" data-act="exp" data-t="i8 接口清单">导出 Excel（R1）</button></span></h4>
-    <div class="tw"><table class="dt"><thead><tr><th>编号</th><th>数据 / 接口</th><th>获取方式</th><th>入参</th><th>用途</th><th>触发方式</th><th>降级方案</th><th>操作</th></tr></thead><tbody>
-    ${TASK.map(t=>`<tr><td class="fc"><span class="tag t-pri">${t[0]}</span></td><td>${esc(t[1])}</td><td class="sm">${esc(t[2])}</td>
-      <td class="sm">${esc(t[3])}</td><td class="sm">${esc(t[4])}</td><td class="sm">${esc(t[5])}</td><td class="sm mut">${esc(t[6])}</td>
-      <td class="ctr now"><button class="btn sm" data-act="fetchOne" data-t="${esc(t[1])}" data-api="${esc(t[0])}">触发</button>
-      <button class="btn sm gost" data-act="manualUp" data-t="${esc(t[1])}">手动导入</button></td></tr>`).join('')}
-    </tbody></table></div>
-    <div class="bd"><div class="tip" style="margin:0"><b>本表为什么不列齐《说明书》附录 E.1 的 8 条：</b><span class="fc">API-07</span>「付款通知书批量打印」是<b>出发型</b>动作 —— 不是抓取、<b>没有 Excel 降级</b>（§4.6 明说"接口不可用即砍、<b>不做自建打印模板</b>"）⇒ 它的入口在 <span class="fc">MOD-03</span> 的「<b>批量打印</b>」；<span class="fc">API-08</span>「班组设备使用报表」<b>近期不做、全部手填</b>（§5.6.2）。两者都在附录 E.1 有登记。<br><b>时间口径（§9.2）：</b>对外一律 <span class="fc">start_date</span> / <span class="fc">end_date</span>，<b>ISO 闭区间</b>；「核算期」参数仅作兼容保留。付款通知书<b>按时间全量抓、不选项目、不分页</b>（§4.2.1）。</div></div>
-  </div>
   <div class="grid2">
     <div class="card"><h4>抓取结果回显<span class="sp"><span class="mut sm">按<b>执行记录</b>里每类接口<b>最近一次</b>的结果（⛔ 不是某页上的实时数）</span></span></h4><div class="bd">
       <div class="kv"><dt>付款通知书</dt><dd>${NO.length} 条（剔除 ${NO.filter(n=>n.excl).length} · i8 已撤单 ${NO.filter(n=>ntVoid(n)).length} · 有效 ${NO.filter(ntLive).length}）</dd>
@@ -3365,7 +3549,7 @@ V.m15=()=>{
     <span class="sp"><span class="mut sm">当前登录 <b>${esc(CUR.name)}</b>（${iAmAdmin?'管理员':'普通用户'}）· 在用 <b>${on.length}</b> · 停用 <b>${offN}</b> · 已删除 <b>${delN}</b></span></span>
     ${iAmAdmin?`<button class="btn" data-act="userTransfer">转让管理员</button>`:''}
     <button class="btn pri" data-act="userAdd" ${iAmAdmin?'':'disabled'} title="${iAmAdmin?'':'只有管理员可管理账号'}">＋ 新增账号</button>
-    <select class="inp" style="width:auto" data-act="themeSet" title="主题（§7.7）—— 按用户隔离：只改你自己看到的样子，⛔ 不影响别人">${THEMES_LIST.map(n=>`<option ${n===CUR_THEME?'selected':''}>${esc(n)}</option>`).join('')}</select><button class="btn" data-act="logout">登出</button></h4>
+    <button class="btn" data-act="logout">登出</button></h4>
     <div class="tw"><table class="dt" data-sort data-sort-key="m15:users"><thead><tr><th>登录账号</th><th>姓名</th><th>角色</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead><tbody>
     ${USERS.map(u=>`<tr class="${u.status==='在用'?'':'ex'}">
       <td class="fc">${esc(u.acc)}</td>
