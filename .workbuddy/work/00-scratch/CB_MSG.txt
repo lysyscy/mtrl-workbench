@@ -1,9 +1,1 @@
-文档架构整改 · 长期守卫批次（TAIL-74）
-
-- 新尺子 tools/audit/audit_work.py：T14（scratch TTL 14 天 / 落点合规）＋ T15（artifacts md 白名单 ＋ work 文档文头四行），接线 doc_audit
-- 反向灵敏度 tools/mut/_mut_t14t15.py：三处变异全中、基线干净、临时件清场
-- docs/delivery-surface.md（交付面目录清单与同步状态）＋ docs/modules.md（15 模块一页纸）
-- 修 T14/T15 首轮命中：logs/i8 接口 dump 归位 artifacts/i8_source、三份 work 文档补文头
-- README 目录树与闸门说明同步
-
-四态 529 = 绿 529 · 17 项闸门全 0
+﻿日志补记 + 执行情况同步（TAIL-74 批次收尾）
