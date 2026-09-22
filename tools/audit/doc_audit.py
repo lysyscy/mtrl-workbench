@@ -22,6 +22,8 @@
 | `T11` | ⭐ **建议类报告必须带「待办登记回执」** —— `artifacts/` 里的审计/提案/建议**不许只活在报告里** | `artifacts/*.md` ↔ 计划 §15 |
 | `T12` | ⭐ **文档分层与命名约定** —— `plans/` 只许两份活文档（其余 `归档-` 打头）· `memory/` 日志必须进 `journal/` · 根只许 `README.md` | 根 `README.md` 的四层表 ＋ 本件三张白名单 |
 | `T13` | ⭐ **主文档过程回潮** —— 计划主文档行数超预算（1700）· 标题出现过程词（逐批/逐次/收官记录）⇒ 黄：该块**该下沉归档了**（`§13.1`「完成的就扔出去」的机器守） | `.workbuddy/plans/开发计划-主文档.md` |
+| `T14` | ⭐ **scratch 超期 / 落点合规** —— `work/00-scratch/` 超 14 天未升档未删 · `tools/` 根与 `logs/` 再现散件 ⇒ 黄（`audit_work.py`） | 文件系统 mtime |
+| `T15` | ⭐ **产物白名单 ＋ 工作记录元信息** —— `artifacts/` 只许工具生成物 md · `work/` 五区文档必须带文头四行（读者/回答什么/何时读/状态）⇒ 黄 | `audit_work.py` 白名单 |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
@@ -69,6 +71,9 @@ from audit_drift import (                                         # noqa: E402
 from audit_meta import (                                          # noqa: E402
     HARD_LIMIT, LINE_LIMIT, check_doc_budgets, check_doc_layout, check_file_sizes,
     check_plan_process, check_report_receipts, check_rule_origins, check_tail_ledger,
+)
+from audit_work import (                                          # noqa: E402
+    check_artifacts_and_headers, check_scratch_ttl,
 )
 
 
@@ -152,6 +157,11 @@ def main() -> int:
     #   **主文档过程回潮守卫** —— 行数超预算 ＋ 标题出现过程词 ⇒ 黄（该下沉归档了）。
     #   ⭐ 治的是"§13.1 早有『完成的就扔出去』的裁定，却只有触发点、没有机器守"。
     raw += check_plan_process()
+    # `T14`/`T15`（2026-09-22 立 · 文档架构审计 §七-15 · 实现见 `audit_work.py`）：
+    #   `T14` = scratch 超期（TTL 14 天）/ 落点合规；`T15` = artifacts md 白名单 ＋ work 文档文头四行。
+    #   ⭐ 治「新区变新垃圾场」：五区建好了只是分类学，**过期与元信息要机器盯着**才算闭环。
+    raw += check_scratch_ttl()
+    raw += check_artifacts_and_headers()
     # `T7` 登记：有能力的口径没被判据兜住（**逻辑在 tools/cover_gap.py** —— 别再内联）
     from cover_gap import T7_EXEMPT, check_cover_gaps         # noqa: PLC0415
 

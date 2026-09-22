@@ -36,6 +36,8 @@ D:\dev\mtrl-workbench\
 ├─ docs\                          【⭐ 工程基准档 · 人优先 · 入 git】
 │   ├─ runbook.md                   新机搭建 · PG/venv · NSSM 装拆起停 · 配置项 · 备份/保留期 · 换机 checklist
 │   ├─ architecture.md              架构总览（两代码面 / 15 模块映射 / 数据流 / 11 链路 —— 指针进计划 §2§3）
+│   ├─ modules.md                   15 个模块一页纸（模块 ↔ 包 ↔ 壳页 ↔ 现状 · 指针）
+│   ├─ delivery-surface.md          交付面目录清单与同步状态（降低仓外单点依赖）
 │   └─ changelog.md                 面向使用的版本变更记录（部署节点 / TAIL 销号批次）
 ├─ .env / .env.example            ↔ 配置（取值唯一出口 = app_settings.effective）
 ├─ ops\                           【工程侧底账】

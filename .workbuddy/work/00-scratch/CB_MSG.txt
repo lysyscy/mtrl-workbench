@@ -1,11 +1,9 @@
-结构检查点：文档架构审计整改落地（D21 · TAIL-72/73）
+文档架构整改 · 长期守卫批次（TAIL-74）
 
-- 重组收口：tools/audit|mut|probe|oneoff 四目录、根 README/阈值表/journal 全部入库
-- 新增 work/ 五区（Agent 工作记录 · 宪法见 work/README.md）＋ docs/（runbook/architecture/changelog）
-- TAIL-69 统一导入模块：import_kit 底座 ＋ m04 导入两步化（预览不写库）
-- TAIL-70 库存单据手动导入下线（T8 守卫）；m07 悬空降级文案纠正
-- 守卫：T13 主文档过程回潮 · T12 work 五区白名单 · 变异 _mut_impkit/_mut_t13/_mut_t8_m08imp
-- 备份收口：唯一点 .workbuddy/backups/（留 5 份）；scratch/backups 进 gitignore
-- 删除：CLAUDE.md（内容已归档）、frontend/ 空壳、backend/artifacts/（D21 二号裁定）
+- 新尺子 tools/audit/audit_work.py：T14（scratch TTL 14 天 / 落点合规）＋ T15（artifacts md 白名单 ＋ work 文档文头四行），接线 doc_audit
+- 反向灵敏度 tools/mut/_mut_t14t15.py：三处变异全中、基线干净、临时件清场
+- docs/delivery-surface.md（交付面目录清单与同步状态）＋ docs/modules.md（15 模块一页纸）
+- 修 T14/T15 首轮命中：logs/i8 接口 dump 归位 artifacts/i8_source、三份 work 文档补文头
+- README 目录树与闸门说明同步
 
-四态 529 = 绿 529 · 16 项闸门全 0
+四态 529 = 绿 529 · 17 项闸门全 0
