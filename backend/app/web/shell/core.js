@@ -1642,14 +1642,31 @@ function jcFetchPreview(d) {
     : '<div class="mut sm">（无）</div>';
   const syn = d.sync || {};
   const warn = syn.degraded ? `<div class="tip wn" style="margin-top:10px">⚠️ ${esc(syn.message || '')}</div>` : '';
+  /* ⭐ 「**未落库**」的**原因分类**（后端回执 `d.unsettled` = 按 `kind` 计数；kind 来自
+     `mod01_projects.domain.OwnershipDecision` —— 归属判定的**唯一出口**）。
+     ⚠️ 这段文案的职责是**给人指下一步**：只写"没落库"用户不知道干什么。
+     ⚠️ 口径（2026-09-25 · 用户「集采抓取与付款通知书同一套」）：未落库的**唯一**原因 = **归属没走完**
+        （不再是"i8 常用列表里没有" —— 那是老口径的措辞），而落库前提 = 能归到一个**具体小微**。 */
+  const KIND_TXT = {
+    needs_keyword: '该项目名是「小微壳」，但**单据名里认不出**是壳下哪个小微 ⇒ 出路：到「档案」页在该壳下**新建一个小微**'
+      + '（或给已有小微**补上**单据名里出现的关键词），补完**再抓一次**',
+    needs_choice: '该项目名是「小微壳」，单据名**同时命中壳下多个小微** ⇒ 出路：把关键词**补得更具体**，让它只命中一个，补完**再抓一次**',
+    not_archived: '该项目**还没建档** ⇒ 出路：先在「档案」页建档（或同步 i8 常用项目），建成后**再抓一次**',
+  };
+  const unsettled = (d.unsettled || []).filter(x => (x.count || 0) > 0);
+  const unsettledHtml = unsettled.length
+    ? `<div style="margin-top:6px">${unsettled.map(x => `<div class="tip wn" style="margin:4px 0">`
+        + `<b>${x.count}</b> 条 · ${esc(KIND_TXT[x.name] || ('归属未走完（' + x.name + '）'))}</div>`).join('')}</div>`
+    : '';
   return `<div class="tip ok" style="margin-bottom:10px"><b>抓取完成</b>：${esc(d.message || '')}</div>
-    ${warn}
-    <div style="font-size:12.5px">
-      <div><b>匹配上</b>（已落库 · 默认「待确认」）· ${d.matched} 条${d.multi ? `（其中 ${d.multi} 条的档案里有重名行，取的是第一条 —— 请核对）` : ''}</div>
-      ${list(d.matched_projects || [])}
-      <div style="margin-top:10px"><b>匹配不上</b>（i8 常用列表里也没有 ⇒ 按口径**不纳入**、未落库）· ${d.unmatched} 条</div>
-      ${list(d.unmatched_projects || [])}
-    </div>`;
+   ${warn}
+   <div style="font-size:12.5px">
+     <div><b>匹配上</b>（已落库 · 默认「待确认」）· ${d.matched} 条</div>
+     ${list(d.matched_projects || [])}
+     <div style="margin-top:10px"><b>未落库</b>（**归属未走完** ⇒ 按口径**不纳管**）· ${d.unmatched} 条</div>
+     ${unsettledHtml}
+     ${list(d.unmatched_projects || [])}
+   </div>`;
 }
 
 /* ⭐⭐ 性能 `P3` 主体 · **页级按需取数**（2026-09-19 · 用户批准的 A 方案）
