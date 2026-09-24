@@ -4,7 +4,7 @@
 --      · 工程底线的「测试库与开发库物理隔离」
 --
 -- 执行方式（需要 postgres 超级用户）：
---   "D:\pgsql\pgsql\bin\psql.exe" -U postgres -f "D:\dev\mtrl-workbench\ops\init_db.sql"
+--   "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -f "D:\dev\mtrl-workbench\ops\init_db.sql"
 --
 -- ⚠️ 执行前把 <PASSWORD> 换成你自己定的强口令，并同步写进 .env（不进版本库）。
 -- ============================================================

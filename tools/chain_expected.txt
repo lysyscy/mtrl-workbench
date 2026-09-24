@@ -90,7 +90,7 @@ P2|可点窗口 = 每月 10 号→月底（按钮可用性，**不是付款拦�
 P3|核验：**唯一核验项 = 审批状态「已批」**（发票核验 / 先付款特例均不做）|审批状态 = 已批|backend/app/mod03_notice/domain.py::class PayRow|ACC-PAY-VERIFY-001|已接
 P3|批量付款（**勾选若干条 → 一次动作** · 不做逐行付款按钮）|勾选若干条 → 一次动作|backend/app/mod03_notice/domain.py::check_batch|ACC-PAY-BATCH-001|已接
 P3|批次内「移出本次付款」（**已填的付款方式 / 金额不得丢失**）|每行可"移出本次付款"|backend/app/mod03_notice/domain.py::remove_from_batch|ACC-PAY-BATCH-001|已接
-P3|**不可付四类**前置禁用（含 ⭐ 已剔除行 · i8 撤单行 ⇒ **不得静默少几行**）|「不可付」共四类|backend/app/mod03_notice/domain.py::check_batch|ACC-PAY-BATCH-001|已接
+P3|**不可付五类**前置禁用（含 ⭐ 已剔除行 · i8 撤单行 · ⭐ **集采未关联** ⇒ **不得静默少几行**）|「不可付」共五类|backend/app/mod03_notice/domain.py::check_batch|ACC-PAY-BATCH-001|已接
 P3|兜底校验：提交时整批重算，**任一不过 ⇒ 整批不产生任何流水**|任一校验不过 → 整批不产生任何流水|backend/app/mod03_notice/domain.py::confirm_batch|ACC-PAY-BATCH-001|已接
 P3|付款登记：**一次付款 = 一条独立流水**（多次付款允许）|每次付款记一条独立流水|backend/app/mod05_flow/repository.py::create_flow|ACC-FLOW-LED-001|已接
 P3|实际付款方式：默认取**付款计划**、取不到兜底「现汇」|默认取自付款计划的付款方式|backend/app/mod05_flow/repository.py::_method_of|ACC-FLOW-LED-001|已接

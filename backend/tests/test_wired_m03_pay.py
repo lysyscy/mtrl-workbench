@@ -54,6 +54,17 @@ def _batch_pay_del() -> str:
     return _slice("batchPayDel:t=>{", "batchPayOk:t=>{", what="移出处理器")
 
 
+def _pay_block() -> str:
+    """⭐ 「本次不可付」的**唯一出口** `ntPayBlock` 通用件源码（与 `ntJcUnlinked` 同块）。
+
+    ⚠️ **为什么要"两段拼起来看"**（同 `shell_src.with_kernel` / `with_tbl` 的 doctrine）：
+       窗口组装那一段**委托**了这个通用件之后，「切片里必须出现 `n.astat==='已批'&&payEff(n)>0`」
+       这类**钉源码形态**的判据就**假红**了 —— 而把判据改回"必须有那串字面"等于**宣布以后不许抽通用件**。
+       ⇒ 正确写法 = 切片**委托了谁**（断言 `ntPayBlock(n)` 出现在切片里）＋ **那个件里**真做了那几件事。
+    """
+    return _slice("const ntPayBlock=n=>", "const ntSelectable", what="「不可付」唯一出口")
+
+
 # ---------------------------------------------------------------- 前置禁用（R14① / §4.4.4）
 
 
@@ -66,8 +77,15 @@ def test_壳里存在不可付行则确认付款禁用并给原因与解决路�
     ＋ 一段说明（含"点该行的删除把它移出本次付款"这条路径）。
     """
     reg = _batch_pay()
-    assert "const bad=rows.filter(n=>!(n.astat==='已批'&&payEff(n)>0));" in reg, \
-        "「不可付」的判据没了（未审批 / 本次应付 ≤ 0 两条都要在）"
+    # ⭐ 2026-09-24（`TAIL-91`）：判据改成**结构无关**的「**委托 ＋ 内核真做事**」——
+    #   不可付的三条判据抽成唯一出口 `ntPayBlock` 之后，原先"切片里必须有那串字面"的写法**必然假红**。
+    #   ⛔ 别改回去（那等于宣布"以后不许抽通用件"，与 `TAIL-62/64/67` 反向）。
+    assert "const bad=rows.filter(n=>ntPayBlock(n));" in reg, \
+        "「不可付」的判据**没走唯一出口**（窗口组装必须委托 `ntPayBlock`）"
+    kern = _pay_block()
+    assert "n.astat!=='已批'" in kern, "内核没判「未审批」"
+    assert "payEff(n)<=0" in kern, "内核没判「本次应付 ≤ 0」"
+    assert "ntJcUnlinked(n)" in kern, "内核没判「集采未关联」（§4.4.3 第⑤类）"
     assert '<button class="btn pri" data-act="batchPayOk"${bad.length?` disabled ' \
            'title="有 ${bad.length} 条不可付，请先删除这些行"`:\'\'}>确认付款</button>' in reg, \
         "有不可付行时「确认付款」没有被禁用"
@@ -84,7 +102,7 @@ def test_壳里本次应付为0也不可付():
     """
     assert "const payEff=n=>payOver(n)?N2(n.payOv):N2(n.approve-paidOf(n.id));" in SHELL, \
         "「本次应付」的口径出口没了（默认 = 审批金额 − 已付金额）"
-    assert "payEff(n)>0" in _batch_pay(), "窗口组装时没把「本次应付为 0」算作不可付"
+    assert "payEff(n)<=0" in _pay_block(), "唯一出口没把「本次应付为 0」算作不可付"
     ok = _batch_pay_ok()
     assert "if(can<=0){ errs.push(" in ok, "提交时没有兜底拦「本次应付为 0」"
     assert "本次应付为 0（审批金额 − 已付金额）" in ok, "拦下时没说清是哪种不可付"

@@ -320,14 +320,16 @@ const ACT={
       防的是"勾上之后才被标撤单"这类**状态错位**把一张已作废的单送进付款。 */
    const rows=all.filter(ntPayCand), drop=all.filter(n=>!ntPayCand(n));
    if(!rows.length){ closeModal(); return toast('请先勾选要付款的记录'); }
-   /* 不可付 = 未审批 或 本次应付 ≤ 0（已付清）。存在任一条时「确认付款」直接禁用（不是点了才拦） */
-   const bad=rows.filter(n=>!(n.astat==='已批'&&payEff(n)>0));
+   /* 不可付 = 未审批 · 本次应付 ≤ 0（已付清）· ⭐ **集采未关联**（§4.4.3）。
+      ⚠️ 判据走**唯一出口** `ntPayBlock(n)`（`index.html`，与后端 `PayRow.block()` 逐条对应）——
+         ⛔ 别在这里再手写一遍条件（两套判据必然漂移）。存在任一条时「确认付款」直接禁用（不是点了才拦）。 */
+   const bad=rows.filter(n=>ntPayBlock(n));
    Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });   /* 清掉已不在批次里的草稿 */
    const whyOf=n=>ntVoid(n)?'i8 已撤单':'已剔除';
    const body=`${drop.length?`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）—— <b>剔除行</b>按 §4.2.2 不进统计；<b>i8 已撤单行</b>的单据在 i8 侧已被删除。两者都<b>不该产生付款</b>；请先<b>恢复剔除 / 撤销已付 / 解绑关联</b>。</div>`:''}<div class="tip" style="margin-bottom:10px">已勾选 <b>${rows.length}</b> 条。<b>本次应付 = 付款金额</b>（默认 = 审批金额 − 已付金额；人工改过则以人工值为准）；「本次付款金额」<b>默认等于本次应付</b>，可改小。校验：<b>未审批</b>不可付（DEV-P-06）；<b>超出本次应付</b>被拦截（防超付）；付款方式选「其他」须填备注（DEV-P-01）。<b>任一校验不通过，整批不产生流水。</b></div>
      ${bad.length?`<div class="tip wn" style="margin-bottom:10px"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>请点该行的「<b>删除</b>」把它移出本次付款，或关闭后调整勾选 —— <b>删除会同时取消该行的勾选</b>，<b>已填的方式与金额不会丢</b>。</div>`:''}
      <div class="tw" style="max-height:44vh"><table class="dt cond" data-sort data-sort-key="modal:batchPay"><thead><tr>${BP_THEAD}</tr></thead><tbody>
-     ${rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=n.astat==='已批'&&can>0;
+     ${rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
        const plan=PLs.find(pl=>pl.docNo===n.code), dm=plan?plan.method:'现汇';
        const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);
        return `<tr class="${ok?'':'hl'}"><td class="fc">${n.code}</td>
@@ -367,6 +369,9 @@ const ACT={
      const can=payEff(n);      /* 本次应付 = 付款金额（默认 = 审批金额 − 已付金额） */
      if(n.astat!=='已批'){ errs.push(`${n.code} · 审批状态非「已批」，不可付款`); return; }
      if(can<=0){ errs.push(`${n.code} · 本次应付为 0（审批金额 − 已付金额）`); return; }
+    /* ⭐ ⑤ 集采未关联（§4.4.3）：窗口已禁用按钮，这行是**兜底**（防"勾上之后才被解绑"的状态错位）——
+       与后端 `PayRow.block()` 同一条口径、同一句文案。 */
+    if(ntJcUnlinked(n)){ errs.push(`${n.code} · 集采未关联合同，不可付款`); return; }
      const mEl=$('#bm'+i), aEl=$('#ba'+i);
      const m=(mEl&&mEl.value)||'现汇';
      const amt=numOf(aEl?aEl.value:'');

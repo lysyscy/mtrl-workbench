@@ -1,13 +1,14 @@
-"""`ACC-PAY-VERIFY-001`（付款前只核验审批状态）5 个判据点的验收断言。
+"""`ACC-PAY-VERIFY-001`（付款前只核验审批状态）6 个判据点的验收断言。
 
 依据：《说明书》§4.4.1（**唯一自动核验项 = 已批**）· §4.4.4（前置禁用 · 逐行移出 · 兜底整批重算）
-      · `DEV-P-06`。
+      · §4.4.3（集采**未关联不可付**——用户 2026-09-24 口述，无例外）· `DEV-P-06`。
 """
 
 from __future__ import annotations
 
 from app.core.money import to_money
 from app.mod03_notice.domain import (
+    BLOCK_JC_UNLINKED,
     BLOCK_NOTHING_DUE,
     BLOCK_STATUS,
     VERIFY_ITEMS,
@@ -18,6 +19,7 @@ from app.mod03_notice.domain import (
     remove_from_batch,
     verify_row,
 )
+from app.mod05_flow.domain import CATEGORY_JC, CATEGORY_MATERIAL
 from tests.acc_plugin import acc
 
 
@@ -103,3 +105,39 @@ def test_移出重绘不丢失其它行已填的值():
     )
     assert bad.ok is False and bad.flows == []              # 整批不产生任何流水
     assert bad.errors and "未批" in bad.errors[0]
+
+
+# ============================================================== 001-06 · ⑤ 集采未关联不可付
+
+
+@acc("ACC-PAY-VERIFY-001", "001-06")
+def test_集采未关联合同不可付():
+    """§4.4.3：集采分类的行**必须已关联集采合同**才可付（用户 2026-09-24 口述，**无例外**）。
+
+    ⚠️ 本测试钉的是**纯函数侧**（`PayRow.block()`）；生产接线（`NoticeRow.category` / `has_link`
+       ⇒ `PayRow`）在 `notice_pay_actions.apply_batch_pay` —— 若那里漏传，本测试**照样绿**
+       （`jc_linked` 默认 `False` 的方向是"拦住"）⇒ 界面上另有 `_shell_smoke` 与真机复做兜。
+    """
+    # 集采 + 未关联 ⇒ 不可付（即便已批、有额度）
+    assert verify_row(PayRow(11, "已批", to_money("100"), CATEGORY_JC, False)) == BLOCK_JC_UNLINKED
+    # 集采 + 已关联 ⇒ 可付（闸只认"有没有关联"，⛔ 不校验关联的是哪一张、金额对不对）
+    assert verify_row(PayRow(12, "已批", to_money("100"), CATEGORY_JC, True)) is None
+    # ⛔ 非集采 / 分类为空**一律不受影响** —— 这是"只拦集采"的关键：漏传不该误伤辅材 / 机械
+    assert verify_row(PayRow(13, "已批", to_money("100"), CATEGORY_MATERIAL, False)) is None
+    assert verify_row(PayRow(14, "已批", to_money("100"))) is None
+
+    # 前置禁用（§4.4.4）：原因要报出来，且**出路是"去关联"，不是"删掉"**
+    chk = check_batch([_ok(1), PayRow(2, "已批", to_money("100"), CATEGORY_JC, False)])
+    assert chk.enabled is False and chk.blocked_ids == [2]
+    assert "集采未关联合同" in chk.reason
+    assert "关联" in chk.how_to_fix                          # 给了正确的出路
+    assert ("删除" in chk.how_to_fix) or ("移出" in chk.how_to_fix)      # 原有的出路仍在
+
+    # 兜底校验（§4.4.4）：整批重算不过 ⇒ **整批不产生任何流水**
+    res = confirm_batch(
+        [PayRow(2, "已批", to_money("100"), CATEGORY_JC, False)],
+        {2: PayDraft(amount=to_money("100"))},
+        pay_date="2026-09-24",
+    )
+    assert res.ok is False and res.flows == []
+    assert any("集采未关联合同" in e for e in res.errors)

@@ -18,7 +18,7 @@ from decimal import Decimal
 
 from app.core.errors import MustReportError
 from app.core.money import MoneyError, require_non_negative, to_money
-from app.mod05_flow.domain import NoticeDebtView, OpeningView, debt_by_category
+from app.mod05_flow.domain import CATEGORY_JC, NoticeDebtView, OpeningView, debt_by_category
 from app.mod05_flow.models import PAY_METHODS
 
 _ZERO = to_money(0)
@@ -232,6 +232,10 @@ VERIFY_ITEMS: tuple[str, ...] = ("approve_status",)
 
 BLOCK_STATUS = "approve_status"        # 不可付原因①：审批状态非「已批」
 BLOCK_NOTHING_DUE = "nothing_due"      # 不可付原因②：本次应付 ≤ 0（前置状态，不是核验项）
+#: 不可付原因⑤：**集采分类但未关联集采合同**（§4.4.3 · 用户 2026-09-24 口述「不关联不允许付款」，**无例外**）。
+#: ⚠️ ③④（已剔除 / i8 已撤单）在 `notice_pay_actions.apply_batch_pay` 那层就**被排除出批次**（§4.2.2 / §4.2.7），
+#:    **不进** `PayRow`；本层只判「已在批次里的行能不能付」。
+BLOCK_JC_UNLINKED = "jc_unlinked"
 
 
 @dataclass
@@ -241,6 +245,12 @@ class PayRow:
     notice_id: int
     approve_status: str = ""
     payable: Decimal = _ZERO           # 本次应付 = 列表「付款金额」（默认=审批金额−已付，可会话级覆盖）
+    #: 分类（§4.2.3 三类）—— 本层只用它认「集采」这一档
+    category: str = ""
+    #: 是否已关联集采合同（关联载体 = 集采合同的**付款子表** `jc_payment`，§6.6.2）
+    #: ⚠️ 默认 `False` 是**故意选的方向**：漏传 ⇒ 集采行**被拦**（宁可拦住让人问一句，
+    #:    也不要静默放行）；非集采行（`category` 为空）**不受影响**。
+    jc_linked: bool = False
 
     def block(self) -> str | None:
         """不可付原因（`None` = 可付）。"""
@@ -248,6 +258,9 @@ class PayRow:
             return BLOCK_STATUS
         if to_money(self.payable) <= _ZERO:
             return BLOCK_NOTHING_DUE
+        # ⭐ ⑤ 集采未关联（§4.4.3）：本层是**纯函数、不查库** ⇒ 「已关联」由调用方灌进来。
+        if str(self.category or "").strip() == CATEGORY_JC and not self.jc_linked:
+            return BLOCK_JC_UNLINKED
         return None
 
     @property
@@ -257,11 +270,13 @@ class PayRow:
             return f"审批状态「{self.approve_status or '（空）'}」非「{APPROVE_STATUS_DONE}」"
         if reason == BLOCK_NOTHING_DUE:
             return "本次应付为 0（审批金额 − 已付金额）"
+        if reason == BLOCK_JC_UNLINKED:
+            return "集采未关联合同"
         return ""
 
 
 def verify_row(row: PayRow) -> str | None:
-    """单行核验（§4.4.1）：唯一自动核验项 = 审批状态「已批」；另附前置状态「本次应付 > 0」。"""
+    """单行核验（§4.4.1）：唯一自动核验项 = 审批状态「已批」；另附前置状态「本次应付 > 0」与「集采已关联」。"""
     return row.block()
 
 
@@ -288,14 +303,20 @@ def check_batch(rows: list[PayRow]) -> BatchCheck:
     for r in blocked:
         if r.label not in kinds:
             kinds.append(r.label)
+    # ⚠️ **出路按原因分叉**：集采未关联的出路**不是"删掉"**，而是**去关联**（§4.4.3）——
+    #    只给"删除"会把用户引到"把这行挪出本次付款"上去（病根没治，下次还拦）。
+    fix = (
+        "请点该行的「删除」把它移出本次付款（**同时取消该行勾选**，已填的付款方式与金额不会丢），"
+        "或关闭后调整勾选。"
+    )
+    if any(r.block() == BLOCK_JC_UNLINKED for r in blocked):
+        fix += ("⚠️ 其中「集采未关联合同」的行：出路是回到付款通知书页，把该行的"
+                "「集采实际供应商」匹配好、再用「关联集采合同」关联到一张合同（**不是删除**）。")
     return BatchCheck(
         enabled=False,
         blocked=blocked,
         reason=f"有 {len(blocked)} 条不可付：" + "；".join(kinds) + " —— 不可付的行不得进入本次付款。",
-        how_to_fix=(
-            "请点该行的「删除」把它移出本次付款（**同时取消该行勾选**，已填的付款方式与金额不会丢），"
-            "或关闭后调整勾选。"
-        ),
+        how_to_fix=fix,
     )
 
 
@@ -387,7 +408,7 @@ __all__ = [
     "derived_pay_amount", "default_stat_value",
     "StatTrace", "adjust_stat", "manual_edited_fields", "was_manually_edited",
     "stat_value_on_reimport", "apply_trace", "recompute_debt",
-    "APPROVE_STATUS_DONE", "VERIFY_ITEMS", "BLOCK_STATUS", "BLOCK_NOTHING_DUE",
+    "APPROVE_STATUS_DONE", "VERIFY_ITEMS", "BLOCK_STATUS", "BLOCK_NOTHING_DUE", "BLOCK_JC_UNLINKED",
     "PayRow", "BatchCheck", "verify_row", "check_batch",
     "PayDraft", "remove_from_batch", "ConfirmResult", "confirm_batch",
 ]

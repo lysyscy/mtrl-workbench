@@ -3,6 +3,7 @@
 依据：
 - 《说明书》§4.4.2（付款方式默认值：先取付款计划、取不到兜底「现汇」—— **窗口渲染与提交同一个出口**）
 - §4.4.4（批量付款：整批判定 ⇒ **不落半批** · `request_id` **幂等** · 一次付款一条独立流水）
+- §4.4.3（集采付款：**未关联集采合同 ⇒ 不可付**——用户 2026-09-24 口述，**无例外**）
 - §4.2.7（撤单 / 剔除行一律排除）
 
 ⚠️ 本模块只做**判定与落库编排**；落库在 `mod05_flow.repository`、动作入口在 `notice_api_router`。
@@ -104,7 +105,16 @@ def apply_batch_pay(
         raise MustReportError("没有可付款的行（勾选的单据可能已撤单 / 已被剔除）")
 
     pay_rows = [
-        PayRow(notice_id=r.notice_id, approve_status=r.approve_status, payable=r.pay_amount)
+        PayRow(
+            notice_id=r.notice_id,
+            approve_status=r.approve_status,
+            payable=r.pay_amount,
+            # ⭐ ⑤ 集采未关联不可付（§4.4.3）：两样都取自 `NoticeRow` ——
+            #    `build_rows` 已把分类与「有没有关联」**一次查完**（`_links_by_notice`，⛔ 无 N+1），
+            #    本层**不另查库**、也不另判一遍（判定唯一出口 = `domain.PayRow.block()`）。
+            category=r.category,
+            jc_linked=r.has_link,
+        )
         for r in targets
     ]
     plan = plan_methods or {}

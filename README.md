@@ -34,7 +34,7 @@
 D:\dev\mtrl-workbench\
 ├─ README.md                      ← 本文件：文档地图（唯一根 md，`T12` 守）
 ├─ docs\                          【⭐ 工程基准档 · 人优先 · 入 git】
-│   ├─ runbook.md                   新机搭建 · PG/venv · NSSM 装拆起停 · 配置项 · 备份/保留期 · 换机 checklist
+│   ├─ runbook.md                   服务起停 · PG/venv · NSSM 装拆起停 · 配置项 · 备份/保留期 · 清理责任
 │   ├─ architecture.md              架构总览（两代码面 / 15 模块映射 / 数据流 / 11 链路 —— 指针进计划 §2§3）
 │   ├─ modules.md                   15 个模块一页纸（模块 ↔ 包 ↔ 壳页 ↔ 现状 · 指针）
 │   ├─ delivery-surface.md          交付面目录清单与同步状态（降低仓外单点依赖）
