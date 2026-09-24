@@ -35,7 +35,7 @@ from app.core.identity import current_operator
 #    `NameError: name 'logger' is not defined` —— 而那句话的**本意**是"保守回落全量、并留个印子"。
 #    ⇒ 静默地把"留痕"变成"炸掉"。已补 logger（与全仓同一口径：`get_logger()`）。
 from app.core.logging import get_logger
-from app.mod01_projects.domain import norm_full_name
+from app.mod01_projects.domain import norm_full_name, resolve_ownership
 from app.mod01_projects.pending import record_detail
 from app.mod01_projects.repository import all_projects
 from app.mod01_projects.sync_service import sync_and_archive
@@ -59,29 +59,38 @@ logger = get_logger()
 
 
 def match_projects(rows: list[dict], projects: list) -> dict:
-    """抓取行 → 按**项目全名**分堆（`norm_full_name` 归一化后**精确相等** · ⛔ 不模糊）。
+    """抓取行 → **项目归属**（⭐ 与付款通知书抓取**同一套**：唯一出口 = `mod01_projects.domain.resolve_ownership`）。
 
-    ⭐ 口径与 `recovery.hits_of_full` **一致**（那是"命中档案行"的唯一出口）—— 本函数是它**只读的镜像**：
-    这里不落库、不改档案，所以⛔ 不调 `plan_recovery`（那是"陌生仓库扶正"的入口；集采没有仓库）。
+    ⚠️⚠️ **为什么不再"按全名精确相等取第一条"**（用户 2026-09-25 口径「**集采合同抓取和付款通知书抓取
+    用同一套匹配逻辑**」＋ 同日实测）：
+    **壳与具体小微共用同一个全名**（《说明书》§2.2 / §2.6）⇒ 拿全名去撞项目表**必然**命中 `[壳, 小微]` 两行，
+    而壳**没有仓库、不进任何候选**（§2.7.4）⇒ 取到壳 = 那批合同在界面上「**没有项目**」、**欠款无从归集**
+    （2026-09-25 实测 **23 条**）。这正是**铁律 §9.8-6**「先判断这个全名是不是壳，**不要直接拿全名去撞项目表**」要防的事。
 
-    ⚠️ **同一全名命中多行**（档案里可能真有重复，如"第四工程公司2026年小微项目"）⇒ 取**第一条**
-    并计入 `multi` ⇒ **报出来**（⛔ 不静默替人挑一行）。
+    ⇒ 本函数**只做分堆**，判定一律委托 `resolve_ownership`（⛔ 本层不再自己判一遍 —— 判定只有一个主人）：
+    · 普通项目全名 ⇒ `normal` ⇒ 落库
+    · **壳全名 ＋ 单据名命中该壳下某一个小微** ⇒ `small` ⇒ **落到那个小微**（不弹窗）
+    · 壳全名 ＋ 命中多个 / 一个都没命中 / 项目未建档 ⇒ `settled=False` ⇒ **不落库**，随回执与执行记录报出（**禁静默**）
+
+    ⚠️ 「单据名」取 i8 原文 `fields.BillName`，与付款通知书**同一套 i8 单据名**（`jc_contract.bill_name` 就是它）。
+    ⚠️ `recovery.hits_of_full` 那套是**材料侧（按仓库名）**的出口，集采**没有仓库** ⇒ 不适用；口径主人 = §2.5.1 / §9.8-6。
     """
-    by_norm: dict[str, list] = {}
-    for p in projects or ():
-        by_norm.setdefault(norm_full_name(str(getattr(p, "name_full", "") or "")), []).append(p)
-
     matched: list[dict] = []
     unmatched: list[dict] = []
     multi = 0
     for row in rows or ():
-        hits = by_norm.get(norm_full_name(str(row.get("project_name") or ""))) or []
-        if hits:
-            if len(hits) > 1:
+        d = resolve_ownership(
+            name_full=str(row.get("project_name") or ""),
+            doc_name=str((row.get("fields") or {}).get("BillName") or ""),
+            projects=projects,
+        )
+        if not d.settled:
+            # ⭐ `needs_choice` = 壳下命中小微**多个**（= 老口径里 `multi` 那批，但现在**不落库**、报出来让人选）
+            if d.kind == "needs_choice":
                 multi += 1
-            matched.append({**row, "project_id": int(hits[0].id)})
-        else:
-            unmatched.append(row)
+            unmatched.append({**row, "unsettled_kind": d.kind, "unsettled_reason": d.reason})
+            continue
+        matched.append({**row, "project_id": int(d.target_id)})     # ← 落的是**具体小微**（不是壳）
     return {"matched": matched, "unmatched": unmatched, "multi": multi}
 
 
@@ -253,7 +262,17 @@ def run_fetch(
     run = save_run_record(s, **fetch_task.fetch_record_payload(
         object_desc=f"{TABLE} 全量（{len(rows)} 条）",
         success=len(m["matched"]), fail=0),
-        detail=record_detail(), operator=operator, started_at=t0)
+        # ⚠️ `record_detail()` 是**材料侧**的键（`promote_pending`，集采天然用不上）⇒ 在其后**追加集采自己的**
+        #    未走完清单（`jc_unsettled`）：少了它，这些合同只会"静默地没落库"（⛔ 禁静默）。
+        detail={**record_detail(),
+                "jc_unsettled": [
+                    {"contract_no": str(r.get("contract_no") or ""),
+                     "project_name": str(r.get("project_name") or ""),
+                     "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
+                     "kind": r.get("unsettled_kind")}
+                    for r in m["unmatched"][:200]           # 截断保护：回执不该被几千条撑爆
+                ]},
+        operator=operator, started_at=t0)
     return {
         "ok": True, "degraded": False,
         "since": since,                                  # ⭐ 本次的日期起点（空 = 全量）
@@ -264,6 +283,10 @@ def run_fetch(
         #    否则它们的金额会按"正常"落 `contract_amt`（可逆，但**不指定就一直不对**）。
         "new_parties": new_parties,
         "matched": len(m["matched"]), "unmatched": len(m["unmatched"]), "multi": m["multi"],
+        # ⭐ `TAIL-92`：没落库的按**归属类别**分开报（⛔ 禁静默 —— 得让人看出"卡在哪一步"）：
+        #    `needs_keyword` = 壳认出来了、但单据名里没有该壳下任何小微的关键词（**最常见**，要人去指认/补词）
+        #    `needs_choice`  = 命中了多个小微（要人挑一个）· `not_archived` = 项目还没建档
+        "unsettled": _tally(m["unmatched"], "unsettled_kind"),
         "stats": stats,
         # ⭐ **匹配预览**（落库前就该让人看见的那两块；这里随回执一起回，壳直接用）
         "matched_projects": _tally(m["matched"], "project_name"),
@@ -273,7 +296,7 @@ def run_fetch(
         "message": (
             f"抓取 {len(rows)} 条（未审批丢弃 {dropped}）· 匹配上 {len(m['matched'])} 条"
             f"（新增 {stats['inserted']} / 刷新 {stats['refreshed']}）· "
-            f"匹配不上 {len(m['unmatched'])} 条（按口径 = 不纳入，未落库）"
+            f"归属未走完、未落库 {len(m['unmatched'])} 条（按口径 = 不纳入；清单见执行记录）"
             + (f" · ⚠️ {sync_result.get('message')}" if sync_result.get("degraded") else "")
         ),
     }

@@ -111,3 +111,55 @@ def test_落库幂等_按合同编号_且无编号的行被跳过并计数():
         # 行数只由"有编号的新行"决定（独立复算）
         assert R.count_contracts(s) >= 2
         s.rollback()
+
+
+# ============================================== 001-11 · 集采匹配 = 付款侧同一套归属（TAIL-92）
+
+
+@acc("ACC-JC-FETCH-001", "001-11")
+def test_集采匹配走付款侧同一套归属_不得挂到壳上():
+    """⭐ 2026-09-25 用户口径：「**集采合同抓取和付款通知书抓取用同一套匹配逻辑**」＋ 铁律 §9.8-6。
+
+    **壳与具体小微共用同一个全名**（《说明书》§2.2 / §2.6）⇒ 拿全名去撞项目表**必然**命中 `[壳, 小微]`，
+    而壳**没有仓库、不进任何候选** ⇒ 取到壳 = 那批合同"没有项目"、**欠款无从归集**（实测 23 条）。
+
+    ⇒ 本判据钉两件事：① 分堆**只委托** `mod01_projects.domain.resolve_ownership`（⛔ 本层不自己判一遍）；
+       ② 「壳全名 ＋ 单据名命中某小微」⇒ 落**那个小微**；命中多个 / 一个没中 / 未建档 ⇒ **不落库**且报出类别。
+    """
+    from types import SimpleNamespace
+
+    from app.mod01_projects.models import TYPE_NORMAL, TYPE_SHELL, TYPE_SMALL
+    from app.mod11_jc.fetch_service import match_projects
+
+    def _p(pid, kind, full, *, wh=None, parent=None, kw=None):
+        return SimpleNamespace(id=pid, project_type=kind, name_full=full, warehouse_name=wh,
+                               parent_shell_id=parent, match_keywords=kw or [])
+
+    full_shell = "第四工程公司2026年小微项目(TBLX2026070003)"
+    shell = _p(10, TYPE_SHELL, full_shell)
+    small = _p(19, TYPE_SMALL, full_shell, wh="兰考金不换前置车间项目",
+               parent=10, kw=["兰考金不换"])
+    normal = _p(7, TYPE_NORMAL, "晋江污泥处理中心一期工程核心设备安装工程(TBLX2024040013)",
+                wh="晋江污泥处理项目")
+    projects = [shell, small, normal]
+
+    def _row(full, bill):
+        return {"contract_no": "CGHT-X", "project_name": full, "fields": {"BillName": bill}}
+
+    # ① 普通项目：照旧落库
+    m = match_projects([_row(normal.name_full, "晋江污泥处理中心…/钢材/…")], projects)
+    assert [r["project_id"] for r in m["matched"]] == [7] and not m["unmatched"]
+
+    # ② 壳全名 ＋ 单据名命中该壳下**唯一**小微 ⇒ **落到那个小微**（⛔ 不是壳！）
+    m = match_projects([_row(full_shell, "第四工程公司兰考金不换项目亿管通钢材付款")], projects)
+    assert [r["project_id"] for r in m["matched"]] == [19], "壳全名被挂到了壳上（§9.8-6 违规）"
+    assert 10 not in [r["project_id"] for r in m["matched"]], "⛔ 落到了壳（壳没有仓库、不进候选）"
+
+    # ③ 壳全名 ＋ 单据名一个关键词都没命中 ⇒ **不落库**，且**报出类别**（禁静默）
+    m = match_projects([_row(full_shell, "第四工程公司某笔没见过的项目付款")], projects)
+    assert not m["matched"] and len(m["unmatched"]) == 1
+    assert m["unmatched"][0]["unsettled_kind"] == "needs_keyword"
+
+    # ④ 项目未建档 ⇒ 不落库（走链路 A 建档后重判）
+    m = match_projects([_row("根本不存在的项目全名(XMCB0000000000)", "x")], projects)
+    assert not m["matched"] and m["unmatched"][0]["unsettled_kind"] == "not_archived"
