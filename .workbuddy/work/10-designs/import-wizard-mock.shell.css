@@ -1,0 +1,289 @@
+/* ⛔ **设计原型用的样式快照**（2026-09-22 自动生成，⛔ 别在壳里引用本文件）
+   来源 ①：backend/app/mod03_notice/page.py :: THEME_CSS（主题变量真源）
+   来源 ②：backend/app/web/index.html 的 <style>（壳组件类，逐字）
+   ⇒ 外观原型与被改造的壳**同源同貌**；壳改了样式，重跑生成器即可同步。 */
+
+:root{
+  /* 中性 / 表面 */
+  --bg:#f4f6f9; --sf:#fff; --sf2:#f8fafc; --sf3:#f4f4f5;
+  --bd:#e3e8ef; --bd2:#eef1f5; --bd3:#c4ccd8;
+  --tx:#1f2329; --tx2:#5c6675; --mut:#6b7280; --mut2:#c9d0da;
+  --on:#fff;
+  /* 主色（四档 ＋ 高亮档） */
+  --pri:#2563eb; --pri-d:#1d4ed8; --pri-l:#eff5ff; --pri-bd:#dbeafe; --pri-hl:#93c5fd;
+  /* 状态色：绿 / 琥珀 / 红 —— 各四档成组 */
+  --ok:#16a34a; --ok-d:#15803d; --ok-l:#f0fdf4; --ok-bd:#bbf7d0;
+  --wn:#d97706; --wn-d:#92400e; --wn-l:#fffbeb; --wn-bd:#fde68a;
+  --dg:#dc2626; --dg-d:#991b1b; --dg-l:#fef2f2; --dg-bd:#fecaca;
+  /* 中性档（普通 / 未付款）与特殊档（集采 / 紫）—— 同样四档成组 */
+  --in:#64748b; --in-d:#475569; --in-l:#f1f5f9; --in-bd:#e2e8f0;
+  --vi:#7c3aed; --vi-d:#6d28d9; --vi-l:#f5f3ff; --vi-bd:#ddd6fe;
+  /* 行态 / 可改格 */
+  --row-hover:#fafbfc; --ex-bg:#fafafa; --hl:#fff8f0; --hl-hover:#fef3c7;
+  --sel:#e0e7ff; --void-bg:#fffbf5; --draft:#fffdf5; --edit-l:#fffbeb; --edit-bd:#fcd34d;
+  --th-hover:#e9eef5; --del-line:#d4d4d4;
+  /* 侧栏（深色面板）与提示条 —— ⭐ 2026-09-21 立**三档文字**规范（用户报「侧栏在各类主题下视觉不平衡」）：
+     `--sb-hd`（品牌名/悬停项 —— 最亮）· `--sb-tx`（普通项）· `--sb-mut`（编号·分组标题·页脚 —— 次要）
+     ＋ `--sb-on`（**选中项底 = 主色本尊**）与 `--sb-on-hl`（选中项里的编号 —— `--on` 的浅化档）。
+     ⚠️ 选中项底**不再是"更暗的面板色"**：那样配 `color:var(--on)`（主色之上的前景）在深色套里
+        会变成**黑字压近黑底**（2026-09-21 实测对比度 **1.05** ⇒ 等于看不见，正是"不平衡"的根）。 */
+  --sb:#1e293b; --sb-bd:#334155; --sb-tx:#cbd5e1; --sb-hd:#ffffff; --sb-mut:#aab8ca; --sb-dis:#8fa0b8;
+  --sb-hover:#273449; --sb-on:#2563eb; --sb-on-hl:#f2f6ff;
+  --toast-bg:#1e293b; --code-bg:#fff9;
+  /* 阴影 / 遮罩 */
+  --shadow:0 1px 2px #0f172a12; --shadow-pop:0 8px 24px #0f172a26;
+  --shadow-md:0 12px 32px #0f172a2e; --shadow-toast:0 8px 22px #0f172a3d; --mask:#0f172a66;
+  /* 几何与字体（非颜色；壳与页面共用同一份，故一并收进真源） */
+  --r:8px; --r2:12px;
+  --fs:'Microsoft YaHei','PingFang SC',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --fm:ui-monospace,'Cascadia Mono',Consolas,monospace;
+}
+
+/* ===== 以下逐字来自 web/index.html 的 <style> ===== */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--fs);font-size:13px;color:var(--tx);background:var(--bg);-webkit-font-smoothing:antialiased}
+.app{display:flex;height:100vh;overflow:visible}
+
+/* ---------- 侧栏 ---------- */
+.sb{width:238px;flex:0 0 238px;background:var(--sb);color:var(--sb-tx);display:flex;flex-direction:column;overflow-y:auto}
+.sb::-webkit-scrollbar{width:8px}
+.sb::-webkit-scrollbar-track{background:none}
+.sb::-webkit-scrollbar-thumb{background:var(--sb-bd);border-radius:4px}
+.sb-brand{padding:14px 16px 12px;border-bottom:1px solid var(--sb-bd)}
+/* ⚠️ 侧栏的**三档文字**各用各的角色（2026-09-21 修）：品牌/悬停 = `--sb-hd`、普通项 = `--sb-tx`、
+   次要（编号/分组/页脚）= `--sb-mut`。⛔ **别再借 `--on`**（它是"主色**之上**的前景"）——
+   原来 `.sb-brand b` 与 `.sb-i:hover` 用 `--on`，在深色套里 `--on` 是**黑** ⇒ 黑字压深面板。 */
+.sb-brand b{display:block;color:var(--sb-hd);font-size:13.5px;font-weight:500;letter-spacing:.2px}
+.sb-brand span{display:block;color:var(--sb-mut);font-size:11px;margin-top:3px}
+.sb-g{padding:10px 0 2px}
+.sb-g>h5{padding:0 16px 6px;font-size:11px;color:var(--sb-mut);font-weight:400;letter-spacing:.6px}
+.sb-i{display:flex;align-items:center;gap:8px;padding:6.5px 16px;cursor:pointer;font-size:12.5px;border-left:2.5px solid transparent;line-height:1.35}
+.sb-i:hover{background:var(--sb-hover);color:var(--sb-hd)}
+/* 选中项：底 = **主色本尊**（`--sb-on`），字 = `--on`（"主色之上的前景"）⇒ 语义正好、深浅两族都读得清；
+   左侧亮边用 `--on`（若仍用 `--pri` 就与底同色、等于看不见）。 */
+.sb-i.on{background:var(--sb-on);color:var(--on);border-left-color:var(--on);font-weight:600}
+.sb-i .c{font-family:var(--fm);font-size:10.5px;color:var(--sb-mut);flex:0 0 46px}
+.sb-i.on .c{color:var(--sb-on-hl)}
+.sb-i.dis{color:var(--sb-dis)}   /* 「暂缓」= 语义标注，不是禁用：该项仍可点进 MOD-10 查看说明页 ⇒ 光标保持 pointer（不用 not-allowed，免得"看着点不动、其实能点"） */
+.sb-i.dis:hover{background:none;color:var(--sb-dis)}
+.sb-i .m{margin-left:auto;font-size:10px;color:var(--sb-mut)}
+.sb-foot{margin-top:auto;padding:10px 16px;border-top:1px solid var(--sb-bd);font-size:10.5px;color:var(--sb-mut);line-height:1.6}
+
+/* ---------- 主体 ---------- */
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+.tb{height:54px;flex:0 0 54px;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:14px;padding:0 18px}
+.tb h1{font-size:14.5px;font-weight:500}
+.tb h1 em{font-style:normal;font-family:var(--fm);font-size:11px;color:var(--mut);margin-left:8px;font-weight:400}
+.tb .sp{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--tx2)}
+.view{flex:1;overflow-y:auto;padding:14px 18px 40px}
+
+/* ---------- 通用件 ---------- */
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);margin-bottom:12px;overflow:hidden}
+.card>h4{padding:9px 13px;border-bottom:1px solid var(--bd2);font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:8px;background:var(--sf2)}
+.card>h4 .sp{margin-left:auto;display:flex;gap:6px;align-items:center;font-weight:400}
+.card .bd{padding:12px 13px}
+.card .bd.np{padding:0}
+.tip{background:var(--pri-l);border:1px solid var(--pri-bd);border-left:3px solid var(--pri);border-radius:6px;padding:8px 11px;font-size:12px;color:var(--pri-d);line-height:1.65;margin-bottom:10px}
+.tip.wn{background:var(--wn-l);border-color:var(--wn-bd);border-left-color:var(--wn);color:var(--wn-d)}
+.tip.dg{background:var(--dg-l);border-color:var(--dg-bd);border-left-color:var(--dg);color:var(--dg-d)}
+.tip.ok{background:var(--ok-l);border-color:var(--ok-bd);border-left-color:var(--ok);color:var(--ok-d)}
+.tip b{font-weight:500}
+.tip code{font-family:var(--fm);font-size:11px;background:var(--code-bg);padding:1px 4px;border-radius:3px}
+/* 可折叠的口径说明：默认收起，把纵向空间让给数据 */
+details.tip>summary{cursor:pointer;font-weight:500;outline:none;list-style:none}
+details.tip>summary::-webkit-details-marker{display:none}
+details.tip>summary::before{content:'▸ ';color:var(--pri);font-size:11px}
+details.tip[open]>summary::before{content:'▾ '}
+
+/* 按钮 */
+.btn{font-family:var(--fs);font-size:12px;padding:4.5px 11px;border:1px solid var(--bd);background:var(--sf);color:var(--tx);border-radius:6px;cursor:pointer;line-height:1.4;white-space:nowrap}
+.btn:hover{border-color:var(--bd3);background:var(--sf2)}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:var(--on)}
+.btn.pri:hover{background:var(--pri-d)}
+.btn.dg{color:var(--dg-d);border-color:var(--dg-bd)}
+.btn.dg:hover{background:var(--dg-l)}
+.btn.sm{padding:2.5px 7px;font-size:11.5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.gost{border-style:dashed;color:var(--mut)}
+
+/* 表格 */
+/* 表格滚动容器：必须有高度上限，sticky 表头才「贴得住」。
+   否则容器不滚动、整页滚动，表头会跟着一起滚走 —— 表现为「往下拖表头没了」。 */
+.tw{overflow:auto;max-height:calc(100vh - 330px);min-height:260px}
+table.dt{width:100%;border-collapse:collapse;font-size:12.5px}
+.dt th{position:sticky;top:0;z-index:2;background:var(--sf2);border-bottom:1px solid var(--bd);padding:6px 8px;text-align:left;font-weight:500;color:var(--tx2);white-space:nowrap;font-size:11.5px}
+/* 「合计」行**统一置底**（2026-09-13 用户口径）：表头贴顶、合计行贴底 ⇒ 数据量大时不用滚到底才看得到（`sumRowOf` 产出的行带 `sumrow` 类）。
+   ⭐⭐ **`position:sticky` 必须落在 `<tr>` 上 —— 写在 `>td` 上永不生效**（2026-09-16 修正）：
+       `sticky` 作用在 `<td>` 时，它的**包含块是表格行**（行高 = 单元格高）⇒ **没有可位移的空间**。
+       实测（真实浏览器 · 容器高 200px · 表内 30 行 · `scrollTop=0`，判据 = 「合计行底 − 容器底」）：
+       `td` 写法 = **+792.5px**（合计行在屏幕外，**必须滚到底才看得见**）vs `tr` 写法 = **−1px**（吸附生效）。
+       ⚠️ 它**不报错、不崩、只是不生效** ⇒ 只能靠实测抓出来；`_smoke` 的 N27 断言已按此收紧。
+   ⚠️ `border-collapse:collapse` 下吸附行的**边框会丢** ⇒ 用 `box-shadow` 补上边线（故 `>td` 那条仍要保留）；
+   ⚠️ 吸附行**必须有不透明底色**（否则数据行会透出来）⇒ 底色统一取 `var(--sf2)`（与既有合计行同色）。
+   ⚠️ **分组表**（`MOD-07` 焊材/气体提取）不置底 —— 分组合计要紧贴本组，两行同 sticky 会重叠（由 `sumRowOf` 的 `sticky:false` 控制）。
+       ⚠️ **不吸附 ≠ 不置底**：`sticky:false` 时合计行仍带 `data-pin`、仍钉在表尾、仍不参与排序。 */
+.dt tbody tr.sumrow{position:sticky;bottom:0;z-index:2}
+.dt tbody tr.sumrow>td{background:var(--sf2);box-shadow:inset 0 1px 0 var(--bd)}
+.dt td{border-bottom:1px solid var(--bd2);padding:5px 8px;vertical-align:middle}
+/* 分段竖线（`.vsep`）：`MOD-06` 表①② 按「总求和（本表）」的四段做**视觉分隔**（2026-09-13 用户口径）。
+   ⚠️ 只加 `border-left`、颜色走 token（不写死色值 —— 内联样式无硬编码色值的断言对 class 同样成立）。 */
+.dt th.vsep,.dt td.vsep{border-left:2px solid var(--bd)}
+.dt tbody tr:hover{background:var(--row-hover)}
+.dt tbody tr.hl{background:var(--wn-l)}
+.dt tbody tr.hl:hover{background:var(--hl-hover)}
+.dt tbody tr.ex{color:var(--mut);background:var(--ex-bg)}
+.dt tbody tr.ex td{text-decoration:line-through;text-decoration-color:var(--del-line)}
+/* ⭐ i8 已撤单行（§4.2.7）：与「剔除」同行样式（.ex），但**左侧加一道警示竖条**，
+   并把删除线关掉 —— 撤单不等于"作废的错数据"，它是"源单被删、保留可查"，故只加标识不划掉。
+   ⚠️ 有牵涉（ntVoidJoint）时该行**仍算有效**（留在统计里），故本类只表达"来源"，不表达"退出统计"。 */
+.dt tbody tr.ntvoid{box-shadow:inset 3px 0 0 var(--wn);background:var(--void-bg)}
+.dt tbody tr.ntvoid:hover{background:var(--hl-hover)}
+.dt tbody tr.ntvoid td{text-decoration:none}
+.dt tbody tr.ntvoid .fl{background:var(--void-bg)}
+.dt tbody tr.pick{background:var(--pri-l)}
+.dt tbody tr.pick:hover{background:var(--pri-bd)}
+.dt tbody tr.sel{background:var(--sel)}
+.dt .num{text-align:right;font-family:var(--fm);font-size:12px;white-space:nowrap}
+.dt .ctr{text-align:center}
+.dt .now{white-space:nowrap}
+.dt.cond td,.dt.cond th{padding:4.5px 7px;font-size:12px}
+.fl{position:sticky;left:0;background:var(--sf);z-index:1}
+.dt tbody tr:hover .fl{background:var(--row-hover)}
+.dt tbody tr.hl .fl{background:var(--wn-l)}
+.dt tbody tr.ex .fl{background:var(--ex-bg)}
+
+/* 标签 */
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;line-height:1.55;white-space:nowrap;border:1px solid transparent}
+.t-pri{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-bd)}
+.t-ok{background:var(--ok-l);color:var(--ok-d);border-color:var(--ok-bd)}
+.t-wn{background:var(--wn-l);color:var(--wn-d);border-color:var(--wn-bd)}
+.t-dg{background:var(--dg-l);color:var(--dg-d);border-color:var(--dg-bd)}
+.t-in{background:var(--in-l);color:var(--in-d);border-color:var(--in-bd)}
+.t-vi{background:var(--vi-l);color:var(--vi-d);border-color:var(--vi-bd)}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:1px}
+.d-ok{background:var(--ok)}.d-wn{background:var(--wn)}.d-dg{background:var(--dg)}.d-in{background:var(--in)}.d-pri{background:var(--pri)}.d-vi{background:var(--vi)}
+
+/* 表单/行内编辑 */
+select.inp,input.inp,textarea.inp{font-family:var(--fs);font-size:12px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px;background:var(--sf);color:var(--tx);width:100%}
+input.inp.num{text-align:right;font-family:var(--fm)}
+input.inp:focus,select.inp:focus,textarea.inp:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-bd)}
+input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;cursor:not-allowed}
+.ed{background:var(--edit-l)!important;border-color:var(--edit-bd)!important}
+.plain{border:1px solid transparent;background:transparent}
+.plain:hover{border-color:var(--bd);background:var(--sf)}
+/* ---------- 活动大表手填项（MOD-07 · OPEN-05「上次值带入」）----------
+   带入态 = 输入框黄底（复用 .ed）+ 左上角「↺07月」来源标记；本月已录入则白底无标记。 */
+.dt td.bigc{position:relative}
+.dt td.bigc .ctag{position:absolute;left:5px;top:2px;font-size:9.5px;font-style:normal;color:var(--wn-d);pointer-events:none}
+.dt td.bigc .inp{padding-left:28px}
+.fbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:10px 13px;border-bottom:1px solid var(--bd2);background:var(--sf2)}
+.fbar .fi{display:flex;flex-direction:column;gap:3px}
+.fbar .fi>label{font-size:10.5px;color:var(--mut)}
+.fbar .fi input,.fbar .fi select{min-width:112px;width:auto}
+.chk{width:13px;height:13px;cursor:pointer;vertical-align:-2px}
+/* ---------- 表头点击排序（数据列表，见 applySorts）----------
+   三态：升序 ▲ → 降序 ▼ → 原序 ↕（可反复切换，同一时刻只有一列生效）。
+   当前排序列常显且用主色；其余可排序列淡灰，鼠标移上去变深。 */
+.dt th.srt{cursor:pointer;-webkit-user-select:none;user-select:none}
+.dt th.srt:hover{background:var(--th-hover);color:var(--tx)}
+.dt th.srt .sind{font-size:10.5px;color:var(--mut2);margin-left:3px}
+.dt th.srt:hover .sind{color:var(--mut)}
+.dt th.srt.on,.dt th.srt.on .sind{color:var(--pri)}
+/* 无障碍焦点框的**唯一出口**：凡「非按钮但可点」的元素，一律 加 `data-act` + `role="button"` + `tabindex="0"`，
+   由这一条规则统一给焦点框、由文件末的 keydown 委托统一给「回车 / 空格」—— 两处都只写一遍。 */
+[data-act][role="button"]:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px}
+.kpi .k{font-size:11.5px;color:var(--mut);display:flex;align-items:center;gap:4px}
+.kpi .v{font-size:19px;font-weight:500;font-family:var(--fm);margin-top:3px;letter-spacing:-.3px}
+.kpi .s{font-size:11px;color:var(--mut);margin-top:2px}
+.kpi.dg .v{color:var(--dg-d)}
+.kpi.wn .v{color:var(--wn-d)}
+.kpi.ok .v{color:var(--ok-d)}
+.kpi.pri .v{color:var(--pri)}
+
+/* 选中汇总条（付款通知书页：选中上下文指标 + 主操作合并为一条） */
+.selbar{position:sticky;top:0;z-index:25;display:flex;align-items:center;background:var(--sf);
+  border:1px solid var(--bd);border-radius:var(--r);padding:0 8px 0 15px;min-height:50px;margin-bottom:12px;
+  box-shadow:0 1px 2px var(--shadow)}
+.selbar .m{display:flex;flex-direction:column;gap:2px}
+.selbar .m .k{font-size:11px;color:var(--mut);line-height:1.15;white-space:nowrap}
+.selbar .m .v{font-family:var(--fm);font-size:14.5px;font-weight:500;line-height:1.2;letter-spacing:-.2px;white-space:nowrap}
+.selbar .dv{width:1px;height:26px;background:var(--bd2);margin:0 16px}
+.selbar .act{margin-left:auto;display:flex;align-items:center;gap:10px}
+
+/* 迷你条 */
+.bars{display:flex;flex-direction:column;gap:6px}
+.bars .br{display:flex;align-items:center;gap:9px;font-size:12px}
+/* 迷你条标签 = **项目名**（看板仓库条 / 按项目看欠款 / 付款统计按项目）⇒ 与表格列同一条规则：
+   **一律不截断**（超宽换行）。⚠️ 该截断只发生在 CSS 里 —— DOM 的文本始终是全文，
+   行为式断言**测不出来**，所以 `_smoke` 另有一条"实现标记"断言直接扫整份文件。 */
+.bars .br .nm{flex:0 0 176px;white-space:normal;overflow-wrap:anywhere;line-height:1.35;color:var(--tx2)}
+.bars .br .tk{flex:1;height:13px;background:var(--sf2);border-radius:3px;overflow:hidden}
+.bars .br .tk i{display:block;height:100%;background:var(--pri);border-radius:3px}
+.bars .br .tk i.g{background:var(--ok)}.bars .br .tk i.r{background:var(--dg)}.bars .br .tk i.o{background:var(--wn)}.bars .br .tk i.v{background:var(--vi)}
+.bars .br .vl{flex:0 0 108px;text-align:right;font-family:var(--fm);font-size:12px}
+
+/* 弹窗 */
+.mask{position:fixed;inset:0;background:var(--mask);display:flex;align-items:center;justify-content:center;z-index:90;padding:24px}
+.modal{background:var(--sf);border-radius:10px;box-shadow:0 12px 32px var(--shadow-md);width:100%;max-width:640px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+.modal.wide{max-width:940px}
+.modal h3{padding:12px 16px;border-bottom:1px solid var(--bd);font-size:13.5px;font-weight:500;display:flex;align-items:center}
+.modal h3 .x{margin-left:auto;cursor:pointer;color:var(--mut);font-size:17px;line-height:1;padding:0 3px}
+.modal h3 .x:hover{color:var(--dg-d)}
+.modal .mb{padding:14px 16px;overflow-y:auto}
+.modal .mf{padding:10px 16px;border-top:1px solid var(--bd);display:flex;gap:8px;justify-content:flex-end;background:var(--sf2)}
+.fld{margin-bottom:11px}
+.fld>label{display:block;font-size:11.5px;color:var(--tx2);margin-bottom:4px}
+.fld>label b{color:var(--dg-d);font-weight:400}
+.fld .hint{font-size:11px;color:var(--mut);margin-top:3px;line-height:1.6}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.kv{display:grid;grid-template-columns:112px 1fr;gap:6px 10px;font-size:12px}
+.kv dt{color:var(--mut)}
+.kv dd{font-family:var(--fm)}
+
+/* 提示条 */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--toast-bg);color:var(--on);padding:9px 18px;border-radius:8px;font-size:12.5px;z-index:120;box-shadow:0 8px 22px var(--shadow-toast);max-width:70vw;line-height:1.5}
+.toast b{color:var(--pri-hl);font-weight:500}
+
+/* 其他 */
+.mut{color:var(--mut)}.sm{font-size:11.5px}.fc{font-family:var(--fm)}
+/* 「外观主题」的**配色标本卡**（`V.set`，2026-09-21）——
+   ⚠️ 卡面的**底色/文字色是逐卡内联的**（各套主题自己的取值，由后端给）⇒ 这里只管**骨架**，
+   ⛔ 一个色值字面量都不写（写了就是第二份真源，`test_theme.py` 会红）。 */
+.thgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(198px,1fr));gap:9px}
+.thcard{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bd);
+  border-radius:var(--r);cursor:pointer;font:inherit;text-align:left;box-shadow:var(--shadow);
+  transition:transform .12s,box-shadow .12s,border-color .12s}
+.thcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.thcard.on{box-shadow:var(--shadow-md);cursor:default}
+.thdot{width:22px;height:22px;border-radius:50%;flex:0 0 auto;box-shadow:inset 0 0 0 1px var(--bd3)}
+.thmeta{display:flex;flex-direction:column;line-height:1.35;min-width:0}
+.thmeta b{font-size:12.5px;font-weight:600}
+.thhex{font-style:normal;font-size:11px;opacity:.72;font-family:var(--fm)}
+.thscene{font-style:normal;font-size:10.5px;opacity:.78;max-width:146px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thck{margin-left:auto;font-size:14px;font-weight:700}
+.hr{height:1px;background:var(--bd2);margin:11px 0}
+.pill{display:inline-flex;align-items:center;gap:5px;background:var(--sf2);border:1px solid var(--bd);border-radius:20px;padding:2px 9px;font-size:11.5px;color:var(--tx2)}
+.steps{display:flex;gap:0;margin:4px 0 12px}
+.steps .st{flex:1;padding:7px 10px;background:var(--sf2);border:1px solid var(--bd);border-right:0;font-size:11.5px;color:var(--tx2);text-align:center}
+.steps .st:first-child{border-radius:6px 0 0 6px}
+.steps .st:last-child{border-radius:0 6px 6px 0;border-right:1px solid var(--bd)}
+.steps .st.on{background:var(--pri-l);color:var(--pri-d);font-weight:500;border-color:var(--pri-bd)}
+.steps .st.dn{background:var(--ok-l);color:var(--ok-d)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--bd);padding:0 13px;background:var(--sf2)}
+.tabs .tb2{padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--tx2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs .tb2:hover{color:var(--tx)}
+.tabs .tb2.on{color:var(--pri);border-bottom-color:var(--pri);font-weight:500}
+.tabs .tb2 .n{font-family:var(--fm);font-size:10.5px;color:var(--mut);margin-left:5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:1180px){.grid2,.grid3{grid-template-columns:1fr}}
+.flowline{font-family:var(--fm);font-size:11.5px;line-height:1.85;background:var(--sf2);border:1px solid var(--bd2);border-radius:6px;padding:10px 13px;white-space:pre;overflow-x:auto;color:var(--tx2)}
+.link{color:var(--pri);cursor:pointer;text-decoration:none;border-bottom:1px dashed var(--pri-hl)}
+.link:hover{color:var(--pri-d);border-bottom-style:solid}

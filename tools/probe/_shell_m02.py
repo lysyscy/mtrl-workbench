@@ -1,6 +1,6 @@
 """壳真机自检 · **第 ⑯ 段：`m02` i8 接入层**（`TAIL-27`）。
 
-**为什么单独立一个文件**：`tools/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的文件行数规则 = 红）
+**为什么单独立一个文件**：`tools/probe/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的文件行数规则 = 红）
 ⇒ 与 `_shell_pend.py` / `_shell_arch.py` 同款，由主自检**调一段**（`check(page, errors)`）。
 
 **它验的链条**：新写的那几段壳代码（`m02EchoKv` / `m02LogRows` / `BIND.m02` / `reloadM02`）**真的能跑** ——
@@ -30,6 +30,15 @@ def check(page, errors: list[str]) -> None:
         #    ⇒ 必须等**数据**（等表格元素会读到空表 —— 实测把"34 条"读成 1 条，整支 rc=1）。
         page.wait_for_function(
             "() => (typeof M02_RECS !== 'undefined') && M02_RECS.length > 0", timeout=15000)
+        # ⭐ 2026-09-24（`TAIL-80`）：光等 `M02_RECS` 有数**不够** —— 整支自检序列里，**上一页的渲染**
+        #    可能还没退场 ⇒ 断言那一刻读到的是**空态那一行**（实测把 50 条读成 1 条、首行是「还没有执行记录」，
+        #    连带回显卡那两条一起假红 ⇒ 整支 rc=1，而这**全都是时序**，不是真错）。
+        #    ⇒ 再等一步：**DOM 里真的出现数据行**（不是空态行）。
+        page.wait_for_function(
+            """() => { const tb = document.querySelector('table[data-sort-key="m02:logs"] tbody');
+                       return !!tb && tb.querySelectorAll('tr').length > 0
+                              && !/还没有执行记录/.test(tb.textContent || ''); }""",
+            timeout=15000)
         stage = "读两张卡"
         got = page.evaluate("""async () => {
             const tb = document.querySelector('table[data-sort-key="m02:logs"] tbody');

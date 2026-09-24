@@ -1,9 +1,11 @@
 """壳真机自检 · **第 ⑳ 段：四个暂留件收口后的壳内四页**（`§19` · 2026-09-21）。
 
-覆盖：`set`（系统设置）· `m05imp`（历史付款导入）· `m06imp`（过程资料历史导入）。
+覆盖：`set`（系统设置）· **`imp`（数据导入 · 通用导入面）**。
 ⚠️ `m08imp`（库存单据导入）已按用户 2026-09-22 裁定**整体删除**（`T8` 守卫）⇒ 不再覆盖。
+⚠️ `m06imp`（过程资料历史导入）已随 `B5c` **下架**、⭐ `m05imp`（历史付款导入）已随 `B5b` 第三步
+（2026-09-23 用户裁定 `B`）**下架** ⇒ 这两页改验 `imp`（同一页里选 `m06_proc` / `m05_flow` 域）。
 
-**为什么单独立一个文件**：`tools/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的 `T5` = 红）
+**为什么单独立一个文件**：`tools/probe/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的 `T5` = 红）
 ⇒ 与 `_shell_home.py` / `_shell_pend.py` 同款，由主自检**调一段**（`check(page, errors)`）。
 
 **它验什么**（三件，都只在真机能看到）：
@@ -26,9 +28,9 @@ import app.core.models_registry  # noqa: E402, F401
 #: 页 → (中文名, 该页必须看得见的几个标志串)
 PAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("set", "系统设置", ("连接参数", "变更留痕", "与直觉相反")),
-    # ⚠️ 标志串必须取**进页就能看见**的那几段（预览区要选完文件才有 ⇒ ⛔ 别拿它当标志）
-    ("m05imp", "历史付款流水导入", ("列说明", "未匹配清单")),
-    ("m06imp", "过程资料历史导入", ("列说明", "按表头文字认列")),
+    # ⭐ `TAIL-75` `B5`（2026-09-22）：通用导入面 —— 「数据导入」页（域清单 ＋ 四步向导）。
+    #    ⚠️ 标志串取**进页就能看见**的（"列映射"要选完文件才有 ⇒ ⛔ 不能当标志）。
+    ("imp", "数据导入", ("导入哪个域", "落库前一个字节都不写库")),
 )
 
 
@@ -87,13 +89,15 @@ def check(page, errors: list[str]) -> None:
         got = page.evaluate("""async () => {
             const j = async u => await (await fetch(u)).json();
             const r = {spec: (await j('/api/m14/settings')).items.length,
-                       m05: (await j('/api/m05/import/meta')).columns.length,
-                       m06: (await j('/api/m06/import/meta')).material_labels.length,
-                       m06d: (await j('/api/m06/import/data')).projects.length};
+                       m05: (await j('/api/imp/m05_flow/schema')).fields.length,
+                       m06: (await j('/api/imp/m06_proc/schema')).fields.length,
+                       m06d: (await j('/api/imp/m06_proc/options')).projects.length};
             return r;
         }""")
         oks = [
             (got["spec"] == len(SPECS), f"设置项条数与 `SPECS` 一致（{got['spec']} = {len(SPECS)}）"),
+            # ⚠️ 2026-09-23（`B5b` 第三步 · 用户裁定 `B`）：`/api/m05/import/meta` 已随旧页删除
+            #    ⇒ 列契约改从**通用面的域声明**读（判词不变：五列契约就是 A–E，只是出口换成域声明）。
             (got["m05"] == 5, f"付款导入的列契约是 A–E 五列（{got['m05']}）"),
             (got["m06"] >= 1, f"过程资料导入的材料列清单非空（{got['m06']} 列）"),
             (got["m06d"] >= 0, f"过程资料导入的项目候选可读（{got['m06d']} 个）"),

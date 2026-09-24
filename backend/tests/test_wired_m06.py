@@ -39,6 +39,27 @@ def _view_body(tag: str) -> str:
     return SHELL[i:k + 1]
 
 
+def _act_body(name: str) -> str:
+    """取 `ACT.<name>` 的函数体（**花括号配平** —— 体里嵌着模板串与 `.map()`，⛔ 不能靠"下一个动作名"切）。
+
+    ⚠️ 认法用**行首**（`^[ \\t]*name:`）—— ⛔ 不能拿 `f"\\n{name}:"`：动作是**缩进**在 `ACT = {…}` 里的
+       （实测踩到：缩进后那个写法一处都匹配不上）；也不能裸匹配 `name:`（`data-act="mechOpen"` 里也有）。
+    """
+    m = re.search(rf"(?m)^[ \t]*{name}:", SHELL)
+    assert m, f"壳里找不到 `ACT.{name}` 的定义"
+    i = m.start()
+    k, depth = SHELL.find("{", i), 0
+    while k < len(SHELL):
+        if SHELL[k] == "{":
+            depth += 1
+        elif SHELL[k] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        k += 1
+    return SHELL[i:k + 1]
+
+
 @acc()
 def test_机械演示数组已删():
     """⛔ 演示值会让本页机械数与后端 KPI **打架**（真假混用比不接更糟）。"""
@@ -233,11 +254,39 @@ def test_机械录入口只送mech键_材料列没有输入面():
     """⭐ 判据点**搬家**（`§19` 批 2）：原先钉在旧页 html（`name="mech_i"` 有、`name="in_/out_"` 没有）。
     改指**新壳**的「录机械费」弹窗：它**只**由 `MECH_LABELS`（**后端**给的列名）生成 `mech_` 键，
     ⛔ 不产生任何**材料列**的输入面（机械列可录 ≠ 材料列可录 —— §5.2）。
+
+    ⭐ 2026-09-23（`TAIL-76` ②）：补**结构护栏** —— 原先只断言"壳里没有 `id="in_`"（全壳字面扫），
+       钉不住"**机械区块里**恰好只有那 6 个输入面"。原靶 `mech_ui.block_html` 随旧页 2026-09-18 删除
+       ⇒ 那半条 claim 一度**改坏了也没人知道**。现在按**弹窗体内**数：除「核算月」那一个输入框外，
+       ⛔ 不许再有任何输入面。
     """
     assert "values['mech_'+i]" in SHELL, "机械值没按 `mech_` 键组装"
     assert 'id="mechIn' in SHELL, "机械列没有输入框"
     for bad in ("values['in_", "values['out_", 'id="in_', 'id="out_'):
         assert bad not in SHELL, f"壳里出现了材料列的输入面：{bad}（材料列只读是铁律）"
+
+    body = _act_body("mechOpen")
+    assert body.count("MECH_LABELS.map(") == 1, "机械列的输入面不是由 `MECH_LABELS` 恰好派生一遍"
+    assert 'id="mechIn${i}"' in body, "机械列输入框没按序号派生 `id`"
+    assert body.count("<input") == 2, \
+        f"机械区块的输入面不是「核算月 1 ＋ 机械 6 列 1 处模板」（实测 {body.count('<input')}）—— 多出来的就是材料列的输入面"
+    m = re.search(r"const MECH_LABELS = \[(.*?)\];", SHELL, re.S)
+    assert m and len(re.findall(r"'[^']+'", m.group(1))) == 6, \
+        "`MECH_LABELS` 兜底不是 6 列（§5.2.5 ③「机械 6 列」）"
+
+
+@acc()
+def test_录机械费第二次打开要回填该月现值():
+    """⭐ `TAIL-76` ①：**录第二次**要能看见**该月现值**（原靶 `mech_ui._value_of` 随旧页 2026-09-18 删除）。
+
+    ⛔ 这条**不能丢**：丢了 ⇒ 第二次打开是**空盒**，而保存是"空 ⇒ 0"（§4.4 旁路载体的口径）
+       ⇒ 用户只改其中一格、点保存，**其余列会被清成 0** —— 而且界面上全程看不出这件事。
+    """
+    body = _act_body("mechOpen")
+    assert "MACH6[wh]" in body, "弹窗没有从 `MACH6` 取**该月现值**（第二次打开会是空盒）"
+    assert "const vals=((MACH6[wh]||{})[ym]||[]);" in body, "取现值的写法变了（取不到时必须回落到空数组）"
+    assert 'value="${esc(vals[i]==null?\'\':String(vals[i]))}"' in body, \
+        "现值没写进输入框的 `value` ⇒ 界面上看不见该月现值（`null` 显示空、⛔ 不显示 0）"
 
 
 @acc()

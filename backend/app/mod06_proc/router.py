@@ -18,12 +18,14 @@ from pydantic import BaseModel
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
+from app.import_kit.api import build_router as build_imp_router
 from app.mod06_proc import domain as D
+from app.mod06_proc import imp_spec
 from app.mod06_proc import mech_ui, repository as repo
-# ⭐ 历史导入三步（§5.2.5 ①②）—— 独立路由件（**JSON API**），由本文件汇总（`main.py` 不用改）。
-# ⚠️ 2026-09-21（`§19` 四个暂留件收口）：原先住在本文件的三条 PRG ＋ `import_view.py`（服务端渲染页）
-#    **已整体删除** —— 能力原样搬成 JSON API `import_api.py`（壳 `V.m06imp` 在用），旧页无独有能力。
-from app.mod06_proc.import_api import router as import_api_router
+# ⚠️ 历史导入三步（§5.2.5 ①②）的**沿革**（别再往回搬）：
+#    2026-09-21（`§19` 收口）三条 PRG ＋ `import_view.py` ⇒ 搬成 JSON API `import_api.py`；
+#    2026-09-22/23（`TAIL-75` `B5c`/`B5c-2`）⇒ 旧页与 `import_api.py`**全部退休**，
+#    过程资料的导入**只走通用导入面** `/api/imp/m06_proc/*`（见下面 ② 段）。
 from app.mod06_proc.service import build_page_data, parse_state
 # ⚠️ 2026-09-18（`§19` 批 2）：`app.mod06_proc.view`（`render_proc_page`/`render_export_preview`）
 #    的导入已随"过程资料页半边"删除 —— ⛔ 别再加回来（那两个渲染件已整体删除）。
@@ -86,17 +88,16 @@ def api_proc_export(request: Request):
 # ---------------------------------------------------------------- ① 机械手录（§5.2.5 ③）
 
 
-# ---------------------------------------------------------------- ② 历史导入（§5.2.5 ①②）
+# ---------------------------------------------------------------- ② 导入（§5.2.5 ①②）＝ **只走通用导入面**
 #
-# ⚠️ 2026-09-21（`TAIL-27` · `§19` 四个暂留件收口）：本段原先有三条 **PRG**（`GET /m06/import` ＋
-#    `POST /m06/import/preview|confirm|rollback`）＋ 服务端渲染页 `import_view.py`。
-#    ⭐ 能力已**原样搬成 JSON API**（`import_api.py`：`/api/m06/import/{data,meta,parse,confirm,rollback}`，
-#    壳 `V.m06imp` 在用）⇒ 三条 PRG 与那个渲染件**已整体删除**（授权 `D18`），无独有能力被丢：
-#      · 解析 / 落库 / 核对报告 = `importer.py`（**一行没动**）；
-#      · 「预览不写库」的载具 = `core.preview_store`（与付款域导入**同一份**，§5.2.5 ②）；
-#      · 候选项目 / 截止月 / 批次 = `service.build_import_data`（**同一个出口**）。
-#    ⛔ 别再往本文件加页面路由（`D18` 口径：新页面 = 新壳 ＋ JSON API）。
-router.include_router(import_api_router)
+# ⚠️ 2026-09-23（`TAIL-75` `B5c-2`）：`/api/m06/import/{data,meta,parse,confirm,rollback}` 五条
+#    **已全部退休**（`import_api.py` 连件删除）—— 过程资料的导入**只剩这一条路**：
+#      · 解析 / 建议 / 记忆 / 预览 / 暂存 = `import_kit`（通用层）；
+#      · 落库 / 回滚 = 域钩子 `imp_spec.commit/rollback`（**原样调 `importer.commit`** →
+#        `repository.import_snapshot`，⛔ 不是第二套落库）；
+#      · 候选项目 / 截止月 / 批次 = 域钩子 `imp_spec.options` ⇒ `GET /api/imp/m06_proc/options`。
+#    ⛔ 别再往本文件加导入路由（`D18` 口径 ＋ "同一件事不留两个入口"）。
+router.include_router(build_imp_router(imp_spec.SPEC, imp_spec.HOOKS))
 
 
 # ============================================================ JSON API（前端壳：原型直接接数据）

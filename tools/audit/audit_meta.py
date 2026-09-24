@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import re
+import sys
 
 from audit_common import (
     HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, RED, REPO_ROOT, TAIL_MIN_CELLS,
-    TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW,
+    TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root,
 )
 
 # ------------------------------------------------- T5 单文件 >400 行是否已登记
@@ -120,17 +121,22 @@ def check_rule_origins() -> list[dict]:
 #:   · `must` 档 = 接手/收尾必读（次之）。
 #: ⚠️ 超预算 ⇒ **黄 ＋ 登记**（⛔ 不是禁写）⇒ 去 `ops/阈值表.md` 登记"为什么该长 / 什么时候拆"。
 #: ⛔ 别为了让这条变绿而**删真东西** —— 正确的动作是**把历史叙事挪出状态文档**（见 `MEMORY.md §八`）。
-#: ⚠️ **预算按真值定 ＋ 留小余量**（2026-09-21 实测：我第一版按 `Measure-Object -Line` 量的数**偏小**
-#:    —— 那条 PowerShell 命令**不数空行** ⇒ 4 份文档当场"超预算"。⛔ 别把它当"文档超标"的证据）。
+#: ⚠️ **预算按真值定 ＋ 留小余量**（2026-09-21 实测：我第一版按 PowerShell 量的数**偏小** ⇒ 4 份文档当场"超预算"）。
+#:    ⭐ 真因（2026-09-24 实测订正）：主因**不是**"不数空行"，而是 `Get-Content` **默认不按 UTF-8 解码**（PS 5.1 = ANSI）
+#:    ⇒ 多字节中文被拆错 ⇒ **行数 / 字符数全错**（同一文件：`Get-Content` **69 行** vs `len(splitlines())` **198 行**）。
+#:    ⛔ 别拿 PowerShell 的数当行数真值；要用就读 `-Encoding UTF8`（或索性用本件这个 `len(…splitlines())`）。
 #: ⭐⭐ 2026-09-21 **文档体系重构**：`CLAUDE.md` 删除（无人读取）⇒ 它的**必用部分并入注入档**，
 #:    故 `MEMORY.md` 预算由 90 提到 200（⚠️ 这是**有意的上调**：把"每轮必用的规则"集中到一个被注入的
 #:    文件里，比原来"散在一个 333 行、没人自动读的文件里"更省 —— 原来我每轮都要去翻它）。
 DOC_BUDGETS: tuple[tuple[str, int, str], ...] = (
-    ("README.md", 240, "inject"),                              # 现 ~200（文档地图 —— 入口/地图，最该短）
-    (".workbuddy/memory/MEMORY.md", 200, "inject"),             # 现 ~165（唯一注入档）
-    (".workbuddy/plans/执行情况-主文档.md", 200, "must"),        # 现 185
-    (".workbuddy/memory/MEMORY-细则.md", 420, "must"),          # 现 ~380
-    (".workbuddy/plans/开发计划-主文档.md", 1800, "must"),       # 现 ~1746（⚠️ 余 54 ⇒ 下次加节就该归档旧节）
+    ("README.md", 240, "inject"),                              #: ⛔ 现值**别手抄** ⇒ 要现值跑 `doc_audit`（`T10` 会报）
+    (".workbuddy/memory/MEMORY.md", 200, "inject"),             #: ⛔ 同上（现值由 `T10` 报）
+    (".workbuddy/plans/执行情况-主文档.md", 200, "must"),        #: ⛔ 同上
+    (".workbuddy/memory/MEMORY-细则.md", 420, "must"),          #: ⛔ 同上
+    (".workbuddy/plans/开发计划-主文档.md", 1700, "must"),   # ⭐ 2026-09-23 **统一成 1700**：
+                                                          #: 此前 `T10` 用 1800、`T13` 用 1700
+                                                          #: （同一件事两处写）⇒ 现已并成一个数       #: ⛔ **现值别手抄进注释** —— 2026-09-24 实测 **1510**，这里曾写「现 ~1746」（09-23 瘦身前的值）
+                                                          #: ⇒ **手抄的数字必漂**；要现值就跑 `doc_audit`（`T10` 会报）。
 )
 
 
@@ -332,6 +338,41 @@ def _t6(rel: str, lineno: int, what: str, why: str, fix: str, text: str = "") ->
             "what": what, "why": why, "fix": fix, "level": RED, "text": text}
 
 
+def ledger_counts() -> dict[str, int] | None:
+    """尾巴台账**四段各有多少行**（只数行，不做任何检查）。
+
+    ⭐ 2026-09-24 从 `check_tail_ledger` 抽出：`T6` 用它核对顶部计数行，
+    `audit_drift` 的 **`T4` 计数锚点**（黄档）用它核对**两份活文档**里手抄的尾巴计数
+    ⇒ ⛔ **段解析与计数口径只留这一份**（别在别处再写一遍）。
+    返回 `{"一": n, "二": n, "三": n, "四": n}`；台账 / 段找不到 ⇒ `None`。
+    """
+    path = REPO_ROOT / LEDGER_REL
+    if not path.exists():
+        return None
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    start = next((k for k, l in enumerate(lines)
+                  if re.match(r"^#{2,3}\s*[\d.]*\s*尾巴台账", l.strip())), None)
+    if start is None:
+        return None
+    end = next((k for k in range(start + 1, len(lines)) if lines[k].startswith("## ")), len(lines))
+    section = ""
+    cnt: dict[str, int] = {}
+    for raw in lines[start:end]:
+        line = raw.strip()
+        m_sec = re.match(r"^#{2,3}\s*([一二三四])\s*[、.]", line)
+        if m_sec:
+            section = m_sec.group(1)
+            continue
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        first = cells[0] if cells else ""
+        if first == "#" or not first or set(first) <= {"-", ":"}:
+            continue
+        cnt[section] = cnt.get(section, 0) + 1
+    return cnt
+
+
 def check_tail_ledger(cases: set[str]) -> list[dict]:
     """`T6` · **尾巴台账**（唯一清点处 = 计划主文档 `§15`）—— 尾巴必须有单一清点处。
 
@@ -386,7 +427,6 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
     ids: dict[str, int] = {}          # 编号 → 行号（重复即红）
     live: set[str] = set()            # 一/二/三 段的编号（**未销号** —— 要和排期表对齐的就是它们）
     hdr: dict[str, list[str]] = {}    # 段号 → 表头栏位名（「阶段 / 时机」靠它定位）
-    per_section: dict[str, int] = {}
     for i, raw in enumerate(lines):
         line = raw.strip()
         # ⚠️ 段落 = `##` / `###` ＋ 中文数字（台账并入计划后层级降了一级）
@@ -403,7 +443,6 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
             continue
         if not first or set(first) <= {"-", ":"}:
             continue                  # 分隔行 / 空行
-        per_section[section] = per_section.get(section, 0) + 1
         # ⭐ **编号只认「第一格」** —— 正文里交叉引用 `TAIL-10`（如"依赖 TAIL-10"）不算重复定义
         m_id = re.match(r"`?(TAIL-(\d+))`?", first)
         if m_id:
@@ -474,8 +513,10 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
                             "排期表留了个幽灵编号 ⇒ 两份清单已经分叉",
                             "删掉该行，或补进台账 §一/§二/§三"))
 
-    counts = {k: per_section.get(k, 0) for k in ("一", "二", "三")}
-    counts["四"] = per_section.get("四", 0)
+    # ⭐ 计数口径 = `ledger_counts()`（**唯一一份**；`T4` 的计数锚点同时用它）
+    _lc = ledger_counts() or {}
+    counts = {k: _lc.get(k, 0) for k in ("一", "二", "三")}
+    counts["四"] = _lc.get("四", 0)
     m = re.search(r"A 类 \*\*(\d+)\*\* 条 · B 类 \*\*(\d+)\*\* 条 · C 类 \*\*(\d+)\*\* 条"
                   r" · 已销号 \*\*(\d+)\*\* 条", "\n".join(lines))
     if not m:
@@ -532,3 +573,198 @@ def check_plan_process() -> list[dict]:
                              "过程留在主文档 = 过期语句的 incubator（写死即旧）",
                              "整块下沉归档件，原处留指针；标题改成「通法 / 清单 / 指针」形态"))
     return hits
+
+
+# ------------------------------------------------- T17 闸门清单活性（治「僵尸闸门」）
+#
+# ⭐⭐ 2026-09-24 立（`TAIL-82`）：一天内核出**四例僵尸闸门**（症状同款：**一直在跑、`rc` 一直是 0、
+#    其实什么都没判**）—— `shell_verify`（有效后退化 ⇒ 已改盖章式）· **`cover_gap` / `audit_drift` /
+#    `audit_meta`**（后三件**从来没有 `__main__`** ⇒ 单跑 **0 行输出**、`rc` 恒 0 ⇒ **从未生效过**）。
+# ⭐ 这一族里**「入口根本不存在」是机器能判的** ⇒ 本检查专管它；
+#    另一半（入口在、但判据没牙）由 `tools/mut/_mut_*.py` ＋ 台账表 B 管 —— **两半合起来才闭环**。
+# ⚠️ 清单**唯一出处 = 计划 `§22.1` 的 `foreach ($t in @(...))`** ⇒ ⛔ 别在这里另抄一份（抄必漂）。
+GATE_LIST_RE = re.compile(r"foreach\s*\(\s*\$t\s+in\s*@\(([^)]*)\)")
+GATE_RULER_DIR = "tools/audit"
+#: ⚠️ **判据必须是「入口那一行」的正则，⛔ 不能用子串 `"__main__" in src`** ——
+#:    2026-09-24 被 `_mut_docaudit` 的 `M9` **当场抓到**：把靶的入口整段截掉，本检查**居然不报**，
+#:    因为**件说明（docstring）里也写着 `__main__` 这个词** ⇒ 子串测试把"注释里提到"当成了"入口在"。
+#:    ⭐ 这正是本仓「存在性检查／整页 `in` 全是假绿温床」（`§十二`）的又一例。
+GATE_GUARD_RE = re.compile(r"^if\s+__name__\s*==\s*['\"]__main__['\"]\s*:", re.M)
+
+
+def _gate_blocks() -> list[list[str]]:
+    """→ 计划里**每一处** `foreach ($t in @(...))` 的项名（通常 §22.1 一处 ＋ 接手开场白一处）。"""
+    p = REPO_ROOT / PLAN_DOC_REL
+    text = p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
+    return [[x.strip().strip("'\"") for x in m.group(1).split(",") if x.strip()]
+            for m in GATE_LIST_RE.finditer(text)]
+
+
+def check_gate_liveness() -> list[dict]:
+    """`T17` · **闸门清单里每一把尺子都必须真有入口**（红）。
+
+    ⭐ 判据：那件在 `tools/audit/` 里**在位** ＋ 有 `if __name__ == \\"__main__\\"` ＋ 件里有 `print(`
+    （⛔ 有入口却一句不打 ⇒ 人看不见它在判什么 —— 另一种空转）。
+    """
+    def hit(what: str, why: str, fix: str) -> dict:
+        return {"code": "T17", "side": "仓", "rel": PLAN_DOC_REL, "line": 1,
+                "what": what, "why": why, "fix": fix, "level": RED, "text": ""}
+
+    blocks = _gate_blocks()
+    if not blocks:
+        return [hit("找不到闸门清单（`§22.1` 的 `foreach`）",
+                    "清单是唯一出处 ⇒ 没了就没法判「哪些尺子在闸门里」",
+                    "恢复 `foreach ($t in @(…))` 那一段")]
+    out: list[dict] = []
+    for names in blocks:
+        for n in names:
+            f = REPO_ROOT / GATE_RULER_DIR / f"{n}.py"
+            if not f.exists():
+                out.append(hit(f"闸门里的 `{n}` 在 `{GATE_RULER_DIR}/` 里不存在",
+                               "清单指的件不在 ⇒ 那一行跑起来是报错或被跳过（⛔ 不是「在判」）",
+                               f"补上 `{GATE_RULER_DIR}/{n}.py`，或把它从清单里删掉"))
+                continue
+            src = f.read_text(encoding="utf-8", errors="replace")
+            m = GATE_GUARD_RE.search(src)
+            if m is None:
+                out.append(hit(f"`{n}.py` **没有 `__main__`** ⇒ 跑它是空转",
+                               "0 行输出、`rc` 恒 0 —— 而它在闸门清单里 ⇒ 人会以为它判过了"
+                               "（2026-09-24 实测三例：`cover_gap` / `audit_drift` / `audit_meta`）",
+                               f"给 `{GATE_RULER_DIR}/{n}.py` 补 `main()` ＋ "
+                               "`if __name__ == \"__main__\":`"))
+            elif "print(" not in src:
+                # ⚠️ 这一条是**弱判据**（`print(` 可能在件里任何地方）—— 它能抓的只是"件里根本没有输出"，
+                #    抓不了"入口那条路不打印"。⭐ 试过"只看入口之后有没有 print(" ⇒ **12 把尺子全被误判**
+                #    （打印都写在 `main()` 里，守卫那几行只是 `sys.exit(main())`）⇒ 已退回弱判据。
+                #    ⛔ 别为了"更严"把弱判据升级成错判据 —— 「判据绿」不等于「判得对」。
+                out.append(hit(f"`{n}.py` 有入口却**一句都不打**",
+                               "看不见它在判什么 ⇒ 另一种空转",
+                               "让它正常时也打一行结论（件名 ＋ 判定）"))
+    if len(blocks) > 1 and any(set(b) != set(blocks[0]) for b in blocks[1:]):
+        out.append(hit("闸门清单在多处 `foreach` 里**不一致**",
+                       "两处分叉 ⇒ 谁都不知道该跑哪一份（清单失去唯一出处）",
+                       "对齐 —— 唯一出处 = `§22.1`"))
+    return out
+
+
+# ------------------------------------------------- T18 路径 / glob 常量体检（治「搬目录后常量失效」）
+#
+# ⭐ 2026-09-24 立（源头 = `work/30-troubleshooting/排查-尺子与规则的过期清单-20260924.md` §一 的**元发现**）：
+#   当天查出的三处失效**同一个根因** —— `tools/audit/` 的**路径 / glob 常量在 `TAIL-58` 搬目录后没跟改**
+#   （`doc_audit` 曾写 `tools/doc_audit.py` · `cover_gap` 曾写 `tools/cover_gap.py` ·
+#    `_mut_prg_form` 曾写 `tools/prg_form_audit.py`）⇒ 症状**全是假绿**：「检查在跑，其实扫的是空集」。
+#   ⚠️ **立本条当天就抓出第 4 例**：`SCAN_GLOBS` 里的 `.workbuddy/memory/CHANGELOG.md` 是**搬迁前的旧地址**
+#      （该件现址 = `docs/changelog.md`，见 `README.md`「工程基准档」那行）⇒ 那条 glob **一条都不命中**。
+#
+# ⭐ 判据（**静态、秒级** ⇒ 进 `doc_audit`，每轮自动跑）：
+#   · `path`：常量指向的件 / 目录**必须存在**；
+#   · `glob` / `glob_delivery`：**必须至少命中 1 个真实件**（⛔ 空命中 = 那一片**从没被扫过**）；
+#   · `path_tuple`：逐个查；`path_first` = 每项取**第 0 个元素**当路径（如 `DOC_BUDGETS`）。
+# ⚠️ **只查登记在册的常量**（`GUARDED`）—— ⛔ **别自动扫"像路径的字符串"**：本仓有一批**故意**指向
+#   已删件的字符串（如 `RETIRED_TERMS` 的 `print/sign.py`）⇒ 全自动必误报一片。
+#   例外走 `GUARD_EXEMPT`（**每条写明理由**），与 `KNOWN_ABSENT` / `t7_expected.txt` 同款纪律。
+GUARDED: tuple[tuple[str, str, str], ...] = (
+    ("audit_common", "SCAN_GLOBS", "glob"),
+    ("audit_common", "DELIVERY_GLOBS", "glob_delivery"),
+    # ⚠️ `CANCELLED_DOC_GLOBS` **刻意不列**：它是 `SCAN_GLOBS` 的**别名**（`= SCAN_GLOBS`）⇒ 查一次即可。
+    ("audit_common", "CANCELLED_SCAN_GLOBS", "glob"),
+    ("audit_common", "CANCELLED_SKIP_RELS", "path_tuple"),
+    ("audit_common", "LENIENT_GLOBS", "glob"),
+    ("audit_meta", "CODE_DIRS", "path_tuple"),
+    ("audit_meta", "DOC_BUDGETS", "path_first"),
+    ("audit_meta", "RECEIPT_DIR", "path"),
+    ("audit_meta", "THRESHOLD_DOC", "path"),
+    ("cover_gap", "CLEARED_REGISTRY", "path"),
+)
+
+#: 例外（`"模块.常量"` → 理由）。⛔ 加例外必须写理由，且**别拿它掩盖"该修没修"**。
+GUARD_EXEMPT: dict[str, str] = {}
+
+
+def check_guard_constants() -> list[dict]:
+    """`T18` · **登记在册的路径 / glob 常量必须解析得到真东西**（红）。
+
+    ⭐ 它抓的是「**常量失效 ⇒ 检查静默扫空集**」这一族（本项目最贵的假绿）——
+    ⚠️ 同类失效**每搬一次目录就可能复发一次**，而在此之前**没有任何尺子看得见**。
+    """
+    import importlib                                            # noqa: PLC0415
+
+    if str(REPO_ROOT / GATE_RULER_DIR) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT / GATE_RULER_DIR))
+
+    def hit(what: str, why: str, fix: str) -> dict:
+        return {"code": "T18", "side": "仓", "rel": GATE_RULER_DIR, "line": 1,
+                "what": what, "why": why, "fix": fix, "level": RED, "text": ""}
+
+    out: list[dict] = []
+    for mod_name, attr, kind in GUARDED:
+        key = f"{mod_name}.{attr}"
+        if key in GUARD_EXEMPT:
+            continue
+        try:
+            mod = importlib.import_module(mod_name)
+        except Exception as exc:                                # noqa: BLE001
+            out.append(hit(f"`{key}` 所在模块 import 失败", str(exc)[:120], "修 import"))
+            continue
+        val = getattr(mod, attr, None)
+        if val is None:
+            out.append(hit(f"登记在册的 `{key}` **找不到**",
+                           "常量被改名/删掉 ⇒ 本检查失去靶（⛔ 别静默跳过）",
+                           f"改名了就把 `GUARDED` 一起改；不再需要就从 `GUARDED` 删掉并写进 `GUARD_EXEMPT`"))
+            continue
+        base = delivery_root() if kind == "glob_delivery" else REPO_ROOT
+        if base is None:
+            out.append(hit(f"`{key}` 无从核（交付面找不到）",
+                           "交付面不在位 ⇒ 那一片没人扫", "先修交付面路径（本机 = `.env` / `audit_common`）"))
+            continue
+        # ⚠️ 只按**容器**判断：`CLEARED_REGISTRY` 是 `Path`、其余是 `str` / `tuple` / 元组列表
+        items = list(val) if isinstance(val, (tuple, list, set, frozenset)) else [val]
+        for item in items:
+            raw = str(item[0] if kind == "path_first" else item)
+            if kind.startswith("glob"):
+                if not any(p.is_file() for p in base.glob(raw)):
+                    out.append(hit(f"`{key}` 里的 glob `{raw}` **一条都不命中**",
+                                   "那一片**从没被扫过**（= 假绿入口；⚠️ 2026-09-24 立本条当天就抓出 "
+                                   "`CHANGELOG.md` 一例：**旧地址搬家后没跟改**）",
+                                   f"核对路径（多半是搬迁/改名后没同步）或把 `{raw}` 从常量里删掉"))
+            elif not (base / raw).exists():
+                out.append(hit(f"`{key}` 指向的 `{raw}` **不存在**",
+                               "路径常量失效 ⇒ 用它的检查**静默扫空集**（本项目最贵的一类假绿）",
+                               "修路径（或改名后同步常量）"))
+    return out
+
+
+def main(argv: list[str] | None = None) -> int:
+    """**单跑本模块的检查**（`T5`/`T6`/`T9`/`T10`/`T11`/`T12`/`T13`/`T17`/`T18`）。
+
+    ⚠️ 2026-09-24（自查一轮）：`T17` 与 `T18` 是**同一天**新立的两条，而首版只把 `T17` 塞进了本入口
+    ⇒ **单跑 `audit_meta.py` 时 `T18` 是哑的**（只在 `doc_audit` 里被动生效）= 同一件事做了一半。
+    现补齐，并把上面那句 docstring 与**实际调用面**对齐 —— ⛔ 这类"说明与代码各说各话"
+    正是本轮的靶（`T17`/`T18` 治的就是"看起来在判"）。
+
+    ⚠️ 2026-09-24 补：此前本件**没有 `__main__`** ⇒ 收工闸门清单里 `audit_meta.py` 那一行是**空转**
+    （**0 行输出 · rc 恒 0**）—— 它作为**模块**被 `doc_audit` 调用时是有用的，**单跑则什么都没判**。
+    ⭐ 同族已有四例（症状同款：**一直在跑、rc 一直是 0、其实什么都没判**）：
+    `shell_verify` · `cover_gap` · `audit_drift` · 本件。
+    ⚠️ 本件只是**单跑入口** —— ⛔ **不另写一套判定**；⚠️ `T14`/`T15` 不在这里（在 `audit_work.py`）。
+    """
+    import acc_report as ar                                        # noqa: PLC0415
+    cases = set(ar.load_json(ar.resolve_baseline(None)).get("cases") or {})
+    raw = (check_file_sizes() + check_rule_origins() + check_doc_budgets()
+           + check_report_receipts() + check_doc_layout() + check_tail_ledger(cases)
+           + check_plan_process() + check_gate_liveness() + check_guard_constants())
+    reds = [h for h in raw if h["level"] == RED]
+    yellows = [h for h in raw if h["level"] == YELLOW]
+    print("=" * 78)
+    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18"
+          "（⚠️ T1–T4/T8 在 `audit_drift` · T7 在 `cover_gap` · T14/T15 在 `audit_work`）")
+    print("=" * 78)
+    print(f"必须修 {len(reds)} · 疑似 {len(yellows)}")
+    for h in reds + yellows:
+        print(f"  [{h['code']}] {'红' if h['level'] == RED else '黄'} {h['rel']}:{h['line']}  {h['what']}")
+        print(f"        {h['why']} → {h['fix']}")
+    return 1 if reds else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

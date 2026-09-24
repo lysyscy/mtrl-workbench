@@ -10,7 +10,7 @@
       （`Connection closed while reading from the driver`）⇒ 跑完必须 `os._exit()`，
       **不要**走正常关闭路径。⚠️ 症状极像"脚本没输出"：**空输出 ≠ 通过**。
 
-用法：先起服务，再 `python -u tools/_shell_smoke.py`。
+用法：先起服务，再 `python -u tools/probe/_shell_smoke.py`。
 """
 
 from __future__ import annotations

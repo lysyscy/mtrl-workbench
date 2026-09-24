@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import subprocess
@@ -21,8 +22,12 @@ SRC = ROOT / "tools" / "chain_sources.txt"
 
 
 def run() -> dict:
-    p = subprocess.run([str(PY), str(ROOT / "tools" / "chain_audit.py"), "--json"],
+    # ⚠️ 2026-09-23（`TAIL-58` 分目录的漏网件）：尺子已搬进 `tools/audit/` ⇒ 旧路径会让
+    #    `chain_audit` 起不来、`stdout` 为空 ⇒ `json.loads` 抛异常 ⇒ **本脚本中途崩掉**。
+    p = subprocess.run([str(PY), str(ROOT / "tools" / "audit" / "chain_audit.py"), "--json"],
                        cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+    if not (p.stdout or "").strip():
+        raise RuntimeError(f"chain_audit --json 没有输出（rc={p.returncode}）：{(p.stderr or '')[:200]}")
     return json.loads(p.stdout)
 
 
@@ -34,6 +39,17 @@ def main() -> int:
     exp0, src0 = EXP.read_bytes(), SRC.read_bytes()
     h_exp, h_src = md5(exp0), md5(src0)
     hits = 0
+
+    # ⚠️⚠️ **崩溃也要复原**（2026-09-23 实测踩到）：本脚本变异的是**被 git 管的**两张真源表
+    #    （`chain_expected.txt` / `chain_sources.txt`）；原先只在**每条正常跑完**时才 `write_bytes` 复原
+    #    ⇒ 一旦中途抛异常（例如 `run()` 抛错），**变异就留在工作区**（实测：认领表里留了
+    #    `ipp.py::send_pdf_TYPO` ⇒ `chain_audit` 报红，而脚本自己已经崩了、什么都没说）。
+    #    ⇒ 用 `atexit` 兜底：正常 / 异常 / `sys.exit` 三条路都会复原（幂等，重复写无害）。
+    def _restore() -> None:
+        EXP.write_bytes(exp0)
+        SRC.write_bytes(src0)
+
+    atexit.register(_restore)
 
     def expect(name: str, needle: str, *, must: bool = True) -> None:
         nonlocal hits

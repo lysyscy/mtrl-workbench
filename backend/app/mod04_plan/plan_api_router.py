@@ -1,24 +1,24 @@
-"""`MOD-04` 的 **JSON API**（前端壳 · `TAIL-35`）—— **手动行 ＋ 导入**。
+"""`MOD-04` 的 **JSON API**（前端壳 · `TAIL-35`）—— 现在只剩**手动行**（导入已收进通用面）。
 
 ⚠️ **为什么单独一件**：`router.py` 已顶到 **>600 行**（`doc_audit` 的 `T5` 是**禁合入硬线**）
    ⇒ 把 JSON 端点与页面（PRG）端点分家。
 ⚠️ 本层**不写任何判定**：一律复用既有出口 ——
-   `plan_manual.manual_row_payload`（手动行校验 · 与 PRG 端点**同一份**）·
-   `importer.parse_workbook` / `attach_projects` / `repo.merge_month`（导入 · §9.5 幂等）。
+   `plan_manual.manual_row_payload`（手动行校验 · 与 PRG 端点**同一份**）。
 ⚠️ 会话走 `session_scope()`（**与 `router.get_db` 等价**，但它经 `Depends` 暴露 ⇒ 自检可注入桩）。
+⛔ 2026-09-23（`TAIL-75` 余项 · 用户裁定）：**付款计划的导入面已连件删除** ⇒ 只留通用面
+   （`/api/imp/m04_plan/*`，落库仍走 `repo.merge_month`）。详见本文件下方那段说明。
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.mod04_plan import repository as repo
-from app.mod04_plan.importer import attach_projects, parse_workbook
 from app.mod04_plan.plan_manual import assert_manual_editable, manual_row_payload
-from app.mod04_plan.project_views import project_briefs, project_label
+from app.mod04_plan.project_views import project_label
 
 router = APIRouter(tags=["mod04"])
 
@@ -70,77 +70,18 @@ def api_plan_row_save(req: PlanRowRequest) -> dict:
     return {"ok": True, "row_id": row_id, "message": msg + "；" + "；".join(payload.notes)}
 
 
-class TokenRequest(BaseModel):
-    token: str
-
-
-@router.post("/api/m04/import/parse")
-async def api_plan_import_parse(year_month: str = Form(""), file: UploadFile = File(...)) -> dict:
-    """⭐ **`TAIL-69` 第 ① 步：解析并预览**（**一个字节都不写库** —— 校验前不碰库）。
-
-    ⭐ 产出 = `token` ＋ 预览（行数 / 项目匹配盘点 / 解析提示）—— 用户在界面上**先看见再确认**；
-       项目匹配**在解析时完成**（确认时**不重算** ⇒ 「所见即所落」，⛔ 第二份口径）。
-    ⚠️ 与旧一步式端点**同一实现链**（`parse_workbook` → `attach_projects`），只差「写不写库」。
-    """
-    try:
-        data = await file.read()
-        with session_scope() as session:
-            parsed = parse_workbook(data)
-            rows = attach_projects(parsed.rows, project_briefs(session))
-    except MustReportError:
-        raise                                            # 口径性报错（表头认不出）原样透出
-    except Exception as exc:                             # noqa: BLE001
-        raise MustReportError(f"解析失败：{type(exc).__name__}: {exc}") from exc
-    if not str(year_month or "").strip():
-        raise MustReportError("导入前**必须先选「年月」**（本批数据一律归入所选月份，§4.3.3）")
-    from app.import_kit import staging                    # noqa: PLC0415
-    from app.mod04_plan.importer import match_summary, stage_payload
-
-    token = staging.save_preview(stage_payload(parsed, rows, year_month))
-    return {"ok": True, "token": token,
-            "preview": {"year_month": year_month, "columns": dict(parsed.columns),
-                        "header_row": parsed.header_row, "alerts": list(parsed.alerts or []),
-                        "match": match_summary(rows)}}
-
-
-@router.post("/api/m04/import/confirm")
-def api_plan_import_confirm(req: TokenRequest) -> dict:
-    """⭐ **`TAIL-69` 第 ② 步：确认落库**（凭 `parse` 给的 token；幂等口径与旧一步式**一字不差**）。
-
-    ⚠️ token 不存在 / 过期 ⇒ `preview_store` **显式报错**（⛔ 不静默当成空导入 —— 空导入会清掉该月）。
-    """
-    from app.import_kit import staging                    # noqa: PLC0415
-    from app.mod04_plan.importer import restore_rows
-
-    payload = staging.load_preview(req.token)
-    year_month, rows = restore_rows(payload)
-    alerts = list(payload.get("alerts") or [])
-    with session_scope() as session:
-        result = repo.merge_month(session, year_month=year_month, rows=rows)
-    msg = (
-        f"已导入 {len(rows)} 行到 {year_month}：新建 {result['created']} · 复用更新 {result['updated']}"
-        f" · 删除该月残影 {result['deleted']}"
-        f"（可手改列一律保留；该月手动行 {result['manual_kept']} 行未被触碰）"
-    )
-    if alerts:
-        msg += "；提示：" + "；".join(alerts[:3])
-    return {"ok": True, "rows": len(rows), "stats": result, "year_month": year_month,
-            "alerts": alerts, "message": msg}
-
-
-@router.post("/api/m04/import")
-async def api_plan_import(year_month: str = Form(""), file: UploadFile = File("")) -> dict:
-    """⛔ **已退役**（`TAIL-69` · 2026-09-22）：一步式导入升级为 **`parse` → `confirm` 两步**（预览不写库）。
-
-    ⚠️ **路由先留着、实现先撤**：壳早已切到新端点；留路由是为了**缓存的旧页面**打过来时
-       收到一句**明白话**（"请刷新"），而不是一个没头没脑的 404。
-       ⭐ 判据已全部搬到新出口（`test_plan_import.py` 两步两条，**claim 一字未改**）；
-       下一轮清尾巴时连路由一起删（届时只删路由，判据已在新出口）。
-    """
-    raise MustReportError(
-        "这个导入入口已升级为「**解析预览 → 确认落库**」两步（2026-09-22）。"
-        "请**刷新页面**后在「付款计划」页重新打开导入弹窗。"
-    )
+# ⛔ `m04` 付款计划的**页内导入面**已全部**连件删除**（`TAIL-75` 余项 · 2026-09-23 **用户裁定**：
+#    「导入基本上只在刚开始用系统时导一次，之后就实时更新了」⇒ **只留通用面**）：
+#    · `POST /api/m04/import/parse`（`TAIL-69` 第①步 预览）—— **已删**
+#    · `POST /api/m04/import/confirm`（第②步 落库，凭 token）—— **已删**
+#    · `POST /api/m04/import`（一步式，2026-09-22 起**已软退役**、路由留着回"请刷新" ⇒ 同批删掉）
+#    · 只服务它们的 `TokenRequest`
+#    ⭐ 现在付款计划的导入 = 壳「**数据导入**」页选 `付款计划`（`m04_plan` 域 · `/api/imp/m04_plan/*`）；
+#    落库口径仍是**既有出口** `repo.merge_month`（§9.5 幂等）—— 域钩子 `imp_spec.commit` 调的就是它。
+#    ⚠️ 域内的解析出口（`importer.parse_workbook` / `attach_projects` / `stage_payload` /
+#    `restore_rows` / `match_summary`）**保留** —— 与 `m05` 留 `parse_rows`、`m06` 留 `parse_sheet` 同款
+#    （域业务不随页面存亡；通用面的域声明也用着前两件）。
+#    ⛔ 别再建"第二条付款计划导入路"（`CANCELLED` 有登记，`T8` 会抓）。
 
 
 __all__ = ["router"]

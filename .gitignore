@@ -64,5 +64,10 @@ desktop.ini
 #   frontend/dist/ —— D7 已定案：构建产物入仓（部署机免 Node）
 
 # ===== 2026-09-22 文档架构审计新增 =====
-.workbuddy/work/00-scratch/          # 临时草稿（TTL 14 天，审计 P2）
-.workbuddy/backups/               # 唯一手工备份点（留 5 份）
+# ⚠️⚠️ 2026-09-24 修：这两行原先把注释写在**同一行**（`路径   # 说明`）—— `.gitignore`
+#   **不支持行内注释** ⇒ 整行成了"匹配不到任何东西的模式" ⇒ scratch 与 backups **一直没被忽略**
+#   （实测 `git check-ignore -v` 返回 rc=1；而 `artifacts/*` 那行 rc=0 ⇒ 差别就在注释位置）。
+#   后果：`git add -A` 会把 **83 件 scratch 临时件 ＋ 壳基线备份**一起提交进版本库。
+#   ⇒ 本文件里 ⛔ **注释一律独立成行**（`#` 必须在行首）。
+.workbuddy/work/00-scratch/
+.workbuddy/backups/

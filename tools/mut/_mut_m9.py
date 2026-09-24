@@ -16,7 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
-TARGETS = ["tests/test_acc_fee_mon.py"]
+#: ⚠️ 2026-09-23：最后一条（候选面板）搬到壳里 ⇒ 判据在 `test_wired_m09.py`，故两个都要跑。
+TARGETS = ["tests/test_acc_fee_mon.py", "tests/test_wired_m09.py"]
 
 #: (相对路径, 变异说明, 原文片段, 替换片段) —— 片段按 LF 写（str），应用时 encode 再按目标文件归一
 #: ⚠️ 片段含中文 ⇒ 用 `str` 而非 `bytes` 字面量（`b"…"` 只允许 ASCII）。
@@ -44,15 +45,19 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     ("backend/app/mod09_fee/service.py", "删除反馈里不再带「重算后的合计」",
      'f" —— 合计重算为 {D.money_text(after)}（§5.5）")',
      'f"（§5.5）")'),
-    ("backend/app/mod09_fee/domain.py", "空态提示行的跨列数写死（不再派生自表头）",
-     "EMPTY_COLSPAN = len(AWF_COLUMNS)",
-     "EMPTY_COLSPAN = 3"),
-    ("backend/app/mod09_fee/view.py", "项目候选的 value 渲染成展示名（键不是仓库名）",
-     'f\'<label><input type="radio" name="pj" value="{esc(c.key)}"\'',
-     'f\'<label><input type="radio" name="pj" value="{esc(c.display)}"\''),
-    ("backend/app/mod09_fee/domain.py", "导出说明里不再点明「随逐月欠款台账」",
-     'EXPORT_NOTE = "随「逐月欠款台账」导出（工作表：辅材欠款 / 机械欠款 / 特殊费用月报表）"',
-     'EXPORT_NOTE = "导出（工作表：辅材欠款 / 机械欠款 / 特殊费用月报表）"'),
+    # ⚠️ 2026-09-23：原靶 `EMPTY_COLSPAN` / 原靶 `mod09_fee/view.py`（旧服务端渲染页）都已作废 ——
+    #    空态跨列数与候选面板的 claim **搬到了壳**（`tests/test_wired_m09.py`）⇒ 靶一律改指壳里那几行。
+    ("backend/app/web/index.html", "空态提示行的跨列数写死（不再派生自表头）",
+     'colspan="${thCount(AWF_THEAD)}"',
+     'colspan="3"'),
+    ("backend/app/web/index.html", "候选面板不再读后端清单（键可能不是仓库名）",
+     "const awfPjPanel=()=>projPanel({list:()=>AWF_PJS,",
+     "const awfPjPanel=()=>projPanel({list:()=>[],"),
+    # ⚠️ 2026-09-23：这段文案在壳里有**两处**（`title=` 提示 ＋ 可见文字）⇒ 变异要**一起改掉**，
+    #    只改可见文字的话 `title` 里还留着「逐月欠款台账」⇒ 断言仍绿（实测踩过）。
+    ("backend/app/web/index.html", "导出说明里不再点明「随逐月欠款台账」",
+     '它随「逐月欠款台账」一起导出，作为每个项目工作簿的第 3 个工作表">随「逐月欠款台账」导出</span>',
+     '它单独导出">导出</span>'),
     ("backend/app/mod09_fee/domain.py", "表头首列改成库存单据的特征列名（不再是「数据项」）",
      '{"key": "item", "label": "数据项", "type": "text"},',
      '{"key": "item", "label": "物料", "type": "text"},'),

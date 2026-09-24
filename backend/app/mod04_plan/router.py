@@ -18,8 +18,10 @@ from sqlalchemy.orm import Session
 
 from app.core.db import session_scope
 from app.core.errors import MustReportError
+from app.import_kit.api import build_router as build_imp_router
 from app.mod01_projects.models import Project
 from app.mod03_notice.page import SORT_NONE
+from app.mod04_plan import imp_spec
 from app.mod04_plan import repository as repo
 from app.mod04_plan import service as svc
 from app.mod04_plan.domain import (
@@ -53,6 +55,13 @@ from app.mod04_plan.plan_ui import (
 router = APIRouter(tags=["mod04"])
 # ⭐ 前端壳的 **JSON API**（`TAIL-35`：手动行 ＋ 导入）—— 独立路由件，由本文件汇总
 router.include_router(plan_api_router)
+
+# ⭐ `TAIL-75`（通用导入面）：**本域同时挂在 `import_kit` 的通用导入面**上（`/api/imp/m04_plan/*`）
+#    —— 壳里的「数据导入」页走这套（列映射 ＋ 建议 ＋ 记忆 ＋ 预览 ＋ 确认）。
+#    ⚠️ 两条路**共用同一份落库口径**（`repo.merge_month`，§9.5）：`plan_api_router` 那条是
+#       「付款计划」页里那个弹窗在用；本域挂上来以后新页走通用面，⛔ 绝不是"两套落库"
+#       （域钩子见 `imp_spec.py`，它只是把 records 装成域的行形状再调同一个出口）。
+router.include_router(build_imp_router(imp_spec.SPEC, imp_spec.HOOKS))
 
 
 def get_db() -> Iterator[Session]:

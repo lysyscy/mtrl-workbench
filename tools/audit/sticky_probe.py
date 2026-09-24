@@ -1,11 +1,19 @@
-"""合计行「视口吸附置底」实测脚本（可复现）。
+"""合计行「视口吸附置底」实测脚本（可复现）—— ⭐ 2026-09-24 起是**真判据**（会红）。
 
 结论与解读见 `ops/M3-合计行置底实测结论.md`。
 
 用法（本机）：
-  $env:PLAYWRIGHT_BROWSERS_PATH = "C:\\Users\\Administrator\\AppData\\Local\\ms-playwright"
-  & backend\\.venv\\Scripts\\python.exe tools\\sticky_probe.py
+  $env:PLAYWRIGHT_BROWSERS_PATH = "C:\\ProgramData\\ms-playwright"
+  & backend\\.venv\\Scripts\\python.exe tools/audit/sticky_probe.py
 判据：容器高 200px、表内 30 行数据、`scrollTop = 0` 时**合计行是否已落在容器可视区内**。
+
+⚠️⚠️ **`main()` 原先在末尾 `os._exit(0)` ⇒ 不管实测结果如何 `rc` 恒 0** —— 而它**每轮都在收工闸门的
+   清单里跑**（`MEMORY.md §〇之二`）⇒ 那一行其实**什么都没判**（同族第五例：`shell_verify` ·
+   `cover_gap` · `audit_drift` · `audit_meta`；症状同款"一直在跑、`rc` 一直是 0、其实什么都没判"）。
+   ⇒ 现在：**本工程采用的那条（`E`）必须有效** ＋ 两个备选（`D`/`C`）必须有效，任一不符 ⇒ **`rc=1`**。
+   ⛔ **刻意不断言 `A` 必须失败**（`A` = 原型当年的写法 `td` 上 sticky）—— 它是"我们**为什么没选它**"的
+   记录；浏览器哪天把它修好了，**我们不该因此报红**。判据只钉「我们在用的那条管用」。
+   自证 = `tools/mut/_mut_sticky.py`（把 `E`/`D` 的 sticky 抹掉 ⇒ 必须红）。
 """
 from __future__ import annotations
 
@@ -13,9 +21,9 @@ import json
 import os
 import sys
 
-os.environ.setdefault(
-    "PLAYWRIGHT_BROWSERS_PATH", r"C:\Users\Administrator\AppData\Local\ms-playwright"
-)
+#: ⚠️ 与收工闸门用的那一个**对齐**（2026-09-24 订正：原先默认 `…\AppData\Local\ms-playwright`，
+#:    而闸门里设的是 `C:\ProgramData\ms-playwright` ⇒ 单跑与闸门跑**可能落到不同的浏览器**）。
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", r"C:\ProgramData\ms-playwright")
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
@@ -42,6 +50,10 @@ th{position:sticky;top:0;z-index:2;background:#eef2f7}
 .caseC .scroller{overflow:auto;flex:1 1 auto;min-height:0}
 .caseC .sumline{flex:0 0 auto;background:#eef2f7;border-top:1px solid #c9d2de}
 """
+
+#: ⭐ **要断言"必须生效"的对照**（见文件头"2026-09-24 起是真判据"那段）——
+#: ⛔ **刻意不含 `A`**：`A`（`td` 上 sticky）是"我们为什么没选它"的记录，浏览器哪天修好了我们不该红。
+ASSERT_OK = ("D", "E", "C")
 
 ROWS = "".join(
     f'<tr><td>D{i:02d}</td><td>项目{i:02d}</td><td class="n">{i * 1000}.00</td></tr>'
@@ -105,9 +117,18 @@ def main() -> int:
                 f"[{k}] 合计行底 − 容器底 = {v['deltaBelow']}px ⇒ "
                 + ("✅ scrollTop=0 即可见（吸附生效）" if v["visibleAtTop"] else "❌ 不可见（吸附未生效）")
             )
-        print("\n预期：A ❌（原型写法无效）· D ✅ · E ✅（本工程采用）· C ✅")
+        print("\n预期：A ❌（原型写法无效 · **只作信息，不断言**）· D ✅ · E ✅（本工程采用）· C ✅")
+        bad = [k for k in ASSERT_OK if not res[k]["visibleAtTop"]]
         sys.stdout.flush()
-        os._exit(0)          # ⚠️ 收尾不调 close()/stop()（技术栈 §2.4 记其会挂死）
+        if bad:
+            print(f"\n⛔ 判据未过：`{'`、`'.join(bad)}` 的吸附**不再生效** ⇒ 「合计行贴底」的实测结论已不成立。"
+                  "\n   ⚠️ 常见原因：换了浏览器大版本（现代 Chromium 的 sticky 语义变了）。"
+                  "\n   ⇒ 先复核 `ops/M3-合计行置底实测结论.md`，再决定「改写法」还是「改结论」。")
+            sys.stdout.flush()
+            os._exit(1)          # ⚠️ 收尾不调 close()/stop()（技术栈 §2.4 记其会挂死）⇒ 用 os._exit 带码退出
+        print(f"\n✅ 判据通过：`{'`、`'.join(ASSERT_OK)}` 三条都有效（本工程采用 `E` —— 末行 `tr` 自身 sticky）")
+        sys.stdout.flush()
+        os._exit(0)              # ⚠️ 同上（`os._exit` 是绕"收尾挂死"的既有手段，⛔ 别换成 `return`）
 
 
 if __name__ == "__main__":

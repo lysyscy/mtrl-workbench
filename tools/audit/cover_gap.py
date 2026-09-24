@@ -1,11 +1,21 @@
 """判据覆盖检查（`T7`）—— **有登记的能力、口径却没人 cover**。
 
-**为什么单独成件**：`tools/doc_audit.py` 已逼近「>600 行禁合入」线（拆分前 650 行）⇒
+**为什么单独成件**：`tools/audit/doc_audit.py` 已逼近「>600 行禁合入」线（拆分前 650 行）⇒
 按工程纪律把本检查抽出；`doc_audit` 只调用、不内联。
+（⚠️ 2026-09-24 订正：原文写 `tools/doc_audit.py` —— 尺子已随 `TAIL-58` 搬进 `tools/audit/`。）
 
 ⚠️ **只登记、不判红**（与 `T5` 同款理由）：某条能力**该不该有判据需要人判断**
 （有些是叙述 / 索引 / 已取消 / 备查），门禁只留给机器能定对错的事
 （幽灵用例号 / 路径 / 术语 / 状态数字）。⇒ 本模块的产物是**给人看的清单**。
+
+⚠️⚠️ **2026-09-24 补 `main()`（僵尸闸门第二例）**：此前本件**没有 `__main__`** ⇒
+   `python tools/audit/cover_gap.py` 是**空转**（**0 行输出 · rc 恒 0**）—— 而它**明明在收工闸门的
+   "12 把尺子"清单里**（`MEMORY.md §〇之二` / 计划 `§22.1`）⇒ 那一行等于**从未跑过**；
+   检查逻辑只在 `doc_audit` 里被动生效过（人单跑它则什么都看不到）。
+   ⭐ 同族第一例 = `shell_verify`（2026-09-24 改成**盖章式**闸门）。两例的共同症状：
+   **"一直在跑、exit code 一直是 0、其实什么都没判"**。
+   ⇒ 现在是**真出口**：**交付面找不到 / 登记册读不到 ⇒ `rc=1`**（⛔ 不静默通过）；
+   清单正常生成 ⇒ `rc=0`（登记档本身仍不判红）。自证 = `tools/mut/_mut_covergap.py`。
 
 判法（**两档，各自独立**）：
 - **`T7a` 无判据承载**：能力行末列**没写 `ACC-*`** ⇒ 这条能力**没有任何用例认领**（最硬的一档）。
@@ -31,13 +41,20 @@
 
 from __future__ import annotations
 
+import argparse
 import re
+import sys
 from pathlib import Path
 
-#: 「已清」登记（**与代码同目录**）：行首 `x ` = 该条已补上判据 ⇒ 不再输出；
+from audit_common import delivery_root
+
+#: 「已清」登记：行首 `x ` = 该条已补上判据 ⇒ 不再输出；
 #: 行首两空格 / 无前缀 = 未清；`#` 开头 = 注释。
 #: ⚠️ 读不到 ⇒ 视为**全部未清**（宁多报不少报）。
-CLEARED_REGISTRY: Path = Path(__file__).resolve().parent / "t7_expected.txt"
+#: ⛔ **路径不跟代码走**（2026-09-24 修）：登记册在 **`tools/t7_expected.txt`**，本件在 `tools/audit/`
+#:    ⇒ 必须 `parent.parent`。写成 `parent`（= `tools/audit/t7_expected.txt`）会**静默读到空**，
+#:    表现为「登记册标了 `x` 却照旧输出」—— 这类失效**没有任何报错**，只有下面那行 stderr 会吭一声。
+CLEARED_REGISTRY: Path = Path(__file__).resolve().parent.parent / "t7_expected.txt"
 
 #: 显式豁免：这些能力**本来就不该有判据**，理由必须写在这里（可追溯）。
 #: ⚠️ 只收「文档里明写不做 / 取消 / 备查」的，**不收"暂时没做"**（那属真缺口，要留着被看见）。
@@ -71,6 +88,8 @@ def load_cleared(path: Path | None = None) -> set[str]:
     """读「已清」登记 → {`MOD-xx.md Lnn`}。读不到 ⇒ 空集（= 全部未清，宁多报）。"""
     p = path or CLEARED_REGISTRY
     if not p.exists():
+        # ⛔ 静默降级 = 「以为登记了，其实没生效」⇒ 必须吭声（2026-09-24 实测踩过）
+        print(f"⚠️ `T7a` 已清登记册读不到：{p} ⇒ 按「全部未清」处理", file=sys.stderr)
         return set()
     out: set[str] = set()
     for ln in p.read_text(encoding="utf-8").splitlines():
@@ -130,11 +149,11 @@ def check_cover_gaps(root: Path | None, baseline: dict) -> list[dict]:
             if any(k in cap for k, _why in T7_EXEMPT):
                 continue                                   # 显式豁免（理由见 T7_EXEMPT）
             rel = f"PRD/02-功能规格/{p.name}"
-            cleared_key = f"{p.name} L{i + 1}"
+            cleared_key = f"{p.name} L{i}"
             # ⭐ T7a：这条能力**自己没有判据**（与"口径有没有人管"是两件事）
             #    ⚠️ 已登记的条目**不再输出**（登记见 `tools/t7_expected.txt`，仍是显式在册的）
             if not has_case and cleared_key not in cleared:
-                out.append({"code": "T7a", "rel": rel, "line": i + 1,
+                out.append({"code": "T7a", "rel": rel, "line": i,
                             "what": f"{cap[:42]} ← 无用例认领（末列没有 `ACC-*`）"})
             secs = re.findall(r"§?(\d+(?:\.\d+)+)", cells[2])
             if not secs:
@@ -145,9 +164,45 @@ def check_cover_gaps(root: Path | None, baseline: dict) -> list[dict]:
                 # 若一并报会把清单噪音化（已标用例却口径不符 = 需人核，见模块 docstring）。
                 if has_case:
                     continue
-                out.append({"code": "T7b", "rel": rel, "line": i + 1,
+                out.append({"code": "T7b", "rel": rel, "line": i,
                             "what": f"{cap[:42]} ← §{', §'.join(bad)} 无人 cover"})
     return out
 
 
-__all__ = ["T7_EXEMPT", "CLEARED_REGISTRY", "load_cleared", "check_cover_gaps"]
+def main(argv: list[str] | None = None) -> int:
+    """独立跑（⭐ 2026-09-24 补 —— 此前**没有 `main`** ⇒ 这行命令是**空转**，见模块 docstring 顶部）。
+
+    `rc=0` 只表示两件事都成立：**清单已生成** ＋ **登记册在位**；
+    ⛔ 不表示"没有缺口"（`T7a`/`T7b` 是**登记档，不判红**）。
+    """
+    ap = argparse.ArgumentParser(description="判据覆盖检查（`T7a`/`T7b` · 登记档）")
+    ap.add_argument("-v", "--verbose", action="store_true", help="附每条的原始口径列")
+    args = ap.parse_args(argv)
+
+    if not CLEARED_REGISTRY.exists():
+        print(f"⛔ `T7a` 已清登记册读不到：{CLEARED_REGISTRY} ⇒ 清单不可信（⛔ 不是通过）", file=sys.stderr)
+        return 1
+    root = delivery_root()
+    if root is None:
+        print("⛔ 找不到交付面（PRD）⇒ 本检查无从判（⛔ 不是通过）", file=sys.stderr)
+        return 1
+
+    import acc_report as ar                                        # noqa: PLC0415
+    gaps = check_cover_gaps(root, ar.load_json(ar.resolve_baseline(None)))
+    a = [g for g in gaps if g["code"] == "T7a"]
+    b = [g for g in gaps if g["code"] == "T7b"]
+    print("=" * 78)
+    print(f" 判据覆盖 `T7` · cover_gap —— `T7a` {len(a)} 条 · `T7b` {len(b)} 条"
+          "（**登记档，不判红** —— 清单是给人看的）")
+    print("=" * 78)
+    for tag, grp in (("T7a · 无用例认领", a), ("T7b · 口径无人 cover", b)):
+        print(f"\n-- {tag} --")
+        for g in grp:
+            print(f"  {g['rel'].replace('PRD/02-功能规格/', ''):<11} L{g['line']:<4} {g['what']}")
+    print(f"\n结论：清单 **{len(gaps)}** 条 · 登记册在位 ⇒ rc=0（⚠️ 缺口没清也照样 rc=0 —— 它是登记档）")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+

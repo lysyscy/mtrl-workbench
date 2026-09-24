@@ -235,98 +235,21 @@ def _client(rows=(), projects=()):
 #    （`POST /m04/import`）已随旧渲染层删除（授权 `D18`）⇒ 原来钉在它们上的三条**搬了断言**：
 #    · 「导入页给出先选月份与口径说明」= **纯页面形态** ⇒ 随页作废（那几句口径现在写在**壳**的导入弹窗里，
 #      由 `tests/test_wired_m04.py::test_导入与手动行走后端` 的接线断言守）；
-#    · 「导入成功回报四个数」与「月份缺失显式报错」= **产品 claim** ⇒ 改指新壳在用的
-#      `POST /api/m04/import`（见下两条，**claim 一字未改**）。
-
-
-def _api_client(monkeypatch):
-    """离线 client：把 `plan_api_router.session_scope` 换成**假上下文**（yield 假写会话）。
-
-    ⚠️ JSON 端点走 `session_scope()`（**不是** `get_db` 依赖）⇒ 上面那个 `_client`（PRG 用）帮不上忙，
-       只能 monkeypatch **模块里的名字**（同 `tests/test_api_m04_force.py`）。
-    """
-    from contextlib import contextmanager
-
-    import app.mod04_plan.plan_api_router as m04_api
-    from tests.m03_action_helpers import FakeWriteSession
-
-    # ⚠️ 导入这条链只要 `PlanRow`（写入）与 `Project`（`project_briefs` 挂项目）—— ⛔ 不必凑齐各模型
-    fake = FakeWriteSession({PlanRow: [], Project: []})
-
-    @contextmanager
-    def _scope():
-        yield fake
-
-    monkeypatch.setattr(m04_api, "session_scope", _scope)
-    return TestClient(create_app(), raise_server_exceptions=False), fake
-
-
-# ⚠️ **2026-09-22（`TAIL-69`）**：一步式端点 `POST /api/m04/import` **已软退役**
-#    （路由留着回"请刷新"的明白话，防缓存的旧页面打出没头没脑的 404；实现已撤）。
-#    它 originally 钉的两条 claim ——「成功报四个数」与「缺月份显式报错」——
-#    **claim 一字未改**，已搬到两步新出口：`test_两步导入_预览不写库_确认才落库`（四个数 ＋ 无效列原样）
-#    ＋ `test_两步导入_解析缺月份显式报错`（缺月份）。下面这条守**退役回执**本身。
-
-
-@acc()
-def test_一步式入口退役回执(monkeypatch):
-    """旧入口打过来 ⇒ **显式说"已升级，请刷新"**（⛔ 不给 404，也不许再真写库）。"""
-    client, fake = _api_client(monkeypatch)
-    resp = client.post(
-        "/api/m04/import",
-        data={"year_month": "2026-09"},
-        files={"file": ("plan.xlsx", _xlsx([_row()]), "application/octet-stream")},
-    )
-    assert resp.status_code >= 400, f"退役端点必须**拒**（实际 {resp.status_code}）"
-    assert "升级" in resp.text and "刷新" in resp.text, resp.text[:200]
-    assert not fake.added, "退役端点**不得再写库**"
-
-
-# ============================================================ ⭐ `TAIL-69` 两步导入（预览不写库）
-
-
-@acc()
-def test_两步导入_预览不写库_确认才落库(monkeypatch):
-    """⭐ `TAIL-69`：**校验前不碰库** —— `parse` 只出预览＋token；`confirm` 凭 token 才 `merge_month`。"""
-    client, fake = _api_client(monkeypatch)
-    file = {"file": ("plan.xlsx", _xlsx([_row()]),
-                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
-    resp = client.post("/api/m04/import/parse", data={"year_month": "2026-09"}, files=file)
-    assert resp.status_code == 200, resp.text[:200]
-    j = resp.json()
-    assert j["ok"] and j["token"]
-    m = j["preview"]["match"]
-    # 假会话里**没有项目档案** ⇒ 预览如实报「1 行 · 未匹配」（盘点让人先看见 —— 正是 `TAIL-69` 的目的）
-    assert m["rows_total"] == 1 and m["matched"] == 0
-    assert len(m["unmatched"]) == 1 and m["unmatched"][0]["project_input"] == "甲仓库"
-    assert not fake.added, "预览阶段**一个字节都不写库**（`TAIL-69` 三条硬性之三）"
-    resp2 = client.post("/api/m04/import/confirm", json={"token": j["token"]})
-    assert resp2.status_code == 200, resp2.text[:200]
-    j2 = resp2.json()
-    assert {"created", "updated", "deleted", "manual_kept"} <= set(j2["stats"])
-    assert fake.added and isinstance(fake.added[0], PlanRow)
-    assert fake.added[0].year_month == "2026-09"
-    assert fake.added[0].flow_amount == Decimal("1000.00"), "金额还原走同一出口（§9.1 精度）"
-
-
-@acc()
-def test_两步导入_token不存在显式报错(monkeypatch):
-    """token 不存在 / 过期 ⇒ **显式报错**（⛔ 不静默当成空导入 —— 空导入会把该月清掉）。"""
-    client, _ = _api_client(monkeypatch)
-    resp = client.post("/api/m04/import/confirm", json={"token": "deadbeefdeadbeefdeadbeefdeadbeef"})
-    assert resp.status_code >= 400, f"要**显式拒**（实际 {resp.status_code}）"
-    assert "过期" in resp.text or "重新上传" in resp.text, resp.text[:160]
-
-
-@acc()
-def test_两步导入_解析缺月份显式报错(monkeypatch):
-    """parse 阶段就拦「没选年月」（⛔ 不等确认才报 —— 用户多绕一圈）。"""
-    client, fake = _api_client(monkeypatch)
-    resp = client.post(
-        "/api/m04/import/parse",
-        data={"year_month": ""},
-        files={"file": ("plan.xlsx", _xlsx([_row()]), "application/octet-stream")},
-    )
-    assert resp.status_code >= 400
-    assert "月" in resp.text
-    assert not fake.added
+#    · 「导入成功回报四个数」与「月份缺失显式报错」= **产品 claim** ⇒ 改指新壳在用的端点。
+#
+# ⚠️⚠️ **2026-09-23（`TAIL-75` 余项 · 用户裁定「只留通用面」）：页内导入面整条连件删除** ——
+#    `POST /api/m04/import`（一步式，2026-09-22 起**已软退役**，现**已删**。）＋ `/api/m04/import/parse|confirm`
+#    （这两个**也已删**。）
+#    （`TAIL-69` 的两步）＋ 只服务它们的 `TokenRequest` ⇒ 付款计划的导入**只剩通用面一条路**
+#    （`/api/imp/m04_plan/*`，壳「数据导入」页选 `付款计划`）。
+#    ⇒ 原先钉在这三个端点上的四条，**照本仓惯例「判词一字不改、只换落点」**：
+#
+#    | 原判据（本文件） | 现在的落点 |
+#    |---|---|
+#    | `test_两步导入_预览不写库_确认才落库` | `test_imp_m04_api.py::test_付款计划在通用面端到端_中文月日按年月补全_且幂等`（落库/幂等，同一份数值口径）；**"预览不写库"**这一半另由同件新增的 `test_通用面预览阶段不写库_且坏token显式报错` **直接查库**证明 |
+#    | `test_两步导入_token不存在显式报错` | 同上那条新用例（坏 token ⇒ `ok:false` ＋ 中文原因）。⚠️ **形态变了**：通用面**恒 HTTP 200、成败看回包 `ok`**（全站写动作口径）⇒ 断言随之改形，claim 不变 |
+#    | `test_两步导入_解析缺月份显式报错` | `test_imp_m04_api.py::test_缺年月要显式报错_不静默落库`。⚠️ **形态变了**：年月从 `parse` 的入参**移进** `commit` 的域上下文（`options.year_month`）⇒ "缺月份不静默落库"这条 claim 不变 |
+#    | `test_一步式入口退役回执` | **随入口作废**（它守的是"留给缓存旧页面的一句明白话"—— 端点已删，没有可打的旧页面了） |
+#
+#    ⛔ 那个离线 client（`_api_client`：monkeypatch `plan_api_router.session_scope`）**同批删除** ——
+#       它只服务上面这四条；通用面有**自己的真库用例**（`test_imp_m04_api.py`，含"预览不写库"的查库证明）。

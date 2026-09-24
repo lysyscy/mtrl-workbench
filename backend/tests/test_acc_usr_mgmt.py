@@ -143,7 +143,7 @@ def test_软删的账号仍带出到界面_且在回收站里单独可见可恢�
     import re
 
     from app.mod15_user import api as API
-    from tests.shell_src import SHELL
+    from tests.shell_src import SHELL, with_tbl
 
     # ---------- ① 后端：软删之后**仍带出来**，且计数是真数 ----------
     with session_scope() as s:
@@ -185,9 +185,23 @@ def test_软删的账号仍带出到界面_且在回收站里单独可见可恢�
     assert "status" not in code, (
         "回收站里又按 `status` 判了一遍「哪些算已删」—— ⛔ 切片 `V.m15` 已经判过 ⇒ 两份必漂；"
         "用 `userRestore` 按钮当选择器就**天然对齐**（那正是切片按同一条件渲染出来的）")
-    assert "${USERS.map(u=>" in SHELL, (
+    # ⭐ 2026-09-24（`TAIL-64` P1b）：**判据从「钉字面」改成「钉意图」** ——
+    #   原写法断言壳全文里有 `${USERS.map(u=>` 字面；表外壳抽进统一件 `TBL` 之后，那段变成
+    #   `...USERS.map(u=>`（进了 `rows:[…]`）⇒ **当场假红**。⛔ 反例：为省事把判据退回钉字面
+    #   ⇒ 等于宣布"以后不许抽通用件"（与 `TAIL-64/67` 相反）。
+    #   ⇒ 现在断三件事：① 切片**委托 `TBL`**；② rows 仍来自**全量 `USERS`**；③ **`TBL` 内核真把 rows
+    #     拼进 `tbody`**（`shell_src.with_tbl()` 把两段拼起来看 —— 照 `test_wired_m09.py` 的 P0 范式）。
+    #   自证 = `tools/mut/_mut_tbl.py`（去掉委托 / 掏空内核 ⇒ 必须红）。
+    i = SHELL.find("\nV.m15=()=>{")
+    j = SHELL.find("\n};", i) if i >= 0 else -1
+    m15 = SHELL[i:j] if i >= 0 and j > i else ""
+    assert m15, "壳里找不到 `V.m15` 切片"
+    assert "TBL({" in m15, "本页主表没走统一出口 `TBL`（`TAIL-64` P1b）"
+    assert "USERS.map(u=>" in m15, (
         "`V.m15` 的切片被改了（主表不再从全量 `USERS` 渲染）—— 回收站**必须**靠搬 DOM 实现，"
         "⛔ 不许改原型切片：`ui_parity` 的 `U1` 要它与 `demo/` 逐行一致，登记簿**只准变短**")
+    assert "rows.join('')" in with_tbl(m15), (
+        "`TBL` 内核没有把 rows 拼进 `tbody` ⇒ 表被掏空了（判据的两段拼接：切片委托 ＋ 内核真做事）")
 
 
 @acc("ACC-USR-MGMT-001", "001-10")

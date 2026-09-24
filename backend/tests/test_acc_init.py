@@ -91,12 +91,16 @@ def test_i8期间两条入口都在_抓通知书与Excel导入历史流水():
 
     ⚠️ 2026-09-21（`§19` 四个暂留件收口）：导入页搬进新壳 ⇒ 三步与纠错通道改由**JSON 端点**承接
        （`import_api.py`）—— **判词一字未变**（"Excel 导入的历史流水这条路真的存在"）。
+    ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · 用户裁定 `B`）：旧页与 `import_api.py` **连件删除**
+       ⇒ 落点换到**通用导入面**（`/api/imp/m05_flow/*`）—— **判词一字未改**
+       （"Excel 导入的历史流水这条路真的存在" ＋ 有**纠错通道**），只是三步按通用面叫
+       `parse / commit / rollback`、列契约改由 `schema` 给。
     """
     paths = _paths()
     assert "/api/m02/fetch/run" in paths                                  # 抓通知书
-    assert {"/api/m05/import/parse", "/api/m05/import/confirm",
-            "/api/m05/import/meta"} <= paths                              # Excel 导入三步（＋列契约）
-    assert "/api/m05/import/rollback" in paths                            # 同批整批回滚（初始化的纠错通道）
+    assert {"/api/imp/m05_flow/parse", "/api/imp/m05_flow/commit",
+            "/api/imp/m05_flow/schema"} <= paths                          # Excel 导入三步（＋列契约）
+    assert "/api/imp/m05_flow/rollback" in paths                          # 同批整批回滚（初始化的纠错通道）
 
 
 @acc("ACC-INIT-001", "001-05")
@@ -113,10 +117,14 @@ def test_过程资料手录与Excel上传两个入口都在():
     # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：历史导入半边**也搬进了新壳** ⇒ 三条 PRG 已删、
     #    `core/nav.py` 里那条入口同批清掉（那是指向已删路由的**幽灵导航**）；
     #    **判词不变**（"Excel 上传这条路真的存在"）—— 改由下面两半钉住：
-    assert {"/api/m06/import/parse", "/api/m06/import/confirm",
-            "/api/m06/import/rollback"} <= paths                     # 上传三步 ＋ 纠错通道
+    # ⚠️ 2026-09-23（`TAIL-75` `B5c-2`）：旧端点 `/api/m06/import/*`（五条）**已全部退休**
+    #    ⇒ 落点换到**通用导入面**。**判词一字未改**（"过程资料的 Excel 上传这条路真的存在"
+    #    ＋ 有**纠错通道**），只是三步的名字按通用面叫 `parse/commit/rollback`。
+    assert {"/api/imp/m06_proc/parse", "/api/imp/m06_proc/commit",
+            "/api/imp/m06_proc/rollback"} <= paths                   # 上传三步 ＋ 纠错通道
     from tests.shell_src import SHELL                                # noqa: PLC0415
-    assert "m06imp" in SHELL and "/api/m06/import/data" in SHELL, "壳侧栏要有这个入口（导航已搬进壳）"
+    assert "imp" in SHELL and "/api/imp/" in SHELL, \
+        "壳侧栏要有「数据导入」这个入口（过程资料的上传走通用面）"
 
     # ① 手录**真的落得进**（旁路载体：无审批、不受源数据约束）
     st = FakeSession({ProcMechManual: []})

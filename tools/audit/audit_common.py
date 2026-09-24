@@ -75,6 +75,54 @@ CANCELLED: dict[str, tuple[str, str, bool]] = {
     "m08ImpMeta": ("同上 —— `API.m08ImpMeta` 已删", "（无替代）", True),
     "mod08_inv.import_api": ("同上 —— 编排与三条端点已删",
                              "抓取走 `fetch_service`（`upsert_details` 是同一套幂等落库出口）", True),
+    # ⚠️ 2026-09-22/23（`TAIL-75` `B5c` / `B5c-2`）：**「过程资料历史导入」页与它的专属端点全部退休**
+    #    —— 同一件事不留两个入口 ⇒ 过程资料的导入**只走「数据导入」页**（通用导入面）。
+    #    已删：壳 `V.m06imp` ＋ `imp06*` 动作 ＋ `API.m06ImpData` ＋ 后端 `/api/m06/import/*` 五条
+    #    ＋ `mod06_proc/import_api.py` 整件。⛔ 别再建"第二条导入路"。
+    "m06imp": ("已撤（2026-09-22 `B5c`：过程资料导入整体搬进「数据导入」页）",
+               "过程资料导入 = **通用导入面** `/api/imp/m06_proc/*`（壳「全局 → 数据导入」）", True),
+    "imp06": ("同上 —— 壳侧动作已删", "同上（通用面四步：选域与文件 → 列映射 → 预览 → 确认）", True),
+    "m06ImpData": ("同上 —— `API.m06ImpData` 已删（2026-09-23 `B5c-2`）",
+                   "`API.impOptions(domain)` ⇒ `GET /api/imp/{domain}/options`", True),
+    "mod06_proc.import_api": ("同上 —— 编排与五条端点已删",
+                              "落库仍走 `importer.commit`（域钩子 `imp_spec.commit` 调的就是它）", True),
+    # ⚠️⚠️ 用户 2026-09-23 裁定 **`B`**：**「历史付款导入」旧页撤掉**（`TAIL-75` `B5b` 第三步）——
+    #    该域已挂上通用导入面 ⇒ 同一件事只留一个入口（与 `m06imp` 同款处置）。
+    #    ⚠️ **代价已记账**（用户拍板时知情）：旧页按**源表列位置**读（无表头也读得动），
+    #       通用面按**列名**认 ⇒ 判据 `ACC-FLOW-IMPORT-001/001-01` 同批**改写**（撤页的已知代价）。
+    #    已删：壳 `V.m05imp` ＋ `imp05*` 四个动作 ＋ `IMP05` / `IMP05_STEPS` / `reportHtml` ＋
+    #    `API.m05ImpMeta` ＋ `PAGE_LOAD`/`LOADERS` 那两行 ＋ NAV/TITLE/WIRED 三处登记
+    #    ＋ 后端 `/api/m05/import/*` 四条 ＋ `mod05_flow/import_api.py` 整件。
+    #    ⛔ 别再建"第二条导入付款流水的路" —— 入口 = 通用面 `/api/imp/m05_flow/*`。
+    "m05imp": ("已撤（2026-09-23 用户裁定 `B`：历史付款导入整体搬进「数据导入」页）",
+               "历史付款导入 = **通用导入面** `/api/imp/m05_flow/*`（壳「全局 → 数据导入」选 `历史付款流水`）", True),
+    "imp05": ("同上 —— 壳侧四个动作（`imp05Pick/Parse/Ok/Rollback`）已删",
+              "同上（通用面四步：选域与文件 → 列映射 → 预览 → 确认）", True),
+    "m05ImpMeta": ("同上 —— `API.m05ImpMeta` 已删（列契约改由域声明 `imp_spec.SPEC` 给）",
+                   "`GET /api/imp/m05_flow/schema`", True),
+    # ⚠️ 2026-09-23（`TAIL-75` 余项 · **用户裁定**）：「集采台账」页里那个**页内导入向导**撤掉 ——
+    #    用户原话：「**导入基本上只会在我刚开始使用系统时导入一次，之后就实时更新了**，所以只留通用面就好」
+    #    ⇒ 与 `m05imp`/`m06imp` 同款处置（同一件事不留两个入口）。同批清掉 `m04` 的旧端点。
+    #    已删：壳 `ACT.jcImportOpen/jcImportPick/jcImportRun/jcImportPickSheet/jcImportPj/jcImportMap/
+    #    jcImportOk` ＋ `jcImportShow`/`jcImpResult` ＋ `jcImp*` 那组状态与工具 ＋ `CHG` 三处登记
+    #    ＋ `BIND.m11` 注入的「⬆ Excel 导入台账」按钮 ＋ `API.m11ImportParse/m11ImportCommit`
+    #    ＋ 后端 `/api/m11/import/parse|commit` 两条 ＋ 它们的入参 class 与 `_b64()`。
+    #    ⛔ 别再建"第二条集采台账导入路" —— 入口 = 通用面 `/api/imp/m11_jc/*`。
+    "jcImport": ("已撤（2026-09-23 用户裁定：集采台账页内导入向导整体搬进「数据导入」页）",
+                 "集采台账导入 = **通用导入面** `/api/imp/m11_jc/*`（壳「全局 → 数据导入」选 `集采台账`）", True),
+    "m11Import": ("同上 —— `API.m11ImportParse/m11ImportCommit` 与 `/api/m11/import/*` 两条端点已删",
+                  "同上（列映射与匹配口径仍只有一份：`import_service.match_and_apply`）", True),
+    # ⚠️ 2026-09-23（**同一条裁定**）：`m04` 付款计划的**页内导入面**同批连件删除 ——
+    #    已删：`POST /api/m04/import/parse`（`TAIL-69` 第①步）· `/api/m04/import/confirm`（第②步）·
+    #    `/api/m04/import`（一步式，2026-09-22 起**已软退役**的路由）· 入参 class `TokenRequest`。
+    #    ⚠️ **域内解析出口保留**（`importer.parse_workbook` / `attach_projects` / `stage_payload` /
+    #    `restore_rows` / `match_summary`）—— 与 `m05` 留 `parse_rows`、`m06` 留 `parse_sheet` 同款
+    #    （域业务不随页面存亡；通用面的域声明也用着前两件）。
+    "m04/import": ("已撤（2026-09-23 用户裁定：付款计划页内导入面整体搬进「数据导入」页）",
+                   "付款计划导入 = **通用导入面** `/api/imp/m04_plan/*`（壳「全局 → 数据导入」选 `付款计划`）", True),
+    "mod05_flow.import_api": ("同上 —— 编排与四条端点已删",
+                              "落库仍走 `importer.commit`（域钩子 `imp_spec.commit` 调的就是它）；"
+                              "`importer.parse_rows`（五列批解析）**保留**，与 `m06` 留 `parse_sheet` 同款", True),
 }
 
 #: `T8` 扫描面 —— **只扫代码**（文档面由 `T2`/`RETIRED_TERMS` 管）。
@@ -85,12 +133,26 @@ CANCELLED: dict[str, tuple[str, str, bool]] = {
 #:   ⇒ ⭐ **迁移链是"历史记录"，不是"复活"** ⇒ 本守卫⛔ 不扫它。
 CANCELLED_SCAN_GLOBS: tuple[str, ...] = (
     "backend/app/**/*.py", "backend/app/**/*.js", "backend/app/**/*.html",
-    "backend/tests/*.py", "tools/*.py",
+    "backend/tests/*.py",
+    # ⭐⭐ 2026-09-24 修：工具**已迁进 `tools/audit/`**，而这里原先写着 `tools/*.py`（只匹配根那一层、
+    #    实测根下 **0 件**）⇒ **`T8` 的「工具面」整片失守且静默**（`clean=True` 的撤项若在尺子里复活，
+    #    没有任何尺子看得见）。⇒ 改成**按目录明确列举**（⛔ 不用一刀切递归）：
+    #    · **收** `tools/audit/`（尺子自己）与 `tools/probe/`（真机探针 —— 它若还在测已撤功能，
+    #      那**是真问题**，必须报）；
+    #    · ⛔ **不收** `tools/mut/`（变异脚本**天生要引用**已删标识符才造得出违规）与
+    #      `tools/oneoff/`（一次性脚本 = 历史叙事，与 `plans/归档-*` 同性质）。
+    # ⚠️⚠️ 2026-09-24 晚再修（`T18` 立起来当天抓的**第二例**）：**`tools/*.py` 已摘掉** ——
+    #    09-24 那次只把 glob 改对了目录，却**留着根那一条**，而**根下 0 件 python** ⇒ 它**一条都不命中**
+    #    = 那片"没人扫"。⭐ 教训：**"改对了主路径"不等于"清掉了死条目"** —— 后者只有 `T18` 看得见。
+    "tools/audit/*.py", "tools/probe/*.py",
 )
 
 #: `T8` 跳过本机制自己（这张表与它两个使用者**必然**要写出那些标识符）
 CANCELLED_SKIP_RELS: tuple[str, ...] = (
-    "tools/audit_common.py", "tools/audit_drift.py", "tools/doc_audit.py",
+    # ⭐ 2026-09-24 修：这三条原写作 `tools/audit_common.py` 等（**旧路径**）⇒ 文件搬进 `tools/audit/`
+    #    之后**永远匹配不到**（死配置）。而它们正是"必然写出那些标识符"的文件（`CANCELLED` 表自身 ＋
+    #    两个使用者）⇒ 不豁免就会自己报自己。
+    "tools/audit/audit_common.py", "tools/audit/audit_drift.py", "tools/audit/doc_audit.py",
 )
 
 #: ⭐⭐ **「原型 / 文档里留着撤项残片」是有意的，⛔ 别去清它**（用户 2026-09-20 裁定）。
@@ -123,6 +185,15 @@ CANCELLED_KEEP_IN_PROTO_AND_DOCS: tuple[str, ...] = (
 HARD_EXEMPT: tuple[str, ...] = (
     "已取消", "已作废", "已删除", "已废除", "已删", "取消「", "不再取", "不再用",
     "勘误", "旧术语", "别再引入", "不得再写",
+    # ⭐ 2026-09-23 补：本仓撤项（页面 / 端点）一贯写「**已下架**」「**已退休**」——
+    #   它们与「已删」是同一个意思，却因不在词表里被判**红**（`m06imp` 那几行就是这样）
+    #   ⇒ 补进来（⛔ 别反过来去改注释的措辞 —— 该迁就的是词表，不是人话）。
+    "已下架", "已退休", "已下线",
+    # ⚠️ 2026-09-23（`B5b` 第三步撤 `m05imp` 时踩到）：⚠️ **别往这里加裸动词**（「删除」「下架」「删掉」）——
+    #   本表是**四条检查共用**的（`T1`/`T2`/`T3`/`T8` 都走 `_verdict`）⇒ 加一个泛词会把
+    #   **T2（已废除术语）/ T3（幽灵路径）在文档里的命中**一起豁免掉（那两把就没区分力了）。
+    #   ⭐ 正确做法 = **把行文写成带「已」的完成态**（「已删除」「已下架」），而不是放宽词表 ——
+    #   词表只收**明确指向"它废了"的固定说法**。
 )
 
 #: **强豁免（模式版）** —— ⭐ 有些"它废了"的写法**中间会夹东西**，纯子串匹配会漏：
@@ -132,8 +203,12 @@ HARD_EXEMPT: tuple[str, ...] = (
 #:  ⭐ 而「写清哪天撤的」正是**最该鼓励**的写法 ⇒ 必须用**模式**匹配，⛔ 不能只比子串。
 #:  ⚠️ 收紧边界（`[^，。；\n]{0,16}`）：只跨"日期 / 版本号"这类短插入，
 #:    避免「已……删」跨半句话把正常行误豁免。
+#: ⭐ 2026-09-24 补 **下架 / 退休 / 下线**：子串表里虽已有「已**下架**」，但本仓实际写法常是
+#:    「**已随 `B5c` 下架**」「已按用户裁定…下架」（中间夹了标识符 / 日期）⇒ 只有模式版兜得住。
+#:    实测：修 `T8` 扫描面后冒出的 3 条红（`tools/probe/_shell_legacy.py` 的 `m08imp`/`m06imp`/`m05imp`）
+#:    **全是这种正确写法**被误判 ⇒ 按本表上方的老规矩（该迁就的是词表，不是人话）补词，⛔ 不改注释。
 HARD_EXEMPT_RE: tuple[str, ...] = (
-    r"已[^，。；\n]{0,16}(?:删|取消|作废|废除|撤|废)",
+    r"已[^，。；\n]{0,16}(?:删|取消|作废|废除|撤|废|下架|退休|下线)",
 )
 
 #: **弱豁免**：邻近出现 ⇒ 降黄（人看一眼）。豁免窗口 = 命中行 ±2 行
@@ -194,12 +269,26 @@ SCAN_GLOBS: tuple[str, ...] = (
     #       与 ④ 产物档（`artifacts/` —— 由 `T11` 管"回执"，不管措辞）。
     # ⚠️ **`CLAUDE.md` 已删除**（2026-09-21 用户裁定：换工具后**无人读取**）—— 它的必用内容已并入
     #    `MEMORY.md`（注入档）与 `MEMORY-细则.md`，过程叙事下沉到 `plans/归档-历史单元条目.md`。
-    "README.md", "ops/*.md", ".workbuddy/plans/*.md",
-    ".workbuddy/memory/MEMORY.md", ".workbuddy/memory/CHANGELOG.md",
+    "README.md", "ops/*.md", ".workbuddy/plans/*.md", "docs/*.md",
+    ".workbuddy/memory/MEMORY.md",
+    # ⚠️ 2026-09-24 **摘掉 `.workbuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
+    #    它是**搬迁前的旧地址**，该件现址 = `docs/changelog.md`（`README.md`「工程基准档」那行）⇒
+    #    这条 glob **一条都不命中** = 那一片**从没被扫过**（`docs/*.md` 已把它盖住 ⇒ 摘掉 = 零损失）。
 )
 DELIVERY_GLOBS: tuple[str, ...] = (
     "*.md", "PRD/*.md", "PRD/*/*.md", "demo/*.md", "demo/*/*.md",
 )
+
+#: ⭐⭐ 2026-09-24（用户裁定 **A**）：`T8` **从「只扫代码」扩到「也扫活文档」**。
+#:   **为什么要扩**：文档面原来交给 `T2`（`RETIRED_TERMS`），但那张词表**不含**已撤的
+#:   页 / 端点名 ⇒ 「用**现在时**描述已撤功能」这类（实测：`docs/modules.md` 把 `m05imp`、
+#:   `m06imp`、`m04` 两步导入写成**现存功能**）**没有任何尺子看得见** ——
+#:   ⚠️ 实证：把 `docs/*.md` 加进漂移扫描面（`SCAN_GLOBS`）之后，`doc_audit` **仍然必须修 0**。
+#:   **怎么扩**：文档面**直接复用 `SCAN_GLOBS`**（它已是「会被当口径读的那几层」的**唯一定义**）
+#:   ⇒ 两处口径用同一个常量，⛔ **不会再分裂**（本项目栽过"同一件事两个主人"）。
+#:   ⚠️ `SCAN_GLOBS` 含 `.workbuddy/plans/*.md`（其中 `归档-*.md` 体积大）⇒ 那类由
+#:      `LENIENT_GLOBS` 降成**黄**（留痕档里出现旧名是**对的**，只提示不判红）。
+CANCELLED_DOC_GLOBS: tuple[str, ...] = SCAN_GLOBS
 
 _ACC_RE = re.compile(r"ACC-[A-Z0-9]+(?:-[A-Z0-9]+)*")
 _ACC_ID_RE = re.compile(r"^ACC-[A-Z0-9]+(?:-[A-Z0-9]+)*-\d{3}$")

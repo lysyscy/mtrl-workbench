@@ -23,7 +23,9 @@ CASES = [
 
 
 def run_doc_audit() -> str:
-    r = subprocess.run([PY, "tools/doc_audit.py", "-v"], cwd=str(ROOT),
+    # ⚠️ 2026-09-23：审计件早已从 `tools/` 搬进 `tools/audit/` —— 旧路径下 subprocess 直接失败、
+    #    `stdout` 为空 ⇒ 三处"造出来的违规"一条都看不见 ⇒ **假绿**（实测：`0/3 变红 ＋ 复原干净 ✅`）。
+    r = subprocess.run([PY, "tools/audit/doc_audit.py", "-v"], cwd=str(ROOT),
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.stdout or ""
 

@@ -27,25 +27,15 @@ async function jcLinkAct(fn, okMsg) {
   render();
   return r;
 }
-/* ⭐ `M5-8`：导入的**状态与工具**（⚠️ 必须放在 `ACT` **之外** —— 对象字面量里只能放属性，
-   放 `let`/`const` 进去会直接语法错（这个坑我踩了两次：先 `jcLinkAct`、再这里）。 */
-let jcImpFile=null, jcImpB64=null, jcImpRes=null, jcImpK=0, jcImpMap={}, jcImpPj='';
-const jcImpRead=f=>new Promise((res,rej)=>{ const r=new FileReader();
-  r.onload=()=>res(String(r.result||'')); r.onerror=()=>rej(new Error('文件读不出来')); r.readAsDataURL(f); });
-const jcImpSheet=()=>((jcImpRes&&jcImpRes.sheets)||[])[jcImpK]||null;
-/* 「人改过的映射」= **后端返回的** ∪ **预览页手点的**（⚠️ 人改的**优先** —— 与后端 `map_columns` 同口径）。 */
-const jcImpCur=()=>{ const s=jcImpSheet(); if(!s) return null;
-  const mp=s.mapping||{}; const flds=Object.assign({}, mp.fields||{});
-  Object.keys(jcImpMap||{}).forEach(c=>{ const v=jcImpMap[c];
-    Object.keys(flds).forEach(k=>{ if(flds[k]===+c) delete flds[k]; });
-    if(v) flds[v]=+c; });
-  return {sheet:s, fields:flds, labels:mp.labels||s.labels||[]}; };
+/* ⛔ `M5-8` 集采台账**页内导入向导**的状态与工具已删（`TAIL-75` 余项 · 2026-09-23 用户裁定：
+   「导入只在启用初期用一次，之后实时更新」⇒ **只留通用面**）—— 现在那条路是「数据导入」页的
+   `m11_jc` 域（`/api/imp/m11_jc/*`）。⛔ 别再往本文件加回 `jcImp*` 那一套。 */
 
 /* ⭐ `M5-6` 增量抓取：**记住用户填过的「开始日期」**（取消后再开不丢，也不每次重算）。 */
 let jcFetchSinceOn = '';
 /* ⭐ `TAIL-69`（2026-09-22）：m04 导入的**预览态**（⚠️ 必须在 `ACT` 对象之外 —— 同上，`let` 进
    对象字面量 = `Unexpected identifier` ⇒ 整支 actions.js 失效、壳只剩 home，且离线文本断言全绿）。 */
-let plImportPrev=null;   /* {token, ym, preview} —— 解析成功后暂存；确认 / 重开时消费 */
+/* ⛔ `plImportPrev` 已随页内导入弹窗删除（`TAIL-75` `B5c`）：预览态现在住在「数据导入」页的 `IMP`。 */
 /* ⭐ `M5-6`：**默认开始日期** = 集采台账里**最大合同日期 − 3 天**（页面看得见、可改）。
    ⚠️ 与后端 `default_since` **同一口径** —— 只是壳里拿**已加载的 `JCs`** 算（够用、且立刻可见）；
       算不出来（库空 / 没有合法日期）⇒ 回空串 ⇒ **交给后端**（后端会走「全量」）。
@@ -587,50 +577,21 @@ const ACT={
     plAct(()=>API.plDelete(ids), `已删除 <b>${ids.length}</b> 行付款计划（只影响付款计划表）`); },
  /* ⭐ `TAIL-69`（2026-09-22）：导入升级为「**选文件 → 解析预览（不写库）→ 确认落库**」——
     预览里先看见**行数 / 项目匹配盘点（未匹配 / 重名）/ 解析提示**，再决定写不写（⛔ 永不静默猜）。
-    弹窗主体在 `actions.js`（切片外）⇒ `U1` 切片一行未动；后端 = `/api/m04/import/parse|confirm`。
     ⚠️ `plImportPrev` 的 `let` 声明在本文件**顶层**（对象字面量里 ⛔ 不能放 `let` ——
        实测：放里面 = `Unexpected identifier` ⇒ **整支 actions.js 失效**、壳白得只剩 home，
        而离线文本断言全绿（只有真机 / `node --check` 看得见）。 */
- plImport:()=>{ plImportPrev=null; modal({title:'导入付款计划 Excel',reopen:()=>ACT.plImport(),body:`<div class="tip" style="margin-bottom:10px">请先选择<b>本次导入数据的月份</b>；导入后本批全部行都归入该年月（<b>按月归档</b>）。<br><b>同一月份允许存在完全相同的行，且不被覆盖</b>（重复由「重复上报」提示，不靠自动去重掩盖）。</div>
-       <div class="fbar" style="border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px">
-         <div class="fi"><label>导入数据的年月</label>${tmBtn('plImportMonth',{scope:'plimp',val:plImportM,modes:['月']})}</div>
-         <div class="fi"><label>Excel 文件</label><input class="inp" type="file" id="plImpFile" accept=".xlsx,.xls" style="padding:4px"></div>
-       </div>
-       <div class="tip ok" style="margin:0">点「解析并预览」<b>先看不写库</b>；确认后按所选月份「<b>清该月自动行 → 重写该批</b>」（§9.5 幂等）——<b>可手改列一律保留</b>、<b>该月手动行不被触碰</b>。</div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="plImportOk">解析并预览</button>`}); },
- /* ② 解析预览：**不写库**（暂存进 `preview_store`，凭 token 确认）——失败显式报原因，草稿/筛选不动。 */
- plImportOk:async ()=>{ const m=plImportM; const el=document.getElementById('plImpFile');
-   const f=el&&el.files&&el.files[0];
-   if(!f) return toast('<b>请先选择要导入的 Excel 文件</b>',5200);
-   try{ const r=await API.m04ImportParse(m,f);
-     plImportPrev={token:r.token, ym:m, preview:r.preview||{}};
-     ACT.plImportPreview();
-   }catch(e){ toast(`<b>解析没能完成（未写库）</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">文件不合法或表头认不出时会这样报；改好文件再试即可</span>`,9000); } },
-   /* ②' 预览弹窗（`reopen` 复用；内容全部来自后端 parse 的返回，⛔ 壳里不另抄口径）。 */
-   plImportPreview:()=>{ if(!plImportPrev) return ACT.plImport();
-   const pv=plImportPrev.preview||{};
-   const p=pv.match||{};
-   const alerts=pv.alerts||[];
-   const list=(arr,head)=>arr&&arr.length?`<h4 style="font-size:12.5px;margin:10px 0 4px">${head}（${arr.length}）</h4>
-       <div class="tw" style="max-height:180px;min-height:0"><table class="dt"><thead><tr><th>行</th><th>项目列原文</th></tr></thead><tbody>
-       ${arr.map(x=>`<tr><td class="num">${esc(x.row)}</td><td>${esc(x.project_input)||'（空）'}</td></tr>`).join('')}</tbody></table></div>`:'';
-   modal({title:`导入付款计划 Excel · 预览（目标月份 <b>${esc(plImportPrev.ym)}</b> · 尚未写库）`,reopen:()=>ACT.plImportPreview(),
-     body:`<div class="tip">解析出 <b>${esc(p.rows_total)}</b> 行 · 项目匹配：<b>${esc(p.matched)}</b> 命中 ·
-         <b class="${(p.unmatched||[]).length?'wn':''}">${esc((p.unmatched||[]).length)} 未匹配</b> ·
-         <b class="${(p.multi||[]).length?'wn':''}">${esc((p.multi||[]).length)} 重名</b>。
-         未匹配 / 重名的行<b>也照收导入</b>（§4.3.3 不猜），导入后在列表里显式标出、由你处理。</div>
-       ${alerts.length?`<div class="tip wn">解析提示：${alerts.map(esc).join('；')}</div>`:''}
-       ${list(p.unmatched,'未匹配（项目列认不出档案）')}
-       ${list(p.multi,'重名（命中多条档案，需人工核对)')}
-       <div class="tip ok" style="margin:10px 0 0">确认后按月份「<b>清该月自动行 → 重写该批</b>」（幂等）；<b>可手改列保留</b>、<b>手动行不碰</b>。不想导就点「取消」—— 什么都不会发生。</div>`,
-     footer:`<button class="btn" data-act="plImport">← 重新选文件</button><button class="btn pri" data-act="plImportConfirm">确认导入（写库）</button>`}); },
- /* ③ 确认落库：凭 token；token 过期 ⇒ 后端显式报错（重新解析一次即可）。 */
- plImportConfirm:async ()=>{ if(!plImportPrev) return;
-   try{ const r=await API.m04ImportConfirm({token:plImportPrev.token});
-     const ym=plImportPrev.ym; plImportPrev=null;
-     closeModal(); plf.ym=ym; await reloadPlans();
-     toast(`<b>${esc(ym)}</b> 导入完成：${esc(r.message||'')}`,9000);
-   }catch(e){ toast(`<b>导入没能完成</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">预览已过期时会这样报 —— 点「← 重新选文件」再解析一次即可</span>`,9000); } },
+ /* ⭐⭐ 2026-09-22（`TAIL-75` `B5c`）：**付款计划的导入收进「数据导入」向导**（通用导入面）——
+    原页内弹窗（选月 → 解析预览 → 确认）**已删**，此处只做"跳到向导并预选本域"。
+    ⚠️ 切片里的按钮文案（`data-act="plImport"` 那一行）**一个字没动** ⇒ `U1` 零漂移；
+       三步纪律（**预览不写库 → 确认才落库**）由向导承接：`impParse → impPreview → impCommit`。
+    ⭐ 2026-09-23（`TAIL-75` 余项 · **用户裁定**「只留通用面」）：后端那两条**页内端点**
+       （`/api/m04/import/parse|confirm`，以及 2026-09-22 起已软退役的一步式 `/api/m04/import`）
+       **同批连件删除**（**都已删**：连同只服务它们的 `TokenRequest`）⇒ 付款计划导入
+       **只剩通用面这一条路**（`/api/imp/m04_plan/*`）。
+       判据**判词一字未改、只换落点**：`test_plan_import.py` 里那几条搬进 `test_imp_m04_api.py`
+       （其中「预览不写库」改由**直接查库**证明）。 */
+ plImport:async ()=>{ await impSetDomain('m04_plan'); go('imp'); IMP.step=0; render();
+   toast('已打开「<b>数据导入</b>」并选好 <b>付款计划</b>：选文件 → 看列映射 → 预览（不写库）→ 确认落库',8000); },
  /* ⭐ 2026-09-18：**已接通**（`TAIL-35` ＋ `TAIL-27` 批 2）—— 手动行走 JSON 端点 `POST /api/m04/plans`
     （`plan_api_router.py`；与旧 PRG 端点**同一份判定** `plan_manual.manual_row_payload`）。
     ⚠️ 旧服务端页（`POST /m04/row/save` ＋ `render_m04`）已随 `§19` 批 2 删除 ⇒ **壳是唯一入口**；
@@ -1722,62 +1683,14 @@ const ACT={
    toast('差异登记筛选已重置 —— 核算月与状态都回到<b>全部</b>'); },
 
  /* —— MOD-11 集采 —— */
-/* ============ `M5-8` 集采台账 Excel 导入（三步：① 选文件 → ② 预览核对列名 → ③ 确认落库）============
-   ⚠️ 服务端**无状态** ⇒ 这里要**一直留着那个 `File`**（`jcImpB64`），确认时把**同一个文件再传一次**
-      （理由见后端 `import_service` 模块头：没有 tmp 要清理、不怕重启，且数据始终由后端自己解析）。
-   ⚠️ ⛔ 前端**不解析台账**：列名映射 / 条数 / 跳过账**一律后端给** —— 壳只负责"选、显示、转发"。 */
-jcImportOpen:()=>{ jcImpFile=null; jcImpB64=null; jcImpRes=null; jcImpK=0; jcImpMap={}; jcImpPj='';
-  modal({title:'集采台账 Excel 导入 · ① 选择文件',
-    body:`<div class="tip" style="margin-bottom:10px">直接<b>上传你原来的台账</b>就行 —— ⛔ 不用照模板重填。<br>
-     下一步会让你<b>选工作表</b>并<b>核对列名</b>，确认无误才落库。</div>
-     <div class="tip wn" style="margin-bottom:10px">⭐ <b>落库口径</b>（2026-09-20 定）：<b>先抓 i8、再导 Excel</b> ——
-       Excel 是来<b>补信息</b>的。系统按 <b>「合同价」（含税）</b> 在<b>本项目内</b>找到对应的那份合同，
-       然后用 Excel 的 <b>材料名 / 发票金额 / 存档 / 存档号 / 寄回日期 / 备注</b> <b>更新它</b>。<br>
-       ⚠️ <b>两边互不覆盖</b>：i8 的地盘（合同价 / 供应商 / 合同日期 / 甲方单位）Excel <b>一个字都不动</b>。<br>
-       ⚠️ 找不到对应合同的（合同价为空、或项目里没这个价、或同价两条）<b>一律列出来给你看</b>，⛔ 不会替你新建。</div>
-      <div class="fld"><label>选择文件（.xls / .xlsx）</label>
-      <input type="file" class="inp" id="jcImpFile" data-act="jcImportPick" accept=".xls,.xlsx,.xlsm"></div>`,
-    footer:`<button class="btn" data-act="closeModal">取消</button>
-      <button class="btn pri" data-act="jcImportRun" id="jcImpNext" disabled>② 解析预览</button>`}); },
+/* ⛔ `M5-8` 集采台账**页内导入向导**（`jcImportOpen/Pick/Run/PickSheet/Pj/Map/Ok` ＋ `jcImpResult`）
+   已**连件删除**（`TAIL-75` 余项 · 2026-09-23 **用户裁定**：「导入基本上只在刚开始用系统时导一次，
+   之后就实时更新了」⇒ **只留通用面**）。
+   ⭐ 现在集采台账的导入 = 壳「**数据导入**」页选 `集采台账`（`m11_jc` 域 · `/api/imp/m11_jc/*`）；
+   ⛔ 后端 `/api/m11/import/parse|commit` 同批**连件删除**；⛔ 别再往壳里加回
+   `jcImp*` / `jcImport*` 这一套（**已删**，见 `tools/audit_common.py::CANCELLED`）。 */
 
-jcImportPick:async t=>{ const f=(t.files||[])[0]; if(!f) return;
-  jcImpFile=f;
-  try{ jcImpB64=await jcImpRead(f); }catch(e){ return toast(`<b>文件读不出来</b>：${esc(String((e&&e.message)||e))}`,7000); }
-  const b=$('#jcImpNext'); if(b) b.disabled=false;
-  toast(`已选择 <b>${esc(f.name)}</b>（${Math.round(f.size/1024)} KB）—— 点「② 解析预览」`); },
-
-jcImportRun:async()=>{ if(!jcImpB64) return toast('请先选择文件');
-  let d=null;
-  try{ d=await API.m11ImportParse({filename:jcImpFile.name, content_b64:jcImpB64}); }
-  catch(e){ return toast(`<b>解析失败</b>：${esc(String((e&&e.message)||e))}`,7000); }
-  if(!d||d.ok===false) return toast(`<b>解析失败</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
-  jcImpRes=d; jcImpK=0; jcImpMap={}; jcImportShow(); },
-
-jcImportPickSheet:t=>{ jcImpK=+t.dataset.k||0; jcImpMap={}; jcImportShow(); },
-jcImportPj:t=>{ jcImpPj=String(t.value||''); jcImportShow(); },
-/* 📌 列名核对：改一格 ⇒ **重绘弹窗**（`reopen` 指向 `jcImportShow`，⛔ 不重新解析 —— 文件不再读一遍） */
-jcImportMap:t=>{ jcImpMap[String(t.dataset.c)]=String(t.value||''); if(lastModal&&lastModal.reopen) lastModal.reopen(); },
-
-jcImportOk:async()=>{ const cur=jcImpCur(); if(!cur) return;
-  if(!jcImpPj) return toast('<b>请先选「项目」</b> —— 这份台账属于哪个项目（⛔ 系统不替你猜）');
-  const keys=Object.keys(cur.fields||{});
-  if(keys.indexOf('contract_date')<0 && keys.indexOf('material_name')<0)
-    return toast('<b>列名还没对上</b>：至少要认出「合同日期」或「材料名称」才能落库');
-  /* ⭐ 2026-09-20 补：**锚点列**（合同价）必须先认出来 —— 匹配就是按它找已有合同的。
-     ⚠️ 后端 `commit` **也会拦**（那条才是最终闸门），这里只是**别让用户白点一次③**，
-        并把话说到"该去点哪一列"（只报"配不上"会让人以为库里没有这些合同）。 */
-  if(keys.indexOf('contract_amt')<0)
-    return toast('<b>没认出「合同价」列</b>（供应商合同总价 / 合同总价 / 合同金额）—— '
-      + '它是<b>匹配锚点</b>，认不到会<b>一条都配不上</b>。请在上面的「列名核对」里把那一列点成「供应商合同总价」', 10000);
-  let d=null;
-  try{ d=await API.m11ImportCommit({filename:jcImpFile.name, content_b64:jcImpB64,
-      sheet:cur.sheet.name, project_key:jcImpPj, mapping:jcImpMap}); }
-  catch(e){ return toast(`<b>没能导入</b>：${esc(String((e&&e.message)||e))}`,7000); }
-  if(!d||d.ok===false) return toast(`<b>没能导入</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
-  await reloadM11();
-  modal({title:'导入结果（`M5-8`）',body:jcImpResult(d),footer:`<button class="btn pri" data-act="closeModal">知道了</button>`}); },
-
- /* ⭐ `M5-9` 导出：**行** = 屏幕上看到的（复用 `jcVisible()` ⇒ ⛔ 不另写一套筛选 —— 两套必打架）；
+/* ⭐ `M5-9` 导出：**行** = 屏幕上看到的（复用 `jcVisible()` ⇒ ⛔ 不另写一套筛选 —— 两套必打架）；
    **列** = 全列（后端给，含贸易公司 3 列 —— 用户选的口径 (B)）。
    ⚠️ 空行集 ⇒ **明确拦**：⛔ 不导一本空表让人以为坏了，也⛔ 不悄悄改成"导全量"。 */
 jcExport:async()=>{ const rows=jcVisible();
@@ -2112,7 +2025,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    mp.a=''; mp.b=''; mp.mode='';
    if(sc==='fetch'){ fetchM=v; mp.open=null; render(); ACT.fetchDlg(); return; }   /* 抓取弹窗内选月 → 重建弹窗回显（三个抓取入口共用） */
    if(sc==='pl'){ plf.ym=v; mp.open=null; prunePlPick(); render(); toast(`付款计划已切到 <b>${tmLabel(v)}</b>`); return; }
-   if(sc==='plimp'){ plImportM=v; mp.open=null; ACT.plImport(); return; }          /* 导入弹窗内选月 → 重建弹窗回显 */
+   /* ⛔ `plimp`（导入弹窗内选月）已随弹窗删除（`TAIL-75` `B5c`）—— 年月现在在「数据导入」页里选。 */
    if(sc==='lg'){ lgCut=v; mp.open=null; render(); return; }                        /* 期初展开区内选「截止年月」→ **只重绘**（不重算默认值） */
    if(sc==='fl'){ flf.ym=v; mp.open=null; render(); toast(`付款流水已切到 <b>${tmLabel(v)}</b>`); return; }
    if(sc==='awf'){ awfYm=v; mp.open=null; reloadM09(); toast(`特殊费用月报表已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（手填项按「核算年月 ＋ 项目」各存一份；只 `render()` 会看到上一月那一份） */
@@ -2223,9 +2136,6 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
 
 /* 事件委托 */
 const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup','editCat','filterNt','pjPick','procPjPick','invWh','invOnlyAdj','ivColQ','ivColMin','ivColMax','ivColVal','awfName','awfAmt','awfPjPick','ledNote','ledPjPick','lgPjPick','lgCat','lgS','lgP','lgR','flFilter','flPjPick','jcMethod','jcArchNo','jcRetDate','jcRemark','jcFilter','jcPjPick','bigEdit','bigSelTog','payDraft','fPjStatus','fPjType','fPjQ','fIvDir','fExtStatus','extBal','plFilter','plPick','plPickAll','plPjPick','plCell','plRowSet','jcPick','jcPickAll','ntRowSet','editApprove','editOrd','jcLinkPick','jcNSet','jcNPjPick','jcSubSet','ledExpPjPick','procExpPjPick','dfSet','dfFilter','supPick',
-  /* ⭐ `M5-8` 导入那三个**都挂在表单元素上**（file / select / select）⇒ **必须进这里**，
-     否则 `change` 被**静默丢弃**：选完文件点「下一步」永远是灰的、改列名没反应（这个坑最容易漏）。 */
-  'jcImportPick','jcImportPj','jcImportMap',
   /* ⚠️⚠️ `M5-6b` **甲方单位分类那个 `select` 也挂在表单元素上** —— 漏了它，
      选完类型**什么都不会发生**（`change` 被静默丢弃）：看着像"没有保存键"，其实是**事件没接上**。
      ⭐ 2026-09-20 用户实测反馈「甲方单位分类你没有给保存键」⇒ 就是这个。 */

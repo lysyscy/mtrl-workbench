@@ -13,15 +13,16 @@
 | `U2` | **演示数据与"假话"不得残留**（D18 产品化红线①） | ① 壳里出现原型的三张演示数组（`PJ` / `NT` / `FL`）⇒ **红**；② 壳里必须**同时**存在「已接后端真实数据」与「原型态」两种措辞（缺任一种 ⇒ 顶栏又会**一律**说"全是虚构" = 对已接线页说假话）⇒ **红** |
 | `U3` | **`WIRED` 自洽** | 壳里必须有 `WIRED` 集合，且**它的每个成员都真实存在于 `V`**（防"标了个不存在的页"）⇒ **红** |
 | `U4` | ⭐ **`WIRED` 的页必须真的指向后端**（2026-09-17 补） | `WIRED` 里的每页 `mNN` ⇒ 壳里必须出现 `/api/mNN`。**这只是"接线点存在"，不是"调通了"** —— 但能挡住最廉价的一种假绿：把页标成"已接后端"而壳里**一个该模块的接口都没调**（顶栏就会对真数据说"已接"）⇒ **红** |
+| `U5` | ⭐⭐ **壳公共件 ⇄ 原型里嵌的同段，逐行一致**（`TAIL-65` · 2026-09-23 立） | 登记表里的每个顶层件，**原型与壳必须逐字一致**（哈希比对）⇒ 不一致 / 任一侧缺件 ⇒ **红**。⚠️ **为什么必须有一条**：`U1` 只比**切片 `V.<页>`**，而"壳 83% 的地盘"在**切片之外**（表头模板 / 列序 / 枚举 / 纯函数）—— 那部分**原型里也存一份**（原型是交付面的交互规格，⛔ 不能给它加文件）⇒ **双份真源**；谁改一边 ⇒ 静默漂移（审计 §六 `C3`）。⇒ ⭐ 抽切片内的东西**之前**必须先立它（它是 `TAIL-64` 的闸门前置） |
 
 ⚠️ **本工具测不了什么（别误当已覆盖）**：**「标了已接后端，其实没接」** ——
-    "某一页的数据由谁喂"无法从源码机械判定 ⇒ 那一条靠**真机自检**（`tools/_shell_smoke.py` /
-   `tools/_shell_render_check.py`）与 `WIRED` 的人工维护。**「断言测不了」这句本身就是要害。**
+    "某一页的数据由谁喂"无法从源码机械判定 ⇒ 那一条靠**真机自检**（`tools/probe/_shell_smoke.py` /
+   `tools/probe/_shell_render_check.py`）与 `WIRED` 的人工维护。**「断言测不了」这句本身就是要害。**
 
-跑法：
-  `backend/.venv/Scripts/python.exe tools/ui_parity.py`          # 人读表（有未登记漂移 ⇒ rc=1）
-  `backend/.venv/Scripts/python.exe tools/ui_parity.py --json`   # 机读
-  `... --write-expected`                                          # 把当前漂移**登记**下来（人先审过再用）
+跑法（⚠️ 2026-09-24 订正：尺子与探针的**真实位置** —— 旧写法 `tools/ui_parity.py` / `tools/_shell_smoke.py` 都已不存在）：
+  `backend/.venv/Scripts/python.exe tools/audit/ui_parity.py`          # 人读表（有未登记漂移 ⇒ rc=1）
+  `backend/.venv/Scripts/python.exe tools/audit/ui_parity.py --json`   # 机读
+  `... --write-expected`                                                # 把当前漂移**登记**下来（人先审过再用）
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ import pathlib
 import re
 import sys
 
-from shell_source import SHELL_PATH, read_shell  # noqa: E402  ← `P4`① 读取点收敛
+from shell_source import SHELL_PARTS, SHELL_PATH, read_shell  # noqa: E402  ← `P4`① 读取点收敛
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PROTO = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\demo\材料报表自动化工作台-交互原型.html")
@@ -56,6 +57,41 @@ DEMO_RE = re.compile(r"const\s+(PJ|NT|FL)\s*=")
 WIRED_TEXT = "已接后端真实数据"
 PROTO_TEXT = "原型态"
 
+# ─────────────────────────────────────────────── `U5`（`TAIL-65`）：壳公共件 ⇄ 原型同段
+#: 顶层声明（`U5` 认段用）
+DECL_RE = re.compile(r"^(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=|^function\s+([A-Za-z_$][\w$]*)\s*\(")
+#: 纯注释行（`U5` 削段尾用）
+COMMENT_RE = re.compile(r"^\s*(?://|/\*|\*|#)")
+
+#: ⭐⭐ **`U5` 登记表**：这些件在**原型**与**壳**里各存一份，必须**逐字一致**。
+#:
+#: **怎么定的**（2026-09-23 立的当天逐条核过 · ⛔ 不是照抄谁的口径）：先用 `--u5-scan` 把两边
+#: **同名顶层段**摆出来 —— 实测 **397 个同名，其中 319 个逐字一致、78 个已被接线有意改过**。
+#: ⇒ 本表只收**规格面**那三类（模板 / 列序枚举口径常量 / 纯函数）；⛔ **已被接线有意改过**的
+#: （`M` · `r2` · `projPanel` · `ACT` · `CHG` · `NO` · `WHM` … 那 78 个）**不收** —— 它们本来就该不一样。
+#: ⭐ `TAIL-64`（表格/筛选/行模板配置化）每抽出一个新公共件，就把名字加进本表 ⇒ **那就是它的闸门**。
+U5_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("表头 / 行模板（`*_THEAD`）—— 逐页列定义，`TAIL-64` 要配置化的原始材料", (
+        "NT_THEAD", "PL_THEAD", "BIG_THEAD", "AWF_THEAD", "JCPAY_THEAD", "JCINV_THEAD",
+        "INV_THEAD", "EXT_THEAD", "LED_THEAD", "DF_THEAD", "DIFF_THEAD", "FL_THEAD",
+        "BP_THEAD", "PJ_THEAD", "JC_THEAD")),
+    ("列序 / 枚举 / 口径常量 —— 界面与导出**共用**的字面表（改一处就得两处同改）", (
+        "ENUMS", "IVC5", "BIGCOLS", "BIGFMT", "IV_FCOL", "IV_COLS", "IV_COLN", "LG_COLS",
+        "NT_COLS", "MACH6_Z", "MACH6_RENT", "CAP_TOL", "ORD_MAX", "NOSORT_COL",
+        "JCSUB_KIND", "ARC_TEXT", "LG_R_DEF", "EXT_BAL_NOTE")),
+    ("纯函数 —— 无副作用、两边本就该同款（接线不该动它们）", (
+        "$", "O", "N2", "PCT", "SIG", "uniqBy", "trailOf", "PROJ_META_KEY", "PROJ_META_FULL")),
+    # ⭐ `TAIL-64`（2026-09-24 P0 试点）：**表格件** —— 表外壳（表头/行/空态/合计 ＋ `data-sort`）的
+    #   统一出口，虚拟滚动将来挂这里。⭐ 每抽一个新公共件就把名字加进本表（见上方 `U5_GROUPS` 说明）。
+    ("表格件（`TAIL-64`）—— 表外壳统一出口", (
+        "TBL",)),
+)
+
+#: `U5` 登记表的**条目总数**（＝ 展平后相加）—— ⭐ 给 `T4` 的**计数锚点**用：
+#:  文档里手抄的「登记 N 个规格件」必须等于它（2026-09-24 实测漂过一次：写 42、实 43）。
+#:  ⛔ 别把 43 抄进文档 —— 抄了必漂；文档要写就写"别写死"或指回本常量。
+U5_COUNT: int = sum(len(_names) for _group, _names in U5_GROUPS)
+
 
 def read_lines(p: pathlib.Path) -> list[str]:
     return p.read_text(encoding="utf-8").replace("\r\n", "\n").split("\n")
@@ -77,6 +113,32 @@ def slices(lines: list[str]) -> dict[str, list[str]]:
             cur = None
             continue
         out[cur].append(ln)
+    return out
+
+
+def top_segs(text: str) -> dict[str, str]:
+    """**顶层段**（`U5` 用）：起点 = 顶层声明行（⛔ **不含 `V.` 切片内部**的东西），
+    终点 = 下一个顶层声明 / `V.` / `BIND.` 行。
+
+    ⚠️ **末尾的纯注释与空行要削掉** —— 接线层的习惯是在一个件后面补一句「⭐ 已接后端…」，
+       那是**壳自己的话**、不是这个段的一部分；不削 ⇒ 每加一句注释就把 `U5` 撞红（假红）。
+    """
+    raw: dict[str, list[str]] = {}
+    cur: str | None = None
+    for ln in text.replace("\r\n", "\n").split("\n"):
+        if END_RE.match(ln):
+            cur = None
+        m = DECL_RE.match(ln)
+        if m and not VIEW_RE.match(ln):
+            cur = m.group(1) or m.group(2)
+            raw.setdefault(cur, [])
+        if cur is not None:
+            raw[cur].append(ln)
+    out: dict[str, str] = {}
+    for k, v in raw.items():
+        while v and (not v[-1].strip() or COMMENT_RE.match(v[-1])):
+            v.pop()
+        out[k] = "\n".join(x.rstrip() for x in v)
     return out
 
 
@@ -103,19 +165,40 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="壳一致性核对器")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--write-expected", action="store_true", help="把当前漂移登记进白名单")
+    # ⚠️ 2026-09-23（`TAIL-65`）：`--proto` / `--u5-scan` 都是给 `U5` 用的 ——
+    #    `--proto` 让反向灵敏度能**拿一份临时副本**证明"原型那侧改了也红"（⛔ 不必去动交付面）；
+    #    `--u5-scan` 把两边**同名顶层段**摆出来（一致 / 已不同），登记表要扩的时候照着它挑。
+    ap.add_argument("--proto", default=None, help="原型路径（默认 = 交付面那份）")
+    ap.add_argument("--u5-scan", action="store_true", help="列出两边同名顶层段的现状（挑 `U5` 候选用）")
     args = ap.parse_args()
 
-    if not PROTO.exists():
-        print(f"⛔ 找不到原型：{PROTO}（它不在工程仓里，属交付面）")
+    proto = pathlib.Path(args.proto) if args.proto else PROTO
+    if not proto.exists():
+        print(f"⛔ 找不到原型：{proto}（它不在工程仓里，属交付面）")
         return 1
     if not SHELL.exists():
         print(f"⛔ 找不到前端壳：{SHELL}")
         return 1
 
-    p_views = slices(read_lines(PROTO))
+    p_views = slices(read_lines(proto))
     shell_lines = read_shell().replace("\r\n", "\n").split("\n")   # ← `P4`①：合并后的**全部件**
     s_views = slices(shell_lines)
     exp = load_expected()
+
+    if args.u5_scan:                                   # `TAIL-65`：挑 `U5` 候选用（不是判据）
+        p_seg, s_seg = top_segs(proto.read_text(encoding="utf-8")), top_segs("\n".join(shell_lines))
+        both = sorted(set(p_seg) & set(s_seg))
+        same = [n for n in both if p_seg[n] == s_seg[n]]
+        print("=" * 78)
+        print(f" U5 候选扫描 —— 原型 {proto.name}（{len(p_seg)} 个顶层段） ⇄ 壳（{len(s_seg)} 个）")
+        print("=" * 78)
+        print(f" 同名顶层段 {len(both)} 个 · **逐字一致** {len(same)} 个 · 已不同 {len(both) - len(same)} 个"
+              f" · 登记表当前收了 {sum(len(n) for _g, n in U5_GROUPS)} 个")
+        print("\n ── 逐字一致（可入登记表的候选）──")
+        print("   " + ", ".join(same))
+        print("\n ── 已不同（⛔ 接线有意改过的，别登记）──")
+        print("   " + ", ".join(n for n in both if n not in set(same)))
+        return 0
 
     # ── U1 · 视图切片逐行一致
     u1: list[dict] = []
@@ -134,6 +217,13 @@ def main() -> int:
 
     u1_new = [d for d in u1 if d["fp"] not in exp.get(d["key"], set())]
     u1_ok = [d for d in u1 if d["fp"] in exp.get(d["key"], set())]
+
+    # ⭐ `U1` 登记簿**防腐化**（2026-09-24）：登记了、却**当前没有对应漂移** = **幽灵登记**
+    #   （那条漂移已被修掉 / 因两边同改而指纹变了）⇒ 提示「可消号」（登记簿**只准变短**）。
+    #   ⚠️ **只提示、不计入 `red`** —— 它不影响"壳现在是否一致"，但登记簿腐化之后
+    #      「已登记放行 N 行」就成了一种**自我安慰**：登记时的理由早就不成立了。
+    _now_fps = {d["fp"] for d in u1}
+    ghosts = [(k, f) for k, fs in sorted(exp.items()) for f in sorted(fs) if f not in _now_fps]
 
     # ── U2 · 演示数组（红线①：假数据不得混进产物）＋「按页说实话」两种措辞
     u2: list[str] = []
@@ -206,7 +296,25 @@ def main() -> int:
                 f"⇒ 这页其实没接（顶栏在对真数据说假话）"
             )
 
-    red = len(u1_new) + len(u2) + len(u3) + len(u4) + len(missing)
+    # ── U5 · 壳公共件 ⇄ 原型里嵌的同段（`TAIL-65`）
+    #     ⚠️ 与 `U1` 的分工：`U1` 管**切片 `V.<页>` 内部**，`U5` 管**切片之外**那些两边各存一份的件。
+    u5: list[str] = []
+    p_seg = top_segs(proto.read_text(encoding="utf-8"))
+    s_seg = top_segs(shell_text)
+    u5_ok = 0
+    for _group, _names in U5_GROUPS:
+        for _n in _names:
+            a, b = p_seg.get(_n), s_seg.get(_n)
+            if a is None or b is None:
+                u5.append(f"`{_n}` 在登记表里，但**{'原型' if a is None else '壳'}里找不到这个段** ⇒ "
+                          f"幽灵条目（件改了名 / 删了 ⇒ 登记表也得同步）")
+            elif a != b:
+                u5.append(f"`{_n}` 两边**已不同**（原型 {fp(a)} / 壳 {fp(b)}）⇒ "
+                          f"要么**原型与壳同改同句**，要么把它从登记表划掉（写明理由）")
+            else:
+                u5_ok += 1
+
+    red = len(u1_new) + len(u2) + len(u3) + len(u4) + len(u5) + len(missing)
 
     if args.write_expected:
         head = [
@@ -222,14 +330,14 @@ def main() -> int:
 
     if args.json:
         print(json.dumps({"u1_new": u1_new, "u1_ok": len(u1_ok), "u2": u2, "u3": u3, "u4": u4,
-                          "missing": missing},
+                          "u5": u5, "u5_ok": u5_ok, "missing": missing},
                          ensure_ascii=False, indent=2))
         return 1 if red else 0
 
     print("=" * 78)
     print(" 壳一致性核对器 · ui_parity —— 「原型逻辑一行不改 ／ 演示数据不留 ／ WIRED 别乱标」")
     print("=" * 78)
-    print(f" 原型 {PROTO.name}（{len(p_views)} 个视图）  ⇄  壳 index.html（{len(s_views)} 个视图）")
+    print(f" 原型 {proto.name}（{len(p_views)} 个视图）  ⇄  壳（{len(s_views)} 个视图 · {len(SHELL_PARTS)} 件）")
     print(f" 已登记放行 {sum(len(v) for v in exp.values())} 条 · `WIRED` = {wired or '（未取到）'}")
     print()
     print(f"─ U1 · 视图切片逐行一致 —— "
@@ -239,8 +347,16 @@ def main() -> int:
         print(f"    {' ' * len(d['key'])}   {' ' * 6} 壳  : {d['shell'][:70]}")
     if len(u1_new) > 25:
         print(f"    …还有 {len(u1_new) - 25} 行")
+    if ghosts:                       # 登记簿防腐化：登记的漂移已经不存在了 ⇒ 该消号
+        print(f"    ⚠️ 登记簿有 {len(ghosts)} 条**幽灵登记**（当前已无对应漂移 ⇒ 可消号，"
+              f"登记簿**只准变短**）：" + "、".join(f"{k} {f}" for k, f in ghosts[:8]))
     if missing:
         print(f"─ U1b · 壳里缺切片 —— ⛔ {len(missing)} 个：{', '.join(missing)}")
+    print(f"─ U5 · 公共件 ⇄ 原型同段（`TAIL-65`）—— "
+          + (f"✅ 登记 {u5_ok} 个**全部逐字一致**" if not u5 else f"⛔ {len(u5)} 条"
+             + f"（其余 {u5_ok} 个一致）"))
+    for it in u5[:10]:
+        print("    " + it)
     for name, items in (("U2 · 演示数组 / 假话残留", u2), ("U3 · WIRED 自洽", u3),
                         ("U4 · WIRED 的页是否真指向后端", u4)):
         print(f"─ {name} —— {'✅ 无' if not items else f'⛔ {len(items)} 条'}")
@@ -248,7 +364,7 @@ def main() -> int:
             print("    " + it)
     print()
     print(f"结论：**必须修 {red}**" + ("（有红 ⇒ 非零退出）" if red else "（rc=0）"))
-    print("⚠️ 它**测不了**「标了已接后端其实没接」—— 那一条靠真机自检 `tools/_shell_smoke.py`。")
+    print("⚠️ 它**测不了**「标了已接后端其实没接」—— 那一条靠真机自检 `tools/probe/_shell_smoke.py`。")
     return 1 if red else 0
 
 

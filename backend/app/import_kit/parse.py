@@ -30,12 +30,28 @@ def amount(value):
     return to_money(raw) if raw else to_money(0)
 
 
+#: Excel 日期序列号的合理区间（1900 日期系统：约 1954-10 ~ 2064-01）
+_SERIAL_LO, _SERIAL_HI = 20000, 60000
+
+
 def date_text(value) -> str:
-    """日期多格式 → `YYYY-MM-DD` 文本（datetime/date 直取；字符串**原样交域内校验**）。"""
+    """日期多格式 → `YYYY-MM-DD` 文本（datetime/date 直取；**Excel 序列号**换算；字符串原样交域内校验）。
+
+    ⭐ **Excel 序列号**（`45444` ⇒ `2024-06-01`）是设计 §六-补 列的"时间列 6 种形态"之一：
+      真文件里那列常是**数字**（不是日期格式的单元格）⇒ `read_grid` 给的还是数字 ⇒ 在这一层换算。
+    ⚠️ 只认 `20000~60000`：那以外的数字（`2025.09` 这种年月、金额）**原样返回**，由**域**去裁
+      （年份 2025 落在区间外 ⇒ 不会被误当序列号）。
+    """
     if isinstance(value, datetime):
         return value.date().isoformat()
     if isinstance(value, date):
         return value.isoformat()
+    if isinstance(value, bool):
+        return text(value)
+    if isinstance(value, (int, float)) and _SERIAL_LO <= float(value) <= _SERIAL_HI:
+        from datetime import timedelta
+
+        return (datetime(1899, 12, 30) + timedelta(days=int(value))).date().isoformat()
     return text(value)
 
 

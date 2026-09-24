@@ -13,7 +13,12 @@ from pathlib import Path
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 ARTIFACTS_DIR: Path = REPO_ROOT / "artifacts"
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("ACC_RESULTS_PATH", str(ARTIFACTS_DIR / "acc_results.json"))
+# ⛔ **这里不再 `setdefault` `ACC_RESULTS_PATH`**（2026-09-23 改）：
+#    原先那条 setdefault 让变量**永远有值** ⇒ `acc_plugin.pytest_configure` 的"没给变量就写**局部**文件"
+#    那条默认分支**永远不触发** ⇒ 跑一支变异脚本（子集）照样把权威 `acc_results.json` 冲成十几条
+#    （本仓反复踩过四次，本条正是**治本**的那一处）。
+#    ⇒ 约定：**子集跑**默认写 `artifacts/_partial_acc_results.json`（插件内定）；
+#      **要写权威文件必须显式给** `ACC_RESULTS_PATH`（全套跑法见 `MEMORY-细则.md` §十七）。
 
 
 # ⚠️⚠️⚠️ **2026-09-20 修：pytest 此前根本没连测试库** ——

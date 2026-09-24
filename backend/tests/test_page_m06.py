@@ -130,14 +130,21 @@ def test_历史导入按表头认列_机械列不导入_异常行必报():
                                           header=("出库工具", "核算月", "租分公司设备", "入库主辅材")))
     assert shuffled.rows[0]["in_主辅材"] == Decimal("1000.00")
 
-    # 异常行逐条列出：月份认不出 / 金额非数字 / 只有月份
+    # 异常行逐条列出：月份认不出 / 金额非数字
+    # ⚠️ **2026-09-22 用户裁定 ④**（"空行就是没数据"）：原第 3 行（只有核算月、无金额）**不再算异常**
+    #    ⇒ 改判为"空行 ⇒ 跳过 ＋ 一条提示"（`ACC-PROC-IMPORT-001/001-05`）；异常由 3 行变 **2 行**。
     with pytest.raises(MustReportError) as bad:
         importer.parse_sheet(_xlsx([
             ["八月", "1.00", "", "", ""],
             ["2026-05", "—", "", "", ""],
             ["2026-06", "", "", "", ""],
         ]))
-    assert "3 行异常" in str(bad.value) and "行 2" in str(bad.value), "报错要带上行号与原因"
+    assert "2 行异常" in str(bad.value) and "行 2" in str(bad.value), "报错要带上行号与原因"
+    # 「空行 ⇒ 跳过」也要**看得见**（提示里点出行号），⛔ 不静默
+    empty_plan = importer.parse_sheet(_xlsx([["2026-06", "", "", "", ""],
+                                             ["2026-07", "5.00", "", "", ""]]))
+    assert empty_plan.writable == 1 and not empty_plan.anomalies
+    assert any("空行" in n and "行 2" in n for n in empty_plan.notes), empty_plan.notes
 
     # 一列材料列都没有 ⇒ 整份拒绝
     with pytest.raises(MustReportError):
@@ -201,16 +208,26 @@ def test_预览暂存不落库且两个导入页共用同一载具():
     with pytest.raises(MustReportError):
         preview_store.load("../etc/passwd")            # 路径穿越 ⇒ 直接拒
     # `MOD-05` 的付款导入走**同一个**载具（此前是它自己的一份 `_dump/_load`）
-    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：这两个编排函数随导入页收口搬进了 `import_api.py`
-    #    （**逐字**搬，⛔ 判定一行没变）⇒ 本行只换落点，测的还是同一件事。
-    from app.mod05_flow import importer as m05
-    from app.mod05_flow.import_api import _known, _payload, _plan_of
+    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：编排函数搬进 `import_api.py`；
+    # ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · **用户裁定 `B`**）：`import_api.py` **连件删除**、
+    #    壳 `V.m05imp` **已下架** ⇒ 付款导入改由**通用面**承接 ⇒ **判词不变**（"付款导入走同一个载具、
+    #    ⛔ 不自带一份暂存"），只把落点换成通用面那一份 —— 后端这半钉两件：
+    #    ① 域钩子确实挂在通用面上（有 `preview` ⇒ 预览也走通用面）；
+    #    ② 域内判定仍是**纯函数**、不依赖会话写（`_plan_of` 可离线跑；`known_notices` 是只读出口）。
+    from tests.shell_src import SHELL                     # noqa: PLC0415
 
-    plan = m05.parse_rows([["FKTZS2026090466", "3000.00", "2026-08-05", "现汇", ""]])
-    again = _plan_of(_payload(plan))
-    assert again.rows[0].amount == Decimal("3000.00")
-    assert again.rows[0].bill_no == "FKTZS2026090466"
-    assert _known(FakeSession({})) == {}
+    from app.mod05_flow import imp_spec
+    from app.mod05_flow import importer as m05
+
+    assert imp_spec.HOOKS.preview is not None and imp_spec.HOOKS.commit is not None, \
+        "付款域必须挂在通用面上（否则它就没有导入入口了）"
+    assert "/api/imp/" in SHELL and "impDomain" in SHELL, "壳的付款导入口没接上通用面"
+
+    plan = imp_spec._plan_of([{"_row": 2, "单据号": "FKTZS2026090466", "付款金额": "3000.00",
+                              "付款时间": "2026-08-05", "付款方式": "现汇", "备注": ""}])
+    assert plan.rows[0].amount == Decimal("3000.00")
+    assert plan.rows[0].bill_no == "FKTZS2026090466"
+    assert m05.known_notices(FakeSession({})) == {}
 
 
 # ============================================================ 导入页（三步）
@@ -223,9 +240,9 @@ def test_历史导入页三步齐备且带项目与截止月():
     ⚠️ 2026-09-21（`§19` 四个暂留件收口）：页面搬进新壳 ⇒ 分两半钉住（同「形态变、判据不变」）：
       ① **后端给的数据**（项目候选 / 截止核算月 / 列说明）—— 来自 `service.build_import_data`
          ＋ `import_api`（⛔ 壳里不许另算一份）；
-      ② **壳把三步与这些数据都画出来**、且上传走 `/api/m06/import/parse`。
+      ② **壳把三步与这些数据都画出来**、且上传走**通用导入面**的 `/api/imp/m06_proc/parse`
+         （⛔ 2026-09-23 `B5c-2`：`/api/m06/import/*` 五条旧端点已退休）。
     """
-    from app.mod06_proc import import_api
     from tests.shell_src import SHELL            # noqa: PLC0415  ← `P4`① 读取点收敛
 
     s = _sess()
@@ -233,11 +250,20 @@ def test_历史导入页三步齐备且带项目与截止月():
     assert data["warehouse"] == WAREHOUSE, "项目（键 = 仓库名）没带出来"
     assert data["cutoff_ym"] == CUTOFF_YM, "当前截止核算月要显示出来"
 
-    meta = import_api.api_meta()
-    mats = meta["material_labels"]
-    assert "入库主辅材" in mats, "材料列清单要从域口径出（壳里不许另抄一份）"
-    assert set(meta["mech_labels"]) == set(D.MECH_COLUMNS)
+    # ⚠️ 2026-09-23（`TAIL-75` `B5c-2`）：`import_api.api_meta()` 随五条旧端点**一起退休** ⇒
+    #    「材料列清单 / 机械列不采」改从**域声明**（`imp_spec.SPEC`）出 —— 判词不变
+    #    （"列清单从域口径出，⛔ 壳里不许另抄一份"），只是**唯一出口**换成了通用面的那一份。
+    from app.mod06_proc import imp_spec
 
-    assert "/api/m06/import/parse" in SHELL, "壳的上传口没接上解析端点"
-    for must in ("核算月", "机械 6 列不导入", "不提供行内编辑", "截止核算月"):
-        assert must in SHELL, f"壳的导入页少了这一段文字：{must}"
+    mats = [f.label for f in imp_spec.FIELDS if f.key in D.MATERIAL_KEYS]
+    assert "入库主辅材" in mats, "材料列清单要从域口径出（壳里不许另抄一份）"
+    ignored = {lb for lb, _ in imp_spec.SPEC.ignored}
+    assert set(D.MECH_COLUMNS) <= ignored, "机械 6 列要落在「明确不采」里（认得出但不导入，且写明理由）"
+
+    # ⚠️ 2026-09-22（`TAIL-75` `B5c`）：画这三步的**是「数据导入」页**（通用导入面），旧 `V.m06imp` 已下架 ——
+    #    **判词不变**（"壳把三步与后端给的数据都画出来"），落点换到通用面：
+    assert "/api/imp/" in SHELL and "impDomains" in SHELL, "壳的上传口没接上通用导入面"
+    assert "/api/imp/${encodeURIComponent(domain)}/parse" in SHELL, "上传口要指到通用面的 parse"
+    assert 'data-act="impPj"' in SHELL and 'id="impCut"' in SHELL, "项目（仓库名）与截止核算月没画出来"
+    for must in ("选域与文件", "列映射", "预览校验", "确认落库"):
+        assert must in SHELL, f"壳的导入流程少了这一步：{must}"

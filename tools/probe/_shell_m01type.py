@@ -1,6 +1,6 @@
 """壳真机自检 · **第 ⑰ 段：`m01` 类型列的人工覆盖**（`TAIL-42`）。
 
-**为什么单独立文件**：`tools/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的行数规则 = 红）
+**为什么单独立文件**：`tools/probe/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的行数规则 = 红）
 ⇒ 与 `_shell_pend.py` / `_shell_arch.py` / `_shell_m02.py` 同款，由主自检**调一段**。
 
 **它验的链条**：新写的壳代码（`BIND.m01` 的类型格注入 ＋ `pjTypeDlg` / `pjTypeOk`）**真的能跑** ——

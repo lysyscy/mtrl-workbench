@@ -1,6 +1,6 @@
 """壳真机自检 · **第 ⑱ 段：链路 C 弹窗「兜底前先查 i8 仓库名单」**（`TAIL-39`）。
 
-**为什么单独立文件**：`tools/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的行数规则 = 红）
+**为什么单独立文件**：`tools/probe/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的行数规则 = 红）
 ⇒ 与 `_shell_arch.py` / `_shell_m02.py` / `_shell_m01type.py` 同款，由主自检**调一段**。
 
 ⚠️ **怎么做到"清单为空也能真跑"**：`/api/m03/notices/unresolved` 现在**没有待指定条目**

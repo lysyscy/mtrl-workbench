@@ -45,6 +45,20 @@ MUTS: list[tuple[str, str, str, str]] = [
         ": N2(m05MechSettle(k)",
         "test_m05的机械结算改用真源_且不再是取零出口",
     ),
+    # ⭐ 2026-09-23（`TAIL-76`）：补两条**壳侧** —— 这两条 claim 的原靶（`mech_ui._value_of` /
+    #    `block_html`）随旧页 2026-09-18 删除 ⇒ 一度"改坏了也没人知道"。
+    (
+        "M5 录机械费不再回填该月现值（第二次打开变空盒 ⇒ 保存会把其余列清成 0）",
+        "const vals=((MACH6[wh]||{})[ym]||[]);",
+        "const vals=[];",
+        "test_录机械费第二次打开要回填该月现值",
+    ),
+    (
+        "M6 机械区块混进材料列输入面（§5.2.3 单向流被破）",
+        '<div class="grid2">${MECH_LABELS.map((nm,i)=>`',
+        '<div class="grid2"><input class="inp" id="in_0">${MECH_LABELS.map((nm,i)=>`',
+        "test_机械录入口只送mech键_材料列没有输入面",
+    ),
 ]
 
 

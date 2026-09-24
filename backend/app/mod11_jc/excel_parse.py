@@ -13,6 +13,14 @@
    ⇒ ⛔ **绝不"取第 N 张"**，一律**摆出工作表让用户选**（系统只给个"像主台账"的提示）。
 
 ⚠️ 本模块**只解析、不落库**（落库在 `import_service`）——「判定归一处」。
+
+⭐ 2026-09-22（`TAIL-75` B4）：接上 `import_kit` 的**建议 / 交叉校验 / 记忆**三件，
+   ⛔ **判定口径一字未改** —— 自动映射的唯一权威仍是 `ALIASES` ＋ 人在预览页手点的 `mapping`：
+   | 新增 | 干什么 | 谁来拍板 |
+   |---|---|---|
+   | `suggest_unknown()` | 别名表**没认出**的列 ⇒ 引擎给建议（带置信度与依据） | **界面**预选 ＋ 标「需你确认」 |
+   | `cross_check()` | 已认出列的**值画像**与字段类型矛盾 ⇒ 提示"可能列认错了" | 人核对（⛔ 系统不改） |
+   | `import_service` 里的记忆 | 表头指纹 → 映射，下次**预填** | 人（标「来自记忆 · 可改」） |
 """
 
 from __future__ import annotations
@@ -20,6 +28,11 @@ from __future__ import annotations
 import io
 import re
 from decimal import Decimal, InvalidOperation
+
+from app.import_kit.mapping import Field as _Field
+from app.import_kit.mapping import guess as _guess
+from app.import_kit.mapping import profile as _profile
+from app.import_kit.mapping import type_conflict as _type_conflict
 
 # ------------------------------------------------------------------ 读网格
 
@@ -269,13 +282,18 @@ def header_labels(grid: list[list[str]], *, row1: int, row2: int) -> list[str]:
     return labels
 
 
-def map_columns(labels: list[str], *, mapping: dict[str, str] | None = None) -> dict:
+def map_columns(labels: list[str], *, mapping: dict[str, str] | None = None,
+                samples: dict[int, list] | None = None) -> dict:
     """逐列拼名 ⇒ `{field: 列下标}`；并**如实报出**认不出的与明确忽略的。
 
     `mapping` = 用户在预览页**手点的修正**（`{"列下标": "字段名"}`，值 `""` = 忽略）
     ⇒ ⭐ 它**优先于**别名表（人改过的必须算数）。
 
-    返回 `{"fields": {field: idx}, "unknown": [{col, label}], "ignored": [{col, label, why}], "dupes": [...]}`
+    `samples` = `{列下标: [值, …]}`（**可选**）⇒ 给了就做**内容画像交叉校验**，把
+    "名字认对了、值不像"的列报进 `suspect`（⭐ `B4` 新增；⛔ **只提示，不改判定**）。
+
+    返回 `{"fields": {field: idx}, "unknown": [{col, label}], "ignored": [{col, label, why}],
+          "dupes": [...], "suspect": [{col, label, field, prof, why}]}`
     ⚠️ `dupes`：同一个系统字段被**两列**认到（如既有`合同金额`又有`合同总价`）⇒ 报出来让人定，
        ⛔ **不"后一个覆盖前一个"**（那是最典型的静默错：导进去的金额来自哪一列没人知道）。
     """
@@ -307,7 +325,94 @@ def map_columns(labels: list[str], *, mapping: dict[str, str] | None = None) -> 
             dupes.append({"col": i, "label": label, "field": fld, "kept": fields[fld]})
             continue
         fields[fld] = i
-    return {"fields": fields, "unknown": unknown, "ignored": ignored, "dupes": dupes}
+    return {"fields": fields, "unknown": unknown, "ignored": ignored, "dupes": dupes,
+            "suspect": cross_check(labels, fields, samples)}
+
+
+# --------------------------------------------------- 引擎接入（`TAIL-75` B4 · 建议/校验/记忆）
+#
+# ⭐ 三条纪律（本段**只加值、不改判定**）：
+# 1. **判定权不搬走**：自动映射的唯一权威仍是上面的 `ALIASES`（+ 人在预览页手点的 `mapping`）
+#    ⇒ ⛔ 引擎的建议**不许**直接变成 `fields`；
+# 2. **建议一律标「需你确认」**：引擎分再高也只是"预选"，界面上人点头才算数；
+# 3. **记忆是预填、不是决定**：命中记忆 ⇒ 界面上预选并标「来自记忆 · 可改」，⛔ 不偷偷改判定。
+
+#: 字段**类型**（供引擎做内容画像交叉校验；⛔ 与上面的判定无关）
+FIELD_TYPES: dict[str, str] = {
+    "contract_date": "date", "material_name": "text", "supplier": "text", "trade_co": "text",
+    "contract_amt": "amount", "inv_sum": "amount", "trade_contract_amt": "amount",
+    "trade_inv_sum": "amount", "method": "enum", "remark": "text", "arch": "enum",
+    "arch_no": "code", "ret_date": "date",
+}
+
+
+def field_specs() -> tuple[_Field, ...]:
+    """**域声明**：`label` = 页面列名（`FIELD_LABELS`），`aliases` = `ALIASES` 里**其余写法**。
+
+    ⭐ 别名**自动反查** ⇒ ⛔ 不手抄第二份名单（抄一份 = 将来改一处漏一处）。
+    """
+    extra: dict[str, list[str]] = {}
+    for alias, fld in ALIASES.items():
+        if alias != FIELD_LABELS.get(fld):
+            extra.setdefault(fld, []).append(alias)
+    return tuple(_Field(key=k, label=v, aliases=tuple(extra.get(k, ())),
+                        type=FIELD_TYPES.get(k, "text"))
+                 for k, v in FIELD_LABELS.items())
+
+
+def suggest_unknown(labels: list[str], mapping: dict, samples: dict[int, list] | None = None) -> list[dict]:
+    """**别名表没认出**的列 ⇒ 引擎建议（带置信度与依据）。
+
+    ⭐ 这是"认不出来就让你点一下"的前半句：界面把建议**预选**上并标「**需你确认**」，
+      人点头后走 `mapping`（那条路本来就有）⇒ ⛔ 引擎一次都不直接落库。
+    """
+    cols = [int(u["col"]) for u in (mapping.get("unknown") or [])]
+    if not cols:
+        return []
+    headers = [labels[i] if i < len(labels) else "" for i in cols]
+    given = {headers[n]: (samples or {}).get(col) or [] for n, col in enumerate(cols)} if samples else None
+    by_label = {v: k for k, v in FIELD_LABELS.items()}
+    out: list[dict] = []
+    for col, sug in zip(cols, _guess(headers, field_specs(), given)):
+        if not sug.field:                                  # 引擎也没把握 ⇒ 不预选（留空给人）
+            continue
+        out.append({"col": col, "label": labels[col] if col < len(labels) else "",
+                    "field": by_label.get(sug.field, sug.field), "field_label": sug.field,
+                    "conf": sug.conf, "why": sug.why, "level": "需你确认"})
+    # ⚠️⚠️ **同一字段被多列建议 ⇒ 全都"不预选"**（真文件实测踩到：非台账的 sheet 上
+    #    「单据日期 / 录入日期 / 核准日期」三列都被建议成 `合同日期`、「编号」被建议成 `存档序号`
+    #    —— 那是"包含词"在**短标签**上过度命中）。与其让界面预选三列同一个字段（看着像系统很肯定），
+    #    不如把建议摆出来、⛔ 不预选，让人自己点。
+    seen: dict[str, int] = {}
+    for x in out:
+        seen[x["field"]] = seen.get(x["field"], 0) + 1
+    for x in out:
+        if seen[x["field"]] > 1:
+            x.update({"dup": True, "preselect": False,
+                      "why": x["why"] + f"；⚠️ 同一字段被 {seen[x['field']]} 列建议 ⇒ **不预选**（多半都不是它）"})
+        else:
+            x["preselect"] = True
+    return out
+
+
+def cross_check(labels: list[str], fields: dict[str, int], samples: dict[int, list] | None = None) -> list[dict]:
+    """**内容画像交叉校验**：已认出的列，值画像与字段类型**矛盾** ⇒ 显式列出。
+
+    ⭐ 防的是"**名字认对、列拿错**"（把「付款方式」那列认成「合同日期」这类）——
+      用**值**说话，与列名无关。⛔ 只提示：判定仍归 `ALIASES` / 人点的 `mapping`。
+    """
+    if not samples:
+        return []
+    out: list[dict] = []
+    for fld, idx in (fields or {}).items():
+        prof = _profile((samples.get(idx) or []))
+        if not prof or not _type_conflict(prof, FIELD_TYPES.get(fld, "")):
+            continue
+        out.append({"col": idx, "label": labels[idx] if idx < len(labels) else "",
+                    "field": fld, "field_label": FIELD_LABELS.get(fld, fld), "prof": prof,
+                    "why": f"这列的值像「{prof}」，与「{FIELD_LABELS.get(fld, fld)}」不符 —— "
+                           f"核对一下是不是列认错了（⛔ 系统不替你改）"})
+    return out
 
 
 # ------------------------------------------------------------------ 值解析
@@ -413,7 +518,8 @@ def _skip_reason(row: list[str], fields: dict[str, int]) -> str:
 
 
 __all__ = [
-    "ALIASES", "FIELD_LABELS", "IGNORED_LABELS", "HEADER_HINTS",
-    "detect_header", "header_labels", "looks_like_data_row", "map_columns",
-    "parse_rows", "read_grid", "sheet_names", "suffix_of", "to_date", "to_money",
+    "ALIASES", "FIELD_LABELS", "FIELD_TYPES", "IGNORED_LABELS", "HEADER_HINTS",
+    "cross_check", "detect_header", "field_specs", "header_labels", "looks_like_data_row",
+    "map_columns", "parse_rows", "read_grid", "sheet_names", "suggest_unknown",
+    "suffix_of", "to_date", "to_money",
 ]

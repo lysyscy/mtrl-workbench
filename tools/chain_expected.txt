@@ -108,7 +108,11 @@ P4|逐行校验（号非空 · 金额 >0 · 时间可解析）⇒ 否则进**异
 P4|付款方式归一四类，归不进 ⇒ 记「其他」＋ 原文留备注；**空 ⇒ 存空**（⛔ 不得编造）|未识别的取值要在预览里**列出来给人过目**|backend/app/mod05_flow/importer.py::normalize_method|ACC-FLOW-IMPORT-002|已接
 # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：导入页的服务端渲染件已删 ⇒ 落点改指**预览四块的产出函数**
 #    （`preview_of` 是纯函数、壳 `V.m05imp` 逐块渲染）—— 口径一字未变（还是"将写入 / 未匹配 / 异常 / 未识别"）。
-P4|⭐ **落库前必须预览**（将写入 N 条 / 未匹配 / 异常 / 未识别方式 四项）|显示四项|backend/app/mod05_flow/import_api.py::preview_of|ACC-FLOW-IMPORT-002|已接
+# ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · **用户裁定 `B`**）：旧页 ＋ `import_api.py` **连件删除**
+#    ⇒ 落点再换一次到**通用面的域预览补丁**（`imp_spec.preview`，它产 `writable` ＋ `kpis` ＋
+#    未匹配/异常/未识别三张表；壳由 `lgBlocks()` 通用渲染）—— **判词一字未改**，还是那四项。
+#    ⚠️ 上面两行的 `importer.parse_rows` **保留**（五列批解析仍在、测试仍钉着它），与 `m06` 撤页时留 `parse_sheet` 同款。
+P4|⭐ **落库前必须预览**（将写入 N 条 / 未匹配 / 异常 / 未识别方式 四项）|显示四项|backend/app/mod05_flow/imp_spec.py::preview|ACC-FLOW-IMPORT-002|已接
 P4|⭐ **幂等**：每次记批次号；**同批重导 ⇒ 先整批回滚**再写新批|同批重导 ⇒ 先整批回滚|backend/app/mod05_flow/importer.py::next_batch|ACC-FLOW-IMPORT-003|已接
 P4|整批回滚（该批流水**置撤销 ＋ 原因**，**留痕、不物理删**）|整批回滚|backend/app/mod05_flow/repository.py::rollback_batch|ACC-FLOW-IMPORT-003|已接
 P4|留痕：记**导入人**与**批次号**（来源标记 `imported`，与 `manual` 区分）|记录**导入人**与**批次号**|backend/app/mod05_flow/importer.py::commit|ACC-FLOW-IMPORT-003|已接
@@ -135,8 +139,10 @@ P4|⭐ **核对报告**：该批涉及月份里、**一条流水都没有的通�
 #   ③ 核对报告单列 ✅ **本次补上**（`§19` 四个暂留件收口那一轮 —— 原先排期在 M6，因为核对报告住在
 #      【历史付款流水导入】暂留页上，"现在做等于做完就搬"）：新增 `repository.notices_overpaid`
 #      （该批月份里 **实付合计 > 审批金额** 的通知书，`>` 不是 `>=` —— 与 `NoticeRow.is_overpaid` 同判据）
-#      → 挂进 `importer.check_report` 的 `overpaid` / `overpaid_count` → 壳 `V.m05imp` 的核对报告里
+#      → 挂进 `importer.check_report` 的 `overpaid` / `overpaid_count` → 核对报告里
 #      **单列一张「超付清单」**（金额 / 实付 / 超出三列都摆出来）。
+#      ⭐ 2026-09-23（`B5b` 第三步 · 用户裁定 `B`）：渲染落点从壳 `V.m05imp`（已下架）换成
+#      **通用面的域补充区块**（`imp_spec._report_blocks` → 壳 `lgBlocks()` 通用渲染）—— 口径未变。
 #   ⇒ 状态 `已接`（三半齐）；⚠️ 落点列只写**真实存在的路径**（C3 会去 `check_target`），散文留在注释里。
 #   ⚠️ 判据 = `ACC-PAY-STAT-002`（002-06 判词本来就写着「＋ 该单挂提醒」）；报告单列那一半的
 #      机械落点在 `tests/test_acc_flow_import.py::test_导入后给出核对报告...` 与 `preview_of` 的断言里。

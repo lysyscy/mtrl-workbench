@@ -81,331 +81,9 @@ async function dlExport(url, { name = '导出文件', label = '导出', close = 
    ⇒ 它们落在 `index.html` 的切片外公共层（见那里「通用件」注释）。
    ⭐ 记这条判据：**切片外还分两层** —— 初始化期要用的 ⇒ `index.html`；只在交互时才用的 ⇒ 本件。 */
 
-const API = {
-  async get(url) {
-    const r = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!r.ok) throw new Error(`GET ${url} → HTTP ${r.status}`);
-    return r.json();
-  },
-  async post(url, body) {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {}),
-    });
-    if (!r.ok) throw new Error(`POST ${url} → HTTP ${r.status}`);
-    return r.json();              /* ⚠️ 恒 HTTP 200 —— 成败看 `ok` 标志（见 notice_api_router） */
-  },
-  /* ⭐ `PUT` 等其余方法走这个 —— ⚠️ **失败时把后端的 `message` 原样抛出**：
-     `MOD-01` 的状态不变式是「拦了就讲清**为什么 + 怎么解决**」（§2.7.2），
-     若只抛 `HTTP 400`，那句"壳下还有 3 个在建小微：A、B、C"就丢了 ⇒ 用户只看到"保存失败"。
-     ⛔ 由 `core/errors.py::AppError` 统一转成 `{code, message}` + 对应状态码。 */
-  async send(method, url, body) {
-    const r = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {}),
-    });
-    const text = await r.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
-    if (!r.ok) throw new Error((data && (data.message || data.detail)) || text || `HTTP ${r.status}`);
-    return data;
-  },
-  /* `period=""` ⇒ **全量**（口径见后端 `notice_filters`）—— 筛选用前端 `ntHit` 原样做 */
-  notices: () => API.get('/api/m03/notice-list?period='),
-  /* ⚠️ `status=all`：原型的筛选**含归档**（默认值只是"在建"，候选里归档项排最后并标注，§2.7/§2.7.1）
-     ⇒ 取数必须**全量**，筛选项由原型自己的 `fPj` 逻辑做（⛔ 别把默认值当"只取在建"）。 */
-  projects: () => API.get('/api/m01/projects?status=all'),
-  /* 修改留痕（§9.3 只有"项目全名 / 项目状态"）—— 供 `m01` 的「修改留痕」卡 */
-  trails: () => API.get('/api/m01/trails?limit=20'),
-  setCategory: (ids, category) =>
-    API.post('/api/m03/actions/category', { ids, category: CAT_API[category] || category }),
-  exclude: ids => API.post('/api/m03/actions/exclude', { ids }),
-  restore: ids => API.post('/api/m03/actions/restore', { ids }),
-  /* 统计金额手改（§4.5.3）：上限 / 留痕 / 欠款重算**全在后端**同一出口
-     —— 前端只负责发与显示回执（⛔ 不本地改值、不本地留痕冒充落库）。
-     ⚠️ 字段名是**后端旁路字段名**（`stat_settle` / `stat_paid`），壳里的短名 `ss`/`sp` 在此映射。 */
-  statCell: body => API.post('/api/m03/actions/stat', body),
-  /* 手动行新增 / 编辑（§4.2.6）：校验与落库**全在后端**（录入人取当前登录用户 / 统计结算恒 0 /
-     全站「统计两金额 ≤ 审批金额」…）—— 前端只管发与显示回执（⛔ 不 `NO.push` 冒充落库）。
-     `row_id` 空 = 新增；有值 = 编辑该手动行。 */
-  manualSave: body => API.post('/api/m03/actions/manual-save', body),
-  /* 删除前的影响范围（§7.2/§9.4 **硬要求**）：由后端给（项目/统计付款金额/已付金额/「欠款回增」那句）
-     —— ⛔ 前端不自己拼这段文字。 */
-  manualDeleteImpact: body => API.post('/api/m03/actions/manual-delete-impact', body),
-  /* 删除手动行（§4.2.6）：只对手动行开放，i8 抓取行永不可删（§4.2.7）；⛔ 前端不本地 splice 冒充删除 */
-  manualDelete: body => API.post('/api/m03/actions/manual-delete', body),
-  /* 批量付款（§4.4.4）：**整批重算 / 整批不落半批 / 幂等** 全在后端同一出口
-     （`notice_actions.apply_batch_pay`）—— 前端只管发与显示回执（⛔ 不本地往 FLs 塞流水冒充落库）。
-     ⚠️ 必须带 `request_id`（幂等号）：服务端据它**拒重复提交**。 */
-  batchPay: body => API.post('/api/m03/actions/batch-pay', body),
-  /* ⭐ `M5-5`「集采实际供应商」（§6.6.3）：判定（**仅「集采」分类可填**）与落库都在后端
-     （`notice_actions.jc_supplier_problem` 是唯一出口）—— 前端只负责发与显示回执（⛔ 不本地改 `n.sup`）。 */
-  jcSupplier: body => API.post('/api/m03/actions/jc-supplier', body),
-  /* ⭐ `M5-5` 供应商**自动匹配**（§6.6.3）：判定**在后端**（`mod03_notice/sup_match.py`）——
-     拿**本项目候选池**去探测**单据名**，返回 `{pool, level, level_name, cands}`。
-     ⚠️ **只算不写**：1 家预填 / ≥2 家让选 / 0 家手动，三条分叉与"预填须经人采用"由壳编排；
-        落库一律走上面的 `jcSupplier`。⛔ 壳里**不再自带**一套片段/等级算法（两份 = 迟早漂移）。 */
-  m03SupMatch: body => API.post('/api/m03/actions/sup-match', body),
-  /* ---- MOD-01 写动作（⛔ 判定与落库一律后端：状态不变式 / 排序重编号 / 全名留痕） ---- */
-  pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
-  pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),
-  pjOrd: (id, body) => API.send('PUT', `/api/m01/projects/${id}/ord`, body),
-  /* ---- MOD-01 · ⭐ 链路 B「人工指认」（`TAIL-30`-③）----
-     ⚠️ 候选行按**全名**查（这是**读**）；**写**一律传 `project_id` 按 id 定位
-        （铁律 5/6：禁止用名字反查 —— 一个全名可能对应多行）。 */
-  pjPromotePending: () => API.get('/api/m01/promote-pending'),
-  pjPromoteCandidates: full => API.get(
-    `/api/m01/promote-candidates?full=${encodeURIComponent(full || '')}`),
-  pjPromote: body => API.post('/api/m01/promote', body),
+/* ⭐ `API`（取数出口）已切到 `shell/api.js`（2026-09-24 · 见设计件 §八.5 第 1 刀）——
+   ⚠️ 它必须在 `core.js` **之前**挂载（顺序真源 = `index.html` 的 `<script src>`）。 */
 
-  /* ---- MOD-01 · 链路 A ③-b「≥2 个仓库 ⇒ 选定一个建行」（`TAIL-45`） ----
-     ⚠️ 清单来自**最近一次成功的「常用项目列表」同步**；原先 `m01` 上**根本没有入口**
-        （那条只在同步回执里报一次、刷新即丢）⇒ 这两个端点就是那个"可点"的出口。 */
-  pjArchPend: () => API.get('/api/m01/archive-pending'),
-  pjArchRow: body => API.post('/api/m01/archive-row', body),
-  /* 人工改**类型**（`TAIL-42`）—— 三类判定的**人工覆盖**；⚠️ 合法域只有 `normal` / `shell`
-     （「具体小微」由链路产生）⇒ 后端也会拒，壳里⛔ 不另写一份判定。 */
-  pjType: (id, project_type, warehouse_name) => API.send(
-    'PUT', `/api/m01/projects/${id}/type`,
-    {project_type, warehouse_name: warehouse_name || null},
-  ),
-
-  /* ---- MOD-02 · i8 接入层（`TAIL-27`）----
-     ⭐ 「抓取结果回显」与「抓取任务日志」的**唯一数据源 = 执行记录**（原先两张卡是模拟值/硬编码行）。
-     ⚠️ 两个同步都会**登录 i8 并强踢该账号在线用户**（D9）⇒ `allow_kick=true` 只允许在
-        界面**二次确认**之后传 —— 下面 `m02Sync()` 里那个弹窗就是那道闸（⛔ 不确认就不发请求）。 */
-  m02Records: (limit = 50) => API.get(`/api/m02/fetch/records?limit=${limit}`),
-  m02SyncWh: () => API.post('/api/m02/sync/warehouses?allow_kick=true', {}),
-  m02SyncPj: () => API.post('/api/m02/sync/common-projects?allow_kick=true', {}),
-  /* ⭐ 看板 ⑦⑬⑭ 的取数口（2026-09-21 接线）—— ⚠️ **另起一个端点、⛔ 不复用 `m02Records`**：
-     那个是**窗口**（`limit ≤ 200`），而 `run_record` 是**流水表**（≈10 条/天 ⇒ 一个月 ≈300 条）
-     ⇒ 用窗口算「本月有没有成功抓取」**会漏、且漏了不报错**。
-     本端点在后端走 **SQL 全表**（`app/home/service.py::run_counts`）。 */
-  homeRunCounts: () => API.get('/api/home/run-counts'),
-
-  /* ---- MOD-03 · 抓取 ＋ 链路 C 弹窗（`TAIL-29`-② ④） ---- */
-  /* ⭐ 抓取：**失败也要看回执** —— 「归属未走完」是**可预期的失败**（要拿它开弹窗）
-     ⇒ 这里**不 throw**，把 body 原样返回，由调用方判 `ok`。 */
-  fetchNotices: async year_month => {
-    const r = await fetch('/api/m03/notices/fetch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year_month, allow_kick: true }),
-    });
-    const body = await r.json().catch(() => ({}));
-    return r.ok ? { ok: true, ...body } : { ok: false, ...body };
-  },
-  unresolved: () => API.get('/api/m03/notices/unresolved'),
-  assignOwnership: body => API.post('/api/m03/notices/ownership-assign', body),
-  /* ⭐ `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（`API-05`）—— ⚠️ 会登录 i8、可能**强踢**（`D9`）
-     ⇒ `allow_kick=true` 只允许在**二次确认之后**传（`ownWhCheck` 那个弹窗就是那道闸）。只查**不落库**。 */
-  whCheck: body => API.post('/api/m03/notices/warehouse-check', body),
-  /* ⭐ `TAIL-46`：批量打印 / 只导出 PDF / 打印机设置（`MOD-03` 三条**真出口**）——
-     这三件事原先**只有旧页 `mod03_notice/static/m03.html` 能做**；接上之后才谈删旧页（§19 批 4.5）。
-     ⚠️ `ids` 必须是**系统内勾选**的通知书 id（001-09 明令：不收文件、不收手输清单）。 */
-  m03Batch: (ids, mode) => API.post('/api/m03/batch', {ids, mode}),
-  printerGet: () => API.get('/api/m03/settings/printer'),
-  printerSet: (url, mode, name) => API.send('PUT', '/api/m03/settings/printer',
-    {printer_ipp_url: url, print_mode: mode, printer_name: name}),
-  /* 本机装了驱动的打印机名（选「系统驱动」通道时**名字要一字不差**）—— 拿不到即空表，⛔ 不是错误 */
-  printerList: () => API.get('/api/m03/settings/printers'),
-
-  /* ---- MOD-07 收发结存与活动大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
-  m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
-  m07Extract: () => API.get('/api/m07/extract'),
-  m07BalCell: body => API.post('/api/m07/extract/balance', body),
-  m07Big: () => API.get('/api/m07/big'),
-  m07BigCell: body => API.post('/api/m07/big/cell', body),
-  m07BigSelection: selected => API.post('/api/m07/big/selection', { selected }),
-  /* ⭐ 抓取：**失败也要看回执**（降级说明在 `message` 里）⇒ 不 throw，由调用方判 `ok`。 */
-  m07Fetch: async month => {
-    const r = await fetch('/api/m07/fetch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ month, confirm: true }),
-    });
-    const body = await r.json().catch(() => ({}));
-    return r.ok ? { ok: true, ...body } : { ok: false, ...body };
-  },
-
-  /* ---- MOD-04 付款计划（⚠️ 后端这几个端点收 **query 参数**，不是 JSON body ⇒ 照它调用） ---- */
-  plans: () => API.get('/api/m04/plans?year_month='),
-  plDeleteImpact: ids =>
-    API.get(`/api/m04/delete-impact?ids=${encodeURIComponent(ids.join(','))}`),
-  plCell: (id, column, value) =>
-    API.send('POST', `/api/m04/plans/${id}/cell`
-      + `?column=${encodeURIComponent(column)}&value=${encodeURIComponent(value == null ? '' : value)}`, null),
-  plRematch: id => API.send('POST', `/api/m04/plans/${id}/re-match`, null),
-  /* ---- MOD-04 · 手动行 ＋ 导入（`TAIL-35`） ---- */
-  /* 手动行新增 / 编辑 —— 判定与落库全在后端（`plan_manual.manual_row_payload`）。 */
-  m04PlanSave: body => API.post('/api/m04/plans', body),
-  /* ⚠️ 导入是 **multipart/form-data**（⛔ 不是 JSON）⇒ 单独写：`FormData` ＋ **不手动设 Content-Type**
-     （浏览器要自己带 boundary；手设会把 boundary 写丢 ⇒ 后端收不到文件）。
-     ⭐ `TAIL-69`（2026-09-22）：一步式升级为 **parse（预览不写库）→ confirm（凭 token 落库）** 两步；
-        旧 `m04Import` 已撤（后端一步式端点仍留作兼容，⛔ 别在新代码里调它）。 */
-  m04ImportParse: async (year_month, file) => {
-    const fd = new FormData();
-    fd.append('year_month', year_month);
-    fd.append('file', file);
-    return API.postFile('/api/m04/import/parse', fd);
-  },
-  m04ImportConfirm: body => API.post('/api/m04/import/confirm', body),
-  plForce: (id, remark) =>
-    API.send('POST', `/api/m04/plans/${id}/force?remark=${encodeURIComponent(remark || '')}`, null),
-  /* ---- MOD-05 付款流水与欠款（读 4 个端点；写：撤销走 JSON、期初/备注走 PRG 表单端点） ---- */
-  flows: () => API.get('/api/m05/flows?year_month='),
-  debt: () => API.get('/api/m05/debt'),
-  stats: q => API.get('/api/m05/stats?granularity=' + encodeURIComponent(q.granularity || 'week')
-    + '&year=' + (q.year || 0) + '&quarter=' + (q.quarter || 0)),
-  ledger: pid => API.get('/api/m05/ledger?project_id=' + pid),
-  flowRevoke: (id, reason) => API.send('POST',
-    `/api/m05/flows/${id}/revoke?reason=${encodeURIComponent(reason || '')}`, null),
-  /* ⚠️ 期初录入 / 期初删除 / 台账备注 **目前只有 PRG 表单端点**（收 `Form`）⇒ 用表单编码发；
-     它们回 303，我们**不看那页 HTML**，改「重拉数据 ＋ 自己的回执」（同一批落库出口）。 */
-  postForm: async (url, obj) => {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(obj || {}).toString(),
-      redirect: 'follow',
-    });
-    if (!r.ok) throw new Error(`POST ${url} → HTTP ${r.status}`);
-    return true;
-  },
-  plForceCancel: id => API.send('POST', `/api/m04/plans/${id}/force-cancel`, null),
-  /* ⚠️ `confirmed=true` 只在**用户已在确认弹窗里看过影响范围**之后才传（§4.3.6 的两步） */
-  plDelete: ids =>
-    API.send('POST', `/api/m04/plans/delete`
-      + `?ids=${encodeURIComponent(ids.join(','))}&confirmed=true`, null),
-
-  /* ---- MOD-08 库存单据与调整单（读全量 + 调整单；写走 JSON） ---- */
-  m08Inventory: () => API.get('/api/m08/inventory'),
-  m08Adjust: (rowId, body) => API.send('POST', '/api/m08/adjust', { row_id: Number(rowId), ...body }),
-  m08AdjustClear: rowId => API.send('POST', '/api/m08/adjust/clear', { row_id: Number(rowId) }),
-  /* ⚠️ 抓取**会顶号**（D9）：`confirm:true` = 用户已在抓取弹窗里确认过；
-     缺它后端一律 400（防静默抓取）。失败（i8 异常）⇒ 后端降级回执，不抛。 */
-  m08Fetch: month => API.send('POST', '/api/m08/fetch', { month, confirm: true }),
-
-  /* ---- MOD-06 过程资料：机械 6 列手录值（旁路表，全量） ---- */
-  m06Mech: () => API.get('/api/m06/mech'),
-  /* ⭐ `TAIL-38`：「录机械费」写入口 —— 校验与落库**全在后端**
-     （`mech_ui.parse_mech_values` ＋ `repository.save_mech`），与 PRG 端点同一份判定。 */
-  m06MechSave: body => API.post('/api/m06/mech', body),
-
-  /* ---- MOD-14 剔除规则（`TAIL-40`）⚠️ 唯一主人在库；⛔ 前端不做任何本地改数据冒充落库 ---- */
-  m14Rules: () => API.get('/api/m14/rules'),
-  m14RuleAdd: body => API.post('/api/m14/rules', body),
-  m14RuleSet: (id, body) => API.send('PUT', `/api/m14/rules/${id}`, body),
-  /* ⭐ `MOD-15` 用户管理（§1.5）：整页数据 = 列表 ＋ **当前登录用户** ＋ 三态计数。
-     ⚠️ 它是 `CUR`（"当前登录用户"）的**唯一来源** —— 别再另开一个"我是谁"的取数口。 */
-  users: () => API.get('/api/m15/users'),
-  m15Theme: () => API.get('/api/m15/theme'),
-  m15ThemeSet: theme => API.post('/api/m15/theme', { theme }),
-  m15Password: id => API.get(`/api/m15/password?id=${encodeURIComponent(id)}`),
-  /* ⭐ `§7.8` i8 绑定（每人一份）：**写**出口。
-     ⚠️ `i8Pwd === null` ⇒ 请求里**不带** `i8_password` ⇒ 后端**不改密码**
-        （界面上那个框是空的 = "我没改它"，⛔ 不是"清空它"）。 */
-  m15I8: (id, i8User, i8Pwd) => API.post('/api/m15/actions/i8',
-    i8Pwd === null || i8Pwd === undefined
-      ? { id, i8_user: i8User }
-      : { id, i8_user: i8User, i8_password: i8Pwd }),
-  /* ⚠️ 6 个写动作**逐个对应后端端点**（⛔ 不在壳里拼一个"通用动作"——
-     那样参数一多就分不清谁是谁，且后端加校验时看不出该改哪儿）。 */
-  m15Create: (account, name, password) =>
-    API.post('/api/m15/actions/create', { account, name, password }),
-  m15Pwd: (id, password) => API.post('/api/m15/actions/password', { id, password }),
-  m15Status: (id, status) => API.post('/api/m15/actions/status', { id, status }),
-  m15Delete: id => API.post('/api/m15/actions/delete', { id }),
-  m15Restore: id => API.post('/api/m15/actions/restore', { id }),
-  m15Transfer: id => API.post('/api/m15/actions/transfer', { id }),
-  /* ⚠️ 登出**由后端清 cookie**（`delete_cookie`）⇒ 壳这边只管**跳登录页**。 */
-  m15Logout: () => API.post('/api/m15/logout', {}),
-  /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok` —— 规则不合法是 §4.2.2 的可预期拒绝，
-     后端那句中文必须原样给用户看。 */
-  m14RuleDel: id => API.send('DELETE', `/api/m14/rules/${id}`, null),
-
-  /* ---- MOD-09 特殊费用月报表（`TAIL-27`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
-  m09Fee: (ym, pj) => API.get(`/api/m09/fee?ym=${encodeURIComponent(ym || '')}`
-    + `&pj=${encodeURIComponent(pj || '')}`),
-  m09Add: body => API.post('/api/m09/fee/add', body),
-  m09Name: body => API.post('/api/m09/fee/name', body),
-  m09Amount: body => API.post('/api/m09/fee/amount', body),
-  m09Delete: body => API.post('/api/m09/fee/delete', body),
-
-  /* ---- MOD-11 集采台账（`M5-7`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
-  m11List: () => API.get('/api/m11/list'),
-  m11Detail: id => API.get(`/api/m11/detail?id=${encodeURIComponent(id)}`),
-  /* ⭐ `M5-5` 付款域双向引用：**关联 / 解绑**。
-     ⚠️ 关联关系**不另建表** —— 就写进合同的**付款子表**（`source=notice` ＋ `notice_id`）⇒
-        与「从付款域引用（R8）」是**同一份记录** ⇒ 两个入口调的是**同一个端点**（`ACC-JC-PAY-001/001-01`）。
-     ⚠️ 一对一（换合同 = **先解绑再写新**）/ 全库去重 / 不校验金额 —— 三条判定全在后端。 */
-  m11Link: body => API.post('/api/m11/link', body),
-  m11Unlink: body => API.post('/api/m11/unlink', body),
-
-  /* ⛔ `MOD-12` 差异登的四个接口（`m12List` / `m12Create` / `m12Delete` / `m12Status`）
-     **已于 2026-09-20 删除**（用户裁定撤页 —— 依据见 `backend/app/main.py` 的 import 处注释）。
-     ⛔ 别再加回来：差异的载体是**调整单**（`API.m08Adjust`），差异表由后端按调整单算（`m06`）。
-     ⭐ 这四行方法体**已于 2026-09-20 夜一并删掉**（原来只剩说明、代码还挂着 ⇒ 越挂越像"还在用"）；
-        守卫：`tools/audit/audit_common.py::CANCELLED` ＋ `doc_audit` 的 `T8`。 */
-  /* ⭐ `M5-6b` 甲方单位分类：它决定「i8 抓来的那个合同价是谁的价」。
-     ⚠️ 正常甲方 ⇒ i8 的价 = **供应商价**（落 `contract_amt` · **锚点**）；
-        贸易公司甲方 ⇒ i8 的价 = **贸易公司的价**（落 `trade_contract_amt`），
-        而真供应商价 i8 里**没有** ⇒ 要人工从 Excel 供应商线补进 `contract_amt`。
-     ⚠️ 没见过的甲方抓取时会**自动落成「未指定」**（⛔ 不静默当成正常）⇒ 页面得能指定。 */
-  m11PartyKinds: () => API.get('/api/m11/party-kinds'),
-  m11SetPartyKind: body => API.post('/api/m11/party-kind', body),
-  /* ⭐ `M5-9` 集采台账导出（2026-09-20 用户定）：
-     **行** = 页面上当前看到的那些（传 id ⇒ 口径与屏幕 100% 一致）；
-     **列** = **全列**（含「贸易公司」3 列）—— 用户选 **(B)**：屏幕上的"隐藏列"**只是屏幕的事**。
-     ⚠️ 走 POST 回来的是 **base64**（id 可能几百个 ⇒ GET 的 URL 会超长）⇒ 前端造 Blob 下载。 */
-  m11Export: body => API.post('/api/m11/export', body),
-  /* ⭐ `M5-8` 集采台账 Excel 导入：**预览** / **确认落库**。
-     ⚠️ 走 **base64**（`{filename, content_b64}`）—— 免 multipart 依赖；文件本来也就几十 KB。
-     ⚠️ 两个端点的入参形状**刻意一致** ⇒ 确认时把**同一个文件再传一次**（服务端无状态，见 `import_service`）。 */
-  m11ImportParse: body => API.post('/api/m11/import/parse', body),
-  m11ImportCommit: body => API.post('/api/m11/import/commit', body),
-  /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok`（可预期的拒绝 = `ok:false` ＋ 一句中文）。 */
-  m11Tag: body => API.post('/api/m11/tag', body),          /* {id, tag} 或 {ids:[…], tag} */
-  m11Add: body => API.post('/api/m11/add', body),
-  m11Fields: body => API.post('/api/m11/fields', body),    /* {id, fields:{…}}（白名单列） */
-  m11InvAdd: body => API.post('/api/m11/invoice/add', body),
-  m11InvDel: body => API.post('/api/m11/invoice/del', body),
-  m11PayAdd: body => API.post('/api/m11/payment/add', body),
-  m11PayDel: body => API.post('/api/m11/payment/del', body),
-  /* ⚠️ 抓取**会顶号**（`D9`）⇒ `confirm:true` = 用户已在确认弹窗里点过；缺它后端一律拒。
-     ⭐ `M5-6`：`since`（`YYYY-MM-DD`）= **单据日期起点** ⇒ 空串 = 让后端用 `default_since`
-        （库里最大合同日期 − 3 天）；**实测**增量 1~5 秒 vs 全量 40 秒。 */
-  m11Fetch: (since = '') => API.post('/api/m11/fetch', { confirm: true, since }),
-
-  /* ---- ⭐ `§19`「四个暂留件收口」（2026-09-21）：系统设置 ＋ 三个历史导入 ----
-     ⚠️ 这四页原先**只有服务端渲染页**（壳里零入口 ⇒ 一直删不掉）—— 现在能力搬进壳
-        （页在 `web/shell/legacy.js`），服务端那四个渲染件与它们的 PRG 已删。
-     ⚠️ 判定**一行都不在壳里**：格式校验 / 留痕 / 落库 / 批量回滚 / 幂等刷新全在后端。
-     ⚠️ 四个端点**恒 HTTP 200 ＋ `ok` 标志**（可预期的拒绝也是 `ok:false` ＋ 一句中文）——
-        ⛔ 别把它们当成"抛异常"来写，否则后端那句原因会被吞掉。 */
-  /* 系统设置（§7.8）：列表 = 设置项 ＋ 提示 ＋ 变更留痕；保存 = 只处理传进来的 key。 */
-  m14Settings: () => API.get('/api/m14/settings'),
-  m14SettingsSave: body => API.post('/api/m14/settings', body),
-  /* 历史付款流水导入（§4.4.6）：列契约 ＋ 三步（预览不写库 → 确认 → 核对报告含**超付单列**）。 */
-  m05ImpMeta: () => API.get('/api/m05/import/meta'),
-  /* 过程资料历史导入（§5.2.5 ①②）：项目候选 / 截止核算月 / 批次 ＋ 列说明。 */
-  m06ImpMeta: () => API.get('/api/m06/import/meta'),
-  m06ImpData: pj => API.get('/api/m06/import/data?pj=' + encodeURIComponent(pj || '')),
-  /* ⛔ `m08ImpMeta` 已随「库存单据手动导入」删除（2026-09-22 用户裁定；`T8` 守卫）。 */
-  /* ⚠️ 三个导入的「解析」都是 **multipart/form-data**（⛔ 不是 JSON）⇒ `FormData` ＋ **不手动设
-     Content-Type**（浏览器要自己带 boundary；手设会把 boundary 写丢 ⇒ 后端收不到文件）。
-     此件即 `m04Import` 那段逻辑的共用出口（⛔ 别在调用方各写一遍）。 */
-  postFile: async (url, fd) => {
-    const r = await fetch(url, { method: 'POST', body: fd });
-    const text = await r.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
-    if (!r.ok) throw new Error((data && (data.message || data.detail)) || text || `HTTP ${r.status}`);
-    return data;
-  },
-};
 
 /* ---------- 字段适配：后端**语义字段** → 原型字段名（`NT_COLS` / `PJ_COLS`） ----------
    ⚠️ API 不为某个前端定制 ⇒ 映射只写在这**一处**（前端壳的适配层）。 */
@@ -1368,70 +1046,20 @@ async function reloadArchPend() {
    `mod03_notice/static/m03.html` 上）⇒ 给切片加按钮 = 登记漂移；而"渲染后注入"正是 `BIND` 的活。
    ⚠️ **幂等**（`render()` 会重画多次）：靠 `dataset.m03More` 打标，⛔ 不叠加。
    ⚠️ 保留别的 `BIND.m03`（若有）：先调旧的，再注入（⛔ 不覆盖）。 */
-/* ============ MOD-11 · 集采台账「Excel 导入」入口（前端壳接线 · `M5-8`）============
+/* ============ MOD-11 · 集采台账的**页内工具条**（前端壳接线）============
    ⭐ **为什么由钩子注入**：切片里那排按钮（`jcFetch` / `jcAdd` / 批量标记…）生在"**不许搬**"的切片区
       ⇒ 给切片加按钮 = 登记漂移；"渲染后注入"正是 `BIND` 的活（同 `BIND.m03` 那两个入口）。
-   ⚠️ **幂等**（`render()` 会重画多次）：靠 `dataset.m8Imp` 打标，⛔ 不叠加。
-   ⚠️ **保留别的 `BIND.m11`**（那个管"全选 / 半选回显"）：先调旧的，再注入。 */
-/* ⭐ `M5-8` ② 预览弹窗（`reopen` 指向本函数 ⇒ 改一格列名**只重绘、不重新解析**）。 */
-function jcImportShow(){
-  const d = jcImpRes, sheets = (d && d.sheets) || [], s = sheets[jcImpK];
-  if (!s) return;
-  const lab = d.field_labels || {}, mp = s.mapping || {};
-  const tabs = sheets.map((x, i) =>
-    `<button class="btn${i === jcImpK ? ' pri' : ''}" data-act="jcImportPickSheet" data-k="${i}">${esc(x.name)}${x.guess ? ' ✅' : ''}</button>`).join(' ');
-  const tgt = (i) => {
-    const ov = jcImpMap[String(i)];
-    if (ov !== undefined) return ov ? `<b>${esc(lab[ov] || ov)}</b>（你改的）` : '<span class="mut">你选择了忽略</span>';
-    const f = Object.keys(mp.fields || {}).find(k => mp.fields[k] === i);
-    if (f) return `<b>${esc(lab[f] || f)}</b> ✅`;
-    const ig = (mp.ignored || []).find(x => x.col === i);
-    if (ig) return `<span class="mut">不导：${esc(ig.why)}</span>`;
-    return `⚠️ <select class="inp" data-act="jcImportMap" data-c="${i}"><option value="">（忽略这一列）</option>${
-      Object.keys(lab).map(k => `<option value="${k}">${esc(lab[k])}</option>`).join('')}</select>`;
-  };
-  const rows = (s.labels || []).map((lb, i) =>
-    `<tr><td class="mut">${i}</td><td>${esc(lb || '（无列名）')}</td><td>${tgt(i)}</td></tr>`).join('');
-  const sk = (s.skipped || []).slice(0, 8).map(x => `<li>第 ${x.row_no} 行：${esc(x.why)}</li>`).join('');
-  const pjs = (typeof PROJ_LIST === 'function' ? PROJ_LIST() : []);
-  modal({title:'集采台账 Excel 导入 · ② 预览并核对列名', reopen: jcImportShow,
-    body:`<div class="tip" style="margin-bottom:8px">⛔ 系统<b>不猜列名</b> —— 认不出的摆出来让你点。</div>
-      <div class="tip wn" style="margin-bottom:8px">⭐ <b>落库口径</b>：按 <b>「合同价」（含税）</b> 在<b>本项目内</b>找到对应的合同并
-        <b>更新它</b>（Excel 只动<b>材料名 / 发票额 / 存档 / 存档号 / 寄回日期 / 备注</b>）；
-        i8 的地盘（合同价 / 供应商 / 日期 / 甲方）<b>一个字都不动</b>。
-        ⚠️ 配不上的（合同价空 / 项目里没这个价 / 同价两条）<b>一律列出来</b>，⛔ 不替你新建。</div>
-      ${s.note ? `<div class="tip wn" style="margin-bottom:8px">⚠️ ${esc(s.note)}</div>` : ''}
-      <div class="fld"><label>工作表（✅ = 看着像主台账）</label><div style="display:flex;flex-wrap:wrap;gap:6px">${tabs}</div></div>
-      <div class="fld"><label>③ 这份台账属于哪个项目（⛔ 系统不替你猜）</label>
-        <select class="inp" data-act="jcImportPj"><option value="">（请选择…）</option>${
-          pjs.map(k => `<option value="${esc(k)}"${k === jcImpPj ? ' selected' : ''}>${esc(pjLabel(k) || k)}</option>`).join('')}</select></div>
-      <div class="fld"><label>列名核对（共 ${s.rows} 行 · 认出数据 ${(s.counts || {}).data || 0} 条 · 解析跳过 ${(s.counts || {}).skipped || 0} 行）</label>
-        <div class="tw" style="max-height:240px"><table class="tbl"><thead><tr><th style="width:38px">列</th><th>你表里的列名</th><th>系统认成</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-      ${sk ? `<div class="tip wn" style="margin-top:8px"><b>解析时跳过的行</b>（⛔ 不是静默丢）：<ul style="margin:4px 0 0;padding-left:18px">${sk}</ul></div>` : ''}`,
-    footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcImportOk">③ 确认导入</button>`});
-}
+   ⚠️ **幂等**（`render()` 会重画多次）：靠 `dataset.m11Tools` 打标，⛔ 不叠加。
+   ⚠️ **保留别的 `BIND.m11`**（那个管"全选 / 半选回显"）：先调旧的，再注入。
+   ⚠️ 2026-09-23（`TAIL-75` 余项 · **用户裁定**）：这里原先**还注入一个「⬆ Excel 导入台账」按钮**
+      ⇒ 已**连件删除**（导入只在启用初期用一次 ⇒ 只留通用面）。本钩子现在只剩 `M5-9` 的
+      「隐藏贸易公司三列」（`hidBtn` 挂在同一个锚点后面）。 */
+/* ⛔ `M5-8` 的 ② 预览弹窗（`jcImportShow`）与 ③ 结果回执（`jcImpResult`）已**连件删除**
+   （`TAIL-75` 余项 · 2026-09-23 **用户裁定**：「导入只在启用初期用一次」⇒ **只留通用面**）。
+   ⭐ 那两步现在是壳「**数据导入**」页的通用流程（`V.imp`：列映射 → 预览校验 → 确认落库），
+   台账侧的匹配口径仍只有一份（后端 `import_service.match_and_apply`）。 */
 
-/* ⭐ `M5-8` ③ 结果回执（⛔ **四类都要列出来**：更新 / 配不上 / 同价冲突 / 提醒 —— 少一类 = 静默丢）。
-   ⚠️ 2026-09-20 **口径改了**：不再是"新增 / 已存在"，而是「**按合同价匹配上并更新**」——
-      因为流程是「**先抓 i8、再导 Excel**」⇒ Excel 是来**补信息**的，⛔ 不是来建合同的。
-   ⚠️ 所以 `updated` / `unmatched` / `ambiguous` **一个都不能省**：
-      "配不上"必须看得见（否则人以为导成功了，其实一条都没对上）。 */
-function jcImpResult(d){
-  const li = (arr, f) => (arr || []).length
-    ? `<ul style="margin:4px 0 0;padding-left:18px;line-height:1.7">${(arr || []).slice(0, 20).map(f).join('')}</ul>`
-    : '<div class="mut sm">（无）</div>';
-  const why = (x, extra) => `<li>第 ${x.row_no} 行${x.amount ? ` · 合同价 <b>${esc(String(x.amount))}</b>` : ''}${extra || ''}<br><span class="mut">${esc(x.why)}</span></li>`;
-  return `<div class="tip ${d.updated ? 'ok' : 'wn'}" style="margin-bottom:8px"><b>${esc(d.message || '')}</b></div>
-    <div class="sm" style="line-height:1.9;margin-bottom:6px">文件 <b>${esc(d.file)}</b> · 工作表 <b>${esc(d.sheet)}</b> · 项目 <b>${esc(pjLabel(d.project_key) || d.project_key)}</b></div>
-    <div class="fld"><label>✅ 按合同价匹配上并更新（${d.updated}）</label>${li(d.items,
-      x => `<li>合同 <b>#${x.id}</b> · 第 ${x.row_no} 行 · 合同价 <b>${esc(String(x.amount))}</b>${x.material_name ? ` · ${esc(x.material_name)}` : ''}<br><span class="mut">更新了：${esc((x.fields || []).join(' / ') || '（无）')}</span></li>`)}</div>
-    <div class="fld"><label>⚠️ 配不上（${d.unmatched}）—— ⛔ 系统**没有**替你新建</label>${li(d.unmatched_items, x => why(x))}</div>
-    <div class="fld"><label>⚠️ 同价冲突（${d.ambiguous}）—— **不猜**，请你人工定</label>${li(d.ambiguous_items,
-      x => `<li>第 ${x.row_no} 行 · 合同价 <b>${esc(String(x.amount))}</b> ⇒ 项目内有 <b>${(x.ids || []).length}</b> 条同价（#${(x.ids || []).join(' / #')}）<br><span class="mut">${esc(x.why)}</span></li>`)}</div>
-    <div class="fld"><label>不合格（${d.bad}）</label>${li(d.bad_items, x => why(x))}</div>
-    <div class="fld"><label>提醒（${d.warned}）</label>${li(d.warn_items, x => why(x))}</div>
-    <div class="fld"><label>解析时跳过（${(d.skipped_rows || []).length}）</label>${li(d.skipped_rows, x => why(x))}</div>`;
-}
+
 
 const _BIND_M11_OLD = BIND.m11;
 BIND.m11 = function () {
@@ -1439,15 +1067,11 @@ BIND.m11 = function () {
   const host = document.querySelector('#view');
   if (!host) return;
   const anchor = host.querySelector('[data-act="jcFetch"]');
-  if (!anchor || anchor.dataset.m8Imp) return;
-  anchor.dataset.m8Imp = '1';
-  const btn = document.createElement('button');
-  btn.className = 'btn';
-  btn.dataset.act = 'jcImportOpen';
-  btn.title = '直接上传你原来的集采台账 Excel（⛔ 不用照模板重填）：选文件 → 选工作表 → 核对列名 → 确认落库；'
-    + '按「合同价」匹配已有合同并更新（i8 的地盘一个字不动）';
-  btn.textContent = '⬆ Excel 导入台账';
-  anchor.insertAdjacentElement('afterend', btn);
+  if (!anchor || anchor.dataset.m11Tools) return;
+  anchor.dataset.m11Tools = '1';
+  /* ⛔ 「⬆ Excel 导入台账」那个按钮**已删**（`TAIL-75` 余项 · 2026-09-23 **用户裁定**：导入只在启用
+     初期用一次 ⇒ **只留通用面**）—— 台账导入现在走壳「数据导入」页（`m11_jc` 域）。
+     ⇒ 本钩子现在只剩 `M5-9` 的「隐藏贸易公司三列」（`hidBtn` 挂在同一个锚点后面）。 */
 
   /* ⭐ `M5-9`：① **导出**（按屏幕上这些行 · **列全给**）
      ② ⭐ **隐藏「贸易公司」三列**（用户 2026-09-20：「列太多了，贸易公司那 3 列不常用」）
@@ -1467,7 +1091,7 @@ BIND.m11 = function () {
   hidBtn.id = 'jcTradeBtn';
   hidBtn.title = '隐藏 / 显示「贸易公司名 · 贸易公司合同金额 · 贸易公司发票金额」三列'
     + '（只影响屏幕；⭐ **导出永远是全列**）';
-  btn.insertAdjacentElement('afterend', hidBtn);
+  anchor.insertAdjacentElement('afterend', hidBtn);   /* ⚠️ 锚点已从「导入按钮」改成 `jcFetch`（那个按钮已删） */
   jcApplyHide();                       /* ⚠️ 表是刚重建的 ⇒ 把"隐藏"偏好重新落上去（见 `jcApplyHide`） */
 
   /* ⭐⭐ `M5-9` 导出：**接管页面已有的那个「导出 Excel（R1）」按钮**，⛔ **不新建一个**。
@@ -2070,8 +1694,9 @@ const PAGE_LOAD = {
   /* ⭐ `set`（系统设置）：主题清单是**这一页自己的取数路** —— 切换器住在这里（`MOD-14`），
      ⚠️ 塞进 `m15` 那一路会"只有进过用户管理才填得上"（见 `reloadTheme` 的注释）。 */
   set: ['系统设置', '外观主题'],
-  m05imp: ['付款导入'],
-  m06imp: ['过程资料导入'],
+  /* ⭐ `TAIL-75` `B5`（2026-09-22）：「数据导入」（通用导入面）—— 域清单先来，其余按步走
+     （选域 → 解析 → 映射 → 预览 → 确认），都在这一页自己的动作里发起 ⇒ **一路够**。 */
+  imp: ['数据导入'],
   /* ⛔ `m08imp` 已随「库存单据手动导入」删除（2026-09-22 用户裁定）。 */
   };
 /* 标签 → 取数函数（标签进顶部横幅的**失败点名** —— ⛔ 一字不许改，它们是给用户看的） */
@@ -2102,8 +1727,7 @@ const LOADERS = {
   /* ⭐ `§19`「四个暂留件收口」（2026-09-21）—— 实现在 `web/shell/legacy.js`（四页与其取数同处一件）。 */
   '系统设置': reloadSet,
   '外观主题': reloadTheme,      /* ⭐ 住 `V.set`（`MOD-14`）：可选清单 ＋ 我当前用哪套 */
-  '付款导入': reloadImp05,
-  '过程资料导入': reloadImp06,
+  '数据导入': reloadImp,        /* ⭐ `B5`：通用导入面（域清单来自 `/api/imp/domains`） */
   /* ⛔ `'库存导入': reloadImp08` 已删（2026-09-22 撤手动导入）。 */
   /* ⛔ `'差异登记': reloadM12` 已删（2026-09-20 撤页）；`reloadM12` / `adaptDf` 也已删。 */
   '收发结存与大表': reloadM07,   /* ⚠️ 吃 `MACH6`/`IVs` ⇒ 见 `LOAD_DEP` */
@@ -2132,6 +1756,15 @@ const LOADED = new Set();          /* 已经拉过的路（同一页反复进出
    ⚠️ 这一条只解决"**切回 m02 时**看到的是新的"；"**人已经站在 m02 上**、从这页点触发"
       那一路由 `reloadM02IfOn()` 负责（见 `reloadM02` 下方）。 */
 const ALWAYS_FRESH = new Set(['i8 执行记录']);
+
+/* ⭐⭐ 2026-09-24（`TAIL-48` 余项 `P3`②）：**跨页写 ⇒ 全标脏** —— 壳里**唯一**的那个出口。
+   证据（写/读两侧到表级）= `.workbuddy/work/10-designs/设计-写动作标脏数据流图-20260924.md`：
+   壳按 `PAGE_LOAD` **进哪页拉哪页**、`LOADED` 记"这路拉过了"，而写动作**只 reload 自己那页**
+   ⇒ ⛔ **别的页拿着旧数**（`payment_notice`/`payment_flow`/`jc_*`/`proc_mech_manual` 都是**多处读、一处写**）。
+   ⚠️ 与 `TAIL-78`（导入落库 / 回滚：`legacy.js` 那两处 `LOADED.clear()`）**同一口径**，本件把它推广到写出口。
+   ⛔ **不许**改成"写动作 → 受影响页"的字面映射表：读侧一改，那张表就开始漏（**双份真源**）；
+   ✅ 全标脏 = "下次进哪页拉哪页"（多几路 GET），代价可忽略，**永不漏拉**。 */
+function markCrossPageStale() { LOADED.clear(); }
 
 /** 按需取数：把 `labels` 里**还没拉过**的几路拉回来（依赖路放**第二组**）。 */
 async function loadPaths(labels) {

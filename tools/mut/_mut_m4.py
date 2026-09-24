@@ -11,12 +11,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# ⚠️ 2026-09-23（`TAIL-77`）：本件随 `TAIL-58` 从 `tools/` 搬进 `tools/mut/` ⇒ 深度 +1，
+#    原 `parent.parent` 会指向 `tools/`（⇒ `BE = tools/backend` ⇒ 一跑就 `FileNotFoundError`）。
+ROOT = Path(__file__).resolve().parents[2]
 BE = ROOT / "backend"
 PY = str(BE / ".venv/Scripts/python.exe")
 # ⚠️ 带上 `test_acc_proc_001.py`：本单元的导出展开区**同页存在**，把该件那条
 #    「筛选栏不给多选」的整页断言撞红了 ⇒ 已改成绑筛选栏段，这里一并钉住它。
-TEST = "tests/test_acc_proc_exp.py tests/test_acc_proc_001.py"
+# ⚠️ 2026-09-23（`TAIL-77`）：⑥⑧⑨⑩ 的靶随旧页（`mod06_proc/view.py`）删除搬进了**壳**
+#    ⇒ 必须连 `test_wired_m06.py` 一起跑（那四条 shell 断言住在那里）。
+TEST = "tests/test_acc_proc_exp.py tests/test_acc_proc_001.py tests/test_wired_m06.py"
 
 
 def _b(s: str) -> bytes:
@@ -57,32 +61,34 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      '    return f"{project}_{EXPORT_DOMAIN}_{tab_name(tab)}_{ym}.xlsx"',
      '    return f"{project}_{EXPORT_DOMAIN}_{ym}.xlsx"'),
 
-    ("⑥ 展开区挪到滚动容器之后（浮层会被裁）",
-     "app/mod06_proc/view.py",
-     "        data_html=_export_strip(data) + table,",
-     "        data_html=table + _export_strip(data),"),
+    # ⭐ 2026-09-23（`TAIL-77`）：⑥⑧⑨⑩ 的靶随旧页（`mod06_proc/view.py`）于 2026-09-18 删除
+    #    ⇒ **改指壳**（`index.html` 的 `V.m06` 切片 / `shell/actions.js`）—— **claim 一字未改**，
+    #    对应断言现在住在 `tests/test_wired_m06.py`（已加进 `TEST`）。
+    ("⑥ 展开区被挪成两处 / 与表格同容器（浮层会被裁）",
+     "app/web/index.html",
+     "    ${procExpOn?procExpStrip():''}",
+     "    ${procExpOn?(procExpStrip()+procExpStrip()):''}"),
 
-    ("⑦ 说明里的列数不再来自列定义（模板列数假掉）",
-     "app/mod06_proc/view.py",
-     '        f"{len(D.PROC_COLUMNS)} 列模板",\n        f"核算月 ｜ 入库 {len(D.CATEGORIES)} 类 ｜ 出库 {len(D.CATEGORIES)} 类 ｜ "\n'
-     '        f"机械 {len(D.MECH_COLUMNS)} 列",',
-     '        f"{0} 列模板",\n        f"核算月 ｜ 入库 {len(D.CATEGORIES)} 类 ｜ 出库 {len(D.CATEGORIES)} 类 ｜ "\n'
-     '        f"机械 {len(D.MECH_COLUMNS)} 列",'),
-
+    # ⛔ ⑦ 已撤（2026-09-23 逐条核过，**不是缺口**）：原 claim 是「说明里的列数**来自列定义**」，
+    #    旧页 `view.py` 里确实是 `len(D.PROC_COLUMNS)`；而新壳那句是**模板自己的**列数说明
+    #    （「17 列模板 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列」）—— 17 由**母本模板文件**定死，
+    #    ⛔ 本来就**不该**跟着域常量派生（模板改了列数，说明也得跟着人改）。⇒ 变异点没了，不是丢了守卫。
     ("⑧ 候选项**全部**预勾选（默认选中 ≠ 当前项目）",
-     "app/mod06_proc/view.py",
-     '        f\'{" checked" if p in exp["selected"] else ""}> {esc(p)}</label>\'',
-     '        \' checked> \' + esc(p) + "</label>"'),
+     "app/web/shell/actions.js",
+     "   if(procExpOn&&!procExpPjs.length&&procPj) procExpPjs=[procPj];",
+     "   if(procExpOn) procExpPjs=[procPj];"),
 
     ("⑨ 0 个项目时导出按钮不禁用（会导出一个用户没选的东西）",
-     "app/mod06_proc/view.py",
-     '        f\'{" disabled" if not n else ""} title="{esc(title)}">导出</button> \'',
-     '        f\' title="{esc(title)}">导出</button> \''),
+     "app/web/index.html",
+     "${procExpPjs.length?'':'disabled'}",
+     "''"),
 
     ("⑩ 筛选栏的项目面板变成多选（与导出面板同款 ⇒ 001-04「单选」被破坏）",
-     "app/mod06_proc/view.py",
-     '        f\'<label><input type="radio" name="pj" value="{esc(p)}" \'',
-     '        f\'<label><input type="checkbox" name="pj" value="{esc(p)}" \''),
+     "app/web/index.html",
+     "const procPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>[procPj],"
+     "pickAct:'procPjPick',meta:PROJ_META_KEY,single:true});",
+     "const procPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>[procPj],"
+     "pickAct:'procPjPick',meta:PROJ_META_KEY});"),
 ]
 
 
@@ -96,10 +102,19 @@ def run_test() -> int:
 
 
 def main() -> int:
-    before = {rel: md5(BE / rel) for _d, rel, _o, _n in MUTATIONS}
+    # ⚠️ 2026-09-23（`TAIL-77`）：靶文件**已被删**的不许把整个脚本崩掉 —— 原先这里直接
+    #    `md5(BE / rel)` 读一个不存在的路径 ⇒ `FileNotFoundError` ⇒ **后面每一条都没验**，
+    #    而屏幕上只有一段 traceback（看起来像"脚本坏了"，其实是"靶早没了"）。
+    rels = {rel for _d, rel, _o, _n in MUTATIONS}
+    for rel in sorted(r for r in rels if not (BE / r).exists()):
+        print(f"[SKIP] ⚠️ 靶文件已不存在：{rel}（该条的 claim 已搬家或已撤 —— 见 `MUTATIONS` 注释）")
+    before = {rel: md5(BE / rel) for rel in rels if (BE / rel).exists()}
     ok, miss, still_green = 0, [], []
     for desc, rel, old_s, new_s in MUTATIONS:
         p = BE / rel
+        if not p.exists():
+            miss.append(f"{desc}（靶文件已删：{rel}）")
+            continue
         src = p.read_bytes()
         old, new = _fit(_b(old_s), src), _fit(_b(new_s), src)
         hit = src.count(old)

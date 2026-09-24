@@ -1,6 +1,6 @@
 """壳真机自检 · **第 ⑬ 段：`m07` 导出（材料报表）**（`TAIL-04` · 2026-09-21 外移）。
 
-**为什么单独立一个文件**：`tools/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的 `T5` = 红）
+**为什么单独立一个文件**：`tools/probe/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的 `T5` = 红）
 ⇒ 与 `_shell_pend.py` / `_shell_arch.py` 同款，由主自检**调一段**（`check(page, errors)`）。
 
 **它验的链条**（⭐ 可观测证据 = **从页面上下文真拉一次 zip**，⛔ 不是"看页面上有没有按钮"）：

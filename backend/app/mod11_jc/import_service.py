@@ -32,20 +32,35 @@
 ⚠️ **发票汇总行**（用户 2026-09-19 定：「直接把台账中的数导入到发票子表里的一条里」）：
   ⛔ **不重复加** —— 该合同**已有同 kind 的发票行** ⇒ 跳过并**报出来**（再导一次不会翻倍）。
   付款**不导**（台账里的"付款"列是**派生**的，导它会**重复计入**，见 `M5-5`）。
+
+⭐ 2026-09-22（`TAIL-75` B4）：接上 `import_kit` 的**建议 / 交叉校验 / 记忆**三件 ——
+   ⛔ **判定口径与"锚点匹配落库"一字未改**：
+   | 件 | 在哪 | 谁拍板 |
+   |---|---|---|
+   | 未认出列的**引擎建议**（带置信度） | `preview` 回的 `suggest` | 界面预选 ＋ 标「需你确认」（⛔ 引擎不直接落库） |
+   | **值画像交叉校验**（防"名字认对、列拿错"） | `preview` 回的 `mapping.suspect` | 人核对（⛔ 系统不改判定） |
+   | **映射记忆**（表头指纹 → 映射） | `preview` 回的 `memory` / `commit` 落库后写入 | 人（标「来自记忆 · 可改」） |
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from decimal import Decimal
 
-from app.mod11_jc import repository as R
 from app.mod11_jc import excel_parse as P
+from app.mod11_jc import repository as R
 
 #: 预览里每张表给几行样例（够人核对列名对不对就行，⛔ 不回全量 —— 见模块头那个取舍）。
 SAMPLE_ROWS = 3
 
 #: 预览里最多列几条"跳过的行"（全量太长没人看；落库回执里会给全量）。
 SKIP_SHOW = 12
+
+#: ⭐ 内容画像取多少行值来"看这列是什么"（`B4` 交叉校验用；够判就停，⛔ 不回传这些值）。
+SAMPLE_SCAN = 30
+
+#: 映射记忆的**域标签**（⛔ 不许与别的域混用 —— `profile_store` 会拦跨域套用）。
+DOMAIN = "m11_jc"
 
 #: ⚠️ 存档三列**走白名单** `update_contract`（它们不在 i8 抓取的刷新范围里 —— 那是**人的地盘**）。
 #: ⚠️ 原先还有一个 `_CORE`（"主表字段 → `insert_contract` 入参名"），**2026-09-20 随口径改成
@@ -75,11 +90,80 @@ EXCEL_COLS: tuple[str, ...] = ("material_name", "method", "remark", "arch", "arc
 
 # ============================================================ 预览
 
-def preview(data: bytes, filename: str) -> dict:
+def _store(store=None):
+    """映射记忆 ⇒ `ProfileStore`（可注入以便测；构造失败 ⇒ `None` ⇒ **导入照常**，⛔ 记忆坏了不许卡住导入）。"""
+    if store is not None:
+        return store
+    try:
+        from app.import_kit.profile_store import ProfileStore
+
+        return ProfileStore()
+    except Exception:                       # noqa: BLE001
+        return None
+
+
+def _samples(grid: list[list[str]], labels: list[str], *, row2: int) -> dict[int, list]:
+    """表头下面若干行 → `{列下标: [值…]}`（**只服务画像**：⛔ 不改判定、⛔ 不回传这些值）。"""
+    out: dict[int, list] = {}
+    for row in grid[row2 + 1: row2 + 1 + SAMPLE_SCAN]:
+        for i in range(len(labels)):
+            v = str(row[i]).strip() if i < len(row) else ""
+            if v:
+                out.setdefault(i, []).append(v)
+    return out
+
+
+def _memory(store, labels: list[str]) -> dict | None:
+    """记忆命中 ⇒ 给界面**预选**用：`{"mapping": {列下标: 字段}, "note", "sim"}`；没命中 ⇒ `None`。
+
+    ⚠️ 记忆按**源列原文**存 ⇒ 这里按原文对应回列下标；**重复列名一律不预填**（原文↔列不是一对一，⛔ 不猜）。
+    ⛔ 只是"预选"：人在界面上点头后走 `mapping`（那条路早就有）。
+    """
+    st = _store(store)
+    if st is None:
+        return None
+    pre = st.prefill(DOMAIN, labels)
+    if not pre:
+        return None
+    stored, note, sim = pre
+    by_label = {v: k for k, v in P.FIELD_LABELS.items()}
+    counts = Counter(labels)
+    out: dict[str, str] = {}
+    for i, lb in enumerate(labels):
+        if counts[lb] > 1:
+            continue
+        fld = stored.get(lb)
+        if fld and fld in by_label:
+            out[str(i)] = by_label[fld]
+    return {"mapping": out, "note": note, "sim": sim} if out else None
+
+
+def _remember(store, labels: list[str], mapping: dict, *, filename: str, sheet: str) -> None:
+    """落库成功后**存记忆**（表头指纹 → 映射）：同一来源第二次导入近似零操作。
+
+    ⚠️ 只记**认出的字段**（且列名唯一）—— ⛔ 不记"忽略"项：多问一次不会错，记错了才会错。
+    """
+    st = _store(store)
+    if st is None:
+        return
+    counts = Counter(labels)
+    saved: dict[str, str] = {}
+    for fld, idx in (mapping.get("fields") or {}).items():
+        lb = labels[idx] if idx < len(labels) else ""
+        if lb and counts[lb] == 1:
+            saved[lb] = P.FIELD_LABELS.get(fld, fld)
+    if saved:
+        st.save(DOMAIN, labels, saved, source_label=f"{filename}·{sheet}")
+
+
+def preview(data: bytes, filename: str, *, store=None) -> dict:
     """文件 ⇒ **每张工作表**的预览（列名 / 映射 / 条数 / 样例 / 跳过账）。
 
     ⚠️ ⛔ **不"取第 N 张表"**：用户样例的**第 1 张就是空表**（真数据在第 2 张）
        ⇒ 一律把表列出来，只给个"像主台账"的**提示**（`guess`），由人选。
+
+    ⭐ `B4` 新增三项（⛔ 都不改判定，只加值）：`suggest`（未认出列的**引擎建议**，一律"需你确认"）·
+       `mapping.suspect`（**值画像**与字段类型矛盾 ⇒ 提示可能认错列）· `memory`（**记忆预填** ＋ 来源说明）。
     """
     sheets: list[dict] = []
     for name in P.sheet_names(data, filename):
@@ -100,13 +184,18 @@ def preview(data: bytes, filename: str) -> dict:
 
         r1, r2 = P.detect_header(grid)
         labels = P.header_labels(grid, row1=r1, row2=r2)
-        mapping = P.map_columns(labels)
+        samples = _samples(grid, labels, row2=r2)                # ⭐ B4：只服务画像
+        mapping = P.map_columns(labels, samples=samples)
         parsed = (P.parse_rows(grid, row2=r2, fields=mapping["fields"])
                   if mapping["fields"] else {"rows": [], "skipped": []})
         info.update({
             "header": {"row1": r1 + 1, "row2": r2 + 1},          # ⚠️ 给人看 ⇒ 1 基
             "labels": labels,
             "mapping": mapping,
+            # ⭐ B4 三项（⛔ 不改判定）：未认出列的**建议**（一律"需你确认"）· **记忆预填** ·
+            #    值画像矛盾（在 `mapping["suspect"]` 里，与 `fields` 并列）
+            "suggest": P.suggest_unknown(labels, mapping, samples),
+            "memory": _memory(store, labels),
             "counts": {"data": len(parsed["rows"]), "skipped": len(parsed["skipped"])},
             "sample": parsed["rows"][:SAMPLE_ROWS],
             "skipped": parsed["skipped"][:SKIP_SHOW],
@@ -157,11 +246,13 @@ def _row_problem(row: dict) -> str:
 
 
 def commit(s, data: bytes, filename: str, *, sheet: str, project_key: str,
-           mapping: dict | None = None, row1: int | None = None, row2: int | None = None) -> dict:
+           mapping: dict | None = None, row1: int | None = None, row2: int | None = None,
+           store=None) -> dict:
     """确认落库（**幂等**：已存在的行不动）。
 
     `row1` / `row2` 是**人看的两行表头号（1 基）**（前端预览里可改）；不给就用探测值。
     `mapping` = 人在预览页手改的列映射（`{"列下标": "字段名"}`，值 `""` = 忽略）⇒ **优先于**别名表。
+    `store` = 映射记忆（默认取 `artifacts/import_profiles.json`；⭐ 落库成功后把这次**确认过的映射**记下）
 
     ⚠️ 只用**主表行** ＋ **两条汇总发票行**；**付款不导**（见模块头）。
     """
@@ -195,8 +286,27 @@ def commit(s, data: bytes, filename: str, *, sheet: str, project_key: str,
             "那它导不了（没有锚点就无从判断该更新哪一条）。")}
 
     parsed = P.parse_rows(grid, row2=r2, fields=fields)
-    rows = parsed["rows"]
+    out = match_and_apply(s, parsed["rows"], project_id=int(project_id), mapped=set(fields))
+    try:                                    # ⭐ `B4` 映射记忆（写失败不影响本次导入）
+        _remember(store, labels, m, filename=filename, sheet=sheet)
+    except Exception:                       # noqa: BLE001
+        pass
+    return {"ok": True, "kind": "ok", "file": filename, "sheet": sheet,
+            "project_key": project_key, **out,
+            "header": {"row1": r1 + 1, "row2": r2 + 1}, "mapping": m,
+            "skipped_rows": parsed["skipped"]}
 
+
+def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | None = None) -> dict:
+    """⭐ **按「含税合同价」锚点匹配并更新**（本域落库的**唯一口径**）—— 从 `commit` 里拆出来。
+
+    ⚠️ 为什么要拆（`TAIL-75` `B5b`）：**通用导入面自己已经把行解析好了**（它不发 token、也不再要文件）
+    ⇒ 它没有"重读文件"这条路 ⇒ 只能复用本函数；⛔ 绝不让通用面另写一份匹配逻辑
+    （"同一口径两个主人"是本仓反复踩过的坑）。
+
+    `mapped` = 这次**映射出了哪些字段**（`commit` 传 `set(fields)`；通用面传 `None` ⇒ 行里有什么算什么）——
+    它只管"**哪些列可更新**"（`EXCEL_COLS` 白名单），⛔ 不改匹配口径、也不动 i8 的事实列。
+    """
     from sqlalchemy import select
 
     from app.mod11_jc.models import JcContract, JcInvoice
@@ -247,8 +357,9 @@ def commit(s, data: bytes, filename: str, *, sheet: str, project_key: str,
         #    用户表里那列叫「详细付款方式」，预览页显示"已认成 付款方式"，
         #    落库后**台账里却一个都没有**）。⇒ 列的**唯一主人** = `EXCEL_COLS`，⛔ 别再散在循环里写死。
         cols: dict = {}
+        allowed = set(mapped) if mapped is not None else set(row)
         for k in EXCEL_COLS:
-            if k in fields:
+            if k in allowed:
                 cols[k] = row.get(k)
         if cols:
             R.update_contract(s, cid, **cols)
@@ -283,18 +394,13 @@ def commit(s, data: bytes, filename: str, *, sheet: str, project_key: str,
                         "fields": sorted(cols)})
 
     return {
-        "ok": True, "kind": "ok",
-        "file": filename, "sheet": sheet, "project_key": project_key,
         "updated": len(updated), "unmatched": len(unmatched),
         "ambiguous": len(ambiguous), "bad": len(bad), "warned": len(warned),
-        "header": {"row1": r1 + 1, "row2": r2 + 1},
-        "mapping": m,
         "items": updated,
         "unmatched_items": unmatched,
         "ambiguous_items": ambiguous,
         "bad_items": bad,
         "warn_items": warned,
-        "skipped_rows": parsed["skipped"],
         "message": (f"导入完成：**按合同价匹配上并更新 {len(updated)} 条**"
                     f" · 配不上 {len(unmatched)} 条 · 同价冲突 {len(ambiguous)} 条"
                     f" · 不合格 {len(bad)} 条 · 提醒 {len(warned)} 条"),
@@ -315,4 +421,5 @@ def _add_invoice(s, contract_id: int, *, kind: str, date: str, amount) -> dict:
     return SV.act_add_invoice(s, contract_id=contract_id, kind=kind, date=date, amount=amount)
 
 
-__all__ = ["SAMPLE_ROWS", "SKIP_SHOW", "EXCEL_COLS", "preview", "commit"]
+__all__ = ["DOMAIN", "EXCEL_COLS", "SAMPLE_ROWS", "SAMPLE_SCAN", "SKIP_SHOW", "commit",
+           "match_and_apply", "preview"]

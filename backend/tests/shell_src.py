@@ -54,5 +54,27 @@ def with_kernel(act: str) -> str:
     return f"{act}\n{dl_kernel()}"
 
 
+def tbl_kernel() -> str:
+    """⭐ `TAIL-64` P0（2026-09-24）：壳公共区里 **`TBL` 表格件**的源码。
+
+    为什么照 `dl_kernel()` 再来一个：表外壳（`<table class="dt" data-sort …>` 那一圈）抽进 `TBL`
+    之后，「切片里必须有 `data-sort-key=` 字面」这类**钉源码形态**的判据会**全部假红** ——
+    2026-09-24 实测就红了 `ACC-FEE-MON-001/001-01`。
+    ⇒ ⭐ 正确的判据是**两段拼起来看**：切片**委托** `TBL` ＋ **内核里**真的用 `key` 拼出 `data-sort-key`。
+    ⛔ 别把判据改回「切片里必须有 `<table`」—— 那会逼着以后**不许抽通用件**（与 `TAIL-64/67` 相反）。
+    """
+    text = read_shell()
+    i = text.find("const TBL=")
+    if i < 0:
+        return ""
+    j = text.find("\n}", i)
+    return text[i:j + 2] if j > i else text[i:]
+
+
+def with_tbl(act: str) -> str:
+    """切片源码 **＋** 它委托的 `TBL` 内核源码 ⇒ 判据**与结构无关**。"""
+    return f"{act}\n{tbl_kernel()}"
+
+
 __all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "dl_kernel", "part_paths",
-           "parts_text", "read_shell", "with_kernel"]
+           "parts_text", "read_shell", "tbl_kernel", "with_kernel", "with_tbl"]

@@ -84,6 +84,30 @@ def test_逐路容错未破():
 
 
 @acc()
+def test_跨页写动作后全标脏():
+    """⭐⭐ `TAIL-48` 余项 `P3`②（2026-09-24）：**跨页写 ⇒ 全标脏**（唯一出口 `markCrossPageStale()`）。
+
+    证据（写/读两侧到**表级**）= `.workbuddy/work/10-designs/设计-写动作标脏数据流图-20260924.md`：
+    壳按 `PAGE_LOAD` 进哪页拉哪页、`LOADED` 记"这路拉过了"，而写动作**只 reload 自己那页**
+    ⇒ 别的页读同一批表时**拿着旧数**（= 对真数据说旧话）。⚠️ 与 `TAIL-78`（导入那两处）**同一口径**。
+
+    ⛔ **不许**改成"写动作 → 受影响页"的字面映射表：读侧一改，那张表就开始漏（**双份真源**）；
+    ✅ 全标脏 = 下次进哪页拉哪页（多几路 GET），**永不漏拉**。
+
+    ⚠️ 判据钉的是"**写出口**里有标脏、取数路径里没有" —— 少一处 ⇒ 那条写路径之后别人一直看旧数，
+       而界面上**全程看不出来**（正是本仓最忌的一类）。
+    """
+    assert "function markCrossPageStale() { LOADED.clear(); }" in SHELL, \
+        "唯一出口 `markCrossPageStale` 被改掉了（标脏口径只此一处）"
+    api = SHELL[SHELL.index("const API = {"):SHELL.index("/* ---------- 字段适配")]
+    n = api.count("markCrossPageStale();")
+    assert n == 6, (f"`API` 写出口里标脏 {n} 处（应为 6：post / send / postForm / postFile / "
+                    "fetchNotices / m07Fetch）—— 少一处 ⇒ 那条写路径之后别的页会一直拿着旧数")
+    get_body = api[api.index("async get(url)"):api.index("async post(url")]
+    assert "markCrossPageStale();" not in get_body, "⛔ 取数路径（`API.get`）里不该标脏"
+
+
+@acc()
 def test_没到位就不补拉():
     """⏳ `P3`① ＋ `P3` 主体的两道闸，防"启动期把 m05 那几路白白拉一遍"。
 

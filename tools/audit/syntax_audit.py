@@ -11,6 +11,12 @@
 |---|---|
 | `Q1` | `backend/app` / `backend/tests` / `tools` 下**任一 `.py` 编译不过**（含"中文串里夹裸双引号"那一族） |
 | `Q2` | 壳的**每一件**（`backend/app/web/index.html` 的内联 `<script>` ＋ `backend/app/web/shell/*.js`）**过不了 `node --check`**（如模板串里塞了反引号） |
+| `Q3` | ⭐ 2026-09-23：**壳目录里只许有壳的件** —— `backend/app/web/` 下出现**备份 / 散件**（`*.bak-sync` · `*.bak` · `*.old` · 不在 `<script src>` 里的 `.js`/`.html`）⇒ **红** |
+
+⚠️ **`Q3` 为什么要进这个哨**（实测踩到，2026-09-23）：`backend/app/web/shell/actions.js.bak-sync`
+（09-21 23:28 · **228KB** · **已进 git**）留在目录里 ⇒ ① 每次 `grep` 都命中它 ⇒ 人眼里是**两份彼此矛盾的
+源码**（它停在 09-21，之后所有改动都不在里面）；② 它**不在** `SHELL_PARTS` 里 ⇒ **所有机器判据都不看它**
+⇒ 错了也没人管 —— 正是"**双份真源**"的典型（同 `U5`/`D26` 那族）。⇒ **留痕请进 git 历史**，⛔ 别留在源码目录。
 
 ⚠️ **本哨只查语法**（⛔ 不做风格评审）：能编译 / 能解析就不是它管的事
 （"内层引号一律「」"那条是**人写文时的规矩**，不是机器判据 —— 机器只认"它到底能不能跑"）。
@@ -127,9 +133,31 @@ def rule_q2(shell: Path | None = None) -> tuple[list[str], str]:
     return bad, ""
 
 
+def rule_q3(web: Path | None = None, parts: list[Path] | None = None) -> list[str]:
+    """`Q3` —— **壳目录里只许有壳的件**（`index.html` ＋ `<script src>` 引到的那几件）。
+
+    ⚠️ 只看 `backend/app/web/` 两层（实测那里只有 `index.html` ＋ `shell/`）。
+    ⛔ 判的是"**多余的东西**"：备份/散件会让 `grep` 看见第二份源码，而**所有判据都不看它**。
+    """
+    base = web if web is not None else SHELL_PATH.parent
+    known = {p.resolve() for p in (parts if parts is not None else SHELL_PARTS)}
+    bad: list[str] = []
+    for p in sorted(base.rglob("*")):
+        if not p.is_file() or p.resolve() in known:
+            continue
+        if p.suffix.lower() in {".js", ".html", ".bak", ".old", ".orig"} or ".bak" in p.name:
+            try:
+                rel = p.relative_to(ROOT)
+            except ValueError:
+                rel = p
+            bad.append(f"{rel}（{p.stat().st_size} 字节）**不是壳的件** ⇒ 备份/散件请进 git 历史，"
+                       f"⛔ 别留在 `web/` 里（它会让 grep 看见第二份源码，而所有判据都不看它）")
+    return bad
+
+
 def main(argv: list[str]) -> int:
     print("=" * 78)
-    print(" 语法哨 · syntax_audit —— 「能编译吗 / 能解析吗」两件事，动手前一次查完")
+    print(" 语法哨 · syntax_audit —— 「能编译吗 / 能解析吗 / 壳目录干净吗」动手前一次查完")
     print("=" * 78)
 
     q1 = rule_q1()
@@ -152,7 +180,15 @@ def main(argv: list[str]) -> int:
     else:
         print("   ✅ 通过")
 
-    must = len(q1) + len(q2)
+    q3 = rule_q3()
+    print("\n─ Q3 · 壳目录里只许有壳的件（⛔ 备份/散件会让 grep 看见第二份源码）")
+    if q3:
+        for x in q3:
+            print(f"   ⛔ {x}")
+    else:
+        print(f"   ✅ 通过（{len(SHELL_PARTS)} 件：{', '.join(p.name for p in SHELL_PARTS)}）")
+
+    must = len(q1) + len(q2) + len(q3)
     print(f"\n结论：**必须修 {must}**" + ("（有红 ⇒ 非零退出）" if must else ""))
     return 0 if must == 0 else 1
 
@@ -190,7 +226,17 @@ def _selftest() -> int:
                 print("        ", q2[0][:130])
             ok &= bool(q2) and not q2_ok
 
-    print("\n自检结论：", "✅ 两条规则都能区分（坏的红、好的放行）" if ok else "⛔ 自检未通过")
+        # Q3：临时目录里造一个"备份散件" ⇒ 必须判红；把它当作"壳件"传进去 ⇒ 必须放行
+        stray = base / "stray.js.bak-sync"
+        stray.write_text("// 09-21 的旧备份\n", encoding="utf-8")
+        q3_bad = rule_q3(web=base, parts=[])
+        q3_ok = rule_q3(web=base, parts=[bad_html, good_html, stray])
+        print("自检 Q3：散件判红 =", bool(q3_bad), "· 壳件放行 =", not q3_ok)
+        if q3_bad:
+            print("        ", q3_bad[0][:110])
+        ok &= bool(q3_bad) and not q3_ok
+
+    print("\n自检结论：", "✅ 三条规则都能区分（坏的红、好的放行）" if ok else "⛔ 自检未通过")
     return 0 if ok else 1
 
 

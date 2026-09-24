@@ -54,8 +54,20 @@ def acc(case: str | None = None, point: str | None = None) -> Callable:
 
 def pytest_configure(config) -> None:  # noqa: ARG001
     global _out_path
-    raw = os.environ.get("ACC_RESULTS_PATH", "artifacts/acc_results.json")
-    _out_path = Path(raw)
+    raw = os.environ.get("ACC_RESULTS_PATH")
+    if raw:
+        _out_path = Path(raw)
+    else:
+        # ⛔ **默认写"局部"文件** —— 权威 `artifacts/acc_results.json` **只在显式给了
+        #    `ACC_RESULTS_PATH` 时才写**。
+        #    ⚠️ 为什么要反过来（本仓**踩过四次**：2026-09-22 起，每次都是"跑了一支变异脚本"
+        #       ⇒ 它跑的是**子集** ⇒ 把 554 条冲成十几条 ⇒ `doc_audit` 的 T4 立刻红 3 条）：
+        #       逐个脚本补 `setdefault` 是**治标**（漏一支就复发，且新脚本天然会漏）。
+        #    ⇒ 治本：**想写权威文件，必须自己开口**（全套跑法：
+        #      `ACC_RESULTS_PATH=../artifacts/acc_results.json pytest tests/`）。
+        # ⚠️ 用**绝对路径**（从本件位置推）—— 否则"谁的工作目录是哪儿"会决定它掉到哪个 `artifacts/`
+        #    （实测：按 cwd 相对写 ⇒ 在仓库里多出一个 `backend/artifacts/`）。
+        _out_path = Path(__file__).resolve().parents[2] / "artifacts" / "_partial_acc_results.json"
     _out_path.parent.mkdir(parents=True, exist_ok=True)
 
 

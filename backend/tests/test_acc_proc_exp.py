@@ -78,3 +78,9 @@ def test_导出取数跟随当前所显示的那张表():
         man = D.export_manifest([cands[0]], tab=tab, ym=YM)
         assert D.tab_name(tab) in man["files"][0]["name"], \
             f"表签 {tab} 的名字没进文件名 ⇒ 取数没跟当前表"
+        # ⭐ 2026-09-23（`TAIL-77` 的反向灵敏度揪出的一处**假绿**）：上面那句是
+        #    `tab_name(tab) in 文件名`，而 `export_manifest` 内部**也走 `tab_name`** ⇒
+        #    `tab_name` 一旦**无视入参**（恒返回默认表的标签：`cur = DEFAULT_TAB`），两边同时错、
+        #    断言照样绿。⇒ 必须**独立**钉住「表签 → 标签」这层映射本身（⛔ 不与文件名的来源同源）。
+        assert D.tab_name(tab) == dict(D.TABS)[tab], \
+            f"表签 {tab} 的标签不对（`tab_name` 没跟入参走）"

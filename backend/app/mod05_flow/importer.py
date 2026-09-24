@@ -151,7 +151,15 @@ def looks_like_bill_no(raw) -> bool:
 
 
 def parse_rows(raw_rows: list[list]) -> ImportPlan:
-    """把"逐行的原始单元格"解析成 `ImportPlan`（**不碰数据库** ⇒ 可离线单测）。"""
+    """把"逐行的原始单元格"按**固定列序（A 单据号 · B 金额 · C 时间 · D 方式 · E 备注）**解析成 `ImportPlan`
+    （**不碰数据库** ⇒ 可离线单测）。
+
+    ⚠️ **2026-09-23（`TAIL-75` `B5b` 第三步 · 用户裁定 `B`）**：本函数**不再是导入入口**（旧页已下架）
+       —— 用户手上的表由**通用导入面按列名映射**到那五列，域钩子 `imp_spec._plan_of` 逐行调本模块的
+       **单值判定**（`parse_amount` / `parse_date` / `normalize_method`）。
+       ⭐ 本函数**保留**（与 `m06` 撤页时留 `parse_sheet` 同款）：它是域内"五列批解析"的**口径出口**，
+       判据 `ACC-FLOW-IMPORT-001` 与 `ACC-INIT-001` 仍钉着它（⛔ 别删 —— 删了那些判据就没落点了）。
+    """
     plan = ImportPlan()
     body = list(raw_rows)
     # ① 首行像表头 ⇒ 跳过并提示（用户给的表**可能带表头也可能不带**）
@@ -188,6 +196,18 @@ def parse_rows(raw_rows: list[list]) -> ImportPlan:
         plan.rows.append(ParsedRow(line=line, bill_no=bill_no, amount=amount, pay_date=pay_date,
                                    pay_method=method, remark=remark, method_recognized=recognized))
     return plan
+
+
+def known_notices(s) -> dict[str, int]:
+    """`单据号 -> notice_id`（精确匹配用；**只读**，故**预览阶段也安全**）。
+
+    ⭐ **公开出口**（`TAIL-75` `B5b` 第三步）：通用导入面的域钩子（`imp_spec.preview` / `imp_spec.commit`）
+       **共用这一份** —— ⛔ 别各写一遍（"同一口径两个主人"是本仓反复踩过的坑）。
+       ⚠️ 2026-09-23（用户裁定 `B`）：原先域自己的 JSON API（`import_api._known`）**已随件删除**
+       ⇒ 现在只有域钩子一个调用方（它仍在生产链路上）。
+    """
+    return {str(n.bill_no or "").strip(): int(n.id)
+            for n in repo.notice_rows(s) if str(n.bill_no or "").strip()}
 
 
 def split_by_match(plan: ImportPlan, known: dict[str, int]) -> ImportPlan:
@@ -274,6 +294,6 @@ def check_report(s, batch: str) -> dict:
 __all__ = [
     "COLUMNS", "MAX_ROWS", "ParsedRow", "ImportPlan",
     "parse_amount", "parse_date", "normalize_method", "looks_like_bill_no",
-    "parse_rows", "split_by_match", "read_workbook",
+    "parse_rows", "split_by_match", "known_notices", "read_workbook",
     "next_batch", "months_of", "commit", "rollback", "check_report",
 ]

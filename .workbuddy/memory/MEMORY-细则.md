@@ -378,5 +378,20 @@
 | ④ **产物档** | `artifacts/`（报告 / 四态 / 截图） | 一次性产物；**建议类报告必须带「待办登记回执」**（`T11`） |
 
 **命名规范**（⛔ 别自创）：活文档 = `<用途>-主文档.md`；留痕 = `归档-<主题>-<日期>.md`（**必须 `归档-` 打头**）；
-日志 = `journal/YYYY-MM-DD.md`；实测结论 = `ops/<主题>-实测结论.md`；索引 = `README.md`；临时件 = `.workbuddy/scratch/`。
+日志 = `journal/YYYY-MM-DD.md`；实测结论 = `ops/<主题>-实测结论.md`；索引 = `README.md`；临时件 = `.workbuddy/work/00-scratch/`
+（⚠️ 2026-09-24 订正：曾写 `.workbuddy/scratch/` —— 那是**旧落点**、已空置；现口径**唯一** = `work/00-scratch/`，由 `T14` 管 TTL 与落点）。
+
+## §廿三 本机 PowerShell / 工具坑（**2026-09-24 收口** —— 原先 `MEMORY §十七` 的"其余"指针写着 `docs/runbook.md` §七，而 runbook 止于 §六 ⇒ 收到这里）
+
+1. ⛔ **量行数别用 PowerShell**：`Get-Content` **默认不按 UTF-8 解码**（PS 5.1 = ANSI/GBK）⇒ 多字节中文被拆错 ⇒
+   **行数 / 字符数全错**（2026-09-24 实测同一文件：`Get-Content` **69** vs `len(text.splitlines())` **198**）；
+   `Measure-Object -Line` 另有"**不数空行**"的毛病（旧记录的"差 12%"只是这一半）。
+   ⇒ 真值走 `len(text.splitlines())`；非要用 PS 就读 `-Encoding UTF8`。
+2. **删文件走专用工具**（`delete_file`：不走 shell、无需审批）；⛔ 别用 `Remove-Item`。
+3. **提交信息走文件 ＋ `git commit -F`**（⛔ 别内联多行 message —— PowerShell 引号会打架）。
+4. **自检回滚要逐字段赋值**（⛔ 别整体换对象引用 —— 换引用会把整个对象替换掉）。
+5. **ORM 冒烟脚本先 `import app.core.models_registry`**（否则跨包 FK 报 `NoReferencedTableError`）—— 全文见本档 `§十二`。
+6. ⛔⛔ **跑靠 `finally` 复原的脚本（变异件那类）别接 `Select-Object -First N`** —— 收满 N 行就**掐断上游进程**
+   ⇒ `finally` 不跑 ⇒ **靶件留坏态**（2026-09-24 实测两次：残留临时靶 ⇒ `T11` 假红；`执行情况-主文档.md`
+   里的 `开发计划-主文档` 被换 3 处 ⇒ `T6` 真红）。⇒ 用 `-Last N`（读完全部）或**先落文件再读**。
 ⚠️ 交付面文档**不得出现 `.workbuddy/…` 路径**。

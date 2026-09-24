@@ -42,7 +42,11 @@ _SHELL_SRC_RE = re.compile(r"/static/shell/([\w.\-]+)")
 
 
 def part_paths() -> list[Path]:
-    """按**文档顺序**列出壳的每一件（`index.html` 永远第一件；此刻没有外链 ⇒ 只有它一件）。"""
+    """按**文档顺序**列出壳的每一件（`index.html` 永远第一件；后面按 `<script src>` 的出现顺序）。
+
+    ⚠️ 2026-09-24 订正：原文写「此刻没有外链 ⇒ 只有它一件」—— `P4`② 拆件后**已有 5 个外链**
+    （`shell/actions.js` · `legacy.js` · `api.js` · `core.js` · `print-export.js`）⇒ 现为 **6 件**。
+    """
     html = INDEX_HTML.read_text(encoding="utf-8")
     return [INDEX_HTML] + [SHELL_DIR / name for name in _SHELL_SRC_RE.findall(html)]
 

@@ -56,8 +56,12 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      "    return ym[:4], str(month), ym[:4], str(month)",
      "    return str(__import__('datetime').date.today().year), str(month), ym[:4], str(month)"),
     # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：落点从 PRG 路由件搬到 JSON API 件（**逐字**搬）。
-    ("backend/app/mod05_flow/import_api.py", "历史流水导入三步少一步（预览端点改名）",
-     '@router.post("/api/m05/import/parse"', '@router.post("/api/m05/import/parse-x"'),
+    # ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · 用户裁定 `B`）：`mod05_flow/import_api.py` **连件删除**
+    #    ⇒ 这条"三步少一步"的**靶改指通用面**（`build_router` 的 parse 端点）—— 判据不变
+    #    （`ACC-INIT-001/001-03`：Excel 导入三步**真的存在**），只是落点换到通用面。
+    #    ⛔ 别删这一条：删了"通用面的端点名真的被断言钉着"就没人证明了。
+    ("backend/app/import_kit/api.py", "通用面的导入三步少一步（parse 端点改名）",
+     '@r.post(base + "/parse")', '@r.post(base + "/parse-x")'),
 ]
 
 

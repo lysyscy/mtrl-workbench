@@ -78,10 +78,13 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      "    from app.mod05_flow.repository import sync_stat_paid\n"
      "    sync_stat_paid(s, 0)"),
 
-    ("⑫ 出纸仍留 A3 打印通道（§1.4.1 的取消被回退）",
-     "backend/app/mod07_setl/big_view.py",
-     "f\"**出纸**：{B.PRINT_CHANNEL}",
-     "f\"**出纸**：A3 打印或 {B.PRINT_CHANNEL}"),
+    # ⚠️ 2026-09-23：⑫ 原靶 `big_view.py`（旧服务端渲染页）**已随旧页删除** ⇒ 锚点命中 0 次
+    #    且会让整支脚本崩在"读靶文件"那一步（**一条都跑不了**）。claim 没变（**出纸=Excel 打印通道，
+    #    ⛔ 不许回退成 A3**）⇒ 靶改指**仍在的**域内核常量，由 `test_acc_rpt_big.py` 那句钉着。
+    ("⑫ 出纸通道被改回 A3（§1.4.1 的取消被回退）",
+     "backend/app/mod07_setl/big_domain.py",
+     'PRINT_CHANNEL = "按模板导出 → Excel 打印"',
+     'PRINT_CHANNEL = "A3 打印"'),
 
     ("⑬ 展示名不进「项目名称」列（那一列会渲染成空）",
      "backend/app/mod07_setl/big_domain.py",
@@ -94,19 +97,20 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
      "    (\"oil\",         KIND_HAND,    FMT_MONEY),   # 工程用油（手填 · 油卡台账）\n"
      "    (\"mat_dup\",     KIND_HAND,    FMT_MONEY),   # 故意：把手填列凑成 7 个"),
 
-    ("⑮ 路由把出口挂到错的模块上（`parse_state` 其实住在 `big_service`）",
-     "backend/app/mod07_setl/router.py",
-     '    month = big_state({"period": str(form.get("period") or "")})["month"]\n'
-     "    with session_scope() as s:\n"
-     '        cands = build_big_data(s, {"month": month})["candidates"]\n'
-     "        res = save_manual_cell(",
-     '    month = big_state.parse_month({"period": str(form.get("period") or "")})["month"]\n'
-     "    with session_scope() as s:\n"
-     '        cands = build_big_data(s, {"month": month})["candidates"]\n'
-     "        res = save_manual_cell("),
+    # ⚠️ 2026-09-23：⑮ 原锚点（`router.py` 里那段 Pydantic 手工解析）已随接口重构改掉 ⇒ 命中 0 次。
+    #    claim 没变（**路由把出口挂到不存在的模块/成员上 ⇒ `test_router_refs` 必须抓住**）
+    #    ⇒ 靶改指**现存的那条写路径**（`api.py` 的 `api_big_cell`）。
+    #    ⚠️ 改的必须是**已导入别名的成员**（写成 `ZZ.xxx` 反而抓不住 —— 守卫只查它认得的别名，
+    #      见 `router_refs.broken_refs`；实测：`BS.save_manual_cell` → `ZZ.save_manual_cell` 全绿）。
+    ("⑮ 路由把出口挂到错的成员上（`save_manual_cell` 住在 `big_service`）",
+     "backend/app/mod07_setl/api.py",
+     "        return BS.save_manual_cell(",
+     "        return BS.save_manual_cell_x("),
 ]
 
-TEST = "tests/test_acc_rpt_big.py"
+#: ⚠️ 2026-09-23：⑮ 守的是**路由静态守卫**（`test_router_refs.py`）⇒ 判据文件不止一个，
+#:    改成列表并把每个都当真参递（⛔ 别拼成一个带空格的字符串 —— `pytest` 会把它当**一个**路径）。
+TESTS = ["tests/test_acc_rpt_big.py", "tests/test_router_refs.py"]
 
 
 def _fit(fragment: str, sample: bytes) -> bytes:
@@ -118,7 +122,7 @@ def _fit(fragment: str, sample: bytes) -> bytes:
 
 
 def run_test() -> int:
-    return subprocess.run([PY, "-m", "pytest", TEST, "-qq", "--no-header",
+    return subprocess.run([PY, "-m", "pytest", *TESTS, "-qq", "--no-header",
                            "-p", "no:cacheprovider"], cwd=BE, capture_output=True).returncode
 
 

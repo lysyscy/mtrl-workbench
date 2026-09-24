@@ -58,11 +58,13 @@ MUTS = [
      '    if sums:\n        cells[COL_TOTAL] = sums[-1]\n',
      "    if False:\n        cells[COL_TOTAL] = sums[-1]\n",
      [T1 + "::test_成品显示区逐格等于独立复算"]),
+    # ⚠️ 2026-09-23（`TAIL-77`）：锚点**尾部不带那行注释** —— 实现后来在 `pop(...)` 那行后面
+    #    加了说明（`# 再清行属性…`）⇒ 旧锚点（带 `\n`）一处都命中不上、报 SKIP＝静默失效。
     ("M8 不清残留的行属性空壳（Excel 的 UsedRange 会多算）", F,
      "    for r in [x for x in ws.row_dimensions if x > last_row]:\n"
-     "        ws.row_dimensions.pop(r, None)\n",
+     "        ws.row_dimensions.pop(r, None)",
      "    for r in []:\n"
-     "        ws.row_dimensions.pop(r, None)\n",
+     "        ws.row_dimensions.pop(r, None)",
      [T1 + "::test_引擎_尾块随行数派生且零行也不留残骸"]),
 ]
 
@@ -96,8 +98,11 @@ def main() -> int:
             fail += 1
             continue
         path.write_bytes(cur.replace(ob, nb, 1))
+        # ⚠️ 2026-09-23（`TAIL-77`）：必须**显式 `encoding="utf-8"`** —— 原先 `text=True` 走本机
+        #    区域编码（GBK）⇒ pytest 输出里一旦有非 GBK 字节就 `UnicodeDecodeError` ⇒ **整个脚本崩掉**。
         r = subprocess.run([str(PY), "-m", "pytest", "-q", *tests], cwd=str(BACKEND),
-                           capture_output=True, text=True, env=env)
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", env=env)
         path.write_bytes(base[rel])                       # 立即复原
         restored = hashlib.md5(path.read_bytes()).hexdigest() == before[rel]
         red = r.returncode != 0

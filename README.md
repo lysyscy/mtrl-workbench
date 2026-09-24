@@ -22,7 +22,7 @@
 | **① 注入档** | `.workbuddy/memory/MEMORY.md` | ⭐ **每个新会话**（自动注入） | 只放**每轮都要用的规则**：坐标/禁区 · 铁律 · 收工闸门 · 工程纪律 · 本机坑 · 服务命令 | **200** | ✅ `T9` |
 | **② 按需档** | `README.md`(本文件) · `MEMORY-细则.md` · `plans/{开发计划,执行情况}-主文档.md` · `ops/*.md` · **`docs/*.md`** · **`.workbuddy/work/README.md`** | 人 / AI **按需查** | 口径 · 台账 · 排期 · 细则 · 实测结论 · **架构/runbook/changelog** · **工作记录分区宪法** | 各见表 | ✅ `T1`–`T6` · `T10` · `T12` |
 | **③ 留痕档** | `memory/journal/YYYY-MM-DD.md` · `plans/archive/归档-*.md`（旧 `plans/归档-*.md` 同层共存） | ⛔ **没人回读**（只追加） | 过程 / 事故 / 逐次定案 / 被删内容的原文 | 不限 | ❌ **故意不扫** |
-| **④ 产物档** | `artifacts/` | 需要证据时 | 四态 `acc_results.json` · 截图 · **工具生成物白名单**（`变异覆盖台账.md`）—— ⛔ **过程类 md 不许进**（去 `work/`） | 不限 | `T11` 管**回执** |
+| **④ 产物档** | `artifacts/` | 需要证据时 | 四态 `acc_results.json` · 截图 · **工具生成物白名单**（`变异覆盖台账.md`）—— ⛔ **过程类 md 不许进**（去 `work/`） | 不限 | `T11` 管**回执** · `T15` 管**白名单** |
 
 ⭐ **分层的意义（这是本项目最贵的一课）**：文档超预算的**失败方式很特别** ——
 **我不读，改去 `grep`** ⇒ **没被搜到的东西就永久丢了**（2026-09-21 实测过：三条待办只在对话里，`grep` 0 命中）。
@@ -113,13 +113,14 @@ D:\dev\mtrl-workbench\
 ## 六、机器守卫（改完任何文档，跑它）
 
 ```powershell
-backend\.venv\Scripts\python.exe tools\audit\doc_audit.py        # 文档漂移（T1–T12）
+backend\.venv\Scripts\python.exe tools\audit\doc_audit.py        # 文档漂移（T1–T17）
 backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面四检（最易漏）
 ```
 `T1` 幽灵用例号 · `T2` 已废术语 · `T3` 幽灵路径 · `T4` 状态数字失配 · `T5` 文件行数 ·
 `T6` 尾巴台账 · `T7` 判据覆盖 · `T8` 撤项复活 · `T9` 纪律出处标记 · `T10` 文档读预算 ·
-`T11` 报告登记回执 · `T12` 分层与命名 · `T13` 过程回潮 —— ⭐ **权威表在 `tools/audit/doc_audit.py` 头部**，本处只列名。
-⚠️ 收工闸门（全套 pytest ＋ 12 把尺子 ＋ 四态 ＋ 四检）见 **`MEMORY.md` §〇之二**（⛔ 别只跑前 5 个）。
+`T11` 报告登记回执 · `T12` 分层与命名 · `T13` 过程回潮 · `T14` scratch TTL 与落点 ·
+`T15` 产物白名单与 work 文头 · `T16` `T7a` 登记册在位 —— ⭐ **权威表在 `tools/audit/doc_audit.py` 头部**，本处只列名。
+⚠️ 收工闸门（全套 pytest ＋ **13 把尺子**（12 项 ＋ `doc_audit`）＋ 四态 ＋ 四检）见 **`MEMORY.md` §〇之二**（⛔ 别只跑前 5 个）。
 
 ## 七、⭐ 怎么加一份新文档（决策树 —— 先走这里，⛔ 别直接建文件）
 
@@ -140,4 +141,4 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 
 - ⚠️ **`MEMORY.md` 是唯一被自动读到的文件** —— 写进别处但没写进它 = **下个会话读不到**。
 - ⚠️ **交付面是 WPS 云同步树**（改名/删除会被**回退**，实测过一次）⇒ ⛔ 别在交付面建新文件、别做备份。
-- ⚠️ **量文档行数别用 PowerShell `Measure-Object -Line`**（不数空行，差 12%）⇒ 用 `len(text.splitlines())`。
+- ⚠️ **量文档行数别用 PowerShell** —— `Get-Content` **默认不按 UTF-8 解码** ⇒ 中文被拆错、**行数全错**（2026-09-24 实测 69 vs 真值 198）；`Measure-Object -Line` 另**不数空行**。真值用 `len(text.splitlines())`。

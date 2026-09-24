@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import inspect
+import pathlib
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -40,8 +41,17 @@ def _rows(*rows) -> list[list]:
 
 
 @acc("ACC-FLOW-IMPORT-001", "001-01")
-def test_按列位置解析并自动跳过表头():
-    """A 单据号 · B 付款金额 · C 付款时间 · D 付款方式 · E 备注 —— **按位置取**。"""
+def test_五列契约固定序_域内批解析按它取值_来源表改由通用面按列名映射():
+    """五列契约（**固定列序**）：A 单据号 · B 付款金额 · C 付款时间 · D 付款方式 · E 备注。
+
+    ⭐ **2026-09-23 判词改写**（用户裁定 `B`：**撤掉"按源表列位置读"的旧页**）—— 本点现在含两半：
+      ① **域内行形状固定序**：`importer.COLUMNS` 是这五列的**唯一主人**
+         （通用面的域声明 `imp_spec.FIELDS` 从它派生，⛔ 不抄第二份）；域内批解析
+         `importer.parse_rows` 就按它取值，首行像表头时跳过并提示。
+      ② **来源表不再按列位置取**：一律由**通用导入面按列名映射**到这五列
+         （`ACC-IMP-MAP-001/001-01`；端到端见 `tests/test_imp_m05_api.py`）。
+    ⚠️ **撤页的已知代价**（用户已裁定接受）：老台账若**没有表头**，请先补一行表头。
+    """
     plan = importer.parse_rows(_rows(
         ["单据号", "付款金额", "付款时间", "付款方式", "备注"],          # 表头
         ["FKTZS2026090466", 12800, date(2026, 9, 3), "现汇", "首款"],
@@ -51,6 +61,11 @@ def test_按列位置解析并自动跳过表头():
     r = plan.rows[0]
     assert (r.bill_no, r.amount, r.pay_date, r.pay_method, r.remark) == (
         "FKTZS2026090466", Decimal("12800.00"), "2026-09-03", "现汇", "首款")
+    # ① 五列的**唯一主人** = `importer.COLUMNS`：通用面的域声明必须与它同条数、同必填
+    from app.mod05_flow import imp_spec
+
+    assert len(importer.COLUMNS) == len(imp_spec.FIELDS) == 5
+    assert [f.required for f in imp_spec.FIELDS] == [bool(c[2]) for c in importer.COLUMNS]
 
 
 @acc("ACC-FLOW-IMPORT-001", "001-02")
@@ -79,41 +94,55 @@ def test_非法行进异常清单且不入库():
 
 
 @acc("ACC-FLOW-IMPORT-001", "001-04")
-def test_解析与预览是纯函数_只有提交才碰会话():
-    """**落库前必须预览 ⇒ 预览阶段不得写库**：解析 / 匹配 / **预览四块**都**不接受会话参数**。
+def test_解析与预览不写库_四类报告都在():
+    """**落库前必须预览 ⇒ 预览阶段不得写库**：将写入条数 ＋ 未匹配 ＋ 异常 ＋ 未识别付款方式取值。
 
-    （结构不变式：`importer` 里只有 `commit` / `rollback` / `check_report` 接会话。）
-    ⚠️ 2026-09-21（`§19` 四个暂留件收口）：预览页搬进新壳 ⇒ 四块由 `import_api.preview_of`
-       （**纯函数**）产出 JSON、壳 `V.m05imp` 逐块渲染 —— 本用例改指那份 JSON ＋ 用壳源码
-       钉住"四块都画出来 + 确认时把 token 带回去"（同「形态变、判据不变」）。
+    （结构不变式：域内判定全是**纯函数** —— 解析 / 匹配 / 归一 / 取值都不接会话。）
+    ⚠️ 2026-09-21（`§19` 四个暂留件收口）：四块由 `import_api.preview_of`（**纯函数**）产出、
+      壳 `V.m05imp` 逐块渲染。
+    ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · 用户裁定 `B`）：旧页与 `preview_of` **已连件删除**
+      ⇒ **判词一字未改**（"落库前必须预览（将写入条数 ＋ 未匹配 ＋ 异常 ＋ 未识别付款方式取值）；
+      预览阶段不得写库"），只换**落点**：**通用面的域预览补丁**
+      （`POST /api/imp/m05_flow/preview` ← `imp_spec.preview`）＋ 壳的**通用区块渲染** `lgBlocks()`。
+      ⚠️ 运行时那一半（"预览真的没写库"）由 `tests/test_imp_m05_api.py` 端到端钉着。
     """
-    from app.mod05_flow.import_api import preview_of
-
-    for fn in (importer.parse_rows, importer.split_by_match, importer.normalize_method,
-               importer.parse_amount, importer.parse_date, preview_of):
-        names = set(inspect.signature(fn).parameters)
-        assert not (names & {"s", "session"}), f"{fn.__name__} 不该接触会话"
-
     plan = importer.split_by_match(
         importer.parse_rows(_rows(
             ["FKTZS2026090466", "100.00", "2026-09-03", "电汇", ""],
             ["FKTZS9999999999", "200.00", "2026-09-03", "", ""],
             ["FKTZS2026090465", "-1", "2026-09-03", "", ""],
         )), {"FKTZS2026090466": 7})
-    pv = preview_of(plan)
-    # 四块**都在**（少一块 = 某一类问题用户根本看不见）
-    assert pv["writable"] == 1
-    assert [u["bill_no"] for u in pv["unmatched"]] == ["FKTZS9999999999"]
-    assert [a["reason"] for a in pv["anomalies"]] and pv["unknown_methods"] == []
-    assert isinstance(pv["rows"], list) and pv["rows"][0]["bill_no"] == "FKTZS2026090466"
+    from app.mod05_flow import imp_spec
 
-    # 而壳侧必须把四块**都画出来**，并且确认时把 token 带回去（token 存壳的 `IMP05` 状态里）
+    # ① 结构不变式：域内判定全是纯函数（不接会话 ⇒ 预览阶段碰不到库）
+    for fn in (importer.parse_rows, importer.split_by_match, importer.normalize_method,
+               importer.parse_amount, importer.parse_date, imp_spec._plan_of, imp_spec._blocks):
+        names = set(inspect.signature(fn).parameters)
+        assert not (names & {"s", "session"}), f"{fn.__name__} 不该接触会话"
+
+    # ② 域预览补丁**只读**：它的函数体里不许出现任何写出口
+    src = pathlib.Path(imp_spec.__file__).read_text(encoding="utf-8")
+    body = src[src.index("def preview("):src.index("def commit(")]
+    for writer in ("I.commit(", "create_flow", "I.rollback("):
+        assert writer not in body, f"域预览补丁里出现了写出口：{writer}"
+
+    # ③ 四类**都在**（少一类 = 某一类问题用户根本看不见）
+    blocks = imp_spec._blocks(plan)               # 预览的域补充块就是它（纯函数，可离线）
+    titles = " ".join(b["title"] for b in blocks)
+    for must in ("未匹配清单", "异常清单", "未识别的付款方式"):
+        assert must in titles, f"预览少了这一块：{must}"
+    assert [u[1] for u in blocks[0]["rows"]] == ["FKTZS9999999999"], "未匹配要逐条列出来（⛔ 不静默丢）"
+    assert blocks[1]["rows"], "异常行要列出来（本批有一条 -1 的金额）"
+    assert blocks[2]["rows"] == [] and plan.writable == 1
+
+    # ④ 壳侧：通用面把这几块**画出来**，且确认时把（预览拿到的）token 带回去
     from tests.shell_src import SHELL            # noqa: PLC0415  ← `P4`① 读取点收敛
 
-    for must in ("尚未写库", "未匹配清单", "异常清单", "未识别的付款方式"):
-        assert must in SHELL, f"壳的导入页少了这一块：{must}"
-    assert "IMP05.token = r.token" in SHELL and "token: IMP05.token" in SHELL, \
+    assert "lgBlocks(p.blocks)" in SHELL and "lgBlocks(r.blocks)" in SHELL, \
+        "壳没把域补充块画出来（未匹配 / 异常 / 未识别 就没地方显示）"
+    assert "IMP.token = r.token" in SHELL and "token: IMP.token" in SHELL, \
         "壳没把预览 token 存下来 / 确认时没带回去（确认会拿不到预览结果）"
+    assert "IMP.token = ''" in SHELL, "确认后没清 token ⇒ 可能拿旧 token 重复落库"
 
 
 @acc("ACC-FLOW-IMPORT-001", "001-05")

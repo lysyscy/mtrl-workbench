@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>通用导入向导 · 模块外观（设计原型 · 2026-09-22）</title>
+<!-- ⭐ 外观原型 = **设计件**（⛔ 不是壳的一部分，不进 `backend/app/web/`）。
+     样式逐字来自真壳快照（`import-wizard-mock.shell.css` = 主题变量 ＋ index.html 的 <style>）
+     ⇒ 在浏览器里看到的就是"壳里长什么样"。 -->
+<link rel="stylesheet" href="import-wizard-mock.shell.css">
+<style>
+/* ---------- 原型专用（⛔ 不进壳）：只加"向导特有"的布局，壳类一律复用 ---------- */
+body{overflow:auto}                       /* 原型要能滚（壳是 overflow:hidden + .view 内滚） */
+.pg{padding:14px 18px 60px}
+.mtx td{vertical-align:top}
+.mtx .src{font-family:var(--fm);font-size:11.5px;white-space:normal;overflow-wrap:anywhere;max-width:250px}
+.mtx .sm2{display:block;font-size:10.5px;color:var(--mut);margin-top:2px;font-family:var(--fm);
+  white-space:normal;overflow-wrap:anywhere}
+.mtx select{min-width:172px}
+.mtx tr.req td{background:var(--dg-l)}
+.mtx tr.req:hover td{background:var(--dg-l)}
+.mtx tr.ign td{color:var(--mut)}
+.mtx tr.ign .src{text-decoration:line-through;text-decoration-color:var(--del-line)}
+.arrow{color:var(--mut2);font-family:var(--fm)}
+.drop{border:1.5px dashed var(--bd3);border-radius:var(--r);padding:22px 14px;text-align:center;
+  background:var(--sf2);color:var(--tx2);cursor:pointer}
+.drop:hover{border-color:var(--pri);background:var(--pri-l);color:var(--pri-d)}
+.drop b{display:block;font-size:13px;margin-bottom:3px;color:var(--tx)}
+.sum{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 11px;border:1px solid var(--bd);
+  border-radius:6px;background:var(--sf2);font-size:12px;margin-bottom:10px}
+.sum .sep{width:1px;height:18px;background:var(--bd);margin:0 2px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;color:var(--mut);margin:0 0 8px}
+.legend i{font-style:normal;display:inline-flex;align-items:center;gap:4px}
+.entry{display:flex;flex-wrap:wrap;gap:8px}
+.entry .btn{display:inline-flex;align-items:center;gap:6px}
+.mono{font-family:var(--fm)}
+.big{font-size:15px}
+.ptbl td{font-family:var(--fm);font-size:11.5px}
+.ptbl .mutc{color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sb">
+    <div class="sb-brand"><b>材料报表自动化工作台</b><span>外观原型 · 非真壳</span></div>
+    <div class="sb-g"><h5>数据</h5>
+      <div class="sb-i"><span class="c">m01</span>项目档案</div>
+      <div class="sb-i"><span class="c">m04</span>付款计划</div>
+      <div class="sb-i"><span class="c">m05</span>付款流水与欠款统计</div>
+      <div class="sb-i"><span class="c">m06</span>过程资料</div>
+      <div class="sb-i"><span class="c">m11</span>集采台账</div>
+    </div>
+    <div class="sb-g"><h5>数据接入</h5>
+      <div class="sb-i on"><span class="c">imp</span>数据导入<span class="m">1</span></div>
+    </div>
+    <div class="sb-foot">本页是**设计原型**：外观取自真壳样式快照，<br>交互只为评审，数据是演示值。</div>
+  </nav>
+  <main>
+    <div class="tb">
+      <h1>数据导入 <em>通用导入向导 · 四步 ｜ 映射式</em></h1>
+      <div class="sp"><span class="pill">设计原型</span><span class="mut sm">2026-09-22</span></div>
+    </div>
+    <div class="view">
+      <div class="pg">
+
+        <div class="card">
+          <h4>这一版在改什么</h4>
+          <div class="bd">
+            <p class="sm" style="line-height:1.75">
+              ⭐ **本页演示数据 = 你给的真实模板**（付款计划 / 材料机械消耗汇总表 / 集采台账 / i8 通知书导出）；
+              历史付款（`m05`）按你说的**先不做**。<br>
+              全站导入面现在各自一套，本版收敛成 <b>一套向导 ＋ 一份域声明</b>：<br>
+              ① <b>认不出来就让你点一下</b>（列映射），⛔ 不再"报错让你去改原表"；
+              ② 系统只做<b>建议</b>（带依据与置信度），决定权在映射界面；
+              ③ <b>映射可记住</b>——同一来源第二次导入近似零操作；
+              ④ 落库前**一个字节都不写库**（预览态），确认才单事务提交。
+            </p>
+            <div class="tip wn" style="margin:10px 0 0">
+              <b>真文件实测（2026-09-22）</b>：三份消耗汇总表 = <b>MOD-06 过程资料</b>的历史件
+              （两级表头 r2/r3、数据 r4 起）—— <b>现有导入器三份全拒</b>（报"找不到表头"）；
+              付款计划那份整本导入也直接报错（现状只读第 1 个 sheet）；
+              集采台账两份<b>认得完全正确</b>（两级拼名 20/19 列全中）。
+            </div>
+            <div class="tip ok" style="margin:10px 0 0">
+              <b>一条不动的原则</b>：<b>永不静默猜</b>。解析不了的单元格**保留原值**并报到行号，
+              只有两条合法路径 —— 映射确认后落库，或问题清单里显式列出待人处理。
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4>① 入口收敛：四张脸，一套内核 <span class="sp mut sm">点任一个看该域的向导</span></h4>
+          <div class="bd">
+            <div class="entry">
+              <button class="btn pri" data-open="m04">付款计划（材机费）· 导入</button>
+              <button class="btn" data-open="m06">材料机械消耗汇总表 · 导入</button>
+              <button class="btn" data-open="m11">集采台账（.xls）· 导入</button>
+              <button class="btn" data-open="m02">i8 通知书导出 · 导入</button>
+            </div>
+            <div class="hr"></div>
+            <table class="dt sm">
+              <thead><tr><th>现在的入口</th><th>往后</th><th>真文件逼出来的域差异（只留这些）</th></tr></thead>
+              <tbody>
+                <tr><td class="now">`m04` 页内弹窗（上传即落库 · 只读第 1 个 sheet）</td>
+                  <td>同一向导 · 域 = 付款计划</td>
+                  <td><b>4 个 sheet 要选</b>（自动挑认得出的）· <b>D 列一列两义</b>（材料/机械，域内消歧）·
+                      「9月11号」这种中文月日</td></tr>
+                <tr><td class="now">侧栏「过程资料历史导入」</td>
+                  <td>同一向导 · 域 = 过程资料</td>
+                  <td><b>两级表头拼名</b>（线上入库›主辅材）· 表列里的「时间」= <b>Excel 序列号</b> ·
+                      材料列<b>动态</b>（有的表没有"临时设施"）· 尾部合计行</td></tr>
+                <tr><td class="now">`m11` 页内导入（逐项目一文件）</td>
+                  <td>同一向导 · 域 = 集采台账</td>
+                  <td><b>11 个 sheet</b>（含 2 个空表）· 两级拼名（`.xls` 读不到合并区 ⇒ 靠兜底规则）·
+                      列数逐项目不同（20 / 19）· 结算/付款/欠款<b>不落库</b></td></tr>
+                <tr><td class="now">（无入口 · 历史数据靠人工）</td>
+                  <td>同一向导 · 域 = i8 通知书导出</td>
+                  <td>逐月一个 sheet · <b>表头顺序每月不同</b>（8 月还多一列「管理费」）· 首列<b>无表头</b></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4>② 步骤骨架（四步）</h4>
+          <div class="bd">
+            <div class="steps" style="margin:0">
+              <div class="st">① 选文件与来源</div>
+              <div class="st">② 列映射（核心）</div>
+              <div class="st">③ 预览与校验（不写库）</div>
+              <div class="st">④ 确认落库</div>
+            </div>
+            <p class="mut sm" style="margin-top:9px">
+              与既有导入页同款骨架（<span class="mono">lgSteps / lgPick / lgNotice</span>），
+              只在中间插一步「列映射」，并把原来的「确认」拆出显式的落库摘要。
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ======================= 向导弹窗 ======================= -->
+<div class="mask" id="mask" hidden>
+  <div class="modal wide">
+    <h3>导入 · <span id="wTitle">—</span><span class="x" data-x="1" title="关闭">×</span></h3>
+    <div class="mb" id="wBody"></div>
+    <div class="mf" id="wFoot"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   演示数据：四个域各一份"域声明"（实施时这就是后端 spec：字段/必填/别名/幂等键）
+   ⚠️ 目的：证明**一套向导能容纳四张不同的脸** —— 差异全在数据里，不在代码分支里。
+   ========================================================================== */
+const DOMAINS = {
+  m04: {
+    title: '付款计划 · 材机费', code: 'MOD-04', from: '项目付款计划（各项目人工填的 Excel）',
+    file: '2026年9月付款计划（材机费）.xlsx', sheet: '材机付款计划明细',
+    sheets: ['计划预收款明细', '分包付款计划明细', '人工费付款计划明细', '材机付款计划明细'],
+    headerRow: 1, headerLevels: [1, 2],
+    headerNote: '⚠️ 真形态：r1 是主体表头，r2 只给 D 列补一行 —— 「材料：…（编号）」与「外租机械：付款通知书（编号）」**是同一列的二选一**',
+    fields: ['项目', '材料单据', '机械单据', '该流程金额', '已付款金额', '本月预付款金额', '付款时间', '付款方式', '备注'],
+    required: ['项目', '该流程金额', '付款时间'],
+    keepNote: '未采（原样保留）：科目 / 费用日期 / 收款单位 / 剩余付款金额',
+    cols: [
+      { src: '项目', sample: ['灵宝二期', '新疆慧能横窑安装项目'], profile: '文本', guess: ['项目', 1.00] },
+      { src: '科目', sample: ['（竖合并分块，值只在块首）'], profile: '文本', guess: null,
+        warn: '分块竖合并 ⇒ 需向下填充（只信合并区）' },
+      { src: '费用日期', sample: ['2025-12-03', '2026-04-01'], profile: '日期', guess: null },
+      { src: '材料：其他支出付资产处/贸易公司（编号）', part: '外租机械：付款通知书（编号）',
+        sample: ['FKTZS2025120365', 'CL2026090012'], profile: '编号', guess: ['材料单据', 0.86],
+        warn: '一列两义：CL* → 材料单据；FKTZS* → 机械单据（域内消歧，映射层表达不了）' },
+      { src: '收款单位', sample: ['资产处集中采购', '河北耀辉管业有限公司'], profile: '文本', guess: null },
+      { src: '该流程金额', sample: ['797,726.50', '28,922.00'], profile: '金额', guess: ['该流程金额', 1.00] },
+      { src: '已付款金额', sample: ['397,726.50', '0.00'], profile: '金额', guess: ['已付款金额', 0.95] },
+      { src: '本月预付款金额', sample: ['400,000.00', '28,922.00'], profile: '金额', guess: ['本月预付款金额', 0.97] },
+      { src: '剩余付款金额', sample: ['（空 / 公式残值）'], profile: '文本', guess: null },
+      { src: '付款时间', sample: ['9月11号', '9月15号'], profile: '文本', guess: ['付款时间', 0.88],
+        warn: '真实值是「9月11号」这种中文月日 ⇒ 需按"本月"补年份' },
+      { src: '付款方式', sample: ['承兑', '现金'], profile: '枚举', guess: ['付款方式', 0.95] },
+      { src: '备注', sample: ['循环水管道（唐山盈）', 'PE管件（赫尔泰）'], profile: '文本', guess: ['备注', 0.88] }
+    ],
+    rows: 106,
+    problems: [
+      { row: 25, col: '付款时间', raw: '9月11号', why: '中文月日 ⇒ 需你确认按哪个月的 11 号（⛔ 系统不替你猜年份）' },
+      { row: 3, col: '科目', raw: '（空 · 竖合并区非首格）', why: '合并区需向下填充才能读到「其他支出」等科目' },
+      { row: 2, col: 'D 列', raw: '外租机械：付款通知书（编号）', why: 'r2 那格说明这一列也能装机械编号 —— 本批里确有机械行' }
+    ],
+    preview: [
+      ['灵宝二期', 'FKTZS2025120365', '797,726.50', '397,726.50', '400,000.00', '2026-09-11', '承兑', '循环水管道（唐山盈）'],
+      ['灵宝二期', 'FKTZS2026040037', '28,922.00', '0.00', '28,922.00', '2026-09-11', '承兑', 'PE管件（赫尔泰）']
+    ],
+    commit: { key: '项目 ＋ 单据编号 ＋ 付款时间', guard: '手改过的行不覆盖', batch: false,
+              note: '⚠️ 现状：本域读的是**第 1 个 sheet**（= 计划预收款明细）⇒ 真文件整本导入直接报错；'
+                  + '改成通用向导后**先选工作表**（自动挑出认得出表头的那张）' }
+  },
+
+  m02: {
+    title: 'i8 通知书导出 · 历史', code: 'MOD-02/03 · 历史数据', from: 'i8「付款通知书-所有页打印」导出件',
+    file: '晋江污泥处理项目集采台账.xls', sheet: '5.1-5.31',
+    sheets: ['pvOg8w（空）', '晋江污泥', '机械费欠款', '辅材欠款', 'i6', '3月底（空）', '4月', '5.1-5.31', '6.1-6.30', '7.1-7.31', '8.1-8.31'],
+    headerRow: 2,
+    headerNote: '⚠️ 真形态：11 个 sheet 里 2 个空；月份 sheet 的表头**每月顺序都不同**，8 月那张还多出一列「管理费」⇒ 只按列名认、⛔ 不按位置',
+    fields: ['单据编号', '单据名称', '单据日期', '付款项目', '收款单位', '申请金额', '审批金额', '付款类型', '业务类型', '备注'],
+    required: ['单据编号', '单据日期', '收款单位'],
+    keepNote: '未采（原样保留）：打印状态 / 记账状态 / 附件 / 打印次数 / 首列无名标签',
+    cols: [
+      { src: '（首列无名 · 值「8月付」）', sample: ['8月付', '（空）'], profile: '文本', guess: null,
+        warn: '这列**没有表头**（只在数据行有值）⇒ 只能原样保留' },
+      { src: '工作流', sample: ['2', '结束'], profile: '枚举', guess: null },
+      { src: '归档', sample: ['（空）', '否'], profile: '文本', guess: null },
+      { src: '单据编码', sample: ['FKTZS2026051962', 'FKTZS2026080613'], profile: '编号', guess: ['单据编号', 0.95] },
+      { src: '单据名称', sample: ['四分晋江污泥项目/管件/赫尔泰/付款支出（41805.6元）'], profile: '文本', guess: ['单据名称', 0.92] },
+      { src: '单据日期', sample: ['2026-05-17', '2026-08-10'], profile: '日期', guess: ['单据日期', 1.00] },
+      { src: '付款项目', sample: ['晋江市污泥处置中心一期工程核心设备安装工程'], profile: '文本', guess: ['付款项目', 0.96] },
+      { src: '收款单位', sample: ['河南赫尔泰阀门有限公司'], profile: '文本', guess: ['收款单位', 0.95] },
+      { src: '申请金额', sample: ['41805.6', '25534.6'], profile: '金额', guess: ['申请金额', 0.95] },
+      { src: '审批金额', sample: ['41805.6', '25534.6'], profile: '金额', guess: ['审批金额', 0.97] },
+      { src: '付款类型', sample: ['付款通知书', '其他支出'], profile: '枚举', guess: ['付款类型', 0.93] },
+      { src: '业务类型', sample: ['付设备租赁款', '付其他供应商款'], profile: '枚举', guess: ['业务类型', 0.90] },
+      { src: '管理费', sample: ['（只有 8 月那张有）'], profile: '金额', guess: null,
+        warn: '某个月才多出来的列 ⇒ 佐证"只按列名认"' },
+      { src: '备注', sample: ['租金2500元/月，租赁时间约一个半月，押金5000元'], profile: '文本', guess: ['备注', 0.88] }
+    ],
+    rows: 9,
+    problems: [
+      { row: 1, col: '（整行）', raw: '付款通知书-所有页打印', why: 'r1 是大标题 ⇒ 表头在 r2（自动扫到，无需你管）' },
+      { row: 3, col: '首列', raw: '（表头为空）', why: '本列无表头 ⇒ 只能原样保留（界面上已显式标"原样保存"）' }
+    ],
+    preview: [
+      ['FKTZS2026050848', '四分晋江污泥处理项目/管件/赫尔泰/付款支出（41805.6元）', '2026-05-17', '晋江市污泥处置中心一期工程核心设备安装工程', '河南赫尔泰阀门有限公司', '41,805.60', '41,805.60', '其他支出', '付其他供应商款', ''],
+      ['FKTZS2026050847', '四分晋江污泥处理项目/铜鼻子/人民电器/付款支出（1929元）', '2026-05-17', '晋江市污泥处置中心一期工程核心设备安装工程', '人民电器集团滕州销售有限公司', '1,929.00', '1,929.00', '其他支出', '付其他供应商款', '']
+    ],
+    commit: { key: '单据编号', guard: '手改列不覆盖', batch: true,
+              note: '逐月一个 sheet ⇒ 同一会话可连续导多个月；**列顺序每月变也不影响**（只按列名认）' }
+  },
+
+  m06: {
+    title: '过程资料 · 材料机械消耗汇总表', code: 'MOD-06', from: '各项目按月手填的汇总表（历史数据唯一来源）',
+    file: '材料机械消耗汇总表(晋江).xlsx', sheet: '汇总表', sheets: ['汇总表'],
+    headerRow: 2, headerLevels: [2, 3],
+    headerNote: '⚠️ 真形态：r2 分组头 ＋ r3 子列（线上入库（不含税）› 主辅材），数据 r4 起；'
+              + '慧能那份把「含税/不含税」放 r2、把「外租设备（零租/包月）」放 r3 ⇒ 拼名**两种顺序都要试**',
+    fields: ['核算月', '入库主辅材', '入库工具', '入库劳保', '入库周转材料',
+             '出库主辅材', '出库工具', '出库劳保', '出库周转材料', '租分公司设备', '内租设备',
+             '外租零租含税', '外租包月含税', '外租零租不含税', '外租包月不含税'],
+    required: ['核算月', '（至少一个材料列）'],
+    keepNote: '未采（原样保留）：序号 / 尾部合计行',
+    cols: [
+      { src: '时间', sample: ['45444', '45475'], profile: '年月', guess: ['核算月', 0.90],
+        warn: '真实值是 **Excel 序列号**（45444 = 某月）⇒ 需转换（现在只认 2026-08 / 2026.08 这类）' },
+      { src: '线上入库（不含税）› 主辅材', sample: ['5,006.98'], profile: '金额', guess: ['入库主辅材', 0.95] },
+      { src: '线上入库（不含税）› 工具', sample: ['595.00'], profile: '金额', guess: ['入库工具', 0.95] },
+      { src: '线上入库（不含税）› 劳保', sample: ['5,994.00'], profile: '金额', guess: ['入库劳保', 0.95] },
+      { src: '线上入库（不含税）› 周转材料', sample: ['（空）'], profile: '金额', guess: ['入库周转材料', 0.95] },
+      { src: '线下出库（不含税）› 主辅材', sample: ['51,987.57'], profile: '金额', guess: ['出库主辅材', 0.95] },
+      { src: '线下出库（不含税）› 工具', sample: ['1,684.29'], profile: '金额', guess: ['出库工具', 0.95] },
+      { src: '线下出库（不含税）› 劳保', sample: ['3,002.00'], profile: '金额', guess: ['出库劳保', 0.95] },
+      { src: '线下出库（不含税）› 周转材料', sample: ['（空）'], profile: '金额', guess: ['出库周转材料', 0.95] },
+      { src: '分公司设备', sample: ['1,100.00'], profile: '金额', guess: ['租分公司设备', 0.88] },
+      { src: '内部设备', sample: ['11,593.00'], profile: '金额', guess: ['内租设备', 0.88] },
+      { src: '外租机械（含税）› 零租', sample: ['7,700.00'], profile: '金额', guess: ['外租零租含税', 0.93] },
+      { src: '外租机械（含税）› 包月', sample: ['50,563.00'], profile: '金额', guess: ['外租包月含税', 0.93] },
+      { src: '外租机械（不含税）› 零租', sample: ['7,182.30'], profile: '金额', guess: ['外租零租不含税', 0.93] },
+      { src: '外租机械（不含税）› 包月', sample: ['46,388.07'], profile: '金额', guess: ['外租包月不含税', 0.93] },
+      { src: '序号', sample: ['1', '2'], profile: '编号', guess: null },
+      { src: '（尾部合计行 B20:N20）', sample: ['合计数'], profile: '文本', guess: null,
+        warn: '尾部合计行 ⇒ 跳过（不是数据行）' }
+    ],
+    rows: 30,
+    problems: [
+      { row: 4, col: '时间', raw: '45444', why: 'Excel 序列号 ⇒ 需按 1900 日期系统转成核算月（现在会整列报错）' },
+      { row: 34, col: '（整行）', raw: '（合计行）', why: '尾部合计行不计入导入' }
+    ],
+    preview: [
+      ['2024-05', '5,006.98', '595.00', '5,994.00', '', '', '', '', '', '1,100.00', '', '', '', '', ''],
+      ['2024-06', '', '', '', '', '', '', '', '', '1,100.00', '', '8,800.00', '', '8,202.00', '']
+    ],
+    commit: { key: '核算月（同月重导 = 覆盖更新）', guard: '手改列不覆盖', batch: true,
+              note: '⚠️ 现状：真文件**三份全被拒**（"找不到表头"）—— 因为模板列名是两级拼名、且「时间」不叫「核算月」。这正是本版要修的' }
+  },
+
+  m11: {
+    title: '集采台账', code: 'M11', from: '人工台账（逐项目一份，列名/列数都不同）',
+    file: '晋江污泥处理项目集采台账.xls', sheet: '晋江污泥',
+    sheets: ['pvOg8w（空）', '晋江污泥', '机械费欠款', '辅材欠款', 'i6', '3月底（空）',
+             '4月', '5.1-5.31', '6.1-6.30', '7.1-7.31', '8.1-8.31'],
+    headerRow: 2, headerLevels: [2, 3],
+    headerNote: '⚠️ 真形态：r2「供应商」＋ r3「合同总价/发票金额」⇒ 拼名；⚠️ **.xls 读不到合并区** ⇒ '
+              + '拼名靠"r2 有值 & r3 空 ⇒ 父级直通"兜底；11 个 sheet 里 2 个是空的（自动跳过）',
+    fields: ['合同日期', '材料名称', '贸易公司', '供应商', '供应商合同总价', '供应商发票金额',
+             '贸易公司合同总价', '贸易公司发票金额', '备注', '存档', '存档序号', '寄回时间', '详细付款方式'],
+    required: ['合同日期', '材料名称', '供应商', '供应商合同总价'],
+    keepNote: '不落库（系统自己算）：结算 / 付款 / 欠款；原样保留：序号',
+    cols: [
+      { src: '序号', sample: ['1', '2'], profile: '编号', guess: null, warn: '系统自己编行号' },
+      { src: '合同日期', sample: ['20240723', '20260313'], profile: '日期', guess: ['合同日期', 0.94],
+        warn: '真实值是 20240723（无分隔）⇒ 按 YYYYMMDD 解析' },
+      { src: '材料名称', sample: ['钢材', '油漆'], profile: '文本', guess: ['材料名称', 1.00] },
+      { src: '贸易公司', sample: ['维萨', '（空）'], profile: '文本', guess: ['贸易公司', 0.95] },
+      { src: '供应商', sample: ['亿管通', '洛阳桐玺'], profile: '文本', guess: ['供应商', 1.00] },
+      { src: '供应商 › 合同总价', sample: ['42,799.80', '309,999.00'], profile: '金额', guess: ['供应商合同总价', 0.98] },
+      { src: '供应商 › 发票金额', sample: ['40,731.17', '54,556.61'], profile: '金额', guess: ['供应商发票金额', 0.98] },
+      { src: '贸易公司 › 合同总价', sample: ['42,885.40'], profile: '金额', guess: ['贸易公司合同总价', 0.98] },
+      { src: '贸易公司 › 发票金额', sample: ['40,812.62'], profile: '金额', guess: ['贸易公司发票金额', 0.98] },
+      { src: '结算', sample: ['40,812.62'], profile: '金额', guess: null, warn: '由子表算出来（不落库）' },
+      { src: '付款', sample: ['40,812.62'], profile: '金额', guess: null, warn: '由付款子表算出来（不落库）' },
+      { src: '欠款', sample: ['0.00'], profile: '金额', guess: null, warn: '由「结算 − 付款」算（不落库）' },
+      { src: '备注', sample: ['60±7银行承兑'], profile: '文本', guess: ['备注', 0.88] },
+      { src: '存档', sample: ['已存档'], profile: '枚举', guess: ['存档', 0.90] },
+      { src: '存档序号', sample: ['1'], profile: '编号', guess: ['存档序号', 0.93] },
+      { src: '寄回时间', sample: ['46273'], profile: '日期', guess: ['寄回时间', 0.90] },
+      { src: '详细付款方式', sample: ['电汇'], profile: '枚举', guess: ['详细付款方式', 0.72],
+        warn: '低置信 ⇒ 界面标"需你确认"（慧能那份**没有这一列**）' },
+      { src: '（末尾空列 ×3）', sample: ['（空）'], profile: '空列', guess: null, warn: '空白表头列 ⇒ 原样保留' }
+    ],
+    rows: 81,
+    problems: [
+      { row: 6, col: '供应商 › 合同总价', raw: '（空）', why: '必填为空 ⇒ 需处理（补值或整行跳过，⛔ 不写 0）' },
+      { row: 4, col: '详细付款方式', raw: '电汇', why: '映射是**低置信**（0.72）⇒ 界面已标"需你确认"' }
+    ],
+    preview: [
+      ['20240723', '钢材', '维萨', '亿管通', '42,799.80', '40,731.17', '42,885.40', '40,812.62', '60±7银行承兑', '已存档', '1', '', '电汇'],
+      ['20260313', '油漆', '', '宿迁伟民油漆', '309,999.00', '54,556.61', '', '', '纸质版未寄回', '已存档', '2', '', '现金']
+    ],
+    commit: { key: '项目 ＋ 供应商 ＋ 合同日期 ＋ 材料名称', guard: '手动行不动 · 调整单不动', batch: true,
+              note: '⚠️ 现状：本域**能认**（实测真文件 20/19 列全中）⇒ 这一域主要是"接映射界面 ＋ 多 sheet 选择"，判定口径一字不改' }
+  }
+};
+
+const IGNORE = '（忽略 · 原样保留）';
+const st = { dom: null, step: 0, map: {}, headerRow: 3, sheet: '', remember: true, ran: false };
+
+const el = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const D = () => DOMAINS[st.dom];
+
+function conf(c) { return c >= 0.9 ? 'ok' : (c >= 0.8 ? 'wn' : 'dg'); }
+function confText(c) { return c >= 0.9 ? '自动' : (c >= 0.8 ? '较可信' : '需确认'); }
+
+function open_(dom) {
+  st.dom = dom; st.step = 0; st.ran = false;
+  st.map = {}; D().cols.forEach(c => st.map[c.src] = c.guess ? c.guess[0] : IGNORE);
+  st.headerRow = D().headerRow; st.sheet = D().sheet || D().sheets[0];
+  el('wTitle').textContent = D().title + '　' + D().code;
+  el('mask').hidden = false; render();
+}
+function close() { el('mask').hidden = true; }
+
+/* ------------------------------------------------ ① 选文件与来源 */
+function s1() {
+  const d = D();
+  const req = d.required.map(r => `<span class="tag t-dg">${esc(r)}</span>`).join(' ');
+  const sheets = d.sheets.length > 1
+    ? `<div class="fi"><label>工作表（读到 ${d.sheets.length} 个）</label>
+        <select class="inp" data-f="sheet">${d.sheets.map(s =>
+          `<option${s === st.sheet ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></div>` : '';
+  return `
+  <div class="steps">${['① 选文件与来源', '② 列映射', '③ 预览与校验', '④ 确认落库']
+    .map((t, i) => `<div class="st ${i === 0 ? 'on' : ''}">${t}</div>`).join('')}</div>
+  <div class="card" style="margin:0">
+    <div class="bd">
+      <div class="drop" data-a="pick">
+        <b>把 Excel 拖到这里，或点一下选择文件</b>
+        <span class="sm">只读 .xlsx；表头不在第 1 行也能认出（前 12 行内自动找）</span>
+      </div>
+      <div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r);margin-top:10px;background:var(--sf)">
+        <div class="fi"><label>已选文件</label>
+          <span class="sm" style="padding-top:3px">${esc(d.file)} <span class="mut">（58 KB）</span></span></div>
+        ${sheets}
+        <div class="fi"><label>来源（用于记住映射）</label>
+          <select class="inp" data-f="from"><option>${esc(d.from)}</option><option>其他 / 新来源…</option></select></div>
+      </div>
+      <div class="tip" style="margin:10px 0 0">
+        <b>本域要求</b>：必须有 ${req}<br>
+        ${esc(d.keepNote)} —— <b>未映射的列一律原样进"原始列"，⛔ 不丢、不报错</b>。
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ------------------------------------------------ ② 列映射（核心） */
+function s2() {
+  const d = D();
+  const auto = d.cols.filter(c => st.map[c.src] !== IGNORE && c.guess).length;
+  const need = d.cols.filter(c => c.guess && c.guess[1] < 0.9 && st.map[c.src] !== IGNORE).length;
+  const ign = d.cols.filter(c => st.map[c.src] === IGNORE).length;
+  const mapd = new Set(Object.values(st.map).filter(v => v !== IGNORE));
+  const missing = d.required.filter(r => !mapd.has(r) &&
+    !(r.includes('（') && d.cols.some(c => st.map[c.src] !== IGNORE && c.profile === '金额')));
+
+  const opts = c => [IGNORE, ...d.fields].map(f =>
+    `<option${st.map[c.src] === f ? ' selected' : ''}>${esc(f)}</option>`).join('');
+
+  const rows = d.cols.map(c => {
+    const to = st.map[c.src];
+    const isIgn = to === IGNORE;
+    const isReqMiss = !isIgn && c.guess === null ? false : false;
+    const cls = isIgn ? 'ign' : '';
+    const tag = isIgn
+      ? `<span class="tag t-in">原样保留</span>`
+      : (c.guess ? `<span class="tag t-${conf(c.guess[1])}">${confText(c.guess[1])}
+          <span class="mono" style="margin-left:4px">${c.guess[1].toFixed(2)}</span></span>`
+        : `<span class="tag t-wn">人工指定</span>`);
+    /* ⚠️ 真文件逼出来的展示位：**结构提示**（如"这一列两级=材料/机械二选一"）与**风险提示** */
+    const warn = c.warn ? `<span class="sm2" style="color:var(--wn-d)">${esc(c.warn)}</span>` : '';
+    return `<tr class="${cls}">
+      <td class="src">${esc(c.src)}${c.part ? `<span class="sm2">↳ 下一级：${esc(c.part)}</span>` : ''}</td>
+      <td class="mut sm" style="white-space:nowrap">${esc(c.profile)}</td>
+      <td class="sm mut" style="max-width:210px">${c.sample.map(v => esc(v || '（空）')).join('　|　')}</td>
+      <td class="ctr arrow">→</td>
+      <td><select class="inp" data-map="${esc(c.src)}">${opts(c)}</select></td>
+      <td style="white-space:nowrap">${tag}${warn}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="steps">${['① 选文件与来源', '② 列映射', '③ 预览与校验', '④ 确认落库']
+    .map((t, i) => `<div class="st ${i === 1 ? 'on' : i < 1 ? 'dn' : ''}">${t}</div>`).join('')}</div>
+
+  <div class="sum">
+    <span>表头行 <b class="mono">第 ${st.headerRow} 行</b>${d.headerLevels
+      ? ` <span class="mut">（两级：第 ${d.headerLevels[0]}、${d.headerLevels[1]} 行拼名）</span>` : ''}</span>
+    <span class="mut sm">${esc(d.headerNote)}</span>
+    <span class="sp" style="margin-left:auto"></span>
+    <span class="sep"></span>
+    <span>源表 <b class="mono">${d.cols.length}</b> 列</span>
+    <span class="tag t-ok">自动认列 ${auto}</span>
+    ${need ? `<span class="tag t-dg">需你确认 ${need}</span>` : ''}
+    <span class="tag t-in">忽略 ${ign}（原样保留）</span>
+  </div>
+
+  ${missing.length ? `<div class="tip dg"><b>必填字段还没映射</b>：${missing.map(esc).join(' / ')}
+    —— 显式卡住，⛔ 不用默认值糊过去</div>`
+    : `<div class="tip ok"><b>必填齐了，可以继续</b> —— 下一步只做预览与校验，<b>一个字节都不写库</b></div>`}
+
+  <div class="tw" style="max-height:46vh;min-height:220px">
+    <table class="dt mtx">
+      <thead><tr>
+        <th style="min-width:230px">源列（原文照抄）</th><th>画像</th><th>前几行样本值</th>
+        <th class="ctr">→</th><th style="min-width:190px">导入到本系统的字段</th><th>系统建议</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+
+  <div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r);margin-top:10px;background:var(--sf)">
+    <div class="fi"><label>&nbsp;</label><label class="sm" style="display:flex;align-items:center;gap:6px">
+      <input type="checkbox" class="chk" data-f="remember"${st.remember ? ' checked' : ''}>
+      记住这套映射（来源：${esc(d.from)}）—— 下次导入自动预填，仍可改</label></div>
+    <div class="fi"><label>&nbsp;</label>
+      <button class="btn sm" data-a="reset">还原系统建议</button></div>
+  </div>`;
+}
+
+/* ------------------------------------------------ ③ 预览与校验 */
+function s3() {
+  const d = D();
+  const bad = d.problems.length;
+  const ok = d.rows - bad;
+  const kpi = (k, v, s, c) => `<div class="kpi ${c || ''}"><div class="k">${k}</div>
+    <div class="v">${v}</div><div class="s">${s}</div></div>`;
+  const pr = d.problems.map(p => `<tr class="hl">
+      <td class="num">${p.row}</td><td class="now">${esc(p.col)}</td>
+      <td class="mono">${esc(p.raw || '（空）')}</td><td class="sm">${esc(p.why)}</td>
+      <td class="ctr"><button class="btn sm" data-a="fix">处理…</button></td></tr>`).join('');
+
+  const mapped = d.cols.filter(c => st.map[c.src] !== IGNORE);
+  const igcols = d.cols.filter(c => st.map[c.src] === IGNORE);
+  const head = mapped.map(c => `<th>${esc(st.map[c.src])}</th>`).join('')
+    + igcols.map(c => `<th class="mutc" style="text-decoration:line-through">${esc(c.src)}</th>`).join('');
+  const body = d.preview.map(r => `<tr>` +
+    mapped.map((c, i) => `<td class="${/金额|价/.test(st.map[c.src]) ? 'num' : (/日期|时间|年月/.test(c.profile) ? 'now' : '')}">${esc(r[i] || '')}</td>`).join('') +
+    igcols.map(() => `<td class="mutc">原样</td>`).join('') + `</tr>`).join('');
+
+  return `
+  <div class="steps">${['① 选文件与来源', '② 列映射', '③ 预览与校验', '④ 确认落库']
+    .map((t, i) => `<div class="st ${i === 2 ? 'on' : i < 2 ? 'dn' : ''}">${t}</div>`).join('')}</div>
+
+  <div class="kpis">
+    ${kpi('将写入', ok, '行（映射已确认）', 'ok')}
+    ${kpi('需处理', bad, '行（见下清单）', bad ? 'dg' : '')}
+    ${kpi('忽略列', d.cols.length - mapped.length, '个（原样保留入库）')}
+    ${kpi('本步写库量', '0', '确认前不碰数据库')}
+  </div>
+
+  <div class="card" style="margin:0 0 10px">
+    <h4>问题清单 <span class="sp"><span class="mut sm">按行列出「行号 / 列 / 原值 / 原因」—— 可逐条处理或整行跳过</span></span></h4>
+    <div class="bd np"><table class="dt cond">
+      <thead><tr><th style="width:64px">行</th><th style="width:150px">列</th><th style="width:150px">原值</th>
+        <th>原因</th><th style="width:96px" class="ctr">操作</th></tr></thead>
+      <tbody>${pr || '<tr><td colspan="5" class="ctr mut" style="padding:16px">没有需要处理的单元格</td></tr>'}</tbody>
+    </table></div>
+  </div>
+
+  <div class="card" style="margin:0">
+    <h4>数据预览（前 2 行 · 未落库）
+      <span class="sp mut sm">灰列 = 未映射，落库时进"原始列"原样保存</span></h4>
+    <div class="bd np"><div class="tw" style="max-height:26vh;min-height:0">
+      <table class="dt cond ptbl"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+    </div></div>
+  </div>
+
+  <div class="tip wn" style="margin-top:10px">
+    <b>可中断可重来</b>：这一步全部在内存/暂存里；改完表重传零成本 —— 库里至今没有这一批的任何痕迹。
+  </div>`;
+}
+
+/* ------------------------------------------------ ④ 确认落库 */
+function s4() {
+  const d = D();
+  const bad = d.problems.length, ok = d.rows - bad;
+  const rep = st.ran ? `
+    <div class="kpis" style="margin:10px 0 0">
+      <div class="kpi ok"><div class="k">新增</div><div class="v">${ok}</div><div class="s">行</div></div>
+      <div class="kpi"><div class="k">更新</div><div class="v">0</div><div class="s">行（同键重导才算更新）</div></div>
+      <div class="kpi wn"><div class="k">跳过</div><div class="v">${bad}</div><div class="s">行（问题清单里的那几行）</div></div>
+      <div class="kpi"><div class="k">保留</div><div class="v">3</div><div class="s">行（手改 / 调整单，⛔ 不动）</div></div>
+    </div>
+    <div class="tip ok" style="margin-top:10px">
+      已提交。<b>批次号 <span class="mono">IMP-20260922-1531-${st.dom}</span></b>
+      ${d.commit.batch ? '—— 本域可整批回滚（页面「导入批次」里）' : '—— 本域无批次回滚，同键重导即覆盖更新'}
+    </div>` : '';
+
+  const kv = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
+  return `
+  <div class="steps">${['① 选文件与来源', '② 列映射', '③ 预览与校验', '④ 确认落库']
+    .map((t, i) => `<div class="st ${i === 3 ? 'on' : i < 3 ? 'dn' : ''}">${t}</div>`).join('')}</div>
+
+  ${st.ran ? '' : `<div class="card" style="margin:0">
+    <h4>落库摘要（请核对）</h4><div class="bd">
+      <dl class="kv">
+        ${kv('来源文件', esc(d.file))}
+        ${kv('工作表', esc(st.sheet))}
+        ${kv('映射', `${d.cols.filter(c => st.map[c.src] !== IGNORE).length} 列采用 · ${d.cols.filter(c => st.map[c.src] === IGNORE).length} 列忽略（原样保留）`)}
+        ${kv('写入', `<b>${ok}</b> 行（跳过 ${bad} 行：见问题清单）`)}
+        ${kv('幂等键', esc(d.commit.key))}
+        ${kv('保护', esc(d.commit.guard))}
+        ${kv('批次', d.commit.batch ? '有（可整批回滚）' : '无（同键覆盖）')}
+      </dl>
+      <div class="tip" style="margin:10px 0 0">${esc(d.commit.note)}</div>
+    </div></div>`}
+  ${rep}`;
+}
+
+/* ------------------------------------------------ 渲染与路由 */
+function render() {
+  const d = D();
+  el('wBody').innerHTML = [s1, s2, s3, s4][st.step]();
+  const back = `<button class="btn" data-a="prev">上一步</button>`;
+  const next = `<button class="btn pri" data-a="next">${['解析并核对列', '下一步：预览校验',
+    '下一步：确认落库', '确认导入（单事务）'][st.step]}</button>`;
+  el('wFoot').innerHTML = st.step === 0
+    ? `<button class="btn" data-x="1">取消</button>${next}`
+    : (st.step === 3
+      ? (st.ran ? `${back}<button class="btn pri" data-x="1">完成</button>`
+                : `${back}<button class="btn pri" data-a="run">确认导入（单事务）</button>`)
+      : `${back}<button class="btn" data-x="1">取消</button>${next}`);
+  const b = el('wFoot').querySelector('[data-a="next"]');
+  if (b && st.step === 1) {
+    const d2 = D();
+    const mapd = new Set(Object.values(st.map).filter(v => v !== IGNORE));
+    const miss = d2.required.filter(r => !mapd.has(r));
+    if (miss.length) { b.disabled = true; b.title = '必填字段还没映射：' + miss.join(' / '); }
+  }
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-open],[data-x],[data-a]');
+  if (!t) return;
+  if (t.dataset.open) return open_(t.dataset.open);
+  if (t.dataset.x) return close();
+  const a = t.dataset.a;
+  if (a === 'next') { st.step = Math.min(3, st.step + 1); return render(); }
+  if (a === 'prev') { st.step = Math.max(0, st.step - 1); return render(); }
+  if (a === 'run') { st.ran = true; return render(); }
+  if (a === 'reset') {
+    D().cols.forEach(c => st.map[c.src] = c.guess ? c.guess[0] : IGNORE);
+    return render();
+  }
+  if (a === 'pick') { return; }              /* 原型不真选文件 */
+  if (a === 'fix') { return; }               /* 原型不弹处理框 */
+});
+document.addEventListener('change', e => {
+  const s = e.target;
+  if (s.dataset && s.dataset.map !== undefined) { st.map[s.dataset.map] = s.value; render(); }
+  if (s.dataset && s.dataset.f === 'remember') { st.remember = s.checked; }
+  if (s.dataset && s.dataset.f === 'sheet') { st.sheet = s.value; }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+open_('m04');   /* 打开页面直接进向导，方便评审 */
+</script>
+</body>
+</html>

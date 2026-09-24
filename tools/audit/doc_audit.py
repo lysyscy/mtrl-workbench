@@ -24,6 +24,7 @@
 | `T13` | ⭐ **主文档过程回潮** —— 计划主文档行数超预算（1700）· 标题出现过程词（逐批/逐次/收官记录）⇒ 黄：该块**该下沉归档了**（`§13.1`「完成的就扔出去」的机器守） | `.workbuddy/plans/开发计划-主文档.md` |
 | `T14` | ⭐ **scratch 超期 / 落点合规** —— `work/00-scratch/` 超 14 天未升档未删 · `tools/` 根与 `logs/` 再现散件 ⇒ 黄（`audit_work.py`） | 文件系统 mtime |
 | `T15` | ⭐ **产物白名单 ＋ 工作记录元信息** —— `artifacts/` 只许工具生成物 md · `work/` 五区文档必须带文头四行（读者/回答什么/何时读/状态）⇒ 黄 | `audit_work.py` 白名单 |
+| `T16` | ⭐ **`T7a` 登记册必须在位** —— 登记册**读不到 / 解析不出条目** ⇒ **红**（治「静默降级成全部未清」） | `cover_gap.CLEARED_REGISTRY` |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
@@ -39,11 +40,11 @@
 2. **豁免窗口 ±2 行** —— 「勘误」常写在下一行，只看当前行会误报。
 3. **强豁免词直接忽略**（`HARD_EXEMPT`）—— 行文本身就在说「它废了」的，不算漂移。
 
-用法：
-    python tools/doc_audit.py              # 人读报告（有红即非零退出）
-    python tools/doc_audit.py -v           # 附命中行上下文
-    python tools/doc_audit.py --ui         # 顺带跑交付面四检（需 node）
-    python tools/doc_audit.py --block      # 打印可粘贴进交接文件的「当前状态」块
+用法（⚠️ 2026-09-24 订正：尺子已随 `TAIL-58` 搬进 `tools/audit/`，旧写法 `tools/doc_audit.py` 已不存在）：
+    python tools/audit/doc_audit.py              # 人读报告（有红即非零退出）
+    python tools/audit/doc_audit.py -v           # 附命中行上下文
+    python tools/audit/doc_audit.py --ui         # 顺带跑交付面四检（需 node）
+    python tools/audit/doc_audit.py --block      # 打印可粘贴进交接文件的「当前状态」块
 
 ⚠️ 本工具**只读**（`--block` 也只打印、不写文件）。
 
@@ -63,14 +64,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from audit_common import (                                        # noqa: E402
-    RED, SKIP, YELLOW, delivery_root, iter_docs,
+    RED, REPO_ROOT, SKIP, YELLOW, delivery_root, iter_docs,
 )
 from audit_drift import (                                         # noqa: E402
-    check_acc_ids, check_cancelled, check_paths, check_status_line, check_terms,
+    check_acc_ids, check_cancelled, check_count_anchors, check_paths, check_section_refs,
+    check_status_line, check_terms,
 )
 from audit_meta import (                                          # noqa: E402
     HARD_LIMIT, LINE_LIMIT, check_doc_budgets, check_doc_layout, check_file_sizes,
-    check_plan_process, check_report_receipts, check_rule_origins, check_tail_ledger,
+    check_gate_liveness, check_guard_constants, check_plan_process, check_report_receipts,
+    check_rule_origins, check_tail_ledger,
 )
 from audit_work import (                                          # noqa: E402
     check_artifacts_and_headers, check_scratch_ttl,
@@ -117,6 +120,37 @@ def _print_block() -> int:
     return 0
 
 
+def check_cover_registry() -> list[dict]:
+    """`T16`：**`T7a` 登记册必须在位**（2026-09-24 立 · `TAIL-20`）。
+
+    ⭐ 治的是「**读不到 ⇒ 静默降级成「全部未清」**」—— 2026-09-24 实测：登记册在 `tools/`，
+    而 `cover_gap.CLEARED_REGISTRY` 按**自身所在目录**拼 ⇒ 恒读到空集 ⇒ 所有 `x` 标记**全部失效**，
+    且**没有任何报错**（降级方向还是"宁多报"，看着反而更安全）⇒ 只有变异测试才撞得出来。
+    ⇒ 光靠 stderr 不够（跑批只看 rc 时照样漏）⇒ 升成**红档**。
+    """
+    from cover_gap import CLEARED_REGISTRY
+
+    try:
+        rel = str(CLEARED_REGISTRY.resolve().relative_to(REPO_ROOT)).replace("\\", "/")
+    except ValueError:
+        rel = str(CLEARED_REGISTRY)
+    if not CLEARED_REGISTRY.exists():
+        return [{"code": "T16", "side": "仓", "rel": rel, "line": 1,
+                 "what": "（登记册文件不存在）",
+                 "why": "`T7a` 的「已清」登记读不到 ⇒ `load_cleared()` 返回空集 ⇒ 所有 `x` 失效（静默）",
+                 "fix": "恢复登记册，或改 `cover_gap.CLEARED_REGISTRY` 指向它的真实位置",
+                 "level": RED, "text": ""}]
+    rows = [ln for ln in CLEARED_REGISTRY.read_text(encoding="utf-8", errors="replace").splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")]
+    if not rows:
+        return [{"code": "T16", "side": "仓", "rel": rel, "line": 1,
+                 "what": "（登记册里解析不出任何条目行）",
+                 "why": "读得到文件却读不到条目 ⇒ `x` 照样全失效",
+                 "fix": "补回条目行（格式见登记册文件头注释）",
+                 "level": RED, "text": ""}]
+    return []
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="文档漂移自检")
     ap.add_argument("-v", "--verbose", action="store_true", help="附命中行上下文")
@@ -133,8 +167,15 @@ def main() -> int:
     docs = iter_docs()
 
     sizes = check_file_sizes()          # 单独成节：它输出的是「欠债清单」，与漂移不同性质
-    raw = check_acc_ids(cases, docs) + check_terms(docs) + check_paths(docs)
+    # `T19`（2026-09-24 立 · `TAIL-84`）：**文档指针（节号）守卫** —— `T3` 只核**文件在不在**，
+    #   而「`X.md` §N」这种**指到某一节**的引用烂了 **没有任何尺子看得见**（实证：`MEMORY §十七`
+    #   的「已下沉 `docs/runbook.md` §七」是**死指针** —— runbook 止于 §六，差点让那六条坑静默消失）。
+    raw = check_acc_ids(cases, docs) + check_terms(docs) + check_paths(docs) + check_section_refs(docs)
     raw += check_status_line()
+    # `T4` **追加**（2026-09-24 立 · 用户「按推荐」）：**计数锚点**（黄）—— 手抄的、有机器真值的计数
+    #   （尾巴计数 / `§22.1` 尺子把数 / `U5` 登记条目数）必须等于真值。⭐ 起因：一天内**两次**实测到
+    #   "手抄的数字漂"（`claim_audit` 黄计数 · `U5` 登记 42↔43），而 `T4` 原先只管**四态数字**。
+    raw += check_count_anchors()
     # `T8`：**已撤项不得在代码里复活**（真源 = `audit_common.CANCELLED`）。
     # ⭐ 这条是「**如何标记才能永久记住某功能已被取消**」的机器化答案 ——
     #    撤项登记在那张表里，`T8` 每次跑批都扫代码面 ⇒ ⛔ 不靠人记得。
@@ -157,11 +198,23 @@ def main() -> int:
     #   **主文档过程回潮守卫** —— 行数超预算 ＋ 标题出现过程词 ⇒ 黄（该下沉归档了）。
     #   ⭐ 治的是"§13.1 早有『完成的就扔出去』的裁定，却只有触发点、没有机器守"。
     raw += check_plan_process()
+    # `T17`（2026-09-24 立 · `TAIL-82`）：**闸门清单里每一把尺子都必须真有入口** ——
+    #   ⭐ 一天内核出四例"僵尸闸门"（`shell_verify` · `cover_gap` · `audit_drift` · `audit_meta`），
+    #   其中三例**从来没有 `__main__`** ⇒ 在闸门清单里跑了几个月，**0 行输出、rc 恒 0、什么都没判**。
+    #   ⚠️ 清单**唯一出处 = 计划 `§22.1` 的 `foreach`**（本检查直接读它 ⇒ 新增尺子自动被查）。
+    raw += check_gate_liveness()
+    # `T18`（2026-09-24 立 · 排查件 §一 的元发现）：**登记在册的路径 / glob 常量必须解析得到真东西** ——
+    #   ⭐ 当天三处失效同根（`tools/audit/` 的常量在 `TAIL-58` 搬目录后没跟改），症状全是
+    #   「**检查在跑，其实扫空集**」；立本条当天就抓出第 4 例（`SCAN_GLOBS` 里 `CHANGELOG.md` 的旧地址）。
+    raw += check_guard_constants()
     # `T14`/`T15`（2026-09-22 立 · 文档架构审计 §七-15 · 实现见 `audit_work.py`）：
     #   `T14` = scratch 超期（TTL 14 天）/ 落点合规；`T15` = artifacts md 白名单 ＋ work 文档文头四行。
     #   ⭐ 治「新区变新垃圾场」：五区建好了只是分类学，**过期与元信息要机器盯着**才算闭环。
     raw += check_scratch_ttl()
     raw += check_artifacts_and_headers()
+    # `T16`（2026-09-24 立 · `TAIL-20`）：**`T7a` 登记册必须在位** —— 读不到就静默降级成
+    #   「全部未清」，而那个方向看着还更安全 ⇒ 必须升成红档才看得见。
+    raw += check_cover_registry()
     # `T7` 登记：有能力的口径没被判据兜住（**逻辑在 tools/cover_gap.py** —— 别再内联）
     from cover_gap import T7_EXEMPT, check_cover_gaps         # noqa: PLC0415
 

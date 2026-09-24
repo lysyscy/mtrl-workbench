@@ -1,0 +1,80 @@
+"""反向灵敏度（`T4` 的**计数锚点**（黄档 · 2026-09-24 立））—— 证明它**真会报**。
+
+做法：把**手抄的计数**改错 ⇒ `check_count_anchors()` **必须命中**（那条锚报出）⇒ 立刻**逐字节复原**（MD5）。
+
+⚠️ 这类"锚点型"检查最容易退化成**永远绿**（正则没命中 = 不报，没人看得出）——
+   本件就是它的自证：**三条靶各改错一处 ⇒ 必须各自报一条**；⛔ 一条都不报 = 它瞎了。
+⚠️ 判据**不是 rc**：锚点是**黄档**（同 `T5`/`T10` 哲学"形式问题该被看见、不挡合入"）⇒ `doc_audit` 的 rc 不变，
+   要判的是"**报告里出现了那条**"（本件直接调检查函数取命中列表，最精确）。
+
+靶（`T4` 计数锚点的 4 类里挑 3 类）：① 尾巴计数（活文档）② `§22.1` 尺子把数（活文档）
+④ `ops/阈值表.md` 自己（数字 vs 它自称的真源）。⚠️ ③（`U5` 登记数）没配靶：它的真值来自
+`ui_parity.U5_COUNT`，改文档里的数同样会报 —— 但三条已够证明这类检查有牙，⛔ 不为凑数硬加。
+
+用法：python tools/mut/_mut_countanchors.py
+"""
+
+from __future__ import annotations
+
+import hashlib
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "audit"))
+from audit_drift import check_count_anchors  # noqa: E402
+
+PLAN = ROOT / ".workbuddy" / "plans" / "开发计划-主文档.md"
+THRESHOLDS = ROOT / "ops" / "阈值表.md"
+
+#: `(名称, 靶件, 旧串, 改成的错值, 期望命中的 what 关键词)`
+CASES = [
+    ("① 尾巴计数（§0.2 手抄的「已销号」）", PLAN,
+     "已销号 **80**（明细", "已销号 **79**（明细", "已销号79"),
+    ("② `§22.1` 尺子把数（与 `foreach` 项数自洽）", PLAN,
+     "**12 把尺子全 `rc=0`**", "**11 把尺子全 `rc=0`**", "尺子把数 11 把"),
+    ("④ `ops/阈值表.md`（数字 vs 自称真源）", THRESHOLDS,
+     "| **240** |", "| **241** |", "数字 **241**"),
+]
+
+
+def hits() -> list[dict]:
+    return check_count_anchors()
+
+
+def main() -> int:
+    before = {p: p.read_bytes() for p in (PLAN, THRESHOLDS)}
+    md5_before = {p: hashlib.md5(b).hexdigest() for p, b in before.items()}
+    texts = {p: b.decode("utf-8") for p, b in before.items()}
+
+    base = hits()
+    print(f"  基线：锚点命中 {len(base)} 条（期望 0）")
+    if base:
+        print("  ⛔ 基线就有命中 ⇒ 先把数字改对再来跑本件")
+        return 1
+
+    ok_all = True
+    for name, target, old, new, needle in CASES:
+        if old not in texts[target]:
+            print(f"  ❌ {name} —— 靶串没找到（文档改了？）⇒ 本件需重定靶")
+            ok_all = False
+            continue
+        target.write_text(texts[target].replace(old, new, 1), encoding="utf-8", newline="")
+        got = hits()
+        target.write_bytes(before[target])                     # ⭐ 立刻复原
+        found = any(needle in h["what"] for h in got)
+        ok_all &= found
+        print(f"  {'✅' if found else '❌'} {name} ⇒ 命中 {len(got)} 条"
+              f"{'（含「' + needle + '」）' if found else ' —— ⛔ 没报到，锚点是假的'}")
+
+    bad = [p.name for p in before
+           if hashlib.md5(p.read_bytes()).hexdigest() != md5_before[p]]
+    after = hits()
+    print(f"\n  复原校验（MD5 逐字节）：{'✅ 全部一致' if not bad else '❌ 未复原：' + '、'.join(bad)}")
+    print(f"  复原后锚点命中 {len(after)} 条（期望 0）")
+    print(f"  反向灵敏度：**{len(CASES) if ok_all else 0}/{len(CASES)} 命中**")
+    return 0 if (ok_all and not bad and not after) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -25,7 +25,7 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, with_tbl  # noqa: F401  ← `P4`① 读取点收敛
 API = (ROOT / "backend" / "app" / "mod09_fee" / "api.py").read_text(encoding="utf-8")
 ROUTER = (ROOT / "backend" / "app" / "mod09_fee" / "router.py").read_text(encoding="utf-8")
 
@@ -109,11 +109,25 @@ def _awf_heads() -> list[str]:
 
 @acc("ACC-FEE-MON-001", "001-01")
 def test_壳里自动项与手填项同桌():
-    """§5.5：**1 个固定自动项行 ＋ N 个手填项行**，同一张表（`data-sort-key="m09:awf"`）。"""
+    """§5.5：**1 个固定自动项行 ＋ N 个手填项行**，同一张表（`m09:awf` 这一张）。
+
+    ⭐ **2026-09-24（`TAIL-64` P0）改判据为「结构无关」**：表外壳已抽进统一件 `TBL`
+    ⇒ 原来那句「切片里必须有 `data-sort-key="m09:awf"` 字面」**当场假红**（通用件一抽就红）。
+    ⇒ 现在的钉法 = **切片委托 `TBL` 并交出 `key:'m09:awf'`** ＋ **`TBL` 内核里真的用 key 拼出
+    `data-sort-key`**（`shell_src.with_tbl()` 把两段拼起来看）。
+    ⛔ 别为了"省事"把判据改回钉字面 —— 那等于宣布**以后不许抽通用件**（与 `TAIL-64/67` 相反）。
+    """
     s = _slice("m09")
-    assert 'data-sort-key="m09:awf"' in s, "壳里这张表不是「特殊费用月报表」"
+    assert "TBL({" in s, "本页表格没走统一出口 `TBL`"
+    assert "key:'m09:awf'" in s, "本页没把「m09:awf」这张表的 key 交给 `TBL`"
+    assert 'data-sort-key="' in with_tbl(s), "`TBL` 内核没有输出 `data-sort-key`"
     assert "安全文明施工费</b>（按 CBS 分类）" in s, "自动项那一行没了"
-    assert "${list.length?list.map(" in s, "手填项没有由后端 `list` 渲染"
+    # ⭐ 同样**不钉形态**（原来钉的是 `${list.length?list.map(` —— 进了 `TBL` 的 `rows` 数组后，
+    #    这段变成 `...(list.length?list.map(...)`，`${` 没了 ⇒ 当场假红）。
+    #    ⇒ 钉**意图**：数据源是后端 `awfList()` ＋ 逐行由 `list` 渲染 ＋ 项名可改的入口还在。
+    assert "awfList()" in s, "手填项的数据源不是后端 `awfList()`"
+    assert "list.map(" in s, "手填项没有由 `list` 逐行渲染"
+    assert 'data-act="awfName"' in s, "手填项「项名可改」的入口没了"
 
 
 @acc("ACC-FEE-MON-001", "001-02")

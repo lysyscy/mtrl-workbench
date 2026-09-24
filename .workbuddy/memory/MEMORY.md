@@ -15,7 +15,7 @@
 | `.workbuddy/plans/执行情况-主文档.md` | **给用户看的一页**（现状 / 下一步 / 要你做什么） | 1 分钟 |
 | `.workbuddy/plans/开发计划-主文档.md` | **给 AI 的完整版** —— 规则 · 口径 · **台账 §15** · 排期 §14.3 · 闸门 | **按需查，别通读** |
 | `tools/chain_expected.txt` | **链路认领表**（全站 11 条链路的端到端）—— 完成度口径之一 | 按需 |
-| 交付面 `PRD/验收/验收基线.json` | **判据真源**（529 个判据点） | 机器读 |
+| 交付面 `PRD/验收/验收基线.json` | **判据真源**（⚠️ 判据点总数**别写死**会涨 —— 跑 `tools/audit/acc_report.py` 看；2026-09-24 = **555**） | 机器读 |
 
 ⚠️ **状态（四态 / 进度 / 尾巴）只信三处**：`tools/audit/acc_report.py` 的输出 · 计划 **`§0` 现状快照** · `执行情况`。
 ⛔ **别在任何别处抄状态**（抄一份必然过期；`T10`＋`T12` 管着）。
@@ -25,15 +25,39 @@
 ```powershell
 cd D:\dev\mtrl-workbench
 $env:PYTHONIOENCODING='utf-8'; $env:PYTHONDONTWRITEBYTECODE='1'
+# ⚠️⚠️ 下面这两条**缺一条就会假红 / 拿到旧数**（2026-09-24 实测定稿；§22.1 同款）：
+#   · 漏 `PLAYWRIGHT_BROWSERS_PATH` ⇒ 浏览器落到不存在的 `systemprofile\…` ⇒ **打印/渲染类用例红**；
+#   · 漏 `ACC_RESULTS_PATH` ⇒ 插件只写局部档 `_partial`，**权威四态不刷新** ⇒ `acc_report` 读到的是**上一次**的数。
+$env:PLAYWRIGHT_BROWSERS_PATH='C:\ProgramData\ms-playwright'
+$env:ACC_RESULTS_PATH='D:\dev\mtrl-workbench\artifacts\acc_results.json'
 cd backend; .venv\Scripts\python.exe -m pytest -q tests/ -p no:cacheprovider --tb=line; cd ..
 foreach($t in @('syntax_audit','wiring_audit','ui_parity','chain_audit','asset_audit','claim_audit',
                 'cover_gap','prg_form_audit','audit_drift','audit_meta','shell_verify','sticky_probe')){
   # ⭐ 2026-09-22（文档架构审计 P3）：尺子在 `tools\audit\`（`TAIL-58` 分目录后旧路径已全部失效）；
   #   ⛔ 别加 `> $null 2>&1` —— 吞掉报错 = 闸门静默跳过还显示"已跑"（审计实测过的活样本）。
   backend\.venv\Scripts\python.exe "tools\audit\$t.py"; "$t=$LASTEXITCODE" }
+# ⭐⭐ 2026-09-24：上面那份清单**一天内核出四例「僵尸闸门」**（症状同款：**一直在跑、`rc` 一直是 0、
+#   其实什么都没判**）—— `shell_verify`（有效后退化 ⇒ 改盖章式）· **`cover_gap` / `audit_drift` /
+#   `audit_meta`**（三件**从来没有 `__main__`** ⇒ 跑它们 = **空转**：**0 行输出**、`rc` 恒 0 ⇒ **从未生效过**）
+#   ⇒ 四件都已补**真出口**；⭐「以后别再出现」= **`T17` 闸门清单活性**（在 `doc_audit` 里 ⇒ 每轮自动跑）：
+#   从**唯一出处**（计划 `§22.1` 的 `foreach`）读清单，逐条查「件在位 ＋ **有入口行** ＋ 有输出」
+#   ⇒ **新加尺子忘写 `__main__` 会当场红**。⭐ 教训：**「这一行在跑」≠「这一行在判」**。
+#   · **第五例 = `sticky_probe`**：它的成因不同 —— 末尾 `os._exit(0)`（绕"收尾挂死"）⇒ **rc 恒 0**；
+#     已装**窄判据**（钉 `D`/`E`/`C` 三条有效，⛔ 不断言 `A` 必须失败）⇒ 自证 `_mut_sticky.py` **2/2**。
+# ⭐ `syntax_audit` 自带 `--selftest` 却**没人跑**（休眠的自证）⇒ 现由 `tools/mut/_mut_syntax.py` **4/4** 叫醒；⚠️ 它**动过壳件** ⇒ 那一轮收尾照旧要 `--snapshot` 盖章。
+# ⛔⛔ 跑 `tools/mut/**`（靠 `finally` 复原的件）**别接 `Select-Object -First N`** —— 收满 N 行就**掐断上游** ⇒ `finally` 不跑 ⇒ **靶件留坏态**（09-24 实测两次：残留临时靶 ⇒ `T11` 假红 · `执行情况-主文档.md` 被换 3 处 ⇒ `T6` 真红）；用 `-Last N` 或先落文件。`_mut_docaudit` 已加**中断自愈**。
+# ⭐⭐ 2026-09-24 晚：`shell_verify` 已是**盖章式闸门**（两边差集合计 >0 ⇒ rc=1；无基线 ⇒ rc=1）
+#   ⇒ **动过壳**（改壳/拆件/跑过变异脚本）的轮次，收尾**多走一步盖章**：
+backend\.venv\Scripts\python.exe tools\audit\shell_verify.py --snapshot
+#   ⛔ 盖章前两道闸：真机 `_shell_smoke` 整支 rc=0 ＋ 没在变异态（污染态盖章 = 洗白）。自证 = `tools/mut/_mut_shellverify.py` 3/3。
+# ⭐ `claim_audit`（2026-09-24 用户裁定 A）**已上真出口**：有黄 ⇒ rc=1（**清零式闸门**）。扫它这一段看两段计数（要条目单跑）：
+#   ⚠️ 模式要**窄**：`'必须修|处'` 会连清单条目一起抓（条目正文常含「处」字）⇒ 用下面这个（恰好 3 行：C1 数 ＋ C2 数 ＋ 结论）
+backend\.venv\Scripts\python.exe tools\audit\claim_audit.py | Select-String '必须修|处（|处：'
 backend\.venv\Scripts\python.exe tools\audit\acc_report.py | Select-String '判据点合计'
-backend\.venv\Scripts\python.exe tools\audit\doc_audit.py          # T1–T12（含撤项守卫 T8）
+backend\.venv\Scripts\python.exe tools\audit\doc_audit.py          # T1–T19（含撤项守卫 T8 · 判据覆盖 T7a/T16 · **闸门活性 T17** · **常量体检 T18** · **文档指针 T19**）
 backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui     # ⭐⭐ 交付面四检（最易漏！）
+#   ⭐ 2026-09-24：四检**有自证了** = `tools/mut/_mut_uicheck.py` **4/4**；⚠️ 它会**临时改交付面一个文件**
+#     （只追加一行、立刻按 bytes 复原、MD5 校验；⛔ 不新建文件）⇒ **别与其它交付面改动同时跑**。
 ```
 
 ⭐ **为什么必须含 `doc_audit --ui`**：它跑交付面四检（`_smoke`/`_doccheck`/`_links`/`_ids`），
@@ -109,6 +133,9 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui     # ⭐⭐ 交�
 - `[助手自定·实测]` 多 router 共用件（会话/当前查询/PRG 回跳/筛选解析）**必须抽中立件**，否则**循环 import**。
 - `[助手自定·实测]` ⭐ **路由引用错只能靠「真机请求」或「静态扫描」发现** ⇒ 守卫 = `tests/router_refs.py`；⚠️ **不带 `as` 的导入也必须查**。
 - `[助手自定·实测]` ⭐ **「预览不写库」的暂存只许一份** = `app/core/preview_store.py`。
+- `[助手自定·实测·2026-09-24]` ⭐ **产物分两处**：一次性**日志/回显**（跑批输出 / 变异回显 / `_gate_*`）⇒ 进 `work/00-scratch/`
+  （**受 `T14` 的 14 天 TTL 管**）；`artifacts/` 只放**约定产物**（`acc_results.json` / `_mut_acc_results.json` / 变异覆盖台账）
+  ＋**能直接打开看的样例**（主题预览 / 渲染样例）。⚠️ 实证：产物档积过 **70 件**零引用日志 ⇒ **搬**（进 scratch）不**删**（不在 git 里）。
 - `[用户·2026-09-21]` ⭐ **远端已配通**（`origin` → gitee `s-cy/mtrl-workbench`）⇒ ⚠️ **提交与推送按用户当前指令**：2026-09-21 定「**先不提交，继续攒**」⇒ ⛔ 别每轮自动提交（攒够了由用户说一声）。⚠️ 真要提交时：多对话 ⇒ **只 `git add` 自己改的文件**。
 - `[用户·2026-09-21]` ⚠️ **后台进程会被回收** ⇒ **常驻就落 Windows 服务**（`mtrl-workbench-server` · `D19`）。⚠️ **改后端必须重启服务才生效**：**服务 cmdlet**（先停 → 等几秒 → 再起；⚠️ **无输出是已知现象** ⇒ 事后 `curl` 复查；⛔ 别用 `schtasks.exe`）。
 - `[用户·实测]` ★ **材料报表成品怎么生成** → `ops/模板法导出-实测结论.md`：**两条路**（§一~§八 = 路径②`zip` 字节替换；**§九 = 路径①模板填充** `tpl_fill.py`：认 `DATA_START` 文字定位 · 尾块随行数派生 · **新数据区之外一格不留**）；⚠️ **模板本体是运行时依赖**（SHA256 闸门）。
@@ -121,13 +148,34 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui     # ⭐⭐ 交�
   ① **注入档**（本文件 —— 唯一每会话必读）② **按需档**（`MEMORY-细则.md` · 计划 · 各主人文档）
   ③ **留痕档**（`journal/` · `归档-*` —— ⭐ **只追加、不回读**）④ **产物档**（`artifacts/`）
   —— ⚠️ 分层的意义：**超预算的失败方式很特别** —— 我不读、改去 `grep` ⇒ **没被搜到的东西就永久丢了**；
+- `[助手自定·2026-09-23 用户要求「定下几份关键框架，我时不时提醒你」]` ⭐⭐ **防我出错的框架就是上面这四层，
+  ⛔ 不再新增"框架文档"**（本仓已**三次重构清"副本债"**）。有效形式只有四种，按强度：
+  **① 机器非过不可**（尺子/闸门/守卫 ⇒ 出错就**红**）＞ **② 注入档一行**（本文件 —— 唯一每会话自动读）＞
+  **③ 单点台账 ＋ 索引**（计划 `§15`/`§14.3` · `ops/阈值表.md` ⇒ 可查可核、唯一出处）＞ **④ 反向灵敏度**
+  （`tools/mut/*` ⇒ 证明判据**有区分力**、不是假绿）；＋ 钩子 `project-handoff`（压缩检查点自动提醒）。
+  ⚠️ **"你再检查一遍"不是常规手段**（贵且不确定）⇒ 替代品二选一：**加一把尺子** 或 **进 `§15` 台账**。
+  用户说「**按框架走**」= 读本文件 §〇/§八 ＋ 计划 `§0` 前的**问答表** ＋ `§15`/`§14.3`（说明件 =
+  `.workbuddy/work/10-designs/设计-防错指令架构-20260923.md`，⛔ 它是说明、不是真源）。
   ⇒ 超预算的正确动作是**把历史叙事挪进留痕档**（⛔ 不是删真东西）。
-- `[助手自定·实测]` ⭐⭐ **每轮收尾必须跑全套 pytest，⛔ 不能只跑 11~13 把尺子**（2026-09-21 血的教训）：
-  尺子看的是**文档与接线**，**行为判据全在 pytest**（1127 条）。实测漏跑一次 ⇒ `dlExport` 抽取后
+- `[助手自定·实测]` ⭐⭐ **每轮收尾必须跑全套 pytest，⛔ 不能只跑 13 把尺子**（2026-09-21 血的教训）：
+  尺子看的是**文档与接线**，**行为判据全在 pytest**（⚠️ 条数**别写死** —— 实测会涨；现值跑
+  `tools/audit/acc_report.py` 或 `doc_audit --block` 取，2026-09-24 实测 = **1218** 条）。实测漏跑一次 ⇒ `dlExport` 抽取后
   **9 个测试红了两天没人知道**（直到下一轮"继续"才暴露）。
+- `[用户·2026-09-24]` ⭐⭐ **要我拍板的事，必须先给「分析 ＋ 明确推荐」**（用户原话：「不要说不清直接问」）：
+  每条待决点都要带 ① **事实/证据**（可复核的数字、出处、我实测到了什么）② **可选方案**（含被否决的）
+  ③ **明确推荐**（⛔ 只列选项不给倾向 = 没分析）④ **推荐理由 ＋ 代价/风险**（不推荐其它方案的理由也要写）。
+  ⛔ **不许把没分析过的选择题原样抛回来** —— 那等于让用户替我做分析，只会多一轮往返。
 - `[助手自定·实测]` ⭐ **"钉源码形态"的断言，抽通用件时会假红** ⇒ 判据要**结构无关**：
   动作委托了哪个件 ＋ 那个件里真做了那件事（壳侧用 `tests/shell_src.with_kernel()` 把两段拼起来看）。
   ⛔ **别为了让断言变绿而把通用件塞回每个动作** —— 那等于宣布"以后不许抽通用件"。
+
+- `[助手自定·实测·2026-09-24]` ⭐ **`T7a` 判据覆盖清单**（**登记档，不判红**）：主人 = `tools/audit/cover_gap.py`
+  ＋ 登记册 `tools/t7_expected.txt`（行首 `x ` = 已清 · `#` = 转 `T7_EXEMPT` · 无前缀 = 未清）。
+  ⚠️「这条能力**有没有用例认领**」与「它的口径**有没有人 cover**」是**两件事**，必须分开报（合并报会把清单噪音化）。
+  ⚠️ 2026-09-24 修掉两个**静默** bug：① 行号 `L{i+1}`（`i` 本已 1-based）② 登记册路径按**自身所在目录**拼 ⇒
+  `load_cleared()` 恒读到空集、**`x` 标记从未生效**且**没有任何报错**（降级方向还是「宁多报」，看着反而更安全）
+  ⇒ 现在由 **`T16` 红档**守「登记册读不到 / 解析不出条目」。
+  ⭐ 教训（可复用）：**「读不到 ⇒ 降级成更保守的默认值」是假绿温床** —— 降级方向看着安全，实则该生效的规则全废了。
 
 ## 九 · 十 · 十一 · 十二 · 十三 · 十四 · 十五（**全文在分册同名节**）
 - **§九 打印**：唯一渲染入口 = `service.render_notice_html(...)`（**预览 = 实印**）；签名格「办理节点」**两种写法都要认**（`fieldId="办理节点"` / `task_des`），**漏认 ⇒ 静默漏印签名**。
@@ -143,8 +191,8 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui     # ⭐⭐ 交�
 - 起停/状态/日志/端口 = **`ops\server_ctl.ps1`**（⚠️ 改完后端必须 `restart`，否则新端点 404 而自检照绿）。
 - 其余（NSSM 安装/迁移/回滚、LocalSystem 浏览器坑、配置项、备份保留期、换机 checklist）⇒ **`docs/runbook.md`**。
 
-## 十七、本机环境坑（⭐ 已下沉 `docs/runbook.md` §七 · 保留两条**每轮高危**）
+## 十七、本机环境坑（⭐ 细则已收口到 `MEMORY-细则.md` §廿三 · 保留两条**每轮高危**）
 - ⛔ **别写内联 `python -c "..."`**（PowerShell 引号打架）⇒ 一律落成脚本文件再跑。
 - ⚠️⚠️ 跑**非全套** pytest 必须设 `$env:ACC_RESULTS_PATH='../artifacts/_mut_acc_results.json'`（⛔ 否则把权威四态冲成残档、`T4` 报红）；跑完必须重跑全套写回。
-- 其余（删文件走专用工具 · commit -F · CRLF 锚点 · 自检回滚 · models_registry · Measure-Object 差 12%） ⇒ **`docs/runbook.md` §七**。
+- 其余（删文件走专用工具 · `commit -F` · CRLF 锚点 · 自检回滚 · `models_registry` · PS 量行数） ⇒ **`MEMORY-细则.md` §廿三**（⚠️ 原先写「`docs/runbook.md` §七」而**该节不存在**（runbook 止于 §六）⇒ 已收口；这也是 `T19` 立起来的由头）。
 

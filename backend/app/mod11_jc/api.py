@@ -261,65 +261,13 @@ def api_fields(payload: FieldsIn) -> dict:
         return SV.act_update_contract(s, contract_id=int(payload.id), **(payload.fields or {}))
 
 
-class ImportParseIn(BaseModel):
-    """`M5-8` 预览入参 —— ⚠️ 走 **base64**（不用 multipart：免引 `python-multipart` 依赖）。
-
-    ⚠️ 两个端点的**入参形状刻意一致**：`parse` 只回预览元信息（⛔ 不回全量行），
-       到 `commit` 时**前端把同一个文件再传一次** ⇒ 服务端**无状态**（见 `import_service` 模块头）。
-    """
-
-    filename: str
-    content_b64: str
-
-
-class ImportCommitIn(ImportParseIn):
-    sheet: str
-    project_key: str
-    row1: int | None = None            # 两行表头（**1 基**，给人看的；不给则用探测值）
-    row2: int | None = None
-    mapping: dict[str, str] = {}       # 人在预览页手改的列映射（{"列下标": "字段名"}，"" = 忽略）
-
-
-def _b64(data: str) -> bytes:
-    import base64
-
-    txt = str(data or "").strip()
-    if "," in txt[:64] and txt.lstrip().startswith("data:"):      # 容忍 `data:...;base64,` 前缀
-        txt = txt.split(",", 1)[1]
-    return base64.b64decode(txt)
-
-
-@router.post("/api/m11/import/parse")
-def api_import_parse(payload: ImportParseIn) -> dict:
-    """集采台账 Excel **预览**（`M5-8`）—— 回每张工作表的**列名 / 映射 / 条数 / 样例 / 跳过账**。
-
-    ⚠️ **落库前必须走到"列名核对"这一步**：认不出 / 撞名的列要**摆出来让人点**（⛔ 不猜、⛔ 不静默丢列）。
-    """
-    from app.mod11_jc.import_service import preview
-
-    try:
-        data = _b64(payload.content_b64)
-    except Exception as exc:                                     # noqa: BLE001
-        return {"ok": False, "message": f"文件内容读不出来：{type(exc).__name__}"}
-    try:
-        return preview(data, payload.filename)
-    except Exception as exc:                                     # noqa: BLE001 —— 坏文件要回一句话，不是 500
-        return {"ok": False, "message": f"这个文件打不开：{type(exc).__name__}: {exc}"[:160]}
-
-
-@router.post("/api/m11/import/commit")
-def api_import_commit(payload: ImportCommitIn) -> dict:
-    """集采台账 **确认落库**（`M5-8`）—— **幂等**：已存在的行不动；只建主表行 ＋ 两条汇总发票行。"""
-    from app.mod11_jc.import_service import commit
-
-    try:
-        data = _b64(payload.content_b64)
-    except Exception as exc:                                     # noqa: BLE001
-        return {"ok": False, "message": f"文件内容读不出来：{type(exc).__name__}"}
-    with session_scope() as s:
-        return commit(s, data, payload.filename, sheet=payload.sheet,
-                      project_key=payload.project_key, mapping=payload.mapping,
-                      row1=payload.row1, row2=payload.row2)
+# ⛔ `POST /api/m11/import/parse` 与 `/api/m11/import/commit`（`M5-8` 的**页内导入面**）已**连件删除**
+#    （`TAIL-75` 余项 · 2026-09-23 **用户裁定**：「导入基本上只在刚开始用系统时导一次，之后就实时更新了」
+#    ⇒ **只留通用面**）。⭐ 集采台账的导入现在是通用面的 `m11_jc` 域
+#    （`/api/imp/m11_jc/{schema,parse,preview,commit}`，域声明见 `mod11_jc/imp_spec.py`）。
+#    ⚠️ **匹配口径仍只有一份**：`import_service.match_and_apply`（通用面的域钩子也调它）
+#    ⇒ ⛔ 别把它连同这两个端点一起删；也⛔ 别再把这套页内端点加回来。
+#    ⚠️ 那两个 class（`ImportParseIn`/`ImportCommitIn`）与模块内的 `_b64()` 只服务这两个端点 ⇒ 同批删除。
 
 
 class LinkIn(BaseModel):

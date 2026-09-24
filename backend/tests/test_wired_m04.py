@@ -120,17 +120,21 @@ def test_导入与手动行已接通():
 
 @acc()
 def test_导入与手动行走后端():
-    """⭐ 接线点：导入 = **multipart** → `/api/m04/import/parse|confirm`（`TAIL-69` 两步）；手动行 = JSON → `/api/m04/plans`。
+    """⭐ 接线点：导入 = **multipart** → **通用导入面**（`TAIL-69` 三步：解析 → 预览 → 确认）；手动行 = JSON → `/api/m04/plans`。
 
-    ⚠️ 2026-09-22（`TAIL-69`）：一步式 `API.m04Import` 已撤 ⇒ 判据改钉**两步**：
-       `plImportOk` = 解析预览（不写库）· `plImportConfirm` = 凭 token 落库。
+    ⚠️ 2026-09-22（`TAIL-75` `B5c`）：付款计划**页内弹窗已删**，导入收进「**数据导入**」向导（通用导入面）
+       ⇒ **判词一字未改**（"预览不写库、确认才落库"），只把**落点**从 `/api/m04/import/*` 换成
+       `/api/imp/m04_plan/*`（域声明见 `mod04_plan/imp_spec.py`）。
+       ⚠️ 切片里那个按钮的文案没动（`U1` 零漂移），变的只是它的**动作**（跳到向导并预选本域）。
     """
-    assert "m04ImportParse: async (year_month, file) =>" in SHELL, "导入没写 multipart 客户端（parse）"
+    assert "impParse: (domain, fd) =>" in SHELL, "通用面的解析没写 multipart 客户端"
     assert "new FormData()" in SHELL, "导入没用 `FormData`（multipart 只能这么传）"
-    assert "plImportOk:async ()=>" in SHELL, "`plImportOk` 没改成 async（那还是假导入）"
-    assert "API.m04ImportParse(" in SHELL, "`plImportOk` 没走 `/api/m04/import/parse`（预览）"
-    assert "API.m04ImportConfirm(" in SHELL, "缺「确认落库」一步（`/api/m04/import/confirm`）"
-    assert "plImportPreview:()=>{" in SHELL, "缺预览弹窗（先看见再确认 —— `TAIL-69` 核心）"
+    assert "plImport:async ()=>{ await impSetDomain('m04_plan');" in SHELL, (
+        "付款计划页的导入按钮没接到通用向导（也没预选本域）"
+    )
+    for step in ("API.impParse(", "API.impPreview(", "API.impCommit("):
+        assert step in SHELL, f"向导少一步：{step}（预览不写库 → 确认才落库）"
+    assert "ACT.impPreview = async () =>" in SHELL and "ACT.impCommit = async () =>" in SHELL, "向导两步动作不在"
     assert "m04PlanSave: body => API.post('/api/m04/plans', body)" in SHELL, (
         "手动行没走 `/api/m04/plans`"
     )
@@ -199,19 +203,21 @@ def test_后端两个新端点存在():
     api = (base / "plan_api_router.py").read_text(encoding="utf-8")
     router = (base / "router.py").read_text(encoding="utf-8")
     assert '@router.post("/api/m04/plans")' in api, "后端缺 `POST /api/m04/plans`"
-    # ⚠️ 2026-09-22（`TAIL-69`）：一步式已软退役（路由留着回"请刷新"）⇒ 判据改钉**两步端点**
-    assert '@router.post("/api/m04/import/parse")' in api, "后端缺 `POST /api/m04/import/parse`（预览）"
-    assert '@router.post("/api/m04/import/confirm")' in api, "后端缺 `POST /api/m04/import/confirm`（落库）"
     assert "router.include_router(plan_api_router)" in router, "`router.py` 没汇总 API 路由（端点会 404）"
-    for fn, needle, why in (
-        ("def api_plan_row_save(", r"(?<![A-Za-z_])manual_row_payload\(",
+    # ⚠️ 2026-09-23（`TAIL-75` 余项 · **用户裁定**「只留通用面」）：付款计划的**页内导入面连件删除**
+    #    （含 2026-09-22 起已软退役的一步式）⇒ 导入那半的落点改指**通用面**：域声明 `imp_spec.py`。
+    #    ⭐ **判词一字未改** —— 还是"落库必须走 `repo.merge_month`（§9.5 幂等）"，只是那件事现在
+    #    由域钩子 `imp_spec.commit` 做（通用面调的也是它）。
+    imp = (base / "imp_spec.py").read_text(encoding="utf-8")
+    for src, fn, needle, why in (
+        (api, "def api_plan_row_save(", r"(?<![A-Za-z_])manual_row_payload\(",
          "手动行端点没走 `manual_row_payload`（判定该与 PRG 端点复用**同一出口**）"),
-        # ⚠️ 2026-09-22（`TAIL-69`）：一步式已软退役 ⇒ 幂等落库（merge_month）改钉在 **confirm** 端点体
-        ("def api_plan_import_confirm(", r"(?<![A-Za-z_])repo\.merge_month\(",
-         "导入端点没走 `repo.merge_month`（§9.5 幂等就没了）"),
+        (imp, "def commit(s, records, mapping_, operator, options):",
+         r"(?<![A-Za-z_])repo\.merge_month\(",
+         "导入落库没走 `repo.merge_month`（§9.5 幂等就没了）"),
     ):
-        i = api.find(fn)
-        assert i > 0, f"`plan_api_router.py` 里找不到 `{fn}`"
-        j = api.find("\n@router.", i)                     # 到下一个路由为止（函数体边界）
-        body = api[i:j if j > i else i + 2500]
+        i = src.find(fn)
+        assert i > 0, f"找不到 `{fn}`（`plan_api_router.py` / `imp_spec.py`）"
+        j = src.find("\n@router.", i)                     # 到下一个路由为止（函数体边界）
+        body = src[i:j if j > i else i + 2500]
         assert re.search(needle, body), why

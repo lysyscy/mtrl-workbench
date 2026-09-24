@@ -913,16 +913,23 @@ function applySorts(html,scope){
 const NAV=[
  {g:'概览',items:[['home','看板','—']]},
  {g:'主数据 · 基础',items:[['m01','项目档案','MOD-01'],['m02','i8 接入层','MOD-02']]},
- {g:'付款域',items:[['m03','付款通知书','MOD-03'],['m04','付款计划','MOD-04'],['m05','付款流水与欠款统计','MOD-05'],['m05imp','历史付款导入','MOD-05']]},
- {g:'报表域',items:[['m06','过程资料','MOD-06'],['m06imp','过程资料历史导入','MOD-06'],['m07','收发结存与活动大表','MOD-07'],['m08','库存单据与调整单','MOD-08'],['m09','特殊费用月报表','MOD-09'],['m10','机械费（暂缓）','MOD-10']]},
+ {g:'付款域',items:[['m03','付款通知书','MOD-03'],['m04','付款计划','MOD-04'],['m05','付款流水与欠款统计','MOD-05']]},
+ {g:'报表域',items:[['m06','过程资料','MOD-06'],['m07','收发结存与活动大表','MOD-07'],['m08','库存单据与调整单','MOD-08'],['m09','特殊费用月报表','MOD-09'],['m10','机械费（暂缓）','MOD-10']]},
  {g:'集采域',items:[['m11','集采台账','MOD-11']]},
- {g:'全局',items:[['m13','跨域能力','MOD-13'],['m14','规则配置','MOD-14'],['set','系统设置','MOD-14'],['m15','用户管理','MOD-15']]}
+ {g:'全局',items:[['imp','数据导入','通用'],['m13','跨域能力','MOD-13'],['m14','规则配置','MOD-14'],['set','系统设置','MOD-14'],['m15','用户管理','MOD-15']]}
 ];
-/* ⚠️ `m05imp` / `m06imp` / `set` = **暂留件收口**后的壳内页面（`§19` · 2026-09-21）——
-  它们**不在 `demo/` 原型里**（原型没有这几页）⇒ 实现放在 `web/shell/legacy.js`（接线层加件）。
-  ⭐ 这也意味着 `ui_parity` 的 `U1`（只比原型**同名** `V.*` 切片）**不覆盖它们** ⇒ 无"逐行对位"负担。
-  ⛔ `m08imp`（库存单据导入）已删（2026-09-22 用户裁定「不要了」；`T8` 守卫）。 */
-const TITLE={home:'看板 · 待办',m01:'项目档案',m02:'i8 接入层',m03:'付款通知书',m04:'付款计划',m05:'付款流水与欠款统计',m06:'过程资料',m07:'收发结存与活动大表',m08:'库存单据与调整单',m09:'特殊费用月报表',m10:'机械费（暂缓）',m11:'集采台账',m12:'差异登记',m13:'跨域能力',m14:'规则配置',m15:'用户管理',m05imp:'历史付款流水导入',m06imp:'过程资料历史导入',set:'系统设置'};
+/* ⚠️ `set` = **暂留件收口**后的壳内页面（`§19` · 2026-09-21）——
+  它**不在 `demo/` 原型里**（原型没有这一页）⇒ 实现放在 `web/shell/legacy.js`（接线层加件）。
+  ⭐ 这也意味着 `ui_parity` 的 `U1`（只比原型**同名** `V.*` 切片）**不覆盖它** ⇒ 无"逐行对位"负担。
+  ⛔ `m08imp`（库存单据导入）已删（2026-09-22 用户裁定「不要了」；`T8` 守卫）。
+  ⛔ **`m06imp`（过程资料历史导入页）已下架**（`TAIL-75` `B5c` · 2026-09-22）：能力**整体搬进**
+     「**数据导入**」页（`imp`，通用导入面 `/api/imp/m06_proc/*`）⇒ 同一件事不留两个入口。
+  ⛔ **`m05imp`（历史付款导入页）也已下架**（`TAIL-75` `B5b` 第三步 · 2026-09-23 **用户裁定 `B`**）：
+     同一件事只留一个入口 ⇒ 能力**整体搬进**「**数据导入**」页（`imp`，`/api/imp/m05_flow/*`）。
+     ⚠️ **代价已记账**：旧页按**源表列位置**读、通用面按**列名**认 ⇒ 老台账若没有表头，
+        请先补一行表头（判据 `ACC-FLOW-IMPORT-001/001-01` 已按此改写）。
+     ⛔ 后端 `/api/m05/import/*` 那几条端点**同批连件删除**（`import_api.py`）。 */
+const TITLE={home:'看板 · 待办',m01:'项目档案',m02:'i8 接入层',m03:'付款通知书',m04:'付款计划',m05:'付款流水与欠款统计',m06:'过程资料',m07:'收发结存与活动大表',m08:'库存单据与调整单',m09:'特殊费用月报表',m10:'机械费（暂缓）',m11:'集采台账',m12:'差异登记',m13:'跨域能力',m14:'规则配置',m15:'用户管理',set:'系统设置',imp:'数据导入'};
 let VIEW='home';
 /* ⭐ **身份状态**（给顶栏"说实话"用）：`'in'` = 拿到了身份；`'none'` = **后端答了、但没有身份**
    （未登录 / 会话过期 / 名字对不上账号）；`''` = **压根没答上来**（取数失败 ⇒ `applyWho` 没跑）。
@@ -1080,10 +1087,15 @@ const V={}, BIND={};
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
 const WIRED=new Set(['home','m03','m01','m02','m04','m05','m06','m07','m08','m09','m14','m11','m15',
-  /* ⭐ `§19`「暂留件收口」（2026-09-21）：设置 ＋ 两个历史导入 —— 它们**全读后端真数据**
-     （`/api/m14/settings` · `/api/m0{5,6}/import/*`）⇒ 顶栏照实说「已接后端真实数据」。
+  /* ⭐ `§19`「暂留件收口」（2026-09-21）：设置 —— 它**全读后端真数据**（`/api/m14/settings`）
+     ⇒ 顶栏照实说「已接后端真实数据」。
      ⛔ `m08imp` 已删（2026-09-22 用户裁定）。 */
-  'set','m05imp','m06imp']);
+  'set',
+  /* ⭐ `TAIL-75` `B5`（2026-09-22）：**通用导入面**的壳页 —— 域清单与一步一数据全来自后端
+     （`/api/imp/domains` → `/api/imp/{域}/schema|parse|preview|commit|rollback`）⇒ 同样照实说"已接后端"。
+     ⛔ `m06imp` **已下架**（`B5c`：能力整体搬进本页）· ⛔ **`m05imp` 也已下架**（`B5b` 第三步 ·
+     2026-09-23 用户裁定 `B`：同一件事只留一个入口，`/api/imp/m05_flow/*` 承接）。 */
+  'imp']);
 
 /* ---------- 运行记录（§3.1.3 抓取 / §4.6 打印）—— 最小形态：时间 · 对象 · 结果 · 失败原因 ----------
    口径主人 =《材料科业务全流程说明书》§3.1.3 / §4.6「执行记录与看板提示」：
@@ -1554,6 +1566,17 @@ const ntDraftRow=()=>{ const d=naD, cat=d.cat||'辅材', isJc=cat==='集采';
    ⇒ 把**表头抽成唯一出处**（`NT_THEAD`），**跨列数由它算**（`thCount`）—— 加列时不可能忘记改 colspan。
    ⚠️ 每行的 `<td>` 仍逐行写：值各不相同，收不了（这是**数据**，不是结构）。
    ⚠️ 表头 HTML **一字不改**（只搬进常量）—— `applySorts` 靠表头文本判列类型与可排性，改一个空格都可能改行为。 */
+/* ⭐ **表格件**（`TAIL-64` P0 · 2026-09-24）—— 一张表的**外壳**统一由它渲染：表头 / 行 / 空态 / 合计。
+   ⭐ 抽它的真理由 = **虚拟滚动只需要挂一处**（本件内），且「表该怎么开（`class` / `data-sort`）」只有一个口径。
+   契约：`TBL({head, rows, empty, sum, key})` ⇒ 返回完整 `<table …>…</table>`（⚠️ 不含外层 `.tw`）。
+   ⛔ 与 `sumRowOf` / `thCount` 的分工：那两个是**纯算法**（求和 / 数列），本件只管**拼装**。 */
+const TBL=({head='',rows=[],empty='',sum='',key='',cls=''})=>{
+  const attr=' class="dt'+(cls?' '+cls:'')+'"'+(key?' data-sort data-sort-key="'+key+'"':'');
+  const th=head?'<thead><tr>'+head+'</tr></thead>':'';
+  return '<table'+attr+'>'+th+'<tbody>'
+    +rows.join('')+(rows.length?'':empty)+sum+'</tbody></table>';
+};
+
 const thCount=h=>(String(h).match(/<th\b/g)||[]).length;   /* 一张表有几列 —— 从表头数出来，不写死 */
 /* ⚠️ **表头有几「列」**（不是有几个 `<th>`）—— **两行表头**时两者不等：活动大表 `<th>` 共 23 个，而**列数是 20**
    （`rowspan` / `colspan` 各只占 1 个 `<th>`）⇒ `thCount` 会把列数**多算**、合计行就会多出几个空 `<td>`，
@@ -2597,8 +2620,8 @@ V.m01=()=>{
       <button class="btn" data-act="fPjReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${rows.length}</b> 行 · 含占位行 ${PJs.filter(p=>p.name.startsWith('未建仓-')).length}</span>
     </div>
-    <div class="tw"><table class="dt" data-sort data-sort-key="m01:projects"><thead><tr>${PJ_THEAD}</tr></thead><tbody>
-    ${rows.map(p=>`<tr class="${p.name.startsWith('未建仓-')?'hl':''}">
+    <div class="tw">${TBL({head:PJ_THEAD,key:'m01:projects',rows:[
+    ...rows.map(p=>`<tr class="${p.name.startsWith('未建仓-')?'hl':''}">
       <td class="ctr now"><input class="inp num" style="width:46px" data-act="editOrd" data-id="${p.id}" value="${p.ord}" title="自定义排序号：改它 → 全站（项目 / 仓库 / 展示名）的顺序都跟着变；序号会自动重编号保持连续">
         <button class="btn sm" data-act="ordUp" data-id="${p.id}" title="上移一位">↑</button><button class="btn sm" data-act="ordDown" data-id="${p.id}" title="下移一位">↓</button></td>
       <td>${typeTag(p.type)}</td>
@@ -2612,14 +2635,13 @@ V.m01=()=>{
       <td class="ctr now">${p.name.startsWith('未建仓-')?`<button class="btn sm pri" data-act="promote" data-id="${p.id}">扶正</button>`:''}
         ${p.type==='small'?`<button class="btn sm" data-act="editKw" data-id="${p.id}">改关键词</button>`:''}
         <button class="btn sm dg" data-act="delPj" data-id="${p.id}">删除</button></td>
-    </tr>`).join('')}
-    ${rows.length?'':`<tr><td colspan="${thCount(PJ_THEAD)}" class="ctr mut" style="padding:22px">当前筛选条件下没有项目档案</td></tr>`}
-    </tbody></table></div>
+    </tr>`)
+    ],empty:`<tr><td colspan="${thCount(PJ_THEAD)}" class="ctr mut" style="padding:22px">当前筛选条件下没有项目档案</td></tr>`})}</div>
     <div class="bd"><div class="tip dg" style="margin:0"><b>⚠️ 最致命的陷阱（§2.5 铁律 / 全局铁律 5、6）：</b>处理付款通知书时必须<b>先判断「这个全名是不是某个壳」</b>，绝不能直接拿全名去撞项目表——一个壳全名对应多个具体小微，用全名反查会逐个覆盖、最后只剩最后一个，<b>钱就被记到错误的小微头上</b>。因此：<b>一切写操作按 id 定位，禁止用名字反查</b>。上表中「山东邹平铝业项目仓库」与「河北唐山海港项目仓库」共享壳全名「第四工程公司2026小微项目」，正是该陷阱的现实样本。</div></div>
   </div>
-  ${PJ_TRAIL.length?`<div class="card"><h4>修改留痕（全名 / 状态）</h4><div class="bd np"><table class="dt cond"><thead><tr><th>时间</th><th>项目</th><th>字段</th><th>改前值</th><th>改后值</th><th>改动人</th></tr></thead><tbody>
-    ${PJ_TRAIL.slice(-8).reverse().map(t=>`<tr><td class="fc">${t[0]}</td><td>${esc(t[1])}</td><td>${t[2]}</td><td class="sm mut">${esc(t[3])}</td><td class="sm">${esc(t[4])}</td><td>${t[5]}</td></tr>`).join('')}
-  </tbody></table></div></div>`:''}`;
+  ${PJ_TRAIL.length?`<div class="card"><h4>修改留痕（全名 / 状态）</h4><div class="bd np">${TBL({cls:'cond',head:'<th>时间</th><th>项目</th><th>字段</th><th>改前值</th><th>改后值</th><th>改动人</th>',rows:[
+    ...PJ_TRAIL.slice(-8).reverse().map(t=>`<tr><td class="fc">${t[0]}</td><td>${esc(t[1])}</td><td>${t[2]}</td><td class="sm mut">${esc(t[3])}</td><td class="sm">${esc(t[4])}</td><td>${t[5]}</td></tr>`)
+  ]})}</div></div>`:''}`;
 };
 
 /* =====================================================================
@@ -3180,15 +3202,14 @@ V.m09=()=>{
       <button class="btn" data-act="awfReset">重置</button>
       <span class="pill" style="margin-left:auto">1 个自动项 ＋ <b>${list.length}</b> 个手填项 ｜ 每项目每月一份 ｜ 报分公司工程科</span>
     </div>
-    <div class="tw"><table class="dt" data-sort data-sort-key="m09:awf"><thead><tr>${AWF_THEAD}</tr></thead><tbody>
-      <tr><td><b>安全文明施工费</b>（按 CBS 分类）</td><td>${tag('系统生成（唯一自动项）','ok')}</td><td class="num">${M(auto)}</td><td class="num">${pc(auto)}</td><td class="ctr mut sm">自动项不可改</td></tr>
-      ${list.length?list.map((r,i)=>`<tr><td><input class="inp plain" data-act="awfName" data-i="${i}" value="${esc(r[0])}"></td><td>${tag('手填','wn')}</td>
+    <div class="tw">${TBL({head:AWF_THEAD,key:'m09:awf',rows:[
+      `<tr><td><b>安全文明施工费</b>（按 CBS 分类）</td><td>${tag('系统生成（唯一自动项）','ok')}</td><td class="num">${M(auto)}</td><td class="num">${pc(auto)}</td><td class="ctr mut sm">自动项不可改</td></tr>`,
+      ...(list.length?list.map((r,i)=>`<tr><td><input class="inp plain" data-act="awfName" data-i="${i}" value="${esc(r[0])}"></td><td>${tag('手填','wn')}</td>
         <td class="num"><input class="inp num" style="width:110px" data-act="awfAmt" data-i="${i}" value="${r[1].toFixed(2)}"></td>
         <td class="num">${pc(r[1])}</td>
-        <td class="ctr"><button class="btn sm dg" data-act="awfDel" data-i="${i}">删除</button></td></tr>`).join('')
-      :`<tr><td colspan="${thCount(AWF_THEAD)}" class="ctr mut" style="padding:18px"><b>${tmLabel(awfYm)}</b> · <b>${esc(PROJ_META_KEY(awfPj).nm)}</b> 还没有手填项 —— 点右上角「＋ 增加手填项」补录（按「核算年月 ＋ 项目」各存一份，未录的那一份不计入）</td></tr>`}
-      ${sumRowOf(AWF_THEAD, list, {2:()=>total,3:[()=>total,()=>total>0?PCT(1):'<span class="mut">—</span>']})}
-    </tbody></table></div>
+        <td class="ctr"><button class="btn sm dg" data-act="awfDel" data-i="${i}">删除</button></td></tr>`)
+      :[`<tr><td colspan="${thCount(AWF_THEAD)}" class="ctr mut" style="padding:18px"><b>${tmLabel(awfYm)}</b> · <b>${esc(PROJ_META_KEY(awfPj).nm)}</b> 还没有手填项 —— 点右上角「＋ 增加手填项」补录（按「核算年月 ＋ 项目」各存一份，未录的那一份不计入）</td></tr>`])
+    ],sum:sumRowOf(AWF_THEAD, list, {2:()=>total,3:[()=>total,()=>total>0?PCT(1):'<span class="mut">—</span>']})})}</div>
     <div class="bd"><div class="tip" style="margin:0"><b>自动项来源：</b>库存单据的 <span class="fc">WBS / CBS</span> 字段（本页取 <span class="fc">CBS-安文费</span> 类目<b>出库</b>金额，<b>按所选核算年月 ＋ 所选项目</b>——项目按 <span class="fc">iv.wh</span> 取，§2.7.4）。<b><span class="fc">OPEN-06</span> 已定案：</b>手填项<b>可增项、项名也可改</b>（§5.5，本原型即按此实现）。<br><b>手填项按「核算年月 ＋ 项目」各存一份</b>（§9.2 材料报表类默认 = <b>上月</b>；项目键 = <b>仓库名</b>）；未录的那一份<b>不做带入</b>，为空即表示"该月 · 该项目"还没录。</div></div>
   </div>`;
 };
@@ -3482,16 +3503,16 @@ V.m13=()=>`
     <div class="tip dg" style="margin:0"><b>原规划</b>：系统内提醒 + 飞书消息推送双通道 / 节点前 N 天推送 / 时间节点总表页面。<br><b>用户最新口径</b>：「没有用…不需要提醒」→ 飞书取消 · 系统内提醒也不需要 · 时间节点总表页面不保留。<b>这显著减少了开发量。</b></div>
   </div></div>
   <div class="card" style="margin-bottom:0"><h4>一期 Non-goals 汇总（PRD 可直接引用）</h4><div class="bd np">
-    <table class="dt"><thead><tr><th>编号</th><th>事项</th><th>处理</th></tr></thead><tbody>
-      <tr><td class="fc">R15</td><td>时间节点与提醒督办</td><td><span class="tag t-dg">整条取消</span> 飞书 / 系统内提醒 / 节点总表页面都不做</td></tr>
-      <tr><td class="fc">R16 ~ R19</td><td>考核报表导出 · 竞价清单审查 · 集采合同审查 · 询价供应商管理与材料价格记录</td><td><span class="tag t-in">搁置</span></td></tr>
-      <tr><td class="fc">R4</td><td>附件双 tab（单据附件 / 审批后附件）</td><td><span class="tag t-wn">一期不做</span> 延后评估</td></tr>
-      <tr><td class="fc">R5</td><td>入库附件批量审查与导出</td><td><span class="tag t-in">二期</span></td></tr>
-      <tr><td class="fc">MOD-10</td><td>机械费核对（结算由过程资料机械列派生、只读）</td><td><span class="tag t-wn">近期不做</span></td></tr>
-      <tr><td class="fc">—</td><td>不做「待确认列表 / 多仓库汇总页」</td><td>走<b>逐次弹窗</b>（业务口径已否决）</td></tr>
-      <tr><td class="fc">—</td><td>不做「项目合并」「换壳」功能</td><td>合并走<b>行删除 + 重建</b>；<b>不支持换壳</b></td></tr>
-      <tr><td class="fc">—</td><td>不做自建付款通知书打印模板</td><td>只调 i8 接口，<b>不行则砍功能</b>（DEV-P-07）</td></tr>
-    </tbody></table></div></div>`;
+    ${TBL({head:'<th>编号</th><th>事项</th><th>处理</th>',rows:[
+      `<tr><td class="fc">R15</td><td>时间节点与提醒督办</td><td><span class="tag t-dg">整条取消</span> 飞书 / 系统内提醒 / 节点总表页面都不做</td></tr>`,
+      `<tr><td class="fc">R16 ~ R19</td><td>考核报表导出 · 竞价清单审查 · 集采合同审查 · 询价供应商管理与材料价格记录</td><td><span class="tag t-in">搁置</span></td></tr>`,
+      `<tr><td class="fc">R4</td><td>附件双 tab（单据附件 / 审批后附件）</td><td><span class="tag t-wn">一期不做</span> 延后评估</td></tr>`,
+      `<tr><td class="fc">R5</td><td>入库附件批量审查与导出</td><td><span class="tag t-in">二期</span></td></tr>`,
+      `<tr><td class="fc">MOD-10</td><td>机械费核对（结算由过程资料机械列派生、只读）</td><td><span class="tag t-wn">近期不做</span></td></tr>`,
+      `<tr><td class="fc">—</td><td>不做「待确认列表 / 多仓库汇总页」</td><td>走<b>逐次弹窗</b>（业务口径已否决）</td></tr>`,
+      `<tr><td class="fc">—</td><td>不做「项目合并」「换壳」功能</td><td>合并走<b>行删除 + 重建</b>；<b>不支持换壳</b></td></tr>`,
+      `<tr><td class="fc">—</td><td>不做自建付款通知书打印模板</td><td>只调 i8 接口，<b>不行则砍功能</b>（DEV-P-07）</td></tr>`
+    ]})}</div></div>`;
 
 V.m14=()=>`
   <details class="tip"><summary>口径说明 · 3 条 <span class="mut sm">点开查看（默认收起，把空间让给数据）</span></summary>
@@ -3501,27 +3522,27 @@ V.m14=()=>`
       <li><b>分类规则 3 步</b>（机械 → 集采 → 辅材），<b>只有三类、没有「其他」</b>；手改后重新抓取<b>不被覆盖</b>（§4.2.3 / §4.2.4）。</li>
     </ul></details>
   <div class="card"><h4>剔除规则（<b>${RULE_EX.length}</b> 类有效）<span class="sp"><button class="btn sm" data-act="ruleAdd" title="新增一条剔除规则（弹窗填「规则类别 / 命中值 / 业务含义」）">＋ 增加规则</button><span class="mut sm">命中即剔除，<b>标记保留、可筛选、不销毁数据</b></span></span></h4>
-    <div class="bd np"><table class="dt"><thead><tr><th>规则类别</th><th>命中值（多个用 ｜ 分隔）</th><th>剔除的业务含义</th><th>操作</th></tr></thead><tbody>
-    ${RULE_EX.map((r,i)=>`<tr><td><b>${esc(r[0])}</b></td><td class="fc">${esc(r[1])}</td><td class="sm mut">${esc(r[2])}</td>
-      <td class="ctr"><button class="btn sm" data-act="ruleEdit" data-i="${i}" title="改这条规则的「规则类别 / 命中值 / 业务含义」">编辑</button> <button class="btn sm dg" data-act="ruleDel" data-i="${i}" title="删除这条规则（配置类数据 = 硬删、不留痕，§9.4）">删除</button></td></tr>`).join('')}
-    </tbody></table></div>
+    <div class="bd np">${TBL({head:'<th>规则类别</th><th>命中值（多个用 ｜ 分隔）</th><th>剔除的业务含义</th><th>操作</th>',rows:[
+      ...RULE_EX.map((r,i)=>`<tr><td><b>${esc(r[0])}</b></td><td class="fc">${esc(r[1])}</td><td class="sm mut">${esc(r[2])}</td>
+      <td class="ctr"><button class="btn sm" data-act="ruleEdit" data-i="${i}" title="改这条规则的「规则类别 / 命中值 / 业务含义」">编辑</button> <button class="btn sm dg" data-act="ruleDel" data-i="${i}" title="删除这条规则（配置类数据 = 硬删、不留痕，§9.4）">删除</button></td></tr>`)
+    ]})}</div>
     <div class="bd"><div class="tip wn" style="margin:0"><b>剔除规则中不得配置「收款单位 = 资产处集中采购」</b>：集采<b>不走剔除</b>，而是参与<b>分类</b>（第 ② 步）。</div>
       <div class="tip" style="margin:6px 0 0"><b>本页「命中值」以系统配置为准</b>（当前来源：${esc(RULE_SRC)}）；初始即《说明书》§4.2.2 那张表。<br>⭐ 本表<b>可增 / 删 / 改</b>（配置类数据 = 硬删、不留痕，§9.4）；改动<b>只影响后续抓取</b>，已产生的剔除标记不受影响、也不重算。</div></div>
   </div>
   <div class="grid2">
-    <div class="card"><h4>分类规则（判定顺序）</h4><div class="bd np"><table class="dt"><thead><tr><th>顺序</th><th>条件</th><th>归入分类</th></tr></thead><tbody>
-      ${RULE_CA.map(r=>`<tr><td class="fc">${r[0]}</td><td class="fc sm">${esc(r[1])}</td><td>${catTag(r[2])}</td></tr>`).join('')}
-    </tbody></table>
+    <div class="card"><h4>分类规则（判定顺序）</h4><div class="bd np">${TBL({head:'<th>顺序</th><th>条件</th><th>归入分类</th>',rows:[
+      ...RULE_CA.map(r=>`<tr><td class="fc">${r[0]}</td><td class="fc sm">${esc(r[1])}</td><td>${catTag(r[2])}</td></tr>`)
+    ]})}
     <div class="bd"><div class="tip dg" style="margin:0"><b>分类只有三类</b>（机械 / 集采 / 辅材），<b>没有「其他」类</b>。任何剔除后剩余的通知书<b>必然落入三类之一</b>。手改后重新抓取导入，<b>分类不被覆盖</b>（人工判断优先于自动规则）。</div></div></div></div>
-    <div class="card"><h4>小微识别关键字配置<span class="sp"><span class="mut sm">已从全局 small_map 迁到项目行</span></span></h4><div class="bd np"><table class="dt"><thead><tr><th>具体小微（仓库名）</th><th>所属壳</th><th>识别关键词</th></tr></thead><tbody>
-      ${PJs.filter(p=>p.type==='small').map(p=>`<tr><td class="sm">${esc(p.name)}</td><td class="sm mut">${esc((PJs.find(x=>x.id===p.parent)||{}).full||'')}</td>
-        <td class="fc">${esc(p.kw)}</td></tr>`).join('')}
-    </tbody></table>
+    <div class="card"><h4>小微识别关键字配置<span class="sp"><span class="mut sm">已从全局 small_map 迁到项目行</span></span></h4><div class="bd np">${TBL({head:'<th>具体小微（仓库名）</th><th>所属壳</th><th>识别关键词</th>',rows:[
+      ...PJs.filter(p=>p.type==='small').map(p=>`<tr><td class="sm">${esc(p.name)}</td><td class="sm mut">${esc((PJs.find(x=>x.id===p.parent)||{}).full||'')}</td>
+        <td class="fc">${esc(p.kw)}</td></tr>`)
+    ]})}
     <div class="bd"><div class="tip" style="margin:0"><b>设计要点（决策 3/4）：</b>关键词是<b>具体小微的属性</b>，存在<b>项目行</b>上（<span class="fc">|词1|词2|</span> 格式）；<b>允许重复</b>，命中多个时<b>弹窗让用户选</b>，选中后去重追加到该小微名下。</div></div></div></div>
   </div>
-  <div class="card" style="margin-bottom:0"><h4>全局铁律（§9.8 · 10 条，实现与验收都按此）</h4><div class="bd np"><table class="dt cond"><tbody>
-    ${['金额 2 位小数、HALF_UP、Decimal、容差 0','源数据不动，人工判断走旁路载体','人工改过的值不被导入覆盖','仓库名不可人工修改（只能系统建档/扶正时写）','一切写操作按 id 定位，禁止用名字反查','处理付款通知书时先判断是否为壳，不可直接拿全名撞表','小微必须先有壳后有微（不可单独存在）','核心数据软删留痕、配置数据硬删','不标准值不清洗，原样入库 + 批量修改入口','材料月报不上报；过程资料才上报'].map((t,i)=>`<tr><td class="fc" style="width:40px">${i+1}</td><td>${t}</td></tr>`).join('')}
-  </tbody></table></div></div>`;
+  <div class="card" style="margin-bottom:0"><h4>全局铁律（§9.8 · 10 条，实现与验收都按此）</h4><div class="bd np">${TBL({cls:'cond',rows:[
+      ...['金额 2 位小数、HALF_UP、Decimal、容差 0','源数据不动，人工判断走旁路载体','人工改过的值不被导入覆盖','仓库名不可人工修改（只能系统建档/扶正时写）','一切写操作按 id 定位，禁止用名字反查','处理付款通知书时先判断是否为壳，不可直接拿全名撞表','小微必须先有壳后有微（不可单独存在）','核心数据软删留痕、配置数据硬删','不标准值不清洗，原样入库 + 批量修改入口','材料月报不上报；过程资料才上报'].map((t,i)=>`<tr><td class="fc" style="width:40px">${i+1}</td><td>${t}</td></tr>`)
+    ]})}</div></div>`;
 
 /* =====================================================================
    17. MOD-15 用户管理（§1.5 角色与权限）
@@ -3550,8 +3571,8 @@ V.m15=()=>{
     ${iAmAdmin?`<button class="btn" data-act="userTransfer">转让管理员</button>`:''}
     <button class="btn pri" data-act="userAdd" ${iAmAdmin?'':'disabled'} title="${iAmAdmin?'':'只有管理员可管理账号'}">＋ 新增账号</button>
     <button class="btn" data-act="logout">登出</button></h4>
-    <div class="tw"><table class="dt" data-sort data-sort-key="m15:users"><thead><tr><th>登录账号</th><th>姓名</th><th>角色</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead><tbody>
-    ${USERS.map(u=>`<tr class="${u.status==='在用'?'':'ex'}">
+    <div class="tw">${TBL({head:'<th>登录账号</th><th>姓名</th><th>角色</th><th>状态</th><th>最近登录</th><th>操作</th>',key:'m15:users',rows:[
+    ...USERS.map(u=>`<tr class="${u.status==='在用'?'':'ex'}">
       <td class="fc">${esc(u.acc)}</td>
       <td>${esc(u.name)}${u.id===CUR.id?' <span class="mut sm">（当前登录）</span>':''}</td>
       <td>${u.role==='admin'?tag('管理员','vi'):tag('普通用户','in')}</td>
@@ -3562,8 +3583,7 @@ V.m15=()=>{
         : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${iAmAdmin?'':'disabled'}>改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
            <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
            ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
-    </tr>`).join('')}
-    </tbody></table></div>
+    </tr>`)]})}</div>
     <div class="bd"><div class="tip" style="margin:0"><b>为什么只有 2 个账号还要做这一页：</b>不是为了分权限（两人权限相同），而是为了让「<b>谁改的</b>」有出处 —— 留痕里的改前人、付款流水的操作人，都要能对到一个<b>真实账号</b>，而不是一个写死的名字。这也是本页与业务字段的<b>唯一接点</b>。</div></div>
   </div>`;
 };
@@ -3579,6 +3599,7 @@ const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;g
          ② 必须在 `core.js` **之前** —— `core.js` 的 `LOADERS` 表**在加载期**就要求值到 `reloadSet` 那几个函数
             （它们住在本件里）；⛔ 放在 `core.js` 之后 ⇒ `reloadSet is not defined` ⇒ `core.js` 整支中止。 -->
   <script src="/static/shell/legacy.js"></script>
+  <script src="/static/shell/api.js"></script>
   <script src="/static/shell/core.js"></script>
   <script src="/static/shell/print-export.js"></script>
 

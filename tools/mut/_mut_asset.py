@@ -13,7 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = ROOT / "ops" / "素材包-索引.md"
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
-AUDIT = str(ROOT / "tools" / "asset_audit.py")
+# ⚠️ 2026-09-23：`asset_audit.py` 已搬进 `tools/audit/` —— 旧路径下子进程 rc=2（读不到审计件），
+#    而脚本把"rc != 1"记成**未变红** ⇒ 假绿（实测：`0/3 如期变红`）。
+AUDIT = str(ROOT / "tools" / "audit" / "asset_audit.py")
 
 
 def run() -> tuple[int, str]:

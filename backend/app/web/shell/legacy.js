@@ -21,14 +21,14 @@
  * ⚠️ 判定**一行都不在壳里**：格式校验 / 落库 / 留痕 / 批量回滚 / 幂等刷新全在后端（各模块 JSON API）。
  */
 
-/* ============================================================ 状态（四个页各一份） */
+/* ============================================================ 状态（暂留件各一份） */
 
 /* ⚠️ 一律 `const 对象 + 原地改字段`（⛔ 不整对象重新赋值）：外部（自检 / 动作）持有的是对象引用
-   —— 这条教训本仓记过（见 `actions.js` 里 `fJc` 那句）。 */
+   —— 这条教训本仓记过（见 `actions.js` 里 `fJc` 那句）。
+   ⛔ `IMP05`（历史付款导入旧页的状态）**已随该页下架删除**（`TAIL-75` `B5b` 第三步 · 2026-09-23
+      用户裁定 `B`：同一件事只留一个入口 ⇒ 走通用面 `/api/imp/m05_flow/*`，见 `V.imp`）。 */
 const SET = {items: [], logs: [], tips: [], errs: [], msg: '', kind: 'ok'};   /* 系统设置 */
-const IMP05 = {meta: null, file: null, token: '', preview: null, report: null, msg: '', kind: 'ok'};
-const IMP06 = {meta: null, data: null, pj: '', file: null, token: '', preview: null,
-               report: null, msg: '', kind: 'ok'};
+
 
 /* ============================================================ 取数（标签 → 函数 见 core.js 的 LOADERS） */
 
@@ -36,13 +36,7 @@ async function reloadSet() {
   const d = await API.m14Settings();
   SET.items = d.items || []; SET.logs = d.logs || []; SET.tips = d.tips || [];
 }
-async function reloadImp05() { IMP05.meta = await API.m05ImpMeta(); }
-async function reloadImp06() { IMP06.meta = await API.m06ImpMeta(); await imp06Load(IMP06.pj); }
-/* 过程资料导入：切项目 ⇒ 重拉该项目的截止核算月与批次（**候选项目由后端给** —— `service.projects_of`）。 */
-async function imp06Load(pj) {
-  const d = await API.m06ImpData(pj || '');
-  IMP06.data = d; IMP06.pj = String((d && d.warehouse) || '');
-}
+
 
 /* ============================================================ 小工具（⛔ 只在本件内用，不污染全局语义） */
 
@@ -66,6 +60,21 @@ function lgPick(id, pickAct, parseAct, file, tip) {
 }
 /* 空态行（跨列数由调用方给）。 */
 const lgEmpty = (cols, text) => `<tr><td colspan="${cols}" class="ctr mut" style="padding:18px">${esc(text)}</td></tr>`;
+/* 域补充区块（`TAIL-75` `B5b` 第三步：**通用面给域留的口子** —— 域侧补"只有它自己算得出"的几块，
+   如历史付款流水的「未匹配清单」与「核对报告」）。
+   ⚠️ 一律**通用渲染**（题 ＋ 说明 ＋ 表）：⛔ 壳里**不许出现任何域名 / 列名** ——
+      那全由**后端**（域钩子 `Hooks.preview` / `commit` 的回执）给 ⇒ 加一个域不必改本页。 */
+function lgBlocks(blocks) {
+  return (blocks || []).map(b => `<div style="margin-top:12px">
+    <h4 style="font-size:12.5px;margin:0 0 5px">${esc(b.title || '')}</h4>
+    ${b.note ? `<p class="mut sm" style="margin:0 0 5px">${esc(b.note)}</p>` : ''}
+    <div class="tw" style="max-height:260px;min-height:0"><table class="dt"><thead><tr>
+      ${(b.columns || []).map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>
+      ${(b.rows || []).length
+        ? b.rows.map(r => `<tr>${(r || []).map(c =>
+            `<td>${esc(c == null ? '' : String(c))}</td>`).join('')}</tr>`).join('')
+        : lgEmpty((b.columns || []).length || 1, b.empty || '（无）')}</tbody></table></div></div>`).join('');
+}
 
 /* ============================================================ `V.set` —— 系统设置（§7.8） */
 
@@ -138,157 +147,18 @@ V.set = () => {
     ${themeCard}`;
 };
 
-/* ============================================================ `V.m05imp` —— 历史付款流水导入（§4.4.6） */
-
-const IMP05_STEPS = ['① 列说明 ＋ 选文件', '② 预览（四块 · 不写库）', '③ 确认导入 ＋ 核对报告'];
-
-V.m05imp = () => {
-  const meta = IMP05.meta || {columns: [], max_rows: 0};
-  const cols = (meta.columns || []).map(([letter, name, required]) =>
-    `<tr><td class="ctr fc">${esc(letter)}</td><td>${esc(name)}</td>
-      <td class="ctr">${required ? '<span class="tag t-wn">必填</span>' : '<span class="mut">可空</span>'}</td></tr>`).join('');
-  let body = '';
-  if (IMP05.preview) {
-    const p = IMP05.preview;
-    const w = (p.rows || []).map(r => `<tr><td class="fc">${esc(r.bill_no)}</td><td class="num">${esc(r.amount)}</td>
-      <td class="now">${esc(r.pay_date)}</td><td>${esc(r.pay_method) || '<span class="mut">（空）</span>'}</td>
-      <td>${esc(r.remark)}</td></tr>`).join('');
-    const u = (p.unmatched || []).map(r => `<tr><td class="num">${esc(r.line)}</td><td class="fc">${esc(r.bill_no)}</td>
-      <td class="num">${esc(r.amount)}</td><td class="now">${esc(r.pay_date)}</td></tr>`).join('');
-    const a = (p.anomalies || []).map(x => `<tr><td class="num">${esc(x.line)}</td>
-      <td class="fc">${esc(x.bill_no) || '—'}</td><td>${esc(x.reason)}</td></tr>`).join('');
-    body += `<div class="card"><h4>② 预览 —— 尚未写库</h4><div class="bd">
-      <div class="tip">将写入 <b>${p.writable}</b> 条；未匹配 <b>${(p.unmatched || []).length}</b> 条；
-        异常 <b>${(p.anomalies || []).length}</b> 条${p.skipped_header ? '（检测到首行是表头，已自动跳过）' : ''}。
-        ⛔ 未匹配 / 异常两类的行**不入库**。</div>
-      <h4 style="font-size:12.5px;margin:10px 0 5px">将写入（前 300 行）</h4>
-      <div class="tw" style="max-height:300px;min-height:0"><table class="dt"><thead><tr><th>单据号</th>
-        <th class="num">付款金额</th><th>付款时间</th><th>付款方式</th><th>备注</th></tr></thead>
-        <tbody>${w || lgEmpty(5, '（没有可写入的行）')}</tbody></table></div>
-      <h4 style="font-size:12.5px;margin:12px 0 5px">未匹配清单（单据号在本地找不到 —— 多半是该月通知书还没抓）</h4>
-      <div class="tw" style="max-height:260px;min-height:0"><table class="dt"><thead><tr><th>行</th>
-        <th>单据号</th><th class="num">付款金额</th><th>付款时间</th></tr></thead>
-        <tbody>${u || lgEmpty(4, '（无 —— 全部单据号都匹配上了）')}</tbody></table></div>
-      <h4 style="font-size:12.5px;margin:12px 0 5px">异常清单（不入库）</h4>
-      <div class="tw" style="max-height:260px;min-height:0"><table class="dt"><thead><tr><th>行</th>
-        <th>单据号</th><th>原因</th></tr></thead><tbody>${a || lgEmpty(3, '（无）')}</tbody></table></div>
-      <h4 style="font-size:12.5px;margin:12px 0 5px">未识别的付款方式取值（已归入「其他」、原文进备注）</h4>
-      <p class="sm">${(p.unknown_methods || []).map(esc).join(' · ') || '（无）'}</p>
-      <div style="margin-top:8px"><button class="btn pri" data-act="imp05Ok">确认导入（写库并记批次）</button>
-        <span class="mut sm" style="margin-left:8px">同批重导须先整批回滚（幂等口径，§4.4.6）</span></div>
-      </div></div>`;
-  } else {
-    body += `<div class="card"><h4>① 列说明（按位置取，从 A 列开始）</h4><div class="bd">
-      <div class="tw" style="max-height:240px;min-height:0"><table class="dt"><thead><tr><th class="ctr">列</th>
-        <th>填什么</th><th class="ctr">要求</th></tr></thead><tbody>${cols || lgEmpty(3, '（取不到列契约）')}</tbody></table></div>
-      <p class="mut sm" style="margin-top:6px">• 首行若是表头会被自动跳过并提示。<br>
-        • <b>付款方式可空</b>（不会替你填「现汇」）；填了但认不出的，会归入「其他」并<b>把原文留在备注</b>。<br>
-        • 单据号必须是 i8 单据编码（形如 FKTZS2026090466）；<b>本地查不到的会列进「未匹配清单」</b>，不会静默丢掉。<br>
-        • 上限 ${esc(meta.max_rows)} 行。</p>
-      ${lgPick('i05f', 'imp05Pick', 'imp05Parse', IMP05.file, '只读第一个工作表')}</div></div>`;
-  }
-  if (IMP05.report) body += reportHtml(IMP05.report, 'imp05Rollback');
-  return `${lgSteps(IMP05_STEPS, IMP05.preview ? (IMP05.report ? 2 : 1) : 0)}${lgNotice(IMP05)}${body}`;
-};
-
-/* 核对报告（**付款域与过程资料同款**：③ 两部分 + 整批回滚按钮）。
-   ⭐ `P4` 超付处置第三半「**核对报告单列**」（§4.4.6）：漏记清单之外**另列一张超付清单** ——
-      「实付合计 > 审批金额」的单据单列出来（判定在后端 `repository.notices_overpaid`，⛔ 壳里不算）。 */
-function reportHtml(rep, rollAct) {
-  const main = (rep.rows || []).map(r => `<tr><td class="fc">${esc(r.bill_no)}</td>
-    <td class="now">${esc(r.doc_date)}</td><td>${esc(r.project_name)}</td>
-    <td class="num">${M(r.amount_approved)}</td></tr>`).join('');
-  const over = (rep.overpaid || []).map(r => `<tr><td class="fc">${esc(r.bill_no)}</td>
-    <td class="now">${esc(r.doc_date)}</td><td>${esc(r.project_name)}</td>
-    <td class="num">${M(r.amount_approved)}</td><td class="num">${M(r.amount_paid)}</td>
-    <td class="num"><span class="tag t-dg">${M(r.over_amount)}</span></td></tr>`).join('');
-  return `<div class="card"><h4>③ 核对报告<span class="sp mut sm">批次 <b class="fc">${esc(rep.batch)}</b>
-      · 涉及月份 ${esc((rep.months || []).join('、')) || '—'}</span></h4><div class="bd">
-    <div class="tip wn">其中 <b>${rep.count}</b> 张通知书**一条流水都没有**（供发现 Excel 漏记 —— 历史欠款能否对平就看它）：</div>
-    <div class="tw" style="max-height:260px;min-height:0"><table class="dt"><thead><tr><th>单据号</th>
-      <th>单据日期</th><th>付款项目</th><th class="num">审批金额</th></tr></thead>
-      <tbody>${main || lgEmpty(4, '（无 —— 这些月份的每张通知书都有流水了）')}</tbody></table></div>
-    <h4 style="font-size:12.5px;margin:14px 0 5px">超付清单（§4.4.6「核对报告单列」）—— 实付合计 <b>大于</b> 审批金额</h4>
-    <p class="mut sm">⚠️ 流水**照记**（NC 侧确实付了，事实不得篡改）、统计付款金额**照实不封顶**；
-      此处只**如实单列**，与 §4.4.4「付款动作禁止超付」不冲突（那条约束的是动作）。</p>
-    <div class="tw" style="max-height:260px;min-height:0"><table class="dt"><thead><tr><th>单据号</th>
-      <th>单据日期</th><th>付款项目</th><th class="num">审批金额</th><th class="num">实付合计</th>
-      <th class="num">超出</th></tr></thead>
-      <tbody>${over || lgEmpty(6, '（无 —— 本批月份里没有超付的单据）')}</tbody></table></div>
-    <div style="margin-top:10px"><button class="btn" data-act="${esc(rollAct)}"
-      data-batch="${esc(rep.batch)}">整批回滚后重导</button>
-      <span class="mut sm" style="margin-left:8px">置撤销 ＋ 原因留痕、<b>不物理删</b>（§4.4.6）</span></div>
-  </div></div>`;
-}
-
-/* ============================================================ `V.m06imp` —— 过程资料历史导入（§5.2.5 ①②） */
-
-const IMP06_STEPS = ['① 列说明 ＋ 选文件', '② 预览（不写库）', '③ 确认导入 ＋ 核对报告'];
-
-V.m06imp = () => {
-  const d = IMP06.data || {projects: [], warehouse: '', cutoff_ym: '', batches: []};
-  const meta = IMP06.meta || {material_labels: [], mech_labels: []};
-  const opts = (d.projects || []).map(p =>
-    `<option value="${esc(p)}"${p === d.warehouse ? ' selected' : ''}>${esc(p)}</option>`).join('');
-  const proj = d.projects.length
-    ? `<div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)"><div class="fi">
-        <label>项目（导入到哪一个项目 · 键 = 仓库名，§2.7.4）</label>
-        <select class="inp" data-act="imp06Pj">${opts}</select></div>
-       <div class="fi"><label>&nbsp;</label><span class="mut sm">当前截止核算月：
-        <b class="fc">${esc(d.cutoff_ym) || '（未设定 ⇒ 一律正式段）'}</b></span></div></div>`
-    : `<div class="tip wn">还没有可导入的项目 —— 先在「库存单据」页抓一次库存单据明细
-        （项目键 = <b>仓库名</b>，§2.7.4）。</div>`;
-  let body = proj;
-  if (IMP06.preview) {
-    const p = IMP06.preview;
-    const rows = (p.rows || []).map(r => `<tr><td class="now">${esc(r.ym)}</td>` +
-      (meta.material_labels || []).map(k => `<td class="num">${esc(r[k]) || '—'}</td>`).join('') + `</tr>`).join('');
-    const head = (meta.material_labels || []).map(k => `<th class="num">${esc(k)}</th>`).join('');
-    const an = (p.anomalies || []).map(x => `<tr><td class="num">${esc(x.line)}</td>
-      <td class="now">${esc(x.ym) || '—'}</td><td>${esc(x.reason)}</td></tr>`).join('');
-    body += `<div class="card"><h4>② 预览 —— 尚未写库</h4><div class="bd">
-      <div class="tip">项目 <b>${esc(p.warehouse)}</b> · 将写入 <b>${p.writable}</b> 个月
-        （${esc((p.months || []).join('、')) || '—'}） · 异常 <b>${(p.anomalies || []).length}</b> 行。</div>
-      <div class="tw" style="max-height:300px;min-height:0"><table class="dt"><thead><tr><th>核算月</th>${head}</tr></thead>
-        <tbody>${rows || lgEmpty((meta.material_labels || []).length + 1, '（没有可写入的行）')}</tbody></table></div>
-      <h4 style="font-size:12.5px;margin:12px 0 5px">异常清单（不入库）</h4>
-      <div class="tw" style="max-height:240px;min-height:0"><table class="dt"><thead><tr><th>行</th>
-        <th>核算月</th><th>原因</th></tr></thead><tbody>${an || lgEmpty(3, '（无）')}</tbody></table></div>
-      <h4 style="font-size:12.5px;margin:12px 0 5px">列提示</h4>
-      <p class="sm">⛔ 未导入的机械列：${(p.ignored_mech || []).map(esc).join(' · ') || '（无）'}
-        （机械列<b>全段手录</b>，见「过程资料」页的机械手录区块）<br>
-        未识别的列（已忽略）：${(p.unknown_headers || []).map(esc).join(' · ') || '（无）'}</p>
-      <div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)"><div class="fi">
-        <label>截止核算月</label>
-        <input class="inp" id="i06cut" value="${esc(p.default_cutoff)}" placeholder="YYYY-MM"></div>
-       <div class="fi"><label>&nbsp;</label><button class="btn pri" data-act="imp06Ok">确认导入（写历史段 ＋ 记批次）</button></div>
-       <div class="fi"><label>&nbsp;</label><span class="mut sm">默认 = 导入数据里最大的核算月（§5.2.5 ①，一次设定、可改）</span></div></div>
-      </div></div>`;
-  } else {
-    body += `<div class="card"><h4>① 列说明（按表头文字认列 · 列序不限）</h4><div class="bd">
-      <div class="tw" style="max-height:200px;min-height:0"><table class="dt"><thead><tr><th>列</th>
-        <th>填什么</th><th>要求</th></tr></thead><tbody>
-        <tr><td>核算月</td><td>如 2026-08（也认 2026/8 · 202608）</td><td><span class="tag t-wn">必填</span></td></tr>
-        <tr><td>材料列</td><td>${esc((meta.material_labels || []).join(' / '))}</td>
-          <td><span class="tag t-wn">至少 1 列</span></td></tr></tbody></table></div>
-      <p class="mut sm" style="margin-top:6px">• 表头可以带「金额」「（元）」等尾缀，会被自动去掉。<br>
-        • ⛔ <b>机械 6 列不导入</b> —— 机械列全段<b>手录</b>（回「过程资料」页的机械手录区块录）。<br>
-        • 只填了核算月、一个材料金额都没有的行会被列进「异常清单」（分不清「确实为 0」还是「漏填」）。<br>
-        • 一列材料列都认不出来 ⇒ <b>整份拒绝</b>（那不像是过程资料的定稿文件）。</p>
-      ${lgPick('i06f', 'imp06Pick', 'imp06Parse', IMP06.file, '只读第一个工作表')}</div></div>
-    <div class="card"><h4>历史段批次</h4><div class="bd">
-      <p class="sm">已登记 <b>${(d.batches || []).length}</b> 批（回滚后不再计入）；
-      ⛔ 历史段<b>不提供行内编辑</b>（要改只能再导一次，§5.2.5 ②）。</p>
-      ${(d.batches || []).length ? `<p class="sm fc">${(d.batches || []).map(esc).join(' · ')}</p>` : ''}
-      </div></div>`;
-  }
-  if (IMP06.report) body += reportHtml(IMP06.report, 'imp06Rollback');
-  return `${lgSteps(IMP06_STEPS, IMP06.preview ? (IMP06.report ? 2 : 1) : 0)}${lgNotice(IMP06)}${body}`;
-};
-
-/* ⛔ **`V.m08imp`（库存单据 · 手动导入）已整体删除**（用户 2026-09-22 裁定「不要了」）——
-   后端 `import_api.py` / `importer.py` 同批删除，`T8` 守卫登记在 `CANCELLED`（复活即红）。
-   i8 不可用时的口径改为：**显式报错待人处理**，⛔ 不做手动兜底入口。 */
+/* ============================================================ ⛔ `V.m05imp` —— **已下架**（`TAIL-75` `B5b` 第三步）
+ * `m05imp`（历史付款导入页）＋ `reportHtml()`（它的核对报告渲染）**整段删除**（2026-09-23 **用户裁定 `B`**）：
+ *   同一件事只留一个入口 —— 历史付款导入**走通用导入面**（`V.imp` 的 `m05_flow` 域）。
+ * ⭐ **能力一处没丢，只是换了落点**：
+ *   · 列说明 / 认列  → 通用面的**列映射**表（源列原⽂ ＋ 画像 ＋ 样本 ＋ 目标字段 ＋ 建议）；
+ *   · ② 预览四块     → 通用面的**域补充区块**（后端 `imp_spec.preview` 给的 `blocks`／`kpis`，
+ *                       壳由 `lgBlocks()` **通用渲染** —— ⛔ 壳里不写任何域名字/列名）；
+ *   · ③ 核对报告     → 通用面**回执**里的域补充区块（`imp_spec._report_blocks`：漏记清单 ＋ **超付单列**）；
+ *   · 整批回滚       → 通用面的 `impRollback`（同一批号）。
+ * ⚠️ **口径变更已记账**：旧页按**源表列位置**读（无表头也读得动），通用面按**列名**认
+ *   ⇒ 判据 `ACC-FLOW-IMPORT-001/001-01` 已按此改写（老台账若没有表头，请先补一行表头）。
+ * ⛔ 后端 `/api/m05/import/*` 同批**连件删除**（`mod05_flow/import_api.py`）；⛔ 别再把它加回来。 */
 
 /* ============================================================ 动作（**一律追加**到既有 `ACT` / `CHG`） */
 
@@ -305,81 +175,267 @@ ACT.setSave = async () => {
   SET.items = (r && r.items) || SET.items; SET.logs = (r && r.logs) || SET.logs;
   SET.msg = (r && r.message) || '已保存'; SET.kind = 'ok'; render();
 };
-/* 付款导入：选文件 → 解析预览 → 确认 → 回滚（四步都**只看后端 `ok`**，可预期的拒绝也走这里）。 */
-ACT.imp05Pick = t => { IMP05.file = (t.files || [])[0] || null; IMP05.msg = ''; render(); };
-ACT.imp05Parse = async () => {
-  if (!IMP05.file) return;
-  IMP05.msg = '正在解析（预览阶段不写库）…'; IMP05.kind = 'ok'; render();
-  const fd = new FormData(); fd.append('file', IMP05.file);
-  let r = null;
-  try { r = await API.postFile('/api/m05/import/parse', fd); }
-  catch (e) { IMP05.msg = `解析失败：${String((e && e.message) || e)}`; IMP05.kind = 'err'; render(); return; }
-  if (!r || r.ok === false) { IMP05.msg = (r && r.message) || '解析失败'; IMP05.kind = 'err'; render(); return; }
-  IMP05.token = r.token; IMP05.preview = r.preview; IMP05.report = null; IMP05.msg = ''; render();
-};
-ACT.imp05Ok = async () => {
-  let r = null;
-  try { r = await API.post('/api/m05/import/confirm', { token: IMP05.token }); }
-  catch (e) { IMP05.msg = `导入失败：${String((e && e.message) || e)}`; IMP05.kind = 'err'; render(); return; }
-  if (!r || r.ok === false) { IMP05.msg = (r && r.message) || '导入失败'; IMP05.kind = 'err'; render(); return; }
-  IMP05.msg = r.message; IMP05.kind = 'ok'; IMP05.report = r.report;
-  IMP05.preview = null; IMP05.token = ''; IMP05.file = null;
-  LOADED.delete('付款域');                       /* ⭐ 刚落了一批流水 ⇒ 付款域那几路标脏（下次进页重拉） */
-  render();
-};
-ACT.imp05Rollback = async t => {
-  let r = null;
-  try { r = await API.post('/api/m05/import/rollback', { batch: t.dataset.batch }); }
-  catch (e) { IMP05.msg = `回滚失败：${String((e && e.message) || e)}`; IMP05.kind = 'err'; render(); return; }
-  if (!r || r.ok === false) { IMP05.msg = (r && r.message) || '回滚失败'; IMP05.kind = 'err'; render(); return; }
-  IMP05.msg = r.message; IMP05.kind = 'wn'; IMP05.report = r.report;
-  LOADED.delete('付款域');
-  render();
-};
-/* 过程资料导入：切项目 / 选文件 / 预览 / 确认 / 回滚。 */
-ACT.imp06Pj = async t => {
-  IMP06.pj = t.value || '';
-  IMP06.preview = null; IMP06.report = null; IMP06.msg = '';
-  try { await imp06Load(IMP06.pj); }
-  catch (e) { IMP06.msg = `项目数据取不到：${String((e && e.message) || e)}`; IMP06.kind = 'err'; }
-  render();
-};
-ACT.imp06Pick = t => { IMP06.file = (t.files || [])[0] || null; IMP06.msg = ''; render(); };
-ACT.imp06Parse = async () => {
-  if (!IMP06.file) return;
-  IMP06.msg = '正在解析（预览阶段不写库）…'; IMP06.kind = 'ok'; render();
-  const fd = new FormData(); fd.append('file', IMP06.file); fd.append('pj', IMP06.pj || '');
-  let r = null;
-  try { r = await API.postFile('/api/m06/import/parse', fd); }
-  catch (e) { IMP06.msg = `解析失败：${String((e && e.message) || e)}`; IMP06.kind = 'err'; render(); return; }
-  if (r && r.data) { IMP06.data = r.data; IMP06.pj = r.data.warehouse || IMP06.pj; }
-  if (!r || r.ok === false) { IMP06.msg = (r && r.message) || '解析失败'; IMP06.kind = 'err'; render(); return; }
-  IMP06.token = r.token; IMP06.preview = r.preview; IMP06.report = null; IMP06.msg = ''; render();
-};
-ACT.imp06Ok = async () => {
-  const el = document.querySelector('#i06cut');
-  const body = { token: IMP06.token, pj: IMP06.pj, cutoff_ym: (el && el.value) || '' };
-  let r = null;
-  try { r = await API.post('/api/m06/import/confirm', body); }
-  catch (e) { IMP06.msg = `导入失败：${String((e && e.message) || e)}`; IMP06.kind = 'err'; render(); return; }
-  if (r && r.data) { IMP06.data = r.data; IMP06.pj = r.data.warehouse || IMP06.pj; }
-  if (!r || r.ok === false) { IMP06.msg = (r && r.message) || '导入失败'; IMP06.kind = 'err'; render(); return; }
-  IMP06.msg = r.message; IMP06.kind = 'ok'; IMP06.report = r.report;
-  IMP06.preview = null; IMP06.token = ''; IMP06.file = null;
-  render();
-};
-ACT.imp06Rollback = async t => {
-  let r = null;
-  try { r = await API.post('/api/m06/import/rollback', { batch: t.dataset.batch, pj: IMP06.pj }); }
-  catch (e) { IMP06.msg = `回滚失败：${String((e && e.message) || e)}`; IMP06.kind = 'err'; render(); return; }
-  if (r && r.data) { IMP06.data = r.data; IMP06.pj = r.data.warehouse || IMP06.pj; }
-  if (!r || r.ok === false) { IMP06.msg = (r && r.message) || '回滚失败'; IMP06.kind = 'err'; render(); return; }
-  IMP06.msg = r.message; IMP06.kind = 'wn'; IMP06.report = r.report; render();
-};
-/* ⛔ `imp08*` 三个动作已随「库存单据手动导入」删除（2026-09-22 用户裁定；`T8` 守卫）。 */
+/* ⛔ 付款导入的四个动作（`imp05Pick/Parse/Ok/Rollback`）**已随旧页下架删除**
+   （`TAIL-75` `B5b` 第三步 · 2026-09-23 用户裁定 `B`）—— 那条路现在是通用面的
+   `impParse / impPreview / impCommit / impRollback`（见下）。
+   ⛔ `imp08*` 三个动作已随「库存单据手动导入」删除（2026-09-22 用户裁定；`T8` 守卫）。
+   ⛔ `m06imp` 的 `imp06*` 也已删（`B5c`）。 */
 
 /* ⚠️⚠️ **挂在表单元素上的动作必须进 `CHG`** —— 漏了 ⇒ `change` 被**静默丢弃**
    （症状：选完文件"解析"按钮永远是灰的 / 换项目没反应）。本仓踩过三次（`jcAmt` / `jcPartySet` / `themeSet`）。
    ⚠️ 只登记**表单元素**上挂的那几个（`<input type=file>` / `<select>`）——
       「解析并预览」是 `<button>`（走 click 委托），⛔ 不用进这里。 */
-CHG.push('imp05Pick', 'imp06Pick', 'imp06Pj');
+CHG.push('impDomain', 'impPick', 'impMap', 'impPj');
+
+/* =====================================================================
+   `V.imp` —— 「**数据导入**」（通用导入面 · `TAIL-75` · `B5` · 2026-09-22）
+   =====================================================================
+   ⭐ 一页盖住**所有已挂通用面的域**（域清单由后端给：`/api/imp/domains`，⛔ 壳里不抄一份域清单）。
+   ⭐ 四步：① 选域与文件 → ② **列映射** → ③ 预览校验 → ④ 确认落库（＋批次回滚）。
+
+   ⚠️ 四条纪律（设计 §六）：
+     ① **系统只出建议**：认出的列**预选**、认不出的**留空**（⛔ 不硬凑）；
+     ② **落库前零写库**：②③ 只带 `token`（后端 `preview_store` 是唯一载具）；
+     ③ **建议带依据与置信度**：界面上把"为什么这么认"照原话显示；
+     ④ **记忆只是预填**：来自记忆的映射照样可改，并标明来源。
+   ⚠️ 域的上下文（如过程资料的"这批进哪个项目"）走 `options` 递——见 `ACT.impCommit`。
+      ⛔ 壳里只有**一处**域号分支（`impSetDomain` 里那句），且它调的是**通用面的** `options` 端点
+     （`GET /api/imp/{domain}/options`，由域的 `Hooks.options` 给 —— ⛔ 不再有域专属读端点）。
+   ⛔ **`m06imp`（过程资料历史导入页）已下架**（`B5c` · 2026-09-22）：同一件事不留两个入口 ——
+      `m05imp`（历史付款导入）**暂留**，等 `m05` 也挂上通用面再删（`B5c-2`）。 */
+const IMP = {domains: [], domain: '', schema: null, file: null, token: '', cols: [], mapping: {},
+             memory: '', preview: null, report: null, step: 0, org: [], wrap: '', cutoff: '',
+             msg: '', kind: 'ok'};
+
+const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '④ 确认落库'];
+/* 映射表里「不导入」那一项的取值：⛔ 用**空串**而不是后端那个哨兵常量 ——
+   后端 `_records` 见 `mapping_.get(src, IGNORE)`，空串是 falsy ⇒ 同样走"原样保留"那条路（实测口径），
+   而抄一份哨兵字面量到壳里，一旦后端改了字面量，就会变成"把一个不存在的字段名当目标"（静默写脏）。 */
+const IMP_IGNORE = '（不导入 · 原样保留）';
+
+async function reloadImp() {
+  const d = await API.impDomains();
+  IMP.domains = (d && d.domains) || [];
+  if (!IMP.domain && IMP.domains.length) await impSetDomain(IMP.domains[0].domain);
+}
+
+/* 切域 ⇒ 重取该域的**字段契约**，并把上一次的进度清干净（⛔ 不许残留上一域的文件/映射）。 */
+async function impSetDomain(domain) {
+  IMP.domain = String(domain || '');
+  IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {}; IMP.memory = '';
+  IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = '';
+  IMP.org = []; IMP.wrap = ''; IMP.cutoff = '';
+  if (!IMP.domain) { IMP.schema = null; return; }
+  IMP.schema = await API.impSchema(IMP.domain);
+  /* ⚠️ 本页**仅有的两处域号分支**（见文件头注释）：都是"这个域要哪个上下文"，
+     且**都调该域自己的读端点**（⛔ 不在壳里另造一份候选）。 */
+  if (IMP.domain === 'm06_proc') {
+    const d = await API.impOptions(IMP.domain);
+    IMP.org = (d && d.projects) || [];
+    IMP.wrap = (d && d.warehouse) || IMP.org[0] || '';
+    IMP.cutoff = (d && d.cutoff_ym) || '';
+  }
+  if (IMP.domain === 'm11_jc') {
+    const d = await API.m11List();
+    IMP.org = ((d && d.projects) || []).map(p => (p && p.key) || String(p));
+    IMP.wrap = IMP.org[0] || '';
+  }
+}
+
+V.imp = () => {
+  const sch = IMP.schema;
+  const doms = IMP.domains.map(d =>
+    `<option value="${esc(d.domain)}"${d.domain === IMP.domain ? ' selected' : ''}>${esc(d.title)}</option>`).join('');
+  const req = (sch && sch.required) || [];
+  const got = Object.values(IMP.mapping || {}).filter(v => v);
+  const lack = req.filter(f => !got.includes(f));
+  const orgs = IMP.org.map(p =>
+    `<option value="${esc(p)}"${p === IMP.wrap ? ' selected' : ''}>${esc(p)}</option>`).join('');
+  const head = `<div class="card"><h4>数据导入<span class="sp"><span class="mut sm">一次导一个域的一种表 ·
+    落库前一个字节都不写库</span></span></h4><div class="bd">${lgSteps(IMP_STEPS, IMP.step)}
+    <div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)">
+      <div class="fi"><label>导入哪个域</label>
+        <select class="inp" data-act="impDomain">${doms || '<option value="">（后端还没挂任何域）</option>'}</select></div>
+      <div class="fi"><label>&nbsp;</label><span class="mut sm">${sch ? esc(sch.title) : '—'}</span></div></div>
+    ${sch && sch.note ? `<div class="tip">${esc(sch.note)}</div>` : ''}
+    ${sch && sch.keep_note ? `<div class="tip wn">${esc(sch.keep_note)}</div>` : ''}
+    ${lgPick('iimp', 'impPick', 'impParse', IMP.file, '解析时自动挑「认得出表头」的那张工作表')}
+    ${IMP.memory ? `<div class="tip ok">${esc(IMP.memory)}</div>` : ''}
+  </div></div>`;
+
+  /* ---- ② 列映射 ---- */
+  let mapCard = '';
+  if (IMP.cols.length) {
+    const optsOf = (c) => {
+      const cur = IMP.mapping[c.src] || '';
+      const fields = ((sch && sch.fields) || []).map(f =>
+        `<option value="${esc(f.label)}"${f.label === cur ? ' selected' : ''}>${esc(f.label)}${f.required ? '（必填）' : ''}</option>`).join('');
+      return `<option value=""${cur ? '' : ' selected'}>${esc(IMP_IGNORE)}</option>` + fields;
+    };
+    const badge = (c) => {
+      if (c.field && c.level === 'auto') return `<span class="tag t-ok">自动 ${Number(c.conf).toFixed(2)}</span>`;
+      if (c.field) return `<span class="tag t-wn">需确认 ${Number(c.conf).toFixed(2)}</span>`;
+      if (c.ignored) return `<span class="tag t-in">不导入</span>`;
+      return `<span class="tag t-dg">认不出</span>`;
+    };
+    const rows = IMP.cols.map(c => `<tr>
+      <td class="now">${esc(c.src)}</td>
+      <td class="mut sm">${esc(c.profile || '')}</td>
+      <td class="mut sm">${esc((c.samples || []).join(' / ')).slice(0, 60)}</td>
+      <td class="ctr">→</td>
+      <td><select class="inp" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select></td>
+      <td class="now">${badge(c)}${c.ignored ? `<div class="mut sm">${esc(c.ignored)}</div>` : ''}</td>
+      <td class="mut sm">${c.field ? esc(c.why || '') : ''}</td></tr>`).join('');
+    mapCard = `<div class="card" style="margin-top:12px"><h4>列映射<span class="sp"><span class="mut sm">
+      系统只给建议 —— 决定权在这张表</span></span></h4><div class="tw"><table class="dt sm">
+      <thead><tr><th>源列（原文）</th><th>画像</th><th>样本值</th><th></th><th>目标字段</th><th>建议</th><th>依据</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+      <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:10px">${lack.length
+        ? `还差必填字段：<b>${esc(lack.join(' / '))}</b> —— 选好才能到下一步（⛔ 系统不替你填默认值）`
+        : '必填都齐了，可以往下走'}</div>
+      <div style="margin-top:10px">
+        <button class="btn pri" data-act="impPreview"${lack.length ? ' disabled' : ''}>③ 预览校验（不写库）</button>
+        <button class="btn" data-act="impReset">重来</button></div></div></div>`;
+  }
+
+  /* ---- ③ 预览校验 ---- */
+  let prevCard = '';
+  if (IMP.preview) {
+    const p = IMP.preview;
+    const probs = (IMP.problems || []);
+    const proj = IMP.domain === 'm04_plan'
+      ? `<div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)">
+        <div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
+          <input class="inp" id="impYm" value="${esc(IMP.cutoff || bjMonth())}" placeholder="2026-09"></div></div>`
+      : (IMP.org.length ? `<div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)">
+        <div class="fi"><label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
+          <select class="inp" data-act="impPj">${orgs}</select></div>
+        <div class="fi"><label>截止核算月（历史段分界）</label>
+          <input class="inp" id="impCut" value="${esc(IMP.cutoff)}" placeholder="留空 ⇒ 取本批最大月"></div></div>` : '');
+    const prows = (p.preview || []).slice(0, 12).map(r => `<tr>${Object.keys(r).filter(k => k !== '_row')
+      .map(k => `<td class="now">${esc(String(r[k] == null ? '' : r[k]))}</td>`).join('')}</tr>`).join('');
+    const pcols = p.preview && p.preview.length
+      ? Object.keys(p.preview[0]).filter(k => k !== '_row').map(k => `<th>${esc(k)}</th>`).join('') : '';
+    prevCard = `<div class="card" style="margin-top:12px"><h4>预览校验<span class="sp"><span class="mut sm">
+      这一步**一个字节都不写库**</span></span></h4><div class="kpis">
+      <div class="kpi"><div class="k">将写入</div><div class="v">${p.writable == null ? p.total : p.writable}</div>
+        <div class="s">行</div></div>
+      <div class="kpi"><div class="k">待处理</div><div class="v">${p.problem_count || probs.length}</div>
+        <div class="s">处（行/列/原值/原因）</div></div>
+      <div class="kpi"><div class="k">本步写库量</div><div class="v">0</div><div class="s">确认前零写库</div></div>
+      ${Object.keys(p.kpis || {}).map(k => `<div class="kpi"><div class="k">${esc(k)}</div>
+        <div class="v">${esc(String(p.kpis[k]))}</div></div>`).join('')}</div>
+      ${probs.length ? `<div class="tw" style="max-height:200px"><table class="dt sm">
+        <thead><tr><th>行</th><th>列</th><th>原值</th><th>原因</th></tr></thead><tbody>
+        ${probs.slice(0, 30).map(x => `<tr><td class="now">${esc(x.row)}</td><td class="now">${esc(x.column)}</td>
+          <td class="now">${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`).join('')}</tbody></table></div>
+        <div class="tip wn" style="margin-top:8px">这些问题**不影响其余行落库**；认不出的值一律原样留着给人看，⛔ 不静默改成 0/空。</div>`
+      : '<div class="tip ok">没有发现问题行</div>'}
+      ${proj}
+      ${lgBlocks(p.blocks)}
+      <div class="tw" style="max-height:260px;margin-top:10px"><table class="dt sm">
+        <thead><tr>${pcols}</tr></thead><tbody>${prows || lgEmpty(1, '没有数据行')}</tbody></table></div>
+      <div style="margin-top:10px"><button class="btn pri" data-act="impCommit">④ 确认落库</button>
+        <button class="btn" data-act="impReset">重来</button></div></div></div>`;
+  }
+
+  /* ---- ④ 结果与批次回滚 ---- */
+  let repCard = '';
+  if (IMP.report) {
+    const r = IMP.report;
+    /* ⚠️ 回执的 KPI 只取**标量**项：`kpis` / `blocks` 是域补充块（下面专门画），
+       混进 KPI 会渲染成 "[object Object]"（实测踩到过）。 */
+    const scalar = k => r[k] == null || ['string', 'number', 'boolean'].includes(typeof r[k]);
+    repCard = `<div class="card" style="margin-top:12px"><h4>落库结果</h4><div class="bd">
+      <div class="kpis">${Object.keys(r).filter(scalar).map(k => `<div class="kpi"><div class="k">${esc(k)}</div>
+        <div class="v">${esc(String(r[k]))}</div></div>`).join('')}
+        ${Object.keys(r.kpis || {}).map(k => `<div class="kpi"><div class="k">${esc(k)}</div>
+          <div class="v">${esc(String(r.kpis[k]))}</div></div>`).join('')}</div>
+      ${r.batch ? `<div class="tip ok">批次 <b class="fc">${esc(r.batch)}</b>
+        <button class="btn sm" data-act="impRollback" data-batch="${esc(r.batch)}">整批回滚</button></div>` : ''}
+      ${lgBlocks(r.blocks)}
+      <div style="margin-top:10px"><button class="btn" data-act="impReset">再导一份</button></div></div></div>`;
+  }
+
+  return `${lgSteps(IMP_STEPS, IMP.step)}${lgNotice(IMP)}${head}${mapCard}${prevCard}${repCard}`;
+};
+
+/* 切域（表单元素 ⇒ 已在 `CHG` 里登记） */
+ACT.impDomain = async t => {
+  IMP.msg = '';
+  try { await impSetDomain(t.value); }
+  catch (e) { IMP.msg = `取域契约失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; }
+  render();
+};
+ACT.impPick = t => { IMP.file = (t.files || [])[0] || null; IMP.msg = ''; render(); };
+ACT.impReset = () => { IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {};
+  IMP.memory = ''; IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = ''; render(); };
+/* ① → ②：解析（不写库）。预选 = 后端给的建议；**记忆命中的映射盖在建议之上**（并标明来源）。 */
+ACT.impParse = async () => {
+  if (!IMP.file || !IMP.domain) return;
+  IMP.msg = '正在解析（预览阶段不写库）…'; IMP.kind = 'ok'; render();
+  const fd = new FormData(); fd.append('file', IMP.file); fd.append('sheet', '');
+  let r = null;
+  try { r = await API.impParse(IMP.domain, fd); }
+  catch (e) { IMP.msg = `解析失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
+  if (!r || r.ok === false) { IMP.msg = (r && r.message) || '解析失败'; IMP.kind = 'err'; render(); return; }
+  IMP.token = r.token; IMP.cols = r.cols || []; IMP.step = 1; IMP.preview = null; IMP.report = null;
+  IMP.mapping = {};
+  (r.cols || []).forEach(c => { if (c.field) IMP.mapping[c.src] = c.field; });
+  IMP.memory = '';
+  if (r.memory && r.memory.mapping) {
+    Object.keys(r.memory.mapping).forEach(src => { IMP.mapping[src] = r.memory.mapping[src]; });
+    IMP.memory = r.memory.note || '来自记忆 · 可改';
+  }
+  IMP.msg = r.dupes && Object.keys(r.dupes).length
+    ? `⚠️ 有字段被多列认到：${Object.keys(r.dupes).map(k => `${k}←${(r.dupes[k] || []).join('、')}`).join('；')}` : '';
+  IMP.kind = IMP.msg ? 'wn' : 'ok';
+  render();
+};
+ACT.impMap = (t) => { IMP.mapping[t.dataset.src] = t.value || ''; render(); };
+ACT.impPj = async t => { IMP.wrap = t.value || ''; render(); };
+/* ② → ③：预览（不写库） */
+ACT.impPreview = async () => {
+  IMP.msg = '正在校验（预览阶段不写库）…'; IMP.kind = 'ok'; render();
+  let r = null;
+  try { r = await API.impPreview(IMP.domain, { token: IMP.token, mapping: IMP.mapping }); }
+  catch (e) { IMP.msg = `预览失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
+  if (!r || r.ok === false) { IMP.msg = (r && r.message) || '预览失败'; IMP.kind = 'err'; render(); return; }
+  IMP.preview = r; IMP.problems = r.problems || []; IMP.step = 2; IMP.msg = ''; render();
+};
+/* ③ → ④：确认落库（`options` = 域上下文：过程资料要"进哪个项目"；`remember` = 记下这套映射） */
+ACT.impCommit = async () => {
+  const cut = document.querySelector('#impCut');
+  const ym = document.querySelector('#impYm');
+  const options = {};
+  if (IMP.domain === 'm06_proc') { options.warehouse = IMP.wrap; options.cutoff_ym = (cut && cut.value) || ''; }
+  if (IMP.domain === 'm04_plan') { options.year_month = (ym && ym.value) || bjMonth(); }
+  if (IMP.domain === 'm11_jc') { options.project_key = IMP.wrap; }
+  IMP.msg = '正在落库…'; IMP.kind = 'ok'; render();
+  let r = null;
+  try { r = await API.impCommit(IMP.domain, { token: IMP.token, mapping: IMP.mapping,
+                                             remember: true, options: options }); }
+  catch (e) { IMP.msg = `导入失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
+  if (!r || r.ok === false) { IMP.msg = (r && r.message) || '导入失败'; IMP.kind = 'err'; render(); return; }
+  IMP.report = r.report || {}; IMP.step = 3; IMP.msg = r.message || '已导入'; IMP.kind = 'ok';
+  IMP.preview = null; IMP.token = ''; IMP.file = null;
+  /* ⭐⭐ 2026-09-23（`TAIL-78` · 查 `TAIL-75` 落库下游时查出）：**导入是跨页写** ⇒ 这里必须
+     **全标脏**（`LOADED.clear()`）。原先只删「机械 6 列 / 收发结存与大表」两路 —— 那是**旧导入页
+     `m06imp`（已下架）**单域时代的遗留；`B5` 起导入已是**通用面**（域由后端 `/api/imp/domains` 列，⛔ 壳里不许再抄一份）。
+     · **漏标的真后果**（实测路径）：`m05_flow` 落库走 `sync_stat_paid`（重算唯一出口）⇒ 改了
+       付款通知书的「统计付款金额」⇒ m03 列表的「已付金额」与 m05 的欠款/台账/统计**都变了**，
+       而 `LOADED` 记着"拉过了" ⇒ **切回那两页看到的是旧数**（对真数据说旧话，是本仓最忌的一类）。
+     · ⛔ 也**不许**改成"补几个字面域名单"：域清单的主人在后端，壳侧列一份 = "加一个域要改两处"。
+     ⇒ 壳侧最省心的**正确**做法 = 全标脏：下次进哪页拉哪页（多几路 GET），⛔ 永不漏拉。 */
+  LOADED.clear();
+  render();
+};
+ACT.impRollback = async t => {
+  let r = null;
+  try { r = await API.impRollback(IMP.domain, { batch: t.dataset.batch }); }
+  catch (e) { IMP.msg = `回滚失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
+  if (!r || r.ok === false) { IMP.msg = (r && r.message) || '回滚失败'; IMP.kind = 'err'; render(); return; }
+  IMP.report = r.report || IMP.report; IMP.msg = r.message || '已回滚'; IMP.kind = 'wn';
+  LOADED.clear();          /* 同上（`TAIL-78`）：回滚也是**跨页写** —— `rollback_batch` 会逐个重算 `stat_paid` */
+  render();
+};

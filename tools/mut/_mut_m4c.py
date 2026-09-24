@@ -11,8 +11,13 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import pathlib
 import subprocess
+
+# ⛔ **结果隔离**（本仓纪律）：本脚本跑的是**子集** pytest ⇒ 必须把四态结果写到**临时文件**，
+#    否则会把权威 `artifacts/acc_results.json` 冲成"只有这几条"（`doc_audit` 的 T4 立刻报红）。
+os.environ.setdefault("ACC_RESULTS_PATH", "../artifacts/_mut_acc_results.json")
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BE = ROOT / "backend"
@@ -27,18 +32,13 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "        if False:\n            raise ValueError(f\"「{label}」不得为负数（当前 {value}）\")",
      "tests/test_page_m06.py tests/test_acc_proc_002.py"),
 
-    ("② 表单不再回填该月现值（录第二次靠人肉记数）",
-     "backend/app/mod06_proc/mech_ui.py",
-     "            value = row.get(key)\n            return \"\" if value in (None, \"\") else f\"{to_money(value):.2f}\"",
-     "            value = row.get(key)\n            return \"\"",
-     "tests/test_page_m06.py"),
-
-    ("③ 区块把**材料列**也做成输入框（§5.2.3 单向流被破）",
-     "backend/app/mod06_proc/mech_ui.py",
-     "        f'<input class=\"inp num\" name=\"mech_{i}\" value=\"{esc(_value_of(data, ym, f\"mech_{i}\"))}\" '",
-     "        f'<input class=\"inp num\" name=\"in_{name}\" value=\"{esc(_value_of(data, ym, f\"mech_{i}\"))}\" '",
-     "tests/test_page_m06.py tests/test_acc_proc_002.py"),
-
+    # ⚠️ 2026-09-23：②③ 的靶（`mech_ui._value_of` 表单回填 · `mech_ui.block_html` 机械区块）
+    #    **已于 2026-09-18 随旧服务端渲染页整体删除**（`mech_ui.py` 文件头有留痕）⇒ 锚点早已命中 0 次
+    #    （表现为 `SKIP`，⛔ 不是通过 —— 与 ⑬⑭ 同款 ⇒ 一并删除，留痕在此）。
+    #    ⚠️ 它们守的两条 claim 现在归**壳的机械区块**（`legacy.js`）：
+    #      · ② 录第二次要能看见上次的值（回填）；
+    #      · ③ 机械区块**只**给机械 6 列输入框，材料列只读（§5.2.3 单向流）。
+    #    ⛔ **这两条在壳侧目前还没有断言** ⇒ 已登记为尾巴（补壳侧断言），⛔ 别当"已覆盖"。
     ("④ `YYYY-MM` 归一放过 13 月",
      "backend/app/mod06_proc/domain.py",
      "    if not 1 <= mm <= 12:",
@@ -46,17 +46,24 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "tests/test_page_m06.py"),
 
     # ---------------------------------------------------------- TAIL-02 历史导入
+    # ⚠️ 2026-09-23：⑤⑥⑨ 的锚点随 `B3`/`B5-0` 重写 `importer.py`（两级表头拼名 ＋ 四条口径裁定）
+    #    被改没了 ⇒ 同样表现为 `SKIP`（静默失效）。**判据没变** ⇒ 锚点改指**现在的**那几行。
     ("⑤ 机械列**静默忽略**（不再列出来给人看）",
      "backend/app/mod06_proc/importer.py",
      "    plan.ignored_mech = [c[\"label\"] for c in D.PROC_COLUMNS\n"
-     "                         if c[\"key\"] in D.MECH_KEYS and c[\"label\"] in names]",
-     "    plan.ignored_mech = []",
+     "                         if c[\"key\"] in D.MECH_KEYS and c[\"key\"] in found]",
+     "    plan.ignored_mech = [c[\"label\"] for c in D.PROC_COLUMNS\n"
+     "                         if c[\"key\"] in D.MECH_KEYS and False]",
      "tests/test_page_m06.py"),
 
     ("⑥ 核算月认不出的行**静默跳过**（不再逐条报）",
      "backend/app/mod06_proc/importer.py",
-     "        if not ym:\n            plan.anomalies.append({\"line\": offset, \"reason\":",
-     "        if False:\n            plan.anomalies.append({\"line\": offset, \"reason\":",
+     "            if not ym:\n"
+     "                plan.anomalies.append({\"line\": offset, \"reason\":\n"
+     "                                       f\"核算月认不出：",
+     "            if False:\n"
+     "                plan.anomalies.append({\"line\": offset, \"reason\":\n"
+     "                                       f\"核算月认不出：",
      "tests/test_page_m06.py"),
 
     ("⑦ 导入时把「截止核算月」吞掉（历史段整段失效）",
@@ -74,31 +81,29 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
 
     ("⑨ 导入解析改成**按下标认列**（挪列就认错）",
      "backend/app/mod06_proc/importer.py",
-     "    index = {n: i for i, n in enumerate(names) if n}",
-     "    index = {n: i for i, n in enumerate(reversed(names)) if n}",
+     "        if got:\n            out[col] = got[0]",
+     "        if got:\n            out[width - 1 - col] = got[0]",
      "tests/test_page_m06.py"),
 
     # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：⑩⑪⑫ 的落点随导入页**搬家**（服务端渲染 → JSON API ＋ 壳）
     #    ⇒ 锚点同步改指新件（**逐字**搬过去的文本原样可用 —— 这正是"形态变、判据不变"）。
-    ("⑩ 历史导入页的上传口指错端点",
-     "backend/app/web/shell/legacy.js",
-     "'/api/m06/import/parse'",
-     "'/api/m06/import/parsx'",
+    # ⚠️ 2026-09-23（`TAIL-75` `B5c-2`）：旧页与旧端点都退休了 ⇒ 靶改指**壳的通用面上传口**
+    #    （`core.js` 的 `impParse`）；判据侧同步钉住这条字面量（见 `test_page_m06.py`）。
+    # ⭐ 2026-09-24：壳再拆一刀 —— `API` 块从 `core.js` 搬进 **`api.js`** ⇒ 靶同步改指 `api.js`
+    #    （⛔ 不改 ⇒ 锚点命中 0 ⇒ 报 **SKIP** ⇒ **尺子假装在岗**；与 `_mut_stale.py` 同日同病）。
+    ("⑩ 导入页的上传口指错端点（通用面 parse 写错 ⇒ 传了文件也没人接）",
+     "backend/app/web/shell/api.js",
+     "/api/imp/${encodeURIComponent(domain)}/parse",
+     "/api/impx/${encodeURIComponent(domain)}/parse",
      "tests/test_page_m06.py"),
 
     # ---------------------------------------------------------- TAIL-01 手动导入 Excel
-    ("⑪ 手动导入的金额列不转回 `Decimal`（落库拿到字符串）",
-     "backend/app/mod08_inv/import_api.py",
-     "        out.append({k: (Decimal(str(v)) if k in importer.NUMERIC_FIELDS else v)\n"
-     "                    for k, v in row.items()})",
-     "        out.append({k: v for k, v in row.items()})",
-     "tests/test_page_m08.py"),
-
-    ("⑫ 手动导入的分组金额漏算（合计只取第一行）",
-     "backend/app/mod08_inv/import_api.py",
-     "                    \"amount\": f'{sum_money([r.get(\"amount\") for r in group]):.2f}'})",
-     "                    \"amount\": f'{sum_money([group[0].get(\"amount\")]):.2f}'})",
-     "tests/test_page_m08.py"),
+    # ⚠️ 2026-09-23：⑪⑫ 的靶文件 `backend/app/mod08_inv/import_api.py` 已随**「库存单据手动导入」整件取消**
+    #    （用户 2026-09-22 裁定「给删掉，不要了」）一起删除 ⇒ 与 ⑬⑭ 同款：**既是过期锚点，又会把整支脚本拖崩**
+    #    （`main()` 开头对所有靶文件 `read_bytes()` ⇒ 缺件 = `FileNotFoundError` ⇒ **一条都跑不了**）。
+    #    ⭐ 它们守的 claim（手动导入的金额转 `Decimal` / 分组金额不漏算）随模块取消**一并消失**
+    #    ⇒ 直接删除，⛔ 不留空靶（库存数据唯一入口 = i8 抓取，见 `audit_common.CANCELLED` 的 `m08imp`）。
+    #    ⚠️ 教训：**删文件时要顺手查一遍 `tools/mut/` 有没有以它为靶的脚本** —— 否则尺子静默失效。
 
     # ⚠️ 原先的 ⑬⑭ 靶在**旧明细页** `backend/app/mod08_inv/view.py` 上 —— 那个文件已于 2026-09-19
     #    （`§19` 批 2，授权 `D18`）整体删除 ⇒ 两条变异**既是"命中 0 次的过期锚点"，又会把整个脚本拖崩**
