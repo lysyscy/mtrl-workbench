@@ -48,6 +48,54 @@
 6. `git clone` 本仓 ＋ 交付面云树同步到位（⚠️ 盘符有变更前科 ⇒ 全仓 grep 旧盘符）；
 7. `.workbuddy/backups/` 若迁移：只带最近 5 份。
 
+### 五之补 · ⭐ 2026-09-24 实测补充（办公室 → 家里 · 放假 10 天那次）
+
+**① 出发前先封存**（⛔ 否则家里拉不到这几天的工作）
+```
+git add -A   &&   git commit -F <msg文件>   &&   git push origin master
+```
+⚠️ 提交信息走**文件 ＋ `-F`**（⛔ 别内联多行 —— PowerShell 引号会打架）；
+⚠️ `git add -A` 前**先审计**：`.env` / cookie / `nssm` / `.venv` / `scratch` **0 命中**才敢提交。
+
+**② 四样必须手工带走**（⛔ 全在 `.gitignore` 里 ⇒ git 拉不到）
+
+| # | 什么 | 在哪 | 不带会怎样 |
+|---|---|---|---|
+| 1 | **`.env`** ⭐ | 仓根（⛔ 不是 `backend/`） | 服务起不来 / 连不上库 |
+| 2 | **库备份** ⭐ | 出发前：`"D:\pgsql\pgsql\bin\pg_dump.exe" -U <user> -d <db> --no-owner --no-privileges -f .workbuddy\backups\mtrl-db-<日期>.sql` | 家里没有真数据 ⇒ **现象复现不了** |
+| 3 | `artifacts\i8_cookie\`（可选） | `artifacts\` | 要重新登录 i8 |
+| 4 | Ollama 模型（可选） | `D:\dev\ollama\models` | 家里的 `ollama pull` 大概率**不通**（见 ⑤） |
+
+> ⛔ **业务数据 / 凭据一律走 U 盘或私有渠道** —— `.workbuddy/backups/` 已被 gitignore（**不上 gitee**），
+> 但别把它搬进公开网盘、更别提交进仓。
+
+**③ 本机实况（下次换机直接抄）**
+- PG = **自定义路径** `D:\pgsql\pgsql\bin`（数据目录 `D:\pgsql\data`）· 服务名 `postgresql-x64-16` · 端口 5432；
+- `pg_dump` / `psql` 均为 16.4，都在那个 `bin`；建库照 `ops\init_db.sql`；
+- 依赖与迁移文件都在 **`backend\`**（`requirements.txt` · `alembic.ini`）；
+- ⚠️ **`venv` 不可移植** ⇒ 家里必须重建：`python -m venv .venv` ＋ `pip install -r requirements.txt`。
+
+**④ 环境验收（四条全过 ⇒ 与办公室等价；缺一条都别急着开发）**
+```
+cd backend  &&  .\.venv\Scripts\python.exe -m pytest -q tests/            # 期望 rc=0
+cd ..       &&  .\backend\.venv\Scripts\python.exe tools\audit\doc_audit.py        # 期望「必须修 0」
+            &&  .\backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # 四检全 0
+            &&  .\backend\.venv\Scripts\python.exe tools\probe\_shell_smoke.py     # 真机 rc=0
+            &&  .\backend\.venv\Scripts\python.exe tools\audit\acc_report.py       # 四态：绿 555 · 红 0
+```
+⚠️ 跑**非全套** pytest 时，`ACC_RESULTS_PATH` 要指到 `_mut_acc_results.json`（⛔ 否则冲掉权威四态）；
+⚠️ 跑 `tools/mut/**`（靠 `finally` 复原的那类）⛔ **别接 `Select-Object -First N`**（掐断上游 ⇒ 靶件留坏态）。
+
+**⑤ 换机那几条老坑（都是实测过的）**
+
+| 坑 | 症状 | 解法 |
+|---|---|---|
+| 服务账户看不到用户目录 | PDF / 批量打印**全失败**，而抓取正常 | 浏览器放机器级 `C:\ProgramData\ms-playwright` ＋ 机器级环境变量 ＋ 服务上再设一份（见 §一） |
+| GitHub 直连不通 | clone / 下二进制超时 | 走 `gh-proxy.com`（实测 7.8 MB/s） |
+| `ollama pull` 不通 | 跑 10 分钟、模型目录 0 字节 | 魔搭 `modelscope.cn` 下 GGUF ＋ `ollama create`；或直接拷模型目录 |
+| PowerShell 量行数不可信 | 同一文件数出 69 行 vs 真值 198 行 | 用 Python `len(text.splitlines())`；PS 要加 `-Encoding UTF8` |
+| 改完 Python 没生效 | 看到的还是旧行为 | ⛔ 服务**无 `--reload`** ⇒ 必须 `ops\server_ctl.ps1 -Action restart` |
+
 ## 六、保留期与清理的责任
 
 - **月度**（或换机前）：按 §四清过期件；`work/00-scratch/` 超 14 天的升档或删（`TAIL-74` 立尺子前人工自查）。
