@@ -234,7 +234,8 @@ def run_fetch(
         run = save_run_record(s, **fetch_task.fetch_record_payload(
             object_desc=f"{TABLE} 全量", success=0, fail=1,
             error_message=f"{type(exc).__name__}: {exc}"),
-            detail=record_detail(), operator=operator, started_at=t0)
+            detail={**record_detail(), **R.fetch_detail()},   # ⚠️ 失败**也要**写标记（否则"最近一次"指不住）
+            operator=operator, started_at=t0)
         return {"ok": False, "degraded": True, "message": notice["message"],
                 "excel_import_available": True, "run_record_id": getattr(run, "id", None)}
 
@@ -265,13 +266,14 @@ def run_fetch(
         # ⚠️ `record_detail()` 是**材料侧**的键（`promote_pending`，集采天然用不上）⇒ 在其后**追加集采自己的**
         #    未走完清单（`jc_unsettled`）：少了它，这些合同只会"静默地没落库"（⛔ 禁静默）。
         detail={**record_detail(),
-                "jc_unsettled": [
-                    {"contract_no": str(r.get("contract_no") or ""),
-                     "project_name": str(r.get("project_name") or ""),
-                     "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
-                     "kind": r.get("unsettled_kind")}
-                    for r in m["unmatched"][:200]           # 截断保护：回执不该被几千条撑爆
-                ]},
+                **R.fetch_detail(
+                    jc_unsettled=[
+                        {"contract_no": str(r.get("contract_no") or ""),
+                         "project_name": str(r.get("project_name") or ""),
+                         "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
+                         "kind": r.get("unsettled_kind")}
+                        for r in m["unmatched"][:200]       # 截断保护：回执不该被几千条撑爆
+                    ])},
         operator=operator, started_at=t0)
     return {
         "ok": True, "degraded": False,

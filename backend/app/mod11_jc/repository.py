@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.mod01_projects.models import Project
+from app.mod02_i8.models import RunRecord   # `TAIL-93`：认「最近一次集采抓取」的运行记录
 from app.mod11_jc import domain as D          # ⚠️ 只**调**它的出口（三态归一 / 判定），⛔ 不在本层复写逻辑
 from app.mod11_jc.models import (
     KIND_PARTY_TRADE,
@@ -498,3 +499,49 @@ __all__ = [
     "one_by_no", "existing_contract_nos", "upsert_fetched_contracts", "payment_of_notice",
     "list_party_kinds", "party_kind_map", "ensure_party_kinds", "set_party_kind",
 ]
+
+
+# ==================================================== TAIL-93 · 抓取记录的标记 ＋ 未走完读回
+
+
+#: 集采抓取运行记录的标记（读侧靠它认「最近一次集采抓取」）—— 口径同 `mod03_notice.repository.FETCH_MARK`
+JC_FETCH_MARK = "jc_fetch"
+
+#: 找"最近一次集采抓取"时**最多回看**多少条运行记录（技术台账，量很小；够用即可）
+LOOKBACK = 50
+
+
+def fetch_detail(**extra) -> dict:
+    """集采抓取**每条运行记录**的 `detail`（**写侧唯一出口**）：一律带标记 ＋ 本次的附加字段。
+
+    ⚠️ **三种结局都必须写**（i8 取数/同步失败 · 抓取成功但有未走完 · 全走完）—— 漏掉任何一条，
+       "最近一次"就指不住，读侧会掉回**更早**的记录 ⇒ 那正是付款侧 `TAIL-41` 踩过的坑：
+       **抓取成功之后仍摆着上一次的未命中清单**，用户对着已解决的清单白干。
+    """
+    return {JC_FETCH_MARK: True, **extra}
+
+
+def latest_unsettled(session: Session) -> list[dict]:
+    """**最近一次集采抓取**带的「归属未走完」清单（`TAIL-93` 弹窗的数据源）。
+
+    ⚠️⚠️ **只认最近一次**（与付款侧 `mod03_notice.repository.latest_unresolved` **同一条口径**）：
+       只认「最近一条带 `JC_FETCH_MARK` 标记的记录」—— 它没带清单 ⇒ **返回空**，⛔ **不回溯更早的记录**。
+    ⚠️ 清单里存的是**当时的判定** ⇒ 调用方必须按**当前档案现算**（`mod03_notice.domain.still_unsettled`）。
+    ⛔ 这里**不暂存任何合同数据**（口径同付款侧：补完词**再抓一次**，库里不留半成品）。
+    """
+    recs = list(session.execute(
+        select(RunRecord)
+        .where(RunRecord.run_type == "fetch")
+        .order_by(RunRecord.id.desc())
+        .limit(LOOKBACK)
+    ).scalars().all())
+    # ⚠️ 离线桩不处理 `order_by` ⇒ 再显式按 id 倒序一次（真库本来有序 ⇒ 语义不变）
+    for r in sorted(recs, key=lambda x: getattr(x, "id", 0) or 0, reverse=True):
+        detail = getattr(r, "detail", None) or {}
+        if not isinstance(detail, dict) or not detail.get(JC_FETCH_MARK):
+            continue                       # 不是集采抓取的记录（材料侧 / 付款侧）⇒ 跳过
+        return list(detail.get("jc_unsettled") or [])
+    return []
+
+
+__all__ = ["JC_FETCH_MARK", "LOOKBACK", "fetch_detail", "latest_unsettled"]

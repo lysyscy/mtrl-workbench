@@ -128,6 +128,9 @@ const API = {
     return r.ok ? { ok: true, ...body } : { ok: false, ...body };
   },
   unresolved: () => API.get('/api/m03/notices/unresolved'),
+  /* ⭐ `TAIL-93`：**集采**侧的「归属未走完」清单（口径与上面那条**逐条对齐**：只认最近一次抓取 ＋
+     按当前档案现算）。⚠️ 写仍走 `assignOwnership` —— 那个端点**只补档案、不写业务行**，两域共用一份。 */
+  jcUnsettled: () => API.get('/api/m11/unsettled'),
   assignOwnership: body => API.post('/api/m03/notices/ownership-assign', body),
   /* ⭐ `TAIL-39`：**兜底前先跑一次 i8 仓库名单**（`API-05`）—— ⚠️ 会登录 i8、可能**强踢**（`D9`）
      ⇒ `allow_kick=true` 只允许在**二次确认之后**传（`ownWhCheck` 那个弹窗就是那道闸）。只查**不落库**。 */

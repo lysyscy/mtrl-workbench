@@ -331,3 +331,38 @@ def api_pay_del(payload: SubRowIn) -> dict:
 
 
 __all__ = ["router"]
+
+
+
+# ==================================================== TAIL-93 · 「归属未走完」只读出口
+
+
+@router.get("/api/m11/unsettled")
+def api_unsettled() -> dict:
+    """**最近一次集采抓取**的「归属未走完」清单 ＋ 该壳下的候选小微（`TAIL-93` · 集采侧弹窗的数据源）。
+
+    口径**逐条对齐付款侧** `GET /api/m03/notices/unresolved`（`TAIL-29`-② ／ `TAIL-41`）：
+    · **只认最近一次抓取**（`R.latest_unsettled`）：最近一条带 `jc_fetch` 标记的记录说的是什么就是什么，
+      它没带清单 ⇒ **空**，⛔ 不回溯更早（否则抓取成功之后还摆着旧清单，用户对着**已解决**的清单白干）；
+    · 每条再按**当前档案现算**（`still_unsettled`）⇒ 用户**刚补的词 / 刚建的小微**当场生效、条目消失；
+    · 附该壳下的候选小微（`candidates_of`）—— 供弹窗「选已有小微并补词」。
+
+    ⛔ **本端点只读**。写仍走 `POST /api/m03/notices/ownership-assign` —— 那个端点**只补档案**
+      （原文：「⛔ 本端点**不写任何通知书数据**」）⇒ **与"付款"这个域无关**，集采**直接复用**，
+      ⛔ 不另写第二份（「同一套」的最后一块；唯一的别扭是它住在 mod03 的路由里 —— 见台账 `TAIL-93`）。
+    """
+    # ⚠️ **局部导入**（口径件分居档案域两处：`still_unsettled` 在 mod03、`candidates_of` 在 mod01）
+    #    —— 避开模块级循环依赖，手法同 `mod03_notice/router.py::_wh_loader_dep`。
+    from app.mod01_projects.domain import candidates_of              # noqa: PLC0415
+    from app.mod01_projects.repository import all_projects           # noqa: PLC0415
+    from app.mod03_notice.domain import still_unsettled              # noqa: PLC0415
+
+    with session_scope() as session:
+        projects = all_projects(session)
+        items = still_unsettled(R.latest_unsettled(session), projects)
+        out = [
+            {**it,
+             "candidates": (candidates_of(int(it["shell_id"]), projects) if it.get("shell_id") else [])}
+            for it in items
+        ]
+    return {"items": out, "total": len(out)}

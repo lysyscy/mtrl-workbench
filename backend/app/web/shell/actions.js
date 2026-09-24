@@ -1058,6 +1058,9 @@ const ACT={
          <div style="margin-top:8px"><button class="btn pri" data-act="ownOk" data-id="${n.id}" data-pid="__new">建档并归集</button></div>
        </div>`,
      footer:`<button class="btn" data-act="closeModal">取消（保持「待指定」）</button>`}); },
+/* ⭐ `TAIL-93`：集采抓取回执里的「去指定归属」—— 开的是**同一个弹窗**（`core.js`），
+   只是**数据源**换成集采（`API.jcUnsettled`）。⛔ 判定与写路径都复用付款侧那一份。 */
+ownJcOpen:()=>openOwnDialogFor('jc'),
  /* 归集：写 OWN[单据id] = 档案 id；选已有小微时把关键词去重追加（§九：重心在「不出错」） */
  ownOk:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return; const pid=t.dataset.pid;
    if(pid==='__new'){

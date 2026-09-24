@@ -163,3 +163,54 @@ def test_集采匹配走付款侧同一套归属_不得挂到壳上():
     # ④ 项目未建档 ⇒ 不落库（走链路 A 建档后重判）
     m = match_projects([_row("根本不存在的项目全名(XMCB0000000000)", "x")], projects)
     assert not m["matched"] and m["unmatched"][0]["unsettled_kind"] == "not_archived"
+
+
+# ============================================== 001-12 · 集采「归属未走完」可读回（TAIL-93）
+
+
+@acc("ACC-JC-FETCH-001", "001-12")
+def test_集采未走完清单只认最近一次抓取_且认得出域():
+    """⭐ `TAIL-93`：集采的「归属未走完」要**能被读回**（否则界面上无从处理，只能人工写脚本建档案）。
+
+    口径**逐条对齐付款侧**（`GET /api/m03/notices/unresolved` · `TAIL-29`-② / `TAIL-41`）：
+    · 写侧出口 `repository.fetch_detail` **一律带标记**（三种结局都要写 —— 漏一条，"最近一次"就指不住，
+      读侧会掉回更早的记录 ⇒ 用户对着**已解决**的清单白干）；
+    · 读侧 `repository.latest_unsettled` **只认最近一次**带标记的记录：它没带清单 ⇒ **返回空**，
+      ⛔ **不回溯更早的那次**（这正是 `TAIL-41` 那条修复的骨血）；
+    · 认不出域（付款 / 材料的记录）⇒ **跳过**，不误当集采清单。
+
+    ⚠️ 「弹窗能点通、补完再抓即归位」由**真机 `_shell_smoke`** 兜 —— 本条刻意不 mock 端点（免造第二套口径）。
+    """
+    from app.mod11_jc import repository as R
+
+    class _Res:
+        def __init__(self, rows): self._rows = rows
+        def scalars(self): return self
+        def all(self): return self._rows
+
+    class _Sess:
+        def __init__(self, recs): self._recs = recs
+        def execute(self, _stmt): return _Res(self._recs)
+
+    class _Rec:
+        def __init__(self, rid, detail): self.id = rid; self.detail = detail
+
+    # ① 写侧出口：一律带标记（caller 只管传业务字段）
+    d = R.fetch_detail(jc_unsettled=[{"contract_no": "A"}])
+    assert d[R.JC_FETCH_MARK] is True and d["jc_unsettled"] == [{"contract_no": "A"}]
+
+    # ② 只认**最近一次**带标记的记录（更早那次有清单也不看）
+    recs = [_Rec(3, {"reason": "别的域"}),
+            _Rec(2, {"jc_fetch": True, "jc_unsettled": [{"contract_no": "A"}]}),
+            _Rec(1, {"jc_fetch": True, "jc_unsettled": [{"contract_no": "B"}]})]
+    assert R.latest_unsettled(_Sess(recs)) == [{"contract_no": "A"}]
+
+    # ③ 最近一次**已走完**（没带清单）⇒ 空，⛔ 不回溯更早那次（`TAIL-41` 的教训）
+    recs = [_Rec(4, {"jc_fetch": True}),
+            _Rec(2, {"jc_fetch": True, "jc_unsettled": [{"contract_no": "A"}]})]
+    assert R.latest_unsettled(_Sess(recs)) == []
+
+    # ④ 别的域的记录（付款 / 材料）⇒ 跳过，不误认
+    recs = [_Rec(5, {"notice_fetch": True, "unresolved": [{"x": 1}]}),
+            _Rec(2, {"jc_fetch": True, "jc_unsettled": [{"contract_no": "A"}]})]
+    assert R.latest_unsettled(_Sess(recs)) == [{"contract_no": "A"}]

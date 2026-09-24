@@ -423,9 +423,23 @@ async function ntFetchBackend(m) {
 }
 
 
+/* ⭐ `TAIL-93`：弹窗的**数据源**可切换 —— `'nt'` = 付款通知书（原有）· `'jc'` = 集采合同（新）。
+   ⛔ 判定与写路径**一个字都不分叉**：两个来源的条目形状**是同一个**（`project_name` / `doc_name` /
+      `kind` / `shell_id` / `candidates`），写一律走 `ownAssignSubmit`（后端那个端点**只补档案**）。
+   ⚠️ 两边都靠后端「**只认最近一次抓取** ＋ **按当前档案现算**」⇒ 用户刚补的词 / 刚建的小微**当场生效**。 */
+let OWN_SRC = 'nt';
+
+async function ownItems() {
+  const d = await (OWN_SRC === 'jc' ? API.jcUnsettled() : API.unresolved());
+  return (d && d.items) || [];
+}
+
+/* ⭐ 切数据源**不动 `openOwnDialog` 的签名**（有测试按原样匹配它）—— 这层壳只设置来源再开。 */
+async function openOwnDialogFor(src) { OWN_SRC = src; return openOwnDialog(); }
+
 async function openOwnDialog() {
-  const d = await API.unresolved();
-  const items = (d && d.items) || [];
+  OWN_WH = {};                      /* ⚠️ 换来源/重开 ⇒ **清掉上次查名单的结果**（它按条目下标存，会串） */
+  const items = await ownItems();
   if (!items.length) return;
   const box = items.map((it, i) => {
     OWN_CTX[i] = it.project_name || '';          /* `TAIL-39`：查名单后用来核"是不是同一个壳" */
@@ -462,7 +476,9 @@ async function openOwnDialog() {
   modal({
     title: `待指定归属 · ${items.length} 条`,
     wide: true,
-    body: `<div class="tip" style="margin-bottom:10px"><b>链路 C</b>：付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并落库。</div>${box}`,
+    body: `<div class="tip" style="margin-bottom:10px">${OWN_SRC === 'jc'
+      ? `<b>链路 C</b>：集采合同的<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并落库（集采是**逐条落库**，已落的不受影响）。`
+      : `<b>链路 C</b>：付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并落库。`}</div>${box}`,
     footer: `<button class="btn" data-act="closeModal">关闭</button>`,
   });
 }
@@ -522,8 +538,7 @@ async function ownWhOk(i) {
 
 /* 提交：补词到小微（后端校验「词须出现在单据名里」＋ 去重追加；本层只转发） */
 async function ownAssignSubmit(i, pid) {
-  const d = await API.unresolved();
-  const it = ((d && d.items) || [])[i];
+  const it = (await ownItems())[i];
   if (!it) return toast('清单已过期，请重新抓取');   /* ⚠️ 清单按**当前档案**现算 ⇒ 索引可能已变 */
   let body;
   if (pid === '__new') {
@@ -1665,6 +1680,9 @@ function jcFetchPreview(d) {
      ${list(d.matched_projects || [])}
      <div style="margin-top:10px"><b>未落库</b>（**归属未走完** ⇒ 按口径**不纳管**）· ${d.unmatched} 条</div>
      ${unsettledHtml}
+     ${unsettled.length ? `<div style="margin-top:8px"><button class="btn pri" data-act="ownJcOpen">`
+        + `去指定归属（${unsettled.reduce((n, x) => n + (x.count || 0), 0)} 条）</button>`
+        + ` <span class="mut sm">补完关键词 / 建好小微后再抓一次即可自动归位</span></div>` : ''}
      ${list(d.unmatched_projects || [])}
    </div>`;
 }
