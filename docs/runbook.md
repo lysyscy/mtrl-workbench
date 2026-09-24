@@ -40,6 +40,45 @@
 
 ## 五、换机 / 灾难恢复 checklist（按序）
 
+### 五·最简路径（懒人版 · ⭐ 一次成功）
+
+**第 1 步 · 两个文件夹照"原路径"放**（⭐ 关键：**路径一致 ⇒ 仓里那批绝对路径一个都不用改**）
+- 工程仓（本仓）⇒ `D:\dev\mtrl-workbench`
+- 交付面 ⇒ `D:\工作\AI\PRD编写夹 - Workbuddy专用`
+
+**第 2 步 · 把下面这段整段粘给家里的 AI**（它自己会去读该读的、跑该跑的）
+
+```
+我要在家里这台机器上继续开发「材料报表自动化工作台」这个项目。两个文件夹已从办公室拷来：
+
+① 工程仓（git 仓，含 .git）：D:\dev\mtrl-workbench
+② 交付面（业务/PRD/原型，不在 git 里）：D:\工作\AI\PRD编写夹 - Workbuddy专用
+
+请按下面的顺序把环境办妥，遇到不确定的问我，别猜：
+
+1) 先读 docs/runbook.md 的 §五（换机 checklist ＋ 五之补 ①～⑧），按它逐项做；
+2) 再读 .workbuddy/plans/开发计划-主文档.md 的 §0 现状快照 / §21 接手须知 / §22 尺子与闸门
+   —— 这是本仓的规矩（判据 / 尺子 / 闸门 / 收尾纪律），之后所有改动都照它来；
+3) ⚠️ 先核对路径：runbook 记的是办公室那台机的实况，家里若不同，就按实况改齐这几处绝对路径：
+   .env 的 PRD_ACCEPTANCE_BASELINE（交付面根就是由它上溯两级推出来的）·
+   backend/tests/test_acc_i8_src.py · tools/audit/ui_parity.py · tools/mut/*.py · tools/probe/*.py
+4) 环境照 runbook §五 第 1～7 步装：venv 重建（⚠️ 不可移植）· PostgreSQL ＋ 恢复库备份
+   （在 .workbuddy/backups/mtrl-db-20260924.sql）· 服务（NSSM）· Playwright 浏览器【必须机器级路径】；
+5) 跑 runbook §五-④ 的四条验收：pytest / doc_audit / doc_audit --ui / _shell_smoke / acc_report
+   —— 全绿（含四态 555 绿 · 0 红）才算环境办妥，然后把结果报给我；
+6) ⛔ 别改业务口径、别动 .workbuddy/plans 与交付面的既有内容 —— 只做环境部署。
+```
+
+> ⚠️ **若非要换路径**（比如想两个文件夹塞进同一个父目录）⇒ 除 `.env` 外，**这些地方也有绝对路径**，得一起改：
+> `.env`（`PRD_ACCEPTANCE_BASELINE`）· `backend/tests/test_acc_i8_src.py`（交付面说明书）·
+> `tools/audit/ui_parity.py`（交付面原型）· `tools/mut/_mut_uicheck.py` / `_mut_u5.py` / `_mut_amount.py` 等 ·
+> `tools/probe/*.py`（`_audit_face.py` / `_m14_parity.py` / `_probe_tpl*.py`）。
+> 漏改的后果 = **测试 / 尺子直接红**（不静默，但会挡住收工闸门）；`tools/oneoff/` 那批是历史一次性件，不影响验收。
+
+---
+
+### 五·完整 checklist（按序 · 人工版）
+
 1. 装 Python 3.13 ＋ `backend\.venv`（`pip install -r requirements.txt`，源 = 国内镜像 D10）；
 2. 装 PostgreSQL ＋ `ops\init_db.sql` ＋ `alembic upgrade head`；
 3. `.env`（含 `TEST_DATABASE_URL`）＋ i8 凭证（`i8_cookie/` 或重登）；
