@@ -230,7 +230,16 @@ def main() -> int:
             };
         }""")
         # ⭐ 虚拟滚动（2026-09-21）：滚到底 ⇒ 合计行必须出现（**只挂窗口 ≠ 丢数据**的可观测证据）
-        page.evaluate("() => { const s=document.querySelector('.view'); s.scrollTop=s.scrollHeight; }")
+        # ⚠️ 2026-09-25 修（用户报「滚快了下面渲染不出来」）：真容器是**表格外框 `.tw`** ——
+        #    `.view` 的 overflow 被 `.tw` 的 max-height 封顶、`scrollTop` 恒 ≈0 ⇒
+        #    原先"程序化改 `.view`"是**假动作**（改完窗口根本不该动，却因为监听挂错而"碰巧"过了）。
+        #    ⇒ 探针必须滚**真容器**，并让事件真的走一遍（捕获阶段）。
+        page.evaluate("""() => {
+            const v=document.querySelector('#view');
+            const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
+            s.scrollTop=s.scrollHeight;
+            s.dispatchEvent(new Event('scroll'));
+        }""")
         page.wait_for_timeout(600)
         m08["bottom"] = page.evaluate("""() => {
             const trs=[...document.querySelectorAll('#view tbody tr')];

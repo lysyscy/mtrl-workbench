@@ -19,7 +19,7 @@
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
 | 提交信息草稿 | artifacts/commit_msgN.txt | `work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
 | 交付面文件的手工备份 | artifacts 根、.workbuddy 根 | `.workbuddy/backups/`（留最近 5 份） |
-| 环境/部署/配置/架构知识 | MEMORY 注入档 | `docs/runbook.md` / `docs/architecture.md`（随变更同批改） |
+| 环境/部署/配置/架构知识 | MEMORY 注入档 | `docs/architecture.md` ＋ `ops/README.md`（随变更同批改） |
 | 使用者可感知的变化 | 活文档正文 | `docs/changelog.md`（部署节点登记） |
 
 ## 二、升档 / 降档生命周期（防新区变新垃圾场）

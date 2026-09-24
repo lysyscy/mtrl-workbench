@@ -956,11 +956,13 @@ function render(){
        : `<span class="dot"></span>身份未取到`);
   /* 视图 HTML 先生成、再统一应用表头排序，最后写入页面（排序是纯字符串变换，见 applySorts） */
   const html=applySorts((V[VIEW]||(()=>'<div class="tip">未实现</div>'))(),VIEW);
-  /* ⭐⭐ 滚动位置保留（2026-09-21 用户报障：m03 勾选一行 ⇒ 列表跳回顶部）：
-     `pick`（actions.js）这类**本页内刷新**走 `render()`，innerHTML 一换 ⇒ 浏览器把 `.view`
-     的 scrollTop 归零（替换瞬间内容高度塌成 0）。⇒ 写入前**记下**滚动、写完**还原**。
+  /* ⭐⭐ 滚动位置保留（2026-09-21 报障 m03 勾选跳顶 · **2026-09-25 修对容器**）：
+     `pick`（actions.js）这类**本页内刷新**走 `render()`，innerHTML 一换 ⇒ 承接滚动的那个元素
+     被**整体重建** ⇒ scrollTop 归零（替换瞬间内容高度塌成 0）。⇒ 写入前**记下**、写完**还原**。
+     ⚠️ **容器一律走 `scrollHost()`**（真滚的是表格外框 `.tw`，⛔ 不是 `.view`）——
+       2026-09-21 那次只记/还 `.view` ⇒ 对 m03 **完全无效**，用户 2026-09-25 复报。
      ⚠️ `go()` 不受影响 —— 它本来就在 `render()` 之后显式 `scrollTop=0`（切页回顶是**故意的**）。 */
-  const scroller=$('.view'); const keep=scroller?scroller.scrollTop:0;
+  const scroller=scrollHost(); const keep=scroller?scroller.scrollTop:0;
   /* ⭐⭐ 大表渐进渲染（2026-09-21 用户报障：m08 点进去卡一下 —— 库存明细 1900+ 行，
      一次 innerHTML = 一次性 parse ＋ 布局，阻塞主线程几百毫秒）：
      HTML **仍然一次生成**（排序 / 合计行口径不变），但**分帧写入**：先写第一块，余下每帧追一块。
@@ -982,7 +984,8 @@ function render(){
         例外见 `VSCROLL`（**只用来"关掉或调阈值"**，⛔ 别再当启用名单用）。 */
   if(vsOn(VIEW) && startVirtual(html, scroller, keep)) return;
   $('#view').innerHTML=html;
-  if(scroller) scroller.scrollTop=keep;
+  /* ⚠️ 还原时**重新解析**滚动容器：`.tw` 已被上一行整体重建（旧元素连同它的 scrollTop 一起没了）。 */
+  const host2=scrollHost(); if(host2) host2.scrollTop=keep;
   if(BIND[VIEW]) BIND[VIEW]();
 }
 /* ⭐ `TAIL-66` 后的语义：**默认全开**，`VSCROLL` = **例外表** ——
@@ -1003,6 +1006,16 @@ function vsEditing(){
 }
 let VS=null;                                    /* 当前虚拟态（切页 / 重渲即重建） */
 const EH=28;                                    /* 未渲染行的估算高（本表众数 ≈27px） */
+/* ⭐⭐ 滚动容器**唯一出口**（2026-09-25 修两个用户报障：① m03 勾选一行 ⇒ 列表跳回顶部；
+   ② 虚拟滚动"滚快了下面的就渲染不出来" —— **两者同根**）：
+   · 真正承接溢出的是**表格外框 `.tw`**（它自带 `max-height` ＋ `overflow:auto`，见 CSS `index.html` 的 `.tw`），
+     ⛔ 不是 `.view`（`.view` 的 overflow 被 `.tw` 的高度封顶 ⇒ 它的 `scrollTop` 恒 ≈0）；
+   · 2026-09-21 那次"修过"只记/还了 `.view` ⇒ **作用对象错**，所以报障又回来了；
+   · ⚠️ `#view` 每次重绘**整体重建** ⇒ 挂在后代上的 `onscroll` 会随 DOM 一起蒸发
+     ⇒ 监听一律挂**不会被重建的 `#view`**，并且必须走**捕获阶段**（`scroll` **不冒泡**，
+       只有"祖先 ＋ 捕获"两条都满足，才收得到后代 `.tw` 的滚动）。 */
+function scrollHost(){ const v=$('#view'); if(!v) return null;
+  const t=v.querySelector('.tw'); return (t && t.scrollHeight>t.clientHeight+1) ? t : v; }
 function splitRows(html){
   /* ⚠️ 只认 **tbody 里的行**：第一个 `<tr>` 往往是 `<thead>` 的表头行 —— 截在那里，
      整段窗口会写进 thead 上下文（tbody 空、页面没行 —— 2026-09-21 真机抓到）。 */
@@ -1023,14 +1036,24 @@ function startVirtual(html, scroller, keep){
   if(!sp || sp.rows.length < vsMin(VIEW)) return false;
   VS={view:VIEW, pre:sp.pre, post:sp.post, rows:sp.rows, h:new Array(sp.rows.length).fill(0),
       colN:((sp.pre.match(/<th\b/gi)||[]).length || (sp.rows[0].match(/<td\b/gi)||[]).length || 8),
-      base:0, t:0, pending:false};
+      base:0, t:0, raf:0, pending:false};
   drawVirtual(true);
-  if(scroller) scroller.scrollTop=keep;
-  scroller.onscroll=()=>{ if(!VS||VS.view!==VIEW) return; clearTimeout(VS.t); VS.t=setTimeout(drawVirtual,30); };
-  /* ⭐ 焦点护栏的**补画**：编辑中被推迟的重画，焦点一离开就补上（否则会留着旧窗口不刷新）。 */
-  if(!scroller._vsFocusBound){
-    scroller._vsFocusBound=true;
-    scroller.addEventListener('focusout',()=>{
+  /* ⚠️ 滚动位置的还原见 `render()`（本函数只负责**首帧** —— 此刻 DOM 里还是旧页面）。 */
+  const host0=scrollHost(); if(host0) host0.scrollTop=keep;
+  /* ⭐⭐ 监听挂**不会被重建的 `#view`** ＋ **捕获阶段**（`scroll` 不冒泡 ⇒ 非捕获收不到 `.tw` 的滚动；
+     挂 `.tw` 上则每次重绘随 DOM 蒸发 —— 2026-09-25 用户"滚快了下面渲染不出来"就是这两条一起犯的）。
+     ⭐ 重画节奏改 **rAF（每帧最多一次）**，取代原先 30ms 的 **trailing 去抖**：
+     去抖在"快速滚动"期间只画最后那一下、中间全是空白垫高行。 */
+  const v=$('#view');
+  if(v && !v._vsScrollBound){
+    v._vsScrollBound=true;
+    v.addEventListener('scroll',()=>{
+      if(!VS||VS.view!==VIEW) return;
+      if(VS.raf) return;
+      VS.raf=requestAnimationFrame(()=>{ VS.raf=0; drawVirtual(false); });
+    },true);
+    /* ⭐ 焦点护栏的**补画**：编辑中被推迟的重画，焦点一离开就补上（否则会留着旧窗口不刷新）。 */
+    v.addEventListener('focusout',()=>{
       setTimeout(()=>{ if(VS&&VS.view===VIEW&&VS.pending) drawVirtual(false); },0);
     });
   }
@@ -1038,7 +1061,8 @@ function startVirtual(html, scroller, keep){
 }
 function vSum(i){ let s=0; for(let k=0;k<i;k++) s+=VS.h[k]||EH; return s; }   /* 前缀和（O(N)，千行级可承受） */
 function drawVirtual(first){
-  const sc=$('.view'); if(!sc||!VS) return;
+  /* ⚠️ 读的必须是**真容器**（`scrollHost()`）—— 读 `.view` 会恒得 `st≈0` ⇒ 窗口永不推进。 */
+  const sc=scrollHost()||$('.view'); if(!sc||!VS) return;
   /* ⭐⭐ 焦点护栏（`TAIL-66`）：首帧必须画（否则空页）；**滚动重画**时若焦点在本页输入控件里 ⇒ **推迟**。 */
   if(!first && vsEditing()){ VS.pending=true; return; }
   VS.pending=false;

@@ -34,7 +34,6 @@
 D:\dev\mtrl-workbench\
 ├─ README.md                      ← 本文件：文档地图（唯一根 md，`T12` 守）
 ├─ docs\                          【⭐ 工程基准档 · 人优先 · 入 git】
-│   ├─ runbook.md                   服务起停 · PG/venv · NSSM 装拆起停 · 配置项 · 备份/保留期 · 清理责任
 │   ├─ architecture.md              架构总览（两代码面 / 15 模块映射 / 数据流 / 11 链路 —— 指针进计划 §2§3）
 │   ├─ modules.md                   15 个模块一页纸（模块 ↔ 包 ↔ 壳页 ↔ 现状 · 指针）
 │   ├─ delivery-surface.md          交付面目录清单与同步状态（降低仓外单点依赖）
@@ -105,7 +104,7 @@ D:\dev\mtrl-workbench\
 | 全站链路通没通 | `tools/chain_expected.txt` | ⛔ 判据全绿 ≠ 链路对（`§十二` 顺序纪律） |
 | 某个硬数字为什么是这个值 | `ops/阈值表.md` | 代码里的常量注释 |
 | 某个能力/字段的业务含义 | 交付面《说明书》/ `PRD/` | ⛔ 代码注释、`ops/`（那是工程侧） |
-| 怎么装 / 怎么恢复 / 配置项有哪些 | `docs/runbook.md` | ⛔ `MEMORY.md`（那里只留指针） |
+| 怎么装 / 怎么起停 / 配置项有哪些 | `ops/README.md`（索引）＋ `ops/` 下的脚本与 SQL | ⛔ `MEMORY.md`（那里只留指针） |
 
 **改一处要顺手同步**（漏了**静默失效、不报错**）：`WIRED` · `PAGE_LOAD` · `CHG` ·
 两张登记表（`tools/*_expected.txt`）· ⭐ **界面上有「操作人/录入人」列 ⇒ 后端必须有字段**。
@@ -134,7 +133,7 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 5. 是"实测出来的结论"吗？ ⇒ **`ops/<主题>-实测结论.md`** ＋ **在 `ops/README.md` 加一行索引**。
 6. 是"一次性的报告/建议"吗？ ⇒ **`artifacts/`** ＋ ⭐ **必须带「待办登记回执」**（每条写"已登记为
    `TAIL-xx`"或"不登记的理由"）—— `T11` 守。
-7. 是"环境/部署/配置/架构知识"吗？ ⇒ **`docs/runbook.md` / `docs/architecture.md`**（随变更同批改）。
+7. 是"环境/部署/配置/架构知识"吗？ ⇒ **`docs/architecture.md`** ＋ **`ops/README.md`**（随变更同批改）。
 8. 以上都不是 ⇒ ⚠️ **先停下来问用户**（可能是新层级，要同时改本文件与 `T12` 白名单）。
 
 ## 八、三条常见坑（都踩过）
