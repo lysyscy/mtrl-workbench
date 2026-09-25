@@ -18,6 +18,7 @@ from app.core.money import to_money
 from app.import_kit.mapping import Field
 from app.import_kit.spec import DomainSpec, Hooks
 from app.mod11_jc import excel_parse as P
+from app.mod11_jc import imp_batch as B
 from app.mod11_jc import import_service as IS
 from app.mod11_jc import repository as R
 
@@ -46,9 +47,13 @@ SPEC = DomainSpec(
     title="集采台账",
     fields=FIELDS,
     source_label="项目集采台账（逐项目一份）",
-    batch=False,             # 本域**无批次回滚**（同源重导 = 锚点匹配后更新，天然幂等）
+    batch=True,              # ⭐ `TAIL-98`：有**整批回滚**（批次号形如 `JC-…`，回执带出、壳侧按钮据此出现）
     note="必须认出**「合同价」列**（供应商合同总价 / 合同总价 / 合同金额）——它是匹配锚点，"
-         "认不到就一条都配不上；落库要选**项目**（仓库名）—— 匹配范围就在这个项目内。",
+         "认不到就一条都配不上；落库要选**项目**（仓库名）—— 匹配范围就在这个项目内。"
+         "⭐ **覆盖语义（导入前必读）**：已存在的行**会被更新**，但 **只动这 6 列** —— "
+         "**材料名 / 付款方式 / 备注 / 存档情况 / 存档号 / 寄回日期**；"
+         "⭐ **i8 的列（合同价 / 供应商 / 合同日期 / 甲方单位）不会被覆盖**（两边互不覆盖）。"
+         "⭐ 落库回执会带**批次号**（形如 `JC-YYYYMMDDHHMMSS`）⇒ 导错了可以**整批回滚**。",
     keep_note="不落库（系统自己算）：结算 / 付款 / 欠款；原样保留（本系统不录）：序号 / 重量 / 开票号 / 单价。",
     ignored=tuple((lb, why) for lb, why in P.IGNORED_LABELS.items()),
 )
@@ -68,9 +73,10 @@ def _rows_of(records) -> list[dict]:
 
 
 def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `mapping_` 只进回执口径
-    """落库：**复用** `import_service.match_and_apply`（锚点匹配 ⇒ 更新已有 ＋ 补汇总发票行）。
+    """落库：**复用** `imp_batch.apply_batch`（它里面调的仍是 `import_service.match_and_apply`）。
 
-    `options`：`project_key`（**必填** · 匹配范围 = 该项目内）。
+    `options`：`project_key`（**必填** · 匹配范围 = 该项目内）· `batch`（批次号，不给 ⇒ 现生成 `JC-…`）。
+    ⭐ `TAIL-98`：回执里**带批次号** ⇒ 壳侧据此显示「整批回滚」按钮（通用面已就绪）。
     """
     key = str((options or {}).get("project_key") or "").strip()
     if not key:
@@ -81,11 +87,17 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     rows = _rows_of(records)
     if not rows:
         raise MustReportError("没有一行可落库的数据 —— 台账未被改动（不写库）")
-    out = IS.match_and_apply(s, rows, project_id=int(project_id))
+    out = B.apply_batch(s, rows, project_id=int(project_id), project_key=key,
+                        operator=str(operator or ""), batch_no=(options or {}).get("batch"))
     out["project_key"] = key
     return out
 
 
-HOOKS = Hooks(commit=commit)          # 无批次回滚 ⇒ 不给 `rollback`（通用面据此不挂那个端点）
+def rollback(s, batch, operator):
+    """**整批回滚**（`TAIL-98`）—— 那 6 列逐列还原 ＋ 摘掉本批新加的发票行（批次置 `rolled_back`）。"""
+    return B.rollback(s, batch, operator)
 
-__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit"]
+
+HOOKS = Hooks(commit=commit, rollback=rollback)
+
+__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "rollback"]

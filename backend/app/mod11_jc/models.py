@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -202,6 +202,7 @@ class JcPartyKind(Base):
 
 __all__ = [
     "JcContract", "JcInvoice", "JcPayment", "JcPartyKind",
+    "JcImportBatch", "JcImportUndo", "BATCH_ACTIVE", "BATCH_ROLLED_BACK",
     "TAG_IN", "TAG_OUT", "TAGS",
     "KIND_SUPPLIER", "KIND_TRADE", "INVOICE_KINDS",
     "SRC_MANUAL", "SRC_NOTICE",
@@ -227,3 +228,58 @@ class JcIgnoreProject(Base):
     operator: Mapped[str] = mapped_column(String(64), default="")
     active: Mapped[bool] = mapped_column(Boolean, index=True, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+# ---------------------------------------------------------------- 导入批次与回滚点（`TAIL-98` · §6.8）
+#
+# ⭐ **为什么要批次**（用户 2026-09-25「集采导入**加整批回滚** ✅」—— 与付款计划 / 过程资料对齐）：
+#    集采导入的落库口径是「**按合同价锚点匹配 ⇒ 更新已有行**」⇒ **导错了只能一列列手工改回去**
+#    （付款计划 / 过程资料都有回滚，集采没有）。⇒ 照 `proc_history_batch` 的形态：
+#    一次导入 = **一个批次** ＋ **逐行的「改前值」回滚点**。
+
+BATCH_ACTIVE = "active"
+BATCH_ROLLED_BACK = "rolled_back"
+
+
+class JcImportBatch(Base):
+    """一次**集采台账 Excel 导入**的批次（**整批回滚**以它为单位 · `TAIL-98`）。
+
+    ⚠️ 与过程资料的批次**同形、不同表**（那是 `proc_history_batch`，管"历史段定稿快照"）——
+       本表管的是"**这次导入改动了哪些行**"，两件事，⛔ 不合并。
+    """
+
+    __tablename__ = "jc_import_batch"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    batch_no: Mapped[str] = mapped_column(String(64), unique=True, index=True, default="")
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("project.id", ondelete="SET NULL", name="fk_jc_import_batch_project"),
+        nullable=True, index=True,
+    )
+    project_key: Mapped[str] = mapped_column(String(128), default="")       # 仓库名（§2.7.4）
+    row_count: Mapped[int] = mapped_column(Integer, default=0)              # 本批**更新**了几行
+    operator: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(16), index=True, default=BATCH_ACTIVE)
+    at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class JcImportUndo(Base):
+    """**回滚点**：本批动过的**每一条合同**在那 6 列上的「改前 / 改后」值 ＋ 本批**新加**的发票行 id。
+
+    ⭐ **为什么 `before` 和 `after` 都存**：回滚要还原 `before`；而 `after` 用来**报出**
+      「这条在导入之后**又被人工改过**」—— 否则回滚会**静默**把人改的那一笔一起抹掉（禁静默）。
+    ⚠️ 只存 `import_service.EXCEL_COLS` 那 **6 列** —— i8 的事实列（合同价 / 供应商 / 合同日期 / 甲方单位）
+      本批**一个字都没碰** ⇒ 不需要回滚点（这也是"两边互不覆盖"的必然结果）。
+    ⚠️ `contract_id` **刻意不设外键**：万一合同没了，**回滚点要留下来**才能把它**报出来**
+      （设外键 + `CASCADE` 会让它静默消失 ⇒ 正是"禁静默"最怕的那种）。
+    """
+
+    __tablename__ = "jc_import_undo"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    batch_no: Mapped[str] = mapped_column(String(64), index=True, default="")
+    contract_id: Mapped[int] = mapped_column(Integer, index=True, default=0)
+    before_json: Mapped[str] = mapped_column(Text, default="")              # 6 列的改前值（JSON）
+    after_json: Mapped[str] = mapped_column(Text, default="")               # 6 列的改后值（JSON）
+    invoice_ids: Mapped[str] = mapped_column(Text, default="")              # 本批**新加**的发票行 id（JSON 数组）
+    at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

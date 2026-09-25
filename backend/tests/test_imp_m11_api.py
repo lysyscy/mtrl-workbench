@@ -4,7 +4,8 @@
 1. **两级表头拼名在通用面上也认得出**（`供应商` › `合同总价` ⇒ `供应商合同总价`）—— 这是真台账的形态；
 2. ⭐ **匹配口径复用同一个函数**（`import_service.match_and_apply`）：锚点 = **含税合同价**、范围 = 单个项目
    ⇒ 命中 1 条就更新它 ＋ 补汇总发票行；**同源重跑不翻倍**（已有同 kind 发票行 ⇒ 跳过并报出来）；
-3. **项目必填**（不给 ⇒ 显式拒绝）；本域**无批次回滚** ⇒ 没有 rollback 端点。
+3. **项目必填**（不给 ⇒ 显式拒绝）；⭐ `TAIL-98`（2026-09-25）起本域**有** `rollback` 端点
+   （整批回滚 · 批次号形如 `JC-YYYYMMDDHHMMSS`）—— 幽灵批次号必须**显式报错**（⛔ 禁静默）。
 
 ⚠️ 会**真写库** ⇒ 仓库名取随机值（持久测试库）。
 """
@@ -129,10 +130,14 @@ def test_老xls也能读_按魔术字节判类型():
 
 
 @acc()
-def test_项目必填_且没有回滚端点(client):
-    """⚠️ 匹配范围 = 单个项目 ⇒ 不给项目就明确拒绝；本域无批次回滚 ⇒ 不挂 rollback。"""
+def test_项目必填_且回滚端点已挂并显式报错(client):
+    """⚠️ 匹配范围 = 单个项目 ⇒ 不给项目就明确拒绝；⭐ `TAIL-98` 起 rollback 端点**已挂**
+    （`SPEC.batch=True` ＋ `HOOKS.rollback` ⇒ 通用面自己挂上），幽灵批次号必须**说人话**。"""
     got = _parse(client)
     out = client.post("/api/imp/m11_jc/commit",
                       json={"token": got["token"], "mapping": {"合同日期": "合同日期"}}).json()
     assert out["ok"] is False and "项目" in out["message"], out
-    assert client.post("/api/imp/m11_jc/rollback", json={"batch": "X"}).status_code in (404, 405)
+    rb = client.post("/api/imp/m11_jc/rollback", json={"batch": "JC-19700101000000"})
+    assert rb.status_code == 200, "端点必须在（通用面按 `hooks.rollback` 挂）"
+    body = rb.json()
+    assert body["ok"] is False and "找不到批次" in body["message"], body
