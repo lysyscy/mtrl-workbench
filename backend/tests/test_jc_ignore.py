@@ -1,8 +1,11 @@
-"""`TAIL-96` 集采**剔除名单**（不要的项目 ⇒ 抓取时先剔除）—— 行为判据。
+"""`ACC-JC-IGNORE-001` —— `TAIL-96` 集采**不纳入名单**（不要的项目 ⇒ 抓取时先剔除）的判据点。
+
+⭐ `TAIL-101`（2026-09-25）**补的契约面**：本文件的行为判据**早就在**（`TAIL-96` 落地时写的），
+   但那批**只做了实现**（用 `@acc()` 自检）—— 判据点**没登记进 `验收基线.json`**，`MOD-14.md` 与
+   《说明书》里也**没有这条能力** ⇒ 交付面**查不到有这条规则**。本批补齐：`ACC-JC-IGNORE-001`（4 点）。
+   ⚠️ 口径主人 = 《说明书》**§6.5.4**（本次新建）。
 
 ⚠️ 非破坏：末尾 `s.rollback()`（同 `test_acc_jc_fetch.py` 的约定，⛔ 一行不留）。
-⚠️ 用 `@acc()`（**实现层自检**）而不是判据点号 —— 用户可见的口径判据点待与契约面同批补
-   （`TAIL-97` 那批一起动 `验收基线.json`，避免"判据点先加、契约没跟"的分叉）。
 
 判据四条（都能证伪）：
 1. 名单命中 ⇒ **摘出**（且不动未命中的行）；
@@ -28,13 +31,11 @@ def _rows() -> list:
             {"contract_no": "IG2", "project_name": "另有其名的项目", "fields": {"BillName": "单-B"}}]
 
 
-@acc()
-def test_名单命中则摘出_名单空则原样():
+@acc("ACC-JC-IGNORE-001", "001-01")
+def test_名单命中则摘出_且不动未命中的行():
+    """⭐ 命中名单只摘**那几行** —— 未命中的行**一行不动**（防"连坐"）。"""
     with session_scope() as s:
         try:
-            keep0, out0 = split_ignored(s, _rows())
-            assert len(out0) == 0 and len(keep0) == 2, "名单为空时不许动任何一行（防回归）"
-
             R.add_ignored(s, name_full=FULL, reason="自检", operator="自检")
             keep, out = split_ignored(s, _rows())
             assert [r["contract_no"] for r in out] == ["IG1"], "命中名单的行必须被摘出"
@@ -43,7 +44,23 @@ def test_名单命中则摘出_名单空则原样():
             s.rollback()
 
 
-@acc()
+@acc("ACC-JC-IGNORE-001", "001-02")
+def test_名单为空时与加名单之前逐字节一致():
+    """⭐ 防回归：**名单为空**才是常态（多数时候没人登记）⇒ 它必须与"没有这个功能"完全一样。
+
+    ⚠️ "原样返回"= **连顺序都不许变**（⛔ 不是"返回等价集合"）—— 抓取链路的行序会影响回执与日志。
+    """
+    with session_scope() as s:
+        try:
+            rows = _rows()
+            keep0, out0 = split_ignored(s, rows)
+            assert len(out0) == 0 and len(keep0) == 2, "名单为空时不许动任何一行（防回归）"
+            assert [r["contract_no"] for r in keep0] == [r["contract_no"] for r in rows], "顺序也不许变"
+        finally:
+            s.rollback()
+
+
+@acc("ACC-JC-IGNORE-001", "001-03")
 def test_反例_名单不许让未走完的行落库():
     """⭐ 这条是防"顺手放宽"的：摘掉忽略行之后，**未走完的行依然不落库**。"""
     with session_scope() as s:
@@ -62,7 +79,7 @@ def test_反例_名单不许让未走完的行落库():
             s.rollback()
 
 
-@acc()
+@acc("ACC-JC-IGNORE-001", "001-04")
 def test_写入同名幂等_停用后不再过滤但留在册():
     with session_scope() as s:
         try:
