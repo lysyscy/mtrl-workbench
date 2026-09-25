@@ -1109,21 +1109,7 @@ function drawVirtual(first){
   if(topH>0) frag+='<tr style="height:'+topH+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>';
   frag+=VS.rows.slice(a,b).join('');
   if(botH>0) frag+='<tr style="height:'+botH+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>';
-  /* ⭐⭐⭐ 2026-09-25 **用户 A/B 定案后**的结构性修（`VS=null` ⇒ 立马顺滑 ⇒ 元凶 = 每次重画都整体重建）：
-     ⛔ 原实现每次重画都重写 `#view` 的 innerHTML ⇒ **真滚动容器 `.tw` 跟着被换** ⇒ 位置要"重设"
-     ⇒ 用户实测**每个滚轮 tick 的有效滚动量被吃掉 ~95%**（"滚 5~6 次才走一行"）。
-     ⇒ **快路径**：整页只有**一个** `<tbody>` 时，重画**只换那个 tbody 的行** ——
-        `#view` / `.tw` / `table` / `thead` **全部保持存活** ⇒ **滚动位置从不需要重设** ✓
-     ⚠️ 多 `tbody` 的页（m07 三张表）保守退回原路（一窗口可能跨两张表，写单 tbody 会错；⛔ 不硬来）。
-     ⛔ 红线①仍在：两条路写的都是"**完整片段**"（上垫高 ＋ 窗口行 ＋ 下垫高），**一次**写完。 */
-  const _tb=$('#view').querySelectorAll('tbody');
-  if(!first && _tb.length===1){
-    _tb[0].innerHTML=(topH>0?'<tr style="height:'+topH+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>':'')
-      +VS.rows.slice(a,b).join('')
-      +(botH>0?'<tr style="height:'+botH+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>':'');
-  }else{
-    $('#view').innerHTML=frag+VS.post;
-  }
+  $('#view').innerHTML=frag+VS.post;
   if(first&&BIND[VIEW]) BIND[VIEW]();
   /* 红线③：窗口内逐行**实测回填** ＋ baseTop 用窗口首行实测位置自校正 */
   const trs=$('#view').querySelectorAll('tbody tr');
