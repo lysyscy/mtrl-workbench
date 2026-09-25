@@ -79,6 +79,22 @@
 
 ⚠️ **`ops/nssm/nssm.exe` 不提交**（二进制 · 见 `.gitignore`）；新机重建照上表第一条重新下载一次即可。
 
+## 一之三、本宿主的 **hooks 能力**（实测结论 · 2026-09-25 · `TAIL-95` 前置）
+
+| 项 | 结论 | 依据 |
+|---|---|---|
+| 支持吗 | ✅ **支持** | CodeBuddy 官方市场自带 `plugin-dev/skills/hook-development/SKILL.md`，**逐字列出**事件：`PreToolUse` · `PostToolUse` · `Stop` · `SubagentStop` · `SessionStart` · `SessionEnd` · `UserPromptSubmit` · `PreCompact` · `Notification`；市场里多个插件**真在用**（`security-scan`→`Stop` · `security-guidance`→`PreToolUse` · `plugin-finder`→`UserPromptSubmit` · `weixin-minigame-helper`→`SessionStart`） |
+| 配置位（**用户级**） | **`.codebuddy/settings.json`** —— **direct 格式**（顶层直接写 `"Stop": [ … ]`） | 同上 · 该 skill 的 `## Settings Format (Direct)` |
+| 配置位（插件级） | `hooks/hooks.json` —— **wrapper 格式**（`{"hooks": { … }}`），路径用 `${CODEBUDDY_PLUGIN_ROOT}` | 同上 · `## Plugin hooks.json Format`；⚠️ 插件 hooks 与用户 hooks **并行合并**执行 |
+| hook 类型 | `"type": "command"`（跑外部命令）· `"type": "prompt"`（交模型判）＋ `matcher` ＋ `timeout` | 同上 |
+| 收到的字段 | 公共：`session_id` · `transcript_path` · `cwd` · `hook_event_name`；`Stop/SubagentStop` 另有 `stop_hook_active` · `reason`；`UserPromptSubmit` 有 `user_prompt`；`Pre/PostToolUse` 有 `tool_name`/`tool_input`/`tool_result` | 同上 ＋ `security-scan` 的 README／脚本 |
+| ⚠️ **未确认** | **`turn_id` 不在文档字段里** ⇒ 计数要按 **`session_id` ＋ `Stop` 次数**降级（或先实测一次拿到真实 payload） | 文档未列出该字段 |
+
+⇒ **对 `project-handoff` 的意义**：它需要的三个事件（`SessionStart` / `UserPromptSubmit` / `Stop`）**全都有**，
+且 `Stop` 带 `stop_hook_active`（防循环）⇒ **技术上可以适配**。
+⚠️ 但落地要**改用户级配置**（`.codebuddy/settings.json`）＋ 可能触发宿主原生信任确认 ⇒ **必须先经用户同意**，
+⛔ 不许我擅自写。本机现状：**尚未配置**（`~/.codebuddy/` 里没有 hooks 相关项）。
+
 ## 二、引用这些结论时的三条纪律
 
 1. **先对前提**：文件头部写了「本机 / 方法 / 脚本 / 日期」。**换机后先把前提重核一遍**
