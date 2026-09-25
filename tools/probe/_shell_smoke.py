@@ -29,6 +29,8 @@ from _shell_home import check as check_home    # noqa: E402  ← ⑲ 看板接�
 
 from _shell_exp import check as check_exp        # noqa: E402  ← ⑬ m07 导出（`TAIL-04`）—— 2026-09-21 外移（本文件逼近 600 行红线）
 from _shell_legacy import check as check_legacy  # noqa: E402  ← ⑳ 四个暂留件收口的壳内四页（`§19`）
+from _shell_m09 import check as check_m09    # noqa: E402  ← ⑪/⑪b m09 特殊费用（2026-09-25 外移：`TAIL-99`）
+from _shell_m14 import check as check_m14    # noqa: E402  ← ⑫/⑫b/⑫c m14 规则配置 ＋ 剔除名单卡（同上）
 
 BASE = "http://127.0.0.1:8000"
 errors: list[str] = []
@@ -428,212 +430,21 @@ def main() -> int:
             if not ok:
                 errors.append("m07 结余列自检未通过：" + what)
 
-        # ---- m09 特殊费用月报表：⭐ 可观测证据 = **页面的数 == 当场重取后端的数** ＋ 演示容器已消失
-        #      ⚠️ **只读**：写动作（增/改/删）的真机验证走 curl（见 `TAIL-27` 的收尾记录），
-        #         这里**不写库** —— 冒烟脚本要能被反复跑，不留下残留数据。
-        page.click('[data-k="m09"]')
-        page.wait_for_timeout(800)
-        m09 = page.evaluate("""async () => {
-            const q = (ym, pj) => '/api/m09/fee?ym=' + encodeURIComponent(ym || '')
-              + '&pj=' + encodeURIComponent(pj || '');
-            const fetchBe = async (ym, pj) => (await (await fetch(q(ym, pj))).json());
-            const tbls = [...document.querySelectorAll('#view table')];
-            const tbl = tbls[0] || null;
-            const be0 = await fetchBe(awfYm, awfPj);
-            const out = {
-              ym: awfYm, proj: awfPj,
-              pjCands: AWF_PJS.length, beCands: (be0.projects || []).length,
-              rows: AWF_ROWS.length, beManuals: (be0.manuals || []).length,
-              total: AWF_TOTAL, beTotal: Number(be0.total),
-              auto: AWF_AUTO, beAuto: Number(be0.auto && be0.auto.amount),
-              demoGone: (typeof AWF === 'undefined'),
-              tables: tbls.length,
-              tbody: tbl ? tbl.querySelectorAll('tbody tr').length : 0,
-              amtCells: tbl ? tbl.querySelectorAll('tbody input[data-act="awfAmt"]').length : 0,
-              wiredLabel: document.querySelector('#ttl em').innerText,
-            };
-            /* ⭐ 换一个**非默认**项目 ⇒ 页面必须跟着后端走（证明"选得到的就取得到"） */
-            const other = AWF_PJS[AWF_PJS.length - 1];
-            if (other && other !== awfPj) {
-              awfPj = other; await reloadM09();
-              const be1 = await fetchBe(awfYm, awfPj);
-              out.switched = { pj: awfPj, beProj: be1.project, total: AWF_TOTAL, beTotal: Number(be1.total) };
-            }
-            /* ⭐ 给一个**后端不认**的项目 ⇒ 归一化必须由后端做（壳里不许各写一份兜底） */
-            awfPj = '__no_such_project__'; await reloadM09();
-            const be2 = await fetchBe(awfYm, '');
-            out.bogus = { pj: awfPj, beProj: be2.project };
-            if (other) { awfPj = other; await reloadM09(); }
-            return out;
-        }""")
-        print("⑪ m09 =", m09)
-        sw = m09.get("switched") or {}
-        bg = m09.get("bogus") or {}
-        oks7 = [
-            (m09["tables"] >= 1 and m09["tbody"] >= 3, "表在线（自动项 ＋ 手填项 ＋ 合计）"),
-            ("已接后端" in m09["wiredLabel"], "顶栏说「已接后端真实数据」"),
-            (m09["demoGone"], "⭐ 演示容器 `AWF` **真的没了**（`typeof AWF === 'undefined'`）"),
-            (m09["pjCands"] > 0 and m09["pjCands"] == m09["beCands"],
-             f"⭐ 项目候选 == 后端（{m09['pjCands']} vs {m09['beCands']}）"
-             " —— 若仍是「加载时求值」，这里会是 0"),
-            (m09["rows"] == m09["beManuals"] and m09["amtCells"] == m09["beManuals"],
-             f"⭐ 手填行数 == 后端 `manuals`（{m09['rows']} vs {m09['beManuals']}；表内输入格 {m09['amtCells']}）"),
-            (abs((m09["total"] or 0) - m09["beTotal"]) < 0.01
-             and abs((m09["auto"] or 0) - m09["beAuto"]) < 0.01,
-             f"⭐ 自动项 / 合计 == 后端（自动 {m09['auto']} vs {m09['beAuto']}；"
-             f"合计 {m09['total']} vs {m09['beTotal']}）"),
-            (bool(sw) and sw.get("pj") == sw.get("beProj")
-             and abs((sw.get("total") or 0) - (sw.get("beTotal") or 0)) < 0.01,
-             f"⭐ 切到非默认项目后仍与后端一致（{sw.get('pj', '')[:16]!r} "
-             f"· 合计 {sw.get('total')} vs {sw.get('beTotal')}）"),
-            (bool(bg) and bg.get("pj") == bg.get("beProj") and bool(bg.get("beProj")),
-             f"⭐ 后端不认的项目被**后端**归一成候选第一个（{bg.get('pj', '')!r} → {bg.get('beProj', '')[:16]!r}）"),
-        ]
-        for ok, what in oks7:
-            print(("  ✅ " if ok else "  ⛔ ") + what)
-            if not ok:
-                errors.append("m09 自检未通过：" + what)
+        # ---- m09 特殊费用月报表（`MOD-09`）—— 页面的数 == 当场重取后端的数 ＋ 演示容器已消失 ＋
+        #      **写路径净零往返**（点「＋ 增加手填项」真落库 ⇒ 点「删除」回到原样），挪 `_shell_m09.py`。
+        check_m09(page, errors)
 
-        # ⭐ 写路径**真机往返**：点「＋ 增加手填项」⇒ 真的多一行；点「删除」⇒ 回到原样。
-        #    ⚠️ **净零**（一增一删，先后端都落库过）⇒ 脚本可反复跑、不留残留；
-        #       若中途失败，下面的 `after == before` 会当场报 ⛔（不留着不管）。
-        m09w = page.evaluate("""async () => {
-            const before = AWF_ROWS.length;
-            const btn = document.querySelector('#view [data-act="awfAdd"]');
-            if (!btn) return { ok: false, why: '找不到「＋ 增加手填项」按钮' };
-            btn.click();
-            await new Promise(r => setTimeout(r, 1000));
-            const added = AWF_ROWS.length;
-            const dels = [...document.querySelectorAll('#view tbody [data-act="awfDel"]')];
-            if (!dels.length) return { ok: false, why: '新增后表内没出现「删除」按钮', before: before, added: added };
-            dels[dels.length - 1].click();
-            await new Promise(r => setTimeout(r, 1000));
-            const be = await (await fetch('/api/m09/fee?ym=' + encodeURIComponent(awfYm)
-              + '&pj=' + encodeURIComponent(awfPj))).json();
-            return { ok: true, before: before, added: added, after: AWF_ROWS.length,
-                     beManuals: (be.manuals || []).length };
-        }""")
-        print("⑪b m09 写路径往返 =", m09w)
-        oks8 = [
-            (bool(m09w.get("ok")), f"⭐ 写路径往返：{m09w.get('why') or '点得动'}"),
-            (m09w.get("ok") and m09w.get("added") == m09w.get("before", -1) + 1,
-             f"「＋ 增加手填项」**真的落库并回读**（{m09w.get('before')} → {m09w.get('added')} 行）"),
-            (m09w.get("ok") and m09w.get("after") == m09w.get("before")
-             and m09w.get("beManuals") == m09w.get("before"),
-             f"「删除」后**回到原样、无残留**（{m09w.get('after')} 行 · 后端也是 {m09w.get('beManuals')}）"),
-        ]
-        for ok, what in oks8:
-            print(("  ✅ " if ok else "  ⛔ ") + what)
-            if not ok:
-                errors.append("m09 写路径自检未通过：" + what)
-
-        # ---- m14 规则配置：⭐ 可观测证据 = **页面的规则条数 == 当场重取后端的条数**
-        #      ＋ 类别下拉与后端同源 ＋ 来源如实显示 ＋ 卡头条数实时算
-        #      ⭐ ⑫b **写路径净零往返**：新增一条探针 ⇒ 条数 +1 ⇒ **按 id 差集**删掉它 ⇒ 回到原样。
-        #         ⚠️ 净零 ⇒ 可反复跑、库不留残留；用「id 差集」而不是"删最后一条"，
-        #            免得删除失败时**误删真规则**。
-        page.click('[data-k="m14"]')
-        page.wait_for_timeout(800)
-        # ⭐ `TAIL-96`：集采剔除名单卡的**点击链路真点一次**（零残留 —— 见设计件 §四）。
-        m14j = page.evaluate("""async () => {
-            await reloadM14(); render();
-            const b = document.querySelector('#view [data-act="jciAdd"]');
-            const i = document.querySelector('#jciName');
-            if (!b || !i) return {why: '看不到「加入剔除名单」输入行'};
-            const n0 = (window.JCI_ALL || []).length;
-            i.value = ''; b.click(); await new Promise(r => setTimeout(r, 500));
-            return {api: [typeof API.m14JcIgnoreAdd, typeof API.m14JcIgnoreSet], n0: n0,
-                    n1: (window.JCI_ALL || []).length,
-                    said: document.body.innerText.includes('项目全名不能为空')};
-        }""")
-        jok = (m14j.get('api') == ['function', 'function'] and m14j.get('n0') == m14j.get('n1')
-               and m14j.get('said'))
-        print(("  ✅ " if jok else "  ⛔ ") + f"⑫c 集采剔除名单卡：加入按钮**真点**⇒空名早退"
-              f"（名单 {m14j.get('n0')} → {m14j.get('n1')} 条 · 回执={m14j.get('said')}）")
-        if not jok:
-            errors.append("m14 集采剔除名单卡自检未通过：" + str(m14j))
-
-        m14 = page.evaluate("""async () => {
-            const rulesBe = async () => (await (await fetch('/api/m14/rules')).json());
-            const be0 = await rulesBe();
-            const tbls = [...document.querySelectorAll('#view table')];
-            const t = tbls[0] || null;
-            const out = {
-              rules: RULE_EX.length, beRules: (be0.rules || []).length,
-              raw: RULE_RAW.length,
-              kinds: RULE_KINDS.length, beKinds: (be0.kinds || []).length,
-              kindKeys: RULE_KINDS.map(k => k.kind),
-              src: RULE_SRC, beSrc: be0.source_label,
-              tbody: t ? t.querySelectorAll('tbody tr').length : 0,
-              wiredLabel: document.querySelector('#ttl em').innerText,
-              headCount: (document.querySelector('#view h4 b') || {}).innerText || '',
-            };
-            /* ⭐ 写路径：经**后端**新增一条探针规则 ⇒ 再按 **id 差集**删掉它（净零） */
-            const before = new Set((be0.rules || []).map(r => r.id));
-            const add = await (await fetch('/api/m14/rules', {method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({kind: 'input_by', values: '__smoke_probe__',
-                                    meaning: '冒烟探针（跑完即删）'})})).json();
-            const be1 = await rulesBe();
-            const fresh = (be1.rules || []).find(r => !before.has(r.id));
-            await reloadM14(); render();
-            out.addedUi = RULE_EX.length;
-            let del = null;
-            if (fresh) {
-              del = await (await fetch('/api/m14/rules/' + fresh.id, {method: 'DELETE'})).json();
-            }
-            await reloadM14(); render();
-            const be2 = await rulesBe();
-            out.add = {ok: add.ok, msg: (add.message || '').slice(0, 70)};
-            out.del = del ? {ok: del.ok, msg: (del.message || '').slice(0, 90)} : null;
-            out.after = RULE_EX.length;
-            out.beAfter = (be2.rules || []).length;
-            return out;
-        }""")
-        print("⑫ m14 =", m14)
-        oks9 = [
-            ("已接后端" in m14["wiredLabel"], "顶栏说「已接后端真实数据」"),
-            (m14["rules"] == m14["beRules"] and m14["rules"] > 0 and m14["raw"] == m14["beRules"],
-             f"⭐ 页面的规则条数 == 后端（{m14['rules']} vs {m14['beRules']}）"
-             " —— 若 `RULE_EX` 还硬编码，这里就对不上"),
-            (m14["tbody"] == m14["beRules"],
-             f"表内渲染行数 == 后端条数（{m14['tbody']}）"),
-            (m14["kinds"] == m14["beKinds"] and m14["kinds"] > 0
-             and "payee" not in m14["kindKeys"],
-             f"⭐ 可选类别来自后端、且**不含「收款单位」**（{m14['kinds']} vs {m14['beKinds']}）"),
-            (m14["src"] == m14["beSrc"] and bool(m14["src"]),
-             f"⭐ 页面如实显示当前值的来源（{m14['src']!r}）"),
-            (m14["headCount"] == str(m14["beRules"]),
-             f"⭐ 卡头条数**实时算**（卡头 {m14['headCount']!r} vs 后端 {m14['beRules']}）"),
-        ]
-        for ok, what in oks9:
-            print(("  ✅ " if ok else "  ⛔ ") + what)
-            if not ok:
-                errors.append("m14 自检未通过：" + what)
-
-        oks10 = [
-            ((m14.get("add") or {}).get("ok") is True,
-             f"⭐ 新增**真的落库**：{(m14.get('add') or {}).get('msg')}"),
-            (m14.get("addedUi") == m14.get("beRules", -99) + 1,
-             f"⭐ 新增后页面条数 +1（{m14.get('rules')} → {m14.get('addedUi')}）—— 证明是全链路不是本地改"),
-            ((m14.get("del") or {}).get("ok") is True,
-             f"⭐ 探针已删除：{(m14.get('del') or {}).get('msg')}"),
-            (m14.get("after") == m14.get("rules") and m14.get("beAfter") == m14.get("rules"),
-             f"⭐ 跑完**回到原样、库无残留**（页面 {m14.get('after')} · 后端 {m14.get('beAfter')}"
-             f" · 原 {m14.get('rules')}）"),
-        ]
-        for ok, what in oks10:
-            print(("  ✅ " if ok else "  ⛔ ") + what)
-            if not ok:
-                errors.append("m14 写路径自检未通过：" + what)
+        # ---- m14 规则配置（`MOD-14`）—— 规则条数/类别/来源/卡头 == 后端 ＋ **写路径净零往返**（id 差集）
+        #      ＋ ⭐ ⑫c 集采剔除名单卡：加入按钮**真点** ⇒ 空名早退（零残留），挪 `_shell_m14.py`。
+        check_m14(page, errors)
 
         # ---- m07 导出（`TAIL-04`）：**从页面上下文真拉一次 zip**（默认月 ＋ 有数据的月，两态都验）。
-        #      ⚠️ 这一段自己七十多行 ⇒ 挪 `_shell_exp.py`：本文件有 **600 行**硬上限（`doc_audit` 的 `T5` = 红）。
+        #      ⚠️ 这一段自己七十多行 ⇒ 挪 `_shell_exp.py`：本文件有 **400 行即黄**（`doc_audit` 的 `T5`）；⚠️ 连 `>600` 也只是**黄** —— `[用户·2026-09-21]` 把"红·禁合入"**降级**，只须在 `ops/阈值表.md` 登记"为什么不拆"。
         check_exp(page, errors)
 
         # ---- ⑭ m01 链路 B「待人工指认」（`TAIL-30`-③）——
         #      ⚠️ 这一段自己一百多行（**真造库样本 ＋ 真点弹窗 ＋ 复原**）⇒ 挪到 `_shell_pend.py`：
-        #         本文件有 **600 行**硬上限（`doc_audit` 的「文件行数」规则 = 红）。
+        #         本文件有 **400 行即黄**（`doc_audit` 的 `T5`）；⚠️ 连 `>600` 也只是**黄** —— `[用户·2026-09-21]` 把"红·禁合入"**降级**，只须在 `ops/阈值表.md` 登记"为什么不拆"。
         check_pend(page, errors)
 
         # ---- ⑮ m01 链路 A ③-b「多仓库 ⇒ 选一个建行」（`TAIL-45`）—— 同上，挪 `_shell_arch.py`。

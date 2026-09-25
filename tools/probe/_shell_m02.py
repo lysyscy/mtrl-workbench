@@ -1,6 +1,6 @@
 """壳真机自检 · **第 ⑯ 段：`m02` i8 接入层**（`TAIL-27`）。
 
-**为什么单独立一个文件**：`tools/probe/_shell_smoke.py` 有 **600 行**硬上限（`doc_audit` 的文件行数规则 = 红）
+**为什么单独立一个文件**：`tools/probe/_shell_smoke.py` 有 **400 行即黄**（`doc_audit` 的 `T5`）；⚠️ 连 `>600` 也只是**黄** —— `[用户·2026-09-21]` 把"红·禁合入"**降级**，只须在 `ops/阈值表.md` 登记"为什么不拆"
 ⇒ 与 `_shell_pend.py` / `_shell_arch.py` 同款，由主自检**调一段**（`check(page, errors)`）。
 
 **它验的链条**：新写的那几段壳代码（`m02EchoKv` / `m02LogRows` / `BIND.m02` / `reloadM02`）**真的能跑** ——
