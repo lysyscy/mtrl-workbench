@@ -364,3 +364,43 @@ def test_当前登录用户是唯一出口且不得写死人名():
         "`boot()` 没有（逐路容错地）取当前登录用户 ⇒ 顶栏第一帧是空的/假的"
         "（必须走 `soft('当前登录用户', reloadWho)` —— ⛔ 也不许让它把首屏拖成串行等待）")
     assert "esc(CUR.name" in SHELL, "顶栏身份没从 `CUR.name` 渲染（那取的是哪儿）"
+
+
+
+# ==================================================== 001-14 · 未登录 ⇒ 写动作一律拒（2026-09-25 补）
+# ⚠️ 搬进本件（而不是单开一件）的记录：单开新件时 `acc_report` 报"未绑定"（绑定在结果档里明明有）
+#    ⇒ 疑为"新测试件"的认领问题 ⇒ 搬进本件后立刻变绿（见 journal 2026-09-25 §67/§68）。
+
+
+@acc("ACC-USR-MGMT-001", "001-14")
+def test_未登录只能看_写动作一律拒():
+    """未登录：**读放行**（落到路由层 404）· **写一律拒**（闸门先拦 401）· 登录/登出放行 · 带票写放行。
+
+    口径 =《说明书》§1.5.1（2026-09-21 用户裁定「未登录 = 无身份」）：「未登录**只能看**，**写动作一律拒**」。
+    ⚠️ 口径**不是**「未登录只能访问登录页」（更严、会把不带会话的真机自检全打白屏）⇒ 本判据专钉"**读放行**"这一半。
+    ⚠️ 断言用"**幽灵路径**"（既不存在、也不碰业务）⇒ 只比**闸门先裁决了没有**：读 ⇒ 404 · 写 ⇒ 401（⛔ 不是 404）。
+    """
+    from fastapi.testclient import TestClient
+
+    from app.core import session as SESS
+    from app.main import create_app
+
+    ghost = "/api/__gate_probe__"
+    anon = TestClient(create_app())
+
+    # ① 读：未登录也**放行**
+    assert anon.get(ghost).status_code == 404, "未登录的读被拦了 —— 与 §1.5.1「只能看」冲突"
+
+    # ② 写：未登录 ⇒ **闸门先拦**（401，且**不是** 404 ⇒ 证明是进业务之前拦的）
+    for method in ("post", "put", "patch", "delete"):
+        r = getattr(anon, method)(ghost)
+        assert r.status_code == 401, f"未登录的 {method.upper()} 没被拦（{r.status_code}）"
+        assert "未登录" in r.json().get("message", ""), "401 得说清原因（禁静默）"
+
+    # ③ 登录 / 登出本身放行（否则永远登不进来）
+    assert anon.post("/api/m15/logout").status_code != 401, "登出被自己的闸拦住了"
+
+    # ④ 带有效会话票 ⇒ 写**放行**（落到路由层 ⇒ 404）
+    logged = TestClient(create_app())
+    logged.cookies.set(SESS.COOKIE_NAME, SESS.make("闸门自检"))
+    assert logged.post(ghost).status_code == 404, "带票的写被拦了 —— 那已登录的人也没法干活"
