@@ -22,3 +22,40 @@ m15 118d0ddb  # 原型: : `<button class="btn sm" data-act="userPwd"｜壳: : `<
 #   原型那一句**必须**留着「所有数据均为虚构模拟值」；壳那一句必须说真话 ⇒ 这是**唯一**一处**有意**的行差。
 #   ⚠️ `V.home` 其余 45 行**逐字相同**（取自数抽成两边同名不同体的 `homeCounts()`，定义在切片之外）
 home fcd29e76  # 原型: <div class="tip">本页为<b>待办页</b>…所有数据均为虚构模拟值。｜壳: <div class="tip">本页为<b>待办页</b>…⭐ <b>本页数据全部来自后端真实数据</b>
+
+# ⭐ 2026-09-25 新增登记 34 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+
+m14 09540e20  # 原型:     <div class="card"><h4>分类规则（判定顺序）</h4><div clas｜壳:       <div class="card"><h4>集采项目剔除名单（<b>${(window.
+m14 ae691e58  # 原型:       ...RULE_CA.map(r=>`<tr><td class="fc">${r[0]｜壳:     <div class="bd np">${TBL({head:'<th>项目全名</th><
+m14 3a994eaf  # 原型:     ]})}｜壳:       ...((window.JCI_ALL||[]).length ? (window.JC
+m14 b00560e5  # 原型:     <div class="bd"><div class="tip dg" style="mar｜壳:         const act = x.active
+m14 51ef38dd  # 原型:     <div class="card"><h4>小微识别关键字配置<span class="sp｜壳:           ? '<button class="btn sm dg" data-act="j
+m14 3694bdc8  # 原型:       ...PJs.filter(p=>p.type==='small').map(p=>`<｜壳:           : '<button class="btn sm" data-act="jciS
+m14 bf318b03  # 原型:         <td class="fc">${esc(p.kw)}</td></tr>`)｜壳:         return '<tr'+(x.active?'':' class="mut"')+
+m14 535dcaa4  # 原型:     ]})}｜壳:           +'<td class="sm mut">'+esc(x.reason||'')
+m14 947a8c10  # 原型:     <div class="bd"><div class="tip" style="margin｜壳:           +'<td class="sm fc">'+esc(x.created_at||
+m14 25e3fb64  # 原型:   </div>｜壳:           +'<td class="ctr">'+(x.active?'在用 ':'已停用
+m14 1dfdb42d  # 原型:   <div class="card" style="margin-bottom:0"><h4>全局｜壳:       }) : ['<tr><td colspan="5" class="mut">名单为空 
+m14 29e37258  # 原型:       ...['金额 2 位小数、HALF_UP、Decimal、容差 0','源数据不动，人｜壳:     ]})}</div>
+m14 43824c49  # 原型:     ]})}</div></div>`;｜壳:     <div class="bd"><div class="fbar"><div class="
+m14 46354647  # 原型: ｜壳:       <div class="fi"><label>理由（可选）</label><input 
+m14 1d7c3db8  # 原型: /* ===============================================｜壳:       <button class="btn pri sm" data-act="jciAdd"
+m14 9b5cc563  # 原型:    17. MOD-15 用户管理（§1.5 角色与权限）｜壳:     <div class="bd"><div class="tip" style="margin
+m14 c4e608a4  # 原型:    ===============================================｜壳:   </div>
+m14 6a4d320b  # 原型: <无此行>｜壳: <div class="card"><h4>分类规则（判定顺序）</h4><div class="b
+m14 06c4820d  # 原型: <无此行>｜壳:       ...RULE_CA.map(r=>`<tr><td class="fc">${r[0]
+m14 977a5cbc  # 原型: <无此行>｜壳:     ]})}
+m14 8bee3f11  # 原型: <无此行>｜壳:     <div class="bd"><div class="tip dg" style="mar
+m14 00de1958  # 原型: <无此行>｜壳:     <div class="card"><h4>小微识别关键字配置<span class="sp
+m14 46cfb970  # 原型: <无此行>｜壳:       ...PJs.filter(p=>p.type==='small').map(p=>`<
+m14 f8a645df  # 原型: <无此行>｜壳:         <td class="fc">${esc(p.kw)}</td></tr>`)
+m14 977a5cbc  # 原型: <无此行>｜壳:     ]})}
+m14 796364b9  # 原型: <无此行>｜壳:     <div class="bd"><div class="tip" style="margin
+m14 a06f8825  # 原型: <无此行>｜壳:   </div>
+m14 768f6841  # 原型: <无此行>｜壳:   <div class="card" style="margin-bottom:0"><h4>全局
+m14 2b675669  # 原型: <无此行>｜壳:       ...['金额 2 位小数、HALF_UP、Decimal、容差 0','源数据不动，人
+m14 720d4765  # 原型: <无此行>｜壳:     ]})}</div></div>`;
+m14 c568838d  # 原型: <无此行>｜壳: 
+m14 99fef39b  # 原型: <无此行>｜壳: /* ===============================================
+m14 b5b4fda9  # 原型: <无此行>｜壳:    17. MOD-15 用户管理（§1.5 角色与权限）
+m14 3689ae4d  # 原型: <无此行>｜壳:    ===============================================

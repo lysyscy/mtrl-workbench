@@ -9,7 +9,7 @@
 **风险没有消失，只是挪了位置** ⇒ 本工具现在守三件事：
 | 代号 | 守什么 | 判据 |
 |---|---|---|
-| `U1` | ⭐⭐ **原型逻辑一行不改**（D18 的硬约束）—— 把原型的筛选 / 排序 / 合计 / 勾选逻辑**顺手改掉**，就再没有"规格"可言了 | 壳的每个 `V.<页>` 切片 与原型同名切片**逐行一致**；差异未登记 ⇒ **红**（登记簿 `tools/ui_parity_expected.txt` · **只准变短**） |
+| `U1` | ⭐⭐ **原型逻辑一行不改**（D18 的硬约束）—— 把原型的筛选 / 排序 / 合计 / 勾选逻辑**顺手改掉**，就再没有"规格"可言了 | 壳的每个 `V.<页>` 切片 与原型同名切片**逐行一致**；差异未登记 ⇒ **红**（登记簿 `tools/ui_parity_expected.txt` · ⭐ 2026-09-25 起**可增可减**：新功能产生的正当差异照登；补回原型/消号时删行） |
 | `U2` | **演示数据与"假话"不得残留**（D18 产品化红线①） | ① 壳里出现原型的三张演示数组（`PJ` / `NT` / `FL`）⇒ **红**；② 壳里必须**同时**存在「已接后端真实数据」与「原型态」两种措辞（缺任一种 ⇒ 顶栏又会**一律**说"全是虚构" = 对已接线页说假话）⇒ **红** |
 | `U3` | **`WIRED` 自洽** | 壳里必须有 `WIRED` 集合，且**它的每个成员都真实存在于 `V`**（防"标了个不存在的页"）⇒ **红** |
 | `U4` | ⭐ **`WIRED` 的页必须真的指向后端**（2026-09-17 补） | `WIRED` 里的每页 `mNN` ⇒ 壳里必须出现 `/api/mNN`。**这只是"接线点存在"，不是"调通了"** —— 但能挡住最廉价的一种假绿：把页标成"已接后端"而壳里**一个该模块的接口都没调**（顶栏就会对真数据说"已接"）⇒ **红** |
@@ -219,7 +219,10 @@ def main() -> int:
     u1_ok = [d for d in u1 if d["fp"] in exp.get(d["key"], set())]
 
     # ⭐ `U1` 登记簿**防腐化**（2026-09-24）：登记了、却**当前没有对应漂移** = **幽灵登记**
-    #   （那条漂移已被修掉 / 因两边同改而指纹变了）⇒ 提示「可消号」（登记簿**只准变短**）。
+    #   （那条漂移已被修掉 / 因两边同改而指纹变了）⇒ 提示「可消号」。
+    # ⭐⭐ 2026-09-25（用户裁定「登记簿可以变长」）：旧的「只准变短」**作废** ——
+    #   新功能带来的正当差异**照登**（`--write-expected` 已改为**只追加**，⛔ 不重写文件）；
+    #   ⚠️ 但**消号仍要人工删行**：本哨只提示，⛔ 不替人删（自动删会连带冲掉旁边的理由注释）。
     #   ⚠️ **只提示、不计入 `red`** —— 它不影响"壳现在是否一致"，但登记簿腐化之后
     #      「已登记放行 N 行」就成了一种**自我安慰**：登记时的理由早就不成立了。
     _now_fps = {d["fp"] for d in u1}
@@ -317,15 +320,32 @@ def main() -> int:
     red = len(u1_new) + len(u2) + len(u3) + len(u4) + len(u5) + len(missing)
 
     if args.write_expected:
+        # ⭐⭐ 2026-09-25（用户裁定「登记簿可以变长」）：本命令由**整份重写**改为**只追加** ——
+        #   旧版 `EXPECTED.write_text(head + 当前漂移)` 会**冲掉登记簿里的历史注释**
+        #   （那些 2026-09-20/21 的销号理由），且**幽灵登记会被静默清掉**（消号必须人工决定）。
+        import datetime as _dt
+
         head = [
             "# 壳一致性核对器 · 已登记漂移（ui_parity_expected.txt）",
-            "# ⚠️ **只准变短** —— 补回原型逻辑 / 删掉多余的改动 ⇒ 删掉对应行（脚本会提示「可消号」）。",
+            "# ⚠️ **可增可减**（2026-09-25 用户裁定）：新功能产生的正当差异**照登**；补回原型逻辑 ⇒ 人工删行（脚本只提示）。",
             "# 格式：`<页> <指纹> [备注]`；指纹 = md5(原型行 + '||' + 壳行)[:8]。",
             "",
         ]
-        body = [f"{d['key']} {d['fp']}  # 原型: {d['proto'][:50]}｜壳: {d['shell'][:50]}" for d in u1]
-        EXPECTED.write_text("\n".join(head + body) + "\n", encoding="utf-8")
-        print(f"已登记 {len(body)} 条漂移 ⇒ {EXPECTED.name}")
+        old_all = read_lines(EXPECTED) if EXPECTED.exists() else []
+        known: set[str] = set()
+        for _t in old_all:
+            _s = _t.strip()
+            if _s and not _s.startswith("#") and len(_s.split()) >= 2:
+                known.add(_s.split()[1])
+        add = [f"{d['key']} {d['fp']}  # 原型: {d['proto'][:50]}｜壳: {d['shell'][:50]}"
+               for d in u1 if d["fp"] not in known]
+        text = old_all if old_all else head
+        if add:
+            text = list(text) + [
+                f"# ⭐ {_dt.date.today().isoformat()} 新增登记 {len(add)} 条"
+                f"（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）", ""] + add
+        EXPECTED.write_text("\n".join(text).rstrip("\n") + "\n", encoding="utf-8")
+        print(f"新增登记 {len(add)} 条（原有 {len(old_all)} 行**一字未动**）⇒ {EXPECTED.name}")
         return 0
 
     if args.json:
@@ -349,7 +369,7 @@ def main() -> int:
         print(f"    …还有 {len(u1_new) - 25} 行")
     if ghosts:                       # 登记簿防腐化：登记的漂移已经不存在了 ⇒ 该消号
         print(f"    ⚠️ 登记簿有 {len(ghosts)} 条**幽灵登记**（当前已无对应漂移 ⇒ 可消号，"
-              f"登记簿**只准变短**）：" + "、".join(f"{k} {f}" for k, f in ghosts[:8]))
+              f"⛔ 消号要人工删行）：" + "、".join(f"{k} {f}" for k, f in ghosts[:8]))
     if missing:
         print(f"─ U1b · 壳里缺切片 —— ⛔ {len(missing)} 个：{', '.join(missing)}")
     print(f"─ U5 · 公共件 ⇄ 原型同段（`TAIL-65`）—— "
