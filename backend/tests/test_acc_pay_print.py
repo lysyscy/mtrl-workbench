@@ -364,7 +364,7 @@ def test_出纸失败须显式报出原因(monkeypatch):
 @acc("ACC-PAY-PRINT-001", "001-09")
 def test_系统内勾选_单选多选端到端():
     """判据：待打印单据来自系统内勾选（不依赖外部文件或手输清单）；单选与多选均能端到端跑通。"""
-    from fastapi.testclient import TestClient
+    from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
     from app.main import create_app
     from app.mod03_notice.router import get_batch_executor, get_notice_lister

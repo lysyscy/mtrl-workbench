@@ -23,7 +23,7 @@ import re
 
 import openpyxl
 import pytest
-from fastapi.testclient import TestClient
+from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
 from app.main import create_app
 from app.mod03_notice.models import PaymentNotice

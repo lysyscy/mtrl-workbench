@@ -246,7 +246,7 @@ def test_三个端点都在且写入口按id定位():
 @acc("ACC-PRJ-AUTO-001", "001-10")
 def test_写入口缺参数直接422不进业务():
     """`project_id` 缺失 ⇒ FastAPI 直接 422（**不连库、不落到"猜一个行"**）。"""
-    from fastapi.testclient import TestClient
+    from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
     from app.main import create_app
 

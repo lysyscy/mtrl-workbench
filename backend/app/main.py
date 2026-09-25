@@ -122,6 +122,41 @@ def _install_session(app: FastAPI) -> None:
         return await call_next(request)
 
 
+#: 「写动作」的方法集（未登录 ⇒ 一律拒）—— 读方法（GET/HEAD/OPTIONS）**不在**其中（§1.5.1「只能看」）
+WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+#: 未登录也能打的**写**端点 —— **只管"登录本身"**（⛔ 往里加业务端点就是开口子）
+AUTH_FREE_WRITE_PATHS = frozenset({"/m15/login", "/api/m15/logout"})
+
+
+def _install_auth_gate(app: FastAPI) -> None:
+    """⭐ **未登录 ⇒ 写动作一律拒**（《说明书》§1.5.1 · 2026-09-21 用户裁定「未登录 = 无身份」）。
+
+    ⚠️⚠️ 补它的理由（2026-09-25 用户报障「未登录状态什么都能做」）：原先**没有任何全局鉴权** ——
+       会话中间件只把 cookie 解成"当前登录用户"，**不拦任何请求**；唯一会拒的是 `mod15` 自己的写动作
+       （且返 200 + `ok:false`）⇒ 其余所有模块（付款 / 集采 / 材料 / 项目…）的写端点**零判定**。
+    ⚠️ **读一律放行**（口径原文 =「未登录**只能看**」）：⛔ 不要顺手改成"未登录只渲染登录页" ——
+       那会把**不带会话的真机自检 / 探针**全打白屏（`_shell_smoke` 等 20 条），且比 §1.5.1 更严，须单独裁定。
+    ⚠️ 判定**只看会话票**（`SESS.read` ⇒ 验签 ＋ 查有效期）：与 `_install_session` **同一个出口**，
+       ⛔ 不在这里另查账号表（那就是第二套口径）。
+    """
+    from app.core import session as SESS
+
+    @app.middleware("http")
+    async def auth_gate(request: Request, call_next):
+        if request.method not in WRITE_METHODS:
+            return await call_next(request)                    # 读：放行（"只能看"）
+        if request.url.path in AUTH_FREE_WRITE_PATHS:
+            return await call_next(request)                    # 登录 / 登出本身
+        if SESS.read(request.cookies.get(SESS.COOKIE_NAME)):
+            return await call_next(request)                    # 有有效会话票 ⇒ 正常走
+        get_logger().warning("未登录拦截写动作：{} {}", request.method, request.url.path)
+        return JSONResponse(
+            {"code": "unauthorized", "message": "未登录：本系统未登录只能查看，改数据请先登录"},
+            status_code=401,
+        )
+
+
 def _install_request_id(app: FastAPI) -> None:
     @app.middleware("http")
     async def request_id(request: Request, call_next):
@@ -183,6 +218,7 @@ def create_app() -> FastAPI:
     _install_cors(app)
     _install_request_id(app)
     _install_session(app)
+    _install_auth_gate(app)          # ⭐ §1.5.1「未登录 ⇒ 写动作一律拒」（2026-09-25 用户裁定 A）
     _install_ip_allowlist(app)
     _install_error_handlers(app)
 

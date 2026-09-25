@@ -66,7 +66,7 @@ def _executor_factory(notices):
 
 @acc("ACC-PAY-PDF-001", "001-01")
 def test_与批量打印共用同一次勾选():
-    from fastapi.testclient import TestClient
+    from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
     from app.main import create_app
     from app.mod03_notice.router import get_batch_executor
@@ -139,7 +139,7 @@ def test_产物不在本机留文件_直接交浏览器下载():
 
 @acc("ACC-PAY-PDF-001", "001-04")
 def test_产物提供访问入口():
-    from fastapi.testclient import TestClient
+    from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
     from app.main import create_app
     from app.mod03_notice.router import get_batch_executor
@@ -234,7 +234,7 @@ def test_多张打包成zip_单张直出PDF_过期给显式404():
     import zipfile
     from urllib.parse import quote
 
-    from fastapi.testclient import TestClient
+    from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
     from app.main import create_app
     from app.mod03_notice import pdf_cache

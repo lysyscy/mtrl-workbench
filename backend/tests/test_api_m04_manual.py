@@ -19,7 +19,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from decimal import Decimal
 
-from fastapi.testclient import TestClient
+from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
 from app.main import create_app
 from app.mod01_projects.models import Project
