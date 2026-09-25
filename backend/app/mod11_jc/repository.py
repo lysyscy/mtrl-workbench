@@ -13,6 +13,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.errors import MustReportError   # `TAIL-96` 补：`add_ignored` 空名要抛它（拆件漏 import ⇒ 运行时 NameError）
 from app.mod01_projects.models import Project
 from app.mod02_i8.models import RunRecord   # `TAIL-93`：认「最近一次集采抓取」的运行记录
 from app.mod11_jc import domain as D          # ⚠️ 只**调**它的出口（三态归一 / 判定），⛔ 不在本层复写逻辑
