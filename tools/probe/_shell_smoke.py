@@ -269,6 +269,19 @@ def main() -> int:
                 return {st:s.scrollTop, first:tr?(tr.innerText||'').replace(/\\s+/g,' ').slice(0,30):''};
             }"""))
         m08["wheel"] = steps
+        # ⭐⭐ 2026-09-25 **第二次报障**的护栏：**焦点在筛选框里**时也必须滚得动。
+        #    根因 = 焦点护栏判定太宽（`#view` 里任何输入框/下拉框 ⇒ 一律推迟重画）⇒ 点过筛选框后
+        #    画面**永久冻结**，而 `st`/滚动条照动 ⇒ 滚轮 / 中键 / 拖滚动条**三种都**表现为"滚不动"。
+        #    ⚠️ 必须**复现用户的操作路径**（先点筛选框再滚）—— 前两版护栏都没这一步 ⇒ 假绿两次。
+        page.evaluate("""() => { const i=document.querySelector('#view input, #view select'); if(i) i.focus(); }""")
+        page.mouse.move(box["x"] if box else 640, box["y"] if box else 400)
+        _f = """() => { const tr=document.querySelector('#view tbody tr:nth-child(2)');
+            return tr?(tr.innerText||'').replace(/\\s+/g,' ').slice(0,26):''; }"""
+        f0 = page.evaluate(_f)
+        for _ in range(3):
+            page.mouse.wheel(0, 300)
+            page.wait_for_timeout(250)
+        m08["focus_scroll"] = {"before": f0, "after": page.evaluate(_f)}
         print("⑧ m08 =", {k: v for k, v in m08.items() if k != 'pill'}, "| pill =", m08["pill"])
         oks4 = [
             (m08["tables"] >= 1, "表在线（单据明细总表）"),
@@ -285,6 +298,10 @@ def main() -> int:
              f"⭐⭐ **真滚轮滚得动**（4 下：st {m08['wheel'][0]['st']} → {m08['wheel'][-1]['st']}，"
              f"首行内容换了 {len({x['first'] for x in m08['wheel']})} 种）—— 用的必须是**真手势**"
              "（`mouse.wheel`）；程序化 `scrollTop` 抓不到「重画打断手势」这类 bug"),
+            (m08["focus_scroll"]["after"] != m08["focus_scroll"]["before"],
+             f"⭐⭐⭐ **焦点在筛选框里也滚得动**（先点 `#view` 里的筛选框再滚：首行 "
+             f"「{m08['focus_scroll']['before']}」→「{m08['focus_scroll']['after']}」）—— "
+             "点过筛选框后画面**永久冻结**（焦点护栏判得太宽）就是这个 bug；⛔ 这条必须走**用户的操作路径**"),
         ]
         for ok, what in oks4:
             print(("  ✅ " if ok else "  ⛔ ") + what)

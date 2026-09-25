@@ -1002,7 +1002,17 @@ function vsMin(v){ const c=VSCROLL[v]; return (c && c.min) || VS_MIN; }
 function vsEditing(){
   const a=document.activeElement, v=$('#view');
   if(!a||!v||!v.contains(a)) return false;
-  return a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT'||a.isContentEditable===true;
+  const editable=a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT'||a.isContentEditable===true;
+  if(!editable) return false;
+  /* ⭐⭐ 2026-09-25 用户报障**第二次**（"滚轮 / 中键自动滚 / 拖滚动条**三种全滚不动**"）的**根**：
+     上面那句"**在本页**的可编辑元素里"**太宽** —— m08 这类页的**筛选 / 搜索框也在 `#view` 里** ⇒
+     用户点过一次筛选框，焦点就一直留在那儿 ⇒ **每一次重画都被推迟** ⇒ 画面**永远不更新**
+     （滚动位置/滚动条在动、内容不动 ⇒ 三种滚法**都**表现为"滚不动"）。
+     ⚠️ 为什么之前没抓到：探针**没有把焦点放进筛选框**（那正是用户的操作路径）——
+        又一个"量测方式不是用户的方式"（见 `ops/README.md` 同日两条同族纪律）。
+     ⇒ 收紧为：**只有焦点落在表格内**（`.tw` 里 = 真会被 `innerHTML` 重写"连值带焦点蒸发"的那些编辑器，
+        即 m07 手填 / m11 子表）才推迟；**表外的筛选框不挡滚动**。 */
+  return !!(a.closest && a.closest('.tw'));
 }
 let VS=null;                                    /* 当前虚拟态（切页 / 重渲即重建） */
 const EH=28;                                    /* 未渲染行的估算高（本表众数 ≈27px） */

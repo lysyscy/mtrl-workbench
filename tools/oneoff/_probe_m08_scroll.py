@@ -135,6 +135,57 @@ def main() -> int:
                   f"rows={h.get('rows')} ｜ 首行={first}")
             prev = h.get("st") or 0
 
+        # ⭐⭐ 2026-09-25（用户第二次报障）④ **复现用户的操作路径**：先点一下页内的**筛选框**（焦点留在那儿），
+        #    再滚 —— 这正是"三种滚法全滚不动"的现场。同时把 `vsEditing()` / `VS.pending` 打出来。
+        print("\n================ ④ 焦点在筛选框里时滚（复现用户现场） ================")
+        info = page.evaluate("""() => {
+            const inp = document.querySelector('#view input, #view select');
+            if (inp) inp.focus();
+            return {focused: document.activeElement ? (document.activeElement.tagName + '#' +
+                    (document.activeElement.id || document.activeElement.className.slice(0, 24))) : '(无)',
+                    vsEditing: (typeof vsEditing === 'function') ? vsEditing() : null,
+                    pending: (typeof VS !== 'undefined' && VS) ? VS.pending : null};
+        }""")
+        print("  焦点 =", info["focused"], "｜ vsEditing() =", info["vsEditing"], "｜ VS.pending =", info["pending"])
+        page.mouse.move(geo["x"] if geo else 640, geo["y"] if geo else 400)
+        seq4 = []
+        for k in range(3):
+            page.mouse.wheel(0, 300)
+            page.wait_for_timeout(280)
+            seq4.append(page.evaluate("""() => {
+                const v=document.querySelector('#view');
+                const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
+                const tr=document.querySelector('#view tbody tr:nth-child(2)');
+                return {st:s.scrollTop, waiting:(typeof VS!=='undefined'&&VS)?VS.pending:null,
+                        first:tr?(tr.innerText||'').replace(/\\s+/g,' ').slice(0,26):''};
+            }"""))
+        for k, x in enumerate(seq4, 1):
+            print(f"  带焦点滚第 {k} 下 → st={x['st']} pending={x['waiting']} ｜ 首行={x['first']}")
+        changed = len({x["first"] for x in seq4}) > 1
+        print(f"  ⇒ 结论：首行内容{'**有**变（滚得动 ✓）' if changed else '**没变**（内容冻结 ✗）'}")
+
+        # ⭐⭐ ⑤ **A/B 证据**：把**旧规则**原样模拟回来（`vsEditing` 恒 true = 旧"焦点在本页就算在编辑"）
+        #    ⇒ 看内容是不是就**冻住**了。这一步回答"根因是不是那道焦点护栏"，⛔ 不是靠推断。
+        print("\n================ ⑤ A/B：模拟旧规则（vsEditing 恒 true） ================")
+        page.evaluate("""() => { window.__vsOld = vsEditing; window.vsEditing = () => true; }""")
+        page.evaluate("""() => { const h=scrollHost(); if(h) h.scrollTop = 20000; }""")
+        page.wait_for_timeout(400)
+        ab = []
+        for k in range(3):
+            page.mouse.wheel(0, 300)
+            page.wait_for_timeout(280)
+            ab.append(page.evaluate("""() => {
+                const v=document.querySelector('#view');
+                const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
+                const tr=document.querySelector('#view tbody tr:nth-child(2)');
+                return {st:s.scrollTop, pending:(typeof VS!=='undefined'&&VS)?VS.pending:null,
+                        first:tr?(tr.innerText||'').replace(/\\s+/g,' ').slice(0,26):''};
+            }"""))
+        for k, x in enumerate(ab, 1):
+            print(f"  旧规则下滚第 {k} 下 → st={x['st']} pending={x['pending']} ｜ 首行={x['first']}")
+        print(f"  ⇒ 旧规则：首行内容{'**有**变' if len({x['first'] for x in ab}) > 1 else '**没变（内容冻结 ✗ —— 这就是用户报的"滚不动"）**'}")
+        page.evaluate("""() => { window.vsEditing = window.__vsOld; }""")
+
         page.screenshot(path=str(pathlib.Path(__file__).resolve().parents[2] /
                                  ".workbuddy" / "scratch" / "_m08_scroll.png"), full_page=False)
         print("\n截图 → .workbuddy/scratch/_m08_scroll.png")
