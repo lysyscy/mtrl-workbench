@@ -1085,6 +1085,13 @@ function drawVirtual(first){
      不钳制的话，估算漂移会让贴底时的窗口落在中段（真机自检抓到）。 */
   if(!first && st + sc.clientHeight >= sc.scrollHeight - 60){ b=n; a=Math.max(0,n-45); }
   if(keepIdx>=0){ a=Math.min(a,Math.max(0,keepIdx-5)); b=Math.max(b,Math.min(n,keepIdx+40)); }
+  /* ⭐⭐ 2026-09-25 用户报「库存单据**还是**滚不动」——**真滚轮**量出来的根因：
+     原实现**每次 scroll 都** `$('#view').innerHTML=…` **整体重建**（真容器 `.tw` 跟着被换掉）——
+     真滚轮下这一操作会把**浏览器正在进行的滚动手势打断**（元素被换 ⇒ 手势失去目标）
+     ⇒ 实测：鼠标压在表上连滚 6 下，`st` **纹丝不动**、首行文本也**不变**（而**程序化**改 scrollTop 却能动 ——
+        上次"修好"正是被这个假象骗了 ⚠️）。
+     ⇒ 只在**窗口边界真的变了**时才重画（虚拟列表的常规做法）：窗口没变 ⇒ 一个字节都别动。 */
+  if(!first && a===VS.curA && b===VS.curB) return;
   const topH=Math.round(vSum(a)), botH=Math.max(0,Math.round(vSum(n)-vSum(b)));
   /* ⛔ 红线①：一次 innerHTML 写**完整片段**（pre ＋ 上垫高 ＋ 窗口行 ＋ 下垫高 ＋ post）
      ⚠️ 垫高为 0 就**不写**那行（否则滚到底时"最后一行"是空的 0 高垫底行 —— 真机自检抓到） */
@@ -1113,7 +1120,7 @@ function drawVirtual(first){
     if(el){ const now=el.getBoundingClientRect().top - scT, d=now-keepOff;
             if(Math.abs(d)>2) sc.scrollTop+=d; }
   }
-  VS.curA=a;
+  VS.curA=a; VS.curB=b;      /* ⚠️ 两个都要记：`curB` 是"窗口没变就别重画"那道闸的比较对象 */
 }
 const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。

@@ -109,6 +109,32 @@ def main() -> int:
             page.wait_for_timeout(700)
             show(f"② 宿主滚到 {int(frac * 100)}%（设置 {ok}）")
 
+        # ⭐⭐ 真·用户手势（2026-09-25 补 —— 用户报"还是滚不动"）：
+        #    程序化改 `scrollTop` **不能**代表用户能不能滚 ⇒ 必须**把鼠标放到表上、真的滚轮滚**。
+        #    ⚠️ 这一步才回答"用户滚的时候到底发生了什么"。
+        box = page.locator("#view .tw").first.bounding_box()
+        print("\n================ ③ 真滚轮（鼠标压在表格上） ================")
+        print("  表格框 =", {k: round(v) for k, v in (box or {}).items()})
+        # ⚠️ 先拉回**顶部**（不去管它，往下滚本来就该有位移）；再量**真滚轮** ＋ **首行内容**变没变
+        page.evaluate("() => { const h = scrollHost(); if (h) h.scrollTop = 0; }")
+        page.wait_for_timeout(400)
+        geo = page.evaluate("""() => { const t = document.querySelector('#view .tw');
+            if (!t) return null; const r = t.getBoundingClientRect();
+            return {x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height}; }""")
+        print("  表格几何 =", geo)
+        page.mouse.move(geo["x"] if geo else 640, geo["y"] if geo else 400)
+        prev = 0
+        for k in range(6):
+            page.mouse.wheel(0, 300)
+            page.wait_for_timeout(300)
+            m = page.evaluate(MEASURE)
+            h = m.get("host") or {}
+            first = page.evaluate("""() => { const tr = document.querySelector('#view tbody tr:nth-child(2)');
+                return tr ? (tr.innerText || '').replace(/\\s+/g, ' ').slice(0, 44) : '(无)'; }""")
+            print(f"  滚轮第 {k + 1} 下 → st={h.get('st')} 位移={(h.get('st') or 0) - prev} "
+                  f"rows={h.get('rows')} ｜ 首行={first}")
+            prev = h.get("st") or 0
+
         page.screenshot(path=str(pathlib.Path(__file__).resolve().parents[2] /
                                  ".workbuddy" / "scratch" / "_m08_scroll.png"), full_page=False)
         print("\n截图 → .workbuddy/scratch/_m08_scroll.png")

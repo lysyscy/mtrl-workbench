@@ -252,20 +252,23 @@ def main() -> int:
         #    （用户感受 = "滚一下就弹回顶部 / 几乎滚不动"）。
         #    ⚠️ 上面那条「滚到底 ⇒ 合计行在」**抓不到它**：程序化滚到底会命中底部钳制分支 ⇒ 合计行照样出现。
         #    ⇒ 必须**直接量位置**：滚下去之后 `st` 要真的 > 0，且**再滚一格还得动**。
-        page.evaluate("""() => {
-            const v=document.querySelector('#view');
-            const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
-            s.scrollTop=Math.round((s.scrollHeight-s.clientHeight)*0.5);
-            s.dispatchEvent(new Event('scroll'));
-        }""")
-        page.wait_for_timeout(500)
-        m08["half"] = page.evaluate("""() => {
-            const v=document.querySelector('#view');
-            const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
-            const before=s.scrollTop;
-            s.scrollTop=before+140; s.dispatchEvent(new Event('scroll'));
-            return {st:before, after:s.scrollTop, sh:s.scrollHeight, ch:s.clientHeight};
-        }""")
+        # ⚠️⚠️ **必须用真滚轮**（`page.mouse.wheel`）：程序化改 `scrollTop` **不算数** ——
+        #    2026-09-25 上一版护栏就是程序化的，于是"每滚一下都被重画打断"这个真 bug **照样绿**（假绿）。
+        box = page.evaluate("""() => { const t=document.querySelector('#view .tw');
+            if(!t) return null; const r=t.getBoundingClientRect();
+            return {x:r.x+r.width/2, y:r.y+r.height/2}; }""")
+        page.mouse.move(box["x"] if box else 640, box["y"] if box else 400)
+        steps = []
+        for _ in range(4):
+            page.mouse.wheel(0, 300)
+            page.wait_for_timeout(250)
+            steps.append(page.evaluate("""() => {
+                const v=document.querySelector('#view');
+                const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
+                const tr=document.querySelector('#view tbody tr:nth-child(2)');
+                return {st:s.scrollTop, first:tr?(tr.innerText||'').replace(/\\s+/g,' ').slice(0,30):''};
+            }"""))
+        m08["wheel"] = steps
         print("⑧ m08 =", {k: v for k, v in m08.items() if k != 'pill'}, "| pill =", m08["pill"])
         oks4 = [
             (m08["tables"] >= 1, "表在线（单据明细总表）"),
@@ -277,9 +280,11 @@ def main() -> int:
              f"⭐ 虚拟滚动生效（DOM 只挂窗口 {m08['rows']} 行，≠ 全量 {m08['listed']}）"),
             ("合计" in m08["bottom"]["txt"],
              f"⭐ 滚到底 ⇒ 合计行在（「{m08['bottom']['txt']}」—— 虚拟化不丢数据）"),
-            (m08["half"]["st"] > 0 and m08["half"]["after"] > m08["half"]["st"],
-             f"⭐⭐ 滚动位置**停得住**（滚到 50% ⇒ st={m08['half']['st']} > 0，且再滚仍在动 "
-             f"⇒ {m08['half']['after']}）—— 这是「重画把位置归零」那个 bug 的护栏"),
+            (m08["wheel"][-1]["st"] > m08["wheel"][0]["st"]
+             and len({x["first"] for x in m08["wheel"]}) > 1,
+             f"⭐⭐ **真滚轮滚得动**（4 下：st {m08['wheel'][0]['st']} → {m08['wheel'][-1]['st']}，"
+             f"首行内容换了 {len({x['first'] for x in m08['wheel']})} 种）—— 用的必须是**真手势**"
+             "（`mouse.wheel`）；程序化 `scrollTop` 抓不到「重画打断手势」这类 bug"),
         ]
         for ok, what in oks4:
             print(("  ✅ " if ok else "  ⛔ ") + what)
