@@ -258,6 +258,10 @@ def main() -> int:
             if(!t) return null; const r=t.getBoundingClientRect();
             return {x:r.x+r.width/2, y:r.y+r.height/2}; }""")
         page.mouse.move(box["x"] if box else 640, box["y"] if box else 400)
+        # ⚠️ **热身一下**：第一下可能被布局 / 滚动锚定吸收（≠ 被吃掉）⇒ 那一下不计入。
+        #    本条断言要抓的是「**每 tick 只剩 ~5px**」那种量级（用户实测过），⛔ 不是抓一次性的首下。
+        page.mouse.wheel(0, 300)
+        page.wait_for_timeout(320)
         steps = []
         for _ in range(4):
             page.mouse.wheel(0, 300)
