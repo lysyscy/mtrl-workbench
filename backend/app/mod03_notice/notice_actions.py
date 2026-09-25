@@ -179,7 +179,8 @@ def apply_stat_change(
     分三层，各有各的主人（本函数只做"接线"）：
       · **判定**：`domain.adjust_stat` —— 四种拒绝（非法金额 / 非旁路字段 / **超上限** / 值没变）；
       · **落库 + 留痕**：`repository.adjust_notice_stat`（留痕 = 壳判「黄底」的唯一事实来源）；
-      · **欠款重算**：MOD-05 的 `service.build_debt`（⛔ 不另写算法）。
+      · **欠款重算**：MOD-05 的 `service.build_debt_live`（⛔ 不另写算法；⭐ `TAIL-100`：它顺带
+        **注入集采欠款** —— 原先回执里的「集采」一栏也是恒 0）。
 
     返回 `(trace, message)`：
       · `trace is None` ⇒ **值没变、什么都没做**（§4.2.7：不做无意义的重算，也不产生空留痕）；
@@ -201,7 +202,7 @@ def apply_stat_change(
             "（§4.2.7：不做无意义的重算、不留空痕）"
         )
 
-    debt = flow_service.build_debt(session)
+    debt = flow_service.build_debt_live(session)
     parts = " · ".join(f"{d['label']} {d['amount']}" for d in debt["by_category"])
     note = "" if debt.get("mech_settle_ready") else "（机械侧结算额来自过程资料 MOD-06，尚未落地 ⇒ 按 0 计）"
     return trace, (

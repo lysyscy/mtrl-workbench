@@ -92,6 +92,23 @@ def build_detail(s: Session, contract_id: int) -> dict | None:
     }
 
 
+def debt_of_ledger(s: Session) -> Decimal:
+    """**集采欠款合计**（⭐ **只计「纳入台账」**的合同）—— 供付款域**注入**用（`TAIL-100`）。
+
+    ⚠️ **为什么必须有它**：付款域的口径是「集采欠款**不在本域算** —— 由集采台账负责」
+       （§4.5.1 / 判据 `ACC-FLOW-DEBT-001/001-03`）⇒ 那边**需要一个注入方**。
+       而原先这个"注入方"**从来没人实现** ⇒ 看板与欠款页的「集采欠款」**恒 ¥0.00**
+       （少算 7444 万级、页面还完全看不出来 —— 典型的「看着正常的错数」）。
+    ⭐ **唯一出口**：算法留在集采域（⛔ 付款域不自己 sum），取值走 `build_list`
+       ⇒ 与**集采台账页**显示的「集采欠款」**必然是同一个数**。
+    """
+    total = D.ZERO
+    for r in build_list(s)["rows"]:
+        if str(r.get("tag") or "") == TAG_IN:
+            total += Decimal(str(r.get("debt") or 0))
+    return total.quantize(Decimal("0.01"))
+
+
 # ============================================================ 写动作（`M5-4`）
 # ⚠️ 判定（三态归一 / 子表校验 / 去重）一律调 `domain` 出口；本层只做**编排 ＋ 回执**。
 # ⚠️ 回执统一形状 `{"ok", "kind", "message", ...}`（同 `m09` 手写动作的口径）；⛔ 不抛业务异常。
@@ -332,7 +349,7 @@ def act_set_party_kind(s: Session, *, name: str, kind: str) -> dict:
 
 
 __all__ = [
-    "build_list", "build_detail",
+    "build_list", "build_detail", "debt_of_ledger",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
     "act_update_contract", "act_add_invoice", "act_del_invoice",
     "act_add_payment", "act_del_payment",

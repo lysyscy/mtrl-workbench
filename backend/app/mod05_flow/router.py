@@ -64,7 +64,9 @@ def get_flows_data() -> PageData:
 def get_debt_data() -> PageData:
     def _load(**kw) -> dict:
         with session_scope() as s:
-            return svc.build_debt(s, **kw)
+            # ⭐ `TAIL-100`：走 `build_debt_live`（＝ `build_debt` ＋ **注入集采欠款**）——
+            #   原先这里直接 `build_debt(s)` ⇒ `jc_debt` 恒 `None` ⇒ 「集采欠款」恒 ¥0.00。
+            return svc.build_debt_live(s, **kw)
 
     return _load
 

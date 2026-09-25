@@ -56,7 +56,9 @@ def main() -> int:
     with session_scope() as s:
         data = M11.build_list(s)
         rows = data["rows"]
-        home = M05.build_debt(s)                 # ⚠️ 看板 `/api/m05/debt` 就是不带 jc_debt 调它
+        # ⚠️ 2026-09-25（`TAIL-100` 修好后）：看板端点走的是 `build_debt_live`（＝ 注入集采欠款）
+        #    ⇒ 本件**跟着改**，否则【三】会继续显示那个已经修掉的 0。
+        home = M05.build_debt_live(s)
         projects = list(data.get("projects") or [])
 
     total = {"n": len(rows), "settle": Z, "pay": Z, "debt": Z}
@@ -89,11 +91,11 @@ def main() -> int:
           f"(+{money(pend['debt'])})")
     print(f"  待确认合同          {pend['n']:>4} =>    0   (-{pend['n']})")
 
-    print("\n【三】看板 `/api/m05/debt`（现状实测 —— ⚠️ 它不带 jc_debt 调用）")
+    print("\n【三】看板 `/api/m05/debt`（⭐ 走生产那条路 `build_debt_live` ⇒ 集采那格已**真的注入**）")
     for c in home["by_category"]:
         print(f"  {c['label']:<4} {c['amount']:>18}   (category={c['category']})")
     print(f"  合计 {home['total']:>18}")
-    print("  ⚠️ 若「集采」那格为 0.00 ⇒ 看板集采欠款**当前就是 0**（下游与本迁移无关，另行登记）")
+    print("  ⭐ `TAIL-100` 修好前：`jc_debt` 没人注入 ⇒ 这一格**恒 0.00**（总欠款少算 7444 万级）")
 
     print("\n【四】大表「主材累计（含税）」按项目（只计纳入台账 · 迁移后变大）")
     settled_wh = [str(r.get("project_key") or "") for r in rows]

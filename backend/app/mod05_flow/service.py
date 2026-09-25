@@ -225,6 +225,20 @@ def build_debt(s: Session, *, jc_debt=None) -> dict:
     }
 
 
+def build_debt_live(s: Session, **kw) -> dict:
+    """⭐ **生产用的欠款组装件** = `build_debt` ＋ **注入集采欠款**（`TAIL-100`）。
+
+    ⚠️ **为什么单开一个函数、⛔ 不让 `build_debt` 自己取**：
+      `build_debt` 是**纯组装**（离线桩件 `tests/test_page_m05.py` 用 `FakeSession` 在测它
+      ⇒ 它里面**不能连库**）；而"**谁去把集采那一格拿回来**"是**装配问题**。
+    ⇒ 收在**这一个出口**：看板端点（`/api/m05/debt`）与手改统计金额的回执**都调它**。
+      ⛔ 别在各自那里 `build_debt(...)` 一次 —— 那就又成了两处、迟早漏一处（这正是 `TAIL-100` 的成因）。
+    """
+    from app.mod11_jc import service as M11      # 局部导入：mod11 ⇄ mod05 不成环（同 `total_debt_rows` 写法）
+    kw.setdefault("jc_debt", M11.debt_of_ledger(s))
+    return build_debt(s, **kw)
+
+
 # ---------------------------------------------------------------- ③ 逐月台账
 
 
@@ -433,6 +447,6 @@ def build_stats(
 __all__ = [
     "CATEGORY_LABELS", "MECH_SETTLE_SOURCE_READY",
     "notice_debt_views", "opening_views", "project_index", "project_label", "project_options",
-    "build_flows", "build_debt", "build_ledger", "build_stats", "window_buckets",
+    "build_flows", "build_debt", "build_debt_live", "build_ledger", "build_stats", "window_buckets",
     "total_debt_rows", "export_total_debt",
 ]

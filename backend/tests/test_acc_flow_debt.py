@@ -1,6 +1,8 @@
-"""`ACC-FLOW-DEBT-001`（欠款统计）5 个判据点的验收断言。"""
+"""`ACC-FLOW-DEBT-001`（欠款统计）6 个判据点的验收断言。"""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from app.core.money import to_money
 from app.mod05_flow.domain import (
@@ -91,3 +93,42 @@ def test_剔除记录不计入欠款():
     d = debt_by_category(rows, [], mech_settle_total=to_money("0"))
     assert d[CATEGORY_MATERIAL] == to_money("1000")
     assert debt_by_project(rows)[1] == to_money("1000")
+
+
+@acc("ACC-FLOW-DEBT-001", "001-07")
+def test_集采欠款必须由装配层注入不许恒零(monkeypatch):
+    """⭐ `TAIL-100`：**「集采由外部注入」这件事，注入方真的存在**。
+
+    ⚠️ 为什么要有这一条（`001-03` 钉不住它）：`001-03` 只钉了**域内核**「集采值由 `jc_debt` 参数给」
+       —— 而"**谁给**"没人管。实测的后果：`build_debt(s)` 在**生产两个调用点**都不传 `jc_debt`
+       ⇒ 看板与欠款页的「集采欠款」**恒 ¥0.00**（真值 7444 万级，页面还完全看不出来）。
+    ⇒ 本点只钉**装配**那一层：`build_debt_live` 在**不给** `jc_debt` 时必须**现取**（走集采域出口），
+       且**显式给了就听给的**（⛔ 不硬塞）。
+    """
+    import app.mod11_jc.service as M11
+    from app.mod05_flow import service as S
+    # 把一个"没有通知书、没有期初、没有档案"的空场景喂进去 ⇒ 剩下唯一变量就是集采那一格
+    monkeypatch.setattr(S, "notice_debt_views", lambda _s: [])
+    monkeypatch.setattr(S, "opening_views", lambda _s: [])
+    monkeypatch.setattr(S, "project_index", lambda _s: {})
+    monkeypatch.setattr(M11, "debt_of_ledger", lambda _s: to_money("123"))
+
+    got = _jc_amount(S.build_debt_live(object()))
+    assert got == "123.00", f"不传 jc_debt ⇒ 必须**现取**集采台账的欠款（实测 {got} —— 恒 0 就是这个 bug）"
+
+    got2 = _jc_amount(S.build_debt_live(object(), jc_debt=to_money("7")))
+    assert got2 == "7.00", "显式给了就听给的（⛔ 不硬塞）"
+
+    # ⭐ 结构面（堵"端点又绕开装配出口"这条路）：两个生产调用点都必须走 `build_debt_live`
+    be = Path(__file__).resolve().parents[1] / "app"
+    for rel, why in (("mod05_flow/router.py", "看板/欠款页端点"),
+                     ("mod03_notice/notice_actions.py", "手改统计金额的欠款重算回执")):
+        src = (be / rel).read_text(encoding="utf-8")
+        assert "build_debt_live" in src, f"{why}（{rel}）没走装配出口 ⇒ 它那一处的「集采欠款」会回到恒 0"
+
+
+def _jc_amount(data: dict) -> str:
+    """取 `by_category` 里「集采」那一格的金额（字符串）。"""
+    hit = [c for c in data["by_category"] if c["category"] == CATEGORY_JC]
+    assert len(hit) == 1, f"「集采」那一格有 {len(hit)} 个 —— 结构变了"
+    return str(hit[0]["amount"])
