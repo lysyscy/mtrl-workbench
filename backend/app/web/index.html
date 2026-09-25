@@ -3597,24 +3597,7 @@ V.m14=()=>`
       <div class="tip" style="margin:6px 0 0"><b>本页「命中值」以系统配置为准</b>（当前来源：${esc(RULE_SRC)}）；初始即《说明书》§4.2.2 那张表。<br>⭐ 本表<b>可增 / 删 / 改</b>（配置类数据 = 硬删、不留痕，§9.4）；改动<b>只影响后续抓取</b>，已产生的剔除标记不受影响、也不重算。</div></div>
   </div>
   <div class="grid2">
-      <div class="card"><h4>集采项目剔除名单（<b>${(window.JCI_ALL||[]).filter(x=>x.active).length}</b> 项在用）<span class="sp"><span class="mut sm">命中即<b>抓取时剔除</b>：不落库、也不再进「未落库」清单（TAIL-96）</span></span></h4>
-    <div class="bd np">${TBL({head:'<th>项目全名</th><th>加入理由</th><th>操作人</th><th>加入时间</th><th>状态 / 操作</th>',rows:[
-      ...((window.JCI_ALL||[]).length ? (window.JCI_ALL||[]).map(x=>{
-        const act = x.active
-          ? '<button class="btn sm dg" data-act="jciSet" data-id="'+x.id+'" data-on="0" title="停用：抓取不再剔除它（记录留在册，可随时恢复）">停用</button>'
-          : '<button class="btn sm" data-act="jciSet" data-id="'+x.id+'" data-on="1" title="恢复：重新参与抓取剔除">恢复</button>';
-        return '<tr'+(x.active?'':' class="mut"')+'><td>'+esc(x.name_full)+'</td>'
-          +'<td class="sm mut">'+esc(x.reason||'')+'</td><td class="sm fc">'+esc(x.operator||'')+'</td>'
-          +'<td class="sm fc">'+esc(x.created_at||'')+'</td>'
-          +'<td class="ctr">'+(x.active?'在用 ':'已停用 ')+act+'</td></tr>';
-      }) : ['<tr><td colspan="5" class="mut">名单为空 —— 目前没有「不要的项目」</td></tr>'])
-    ]})}</div>
-    <div class="bd"><div class="fbar"><div class="fi"><label>加入一项（粘贴<b>项目全名</b>）</label><input class="inp" id="jciName" placeholder="例：某某项目安装工程"></div>
-      <div class="fi"><label>理由（可选）</label><input class="inp" id="jciWhy" placeholder="例：老项目，款已付清"></div>
-      <button class="btn pri sm" data-act="jciAdd" title="加入后：该项目从下次抓取起不再落库，也不再进「未落库」清单">加入剔除名单</button></div></div>
-    <div class="bd"><div class="tip" style="margin:0">⭐ 命中口径 = <b>项目全名归一化后相等</b>（与归属判定<b>同一个</b>归一化函数）⇒ 这里写<b>人看的全名</b>即可。<br>⛔ 与付款侧「剔除规则」<b>各一份、不共用</b>（用户 2026-09-25 裁定）；本名单只影响<b>集采合同抓取</b>，<b>不动已入库的历史合同</b>（不删数据）。</div></div>
-  </div>
-<div class="card"><h4>分类规则（判定顺序）</h4><div class="bd np">${TBL({head:'<th>顺序</th><th>条件</th><th>归入分类</th>',rows:[
+    <div class="card"><h4>分类规则（判定顺序）</h4><div class="bd np">${TBL({head:'<th>顺序</th><th>条件</th><th>归入分类</th>',rows:[
       ...RULE_CA.map(r=>`<tr><td class="fc">${r[0]}</td><td class="fc sm">${esc(r[1])}</td><td>${catTag(r[2])}</td></tr>`)
     ]})}
     <div class="bd"><div class="tip dg" style="margin:0"><b>分类只有三类</b>（机械 / 集采 / 辅材），<b>没有「其他」类</b>。任何剔除后剩余的通知书<b>必然落入三类之一</b>。手改后重新抓取导入，<b>分类不被覆盖</b>（人工判断优先于自动规则）。</div></div></div></div>
