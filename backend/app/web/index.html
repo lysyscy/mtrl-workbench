@@ -1015,7 +1015,8 @@ function vsEditing(){
   return !!(a.closest && a.closest('.tw'));
 }
 let VS=null;                                    /* 当前虚拟态（切页 / 重渲即重建） */
-const EH=28;                                    /* 未渲染行的估算高（本表众数 ≈27px） */
+const EH=28;
+const VS_WIN=45, VS_OVER=10;                   /* 窗口行数 / 回看行数（上垫高 = a×EH）—— `TAIL-94` 重写 */                                    /* 未渲染行的估算高（本表众数 ≈27px） */
 /* ⭐⭐ 滚动容器**唯一出口**（2026-09-25 修两个用户报障：① m03 勾选一行 ⇒ 列表跳回顶部；
    ② 虚拟滚动"滚快了下面的就渲染不出来" —— **两者同根**）：
    · 真正承接溢出的是**表格外框 `.tw`**（它自带 `max-height` ＋ `overflow:auto`，见 CSS `index.html` 的 `.tw`），
@@ -1046,14 +1047,14 @@ function startVirtual(html, scroller, keep){
   if(!sp || sp.rows.length < vsMin(VIEW)) return false;
   VS={view:VIEW, pre:sp.pre, post:sp.post, rows:sp.rows, h:new Array(sp.rows.length).fill(0),
       colN:((sp.pre.match(/<th\b/gi)||[]).length || (sp.rows[0].match(/<td\b/gi)||[]).length || 8),
-      base:0, t:0, raf:0, pending:false};
+      base:0, t:0, raf:0, pending:false, a:-1, b:-1, tb:null};
   drawVirtual(true);
   /* ⚠️ 滚动位置的还原见 `render()`（本函数只负责**首帧** —— 此刻 DOM 里还是旧页面）。 */
   const host0=scrollHost(); if(host0) host0.scrollTop=keep;
   /* ⭐⭐ 监听挂**不会被重建的 `#view`** ＋ **捕获阶段**（`scroll` 不冒泡 ⇒ 非捕获收不到 `.tw` 的滚动；
      挂 `.tw` 上则每次重绘随 DOM 蒸发 —— 2026-09-25 用户"滚快了下面渲染不出来"就是这两条一起犯的）。
-     ⭐ 重画节奏改 **rAF（每帧最多一次）**，取代原先 30ms 的 **trailing 去抖**：
-     去抖在"快速滚动"期间只画最后那一下、中间全是空白垫高行。 */
+     ⭐ 重画节奏 = **rAF（每帧最多一次）**，而不是 30ms 的 trailing 去抖：去抖在快速滚动期间只画最后一下、
+     中间全是空白垫高行。 */
   const v=$('#view');
   if(v && !v._vsScrollBound){
     v._vsScrollBound=true;
@@ -1069,69 +1070,71 @@ function startVirtual(html, scroller, keep){
   }
   return true;
 }
-function vSum(i){ let s=0; for(let k=0;k<i;k++) s+=VS.h[k]||EH; return s; }   /* 前缀和（O(N)，千行级可承受） */
+/* ⭐⭐ 虚拟滚动**重写**（`TAIL-94` · 2026-09-25）：**单一渲染路径 ＋ 文档总高恒定 ＋ 滚动中零写入**。
+   前六次尝试全部回滚换来的三条结论（⛔ 别再犯）：
+   ① **不再 `$('#view').innerHTML=…`** —— 那会把真容器 `.tw` 一起换掉 ⇒ 打断滚轮手势、`scrollTop` 归零；
+      而"程序化改 scrollTop 能动"的假象骗过两次自检（见 `ops/README.md` 两条纪律）。
+   ② **不在滚动中写 `scrollTop`** —— 锚定回拉那种"写一下修正"会顶掉用户这一格的滚轮量
+      ⇒ 真机表现 =「往下能滚、**往上回不来**」（第 4 次尝试就是这么废的）。
+   ③ ⇒ 只用 `tbody.innerHTML` 换**窗口行**（容器 / 表头 / `.tw` 一个字节都不动），
+      并让**文档总高恒为 `n*EH`**：下垫高吸收"真高 − 估算"的差量；**贴底时改由上垫高吸收**
+      —— 因为最后一行**必须是合计行**、⛔ 不能是空垫高行（真机自检抓过）。
+   ④ 于是窗口 = `f(scrollTop)` 的**纯函数**：无反馈环、无累积漂移、上下双向对称。 */
 function drawVirtual(first){
   /* ⚠️ 读的必须是**真容器**（`scrollHost()`）—— 读 `.view` 会恒得 `st≈0` ⇒ 窗口永不推进。 */
-  let sc=scrollHost()||$('.view'); if(!sc||!VS) return;   /* ⚠️ `let`：重建后要换人（见下方"重新取真容器"） */
-  /* ⭐⭐ 焦点护栏（`TAIL-66`）：首帧必须画（否则空页）；**滚动重画**时若焦点在本页输入控件里 ⇒ **推迟**。 */
+  const sc=scrollHost()||$('.view'); if(!sc||!VS) return;
+  /* ⭐⭐ 焦点护栏（`TAIL-66`）：首帧必须画（否则空页）；滚动重画时若焦点在**表内**编辑控件里 ⇒ 推迟。 */
   if(!first && vsEditing()){ VS.pending=true; return; }
   VS.pending=false;
-  const n=VS.rows.length, st=sc.scrollTop, scT=sc.getBoundingClientRect().top;
-  /* ⭐ 锚定回拉（动态行高的标准解法）：重画前记下「视口顶上的那一行」的**全局行号**与其视口内偏移；
-     重画＋实测回填后，把它拉回原位 —— 否则估算漂移会让"滚到底"的窗口落错段（真机抓到）。 */
-  let keepIdx=-1, keepOff=0;
-  if(!first && VS.curA!=null){
-    const cur=document.querySelectorAll('#view tbody tr');
-    for(let i=0;i<cur.length;i++){
-      const r=cur[i].getBoundingClientRect();
-      if(r.bottom>scT+1){ const gi=(VS.curA||0)+i-1;   /* −1 = 跳过上垫高行 */
-        if(gi>=0&&gi<n){ keepIdx=gi; keepOff=r.top-scT; } break; }
+  const n=VS.rows.length, st=sc.scrollTop, vh=sc.clientHeight;
+  let a,b;
+  /* ⭐ 底部钳制（虚拟列表标配）：贴底 ⇒ 窗口**必须**收在最后一行（合计行永远如约出现）。 */
+  if(st + vh >= n*EH - 2){ b=n; a=Math.max(0, n-VS_WIN-VS_OVER); }
+  else { a=Math.max(0, Math.floor(st/EH)-VS_OVER); b=Math.min(n, a+VS_WIN+VS_OVER); }
+  /* ⭐ 窗口没变 ⇒ 一个字节都别动（滚动中反复重写会打断手势）。 */
+  if(!first && a===VS.a && b===VS.b) return;
+  const topH0=a*EH, botH0=(n-b)*EH, winRows=VS.rows.slice(a,b);
+  const SP=h => h>0
+    ? '<tr class="vsp" style="height:'+Math.round(h)+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>'
+    : '';
+  if(first){
+    /* 红线①：整页**一次**写完整片段（pre ＋ 上垫高 ＋ 窗口行 ＋ 下垫高 ＋ post），⛔ 不追加片段。 */
+    $('#view').innerHTML = VS.pre + SP(topH0) + winRows.join('') + SP(botH0) + VS.post;
+    if(BIND[VIEW]) BIND[VIEW]();
+    VS.tb=$('#view').querySelector('tbody');
+  }else{
+    /* ⭐⭐ 滚动重画：**只换 tbody 的行** —— `.tw` / 表头 / `#view` 都不动 ⇒ 手势不被打断、`scrollTop` 不用还。 */
+    const tb=(VS.tb && document.contains(VS.tb)) ? VS.tb : $('#view').querySelector('tbody');
+    if(!tb) return;
+    VS.tb=tb;
+    tb.innerHTML = SP(topH0) + winRows.join('') + SP(botH0);
+  }
+  /* 红线③：窗口行**实测回填**（行高 27~91px 不等高）＋ 差量吸收 ⇒ 文档总高恒为 `n*EH`。 */
+  const trs=VS.tb?VS.tb.children:null;
+  if(trs && trs.length){
+    const hasTop=!!(trs[0] && trs[0].classList && trs[0].classList.contains('vsp'));
+    let H=0;
+    for(let i=hasTop?1:0; i<trs.length; i++){
+      const r=trs[i];
+      if(r.classList && r.classList.contains('vsp')) continue;
+      const hh=r.getBoundingClientRect().height;
+      const gi=a+i-(hasTop?1:0);
+      if(gi>=0 && gi<n) VS.h[gi]=+hh.toFixed(1);
+      H+=hh;
     }
+    const delta=(b-a)*EH - H;                 /* 真高比估算高 ⇒ delta<0 */
+    if(b<n){                                  /* 下垫高吸收（它在视口外 ⇒ 不可见） */
+      const bt=trs[trs.length-1];
+      if(bt && bt.classList.contains('vsp')) bt.style.height=Math.max(0, Math.round(botH0+delta))+'px';
+    }else if(hasTop){                         /* ⭐ 贴底：差量吃进**上垫高**（末行必须仍是合计行） */
+      trs[0].style.height=Math.max(0, Math.round(topH0+delta))+'px';
+    }
+    const r0=trs[hasTop?1:0];
+    if(r0) VS.base=r0.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - topH0;
   }
-  let a=(VS.base&&!first)?Math.floor((st-VS.base)/EH)-10:0;
-  a=Math.max(0,Math.min(a,n-1));
-  let b=Math.min(n,a+45);
-  /* ⭐ 底部钳制（虚拟列表标配）：贴底 ⇒ 窗口**必须**收在最后一行（合计行永远如约出现）；
-     不钳制的话，估算漂移会让贴底时的窗口落在中段（真机自检抓到）。 */
-  if(!first && st + sc.clientHeight >= sc.scrollHeight - 60){ b=n; a=Math.max(0,n-45); }
-  if(keepIdx>=0){ a=Math.min(a,Math.max(0,keepIdx-5)); b=Math.max(b,Math.min(n,keepIdx+40)); }
-  /* ⭐⭐ 2026-09-25 用户报「库存单据**还是**滚不动」——**真滚轮**量出来的根因：
-     原实现**每次 scroll 都** `$('#view').innerHTML=…` **整体重建**（真容器 `.tw` 跟着被换掉）——
-     真滚轮下这一操作会把**浏览器正在进行的滚动手势打断**（元素被换 ⇒ 手势失去目标）
-     ⇒ 实测：鼠标压在表上连滚 6 下，`st` **纹丝不动**、首行文本也**不变**（而**程序化**改 scrollTop 却能动 ——
-        上次"修好"正是被这个假象骗了 ⚠️）。
-     ⇒ 只在**窗口边界真的变了**时才重画（虚拟列表的常规做法）：窗口没变 ⇒ 一个字节都别动。 */
-  if(!first && a===VS.curA && b===VS.curB) return;
-  const topH=Math.round(vSum(a)), botH=Math.max(0,Math.round(vSum(n)-vSum(b)));
-  /* ⛔ 红线①：一次 innerHTML 写**完整片段**（pre ＋ 上垫高 ＋ 窗口行 ＋ 下垫高 ＋ post）
-     ⚠️ 垫高为 0 就**不写**那行（否则滚到底时"最后一行"是空的 0 高垫底行 —— 真机自检抓到） */
-  let frag=VS.pre;
-  if(topH>0) frag+='<tr style="height:'+topH+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>';
-  frag+=VS.rows.slice(a,b).join('');
-  if(botH>0) frag+='<tr style="height:'+botH+'px"><td colspan="'+VS.colN+'" style="border:0;padding:0"></td></tr>';
-  $('#view').innerHTML=frag+VS.post;
-  if(first&&BIND[VIEW]) BIND[VIEW]();
-  /* 红线③：窗口内逐行**实测回填** ＋ baseTop 用窗口首行实测位置自校正 */
-  const trs=$('#view').querySelectorAll('tbody tr');
-  for(let i=1;i<trs.length-1;i++) VS.h[a+i-1]=+trs[i].getBoundingClientRect().height.toFixed(1);
-  if(trs.length>2) VS.base=trs[1].getBoundingClientRect().top - scT + sc.scrollTop - vSum(a);
-  /* ⭐⭐ 2026-09-25 用户报障「库存单据页几乎无法滚动」的**根**（真机量出来的）：
-     上面那行 `$('#view').innerHTML=…` 把 `#view` **整体重建** ⇒ **真正的滚动容器 `.tw` 也一起被换掉** ⇒
-     第 1065 行取到的那个 `sc` **已经不在 DOM 里**，对它写 `scrollTop` 等于**没写** ⇒ 每次重画都把滚动位置
-     归零（用户感受 = "滚一下就弹回顶部 / 几乎滚不动"；实测 `st` 恒 0，而窗口在推进）。
-     ⇒ 重画后**必须重新取一次真容器**，并把重画前记下的位置还回去。
-     ⚠️ 时机：必须放在**已经强制过布局之后**（上面那两行读了 `getBoundingClientRect()`）——
-        否则新容器的 `scrollHeight` 还没算出来，赋值会被浏览器钳到 0（等于没还）。 */
-  const host2=scrollHost();
-  if(host2){ if(st) host2.scrollTop=st; sc=host2; }
-  /* 锚定回拉：把锚行拉回它重画前所在的视口位置（偏差 <2px 不动，防抖） */
-  if(keepIdx>=0 && keepIdx>=a && keepIdx<b){
-    const el=trs[1+(keepIdx-a)];
-    if(el){ const now=el.getBoundingClientRect().top - scT, d=now-keepOff;
-            if(Math.abs(d)>2) sc.scrollTop+=d; }
-  }
-  VS.curA=a; VS.curB=b;      /* ⚠️ 两个都要记：`curB` 是"窗口没变就别重画"那道闸的比较对象 */
+  VS.a=a; VS.b=b;
 }
+
 const V={}, BIND={};
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。

@@ -254,6 +254,17 @@ def main() -> int:
         #    ⇒ 必须**直接量位置**：滚下去之后 `st` 要真的 > 0，且**再滚一格还得动**。
         # ⚠️⚠️ **必须用真滚轮**（`page.mouse.wheel`）：程序化改 `scrollTop` **不算数** ——
         #    2026-09-25 上一版护栏就是程序化的，于是"每滚一下都被重画打断"这个真 bug **照样绿**（假绿）。
+        # ⭐⭐ 2026-09-25（`TAIL-94` 重写）：**滚轮断言必须从"非底部"起步**。
+        #    上一条已经把「滚到底 ⇒ 合计行在」单独测过了；**贴底时再往下滚本就不该动**（那是正确行为，不是 bug）。
+        #    ⚠️ 旧实现"文档总高随实测漂移"会在底部留出多余余量 ⇒ 这三条断言**一直是从假前提上绿过来的**
+        #    （总高恒定的重写把它暴露出来）。⇒ 拉回用户的真实手势：**从中段起步往下滚**。
+        page.evaluate("""() => {
+            const v=document.querySelector('#view');
+            const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
+            s.scrollTop=Math.round(s.scrollHeight*0.25);
+            s.dispatchEvent(new Event('scroll'));
+        }""")
+        page.wait_for_timeout(320)
         box = page.evaluate("""() => { const t=document.querySelector('#view .tw');
             if(!t) return null; const r=t.getBoundingClientRect();
             return {x:r.x+r.width/2, y:r.y+r.height/2}; }""")
