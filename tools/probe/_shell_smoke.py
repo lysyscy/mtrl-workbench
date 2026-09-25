@@ -246,6 +246,26 @@ def main() -> int:
             const last=trs[trs.length-1]||{};
             return {n:trs.length, txt:(last.innerText||'').replace(/\\s+/g,' ').slice(0,60)};
         }""")
+        # ⭐⭐ 2026-09-25 用户报障「库存单据页几乎无法滚动」的**回归护栏**（真机量出来的根因）：
+        #    重画时 `$('#view').innerHTML=…` 把 `#view` **整体重建** ⇒ **真容器 `.tw` 跟着被换掉**，
+        #    而代码仍把滚动位置还给**已经不挂在 DOM 上的旧节点** ⇒ 每次滚动都被归零
+        #    （用户感受 = "滚一下就弹回顶部 / 几乎滚不动"）。
+        #    ⚠️ 上面那条「滚到底 ⇒ 合计行在」**抓不到它**：程序化滚到底会命中底部钳制分支 ⇒ 合计行照样出现。
+        #    ⇒ 必须**直接量位置**：滚下去之后 `st` 要真的 > 0，且**再滚一格还得动**。
+        page.evaluate("""() => {
+            const v=document.querySelector('#view');
+            const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
+            s.scrollTop=Math.round((s.scrollHeight-s.clientHeight)*0.5);
+            s.dispatchEvent(new Event('scroll'));
+        }""")
+        page.wait_for_timeout(500)
+        m08["half"] = page.evaluate("""() => {
+            const v=document.querySelector('#view');
+            const t=v&&v.querySelector('.tw'); const s=(t&&t.scrollHeight>t.clientHeight+1)?t:v;
+            const before=s.scrollTop;
+            s.scrollTop=before+140; s.dispatchEvent(new Event('scroll'));
+            return {st:before, after:s.scrollTop, sh:s.scrollHeight, ch:s.clientHeight};
+        }""")
         print("⑧ m08 =", {k: v for k, v in m08.items() if k != 'pill'}, "| pill =", m08["pill"])
         oks4 = [
             (m08["tables"] >= 1, "表在线（单据明细总表）"),
@@ -257,6 +277,9 @@ def main() -> int:
              f"⭐ 虚拟滚动生效（DOM 只挂窗口 {m08['rows']} 行，≠ 全量 {m08['listed']}）"),
             ("合计" in m08["bottom"]["txt"],
              f"⭐ 滚到底 ⇒ 合计行在（「{m08['bottom']['txt']}」—— 虚拟化不丢数据）"),
+            (m08["half"]["st"] > 0 and m08["half"]["after"] > m08["half"]["st"],
+             f"⭐⭐ 滚动位置**停得住**（滚到 50% ⇒ st={m08['half']['st']} > 0，且再滚仍在动 "
+             f"⇒ {m08['half']['after']}）—— 这是「重画把位置归零」那个 bug 的护栏"),
         ]
         for ok, what in oks4:
             print(("  ✅ " if ok else "  ⛔ ") + what)

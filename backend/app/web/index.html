@@ -1062,7 +1062,7 @@ function startVirtual(html, scroller, keep){
 function vSum(i){ let s=0; for(let k=0;k<i;k++) s+=VS.h[k]||EH; return s; }   /* 前缀和（O(N)，千行级可承受） */
 function drawVirtual(first){
   /* ⚠️ 读的必须是**真容器**（`scrollHost()`）—— 读 `.view` 会恒得 `st≈0` ⇒ 窗口永不推进。 */
-  const sc=scrollHost()||$('.view'); if(!sc||!VS) return;
+  let sc=scrollHost()||$('.view'); if(!sc||!VS) return;   /* ⚠️ `let`：重建后要换人（见下方"重新取真容器"） */
   /* ⭐⭐ 焦点护栏（`TAIL-66`）：首帧必须画（否则空页）；**滚动重画**时若焦点在本页输入控件里 ⇒ **推迟**。 */
   if(!first && vsEditing()){ VS.pending=true; return; }
   VS.pending=false;
@@ -1098,6 +1098,15 @@ function drawVirtual(first){
   const trs=$('#view').querySelectorAll('tbody tr');
   for(let i=1;i<trs.length-1;i++) VS.h[a+i-1]=+trs[i].getBoundingClientRect().height.toFixed(1);
   if(trs.length>2) VS.base=trs[1].getBoundingClientRect().top - scT + sc.scrollTop - vSum(a);
+  /* ⭐⭐ 2026-09-25 用户报障「库存单据页几乎无法滚动」的**根**（真机量出来的）：
+     上面那行 `$('#view').innerHTML=…` 把 `#view` **整体重建** ⇒ **真正的滚动容器 `.tw` 也一起被换掉** ⇒
+     第 1065 行取到的那个 `sc` **已经不在 DOM 里**，对它写 `scrollTop` 等于**没写** ⇒ 每次重画都把滚动位置
+     归零（用户感受 = "滚一下就弹回顶部 / 几乎滚不动"；实测 `st` 恒 0，而窗口在推进）。
+     ⇒ 重画后**必须重新取一次真容器**，并把重画前记下的位置还回去。
+     ⚠️ 时机：必须放在**已经强制过布局之后**（上面那两行读了 `getBoundingClientRect()`）——
+        否则新容器的 `scrollHeight` 还没算出来，赋值会被浏览器钳到 0（等于没还）。 */
+  const host2=scrollHost();
+  if(host2){ if(st) host2.scrollTop=st; sc=host2; }
   /* 锚定回拉：把锚行拉回它重画前所在的视口位置（偏差 <2px 不动，防抖） */
   if(keepIdx>=0 && keepIdx>=a && keepIdx<b){
     const el=trs[1+(keepIdx-a)];
