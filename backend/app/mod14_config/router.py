@@ -23,7 +23,11 @@ router.include_router(settings_api_router)
 #       ⇒ 依赖单向 `mod14_config → mod03_notice`，不成环。
 from app.mod14_config.rules_api import router as rules_router      # noqa: E402
 
+# ⭐ `TAIL-96` 集采项目**剔除名单**（页面在 M14、数据主人在集采域，与剔除规则**同构**）
+from app.mod14_config.jc_ignore_api import router as jc_ignore_router  # noqa: E402
+
 router.include_router(rules_router)
+router.include_router(jc_ignore_router)      # ⭐ `TAIL-96` 集采剔除名单（与上面同构）
 
 
 __all__ = ["router"]
