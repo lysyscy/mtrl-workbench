@@ -108,6 +108,25 @@
 
 
 
+### ⛔ 负结果（2026-09-25 收口 · `TAIL-95`）：**本宿主的 IDE 会话不跑 hooks**
+
+实测条件：**三个挂载点同时配置** ＋ 用户**重启整个 VS Code 进程** ＋ 走完**一个完整回合**：
+
+| 挂载点 | 依据 | 结果 |
+|---|---|---|
+| 用户级 `~/.codebuddy/settings.json` 的 `Stop`（direct 格式） | 官方 `hook-development` 的 Settings Format | ⛔ **0 次触发** |
+| 用户级 `~/.codebuddy/hooks.json` 的 `Stop` | 技能附页口径「合并到用户 `hooks.json`」 | ⛔ **0 次触发** |
+| **项目级** `.codebuddy/settings.json` 的 `Stop` | direct 格式 | ⛔ **0 次触发** |
+
+· hook 脚本**逻辑本身已验证**（四用例：写心跳 ✓ · 异项目静默 ✓ · 防循环静默 ✓ · 畸形输入吞掉 ✓，都 `rc=0` 且 stdout 为空）；
+· 宿主日志 `~/.codebuddy/logs/` 里只有 `cli-memwatch-*.log` —— **没有** hook 加载/报错记录；
+· 「插件形式」**未试**：本机 `plugins/known_marketplaces.json` **只有两个内置 zip 市场**（`isBuiltIn:true`），
+  没有本地目录市场的样例 ⇒ 猜 schema 违反纪律（⛔ 不猜）。
+⇒ **判定**：官方文档列的事件名/配置位是 **CodeBuddy Code（CLI）** 的能力；**本 IDE 会话不加载 hooks**。
+**收口动作**：宿主配置**已还原**（`settings.json` ← `.bak-20260925`）· 两个新增文件**已删** ·
+脚本 `~/.codebuddy/hooks/handoff_stop_hook.py` **留作 CLI 路线备用**（未接线、零影响）。
+⚠️ **口径**：IDE 会话里**没有程序兜底** ⇒ 交接评估**只能靠每轮自检**（`project-handoff` 技能允许并要求的口径）。
+
 ## 二、引用这些结论时的三条纪律
 
 1. **先对前提**：文件头部写了「本机 / 方法 / 脚本 / 日期」。**换机后先把前提重核一遍**
