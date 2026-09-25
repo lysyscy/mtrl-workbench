@@ -242,7 +242,26 @@ const ACT={
      if(res.ok===false) return toast(`<b>没能删除</b>：${esc(res.message||'')}`, 8000);
      await reloadM14(); render();
      toast(esc(res.message||'已删除'), 7000);
+
    }catch(e){ toast(`<b>没能删除</b>：${esc(String((e&&e.message)||e))}`, 8000); } },
+ /* ⭐ TAIL-96 集采项目剔除名单：**加入 / 停用 / 恢复**（页面在 M14；数据主人在集采域）。
+    ⚠️ 回执一律用后端那句中文原话；失败只把话讲清、⛔ 不静默。 */
+ jciAdd:async()=>{ const el=$('#jciName'), why=$('#jciWhy');
+   const name=((el&&el.value)||'').trim();
+   if(!name) return toast('<b>项目全名不能为空</b> —— 粘贴「项目全名」（与档案里那个名字一致）');
+   try{
+     const res = await API.m14JcIgnoreAdd({name_full:name, reason:((why&&why.value)||'').trim()});
+     if(res.ok===false) return toast('<b>没能加入</b>：'+esc(res.message||''), 8000);
+     await reloadM14(); render();
+     toast(esc(res.message||'已加入剔除名单'), 8000);
+   }catch(e){ toast('<b>没能加入</b>：'+esc(String((e&&e.message)||e)), 8000); } },
+ jciSet:async t=>{ const id=+t.dataset.id, on=t.dataset.on==='1';
+   try{
+     const res = await API.m14JcIgnoreSet(id, {active:on});
+     if(res.ok===false) return toast('<b>没能改</b>：'+esc(res.message||''), 8000);
+     await reloadM14(); render();
+     toast(esc(res.message||'已更新'), 7000);
+   }catch(e){ toast('<b>没能改</b>：'+esc(String((e&&e.message)||e)), 8000); } },
 
  /* —— MOD-03 付款通知书 —— */
  pick:t=>{ const id=t.dataset.id; t.checked?pickSet.add(id):pickSet.delete(id); render(); },
