@@ -840,6 +840,10 @@ async function reloadM14() {
   RULE_RAW = d.rules || [];
   RULE_KINDS = d.kinds || [];
   RULE_SRC = d.source_label || '';
+  /* ⭐ `TAIL-96` 集采项目剔除名单（页面在 M14、数据主人在集采域）
+     ⚠️ 挂 `window` 而不是模块级 `let` —— 视图代码在 `index.html`，跨件引用走全局最稳（本壳非严格模式）。 */
+  const dj = await API.m14JcIgnore();
+  window.JCI_ALL = dj.items || [];
   /* ⚠️ 后端给 `kind_label`（**展示名**）—— 本页只展示，故用展示名；
      写动作要的是 `kind`（内部值）⇒ 从 `RULE_RAW[i]` 取，别从展示三元组反推。 */
   RULE_EX = RULE_RAW.map(r => [r.kind_label, r.values, r.meaning]);

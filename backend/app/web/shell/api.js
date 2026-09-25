@@ -252,6 +252,10 @@ const API = {
   /* ⚠️ 写动作**恒 HTTP 200**，成败看回包的 `ok` —— 规则不合法是 §4.2.2 的可预期拒绝，
      后端那句中文必须原样给用户看。 */
   m14RuleDel: id => API.send('DELETE', `/api/m14/rules/${id}`, null),
+  /* ⭐ `TAIL-96` 集采项目**剔除名单**（页面在 M14、数据主人在集采域 ⇒ 与上面「剔除规则」同构） */
+  m14JcIgnore: () => API.get('/api/m14/jc-ignore'),
+  m14JcIgnoreAdd: body => API.post('/api/m14/jc-ignore', body),
+  m14JcIgnoreSet: (id, body) => API.send('PUT', `/api/m14/jc-ignore/${id}`, body),
 
   /* ---- MOD-09 特殊费用月报表（`TAIL-27`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
   m09Fee: (ym, pj) => API.get(`/api/m09/fee?ym=${encodeURIComponent(ym || '')}`
