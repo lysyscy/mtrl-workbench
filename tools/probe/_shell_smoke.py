@@ -298,6 +298,10 @@ def main() -> int:
              f"⭐⭐ **真滚轮滚得动**（4 下：st {m08['wheel'][0]['st']} → {m08['wheel'][-1]['st']}，"
              f"首行内容换了 {len({x['first'] for x in m08['wheel']})} 种）—— 用的必须是**真手势**"
              "（`mouse.wheel`）；程序化 `scrollTop` 抓不到「重画打断手势」这类 bug"),
+            (m08["wheel"][-1]["st"] - m08["wheel"][0]["st"] >= 300 * 4 * 0.8,
+             f"⭐⭐⭐ **滚轮量没被吃掉**（4 下 × 300px ⇒ 实际走了 "
+             f"{m08['wheel'][-1]['st'] - m08['wheel'][0]['st']}px，≥ 80% 才算正常）—— "
+             "用户实测过的症状：每 tick 只剩 ~5px（滚 5~6 次才走一行），根因 = 每次滚动都重建 `#view`"),
             (m08["focus_scroll"]["after"] != m08["focus_scroll"]["before"],
              f"⭐⭐⭐ **焦点在筛选框里也滚得动**（先点 `#view` 里的筛选框再滚：首行 "
              f"「{m08['focus_scroll']['before']}」→「{m08['focus_scroll']['after']}」）—— "
