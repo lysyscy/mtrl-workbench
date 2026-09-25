@@ -93,7 +93,20 @@
 ⇒ **对 `project-handoff` 的意义**：它需要的三个事件（`SessionStart` / `UserPromptSubmit` / `Stop`）**全都有**，
 且 `Stop` 带 `stop_hook_active`（防循环）⇒ **技术上可以适配**。
 ⚠️ 但落地要**改用户级配置**（`.codebuddy/settings.json`）＋ 可能触发宿主原生信任确认 ⇒ **必须先经用户同意**，
-⛔ 不许我擅自写。本机现状：**尚未配置**（`~/.codebuddy/` 里没有 hooks 相关项）。
+⛔ 不许我擅自写。本机现状：**已挂第一步（2026-09-25 晚）** —— 见下「落地状态」。
+
+### 落地状态（`TAIL-95` 第一步 · 2026-09-25）
+
+| 项 | 值 |
+|---|---|
+| 挂在哪 | 用户级 **`~/.codebuddy/settings.json`** 的 `Stop`（direct 格式 · `matcher:"*"` · `timeout:15`）｜改前备份 = 同目录 `settings.json.bak-20260925` |
+| 脚本 | **`~/.codebuddy/hooks/handoff_stop_hook.py`**（宿主层 · 不在本仓 ⇒ 本仓文档架构规则不受影响） |
+| 干什么 | ① **只认本项目**（`cwd` 含 `mtrl-workbench`，其余项目静默退出）② `stop_hook_active=true` ⇒ 静默（防循环）③ 其余 ⇒ 往 `~/.codebuddy/state/handoff-stop-hook.log` **写一行心跳**（含**真实字段名**）④ ⛔ **绝不往 stdout 写**、⛔ 异常全吞、**一律 `exit 0`** |
+| 自证（四用例 · 都 rc=0 ＋ stdout 空） | 本项目 ⇒ 心跳 ✓ ｜异项目 ⇒ 静默不写 ✓ ｜`stop_hook_active=true` ⇒ 静默 ✓ ｜**畸形输入** ⇒ 吞掉 ✓ |
+| ⭐ 实测到的真实 payload 字段 | `cwd` · `hook_event_name` · `session_id` · `stop_hook_active` · `transcript_path` —— **没有 `turn_id`** ⇒ 计数只能按 **`session_id`** |
+| ⛔ **未实现（别当已完成）** | 「**压缩到期却漏了评估**」的判定 —— 技能计数器需要一次压缩计数输入，而宿主 `PreCompact` 没有"自增"入口、payload 也无 `turn_id` ⇒ 当前 hook 只做**管道自证 ＋ 心跳**；要真做到点提醒，下一步得先解决"压缩次数怎么落账" |
+
+
 
 ## 二、引用这些结论时的三条纪律
 
