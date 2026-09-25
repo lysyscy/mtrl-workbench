@@ -1682,7 +1682,7 @@ function jcFetchPreview(d) {
   return `<div class="tip ok" style="margin-bottom:10px"><b>抓取完成</b>：${esc(d.message || '')}</div>
    ${warn}
    <div style="font-size:12.5px">
-     <div><b>匹配上</b>（已落库 · 默认「待确认」）· ${d.matched} 条</div>
+     <div><b>匹配上</b>（已落库 · 默认「纳入台账」）· ${d.matched} 条</div>
      ${list(d.matched_projects || [])}
      <div style="margin-top:10px"><b>未落库</b>（**归属未走完** ⇒ 按口径**不纳管**）· ${d.unmatched} 条</div>
      ${unsettledHtml}

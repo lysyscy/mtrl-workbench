@@ -3,7 +3,8 @@
 依据：《说明书》**§6.4.1**（合同主表 **19 字段** —— 用户确认「无遗漏、无需删除」）·
 **§6.4.2**（发票子表：两张同款「发票日期 ＋ 金额」· 一合同 1..N 张）· **§6.4.3**（付款子表：0/1/N ·
 每条标明**来源**、引用付款域时记通知书 id 用于**去重**）· **§6.4.4**（欠款 = 结算 − 付款 ·
-**合同级实时、不拆月度**）· **§6.5.3**（三态标记）· **§6.6.2**（付款引用：全库去重 · 一对一）。
+**合同级实时、不拆月度**）· **§6.5.3**（**两态**标记 —— `TAIL-97` 2026-09-25 用户裁定**取消「待确认」**）·
+**§6.6.2**（付款引用：全库去重 · 一对一）。
 
 ⭐ **§6.4.1 的 19 个字段里只有 14 个落库** —— 其余按口径**一律现场算**（落库就是第二份真相）：
 
@@ -39,11 +40,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
 
-#: 三态标记（§6.5.3）：**新抓取的默认「待确认」**；人工标记**不被后续抓取覆盖**（域层保证）
-TAG_PENDING = "待确认"
+#: **两态**标记（§6.5.3 · `TAIL-97`）：**抓来即「纳入台账」**，可人工改「不纳入」；
+#: ⛔ 人工标记**不被后续抓取覆盖**（域层保证 —— 这条铁律在"取消待确认"之后**必须保留**）。
+#: ⚠️ 「待确认」这个值**已取消**（存量 258 条已迁移）⇒ 常量一并删除，⛔ 别在别处再写它。
 TAG_IN = "纳入台账"
 TAG_OUT = "不纳入"
-TAGS: tuple[str, ...] = (TAG_PENDING, TAG_IN, TAG_OUT)
+TAGS: tuple[str, ...] = (TAG_IN, TAG_OUT)
 
 #: 发票子表的两种 `kind`（§6.4.2）：供应商发票 / 贸易公司发票（后者仅"有贸易公司"时启用）
 KIND_SUPPLIER = "supplier"
@@ -108,7 +110,7 @@ class JcContract(Base):
     party_name: Mapped[str] = mapped_column(String(128), default="", server_default="", index=True)
     trade_co: Mapped[str | None] = mapped_column(String(128), nullable=True)            # 贸易公司名（手工 · 可空）
     trade_contract_amt: Mapped[float | None] = mapped_column(MONEY, nullable=True)      # 贸易公司合同金额（可空）
-    tag: Mapped[str] = mapped_column(String(8), index=True, default=TAG_PENDING)        # 三态（默认「待确认」）
+    tag: Mapped[str] = mapped_column(String(8), index=True, default=TAG_IN)             # 两态（默认「纳入台账」）
     arch: Mapped[str] = mapped_column(String(8), default="")                            # 合同存档情况（手工）
     arch_no: Mapped[str] = mapped_column(String(64), default="")                        # 合同存档号（手工）
     ret_date: Mapped[str | None] = mapped_column(String(10), nullable=True)             # 合同寄回日期（可空）
@@ -200,7 +202,7 @@ class JcPartyKind(Base):
 
 __all__ = [
     "JcContract", "JcInvoice", "JcPayment", "JcPartyKind",
-    "TAG_PENDING", "TAG_IN", "TAG_OUT", "TAGS",
+    "TAG_IN", "TAG_OUT", "TAGS",
     "KIND_SUPPLIER", "KIND_TRADE", "INVOICE_KINDS",
     "SRC_MANUAL", "SRC_NOTICE",
     "KIND_PARTY_NORMAL", "KIND_PARTY_TRADE", "KIND_PARTY_UNKNOWN",

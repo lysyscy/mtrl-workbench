@@ -22,7 +22,7 @@ from app.core.db import get_engine, session_scope
 from app.mod01_projects import repository as pj_repo
 from app.mod01_projects.models import TYPE_NORMAL, Project
 from app.mod11_jc import repository as R
-from app.mod11_jc.models import TAG_IN, TAG_OUT, TAG_PENDING, JcContract
+from app.mod11_jc.models import TAG_IN, TAG_OUT, JcContract
 from tests.acc_plugin import acc
 
 WH_F = "__自检仓_集采抓__"
@@ -48,7 +48,7 @@ def test_再次导入不覆盖旁路字段_且不动已人工标记的行():
     """⭐ 两条判据一起验（它们本就是一件事的两面）：
 
     ① `001-09` **再次导入不覆盖旁路字段** —— 重抓同一张合同时，⛔ 不许把人工填的东西冲掉；
-    ② `001-10` **抓取不覆盖已人工标记的行** —— 人工标过的三态，重抓后必须**原样还在**。
+    ② `001-10` **抓取不覆盖已人工标记的行** —— 人工标过的两态，重抓后必须**原样还在**。
     """
     with session_scope() as s:
         p = _project(s)
@@ -56,7 +56,7 @@ def test_再次导入不覆盖旁路字段_且不动已人工标记的行():
         assert first["inserted"] == 1 and first["refreshed"] == 0
 
         row = R.one_by_no(s, "__自检_CGHT_1__")
-        assert row.tag == TAG_PENDING, "新抓的默认「待确认」（⛔ 不是「纳入台账」）"
+        assert row.tag == TAG_IN, "新抓的默认「纳入台账」（`TAIL-97`：取消「待确认」）"
 
         # 人把它标成「不纳入」＋ 填了存档三列 / 备注 / 付款方式 / 贸易公司
         row.tag = TAG_OUT

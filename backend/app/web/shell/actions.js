@@ -1795,7 +1795,7 @@ jcFetch:()=>{ const def = jcFetchSinceOn || jcFetchSinceDefault(); modal({title:
     <div class="fld"><label>开始日期 —— 只抓<b>这之后</b>的单据（<b>增量</b>）</label>
       <input class="inp" id="jcFetchSince" type="date" value="${esc(def)}">
       <div class="sm mut" style="margin-top:6px">默认 = 台账里<b>最新合同日期 − 3 天</b>（多留几天：i8 的<b>增补合同会沿用原单据日期</b>，卡太紧会漏；重复的会被幂等挡掉）。<br><b>清空</b> = 全量（<b>约 40 秒</b>，首次建档才需要）；带日期 = 增量（<b>1~5 秒</b>）。</div></div>
-    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 落库（新抓的默认<b>「待确认」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但**落库前会给你一眼看见**。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
+    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 落库（新抓的默认<b>「纳入台账」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但**落库前会给你一眼看见**。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
   footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcFetchOk">确认抓取（会顶号）</button>`}); },
 jcFetchOk:async()=>{ const el=$('#jcFetchSince');
   /* ⚠️ 读不到 / 格式不对 ⇒ 传**空串**（= 交给后端按默认增量走），⛔ 不传一个"看着像日期"的脏值：

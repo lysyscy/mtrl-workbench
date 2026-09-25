@@ -1,6 +1,6 @@
 """`MOD-11` 集采台账 · **仓储层**（只做取数 / 落库，不写判定）。
 
-⚠️ **判定一律调 `domain` 出口**（结算 / 欠款 / 子表校验 / 三态）—— 本文件里⛔ 不出现第二个"结算口径"。
+⚠️ **判定一律调 `domain` 出口**（结算 / 欠款 / 子表校验 / 两态）—— 本文件里⛔ 不出现第二个"结算口径"。
 ⚠️ **项目键 = 仓库名**（§2.7.4）：比较 / 筛选一律用它，**写库仍按档案 id** ⇒ 本层负责把 `project_id`
    翻译成 `warehouse_name`（`select(Project.warehouse_name)`），⛔ 不让上层各自 join 一遍。
 ⚠️ 派生金额（发票合计 / 付款合计 / 结算 / 欠款）**一律不落库**（§6.4.1 末行）⇒ 本层只回原始子表行。
@@ -22,7 +22,7 @@ from app.mod11_jc.models import (
     KIND_PARTY_UNKNOWN,
     PARTY_KIND_NAMES,
     SRC_MANUAL,
-    TAG_PENDING,
+    TAG_IN,
     JcContract,
     JcInvoice,
     JcPartyKind,
@@ -181,7 +181,7 @@ EDITABLE_COLS: tuple[str, ...] = (
 
 def insert_contract(s: Session, *, project_id: int, contract_date: str = "",
                     material_name: str = "", supplier: str = "", contract_amt=0,
-                    trade_co=None, trade_contract_amt=None, tag: str = TAG_PENDING,
+                    trade_co=None, trade_contract_amt=None, tag: str = TAG_IN,
                     method: str = "", remark: str = "") -> JcContract:
     """手工新增合同 ⇒ **真的建档**（判据 `ACC-JC-UI-001/001-13`）。
 
@@ -197,7 +197,7 @@ def insert_contract(s: Session, *, project_id: int, contract_date: str = "",
         trade_co=(str(trade_co) if trade_co not in (None, "") else None),
         trade_contract_amt=(Decimal(str(trade_contract_amt))
                             if trade_contract_amt not in (None, "") else None),
-        tag=str(tag or TAG_PENDING),
+        tag=str(tag or TAG_IN),
         method=str(method or "")[:64],
         remark=str(remark or "")[:255],
     )
@@ -370,9 +370,10 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
     ⭐ 幂等键 = **`contract_no`**（i8 的 `BillNo`）：
 
     - 没编号 ⇒ **跳过并计数**（⛔ 静默丢弃 —— 与 `API-04` 取数层同一口径）；
-    - **不存在** ⇒ 新增，三态 = 「**待确认**」（新抓的那条路；⛔ 不是"纳入台账"——那是手工新增）；
-    - **已存在** ⇒ 只刷 `FETCH_COLS` ＋ 按 `domain.tag_after_fetch` 归一三态
-      ⇒ ⛔ **不碰**存档三列 / 备注 / 付款方式 / 贸易公司（人的地盘）。
+    - **不存在** ⇒ 新增，两态 = 「**纳入台账**」（`TAIL-97`：抓来即纳入，与手工新增**同一个默认值**）；
+    - **已存在** ⇒ 只刷 `FETCH_COLS` ＋ 按 `domain.tag_after_fetch` 归一
+      ⇒ ⛔ **不碰**存档三列 / 备注 / 付款方式 / 贸易公司（人的地盘），
+        ⛔ 也**不许**把人工标的「不纳入」改回来（判据 `001-10` 的铁律）。
     """
     inserted = refreshed = skipped = 0
     for row in rows or ():
@@ -400,7 +401,7 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
                 trade_co=(_party_name or None) if _is_trade else None,
                 trade_contract_amt=(_amt if _is_trade else None),
                 bill_name=str(row.get("bill_name") or "")[:255],   # ⭐ i8 原文（可回溯）
-                tag=TAG_PENDING,                       # ⭐ 新抓的默认「待确认」
+                tag=TAG_IN,                            # ⭐ `TAIL-97`：新抓的默认「纳入台账」
                 remark=str(row.get("remark") or "")[:255],
             ))
             inserted += 1
@@ -433,7 +434,7 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
                 #    ⇒ 但 `unknown` **必须在回执/页面里报出来**（见 `fetch_service` 与分类页）。
                 cur.contract_amt = _amt
             # ⭐ 判据 `001-10`「抓取**不覆盖已人工标记的行**」= 这里只做"归一"：
-            #    原值是人工标过的（≠待确认）⇒ 原样保留；否则回落「待确认」。
+            #    人工标的「不纳入」⇒ 原样保留；其余（含新抓的）一律「纳入台账」。
             cur.tag = D.tag_after_fetch(cur.tag)
             refreshed += 1
     s.flush()

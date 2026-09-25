@@ -1,6 +1,6 @@
 """`ACC-JC-*`（M5 集采域）· **域内核**的验收断言。
 
-⚠️ 本文件**只钉纯函数口径**（结算 / 欠款 / 子表校验 / 三态 / 去重 / 候选）——
+⚠️ 本文件**只钉纯函数口径**（结算 / 欠款 / 子表校验 / 两态 / 去重 / 候选）——
    界面结构、落库、勾选语义那些判据点留给壳侧与 API 侧（M5-7），⛔ 别在这里凑数。
 
 逐条对应（`claim` 原文见验收基线 `PRD/验收/验收基线.json`）：
@@ -15,9 +15,10 @@
 - `ACC-JC-PAY-001/001-06` 候选为空 ⇒ **给提示且不允许提交**
 - `ACC-JC-FETCH-001/001-10` **抓取不覆盖已人工标记的行**（⭐ 这条原是"待建"档）
 
-⚠️ `ACC-JC-FETCH-001/001-01`（触发方式「人工 + 定时」）与 `001-07`（三态默认「纳入台账」）**本文件刻意不钉** ——
-   它们与《说明书》§6.5.2（D9：**仅人工点击、不做定时**）/ §6.5.3（新抓取默认**待确认**）**冲突**，
-   已登记为待裁定事项（见 §14.4c 的卡点栏）；⛔ 不替用户拍板。
+⚠️ `ACC-JC-FETCH-001/001-01`（触发方式「人工 + 定时」）**本文件刻意不钉** ——
+   它与《说明书》§6.5.2（D9：**仅人工点击、不做定时**）**冲突**，已登记为待裁定事项（见 §14.4c 的卡点栏）；⛔ 不替用户拍板。
+⭐ `001-07`（默认值 = 纳入台账）**只钉在 `test_acc_jc_write.py`**（⛔ 本文件不重复钉）；
+   ⭐ `TAIL-97` 之后它**不再与 §6.5.3 冲突**了 —— 抓取与手工新增的默认值**已经合流**。
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from decimal import Decimal
 from tests.acc_plugin import acc
 
 from app.mod11_jc import domain as D
-from app.mod11_jc.models import KIND_SUPPLIER, KIND_TRADE, TAG_IN, TAG_OUT, TAG_PENDING
+from app.mod11_jc.models import KIND_SUPPLIER, KIND_TRADE, TAG_IN, TAG_OUT
 
 
 def _inv(kind: str, date: str, amount: str) -> dict:
@@ -140,14 +141,19 @@ def test_付款方式自由文本_不得引入枚举校验():
 
 @acc("ACC-JC-FETCH-001", "001-10")
 def test_抓取不覆盖已人工标记的行():
-    """⭐ 原为「待建」档：新抓的默认「待确认」，**已人工标记的持久保留**（抓取不许覆盖人工判定）。"""
-    assert D.tag_after_fetch(None) == TAG_PENDING, "新抓的行 ⇒ 「待确认」"
-    assert D.tag_after_fetch("") == TAG_PENDING, "空值 ⇒ 当作新抓的"
-    assert D.tag_after_fetch(TAG_PENDING) == TAG_PENDING
-    assert D.tag_after_fetch(TAG_IN) == TAG_IN, "已人工标记的「纳入台账」必须**原样保留**"
-    assert D.tag_after_fetch(TAG_OUT) == TAG_OUT, "「不纳入」同理（人工判定优先）"
-    # 认不出的值 ⇒ 回落到「待确认」（⛔ 不猜成"纳入"= 不替用户拍板）
-    assert D.normalize_tag("随便什么") == TAG_PENDING
+    """⭐ 原为「待建」档。`TAIL-97` 两态化之后口径变成：
+
+    **抓来即「纳入台账」**，但 ⭐⭐ **人工标的「不纳入」抓取不许改回来**（这条铁律**必须保留**）。
+    """
+    assert D.tag_after_fetch(None) == TAG_IN, "新抓的行 ⇒ 「纳入台账」（`TAIL-97`：取消「待确认」）"
+    assert D.tag_after_fetch("") == TAG_IN, "空值 ⇒ 当作新抓的"
+    assert D.tag_after_fetch(TAG_IN) == TAG_IN, "本来就是「纳入台账」⇒ 原样"
+    assert D.tag_after_fetch(TAG_OUT) == TAG_OUT, \
+        "⭐ 人工标的「不纳入」必须**原样保留**（抓取**不许**改回来 —— 本条的要点）"
+    # 认不出的值 ⇒ 回落到**默认值「纳入台账」**（两态下它就是系统默认，回落方向与"抓来即纳入"一致）
+    assert D.normalize_tag("随便什么") == TAG_IN
+    # ⭐ 取值域只剩两态（「待确认」已取消 ⇒ 谁把它加回来，本条必红）
+    assert D.TAGS == (TAG_IN, TAG_OUT)
 
 
 # ---------------------------------------------------------------- 付款引用（§6.6.2）

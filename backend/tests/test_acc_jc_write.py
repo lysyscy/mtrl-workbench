@@ -24,7 +24,7 @@ from app.mod01_projects.models import TYPE_NORMAL, Project
 #    （生产侧由 `main.py` import 各 router 顺带注册；测试进程没有那一步 ⇒ 显式引一次）。
 from app.mod03_notice import models as _m03  # noqa: F401
 from app.mod11_jc import service as SV
-from app.mod11_jc.models import TAG_IN, TAG_OUT, TAG_PENDING, JcContract, JcInvoice
+from app.mod11_jc.models import TAG_IN, TAG_OUT, JcContract, JcInvoice
 from tests.acc_plugin import acc
 
 WH_A = "__自检仓_集采写甲__"
@@ -67,19 +67,21 @@ def test_手工新增保存真的建档_没调接口就不入库():
 
 @acc("ACC-JC-FETCH-001", "001-07")
 def test_手工新增的三态默认是纳入台账():
-    """⭐ 判据**原文**「三态默认值 = **纳入台账**」（比对加载时快照）。
+    """⭐ 判据**原文**「默认值 = **纳入台账**」（比对加载时快照）。
 
-    ⚠️ 这条与"**抓取**默认待确认"**分来源**（用户 2026-09-19 定案）：
-    抓取走 `models.JcContract.tag` 的列默认（`TAG_PENDING`），**手工新增走 `DEFAULT_TAG_ON_CREATE`**。
-    ⛔ 若哪天有人把两者合并成一个默认值，本断言必须红。
+    ⚠️ 这条**曾经**钉的是「抓取 ≠ 手工新增、两个默认值分来源」（用户 2026-09-19 定案）——
+       ⭐ `TAIL-97`（用户 2026-09-25 取消「待确认」）之后**那个口径已被取代**：
+       抓取与手工新增的默认值**合流**，两条路都是 `TAG_IN`。
+    ⇒ 本断言现在钉的是**合流这件事本身**：谁再把两条路拆回分叉，必红。
     """
     with session_scope() as s:
         p = _project(s)
         r = SV.act_add_contract(s, project_id=p.id, contract_date="2026-09-19", supplier="业祥")
         assert r["tag"] == TAG_IN == SV.DEFAULT_TAG_ON_CREATE, \
-            "手工新增的默认三态必须是「纳入台账」（判据原文）"
+            "手工新增的默认值必须是「纳入台账」（判据原文）"
         assert s.get(JcContract, int(r["id"])).tag == TAG_IN
-        assert sv_default_is_not_fetch_default(), "两个默认值必须**分来源**、⛔ 不得同源"
+        assert fetch_default_is_same_as_create_default(), \
+            "`TAIL-97` 起两条路的默认值必须**合流**（抓取与手工新增同为「纳入台账」）"
 
         # 显式给了就听给的（⛔ 不硬塞默认）
         r2 = SV.act_add_contract(s, project_id=p.id, contract_date="2026-09-19",
@@ -88,9 +90,14 @@ def test_手工新增的三态默认是纳入台账():
         s.rollback()
 
 
-def sv_default_is_not_fetch_default() -> bool:
-    """钉「两个默认值分来源」：手工新增的默认 ≠ 表列默认（抓取那条路）。"""
-    return SV.DEFAULT_TAG_ON_CREATE == TAG_IN and TAG_IN != TAG_PENDING
+def fetch_default_is_same_as_create_default() -> bool:
+    """钉「两条路的默认值**已合流**」（`TAIL-97`）：手工新增的出口默认 ＝ 表列默认（抓取那条路）。
+
+    ⚠️ 反过来说也一样：**谁把它们拆回分叉，本断言必红**（这正是它现在的区分力所在）。
+    """
+    col_default = JcContract.__table__.c.tag.default
+    return (SV.DEFAULT_TAG_ON_CREATE == TAG_IN
+            and col_default is not None and col_default.arg == TAG_IN)
 
 
 @acc("ACC-JC-FETCH-001", "001-03")
@@ -108,9 +115,9 @@ def test_三态标记可逐条也可批量():
         assert many["ok"] is True and set(many["affected_ids"]) == set(ids[1:])
         assert all(s.get(JcContract, i).tag == TAG_OUT for i in ids), "两种方式结果一致"
 
-        # ⛔ 认不出的值不许静默变成"纳入"（替用户拍板）—— `normalize_tag` 回落到「待确认」
+        # 认不出的值 ⇒ 回落**默认值「纳入台账」**（`TAIL-97`：两态下它就是系统默认）
         SV.act_set_tag(s, contract_id=ids[0], tag="随便写的")
-        assert s.get(JcContract, ids[0]).tag == TAG_PENDING, "非法值回落「待确认」，⛔ 不是「纳入」"
+        assert s.get(JcContract, ids[0]).tag == TAG_IN, "非法值回落「纳入台账」（两态下的默认值）"
         s.rollback()
 
 

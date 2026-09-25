@@ -161,7 +161,7 @@ R|经济活动分析大表（焊材/气体**自动填** ＋ 其余**手填**）|
 R|经济活动分析大表 · ⛔ **按模板导出**（会上用）|按模板导出|backend/app/report_export/service.py::export_big|ACC-RPT-BIG-001|已接
 R|每半年 **三账比对** ⇒ 能修的修（**在库存单据打调整单**）→ 差异由**系统产出**（表①原始 / 表②调整后 / 差异表）|三账比对|backend/app/mod08_inv/domain.py::make_adjustment|ACC-DIF-REG-001|已接
 # ============================================================
-# ⑧ J 集采域：抓合同 → 三态 → 发票/付款子表 → 结算欠款 → 台账（真源 = 说明书 §6.2）
+# ⑧ J 集采域：抓合同 → 两态 → 发票/付款子表 → 结算欠款 → 台账（真源 = 说明书 §6.2）
 # ⭐⭐ 2026-09-20 **专项核对**（这一节曾整节标「缺」，现逐条核过 ⇒ 全部改「已接」）。
 #    ⚠️ 本行原来写的是「`app/mod11_jc/` 只有 `__init__.py`（空模块）⇒ 下列分支全部没有落点」——
 #    **该前提早已不成立**（现有 10 件 ≈ 170 KB：api / domain / excel_parse / fetch_service /
@@ -172,9 +172,9 @@ R|每半年 **三账比对** ⇒ 能修的修（**在库存单据打调整单**�
 #    ⚠️⚠️ **教训（我差点判错）**：核对 L127「纸质合同收发」时，我拿**文档的措辞**
 #      （「收发 / 寄回 / 盖章 / 存档 / 纸质」）去搜代码 ⇒ **一处都没搜到**，差点判定「真缺」。
 #      而实现的命名是 `arch` / `arch_no` / `ret_date` ⇒ **搜代码要用实现的命名，⛔ 不是文档的用词**。
-J|集采域**整条链路**（抓合同 → 三态 → 发票/付款子表 → 结算欠款 → 台账）|本系统只覆盖「合同签订后」的台账管理环节|backend/app/mod11_jc/router.py|ACC-JC-UI-001|已接
-J|抓采购合同（`API-04` · **仅人工点击**）|三态标记|backend/app/mod11_jc/fetch_service.py::run_fetch|ACC-JC-FETCH-001|已接
-J|集采台账**三态标记**（信息化抓取）|集采台账|backend/app/mod11_jc/domain.py::tag_after_fetch|ACC-JC-FETCH-001|已接
+J|集采域**整条链路**（抓合同 → 两态 → 发票/付款子表 → 结算欠款 → 台账）|本系统只覆盖「合同签订后」的台账管理环节|backend/app/mod11_jc/router.py|ACC-JC-UI-001|已接
+J|抓采购合同（`API-04` · **仅人工点击**）|两态标记|backend/app/mod11_jc/fetch_service.py::run_fetch|ACC-JC-FETCH-001|已接
+J|集采台账**两态标记**（信息化抓取）|集采台账|backend/app/mod11_jc/domain.py::tag_after_fetch|ACC-JC-FETCH-001|已接
 J|发票登记（供应商开票 → 项目走流程 → **科室见票登记台账**）|见票登记集采台账|backend/app/mod11_jc/service.py::act_add_invoice|ACC-JC-UI-001|已接
 J|合同收发登记（**纸质合同**：供应商寄来 → 送资产处盖章 → 存档 ＋ 寄回）|纸质合同|backend/app/mod11_jc/service.py::act_update_contract|ACC-JC-UI-001|已接
 J|付款引用与实际供应商（§6.6.3 受限子串匹配 · 反向入口在 `m03`）|受限子串匹配|backend/app/mod11_jc/service.py::act_add_payment|ACC-JC-PAY-001|已接

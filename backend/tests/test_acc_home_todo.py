@@ -1,4 +1,4 @@
-"""`ACC-HOME-TODO-001` —— 看板（默认落地页）= 待办页 · 9 项待办。
+"""`ACC-HOME-TODO-001` —— 看板（默认落地页）= 待办页 · 8 项待办。
 
 判据 → `PRD/验收/验收基线.json` 的 `cases["ACC-HOME-TODO-001"]`。
 ⚠️ **看板不占模块号**（原型导读）⇒ 本页交互规格主人 = 原型 `V.home`（`demo/`）。
@@ -36,12 +36,13 @@ from app.home import service as S
 
 CASE = "ACC-HOME-TODO-001"
 
-#: 9 项把手（**顺序也是契约** —— 看板按此序展示）
-KEYS = ("ntUnapproved", "ownership", "planUnmatched", "jcPending", "dfPending",
+#: 8 项把手（**顺序也是契约** —— 看板按此序展示）
+#: ⭐ `TAIL-97`（2026-09-25）：`jcPending`（集采合同待确认）**已撤** ⇒ 9 项 ⇒ 8 项。
+KEYS = ("ntUnapproved", "ownership", "planUnmatched", "dfPending",
         "placeholder", "fetchDue", "fetchFail", "printFail")
 
 #: 每项的去向页（`data-k`）—— ⚠️ `dfPending` 2026-09-21 由 `m12`（已撤页）改指 `m08`
-DEST = {"ntUnapproved": "m03", "ownership": "m03", "planUnmatched": "m04", "jcPending": "m11",
+DEST = {"ntUnapproved": "m03", "ownership": "m03", "planUnmatched": "m04",
         "dfPending": "m08", "placeholder": "m01", "fetchDue": "m02", "fetchFail": "m02",
         "printFail": "m03"}
 
@@ -76,12 +77,12 @@ def _calls(block: str) -> dict[str, str]:
 
 # ----------------------------------------------------------------- 001-01
 @acc(CASE, "001-01")
-def test_九项待办把手齐全不重不漏():
-    """⭐ **9 项**、把手集合固定、**顺序即契约**。"""
+def test_八项待办把手齐全不重不漏():
+    """⭐ **8 项**、把手集合固定、**顺序即契约**（`TAIL-97` 撤掉 `jcPending`）。"""
     block = _home()
     got = [m.group(1) for m in re.finditer(r"(?:run)?[Tt]ile\('(\w+)',", block)]
     assert got == list(KEYS), f"页面把手 = {got}"
-    assert len(set(got)) == 9, "把手有重复"
+    assert len(set(got)) == 8, "把手有重复"
     assert set(_calls(block)) == set(KEYS)
 
 
@@ -97,7 +98,7 @@ def test_每项数字都来自数据源不得写死():
     calls = _calls(block)
     # ①–⑥ 与 ⑤ 的表达式名（每一行都是**该域的出口**，不是本页另算的中间量）
     want_expr = {
-        "ntUnapproved": "nUn", "ownership": "nOwn", "planUnmatched": "nPl", "jcPending": "nJc",
+        "ntUnapproved": "nUn", "ownership": "nOwn", "planUnmatched": "nPl",
         "dfPending": "nAdj", "placeholder": "ph.length",
     }
     for key, expr in want_expr.items():
@@ -111,7 +112,6 @@ def test_每项数字都来自数据源不得写死():
         "nUn=NO.filter(n=>ntLive(n)&&n.astat==='未批').length;",
         "const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;",
         "const nPl =PLs.filter(p=>plRev(p,PLs)!=='完全匹配').length;",
-        "const nJc =JCs.filter(j=>j.tag==='待确认').length;",
         "const nAdj=IVs.filter(iv=>adjOf(iv)).length;",
         "const ph=PJs.filter(p=>p.name.startsWith('未建仓-'));",
     ):
@@ -123,7 +123,7 @@ def test_每项数字都来自数据源不得写死():
 
 # ----------------------------------------------------------------- 001-03
 @acc(CASE, "001-03")
-def test_九项都可点击跳到对应页():
+def test_八项都可点击跳到对应页():
     """⭐ 每一项都能**点进去处理**（不是只读展示）＋ 键盘可达（R13 无障碍）。"""
     block = _home()
     calls = _calls(block)
@@ -171,14 +171,16 @@ def test_集采与差异各取本域出口且不臆造不隐藏():
        ⛔ 别退回"恒 0 ＋ 该域未实现"（那会让看板去谎报一个不存在的待办）。
     """
     block = _home()
-    assert "const nJc =JCs.filter(j=>j.tag==='待确认').length;" in block
     assert "const nAdj=IVs.filter(iv=>adjOf(iv)).length;" in block
+    # ⭐ `TAIL-97`：`jcPending`（集采待确认）**已撤** ⇒ ④ 号那条口径出口**不许再出现**
+    assert "nJc" not in block, "看板又数起了「集采待确认」（该待办已撤）"
     # ⛔ **已撤页的数据源不许长回来**（`DFs` 是 m12 的留痕残留、恒空 ⇒ 拿它当"待核对"就是谎报）
     assert "DFs" not in block, "看板又读起了 `DFs`（那是已撤的 `m12` 的残片，恒空）"
     assert "待核对" not in block, "看板又写起了「差异待核对」（该状态已无载体）"
     # 两项都**在**（⛔ 不隐藏）
     calls = _calls(block)
-    assert "jcPending" in calls and "dfPending" in calls
+    assert "dfPending" in calls
+    assert "jcPending" not in calls, "看板的「集采待确认」瓦片已撤（TAIL-97）"
 
 
 # ----------------------------------------------------------------- 001-10
@@ -326,4 +328,4 @@ def test_旧看板渲染层不得复活():
     """
     home_dir = Path(__file__).resolve().parents[1] / "app" / "home"
     assert not (home_dir / "view.py").exists(), "旧看板渲染页 `view.py` 又回来了"
-    assert not (home_dir / "domain.py").exists(), "旧看板的 9 项口径出口 `domain.py` 又回来了"
+    assert not (home_dir / "domain.py").exists(), "旧看板的 8 项口径出口 `domain.py` 又回来了"

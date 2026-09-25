@@ -74,7 +74,7 @@ def test_先同步常用项目再匹配_否则会把该纳管的判成不需要(
         # ② 匹配上的落了库、匹配的**没落**
         assert R.one_by_no(s, "__自检_F_1__") is not None, "匹配上 ⇒ 必须落库"
         assert R.one_by_no(s, "__自检_F_2__") is None, "匹配不上 ⇒ **不落库**（= 不需要）"
-        assert R.one_by_no(s, "__自检_F_1__").tag == "待确认", "抓取落的默认「待确认」"
+        assert R.one_by_no(s, "__自检_F_1__").tag == "纳入台账", "抓取落的默认「纳入台账」（`TAIL-97`）"
         s.rollback()
 
 
