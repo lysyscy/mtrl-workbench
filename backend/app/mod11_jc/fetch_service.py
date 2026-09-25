@@ -194,6 +194,10 @@ def run_fetch(
                 else:
                     rows = fetch(client)
                 dropped = int(getattr(fetcher, "last_unapproved", 0) or 0)
+                # ⭐⭐ `TAIL-96` **集采剔除名单**：不要的**项目** ⇒ 抓取时先剔除
+                #    （用户 2026-09-25 裁定；付款与集采**各一份名单**，⛔ 不共用）
+                #    ⛔ 禁静默：剔除多少条、都是谁 ⇒ 回执 `ignored` ＋ 执行记录 `jc_ignored`。
+                rows, ignored_rows = split_ignored(s, rows)
                 # ⭐⭐ **补材料名**（`M5-6`）：i8 **列表接口没有材料字段**（88 个字段全查过）
                 #    ⇒ 只能**逐条问详情**（`GetCntMInfoFirst` → `Data.Grid.results[0].ItemName`）。
                 #    ⚠️⚠️ **只补「库里还没有的」** —— 这是这件事能用的前提：
@@ -273,6 +277,12 @@ def run_fetch(
                          "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
                          "kind": r.get("unsettled_kind")}
                         for r in m["unmatched"][:200]       # 截断保护：回执不该被几千条撑爆
+                    ],
+                    # ⭐ `TAIL-96`：被名单剔除的（同样截断保护）
+                    jc_ignored=[
+                        {"contract_no": str(r.get("contract_no") or ""),
+                         "project_name": str(r.get("project_name") or "")}
+                        for r in ignored_rows[:200]
                     ])},
         operator=operator, started_at=t0)
     return {
@@ -284,6 +294,8 @@ def run_fetch(
         # ⭐ `M5-6b`：这一次**新遇到的甲方单位**（已落成"未指定"）—— ⛔ 必须报出来让人去指定，
         #    否则它们的金额会按"正常"落 `contract_amt`（可逆，但**不指定就一直不对**）。
         "new_parties": new_parties,
+        # ⭐ `TAIL-96`：被剔除名单挡下的（⛔ 不静默 —— 得让人看见"哪些项目被当成不要的了"）
+        "ignored": len(ignored_rows), "ignored_projects": _tally(ignored_rows, "project_name"),
         "matched": len(m["matched"]), "unmatched": len(m["unmatched"]), "multi": m["multi"],
         # ⭐ `TAIL-92`：没落库的按**归属类别**分开报（⛔ 禁静默 —— 得让人看出"卡在哪一步"）：
         #    `needs_keyword` = 壳认出来了、但单据名里没有该壳下任何小微的关键词（**最常见**，要人去指认/补词）
@@ -306,3 +318,21 @@ def run_fetch(
 
 __all__ = ["TABLE", "CONFIRM_TOKEN", "KICK_WARNING",
            "match_projects", "default_loaders", "run_fetch"]
+
+
+def split_ignored(s: Session, rows: list) -> tuple:
+    """把命中**剔除名单**的行从 `rows` 里摘出来 ⇒ `(要保留的行, 被剔除的行)`（`TAIL-96`）。
+
+    ⭐ 命中口径 = **归一化全名相等**（与 `resolve_ownership` 同函数）⇒ 名单里写人看的全名就行；
+    ⚠️ 名单为空 ⇒ **原样返回**（与加名单之前**逐字节一致** —— 防回归，也是判据之一）。
+    """
+    names = R.ignored_names(s)
+    if not names:
+        return rows, []
+    from app.mod01_projects.domain import norm_full_name
+    keep: list = []
+    out: list = []
+    for row in rows or ():
+        key = norm_full_name(str(row.get("project_name") or ""))
+        (out if key and key in names else keep).append(row)
+    return keep, out

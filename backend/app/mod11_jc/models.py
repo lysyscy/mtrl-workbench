@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -206,3 +206,22 @@ __all__ = [
     "KIND_PARTY_NORMAL", "KIND_PARTY_TRADE", "KIND_PARTY_UNKNOWN",
     "PARTY_KINDS", "PARTY_KIND_NAMES",
 ]
+
+
+class JcIgnoreProject(Base):
+    """集采**剔除名单**（`TAIL-96`）：这些**项目**的合同我不要 ⇒ 抓取时先剔除（既不落库、也不再报未落库）。
+
+    ⭐ 与付款侧**各一份、⛔ 不共用**（用户 2026-09-25 裁定）。
+    ⚠️ 命中口径 = `name_full` **归一化后相等**（与 `resolve_ownership` 同一个归一化函数
+       `app.mod01_projects.domain.norm_full_name`）⇒ 名单里存人看的全名即可。
+    ⚠️ `active=False` = 停用（**保留记录**，⛔ 不物理删 —— 免得"这条为什么没了"无从追溯）。
+    """
+
+    __tablename__ = "jc_ignore_project"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_full: Mapped[str] = mapped_column(String(512), index=True, default="")
+    reason: Mapped[str] = mapped_column(String(255), default="")
+    operator: Mapped[str] = mapped_column(String(64), default="")
+    active: Mapped[bool] = mapped_column(Boolean, index=True, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
