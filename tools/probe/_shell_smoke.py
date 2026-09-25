@@ -534,6 +534,25 @@ def main() -> int:
         #            免得删除失败时**误删真规则**。
         page.click('[data-k="m14"]')
         page.wait_for_timeout(800)
+        # ⭐ `TAIL-96`：集采剔除名单卡的**点击链路真点一次**（零残留 —— 见设计件 §四）。
+        m14j = page.evaluate("""async () => {
+            await reloadM14(); render();
+            const b = document.querySelector('#view [data-act="jciAdd"]');
+            const i = document.querySelector('#jciName');
+            if (!b || !i) return {why: '看不到「加入剔除名单」输入行'};
+            const n0 = (window.JCI_ALL || []).length;
+            i.value = ''; b.click(); await new Promise(r => setTimeout(r, 500));
+            return {api: [typeof API.m14JcIgnoreAdd, typeof API.m14JcIgnoreSet], n0: n0,
+                    n1: (window.JCI_ALL || []).length,
+                    said: document.body.innerText.includes('项目全名不能为空')};
+        }""")
+        jok = (m14j.get('api') == ['function', 'function'] and m14j.get('n0') == m14j.get('n1')
+               and m14j.get('said'))
+        print(("  ✅ " if jok else "  ⛔ ") + f"⑫c 集采剔除名单卡：加入按钮**真点**⇒空名早退"
+              f"（名单 {m14j.get('n0')} → {m14j.get('n1')} 条 · 回执={m14j.get('said')}）")
+        if not jok:
+            errors.append("m14 集采剔除名单卡自检未通过：" + str(m14j))
+
         m14 = page.evaluate("""async () => {
             const rulesBe = async () => (await (await fetch('/api/m14/rules')).json());
             const be0 = await rulesBe();
