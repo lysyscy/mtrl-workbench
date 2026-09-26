@@ -243,16 +243,21 @@ def run_fetch(
         return {"ok": False, "degraded": True, "message": notice["message"],
                 "excel_import_available": True, "run_record_id": getattr(run, "id", None)}
 
-    # ⭐ **再匹配**（档案已被上一步补过）
-    m = match_projects(rows, all_projects(s))
-
     # ⭐⭐ **甲方单位归类**（`M5-6b` · 用户 2026-09-20 口径）—— 落库前必须先有它：
     #    `upsert_fetched_contracts` 靠 `row["party_kind"]` 决定**金额落哪一列**。
     #    ⚠️ **没见过的甲方先落 `unknown` 等人指定**（⛔ 不静默当成"正常"），并**在回执里报出来**。
+    # ⚠️⚠️ **必须排在 `match_projects` 之前**（2026-09-26 用户报障「抓取后那批合同还是没变」的**真因**）：
+    #    `match_projects` 返回的是 **`{**row, project_id}` 造出来的新 dict** ⇒ 在它**之后**才打的
+    #    `party_kind` 只落在**原 `rows`** 上，**副本里没有** ⇒ 落库看到的是 `unknown`
+    #    ⇒ **永远走"正常甲方"分支** ⇒ 贸易公司合同的 i8 价被写进「合同金额」、贸易两列永远空
+    #    （分类表里明明标着 `trade` —— 用户看到的就是这个）。
     new_parties = R.ensure_party_kinds(s, [str(r.get("party_name") or "") for r in rows])
     _kmap = R.party_kind_map(s)
     for _r in rows:
         _r["party_kind"] = _kmap.get(str(_r.get("party_name") or "").strip(), KIND_PARTY_UNKNOWN)
+
+    # ⭐ **再匹配**（档案已被上一步补过）——⚠️ 这一步会**复制**行 dict ⇒ 所以它必须在**上面那段之后**
+    m = match_projects(rows, all_projects(s))
 
     # ⭐ 分开落库：一张合同必有项目（§6.4.1）⇒ 只落**匹配上**的；匹配不上 = i8 常用列表里也没有 = 不需要
     stats = {"inserted": 0, "refreshed": 0, "skipped": 0}

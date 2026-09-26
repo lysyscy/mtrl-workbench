@@ -60,6 +60,49 @@ def test_正常甲方_i8的价落contract_amt():
 
 
 @acc()
+def test_抓取链路_分类要在匹配之前打上():
+    """⭐⭐ 2026-09-26（用户报障「全量抓取后那批贸易公司合同还是没变」）—— **真 bug · 本片最贵的一条**：
+
+    `fetch_service.run_fetch` 里原先**先** `m = match_projects(rows, …)`、**之后**才给 `rows` 打
+    `party_kind`；而 `match_projects` 返回的是 **`{**row, project_id}` 造出来的新 dict**
+    ⇒ **副本里没有 `party_kind`** ⇒ `upsert_fetched_contracts` 看到 `unknown`
+    ⇒ **永远走"正常甲方"分支** ⇒ 贸易公司合同的 i8 价**每次都被写进「合同金额」**、贸易两列**永远空**
+    （用户现场：分类表里明明标着 `trade`；我的探针直接调落库却是对的 —— 差别就在这一段的**装配顺序**）。
+
+    ⚠️ **能证伪**：把 `party_kind` 的赋值挪到 `match_projects` **之后** ⇒ 本条必红。
+    """
+    import inspect
+
+    from app.mod11_jc import fetch_service as FS
+
+    src = inspect.getsource(FS.run_fetch)
+    assert src.index('"party_kind"') < src.index("match_projects("), (
+        "`party_kind` 必须在 `match_projects` **之前**打上 —— 那个函数返回的是 `{**row, project_id}` "
+        "**新造的 dict**，之后打的分类只落在原 `rows` 上、**副本里没有** ⇒ 落库一律当 `unknown`")
+
+    with session_scope() as s:                        # 行为面：照**真实序列**（匹配 → 打分类 → 落库）走一遍
+        p = _proj(s)
+        R.set_party_kind(s, "自检链路贸易", KIND_PARTY_TRADE)
+        no = "__自检_LINK_001__"
+        rows = [{"contract_no": no, "project_name": str(p.name_full), "sign_date": "2025-11-14",
+                 "supplier_name": "自检供应商", "material_name": "电缆桥架",
+                 "contract_amt": Decimal("40124.09"), "party_name": "自检链路贸易",
+                 "bill_name": "自检单据", "remark": "", "fields": {"BillName": "自检单据"}}]
+        m = FS.match_projects(rows, FS.all_projects(s))
+        assert len(m["matched"]) == 1, f"自检行没匹配上项目：{m}"
+        kmap = R.party_kind_map(s)
+        for _r in m["matched"]:                       # ⚠️ 对**副本**打分类（`run_fetch` 现在做的就是这件事）
+            _r["party_kind"] = kmap.get(str(_r.get("party_name") or "").strip(), "unknown")
+        R.upsert_fetched_contracts(s, project_id=int(p.id), rows=m["matched"])
+        cur = R.one_by_no(s, no)
+        assert Decimal(str(cur.trade_contract_amt)) == Decimal("40124.09"), (
+            "贸易公司合同：i8 的价要落「贸易公司合同金额」—— 落进「合同金额」就是本次报障的症状")
+        assert cur.trade_co == "自检链路贸易", "贸易公司名 = 甲方单位名"
+        assert Decimal(str(cur.contract_amt)) == Decimal("0"), "供应商价留空等人从 Excel 补"
+        s.rollback()
+
+
+@acc()
 def test_贸易公司甲方_i8的价落trade_contract_amt且不碰contract_amt():
     """⭐⭐ **本片的核心**：贸易公司甲方 ⇒ i8 的价是**贸易公司的价** ⇒ 落 `trade_contract_amt`；
     而 `contract_amt`（**锚点** · 真供应商价）要留给人从 Excel 供应商线补 ⇒ **抓取绝不碰它**。
