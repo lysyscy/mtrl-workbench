@@ -56,6 +56,29 @@ def _probe(page, key: str) -> dict:
     }""", key)
 
 
+def _mk_xlsx(path) -> tuple[int, str]:
+    """造一份**最小可解析**的 xlsx 供真上传用 —— 表头**照域契约生成**（⛔ 不手抄列名）。
+
+    ⚠️ 为什么必须照契约造：`m06_proc` 的契约里**没有机械 6 列**（口径：机械全段手录）⇒
+       手抄一份"以为该有的表头"就会造出一份系统**不认**的表，然后误判成"导入坏了"。
+    ⚠️ 为什么**在探针里现造**而不是提交一份二进制 fixture：二进制进库 = 又一个"看不见内容"的
+       真源（本仓忌）；而现造的成本就是 openpyxl 写两行。
+    返回 `(列数, 域号)`。
+    """
+    from openpyxl import Workbook
+
+    from app.mod06_proc import imp_spec as I06
+
+    fields = list(I06.FIELDS)
+    wb = Workbook()
+    ws = wb.active
+    ws.append([f.label for f in fields])                       # 表头 = 契约标签
+    #: 「核算月」给个能认的年月，其余给 0（② 阶段只认表头 ⇒ 值不影响"列映射出不出来"）
+    ws.append(["2026-01" if f.key == "ym" else 0 for f in fields])
+    wb.save(str(path))
+    return len(fields), I06.DOMAIN
+
+
 def check(page, errors: list[str]) -> None:
     """⑳ 真机走一遍：四页 **渲染 ＋ 无死控件 ＋ 内容是后端的**。"""
     from app.core.app_settings import SPECS
@@ -107,6 +130,33 @@ def check(page, errors: list[str]) -> None:
                               "（`change` 事件被静默丢弃 —— `#2` 拆名单拆坏了）")
             page.select_option('[data-act="impDomain"]', cur)      # 复位，别影响后面的对账
             page.wait_for_timeout(600)
+
+        # ①′ ⭐ **`② 列映射` 的真机证据**（2026-09-26 补）：**真上传一份表 ⇒ 解析 ⇒ ② 必须出来**。
+        #    ⚠️ 这一屏（还有 ③ 预览）**只有真上传才有** —— 离线断言、源码断言都看不见它；
+        #       而"上传 → 认表头 → 给映射建议"正是这条通用面最核心的一段。
+        stage = "真上传并解析"
+        fx = Path(__file__).resolve().parents[2] / ".workbuddy" / "scratch" / "imp_smoke_m06.xlsx"
+        n_cols, dm = _mk_xlsx(fx)
+        page.select_option('[data-act="impDomain"]', dm)
+        page.wait_for_timeout(700)
+        page.set_input_files('[data-act="impPick"]', str(fx))
+        page.wait_for_timeout(500)
+        page.click('[data-act="impParse"]')                # 「解析并预览」是 `<button>` ⇒ click 委托
+        page.wait_for_timeout(2500)
+        got2 = page.evaluate("""() => {
+            const v = document.querySelector('#view');
+            const sel = [...v.querySelectorAll('[data-act="impMap"]')];
+            return {maps: sel.length, n: v.querySelectorAll('table').length,
+                    which: (v.innerText.match(/②[^\\n]{0,20}/) || [''])[0],
+                    tip: ((v.querySelector('.tip') || {}).innerText || '').slice(0, 90)};
+        }""")
+        print(f"①′ 真上传解析 = {got2}（表头 {n_cols} 列 · 域 {dm}）")
+        ok_parse = got2["maps"] >= 1
+        print(("  ✅ " if ok_parse else "  ⛔ ")
+              + f"⑳ 真上传一份表 ⇒ 解析出「② 列映射」（{got2['maps']} 个源列 · 表格 {got2['n']} 张）")
+        if not ok_parse:
+            errors.append("四个暂留件收口自检未通过：真上传后 ② 列映射没出来"
+                          f"（表头 {n_cols} 列 · 域 {dm} · 页面提示：{got2.get('tip') or got2.get('which')}）")
 
         # ③ 内容是后端的（⛔ 壳里另抄一份 = 两处副本必漂）
         stage = "与后端对账"
