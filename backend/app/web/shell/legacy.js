@@ -349,10 +349,17 @@ V.imp = () => {
           const k = kindOf(c);
           /* ⭐⭐ 2026-09-26 用户裁定：「**不参与的就不要给下拉选项了**」——
              导入既然不用它，给个"能点但点了没用"的下拉＝**误导**（守则 §4 相似元素不制造歧义 ·
-             §5.5 不能点的要置灰或隐藏）⇒ 这一类（含"按口径不采"的列）直接显示**去向标签**、
-             ⛔ 不给 `<select>`。⚠️ 要映射的列**必须照旧有** `data-act="impMap"`（判据与真机都认它）。 */
+             §5.5 不能点的要置灰或隐藏）⇒ 这一类（含"按口径不采"的列）**默认只显示去向标签**。
+             ⭐ 同轮补的**退路**（用户选了 B 案）：标签旁边挂一个「改」——**点开才展开下拉**，
+             这样"平时不误导"与"认错了还能纠"两头都占（用 `<details>` 实现 ⇒ ⛔ 不需要额外 JS 状态）。
+             ⚠️ 要映射的列**必须照旧有** `data-act="impMap"`（判据与真机都认它）—— 这里的下拉也在，
+             只是**折叠着**（`details` 收起来时不可见）。 */
           if (c.ignored || k === '不参与') {
-            return `<span class="tag t-in" title="${esc(whatOf(c))}">不参与</span>`;
+            return `<details style="display:inline-block;max-width:100%">`
+                 + `<summary class="sm" style="cursor:pointer" title="${esc(whatOf(c))}">`
+                 + `<span class="mut">不参与</span> <span class="tag t-in">改</span></summary>`
+                 + `<select class="inp" style="width:100%;margin-top:4px" data-act="impMap"`
+                 + ` data-src="${esc(c.src)}">${optsOf(c)}</select></details>`;
           }
           return `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`;
         })}
