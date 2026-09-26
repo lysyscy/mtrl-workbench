@@ -302,6 +302,11 @@ V.imp = () => {
   </div></div>`;
 
   /* ---- ② 列映射 ---- */
+  /* ⭐⭐ **版式 = 一列一张卡**（源列**横着铺**）；⛔ 不再是"一行一个源列"的表格。
+     ⚠️ 用户 2026-09-26 第二次指出（原话）：「列映射就要以（**列**）的样子显示，现在还是（**行**）的样子」。
+        上一轮我把「弄成行」误读成"弄成一行文字"（只改了措辞、版式没动）⇒ **记号**：
+        **他说「行 / 列」指的是版式**，⛔ 别再当文字行数解。
+     ⚠️ 判据与真机证据都按这两个属性找，⛔ 不许改：`<select data-act="impMap" data-src="…">`。 */
   let mapCard = '';
   if (IMP.cols.length) {
     const optsOf = (c) => {
@@ -311,29 +316,37 @@ V.imp = () => {
       return `<option value=""${cur ? '' : ' selected'}>${esc(IMP_IGNORE)}</option>` + fields;
     };
     const badge = (c) => {
-      if (c.field && c.level === 'auto') return `<span class="tag t-ok">自动 ${Number(c.conf).toFixed(2)}</span>`;
+      /* ⚠️ 「自动」那一档**不带数字**（用户《前端设计规则》§6：置信度只在"要人判断"时才有意义）；
+         「需确认」才给分 —— 那才是他真要看的。 */
+      if (c.field && c.level === 'auto') return '<span class="tag t-ok">自动</span>';
       if (c.field) return `<span class="tag t-wn">需确认 ${Number(c.conf).toFixed(2)}</span>`;
-      if (c.ignored) return `<span class="tag t-in">不导入</span>`;
-      return `<span class="tag t-dg">认不出</span>`;
+      if (c.ignored) return '<span class="tag t-in">不导入</span>';
+      return '<span class="tag t-dg">认不出</span>';
     };
-    const rows = IMP.cols.map(c => `<tr>
-      <td class="now">${esc(c.src)}</td>
-      <td class="mut sm">${esc(c.profile || '')}</td>
-      <td class="mut sm">${esc((c.samples || []).join(' / ')).slice(0, 60)}</td>
-      <td class="ctr">→</td>
-      <td><select class="inp" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select></td>
-      <td class="now">${badge(c)}${c.ignored ? `<div class="mut sm">${esc(c.ignored)}</div>` : ''}</td>
-      <td class="mut sm">${c.field ? esc(c.why || '') : ''}</td></tr>`).join('');
+    /* ⚠️ 域声明了 `ignored` 的列（认得、但按口径**不导入**）**不进映射网格**：它们不需要人选
+       （域已定死），混在网格里会把"要人做决定的列"淹掉（用户 2026-09-26 口径）。
+       ⚠️ 而**认不出**的列要**留在网格里**（它们正等人点下拉）。 */
+    const toMap = IMP.cols.filter(c => !c.ignored);
+    const skipped = IMP.cols.filter(c => c.ignored);
+    const card = (c) => `<div style="border:1px solid var(--bd);border-radius:var(--r);padding:9px 10px;
+        background:var(--sf2);display:flex;flex-direction:column;gap:7px">
+      <div style="font-weight:600">${esc(c.src)}</div>
+      <div class="mut sm" style="min-height:14px">${esc([c.profile, (c.samples || []).join(' / ')]
+        .filter(Boolean).join(' · ')).slice(0, 70)}</div>
+      <div><select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select></div>
+      <div>${badge(c)}</div>
+      ${c.field && c.why ? `<div class="mut sm">${esc(c.why)}</div>` : ''}</div>`;
     mapCard = `<div class="card" style="margin-top:12px"><h4>列映射<span class="sp"><span class="mut sm">
-      系统只给建议 —— 决定权在这张表</span></span></h4><div class="tw"><table class="dt sm">
-      <thead><tr><th>源列（原文）</th><th>画像</th><th>样本值</th><th></th><th>目标字段</th><th>建议</th><th>依据</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
+      一列一张卡 · 系统只给建议，决定权在你</span></span></h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:9px">${toMap.map(card).join('')}</div>
+      ${skipped.length ? `<div class="tip" style="margin-top:10px"><b>这几列不导入</b>（原样保留，不需要你选）：
+        ${skipped.map(c => `<div class="sm">· ${esc(c.src)} —— ${esc(c.ignored)}</div>`).join('')}</div>` : ''}
       <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:10px">${lack.length
         ? `还差必填字段：<b>${esc(lack.join(' / '))}</b> —— 选好才能到下一步（⛔ 系统不替你填默认值）`
         : '必填都齐了，可以往下走'}</div>
       <div style="margin-top:10px">
         <button class="btn pri" data-act="impPreview"${lack.length ? ' disabled' : ''}>③ 预览校验（不写库）</button>
-        <button class="btn" data-act="impReset">重来</button></div></div></div>`;
+        <button class="btn" data-act="impReset">重来</button></div></div>`;
   }
 
   /* ---- ③ 预览校验 ---- */
