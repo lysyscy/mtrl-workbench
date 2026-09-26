@@ -73,7 +73,7 @@ def main() -> int:
     cases = [
         # (说明, 靶件, 改坏方式, 要跑的检查, 判据串)
         ("M1 `_smoke`：`CHG` 少登记一个**表单元素动作**（change 会被静默丢弃）", PROTO,
-         ("replace", b"'plRowSet'", b"'plRowSet_MUT'"), "_smoke.js", ("plRowSet", "CHG")),
+         ("replace", b"/* \xe2\x9b\x94 `#2`", b"const CHG=[];\n/* \xe2\x9b\x94 `#2`"), "_smoke.js", ("plRowSet", "CHG")),
         ("M2 `_doccheck`：文档里写**错的计数**（设计规则条数 ≠ 主人实时值）", DOC,
          ("append", "\n\n（变异靶：可复用设计规则 99 条）\n", None), "_doccheck.js", ("设计规则条数",)),
         ("M3 `_links`：文档里出现**不存在的路径引用**（断链）", DOC,

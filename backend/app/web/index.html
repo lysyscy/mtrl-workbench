@@ -558,7 +558,7 @@ let BIGVAL = {};   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/big` �
         取数回来时它早已定死成空（**静默失去默认项目**，不报错）⇒ 改由后端回包的 `project` 落定
         （后端 `service._resolve` 已把"没给 / 给了无效值"归一成候选第一个；候选为空时才是空串）。 */
 let awfYm = bjMonth(-1);                       /* 默认 = 北京时间上月（§9.2，与后端 `domain.default_ym` 同口径） */
-let awfPj = '', awfPjOpen = false;
+let awfPj = '';
 /* ⚠️ 下面这些**只能由 `reloadM09()` 落定** —— `PJs` 是**异步填充**的，
    若仍写成加载时求值（`const x = f(异步变量)`），取数回来时它早已定死成空（**静默空表 / 静默失去候选**，不报错）。 */
 let AWF_ROWS = [];        /* 手填项（后端 `manuals`）：`[{index,id,item,amount,…}]` */
@@ -1263,7 +1263,7 @@ const monthEnd=m=>{const [y,mm]=m.split('-').map(Number); return m+'-'+String(ne
    替代原生 input[type=month]（原生只支持滚轮/逐月翻，太慢）。
    全前端凡需「选时间」处一律用 tmBtn(id,{scope,val,modes}) 渲染，由 mpToggle/mpYear/mpMode/mpWQ/mpPick 驱动。 */
 let mp={open:null,year:2026,mode:'',a:'',b:'',wq:''};
-let pjOpen=false;
+/* 展开态在 `PJ_OPEN`（key='pj' · `#1` 2026-09-26 收口） */
 /* ⭐ 通用「时间选择器」组件（2026-09-13 重做；替掉原 `mpBtn` / `mpPanel`）
    原版缺陷：「全部月份」写在组件内部、按 `scope==='nt'` 现判 ⇒ 只有付款通知书有
    ⇒ **组件一份、能力却是散的**（违反 §八 准则 1「同一个事实只写一处」）。
@@ -1505,13 +1505,35 @@ const JC_PROJ_LIST=()=>pjSort(uniqBy(JCs,j=>j.proj));
    ⭐ `single` 是**由调用点声明**的能力开关（与 `tmBtn` 的 `modes` 同一套思路）：
       单选时渲染 `radio`（不是 checkbox）、**不渲染「全选 / 清空」**（多选才需要），
       并且**面板内不出现 `scope===xxx` 之类的分支**。
+   ⭐⭐ **单选 ⇒ 点一下就收**（2026-09-26 用户提问：「单选模式时，我点击想要的项目后也要**自动关闭**吧？
+      这个规则**通用模块里设计了么**？」）：**规则在，但它不在共用件里自动做** ——
+      `projPanel` 只渲染 `radio` ＋ `data-act="${c.pickAct}"`，而"收起哪一个展开态"**只有调用点知道**
+      ⇒ 所以它写成**契约**：**凡 `single:true` 的调用点，`pickAct` 的动作里必须收起自己那个展开态**
+      （6 个单选调用点都写了 `XxxPjOpen=false`）。⛔ 漏写 = 点完不收，与其他面板不一致。
+      ⚠️ 这条**有机器判据**：`backend/tests/test_proj_panel.py`（扫全壳的 `single:true` 调用点逐个查）
+      ⇒ 将来新加第 7 个面板漏写会**当场红**（不再靠自觉）。
    选中值一律走 `data-pj`（含义 = 该面板的筛选键 = **仓库名**）。 */
 const PROJ_META_KEY=v=>{ const p=pjRowOf(v);
   return { nm:p?pjDisp(p):'未建档', warn:!p, arc:arcOf(p), title:'仓库名：'+v }; };
 const PROJ_META_FULL=v=>{ const m=projMatches(v);
   return { nm:m.length===1?pjDisp(m[0]):(m.length>1?`${m.length-1} 个小微（同一壳）`:'未建档'),
            warn:m.length!==1, arc:arcOfFull(v), title:'项目全名：'+v }; };
+/* ⭐⭐ **浮层面板展开态的唯一主人**（`#1` · 2026-09-26 用户裁定：
+   「写在通用模块里，不必靠每个模块设计的时候自觉」）。
+   ⛔ 调用点**不再各持一个 `let XxxPjOpen`** —— 全部走 `PJ_OPEN[key]`（key 由面板的 `pickAct` 派生）。
+   ⭐ 三条自动行为（一个名字都不用登记 —— 原先那份"13 个名字逐个登记"的名单**整个消失**）：
+     ① 点面板里的 `radio` ⇒ **选中后自动收起**（委托层做；多选面板渲染的是 `checkbox` ⇒ 天然不收）；
+     ② 点 `.pjwrap` 之外 ⇒ 委托层**遍历注册表全关**；
+     ③ 触发按钮 ⇒ `pjToggle(key)`。
+   ⚠️ 2026-09-26 两次现场都出在"名单/自觉"上：漏登记 `IMP.pjIsOpen('pj')` ⇒ 用户报障「展开后关不掉」；
+      单选点完要不要自收**根本没有规则**（6 处各写）。 */
+const PJ_OPEN = {};
+const pjIsOpen = k => !!PJ_OPEN[String(k)];
+const pjToggle = k => { const s = String(k); PJ_OPEN[s] = !PJ_OPEN[s]; render(); };
+const pjClose = k => { const s = String(k); if (PJ_OPEN[s]) { PJ_OPEN[s] = false; return true; } return false; };
 const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
+  /* ⭐ key **由 `pickAct` 派生**（`ledPjPick` ⇒ `ledPj`）⇒ ⛔ 调用点不用传、也不会漏传。 */
+  const pk=String(c.pickAct||'').replace(/Pick$/,'');
   return `<div style="position:absolute;z-index:80;top:calc(100% + 5px);left:0;width:max-content;min-width:178px;max-width:340px;max-height:264px;overflow-y:auto;overflow-x:hidden;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:5px">
   <div style="display:flex;gap:6px;align-items:center;padding:2px 4px 6px">
     ${single?'':`<button class="btn sm" data-act="${c.allAct}">全选</button><button class="btn sm" data-act="${c.noneAct}">清空</button>`}
@@ -1519,7 +1541,7 @@ const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
   </div>
   ${c.list().map(v=>{const on=c.selected().includes(v), mt=meta(v);
     return `<label title="${esc(mt.title)}" style="display:flex;gap:7px;align-items:center;padding:5px 6px;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap">
-      <input type="${single?'radio':'checkbox'}"${single?' name="projPanelSingle"':''} class="chk" style="flex:0 0 auto" data-act="${c.pickAct}" data-pj="${esc(v)}" ${on?'checked':''}>
+      <input type="${single?'radio':'checkbox'}"${single?' name="projPanelSingle"':''} class="chk" style="flex:0 0 auto" data-act="${c.pickAct}" data-pj="${esc(v)}" data-pj-key="${pk}" ${on?'checked':''}>
       <span${mt.warn?' style="color:var(--wn-d)"':''}>${esc(mt.nm)}</span>${mt.arc?' '+arcTag():''}</label>`}).join('')}
 </div>`; };
 const pjPanel=()=>projPanel({list:PROJ_LIST,selected:()=>fNt.projs,allAct:'pjAll',noneAct:'pjNone',pickAct:'pjPick',meta:PROJ_META_KEY});
@@ -2046,7 +2068,7 @@ V.m03=()=>{
       <div class="fi"><label>对应单据日期（闭区间）</label><input class="inp" readonly style="width:198px" value="${esc(tmRange(fNt.month))}" title="按单据日期起止筛选，闭区间；抓取按时间全量、不选项目、不分页（§4.2.1）"></div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
         <button class="btn" data-act="pjToggle" style="min-width:126px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${fNt.projs.length?`已选 ${fNt.projs.length} 个`:'全部项目'}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${pjOpen?pjPanel():''}</div>
+        ${pjIsOpen('pj')?pjPanel():''}</div>
       <div class="fi"><label>分类</label><select class="inp" id="fCat" data-act="filterNt">${optsOf(['全部'].concat(enumVals('cat'),['剔除']),fNt.cat)}</select></div>
       <div class="fi"><label>审批状态</label><select class="inp" id="fAstat" data-act="filterNt">${enumOpts('astat',fNt.astat,1)}</select></div>
       <div class="fi"><label>付款状态</label><select class="inp" id="fStat" data-act="filterNt">${enumOpts('payState',fNt.stat,1)}</select></div>
@@ -2072,7 +2094,7 @@ BIND.m03=()=>{ const box=$('#pickAllBox'); if(!box) return;
    ⚠️ 复位一律【原地改字段 / 清空】，不要整体重新赋值 —— 外部（自检）持有的是对象引用。 */
 let plf={ym:bjMonth(),projs:[],review:'全部'};
 let plPick=new Set();
-let plPjOpen=false;
+/* 展开态在 `PJ_OPEN`（key='plPj'） */
 let plImportM=bjMonth();          /* 「导入付款计划」弹窗里选定的年月（导入后本批数据全归该月） */
 /* ---------- 「按付款计划勾选」的生效窗口（2026-09-12 定案） ----------
    用户口径：**付款计划每月 10 号生效 → 月末**（§4.3.2：8 号前上报 / 8 号前审核 / 临近 10 号整理 /
@@ -2212,7 +2234,7 @@ V.m04=()=>{
       <div class="fi"><label>单据年月</label>${tmBtn('plMonth',{scope:'pl',val:plf.ym,label:tmLabel(plf.ym),modes:['月','跨月','年','全部']})}</div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
         <button class="btn" data-act="plPjToggle" style="min-width:126px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${plf.projs.length?`已选 ${plf.projs.length} 个`:'全部项目'}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${plPjOpen?plPjPanel():''}</div>
+        ${pjIsOpen('plPj')?plPjPanel():''}</div>
       <div class="fi"><label>审查结果</label><select class="inp" id="plReview" data-act="plFilter">${optsOf(enumVals('plRevF'),plf.review)}</select></div>
       <button class="btn" data-act="plFilterReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(plf.ym)} 共 <b>${scoped.length}</b> 条</span>
@@ -2294,7 +2316,7 @@ const LG_R_DEF='系统上线前已发生，无付款通知书';
 let lgD={s:'0.00',p:'0.00',r:LG_R_DEF};
 let lgPjName='';                           /* 展开区里选的**项目键（仓库名）**（打开时默认＝台账当前项目） */
 let lgOn=false;                            /* 增行态开关：展开区是否打开（取代原弹窗的"是否开着"） */
-let lgPjOpen=false;                        /* 展开区里「项目」共用面板是否展开（真实浮层 —— 在 .tw 之外，不会被裁） */
+/* 展开态在 `PJ_OPEN`（key='lgPj'） */                        /* 展开区里「项目」共用面板是否展开（真实浮层 —— 在 .tw 之外，不会被裁） */
 const LEDNOTE={};                          /* { '口径|项目键|月': 文本 } —— 逐月台账备注（手填；不在 §9.3 留痕范围） */
 /* 通知书行的**项目键** = 归属档案行的**仓库名**（§2.7.4）；无归属 / 壳未判定 → ''（落不到任何项目上）。
    `ntProjName` 只在**给人看**时用（展示名）。 */
@@ -2354,7 +2376,7 @@ const ledCur=()=>{ const l=ledProjs(); return l.includes(ledProj)?ledProj:(l[0]|
    候选 = `ledProjs()`（该分类下有数据 / 有期初行的项目，**键 = 仓库名**）；卡内左右两栏共用这一个值。
    ⚠️ 它落在**卡片头**、**不在滚动容器里** ⇒ 浮层面板不会被裁（这正是它可以用面板、
       而**弹窗内**那 3 处只能用原生 `<select>` 的原因）。 */
-let ledPjOpen=false;
+/* 展开态在 `PJ_OPEN`（key='ledPj'） */
 /* —— 「导出逐月欠款台账」的展开区（2026-09-13 用户口径）——
    原先**左右两栏各一个**「导出 Excel」（各导一侧）；现改为**卡头一个入口**：
    点开一条**渲染在 `.tw` 之外**的展开区 → 用**共用面板多选项目**（默认 = 页面当前所选项目）
@@ -2363,7 +2385,7 @@ let ledPjOpen=false;
    ⚠️ **特殊费用月报表不再单独设导出按钮** —— 它作为台账工作簿的第 3 个工作表随台账一起导出。
    ⚠️ 面板必须渲染在 `.tw` 之外（浮层才不被滚动容器裁）—— 展开区放在卡内、`<div class="grid2">` **之前**。 */
 let ledExpOn=false;          /* 导出展开区是否打开 */
-let ledExpPjOpen=false;      /* 其中的「项目」多选面板是否展开 */
+/* 展开态在 `PJ_OPEN`（key='ledExpPj'） */      /* 其中的「项目」多选面板是否展开 */
 let ledExpPjs=[];            /* 导出所选项目（**仓库名**数组；空 = 未选 ⇒ 打开时默认取页面当前项目） */
 const ledPjPanel=()=>projPanel({list:ledProjs,selected:()=>[ledCur()],pickAct:'ledPjPick',meta:PROJ_META_KEY,single:true});
 /* 导出用的「项目」面板 —— **多选**（不走 `single`；面板自带「全选 / 清空」）。候选 = 台账候选（`ledProjs`，**键 = 仓库名**） */
@@ -2373,7 +2395,7 @@ const ledExpStrip=()=>`<div class="fbar" style="margin:0 0 8px;border:1px solid 
       <div class="fi"><span class="pill" style="margin:0" title="导出 = 每个项目一个工作簿，工作簿里 3 个工作表：辅材欠款 / 机械欠款 / 特殊费用月报表">导出欠款台账</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
         <button class="btn" data-act="ledExpPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${ledExpPjs.length?`已选 ${ledExpPjs.length} 个项目`:'请选择项目'}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${ledExpPjOpen?ledExpPjPanel():''}</div>
+        ${pjIsOpen('ledExpPj')?ledExpPjPanel():''}</div>
       <div class="fi" style="margin-left:auto;display:flex;gap:6px">
         <button class="btn sm pri" data-act="ledExpOk" ${ledExpPjs.length?'':'disabled'} title="${ledExpPjs.length?'按所选项目导出（每项目一个工作簿 · 3 个工作表）':'请先选项目'}">导出</button>
         <button class="btn sm" data-act="ledExpCancel">取消</button></div>
@@ -2391,7 +2413,7 @@ const lgStrip=()=>`<div class="fbar" style="margin-bottom:6px;border:1px solid v
       <div class="fi"><span class="pill" style="margin:0" title="期初占位行 = 本栏台账的第 1 行（起点）；保存后按其「分类」并入上方欠款">期初占位行</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         <button class="btn" data-act="lgPjToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(pjLabel(lgPjName))}${pjArcMark(pjRowOf(lgPjName))}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${lgPjOpen?lgPjPanel():''}</div>
+        ${pjIsOpen('lgPj')?lgPjPanel():''}</div>
       <div class="fi"><label>分类</label><select class="inp" style="width:auto" id="lgCat" data-act="lgCat">${['辅材','机械'].map(c=>`<option ${lgCat===c?'selected':''}>${c}</option>`).join('')}</select></div>
       <div class="fi"><label>截止年月</label>${tmBtn('lgCutoff',{scope:'lg',val:lgCut,modes:['月']})}</div>
       <div class="fi"><label>统计结算金额</label><input class="inp num" style="width:118px" id="lgS" data-act="lgS" value="${esc(lgD.s)}"></div>
@@ -2425,7 +2447,7 @@ const flVisible=()=>FLs.filter(f=>tmIn(flf.ym,f.date)&&flHit(f)
    候选 = **流水里出现过的项目**（`flProjs()`，键 = 仓库名，归档排最后由 `pjSort` 处理）；
    ⚠️ 原先这里是自造的**原生 `<select>` 单选** —— 既破坏「统一多选面板」这条复用点，
       又与「全站约定：MOD-09 单选、其余多选」不一致 ⇒ 本次改回共用面板（多选）。 */
-let flPjOpen=false;
+/* 展开态在 `PJ_OPEN`（key='flPj'） */
 /* ⚠️ 候选 = **流水里出现过的项目** ∪ **当前已选的** —— 后者是为了「点付款统计的条目联动」时，
    那种**当前没有任何流水**的项目也能在面板里看到并勾上（否则"已选 N/M"里那个 N 会凭空多出一个、
    面板里却没有对应勾选框 ⇒ 状态与界面脱节）。这条是原「单选下拉」时代的既定行为，**必须保留**。 */
@@ -2583,7 +2605,7 @@ V.m05=()=>{
   <div class="card" style="margin-bottom:12px"><h4>逐月欠款台账<span class="sp" style="flex-wrap:wrap;justify-content:flex-end">
     <span class="pill">第 1 行 = 期初占位行 · 其后每月 1 行（空月也出行）</span>
     <span class="mut sm">两侧共用「项目」</span>
-    <span class="pjwrap" style="position:relative;display:inline-block"><button class="btn" data-act="ledPjToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(pjLabel(lp))}${pjArcMark(pjRowOf(lp))}</span><span class="mut" style="font-size:9px">▼</span></button>${ledPjOpen?ledPjPanel():''}</span>
+    <span class="pjwrap" style="position:relative;display:inline-block"><button class="btn" data-act="ledPjToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(pjLabel(lp))}${pjArcMark(pjRowOf(lp))}</span><span class="mut" style="font-size:9px">▼</span></button>${pjIsOpen('ledPj')?ledPjPanel():''}</span>
     <button class="btn pri" data-act="ledExpToggle" title="按所选项目导出逐月欠款台账：每个项目一个工作簿（工作表 = 辅材欠款 / 机械欠款 / 特殊费用月报表）；多项目打 zip">导出…</button>
   </span></h4>
     <div class="bd"><div class="tip" style="margin:0"><b>口径（§4.5.1）：</b><b>欠款 = 其他支出金额 − 付款</b>，逐月一算，是<b>当月新增欠款</b>（<b>不是累计</b>）。<b>其他支出金额</b>：辅材 = Σ 当月 · 本项目 · 分类=辅材 的<b>统计结算金额</b>；<b>机械 = 派生只读</b>（Σ 该月「外租零租含税 ＋ 外租包月含税」；<b>手填的源头</b>在过程资料机械 6 列，未来若改到机械费台账只需替换 <b>ledSettle</b> 那一行）。<b>付款</b>：两者同构 = Σ 当月 · 本项目 · 同分类 的<b>统计付款金额</b>。归月一律按通知书的<b>单据日期</b>；项目按<b>归属</b>归集。<br><b>第 1 行 = 期初占位行</b>（§4.5.2）：<b>按其「分类」取</b> —— 辅材台账只带辅材的期初行、机械台账只带机械的期初行；它的金额<b>已按分类并入</b>上方「辅材 / 机械」欠款。<br><b>卡内左右两栏</b>＝同一套逻辑、同一个「项目」（选择器在卡头、两栏共用）：<b>左辅材 / 右机械</b>，只有「其他支出金额」的取数不同。</div>
@@ -2625,7 +2647,7 @@ V.m05=()=>{
       <div class="fi"><label>付款年月</label>${tmBtn('flMonth',{scope:'fl',val:flf.ym,label:tmLabel(flf.ym),modes:['月','跨月','年','全部']})}</div>
       <div class="fi pjwrap" style="position:relative"><label>付款项目（可多选）</label>
         <button class="btn" data-act="flPjToggle" style="min-width:128px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${flf.projs.length?`已选 ${flf.projs.length} 个`:'全部项目'}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${flPjOpen?flPjPanel():''}</div>
+        ${pjIsOpen('flPj')?flPjPanel():''}</div>
       <div class="fi"><label>实际付款方式</label><select class="inp" id="flMethod" data-act="flFilter">${['全部',...enumVals('payMethod')].map(v=>`<option${flf.method===v?' selected':''}>${v}</option>`).join('')}</select></div>
       <div class="fi"><label>状态</label><select class="inp" id="flState" data-act="flFilter">${enumOpts('flowState',flf.state,1)}</select></div>
       <div class="fi"><label>关键词</label><span style="display:inline-flex;gap:6px"><input class="inp" id="flQ" value="${esc(flf.q)}" placeholder="流水号 / 单据编码" style="width:150px"><button class="btn" data-act="flSearch" title="点它才搜索 —— 输入不会自动触发（避免打字即筛）">搜索</button></span></div>
@@ -2754,8 +2776,8 @@ const adjOf=iv=>ADs.find(x=>x.ivid===iv.id);
    ⚠️ **必须由 `reloadInv()` 重算**：`IVs` 接后端后是**异步填充**的 —— 若仍写成加载时
       `uniqBy(IVs,…)` 一次性求值，取数回来时它早已定死成空数组（**静默失去候选**，不报错）。 */
 let PROC_PJS=[];
-/* procTab 默认 = 1（**表② 调整后表**）；procPjOpen = 「项目」单选面板的开合（用户口径 2026-09-13） */
-let procPj='', procTab=1, procPjOpen=false;   /* 初值同理由 `reloadInv()` 落定（不能取加载时的 `PROC_PJS[0]`） */
+/* procTab 默认 = 1（**表② 调整后表**）；pjIsOpen('procPj') = 「项目」单选面板的开合（用户口径 2026-09-13） */
+let procPj='', procTab=1;   /* 初值同理由 `reloadInv()` 落定（不能取加载时的 `PROC_PJS[0]`） */
 /* 该项目的**核算月**清单（升序）= 库存单据里出现过的月份 —— 这就是「过程资料 = 每项目每月一份」
    的月份维度。⚠️ 月份**只从库存单据来**，不新立口径。 */
 const procMonths=proj=>[...new Set(IVs.filter(iv=>iv.wh===proj).map(iv=>String(iv.dd).slice(0,7)))].sort();
@@ -2782,13 +2804,13 @@ const procPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>[procPj]
    原按钮只演示一份；现改为：点开展开区 → **多选项目**（默认 = 本页当前所选）→
    选 N 个项目生成 **N 个文件**（每个 = 该项目的过程资料，17 列模板）→ ≥2 个 ⇒ 打成一个 zip。
    ⚠️ 展开区渲染在 `.tw` **之外**（浮层面板才不被裁）。 */
-let procExpOn=false, procExpPjOpen=false, procExpPjs=[];
+let procExpOn=false, procExpPjs=[];
 const procExpPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>procExpPjs,allAct:'procExpPjAll',noneAct:'procExpPjNone',pickAct:'procExpPjPick',meta:PROJ_META_KEY});
 const procExpStrip=()=>`<div class="fbar" style="margin:0 0 8px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);padding:8px 10px">
       <div class="fi"><span class="pill" style="margin:0" title="按 17 列模板导出，每项目一份，报分公司工程科">按模板导出</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
         <button class="btn" data-act="procExpPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${procExpPjs.length?`已选 ${procExpPjs.length} 个项目`:'请选择项目'}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${procExpPjOpen?procExpPjPanel():''}</div>
+        ${pjIsOpen('procExpPj')?procExpPjPanel():''}</div>
       <div class="fi" style="margin-left:auto;display:flex;gap:6px">
         <button class="btn sm pri" data-act="procExpOk" ${procExpPjs.length?'':'disabled'} title="${procExpPjs.length?'按所选项目导出（每项目一份）':'请先选项目'}">导出</button>
         <button class="btn sm" data-act="procExpCancel">取消</button></div>
@@ -2860,7 +2882,7 @@ V.m06=()=>{
     <div class="fbar">
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         <button class="btn" data-act="procPjToggle" style="min-width:210px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(PROJ_META_KEY(procPj).nm)}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${procPjOpen?procPjPanel():''}</div>
+        ${pjIsOpen('procPj')?procPjPanel():''}</div>
       <span class="pill" style="margin-left:auto">17 列 ｜ 每项目每月一份 ｜ 报分公司工程科</span>
     </div>
     ${procExpOn?procExpStrip():''}
@@ -3094,7 +3116,7 @@ V.m07=()=>{
 /* ⭐ 2026-09-13 用户口径：MOD-08 的「**仓库**」筛选改为「**项目**」筛选 —— 走**通用控件**（共用项目面板 `projPanel`，**多选**）；
    另加两块：**每列可筛（Excel 式）** + **表格之外的求和条**（求和值随筛选变动）。
    键仍是**仓库名**（§2.7.4；一个项目只有一个仓库 ⇒ 1:1），显示名走 `PROJ_META_KEY`。 */
-let invWhs=[], invWhOpen=false, fIvCol={}, invColOpen='', invOnlyAdj=false, fIvDir='全部', fIvYm=bjMonth(-1);
+let invWhs=[], fIvCol={}, invColOpen='', invOnlyAdj=false, fIvDir='全部', fIvYm=bjMonth(-1);
 /* ⚠️ 候选 = **库存单据里真实出现过的仓库名**（`PROC_PJS`）——
    原先用演示主数据 `WHs.map(w=>w.name)`：那 8 个演示仓库名与 i8 真名对不上，
    **选了候选也筛不出任何行**（静默失配、不报错）。 */
@@ -3196,7 +3218,7 @@ V.m08=()=>{
       <div class="fi"><label>核算年月</label>${tmBtn('ivMonth',{scope:'iv',val:fIvYm,label:tmLabel(fIvYm),modes:['月','跨月','年','全部']})}</div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         <button class="btn" data-act="invWhToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${invWhs.length?(invWhs.length===1?esc((pjRowOf(invWhs[0])&&pjDisp(pjRowOf(invWhs[0])))||invWhs[0]):`已选 ${invWhs.length} 个`):'全部项目'}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${invWhOpen?invWhPanel():''}</div>
+        ${pjIsOpen('invWh')?invWhPanel():''}</div>
       <div class="fi"><label>出入库方向</label><select class="inp" id="fIvDir" data-act="fIvDir">${enumOpts('ivDir',fIvDir,1)}</select></div>
       <div class="fi"><label>只看被调整行</label><select class="inp" data-act="invOnlyAdj"><option value="0">否</option><option value="1" ${invOnlyAdj?'selected':''}>是</option></select></div>
       <button class="btn" data-act="fIvReset">重置</button>
@@ -3262,7 +3284,7 @@ V.m09=()=>{
     <div class="fbar">
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         <button class="btn" data-act="awfPjToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(PROJ_META_KEY(awfPj).nm)}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${awfPjOpen?awfPjPanel():''}</div>
+        ${pjIsOpen('awfPj')?awfPjPanel():''}</div>
       <div class="fi"><label>核算年月</label>${tmBtn('awfMonth',{scope:'awf',val:awfYm,label:tmLabel(awfYm),modes:['月']})}</div>
       <button class="btn" data-act="awfReset">重置</button>
       <span class="pill" style="margin-left:auto">1 个自动项 ＋ <b>${list.length}</b> 个手填项 ｜ 每项目每月一份 ｜ 报分公司工程科</span>
@@ -3413,7 +3435,7 @@ V.m12=()=>{
       且**不随升降序翻转** ⇒ 要找"待补供应商价"的行（金额为空 = 贸易公司合同还没填）
       ⇒ 排序**够不着**（它们全沉在表格底部）⇒ 只能靠筛选把它们捞出来。 */
 let fJc={tag:'纳入台账',arch:'全部',sup:'',projs:[],amt:''};
-let jcPjOpen=false;                 /* 「项目」多选面板的展开态（第 4 个 projPanel 调用点） */
+/* 展开态在 `PJ_OPEN`（key='jcPj'） */                 /* 「项目」多选面板的展开态（第 4 个 projPanel 调用点） */
 /* 集采三态「批量标记」的勾选集合（§6.5.3）：范围 = **当前筛选结果**，筛选变化时裁剪 */
 let jcPick=new Set();
 /* 「项目」筛选走**通用控件**（= 共用项目面板 `projPanel`，多选、默认全部；2026-09-13 用户口径）——
@@ -3425,14 +3447,14 @@ const jcPjPanel=()=>projPanel({list:JC_PROJ_LIST,selected:()=>fJc.projs,allAct:'
       「发票金额 / 贸易公司发票金额 / 付款金额」= **各自子表合计**、「结算 / 欠款」= 自动算
       ⇒ **一律不出现在新增区**（建档后走各列右侧的「子表」）。 */
 let jcNewOn=false;                 /* 增行态开关（取代原弹窗的"是否开着"） */
-let jcNPjOpen=false;               /* 「项目」共用面板（**单选** —— 第 10 个 `projPanel` 调用点）是否展开 */
+/* 展开态在 `PJ_OPEN`（key='jcNPj'） */               /* 「项目」共用面板（**单选** —— 第 10 个 `projPanel` 调用点）是否展开 */
 let jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',pj:''};
 const jcNPjPanel=()=>projPanel({list:()=>pjKeysOfRows(ntPjList()),selected:()=>[jcND.pj],pickAct:'jcNPjPick',meta:PROJ_META_KEY,single:true});
 const jcNewStrip=()=>`<div class="fbar" style="margin-bottom:6px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);padding:8px 10px">
       <div class="fi"><span class="pill" style="margin:0" title="建一张集采合同主表行（两态默认「纳入台账」，与抓取行一致）">手工新增合同</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         <button class="btn" data-act="jcNPjToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(pjLabel(jcND.pj)||'请选择项目')}${pjArcMark(pjRowOf(jcND.pj))}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${jcNPjOpen?jcNPjPanel():''}</div>
+        ${pjIsOpen('jcNPj')?jcNPjPanel():''}</div>
       <div class="fi"><label>合同日期</label><input class="inp" type="date" id="jcNDate" data-act="jcNSet" data-k="date" value="${esc(jcND.date)}"></div>
       <div class="fi"><label>材料名</label><input class="inp" style="min-width:150px" id="jcNMaterial" data-act="jcNSet" data-k="material" value="${esc(jcND.material)}" placeholder="例：热轧卷板 Q235B"></div>
       <div class="fi"><label>供应商</label><input class="inp" style="min-width:150px" id="jcNSupplier" data-act="jcNSet" data-k="supplier" value="${esc(jcND.supplier)}"></div>
@@ -3485,7 +3507,7 @@ V.m11=()=>{
     <div class="fbar">
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
         <button class="btn" data-act="jcPjToggle" style="min-width:126px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${fJc.projs.length?`已选 ${fJc.projs.length} 个`:'全部项目'}</span><span class="mut" style="font-size:9px">▼</span></button>
-        ${jcPjOpen?jcPjPanel():''}</div>
+        ${pjIsOpen('jcPj')?jcPjPanel():''}</div>
       <div class="fi"><label>两态标记</label><select class="inp" id="fTag" data-act="jcFilter">${enumOpts('jcTag',fJc.tag,1)}</select></div>
       <div class="fi"><label>合同存档情况</label><select class="inp" id="fArch" data-act="jcFilter">${enumOpts('jcArch',fJc.arch,1)}</select></div>
       <div class="fi"><label>供应商</label><input class="inp" id="fSup" data-act="jcFilter" value="${esc(fJc.sup)}" placeholder="模糊搜索"></div>

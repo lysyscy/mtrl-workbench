@@ -206,4 +206,6 @@ def test_壳里项目选择器走共用件且label只一层():
     reg = _nt_region()
     assert '<div class="fi pjwrap"' in reg, "项目选择器没用原型类名（`.fi.pjwrap`）"
     assert reg.count("<label>项目（可多选）</label>") == 1, "label 只该出现一次（套两层就重复）"
-    assert "${pjOpen?pjPanel():''}" in reg, "没渲染共用件面板"
+    # ⭐ `#1`（2026-09-26）：展开态收进共用件注册表 `PJ_OPEN` ⇒ 判词不变、落点改成 `pjIsOpen(...)`
+    #    （⛔ 这一处**不许**退回 `pjOpen` 裸变量 —— 那正是"靠自觉"的形态）。
+    assert "${pjIsOpen('pj')?pjPanel():''}" in reg, "没渲染共用件面板（展开态该走 `PJ_OPEN`）"

@@ -216,7 +216,8 @@ def test_批量标记按钮未勾选时先禁用():
         assert "jcPick.size?" in tag, (
             "批量按钮的 `disabled` 不是跟着**勾选数**走的 ⇒ 禁用条件大概接错了对象：\n"
             f"  {tag[:150]}")
-    body = _fn(_actions(), "jcBatchTag:", "CHG=")
+    # ⚠️ `#2`（2026-09-26）起 `CHG=` 那个结束标记**已不存在**（名单拆了）⇒ 改用紧随其后的「事件委托」段注释。
+    body = _fn(_actions(), "jcBatchTag:", "/* 事件委托")
     assert "if(!jcPick.size)" in body, (
         "handler 里少了第二道保险（点了也要拦）—— 按钮禁用是「先禁用」，"
         "但**状态可能被外部改动**，两道都要在")

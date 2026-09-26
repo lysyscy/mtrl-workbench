@@ -141,3 +141,37 @@ def test_项目必填_且回滚端点已挂并显式报错(client):
     assert rb.status_code == 200, "端点必须在（通用面按 `hooks.rollback` 挂）"
     body = rb.json()
     assert body["ok"] is False and "找不到批次" in body["message"], body
+
+
+@acc()
+def test_域上下文端点在_且候选项目只给非空键(client):
+    """⭐ 2026-09-26（用户报障截图里的 `[object Object]`）：本域的域上下文必须**走通用面**、且只给**候选键**。
+
+    报障链路：本域原先**没有** `options` 钩子 ⇒ 壳只好单开一条**域号分支**去调**域专属读端点**
+      `/api/m11/list`（= `repository.project_choices()` 的**对象** `{"key","display"}`），
+      而壳里写的是 `(p && p.key) || String(p)` —— `key` 是**空串**（项目没记仓库名，**库里真有 3 条**）
+      时落到 `String(对象)` ⇒ 下拉里是 `[object Object]`，**选中即报「找不到项目」**。
+
+    ⇒ 两条一起钉：
+      ① 本域的 `/options` **在**、且**只给候选键**（⛔ 不许再给对象 —— 那正是坏选项的土壤）；
+      ② 档案里 `key` 为空的那些项目**根本不进候选**（⛔ 不靠壳里兜底：坏值能进到界面，
+         就一定会有人选中它）。
+    """
+    from app.core.db import session_scope
+    from app.mod11_jc import repository as R
+
+    r = client.get("/api/imp/m11_jc/options")
+    assert r.status_code == 200, "域上下文端点必须在（壳里零域号分支，全靠这一条问上下文）"
+    got = r.json()
+    assert got["ok"] is True, got
+    keys = got.get("projects")
+    assert keys, "没给候选项目 ⇒ 通用面上根本选不了项目（可本域落库**必须要**它）"
+    bad = [k for k in keys if not (isinstance(k, str) and k.strip())]
+    assert not bad, f"候选键里混进了空键 / 非字符串：{bad}（渲染到界面上就是 `[object Object]`）"
+    with session_scope() as s:
+        choices = R.project_choices(s)
+    empties = [c for c in choices if not str(c.get("key") or "").strip()]
+    assert len(keys) == len(choices) - len(empties), (
+        f"候选该 = 档案里**有仓库名**的那些（实测空键 {len(empties)} 条，一条都不许进候选）")
+    assert set(got) - {"ok", "projects"} == set(), \
+        f"域上下文只该给候选键（⛔ 别塞 `display` 之类的对象）—— 多给了：{set(got) - {'ok', 'projects'}}"

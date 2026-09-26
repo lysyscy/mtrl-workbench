@@ -63,6 +63,23 @@ def client(tmp_path, monkeypatch):
     return TestClient(app)
 
 
+@acc()
+def test_没挂options钩子的域也要200不许404(client):
+    """⭐ 2026-09-26：`/options` **恒挂** —— 没给钩子的域回 **200 ＋ 空包**，⛔ 不许 404。
+
+    为什么值得一条断言：壳问「这个域有哪些上下文」是**一条通用问句**（壳里零域号分支，见
+      `test_imp_shell.py`）—— 没挂钩子的域若回 404，两处一起坏：
+      ① 真机自检 `tools/probe/_shell_smoke.py` 的「console / page 错误」把浏览器里的 404 **判红**；
+      ② "问不到"（404）与"真的没有上下文"（空包）在壳侧长得一样 ⇒ 壳只能靠吞异常猜。
+    ⇒ 本域（`m05_flow` **没有** `options` 钩子）就是这条的活样本。
+    """
+    r = client.get("/api/imp/m05_flow/options")
+    assert r.status_code == 200, "没挂 `options` 钩子的域**不许**回 404（壳一问就红了）"
+    got = r.json()
+    assert got["ok"] is True, got
+    assert set(got) - {"ok"} == set(), f"没有域上下文就该给空包（⛔ 别塞看着像上下文的键）：{got}"
+
+
 def _parse(client, rows: list[tuple]):
     return client.post("/api/imp/m05_flow/parse",
                        files={"file": ("付款流水.xlsx", _book(rows),

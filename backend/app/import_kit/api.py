@@ -254,20 +254,28 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
     def api_schema() -> dict:
         return {"ok": True, **spec.as_schema()}
 
-    if hooks.options is not None:
-        @r.get(base + "/options")
-        def api_options() -> dict:
-            """**域上下文**（候选项目 / 截止月 / 批次…）—— 由域钩子给，通用层不认识它的内容。
+    # ⭐ `/options` **恒挂**（2026-09-26）—— 它与 `rollback` 的处置**刻意不同**：
+    #    · `rollback` 是**能力**：没钩子 = 这个域没有回滚 ⇒ 不挂端点，壳也不画那个按钮（能力缺失看得见）；
+    #    · `options` 是**问一句**"这个域有哪些上下文"（候选项目 / 截止月 / 归属年月…）⇒ **问句必须有个回答**。
+    #  ⛔ 原先写成 `if hooks.options is not None:` ⇒ 没挂钩子的域**一问就是 HTTP 404**，而真机自检
+    #     （`tools/probe/_shell_smoke.py` 的「console / page 错误」）**把 404 判红**；
+    #     更糟的是："问不到"（404）与"真的没有上下文"（空包）在壳侧长得一样 ⇒ 壳只能靠吞异常猜。
+    #  ⇒ 没给钩子 = 这个域**没有域上下文**（回 `ok` 空包），壳据此不渲染那一栏控件。
+    @r.get(base + "/options")
+    def api_options() -> dict:
+        """**域上下文**（候选项目 / 截止月 / 批次…）—— 由域钩子给，通用层不认识它的内容。
 
-            ⚠️ 恒 200 ＋ `ok` 标志（与通用面其余端点同律）：取不到也要让人**看见原因**，⛔ 不静默给空。
-            """
-            try:
-                with session_scope() as s:
-                    return {"ok": True, **(hooks.options(s) or {})}
-            except MustReportError as exc:
-                return {"ok": False, "message": str(exc)}
-            except Exception as exc:  # noqa: BLE001
-                return {"ok": False, "message": f"取本域选项失败：{type(exc).__name__}: {exc}"}
+        ⚠️ 恒 200 ＋ `ok` 标志（与通用面其余端点同律）：取不到也要让人**看见原因**，⛔ 不静默给空。
+        """
+        if hooks.options is None:
+            return {"ok": True}                      # 这个域**没有**域上下文（⛔ 这不是错误）
+        try:
+            with session_scope() as s:
+                return {"ok": True, **(hooks.options(s) or {})}
+        except MustReportError as exc:
+            return {"ok": False, "message": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "message": f"取本域选项失败：{type(exc).__name__}: {exc}"}
 
     @r.post(base + "/parse")
     async def api_parse(file: UploadFile = File(...), sheet: str = Form("")) -> dict:

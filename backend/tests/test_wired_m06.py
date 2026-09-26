@@ -216,7 +216,7 @@ def test_项目筛选单选且选中即收起():
     panel = panel[:panel.index("\n")]
     assert "pickAct:'procPjPick'" in panel and "single:true" in panel, \
         "m06 的项目面板不是单选（`single:true`）—— 「不给多选」这条保证没了"
-    assert "procPjPick:t=>{ procPj=t.dataset.pj; procPjOpen=false; render(); }" in SHELL, \
+    assert "procPjPick:t=>{ procPj=t.dataset.pj; pjClose('procPj'); render(); }" in SHELL, \
         "选完项目没有收起面板"
 
 

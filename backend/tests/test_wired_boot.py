@@ -105,6 +105,33 @@ def test_跨页写动作后全标脏():
                     "fetchNotices / m07Fetch）—— 少一处 ⇒ 那条写路径之后别的页会一直拿着旧数")
     get_body = api[api.index("async get(url)"):api.index("async post(url")]
     assert "markCrossPageStale();" not in get_body, "⛔ 取数路径（`API.get`）里不该标脏"
+    # ⭐ `#3`（2026-09-26 用户裁定「写在通用模块里、不必靠自觉」）：`LOADED.clear()` **只许出现在出口里**。
+    #    ⚠️ 报障前的形态：`legacy.js` 的导入落库 / 回滚**各自手写了一遍** `LOADED.clear()`（与出口重复）——
+    #       重复本身无害，但它**教坏了后来人**："标脏要在业务动作里写"⇒ 新写一个写动作多半会漏
+    #       （`TAIL-78` 就是这么漏掉一路的：付款通知书改了统计金额 ⇒ 切回 m03/m05 看旧数）。
+    import re as _re                                  # ⚠️ 局部导入：本件别处没用到正则
+    # ⚠️⚠️ **必须剥掉块注释再数**：注释里会**引述**这个写法（"原先有三处"、"与 TAIL-78 那两处同一口径"…）
+    #     —— 不剥 ⇒ 说明性注释把判据自己判红（本仓踩过多次，见 `test_acc_theme_user.py` 的头注）。
+    code = _re.sub(r"/\*.*?\*/", "", SHELL, flags=_re.S)
+    # ⭐ `#4`（2026-09-26）：浮层锚点 `pjwrap` 是"浮层**不会被 `.tw` 裁掉**"的唯一保险 ——
+    #    漏一个 ⇒ 界面上只表现为"某一格的下拉被裁了一半"（看不出是漏了 wrapper）。
+    #    ⇒ 判据钉**两条不变量**（写法只许两种 ＋ 面板必须都有锚点）；把 markup 搬进共用件是纯形态、
+    #      零行为收益，那条已在设计件 §四 排队（本判据先保证"漏了会红"）。
+    forms = _re.findall(r'class="[^"]*pjwrap[^"]*"[^>]*style="([^"]*)"', code)
+    assert forms, "壳里连 `pjwrap` 锚点都没有了 —— 浮层会被 `.tw` 裁掉（本该有一圈 anchor 包装）"
+    bad = [f for f in forms if f not in ("position:relative", "position:relative;display:inline-block")]
+    assert not bad, (
+        f"`pjwrap` 出现了**非标准形态**：{bad} —— 只许两种"
+        "（表单格 `position:relative` / 行内 `position:relative;display:inline-block`）")
+    n_panel = SHELL.count("projPanel({")
+    n_wrap = len(_re.findall(r"pjwrap", code))
+    assert n_wrap >= n_panel, (
+        f"`projPanel` 调用 {n_panel} 处、`pjwrap` 锚点只有 {n_wrap} 处 —— "
+        "少的那几处浮层会被滚动容器裁掉（界面上只是一格错位，看不出根因）")
+    hits = code.count("LOADED.clear()")
+    assert hits == 1, (
+        f"`LOADED.clear()` 全壳出现 {hits} 次 —— **只许 1 次**（在 `markCrossPageStale()` 里）；"
+        "业务动作里手写清空 = 两处口径 ⇒ 下一个人会以为必须写，而漏写的人没有任何东西提醒他")
 
 
 @acc()

@@ -48,8 +48,8 @@ def _probe(page, key: str) -> dict:
             view: VIEW, len: (box.innerHTML || '').length, txt: txt,
             acts: acts,
             dead: acts.filter(x => typeof ACT[x.a] !== 'function').map(x => x.a),
-            notInChg: acts.filter(x => ['input', 'select', 'textarea'].includes(x.tag)
-                                    && !CHG.includes(x.a)).map(x => x.a),
+            /* ⛔ `#2`（2026-09-26）：`CHG` 名单已拆 ⇒ 这里**不再查"有没有登记"**
+               —— `change` 委托看见 `data-act` 就跑，"漏登记"这回事不存在。 */
             inputs: box.querySelectorAll('input,select').length,
             rows: box.querySelectorAll('tbody tr').length,
         };
@@ -73,16 +73,14 @@ def check(page, errors: list[str]) -> None:
             if not ok_render:
                 errors.append(f"四个暂留件收口自检未通过：{name} 没渲染出来（缺 {miss}）")
 
-            # ② 死控件 ＋ 表单元素漏登记 `CHG`（本仓最贵的一类"静默"）
-            ok_acts = not got["dead"] and not got["notInChg"]
+            # ② 死控件（本仓最贵的一类"静默"）—— ⚠️ `#2` 起"表单元素是否进 CHG"这半**已废**（名单拆了）
+            ok_acts = not got["dead"]
             print(("  ✅ " if ok_acts else "  ⛔ ")
                   + f"⑳ {name} 无死控件（{len(got['acts'])} 个 data-act"
                   + f"，表单元素 {got['inputs']} 个）"
-                  + ("" if ok_acts else f"：ACT 里没有 {got['dead']}；未进 CHG {got['notInChg']}"))
+                  + ("" if ok_acts else f"：ACT 里没有 {got['dead']}"))
             if not ok_acts:
-                errors.append(
-                    f"四个暂留件收口自检未通过：{name} 有死控件 / 表单动作没进 CHG"
-                    f"（ACT 缺 {got['dead']}；CHG 缺 {got['notInChg']}）")
+                errors.append(f"四个暂留件收口自检未通过：{name} 有死控件（ACT 缺 {got['dead']}）")
 
         # ③ 内容是后端的（⛔ 壳里另抄一份 = 两处副本必漂）
         stage = "与后端对账"

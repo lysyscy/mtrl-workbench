@@ -288,11 +288,15 @@ def test_结余录入走后端且不在前端复写判据():
 
 
 @acc("ACC-SETL-EXT-001", "001-09")
-def test_结余是表单类动作已登记CHG():
-    """⛔ 漏登记 `CHG` ⇒ `change` 事件被静默丢弃（输入框「点了没反应」）。"""
-    m = re.search(r"const CHG=\[([^\]]*)\]", SHELL)
-    assert m, "壳里找不到 `CHG` 数组"
-    assert "'extBal'" in m.group(1), "`extBal` 没登记进 `CHG`"
+def test_结余是表单类动作由change委托承接():
+    """⛔ 判词（不变）：**「结余」这个表单类动作必须真的能被 `change` 触发**（否则输入框「点了没反应」）。
+
+    ⭐ `#2`（2026-09-26）**换落点**：原先钉的是「`extBal` 必须登记进 `CHG`」——
+      名单已拆 ⇒ 同一件事的新落点 = **`change` 委托「看见 `data-act` 就跑」**（不再需要任何登记）。
+    """
+    assert "extBal" in SHELL, "壳里找不到「结余」那个动作"
+    assert "if(ACT[a]) ACT[a](t,e);" in SHELL, (
+        "`change` 委托不是「不看名单直接跑」⇒ 表单类动作（含 `extBal`）会被**静默丢弃**")
 
 
 @acc("ACC-SETL-EXT-001", "001-09")

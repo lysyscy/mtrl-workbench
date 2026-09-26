@@ -305,3 +305,41 @@ def test_付款方式列宽够装真实条款():
     assert col.type.length >= 512, (
         f"付款方式列宽只有 {col.type.length} —— 实测用户那条整段条款就有 **95 字**，"
         "64 装不下（会被数据库拒；而且错在导入那一步，很难一眼看出是列宽问题）")
+
+
+@acc()
+def test_域上下文只给候选键_空键不进候选():
+    """⭐ 2026-09-26（用户截图报障）：通用导入面「项目」下拉里出现 `[object Object]`，**选中即报「找不到项目」**。
+
+    报障链路：本域原先**没有** `options` ⇒ 壳只好单开一条**域号分支**、去调**域专属读端点**
+      `/api/m11/list`（= `build_list()["projects"]` = `repository.project_choices()` 的**对象**
+      `{"key","display"}`）；而壳里写的是 `(p && p.key) || String(p)` —— `key` 是**空串**
+      （项目没记仓库名，**库里真有 3 条**）时落到 `String(对象)` ⇒ 就是那个 `[object Object]`。
+
+    ⇒ 三条一起钉：
+      ① 本域**挂了** `options`（＝ 域上下文只走通用面这条路，⛔ 壳里不再认域号、⛔ 不再调域专属端点）；
+      ② 它给的一律是**非空字符串键**，且档案里 `key` 为空的项目**根本不进候选**
+         （⛔ 不靠壳里兜底 —— 那正是这次的坏法：坏值能进到界面，就一定会有人选中它）；
+      ③ 与 `m06_proc` **同形**（壳侧才能用同一段通用代码收上下文 —— 一边给对象一边给字符串正是土壤）。
+    """
+    from app.core.db import session_scope
+    from app.mod06_proc import imp_spec as I06
+    from app.mod11_jc import imp_spec as I11
+    from app.mod11_jc import repository as R
+
+    assert I11.HOOKS.options is not None, \
+        "集采域没挂 `options` ⇒ 壳又得认域号、又得去调域专属读端点（2026-09-26 那条 bug 的土壤）"
+    with session_scope() as s:
+        got = I11.HOOKS.options(s)["projects"]
+        other = I06.HOOKS.options(s)["projects"]
+        choices = R.project_choices(s)
+
+    assert got, "候选项目为空 ⇒ 通用面上根本选不了项目（可本域落库**必须要**它）"
+    bad = [k for k in got if not (isinstance(k, str) and k.strip())]
+    assert not bad, f"候选里出现了空键 / 非字符串：{bad}（渲染到界面上就是 `[object Object]`）"
+    empties = [c for c in choices if not str(c.get("key") or "").strip()]
+    assert len(got) == len(choices) - len(empties), (
+        f"候选该 = 档案里**有仓库名**的那些（实测空键 {len(empties)} 条，它们一条都不许进候选）")
+    assert all(isinstance(k, str) for k in other), "过程资料域的候选也必须是键字符串（两域同形）"
+
+

@@ -5,10 +5,14 @@
    ⛔ 不新写第二条匹配逻辑。
 
 ⚠️ 本域的三条域内口径（通用面不管，也管不了）：
-   ① **「合同价」列必须在**（它是匹配锚点，认不到 ⇒ 一条都配不上）—— 通用面按 `required` 卡；
-   ② **匹配范围 = 单个项目** ⇒ 落库要 `options.project_key`（仓库名，§2.7.4）；
-   ③ **只更「Excel 的地盘」那几列**（`EXCEL_COLS`）：i8 的事实列（合同价/供应商/合同日期/甲方单位）
-      一个字都不碰 —— 由 `match_and_apply` 保证（它与老那条路是**同一个函数**）。
+  ① **「合同价」列必须在**（它是匹配锚点，认不到 ⇒ 一条都配不上）—— 通用面按 `required` 卡；
+  ② **匹配范围 = 单个项目** ⇒ 落库要 `options.project_key`（仓库名，§2.7.4）；
+  ③ **只更「Excel 的地盘」那几列**（`EXCEL_COLS`）：i8 的事实列（合同价/供应商/合同日期/甲方单位）
+     一个字都不碰 —— 由 `match_and_apply` 保证（它与老那条路是**同一个函数**）。
+
+⭐ 域上下文（候选项目）走通用面**唯一**一条端点 `GET /api/imp/{domain}/options`（= 下面的 `options` 钩子）
+  —— 2026-09-26 用户报障后补上：本域原先**没有**它，壳只好单开一条**域号分支**去调**域专属读端点**
+  `/api/m11/list`（那条路给的是**对象**），于是渲染出 `[object Object]`（详见 `options` 的 docstring）。
 """
 
 from __future__ import annotations
@@ -98,6 +102,22 @@ def rollback(s, batch, operator):
     return B.rollback(s, batch, operator)
 
 
-HOOKS = Hooks(commit=commit, rollback=rollback)
+def options(s) -> dict:
+    """**域上下文**（通用面唯一一条读端点：`GET /api/imp/{domain}/options`）—— 候选项目（§2.7.4）。
 
-__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "rollback"]
+    ⭐ **为什么要它**（2026-09-26 用户报障「项目的选择要用通用模块」）：本域原先**没有** `options`
+      ⇒ 壳只好给它单开一条**域号分支**、去调**域专属读端点** `/api/m11/list`；那条路是
+      `repository.project_choices()` 给的**对象** `{"key","display"}`，而壳里写的是
+      `(p && p.key) || String(p)` ⇒ `key` 是**空串**（项目没记仓库名）时落到 `String(对象)`
+      ⇒ 下拉里出现 `[object Object]`（真机实测 20 条里 3 条），**选中即报「找不到项目」**。
+    ⇒ 走通用面这条路**只给候选键**、且**空的键根本不进候选**（根因从源头去掉，⛔ 不靠壳里兜底）。
+
+    ⚠️ 与 `m06_proc` 的 `options` 同形（都是 `{"projects": [仓库名, …]}`）⇒ 壳侧**同一段通用代码**处理两域，
+      ⛔ 壳里不再有"集采给对象、过程资料给字符串"这种两套形态（那正是本次坏选项的土壤）。
+    """
+    return {"projects": [c["key"] for c in R.project_choices(s) if str(c.get("key") or "").strip()]}
+
+
+HOOKS = Hooks(commit=commit, rollback=rollback, options=options)
+
+__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "options", "rollback"]

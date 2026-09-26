@@ -572,9 +572,9 @@ const ACT={
 
  /* —— MOD-04 付款计划：筛选 + 行多选 + 多选删除 + 选月份导入（2026-09-12 新增）—— */
  plFilter:()=>{ const el=$('#plReview'); plf.review=(el&&el.value)||'全部'; prunePlPick(); render(); },
- plFilterReset:()=>{ plf.ym=bjMonth(); plf.projs=[]; plf.review='全部'; plPjOpen=false; prunePlPick(); render();
+ plFilterReset:()=>{ plf.ym=bjMonth(); plf.projs=[]; plf.review='全部'; pjClose('plPj'); prunePlPick(); render();
    toast('付款计划筛选已重置（年月回到「北京时间当月」，审查结果回到「全部」）'); },
- plPjToggle:()=>{ plPjOpen=!plPjOpen; render(); },
+ plPjToggle:()=>{ pjToggle('plPj'); render(); },
  plPjPick:t=>{ const f=t.dataset.pj; const i=plf.projs.indexOf(f); if(i>=0) plf.projs.splice(i,1); else plf.projs.push(f); prunePlPick(); render(); },
  plPjAll:()=>{ plf.projs=PL_PROJ_LIST(); prunePlPick(); render(); },
  plPjNone:()=>{ plf.projs=[]; prunePlPick(); render(); },
@@ -723,7 +723,7 @@ const ACT={
    if(!win.open){ toast(`<b>付款计划 ${win.from} 号起生效、月末截止</b>（§4.3.2）—— 模拟今天 <b>${SYS_TODAY}</b>，不在付款窗口内，暂不可勾选`,4800); return; }
    const ym=win.ym;
    /* ⚠️ 只放宽「视图参数」；**不碰 fNt.projs**（项目筛选是用户选定的业务范围） */
-   fNt.month='全部'; fNt.cat='全部'; fNt.astat='全部'; fNt.stat='未付清'; pjOpen=false; mp.open=null;
+   fNt.month='全部'; fNt.cat='全部'; fNt.astat='全部'; fNt.stat='未付清'; pjClose('pj'); mp.open=null;
    pickSet.clear();
    const plan=PLs.filter(p=>p.ym===ym);
    let hit=0, miss=0;
@@ -840,7 +840,7 @@ const ACT={
    if(live.length===1) return ACT.revDlg({ dataset:{fid:live[0].id}, tagName:'BUTTON' });
    /* 多条：跳到流水页并只筛这一单（流水页有"关键词"筛选，用它把单据编码填进去） */
    flf.ym=fNt.month; flf.projs=[]; flf.method='全部'; flf.state='全部'; flf.q=n.code||'';
-   flPjOpen=false;   /* 面板收起（变量名是 `flPjOpen`，交互路径与 `rollback` 都用它） */
+   pjClose('flPj');   /* 面板收起（变量名是 `pjIsOpen('flPj')`，交互路径与 `rollback` 都用它） */
    go('m05');   /* `go` 内部已 render + 滚动到顶；离开 m03 它会自动 clear pickSet */
    toast(`该行有 <b>${live.length}</b> 条生效流水 —— 已跳到「付款流水与欠款统计」并筛出 <b>${esc(n.code||n.id)}</b><br>请逐条点「撤销」并分别填写原因（撤销是<b>逐条留痕</b>的动作，不做一次撤全部）`,6800); },
 
@@ -884,9 +884,9 @@ const ACT={
         唯一例外：**改「分类」**要重算 —— 辅材 / 机械 的最早数据月各算各的，不重算就会给出错的默认值。 */
   lgPjName=lgDefPjName(); lgCut=lgCutFor(lgPjName,lgCat);
   lgD.s='0.00'; lgD.p='0.00'; lgD.r=LG_R_DEF;                 /* 新开一次 → 草稿复位（原地改字段） */
-  lgOn=true; lgPjOpen=false; render();
+  lgOn=true; pjClose('lgPj'); render();
   toast(`已在「<b>${esc(lgCat)}</b>」栏上方展开期初占位行录入区 —— 填完点「保存」落库、点「取消」丢弃（<b>草稿不入库</b>）`,5400); },
- lgCancel:()=>{ lgOn=false; lgPjOpen=false; render();
+ lgCancel:()=>{ lgOn=false; pjClose('lgPj'); render();
   toast('已取消期初占位行录入 —— <b>未写入任何数据</b>'); },
  /* 草稿层写入口：输入立即记下，展开区重绘时不丢 */
  lgS:t=>{ lgD.s=String((t&&t.value)!=null?t.value:''); },
@@ -901,7 +901,7 @@ const ACT={
  flFilter:()=>{ const b=$('#flMethod'), c=$('#flState');
   flf.method=(b&&b.value)||'全部'; flf.state=(c&&c.value)||'全部'; render(); },
  /* —— 付款流水「付款项目」共用面板（能力由调用点声明：**多选**） —— */
- flPjToggle:()=>{ flPjOpen=!flPjOpen; render(); },
+ flPjToggle:()=>{ pjToggle('flPj'); render(); },
  flPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
   const i=flf.projs.indexOf(v); if(i>=0) flf.projs.splice(i,1); else flf.projs.push(v); render(); },
  flPjAll:()=>{ const all=flProjs(); flf.projs.length=0; all.forEach(v=>flf.projs.push(v)); render(); },
@@ -909,7 +909,7 @@ const ACT={
  /* ⭐ 关键词**只在这一个按钮里生效**（输入框不挂 data-act、也不在 CHG 里）—— 别的动作不会带着它去搜 */
  flSearch:()=>{ const i=$('#flQ'); flf.q=String((i&&i.value)||'').trim(); render();
   toast(flf.q?`付款流水已按关键词 <b>${esc(flf.q)}</b> 搜索`:'已清空关键词'); },
- flReset:()=>{ flf.ym=bjMonth(); flf.projs.length=0; flf.method='全部'; flf.state='全部'; flf.q=''; flPjOpen=false; render();
+ flReset:()=>{ flf.ym=bjMonth(); flf.projs.length=0; flf.method='全部'; flf.state='全部'; flf.q=''; pjClose('flPj'); render();
   toast('付款流水筛选已重置（年月回到默认「当月」，§9.2）'); },
  /* —— 付款统计（§4.5「付款」侧）—— 粒度切换 · 点项目条联动下方流水 —— */
  pstGran:t=>{ pst.gran=(t&&t.dataset&&t.dataset.g)||'周'; pst.ym=''; mp.open=null; render(); },   /* 换粒度 → 桶回到该粒度下"最新有数据"的那个（兜底也随默认值走「周」） */
@@ -918,9 +918,9 @@ const ACT={
   const i=flf.projs.indexOf(k); if(i>=0) flf.projs.splice(i,1); else flf.projs.push(k); render();
   toast(i>=0?`付款统计 → 下方「付款流水」已取消 <b>${esc(pjLabel(k))}</b> 的筛选`:`付款统计 → 下方「付款流水」已加选 <b>${esc(pjLabel(k))}</b>`); },
  /* 「项目」共用面板（**单选** —— 能力由调用点声明，与 `MOD-09` / 台账主选择器同款：点一下即切换并收起） */
- lgPjToggle:()=>{ lgPjOpen=!lgPjOpen; render(); },
+ lgPjToggle:()=>{ pjToggle('lgPj'); render(); },
  lgPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
-  lgPjName=v; lgPjOpen=false; render();
+  lgPjName=v; pjClose('lgPj'); render();
   toast(`期初占位行的项目已切到 <b>${esc(pjLabel(v))}</b>（截止年月仍按当前「分类」单独算）`); },
  /* 保存 = 原弹窗的「保存」——**只读草稿层**，不再从 DOM 取值（增行模式：没有弹窗可读） */
  /* ⭐ 已接后端：`POST /m05/opening`（PRG 表单端点 · 同一「口径 + 项目 + 截止年月」重复录入 = **覆盖**）
@@ -1321,19 +1321,19 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
       `✅ <b>已同步</b>：${esc((r&&r.message)||('取到 '+((r&&r.count)||0)+' 条'))}${more}`); },
 
  /* —— MOD-06 —— */
- procPjToggle:()=>{ procPjOpen=!procPjOpen; render(); },
- procPjPick:t=>{ procPj=t.dataset.pj; procPjOpen=false; render(); },
+ procPjToggle:()=>{ pjToggle('procPj'); render(); },
+ procPjPick:t=>{ procPj=t.dataset.pj; pjClose('procPj'); render(); },
  /* —— 过程资料「按模板导出」展开区（2026-09-13：多选项目 · 每项目一份 · ≥2 打 zip）—— */
- procExpToggle:()=>{ procExpOn=!procExpOn; procExpPjOpen=false;
+ procExpToggle:()=>{ procExpOn=!procExpOn; pjClose('procExpPj');
    if(procExpOn&&!procExpPjs.length&&procPj) procExpPjs=[procPj];   /* 默认 = 本页当前所选项目 */
    render();
    if(procExpOn) toast('已展开「按模板导出」：<b>默认选中本页当前项目</b>（可多选）—— 每项目一份 17 列模板；选 2 个以上打成 zip',6200); },
- procExpPjToggle:()=>{ procExpPjOpen=!procExpPjOpen; render(); },
+ procExpPjToggle:()=>{ pjToggle('procExpPj'); render(); },
  procExpPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
    const i=procExpPjs.indexOf(v); if(i>=0) procExpPjs.splice(i,1); else procExpPjs.push(v); render(); },
  procExpPjAll:()=>{ procExpPjs=pjSort(PROC_PJS).slice(); render(); },
  procExpPjNone:()=>{ procExpPjs=[]; render(); },
- procExpCancel:()=>{ procExpOn=false; procExpPjOpen=false; procExpPjs=[]; render(); toast('已收起导出面板（<b>未导出任何文件</b>）'); },
+ procExpCancel:()=>{ procExpOn=false; pjClose('procExpPj'); procExpPjs=[]; render(); toast('已收起导出面板（<b>未导出任何文件</b>）'); },
  procExpOk:()=>{ const pjs=procExpPjs.slice(); if(!pjs.length) return toast('请先选择要导出的项目');
    /* ⚠️ 文件名 = **展示名 ＋ 域 ＋ 表名 ＋ 年月**（与后端 `domain.export_file_name` 同构）——
       ⚠️ **表名进文件名**：三张表（表① / 表② / 差异表）**同一形态**，只有数据与文件名不同
@@ -1529,7 +1529,7 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
 
  /* —— MOD-08 —— */
  /* 「项目」筛选（**通用控件** = 共用项目面板，**多选**；2026-09-13 用户口径）—— 键 = 仓库名（§2.7.4）。 */
- invWhToggle:()=>{ invWhOpen=!invWhOpen; render(); },
+ invWhToggle:()=>{ pjToggle('invWh'); render(); },
  invWh:t=>{ const v=t.dataset.pj; const k=invWhs.indexOf(v); if(k>=0) invWhs.splice(k,1); else invWhs.push(v); render(); },
  invWhAll:()=>{ invWhs.length=0; PROC_PJS.forEach(v=>invWhs.push(v)); render(); },   /* 同款：候选必须与数据源一致（原用演示 `WHs`） */
  invWhNone:()=>{ invWhs.length=0; render(); },
@@ -1572,8 +1572,8 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
 
   /* —— MOD-09（手填项**按「核算年月 ＋ 项目」各存一份**：写路径都落在「当前所选核算年月 · 当前所选项目」那一份上） —— */
   /* 「项目」**单选**面板（第 6 个 `projPanel` 调用点）：点一下即切换并收起（与 `MOD-06` 同款） */
-  awfPjToggle:()=>{ awfPjOpen=!awfPjOpen; render(); },
-  awfPjPick:t=>{ const v=t.dataset.pj; if(!v) return; awfPj=v; awfPjOpen=false;
+  awfPjToggle:()=>{ pjToggle('awfPj'); render(); },
+  awfPjPick:t=>{ const v=t.dataset.pj; if(!v) return; awfPj=v; pjClose('awfPj');
     /* ⭐ 切项目 ⇒ **按 (核算年月, 项目) 重取那一份**（手填项是"每项目每月各存一份"，§5.5） */
     reloadM09().then(()=>toast(`特殊费用月报表已切到项目 <b>${esc(PROJ_META_KEY(v).nm)}</b>（自动项与手填项都只算该项目）`)); },
   /* ⭐ 接线：四个写动作**全部走后端**（`/api/m09/fee/*` —— 2026-09-19 `§19` 批 2 起旧 PRG 端点
@@ -1590,7 +1590,7 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
      非法 ⇒ 后端拒绝且**原值不变**，重拉后输入框回到库里那个值。 */
   awfAmt:t=>awfAct(()=>API.m09Amount({ym:awfYm, project:awfPj, index:+t.dataset.i, value:t.value}), r=>r.message),
   /* 重置 = 回到默认核算年月 ＋ 默认项目（候选第一个）—— `R4` 要求列表 / 报表页提供「重置」 */
-  awfReset:()=>{ awfYm=bjMonth(-1); awfPj=AWF_PJS[0]||''; awfPjOpen=false;
+  awfReset:()=>{ awfYm=bjMonth(-1); awfPj=AWF_PJS[0]||''; pjClose('awfPj');
     reloadM09().then(()=>toast(`特殊费用月报表已重置：核算年月回到 <b>${tmLabel(bjMonth(-1))}</b>、项目回到 <b>${esc(PROJ_META_KEY(awfPj).nm)}</b>（材料报表类默认 = 上月，§9.2）`)); },
 
  /* —— MOD-05 · 逐月欠款台账（2026-09-12 用户口径）——
@@ -1599,8 +1599,8 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
     ⚠️「机械」口径下的手填值原先是 MOD-10 的 `machAmt`（按项目一个数）——已升格为**按月**，
        故本动作取代它；MOD-10 改为只读合计。 */
  /* 台账「项目」= 共用面板（单选）：开/收 + 选（选谁都切两侧，语义与原来的下拉一致） */
- ledPjToggle:()=>{ ledPjOpen=!ledPjOpen; render(); },
- ledPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; ledProj=v; ledPjOpen=false; render(); },
+ ledPjToggle:()=>{ pjToggle('ledPj'); render(); },
+ ledPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; ledProj=v; pjClose('ledPj'); render(); },
  /* ⭐⭐ 2026-09-20 用户定：**总欠款导出** —— 每个项目一行：
     **A 序号 · B 项目展示名 · C 集采 · D 辅材 · E 机械**（⛔ 列序是用户指定的，别"顺手优化"）。
     ⚠️ 后端**失败时回 JSON 200 ＋ `ok:false` ＋ 中文**（一条都算不出来）⇒ 必须**先看 `content-type`**，
@@ -1614,17 +1614,17 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
      + `<br><span class="sm mut">⚠️「机械」未含机械费结算（该来源未接通）—— 表尾也写了这一句</span>`, 11000);
  },
  /* —— 「导出逐月欠款台账」展开区（2026-09-13 用户口径：一个入口 + 多选项目 + 每项目一簿三表）—— */
- ledExpToggle:()=>{ ledExpOn=!ledExpOn; ledExpPjOpen=false;
+ ledExpToggle:()=>{ ledExpOn=!ledExpOn; pjClose('ledExpPj');
    /* 首次打开：**默认选中本页当前所选项目**（用户口径"要想办法实现自选项目"，默认值取当前是为了少点一下） */
    if(ledExpOn&&!ledExpPjs.length){ const c=ledCur(); ledExpPjs=c?[c]:[]; }
    render();
    if(ledExpOn) toast('已展开「导出欠款台账」：<b>默认选中本页当前项目</b>（可多选）—— 导出 = <b>每个项目一个工作簿</b>（辅材欠款 / 机械欠款 / 特殊费用月报表）；选 2 个以上打 zip',6200); },
- ledExpPjToggle:()=>{ ledExpPjOpen=!ledExpPjOpen; render(); },
+ ledExpPjToggle:()=>{ pjToggle('ledExpPj'); render(); },
  ledExpPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
    const i=ledExpPjs.indexOf(v); if(i>=0) ledExpPjs.splice(i,1); else ledExpPjs.push(v); render(); },
  ledExpPjAll:()=>{ ledExpPjs=ledProjs().slice(); render(); },
  ledExpPjNone:()=>{ ledExpPjs=[]; render(); },
- ledExpCancel:()=>{ ledExpOn=false; ledExpPjOpen=false; ledExpPjs=[]; render(); toast('已收起导出面板（<b>未导出任何文件</b>）'); },
+ ledExpCancel:()=>{ ledExpOn=false; pjClose('ledExpPj'); ledExpPjs=[]; render(); toast('已收起导出面板（<b>未导出任何文件</b>）'); },
  ledExpOk:()=>{ const pjs=ledExpPjs.slice(); if(!pjs.length) return toast('请先选择要导出的项目');
    /* ⚠️ 报告月 = **材料报表类默认 = 上月**（§9.2）：台账/特殊费用月报表都**没有「止月」选择器**
       （台账跨月连续、特殊费用月报表是单月列由系统生成）⇒ 这里的「当前年月」就是上月。
@@ -1986,14 +1986,14 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  jcAdd:()=>{ const cands=pjKeysOfRows(ntPjList());
    jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',
      pj:(fJc.projs.length===1?fJc.projs[0]:(cands[0]||''))};   /* 项目默认 = 当前筛选唯一项，否则候选第一个 */
-   jcNewOn=true; jcNPjOpen=false; render();
+   jcNewOn=true; pjClose('jcNPj'); render();
    toast('已在表格上方展开「手工新增合同」录入区 —— 填完点「保存」建档、点「取消」丢弃（<b>草稿不入库</b>）<br><span class="mut sm">发票金额 / 贸易公司发票金额 / 付款金额 = 各自子表合计（建档后在各列右侧「子表」里录）</span>',6000); },
- jcRowCancel:()=>{ jcNewOn=false; jcNPjOpen=false; render(); toast('已取消手工新增合同 —— <b>未写入任何数据</b>'); },
+ jcRowCancel:()=>{ jcNewOn=false; pjClose('jcNPj'); render(); toast('已取消手工新增合同 —— <b>未写入任何数据</b>'); },
  /* 草稿写入口（不重绘 —— 免得每改一格就丢焦点；本展开区没有"改一格要连带重绘"的字段） */
  jcNSet:t=>{ const k=t.dataset.k; if(k) jcND[k]=t.value; },
  /* 「项目」共用面板（**单选**）—— 第 10 个 `projPanel` 调用点 */
- jcNPjToggle:()=>{ jcNPjOpen=!jcNPjOpen; render(); },
- jcNPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; jcND.pj=v; jcNPjOpen=false; render();
+ jcNPjToggle:()=>{ pjToggle('jcNPj'); render(); },
+ jcNPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; jcND.pj=v; pjClose('jcNPj'); render();
    toast(`新增合同的项目已定为 <b>${esc(pjLabel(v))}</b>`); },
  /* 建档（替代原弹窗那句挂 `silent` 的空"保存"） */
  /* 建档 ⇒ `POST /api/m11/add`。⭐ 三态**不由这里给** —— 后端按「手工新增 = 纳入台账」填
@@ -2019,7 +2019,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
      if(fJc.arch!=='全部') fJc.arch='全部';
      if(fJc.sup) fJc.sup='';
      if(fJc.projs.length&&fJc.projs.indexOf(jcND.pj)<0) fJc.projs.push(jcND.pj);
-     jcNewOn=false; jcNPjOpen=false; render();
+     jcNewOn=false; pjClose('jcNPj'); render();
    } },
 
  /* —— MOD-13 —— */
@@ -2037,9 +2037,9 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    fNt.astat=(aEl&&aEl.value)||'全部'; fNt.stat=(sEl&&sEl.value)||'全部';
    prunePick(); render();
  },
- filterReset:()=>{ fNt={month:fNt.month,cat:'全部',astat:'全部',stat:'未付清',projs:[]}; pjOpen=false; prunePick(); render(); toast(`筛选条件已重置（年月保留 ${fNt.month}，付款状态回到默认「未付清」）`); },
+ filterReset:()=>{ fNt={month:fNt.month,cat:'全部',astat:'全部',stat:'未付清',projs:[]}; pjClose('pj'); prunePick(); render(); toast(`筛选条件已重置（年月保留 ${fNt.month}，付款状态回到默认「未付清」）`); },
  /* 项目多选 */
- pjToggle:()=>{ pjOpen=!pjOpen; render(); },
+ pjToggle:()=>{ pjToggle('pj'); render(); },
  pjPick:t=>{ const f=t.dataset.pj; const i=fNt.projs.indexOf(f); if(i>=0) fNt.projs.splice(i,1); else fNt.projs.push(f); prunePick(); render(); },
  pjAll:()=>{ fNt.projs=PROJ_LIST(); prunePick(); render(); },
  pjNone:()=>{ fNt.projs=[]; prunePick(); render(); },
@@ -2151,10 +2151,10 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    fJc.tag=(a&&a.value)||'全部'; fJc.arch=(b&&b.value)||'全部'; fJc.sup=(c&&c.value)||''; pruneJcPick(); render(); },
  /* ⚠️ 复位一律【原地改字段】，不要 `fJc={...}` 重新赋值 —— 外部（自检）持有的是对象引用，
     重新赋值会让引用失效（同 BIGVAL 的教训） */
- jcReset:()=>{ fJc.tag='纳入台账'; fJc.arch='全部'; fJc.sup=''; fJc.amt=''; fJc.projs.length=0; jcPjOpen=false; pruneJcPick(); render(); toast('集采台账筛选条件已重置（三态回到默认「纳入台账」）'); },
+ jcReset:()=>{ fJc.tag='纳入台账'; fJc.arch='全部'; fJc.sup=''; fJc.amt=''; fJc.projs.length=0; pjClose('jcPj'); pruneJcPick(); render(); toast('集采台账筛选条件已重置（三态回到默认「纳入台账」）'); },
  /* 「项目」筛选（**通用控件** = 共用项目面板 `projPanel`，多选）—— 与 MOD-03 / MOD-04 同款，只是动作命名空间不同。
     ⚠️ 一律**原地改数组内容**（不要 `fJc.projs=…` 重新赋值）—— 外部持有的是那个数组的引用。 */
- jcPjToggle:()=>{ jcPjOpen=!jcPjOpen; render(); },
+ jcPjToggle:()=>{ pjToggle('jcPj'); render(); },
  jcPjPick:t=>{ const v=t.dataset.pj; const i=fJc.projs.indexOf(v); if(i>=0) fJc.projs.splice(i,1); else fJc.projs.push(v); pruneJcPick(); render(); },
  jcPjAll:()=>{ fJc.projs.length=0; fJc.projs.push(...JC_PROJ_LIST()); pruneJcPick(); render(); },
  jcPjNone:()=>{ fJc.projs.length=0; pruneJcPick(); render(); },
@@ -2163,16 +2163,15 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  fPjQ:t=>{ fPj.q=t.value||''; render(); },
  fPjReset:()=>{ fPj.status='在建'; fPj.type='全部'; fPj.q=''; render(); toast('项目档案筛选已重置（状态回到默认「在建」，§2.7）'); },
  fIvDir:t=>{ fIvDir=t.value||'全部'; render(); },
- fIvReset:()=>{ invWhs.length=0; invWhOpen=false; invOnlyAdj=false; fIvDir='全部'; fIvYm=bjMonth(-1); fIvCol={}; invColOpen=''; render();
+ fIvReset:()=>{ invWhs.length=0; pjClose('invWh'); invOnlyAdj=false; fIvDir='全部'; fIvYm=bjMonth(-1); fIvCol={}; invColOpen=''; render();
    toast(`库存单据筛选已重置 —— 核算年月回到默认的 <b>${tmLabel(bjMonth(-1))}</b>（材料报表类默认 = 上月，§9.2）`); }
 };
 
 /* 事件委托 */
-const CHG=['pick','pickAll','editss','editFull','editStatus','editDisp','editSup','editCat','filterNt','pjPick','procPjPick','invWh','invOnlyAdj','ivColQ','ivColMin','ivColMax','ivColVal','awfName','awfAmt','awfPjPick','ledNote','ledPjPick','lgPjPick','lgCat','lgS','lgP','lgR','flFilter','flPjPick','jcMethod','jcArchNo','jcRetDate','jcRemark','jcFilter','jcPjPick','bigEdit','bigSelTog','payDraft','fPjStatus','fPjType','fPjQ','fIvDir','fExtStatus','extBal','plFilter','plPick','plPickAll','plPjPick','plCell','plRowSet','jcPick','jcPickAll','ntRowSet','editApprove','editOrd','jcLinkPick','jcNSet','jcNPjPick','jcSubSet','ledExpPjPick','procExpPjPick','dfSet','dfFilter','supPick',
-  /* ⚠️⚠️ `M5-6b` **甲方单位分类那个 `select` 也挂在表单元素上** —— 漏了它，
-     选完类型**什么都不会发生**（`change` 被静默丢弃）：看着像"没有保存键"，其实是**事件没接上**。
-     ⭐ 2026-09-20 用户实测反馈「甲方单位分类你没有给保存键」⇒ 就是这个。 */
-  'jcPartySet','jcAmt'];
+/* ⛔ `#2`（2026-09-26）：那张 **「变更事件白名单」已整份删除** —— 表单类动作**不再需要登记**：
+   `change` 委托按「事件只来自表单元素」直接跑（见下面那个 `change` 委托）。
+   ⚠️ 原先 64 个名字的名单 ＋ `legacy.js` 追加 3 个 = 每加一个控件都要人记一次，
+      漏了就是「选完没反应」的**静默**故障。 */
 /* ⚠️ `'themeSet'` **在本列表里出现过、2026-09-21 已移除**：那时它是 `V.m15` 的一个 `<select>`
    （表单元素 ⇒ 必须进 `CHG`，否则 `change` 被静默丢弃）。
    现在它是「外观主题」里的**卡片按钮**（一个 `<button>`，动作名仍是 `themeSet`，主题名走 `data-theme`）⇒
@@ -2187,32 +2186,35 @@ document.addEventListener('click',e=>{
   const a=t.dataset.act; if(!a||!ACT[a]) return;
   if(a==='maskBg'){ ACT.maskBg(t,e); return; }
   e.preventDefault(); ACT[a](t,e);
+  /* ⭐ **单选面板点一下就收**（`#1` · 2026-09-26 用户要求「写在通用模块里」）——
+     由**委托层**做，⛔ 不靠调用点自觉；多选面板渲染的是 `checkbox` ⇒ 天然不收（"勾完不关、好连续选"）。 */
+  if(t.dataset.pjKey && t.type==='radio'){ PJ_OPEN[t.dataset.pjKey]=false; render(); }
 });
 document.addEventListener('change',e=>{
   const t=e.target.closest('[data-act]'); if(!t) return;
-  const a=t.dataset.act; if(ACT[a]&&CHG.includes(a)) ACT[a](t,e);
+  const a=t.dataset.act; /* ⭐ `#2`（2026-09-26）：**没有名单了** —— `change` 事件只可能来自表单元素
+     （`data-act` 挂在别的东西上根本收不到 change）⇒ 名单是纯多余的护栏，
+     而它每漏登记一个动作就是一次**静默丢弃**（本仓踩过 `jcAmt` / `jcPartySet` / `themeSet`）。 */
+  if(ACT[a]) ACT[a](t,e);
 });
 /* 点面板外部自动收起（年月选择器 / 项目面板）—— 在委托处理之后再跑，点自身不会被误关。
-   ⚠️ **十个项目面板**（MOD-03 pjOpen / MOD-04 plPjOpen / MOD-05 付款流水 flPjOpen / MOD-05 台账 ledPjOpen /
-      MOD-05 期初展开区 lgPjOpen · MOD-11 集采新增展开区 jcNPjOpen（2026-09-13 增行模式新增 —— 都在 `.tw` 之外，不会被裁） /
-      MOD-06 procPjOpen / MOD-08 invWhOpen / MOD-09 awfPjOpen / MOD-11 jcPjOpen）都要在这里登记，
-   都要在这里登记，否则"点空白处不收起"（MOD-04、MOD-08、MOD-11 都曾漏登记）。 */
+   ⚠️ **每一个项目面板**（MOD-03 pjIsOpen('pj') / MOD-04 pjIsOpen('plPj') / MOD-05 付款流水 pjIsOpen('flPj') / MOD-05 台账 pjIsOpen('ledPj') /
+      MOD-05 期初展开区 pjIsOpen('lgPj') · MOD-11 集采新增展开区 pjIsOpen('jcNPj')（2026-09-13 增行模式新增 —— 都在 `.tw` 之外，不会被裁） /
+      MOD-06 pjIsOpen('procPj') / MOD-08 pjIsOpen('invWh') / MOD-09 pjIsOpen('awfPj') / MOD-11 pjIsOpen('jcPj') /
+      **通用导入面 `IMP.pjIsOpen('pj')`（2026-09-26 补 —— 见下）**）都要在这里登记，
+   否则"点空白处不收起"（MOD-04、MOD-08、MOD-11 都曾漏登记）。
+   ⚠️⚠️ **2026-09-26 实测漏登记的代价**（用户报障「展开待选列表后无法正常关闭」）：通用导入面换用共用面板时
+      忘了把 `IMP.pjIsOpen('pj')` 加进来 ⇒ 面板**只能在"再点一次那个按钮"或"选中一项"时才收**，
+      点页面别处一律不收 —— 与其他面板行为不一致（规则 4「相似元素不制造歧义」：同类控件行为必须一样）。
+      ⇒ 判据：`backend/tests/test_imp_shell.py::test_本页的面板展开态登记在点外面收起里`（漏登记必红）。 */
 document.addEventListener('click',e=>{
-  if(!pjOpen && !plPjOpen && !flPjOpen && !procPjOpen && !jcPjOpen && !invWhOpen && !awfPjOpen && !ledPjOpen && !lgPjOpen && !jcNPjOpen && !ledExpPjOpen && !procExpPjOpen && mp.open===null) return;
+  const anyOpen = Object.keys(PJ_OPEN).some(k=>PJ_OPEN[k]);
+  if(!anyOpen && mp.open===null) return;
   const inEl=cls=>!!(e.target&&e.target.closest&&e.target.closest(cls));
   let ch=false;
-  if(pjOpen && !inEl('.pjwrap')){ pjOpen=false; ch=true; }
-  if(plPjOpen && !inEl('.pjwrap')){ plPjOpen=false; ch=true; }
-  if(procPjOpen && !inEl('.pjwrap')){ procPjOpen=false; ch=true; }
-  if(jcPjOpen && !inEl('.pjwrap')){ jcPjOpen=false; ch=true; }
-  if(invWhOpen && !inEl('.pjwrap')){ invWhOpen=false; ch=true; }
-  if(awfPjOpen && !inEl('.pjwrap')){ awfPjOpen=false; ch=true; }
-  if(flPjOpen && !inEl('.pjwrap')){ flPjOpen=false; ch=true; }
-  if(ledPjOpen && !inEl('.pjwrap')){ ledPjOpen=false; ch=true; }
-  if(ledExpPjOpen && !inEl('.pjwrap')){ ledExpPjOpen=false; ch=true; }
-  if(procExpPjOpen && !inEl('.pjwrap')){ procExpPjOpen=false; ch=true; }
-  if(lgPjOpen && !inEl('.pjwrap')){ lgPjOpen=false; ch=true; }
-  if(jcNPjOpen && !inEl('.pjwrap')){ jcNPjOpen=false; ch=true; }
+  /* ⭐ `#1`（2026-09-26）：**遍历注册表全关** —— ⛔ 不再逐个列面板名字
+     （那份名单正是 2026-09-26 用户报障「展开后关不掉」的根：漏登记一个新面板就静默坏）。 */
+  if(!inEl('.pjwrap')) Object.keys(PJ_OPEN).forEach(k=>{ if(PJ_OPEN[k]){ PJ_OPEN[k]=false; ch=true; } });
   if(mp.open!==null && !inEl('.mpwrap')){ mp.open=null; ch=true; }
   if(ch){ render(); if(lastModal&&lastModal.reopen) lastModal.reopen(); }
 });
@@ -2227,7 +2229,8 @@ document.addEventListener('keydown',e=>{
     if(t&&ACT[t.dataset.act]){ e.preventDefault(); ACT[t.dataset.act](t,e); return; }
   }
   if(e.key!=='Escape') return;
-  if(pjOpen||plPjOpen||flPjOpen||ledPjOpen||procPjOpen||jcPjOpen||invWhOpen||awfPjOpen||lgPjOpen||jcNPjOpen||ledExpPjOpen||procExpPjOpen||invColOpen!==''||mp.open!==null){ pjOpen=false; plPjOpen=false; flPjOpen=false; ledPjOpen=false; procPjOpen=false; jcPjOpen=false; invWhOpen=false; awfPjOpen=false; lgPjOpen=false; jcNPjOpen=false; ledExpPjOpen=false; procExpPjOpen=false; invColOpen=''; mp.open=null; render(); }
+  /* ⭐ `#1`（2026-09-26）：**遍历注册表全关** —— ⛔ 不再手写面板名单（`invColOpen` 是另一种控件，单独收）。 */
+  if(Object.keys(PJ_OPEN).some(k=>PJ_OPEN[k])||invColOpen!==''||mp.open!==null){ Object.keys(PJ_OPEN).forEach(k=>{ PJ_OPEN[k]=false; }); invColOpen=''; mp.open=null; render(); }
   closeModal(); });
 
 /* =====================================================================

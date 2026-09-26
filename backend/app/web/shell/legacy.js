@@ -185,7 +185,11 @@ ACT.setSave = async () => {
    （症状：选完文件"解析"按钮永远是灰的 / 换项目没反应）。本仓踩过三次（`jcAmt` / `jcPartySet` / `themeSet`）。
    ⚠️ 只登记**表单元素**上挂的那几个（`<input type=file>` / `<select>`）——
       「解析并预览」是 `<button>`（走 click 委托），⛔ 不用进这里。 */
-CHG.push('impDomain', 'impPick', 'impMap', 'impPj');
+/* `#2`（2026-09-26）：那行「变更事件白名单」登记已废 —— 表单类动作不再需要登记 */
+/* ⚠️ `impPj` **已从 `CHG` 里去掉**（2026-09-26）：它原来是挂在 `<select data-act="impPj">` 上的，
+   现在「项目」换成**共用面板 `projPanel`（单选）** ⇒ 面板内的 `radio` 挂的是 `impPjPick`、
+   展开/收起是 `impPjToggle`（都是 `<button>` / `radio`，走 click 委托）⇒ ⛔ 不用进 `CHG`。
+   （`CHG` 只管 `<select>` / `<input type=file>` 这类 **change 事件**的控件。） */
 
 /* =====================================================================
    `V.imp` —— 「**数据导入**」（通用导入面 · `TAIL-75` · `B5` · 2026-09-22）
@@ -198,13 +202,16 @@ CHG.push('impDomain', 'impPick', 'impMap', 'impPj');
      ② **落库前零写库**：②③ 只带 `token`（后端 `preview_store` 是唯一载具）；
      ③ **建议带依据与置信度**：界面上把"为什么这么认"照原话显示；
      ④ **记忆只是预填**：来自记忆的映射照样可改，并标明来源。
-   ⚠️ 域的上下文（如过程资料的"这批进哪个项目"）走 `options` 递——见 `ACT.impCommit`。
-      ⛔ 壳里只有**一处**域号分支（`impSetDomain` 里那句），且它调的是**通用面的** `options` 端点
-     （`GET /api/imp/{domain}/options`，由域的 `Hooks.options` 给 —— ⛔ 不再有域专属读端点）。
+   ⚠️ 域的上下文（如过程资料的"这批进哪个项目"、付款计划的"归属年月"）走 `options` 递——见 `ACT.impCommit`。
+      ⛔ 壳里**零域号分支**（也不再有域专属读端点）：一律调**通用面的** `options` 端点
+     （`GET /api/imp/{domain}/options`，由域的 `Hooks.options` 给），**哪个域有哪些上下文由域自己说**
+     （键在不在）⇒ 加一个域不用动壳。⚠️ 2026-09-26 收口：此前 `impSetDomain` / `ACT.impCommit` 里
+     共有 **5 处** `IMP.domain === '…'` 分支（与这句注释不符 —— 注释当时是"目标"，实现没跟上）。
    ⛔ **`m06imp`（过程资料历史导入页）已下架**（`B5c` · 2026-09-22）：同一件事不留两个入口 ——
       `m05imp`（历史付款导入）**暂留**，等 `m05` 也挂上通用面再删（`B5c-2`）。 */
 const IMP = {domains: [], domain: '', schema: null, file: null, token: '', cols: [], mapping: {},
              memory: '', preview: null, report: null, step: 0, org: [], wrap: '', cutoff: '',
+             ym: '', pjDisp: {}, hasCut: false, hasYm: false,
              msg: '', kind: 'ok'};
 
 const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '④ 确认落库'];
@@ -224,22 +231,45 @@ async function impSetDomain(domain) {
   IMP.domain = String(domain || '');
   IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {}; IMP.memory = '';
   IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = '';
-  IMP.org = []; IMP.wrap = ''; IMP.cutoff = '';
+  IMP.org = []; IMP.wrap = ''; IMP.cutoff = ''; IMP.ym = '';
+  IMP.pjClose('impPj'); IMP.pjDisp = {}; IMP.hasCut = false; IMP.hasYm = false;
   if (!IMP.domain) { IMP.schema = null; return; }
   IMP.schema = await API.impSchema(IMP.domain);
-  /* ⚠️ 本页**仅有的两处域号分支**（见文件头注释）：都是"这个域要哪个上下文"，
-     且**都调该域自己的读端点**（⛔ 不在壳里另造一份候选）。 */
-  if (IMP.domain === 'm06_proc') {
-    const d = await API.impOptions(IMP.domain);
-    IMP.org = (d && d.projects) || [];
-    IMP.wrap = (d && d.warehouse) || IMP.org[0] || '';
-    IMP.cutoff = (d && d.cutoff_ym) || '';
-  }
-  if (IMP.domain === 'm11_jc') {
-    const d = await API.m11List();
-    IMP.org = ((d && d.projects) || []).map(p => (p && p.key) || String(p));
-    IMP.wrap = IMP.org[0] || '';
-  }
+  await impLoadCtx();
+}
+
+/* ⭐ **域上下文**（候选项目 / 截止核算月 / 归属年月…）一律走通用面**唯一**一条读端点
+   （`GET /api/imp/{domain}/options`，由域的 `Hooks.options` 给）—— 本页**零域号分支**。
+   ⛔ 壳里不再有 `if (IMP.domain === 'xxx')` 这种分支、⛔ 也不再调域专属读端点。
+   ⭐ 2026-09-26 用户报障后收口（原来集采域那一条分支调的是域专属端点 `/api/m11/list`，
+      而它给的是**对象**，壳里 `(p && p.key) || String(p)` 在 `key` 为空串时把对象渲染成
+      `[object Object]` ⇒ 真机实测 20 条候选里 3 条是坏的，选中即报「找不到项目」）。
+   ⚠️ 没挂 `options` 的域该端点**没注册**（HTTP 404）⇒ 这里按"这个域没有上下文"处理，
+      ⛔ 不报错、不拦路（域清单的主人在后端，壳不该认识"哪个域有上下文"）。 */
+async function impLoadCtx() {
+  let d = null;
+  try { d = await API.impOptions(IMP.domain); }
+  catch (e) { d = null; }                       /* 404 / 网络失败 ⇒ 都算"没有域上下文" */
+  const ctx = (d && d.ok !== false) ? d : {};
+  /* 候选项目的**两种历史形态**都能收（`m06`/`m11` 现在都给字符串键，`{key,display}` 也认）——
+     ⚠️ 这里是**唯一**一处拍平；⛔ **空键一律丢弃**：空键渲染出来就是 `[object Object]`（本次报障的根因），
+        而且 `project_id_by_key('')` 必然查不到 ⇒ 早丢早好，⛔ 不靠下游报错来兜。 */
+  const raw = ctx.projects || [];
+  IMP.org = []; IMP.pjDisp = {};
+  raw.forEach(p => {
+    const k = (typeof p === 'string' ? p : String((p && p.key) || '')).trim();
+    if (!k) return;
+    IMP.org.push(k);
+    const disp = (typeof p === 'string' ? '' : String((p && p.display) || ''));
+    if (disp) IMP.pjDisp[k] = disp;
+  });
+  IMP.wrap = ctx.warehouse || ctx.project_key || IMP.org[0] || '';
+  /* ⭐ **哪个域要哪些上下文，由域自己说**（键在不在），壳按这个渲染控件 —— 这就是"加一个域不改壳"：
+       `projects` ⇒ 项目选择 · `year_month` ⇒ 本批归属年月（`m04`）· `cutoff_ym` ⇒ 截止核算月（`m06`） */
+  IMP.hasYm = Object.prototype.hasOwnProperty.call(ctx, 'year_month');
+  IMP.hasCut = Object.prototype.hasOwnProperty.call(ctx, 'cutoff_ym');
+  IMP.ym = IMP.hasYm ? String(ctx.year_month || '') : '';
+  IMP.cutoff = IMP.hasCut ? String(ctx.cutoff_ym || '') : '';
 }
 
 V.imp = () => {
@@ -249,8 +279,16 @@ V.imp = () => {
   const req = (sch && sch.required) || [];
   const got = Object.values(IMP.mapping || {}).filter(v => v);
   const lack = req.filter(f => !got.includes(f));
-  const orgs = IMP.org.map(p =>
-    `<option value="${esc(p)}"${p === IMP.wrap ? ' selected' : ''}>${esc(p)}</option>`).join('');
+  /* 「键 → 显示」= **域给的展示名**优先，没有就原样显示仓库名。
+     ⚠️ **刻意不无条件用 `PROJ_META_KEY`**：它要从**项目档案**（`PJs`）查展示名与归档状态，而
+        「数据导入」页的 `page_load` 只有 `['数据导入']` ⇒ 档案**可能没加载** ⇒ 那样满屏黄字「未建档」，
+        比原来的下拉还糟。`PJs` 恰好在（用户刚去过档案页）就用它 —— 能顺带标出**归档**与**未建档**。 */
+  const impPjMeta = v => (PJs.length ? PROJ_META_KEY(v)
+    : {nm: IMP.pjDisp[v] || v, warn: false, arc: false, title: '仓库名（§2.7.4）：' + v});
+  /* 「项目」= **共用面板**（单选）—— 与 MOD-09 / 新增合同 / 台账导出（`ledPjPanel`）同款。
+     ⚠️ 它渲染在本卡的 `fbar` 里、**不在 `.tw`（滚动容器）内** ⇒ 浮层不会被裁（同 `ledExpStrip` 的处置）。 */
+  const impPjPanel = () => projPanel({list: () => IMP.org, selected: () => [IMP.wrap],
+                                      pickAct: 'impPjPick', meta: impPjMeta, single: true});
   const head = `<div class="card"><h4>数据导入<span class="sp"><span class="mut sm">一次导一个域的一种表 ·
     落库前一个字节都不写库</span></span></h4><div class="bd">${lgSteps(IMP_STEPS, IMP.step)}
     <div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)">
@@ -303,15 +341,25 @@ V.imp = () => {
   if (IMP.preview) {
     const p = IMP.preview;
     const probs = (IMP.problems || []);
-    const proj = IMP.domain === 'm04_plan'
+    /* ⭐ **域上下文那一栏 = 按域给的键渲染**（⛔ 壳里不看域号）：
+         · `projects`   ⇒ 「这批数据进哪个项目」= **共用项目面板（单选）**（⛔ 全站不得自造项目控件）
+         · `year_month` ⇒ 「本批归属年月」（`m04`：这批全归该月，§4.3.3；落库**必填**）
+         · `cutoff_ym`  ⇒ 「截止核算月」（`m06` 的历史段分界，§5.2.5）
+       ⚠️ 2026-09-26 所修（用户报障）：原先这里是 `IMP.domain === 'm04_plan' ? 年月 : (项目 ＋ 截止核算月)`
+          —— 两处毛病：①「项目」是**自造的原生下拉**（全站约定是共用面板，10 处都在用它）；
+          ②**截止核算月被画给了所有域**，而集采/付款计划的落库根本不读它（`ACT.impCommit` 给的上下文包里
+          它只是空转）⇒ 用户填了**不生效**，属于"让人以为能改"的死控件。 */
+    const ctxBar = (IMP.org.length || IMP.hasYm || IMP.hasCut)
       ? `<div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)">
-        <div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
-          <input class="inp" id="impYm" value="${esc(IMP.cutoff || bjMonth())}" placeholder="2026-09"></div></div>`
-      : (IMP.org.length ? `<div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)">
-        <div class="fi"><label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
-          <select class="inp" data-act="impPj">${orgs}</select></div>
-        <div class="fi"><label>截止核算月（历史段分界）</label>
-          <input class="inp" id="impCut" value="${esc(IMP.cutoff)}" placeholder="留空 ⇒ 取本批最大月"></div></div>` : '');
+        ${IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
+          <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
+          <button class="btn" data-act="impPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(IMP.wrap ? (IMP.pjDisp[IMP.wrap] || IMP.wrap) : '请选择项目')}</span><span class="mut" style="font-size:9px">▼</span></button>
+          ${IMP.pjIsOpen('impPj') ? impPjPanel() : ''}</div>` : ''}
+        ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
+          <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
+        ${IMP.hasCut ? `<div class="fi"><label>截止核算月（历史段分界）</label>
+          <input class="inp" id="impCut" value="${esc(IMP.cutoff)}" placeholder="留空 ⇒ 取本批最大月"></div>` : ''}
+        </div>` : '';
     const prows = (p.preview || []).slice(0, 12).map(r => `<tr>${Object.keys(r).filter(k => k !== '_row')
       .map(k => `<td class="now">${esc(String(r[k] == null ? '' : r[k]))}</td>`).join('')}</tr>`).join('');
     const pcols = p.preview && p.preview.length
@@ -331,7 +379,7 @@ V.imp = () => {
           <td class="now">${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`).join('')}</tbody></table></div>
         <div class="tip wn" style="margin-top:8px">这些问题**不影响其余行落库**；认不出的值一律原样留着给人看，⛔ 不静默改成 0/空。</div>`
       : '<div class="tip ok">没有发现问题行</div>'}
-      ${proj}
+      ${ctxBar}
       ${lgBlocks(p.blocks)}
       <div class="tw" style="max-height:260px;margin-top:10px"><table class="dt sm">
         <thead><tr>${pcols}</tr></thead><tbody>${prows || lgEmpty(1, '没有数据行')}</tbody></table></div>
@@ -369,7 +417,8 @@ ACT.impDomain = async t => {
 };
 ACT.impPick = t => { IMP.file = (t.files || [])[0] || null; IMP.msg = ''; render(); };
 ACT.impReset = () => { IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {};
-  IMP.memory = ''; IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = ''; render(); };
+  IMP.memory = ''; IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = ''; IMP.pjClose('impPj');
+  render(); };
 /* ① → ②：解析（不写库）。预选 = 后端给的建议；**记忆命中的映射盖在建议之上**（并标明来源）。 */
 ACT.impParse = async () => {
   if (!IMP.file || !IMP.domain) return;
@@ -393,7 +442,13 @@ ACT.impParse = async () => {
   render();
 };
 ACT.impMap = (t) => { IMP.mapping[t.dataset.src] = t.value || ''; render(); };
-ACT.impPj = async t => { IMP.wrap = t.value || ''; render(); };
+/* 「项目」共用面板（**单选**）—— 第 11 个 `projPanel` 调用点。
+   ⚠️ 展开是 `<button>`、选择是面板内的 `radio` ⇒ 都走 **click 委托**，⛔ 不进 `CHG`
+      （`CHG` 只管 `<select>` / `<input type=file>` 那种 **change** 事件）。 */
+ACT.impPjToggle = () => { IMP.pjIsOpen('impPj') = !IMP.pjIsOpen('impPj'); render(); };
+ACT.impPjPick = t => { const v = (t && t.dataset && t.dataset.pj) || ''; if (!v) return;
+  IMP.wrap = v; IMP.pjClose('impPj'); render();
+  toast(`这批数据将导入项目 <b>${esc(IMP.pjDisp[v] || v)}</b>（键 = 仓库名，§2.7.4）`); };
 /* ② → ③：预览（不写库） */
 ACT.impPreview = async () => {
   IMP.msg = '正在校验（预览阶段不写库）…'; IMP.kind = 'ok'; render();
@@ -407,10 +462,12 @@ ACT.impPreview = async () => {
 ACT.impCommit = async () => {
   const cut = document.querySelector('#impCut');
   const ym = document.querySelector('#impYm');
-  const options = {};
-  if (IMP.domain === 'm06_proc') { options.warehouse = IMP.wrap; options.cutoff_ym = (cut && cut.value) || ''; }
-  if (IMP.domain === 'm04_plan') { options.year_month = (ym && ym.value) || bjMonth(); }
-  if (IMP.domain === 'm11_jc') { options.project_key = IMP.wrap; }
+  /* ⭐ **上下文包 = 域声明的键一并给**（⛔ 壳里不再按域号挑那几个键 —— 2026-09-26 收口）：
+     各域的 `commit` 只读它认识的那几个（`m06` 读 `warehouse` / `cutoff_ym`、`m04` 读 `year_month`、
+     `m11` 读 `project_key`），多给的键对它只是**字典里的空转**。
+     ⚠️ 壳**不知道**哪个域要哪个键（那是域的事）⇒ ⛔ 别再加回"`if (域号) 只给这几个`"的写法。 */
+  const options = {warehouse: IMP.wrap, project_key: IMP.wrap,
+                   cutoff_ym: (cut && cut.value) || '', year_month: (ym && ym.value) || bjMonth()};
   IMP.msg = '正在落库…'; IMP.kind = 'ok'; render();
   let r = null;
   try { r = await API.impCommit(IMP.domain, { token: IMP.token, mapping: IMP.mapping,
@@ -426,8 +483,10 @@ ACT.impCommit = async () => {
        付款通知书的「统计付款金额」⇒ m03 列表的「已付金额」与 m05 的欠款/台账/统计**都变了**，
        而 `LOADED` 记着"拉过了" ⇒ **切回那两页看到的是旧数**（对真数据说旧话，是本仓最忌的一类）。
      · ⛔ 也**不许**改成"补几个字面域名单"：域清单的主人在后端，壳侧列一份 = "加一个域要改两处"。
-     ⇒ 壳侧最省心的**正确**做法 = 全标脏：下次进哪页拉哪页（多几路 GET），⛔ 永不漏拉。 */
-  LOADED.clear();
+     ⇒ 壳侧最省心的**正确**做法 = 全标脏：下次进哪页拉哪页（多几路 GET），⛔ 永不漏拉。
+     ⭐ **`#3`（2026-09-26）：这个清空搬进了写出口** —— `API.impCommit` 是**写出口**，`api.js` 里
+     已经统一调 `markCrossPageStale()`（= `LOADED.clear()`）⇒ 本动作**不再自己写**
+     （业务动作里手写清空 = "靠自觉"，下一个人还得记得写；判据见 `test_wired_boot.py`）。 */
   render();
 };
 ACT.impRollback = async t => {
@@ -436,6 +495,8 @@ ACT.impRollback = async t => {
   catch (e) { IMP.msg = `回滚失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
   if (!r || r.ok === false) { IMP.msg = (r && r.message) || '回滚失败'; IMP.kind = 'err'; render(); return; }
   IMP.report = r.report || IMP.report; IMP.msg = r.message || '已回滚'; IMP.kind = 'wn';
-  LOADED.clear();          /* 同上（`TAIL-78`）：回滚也是**跨页写** —— `rollback_batch` 会逐个重算 `stat_paid` */
+  /* 同上（`TAIL-78`）：回滚也是**跨页写** —— `rollback_batch` 会逐个重算 `stat_paid`。
+     ⭐ `#3`（2026-09-26）：清空**由写出口统一做**（`API.impRollback` ⇒ `api.js` 的 `markCrossPageStale()`），
+     本动作⛔ 不再自己写（理由同上）。 */
   render();
 };

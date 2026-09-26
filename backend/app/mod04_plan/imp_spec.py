@@ -103,6 +103,17 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     return {"year_month": ym, **out}
 
 
-HOOKS = Hooks(commit=commit)          # 无批次回滚 ⇒ 不给 `rollback` 钩子（通用面据此不挂那个端点）
+def options(s) -> dict:  # noqa: ARG001 —— 本域的上下文不来自库，但签名要与通用面的钩子一致
+    """**域上下文**（通用面唯一一条读端点：`GET /api/imp/{domain}/options`）—— 本域要「本批归属年月」。
 
-__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit"]
+    ⭐ 这里给的是**键的存在性**：壳按"域声明了哪个键就渲染哪个控件"来画（⛔ 壳里不看域号）——
+      所以本域只要返回 `year_month` 这个键，壳就会把那格「本批归属年月」画出来（§4.3.3）。
+    ⚠️ 值**故意留空**：默认值（北京时间当月）是**壳**的事 —— 后端塞一个"看起来像默认"的月份，
+       会让「没选年月」看起来像「选过了」（而本域落库时年月**必填**，⛔ 不许出现这种假象）。
+    """
+    return {"year_month": ""}
+
+
+HOOKS = Hooks(commit=commit, options=options)   # 无批次回滚 ⇒ 不给 `rollback` 钩子（通用面据此不挂那个端点）
+
+__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "options"]

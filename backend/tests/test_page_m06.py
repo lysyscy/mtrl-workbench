@@ -264,6 +264,9 @@ def test_历史导入页三步齐备且带项目与截止月():
     #    **判词不变**（"壳把三步与后端给的数据都画出来"），落点换到通用面：
     assert "/api/imp/" in SHELL and "impDomains" in SHELL, "壳的上传口没接上通用导入面"
     assert "/api/imp/${encodeURIComponent(domain)}/parse" in SHELL, "上传口要指到通用面的 parse"
-    assert 'data-act="impPj"' in SHELL and 'id="impCut"' in SHELL, "项目（仓库名）与截止核算月没画出来"
+    # ⚠️ 2026-09-26（`TAIL-103`）：「项目」从**自造的原生下拉**（`data-act="impPj"`）换成
+    #    **共用面板 `projPanel`（单选）**，且那一栏改成**按域声明的键渲染**（`IMP.hasCut`）——
+    #    **判词不变**（"壳把项目与截止核算月都画出来"），落点换成面板的展开动作。
+    assert 'data-act="impPjToggle"' in SHELL and 'id="impCut"' in SHELL, "项目（仓库名）与截止核算月没画出来"
     for must in ("选域与文件", "列映射", "预览校验", "确认落库"):
         assert must in SHELL, f"壳的导入流程少了这一步：{must}"
