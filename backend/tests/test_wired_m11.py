@@ -37,7 +37,10 @@ def test_适配层把后端字符串金额转成数字():
     s = _sh()
     assert "function adaptJc" in s, "要有适配层（⛔ 不许把转形散落到 `V.m11` 里）"
     for frag in ("contractAmt: N0(x.contract_amt)", "settle: N0(x.settle)",
-                 "pay_sum: N0(x.pay_sum)", "debt: N0(x.debt)"):
+                 "pay_sum: N0(x.pay_sum)", "debt: N0(x.debt)",
+                 # ⭐⭐ 2026-09-26（用户报障「宜化发票子表导入成功，但**发票金额没跟着动**」）：
+                 #    这两列**原先没进适配层**（主表按本地子表现算 ⇒ 恒 0）⇒ 现在必须与另三列同款转数字。
+                 "inv_sum: N0(x.inv_sum)", "trade_inv_sum: N0(x.trade_inv_sum)"):
         assert frag in s, f"适配层漏了 `{frag}`"
     # ⚠️⚠️ 键名以 `domain.DERIVED_MONEY_KEYS` 为准：**是 `pay_sum`，⛔ 不是 `pay`**。
     #    写成 `x.pay` ⇒ 拿到 `undefined` ⇒ `N0()` 变 0 ⇒ **页面金额恒 0、且不报错**（实测踩到过）。
@@ -53,14 +56,28 @@ def test_适配层把后端字符串金额转成数字():
 
 @acc()
 def test_反向_判定搬家_金额读后端不再前端现算():
-    """⭐ 反向断言①：**不许再自己算不变式**（那是第二份口径，早晚与后端分叉）。"""
+    """⭐ 反向断言①：**不许再自己算不变式**（那是第二份口径，早晚与后端分叉）。
+
+    ⭐⭐ 2026-09-26（用户报障 · 原话：「宜化项目**发票子表导入成功**，但**发票金额没跟着动**」）：
+      `M5-7` 那次搬家**漏了 `发票金额` / `贸易公司发票金额` 这两列** —— 它们仍按**本地子表数组**现算，
+      而 `/api/m11/list` **故意不给子表明细**（`adaptJc` 里那三个数组**恒为空**）
+      ⇒ **主表这两列恒显示 0.00**（后端其实算对了：实测 `inv_sum` 已是 52235.70 / 358722.46 / 54556.61，
+      页面却全 0）⇒ 用户眼里就是"导入成功了、金额没动"。
+      ⚠️ 这个 bug **离线看不见**（`node --check` 能过、页面也没报错）—— 真机那半由
+      `tools/probe/_shell_m11.py`（㉓）按"**页面显示 == 后端派生值**"逐行比。
+    """
     s = _sh()
     assert "const jcSettle=j=>N2(j.settle);" in s, "结算必须读后端字段"
     assert "const jcPay=j=>N2(j.pay_sum);" in s, "付款合计的键名是 `pay_sum`（后端 `DERIVED_MONEY_KEYS`）"
     assert "const jcDebt=j=>N2(j.debt);" in s
+    assert "const jcInvSum=j=>N2(j.inv_sum);" in s, \
+        "发票金额必须读后端派生值（⛔ 别再按本地子表现算 —— 列表里根本没有子表明细 ⇒ 恒 0）"
+    assert "const jcTradeInvSum=j=>N2(j.trade_inv_sum);" in s, "贸易公司发票金额同理"
     assert "jcTradeInvSum(j):jcInvSum(j)" not in s, \
         "⛔ 不许再按子表现算结算（原实现 = 第二份口径）"
     assert "const jcDebt=j=>N2(jcSettle(j)-jcPay(j))" not in s, "⛔ 欠款不许再前端现算"
+    assert "j.invoices||[]).reduce" not in s and "j.tradeInvoices||[]).reduce" not in s, \
+        "⛔ 壳里不许再「按子表数组现算发票合计」（列表不给明细 ⇒ 恒 0，且那是第二份口径）"
 
 
 @acc()

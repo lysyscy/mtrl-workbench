@@ -30,6 +30,7 @@ from _shell_home import check as check_home    # noqa: E402  ← ⑲ 看板接�
 from _shell_exp import check as check_exp        # noqa: E402  ← ⑬ m07 导出（`TAIL-04`）—— 2026-09-21 外移（本文件逼近 600 行红线）
 from _shell_legacy import check as check_legacy  # noqa: E402  ← ⑳ 四个暂留件收口的壳内四页（`§19`）
 from _shell_pops import check as check_pops    # noqa: E402  ← ㉑ 通用浮层的 `fixed` 定位 ＋ 点命中（`TAIL-109`/`TAIL-110`）
+from _shell_m11 import check as check_m11      # noqa: E402  ← ㉓ 集采台账派生金额＝后端派生值（`TAIL-113`）
 from _shell_m09 import check as check_m09    # noqa: E402  ← ⑪/⑪b m09 特殊费用（2026-09-25 外移：`TAIL-99`）
 from _shell_m14 import check as check_m14    # noqa: E402  ← ⑫/⑫b/⑫c m14 规则配置 ＋ 剔除名单卡（同上）
 
@@ -543,6 +544,11 @@ def main() -> int:
         #      `placePops` 提升为 `fixed`（否则被卡片 `overflow:hidden` 裁掉后半截，用户报过）
         #      ＋ ⭐ **点命中**判"最后一项真的看得见"（离线看不见 CSS 裁剪，只有这里能量到）。
         check_pops(page, errors)
+
+        # ---- ㉓ **集采台账派生金额 = 后端派生值**（`TAIL-113` · 2026-09-26 用户报障
+        #      「宜化发票子表导入成功，但**发票金额没跟着动**」）：5 列**逐行 ＋ 合计**比一遍。
+        #      ⚠️ 这类 bug **离线看不见**（静态判据只钉"函数体读哪个字段"，钉不出"页面画对了"）。
+        check_m11(page, errors)
 
     print("\n=== console / page 错误 ===")
     if errors:

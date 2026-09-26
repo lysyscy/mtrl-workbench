@@ -688,20 +688,21 @@ const hasT=(n,label)=>hasTrail(n.trail,label);   /* 留痕读取的唯一出口�
    页面刷新后 payOv 不存在 → 回到派生默认，这正是所要的行为。 */
 const payOver=n=>n.payOv!=null;
 const payEff=n=>payOver(n)?N2(n.payOv):N2(n.approve-paidOf(n.id));
-/* 发票金额 / 贸易公司发票金额 / 付款金额 一律由【子表汇总】得出（主表同名列只显示合计，不再单独存储）
-   —— 供应商侧与贸易公司侧**同一套逻辑**（口径 2026-09-12 定案）
-   ⭐ 2026-09-13：发票子表槽位由 `[金额]` 改为 **`[日期, 金额]`**（用户口径：录入要填日期）⇒ 求和取 `i[1]`；
-   付款子表本来就是 `[日期, 金额, 来源, 通知书id]`，取 `p[1]` 不变。 */
-const jcInvSum=j=>N2((j.invoices||[]).reduce((a,i)=>a+(+i[1]||0),0));
-const jcTradeInvSum=j=>N2((j.tradeInvoices||[]).reduce((a,i)=>a+(+i[1]||0),0));
-/* ⭐⭐ `M5-7` **判定搬家**：结算 / 付款 / 欠款**一律读后端**（`/api/m11/list` 的 `settle`/`pay`/`debt`，
-   §6.4.4 的唯一出口在 `mod11_jc.domain`）。
-   ⛔ 原实现在浏览器里按**子表**现算 —— 那是**第二份口径**（早晚与后端分叉），而且列表里根本没有子表明细。
-   ✅ **保留原函数签名** ⇒ `V.m11` 一行都不用改（`ui_parity` 的 `U1` 才能保持 0 漂移）。
+/* ⭐⭐ **主表那 5 个派生金额列一律读后端派生值**（`M5-7` 判定搬家；唯一出口 = `mod11_jc.domain`）。
+   ⛔ 原实现在浏览器里按**子表数组**现算 —— 那是**第二份口径**（早晚与后端分叉），而且
+      `/api/m11/list` **故意不给子表明细**（`adaptJc` 里那三个数组**恒为空**）⇒ 算出来**恒 0**。
+   ✅ 保留原函数签名 ⇒ `V.m11` 一行都不用改（`ui_parity` 的 `U1` 才能保持 0 漂移）。
    ⚠️ 后端金额出**字符串** ⇒ 过 `N2()`（漏了会让"求和"变**字符串拼接**、合计安静地错）。
-   上方的 `jcInvSum`/`jcTradeInvSum` 仍留着 —— **子表弹窗**要按行渲染它们（那走 `/api/m11/detail`）。 */
+   ⚠️⚠️ **`jcInvSum` / `jcTradeInvSum` 原先漏搬了**（2026-09-26 用户报障原话：「宜化项目**发票子表导入成功**，
+      但**发票金额没跟着动**」）：它们当时仍按本地子表现算 ⇒ **主表那两列恒显示 0.00**
+      （后端其实算对了 —— 实测 `inv_sum` 已是 52235.70 / 358722.46 / 54556.61，页面却全 0）。
+      ⇒ 一并改读后端；⭐ 子表弹窗**也**读它：加/删子表行时 `jcAct` 内部会 `reloadM11()`
+      （列表随即重拉，含刚加的那张票）⇒ 弹窗合计与主表**同一个数**，⛔ 不必（也**不许**）再按本地数组现算一遍。
+   ⛔ 后端键名以 `domain.DERIVED_MONEY_KEYS` 为准：是 **`pay_sum`**，⛔ 不是 `pay`。 */
+const jcInvSum=j=>N2(j.inv_sum);
+const jcTradeInvSum=j=>N2(j.trade_inv_sum);
 const jcSettle=j=>N2(j.settle);
-const jcPay=j=>N2(j.pay_sum);            /* ⚠️ 后端键名是 `pay_sum`（`domain.DERIVED_MONEY_KEYS`），⛔ 不是 `pay` */
+const jcPay=j=>N2(j.pay_sum);
 const jcDebt=j=>N2(j.debt);
 function debts(){
   /* ⭐ 已接后端：三类 ＋ 合计**一律读 `/api/m05/debt`**（§4.5.1 的唯一出口）。
