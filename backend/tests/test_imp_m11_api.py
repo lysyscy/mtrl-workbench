@@ -175,3 +175,74 @@ def test_域上下文端点在_且候选项目只给非空键(client):
         f"候选该 = 档案里**有仓库名**的那些（实测空键 {len(empties)} 条，一条都不许进候选）")
     assert set(got) - {"ok", "projects"} == set(), \
         f"域上下文只该给候选键（⛔ 别塞 `display` 之类的对象）—— 多给了：{set(got) - {'ok', 'projects'}}"
+
+
+@acc("ACC-IMP-MAP-001", "001-12")
+def test_贸易公司合同凭贸易公司金额对号_供应商价空才填_且能整批回滚(client):
+    """⭐⭐ 2026-09-26（用户报障「贸易公司合同落错列」⇒ 他裁定的**方案②**）：
+
+    贸易公司合同的「合同金额」（= 供应商价）在 i8 里**根本没有**、按设计**留空**
+    ⇒ 拿它当钥匙**永远配不上**（Excel 里那个真供应商价永远进不来）
+    ⇒ 现在改用「**贸易公司合同金额**」当钥匙（对号 Excel 的「贸易公司合同总价」），
+    对上后把 Excel 的「**供应商合同总价**」**空才填**进台账「合同金额」。
+
+    ⚠️ **能证伪**：把 `match_and_apply` 的锚点索引改回"只有 `by_amt` 一张表" ⇒ 本条必红（配不上）。
+    ⚠️ 一并钉三半：① 空 ⇒ 填；② **已有值 ⇒ ⛔ 不覆盖**（§9.3「人工改过的不被覆盖」）；
+       ③ **整批回滚要把它也还原**（回滚点原先只记那 6 列 ⇒ 会"回滚了但金额没回"）。
+    """
+    from sqlalchemy import select
+
+    from app.core.db import session_scope
+    from app.mod01_projects import repository as pj_repo
+    from app.mod01_projects.models import TYPE_NORMAL
+    from app.mod11_jc.models import JcContract
+
+    trade_amt, sup, sup2 = "42885.40", "150000.00", "999999.00"
+    no = "__自检_B5b_T1__"
+    mapping = {"合同日期": "合同日期", "材料名称": "材料名称", "供应商合同总价": "供应商合同总价",
+               "供应商发票金额": "供应商发票金额", "贸易公司合同总价": "贸易公司合同总价",
+               "贸易公司发票金额": "贸易公司发票金额", "详细付款方式": "付款方式", "备注": "备注"}
+    wh = "__自检仓_IMP_M11T_" + uuid.uuid4().hex[:8] + "__"
+    with session_scope() as s:
+        p = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full="__自检_贸易公司合同__",
+                                   warehouse_name=wh, phid="")
+        s.add(JcContract(contract_no=no, project_id=int(p.id), contract_date="2025-11-14",
+                         material_name="电缆桥架", supplier="江苏万有电气科技有限公司",
+                         party_name="洛阳维萨工程技术有限公司", contract_amt=Decimal("0"),
+                         trade_co="洛阳维萨工程技术有限公司", trade_contract_amt=Decimal(trade_amt)))
+
+    def run(sup_amt: str, mat: str) -> dict:
+        got = client.post("/api/imp/m11_jc/parse",
+                          files={"file": ("台账.xlsx", _book([(1, "20251114", mat, sup_amt, "0",
+                                                              trade_amt, "0", "电汇", "")]),
+                                          "application/octet-stream")},
+                          data={"sheet": ""}).json()
+        assert got["ok"], got
+        body = {"token": got["token"], "mapping": mapping, "options": {"project_key": wh}}
+        return client.post("/api/imp/m11_jc/commit", json=body).json()
+
+    out = run(sup, "电缆桥架")
+    assert out["ok"] and out["report"]["updated"] == 1, out
+    assert out["report"]["unmatched"] == 0, out["report"]
+    assert out["report"]["items"][0]["matched_by"] == "trade", "这一行该是**靠贸易公司金额**对上的"
+    with session_scope() as s:
+        c = s.execute(select(JcContract).where(JcContract.contract_no == no)).scalars().first()
+        assert Decimal(str(c.contract_amt)) == Decimal(sup), "空 ⇒ 把 Excel 的供应商价填进「合同金额」"
+        assert Decimal(str(c.trade_contract_amt)) == Decimal(trade_amt), "贸易公司金额不被导入改"
+        assert c.supplier == "江苏万有电气科技有限公司", "i8 的事实列一个字不改"
+
+    out2 = run(sup2, "电缆桥架（改）")            # 第二遍：合同金额**已有值** ⇒ ⛔ 不许覆盖
+    assert out2["ok"] and out2["report"]["updated"] == 1, out2
+    assert out2["report"]["items"][0]["contract_amt_filled"] is False, "已有值还去写 = 覆盖"
+    with session_scope() as s:
+        c = s.execute(select(JcContract).where(JcContract.contract_no == no)).scalars().first()
+        assert Decimal(str(c.contract_amt)) == Decimal(sup), "⛔ 已有值被覆盖了"
+        assert c.material_name == "电缆桥架（改）", "那 6 列照旧能覆盖（口径未变）"
+
+    rb = client.post("/api/imp/m11_jc/rollback",
+                     json={"batch": out2["report"]["batch"]}).json()
+    assert rb["ok"], rb
+    with session_scope() as s:
+        c = s.execute(select(JcContract).where(JcContract.contract_no == no)).scalars().first()
+        assert Decimal(str(c.contract_amt)) == Decimal(sup), "回滚第二遍：金额回到第一遍之后的值"
+        assert c.material_name == "电缆桥架", "那 6 列已还原（原有行为不变）"

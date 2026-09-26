@@ -170,12 +170,20 @@ def project_choices(s: Session) -> list[dict]:
 #   `domain.invoice_problem` / `payment_problem`（调用方 = `service`）⇒ ⛔ 别在这里再判一遍。
 # ⚠️ 白名单之外的列**一律不改**（`EDITABLE_COLS`）—— 防"顺手改了金额 / 三态"绕过各自出口。
 
-#: 可手改列的白名单（判据 `001-12`「三列 ＋ 备注可手改并落值」＋ 用户 2026-09-19「合同金额可能不对」）。
+#: 可手改列的白名单（判据 `001-12`「三列 ＋ 备注可手改并落值」）。
+#: ⭐⭐ **2026-09-26 用户裁定收窄**（他的原话："实际集采台账上能被手改的很少"）：只留**界面上
+#:   真给了入口的列** = "Excel 的地盘"这 6 列（材料名 / 付款方式 / 备注 / 存档三列，与台账页那几格一一对应）。
+#:   ⛔ **i8 的事实列**（合同日期 / 供应商 / 甲方单位）不在其中：界面上本来**没有入口**，而放行它
+#:      = 任何一条接口调用都能改 i8 的事实、且**下次抓取会静默盖回**（"看着能改、改了没用"）。
+#:   ⛔ **合同金额 / 贸易公司两列**也不在其中：它们的写入口归**抓取**（按甲方类型分叉）与
+#:      **导入**（`fill_contract_amt_if_blank` · 只对贸易公司合同 · **空才填**）—— ⛔ 不是人手改。
+#:      ⚠️ 2026-09-19 曾把它放进来（"合同金额可能不对"）——现按 2026-09-26 的口径移出：
+#:        界面上没有那一格可填，留着它只会让人误以为"能改"。
 #: ⚠️ **三态不在其中** —— 它有专门出口 `set_tag` / `set_tags`（标记与编辑分开，免得互相绕过）。
+#: ⚠️ 与 `import_service.EXCEL_COLS` 是**同一份口径**（`tests/test_acc_jc_import.py` 钉着包含关系）
+#:    ⇒ 改一边必须改另一边，⛔ 别只改这里。
 EDITABLE_COLS: tuple[str, ...] = (
-    "contract_date", "material_name", "supplier", "contract_amt",
-    "trade_co", "trade_contract_amt", "method", "remark",
-    "arch", "arch_no", "ret_date",
+    "material_name", "method", "remark", "arch", "arch_no", "ret_date",
 )
 
 
@@ -254,6 +262,28 @@ def update_contract(s: Session, contract_id: int, **cols) -> int:
         setattr(row, key, val)
     s.flush()
     return 1
+
+
+def fill_contract_amt_if_blank(s: Session, contract_id: int, value) -> bool:
+    """**只在「合同金额」为空时**写它 —— **Excel 供应商线专用**（2026-09-26 用户裁定 · 方案②）。
+
+    ⭐ 为什么单开一个出口、⛔ 不走 `update_contract`：「合同金额」对**正常合同**是 i8 的事实
+      （人工改不了、Excel 也不许覆盖）；只有**贸易公司合同**它才是**空的**、等 Excel 的供应商线补
+      （i8 里根本没有这个数 —— 见 `upsert_fetched_contracts` 的"按甲方类型分叉"那段）
+      ⇒ 两条口径不同 ⇒ 出口分开；`EDITABLE_COLS` 里**刻意不放它**（放了 = 人能改 i8 的事实）。
+    ⚠️ **空才填**：已有非 0 值（上一次导入填的）一个字不改 —— 与 §9.3「人工改过的不被覆盖」同款。
+    ⚠️ 传空 / 0 **不写**（免得把"还没补"写成 0 —— "0"与"空"在台账上是两件事）。
+    返回 `True` = 真写了。
+    """
+    row = s.get(JcContract, int(contract_id))
+    if row is None or float(row.contract_amt or 0) != 0:
+        return False
+    amt = Decimal(str(value or 0))
+    if amt <= 0:
+        return False
+    row.contract_amt = amt
+    s.flush()
+    return True
 
 
 def insert_invoice(s: Session, *, contract_id: int, kind: str, invoice_date: str, amount) -> JcInvoice:
@@ -496,6 +526,7 @@ __all__ = [
     "invoices_of_many", "payments_of_many", "notice_ids_used", "project_choices",
     "project_id_by_key",
     "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
+    "fill_contract_amt_if_blank",
     "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
     "FETCH_COLS", "FETCH_ONLY_WHEN_BLANK", "FETCH_BY_PARTY_COLS",
     "one_by_no", "existing_contract_nos", "upsert_fetched_contracts", "payment_of_notice",

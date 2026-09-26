@@ -311,9 +311,21 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
 
     from app.mod11_jc.models import JcContract, JcInvoice
 
-    # ⭐⭐ **锚点索引**：该项目内已有合同的 `合同价 -> [合同…]`（**一次查完** ⇒ ⛔ 不逐行查 = N+1）。
+    # ⭐⭐ **锚点索引**（2026-09-26 用户裁定 · 方案②：**按合同类型分叉**）：
+    #    · **贸易公司合同**（`trade_contract_amt` 有值 / 记了贸易公司名）⇒ 用「**贸易公司合同金额**」
+    #      当钥匙 —— 它的「合同金额」（供应商价）在 i8 里**根本没有**、按设计**留空**
+    #      （见 `upsert_fetched_contracts` 的"按甲方类型分叉"），空值当不了钥匙
+    #      ⇒ 以前这类合同**永远配不上**（Excel 里那个真供应商价永远进不来）。
+    #    · 其余合同 ⇒ 仍用「合同金额」（含税合同价）当钥匙 —— **口径一字未改**。
+    #    ⚠️ 一次查完 ⇒ ⛔ 不逐行查 = N+1。
     by_amt: dict[str, list] = {}
+    by_trade: dict[str, list] = {}
     for c in s.execute(select(JcContract).where(JcContract.project_id == int(project_id))).scalars():
+        if c.trade_contract_amt is not None or str(c.trade_co or "").strip():
+            k = _amount_key(c.trade_contract_amt)
+            if k:
+                by_trade.setdefault(k, []).append(c)
+            continue                    # ⛔ 贸易公司合同**不进** `by_amt`（免得拿供应商价那条路撞错行）
         k = _amount_key(c.contract_amt)
         if k:
             by_amt.setdefault(k, []).append(c)
@@ -324,14 +336,28 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
     bad: list[dict] = []
     warned: list[dict] = []
     for n, row in enumerate(rows, start=1):
-        raw_amt = row.get("contract_amt")
-        key = _amount_key(raw_amt)
-        if not key:
-            unmatched.append({"row_no": n, "amount": str(raw_amt or ""),
-                              "material_name": str(row.get("material_name") or ""),
-                              "why": "**合同价为空 / 为 0** ⇒ 不参与匹配（⛔ 空值不许去撞库里任何一行）"})
-            continue
-        cands = by_amt.get(key) or []
+        # ⭐ **先按「贸易公司合同金额」对号**（只有在 Excel 那行**填了这一列**时才走）——
+        #    它对应库里**贸易公司合同**的钥匙；对上 ⇒ 这一行的「供应商合同总价」就是那合同的
+        #    **合同金额**（空才填，见下）。0 命中 ⇒ 退回按「合同金额」对号（正常合同那条路，不变）。
+        key_kind = ""
+        key = ""
+        cands: list = []
+        trade_key = _amount_key(row.get("trade_contract_amt"))
+        if trade_key:
+            cands = by_trade.get(trade_key) or []
+            if cands:
+                key_kind, key = "trade", trade_key
+        if not cands:
+            raw_amt = row.get("contract_amt")
+            key = _amount_key(raw_amt)
+            if not key:
+                unmatched.append({"row_no": n, "amount": str(raw_amt or ""),
+                                  "material_name": str(row.get("material_name") or ""),
+                                  "why": "**合同价为空 / 为 0** ⇒ 不参与匹配"
+                                         "（⛔ 空值不许去撞库里任何一行）"})
+                continue
+            cands = by_amt.get(key) or []
+            key_kind = "amount" if cands else ""
         if len(cands) == 0:
             unmatched.append({"row_no": n, "amount": key,
                               "material_name": str(row.get("material_name") or ""),
@@ -364,6 +390,13 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
         if cols:
             R.update_contract(s, cid, **cols)
 
+        # ⭐ **贸易公司合同那一支**（2026-09-26 方案② · 用户裁定）：这一行是**靠贸易公司金额对上**的
+        #    ⇒ Excel 的「供应商合同总价」就是这张合同的**合同金额**（i8 里没有这个数 ⇒ 台账那格空着）
+        #    ⇒ **空才填**（已有值一个字不改）。⛔ 不走 `update_contract`（那把"人能改 i8 事实列"放进白名单）。
+        filled = False
+        if key_kind == "trade":
+            filled = R.fill_contract_amt_if_blank(s, cid, row.get("contract_amt"))
+
         # ⭐ **汇总发票行**：⛔ **不重复加** —— 已有同 kind 的发票行 ⇒ 跳过并报出来（再导一次不会翻倍）。
         already = {str(x) for x in s.execute(
             select(JcInvoice.kind).where(JcInvoice.contract_id == cid)).scalars()}
@@ -390,8 +423,10 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
         #    ⛔ 不然两行都会去写同一条合同（后写的把先写的**静默覆盖**）。
         by_amt[key] = [c for c in cands if int(c.id) != cid]
         updated.append({"id": cid, "row_no": n, "amount": key,
+                        "matched_by": key_kind,          # `trade` = 靠贸易公司金额对上 / `amount` = 合同价
+                        "contract_amt_filled": filled,   # 只在 `trade` 那支可能为 True（空才填）
                         "material_name": str(row.get("material_name") or cur.material_name or ""),
-                        "fields": sorted(cols)})
+                        "fields": sorted(list(cols) + (["contract_amt"] if filled else []))})
 
     return {
         "updated": len(updated), "unmatched": len(unmatched),

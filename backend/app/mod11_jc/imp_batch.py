@@ -56,9 +56,18 @@ def unique_batch(s: Session, *, at: datetime | None = None) -> str:
     raise MustReportError("批次号连试 600 次都撞 —— 库里 `JC-*` 的号段异常，请人工看一下")
 
 
+#: 回滚点 / 快照要记的列 = 「Excel 的地盘」6 列 ＋ **合同金额**。
+#: ⭐ 2026-09-26（方案② 用户裁定）：贸易公司合同的「合同金额」现在**由导入填**（空才填）
+#:   ⇒ 必须能一起回滚；⛔ 不加它 = "回滚了但金额没回"（最像"回滚成功"的那种假绿）。
+UNDO_COLS: tuple[str, ...] = IS.EXCEL_COLS + ("contract_amt",)
+
+#: `UNDO_COLS` 里的**金额列**（回滚时要转回 `Decimal` —— 快照按文本存）。
+_MONEY_COLS: frozenset[str] = frozenset({"contract_amt"})
+
+
 def _snap(c: JcContract) -> dict:
-    """6 列（`EXCEL_COLS`）的**当前值** —— 回滚点与"有没有变"都按它判。"""
-    return {k: str(getattr(c, k) or "") for k in IS.EXCEL_COLS}
+    """快照（`UNDO_COLS`）的**当前值** —— 回滚点与"有没有变"都按它判。"""
+    return {k: str(getattr(c, k) or "") for k in UNDO_COLS}
 
 
 def _contracts_of(s: Session, project_id: int) -> list[JcContract]:
@@ -142,12 +151,16 @@ def rollback(s: Session, batch_no: str, operator: str = "") -> dict:  # noqa: AR
             continue
         after = json.loads(u.after_json or "{}")
         cur = _snap(c)
-        changed = sorted(k for k in IS.EXCEL_COLS if cur.get(k) != str(after.get(k) or ""))
+        changed = sorted(k for k in UNDO_COLS if cur.get(k) != str(after.get(k) or ""))
         if changed:
             # ⚠️ 导入之后又被人工改过 ⇒ **照还原，但必须说清**（禁静默抹掉人工的改动）
             drifted.append({"id": int(c.id), "fields": changed})
         for k, v in (json.loads(u.before_json or "{}")).items():
-            setattr(c, k, v)
+            if k in _MONEY_COLS:                     # ⚠️ 金额列的快照是**文本** ⇒ 还原要回 `Decimal`
+                from decimal import Decimal          #    （直接塞字符串会被数据库当类型错）
+                setattr(c, k, Decimal(str(v or 0)))
+            else:
+                setattr(c, k, v)
         restored += 1
         for iid in json.loads(u.invoice_ids or "[]"):
             inv = s.get(JcInvoice, int(iid))
@@ -160,7 +173,7 @@ def rollback(s: Session, batch_no: str, operator: str = "") -> dict:  # noqa: AR
     return {
         "batch": bno, "restored": restored, "undo_rows": len(rows),
         "removed_invoices": removed_invoices, "missing_contracts": missing, "drifted": drifted,
-        "message": (f"批次 {bno} 已回滚：**还原 {restored} 条**（那 6 列）· "
+        "message": (f"批次 {bno} 已回滚：**还原 {restored} 条**（那 6 列 ＋ 合同金额）· "
                     f"摘掉本批新加的发票行 {removed_invoices} 条"
                     + (f" · ⚠️ 其中 **{len(drifted)} 条在导入之后又被人工改过**（已一并还原，见清单）"
                        if drifted else "")

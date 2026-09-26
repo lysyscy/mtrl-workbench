@@ -1841,10 +1841,18 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  /* 合同收发登记（§6.7）**改为可手改**（2026-09-13 用户口径）：存档号 / 寄回日期 / 备注三列。
     ⚠️ 按 §9.3 的留痕清单（只给 统计两金额 / 调整单 / 项目全名与状态）⇒ 这三列**不留痕**（照既有口径、不新增）。
     ⚠️ 寄回日期用 `type="date"`（要的是**完整日期**；R6 只管"选年月"那种滚轮控件）。 */
- jcArchNo:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.archNo=String(t.value==null?'':t.value).trim(); render(); toast(`合同 <b>${j.id}</b> 存档号已保存`); },
- jcRetDate:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.retDate=String(t.value==null?'':t.value).trim(); render();
-   toast(`合同 <b>${j.id}</b> 寄回日期已保存${j.retDate?`：<b>${esc(j.retDate)}</b>`:'（已清空）'}`); },
- jcRemark:t=>{ const j=JCs.find(x=>x.id===t.dataset.id); j.remark=String(t.value==null?'':t.value).trim(); render(); },
+ jcArchNo:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+   const v=String(t.value==null?'':t.value).trim();
+   await jcAct(()=>API.m11Fields({id:j.id, fields:{arch_no:v}}),
+     `合同 <b>${j.id}</b> 存档号已保存${v?`：<b>${esc(v)}</b>`:'（已清空）'}`); },
+ jcRetDate:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+   const v=String(t.value==null?'':t.value).trim();
+   await jcAct(()=>API.m11Fields({id:j.id, fields:{ret_date:v}}),
+     `合同 <b>${j.id}</b> 寄回日期已保存${v?`：<b>${esc(v)}</b>`:'（已清空）'}`); },
+ jcRemark:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
+   const v=String(t.value==null?'':t.value).trim();
+   await jcAct(()=>API.m11Fields({id:j.id, fields:{remark:v}}),
+     `合同 <b>${j.id}</b> 备注已保存`); },
  /* 子表弹窗**拆开**（2026-09-13 用户口径）：三个弹窗各装**一张**子表，
     入口就近放在「**发票金额 / 贸易公司发票金额 / 付款金额**」三列右侧的「子表」按钮上。
     ⇒ 原「一个按钮装三张子表」的 `jcDetail` 已删除。 */

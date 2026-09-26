@@ -79,8 +79,11 @@ def test_贸易公司甲方_i8的价落trade_contract_amt且不碰contract_amt()
         assert Decimal(str(cur.contract_amt)) == Decimal("0"), "供应商价留空等人补（i8 里没有这个数）"
         assert cur.trade_co == "自检维萨贸易", "贸易公司名 = 甲方单位名"
 
-        # ② 人从 Excel 供应商线补上真供应商价（走白名单编辑口）
-        R.update_contract(s, int(cur.id), contract_amt="150000.00")
+        # ② 人从 Excel 供应商线补上真供应商价
+        #    ⭐ 2026-09-26（方案② 用户裁定）：走**导入的专用出口**（`空才填`），
+        #    ⛔ 不再走 `update_contract` —— 「合同金额」已按裁定移出人手改白名单
+        #    （界面上没有那一格；它的写入口只有"抓取分叉"与"导入空才填"两条）。
+        assert R.fill_contract_amt_if_blank(s, int(cur.id), "150000.00") is True
         # ③ **再抓一次**（i8 仍回维萨价）——⛔ 人工填的值必须**留住**，且 trade 列也不被刷
         r2 = _row("__自检_T_001__", party="自检维萨贸易", amt="171983.28")
         r2["party_kind"] = kmap["自检维萨贸易"]

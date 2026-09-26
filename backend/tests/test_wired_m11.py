@@ -125,6 +125,13 @@ def test_写动作接上了_api_且抓取要二次确认():
                  "fields:{arch:next}",                          # 存档推进
                  "API.m11Add({"):                               # 手工新增
         assert frag in s, f"动作没接上 API：{frag}"
+    # ⭐⭐ 2026-09-26 补钉（**当时是真 bug**）：合同收发登记那三格（存档号 / 寄回日期 / 备注）
+    #    原先**只改内存对象**（`j.archNo = …` ＋ toast「已保存」）⇒ **提示说保存了、刷新就没了**
+    #    （本仓最忌的一类：看着成了、其实一个字节都没写）。⇒ 三条一起钉：
+    #    必须走 `API.m11Fields`（真落库 ＋ `jcAct` 回读），且**字段名用后端的**（`arch_no`/`ret_date`/`remark`）。
+    for frag in ("fields:{arch_no:v}", "fields:{ret_date:v}", "fields:{remark:v}"):
+        assert frag in s, (
+            f"合同收发登记那几格没真落库（缺 `{frag}`）—— 只改内存 + 提示「已保存」= 刷新即丢")
     assert "project_key:jcND.pj" in s, "手工新增要传 `project_key`（仓库名），⛔ 不是 project_id"
     assert "API.m11Fetch(" in s and "jcFetchOk" in s, "抓取要走 `POST /api/m11/fetch`"
     # ⭐ `M5-6`（2026-09-20）：抓取弹窗要能设「**开始日期**」（增量）——
