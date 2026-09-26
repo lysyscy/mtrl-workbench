@@ -20,8 +20,9 @@ def check(page, errors: list[str]) -> None:
     # ---- m09 特殊费用月报表：⭐ 可观测证据 = **页面的数 == 当场重取后端的数** ＋ 演示容器已消失
     #      ⚠️ **只读**：写动作（增/改/删）的真机验证走 curl（见 `TAIL-27` 的收尾记录），
     #         这里**不写库** —— 冒烟脚本要能被反复跑，不留下残留数据。
-    page.click('[data-k="m09"]')
-    page.wait_for_timeout(800)
+    from _shell_common import goto          # 局部导入：本件只在这一处用（⛔ 不复制那份等待逻辑）
+
+    goto(page, "m09")
     m09 = page.evaluate("""async () => {
         const q = (ym, pj) => '/api/m09/fee?ym=' + encodeURIComponent(ym || '')
           + '&pj=' + encodeURIComponent(pj || '');

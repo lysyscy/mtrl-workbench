@@ -79,7 +79,14 @@ def check(page, errors: list[str]) -> None:
         stage = "确认指认"
         page.select_option('#pmRow', str(made_pids[1]))     # 指定**第二条**同名行
         page.click('.mf [data-act="pjPromoteOk"]')
-        page.wait_for_timeout(1800)
+        # ⚠️ 2026-09-26：等**库里那条真的挂上仓库名**（原为睡 1800 ms）—— 同 `_shell_arch` 那处：
+        #    判据就是"库里该有它"，直接等它 ⇒ 快且超时即红。
+        from _shell_common import wait_db
+        if not wait_db(lambda s: str(s.get(Project, made_pids[1]).warehouse_name or "").strip()):
+            errors.append("指认确认后 20 s 内那条项目仍没有仓库名（指认没落库？）")
+        # ⚠️ 同 `_shell_arch`：等界面重绘 —— 原来的 1800 ms 是"库写入 ＋ 界面刷新"两件事一起盖的。
+        from _shell_common import settle
+        settle(page)
         with session_scope() as s:
             got_a = str(s.get(Project, made_pids[0]).warehouse_name or "")
             got_b = str(s.get(Project, made_pids[1]).warehouse_name or "")

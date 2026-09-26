@@ -21,8 +21,9 @@ def check(page, errors: list[str]) -> None:
     #      ⭐ ⑫b **写路径净零往返**：新增一条探针 ⇒ 条数 +1 ⇒ **按 id 差集**删掉它 ⇒ 回到原样。
     #         ⚠️ 净零 ⇒ 可反复跑、库不留残留；用「id 差集」而不是"删最后一条"，
     #            免得删除失败时**误删真规则**。
-    page.click('[data-k="m14"]')
-    page.wait_for_timeout(800)
+    from _shell_common import goto          # 局部导入：本件只在这一处用（⛔ 不复制那份等待逻辑）
+
+    goto(page, "m14")
     # ⭐ `TAIL-96`：集采剔除名单卡的**点击链路真点一次**（零残留 —— 见设计件 §四）。
     m14j = page.evaluate("""async () => {
         await reloadM14(); render();

@@ -37,27 +37,14 @@ errors: list[str] = []
 
 
 def _goto(page, key: str, timeout: int = 15000) -> None:
-    """切页（点 `[data-k=key]`）并等**这一屏画完**（⛔ 不再是"睡 600~800 ms"）。
+    """切页并等**这一屏画完**（⛔ 不是睡固定毫秒）—— 实现搬进 `_shell_common.goto`（各件共用一份）。
 
-    ⚠️ 条件为什么这样取（2026-09-26 · 与用户核过"会不会每次都慢这么多"之后改的）：
-      · ⛔ **不能用 `networkidle`** —— 壳里有持续请求，它**永远等不到**（文件头坑 1 实测踩过）；
-      · ⛔ 也不能等"某个元素在" —— 那要**猜数据**（空库时同一页长得不一样），猜错就是**假红**；
-      · ✅ 用「**内容长度连续两段 120 ms 不变**」：壳的口径是**取数完再 render**（`loadPaths` 之后
-        一次画完）⇒"长度稳住"≈"这屏画完了"；且它**与数据无关**（空库/满库都成立）。
-    ⚠️ 好处不止快：**等不到会超时抛错**（原来睡够就往下 ⇒ 页面没动时，下面的断言会**读到上一屏**，
-       报出"这页好好的" = 假绿）。
+    ⚠️ 2026-09-26：本函数原先在这里实现，现**移到 `_shell_common.py`** —— 因为 `_shell_m09` /
+       `_shell_m14` 也有同样的"切页睡 800 ms"，三处共用一份（⛔ 不再各写一遍，那正是本仓的老病）。
     """
-    page.click(f'[data-k="{key}"]')
-    page.wait_for_function(
-        """(k) => new Promise(res => {
-             if (VIEW !== k) return res(false);
-             const len = () => (document.querySelector('#view').innerHTML || '').length;
-             const a = len();
-             if (!a) return res(false);                     /* 还空着 = 没画 ⇒ 接着等 */
-             setTimeout(() => { const b = len();
-               setTimeout(() => res(b === len() && b > 0), 120);
-             }, 120);
-           })""", arg=key, timeout=timeout)
+    from _shell_common import goto
+
+    goto(page, key, timeout=timeout)
 
 
 def _session_cookie() -> tuple[str, str]:

@@ -78,7 +78,17 @@ def check(page, errors: list[str]) -> None:
         stage = "选定并建行"
         page.select_option('#arcWh', ARCH_WB)                  # 选**第二个**仓库
         page.click('.mf [data-act="pjArchOk"]')
-        page.wait_for_timeout(1800)
+        # ⚠️ 2026-09-26：**等库里那行真出现**（原来是睡 1800 ms）—— 判据本来就是「库里该有它」，
+        #    所以直接等它：写完就往下（不等满），**超时即红**（睡够就往下时，区分不了
+        #    "没写进去"与"还没写进去"，只能靠下面读到空来猜）。
+        from _shell_common import wait_db
+        if not wait_db(lambda s: s.execute(
+                select(Project).where(Project.name_full == ARCH_FULL)).scalars().first()):
+            errors.append("建档弹窗确认后 20 s 内库里没出现那一行（建档没落库？）")
+        # ⚠️ **还要等界面重绘**：原先那 1800 ms 同时盖住了"库写入"与"壳拿到响应后重绘"两件事
+        #    —— 只等库 ⇒ 下面那些**界面**断言会读到还没重绘的画（实测会当场红，不是理论担心）。
+        from _shell_common import settle
+        settle(page)
         with session_scope() as s:
             rows = s.execute(select(Project).where(Project.name_full == ARCH_FULL)).scalars().all()
             got = [(r.id, str(r.warehouse_name or ""), str(r.project_type or "")) for r in rows]

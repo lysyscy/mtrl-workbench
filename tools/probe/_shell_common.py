@@ -1,0 +1,76 @@
+"""真机自检的**共用小件**（`_shell_*.py` 之间共享，⛔ 不各写一份）。
+
+⭐ 2026-09-26 立件（**它自己就是"别再靠自觉"的一次收口**）：此前"切页等多久""写动作等多久"
+   散在各 `_shell_*.py` 里，全是 `page.wait_for_timeout(600~1800)` 的**纯睡** ⇒ 既慢、又
+   **超时也是绿的**（页面没动时下面的断言会读到上一屏，报出"这页好好的" = 假绿）。
+
+本件只放**与具体页面无关**的两件：
+  · `goto()`    —— 切页（等"这一屏画完"）
+  · `wait_db()` —— 等**库里的结果**出现（写动作的判据本来就是库里的行）
+"""
+
+from __future__ import annotations
+
+import time
+
+
+def settle(page, timeout: int = 15000) -> None:
+    """等**当前这屏的 DOM 稳定下来**（内容长度连续两段 120 ms 不变）—— 壳的 `render()` 是一次画完的。
+
+    ⚠️ **为什么它必须单独存在**（2026-09-26 实测换来的）：写动作之后的等待，原先那些 `1800 ms`
+       同时盖住了**两件事** —— ① 服务端**库写入** ② 壳拿到响应后的**界面重绘**。
+       只等①（`wait_db` 只保证库里有）⇒ 后面的**界面断言会读到还没重绘的画**（实测：建档/指认
+       两条链路当场报"界面如实报出结果"失败）。⇒ ②单独等（本函数）。
+    """
+    page.wait_for_function(
+        """() => new Promise(res => {
+             const len = () => (document.querySelector('#view').innerHTML || '').length;
+             const a = len();
+             if (!a) return res(false);                     /* 还空着 = 没画 ⇒ 接着等 */
+             setTimeout(() => { const b = len();
+               setTimeout(() => res(b === len() && b > 0), 120);
+             }, 120);
+           })""", timeout=timeout)
+
+
+def goto(page, key: str, timeout: int = 15000) -> None:
+    """切页（点 `[data-k=key]`）并等**这一屏画完**（⛔ 不是睡固定毫秒）= 「路由到位」＋ `settle`。
+
+    ⚠️ 条件为什么这样取：
+      · ⛔ **不能用 `networkidle`** —— 壳里有持续请求，它**永远等不到**（`_shell_smoke.py` 文件头坑 1）；
+      · ⛔ 也不能等"某个元素在" —— 那要**猜数据**（空库时同一页长得不一样）⇒ 猜错就是**假红**；
+      · ✅ 用"**长度连续两段不变**"（见 `settle`）：壳是"取数完再 render"⇒ 稳住了 ≈ 画完了；
+        且它**与数据无关**（空库/满库都成立）。
+    ⚠️ 好处不止快：**等不到会超时抛错** —— 原来睡够就往下，页面没动时断言读到上一屏 = **假绿**。
+    """
+    page.click(f'[data-k="{key}"]')
+    page.wait_for_function("(k) => VIEW === k", arg=key, timeout=timeout)
+    settle(page, timeout=timeout)
+
+
+def wait_db(pred, timeout: float = 20.0, interval: float = 0.15) -> bool:
+    """等**库里的结果**出现（`pred(session)` 为真即返回 `True`；超时返回 `False`）。
+
+    ⭐ 什么时候用它：写动作之后的等待 —— 那条判据**本来就是"库里该有这一行"**，
+       所以直接等它，比"等弹窗消失"更贴判据、也比"睡 1800 ms"更准（写完就往下，不等满）。
+    ⚠️ 每次开一个短会话轮询（`interval=0.15 s`）⇒ 不会把事务开着等（那才是坏味道）。
+    """
+    import pathlib
+    import sys
+
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "backend"))
+    from app.core.db import session_scope
+
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            with session_scope() as s:
+                if pred(s):
+                    return True
+        except Exception:      # noqa: BLE001
+            pass               # ⚠️ 库正被写事务占着（"database is locked"）是**正常**的 ⇒ 接着轮询
+        time.sleep(interval)
+    return False
+
+
+__all__ = ["goto", "wait_db"]
