@@ -232,7 +232,7 @@ async function impSetDomain(domain) {
   IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {}; IMP.memory = '';
   IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = '';
   IMP.org = []; IMP.wrap = ''; IMP.cutoff = ''; IMP.ym = '';
-  IMP.pjClose('impPj'); IMP.pjDisp = {}; IMP.hasCut = false; IMP.hasYm = false;
+  pjClose('impPj'); IMP.pjDisp = {}; IMP.hasCut = false; IMP.hasYm = false;
   if (!IMP.domain) { IMP.schema = null; return; }
   IMP.schema = await API.impSchema(IMP.domain);
   await impLoadCtx();
@@ -354,7 +354,7 @@ V.imp = () => {
         ${IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
           <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
           <button class="btn" data-act="impPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(IMP.wrap ? (IMP.pjDisp[IMP.wrap] || IMP.wrap) : '请选择项目')}</span><span class="mut" style="font-size:9px">▼</span></button>
-          ${IMP.pjIsOpen('impPj') ? impPjPanel() : ''}</div>` : ''}
+          ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>` : ''}
         ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
           <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
         ${IMP.hasCut ? `<div class="fi"><label>截止核算月（历史段分界）</label>
@@ -417,7 +417,7 @@ ACT.impDomain = async t => {
 };
 ACT.impPick = t => { IMP.file = (t.files || [])[0] || null; IMP.msg = ''; render(); };
 ACT.impReset = () => { IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {};
-  IMP.memory = ''; IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = ''; IMP.pjClose('impPj');
+  IMP.memory = ''; IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = ''; pjClose('impPj');
   render(); };
 /* ① → ②：解析（不写库）。预选 = 后端给的建议；**记忆命中的映射盖在建议之上**（并标明来源）。 */
 ACT.impParse = async () => {
@@ -445,9 +445,9 @@ ACT.impMap = (t) => { IMP.mapping[t.dataset.src] = t.value || ''; render(); };
 /* 「项目」共用面板（**单选**）—— 第 11 个 `projPanel` 调用点。
    ⚠️ 展开是 `<button>`、选择是面板内的 `radio` ⇒ 都走 **click 委托**，⛔ 不进 `CHG`
       （`CHG` 只管 `<select>` / `<input type=file>` 那种 **change** 事件）。 */
-ACT.impPjToggle = () => { IMP.pjIsOpen('impPj') = !IMP.pjIsOpen('impPj'); render(); };
+ACT.impPjToggle = () => { pjToggle('impPj'); render(); };
 ACT.impPjPick = t => { const v = (t && t.dataset && t.dataset.pj) || ''; if (!v) return;
-  IMP.wrap = v; IMP.pjClose('impPj'); render();
+  IMP.wrap = v; pjClose('impPj'); render();
   toast(`这批数据将导入项目 <b>${esc(IMP.pjDisp[v] || v)}</b>（键 = 仓库名，§2.7.4）`); };
 /* ② → ③：预览（不写库） */
 ACT.impPreview = async () => {

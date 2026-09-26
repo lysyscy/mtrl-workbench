@@ -35,6 +35,29 @@ def _imp_region() -> str:
     return SHELL[i:j]
 
 
+@acc()
+def test_面板三件是全局共用件_不许写成_IMP_的方法():
+    """⭐ 2026-09-26 收尾核「③ 预览」屏时查出（**真 bug · 已被本判据挡在离线**）：
+
+    面板三件（`pjIsOpen` / `pjToggle` / `pjClose`）是 `projPanel` 配套的**全局共用件**
+    （20 多处调用点都写 `pjToggle('ledPj')` 这种裸名），⛔ **不是 `IMP` 的方法**。
+
+    ⚠️ **为什么四个闸门全绿而它是坏的**：写成 `IMP.pjClose('impPj')` **语法完全合法**
+       （调用 `undefined` ⇒ 点下去才 `TypeError`），`X() = Y` 那种形态连 `node --check`/语法哨都放行；
+       而 `test_imp_shell` 旧断言只查**名字在不在**（`ACT.impPjToggle` 存在 ✔）。
+    ⚠️ **为什么真机也没抓到**：那三处（切域 / 重来 / 选完收起）＋渲染展开态那一处，**只在 ③ 预览卡**上
+       才跑到（`ctxBar` 在 `prevCard` 里）—— 而真机自检此前到 ② 列映射为止，**从没走到 ③**。
+       ⇐ 这正是"把真机证据补齐"的直接价值：**补齐的过程本身就抓出一个 live bug**。
+
+    ⇒ 判据：壳里⛔ 不许出现 `IMP.pjXxx(` 这种写法（**剥块注释**后查 —— 注释里会**引述**这个坏形态作留痕）。
+    """
+    code = re.sub(r"/\*.*?\*/", "", SHELL, flags=re.S)     # ⚠️ 剥块注释：引述 ≠ 实现
+    for bad in ("IMP.pjIsOpen(", "IMP.pjToggle(", "IMP.pjClose("):
+        assert bad not in code, (
+            f"壳里出现了 `{bad}` —— 面板三件是**全局共用件**（`projPanel` 配套），"
+            "写成 `IMP.` 的方法语法合法、点下去才 TypeError（闸门全都看不见）")
+
+
 def _imp_code() -> str:
     """本页的**代码**（剥掉块注释）。
 
