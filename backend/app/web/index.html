@@ -462,9 +462,14 @@ const machSettleOf=wh=>N2(Object.keys(MACH6[wh]||{}).reduce((a,k)=>a+machExtRent
    新沂 / 漯河 / 邹平壳 无机械费 ⇒ 不在这张表里（取数回退 MACH6_Z）。 */
 /* ⭐ **已接后端**：由 `reloadMech()` 从 `/api/m06/mech` 填充（原先由演示数组生成 —— 已删）。
    ⚠️ **结构刻意与原型一致**（`{仓库名: {核算月: [6 列]}}`）⇒ 下面 `mach6Arr` / `machSettleOf`
-      等十几处引用**一行不用改**，只换来源。
-   来源 = `proc_mech_manual`（**旁路表**：重抓 i8 / 重导历史都不覆盖，§5.2.5 ③）。 */
+     等十几处引用**一行不用改**，只换来源。
+   ⭐⭐ 来源**按分界月切**（2026-09-26 用户裁定 · `TAIL-107`）：**历史段（≤ 截止核算月）= 过程资料导入的
+     快照值**；正式段 = `proc_mech_manual`（旁路表：重抓 i8 / 重导历史都不覆盖，§5.2.5 ③）。
+     ⛔ 判定在**后端**（`domain.column_source`）—— 壳里只管显示。 */
 let MACH6 = {};
+/* ⭐ `{仓库名: {核算月: 'history'|'formal'}}`（后端 `sections` 给）—— 用来把
+   "**历史段不许手录**"在界面上说清（守则 §5.5：不能做的要置灰并说明原因）。⛔ 别在壳里自算段。 */
+let MECH_SECTIONS = {};
 const MACH6_Z=[0,0,0,0,0,0];
 const MACH6_RENT=[2,3];                                                   /* 进结算的两列：外租零租含税 / 外租包月含税 */
 const mach6Arr=(wh,ym)=>(MACH6[wh]||{})[ym]||MACH6_Z;                     /* 某项目某核算月的机械 6 列 */

@@ -3,11 +3,13 @@
 对应判据 `ACC-RPT-PROC-002`（8 点，`PRD/验收/验收基线.json`）：
 - `001-01` 历史段（核算月 ≤ 截止核算月）材料列来自**导入的定稿快照**、**不引用库存单据**
 - `001-02` 正式段（> 截止核算月）**只读引用**库存单据；两段分界 = 截止核算月，**改它分界随之移动**
-- `001-03` 机械 6 列**全段可手录**（含历史段）；手录值落旁路载体，**不被重抓 / 重导覆盖**
+- `001-03` ⭐ **2026-09-26 改口径**（`TAIL-107`）：机械 6 列**按段切来源** —— 历史段以**导入的快照**
+  为准（**不许手录**）· 正式段手录（"手录仅限于正式启用系统后"）；手录值落旁路载体，**不被重抓 / 重导覆盖**
 - `001-04` ⭐ **两段互不覆盖**：重抓 i8 不动历史段 · 重导历史不动正式段
 - `001-05` **截止核算月**在导入时设定；默认 = 导入数据里**最大的核算月**；一次设定、可改
 - `001-06` 历史段要改**只能走导入**；页面**不提供历史段的行内编辑入口**
 - `001-07` ⭐ 机械列与材料列**在页面上同构** —— 都经**同一个「列取值出口」**、数据源可插拔
+  （材料列：历史段快照 / 正式段库存单据；机械列：历史段快照 / 正式段手录）
 - `001-08` 正式段某月尚无 i8 数据时，材料列给**空态提示**、**不臆造 0**
 """
 
@@ -84,18 +86,51 @@ def test_正式段只读引用库存单据且分界可移动():
     assert moved["2026-09"]["section"] == D.SECTION_FORMAL
 
 
-# ------------------------------------------------------------ 001-03 机械全段手录
+# ------------------------------------------------------------ 001-03 机械列按段切来源（2026-09-26 改口径）
 
 @acc(CASE, "001-03")
-def test_机械六列全段可手录含历史段():
+def test_机械六列_历史段以导入值为准_正式段手录():
+    """⭐⭐ 2026-09-26（用户裁定 · `TAIL-107`）**这条口径变了**（可核出处 = `TAIL-107` 的"来源"格原话）：
+
+    「导入过程资料，**机械费也要导进去**，**机械费手录仅限于正式启用系统后**，历史机械费都填在
+    过程资料 excel 里」。
+
+    ⚠️ 改前是「机械 6 列**全段可手录**（含历史段）」—— 那条已作废（同一格两个来源 = 谁也说不清哪个对）。
+
+    判词（四半，缺一半都不算）：
+      ① **来源按段切**：历史段 ⇒ `SOURCE_SNAPSHOT`（导入快照）· 正式段 ⇒ `SOURCE_MANUAL`（手录）；
+      ② **读到的值也按段**：历史段读到的是**快照值**（5.00），⛔ **不是**手录表里那一格（7.00）；
+      ③ **可编辑性**：历史段**不可**手录 · 正式段**可**；材料列两段都不可；
+      ④ **挡板在写出口**（`repository.save_mech`）：往历史段录 ⇒ **拒**（⛔ 不是"录了但不显示"）。
+    """
     rows = _by_month(_sess())
     assert rows["2026-06"]["section"] == D.SECTION_HISTORY
-    assert rows["2026-06"]["mech_0"] == Decimal("7.00"), "历史段机械列照样取手录值"
-    assert rows["2026-10"]["mech_0"] == Decimal("9.00")
-    assert all(D.column_source(k, ym="2026-06", cutoff_ym=CUTOFF_YM) == D.SOURCE_MANUAL
-               for k in D.MECH_KEYS)
-    assert all(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS)
-    assert not any(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MATERIAL_KEYS)
+    # ① 来源按段切
+    assert all(D.column_source(k, ym="2026-06", cutoff_ym=CUTOFF_YM) == D.SOURCE_SNAPSHOT
+               for k in D.MECH_KEYS), "历史段的机械列来源 = **导入的快照**"
+    assert all(D.column_source(k, ym="2026-07", cutoff_ym=CUTOFF_YM) == D.SOURCE_MANUAL
+               for k in D.MECH_KEYS), "正式段的机械列来源 = **手录**"
+    # ② 值也按段（快照 5.00 压过手录 7.00 —— 这两个数在桩里是刻意不一致的）
+    assert rows["2026-06"]["mech_0"] == Decimal("5.00"), \
+        "历史段机械列要取**快照值**（桩里手录表还有一格 7.00 ⇒ 那格**不该被读到**）"
+    assert rows["2026-07"]["mech_0"] == Decimal("1.00"), "正式段机械列取手录值"
+    assert rows["2026-10"]["mech_0"] == Decimal("9.00"), "正式段（只有手录、无库存单据）照常取手录"
+    # ③ 可编辑性
+    assert not any(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS), \
+        "历史段**不许**手录（以导入值为准）"
+    assert all(D.column_editable(k, ym="2026-07", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS), \
+        "正式段可手录"
+    assert not any(D.column_editable(k, ym="2026-07", cutoff_ym=CUTOFF_YM) for k in D.MATERIAL_KEYS), \
+        "材料列两段都不可编辑（引用 / 快照）"
+
+    # ④ 挡板 = **唯一写出口** `repository.save_mech`（⛔ 不是只在界面上挡）
+    s = _sess()
+    with pytest.raises(Exception) as bad:
+        save_mech(s, ym="2026-05", warehouse=WAREHOUSE, values={"mech_1": Decimal("3.50")})
+    assert "历史段" in str(bad.value) and "导入" in str(bad.value), \
+        "拒绝必须说清「为什么」与「怎么办」（守则 §5.5）"
+    save_mech(s, ym="2026-07", warehouse=WAREHOUSE, values={"mech_1": Decimal("4.50")})
+    assert _by_month(s)["2026-07"]["mech_1"] == Decimal("4.50"), "正式段手录没生效"
 
     # ⭐ **录入口真的在界面上**（此前只有「域出口说可编辑」、界面根本没有录入口 —— `TAIL-03`）。
     #    ⚠️ 2026-09-18（`§19` **批 2**）：这一段原先借**旧服务端页**的 HTML 观测（`name="mech_i"`
@@ -105,13 +140,9 @@ def test_机械六列全段可手录含历史段():
     #      `test_wired_m06.py::test_机械录入口只送mech键_材料列没有输入面` 各占一半 ✓
     #    （⛔ 不再借页面 html 复述一遍 —— 同一 claim 写成两份，改坏一处仍会全绿）。
 
-    # ⭐ **两段都真的录得进**（历史段 + 正式段），0 是合法值、负数被拦
-    s = _sess()
-    save_mech(s, ym="2026-05", warehouse=WAREHOUSE, values={"mech_1": Decimal("3.50")})
-    save_mech(s, ym="2026-07", warehouse=WAREHOUSE, values={"mech_1": Decimal("4.50")})
-    got = _by_month(s)
-    assert got["2026-05"]["mech_1"] == Decimal("3.50"), "历史段手录没生效"
-    assert got["2026-07"]["mech_1"] == Decimal("4.50"), "正式段手录没生效"
+    # ⭐ 入参口径两条仍在（**空按 0 / 负数被拦**）—— 与"哪一段能录"是两件事，⛔ 别混。
+    #    ⚠️ 改前这里是"**两段都真的录得进**（历史段 + 正式段）"；2026-09-26 起历史段**录音被拒**
+    #       （那条断言已由上面的挡板判据取代 ✓）。
     assert mech_ui.parse_mech_values({"mech_1": "0"})["mech_1"] == Decimal("0.00"), "0 合法"
     with pytest.raises(ValueError):
         mech_ui.parse_mech_values({"mech_1": "-0.01"}), "负数必须被拦"
@@ -213,7 +244,9 @@ def test_机械列与材料列同构且数据源可插拔():
     mech_h = {D.column_source(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS}
     mech_f = {D.column_source(k, ym="2026-07", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS}
     assert hist == {D.SOURCE_SNAPSHOT} and formal == {D.SOURCE_INV}
-    assert mech_h == mech_f == {D.SOURCE_MANUAL}
+    # ⭐ 2026-09-26（`TAIL-107`）：机械 6 列**走的还是这同一个出口**，只是结果也**按段切**
+    #    （历史段 = 快照 / 正式段 = 手录）—— "同构、数据源可插拔"这条 claim 没变，变的是插头插在哪。
+    assert mech_h == {D.SOURCE_SNAPSHOT} and mech_f == {D.SOURCE_MANUAL}
     assert D.column_source(D.MATERIAL_KEYS[0], ym="2026-06", cutoff_ym="") == D.SOURCE_INV
     # 两类列**同一张表、同一套渲染出口** ⇒ 换机械费数据源时不动界面。
     # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 的 `class="tw"` 计数观测；旧页删（`D18`）后

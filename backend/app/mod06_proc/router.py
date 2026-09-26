@@ -105,31 +105,67 @@ router.include_router(build_imp_router(imp_spec.SPEC, imp_spec.HOOKS))
 
 @router.get("/api/m06/mech")
 def api_mech() -> dict:
-    """机械 6 列手录值（**全量**）→ 按「仓库名 → 核算月 → [6 列]」聚合。
+    """机械 6 列的**有效值**（按分界月切来源）→ 按「仓库名 → 核算月 → [6 列]」聚合。
 
     ⭐ **出参形状刻意与原型 `MACH6` 一致** ⇒ 壳里那十几处引用（过程资料 17 列的机械 6 列 /
     活动大表 / 机械结算 / 台账项目候选）**一行不用改**，只换数据来源。
 
-    ⚠️ 机械费是**旁路载体**（`proc_mech_manual`）：重抓 i8 / 重导历史**都不覆盖它**（§5.2.5 ③）。
+    ⭐⭐ 2026-09-26（`TAIL-107` · 用户裁定）：**历史段（≤ 截止核算月）的机械费来自「过程资料导入」
+      的定稿快照**，正式段才是手录 ⇒ 本端点按 `domain.column_source` 取数（**同一出口**，
+      ⛔ 不在这里另判段）。⚠️ 改前它只回手录值（"全段手录"），而历史段的手录值**页面根本不读**
+      ⇒ 那种"录了却不显示"的错配正是本届口径要堵的。
+    ⚠️ 机械费是**旁路载体**（正式段 `proc_mech_manual` / 历史段 快照）：重抓 i8 都动不到它（§5.2.5 ③）。
     ⭐ 本表是 **`m05` 机械欠款的结算源** —— 接上它，`m05` 的「机械欠款」才会从 0 变成真数。
+
+    ⚠️ 额外的 `sections`（旧键一个不动，只**多**一个）＝ `{仓库名: {核算月: "history"|"formal"}}`：
+       壳侧据此把"历史段不许手录"**在界面上**也说清（守则 §5.5）。
     """
     with session_scope() as s:
-        rows = repo.load_mech(s)
+        rows = repo.load_mech(s)                      # 手录（正式段）
+        snaps = repo.load_history(s)                  # 快照（历史段的材料 ＋ 机械）
+        cutoffs = repo.load_cutoffs(s)                # 每个项目的分界月
 
-    out: dict[str, dict[str, list[float]]] = {}
-    for r in rows:
-        wh = str(r.get("warehouse") or "").strip()
-        ym = str(r.get("ym") or "").strip()
-        if not wh or not ym:
-            continue                      # 键不全的行落不到任何项目/月份上（真库里不会有）
-        vals = []
+    zeros = [0.0] * len(D.MECH_COLUMNS)
+
+    def _vals(src: dict) -> list[float]:
+        """一条源行 → `[6 个金额]`（`MACH6` 的形状：**只能给数**，没有"空态"这一档）。"""
+        out: list[float] = []
         for i in range(len(D.MECH_COLUMNS)):
             try:
-                vals.append(round(float(r.get(f"mech_{i}") or 0), 2))
+                out.append(round(float(src.get(f"mech_{i}") or 0), 2))
             except (TypeError, ValueError):
-                vals.append(0.0)
-        out.setdefault(wh, {})[ym] = vals
-    return {"mech": out, "count": len(rows), "columns": list(D.MECH_COLUMNS)}
+                out.append(0.0)
+        return out
+
+    def _key(r: dict) -> tuple[str, str]:
+        return str(r.get("warehouse") or "").strip(), str(r.get("ym") or "").strip()
+
+    manual: dict[tuple[str, str], list[float]] = {}
+    snap: dict[tuple[str, str], list[float]] = {}
+    for r in rows:
+        wh, ym = _key(r)
+        if wh and ym:
+            manual[(wh, ym)] = _vals(r)
+    for r in snaps:
+        wh, ym = _key(r)
+        if wh and ym:
+            snap.setdefault((wh, ym), _vals(r))       # 同月多行（一标/三标）⇒ 取第一条（与页面同"命中第一条"语义）
+
+    # ⭐ 逐月按**分界月**定来源（`column_source` = 唯一出口，⛔ 不在这里另判）：
+    #    历史段 ⇒ 快照值；正式段 ⇒ 手录值。两边都取不到 ⇒ 全 0（`MACH6` 只能给数；页面表体的
+    #    "空态"那一档由 `domain.build_matrix` 表达，本端点不吃那一套）。
+    out: dict[str, dict[str, list[float]]] = {}
+    sections: dict[str, dict[str, str]] = {}
+    for wh, ym in sorted(set(manual) | set(snap)):
+        cut = cutoffs.get(wh) or ""
+        section = D.section_of(ym, cut)
+        from_snapshot = (D.column_source(D.MECH_KEYS[0], ym=ym, cutoff_ym=cut)
+                         == D.SOURCE_SNAPSHOT)
+        out.setdefault(wh, {})[ym] = (snap.get((wh, ym), zeros) if from_snapshot
+                                      else manual.get((wh, ym), zeros))
+        sections.setdefault(wh, {})[ym] = section
+    return {"mech": out, "count": len(rows), "columns": list(D.MECH_COLUMNS),
+            "sections": sections}
 
 
 class MechSaveRequest(BaseModel):
@@ -146,6 +182,9 @@ def api_mech_save(req: MechSaveRequest) -> dict:
 
     ⚠️ 校验**唯一出口 = `mech_ui.parse_mech_values`**（空 ⇒ 0；非数字 / 负数 ⇒ 拒）——
       与 PRG 端点（`POST /m06/mech`）**同一份判定**，⛔ 不在本层另写一套。
+    ⭐⭐ **历史段的月份会被拒**（2026-09-26 用户裁定：「机械费手录**仅限于正式启用系统后**」）——
+      挡板在**唯一写出口** `repository.save_mech`（⛔ 不是在本层判、也不是只靠界面）；
+      理由原样给用户看（"这一格不能手录：… 属历史段 … 以过程资料导入的值为准"）。
 
     ⚠️ 手录值落**旁路载体**（`proc_mech_manual`）⇒ 重抓 i8 / 重导历史**都不覆盖它**（§5.2.5 ③）。
     ⚠️ 失败 **抛 `MustReportError`** ⇒ 400 ＋ 原样原因（壳侧把它给用户，不静默）。

@@ -110,16 +110,24 @@ def make_batch(batch_no: str = _BATCH, *, warehouse: str = WAREHOUSE,
 
 
 def make_snapshot(row_id: int, *, ym: str, ins: str = "0", outs: str = "0",
-                  warehouse: str = WAREHOUSE, batch_no: str = _BATCH):
-    """历史段定稿快照的一行：`ins` / `outs` 都是「主辅材」列的金额（够用即可）。"""
+                  warehouse: str = WAREHOUSE, batch_no: str = _BATCH,
+                  mech: list[str] | None = None):
+    """历史段定稿快照的一行：`ins` / `outs` 都是「主辅材」列的金额（够用即可）。
+
+    ⭐ `mech` = **机械 6 列**（2026-09-26 · `TAIL-107`：历史段的机械费也来自快照）——
+      不给 ⇒ 全 `0`（＝这份快照没导入机械费）。
+    """
     from decimal import Decimal as D
 
     from app.mod06_proc.models import ProcHistorySnapshot
 
+    vals = list(mech or [])
+    kw = {f"mech_{i}": D(str(vals[i]) if i < len(vals) else "0")
+          for i in range(6)}
     return ProcHistorySnapshot(id=row_id, batch_no=batch_no, ym=ym, warehouse_name=warehouse,
                                project_id=None, in_0=D(ins), in_1=D("0"), in_2=D("0"),
                                in_3=D("0"), in_4=D("0"), out_0=D(outs), out_1=D("0"),
-                               out_2=D("0"), out_3=D("0"), out_4=D("0"))
+                               out_2=D("0"), out_3=D("0"), out_4=D("0"), **kw)
 
 
 def make_cutoff(cutoff_ym: str = CUTOFF_YM, *, warehouse: str = WAREHOUSE):
@@ -135,6 +143,10 @@ def dataset_sections() -> dict:
     - 截止核算月 = `2026-06` ⇒ 历史段 = {05, 06}（快照）· 正式段 = {07, 08, 09, 10}（库存单据）
     - ⚠️ **库存单据里也放了一条 2026-05**（金额 9999）—— 用来证明**历史段不引用库存单据**
     - ⚠️ **2026-10 只有机械手录、没有库存单据** —— 用来证明**正式段空态不臆造 0**
+    - ⭐⭐ **机械列刻意"两段各一份、值还不一样"**（2026-09-26 · `TAIL-107`）：
+      历史段 `2026-06` 的**快照**有机械值（`mech_0 = 5.00`）而**手录表里也有** `2026-06`（`mech_0 = 7.00`，
+      改前那条口径留下的行）⇒ 判据据此证明「**历史段以导入值为准**：读到的必须是 5.00、不是 7.00」；
+      正式段 `2026-07` 只有手录（1.00）⇒ 证明正式段仍以手录为准。
     """
     from decimal import Decimal as D
 
@@ -162,7 +174,8 @@ def dataset_sections() -> dict:
         ProcHistoryBatch: [make_batch()],
         ProcHistorySnapshot: [
             make_snapshot(301, ym="2026-05", ins="1000.00"),
-            make_snapshot(302, ym="2026-06", outs="200.00"),
+            # ⭐ 2026-06 的快照**带机械值**（5.00）—— 而手录表里同一格是 7.00 ⇒ 判据证明"快照说了算"
+            make_snapshot(302, ym="2026-06", outs="200.00", mech=["5.00", "0", "0", "0", "0", "0"]),
         ],
         ProcCutoff: [make_cutoff()],
     }

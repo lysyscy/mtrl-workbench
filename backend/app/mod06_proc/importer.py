@@ -10,11 +10,15 @@
 |---|---|---|
 | **核算月** | `2026-08`（也接受 `2026/8` · `2026.08` · `202608`；别名 `核算年月` / `月份` / **`时间`**） | ✅ |
 | `domain.PROC_COLUMNS` 的 10 个材料列 | 入库 / 出库各 5 类（主辅材 · 工具 · 劳保 · 周转材料 · 临时设施） | **至少 1 列** |
+| `domain.PROC_COLUMNS` 的 **机械 6 列** | 租分公司设备 · 内租设备 · 外租（零租/包月 含税/不含税） | 否 |
 
 - ⭐ **列名的唯一主人 = `domain.PROC_COLUMNS`** —— 本文件不另抄一份列名，只按 label 认列。
-- ⚠️ **机械 6 列不导入**：机械列**全段手录**（旁路表 `proc_mech_manual`，见 `mech_ui.py`）
-  ⇒ 文件里出现就**显式列出来给人看**（不静默忽略、也不顺手写进快照）。
-- ⚠️ 认不出的列**列出来提示**（用户台账常带附注列）—— **不算错**；但**一列材料列都没有 ⇒ 报错**
+- ⭐⭐ **2026-09-26（`TAIL-107`）：机械 6 列也导入**（进历史段快照）—— 用户原话：「导入过程资料，
+  **机械费也要导进去**，机械费手录仅限于正式启用系统后，历史机械费都填在过程资料 excel 里」。
+  ⚠️ 改前是反的（"机械列不导入、全段手录"）⇒ ⛔ 别再把机械列从 `map_columns` 里过滤掉：
+     一过滤就成了"认得出、不写、全程不报错"（用户得手工敲）。
+  ⭐ 顺带一条：**只填了机械列、材料全空的行也算数据行**（`_has_amounts` 现在把机械列算进去）。
+- ⚠️ 认不出的列**列出来提示**（用户台账常带附注列）—— **不算错**；但**机械列与材料列一列都没有 ⇒ 报错**
   （那说明这文件不是过程资料，导进去只会污染历史段）。
 
 ## 三条硬纪律
@@ -94,7 +98,7 @@ def _mk_fields() -> tuple[Field, ...]:
             f"线下出库{leaf}", f"线下出库（不含税）{leaf}", f"线下出库不含税{leaf}",
             f"{leaf}线下出库", f"{leaf}线下出库（不含税）", f"{leaf}线下出库不含税",
         )))
-    # 机械 6 列：**认出来只为提示「不导入」**（口径见模块头 ⚠️）
+    # 机械 6 列：**要导入**（⭐ 2026-09-26 用户裁定 —— 历史机械费在 excel 里；别名照真模板）
     mech = (
         ("租分公司设备", ("分公司设备", "租分公司设备")),
         ("内租设备", ("内部设备", "内租设备")),
@@ -135,8 +139,14 @@ def material_labels() -> dict[str, str]:
 
 
 def mech_labels() -> dict[str, str]:
-    """`{表头 label: 列 key}` —— 机械 6 列（**认出来只为提示「不导入」**）。"""
+    """`{表头 label: 列 key}` —— 机械 6 列（⭐ 2026-09-26 起**也要落库**，见模块头）。"""
     return {col["label"]: col["key"] for col in D.PROC_COLUMNS if col["key"] in D.MECH_KEYS}
+
+
+def value_labels() -> dict[str, str]:
+    """`{列 key: 表头 label}` —— **材料 ＋ 机械**（报错时写"哪一列"用；⛔ 别只盖材料那半）。"""
+    return {col["key"]: col["label"] for col in D.PROC_COLUMNS
+            if col["key"] in D.MATERIAL_KEYS or col["key"] in D.MECH_KEYS}
 
 
 # ------------------------------------------------------------------ 识别（引擎）
@@ -216,22 +226,23 @@ def find_header(grid: list[list]) -> int:
 
 
 def map_columns(header: list, leaf: list | None = None) -> dict[str, int]:
-    """表头（可带叶子行）→ `{列 key 或 `ym`: 下标}`。
+    """表头（可带叶子行）→ `{列 key 或 `ym`: 下标}` —— 回 `ym` ＋ 材料 10 列 ＋ **机械 6 列**。
 
-    ⚠️ **只回 `ym` ＋ 材料 10 列** —— 机械 6 列**不进这个映射**（它们只用于「提示不导入」，
-       见 `parse_sheet` 的 `ignored_mech`）。⛔ 别把机械列混进来：`parse_sheet` 是照它逐列取值的，
-       混进来就会把机械金额**写进快照**（与「机械全段手录」的口径相冲 —— 自测抓到过）。
+    ⭐ 2026-09-26（`TAIL-107`）：**机械 6 列进这个映射**（要落库）。⚠️ 改前这里**故意把它们滤掉**
+      （旧口径"机械全段手录、导入只提示不落库"）—— 那条口径已作废，⛔ 别把 filter 加回来。
+    ⚠️ 「一列都没认出来」的判据：**材料列与机械列都算**（只填机械列的表也是过程资料）。
     """
     found = _recognize(header, leaf)
     if "ym" not in found:
-        raise MustReportError(f"文件里没有「核算月」列（可写：{' / '.join(YM_HEADERS)}）")
-    mats = {k: at for k, at in found.items() if k == "ym" or k in D.MATERIAL_KEYS}
-    if not [k for k in mats if k != "ym"]:
+        raise MustReportError(f"文件里没有「核算月」列（可写：{' · '.join(YM_HEADERS)}）")
+    vals = {k: at for k, at in found.items()
+            if k == "ym" or k in D.MATERIAL_KEYS or k in D.MECH_KEYS}
+    if not [k for k in vals if k != "ym"]:
         raise MustReportError(
-            "文件里一列材料列都没认出来 —— 过程资料的列名见 §5.2.2（如「入库主辅材」「出库工具」）；"
-            "这份文件看起来不是过程资料"
+            "文件里一列材料列 / 机械列都没认出来 —— 过程资料的列名见 §5.2.2（如「入库主辅材」"
+            "「外租机械（含税）零租」）；这份文件看起来不是过程资料"
         )
-    return mats
+    return vals
 
 
 # ------------------------------------------------------------------ 核算月（含真文件那两种写法）
@@ -312,7 +323,12 @@ def _ym_loose(value) -> tuple[str, str]:
 
 
 def _has_amounts(row: list, index: dict[str, int]) -> bool:
-    """该行**材料列**里有没有填东西（判定"是不是数据行"用；⛔ 不看机械列 —— 那不导入）。"""
+    """该行**材料列 / 机械列**里有没有填东西（判定"是不是数据行"用）。
+
+    ⭐ 2026-09-26（`TAIL-107`）：**机械列也算** —— "只填了机械列"的行从此**是数据行**
+      （改前它被判成"空行"丢掉，而机械费正是用户要导的东西）。判据只认 `index`（= `map_columns` 的出口）
+      ⇒ 加列不必改这里（⛔ 别在这里硬写列名）。
+    """
     return any(_cell(row, at) for key, at in index.items() if key != "ym")
 
 
@@ -394,14 +410,17 @@ def plan_rows(records) -> tuple[list[dict], list[str], list[dict]]:
         "好的两行照常进"）；**一行都没有**时才由调用方拒绝整批。
     """
     key_of = {f.label: f.key for f in FIELDS}
-    mat_labels = [f.label for f in FIELDS if f.key in D.MATERIAL_KEYS]
+    # ⚠️ "有没有金额"= **材料列 ＋ 机械列**（⭐ `TAIL-107`：只填机械列的行也算数据行）——
+    #    ⛔ 别只挑材料列：那样"只填了机械费的那些月"会被当空行丢掉（而那正是用户要导的东西）。
+    amount_labels = [f.label for f in FIELDS
+                     if f.key in D.MATERIAL_KEYS or f.key in D.MECH_KEYS]
     rows: list[dict] = []
     skipped: dict[str, list[int]] = {}
     bad: list[dict] = []
     for rec in records or []:
         line = int(rec.get("_row") or 0)
         kind = _row_kind_of(cells=_record_cells(rec),
-                            has_amounts=any(str(rec.get(lb) or "").strip() for lb in mat_labels))
+                            has_amounts=any(str(rec.get(lb) or "").strip() for lb in amount_labels))
         if kind:
             skipped.setdefault(kind, []).append(line)
             continue
@@ -433,7 +452,8 @@ class ImportPlan:
 
     rows: list[dict] = field(default_factory=list)          # 将写入快照的行（只含非空列）
     anomalies: list[dict] = field(default_factory=list)     # 不入库的行（行号 + 原因）
-    ignored_mech: list[str] = field(default_factory=list)   # 文件里出现、但不导入的机械列名
+    # ⛔ `ignored_mech` 字段已删（2026-09-26 · `TAIL-107`）：机械 6 列**从此要导入**
+    #    ⇒ "文件里出现、但不导入的机械列"这个概念不存在了（那条旧口径已作废）。
     unknown_headers: list[str] = field(default_factory=list)  # 认不出的列名（提示，不算错）
     header_row: int = 0                                     # 表头在 Excel 里的行号（1 基，报错好定位）
     header_levels: tuple[int, ...] = ()                      # 两级表头时 =（分组行, 叶子行）（1 基）
@@ -489,12 +509,10 @@ def parse_sheet(data: bytes) -> ImportPlan:
         raise MustReportError("文件是空的（没有工作表内容）")
     head, leaf, found = _pick_header(grid)
     index = map_columns(grid[head], grid[leaf] if leaf is not None else None)
-    labels = {v: k for k, v in material_labels().items()}      # key → label（报错时写列名）
+    labels = value_labels()                                    # key → label（报错时写列名，含机械列）
 
     plan = ImportPlan(header_row=head + 1, sheet=sheet,
                       header_levels=(head + 1, leaf + 1) if leaf is not None else ())
-    plan.ignored_mech = [c["label"] for c in D.PROC_COLUMNS
-                         if c["key"] in D.MECH_KEYS and c["key"] in found]
     # ⭐ 「认不出的列」= **整列都没认成任何字段**的那些（⛔ 不把两级表头的两半各报一条 —— 那是噪音：
     #    真文件里 13 条"认不出"，其中 12 条其实是已认出列的父级/叶子）
     cols = _recognize_cols(grid[head], grid[leaf] if leaf is not None else None)
@@ -614,6 +632,6 @@ def rollback(s, *, batch_no: str) -> int:
 
 
 __all__ = ["FIELDS", "MAX_ROWS", "HEADER_SCAN_ROWS", "YM_HEADERS", "YM_SUFFIXES", "ImportPlan",
-           "material_labels", "mech_labels", "next_batch", "ym_of", "plan_rows",
+           "material_labels", "mech_labels", "value_labels", "next_batch", "ym_of", "plan_rows",
            "read_sheet", "find_header", "map_columns",
            "parse_sheet", "commit", "check_report", "rollback"]

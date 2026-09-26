@@ -95,8 +95,11 @@ def test_机械手录落库后表内取到_且重抓重导都不覆盖():
     s.by_model[ProcHistorySnapshot].append(make_snapshot(399, ym="2026-09", ins="1.00",
                                                         batch_no="H-02"))
     assert _by_month(s)["2026-09"]["mech_0"] == Decimal("55.00"), "重导不得动机械手录"
-    # ③ 历史段那份手录也照常可录（2026-06 ≤ 截止月）
-    assert all(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS)
+    # ③ ⭐ 2026-09-26 改口径（`TAIL-107`）：**历史段（2026-06 ≤ 截止月）不许手录**
+    #    （那一格以"过程资料导入"的值为准）—— 改前这条断言是"历史段也照常可录"。
+    assert not any(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS)
+    assert all(D.column_editable(k, ym="2026-09", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS), \
+        "正式段仍可手录（用户原话：「机械费手录仅限于正式启用系统后」）"
 
 
 # ⚠️ 原先还有一条 `test_机械手录回执条必须转义`（旧页 PRG 的 `msg` 参数反射）—— 随页作废：
@@ -115,20 +118,25 @@ def _plan():
 
 
 @acc()
-def test_历史导入按表头认列_机械列不导入_异常行必报():
+def test_历史导入按表头认列_机械列也导_异常行必报():
+    """⭐ 2026-09-26（`TAIL-107`）**改口径**：**机械 6 列也导入**（进历史段快照）。
+
+    ⚠️ 改前这条叫"机械列不导入"（口径：机械全段手录、导入只提示）—— 那条已作废；⛔ 别再改回去。
+    """
     plan = _plan()
     assert plan.months == ["2026-03", "2026-04"] and plan.writable == 2
     assert plan.rows[0]["in_主辅材"] == Decimal("1000.00")
     assert plan.rows[0]["out_工具"] == Decimal("20.00")
-    # ⛔ 机械列**不入快照**（全段手录）—— 但要**显式列出来**给人看
-    assert plan.ignored_mech == ["租分公司设备"]
-    assert not any(k.startswith("mech_") for k in plan.rows[0])
-    # 认不出的列只提示、不算错
+    # ⭐ 机械列**进快照**（表头「租分公司设备」⇒ `mech_0`）
+    assert plan.rows[0]["mech_0"] == Decimal("888.00")
+    assert plan.rows[1]["mech_0"] == Decimal("999.00")
+    # 认不出的列只提示、不算错（「备注」不属那 17 列）
     assert plan.unknown_headers == ["备注"]
     # 列序打乱也认得出（**不依赖位置**）
     shuffled = importer.parse_sheet(_xlsx([["20.00", "2026-03", "888", "1000.00"]],
                                           header=("出库工具", "核算月", "租分公司设备", "入库主辅材")))
     assert shuffled.rows[0]["in_主辅材"] == Decimal("1000.00")
+    assert shuffled.rows[0]["mech_0"] == Decimal("888.00"), "机械列也一样不依赖位置"
 
     # 异常行逐条列出：月份认不出 / 金额非数字
     # ⚠️ **2026-09-22 用户裁定 ④**（"空行就是没数据"）：原第 3 行（只有核算月、无金额）**不再算异常**
@@ -251,14 +259,20 @@ def test_历史导入页三步齐备且带项目与截止月():
     assert data["cutoff_ym"] == CUTOFF_YM, "当前截止核算月要显示出来"
 
     # ⚠️ 2026-09-23（`TAIL-75` `B5c-2`）：`import_api.api_meta()` 随五条旧端点**一起退休** ⇒
-    #    「材料列清单 / 机械列不采」改从**域声明**（`imp_spec.SPEC`）出 —— 判词不变
+    #    「材料列清单 / 不采哪些列」改从**域声明**（`imp_spec.SPEC`）出 —— 判词不变
     #    （"列清单从域口径出，⛔ 壳里不许另抄一份"），只是**唯一出口**换成了通用面的那一份。
+    #    ⭐ 2026-09-26（`TAIL-107`）：**机械列从"不采"挪到"目标字段"**（要导）——「不采」只剩「序号」。
     from app.mod06_proc import imp_spec
 
     mats = [f.label for f in imp_spec.FIELDS if f.key in D.MATERIAL_KEYS]
     assert "入库主辅材" in mats, "材料列清单要从域口径出（壳里不许另抄一份）"
+    # ⭐ 2026-09-26（`TAIL-107`）**改口径**：机械 6 列**要导**（进历史段快照）⇒ 它们是**目标字段**，
+    #    ⛔ 不再落在「明确不采」里。改前这条断言恰是 `set(D.MECH_COLUMNS) <= ignored`。
+    fields = {f.label for f in imp_spec.FIELDS}
+    assert set(D.MECH_COLUMNS) <= fields, "机械 6 列要从域口径出（它们现在是目标字段）"
     ignored = {lb for lb, _ in imp_spec.SPEC.ignored}
-    assert set(D.MECH_COLUMNS) <= ignored, "机械 6 列要落在「明确不采」里（认得出但不导入，且写明理由）"
+    assert not (set(D.MECH_COLUMNS) & ignored), "机械 6 列不许再出现在「明确不采」里（那是旧口径）"
+    assert ignored == {"序号"}, "「明确不采」现在只剩「序号」（行号，系统自己编）"
 
     # ⚠️ 2026-09-22（`TAIL-75` `B5c`）：画这三步的**是「数据导入」页**（通用导入面），旧 `V.m06imp` 已下架 ——
     #    **判词不变**（"壳把三步与后端给的数据都画出来"），落点换到通用面：
@@ -270,3 +284,60 @@ def test_历史导入页三步齐备且带项目与截止月():
     assert 'data-act="impPjToggle"' in SHELL and 'id="impCut"' in SHELL, "项目（仓库名）与截止核算月没画出来"
     for must in ("选域与文件", "列映射", "预览校验", "确认落库"):
         assert must in SHELL, f"壳的导入流程少了这一步：{must}"
+
+
+# ============================================================ 机械 6 列的有效值（`TAIL-107`）
+
+
+@acc()
+def test_接口按分界月给机械值_历史段读快照():
+    """⭐⭐ 2026-09-26（`TAIL-107`）：`GET /api/m06/mech` 给的是机械 6 列的**有效值**（**按段切来源**）。
+
+    ⚠️ 为什么必须钉住它：壳里十几处都吃这一份（过程资料 17 列 / 活动大表 / **机械结算 = `m05` 欠款** /
+    台账候选）⇒ 它给错，用户看到的机械费就错。
+    ⚠️ 改前它只回**手录值**（旧口径"全段手录"）—— 而历史段的手录值**页面根本不读**（读快照）
+      ⇒ 那种"录了却不显示"的错配，正是本届口径要堵的。
+    ⭐ 判据里刻意塞了一条**历史段的旧手录行**（99.00，绕过挡板直接写模型，模拟改口径之前留下的数据）
+      ⇒ 读到的必须是**快照值 11.00**，⛔ 不是 99.00（"以导入值为准"不是口号）。
+    """
+    import uuid
+
+    from sqlalchemy import select as _sel
+
+    from app.core.db import session_scope
+    from app.mod06_proc import repository as repo
+    from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot, ProcMechManual
+    from app.mod06_proc.router import api_mech
+
+    h = "__自检仓_MECHAPI_H_" + uuid.uuid4().hex[:6] + "__"       # 历史段（有快照值 ＋ 一条旧手录）
+    f = "__自检仓_MECHAPI_F_" + uuid.uuid4().hex[:6] + "__"       # 正式段（只有手录）
+    ym_h, ym_f = "2026-05", "2026-09"
+    try:
+        with session_scope() as s:
+            repo.import_snapshot(s, warehouse=h, rows=[{"ym": ym_h, "mech_0": Decimal("11.00")}],
+                                 batch_no="PROC-API-" + uuid.uuid4().hex[:6], operator="自检",
+                                 cutoff_ym="2026-06")
+            repo.save_mech(s, ym=ym_f, warehouse=f, values={"mech_0": Decimal("22.00")})
+            s.add(ProcMechManual(ym=ym_h, warehouse_name=h, mech_0=Decimal("99.00")))  # 旧口径遗留
+            s.flush()
+
+        got = api_mech()
+        assert got["mech"][h][ym_h][0] == 11.0, \
+            f"历史段要读**快照值**（那条 99.00 的旧手录不该被读到）：{got['mech'][h]}"
+        assert got["mech"][f][ym_f][0] == 22.0, "正式段要读**手录值**"
+        assert got["sections"][h][ym_h] == D.SECTION_HISTORY, "段要如实给（壳据此拦住历史段手录）"
+        assert got["sections"][f][ym_f] == D.SECTION_FORMAL
+    finally:
+        with session_scope() as s:
+            for r in list(s.execute(_sel(ProcHistorySnapshot)).scalars()):
+                if r.warehouse_name == h:
+                    s.delete(r)
+            for r in list(s.execute(_sel(ProcHistoryBatch)).scalars()):
+                if r.warehouse_name == h:
+                    s.delete(r)
+            for r in list(s.execute(_sel(ProcCutoff)).scalars()):
+                if r.warehouse_name == h:
+                    s.delete(r)
+            for r in list(s.execute(_sel(ProcMechManual)).scalars()):
+                if r.warehouse_name in (h, f):
+                    s.delete(r)

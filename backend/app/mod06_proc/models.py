@@ -1,7 +1,14 @@
 """`MOD-06` 过程资料 · **机械 6 列的手录旁路表**。
 
-依据：《说明书》**§5.2.3 ②**（机械费各项 = 人工录入 —— 机械费近期不做，先手录）·
-**§5.2.5 ③**（机械 6 列**全段手录**，但**必须与材料列同构**：同一「列取值出口」、数据源可插拔）。
+依据：《说明书》**§5.2.3 ②**（机械费各项 = 人工录入）·
+**§5.2.5 ③**（机械 6 列**必须与材料列同构**：同一「列取值出口」、数据源可插拔）。
+
+⭐⭐ **2026-09-26 口径变更**（用户原话：「导入过程资料，**机械费也要导进去**，**机械费手录仅限于正式启用
+系统后**，历史机械费都填在过程资料 excel 里」）：
+- **历史段（≤ 截止核算月）**：机械 6 列以**过程资料导入的定稿快照**为准（`ProcHistorySnapshot` 的
+  `mech_0…mech_5`）；⚠️ **不许手录**（同一格两个来源 = 谁也说不清哪个对）。
+- **正式段（> 截止核算月）**：**手录**（正是本表）。
+- 出口仍是 `domain.column_source` / `column_editable`（⛔ 页面与取数不另写口径）。
 
 ⚠️ 旁路载体（与调整单同源思路）：**不被重抓 i8 / 重导历史覆盖**（§9.3）。
 ⚠️ 键 = **核算月 ＋ 仓库名**（项目键 = 仓库名，§2.7.4）。
@@ -21,7 +28,7 @@ from app.core.db import Base, MONEY
 
 
 class ProcMechManual(Base):
-    """过程资料 · 机械 6 列手录值（一「核算月 × 仓库」一行）。"""
+    """过程资料 · 机械 6 列手录值（一「核算月 × 仓库」一行）—— ⭐ **只服务正式段**（见模块头）。"""
 
     __tablename__ = "proc_mech_manual"
     __table_args__ = (
@@ -71,7 +78,12 @@ class ProcHistoryBatch(Base):
 
 
 class ProcHistorySnapshot(Base):
-    """历史段定稿快照的一条记录（键 = **批次 ＋ 核算月 ＋ 仓库名**；材料 10 列）。"""
+    """历史段定稿快照的一条记录（键 = **批次 ＋ 核算月 ＋ 仓库名**；材料 10 列 ＋ **机械 6 列**）。
+
+    ⭐ 2026-09-26：**机械 6 列也进快照**（用户裁定"历史机械费都填在过程资料 excel 里"）——
+      此前只有材料 10 列 ⇒ 历史段的机械费没有落点（只能手录，而那本是"启用后"才用的）。
+    ⚠️ 机械列**只在历史段被读**（`domain.column_source` 按段切来源）—— 正式段的机械费仍走手录旁路表。
+    """
 
     __tablename__ = "proc_history_snapshot"
 
@@ -95,6 +107,16 @@ class ProcHistorySnapshot(Base):
     out_2: Mapped[float] = mapped_column(MONEY, default=0)
     out_3: Mapped[float] = mapped_column(MONEY, default=0)
     out_4: Mapped[float] = mapped_column(MONEY, default=0)
+
+    # 机械 6 列（下标与 `domain.MECH_COLUMNS` 一一对应；2026-09-26 补，迁移 `f3a7c1e5b9d2`）
+    # ⚠️ `server_default="0"` 是**迁移给的**（往有行的表加非空列必须给默认值）—— 模型这行
+    #    **必须一起声明**，否则 `alembic check` 天天报 `modify_default`（`TAIL-102` 的教训）。
+    mech_0: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")   # 租分公司设备
+    mech_1: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")   # 内租设备
+    mech_2: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")   # 外租零租含税
+    mech_3: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")   # 外租包月含税
+    mech_4: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")   # 外租零租不含税
+    mech_5: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")   # 外租包月不含税
 
 
 class ProcCutoff(Base):

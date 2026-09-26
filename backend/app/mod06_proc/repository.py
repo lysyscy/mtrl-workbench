@@ -42,8 +42,26 @@ def load_mech(s: Session) -> list[dict]:
 
 
 def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: int | None = None):
-    """写机械 6 列手录值（**旁路载体**：不被重抓 / 重导覆盖，§5.2.5 ③）。"""
+    """写机械 6 列手录值（**旁路载体**：不被重抓 / 重导覆盖，§5.2.5 ③）—— ⭐ **只服务正式段**。
+
+    ⭐⭐ **挡板就在这一处（唯一写出口）**（用户 2026-09-26 裁定：「机械费手录**仅限于正式启用系统后**」）：
+      该月若落**历史段**（`ym ≤ 该项目的截止核算月`）⇒ **拒绝**（历史段的机械费以**过程资料导入**为准）。
+      ⚠️ 为什么挡在这里、而不是只在界面上：界面只挡"人点的路"，脚本 / 接口绕过去照样写
+         —— 而页面**只读快照** ⇒ 录进去的值**根本不显示** ⇒ 用户以为存了、去看却没有
+         （同一格两个来源 = 谁也说不清哪个对；这正是本条口径要堵的）。
+    """
+    from app.core.errors import MustReportError
     from app.core.money import require_non_negative
+    from app.mod06_proc.domain import SECTION_HISTORY, section_of
+
+    ym = str(ym or "")
+    cutoff = load_cutoff(s, warehouse=warehouse)
+    if section_of(ym, cutoff) == SECTION_HISTORY:
+        raise MustReportError(
+            f"{ym} 这一格不能手录 —— 它属**历史段**（{warehouse} 的截止核算月 = {cutoff}）："
+            "历史段的机械费以「**过程资料导入**」的值为准（要改请改 Excel 后重导）。"
+            "机械费手录只在**正式段**（截止月之后）用。"
+        )
 
     rows = list(s.execute(select(ProcMechManual)).scalars())
     found = next((x for x in rows if x.ym == ym and x.warehouse_name == warehouse), None)
@@ -62,11 +80,17 @@ def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: 
 
 
 def _snapshot_keys() -> dict[str, tuple[str, int]]:
-    """domain 的列 key（`in_主辅材`…）→ 快照表的列名（`in_0`…）。**只有这一处映射**。"""
+    """domain 的列 key（`in_主辅材`… / `mech_0`…）→ 快照表的列名（`in_0`… / `mech_0`…）。
+
+    **只有这一处映射**。
+    ⭐ 2026-09-26（`TAIL-107`）：**机械 6 列也进快照**（用户裁定"历史机械费都填在过程资料 excel 里"）。
+    """
     out: dict[str, tuple[str, int]] = {}
     for i, cat in enumerate(CATEGORIES):
         out[f"in_{cat}"] = ("in", i)
         out[f"out_{cat}"] = ("out", i)
+    for i in range(len(MECH_COLUMNS)):
+        out[f"mech_{i}"] = ("mech", i)          # ⭐ 历史段的机械费落点（与手录表同名列名）
     return out
 
 

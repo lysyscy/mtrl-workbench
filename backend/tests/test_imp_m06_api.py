@@ -177,6 +177,49 @@ def test_每个项目的截止月各给一份_换项目不会串():
 
 
 @acc()
+def test_机械列导入落进历史段_并能被读到(client):
+    """⭐⭐ 2026-09-26（`TAIL-107`）**端到端**：机械 6 列从 excel **导进来** ⇒ 落**历史段快照** ⇒ 读得到。
+
+    用户原话：「导入过程资料，**机械费也要导进去**，机械费手录仅限于正式启用系统后，
+    历史机械费都填在过程资料 excel 里」—— 本件钉的就是这条链**通了**（改前机械列被过滤掉，
+    导进来的只有材料 10 列）。
+    """
+    from app.core.db import session_scope
+    from app.mod06_proc import repository as repo
+
+    got = _parse(client).json()
+    # 「分公司设备」= 机械第一列（`mech_0`）的别名之一 —— 它现在**是目标字段**
+    by_src = {c["src"]: c for c in got["cols"]}
+    assert by_src["分公司设备"]["field"] == "租分公司设备", by_src["分公司设备"]
+    body = {"token": got["token"],
+            "mapping": {"时间": "核算月", "线上入库（不含税）主辅材": "入库主辅材",
+                        "分公司设备": "租分公司设备"}}
+    wh = "__自检仓_MECH_" + uuid.uuid4().hex[:8] + "__"
+    out = client.post("/api/imp/m06_proc/commit",
+                      json={**body, "options": {"warehouse": wh,
+                                                "batch": "PROC-MECH-" + uuid.uuid4().hex[:8]}}).json()
+    assert out["ok"], out
+    with session_scope() as s:
+        rows = [r for r in repo.load_history(s) if r.get("warehouse") == wh]
+        assert rows, "历史段快照里没有这一批"
+        assert any(r.get("mech_0") for r in rows), \
+            f"机械列**没落进快照** —— 用户要导的机械费丢了：{rows}"
+        assert [r["mech_0"] for r in rows if r.get("mech_0")], "机械第一列的值要对上"
+        # 清干净（持久测试库：随手删掉本件造的批次与快照）
+        from app.mod06_proc.models import ProcHistoryBatch, ProcHistorySnapshot, ProcCutoff
+        from sqlalchemy import select as _sel
+        for r in list(s.execute(_sel(ProcHistorySnapshot)).scalars()):
+            if r.warehouse_name == wh:
+                s.delete(r)
+        for r in list(s.execute(_sel(ProcHistoryBatch)).scalars()):
+            if r.warehouse_name == wh:
+                s.delete(r)
+        for r in list(s.execute(_sel(ProcCutoff)).scalars()):
+            if r.warehouse_name == wh:
+                s.delete(r)
+
+
+@acc()
 def test_合计与说明行跳过_不合规核算月不收_且在预览就报出来(client):
     """⭐⭐ 2026-09-26（用户报障收口 · 原话「**不合规的核算月文本不收**，我说了正式导入的时候会改成
     标准格式」＋「**合计说明行跳过**」）。
@@ -255,24 +298,35 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
 
 
 @acc()
-def test_schema_不给机械列目标字段(client):
-    """⭐ 口径：机械 6 列**全段手录** ⇒ 通用面里根本不给它们字段（界面不会让他们落库）。"""
+def test_schema_机械列也是目标字段(client):
+    """⭐⭐ 2026-09-26（`TAIL-107`）**改口径**：机械 6 列**也是目标字段**（要落进历史段快照）。
+
+    ⚠️ 改前这条断言是**反的**（"不给机械列目标字段" —— 旧口径"机械全段手录"），那条已作废；
+       ⛔ 别再用"机械列不许出现在目标字段里"当判据（那会把用户要导的东西挡在门外）。
+    """
     sch = client.get("/api/imp/m06_proc/schema").json()
     labels = {f["label"] for f in sch["fields"]}
     assert "核算月" in labels and {"入库主辅材", "出库周转材料"} <= labels
-    assert not (labels & {"租分公司设备", "内租设备", "外租零租含税"}), "机械列不许出现在目标字段里"
-    assert sch["batch"] is True and "机械 6 列不导入" in sch["keep_note"]
+    assert {"租分公司设备", "内租设备", "外租零租含税", "外租包月含税",
+            "外租零租不含税", "外租包月不含税"} <= labels, "机械 6 列要在目标字段里（它们要导）"
+    assert sch["batch"] is True
+    assert "序号" in sch["keep_note"], "「不采」那一栏现在只剩「序号」这类"
+    assert "机械 6 列不导入" not in sch["keep_note"], "还留着旧口径那句话（机械列现在要导）"
 
 
 @acc("ACC-IMP-MAP-001", "001-09")
-def test_机械列落进明确不采_而不是未认出(client):
+def test_序号落进明确不采_机械列是目标字段(client):
     """⭐ 「**认得出但按口径不采**」与「**系统不认识**」必须分开 —— 否则界面上看着像系统漏了列。
-    （`B5-0` 实测逼出来的：机械 6 列早先落进"未认出"，用户会一列列去点。）"""
+
+    ⭐ 2026-09-26（`TAIL-107`）**改口径**：**机械列从"不采"挪到"目标字段"**（要导）；
+      「不采」那一档现在只剩 `序号`（行号，系统自己编）—— 这条判据的**形态**没变、**成员**变了。
+    """
     got = _parse(client).json()
     ignored = {x["src"]: x["why"] for x in got["ignored"]}
-    assert "分公司设备" in ignored and "机械 6 列" in ignored["分公司设备"], got["ignored"]
-    assert "序号" in ignored, "序号也是「认得出、系统自己编」那一类"
+    assert "序号" in ignored, "序号是「认得出、系统自己编」那一类"
+    assert not [x for x in got["ignored"] if "机械" in x["why"]], \
+        f"机械列**不许**再落进「不采」（它们要导）：{got['ignored']}"
     by_src = {c["src"]: c for c in got["cols"]}
-    assert "机械 6 列" in by_src["分公司设备"]["ignored"]
-    assert by_src["分公司设备"]["field"] is None, "不采的列不给目标字段"
+    assert by_src["序号"]["field"] is None, "不采的列不给目标字段"
+    assert by_src["分公司设备"]["field"] == "租分公司设备", "机械列现在是**目标字段**（要落库）"
     assert by_src["时间"]["ignored"] == "" and by_src["时间"]["field"] == "核算月"

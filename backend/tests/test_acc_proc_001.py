@@ -166,7 +166,13 @@ def test_差异表合计只求三列且跨列数对齐():
 @acc(CASE, "001-08")
 def test_材料费只作引用只读且无编辑入口():
     assert all(D.COLUMN_SOURCE[k] == D.SOURCE_INV for k in D.MATERIAL_KEYS)
-    assert all(D.COLUMN_SOURCE[k] == D.SOURCE_MANUAL for k in D.MECH_KEYS)
+    # ⭐ 2026-09-26（`TAIL-107`）：机械 6 列**不在**这张**静态**来源表里 —— 它们的来源**按段切**
+    #    （历史段 = 导入的快照 / 正式段 = 手录）⇒ 静态表表达不了。唯一出口 = `column_source`。
+    #    ⛔ 别为了"这一行看着整齐"把机械列塞回来：那等于又给出一份"恒为手录"的第二说法
+    #      （改前就是这样，正是这次要收掉的东西）。
+    assert all(k not in D.COLUMN_SOURCE for k in D.MECH_KEYS)
+    assert D.MECH_SOURCE_BY_SECTION == {D.SECTION_HISTORY: D.SOURCE_SNAPSHOT,
+                                        D.SECTION_FORMAL: D.SOURCE_MANUAL}
     assert D.MATERIAL_READONLY is True
 
     # ⚠️ 2026-09-18（`§19` 批 2）：原先拿**旧服务端页**渲染结果喂 `D.boundary_violations` 扫描；

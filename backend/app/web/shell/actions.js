@@ -1501,13 +1501,17 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
    toast(`活动大表已按所选 <b>${BIGSET.length}</b> 个项目出表（行序即刚才设置的行序）`); },
 
  /* ⭐ `TAIL-38`：录机械费（`m06` 的机械 6 列是**旁路载体**；原型没画入口 ⇒ §5.2.5 ③ 自行设计）。
-    判定与落库**全在后端**：空 ⇒ 0、负数 / 非数字 ⇒ 拒且不写库（`mech_ui.parse_mech_values`）。 */
+    判定与落库**全在后端**：空 ⇒ 0、负数 / 非数字 ⇒ 拒且不写库（`mech_ui.parse_mech_values`）。
+    ⭐⭐ 2026-09-26（`TAIL-107` · 用户裁定）：**手录只给正式段** —— 历史段（≤ 截止核算月）的机械费
+      以**过程资料导入**的值为准。挡板在后端（`repository.save_mech`，唯一写出口）⇒ 这里只负责
+      **提前说清**（守则 §5.5：不能做的要说明原因，⛔ 别让人填完才被拒）。 */
  mechOpen:()=>{ const cands=(typeof PROC_PJS==='object'&&PROC_PJS&&PROC_PJS.length)?PROC_PJS:bigCands();
    const wh=(cands.indexOf(procPj)>=0?procPj:(cands[0]||''));
    const ym=bjMonth(-1);                                   /* 材料报表类默认 = 北京时间上月（§9.2） */
    const vals=((MACH6[wh]||{})[ym]||[]);
    modal({title:'录机械费 · 手录 6 列',reopen:()=>ACT.mechOpen(),
-     body:`<div class="tip" style="margin-bottom:8px">机械 6 列是<b>旁路载体</b>：重抓 i8 / 重导历史<b>都不覆盖</b>它（§5.2.5 ③）。<br>空 ⇒ 0；<b>负数 / 非数字一律拒绝且不写库</b>（判定在后端，原值不变）。</div>
+     body:`<div class="tip" style="margin-bottom:8px">机械 6 列是<b>旁路载体</b>：重抓 i8 / 重导历史<b>都不覆盖</b>它（§5.2.5 ③）。<br>空 ⇒ 0；<b>负数 / 非数字一律拒绝且不写库</b>（判定在后端，原值不变）。<br>
+       ⚠️ <b>手录只用于「正式段」</b>（核算月 <b>晚于</b>该项目的<b>截止核算月</b>）；<b>历史段</b>（≤ 截止月）的机械费以<b>过程资料导入</b>的值为准 —— 录到历史段会被拒绝（要改历史值请改 Excel 后重导）。</div>
        <div class="fbar" style="border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px">
          <div class="fi"><label>项目</label><select class="inp" id="mechPj">${cands.map(k=>`<option value="${esc(k)}"${k===wh?' selected':''}>${esc(k)}</option>`).join('')||'<option value="">（没有候选项目）</option>'}</select></div>
          <div class="fi"><label>核算月</label><input class="inp" id="mechYm" value="${esc(ym)}" placeholder="YYYY-MM"></div>
@@ -1516,6 +1520,10 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="mechOk">保存</button>`}); },
  mechOk:async ()=>{ const g=id=>document.getElementById(id);
    const wh=String(((g('mechPj')||{}).value)||''), ym=String(((g('mechYm')||{}).value)||'').trim();
+   /* ⛔ **本地兜底**拦住"往历史段手录"（后端也会拒 —— 但那时用户已经填完 6 格了）；
+      判据只认后端给的段（`MECH_SECTIONS`，⛔ 壳里不许自己拿截止月比大小）。 */
+   if(((MECH_SECTIONS[wh]||{})[ym]||'')==='history'){
+     return toast(`<b>这一格不能手录</b>：<b>${esc(wh)}</b> 的 <b>${esc(ym)}</b> 属<b>历史段</b> —— 历史段的机械费以<b>过程资料导入</b>的值为准（要改请改 Excel 后重导）；手录只在<b>正式段</b>（截止核算月之后）用。`,8000); }
    const values={}; MECH_LABELS.forEach((_,i)=>{ values['mech_'+i]=String(((g('mechIn'+i)||{}).value)||''); });
    let r = null;
    try{ r=await API.m06MechSave({warehouse:wh,ym:ym,values:values}); }

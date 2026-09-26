@@ -75,11 +75,14 @@ def _data(ym, *, main=1000, tool=20):
 def test_两级表头拼名认列_父子在项目间互换也认得出():
     """⭐ 慧能（`含税`›`外租设备（零租）`）与晋江（`外租机械（含税）`›`零租`）**两种顺序都要认**。"""
     jj = importer.parse_sheet(_book(JJ, [_data(45871)]))
-    assert jj.ignored_mech == ["租分公司设备", "内租设备", "外租零租含税", "外租包月含税",
-                               "外租零租不含税", "外租包月不含税"], "机械 6 列要**全部认出来**（只为提示）"
+    # ⭐ 2026-09-26（`TAIL-107`）**改口径**：机械 6 列**要导**（进历史段快照）——
+    #    改前这里断言的是 `jj.ignored_mech == [6 个机械列名]`（"只为提示、不导入"）。
+    assert [k for k in jj.rows[0] if k.startswith("mech_")] == [f"mech_{i}" for i in range(6)], \
+        f"机械 6 列要全认出来并进快照：{jj.rows[0]}"
+    assert jj.rows[0]["mech_0"] == Decimal("300.00"), "机械第一列的金额要对上（_data 的第 11 列）"
     assert jj.unknown_headers == ["序号"]          # ⛔ 不把两级表头的两半各报一条（那是噪音）
     hui = importer.parse_sheet(_book(HUI, [_data(2025.11)]))
-    assert hui.ignored_mech == jj.ignored_mech, "父/子互换的那份，机械 6 列也要全认出来"
+    assert hui.rows[0]["mech_0"] == jj.rows[0]["mech_0"], "父/子互换的那份，机械 6 列也要全认出来"
     assert hui.unknown_headers == ["序号"]
     assert hui.header_levels == (2, 3) and hui.header_row == 2
 
@@ -105,12 +108,24 @@ def test_尾部合计行不计入也不报异常():
 
 
 @acc("ACC-PROC-IMPORT-001", "001-04")
-def test_机械列只提示不导入_数据行里不许出现机械金额():
-    """⚠️ 口径：机械 6 列**全段手录**（旁路表）⇒ 导入时只提示；⛔ 混进快照就是口径破口。"""
+def test_机械列要进快照_且只填了机械列的行也算数据():
+    """⭐⭐ 2026-09-26（`TAIL-107`）**改口径**：机械 6 列**要导**（历史机械费在 excel 里）。
+
+    ⚠️ 改前这条叫 `test_机械列只提示不导入_数据行里不许出现机械金额`（旧口径"机械全段手录"）；
+       那条已作废 —— 但**下面那半"空 ≠ 0"仍然成立**：没填的列**不进快照**（⛔ 不写 0）。
+    """
     plan = importer.parse_sheet(_book(JJ, [_data(45871)]))
     row = plan.rows[0]
-    assert not [k for k in row if k.startswith("mech_")], f"机械列不许进快照：{row}"
-    assert set(row) == {"ym", "in_主辅材", "in_工具"}, "只有真填了值的材料列进快照"
+    assert set(row) == {"ym", "in_主辅材", "in_工具"} | {f"mech_{i}" for i in range(6)}, \
+        f"材料两列 ＋ 机械 6 列（真填了值的）都进快照：{row}"
+    assert "in_劳保" not in row, "没填的材料列**不进**（空 ≠ 0）"
+
+    # ⭐ **只填了机械列、材料全空**的行 = **数据行**（改前它被当"空行"跳过）
+    only_mech = importer.parse_sheet(_book(JJ, [("", 45444, "", "", "", "",
+                                                "", "", "", "", 1, 2, 3, 4, 5, 6)]))
+    assert only_mech.writable == 1, "只填机械列的行也是数据（否则那些机械费就丢了）"
+    assert only_mech.rows[0]["mech_0"] == Decimal("1.00")
+    assert not [k for k in only_mech.rows[0] if k.startswith(("in_", "out_"))], "材料列一个都没填"
 
 
 @acc("ACC-PROC-IMPORT-001", "001-05")

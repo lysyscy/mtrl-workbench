@@ -141,10 +141,19 @@ def test_录机械费走后端且不在前端复写判据():
     """⭐ 反向：不许本地改 `MACH6` 冒充落库（假成功）；校验（负数 / 非数字）也不在前端复写。"""
     i = SHELL.find("mechOk:async ()=>{")
     assert i > 0, "`mechOk` 没改成 async（异步走后端）"
-    body = SHELL[i:i + 900]
+    # ⚠️ 2026-09-26：原先这里切**固定 900 字符** —— 往 `mechOk` 里加几行注释/兜底就把
+    #    `reloadMech()` 挤出窗口 ⇒ **假红**（本次就是这么红的）。改成切到**本动作结束**
+    #    （下一个段头块注释为止），不再靠魔法数字。
+    seg = SHELL[i:]
+    nxt = seg.find("\n/*", 1)
+    body = seg[:nxt] if nxt > 0 else seg[:4000]
+    assert len(body) > 200, "切出来的 `mechOk` 太短 —— 本页形态变了就同批改本件"
     assert "API.m06MechSave(" in body, "`mechOk` 没走 `/api/m06/mech`"
     assert "MACH6[" not in body, "`mechOk` 还在本地改 `MACH6` 冒充落库（假成功）"
     assert "reloadMech()" in body, "`mechOk` 成功后没「以后端为准重拉」"
+    # ⭐ 2026-09-26（`TAIL-107`）：往历史段手录要**在本地就拦住并说清**（别等后端拒、那时人已填完 6 格）
+    assert "MECH_SECTIONS" in body and "history" in body, \
+        "`mechOk` 没有拦「往历史段手录」这一档 —— 用户会填完 6 格才被拒（守则 §5.5：要提前说清）"
 
 
 # --------------------------------------- `ACC-RPT-PROC-001` 的**形态**半边（搬家 · §19 批 2）

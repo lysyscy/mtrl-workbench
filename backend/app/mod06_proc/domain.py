@@ -29,7 +29,8 @@ PROPERTY_TO_CATEGORY: dict[str, str] = {
 }
 CATEGORIES: tuple[str, ...] = ("主辅材", "工具", "劳保", "周转材料", "临时设施")   # §5.2.2 的 5 类
 
-# 机械 6 列（**全段手录**；§5.2.5 —— 机械费报表做好后**只换数据源、不动页面**）
+# 机械 6 列（⭐ 2026-09-26 用户裁定：**历史段以「过程资料导入」的值为准 · 正式段手录**；
+# §5.2.5 —— 改数据源只动 `column_source` / `MECH_SOURCE_BY_SECTION`，**不动页面**）
 MECH_COLUMNS: tuple[str, ...] = (
     "租分公司设备", "内租设备", "外租零租含税", "外租包月含税",
     "外租零租不含税", "外租包月不含税",
@@ -69,17 +70,27 @@ SUM_SEGMENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 # ============================================================ 数据来源（§5.2.3 · §5.2.5）
 
 SOURCE_INV = "inv_detail"        # 正式段材料列：**只读引用**库存单据
-SOURCE_SNAPSHOT = "proc_history"  # 历史段材料列：**导入的定稿快照**（不引用库存单据，§5.2.5）
-SOURCE_MANUAL = "manual"         # 机械 6 列：手录旁路表（**两段都手录**）
-
-COLUMN_SOURCE: dict[str, str] = {
-    **{k: SOURCE_INV for k in MATERIAL_KEYS},
-    **{k: SOURCE_MANUAL for k in MECH_KEYS},
-}
+SOURCE_SNAPSHOT = "proc_history"  # 历史段：**导入的定稿快照**（材料 ＋ 机械，不引用库存单据，§5.2.5）
+SOURCE_MANUAL = "manual"         # 机械 6 列**正式段**：手录旁路表
 
 # 两段（§5.2.5）：分界 = **截止核算月**；历史段 ≤ 截止，正式段 > 截止
 SECTION_HISTORY = "history"
 SECTION_FORMAL = "formal"
+
+#: 材料 10 列的**静态来源**（它们的来源**只看段**：历史 ⇒ 快照 / 正式 ⇒ 库存单据）。
+#: ⚠️⚠️ **机械 6 列刻意不在本表里** —— 它们的来源**也按段切**（见 `MECH_SOURCE_BY_SECTION`），
+#:    静态表表达不了 ⇒ 塞进来就等于给出一份"恒为手录"的**第二说法**（改前的老毛病）。
+COLUMN_SOURCE: dict[str, str] = {k: SOURCE_INV for k in MATERIAL_KEYS}
+
+#: ⭐⭐ **机械 6 列的来源按段切**（用户 2026-09-26 裁定）：
+#:   · 历史段（≤ 截止核算月）⇒ **以过程资料导入的定稿快照为准**
+#:     （用户原话：「历史机械费都填在过程资料 excel 里」）；
+#:   · 正式段（> 截止核算月）⇒ **手录**
+#:     （用户原话：「机械费手录仅限于**正式启用系统后**」）。
+MECH_SOURCE_BY_SECTION: dict[str, str] = {
+    SECTION_HISTORY: SOURCE_SNAPSHOT,
+    SECTION_FORMAL: SOURCE_MANUAL,
+}
 
 
 def section_of(ym: str, cutoff_ym: str | None) -> str:
@@ -93,12 +104,14 @@ def column_source(key: str, *, ym: str, cutoff_ym: str | None) -> str:
     """⭐ **每列的「列取值出口」（唯一）** —— 机械列与材料列**在这一个出口上同构**（§5.2.5 ③）。
 
     - 材料 10 列：历史段 ⇒ `SOURCE_SNAPSHOT`；正式段 ⇒ `SOURCE_INV`
-    - 机械 6 列：恒 `SOURCE_MANUAL`
+    - 机械 6 列：历史段 ⇒ `SOURCE_SNAPSHOT`（**导入值**）；正式段 ⇒ `SOURCE_MANUAL`（手录）
+      ⭐ 2026-09-26 用户裁定 —— 改前是"恒 `SOURCE_MANUAL`（全段手录）"。
+    - 认不出的 key ⇒ 按材料列那一套（随段切）——⛔ 不静默返回 `SOURCE_MANUAL` 那种"看起来有答案"的值。
 
-    ⇒ **将来接机械费报表只改本函数的数据源、不动页面**（判据 `ACC-RPT-PROC-002/001-07`）。
+    ⇒ **接机械费报表 / 改机械费来源只改本函数、不动页面**（判据 `ACC-RPT-PROC-002/001-07`）。
     """
-    if COLUMN_SOURCE.get(key) == SOURCE_MANUAL:
-        return SOURCE_MANUAL
+    if key in MECH_KEYS:
+        return MECH_SOURCE_BY_SECTION[section_of(ym, cutoff_ym)]
     return SOURCE_SNAPSHOT if section_of(ym, cutoff_ym) == SECTION_HISTORY else SOURCE_INV
 
 
@@ -106,9 +119,10 @@ def column_editable(key: str, *, ym: str, cutoff_ym: str | None) -> bool:
     """该列在该核算月**是否可在页面行内编辑**。
 
     - 材料列：**恒只读**（引用 / 快照，§5.2.3）；⭐ **历史段尤其不得行内编辑**（§5.2.5 ②）
-    - 机械列：可手录（**两段都一样**）
+    - 机械列：⭐ **只在正式段可手录**（历史段以导入值为准 ⇒ 同一格不许两个来源；
+      用户 2026-09-26：「机械费手录**仅限于正式启用系统后**」）
     """
-    return COLUMN_SOURCE.get(key) == SOURCE_MANUAL
+    return key in MECH_KEYS and section_of(ym, cutoff_ym) == SECTION_FORMAL
 
 # ⛔ 本页**不得出现**的自算表述 / 不得提供的入口（001-08：材料费只作引用 · 只读）
 FORBIDDEN_PHRASES: tuple[str, ...] = ("理论上 =", "理论上=")
@@ -194,7 +208,10 @@ def material_by_month(
 
 
 def mech_by_month(manual_rows: list[dict], *, warehouse: str) -> dict[str, list[Decimal]]:
-    """机械 6 列的手录值（**旁路表**）：`{核算月: [6 个金额]}`（§5.2.5「全段手录」）。"""
+    """机械 6 列的**手录值**（旁路表）：`{核算月: [6 个金额]}` —— ⭐ **只服务正式段**（见模块头）。
+
+    ⚠️ 历史段的机械费**不走这里**（那是导入的快照值）—— 按段取数是 `build_matrix` 的事。
+    """
     out: dict[str, list[Decimal]] = {}
     for row in manual_rows or ():
         if str(row.get("warehouse") or "") != warehouse:
@@ -227,9 +244,11 @@ def tab_of(value) -> int:
 def snapshot_by_month(
     snapshot_rows: list[dict], *, warehouse: str
 ) -> dict[str, dict[str, Decimal]]:
-    """**历史段**的材料列：来自「过程资料历史导入」的**定稿快照**（§5.2.5 ①）。
+    """**历史段**的列值：来自「过程资料历史导入」的**定稿快照**（§5.2.5 ①）—— 材料 10 列 ＋ **机械 6 列**。
 
     ⚠️ 快照是**独立载体** —— 本函数**只看快照**，**不回落库存单据**（回落就等于历史段被源数据覆盖）。
+    ⭐ 2026-09-26：**机械 6 列也走快照**（历史机械费来自导入）；⚠️ 但本函数只负责"把快照摊平"，
+       **哪一段读它**由 `build_matrix` 按 `column_source` 决定（⛔ 别在这里判段）。
     """
     out: dict[str, dict[str, Decimal]] = {}
     for row in snapshot_rows or ():
@@ -239,7 +258,7 @@ def snapshot_by_month(
         if not ym:
             continue
         bucket = out.setdefault(ym, {})
-        for key in MATERIAL_KEYS:
+        for key in (MATERIAL_KEYS + MECH_KEYS):
             if row.get(key) not in (None, ""):
                 bucket[key] = (bucket.get(key) or Decimal("0.00")) + to_money(row[key])
     return {ym: {k: to_money(v) for k, v in kv.items()} for ym, kv in out.items()}
@@ -256,9 +275,10 @@ def build_matrix(
 ) -> list[dict]:
     """过程资料表体：**一个核算月一行、月份升序**（001-02），**按截止核算月分两段**（§5.2.5）。
 
-    - **历史段**（核算月 ≤ 截止核算月）：材料列取**导入的定稿快照**，**不引用库存单据**；
-    - **正式段**（> 截止核算月）：材料列**只读引用**库存单据；
-    - 机械 6 列**两段都取手录旁路表**（`SOURCE_MANUAL`）。
+    - **历史段**（核算月 ≤ 截止核算月）：材料 10 列 ＋ **机械 6 列**都取**导入的定稿快照**，
+      **不引用库存单据、也不读手录**；
+    - **正式段**（> 截止核算月）：材料列**只读引用**库存单据；机械 6 列取**手录旁路表**。
+    - ⭐ 哪一列读哪个来源**一律问 `column_source`**（唯一出口）—— ⛔ 别在这里硬编码列名清单。
     ⭐ **两段互不覆盖**：两个来源分别读、各成一段，本函数**从不把一段写进另一段**（001-04）。
     ⚠️ 该段该月**无数据** ⇒ 材料 10 列为 `None`（**空态、不臆造 0**，001-08），行上带 `material_empty=True`。
     """
@@ -270,13 +290,22 @@ def build_matrix(
     rows: list[dict] = []
     for ym in months:
         section = section_of(ym, cutoff_ym)
-        source = history if section == SECTION_HISTORY else formal
-        bucket = source.get(ym)
-        row: dict = {YM_KEY: ym, "section": section, "material_empty": bucket is None}
+        bucket = (history if section == SECTION_HISTORY else formal).get(ym)
+        # ⚠️⚠️ 「该月材料有没有数据」**只看材料 10 列**（⛔ 别看 bucket 整体是不是空）：
+        #    自 2026-09-26 起历史段的 bucket 里**还装着机械列** ⇒ 若用 `bucket is None` 判，
+        #    那种"**只有机械费、材料一列没填**"的月份会被判成"材料也有数"⇒ 材料列从 `None`（空态）
+        #    变成 `0.00`（**凭空多一笔 0**）。这正是"空 ≠ 0"要守的地方。
+        has_mat = bool(bucket) and any(k in bucket for k in MATERIAL_KEYS)
+        row: dict = {YM_KEY: ym, "section": section, "material_empty": not has_mat}
         for key in DATA_KEYS:
-            if key.startswith("mech_"):
-                idx = int(key.split("_")[1])
-                row[key] = mech.get(ym, [Decimal("0.00")] * len(MECH_COLUMNS))[idx]
+            if key in MECH_KEYS:
+                if column_source(key, ym=ym, cutoff_ym=cutoff_ym) == SOURCE_SNAPSHOT:
+                    # 历史段：机械费 = 导入值（该月连快照行都没有 ⇒ 空态，⛔ 不臆造 0）
+                    row[key] = None if bucket is None else bucket.get(key, Decimal("0.00"))
+                else:
+                    # 正式段：机械费 = 手录（"空按 0" 是手录侧既有口径）
+                    idx = int(key.split("_")[1])
+                    row[key] = mech.get(ym, [Decimal("0.00")] * len(MECH_COLUMNS))[idx]
             elif bucket is None:
                 row[key] = None                      # 空态（不臆造 0）
             else:
@@ -482,7 +511,9 @@ def boundary_violations(html: str, action_ids=()) -> list[str]:
 __all__ = [
     "MATERIAL_PROPERTIES", "PROPERTY_TO_CATEGORY", "CATEGORIES", "MECH_COLUMNS",
     "PROC_COLUMNS", "PROC_KEYS", "DATA_KEYS", "MATERIAL_KEYS", "MECH_KEYS", "YM_KEY",
-    "SUM_SEGMENTS", "SOURCE_INV", "SOURCE_MANUAL", "COLUMN_SOURCE",
+    "SUM_SEGMENTS", "SOURCE_INV", "SOURCE_SNAPSHOT", "SOURCE_MANUAL", "COLUMN_SOURCE",
+    "MECH_SOURCE_BY_SECTION", "SECTION_HISTORY", "SECTION_FORMAL", "section_of",
+    "column_source", "column_editable", "snapshot_by_month", "build_matrix",
     "FORBIDDEN_PHRASES", "FORBIDDEN_ACTIONS", "column_meta", "to_category", "normalize_ym",
     "row_material_amount", "material_by_month", "mech_by_month",
     "TAB_RAW", "TAB_ADJUSTED", "TAB_DIFF", "TABS", "DEFAULT_TAB", "tab_of", "build_matrix",
