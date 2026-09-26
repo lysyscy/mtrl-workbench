@@ -329,8 +329,10 @@ V.imp = () => {
         ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>` : ''}
       ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
         <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
-      ${IMP.hasCut ? `<div class="fi"><label>截止核算月（历史段分界）</label>
-        <input class="inp" id="impCut" value="${esc(IMP.cutoff)}" placeholder="留空 ⇒ 取本批最大月"></div>` : ''}
+      ${IMP.hasCut ? `<div class="fi"><label>截止核算月（＝历史段 / 正式段的分界月）</label>
+        <input class="inp" id="impCut" value="${esc(IMP.cutoff)}" placeholder="留空 ⇒ 取本批最大月">
+        <span class="mut sm">这个月 <b>及以前</b>算历史段（用这份表，不再从 i8 取）；<b>之后</b>才走 i8 抓取。
+          留空 = 取本批里最大的核算月。换项目会自动换成**那个项目**已设的值。</span></div>` : ''}
       </div>` : '';
   /* ⛔ **该域要选项目、而还没选** ⇒ ④ 置灰（见下面 `prevCard` 里那个按钮）—— 「默认值不诱导」的落点：
      系统不再替用户挑第一个项目（`IMP.wrap` 初值 = 空），但也不能让人**点下去才发现没选**。 */
@@ -342,7 +344,8 @@ V.imp = () => {
         [
           IMP.org.length ? `项目 <b>${esc(IMP.wrap ? (IMP.pjDisp[IMP.wrap] || IMP.wrap) : '（还没选）')}</b>` : '',
           IMP.hasYm ? `归属年月 <b>${esc(IMP.ym || bjMonth())}</b>` : '',
-          IMP.hasCut ? `截止核算月 <b>${esc(IMP.cutoff || '（留空 ⇒ 取本批最大月）')}</b>` : '',
+          IMP.hasCut ? `截止核算月 <b>${esc(IMP.cutoff || '（留空 ⇒ 取本批最大月）')}</b>`
+            + `<span class="mut sm">（该月及以前按这份表，之后走 i8）</span>` : '',
         ].filter(Boolean).join(' · ')}<span class="mut sm">　要改请回第 ① 步（「导入哪个域」下面那一栏）</span></div>`
     : '';
   const head = `<div class="card"><h4>数据导入<span class="sp"><span class="mut sm">一次导一个域的一种表 ·
@@ -466,10 +469,25 @@ V.imp = () => {
     const probs = (IMP.problems || []);
     /* ⚠️ 2026-09-26：**「范围」栏已整体挪到 ①（`ctxBar`）** —— 这一屏只留**只读回显**（`scopeEcho`），
        理由见 `V.imp` 里 `ctxBar` 那段（用户裁定"选文件时就选项目"）。⛔ 别把控件搬回来。 */
-    const prows = (p.preview || []).slice(0, 12).map(r => `<tr>${Object.keys(r).filter(k => k !== '_row')
+    /* ⚠️⚠️ 2026-09-26（用户报障：「导入晋江的过程资料时，**第 4 步显示的行不完整**」）——
+       这一屏原先有两处**显示**毛病，报障的实质是它们叠在一起：
+       ① **行号列被抠掉了**（`filter(k => k !== '_row')`）—— 而 ④ 落库报错写的是
+          「**第 19 行**的核算月认不出…」⇒ 用户**在页面上根本找不到第 19 行**（连行号都没有可比）；
+       ② 只画**前一打（12）行**却**一个字都不说**（后端其实给得更多）⇒ 看着像"系统只读到 12 行"。
+       ⭐ 实测（晋江那份真文件）：数据在 Excel 的 r4~r32（29 行）＋ 尾部 r33/r34 合计 r35 说明，
+          而用户看不到的正好就是出问题的 **r19/r20/r22**。
+       ⇒ 现在：**行号列画出来**（= Excel 行号，与"第 N 行…"这类报错**同一个数**）＋
+          **后端给多少行就画多少行** ＋ 写明「共几行 / 显示几行」。
+       ⛔ 别再把 `_row` 抠掉、⛔ 也别再静默截断（那正是本条报障的来源）。 */
+    const plist = (p.preview || []);
+    const ptotal = Number(p.writable == null ? (p.total == null ? plist.length : p.total) : p.writable);
+    const prows = plist.map(r => `<tr>${Object.keys(r)
       .map(k => `<td class="now">${esc(String(r[k] == null ? '' : r[k]))}</td>`).join('')}</tr>`).join('');
-    const pcols = p.preview && p.preview.length
-      ? Object.keys(p.preview[0]).filter(k => k !== '_row').map(k => `<th>${esc(k)}</th>`).join('') : '';
+    const pcols = plist.length
+      ? Object.keys(plist[0]).map(k => `<th>${esc(k === '_row' ? '行' : k)}</th>`).join('') : '';
+    const pnote = `本步读到 <b class="fc">${ptotal}</b> 行 · 表格显示`
+      + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 落库写的是**全量**）`
+                               : `全部 <b class="fc">${plist.length}</b> 行`)
     prevCard = `<div class="card" style="margin-top:12px"><h4>预览校验<span class="sp"><span class="mut sm">
       这一步**一个字节都不写库**</span></span></h4><div class="kpis">
       <div class="kpi"><div class="k">将写入</div><div class="v">${p.writable == null ? p.total : p.writable}</div>
@@ -487,7 +505,9 @@ V.imp = () => {
       : '<div class="tip ok">没有发现问题行</div>'}
       ${scopeEcho}
       ${lgBlocks(p.blocks)}
-      <div class="tw" style="max-height:260px;margin-top:10px"><table class="dt sm">
+      <div class="mut sm" style="margin-top:10px">${pnote}
+        · 「行」= <b>Excel 里的行号</b>（与"第 N 行…"那类报错**同一个数**，用来对号）</div>
+      <div class="tw" style="max-height:280px;margin-top:6px"><table class="dt sm">
         <thead><tr>${pcols}</tr></thead><tbody>${prows || lgEmpty(1, '没有数据行')}</tbody></table></div>
       <div style="margin-top:10px"><button class="btn pri" data-act="impCommit"${needPj ? ' disabled' : ''}>④ 确认落库</button>
         <button class="btn" data-act="impReset">重来</button>

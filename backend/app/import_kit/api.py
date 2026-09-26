@@ -34,7 +34,11 @@ from app.import_kit.readers import HEADER_SCAN_ROWS, list_sheets, read_grid
 from app.import_kit.spec import DomainSpec, Hooks
 
 #: 预览给前几行（⛔ 不是导出：全量已随 token 暂存）
-PREVIEW_ROWS = 20
+#  ⚠️ 2026-09-26（用户报障「第 4 步显示的行不完整」）：原值 **20** —— 而真文件（晋江那份过程资料）
+#     数据在 Excel 的 r4~r32 ⇒ **20 条盖不住**，"有问题的第 19 行"那一屏里就是看不到。
+#     ⇒ 抬到 **200**（不是"给全量"：上限仍在，只是**够看清一份台账**；真正的全量始终随 token 暂存、
+#     ④ 落库写的是**全量**）。⭐ 壳侧必须写明"显示前 N 行 / 共 M 行"（⛔ 不许静默截断）。
+PREVIEW_ROWS = 200
 #: 每列取几个样本值（给画像与界面看）
 SAMPLES = 3
 #: 挑工作表时，至少要认出这么多列才算"这张是对的"
