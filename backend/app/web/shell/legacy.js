@@ -318,33 +318,38 @@ V.imp = () => {
       return `<option value=""${cur ? '' : ' selected'}>${esc(IMP_IGNORE)}</option>` + fields;
     };
     const badge = (c) => {
-      /* ⚠️ 「自动」那一档**不带数字**（用户《前端设计规则》§6：置信度只在"要人判断"时才有意义）；
-         「需确认」才给分 —— 那才是他真要看的。 */
-      if (c.field && c.level === 'auto') return '<span class="tag t-ok">自动</span>';
-      if (c.field) return `<span class="tag t-wn">需确认 ${Number(c.conf).toFixed(2)}</span>`;
-      if (c.ignored) return '<span class="tag t-in">不导入</span>';
-      return '<span class="tag t-dg">认不出</span>';
+      /* ⚠️ 状态一律**说人话**（`[用户·2026-09-26]`《前端设计守则》`ops/前端设计守则-以使用用户为中心.md`
+         §2/§3/§8：⛔ 技术字段与**裸数字**不上屏；§5.9：次要信息可折叠）：
+         · 「自动」那档**不给数字**（`0.86` 这种没有口径的裸数字按 §7 不许上屏）；
+         · 算法名（"归一化相等/包含词命中/token 交集"）是**内部黑话** ⇒ 折进 `title`（hover 才看），
+           屏幕上只留一句**用户能判断的话**。 */
+      const why = c.why ? ` title="${esc(c.why)}"` : '';
+      if (c.field && c.level === 'auto') return `<span class="tag t-ok"${why}>已自动对上</span>`;
+      if (c.field) return `<span class="tag t-wn"${why}>系统拿不准，请确认</span>`;
+      if (c.ignored) return '<span class="tag t-in">不导入（原样保留）</span>';
+      return '<span class="tag t-dg">认不出 —— 请选一个</span>';
     };
     /* ⚠️ 域声明了 `ignored` 的列（认得、但按口径**不导入**）**不进映射表**：它们不需要人选
        （域已定死），混在里面会把"要人做决定的列"淹掉（用户 2026-09-26 口径：不导入的**单独写**）。
        ⚠️ 而**认不出**的列要**留在表里**（它们正等人点下拉）。 */
     const toMap = IMP.cols.filter(c => !c.ignored);
     const skipped = IMP.cols.filter(c => c.ignored);
-    /* 每行 = 一个**属性**（行首是属性名，其余各列 = 各源列该属性）—— 这就是"转置" */
-    const attrRow = (label, cellOf) =>
-      `<tr><th style="text-align:left;white-space:normal;min-width:104px" class="mut sm">${label}</th>`
+    /* ⭐ **排版（2026-09-26 按守则重做）**：只有**两行数据** —— 「导入到」（唯一的主操作）
+       ＋「系统提示」（状态，人话）。
+       ⛔ 拿掉的两样：①「依据」那一整行（算法黑话 ⇒ 折进状态的 `title`）②「画像」上的文字
+       （半术语 ⇒ 折进表头 `title`）⇒ 同屏只剩"选哪列 + 系统怎么说"（§5.9 优先级排序）。 */
+    const attrRow = (label, cls, cellOf) =>
+      `<tr><th class="${cls}" style="text-align:left;white-space:nowrap;vertical-align:top;min-width:72px">${label}</th>`
       + toMap.map(c => `<td>${cellOf(c)}</td>`).join('') + '</tr>';
     mapCard = `<div class="card" style="margin-top:12px"><h4>列映射<span class="sp"><span class="mut sm">
-      <b>横着一列一个源列</b>（照你 Excel 的样子）· 系统只给建议，决定权在你</span></span></h4>
-      <div class="tw"><table class="dt sm">
-      <thead><tr><th style="min-width:104px"></th>${toMap.map(c => `<th style="vertical-align:bottom;min-width:146px">
+      横看 = 你表里的每一列 · 系统只给建议，<b>选哪个由你定</b></span></span></h4>
+      <div class="tw"><table class="dt sm" style="table-layout:fixed">
+      <thead><tr><th style="min-width:72px"></th>${toMap.map(c => `<th style="vertical-align:bottom;min-width:150px">
         <div style="font-weight:600">${esc(c.src)}</div>
-        <div class="mut sm" style="font-weight:400;white-space:normal">${esc([c.profile, (c.samples || []).join(' / ')]
-          .filter(Boolean).join(' · ')).slice(0, 52)}</div></th>`).join('')}</tr></thead>
+        <div class="mut sm" style="font-weight:400;white-space:normal"${c.profile ? ` title="列的形态：${esc(c.profile)}"` : ''}>${esc((c.samples || []).join(' / ')).slice(0, 46) || '（无样本）'}</div></th>`).join('')}</tr></thead>
       <tbody>
-        ${attrRow('映射到', c => `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`)}
-        ${attrRow('系统建议', c => badge(c))}
-        ${attrRow('依据', c => `<span class="mut sm">${esc(c.field ? (c.why || '') : '')}</span>`)}
+        ${attrRow('导入到', '', c => `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`)}
+        ${attrRow('系统提示', 'mut sm', c => badge(c))}
       </tbody></table></div>
       ${skipped.length ? `<div class="tip" style="margin-top:10px"><b>这几列不导入</b>（原样保留，不需要你选）：
         ${skipped.map(c => `<div class="sm">· ${esc(c.src)} —— ${esc(c.ignored)}</div>`).join('')}</div>` : ''}
