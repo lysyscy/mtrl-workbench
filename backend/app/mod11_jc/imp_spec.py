@@ -143,6 +143,14 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     out = B.apply_batch(s, rows, project_id=int(project_id), project_key=key,
                         operator=str(operator or ""), batch_no=(options or {}).get("batch"))
     out["project_key"] = key
+    # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」· 四个域一起改）：回执**自报人话指标** ——
+    #    通用面只画 `kpis`，⛔ 不再把 `updated` / `undo_rows` / `message` 这些**程序用的键名**铺一排。
+    #    ⚠️ 词与 `preview` **完全一样**（配上 / 配不上 / 同价冲突 / 不合格）—— 同一个数在两屏不许换说法。
+    out["kpis"] = {"配上并更新": int(out.get("updated") or 0),
+                   "配不上": int(out.get("unmatched") or 0),
+                   "同价冲突": int(out.get("ambiguous") or 0),
+                   "不合格": int(out.get("bad") or 0),
+                   "提醒": int(out.get("warned") or 0)}
     return out
 
 

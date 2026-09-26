@@ -147,6 +147,9 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     # ⭐ ④ 的回执也要**说清有几行没写进去**（⛔ 不许只在 ③ 说过、到这里就悄悄算了）
     out["不写入的行数"] = len(bad)
     out["blocks"] = _blocks_of(bad, notes)
+    # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」· 四个域一起改）：回执**自报人话指标** ——
+    #    通用面只画 `kpis`（原始键仍留着：排查与判据都要看它们）。
+    out["kpis"] = {"写入行数": int(out.get("rows") or 0), "不写入的行数": len(bad)}
     return out
 
 

@@ -106,6 +106,11 @@ def test_付款计划在通用面端到端_中文月日按年月补全_且幂等
     out = client.post("/api/imp/m04_plan/commit", json=body).json()
     assert out["ok"] and out["report"]["year_month"] == ym, out
     assert out["report"]["created"] == 2 and out["report"]["deleted"] == 0, out["report"]
+    # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」）：回执还必须**自报人话指标**（`kpis`）——
+    #    通用面只画它（⛔ 不再把 `created`/`deleted` 这些**程序用的键名**铺给用户看）。
+    kpi = out["report"]["kpis"]
+    assert kpi["新增"] == 2 and kpi["更新"] == 0, f"回执没自报人话指标（`kpis`）：{kpi!r}"
+    assert "移出（该月不在本批的自动行）" in kpi, f"`deleted` 的说明必须说实话：{kpi!r}"
     again = client.post("/api/imp/m04_plan/commit", json=body).json()
     assert again["report"]["created"] == 0 and again["report"]["updated"] == 2, \
         f"同源重跑必须「更新不重复」（§9.5）：{again['report']}"

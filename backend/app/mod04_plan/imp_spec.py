@@ -100,7 +100,14 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
         raise MustReportError("没有一行可落库的数据 —— 该月未被改动（不写库）")
     rows = I.attach_projects(rows, project_briefs(s))
     out = repo.merge_month(s, year_month=ym, rows=rows)
-    return {"year_month": ym, **out}
+    # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」· 四个域一起改）：回执**自报人话指标** ——
+    #    通用面只画 `kpis`，⛔ 不再把 `created` / `deleted` 这些**程序用的键名**糊到用户脸上。
+    #    ⚠️ 标签必须说实话：`deleted` = **该月不在本批的自动行被移出**（§9.5「减行不留残影」），
+    #       ⛔ 不是"删了用户的数据"；`manual_kept` = 该月**手动行原样保留**（§9.5 手动行不被触碰）。
+    return {"year_month": ym, **out,
+            "kpis": {"新增": out["created"], "更新": out["updated"],
+                     "移出（该月不在本批的自动行）": out["deleted"],
+                     "保留手改行": out["manual_kept"]}}
 
 
 def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` 由通用面记账，本域判定用不着

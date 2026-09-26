@@ -102,6 +102,12 @@ def test_集采台账在通用面端到端_两级拼名认列_锚点匹配_且�
     out = client.post("/api/imp/m11_jc/commit", json=body).json()
     assert out["ok"] and out["report"]["updated"] == 1, out
     assert out["report"]["unmatched"] == 0 and out["report"]["ambiguous"] == 0, out["report"]
+    # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」）：回执还必须**自报人话指标**（`kpis`）——
+    #    通用面只画它（⛔ 不再把 `updated`/`undo_rows`/`message` 这些**程序用的键名**铺一排）；
+    #    ⚠️ 词必须与 `preview` **完全一样**（配上 / 配不上 / 同价冲突 / 不合格）—— 同一个数不换说法。
+    kpi = out["report"]["kpis"]
+    assert kpi["配上并更新"] == 1 and kpi["配不上"] == 0, f"回执没自报人话指标：{kpi!r}"
+    assert kpi["同价冲突"] == 0 and kpi["不合格"] == 0 and "提醒" in kpi, f"`kpis` 少项：{kpi!r}"
     assert out["report"]["items"][0]["fields"], "要报出这次更新了哪几列（Excel 的地盘）"
 
     again = client.post("/api/imp/m11_jc/commit", json=body).json()

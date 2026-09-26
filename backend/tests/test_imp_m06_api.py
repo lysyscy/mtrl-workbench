@@ -113,6 +113,10 @@ def test_通用面端到端_认列到落库再到回滚(client):
     out = client.post("/api/imp/m06_proc/commit", json=body).json()
     # ⚠️ 2 行（不是 3）：第三行**材料列全空**（只填了机械列）⇒ 按域内口径当空行跳过（见 `_rows()` 的 ⚠️）
     assert out["ok"] and out["report"]["rows"] == 2, out
+    # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」）：回执还必须**自报人话指标**（`kpis`）——
+    #    通用面只画它（⛔ 不再把 `cutoff_ym` 这类**程序用的键名**铺一排给用户看）。
+    kpi = out["report"]["kpis"]
+    assert kpi["写入行数"] == 2 and kpi["不写入的行数"] == 0, f"回执没自报人话指标：{kpi!r}"
     assert out["report"]["cutoff_ym"] == "2024-07", \
         "默认截止核算月 = **能落库的那些**里最大那个（被跳过的那一行不参与）"
 

@@ -217,6 +217,59 @@ def test_本页的项目浮层走通用机制():
 
 
 @acc()
+def test_项目候选与选完之后的名字只走一个出口():
+    """⭐⭐ 2026-09-26（用户报障 · 原话：「**候选和选择后显示的不一样**」）。
+
+    ⚠️ 病根：**同一个键在三处各自算名字** —— ① 下拉按钮 `IMP.pjDisp[键] || 键`（域给的 display，
+       域没给就退化成**仓库名**）· ③ 只读回显同款 · 候选面板却走 `impPjMeta`（**档案展示名**）
+       ⇒ 用户截图里：按钮写「内蒙石灰窑项目」（仓库名），候选里却是「内蒙宜化项目」（展示名）。
+    ⇒ 判词：① 按钮 与 ③ 回显**一律**走 `impPjLabel`（＝ `impPjMeta(v).nm`，与候选面板**同一个函数**）；
+      ⛔ 壳里**不许**再出现 `IMP.pjDisp[键]` 那种直接取值的写法（那正是"两个主人"的开端）。
+
+    ⚠️ 能证伪：把按钮改回 `IMP.pjDisp[IMP.wrap] || IMP.wrap` ⇒ 本件必红。
+    """
+    code = _imp_code()
+    assert "const impPjLabel" in code, "没有「候选键 → 显示名」的唯一出口（`impPjLabel`）"
+    n = code.count("impPjLabel(IMP.wrap)")
+    assert n >= 2, (
+        f"`impPjLabel(IMP.wrap)` 应同时出现在**① 下拉按钮**与**③ 只读回显**（现在 {n} 处）"
+        "—— 少一处就会出现「两处名字不一样」（用户 2026-09-26 报的障）")
+    assert "IMP.pjDisp[IMP.wrap]" not in code, (
+        "又有人直接拿 `IMP.pjDisp[键]` 当显示名了 —— 它与候选面板的档案展示名**不是一个来源**，"
+        "必然再次出现「候选和选完不一样」")
+
+
+@acc()
+def test_落库结果卡给的是人话_原始键名进技术明细():
+    """⭐⭐ 2026-09-26（用户报障 · 原话：「**落库结果可读性比较差**」· 四个域一起改）。
+
+    ⚠️ 病根（截图看得很清楚）：结果卡把**回执的原始键名**（`updated` / `undo_rows` / `message`…）
+       当 KPI 标签铺成一排，`message` 那一长句被挤成一根细柱，`project key` 还是**仓库名**。
+    ⇒ 判词（五半）：
+      ① 人话指标**只画域自报的 `kpis`**（⛔ 不再 `Object.keys(r).filter(scalar)` 那套裸键循环）；
+      ② 一句话结果（`message`）**整行**显示；
+      ③ **写入项目**从壳自己的状态取（`impPjLabel`）—— ⛔ 不用回执里那个 `project key`（仓库名）；
+      ④ 原始回执**一个字不丢**：折进「技术明细」（排查时要看它）；
+      ⑤ `**加粗**` 要渲染成 `<b>`（否则满屏星号 —— 截图里那句就写着 `**按合同价匹配上并更新 5 条**`）。
+    ⚠️ 能证伪：把裸键循环写回去 / 去掉技术明细 / 把 `message` 塞回 KPI 格 / 去掉 `lgMd` ⇒ 本件必红。
+    """
+    code = _imp_code()
+    assert "Object.keys(r).filter(scalar).map" not in code, (
+        "结果卡又把**原始键名**当 KPI 标签铺一排了 —— 用户 2026-09-26 报的「可读性差」就是它")
+    assert "Object.entries(r.kpis || {})" in code, "结果卡没画域自报的人话指标（`kpis`）"
+    assert "lgMd(r.message)" in code, "一句话结果没整行显示（或没渲染 `**加粗**`）"
+    assert "技术明细" in code and "<details" in code, \
+        "原始回执没有折进「技术明细」（排查时看不到原始键名与值）"
+    assert "写入项目" in code and "impPjLabel(IMP.wrap)" in code, \
+        "结果卡没写清「写入哪个项目」（⛔ 也别拿回执里那个仓库名当项目名）"
+    src = re.sub(r"/\*.*?\*/", "", SHELL, flags=re.S)
+    assert "const lgMd" in src and r"replace(/\*\*(.+?)\*\*/g" in src, \
+        "没有 `**加粗**` 的渲染出口（`lgMd`）—— 后端说明文字里的 `**…**` 会原样显示成星号"
+    assert "lgMd(b.title" in src and "lgMd(b.note" in src, \
+        "域区块的标题 / 说明没走 `lgMd`（那里同样写着一堆 `**…**`）"
+
+
+@acc()
 def test_截止核算月要写清格式要求():
     """⭐ 2026-09-26（用户报障 · 原话：「**截止核算月的格式要求一下吧**」）。
 

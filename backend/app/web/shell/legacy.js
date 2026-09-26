@@ -40,9 +40,15 @@ async function reloadSet() {
 
 /* ============================================================ 小工具（⛔ 只在本件内用，不污染全局语义） */
 
+/* ⭐ **`**加粗**` 渲染成 `<b>`**（2026-09-26 用户报障「**落库结果可读性比较差**」里的一个具体毛病）：
+   后端回执与区块说明里**本来就写着一堆 `**…**`**（= "这段最关键"的标记），此前一律 `esc` ⇒
+   用户看到的是**满屏星号**（截图那句就是「导入完成：**按合同价匹配上并更新 5 条**」）。
+   ⚠️ **先 `esc` 再替换**，⛔ 绝不反过来（反过来等于给自己开一个注入口子）。
+   ⚠️ 只用于**说明文字**（标题 / 说明 / 一句话结果 / 指标名）；表格**单元格**里的仍是数据 ⇒ 只 `esc`。 */
+const lgMd = s => esc(String(s == null ? '' : s)).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 /* 回执条：`kind` = ok / wn / err（与后端 `message` 的中文原因**原样**呈现，⛔ 不吞）。 */
 const lgNotice = s => (s.msg
-  ? `<div class="tip ${s.kind === 'err' ? 'dg' : (s.kind === 'wn' ? 'wn' : 'ok')}">${esc(s.msg)}</div>` : '');
+  ? `<div class="tip ${s.kind === 'err' ? 'dg' : (s.kind === 'wn' ? 'wn' : 'ok')}">${lgMd(s.msg)}</div>` : '');
 /* 三步条：`at` = 当前第几步（0/1/2）。 */
 const lgSteps = (steps, at) => `<div class="steps">` + steps.map((t, i) =>
   `<div class="st ${i === at ? 'on' : (i < at ? 'dn' : '')}">${esc(t)}</div>`).join('') + `</div>`;
@@ -66,8 +72,8 @@ const lgEmpty = (cols, text) => `<tr><td colspan="${cols}" class="ctr mut" style
       那全由**后端**（域钩子 `Hooks.preview` / `commit` 的回执）给 ⇒ 加一个域不必改本页。 */
 function lgBlocks(blocks) {
   return (blocks || []).map(b => `<div style="margin-top:12px">
-    <h4 style="font-size:12.5px;margin:0 0 5px">${esc(b.title || '')}</h4>
-    ${b.note ? `<p class="mut sm" style="margin:0 0 5px">${esc(b.note)}</p>` : ''}
+    <h4 style="font-size:12.5px;margin:0 0 5px">${lgMd(b.title || '')}</h4>
+    ${b.note ? `<p class="mut sm" style="margin:0 0 5px">${lgMd(b.note)}</p>` : ''}
     <div class="tw" style="max-height:260px;min-height:0"><table class="dt"><thead><tr>
       ${(b.columns || []).map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>
       ${(b.rows || []).length
@@ -310,6 +316,13 @@ V.imp = () => {
         比原来的下拉还糟。`PJs` 恰好在（用户刚去过档案页）就用它 —— 能顺带标出**归档**与**未建档**。 */
   const impPjMeta = v => (PJs.length ? PROJ_META_KEY(v)
     : {nm: IMP.pjDisp[v] || v, warn: false, arc: false, title: '仓库名（§2.7.4）：' + v});
+  /* ⭐⭐ **「候选键 → 显示名」的唯一出口**（2026-09-26 用户报障：「**候选和选择后显示的不一样**」）。
+     此前**三处各自算**：① 下拉按钮 `IMP.pjDisp[键] || 键`（域给的 display，域没给就退化成**仓库名**）·
+     ③ 只读回显同款 · 候选面板却走 `impPjMeta`（**档案展示名**）⇒ 同一个键能显示**两个名字**
+     （实测：按钮「内蒙石灰窑项目」＝仓库名，候选里是「内蒙宜化项目」＝展示名 —— 用户就是拿这个报的障）。
+     ⇒ 现在三处**一律**走 `impPjLabel`（＝ `impPjMeta(v).nm` —— 与面板**同一个函数**，同名是构造保证的）。
+     ⛔ 别在这三处再各写一遍取值：那是"同一个事实有两个主人"，必然再次走形。 */
+  const impPjLabel = v => impPjMeta(v).nm;
   /* 「项目」= **共用面板**（单选）—— 与 MOD-09 / 新增合同 / 台账导出（`ledPjPanel`）同款。
      ⚠️ 它渲染在本卡的 `fbar` 里、**不在 `.tw`（滚动容器）内** ⇒ 浮层不会被裁（同 `ledExpStrip` 的处置）。 */
   const impPjPanel = () => projPanel({list: () => IMP.org, selected: () => [IMP.wrap],
@@ -328,7 +341,7 @@ V.imp = () => {
     ? `<div class="fbar" style="border:1px solid var(--bd);border-radius:var(--r)">
       ${IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
         <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
-        <button class="btn" data-act="impPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span>${esc(IMP.wrap ? (IMP.pjDisp[IMP.wrap] || IMP.wrap) : '请选择项目')}</span><span class="mut" style="font-size:9px">▼</span></button>
+        <button class="btn" data-act="impPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px" title="${IMP.wrap ? esc('仓库名（§2.7.4）：' + IMP.wrap) : ''}"><span>${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}</span><span class="mut" style="font-size:9px">▼</span></button>
         ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>` : ''}
       ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
         <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
@@ -347,7 +360,8 @@ V.imp = () => {
   const scopeEcho = (IMP.org.length || IMP.hasYm || IMP.hasCut)
     ? `<div class="tip">本批数据将写入：${
         [
-          IMP.org.length ? `项目 <b>${esc(IMP.wrap ? (IMP.pjDisp[IMP.wrap] || IMP.wrap) : '（还没选）')}</b>` : '',
+          IMP.org.length ? `项目 <b>${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '（还没选）')}</b>`
+            + (IMP.wrap ? `<span class="mut sm">（仓库名 ${esc(IMP.wrap)}）</span>` : '') : '',
           IMP.hasYm ? `归属年月 <b>${esc(IMP.ym || bjMonth())}</b>` : '',
           IMP.hasCut ? `截止核算月 <b>${esc(IMP.cutoff || '（留空 ⇒ 取本批最大月）')}</b>`
             + `<span class="mut sm">（该月及以前按这份表，之后走 i8）</span>` : '',
@@ -530,21 +544,43 @@ V.imp = () => {
           —— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）</span>` : ''}</div></div></div>`;
   }
 
-  /* ---- ④ 结果与批次回滚 ---- */
+  /* ---- ④ 结果与批次回滚 ----
+     ⭐⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」· 四个域一起改）—— 这一版把回执分三层：
+       ① **人话指标**（**域自报**的 `kpis`）画成 KPI 卡 —— ⛔ 不再把回执的**原始键名**
+          （`updated` / `undo_rows` / `message`…）当标签铺一排：那是**给程序看的**
+          （截图里 `message` 那一长句被挤成一根细柱，就是这么来的）；
+       ② **一句话结果**（域的 `message`）**整行**显示（它本来就是一句人话）＋ `**…**` 渲染成粗体；
+       ③ **写入目标**（项目）**从壳自己的状态取**（`IMP.wrap` ⇒ `impPjLabel`）—— ⛔ 不用回执里那个
+          `project key`（那是**仓库名**：既难认，又和第 ① 步显示的名字不是一回事）。
+       原始回执**一个字不丢**：全进「技术明细」折起来（排查时展开）。
+     ⚠️ 通用面**不认识任何域键** —— 哪几个数值得给用户看**由域自报**（`kpis`）；
+        四个域都自报了 kpis 这件事由判据钉着（`test_imp_m06_api` / `test_imp_m04_api` /
+        `test_imp_m05_api` / `test_imp_m11_api` 的「回执自报人话指标」）。 */
   let repCard = '';
   if (IMP.report) {
     const r = IMP.report;
-    /* ⚠️ 回执的 KPI 只取**标量**项：`kpis` / `blocks` 是域补充块（下面专门画），
-       混进 KPI 会渲染成 "[object Object]"（实测踩到过）。 */
+    /* ⚠️ 回执的标量项里，**壳自己已经处理掉的**不再重复画：`kpis` / `blocks` 另画；
+       `message` 走整行；`batch` 走批次行 ⇒ 剩下的（`updated`/`undo_rows`/`project key`…）
+       一律进「技术明细」（⚠️ 它们**不是垃圾**：排查时正好要看原始键名）。 */
     const scalar = k => r[k] == null || ['string', 'number', 'boolean'].includes(typeof r[k]);
-    repCard = `<div class="card" style="margin-top:12px"><h4>落库结果</h4><div class="bd">
-      <div class="kpis">${Object.keys(r).filter(scalar).map(k => `<div class="kpi"><div class="k">${esc(k)}</div>
-        <div class="v">${esc(String(r[k]))}</div></div>`).join('')}
-        ${Object.keys(r.kpis || {}).map(k => `<div class="kpi"><div class="k">${esc(k)}</div>
-          <div class="v">${esc(String(r.kpis[k]))}</div></div>`).join('')}</div>
-      ${r.batch ? `<div class="tip ok">批次 <b class="fc">${esc(r.batch)}</b>
+    const handled = ['kpis', 'blocks', 'message', 'batch'];
+    const tech = Object.keys(r).filter(k => scalar(k) && handled.indexOf(k) < 0);
+    const kpis = Object.entries(r.kpis || {});
+    repCard = `<div class="card" style="margin-top:12px"><h4>落库结果<span class="sp"><span class="mut sm">${
+      IMP.wrap ? `写入项目：<b>${esc(impPjLabel(IMP.wrap))}</b>`
+        + `<span class="mut">（仓库名 ${esc(IMP.wrap)}）</span>` : ''}</span></span></h4><div class="bd">
+      ${r.message ? `<div class="tip ok">${lgMd(r.message)}</div>` : ''}
+      ${kpis.length ? `<div class="kpis">${kpis.map(([k, v]) => `<div class="kpi"><div class="k">${lgMd(k)}</div>
+        <div class="v">${esc(String(v))}</div></div>`).join('')}</div>` : ''}
+      ${r.batch ? `<div class="tip">本次批次 <b class="fc">${esc(r.batch)}</b>
+        <span class="mut sm">（要撤销这一批就点右边 —— 撤销按 §4.4.6 留痕、不做物理删）</span>
         <button class="btn sm" data-act="impRollback" data-batch="${esc(r.batch)}">整批回滚</button></div>` : ''}
       ${lgBlocks(r.blocks)}
+      ${tech.length ? `<details style="margin-top:10px"><summary class="mut sm">技术明细（原始回执
+        ${tech.length} 项 · 排查用；⛔ 不是给你看的指标）</summary>
+        <div class="tw" style="margin-top:6px"><table class="dt sm"><tbody>${tech.map(k =>
+          `<tr><th style="width:30%">${esc(k)}</th><td>${esc(String(r[k]))}</td></tr>`).join('')}
+        </tbody></table></div></details>` : ''}
       <div style="margin-top:10px"><button class="btn" data-act="impReset">再导一份</button></div></div></div>`;
   }
 

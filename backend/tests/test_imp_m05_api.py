@@ -158,6 +158,12 @@ def test_付款流水在通用面端到端_未匹配与异常不入库_核对报
         assert out["ok"] and out["report"]["written"] == 3, out
         assert out["report"]["unmatched"] == 1 and out["report"]["anomalies"] == 1, out["report"]
         assert out["report"]["unknown_methods"] == 1, out["report"]
+        # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」）：回执还必须**自报人话指标**（`kpis`）——
+        #    ⚠️ 词与**本域自己的预览**（上面第 147 行那三个）**完全一样** —— 同一个数在两屏不许换说法。
+        kpi = out["report"]["kpis"]
+        assert kpi["写入流水"] == 3 and kpi["未匹配"] == 1, f"回执没自报人话指标：{kpi!r}"
+        assert kpi["异常"] == 1 and kpi["未识别付款方式"] == 1, f"`kpis` 少项：{kpi!r}"
+        assert "超付（实付 ＞ 审批金额）" in kpi, f"核对报告的两个数也要人话（漏记 / 超付）：{kpi!r}"
         batch = str(out["report"]["batch"])
         assert batch.startswith("IMP-"), out["report"]
 

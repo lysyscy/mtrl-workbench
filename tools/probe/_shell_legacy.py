@@ -400,16 +400,39 @@ def check(page, errors: list[str]) -> None:
                     const v = document.querySelector('#view');
                     v.querySelector('[data-act="impPjToggle"]').click();
                     const open = v.querySelectorAll('[data-act="impPjPick"]').length;
-                    const r = [...v.querySelectorAll('[data-act="impPjPick"]')][0];
-                    if (r) r.click();
-                    const btn = v.querySelector('[data-act="impCommit"]');
+                    const all = [...v.querySelectorAll('[data-act="impPjPick"]')];
+                    /* ⭐⭐ 2026-09-26（用户报障「**候选和选择后显示的不一样**」）：
+                       专门挑一个「**显示名 ≠ 仓库名**」的候选（正是他截图里那种：候选写「内蒙宜化项目」、
+                       按钮却写「内蒙石灰窑项目」= 仓库名），点它，再看**按钮上**写的哪个名字。
+                       ⛔ 直接取第 0 个候选会**测不出**这个病（那个候选的两个名字可能正好相同）。 */
+                    let pick = null, want = '';
+                    for (const x of all) {
+                        const lb = x.closest('label');
+                        const sp = lb ? lb.querySelector('span') : null;
+                        const nm = sp ? sp.innerText.trim() : '';
+                        if (nm && nm !== String(x.dataset.pj || '')) { pick = x; want = nm; break; }
+                    }
+                    if (!pick) pick = all[0];
+                    if (pick) pick.click();
+                    const btn = v.querySelector('[data-act="impPjToggle"]');
+                    const shown = btn && btn.querySelector('span') ? btn.querySelector('span').innerText.trim() : '';
+                    const commit = v.querySelector('[data-act="impCommit"]');
                     const cut = v.querySelector('#impCut');
                     return {open: open, closed: v.querySelectorAll('[data-act="impPjPick"]').length,
-                            disabled: !!(btn && btn.disabled), cut: cut ? cut.value : null};
+                            disabled: !!(commit && commit.disabled), cut: cut ? cut.value : null,
+                            differ: !!want, want: want, shown: shown};
                 }""")
                 oks3.append((not got4["disabled"],
                              f"`{dm}` 真点选一个项目 ⇒ 「④ 确认落库」**变可用**"
                              f"（面板真点能开 {got4['open']} 个候选 · 选完自动收 {got4['closed']}）"))
+                if got4["differ"]:
+                    oks3.append((got4["shown"] == got4["want"],
+                                 f"`{dm}` **选完按钮上的名字 = 候选里那个名字**"
+                                 f"（候选写 `{got4['want']}` ⇒ 选完按钮写 `{got4['shown']}`）"
+                                 "—— 用户 2026-09-26 报障：两处显示**不一样**"))
+                else:
+                    print(f"  ℹ️ {dm} 候选里没有「显示名 ≠ 仓库名」的，跳过「名字一致性」这条真机判词"
+                          "（静态判词仍守着「三处只走 impPjLabel」）")
                 if dm == "m06_proc" and exp["p"]:
                     oks3.append((got4["cut"] == exp["cut"],
                                  f"`m06_proc` 换项目 ⇒ 「截止核算月」**跟着换**（选 `{exp['p']}` ⇒ "

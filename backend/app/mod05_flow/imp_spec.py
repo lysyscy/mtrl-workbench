@@ -193,6 +193,15 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
         "unmatched": len(plan.unmatched), "anomalies": len(plan.anomalies),
         "unknown_methods": len(plan.unknown_methods),
         "missing_notices": int(report["count"]), "overpaid": int(report["overpaid_count"]),
+        # ⭐ 2026-09-26（用户报障「落库结果可读性差」）：**人话指标**（下面是给程序用的原始键，留作排查）。
+        #  ⚠️ 前三个词与 `preview` 的 `kpis`（未匹配 / 异常 / 未识别付款方式）**逐字相同** ——
+        #     同一个数在两屏不许换说法；后两个用核对报告那两张清单的标题原话（漏记 / 超付）。
+        "kpis": {"写入流水": int(out["written"]),
+                 "未匹配": len(plan.unmatched),
+                 "异常": len(plan.anomalies),
+                 "未识别付款方式": len(plan.unknown_methods),
+                 "漏记（该批月份里一条流水都没有的通知书）": int(report["count"]),
+                 "超付（实付 ＞ 审批金额）": int(report["overpaid_count"])},
         "blocks": _report_blocks(report),
     }
 
