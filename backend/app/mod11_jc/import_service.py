@@ -47,6 +47,7 @@ from __future__ import annotations
 from collections import Counter
 from decimal import Decimal
 
+from app.core import timing
 from app.mod11_jc import excel_parse as P
 from app.mod11_jc import repository as R
 
@@ -409,9 +410,14 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
                 warned.append({"row_no": n, "why": f"合同 #{cid} 已有「{label}发票」行 ⇒ **未重复导入**"
                                                    f"（发票子表是一合同 1..N 张，重导会翻倍）"})
                 continue
-            date = str(row.get("contract_date") or "").strip() or str(cur.contract_date or "").strip()
-            if not date:
-                warned.append({"row_no": n, "why": f"{label}发票额没落 —— 这张合同没有日期可用作发票日期"})
+            # ⭐ **发票日期 = 操作当天（北京时间）** —— 2026-09-26 用户裁定：
+            #    「新加的发票行的发票日期，**不要用合同日期，用操作时的日期**」。
+            #    ⚠️ 原先取 `row["contract_date"]`（Excel 里的合同日期）⇒ 与"这张票是什么时候录进系统的"
+            #    不符（发票要能对上所属期，本来关心的就是**录入这一天**）；真取不到日期就整条不落
+            #    ⇒ 发票额白导、且人看不出为什么（现在这条 warned 分支也一并删掉了）。
+            date = timing.to_iso(timing.today_cn())
+            if not date:                                  # pragma: no cover —— `today_cn()` 恒有值
+                warned.append({"row_no": n, "why": f"{label}发票额没落 —— 取不到当天日期"})
                 continue
             inv = _add_invoice(s, cid, kind=kind, date=date, amount=amt)
             if not inv.get("ok"):

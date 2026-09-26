@@ -318,17 +318,29 @@ V.imp = () => {
         `<option value="${esc(f.label)}"${f.label === cur ? ' selected' : ''}>${esc(f.label)}${f.required ? '（必填）' : ''}</option>`).join('');
       return `<option value=""${cur ? '' : ' selected'}>${esc(IMP_IGNORE)}</option>` + fields;
     };
-    /* 「导入后会怎样」= 按**当前映射的目标字段**查域声明（域没声明 ⇒ 留空，⛔ 不替域编）。
-       ⚠️ 它随用户改下拉**实时变**：同一列选不同字段 ⇒ 后果不同 ⇒ 话也不同。 */
-    const impacts = {};
-    ((sch && sch.impacts) || []).forEach(x => { impacts[x.label] = x.what; });
-    const impactOf = (c) => (c.ignored ? '不写库（原样保留）' : (impacts[c.field] || ''));
+    /* ⭐⭐ 2026-09-26（用户裁定）：屏上只留**三个短词** —— 写台账 / 当钥匙 / 不参与
+       （原话：「**写台账和进子表为一个意思，合并为写台账**」）；**完整说明一律下沉到悬停**，
+       屏上不再出现长句（守则 §5.9：同屏做优先级 —— 用户当场说"那一行可读性太差"）。
+       ⚠️ 随用户改下拉**实时变**：同一列选不同字段 ⇒ 去向与说明都跟着变。
+       ⚠️ 判据与真机认 `data-act="impMap"` ⇒ ⛔ 别动那个属性；去向另起一行，⛔ 不塞进下拉那格。 */
+    const impacts = {};                      /* 字段 → 完整说明（进悬停） */
+    const kkinds = {};                       /* 字段 → 去向（写台账 / 当钥匙 / 不参与） */
+    ((sch && sch.impacts) || []).forEach(x => { impacts[x.label] = x.what; kkinds[x.label] = x.kind || ''; });
+    const kindOf = (c) => (c.ignored ? '不参与' : (kkinds[c.field] || ''));
+    const whatOf = (c) => (c.ignored ? String(c.ignored) : (impacts[c.field] || ''));
+    const tagOf = (k) => (k === '写台账' ? '<span class="tag t-wn">写台账</span>'
+                        : k === '当钥匙' ? '<span class="tag t-in">当钥匙</span>'
+                        : k === '不参与' ? '<span class="mut sm">不参与</span>' : '');
     const attrRow = (label, cellOf) =>
       `<tr><th style="text-align:left;white-space:nowrap;vertical-align:middle;min-width:92px" class="mut sm">${label}</th>`
       + IMP.cols.map(c => `<td>${cellOf(c)}</td>`).join('') + '</tr>';
     mapCard = `<div class="card" style="margin-top:12px"><h4>列映射<span class="sp"><span class="mut sm">
       横看 = 你表里的每一列 · 系统只给建议，<b>选哪个由你定</b></span></span></h4>
       ${sch && sch.rule_note ? `<div class="tip" style="margin-bottom:8px">${esc(sch.rule_note)}</div>` : ''}
+      ${(sch && sch.impacts && sch.impacts.length) ? `<div class="sm mut" style="margin-bottom:8px">
+        <b>去向</b>：${tagOf('写台账')} 会盖掉台账里的值（<b>含往发票子表加一张票</b>）·
+        ${tagOf('当钥匙')} 拿它去找那张合同（合同上的原值<b>不动</b>）·
+        ${tagOf('不参与')} 导入不用它 —— 把鼠标停在格子上看完整说明</div>` : ''}
       <div class="tw"><table class="dt sm">
       <thead><tr><th style="min-width:92px"></th>${IMP.cols.map(c => `<th style="vertical-align:bottom;min-width:136px">
         <div style="font-weight:600;white-space:normal">${esc(c.src)}</div></th>`).join('')}</tr></thead>
@@ -336,14 +348,38 @@ V.imp = () => {
         ${attrRow('导入到', c => (c.ignored
           ? `<span class="tag t-in"${c.ignored ? ` title="${esc(c.ignored)}"` : ''}>不写库</span>`
           : `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`))}
-        ${IMP.cols.some(c => c.ignored || impacts[c.field])
-          ? attrRow('导入后会怎样', c => { const t = impactOf(c); return t ? `<span class="sm">${esc(t)}</span>` : ''; })
-          : '' /* ⚠️ **域没声明任何后果、也没有"不写库"列 ⇒ 整行不画**（用户 2026-09-26 看截图：
-                 一个只有行标签、格子里全空的"导入后会怎样"看着像坏了 —— 而它其实只是"本域没这条信息"）*/}
+        ${IMP.cols.some(c => c.ignored || kkinds[c.field])
+          ? attrRow('去向', c => {
+              const k = kindOf(c);
+              return k ? `<span title="${esc(whatOf(c))}">${tagOf(k)}</span>` : '';
+            })
+          : '' /* ⚠️ **域没声明任何去向、也没有"不写库"列 ⇒ 整行不画**（本域没这条信息，画个空行像坏了）*/}
       </tbody></table></div>
       <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:10px">${lack.length
         ? `还差必填字段：<b>${esc(lack.join(' / '))}</b> —— 选好才能到下一步（⛔ 系统不替你填默认值）`
         : '必填都齐了，可以往下走'}</div>
+      ${(() => {
+        /* ⭐ ④ 「本系统要哪些列」—— **新增**（2026-09-26 用户报「缺贸易公司发票金额」）：
+           ② 这一屏**只列"你表里有的源列"** ⇒ 表里没有的列**从不出现** ⇒ 会被读成"系统不支持它"。
+           这一块把**域契约的全部字段**列齐（有 / 表里没有 ＋ 去向），并把域给的那句提醒**默认露出来**
+           （用户裁定：缺列提醒⛔ **不能藏在折叠里** —— 藏了等于没提醒）。 */
+        const fields = (sch && sch.fields) || [];
+        if (!fields.length) return '';
+        const has = (lb) => IMP.cols.some(c => c.field === lb);
+        const rows = fields.map(f =>
+          `<tr><td>${esc(f.label)}${f.required ? '<span class="mut sm">（必填）</span>' : ''}</td>`
+          + `<td>${has(f.label) ? '有' : '<span class="mut">表里没有</span>'}</td>`
+          + `<td>${tagOf(kkinds[f.label] || '')}</td></tr>`).join('');
+        const miss = fields.filter(f => !has(f.label)).length;
+        const hint = String((sch && sch.field_list_hint) || '');
+        return `${hint ? `<div class="tip" style="margin-top:10px">${esc(hint)}</div>` : ''}`
+             + `<details style="margin-top:8px"><summary class="mut sm" style="cursor:pointer">`
+             + `本系统要哪些列（共 ${fields.length} 列 · 你表里缺 ${miss} 列，点开看）</summary>`
+             + `<div class="tw" style="margin-top:8px"><table class="dt sm"><thead><tr>`
+             + `<th style="text-align:left">列名</th><th style="text-align:left">你表里</th>`
+             + `<th style="text-align:left">去向</th></tr></thead><tbody>${rows}</tbody></table></div>`
+             + '</details>';
+      })()}
       <div style="margin-top:10px">
         <button class="btn pri" data-act="impPreview"${lack.length ? ' disabled' : ''}>③ 预览校验（不写库）</button>
         <button class="btn" data-act="impReset">重来</button></div></div>`;

@@ -192,10 +192,11 @@ def test_贸易公司合同凭贸易公司金额对号_供应商价空才填_且
     """
     from sqlalchemy import select
 
+    from app.core import timing
     from app.core.db import session_scope
     from app.mod01_projects import repository as pj_repo
     from app.mod01_projects.models import TYPE_NORMAL
-    from app.mod11_jc.models import JcContract
+    from app.mod11_jc.models import JcContract, JcInvoice
 
     trade_amt, sup, sup2 = "42885.40", "150000.00", "999999.00"
     # ⚠️ **编号必须每次唯一**：`contract_no` 是全库按值查的（`one_by_no`），留个固定串
@@ -216,7 +217,7 @@ def test_贸易公司合同凭贸易公司金额对号_供应商价空才填_且
 
     def run(sup_amt: str, mat: str) -> dict:
         got = client.post("/api/imp/m11_jc/parse",
-                          files={"file": ("台账.xlsx", _book([(1, "20251114", mat, sup_amt, "0",
+                          files={"file": ("台账.xlsx", _book([(1, "20251114", mat, sup_amt, "1000",
                                                               trade_amt, "0", "电汇", "")]),
                                           "application/octet-stream")},
                           data={"sheet": ""}).json()
@@ -233,6 +234,15 @@ def test_贸易公司合同凭贸易公司金额对号_供应商价空才填_且
         assert Decimal(str(c.contract_amt)) == Decimal(sup), "空 ⇒ 把 Excel 的供应商价填进「合同金额」"
         assert Decimal(str(c.trade_contract_amt)) == Decimal(trade_amt), "贸易公司金额不被导入改"
         assert c.supplier == "江苏万有电气科技有限公司", "i8 的事实列一个字不改"
+        # ⭐ 新加的发票行：**发票日期 = 操作当天**（2026-09-26 用户裁定：
+        #    「新加的发票行的发票日期，**不要用合同日期，用操作时的日期**」）
+        inv = s.execute(select(JcInvoice).where(
+            JcInvoice.contract_id == int(out["report"]["items"][0]["id"]))).scalars().first()
+        assert inv is not None, "「供应商发票金额」那一列要往发票子表**加一张票**"
+        assert inv.invoice_date == timing.to_iso(timing.today_cn()), (
+            f"发票日期该 = **操作当天**（{timing.to_iso(timing.today_cn())}），实得 {inv.invoice_date!r}")
+        assert inv.invoice_date != "2025-11-14", "⛔ 不许再拿合同日期当发票日期"
+        assert Decimal(str(inv.amount)) == Decimal("1000")
 
     out2 = run(sup2, "电缆桥架（改）")            # 第二遍：合同金额**已有值** ⇒ ⛔ 不许覆盖
     assert out2["ok"] and out2["report"]["updated"] == 1, out2

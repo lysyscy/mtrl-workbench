@@ -51,18 +51,28 @@ class DomainSpec:
     #:   早先它们落进"未认出" ⇒ 界面上看着像**系统漏了**（用户会一列列去点）。两者含义完全不同：
     #:   **未认出 = 系统不认识**（该让人点）；**不采 = 系统认识、但按规矩不导**（该把理由说清）。
     ignored: tuple[tuple[str, str], ...] = ()
-    #: ⭐ **逐列后果**：`((目标字段, 一句话), …)` —— 界面在「导入后会怎样」那一行**逐列显示域给的这句**。
+    #: ⭐ **逐列后果**：`((目标字段, 一句话), …)` 或 `((目标字段, 一句话, 去向), …)`。
     #:
     #: ⚠️ 为什么必须有它（用户 2026-09-26 拷问后定）：用户要决定"这列导不导、选哪个字段"，
     #:   就必须知道**导了会怎样** —— 而"哪几列会被覆盖、哪一列只是用来对号、哪几列是 i8 的、一个字都不碰"
     #:   **只有域知道**（壳看一眼数据猜不出）。⛔ 措辞一律**由域给**，壳不猜、不拼；
     #:   **域没声明 ⇒ 界面不标**（不替域编）。⚠️ 键是**目标字段名**（不是源列名）——
     #:   这样它随用户改下拉**实时跟着变**：同一列选不同字段，后果不同就得说不同的话。
-    impacts: tuple[tuple[str, str], ...] = ()
+    #:
+    #: ⭐⭐ **第三项「去向」**（2026-09-26 用户裁定）：**只许三个词** ——
+    #:   `写台账`（会盖掉台账里的值，**含"往发票子表加一张票"** —— 用户原话：
+    #:   「写台账和进子表为一个意思，合并为写台账」）· `当钥匙`（拿它去找那张合同，合同上的原值不动）·
+    #:   `不参与`（导入不用它）。⚠️ 屏上只留这三个短词（守则 §5.9 同屏做优先级），
+    #:   **完整说明放第二项**（界面把它放进**悬停**）。
+    impacts: tuple[tuple, ...] = ()
     #: ⭐ **这一批怎么入库**（页头一句话）：对号键是什么 · 覆盖谁 · 能不能反悔 —— **大白话**，域给。
     #: ⚠️ 四域的规则互不相同（`m04` 按"年月＋单据号"更新、`m11` 按"含税合同价"对号、`m06` 每次新批…）
     #:   ⇒ 这句话**必须由域说**，⛔ 通用层不写"套话"（套话=误导）。
     rule_note: str = ""
+    #: ⭐ **「本系统要哪些列」那段的一句话提醒**（域给 · 大白话）：2026-09-26 用户裁定
+    #:   「缺列提醒**必须默认露出来**」（⛔ 不能藏在折叠里 —— 藏了等于没提醒）。
+    #: ⚠️ 通用层⛔ 不编这句（"缺哪列要紧"只有域知道），域不给 ⇒ 界面不显示。
+    field_list_hint: str = ""
     extra: dict = field(default_factory=dict)    # 域自定义（⛔ 通用层不看）
 
     @property
@@ -77,9 +87,10 @@ class DomainSpec:
         return {
             "domain": self.domain, "title": self.title, "required": list(self.required),
             "note": self.note, "keep_note": self.keep_note, "batch": bool(self.batch),
-            "rule_note": self.rule_note,
+            "rule_note": self.rule_note, "field_list_hint": self.field_list_hint,
             "ignored": [{"label": lb, "why": why} for lb, why in self.ignored],
-            "impacts": [{"label": lb, "what": what} for lb, what in self.impacts],
+            "impacts": [{"label": x[0], "what": x[1], "kind": (x[2] if len(x) > 2 else "")}
+                        for x in self.impacts],
             "fields": [{"key": f.key, "label": f.label, "type": f.type,
                         "required": bool(f.required), "aliases": list(f.aliases)}
                        for f in self.fields],
@@ -93,12 +104,24 @@ class DomainSpec:
                 return why
         return ""
 
-    def impact_of(self, label: str) -> str:
-        """该**目标字段**的「导入后会怎样」⇒ 域给的原文；没声明 ⇒ `""`（界面不标）。"""
+    def impact_kind_of(self, label: str) -> str:
+        """该**目标字段**的「去向」（`写台账` / `当钥匙` / `不参与`）；没声明 ⇒ `""`（界面不标）。"""
         key = normalize(label)
-        for raw, what in self.impacts:
-            if normalize(raw) == key:
-                return what
+        for x in self.impacts:
+            if normalize(x[0]) == key:
+                return x[2] if len(x) > 2 else ""
+        return ""
+
+    def impact_of(self, label: str) -> str:
+        """该**目标字段**的「导入后会怎样」⇒ 域给的原文；没声明 ⇒ `""`（界面不标）。
+
+        ⚠️ 按**下标**取，⛔ 不写 `for raw, what in …` —— 声明可以是 **2 元组或 3 元组**
+        （第三项 = 去向），按 2 个解包会在遇到 3 元组时 `ValueError`（2026-09-26 当场踩到）。
+        """
+        key = normalize(label)
+        for x in self.impacts:
+            if normalize(x[0]) == key:
+                return x[1]
         return ""
 
 

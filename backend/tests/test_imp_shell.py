@@ -184,3 +184,32 @@ def test_本页的项目面板走注册表收起():
     assert "IMP.pjOpen" not in block, "还留着旧的逐个登记写法（`#1` 已把它收进 `PJ_OPEN`）"
     assert "pjClose('impPj')" in SHELL, \
         "本页「项目」面板的收起没走注册表 `PJ_OPEN`（key 由 `pickAct` 派生：`impPjPick` ⇒ `impPj`）"
+
+
+@acc()
+def test_列映射的去向只许三个词_不许再说认行_且字段清单要列全():
+    """⭐⭐ 2026-09-26（用户三点要求）：去向**只许三个词** · ⛔ 不许再说「只用来认行」 ·
+    字段清单必须**列全域契约的全部字段**（用户报「缺贸易公司发票金额」的真因就在这）。
+
+    用户原话：「**写台账和进子表为一个意思，合并为写台账**」·「贸易公司名 / 合同日期
+    **不写库、也不用来认行**」·「**导入后会怎样**这一行**可读性太差**」。
+
+    ⚠️ **能证伪**：把去向换成别的词 / 把"认行"写回去 / 字段清单漏列 ⇒ 本件必红。
+    """
+    from app.mod11_jc import excel_parse as P
+    from app.mod11_jc import imp_spec
+
+    kinds = {x[2] if len(x) > 2 else "" for x in imp_spec.SPEC.impacts}
+    bad = sorted(kinds - {"写台账", "当钥匙", "不参与"})
+    assert not bad, f"去向**只许三个词**（写台账 / 当钥匙 / 不参与），出现了：{bad}"
+    assert imp_spec.SPEC.impact_kind_of("贸易公司发票金额") == "写台账", (
+        "「贸易公司发票金额」的去向必须「写台账」—— 它往发票子表加一张票（用户本次报的就是它）")
+    for fld in ("贸易公司", "合同日期", "供应商"):
+        assert imp_spec.SPEC.impact_kind_of(fld) == "不参与", (
+            f"「{fld}」导入**不用它** ⇒ 去向必须「不参与」（用户 2026-09-26 当场纠正）")
+    assert "认行" not in (SHELL + str(imp_spec.SPEC.impacts)), (
+        "还留着「只用来认行」—— 导入**不对号用它**（对号只用合同价 / 贸易公司合同价），这话是错的、会误导")
+    assert {f.label for f in imp_spec.SPEC.fields} == set(P.FIELD_LABELS.values()), (
+        "域字段契约与 `FIELD_LABELS` 不一致 ⇒「本系统要哪些列」那块会漏列（用户报的「缺列」就从这来）")
+    for must in ("本系统要哪些列", "写台账", "当钥匙", "不参与", "field_list_hint"):
+        assert must in SHELL, f"壳里缺 `{must}` —— 列映射的「去向 / 本系统要哪些列」没渲染出来"
