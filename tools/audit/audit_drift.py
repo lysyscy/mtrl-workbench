@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 from audit_common import (
@@ -110,6 +112,25 @@ def check_cancelled() -> list[dict]:
 # ------------------------------------------------------------------- T3 路径
 
 
+@lru_cache(maxsize=8)
+def _name_index(root_str: str) -> dict[str, tuple[Path, ...]]:
+    """「根目录 → `{名字: (路径…)}`」的**一次性索引**（缓存）—— `audit_drift` 8.8 s 的根因就在这。
+
+    ⚠️ 原先三处（`_path_exists` / `_resolve_md` / `_resolve_repo_path`）**每个引用各走一遍全仓**
+       （`rglob(name)`）：引用几百个 ⇒ 几百遍 `rglob`，而且 `rglob` **拦不住 `.venv`**（它照样进去翻，
+       过滤发生在**遍历之后**）⇒ 8.8 s 基本都耗在这。实测（2026-09-26）。
+    ⭐ 口径**一字不变**：仍然"同名**唯一**才算命中"（`len(hits) == 1`）、仍然排除 `.venv` / `__pycache__`；
+       区别只是**走一次树、问很多次**。文件与目录**都进索引**（原 `rglob` 也匹配目录名）。
+    """
+    idx: dict[str, list[Path]] = {}
+    root = Path(root_str)
+    for cur, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in {".venv", "__pycache__"}]   # ⭐ 剪枝：别进去
+        for name in (*dirnames, *filenames):
+            idx.setdefault(name, []).append(Path(cur) / name)
+    return {k: tuple(v) for k, v in idx.items()}
+
+
 def _path_exists(raw: str, roots: list) -> str:
     """→ `exact` 精确命中 / `same-name` 同名文件存在 / `` 都没有。"""
     for r in roots:
@@ -121,7 +142,7 @@ def _path_exists(raw: str, roots: list) -> str:
     for r in roots:
         for pre in ("", "backend/"):
             base = r / pre
-            if base.exists() and any(base.rglob(name)):
+            if base.exists() and _name_index(base).get(name):
                 return "same-name"
     return ""
 
@@ -193,8 +214,7 @@ def _resolve_md(raw: str, roots: list) -> Path | None:
             if cand.exists():
                 return cand
     name = Path(raw).name
-    hits = [p for r in roots for p in r.rglob(name)
-            if ".venv" not in str(p) and "__pycache__" not in str(p)]
+    hits = [p for r in roots for p in _name_index(r).get(name, ())]
     return hits[0] if len(hits) == 1 else None
 
 
@@ -318,8 +338,7 @@ def _resolve_repo_path(rel: str) -> Path | None:
         if cand.exists():
             return cand
     name = Path(rel).name
-    hits = [p for p in REPO_ROOT.rglob(name)
-            if ".venv" not in str(p) and "__pycache__" not in str(p)]
+    hits = list(_name_index(REPO_ROOT).get(name, ()))
     return hits[0] if len(hits) == 1 else None
 
 
