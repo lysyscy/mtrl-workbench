@@ -116,6 +116,16 @@ def load_batches(s: Session) -> list[ProcHistoryBatch]:
     return list(s.execute(select(ProcHistoryBatch)).scalars())
 
 
+def batch_exists(s: Session, *, batch_no: str) -> bool:
+    """该批号是否已被占用（`proc_history_batch.batch_no` 是**唯一**的）。
+
+    ⭐ 2026-09-26（`TAIL-108`）：给"**同一秒里两次落库**"兜底用 —— 默认批号 = `PROC-<yyyymmddHHMMSS>`
+      （**秒**）⇒ 连点两次「④ 确认落库」（或两支判据在同一秒里各提交一次）会撞唯一约束，
+      用户看到的是 `导入失败：IntegrityError … 重复键违反唯一约束`（**天书**）。
+    """
+    return any((b.batch_no or "") == str(batch_no) for b in s.execute(select(ProcHistoryBatch)).scalars())
+
+
 def load_cutoff(s: Session, *, warehouse: str) -> str:
     """该项目的**截止核算月**（未设定 ⇒ 空串 = 一律正式段）。"""
     for r in s.execute(select(ProcCutoff)).scalars():

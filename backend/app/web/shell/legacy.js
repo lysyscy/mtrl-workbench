@@ -210,9 +210,12 @@ ACT.setSave = async () => {
    ⛔ **`m06imp`（过程资料历史导入页）已下架**（`B5c` · 2026-09-22）：同一件事不留两个入口 ——
       `m05imp`（历史付款导入）**暂留**，等 `m05` 也挂上通用面再删（`B5c-2`）。 */
 const IMP = {domains: [], domain: '', schema: null, file: null, token: '', cols: [], mapping: {},
-             memory: '', preview: null, report: null, step: 0, org: [], wrap: '', cutoff: '',
-             ym: '', pjDisp: {}, cutoffs: {}, hasCut: false, hasYm: false,
-             msg: '', kind: 'ok'};
+            memory: '', preview: null, report: null, step: 0, org: [], wrap: '', cutoff: '',
+            ym: '', pjDisp: {}, cutoffs: {}, hasCut: false, hasYm: false,
+            /* ⭐ `busy` = **正在落库**（`TAIL-108`）：提交期间把 ④ 置灰 ＋ 挡住重入
+               —— 连点两次会发两次请求，而默认批号到**秒** ⇒ 第二次撞批号唯一约束（`IntegrityError` 天书）。 */
+            busy: false,
+            msg: '', kind: 'ok'};
 
 const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '④ 确认落库'];
 /* 映射表里「不导入」那一项的取值：⛔ 用**空串**而不是后端那个哨兵常量 ——
@@ -519,7 +522,7 @@ V.imp = () => {
       <div class="tw" style="max-height:280px;margin-top:6px"><table class="dt sm">
         <thead><tr>${pcols}</tr></thead><tbody>${prows || lgEmpty(1, '没有数据行')}</tbody></table></div>
       ${pwarn}
-      <div style="margin-top:10px"><button class="btn pri" data-act="impCommit"${needPj ? ' disabled' : ''}>④ 确认落库</button>
+      <div style="margin-top:10px"><button class="btn pri" data-act="impCommit"${(needPj || IMP.busy) ? ' disabled' : ''}>${IMP.busy ? '正在落库…' : '④ 确认落库'}</button>
         <button class="btn" data-act="impReset">重来</button>
         ${needPj ? `<span class="mut sm" style="margin-left:8px">⚠️ 先回第 ① 步选「这批数据进哪个项目」
           —— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）</span>` : ''}</div></div></div>`;
@@ -628,11 +631,18 @@ ACT.impCommit = async () => {
      ⚠️ 壳**不知道**哪个域要哪个键（那是域的事）⇒ ⛔ 别再加回"`if (域号) 只给这几个`"的写法。
      ⚠️ 打包本体搬到 `impOptions()` —— **预览用的就是它**（同一份，⛔ 不许两处各拼一遍）。 */
   const options = impOptions();
+  /* ⛔ **同一动作不许并发提交**（2026-09-26 · `TAIL-108`）：连点两次「④ 确认落库」会发两次请求 ——
+     而默认批号到**秒** ⇒ 第二次会撞批号唯一约束，用户看到 `IntegrityError …重复键违反唯一约束`（天书）。
+     ⚠️ 这里挡"人点的路"，后端另有一道（`imp_spec._batch_no`：撞了就换号）—— 两道都要，
+     因为脚本 / 接口能绕过界面（本仓老规矩：界面挡不住的路要有后端挡）。 */
+  if (IMP.busy) return;
+  IMP.busy = true;
   IMP.msg = '正在落库…'; IMP.kind = 'ok'; render();
   let r = null;
   try { r = await API.impCommit(IMP.domain, { token: IMP.token, mapping: IMP.mapping,
-                                             remember: true, options: options }); }
-  catch (e) { IMP.msg = `导入失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
+                                            remember: true, options: options }); }
+  catch (e) { IMP.busy = false; IMP.msg = `导入失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
+  IMP.busy = false;
   if (!r || r.ok === false) { IMP.msg = (r && r.message) || '导入失败'; IMP.kind = 'err'; render(); return; }
   IMP.report = r.report || {}; IMP.step = 3; IMP.msg = r.message || '已导入'; IMP.kind = 'ok';
   IMP.preview = null; IMP.token = ''; IMP.file = null;

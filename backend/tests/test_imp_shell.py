@@ -194,10 +194,31 @@ def test_范围栏画在第一步_且没选项目不许落库():
     assert "IMP.wrap = ''" in code.replace("  ", " "), \
         "`IMP.wrap` 的初值不是空 —— 不预选这条就落不到实处"
     # 没选 ⇒ ④ 置灰（不能点的要置灰并说明原因 · 守则 §5.5）
-    assert 'data-act="impCommit"${needPj ? ' in code, \
+    # ⚠️ 2026-09-26（`TAIL-108`）：置灰条件从 `needPj` 变成 `needPj || IMP.busy`
+    #    （落库期间也要禁用 —— 连点两次会撞批号，见本件末尾那条）——**判词不变**："没选项目不许点"。
+    assert 'data-act="impCommit"${(needPj || IMP.busy) ? ' in code, \
         "「④ 确认落库」没按 `needPj` 置灰 —— 没选项目也能点下去（后端才报错，用户已经白跑一趟）"
     assert "IMP.org.length && !IMP.wrap" in code, \
         "`ACT.impCommit` 没有本地兜底拦住「没选项目就落库」（按钮置灰挡不住程序化调用/回车）"
+
+
+@acc()
+def test_落库期间不许重复提交_按钮要禁用():
+    """⭐ 2026-09-26（`TAIL-108`）：连点两次「④ 确认落库」会发两次请求 —— 而默认批号到**秒**
+    ⇒ 第二次撞批号唯一约束，用户看到 `IntegrityError …重复键违反唯一约束`（**天书**）。
+
+    判词（两半，缺一半都不算）：
+      ① **提交期间 `④` 置灰 ＋ 换文案**（守则 §5.5：不能点的要置灰并说明）；
+      ② **动作里挡重入**（`IMP.busy` 早退）—— 光置灰挡不住程序化调用 / 回车（同 `impCommit` 的既有兜底）。
+    ⚠️ 后端另有一道（`imp_spec._batch_no`：撞了就换号）—— 界面挡不住脚本 / 接口，两道都要。
+    """
+    code = _imp_code()
+    # ⚠️ `const IMP = {…}` 在 `impSetDomain` **之前** ⇒ 不在 `_imp_region()` 的切片里，要查全壳
+    assert "busy: false" in re.sub(r"/\*.*?\*/", "", SHELL, flags=re.S), \
+        "`IMP` 状态里没有 `busy` —— 落库期间的状态无处可记"
+    assert "if (IMP.busy) return;" in code, "`ACT.impCommit` 没挡重入（连点两次会发两次请求）"
+    assert "needPj || IMP.busy" in code, "「④ 确认落库」没在落库期间置灰"
+    assert "IMP.busy = false" in code, "`busy` 没有复位 —— 一次失败之后 ④ 会**永远点不动**"
 
 
 @acc()

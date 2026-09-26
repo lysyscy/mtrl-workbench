@@ -177,6 +177,33 @@ def test_每个项目的截止月各给一份_换项目不会串():
 
 
 @acc()
+def test_同一秒两次落库各自拿到批号(client):
+    """⭐ 2026-09-26（`TAIL-108`）：默认批号 = `PROC-<yyyymmddHHMMSS>`（**秒**）⇒ **同一秒两次落库**
+    会撞 `proc_history_batch.batch_no` 的唯一约束，用户看到 `导入失败：IntegrityError …重复键违反唯一约束`
+    （**天书**；守则 §5.5 不让这么报）。
+
+    ⚠️ 诱因很自然：**连点两次「④ 确认落库」** —— 壳侧同批加了"提交期间禁用 ④"，但**脚本 / 接口绕得过界面**
+      ⇒ 后端也要兜（`imp_spec._batch_no`：撞了就补 `-2`）。
+    判词：**不显式给批号**、连着提交两次 ⇒ **两次都成功**、且批号**不同**。
+    """
+    g1 = _parse(client).json()
+    g2 = _parse(client).json()
+    mapping = {"时间": "核算月", "线上入库（不含税）主辅材": "入库主辅材"}
+    wh = "__自检仓_TAIL108_" + uuid.uuid4().hex[:8] + "__"
+    out1 = client.post("/api/imp/m06_proc/commit",
+                       json={"token": g1["token"], "mapping": mapping,
+                             "options": {"warehouse": wh}}).json()
+    out2 = client.post("/api/imp/m06_proc/commit",
+                       json={"token": g2["token"], "mapping": mapping,
+                             "options": {"warehouse": wh}}).json()
+    assert out1["ok"] and out2["ok"], (out1, out2)
+    b1, b2 = out1["report"]["batch"], out2["report"]["batch"]
+    assert b1 and b2 and b1 != b2, f"同一秒两次落库拿到同一个批号（会撞唯一约束）：{b1} / {b2}"
+    back = client.post("/api/imp/m06_proc/rollback", json={"batch": b2}).json()
+    assert back["ok"], back
+
+
+@acc()
 def test_机械列导入落进历史段_并能被读到(client):
     """⭐⭐ 2026-09-26（`TAIL-107`）**端到端**：机械 6 列从 excel **导进来** ⇒ 落**历史段快照** ⇒ 读得到。
 
@@ -270,13 +297,11 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
         f"说明行（Excel 第 7 行）被报成了要处理的问题：{pre['problems']}"
 
     # ③ 落库：只写能写的那两行，且回执说清少写了一行
-    # ⚠️ **批号显式给**：默认批号是 `PROC-<yyyymmddHHMMSS>`（**秒**）—— 同秒两次落库会撞唯一约束
-    #    （本件就踩到了：前一条判据刚提交、这条在同一秒里 ⇒ `UniqueViolation`）。那条真缺陷另登了尾巴。
+    # ⚠️ 这里**不显式给批号**（2026-09-26 `TAIL-108` 修好后不必再绕）—— 同秒撞批号由
+    #    `imp_spec._batch_no` 兜（撞了自动补 `-2`）；那条缺陷的判据见本件末尾。
     wh = "__自检仓_ODD_" + uuid.uuid4().hex[:8] + "__"
     out = client.post("/api/imp/m06_proc/commit",
-                      json={**body, "token": token,
-                            "options": {"warehouse": wh,
-                                        "batch": "PROC-ODD-" + uuid.uuid4().hex[:8]}}).json()
+                      json={**body, "token": token, "options": {"warehouse": wh}}).json()
     assert out["ok"] and out["report"]["rows"] == 2, out
     assert out["report"]["不写入的行数"] == 1, \
         f"④ 回执没说清少写了几行 —— 用户会以为全导进去了：{out['report']}"

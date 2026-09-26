@@ -98,6 +98,29 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
             "blocks": _blocks_of(bad, notes)}
 
 
+def _batch_no(s, opts: dict) -> str:
+    """本批的批号：调用方给了就用它；没给 ⇒ `PROC-<yyyymmddHHMMSS>`（**秒**），**撞了就换一个**。
+
+    ⭐ 2026-09-26（`TAIL-108`）：默认批号**到秒** ⇒ **同一秒里的第二次落库**会撞
+      `proc_history_batch.batch_no` 的唯一约束，用户看到的是
+      `导入失败：IntegrityError … 重复键违反唯一约束`（**天书**，守则 §5.5 不让这么报）。
+      ⚠️ 诱因很自然：**连点两次「④ 确认落库」**（壳侧同批加了"提交期间禁用" —— 这里是**后端那一道**，
+      ⛔ 只靠界面挡不住脚本 / 接口）。
+      ⇒ 撞了就补 `-2` / `-3`…（最多试到 9；真撞满就照旧让数据库报错 —— ⛔ 不静默吞、也不编一个假批号）。
+    """
+    given = str(opts.get("batch") or "")
+    if given:
+        return given
+    from app.mod06_proc import repository as repo
+
+    base = I.next_batch()
+    for n in range(1, 10):
+        cand = base if n == 1 else f"{base}-{n}"
+        if not repo.batch_exists(s, batch_no=cand):
+            return cand
+    return base
+
+
 def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `mapping_` 只进回执口径
     """落库：**原样复用** `importer.commit` ⇒ 只写**历史段**（不碰正式段、不碰机械手录）。
 
@@ -118,9 +141,8 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
         why = "；".join(f"行 {a['line']}：{a['reason']}" for a in bad[:3]) or "文件里没有数据行"
         raise MustReportError(f"没有一行可落库的数据 —— {why}。历史段未被改动（不写库）")
     plan = I.ImportPlan(rows=rows, anomalies=bad, notes=notes)
-    out = I.commit(s, plan, warehouse=warehouse,
-                   batch=str(opts.get("batch") or I.next_batch()), operator=operator,
-                   cutoff_ym=str(opts.get("cutoff_ym") or "") or None)
+    out = I.commit(s, plan, warehouse=warehouse, batch=_batch_no(s, opts),
+                   operator=operator, cutoff_ym=str(opts.get("cutoff_ym") or "") or None)
     out["cutoff_default"] = plan.default_cutoff        # 界面用来回显"默认截止月 = 最大核算月"
     # ⭐ ④ 的回执也要**说清有几行没写进去**（⛔ 不许只在 ③ 说过、到这里就悄悄算了）
     out["不写入的行数"] = len(bad)
