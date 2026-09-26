@@ -995,11 +995,14 @@ function render(){
         （⛔ 用户当天的纠正：**不能用"当前数据量小"当判据** —— 没正式用的页以后可能上万行，
         而名单式的下场是"某个页涨上去、忘了加名单 ⇒ 永远不生效"）。
         例外见 `VSCROLL`（**只用来"关掉或调阈值"**，⛔ 别再当启用名单用）。 */
-  if(vsOn(VIEW) && startVirtual(html, scroller, keep)) return;
+  /* ⚠️ 虚拟滚动那条路也在 `startVirtual` 里就把 DOM 写完了 ⇒ 面板定位**两条路都要跑**
+     （`placePjPanels` 幂等；漏一条 ⇒ 大表页上展开的面板仍被卡片裁）。 */
+  if(vsOn(VIEW) && startVirtual(html, scroller, keep)){ placePjPanels(); return; }
   $('#view').innerHTML=html;
   /* ⚠️ 还原时**重新解析**滚动容器：`.tw` 已被上一行整体重建（旧元素连同它的 scrollTop 一起没了）。 */
   const host2=scrollHost(); if(host2) host2.scrollTop=keep;
   if(BIND[VIEW]) BIND[VIEW]();
+  placePjPanels();      /* ⭐ 面板逃出卡片裁剪（`TAIL-109`）—— 见 `placePjPanels` 的注释 */
 }
 /* ⭐ `TAIL-66` 后的语义：**默认全开**，`VSCROLL` = **例外表** ——
    `{m07:{off:true}}` = 这页不虚拟化；`{m09:{min:800}}` = 这页阈值调到 800。
@@ -1551,7 +1554,9 @@ const pjClose = k => { const s = String(k); if (PJ_OPEN[s]) { PJ_OPEN[s] = false
 const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
   /* ⭐ key **由 `pickAct` 派生**（`ledPjPick` ⇒ `ledPj`）⇒ ⛔ 调用点不用传、也不会漏传。 */
   const pk=String(c.pickAct||'').replace(/Pick$/,'');
-  return `<div style="position:absolute;z-index:80;top:calc(100% + 5px);left:0;width:max-content;min-width:178px;max-width:340px;max-height:264px;overflow-y:auto;overflow-x:hidden;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:5px">
+  /* ⚠️ 那个 `class="pjpop"` 是给 `placePjPanels()` 用的（渲染后把它提升为 `fixed`）—— 见该函数注释。
+     ⛔ 别删：删了面板又会被宿主卡片裁（用户 2026-09-26 报的"行数显示不全"）。 */
+  return `<div class="pjpop" style="position:absolute;z-index:80;top:calc(100% + 5px);left:0;width:max-content;min-width:178px;max-width:340px;max-height:264px;overflow-y:auto;overflow-x:hidden;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:5px">
   <div style="display:flex;gap:6px;align-items:center;padding:2px 4px 6px">
     ${single?'':`<button class="btn sm" data-act="${c.allAct}">全选</button><button class="btn sm" data-act="${c.noneAct}">清空</button>`}
     <span class="mut" style="font-size:11px;margin-left:4px;white-space:nowrap">${single?'单选 · ':''}已选 ${c.selected().length}/${c.list().length}</span>
@@ -1561,6 +1566,37 @@ const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
       <input type="${single?'radio':'checkbox'}"${single?' name="projPanelSingle"':''} class="chk" style="flex:0 0 auto" data-act="${c.pickAct}" data-pj="${esc(v)}" data-pj-key="${pk}" ${on?'checked':''}>
       <span${mt.warn?' style="color:var(--wn-d)"':''}>${esc(mt.nm)}</span>${mt.arc?' '+arcTag():''}</label>`}).join('')}
 </div>`; };
+/* ⭐⭐ 2026-09-26（用户报障：「**通用导入的项目选择控件，行数显示不全**」）—— 根因 = **面板被宿主卡片裁掉**：
+   `.card{...overflow:hidden}`（见上面 CSS）会把**卡片矩形之外**的部分剪掉，而面板是 `absolute`
+   ⇒ 实测（真机量过）：卡片下沿在 504、面板伸到 567 ⇒ **裁掉 63px ＝ 最下面 2~3 行**，
+   而那几行**既看不见也滚不到**（面板自身 `scrollH≈clientH` —— 不是它自己的滚动问题）。
+   ⇒ 每次渲染后把展开的面板**提升为 `fixed`**（`fixed` 的包含块是视口，**不受非 transform 祖先的 overflow 裁剪**
+     ⇒ 逃出卡片），位置按**触发按钮**算、高度按**按钮下方到窗口底**算 ⇒ 一行都不缺；太长时面板自己滚。
+   ⚠️ 面板**留在原 DOM 位置**（仍在 `.pjwrap` 内）——「点面板外收起」的委托层判的就是 `.pjwrap` 包含关系，
+      搬走它 ⇒ "点面板内"会被当成"点外面"（那种 bug 极隐蔽：点一下就收）。
+   ⚠️ 触发按钮取 **`:scope > button`**：面板里的「全选 / 清空」也是 `<button>`，按 DOM 序拿"第一个 button"
+      会拿成面板内那个（位置就全错了）。 */
+function placePjPanels(){
+  document.querySelectorAll('.pjwrap').forEach(w=>{
+    const p=w.querySelector(':scope > .pjpop'); if(!p) return;
+    const b=w.querySelector(':scope > button'); if(!b) return;
+    const r=b.getBoundingClientRect();
+    p.style.position='fixed';
+    p.style.top=(r.bottom+5)+'px';
+    /* 只给"按钮下方到窗口底"这段（最少 140px）—— 面板自己的 `overflow-y:auto` 兜住更长的清单 */
+    p.style.maxHeight=Math.max(140, innerHeight-r.bottom-14)+'px';
+    /* 左右也夹进视口（按钮靠右时面板不许把右边顶出去） */
+    const wide=Math.min(340, Math.max(178, p.offsetWidth||260));
+    p.style.left=Math.max(6, Math.min(r.left, innerWidth-wide-6))+'px';
+  });
+}
+/* 面板是 `fixed` ⇒ 外层一滚，它得**跟着按钮走**（否则"粘"在原地像浮在空中）。
+   ⚠️ 监听挂 `document` ＋ **捕获阶段**（`scroll` 不冒泡 —— 同虚拟滚动那两行注释里记的坑）。 */
+if(!window._pjPopBound){
+  window._pjPopBound=true;
+  window.addEventListener('resize', placePjPanels);
+  document.addEventListener('scroll', placePjPanels, true);
+}
 const pjPanel=()=>projPanel({list:PROJ_LIST,selected:()=>fNt.projs,allAct:'pjAll',noneAct:'pjNone',pickAct:'pjPick',meta:PROJ_META_KEY});
 
 /* 筛选条件：选择器即时生效（不设独立的「应用筛选」按钮） */

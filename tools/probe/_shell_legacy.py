@@ -349,6 +349,47 @@ def check(page, errors: list[str]) -> None:
                 oks3.append((got3["disabled"],
                              f"`{dm}` **没选项目 ⇒ 「④ 确认落库」置灰**（⛔ 系统不替你挑、"
                              "也不许点了才报错）"))
+                # ⭐⭐ ①‴ **「项目」面板不许被宿主卡片裁**（`TAIL-109` · 用户 2026-09-26 报障原话：
+                #    「通用导入的项目选择控件，**行数显示不全**」）。
+                #    ⭐ 根因（**真机量出来的**）：`.card{...overflow:hidden}` 把面板下沿裁掉 63px ⇒
+                #       最下面 2~3 行**既看不见也滚不到**（面板自身 `scrollH≈clientH` —— 不是它自己的滚动问题）。
+                #    ⇒ 修法：渲染后把面板提升为 `fixed`（见 `placePjPanels`）。
+                #    ⚠️ **CSS 的 overflow 裁剪离线断言看不见**（`test_imp_shell` 只能查"钩子在不在"）
+                #       ⇒ 这一条是**唯一能证明"真的没被裁"**的地方：用**点命中**判（几何算法对 fixed 会误判）。
+                #    量完**把面板点回去关掉**（下面那步 `got4` 期望的是"面板关着、点一次开"）。
+                panel = page.evaluate("""() => {
+                    const v = document.querySelector('#view');
+                    const t0 = v.querySelector('[data-act="impPjToggle"]');
+                    if (!t0) return {err: '没有项目面板'};
+                    t0.click();
+                    /* ⚠️⚠️ 上面这次 click 会触发 `render()` ⇒ `t0` **已脱离 DOM**（拿旧节点再点 = 什么都不发生
+                       ⇒ 面板留在展开态 ⇒ 下面那步"点一次开"反而把它**关掉**，实测报「能开 0 个候选」）。
+                       ⇒ 收尾一律**重新查一次**按钮。 */
+                    const ins = [...v.querySelectorAll('[data-act="impPjPick"]')];
+                    let p = ins[0];
+                    while (p && !(p.classList && p.classList.contains('pjpop'))) p = p.parentElement;
+                    const close = () => { const t = v.querySelector('[data-act="impPjToggle"]'); if (t) t.click(); };
+                    if (!p || !ins.length) { close(); return {err: '面板没开/找不到 .pjpop'}; }
+                    const last = ins[ins.length - 1];
+                    const lr = last.getBoundingClientRect();
+                    const hit = document.elementFromPoint(lr.left + 6, lr.top + lr.height / 2);
+                    const out = {n: ins.length, pos: getComputedStyle(p).position,
+                                 clientH: p.clientHeight, scrollH: p.scrollHeight,
+                                 lastInViewport: lr.bottom <= innerHeight && lr.top >= 0,
+                                 lastHittable: !!(hit && p.contains(hit))};
+                    close();
+                    return out;
+                }""")
+                print(f"①‴ {dm} 项目面板 = {panel}")
+                if dm == "m06_proc":
+                    oks3.append((panel.get("pos") == "fixed",
+                                 "「项目」面板渲染后**被提升为 `fixed`**（否则被 `.card{overflow:hidden}` 裁掉 "
+                                 "—— 用户 2026-09-26 报的「行数显示不全」）"))
+                    oks3.append((bool(panel.get("n")) and bool(panel.get("lastHittable"))
+                                 and bool(panel.get("lastInViewport")),
+                                 f"面板**最后一行也看得见、点得到**（{panel.get('n')} 个候选 · "
+                                 f"clientH={panel.get('clientH')} / scrollH={panel.get('scrollH')} "
+                                 f"· 点命中在面板内={panel.get('lastHittable')}）"))
                 # ⭐ 真点面板选第一个候选 ⇒ ④ 变可用；m06 另验「截止核算月跟着换」
                 exp = page.evaluate("""async (dm) => {
                     const d = await (await fetch('/api/imp/' + dm + '/options')).json();

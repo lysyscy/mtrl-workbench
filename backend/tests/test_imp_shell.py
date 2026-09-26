@@ -203,6 +203,41 @@ def test_范围栏画在第一步_且没选项目不许落库():
 
 
 @acc()
+def test_面板要逃出卡片裁剪_否则行数显示不全():
+    """⭐⭐ 2026-09-26（用户报障 · 原话：「**通用导入的项目选择控件，行数显示不全**」）。
+
+    ⭐ 根因（**真机量过、不是猜的**）：`.card{...overflow:hidden}` 会把**卡片矩形之外**的部分剪掉，
+      而面板是 `position:absolute` ⇒ 实测：卡片下沿 504、面板伸到 567 ⇒ **裁掉 63px ＝ 最下面 2~3 行**，
+      那几行**既看不见也滚不到**（面板自身 `scrollH≈clientH` ⇒ 不是它自己的滚动问题）。
+    ⇒ 判词（四半）：① 面板带定位钩子 `class="pjpop"`；② 有 `placePjPanels()` 把它提升为 `fixed`
+      （`fixed` 的包含块是视口 ⇒ 不受非 transform 祖先的 `overflow` 裁剪）；③ **两条渲染路径都要调用**
+      （虚拟滚动那条**提前 `return`** —— 只挂一处 ⇒ 大表页上照旧被裁）；④ 滚/缩窗口时要重新定位。
+    ⚠️ **能证伪**：删 `pjpop` / 删 `placePjPanels` / 只留一条调用 / 去掉 scroll 监听 ⇒ 本件必红。
+    """
+    src = re.sub(r"/\*.*?\*/", "", SHELL, flags=re.S)
+    assert 'class="pjpop"' in src, "`projPanel` 的面板没有定位钩子 —— 渲染后没东西可提升为 fixed"
+    assert "function placePjPanels()" in src, "没有 `placePjPanels`（面板逃不出卡片的 overflow:hidden）"
+    assert src.count("placePjPanels()") >= 2, \
+        "`placePjPanels()` 的调用点不足：`render()` 有两处（正常 ＋ **虚拟滚动那条提前 return 的**）⇒ 两处都要"
+    assert "document.addEventListener('scroll', placePjPanels, true)" in src, \
+        "面板是 fixed ⇒ 外层一滚必须跟着按钮走（⚠️ 要**捕获阶段**：`scroll` 不冒泡）"
+
+
+@acc()
+def test_截止核算月要写清格式要求():
+    """⭐ 2026-09-26（用户报障 · 原话：「**截止核算月的格式要求一下吧**」）。
+
+    ⚠️ 「要求」光写在文档里不算 —— 要**贴在控件旁边**（守则 §5.5：不能做的 / 要怎么填的，当面说清），
+      而且**后端也得执行**（`repository.import_snapshot` 归一 ＋ 认不出当场拒；判据在 `test_imp_m06_api`）。
+    """
+    code = _imp_code()
+    assert 'id="impCut"' in code, "「截止核算月」输入框不见了（真机判词钉着它）"
+    assert "YYYY-MM" in code, "「截止核算月」旁边没写**格式要求**"
+    assert 'placeholder="2026-08"' in code, \
+        "占位里没给一个**示例格式**（占位本身就是最好的示范：用户照着填就不会错）"
+
+
+@acc()
 def test_落库期间不许重复提交_按钮要禁用():
     """⭐ 2026-09-26（`TAIL-108`）：连点两次「④ 确认落库」会发两次请求 —— 而默认批号到**秒**
     ⇒ 第二次撞批号唯一约束，用户看到 `IntegrityError …重复键违反唯一约束`（**天书**）。

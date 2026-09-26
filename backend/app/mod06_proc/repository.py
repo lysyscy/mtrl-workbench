@@ -177,7 +177,25 @@ def import_snapshot(
     """
     if not rows:
         raise ValueError("历史段导入为空 —— 不写库（避免把历史段清空）")
-    cutoff = str(cutoff_ym or max(str(r.get("ym") or "") for r in rows) or "")
+    # ⭐⭐ 2026-09-26（用户报「**截止核算月的格式要求一下吧**」）—— **"要求"必须有人执行**：
+    #    改前这一格**原样入库**（`cutoff_ym` 直接写进 `proc_cutoff`）⇒ 写个 `2026/8` / `八月`
+    #    都能静默存进去；而**分段是按字符串比的**（`domain.section_of`：`ym <= cutoff`）
+    #    ⇒ 分段会**悄悄错**（页面上表现成"某个月莫名其妙算到了另一段"）。
+    #    ⇒ 归一出口 = `domain.normalize_ym`（与「核算月」同一处，⛔ 不另写一套）；
+    #      **认不出当场拒**（说清要什么形态），含糊的写法（`2026/8`）**照收并归一**成 `2026-08`。
+    cutoff = str(cutoff_ym or "").strip()
+    if cutoff:
+        from app.core.errors import MustReportError
+        from app.mod06_proc.domain import normalize_ym
+
+        norm = normalize_ym(cutoff)
+        if not norm:
+            raise MustReportError(
+                f"截止核算月认不出：{cutoff!r} —— 请写 **YYYY-MM** 这种形态（如 `2026-08`）；"
+                "留空 = 取本批里最大的核算月。")
+        cutoff = norm
+    else:
+        cutoff = max(str(r.get("ym") or "") for r in rows) or ""
     mapping = _snapshot_keys()
 
     batch = ProcHistoryBatch(batch_no=batch_no, warehouse_name=warehouse, cutoff_ym=cutoff,

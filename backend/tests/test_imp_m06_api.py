@@ -177,6 +177,47 @@ def test_每个项目的截止月各给一份_换项目不会串():
 
 
 @acc()
+def test_截止核算月认不出要拒_含糊写法归一(client):
+    """⭐ 2026-09-26（用户报「**截止核算月的格式要求一下吧**」）—— 要求写清了，就得**有人执行**：
+
+    ⚠️ 改前这一格**原样入库**（`cutoff_ym` 直接写进 `proc_cutoff`）—— 写个 `八月` 也能静默存进去，
+      而**分段是按字符串比的**（`ym <= cutoff`）⇒ 分段会悄悄错（表现成"某个月莫名其妙算到另一段"）。
+    判词两半：① 认不出的**当场拒**（说清要什么形态）；② 含糊但能认的（`2026/8`）**照收并归一**成 `2026-08`。
+    """
+    from sqlalchemy import select as _sel
+
+    from app.core.db import session_scope
+    from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot
+
+    mapping = {"时间": "核算月", "线上入库（不含税）主辅材": "入库主辅材"}
+    whs = ["__自检仓_CUT_X_" + uuid.uuid4().hex[:6] + "__",
+           "__自检仓_CUT_Y_" + uuid.uuid4().hex[:6] + "__"]
+
+    def _commit(cut, wh):
+        g = _parse(client).json()                       # ⚠️ 每次提交用**自己的 token**（token 是一次性的）
+        return client.post("/api/imp/m06_proc/commit",
+                           json={"token": g["token"], "mapping": mapping,
+                                 "options": {"warehouse": wh, "cutoff_ym": cut,
+                                             "batch": "PROC-CUT-" + uuid.uuid4().hex[:8]}}).json()
+
+    try:
+        bad = _commit("八月", whs[0])
+        assert bad["ok"] is False, bad
+        assert "YYYY-MM" in bad["message"] and "截止核算月" in bad["message"], \
+            f"拒绝要说清「要什么形态」（守则 §5.5）：{bad['message']}"
+        ok = _commit("2026/8", whs[1])
+        assert ok["ok"], ok
+        assert ok["report"]["cutoff_ym"] == "2026-08", \
+            f"含糊写法要**归一**成 YYYY-MM 再入库：{ok['report']['cutoff_ym']}"
+    finally:
+        with session_scope() as s:
+            for model in (ProcHistorySnapshot, ProcHistoryBatch, ProcCutoff):
+                for r in list(s.execute(_sel(model)).scalars()):
+                    if getattr(r, "warehouse_name", "") in whs:
+                        s.delete(r)
+
+
+@acc()
 def test_同一秒两次落库各自拿到批号(client):
     """⭐ 2026-09-26（`TAIL-108`）：默认批号 = `PROC-<yyyymmddHHMMSS>`（**秒**）⇒ **同一秒两次落库**
     会撞 `proc_history_batch.batch_no` 的唯一约束，用户看到 `导入失败：IntegrityError …重复键违反唯一约束`

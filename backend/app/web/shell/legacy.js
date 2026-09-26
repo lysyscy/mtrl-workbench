@@ -333,8 +333,10 @@ V.imp = () => {
       ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
         <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
       ${IMP.hasCut ? `<div class="fi"><label>截止核算月（＝历史段 / 正式段的分界月）</label>
-        <input class="inp" id="impCut" value="${esc(IMP.cutoff)}" placeholder="留空 ⇒ 取本批最大月">
-        <span class="mut sm">这个月 <b>及以前</b>算历史段（用这份表，不再从 i8 取）；<b>之后</b>才走 i8 抓取。
+        <input class="inp" id="impCut" value="${esc(IMP.cutoff)}" placeholder="2026-08"
+               title="格式 YYYY-MM（如 2026-08）">
+        <span class="mut sm">格式 <b>YYYY-MM</b>（如 <code>2026-08</code>；写成别的样子会**被拒**）。
+          这个月 <b>及以前</b>算历史段（用这份表，不再从 i8 取）；<b>之后</b>才走 i8 抓取。
           留空 = 取本批里最大的核算月。换项目会自动换成**那个项目**已设的值。</span></div>` : ''}
       </div>` : '';
   /* ⛔ **该域要选项目、而还没选** ⇒ ④ 置灰（见下面 `prevCard` 里那个按钮）—— 「默认值不诱导」的落点：
