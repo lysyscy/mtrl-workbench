@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>材料报表自动化工作台 · 交互原型（全模拟数据）</title>
+<title>材料报表自动化工作台</title>
 <link rel="stylesheet" href="/static/theme.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -261,7 +261,9 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
   <aside class="sb">
     <div class="sb-brand">
       <b>材料报表自动化工作台</b>
-      <span>交互原型 · 全模拟数据</span>
+      <!-- ⚠️ 原先这里还有一行「交互原型 · 全模拟数据」—— 2026-09-26 用户指出：
+           本系统**已接真数据**（顶栏按页说实话），再挂着"全模拟数据"就是不实话
+           （《前端设计守则》§3：开发态 / 测试态标识，生产必须移除）⇒ 已删。 -->
     </div>
     <div id="nav"></div>
     <div class="sb-foot">

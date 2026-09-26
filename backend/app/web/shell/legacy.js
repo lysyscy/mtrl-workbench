@@ -336,7 +336,10 @@ V.imp = () => {
         ${attrRow('导入到', c => (c.ignored
           ? `<span class="tag t-in"${c.ignored ? ` title="${esc(c.ignored)}"` : ''}>不写库</span>`
           : `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`))}
-        ${attrRow('导入后会怎样', c => { const t = impactOf(c); return t ? `<span class="sm">${esc(t)}</span>` : ''; })}
+        ${IMP.cols.some(c => c.ignored || impacts[c.field])
+          ? attrRow('导入后会怎样', c => { const t = impactOf(c); return t ? `<span class="sm">${esc(t)}</span>` : ''; })
+          : '' /* ⚠️ **域没声明任何后果、也没有"不写库"列 ⇒ 整行不画**（用户 2026-09-26 看截图：
+                 一个只有行标签、格子里全空的"导入后会怎样"看着像坏了 —— 而它其实只是"本域没这条信息"）*/}
       </tbody></table></div>
       <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:10px">${lack.length
         ? `还差必填字段：<b>${esc(lack.join(' / '))}</b> —— 选好才能到下一步（⛔ 系统不替你填默认值）`
@@ -415,7 +418,9 @@ V.imp = () => {
       <div style="margin-top:10px"><button class="btn" data-act="impReset">再导一份</button></div></div></div>`;
   }
 
-  return `${lgSteps(IMP_STEPS, IMP.step)}${lgNotice(IMP)}${head}${mapCard}${prevCard}${repCard}`;
+  /* ⚠️ 这里**不再画步骤条**（2026-09-26 用户按截图指出：「两条一模一样的四步条」⇒「**只留卡里那条**」）——
+     卡内的 `head` 里那份是**它自己**的（`lgSteps(IMP_STEPS, IMP.step)`），本行原先又画了一遍 ⇒ 同屏两条。 */
+  return `${lgNotice(IMP)}${head}${mapCard}${prevCard}${repCard}`;
 };
 
 /* 切域（表单元素 ⇒ 已在 `CHG` 里登记） */
