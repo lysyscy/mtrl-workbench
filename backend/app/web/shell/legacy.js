@@ -480,14 +480,23 @@ V.imp = () => {
           **后端给多少行就画多少行** ＋ 写明「共几行 / 显示几行」。
        ⛔ 别再把 `_row` 抠掉、⛔ 也别再静默截断（那正是本条报障的来源）。 */
     const plist = (p.preview || []);
-    const ptotal = Number(p.writable == null ? (p.total == null ? plist.length : p.total) : p.writable);
+    const ptotal = Number(p.total == null ? plist.length : p.total);
+    const pw = (p.writable == null ? null : Number(p.writable));      /* 域没给 ⇒ 不显示"能写入几行" */
     const prows = plist.map(r => `<tr>${Object.keys(r)
       .map(k => `<td class="now">${esc(String(r[k] == null ? '' : r[k]))}</td>`).join('')}</tr>`).join('');
     const pcols = plist.length
       ? Object.keys(plist[0]).map(k => `<th>${esc(k === '_row' ? '行' : k)}</th>`).join('') : '';
-    const pnote = `本步读到 <b class="fc">${ptotal}</b> 行 · 表格显示`
-      + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 落库写的是**全量**）`
-                               : `全部 <b class="fc">${plist.length}</b> 行`)
+    const pnote = `本步读到 <b class="fc">${ptotal}</b> 行`
+      + (pw == null ? '' : ` · 能写入 <b class="fc">${pw}</b> 行`)
+      + ` · 表格显示`
+      + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 落库按**全量**处理）`
+                               : `全部 <b class="fc">${plist.length}</b> 行`);
+    /* ⭐ 2026-09-26（用户报障后加）：**有行写不进去时必须当面说**，⛔ 不许让 ④ 点下去才知道。
+       ⚠️ 数由**域**给（`writable` 与 `total` 是通用面的键）—— 壳里仍**不认域号**。 */
+    const pwarn = (pw != null && pw < ptotal)
+      ? `<div class="tip wn" style="margin-top:8px">⚠️ 有 <b>${ptotal - pw}</b> 行**不会写入**（原因见下面
+          「落不了库的行」/「不导入的行」）—— ④ 只写能写入的那些。要它们也进去：先把文件改成标准格式，
+          再**整批回滚后重导**（⛔ 别让两批叠着）。</div>` : '';
     prevCard = `<div class="card" style="margin-top:12px"><h4>预览校验<span class="sp"><span class="mut sm">
       这一步**一个字节都不写库**</span></span></h4><div class="kpis">
       <div class="kpi"><div class="k">将写入</div><div class="v">${p.writable == null ? p.total : p.writable}</div>
@@ -509,6 +518,7 @@ V.imp = () => {
         · 「行」= <b>Excel 里的行号</b>（与"第 N 行…"那类报错**同一个数**，用来对号）</div>
       <div class="tw" style="max-height:280px;margin-top:6px"><table class="dt sm">
         <thead><tr>${pcols}</tr></thead><tbody>${prows || lgEmpty(1, '没有数据行')}</tbody></table></div>
+      ${pwarn}
       <div style="margin-top:10px"><button class="btn pri" data-act="impCommit"${needPj ? ' disabled' : ''}>④ 确认落库</button>
         <button class="btn" data-act="impReset">重来</button>
         ${needPj ? `<span class="mut sm" style="margin-left:8px">⚠️ 先回第 ① 步选「这批数据进哪个项目」

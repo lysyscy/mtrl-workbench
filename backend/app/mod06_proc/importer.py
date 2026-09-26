@@ -288,7 +288,13 @@ def _is_total_row(row: list) -> bool:
 def _ym_loose(value) -> tuple[str, str]:
     """放宽解析：文本**以 `YYYY年M月` 开头** ⇒ `(核算月, 提示)`；认不出 ⇒ `("", "")`。
 
-    ⭐ 真文件：「**2025年9月（一标）**」—— 用户 2026-09-22 裁定「**数据没错，是大设备**」
+    ⚠️⚠️ **本函数只服务域内旧路 `parse_sheet`（页面已下架、`router` 里也没有它的路由）** ——
+      ⛔ **现行唯一入口（通用导入面）不走这条路**：那里 `plan_rows` 用 `ym_of`，认不出就**不收这一行**。
+      ⭐ **用户 2026-09-26 已改口径**（原话：「不合规的核算月文本**不收**，我说了正式导入的时候会改成
+      标准格式」）⇒ 本条取代下面的 2026-09-22 旧裁定。⛔ 别拿"系统会收 `2025年9月（一标）`"当凭据：
+      那只是**旧路**的遗留（测试还钉着它），真导数据请写标准格式。
+
+    ⭐ 真文件：「**2025年9月（一标）**」—— 用户 2026-09-22 当时的裁定是「**数据没错，是大设备**」
       ⇒ 认月、**值原样不动**（⛔ 不换算、⛔ 不因后缀就丢行）；同月多行由页面侧**相加**（`snapshot_by_month`）。
     ⛔ 只在**有材料金额**的行上走这条路（说明行先按"非数据行"跳过），且要求**从行首匹配** ——
       免得从一句说明里"抠"出个年月来。
@@ -315,13 +321,19 @@ def _row_kind(row: list, index: dict[str, int]) -> str:
 
     ⚠️ 判"空行 vs 说明行"看**文字本身**（真文件里说明就写在「时间」那一列：`6月总出库也多了53.54`）
       ⇒ ⛔ 不能按"除核算月列外还有没有字"判（那样说明行会被误判成空行 —— 自测踩过）。
+    ⚠️ **网格形态的薄壳**：判法本体在 `_row_kind_of`（通用导入面的记录形态走的是同一个本体 ——
+       ⛔ 别在这里另写一套，否则同一个域就有了两份"什么算数据行"）。
     """
-    if _is_total_row(row):
+    return _row_kind_of(cells=[_norm(c) for c in row], has_amounts=_has_amounts(row, index))
+
+
+def _row_kind_of(*, cells: list[str], has_amounts: bool) -> str:
+    """**判"是不是数据行"的本体**（网格与记录两种形态共用）：`合计/小计行` / `空行` / `说明行` / `""`。"""
+    if _is_total_row(cells):
         return "合计/小计行"
-    if _has_amounts(row, index):
+    if has_amounts:
         return ""
-    for cell in row:
-        text = _norm(cell)
+    for text in cells:
         if len(text) > 4 and re.search(r"[\u4e00-\u9fff]", text):   # 成句的中文 ⇒ 说明行
             return "说明行"
     return "空行"
@@ -351,6 +363,68 @@ def _money_or_none(text: str, *, label: str, line: int):
         return to_money(text.replace(",", "").replace("，", ""))
     except (MoneyError, ArithmeticError, ValueError) as exc:
         raise MustReportError(f"第 {line} 行「{label}」不是数字：{text!r}") from exc
+
+
+# ---------------------------------------------------------------- 记录 → 能落库的行（**预览与落库共用这一处**）
+def _record_cells(rec: dict) -> list[str]:
+    """一条**通用面的记录** → "像一行的文本序列"（供给 `_row_kind_of` 判"是不是数据行"）。
+
+    ⚠️ 通用面给的是**按列名映射后**的记录（键 = 界面字段名），而旧路 `parse_sheet` 拿到的是**原始网格行**
+      ⇒ 为了让"什么算数据行"**只有一个主人**，这里把记录摊成"一行文本"，再走同一个 `_row_kind_of`。
+      ⛔ 别在这里另写一套判法（同一个域两份口径 = 往后必然说不一样）。
+    """
+    vals = [str(rec.get(f.label) or "") for f in FIELDS]
+    vals += [str(v or "") for v in (rec.get("raw") or {}).values()]
+    return [_norm(v) for v in vals]
+
+
+def plan_rows(records) -> tuple[list[dict], list[str], list[dict]]:
+    """通用面的 `records` → `(能落库的行, 提示, 落不了库的行)` —— ⭐ **预览与落库共用这一处**。
+
+    ⭐ 为什么必须共用（2026-09-26 用户报障的根）：④ 落库报「第 19 行的核算月认不出」，而 ③ 预览
+      **一个字都没说**（实测晋江那份真文件：预览只报了一条无关的行 35）⇒ 用户"走到最后才知道"。
+      ⇒ ③ 拿本函数算「将写入」并**列出落不了库的行**，④ 拿同一份真写。
+
+    跳过与异常（**沿用域内既有口径**，⛔ 别在这里改判）：
+      · **合计/小计行 · 说明行 · 空行** ⇒ 跳过（算**提示**，不算异常）—— 旧路 `parse_sheet` 一直如此；
+      · **核算月认不出** ⇒ **这一行不收**，进"落不了库的行"并**逐条列出**（⭐ 用户 2026-09-26 裁定：
+        「不合规的核算月文本**不收**（正式导入时会改成标准格式）」）；
+      · **金额认不出** ⇒ 同上（⛔ 不静默丢、也不替它编数）；
+      · **其余行照常落库** —— 仓内既有口径：异常行只跳过自己，其余照写（`test_acc_oddval` 明写
+        "好的两行照常进"）；**一行都没有**时才由调用方拒绝整批。
+    """
+    key_of = {f.label: f.key for f in FIELDS}
+    mat_labels = [f.label for f in FIELDS if f.key in D.MATERIAL_KEYS]
+    rows: list[dict] = []
+    skipped: dict[str, list[int]] = {}
+    bad: list[dict] = []
+    for rec in records or []:
+        line = int(rec.get("_row") or 0)
+        kind = _row_kind_of(cells=_record_cells(rec),
+                            has_amounts=any(str(rec.get(lb) or "").strip() for lb in mat_labels))
+        if kind:
+            skipped.setdefault(kind, []).append(line)
+            continue
+        ym = ym_of(rec.get("核算月"))
+        if not ym:
+            bad.append({"line": line, "reason":
+                        f"核算月认不出：{str(rec.get('核算月') or '（空）')!r} —— 写 2026-08 / 2025年9月 "
+                        "这种形态（⛔ 这一行**不导入**：请改成标准格式后重导）"})
+            continue
+        row: dict = {"ym": ym}
+        try:
+            for label, key in key_of.items():
+                if key == "ym":
+                    continue
+                val = rec.get(label)
+                if val in (None, ""):
+                    continue
+                row[key] = to_money(str(val))
+        except (MoneyError, ArithmeticError, ValueError) as exc:
+            bad.append({"line": line, "reason": f"金额认不出：{exc}"})
+            continue
+        rows.append(row)
+    return rows, [_lines_note(k, v) for k, v in skipped.items()], bad
 
 
 @dataclass
@@ -540,6 +614,6 @@ def rollback(s, *, batch_no: str) -> int:
 
 
 __all__ = ["FIELDS", "MAX_ROWS", "HEADER_SCAN_ROWS", "YM_HEADERS", "YM_SUFFIXES", "ImportPlan",
-           "material_labels", "mech_labels", "next_batch", "ym_of",
+           "material_labels", "mech_labels", "next_batch", "ym_of", "plan_rows",
            "read_sheet", "find_header", "map_columns",
            "parse_sheet", "commit", "check_report", "rollback"]

@@ -54,7 +54,15 @@ def _book(rows: list[tuple] | None = None) -> bytes:
 
 
 def _rows():
-    """三行：正常行 · 含**负数**（红字/冲销，`D25` ①）· 材料列**全空**（= 没填，不是 0）。"""
+    """三行：正常行 · 含**负数**（红字/冲销，`D25` ①）· 材料列**全空**（= 没填，不是 0）。
+
+    ⚠️ 第三行（`45507` 那一行）**只填了机械列**、材料 10 列全空 —— 2026-09-26 起它**不进快照**
+    （按域内口径当「空行」跳过：`material 一行都没有 ⇒ 没有可落库的数据`）⇒ 落库 **2 行**、
+    「默认截止核算月」也跟着变成 **2024-07**（被跳过的那个月不再参与"最大月"的推断）。
+    ⛔ **别只写"只有月份"的空行**：那会在历史段里**凭空多一个全 0 的月份**（"空 ≠ 0"）。
+    ⭐ `TAIL-107`（机械费也要从过程资料导入）落地后，这一行**会重新变成数据**（它有机械金额）——
+       届时本件这两处期望要**同批**改回 3 行 / `2024-08`，那正是"机械列有值就算数据"的判据。
+    """
     return [
         (1, 45444, 5006.98, 595, 5994, "", 12000, 100, 200, "", 1100),
         (2, 45475, "1125913.87", "-7579.56", "27668.13", "", "1600986.05", "173286", "29840.7",
@@ -72,9 +80,10 @@ def client(tmp_path, monkeypatch):
     return TestClient(app)
 
 
-def _parse(client, sheet: str = ""):
+def _parse(client, sheet: str = "", book: bytes | None = None):
+    """解析一份表（默认 `_book()`；`book` 给了就用它 —— 见下面"不合规核算月"那条判据）。"""
     return client.post("/api/imp/m06_proc/parse",
-                       files={"file": ("汇总表.xlsx", _book(),
+                       files={"file": ("汇总表.xlsx", _book() if book is None else book,
                                        "application/vnd.openxmlformats-officedocument"
                                        ".spreadsheetml.sheet")},
                        data={"sheet": sheet})
@@ -102,12 +111,14 @@ def test_通用面端到端_认列到落库再到回滚(client):
     wh = "__自检仓_IMP_M06_" + uuid.uuid4().hex[:8] + "__"
     body["options"] = {"warehouse": wh}
     out = client.post("/api/imp/m06_proc/commit", json=body).json()
-    assert out["ok"] and out["report"]["rows"] == 3, out
-    assert out["report"]["cutoff_ym"] == "2024-08", "默认截止核算月 = 导入数据里最大那个"
+    # ⚠️ 2 行（不是 3）：第三行**材料列全空**（只填了机械列）⇒ 按域内口径当空行跳过（见 `_rows()` 的 ⚠️）
+    assert out["ok"] and out["report"]["rows"] == 2, out
+    assert out["report"]["cutoff_ym"] == "2024-07", \
+        "默认截止核算月 = **能落库的那些**里最大那个（被跳过的那一行不参与）"
 
     back = client.post("/api/imp/m06_proc/rollback",
                        json={"batch": out["report"]["batch"]}).json()
-    assert back["ok"] and back["report"]["revoked"] == 3, back
+    assert back["ok"] and back["report"]["revoked"] == 2, back
 
 
 @acc()
@@ -163,6 +174,77 @@ def test_每个项目的截止月各给一份_换项目不会串():
         for r in list(s.execute(select(ProcCutoff)).scalars()):   # 持久测试库：随手清干净
             if r.warehouse_name in (a, b):
                 s.delete(r)
+
+
+@acc()
+def test_合计与说明行跳过_不合规核算月不收_且在预览就报出来(client):
+    """⭐⭐ 2026-09-26（用户报障收口 · 原话「**不合规的核算月文本不收**，我说了正式导入的时候会改成
+    标准格式」＋「**合计说明行跳过**」）。
+
+    ⭐ 这条判据钉的是**用户那次"走到最后才知道"**的真因：④ 报「第 19 行的核算月认不出」，
+       而 ③ 预览**一个字都没说**（只报了一条无关的行）⇒ 预览与落库**必须是同一个函数**
+       （`importer.plan_rows`）算出来的数。
+
+    判词（三半，缺一半都不算）：
+      ① ③ 就要给出「**能写入几行**」＋ 把**落不了库的行（行号 ＋ 原因）**列出来；
+      ② **合计/小计行 · 说明行**算"跳过"（**提示**），⛔ 不算"落不了库"（否则用户以为是自己填错了）；
+      ③ ④ 落库**只写能写的那些**，回执里也要说清**少写了几行**（⛔ 不许只在 ③ 说过）。
+    ⚠️ **反向灵敏度**：把那条文本月换成标准写法 ⇒ 它就得能写（证明拦的是"认不出"，不是"有合计行"）。
+    """
+    rows = [
+        (1, 45444, 5006.98, 595, 5994, "", 12000, 100, 200, "", 1100),        # 合规
+        (2, "2025年9月（一标）", 100, "", "", "", 200, "", "", "", 0),           # ✗ 核算月不是标准格式
+        ("", "小计", 5106.98, 595, 5994, "", 12200, 100, 200, "", 1100),       # 合计/小计行 ⇒ 跳过
+        ("", "说明：6月总出库也多了53.54", "", "", "", "", "", "", "", "", ""),   # 说明行 ⇒ 跳过
+        (3, 45507, 700, "", "", "", "", "", "", "", ""),                      # 合规
+    ]
+    body = {"token": "", "mapping": {"时间": "核算月", "线上入库（不含税）主辅材": "入库主辅材",
+                                     "线下出库（不含税）主辅材": "出库主辅材"}}
+
+    def _prev(book):
+        got = _parse(client, book=book).json()
+        assert got["ok"], got
+        return client.post("/api/imp/m06_proc/preview",
+                           json={**body, "token": got["token"]}).json(), got["token"]
+
+    pre, token = _prev(_book(rows))
+    assert pre["ok"] and pre["total"] == 5, pre
+    assert pre.get("writable") == 2, (
+        f"能写入的应只有**两行合规行**（合计/说明行不许算进去）—— 拿到 {pre.get('writable')!r}；"
+        "③ 没给这个数 = 域的预览钩子没接上（用户又只能走到 ④ 才知道）")
+    blocks = {b["title"]: b for b in pre["blocks"]}
+    bad = next((b for t, b in blocks.items() if t.startswith("⚠️ 落不了库的行")), None)
+    assert bad, f"③ 没报出「落不了库的行」—— 用户又要走到 ④ 才知道：{list(blocks)}"
+    assert [r[0] for r in bad["rows"]] == [5], f"落不了库的行号不对（应是 Excel 第 5 行）：{bad['rows']}"
+    assert "核算月认不出" in bad["rows"][0][1]
+    tip = next((b for t, b in blocks.items() if t.startswith("不导入的行")), None)
+    assert tip and any("合计/小计行" in r[0] for r in tip["rows"]), \
+        f"合计/小计行没算成「跳过」（提示）—— 它不该混进「落不了库」里：{tip}"
+    assert any("说明行" in r[0] for r in tip["rows"]), tip
+
+    # ③ 落库：只写能写的那两行，且回执说清少写了一行
+    # ⚠️ **批号显式给**：默认批号是 `PROC-<yyyymmddHHMMSS>`（**秒**）—— 同秒两次落库会撞唯一约束
+    #    （本件就踩到了：前一条判据刚提交、这条在同一秒里 ⇒ `UniqueViolation`）。那条真缺陷另登了尾巴。
+    wh = "__自检仓_ODD_" + uuid.uuid4().hex[:8] + "__"
+    out = client.post("/api/imp/m06_proc/commit",
+                      json={**body, "token": token,
+                            "options": {"warehouse": wh,
+                                        "batch": "PROC-ODD-" + uuid.uuid4().hex[:8]}}).json()
+    assert out["ok"] and out["report"]["rows"] == 2, out
+    assert out["report"]["不写入的行数"] == 1, \
+        f"④ 回执没说清少写了几行 —— 用户会以为全导进去了：{out['report']}"
+    assert any(b["title"].startswith("⚠️ 落不了库的行") for b in out["report"].get("blocks") or []), \
+        "④ 回执里没有「落不了库的行」—— 只在 ③ 说过的信息，到落库后就断了"
+    back = client.post("/api/imp/m06_proc/rollback",
+                       json={"batch": out["report"]["batch"]}).json()
+    assert back["ok"] and back["report"]["revoked"] == 2, back
+
+    # ⭐ 反向灵敏度：把那条文本月换成标准写法 ⇒ 三行全能写（拦的是"认不出"，不是别的）
+    ok_rows = [rows[0], (2, 45475, 100, "", "", "", 200, "", "", "", 0)] + rows[2:]
+    pre2, _ = _prev(_book(ok_rows))
+    assert pre2["writable"] == 3, f"改成标准写法后应能写 3 行：{pre2.get('writable')}"
+    assert not [b for b in pre2["blocks"] if b["title"].startswith("⚠️ 落不了库的行")], \
+        "标准写法下不该再有「落不了库的行」"
 
 
 @acc()

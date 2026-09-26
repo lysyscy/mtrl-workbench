@@ -8,12 +8,18 @@
 ⚠️ **字段清单 = 核算月 ＋ 材料 10 列**；**机械 6 列刻意不在里面**（口径：机械全段手录，导入只提示不落库）。
    ⛔ 不给机械列一个"能落库的字段"—— 否则又要踩一遍 `m11` 那个静默错：
    "认得出、白名单也放行、就是不写"，全程不报错。
+
+⭐⭐ **2026-09-26（用户报障后收口）—— 本域的两条口径都归到 `importer.plan_rows` 一处**：
+  ① **合计/小计行 · 说明行 · 空行 ⇒ 跳过**（旧路 `parse_sheet` 一直如此，搬到通用面时丢了）；
+  ② **不合规的核算月文本 ⇒ 这一行不收**（用户原话：「不合规的核算月文本**不收**，我说了正式导入的时候
+     会改成标准格式」）—— ⚠️ **取代** 2026-09-22 那条「`2025年9月（一标）` 照收」（那只剩旧路在用）。
+  ⛔ **预览（`preview`）与落库（`commit`）必须是同一个函数**：此前各写一套 ⇒ ③ 说"没问题"、④ 才报
+     「第 19 行认不出」（实测晋江那份真文件），用户**走到最后才知道**。
 """
 
 from __future__ import annotations
 
 from app.core.errors import MustReportError
-from app.core.money import to_money
 from app.import_kit.spec import DomainSpec, Hooks
 from app.mod06_proc import domain as D
 from app.mod06_proc import importer as I
@@ -24,10 +30,9 @@ DOMAIN = "m06_proc"
 
 #: 材料 10 列 ＋ 核算月（机械 6 列不入，见模块头 ⚠️）
 FIELDS = tuple(f for f in I.FIELDS if f.key == "ym" or f.key in D.MATERIAL_KEYS)
-
-def _label_key() -> dict[str, str]:
-    """`{界面字段名: 域内列 key}`（⛔ 不手抄第二份名单 —— 从 `FIELDS` 反查）。"""
-    return {f.label: f.key for f in FIELDS}
+# ⚠️ 原先这里还有一个 `_label_key()`（把记录转成"界面名 → 列 key"）—— 2026-09-26 **已删**：
+#    取行这一件事**整体搬进了 `importer.plan_rows`**（③ 预览与 ④ 落库共用），本件不该再留一份
+#    "哪些字段要落库"的小抄（那就是同一口径的第二个主人）。
 
 
 def _ignored() -> tuple[tuple[str, str], ...]:
@@ -61,40 +66,64 @@ SPEC = DomainSpec(
 )
 
 
+def _blocks_of(bad: list[dict], notes: list[str]) -> list[dict]:
+    """**③ 预览与 ④ 回执共用**的两块：`落不了库的行` ＋ `不导入的行（提示）`。
+
+    ⛔ 别在两处各拼一份 —— 那正是"同一件事两个说法"的开端（用户按 ③ 的数核对，④ 却给另一份）。
+    """
+    out: list[dict] = []
+    if bad:
+        out.append({"title": f"⚠️ 落不了库的行（{len(bad)} 行 · 不会写进历史段）",
+                    "note": "这些行**不导入**，其余行照常落库。要它们也进去：改成标准格式后**重导一次**"
+                            "（先把同批整批回滚，⛔ 别让两批叠着）。",
+                    "columns": ["行", "原因"],
+                    "rows": [[a["line"], a["reason"]] for a in bad]})
+    if notes:
+        out.append({"title": "不导入的行（提示）", "columns": ["说明"],
+                    "rows": [[n] for n in notes]})
+    return out
+
+
+def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` 不参与本域的判定
+    """域预览补丁（`Hooks.preview`）：⭐ **③ 就说出"能写几行 / 哪几行写不了"**。
+
+    ⚠️ 与落库**同一个函数**（`I.plan_rows`）—— "预览说没事、落库才炸"正是用户 2026-09-26 报障的实质
+      （实测：④ 报「第 19 行的核算月认不出」，而 ③ 只报了一条无关的行 35）。⛔ 别在这里另算一套行数。
+    ⚠️ **只读**（`plan_rows` 是纯函数，不碰库）⇒ 「确认前一个字节都不写库」不受影响。
+    """
+    rows, notes, bad = I.plan_rows(records)
+    return {"writable": len(rows),
+            "kpis": {"能写入的行": len(rows), "不写入的行": len(bad)},
+            "blocks": _blocks_of(bad, notes)}
+
+
 def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `mapping_` 只进回执口径
     """落库：**原样复用** `importer.commit` ⇒ 只写**历史段**（不碰正式段、不碰机械手录）。
 
     `options`：`warehouse`（项目/仓库名，**必填**）· `cutoff_ym`（截止核算月，不给 ⇒ 取导入数据最大月）
     · `batch`（批次号，不给 ⇒ `importer.next_batch()`）。
+
+    ⭐⭐ 2026-09-26 用户裁定的两条口径，**都落在 `I.plan_rows` 这一处**（与 ③ 预览共用）：
+      「**合计/说明行跳过**」＋「**不合规的核算月文本不收**（正式导入时会改成标准格式）」。
+    ⚠️ **异常行只跳过自己** —— 其余行照常落库（仓内既有口径：`test_acc_oddval` 明写"好的两行照常进"）；
+       只有**一行都没有**时才拒绝整批（历史段一个字不动）。
     """
     opts = dict(options or {})
     warehouse = str(opts.get("warehouse") or "").strip()
     if not warehouse:
         raise MustReportError("请先选**项目**（仓库名）—— 过程资料按项目分别存，没选就无从落库")
-    key_of = _label_key()
-    rows: list[dict] = []
-    for rec in records or []:
-        ym = I.ym_of(rec.get("核算月"))
-        if not ym:
-            raise MustReportError(
-                f"第 {rec.get('_row')} 行的核算月认不出：{rec.get('核算月')!r} —— "
-                "写 2026-08 / 2025年9月 这种形态")
-        row: dict = {"ym": ym}
-        for label, key in key_of.items():
-            if key == "ym":
-                continue
-            val = rec.get(label)
-            if val in (None, ""):
-                continue
-            row[key] = to_money(str(val))
-        rows.append(row)
+    rows, notes, bad = I.plan_rows(records)
     if not rows:
-        raise MustReportError("没有一行可落库的数据 —— 历史段未被改动（不写库）")
-    plan = I.ImportPlan(rows=rows)
+        why = "；".join(f"行 {a['line']}：{a['reason']}" for a in bad[:3]) or "文件里没有数据行"
+        raise MustReportError(f"没有一行可落库的数据 —— {why}。历史段未被改动（不写库）")
+    plan = I.ImportPlan(rows=rows, anomalies=bad, notes=notes)
     out = I.commit(s, plan, warehouse=warehouse,
                    batch=str(opts.get("batch") or I.next_batch()), operator=operator,
                    cutoff_ym=str(opts.get("cutoff_ym") or "") or None)
     out["cutoff_default"] = plan.default_cutoff        # 界面用来回显"默认截止月 = 最大核算月"
+    # ⭐ ④ 的回执也要**说清有几行没写进去**（⛔ 不许只在 ③ 说过、到这里就悄悄算了）
+    out["不写入的行数"] = len(bad)
+    out["blocks"] = _blocks_of(bad, notes)
     return out
 
 
@@ -126,6 +155,6 @@ def options(s) -> dict:
     }
 
 
-HOOKS = Hooks(commit=commit, rollback=rollback, options=options)
+HOOKS = Hooks(commit=commit, rollback=rollback, options=options, preview=preview)
 
-__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "options", "rollback"]
+__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "options", "preview", "rollback"]
