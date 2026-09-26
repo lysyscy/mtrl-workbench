@@ -82,6 +82,32 @@ def check(page, errors: list[str]) -> None:
             if not ok_acts:
                 errors.append(f"四个暂留件收口自检未通过：{name} 有死控件（ACT 缺 {got['dead']}）")
 
+        # ②′ ⭐ `#2` 的真机证据（2026-09-26 补 · 用户裁定"拆 `CHG` 名单"后必须证到）：
+        #     **表单元素真选一次 ⇒ 页面必须跟着变** —— `CHG` 名单拆掉之后，`select` 的 `change`
+        #     全靠 `data-act` 委托跑（`change` 委托看见 `data-act` 就跑）。真机这一下是**唯一的**证明：
+        #     拆名单有没有把"选完不生效"这类静默丢事件带回来。
+        #     ⚠️ 判词取"**页面文本变了**"（不依赖任何内部变量：`IMP` 在壳的闭包里，真机取不到）。
+        stage = "表单元素真触发"
+        cur = page.eval_on_selector('[data-act="impDomain"]', "el => el.value")
+        opts = page.eval_on_selector('[data-act="impDomain"]',
+                                     "el => [...el.options].map(o => o.value).filter(Boolean)")
+        other = next((v for v in opts if v != cur), "")
+        if not other:
+            errors.append("四个暂留件收口自检未通过：导入页只有一个域 ⇒ 验不了「真选一次」")
+        else:
+            before = page.evaluate("() => document.querySelector('#view').innerText")
+            page.select_option('[data-act="impDomain"]', other)
+            page.wait_for_timeout(900)
+            after = page.evaluate("() => document.querySelector('#view').innerText")
+            ok_trigger = after != before
+            print(("  ✅ " if ok_trigger else "  ⛔ ")
+                  + f"⑳ 表单元素真选一次触发了（域 {cur} → {other}，页面文本{'变' if ok_trigger else '没变'}）")
+            if not ok_trigger:
+                errors.append("四个暂留件收口自检未通过：域选择真选一次**页面没变**"
+                              "（`change` 事件被静默丢弃 —— `#2` 拆名单拆坏了）")
+            page.select_option('[data-act="impDomain"]', cur)      # 复位，别影响后面的对账
+            page.wait_for_timeout(600)
+
         # ③ 内容是后端的（⛔ 壳里另抄一份 = 两处副本必漂）
         stage = "与后端对账"
         got = page.evaluate("""async () => {
