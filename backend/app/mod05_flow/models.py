@@ -68,7 +68,11 @@ class PaymentFlow(Base):
     #:   （`core.js::adaptFlow` 的 `op: x.created_at` **不是笔误，是没字段可填**）。
     #: ⚠️ **取值一律走唯一出口** `core/identity.py::current_operator()`（⛔ 不写死名字）；
     #:   老行为**空串** = **如实表示"当时没记"**（⛔ 不要为它编一个名字）。
-    created_by: Mapped[str] = mapped_column(String(64), default="")
+    #: ⚠️ `server_default=""` **必须留着**（2026-09-26 · `TAIL-102` 修复）：它是迁移
+    #:   `d1f3a5c7e9b2` 加这一列时给的（**非空表加非空列必须给默认值**，否则 upgrade 直接报错），
+    #:   而模型原先没声明 ⇒ `alembic check` 永远报 `modify_default`（元数据与库两份说法不一致）。
+    #:   ⛔ 别用"写一条迁移把库里的默认值删掉"来对齐：那要动**线上库的列**，且丢掉"裸插入留空串"这层兜底。
+    created_by: Mapped[str] = mapped_column(String(64), default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 

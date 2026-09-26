@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -52,13 +52,22 @@ class UserAccount(Base):
 
     __tablename__ = "user_account"
 
+    #: ⚠️⚠️ **`uq_user_account` 必须在这里声明**（2026-09-26 · `TAIL-102` 修复）：
+    #:    它由建表迁移 `d3f7a1c9b2e4` 创建（**不过滤软删行**，见模块头），而模型原先**没写** ——
+    #:    于是 `alembic check` 判成「**要删掉这个唯一约束**」⇒ ⛔ 谁跑一次 `autogenerate`，
+    #:    就会生成一条**删约束的迁移**（本表存在的意义之一就是"账号名不重复"，删了就静默放开重名）。
+    #:    ⭐ 声明在这里**不改数据库**（约束早就在库里）—— 它只是让**元数据与库这两份说法一致**。
+    __table_args__ = (UniqueConstraint("account", name="uq_user_account"),)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     #: **登录账号** —— §1.5.1「非空 + **不重复**即可（**不限制字符与长度**）」。
     #: ⚠️ 用 `Text`（不限长）—— ⛔ 别改回 `String(N)`：那是**一个真实的上限**，
     #:    而口径明写"不限制长度"。写入前的校验只在 `domain.assert_account_usable`
     #:    （它**只管非空与不重复**，⛔ 不管长度与格式）。
-    account: Mapped[str] = mapped_column(Text, nullable=False)
+    #: ⚠️ `server_default=""` **是建表迁移给的**（迁移约定：非空表加列/建表必须给默认值）——
+    #:    ⛔ 别为了让 `alembic check` 好看就删掉它：那会让**元数据与库再次分叉**（`TAIL-102` 的教训）。
+    account: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
 
     #: **姓名** —— 历史留痕里的「人名」取它（§1.5.1 末行：「留痕里的改前人**统一取当前登录用户**」）。
     name: Mapped[str] = mapped_column(String(64), default="", server_default="")

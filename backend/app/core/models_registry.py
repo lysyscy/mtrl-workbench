@@ -23,6 +23,9 @@ from app.mod11_jc import models as _m11  # noqa: F401  ← M5 切片 5 启用（
 #    ⇒ 差异的**载体 = 调整单**（`m08`）、**产出 = 差异表**（`m06` 按调整单算）⇒ ⛔ 无独立模块。
 #    ⭐ 本行是**撤项记录**（由 `doc_audit` 的 `T8` 守卫兜着 —— 见 `audit_common.CANCELLED`）。
 from app.mod14_config import models as _m14  # noqa: F401  ← M6 系统设置 2026-09-16 启用
-# from app.mod15_user import models as _m15  # noqa: F401
+from app.mod15_user import models as _m15  # noqa: F401  ← 2026-09-26 启用（`TAIL-102` 修复：原先这行是注释 ⇒
+#   `user_account` 在元数据里根本不存在 ⇒ `alembic check` 判成「**要删掉这张表**」（⛔ 谁跑一次 autogenerate
+#   就会生成一条删表的迁移 —— 那正是本条尾巴警告的雷）。⚠️ 登录/账号体系**早就在跑**（`main.py` 挂了
+#   `mod15_api_router`、`core/identity.py` 靠它取「当前登录用户」）⇒ 这行只是**漏登记**，不是"未启用"。
 
 __all__: list[str] = []
