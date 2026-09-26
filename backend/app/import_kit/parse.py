@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from app.core.money import to_money
 
@@ -22,6 +22,36 @@ def text(value) -> str:
     if isinstance(value, date):
         return value.isoformat()
     return str(value).strip()
+
+
+def cell_text(value) -> str:
+    """**读表出口**：任意单元格值 → 文本（日期/时间按 ISO 文本、整数值的浮点去掉小数点、其余走文本）。
+
+    ⭐ 为什么必须有这一件（2026-09-26 用户报障 · 真上传台账 ⇒ 界面「解析失败：TypeError:
+       Object of type time is not JSON serializable」）：
+       读表底座 `readers.read_grid` 的 **xlsx 分支**原先把 `openpyxl` 的原生值**原样返回**
+       （`datetime` / `date` / `time` / `Decimal`…），而预览载具 `core.preview_store` 落盘是
+       `json.dumps(payload)`、装的正是读表给的 `grid_rows` ⇒ **遇到 `datetime.time` 当场抛**
+       （用户原话：`解析失败：TypeError: Object of type time is not JSON serializable`）。
+       ⚠️ 而 **`.xls` 分支早就文本化了** ⇒ 同一张台账存成两种格式曾是"一条能导、一条报错"
+       —— 所以修在**读表这一层**，两个引擎共用本函数。
+    ⚠️ 与 `text()` 的分工：`text()` 是"取某一格的值"的**通用出口**（值域宽松，域内解析都用它）；
+       本件是**读表**出口 —— 比它多认 `time`（`08:30:00`）与"整数值的浮点"（Excel 里 `174`
+       常被读成 `174.0`，写给用户看应当是 `174`，与 `.xls` 分支同口径）。
+    ⚠️⚠️ **调用方注意**：`read_grid` 只把**JSON 装不下的**类型交给本函数，`str/int/float/bool/None`
+       **原样保留** —— 序列号 / 金额的换算靠"值的类型"来判（见 `readers` 里那段注释）。
+    """
+    if value is None:
+        return ""
+    if isinstance(value, datetime):                    # ⚠️ 必须先判 datetime（它是 date 的子类）
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, time):
+        return value.isoformat()                       # `08:30:00`（课表那种"上课时间"格）
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))                         # `174.0` ⇒ `174`
+    return str(value).strip()                          # Decimal / str / bool / 其余
 
 
 def amount(value):
@@ -55,4 +85,4 @@ def date_text(value) -> str:
     return text(value)
 
 
-__all__ = ["text", "amount", "date_text"]
+__all__ = ["text", "cell_text", "amount", "date_text"]

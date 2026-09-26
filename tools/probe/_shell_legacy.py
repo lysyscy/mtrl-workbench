@@ -83,6 +83,7 @@ def _mk_xlsx(path, domain: str) -> int:
        真源（本仓忌）；而现造的成本就是 openpyxl 写两行。
     """
     import importlib
+    from datetime import time
 
     from openpyxl import Workbook
 
@@ -91,7 +92,12 @@ def _mk_xlsx(path, domain: str) -> int:
     wb = Workbook()
     ws = wb.active
     ws.append([f.label for f in fields])                      # 表头 = 契约标签
-    ws.append(["2026-01" if f.key == "ym" else 0 for f in fields])   # 年月给个能认的，其余给 0
+    # ⚠️ 数据行**必须带一个"时间格"**：这是 2026-09-26 用户报障的形态（真课表.xlsx 的「上课时间」
+    #    那列是时间格 ⇒ 读表给原生 `datetime.time` ⇒ 载具 `json.dumps` 当场炸
+    #    「解析失败：TypeError: Object of type time is not JSON serializable」）
+    #    ⇒ 真机这趟**带着它跑**，才算真的证到"这类文件导得进来"（⛔ 只给日期/数字的假表证不到）。
+    ws.append([("2026-01" if f.key == "ym" else (time(8, 30) if i == 1 else 0))
+               for i, f in enumerate(fields)])
     wb.save(str(path))
     return len(fields)
 

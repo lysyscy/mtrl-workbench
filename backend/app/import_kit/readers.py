@@ -6,6 +6,7 @@ import io
 from collections.abc import Callable
 
 from app.core.errors import MustReportError
+from app.import_kit.parse import cell_text
 
 #: 真实表前面可能有一两行标题 ⇒ 表头行扫描上限（默认值，可覆盖）
 HEADER_SCAN_ROWS = 12
@@ -75,13 +76,15 @@ def _read_xls(data: bytes, *, sheet: str | None, max_rows: int | None,
         for c in range(sh.ncols):
             cell = sh.cell(r, c)
             if cell.ctype == xlrd.XL_CELL_DATE:
-                y, m, d, *_ = xlrd.xldate_as_tuple(cell.value, book.datemode)
-                row.append(f"{y:04d}-{m:02d}-{d:02d}")
-            elif cell.ctype == xlrd.XL_CELL_NUMBER:
-                v = cell.value
-                row.append(str(int(v)) if float(v).is_integer() else str(v))
+                y, m, d, *rest = xlrd.xldate_as_tuple(cell.value, book.datemode)
+                # ⚠️ `XL_CELL_DATE` 也可能是**纯时间**（`0.354` = 08:30）⇒ 有钟点就一并写出来
+                #    （`xldate_as_tuple` 给 `(年, 月, 日, 时, 分, 秒)`）—— 与 `cell_text` 同口径。
+                clock = f" {rest[0]:02d}:{rest[1]:02d}:{rest[2]:02d}" if any(rest) else ""
+                row.append(f"{y:04d}-{m:02d}-{d:02d}{clock}")
             else:
-                row.append(str(cell.value or "").strip())
+                # ⭐ 与 xlsx 分支**共用同一个读表出口**（`parse.cell_text`）—— ⛔ 别在这里另写一套：
+                #    两个引擎口径一分家，同一张表换个后缀就读出两种结果（本仓 2026-09-26 踩过）。
+                row.append(cell_text(cell.value))
         grid.append(row)
     if not grid:
         raise MustReportError("这个工作表是空的 —— 请确认选对了 sheet")
@@ -127,7 +130,17 @@ def read_grid(data: bytes, *, sheet: str | None = None, max_rows: int | None = N
         ws = wb[sheet]
     else:
         ws = wb.worksheets[0]
-    grid = [list(r) for r in ws.iter_rows(values_only=True)]
+    # ⚠️ **只文本化 JSON 装不下的那几种**（`datetime` / `date` / `time` / `Decimal` / `timedelta`…）；
+    #    `str / int / float / bool / None` **一律原样留着**。
+    #    ⭐ 两个理由（2026-09-26 用户报障那天实测出来的）：
+    #    ① **必须文本化**：预览载具 `core.preview_store.save` 落盘是 `json.dumps`，
+    #       而通用面的 `/parse` 把本函数给的 `grid_rows` **原样**塞进去 ⇒ 一个 `datetime.time`
+    #       就是「解析失败：TypeError: Object of type time is not JSON serializable」（报障原话）；
+    #    ② **⛔ 不能连数字一起文本化**：序列号/金额的换算**按值的类型判**（`date_text` 认 `int/float`
+    #       的序列号、`m06._ym_from_number` 同）—— 真把 `45444` 变成 `"45444"`，
+    #       「核算月」会被**静默认不出**（当场被 `test_imp_m06_api.py` 抓住，判据很有用）。
+    grid = [[v if v is None or isinstance(v, (str, int, float, bool)) else cell_text(v)
+             for v in r] for r in ws.iter_rows(values_only=True)]
     if fill_merged_rows:
         grid = _fill_merged(ws, grid, fill_merged_rows)
     title = ws.title

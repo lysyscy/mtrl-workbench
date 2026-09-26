@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import io
+import json
 from decimal import Decimal
 
 from app.import_kit import staging
@@ -66,6 +67,32 @@ def test_读grid与前N行找表头():
 def test_表头行_找不到给None_报错话术归调用方():
     grid, _ = read_grid(_grid(("a", "b"), ("1", "2")))
     assert find_header(grid, lambda c: None) is None          # ⛔ 底座不发明报错文案
+
+
+@acc()
+def test_读表的格子都装得进载具_但数字仍是数字():
+    """⭐ 2026-09-26 用户报障（**真上传课表.xlsx ⇒ 界面「解析失败：TypeError: Object of type
+    time is not JSON serializable」**）—— **能证伪**：把 `read_grid` 的 xlsx 分支改回
+    "原样返回 openpyxl 原生值" ⇒ 本件必红（`datetime.time` 一进载具就抛）。
+
+    ⚠️ 崩的是**载具**：`core.preview_store.save` 落盘是 `json.dumps`，而通用面的 `/parse`
+       把读表给的 `grid_rows` **原样**塞进这个载荷 ⇒ 读表出口必须**装得进 JSON**。
+    ⚠️⚠️ 但**不能连数字一起文本化**：序列号 / 金额的换算靠"值的类型"判（`parse.date_text`
+       认 `int/float` 的序列号、`m06._ym_from_number` 同）—— 真把 `45444` 变成 `"45444"`，
+       `m06` 的「核算月」会被**静默认不出**。本条把这两半一起钉住（假绿/假红都不许）。
+    """
+    from datetime import date, datetime, time
+
+    grid, _ = read_grid(_grid(("项目", "上课时间", "金额", "日期", "核算月"),
+                              ("甲", time(8, 30), 174.0, date(2026, 9, 15), 45444),
+                              ("乙", datetime(2026, 9, 15, 8, 30), Decimal("12.30"), "2026/9/15", 45444)))
+    assert grid[1][1] == "08:30:00", "时间格要给文本（课表那种「上课时间」列）"
+    assert grid[1][3] == "2026-09-15" and grid[2][1] == "2026-09-15", "日期 / 日期时间按 ISO 给"
+    assert grid[1][2] == 174.0 and grid[1][4] == 45444, \
+        "⛔ 数字**原样**（序列号/金额的换算按类型判：文本化会让「核算月」静默认不出）"
+    json.dumps(grid, ensure_ascii=False)
+    token = staging.save_preview({"grid_rows": grid})         # ← 报障时**炸的就是这一句**
+    assert staging.load_preview(token)["grid_rows"] == grid, "所见即所落（重启后预览还在）"
 
 
 # ------------------------------------------------------------ staging（唯一载具）
