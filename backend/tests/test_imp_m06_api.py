@@ -134,6 +134,38 @@ def test_缺项目选项要显式报错_不静默落库(client):
 
 
 @acc()
+def test_每个项目的截止月各给一份_换项目不会串():
+    """⭐ 2026-09-26（**真缺陷修复**）：界面上的「截止核算月」**按项目存**（`repository.load_cutoff`），
+    而落库会把它**写进所选项目**（`importer.commit` → `import_snapshot(cutoff_ym=…)`）。
+
+    ⚠️ 症状（改之前）：域上下文**只在进域那一刻**取一次（取的是"候选人里的第一个"）
+    ⇒ 用户**换成别的项目时那个框不跟着换** ⇒ **A 项目的分界被写给 B，而且不报错**。
+    ⇒ 修法：域上下文**把每个项目的那一格都给出来**（`cutoffs`），壳按当前选中项取。
+    本判据点钉的就是"这张表**逐项目**都在"（⛔ 只给一格 = 缺陷会复发）。
+    """
+    from sqlalchemy import select
+
+    from app.core.db import session_scope
+    from app.mod06_proc import imp_spec as spec
+    from app.mod06_proc import repository as repo
+    from app.mod06_proc.models import ProcCutoff
+
+    a = "__自检仓_CUT_A_" + uuid.uuid4().hex[:6] + "__"
+    b = "__自检仓_CUT_B_" + uuid.uuid4().hex[:6] + "__"
+    with session_scope() as s:
+        repo.set_cutoff(s, warehouse=a, cutoff_ym="2026-05")
+        repo.set_cutoff(s, warehouse=b, cutoff_ym="2026-07")
+        s.flush()
+        opts = spec.options(s)                     # ⭐ 域钩子 = 壳唯一能看到的那一份
+        assert opts["cutoffs"].get(a) == "2026-05", opts.get("cutoffs")
+        assert opts["cutoffs"].get(b) == "2026-07", "两个项目必须各给一份（⛔ 不是只给「当前那个」）"
+        assert repo.load_cutoffs(s).get(b) == "2026-07"
+        for r in list(s.execute(select(ProcCutoff)).scalars()):   # 持久测试库：随手清干净
+            if r.warehouse_name in (a, b):
+                s.delete(r)
+
+
+@acc()
 def test_schema_不给机械列目标字段(client):
     """⭐ 口径：机械 6 列**全段手录** ⇒ 通用面里根本不给它们字段（界面不会让他们落库）。"""
     sch = client.get("/api/imp/m06_proc/schema").json()

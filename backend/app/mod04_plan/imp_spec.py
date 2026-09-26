@@ -103,6 +103,44 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     return {"year_month": ym, **out}
 
 
+def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` 由通用面记账，本域判定用不着
+    """**域预览补丁**：③ 列出**项目匹配盘点**（命中 / 未匹配 / 重名）—— 让人先看见再确认。
+
+    ⚠️ 为什么现在才接上（2026-09-26 · `TAIL-106`）：`importer.match_summary` 当初**就是为预览写的**
+      （注释原话"预览用的项目匹配盘点 …… 让人先看见再确认"），可它随旧导入页 2026-09-23 下架后
+      **零调用** ⇒ 接上它 = **零风险复用**，⛔ 绝不另写一份盘点口径。
+
+    ⚠️ **本域不给 `writable`**（界面上「将写入」仍用通用面的 `total`）：付款计划是**整批按月重写**
+      （`merge_month`），**项目没匹配上的行照样落库**（只是挂不上项目，到计划页里再逐行处理）——
+      若把 `writable` 设成"匹配上的行数"，那是**假话**（守则 §4「状态必须真实」）。
+
+    ⚠️ 「项目」列对不上**不是错误**：本域的口径是"**不猜**，显式标未匹配"⇒ 这里只**列出来**，
+      ⛔ 不拦住落库、⛔ 也不替人猜一个项目。
+    """
+    ym = str((options or {}).get("year_month") or "").strip()
+    # ⚠️ `ym` 可能为空（老客户端 / 直接调接口）：`norm_pay_date` 对空 `ym` **原样返回**（不猜），
+    #    而盘点只看「项目」列 ⇒ 对结果没有影响。
+    rows = I.attach_projects(_rows_of(records, ym), project_briefs(s))
+    got = I.match_summary(rows)
+    return {
+        "kpis": {"项目未匹配": len(got["unmatched"]), "项目重名": len(got["multi"])},
+        "blocks": [
+            {"title": "项目对不上的行（**照样进库**，但在付款计划页里挂不上项目）",
+             "note": "⚠️ 系统**不猜**项目：按你表里「项目」列的文字去对**项目档案**（展示名 / 仓库名，"
+                     "§2.7.4），一个字没对上就标「未匹配」。⇒ 请在计划页里逐行核对"
+                     "（多半是项目名写法与档案不一致，或该项目还没建档）。",
+             "columns": ["行", "你表里写的项目"],
+             "rows": [[x.get("row"), x.get("project_input") or ""] for x in got["unmatched"]],
+             "empty": "（无 —— 每一行的项目都对上了）"},
+            {"title": "重名的行（一个名字对到多条档案 ⇒ 需人工选）",
+             "columns": ["行", "你表里写的项目", "对上几条"],
+             "rows": [[x.get("row"), x.get("project_input") or "", len(x.get("candidates") or [])]
+                      for x in got["multi"]],
+             "empty": "（无）"},
+        ],
+    }
+
+
 def options(s) -> dict:  # noqa: ARG001 —— 本域的上下文不来自库，但签名要与通用面的钩子一致
     """**域上下文**（通用面唯一一条读端点：`GET /api/imp/{domain}/options`）—— 本域要「本批归属年月」。
 
@@ -114,6 +152,7 @@ def options(s) -> dict:  # noqa: ARG001 —— 本域的上下文不来自库，
     return {"year_month": ""}
 
 
-HOOKS = Hooks(commit=commit, options=options)   # 无批次回滚 ⇒ 不给 `rollback` 钩子（通用面据此不挂那个端点）
+HOOKS = Hooks(commit=commit, options=options, preview=preview)
+# ⚠️ 无批次回滚 ⇒ 不给 `rollback` 钩子（通用面据此**不挂**那个端点、壳也不画那个按钮）。
 
-__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "options"]
+__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "options", "preview"]

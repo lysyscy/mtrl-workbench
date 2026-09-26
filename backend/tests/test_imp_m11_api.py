@@ -112,6 +112,80 @@ def test_集采台账在通用面端到端_两级拼名认列_锚点匹配_且�
 
 
 @acc()
+def test_预览就能看到配上几条_且一个字节都不写库(client):
+    """⭐⭐ 2026-09-26（`TAIL-106` · 用户裁定）：**③ 预览**就要说出「**能配上几条**」。
+
+    用户原话：「匹配既然凭合同金额／贸易公司合同金额，为什么放到**最后一步**？能否在**选文件时**
+    就选定项目、并**立刻显示"匹配上多少"**？」
+
+    ⚠️ 本判据盯**两件**（少一件都会出问题）：
+      ① **数对不对**：库里有一条同价合同 ⇒ 那一行配上；另给一行**对不上的价** ⇒ 列进"没配上"；
+      ② ⭐ **零写库**：预览走 `match_and_apply(dry_run=True)` —— 它**只分类、不写**
+         （`update_contract` / `fill_contract_amt_if_blank` / `_add_invoice` 三处全跳过）。
+         实测办法：**预览前后**把那张合同的那 6 列 ＋ **发票行数**各比一遍，必须一模一样。
+    """
+    from app.core.db import session_scope
+    from app.mod01_projects import repository as pj_repo
+    from app.mod01_projects.models import TYPE_NORMAL
+    from app.mod11_jc import import_service as IS
+    from app.mod11_jc.models import JcContract, JcInvoice
+
+    wh = "__自检仓_IMP_PRE_" + uuid.uuid4().hex[:8] + "__"
+    with session_scope() as s:
+        p = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full="__自检_预览对号__",
+                                   warehouse_name=wh, phid="")
+        c = JcContract(contract_no="__自检_预览_C1__", project_id=int(p.id),
+                       contract_date="2024-07-23", material_name="i8给的材料名",
+                       supplier="i8给的供应商", contract_amt=Decimal(AMT))
+        s.add(c)
+        s.flush()
+        cid = int(c.id)
+
+    def _snap() -> tuple:
+        with session_scope() as s:
+            row = s.get(JcContract, cid)
+            cols = tuple(str(getattr(row, k) or "") for k in IS.EXCEL_COLS + ("contract_amt",))
+            inv = s.query(JcInvoice).filter(JcInvoice.contract_id == cid).count()
+        return cols + (inv,)
+
+    before = _snap()
+    mapping = {"合同日期": "合同日期", "材料名称": "材料名称", "供应商合同总价": "供应商合同总价",
+               "供应商发票金额": "供应商发票金额", "详细付款方式": "付款方式", "备注": "备注"}
+    # 第二行：合同价与库里那条**不同** ⇒ 必须落进"配不上"（⛔ 不静默新增、⛔ 不猜）
+    book = _book([(1, "20240723", "钢材", AMT, "40731.17", "", "", "电汇", "60±7银行承兑"),
+                  (2, "20240724", "水泥", "999.00", "", "", "", "", "")])
+    got2 = client.post("/api/imp/m11_jc/parse",
+                       files={"file": ("台账.xlsx", book,
+                                       "application/vnd.openxmlformats-officedocument"
+                                       ".spreadsheetml.sheet")},
+                       data={"sheet": ""}).json()
+    assert got2["ok"], got2
+    body = {"token": got2["token"], "mapping": mapping, "options": {"project_key": wh}}
+    pre = client.post("/api/imp/m11_jc/preview", json=body).json()
+    assert pre["ok"], pre
+    assert pre["writable"] == 1, f"「将写入」必须 = **真会更新的条数**（不是解析出的 2 行）：{pre}"
+    assert pre["kpis"]["配上"] == 1 and pre["kpis"]["配不上"] == 1, pre.get("kpis")
+    miss = [b for b in pre["blocks"] if "没配上" in b["title"]]
+    assert miss and len(miss[0]["rows"]) == 1, f"配不上的行要逐条列出来（带原因）：{pre.get('blocks')}"
+    assert "999.00" in " ".join(str(x) for x in miss[0]["rows"][0]), miss[0]["rows"][0]
+    assert _snap() == before, "⛔ 预览把库改了 —— 预览必须**只查不写**（判据 001-06）"
+
+
+@acc()
+def test_没选项目时预览不给假的配对数(client):
+    """⚠️ 台账按项目分存 ⇒ **没选项目**时一条都对不了号；此时**不许**给出"配上 0 条"这种假数。
+
+    ⇒ 判词：预览**不给** `writable`（界面上的「将写入」退回通用面的行数），只回一句"还没选项目"的提示块。
+    """
+    got = _parse(client)
+    pre = client.post("/api/imp/m11_jc/preview",
+                      json={"token": got["token"], "mapping": {"合同日期": "合同日期"}}).json()
+    assert pre["ok"], pre
+    assert "writable" not in pre, f"没选项目却给了「将写入」—— 那是假话：{pre}"
+    assert any("还没选" in b["title"] for b in pre["blocks"]), pre.get("blocks")
+
+
+@acc()
 def test_老xls也能读_按魔术字节判类型():
     """⭐ 用户的集采台账是**老 `.xls`** ⇒ 通用面必须两种格式都认（⛔ 且**不靠文件名**）。
 

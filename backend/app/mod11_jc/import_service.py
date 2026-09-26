@@ -298,7 +298,8 @@ def commit(s, data: bytes, filename: str, *, sheet: str, project_key: str,
             "skipped_rows": parsed["skipped"]}
 
 
-def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | None = None) -> dict:
+def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | None = None,
+                    dry_run: bool = False) -> dict:
     """⭐ **按「含税合同价」锚点匹配并更新**（本域落库的**唯一口径**）—— 从 `commit` 里拆出来。
 
     ⚠️ 为什么要拆（`TAIL-75` `B5b`）：**通用导入面自己已经把行解析好了**（它不发 token、也不再要文件）
@@ -307,6 +308,13 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
 
     `mapped` = 这次**映射出了哪些字段**（`commit` 传 `set(fields)`；通用面传 `None` ⇒ 行里有什么算什么）——
     它只管"**哪些列可更新**"（`EXCEL_COLS` 白名单），⛔ 不改匹配口径、也不动 i8 的事实列。
+
+    ⭐⭐ `dry_run=True` = **只分类、不写库**（2026-09-26 · `TAIL-106` 用户裁定）：
+      预览要在**落库之前**告诉人"这批能配上几条"，而"配上/配不上/同价冲突"这套分叉**只有这里知道**
+      ⇒ 给它一个"只看不写"的开关，⛔ **不是**让预览另写一份匹配（那就是两份口径）。
+      三处写口（`update_contract` / `fill_contract_amt_if_blank` / `_add_invoice`）在 `dry_run` 下**全部跳过**；
+      分类结果、`items`（含"**会**填金额"）与真跑**逐字段一致**，只是库里一个字节没动。
+      ⚠️ 判据：`tests/test_imp_m11_api.py` 钉着"预览/干跑后库里一模一样"（零写库）。
     """
     from sqlalchemy import select
 
@@ -388,15 +396,18 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
         for k in EXCEL_COLS:
             if k in allowed:
                 cols[k] = row.get(k)
-        if cols:
+        if cols and not dry_run:
             R.update_contract(s, cid, **cols)
 
         # ⭐ **贸易公司合同那一支**（2026-09-26 方案② · 用户裁定）：这一行是**靠贸易公司金额对上**的
         #    ⇒ Excel 的「供应商合同总价」就是这张合同的**合同金额**（i8 里没有这个数 ⇒ 台账那格空着）
         #    ⇒ **空才填**（已有值一个字不改）。⛔ 不走 `update_contract`（那把"人能改 i8 事实列"放进白名单）。
+        # ⚠️ `dry_run` 下走**同一个判据**的只读形态（`R.contract_amt_is_fillable`）——
+        #    所以预览说的"会填"与真跑填的是同一件事（⛔ 不许在预览里另写一份"空才填"）。
         filled = False
         if key_kind == "trade":
-            filled = R.fill_contract_amt_if_blank(s, cid, row.get("contract_amt"))
+            filled = (R.contract_amt_is_fillable(cur, row.get("contract_amt")) if dry_run
+                      else R.fill_contract_amt_if_blank(s, cid, row.get("contract_amt")))
 
         # ⭐ **汇总发票行**：⛔ **不重复加** —— 已有同 kind 的发票行 ⇒ 跳过并报出来（再导一次不会翻倍）。
         already = {str(x) for x in s.execute(
@@ -418,6 +429,11 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
             date = timing.to_iso(timing.today_cn())
             if not date:                                  # pragma: no cover —— `today_cn()` 恒有值
                 warned.append({"row_no": n, "why": f"{label}发票额没落 —— 取不到当天日期"})
+                continue
+            if dry_run:
+                # ⚠️ **只看不写**：`already` 照样记上（同一份表里后续行遇到同 kind 也按"加过了"算）
+                #    ⇒ 干跑与真跑**逐行同判定**，⛔ 不然预览会多报几张票。
+                already.add(kind)
                 continue
             inv = _add_invoice(s, cid, kind=kind, date=date, amount=amt)
             if not inv.get("ok"):
@@ -442,8 +458,12 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
         "ambiguous_items": ambiguous,
         "bad_items": bad,
         "warn_items": warned,
-        "message": (f"导入完成：**按合同价匹配上并更新 {len(updated)} 条**"
-                    f" · 配不上 {len(unmatched)} 条 · 同价冲突 {len(ambiguous)} 条"
+        # ⚠️ 措辞按"**这次到底动没动手**"分开（守则 §4「状态必须真实」）：
+        #    干跑**一个字都没写库** ⇒ ⛔ 不许说"导入完成"（那是最典型的一类假话）。
+        "message": ((f"（**只查不写**）按合同价能配上 {len(updated)} 条"
+                     if dry_run else
+                     f"导入完成：**按合同价匹配上并更新 {len(updated)} 条**")
+                    + f" · 配不上 {len(unmatched)} 条 · 同价冲突 {len(ambiguous)} 条"
                     f" · 不合格 {len(bad)} 条 · 提醒 {len(warned)} 条"),
     }
 

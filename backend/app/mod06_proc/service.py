@@ -11,6 +11,7 @@ from app.mod06_proc import domain as D
 from app.mod06_proc.repository import (
     load_batches,
     load_cutoff,
+    load_cutoffs,
     load_history,
     load_inv_rows,
     load_mech,
@@ -95,6 +96,11 @@ def build_import_data(s: Session, *, warehouse: str = "") -> dict:
         "projects": projects,
         "warehouse": current,
         "cutoff_ym": load_cutoff(s, warehouse=current) if current else "",
+        # ⭐ **每个项目的截止月表**（2026-09-26）：界面上「截止核算月」要**跟着所选项目换** ——
+        #   上面那个 `cutoff_ym` 只是"当前项目"的那一格（读到的是候选人里的第一个），
+        #   而用户会换项目 ⇒ 只给一格就会把 A 项目的分界写给 B（真缺陷，见 `load_cutoffs`）。
+        #   ⚠️ 口径仍只有一处：本键由 `load_cutoffs` 给，与 `cutoff_ym` 同一张表。
+        "cutoffs": load_cutoffs(s),
         "batches": [b for b in load_batches(s) if not current or b.warehouse_name == current],
     }
 

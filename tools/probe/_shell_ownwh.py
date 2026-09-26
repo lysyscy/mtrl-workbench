@@ -73,13 +73,20 @@ def check(page, errors: list[str]) -> None:
         page.click('[data-act="ownAssign"][data-pid="__new"]')
         # ⚠️ 页上可能还有**上一段残留的 toast**（实测踩过：读到了 ⑮ 段那条"已扶正"）⇒
         #    这里**等那条特定的消息**出现，而不是随便抓一个 toast。
+        # ⚠️⚠️ 2026-09-26 订正：`toast()` 是**每说一句就 append 一个新的 `div.toast`**
+        #    （`index.html` 的 `toast(msg, ms)`，到点各自 `remove`）⇒ 页上可能**同时挂着好几条**；
+        #    而 `document.querySelector('.toast, …')` 只回**文档里最早那条**（＝上一段的残留）
+        #    ⇒ 新消息被挡在后面，**等「先查」等到超时**（实测：同一支自检时红时绿，纯粹看残留那条的 TTL）。
+        #    ⇒ 判词改成「**任意一条**活着的 toast 含『先查』」，取值取**最新那条**（文档顺序的最后一条）。
         page.wait_for_function(
-            """() => { const t = document.querySelector('.toast, .tp, #toast');
-                       return !!t && t.innerText.indexOf('先查') >= 0; }""",
+            "() => [...document.querySelectorAll('.toast, .tp, #toast')]"
+            ".some(t => (t.innerText || '').indexOf('先查') >= 0);",
             timeout=8000,
         )
         blocked = page.evaluate("""() => {
-            const t = document.querySelector('.toast, .tp, #toast');
+            const all = [...document.querySelectorAll('.toast, .tp, #toast')];
+            const hit = all.filter(t => (t.innerText || '').indexOf('先查') >= 0);
+            const t = hit.length ? hit[hit.length - 1] : all[all.length - 1];
             return {text: t ? t.innerText.replace(/\\s+/g,' ') : '',
                     stillOpen: !!document.querySelector('[data-act="ownAssign"][data-pid="__new"]')};
         }""")

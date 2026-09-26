@@ -100,6 +100,26 @@ def load_cutoff(s: Session, *, warehouse: str) -> str:
     return ""
 
 
+def load_cutoffs(s: Session) -> dict[str, str]:
+    """**每个项目**的截止核算月（`{仓库名: 截止月}`）—— 给界面"换项目时截止月跟着换"用。
+
+    ⚠️ 为什么需要它（2026-09-26 实测出来的真缺陷）：界面上的「截止核算月」原先只在**进域那一刻**
+      取一次（取的是**候选第一个项目**的，见 `service.build_import_data` 的 `current = projects[0]`），
+      用户换成别的项目时那个框**不会跟着换** ⇒ 而落库会把它**当新项目的截止月写进去**
+      （`importer.commit` → `import_snapshot(cutoff_ym=…)`，截止月本身是**按项目存**的）
+      ⇒ **A 项目的分界写给了 B，且不报错**。
+    ⇒ 界面改成"按当前选中项目查这张表"（壳侧只认 `cutoffs` 这个键，⛔ 不认识域号）。
+
+    口径与 `load_cutoff` **同一个**（同表 · 同字段 · "命中第一条"语义）—— 它只是**批量形态**。
+    """
+    out: dict[str, str] = {}
+    for r in s.execute(select(ProcCutoff)).scalars():
+        key = str(r.warehouse_name or "")
+        if key:
+            out.setdefault(key, str(r.cutoff_ym or ""))
+    return out
+
+
 def set_cutoff(s: Session, *, warehouse: str, cutoff_ym: str) -> ProcCutoff:
     rows = list(s.execute(select(ProcCutoff)).scalars())
     found = next((x for x in rows if x.warehouse_name == warehouse), None)
@@ -155,5 +175,5 @@ def rollback_batch(s: Session, *, batch_no: str) -> int:
 
 
 __all__ = ["load_inv_rows", "load_mech", "save_mech",
-           "load_history", "load_batches", "load_cutoff", "set_cutoff",
+           "load_history", "load_batches", "load_cutoff", "load_cutoffs", "set_cutoff",
            "import_snapshot", "rollback_batch", "MATERIAL_KEYS"]

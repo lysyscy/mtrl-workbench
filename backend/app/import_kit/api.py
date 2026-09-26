@@ -64,10 +64,11 @@ def _hit(header, spec: DomainSpec) -> str | None:
     return got.field
 
 
-def _takes_options(fn) -> bool:
-    """钩子是否要第 5 个参数（`options`）—— 按**签名**判。
+def _takes_options(fn, base: int) -> bool:
+    """钩子是否**多收**一个 `options` 参数 —— 按**签名**判；`base` = 不收 `options` 时的位置参数个数
+    （`commit` = 4：`session/records/mapping/operator` · `preview` = 3：`session/records/mapping`）。
 
-    ⛔ 不写成"先按 5 参试调，失败再按 4 参"：那会把钩子**内部**真出的 `TypeError` 一起吃掉，
+    ⛔ 不写成"先按多一个参试调，失败再退回"：那会把钩子**内部**真出的 `TypeError` 一起吃掉，
        症状是"导入报了个莫名其妙的旧错"。
     """
     try:
@@ -75,7 +76,7 @@ def _takes_options(fn) -> bool:
                   if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
     except (TypeError, ValueError):
         return False
-    return len(params) >= 5
+    return len(params) >= base + 1
 
 
 def _headers_of(grid: list[list], top: int, bottom: int | None, spec: DomainSpec
@@ -344,12 +345,20 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
                    "preview": [{k: v for k, v in rec.items() if k != "raw"}
                                for rec in records[:PREVIEW_ROWS]]}
             # ⭐ **域预览补丁**（可选 · 2026-09-23 `B5b` 第三步）：域补"只有它自己算得出"的那几块
-            #    （如 `m05` 的**未匹配清单**／未识别的付款方式取值）。
+            #    （如 `m05` 的**未匹配清单**／未识别的付款方式取值／`m11` 的**对号结果**）。
             #    ⚠️ 它是**只读**的（只 `session_scope` 读库），⛔ **不写库** ⇒ `preview_store`
             #       仍是预览的唯一载具（判据 001-06「确认前一个字节都不写库」不受影响）。
+            #    ⭐⭐ 2026-09-26（`TAIL-106`）：**上下文一并递过去**——有的域"算得出什么"取决于
+            #       界面给的那几格（`m11` 不知道"进哪个项目"就一条都对不了号）。
+            #       ⚠️ 与 `commit` **同一条规矩**：钩子收 4 参（只 session/records/mapping）或
+            #       5 参（多收一个 `options`）都合法，按**签名**判 —— ⛔ 别写成"先按 5 参试调、
+            #       `TypeError` 再退回 4 参"（那会把钩子内部真出的 `TypeError` 一起吃下去）。
             if hooks.preview is not None:
+                options = dict((body or {}).get("options") or {})
                 with session_scope() as s:
-                    extra = hooks.preview(s, records, mapping_) or {}
+                    extra = (hooks.preview(s, records, mapping_, options)
+                             if _takes_options(hooks.preview, 3)
+                             else hooks.preview(s, records, mapping_)) or {}
                 problems.extend(extra.get("problems") or [])
                 out["problems"] = problems[:200]
                 out["problem_count"] = len(problems)
@@ -380,7 +389,7 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
             options = dict((body or {}).get("options") or {})      # ⭐ 域自定义上下文（如 m06 的"哪个项目"）
             with session_scope() as s:
                 report = (hooks.commit(s, records, mapping_, current_operator(), options)
-                          if _takes_options(hooks.commit)
+                          if _takes_options(hooks.commit, 4)
                           else hooks.commit(s, records, mapping_, current_operator()))
             return {"ok": True, "report": report, "problems": problems[:50],
                     "message": f"已导入 {len(records)} 行"

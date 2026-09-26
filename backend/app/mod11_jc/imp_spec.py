@@ -151,6 +151,60 @@ def rollback(s, batch, operator):
     return B.rollback(s, batch, operator)
 
 
+def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` 由通用面记账，本域判定用不着
+    """**域预览补丁**：③ 就能看到「配上有几条 / 配不上几条」——**只查不写**（2026-09-26 · `TAIL-106`）。
+
+    ⭐ 用户原话：「匹配既然凭合同金额／贸易公司合同金额，为什么放到**最后一步**？能否在选文件时
+      就选定项目、并**立刻显示"匹配上多少"**？」⇒ 本函数就是后半句的落点。
+
+    ⚠️ **为什么不在这里另写一份匹配**：对号的口径（含"贸易公司合同改用贸易公司金额当钥匙""配上后
+      空才填合同金额"）**只有** `import_service.match_and_apply` 一处主人 ⇒ 这里传 `dry_run=True`
+      调**同一个函数**（⛔ 两份口径必然漂）。
+
+    ⚠️ **没选项目就不猜**：台账按项目分存、对号只在项目内做 ⇒ 没选 ⇒ 一条都说不上，且**不给**
+      `writable`（界面上「将写入」退回通用面的 `total`，免得用"能配上 0 条"这种假话糊人）。
+    """
+    key = str((options or {}).get("project_key") or "").strip()
+    if not key:
+        return {"blocks": [{
+            "title": "还没选「这批数据进哪个项目」—— 现在还看不出能配上几条",
+            "note": "台账按项目分存、对号也**只在项目内**做 ⇒ 先回第 ① 步把项目选定，"
+                    "这一屏立刻会给「配上 / 配不上 / 同价冲突」三个数。",
+            "columns": [], "rows": [], "empty": ""}]}
+    project_id = R.project_id_by_key(s, key)
+    if project_id is None:
+        raise MustReportError(f"找不到项目（仓库名 {key!r}）—— 请先在「项目档案」建好")
+    out = IS.match_and_apply(s, _rows_of(records), project_id=int(project_id), dry_run=True)
+    bad_rows = ([["——", "——", "材料名称与供应商都空着，认不出是哪条合同", x.get("why") or ""]
+                 for x in out.get("bad_items") or []])
+    rows: list[list] = []
+    for x in out.get("unmatched_items") or []:
+        rows.append([x.get("row_no"), x.get("amount") or "（空）",
+                     x.get("material_name") or "", x.get("why") or ""])
+    for x in out.get("ambiguous_items") or []:
+        rows.append([x.get("row_no"), x.get("amount"), "", x.get("why") or ""])
+    rows += bad_rows
+    return {
+        # ⭐ **「将写入」改成真会更新的条数**（`writable` 覆盖通用面的 `total`）——
+        #    这正是用户要的那个数：**这批能配上几条**。
+        "writable": int(out["updated"]),
+        "kpis": {"配上": out["updated"], "配不上": out["unmatched"],
+                 "同价冲突": out["ambiguous"], "不合格": out["bad"]},
+        "blocks": [
+            {"title": "没配上的行（**不会被写进台账**，台账里一条不动）",
+             "note": "⚠️ 认不出锚点 / 项目内没有同价合同 / 同价有多条 —— 三种都**不猜、不新增**："
+                     "先看这几行，多半是「这个项目的合同还没抓」或「合同价那一列没认对」。",
+             "columns": ["行", "合同价", "材料名称", "原因"],
+             "rows": rows,
+             "empty": "（无 —— 每一行都配上了）"},
+            {"title": "提醒（不影响本次落库）",
+             "columns": ["行", "说明"],
+             "rows": [[x.get("row_no"), x.get("why") or ""] for x in out.get("warn_items") or []],
+             "empty": "（无）"},
+        ],
+    }
+
+
 def options(s) -> dict:
     """**域上下文**（通用面唯一一条读端点：`GET /api/imp/{domain}/options`）—— 候选项目（§2.7.4）。
 
@@ -167,6 +221,6 @@ def options(s) -> dict:
     return {"projects": [c["key"] for c in R.project_choices(s) if str(c.get("key") or "").strip()]}
 
 
-HOOKS = Hooks(commit=commit, rollback=rollback, options=options)
+HOOKS = Hooks(commit=commit, rollback=rollback, options=options, preview=preview)
 
-__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "options", "rollback"]
+__all__ = ["DOMAIN", "FIELDS", "HOOKS", "SPEC", "commit", "options", "preview", "rollback"]

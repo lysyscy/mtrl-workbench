@@ -69,9 +69,10 @@ def _probe(page, key: str, marks: tuple[str, ...] = ()) -> dict:
     }""", key)
 
 
-#: 真上传要造的域（`③ 预览` 那两条判词要**两个域互为对照**，见下面 ③′）：
+#: 真上传要造的域（范围栏那条判词要**几个域互为对照** —— 这就是"按键渲染"的真机证明）：
 #:   `m06_proc` 声明了 `cutoff_ym`（截止核算月）· `m04_plan` 声明了 `year_month`（本批归属年月）
-IMP_DOMAINS = ("m06_proc", "m04_plan")
+#:   · `m11_jc` 只给 `projects`（**逐项目**，且 ③ 会给出"配上几条"）。
+IMP_DOMAINS = ("m06_proc", "m04_plan", "m11_jc")
 
 
 def _mk_xlsx(path, domain: str) -> int:
@@ -87,7 +88,8 @@ def _mk_xlsx(path, domain: str) -> int:
 
     from openpyxl import Workbook
 
-    mod = {"m06_proc": "app.mod06_proc.imp_spec", "m04_plan": "app.mod04_plan.imp_spec"}[domain]
+    mod = {"m06_proc": "app.mod06_proc.imp_spec", "m04_plan": "app.mod04_plan.imp_spec",
+           "m11_jc": "app.mod11_jc.imp_spec"}[domain]
     fields = list(importlib.import_module(mod).FIELDS)        # ⛔ 契约的主人还是那个模块
     wb = Workbook()
     ws = wb.active
@@ -102,21 +104,64 @@ def _mk_xlsx(path, domain: str) -> int:
     return len(fields)
 
 
+#: 各域**范围栏就绪**的判据（JS 表达式）＝"域上下文真的取回来了"——
+#:   · ⛔ 别用"页面文本变了"当条件：**同一个域再选一次**时文本可能一模一样（实测 `m04_plan` 就白等到超时）；
+#:   · ⛔ 也别用"下拉的 value 变成目标"：`select_option` 是**同步**改 DOM 值的 ⇒ 会在异步取域上下文
+#:     之前就返回（实测：切到 `m04_plan` 却读到 `m06_proc` 的范围栏，三条判词全**假红**）；
+#:   · ⚠️ 每个判据必须**只对本域成立**：`m11_jc` 的项目面板与 `m06_proc` 那个长得一样
+#:     ⇒ 得再加上"**没有** `#impCut` / `#impYm`"才算认到 m11 那一屏。
+_CTX_READY = {
+    "m06_proc": "!!document.querySelector('#impCut')",
+    "m04_plan": "!!document.querySelector('#impYm')",
+    "m11_jc": "!!document.querySelector('[data-act=\"impPjToggle\"]')"
+              " && !document.querySelector('#impCut') && !document.querySelector('#impYm')",
+}
+
+
+def _imp_domain(page, domain: str, wait_ready: str = "") -> None:
+    """**只切域**（不选文件）—— 用来证「**选完域、还没选文件**就看得到范围栏」。
+
+    `wait_ready` = 该域范围栏就绪的 JS 判据（见 `_CTX_READY`）；给空则只等下拉的 value 对上
+    （⚠️ 那只够用在"不读该域范围栏"的地方）。
+    """
+    if page.eval_on_selector('[data-act="impDomain"]', "el => el.value") == domain:
+        return
+    page.select_option('[data-act="impDomain"]', domain)
+    if wait_ready:
+        page.wait_for_function(f"() => {wait_ready}", timeout=8000)
+    else:
+        page.wait_for_function("d => document.querySelector('[data-act=\"impDomain\"]').value === d",
+                               arg=domain, timeout=8000)
+
+
 def _imp_pick(page, domain: str, fx) -> None:
     """选域 → 上传 → 解析（**全走条件等待**）—— ①′/③′ 共用（⛔ 不复制两遍）。
 
-    ⚠️ 三个等待各自的条件 = "**下一步要读的东西真的在了**"：切域 ⇒ 页面文本变（壳要重取该域契约）；
-    上传 ⇒ 不用等（`set_input_files` 同步触发 change）；解析 ⇒ **② 的映射控件出现**。
+    ⚠️ 三个等待各自的条件 = "**下一步要读的东西真的在了**"：切域 ⇒ 该域范围栏的控件出现；
+    上传 ⇒ 不用等（`set_input_files` 同步触发 change）；解析 ⇒ **② 的映射控件出现**（⚠️ 按 `attached` 判
+    —— ② 里"不参与"的列**没有可见下拉**，按 `visible` 判会**假红**，见下面那段的现场记录）。
     ⇒ 成功路径 ~0.5 s（原先是 700 ＋ 500 ＋ 2500 的**纯睡**），且**等不到就超时即红**
        （死等的隐患：超时也是绿的 ⇒ 页面没动时，"② 出来了"的断言会读上一屏的内容）。
     """
-    before = page.evaluate("() => document.querySelector('#view').innerText")
-    page.select_option('[data-act="impDomain"]', domain)
-    page.wait_for_function("t => document.querySelector('#view').innerText !== t",
-                           arg=before, timeout=8000)
+    _imp_domain(page, domain, _CTX_READY.get(domain, ""))
     page.set_input_files('[data-act="impPick"]', str(fx))
     page.click('[data-act="impParse"]')          # 「解析并预览」是 `<button>` ⇒ click 委托
-    page.wait_for_selector('[data-act="impMap"]', timeout=20000)
+    # ⚠️ ② 没出来时**必须把页首那句话打出来**（"解析失败：…"就是它写的）—— 否则只剩一句
+    #    `TimeoutError`，病因（多半是这份自检表没被认成该域）全被藏掉。
+    try:
+        # ⚠️ **必须 `state="attached"`**（2026-09-26 订正）：默认的 `visible` 会漏判 ——
+        #    ② 那一屏里**「不参与」的列根本不给可见的下拉**（用户裁定：藏在 `<details>` 折叠里），
+        #    而探针造的**自检表**值全是 `0`/时间格 ⇒ 认出来的列极少、**一个可见下行都没有**
+        #    ⇒ `visible` 判据**白等到超时**（症状 = 一句 `TimeoutError`，看着像"解析坏了"，其实 ② 早出来了）。
+        page.wait_for_selector('[data-act="impMap"]', state="attached", timeout=20000)
+    except Exception:                            # noqa: BLE001
+        notice = page.evaluate("() => (document.querySelector('#view').innerText || '').slice(0, 260)")
+        print(f"  ⛔ ② 列映射没出来（域 {domain}）—— 页首提示：{notice!r}")
+        print("  [诊断] ② 的痕迹：", page.evaluate("""() => ({
+            card: !!document.querySelector('[data-act="impPreview"]'),
+            maps: document.querySelectorAll('[data-act="impMap"]').length,
+        })"""))
+        raise
 
 
 def check(page, errors: list[str]) -> None:
@@ -213,57 +258,148 @@ def check(page, errors: list[str]) -> None:
         except Exception as exc:                              # noqa: BLE001
             print(f"  ⚠️ 截图失败（不影响判据）：{type(exc).__name__}: {exc}")
 
-        # ③′ ⭐⭐ **`③ 预览` 的真机证据**（2026-09-26 补 · **用户报障的另一半就在这一屏**）：
-        #    `ctxBar`（项目面板 ＋ **本批归属年月** ＋ **截止核算月**）**只在 ③ 预览卡**里渲染
-        #    （`legacy.js` 的 `${ctxBar}` 在 `prevCard`，就在「④ 确认落库」上面）⇒ ② 及以前看不见它。
-        #    ⭐ 它此前**从没被真机跑过**：2026-09-26 收尾核这一屏时，**当场查出**导入页 5 处把面板共用件
-        #       写成了 `IMP` 的方法（`IMP.pjClose('impPj')` 那种 —— 语法合法、点下去才 TypeError，
-        #       四个闸门全绿）⇒ 这条证据就是为"这一屏"补的。
-        #    判词三件（**两个域互为对照** —— 这就是"按键渲染"的真机证明）：
+        # ①″ ⭐⭐ **「范围」栏前移 + 未选项目不能落库**的真机证据（2026-09-26 用户裁定：
+        #    「**选文件时就选定项目**」＋「默认值不诱导」）：
+        #    `ctxBar`（项目面板 ＋ **本批归属年月** ＋ **截止核算月**）**原先只画在 ③ 预览卡里**
+        #    ⇒ 用户**走到最后一步才知道要选项目**；现在画在 **①「选域与文件」**（`legacy.js` 的 `head`）
+        #    ⇒ **选完域、还没选文件就该看得见**（这一条只有真机能证）。
+        #    ⚠️ 那三处控件此前**从没在"① 那一屏"被真机跑过**：2026-09-26 收尾核这一屏时**当场查出**
+        #       导入页 5 处把面板共用件写成了 `IMP.` 的方法（语法合法、点下去才 TypeError，四个闸门全绿）。
+        #    判词（**两个域互为对照** —— 这就是"按键渲染"的真机证明）：
         #      ① `m06_proc` **声明了** `cutoff_ym` ⇒ `#impCut` 在、`#impYm` 不在；
-        #      ② `m04_plan` **声明了** `year_month` ⇒ `#impYm` 在、`#impCut` 不在
-        #         （⭐ 用户原话「截止核算月是干嘛的？」＋「集采页那个框填了不生效」—— 修法就是
-        #          "只画给声明它的域"，此前**只有源码断言**看得见）；
-        #      ③ 两个域都要有**项目面板**，且**真点能开、点空白能收**（那一屏上的共用件真在跑）。
-        stage = "③ 预览（域上下文栏）"
+        #      ② `m04_plan` **声明了** `year_month` ⇒ `#impYm` 在、`#impCut` 不在（⭐ 用户原话
+        #         「截止核算月是干嘛的？」—— 修法就是"只画给声明它的域"，此前只有源码断言看得见）；
+        #      ③ `m06_proc` 有 `projects` ⇒ 项目面板在 **且默认不预选**（按钮文案 = `请选择项目`）。
+        #    再往下（同一循环里）验 ③ 那一屏：**只读回显**在、**没选项目 ⇒ ④ 置灰**、
+        #      真点选一个 ⇒ ④ 变可用，且 `#impCut` **换成所选项目自己的截止月**（真缺陷的修复证据）。
+        stage = "① 范围栏（选域即可见 · 项目不预选）"
         # 域 ⇒ (要「截止核算月」, 要「本批归属年月」, 要「项目面板」)
-        # ⚠️ 面板**不是每个域都有**：`m04_plan` 的 `options` 只给 `year_month`（付款计划取数不走这一格）
+        # ⚠️ 面板**不是每个域都有**：`m04_plan` 的 `options` 只给 `year_month`（付款计划不按项目导）
         #    ⇒ 它**本来就没有**项目面板。⭐ 实测当场打脸第一版判词（"两域都要有面板" ⇒ `m04` 报 `pj=False`）——
         #    那不是壳的错，是**判词把自己以为的设计当成了契约**（⛔ 判据只许照域自己说的写）。
-        want = {"m06_proc": (True, False, True), "m04_plan": (False, True, False)}
+        want = {"m06_proc": (True, False, True), "m04_plan": (False, True, False),
+                "m11_jc": (False, False, True)}
         for dm in IMP_DOMAINS:
             want_cut, want_ym, want_pj = want[dm]
+            # ⚠️ **必须给就绪判据**（`_CTX_READY`）：`select_option` 是**同步**改 DOM 值的，若只等
+            #    "下拉的 value 变成目标"，会**在异步取域上下文之前**就返回 ⇒ 读到的还是**上一屏**
+            #    （实测：切到 `m04_plan` 却读到 `m06_proc` 的范围栏，三条判词全假红）。
+            _imp_domain(page, dm, _CTX_READY.get(dm, ""))   # ⭐ **只切域**（这一步**还没选文件**）
+            got1 = page.evaluate("""() => {
+                const v = document.querySelector('#view');
+                const t = v.querySelector('[data-act="impPjToggle"]');
+                const sp = t ? t.querySelector('span') : null;      /* 第 1 个 span = 选中的项目名（第 2 个是 ▼） */
+                return {cut: !!v.querySelector('#impCut'), ym: !!v.querySelector('#impYm'),
+                        pj: !!t, label: sp ? (sp.innerText || '').trim() : '',
+                        hasFile: !!v.querySelector('[data-act="impPick"]')};
+            }""")
+            print(f"①″ {dm} 范围栏（切域后 · 未选文件）= {got1}")
+            oks1 = [
+                (got1["cut"] == want_cut,
+                 f"`{dm}` 的「截止核算月」" + ("在（它声明了 `cutoff_ym`）" if want_cut
+                                          else "**没画**（它没声明 `cutoff_ym` ⇒ 画了也是填了不生效）")),
+                (got1["ym"] == want_ym,
+                 f"`{dm}` 的「本批归属年月」" + ("在（它声明了 `year_month`）" if want_ym
+                                           else "**没画**（它没声明 `year_month`）")),
+                (got1["pj"] == want_pj,
+                 f"`{dm}` " + ("的项目面板**在 ①**（它给了 `projects`）" if want_pj
+                               else "**没画**项目面板（它没给 `projects`）")),
+            ]
+            if want_pj:
+                oks1.append((got1["label"] == "请选择项目",
+                             f"`{dm}` 的项目格**默认不预选**（文案应为「请选择项目」，实为「{got1['label']}」）"
+                             " —— 默认值不诱导：⛔ 系统不替用户挑项目"))
+            for ok1, what1 in oks1:
+                print(("  ✅ " if ok1 else "  ⛔ ") + "⑳″ " + what1)
+                if not ok1:
+                    errors.append(f"① 范围栏自检未通过（{dm}）：" + what1)
+
+            # ③″ 预览屏：只读回显 ＋ 未选项目 ⇒ ④ 置灰 ＋ 真点选一个 ⇒ 可用 ＋ 截止月跟随项目
             fx = fs / f"imp_smoke_{dm}.xlsx"
             n_cols = _mk_xlsx(fx, dm)
             _imp_pick(page, dm, fx)                         # 选域 → 上传 → 解析（② 出来）
             page.click('[data-act="impPreview"]')           # ② → ③（**只读**：预览阶段不写库）
-            page.wait_for_selector('[data-act="impCommit"]', timeout=20000)   # 预览卡到了（落库按钮只在这）
+            # ⚠️ 预览卡没出来时**必须把页首那句话打出来**：`IMP.msg` 在壳的闭包里，真机取不到 ——
+            #    而"预览失败：…"正是它写上去的（⛔ 只报一句 `TimeoutError` 等于把病因藏了）。
+            try:
+                page.wait_for_selector('[data-act="impCommit"]', timeout=20000)   # 预览卡到了（落库按钮只在这）
+                ok_card = True
+            except Exception:                              # noqa: BLE001
+                ok_card = False
+            if not ok_card:
+                notice = page.evaluate(
+                    "() => (document.querySelector('#view').innerText || '').slice(0, 220)")
+                print(f"  ⛔ ③″ {dm} 预览卡没出来 —— 页首提示：{notice!r}")
+                errors.append(f"③ 预览屏自检未通过（{dm}）：预览卡没出来（页首：{notice[:130]}）")
+                continue
             got3 = page.evaluate("""() => {
                 const v = document.querySelector('#view');
-                const t = v.querySelector('[data-act="impPjToggle"]');
-                let open = -1, outside = -1;
-                if (t) { t.click(); open = v.querySelectorAll('[data-act="impPjPick"]').length;
-                         document.querySelector('#ttl').click();
-                         outside = v.querySelectorAll('[data-act="impPjPick"]').length; }
-                return {cut: !!v.querySelector('#impCut'), ym: !!v.querySelector('#impYm'),
-                        pj: !!t, open: open, outside: outside};
+                const btn = v.querySelector('[data-act="impCommit"]');
+                return {echo: (v.innerText || '').includes('本批数据将写入'),
+                        echoTxt: ((v.innerText.match(/本批数据将写入[^\\n]{0,90}/) || [''])[0]).trim(),
+                        disabled: !!(btn && btn.disabled)};
             }""")
-            print(f"③′ {dm} 预览卡 = {got3}（表头 {n_cols} 列）")
+            print(f"③″ {dm} 预览卡 = {got3}（表头 {n_cols} 列）")
             oks3 = [
-                (got3["cut"] == want_cut,
-                 f"`{dm}` 的「截止核算月」" + ("在（它声明了 `cutoff_ym`）" if want_cut
-                                          else "**没画**（它没声明 `cutoff_ym` ⇒ 画了也是填了不生效）")),
-                (got3["ym"] == want_ym,
-                 f"`{dm}` 的「本批归属年月」" + ("在（它声明了 `year_month`）" if want_ym
-                                           else "**没画**（它没声明 `year_month`）")),
-                (got3["pj"] == want_pj and (not want_pj or (got3["open"] >= 1 and got3["outside"] == 0)),
-                 f"`{dm}` " + (f"的项目面板真点能开（{got3['open']} 个候选）· 点空白能收（{got3['outside']}）"
-                               if want_pj else "**没画**项目面板（它没给 `projects`）")),
+                (got3["echo"],
+                 f"`{dm}` 预览屏有**只读回显**「本批数据将写入…」（{got3['echoTxt']}）"
+                 " —— ④ 之前必须能复核范围（守则 §4 防误导）"),
             ]
+            if want_pj:
+                oks3.append((got3["disabled"],
+                             f"`{dm}` **没选项目 ⇒ 「④ 确认落库」置灰**（⛔ 系统不替你挑、"
+                             "也不许点了才报错）"))
+                # ⭐ 真点面板选第一个候选 ⇒ ④ 变可用；m06 另验「截止核算月跟着换」
+                exp = page.evaluate("""async (dm) => {
+                    const d = await (await fetch('/api/imp/' + dm + '/options')).json();
+                    const p = (d.projects || [])[0] || '';
+                    return {p: p, cut: ((d.cutoffs || {})[p] || '')};
+                }""", dm)
+                got4 = page.evaluate("""() => {
+                    const v = document.querySelector('#view');
+                    v.querySelector('[data-act="impPjToggle"]').click();
+                    const open = v.querySelectorAll('[data-act="impPjPick"]').length;
+                    const r = [...v.querySelectorAll('[data-act="impPjPick"]')][0];
+                    if (r) r.click();
+                    const btn = v.querySelector('[data-act="impCommit"]');
+                    const cut = v.querySelector('#impCut');
+                    return {open: open, closed: v.querySelectorAll('[data-act="impPjPick"]').length,
+                            disabled: !!(btn && btn.disabled), cut: cut ? cut.value : null};
+                }""")
+                oks3.append((not got4["disabled"],
+                             f"`{dm}` 真点选一个项目 ⇒ 「④ 确认落库」**变可用**"
+                             f"（面板真点能开 {got4['open']} 个候选 · 选完自动收 {got4['closed']}）"))
+                if dm == "m06_proc" and exp["p"]:
+                    oks3.append((got4["cut"] == exp["cut"],
+                                 f"`m06_proc` 换项目 ⇒ 「截止核算月」**跟着换**（选 `{exp['p']}` ⇒ "
+                                 f"框里 `{got4['cut']}` · 域给的 `cutoffs` 是 `{exp['cut']}`）"
+                                 " —— 此前它只在进域那一刻取一次 ⇒ 会把 A 项目的分界写给 B（真缺陷）"))
+                # ⭐⭐ `m11_jc`：**选完项目再预览一次** ⇒ ③ 必须报出「配上几条 / 配不上几条」
+                #    （`TAIL-106` 用户原话：「能否在选文件时就选定项目、并**立刻显示"匹配上多少"**」）。
+                #    ⚠️ 必须先重跑一次预览：上一屏那个数是在**没选项目**时算的（域钩子当时只能回一句提示）。
+                if dm == "m11_jc":
+                    page.click('[data-act="impPreview"]')
+                    try:
+                        page.wait_for_function(
+                            "() => (document.querySelector('#view').innerText || '')"
+                            ".includes('没配上的行')", timeout=20000)
+                        ok_pre = True
+                    except Exception:                              # noqa: BLE001
+                        ok_pre = False
+                    txt = page.evaluate("() => document.querySelector('#view').innerText || ''")
+                    print(f"③‴ m11_jc 对号预览 = {txt[txt.find('将写入'):][:120]!r}")
+                    oks3.append((ok_pre and "配上" in txt and "配不上" in txt,
+                                 "`m11_jc` ③ 报出「**配上 / 配不上**」两个数"
+                                 "（改动前 ③ 一条对号信息都没有，得等到 ④ 落库才知道）"))
+                    oks3.append(("没配上的行" in txt,
+                                 "`m11_jc` ③ 把没配上的行**逐条列出来**（含原因）—— ⛔ 不是只丢一个总数"))
             for ok3, what3 in oks3:
                 print(("  ✅ " if ok3 else "  ⛔ ") + "⑳′ " + what3)
                 if not ok3:
                     errors.append(f"③ 预览屏自检未通过（{dm}）：" + what3)
+
+        # ⚠️ 原「③ 预览（域上下文栏）」那一段**已于 2026-09-26 上移合并进 ①″/③″**
+        #    （范围栏从 ③ 挪到了 ① ⇒ 判词必须跟着挪，否则它盯的是一个已经不存在的位置）。
 
         # ③ 内容是后端的（⛔ 壳里另抄一份 = 两处副本必漂）
         stage = "与后端对账"

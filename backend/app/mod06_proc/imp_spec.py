@@ -113,8 +113,15 @@ def options(s) -> dict:
     data = build_import_data(s, warehouse="")
     return {
         "projects": list(data["projects"]),
+        # ⚠️ `warehouse` 是"**读数据**时的当前项目"（= 候选人里的第一个）—— 通用面**拿它当默认**用会出事
+        #   （⛔ 别再把 `ctx.warehouse` 当预选值：那是"系统替你挑了一个项目"，见 §4 默认值不诱导）；
+        #   它继续给着，是为了壳侧**不认域号**这条纪律下仍能读懂"这个域有项目维度"。
         "warehouse": str(data["warehouse"] or ""),
         "cutoff_ym": str(data["cutoff_ym"] or ""),
+        # ⭐ **每个项目的截止核算月表**（2026-09-26）：界面上的「截止核算月」曾只在**进域那一刻**取一次，
+        #   用户换项目后那个框**不跟着换**，而落库会把它**写进新项目**（A 的分界写给 B，且不报错）⇒
+        #   现在壳按**当前选中的项目**查这张表。⚠️ 与 `cutoff_ym` 同表同口径（`repository.load_cutoffs`）。
+        "cutoffs": dict(data.get("cutoffs") or {}),
         "batches": [str(getattr(b, "batch_no", "") or "") for b in data["batches"]],
     }
 

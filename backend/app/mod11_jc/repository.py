@@ -264,6 +264,18 @@ def update_contract(s: Session, contract_id: int, **cols) -> int:
     return 1
 
 
+def contract_amt_is_fillable(row: JcContract | None, value) -> bool:
+    """「**合同金额空才填**」的**唯一判据**（`fill_contract_amt_if_blank` 与**导入预览**共用一份）。
+
+    ⚠️ 为什么抽出来（2026-09-26 · `TAIL-106`）：预览要**只读**地说"这一行会把供应商价填进空的那格"，
+       而判据一旦在预览里**另写一份**，就会出现"预览说会填、落库没填"（或反过来）——
+       那正是本仓最忌的「同一口径两个主人」。⇒ 判据只此一处，读写两侧都调它。
+    """
+    if row is None or float(row.contract_amt or 0) != 0:
+        return False
+    return Decimal(str(value or 0)) > 0
+
+
 def fill_contract_amt_if_blank(s: Session, contract_id: int, value) -> bool:
     """**只在「合同金额」为空时**写它 —— **Excel 供应商线专用**（2026-09-26 用户裁定 · 方案②）。
 
@@ -273,15 +285,12 @@ def fill_contract_amt_if_blank(s: Session, contract_id: int, value) -> bool:
       ⇒ 两条口径不同 ⇒ 出口分开；`EDITABLE_COLS` 里**刻意不放它**（放了 = 人能改 i8 的事实）。
     ⚠️ **空才填**：已有非 0 值（上一次导入填的）一个字不改 —— 与 §9.3「人工改过的不被覆盖」同款。
     ⚠️ 传空 / 0 **不写**（免得把"还没补"写成 0 —— "0"与"空"在台账上是两件事）。
-    返回 `True` = 真写了。
+    返回 `True` = 真写了。⚠️ 判据本体在 `contract_amt_is_fillable`（预览也调它，⛔ 别在这里再写一遍）。
     """
     row = s.get(JcContract, int(contract_id))
-    if row is None or float(row.contract_amt or 0) != 0:
+    if not contract_amt_is_fillable(row, value):
         return False
-    amt = Decimal(str(value or 0))
-    if amt <= 0:
-        return False
-    row.contract_amt = amt
+    row.contract_amt = Decimal(str(value or 0))
     s.flush()
     return True
 
@@ -526,7 +535,7 @@ __all__ = [
     "invoices_of_many", "payments_of_many", "notice_ids_used", "project_choices",
     "project_id_by_key",
     "EDITABLE_COLS", "insert_contract", "set_tag", "set_tags", "update_contract",
-    "fill_contract_amt_if_blank",
+    "contract_amt_is_fillable", "fill_contract_amt_if_blank",
     "insert_invoice", "delete_invoice", "insert_payment", "delete_payment", "count_contracts",
     "FETCH_COLS", "FETCH_ONLY_WHEN_BLANK", "FETCH_BY_PARTY_COLS",
     "one_by_no", "existing_contract_nos", "upsert_fetched_contracts", "payment_of_notice",
