@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-#: 引用形态：`tests/test_x.py` / `test_x.py` / 反引号里的裸名都算
+#: 引用形态：`tests/test_x.py` / `test_x.py`（⚠️ `test_x.py` 是**示例**名、不存在）/ 反引号里的裸名都算
 REF = re.compile(r"[\w./\\-]*test_[\w]+\.py")
 SCAN_DIRS = ("backend/app", "tools", "ops", "backend/tests")
 SKIP_PARTS = (".venv", "__pycache__", "node_modules", ".git", "backups")

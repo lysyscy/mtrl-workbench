@@ -4,7 +4,7 @@
 - `ACC-PAY-CAT-001`    —— 批量改分类（三类 · 必须先勾选 · 分档回报 · 只动勾选行）⇒ `§4.2.4`
 - `ACC-PAY-MANUAL-001` —— 手动新增行（统计结算恒 0 · 录入人 · 项目候选 · 编辑删除边界 · 上限）⇒ `§4.2.6`
 
-⚠️ 本件只放**不碰页面与路由**的纯函数断言；渲染面见 `test_wired_m03_action.py（`test_notice_action_page.py` 已不在仓里 —— 2026-09-26 机器扫出）`、
+⚠️ 本件只放**不碰页面与路由**的纯函数断言；渲染面见 `test_wired_m03_action.py`（原 `test_notice_action_page.py` —— 该件已不在仓里）、
 端点见 `test_notice_action_api.py`（2026-09-16 自 `test_notice_actions.py` 拆出，断言未改）。
 ⚠️ 桩件的**唯一主人** = `tests/m03_action_helpers.py`；本文件当年的「兼容再导出」已清理
 （2026-09-17 · `TAIL-22`）—— 5 个依赖方改为直接指向主人，本文件不再充当二传手。

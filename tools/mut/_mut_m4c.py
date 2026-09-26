@@ -109,7 +109,8 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
     #    （`§19` 批 2，授权 `D18`）整体删除 ⇒ 两条变异**既是"命中 0 次的过期锚点"，又会把整个脚本拖崩**
     #    （`main()` 一开头就对所有靶文件 `read_bytes()` ⇒ 缺件 = `FileNotFoundError`、**一条都跑不了**）。
     #    ⇒ 2026-09-21 一并删除（留痕在此）。它们守的 claim（**降级后确实有手动导入这条路**）现由
-    #    `tests/test_page_m08.py`（壳里两个入口 ＋ 解析端点）＋ `test_acc_inv_fetch.py::001-08` 承接 ✓
+    #    `tests/test_wired_m08.py`（壳里两个入口 ＋ 解析端点；原 `test_page_m08.py` 已随旧页删除，该件已不在仓里）
+    #    ＋ `test_acc_inv_fetch.py::001-08` 承接 ✓
 
     ("⑮ 预览暂存取不到时**回落成空**（而不是显式报错）",
      "backend/app/core/preview_store.py",
