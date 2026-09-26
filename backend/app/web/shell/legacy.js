@@ -302,11 +302,13 @@ V.imp = () => {
   </div></div>`;
 
   /* ---- ② 列映射 ---- */
-  /* ⭐⭐ **版式 = 一列一张卡**（源列**横着铺**）；⛔ 不再是"一行一个源列"的表格。
-     ⚠️ 用户 2026-09-26 第二次指出（原话）：「列映射就要以（**列**）的样子显示，现在还是（**行**）的样子」。
-        上一轮我把「弄成行」误读成"弄成一行文字"（只改了措辞、版式没动）⇒ **记号**：
-        **他说「行 / 列」指的是版式**，⛔ 别再当文字行数解。
-     ⚠️ 判据与真机证据都按这两个属性找，⛔ 不许改：`<select data-act="impMap" data-src="…">`。 */
+  /* ⭐⭐ **版式 = 转置**（2026-09-26 用户**第三次**说清，这是最终口径）：
+     原话「我要**每个表头在列上**，你能明白么？**excel 里是列，本系统里也是列**；
+     你做列映射一开始弄行，后来又弄卡片；**卡片也是你误解的**」
+     ⇒ **每个源列 = 表里的一列**（源列名当**表头横排**，跟 Excel 一样），
+       **属性在行上**（画像·样本 / 映射到 / 系统建议 / 依据）。
+     ⛔ 之前两版都错：① 源列占**行**（一行一个源列，名字在行首）② 卡片网格。
+     ⚠️ 判据与真机证据认 `<select data-act="impMap" data-src="…">`，⛔ 不许改这两个属性。 */
   let mapCard = '';
   if (IMP.cols.length) {
     const optsOf = (c) => {
@@ -323,22 +325,27 @@ V.imp = () => {
       if (c.ignored) return '<span class="tag t-in">不导入</span>';
       return '<span class="tag t-dg">认不出</span>';
     };
-    /* ⚠️ 域声明了 `ignored` 的列（认得、但按口径**不导入**）**不进映射网格**：它们不需要人选
-       （域已定死），混在网格里会把"要人做决定的列"淹掉（用户 2026-09-26 口径）。
-       ⚠️ 而**认不出**的列要**留在网格里**（它们正等人点下拉）。 */
+    /* ⚠️ 域声明了 `ignored` 的列（认得、但按口径**不导入**）**不进映射表**：它们不需要人选
+       （域已定死），混在里面会把"要人做决定的列"淹掉（用户 2026-09-26 口径：不导入的**单独写**）。
+       ⚠️ 而**认不出**的列要**留在表里**（它们正等人点下拉）。 */
     const toMap = IMP.cols.filter(c => !c.ignored);
     const skipped = IMP.cols.filter(c => c.ignored);
-    const card = (c) => `<div style="border:1px solid var(--bd);border-radius:var(--r);padding:9px 10px;
-        background:var(--sf2);display:flex;flex-direction:column;gap:7px">
-      <div style="font-weight:600">${esc(c.src)}</div>
-      <div class="mut sm" style="min-height:14px">${esc([c.profile, (c.samples || []).join(' / ')]
-        .filter(Boolean).join(' · ')).slice(0, 70)}</div>
-      <div><select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select></div>
-      <div>${badge(c)}</div>
-      ${c.field && c.why ? `<div class="mut sm">${esc(c.why)}</div>` : ''}</div>`;
+    /* 每行 = 一个**属性**（行首是属性名，其余各列 = 各源列该属性）—— 这就是"转置" */
+    const attrRow = (label, cellOf) =>
+      `<tr><th style="text-align:left;white-space:normal;min-width:104px" class="mut sm">${label}</th>`
+      + toMap.map(c => `<td>${cellOf(c)}</td>`).join('') + '</tr>';
     mapCard = `<div class="card" style="margin-top:12px"><h4>列映射<span class="sp"><span class="mut sm">
-      一列一张卡 · 系统只给建议，决定权在你</span></span></h4>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:9px">${toMap.map(card).join('')}</div>
+      <b>横着一列一个源列</b>（照你 Excel 的样子）· 系统只给建议，决定权在你</span></span></h4>
+      <div class="tw"><table class="dt sm">
+      <thead><tr><th style="min-width:104px"></th>${toMap.map(c => `<th style="vertical-align:bottom;min-width:146px">
+        <div style="font-weight:600">${esc(c.src)}</div>
+        <div class="mut sm" style="font-weight:400;white-space:normal">${esc([c.profile, (c.samples || []).join(' / ')]
+          .filter(Boolean).join(' · ')).slice(0, 52)}</div></th>`).join('')}</tr></thead>
+      <tbody>
+        ${attrRow('映射到', c => `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`)}
+        ${attrRow('系统建议', c => badge(c))}
+        ${attrRow('依据', c => `<span class="mut sm">${esc(c.field ? (c.why || '') : '')}</span>`)}
+      </tbody></table></div>
       ${skipped.length ? `<div class="tip" style="margin-top:10px"><b>这几列不导入</b>（原样保留，不需要你选）：
         ${skipped.map(c => `<div class="sm">· ${esc(c.src)} —— ${esc(c.ignored)}</div>`).join('')}</div>` : ''}
       <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:10px">${lack.length
