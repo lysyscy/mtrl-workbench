@@ -62,3 +62,52 @@ def test_虚拟滚动的设计红线():
     assert "VS_MIN=400" in read_shell(), "虚拟化阈值没了（小页也被虚拟化 = 固定开销不值）"
     # 红线③：BIND（注入按钮/钩子）必须在最后一块之后才调 —— 两个分支各调一次
     assert body.count("BIND[VIEW]") >= 2, "`BIND[VIEW]` 只调一处 ⇒ 另一条路径渲染完没有注入钩子"
+
+
+@acc()
+def test_通用浮层要逃出卡片裁剪_机制只有一处():
+    """⭐⭐ 2026-09-26：`TAIL-109`（用户报障「**通用导入的项目选择控件，行数显示不全**」）＋
+    `TAIL-110`（同类风险收口）。
+
+    **病根**：`.card{...overflow:hidden}`（给表格圆角用的）会剪掉**卡片矩形之外**的部分，而浮层是
+      `position:absolute` ⇒ 真机量到：卡片下沿 504、浮层伸到 567 ⇒ **裁掉 63px ＝ 最下面 2~3 行**，
+      那几行**既看不见也滚不到**（浮层自身 `scrollH≈clientH`）。
+    **药**：渲染后把浮层提升为 `fixed`（包含块 = 视口 ⇒ 不受非 transform 祖先的 `overflow` 裁剪）。
+
+    **判词**（五半，缺一半都不算）：
+      ① 机制**只有一处实现**（`placePops`）—— ⛔ 别按"项目面板一套、时间选择器一套"各写一份；
+      ② **两类浮层都挂了两个钩子**：锚 `pjwrap` ／ 盒 `pjpop`（项目面板 ＋ **时间选择器**）；
+      ③ `render()` **两条路径都要调**（虚拟滚动那条**提前 `return`** ⇒ 漏了它，大表页上照旧被裁）；
+      ④ 滚 / 缩窗口要**重新定位**（浮层是 `fixed`，不重新定位就"粘"在原地像浮在空中）；
+      ⑤ ⛔ **不许再出现裸浮层**：壳里每个 `z-index:80` 的浮层盒**必须**带 `pjpop`
+         （新加浮层忘了挂钩子 ⇒ 它的后半截又会被裁，而人**不会记得**这件事 —— 所以由机器记）。
+
+    ⚠️ 能证伪：删 `placePops` 的任一调用 / 摘掉某一类的 `pjpop` / 新加一个不带钩子的浮层 ⇒ 本件必红。
+    ⚠️ 静态判词的**行为**那半边由真机段 `tools/probe/_shell_pops.py` 兜（量 `fixed` ＋ 点命中）。
+    """
+    raw = read_shell()
+    src = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", raw, flags=re.S))
+
+    # ① 机制只有一处
+    assert src.count("function placePops()") == 1, "通用浮层机制**应当只有一处**（`placePops`）"
+
+    # ② 两类浮层都挂两个钩子
+    assert 'class="mpwrap pjwrap"' in src, (
+        "时间选择器的**锚**没挂 `pjwrap` —— 它就不会被 `placePops` 提升为 `fixed`（`TAIL-110`）")
+    assert src.count('class="fi pjwrap"') >= 5, "项目面板的锚不见了（`.fi pjwrap` 那十几处）"
+    pops = re.findall(r"<div[^>]*z-index:80[^>]*>", src)
+    assert len(pops) == 2, (
+        f"壳里的浮层盒数变了（{len(pops)} 个）—— 增删浮层必须同批过本件（并挂好钩子）：{pops}")
+    for tag in pops:
+        assert 'class="pjpop"' in tag, (
+            f"有浮层**没挂 `pjpop`** ⇒ 它的后半截会被卡片裁掉（`TAIL-109`/`TAIL-110`）：{tag}")
+
+    # ③ 两条渲染路径都调（`placePops()` 全壳出现 3 次 = 1 处定义 ＋ 2 处调用）
+    assert src.count("placePops()") == 3, (
+        f"`placePops()` 的调用点不是两处（全壳 {src.count('placePops()')} 次）—— "
+        "虚拟滚动那条提前 `return`，漏了它大表页上照旧被裁")
+
+    # ④ 滚 / 缩窗口要重新定位
+    assert "document.addEventListener('scroll', placePops, true)" in src, (
+        "浮层是 `fixed` ⇒ 外层一滚必须重新定位（⚠️ 要**捕获阶段**：`scroll` 不冒泡）")
+    assert "addEventListener('resize', placePops)" in src, "缩窗口后浮层没重新定位"

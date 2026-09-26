@@ -29,6 +29,7 @@ from _shell_home import check as check_home    # noqa: E402  ← ⑲ 看板接�
 
 from _shell_exp import check as check_exp        # noqa: E402  ← ⑬ m07 导出（`TAIL-04`）—— 2026-09-21 外移（本文件逼近 600 行红线）
 from _shell_legacy import check as check_legacy  # noqa: E402  ← ⑳ 四个暂留件收口的壳内四页（`§19`）
+from _shell_pops import check as check_pops    # noqa: E402  ← ㉑ 通用浮层的 `fixed` 定位 ＋ 点命中（`TAIL-109`/`TAIL-110`）
 from _shell_m09 import check as check_m09    # noqa: E402  ← ⑪/⑪b m09 特殊费用（2026-09-25 外移：`TAIL-99`）
 from _shell_m14 import check as check_m14    # noqa: E402  ← ⑫/⑫b/⑫c m14 规则配置 ＋ 剔除名单卡（同上）
 
@@ -507,6 +508,11 @@ def main() -> int:
         # ---- ⑳ 四个暂留件收口（`§19` · 2026-09-21）—— 设置 ＋ 三个历史导入：四页渲染 ＋
         #      **无死控件**（真机版的 `data-act`/`CHG` 守卫）＋ 页内容是后端的，挪 `_shell_legacy.py`。
         check_legacy(page, errors)
+
+        # ---- ㉑ **通用浮层**（`TAIL-109` 立 · `TAIL-110` 收口）：时间选择器 / 项目面板必须被
+        #      `placePops` 提升为 `fixed`（否则被卡片 `overflow:hidden` 裁掉后半截，用户报过）
+        #      ＋ ⭐ **点命中**判"最后一项真的看得见"（离线看不见 CSS 裁剪，只有这里能量到）。
+        check_pops(page, errors)
 
     print("\n=== console / page 错误 ===")
     if errors:

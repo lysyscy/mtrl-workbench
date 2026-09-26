@@ -2229,9 +2229,14 @@ document.addEventListener('click',e=>{
   const inEl=cls=>!!(e.target&&e.target.closest&&e.target.closest(cls));
   let ch=false;
   /* ⭐ `#1`（2026-09-26）：**遍历注册表全关** —— ⛔ 不再逐个列面板名字
-     （那份名单正是 2026-09-26 用户报障「展开后关不掉」的根：漏登记一个新面板就静默坏）。 */
-  if(!inEl('.pjwrap')) Object.keys(PJ_OPEN).forEach(k=>{ if(PJ_OPEN[k]){ PJ_OPEN[k]=false; ch=true; } });
-  if(mp.open!==null && !inEl('.mpwrap')){ mp.open=null; ch=true; }
+     （那份名单正是 2026-09-26 用户报障「展开后关不掉」的根：漏登记一个新面板就静默坏）。
+     ⭐⭐ `TAIL-110`（2026-09-26）：**锚只剩一个名字 `.pjwrap`** —— 时间选择器与项目面板共用同一套
+     （它同时管「逃出卡片裁剪」`placePops` 与「点浮层外收起」本函数）⇒ 判据只认**锚的包含关系**；
+     ⛔ 别再给某类浮层单独加一个锚名（那就是"同一件事两个判据"）。 */
+  if(!inEl('.pjwrap')){
+    Object.keys(PJ_OPEN).forEach(k=>{ if(PJ_OPEN[k]){ PJ_OPEN[k]=false; ch=true; } });
+    if(mp.open!==null){ mp.open=null; ch=true; }
+  }
   if(ch){ render(); if(lastModal&&lastModal.reopen) lastModal.reopen(); }
 });
 document.addEventListener('keydown',e=>{

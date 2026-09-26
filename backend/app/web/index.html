@@ -213,7 +213,11 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .kv dd{font-family:var(--fm)}
 
 /* 提示条 */
-.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--toast-bg);color:var(--on);padding:9px 18px;border-radius:8px;font-size:12.5px;z-index:120;box-shadow:0 8px 22px var(--shadow-toast);max-width:70vw;line-height:1.5}
+/* ⚠️ `pointer-events:none`（2026-09-26 真机段 ㉑ 量出来的真缺陷）：提示条是**纯提示**、没人给它挂点击，
+   可它 `z-index:120` 又贴在屏幕下沿 ⇒ 会**吃掉那一条带的点击**：浮层（`z-index:80`）最下面几项若正好
+   落在那条带上，**点了没反应**（实测：`m04` 的 `plMonth` 面板末项 `关闭` 被 `.toast` 命中）。
+   ⇒ 提示条一律不参与命中；⛔ 别为"让它可点"加回来（要能点就该做成按钮，不是提示条）。 */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--toast-bg);color:var(--on);padding:9px 18px;border-radius:8px;font-size:12.5px;z-index:120;box-shadow:0 8px 22px var(--shadow-toast);max-width:70vw;line-height:1.5;pointer-events:none}
 .toast b{color:var(--pri-hl);font-weight:500}
 
 /* 其他 */
@@ -995,14 +999,14 @@ function render(){
         （⛔ 用户当天的纠正：**不能用"当前数据量小"当判据** —— 没正式用的页以后可能上万行，
         而名单式的下场是"某个页涨上去、忘了加名单 ⇒ 永远不生效"）。
         例外见 `VSCROLL`（**只用来"关掉或调阈值"**，⛔ 别再当启用名单用）。 */
-  /* ⚠️ 虚拟滚动那条路也在 `startVirtual` 里就把 DOM 写完了 ⇒ 面板定位**两条路都要跑**
-     （`placePjPanels` 幂等；漏一条 ⇒ 大表页上展开的面板仍被卡片裁）。 */
-  if(vsOn(VIEW) && startVirtual(html, scroller, keep)){ placePjPanels(); return; }
+  /* ⚠️ 虚拟滚动那条路也在 `startVirtual` 里就把 DOM 写完了 ⇒ 浮层定位**两条路都要跑**
+     （`placePops` 幂等；漏一条 ⇒ 大表页上展开的浮层仍被卡片裁）。 */
+  if(vsOn(VIEW) && startVirtual(html, scroller, keep)){ placePops(); return; }
   $('#view').innerHTML=html;
   /* ⚠️ 还原时**重新解析**滚动容器：`.tw` 已被上一行整体重建（旧元素连同它的 scrollTop 一起没了）。 */
   const host2=scrollHost(); if(host2) host2.scrollTop=keep;
   if(BIND[VIEW]) BIND[VIEW]();
-  placePjPanels();      /* ⭐ 面板逃出卡片裁剪（`TAIL-109`）—— 见 `placePjPanels` 的注释 */
+  placePops();          /* ⭐ 通用浮层逃出卡片裁剪（`TAIL-109`/`TAIL-110`）—— 见 `placePops` 的注释 */
 }
 /* ⭐ `TAIL-66` 后的语义：**默认全开**，`VSCROLL` = **例外表** ——
    `{m07:{off:true}}` = 这页不虚拟化；`{m09:{min:800}}` = 这页阈值调到 800。
@@ -1289,9 +1293,12 @@ let mp={open:null,year:2026,mode:'',a:'',b:'',wq:''};
        · 周 = 该周**周一**的 `YYYY-MM-DD` · 全部 = `全部`
    ⚠️ 抓取 / 付款计划导入 / 期初截止年月 **有意只声明「月」**（业务上就是"一次一个月"）——
       写进配置防"顺手统一"。 */
-const tmBtn=(id,cfg)=>`<div class="mpwrap" style="position:relative;display:inline-block">
+const tmBtn=(id,cfg)=>`<div class="mpwrap pjwrap" style="position:relative;display:inline-block">
   <button class="btn" data-act="mpToggle" data-id="${id}" data-scope="${cfg.scope}" data-val="${esc(cfg.val)}" style="min-width:118px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px"><span class="fc">${esc(cfg.label==null?cfg.val:cfg.label)}</span><span class="mut" style="font-size:9px">▼</span></button>
   ${mp.open===id?tmPanel(id,cfg):''}</div>`;
+/* ⚠️ 上面那个 `pjwrap` 是**浮层锚**（与 `.mpwrap` 并存：`.mpwrap` 是"点外面收起"的历史判据，
+   `pjwrap` 才是**逃出卡片裁剪**那套机制认的锚）—— 见 `placePops()` 的注释。
+   ⛔ 别删 `pjwrap`：删了时间选择器就退回"被卡片 overflow 裁"的老形态（`TAIL-110`）。 */
 const tmModes={月:1,跨月:1,年:1,季度:1,周:1,全部:1};
 const tmParse=v=>{ v=String(v==null?'':v);
   if(v==='全部') return {mode:'全部'};
@@ -1375,7 +1382,7 @@ const tmPanel=(id,cfg)=>{
       ${md==='季度'?D('mpPick',{id:id,scope:sc,val:tmQNow(),m:'季度'},'','本季'):''}
       ${md==='周'?D('mpPick',{id:id,scope:sc,val:wkMon(SYS_TODAY),m:'周'},'','本周'):''}
       ${D('mpClose',{scope:sc},'','关闭')}</div>`;
-  return `<div style="position:absolute;z-index:80;top:calc(100% + 4px);left:0;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:9px;width:238px">
+  return `<div class="pjpop" style="position:absolute;z-index:80;top:calc(100% + 4px);left:0;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:9px;width:238px">
     ${head}${body}${quick}</div>`;
 };
 
@@ -1566,36 +1573,46 @@ const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
       <input type="${single?'radio':'checkbox'}"${single?' name="projPanelSingle"':''} class="chk" style="flex:0 0 auto" data-act="${c.pickAct}" data-pj="${esc(v)}" data-pj-key="${pk}" ${on?'checked':''}>
       <span${mt.warn?' style="color:var(--wn-d)"':''}>${esc(mt.nm)}</span>${mt.arc?' '+arcTag():''}</label>`}).join('')}
 </div>`; };
-/* ⭐⭐ 2026-09-26（用户报障：「**通用导入的项目选择控件，行数显示不全**」）—— 根因 = **面板被宿主卡片裁掉**：
-   `.card{...overflow:hidden}`（见上面 CSS）会把**卡片矩形之外**的部分剪掉，而面板是 `absolute`
-   ⇒ 实测（真机量过）：卡片下沿在 504、面板伸到 567 ⇒ **裁掉 63px ＝ 最下面 2~3 行**，
-   而那几行**既看不见也滚不到**（面板自身 `scrollH≈clientH` —— 不是它自己的滚动问题）。
-   ⇒ 每次渲染后把展开的面板**提升为 `fixed`**（`fixed` 的包含块是视口，**不受非 transform 祖先的 overflow 裁剪**
-     ⇒ 逃出卡片），位置按**触发按钮**算、高度按**按钮下方到窗口底**算 ⇒ 一行都不缺；太长时面板自己滚。
-   ⚠️ 面板**留在原 DOM 位置**（仍在 `.pjwrap` 内）——「点面板外收起」的委托层判的就是 `.pjwrap` 包含关系，
-      搬走它 ⇒ "点面板内"会被当成"点外面"（那种 bug 极隐蔽：点一下就收）。
-   ⚠️ 触发按钮取 **`:scope > button`**：面板里的「全选 / 清空」也是 `<button>`，按 DOM 序拿"第一个 button"
-      会拿成面板内那个（位置就全错了）。 */
-function placePjPanels(){
+/* ⭐⭐⭐ **通用浮层的「逃出卡片裁剪」机制** —— 全壳**只有这一处**（2026-09-26 立 · `TAIL-109` 起 · `TAIL-110` 收口）。
+   适用对象 = **任何**展开的浮层：项目面板（`projPanel`）＋ **时间选择器（`tmPanel`）** ＋ 将来新增的浮层。
+
+   **为什么需要**：`.card{...overflow:hidden}`（见上面 CSS，给表格圆角用的）会把**卡片矩形之外**的部分剪掉，
+   而浮层是 `absolute` ⇒ 实测（真机量过，`TAIL-109`）：卡片下沿在 504、面板伸到 567 ⇒ **裁掉 63px ＝
+   最下面 2~3 行**，而那几行**既看不见也滚不到**（面板自身 `scrollH≈clientH` —— 不是它自己的滚动问题）。
+
+   **怎么做**：每次渲染后把展开的面板**提升为 `fixed`**（`fixed` 的包含块是视口，**不受非 transform 祖先的
+   `overflow` 裁剪** ⇒ 逃出卡片），位置按**触发按钮**算、高度按**按钮下方到窗口底**算 ⇒ 一行都不缺；
+   太长时面板自己的 `overflow-y:auto` 兜住。
+
+   **怎么挂**：调用点只需两件事（⛔ 不需要知道本函数存在）——
+     ① 浮层的**锚**加 `class="pjwrap"`（`position:relative` 的那个容器；名字里的 `pj` 是**历史遗留**，
+        现在是通用锚 —— ⛔ 别再新建第二种锚名，那会让本机制要认两套名字）；
+     ② 浮层的**盒**加 `class="pjpop"`。
+   ⚠️ 面板**留在原 DOM 位置**（仍在锚内）——「点浮层外收起」的委托层判的就是锚的包含关系，
+      搬走它 ⇒ "点浮层内"会被当成"点外面"（那种 bug 极隐蔽：点一下就收）。
+   ⚠️ 触发按钮取 **`:scope > button`（锚的**直接**子按钮）**：浮层里的「全选 / 清空 / 31 个日期格」也是
+      `<button>`，按 DOM 序拿"第一个 button"会拿成浮层内那个（位置就全错了）。
+   ⚠️ 两条渲染路径都要调（`render()` 正常那条 ＋ **虚拟滚动提前 return 那条**）—— 见 `render()` 里的调用。 */
+function placePops(){
   document.querySelectorAll('.pjwrap').forEach(w=>{
     const p=w.querySelector(':scope > .pjpop'); if(!p) return;
     const b=w.querySelector(':scope > button'); if(!b) return;
     const r=b.getBoundingClientRect();
     p.style.position='fixed';
     p.style.top=(r.bottom+5)+'px';
-    /* 只给"按钮下方到窗口底"这段（最少 140px）—— 面板自己的 `overflow-y:auto` 兜住更长的清单 */
+    /* 只给"按钮下方到窗口底"这段（最少 140px）—— 浮层自己的 `overflow-y:auto` 兜住更长的清单 */
     p.style.maxHeight=Math.max(140, innerHeight-r.bottom-14)+'px';
-    /* 左右也夹进视口（按钮靠右时面板不许把右边顶出去） */
+    /* 左右也夹进视口（按钮靠右时浮层不许把右边顶出去） */
     const wide=Math.min(340, Math.max(178, p.offsetWidth||260));
     p.style.left=Math.max(6, Math.min(r.left, innerWidth-wide-6))+'px';
   });
 }
-/* 面板是 `fixed` ⇒ 外层一滚，它得**跟着按钮走**（否则"粘"在原地像浮在空中）。
+/* 浮层是 `fixed` ⇒ 外层一滚，它得**跟着按钮走**（否则"粘"在原地像浮在空中）。
    ⚠️ 监听挂 `document` ＋ **捕获阶段**（`scroll` 不冒泡 —— 同虚拟滚动那两行注释里记的坑）。 */
 if(!window._pjPopBound){
   window._pjPopBound=true;
-  window.addEventListener('resize', placePjPanels);
-  document.addEventListener('scroll', placePjPanels, true);
+  window.addEventListener('resize', placePops);
+  document.addEventListener('scroll', placePops, true);
 }
 const pjPanel=()=>projPanel({list:PROJ_LIST,selected:()=>fNt.projs,allAct:'pjAll',noneAct:'pjNone',pickAct:'pjPick',meta:PROJ_META_KEY});
 

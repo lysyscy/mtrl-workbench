@@ -203,24 +203,17 @@ def test_范围栏画在第一步_且没选项目不许落库():
 
 
 @acc()
-def test_面板要逃出卡片裁剪_否则行数显示不全():
-    """⭐⭐ 2026-09-26（用户报障 · 原话：「**通用导入的项目选择控件，行数显示不全**」）。
+def test_本页的项目浮层走通用机制():
+    """⭐ 2026-09-26（用户报障「**通用导入的项目选择控件，行数显示不全**」⇒ `TAIL-109` 修、`TAIL-110` 收口）。
 
-    ⭐ 根因（**真机量过、不是猜的**）：`.card{...overflow:hidden}` 会把**卡片矩形之外**的部分剪掉，
-      而面板是 `position:absolute` ⇒ 实测：卡片下沿 504、面板伸到 567 ⇒ **裁掉 63px ＝ 最下面 2~3 行**，
-      那几行**既看不见也滚不到**（面板自身 `scrollH≈clientH` ⇒ 不是它自己的滚动问题）。
-    ⇒ 判词（四半）：① 面板带定位钩子 `class="pjpop"`；② 有 `placePjPanels()` 把它提升为 `fixed`
-      （`fixed` 的包含块是视口 ⇒ 不受非 transform 祖先的 `overflow` 裁剪）；③ **两条渲染路径都要调用**
-      （虚拟滚动那条**提前 `return`** —— 只挂一处 ⇒ 大表页上照旧被裁）；④ 滚/缩窗口时要重新定位。
-    ⚠️ **能证伪**：删 `pjpop` / 删 `placePjPanels` / 只留一条调用 / 去掉 scroll 监听 ⇒ 本件必红。
+    ⚠️ **机制本身（`placePops` 的完整性／"不许再有裸浮层"）由 `test_shell_render.py` 守**
+      —— 它是**全站渲染机制**，不是本页的事（⛔ 同一 claim 别写成两份：一处改坏另一处仍会绿）。
+      本件只钉**本页**那一半：导入页的「项目」浮层**确实是那套机制的实例**。
     """
     src = re.sub(r"/\*.*?\*/", "", SHELL, flags=re.S)
-    assert 'class="pjpop"' in src, "`projPanel` 的面板没有定位钩子 —— 渲染后没东西可提升为 fixed"
-    assert "function placePjPanels()" in src, "没有 `placePjPanels`（面板逃不出卡片的 overflow:hidden）"
-    assert src.count("placePjPanels()") >= 2, \
-        "`placePjPanels()` 的调用点不足：`render()` 有两处（正常 ＋ **虚拟滚动那条提前 return 的**）⇒ 两处都要"
-    assert "document.addEventListener('scroll', placePjPanels, true)" in src, \
-        "面板是 fixed ⇒ 外层一滚必须跟着按钮走（⚠️ 要**捕获阶段**：`scroll` 不冒泡）"
+    assert 'class="fi pjwrap"' in src, \
+        "导入页「项目」的**锚**没了 —— 浮层就不会被 `placePops` 提升为 `fixed`，后半截会被卡片裁掉"
+    assert 'data-act="impPjToggle"' in src, "「项目」浮层的触发按钮不见了"
 
 
 @acc()
