@@ -345,15 +345,25 @@ V.imp = () => {
       <thead><tr><th style="min-width:92px"></th>${IMP.cols.map(c => `<th style="vertical-align:bottom;min-width:136px">
         <div style="font-weight:600;white-space:normal">${esc(c.src)}</div></th>`).join('')}</tr></thead>
       <tbody>
-        ${attrRow('导入到', c => (c.ignored
-          ? `<span class="tag t-in"${c.ignored ? ` title="${esc(c.ignored)}"` : ''}>不写库</span>`
-          : `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`))}
-        ${IMP.cols.some(c => c.ignored || kkinds[c.field])
+        ${attrRow('导入到', c => {
+          const k = kindOf(c);
+          /* ⭐⭐ 2026-09-26 用户裁定：「**不参与的就不要给下拉选项了**」——
+             导入既然不用它，给个"能点但点了没用"的下拉＝**误导**（守则 §4 相似元素不制造歧义 ·
+             §5.5 不能点的要置灰或隐藏）⇒ 这一类（含"按口径不采"的列）直接显示**去向标签**、
+             ⛔ 不给 `<select>`。⚠️ 要映射的列**必须照旧有** `data-act="impMap"`（判据与真机都认它）。 */
+          if (c.ignored || k === '不参与') {
+            return `<span class="tag t-in" title="${esc(whatOf(c))}">不参与</span>`;
+          }
+          return `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`;
+        })}
+        ${IMP.cols.some(c => !c.ignored && ['写台账', '当钥匙'].includes(kindOf(c)))
           ? attrRow('去向', c => {
               const k = kindOf(c);
-              return k ? `<span title="${esc(whatOf(c))}">${tagOf(k)}</span>` : '';
+              /* ⚠️「不参与」这一列**上面那格已经写着**它了 ⇒ 这行留空，⛔ 别重复（同一格两处"不参与"＝噪音） */
+              return (c.ignored || !k || k === '不参与')
+                ? '' : `<span title="${esc(whatOf(c))}">${tagOf(k)}</span>`;
             })
-          : '' /* ⚠️ **域没声明任何去向、也没有"不写库"列 ⇒ 整行不画**（本域没这条信息，画个空行像坏了）*/}
+          : '' /* ⚠️ **一行"去向"都没内容 ⇒ 整行不画**（本域没这条信息，画个空行像坏了）*/}
       </tbody></table></div>
       <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:10px">${lack.length
         ? `还差必填字段：<b>${esc(lack.join(' / '))}</b> —— 选好才能到下一步（⛔ 系统不替你填默认值）`
