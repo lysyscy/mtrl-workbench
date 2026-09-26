@@ -1508,10 +1508,14 @@ const JC_PROJ_LIST=()=>pjSort(uniqBy(JCs,j=>j.proj));
    ⭐⭐ **单选 ⇒ 点一下就收**（2026-09-26 用户提问：「单选模式时，我点击想要的项目后也要**自动关闭**吧？
       这个规则**通用模块里设计了么**？」）：**规则在，但它不在共用件里自动做** ——
       `projPanel` 只渲染 `radio` ＋ `data-act="${c.pickAct}"`，而"收起哪一个展开态"**只有调用点知道**
-      ⇒ 所以它写成**契约**：**凡 `single:true` 的调用点，`pickAct` 的动作里必须收起自己那个展开态**
-      （6 个单选调用点都写了 `XxxPjOpen=false`）。⛔ 漏写 = 点完不收，与其他面板不一致。
-      ⚠️ 这条**有机器判据**：`backend/tests/test_proj_panel.py`（扫全壳的 `single:true` 调用点逐个查）
-      ⇒ 将来新加第 7 个面板漏写会**当场红**（不再靠自觉）。
+      ✅ **`#1`（2026-09-26 当天）已把它做成结构性**：展开态搬进**注册表 `PJ_OPEN`**（key 由 `pickAct`
+      派生），`pjPick` 里统一收起 ⇒ **调用点⛔ 不再各写一遍**（原来那 6 处裸变量已删净）。
+      ⚠️⚠️ 本条原先写着「这条**有机器判据**：`backend/tests/test_proj_panel.py`」—— **那个文件从来不存在**
+      （2026-09-26 机器扫出：`tools/oneoff/_find_phantom_test_refs.py`）。
+      ⇒ **承诺一个不存在的检查，比不承诺更糟**：下一个人会放心把活交给它。⛔ 别再把"某处有判据"
+      当免责话写进注释 —— 要写就把**文件名 + 判词**写全，让机器扫得出来。
+      ⭐ 现在真盯着它的是：`_shell_smoke.py`（m05「项目」面板 round-trip：真点一下 ⇒ `byPick=0` 即"点完就收"）
+      ＋ `_shell_legacy.py`（③ 预览卡同款）＋ `pjPick` 里那行统一收起（实现级）。
    选中值一律走 `data-pj`（含义 = 该面板的筛选键 = **仓库名**）。 */
 const PROJ_META_KEY=v=>{ const p=pjRowOf(v);
   return { nm:p?pjDisp(p):'未建档', warn:!p, arc:arcOf(p), title:'仓库名：'+v }; };
