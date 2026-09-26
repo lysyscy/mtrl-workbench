@@ -302,12 +302,13 @@ V.imp = () => {
   </div></div>`;
 
   /* ---- ② 列映射 ---- */
-  /* ⭐⭐ **版式 = 转置**（2026-09-26 用户**第三次**说清，这是最终口径）：
-     原话「我要**每个表头在列上**，你能明白么？**excel 里是列，本系统里也是列**；
-     你做列映射一开始弄行，后来又弄卡片；**卡片也是你误解的**」
-     ⇒ **每个源列 = 表里的一列**（源列名当**表头横排**，跟 Excel 一样），
-       **属性在行上**（画像·样本 / 映射到 / 系统建议 / 依据）。
-     ⛔ 之前两版都错：① 源列占**行**（一行一个源列，名字在行首）② 卡片网格。
+  /* ⭐⭐ **信息与版式（**用户 2026-09-26「拷问」后定稿** —— 前四版都被否，这条是用户逐条选的）**：
+     原话：「**全部并排，宽了就左右滚动**」·「每个源列要看：**源列名**、**目标字段**、
+     **导入后会怎样：会覆盖 / 只用于匹配 / 不写库**」·「**就用原生下拉**」·
+     「**不写库的这列，不要给目标字段了，就提示不写库即可**」·
+     「**要：顶部一句话说清 ＋ 每列标后果**」。
+     ⇒ 所以这里：⛔ 不折叠、⛔ 不卡片、⛔ 不分页；⛔ 不显示样本/画像（用户没要）；
+       ⛔ 不显示置信度数字与算法名（它们不是"用户要的信息"）。
      ⚠️ 判据与真机证据认 `<select data-act="impMap" data-src="…">`，⛔ 不许改这两个属性。 */
   let mapCard = '';
   if (IMP.cols.length) {
@@ -317,42 +318,26 @@ V.imp = () => {
         `<option value="${esc(f.label)}"${f.label === cur ? ' selected' : ''}>${esc(f.label)}${f.required ? '（必填）' : ''}</option>`).join('');
       return `<option value=""${cur ? '' : ' selected'}>${esc(IMP_IGNORE)}</option>` + fields;
     };
-    const badge = (c) => {
-      /* ⚠️ 状态一律**说人话**（`[用户·2026-09-26]`《前端设计守则》`ops/前端设计守则-以使用用户为中心.md`
-         §2/§3/§8：⛔ 技术字段与**裸数字**不上屏；§5.9：次要信息可折叠）：
-         · 「自动」那档**不给数字**（`0.86` 这种没有口径的裸数字按 §7 不许上屏）；
-         · 算法名（"归一化相等/包含词命中/token 交集"）是**内部黑话** ⇒ 折进 `title`（hover 才看），
-           屏幕上只留一句**用户能判断的话**。 */
-      const why = c.why ? ` title="${esc(c.why)}"` : '';
-      if (c.field && c.level === 'auto') return `<span class="tag t-ok"${why}>已自动对上</span>`;
-      if (c.field) return `<span class="tag t-wn"${why}>系统拿不准，请确认</span>`;
-      if (c.ignored) return '<span class="tag t-in">不导入（原样保留）</span>';
-      return '<span class="tag t-dg">认不出 —— 请选一个</span>';
-    };
-    /* ⚠️ 域声明了 `ignored` 的列（认得、但按口径**不导入**）**不进映射表**：它们不需要人选
-       （域已定死），混在里面会把"要人做决定的列"淹掉（用户 2026-09-26 口径：不导入的**单独写**）。
-       ⚠️ 而**认不出**的列要**留在表里**（它们正等人点下拉）。 */
-    const toMap = IMP.cols.filter(c => !c.ignored);
-    const skipped = IMP.cols.filter(c => c.ignored);
-    /* ⭐ **排版（2026-09-26 按守则重做）**：只有**两行数据** —— 「导入到」（唯一的主操作）
-       ＋「系统提示」（状态，人话）。
-       ⛔ 拿掉的两样：①「依据」那一整行（算法黑话 ⇒ 折进状态的 `title`）②「画像」上的文字
-       （半术语 ⇒ 折进表头 `title`）⇒ 同屏只剩"选哪列 + 系统怎么说"（§5.9 优先级排序）。 */
-    const attrRow = (label, cls, cellOf) =>
-      `<tr><th class="${cls}" style="text-align:left;white-space:nowrap;vertical-align:top;min-width:72px">${label}</th>`
-      + toMap.map(c => `<td>${cellOf(c)}</td>`).join('') + '</tr>';
+    /* 「导入后会怎样」= 按**当前映射的目标字段**查域声明（域没声明 ⇒ 留空，⛔ 不替域编）。
+       ⚠️ 它随用户改下拉**实时变**：同一列选不同字段 ⇒ 后果不同 ⇒ 话也不同。 */
+    const impacts = {};
+    ((sch && sch.impacts) || []).forEach(x => { impacts[x.label] = x.what; });
+    const impactOf = (c) => (c.ignored ? '不写库（原样保留）' : (impacts[c.field] || ''));
+    const attrRow = (label, cellOf) =>
+      `<tr><th style="text-align:left;white-space:nowrap;vertical-align:middle;min-width:92px" class="mut sm">${label}</th>`
+      + IMP.cols.map(c => `<td>${cellOf(c)}</td>`).join('') + '</tr>';
     mapCard = `<div class="card" style="margin-top:12px"><h4>列映射<span class="sp"><span class="mut sm">
       横看 = 你表里的每一列 · 系统只给建议，<b>选哪个由你定</b></span></span></h4>
-      <div class="tw"><table class="dt sm" style="table-layout:fixed">
-      <thead><tr><th style="min-width:72px"></th>${toMap.map(c => `<th style="vertical-align:bottom;min-width:150px">
-        <div style="font-weight:600">${esc(c.src)}</div>
-        <div class="mut sm" style="font-weight:400;white-space:normal"${c.profile ? ` title="列的形态：${esc(c.profile)}"` : ''}>${esc((c.samples || []).join(' / ')).slice(0, 46) || '（无样本）'}</div></th>`).join('')}</tr></thead>
+      ${sch && sch.rule_note ? `<div class="tip" style="margin-bottom:8px">${esc(sch.rule_note)}</div>` : ''}
+      <div class="tw"><table class="dt sm">
+      <thead><tr><th style="min-width:92px"></th>${IMP.cols.map(c => `<th style="vertical-align:bottom;min-width:136px">
+        <div style="font-weight:600;white-space:normal">${esc(c.src)}</div></th>`).join('')}</tr></thead>
       <tbody>
-        ${attrRow('导入到', '', c => `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`)}
-        ${attrRow('系统提示', 'mut sm', c => badge(c))}
+        ${attrRow('导入到', c => (c.ignored
+          ? `<span class="tag t-in"${c.ignored ? ` title="${esc(c.ignored)}"` : ''}>不写库</span>`
+          : `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`))}
+        ${attrRow('导入后会怎样', c => { const t = impactOf(c); return t ? `<span class="sm">${esc(t)}</span>` : ''; })}
       </tbody></table></div>
-      ${skipped.length ? `<div class="tip" style="margin-top:10px"><b>这几列不导入</b>（原样保留，不需要你选）：
-        ${skipped.map(c => `<div class="sm">· ${esc(c.src)} —— ${esc(c.ignored)}</div>`).join('')}</div>` : ''}
       <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:10px">${lack.length
         ? `还差必填字段：<b>${esc(lack.join(' / '))}</b> —— 选好才能到下一步（⛔ 系统不替你填默认值）`
         : '必填都齐了，可以往下走'}</div>

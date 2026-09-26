@@ -51,6 +51,18 @@ class DomainSpec:
     #:   早先它们落进"未认出" ⇒ 界面上看着像**系统漏了**（用户会一列列去点）。两者含义完全不同：
     #:   **未认出 = 系统不认识**（该让人点）；**不采 = 系统认识、但按规矩不导**（该把理由说清）。
     ignored: tuple[tuple[str, str], ...] = ()
+    #: ⭐ **逐列后果**：`((目标字段, 一句话), …)` —— 界面在「导入后会怎样」那一行**逐列显示域给的这句**。
+    #:
+    #: ⚠️ 为什么必须有它（用户 2026-09-26 拷问后定）：用户要决定"这列导不导、选哪个字段"，
+    #:   就必须知道**导了会怎样** —— 而"哪几列会被覆盖、哪一列只是用来对号、哪几列是 i8 的、一个字都不碰"
+    #:   **只有域知道**（壳看一眼数据猜不出）。⛔ 措辞一律**由域给**，壳不猜、不拼；
+    #:   **域没声明 ⇒ 界面不标**（不替域编）。⚠️ 键是**目标字段名**（不是源列名）——
+    #:   这样它随用户改下拉**实时跟着变**：同一列选不同字段，后果不同就得说不同的话。
+    impacts: tuple[tuple[str, str], ...] = ()
+    #: ⭐ **这一批怎么入库**（页头一句话）：对号键是什么 · 覆盖谁 · 能不能反悔 —— **大白话**，域给。
+    #: ⚠️ 四域的规则互不相同（`m04` 按"年月＋单据号"更新、`m11` 按"含税合同价"对号、`m06` 每次新批…）
+    #:   ⇒ 这句话**必须由域说**，⛔ 通用层不写"套话"（套话=误导）。
+    rule_note: str = ""
     extra: dict = field(default_factory=dict)    # 域自定义（⛔ 通用层不看）
 
     @property
@@ -65,7 +77,9 @@ class DomainSpec:
         return {
             "domain": self.domain, "title": self.title, "required": list(self.required),
             "note": self.note, "keep_note": self.keep_note, "batch": bool(self.batch),
+            "rule_note": self.rule_note,
             "ignored": [{"label": lb, "why": why} for lb, why in self.ignored],
+            "impacts": [{"label": lb, "what": what} for lb, what in self.impacts],
             "fields": [{"key": f.key, "label": f.label, "type": f.type,
                         "required": bool(f.required), "aliases": list(f.aliases)}
                        for f in self.fields],
@@ -77,6 +91,14 @@ class DomainSpec:
         for raw, why in self.ignored:
             if normalize(raw) == key:
                 return why
+        return ""
+
+    def impact_of(self, label: str) -> str:
+        """该**目标字段**的「导入后会怎样」⇒ 域给的原文；没声明 ⇒ `""`（界面不标）。"""
+        key = normalize(label)
+        for raw, what in self.impacts:
+            if normalize(raw) == key:
+                return what
         return ""
 
 

@@ -197,6 +197,15 @@ def check(page, errors: list[str]) -> None:
         if not ok_parse:
             errors.append("四个暂留件收口自检未通过：真上传后 ② 列映射没出来"
                           f"（表头 {n_cols} 列 · 域 {dm} · 页面提示：{got2.get('tip') or got2.get('which')}）")
+        # ⭐ **留一张截图**（`[用户·2026-09-26]`：Agent **看不见界面** ⇒ 版式问题（挤/压字/遮挡）
+        #    只能靠人眼发现 ⇒ 每改一次版式就留一张图，落到 `artifacts/`（**不是** `.workbuddy/scratch/`，
+        #    那里 14 天 TTL）。⚠️ 截图失败**不影响判据**（它只是取证）。
+        try:
+            shot = Path(__file__).resolve().parents[2] / "artifacts" / "imp_map_2.png"
+            page.screenshot(path=str(shot), full_page=True)
+            print(f"  📷 已截图 ② 列映射：{shot}")
+        except Exception as exc:                              # noqa: BLE001
+            print(f"  ⚠️ 截图失败（不影响判据）：{type(exc).__name__}: {exc}")
 
         # ③′ ⭐⭐ **`③ 预览` 的真机证据**（2026-09-26 补 · **用户报障的另一半就在这一屏**）：
         #    `ctxBar`（项目面板 ＋ **本批归属年月** ＋ **截止核算月**）**只在 ③ 预览卡**里渲染
