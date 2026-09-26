@@ -239,10 +239,17 @@ def _records(rows: list[list], headers: list[str], spec: DomainSpec,
             else:
                 raw[src] = text(val)
         # 必填为空 ⇒ 显式列出（⛔ 不写 0、不写空字符串糊过去）
-        for label in spec.required:
-            if not str(rec.get(label) or "").strip():
-                problems.append({"row": offset, "column": label, "raw": "",
-                                 "reason": "必填为空 ⇒ 需处理（补值或跳过本行，⛔ 不写 0）"})
+        # ⚠️⚠️ 2026-09-26（用户报障后收口）：**只对"看起来是数据行"的行报**（这一行至少有一个别的字段有值）。
+        #    否则**说明行**（真文件里就写在「时间」列：`6月总出库也多了53.54`）会被报成
+        #    「必填为空 ⇒ 需处理」，而域那边同时说它「**说明行 ⇒ 不导入**」⇒ **同一行两个说法**，
+        #    用户会去追一条根本不用管的问题（实测晋江那份：预览的"待处理 1 处"指的就是这一行）。
+        #    ⛔ 别把这条判据搬走：它管的是"这一行**像不像数据**"，与域"哪些行不收"无关。
+        filled = any(str(v or "").strip() for k, v in rec.items() if k not in ("_row", "raw"))
+        if filled:
+            for label in spec.required:
+                if not str(rec.get(label) or "").strip():
+                    problems.append({"row": offset, "column": label, "raw": "",
+                                     "reason": "必填为空 ⇒ 需处理（补值或跳过本行，⛔ 不写 0）"})
         rec["raw"] = raw
         out.append(rec)
     return out, problems
@@ -395,8 +402,14 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
                 report = (hooks.commit(s, records, mapping_, current_operator(), options)
                           if _takes_options(hooks.commit, 4)
                           else hooks.commit(s, records, mapping_, current_operator()))
+            # ⚠️⚠️ 这句话的数字**必须是"真写进去几行"**（2026-09-26 · 用户报障后顺出来的第二个谎）：
+            #   原先是 `len(records)`（**解析出多少行**）—— 而域会**跳过**合计/说明行、**不收**认不出核算月的行
+            #   ⇒ 实测晋江那份：写了 **24** 行，回执却写「已导入 **32** 行」（用户会以为全进去了）。
+            #   ⇒ 域回执里给了写入行数（`rows`）就用它；没给才退回解析行数（⛔ 不许瞎写一个数）。
+            written = report.get("rows") if isinstance(report, dict) else None
+            n = int(written) if isinstance(written, int) and not isinstance(written, bool) else len(records)
             return {"ok": True, "report": report, "problems": problems[:50],
-                    "message": f"已导入 {len(records)} 行"
+                    "message": f"已导入 {n} 行"
                                + (f"（{len(problems)} 处需处理）" if problems else "")}
         except MRE as exc:
             return {"ok": False, "message": str(exc)}

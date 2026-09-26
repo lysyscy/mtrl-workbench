@@ -221,6 +221,10 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     assert tip and any("合计/小计行" in r[0] for r in tip["rows"]), \
         f"合计/小计行没算成「跳过」（提示）—— 它不该混进「落不了库」里：{tip}"
     assert any("说明行" in r[0] for r in tip["rows"]), tip
+    # ⚠️ **说明行不许再被报成"必填为空 ⇒ 需处理"**（2026-09-26：同一行两个说法 —— 域说"不导入"、
+    #    通用面说"需处理"，用户会去追一条根本不用管的问题。真文件里那行是 Excel 第 7 行）
+    assert all(p["row"] != 7 for p in pre["problems"]), \
+        f"说明行（Excel 第 7 行）被报成了要处理的问题：{pre['problems']}"
 
     # ③ 落库：只写能写的那两行，且回执说清少写了一行
     # ⚠️ **批号显式给**：默认批号是 `PROC-<yyyymmddHHMMSS>`（**秒**）—— 同秒两次落库会撞唯一约束
@@ -233,6 +237,9 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     assert out["ok"] and out["report"]["rows"] == 2, out
     assert out["report"]["不写入的行数"] == 1, \
         f"④ 回执没说清少写了几行 —— 用户会以为全导进去了：{out['report']}"
+    # ⚠️ 顶上那句数字**必须是真写进去的行数**（原来是"解析出多少行"：5 行里只写 2 行，却说"已导入 5 行"）
+    assert "已导入 2 行" in out["message"], \
+        f"回执头一句的数字不是**真写入**的行数（实测晋江那份：写 24 行却说「已导入 32 行」）：{out['message']}"
     assert any(b["title"].startswith("⚠️ 落不了库的行") for b in out["report"].get("blocks") or []), \
         "④ 回执里没有「落不了库的行」—— 只在 ③ 说过的信息，到落库后就断了"
     back = client.post("/api/imp/m06_proc/rollback",
