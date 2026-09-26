@@ -36,6 +36,30 @@ BASE = "http://127.0.0.1:8000"
 errors: list[str] = []
 
 
+def _goto(page, key: str, timeout: int = 15000) -> None:
+    """切页（点 `[data-k=key]`）并等**这一屏画完**（⛔ 不再是"睡 600~800 ms"）。
+
+    ⚠️ 条件为什么这样取（2026-09-26 · 与用户核过"会不会每次都慢这么多"之后改的）：
+      · ⛔ **不能用 `networkidle`** —— 壳里有持续请求，它**永远等不到**（文件头坑 1 实测踩过）；
+      · ⛔ 也不能等"某个元素在" —— 那要**猜数据**（空库时同一页长得不一样），猜错就是**假红**；
+      · ✅ 用「**内容长度连续两段 120 ms 不变**」：壳的口径是**取数完再 render**（`loadPaths` 之后
+        一次画完）⇒"长度稳住"≈"这屏画完了"；且它**与数据无关**（空库/满库都成立）。
+    ⚠️ 好处不止快：**等不到会超时抛错**（原来睡够就往下 ⇒ 页面没动时，下面的断言会**读到上一屏**，
+       报出"这页好好的" = 假绿）。
+    """
+    page.click(f'[data-k="{key}"]')
+    page.wait_for_function(
+        """(k) => new Promise(res => {
+             if (VIEW !== k) return res(false);
+             const len = () => (document.querySelector('#view').innerHTML || '').length;
+             const a = len();
+             if (!a) return res(false);                     /* 还空着 = 没画 ⇒ 接着等 */
+             setTimeout(() => { const b = len();
+               setTimeout(() => res(b === len() && b > 0), 120);
+             }, 120);
+           })""", arg=key, timeout=timeout)
+
+
 def _session_cookie() -> tuple[str, str]:
     """造一张「以**在用管理员**身份登录」的会话票 —— 返回 `(cookie 名, 票)`。
 
@@ -93,8 +117,7 @@ def main() -> int:
               f" · BOOT_ERROR={page.evaluate('BOOT_ERROR')!r}")
 
         # 切到 m03 并断言结构件（对照 ui_parity 的口径）
-        page.click('[data-k="m03"]')
-        page.wait_for_timeout(600)
+        _goto(page, "m03")
         dims = page.evaluate("""() => ({
             tables: document.querySelectorAll('#view table').length,
             fbar:   document.querySelectorAll('#view .fbar').length,
@@ -108,8 +131,7 @@ def main() -> int:
         print("④ m03 结构件 =", dims)
 
         # ---- m01 项目档案：接线后应**渲染真数据**（⛔ 不是"页面空着但不报错"）
-        page.click('[data-k="m01"]')
-        page.wait_for_timeout(600)
+        _goto(page, "m01")
         m01 = page.evaluate("""() => {
             const rows = [...document.querySelectorAll('#view tbody tr')];
             const cells = rows.map(tr => tr.innerText.replace(/\\s+/g,' ').trim()).slice(0, 3);
@@ -137,8 +159,7 @@ def main() -> int:
                 errors.append("m01 自检未通过：" + what)
 
         # ---- m04 付款计划：结构件在线 ＋ 空库时给**空态**（⛔ 不是"表都没了"）
-        page.click('[data-k="m04"]')
-        page.wait_for_timeout(600)
+        _goto(page, "m04")
         m04 = page.evaluate("""() => {
             const pills=[...document.querySelectorAll('#view .pill')].map(x=>x.innerText).join(' | ');
             const m=pills.match(/显示\\s*(\\d+)\\s*条/);
@@ -167,7 +188,8 @@ def main() -> int:
 
         # ---- m04 手动行（`TAIL-35`）：⭐ 真机验「入口真的能开出草稿行」（**不落库**，验完收起）
         page.click('[data-act="plRowAdd"]')
-        page.wait_for_timeout(400)
+        # 条件 = **下一步就要读的那个元素**（草稿行的「保存」按钮）—— ⛔ 不是"睡 400 ms 再说"
+        page.wait_for_selector('[data-act="plRowSave"]', timeout=8000)
         m04d = page.evaluate("""() => ({
             draft: !!document.querySelector('[data-act="plRowSave"]'),
             setCells: document.querySelectorAll('#view [data-act="plRowSet"]').length,
@@ -182,12 +204,11 @@ def main() -> int:
                 errors.append("m04 手动行自检未通过：" + what)
         if m04d["draft"]:
             page.click('[data-act="plRowCancel"]')      # ⚠️ 收起草稿 —— **不落库**（写库验证走 curl 那边）
-            page.wait_for_timeout(300)
+            page.wait_for_selector('[data-act="plRowSave"]', state="detached", timeout=8000)
             print("  ℹ️ 草稿已收起（未落库）")
 
         # ---- m05 付款流水与欠款：四张 KPI ＋ 三张表；⭐ **KPI 的数必须来自后端**（可观测证据）
-        page.click('[data-k="m05"]')
-        page.wait_for_timeout(700)
+        _goto(page, "m05")
         m05 = page.evaluate("""() => {
             const kpis=[...document.querySelectorAll('#view .kpi')].map(x=>x.innerText.replace(/\\s+/g,' '));
             const num=s=>{ const m=String(s).replace(/[^\\d.-]/g,''); return m?Number(m):null; };
@@ -249,8 +270,7 @@ def main() -> int:
                 errors.append("面板 round-trip 自检未通过：" + what)
 
         # ---- m08 库存单据与调整单：⭐ **全量行数必须等于后端**（可观测证据；表内渲染随筛选走）
-        page.click('[data-k="m08"]')
-        page.wait_for_timeout(700)
+        _goto(page, "m08")
         m08 = page.evaluate("""() => {
             const pill=(document.querySelector('#view .pill')||{}).innerText||'';
             const m=String(pill).match(/(\\d+)\\s*行/);
@@ -276,6 +296,9 @@ def main() -> int:
             s.scrollTop=s.scrollHeight;
             s.dispatchEvent(new Event('scroll'));
         }""")
+        # ⚠️⚠️ 自此处起的几处 `wait_for_timeout` **刻意保留、⛔ 不许"顺手统一"成条件等待**（2026-09-26 复核）：
+        #    它们量的是「**滚动 / 吸附每个 tick 走多少 px**」—— **时长本身就是测量条件**，
+        #    换成条件等待 = 把被测对象换掉（那条判据当场作废）。本文件其余 `wait_for_timeout` 已改为条件等待。
         page.wait_for_timeout(600)
         m08["bottom"] = page.evaluate("""() => {
             const trs=[...document.querySelectorAll('#view tbody tr')];
@@ -366,8 +389,7 @@ def main() -> int:
                 errors.append("m08 自检未通过：" + what)
 
         # ---- m06 过程资料：机械源已接后端 ⇒ ⭐ **`procPj` 必须有值**（证明「加载时求值」的坑已修）
-        page.click('[data-k="m06"]')
-        page.wait_for_timeout(700)
+        _goto(page, "m06")
         m06 = page.evaluate("""() => ({
             mach6Wh: Object.keys(MACH6).length,
             ivs: IVs.length,
@@ -396,8 +418,7 @@ def main() -> int:
 
         # ---- m07 收发结存与活动大表：读全量 ＋ 提取 ＋ 大表
         #      ⭐ 可观测证据 = **表内渲染行数 == 后端给出的行数 ＋ 合计行**（同 m08 的口径）
-        page.click('[data-k="m07"]')
-        page.wait_for_timeout(800)
+        _goto(page, "m07")
         m07 = page.evaluate("""() => {
             const rows = whRows(fWhYm);
             const tbls = [...document.querySelectorAll('#view table')];
