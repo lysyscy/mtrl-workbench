@@ -1,13 +1,14 @@
 /* shell/actions.js —— 壳接线层①：**写动作与交互**
  *
  * 来源：`index.html` 的第 L3329–L5095 行（`P4`② 三刀真拆 · 2026-09-19），**原文逐字搬出、顺序未改**。
- * 内容：`ACT` 表（表驱动的按钮 / 单元格动作）· `CHG`（变更事件白名单）· 4 个全局事件委托。
+ * 内容：`ACT` 表（表驱动的按钮 / 单元格动作）· 4 个全局事件委托（click / change / input / keydown）。
  * 加载顺序：**紧跟 `index.html` 的内联脚本之后**（见那里的 `<script src>`）；`boot();` 在三件都加载完之后。
  * ⛔ 改这里前先看 §23：`index.html` 里 258–3285 那一段（公共外壳 ＋ 原型切片 `V.*`）**不许搬**。
  */
 /* =====================================================================
    18. 交互处理器（`ACT.*` —— 全部交互动作的映射；`data-act="名"` → `ACT.名`）
-   ⚠️ 漏登记 `CHG` ⇒ 表单类元素的 change 被**静默丢弃**（见目录 ⑤）
+   ⭐ `#2`（2026-09-26）起**没有 `CHG` 名单了**：`change` 由委托层**直呼 `ACT[a]`**
+   ⇒ "表单类动作漏登记 ⇒ `change` 被静默丢弃"那个老坑**在结构上不再可能**（见目录 ⑤）。
    ===================================================================== */
 /* ⭐ `M5-5`：跨页写动作的**统一包装**（关联 / 解绑 / 集采实际供应商）—— 成功后**两侧同刷**。
    ⚠️ 为什么不复用集采页的 `jcAct`：那个只重建 `JCs`（集采页专用）。而这三件事都是**跨页**的 ——
@@ -209,7 +210,7 @@ const ACT={
    toast(`⏳ <b>「${esc(tt)}」的手动导入入口尚未接通</b>：降级路径要有对应页面的导入入口（与全站其它导入走同一套管线）—— 在此之前⛔ 不演示假上传`,7500); },
  /* MOD-14 剔除规则：**真增 / 删 / 改**（2026-09-13 P6 裁定①·乙）。
     ⚠️ 只改这张**演示表**（`RULE_EX`）；**不重算**已产生的剔除标记（`NO[].exrule`）—— 页内已写明。
-    配置类数据按 §9.4 = **硬删、不留痕**；弹窗内输入由「保存」按钮一次性读取（不挂 data-act ⇒ 不进 `CHG`）。 */
+    配置类数据按 §9.4 = **硬删、不留痕**；弹窗内输入由「保存」按钮一次性读取（不挂 data-act ⇒ 走不到委托层）。 */
  ruleAdd:()=>ACT.ruleForm(-1),
  ruleEdit:t=>ACT.ruleForm(+t.dataset.i),
  ruleForm:i=>{ const r=i>=0?RULE_EX[i]:null; if(i>=0&&!r) return;
@@ -661,7 +662,7 @@ const ACT={
     用途：项目端报来的计划**漏项 / 临时补报**时提供**不依赖 Excel 的补录入口**。
     ⚠️ 落库后**与导入行同住一表、走同一条审查链路**（判定一律 `plRev()` 实时派生、不看来源）；
        **导入只清并重写自动行 ⇒ 手动行不被触碰**（§9.5）。 */
- /* 草稿层写入口（表单元素走 `change`，已登记在 `CHG`）
+ /* 草稿层写入口（表单元素走 `change` ⇒ 委托层直呼 `ACT[a]`，⛔ 没有名单）
     ⚠️ 本动作**不重绘** —— 免得每改一格就把焦点丢掉（与 `ntRowSet` 同款，只有需要联动时才重绘） */
  plRowSet:t=>{ const k=t.dataset.k; if(!k) return; plD[k]=String(t.value==null?'':t.value); },
  plRowCancel:()=>{ const was=(plRowEditId&&plRowEditId!==PL_NEW_ID)?plRowEditId:'';
@@ -745,7 +746,7 @@ const ACT={
     草稿层仍是 `naD`（键与 `NT_COLS` 同名，另加 `pid`）⇒ "改一格不会冲掉别的格"这条老教训照旧成立。 */
  ntRowAdd:()=>{ naEditId=NT_NEW_ID; naD=ntBlank(); ntReveal(); render();
    toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>已放宽「单据年月 / 分类 / 审批状态 / 付款状态」以便看见草稿行；<b>「项目」筛选未改动</b>',5600); },
- /* 草稿层写入口：输入即记录（表单元素走 `change`，已登记在 `CHG`）；
+ /* 草稿层写入口：输入即记录（表单元素走 `change` ⇒ 委托层直呼，⛔ 没有名单）；
     ⚠️ 只有「分类」变了需要重绘（它决定「集采实际供应商」是否可填）—— 其余字段不重绘，
        免得每改一格就把焦点丢掉。 */
  ntRowSet:t=>{ const k=t.dataset.k, v=t.value;
@@ -906,7 +907,7 @@ const ACT={
   const i=flf.projs.indexOf(v); if(i>=0) flf.projs.splice(i,1); else flf.projs.push(v); render(); },
  flPjAll:()=>{ const all=flProjs(); flf.projs.length=0; all.forEach(v=>flf.projs.push(v)); render(); },
  flPjNone:()=>{ flf.projs.length=0; render(); },
- /* ⭐ 关键词**只在这一个按钮里生效**（输入框不挂 data-act、也不在 CHG 里）—— 别的动作不会带着它去搜 */
+ /* ⭐ 关键词**只在这一个按钮里生效**（输入框不挂 data-act ⇒ 走不到委托层）—— 别的动作不会带着它去搜 */
  flSearch:()=>{ const i=$('#flQ'); flf.q=String((i&&i.value)||'').trim(); render();
   toast(flf.q?`付款流水已按关键词 <b>${esc(flf.q)}</b> 搜索`:'已清空关键词'); },
  flReset:()=>{ flf.ym=bjMonth(); flf.projs.length=0; flf.method='全部'; flf.state='全部'; flf.q=''; pjClose('flPj'); render();
@@ -1542,7 +1543,8 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
  invWh:t=>{ const v=t.dataset.pj; const k=invWhs.indexOf(v); if(k>=0) invWhs.splice(k,1); else invWhs.push(v); render(); },
  invWhAll:()=>{ invWhs.length=0; PROC_PJS.forEach(v=>invWhs.push(v)); render(); },   /* 同款：候选必须与数据源一致（原用演示 `WHs`） */
  invWhNone:()=>{ invWhs.length=0; render(); },
- /* —— 「每列可筛」（Excel 式）—— 全部**从动作进去**；其中 4 个挂在表单元素上 ⇒ **必须进 `CHG`** —— */
+ /* —— 「每列可筛」（Excel 式）—— 全部**从动作进去**；其中 4 个挂在表单元素上 ⇒ 由 `change` 委托直呼
+   （⭐ `#2` 2026-09-26 起**没有名单**，⛔ 不必也不许再往哪儿登记） —— */
  ivColOpen:t=>{ const c=String(t.dataset.c); invColOpen=(invColOpen===c?'':c); render(); },
  ivColClose:()=>{ invColOpen=''; render(); },
  ivColClear:t=>{ delete fIvCol[String(t.dataset.c)]; render(); },
@@ -1714,7 +1716,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
     范式与 `MOD-03` 手动行、集采子表**同款**：草稿层（`dfD`，键=字段名）+ 表内增行 + 保存才落库。 */
  dfAdd:()=>{ dfNewOn=true; dfClear(); render();
    toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>「归属」恒为<b>库存单据</b>（§5.8.3）；金额<b>可正可负</b>（+ 上调 / − 下调）',6000); },
- dfSet:t=>{ dfD[t.dataset.k]=t.value; },   /* 草稿层写入口（表单元素走 change，已登记在 CHG）；不重绘，免得每改一格丢焦点 */
+ dfSet:t=>{ dfD[t.dataset.k]=t.value; },   /* 草稿层写入口（表单元素走 change ⇒ 委托层直呼；⛔ 无名单）；不重绘，免得每改一格丢焦点 */
  dfCancel:()=>{ dfNewOn=false; dfClear(); render(); toast('已取消登记 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
  dfSave:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记**不独立成页** —— '
    + '差异登记在<b>库存单据的调整单</b>里；去「过程资料 → 差异表」可看差异并<b>跳回</b>被调整的行',7200),
@@ -1896,7 +1898,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       <div class="sm mut" style="margin-top:7px">集采付款通知书的收款方都是「资产处集中采购」，真实供应商靠<b>人工录入的「集采实际供应商」</b>做关联锚点；<b>同一笔通知书不可重复引用</b>。</div>
       <div class="tip" style="margin:12px 0 0"><b>付款子表（ENT-08）</b>：一合同 <b>0 / 1 / 多</b> 次，手工录入 + 可从付款域引用。<br><b>欠款口径（§6.4.4）：</b>${j.tradeCo?`有贸易公司 → 贸易公司发票合计 ${M(jcTradeInvSum(j))}`:`无贸易公司 → 供应商发票合计 ${M(jcInvSum(j))}`} − 付款合计 ${M(jcPay(j))} = <b style="color:var(--dg)">${M(jcDebt(j))}</b>（<b>合同级实时，不拆月度</b>）</div>`}); },
  /* —— 集采三张子表的录入 = **表内增行**（2026-09-13 用户口径：发票子表录入要填日期；**取代原先那种浏览器原生输入小窗**）——
-    `jcSubAdd` 进增行态（草稿只存 `jcSubD`）· `jcSubSet` 写草稿层（走 `CHG`）· `jcSubSave` 校验后落库 · `jcSubCancel` 丢弃。
+    `jcSubAdd` 进增行态（草稿只存 `jcSubD`）· `jcSubSet` 写草稿层（走 `change` 委托）· `jcSubSave` 校验后落库 · `jcSubCancel` 丢弃。
     ⚠️ 旧动作 `jcInvAdd` / `jcTInvAdd` / `jcPayAdd`（`prompt` 单值录入）已删除。 */
  jcSubAdd:t=>{ const j=JCs.find(x=>x.id===t.dataset.id), kind=t.dataset.kind; if(!j||!JCSUB_KIND[kind]) return;
    jcSubKind=kind; jcSubId=j.id; jcSubD={date:(kind==='pay'?SYS_TODAY:''),amt:''};
@@ -2185,15 +2187,15 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
 };
 
 /* 事件委托 */
-/* ⛔ `#2`（2026-09-26）：那张 **「变更事件白名单」已整份删除** —— 表单类动作**不再需要登记**：
+/* ⛔ `#2`（2026-09-26）：那张 **「变更事件白名单」（`CHG`）已整份删除** —— 表单类动作**不再需要登记**：
    `change` 委托按「事件只来自表单元素」直接跑（见下面那个 `change` 委托）。
    ⚠️ 原先 64 个名字的名单 ＋ `legacy.js` 追加 3 个 = 每加一个控件都要人记一次，
       漏了就是「选完没反应」的**静默**故障。 */
 /* ⚠️ `'themeSet'` **在本列表里出现过、2026-09-21 已移除**：那时它是 `V.m15` 的一个 `<select>`
-   （表单元素 ⇒ 必须进 `CHG`，否则 `change` 被静默丢弃）。
+   （表单元素 ⇒ 当年必须登记，否则 `change` 被静默丢弃）。
    现在它是「外观主题」里的**卡片按钮**（一个 `<button>`，动作名仍是 `themeSet`，主题名走 `data-theme`）⇒
-   走**点击委托**那条路，⛔ 不再是表单元素，**留在 `CHG` 里反而会误导**
-   （`tools/probe/_shell_legacy.py` 只要求"表单元素必须在 `CHG` 里"，多登记不报错 —— 但没用的登记就是噪声）。
+   走**点击委托**那条路，⛔ 不再是表单元素
+   （⭐ `#2` 2026-09-26 起连"名单"都没了 ⇒ 想登记也没处登 —— 这一项整条下线）。
    ⚠️ 本注释**刻意不写出那个属性的完整形态**：`test_acc_theme_user.py` 会数"入口只有一处"，
       而它读的是**文本** ⇒ 注释里的示例会把它喂饱（同类坑踩过三次了）。 */
 document.addEventListener('click',e=>{

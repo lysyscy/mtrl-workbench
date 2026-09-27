@@ -8,10 +8,10 @@
  *    原型切片一行不动**」——这四个页是**壳新增**的（`demo/` 原型里根本没有它们）⇒
  *    `ui_parity` 的 `U1`（只比原型**同名** `V.*` 切片）**看不见本件** ⇒ **零漂移风险**。
  *
- * ⛔ **本件不许碰的东西**：任何 `V.<原型页>` 切片 · `ACT` 里既有动作 · `CHG` 里既有项
- *    （都是**追加**：`V.set = …` / `ACT.xxx = …` / `CHG.push(…)`）。
+ * ⛔ **本件不许碰的东西**：任何 `V.<原型页>` 切片 · `ACT` 里既有动作
+ *    （都是**追加**：`V.set = …` / `ACT.xxx = …`）。
  * ⚠️⚠️ **加载顺序有严格要求**（`index.html` 里的 `<script src>` 顺序即真源）：
- *    ① 在 `actions.js` **之后** —— 本件要往 `ACT` / `CHG` 上追加；
+ *    ① 在 `actions.js` **之后** —— 本件要往 `ACT` 上追加；
  *    ② 在 `core.js` **之前** —— `core.js` 的 `LOADERS` 表**加载期就求值**到 `reloadSet` 这几个名字，
  *       而它们住在本件里。⭐ 实测踩到：放在 `core.js` 之后 ⇒ `reloadSet is not defined` ⇒
  *       `core.js` **整支中止**（`boot` 都没定义）⇒ 页面一片空白、看板一行数据都没有，
@@ -166,10 +166,10 @@ V.set = () => {
  *   ⇒ 判据 `ACC-FLOW-IMPORT-001/001-01` 已按此改写（老台账若没有表头，请先补一行表头）。
  * ⛔ 后端 `/api/m05/import/*` 同批**连件删除**（`mod05_flow/import_api.py`）；⛔ 别再把它加回来。 */
 
-/* ============================================================ 动作（**一律追加**到既有 `ACT` / `CHG`） */
+/* ============================================================ 动作（**一律追加**到既有 `ACT`） */
 
 /* 系统设置：保存（把**页面上那几个输入框**的值整批交后端 —— 校验 / 留痕 / 清缓存全在后端）。
-   ⚠️ 输入框**不挂 `data-act`**（它们是整批提交的字段、不是逐字段动作）⇒ 不用进 `CHG`。 */
+   ⚠️ 输入框**不挂 `data-act`**（它们是整批提交的字段、不是逐字段动作）⇒ 走不到委托层。 */
 ACT.setSave = async () => {
   const body = {};
   document.querySelectorAll('#view input[data-k]').forEach(el => { body[el.dataset.k] = el.value; });
@@ -187,15 +187,14 @@ ACT.setSave = async () => {
    ⛔ `imp08*` 三个动作已随「库存单据手动导入」删除（2026-09-22 用户裁定；`T8` 守卫）。
    ⛔ `m06imp` 的 `imp06*` 也已删（`B5c`）。 */
 
-/* ⚠️⚠️ **挂在表单元素上的动作必须进 `CHG`** —— 漏了 ⇒ `change` 被**静默丢弃**
-   （症状：选完文件"解析"按钮永远是灰的 / 换项目没反应）。本仓踩过三次（`jcAmt` / `jcPartySet` / `themeSet`）。
-   ⚠️ 只登记**表单元素**上挂的那几个（`<input type=file>` / `<select>`）——
-      「解析并预览」是 `<button>`（走 click 委托），⛔ 不用进这里。 */
-/* `#2`（2026-09-26）：那行「变更事件白名单」登记已废 —— 表单类动作不再需要登记 */
-/* ⚠️ `impPj` **已从 `CHG` 里去掉**（2026-09-26）：它原来是挂在 `<select data-act="impPj">` 上的，
-   现在「项目」换成**共用面板 `projPanel`（单选）** ⇒ 面板内的 `radio` 挂的是 `impPjPick`、
-   展开/收起是 `impPjToggle`（都是 `<button>` / `radio`，走 click 委托）⇒ ⛔ 不用进 `CHG`。
-   （`CHG` 只管 `<select>` / `<input type=file>` 这类 **change 事件**的控件。） */
+/* ⚠️ 历史上这里有一条规矩：「**挂在表单元素上的动作必须登记**」—— 漏了 ⇒ `change` 被**静默丢弃**
+   （症状：选完文件"解析"按钮永远是灰的 / 换项目没反应）。本仓因此踩过三次
+   （`jcAmt` / `jcPartySet` / `themeSet`）。
+   ⭐ `#2`（2026-09-26）：**那份名单（当年叫 `CHG`）已整份拆掉** —— `change` 由委托层**直呼 `ACT[a]`**
+      ⇒ 这类"漏登记 ⇒ 静默丢弃"**在结构上不再可能**，⛔ 也不必（且无处）再登记。
+   ⚠️ `impPj` 那一项随之下线（2026-09-26）：它原来是挂在 `<select data-act="impPj">` 上的；
+      现在「项目」换成**共用面板 `projPanel`（单选）** ⇒ 面板内的 `radio` 挂 `impPjPick`、
+      展开/收起是 `impPjToggle`（`<button>` / `radio`，走 **click 委托**）。 */
 
 /* =====================================================================
    `V.imp` —— 「**数据导入**」（通用导入面 · `TAIL-75` · `B5` · 2026-09-22）
@@ -589,7 +588,7 @@ V.imp = () => {
   return `${lgNotice(IMP)}${head}${mapCard}${prevCard}${repCard}`;
 };
 
-/* 切域（表单元素 ⇒ 已在 `CHG` 里登记） */
+/* 切域（表单元素 ⇒ 由 `change` 委托直呼 `ACT[a]`，⛔ 没有名单） */
 ACT.impDomain = async t => {
   IMP.msg = '';
   try { await impSetDomain(t.value); }
@@ -631,8 +630,8 @@ ACT.impParse = async () => {
 };
 ACT.impMap = (t) => { IMP.mapping[t.dataset.src] = t.value || ''; render(); };
 /* 「项目」共用面板（**单选**）—— 第 11 个 `projPanel` 调用点。
-   ⚠️ 展开是 `<button>`、选择是面板内的 `radio` ⇒ 都走 **click 委托**，⛔ 不进 `CHG`
-      （`CHG` 只管 `<select>` / `<input type=file>` 那种 **change** 事件）。 */
+   ⚠️ 展开是 `<button>`、选择是面板内的 `radio` ⇒ 都走 **click 委托**
+      （`change` 委托只管 `<select>` / `<input type=file>` 那种表单元素；⭐ `#2` 起它也不需要登记）。 */
 ACT.impPjToggle = () => { pjToggle('impPj'); render(); };
 ACT.impPjPick = t => { const v = (t && t.dataset && t.dataset.pj) || ''; if (!v) return;
   IMP.wrap = v;
