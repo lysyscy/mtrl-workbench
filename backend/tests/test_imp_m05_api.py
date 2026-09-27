@@ -32,6 +32,7 @@ from app.mod01_projects import models as _pj_models  # noqa: F401
 from app.mod03_notice.models import PaymentNotice
 from app.mod05_flow import imp_spec
 from tests.acc_plugin import acc
+from tests.imp_contract import assert_skipped_contract
 
 HEADER = ["单据号", "付款金额", "付款时间", "付款方式", "备注"]
 APPROVED = Decimal("100.00")          # 审批金额**刻意很小** ⇒ 本批 3 条流水一定会"超付"（供验超付单列）
@@ -151,6 +152,13 @@ def test_付款流水在通用面端到端_未匹配与异常不入库_核对报
         assert any("未识别的付款方式" in t for t in titles), titles
         un = next(b for b in pre["blocks"] if "未匹配清单" in b["title"])
         assert [r[1] for r in un["rows"]] == [missing], un
+        # ⭐ 2026-09-26（用户报障「**这些不会落库的行，要在行上直接标**……而不是还要抬头去看文字说明」）：
+        #    域必须**自报逐行名单**（`skipped` = 行号 ＋ 人话原因）—— 通用面靠它把「不写入」标在**那一行**上。
+        #    ⛔ 只给 `total - writable` 那种差值不算（差值标不出"哪几行"，用户还是得自己数）。
+        sk = pre["skipped"]
+        assert_skipped_contract(pre, expect=2)          # 契约三条（未匹配 1 ＋ 异常 1）
+        assert {x["why"].split("：")[0] for x in sk} == {"未匹配", "异常"}, \
+            f"原因要说人话、且用本域那两张清单的原话（未匹配 / 异常 —— 同一数不换说法）：{sk!r}"
         # ⭐ **预览阶段一个字节都不写库**（判据 001-06）
         assert not _flows_of(mine), "预览就把流水写进去了 —— 确认前必须零写库"
 

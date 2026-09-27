@@ -198,6 +198,22 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
         "writable": int(out["updated"]),
         "kpis": {"配上": out["updated"], "配不上": out["unmatched"],
                  "同价冲突": out["ambiguous"], "不合格": out["bad"]},
+        # ⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个浅色底，
+        #    或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」）：
+        #    域**自报**写不进去的行（配不上 / 同价冲突 / 不合格）⇒ 通用面按 `row_no` 标在那一行上。
+        #    ⚠️ 与下面 `blocks` 那几张清单**同一个来源**（同一次 `dry_run` 的 `out`）—— ⛔ 别另算一份；
+        #       ⚠️ **「提醒」（`warned`）不进这里**：那些行**是写进去的**（只是带了句提醒），
+        #          标成"不写入"就是假话（守则 §4.2 状态必须真实）。
+        "skipped": (
+            [{"row": int(x.get("row_no") or 0),
+              "why": "配不上：项目内没有同价合同（或认不出锚点）⇒ 这一行不写进台账"}
+             for x in out.get("unmatched_items") or []]
+            + [{"row": int(x.get("row_no") or 0),
+                "why": "同价冲突：项目内有多条同价合同 ⇒ 系统不猜，这一行不写"}
+               for x in out.get("ambiguous_items") or []]
+            + [{"row": int(x.get("row_no") or 0),
+                "why": f"不合格：{x.get('why') or '这一行不合格'}"}
+               for x in out.get("bad_items") or []]),
         "blocks": [
             {"title": "没配上的行（**不会被写进台账**，台账里一条不动）",
              "note": "⚠️ 认不出锚点 / 项目内没有同价合同 / 同价有多条 —— 三种都**不猜、不新增**："

@@ -27,6 +27,7 @@ from app.import_kit.profile_store import ProfileStore
 from app.mod01_projects import models as _pj_models  # noqa: F401
 from app.mod11_jc import imp_spec
 from tests.acc_plugin import acc
+from tests.imp_contract import assert_skipped_contract
 
 #: 真台账形态：r2 一级（`供应商`/`贸易公司` 各合并两列）· r3 二级（合同总价 / 发票金额）
 R2 = ["序号", "合同日期", "材料名称", "供应商", "", "贸易公司", "", "详细付款方式", "备注"]
@@ -171,6 +172,11 @@ def test_预览就能看到配上几条_且一个字节都不写库(client):
     assert pre["ok"], pre
     assert pre["writable"] == 1, f"「将写入」必须 = **真会更新的条数**（不是解析出的 2 行）：{pre}"
     assert pre["kpis"]["配上"] == 1 and pre["kpis"]["配不上"] == 1, pre.get("kpis")
+    # ⭐ 2026-09-26（用户报障「**这些不会落库的行，要在行上直接标**……而不是还要抬头去看文字说明」）：
+    #    预览必须**自报逐行名单**（`skipped`）—— 通用面靠它把「不写入」标在**那一行**上。
+    #    ⚠️ 本域口径：不写进去的 = **配不上 ＋ 同价冲突 ＋ 不合格**（`提醒` **不算** —— 那些行是写进去的）。
+    assert_skipped_contract(pre, expect=(pre["kpis"]["配不上"] + pre["kpis"]["同价冲突"]
+                                         + pre["kpis"]["不合格"]))
     miss = [b for b in pre["blocks"] if "没配上" in b["title"]]
     assert miss and len(miss[0]["rows"]) == 1, f"配不上的行要逐条列出来（带原因）：{pre.get('blocks')}"
     assert "999.00" in " ".join(str(x) for x in miss[0]["rows"][0]), miss[0]["rows"][0]

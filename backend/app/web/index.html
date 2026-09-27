@@ -107,6 +107,15 @@ table.dt{width:100%;border-collapse:collapse;font-size:12.5px}
 .dt tbody tr.ntvoid:hover{background:var(--hl-hover)}
 .dt tbody tr.ntvoid td{text-decoration:none}
 .dt tbody tr.ntvoid .fl{background:var(--void-bg)}
+/* ⭐⭐ 行级「**不会写入**」标记（2026-09-26 用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，
+   比如给一个浅色底，或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」；
+   ⛔ 通用导入页都要这么做）。用于 ③ 预览表里域自报 `skipped` 的行 ⇒ **标记落在行上**，
+   不是只写在卡片底下的一段话里（那段话要求读者自己把"有 7 行"对上具体的行 —— 做不到）。
+   ⚠️ 视觉语言与「i8 已撤单行」`.ntvoid` **同源**（`inset` 左边一道警示竖条 ＋ 浅底），
+      ⛔ 别为"又一种状态"另造一套（守则 §4.5 颜色只承担语义 / §4.4 相似元素不制造歧义）。 */
+.dt tbody tr.skiprow{box-shadow:inset 3px 0 0 var(--wn);background:var(--wn-l)}
+.dt tbody tr.skiprow:hover{background:var(--hl-hover)}
+.dt tbody tr.skiprow .fl{background:var(--wn-l)}
 .dt tbody tr.pick{background:var(--pri-l)}
 .dt tbody tr.pick:hover{background:var(--pri-bd)}
 .dt tbody tr.sel{background:var(--sel)}

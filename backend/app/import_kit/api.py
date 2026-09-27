@@ -379,6 +379,16 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
                     out["kpis"] = dict(extra["kpis"])
                 if extra.get("blocks"):
                     out["blocks"] = list(extra["blocks"])
+                # ⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个
+                #    浅色底，或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」）：
+                #    域的**逐行**名单（`skipped` = `[{row: Excel 行号, why: 人话原因}]`）也要过这一层 ——
+                #    壳靠它把「不写入」标在**那一行**上（⛔ 不是只在卡片底下写一句总数）。
+                #    ⚠️ 判据：`"skipped" in extra`（而不是"非空才放行"）—— **空名单也是一个回答**
+                #       （"本域认定一行都不缺" vs "本域没这个概念"在界面上不一样）。
+                #    ⚠️ 白名单式放行是**有意**的：域回执里的键五花八门（`cutoff_ym`/`project_key`…），
+                #       全部透传等于让域**随便往界面上加东西**（守则 §3「用户不该看到内部字段」）。
+                if "skipped" in extra:
+                    out["skipped"] = list(extra["skipped"] or [])
             return out
         except MustReportError as exc:
             return {"ok": False, "message": str(exc)}

@@ -23,6 +23,7 @@ from openpyxl import Workbook
 
 from app.import_kit import api as imp_api
 from app.import_kit.profile_store import ProfileStore
+from tests.imp_contract import assert_skipped_contract
 # ⚠️ 必须先把 `project` 等表导进来：本件用的是**独立 FastAPI app**（不经过 `app.main`）⇒
 #    少一次导入，`proc_history_snapshot.project_id` 的外键就解析不到表（`NoReferencedTableError`，实测踩到）。
 from app.mod01_projects import models as _pj_models  # noqa: F401
@@ -107,6 +108,10 @@ def test_通用面端到端_认列到落库再到回滚(client):
     first = pre["preview"][0]
     assert first["核算月"] == "2024-06", "Excel 序列号 45444 ⇒ 2024-06"
     assert first["出库主辅材"] == "12000.00"
+    # ⭐ 2026-09-26（用户报障「**这些不会落库的行，要在行上直接标**……而不是还要抬头去看文字说明」）：
+    #    预览必须**自报逐行名单**（`skipped` = 行号 ＋ 人话原因）—— 通用面靠它把「不写入」标在**那一行**上。
+    #    ⚠️ 契约三条（m04/m05/m11 同款）：是 list · **条数与 `不写入的行` 一致** · 每项带行号与人话原因。
+    assert_skipped_contract(pre, expect=pre["kpis"]["不写入的行"])
 
     wh = "__自检仓_IMP_M06_" + uuid.uuid4().hex[:8] + "__"
     body["options"] = {"warehouse": wh}

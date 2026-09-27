@@ -95,6 +95,13 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
     rows, notes, bad = I.plan_rows(records)
     return {"writable": len(rows),
             "kpis": {"能写入的行": len(rows), "不写入的行": len(bad)},
+            # ⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个浅色底，
+            #    或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」）：
+            #    域**自报**哪几行写不进去（通用面按 `row` 标在那一行上、把 `why` 挂成悬停原因）。
+            #    ⚠️ 与 `_blocks_of` 里那份 `落不了库的行` **同一个来源**（`bad`）—— ⛔ 别另算一份。
+            #    ⚠️ 显式给 `[]`（而不是省略键）：`[]` = "本域认定一行都不缺"，
+            #       省略 = "本域没这个概念" —— 两者在界面上不一样（前者不标注、后者照实不标注但语义不同）。
+            "skipped": [{"row": a["line"], "why": a["reason"]} for a in bad],
             "blocks": _blocks_of(bad, notes)}
 
 

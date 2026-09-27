@@ -129,6 +129,10 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
     #    而盘点只看「项目」列 ⇒ 对结果没有影响。
     rows = I.attach_projects(_rows_of(records, ym), project_briefs(s))
     got = I.match_summary(rows)
+    # ⚠️ 本域**不给 `skipped`** —— 不是"忘了"，是**本域没有"不会落库的行"**：
+    #    付款计划**整批按月重写**（`merge_month`），项目没匹配上的行**照样进库**（只是挂不上项目，
+    #    到计划页里再逐行处理）⇒ 一行都不缺，界面上也就**没有行要标**（守则 §4.2 状态必须真实：
+    #    加了"不写入"标记反而是假话）。`writable` 同理不给（见上面那段注释）。
     return {
         "kpis": {"项目未匹配": len(got["unmatched"]), "项目重名": len(got["multi"])},
         "blocks": [

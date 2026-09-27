@@ -100,6 +100,15 @@ def _mk_xlsx(path, domain: str) -> int:
     #    ⇒ 真机这趟**带着它跑**，才算真的证到"这类文件导得进来"（⛔ 只给日期/数字的假表证不到）。
     ws.append([("2026-01" if f.key == "ym" else (time(8, 30) if i == 1 else 0))
                for i, f in enumerate(fields)])
+    # ⭐ 2026-09-26（用户报障「**这些不会落库的行，要在行上直接标**」）：再补**一行会被本域拒收的** ——
+    #    ⚠️ 不补的话，③ 那屏里一行「不写入」都不会出现 ⇒ 真机判词**空转**
+    #       （"没有行可标"也能通过 = **假绿**，比没有判词更糟）。
+    #    ⚠️ 这一行**照本域自己的拒收口径造**（⛔ 不是随便塞一行凑数）：
+    #       `m06_proc` 的核算月写成一串**非标准文本** —— 正是用户 2026-09-26 截图里那份文件被拒的形态。
+    #    ⚠️ 只有 `m06_proc` 补：`m04_plan` **没有**「不会落库的行」（项目没配上照样进库）⇒ 真机那趟
+    #       顺带证到"**没有就不标**"（⛔ 别为了凑数据硬造一行）。
+    if domain == "m06_proc":
+        ws.append([("2025年9月（三标）" if f.key == "ym" else 0) for f in fields])
     wb.save(str(path))
     return len(fields)
 
@@ -345,6 +354,76 @@ def check(page, errors: list[str]) -> None:
                  f"`{dm}` 预览屏有**只读回显**「本批数据将写入…」（{got3['echoTxt']}）"
                  " —— ④ 之前必须能复核范围（守则 §4 防误导）"),
             ]
+            # ⭐⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个浅色底，
+            #    或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」· 通用导入页都这么做）。
+            #    ⚠️ 离线（`test_imp_shell::test_不会落库的行要在行上直接标`）只能查"壳里有没有那几行代码"，
+            #       **看不见真的有没有标上**（域有没有自报 / 行号对不对得上 / 底色是不是真不一样）
+            #       ⇒ 只有这里能量出来（CSS 与按行号匹配都是跑起来才成立的东西）。
+            #    量四件：① 被域判「不落库」的行带 `.skiprow`；② 它跟**同一张表里**的普通行**底色不同**；
+            #           ③ 行内有「不写入」那枚**文字**标记（色弱的人不靠颜色也能认）；
+            #           ④ 图例在 ＋ 底部那句指向「已在上表逐行标出」。
+            marks = page.evaluate("""() => {
+                const v = document.querySelector('#view');
+                const trs = [...v.querySelectorAll('table.dt tbody tr')];
+                const has = t => t.classList.contains('skiprow');
+                const bg = t => getComputedStyle(t).backgroundColor;
+                const skip = trs.filter(has);
+                /* ⚠️ 普通行要取**同一张表**里的：图卡里还有"问题清单/域区块"几张表，
+                   拿别张表的行来比底色等于比了个无关的东西。 */
+                const host = skip.length ? skip[0].closest('table') : null;
+                const peers = host ? [...host.querySelectorAll('tbody tr')].filter(t => !has(t)) : [];
+                return {rows: trs.length, skip: skip.length,
+                        skipBg: skip.length ? bg(skip[0]) : null,
+                        peerBg: peers.length ? bg(peers[0]) : null,
+                        tagged: skip.filter(t => (t.innerText || '').includes('不写入')).length,
+                        tip: skip.length ? (skip[0].getAttribute('title') || '') : '',
+                        /* ⚠️ 诊断用：标了却没见到「不写入」文字时，得看清**真实 DOM**长什么样
+                           （第一版就是这么发现"标上了、但文字没渲染"的）。 */
+                        /* ⚠️ 诊断用：被标的行**分别落在哪张表**、那一行的每个格子写了什么
+                           （③ 屏里有好几张表：问题清单 / 域区块 / 数据表）—— 一眼看清"标对地方没有"。 */
+                        /* ⚠️ **表头几列 ⇒ 数据行就得几格**：这一条今天真抓到过东西 ——
+                           被标的那张表题头写着「行｜核算月｜…」（18 格），而数据行只有 17 格
+                           （**行号那格根本没画出来**）⇒ 用别的办法量都会说"看着挺好"。 */
+                        skipTable: (() => {
+                            const tb = skip.length ? skip[0].closest('table') : null;
+                            if (!tb) return null;
+                            const body = [...tb.querySelectorAll('tbody tr')];
+                            return {nHead: tb.querySelectorAll('th').length,
+                                    nTd: body.map(x => x.children.length).slice(0, 3),
+                                    head: [...tb.querySelectorAll('th')].map(h => h.innerText.trim())
+                                                                    .join('|').slice(0, 26)};
+                        })(),
+                        /* ⭐ **卡片上说得出的数**（"⚠️ 有 N 行不会写入…"）——
+                           判词要拿它跟**行上真标出来的条数**比：两个数必须一致。
+                           ⚠️ 没有这一条，"壳根本没标"与"本来就没有行要标"长得一样 ⇒ 判词会**空转**
+                              （把标行那行代码删掉也照样绿 —— 那就白写了）。 */
+                        nSaid: (() => { const m = (v.innerText || '').match(/有\s*(\d+)\s*行/);
+                                        return m ? Number(m[1]) : 0; })(),
+                        legend: (v.innerText || '').includes('不会写进系统'),
+                        hint: (v.innerText || '').includes('逐行标出')};
+            }""")
+            print(f"③″ {dm} 行级标记 = {marks}")
+            st = marks["skipTable"] or {}
+            if st:
+                print(f"     · 被标那行的表 = 题头 {st['nHead']} 格 / 数据行 {st['nTd']} 格"
+                      f"（{st['head']}…）")
+            if marks["skip"] or marks["nSaid"]:
+                oks3.append((marks["skip"] == marks["nSaid"]                     # 数对得上
+                             and marks["tagged"] == marks["skip"]                # 每行都有文字标记
+                             and marks["skipBg"] != marks["peerBg"]              # 底色真的不同
+                             and marks["legend"] and marks["hint"]               # 图例 ＋ 指向
+                             and bool(st) and st["nHead"] == st["nTd"][0],       # 题头几列＝行几格
+                             f"`{dm}` 卡片说「有 {marks['nSaid']} 行不会写入」⇒ **表里真标出 "
+                             f"{marks['skip']} 行**（带「不写入」文字 {marks['tagged']} 行 · 底色 "
+                             f"{marks['skipBg']} ≠ 普通行 {marks['peerBg']} · 题头 {st.get('nHead')} 格"
+                             f"/行 {st.get('nTd')} 格 · 悬停原因 {marks['tip'][:36]!r}）"
+                             " —— 用户报障原话：「要在行上直接标……而不是还要抬头去看文字说明」"))
+            else:
+                print(f"  ℹ️ {dm} 这批测试数据里**没有**「不会落库的行」⇒ 行级标记无从量起"
+                      "（静态判词仍守着「域必自报 ＋ 壳必标」）")
+                oks3.append((not marks["legend"] and not marks["hint"],
+                             f"`{dm}` 这批数据里**没有**「不会落库的行」⇒ 表里**一行都没标**、"
+                             "也没有图例（⛔ 别为不存在的状态摆一个说明）"))
             if want_pj:
                 oks3.append((got3["disabled"],
                              f"`{dm}` **没选项目 ⇒ 「④ 确认落库」置灰**（⛔ 系统不替你挑、"

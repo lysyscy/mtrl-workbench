@@ -170,7 +170,18 @@ def preview(s, records, mapping_):  # noqa: ARG001 —— `mapping_` 由通用�
                  "未识别付款方式": len(plan.unknown_methods)},
         "problems": _problems(plan, plan),
         "blocks": _blocks(plan),
-    }
+        # ⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个浅色底，
+        #    或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」）：
+        #    域**自报**写不进去的行（未匹配 ＋ 异常）⇒ 通用面按 `row` 标在那一行上、`why` 挂悬停。
+        #    ⚠️ 与 `_blocks(plan)` 里那两张清单**同一个来源**（同一个 `plan`）—— ⛔ 别另算一份；
+        #       措辞也照抄那两张清单的标题原话（`未匹配` / `异常` —— 同一个数在两屏不换说法）。
+        "skipped": (
+            [{"row": int(u.get("line") or 0),
+              "why": f"未匹配：单据号 {u.get('bill_no')} 在本地找不到（多半是该月通知书还没抓）⇒ 不入库"}
+             for u in plan.unmatched]
+            + [{"row": int(a.get("line") or 0),
+                "why": f"异常：{a.get('reason')}（本行不入库）"} for a in plan.anomalies]),
+        }
 
 
 def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `mapping_` 只进回执口径

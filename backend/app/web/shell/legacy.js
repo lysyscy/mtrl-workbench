@@ -500,8 +500,30 @@ V.imp = () => {
     const plist = (p.preview || []);
     const ptotal = Number(p.total == null ? plist.length : p.total);
     const pw = (p.writable == null ? null : Number(p.writable));      /* 域没给 ⇒ 不显示"能写入几行" */
-    const prows = plist.map(r => `<tr>${Object.keys(r)
-      .map(k => `<td class="now">${esc(String(r[k] == null ? '' : r[k]))}</td>`).join('')}</tr>`).join('');
+    /* ⭐⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个浅色底，
+       或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」—— 通用导入页都这么做）：
+       域自报 `skipped` = `[{row: Excel 行号, why: 人话原因}]` ⇒ **标记落在行上**（三件事一起给）：
+         · 整行浅底 ＋ 左侧警示竖条（`.skiprow`）；
+         · **行号格上一枚「不写入」标签** ＋ 整行 `title` 写原因（悬停即见）；
+         · 表格上方一枚**图例**（看表的人一眼知道浅底是什么意思）。
+       ⇒ 用户不用再去读卡片底下那段话、也不用自己把"有 7 行"对上具体是哪几行。
+       ⚠️ 通用面**不猜**哪几行写不进去：域给 `skipped` 就按行号标；**没给就只是不标**（照实）
+          —— ⛔ 绝不拿 `total - writable` 反推"大概是最后几行"（那是"看起来对"的猜法，守则 §4.2 状态必须真实）。 */
+    const skipOf = {};
+    (p.skipped || []).forEach(x => { skipOf[String(x.row)] = String(x.why || ''); });
+    const nskip = Object.keys(skipOf).length;
+    const prows = plist.map(r => {
+      const why = skipOf[String(r._row)];
+      const bad = why !== undefined;
+      const cell = (v, tail) => `<td class="now">${esc(String(v == null ? '' : v))}${tail || ''}</td>`;
+      /* ⚠️ **行号格显式先画**（不靠"`_row` 恰好是第一个键"）：题头 `pcols` 与数据格是同源同序的，
+         但**行号列是这一屏的锚**（"第 N 行…"那类报错按它对号）⇒ 把它钉死在第一格，
+         顺带把「不写入」这枚标记也钉在它上面（⛔ 别让标记跟着键顺序漂到别的格）。 */
+      return `<tr${bad ? ` class="skiprow" title="这一行不会写进系统：${esc(why)}"` : ''}>`
+        + cell(r._row, bad ? ' <span class="tag t-wn">不写入</span>' : '')
+        + Object.keys(r).filter(k => k !== '_row').map(k => cell(r[k])).join('')
+        + '</tr>';
+    }).join('');
     const pcols = plist.length
       ? Object.keys(plist[0]).map(k => `<th>${esc(k === '_row' ? '行' : k)}</th>`).join('') : '';
     const pnote = `本步读到 <b class="fc">${ptotal}</b> 行`
@@ -509,12 +531,21 @@ V.imp = () => {
       + ` · 表格显示`
       + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 落库按**全量**处理）`
                                : `全部 <b class="fc">${plist.length}</b> 行`);
+    /* ⭐ 表上方图例：只有真有行被标出来时才画（没有就别让人去找一个不存在的东西）。 */
+    const plegend = nskip
+      ? `<div class="mut sm" style="margin-top:6px">标了 <span class="tag t-wn">不写入</span> 的
+          行（浅底 ＋ 左侧竖条）= **不会写进系统** —— **鼠标放到那一行上看原因**；④ 只写其余的行。</div>`
+      : '';
     /* ⭐ 2026-09-26（用户报障后加）：**有行写不进去时必须当面说**，⛔ 不许让 ④ 点下去才知道。
-       ⚠️ 数由**域**给（`writable` 与 `total` 是通用面的键）—— 壳里仍**不认域号**。 */
-    const pwarn = (pw != null && pw < ptotal)
-      ? `<div class="tip wn" style="margin-top:8px">⚠️ 有 <b>${ptotal - pw}</b> 行**不会写入**（原因见下面
-          「落不了库的行」/「不导入的行」）—— ④ 只写能写入的那些。要它们也进去：先把文件改成标准格式，
-          再**整批回滚后重导**（⛔ 别让两批叠着）。</div>` : '';
+       ⚠️ 数由**域**给（`writable` 与 `total` 是通用面的键）—— 壳里仍**不认域号**；
+       数优先用 `skipped` 的长度（那是**逐行**认定的结果，比 `total - writable` 这个差值可靠）。 */
+    const nbad = nskip || (pw != null ? Math.max(0, ptotal - pw) : 0);
+    const pwarn = nbad > 0
+      ? `<div class="tip wn" style="margin-top:8px">⚠️ 有 <b>${nbad}</b> 行**不会写入** —— 已在上表
+          **逐行标出**（浅底 ＋ 行号旁的「不写入」，鼠标放上去看原因）
+          ${nskip ? '' : '（原因见下面「落不了库的行」/「不导入的行」）'}。
+          ④ 只写能写入的那些；要它们也进去：先把文件改成标准格式，再**整批回滚后重导**（⛔ 别让两批叠着）。</div>`
+      : '';
     prevCard = `<div class="card" style="margin-top:12px"><h4>预览校验<span class="sp"><span class="mut sm">
       这一步**一个字节都不写库**</span></span></h4><div class="kpis">
       <div class="kpi"><div class="k">将写入</div><div class="v">${p.writable == null ? p.total : p.writable}</div>
@@ -534,6 +565,7 @@ V.imp = () => {
       ${lgBlocks(p.blocks)}
       <div class="mut sm" style="margin-top:10px">${pnote}
         · 「行」= <b>Excel 里的行号</b>（与"第 N 行…"那类报错**同一个数**，用来对号）</div>
+      ${plegend}
       <div class="tw" style="max-height:280px;margin-top:6px"><table class="dt sm">
         <thead><tr>${pcols}</tr></thead><tbody>${prows || lgEmpty(1, '没有数据行')}</tbody></table></div>
       ${pwarn}

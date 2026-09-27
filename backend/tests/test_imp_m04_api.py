@@ -102,6 +102,13 @@ def test_付款计划在通用面端到端_中文月日按年月补全_且幂等
     body = {"token": got["token"], "mapping": mapping, "options": {"year_month": ym}}
     pre = client.post("/api/imp/m04_plan/preview", json=body).json()
     assert pre["ok"] and pre["total"] == 2, pre
+    # ⭐ 2026-09-26（③ 行级「不会写入」标记的契约 · 四个域一起改）：**本域不给 `skipped`** ——
+    #    不是漏了，是**本域没有「不会落库的行」**：付款计划**整批按月重写**，项目没匹配上的行
+    #    **照样进库**（只是挂不上项目，到计划页里再逐行处理）⇒ 界面上没有行要标。
+    #    ⛔ 别"顺手补一个" —— 给这类行标「不写入」就是假话（守则 §4.2 状态必须真实）。
+    assert "skipped" not in pre, (
+        "本域没有「不会落库的行」（项目没配上照样进库）⇒ 不该给 `skipped`（标了就是假话）："
+        f"{pre.get('skipped')!r}")
 
     out = client.post("/api/imp/m04_plan/commit", json=body).json()
     assert out["ok"] and out["report"]["year_month"] == ym, out
