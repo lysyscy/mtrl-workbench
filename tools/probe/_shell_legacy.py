@@ -508,6 +508,43 @@ def check(page, errors: list[str]) -> None:
                        m05: (await j('/api/imp/m05_flow/schema')).fields.length,
                        m06: (await j('/api/imp/m06_proc/schema')).fields.length,
                        m06d: (await j('/api/imp/m06_proc/options')).projects.length};
+            /* ⭐⭐ `TAIL-114`（2026-09-27 用户裁定）：**导入页的候选**必须覆盖
+               「**项目档案里有仓库名的每一个项目**」（含**没有任何数据**的）——
+               否则"给一个新项目导历史资料"这件事根本做不到（候选里就没有它）。
+               ⚠️ 判词**锚在档案上**（不在"后端 vs 页面"的差上）：两处一起变小时，差恒为 0 ⇒ 抓不到回退。
+               ⚠️⚠️ **必须先选 `m06_proc` 域**：候选是**跟着域变的**（那一刻可能停在别的域上 ——
+                  实测踩到：域停在 `m11_jc` ⇒ 面板候选 17 个，看着像"已经修好了"，其实是另一域的候选）。
+               ⚠️ 只在**数据导入页**量（那页才有 `impPjToggle` / `PJs`）⇒ 别的页返回 -1，不判。 */
+            const v = document.querySelector('#view');
+            const t = v.querySelector('[data-act="impPjToggle"]');
+            r.panelN = -1; r.missArch = -1; r.archN = -1; r.dom = '';
+            if (t) {
+                const sel = v.querySelector('[data-act="impDomain"]');
+                const back = sel ? sel.value : '';
+                if (sel && sel.value !== 'm06_proc') {
+                    sel.value = 'm06_proc';
+                    sel.dispatchEvent(new Event('change', {bubbles: true}));
+                    await new Promise(done => setTimeout(done, 900));     /* 域上下文是**异步**取的 */
+                }
+                const sel2 = v.querySelector('[data-act="impDomain"]');
+                r.dom = sel2 ? sel2.value : '';
+                r.m06d = (await j('/api/imp/m06_proc/options')).projects.length;
+                const t2 = v.querySelector('[data-act="impPjToggle"]');
+                if (t2) {
+                    t2.click();
+                    const ins = [...v.querySelectorAll('[data-act="impPjPick"]')].map(x => x.dataset.pj);
+                    const arch = (typeof PJs === 'object' && PJs)
+                        ? PJs.filter(p => p.type !== 'shell' && p.name).map(p => p.name) : [];
+                    r.panelN = ins.length;
+                    r.archN = arch.length;
+                    r.missArch = arch.filter(k => ins.indexOf(k) < 0).length;
+                    const b = v.querySelector('[data-act="impPjToggle"]'); if (b) b.click();
+                }
+                if (sel2 && back && back !== 'm06_proc') {                 /* 量完切回去，⛔ 别影响后面的段 */
+                    sel2.value = back;
+                    sel2.dispatchEvent(new Event('change', {bubbles: true}));
+                }
+            }
             return r;
         }""")
         oks = [
@@ -518,6 +555,14 @@ def check(page, errors: list[str]) -> None:
             (got["m06"] >= 1, f"过程资料导入的材料列清单非空（{got['m06']} 列）"),
             (got["m06d"] >= 0, f"过程资料导入的项目候选可读（{got['m06d']} 个）"),
         ]
+        if got.get("panelN", -1) >= 0:
+            oks.append((got["panelN"] == got["m06d"],
+                        f"导入页候选 == 后端（{got['panelN']} vs {got['m06d']}）—— "
+                        "若仍是「加载时求值 / 口径不一致」，这两个数会不一样"))
+            oks.append((got["missArch"] == 0,
+                        f"⭐⭐ **导入页候选覆盖了档案里有仓库名的每个项目**（档案 {got['archN']} 个 · "
+                        f"面板 {got['panelN']} 个 · ⛔ 缺口 **{got['missArch']}** 个）—— "
+                        "缺一个，那个项目的历史资料就永远导不进去（`TAIL-114`）"))
         for ok, what in oks:
             print(("  ✅ " if ok else "  ⛔ ") + f"⑳ {what}")
             if not ok:

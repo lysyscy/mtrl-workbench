@@ -400,3 +400,49 @@ def test_序号落进明确不采_机械列是目标字段(client):
     assert by_src["序号"]["field"] is None, "不采的列不给目标字段"
     assert by_src["分公司设备"]["field"] == "租分公司设备", "机械列现在是**目标字段**（要落库）"
     assert by_src["时间"]["ignored"] == "" and by_src["时间"]["field"] == "核算月"
+
+
+@acc()
+def test_导入候选要能选到只有档案行的项目_页面口径不许跟着改(client):
+    """⭐⭐ 2026-09-27（用户裁定 · `TAIL-114`）——**两处候选口径刻意不同**（⛔ 别再合并成一处）：
+
+    · **导入页**（`build_import_data` ⇒ `GET /api/imp/m06_proc/options`）＝ **项目档案里的全部
+      （含归档）∪ 有数据的**。为什么：**"导历史资料"这件事本身**才是给项目造历史段的手段 ——
+      若候选只看「库存单据里出现过的仓库名」，**一个还没有任何数据的项目永远选不到 ⇒ 它的历史
+      永远导不进去**（自我锁死＝鸡生蛋；实测 17 个有仓库名的档案项目里 **8 个选不到**）。
+    · **过程资料页**（`projects_of`）＝ 仍只列**有数据的**（用户原话：「过程资料**本身**可以只显示
+      仓库有数据项目没问题」）⇒ 那条口径**不许**跟着改。
+
+    ⚠️ 反证：把 `build_import_data` 里的 `import_projects(s)` 写回 `projects_of(...)` ⇒ 本件必红
+      （那正是 2026-09-27 改前的形态）。
+    """
+    from sqlalchemy import select
+
+    from app.core.db import session_scope
+    from app.mod01_projects.models import Project
+    from app.mod06_proc import service as SV
+    from app.mod06_proc.repository import load_history, load_inv_rows
+
+    wh = "__自检仓_导入候选_" + uuid.uuid4().hex[:8] + "__"          # 随机名：持久测试库，写死会撞
+    with session_scope() as s:
+        s.add(Project(project_type="normal", warehouse_name=wh, name_full=wh,
+                      disp="导入候选自检", status="active"))
+    try:
+        with session_scope() as s:
+            imp = SV.build_import_data(s, warehouse="")["projects"]
+            page = SV.projects_of(load_inv_rows(s), load_history(s))
+        assert wh in imp, (
+            "**导入页**的候选里没有「只有档案行、没有任何数据」的项目 —— 那正是本条的病："
+            "导历史本身就是给它造数据的手段 ⇒ 候选只看'有数据的'就**永远锁死**（`TAIL-114`）")
+        assert wh not in page, (
+            "**过程资料页**的候选把它也带上了 —— 用户 2026-09-27 明确「过程资料本身可以只显示"
+            "仓库有数据的项目没问题」⇒ 页面那条口径**不许**跟着改（两处**刻意**不同）")
+        got = client.get("/api/imp/m06_proc/options").json()
+        assert wh in (got.get("projects") or []), (
+            f"通用导入面的 `options` 没给全候选（{len(got.get('projects') or [])} 个）—— "
+            "导入页选不到它，历史资料就永远导不进去")
+    finally:
+        with session_scope() as s:
+            row = s.execute(select(Project).where(Project.warehouse_name == wh)).scalar_one_or_none()
+            if row is not None:
+                s.delete(row)

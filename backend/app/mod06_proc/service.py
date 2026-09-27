@@ -60,13 +60,40 @@ def parse_state(params: dict | None = None) -> dict:
 
 
 def projects_of(inv_rows: list[dict], history_rows: list[dict]) -> list[str]:
-    """候选项目 = 库存单据里出现过的仓库名 ∪ 只有历史段快照的仓库名（**项目键 = 仓库名**，§2.7.4）。
+    """**过程资料页**的候选项目 = 库存单据里出现过的仓库名 ∪ 只有历史段快照的仓库名
+    （**项目键 = 仓库名**，§2.7.4）。
 
-    ⚠️ 唯一出口：过程资料页与**历史导入页**共用同一份候选（各写一份 ⇒ 两页会给出不同的项目列表）。
+    ⚠️ 与**导入页**的候选**刻意不同**（2026-09-27 用户裁定 · `TAIL-114`）：
+       · **过程资料页**（本函数）＝ **只在有数据的那些项目里选**（用户原话：「过程资料**本身**可以
+         只显示仓库有数据的项目没问题」）—— 页面上本来也只画得出有数据的项目；
+       · **导入页**（`import_projects`）＝ **项目档案里的全部**（含归档）∪ 有数据的 —— 见下面那个函数的
+         docstring（"导历史"这件事本身要能给**还没有任何数据**的项目做）。
+       ⛔ 别再让两页"共用一份候选"：那正是 2026-09-27 之前的状态（导入页因此**自我锁死**）。
     """
     out = {str(r.get("warehouse") or "") for r in inv_rows if r.get("warehouse")}
     out |= {str(r.get("warehouse") or "") for r in history_rows if r.get("warehouse")}
     return sorted(out)
+
+
+def import_projects(s: Session) -> list[str]:
+    """**历史导入页**的候选项目 = **项目档案里所有有仓库名的项目（含归档）** ∪ 「有数据的那些」。
+
+    ⭐⭐ 2026-09-27（用户裁定 · `TAIL-114`）：导入页的候选**不再只给"有数据的项目"** ——
+      原口径（只有 `projects_of`）看的是「库存单据里出现过的仓库名 ∪ 已有历史段快照的仓库名」，
+      而**"导历史资料"这件事本身**才是给项目造历史段的手段 ⇒
+      **没有库存单据的项目永远进不了候选 ⇒ 它的历史资料永远导不进去**（自我锁死＝鸡生蛋；
+      实测 17 个有仓库名的档案项目里 **8 个选不到**）—— 而这恰恰是"**系统刚启用、还没有正式段**"时
+      最需要做的那件事。用户原话：「过程资料**导入**项目只显示仓库有数据的项目这个还是没改，改一下吧；
+      过程资料**本身**可以只显示仓库有数据项目没问题」⇒ **两处口径就此分开**（见 `projects_of` 的注释）。
+
+    ⚠️ 档案那一侧**复用唯一出口** `displays_by_key`（它自己走 `mod01_projects.domain.build_candidates`
+      ⇒ 含归档、不含壳、键=仓库名）—— ⛔ 不在这里另立一套"从档案取候选"。
+    ⚠️ 并集里**保留** i8 出现过、档案里没有的仓库名：m06 落库**不要求**档案行
+      （`import_snapshot(project_id=None)` 照样写、页面按仓库名读）⇒ 那些项目也导得进去 ✓。
+    """
+    keys = set(projects_of(load_inv_rows(s), load_history(s)))
+    keys |= set(displays_by_key(s))
+    return sorted(k for k in keys if k)
 
 
 def displays_by_key(s: Session) -> dict[str, str]:
@@ -90,7 +117,10 @@ def build_import_data(s: Session, *, warehouse: str = "") -> dict:
 
     ⚠️ 本页**读取**现有数据，**不写任何东西**；写路径在 `importer.commit`（只写历史段）。
     """
-    projects = projects_of(load_inv_rows(s), load_history(s))
+    # ⭐ `TAIL-114`（2026-09-27 用户裁定）：导入页候选 = **档案里的全部**（含归档）∪ 有数据的
+    #   —— 见 `import_projects` 的 docstring（"导历史"要能给还没数据的项目做）。
+    #   ⚠️ **过程资料页**仍走 `projects_of`（用户确认：那里只显示有数据的项目没问题）。
+    projects = import_projects(s)
     current = warehouse if warehouse in projects else (projects[0] if projects else "")
     return {
         "projects": projects,
