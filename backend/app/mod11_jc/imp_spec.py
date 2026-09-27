@@ -113,21 +113,11 @@ SPEC = DomainSpec(
 
 
 def _rows_of(records) -> list[dict]:
-    """通用面的 `records`（按字段名）→ 本域的**行形状**（key 即 `FIELD_LABELS` 的键）。
-
-    ⭐⭐ 2026-09-27（用户报障：③ 预览的「没配上的行 / 提醒」里写「**行 1 / 行 2 / 行 5**」，
-      而**数据表**里写的是 **Excel 行号**（4 / 5 / 8）⇒ 他**在表里找不到那个"行 5"**）：
-      把通用面的 `_row`（**Excel 行号**）一并带过来 —— 匹配结果里那一列从此是**同一个数**
-      （守则 §4.7：同一个数不许在两个地方换说法）。
-      ⚠️ 改前这里**丢掉了 `_row`** ⇒ `match_and_apply` 只好用"第几条数据"当行号（1 起）——
-         两者差一个表头行数（本例差 3），页面上看不出任何毛病，**只有用户去对号时才发现对不上**。
-    """
+    """通用面的 `records`（按字段名）→ 本域的**行形状**（key 即 `FIELD_LABELS` 的键）。"""
     key_of = {f.label: f.key for f in FIELDS}
     out: list[dict] = []
     for rec in records or []:
         row: dict = {key_of[lb]: rec[lb] for lb in key_of if rec.get(lb) not in (None, "")}
-        if rec.get("_row") not in (None, ""):
-            row["_row"] = rec["_row"]                      # ⭐ Excel 行号（见 docstring）
         for k, v in list(row.items()):                     # 金额回 `Decimal`（通用面给的是字符串）
             if k.endswith(("_amt", "_sum")):
                 row[k] = to_money(str(v))
@@ -193,19 +183,14 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
     if project_id is None:
         raise MustReportError(f"找不到项目（仓库名 {key!r}）—— 请先在「项目档案」建好")
     out = IS.match_and_apply(s, _rows_of(records), project_id=int(project_id), dry_run=True)
-    # ⭐ 2026-09-27（用户报障「查一下问题在哪」· 附两张截图）：这张清单**多给两列**
-    #    （供应商 / **发票金额**）—— 他遇到的是「7 行报『合同价为空』」，而**别的列明明有数**：
-    #    光看"合同价为空"没法判断"是文件没填"还是"**列映射认错了**（值跑进了发票那一列）"
-    #    ⇒ 把这一行手里**实际有什么**摆出来，一眼就能判（守则 §2.7：结论贴在被说的对象上）。
-    bad_rows = ([["——", "——", "——", "材料名称与供应商都空着，认不出是哪条合同", x.get("why") or ""]
+    bad_rows = ([["——", "——", "材料名称与供应商都空着，认不出是哪条合同", x.get("why") or ""]
                  for x in out.get("bad_items") or []])
     rows: list[list] = []
     for x in out.get("unmatched_items") or []:
-        rows.append([x.get("row_no"), x.get("amount") or "（空）", x.get("invoice") or "",
-                     x.get("supplier") or x.get("material_name") or "", x.get("why") or ""])
+        rows.append([x.get("row_no"), x.get("amount") or "（空）",
+                     x.get("material_name") or "", x.get("why") or ""])
     for x in out.get("ambiguous_items") or []:
-        rows.append([x.get("row_no"), x.get("amount"), x.get("invoice") or "",
-                     x.get("supplier") or x.get("material_name") or "", x.get("why") or ""])
+        rows.append([x.get("row_no"), x.get("amount"), "", x.get("why") or ""])
     rows += bad_rows
     return {
         # ⭐ **「将写入」改成真会更新的条数**（`writable` 覆盖通用面的 `total`）——
@@ -220,11 +205,8 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
         #       ⚠️ **「提醒」（`warned`）不进这里**：那些行**是写进去的**（只是带了句提醒），
         #          标成"不写入"就是假话（守则 §4.2 状态必须真实）。
         "skipped": (
-            # ⚠️ 行内原因**用这一行自己的** why（"合同价为空 / 为 0" / "项目内没有同价合同…"）——
-            #    原来一句笼统的"项目内没有同价合同"会把"锚点是空"也罩进去 ⇒ 用户按错的线索去改
-            #    （守则 §4.2 状态必须真实）。
             [{"row": int(x.get("row_no") or 0),
-              "why": f"配不上：{x.get('why') or '项目内没有同价合同（或认不出锚点）'}"}
+              "why": "配不上：项目内没有同价合同（或认不出锚点）⇒ 这一行不写进台账"}
              for x in out.get("unmatched_items") or []]
             + [{"row": int(x.get("row_no") or 0),
                 "why": "同价冲突：项目内有多条同价合同 ⇒ 系统不猜，这一行不写"}
@@ -234,19 +216,9 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
                for x in out.get("bad_items") or []]),
         "blocks": [
             {"title": "没配上的行（**不会被写进台账**，台账里一条不动）",
-             # ⭐ 2026-09-27（用户报障「查一下问题在哪」）：note 从"多半是…"改成**两条可操作的查法**
-             #    —— 他这次 8 行里有 7 行报"**合同价为空**"，而**不是**"没有同价合同"：
-             #    这两种的**下一步完全不同**（空 ⇒ 看文件/映射；找不到 ⇒ 看项目/抓合同）。
-             "note": "⚠️ 三种都**不猜、不新增**。按**原因那一列**分开处理："
-                     "① 「**合同价为空 / 为 0**」⇒ 这一行的锚点列是空的：若**你文件里明明填了价**，"
-                     "回第 **② 步**看那一列被认成了什么（多半被认成「发票金额」了）"
-                     "—— 那一格也可能是**带单位/空格的文本**，系统按「不是数」处理；"
-                     "② 「**项目内没有合同价 = X 的合同**」⇒ 先确认**第 ① 步选的项目对不对**，"
-                     "再看这个项目的合同**抓齐了没有**（抓齐了还缺，就是 i8 里还没有这张合同）；"
-                     "③ 「**同价有多条**」⇒ 项目内有多条同价合同，系统不猜 ⇒ 先分辨清是哪一张。"
-                     "⭐ 本表已多给「**供应商 / 发票金额**」两列：**这两列有数而合同价是空**，"
-                     "基本就是第 ① 种（列映射认错了）。",
-             "columns": ["行", "合同价", "发票金额", "供应商", "原因"],
+             "note": "⚠️ 认不出锚点 / 项目内没有同价合同 / 同价有多条 —— 三种都**不猜、不新增**："
+                     "先看这几行，多半是「这个项目的合同还没抓」或「合同价那一列没认对」。",
+             "columns": ["行", "合同价", "材料名称", "原因"],
              "rows": rows,
              "empty": "（无 —— 每一行都配上了）"},
             {"title": "提醒（不影响本次落库）",
