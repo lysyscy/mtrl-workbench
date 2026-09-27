@@ -295,13 +295,22 @@ def test_不会落库的行要在行上直接标():
     code = _imp_code()                      # ⚠️ 剥掉注释：注释里**引述**了旧写法（引述 ≠ 实现）
     assert "(p.skipped || [])" in code, (
         "③ 预览没读域的**逐行**名单（`skipped`）—— 它手里只有一个总数，标不到行上")
-    assert 'class="skiprow"' in code and 'title="这一行不会写进系统' in code, (
+    assert 'class="skiprow' in code and 'title="${tip}"' in code, (
         "被跳过的行没有**行级标记**（`.skiprow` ＋ 把原因挂整行 `title`）—— "
         "用户报障原话：「要在**行上**直接标……而不是还要抬头去看文字说明」")
     assert 'tag t-wn">不写入</span>' in code, (
-        "被跳过的行缺**行内文字标记**（行号旁的「不写入」标签）—— 只给浅底，色弱的人认不出")
-    assert "plegend" in code and "鼠标放到那一行上看原因" in code, \
-        "表上方没有**图例**（看表的人不知道那个浅底是什么意思）"
+        "「要你处理」的行缺**行内文字标记**（行号旁的「不写入」标签）—— 只给浅底，色弱的人认不出")
+    # ⭐⭐ 2026-09-27（用户报障 · 原话「**请将所有不写入输出的行也进行标注**」· 他截图里红框的是
+    #    「小计」「合计」行）：**「本来就跳过」的那类也要标**，而且**不能跟"要处理"长得一样** ——
+    #    ⛔ 混成一种颜色/一个词，用户会以为"合计行也要我去改"（守则 §2.8）。
+    assert 'tag t-mut">不导入</span>' in code, (
+        "「本来就跳过」的行（合计/小计 · 说明 · 空行）缺**自己的行内标记** —— 用户 2026-09-27 "
+        "报障的正是「这些行一个标记都没有」")
+    assert "skiprow${plain ? ' plain' : ''}" in code and "kind || 'bad'" in code, (
+        "两类标记没有分开渲染（`kind=skip` → 灰底 `.plain`；且**缺 `kind` 按 `bad` 走**，"
+        "保守：宁可多提醒一句「要处理」，也别把该处理的悄悄归成「不用管」）")
+    assert "plegend" in code and "不用你改" in code and "鼠标放到那一行上看原因" in code, \
+        "表上方没有**两类图例**（看表的人分不清「要处理」与「本来就跳过」）"
     assert "已在上表" in code and "逐行标出" in code, (
         "底部那句还是只让人去读别处的文字 —— 必须指向「行上**已经标好了**」")
     assert ".dt tbody tr.skiprow{box-shadow:inset 3px 0 0 var(--wn);background:var(--wn-l)}" in SHELL, (

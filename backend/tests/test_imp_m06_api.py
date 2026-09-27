@@ -111,7 +111,9 @@ def test_通用面端到端_认列到落库再到回滚(client):
     # ⭐ 2026-09-26（用户报障「**这些不会落库的行，要在行上直接标**……而不是还要抬头去看文字说明」）：
     #    预览必须**自报逐行名单**（`skipped` = 行号 ＋ 人话原因）—— 通用面靠它把「不写入」标在**那一行**上。
     #    ⚠️ 契约三条（m04/m05/m11 同款）：是 list · **条数与 `不写入的行` 一致** · 每项带行号与人话原因。
-    assert_skipped_contract(pre, expect=pre["kpis"]["不写入的行"])
+    assert_skipped_contract(pre,
+                            expect_bad=pre["kpis"]["不写入的行"],
+                            expect_skip=pre["kpis"]["本来就跳过（合计/说明/空行）"])
 
     wh = "__自检仓_IMP_M06_" + uuid.uuid4().hex[:8] + "__"
     body["options"] = {"warehouse": wh}
@@ -337,10 +339,20 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     assert bad, f"③ 没报出「落不了库的行」—— 用户又要走到 ④ 才知道：{list(blocks)}"
     assert [r[0] for r in bad["rows"]] == [5], f"落不了库的行号不对（应是 Excel 第 5 行）：{bad['rows']}"
     assert "核算月认不出" in bad["rows"][0][1]
-    tip = next((b for t, b in blocks.items() if t.startswith("不导入的行")), None)
-    assert tip and any("合计/小计行" in r[0] for r in tip["rows"]), \
-        f"合计/小计行没算成「跳过」（提示）—— 它不该混进「落不了库」里：{tip}"
-    assert any("说明行" in r[0] for r in tip["rows"]), tip
+    tip = next((b for t, b in blocks.items() if t.startswith("本来就跳过的行")), None)
+    assert tip, f"③ 没报出「本来就跳过的行」—— 那几行在表里就没标记：{list(blocks)}"
+    assert [r[0] for r in tip["rows"]] == [6, 7], \
+        f"跳过行的**行号**不对（小计 = 第 6 行 · 说明 = 第 7 行）：{tip['rows']}"
+    assert all("不用你改" in r[1] for r in tip["rows"]), \
+        f"跳过行的原因必须说清「不用你改」（否则用户以为是自己文件的问题）：{tip['rows']}"
+    # ⭐⭐ 2026-09-27（用户报障 · 原话「**请将所有不写入输出的行也进行标注**」）：**逐行**名单里
+    #    这两类都要有，且**分开**（壳按 `kind` 给两种标记 —— 合成一种，用户会以为合计行也要自己改）。
+    sk = {(x["row"], str(x.get("kind") or "bad")) for x in pre["skipped"]}
+    assert (5, "bad") in sk, f"落不了库的那一行（第 5 行）要带 `kind=bad`：{sorted(sk)}"
+    assert (6, "skip") in sk and (7, "skip") in sk, \
+        f"合计/小计行与说明行（第 6、7 行）要带 `kind=skip`（**也要在行上标**）：{sorted(sk)}"
+    assert pre["kpis"]["本来就跳过（合计/说明/空行）"] == 2, (
+        f"「本来就跳过」的数与 `skipped` 对不上（守则 §4.7：同一页同一个数不换说法）：{pre['kpis']}")
     # ⚠️ **说明行不许再被报成"必填为空 ⇒ 需处理"**（2026-09-26：同一行两个说法 —— 域说"不导入"、
     #    通用面说"需处理"，用户会去追一条根本不用管的问题。真文件里那行是 Excel 第 7 行）
     assert all(p["row"] != 7 for p in pre["problems"]), \
@@ -355,6 +367,8 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     assert out["ok"] and out["report"]["rows"] == 2, out
     assert out["report"]["不写入的行数"] == 1, \
         f"④ 回执没说清少写了几行 —— 用户会以为全导进去了：{out['report']}"
+    assert out["report"]["本来就跳过的行数"] == 2, \
+        f"④ 回执要把「本来就跳过」（合计/说明行）**分开**报（与 ③ 同一个数）：{out['report']}"
     # ⚠️ 顶上那句数字**必须是真写进去的行数**（原来是"解析出多少行"：5 行里只写 2 行，却说"已导入 5 行"）
     assert "已导入 2 行" in out["message"], \
         f"回执头一句的数字不是**真写入**的行数（实测晋江那份：写 24 行却说「已导入 32 行」）：{out['message']}"

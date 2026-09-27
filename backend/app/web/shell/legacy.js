@@ -509,18 +509,32 @@ V.imp = () => {
        ⇒ 用户不用再去读卡片底下那段话、也不用自己把"有 7 行"对上具体是哪几行。
        ⚠️ 通用面**不猜**哪几行写不进去：域给 `skipped` 就按行号标；**没给就只是不标**（照实）
           —— ⛔ 绝不拿 `total - writable` 反推"大概是最后几行"（那是"看起来对"的猜法，守则 §4.2 状态必须真实）。 */
+    /* ⭐⭐ 2026-09-27（用户报障 · 原话：「**请将所有不写入输出的行也进行标注**」· 他截图里红框的是
+       第 33 行「小计」/ 第 34 行「合计」）：域自报的 `skipped` 里**两类都要标**，而且**必须一眼分得开**
+       （守则 §2.8：**要你处理的** vs **本来就跳过的**）——
+         · `kind="bad"`（缺省）⇒ **要你处理**：浅底 ＋ 左侧警示竖条 ＋ 行号旁「**不写入**」（守则 §2.7）；
+         · `kind="skip"` ⇒ **本来就跳过**（合计/小计 · 说明 · 空行）：灰底、**没有**竖条 ＋ 行号旁「**不导入**」。
+       ⛔ 两类混成一种颜色/一个词，用户会以为"合计行也要我去改"（那正是"看起来有毛病"的误读）。
+       ⚠️ 缺 `kind` 时按 `bad` 走（**保守**：宁可多提醒一句"要处理"，也别把该处理的悄悄归成"不用管"）。 */
     const skipOf = {};
-    (p.skipped || []).forEach(x => { skipOf[String(x.row)] = String(x.why || ''); });
-    const nskip = Object.keys(skipOf).length;
+    (p.skipped || []).forEach(x => {
+      skipOf[String(x.row)] = {why: String(x.why || ''), kind: String(x.kind || 'bad')};
+    });
+    let nskip = 0, nplain = 0;
+    Object.keys(skipOf).forEach(k => { if (skipOf[k].kind === 'skip') nplain += 1; else nskip += 1; });
     const prows = plist.map(r => {
-      const why = skipOf[String(r._row)];
-      const bad = why !== undefined;
+      const hit = skipOf[String(r._row)] || null;
+      const plain = !!hit && hit.kind === 'skip';
       const cell = (v, tail) => `<td class="now">${esc(String(v == null ? '' : v))}${tail || ''}</td>`;
       /* ⚠️ **行号格显式先画**（不靠"`_row` 恰好是第一个键"）：题头 `pcols` 与数据格是同源同序的，
          但**行号列是这一屏的锚**（"第 N 行…"那类报错按它对号）⇒ 把它钉死在第一格，
-         顺带把「不写入」这枚标记也钉在它上面（⛔ 别让标记跟着键顺序漂到别的格）。 */
-      return `<tr${bad ? ` class="skiprow" title="这一行不会写进系统：${esc(why)}"` : ''}>`
-        + cell(r._row, bad ? ' <span class="tag t-wn">不写入</span>' : '')
+         顺带把那枚标记也钉在它上面（⛔ 别让标记跟着键顺序漂到别的格）。 */
+      const tag = !hit ? ''
+        : plain ? ' <span class="tag t-mut">不导入</span>' : ' <span class="tag t-wn">不写入</span>';
+      const tip = !hit ? ''
+        : `${plain ? '这一行本来就跳过（不用你改）' : '这一行不会写进系统（要处理）'}：${esc(hit.why)}`;
+      return `<tr${hit ? ` class="skiprow${plain ? ' plain' : ''}" title="${tip}"` : ''}>`
+        + cell(r._row, tag)
         + Object.keys(r).filter(k => k !== '_row').map(k => cell(r[k])).join('')
         + '</tr>';
     }).join('');
@@ -531,20 +545,38 @@ V.imp = () => {
       + ` · 表格显示`
       + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 落库按**全量**处理）`
                                : `全部 <b class="fc">${plist.length}</b> 行`);
-    /* ⭐ 表上方图例：只有真有行被标出来时才画（没有就别让人去找一个不存在的东西）。 */
-    const plegend = nskip
-      ? `<div class="mut sm" style="margin-top:6px">标了 <span class="tag t-wn">不写入</span> 的
-          行（浅底 ＋ 左侧竖条）= **不会写进系统** —— **鼠标放到那一行上看原因**；④ 只写其余的行。</div>`
+    /* ⭐ 表上方图例：只有真有行被标出来时才画（没有就别让人去找一个不存在的东西）。
+       ⭐ 2026-09-27：**两类标记要说清区别**（守则 §2.8）—— 否则"灰底"会被当成"淡一点的警告"。 */
+    const plegend = (nskip || nplain)
+      ? `<div class="mut sm" style="margin-top:6px">⚠️ 表里有两类标记，**看颜色一眼分开**（鼠标放到那一行上看原因）：`
+        + `<br>· <span class="tag t-wn">不写入</span>（浅底 ＋ 左侧竖条）= **不会写进系统，要你处理**`
+        + `（把文件改成标准格式后重导）；`
+        + `<br>· <span class="tag t-mut">不导入</span>（灰底、没有竖条）= **本来就跳过**`
+        + `（合计/小计 · 说明 · 空行 —— **不用你改**）。</div>`
       : '';
     /* ⭐ 2026-09-26（用户报障后加）：**有行写不进去时必须当面说**，⛔ 不许让 ④ 点下去才知道。
        ⚠️ 数由**域**给（`writable` 与 `total` 是通用面的键）—— 壳里仍**不认域号**；
-       数优先用 `skipped` 的长度（那是**逐行**认定的结果，比 `total - writable` 这个差值可靠）。 */
+       数优先用 `skipped` 的**逐行**结果（比 `total - writable` 这个差值可靠），
+       ⭐ 且**两类分开说**（守则 §4.7 口径透明：合成一个"3 行"⇒ 用户以为三行都要自己改）。 */
     const nbad = nskip || (pw != null ? Math.max(0, ptotal - pw) : 0);
-    const pwarn = nbad > 0
-      ? `<div class="tip wn" style="margin-top:8px">⚠️ 有 <b>${nbad}</b> 行**不会写入** —— 已在上表
-          **逐行标出**（浅底 ＋ 行号旁的「不写入」，鼠标放上去看原因）
-          ${nskip ? '' : '（原因见下面「落不了库的行」/「不导入的行」）'}。
-          ④ 只写能写入的那些；要它们也进去：先把文件改成标准格式，再**整批回滚后重导**（⛔ 别让两批叠着）。</div>`
+    const said = [];
+    if (nbad > 0) {
+      said.push(`有 <b>${nbad}</b> 行**不会写入**`
+                + (nskip ? ' —— 已在上表**逐行标出**（浅底 ＋ 左侧竖条 ＋ 行号旁的「不写入」，'
+                           + '鼠标放上去看原因）'
+                         : '（原因见下面「落不了库的行」）'));
+    }
+    if (nplain > 0) {
+      said.push(`另有 <b>${nplain}</b> 行**本来就跳过**（合计/小计 · 说明 · 空行 ⇒ 不是数据行，`
+                + `已标成灰底，**不用你改**）`);
+    }
+    const pwarn = said.length
+      ? `<div class="tip wn" style="margin-top:8px">⚠️ ${said.join('；')}。`
+        + (nbad > 0
+           ? '④ 只写能写入的那些；要它们也进去：先把文件改成标准格式，再**整批回滚后重导**'
+             + '（⛔ 别让两批叠着）。'
+           : '④ 照常落库即可 —— 这一批**不需要你改文件**。')
+        + '</div>'
       : '';
     prevCard = `<div class="card" style="margin-top:12px"><h4>预览校验<span class="sp"><span class="mut sm">
       这一步**一个字节都不写库**</span></span></h4><div class="kpis">

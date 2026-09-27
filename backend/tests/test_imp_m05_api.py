@@ -156,7 +156,7 @@ def test_付款流水在通用面端到端_未匹配与异常不入库_核对报
         #    域必须**自报逐行名单**（`skipped` = 行号 ＋ 人话原因）—— 通用面靠它把「不写入」标在**那一行**上。
         #    ⛔ 只给 `total - writable` 那种差值不算（差值标不出"哪几行"，用户还是得自己数）。
         sk = pre["skipped"]
-        assert_skipped_contract(pre, expect=2)          # 契约三条（未匹配 1 ＋ 异常 1）
+        assert_skipped_contract(pre, expect_bad=2)      # 契约：未匹配 1 ＋ 异常 1（都是"要你处理"）
         assert {x["why"].split("：")[0] for x in sk} == {"未匹配", "异常"}, \
             f"原因要说人话、且用本域那两张清单的原话（未匹配 / 异常 —— 同一数不换说法）：{sk!r}"
         # ⭐ **预览阶段一个字节都不写库**（判据 001-06）

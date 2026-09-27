@@ -116,6 +116,16 @@ table.dt{width:100%;border-collapse:collapse;font-size:12.5px}
 .dt tbody tr.skiprow{box-shadow:inset 3px 0 0 var(--wn);background:var(--wn-l)}
 .dt tbody tr.skiprow:hover{background:var(--hl-hover)}
 .dt tbody tr.skiprow .fl{background:var(--wn-l)}
+/* ⭐⭐ 2026-09-27（用户报障：「**请将所有不写入输出的行也进行标注**」· 他截图里红框的是第 33 行
+   「小计」/ 第 34 行「合计」）：**「本来就跳过」**的行（合计/小计 · 说明 · 空行）**也要标**，
+   但⛔ **不是警示色** —— 它们没问题、不用用户改（守则 §2.8：**要你处理的** 与 **本来就跳过的**
+   必须一眼分得开，混成一种颜色/一个词 ⇒ 用户以为"合计行也要我去改"）。
+   ⇒ 同一套视觉语言（浅底），换**中性灰**、并**去掉左侧警示竖条**：
+      读成"这行不参与"（同 `.ex` 剔除行的灰），而不是"这行有毛病"。 */
+.dt tbody tr.skiprow.plain{box-shadow:none;background:var(--ex-bg)}
+.dt tbody tr.skiprow.plain .fl{background:var(--ex-bg)}
+/* 「不导入」那枚**中性标签**（灰底、不用警示色 —— 同上）。簇里其余颜色都已有语义，⛔ 别新造色。 */
+.tag.t-mut{background:var(--ex-bg);color:var(--mut);border-color:var(--bd)}
 .dt tbody tr.pick{background:var(--pri-l)}
 .dt tbody tr.pick:hover{background:var(--pri-bd)}
 .dt tbody tr.sel{background:var(--sel)}

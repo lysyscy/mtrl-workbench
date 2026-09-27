@@ -356,9 +356,29 @@ def _row_kind_of(*, cells: list[str], has_amounts: bool) -> str:
 
 
 def _lines_note(kind: str, lines: list[int]) -> str:
-    """把"跳过的行"攒成**一条**提示（⛔ 不一行一条 —— 南平那份有 10 行空行，刷屏）。"""
+    """把"跳过的行"攒成**一条**提示（⛔ 不一行一条 —— 南平那份有 10 行空行，刷屏）。
+
+    ⚠️ 只服务**域内旧路** `parse_sheet`（页面已下架）。⭐ 通用导入面（现行唯一入口）不再用它 ——
+      那里给的是**逐行**清单（`[{row, kind, why}]`），因为用户 2026-09-27 要求"**所有不写入的行
+      都要在行上标出来**"，而一句"合计/小计行 2 行（行 33、34）—— 不导入"在表里**对不上行**。
+    """
     where = "、".join(str(x) for x in lines) if len(lines) <= 4 else f"{lines[0]}~{lines[-1]}"
     return f"{kind} {len(lines)} 行（行 {where}）—— 不导入"
+
+
+def _skip_why(kind: str) -> str:
+    """「本来就跳过」的那几行**逐行**说一句人话（通用面把它挂成那一行的悬停说明）。
+
+    ⚠️ 措辞要点（守则 §2.8）：**必须说清"不用你管"** —— 否则用户看到"没写进去"，
+      第一反应是自己的文件有问题（而合计行/说明行/空行**本来就该跳**）。
+    """
+    if "合计" in kind or "小计" in kind:
+        return "尾部合计/小计行 —— 不是数据行，**本来就跳过**（不用你改）"
+    if "说明" in kind:
+        return "手写说明行 —— 不是数据行，**本来就跳过**（不用你改）"
+    if "空" in kind:
+        return "空行 —— **本来就跳过**（不用你改）"
+    return f"{kind} —— **本来就跳过**（不是数据行，不用你改）"
 
 
 def _cell(row: list, at: int) -> str:
@@ -394,15 +414,23 @@ def _record_cells(rec: dict) -> list[str]:
     return [_norm(v) for v in vals]
 
 
-def plan_rows(records) -> tuple[list[dict], list[str], list[dict]]:
-    """通用面的 `records` → `(能落库的行, 提示, 落不了库的行)` —— ⭐ **预览与落库共用这一处**。
+def plan_rows(records) -> tuple[list[dict], list[dict], list[dict]]:
+    """通用面的 `records` → `(能落库的行, 本就跳过的行, 落不了库的行)` —— ⭐ **预览与落库共用这一处**。
 
     ⭐ 为什么必须共用（2026-09-26 用户报障的根）：④ 落库报「第 19 行的核算月认不出」，而 ③ 预览
       **一个字都没说**（实测晋江那份真文件：预览只报了一条无关的行 35）⇒ 用户"走到最后才知道"。
       ⇒ ③ 拿本函数算「将写入」并**列出落不了库的行**，④ 拿同一份真写。
 
+    ⭐⭐ 2026-09-27（用户报障 · 原话：「**请将所有不写入输出的行也进行标注**」· 截图里红框框的是
+      **第 33 行「小计」/ 第 34 行「合计」**）：第二项从**一句提示文字**（`_lines_note`，如
+      "合计/小计行 2 行（行 33、34）—— 不导入"）改成**逐行清单** `[{row, kind, why}]`
+      —— 行号本来就聚在 `skipped` 里、只是被拼成了句子 ⇒ 通用面据此把那几行**也标出来**，
+      并且把「**要你处理**」（`bad`）与「**本来就跳过**」（本项）**分成两种标记**：
+      ⛔ 两者混成一种颜色/一个词，用户会以为"合计行也要我去改"（守则 §2.8）。
+      ⚠️ 真正的**数据行**照旧只有两种去向：落 / 不落（`bad`）；本项是"**根本不是数据行**"。
+
     跳过与异常（**沿用域内既有口径**，⛔ 别在这里改判）：
-      · **合计/小计行 · 说明行 · 空行** ⇒ 跳过（算**提示**，不算异常）—— 旧路 `parse_sheet` 一直如此；
+      · **合计/小计行 · 说明行 · 空行** ⇒ 跳过（算**本就该跳**，不算异常）—— 旧路 `parse_sheet` 一直如此；
       · **核算月认不出** ⇒ **这一行不收**，进"落不了库的行"并**逐条列出**（⭐ 用户 2026-09-26 裁定：
         「不合规的核算月文本**不收**（正式导入时会改成标准格式）」）；
       · **金额认不出** ⇒ 同上（⛔ 不静默丢、也不替它编数）；
@@ -443,7 +471,10 @@ def plan_rows(records) -> tuple[list[dict], list[str], list[dict]]:
             bad.append({"line": line, "reason": f"金额认不出：{exc}"})
             continue
         rows.append(row)
-    return rows, [_lines_note(k, v) for k, v in skipped.items()], bad
+    # ⭐ 逐行清单（不是一句汇总）：通用面要按 `row` 把这几行**在行上**标出来（守则 §2.7/§2.8）。
+    skip_rows = [{"row": line, "kind": k, "why": _skip_why(k)}
+                 for k, lines in skipped.items() for line in lines]
+    return rows, skip_rows, bad
 
 
 @dataclass

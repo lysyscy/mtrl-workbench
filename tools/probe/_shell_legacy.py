@@ -109,6 +109,11 @@ def _mk_xlsx(path, domain: str) -> int:
     #       顺带证到"**没有就不标**"（⛔ 别为了凑数据硬造一行）。
     if domain == "m06_proc":
         ws.append([("2025年9月（三标）" if f.key == "ym" else 0) for f in fields])
+        # ⭐ 2026-09-27（用户报障「**请将所有不写入输出的行也进行标注**」）：再补**尾部合计行** ——
+        #    它是「本来就跳过」那一类的真实形态（用户截图里红框的正是「小计」「合计」两行）。
+        #    ⚠️ 不补的话，真机判词只能量到「要你处理」那一类 ⇒ 新加的**灰底标记一处都没验证**
+        #       （那等于新功能没有真机证据）。
+        ws.append(["合计"] + [0] * (len(fields) - 1))
     wb.save(str(path))
     return len(fields)
 
@@ -366,22 +371,34 @@ def check(page, errors: list[str]) -> None:
                 const v = document.querySelector('#view');
                 const trs = [...v.querySelectorAll('table.dt tbody tr')];
                 const has = t => t.classList.contains('skiprow');
+                const plain = t => t.classList.contains('plain');
                 const bg = t => getComputedStyle(t).backgroundColor;
                 const skip = trs.filter(has);
+                const skipBad = skip.filter(t => !plain(t));        /* 要你处理（黄） */
+                const skipPlain = skip.filter(plain);               /* 本来就跳过（灰） */
                 /* ⚠️ 普通行要取**同一张表**里的：图卡里还有"问题清单/域区块"几张表，
                    拿别张表的行来比底色等于比了个无关的东西。 */
                 const host = skip.length ? skip[0].closest('table') : null;
                 const peers = host ? [...host.querySelectorAll('tbody tr')].filter(t => !has(t)) : [];
-                return {rows: trs.length, skip: skip.length,
-                        skipBg: skip.length ? bg(skip[0]) : null,
+                const said = re => Number(((v.innerText || '').match(re) || [0, 0])[1] || 0);
+                return {rows: trs.length,
+                        bad: skipBad.length, plain: skipPlain.length,
+                        badBg: skipBad.length ? bg(skipBad[0]) : null,
+                        plainBg: skipPlain.length ? bg(skipPlain[0]) : null,
                         peerBg: peers.length ? bg(peers[0]) : null,
-                        tagged: skip.filter(t => (t.innerText || '').includes('不写入')).length,
-                        tip: skip.length ? (skip[0].getAttribute('title') || '') : '',
-                        /* ⚠️ 诊断用：标了却没见到「不写入」文字时，得看清**真实 DOM**长什么样
-                           （第一版就是这么发现"标上了、但文字没渲染"的）。 */
-                        /* ⚠️ 诊断用：被标的行**分别落在哪张表**、那一行的每个格子写了什么
-                           （③ 屏里有好几张表：问题清单 / 域区块 / 数据表）—— 一眼看清"标对地方没有"。 */
-                        /* ⚠️ **表头几列 ⇒ 数据行就得几格**：这一条今天真抓到过东西 ——
+                        taggedBad: skipBad.filter(t => (t.innerText || '').includes('不写入')).length,
+                        taggedPlain: skipPlain.filter(t => (t.innerText || '').includes('不导入')).length,
+                        tipBad: skipBad.length ? (skipBad[0].getAttribute('title') || '') : '',
+                        tipPlain: skipPlain.length ? (skipPlain[0].getAttribute('title') || '') : '',
+                        /* ⭐ **卡片上说得出的两个数** —— 判词要拿它们跟**行上真标出来的条数**比
+                           （⚠️ 没这一条，"壳根本没标"与"本来就没有行要标"长得一样 ⇒ 判词**空转**：
+                              把标行那行代码删掉也照样绿）。 */
+                        nSaid: said(/有\\s*(\\d+)\\s*行/),          /* 「有 N 行不会写入」 */
+                        nSaidPlain: said(/另有\\s*(\\d+)\\s*行/),    /* 「另有 M 行本来就跳过」 */
+                        legend: (v.innerText || '').includes('要你处理')
+                                && (v.innerText || '').includes('不用你改'),
+                        hint: (v.innerText || '').includes('逐行标出'),
+                        /* ⚠️ **表头几列 ⇒ 数据行就得几格**：这一条真抓到过东西 ——
                            被标的那张表题头写着「行｜核算月｜…」（18 格），而数据行只有 17 格
                            （**行号那格根本没画出来**）⇒ 用别的办法量都会说"看着挺好"。 */
                         skipTable: (() => {
@@ -392,37 +409,44 @@ def check(page, errors: list[str]) -> None:
                                     nTd: body.map(x => x.children.length).slice(0, 3),
                                     head: [...tb.querySelectorAll('th')].map(h => h.innerText.trim())
                                                                     .join('|').slice(0, 26)};
-                        })(),
-                        /* ⭐ **卡片上说得出的数**（"⚠️ 有 N 行不会写入…"）——
-                           判词要拿它跟**行上真标出来的条数**比：两个数必须一致。
-                           ⚠️ 没有这一条，"壳根本没标"与"本来就没有行要标"长得一样 ⇒ 判词会**空转**
-                              （把标行那行代码删掉也照样绿 —— 那就白写了）。 */
-                        nSaid: (() => { const m = (v.innerText || '').match(/有\s*(\d+)\s*行/);
-                                        return m ? Number(m[1]) : 0; })(),
-                        legend: (v.innerText || '').includes('不会写进系统'),
-                        hint: (v.innerText || '').includes('逐行标出')};
+                        })()};
             }""")
             print(f"③″ {dm} 行级标记 = {marks}")
             st = marks["skipTable"] or {}
             if st:
                 print(f"     · 被标那行的表 = 题头 {st['nHead']} 格 / 数据行 {st['nTd']} 格"
                       f"（{st['head']}…）")
-            if marks["skip"] or marks["nSaid"]:
-                oks3.append((marks["skip"] == marks["nSaid"]                     # 数对得上
-                             and marks["tagged"] == marks["skip"]                # 每行都有文字标记
-                             and marks["skipBg"] != marks["peerBg"]              # 底色真的不同
-                             and marks["legend"] and marks["hint"]               # 图例 ＋ 指向
-                             and bool(st) and st["nHead"] == st["nTd"][0],       # 题头几列＝行几格
-                             f"`{dm}` 卡片说「有 {marks['nSaid']} 行不会写入」⇒ **表里真标出 "
-                             f"{marks['skip']} 行**（带「不写入」文字 {marks['tagged']} 行 · 底色 "
-                             f"{marks['skipBg']} ≠ 普通行 {marks['peerBg']} · 题头 {st.get('nHead')} 格"
-                             f"/行 {st.get('nTd')} 格 · 悬停原因 {marks['tip'][:36]!r}）"
-                             " —— 用户报障原话：「要在行上直接标……而不是还要抬头去看文字说明」"))
+            # ⭐⭐ 2026-09-27（用户报障：「**请将所有不写入输出的行也进行标注**」· 他截图里红框的是
+            #    「小计」「合计」行）：**两类都要标、且必须一眼分得开**（守则 §2.8）——
+            #    量六件：① 「要你处理」条数 == 卡片说的数；② 「本来就跳过」条数 == 卡片说的数；
+            #    ③ 两类各带自己的**行内文字**标记（「不写入」/「不导入」）；
+            #    ④ 两类底色都 ≠ 普通行；⑤ ⭐ **两类底色彼此也不同**（混成一种色 = 用户以为
+            #    "合计行也要我改"）；⑥ 图例在（说清「要你处理」/「不用你改」）＋ 底部指向"逐行标出"。
+            if marks["bad"] or marks["plain"] or marks["nSaid"] or marks["nSaidPlain"]:
+                ok = (marks["bad"] == marks["nSaid"]                         # ① 数对得上
+                      and marks["plain"] == marks["nSaidPlain"]              # ② 数对得上
+                      and marks["taggedBad"] == marks["bad"]                 # ③ 每行有文字标记
+                      and marks["taggedPlain"] == marks["plain"]
+                      and (not marks["bad"] or marks["badBg"] != marks["peerBg"])      # ④
+                      and (not marks["plain"] or marks["plainBg"] != marks["peerBg"])
+                      and (not (marks["bad"] and marks["plain"])
+                           or marks["badBg"] != marks["plainBg"])                        # ⑤
+                      and marks["legend"] and marks["hint"]
+                      and bool(st) and st["nHead"] == st["nTd"][0])                  # ⑥ 题头几列＝行几格
+                oks3.append((ok,
+                             f"`{dm}` 卡片说「不会写入 {marks['nSaid']} 行 · 本来就跳过 "
+                             f"{marks['nSaidPlain']} 行」⇒ **表里真标出 {marks['bad']} ＋ "
+                             f"{marks['plain']} 行**（文字标记「不写入」{marks['taggedBad']} · "
+                             f"「不导入」{marks['taggedPlain']}；底色 要处理 {marks['badBg']} / "
+                             f"本来就跳过 {marks['plainBg']} / 普通行 {marks['peerBg']}；"
+                             f"题头 {st.get('nHead')} 格·行 {st.get('nTd')} 格）"
+                             " —— 用户报障原话：「要在行上直接标……而不是还要抬头去看文字说明」、"
+                             "「**请将所有不写入输出的行也进行标注**」"))
             else:
-                print(f"  ℹ️ {dm} 这批测试数据里**没有**「不会落库的行」⇒ 行级标记无从量起"
+                print(f"  ℹ️ {dm} 这批测试数据里**没有**「不写入的行」⇒ 行级标记无从量起"
                       "（静态判词仍守着「域必自报 ＋ 壳必标」）")
                 oks3.append((not marks["legend"] and not marks["hint"],
-                             f"`{dm}` 这批数据里**没有**「不会落库的行」⇒ 表里**一行都没标**、"
+                             f"`{dm}` 这批数据里**没有**「不写入的行」⇒ 表里**一行都没标**、"
                              "也没有图例（⛔ 别为不存在的状态摆一个说明）"))
             if want_pj:
                 oks3.append((got3["disabled"],

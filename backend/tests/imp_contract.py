@@ -13,12 +13,15 @@
 from __future__ import annotations
 
 
-def assert_skipped_contract(pre: dict, *, expect: int) -> None:
-    """**③ 预览回执必须自报"哪几行不会落库"**（三条，缺一条通用面就标不出行）。
+def assert_skipped_contract(pre: dict, *, expect_bad: int, expect_skip: int = 0) -> None:
+    """**③ 预览回执必须自报"哪几行不会落库"**（四条，缺一条通用面就标不出行 / 标错类）。
 
     ① `skipped` 是 `list`（⛔ **不是** `total - writable` 那种差值 —— 差值标不出"哪几行"）；
-    ② 条数 = `expect`（**由调用方按本域口径给**：域自己的 `kpis` 里那几个"不写入"的数）；
-    ③ 每项 = `{"row": Excel 行号(>0), "why": 人话原因}` —— 通用面**按行号**标行、`why` 挂悬停。
+    ② 每项 = `{"row": Excel 行号(>0), "why": 人话原因}` —— 通用面**按行号**标行、`why` 挂悬停；
+    ③ `kind` ∈ `{"bad", "skip"}`（**缺省 = `"bad"`**）：`bad` = **要你处理**（文件不合规）；
+       `skip` = **本来就跳过**（合计/小计 · 说明 · 空行 ⇒ 不是数据行，用户不用改）；
+       ⇒ 壳据此给**两种标记**（守则 §2.8：两类混成一种颜色/一个词，用户会以为"合计行也要我改"）；
+    ④ 两类**条数分别**对得上（`expect_bad` / `expect_skip`，由调用方按**本域自己的** `kpis` 给）。
 
     ⚠️ 通用面**不猜**：域不给 `skipped` 就只是一行都不标（⛔ 绝不拿差值反推"大概是最后几行"，
        那是"看起来对"的猜法，守则 §4.2 状态必须真实）。
@@ -26,9 +29,14 @@ def assert_skipped_contract(pre: dict, *, expect: int) -> None:
     sk = pre.get("skipped")
     assert isinstance(sk, list), (
         f"③ 预览没自报**逐行**名单（`skipped`）—— 通用面手里只有一个总数，标不到行上：{sk!r}")
-    assert len(sk) == expect, (
-        f"`skipped` 的条数（{len(sk)}）与**本域口径**（{expect}）对不上 —— "
+    kinds = [str(x.get("kind") or "bad") for x in sk]
+    assert set(kinds) <= {"bad", "skip"}, (
+        f"`skipped` 的 `kind` 只许 `bad`（要你处理）/ `skip`（本来就跳过）：{sk!r}")
+    assert kinds.count("bad") == expect_bad, (
+        f"「要你处理」的条数（{kinds.count('bad')}）与**本域口径**（{expect_bad}）对不上 —— "
         f"两处对不上就是「两个主人」：{sk!r}")
+    assert kinds.count("skip") == expect_skip, (
+        f"「本来就跳过」的条数（{kinds.count('skip')}）与**本域口径**（{expect_skip}）对不上：{sk!r}")
     for x in sk:
         assert isinstance(x.get("row"), int) and x["row"] > 0, (
             f"`skipped` 的每一项都要带 **Excel 行号**（通用面按它对行作标记）：{x!r}")

@@ -67,10 +67,14 @@ SPEC = DomainSpec(
 )
 
 
-def _blocks_of(bad: list[dict], notes: list[str]) -> list[dict]:
-    """**③ 预览与 ④ 回执共用**的两块：`落不了库的行` ＋ `不导入的行（提示）`。
+def _blocks_of(bad: list[dict], skip_rows: list[dict]) -> list[dict]:
+    """**③ 预览与 ④ 回执共用**的两块：`落不了库的行` ＋ `本来就跳过的行`。
 
     ⛔ 别在两处各拼一份 —— 那正是"同一件事两个说法"的开端（用户按 ③ 的数核对，④ 却给另一份）。
+
+    ⭐ 2026-09-27（用户报障：「**请将所有不写入输出的行也进行标注**」）：第二块的**列从「说明」改成
+      「行 / 原因」** —— 原先是一句"合计/小计行 2 行（行 33、34）—— 不导入"，**与表里那几行对不上号**
+      （用户得自己数到第 33 行）。现在逐行给行号 ⇒ 与行级标记**同一个数**（守则 §2.7）。
     """
     out: list[dict] = []
     if bad:
@@ -79,9 +83,12 @@ def _blocks_of(bad: list[dict], notes: list[str]) -> list[dict]:
                             "（先把同批整批回滚，⛔ 别让两批叠着）。",
                     "columns": ["行", "原因"],
                     "rows": [[a["line"], a["reason"]] for a in bad]})
-    if notes:
-        out.append({"title": "不导入的行（提示）", "columns": ["说明"],
-                    "rows": [[n] for n in notes]})
+    if skip_rows:
+        out.append({"title": f"本来就跳过的行（{len(skip_rows)} 行 · 不是数据行，**不用你改**）",
+                    "note": "合计/小计行 · 手写说明行 · 空行 —— **本来就不该进库**（⛔ 不是你文件的毛病）。"
+                            "⚠️ 与上面「落不了库的行」**不是一回事**：那些才要你改文件。",
+                    "columns": ["行", "原因"],
+                    "rows": [[x["row"], x["why"]] for x in skip_rows]})
     return out
 
 
@@ -92,17 +99,24 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
       （实测：④ 报「第 19 行的核算月认不出」，而 ③ 只报了一条无关的行 35）。⛔ 别在这里另算一套行数。
     ⚠️ **只读**（`plan_rows` 是纯函数，不碰库）⇒ 「确认前一个字节都不写库」不受影响。
     """
-    rows, notes, bad = I.plan_rows(records)
+    rows, skip_rows, bad = I.plan_rows(records)
     return {"writable": len(rows),
-            "kpis": {"能写入的行": len(rows), "不写入的行": len(bad)},
+            # ⭐ 2026-09-27（用户报障「所有不写入的行都要标」）：两个数**分开报**（守则 §4.7 口径透明）
+            #    —— 用户看到"3 行没进去"会以为三行都要自己改，而其中"本来就跳过"的那几行
+            #    （合计/说明/空行）**什么都不用做**。⛔ 别合成一个"不写入的行"。
+            "kpis": {"能写入的行": len(rows), "不写入的行": len(bad),
+                     "本来就跳过（合计/说明/空行）": len(skip_rows)},
             # ⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个浅色底，
             #    或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」）：
             #    域**自报**哪几行写不进去（通用面按 `row` 标在那一行上、把 `why` 挂成悬停原因）。
-            #    ⚠️ 与 `_blocks_of` 里那份 `落不了库的行` **同一个来源**（`bad`）—— ⛔ 别另算一份。
+            #    ⚠️ 与 `_blocks_of` 里那两块**同一个来源**（`bad` / `skip_rows`）—— ⛔ 别另算一份。
             #    ⚠️ 显式给 `[]`（而不是省略键）：`[]` = "本域认定一行都不缺"，
             #       省略 = "本域没这个概念" —— 两者在界面上不一样（前者不标注、后者照实不标注但语义不同）。
-            "skipped": [{"row": a["line"], "why": a["reason"]} for a in bad],
-            "blocks": _blocks_of(bad, notes)}
+            #    ⭐ `kind`（守则 §2.8）：`bad` = **要你处理**（改成标准格式后重导）；`skip` = **本来就跳过**
+            #       （合计/说明/空行，不用你改）⇒ 壳给**两种标记**，⛔ 不能混成一种颜色/一个词。
+            "skipped": ([{"row": a["line"], "kind": "bad", "why": a["reason"]} for a in bad]
+                        + [{"row": x["row"], "kind": "skip", "why": x["why"]} for x in skip_rows]),
+            "blocks": _blocks_of(bad, skip_rows)}
 
 
 def _batch_no(s, opts: dict) -> str:
@@ -143,20 +157,24 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     warehouse = str(opts.get("warehouse") or "").strip()
     if not warehouse:
         raise MustReportError("请先选**项目**（仓库名）—— 过程资料按项目分别存，没选就无从落库")
-    rows, notes, bad = I.plan_rows(records)
+    rows, skip_rows, bad = I.plan_rows(records)
     if not rows:
         why = "；".join(f"行 {a['line']}：{a['reason']}" for a in bad[:3]) or "文件里没有数据行"
         raise MustReportError(f"没有一行可落库的数据 —— {why}。历史段未被改动（不写库）")
-    plan = I.ImportPlan(rows=rows, anomalies=bad, notes=notes)
+    # ⚠️ `notes`（`ImportPlan` 的老字段）**不再拼**：那几行现在走**逐行**的 `skip_rows`（上面
+    #    `_blocks_of` 与 `skipped` 都用它）⇒ 再拼一份文本就是"同一件事两个说法"。
+    plan = I.ImportPlan(rows=rows, anomalies=bad, notes=[])
     out = I.commit(s, plan, warehouse=warehouse, batch=_batch_no(s, opts),
                    operator=operator, cutoff_ym=str(opts.get("cutoff_ym") or "") or None)
     out["cutoff_default"] = plan.default_cutoff        # 界面用来回显"默认截止月 = 最大核算月"
     # ⭐ ④ 的回执也要**说清有几行没写进去**（⛔ 不许只在 ③ 说过、到这里就悄悄算了）
     out["不写入的行数"] = len(bad)
-    out["blocks"] = _blocks_of(bad, notes)
+    out["本来就跳过的行数"] = len(skip_rows)            # ⭐ 与"要你处理"分开报（同上）
+    out["blocks"] = _blocks_of(bad, skip_rows)
     # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」· 四个域一起改）：回执**自报人话指标** ——
     #    通用面只画 `kpis`（原始键仍留着：排查与判据都要看它们）。
-    out["kpis"] = {"写入行数": int(out.get("rows") or 0), "不写入的行数": len(bad)}
+    out["kpis"] = {"写入行数": int(out.get("rows") or 0), "不写入的行数": len(bad),
+                   "本来就跳过（合计/说明/空行）": len(skip_rows)}
     return out
 
 
