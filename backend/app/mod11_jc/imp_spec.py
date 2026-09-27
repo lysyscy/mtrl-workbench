@@ -113,11 +113,20 @@ SPEC = DomainSpec(
 
 
 def _rows_of(records) -> list[dict]:
-    """通用面的 `records`（按字段名）→ 本域的**行形状**（key 即 `FIELD_LABELS` 的键）。"""
+    """通用面的 `records`（按字段名）→ 本域的**行形状**（key 即 `FIELD_LABELS` 的键）。
+
+    ⭐⭐ 2026-09-27（用户报障 · 原话「**678 行明明有合同总价，但是却显示合同价为空**」）：
+      把通用面的 `_row`（**Excel 行号**）一并带过来 —— 匹配结果里那一列从此是**同一个数**
+      （守则 §4.7：同一个数不许在两个地方换说法）。
+      ⚠️ 改前这里**丢掉了 `_row`** ⇒ `match_and_apply` 只好用"第几条数据"当行号（1 起）——
+         两者差一个表头行数，页面上看不出任何毛病，**只有用户去对号时才发现对不上**（实测就是这个）。
+    """
     key_of = {f.label: f.key for f in FIELDS}
     out: list[dict] = []
     for rec in records or []:
         row: dict = {key_of[lb]: rec[lb] for lb in key_of if rec.get(lb) not in (None, "")}
+        if rec.get("_row") not in (None, ""):
+            row["_row"] = rec["_row"]                      # ⭐ Excel 行号（见 docstring）
         for k, v in list(row.items()):                     # 金额回 `Decimal`（通用面给的是字符串）
             if k.endswith(("_amt", "_sum")):
                 row[k] = to_money(str(v))
@@ -150,7 +159,9 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
                    "配不上": int(out.get("unmatched") or 0),
                    "同价冲突": int(out.get("ambiguous") or 0),
                    "不合格": int(out.get("bad") or 0),
-                   "提醒": int(out.get("warned") or 0)}
+                   "提醒": int(out.get("warned") or 0),
+                   # ⭐ 2026-09-27：与 ③ **同一个口径**（空白行 / 合计行本来就不导）
+                   "本来就跳过（空白行/合计行）": int(out.get("skipped") or 0)}
     return out
 
 
@@ -196,8 +207,12 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
         # ⭐ **「将写入」改成真会更新的条数**（`writable` 覆盖通用面的 `total`）——
         #    这正是用户要的那个数：**这批能配上几条**。
         "writable": int(out["updated"]),
+        # ⭐ 2026-09-27（用户报障「查一下问题在哪」· 用他**真文件**复现后定的口径）：
+        #    **「本来就跳过」单独报一个数**（守则 §4.7）—— 他屏幕上"8 行没配上"里，
+        #    **7 行是空白行（只填了序号）＋ 1 行是 `合计：` 行** ⇒ 合成一个数会让他以为文件有毛病。
         "kpis": {"配上": out["updated"], "配不上": out["unmatched"],
-                 "同价冲突": out["ambiguous"], "不合格": out["bad"]},
+                 "同价冲突": out["ambiguous"], "不合格": out["bad"],
+                 "本来就跳过（空白行/合计行）": len(out.get("skip_items") or [])},
         # ⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个浅色底，
         #    或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」）：
         #    域**自报**写不进去的行（配不上 / 同价冲突 / 不合格）⇒ 通用面按 `row_no` 标在那一行上。
@@ -205,22 +220,40 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
         #       ⚠️ **「提醒」（`warned`）不进这里**：那些行**是写进去的**（只是带了句提醒），
         #          标成"不写入"就是假话（守则 §4.2 状态必须真实）。
         "skipped": (
+            # ⚠️ 行内原因**用这一行自己的** why（"合同价为空 / 为 0" / "项目内没有同价合同…"）——
+            #    一句笼统的"项目内没有同价合同"会把"锚点是空"也罩进去（守则 §4.2 状态必须真实）。
             [{"row": int(x.get("row_no") or 0),
-              "why": "配不上：项目内没有同价合同（或认不出锚点）⇒ 这一行不写进台账"}
+              "why": f"配不上：{x.get('why') or '项目内没有同价合同（或认不出锚点）'}"}
              for x in out.get("unmatched_items") or []]
             + [{"row": int(x.get("row_no") or 0),
                 "why": "同价冲突：项目内有多条同价合同 ⇒ 系统不猜，这一行不写"}
                for x in out.get("ambiguous_items") or []]
             + [{"row": int(x.get("row_no") or 0),
                 "why": f"不合格：{x.get('why') or '这一行不合格'}"}
-               for x in out.get("bad_items") or []]),
+               for x in out.get("bad_items") or []]
+            # ⭐⭐ 「本来就跳过」= **空白行 / 合计行** ⇒ `kind="skip"`（壳给**灰标「不导入」**，
+            #    守则 §2.8：要你处理的 vs 本来就跳过的，必须一眼分得开）
+            + [{"row": int(x.get("row_no") or 0), "kind": "skip",
+                "why": x.get("why") or "不是数据行 ⇒ 本来就跳过"}
+               for x in out.get("skip_items") or []]),
         "blocks": [
             {"title": "没配上的行（**不会被写进台账**，台账里一条不动）",
              "note": "⚠️ 认不出锚点 / 项目内没有同价合同 / 同价有多条 —— 三种都**不猜、不新增**："
-                     "先看这几行，多半是「这个项目的合同还没抓」或「合同价那一列没认对」。",
+                     "先看这几行，多半是「这个项目的合同还没抓」或「第 ① 步的项目选错了」。"
+                     "⛔ 空白行与合计行**不在这张表里**（见下面那张「本来就跳过的行」）。",
              "columns": ["行", "合同价", "材料名称", "原因"],
              "rows": rows,
              "empty": "（无 —— 每一行都配上了）"},
+            # ⭐⭐ 2026-09-27（用户报障的**真因**）：空白行 / 合计行**本来就不该导** ——
+            #    它们既不是"没配上"也不是"不合格"；单独摆一张，让人**一眼看出"不用你改"**。
+            {"title": f"本来就跳过的行（{len(out.get('skip_items') or [])} 行 · **不用你改**）",
+             "note": "空白行（只填了「序号」这类**不采**的列）· 尾部 `合计/小计` 行 —— "
+                     "**本来就不该进台账**（⛔ 不是你文件的毛病）。"
+                     "⚠️ 与上面「没配上的行」**不是一回事**：那些才要你去查。",
+             "columns": ["行", "原因"],
+             "rows": [[x.get("row_no"), x.get("why") or ""]
+                      for x in out.get("skip_items") or []],
+             "empty": "（无）"},
             {"title": "提醒（不影响本次落库）",
              "columns": ["行", "说明"],
              "rows": [[x.get("row_no"), x.get("why") or ""] for x in out.get("warn_items") or []],

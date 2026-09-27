@@ -239,6 +239,39 @@ def _amount_key(v) -> str:
     return str(d.quantize(Decimal("0.01")))
 
 
+#: 合计 / 小计行（不导入、不参与匹配）—— ⚠️ 与 `m06_proc` 同口径
+_TOTAL_WORDS = ("合计", "小计", "总计")
+
+
+def _row_kind(row: dict) -> str:
+    """这行**是不是数据行**：`""` = 是（照常匹配）· `"合计/小计行"` · `"空行"`。
+
+    ⚠️ 为什么必须有这一层（2026-09-27 用户报障 · **用他的真文件复现的**）：他文件里
+      · **Excel r9~r15** 只填了「序号」（6~12）、其余全空 ⇒ 原来被报成「合同价为空 / 为 0」✗
+      · **Excel r16** 是 `合计：` 行（合同总价 = 1011277，正是那些行金额之和）⇒ 原来被报成
+        「项目内没有合同价 = 1011277 的合同」✗（用户会去追一条**根本不存在的合同**）
+      ⇒ 两种都**不是"数据有问题"**（本来就不该导）⇒ 归「本来就跳过」，
+        ⛔ 不许混进"没配上的行"（用户原话：「678 行明明有合同总价，但是却显示合同价为空」）。
+    ⚠️ 「空行」= **一个映射字段都没有**（只填了「序号」这种**不采**的列）—— 通用面 `_records` 只跳
+      "整行全空"，所以这种行会走到这里 ⇒ 得在这儿认出来。
+    ⚠️ 口径与 `m06_proc.importer._row_kind_of` **同源**（合计/小计/总计 ＋ 空行）；⭐ 第三个域也要时再抽进 `import_kit`。
+    """
+    vals = [v for k, v in row.items() if k != "_row"]      # ⚠️ `_row` 是行号，不算"值"
+    text = " ".join(str(v) for v in vals)
+    if any(w in text for w in _TOTAL_WORDS):
+        return "合计/小计行"
+    if not any(str(v).strip() for v in vals):
+        return "空行"
+    return ""
+
+
+def _skip_why(kind: str) -> str:
+    """「本来就跳过」逐行一句人话 —— ⭐ **必须说清"不用你改"**（守则 §2.8：别让人以为文件有毛病）。"""
+    if "合计" in kind or "小计" in kind:
+        return "尾部合计/小计行 —— 不是数据行，**本来就跳过**（不用你改）"
+    return "空白行（只填了「序号」这类不采的列）—— **本来就跳过**（不用你改）"
+
+
 def _row_problem(row: dict) -> str:
     """这行为什么**不能落库**（`""` = 可以）。⚠️ 返回**给人看的一句话**。"""
     if not str(row.get("material_name") or "").strip() and not str(row.get("supplier") or "").strip():
@@ -344,7 +377,24 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
     ambiguous: list[dict] = []
     bad: list[dict] = []
     warned: list[dict] = []
+    skip_rows: list[dict] = []          # ⭐ 「本来就跳过」：空白行 / 合计行（见 `_row_kind`）
     for n, row in enumerate(rows, start=1):
+        # ⭐⭐ 2026-09-27（用户报障 · 原话「**678 行明明有合同总价，但是却显示合同价为空**」）：
+        #    两个「行」不是一个数 —— 块里写的是**第几条数据**、数据表写的是 **Excel 行号**；
+        #    用户拿"行 6"去表里找，找到的是**另一行**（真数据，当然有合同价）。
+        #    ⇒ **行号一律取 Excel 行号**（通用面解析时给每行打了 `_row`，`imp_spec._rows_of` 带过来）；
+        #    退回 `n` 只在**没有 `_row`** 时发生（旧路 / 直接调本函数）—— 保守兼容。
+        row_no = int(row.get("_row") or n)
+        # ⭐⭐ 同一轮（用**他的真文件** `内蒙宜化套筒窑项目集采台账.xlsx` 复现出来的）：
+        #    · **Excel r9~r15** 只填了「序号」（6~12）的**空白行** ⇒ 原来报「合同价为空」✗
+        #    · **Excel r16** 是 `合计：` 行（合同总价 1011277 = 上面各行之和）⇒ 原来报
+        #      「项目内没有合同价 = 1011277 的合同」✗（用户会去追一条**根本不存在的合同**）
+        #    ⇒ 这两种**本来就不该导**（不是"数据有问题"）⇒ 先分类，归「本来就跳过」，
+        #    ⛔ 不许混进"没配上的行"（那会让人以为自己的文件有毛病 —— 正是这次报障的实质）。
+        kind = _row_kind(row)
+        if kind:
+            skip_rows.append({"row_no": row_no, "kind": kind, "why": _skip_why(kind)})
+            continue
         # ⭐ **先按「贸易公司合同金额」对号**（只有在 Excel 那行**填了这一列**时才走）——
         #    它对应库里**贸易公司合同**的钥匙；对上 ⇒ 这一行的「供应商合同总价」就是那合同的
         #    **合同金额**（空才填，见下）。0 命中 ⇒ 退回按「合同金额」对号（正常合同那条路，不变）。
@@ -360,7 +410,7 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
             raw_amt = row.get("contract_amt")
             key = _amount_key(raw_amt)
             if not key:
-                unmatched.append({"row_no": n, "amount": str(raw_amt or ""),
+                unmatched.append({"row_no": row_no, "amount": str(raw_amt or ""),
                                   "material_name": str(row.get("material_name") or ""),
                                   "why": "**合同价为空 / 为 0** ⇒ 不参与匹配"
                                          "（⛔ 空值不许去撞库里任何一行）"})
@@ -368,12 +418,12 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
             cands = by_amt.get(key) or []
             key_kind = "amount" if cands else ""
         if len(cands) == 0:
-            unmatched.append({"row_no": n, "amount": key,
+            unmatched.append({"row_no": row_no, "amount": key,
                               "material_name": str(row.get("material_name") or ""),
                               "why": f"该项目内**没有**合同价 = {key} 的合同（⛔ 不静默新增 —— 锚点找不到先看）"})
             continue
         if len(cands) > 1:
-            ambiguous.append({"row_no": n, "amount": key,
+            ambiguous.append({"row_no": row_no, "amount": key,
                               "ids": [int(c.id) for c in cands],
                               "why": f"该项目内有 **{len(cands)}** 条同价合同 ⇒ **不猜**（和人挑供应商同一个道理）"})
             continue
@@ -382,7 +432,7 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
         cid = int(cur.id)
         problem = _row_problem(row)
         if problem:
-            bad.append({"row_no": n, "why": problem})
+            bad.append({"row_no": row_no, "why": problem})
             continue
 
         # ⭐ **只更"Excel 的地盘"那几列**（用户 2026-09-20 列的字段）——
@@ -418,7 +468,7 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
             if amt in (None, ""):
                 continue
             if kind in already:
-                warned.append({"row_no": n, "why": f"合同 #{cid} 已有「{label}发票」行 ⇒ **未重复导入**"
+                warned.append({"row_no": row_no, "why": f"合同 #{cid} 已有「{label}发票」行 ⇒ **未重复导入**"
                                                    f"（发票子表是一合同 1..N 张，重导会翻倍）"})
                 continue
             # ⭐ **发票日期 = 操作当天（北京时间）** —— 2026-09-26 用户裁定：
@@ -428,7 +478,7 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
             #    ⇒ 发票额白导、且人看不出为什么（现在这条 warned 分支也一并删掉了）。
             date = timing.to_iso(timing.today_cn())
             if not date:                                  # pragma: no cover —— `today_cn()` 恒有值
-                warned.append({"row_no": n, "why": f"{label}发票额没落 —— 取不到当天日期"})
+                warned.append({"row_no": row_no, "why": f"{label}发票额没落 —— 取不到当天日期"})
                 continue
             if dry_run:
                 # ⚠️ **只看不写**：`already` 照样记上（同一份表里后续行遇到同 kind 也按"加过了"算）
@@ -437,14 +487,14 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
                 continue
             inv = _add_invoice(s, cid, kind=kind, date=date, amount=amt)
             if not inv.get("ok"):
-                warned.append({"row_no": n, "why": f"{label}发票额没落：{inv.get('message')}"})
+                warned.append({"row_no": row_no, "why": f"{label}发票额没落：{inv.get('message')}"})
             else:
                 already.add(kind)
 
         # ⚠️ 落地后**从索引里摘掉**：同一份 Excel 里两行撞同一个锚点 ⇒ 后一行必须被判"已配对"，
         #    ⛔ 不然两行都会去写同一条合同（后写的把先写的**静默覆盖**）。
         by_amt[key] = [c for c in cands if int(c.id) != cid]
-        updated.append({"id": cid, "row_no": n, "amount": key,
+        updated.append({"id": cid, "row_no": row_no, "amount": key,
                         "matched_by": key_kind,          # `trade` = 靠贸易公司金额对上 / `amount` = 合同价
                         "contract_amt_filled": filled,   # 只在 `trade` 那支可能为 True（空才填）
                         "material_name": str(row.get("material_name") or cur.material_name or ""),
@@ -458,6 +508,10 @@ def match_and_apply(s, rows: list[dict], *, project_id: int, mapped: set[str] | 
         "ambiguous_items": ambiguous,
         "bad_items": bad,
         "warn_items": warned,
+        # ⭐ 2026-09-27：「**本来就跳过**」（空白行 / 合计行）与"没配上 / 不合格"**分开报** ——
+        #    ③ 据此给**灰标「不导入」**（守则 §2.8：要你处理的 vs 本来就跳过的，必须一眼分得开）。
+        "skip_items": skip_rows,
+        "skipped": len(skip_rows),
         # ⚠️ 措辞按"**这次到底动没动手**"分开（守则 §4「状态必须真实」）：
         #    干跑**一个字都没写库** ⇒ ⛔ 不许说"导入完成"（那是最典型的一类假话）。
         "message": ((f"（**只查不写**）按合同价能配上 {len(updated)} 条"

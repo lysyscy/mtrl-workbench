@@ -159,8 +159,15 @@ def test_预览就能看到配上几条_且一个字节都不写库(client):
     mapping = {"合同日期": "合同日期", "材料名称": "材料名称", "供应商合同总价": "供应商合同总价",
                "供应商发票金额": "供应商发票金额", "详细付款方式": "付款方式", "备注": "备注"}
     # 第二行：合同价与库里那条**不同** ⇒ 必须落进"配不上"（⛔ 不静默新增、⛔ 不猜）
+    # ⭐⭐ 2026-09-27（用户报障 · 原话「**678 行明明有合同总价，但是却显示合同价为空**」）：
+    #    再补两种**本来就不该导**的行（**照他真文件的形态造** —— 那份台账里 Excel r9~r15 只填了
+    #    「序号」、r16 是 `合计：` 行）⇒ 它们**不许**被报成"合同价为空 / 没有同价合同"：
+    #      · 只填「序号」的行（「序号」是**不采**的列 ⇒ 通用面不跳"整行全空" ⇒ 会走到匹配层）
+    #      · `合计` 行（那一格金额会被当成一条真数据去撞库 ⇒ 报"没有同价合同"，用户会去追一条**不存在的合同**）
     book = _book([(1, "20240723", "钢材", AMT, "40731.17", "", "", "电汇", "60±7银行承兑"),
-                  (2, "20240724", "水泥", "999.00", "", "", "", "", "")])
+                  (2, "20240724", "水泥", "999.00", "", "", "", "", ""),
+                  ("6", "", "", "", "", "", "", "", ""),                    # 空白行（只有序号）
+                  ("", "合计", "5106.98", "", "", "", "", "", "")])          # 合计行
     got2 = client.post("/api/imp/m11_jc/parse",
                        files={"file": ("台账.xlsx", book,
                                        "application/vnd.openxmlformats-officedocument"
@@ -170,16 +177,34 @@ def test_预览就能看到配上几条_且一个字节都不写库(client):
     body = {"token": got2["token"], "mapping": mapping, "options": {"project_key": wh}}
     pre = client.post("/api/imp/m11_jc/preview", json=body).json()
     assert pre["ok"], pre
-    assert pre["writable"] == 1, f"「将写入」必须 = **真会更新的条数**（不是解析出的 2 行）：{pre}"
+    assert pre["writable"] == 1, f"「将写入」必须 = **真会更新的条数**（不是解析出的行数）：{pre}"
     assert pre["kpis"]["配上"] == 1 and pre["kpis"]["配不上"] == 1, pre.get("kpis")
+    # ⭐⭐ 空白行 / 合计行 ⇒ **「本来就跳过」**（单独一类）：既不是"配不上"也不是"不合格"
+    assert pre["kpis"]["本来就跳过（空白行/合计行）"] == 2, (
+        f"空白行与合计行没被单独分类（它们本来就不该导；报成「没配上」= 让人以为文件有毛病）："
+        f"{pre.get('kpis')}")
+    skips = [x for x in pre["skipped"] if x.get("kind") == "skip"]
+    assert len(skips) == 2, f"`skipped` 里没有「本来就跳过」那两类（灰标「不导入」靠它）：{pre.get('skipped')}"
+    tips = [b for b in pre["blocks"] if "本来就跳过" in b["title"]]
+    assert tips and len(tips[0]["rows"]) == 2, f"③ 没有「本来就跳过的行」那张表：{pre.get('blocks')}"
     # ⭐ 2026-09-26（用户报障「**这些不会落库的行，要在行上直接标**……而不是还要抬头去看文字说明」）：
     #    预览必须**自报逐行名单**（`skipped`）—— 通用面靠它把「不写入」标在**那一行**上。
     #    ⚠️ 本域口径：不写进去的 = **配不上 ＋ 同价冲突 ＋ 不合格**（`提醒` **不算** —— 那些行是写进去的）。
     assert_skipped_contract(pre, expect_bad=(pre["kpis"]["配不上"] + pre["kpis"]["同价冲突"]
-                                             + pre["kpis"]["不合格"]))
+                                             + pre["kpis"]["不合格"]),
+                            expect_skip=pre["kpis"]["本来就跳过（空白行/合计行）"])
     miss = [b for b in pre["blocks"] if "没配上" in b["title"]]
     assert miss and len(miss[0]["rows"]) == 1, f"配不上的行要逐条列出来（带原因）：{pre.get('blocks')}"
     assert "999.00" in " ".join(str(x) for x in miss[0]["rows"][0]), miss[0]["rows"][0]
+    # ⭐⭐ 2026-09-27（用户报障的**另一半**）：**块里的「行」必须与数据表那一行的「行」是同一个数**
+    #    （守则 §4.7）—— 他截图里块写「行 1 / 2 / 5」、表里写 Excel 行号，于是他拿"行 6"去表里找，
+    #    找到的是**另一行**（真数据，当然有合同价）⇒ 他看到的正是「678 行明明有合同总价却显示合同价为空」。
+    tbl = {str(r.get("_row")): r for r in pre["preview"]}
+    assert str(miss[0]["rows"][0][0]) in tbl, (
+        f"「没配上的行」里的行号（{miss[0]['rows'][0][0]!r}）在数据表里**找不到** —— "
+        f"两块不是一个口径（表里的行号 = {sorted(tbl)}）：{miss[0]['rows'][0]}")
+    assert all(str(x.get("row")) in tbl for x in skips), (
+        f"「本来就跳过」的行号在数据表里找不到 —— 同一页不能有两套「行」：{skips}")
     assert _snap() == before, "⛔ 预览把库改了 —— 预览必须**只查不写**（判据 001-06）"
 
 
