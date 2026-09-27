@@ -370,13 +370,39 @@ def check(page, errors: list[str]) -> None:
                     while (p && !(p.classList && p.classList.contains('pjpop'))) p = p.parentElement;
                     const close = () => { const t = v.querySelector('[data-act="impPjToggle"]'); if (t) t.click(); };
                     if (!p || !ins.length) { close(); return {err: '面板没开/找不到 .pjpop'}; }
-                    const last = ins[ins.length - 1];
+                    /* ⚠️ "最后一行"只许取**可见**的那些：归档折叠（②）会把归档段 `hidden` 掉，
+                       被折起来的行 rect 是 0 ⇒ 拿它判"看得见/点得到"就是**假红**（2026-09-27 前置修正）。 */
+                    const vis = ins.filter(x => x.offsetParent !== null);
+                    const last = vis[vis.length - 1] || ins[ins.length - 1];
                     const lr = last.getBoundingClientRect();
                     const hit = document.elementFromPoint(lr.left + 6, lr.top + lr.height / 2);
-                    const out = {n: ins.length, pos: getComputedStyle(p).position,
-                                 clientH: p.clientHeight, scrollH: p.scrollHeight,
-                                 lastInViewport: lr.bottom <= innerHeight && lr.top >= 0,
-                                 lastHittable: !!(hit && p.contains(hit))};
+                    const out = {n: ins.length, nVis: vis.length, pos: getComputedStyle(p).position,
+                                clientH: p.clientHeight, scrollH: p.scrollHeight,
+                                lastInViewport: lr.bottom <= innerHeight && lr.top >= 0,
+                                lastHittable: !!(hit && p.contains(hit))};
+                    /* ⭐⭐ ①②（2026-09-27 用户裁定）：**搜索框真机验** —— 打字 ⇒ 只切 DOM 显示（不重绘）。
+                       判：① 可见候选数**变少**（或本来就只 1 个）② 命中的行**都含**该词
+                       ③ 搜不到时给**人话空态**（⛔ 不是一片空白）④ 清空后**恢复**原样。 */
+                    const box = p.querySelector('[data-act="pjSearch"]');
+                    if (box) {
+                        const before = vis.length;
+                        const nm = (ins[ins.length - 1].closest('label').dataset.pjMatch || '').split(' ')[0];
+                        const word = nm || 'zzz';
+                        box.value = word; box.dispatchEvent(new Event('input', {bubbles: true}));
+                        const rows = [...v.querySelectorAll('[data-pj-row]')];
+                        const shown = rows.filter(r => !r.hidden);
+                        const after = shown.filter(r => (r.querySelector('input') || {}).offsetParent !== null).length;
+                        const hitOk = shown.every(r => (r.dataset.pjMatch || '').includes(word.toLowerCase()));
+                        box.value = 'zzz绝不存在zzz'; box.dispatchEvent(new Event('input', {bubbles: true}));
+                        const none = v.querySelector('[data-pj-none]');
+                        const noneShown = !!(none && !none.hidden);
+                        const noneText = none ? String(none.textContent || '').slice(0, 20) : '';
+                        box.value = ''; box.dispatchEvent(new Event('input', {bubbles: true}));
+                        const back = [...v.querySelectorAll('[data-act="impPjPick"]')]
+                            .filter(x => x.offsetParent !== null).length;
+                        out.search = {before: before, word: word, after: after, hitOk: hitOk,
+                                      noneShown: noneShown, noneText: noneText, back: back};
+                    }
                     close();
                     return out;
                 }""")
@@ -390,6 +416,15 @@ def check(page, errors: list[str]) -> None:
                                  f"面板**最后一行也看得见、点得到**（{panel.get('n')} 个候选 · "
                                  f"clientH={panel.get('clientH')} / scrollH={panel.get('scrollH')} "
                                  f"· 点命中在面板内={panel.get('lastHittable')}）"))
+                if dm == "m06_proc" and panel.get("search"):
+                    sc = panel["search"]
+                    oks3.append((bool(sc["word"]) and sc["hitOk"] and sc["after"] <= max(1, sc["before"])
+                                 and (sc["after"] < sc["before"] or sc["before"] <= 1),
+                                 f"① 项目面板**搜索**（真机）：打「{sc['word']}」⇒ 可见候选 {sc['before']} → "
+                                 f"{sc['after']} 行、命中行都含该词（打字**只切 DOM**、不重绘 ⇒ 不丢焦点）"))
+                    oks3.append((sc["noneShown"] and "没有匹配" in sc["noneText"] and sc["back"] == sc["before"],
+                                 f"① 搜不到时给的是**人话空态**「{sc['noneText']}」、清空后恢复 {sc['back']} 行"
+                                 "（⛔ 不是一片空白 —— 那会让用户以为面板坏了）"))
                 # ⭐ 真点面板选第一个候选 ⇒ ④ 变可用；m06 另验「截止核算月跟着换」
                 exp = page.evaluate("""async (dm) => {
                     const d = await (await fetch('/api/imp/' + dm + '/options')).json();

@@ -1002,12 +1002,13 @@ function render(){
         例外见 `VSCROLL`（**只用来"关掉或调阈值"**，⛔ 别再当启用名单用）。 */
   /* ⚠️ 虚拟滚动那条路也在 `startVirtual` 里就把 DOM 写完了 ⇒ 浮层定位**两条路都要跑**
      （`placePops` 幂等；漏一条 ⇒ 大表页上展开的浮层仍被卡片裁）。 */
-  if(vsOn(VIEW) && startVirtual(html, scroller, keep)){ placePops(); return; }
+  if(vsOn(VIEW) && startVirtual(html, scroller, keep)){ placePops(); applyPjFilters(); return; }
   $('#view').innerHTML=html;
   /* ⚠️ 还原时**重新解析**滚动容器：`.tw` 已被上一行整体重建（旧元素连同它的 scrollTop 一起没了）。 */
   const host2=scrollHost(); if(host2) host2.scrollTop=keep;
   if(BIND[VIEW]) BIND[VIEW]();
   placePops();          /* ⭐ 通用浮层逃出卡片裁剪（`TAIL-109`/`TAIL-110`）—— 见 `placePops` 的注释 */
+  applyPjFilters();     /* ⭐ 项目面板的搜索词 / 归档折叠**重涂**（①② 2026-09-27）—— 见该函数注释 */
 }
 /* ⭐ `TAIL-66` 后的语义：**默认全开**，`VSCROLL` = **例外表** ——
    `{m07:{off:true}}` = 这页不虚拟化；`{m09:{min:800}}` = 这页阈值调到 800。
@@ -1556,24 +1557,71 @@ const PROJ_META_FULL=v=>{ const m=projMatches(v);
    ⚠️ 2026-09-26 两次现场都出在"名单/自觉"上：漏登记 `IMP.pjIsOpen('pj')` ⇒ 用户报障「展开后关不掉」；
       单选点完要不要自收**根本没有规则**（6 处各写）。 */
 const PJ_OPEN = {};
+/* ⭐⭐ 项目面板的**过滤词**（去 ①② · 2026-09-27 用户裁定）：`{面板 key: 关键词}`。
+   ⚠️ 为什么要单独存一份、而不是"让输入框自己拿着"：过滤**只切 DOM 显示、不重绘**
+      （⛔ 重绘会把焦点与光标一起丢掉 —— 壳里踩过，见 `jcSubSet` 那行注释），
+      而面板在**勾选 / 展开归档**时会重绘 ⇒ 重绘时要把关键词**填回去**，
+      ⛔ 否则"勾一个候选就把搜索词清零"（多选场景等于没法用）。 */
+const PJ_TXT = {};
 const pjIsOpen = k => !!PJ_OPEN[String(k)];
 const pjToggle = k => { const s = String(k); PJ_OPEN[s] = !PJ_OPEN[s]; render(); };
 const pjClose = k => { const s = String(k); if (PJ_OPEN[s]) { PJ_OPEN[s] = false; return true; } return false; };
 const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
   /* ⭐ key **由 `pickAct` 派生**（`ledPjPick` ⇒ `ledPj`）⇒ ⛔ 调用点不用传、也不会漏传。 */
   const pk=String(c.pickAct||'').replace(/Pick$/,'');
-  /* ⚠️ 那个 `class="pjpop"` 是给 `placePjPanels()` 用的（渲染后把它提升为 `fixed`）—— 见该函数注释。
-     ⛔ 别删：删了面板又会被宿主卡片裁（用户 2026-09-26 报的"行数显示不全"）。 */
+  /* ⭐⭐ 2026-09-27（用户裁定 ①②：「项目会越来越多，候选不能无限增长」）：
+     ① **搜索框**：按**展示名 / 仓库名**包含匹配 —— 它**不改候选集合**（§2.7.1 一字不动：含归档、
+        排最后、标注都还在），只是让人**找得到**；
+     ② **归档折叠**：归档项（本来就在最后）**默认折成一行**，点开照旧可选。
+        ⚠️⚠️ 折叠行上**必须报「已选 k」** —— 多选面板的「全选」含归档（§2.7.1「含归档」）⇒
+           折起来若不报，就会出现"**看不见的已选**"（状态不真实可见，本仓明令禁止）。
+     ⚠️ 折叠的展开态**也进 `PJ_OPEN`**（key = `pk+'Arc'`）—— 壳里"展开态唯一主人"那条纪律，
+        ⛔ 不许另开一份 `let xxxArcOpen`。
+     ⚠️ 那个 `class="pjpop"` 是给 `placePops()` 用的（渲染后把它提升为 `fixed`）—— 见该函数注释。
+        ⛔ 别删：删了面板又会被宿主卡片裁（用户 2026-09-26 报的"行数显示不全"）。 */
+  const all=c.list(), sel=c.selected();
+  const act=all.filter(v=>!meta(v).arc), arc=all.filter(v=>meta(v).arc);
+  const arcOpen=pjIsOpen(pk+'Arc');
+  const arcSel=arc.filter(v=>sel.includes(v)).length;
+  const row=v=>{const on=sel.includes(v), mt=meta(v);
+    return `<label data-pj-row data-pj-match="${esc((mt.nm+' '+v).toLowerCase())}" title="${esc(mt.title)}" style="display:flex;gap:7px;align-items:center;padding:5px 6px;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap">
+      <input type="${single?'radio':'checkbox'}"${single?' name="projPanelSingle"':''} class="chk" style="flex:0 0 auto" data-act="${c.pickAct}" data-pj="${esc(v)}" data-pj-key="${pk}" ${on?'checked':''}>
+      <span${mt.warn?' style="color:var(--wn-d)"':''}>${esc(mt.nm)}</span>${mt.arc?' '+arcTag():''}</label>`;};
   return `<div class="pjpop" style="position:absolute;z-index:80;top:calc(100% + 5px);left:0;width:max-content;min-width:178px;max-width:340px;max-height:264px;overflow-y:auto;overflow-x:hidden;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:5px">
   <div style="display:flex;gap:6px;align-items:center;padding:2px 4px 6px">
     ${single?'':`<button class="btn sm" data-act="${c.allAct}">全选</button><button class="btn sm" data-act="${c.noneAct}">清空</button>`}
-    <span class="mut" style="font-size:11px;margin-left:4px;white-space:nowrap">${single?'单选 · ':''}已选 ${c.selected().length}/${c.list().length}</span>
+    <span class="mut" style="font-size:11px;margin-left:4px;white-space:nowrap">${single?'单选 · ':''}已选 ${sel.length}/${all.length}</span>
   </div>
-  ${c.list().map(v=>{const on=c.selected().includes(v), mt=meta(v);
-    return `<label title="${esc(mt.title)}" style="display:flex;gap:7px;align-items:center;padding:5px 6px;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap">
-      <input type="${single?'radio':'checkbox'}"${single?' name="projPanelSingle"':''} class="chk" style="flex:0 0 auto" data-act="${c.pickAct}" data-pj="${esc(v)}" data-pj-key="${pk}" ${on?'checked':''}>
-      <span${mt.warn?' style="color:var(--wn-d)"':''}>${esc(mt.nm)}</span>${mt.arc?' '+arcTag():''}</label>`}).join('')}
-</div>`; };
+  <div style="padding:0 4px 6px"><input class="inp" data-act="pjSearch" data-pk="${pk}" value="${esc(PJ_TXT[pk]||'')}"
+    placeholder="搜索项目（展示名 / 仓库名）" style="width:100%;min-width:186px" title="只筛这一屏显示，⚠️ 不影响「全选 / 清空」的范围（那是全部 ${all.length} 个候选）"></div>
+  <div data-pj-body>
+    ${act.map(row).join('')}
+    ${arc.length?`<button class="btn sm" data-act="pjArcToggle" data-pk="${pk}" style="width:100%;justify-content:flex-start;margin:4px 0 2px">${arcOpen?'▾':'▸'} 已归档（${arc.length}${arcSel?` · 已选 ${arcSel}`:''}）</button>
+      <div data-pj-arc${arcOpen?'':' hidden'}>${arc.map(row).join('')}</div>`:''}
+    <div class="mut sm" data-pj-none hidden style="padding:8px 6px">没有匹配的项目</div>
+  </div></div>`; };
+
+/* ⭐⭐ 项目面板的**过滤 / 折叠重涂**（渲染后跑一次）—— 2026-09-27（用户裁定 ①②）。
+   ⚠️ 为什么必须"渲染后重涂"：过滤是**纯 DOM** 的（打字不重绘 ⇒ 不丢焦点），
+      可面板一重绘（勾选 / 展开）那点 DOM 改动就没了 ⇒ 渲染收尾要**按 `PJ_TXT` 再涂一遍**；
+      折叠块同理（按 `PJ_OPEN[pk+'Arc']` 复位）。
+   ⚠️ **有关键词时归档自动展开**：搜索的意义就是"找得到"，藏在折里等于搜不到（`0 命中` 是假话）。
+   ⚠️ 空态要说人话：**"没有匹配「xx」的项目"** —— ⛔ 不许只留一片空白（用户会以为面板坏了）。 */
+function applyPjFilters(){
+  document.querySelectorAll('.pjpop').forEach(p=>{
+    const box=p.querySelector('[data-act="pjSearch"]'); if(!box) return;
+    const q=String(box.value||'').trim().toLowerCase();
+    let hit=0;
+    p.querySelectorAll('[data-pj-row]').forEach(r=>{
+      const m=!q || String(r.dataset.pjMatch||'').includes(q);
+      r.hidden=!m; if(m) hit++;
+    });
+    const arcBlock=p.querySelector('[data-pj-arc]');
+    if(arcBlock) arcBlock.hidden = q ? false : !pjIsOpen(String(box.dataset.pk||'')+'Arc');
+    const none=p.querySelector('[data-pj-none]');
+    if(none){ none.hidden=hit>0; if(!hit) none.textContent=`没有匹配「${String(box.value||'').trim()}」的项目`; }
+  });
+}
 /* ⭐⭐⭐ **通用浮层的「逃出卡片裁剪」机制** —— 全壳**只有这一处**（2026-09-26 立 · `TAIL-109` 起 · `TAIL-110` 收口）。
    适用对象 = **任何**展开的浮层：项目面板（`projPanel`）＋ **时间选择器（`tmPanel`）** ＋ 将来新增的浮层。
 

@@ -135,6 +135,47 @@ def test_跨页写动作后全标脏():
 
 
 @acc()
+def test_项目面板的搜索与归档折叠():
+    """⭐⭐ 2026-09-27（用户裁定 ①② · 原话：「项目总会越来越多，不能无限制地让候选数量增加」）。
+
+    做法（都在**壳里唯一那一处** `projPanel`，13 个调用点同时受益）：
+      ① **搜索框** —— 按**展示名 / 仓库名**筛这一屏的显示；⛔ **不改候选集合**（§2.7.1 一字不动：
+         含归档、排最后、标注、可选性都不变）⇒ 它治的是"**找得到**"；
+      ② **归档折叠** —— 归档那一整段（本来就在最后）**默认折成一行**，点开照旧可选 ⇒ 治"不占视线"。
+
+    判词（四条，缺一条就是新坑）：
+      ① 面板里有 `data-act="pjSearch"`，且它有**专属的 `input` 委托**（⚠️ ⛔ 不走 `change`：那要等失焦）；
+      ② ⛔ 过滤**不许重绘**（重绘重建输入框 ⇒ **焦点与光标一起丢**，壳里踩过）⇒ 必须走
+         `applyPjFilters()` 这种"只切 DOM 显示"的路，关键词存 `PJ_TXT`（重绘后回填）；
+      ③ 归档折叠行**必须报「已选 k」** —— 多选面板的「全选」含归档（§2.7.1），
+         折起来不报就是"**看不见的已选**"（状态不真实可见）；折叠态走 `PJ_OPEN`（⛔ 不许另开一份状态）；
+      ④ **有关键词时归档自动展开**（藏在折里 ⇒ "搜不到"是假话）。
+
+    ⚠️ 能证伪：删搜索框 / 改成只认 `change` / 折叠行去掉已选数 / 折叠态改用新变量 ⇒ 本件必红。
+    """
+    code = SHELL
+    # ⚠️ 断言要**写死到标记本身**（`data-act` ＋ `data-pk` ＋ 值回填）——
+    #    只查 `'data-act="pjSearch"' in code` 会被**委托层那行**（`closest('[data-act="pjSearch"]')`）
+    #    满足 ⇒ 面板里把搜索框删掉/改名它**照样绿**（本件反向灵敏度实测抓到过）。
+    assert '<input class="inp" data-act="pjSearch" data-pk="${pk}" value="${esc(PJ_TXT[pk]||\'\')}"' in code, \
+        "项目面板里没有「搜索框」这个输入（① 没落地 / 改了标记）"
+    assert "document.addEventListener('input'" in code, \
+        "没有处理搜索的 `input` 委托（⛔ 只认 change 的话要等失焦才筛）"
+    assert "function applyPjFilters()" in code, "过滤/折叠没有唯一出口（`applyPjFilters`）"
+    assert "const PJ_TXT = {}" in code and "value=\"${esc(PJ_TXT[pk]||'')}\"" in code, \
+        "关键词没存 / 重绘后没回填 —— 勾一个候选搜索词就被清零（多选场景等于没法用）"
+    assert 'data-act="pjArcToggle"' in code, "归档段没有折叠行（② 没落地）"
+    assert "已归档（${arc.length}${arcSel?` · 已选 ${arcSel}`:''}）" in code, \
+        "折叠行**没报已选数** —— 多选面板「全选」含归档 ⇒ 会出现看不见的已选（状态不真实可见）"
+    assert "pjToggle(String(t.dataset.pk||'')+'Arc')" in code, \
+        "折叠态没走 `PJ_OPEN`（另开一份 `xxxArcOpen` 会破坏「展开态唯一主人」）"
+    assert "data-pj-none" in code and "没有匹配「" in code, \
+        "搜不到时没有空态提示 —— ⛔ 不许只留一片空白（用户会以为面板坏了）"
+    assert "arcBlock.hidden = q ? false : !pjIsOpen(" in code, \
+        "有关键词时归档段没有自动展开（藏在折里 ⇒「搜得到」成了假话）"
+
+
+@acc()
 def test_没到位就不补拉():
     """⏳ `P3`① ＋ `P3` 主体的两道闸，防"启动期把 m05 那几路白白拉一遍"。
 

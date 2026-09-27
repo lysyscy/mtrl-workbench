@@ -1321,7 +1321,8 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
       `✅ <b>已同步</b>：${esc((r&&r.message)||('取到 '+((r&&r.count)||0)+' 条'))}${more}`); },
 
  /* —— MOD-06 —— */
- procPjToggle:()=>{ pjToggle('procPj'); render(); },
+ pjArcToggle:t=>{ pjToggle(String(t.dataset.pk||'')+'Arc'); },   /* ⭐ 归档折叠（①② 2026-09-27）：展开态走 `PJ_OPEN` */
+procPjToggle:()=>{ pjToggle('procPj'); render(); },
  procPjPick:t=>{ procPj=t.dataset.pj; pjClose('procPj'); render(); },
  /* —— 过程资料「按模板导出」展开区（2026-09-13：多选项目 · 每项目一份 · ≥2 打 zip）—— */
  procExpToggle:()=>{ procExpOn=!procExpOn; pjClose('procExpPj');
@@ -2212,6 +2213,17 @@ document.addEventListener('change',e=>{
      （`data-act` 挂在别的东西上根本收不到 change）⇒ 名单是纯多余的护栏，
      而它每漏登记一个动作就是一次**静默丢弃**（本仓踩过 `jcAmt` / `jcPartySet` / `themeSet`）。 */
   if(ACT[a]) ACT[a](t,e);
+});
+/* ⭐⭐ **带过滤的输入**（`input` 事件）—— 2026-09-27（用户裁定 ①② · 项目面板"搜索"）。
+   ⚠️ 为什么**不走 `change`**（那样简单）：`change` 要等失焦/回车才发，边打边筛才是"找得到"；
+   ⚠️ 为什么**不重绘**：`render()` 会把输入框整个重建 ⇒ **焦点与光标一起丢**（壳里踩过，
+      见 `jcSubSet` 那条注释）⇒ 这里只**切 DOM 显示**（`applyPjFilters()`），
+      关键词存进 `PJ_TXT`（⛔ 不重绘），重绘时由 `render()` 收尾把它填回去。
+   ⚠️ 与 `change` / `click` 同一个委托风格：**没有名单**（`data-act` 只可能挂在真实输入上）。 */
+document.addEventListener('input',e=>{
+  const t=e.target.closest('[data-act="pjSearch"]'); if(!t) return;
+  PJ_TXT[String(t.dataset.pk||'')]=t.value;
+  applyPjFilters();
 });
 /* 点面板外部自动收起（年月选择器 / 项目面板）—— 在委托处理之后再跑，点自身不会被误关。
    ⚠️ **每一个项目面板**（MOD-03 pjIsOpen('pj') / MOD-04 pjIsOpen('plPj') / MOD-05 付款流水 pjIsOpen('flPj') / MOD-05 台账 pjIsOpen('ledPj') /

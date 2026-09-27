@@ -111,3 +111,26 @@ def test_通用浮层要逃出卡片裁剪_机制只有一处():
     assert "document.addEventListener('scroll', placePops, true)" in src, (
         "浮层是 `fixed` ⇒ 外层一滚必须重新定位（⚠️ 要**捕获阶段**：`scroll` 不冒泡）")
     assert "addEventListener('resize', placePops)" in src, "缩窗口后浮层没重新定位"
+
+
+@acc()
+def test_项目面板的过滤与折叠_两条渲染路径都要重涂():
+    """⭐⭐ 2026-09-27（用户裁定 ①②）：项目面板的**搜索词与归档折叠**是"渲染后重涂"的。
+
+    ⚠️ 为什么必须重涂：过滤是**纯 DOM** 的（打字**不重绘** —— 重绘重建输入框会把焦点与光标一起丢掉，
+      壳里踩过）⇒ 可面板一重绘（勾选 / 展开归档），那点 DOM 改动**就没了** ⇒ `render()` 收尾要照
+      `PJ_TXT` 再涂一遍、按 `PJ_OPEN[pk+'Arc']` 复位折叠块。
+
+    ⚠️ **两条渲染路径都要调**（同 `placePops` 那条教训）：虚拟滚动那条**提前 `return`** ⇒ 漏了它，
+       大表页上「勾一个候选搜索词就没了 / 归档又自己展开」。
+
+    能证伪：去掉任一处的 `applyPjFilters()` ⇒ 本件必红（计数断言）。
+    """
+    src = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", read_shell(), flags=re.S))
+    assert "function applyPjFilters(){" in src, "没有过滤/折叠重涂的唯一出口"
+    # ⚠️ 数**带分号的调用**（定义那行没有分号）⇒ 算术干净：**2 处渲染收尾 ＋ 1 处输入委托**。
+    calls = src.count("applyPjFilters();")
+    assert calls == 3, (
+        f"`applyPjFilters();` 全壳调用 {calls} 次 —— 应为 **3**"
+        "（`render()` 的**两条**路径各一处〔虚拟滚动那条提前 `return`，漏了它大表页上照样出问题〕"
+        " ＋ `input` 委托一处〔打字时只切 DOM、不重绘〕）")
