@@ -180,6 +180,19 @@ def test_预览就能看到配上几条_且一个字节都不写库(client):
     miss = [b for b in pre["blocks"] if "没配上" in b["title"]]
     assert miss and len(miss[0]["rows"]) == 1, f"配不上的行要逐条列出来（带原因）：{pre.get('blocks')}"
     assert "999.00" in " ".join(str(x) for x in miss[0]["rows"][0]), miss[0]["rows"][0]
+    # ⭐⭐ 2026-09-27（用户报障 · 原话「查一下问题在哪？」· 附 ③ 预览截图）：**块里的「行」必须与
+    #    数据表里那一行的「行」是同一个数**（守则 §4.7）—— 他截图里块写「行 1 / 2 / 5」，
+    #    而数据表写的是 **Excel 行号**（4 / 5 / 8）⇒ 他**在表里找不到那个"行 5"**。
+    #    ⚠️ 根因：`imp_spec._rows_of` 当初**没把通用面的 `_row` 带过来** ⇒ 匹配里只好用"第几条数据"。
+    tbl = {str(r.get("_row")): r for r in pre["preview"]}
+    assert str(miss[0]["rows"][0][0]) in tbl, (
+        f"「没配上的行」里的行号（{miss[0]['rows'][0][0]!r}）在数据表里**找不到** —— "
+        f"两块不是一个口径（表里的行号 = {sorted(tbl)}）：{miss[0]['rows'][0]}")
+    assert "999.00" in " ".join(str(v) for v in tbl[str(miss[0]["rows"][0][0])].values()), \
+        "行号虽对上了，但那一行**不是**『配不上』的那一行（口径仍然乱）"
+    # ⭐ 顺带：这张清单多给「发票金额」列 —— 用来一眼看出"是不是列映射认错"（值跑进发票那列）
+    assert miss[0]["columns"][:3] == ["行", "合同价", "发票金额"], \
+        f"「没配上的行」的列变了（要能一眼看出这一行手里有什么）：{miss[0]['columns']}"
     assert _snap() == before, "⛔ 预览把库改了 —— 预览必须**只查不写**（判据 001-06）"
 
 
