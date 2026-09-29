@@ -15,12 +15,15 @@
        · `.workbuddy/memory/**`（注入档 ＋ journal）
        · `ops/nssm/nssm.exe`（服务注册要它，**已 gitignore**）
        · `artifacts/变异覆盖台账.md` ＋ `artifacts/acc_results.json`（变异台账 ＋ 四态快照）
-       · `backups/` 里**最新一份** `*_壳单文件基线.html`（`shell_verify` 的默认基准）
-    ③ **库**：`db/init_db.sql`（空库路线 · 建库＋角色）＋ 可选 `db/<db>-<日期>.dump`（`-WithDump` · 只作对照）
-    ＋ 随包放一份 `docs/deployment.md`（一页）
+       · **`.workbuddy/backups/`** 里**最新一份** `*_壳单文件基线.html`（`shell_verify` 的默认基准）
+         ⚠️ **2026-09-29 干跑实测抓出**：这里原写成**顶层** `backups/` —— 仓里**没有**那个目录
+         （真身 = `.workbuddy\backups\`）⇒ **5 份基线一份都进不了包**，而脚本还会说"没找到"
+         ⇒ ⛔ 把**路径写错**伪装成**真没有**（详见下面第 2 步的注释）
+       ③ **库**：`db/init_db.sql`（空库路线 · 建库＋角色）＋ 可选 `db/<db>-<日期>.dump`（`-WithDump` · 只作对照）
+       ＋ 随包放一份 `docs/deployment.md`（一页）
 
-  ⛔ **一律不带**：`backend/.venv`（绝对路径，拷过去必崩）· `logs/` · `.workbuddy/scratch` ·
-    `backups/交付面-*`（交付面快照）· **`.env`**（真口令不进包 —— 守 `TAIL-88` 的"敏感件 0 命中"）。
+       ⛔ **一律不带**：`backend/.venv`（绝对路径，拷过去必崩）· `logs/` · `.workbuddy/scratch` ·
+       `.workbuddy/backups/交付面-*`（交付面快照）· **`.env`**（真口令不进包 —— 守 `TAIL-88` 的"敏感件 0 命中"）。
 
   用法（本机 · 普通窗口即可）：
     powershell -ExecutionPolicy Bypass -File ops\pack.ps1
@@ -51,6 +54,10 @@ Say '=== ops/pack.ps1 · 产交付包（可继续开发的可运行系统）==='
 Say ('仓   = ' + $RepoRoot)
 Say ('输出 = ' + $Out)
 Say ('模式 = ' + $(if ($DryRun) { '干跑（不落盘）' } else { '落盘' }))
+#: ⭐ 2026-09-29：**"该带的件"缺了几项** —— **干跑时它非零 ⇒ `exit 1`**（见末尾）。
+#:   为什么要有它：原先"缺件"只打印一行 ⛔、**rc 仍是 0** ⇒ 照抄"干跑"的人（或自动化）会当它**通过** ⇒
+#:   今天那次缺陷（壳基线路径写错）就是靠**人读输出**才发现的，机器判不出来 ✗。
+$packProblems = 0
 
 # ---- 0) 前置两件（⭐ 只打"绿的包"：闸门红 ⇒ 停手，别产出一个跑不起来/说不清的包）----
 #   预案（`ops/README.md` §一之四）在这里落成**脚本**（⛔ 不靠"我记得"）：
@@ -106,28 +113,43 @@ $extra = @(
 foreach ($e in $extra) {
     $s = Join-Path $RepoRoot $e.Src
     $d = Join-Path $Out $e.Dst
-    if (-not (Test-Path $s)) { Say ('   ⚠️ 缺：' + $e.Src + '（跳过，⚠️ 记进 MANIFEST 说明）'); continue }
+    if (-not (Test-Path $s)) { Say ('   ⛔ 缺：' + $e.Src + '（跳过 ⇒ 已记进"该带的件缺 N 项"；见末尾）'); $packProblems++; continue }
     if ($DryRun) { Say ('   [干跑] ' + $e.Src + ' -> ' + $e.Dst); continue }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $d) | Out-Null
     if ($e.Kind -eq 'dir') { Copy-Item -Recurse -Force $s $d } else { Copy-Item -Force $s $d }
     Say ('   ✓ ' + $e.Src)
 }
-$snap = Get-ChildItem (Join-Path $RepoRoot 'backups') -File -ErrorAction SilentlyContinue |
+# ⚠️⚠️ 2026-09-29 修（**干跑 `-DryRun` 当场抓出**）：源路径原写成 `Join-Path $RepoRoot 'backups'` ——
+#    而仓里**根本没有顶层 `backups/`**（真身 = `.workbuddy\backups\`；**唯一主人** = `tools/audit/shell_verify.py`
+#    的 `BACKUPS = REPO / ".workbuddy" / "backups"`）⇒ **5 份基线一份都匹配不到**，
+#    而 else 分支还会把它说成"包里没有壳基线" ⇒ ⛔ **把"路径写错"伪装成"真没有"**（最贵的一类：人就不查了）。
+# ⭐ 同批把**包内布局**改成与**仓内相对路径一致**（`.workbuddy\backups\`）—— 这样 `deploy_restore.ps1`
+#    那张"放回列表"才**左右对称**（原先五项里**只有这一项**不对称 ⇒ 那正是错的来源）。
+# ⚠️ 另一条同源坑（别删）：中文通配交给 `-Filter` 会**命中 0** ⇒ 已改 `Where-Object -like`（见 `ops/README.md` §一之四 ⑤）。
+$snapDir = Join-Path $RepoRoot '.workbuddy\backups'
+$snap = Get-ChildItem $snapDir -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like '*_壳单文件基线.html' } |
         Sort-Object Name | Select-Object -Last 1
 $snapName = ''
 if ($snap) {
     $snapName = $snap.Name
-    $d = Join-Path $Out ('backups\' + $snap.Name)
-    if ($DryRun) { Say ('   [干跑] backups\' + $snap.Name) }
-    else { New-Item -ItemType Directory -Force -Path (Join-Path $Out 'backups') | Out-Null; Copy-Item -Force $snap.FullName $d; Say ('   ✓ backups\' + $snap.Name + '（shell_verify 的默认基准）') }
+    $d = Join-Path $Out ('.workbuddy\backups\' + $snap.Name)
+    if ($DryRun) { Say ('   [干跑] .workbuddy\backups\' + $snap.Name) }
+    else { New-Item -ItemType Directory -Force -Path (Join-Path $Out '.workbuddy\backups') | Out-Null; Copy-Item -Force $snap.FullName $d; Say ('   ✓ .workbuddy\backups\' + $snap.Name + '（shell_verify 的默认基准）') }
 } else {
-    # ⚠️ 2026-09-29 修：原先是 `-Filter '*_壳单文件基线.html'` —— **中文通配在 `-Filter` 上不可靠**
-    #    （实测**命中 0**，而 `backups/` 里明明有基线）⇒ 改成 `Where-Object -like`（与 `ops/README.md` §一之四 同口径：
-    #    ⛔ **中文路径 / 中文通配一律别交给 PowerShell 原语**）。⇒ 顺带**把它报响**（原先只是一句 ⚠️、容易被当噪声跳过）。
-    Say '   ⛔ **包里没有壳基线**（`backups\*_壳单文件基线.html` 一个都没匹配到）'
+    # ⭐ 两类**必须分开报**（2026-09-29）：原先混成一句"一个都没匹配到" ⇒ 分不清是**真没有**还是**路径写错**。
+    #    ⚠️ 同族教训 = `TAIL-190`（同步回执把两类待人工混成一个数 ⇒ 用户看到空卡，只能靠猜）。
+    Say '   ⛔ **包里没有壳基线**'
+    if (-not (Test-Path $snapDir)) {
+        Say ('      真因① = **目录都不存在**：' + $snapDir)
+        Say '        ⚠️ 这多半是**路径写错**（真身必须是仓内 `.workbuddy\backups\`）⇒ 先查这个，⛔ 别急着去 --snapshot'
+    } else {
+        $loose = @(Get-ChildItem $snapDir -File -ErrorAction SilentlyContinue).Count
+        Say ('      真因② = 目录在（' + $loose + ' 个散件）但**没有** `*_壳单文件基线.html` 匹配')
+        Say '        ⇒ 先复核壳，再 `python tools/audit/shell_verify.py --snapshot` 建一份'
+    }
     Say '      ⚠️ 后果：目标机第一次跑 `shell_verify` 会判红「没有基线、要你建基线」⇒ 届时 `--snapshot` 一次即可'
-    Say '      ⚠️ 但"没找到"也可能是**匹配/路径写错了**（本仓真踩过：中文通配 `-Filter` 命中 0 ✗）'
+    $packProblems++
 }
 
 # ---- 4) 库 ----
@@ -163,9 +185,9 @@ if (-not $DryRun) {
     $mf += ('HEAD     : ' + $head + '（工作区干净 —— 产包闸已挡过未提交）')
     $mf += '仓       : repo\mtrl-workbench.bundle（git bundle --all ⇒ 含全部历史，D18 的回退保障）'
     $mf += '非 git 件: .codebuddy\memory\** · .workbuddy\memory\** · ops\nssm\nssm.exe · artifacts\*'
-    $mf += ('壳基线   : ' + $(if ($snapName) { 'backups\' + $snapName } else { '⛔ 缺！见产包日志的解释（目标机 --snapshot 一次即可）' }))
+    $mf += ('壳基线   : ' + $(if ($snapName) { '.workbuddy\backups\' + $snapName } else { '⛔ 缺！见产包日志里"真因①/②"那两行（目标机 --snapshot 一次即可）' }))
     $mf += ('库       : db\init_db.sql（空库路线；⚠️ 里面 <PASSWORD> 到目标机要换）' + $(if ($WithDump) { ' ＋ db\*.dump（⚠️ 只作对照，⛔ 不灌生产）' } else { '' }))
-    $mf += '⛔ 一律不带: backend\.venv · logs\ · .workbuddy\scratch · backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
+    $mf += '⛔ 一律不带: backend\.venv · logs\ · .workbuddy\scratch · .workbuddy\backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
     $mf += '落地说明 : 部署-落地说明.md（= docs\deployment.md）'
     $mf += '校验     : SHA256SUMS.txt 覆盖本目录**全部文件**（本件也在内）—— 目标机脚本先校它'
     [IO.File]::WriteAllText((Join-Path $Out 'MANIFEST.txt'), ($mf -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding($false)))
@@ -180,5 +202,14 @@ if (-not $DryRun) {
     else { Say '   ✓ 敏感件自检：0 命中' }
 }
 Say ''
+if ($packProblems -gt 0) {
+    Say ('⛔ 该带的件缺 ' + $packProblems + ' 项（上面逐项写明了是哪一项、以及后果）')
+    if ($DryRun) {
+        Say '⭐ **干跑通过的含义 = "该带的都带得上"** ⇒ 现在 rc=1'
+        Say '   （⛔ 别把干跑当"放宽版"：它是产包那天**唯一能机器判**的一步 ⇒ 它绿了，那天照抄才有底）'
+        exit 1
+    }
+    Say '⚠️ 正式产包**放行**（MANIFEST 里已如实写明缺哪项）—— 但先想清楚：目标机会不会因此少东西'
+}
 Say ('=== 完成 · 包在 ' + $Out + ' ===')
 Say '下一步：把整个目录拷到目标机 ⇒ 在目标机跑 ops\deploy_restore.ps1 -Pack <该目录> -Mode empty ⇒ 再跑 ops\selfcheck.ps1'

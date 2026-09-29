@@ -64,7 +64,7 @@
 | `nssm_uninstall.ps1` | 撤销服务注册（⛔ 不动数据、不动 `backend/`、不动 `.env`）；`-RestoreScheduledTask` 可恢复迁移前的计划任务形态 | 同上 |
 | `server_ctl.ps1` | 日常遥控：`status` / `start` / `stop` / `restart` / `log` / `port` / `pg`；⭐ `port` 那条会打印占用 8000 的**进程命令行与启动时间**（诊断"是不是旧进程"） | 普通窗口即可（`start`/`stop`/`restart` 需管理员）。⛔ **改完 Python 必须 `restart`**（无 `--reload`） |
 | `_ps_bom.py`（⚠️ 在 **`tools/oneoff/`** —— 2026-09-29 订正：原写"在 `tools/`"**已过期**，照它找会**找不到文件** ✗） | 给 `.ps1` 补 **UTF-8 BOM** | ⚠️ **PS 5.1 按 GBK 读无 BOM 的 .ps1** ⇒ 中文字节会**吞掉紧跟的 ASCII 引号** ⇒ 满屏 `ParserError`（文件本身没错）。**每次改完 ops 下的 .ps1 就跑一次** |
-| `_ps_parse_check.ps1`（在 **`tools/oneoff/`** · ⭐ 2026-09-29 立） | ⭐ **`ops/*.ps1` 的语法闸**：用 PS 自己的 parser 逐份解析 ⇒ 不通过就 `rc=1` | ⚠️ 仓里**此前没有任何 PS 尺子**（Python 有 `syntax_audit.py`、前端有 `node --check` 那一路，PowerShell 没有）⇒ 改完只能等**真跑那一刻**才炸 —— 而那通常正是"要去办公室产包"的时候 ✗。⚠️ 它**只管语法**，语义/参数靠 `-DryRun` 真跑 |
+| `_ps_parse_check.ps1`（在 **`tools/oneoff/`** · ⭐ 2026-09-29 立） | ⭐ **`ops/*.ps1` 的闸（两段）**：① **语法**（PS parser 逐份解析）② ⭐ **仓内路径字面量必须真的存在**（`Join-Path $RepoRoot '…'` 形态；⚠️ **先剥注释再扫** —— 不剥会把"解释缺陷的注释"当成缺陷）⇒ 任一段不过就 `rc=1` | ⚠️ 仓里**此前没有任何 PS 尺子**（Python 有 `syntax_audit.py`、前端有 `node --check` 那一路，PowerShell 没有）⇒ 改完只能等**真跑那一刻**才炸 —— 而那通常正是"要去办公室产包"的时候 ✗。⚠️ 它**不管语义/参数**，那半靠 `-DryRun` 真跑（两者互补：它查"写死的路径在不在"，`-DryRun` 查"流程对不对"） |
 
 ⭐ **Playwright 浏览器路径（`C:\ProgramData\ms-playwright`）—— 2026-09-21 实测补的，⛔ 别删**：
 
@@ -119,9 +119,13 @@
 # （只要改过 ops 下的 .ps1 ⇒ 先补 BOM ＋ 过语法闸：PS 5.1 按 GBK 读无 BOM 的 .ps1，中文会吞掉紧跟的 ASCII 引号 ⇒ 满屏 ParserError）
 backend\.venv\Scripts\python.exe tools\oneoff\_ps_bom.py            # ⚠️ 在 tools\oneoff\（⛔ 不是 tools\ —— 照旧写法会"找不到文件"）
 powershell -ExecutionPolicy Bypass -File tools\oneoff\_ps_parse_check.ps1
-powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -DryRun                       # 先干跑看一眼会打什么
+powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -DryRun                       # ⭐ 先干跑 —— **它的 rc 必须 =0**：含义是「该带的件都带得上」
 powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -Out D:\deliver\mtrl-<日期>
 ```
+
+⭐ **为什么"干跑 `rc=0`"能当闸使**（2026-09-29 立）：干跑**不落盘**，但它把"该带的件"逐项过一遍 ⇒ **缺件就 `rc=1`**。
+⚠️ 这条是**当天真抓到缺陷之后**才补上的：在那之前"缺件"只打印一行 ⛔、**rc 仍是 0** ⇒ 照抄干跑的人会当它**通过**
+（当天那个"5 份壳基线一份都没进包"就是这么漏过去的 ⇒ 见 ⑤ 第 1 行）。
 
 ### ④ 产后两件（脚本会写，**人只需核一眼**）
 
@@ -134,6 +138,7 @@ powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -Out D:\deliver\mtrl-<日�
 | 坑 | 症状 | 处置 |
 |---|---|---|
 | **中文交给 PowerShell 原语** | `-Filter '*_壳单文件基线.html'` **命中 0**（而 `backups/` 里明明有）⇒ 包里缺壳基线 | 已改 `Where-Object -like` ✓；⭐ **口径：中文路径 / 中文通配一律走 `.NET`／`-like`／Python**，⛔ 不用 `-Filter`、⛔ 不用 `Get-FileHash` 猜（本文件另记过两次同源事故） |
+| ⭐⭐ **壳基线的源目录少写 `.workbuddy\`**（2026-09-29 **干跑当场抓出**） | 干跑报「**包里没有壳基线**」，而 `.workbuddy\backups\` 里**明明有 5 份** ⇒ **一份都进不了包**；⚠️ 报错还说"没找到" ⇒ **把"路径写错"伪装成"真没有"**（最贵的一类：人就不查了） | 已修**两端**：① 源路径 = **`.workbuddy\backups`**（**唯一主人** = `tools/audit/shell_verify.py` 的 `BACKUPS`）② **包内布局 = 仓内相对路径**（`deploy_restore.ps1` 的"放回列表"同批改 ⇒ 五项**左右对称**）③ 报错**两类分开**（真因① 目录不在 / 真因② 目录在但没匹配）⇒ ⭐ **机器眼** = `_ps_parse_check.ps1` **段②**（仓内路径字面量必须存在）＋ **干跑缺件即 `rc=1`** |
 | 库口令 | 包内 `db\init_db.sql` 是**模板**（真口令不进包 ✓） | 目标机现改，并与**仓根 `.env`** 两处一致 |
 | 壳基线缺失的后果 | 目标机第一次 `shell_verify` 判红「要你建基线」 | **不是坏了** ⇒ 在那里 `--snapshot` 一次；`MANIFEST.txt` 里已写明它缺没缺 |
 | BOM | 改完 `.ps1` 没补 BOM ⇒ PS 5.1 满屏 `ParserError`（文件本身没错） | 见 ③ 第一条命令 |
