@@ -601,9 +601,10 @@ def test_壳新增那四页里的清单表也走统一出口_TBL():
 
     ⚠️ **为什么单开一条守**：这四页是**壳新增**（原型里根本没有）⇒ `U1`（只比原型同名 `V.*` 切片）**看不见本件**；
        而这几张表又**没有各自的 claim 判据** ⇒ 换 `TBL` 时**别的东西感知不到**。
-    ⚠️⚠️ **只钉已改的那三张，⛔ 不写"全部"**：同件里另有几张**还没换**（按自己的批次走）——
-       写"全部"会让本判据**下一批一开工就红**（那是**假红**：判据不该替别的批管进度）。
-    自证 = `tools/mut/_mut_tbl.py` 的 M24／M25／M26 去掉这三处委托 ⇒ 必须红。
+    ⚠️⚠️ **本件已「全清」⇒ 七张全钉**（2026-09-29：`legacy.js` 里裸 `<table>` 归零，`tools/oneoff/_tbl_scan.py` 可复核）。
+       ⛔ 演进史值得记：**先落 3 张时本判据只钉那 3 张** —— 因为"写全部"会让它**下一批一开工就假红**
+       （判据不该替别的批管进度）；等本件真做完了，才把七张一次钉齐。
+    自证 = `tools/mut/_mut_tbl.py` 的 M24／M25／M26／M27／M28／M29／M30 去掉这七处委托 ⇒ 必须红。
     """
     assert "TBL({head:'<th>时间</th><th>设置项</th>" in SHELL, \
         "「变更留痕」那张表没走统一出口 `TBL`（`TAIL-64` A′）"
@@ -611,3 +612,11 @@ def test_壳新增那四页里的清单表也走统一出口_TBL():
         "「本系统要哪些列」那张对照表没走统一出口 `TBL`（`TAIL-64` A′）"
     assert "TBL({cls:'sm',head:pcols," in SHELL, \
         "「预览」那张表（`pcols` / `prows`）没走统一出口 `TBL`（`TAIL-64` A′）"
+    assert "TBL({head:(b.columns || []).map(" in SHELL, \
+        "「块」通用渲染件（`lgBlock` 那张表）没走统一出口 `TBL`（`TAIL-64` A′）"
+    assert "TBL({cls:'sm',head:'<th style=\"min-width:92px\"></th>'+IMP.cols.map(" in SHELL, \
+        "导入页「字段对照」那张大表没走统一出口 `TBL`（`TAIL-64` A′）"
+    assert "TBL({cls:'sm',head:'<th>行</th><th>列</th><th>原值</th><th>原因</th>'," in SHELL, \
+        "「问题行」那张表没走统一出口 `TBL`（`TAIL-64` A′）"
+    assert "TBL({cls:'sm',rows:tech.map(k =>" in SHELL, \
+        "「技术细节」（`<details>` 里那张无表头的表）没走统一出口 `TBL`（`TAIL-64` A′）"

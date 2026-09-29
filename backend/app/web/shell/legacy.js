@@ -75,12 +75,12 @@ function lgBlocks(blocks) {
   return (blocks || []).map(b => `<div style="margin-top:calc(12px * var(--fscale))">
     <h4 style="font-size:calc(12.5px * var(--fscale));margin:0 0 calc(5px * var(--fscale))">${lgMd(b.title || '')}</h4>
     ${b.note ? `<p class="mut sm" style="margin:0 0 calc(5px * var(--fscale))">${lgMd(b.note)}</p>` : ''}
-    <div class="tw" style="max-height:260px;min-height:0"><table class="dt"><thead><tr>
-      ${(b.columns || []).map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>
-      ${(b.rows || []).length
+    <div class="tw" style="max-height:260px;min-height:0">${TBL({head:(b.columns || []).map(c => `<th>${esc(c)}</th>`).join(''),
+      rows:(b.rows || []).length
         ? b.rows.map(r => `<tr>${(r || []).map(c =>
-            `<td>${esc(c == null ? '' : String(c))}</td>`).join('')}</tr>`).join('')
-        : lgEmpty((b.columns || []).length || 1, b.empty || '（无）')}</tbody></table></div></div>`).join('');
+            `<td>${esc(c == null ? '' : String(c))}</td>`).join('')}</tr>`)
+        : [],
+      empty:lgEmpty((b.columns || []).length || 1, b.empty || '（无）')})}</div></div>`).join('');
 }
 
 /* ============================================================ `V.set` —— 系统设置（§7.8） */
@@ -526,11 +526,10 @@ V.imp = () => {
         <b>去向</b>：${tagOf('写台账')} 会盖掉台账里的值（<b>含往发票子表加一张票</b>）·
         ${tagOf('当钥匙')} 拿它去找那张合同（合同上的原值<b>不动</b>）·
         ${tagOf('不参与')} 导入不用它 —— 把鼠标停在格子上看完整说明</div>` : ''}
-      <div class="tw"><table class="dt sm">
-      <thead><tr><th style="min-width:92px"></th>${IMP.cols.map(c => `<th style="vertical-align:bottom;min-width:136px">
-        <div style="font-weight:600;white-space:normal">${esc(c.src)}</div></th>`).join('')}</tr></thead>
-      <tbody>
-        ${attrRow('导入到', c => {
+      <div class="tw">${TBL({cls:'sm',head:'<th style="min-width:92px"></th>'+IMP.cols.map(c => `<th style="vertical-align:bottom;min-width:136px">
+        <div style="font-weight:600;white-space:normal">${esc(c.src)}</div></th>`).join(''),
+      rows:[
+        attrRow('导入到', c => {
           const k = kindOf(c);
           /* ⭐⭐ 2026-09-26 用户裁定：「**不参与的就不要给下拉选项了**」——
              导入既然不用它，给个"能点但点了没用"的下拉＝**误导**（守则 §4 相似元素不制造歧义 ·
@@ -547,16 +546,16 @@ V.imp = () => {
                  + ` data-src="${esc(c.src)}">${optsOf(c)}</select></details>`;
           }
           return `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`;
-        })}
-        ${IMP.cols.some(c => !c.ignored && ['写台账', '当钥匙'].includes(kindOf(c)))
+        }),
+        IMP.cols.some(c => !c.ignored && ['写台账', '当钥匙'].includes(kindOf(c)))
           ? attrRow('去向', c => {
               const k = kindOf(c);
               /* ⚠️「不参与」这一列**上面那格已经写着**它了 ⇒ 这行留空，⛔ 别重复（同一格两处"不参与"＝噪音） */
               return (c.ignored || !k || k === '不参与')
                 ? '' : `<span title="${esc(whatOf(c))}">${tagOf(k)}</span>`;
             })
-          : '' /* ⚠️ **一行"去向"都没内容 ⇒ 整行不画**（本域没这条信息，画个空行像坏了）*/}
-      </tbody></table></div>
+          : '' /* ⚠️ **一行"去向"都没内容 ⇒ 整行不画**（本域没这条信息，画个空行像坏了）*/
+      ]})}</div>
       <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:calc(10px * var(--fscale))">${lack.length
         ? `还差必填字段：<b>${esc(lack.join(' / '))}</b> —— 选好才能到下一步（⛔ 系统不替你填默认值）`
         : '必填都齐了，可以往下走'}</div>
@@ -693,10 +692,9 @@ V.imp = () => {
       <div class="kpi"><div class="k">本步写库量</div><div class="v">0</div><div class="s">确认前零写库</div></div>
       ${Object.keys(p.kpis || {}).map(k => `<div class="kpi"><div class="k">${esc(k)}</div>
         <div class="v">${esc(String(p.kpis[k]))}</div></div>`).join('')}</div>
-      ${probs.length ? `<div class="tw" style="max-height:200px"><table class="dt sm">
-        <thead><tr><th>行</th><th>列</th><th>原值</th><th>原因</th></tr></thead><tbody>
-        ${probs.slice(0, 30).map(x => `<tr><td class="now">${esc(x.row)}</td><td class="now">${esc(x.column)}</td>
-          <td class="now">${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`).join('')}</tbody></table></div>
+      ${probs.length ? `<div class="tw" style="max-height:200px">${TBL({cls:'sm',head:'<th>行</th><th>列</th><th>原值</th><th>原因</th>',
+        rows:probs.slice(0, 30).map(x => `<tr><td class="now">${esc(x.row)}</td><td class="now">${esc(x.column)}</td>
+          <td class="now">${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`)})}</div>
         <div class="tip wn" style="margin-top:calc(8px * var(--fscale))">这些问题**不影响其余行落库**；认不出的值一律原样留着给人看，⛔ 不静默改成 0/空。</div>`
       : '<div class="tip ok">没有发现问题行</div>'}
       ${scopeEcho}
@@ -748,9 +746,8 @@ V.imp = () => {
       ${lgBlocks(r.blocks)}
       ${tech.length ? `<details style="margin-top:calc(10px * var(--fscale))"><summary class="mut sm">技术明细（原始回执
         ${tech.length} 项 · 排查用；⛔ 不是给你看的指标）</summary>
-        <div class="tw" style="margin-top:calc(6px * var(--fscale))"><table class="dt sm"><tbody>${tech.map(k =>
-          `<tr><th style="width:30%">${esc(k)}</th><td>${esc(String(r[k]))}</td></tr>`).join('')}
-        </tbody></table></div></details>` : ''}
+        <div class="tw" style="margin-top:calc(6px * var(--fscale))">${TBL({cls:'sm',rows:tech.map(k =>
+          `<tr><th style="width:30%">${esc(k)}</th><td>${esc(String(r[k]))}</td></tr>`)})}</div></details>` : ''}
       <div style="margin-top:calc(10px * var(--fscale))"><button class="btn" data-act="impReset">再导一份</button></div></div></div>`;
   }
 
