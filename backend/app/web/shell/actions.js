@@ -1499,9 +1499,8 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
    const body = pjs.length===1
      ? `<div class="tip" style="margin:0">将生成 <b>1 个文件</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>内容 = <b>当前所显示的那张表</b>（<b>${procTabName()}</b>）按 <b>17 列模板</b>填充（核算月 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列），报<b>分公司工程科</b>（§5.2.2）。</div>`
      : `<div class="tip" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">过程资料_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个文件（每个 = 一个项目的 <b>${procTabName()}</b>）。</div>
-       <table class="dt cond" data-sort data-sort-key="modal:procExp" style="margin-top:calc(8px * var(--fscale))"><thead><tr><th>#</th><th>文件（每项目一份）</th></tr></thead><tbody>
-       ${pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`).join('')}
-       </tbody></table>`;
+       ${TBL({cls:'cond',key:'modal:procExp',sty:'margin-top:calc(8px * var(--fscale))',head:'<th>#</th><th>文件（每项目一份）</th>',
+       rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)})}`;
    modal({title:'导出 · 过程资料（按模板 · 每项目一份）',body,
      footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="procExpSave">保存到本地</button>`}); },
  /* ⭐ 接线（`TAIL-04` 路径① · 片 4a）：成品由**后端模板填充**生成 —— 每个项目**一本工作簿**
@@ -1894,12 +1893,11 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
    modal({ title:`选择项目 · 导出总欠款要包含哪些项目（已选 ${DEBTDRAFT.length} / 候选 ${debtCands().length}）`,
      reopen:()=>ACT.debtPick({dataset:{keep:'1'},tagName:'BUTTON'}),
      body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">勾选要导出的项目；<b>已选的</b>可用 <b>↑ / ↓</b> 调顺序（<b>导出的行序就是这个</b>）。<b>全清空 = 全部项目</b>（与原来的行为一致）。</div>
-       <div style="max-height:52vh;overflow:auto"><table class="dt cond" data-sort-key="modal:debtPick"><thead><tr><th style="width:34px">选</th><th style="width:40px">序</th><th>项目（候选 = 项目档案全部，含归档）</th><th style="width:82px">调顺序</th></tr></thead><tbody>
-       ${debtCands().map(wh=>{ const k=DEBTDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
+       <div style="max-height:52vh;overflow:auto">${TBL({cls:'cond',key:'modal:debtPick',sort:false,head:'<th style="width:34px">选</th><th style="width:40px">序</th><th>项目（候选 = 项目档案全部，含归档）</th><th style="width:82px">调顺序</th>',
+       rows:debtCands().map(wh=>{ const k=DEBTDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
          return `<tr><td class="ctr"><input type="checkbox" data-act="debtPickTog" data-wh="${esc(wh)}"${on?' checked':''}></td>
          <td class="fc">${on?k+1:''}</td><td class="sm">${esc(p?pjDispOr(p,wh):wh)}</td>
-         <td class="ctr now"><button class="btn sm" data-act="debtPickUp" data-wh="${esc(wh)}"${(on&&k>0)?'':' disabled'}>↑</button> <button class="btn sm" data-act="debtPickDown" data-wh="${esc(wh)}"${(on&&k<DEBTDRAFT.length-1)?'':' disabled'} title="${(on&&k<DEBTDRAFT.length-1)?'把这一行往下挪一位':'只有「选中了某一行」且它不是最后一行时才能下移'}">↓</button></td></tr>`; }).join('')}
-       </tbody></table></div>`,
+         <td class="ctr now"><button class="btn sm" data-act="debtPickUp" data-wh="${esc(wh)}"${(on&&k>0)?'':' disabled'}>↑</button> <button class="btn sm" data-act="debtPickDown" data-wh="${esc(wh)}"${(on&&k<DEBTDRAFT.length-1)?'':' disabled'} title="${(on&&k<DEBTDRAFT.length-1)?'把这一行往下挪一位':'只有「选中了某一行」且它不是最后一行时才能下移'}">↓</button></td></tr>`; })})}</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="debtPickNone">全清空（= 全部）</button><button class="btn" data-act="debtPickAll">全选</button><button class="btn pri" data-act="debtPickOk">确定</button>`}); },
  debtPickTog:t=>{ const wh=t.dataset.wh, k=DEBTDRAFT.indexOf(wh);
    if(k>=0) DEBTDRAFT.splice(k,1); else DEBTDRAFT.push(wh);       /* 新勾选追加到末尾（顺序可再调） */
@@ -1964,9 +1962,8 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
    const body = pjs.length===1
      ? `<div class="tip" style="margin:0">将生成 <b>1 个工作簿</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>工作簿内 <b>3 个工作表</b>：<b>辅材欠款</b> · <b>机械欠款</b> · <b>特殊费用月报表</b></div>`
      : `<div class="tip" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">逐月欠款台账_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个工作簿（每个 <b>3 个工作表</b>）。</div>
-        <table class="dt cond" data-sort data-sort-key="modal:ledExp" style="margin-top:calc(8px * var(--fscale))"><thead><tr><th>#</th><th>工作簿（每项目一个）</th><th>工作表</th></tr></thead><tbody>
-        ${pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td><td class="sm">辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>`).join('')}
-        </tbody></table>`;
+        ${TBL({cls:'cond',key:'modal:ledExp',sty:'margin-top:calc(8px * var(--fscale))',head:'<th>#</th><th>工作簿（每项目一个）</th><th>工作表</th>',
+        rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td><td class="sm">辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>`)})}`;
    modal({title:'导出 · 逐月欠款台账（每项目一个工作簿）',body,
      footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="ledExpSave">保存到本地</button>`}); },
  /* ⭐ 接线（`TAIL-04` 路径① · **片 2＋3**）：成品由**后端模板填充**生成 —— 每个项目**一本工作簿**
@@ -2107,14 +2104,13 @@ jcPartyDlg:async()=>{ let d=null;
         它们的金额按「<b>正常</b>」落进「合同金额」列（这个选择**可逆**：指定后会一眼看出对不对）。`
       :'全部甲方都已指定类型 ✅'}
     <br><span class="mut sm">规则：<b>正常甲方</b> ⇒ i8 合同价 = <b>供应商价</b>（落「合同金额」）；<b>贸易公司甲方</b> ⇒ i8 合同价 = <b>贸易公司的价</b>（落「贸易公司合同金额」），而<b>真供应商价 i8 里没有</b> ⇒ 要人工从 Excel 的供应商线补进「合同金额」。</span></div>
-    <div class="tw" style="max-height:50vh"><table class="dt cond" data-sort data-sort-key="modal:jcParty"><thead><tr>
-      <th>甲方单位（i8 的「甲方单位」原样）</th><th style="width:150px">类型</th><th style="width:88px">合同数</th></tr></thead><tbody>
-    ${items.length?items.map(it=>`<tr class="${it.kind==='unknown'?'hl':''}">
+    <div class="tw" style="max-height:50vh">${TBL({cls:'cond',key:'modal:jcParty',
+      head:'<th>甲方单位（i8 的「甲方单位」原样）</th><th style="width:150px">类型</th><th style="width:88px">合同数</th>',
+    rows:items.map(it=>`<tr class="${it.kind==='unknown'?'hl':''}">
       <td>${esc(it.name)}</td>
       <td><select class="inp" data-act="jcPartySet" data-name="${esc(it.name)}"${it.kind==='unknown'?' style="border-color:var(--wn)"':''}>${opt(it.kind)}</select></td>
-      <td class="num">${it.count||0}</td></tr>`).join('')
-      :EMPTYROW(3, '还没有甲方记录', '抓取一次后，i8 里的甲方单位会自动出现在这里')}
-    </tbody></table></div>
+      <td class="num">${it.count||0}</td></tr>`),
+    empty:EMPTYROW(3, '还没有甲方记录', '抓取一次后，i8 里的甲方单位会自动出现在这里')})}</div>
     <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>⚠️ 改类型**不会**回头重算已有合同的金额</b> —— 与「改规则不重算历史」同款口径。
       已经落错列的行，改完分类后请<b>重抓一次</b>（贸易公司的价会被重新落位）或<b>手工改</b>。</div>`;
   modal({title:'甲方单位分类（决定合同价是谁的价）', wide:true, body,

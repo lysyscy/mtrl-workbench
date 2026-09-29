@@ -7,7 +7,8 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-十五靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打的是 `shell/proj.js` —— 见下方"哑靶"说明）：
+二十一靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打的是 `shell/proj.js`、`M16`~`M21` 打的是
+`shell/actions.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
 - `M2` **掏空内核**：把 `TBL` 体内的 `+rows.join('')+` 改成 `+''+` ⇒ "内核没把 rows 拼进 tbody"必须红。
@@ -39,6 +40,9 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SHELL = ROOT / "backend" / "app" / "web" / "index.html"
+#: ⭐ 2026-09-29（`TAIL-64` A′）：modal 那批表住在**拆件**里（`shell/actions.js`），不在 `index.html`
+#: ⇒ 靶也要自带文件（同 `M2` 的哑靶教训：**别假设源码在 `index.html`**）。
+ACTIONS = ROOT / "backend" / "app" / "web" / "shell" / "actions.js"
 #: ⭐⭐ **2026-09-29 修一个"哑靶"（本件自己的仪器缺陷）**：`M2` 原来只在 `index.html` 里找 `TBL` 内核，
 #: 而壳 **2026-09-28 拆件（`P2-a`）**把 `TBL` 从 `index.html` **搬进了 `shell/proj.js`**
 #: （`V.*` 切片留在 `index.html`、顶层段搬走）⇒ `M2` 的靶串**从此一次都命中不到**（实测「命中 0 次」）。
@@ -55,7 +59,8 @@ TARGETS: tuple[str, ...] = ("tests/test_acc_usr_mgmt.py",   #: `m15`（P1b）那
                             "tests/test_wired_m03_list.py",  #: ⭐ `m03`（P3）
                             "tests/test_wired_m04.py",      #: ⭐ `m04`（P3）
                             "tests/test_acc_home_todo.py",  #: ⭐ `home`（P3）状态一览表
-                            "tests/test_acc_jc_shell.py")   #: ⭐ `m11`（P3 余量）集采台账表
+                            "tests/test_acc_jc_shell.py",   #: ⭐ `m11`（P3 余量）集采台账表
+                            "tests/test_acc_x_exp.py")      #: ⭐ A′（modal）导出清单表
 PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
 
 def _b(s: str) -> bytes:
@@ -104,6 +109,23 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
     # ⭐ 2026-09-29（`TAIL-64` P3 余量）：`m10`/`m12`/`m11` 三张收尾表
     (SHELL, "M15 去掉委托（`m11` 集采台账表 不再走 `TBL`）", _b("TBL({head:JC_THEAD,key:'m11:jc',"),
      _b("TBLBROKEN({head:JC_THEAD,key:'m11:jc',"), "集采台账表没走统一出口"),
+    # ⭐ 2026-09-29（`TAIL-64` A′）：modal 那批（住 `shell/actions.js`）—— 先落两张最简的
+    (ACTIONS, "M16 去掉委托（`modal:procExp` 清单表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:procExp',"), _b("TBLBROKEN({cls:'cond',key:'modal:procExp',"),
+     "没有清单表"),
+    (ACTIONS, "M17 去掉委托（`modal:ledExp` 清单表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:ledExp',"), _b("TBLBROKEN({cls:'cond',key:'modal:ledExp',"),
+     "没有清单表"),
+    (ACTIONS, "M18 把可排表标成刻意不可排（`modal:procExp` 塞 `sort:false`）",
+     _b("key:'modal:procExp',"), _b("sort:false,key:'modal:procExp',"), "刻意不可排"),
+    (ACTIONS, "M19 去掉委托（`modal:debtPick` 选择项目表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:debtPick',"), _b("TBLBROKEN({cls:'cond',key:'modal:debtPick',"),
+     "没走统一出口"),
+    (ACTIONS, "M20 去掉委托（`modal:jcParty` 甲方分类表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:jcParty',"), _b("TBLBROKEN({cls:'cond',key:'modal:jcParty',"),
+     "没走统一出口"),
+    (ACTIONS, "M21 把「刻意不可排」放回可排（`modal:debtPick` 的 `sort:false` 去掉）",
+     _b("key:'modal:debtPick',sort:false,"), _b("key:'modal:debtPick',"), "没声明「刻意不可排」"),
 ]
 
 

@@ -329,6 +329,11 @@ def test_总欠款导出与期初删除都不许静默失败():
     # ①′ **选择项目**那套必须齐（多选 + 顺序 + 不落库）
     assert "debtPick:t=>{" in SHELL and "debtPickUp:t=>{" in SHELL and "debtPickOk:()=>{" in SHELL, \
         "缺「导出总欠款 · 选择项目」那一套动作（多选 / 调顺序 / 确定）"
+    # ⭐ 2026-09-29（`TAIL-64` A′）：那张「选择项目」弹窗的表也走统一出口 `TBL` —— 且**刻意不可排**
+    #   （`sort:false`：它的行序是**用户手工调的**，⛔ 给它排序入口会把用户调好的顺序搞乱）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M19（去掉委托）/ M21（`sort:false` 改回 `true`）都必须红。
+    assert "TBL({cls:'cond',key:'modal:debtPick',sort:false," in SHELL, \
+        "「选择项目」的表没走统一出口 `TBL`，或没声明「刻意不可排」（`sort:false`）"
     assert "选择项目（" in SHELL, "「选择项目」按钮文案没了（用户 2026-09-28 明确要求：叫得让人一眼明白）"
     assert "选题" not in SHELL, "壳里又出现「选题」这个说法（用户说看不懂，已统一改成「选择项目」）"
     # ② 期初行 id：不许写死假值，且比较必须归一成字符串（`dataset.id` 恒是字符串、`x.id` 是数字）

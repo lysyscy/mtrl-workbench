@@ -12,7 +12,7 @@ import re
 
 import app
 from tests.acc_plugin import acc
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
 
 
 def _shell_dir() -> pathlib.Path:
@@ -199,9 +199,14 @@ def test_多项目导出的清单预览有单多两条形态():
         assert "1 " in single and ("工作簿" in single or "文件" in single), \
             f"`{key}` 的**单项目**分支没说清生成什么（应是「1 个工作簿/文件」）"
         assert unit in single, f"`{key}` 的单项目分支没说明**内含多张工作表**（应出现 `{unit}`）"
-        assert "<table" in multi, (
+        # ⭐ 2026-09-29（`TAIL-64` A′）：表外壳走统一出口 `TBL` ⇒ 原先钉 `<table` 字面就假红了
+        #   （那串搬进 `TBL` 内核后分支里不再出现）。改钉**两段式**（照 P0 范式）：
+        #   ① 分支**委托** `TBL` 并交出表的身份（`key:'modal:…'`）；② 内核里**真的**渲染 `<table>`。
+        #   自证 = `tools/mut/_mut_tbl.py` 的 M16/M17 去掉这两处委托 ⇒ 必须红。
+        assert "TBL({cls:'cond',key:'modal:" in multi, (
             f"`{key}` 的**多项目**分支没有清单表 ⇒ 用户看不到「哪几个项目」进了 zip"
             "（claim 明确要求「**每项目一行清单**」）")
+        assert "<table" in tbl_kernel(), "`TBL` 内核不再渲染 `<table>`（表外壳出口坏了）"
         assert "pjs.map" in multi, f"`{key}` 的清单表不是**逐项目一行**（`pjs.map` 不在其中）"
         assert "zip" in multi.lower(), f"`{key}` 的多项目分支没说明**打成 zip**"
 
@@ -254,15 +259,24 @@ def test_导出清单弹窗里的表可排序():
        所以反面也一并钉住。
     """
     acts = _actions()
+    kern = tbl_kernel()
     for name, (title, key) in EXPORT_MODAL_TABLES.items():
         assert title in acts, f"找不到导出弹窗「{title}」（{name}）—— 落点变了"
-        m = re.search(r'<table\b[^>]*data-sort-key="' + re.escape(key) + r'"[^>]*>', acts)
-        assert m, f"「{title}」的清单表没有 `data-sort-key=\"{key}\"`（表的**身份**，本仓约定新表一律声明）"
-        tag = m.group(0)
-        assert re.search(r"\sdata-sort[\s>]", tag), (
-            f"「{title}」的清单表**没有 `data-sort`**（真开关）⇒ 表头点了不动。\n"
-            f"  ⚠️⚠️ 光有 `data-sort-key` **不生效** —— 壳里精确匹配的是 `data-sort` 本身。\n"
-            f"  实际标签：{tag[:150]}")
+        # ⭐ 2026-09-29（`TAIL-64` A′）：表外壳走统一出口 `TBL` ⇒ 字面标签在源码里查不到了。
+        #   改钉**委托时那三件事**（判据的命门不变：真开关 `data-sort` ＋ 身份 `key`）：
+        #   ① 交出身份 `key:'modal:…'`；② **不**写 `sort:false`（= 走默认的可排分支）；
+        #   ③ 内核里「可排」那条分支**真的**出 ` data-sort data-sort-key="…"`。
+        #   自证 = `tools/mut/_mut_tbl.py` 的 M16（去掉委托）/ M18（把 `sort:false` 塞进去）都必须红。
+        i = acts.find("key:'" + key + "'")
+        assert i >= 0, f"「{title}」的清单表没声明身份 `key:'{key}'`（本仓约定新表一律声明）"
+        win = acts[max(0, i - 200): i + 220]
+        assert "TBL({" in acts[max(0, i - 200): i], (
+            f"「{title}」的清单表没用统一出口 `TBL`（`TAIL-64` A′）")
+        assert "sort:false" not in win, (
+            f"「{title}」的清单表被标成**刻意不可排**（`sort:false`）⇒ 表头点了不动。\n"
+            "  ⚠️⚠️ 刻意不可排只许给「合计行要 pin 在表尾」那类表（`modal:expExt`）。")
+        assert "' data-sort data-sort-key=\"'+key+'\"'" in kern, (
+            "`TBL` 内核里「可排」那条分支不再出 ` data-sort data-sort-key`（排序开关坏了）")
 
     # ⭐ 把**机制**也钉住：⛔ 别把"认 `data-sort`"放宽成"认 `data-sort-key` 也行"
     # ⚠️ 2026-09-28（`TAIL-164` · `P2-a` 拆件）：这段机制住在**壳的公共件**里（原先在 `index.html` 的内联脚本，

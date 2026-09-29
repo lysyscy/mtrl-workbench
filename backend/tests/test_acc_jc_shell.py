@@ -268,3 +268,20 @@ def test_全选只作用于当前筛选结果且收紧后被裁剪():
     assert _all_shell().count("pruneJcPick()") >= 4, (
         "`pruneJcPick()` 的调用点太少 ⇒ 有些筛选变化后根本不会裁剪"
         "（⚠️ 必须搜**整支壳**：定义在 `index.html`、调用散在 `actions.js`/`core.js`）")
+
+
+@acc()
+def test_甲方单位分类弹窗的表也走统一出口_TBL():
+    """`TAIL-64` A′：`modal:jcParty`（甲方单位分类）的表走统一出口 `TBL`。
+
+    ⚠️ 它的**表头原本跨两行**（`<thead><tr>` 与 `<th>…</th>` 分成两行写）⇒ 换 `TBL` 时把表头**并成一串**
+       —— 这是「表头跨多行的表别硬搬」那条的一个**例外**：它**没有逐列插值**、只是排版断行，
+       并起来**无损**（对照：`mechYm`/`awfTbl` 那种逐列插值的才真属于 `P5` 行模板的活）。
+    ⚠️ 空态仍是那个**写死的 3**（`EMPTYROW(3, …)`），本次**不顺手改**它（⛔ 一码归一码）。
+    自证 = `tools/mut/_mut_tbl.py` 的 M20 去掉这处委托 ⇒ 必须红。
+    """
+    acts = _all_shell()
+    assert "TBL({cls:'cond',key:'modal:jcParty'," in acts, \
+        "甲方单位分类弹窗的表没走统一出口 `TBL`（`TAIL-64` A′）"
+    assert "EMPTYROW(3, '还没有甲方记录'" in acts, \
+        "那张表的空态行丢了（⚠️ 它的跨列数是写死的 3，不是由表头派生的）"
