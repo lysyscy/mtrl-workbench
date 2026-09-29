@@ -1388,8 +1388,8 @@ BIND.m01 = function () {
         ${ARCP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))"><b>为什么这里要人来定</b>：这个全名在 i8 名单里挂了
           <b>≥2 个仓库</b>，而<b>一条普通项目只挂一个仓库</b>（决策 2）⇒ 系统<b>不猜</b> ——
           请你<b>选定一个</b>，系统按它建行；⚠️ 其余仓库<b>不会</b>再建行。</div>
-        <table class="dt cond"><thead><tr><th>项目全名</th><th>待选仓库</th><th>系统为什么不自己定</th><th></th></tr></thead>
-        <tbody>${arows}</tbody></table>` : ''}
+        ${TBL({cls:'cond',head:'<th>项目全名</th><th>待选仓库</th><th>系统为什么不自己定</th><th></th>',
+        rows:[arows]})}` : ''}
       </div>`;
     host.prepend(abox);
   }
@@ -1421,8 +1421,8 @@ BIND.m01 = function () {
         而它的全名在档案里命中 <b>≥2 条</b>非壳行 ⇒ 系统<b>无法自己决定</b>挂哪一条、也<b>不该猜</b>
         （决策 1 兜底）—— 请你指明这条<b>真实仓库名</b>该写到<b>哪一行</b>上。
         ⚠️ 只改仓库名（系统写入）；<b>类型纠正</b>不在这里做。</div>
-      <table class="dt cond"><thead><tr><th>陌生仓库名</th><th>项目全名</th><th>同名档案行</th><th>系统为什么不自己定</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table>
+      ${TBL({cls:'cond',head:'<th>陌生仓库名</th><th>项目全名</th><th>同名档案行</th><th>系统为什么不自己定</th><th></th>',
+      rows:[rows]})}
     </div>`;
   host.prepend(box);
 };
