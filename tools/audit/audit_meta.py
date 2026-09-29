@@ -34,8 +34,21 @@ def check_file_sizes() -> list[dict]:
     ⇒ **本函数的输出就是那份清单**；文档只留纪律，不留名单（这正是「状态由机器生成」）。
     ⚠️ **`>600` 不再是红**（2026-09-21 用户裁定降级）：它**不挡合入**，但仍要求一条登记。
     ⛔ 别把这条悄悄改回红 —— 要改先改 `ops/阈值表.md` 里那一行（那里写着出处与理由）。
+
+    ⭐⭐ 2026-09-29 **补第二半**（`TAIL-06` 的量测逼出来的）：**`>600` 的件必须在阈值表里被"点名"**。
+      原先只报「超线 ⇒ 须登记」，⚠️ **却不核"那张表里到底有没有这一件"** ⇒ 实测当场对不上：
+      阈值表写着「**现唯一超线件 = `mod11_jc/repository.py`（605 行）**」，而实际是 **5 件**
+      （`audit_meta.py` **811** · `_shell_legacy.py` **809** · `mod06_proc/importer.py` **668** ·
+      `mod11_jc/repository.py` **646** · `_shell_smoke.py` **650**）⇒ 又一个「**口径要求一件事、
+      机器只看一半**」（同 `TAIL-59` 的病）。
+    ⚠️ **认法 = 文件名出现即可**（黄档 · 不追求精确到行）；表不存在时本半**不判**（那是 `T18` 的事）。
+    ⚠️⚠️ **它的边界（实测踩到，⛔ 别高估它）**：认法是"**文件名在表里任意位置出现过**" ⇒ **历史叙述里的
+      旧名也算数**（`M16` 第一版就踩到：抹掉 `_shell_smoke.py` 的登记处、它在那句"（旧登记 = …671 行）"
+      里仍被提到 ⇒ 判据**不报**）。⇒ 它挡的是「**完全没提**」这一档；⛔ **不区分"在哪个场合提的"**。
     """
     hits: list[dict] = []
+    table = REPO_ROOT / THRESHOLD_DOC
+    reg_text = table.read_text(encoding="utf-8", errors="replace") if table.exists() else ""
     for d in CODE_DIRS:
         for f in sorted((REPO_ROOT / d).rglob("*.py")):
             n = len(f.read_text(encoding="utf-8", errors="replace").splitlines())
@@ -43,6 +56,17 @@ def check_file_sizes() -> list[dict]:
                 continue
             rel = str(f.relative_to(REPO_ROOT)).replace("\\", "/")
             over_max = n > HARD_LIMIT
+            if over_max and reg_text and f.name not in reg_text:
+                hits.append({"code": "T5", "side": "仓", "rel": rel, "line": 1,
+                             "what": f"{n} 行 · ⚠️ **阈值表没点名本件**",
+                             "why": f"超过 {HARD_LIMIT} 行 ⇒ 按口径必须在 `{THRESHOLD_DOC}` 登记"
+                                    "**为什么不拆**，而那张表里**找不到本件的文件名** ⇒"
+                                    "「口径有要求、机器只看一半」（2026-09-29 `TAIL-06` 实测：表里写"
+                                    "「唯一超线件」而实际 5 件）",
+                             "fix": f"在 `{THRESHOLD_DOC}` 的 **600** 那一行**点名本件** ＋ 一句"
+                                    "「为什么不拆」（或真的拆开、复跑四态全绿）",
+                             "level": YELLOW, "text": ""})
+                continue
             hits.append({"code": "T5", "side": "仓", "rel": rel, "line": 1,
                          "what": f"{n} 行",
                          "why": (f"超过 {HARD_LIMIT} 行 —— 须在 `{THRESHOLD_DOC}` 登记"

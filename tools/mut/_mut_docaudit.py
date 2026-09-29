@@ -167,6 +167,15 @@ MUTS_RED2: list[dict] = [
     {"desc": "M15 `T9`② 注入档里**复述守卫阈值**（造一句 `T13`（行数预算 9999））", "mode": "needle",
      "needle": ("[T9]", "复述了守卫的阈值"), "path": MEM,
      "frag": lambda src: _fit(_b("\n\n\n⭐ 归档守卫 = `T13`（行数预算 9999 ＋ 过程标题词）。\n\n\n"), src)},
+    # ⭐⭐ `T5` 第二半（2026-09-29 立 · `TAIL-06` 量测）：把阈值表里**某个 >600 件的文件名抹掉**
+    #    ⇒ 必须报「阈值表没点名本件」（**黄** ⇒ 判据写成 `needle` 元组）。
+    #    ⚠️ **靶必须挑"在表里只出现一次"的名字**：第一次挑的 `_shell_smoke.py` **当场没命中** ——
+    #      因为那句"为什么不拆"的历史叙事里**还留着**它（`（671 行）`）⇒ 判据的认法是"文件名出现即可"
+    #      ⇒ 抹掉一处它仍然算"被点名" ✗（⭐ 教训：**变异的靶要先确认"唯一"**）。
+    {"desc": "M16 `T5`② `>600` 的件**没被阈值表点名**（抹掉 `mod06_proc/importer.py`）", "mode": "needle",
+     "needle": ("importer.py", "阈值表没点名本件"), "path": THRESHOLD,
+     "old_new": (_b("`backend/app/mod06_proc/importer.py` **668**"),
+                 _b("`backend/app/mod06_proc/importer_zzz.py` **668**")), "all": False},
 ]
 
 
