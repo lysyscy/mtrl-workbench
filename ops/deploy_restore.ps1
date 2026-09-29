@@ -35,7 +35,18 @@ function Step($m) { Write-Host ''; Write-Host ('── ' + $m) }
 function Run($exe, [string[]] $argv, $cwd) {
     Say ('   > ' + $exe + ' ' + ($argv -join ' '))
     if ($DryRun) { return 0 }
-    Push-Location $cwd; & $exe @argv; $code = $LASTEXITCODE; Pop-Location; return $code
+    # ⚠️ 2026-09-29 修：**子进程一律带 UTF-8 的 IO 编码** —— `alembic` / `psql` 都会回显**中文**
+    #    （表名 / 注释 / 角色名），而 Windows 控制台默认代码页是 GBK ⇒ 实测 `alembic upgrade head`
+    #    的输出**整段乱码**（结论不受影响，但**看着像出错** ⇒ 目标机上最容易把人吓住的就是它）。
+    #    `PGCLIENTENCODING` 管 psql 那一路；`PYTHONIOENCODING` 管 python/alembic。
+    $prevPy = $env:PYTHONIOENCODING
+    $prevPg = $env:PGCLIENTENCODING
+    $env:PYTHONIOENCODING = 'utf-8'
+    $env:PGCLIENTENCODING = 'UTF8'
+    Push-Location $cwd; & $exe @argv; $code = $LASTEXITCODE; Pop-Location
+    if ($null -eq $prevPy) { Remove-Item Env:\PYTHONIOENCODING -ErrorAction SilentlyContinue } else { $env:PYTHONIOENCODING = $prevPy }
+    if ($null -eq $prevPg) { Remove-Item Env:\PGCLIENTENCODING -ErrorAction SilentlyContinue } else { $env:PGCLIENTENCODING = $prevPg }
+    return $code
 }
 
 Say '=== ops/deploy_restore.ps1 · 目标机落地 ==='

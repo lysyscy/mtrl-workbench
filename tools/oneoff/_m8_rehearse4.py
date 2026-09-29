@@ -87,7 +87,10 @@ def main() -> int:
     rc, out = sh([str(PY), "-X", "utf8", "-m", "pytest", "--collect-only", "-q",
                   "-p", "no:cacheprovider"], cwd=CLONE / "backend")
     tail = [l for l in out.splitlines() if l.strip()][-2:]
-    ok = rc == 0 and "error" not in out.lower()
+    # ⚠️ 2026-09-29 修：原先还要求 `"error" not in out` —— **过保守**：`--collect-only` 的正常输出里
+    #    完全可能出现 "error"/"errors" 这类字样（rootdir / 配置差异带的），⇒ 把 `rc=0` 也判成"收集不全"（**假红** ✗）。
+    #    ⭐ 判据只认**退出码**（那才是这件事的权威信号）；⛔ 别再退回子串判。
+    ok = rc == 0
     print(f"  {'✅' if ok else '⚠️'} pytest --collect-only：rc={rc} · {' | '.join(tail)[:120]}")
     if not ok:
         print("     ⚠️ 收集不全 ⇒ 可能是 clone 里缺件，**也可能**是 rootdir/配置差异（落地时以目标机为准）")

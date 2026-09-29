@@ -5,9 +5,13 @@ PS 5.1 会把 UTF-8 字节按 GBK 解码 —— 解码出的**尾字节会吞掉
 症状是**一堆莫名其妙的 ParserError**（`Unexpected token` / `Missing closing '}'`），
 而文件本身一点没错。2026-09-21 实测踩过（`ops/nssm_install.ps1` / `ops/server_ctl.ps1`）。
 
-用法：`backend/.venv/Scripts/python.exe tools/_ps_bom.py ops/*.ps1`
-（不带参数 ⇒ 默认给 `ops/` 下全部 .ps1 补）
+用法：`backend/.venv/Scripts/python.exe tools/oneoff/_ps_bom.py ops/*.ps1`
+（不带参数 ⇒ 默认给 **`ops/*.ps1` ＋ `tools/**/*.ps1`** 两份都补）
 幂等：已有 BOM 的文件跳过。
+⭐ 2026-09-29 两处订正：① 路径（原先文档头写 `tools/_ps_bom.py`，实际在 **`tools/oneoff/`** ⇒ 照着找会找不到 ✗）；
+   ② **默认范围原来只有 `ops/`** ⇒ 放在 `tools/` 下的 .ps1 **没人管** —— 本次实测：新写的
+   `tools/oneoff/_ps_parse_check.ps1` 就没被扫到，结果**被新立的 PS 语法闸当场抓到"无 BOM ⇒ 满屏 ParserError"** ✓✗
+   （自己成了第一个案例）⇒ 默认范围扩到 `tools/**/*.ps1`。
 """
 from __future__ import annotations
 
@@ -27,8 +31,14 @@ def fix(path: Path) -> str:
 
 
 def main(argv: list[str]) -> int:
-    root = Path(__file__).resolve().parent.parent
-    targets = [Path(a) for a in argv] or sorted((root / "ops").glob("*.ps1"))
+    # ⚠️ 2026-09-29 修：本脚本从 `tools/` 搬到 `tools/oneoff/` 后，根算错了一格
+    #    （`parent.parent` = `tools/` ⇒ 两个 glob 全空 ⇒ 永远打印 "no .ps1 found" ✗ —— 而且**两次都这样**、
+    #    很容易被当成"没有 .ps1 要补"而放过）⇒ 用 `parents[2]`（`tools/oneoff/X.py` → 仓根 ✓）。
+    root = Path(__file__).resolve().parents[2]
+    # ⚠️ 默认范围：`ops/*.ps1` **＋** `tools/**/*.ps1`（2026-09-29 扩 —— 原先只扫 ops ⇒ tools 下的 .ps1 没人管 ✗）
+    targets = [Path(a) for a in argv] or (
+        sorted((root / "ops").glob("*.ps1")) + sorted((root / "tools").rglob("*.ps1"))
+    )
     if not targets:
         print("no .ps1 found")
         return 0

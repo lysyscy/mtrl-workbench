@@ -63,7 +63,8 @@
 | `nssm_install.ps1` | **幂等**把后端注册成 NSSM 服务（服务名 `mtrl-workbench-server` · 单 worker · `0.0.0.0:8000` · 开机自启 · 崩溃自重启 · 日志分流 `../logs/server.out.log` / `server.err.log` 带 10 MB 轮转 · 依赖 `postgresql-x64-16`）。**先停并删除同名计划任务**（⛔ 不允许两个实例抢 8000） | ⚠️ **必须管理员** PowerShell；需要 `nssm.exe`（放 `ops/nssm/`，**已 gitignore**；获取渠道见脚本提示）。⭐ **换机 / 改启动参数（host、port、worker 数）/ 改 venv 路径 ⇒ 必复做** |
 | `nssm_uninstall.ps1` | 撤销服务注册（⛔ 不动数据、不动 `backend/`、不动 `.env`）；`-RestoreScheduledTask` 可恢复迁移前的计划任务形态 | 同上 |
 | `server_ctl.ps1` | 日常遥控：`status` / `start` / `stop` / `restart` / `log` / `port` / `pg`；⭐ `port` 那条会打印占用 8000 的**进程命令行与启动时间**（诊断"是不是旧进程"） | 普通窗口即可（`start`/`stop`/`restart` 需管理员）。⛔ **改完 Python 必须 `restart`**（无 `--reload`） |
-| `_ps_bom.py`（在 `tools/`） | 给 `.ps1` 补 **UTF-8 BOM** | ⚠️ **PS 5.1 按 GBK 读无 BOM 的 .ps1** ⇒ 中文字节会**吞掉紧跟的 ASCII 引号** ⇒ 满屏 `ParserError`（文件本身没错）。**每次改完 ops 下的 .ps1 就跑一次** |
+| `_ps_bom.py`（⚠️ 在 **`tools/oneoff/`** —— 2026-09-29 订正：原写"在 `tools/`"**已过期**，照它找会**找不到文件** ✗） | 给 `.ps1` 补 **UTF-8 BOM** | ⚠️ **PS 5.1 按 GBK 读无 BOM 的 .ps1** ⇒ 中文字节会**吞掉紧跟的 ASCII 引号** ⇒ 满屏 `ParserError`（文件本身没错）。**每次改完 ops 下的 .ps1 就跑一次** |
+| `_ps_parse_check.ps1`（在 **`tools/oneoff/`** · ⭐ 2026-09-29 立） | ⭐ **`ops/*.ps1` 的语法闸**：用 PS 自己的 parser 逐份解析 ⇒ 不通过就 `rc=1` | ⚠️ 仓里**此前没有任何 PS 尺子**（Python 有 `syntax_audit.py`、前端有 `node --check` 那一路，PowerShell 没有）⇒ 改完只能等**真跑那一刻**才炸 —— 而那通常正是"要去办公室产包"的时候 ✗。⚠️ 它**只管语法**，语义/参数靠 `-DryRun` 真跑 |
 
 ⭐ **Playwright 浏览器路径（`C:\ProgramData\ms-playwright`）—— 2026-09-21 实测补的，⛔ 别删**：
 
@@ -93,6 +94,72 @@
 「新增实测结论 ⇒ ① 文件自身写清（性质 / 方法 / 脚本 / 日期 / 本机）② **在本表加一行**」——
 把"内容"塞进"索引"是**职责混杂**（将来要复核 hooks 结论时，不知道"该改哪儿"、也不知道"这条还成立吗"）
 ⇒ 已拆成独立件，并在 §一 表加一行。
+
+## 一之四、**产包**（`ops/pack.ps1`）的固定预案（⭐ 2026-09-29 立 · 用户原话：「**你是否对产包有固定的预案？**」）
+
+> **一句话**：产包 = **一键脚本 ＋ 四道闸**（产前两件 / 一键步骤 / 产后两件）—— ⛔ 不靠"我记得"。
+> 口径：包 = **「可继续开发的可运行系统」**（`M8` · `TAIL-188`）· ⭐ **重产时点 = 去办公室的前一天**（用户 2026-09-29 裁定）。
+
+### ① 产前两件（**脚本自己会挡**，⛔ 不靠人记得）
+
+| 闸 | 挡在哪 | 不满足会怎样 |
+|---|---|---|
+| **工作区干净** | `1) 仓` 之前：`git status --porcelain` 有条数 ⇒ `exit 1` | 包里**缺这批改动**（`git bundle` 只打**提交**）⇒ 目标机拿到旧代码，且**静默** ✗ |
+| **闸门全绿** | `0a`：跑 `tools/oneoff/_run_rulers.py` ⇒ `rc≠0` ⇒ `exit 1` | 产出一个**跑不起来 / 说不清**的包 |
+
+### ② 产前第三件：**证据新鲜**（`0b`，可 `-SkipEvidence` 跳）
+
+全套 `pytest` ＋ ⭐ **显式** `ACC_RESULTS_PATH=artifacts/acc_results.json` ⇒ 包里那份四态档才是**刚跑出来的**
+（⚠️ 不给这个变量时插件**只写局部档**、权威档不刷新 ⇒ 带出去的是**上一轮证据** —— 本文件 §一 开头记过
+"拿旧证据当真、白追四步"）。⚠️ `artifacts/` 是 **gitignore** 的 ⇒ 刷新它**不会**弄脏工作区 ✓。
+
+### ③ 一键步骤
+
+```powershell
+# （只要改过 ops 下的 .ps1 ⇒ 先补 BOM ＋ 过语法闸：PS 5.1 按 GBK 读无 BOM 的 .ps1，中文会吞掉紧跟的 ASCII 引号 ⇒ 满屏 ParserError）
+backend\.venv\Scripts\python.exe tools\oneoff\_ps_bom.py            # ⚠️ 在 tools\oneoff\（⛔ 不是 tools\ —— 照旧写法会"找不到文件"）
+powershell -ExecutionPolicy Bypass -File tools\oneoff\_ps_parse_check.ps1
+powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -DryRun                       # 先干跑看一眼会打什么
+powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -Out D:\deliver\mtrl-<日期>
+```
+
+### ④ 产后两件（脚本会写，**人只需核一眼**）
+
+- `SHA256SUMS.txt`（覆盖包内**全部文件** ⇒ 目标机脚本先校它）＋ ⭐ **敏感件自检**（`.env` / cookie / password / secret 必须 **0 命中**，守 `TAIL-88`）；
+- ⭐ **`MANIFEST.txt`**（2026-09-29 补 —— 原先脚本标题里一直写着 MANIFEST、其实**没有一行代码写它** ✗）：
+  HEAD / 时间 / 件清单 / **壳基线在不在** / ⛔ 排除项 ⇒ "这个包里有什么、缺什么"**落纸**。
+
+### ⑤ 已知坑（都真踩过，⛔ 别重踩）
+
+| 坑 | 症状 | 处置 |
+|---|---|---|
+| **中文交给 PowerShell 原语** | `-Filter '*_壳单文件基线.html'` **命中 0**（而 `backups/` 里明明有）⇒ 包里缺壳基线 | 已改 `Where-Object -like` ✓；⭐ **口径：中文路径 / 中文通配一律走 `.NET`／`-like`／Python**，⛔ 不用 `-Filter`、⛔ 不用 `Get-FileHash` 猜（本文件另记过两次同源事故） |
+| 库口令 | 包内 `db\init_db.sql` 是**模板**（真口令不进包 ✓） | 目标机现改，并与**仓根 `.env`** 两处一致 |
+| 壳基线缺失的后果 | 目标机第一次 `shell_verify` 判红「要你建基线」 | **不是坏了** ⇒ 在那里 `--snapshot` 一次；`MANIFEST.txt` 里已写明它缺没缺 |
+| BOM | 改完 `.ps1` 没补 BOM ⇒ PS 5.1 满屏 `ParserError`（文件本身没错） | 见 ③ 第一条命令 |
+
+### ⑥ 何时**必须**重产
+
+① **去办公室前一天**（用户定）· ② 任何"包里该带的"变了（脚本 / 依赖 / 库结构 / 模板 / 判据台账）·
+③ ⛔ **旧包别当最新版带走** —— 拿 `MANIFEST.txt` 里的 `HEAD` 与本机 `git log -1` 一对就知道它过期没有。
+
+## 一之五、**配置主人表**（改了哪一项 ⇒ 在哪生效 ⇒ 要不要重启 · ⭐ 2026-09-29 立 · `TAIL-192`-②）
+
+> **为什么有这一段**：同一个配置项**两处存** —— 页面「设置」写**库**、文件里是 `.env` ⇒ 最常见的误解是
+> 「我改了 `.env` 怎么不生效」。⚠️ **取值链 = 库（页面所设）→ `.env`**，唯一出口 = `app_settings.effective()`
+> （定义见 `backend/app/core/app_settings.py` 文件头）⇒ ⛔ 别在别处另定一套"谁是主人"，本表只**指路**。
+
+| 想改什么 | 从哪儿改（推荐） | 存到哪 | 要重启后端吗 |
+|---|---|---|---|
+| **i8 服务地址** ＋ **两个打印版式 ID** | **页面**：`i8 接入层`（i8 地址）· 付款通知书页「打印机设置」弹窗（两个版式 ID） | 写**库** | ⛔ **不用**（保存即清缓存） |
+| **打印机三项** `PRINTER_IPP_URL` / `PRINT_MODE` / `PRINTER_NAME` | **页面**：付款通知书页「打印机设置」弹窗 | 写**仓根 `.env`**（⚠️ 页面有入口，但**不存库**） | ⛔ **不用**（写完 `cache_clear()`） |
+| **其余全部**（库口令 `DATABASE_URL` / `TEST_DATABASE_URL` · `ALLOWED_IP_CIDRS` · i8 账号 `I8_USER`/`I8_PASSWORD` · `SESSION_SECRET` · `ARTIFACTS_DIR`/`LOGS_DIR` …） | **仓根 `.env`**（键名见 **仓根 `.env.example`**） | 只在启动时读一次 | ✅ **要**：`ops\server_ctl.ps1 -Action restart` |
+
+⭐ **一句话记法**：**有页面入口的那几项 ⇒ 改完不用重启；只在 `.env` 里手改的 ⇒ 必须重启**（后端**没有** `--reload`）。
+
+⚠️ **第二句更要紧**：i8 地址与两个版式 ID 是「**库优先、`.env` 兜底**」⇒ **页面上设过之后，再改 `.env` 那几行就不生效了**
+（页面显示的是**生效值** —— 要核对就看页面那一格，⛔ 别去看 `.env` 原文）。
+⚠️ 两个打印版式 ID **与直觉相反**（材料类走「其他支出」版式）—— 以 `backend/app/core/app_settings.py` 的 `SPECS` 提示语为准。
 
 ## 二、引用这些结论时的三条纪律
 
