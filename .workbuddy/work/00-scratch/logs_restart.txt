@@ -1,2 +1,0 @@
-﻿state=Running
-listen=1

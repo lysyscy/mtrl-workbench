@@ -1,6 +1,0 @@
-LastTaskResult = 0
-PROBE_OK
-sys.executable=D:\工作\AI\材料工作台\backend\.venv\Scripts\python.exe
-cwd=D:\工作\AI\材料工作台
-user=W11-20250421859$
-USERPROFILE=C:\WINDOWS\system32\config\systemprofile
