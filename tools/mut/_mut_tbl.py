@@ -7,7 +7,7 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-三十三靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M33` 打
+三十四靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M34` 打
 `shell/actions.js`、`M22`/`M23` 打 `shell/core.js`、`M24`~`M30` 打 `shell/legacy.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
@@ -65,7 +65,8 @@ TARGETS: tuple[str, ...] = ("tests/test_acc_usr_mgmt.py",   #: `m15`（P1b）那
                             "tests/test_acc_home_todo.py",  #: ⭐ `home`（P3）状态一览表
                             "tests/test_acc_jc_shell.py",   #: ⭐ `m11`（P3 余量）集采台账表
                             "tests/test_acc_x_exp.py",      #: ⭐ A′（modal）导出清单表
-                            "tests/test_ux_pages.py")       #: ⭐ A′（`core.js`）人工指认清单表
+                            "tests/test_ux_pages.py",       #: ⭐ A′（`core.js`）人工指认清单表
+                            "tests/test_wired_m03_pay.py")  #: ⭐ A′（modal）批量付款表
 PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
 
 def _b(s: str) -> bytes:
@@ -169,6 +170,9 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      "没走统一出口"),
     (ACTIONS, "M33 去掉委托（`modal:jcPay` 付款子表 不再走 `TBL`）",
      _b("TBL({cls:'cond',key:'modal:jcPay',"), _b("TBLBROKEN({cls:'cond',key:'modal:jcPay',"),
+     "没走统一出口"),
+    (ACTIONS, "M34 去掉委托（`modal:batchPay` 批量付款表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:batchPay',"), _b("TBLBROKEN({cls:'cond',key:'modal:batchPay',"),
      "没走统一出口"),
 ]
 

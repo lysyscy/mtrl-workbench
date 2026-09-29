@@ -98,6 +98,11 @@ def test_壳里存在不可付行则确认付款禁用并给原因与解决路�
     assert "ntPayBlock(n)" in reg, "原因没走唯一出口 `ntPayBlock`（另写一套文案 ⇒ 必然漂）"
     assert "把它移出本次付款" in reg, "没给解决路径（只说不行、不说怎么办）"
     assert "已填的方式与金额不会丢" in reg, "没讲清「移出不丢已填值」（用户不敢移）"
+    # ⭐ 2026-09-29（`TAIL-64` A′）：这张表的**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt cond" …>`）。
+    #   ⚠️ 它在这条判据里是**第二例**「委托 ＋ 内核」——同一条判据守着同一段切片的两处委托（`ntPayBlock` 与 `TBL`）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M34 去掉这处委托 ⇒ 必须红。
+    assert "TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD," in reg, \
+        "批量付款那张表没走统一出口 `TBL`（`TAIL-64` A′）"
 
 
 @acc("ACC-PAY-BATCH-001", "001-02")
