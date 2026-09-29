@@ -49,7 +49,7 @@ def _slice(name: str, limit: int = 18000) -> str:
 # 原先在 `tests/test_page_m05.py` 里借**旧服务端页**观测（该文件已改守数据出口 ✓）。
 
 
-@acc()
+@acc("ACC-FLOW-LED-001", "001-05")
 def test_台账两侧共用同一个项目选择器且无切换口径():
     """§4.5.4：台账两侧**共用同一个**项目选择器（切一次两边都换）；⛔ 没有「切换口径」按钮。"""
     assert "const ledPjPanel=()=>projPanel({list:ledProjs,selected:()=>[ledCur()],pickAct:'ledPjPick'" in SHELL, \
@@ -57,7 +57,7 @@ def test_台账两侧共用同一个项目选择器且无切换口径():
     assert "切换口径" not in _slice("m05"), "壳里出现了「切换口径」按钮"
 
 
-@acc()
+@acc("ACC-FLOW-LIST-001", "001-04")
 def test_撤销入口只在生效行且必须填原因():
     """§4.4.5：撤销按钮**只在生效行**出（已撤销那行给「—」）；撤销**必须填原因**（后端把关）。"""
     s = _slice("m05")
@@ -67,7 +67,7 @@ def test_撤销入口只在生效行且必须填原因():
     assert "撤销原因必填" in SHELL, "没写明撤销必须填原因"
 
 
-@acc()
+@acc("ACC-FLOW-LIST-001", "001-06")
 def test_流水空态跨列由表头派生且不分页():
     """空态行的 `colspan` **由表头派生**（⛔ 不写死）；该表**不做分页**（一次给全）。"""
     s = _slice("m05")
@@ -104,6 +104,14 @@ def test_读写都走统一的出口与外壳():
     # 期初 / 备注目前只有 PRG 表单端点 ⇒ 必须用表单编码发（不是 JSON）
     assert "postForm: async (url, obj) => {" in SHELL
     assert "URLSearchParams(obj || {})" in SHELL
+    # ⭐ 2026-09-29（`TAIL-64` P2④）：本页**两张表的表外壳**也走统一出口 `TBL`（⛔ 别退回裸
+    #   `<table class="dt" data-sort …>`）。⚠️ `m05:ledger-*` 的 key 是**拼出来**的（三栏台账共用一处渲染）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M9（台账去委托）/ M10（流水去委托）⇒ 各自必须红。
+    s = _slice("m05")
+    assert "TBL({head:LED_THEAD,key:'m05:ledger-'+sc," in s, \
+        "逐月欠款台账没走统一出口 `TBL`（`TAIL-64` P2④）"
+    assert "TBL({head:FL_THEAD,key:'m05:flows'," in s, \
+        "付款流水表没走统一出口 `TBL`（`TAIL-64` P2④）"
 
 
 # --------------------------------------------------------------- 反向（不许再出现）
@@ -165,7 +173,7 @@ def test_已接线页的演示数组必须已删():
 #    口径一个字没动，⛔ 表头 `LED_THEAD` 一字未改（它在 `ui_parity` 的 `U5` 登记表里：原型与壳必须逐字一致）。
 
 
-@acc()
+@acc("ACC-FLOW-LED-001", "001-12")
 def test_台账的现状数_截至行与入口名都钉住():
     """守四件（守则 §2.6 §2.7 先给结论 · §4.7 数字口径透明 · §4.4 相似元素不歧义 · §5.9 优先级）。
 
@@ -202,7 +210,7 @@ def test_台账的现状数_截至行与入口名都钉住():
     assert "const d=debts();" not in _slice("m05"), "`V.m05` 里又出现没有读者的 `const d=debts();`"
 
 
-@acc()
+@acc("ACC-FLOW-LED-001", "001-13")
 def test_台账卡头按钮分组与点开有反馈都钉住():
     """`TAIL-142` ＋ `TAIL-144`（用户：①「上面几个按钮的显示和交互优化一下」② 截图报障
     「我要选辅材机械表的项目，要在右上角选离那么远；我要统一导出，点按钮后又要跑到最左边选项目」）。
@@ -296,7 +304,7 @@ def test_台账导出失败必须给人原因不静默():
         "非 2xx 没显式报错（会静默产出空文件）"
 
 
-@acc()
+@acc("ACC-FLOW-LED-001", "001-14")
 def test_总欠款导出与期初删除都不许静默失败():
     """⭐ 2026-09-28（用户走查两条「点了没反应」）—— 两条**同源**缺陷，各钉一条静态断言。
 

@@ -155,10 +155,11 @@ m07 60c67bda  # 原型: <无此行>｜壳:    键仍是**仓库名**（§2.7.4�
 # ⭐⭐ 2026-09-27（TAIL-117 批次 5「长文案与优先级」）：m05 三段（逐月欠款口径 / 付款统计 / 付款流水）
 #   与 m07 一段（大表装配规则）压短、或折进 details ⇒ 共 25 条；m07 那条改成「摘要 ＋ 折叠」后多出 3 行，
 #   后面 2 条老登记（79ab32d7 / 8ef80687）随之作废，同批消号。
+#   ⚠️ 2026-09-29（`TAIL-64` P2④）订正：上面提到的 **m05 那几条**已随「表外壳改走 `TBL`」**换号消号**
+#     （来由见文末那段 `P2④` 的说明）；本注释上方剩下的 **m07 那几条仍在**。⛔ 别按这条注释去数条数。
 
 # ⭐ 2026-09-27 新增登记 11 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
-m08 33eb1000  # 原型:       :`<tr><td colspan="${thCount(INV_THEAD)}" cl｜壳:       :EMPTYROW(thCount(INV_THEAD), '当前筛选条件下没有库存单据
 m09 8446349c  # 原型:       :[`<tr><td colspan="${thCount(AWF_THEAD)}" c｜壳:       :[EMPTYROW(thCount(AWF_THEAD), '<b>'+tmLabel
 m12 ccfa5b35  # 原型:     ${(!vis.length&&!dfNewOn)?`<tr><td colspan="${｜壳:     ${(!vis.length&&!dfNewOn)?EMPTYROW(thCount(DF_
 
@@ -260,19 +261,12 @@ m12 528752ab  # 原型:       <li><b>补正规则分工</b>：材料数据<b>要
 m05 1b0509a4  # 原型: <无此行>｜壳:       <button class="btn" data-act="flReset">重置</b
 m05 5fccd8e0  # 原型: <无此行>｜壳:       <span class="pill" style="margin-left:auto">
 m05 7313c6f4  # 原型: <无此行>｜壳:     </div>
-m05 8c289dec  # 原型: <无此行>｜壳:     <div class="tw"><table class="dt" data-sort da
-m05 0a80f0b1  # 原型: <无此行>｜壳:     ${flList.map(f=>{const n=ntOf(f);
 m05 e3fdaae3  # 原型: <无此行>｜壳:       return `<tr class="${f.voided?'ex':''}"><td 
 m05 ede287d1  # 原型: <无此行>｜壳:       <td title="付款项目全名：${n?esc(n.proj):''}"><div 
 m05 cf3b1caf  # 原型: <无此行>｜壳:       <td class="now">${f.date}</td><td class="num
 m05 a2b07f77  # 原型: <无此行>｜壳:       <td>${enumTag('payMethod',f.method)}</td>
 m05 8ba7f6f8  # 原型: <无此行>｜壳:       <td class="sm mut">${esc(f.remark)||'—'}</td
 m05 fc6a80fe  # 原型: <无此行>｜壳:       <td>${f.voided?enumTag('flowState','已撤销')+' 
-m05 5571be78  # 原型: <无此行>｜壳:       <td class="ctr now">${f.voided?'<span class=
-m05 f471aa2c  # 原型: <无此行>｜壳:     ${flList.length?sumRowOf(FL_THEAD, flOn, {4:[r
-m05 e7de3eeb  # 原型: <无此行>｜壳:         {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：
-m05 0ae21739  # 原型: <无此行>｜壳:       :EMPTYROW(thCount(FL_THEAD), '该筛选条件下没有付款流水',
-m05 54979a40  # 原型: <无此行>｜壳:     </tbody></table></div>
 m05 e2475b83  # 原型: <无此行>｜壳:     <div class="bd"><div class="tip" style="margin
 m05 81bfd50c  # 原型: <无此行>｜壳:   </div>`;
 m05 de3cd6f8  # 原型: <无此行>｜壳: };
@@ -596,8 +590,6 @@ home 1acbce9a  # 原型:   </tbody></table></details>`;｜壳:    ==============
 # ⭐ 2026-09-28 新增登记 126 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
 m05 4e8d1a44  # 原型:         </span></div>｜壳:   /* ⛔ 表头 `LED_THEAD` **一字未动** —— 它在 `ui_parity` 的
-m05 7dbad85f  # 原型:       <div class="tw"><table class="dt" data-sort ｜壳:        ⇒ 一律写明「本项目」（§4.7：同一个数不许两处换说法、不同口径不许并排不说明）。
-m05 03d7895f  # 原型:     ${rows.map((r,i)=>`<tr${r.open?' class="hl"':'｜壳:      —— 本栏显示设计（现状行 / 合计行正名 / 空月压暗 / 按钮带分类名）的来历与逐条理
 m05 0dee332f  # 原型:       <td class="fc">${i+1}${r.open?` <span class=｜壳:         见《开发计划》§15 `TAIL-141`（`P2-b` 注释分级：故事下沉台账，代
 m05 12fad5ad  # 原型:       <td class="now">${r.open?esc(ledCutLabel(r.y｜壳:   const ledHalf=sc=>{ const rows=lp?ledRows(sc,lp)
 m05 afd0ff6b  # 原型:       <td class="num"${sc==='机械'&&!r.open?' title=｜壳:     const mrows=rows.filter(r=>!r.open);          
@@ -605,34 +597,8 @@ m05 5065b480  # 原型:       <td class="num">${M(r.p)}</td>｜壳:     const cu
 m05 b4a0b30b  # 原型:       <td class="num" style="color:var(--${N2(r.s-｜壳:     const mLast=mrows.length?mrows[mrows.length-1]
 m05 a742fcdd  # 原型:       <td>${r.open?`<span class="mut sm">${esc(r.n｜壳:     const add=mLast?N2(mLast.s-mLast.p):null;     
 m05 6ff82700  # 原型:         :`<input class="inp" data-act="ledNote" da｜壳:     const upto=(mLast?mLast.ym:(rows.length?rows[r
-m05 7d80a1ea  # 原型:       <td class="ctr">${r.open?`<button class="btn｜壳:     return `<div>
-m05 bb383d2f  # 原型:     ${rows.length?sumRowOf(LED_THEAD, rows, {｜壳:       <div style="display:flex;align-items:baselin
 m05 33eeeafa  # 原型:         2:[rs=>N2(rs.reduce((a,x)=>a+x.s,0)),v=>'<｜壳:         <b>${sc}欠款台账</b>
 m05 a9e20a94  # 原型:         4:[rs=>N2(rs.reduce((a,x)=>a+x.s-x.p,0)),v｜壳:         ${mLast?`<span class="mut sm" title="最近一月（
-m05 5935cf09  # 原型:         {lead:'<b>合计：</b>',leadSpan:2,leadCls:'ctr｜壳:         <span style="margin-left:auto;display:flex
-m05 ee4bf279  # 原型:       :`<tr><td colspan="${thCount(LED_THEAD)}" cl｜壳:           <button class="btn sm" data-act="addLg" 
-m05 8bbce4e4  # 原型:     </tbody></table></div></div>`; };｜壳:         </span></div>
-m05 6b64ede2  # 原型:   /* —— 付款流水（**实际付款记录**）——｜壳:       ${lgOn&&lgCat===sc?lgStrip():''}
-m05 f827496d  # 原型:      ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 ——｜壳:       <div class="tw"><table class="dt" data-sort 
-m05 2a913f12  # 原型:         ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 ｜壳:     ${rows.map((r,i)=>{ const z=!r.open&&!N2(r.s)&
-m05 5b92cb6e  # 原型:         + 重置 + 命中计数；列表限高内滚（`.tw`，R7①）+ 合计行钉底（R13）。｜壳:       const cell=v=>z?`<span class="mut">${M(v)}</
-m05 df7253cf  # 原型:      口径：合计只算**生效**流水（已撤销不计入 —— 与「已付金额 = 流水汇总」§4.4.｜壳:       return `<tr${r.open?' class="hl"':''}>
-m05 00a8dee0  # 原型:   const flList=flVisible();｜壳:       <td class="fc">${i+1}${r.open?` <span class=
-m05 4fce287a  # 原型:   const flScope=FLs.filter(f=>tmIn(flf.ym,f.date))｜壳:       <td class="now">${r.open?esc(ledCutLabel(r.y
-m05 7dc408df  # 原型:   const flOn=flList.filter(f=>!f.voided);｜壳:       <td class="num"${sc==='机械'&&!r.open?' title=
-m05 04069625  # 原型:   /* —— 付款统计（§4.5「付款」侧）：粒度 = 月 / 周；点项目条 → 联动下方流水 —｜壳:       <td class="num">${cell(r.p)}</td>
-m05 855e1be6  # 原型:   const pd=pstData();｜壳:       <td class="num" style="color:var(--${N2(r.s-
-m05 ce2570c4  # 原型:   /* ⚠️ 标签只在**传了 labels（时间轴）**时才替换 —— 按项目那一列传的是**项｜壳:       <td>${r.open?`<span class="mut sm">${esc(r.n
-m05 ad8a2044  # 原型:      绝不能按"周粒度就 k.slice(5)"去处理（那会把项目名当日期砍掉前 5 个字符）。｜壳:         :`<input class="inp" style="max-width:150p
-m05 1733ef57  # 原型:   const pstBars=(list,click,labels)=>{ const mx=Ma｜壳:       <td class="ctr">${r.open?`<button class="btn
-m05 66b42848  # 原型:     return `<div class="bars">${list.map(([k,v],i)｜壳:     ${rows.length?sumRowOf(LED_THEAD, rows, {
-m05 17cc198a  # 原型:       /* 时间轴（传了 labels）用 labels；**按项目**那一列的值是**仓库名｜壳:         2:[rs=>N2(rs.reduce((a,x)=>a+x.s,0)),v=>'<
-m05 9e0ac305  # 原型:       const lb=labels?labels[i]:pjLabel(k);｜壳:         3:[rs=>N2(rs.reduce((a,x)=>a+x.p,0)),v=>'<
-m05 c9483f83  # 原型:       const attrs=click?` data-act="pstPj" data-pj｜壳:         4:[rs=>N2(rs.reduce((a,x)=>a+x.s-x.p,0)),v
-m05 7acf547c  # 原型:       return `<div class="br"${attrs}><span class=｜壳:         {lead:`截至 ${esc(upto)}<span class="mut sm"
-m05 2f69d36b  # 原型:   return `｜壳:          tip:`这一行是自期初起累计（含第 1 行期初占位行），不是"当月数字相加"；其
-m05 b29bbbb7  # 原型:   <details class="tip"><summary>口径说明 · 7 条 <span c｜壳:       :EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据'
-m05 0891937c  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     </tbody></table></div></div>`; };
 m05 ea370599  # 原型:       <li><b>辅材欠款</b>（§4.5.1）= Σ（辅材<b>统计结算金额</b>）−｜壳:   /* —— 付款流水（**实际付款记录**）——
 m05 8c04c4ad  # 原型:       <li><b>机械欠款</b> = <b>派生的机械费结算金额</b>（= Σ「外租零租｜壳:      ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 ——
 m05 a5b95235  # 原型:       <li><b>集采欠款不在本域算</b>，由集采台账负责（合同级实时、不拆月度）。</l｜壳:         ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 
@@ -702,23 +668,11 @@ m05 187cf3ca  # 原型:       <div class="fi"><label>关键词</label><span styl
 m05 335a3d09  # 原型:       <button class="btn" data-act="flReset">重置</b｜壳:           <div style="display:flex;align-items:cen
 m05 5bb443a9  # 原型:       <span class="pill" style="margin-left:auto">｜壳:             <b class="sm">按项目</b>
 m05 44a6f408  # 原型:     </div>｜壳:             ${tmBtn('pstBucket',{scope:'pstb',val:
-m05 3807556b  # 原型:     <div class="tw"><table class="dt" data-sort da｜壳:             <span class="mut sm">本${pd.g==='周'?'周'
-m05 fed83378  # 原型:     ${flList.map(f=>{const n=ntOf(f);｜壳:           </div>
 m05 6dce9004  # 原型:       return `<tr class="${f.voided?'ex':''}"><td ｜壳:           <div class="mut sm" style="margin-bottom
 m05 eb22ec98  # 原型:       <td class="now">${f.date}</td><td class="num｜壳:         </div>
 m05 fac0ff64  # 原型:       <td>${enumTag('payMethod',f.method)}</td>｜壳:         <div>
 m05 72cbe05d  # 原型:       <td class="sm mut">${esc(f.remark)||'—'}</td｜壳:           <div style="display:flex;align-items:cen
 m05 48aa6d84  # 原型:       <td>${f.voided?enumTag('flowState','已撤销')+' ｜壳:             <b class="sm">按${pd.g}</b>
-m05 fec5f047  # 原型:       <td class="ctr now">${f.voided?'<span class=｜壳:             ${tmBtn('pstAxis',{scope:'psta',val:pd
-m05 787372c7  # 原型:     ${flList.length?sumRowOf(FL_THEAD, flOn, {4:[r｜壳:             <span class="mut sm">窗口合计 <b>${M(pd.to
-m05 d0a6d346  # 原型:         {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：｜壳:           </div>
-m05 51995634  # 原型:       :`<tr><td colspan="${thCount(FL_THEAD)}" cla｜壳:           <div class="mut sm" style="margin-bottom
-m05 057b97f7  # 原型:     </tbody></table></div>｜壳:           ${pstBars(pd.series,false,pd.labels)}
-m05 6cdb2c9e  # 原型:     <div class="bd"><div class="tip" style="margin｜壳:         </div>
-m05 212a74f4  # 原型:   </div>`;｜壳:       </div>`
-m05 ef75ffad  # 原型: };｜壳:       :EMPTYBOX('没有付款数据（取值 = 统计付款金额）', '换个时间范围或粒度（
-m05 346ceb92  # 原型: /* ===============================================｜壳:     </div>
-m05 e389af5f  # 原型:    7. MOD-01 项目档案｜壳:   </div>
 
 # ⭐ 2026-09-29 新增登记 35 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
@@ -765,7 +719,6 @@ m05 bbce42d0  # 原型:       ${lgOn&&lgCat===sc?lgStrip():''}｜壳:      ⚠�
 m05 1b73f3b5  # 原型:         3:[rs=>N2(rs.reduce((a,x)=>a+x.p,0)),v=>'<｜壳:         <span class="mut sm" title="只算「卡头所选的那个项目」；
 m05 b0d4cbc6  # 原型:             ${tmBtn('pstAxis',{scope:'psta',val:pd｜壳:     <div class="bd"><div class="tip" style="margin
 m05 76eeeeeb  # 原型:       <td title="付款项目全名：${n?esc(n.proj):''}"><div ｜壳:           ${pd.byPj.length?pstBars(pd.byPj,true):'
-m05 83af41fa  # 原型:    ===============================================｜壳:   <div class="card" style="margin-bottom:0"><h4>付款
 m15 427fd272  # 原型:     <span class="sp"><span class="mut sm">当前登录 <b>｜壳:     <span class="sp"><span class="mut sm">当前登录 <b>
 m15 ecc5e792  # 原型:     <button class="btn" data-act="logout">登出</butt｜壳:     <button class="btn" data-act="logout">登出</butt
 
@@ -885,3 +838,67 @@ m07 8b8767c1  # 原型:     sum:(()=>{ const rs=bigRows(bjMonth(-1)); if(!｜壳
 m07 7bfdb1f4  # 原型:         return sumRowOf(BIG_THEAD, rs, {3:S('hwc')｜壳:         return rs.length?sumRowOf(BIG_THEAD, rs, {
 m07 15a7a78c  # 原型:           9:S('leaseC'),10:S('lease'),11:S('totC')｜壳:           9:S('leaseC'),10:S('lease'),11:S('totC')
 m07 9b4c7148  # 原型:     })}</div>｜壳:     empty:EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY, '
+
+# ⭐ 2026-09-29 新增登记 46 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+# ⚠️ 这 46 条 = `TAIL-64` P2④（`m05` **两张表**走统一出口 `TBL`）之后的结果 —— ⛔ 别当成"功能差异"读：
+#   `m05` 这两侧的 `V.m05` **本来就整体错位**（壳比原型多 31 行：三张柱卡 / 台账标题行 / 卡片分组等**接线与呈现**差异），
+#   表 A（`m05:ledger-*`）在两侧的行号相差 18、表 B（`m05:flows`）相差 31 ⇒ 改这两张表**必然**让这几十对"配对内容"换位。
+#   ⭐ 本次改动本身 = **只把表外壳换成 `TBL`**（渲染出的 HTML 与改前**逐字节相同**，界面上看不出任何变化）；
+#   ⛔ 要看 `m05` 的真实差异，请直接对读两侧 `V.m05` 全文，别读这些行。
+
+m05 a11e5ef5  # 原型:       <div class="tw">${TBL({head:LED_THEAD,key:'m｜壳:        ⇒ 一律写明「本项目」（§4.7：同一个数不许两处换说法、不同口径不许并排不说明）。
+m05 f23c396f  # 原型:     rows:rows.map((r,i)=>`<tr${r.open?' class="hl"｜壳:      —— 本栏显示设计（现状行 / 合计行正名 / 空月压暗 / 按钮带分类名）的来历与逐条理
+m05 56b0cf5d  # 原型:       <td class="ctr">${r.open?`<button class="btn｜壳:     return `<div>
+m05 11afbe19  # 原型:     sum:rows.length?sumRowOf(LED_THEAD, rows, {｜壳:       <div style="display:flex;align-items:baselin
+m05 84801ce3  # 原型:         {lead:'<b>合计：</b>',leadSpan:2,leadCls:'ctr｜壳:         <span style="margin-left:auto;display:flex
+m05 d2516e05  # 原型:     empty:`<tr><td colspan="${thCount(LED_THEAD)}"｜壳:           <button class="btn sm" data-act="addLg" 
+m05 63d41659  # 原型:   /* —— 付款流水（**实际付款记录**）——｜壳:         </span></div>
+m05 ef83ab90  # 原型:      ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 ——｜壳:       ${lgOn&&lgCat===sc?lgStrip():''}
+m05 b1b3415b  # 原型:         ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 ｜壳:       <div class="tw">${TBL({head:LED_THEAD,key:'m
+m05 fe7b1af4  # 原型:         + 重置 + 命中计数；列表限高内滚（`.tw`，R7①）+ 合计行钉底（R13）。｜壳:     rows:rows.map((r,i)=>{ const z=!r.open&&!N2(r.
+m05 04b42341  # 原型:      口径：合计只算**生效**流水（已撤销不计入 —— 与「已付金额 = 流水汇总」§4.4.｜壳:       const cell=v=>z?`<span class="mut">${M(v)}</
+m05 3d3f1979  # 原型:   const flList=flVisible();｜壳:       return `<tr${r.open?' class="hl"':''}>
+m05 e04568f2  # 原型:   const flScope=FLs.filter(f=>tmIn(flf.ym,f.date))｜壳:       <td class="fc">${i+1}${r.open?` <span class=
+m05 2200a992  # 原型:   const flOn=flList.filter(f=>!f.voided);｜壳:       <td class="now">${r.open?esc(ledCutLabel(r.y
+m05 5069c80e  # 原型:   /* —— 付款统计（§4.5「付款」侧）：粒度 = 月 / 周；点项目条 → 联动下方流水 —｜壳:       <td class="num"${sc==='机械'&&!r.open?' title=
+m05 069b5922  # 原型:   const pd=pstData();｜壳:       <td class="num">${cell(r.p)}</td>
+m05 eab4a327  # 原型:   /* ⚠️ 标签只在**传了 labels（时间轴）**时才替换 —— 按项目那一列传的是**项｜壳:       <td class="num" style="color:var(--${N2(r.s-
+m05 f6f81147  # 原型:      绝不能按"周粒度就 k.slice(5)"去处理（那会把项目名当日期砍掉前 5 个字符）。｜壳:       <td>${r.open?`<span class="mut sm">${esc(r.n
+m05 ad67ff72  # 原型:   const pstBars=(list,click,labels)=>{ const mx=Ma｜壳:         :`<input class="inp" style="max-width:150p
+m05 c7c0d3ce  # 原型:     return `<div class="bars">${list.map(([k,v],i)｜壳:       <td class="ctr">${r.open?`<button class="btn
+m05 ed443804  # 原型:       /* 时间轴（传了 labels）用 labels；**按项目**那一列的值是**仓库名｜壳:     sum:rows.length?sumRowOf(LED_THEAD, rows, {
+m05 0aaaf350  # 原型:       const lb=labels?labels[i]:pjLabel(k);｜壳:         2:[rs=>N2(rs.reduce((a,x)=>a+x.s,0)),v=>'<
+m05 c06fc1d0  # 原型:       const attrs=click?` data-act="pstPj" data-pj｜壳:         3:[rs=>N2(rs.reduce((a,x)=>a+x.p,0)),v=>'<
+m05 ea9047a3  # 原型:       return `<div class="br"${attrs}><span class=｜壳:         4:[rs=>N2(rs.reduce((a,x)=>a+x.s-x.p,0)),v
+m05 cb720dee  # 原型:   return `｜壳:         {lead:`截至 ${esc(upto)}<span class="mut sm"
+m05 7fa4e5da  # 原型:   <details class="tip"><summary>口径说明 · 7 条 <span c｜壳:          tip:`这一行是自期初起累计（含第 1 行期初占位行），不是"当月数字相加"；其
+m05 93d6dc9f  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:       empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下
+m05 182eef41  # 原型:     <div class="tw">${TBL({head:FL_THEAD,key:'m05:｜壳:             <span class="mut sm">本${pd.g==='周'?'周'
+m05 0ca86519  # 原型:     rows:flList.map(f=>{const n=ntOf(f);｜壳:           </div>
+m05 a40c2a4d  # 原型:       <td class="ctr now">${f.voided?'<span class=｜壳:             ${tmBtn('pstAxis',{scope:'psta',val:pd
+m05 6466bd6a  # 原型:     sum:flList.length?sumRowOf(FL_THEAD, flOn, {4:｜壳:             <span class="mut sm">窗口合计 <b>${M(pd.to
+m05 ae37fa06  # 原型:         {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：｜壳:           </div>
+m05 a99a394b  # 原型:     empty:`<tr><td colspan="${thCount(FL_THEAD)}" ｜壳:           <div class="mut sm" style="margin-bottom
+m05 f261dbb6  # 原型:     <div class="bd"><div class="tip" style="margin｜壳:           ${pstBars(pd.series,false,pd.labels)}
+m05 c4ba1128  # 原型:   </div>`;｜壳:         </div>
+m05 b0226cd8  # 原型: };｜壳:       </div>`
+m05 dd074bb4  # 原型: /* ===============================================｜壳:       :EMPTYBOX('没有付款数据（取值 = 统计付款金额）', '换个时间范围或粒度（
+m05 14e65a60  # 原型:    7. MOD-01 项目档案｜壳:     </div>
+m05 c4e608a4  # 原型:    ===============================================｜壳:   </div>
+m05 fdbdd50c  # 原型: <无此行>｜壳:   <div class="card" style="margin-bottom:0"><h4>付款
+m05 f93bdc19  # 原型: <无此行>｜壳:     <div class="tw">${TBL({head:FL_THEAD,key:'m05:
+m05 aa1041f4  # 原型: <无此行>｜壳:     rows:flList.map(f=>{const n=ntOf(f);
+m05 4724b90c  # 原型: <无此行>｜壳:       <td class="ctr now">${f.voided?'<span class=
+m05 bc9598d6  # 原型: <无此行>｜壳:     sum:flList.length?sumRowOf(FL_THEAD, flOn, {4:
+m05 2f2eec19  # 原型: <无此行>｜壳:         {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：
+m05 d4e5d7c8  # 原型: <无此行>｜壳:     empty:EMPTYROW(thCount(FL_THEAD), '该筛选条件下没有付款流
+
+# ⭐ 2026-09-29 新增登记 1 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+# ⚠️ 这 1 条 = `TAIL-64` P2⑤（`m08` 库存单据明细表走统一出口 `TBL`）之后的**换号**：
+#   它守的是**壳侧早有的一处有意偏离**（空态行：壳走唯一出口 `EMPTYROW`，原型是内联 `<tr>`），
+#   表外壳抽进 `TBL` 后这一行的**写法变了** ⇒ 指纹换号，而**偏离本身一字未改**。
+#   ⭐ `m08` 两侧切片**本来就逐行对齐**（各 72 行 · 只 14 条登记）⇒ 本次两侧**同量各减 1 行**，
+#   除本条外**没有级联换号**（对照：`m05` 那片因两侧整体错位 ⇒ 换号 46 条）。
+#   ⛔ 要看 `m08` 的真实差异，请直接对读两侧 `V.m08` 全文，别读这些行。
+
+m08 b4d1470c  # 原型:     empty:`<tr><td colspan="${thCount(INV_THEAD)}"｜壳:     empty:EMPTYROW(thCount(INV_THEAD), '当前筛选条件下没有库

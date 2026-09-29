@@ -768,8 +768,8 @@ V.m05=()=>{
           <button class="btn sm" data-act="addLg" data-sc="${sc}" title="在本栏表格上方展开「期初占位行」录入区（不再弹窗）—— 期初占位行 = 台账第 1 行（按其「分类」取）；它的金额已按分类并入上方「${sc}」欠款">＋ 录入${sc}期初</button>
         </span></div>
       ${lgOn&&lgCat===sc?lgStrip():''}
-      <div class="tw"><table class="dt" data-sort data-sort-key="m05:ledger-${sc}"><thead><tr>${LED_THEAD}</tr></thead><tbody>
-    ${rows.map((r,i)=>{ const z=!r.open&&!N2(r.s)&&!N2(r.p)&&!String(r.note||'').trim();   /* 空月（且无备注）⇒ 压暗（§5.9） */
+      <div class="tw">${TBL({head:LED_THEAD,key:'m05:ledger-'+sc,
+    rows:rows.map((r,i)=>{ const z=!r.open&&!N2(r.s)&&!N2(r.p)&&!String(r.note||'').trim();   /* 空月（且无备注）⇒ 压暗（§5.9） */
       const cell=v=>z?`<span class="mut">${M(v)}</span>`:M(v);
       return `<tr${r.open?' class="hl"':''}>
       <td class="fc">${i+1}${r.open?` <span class="tag t-in">期初 · ${esc(r.cat||'')}</span>`:''}</td>
@@ -779,15 +779,14 @@ V.m05=()=>{
       <td class="num" style="color:var(--${N2(r.s-r.p)>0?'dg':'mut'})">${cell(N2(r.s-r.p))}</td>
       <td>${r.open?`<span class="mut sm">${esc(r.note)}</span>`
         :`<input class="inp" style="max-width:150px" data-act="ledNote" data-sc="${sc}" data-proj="${esc(lp)}" data-m="${r.ym}" value="${esc(r.note)}" placeholder="—" title="点这一格就能改：离开它即保存（清空 = 清除这格备注）">`}</td>
-      <td class="ctr">${r.open?`<button class="btn sm dg" data-act="delLg" data-id="${r.id}" title="删除这一行期初占位行（删除前列出影响范围）">删除期初行</button>`:'<span class="mut">—</span>'}</td></tr>`;}).join('')}
-    ${rows.length?sumRowOf(LED_THEAD, rows, {
+      <td class="ctr">${r.open?`<button class="btn sm dg" data-act="delLg" data-id="${r.id}" title="删除这一行期初占位行（删除前列出影响范围）">删除期初行</button>`:'<span class="mut">—</span>'}</td></tr>`;}),
+    sum:rows.length?sumRowOf(LED_THEAD, rows, {
         2:[rs=>N2(rs.reduce((a,x)=>a+x.s,0)),v=>'<b>'+M(v)+'</b>'],
         3:[rs=>N2(rs.reduce((a,x)=>a+x.p,0)),v=>'<b>'+M(v)+'</b>'],
         4:[rs=>N2(rs.reduce((a,x)=>a+x.s-x.p,0)),v=>'<b>'+M(v)+'</b><span class="mut sm"> 当前欠款</span>']},
         {lead:`截至 ${esc(upto)}<span class="mut sm"> · 自期初起累计</span>`,leadSpan:2,leadCls:'ctr',style:'',
-         tip:`这一行是自期初起累计（含第 1 行期初占位行），不是"当月数字相加"；其中「欠款」那格 = 本项目截至 ${upto} 还欠多少，与本栏上方那个数同一个出口`})
-      :EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；期初底数用本栏右上角「＋ 录入${sc}期初」补`)}
-    </tbody></table></div></div>`; };
+         tip:`这一行是自期初起累计（含第 1 行期初占位行），不是"当月数字相加"；其中「欠款」那格 = 本项目截至 ${upto} 还欠多少，与本栏上方那个数同一个出口`}):'',
+      empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；期初底数用本栏右上角「＋ 录入${sc}期初」补`)})}</div></div>`; };
   /* —— 付款流水（**实际付款记录**）——
      ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 —— 默认按「当前核算月」核算**（一个月内流水有限）
         ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 / 关键词（流水号 · 单据编码）
@@ -886,19 +885,18 @@ V.m05=()=>{
       <button class="btn" data-act="flReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${flList.length}</b> 条 ｜ ${tmLabel(flf.ym)} 共 <b>${flScope.length}</b> 条</span>
     </div>
-    <div class="tw"><table class="dt" data-sort data-sort-key="m05:flows"><thead><tr>${FL_THEAD}</tr></thead><tbody>
-    ${flList.map(f=>{const n=ntOf(f);
+    <div class="tw">${TBL({head:FL_THEAD,key:'m05:flows',
+    rows:flList.map(f=>{const n=ntOf(f);
       return `<tr class="${f.voided?'ex':''}"><td class="fc">${f.id}</td><td class="fc">${n?n.code:''}</td>
       <td title="付款项目全名：${n?esc(n.proj):''}"><div style="max-width:260px">${n?dispCell(n.proj,n):'<span class="mut">—</span>'}</div></td>
       <td class="now">${f.date}</td><td class="num">${M(f.amt)}</td>
       <td>${enumTag('payMethod',f.method)}</td>
       <td class="sm mut">${esc(f.remark)||'—'}</td><td class="sm">${esc(f.op)}</td>
       <td>${f.voided?enumTag('flowState','已撤销')+' <span class="mut sm">'+esc(f.reason)+'</span>':enumTag('flowState','生效')}</td>
-      <td class="ctr now">${f.voided?'<span class="mut sm">—</span>':`<button class="btn sm dg" data-act="revDlg" data-fid="${f.id}">撤销</button>`}</td></tr>`}).join('')}
-    ${flList.length?sumRowOf(FL_THEAD, flOn, {4:[rs=>N2(rs.reduce((a,x)=>a+x.amt,0)),v=>'<b>'+M(v)+'</b>']},
-        {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：</b>`,leadSpan:4,leadCls:'ctr',style:''})
-      :EMPTYROW(thCount(FL_THEAD), '该筛选条件下没有付款流水', '换个年月 / 项目 / 状态，或点「重置」')}
-    </tbody></table></div>
+      <td class="ctr now">${f.voided?'<span class="mut sm">—</span>':`<button class="btn sm dg" data-act="revDlg" data-fid="${f.id}">撤销</button>`}</td></tr>`;}),
+    sum:flList.length?sumRowOf(FL_THEAD, flOn, {4:[rs=>N2(rs.reduce((a,x)=>a+x.amt,0)),v=>'<b>'+M(v)+'</b>']},
+        {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：</b>`,leadSpan:4,leadCls:'ctr',style:''}):'',
+    empty:EMPTYROW(thCount(FL_THEAD), '该筛选条件下没有付款流水', '换个年月 / 项目 / 状态，或点「重置」')})}</div>
     <div class="bd"><div class="tip" style="margin:0"><b>默认看「当前核算月」</b>（要看别的月份改左上「付款年月」），一个月内流水有限故<b>不分页</b>。<b>「付款项目」按归属归集</b>（壳全名下的流水拆到具体小微）。<br><b>别和上方台账那一列弄混</b>：本表 = <b>实际付款流水</b>（「已付金额」的来源）；台账的<b>「付款」列 = 统计付款金额</b>（油卡等会把它调小）—— 两者并存是<b>有意</b>的。<br><b>撤销入口就在这里</b>（必须填原因、留痕）：撤销后该通知书的「已付金额」回退、状态重判；<b>批量付款在「付款通知书」页</b>。</div></div>
   </div>`;
 };
@@ -1259,8 +1257,8 @@ V.m08=()=>{
     ${invColOpen!==''?
       `<div class="bd" style="padding:calc(8px * var(--fscale)) calc(10px * var(--fscale));background:var(--sf2);border-radius:6px;margin:0 calc(10px * var(--fscale)) calc(8px * var(--fscale))"><b class="sm">列筛选</b> <span class="mut sm">（Excel 式：点表头 ▾ 选列；条件之间是「与」）</span>${ivColPanel()}</div>`
       :`<div class="bd" style="padding:calc(6px * var(--fscale)) calc(10px * var(--fscale))"><span class="mut sm">点<b>任意表头的 ▾</b> 可按该列筛选（Excel 式）；已设列条件 <b>${ivColN()}</b> 列${ivColN()?'':'，当前无'}</span>${ivColN()?' <button class="btn sm" data-act="ivColClearAll">清除全部列筛选</button>':''}</div>`}
-    <div class="tw"><table class="dt" data-sort data-sort-key="m08:invoices"><thead><tr>${ivThead()}</tr></thead><tbody>
-    ${list.map(iv=>{const a=adjOf(iv);return `<tr class="${a?'hl':''}">
+    <div class="tw">${TBL({head:ivThead(),key:'m08:invoices',
+    rows:list.map(iv=>{const a=adjOf(iv);return `<tr class="${a?'hl':''}">
       <td class="fc">${iv.docNo}</td><td class="fc">${iv.seq}</td>
       <td>${enumTag('ivDir',iv.dir)}</td>
       <td>${esc(iv.mat)}</td><td class="sm mut">${esc(iv.spec)}</td><td class="sm">${esc(iv.unit)}</td>
@@ -1268,10 +1266,9 @@ V.m08=()=>{
       <td class="num">${a?`<span class="ed" style="padding:calc(1px * var(--fscale)) calc(4px * var(--fscale));border-radius:3px">${M(a.newAmt)}</span> <span class="sm" style="color:var(--dg)">${SIG(a.newAmt-iv.amt)}</span>`:'<span class="mut">—</span>'}</td>
       <td class="num">${M(iv.tax)}</td><td class="sm">${esc(iv.biz)}</td><td class="sm">${esc(iv.cp)}</td><td class="now">${iv.dd}</td><td class="now">${iv.ad}</td>
       <td class="sm">${esc(iv.wh)}</td><td class="sm mut">${esc(iv.wbs)}</td><td class="sm mut">${esc(iv.cbs)}</td>
-      <td class="ctr now"><button class="btn sm ${a?'':'pri'}" data-act="adjDlg" data-iv="${iv.id}">${a?'查看/改调整单':'打调整单'}</button></td></tr>`}).join('')}
-    ${list.length?sumRowOf(INV_THEAD,list,invSums,{tip:'只求 数量 / 金额 / 调整后金额 / 价税合计；两个单价列不求和（单位价无求和含义）'})
-      :EMPTYROW(thCount(INV_THEAD), '当前筛选条件下没有库存单据明细'+(invOnlyAdj?'（该项目本月未打调整单）':''), '换个「核算年月 / 项目 / 出入库方向」，或清掉表头的列筛选')}
-    </tbody></table></div>
+      <td class="ctr now"><button class="btn sm ${a?'':'pri'}" data-act="adjDlg" data-iv="${iv.id}">${a?'查看/改调整单':'打调整单'}</button></td></tr>`;}),
+    sum:list.length?sumRowOf(INV_THEAD,list,invSums,{tip:'只求 数量 / 金额 / 调整后金额 / 价税合计；两个单价列不求和（单位价无求和含义）'}):'',
+    empty:EMPTYROW(thCount(INV_THEAD), '当前筛选条件下没有库存单据明细'+(invOnlyAdj?'（该项目本月未打调整单）':''), '换个「核算年月 / 项目 / 出入库方向」，或清掉表头的列筛选')})}</div>
     <div class="sm mut" style="margin-top:calc(6px * var(--fscale))">合计行只求<b>数量 / 金额 / 调整后金额 / 价税合计</b>；两个<b>单价列刻意不求和</b>（单位价求和无业务含义）⇒ 在合计行里留空。</div>
     <div class="bd"><div class="grid2">
       <div class="tip" style="margin:0"><b>调整单口径：</b>打在<b>单据行</b>上（不是按项目/月打总单）· <b>不被 i8 导出覆盖</b> · <b>留痕 + 留备注</b> · 双表展示（原始 / 调整后 + 差异表）。<b>差异的修正只改库存单据</b>——过程资料的材料费<b>引用自本页</b>，随之反映，不独立改。</div>

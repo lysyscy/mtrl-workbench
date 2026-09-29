@@ -93,6 +93,10 @@ def test_合计行由表头派生且单价列不求和():
     新壳：`sumRowOf(INV_THEAD, …)` ⇒ 格数**由表头派生**（结构性保证 ✓）＋ 说明里点明两个单价列不求和。"""
     assert "sumRowOf(INV_THEAD,list,invSums,{tip:'" in SHELL, "合计行不是由表头派生的"
     assert "两个单价列不求和" in SHELL, "「单价列不求和」这条没说清"
+    # ⭐ 2026-09-29（`TAIL-64` P2⑤）：**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt" data-sort …>`）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M11 去掉这处委托 ⇒ 必须红。
+    assert "TBL({head:ivThead(),key:'m08:invoices'," in SHELL, \
+        "库存单据明细表没走统一出口 `TBL`（`TAIL-64` P2⑤）"
 
 
 @acc("ACC-INV-001", "001-08")

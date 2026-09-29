@@ -7,14 +7,16 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-七靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打的是 `shell/proj.js` —— 见下方"哑靶"说明）：
+十一靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打的是 `shell/proj.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
 - `M2` **掏空内核**：把 `TBL` 体内的 `+rows.join('')+` 改成 `+''+` ⇒ "内核没把 rows 拼进 tbody"必须红。
 - ⭐ `M3`/`M4`（2026-09-29 · `TAIL-64` **P2② `m06`**）：`m06` 那**两张表**各自去掉委托
   （差异表 / 主表 表①·表②）⇒ 两条新判据各自必须红。
-- ⭐ `M5`/`M6`/`M7`（2026-09-29 · `TAIL-64` **P2③ `m07`**）：`M5` 提取表去掉委托 · `M6` 大表去掉委托 ·
-  `M7` 把提取表的 `sort:false` 改回 `true`（⇒ "刻意不可排"那条必须红）。
+- ⭐ `M5`/`M6`/`M7`/`M8`（2026-09-29 · `TAIL-64` **P2③ `m07`**）：`M5` 提取表去掉委托 · `M6` 大表去掉委托 ·
+  `M7` 把提取表的 `sort:false` 改回 `true`（⇒ "刻意不可排"那条必须红）· `M8` 两类顺序颠倒。
+- ⭐ `M9`/`M10`（2026-09-29 · `TAIL-64` **P2④ `m05`**）：欠款台账 / 付款流水表各自去掉委托。
+- ⭐ `M11`（2026-09-29 · `TAIL-64` **P2⑤ `m08`**）：库存单据明细表去掉委托。
 
 ⚠️ 判据 = **目标测试件 rc≠0**（不是整支尺子）＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc：别的用例红
 也会让 rc≠0）。
@@ -44,7 +46,9 @@ PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 TARGETS: tuple[str, ...] = ("tests/test_acc_usr_mgmt.py",   #: `m15`（P1b）那两条判据
                             "tests/test_wired_m06.py",      #: ⭐ `m06`（P2②）那两条判据
                             "tests/test_wired_m07.py",      #: ⭐ `m07`（P2③）收发结存 + 提取表
-                            "tests/test_wired_m07_big.py")  #: ⭐ `m07`（P2③）月度会大表
+                            "tests/test_wired_m07_big.py",  #: ⭐ `m07`（P2③）月度会大表
+                            "tests/test_wired_m05.py",      #: ⭐ `m05`（P2④）欠款台账 + 付款流水
+                            "tests/test_wired_m08.py")      #: ⭐ `m08`（P2⑤）库存单据明细
 PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
 
 def _b(s: str) -> bytes:
@@ -75,6 +79,14 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      _b("sort:false,head:EXT_THEAD"), _b("sort:true,head:EXT_THEAD"), "刻意不可排"),
     (SHELL, "M8 提取表两类顺序颠倒（焊材 / 气体 互换）", _b("rows:[extBlock('焊材')+extBlock('气体')]"),
      _b("rows:[extBlock('气体')+extBlock('焊材')]"), "两类的渲染顺序变了"),
+    # ⭐ 2026-09-29（`TAIL-64` P2④ `m05`）：本页两张表各自去掉委托
+    (SHELL, "M9 去掉委托（`m05` 逐月欠款台账 不再走 `TBL`）", _b("TBL({head:LED_THEAD,key:'m05:ledger-'+sc,"),
+     _b("TBLBROKEN({head:LED_THEAD,key:'m05:ledger-'+sc,"), "逐月欠款台账没走统一出口"),
+    (SHELL, "M10 去掉委托（`m05` 付款流水表 不再走 `TBL`）", _b("TBL({head:FL_THEAD,key:'m05:flows',"),
+     _b("TBLBROKEN({head:FL_THEAD,key:'m05:flows',"), "付款流水表没走统一出口"),
+    # ⭐ 2026-09-29（`TAIL-64` P2⑤ `m08`）：库存单据明细表去掉委托
+    (SHELL, "M11 去掉委托（`m08` 库存单据明细表 不再走 `TBL`）", _b("TBL({head:ivThead(),key:'m08:invoices',"),
+     _b("TBLBROKEN({head:ivThead(),key:'m08:invoices',"), "库存单据明细表没走统一出口"),
 ]
 
 
