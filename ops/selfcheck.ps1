@@ -70,10 +70,13 @@ print(s.execute(text("select count(*) from information_schema.tables where table
 '@
     $tmp = Join-Path $env:TEMP 'mtrl_selfcheck_db.py'
     [IO.File]::WriteAllText($tmp, $code, (New-Object Text.UTF8Encoding($false)))
-    # ⚠️ 必须**在 backend 里**跑：`app` 包在那儿（⛔ 从仓根跑 ⇒ ModuleNotFoundError: No module named 'app'）
-    Push-Location (Join-Path $RepoRoot 'backend')
+    # ⚠️⚠️ `app` 包在 backend/ ⇒ 必须让它可导入。⛔ 光 `Push-Location backend` **不够** ——
+    #    python 跑**脚本文件**时 `sys.path[0]` = **脚本所在目录**（这里是 %TEMP%）✗，不是 cwd ✗
+    #    ⇒ 2026-09-29 实测 `ModuleNotFoundError: No module named 'app'` ⇒ 正解 = **显式给 PYTHONPATH**。
+    $oldPp = $env:PYTHONPATH
+    $env:PYTHONPATH = (Join-Path $RepoRoot 'backend')
     $out = (& $py $tmp 2>&1 | Select-Object -Last 1)
-    Pop-Location
+    $env:PYTHONPATH = $oldPp
     if ($LASTEXITCODE -eq 0 -and $out -match '^\d+$' -and [int]$out -ge 10) { Ok ('库连得上 · 当前 schema 表 ' + $out + ' 张') }
     else { Bad ('库自检失败（后端自己的配置连不上或缺表）：' + ($out -join ' ')) }
 }
