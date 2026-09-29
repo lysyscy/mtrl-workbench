@@ -245,8 +245,13 @@ def sync_common_projects(
         # ⚠️ **不截断** —— 截断会把排在第 2 条以后的待办**静默吞掉**（本轮实测踩到）：
         #    这两类列表本身很小（受项目数上界），全给；口径 = 「显式列出、禁静默」。
         sample=(out["plan"]["manual"] + out["plan"]["no_phid"]),
+        # ⭐ `TAIL-190`（2026-09-29 用户真机报障）：`待人工` 里**混着两类、而两类出路不同**
+        #    （多仓库 ⇒ m01 的卡 · 壳下小微 ⇒ 建档向导）⇒ 回执**必须把两类分列**。
+        #    ⚠️ 原先只给一个总数，用户就照着一句"去 m01 的卡"跑去档案页 —— 而卡只收多仓库那类 ⇒ 空卡 ✗。
         message=(f"建档 {counts['create']} 条 · 已在档案 {counts['exists']} 条 · "
-                 f"待人工 {counts['manual']} 条 · 缺 phid {counts['no_phid']} 条"),
+                 f"待人工 {counts['manual']} 条（多仓库 {counts['manual_multi']} · "
+                 f"壳下小微 {counts['manual_shell']}） · "
+                 f"缺 phid {counts['no_phid']} 条"),
     )
 
 

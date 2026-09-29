@@ -207,3 +207,74 @@ def test_手填或已被占用的仓库名都拒():
             AP.pick_row(s, full_name=FULL, warehouse_name=wh)
         assert "候选" in str(e.value) and "i8 名单" in str(e.value), f"{why} 的拒绝理由没说清：{e.value}"
         assert s.added == [], f"{why} 被拒之后居然落了行"
+
+
+# ============================================================ ④ 「待人工」分两类、两条出路（`TAIL-190`）
+
+
+@acc("ACC-PRJ-SYNC-001", "001-12")
+def test_待人工按出路分两类并且各自带kind():
+    """⭐⭐ 2026-09-29（**用户真机报障** · 出处 = `.codebuddy/memory/2026-09-29.md` §㊳）：
+    `manual` 里**混着两类、而两类出路完全不同** ——
+
+      · **多仓库**（`MANUAL_MULTI`）⇒ 出路 = `m01` 的「待人工建档」卡（选定一个仓库就地建行）；
+      · **壳下具体小微**（`MANUAL_SHELL`）⇒ 出路 = **建档向导**（`m03` · `TAIL-39`）⇒ ⛔ **不进那张卡**。
+
+    ⚠️ 报障的形态：回执报「待人工 2 条」、并把出路**一律**写成「去 m01 的『待人工建档』卡」
+    ⇒ 用户按它去了档案页，而那 2 条**全是壳下小微** ⇒ **卡是空的** ✗（实测：报出 2 · 卡画 0）。
+    ⇒ 分类**由后端给**（`kind` 给机器认、`reason` 给人看）＋ 计数**按出路拆开**。
+
+    ⚠️ **能证伪**：把 `kind` 去掉 / 把 `counts_of` 的拆数去掉 / 让壳下小微那条也带上 `warehouses` ⇒ 本件必红。
+    """
+    from app.mod01_projects.archive import MANUAL_MULTI, MANUAL_SHELL, counts_of
+
+    c = counts_of({"create": [], "exists": [], "no_phid": [],
+                   "manual": [{"kind": MANUAL_MULTI, "warehouses": ["甲仓", "乙仓"]},
+                              {"kind": MANUAL_SHELL}, {"kind": MANUAL_SHELL}]})
+    assert c["manual"] == 3, "总体的那个数照旧要给（兼容老壳与日志）"
+    assert c["manual_multi"] == 1 and c["manual_shell"] == 2, \
+        "「待人工」没按出路拆成两个数 ⇒ 回执只能报一个总数、只能指一条路（用户就会去错地方）"
+    # ⚠️ 老记录（没有 kind）⇒ 两个拆数**会少于**总数：这是**预期**（读侧会如实报成"不属本卡"）
+    assert counts_of({"manual": [{}]})["manual_multi"] == 0
+    assert counts_of(None)["manual_shell"] == 0
+
+
+@acc("ACC-PRJ-SYNC-001", "001-12")
+def test_写入侧两类都打kind():
+    """⭐ `kind` 是**机器认**的那个字段（⛔ 别拿中文 `reason` 串判类别 —— 文案一改就静默失效，
+    `recovery.py` 起就是本仓纪律）。
+
+    ⚠️ 钉在**源码**上：`plan_archive` 的三处 `manual.append` 都必须带 `kind`
+    （多仓库 1 处 · 壳下小微 2 处：壳已在档 / 壳刚自动建）。
+    """
+    import inspect as _inspect
+
+    from app.mod01_projects import archive as A
+
+    src = _inspect.getsource(A.plan_archive)
+    assert src.count('"kind": MANUAL_SHELL') == 2, "壳下小微那两处（壳已在档 / 壳刚建）都要打 kind"
+    assert src.count('"kind": MANUAL_MULTI') == 1, "多仓库那处要打 kind"
+
+
+@acc("ACC-PRJ-SYNC-001", "001-12")
+def test_壳下小微那类不进卡但要如实报出去():
+    """⭐⭐ 报障的正面复现：**壳下具体小微**（没有候选仓库）⇒ 不进本卡（这一步是**对的**），
+    但必须**如实报出去**（为什么 ＋ 该去哪）—— 只给一个 `dropped` 计数是不够的（用户只能猜）。
+
+    ⚠️ **能证伪**：把 `dropped_items` 去掉 / 把 `why_text` 换成不指名去处的说法 ⇒ 本件必红。
+    """
+    from app.mod01_projects.archive import MANUAL_SHELL
+
+    shell_item = {"name_full": "甲小微(XMCB2025000009)", "phid": "ph-9", "kind": MANUAL_SHELL,
+                  "reason": "壳已在档，但壳下具体小微（1 个仓库：甲仓）需配「出现在单据名里」的关键词"
+                            " —— 走建档向导人工建"}
+    s = sess([rec(1, items=[shell_item])])
+    assert AP.live_items(s) == [], "壳下小微那类不该出现在「选一个仓库建行」的卡上"
+    d = AP.dropped_items(s)
+    assert len(d) == 1 and d[0]["full_name"] == "甲小微(XMCB2025000009)"
+    assert d[0]["why"] == AP.WHY_SHELL, "丢的理由要机器可认"
+    assert "建档向导" in d[0]["why_text"] and "不属本卡" in d[0]["why_text"], \
+        f"丢掉的理由要说清「该去哪」—— 只说「丢了」＝ 让用户猜（实测就是这么爆的）：{d[0]['why_text']}"
+    lp = AP.live_pending(s)
+    assert lp["dropped"] == 1 and len(lp["dropped_items"]) == 1, \
+        "计数与清单必须**同一处**出（⛔ 别两处各算一遍 —— 那就是下一个「数不一致」）"

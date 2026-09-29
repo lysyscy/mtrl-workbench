@@ -188,10 +188,14 @@ class ArchivePendingOut(BaseModel):
 
     ⚠️ `source` 如实说明来源（⛔ 不装作"刚刚"）：清单来自**最近一次「常用项目列表」同步**；
        `dropped` = 已被解决（人挑过 / 别处建过）而**当场丢掉**的条数。
+    ⭐ `TAIL-190`（2026-09-29 真机报障）：丢掉的那几条**也要看得见** —— `dropped_items` 给出
+       `{full_name, why, why_text, reason}`（**为什么丢 ＋ 该去哪**）。⚠️ 尤其是「壳下具体小微」那类：
+       它**本来就不属本卡**（出路 = 建档向导）⇒ 只报一个 `dropped=2` 会让用户以为卡坏了。
     """
 
     found: bool = False
     items: list[dict] = Field(default_factory=list)
+    dropped_items: list[dict] = Field(default_factory=list)
     source: dict = Field(default_factory=dict)
     dropped: int = 0
 

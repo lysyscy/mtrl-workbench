@@ -191,7 +191,16 @@ def test_回执四类计数且接口不可用不动本地档案():
 
     good_common, good_wh = _Loader(_common()), _Loader(_warehouses())
     out = S.build_plan(load_common=good_common, load_warehouses=good_wh, existing=set(), taken=())
-    assert set(out["counts"]) == {"create", "exists", "manual", "no_phid"}
+    # ⚠️ 2026-09-29（`TAIL-190`）：计数**加了两项** —— `manual_multi` / `manual_shell`（「待人工」按**出路**拆）。
+    #    ⇒ 本断言从「**恰好等于**四类」改成「**四类一个都不许少** ＋ 两个拆数必须在」：
+    #    契约声明的是"四类都要给"，**多给拆数不违反**它；而少了任何一类**才是契约被打穿**。
+    assert {"create", "exists", "manual", "no_phid"} <= set(out["counts"]), "四类计数的任何一类都不许缺席"
+    assert {"manual_multi", "manual_shell"} <= set(out["counts"]), \
+        "「待人工」没按出路拆开 —— 回执就只能报一个总数、只能指一条路（用户会去错地方：`TAIL_190`）"
+    # ⭐ 拆数之和必须**回到**总数（这才叫"拆"，⛔ 不是又一处各算一遍）：
+    #   `plan_archive` 的三处 `manual.append` 都带 `kind` ⇒ 新计划里必然成立。
+    assert out["counts"]["manual_multi"] + out["counts"]["manual_shell"] == out["counts"]["manual"], \
+        "按出路拆的两个数加起来不等于「待人工」总数 —— 有 manual 条目**没打 kind**（分类漏了）"
     assert out["counts"]["create"] == len(out["plan"]["create"])
     assert good_common.calls == 1 and good_wh.calls == 1     # 同一次同步各取一次
 

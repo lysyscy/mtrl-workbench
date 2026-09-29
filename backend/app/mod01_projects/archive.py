@@ -34,6 +34,17 @@ NEW_STATUS = STATUS_ACTIVE
 #: 计划的四类（**都要给，禁静默**）
 PLAN_KEYS: tuple[str, ...] = ("create", "exists", "manual", "no_phid")
 
+#: ⭐⭐ **`manual` 里混着两类，而两类出路完全不同**（2026-09-29 · `TAIL-190` 用户真机报障）
+#: —— `kind` 给机器认、`reason` 给人看（同 `recovery.py` 的纪律：⛔ 别拿中文 `reason` 串判类别）：
+#: · `MANUAL_MULTI`「一个全名挂 **≥2 个仓库**」⇒ 出路 = **`m01` 的「待人工建档」卡**（选定一个仓库就地建行）；
+#: · `MANUAL_SHELL`「**壳下具体小微**」（壳在档、但它名下的仓库还没建行）⇒ 出路 = **建档向导**
+#:   （`m03` · `TAIL-39`：选已有小微 / 新建并配「出现在单据名里」的关键词）—— ⛔ **不进 `m01` 那张卡**。
+#: ⚠️ 为什么要有它：这两类**原先只在同一个 `manual` 里**，回执报一个总数、又把出路一律写成
+#:   「去 m01 的『待人工建档』卡」⇒ 用户按回执去 `m01`，而卡里**只收多仓库那类** ⇒ **卡是空的** ✗
+#:   （2026-09-29 真机实测：报出 2 条、两条都是壳下小微 ⇒ 卡画 0 条，而回执还说"去 m01 的卡"）。
+MANUAL_MULTI = "multi_warehouse"
+MANUAL_SHELL = "shell_small"
+
 
 def warehouses_by_owner(warehouse_rows: list[dict] | None) -> dict[str, list[str]]:
     """仓库名单 → `{项目全名: [仓库名, ...]}`（**去重、保序**；缺任一侧的行跳过）。"""
@@ -113,7 +124,7 @@ def plan_archive(
             #    壳早就在档、而它名下的仓库还没建行（本轮实测：`兰考金不换前置车间项目` 就是这样
             #    被静默吞掉的）⇒ 仍要列出，否则新仓库永远只在报表里、不在档案里。
             if kind == TYPE_SHELL and gap_whs:
-                manual.append({"name_full": name, "phid": phid,
+                manual.append({"name_full": name, "phid": phid, "kind": MANUAL_SHELL,
                                "reason": _shell_reason(gap_whs, already=True)})
             continue
 
@@ -121,13 +132,13 @@ def plan_archive(
             create.append({"name_full": name, "phid": phid,
                            "project_type": TYPE_SHELL, "warehouse_name": None})
             if gap_whs:                                  # 壳下的仓库 = **具体小微** ⇒ 人工
-                manual.append({"name_full": name, "phid": phid,
+                manual.append({"name_full": name, "phid": phid, "kind": MANUAL_SHELL,
                                "reason": _shell_reason(gap_whs, already=False)})
             continue
 
         if len(whs) >= 2:                                # 原口径：列出让用户选
             manual.append({
-                "name_full": name, "phid": phid,
+                "name_full": name, "phid": phid, "kind": MANUAL_MULTI,
                 # ⭐ **结构化候选仓库清单**（`TAIL-45`）：只给一句 `reason` 文案，界面**没法让人"选"**
                 #    —— 选定之后要把那个仓库名**原样**交给建档口（⛔ 不许人手打，§9.4：仓库名是 i8 的）。
                 "warehouses": list(whs),
@@ -156,8 +167,20 @@ def plan_archive(
 
 
 def counts_of(plan: dict | None) -> dict[str, int]:
-    """四类计数（回执用；`plan=None` ⇒ 全 0）。"""
-    return {k: len((plan or {}).get(k) or ()) for k in PLAN_KEYS}
+    """四类计数（回执用；`plan=None` ⇒ 全 0）＋ ⭐ **「待人工」按出路拆成两个数**。
+
+    ⚠️ 为什么要拆（`TAIL-190` · 2026-09-29 真机报障）：`manual` 里的两类**出路不同**
+    （`MANUAL_MULTI` ⇒ `m01` 的卡；`MANUAL_SHELL` ⇒ 建档向导）⇒ 回执**只报一个总数**时，
+    用户没法知道该去哪 —— 实测他就按回执照去了 `m01`，而卡是空的（它只收多仓库那类）。
+    ⭐ 拆数按 **`kind`** 认（⛔ 不看中文 `reason` —— 文案一改就静默失效，同 `recovery.py` 的纪律）。
+    ⚠️ 老记录 / 手工拼的条目可能**没有 `kind`** ⇒ 那两个数会**少于** `manual` —— 这不是 bug：
+    它们走的是"老记录"那条（读侧会如实报出来，见 `archive_pending.dropped_items`）。
+    """
+    out = {k: len((plan or {}).get(k) or ()) for k in PLAN_KEYS}
+    manual = (plan or {}).get("manual") or ()
+    out["manual_multi"] = sum(1 for x in manual if x.get("kind") == MANUAL_MULTI)
+    out["manual_shell"] = sum(1 for x in manual if x.get("kind") == MANUAL_SHELL)
+    return out
 
 
 __all__ = ["NEW_STATUS", "PLAN_KEYS", "warehouses_by_owner", "next_placeholder",

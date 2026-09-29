@@ -34,6 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
+from app.mod01_projects import archive as ARCHIVE      # ⚠️ 只为 `MANUAL_SHELL` 这个字面（唯一主人 = 那边）
 from app.mod01_projects.domain import DEFAULT_SMALL_KEYWORD, classify_name, norm_full_name
 from app.mod01_projects.models import Project
 from app.mod01_projects.repository import all_projects, create_project
@@ -101,6 +102,64 @@ def _snapshot(session: Session) -> tuple[set[str], set[str]]:
     return taken, have_full
 
 
+#: 丢掉的理由（**机器认**；人话在 `_WHY_TEXT` 里 —— ⛔ 别拿中文串判类别，`recovery.py` 的老纪律）
+WHY_SHELL = "shell_small"          # ⭐ 壳下具体小微 ⇒ **本来就不属本卡**（出路 = 建档向导）
+WHY_NO_WH = "no_warehouses"        # 老记录 / 手工拼的（没有结构化仓库清单）⇒ 让人「选」都无从选
+WHY_HAS_ROW = "has_row"            # 该全名已经建过行了
+WHY_NOT_ENOUGH = "not_enough"      # 那条 i8 名单里剩下的候选不足 2 个
+
+_WHY_TEXT = {
+    WHY_SHELL: "它是「壳下具体小微」（壳已在档，但它名下的仓库还没建行）—— 要的是"
+               "「出现在单据名里」的**关键词**，出路是**建档向导**（m03 里遇到该壳时选小微／补词），"
+               "⛔ 不是在这里选仓库 ⇒ **不属本卡**",
+    WHY_NO_WH: "这条没带候选仓库清单（老记录 / 手工拼的）⇒ 本卡让人「选一个」都无从选",
+    WHY_HAS_ROW: "这个全名**已经建过行**了",
+    WHY_NOT_ENOUGH: "那条 i8 名单里剩下的候选**不足 2 个**（下次同步系统自己就建了，不必打扰人）",
+}
+
+
+def _scan_rows(session: Session, raw_items: list[dict]) -> list[dict]:
+    """把同步报出的**每一条**过一遍现算 ⇒ 逐条给出结论：`{keep, why, ...}`。
+
+    ⭐⭐ **只此一处判**：`live_items`（留下的）与 `dropped_items`（丢掉的 ＋ 为什么）**都从这儿切**
+    —— 写两遍判据 = 同一个事实有两个主人（本仓铁律，那种地方必然走形）。
+
+    ⚠️ 为什么还要把"丢掉的"报出来（`TAIL-190` · 2026-09-29 真机报障）：丢是**对的**（清单是线索、
+    档案现在才是真相），但**原先壳上一个字都不说** ⇒ 用户看到的是「回执说有待人工 2 条、
+    卡是空的」✗✗（本仓最贵那类**静默**）。⇒ 现在丢掉也要**有理由、有去处**。
+    """
+    taken, have_full = _snapshot(session)
+    out: list[dict] = []
+    for raw in raw_items:
+        full = str(raw.get("name_full") or "")
+        whs = [str(w) for w in (raw.get("warehouses") or []) if str(w)]
+        if not full:
+            continue                                   # 连全名都没有 ⇒ 无从谈起（不进任何一侧）
+        if not whs:
+            # ⚠️ 按 `kind` 分（⛔ 不看中文 `reason`）：壳下小微那类**本来就不属本卡**
+            why = WHY_SHELL if raw.get("kind") == ARCHIVE.MANUAL_SHELL else WHY_NO_WH
+            out.append({"keep": None, "why": why, "full_name": full,
+                        "reason": str(raw.get("reason") or "")})
+            continue
+        if norm_full_name(full) in have_full:
+            out.append({"keep": None, "why": WHY_HAS_ROW, "full_name": full,
+                        "reason": str(raw.get("reason") or "")})
+            continue
+        left = [w for w in whs if w not in taken]
+        if len(left) < 2:
+            out.append({"keep": None, "why": WHY_NOT_ENOUGH, "full_name": full,
+                        "reason": str(raw.get("reason") or "")})
+            continue
+        out.append({"keep": {
+            "full_name": full,
+            "phid": str(raw.get("phid") or ""),
+            "warehouses": left,          # ⭐ 界面能选的候选 = **i8 名单里那条**、且尚未被占用
+            "stored_warehouses": whs,    # 当时同步报出来的全部（留痕：看得见"少了谁"）
+            "reason": str(raw.get("reason") or ""),
+        }, "why": ""})
+    return out
+
+
 def live_items(session: Session) -> list[dict]:
     """待人工建档清单：最近一次同步报出的那几条，**逐条按当前档案现算**。
 
@@ -114,38 +173,38 @@ def live_items(session: Session) -> list[dict]:
     ⚠️ 全名比较走**归一化出口** `norm_full_name`（`ACC-PRJ-NAME-001` 的唯一出口）；
        与 `sync_service.existing`（原样比较）的差别仅在**尾码 / 空白** —— 归一化更**保守**：
        ⛔ 宁可少列一条，也不重复建行。
+    ⭐ 判据**只此一处**（`_scan_rows`）—— 本函数只是把"留下的"挑出来。
     """
-    taken, have_full = _snapshot(session)
-    out: list[dict] = []
-    for raw in latest_pending(session)["items"]:
-        full = str(raw.get("name_full") or "")
-        whs = [str(w) for w in (raw.get("warehouses") or []) if str(w)]
-        if not full or not whs:
-            continue            # 老记录 / 手工拼的（没有结构化仓库清单）⇒ 让人「选」都无从选
-        if norm_full_name(full) in have_full:
-            continue            # ① 已经建过行
-        left = [w for w in whs if w not in taken]
-        if len(left) < 2:
-            continue            # ② 剩下的不够两条 ⇒ 系统下次同步自己建
-        out.append({
-            "full_name": full,
-            "phid": str(raw.get("phid") or ""),
-            "warehouses": left,          # ⭐ 界面能选的候选 = **i8 名单里那条**、且尚未被占用
-            "stored_warehouses": whs,    # 当时同步报出来的全部（留痕：看得见"少了谁"）
-            "reason": str(raw.get("reason") or ""),
-        })
-    return out
+    return [r["keep"] for r in _scan_rows(session, latest_pending(session)["items"]) if r["keep"]]
+
+
+def dropped_items(session: Session) -> list[dict]:
+    """⭐ **被现算丢掉的那几条 ＋ 为什么**（`TAIL-190`）—— 丢是对的，但**不许静默**：
+
+    `m01` 那张卡要如实说明「这次同步报出 N 条，其中 M 条不属本卡 ＋ 各自去哪」，
+    否则用户看着"回执说有待人工、卡却是空的"，只能猜是不是坏了（2026-09-29 实测报障）。
+    """
+    rows = _scan_rows(session, latest_pending(session)["items"])
+    return [{"full_name": r["full_name"], "why": r["why"], "why_text": _WHY_TEXT[r["why"]],
+             "reason": r.get("reason", "")} for r in rows if not r["keep"]]
 
 
 def live_pending(session: Session) -> dict:
-    """`m01` 那个入口要的全部：**清单 ＋ 它来自哪一次同步**（⛔ 不装作"刚刚"—— 如实标来源）。"""
+    """`m01` 那个入口要的全部：**清单 ＋ 它来自哪一次同步**（⛔ 不装作"刚刚"—— 如实标来源）。
+
+    ⭐ `dropped_items`（＋ `dropped` 计数）＝ 丢掉的那几条**连同理由与去处**（见 `dropped_items`）。
+    """
     src = latest_pending(session)
-    items = live_items(session)
+    rows = _scan_rows(session, src["items"])
+    items = [r["keep"] for r in rows if r["keep"]]
+    dropped = [{"full_name": r["full_name"], "why": r["why"], "why_text": _WHY_TEXT[r["why"]],
+                "reason": r.get("reason", "")} for r in rows if not r["keep"]]
     return {
         "found": src["found"],
         "items": items,
+        "dropped_items": dropped,
         "source": {"target": src["target"], "at": src["at"], "run_record_id": src["run_record_id"]},
-        "dropped": len(src["items"]) - len(items),
+        "dropped": len(dropped),
     }
 
 
@@ -191,4 +250,6 @@ def pick_row(session: Session, *, full_name: str, warehouse_name: str) -> Projec
 
 
 __all__ = ["RECORD_KEY", "TARGET_OF_SYNC", "LOOKBACK", "record_detail",
-           "is_common_project_sync", "latest_pending", "live_items", "live_pending", "pick_row"]
+           "is_common_project_sync", "latest_pending", "live_items", "dropped_items",
+           "live_pending", "pick_row",
+           "WHY_SHELL", "WHY_NO_WH", "WHY_HAS_ROW", "WHY_NOT_ENOUGH"]

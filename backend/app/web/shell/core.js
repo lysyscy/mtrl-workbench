@@ -1,7 +1,8 @@
 /* shell/core.js —— 壳接线层②：**数据出口与各模块接线**
  *
  * 来源：`index.html` 的第 L5096–L5618 ＋ L5688–L6620 行（`P4`② 三刀真拆 · 2026-09-19），分两段原样搬出（中间那段是打印/设置，见 `print-export.js`）。
- * 内容：`CAT_API` / `API`（唯一数据出口）· 字段适配器（`adapt*`）· 各模块取数与写动作外壳（`reload*` / `*Act`）
+ * 内容：`CAT_API` · 字段适配器（`adapt*`）· 各模块取数与写动作外壳（`reload*` / `*Act`）
+ * ⚠️ **`API`（唯一数据出口）不在这里** —— 2026-09-24（`TAIL-48`）已切到 `api.js`；本件与各页只用它、⛔ 不再定义。
  *       · `BIND.*`（渲染后注入）· 按需取数表（`PAGE_LOAD` / `LOADERS` / `LOAD_DEP` / `soft` / `loadPaths`）。
  * ⚠️ `boot();` **不在本件**（它留在 `index.html` 末尾 ⇒ 启动点显式可见、加载顺序可调）。
  * ⛔ 改这里前先看计划 §23：**原型切片 `V.*` 不许搬出 `index.html`**（`ui_parity` 的 `U1` 逐行比它）。
@@ -1118,6 +1119,7 @@ let PEND_SRC = null;    /* 清单来自哪一次抓取（如实告诉用户，�
 let PEND_ERR = '';      /* 这一路取数失败的原因（在页面上如实说明；⛔ 不静默成"本来就没有"） */
 let PEND_DLG = null;    /* 当前打开的指认弹窗锁定哪一条（⛔ 不用下标：清单刷新后下标会错位） */
 let ARCP = [];          /* 待人工建档条目（链路 A ③-b「≥2 个仓库」，含**当前候选仓库**） */
+let ARCP_DROP = [];     /* ⭐ 被现算丢掉的那几条 ＋ 为什么/该去哪（`TAIL-190`：丢是对的，但⛔ 不许静默） */
 let ARCP_SRC = null;    /* 清单来自哪一次同步（如实标来源，⛔ 不装作"刚刚"） */
 let ARCP_ERR = '';      /* 这一路取数失败的原因（页面上如实说明；⛔ 不静默成"没有待办"） */
 let ARCP_DLG = null;    /* 当前弹窗锁定哪一条（⛔ 不用下标：清单刷新后下标会错位） */
@@ -1162,6 +1164,8 @@ function adaptArch(it) {
 async function reloadArchPend() {
   const d = await API.pjArchPend();
   ARCP = (d.items || []).map(adaptArch);
+  /* ⭐ `TAIL-190`：丢掉的那几条（**连同为什么、该去哪**）后端已经算好并给了 ⇒ 壳侧只展示、⛔ 不重算 */
+  ARCP_DROP = d.dropped_items || [];
   ARCP_SRC = d.source || null;
   ARCP_ERR = '';
 }
@@ -1355,7 +1359,11 @@ BIND.m01 = function () {
         A：名单同步报出的"一个全名挂 ≥2 个仓库"选哪一个）⇒ 失败原因**各报各的**。 */
   const aold = document.getElementById('archBox');
   if (aold) aold.remove();
-  if (ARCP.length || ARCP_ERR) {
+  /* ⭐ 2026-09-29（`TAIL-190` · 用户真机报障）：**丢掉的那几条也要画出来**，否则用户看到的是
+     「回执说有待人工 2 条、卡是空的」—— 只能猜是不是坏了（本仓最贵那类**静默**）。
+     ⚠️ 触发条件**不能只看 `ARCP.length`**：本次实测那 2 条**全是「壳下具体小微」**（按设计不属本卡）
+     ⇒ 只按清单长度画的写法会**整张卡都不出现** ✗（那正是他看到的"空"）。 */
+  if (ARCP.length || ARCP_ERR || ARCP_DROP.length) {
     const asrc = ARCP_SRC && ARCP_SRC.target
       ? `清单来自<b>最近一次「常用项目列表」同步</b>：<span class="fc">${esc(ARCP_SRC.target)}</span>`
         + (ARCP_SRC.at ? ` · ${esc(ARCP_SRC.at)}` : '')
@@ -1368,15 +1376,20 @@ BIND.m01 = function () {
     const abox = document.createElement('div');
     abox.id = 'archBox';
     abox.className = 'card';
-    abox.innerHTML = `<h4>待人工建档（链路 A · 多仓库）<span class="sp"><span class="mut sm">共 ${ARCP.length} 条 · ${asrc}</span></span></h4>
+    abox.innerHTML = `<h4>待人工建档（链路 A · 多仓库）<span class="sp"><span class="mut sm">共 ${ARCP.length} 条${ARCP_DROP.length?` · 另有 ${ARCP_DROP.length} 条不属本卡（见下）`:''} · ${asrc}</span></span></h4>
       <div class="bd">
         ${ARCP_ERR ? `<div class="tip dg" style="margin:0 0 calc(8px * var(--fscale))">⚠️ <b>待建档清单没取到</b>：${esc(ARCP_ERR)}
           <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
-        <div class="tip" style="margin:0 0 calc(8px * var(--fscale))"><b>为什么这里要人来定</b>：这个全名在 i8 名单里挂了
+        ${ARCP_DROP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))">⚠️ 这次同步<b>报出</b>的待人工里，
+          有 <b>${ARCP_DROP.length}</b> 条<b>不属这张卡</b>（所以下表里看不到它们）—— 逐条如下，各自说清<b>为什么</b>与<b>该去哪</b>：
+          <ul style="margin:calc(6px * var(--fscale)) 0 0 calc(18px * var(--fscale))">${ARCP_DROP.map(x =>
+            `<li><b>${esc(x.full_name)}</b>：${em(x.why_text || '')}</li>`).join('')}</ul>
+          ⛔ 卡里没有它们<b>不是</b>报错（同族的还有「缺 phid」那条 —— 那类要去 i8 侧加项目）。</div>` : ''}
+        ${ARCP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))"><b>为什么这里要人来定</b>：这个全名在 i8 名单里挂了
           <b>≥2 个仓库</b>，而<b>一条普通项目只挂一个仓库</b>（决策 2）⇒ 系统<b>不猜</b> ——
           请你<b>选定一个</b>，系统按它建行；⚠️ 其余仓库<b>不会</b>再建行。</div>
         <table class="dt cond"><thead><tr><th>项目全名</th><th>待选仓库</th><th>系统为什么不自己定</th><th></th></tr></thead>
-        <tbody>${arows}</tbody></table>
+        <tbody>${arows}</tbody></table>` : ''}
       </div>`;
     host.prepend(abox);
   }

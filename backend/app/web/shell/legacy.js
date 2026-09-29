@@ -290,7 +290,7 @@ ACT.i8SetSave = async () => {
       `m05imp`（历史付款导入）**暂留**，等 `m05` 也挂上通用面再删（`B5c-2`）。 */
 const IMP = {domains: [], domain: '', schema: null, file: null, token: '', cols: [], mapping: {},
             memory: '', preview: null, report: null, step: 0, org: [], wrap: '', cutoff: '',
-            ym: '', pjDisp: {}, cutoffs: {}, hasCut: false, hasYm: false,
+            ym: '', pjDisp: {}, cutoffs: {}, hasCut: false, hasYm: false, hasPj: false,
             /* ⭐ `busy` = **正在落库**（`TAIL-108`）：提交期间把 ④ 置灰 ＋ 挡住重入
                —— 连点两次会发两次请求，而默认批号到**秒** ⇒ 第二次撞批号唯一约束（`IntegrityError` 天书）。 */
             busy: false,
@@ -314,7 +314,7 @@ async function impSetDomain(domain) {
   IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {}; IMP.memory = '';
   IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = '';
   IMP.org = []; IMP.wrap = ''; IMP.cutoff = ''; IMP.ym = ''; IMP.cutoffs = {};
-  pjClose('impPj'); IMP.pjDisp = {}; IMP.hasCut = false; IMP.hasYm = false;
+  pjClose('impPj'); IMP.pjDisp = {}; IMP.hasCut = false; IMP.hasYm = false; IMP.hasPj = false;
   if (!IMP.domain) { IMP.schema = null; return; }
   IMP.schema = await API.impSchema(IMP.domain);
   await impLoadCtx();
@@ -332,7 +332,16 @@ async function impLoadCtx() {
   let d = null;
   try { d = await API.impOptions(IMP.domain); }
   catch (e) { d = null; }                       /* 404 / 网络失败 ⇒ 都算"没有域上下文" */
-  const ctx = (d && d.ok !== false) ? d : {};
+  /* ⚠️ 2026-09-29（用户真机报障后修）：**取不到要说出来** —— 后端那条 `/options` 自己的口径就是
+     「取不到也要让人**看见原因**，⛔ 不静默给空」（`import_kit/api.py` 的 `api_options`）。
+     ⚠️ 原先这里把 `ok:false` 静默当作"这个域没有上下文" ⇒ 后果不是"少一格控件"，
+        而是**项目闸门整条失灵**（`hasPj` 取不到 ⇒ `needPj = false` ⇒ ④ 亮着不可挡 ✗✗）。 */
+  const ok = !!(d && d.ok !== false);
+  const ctx = ok ? d : {};
+  if (!ok) {
+    IMP.msg = (d && d.message) || '取本域的上下文失败（候选项目 / 截止月可能不是最新的）—— 请重试或刷新';
+    IMP.kind = 'wn';
+  }
   /* 候选项目的**两种历史形态**都能收（`m06`/`m11` 现在都给字符串键，`{key,display}` 也认）——
      ⚠️ 这里是**唯一**一处拍平；⛔ **空键一律丢弃**：空键渲染出来就是 `[object Object]`（本次报障的根因），
         而且 `project_id_by_key('')` 必然查不到 ⇒ 早丢早好，⛔ 不靠下游报错来兜。 */
@@ -354,6 +363,16 @@ async function impLoadCtx() {
   IMP.wrap = '';
   /* ⭐ **哪个域要哪些上下文，由域自己说**（键在不在），壳按这个渲染控件 —— 这就是"加一个域不改壳"：
        `projects` ⇒ 项目选择 · `year_month` ⇒ 本批归属年月（`m04`）· `cutoff_ym` ⇒ 截止核算月（`m06`） */
+  /* ⭐⭐ **这个域要不要选项目 —— 由域自己说**（`projects` 键在不在），⛔ **不看"候选列表空不空"**。
+     ⚠️⚠️ 2026-09-29 修（**用户真机报障**：「④ 确认落库**是亮的**、点下去**没反应**；刷新后才是灰的、
+        而且有提示了」）—— 现象就是这条判据自己露的破绽：**两种状态都存在** ⇒ 不是"设计如此"，
+        是状态**没算对**。原判据 `needPj = IMP.org.length > 0 && !IMP.wrap` 把"要不要选项目"
+        **绑在候选列表上** ⇒ **候选为空**（库里还没有项目档案 ⇒ `m06_proc` 的 `options` 回 `projects: []`）
+        时 `needPj = false`：④ 亮着 ＋ 同一条错写法的兜底也放行 ⇒ 请求照发 ⇒ **静默失败** ✗✗。
+     ⭐ 改法：候选有没有**不改变"这个域要不要项目"** —— 空候选是**另一种状态**，只换**提示**
+       （② 那条真出路：同步 i8「常用项目列表」），⛔ 不换"拦不拦"。 ⇒ 一条判据同时管住
+       「档案还没建」与「建了但还没选」两种情形。判据 = `tests/test_imp_shell.py`。 */
+  IMP.hasPj = Object.prototype.hasOwnProperty.call(ctx, 'projects');
   IMP.hasYm = Object.prototype.hasOwnProperty.call(ctx, 'year_month');
   IMP.hasCut = Object.prototype.hasOwnProperty.call(ctx, 'cutoff_ym');
   IMP.ym = IMP.hasYm ? String(ctx.year_month || '') : '';
@@ -410,12 +429,22 @@ V.imp = () => {
      ⚠️ 2026-09-26 所修（用户报障）：更早这里是 `IMP.domain === 'm04_plan' ? 年月 : (项目 ＋ 截止核算月)`
         —— 两处毛病：①「项目」是**自造的原生下拉**；②**截止核算月被画给了所有域**，而集采/付款计划的
         落库根本不读它（`ACT.impCommit` 给的上下文包里它只是空转）⇒ 用户填了**不生效**（死控件）。 */
-  const ctxBar = (IMP.org.length || IMP.hasYm || IMP.hasCut)
+  const ctxBar = (IMP.hasPj || IMP.hasYm || IMP.hasCut)
     ? `<div class="fbar pane">
-      ${IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
+      ${IMP.hasPj ? (IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
         <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
         <button class="btn" data-act="impPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))" title="${IMP.wrap ? esc('仓库名（§2.7.4）：' + IMP.wrap) : ''}"><span>${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
-        ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>` : ''}
+        ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>`
+      /* ⛔ **候选为空 ≠ 这个域不要项目**（2026-09-29 修）：仍要把这一格画出来 —— ① 让人看见
+         "这一步有项目这一环"（⛔ 不静默少一格，否则用户以为不用选）；② 给**真出路**
+         （去 `m02`「i8 接入层」同步 i8「常用项目列表」⇒ 按 phid 幂等建档）；③ 按钮**置灰**，
+         ⛔ 不做成"可点的空面板"（点开是空的 = 假控件）。 */
+      : `<div class="fi pjwrap" style="position:relative">
+        <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
+        <button class="btn" disabled style="min-width:186px" title="库里还没有项目档案 —— 先去「i8 接入层」同步「常用项目列表」">（库里还没有项目档案）</button>
+        <span class="mut sm">⚠️ <b>这个域要先有项目档案</b>：去 <b>「i8 接入层」</b>页同步
+          <b>「常用项目列表」</b>（按 phid 幂等建档；「一个全名挂多个仓库」的进 <b>「项目档案」</b>页的
+          「待人工建档」卡处理）—— 建完<b>回本页刷新</b>，候选就在了。</span></div>`) : ''}
       ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
         <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
       ${IMP.hasCut ? `<div class="fi"><label>截止核算月（＝历史段 / 正式段的分界月）</label>
@@ -427,13 +456,14 @@ V.imp = () => {
       </div>` : '';
   /* ⛔ **该域要选项目、而还没选** ⇒ ④ 置灰（见下面 `prevCard` 里那个按钮）—— 「默认值不诱导」的落点：
      系统不再替用户挑第一个项目（`IMP.wrap` 初值 = 空），但也不能让人**点下去才发现没选**。 */
-  const needPj = IMP.org.length > 0 && !IMP.wrap;
+  const needPj = IMP.hasPj && !IMP.wrap;
   /* **③ 的只读回显**：范围栏在 ①，而 ④ 按钮在 ③ ⇒ 中间隔着两屏 ⇒ 点落库前必须能**复核一眼**
      （守则 §4 防误导：宁可少给信息，也不能让用户不知道自己正要写哪儿）。⛔ 这里**不给控件**（改在 ①）。 */
-  const scopeEcho = (IMP.org.length || IMP.hasYm || IMP.hasCut)
+  const scopeEcho = (IMP.hasPj || IMP.hasYm || IMP.hasCut)
     ? `<div class="tip">本批数据将写入：${
         [
-          IMP.org.length ? `项目 <b>${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '（还没选）')}</b>`
+          IMP.hasPj ? `项目 <b>${esc(IMP.wrap ? impPjLabel(IMP.wrap)
+            : (IMP.org.length ? '（还没选）' : '（库里还没有项目档案 —— 落不了库）'))}</b>`
             + (IMP.wrap ? `<span class="mut sm">（仓库名 ${esc(IMP.wrap)}）</span>` : '') : '',
           IMP.hasYm ? `归属年月 <b>${esc(IMP.ym || bjMonth())}</b>` : '',
           IMP.hasCut ? `截止核算月 <b>${esc(IMP.cutoff || '（留空 ⇒ 取本批最大月）')}</b>`
@@ -681,8 +711,9 @@ V.imp = () => {
       ${pwarn}
       <div style="margin-top:calc(10px * var(--fscale))"><button class="btn pri" data-act="impCommit"${(needPj || IMP.busy) ? ' disabled' : ''} title="${IMP.busy?'正在落库 —— 请勿重复点击':(needPj?'先回第 ① 步选「这批数据进哪个项目」—— 没选就落不了库':'确认落库（这一步才真正写库）')}">${IMP.busy ? '正在落库…' : '④ 确认落库'}</button>
         <button class="btn" data-act="impReset">重来</button>
-        ${needPj ? `<span class="mut sm" style="margin-left:calc(8px * var(--fscale))">⚠️ 先回第 ① 步选「这批数据进哪个项目」
-          —— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）</span>` : ''}</div></div></div>`;
+        ${needPj ? `<span class="mut sm" style="margin-left:calc(8px * var(--fscale))">${IMP.org.length
+          ? '⚠️ 先回第 ① 步选「这批数据进哪个项目」 —— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）'
+          : '⚠️ <b>库里还没有项目档案</b> —— 这批数据无处可写：先去「i8 接入层」页同步「常用项目列表」，回本页刷新后再导'}</span>` : ''}</div></div></div>`;
   }
 
   /* ---- ④ 结果与批次回滚 ----
@@ -800,8 +831,10 @@ ACT.impCommit = async () => {
   /* ⛔ **兜底拦住"没选项目就落库"**（2026-09-26）：按钮已按 `needPj` 置灰，但**程序化调用 / 键盘
      回车**也可能走到这里 —— 而落错项目的代价是**静默**的（`m06` 写历史段、不报错）⇒ 拦在本地并
      说清去哪改（⛔ 别只靠后端那句 `请先选项目` 兜着：那时用户已经点了、还以为自己在导数据）。 */
-  if (IMP.org.length && !IMP.wrap) {
-    IMP.msg = '请先在第 ① 步选「这批数据进哪个项目」—— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）';
+  if (IMP.hasPj && !IMP.wrap) {
+    IMP.msg = IMP.org.length
+      ? '请先在第 ① 步选「这批数据进哪个项目」—— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）'
+      : '库里还没有项目档案 ⇒ 这批数据无处可写：请先去「i8 接入层」页同步「常用项目列表」（按 phid 幂等建档），回本页刷新后再导';
     IMP.kind = 'wn'; render(); return;
   }
   /* ⭐ **上下文包 = 域声明的键一并给**（⛔ 壳里不再按域号挑那几个键 —— 2026-09-26 收口）：

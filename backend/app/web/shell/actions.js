@@ -514,6 +514,8 @@ const ACT={
     m05Act(()=>API.flowRevoke(f.id, rs),
       `已撤销流水 <b>${f.id}</b>（原因：${esc(rs)}）<br>该单据「已付金额」已回退，状态按 §4.4.2 重判`); },
  /* 抓取 i8 —— 一律**按月抓取**（2026-09-13 用户口径：三个入口都抓「所选月份」的数据；
+   ⚠️ 下面两个动作里那个**局部**变量叫 `apiCode`（⛔ 别叫 `API`）—— `API` 是全壳**数据出口**的名字
+      （定义在 `api.js`），同名会把外层接线整个遮蔽掉（本函数里再用 `API.xxx` 就静默失效）。
     收发结存表 / 库存单据明细表打开弹窗时**默认月份 = 本页「核算年月」当前所选**）。
     界面只选「核算年月」；i8 侧的入参是「单据日期起止」（闭区间），由系统自动换算后传入。
     ⚠️ `fetchDlg` 的 **nt 分支文案一字未改**（既有断言钉着它）；wh / iv 两个分支另写。 */
@@ -526,7 +528,7 @@ const ACT={
  fetchIv:()=>{ fetchKind='iv'; fetchM=fIvYm; return ACT.fetchDlg(); },   /* 同上 */
  fetchDlg:()=>{ const k=fetchKind, m=fetchM, from=m+'-01', to=monthEnd(m);
    const NM={nt:'付款通知书',wh:'收发结存表',iv:'库存单据明细表'}[k]||'付款通知书';
-   const API={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
+   const apiCode={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
    const box=`<div class="fbar plate">
         <div class="fi"><label>抓取月份</label>${tmBtn('fetchMonth',{scope:'fetch',val:m,modes:['月']})}</div>
         <div class="fi"><label>换算后传给 i8 的入参（只读）</label><div class="inp" style="background:var(--sf2);color:var(--tx2);border-style:dashed;font-family:var(--fm);white-space:nowrap">单据日期 ${from} ~ ${to}</div></div>
@@ -542,7 +544,7 @@ const ACT={
       <div class="tip" style="margin:0"><b>${m}</b> 目前有 <b>${hit.length}</b> 条：有效 <b>${okN}</b> · 剔除 <b>${exN}</b> · i8 已撤单 <b>${vdN}</b>${unN?` · 其中未审批 <b>${unN}</b>`:''}。<br>抓取会<b>全量刷新源数据</b>，但<b>旁路值不受影响</b>（统计结算/统计付款金额 · 分类 · 集采实际供应商 · 调整单 —— 均不被导入覆盖）。</div>`,
        footer:foot}); }
    return modal({title:`抓取 i8 ${NM}（按月）`,reopen:()=>ACT.fetchDlg(),body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">i8 侧的抓取实现是<b>选择「单据日期」起止时间</b>；这里只需选<b>月份</b>（<b>默认 = 本页「核算年月」当前所选</b>，可改），系统自动换算为<b>当月 1 号 ~ 末日</b>（<b>闭区间</b>），并按<b>项目（phid 筛）</b>抓取（${API} · §9.2）。</div>
+     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">i8 侧的抓取实现是<b>选择「单据日期」起止时间</b>；这里只需选<b>月份</b>（<b>默认 = 本页「核算年月」当前所选</b>，可改），系统自动换算为<b>当月 1 号 ~ 末日</b>（<b>闭区间</b>），并按<b>项目（phid 筛）</b>抓取（${apiCode} · §9.2）。</div>
       ${box}
       <div class="tip" style="margin:0">抓取会<b>全量刷新该月 · 该项目</b>的源数据；<b>手工值与调整单不被覆盖</b>（§9.5 幂等）。<br>要抓别的月份，改上面的月份即可 —— <b>默认就是本页当前所选的那个月</b>。</div>`,
      footer:foot}); },
@@ -553,7 +555,7 @@ const ACT={
    if(k==='iv') return ivFetchBackend(m);
    if(k==='wh') return whFetchBackend(m);   /* ⭐ 收发结存已接后端；`nt` 走 `/api/m03/notices/fetch`（见 fetchNtOk） */
    const NM={nt:'付款通知书',wh:'收发结存表',iv:'库存单据明细表'}[k]||'付款通知书';
-   const API={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
+   const apiCode={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
    closeModal();
    if(k==='nt'){ const hit=NO.filter(n=>n.date>=from&&n.date<=to);
      /* ⭐ 再次导入的合并（§4.2.7 · 方案乙）：**模拟 i8 那边"这一批的单据有改动"** ——
@@ -589,7 +591,7 @@ const ACT={
             + `${gBlocked.length?`；<b>${gBlocked.length}</b> 条<b>有牵涉 · 已硬拦</b>（仍参与统计）：请先<b>撤销付款 / 解绑关联</b>，处理完它才退出统计`  :''}`
             + `<br><span class="mut sm">不做「删除付款通知书」按钮 —— i8 行是源数据、永不删除，排除撤单靠的是「退出统计」（§4.2.7）</span>`:''}`
        + `<br><span class="mut sm">旁路值（分类 / 集采实际供应商 / 调整单）不被覆盖</span>`,7200); }
-   toast(`已按 <b>${m}</b> 抓取 ${NM}（${API}）：入参 = <span class="fc">核算年月 ${m}</span> → 单据日期 ${from} ~ ${to}（闭区间）＋ <b>项目（phid 筛）</b><br>该月源数据已全量刷新；<b>调整单 / 手工值不被覆盖</b>`,5600); },
+   toast(`已按 <b>${m}</b> 抓取 ${NM}（${apiCode}）：入参 = <span class="fc">核算年月 ${m}</span> → 单据日期 ${from} ~ ${to}（闭区间）＋ <b>项目（phid 筛）</b><br>该月源数据已全量刷新；<b>调整单 / 手工值不被覆盖</b>`,5600); },
   /* 批量改分类（重做）：勾选 → 点一次「→ 辅材 / → 机械 / → 集采」即完成，不再走弹窗
      ⭐ 改为「集采」时顺带**自动匹配供应商**（§6.6.3 触发时机）；离开集采时清空待确认标记 */
   /* ⭐ 已接后端：判定与落库全在后端（`POST /api/m03/actions/category`），前端只发勾选集 + 显示回执 */
@@ -1444,7 +1446,18 @@ uiScaleSet:async t=>{
     if(r && r.degraded) return fetchResultModal(`同步结果 · ${isWh?'仓库名单':'常用项目列表'}`,
       `⚠️ <b>i8 侧不可用，未改动本地档案</b>：${esc(r.message||'')}`);
     const ct=(r&&r.counts)||{};
-    const more=(!isWh && ct.manual) ? `<br>⇒ 有 <b>${ct.manual}</b> 条「一个全名挂多个仓库」需人工选定 —— 去 <b>m01</b> 的「待人工建档」卡处理` : '';
+    /* ⭐ 2026-09-29（`TAIL-190` 用户真机报障）：`待人工` 里**混着两类、出路完全不同** ⇒
+       ⛔ 不许只报一个总数、更不许把两类都指向 m01 那张卡 —— 那张卡**只收「挂 ≥2 个仓库」那类**，
+       「壳下具体小微」按设计根本不在卡上 ⇒ 用户照旧文案去了档案页，看到的是**空卡** ✗✗。
+       分类的**唯一出口 = 后端**（`counts.manual_multi` / `counts.manual_shell`，后端按 `kind` 认），
+       壳侧只负责把「去哪」说清（⛔ 不自己判断"有没有 warehouses 键"）。 */
+    const nM=Number((ct.manual_multi)||0), nS=Number((ct.manual_shell)||0);
+    const more=(!isWh && ct.manual)
+      ? `<br>⇒ 待人工 <b>${ct.manual}</b> 条，<b>两类去两个地方</b>：`
+        + (nM?`<br>· <b>${nM}</b> 条「一个全名挂多个仓库」⇒ 去 <b>「项目档案」页</b>的「待人工建档」卡，<b>选定一个仓库</b>就地建行`:'')
+        + (nS?`<br>· <b>${nS}</b> 条「壳下具体小微」⇒ <b>不用去档案页</b>：它要的是<b>关键词</b>，走<b>建档向导</b>（m03 里遇到该壳时选小微／补词）`:'')
+        + ((nM+nS===0)?`<br>· 明细见 <b>「项目档案」页</b>的「待人工建档」卡（老记录没有分类字段时只能看那张卡）`:'')
+      : '';
     fetchResultModal(`同步结果 · ${isWh?'仓库名单':'常用项目列表'}`,
       `✅ <b>已同步</b>：${esc((r&&r.message)||('取到 '+((r&&r.count)||0)+' 条'))}${more}`); },
 

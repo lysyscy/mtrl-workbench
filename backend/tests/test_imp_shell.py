@@ -187,7 +187,7 @@ def test_域上下文一律走通用面_壳里零域号分支():
         "集采域又去调域专属读端点 `/api/m11/list` 了（该走通用面的 `options` 端点）"
     assert "impOptions" in code, "域上下文没走通用面的 `options` 端点 —— 那又从哪来的？"
     # ⭐ 上下文那一栏必须**按域给的键**渲染（⛔ 不许再出现"是 m04 就给年月、否则给项目＋截止月"那种写法）
-    assert "IMP.hasCut" in code and "IMP.hasYm" in code, \
+    assert "IMP.hasCut" in code and "IMP.hasYm" in code and "IMP.hasPj" in code, \
         "控件不是按域声明的键渲染的 —— 那么「截止核算月」又会跑给集采/付款计划（填了不生效）"
 
 
@@ -225,11 +225,40 @@ def test_范围栏画在第一步_且没选项目不许落库():
         "`IMP.wrap` 的初值不是空 —— 不预选这条就落不到实处"
     # 没选 ⇒ ④ 置灰（不能点的要置灰并说明原因 · 守则 §5.5）
     # ⚠️ 2026-09-26（`TAIL-108`）：置灰条件从 `needPj` 变成 `needPj || IMP.busy`
-    #    （落库期间也要禁用 —— 连点两次会撞批号，见本件末尾那条）——**判词不变**："没选项目不许点"。
+    #    （落库期间也要禁用 —— 连点两次会撞批号，见本件末尾那条）——**判词不变**：「没选项目不许点」。
     assert 'data-act="impCommit"${(needPj || IMP.busy) ? ' in code, \
         "「④ 确认落库」没按 `needPj` 置灰 —— 没选项目也能点下去（后端才报错，用户已经白跑一趟）"
-    assert "IMP.org.length && !IMP.wrap" in code, \
-        "`ACT.impCommit` 没有本地兜底拦住「没选项目就落库」（按钮置灰挡不住程序化调用/回车）"
+    # ⭐⭐ 2026-09-29（**用户真机报障** · 本机预演第 3 步第一次走就撞上）：
+    #    「**④ 确认落库是亮的**、点下去**没反应**；**刷新后才是灰的**、而且有提示了」。
+    #    ⚠️ 这句话就把根因指出来了 —— **亮/灰两种状态都存在** ⇒ 不是设计如此，是**状态没算对**：
+    #      原判据 `IMP.org.length && !IMP.wrap` 把「这个域要不要选项目」**绑在了候选列表上**
+    #      ⇒ **候选为空**（库里还没有项目档案 ⇒ `options` 回 `projects: []`；或档案刚同步进来、
+    #      本页上下文还是旧的）时 `needPj = false` ⇒ ④ **亮着** ＋ 兜底（**同一个错写法**）**放行**
+    #      ⇒ 请求照发 ⇒ **静默失败** ✗（刷新后 `impSetDomain → impLoadCtx` 重取 ⇒ 候选有了 ⇒ 才灰 ✓）。
+    #    ⚠️ 而且**不是边缘场景**：**空库 + 首次导初始化数据**正是 `M8` ① 的既定路径
+    #      （全新落地到办公室电脑时，项目档案**本来就是空的**，先同步 i8「常用项目列表」才有）。
+    #    ⇒ 拦不拦**只看域声明** `IMP.hasPj`（⛔ 不再看候选空不空）；**候选为空只换提示**（给真出路）
+    #      ⛔ 不换「拦不拦」。判据 = 本件这四条 ＋ 真机侧 `tools/probe/_shell_legacy.py` 的 ①″/③″。
+    #    ⚠️ **能证伪**：把任一处改回 `IMP.org.length`（`needPj` / 兜底 / 范围栏 / ④ 提示）⇒ 本件必红。
+    assert "const needPj = IMP.hasPj && !IMP.wrap;" in code, \
+        "`needPj` 又绑回候选列表了 —— 候选为空时它变 `false`（④ 亮着、挡不住落库）"
+    assert "if (IMP.hasPj && !IMP.wrap) {" in code, \
+        "`ACT.impCommit` 的兜底又绑回候选列表了 —— 候选为空时它**整条放行**（正是本次报障的形态）"
+    assert "IMP.org.length && !IMP.wrap" not in code, \
+        "又拿候选列表当「要不要选项目」的判据了 —— 候选为空 ⇒ 闸门整条失灵（2026-09-29 报障）"
+    assert "hasOwnProperty.call(ctx, 'projects')" in code and "IMP.hasPj" in code, \
+        "`hasPj` 没从域给的 `projects` 键算出来 —— 那「这个域要不要项目」又从哪知道？"
+    # 候选为空 ⇒ 这一格**照样画**（⛔ 不静默少一格）＋ **置灰**（⛔ 不做可点的空面板）＋ **给真出路**
+    assert "(IMP.hasPj || IMP.hasYm || IMP.hasCut)" in code, \
+        "范围栏的渲染条件没跟上 —— 候选为空时用户看不到「有项目这一环」"
+    assert 'class="btn" disabled style="min-width:186px" title="库里还没有项目档案' in code, \
+        "空候选时那个按钮不是**置灰**的 —— 点开一个空面板 = 假控件（守则 §5.5）"
+    assert "「i8 接入层」" in code, \
+        "候选为空时没给**真出路**（去「i8 接入层」同步 i8「常用项目列表」）—— 只说「没项目」等于把人堵死"
+    assert "库里还没有项目档案" in code, \
+        "候选为空时 ④ 那侧没解释「库里还没有项目档案」—— 用户只会看到按钮灰着、不知道去哪"
+    assert "const ok = !!(d && d.ok !== false);" in code, \
+        "`impLoadCtx` 又把 `ok:false` 静默当成「这个域没有上下文」了 —— 那 `hasPj` 取不到、闸门整条失灵"
 
 
 @acc()
