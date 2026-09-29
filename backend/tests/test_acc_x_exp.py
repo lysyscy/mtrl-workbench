@@ -287,11 +287,19 @@ def test_导出清单弹窗里的表可排序():
         "**刻意不可排**的表（分组表：合计行要 pin 在表尾）会被**误注入**排序入口 ⇒ 那是**有意的设计**，别动。")
 
     # ⭐ 反面：刻意不可排的表 **不许**被"顺手对齐"加上 `data-sort`
+    # ⚠️ 2026-09-29（`TAIL-64` A′）：表外壳走统一出口 `TBL` ⇒ **字面标签查不到了**，改钉**委托时的两件事**：
+    #   ① 交出身份（⚠️ 它是**拼出来**的：`key:'modal:expExt-'+kind` ⇒ 查**不带收尾引号**的那半段）；
+    #   ② **显式** `sort:false`（= 走"只出 `data-sort-key`、不出 `data-sort`"那条分支）。
+    #   ⛔ 别改回钉字面标签（那等于宣布"以后不许抽通用件"）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M36（去掉委托）/ M37（`sort:false` 去掉）都必须红。
     for key in NOT_SORTABLE_BY_DESIGN:
-        m = re.search(r'<table\b[^>]*data-sort-key="' + re.escape(key) + r'[^"]*"[^>]*>', acts)
-        assert m, f"找不到 `{key}` 那张刻意不可排的表 —— 落点变了"
-        assert not re.search(r"\sdata-sort[\s>]", m.group(0)), (
-            f"`{key}` 那张表被加上了 `data-sort` —— ⛔ 它是**刻意不可排**的"
+        needle = "key:'" + key
+        assert needle in acts, (
+            f"找不到 `{key}` 那张刻意不可排的表 —— 落点变了（或它没走统一出口 `TBL`）")
+        i = acts.index(needle)
+        assert "TBL({" in acts[max(0, i - 200): i], f"`{key}` 那张表没走统一出口 `TBL`"
+        assert "sort:false" in acts[i: i + 260], (
+            f"`{key}` 那张表**没显式声明 `sort:false`** —— ⛔ 它是**刻意不可排**的"
             "（分组表：合计行要 pin 在表尾 ⇒ 注入排序入口会坏）")
 
 

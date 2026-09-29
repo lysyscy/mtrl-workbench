@@ -672,7 +672,7 @@ const ACT={
       +`<td>${esc(String(r.result||''))}</td></tr>`).join('');
     modal({title:'删除付款计划行确认',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 将删除 <span class="fc">${ids.length}</span> 行付款计划数据</b>。删除后需重新导入才能恢复。</div>
       ${kvBlock([['删除行数',`<span class="fc">${ids.length} 行</span>`],['影响范围','只影响付款计划表；<b>不影响付款通知书与欠款统计</b>']])}
-      <div class="tw" style="max-height:220px"><table class="dt cond"><thead><tr><th>行号</th><th>年月</th><th>审查结果</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="tw" style="max-height:220px">${TBL({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',rows:[rows]})}</div>
       <div class="mut sm" style="margin-top:calc(6px * var(--fscale))">后端报出 ${impList.length} 行影响 · 涉及表：${esc(String((imp.affected_tables||['plan_row']).join('、')))}</div>`,
       footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="plDelOk">确认删除</button>`}); },
  /* ⭐ 逐行删除：与批量删除**走同一套**（先取后端影响范围 → 确认 → 删） */
@@ -1576,7 +1576,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
        + sumRowOf(head, list, Object.assign({[ms.length+1]:rs=>N2(rs.reduce((a,w)=>a+extTotal(kind,w),0))},
            ...ms.map((m,i)=>({[i+1]:rs=>N2(rs.reduce((a,w)=>a+extMon(kind,w,m),0))}))))
        :EMPTYROW(ms.length+2, '当前筛选条件下没有'+kind+'数据', '换个「项目状态」或月份');
-     return `<div class="tip" style="margin:calc(10px * var(--fscale)) 0 calc(6px * var(--fscale))"><b>${kind}</b> · 项目 × 月份</div><div class="tw"><table class="dt cond" data-sort-key="modal:expExt-${kind}"><thead>${head}</thead><tbody>${body}</tbody></table></div>`; };
+     return `<div class="tip" style="margin:calc(10px * var(--fscale)) 0 calc(6px * var(--fscale))"><b>${kind}</b> · 项目 × 月份</div><div class="tw">${TBL({cls:'cond',key:'modal:expExt-'+kind,sort:false,headRows:true,head,rows:[body]})}</div>`; };
    modal({title:'导出 · 焊材 / 气体提取（按 项目 × 月份）',body:
      `<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">将导出 <b>1 个工作簿</b>（<b>2 个工作表</b>：<b>焊材</b> / <b>气</b>），每表 = <b>项目 | 结余 | 1月…12月 | 合计</b>（按模板填充）。<br>下表是<b>按月核对视图</b>（列 = <b>${ms[0]||'—'} → … → 求和</b>，自「最早有数据的月」起<b>逐月连续</b>），<b>不是</b>成品的列结构。</div>`+blk('焊材')+blk('气体'),
      footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="saveExt">保存到本地</button>`}); },
@@ -1617,12 +1617,11 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
    modal({ title:`选择项目 · 月度会大表的项目（已选 ${BIGDRAFT.length} / 候选 ${bigCands().length}）`,
      reopen:()=>ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}),
      body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">勾选要上表的项目；<b>已选的</b>可用 <b>↑ / ↓</b> 调顺序。点「确定」后 <b>大表 / 导出</b> 两处一律按这个顺序。</div>
-       <div style="max-height:52vh;overflow:auto"><table class="dt cond" data-sort-key="modal:bigPick"><thead><tr><th style="width:34px">选</th><th style="width:40px">序</th><th>项目（候选 = 项目档案里「在建」的项目）</th><th style="width:82px">调顺序</th></tr></thead><tbody>
-       ${bigCands().map(wh=>{ const k=BIGDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
+       <div style="max-height:52vh;overflow:auto">${TBL({cls:'cond',key:'modal:bigPick',sort:false,head:'<th style="width:34px">选</th><th style="width:40px">序</th><th>项目（候选 = 项目档案里「在建」的项目）</th><th style="width:82px">调顺序</th>',
+       rows:bigCands().map(wh=>{ const k=BIGDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
          return `<tr><td class="ctr"><input type="checkbox" data-act="bigSelTog" data-wh="${esc(wh)}"${on?' checked':''}></td>
          <td class="fc">${on?k+1:''}</td><td class="sm">${esc(p?pjDispOr(p,wh):wh)}</td>
-         <td class="ctr now"><button class="btn sm" data-act="bigSelUp" data-wh="${esc(wh)}"${(on&&k>0)?'':' disabled'}>↑</button> <button class="btn sm" data-act="bigSelDown" data-wh="${esc(wh)}"${(on&&k<BIGDRAFT.length-1)?'':' disabled'} title="${(on&&k<BIGDRAFT.length-1)?'把这一行往下挪一位':'只有「选中了某一行」且它不是最后一行时才能下移'}">↓</button></td></tr>`; }).join('')}
-       </tbody></table></div>`,
+         <td class="ctr now"><button class="btn sm" data-act="bigSelUp" data-wh="${esc(wh)}"${(on&&k>0)?'':' disabled'}>↑</button> <button class="btn sm" data-act="bigSelDown" data-wh="${esc(wh)}"${(on&&k<BIGDRAFT.length-1)?'':' disabled'} title="${(on&&k<BIGDRAFT.length-1)?'把这一行往下挪一位':'只有「选中了某一行」且它不是最后一行时才能下移'}">↓</button></td></tr>`; })})}</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="bigSelNone">清空</button><button class="btn pri" data-act="bigPickOk">确定</button>`}); },
  bigSelTog:t=>{ const wh=t.dataset.wh, k=BIGDRAFT.indexOf(wh);
    if(k>=0) BIGDRAFT.splice(k,1); else BIGDRAFT.push(wh);        /* 新勾选的**追加到末尾**（顺序可再调） */

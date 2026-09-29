@@ -620,3 +620,20 @@ def test_壳新增那四页里的清单表也走统一出口_TBL():
         "「问题行」那张表没走统一出口 `TBL`（`TAIL-64` A′）"
     assert "TBL({cls:'sm',rows:tech.map(k =>" in SHELL, \
         "「技术细节」（`<details>` 里那张无表头的表）没走统一出口 `TBL`（`TAIL-64` A′）"
+
+
+@acc()
+def test_弹窗里的选择表与影响行表也走统一出口_TBL():
+    """`TAIL-64` A′ · `shell/actions.js`：两张**当时没有判据守**的表也走统一出口 `TBL`。
+
+    ⚠️ **为什么单开一条守**：这两张表**没有各自的 claim 判据**（一张是「选项目上大表」的选择器、
+       一张是「删除付款计划行确认」里的影响行清单）⇒ 换 `TBL` 时**别的东西感知不到**。
+    ⚠️ 两张都是**刻意不可排**（只出 `data-sort-key`：行序是**用户手工调的** / 影响行清单不需要排序）
+       ⇒ 都必须带 `sort:false`（同 `modal:debtPick`）。
+    ⚠️ 其中「影响行」那张**是壳独有**的（原型里没有「审查结果」这张表 ⇒ 当年随后端影响范围一起加的）。
+    自证 = `tools/mut/_mut_tbl.py` 的 M38（`bigPick` 去委托）/ M39（影响行表去委托）都必须红。
+    """
+    assert "TBL({cls:'cond',key:'modal:bigPick',sort:false,head:'<th style=\"width:34px\">选</th>" in SHELL, \
+        "「选项目上大表」那张选择表没走统一出口 `TBL`，或没声明「刻意不可排」（`sort:false`）—— `TAIL-64` A′"
+    assert "TBL({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',rows:[rows]})" in SHELL, \
+        "「删除付款计划行确认」里那张影响行表没走统一出口 `TBL`（`TAIL-64` A′）"

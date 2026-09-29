@@ -7,7 +7,7 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-三十五靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M35` 打
+三十九靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M39` 打
 `shell/actions.js`、`M22`/`M23` 打 `shell/core.js`、`M24`~`M30` 打 `shell/legacy.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
@@ -178,6 +178,18 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
     (ACTIONS, "M35 去掉委托（「查看关联」流水子表 不再走 `TBL`）",
      _b("TBL({cls:'cond',head:'<th>流水号</th>"), _b("TBLBROKEN({cls:'cond',head:'<th>流水号</th>"),
      "没走统一出口"),
+    # ⭐ 2026-09-29（`TAIL-64` A′ 收尾）：可做的最后三张（做完 ⇒ 只剩 2 张 P5 ＋ 1 张"不适用"）
+    (ACTIONS, "M36 去掉委托（`modal:expExt-*` 分组表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:expExt-'+kind,"),
+     _b("TBLBROKEN({cls:'cond',key:'modal:expExt-'+kind,"), "没走统一出口"),
+    (ACTIONS, "M37 把「刻意不可排」放回可排（`modal:expExt-*` 的 `sort:false` 去掉）",
+     _b("key:'modal:expExt-'+kind,sort:false,"), _b("key:'modal:expExt-'+kind,"), "没显式声明"),
+    (ACTIONS, "M38 去掉委托（`modal:bigPick` 选项目表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:bigPick',"), _b("TBLBROKEN({cls:'cond',key:'modal:bigPick',"),
+     "没走统一出口"),
+    (ACTIONS, "M39 去掉委托（「删除付款计划行确认」影响行表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',"),
+     _b("TBLBROKEN({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',"), "没走统一出口"),
 ]
 
 
