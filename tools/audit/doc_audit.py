@@ -25,6 +25,10 @@
 | `T14` | ⭐ **scratch 超期 / 落点合规** —— `work/00-scratch/` 超 14 天未升档未删 · `tools/` 根与 `logs/` 再现散件 ⇒ 黄（`audit_work.py`） | 文件系统 mtime |
 | `T15` | ⭐ **产物白名单 ＋ 工作记录元信息** —— `artifacts/` 只许工具生成物 md · `work/` 五区文档必须带文头四行（读者/回答什么/何时读/状态）⇒ 黄 | `audit_work.py` 白名单 |
 | `T16` | ⭐ **`T7a` 登记册必须在位** —— 登记册**读不到 / 解析不出条目** ⇒ **红**（治「静默降级成全部未清」） | `cover_gap.CLEARED_REGISTRY` |
+| `T17` | ⭐ **闸门清单里每一把尺子都必须真有入口** —— 在跑却**0 行输出**（僵尸闸门）⇒ 红 | 计划 `§22.1` 的 `foreach` |
+| `T18` | ⭐ **登记在册的路径 / glob 常量必须解析得到真东西** —— 空命中 = 那一片**从没被扫过** ⇒ 红 | `audit_meta.GUARDED` |
+| `T19` | ⭐ **文档指针（节号）守卫** —— 「`X.md` §N」必须真有那一节（`T3` 只管文件在不在）⇒ 红 | `audit_drift` |
+| `T20` | ⭐ **保留期与容量** —— `.workbuddy/backups/` 顶层条目 > 5（口径「留 5 份 · 月度清」）· `.workbuddy/scratch/` 活区规模超线 ⇒ 黄 | `README.md` §三/§四 ＋ `ops/阈值表.md` ＋ `audit_work.py` |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
@@ -76,7 +80,7 @@ from audit_meta import (                                          # noqa: E402
     check_rule_origins, check_tail_ledger,
 )
 from audit_work import (                                          # noqa: E402
-    check_artifacts_and_headers, check_scratch_ttl,
+    check_artifacts_and_headers, check_retention, check_scratch_ttl,
 )
 
 
@@ -212,6 +216,12 @@ def main() -> int:
     #   ⭐ 治「新区变新垃圾场」：五区建好了只是分类学，**过期与元信息要机器盯着**才算闭环。
     raw += check_scratch_ttl()
     raw += check_artifacts_and_headers()
+    # `T20`（2026-09-28 立 · 文档审计）：**保留期与容量** —— `backups/` 顶层条目 > 5（口径「留 5 份」）
+    #   与 `.workbuddy/scratch/` 活区规模超线 ⇒ **黄**。
+    #   ⭐ 起因：`README.md` 写着"留 5 份 · 月度清"，而 2026-09-22 整改设计自己给的验收判据
+    #   "目录计数 ≤5（可数）"**从没被机器守过** ⇒ `TAIL-73` 销号只验了"唯一点"、没验"≤5" ⇒
+    #   **口径在、判据无 ⇒ 静默漂**（43 个条目堆着，含 09-18 的旧快照）。
+    raw += check_retention()
     # `T16`（2026-09-24 立 · `TAIL-20`）：**`T7a` 登记册必须在位** —— 读不到就静默降级成
     #   「全部未清」，而那个方向看着还更安全 ⇒ 必须升成红档才看得见。
     raw += check_cover_registry()

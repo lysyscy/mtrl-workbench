@@ -149,6 +149,21 @@ def set_theme(s: Session, uid: int, theme: str) -> UserAccount:
     return row
 
 
+def set_ui_scale(s: Session, uid: int, scale: str) -> UserAccount:
+    """存**界面大小档位**（`TAIL-129`：与 `theme` 同款 —— **按用户隔离**）。
+
+    ⚠️ 只写这一列、⛔ 不碰别的（同 `set_theme`）：一个动作改一个偏好。
+    ⚠️ 合法性由**调用方**先过 `domain.assert_ui_scale_usable`（本函数只管落库，⛔ 不静默回落）——
+       与 `set_theme` 有意不同：那边的非法名由 `page.render_theme` 兜底，这边必须当场拒绝。
+    """
+    row = s.get(UserAccount, uid)
+    if row is None:
+        raise MustReportError(f"账号不存在：id={uid}")
+    row.ui_scale = (scale or "").strip()
+    s.flush()
+    return row
+
+
 def by_identity(s: Session, who: str) -> UserAccount | None:
     """按「**姓名 或 账号**」找**未删除**的账号 —— **"当前登录用户是哪一个"的唯一判定出口**。
 
@@ -266,6 +281,6 @@ def transfer_admin(s: Session, actor: UserAccount, target: UserAccount) -> tuple
 
 __all__ = [
     "SEED_ACCOUNT", "SEED_NAME", "all_users", "by_account", "create", "ensure_seeded",
-    "by_identity", "get", "restore", "set_password", "set_status", "set_theme",
+    "by_identity", "get", "restore", "set_password", "set_status", "set_theme", "set_ui_scale",
     "soft_delete", "theme_by_account", "touch_login", "transfer_admin",
 ]

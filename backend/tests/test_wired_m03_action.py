@@ -254,3 +254,23 @@ def test_壳里批量付款走真接口且带幂等号():
     assert "reloadNotices()" in reg, "提交成功没重拉列表（已付金额 / 状态刷不出来）"
     # §4.4.4：动作改走后端后，「取消」= **不调接口**（不再有服务端状态要回滚）
     assert "batchPayCancel:" in SHELL, "「取消」按钮的处理器没了"
+
+
+@acc("ACC-PAY-MANUAL-001", "001-12")
+def test_手动行保存挡重入():
+    """守则 §5.5「动作里挡重入」（`TAIL-171`-② · 2026-09-29）：连点两次「保存」= 两次
+    `POST /api/m03/actions/manual-save` ⇒ **同一份补录落两行**；⚠️ 手动行**没有**「单据号唯一约束」
+    这道天然闸（同一笔补两行在业务上是合法状态）⇒ 这一道只能由界面挡（同 `m04` 的 `plSaving`）。
+
+    ⚠️ 闸必须上在**本地校验之后**（校验是早退的：先上闸 ⇒ 校验一失败就把按钮卡死）。
+    ⚠️ 能证伪：把 `if(ntSaving) return;` 摘掉、或把按钮那半的 `disabled` 摘掉 ⇒ 本件必红。
+    """
+    i = SHELL.find("ntRowSave:")
+    assert i >= 0, "找不到 `ntRowSave`"
+    body = SHELL[i:i + 4200]
+    assert "if(ntSaving) return;" in body, "`ntRowSave` 没挡重入（连点会落两行）"
+    assert "ntSaving=true" in body, "闸没合上（`ntSaving=true`）"
+    assert body.count("ntSaving=false") >= 2, "闸没复位（成功 / 失败 / 异常三条路都要解）"
+    # ⚠️ 只设一个没人读的标记 = 假守卫：草稿行的按钮必须**真的**变样
+    assert "${ntSaving?' disabled':''}" in SHELL, "草稿行的「保存」按钮没有跟着禁用"
+    assert "保存中…" in SHELL, "保存中没给状态文案（用户会以为没点上）"

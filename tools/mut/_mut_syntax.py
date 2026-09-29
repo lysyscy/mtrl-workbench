@@ -6,7 +6,7 @@
    本件把两件事一起做：① 把那份休眠自检**叫醒**（`M4`）② 在**活树**上各改坏一处 ——
    内建自检用的是**临时样本**，它证明不了"**真仓里的文件**确实被这把尺子看得见"。
 
-四靶（每处改完**立刻按 bytes 复原** ＋ 收尾 MD5 校验）：
+五靶（每处改完**立刻按 bytes 复原** ＋ 收尾 MD5 校验）：
 - `M1` `Q1`：在 `tools/` 下新建一个**语法错**的 `.py` ⇒ 必须红（用完删掉；⚠️ 名字**故意不带** `_mut_`，
   免得被「变异件清单」当成常驻件统计）。
 - `M2` `Q2`：把壳的**最小一件**（`web/shell/print-export.js`）追加一段过不了 `node --check` 的内容 ⇒ 必须红。
@@ -14,6 +14,9 @@
 - `M3` `Q3`：在 `backend/app/web/shell/` 下放一个 `*.bak-sync` 散件 ⇒ 必须红（用完删掉）。
 - `M4` 内建 `--selftest`（临时样本那三条证明）⇒ 必须 `rc=0`（⚠️ 没有 `node` 时它会自报"无法自证" ⇒ 本件判失败，
   那是**对的** —— ⛔ 别把它当通过）。
+- ⭐ `M5` `Q2` **内联脚本**：把语法错塞进 `index.html` 的**真内联脚本**（第一块）⇒ 必须红。
+  ⚠️ 2026-09-28 补：`_extract_script` 原取 `blocks[-1]`（= 那个 **7 字节空块**）⇒ `Q2` **恒绿**；
+  `M2` 只打外链件、抓不到 ⇒ 这条是那个缺陷的专用眼。
 
 用法：python tools/mut/_mut_syntax.py
 """
@@ -33,6 +36,7 @@ PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 
 Q1_TMP = ROOT / "tools" / "_tmp_q1_broken.py"           #: ⚠️ 用完删；名字不带 `_mut_`
 Q2_TARGET = ROOT / "backend" / "app" / "web" / "shell" / "print-export.js"   #: 壳件里最小的一件
+Q2I_TARGET = ROOT / "backend" / "app" / "web" / "index.html"                  #: 内联脚本那一块（M5）
 Q3_TMP = ROOT / "backend" / "app" / "web" / "shell" / "_tmp_stray.js.bak-sync"
 
 
@@ -60,7 +64,7 @@ def main() -> int:
         return 1
 
     hits = 0
-    total = 4
+    total = 5
 
     # ---- M1 `Q1`：新造一个编译不过的 `.py` ----
     Q1_TMP.write_text('X = f"说"话"\n', encoding="utf-8")
@@ -100,10 +104,27 @@ def main() -> int:
     print(f"  {'✅' if ok else '⛔ 未命中'} M4 内建 `--selftest` ⇒ 三条规则各证明一次"
           f"（rc={rc}，应为 0；⚠️ 无 node 时它会自报『无法自证』⇒ 本件判失败，那是对的）")
 
-    # ---- 复原校验：两个临时件必须**不存在** ----
+    # ---- M5 `Q2`：把语法错塞进 `index.html` 的**真内联脚本**（第一块）----
+    #   ⚠️ 2026-09-28 补：原 `_extract_script` 取 `blocks[-1]`（= `index.html` 里**末尾那个 7 字节空块**）
+    #      ⇒ `Q2` 对着空块 `node --check` ⇒ **恒绿**；当场后果：一段含反引号的注释写进 `V.m05` 的模板字面量
+    #      文本区（截断模板串 ⇒ 白屏），本尺子仍报「✅ 通过」。M2 只打**外链件**，抓不到这条 ⇒ 补本靶。
+    raw = Q2I_TARGET.read_bytes()
+    try:
+        i = raw.index(b"</script>")            # 第一块（真壳代码）的结尾
+        Q2I_TARGET.write_bytes(raw[:i] + b"\nconst _tmp_broken_inline = ;\n" + raw[i:])
+        n, out, _ = run_ruler()
+    finally:
+        Q2I_TARGET.write_bytes(raw)
+    ok = n > 0 and f"{Q2I_TARGET.name} 过不了" in out
+    hits += ok
+    print(f"  {'✅' if ok else '⛔ 未命中'} M5 `Q2` 内联脚本塞语法错 ⇒ 必须修 {n}"
+          f"（应含「{Q2I_TARGET.name} 过不了」—— 这条专打「取错块」那个缺陷）")
+
+    # ---- 复原校验：两个临时件必须**不存在** + 两处壳件逐字节复原 ----
     leftovers = [p for p in (Q1_TMP, Q3_TMP) if p.exists()]
     shell_ok = hashlib.md5(Q2_TARGET.read_bytes()).hexdigest() == \
         hashlib.md5(before).hexdigest()
+    shell_ok = shell_ok and hashlib.md5(Q2I_TARGET.read_bytes()).hexdigest() == hashlib.md5(raw).hexdigest()
     print()
     print(f"  临时件残留：{'❌ ' + str(leftovers) if leftovers else '✅ 无'}"
           f" · 壳件逐字节复原：{'✅' if shell_ok else '❌'}")

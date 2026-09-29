@@ -17,10 +17,48 @@ from app.core.period import MODE_MONTH, period_capabilities
 from app.mod08_inv.domain import INV_TABLE_COLUMNS
 from app.mod08_inv.models import InvDetail
 from app.mod09_fee import domain as D
+from app.mod09_fee import repository as R
 from app.mod09_fee import service as S
 from app.mod09_fee.models import FeeManualItem
 from tests.acc_plugin import acc
 from tests.m09_helpers import WH_A, WH_B, YM_NOW, YM_OTHER, session
+
+
+@acc()
+def test_月度批量录入_按项名幂等且空格子不写():
+    """⭐ `TAIL-156`（用户口径「一次录好几个月太麻烦」⇒ 月度批量录入）：新写入口 `S.act_batch` 的三条语义 ——
+
+    ① **按 (核算月, 项目, 项名) 幂等**：同一格重提交 = **改那一条**（⛔ 不是又追加一条）；
+    ② **空格子整格跳过**：⛔ 不写 0、也不建行（**"空 ≠ 0"**，与 `001-05` / `001-11` 同口径）；
+    ③ **一格非法 ⇒ 整批不写**（写一半会让人分不清哪些进去了 ⇒ 宁可整批退回）。
+
+    ⚠️ **能证伪**：把"空格跳过"改成"空 ⇒ 0"、或把 `R.upsert_item` 换回 `R.add_item` ⇒ 本件必红。
+    """
+    s = session()
+    pid = R.project_by_key(s, WH_A).id
+    before = {r["name"]: r["amount"] for r in R.items_of(s, ym=YM_NOW, project_id=pid)}
+    n0 = len(before)
+    assert "油卡使用" in before and "运费" in before, "样本变了：本件依赖 `m09_helpers` 那两条手填项"
+
+    r1 = S.act_batch(s, project_key=WH_A, items=["油卡使用", "运费", "新项X"],
+                     months=[{"ym": YM_NOW, "values": {"油卡使用": "120", "运费": "", "新项X": "9.5"}},
+                             {"ym": YM_OTHER, "values": {"油卡使用": "77"}}])
+    assert r1["kind"] == "ok", r1
+    now = {r["name"]: r["amount"] for r in R.items_of(s, ym=YM_NOW, project_id=pid)}
+    assert now["油卡使用"] == Decimal("120"), "① 没改到那一条（或者又追加了一条）"
+    assert now["运费"] == before["运费"], "② 空格子被动过（空 ≠ 0 ⇒ 应原值不变）"
+    assert now["新项X"] == Decimal("9.5"), "原来没有的项名没被新建"
+    assert len(now) == n0 + 1, f"② 空格子建了行（实测 {len(now)} 条，应 {n0 + 1} 条）"
+    other = {r["name"]: r["amount"] for r in R.items_of(s, ym=YM_OTHER, project_id=pid)}
+    assert other.get("油卡使用") == Decimal("77"), "跨月那一格没落对（或落到了别的月份）"
+
+    # ③ 一格非法 ⇒ 整批不写：这一格里「油卡使用」是**合法值**，但它也必须**没**被写进去
+    r2 = S.act_batch(s, project_key=WH_A, items=["油卡使用", "坏格"],
+                     months=[{"ym": YM_OTHER, "values": {"油卡使用": "55", "坏格": "abc"}}])
+    assert r2["kind"] == "err", "非法金额没被拒"
+    after = {r["name"]: r["amount"] for r in R.items_of(s, ym=YM_OTHER, project_id=pid)}
+    assert after.get("油卡使用") == Decimal("77"), "被拒之后原值变了（半批落库）"
+    assert "坏格" not in after, "被拒之后还是建了行（半批落库）"
 
 # ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 2**）：原先这里有一整组**页面观测辅助件**
 #    （`_tbody` / `_heads` / `_sum_cells` / `_empty_row` / `_page`）。旧页整体删除（授权 `D18`）
@@ -157,7 +195,7 @@ def test_未录的月份项目为空并给提示行():
     assert data["total"] == Decimal("3000.00")                   # 只有该月该项目的自动项
     # ⚠️ 2026-09-19（`§19` 批 2）：原先还从旧页抠空态行的 `colspan`（= 表头列数，派生不写死）与合计行的
     # 金额格；旧页删除（`D18`）后形态搬到壳 ——
-    # `test_wired_m09.py::test_壳里空态行跨列数由表头派生`（`colspan="${thCount(AWF_THEAD)}"` ✓）＋
+    # `test_wired_m09.py::test_壳里空态行跨列数由表头派生`（`EMPTYROW(thCount(AWF_THEAD), …)` ✓）＋
     # `…test_壳里合计行由共用出口出` ✓。
 
 

@@ -54,8 +54,12 @@ WIRED_RE = re.compile(r"const\s+WIRED\s*=\s*new\s+Set\(\s*\[([^\]]*)\]")
 DEMO_RE = re.compile(r"const\s+(PJ|NT|FL)\s*=")
 # U2b ·「按页说实话」的两种措辞必须都在（⛔ 注意：那句"全为虚构"的文案**本身留着是对的** ——
 #        未接线的页正需要它；**坏的是对已接线的页也说它**。所以判的是"两种措辞齐不齐"，不是"有没有那句"）
-WIRED_TEXT = "已接后端真实数据"
-PROTO_TEXT = "原型态"
+#: ⭐⭐ 2026-09-27（用户裁定 `B` · 守则 §3.6）：顶栏/侧栏**只给"还没接通"的页如实标注**，
+#:    接通的页**不挂任何状态牌**（上一版是每页挂一句「已接后端真实数据 / 原型态 · 数据为模拟值」——
+#:    那是**给我们自己看的进度牌**：铺在 16 页标题上对用户是噪音，且「原型态 / 模拟值」属开发话术）。
+#:    ⚠️ 「已接后端真实数据」这个常量**已随本轮删除**：它不再需要出现在壳里。
+#:    ⛔ **别退回"一律挂一句"**（无论说真话还是假话）—— 没标 = 正常可用，就是最诚实的状态。
+PROTO_TEXT = "本页数据尚未接通"
 
 # ─────────────────────────────────────────────── `U5`（`TAIL-65`）：壳公共件 ⇄ 原型同段
 #: 顶层声明（`U5` 认段用）
@@ -225,8 +229,13 @@ def main() -> int:
     #   ⚠️ 但**消号仍要人工删行**：本哨只提示，⛔ 不替人删（自动删会连带冲掉旁边的理由注释）。
     #   ⚠️ **只提示、不计入 `red`** —— 它不影响"壳现在是否一致"，但登记簿腐化之后
     #      「已登记放行 N 行」就成了一种**自我安慰**：登记时的理由早就不成立了。
-    _now_fps = {d["fp"] for d in u1}
-    ghosts = [(k, f) for k, fs in sorted(exp.items()) for f in sorted(fs) if f not in _now_fps]
+    # ⚠️ 2026-09-27 同批修：幽灵判定也**按页**算（原先用**全局** `_now_fps` ⇒ 指纹在别的页还活着时，
+    #       本页那条"早已没有对应漂移"的死条目**不会**被报出来 —— 与 `--write-expected` 是同一个错的另一半）。
+    _now_fps_by_key: dict[str, set[str]] = {}
+    for _d in u1:
+        _now_fps_by_key.setdefault(_d["key"], set()).add(_d["fp"])
+    ghosts = [(k, f) for k, fs in sorted(exp.items())
+              for f in sorted(fs) if f not in _now_fps_by_key.get(k, set())]
 
     # ── U2 · 演示数组（红线①：假数据不得混进产物）＋「按页说实话」两种措辞
     u2: list[str] = []
@@ -235,10 +244,14 @@ def main() -> int:
         if m:
             u2.append(f"L{i} 残留演示数组 {m.group(1)}：{ln.strip()[:70]}")
     shell_text = "\n".join(shell_lines)
-    if WIRED_TEXT not in shell_text:
-        u2.append(f"壳里找不到「{WIRED_TEXT}」⇒ 已接线的页会被说成原型态（界面对真数据说了假话）")
+    # ⭐⭐ 2026-09-27（用户裁定 `B`）：U2 的"按页说实话"**改形**（能力不变、措辞换掉）——
+    #    旧形是"壳里必须同时存在两种措辞"（保证顶栏能分清已接/未接）；现形是"**只有一种**：
+    #    未接通的要如实说，且必须**按页判**"。⚠️ 这一条的能力是"不许对用户说假话"，⛔ 别删成"没了"。
     if PROTO_TEXT not in shell_text:
-        u2.append(f"壳里找不到「{PROTO_TEXT}」⇒ 未接线的页不再标明数据是模拟值")
+        u2.append(f"壳里找不到「{PROTO_TEXT}」⇒ 未接通的页不再如实标注（用户会以为它已经能用）")
+    if not any("WIRED.has(" in l for l in shell_lines if PROTO_TEXT in l):
+        u2.append(f"「{PROTO_TEXT}」不是**按页**判的 —— 必须写成 `WIRED.has(VIEW) ? '' : '…'` 那种形态；"
+                  "⛔ 一律挂一句就是对已接线的页说假话（U2 当初立起来防的就是它）")
 
     # ── U2b · **已接线的页，它的演示数组必须已删**（"接线即清"，机器看管）
     #     ⚠️ 只查 `WIRED` 里的页：未接线的页**正需要**演示数据（否则页面空着）。
@@ -267,7 +280,7 @@ def main() -> int:
             _re_pat = rf"(?:{_kw})\s+{_arr}\s*=\s*(?:\{{\s*[^\s}}]|\[\s*[^\s\]])"
             if re.search(_re_pat, shell_text):
                 u2.append(
-                    f"`{_page}` 已标「已接后端真实数据」，但演示数组 `{_arr}` 还在壳里 "
+                    f"`{_page}` 已接通（在 `WIRED` 里），但演示数组 `{_arr}` 还在壳里 "
                     f"⇒ 接线要连演示数据一起清（一份内容只许一个主人）"
                 )
 
@@ -332,13 +345,19 @@ def main() -> int:
             "",
         ]
         old_all = read_lines(EXPECTED) if EXPECTED.exists() else []
-        known: set[str] = set()
+        # ⚠️⚠️ 2026-09-27 **修一个真缺陷**：原先按**全局指纹**去重（`known` 只存 `fp`），
+        #    而核对器是**按页**查（`exp.get(d["key"])`）⇒ 同一个指纹出现在**别的页**下时，
+        #    本页那条**永远登记不上**：登记器报「新增 0 条」、核对器照旧报红 ⇒ 只能手工写行绕过。
+        #    ⭐ 触发条件很常见 —— **切片里插/删一行 ⇒ 页尾那几行的归属换页**（实测：`m14` 下的
+        #    `c568838d`（页尾空行）在 m03 切片变长后归到了 `m03`）。
+        #    ⇒ 去重键必须是 **(页, 指纹)**，与核对器的查法对齐。
+        known: set[tuple[str, str]] = set()
         for _t in old_all:
             _s = _t.strip()
             if _s and not _s.startswith("#") and len(_s.split()) >= 2:
-                known.add(_s.split()[1])
+                known.add((_s.split()[0], _s.split()[1]))
         add = [f"{d['key']} {d['fp']}  # 原型: {d['proto'][:50]}｜壳: {d['shell'][:50]}"
-               for d in u1 if d["fp"] not in known]
+               for d in u1 if (d["key"], d["fp"]) not in known]
         text = old_all if old_all else head
         if add:
             text = list(text) + [

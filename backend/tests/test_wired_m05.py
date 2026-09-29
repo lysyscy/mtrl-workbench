@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from tests.acc_plugin import acc
@@ -19,8 +20,14 @@ from tests.acc_plugin import acc
 from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 
 
-def _slice(name: str, limit: int = 16000) -> str:
-    """取壳里 `V.<name>=()=>{…}` 的切片（花括号配平）。"""
+def _slice(name: str, limit: int = 18000) -> str:
+    """取壳里 `V.<name>=()=>{…}` 的切片（花括号配平）。
+
+    ⚠️ `limit` 是"配平跑偏"的**哨兵**（配平歪了会一路吃到下一个函数 ⇒ 长度暴涨），⛔ 不是预算线：
+       `V.m05` 2026-09-28 两次重设计（`TAIL-141` 显示层 ＋ `TAIL-142` 卡头按钮）后 **16.5k** ⇒
+       旧哨兵 16000 当场误报（"配平可能跑偏"），实测**配平是对的**。字长本身归 `T5`（>400 行文件）管，
+       ⛔ 别在这里再立一条预算。
+    """
     i = SHELL.find(f"\nV.{name}=()=>{{")
     assert i > 0, f"壳里找不到 `V.{name}=()=>{{`"
     i += 1
@@ -64,7 +71,7 @@ def test_撤销入口只在生效行且必须填原因():
 def test_流水空态跨列由表头派生且不分页():
     """空态行的 `colspan` **由表头派生**（⛔ 不写死）；该表**不做分页**（一次给全）。"""
     s = _slice("m05")
-    assert 'colspan="${thCount(FL_THEAD)}"' in s, "空态行的跨列数不再由表头派生"
+    assert "EMPTYROW(thCount(FL_THEAD)" in s, "空态行的跨列数不再由表头派生"
     assert "没有付款流水" in s, "空态提示丢了"
     assert "不做分页" in s, "没写明「不做分页」"
 
@@ -153,6 +160,106 @@ def test_已接线页的演示数组必须已删():
     assert "LG.map(r=>O(r,LG_COLS))" not in SHELL
 
 
+# --------------------------------------------------------------- 台账**显示层**重设计（`TAIL-141` · 方案 `B`）
+# ⭐ 2026-09-28（用户「逐月欠款台账的交互和显示重新设计吧」⇒ 选 `B`）：**只改显示层** ——
+#    口径一个字没动，⛔ 表头 `LED_THEAD` 一字未改（它在 `ui_parity` 的 `U5` 登记表里：原型与壳必须逐字一致）。
+
+
+@acc()
+def test_台账的现状数_截至行与入口名都钉住():
+    """守四件（守则 §2.6 §2.7 先给结论 · §4.7 数字口径透明 · §4.4 相似元素不歧义 · §5.9 优先级）。
+
+    ⚠️ 这四条**都是"下一个人顺手改回去"的高危处** —— 尤其表尾那个「合计：」是**旧形态的原话**，
+       谁重排版式都可能把它抄回来（那时"当前欠多少"又重新变成一个没人读得懂的格子）。
+    """
+    # ① 每栏标题行**先给"现状"**（§2.6 能算出来的别让人自己数 · §2.7 结论贴在对象上）
+    assert "本项目当前欠款（含期初）" in SHELL, "标题行没给「本项目当前欠款」⇒ 用户又得自己把「欠款」列加一遍"
+    assert "${esc(mLast.ym)} 新增" in SHELL, "标题行没给「最近一月新增」（那是台账里唯一属于「当月」的那个数）"
+    # ⭐ 它必须与**表尾那一格同源**（同一处算出来）—— 两处各算一份 ⇒ 迟早打架（§4.7）
+    assert "const cur=N2(rows.reduce((a,r)=>a+(r.s-r.p),0));" in SHELL, \
+        "标题行那个数不是从表尾同一个出口算出来的（各算一份 ⇒ 迟早打架）"
+    # ② 表尾正名（§4.7）：原来叫「合计：」⇒ 会被读成"各月数字相加"
+    assert "lead:'<b>合计：</b>'" not in SHELL, "表尾又退回「合计：」（那会被读成各月数字相加）"
+    assert "截至 ${esc(upto)}" in SHELL and "自期初起累计" in SHELL, "表尾没写明「截至哪个月 · 自期初起累计」"
+    assert "当前欠款</span>" in SHELL, "表尾「欠款」那格没标出它就是「现在还欠多少」"
+    # ③ 两个期初录入入口**不许同名并排**（§4.4；旧的「＋ 录入期初占位行」两栏各一个）
+    assert ">＋ 录入${sc}期初</button>" in SHELL, "期初录入按钮文案没带分类名（两栏认错就录错池子）"
+    assert "＋ 录入期初占位行</button>" not in SHELL, "同名并排的旧按钮文案又回来了"
+    # ④ 空月压暗（§5.9）—— ⚠️ 台账**空月也出行**，不压暗则"哪个月真发生过事"看不出来
+    assert "const z=!r.open&&!N2(r.s)&&!N2(r.p)" in SHELL, "空月压暗没了（每个月看起来一样重）"
+    # 备注可编辑性要**提前说**（§2.4：不给提示，用户不知道点一下就改）
+    assert "点这一格就能改" in SHELL, "备注可编辑没提前说"
+    # ⑤ ⭐ 2026-09-29（`A1` 逐页）：**引用了已经删掉的东西 = 页面在讲一件不存在的事**（守则 §4.2 状态必须真实）。
+    #    本页 4 条 KPI 已于 2026-09-28 **全删**（用户判「无用」），而标题行与卡内说明里还写着
+    #    「与上方 KPI 不是同一个数」⇒ 用户会**抬头去找一排已经不存在的 KPI**（`TAIL-161` 同族教训：
+    #    删掉一块东西时，同一批必须扫一遍"还在说它的那些话"）。
+    assert "与上方 KPI 不是同一个数" not in SHELL, \
+        "又说「与上方 KPI 不是同一个数」—— 那排 KPI 2026-09-28 已全删，页面在讲一件不存在的事"
+    assert "与上方全部项目的 KPI" not in SHELL, "同上（另一处措辞）"
+    assert SHELL.count("与上方那三栏不是同一个数") >= 2, \
+        "没写明「与上方那三栏不是同一个数」（那三栏**按项目分列**、台账这两栏只算选中的那一个）"
+    # ⛔ 墓碑：`V.m05` 里那句 `const d=debts();` 随 KPI 删除一起消失（§5.1「答不出为什么需要它，就删」）
+    assert "const d=debts();" not in _slice("m05"), "`V.m05` 里又出现没有读者的 `const d=debts();`"
+
+
+@acc()
+def test_台账卡头按钮分组与点开有反馈都钉住():
+    """`TAIL-142` ＋ `TAIL-144`（用户：①「上面几个按钮的显示和交互优化一下」② 截图报障
+    「我要选辅材机械表的项目，要在右上角选离那么远；我要统一导出，点按钮后又要跑到最左边选项目」）。
+
+    守则：§2.7（**控件贴在它管的对象上**）· §4.4（相似元素不歧义）· §5.5（点开必须有反馈）·
+    §3.4（说明贴在对象旁，别拿长 toast 顶替）· §5.9（优先级）。
+    """
+    s = _slice("m05")
+    # ① ⭐ 控件贴对象：「看哪个项目」必须在**两栏台账之前**（它管的就是下面那两张表）。
+    #    ⚠️ 这条是 `TAIL-144` 的核心：它原来挂在卡头右上角 ⇒ 用户"要在右上角选，离那么远"。
+    #    ⚠️⚠️ 一律钉**标记串**（`<span class="mut sm">…</span>`），⛔ 别钉裸文案 —— 源码注释里也出现过
+    #       「看哪个项目（两侧共用）」这句 ⇒ 钉裸文案时"把控件删掉"仍会**假绿**（反向灵敏度 M10 实测抓到）。
+    _PICK = '<span class="mut sm">看哪个项目（两侧共用）</span>'
+    assert _PICK in s, "「看哪个项目」那条标签没了"
+    assert s.index(_PICK) < s.index("${ledHalf('辅材')}"), \
+        "「看哪个项目」又跑到表格后面/卡头右上角去了（守则 §2.7：控件要贴着它管的那两张表）"
+    # ② ⭐ 卡头**只留一个**导出入口（用户 2026-09-13 裁定「卡头一个导出入口」；上一版挤了三个）
+    _h = s.index("<h4>逐月欠款台账")
+    head = s[_h:s.index("</h4>", _h)]
+    assert head.count("data-act=") == 1 and 'data-act="ledExpToggle"' in head, \
+        f"卡头上了不止一个入口（实测 {head.count('data-act=')} 个）—— ⛔ 别再把导出件塞回卡头"
+    # ⭐ 2026-09-28：按钮名由孤零零的「导出…」改成「**批量导出（先选项目）…**」—— 用户报
+    #    「点掉筛选后**不知道去哪里找**」（守则 §10「按钮怎么起名」：动词在前 ＋ 名字里能看出下一步 ＋ 有下文带 `…`）。
+    assert ">批量导出（先选项目）…</button>" in head, "卡头那个唯一入口的按钮名没说明「要先选项目」"
+    # ③ ⭐ 两个导出在同一条面板里，**各自的项目范围挨着自己的动作**（治"点按钮后跑到最左边选项目"）
+    strip = SHELL[SHELL.index("const ledExpStrip=()=>"):SHELL.index("const lgPjPanel=()=>")]
+    assert "① 逐月台账" in strip and "② 总欠款汇总" in strip, "两个导出没在同一条面板里（分两处又会让人来回跑）"
+    for act in ('data-act="ledExpPjToggle"', 'data-act="ledExpOk"', 'data-act="ledExpCancel"',
+                'data-act="debtPick"', 'data-act="debtExpAll"'):
+        assert act in strip, f"面板里缺 {act}（导出件跑到别处去了）"
+    assert "选择项目（" in strip, "「导出总欠款」的范围按钮不在它旁边"
+    assert ">导出台账</button>" in strip and ">导出总欠款</button>" in strip, "两个导出的动作名不清楚"
+    # ④ 两个 toggle 点开**必须自己带 `on`**（由展开态决定，⛔ 不是写死）
+    assert """class="btn${pjIsOpen('ledPj')?' on':''}\"""" in s, "项目选择器按钮不看展开态（点开自己不变样）"
+    assert """class="btn pri${ledExpOn?' on':''}\"""" in s, "导出入口不看展开态（点开自己不变样）"
+    assert ".btn.on{background:var(--pri-l);border-color:var(--pri-bd);color:var(--pri-d)}" in SHELL, \
+        "缺 `.on` 按钮态（且必须复用 `--pri*` token，⛔ 不另造视觉语言 —— 守则 §4.5）"
+    # ⑤ ⛔ DOM 注入那条老路已撤（`TAIL-138` 当年为了"零切片漂移"把按钮注入进卡头 ⇒ 就是它把卡头挤成三个）
+    assert "anchor.dataset.debtExp" not in SHELL, "`BIND.m05` 的注入又回来了（导出件会被塞进卡头）"
+    # ⑥ 参数按钮按「设没设」分主次（与 `pjTypePick` / `uiScaleSet` 同一套写法）
+    assert """class="btn sm${DEBTPICK.length?' pri':' gost'}\"""" in SHELL, \
+        "「选择项目」没按「已设 / 未设」分主次（未设 = 全部 ⇒ 该是次要态）"
+    # ⑦ 说明要贴在面板里；⛔ 别再用长 toast 顶替（墓碑：所有「已展开…」回执都不许挂 6200ms）
+    for line in SHELL.splitlines():
+        if "toast('已展开" in line:
+            assert ",6200)" not in line, \
+                f"「已展开」回执又变回 6200ms 的长机制说明：{line.strip()[:70]}"
+    assert "toast('已展开「导出台账」：默认选中<b>本页当前项目</b>（可多选）')" in SHELL, \
+        "台账导出面板的回执不是短句（应只剩「点上了」这一件）"
+    assert "每次打开<b>默认选中本页当前项目</b>" in SHELL, "面板里没写「默认选中本页当前项目」"
+    # ⑧ 真机段在位（本批的新覆盖：**点开自己变样** ＋ 不开长 toast —— 离线看不见）
+    probe = Path(__file__).resolve().parents[2] / "tools" / "probe" / "_shell_m05head.py"
+    assert probe.exists(), "真机段 `_shell_m05head.py`（㉚）不在位"
+    assert "check_m05head(page, errors)" in (probe.parent / "_shell_smoke.py").read_text(encoding="utf-8"), \
+        "真机段 ㉚ 没被编排件 `_shell_smoke.py` 调用"
+
+
 # --------------------------------------------------------------- 台账导出（`TAIL-04` 片 2＋3）
 
 
@@ -187,3 +294,41 @@ def test_台账导出失败必须给人原因不静默():
     assert "后端没给原因" in _b, "失败时没把后端的中文原因给用户"
     assert "r.ok" in _b and "HTTP ${r.status}" in _b, \
         "非 2xx 没显式报错（会静默产出空文件）"
+
+
+@acc()
+def test_总欠款导出与期初删除都不许静默失败():
+    """⭐ 2026-09-28（用户走查两条「点了没反应」）—— 两条**同源**缺陷，各钉一条静态断言。
+
+    ① **「导出总欠款」**：壳里曾写 `dlExport(url, …)` —— `url` 是**未声明的标识符** ⇒ `ReferenceError`；
+       而该动作是 `async` ⇒ 异常变成**未捕获的 promise rejection** ⇒ 界面**毫无反应**（连报错都不给）。
+    ② **「删除期初行」**：`delLg` 用 `LGs.find(x=>x.id===t.dataset.id)`，而 `adaptOpening` 曾把 id 写成
+       **假值 `''`**（后端那时不返回 id）＋ `dataset.id` 恒是**字符串** ⇒ 恒不匹配 ＋ 静默 `return`。
+
+    ⚠️ 这两处**离线判据原先 0 覆盖**（全仓搜 `debtExpAll` / `delLg` 无断言）⇒ 坏了没人知道 ——
+       本条与 `tests/test_page_m05.py` 的「两侧同 id」合起来才算闭环（壳侧 ＋ 后端侧）。
+    """
+    # ① 总欠款导出：先看**本动作体**（⛔ 别全仓扫 `dlExport(url` —— `procExpSave` 那种
+    #    「先 `const url=…` 再传进去」的写法是**对的**，一刀切会把好写法也判红，实测踩到一次）
+    i = SHELL.index("debtExpAll:async ()=>{")
+    act = SHELL[i:i + 2000]
+    assert "/api/m05/debt/export" in act, "「导出总欠款」的动作体里没有后端端点 `/api/m05/debt/export`"
+    # ⭐ 2026-09-28（同日第二批 · 用户口径）：它现在带 `projects=`（选择项目 · 顺序即行序）
+    assert "projects=" in act, "「导出总欠款」没把「选择项目」的选择带给后端（`projects=`）"
+    # ⭐ 老缺陷的**根因形态**：`url` 必须在**本动作体内声明**（⛔ 别用外层/不存在的标识符 ⇒ 点击静默失败）
+    assert "const url=" in act, "「导出总欠款」的 `url` 必须在本动作体里**声明**（否则 async ⇒ 未捕获 rejection ⇒ 点了没反应）"
+    assert "dlExport(url," in act, "「导出总欠款」必须真走统一下载出口 `dlExport`"
+    # ①′ **选择项目**那套必须齐（多选 + 顺序 + 不落库）
+    assert "debtPick:t=>{" in SHELL and "debtPickUp:t=>{" in SHELL and "debtPickOk:()=>{" in SHELL, \
+        "缺「导出总欠款 · 选择项目」那一套动作（多选 / 调顺序 / 确定）"
+    assert "选择项目（" in SHELL, "「选择项目」按钮文案没了（用户 2026-09-28 明确要求：叫得让人一眼明白）"
+    assert "选题" not in SHELL, "壳里又出现「选题」这个说法（用户说看不懂，已统一改成「选择项目」）"
+    # ② 期初行 id：不许写死假值，且比较必须归一成字符串（`dataset.id` 恒是字符串、`x.id` 是数字）
+    assert "id: '', proj:" not in SHELL, \
+        "`adaptOpening` 又把期初行 id 写死成假值 `''` ⇒ 「删除期初行」必然匹配不上、静默无反应"
+    assert "id: x.id == null ? '' : String(x.id)" in SHELL, "`adaptOpening` 没把真 id 带出来（归一成字符串）"
+    i = SHELL.index("delLg:t=>{")
+    body = SHELL[i:SHELL.index("delLgOk:t=>{", i)]
+    assert 100 < len(body) < 3000, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
+    assert "String(" in body, "`delLg` 没做 `String()` 归一（`dataset.id` 是字符串、`x.id` 是数字）"
+    assert "toast(" in body, "`delLg` 找不到数据时必须给**可见反馈** —— 「点了没反应」正是本条的老毛病"

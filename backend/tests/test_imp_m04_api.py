@@ -92,13 +92,14 @@ def test_付款计划在通用面端到端_中文月日按年月补全_且幂等
     assert got["ok"] and got["header_row"] == 2, got
     cols = {c["src"]: c for c in got["cols"]}
     assert cols["项目"]["field"] == "项目"
-    assert cols["材料：其他支出付资产处/贸易公司（编号）"]["field"] == "材料单据", \
-        "实拍长表头要被别名库认出（B2 的成果在通用面上同样生效）"
+    assert cols["材料：其他支出付资产处/贸易公司（编号）"]["field"] == "单据号", \
+        "实拍长表头要被别名库认出（B2 的成果在通用面上同样生效）；" \
+        "⭐ 2026-09-27（`TAIL-129` 用户裁定「单据号不分机械和材料」）⇒ 目标字段是**一个**「单据号」"
     assert {c["src"] for c in got["cols"] if c["ignored"]} == {"审批状态"}, "不采的列要显式说明理由"
 
     mapping = {"项目": "项目", "该流程金额": "该流程金额", "本月预付款金额": "本月预付款金额",
                "付款时间": "付款时间", "付款方式": "付款方式", "备注": "备注",
-               "材料：其他支出付资产处/贸易公司（编号）": "材料单据"}
+               "材料：其他支出付资产处/贸易公司（编号）": "单据号"}
     body = {"token": got["token"], "mapping": mapping, "options": {"year_month": ym}}
     pre = client.post("/api/imp/m04_plan/preview", json=body).json()
     assert pre["ok"] and pre["total"] == 2, pre

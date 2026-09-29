@@ -116,13 +116,23 @@ def _header_row(grid: list[list], spec: DomainSpec) -> tuple[int, int | None, in
 
     ⚠️ **单行与两行都要试**（不是"看第几行像表头"）：用户台账里既有单行表头（付款计划实拍），
       也有两级表头（过程资料 `线上入库（不含税）` › `主辅材`）⇒ 取"认出字段最多"的那个。
+
+    ⚠️⚠️ **子行必须是"表头词"那一类，⛔ 不许是数据行**（`TAIL-129` · 2026-09-27 用户报障逼出来的）：
+      真表里"表头第 2 行（只给单据号那列补一句）＋ **紧跟其后的第一行数据**"会被拼成"两级表头"，
+      于是列名变成 `收款单位**资产处集中采购**` ⇒ 别名「资产处」被"包含词命中"**抢走这一列**
+      ⇒ 落库的"单据号"全是**供应商名**（同时还白吃一行数据）。
+      ⇒ 判据 = `mapping.looks_like_data(子行)` 为真 ⇒ **这个候选取消**。
+      ⚠️ 这一条**只否掉"像数据"的行**，⛔ 不动"单行 vs 两行"的原有择优（那套是给真·两级表头用的）。
     """
     best: tuple[int, int | None, int] | None = None
+    best_key: tuple[int, int, int] | None = None
     for idx in range(min(len(grid), HEADER_SCAN_ROWS)):
         for bottom in (None, idx + 1):
-            if bottom is not None and (bottom >= len(grid)
-                                       or not any(text(c) for c in grid[bottom])):
-                continue
+            if bottom is not None:
+                if bottom >= len(grid) or not any(text(c) for c in grid[bottom]):
+                    continue
+                if mapping.looks_like_data([text(c) for c in grid[bottom]]):
+                    continue                      # ⛔ 数据行不许当表头（见上）
             _, fields = _headers_of(grid, idx, bottom, spec)
             if len(fields) < MIN_SHEET_HITS:
                 continue
@@ -132,10 +142,48 @@ def _header_row(grid: list[list], spec: DomainSpec) -> tuple[int, int | None, in
             #      于是第一个数据行被当成表头吃掉。加了这条：**拼名没多认出任何字段 ⇒ 就不算父级**。
             #   ⚠️ 中间那项 **1 = 无子行优先**（⛔ 别写成"有子行"更优 —— 那会把标题行/数据行拉进表头，
             #      自测踩到：B1 的夹具表头在首行，被"父级拼名"顶掉 ⇒ 整表认列全乱）。
+            #   ⚠️ 比较键**只算一次**（`best_key`）：原先右边是手抄的一份元组 —— 加一档就得改两处，
+            #      漏改一处就是"比较维度不一致"，且症状是**静默选错表头**。
             key = (len(fields), 1 if bottom is None else 0, idx)
-            if best is None or key > (best[2], 1 if best[1] is None else 0, best[0]):
-                best = (idx, bottom, len(fields))
+            if best_key is None or key > best_key:
+                best_key, best = key, (idx, bottom, len(fields))
     return best
+
+
+def _header_ish(row: list[str], spec: DomainSpec) -> bool:
+    """整行非空格子**都还认得出字段** ⇒ 它还是表头（续行 / 竖合并铺开的副本），**不是数据**。
+
+    ⚠️ 与 `mod04_plan/importer.py` 里那条**同源**（域自己那条路早就这么判；通用面此前只判"非空"）。
+    """
+    vals = [v for v in row if v]
+    return bool(vals) and all(_hit(v, spec) for v in vals)
+
+
+def _first_data_row(grid: list[list], start: int, headers: list[str], spec: DomainSpec) -> int:
+    """表头下面若还跟着**表头自己的重复行**（竖合并铺开的产物）⇒ 跳过它，⛔ 不当数据。
+
+    ⭐ 为什么需要（`TAIL-129`）：真表的表头是**竖合并**的（`项目` 那一格跨 r1:r2）——
+       `read_grid(fill_merged_rows=…)` 把 r1 的值铺到 r2 ⇒ 挑表头时容易把 r2 认成表头、把 r1 的副本
+       留给数据区 ⇒ 落库会**凭空多一行**（`项目` 列的值就是"项目"两个字）。
+    ⚠️ 只跳过**紧贴表头的那几行**、且必须"像表头"（非空格子 ≥1 格与表头同名，其余都能认成字段）；
+       ⛔ 一旦遇到像数据的行立刻停（⛔ 别把它写成"往下一直扫"）。
+    """
+    i = start
+    while i < len(grid):
+        vals = [text(c) for c in grid[i]]
+        nz = [(c, v) for c, v in enumerate(vals) if v]
+        if not nz:
+            i += 1
+            continue
+        if mapping.looks_like_data([v for _, v in nz]):
+            break
+        same = sum(1 for c, v in nz if c < len(headers) and v == headers[c])
+        ok = all((c < len(headers) and v == headers[c]) or _hit(v, spec) for c, v in nz)
+        if same >= 1 and ok:
+            i += 1
+            continue
+        break
+    return i
 
 
 def _pick_sheet(data: bytes, spec: DomainSpec
@@ -307,7 +355,9 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
                 name, grid, top, bottom, sheets = _pick_sheet(data, spec)
             headers, _ = _headers_of(grid, top, bottom, spec)
             last = bottom if bottom is not None else top     # 表头最后一行（子行优先）
-            samples = _cols(headers, grid, first_row=last + 1)
+            # ⭐ `TAIL-129`：表头下面若还跟着**表头自己的重复行**（竖合并铺开）⇒ 不算数据
+            data_at = _first_data_row(grid, last + 1, headers, spec)
+            samples = _cols(headers, grid, first_row=data_at)
             # ⭐ **域里明确不采的列 ⇒ 引擎建议一律作废**（⛔ 不让"包含词"在短标签上过度命中）：
             #    实测（`B5b` 接 m11）：台账的 `序号` 被 0.90 认成 `存档序号`（"序号" ⊂ "存档序号"）
             #    —— 而域里白纸黑字写着"序号 = 行号，系统自己编，不采"。**人写的口径 > 引擎的猜测**。
@@ -319,8 +369,8 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
             # ⭐ 记忆预填（表头指纹为准；界面照旧显示"来自记忆 · 可改"）
             memory = store.prefill(spec.domain, headers)
             payload = {"domain": spec.domain, "sheet": name, "header_row": top + 1,
-                       "headers": headers, "grid_rows": grid[last + 1:],
-                       "first_row": last + 2}            # 首行数据的 Excel 行号（报问题用，1 起）
+                       "headers": headers, "grid_rows": grid[data_at:],
+                       "first_row": data_at + 1}         # 首行数据的 Excel 行号（报问题用，1 起）
             token = preview_store.save(payload)
             return {
                 "ok": True, "token": token, "sheets": sheets, "sheet": name,

@@ -44,7 +44,11 @@ def _view_slices(html: str) -> dict[str, str]:
 #: ⛔ **「非数据」≠「页上没有表」** —— `m15` 页上就有 `m15:users` 那张表，它是**系统/账号数据**、
 #:   不是**业务台账**；`m14` 是**配置类**（§9.4）；`m10` 是**暂缓**（页都没做）。
 #:    ⇒ ⛔ 所以**不许**拿"页上有没有 `data-sort-key`"当真值来源（那会得出"m15 是数据页"）。
-NON_DATA_VIEWS = {"m10", "m14", "m15"}
+#: ⭐ 2026-09-28（`TAIL-124` · 用户 2026-09-27 裁定 2 的 `B` 案）：**`m13` 也是非数据页** ——
+#:   它**没有自有数据源**（§0.3 的定性就是"跨域**能力说明页**"），整页只回答「导出 / 删除 / 附件」怎么用。
+#:   ⚠️ 它原来那枚「演示导出」按钮点了只会弹兜底提示（假按钮）⇒ 本批已删；
+#:   真入口在**各业务页**上（本名单里的页都各有自己的导出按钮或去处说明）。
+NON_DATA_VIEWS = {"m10", "m13", "m14", "m15"}
 #: **是数据页、但不单独导出** ⇒ 按 claim 的除外条件，必须在**页面上说明去处**。
 EXPORT_EXEMPT = {
     "m09": "随「逐月欠款台账」导出（作为每项目工作簿的第 3 个工作表）",
@@ -65,10 +69,11 @@ def test_有数据的页面都有导出入口():
     ⚠️ `NON_DATA_VIEWS` 用**双向**钉住：冒出新的／不再成立，**都红** ——
        ⛔ 它是"这份名单已核对过"的意思，不是"允许少做"的意思。
     """
-    html = _index()
-    views = dict(sorted(set(re.findall(r"\['(m\d+)','([^']+)','[^']+'\]", html))))
+    # ⚠️ 2026-09-28（`TAIL-164` · `P2-a` 拆件）：`NAV` 已随拆件搬进 `web/shell/*.js` ⇒ 导航要从
+    #    **合并后的壳**（`SHELL`）解析；而**视图切片 `V.*` 按计划 §23 留在 `index.html`** ⇒ 切片仍读单件。
+    views = dict(sorted(set(re.findall(r"\['(m\d+)','([^']+)','[^']+'\]", SHELL))))
     assert len(views) >= 14, f"导航只解析出 {len(views)} 个视图 —— 解析大概失效了"
-    slices = _view_slices(html)
+    slices = _view_slices(_index())
 
     no_entry, missing_note, exempt_ok, wrongly_listed = [], [], [], []
     for k in views:
@@ -212,9 +217,11 @@ def test_导出相关渲染面无Markdown泄漏():
     ⚠️ **覆盖面的诚实交代**：这是**静态**检查（核模板串），
        ⛔ **不等于**真机 DOM 上没有泄漏 —— 真机那层由 `tools/probe/_shell_smoke.py` 兜（它读 console/page 错误）。
     """
-    # ⚠️ 渲染面**不在同一个文件**：两个展开区在 `index.html`、两个确认弹窗在 `actions.js`
+    # ⚠️ 渲染面**不在同一个文件**：两个展开区在壳的公共件里、两个确认弹窗在 `actions.js`；
+    #    2026-09-28（`TAIL-164` · `P2-a` 拆件）后展开区又搬进了 `web/shell/pages-a.js`/`pages-b.js`
+    #    ⇒ 取源一律用**合并后的壳**（`SHELL`），⛔ 别再列举单件（列举必漏，漏了还静默）。
     for name, (anchor, end) in RENDER_SEGMENTS.items():
-        src = next((s for s in (_index(), _actions()) if anchor in s), None)
+        src = next((s for s in (SHELL, _actions()) if anchor in s), None)
         assert src, f"找不到 `{name}` 的定义（锚点 `{anchor}`）—— 落点变了，先核对再改断言"
         seg = _strip_js_comments(_fn_body(src, anchor, end))
         assert "**" not in seg, f"`{name}` 的渲染面出现 `**`（Markdown 粗体泄漏到界面）"
@@ -258,8 +265,10 @@ def test_导出清单弹窗里的表可排序():
             f"  实际标签：{tag[:150]}")
 
     # ⭐ 把**机制**也钉住：⛔ 别把"认 `data-sort`"放宽成"认 `data-sort-key` 也行"
-    html = _index()
-    assert "\\sdata-sort[\\s>]" in html, (
+    # ⚠️ 2026-09-28（`TAIL-164` · `P2-a` 拆件）：这段机制住在**壳的公共件**里（原先在 `index.html` 的内联脚本，
+    #    现随 `P2-a` 搬进 `web/shell/*.js`）⇒ 必须读**合并后的壳**（`SHELL`），⛔ 不是 `index.html` 单件。
+    #    ⭐ 判据内容**一个字没改**（还是钉那个字面），只换读取出口（本仓既有做法，同 `shell_src.dl_kernel`）。
+    assert "\\sdata-sort[\\s>]" in SHELL, (
         "注入排序入口的逻辑不再精确匹配 `data-sort` —— ⚠️ 一旦放宽成「有 `data-sort-key` 也算可排」，"
         "**刻意不可排**的表（分组表：合计行要 pin 在表尾）会被**误注入**排序入口 ⇒ 那是**有意的设计**，别动。")
 

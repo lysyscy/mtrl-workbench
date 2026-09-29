@@ -321,6 +321,42 @@ def create_app() -> FastAPI:
     #    ⚠️ **拆件要两处登记**：① `index.html` 的 `<script src>`（读壳的唯一出口认这个）
     #    ② **本文件的一条路由**（缺 ⇒ 浏览器 404 ⇒ `ReferenceError` 整支崩）
     #    ⇒ 机器守 = `tests/test_shell_part_routes.py`（⛔ 别只改一处）。
+
+    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/base.js`。
+    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
+    @app.get("/static/shell/base.js", include_in_schema=False)
+    def shell_base_js_js() -> FileResponse:
+        return _shell_js("base.js")
+
+    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/view.js`。
+    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
+    @app.get("/static/shell/view.js", include_in_schema=False)
+    def shell_view_js_js() -> FileResponse:
+        return _shell_js("view.js")
+
+    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/ui.js`。
+    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
+    @app.get("/static/shell/ui.js", include_in_schema=False)
+    def shell_ui_js_js() -> FileResponse:
+        return _shell_js("ui.js")
+
+    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/proj.js`。
+    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
+    @app.get("/static/shell/proj.js", include_in_schema=False)
+    def shell_proj_js_js() -> FileResponse:
+        return _shell_js("proj.js")
+
+    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/pages-a.js`。
+    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
+    @app.get("/static/shell/pages-a.js", include_in_schema=False)
+    def shell_pages_a_js_js() -> FileResponse:
+        return _shell_js("pages-a.js")
+
+    # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/pages-b.js`。
+    #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
+    @app.get("/static/shell/pages-b.js", include_in_schema=False)
+    def shell_pages_b_js_js() -> FileResponse:
+        return _shell_js("pages-b.js")
     @app.get("/static/shell/api.js", include_in_schema=False)
     def shell_api_js() -> FileResponse:
         return _shell_js("api.js")

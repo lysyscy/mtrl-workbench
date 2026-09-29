@@ -67,8 +67,8 @@ def test_壳里按项目状态过滤且空态跨列派生():
     `colspan` **由表头派生**，并点名是哪一类。"""
     assert "const extVisible = kind => extWhs(kind).filter(w => fExt.status === '全部'" in SHELL, \
         "可见行不再按项目状态过滤"
-    assert 'colspan="${thCount(EXT_THEAD)}"' in SHELL, "空态行的跨列数不再由表头派生"
-    assert "当前筛选条件下没有" in SHELL and "数据 —— 换个「项目状态」或月份" in SHELL, "空态提示丢了"
+    assert "EMPTYROW(thCount(EXT_THEAD)" in SHELL, "空态行的跨列数不再由表头派生"
+    assert "当前筛选条件下没有" in SHELL and "换个「项目状态」或月份" in SHELL, "空态提示丢了"
 
 
 @acc("ACC-SETL-EXT-001", "001-06")
@@ -99,7 +99,7 @@ def test_壳里核算年月默认上月且可切():
 @acc("ACC-SETL-001", "001-05")
 def test_壳里空态跨列数由表头派生():
     """空月 ⇒ 空态提示行，`colspan` **由表头列数派生**，且提示里点名是哪个年月。"""
-    assert 'colspan="${thCount(WH_THEAD)}"' in SHELL, "空态行跨列数不再由表头派生"
+    assert "EMPTYROW(thCount(WH_THEAD)" in SHELL, "空态行跨列数不再由表头派生"
     assert "没有收发结存数据" in SHELL, "空月没有提示"
 
 

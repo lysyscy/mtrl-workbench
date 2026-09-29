@@ -34,7 +34,7 @@ from pydantic import BaseModel
 
 from app.core import session as SESS
 from app.core.db import session_scope
-from app.core.errors import AppError
+from app.core.errors import AppError, MustReportError
 from app.mod15_user import domain as D
 from app.mod15_user import login as LG
 from app.mod15_user import repository as R
@@ -114,7 +114,17 @@ def _payload(s) -> dict:
     users = R.all_users(s)
     return {
         "users": [_row(u) for u in users],
-        "me": (_row(me) if me is not None else None),
+        # ⭐ 2026-09-27（`TAIL-129`）：**当前登录用户**这一块多带两项**界面偏好**（主题 ＋ 界面大小）。
+        #    ⚠️ 为什么挂在这里：`/api/m15/users` 是**启动时就会拉**的那一路（壳 `boot()` 的
+        #    `reloadWho`）⇒ 界面大小**首屏就生效**，⛔ 不必为它新开一路请求（也别塞进
+        #    `PAGE_LOAD['set']` —— 那样只有进过设置页才生效，正是主题踩过的那个坑）。
+        #    ⚠️ `ui_scale_css` 是**倍率字符串**（给 CSS `--fscale` 直接用）：壳⛔ 不拿键去查表。
+        "me": (None if me is None else {
+            **_row(me),
+            "theme": D.effective_theme(me),
+            "ui_scale": D.effective_ui_scale(me),
+            "ui_scale_css": D.ui_scale_css(me),
+        }),
         "counts": {
             "total": len(users),
             "active": sum(1 for u in users if D.state_of(u) == D.STATUS_ACTIVE),
@@ -248,14 +258,49 @@ def api_theme() -> dict:
 
     names = list(P.theme_names())
     with session_scope() as s:
+        me = _me(s)
         return {
             "ok": True,
-            "theme": D.effective_theme(_me(s)),
+            "theme": D.effective_theme(me),
             "themes": names,
             "default": P.DEFAULT_THEME,
             # ⭐ 每套一张"配色标本"卡（见 `_palette` 的注释）—— 壳只负责画，取值全在这儿
             "palette": [_palette(n) for n in names],
+            # ⭐⭐ 2026-09-27（`TAIL-129` 界面大小）：**档位清单的真源在后端**（`domain.UI_SCALES`）——
+            #    壳拿它画按钮、⛔ 不写死档位映射（加一档要改两处就是两份真源）；
+            #    `css` 是喂 `--fscale` 的倍率字符串（壳直接用，⛔ 不用键去查表）。
+            "ui_scale": D.effective_ui_scale(me),
+            "scales": [{"key": k, "label": lb, "css": css} for k, lb, css in D.UI_SCALES],
         }
+
+
+class UiScaleIn(BaseModel):
+    """界面大小**档位键**（`standard` / `large` / `larger` / `largest`）。"""
+
+    ui_scale: str = ""
+
+
+@router.post("/api/m15/ui-scale")
+def api_set_ui_scale(req: UiScaleIn) -> dict:
+    """存**自己的**界面大小档位（`TAIL-129` · 用户裁定走方案 B：字号＋行距走 CSS 变量）。
+
+    ⚠️⚠️ **不接 `id`**（与主题那条同款）：只能改**当前登录用户自己**的那一行 —— 这正是
+       「A 选了"更大"不妨碍 B 保持标准」的另一半（前半在"读的时候各读各的"）。
+    ⚠️ 非法档位**显式拒绝**（`domain.assert_ui_scale_usable`）—— ⭐ 与主题的"非法名静默回落"
+       **有意不同**：主题的乱名页面还看得见一套样式（用户能察觉），而界面大小的乱值
+       **什么都不会发生**（`--fscale` 算不出来 ⇒ 看起来就是"点了没反应"）⇒ 必须当场说清。
+    """
+    with session_scope() as s:
+        me = _me(s)
+        if me is None:
+            return _flash("err", "没有当前登录用户 —— 请先登录再改界面大小。")
+        try:
+            key = D.assert_ui_scale_usable(req.ui_scale)
+        except MustReportError as exc:
+            return _flash("err", str(exc))
+        R.set_ui_scale(s, me.id, key)
+        label = {k: lb for k, lb, _ in D.UI_SCALES}.get(key, key)
+        return _flash("ok", f"界面大小已改为「{label}」")
 
 
 class ThemeIn(BaseModel):

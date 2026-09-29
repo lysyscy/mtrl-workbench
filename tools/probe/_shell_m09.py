@@ -40,7 +40,7 @@ def check(page, errors: list[str]) -> None:
           tables: tbls.length,
           tbody: tbl ? tbl.querySelectorAll('tbody tr').length : 0,
           amtCells: tbl ? tbl.querySelectorAll('tbody input[data-act="awfAmt"]').length : 0,
-          wiredLabel: document.querySelector('#ttl em').innerText,
+          wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
         };
         /* ⭐ 换一个**非默认**项目 ⇒ 页面必须跟着后端走（证明"选得到的就取得到"） */
         const other = AWF_PJS[AWF_PJS.length - 1];
@@ -61,7 +61,7 @@ def check(page, errors: list[str]) -> None:
     bg = m09.get("bogus") or {}
     oks7 = [
         (m09["tables"] >= 1 and m09["tbody"] >= 3, "表在线（自动项 ＋ 手填项 ＋ 合计）"),
-        ("已接后端" in m09["wiredLabel"], "顶栏说「已接后端真实数据」"),
+        ("未接通" not in m09["wiredLabel"], "接通页的顶栏不挂状态牌（用户裁定 B）"),
         (m09["demoGone"], "⭐ 演示容器 `AWF` **真的没了**（`typeof AWF === 'undefined'`）"),
         (m09["pjCands"] > 0 and m09["pjCands"] == m09["beCands"],
          f"⭐ 项目候选 == 后端（{m09['pjCands']} vs {m09['beCands']}）"

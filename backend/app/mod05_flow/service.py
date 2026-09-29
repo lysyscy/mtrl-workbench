@@ -78,6 +78,7 @@ def opening_views(s: Session, project_id: int | None = None) -> list[OpeningView
             cutoff_ym=str(o.cutoff_ym or ""),
             settle_amount=to_money(o.settle_amount),
             paid_amount=to_money(o.paid_amount),
+            opening_id=int(o.id or 0),                  # ⭐ 真 id（与 `ledger.opening_id` 同源 · 见 domain 注释）
         )
         for o in repo.list_openings(s, project_id=project_id)
     ]
@@ -211,6 +212,9 @@ def build_debt(s: Session, *, jc_debt=None) -> dict:
         #    「卡片要并」）—— 只给 `by_category` 的聚合数，前端就没法按期初修正柱子 ⇒ **与 KPI 打架**。
         "openings": [
             {
+                # ⭐ 真 id：壳里「删除期初行」按钮在**台账行**上、要去这一侧取数据 ⇒ 两边 id 必须同源
+                #   （2026-09-28 修：此前不返回 id ⇒ 壳只能填假值 `''` ⇒ 点删除**静默无反应**）。
+                "id": o.opening_id,
                 "category": o.category,
                 "category_label": CATEGORY_LABELS.get(o.category, o.category),
                 "project_id": o.project_id,
@@ -244,7 +248,30 @@ def build_debt_live(s: Session, **kw) -> dict:
 
 # ---------------------------------------------------------------- ④ 总欠款表（用户 2026-09-20）
 
-def total_debt_rows(s: Session) -> dict:
+def order_project_ids(cand: set[int], by_wh: dict[str, int], order: list[str], label_of) -> list[int]:
+    """「导出总欠款」的**行序**（2026-09-28 用户口径：可以像月度会大表那样**自己选项目 + 定顺序**）。
+
+    - `order` **非空** ⇒ **按用户给的顺序**出行（只保留：能解析到、且**真有数**的项目；重复的只取一次）；
+      ⛔ 不存在的名字**静默跳过**（壳侧候选只给"档案里有的项目"，正常不会出现 —— 跳过比报错好：别让一个
+      脏名字把整张表顶掉）。
+    - `order` **为空** ⇒ 现状：按**项目展示名**升序（同名再按 id）。
+
+    ⭐ 抽成纯函数是为了**能离线钉住**（`tests/test_page_m05.py`）—— 排序这种事最容易"改一处漏一处"。
+    """
+    if not order:
+        return sorted(cand, key=lambda p: (label_of(p) or "", int(p)))
+    seen: set[int] = set()
+    out: list[int] = []
+    for nm in order:
+        pid = by_wh.get(str(nm))
+        if pid is None or pid not in cand or pid in seen:
+            continue
+        seen.add(pid)
+        out.append(pid)
+    return out
+
+
+def total_debt_rows(s: Session, *, order: list[str] | None = None) -> dict:
     """**总欠款**（按项目 × 集采 / 辅材 / 机械）—— 供 `debt_export.build_xlsx` 写表。
 
     ⭐ **口径一律复用现场那两个函数**（⛔ 绝不在这里另写一套算钱的）：
@@ -288,8 +315,9 @@ def total_debt_rows(s: Session) -> dict:
             continue
         jc[pid] = jc.get(pid, Decimal("0")) + Decimal(str(r.get("debt") or 0))
 
-    pids = sorted(set(per) | set(jc),
-                  key=lambda p: (project_label(index.get(p)) or "", int(p)))
+    # ⭐ 行序（2026-09-28 用户口径）：用户选了项目 ⇒ **按他给的顺序**；没选 ⇒ 按展示名升序（现状）
+    pids = order_project_ids(set(per) | set(jc), by_wh, list(order or []),
+                             label_of=lambda p: project_label(index.get(p)))
     items = [
         {
             "index": n,
@@ -303,7 +331,7 @@ def total_debt_rows(s: Session) -> dict:
     return {"items": items, "jc_skipped": jc_skipped, "mech_settle_ready": MECH_SETTLE_SOURCE_READY}
 
 
-def export_total_debt(s: Session) -> tuple[Path, dict]:
+def export_total_debt(s: Session, projects: str = "") -> tuple[Path, dict]:
     """导出**总欠款表** ⇒ `(绝对路径, 回执说明)`。
 
     ⚠️⚠️ 回的是 **`Path`**，⛔ **不是 `str`** —— 端点那边要 `path.name`：
@@ -316,7 +344,9 @@ def export_total_debt(s: Session) -> tuple[Path, dict]:
     from app.core.config import PROJECT_ROOT
     from app.mod05_flow import debt_export as X
 
-    data = total_debt_rows(s)
+    # ⭐ `projects` = 壳里「选择项目」给的**仓库名**，逗号分隔、**顺序即行序**（空 = 全部，现状行为）
+    order = [x.strip() for x in str(projects or "").split(",") if x.strip()]
+    data = total_debt_rows(s, order=order or None)
     if not data["items"]:
         raise MustReportError("总欠款：**一个项目的欠款都算不出来**（通知书与集采合同都还没数据）"
                               "—— 请先抓取 / 导入，再导出。")
@@ -448,5 +478,5 @@ __all__ = [
     "CATEGORY_LABELS", "MECH_SETTLE_SOURCE_READY",
     "notice_debt_views", "opening_views", "project_index", "project_label", "project_options",
     "build_flows", "build_debt", "build_debt_live", "build_ledger", "build_stats", "window_buckets",
-    "total_debt_rows", "export_total_debt",
+    "total_debt_rows", "export_total_debt", "order_project_ids",
 ]

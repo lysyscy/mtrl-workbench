@@ -89,7 +89,16 @@ def test_状态色一律四档成组():
 
 @acc()
 def test_全工程引用的变量都有定义_引用了没定义会静默失效():
+    """⭐ 2026-09-27（`TAIL-129` 界面大小）：**"定义处"有两个** ——
+      ① **主题真源**（`page.THEME_CSS`，全是**颜色**）；② **壳自己的样式块**（**非颜色**的尺寸/倍率，
+         如界面大小的 `--fscale`，它的默认值必须写在壳里 —— 那是"JS 没跑时也不散架"的兜底）。
+    ⚠️ 本条守的是「**引用必有定义**（否则 `var()` 取不到值 ⇒ 整条声明静默失效）」，不是
+       「只能在主题真源里定义」⇒ 放开这一处**不会**削弱颜色那半：
+       颜色另有更严的守卫（壳不许自带 `:root` / 硬编码色清零 / `ACC-UI-THEME-001` 那几条）。
+    """
     defined = set(_theme_vars())
+    for _name, text in _iter_html():
+        defined |= set(_VAR_DEF_RE.findall(text))       # ⭐ 壳自己定义的（`html{--fscale:1}` 这种）
     used: set[str] = set()
     for f in _iter_app_py():
         used |= set(_VAR_USE_RE.findall(f.read_text(encoding="utf-8")))

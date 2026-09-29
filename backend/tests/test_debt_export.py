@@ -78,7 +78,9 @@ def test_导出返回的是Path而不是str(monkeypatch):
        **没有一条跨过「实现 → 端点」那道缝** —— 这正是"接缝处最容易漏测"的典型样子。
     ⇒ 这条钉住那个**类型契约**：必须回 `Path`（端点要用 `.name` / `.suffix` 决定文件名与媒体类型）。
     """
-    monkeypatch.setattr(S, "total_debt_rows", lambda _s: {
+    # ⚠️ 桩要跟着签名走（2026-09-28 加了 `order=` —— 「选择项目」的**行序**）：
+    #    签名一变、桩不收新参数 ⇒ 这里会 TypeError（本条当天就是这么抓到自己的）
+    monkeypatch.setattr(S, "total_debt_rows", lambda _s, *, order=None: {
         "items": [{"index": 1, "project": "自检项目", "jc": Decimal("1"),
                    "material": Decimal("2"), "mech": Decimal("3")}],
         "jc_skipped": 0, "mech_settle_ready": False,

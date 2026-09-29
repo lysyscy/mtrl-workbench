@@ -15,10 +15,16 @@ from app.mod04_plan.domain import ProjectBrief
 
 
 def project_briefs(session: Session) -> list[ProjectBrief]:
-    """档案行 → 匹配用视图（**只带匹配所需的三个字段**）。"""
+    """档案行 → 匹配用视图（**只带匹配所需的几个字段**）。
+
+    ⭐ 2026-09-27（`TAIL-129`）：多带一份 `keywords`（`project.match_keywords`）——
+       它是**用户在「项目管理」页自己维护的简称/关键词**，正好当"项目名匹配"的第④步别名表
+       （用户表里写 `大唐雷州`、档案叫 `大唐雷州发电项目` 这种，②③步多半能中；中了也仍可人工补一条别名兜住）。
+    """
     return [
         ProjectBrief(id=p.id, disp=p.disp or "", warehouse_name=p.warehouse_name,
-                     name_full=p.name_full or "")
+                     name_full=p.name_full or "",
+                     keywords=tuple(str(k) for k in (p.match_keywords or []) if str(k).strip()))
         for p in session.execute(select(Project)).scalars().all()
     ]
 

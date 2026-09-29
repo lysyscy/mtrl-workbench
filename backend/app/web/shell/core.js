@@ -4,7 +4,10 @@
  * 内容：`CAT_API` / `API`（唯一数据出口）· 字段适配器（`adapt*`）· 各模块取数与写动作外壳（`reload*` / `*Act`）
  *       · `BIND.*`（渲染后注入）· 按需取数表（`PAGE_LOAD` / `LOADERS` / `LOAD_DEP` / `soft` / `loadPaths`）。
  * ⚠️ `boot();` **不在本件**（它留在 `index.html` 末尾 ⇒ 启动点显式可见、加载顺序可调）。
- * ⛔ 改这里前先看 §23：`index.html` 里 258–3285 那一段（公共外壳 ＋ 原型切片 `V.*`）**不许搬**。
+ * ⛔ 改这里前先看计划 §23：**原型切片 `V.*` 不许搬出 `index.html`**（`ui_parity` 的 `U1` 逐行比它）。
+ *    ⚠️ **订正（2026-09-28 · `TAIL-164`）**：原文写「`index.html` 里 258–3285 那一段（公共外壳 ＋ 原型切片）
+ *    不许搬」—— 那句**过宽**（`§23` 的口径只管**原型切片**）：**非切片**的公共代码已按 `P2-a` 搬进
+ *    `web/shell/{base,view,ui,proj,pages-a,pages-b}.js` ⇒ ⛔ 别再照那句拦。
  */
 /* ⚠️ 分类的**内部值**是英文（`material` / `mechanical` / `jc`），中文只是**显示名** ——
    界面上传下来的是中文 ⇒ 在**这一处**转（映射只写一份，别在动作里各转一遍）。 */
@@ -56,16 +59,31 @@ async function dlExport(url, { name = '导出文件', label = '导出', close = 
   toast(`<b>${label}</b>：正在从服务器准备文件 …（完成后会再提示）`, 4000);
   let r;
   try { r = await fetch(url); }
-  catch (e) { toast(`<b>${label}没能完成</b>：${esc(String((e && e.message) || e))}`, 8000); return ''; }
+  catch (e) {
+    /* ⚠️ 这条 catch 抓的是 `fetch` **本身**抛的（断网 / 服务没起来）—— 它的 `message`
+       是浏览器的英文原文（`Failed to fetch`）⇒ ⛔ 不能直接上屏，必须过「人话出口」。 */
+    const h = errHuman(`没能连上服务器（${label}这一步）。请确认服务在运行，然后重试。`,
+      String((e && e.message) || e));
+    toast(`<b>${label}没能完成</b>：${esc(h.message)}`, 8000); return '';
+  }
   const ct = r.headers.get('content-type') || '';
   if (ct.includes('application/json')) {
     let d = {};
-    try { d = await r.json(); } catch (e) { /* 读不出 ⇒ 下面统一报「后端没给原因」 */ }
-    /* ⚠️ 两种失败体都认：自己回的 `{message}`（ok:false）· FastAPI 的 `{detail}`（HTTPException）。 */
-    toast(`<b>${label}没能完成</b>：${esc(d.message || d.detail || '后端没给原因')}`, 9600);
+    try { d = await r.json(); } catch (e) { /* 读不出 ⇒ 下面统一报「没拿到原因」的人话 */ }
+    /* ⚠️ 两种失败体都认：自己回的 `{message}`（ok:false）· FastAPI 的 `{detail}`（HTTPException）。
+       ⭐ 后端给了中文（"为什么＋怎么解决"）⇒ **原样透传**；没给 ⇒ 只说人话，⛔ 不写"后端没给原因"
+         这种给开发看的话（守则 §3.3）。 */
+    const why = (d && (d.message || d.detail)) || '';
+    const h = errHuman(`没能生成文件${why ? '：' + why : '，服务器没有说明原因。请稍后重试'}`
+      + '；仍失败请把这一步告诉管理员。', `GET ${url} → 200 · JSON 失败体=${JSON.stringify(d).slice(0, 300)}`);
+    toast(`<b>${label}没能完成</b>：${esc(h.message)}`, 9600);
     return '';
   }
-  if (!r.ok) { toast(`<b>${label}没能完成</b>：HTTP ${r.status}`, 8000); return ''; }
+  if (!r.ok) {
+    const h = errHuman('没能生成文件，服务器返回了错误。请稍后重试；仍失败请把这一步告诉管理员。',
+      `GET ${url} → HTTP ${r.status}`);
+    toast(`<b>${label}没能完成</b>：${esc(h.message)}`, 8000); return '';
+  }
   const fn = decodeURIComponent(r.headers.get('x-export-filename') || '') || name;
   const blob = await r.blob(), a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = fn;
@@ -207,19 +225,19 @@ let pjTypeCur = null, pjTypeNew = '';
 function pjTypeDlg() {
   const p = pjTypeCur;
   if (!p) return;
-  const opt = (k, desc) => `<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--bd);border-radius:7px;margin-bottom:7px">
+  const opt = (k, desc) => `<div style="display:flex;align-items:center;gap:calc(10px * var(--fscale));padding:calc(8px * var(--fscale));border:1px solid var(--bd);border-radius:7px;margin-bottom:calc(7px * var(--fscale))">
       <button class="btn sm ${pjTypeNew === k ? 'pri' : 'gost'}" style="flex:0 0 auto" data-act="pjTypePick" data-t="${k}">${pjTypeNew === k ? '已选' : '选它'}</button>
       <span style="flex:1;min-width:0"><b>${esc(PJ_TYPE_LABEL[k])}</b> <span class="mut sm">· ${desc}</span></span></div>`;
   modal({
     title: `改类型 · ${esc(pjDisp(p))}`,
-    body: `<div class="tip" style="margin-bottom:10px">当前类型：<b>${esc(PJ_TYPE_LABEL[p.type] || p.type)}</b>。
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">当前类型：<b>${esc(PJ_TYPE_LABEL[p.type] || p.type)}</b>。
       三类判定（§2.2.1）本来是<b>自动</b>的：全名含「小微」⇒ <b>小微壳</b>；同一全名挂 <b>≥2 个仓库</b> ⇒ 待人工确认；其余算<b>普通项目</b>。
       ⚠️ 有的壳的全名里<b>没有「小微」</b>（图纸上的叫法就是这样）⇒ 会被误判成普通项目 —— <b>这里就是人工纠正的入口</b>
       （改动<b>会留痕</b>，在「修改留痕」卡里可查）。</div>
-      <div class="tip wn" style="margin-bottom:10px">⛔ <b>不能选「具体小微」</b>：它得挂在一个壳下面、还占一个仓库名，由链路产生（人工指定只会造出挂不上的行）。</div>
+      <div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))">⛔ <b>不能选「具体小微」</b>：它得挂在一个壳下面、还占一个仓库名，由链路产生（人工指定只会造出挂不上的行）。</div>
       ${opt('shell', '不挂仓库；它名下的仓库 = 具体小微（今后走这条路）')}
       ${opt('normal', '要挂一个仓库名（候选键）—— 选了它，下面会让你填')}
-      ${pjTypeNew === 'normal' ? `<div style="margin-top:6px"><div class="sm mut" style="margin-bottom:4px">仓库名（普通项目必填）</div>
+      ${pjTypeNew === 'normal' ? `<div style="margin-top:calc(6px * var(--fscale))"><div class="sm mut" style="margin-bottom:calc(4px * var(--fscale))">仓库名（普通项目必填）</div>
         <input class="inp" id="pjTypeWh" style="width:100%" value="${esc(p.name || '')}" placeholder="填这一行挂的仓库名"></div>` : ''}`,
     footer: `<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="pjTypeOk">确认改类型</button>`,
   });
@@ -259,7 +277,12 @@ function adaptFlow(x) {
 /* 期初行：只喂「按项目看欠款」的柱子（台账行改读后端）⇒ 按原型 `LG_COLS` 的关键字段给 */
 function adaptOpening(x) {
   return {
-    id: '', proj: x.project_key || x.project_label || '', cat: x.category_label || '',
+    /* ⭐ 2026-09-28 修：这里原来把 id **写死成假值 `''`**（因为当时 `/api/m05/debt` 不返回 id）
+       ⇒ 「删除期初行」按钮 `LGs.find(x=>x.id===…)` **永不匹配、静默无反应**（用户走查报障）。
+       现在后端给了真 id（`openings[].id`，与 `ledger.opening_id` 同源）⇒ 如实带上；空值仍留空
+       （守则 §铁律 4：⛔ 不许拿假值冒充 —— 但**调用方**必须对"没有"给可见反馈，不许静默 return）。 */
+    id: x.id == null ? '' : String(x.id),
+    proj: x.project_key || x.project_label || '', cat: x.category_label || '',
     settle: numOr0(x.settle), paid: numOr0(x.paid), cutoff: x.cutoff || '', remark: '',
   };
 }
@@ -406,18 +429,18 @@ async function ntFetchBackend(m) {
   try { r = await API.fetchNotices(m); }
   catch (e) {
     await reloadM02IfOn();     /* ⚠️ 抓取失败**也写了一条执行记录**（`_persist_fetch` 的失败路径）⇒ 卡也要变 */
-    return fetchResultModal(`抓取失败 · 付款通知书（API-01）`,
+    return fetchResultModal(`抓取失败 · 付款通知书`,
       `<b style="color:var(--wn)">网络或服务异常</b>：${esc(String((e && e.message) || e))}`);
   }
   if (r.ok) {
     await reloadNotices();
     await reloadM02IfOn();     /* ⭐ 刚写的那条记录要**立刻**在记录卡上看到（见 `reloadM02IfOn`） */
-    return fetchResultModal(`抓取结果 · 付款通知书（API-01）`,
+    return fetchResultModal(`抓取结果 · 付款通知书`,
       `已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，落库 <b>${r.upserted}</b> 条。`);
   }
   /* 失败：把后端原因**原样**给用户（后端已写成中文）；属「归属未走完」⇒ 直接开补词弹窗 */
   await reloadM02IfOn();       /* ⚠️ 「抓取被拒」同样是**一条真记录**（`failed`）⇒ 卡上要能看到 */
-  fetchResultModal(`抓取被拒 · 付款通知书（API-01）`,
+  fetchResultModal(`抓取被拒 · 付款通知书`,
     `<b style="color:var(--wn)">后端拒绝了这次抓取</b>：${esc(r.message || '未知原因')}`);
   try { await openOwnDialog(); } catch (e) { /* 打不开弹窗也不影响上面那句原因 */ }
 }
@@ -444,7 +467,7 @@ async function openOwnDialog() {
   const box = items.map((it, i) => {
     OWN_CTX[i] = it.project_name || '';          /* `TAIL-39`：查名单后用来核"是不是同一个壳" */
     const cands = it.candidates || [];
-    const rows = cands.map(c => `<div style="display:flex;align-items:center;gap:9px;padding:7px 8px;border:1px solid var(--bd);border-radius:7px;margin-bottom:7px">
+    const rows = cands.map(c => `<div style="display:flex;align-items:center;gap:calc(9px * var(--fscale));padding:calc(7px * var(--fscale)) calc(8px * var(--fscale));border:1px solid var(--bd);border-radius:7px;margin-bottom:calc(7px * var(--fscale))">
       <button class="btn sm pri" style="flex:0 0 auto" data-act="ownAssign" data-i="${i}" data-pid="${c.id}">归集到它</button>
       <span style="flex:1;min-width:0">${esc(c.disp)} <span class="mut sm">· 仓库名 ${esc(c.warehouse_name || '—')} · 关键词 ${esc((c.keywords || []).join('、') || '—')}</span></span>
       <input class="inp" style="width:148px;flex:0 0 auto" id="ownKw_${i}_${c.id}" placeholder="关键词">
@@ -454,29 +477,29 @@ async function openOwnDialog() {
         : it.kind === 'not_archived'
           ? '⛔ <b>未建档</b>（且不在 i8 常用项目列表）⇒ 请把它<b>加入 i8 常用项目列表</b>，下次抓取会自动建档 —— <b>不要</b>在这里新建小微'
           : `（${esc(it.kind)}）`;
-    return `<div style="border:1px solid var(--bd2);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div class="sm" style="margin-bottom:6px"><b>${esc(it.project_name)}</b> <span class="mut">${note}</span></div>
+    return `<div style="border:1px solid var(--bd2);border-radius:8px;padding:calc(10px * var(--fscale));margin-bottom:calc(10px * var(--fscale))">
+      <div class="sm" style="margin-bottom:calc(6px * var(--fscale))"><b>${esc(it.project_name)}</b> <span class="mut">${note}</span></div>
       ${kvBlock([['单据编码', `<span class="fc">${esc(it.bill_no || '—')}</span>`], ['单据名称', `<span class="fc">${esc(it.doc_name || '—')}</span>`]])}
-      <p style="font-size:12px;margin:6px 0 8px">选已有小微时，<b>须填一个出现在上面单据名里的关键词</b>（选中后<b>去重追加</b>到该小微名下，供下次自动命中）；填不出说明不是它。</p>
-      ${rows || '<div class="tip wn" style="margin:0 0 9px">该壳下<b>暂无具体小微</b> → 只能走下面的「新小微」。</div>'}
-      <div style="padding:9px;border:1px dashed var(--bd);border-radius:7px;margin-top:8px">
-        <div class="mut sm" style="margin-bottom:7px">属于<b>新小微</b> → 录「仓库名 ＋ 关键词」建档</div>
+      <p style="font-size:calc(12px * var(--fscale));margin:calc(6px * var(--fscale)) 0 calc(8px * var(--fscale))">选已有小微时，<b>须填一个出现在上面单据名里的关键词</b>（选中后<b>去重追加</b>到该小微名下，供下次自动命中）；填不出说明不是它。</p>
+      ${rows || '<div class="tip wn" style="margin:0 0 calc(9px * var(--fscale))">该壳下<b>暂无具体小微</b> → 只能走下面的「新小微」。</div>'}
+      <div style="padding:calc(9px * var(--fscale));border:1px dashed var(--bd);border-radius:7px;margin-top:calc(8px * var(--fscale))">
+        <div class="mut sm" style="margin-bottom:calc(7px * var(--fscale))">属于<b>新小微</b> → 录「仓库名 ＋ 关键词」建档</div>
         <div class="fld"><label>新小微的仓库名</label><input class="inp" id="ownNewName_${i}" placeholder="如：河南南阳热电项目仓库"></div>
-        <div class="fld" style="margin-top:6px"><label>识别关键词（须出现在单据名里）</label><input class="inp" id="ownNewKw_${i}" placeholder="如：南阳"></div>
-        <div style="margin-top:8px">
+        <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>识别关键词（须出现在单据名里）</label><input class="inp" id="ownNewKw_${i}" placeholder="如：南阳"></div>
+        <div style="margin-top:calc(8px * var(--fscale))">
           <button class="btn gost" data-act="ownWhCheck" data-i="${i}">① 先查 i8 仓库名单</button>
-          <span id="ownWhRes_${i}" class="sm" style="margin-left:8px"></span>
+          <span id="ownWhRes_${i}" class="sm" style="margin-left:calc(8px * var(--fscale))"></span>
         </div>
-        <div class="mut sm" style="margin-top:6px">⭐ <b>建档前必须先跑这一环</b>（用户 2026-09-18 口述裁定）——
+        <div class="mut sm" style="margin-top:calc(6px * var(--fscale))">⭐ <b>建档前必须先跑这一环</b>（用户 2026-09-18 口述裁定）——
           不查就建＝凭猜填仓库名，会留下与 i8 不符的<b>假档案行</b>。⚠️ 查名单要登录 i8，<b>会顶号</b>，故要二次确认。</div>
-        <div style="margin-top:8px"><button class="btn" data-act="ownAssign" data-i="${i}" data-pid="__new">建档并归集</button></div>
+        <div style="margin-top:calc(8px * var(--fscale))"><button class="btn" data-act="ownAssign" data-i="${i}" data-pid="__new">建档并归集</button></div>
       </div>
     </div>`;
   }).join('');
   modal({
     title: `待指定归属 · ${items.length} 条`,
     wide: true,
-    body: `<div class="tip" style="margin-bottom:10px">${OWN_SRC === 'jc'
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">${OWN_SRC === 'jc'
       ? `<b>链路 C</b>：集采合同的<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并落库（集采是**逐条落库**，已落的不受影响）。`
       : `<b>链路 C</b>：付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并落库。`}</div>${box}`,
     footer: `<button class="btn" data-act="closeModal">关闭</button>`,
@@ -500,7 +523,7 @@ async function ownWhCheck(i) {
   /* ⚠️ `D9`：查名单**要登录 i8**（可能**强踢**在线用户）⇒ 先二次确认，确认之后才发请求。 */
   modal({
     title: `查 i8 仓库名单 · ${esc(name)}`,
-    body: `<div class="tip dg" style="margin:0 0 10px"><b>⚠️ 这一步会登录 i8，可能<b>强制踢掉</b>该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）—— 若同事正在用 i8，请先<b>择时</b>。</div>
+    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能<b>强制踢掉</b>该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）—— 若同事正在用 i8，请先<b>择时</b>。</div>
       <div class="tip" style="margin:0">查什么：i8 仓库名单（<span class="fc">API-05</span>）里**有没有**「${esc(name)}」，以及它**挂在哪个项目全名**下 ——
       用来判断该走「选已有小微」还是「只能手填」。⚠️ 只查**不落库**（名单本身不留档）。</div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
@@ -650,15 +673,15 @@ async function ivFetchBackend(month) {
     if (r.ok === false) {                    /* 降级：i8 侧失败 ⇒ 走手动 Excel 导入（§3.6） */
       await reloadInv();
       await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
-      return fetchResultModal(`抓取没能完成 · 收发结存（API-02）`,
+      return fetchResultModal(`抓取没能完成 · 收发结存`,
         `已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
         + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`);
     }
     await reloadInv();
     await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
     const st = r.stats || {};
-    fetchResultModal(`抓取结果 · 库存单据明细（API-03）`,
-      `已按 <b>${esc(month)}</b> 抓取库存单据明细（API-03）：<br>`
+    fetchResultModal(`抓取结果 · 库存单据明细`,
+      `已按 <b>${esc(month)}</b> 抓取库存单据明细：<br>`
       + `本次插入 <b>${st.inserted || 0}</b> · 更新 <b>${st.updated || 0}</b>`
       + ` · i8 侧已删 <b>${st.deleted || 0}</b>`
       + `${st.kept_with_adjustment ? ` · <b>保留调整单 ${st.kept_with_adjustment}</b>` : ''}`
@@ -672,10 +695,14 @@ async function ivFetchBackend(month) {
   }
 }
 
-/* ============ MOD-07 收发结存与活动大表（前端壳接线 · `TAIL-27`）============
+/* ============ MOD-07 收发结存与月度会大表（前端壳接线 · `TAIL-27`）============
    ⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 这里**一律过 `N0()`**：
       不过的话壳里的求和会变成**字符串拼接**（`'100.00' + '1.00'`），而且**不报错**。 */
 let MAT_OK = false;            /* 「主材累计（含税）」取数口是否已接入（后端 `mat_available`） */
+/* ⭐ `A5`（2026-09-29 逐页）：大表**空态**那句「为什么是空的」—— ⚠️ **主人是后端**
+   （`/api/m07/big` 的 `empty_text`，源自 `big_domain.empty_text`）⇒ 壳里⛔ 不自己编一句。
+   （它此前是后端的**死代码**，而壳那边 0 行时只 `return ''` ⇒ 只剩三级表头的大空表。） */
+let BIG_EMPTY = '';
 /* 手填 6 列的 key 与格式 —— ⚠️ **顺序与列型的主人是后端**（`big_domain.BIG_MANUAL`），
    由 `reloadM07()` 按 `manual_keys` / `manual_fmts` 覆盖；这里只是**取数前的兜底**。 */
 const BIG_MKEYS = ['open_ym', 'mech_est', 'contract', 'output_cum', 'oil', 'note'];
@@ -769,11 +796,12 @@ async function reloadM07() {
     BIGSET.length = 0;
     (bg.selected || []).forEach(k => BIGSET.push(k));
     MAT_OK = !!bg.mat_available;
+    BIG_EMPTY = String(bg.empty_text || '');
   }
   /* ⚠️ 大表月份 = `bjMonth(-1)`（原型写死「北京时间上月」，§9.2 材料报表类）——
      与后端 `default_month()` 同口径；后端 `selected` 已是「大表自己的顺序」，不需前端重排。
-     ⛔ **不要在这里给 `BIGSET` 兜底「空了就填全部候选」**：后端的选题有**标记行**区分
-        「从未选题」（⇒ 后端已给全部候选）与「选了空」（⇒ 表里 0 个项目）——
+     ⛔ **不要在这里给 `BIGSET` 兜底「空了就填全部候选」**：后端的选择项目有**标记行**区分
+        「从未选择项目」（⇒ 后端已给全部候选）与「选了空」（⇒ 表里 0 个项目）——
         前端兜底会把用户的「清空」**悄悄改回全部候选**（假成功，且不报错）。 */
   render();
 }
@@ -792,7 +820,7 @@ async function whFetchBackend(month) {
     if (r.ok === false) {                    /* 降级：i8 侧失败 ⇒ 走手动 Excel 导入（§3.6） */
       await reloadM07();
       await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
-      return fetchResultModal(`抓取没能完成 · 库存单据明细（API-03）`,
+      return fetchResultModal(`抓取没能完成 · 库存单据明细`,
         `已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
         + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`);
     }
@@ -803,7 +831,7 @@ async function whFetchBackend(month) {
        用户在壳上抓完收发结存，**看不到"待人工 N 条"**，也就不知道该去 `m01` 处理。 */
     try { await reloadPending(); } catch (_) { /* 清单这一路失败 ⇒ 下面的回执里如实说明 */ }
     const st = r.stats || {};
-    let msg = `已按 <b>${esc(month)}</b> 抓取收发结存（API-02）：解析 <b>${r.rows || 0}</b> 行 —— `
+    let msg = `已按 <b>${esc(month)}</b> 抓取收发结存：解析 <b>${r.rows || 0}</b> 行 —— `
       + `新增 <b>${st.inserted || 0}</b> · 更新 <b>${st.updated || 0}</b> · 删除 <b>${st.deleted || 0}</b>`;
     const rc = r.recovery || {};
     const pro = (rc.promoted || []).length, cre = (rc.created || []).length;
@@ -816,7 +844,7 @@ async function whFetchBackend(month) {
         + `<br>⇒ <span class="link" data-act="go" data-k="m01" tabindex="0" role="button">去项目档案指认到哪一行 →</span>`;
     }
     if (rc.degraded && rc.message) msg += `<br>⚠️ ${esc(rc.message)}`;
-    fetchResultModal(`抓取结果 · 收发结存（API-02）`,
+    fetchResultModal(`抓取结果 · 收发结存`,
       msg + `<br><span class="mut sm">⚠️ 解析条数与落库条数不一致时先怀疑幂等范围（见 ops 实测结论）</span>`);
   } catch (e) {
     await reloadM07();
@@ -894,6 +922,11 @@ function applyWho(d) {
   CUR.acc = me.account || '';
   CUR.name = me.name || '';
   CUR.role = me.role || '';
+  /* ⭐⭐ 2026-09-27（`TAIL-129` 界面大小）：**在这个启动就一定会跑的地方**应用界面偏好 ——
+     `/api/m15/users` 是 `boot()` 里的"当前登录用户"那一路 ⇒ 界面大小**首屏就生效**，
+     ⛔ 不必为它新开一路请求（也⛔ 别只挂在 `reloadTheme` 上 —— 那一路上次就是这么把主题坑了的：
+     只有进过"系统设置"页才生效）。⚠️ 取不到（`me` 为空 / 字段缺失）⇒ 什么都不做 = **保持标准档** ✓ */
+  if (me.ui_scale_css) { CUR_UI_SCALE = String(me.ui_scale || ''); applyUiScale(me.ui_scale_css); }
 }
 async function reloadWho() { applyWho(await API.users()); }
 
@@ -930,7 +963,7 @@ function m15Trash() {
   card.id = 'm15Trash';
   card.className = 'card';
   card.innerHTML = `<h4>回收站 · 已删除账号
-    <span class="sp"><span class="mut sm">删除是<b>软删</b>：账号名保留、数据不销毁 ⇒ 历史留痕里的人名仍认得出来；恢复后回到它**原来的状态**（停用过的仍是「已停用」）</span></span></h4>
+    <span class="sp"><span class="mut sm">删除是<b>软删</b>：账号名保留、数据不销毁 ⇒ 历史留痕里的人名仍认得出来；恢复后回到它<b>原来的状态</b>（停用过的仍是「已停用」）</span></span></h4>
     <div class="tw"><table class="dt"><thead><tr><th>登录账号</th><th>姓名</th><th>角色</th><th>状态</th><th>最近登录</th><th>操作</th></tr></thead><tbody></tbody></table></div>`;
   const tb = card.querySelector('tbody');
   rows.forEach(tr => tb.appendChild(tr));                  /* ⭐ 原样搬（含恢复按钮） */
@@ -946,6 +979,22 @@ BIND.m15 = m15Trash;
       下拉里一个选项都没有、`themeSet` 写回**空串**（症状 = "换主题没用"，
       而且**全程不报错**；2026-09-21 实测踩到，正是用户报的那个毛病）。
    ⚠️ 取不到**不该让整页报错** ⇒ 清单空着即可（`V.set` 会写明"清单取不到"），⛔ 别把异常抛上去。 */
+/* ⭐⭐ 2026-09-27（`TAIL-129` 界面大小 · 用户裁定走**方案 B**：字号＋间距走 CSS 变量）：
+   `UI_SCALES` = **档位清单**（`[{key,label,css}]`，真源在后端 `domain.UI_SCALES` ⇒ 壳⛔ 不写死映射）、
+   `CUR_UI_SCALE` = 我当前哪一档（键）。两者都由 `/api/m15/theme` 填（与主题同源最省事）。 */
+let UI_SCALES = [], CUR_UI_SCALE = '';
+
+/* 应用**界面大小**档：把倍率写到 `<html>` 的内联 `--fscale` 上。
+   ⚠️ 用**内联 style**、不是改样式表：① 优先级最高 ⇒ ⛔ 不用碰 `theme.css`（那里的 `--fs` 是
+      **字体族**，两个名字只差一个字母，别混）；② 换档**立即生效、不刷新页面**
+      （与主题同一条纪律 —— 刷新会把用户扔回看板，那是 2026-09-21 报过的毛病）。
+   ⚠️ 取不到值 ⇒ 回 `1`（标准档）：⛔ 别回空串 —— 空串会让 `calc(… * var(--fscale))` **整条失效**
+      （字号回落成浏览器默认 = 界面全乱）。 */
+function applyUiScale(css) {
+  const v = String(css || '').trim() || '1';
+  document.documentElement.style.setProperty('--fscale', v);
+}
+
 async function reloadTheme() {
   try {
     const th = await API.m15Theme();
@@ -954,6 +1003,13 @@ async function reloadTheme() {
        ⛔ 壳里**一个色值都不写**（写死就是第二份真源，`test_theme.py` 会红）。 */
     THEME_PALETTE.splice(0, THEME_PALETTE.length, ...((th.palette || [])));
     CUR_THEME = th.theme || th.default || '';
+    /* ⭐ 界面大小（`TAIL-129`）：档位清单 ＋ "我当前哪一档" —— ⚠️ 清单的真源在**后端**
+       （`domain.UI_SCALES`），壳只负责画按钮；`css` 是喂 `--fscale` 的倍率字符串。
+       ⚠️ 进这一路时**顺手应用一次**（保证"没走过启动那一路"或"换过账号"时也对）。 */
+    UI_SCALES.splice(0, UI_SCALES.length, ...((th.scales || [])));
+    CUR_UI_SCALE = String(th.ui_scale || '');
+    const cur = UI_SCALES.find(s => s.key === CUR_UI_SCALE);
+    if (cur) applyUiScale(cur.css);
   } catch (e) { /* 见上 */ }
 }
 
@@ -976,14 +1032,71 @@ async function reloadMech() {
       判定与落库全在后端（`POST /api/m06/mech`）。⚠️ 机械值是**旁路载体**，重抓 / 重导都不覆盖它。 */
 BIND.m06 = function () {
   const host = document.querySelector('#view');
-  if (!host || document.getElementById('mechEntry')) return;
+  if (!host) return;
+  /* ⭐⭐ 2026-09-29（用户裁定 `A` · `TAIL-173`）：**摘掉卡头那枚「导出 Excel」（朴素那份）** —— 它
+     **永远只会说"这一页还没有导出功能"**（`EXP_ROUTES` 里没有「过程资料」），而同一张卡头里已经有
+     **真入口**「批量导出（先选项目）…」⇒ 两枚导出并排、其中一枚点了必然空转 = 让用户以为坏了
+     （守则 §4.4：相似元素不制造歧义）。
+     ⚠️ **走 BIND 在渲染后摘除，⛔ 不改 `V.m06` 那一行**（同 `BIND.m11` 改导出按钮的做法）：
+        切片是**逐行对位**核对的 ⇒ 删一行会让它后面**所有行**报漂移（`A4` 那次 101 条的教训）；
+        而且 `tests/test_tail04_pages.py` 把 `data-act="exp" data-t=…` 的**名单钉在源码上** ⇒ 删源码必红。
+     ⚠️ **兜底那句不许删**（它在 `EXP_ROUTES` 上面的分支里）：`m08` 朴素那份 / 已取消的差异清单仍在用它。
+     ⚠️ **幂等**：`render()` 每次重画 `#view` ⇒ 本钩子每次都要重摘一遍。 */
+  const naive = host.querySelector('[data-act="exp"][data-t="过程资料"]');
+  if (naive) naive.remove();
+  if (document.getElementById('mechEntry')) return;
   const bar = document.createElement('div');
   bar.id = 'mechEntry';
-  bar.className = 'fbar';
-  bar.style.cssText = 'border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px';
+  /* ⭐ `A4`（2026-09-29 逐页）：改走**变体类** —— 原先这里把 `.fbar` 的声明在 JS 里**又写了一遍**
+     （`border` / `border-radius` / `margin-bottom`），而那个 `margin-bottom:10px` **漏了 `--fscale`**
+     ⇒ 用户把「界面大小」调大时**这一处不跟着变**（守则 §5.11：漏一处 = 半成品相）。
+     ⚠️ `.fbar.plate`（`index.html` 样式块里那四个变体类之一）的声明与它**逐像素等价**、只差那个倍率。 */
+  bar.className = 'fbar plate';
   bar.innerHTML = '<div class="fi"><label>机械费手录（§5.2.5 ③）</label>'
     + '<span class="mut sm">机械 6 列是<b>旁路载体</b> —— 重抓 i8 / 重导历史都<b>不覆盖</b>它</span></div>'
     + '<button class="btn pri" data-act="mechOpen">录机械费</button>';
+  host.prepend(bar);
+};
+
+/* ⭐⭐ `TAIL-185`（`A` 案 · 2026-09-29 **用户裁定**）：**摘掉 `m08` 卡头那枚「点了必然空转」的朴素导出**。
+   `m08` 卡头并排两枚导出：「导出 Excel」（朴素 · `data-act="exp"` · 走 `EXP_ROUTES` 兜底 ⇒ 点了只会
+   **如实说"这页还没有导出功能"**）＋「导出（含数据透视表）」（`expPivot` · **真下载**）。
+   ⚠️ "点了必然空转"的那枚会让用户**以为坏了**（守则 §4.6：看不到的功能不留"点了报错"的入口）——
+     同族先例：`m06` 那枚朴素导出已在 `TAIL-173`（同日 · 用户裁定 `A`）按同款摘掉。
+   ⚠️ **为什么走 BIND 摘除、⛔ 不删切片那一行**：`V.m08` 是 `ui_parity` 的 `U1` 逐行对位原件（删一行 ⇒
+      它后面**所有行**报漂移），而且 `tests/test_tail04_pages.py` 把 `data-act="exp" data-t=…` 的**名单
+      钉在源码上**；"渲染后注入/摘除"正是本层（`BIND`）该干的活（同 `BIND.m06`）。
+   ⚠️⚠️ **同批改了契约**：`ACC-INV-001/001-12` 的 claim 文字由「朴素导出与含透视那份**并存互不影响**」
+      改成「卡头**只留真入口**（朴素那枚渲染后摘除）」—— ⛔ 别只改壳不改 claim（那正是 §4.1 的"说了不做"）；
+      守卫同批改在 `tests/test_tail04_export.py`（`001-12`）。
+   ⚠️ **幂等**：`render()` 每次重画 `#view` ⇒ 本钩子每次都要重摘一遍（同 `BIND.m06` 那条口径）。 */
+BIND.m08 = function () {
+  const host = document.querySelector('#view');
+  if (!host) return;
+  const naive = host.querySelector('[data-act="exp"][data-t="库存单据明细总表"]');
+  if (naive) naive.remove();
+};
+
+/* ⭐ `TAIL-156`：**月份位移的唯一出口**（`m09` 批量录入用：默认那几行 / 「＋ 加一行」都靠它）。
+   ⚠️ 只在壳里做**加减月份**这种纯算术；⛔ 不在这里判任何业务（判定一律后端）。 */
+const ymAdd = (m, n) => {
+  const [y, mm] = String(m || '').split('-').map(Number);
+  const d = new Date(y, (mm || 1) - 1 + n, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+};
+
+/* ⭐⭐ `TAIL-156` `P2`：`m09` 特殊费用的**月度批量录入**入口 —— 与 `BIND.m06`「录机械费」**同款**：
+   走原型自己的 `BIND` 钩子往页首注入一条工具栏，⛔ **不改 `V.m09` 切片一行**（`D18`）。
+   判定与落库全在后端（`POST /api/m09/fee/batch`，语义见 `mod09_fee.service.act_batch`）。 */
+BIND.m09 = function () {
+  const host = document.querySelector('#view');
+  if (!host || document.getElementById('awfBatchEntry')) return;
+  const bar = document.createElement('div');
+  bar.id = 'awfBatchEntry';
+  bar.className = 'fbar plate';   /* ⭐ 同 `BIND.m06`（`A4` 2026-09-29）：走变体类，⛔ 别在 JS 里重写声明 */
+  bar.innerHTML = '<div class="fi"><label>特殊费用 · 按月批量录入（§5.5）</label>'
+    + '<span class="mut sm">一屏把<b>好几个月</b>填完（列 = 本页这一份的项名 · 行数<b>可加减</b> · <b>核算期每行都能改</b>）</span></div>'
+    + '<button class="btn pri" data-act="awfBatch">批量录入（按月）…</button>';
   host.prepend(bar);
 };
 
@@ -1118,10 +1231,14 @@ BIND.m11 = function () {
     + '（只影响屏幕；⭐ **导出永远是全列**）';
   anchor.insertAdjacentElement('afterend', hidBtn);   /* ⚠️ 锚点已从「导入按钮」改成 `jcFetch`（那个按钮已删） */
   jcApplyHide();                       /* ⚠️ 表是刚重建的 ⇒ 把"隐藏"偏好重新落上去（见 `jcApplyHide`） */
+  /* ⭐⭐ `TAIL-180`（`B` 案 · 2026-09-29 用户裁定）：行身份区（勾选框 ＋ 序号 ＋ 合同日期 ＋ 材料名）钉住
+     —— 同「隐藏偏好」一个道理：`render()` 每次都重建整张表 ⇒ **每次都重量一次偏移**
+     （本页偏移是量出来的，⛔ 不是静态算式 —— 为什么见 `actions.js::jcApplyPin` 那段注释）。 */
+  jcApplyPin();
 
-  /* ⭐⭐ `M5-9` 导出：**接管页面已有的那个「导出 Excel（R1）」按钮**，⛔ **不新建一个**。
+  /* ⭐⭐ `M5-9` 导出：**接管页面已有的那个「导出 Excel」按钮**，⛔ **不新建一个**。
      ⚠️ 2026-09-20 用户实测：「导出的按钮现在有俩了，你合并一下，把无色的合并到有颜色的按钮里」
-        —— 页面上原本就有 `<button class="btn pri" data-act="exp">导出 Excel（R1）</button>`（**有颜色**），
+        —— 页面上原本就有 `<button class="btn pri" data-act="exp">导出 Excel</button>`（**有颜色**），
         我又 `createElement` 了一个无色的 ⇒ 两个按钮干同一件事。
      ⚠️ **为什么"改它的 `data-act`"而不是去改切片里那行**：切片一行不改是硬约束（`ui_parity`）；
         而**渲染后注入属性**正是本层（`BIND`）该干的活 —— 同 `injectTypeEdit` 那套（那里也是注入属性、
@@ -1159,26 +1276,14 @@ BIND.m03 = function () {
   anchor.insertAdjacentElement('afterend', box);
 };
 
-/* ⭐⭐ 2026-09-20 用户定：**总欠款导出**入口 —— 用 `BIND` **注入**按钮，⛔ **不写进 `V.m05`**。
-   ⚠️⚠️ 为什么不能写进 `V.m05`：`ui_parity` 是**按 `V.` 切片逐行比**的 —— 往里插 1 行
-      ⇒ 该切片**后面全部位移** ⇒ 一次报 **67 行未登记**（实测）。
-   ⚠️⚠️ 而"把 `V.m05` 整片同步给原型"**又是危险的**：那片里有一行是
-      「**壳接后端**（`ntLive`）/ **原型演示**（`MACH6`）」的**逻辑差异** ⇒ 整体同步会
-      **改掉原型逻辑**（`D18` 硬约束：原型逻辑一行不改）。
-   ⇒ `BIND` **不属于 `V.` 切片** ⇒ 注入按钮**零漂移**（同 `BIND.m03` 注入「只导出 PDF / 打印机设置」）。 */
-BIND.m05 = function () {
-  const host = document.querySelector('#view');
-  if (!host) return;
-  const anchor = host.querySelector('[data-act="ledExpToggle"]');
-  if (!anchor || anchor.dataset.debtExp) return;
-  anchor.dataset.debtExp = '1';
-  const btn = document.createElement('button');
-  btn.className = 'btn';
-  btn.dataset.act = 'debtExpAll';
-  btn.title = '导出「总欠款」表（所有项目各一行）：A 序号 · B 项目展示名 · C 集采 · D 辅材 · E 机械（实时口径）';
-  btn.textContent = '导出总欠款';
-  anchor.insertAdjacentElement('afterend', btn);
-};
+/* ⭐⭐ 2026-09-28（`TAIL-144`）**这里原来有一个 `BIND.m05`**（2026-09-20 起：用 DOM 注入把「选择项目 ＋
+   导出总欠款」两个按钮插到卡头「导出…」旁边）。⭐ **本轮撤掉**，理由（用户截图报障）：
+     · 卡头因此挤了**三个**导出件（导出台账… / 选择项目 / 导出总欠款）—— 而用户 2026-09-13 的裁定是
+       「**卡头一个导出入口**」；而且"点右上那个按钮、再跑到最左边选项目"（展开区在卡内左侧）正是他说的不便。
+   ⇒ 现在这两个按钮**直接渲染在展开区里**（`index.html` 的 `ledExpStrip` 第 ② 段），与它们各自的项目范围挨着；
+     卡头只留一个「导出…」。⭐ 这同时省掉了当年那个折中：注入是为了"零 `V.` 切片漂移"，
+     而现在**改 `V.m05` 已经是常规操作**（`ui_parity` 的登记簿可增可减、逐条审过即可）。
+   ⛔ **别再注入回卡头**（`test_wired_m05.py::test_台账卡头按钮分组与点开有反馈都钉住` 数着卡头只有这一个入口）。 */
 
 BIND.m02 = function () {
   const host = document.querySelector('#view');
@@ -1201,6 +1306,24 @@ BIND.m02 = function () {
     if (h4) h4.textContent = '执行记录';
     const th = tbl.tHead && tbl.tHead.rows[0] && tbl.tHead.rows[0].cells[1];
     if (th) th.textContent = '动作 / 接口';
+  }
+  /* ⭐ 2026-09-27（`TAIL-127` · 用户裁定 **B**）：**「i8 服务地址」搬到本页** ——
+     用户原话：「连接参数这个板块说实话可以删掉，因为**不可能有变动**；那系统设置就只剩下主题色了」。
+     ⚠️ **为什么注入、不进 `V.m02` 切片**：切片是**逐行对位**核对的 ⇒ 插一行 = 后面全部报漂移
+        （实测一次 67 行）；而"渲染后注入"正是 `BIND` 的活（`BIND.m03`/`m11`/`m05` 同款）。
+     ⚠️ 锚点取「装着回显 `.kv` 的那张卡的 `h4`」—— ⛔ 不赌列序号 / 不赌按钮文字（那是别处同一把尺子）。
+     ⚠️ **幂等**：`render()` 会重画多次 ⇒ 靠 `dataset.i8Set` 打标，⛔ 不叠加。 */
+  const kvCard = kv && kv.closest('.card');
+  const h4 = kvCard && kvCard.querySelector('h4');
+  if (h4 && !h4.dataset.i8Set) {
+    h4.dataset.i8Set = '1';
+    const b = document.createElement('button');
+    b.className = 'btn sp';
+    b.dataset.act = 'i8SetOpen';
+    b.textContent = 'i8 连接设置';
+    b.title = 'i8 装在哪台机器上（服务地址）—— 从「系统设置」搬到这里：它就是用它的那一页。'
+      + '保存即时生效、改动留痕';
+    h4.appendChild(b);
   }
 };
 
@@ -1247,9 +1370,9 @@ BIND.m01 = function () {
     abox.className = 'card';
     abox.innerHTML = `<h4>待人工建档（链路 A · 多仓库）<span class="sp"><span class="mut sm">共 ${ARCP.length} 条 · ${asrc}</span></span></h4>
       <div class="bd">
-        ${ARCP_ERR ? `<div class="tip dg" style="margin:0 0 8px">⚠️ <b>待建档清单没取到</b>：${esc(ARCP_ERR)}
+        ${ARCP_ERR ? `<div class="tip dg" style="margin:0 0 calc(8px * var(--fscale))">⚠️ <b>待建档清单没取到</b>：${esc(ARCP_ERR)}
           <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
-        <div class="tip" style="margin:0 0 8px"><b>为什么这里要人来定</b>：这个全名在 i8 名单里挂了
+        <div class="tip" style="margin:0 0 calc(8px * var(--fscale))"><b>为什么这里要人来定</b>：这个全名在 i8 名单里挂了
           <b>≥2 个仓库</b>，而<b>一条普通项目只挂一个仓库</b>（决策 2）⇒ 系统<b>不猜</b> ——
           请你<b>选定一个</b>，系统按它建行；⚠️ 其余仓库<b>不会</b>再建行。</div>
         <table class="dt cond"><thead><tr><th>项目全名</th><th>待选仓库</th><th>系统为什么不自己定</th><th></th></tr></thead>
@@ -1279,9 +1402,9 @@ BIND.m01 = function () {
   box.className = 'card';
   box.innerHTML = `<h4>待人工指认（链路 B）<span class="sp"><span class="mut sm">共 ${PEND.length} 条 · ${src}</span></span></h4>
     <div class="bd">
-      ${PEND_ERR ? `<div class="tip dg" style="margin:0 0 8px">⚠️ <b>待指认清单没取到</b>：${esc(PEND_ERR)}
+      ${PEND_ERR ? `<div class="tip dg" style="margin:0 0 calc(8px * var(--fscale))">⚠️ <b>待指认清单没取到</b>：${esc(PEND_ERR)}
         <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
-      <div class="tip" style="margin:0 0 8px"><b>为什么这里要人来定</b>：材料报表出现了<b>陌生仓库</b>，
+      <div class="tip" style="margin:0 0 calc(8px * var(--fscale))"><b>为什么这里要人来定</b>：材料报表出现了<b>陌生仓库</b>，
         而它的全名在档案里命中 <b>≥2 条</b>非壳行 ⇒ 系统<b>无法自己决定</b>挂哪一条、也<b>不该猜</b>
         （决策 1 兜底）—— 请你指明这条<b>真实仓库名</b>该写到<b>哪一行</b>上。
         ⚠️ 只改仓库名（系统写入）；<b>类型纠正</b>不在这里做。</div>
@@ -1315,19 +1438,19 @@ async function openPendDialog(i) {
   PEND_DLG = it;
   modal({
     title: `人工指认 · ${it.wh}`,
-    body: `<div class="tip" style="margin-bottom:10px"><b>链路 B · 材料侧扶正</b>：材料报表里出现了
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))"><b>链路 B · 材料侧扶正</b>：材料报表里出现了
       <b>陌生仓库</b>，而它的全名在档案里命中 <b>${rows.length}</b> 条非壳行 ⇒ <b>系统不猜</b>（决策 1 兜底），
       请你指明这条仓库名该写到<b>哪一行</b>。⚠️ 这是**系统写入**（不是人工改仓库名，§2.3.1）；
       <b>类型纠正</b>不在这里做（另立）。</div>
       ${kvBlock([['陌生仓库名', `<span class="fc">${esc(it.wh)}</span>`],
-                 ['项目全名', `<span style="font-size:11.5px">${esc(it.full)}</span>`],
-                 ['系统当时为什么没自己定', `<span style="font-size:11.5px">${em(it.reason)}</span>`]])}
+                 ['项目全名', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.full)}</span>`],
+                 ['系统当时为什么没自己定', `<span style="font-size:calc(11.5px * var(--fscale))">${em(it.reason)}</span>`]])}
       <div class="fld"><label>写到哪一行（候选 = 该全名下的档案行，含归档行）</label>
         <select class="inp" id="pmRow">${opts}</select></div>
       ${usable.length ? '' : `<div class="tip dg" style="margin:0">⚠️ 这几行<b>都不是占位行</b>（都已有真实仓库名）
         ⇒ 按决策 2（普通项目 ↔ 仓库 = 1 : 1）**不能靠扶正解决** —— 需要人工核对档案，属另一件事。</div>`}`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
-      <button class="btn pri" data-act="pjPromoteOk"${usable.length ? '' : ' disabled'}>按这一行扶正</button>`,
+      <button class="btn pri" data-act="pjPromoteOk"${usable.length ? '' : ' disabled'} title="${usable.length?'把该小微写到选定的那一行':'候选里没有可写的占位行 —— 弹窗里已写明'}">按这一行扶正</button>`,
   });
 }
 
@@ -1345,13 +1468,13 @@ async function openArchDialog(i) {
   ARCP_DLG = it;
   modal({
     title: `选定仓库 · ${esc(it.full)}`,
-    body: `<div class="tip" style="margin-bottom:10px"><b>链路 A · 多仓库建档</b>：i8 名单里这个全名挂了
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))"><b>链路 A · 多仓库建档</b>：i8 名单里这个全名挂了
       <b>${it.stored.length}</b> 个仓库，而<b>一条普通项目只挂一个仓库</b>（决策 2）⇒ <b>系统不猜</b>，
       请你选定<b>一个</b>，系统按它建行（⛔ 仓库名不许手填，§9.4）。</div>
-      ${kvBlock([['项目全名', `<span style="font-size:11.5px">${esc(it.full)}</span>`],
-                 ['i8 名单里的仓库', `<span style="font-size:11.5px">${esc(it.stored.join('、'))}</span>`],
-                 ['已被别的行占用（不列）', `<span style="font-size:11.5px">${gone.length ? esc(gone.join('、')) : '（无）'}</span>`],
-                 ['系统当时为什么没自己定', `<span style="font-size:11.5px">${em(it.reason)}</span>`]])}
+      ${kvBlock([['项目全名', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.full)}</span>`],
+                 ['i8 名单里的仓库', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.stored.join('、'))}</span>`],
+                 ['已被别的行占用（不列）', `<span style="font-size:calc(11.5px * var(--fscale))">${gone.length ? esc(gone.join('、')) : '（无）'}</span>`],
+                 ['系统当时为什么没自己定', `<span style="font-size:calc(11.5px * var(--fscale))">${em(it.reason)}</span>`]])}
       <div class="fld"><label>选定一个仓库（候选 = i8 名单里那条，减去已被占用的）</label>
         <select class="inp" id="arcWh">${opts}</select></div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
@@ -1363,8 +1486,9 @@ async function openArchDialog(i) {
    ⭐ **「抓取结果回显」与「抓取任务日志」的唯一数据源 = 执行记录**（`/api/m02/fetch/records`）：
       原先两张卡是**模拟值 ＋ 硬编码行**（还读着演示数组 `WHs`/`JCs`）⇒ 接线后一律读真记录，
       ⛔ 不读任何演示数组（那两份数据的主人分别是 m07 的演示与集采域的原型页）。
-   ⚠️ **接口清单表（`TASK`）刻意不接** —— 它是**口径文档式静态表**（《说明书》附录 E.1 的**子集**），
-      数据源就是**文档本身**，不是运行数据；它的「触发 / 手动导入」两个按钮才走下面这些入口。
+   ⚠️ **接口清单表（`TASK`）已于 2026-09-27 删除**（`TAIL-117` 批次 7）—— 它**零引用**、且内容是
+      **开发视角**（`API-0x` 代号 / 触发方式 / 数据源），数据源本就是《说明书》附录 E.1 的文档
+      ⇒ 需要时查文档，⛔ 别在壳里再抄一份（两份真源 ⇒ 文档一改就静默过期）。
    ⚠️ 「采购合同信息」（`API-04`）**没有落点** —— 属**集采域（M5，未开工）** ⇒ 卡片上如实标「待接通」，
       ⛔ 不写 0（那是假话：会让人以为"抓过、没有"）。 */
 let M02_RECS = [];        /* 执行记录（**新 → 旧**），由 `reloadM02()` 填 */
@@ -1421,8 +1545,8 @@ function m02EchoKv() {
     else if (M02_ERR) dd = '<span class="dg">⚠️ 执行记录没取到（见下方日志卡）</span>';
     else if (!r) dd = '<span class="mut">还没有执行记录（抓过 / 同步过就有了）</span>';
     else dd = `${m02StatusTag(r)} <span class="mut sm">${esc(m02When(r))}</span>`
-      + (r.err ? `<br><span class="dg sm">${esc(r.err)}</span>` : '');
-    return `<dt>${esc(it.label)}</dt><dd>${dd}</dd>`;
+      + (r.err ? `<br><span class="dg sm">${lgMd(r.err)}</span>` : '');
+    return `<dt title="${esc(it.api)}">${esc(it.label)}</dt><dd>${dd}</dd>`;
   }).join('');
 }
 
@@ -1432,16 +1556,19 @@ function m02LogRows() {
     <br><span class="mut">其余页照常可用（这一路失败不拖垮本页）—— 可刷新页面重试。</span></td></tr>`;
   if (!M02_RECS.length) return '<tr><td colspan="4" class="mut">还没有执行记录 —— 抓过 / 同步过之后这里就有（按时间倒序）</td></tr>';
   return M02_RECS.map(r => `<tr><td class="fc">${esc(String(r.at).replace('T', ' '))}</td>
-    <td title="${esc(String(r.target || ''))}">${esc(m02LabelOf(r))}</td>
-    <td>${m02StatusTag(r)}${r.err ? `<br><span class="dg sm">${esc(r.err)}</span>` : ''}</td>
+    <td title="${esc([m02CodeOf(r), String(r.target || '')].filter(Boolean).join(' · '))}">${esc(m02LabelOf(r))}</td>
+    <td>${m02StatusTag(r)}${r.err ? `<br><span class="dg sm">${lgMd(r.err)}</span>` : ''}</td>
     <td class="fc">${esc(m02Dur(r))}</td></tr>`).join('');
 }
 
 function m02LabelOf(r) {
   const it = M02_IFACES.find(x => m02IsIf(x, r));
   /* ⚠️ 抓取接口给「名字（型号）」，⛔ 不再把 `API-0x` 顶在前面 —— 用户 2026-09-20：
-     「里面显示的**接口名不直观**，换成直观的」。 */
-  if (it) return `${it.label}（${it.api}）`;
+     「里面显示的**接口名不直观**，换成直观的」。
+     ⭐⭐ 2026-09-27（守则 §3.1 · `TAIL-117` 批次 2）：**接口代号整串撤出可见文案** ——
+        上一版是 `付款通知书（API-01）`，用户看到的仍是内部编号。代号**没丢**：
+        它挂在日志卡那一格 / 回显卡的 `title` 上（见 `m02CodeOf` ⇒ 悬停即见，守则 §5.8「换地方，不是删掉」）。 */
+  if (it) return it.label;
   /* ⚠️⚠️ 2026-09-20 补：**打印 / 只导出 PDF 的记录不在 `M02_IFACES` 里**（那是"抓取接口"清单）
      ⇒ 原先 fallback 成 `r.target`，而那是**一长串单号**（`FKTZS…,FKTZS…`，最多 512 字符）
      ⇒ 界面上就是"完全看不出这是干什么的"。⇒ 按 `run_type` 给人话，单号只给**个数**、
@@ -1450,6 +1577,13 @@ function m02LabelOf(r) {
   const n = String(r.target || '').split(',').filter(Boolean).length;
   if (RUN[r.type]) return `${RUN[r.type]}${n ? ` · ${n} 张` : ''}`;
   return r.target;                                     /* 真认不出的走原文（⛔ 不猜成某一类） */
+}
+
+/** ⭐ 该记录对应的 i8 接口代号（`API-0x`）—— **只给悬停 `title` 用，⛔ 不上屏**（守则 §3.1/§5.8）。
+ *  认不出就空串（别硬猜成某一类）。 */
+function m02CodeOf(r) {
+  const it = M02_IFACES.find(x => m02IsIf(x, r));
+  return it ? it.api : '';
 }
 
 async function reloadM02() {
@@ -1522,12 +1656,12 @@ async function reloadHome() {
    签发给谁：本函数的两种入参就是那两个端点（`warehouses` / `common-projects`）。 */
 async function m02Sync(which) {
   const isWh = which === 'warehouses';
-  const name = isWh ? '仓库名单（API-05）' : '常用项目列表（API-06）';
+  const name = isWh ? '仓库名单' : '常用项目列表';
   const tail = isWh ? '仓库名单本身**不落库**（它是建档的输入）；建档请用「常用项目列表」那一行'
                     : '会按 phid **幂等建档**，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
   modal({
     title: `同步 ${name}`,
-    body: `<div class="tip dg" style="margin:0 0 10px"><b>⚠️ 这一步会登录 i8，并强制踢掉该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）——
+    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，并强制踢掉该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）——
       若其他同事正在用 i8，请先<b>择时</b>；系统<b>不会</b>自动重试登录。</div>
       <div class="tip" style="margin:0">${tail}</div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
@@ -1661,12 +1795,12 @@ async function jcAct(fn, okMsg) {
    匹配不上的按口径 = **不纳入**（终态、不会被后续抓取覆盖）⇒ 人必须**当场看一眼**再落。 */
 function jcFetchPreview(d) {
   const list = (rows) => rows.length
-    ? `<ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">${rows.slice(0, 15).map(
+    ? `<ul style="margin:calc(6px * var(--fscale)) 0 0;padding-left:calc(18px * var(--fscale));line-height:1.7">${rows.slice(0, 15).map(
       p => `<li><b>${p.count}</b> 条 · ${esc(p.name)}</li>`).join('')}</ul>`
       + (rows.length > 15 ? `<div class="mut sm">…另有 ${rows.length - 15} 个项目</div>` : '')
     : '<div class="mut sm">（无）</div>';
   const syn = d.sync || {};
-  const warn = syn.degraded ? `<div class="tip wn" style="margin-top:10px">⚠️ ${esc(syn.message || '')}</div>` : '';
+  const warn = syn.degraded ? `<div class="tip wn" style="margin-top:calc(10px * var(--fscale))">⚠️ ${esc(syn.message || '')}</div>` : '';
   /* ⭐ 「**未落库**」的**原因分类**（后端回执 `d.unsettled` = 按 `kind` 计数；kind 来自
      `mod01_projects.domain.OwnershipDecision` —— 归属判定的**唯一出口**）。
      ⚠️ 这段文案的职责是**给人指下一步**：只写"没落库"用户不知道干什么。
@@ -1680,17 +1814,17 @@ function jcFetchPreview(d) {
   };
   const unsettled = (d.unsettled || []).filter(x => (x.count || 0) > 0);
   const unsettledHtml = unsettled.length
-    ? `<div style="margin-top:6px">${unsettled.map(x => `<div class="tip wn" style="margin:4px 0">`
+    ? `<div style="margin-top:calc(6px * var(--fscale))">${unsettled.map(x => `<div class="tip wn" style="margin:calc(4px * var(--fscale)) 0">`
         + `<b>${x.count}</b> 条 · ${esc(KIND_TXT[x.name] || ('归属未走完（' + x.name + '）'))}</div>`).join('')}</div>`
     : '';
-  return `<div class="tip ok" style="margin-bottom:10px"><b>抓取完成</b>：${esc(d.message || '')}</div>
+  return `<div class="tip ok" style="margin-bottom:calc(10px * var(--fscale))"><b>抓取完成</b>：${esc(d.message || '')}</div>
    ${warn}
-   <div style="font-size:12.5px">
+   <div style="font-size:calc(12.5px * var(--fscale))">
      <div><b>匹配上</b>（已落库 · 默认「纳入台账」）· ${d.matched} 条</div>
      ${list(d.matched_projects || [])}
-     <div style="margin-top:10px"><b>未落库</b>（**归属未走完** ⇒ 按口径**不纳管**）· ${d.unmatched} 条</div>
+     <div style="margin-top:calc(10px * var(--fscale))"><b>未落库</b>（**归属未走完** ⇒ 按口径**不纳管**）· ${d.unmatched} 条</div>
      ${unsettledHtml}
-     ${unsettled.length ? `<div style="margin-top:8px"><button class="btn pri" data-act="ownJcOpen">`
+     ${unsettled.length ? `<div style="margin-top:calc(8px * var(--fscale))"><button class="btn pri" data-act="ownJcOpen">`
         + `去指定归属（${unsettled.reduce((n, x) => n + (x.count || 0), 0)} 条）</button>`
         + ` <span class="mut sm">补完关键词 / 建好小微后再抓一次即可自动归位</span></div>` : ''}
      ${list(d.unmatched_projects || [])}
@@ -1718,7 +1852,10 @@ const PAGE_LOAD = {
      首屏就得判"这行有没有被关联 / 有哪些候选"，否则按钮会先显示错的态再跳一下。 */
   m03: ['付款通知书', '付款计划', '项目档案', '集采台账'],
   m04: ['付款计划', '付款通知书', '付款域', '机械 6 列'],
-  m05: ['付款域', '修改留痕', '机械 6 列'],
+  /* ⭐ 2026-09-28（用户口径 ①）：`m05` 新增「**按项目看集采欠款**」柱 ⇒ 本页**必须**带上「集采台账」
+     这一路（它填 `JCs`）。⛔ 不加的话那条柱子会恒 0 —— 那是**假数**（比不显示更坏）。
+     ⚠️ `JCs` 是跨页共享的（看板 / 大表主材累计 / m03 集采关联也读它）⇒ 多这一路不会重复取。 */
+  m05: ['付款域', '修改留痕', '机械 6 列', '集采台账'],
   m06: ['机械 6 列', '库存单据', '收发结存与大表'],   /* 过程资料读 `MACH6`/`IVs`/`EXTM`/`BIGVAL` */
   m07: ['机械 6 列', '库存单据', '收发结存与大表'],
   m08: ['库存单据'],
@@ -1787,10 +1924,27 @@ const fails = [];
    ⭐ 实测踩到：`/api/m06/mech` 404（后端加了端点但服务没重启）⇒ 原来的单个 `try` 把后面**全部**跳过，
       `m08`/`m05` 明明已接线却显示空表 —— **看起来像功能没做**（假故障、最难查的那类）。
    ⇒ 逐路 `soft()`：坏的那路在顶部横幅里**点名**，其余页**照常可用**。 */
+const failsTech = [];          /* ⭐ 与上面 `fails` 并排的**技术明细**（只进横幅折叠区）—— 见 `soft` */
 const soft = async (label, fn) => {
-  try { await fn(); } catch (e) { fails.push(`${label}：${String((e && e.message) || e)}`); }
+  try { await fn(); FAILED.delete(label); }        /* ⭐ 重试成功 ⇒ 摘掉"这一路坏了"的名 */
+  catch (e) {
+    FAILED.set(label, String((e && e.message) || e));   /* ⭐ `TAIL-117` 批次 6：按**路名**记失败（页级四态要用） */
+    /* ⭐ 2026-09-27（`TAIL-117` 批次 1）：两半**分开收** ——
+       `fails` = **上屏的那半**（`e.message` 已经过 `api.js` 的「人话出口」，守则 §3.7）；
+       `failsTech` = **原始串那半**（方法 / 全路径 / 状态码）⇒ 只进横幅的「技术明细」折叠区。
+       ⚠️ `BOOT_ERROR` 仍必须是**字符串**（`test_wired_boot` 与真机都按字符串判真假 ⇒ ⛔ 别改成数组）。 */
+    fails.push(`${label}：${String((e && e.message) || e)}`);
+    failsTech.push(`${label}：${String((e && e.tech) || (e && e.message) || e)}`);
+  }
 };
 const LOADED = new Set();          /* 已经拉过的路（同一页反复进出不重复拉） */
+/* ⭐⭐ 2026-09-27（`TAIL-117` 批次 6「页级四态」）：**逐路记失败** ＋ **记"正在拉"** —— 两件都只为
+   `pageState()` 服务（见下方）。⛔ 别拿它们替代 `LOADED`：那三个集合问的是三个不同的问题 ——
+     `LOADED` = 「这一路**拉过**没有」（缓存口径）· `PENDING` = 「**此刻**正在拉吗」（加载态口径）
+     · `FAILED` = 「这一路**坏了吗**」（错误态口径）。⭐ 混成一个必然出错（实测过：写动作
+     `LOADED.clear()` 之后，若拿"未 LOADED"当加载态 ⇒ **整页永远卡在"正在读取"**）。 */
+const PENDING = new Set();
+const FAILED = new Map();
 /* ⭐⭐ 2026-09-20：**台账类取数不许被 `LOADED` 缓存住** —— 用户实测：「**执行记录并不会自动刷新**」。
    ⚠️ 缓存口径「同一页反复进出不重复拉」对**台账页**正好是错的：「i8 执行记录」的内容
       **由别的动作产生**（抓取 / 同步 / 批量打印 / 只导出 PDF 都往 `run_record` 里写一条），
@@ -1815,12 +1969,76 @@ function markCrossPageStale() { LOADED.clear(); }
 async function loadPaths(labels) {
   const fresh = (labels || []).filter(l => ALWAYS_FRESH.has(l) || !LOADED.has(l));
   if (!fresh.length) return;
-  await Promise.all(fresh.filter(l => !LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));
-  await Promise.all(fresh.filter(l => LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));
+  /* ⭐ 批次 6：**先把这几路标成"正在拉"** ⇒ 页级状态才能把"还没回来"和"确实没有"分开
+     （守则 §4.2「加载未完成不给最终数」）。⚠️ `finally` 里**一定**要摘掉 —— 否则中途抛异常
+     会把整页永久卡在"正在读取"（比空页更糟：用户连重试的机会都没有）。 */
+  fresh.forEach(l => PENDING.add(l));
+  try {
+    await Promise.all(fresh.filter(l => !LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));
+    await Promise.all(fresh.filter(l => LOAD_DEP.has(l)).map(l => soft(l, LOADERS[l])));
+  } finally {
+    fresh.forEach(l => PENDING.delete(l));
+  }
   fresh.forEach(l => LOADED.add(l));
   BOOT_ERROR = fails.join('；');
   render();                          /* 各路内部多数已 render 一次；这里兜一次（幂等） */
   if (BOOT_ERROR) bootErrorBanner();
+}
+
+/* ⭐⭐⭐ 2026-09-27（`TAIL-117` 批次 6「四态统一」· 守则 §4.2 / §3.3 / §2.2 / §5.9）：
+   **页级状态只有一个出口** —— 「这一页现在该显示什么」由本件说了算，⛔ 别在各页 `V.*` 里各判一次。
+
+   为什么必须做（本批开工时的实测）：壳是「进哪页拉哪页」，而 `render()` **不看取数回来了没有**
+   ⇒ 数据没到的那一瞬，页面画的是**空表 / 0 / 空图** —— 与"确实没有数据"**长得一模一样**。
+   用户看到"这月没有付款"时，没法分辨**是真的没有**还是**还没取回来**（守则 §4.2 明禁）。
+
+   四态（`kind`）与判据：
+     · `loading`：本页依赖的路**此刻正在拉**（`PENDING`）或**启动还没收尾**（`BOOTING` 且该路没拉过）
+     · `error`  ：本页依赖的路里**有坏了的**（`FAILED`）⇒ 说清"哪一块没取到" ＋ 给「重试」
+     · `ready`  ：其余（含"这页本来就不取数"：`PAGE_LOAD` 没有这一页）
+   ⚠️ **只认"本页依赖的那几路"**（`PAGE_LOAD[VIEW]`）—— ⛔ 别拿"全局有没有失败"当判据：
+      别页坏了不该让这一页变成错误页（那是"某一项失败拖垮全站"，本仓 2026-09-17 踩过）。
+   ⚠️ **只认 `PENDING`，⛔ 不拿"未 `LOADED`"当加载态**：写动作会 `LOADED.clear()`
+      （`markCrossPageStale`），而它只 reload 自己那页 ⇒ 拿"未 LOADED"判就会**永久卡住**。 */
+function pageState() {
+  const deps = PAGE_LOAD[VIEW] || [];
+  const failed = deps.filter(l => FAILED.has(l));
+  if (failed.length) return { kind: 'error', failed: failed, why: failed.map(l => `${l}：${FAILED.get(l)}`) };
+  const waiting = deps.filter(l => PENDING.has(l) || (BOOTING && !LOADED.has(l)));
+  if (waiting.length) return { kind: 'loading', waiting: waiting };
+  return { kind: 'ready', deps: deps };
+}
+
+/** 页级状态页的 HTML（`loading` / `error`）—— 与 `pageState()` 成对，⛔ 别在别处另拼一份。 */
+function pageGate(st) {
+  const head = `<div class="card"><div class="ctr" style="padding:calc(34px * var(--fscale)) calc(18px * var(--fscale))">`;
+  if (st.kind === 'loading') {
+    return head + `<div class="mut"><b>正在读取这一页的数据…</b>`
+      + `<div class="sm" style="margin-top:calc(6px * var(--fscale))">（${esc(st.waiting.join('、'))}）</div>`
+      + `<div class="sm" style="margin-top:calc(6px * var(--fscale))">读完自动显示，不用刷新。</div></div></div></div>`;
+  }
+  return head + `<div><b class="dg">这一页的数据没能取到</b>`
+    + `<div class="sm" style="margin-top:calc(6px * var(--fscale))">${st.why.map(w => esc(w)).join('<br>')}</div>`
+    + `<div class="sm" style="margin-top:calc(8px * var(--fscale))">别的页照常可用（某一项取不到不该拖垮全站）。`
+    + `先点「重试」；一直这样就把这一步告诉管理员。</div>`
+    + `<div style="margin-top:calc(12px * var(--fscale))"><button class="btn pri" data-act="retryPage">重试</button></div>`
+    + `</div></div></div>`;
+}
+
+/** 重试本页依赖的取数（页级错误态那个按钮的唯一落点）。 */
+async function retryPage() {
+  const deps = PAGE_LOAD[VIEW] || [];
+  deps.forEach(l => { FAILED.delete(l); LOADED.delete(l); });
+  await loadPaths(deps);
+  render();
+}
+
+/** ⭐ 批次 6：**进页时先"预告"要拉哪几路** —— 这样 `render()` 的第一帧就能出「正在读取」，
+   而不是先画一张空表、等数据回来再跳一下（守则 §4.2）。
+   ⚠️ 只标"确实要拉的"（与 `loadPaths` 的 `fresh` 同一条筛选）—— ⛔ 多标了就会**永久卡住**
+      （`loadPaths` 见 `fresh` 为空会直接 return，那个 `PENDING` 没人摘）。 */
+function markPending(labels) {
+  (labels || []).filter(l => ALWAYS_FRESH.has(l) || !LOADED.has(l)).forEach(l => PENDING.add(l));
 }
 
 async function boot() {
@@ -1830,6 +2048,10 @@ async function boot() {
      所以它⛔ 不进 `PAGE_LOAD`；⛔ 也不用 `Promise.all`（那条红线是防"退回全量拉 13 路"的形态，
      见 `test_wired_boot.py`）⇒ 先**发起**、首屏拉完再**收**它。 */
   const who = soft('当前登录用户', reloadWho);
+  /* ⭐ 批次 6：**先把"正在读取"这一帧画出来**（⛔ 别等数据回来才有第一帧）——
+     改前首屏在数据到位前 `#view` 是**空的**，用户看不出"是在读"还是"这页没东西"。 */
+  markPending(PAGE_LOAD[VIEW] || []);
+  render();
   await loadPaths(PAGE_LOAD[VIEW] || []);
   await who;
   /* ⚠️ `loadPaths` 自己也赋了一次 —— 两路并发时"它收尾在前、我这路失败在后"就会被漏掉 ⇒ 这里兜一次 */
@@ -1844,17 +2066,40 @@ async function boot() {
    页面读后端接口 ⇒ 数据必然空。⭐ 实测踩到：展示壳时预览面板打开的正是
    `file:///…/app/web/index.html`，于是"看起来和原型没区别、还没有数据"。 */
 function bootErrorBanner() {
+  /* ⭐ 2026-09-27（`TAIL-117` 批次 1 · 守则 §3.1 / §3.7 / §5.9）：横幅**分两截** ——
+     ① 可见区**只放人话 ＋ 下一步**（`BOOT_ERROR` 里的 `e.message` 已经过 `api.js` 的人话出口）；
+     ② 原始串（`GET /api/… → HTTP 500`）折进「技术明细」，排障要看就展开
+        —— 守则 §5.8：换地方，⛔ 不是删掉。 */
+  const det = failsTech.length
+    ? '<details style="margin-top:calc(6px * var(--fscale))"><summary style="cursor:pointer">技术明细（给管理员看）</summary>'
+      + '<div style="font-family:var(--fm);font-size:calc(11px * var(--fscale));margin-top:calc(4px * var(--fscale))">'
+      + failsTech.map(t => esc(t)).join('<br>') + '</div></details>'
+    : '';
   const why = location.protocol === 'file:'
     ? '你正在用 <b>file:// 直接打开这个 HTML 文件</b> —— 浏览器不许它读后端接口，所以页面是空的。'
-    : '这几路没取到：<br><span class="fc">' + esc(BOOT_ERROR) + '</span><br>'
-      + '<b>其余页的数据照常可用</b>（某一路失败不该拖垮全站）—— 如需重试，刷新页面即可。';
+    : '这几项没能取到：<br><span class="fc">' + esc(BOOT_ERROR) + '</span><br>'
+      + '<b>其余页的数据照常可用</b>（某一项失败不该拖垮全站）。'
+      + '<b>下一步</b>：刷新页面重试；若一直这样，请把下面的「技术明细」发给管理员。' + det;
   const el = document.createElement('div');
   el.className = 'tip dg';
-  el.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:9999;margin:0;border-radius:0';
+  /* ⭐⭐ `TAIL-182`（`A` 案 · 2026-09-29 **用户裁定**）：**不许再盖住内容**。
+     原先这里是 `position:fixed;left:0;right:0;top:0;z-index:9999` ⇒ 整带宽横幅**压在页面之上** ⇒
+     页首那一带的**卡头按钮全都点不着**（真机实测：`#jcTradeBtn` 被它挡住，Playwright 报
+     `intercepts pointer events` 连重试 57 次；`elementFromPoint` 拿到的正是它）——
+     守则 `§4.6` 的反例原文就是「提示条盖住可点区（本仓真例：`.toast` 吃掉浮层点击）」，**同一族**。
+     ⇒ 改成**进布局流**：插在 `main` 里、`#view` 之前 ＋ `flex:0 0 auto` ⇒ 它**占位**、把内容往下推。
+     ⚠️ **为什么不能挂 `body`**：`html,body{height:100%;overflow:hidden}` ＋ `.app{height:100vh}` ⇒
+        挂上去会**溢出被裁**（真机量过）；`.view` 才是那个自己滚的容器。
+     ⚠️ 它**不会滚走**（比原先更省心）：真正的滚动容器是 `.view`，而本横幅是它的**兄弟节点**
+        （挂在 `main` 里、`#view` 之前）⇒ 用户滚内容时它**一直停在顶上**、又不压任何东西。 */
+  el.style.cssText = 'flex:0 0 auto;margin:0;border-radius:0';
   el.innerHTML = `⚠️ <b>没拿到数据</b> —— ${why}<br>`
     + '请改用<b>服务地址</b>打开：<b>http://127.0.0.1:8000/app</b>'
     + '（粘到浏览器地址栏回车；⛔ 不要双击 HTML 文件）';
-  document.body.prepend(el);
+  const host = document.querySelector('.app > main');
+  const view = document.getElementById('view');
+  if (host && view && view.parentElement === host) host.insertBefore(el, view);
+  else (host || document.body).prepend(el);        /* 兜底：结构没认出来时也把提示留在屏幕上 */
 }
 
 /* 启动 */

@@ -66,7 +66,8 @@ def check(page, errors: list[str]) -> None:
         page.click('.mf [data-act="closeModal"]')          # ⛔ **一定取消**（确认 = 真顶号）
 
         oks = [
-            ("已接后端真实数据" in got["wired"], f"顶栏已认这页接了后端（{got['wired'][:24]}）"),
+            # ⭐ 2026-09-27（用户裁定 `B`）：接通页的顶栏**不挂状态牌** ⇒ 这里断言"不许反过来说未接通"
+            ("未接通" not in got["wired"], f"接通页的顶栏不挂状态牌（用户裁定 B）· 实读 {got['wired'][:24]!r}"),
             (got["rows"] == (got["be"] or 1),
              f"⭐ 任务日志行数 = 后端执行记录条数（{got['rows']} vs {got['be']}）"),
             (got["be"] == 0 or "成功" in got["firstRow"] or "失败" in got["firstRow"] or "部分" in got["firstRow"],

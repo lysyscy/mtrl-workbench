@@ -42,7 +42,7 @@ NAV_GROUPS: tuple[tuple[str, tuple[tuple[str, str, str, bool], ...]], ...] = (
                 ("/m10", "机械费（暂缓）", "MOD-10", False),
                 ("/m12", "差异登记", "MOD-12", False))),
     ("集采域", (("/m11", "集采台账", "MOD-11", False),)),
-    ("全局", (("/m13", "跨域能力", "MOD-13", False),
+    ("全局", (("/m13", "导出与删除", "MOD-13", False),
               ("/m14/settings", "规则配置", "MOD-14", True),
               ("/m15", "用户管理", "MOD-15", False))),
 )

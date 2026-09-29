@@ -77,7 +77,27 @@ def delete_item(s: Session, row: FeeManualItem) -> None:
     s.flush()
 
 
+def upsert_item(s: Session, *, ym: str, project_id: int, name: str, amount: Decimal) -> FeeManualItem:
+    """⭐ `TAIL-156`（月度批量录入）用：按 **(核算月, 项目, 项名)** **幂等**写入 —— 已有 ⇒ 改金额，没有 ⇒ 新建。
+
+    ⚠️ **为什么按项名、不按下标**：批量表里**每一列就是一个项名**（用户看到、能改的就是名字）；
+       而按下标会把"第 3 行"这种**位置**概念带进一个**跨月**的界面（各月行数还不一样）⇒ 迟早改错格。
+    ⚠️ 项名**允许重名**（`domain` 既有口径：可改、可重名）⇒ 重名时只认**最早那一条**（`order_by(id)`），
+       ⛔ 不去猜用户想改哪条 —— 猜错就是**静默改错值**。
+    """
+    row = s.execute(
+        select(FeeManualItem)
+        .where(FeeManualItem.ym == ym, FeeManualItem.project_id == int(project_id),
+               FeeManualItem.item_name == str(name))
+        .order_by(FeeManualItem.id)
+    ).scalars().first()
+    if row is None:
+        return add_item(s, ym=ym, project_id=project_id, name=name, amount=amount)
+    set_item_amount(s, row, amount)
+    return row
+
+
 __all__ = [
     "inv_rows", "project_by_key", "items_of", "item_of",
-    "add_item", "set_item_name", "set_item_amount", "delete_item",
+    "add_item", "set_item_name", "set_item_amount", "delete_item", "upsert_item",
 ]

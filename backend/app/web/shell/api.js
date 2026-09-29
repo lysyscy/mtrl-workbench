@@ -7,19 +7,72 @@
    ⛔ 别把本件再塞回 `core.js`：`shell_verify` 比的是**并集**，搬动会让「只在旧版 / 只在现在」各多一堆行。
    ============================================================================= */
 
+/* ⭐⭐ **报错「人话出口」**（唯一 · 2026-09-27 立 · 守则 §3.2 / §3.7 / §5.3）
+   契约两条：
+    ① **上屏的永远是用户语言 ＋ 下一步**；原始报错（方法 / 全路径 / HTTP 状态码）⛔ **绝不上屏**，
+       只进 `err.tech` ＋ `console.warn` 留痕（排障要用 ⇒ 不是删掉，是**换地方**，守则 §5.8）。
+    ② ⭐ **改在「抛出的那一处」**：壳里 60 余处 `catch` 显示的都是 `e.message`
+       （`toast(...esc(e.message)...)`）⇒ 在源头把 message 写成用户语言，**全场自动受益**；
+       ⛔ 别去逐个改那 60 处 —— 那等于把"人话"这件事抄 60 份，漏一处就是"用户又看到 HTTP 500"。
+   ⚠️ **后端 `AppError` 给的中文必须原样透传**（如「壳下还有 3 个在建小微：A、B、C」）——
+      那是「拦了就讲清**为什么 ＋ 怎么解决**」（§2.7.2）⇒ ⛔ 别被人话模板盖掉。
+   ⚠️ 本件在 `core.js` **之前**挂载（见文件头）⇒ 这三件对 `core.js` / `actions.js` / `legacy.js` 都可见。 */
+const ERR_NEXT = '请刷新页面重试；仍失败请把这一步告诉管理员。';
+/* ⭐⭐ 2026-09-28（用户口径：「**提醒需要告诉具体原因和解决方法**」）——
+   ⚠️ 仍守本件上面那条铁律：**原始报错（方法 / 全路径 / HTTP 状态码）一律不上屏**（只进 `err.tech`）。
+   ⇒ 但"没能完成"这句话本身**太空**了（用户原话：光说"刷新页面重试 / 告诉管理员"没用，
+      **管理员就是他自己**）⇒ 在**不违反铁律**的前提下，把原因**归类成人话**并把下一步写具体：
+     仍不出现状态码、不出现 URL、不出现英文原文。 */
+const errWhyByStatus = s => {
+  const n = Number(s) || 0;
+  if (n === 401 || n === 403) return ['登录状态过期、或这个动作没有权限', '请刷新页面重新登录；仍不行请核对当前账号的权限。'];
+  if (n === 404 || n === 405) return ['这个动作在服务端**没有找到**（最常见的原因：后端刚改过、但**没有重启**）',
+    '请让管理员在服务器上**重启后端服务**（本仓无热重载），然后刷新页面重试。'];
+  if (n >= 500) return ['服务端内部出错了（不是你的输入问题）', '请把这一步的时间点告诉管理员，并查看服务端日志；通常重启服务后即可恢复。'];
+  return ['服务端没有接受这一步', ERR_NEXT];
+};
+const errHuman = (why, tech) => {
+  const e = new Error(why || ('这一步没能完成。' + ERR_NEXT));
+  e.tech = String(tech || '');
+  /* ⚠️ `warn`（不是 `error`）：真机自检只把 `console.error` 当失败 ⇒ 这里留痕但**不误报**。 */
+  if (e.tech) console.warn('[没能完成]', why || '', e.tech);
+  return e;
+};
+
+/* ⭐⭐ 2026-09-27（`TAIL-117` 批次 6 的 ㉗ 当场抓到的缺口）：**`fetch` 自己抛的那条路**也要人话。
+   ⚠️ 症状（真机实测）：把 `m09` 那一路拦断后，页级错误态上写着 **`Failed to fetch`** ——
+      那是**浏览器的英文原文**（fetch 承诺被拒时的 `TypeError.message`）。
+      此前 `errHuman` 只罩住了"**服务器答了但状态码不对**"（`!r.ok`）这条；
+      "**压根没答上来**"（服务没起 / 断网 / 被拦）走的是 fetch 的 reject ⇒ **原样漏到了屏幕上**。
+   ⇒ 统一在这里收口：两句话都说清"**怎么了 ＋ 下一步**"（守则 §3.7）。⛔ 别在调用点各写一份。 */
+const netErr = (tech) => errHuman(
+  '连不上服务器 —— 请确认服务在运行、网络正常，然后重试。' + ERR_NEXT, tech);
+/* ⚠️ **壳里所有取数都要过这里**（`GET` / `JSON 写` / 表单 / 文件 / 抓取）——
+   ⛔ 别再直接写 `fetch`：漏一处就是"某条路上用户看到 `Failed to fetch`"。
+   ⚠️ 判据 `tests/test_ux_states.py` 数的是"**没经过包装的取数**"（壳里只允许两处：
+      本函数 ＋ `core.js::dlExport`——后者自己有一份人话 catch）。 */
+const rawFetch = async (url, opts, tech) => {
+  try { return await fetch(url, opts); }
+  catch (e) { throw netErr(`${tech} · ${String((e && e.message) || e)}`); }
+};
+const getSafe = (url, tech) => rawFetch(url, { headers: { Accept: 'application/json' } }, tech);
+const postSafe = (url, body, tech) => rawFetch(url, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body || {}),
+}, tech);
+
 const API = {
   async get(url) {
-    const r = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!r.ok) throw new Error(`GET ${url} → HTTP ${r.status}`);
+    const r = await getSafe(url, 'GET ' + url);
+    if (!r.ok) { const [wy, nx] = errWhyByStatus(r.status);
+      throw errHuman('这页的数据没能取到：' + wy + '。' + nx, `GET ${url} → HTTP ${r.status}`); }
     return r.json();
   },
   async post(url, body) {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {}),
-    });
-    if (!r.ok) throw new Error(`POST ${url} → HTTP ${r.status}`);
+    const r = await postSafe(url, body, 'POST ' + url);
+    if (!r.ok) { const [wy, nx] = errWhyByStatus(r.status);
+      throw errHuman('这一步没能完成：' + wy + '。' + nx, `POST ${url} → HTTP ${r.status}`); }
     markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：JSON 写出口（见 `markCrossPageStale`） */
     return r.json();              /* ⚠️ 恒 HTTP 200 —— 成败看 `ok` 标志（见 notice_api_router） */
   },
@@ -28,15 +81,22 @@ const API = {
      若只抛 `HTTP 400`，那句"壳下还有 3 个在建小微：A、B、C"就丢了 ⇒ 用户只看到"保存失败"。
      ⛔ 由 `core/errors.py::AppError` 统一转成 `{code, message}` + 对应状态码。 */
   async send(method, url, body) {
-    const r = await fetch(url, {
+    const r = await rawFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body || {}),
-    });
+    }, `${method} ${url}`);
     const text = await r.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
-    if (!r.ok) throw new Error((data && (data.message || data.detail)) || text || `HTTP ${r.status}`);
+    /* ⭐ 两种情况分开（守则 §3.7）：**后端给了中文** ⇒ 原样透传（那是"为什么＋怎么解决"）；
+       **后端没给**（网关 / 500 / 代理页）⇒ 换成人话，把原始体截断后只放进 `tech`（⛔ 不上屏）。 */
+    if (!r.ok) {
+      const why = (data && (data.message || data.detail)) || '';
+      const [wy, nx] = errWhyByStatus(r.status);
+      throw errHuman(why || ('这一步没能完成：' + wy + '。' + nx),
+        `${method} ${url} → HTTP ${r.status}` + (why ? '' : ' · ' + String(text || '').slice(0, 300)));
+    }
     markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：`PUT`/`POST` 写出口（`plDelete` 等走这条） */
     return data;
   },
@@ -117,11 +177,11 @@ const API = {
   /* ⭐ 抓取：**失败也要看回执** —— 「归属未走完」是**可预期的失败**（要拿它开弹窗）
      ⇒ 这里**不 throw**，把 body 原样返回，由调用方判 `ok`。 */
   fetchNotices: async year_month => {
-    const r = await fetch('/api/m03/notices/fetch', {
+    const r = await rawFetch('/api/m03/notices/fetch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ year_month, allow_kick: true }),
-    });
+    }, 'POST /api/m03/notices/fetch');
     const body = await r.json().catch(() => ({}));
     markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：抓取是**跨页写**（`payment_notice`/`run_record`；
                                      ⚠️ 「归属未走完」也是**已落库**的可预期失败 ⇒ 成败都要标脏） */
@@ -145,7 +205,7 @@ const API = {
   /* 本机装了驱动的打印机名（选「系统驱动」通道时**名字要一字不差**）—— 拿不到即空表，⛔ 不是错误 */
   printerList: () => API.get('/api/m03/settings/printers'),
 
-  /* ---- MOD-07 收发结存与活动大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
+  /* ---- MOD-07 收发结存与月度会大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
   m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
   m07Extract: () => API.get('/api/m07/extract'),
   m07BalCell: body => API.post('/api/m07/extract/balance', body),
@@ -154,11 +214,11 @@ const API = {
   m07BigSelection: selected => API.post('/api/m07/big/selection', { selected }),
   /* ⭐ 抓取：**失败也要看回执**（降级说明在 `message` 里）⇒ 不 throw，由调用方判 `ok`。 */
   m07Fetch: async month => {
-    const r = await fetch('/api/m07/fetch', {
+    const r = await rawFetch('/api/m07/fetch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ month, confirm: true }),
-    });
+    }, 'POST /api/m07/fetch');
     const body = await r.json().catch(() => ({}));
     markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：抓取落 `setl_detail` ⇒ m06/m07 都读它 */
     return r.ok ? { ok: true, ...body } : { ok: false, ...body };
@@ -191,13 +251,14 @@ const API = {
   /* ⚠️ 期初录入 / 期初删除 / 台账备注 **目前只有 PRG 表单端点**（收 `Form`）⇒ 用表单编码发；
      它们回 303，我们**不看那页 HTML**，改「重拉数据 ＋ 自己的回执」（同一批落库出口）。 */
   postForm: async (url, obj) => {
-    const r = await fetch(url, {
+    const r = await rawFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams(obj || {}).toString(),
       redirect: 'follow',
-    });
-    if (!r.ok) throw new Error(`POST ${url} → HTTP ${r.status}`);
+    }, `POST ${url}`);
+    if (!r.ok) { const [wy, nx] = errWhyByStatus(r.status);
+      throw errHuman('这一步没能完成：' + wy + '。' + nx, `POST ${url} → HTTP ${r.status}`); }
     markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：PRG 表单写出口（期初录入 / 台账备注） */
     return true;
   },
@@ -220,6 +281,9 @@ const API = {
   /* ⭐ `TAIL-38`：「录机械费」写入口 —— 校验与落库**全在后端**
      （`mech_ui.parse_mech_values` ＋ `repository.save_mech`），与 PRG 端点同一份判定。 */
   m06MechSave: body => API.post('/api/m06/mech', body),
+  /* ⭐ `TAIL-156` `P2`：`m09` **月度批量录入**的唯一出口（一次写「N 个核算月 × M 个项」；
+     语义 = 按 (月, 项目, 项名) 幂等 / 空格外跳过 / 一格非法整批不写 —— 见 `mod09_fee.service.act_batch`） */
+  m09Batch: body => API.post('/api/m09/fee/batch', body),
 
   /* ---- MOD-14 剔除规则（`TAIL-40`）⚠️ 唯一主人在库；⛔ 前端不做任何本地改数据冒充落库 ---- */
   m14Rules: () => API.get('/api/m14/rules'),
@@ -230,6 +294,8 @@ const API = {
   users: () => API.get('/api/m15/users'),
   m15Theme: () => API.get('/api/m15/theme'),
   m15ThemeSet: theme => API.post('/api/m15/theme', { theme }),
+  /* ⭐ 界面大小档位（`TAIL-129`）：与主题同构 —— **只改自己那一行**（⛔ 不接 `id`） */
+  m15UiScaleSet: uiScale => API.post('/api/m15/ui-scale', { ui_scale: uiScale }),
   m15Password: id => API.get(`/api/m15/password?id=${encodeURIComponent(id)}`),
   /* ⭐ `§7.8` i8 绑定（每人一份）：**写**出口。
      ⚠️ `i8Pwd === null` ⇒ 请求里**不带** `i8_password` ⇒ 后端**不改密码**
@@ -339,11 +405,15 @@ const API = {
      Content-Type**（浏览器要自己带 boundary；手设会把 boundary 写丢 ⇒ 后端收不到文件）。
      此件即 `m04Import` 那段逻辑的共用出口（⛔ 别在调用方各写一遍）。 */
   postFile: async (url, fd) => {
-    const r = await fetch(url, { method: 'POST', body: fd });
+    const r = await rawFetch(url, { method: 'POST', body: fd }, `POST ${url}`);
     const text = await r.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
-    if (!r.ok) throw new Error((data && (data.message || data.detail)) || text || `HTTP ${r.status}`);
+    if (!r.ok) {
+      const why = (data && (data.message || data.detail)) || '';
+      throw errHuman(why || ('文件没能交上去。请重新选一次文件再试；仍失败请把这一步告诉管理员。'),
+        `POST ${url} → HTTP ${r.status}` + (why ? '' : ' · ' + String(text || '').slice(0, 300)));
+    }
     markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：文件写出口（导入解析等） */
     return data;
   },

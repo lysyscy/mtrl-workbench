@@ -33,6 +33,15 @@ from _shell_pops import check as check_pops    # noqa: E402  ← ㉑ 通用浮�
 from _shell_m11 import check as check_m11      # noqa: E402  ← ㉓ 集采台账派生金额＝后端派生值（`TAIL-113`）
 from _shell_m09 import check as check_m09    # noqa: E402  ← ⑪/⑪b m09 特殊费用（2026-09-25 外移：`TAIL-99`）
 from _shell_m14 import check as check_m14    # noqa: E402  ← ⑫/⑫b/⑫c m14 规则配置 ＋ 剔除名单卡（同上）
+from _shell_err import check as check_err    # noqa: E402  ← ㉔ 报错人话化（`TAIL-117` 批次 1 · 2026-09-27）
+from _shell_text import check as check_text  # noqa: E402  ← ㉕ 上屏文案无内部编号/开发话术（批次 2）
+from _shell_states import check as check_states  # noqa: E402  ← ㉗ 页级四态（批次 6）
+from _shell_live import check as check_live    # noqa: E402  ← ㉘ 活服务与代码同一份（`TAIL-129`）
+from _shell_m05head import check as check_m05head  # noqa: E402  ← ㉚ 台账卡头那排按钮（`TAIL-142`）
+from _shell_empty import check as check_empty  # noqa: E402  ← ㉛ 空态（`TAIL-171`-① · 2026-09-29）
+from _shell_bigpin import check as check_bigpin  # noqa: E402 ← ㉜ 大表首列区固定（`TAIL-175` · 2026-09-29）
+from _shell_jcpin import check as check_jcpin  # noqa: E402  ← ㉝ m11 行身份区固定（`TAIL-180` · 2026-09-29）
+from _shell_bootbar import check as check_bootbar  # noqa: E402 ← ㉞ 启动失败横幅不盖内容（`TAIL-182` · 2026-09-29）
 
 BASE = "http://127.0.0.1:8000"
 errors: list[str] = []
@@ -158,7 +167,7 @@ def main() -> int:
               pjs: PJs.length,
               rows: rows.length,
               empty: document.body.innerText.includes('当前筛选条件下没有项目档案'),
-              wiredLabel: document.querySelector('#ttl em').innerText,
+              wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
               statusSel: [...document.querySelectorAll('#view tbody select[data-act="editStatus"]')]
                             .map(s => s.value).slice(0, 5),
               sample: cells,
@@ -168,7 +177,7 @@ def main() -> int:
         oks = [
             (m01["pjs"] > 0, "PJs 拉到真数据"),
             (m01["rows"] > 0 and not m01["empty"], "列表**真的渲染出行**（状态枚举没转对时会恒空）"),
-            ("已接后端" in m01["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            ("未接通" not in m01["wiredLabel"], "接通页的顶栏不挂状态牌（用户裁定 B）"),
             (all(v in ("在建", "归档") for v in m01["statusSel"]) and len(m01["statusSel"]) > 0,
              "状态列的 <select> **选中了值**（不是空选）"),
         ]
@@ -188,7 +197,7 @@ def main() -> int:
               kpis: document.querySelectorAll('#view .kpi').length,
               rows: document.querySelectorAll('#view tbody tr').length,
               shown: m?Number(m[1]):null,
-              wiredLabel: document.querySelector('#ttl em').innerText,
+              wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
             };
         }""")
         print("⑥ m04 =", m04)
@@ -196,7 +205,7 @@ def main() -> int:
         #    改断**筛选条报出的条数 == 数据源条数** —— 这才是"页面真接上了数据源"的可观测证据。
         oks2 = [
             (m04["tables"] >= 1 and m04["kpis"] == 6, "结构件在线（表 ＋ 6 张判定卡）"),
-            ("已接后端" in m04["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            ("未接通" not in m04["wiredLabel"], "接通页的顶栏不挂状态牌（用户裁定 B）"),
             (m04["shown"] is not None and m04["shown"] == m04["plans"],
              f"筛选条条数 == 数据源条数（{m04['shown']} vs {m04['plans']}）"),
         ]
@@ -230,24 +239,33 @@ def main() -> int:
         _goto(page, "m05")
         m05 = page.evaluate("""() => {
             const kpis=[...document.querySelectorAll('#view .kpi')].map(x=>x.innerText.replace(/\\s+/g,' '));
-            const num=s=>{ const m=String(s).replace(/[^\\d.-]/g,''); return m?Number(m):null; };
+            /* ⚠️ 2026-09-27（`TAIL-117` 批次 4 给金额 KPI 加了单位「元」）——
+               **只取第一个数字 token**（`83,191,167.72`），⛔ 别再用"把所有数字字符拼起来"那种写法：
+               副行里还有别的数字（时点 / 期初 / 容差），拼起来必然 NaN（本批就是这么把真机打红的）。 */
+            const num=s=>{ const m=String(s).match(/-?\\d[\\d,]*(?:\\.\\d+)?/); return m?Number(m[0].replace(/,/g,'')):null; };
+            const k0=document.querySelector('#view .kpi');
+            const v0=k0?k0.querySelector('.v'):null;
             return {
               kpis: kpis.length,
-              kpiTotal: kpis.length?num(kpis[0]):null,
+              kpiTotal: num(v0?v0.innerText:''),
               debtTotal: M05.debt?Number(M05.debt.total):null,
               flows: FLs.length, openings: LGs.length,
               tables: document.querySelectorAll('#view table').length,
-              wiredLabel: document.querySelector('#ttl em').innerText,
+              wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
             };
         }""")
         print("⑦ m05 =", m05)
         oks3 = [
-            (m05["kpis"] == 4, "四张 KPI（合计 / 辅材 / 机械 / 集采）"),
-            (m05["tables"] >= 2, "表在线（按项目欠款 ×2 ＋ 台账 ＋ 流水）"),
-            ("已接后端" in m05["wiredLabel"], "顶栏说「已接后端真实数据」"),
-            (m05["kpiTotal"] is not None and m05["debtTotal"] is not None
-             and abs(m05["kpiTotal"] - m05["debtTotal"]) < 0.01,
-             f"⭐ KPI「欠款合计」== 后端 `/api/m05/debt.total`（{m05['kpiTotal']} vs {m05['debtTotal']}）"),
+            # ⚠️ 2026-09-28（用户口径 · 看板清账）：m05 那 4 条欠款 KPI **已删**（用户判「无用」）⇒
+            #    ① 原「四张 KPI」断言改**反向墓碑**：⛔ 不许长回来；
+            #    ② 原「KPI 欠款合计 == 后端 total」的**屏上锚点**随之撤除 ⇒ 保留它的**数据侧**那半
+            #       （后端确实取到真数 = 可观测证据），屏上锚点改由「按项目看…」三栏承载。
+            (m05["kpis"] < 4, "已撤的 4 条欠款 KPI 没有长回页面"),
+            (m05["tables"] >= 2, "表在线（按项目欠款 ×3 ＋ 台账 ＋ 流水）"),
+            ("未接通" not in m05["wiredLabel"], "接通页的顶栏不挂状态牌（用户裁定 B）"),
+            (m05["debtTotal"] is not None and m05["debtTotal"] > 0,
+             f"⭐ 后端欠款总数可取到（`/api/m05/debt.total` = {m05['debtTotal']}）"
+             f" —— 屏上锚点已随 KPI 撤除，改由「按项目看…」三栏承载"),
         ]
         for ok, what in oks3:
             print(("  ✅ " if ok else "  ⛔ ") + what)
@@ -299,7 +317,7 @@ def main() -> int:
               listed: m ? Number(m[1]) : -1,       /* 筛选条报出的条数 */
               rows: document.querySelectorAll('#view tbody tr').length,
               tables: document.querySelectorAll('#view table').length,
-              wiredLabel: document.querySelector('#ttl em').innerText,
+              wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
               firstDoc: (IVs[0]||{}).docNo||'',
               vsRows: (typeof VS!=='undefined'&&VS)?VS.rows.length:-1,
             };
@@ -378,7 +396,7 @@ def main() -> int:
         print("⑧ m08 =", {k: v for k, v in m08.items() if k != 'pill'}, "| pill =", m08["pill"])
         oks4 = [
             (m08["tables"] >= 1, "表在线（单据明细总表）"),
-            ("已接后端" in m08["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            ("未接通" not in m08["wiredLabel"], "接通页的顶栏不挂状态牌（用户裁定 B）"),
             (m08["ivs"] > 0, f"库存单据**全量到手**（{m08['ivs']} 行 —— 后端真数据，不是演示数组）"),
             (m08["vsRows"] == m08["listed"] + 1,
              f"⭐ 虚拟行集 = 筛选条条数 ＋ 合计行（{m08['vsRows']} = {m08['listed']} ＋ 1）"),
@@ -417,12 +435,12 @@ def main() -> int:
             tabs: document.querySelectorAll('#view .tb2').length,
             tables: document.querySelectorAll('#view table').length,
             mechEntry: !!document.getElementById('mechEntry'),
-            wiredLabel: document.querySelector('#ttl em').innerText,
+            wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
         })""")
         print("⑨ m06 =", m06)
         oks5 = [
             (m06["tables"] >= 1 and m06["tabs"] == 3, "三张表签（表① / 表② / 差异表）＋ 表在线"),
-            ("已接后端" in m06["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            ("未接通" not in m06["wiredLabel"], "接通页的顶栏不挂状态牌（用户裁定 B）"),
             (m06["ivs"] > 0, f"材料侧取数已通（库存单据 {m06['ivs']} 行）"),
             (bool(m06["procPj"]) and m06["pjCands"] > 0,
              f"⭐ 项目候选已落定（procPj={m06['procPj'][:18]!r} · 候选 {m06['pjCands']} 个）"
@@ -449,13 +467,13 @@ def main() -> int:
               manMons: Object.keys(BIGVAL).length,
               matOk: MAT_OK,
               tables: tbls.length,
-              wiredLabel: document.querySelector('#ttl em').innerText,
+              wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
             };
         }""")
         print("⑩ m07 =", m07)
         oks6 = [
             (m07["tables"] >= 3, "三张表在线（收发结存 ＋ 焊材/气体提取 ＋ 活动大表）"),
-            ("已接后端" in m07["wiredLabel"], "顶栏说「已接后端真实数据」"),
+            ("未接通" not in m07["wiredLabel"], "接通页的顶栏不挂状态牌（用户裁定 B）"),
             (m07["whRows"] == m07["wh"] + 1,
              f"⭐ 收发结存表内渲染 == 后端行数 ＋ 合计行（{m07['whRows']} = {m07['wh']} ＋ 1）"),
             (m07["big"] > 0 and m07["bigRows"] == m07["big"],
@@ -549,6 +567,72 @@ def main() -> int:
         #      「宜化发票子表导入成功，但**发票金额没跟着动**」）：5 列**逐行 ＋ 合计**比一遍。
         #      ⚠️ 这类 bug **离线看不见**（静态判据只钉"函数体读哪个字段"，钉不出"页面画对了"）。
         check_m11(page, errors)
+
+        # ---- ㉔ **报错人话化**（`TAIL-117` 批次 1 · 2026-09-27）：把 `m01` 导出端点**真拦成 500** ⇒
+        #      屏幕上的提示不许出现内部串（`HTTP` / `/api/` / 状态码）＋ 必须给下一步；
+        #      原始串要在 `console.warn` 留痕（守则 §5.8：换地方，不是删掉）。挪 `_shell_err.py`。
+        check_err(page, errors)
+
+        # ---- ㉕ **上屏文案无内部编号 / 开发话术**（`TAIL-117` 批次 2 · 2026-09-27）：17 屏逐页读
+        #      **正文（含折叠区）＋ 顶栏 ＋ 所有悬停 title** ⇒ `API-0x` / `DEV-x` / `ENT-xx` / `OPEN-x` /
+        #      `REQ-x` / `TAIL-nn` / 「模拟值 / 模拟今天 / 原型态 / 原型演示 / 虚构」一处都不许有。
+        #      ⚠️ 为什么必须在真机：离线要"全面扫"就得先分清字面量/三种注释/正则，实测报出一堆假阳性
+        #         （详见 `_shell_text.py` 文件头）⇒ 离线只钉整串墓碑。挪 `_shell_text.py`。
+        check_text(page, errors)
+
+        # ---- ㉘ **活服务与代码是不是同一份**（`TAIL-129` · 2026-09-27 用户报障逼出来的）：后端**没有
+        #      热重载** ⇒ 改完后端**不重启**时，用户看到的还是老行为，而**离线判据全绿**
+        #      （pytest 直接 import 代码、不走那个进程）⇒ 症状 =「用户说没修好，仓里判据说修好了」。
+        #      判法 = 拿**公开只读端点**的回包比**代码里的真源**（导入域清单 ＋ 每域的字段契约）。
+        #      ⚠️ 为什么必须在真机：**只有真机能看见"那个跑着的进程"是哪一份**。
+        check_live(errors, BASE)
+
+        # ---- ㉗ **页级四态**（`TAIL-117` 批次 6 · 2026-09-27）：把 `m09` 那一路**拖慢** ⇒ 屏幕上必须是
+        #      「正在读取…」且**没有表**（⛔ 不许拿空表冒充"没数据"）；再把这一路**真拦断** ⇒ 必须是
+        #      「没能取到 ＋ 重试」，且点「重试」**真的能恢复**。⚠️ 这两件离线看不见（要的就是"那一瞬"）。
+        check_states(page, errors)
+
+        # ---- ㉚ **台账卡头那排按钮**（`TAIL-142` · 2026-09-28）：点开「看哪个项目 / 导出台账…」⇒
+        #      按钮**自己**必须带 `on` 态、收起要复原（原来点开毫无变化 ⇒ 看不出点上了没有）；
+        #      再查卡头**不许有同名按钮**、**不许横向溢出**，并钉住"说明走面板、⛔ 不弹长 toast"。
+        #      ⚠️ 为什么必须在真机：离线只能证明"源码里写了那句"，证明不了"屏幕上真的这样"。挪 `_shell_m05head.py`。
+        check_m05head(page, errors)
+
+        # ---- ㉛ **空态**（`TAIL-171`-① · 2026-09-29）：把 `m04` 的日期筛到一个**没有数据的月** ⇒
+        #      屏幕上必须是**空态**（为什么空 ＋ 下一步），⛔ **不许只剩表头**（那与"页面坏了"长得一样）；
+        #      再筛回当月 ⇒ **正常路没被改坏**（有行、合计行还在）。
+        #      ⚠️ 为什么必须在真机：离线只能证明源码里写了 `EMPTYROW(...)`，证明不了"0 行那一刻画了什么"；
+        #         本仓此前 **没有任何真机探针验过空态**（`_shell_states.py` 只管 加载/错/重试）⇒ 这条是补盲区。
+        check_empty(page, errors)
+
+        # ---- ㉜ **大表的「首列区固定」**（`TAIL-175` · 2026-09-29）：大表 20 列横表，往右填手填那几列时
+        #      「序号 ＋ 项目名称」必须留在视野里（否则看不见自己在给哪个项目填 ⇒ 会填错行）。
+        #      量的是**吸附几何**：两格严丝合缝（有缝 = 露底 / 叠住 = 盖字）、数据行与表头同款、
+        #      合计行首格（`colspan=2`）正好盖住这两列，且**表头第 2 行不许被钉**（钉错列）。
+        #      ⚠️ 为什么必须在真机：离线只能证明源码里挂了 `fl` / 写了偏移算式，证明不了屏幕上**真的**严丝合缝
+        #         （`sticky` 的错位是它的经典失败模式，且**不报错**）。挪 `_shell_bigpin.py`。
+        check_bigpin(page, errors)
+
+        # ---- ㉝ **`m11` 合同主表的「行身份区固定」**（`TAIL-180` · `B` 案 · 2026-09-29 用户裁定）：
+        #      该表 **20 列 · 330 行**，而 **4 个可编辑列**（付款方式 / 备注 / 存档号 / 寄回日期）**正好在最右**
+        #      ⇒ 往右滚 855px 去填它们时，「勾选框 ＋ 序号 ＋ 合同日期 ＋ 材料名」必须留在视野里
+        #      （否则看不见自己在给哪条合同填 ⇒ 会填错行；同族 = 大表那条 `TAIL-175`）。
+        #      ⚠️ 与本页的**实现路子也有关**：本页偏移是**渲染后按表头实测**的（⛔ 不是静态算式 ——
+        #         实测列宽随视口变：勾选框列 1440/1920 是 29px、2560 是 34px）⇒ 除了"严丝合缝"，
+        #         还要验"**隐藏贸易公司三列之后重量了没有**"（隐藏会改剩下的列宽 ⇒ 旧偏移当场过期）。
+        #      挪 `_shell_jcpin.py`。
+        check_jcpin(page, errors)
+
+        # ---- ㉞ **启动失败横幅「不许盖住内容」**（`TAIL-182` · `A` 案 · 2026-09-29 用户裁定）：
+        #      那条横幅原先是 `position:fixed;top:0;z-index:9999` ⇒ **压在页面之上**，页首那一带的
+        #      **卡头按钮全都点不着**（发现它的经过：㉝ 想点「隐藏贸易公司列」时被它挡住，
+        #      Playwright 报 `intercepts pointer events` 连重试 57 次）。守则 §4.6 的反例原文就是
+        #      「提示条盖住可点区（本仓真例：`.toast` 吃掉浮层点击）」—— 同一族，当年只修了 `.toast`。
+        #      ⚠️ 本段**自己把那个状态造出来**（拦断 `/api/**` ＋ 刷新）⇒ 量三条几何：横幅在流里 /
+        #         不与卡头重叠 / 卡头按钮正中间 `elementFromPoint` 就是它。
+        #      ⚠️ 它**必须排在最后**：本段会拦断、刷新，会清掉前面那些段依赖的页面状态。
+        #      挪 `_shell_bootbar.py`。
+        check_bootbar(page, errors)
 
     print("\n=== console / page 错误 ===")
     if errors:

@@ -21,7 +21,17 @@ def settle(page, timeout: int = 15000) -> None:
        同时盖住了**两件事** —— ① 服务端**库写入** ② 壳拿到响应后的**界面重绘**。
        只等①（`wait_db` 只保证库里有）⇒ 后面的**界面断言会读到还没重绘的画**（实测：建档/指认
        两条链路当场报"界面如实报出结果"失败）。⇒ ②单独等（本函数）。
+
+    ⭐⭐ 2026-09-27（`TAIL-117` 批次 6）：**先等"离开加载态"再等稳定** —— 批次 6 给壳加了页级四态
+       （`pageState()`：数据没回来时画「正在读取…」而不是空表），而**状态页的 DOM 也是稳的**
+       ⇒ 只等"长度不变"会在**加载中**就返回（实测当场红：`m06` 量到 `tables: 0`）。
+       ⇒ 判据改成两步：① `pageState().kind !== 'loading'`（下称"不忙了"）② 再等 DOM 稳定。
+    ⚠️ 只等"不忙"、**不等"没问题"**：`error` 态也放过去 ⇒ 让下面那些断言**如实报红**
+       （等它就等于把"这页坏了"变成"探针超时"，那是把真故障说成探针故障）。
     """
+    page.wait_for_function(
+        "() => (typeof pageState !== 'function') || pageState().kind !== 'loading'",
+        timeout=timeout)
     page.wait_for_function(
         """() => new Promise(res => {
              const len = () => (document.querySelector('#view').innerHTML || '').length;

@@ -193,7 +193,7 @@ def test_合计行逐列独立复算且随筛选变():
 
 # ⚠️ 2026-09-18（`§19` 批 2）：原先这条（`test_筛选为空必须有空态提示行`）看**旧页**渲染出来的空态行
 #    与它的 `colspan`；旧页删除（`D18`）后**形态**搬到壳 ——
-#    `test_wired_m08.py::test_空态行跨列数由表头派生`（`colspan="${thCount(INV_THEAD)}"` ＋ 文案 ✓）。
+#    `test_wired_m08.py::test_空态行跨列数由表头派生`（`EMPTYROW(thCount(INV_THEAD), …)` ＋ 文案 ✓）。
 #    ⚠️ 「筛选为空 ⇒ 结果为空」这条**实质**在上面 001-03/004 的 `filter_rows` 断言里 ✓。
 
 

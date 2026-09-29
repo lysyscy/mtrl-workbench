@@ -9,8 +9,8 @@
 from __future__ import annotations
 
 from app.import_kit.mapping import (
-    IGNORE, Field, apply, dupes, guess, join_levels, level_of, normalize, profile, secondary,
-    serial_hint,
+    IGNORE, Field, apply, dupes, guess, join_levels, level_of, looks_like_data, normalize, profile,
+    secondary, serial_hint,
 )
 from app.import_kit.profile_store import MIN_JACCARD, ProfileStore, fingerprint, jaccard
 from tests.acc_plugin import acc
@@ -250,3 +250,31 @@ def test_记忆_默认落点与cwd无关(tmp_path, monkeypatch):
     st = ProfileStore()
     assert st.path.is_absolute(), f"默认落点必须是绝对路径，实为 {st.path}"
     assert st.path.parts[-2:] == ("artifacts", "import_profiles.json"), st.path
+
+
+# ---------------------------------------------------- 像数据吗（`TAIL-129` 表头定位的硬门槛）
+
+
+@acc()
+def test_像数据的行不许当表头():
+    """⭐⭐ 2026-09-27 **用户报障的最小回归**：「**最后落库的单据号大多都变成供应商名**了」。
+
+    ⚠️ 起因：挑表头时把「表头第 2 行 ＋ **紧跟的第一行数据**」拼成了"两级表头"
+       ⇒ 列名成了 `收款单位**资产处集中采购**` ⇒ 别名「资产处」被"包含词命中"抢走这一列
+       ⇒ 收款单位（供应商名）落成了单据号。
+    ⇒ 本条钉两半：① 真·数据行（编号/日期/金额/纯数字）**必须**判成"像数据"；
+       ② 真·表头续行（`外租机械：付款通知书（编号）`）**不许**被判成"像数据"
+       （⛔ 判严了会把正当的两级表头一起否掉）。
+    """
+    # ① 真表的**第一行数据**（就是它被误当成了子表头）
+    row = ["灵宝二期", "", "2025-12-03 00:00:00", "FKTZS2025120365", "资产处集中采购",
+           797726.5, 397726.5, 400000, "", "9月11号", "承兑", "循环水管道（唐山泽盈）"]
+    assert looks_like_data(row) is True
+
+    # ② 表头续行 / 表头本身 ⇒ **不是**数据（否则两级表头会被误杀）
+    assert looks_like_data(["", "", "", "外租机械：付款通知书  （编号）", "", "", "", "", ""]) is False
+    assert looks_like_data(["项目", "科目", "费用日期", "收款单位", "该流程金额", "备注"]) is False
+    assert looks_like_data([]) is False and looks_like_data(["", ""]) is False
+
+    # ③ 门槛**故意不严**：表头里偶尔出现一格年份/数字不算数据（≥2 格且占比 ≥50% 才算）
+    assert looks_like_data(["项目", "2025", "备注"]) is False

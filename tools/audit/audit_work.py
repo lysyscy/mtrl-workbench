@@ -23,6 +23,17 @@ ARTIFACTS_MD_ALLOW: tuple[str, ...] = ("变异覆盖台账.md", ".gitkeep")
 WORK_HEADER_KEYS: tuple[str, ...] = ("读者", "回答", "何时读", "状态")
 WORK_HEADER_EXEMPT: tuple[str, ...] = ("README.md", "D索引-")
 
+# ------------------------------------------------- T20 保留期与容量（2026-09-28 立）
+
+#: `.workbuddy/backups/` 顶层**允许的条目数**（口径出处 = `README.md` §三/§四「留 5 份 · 月度清」）
+BACKUP_KEEP = 5
+#: 显式归档子目录（⛔ 不计入 `BACKUP_KEEP`；但会在报告里**如实打印它的件数与体积** —— 防"全塞进归档"糊弄）
+BACKUP_ARCHIVE_PREFIXES = ("_归档-", "_旧快照归档-")
+#: ⛔ 不计数：壳单文件基线由 `shell_verify` **自己**守 5 份（阈值表另有一行），不在本条重复管
+BACKUP_SKIP_SUFFIXES = ("_壳单文件基线.html",)
+#: `.workbuddy/scratch/`（**活区** · 详见该目录 `README.md`）的规模提示线：超 ⇒ 黄**一行**（⛔ 不逐件报）
+SCRATCH_MAX_FILES, SCRATCH_MAX_MB = 2000, 50
+
 
 def _hit(code: str, rel: str, what: str, why: str, fix: str) -> dict:
     return {"code": code, "side": "仓", "rel": rel, "line": 1,
@@ -96,5 +107,59 @@ def check_artifacts_and_headers() -> list[dict]:
     return hits
 
 
-__all__ = ["ARTIFACTS_MD_ALLOW", "SCRATCH_TTL_DAYS", "WORK_HEADER_KEYS",
-           "check_artifacts_and_headers", "check_scratch_ttl"]
+def check_retention() -> list[dict]:
+    """`T20` · **保留期与容量** —— ⭐ 治「口径写了『留 5 份』，却没有任何机器看得见」。
+
+    背景（2026-09-28 文档审计 · `work/10-designs/设计-文档审计-20260928.md` §四-7）：
+      `README.md` §三/§四 写着 `.workbuddy/backups/`「**留 5 份 · 月度清**」，而 2026-09-22 那份整改
+      设计给出的验收判据**就是**「`backups/` 目录计数 ≤5（可数）」—— 却**从没被机器守过**
+      ⇒ `TAIL-73` 销号时只验了"备份收敛到唯一点"、没验"≤5" ⇒ **43 个条目静默堆着**（含 09-18 的旧快照）。
+
+    口径（⛔ 别自己另定一套）：
+      · 计数对象 = `backups/` **顶层**条目（目录与散件都算）；
+      · **不计**显式归档子目录（`_归档-*` / `_旧快照归档-*`）与壳单文件基线（后者由 `shell_verify` 自守）；
+      · 归档子目录**照实打印件数与体积** —— 防"全塞进归档"把这条糊弄成假绿；
+      · 上限 = `BACKUP_KEEP`（5，出处 = 根 `README.md`）。
+
+    ⚠️ **黄**（与 `T5`/`T10`/`T12` 同款哲学：可能定错的不该挡合入，但**必须被看见**）。
+    """
+    hits: list[dict] = []
+    backups = REPO_ROOT / ".workbuddy" / "backups"
+    if backups.is_dir():
+        counted, archived = [], []
+        for e in sorted(backups.iterdir()):
+            name = e.name
+            if name.startswith(BACKUP_ARCHIVE_PREFIXES):
+                archived.append(e)
+                continue
+            if name.endswith(BACKUP_SKIP_SUFFIXES):
+                continue
+            counted.append(e)
+        if archived:
+            n = sum(1 for a in archived for _ in a.rglob("*") if _.is_file())
+            mb = sum(_.stat().st_size for a in archived for _ in a.rglob("*") if _.is_file()) / 1024 / 1024
+            print(f"  （信息）`backups/` 显式归档：{len(archived)} 个子目录 · {n} 件 · {mb:.1f} MB"
+                  f" —— ⛔ 归档不计入上限，但它**应当被清掉或定期复核**（见 `TAIL-134`）")
+        if len(counted) > BACKUP_KEEP:
+            names = " · ".join(x.name for x in counted[:8])
+            hits.append(_hit(
+                "T20", ".workbuddy/backups/",
+                f"顶层 {len(counted)} 个条目 > 上限 {BACKUP_KEEP}（口径：留 {BACKUP_KEEP} 份 · 月度清）",
+                "⭐ 口径在 `README.md` 写着、却没人守 ⇒ 只会继续长；本条是它的机器眼（2026-09-28 立）",
+                f"把旧的**移进** `_旧快照归档-YYYYMMDD/`（可逆）或清掉；现值：{names}"))
+    scratch = REPO_ROOT / ".workbuddy" / "scratch"
+    if scratch.is_dir():
+        fs = [f for f in scratch.rglob("*") if f.is_file()]
+        mb = sum(f.stat().st_size for f in fs) / 1024 / 1024
+        if len(fs) > SCRATCH_MAX_FILES or mb > SCRATCH_MAX_MB:
+            hits.append(_hit(
+                "T20", ".workbuddy/scratch/",
+                f"活区规模 {len(fs)} 件 / {mb:.1f} MB > 提示线 {SCRATCH_MAX_FILES} 件 / {SCRATCH_MAX_MB} MB",
+                "它是**活区**（临时件 ＋ 各尺子输出 ＋ 一次性脚本），保留期 14 天；长到这份上说明没人清",
+                "按该目录 `README.md` 的保留期清；⚠️ 删除不可逆 ⇒ 先移 `_keep-YYYYMMDD/` 再删（见 `TAIL-134`）"))
+    return hits
+
+
+__all__ = ["ARTIFACTS_MD_ALLOW", "BACKUP_KEEP", "SCRATCH_MAX_FILES", "SCRATCH_MAX_MB",
+           "SCRATCH_TTL_DAYS", "WORK_HEADER_KEYS",
+           "check_artifacts_and_headers", "check_retention", "check_scratch_ttl"]

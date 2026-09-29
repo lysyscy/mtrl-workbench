@@ -17,8 +17,14 @@ from app.core.errors import MustReportError
 from app.main import create_app
 from app.mod01_projects.models import Project
 from app.mod04_plan import repository as repo
-from app.mod04_plan.domain import MATCH_AMBIGUOUS, MATCH_MATCHED, MATCH_UNMATCHED, ProjectBrief
-from app.mod04_plan.importer import attach_projects, parse_workbook
+from app.mod04_plan.domain import (
+    MATCH_AMBIGUOUS,
+    MATCH_MATCHED,
+    MATCH_UNMATCHED,
+    ProjectBrief,
+    match_project,
+)
+from app.mod04_plan.importer import attach_projects, match_summary, parse_workbook
 from app.mod04_plan.models import PlanRow
 from app.mod04_plan.router import get_db
 from tests.acc_plugin import acc
@@ -102,11 +108,16 @@ def test_表头认不出就显式报错():
 
 
 @acc()
-def test_两列单据号都填时取材料列并提示():
+def test_单据号是一个字段_两列都有值时取第一个并提示():
+    """⭐ 2026-09-27（`TAIL-129` · 用户裁定「**实际上单据号不分机械和材料**」）：
+    那一列就是**一个字段**（`doc_no`）—— 原先拆成"材料单据 / 机械单据"再按编号形态猜类别，
+    已随本裁定删除。文件里若真有两列都写着编号 ⇒ **取第一个非空的**并**提示**（只提示、不拦截）。
+    """
     parsed = parse_workbook(_xlsx([_row(material="D1", mech="D2")]))
     assert parsed.rows[0]["doc_no"] == "D1"
-    assert parsed.rows[0]["raw"]["_mechanical_doc"] == "D2"      # 原样留在 raw 里
-    assert any("两列都填了编号" in a for a in parsed.alerts)      # 只提示、不拦截
+    assert any("单据号在两列里都有值" in a for a in parsed.alerts)      # 只提示、不拦截
+    assert not any("_material_doc" in k or "_mechanical_doc" in k
+                   for k in parsed.rows[0]["raw"]), "⛔ 那两个「材料/机械」痕迹字段已随口径删除"
 
 
 # ============================================================ 项目列匹配（§4.3.3）
@@ -136,6 +147,39 @@ def test_项目重名标重名N条且不猜():
     assert rows[0]["match_status"] == MATCH_AMBIGUOUS
     assert rows[0]["match_candidates"] == 2
     assert rows[0]["project_id"] is None                        # **不猜**
+
+
+@acc()
+def test_重名行给的是候选清单而不是个数():
+    """⭐⭐ 2026-09-27 **真机抓出来的既有缺陷**：`match_summary` 把「个数（int）」当成清单去 `list()`
+    ⇒ 真有重名行时 `TypeError: 'int' object is not iterable`（此前一直没有重名行去碰它）。
+
+    ⇒ 契约：`match_candidates` = **个数** · `_candidate_labels` = **清单**（界面要能列出
+      "对上了哪几条"，⛔ 只给个数字等于让人自己猜）。⚠️ 清单键**必须 `_` 开头**：旁路键由
+      `repo.merge_month` 按前缀挡在表字段之外（新键不带 `_` 会当场漏进 `PlanRow(**payload)`）。
+    """
+    briefs = [ProjectBrief(id=11, disp="重名", warehouse_name="仓库A"),
+              ProjectBrief(id=12, disp="重名", warehouse_name="仓库B")]
+    rows = attach_projects([{"project_input": "重名", "_row_no": 3}], briefs)
+    assert rows[0]["match_candidates"] == 2                      # 个数
+    assert rows[0]["_candidate_labels"] == ["重名", "重名"]         # 清单
+    got = match_summary(rows)
+    assert got["multi"][0]["candidates"] == ["重名", "重名"], "⛔ 不许是 int（那是老缺陷的形态）"
+    assert got["multi"][0]["row"] == 3
+
+
+@acc()
+def test_短输入不许靠包含匹配撞上项目():
+    """⚠️ 2026-09-27 真机：夹具里项目列写成 `0` ⇒ 被"包含"撞上 `未建仓03` / `未建仓04`（**假歧义**）。
+    ⇒ 第③步要求**两侧都 ≥ 3 个字**；实测真收益的两例（`晋江污泥` / `大唐雷州`）都是 4 字，不损失。
+    """
+    briefs = [ProjectBrief(id=1, disp="", warehouse_name="未建仓-03"),
+              ProjectBrief(id=2, disp="", warehouse_name="未建仓-04"),
+              ProjectBrief(id=3, disp="大唐雷州发电项目", warehouse_name="大唐雷州发电项目")]
+    assert match_project("0", briefs).status == MATCH_UNMATCHED          # 太短 ⇒ 不猜
+    got = match_project("大唐雷州", briefs)
+    assert got.status == MATCH_MATCHED and got.project_id == 3           # 够长 ⇒ 命中
+    assert got.how == "包含", "命中方式要记下来（界面要能回答「为什么它配上了」）"
 
 
 # ============================================================ 幂等重写（§9.5）

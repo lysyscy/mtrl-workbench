@@ -146,7 +146,7 @@ def test_壳里重置回默认月与默认项目():
 @acc("ACC-FEE-MON-001", "001-05")
 def test_壳里空态行跨列数由表头派生():
     """未录的那一份 ⇒ 空态提示行，`colspan` **由表头列数派生**（⛔ 不写死数字）。"""
-    assert 'colspan="${thCount(AWF_THEAD)}"' in SHELL, "空态行的跨列数不再由表头派生"
+    assert "EMPTYROW(thCount(AWF_THEAD)" in SHELL, "空态行的跨列数不再由表头派生"
     assert "还没有手填项" in SHELL, "未录的月没有提示"
 
 

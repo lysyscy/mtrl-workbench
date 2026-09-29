@@ -120,6 +120,12 @@ class UserAccount(Base):
     #:   （那是 `001-07` 已经钉住的口径：「回落默认套 **或** 显式报错，两者择一」—— 本仓选了"回落"）
     #:   ⇒ ⛔ 这里再加一道校验 = 两道口径、且会互相漂。
     theme: Mapped[str] = mapped_column(String(32), default="", server_default="")
+    #: ⭐ 2026-09-27（`TAIL-129` · 用户走查「界面字号及界面大小」）—— **按用户**的**界面大小档位**
+    #:  （存**档位键**：`standard` / `large` / `larger` / `largest`；空串 = 未设置 ⇒ 回落标准档）。
+    #:  ⚠️ 存**键**、⛔ 不存倍率（`1.25`）—— 倍率是**显示口径**，哪天调档位不该动历史数据；
+    #:     键↔倍率的映射只有一处真源 = `mod15_user.domain.UI_SCALES`。
+    #:  ⚠️ 与 `theme` 同款：**按用户隔离**（A 选"更大"不妨碍 B 保持标准）。
+    ui_scale: Mapped[str] = mapped_column(String(16), default="", server_default="")
 
     #: ⭐ **软删标记**（§1.5.1「删除 = 软删除」）—— 非空 = 已删除。
     #: ⚠️ 这是**全仓第一个真软删**（`ACC-X-DEL-001/001-08` 的"软删档双向开"断言在这里**落地**）。

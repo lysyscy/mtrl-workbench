@@ -159,4 +159,36 @@ def api_delete(req: CellRequest) -> dict:
         return _flash(SV.act_delete(s, ym=req.ym, project_key=req.project, index=req.index))
 
 
+class BatchMonth(BaseModel):
+    """批量表里的**一行** = 一个核算月 ＋ 该行各列的原始输入（`{项名: 用户敲的串}`）。"""
+
+    ym: str = ""
+    values: dict[str, Any] = {}
+
+
+class BatchRequest(BaseModel):
+    """⭐ `TAIL-156` 月度批量录入：一次提交「N 个核算月 × M 个项」。
+
+    ⚠️ `values` 用 `Any`：壳送来的是**用户敲的原样字符串**（可能带空格、可能不是数字）
+       ⇒ 判定出口 `domain.amount_problem` 本来就吃任意输入，⛔ 别在这里先转一道（那是第二份口径）。
+    """
+
+    project: str = ""
+    items: list[str] = []
+    months: list[BatchMonth] = []
+
+
+@router.post("/api/m09/fee/batch")
+def api_batch(req: BatchRequest) -> dict:
+    """⭐ 一次写「N 个核算月 × M 个项」—— **按 (月, 项目, 项名) 幂等**；**空格外整格跳过**；
+    **一格非法 ⇒ 整批不写**（语义与回执见 `service.act_batch`）。"""
+    with session_scope() as s:
+        return _flash(SV.act_batch(
+            s,
+            project_key=req.project,
+            items=list(req.items or []),
+            months=[{"ym": m.ym, "values": dict(m.values or {})} for m in (req.months or [])],
+        ))
+
+
 __all__ = ["router"]

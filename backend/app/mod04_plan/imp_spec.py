@@ -48,32 +48,22 @@ SPEC = DomainSpec(
 def _rows_of(records, year_month: str) -> list[dict]:
     """通用面的 `records` → 本域的**行形状**（`doc_no` 一类，见 `parse_workbook` 的 same 口径）。
 
-    ⚠️ 两处**不是简单改名**（自测踩到 `'material_doc' is an invalid keyword argument for PlanRow`）：
-    ① 本域的行字段是**单个 `doc_no`** —— 「材料／外租机械」是**同一列的二选一**（§4.3.3），
-       通用面按"一列一个目标"映射 ⇒ 这一格落进 `材料单据` 或 `机械单据` 之一，**消歧要在这里补**
-       （`importer.doc_kind`，与解析路同一个出口）；
-    ② 金额空 ⇒ **0**（本域的 `_amount` 就是这个口径），而不是通用面的"空 ⇒ 不写"。
+    ⚠️ 一处**不是简单改名**：
+    ① 金额空 ⇒ **0**（本域的 `_amount` 就是这个口径），而不是通用面的"空 ⇒ 不写"。
+    ⭐ 2026-09-27（`TAIL-129`）：**「单据号」现在就是通用面上的一个字段**（`doc_no`）——
+       原先它在通用面上被拆成 `材料单据` / `机械单据` 两个标签、这里再按编号形态"消歧"
+       （`importer.doc_kind`）；用户裁定「单据号不分机械和材料」后**那套消歧整条删掉**，
+       于是本函数对单据号**只是原样搬运**（⛔ 别再长出第二套口径）。
     """
     key_of = {f.label: f.key for f in FIELDS}
     out: list[dict] = []
     for rec in records or []:
         vals = {key_of[lb]: rec.get(lb) for lb in key_of if rec.get(lb) not in (None, "")}
-        material = mechanical = ""
-        for fld in ("material_doc", "mechanical_doc"):
-            v = str(vals.get(fld) or "").strip()
-            if not v:
-                continue
-            if I.doc_kind(v) == "mechanical_doc":
-                mechanical = v
-            else:
-                material = v
         raw = dict(rec.get("raw") or {})            # ⭐ 未映射列**原样保留**（域里就是这么存的）
         raw["_row_no"] = rec.get("_row")
-        raw["_material_doc"] = material
-        raw["_mechanical_doc"] = mechanical
         out.append({
             "project_input": str(vals.get("project_input") or ""),
-            "doc_no": material or mechanical,
+            "doc_no": str(vals.get("doc_no") or "").strip(),
             "flow_amount": to_money(str(vals.get("flow_amount") or 0)),
             "planned_amount": to_money(str(vals.get("planned_amount") or 0)),
             "pay_date": I.norm_pay_date(str(vals.get("pay_date") or ""), year_month),

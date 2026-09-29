@@ -261,7 +261,9 @@ def api_ledger_export(
 
 
 @router.get("/api/m05/debt/export")
-def api_export_total_debt():
+def api_export_total_debt(
+    projects: str = Query("", description="要导出的项目（**仓库名**，逗号分隔；**顺序即导出行序**；空 = 全部项目）"),
+):
     """导出**总欠款表**（用户 2026-09-20 定）—— 每个项目一行：`集采 / 辅材 / 机械`。
 
     - ⭐ 列序**由用户指定**：**A 序号 · B 项目展示名 · C 集采 · D 辅材 · E 机械**
@@ -281,7 +283,7 @@ def api_export_total_debt():
 
     try:
         with session_scope() as s:
-            path, _note = svc.export_total_debt(s)
+            path, _note = svc.export_total_debt(s, projects)
     except MustReportError as exc:
         return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
     return FileResponse(

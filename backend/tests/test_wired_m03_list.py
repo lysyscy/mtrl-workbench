@@ -29,12 +29,24 @@ def _nt_region() -> str:
 
     ⚠️ 断言一律在这个**切片**里找，不到全文里撞 —— 否则 `10:rs=>N2(rs.reduce(` 这种片段
     会被别的表（如库存单据 `ivSums`）的同款写法**假命中**。
+
+    ⚠️⚠️ 2026-09-28（`TAIL-164` · `P2-a` 拆件）：本页的**表头模板 `NT_THEAD`／`ntActCell`／
+       `pjPanel`** 已随拆件搬进 `web/shell/proj.js`，而**渲染函数 `V.m03` 按计划 §23 留在
+       `index.html`** ⇒ 两者在**合并后的壳**里不再相邻（`read_shell()` 的顺序 = `index.html` …
+       `proj.js` …），一段 `find(i) → find(term, i)` 会把收尾找到**下一页**去。
+       ⇒ 本函数取**两段并起来**：① 表头模板那一段（`proj.js`）② `V.m03` 切片那一段（`index.html`）。
+       ⭐ 判据内容**一字未改**，只换取材方式（本仓既有做法：拆件后判据改指，⛔ 不是不许拆件）。
     """
     i = SHELL.find("const NT_THEAD=")
     assert i >= 0, "壳里找不到 `const NT_THEAD=`"
-    j = SHELL.find("</div>`;", i)
-    assert j > i, "找不到本页渲染函数的收尾"
-    return SHELL[i:j]
+    j = SHELL.find("`;", i)                    # ⚠️ 收到 `NT_THEAD` **自己**的收尾（⛔ 别用 `</div>\`;` —— 拆件后会跑到别的件里）
+    assert j > i, "找不到 `NT_THEAD` 模板的收尾"
+    head = SHELL[i:j]
+    k = SHELL.find("V.m03=()=>{")
+    assert k >= 0, "壳里找不到 `V.m03` 切片"
+    e = SHELL.find("</div>`;", k)
+    assert e > k, "找不到 `V.m03` 渲染的收尾"
+    return head + "\n" + SHELL[k:e]
 
 
 def _nt_heads() -> list[str]:
@@ -99,6 +111,22 @@ def test_壳里有效行口径与计数三档():
     assert "i8 已撤单 ${NO.filter(n=>ntVoid(n)&&inM(n)).length} 条" in reg, "「i8 已撤单 N 条」计数没了"
 
 
+@acc("ACC-PAY-LIST-001", "001-11")
+def test_汇总pill把撤单里有牵涉的单独报一档():
+    """⭐ 2026-09-28（用户口径：「i8 删除付款通知书情况**非常少非常少**；但是可以做一个**保险**」）：
+    常驻那句「i8 已撤单 N 条」看不出**其中有多少条仍有牵涉**（已挂付款流水 / 集采关联）——
+    而这一类按 §4.2.7 **仍参与统计**、必须人先撤销付款 / 解绑才会退出。
+    ⇒ 汇总 pill 要把它**单独报一档**（含悬停说明与去处），否则"保险"只在抓取回执里出现过一次。
+
+    ⚠️ 能证伪：把 `ntVoidJoint(n)&&inM(n)` 那一档从 pill 里摘掉 ⇒ 本件必红。
+    ⚠️ 只**加**一档，⛔ 不动既有四档文案（那四档由 `test_壳里有效行口径与计数三档` 继续守）。
+    """
+    reg = _nt_region()
+    assert "ntVoidJoint(n)&&inM(n)" in reg, "汇总 pill 没给「有牵涉」单独一档"
+    assert "条有牵涉" in reg, "「有牵涉」那一档没有看得见的字（用户认不出）"
+    assert "仍参与统计" in reg, "没说明它为什么还在统计里（只说数字，用户不知道要不要管）"
+
+
 @acc()
 def test_壳里剔除来源分档不混作一谈():
     """旧页：切「分类 = 剔除」时按来源分档打标签（`人工批量剔除` / `规则命中` / `i8 已撤单`）。
@@ -114,7 +142,7 @@ def test_壳里剔除来源分档不混作一谈():
 # ---------------------------------------------------------------- 排序与空态
 
 
-@acc()
+@acc("ACC-PAY-LIST-001", "001-13")
 def test_壳里金额列按数值排序而不是按字符串():
     """旧页：金额列按**数值**排序（按字符串排 `"10,000.00" < "900.00"` 是错的）。
     新壳：`applySorts` 先判**列类型**（`_colType`）再按类型比较（`_cmp`）—— 不是裸字符串比较；
@@ -128,12 +156,12 @@ def test_壳里金额列按数值排序而不是按字符串():
         "合计行 / 草稿行没走 pin 通道（会被排序卷进数据行里）"
 
 
-@acc()
+@acc("ACC-PAY-LIST-001", "001-12")
 def test_壳里空态行跨列数由表头派生且指出剔除行去哪看():
     """旧页：空态提示行的 `colspan` 由表头列数**派生**，且提示里给出「去哪儿找剔除了的行」。
-    新壳同款：`colspan="${thCount(NT_THEAD)}"` ＋ pill 里写明「切「分类 = 剔除」查看」。
+    新壳同款：走**空态唯一出口** `EMPTYROW(thCount(NT_THEAD), …)`（跨列数由表头派生）＋ pill 里写明「切「分类 = 剔除」查看」。
     """
-    assert 'colspan="${thCount(NT_THEAD)}"' in SHELL, "空态行的跨列数不再由表头派生"
+    assert "EMPTYROW(thCount(NT_THEAD)" in SHELL, "空态行的跨列数不再由表头派生"
     assert "当前筛选条件下没有付款通知书" in SHELL, "空态文案丢了"
     assert "（切「分类 = 剔除」查看）" in SHELL, "空态没告诉用户剔除了的行去哪儿找"
 
@@ -157,7 +185,7 @@ def test_壳里默认月由后端给且付款域默认当月():
     assert default_period("notice") != default_period("process"), "付款域与材料报表类的默认月应当不同"
 
 
-@acc()
+@acc("ACC-PAY-LIST-001", "001-14")
 def test_壳里勾选框与标签由渲染注入而不是数据带的():
     """旧页：`/api/m03/notice-list` 的 items **不含 HTML**（勾选框是页面渲染时才注入的）。
     新壳同款：勾选框（`data-act="pick"`）与行标签（`ntArchTag`）都在**渲染时**拼；

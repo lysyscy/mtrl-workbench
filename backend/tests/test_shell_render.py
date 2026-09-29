@@ -36,9 +36,11 @@ def test_本页内刷新不得跳滚动():
     # 记与还必须成对：先取 keep，写完才还原（还原出现在 keep 之后）
     assert body.index("keep") < body.rindex("keep"), "`keep` 只出现一次 ⇒ 没有还原"
     # ⛔ 切页回顶是**故意的**：`go()` 里的显式置 0 不许被人"顺手修掉"
+    # ⚠️ 2026-09-27（批次 6）：`go()` 从**一行**变成**多行**了（进页前要多做一件"标出要拉哪几路"）
+    #    ⇒ 判法从"取那一行"改成"取这一段的**窗口**"（⛔ 不是放宽 —— 仍要求函数体里真有这句）。
     go = re.sub(r"/\*.*?\*/", "", read_shell(), flags=re.S)
-    m = re.search(r"function go\(k\)\{[^\n]*", go)
-    assert m and "scrollTop=0" in m.group(0), "go() 的切页回顶没了（那是故意的设计）"
+    body_go = go[go.index("function go(k){"):][:700]
+    assert "scrollTop=0" in body_go, "go() 的切页回顶没了（那是故意的设计）"
 
 
 @acc()

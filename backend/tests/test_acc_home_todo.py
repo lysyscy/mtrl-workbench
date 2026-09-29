@@ -1,4 +1,4 @@
-"""`ACC-HOME-TODO-001` —— 看板（默认落地页）= 待办页 · 8 项待办。
+"""`ACC-HOME-TODO-001` —— 看板（默认落地页）= **待办页**（项数**以 `KEYS` 为准**，⛔ 别在文案里写死个数；用户增减待办项是常态）。
 
 判据 → `PRD/验收/验收基线.json` 的 `cases["ACC-HOME-TODO-001"]`。
 ⚠️ **看板不占模块号**（原型导读）⇒ 本页交互规格主人 = 原型 `V.home`（`demo/`）。
@@ -38,17 +38,27 @@ CASE = "ACC-HOME-TODO-001"
 
 #: 8 项把手（**顺序也是契约** —— 看板按此序展示）
 #: ⭐ `TAIL-97`（2026-09-25）：`jcPending`（集采合同待确认）**已撤** ⇒ 9 项 ⇒ 8 项。
-KEYS = ("ntUnapproved", "ownership", "planUnmatched", "dfPending",
-        "placeholder", "fetchDue", "fetchFail", "printFail")
+# ⚠️ 2026-09-28（用户口径 · 看板清账）：删掉 4 个瓦片 —— `ntUnapproved` / `dfPending` /
+#    `fetchFail` / `printFail`（用户判「全无用」）。⭐ **claim 不变**：「留下的每一项」都必须
+#    **有本域出口 · 能点去对应页 · 不许写死数字」。⛔ 删除已登记，别把这几项加回来。
+#: ⭐ 2026-09-28（用户口径「**AB 做吧**」· 看板补两项真待办）：加 `jcUnlinked`（集采未关联合同 ⇒
+#:    **付不了款**）与 `voidJoint`（i8 已撤单但仍有牵涉 ⇒ 账不准）。⭐ **claim 不变**：
+#:    每一项都必须**有本域出口 · 能点去对应页 · 不许写死数字**。
+#: ⚠️ 顺序即契约（= 页面渲染顺序）：两个新把手**插在 `fetchDue` 之前** —— 前面几项都是「有具体东西要办」，
+#:    而「本月抓取」更像**例行状态**（已抓就绿）。⛔ 改顺序要**同批改壳里的瓦片顺序**，否则本件必红。
+KEYS = ("ownership", "planUnmatched",
+        "placeholder", "jcUnlinked", "voidJoint", "fetchDue")
 
-#: 每项的去向页（`data-k`）—— ⚠️ `dfPending` 2026-09-21 由 `m12`（已撤页）改指 `m08`
-DEST = {"ntUnapproved": "m03", "ownership": "m03", "planUnmatched": "m04",
-        "dfPending": "m08", "placeholder": "m01", "fetchDue": "m02", "fetchFail": "m02",
-        "printFail": "m03"}
+#: 每项的去向页（`data-k`）—— 新加两项都去 `m03`（付款通知书页：关联合同 / 撤销付款 / 解绑都在那）
+DEST = {"ownership": "m03", "planUnmatched": "m04",
+        "placeholder": "m01", "fetchDue": "m02",
+        "jcUnlinked": "m03", "voidJoint": "m03"}
+# ⚠️ 上面这张表里若还留着已删瓦片的条目（如 `ntUnapproved`），那是**惰性残留** —— 001-03 只按
+#    `KEYS` 逐项核对，多余的键不会生效；下次动本件时顺手清掉即可。
 
 
 def _home() -> str:
-    """`V.home` 的**推导段**（口径表达式 ＋ 9 个瓦片）—— 到 `return \\`` 为止。"""
+    """`V.home` 的**推导段**（口径表达式 ＋ 各瓦片，**个数以 `KEYS` 为准**）—— 到 `return \\`` 为止。"""
     i = SHELL.find("V.home=()=>{")
     assert i >= 0, "壳里找不到 `V.home`"
     j = SHELL.find("  return `", i)
@@ -77,12 +87,16 @@ def _calls(block: str) -> dict[str, str]:
 
 # ----------------------------------------------------------------- 001-01
 @acc(CASE, "001-01")
-def test_八项待办把手齐全不重不漏():
-    """⭐ **8 项**、把手集合固定、**顺序即契约**（`TAIL-97` 撤掉 `jcPending`）。"""
+def test_待办把手齐全不重不漏():
+    """⭐ 把手集合固定、**顺序即契约**（`TAIL-97` 撤掉 `jcPending`；2026-09-28 看板清账又撤 4 项）。
+
+    ⚠️ 数量**以 `KEYS` 为准** —— ⛔ 别把个数写死在断言里：用户增减待办项是常态，
+       写死个数会让"用户删一个无用的待办"变成一串假红（本会话实测踩到）。
+    """
     block = _home()
     got = [m.group(1) for m in re.finditer(r"(?:run)?[Tt]ile\('(\w+)',", block)]
     assert got == list(KEYS), f"页面把手 = {got}"
-    assert len(set(got)) == 8, "把手有重复"
+    assert len(set(got)) == len(KEYS), "把手有重复"
     assert set(_calls(block)) == set(KEYS)
 
 
@@ -97,16 +111,19 @@ def test_每项数字都来自数据源不得写死():
     block = _home()
     calls = _calls(block)
     # ①–⑥ 与 ⑤ 的表达式名（每一行都是**该域的出口**，不是本页另算的中间量）
+    # ⚠️ 2026-09-28（看板清账）：`ntUnapproved` / `dfPending` 两个瓦片已删 ⇒ 从本表去掉；
+    #    claim 不变：**留下的每一项**都取自本域出口（⛔ 不许本页另算中间量）。
     want_expr = {
-        "ntUnapproved": "nUn", "ownership": "nOwn", "planUnmatched": "nPl",
-        "dfPending": "nAdj", "placeholder": "ph.length",
+        "ownership": "nOwn", "planUnmatched": "nPl",
+        "placeholder": "ph.length",
+        "jcUnlinked": "nNoLink", "voidJoint": "nVoidJ",
     }
     for key, expr in want_expr.items():
         assert calls[key].split(",")[1] == expr, f"{key} 的数不是取自 {expr}：{calls[key][:70]}"
     # ⑦⑬⑭ 走 `runTile`（后端取数）—— 数字必须引 `fDone` / `fFail` / `pFail`，⛔ 不写死
     assert "fDone?0:1" in calls["fetchDue"]
-    assert "fFail?1:0" in calls["fetchFail"]
-    assert "pFail?1:0" in calls["printFail"]
+    # ⚠️ 2026-09-28（看板清账）：`fetchFail` / `printFail` 两个瓦片已删 ⇒ 那两条形态断言随之去掉；
+    #    claim 不变：**留下的**这一项仍必须引后端取数的量（`fDone`），⛔ 不许写死。
     # ⭐ 逐条钉住**口径表达式本身**（谁把口径改了/换成写死的数 ⇒ 红）
     for line in (
         "nUn=NO.filter(n=>ntLive(n)&&n.astat==='未批').length;",
@@ -114,6 +131,12 @@ def test_每项数字都来自数据源不得写死():
         "const nPl =PLs.filter(p=>plRev(p,PLs)!=='完全匹配').length;",
         "const nAdj=IVs.filter(iv=>adjOf(iv)).length;",
         "const ph=PJs.filter(p=>p.name.startsWith('未建仓-'));",
+        # ⭐ 2026-09-28 新增两项：口径**必须**走本域唯一出口（`ntJcUnlinked` / `ntVoidJoint`），
+        #    ⛔ 不许本页另写判定（改口径 ⇒ 本行必红）。
+        # ⚠️ 变量名**刻意不含 `nJc`** —— 001-09 那条旧墓碑写着"看板不许再数 `nJc`（集采待确认，TAIL-97 已撤）"，
+        #    命名撞子串会让它**假红**（本次实测踩到）⇒ 这里用 `nNoLink`。
+        "const nNoLink=NO.filter(n=>ntLive(n)&&ntJcUnlinked(n)&&statOf(n)!=='已付清').length;",
+        "const nVoidJ=NO.filter(ntVoidJoint).length;",
     ):
         assert line in block, f"口径表达式的唯一出口不见了：{line}"
     # ⚠️ 反向：这些瓦片的数字**不得**出现字面量写法（`tile('x',3,` 这种）
@@ -177,9 +200,9 @@ def test_集采与差异各取本域出口且不臆造不隐藏():
     # ⛔ **已撤页的数据源不许长回来**（`DFs` 是 m12 的留痕残留、恒空 ⇒ 拿它当"待核对"就是谎报）
     assert "DFs" not in block, "看板又读起了 `DFs`（那是已撤的 `m12` 的残片，恒空）"
     assert "待核对" not in block, "看板又写起了「差异待核对」（该状态已无载体）"
-    # 两项都**在**（⛔ 不隐藏）
+    # ⚠️ 2026-09-28（看板清账）：`dfPending` 瓦片已删（用户判无用）⇒ 原「两项都在」不再适用；
+    #    claim 改成**反向**保留：已撤的东西⛔ 不许长回来（下面那条 `jcPending` 就是同款）。
     calls = _calls(block)
-    assert "dfPending" in calls
     assert "jcPending" not in calls, "看板的「集采待确认」瓦片已撤（TAIL-97）"
 
 

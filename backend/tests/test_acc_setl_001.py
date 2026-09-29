@@ -128,8 +128,8 @@ def test_空月的空态提示行跨列数等于表头列数():
     assert empty["rows"] == [], "空月不该有数据行"
     # ⚠️ 2026-09-19（`§19` 批 2）：原先在这里从**旧页**抠"空态提示行 / 跨列数 = 表头列数 /
     # 提示里点名了那个月"；旧页删除（授权 `D18`）后形态搬到壳 ——
-    # `test_wired_m07.py::test_壳里空态跨列数由表头派生`（`colspan="${thCount(WH_THEAD)}"` ＋
-    # 提示里带 `<b>${tmLabel(fWhYm)}</b>` ✓）。「空月不该有合计行」由 `empty["rows"] == []` 蕴含 ✓。
+    # `test_wired_m07.py::test_壳里空态跨列数由表头派生`（`EMPTYROW(thCount(WH_THEAD), …)` ＋
+    # 提示里带 `tmLabel(fWhYm)` ✓）。「空月不该有合计行」由 `empty["rows"] == []` 蕴含 ✓。
 
 
 @acc(CASE, "001-06")

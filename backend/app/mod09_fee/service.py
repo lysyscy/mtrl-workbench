@@ -153,7 +153,49 @@ def _total_after(s: Session, *, ym: str, project_key: str, project_id: int):
     return D.total_amount(inv, items, ym=ym, project_key=project_key)
 
 
+def act_batch(s: Session, *, project_key: str, items: list, months: list) -> dict:
+    """⭐ `TAIL-156`（用户口径「一次录好几个月太麻烦」）· **月度批量录入**：一次写「N 个核算月 × M 个项」。
+
+    ⭐ 三条语义（**唯一出口**，壳里不许复写）：
+      ① **按 (核算月, 项目, 项名) 幂等** —— 同一格重提交 = **改那一条**的金额（⛔ 不是又追加一条；见 `R.upsert_item`）；
+      ② **空格子整格跳过** —— ⛔ 不写 0、也不建行（**"空 ≠ 0"**，与 `001-05` / `001-11` 同口径）：
+         用户没填的格子就是"没打算录"，替它写 0 会**凭空多出一行 0**（拿掉 0 还得再删一次）；
+      ③ **先全量校验、通过才落库** ⇒ **一格非法 ⇒ 整批不写**（写一半会让人分不清哪些进去了 —— 宁可整批退回）。
+    ⚠️ 金额判据**只走** `domain.amount_problem`（⛔ 本层不许自己判非数字）。
+    """
+    pj = R.project_by_key(s, project_key)
+    if pj is None:
+        return _flash("err", f"项目「{project_key or '（未选）'}」不在档案里 —— 先建档再录")
+    names = [str(n or "").strip() for n in (items or [])]
+    if not names:
+        return _flash("err", "一项都没有 —— 先选一个「项名基准月」或加一列，再来填")
+    # ---- 第 1 遍：**全量校验**（⛔ 不落库；任何一格非法 ⇒ 整批退回）
+    plan: list[tuple[str, str, object]] = []
+    for m in months or []:
+        ym = D.parse_ym(str((m or {}).get("ym") or ""))
+        if not ym:
+            return _flash("err", f"核算年月认不出：{(m or {}).get('ym')!r} —— 请写成 YYYY-MM")
+        vals = (m or {}).get("values") or {}
+        for nm in names:
+            raw = vals.get(nm, "")
+            if raw is None or str(raw).strip() == "":
+                continue                       # ⭐ ② 空 ⇒ 整格跳过（不写 0、不建行）
+            problem = D.amount_problem(raw)
+            if problem:
+                return _flash("err", f"{ym}「{nm or D.UNNAMED}」：{problem}"
+                                     f" —— 这一批**一格都没写**，改完请再按一次保存")
+            plan.append((ym, nm, D.parse_amount(raw)))
+    if not plan:
+        return _flash("err", "所有格子都是空的 —— 没有要写的内容（⛔ 不会替你写 0）")
+    # ---- 第 2 遍：落库（幂等：有 ⇒ 改，无 ⇒ 增）
+    for ym, nm, amt in plan:
+        R.upsert_item(s, ym=ym, project_id=pj.id, name=nm, amount=amt)
+    yms = sorted({p[0] for p in plan})
+    return _flash("ok", f"已写入 {len(yms)} 个核算月 × {len(names)} 项，共 {len(plan)} 格"
+                        f"（{yms[0]} ~ {yms[-1]}）；同一「月 + 项名」已有 ⇒ 改值，没有 ⇒ 新建；空格子一律不写")
+
+
 __all__ = [
     "parse_state", "candidates", "build_page_data",
-    "act_add", "act_rename", "act_set_amount", "act_delete",
+    "act_add", "act_rename", "act_set_amount", "act_delete", "act_batch",
 ]

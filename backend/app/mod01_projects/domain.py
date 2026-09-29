@@ -194,7 +194,7 @@ def ensure_batch_settled(decisions: list[OwnershipDecision]) -> None:
     unsettled = [d for d in decisions if not d.settled]
     if unsettled:
         raise MustReportError(
-            f"归属未走完（{len(unsettled)} 行）⇒ **整批不入库**；"
+            f"归属未走完（{len(unsettled)} 行）⇒ 整批不入库；"
             "请先把每一行的归属指定完（不得留下「待指定」的行）。"
         )
 

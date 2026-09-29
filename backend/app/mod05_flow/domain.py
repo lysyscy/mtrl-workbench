@@ -136,6 +136,10 @@ class OpeningView:
     cutoff_ym: str = ""
     settle_amount: Decimal = _ZERO
     paid_amount: Decimal = _ZERO
+    #: ⭐ **期初行的真 id**（2026-09-28 加）：`/api/m05/debt` 与 `/api/m05/ledger` **必须给同一个 id**
+    #   —— 壳里"删除期初行"按钮在**台账行**上（拿的是 `ledger.opening_id`），而它要去 `debt.openings`
+    #   那一侧找数据 ⇒ 两边对不上就**静默点不动**（实测缺陷：壳的 `adaptOpening` 曾把 id 写成 `''`）。
+    opening_id: int = 0
 
 
 def debt_by_category(

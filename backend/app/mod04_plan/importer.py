@@ -17,7 +17,9 @@
    ⇒ 现在按「**哪张认得出表头**」自动挑（`_pick_sheet`）；
 2. **二级表头续行**：真实表 `r1` 是表头、`r2` **只给"单据号"那一列**补一行（`外租机械：付款通知书（编号）`）、
    数据从 `r3` 起 —— 现状会把 `r2` 当**数据行**收进来（凭空多一行垃圾）⇒ 现在识别为**表头续行**并跳过；
-3. **同一列两种单据号**（材料 / 外租机械 二选一）⇒ 见 `_doc_kind`（**域内口径**）；
+3. ⭐ 该列在真表里**表头是两行**（`材料：其他支出…（编号）` › `外租机械：付款通知书（编号）`）——
+   2026-09-27（`TAIL-129`）用户裁定「**单据号不分机械和材料**」⇒ 现在它就是**一个字段**（`doc_no`），
+   ⛔ 不再按编号形态猜类别（旧实现 `doc_kind` / `_MECH_DOC` 已删）；
 4. **付款时间是「9月11号」**（中文月日）⇒ 按所选**年月**补年份（`_norm_pay_date`；⛔ 认不出就原样留着）。
 """
 
@@ -37,10 +39,18 @@ from app.mod04_plan.domain import ProjectBrief, match_project
 #: ⭐ **域声明**：字段名 ＋ 实拍长表头的**别名**（原 `_HINTS` 的包含词搬到这里）—— 识别归引擎、口径归本域。
 FIELDS: tuple[Field, ...] = (
     Field("project_input", "项目", aliases=("项目名称", "工程名称"), type="text", required=True),
-    Field("material_doc", "材料单据",
-          aliases=("材料：其他支出付资产处/贸易公司（编号）", "其他支出", "资产处", "贸易公司"), type="code"),
-    Field("mechanical_doc", "机械单据",
-          aliases=("外租机械：付款通知书（编号）", "外租机械", "付款通知书"), type="code"),
+    # ⭐⭐ 2026-09-27（`TAIL-129` · 用户走查裁定：「**实际上单据号不分机械和材料**」）：
+    #    **单据号只有一个字段** —— 原先拆成 `材料单据` / `机械单据` 两个字段，靠"编号形态"（`FKTZS…`）
+    #    猜它属于哪一类（老口径：材料走「其他支出」、外租机械走「付款通知书」）。
+    #    真表实测：那一列**全是同一套 `FKTZS…` 编号**（`FKTZS2025120365` 的备注写「循环水管道」，
+    #    那是**材料**）⇒ "猜类别"既没有业务依据，又给了一堆**误命中的弹药**。
+    #    ⚠️⚠️ 别名写法**从此收窄成"整条表头原文"**：原先还挂着 `其他支出` / `资产处` / `贸易公司`
+    #    这些**长表头里的片段** —— 一旦列名被污染（表头字 ＋ 数据值拼在一起，见
+    #    `import_kit.mapping.looks_like_data` 那段），「资产处」就会把**收款单位**那一列抢走
+    #    ⇒ 落库的"单据号"变成**供应商名**（用户报障原话：「最后落库的单据号大多都变成供应商名了」）。
+    #    ⛔ 别再往回加片段别名。
+    Field("doc_no", "单据号",
+          aliases=("材料：其他支出付资产处/贸易公司（编号）", "外租机械：付款通知书（编号）"), type="code"),
     Field("flow_amount", "该流程金额", aliases=("流程金额",), type="amount", required=True),
     Field("planned_amount", "本月预付款金额", aliases=("本月预付", "预付款金额"), type="amount"),
     Field("pay_date", "付款时间", aliases=("付款日期",), type="date"),
@@ -49,8 +59,9 @@ FIELDS: tuple[Field, ...] = (
 )
 #: 挑表门槛：一张表至少要认出这么多字段（且**必须含「项目」**）才算"这张是付款计划"
 _MIN_HITS = 3
-#: 机械侧单据号形态：`FKTZS…`（**付款通知书**）—— 见 `_doc_kind`
-_MECH_DOC = re.compile(r"^[A-Za-z]{2,}ZS\d+")
+# ⛔ `_MECH_DOC`（按编号形态猜"这是机械侧单据"）**已删**（`TAIL-129` · 2026-09-27）——
+#    业务上**单据号不分机械与材料**（用户裁定），"猜类别"只会制造误命中。见 `FIELDS` 上方那段。
+
 #: 「9月11号」这类**中文月日**
 _CN_MD = re.compile(r"^(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]$")
 
@@ -112,16 +123,6 @@ def _pick_sheet(data: bytes) -> tuple[str, list[list], int]:
     return best[1], best[2], best[3]
 
 
-def doc_kind(value: str) -> str:
-    """⭐ **单列两种单据号的域内消歧**（材料 / 外租机械 二选一，§4.3.3）。
-
-    依据 = 真文件实测：该列填的是 `FKTZS…`（**付款通知书**编号 ⇒ 外租机械侧），
-    而材料侧走的是其他支出单（`QTZC…` 一类）⇒ **`FKTZS` 形态归机械，其余归材料**。
-    ⛔ 本函数只判"这一格属于哪一类"，不做任何取值改写。
-    """
-    return "mechanical_doc" if _MECH_DOC.match(value) else "material_doc"
-
-
 def norm_pay_date(value: str, year_month: str) -> str:
     """付款时间归一：**「9月11号」按所选年月补成完整日期**（其余原样，⛔ 不猜）。
 
@@ -147,23 +148,26 @@ def parse_workbook(data: bytes, *, year_month: str = "") -> ParsedSheet:
     sheet, grid, header_idx = _pick_sheet(data)
     head = grid[header_idx]
     cols = _columns_of(head)
-    parsed = ParsedSheet(
-        columns={key: _text(head[col]) for col, key in sorted(cols.items())},
-        header_row=header_idx + 1,
-        sheet=sheet,
-    )
+    # ⚠️ 同一字段被**多列**认领时（真表的「单据号」那格就是分两行写的）⇒ 回执里取**第一列**的表头原文
+    #    （`setdefault`；原先的字典推导是"后写覆盖"⇒ 回执里显示的是第二列，与用户看到的表头对不上）。
+    columns: dict[str, str] = {}
+    for col, key in sorted(cols.items()):
+        columns.setdefault(key, _text(head[col]))
+    parsed = ParsedSheet(columns=columns, header_row=header_idx + 1, sheet=sheet)
 
-    # ⭐ **二级表头续行**（真文件 r2）：整行非空格子**都还能认成字段** ⇒ 它还是表头，不是数据。
+    # ⭐ **表头续行**（真文件 r2）：整行非空格子**都还能认成字段** ⇒ 它还是表头，不是数据。
+    #   ⚠️⚠️ **必须同时否掉"像数据"的行**（`mapping.looks_like_data`）—— 否则真表的**第一行数据**
+    #      会被当成"续行"吃掉（症状 = 少一行数据 ＋ 列名被数据值污染；`TAIL-129` 用户报障就是它）。
     lvl2 = grid[header_idx + 1] if header_idx + 1 < len(grid) else []
-    lvl2_cols = _columns_of(lvl2)
-    if lvl2_cols and all(_columns_of([cell]).get(0) or not _text(cell) for cell in lvl2):
-        # 同一列出现**第二个字段** ⇒ 这一列是"二选一"（材料 / 机械）
-        duo = {c: (cols[c], f2) for c, f2 in lvl2_cols.items() if c in cols and f2 != cols[c]}
+    if (_columns_of(lvl2) and not mapping.looks_like_data(lvl2)
+            and all(_columns_of([cell]).get(0) or not _text(cell) for cell in lvl2)):
         parsed.alerts.append(f"工作表「{sheet}」的第 {header_idx + 1}、{header_idx + 2} 行是**两级表头**（已合并识别）")
         data_from = header_idx + 2
     else:
-        duo = {}
         data_from = header_idx + 1
+
+    #: 被认成「单据号」的列（真表里可能有**两列**都写成单据号：表头分两行写了材料 / 外租机械）
+    doc_cols = sorted(c for c, k in cols.items() if k == "doc_no")
 
     for row_no, row in enumerate(grid[data_from:], start=data_from + 1):
         if all(_text(c) == "" for c in row):
@@ -173,21 +177,18 @@ def parse_workbook(data: bytes, *, year_month: str = "") -> ParsedSheet:
             col = next((c for c, k in cols.items() if k == key), None)
             return row[col] if col is not None and col < len(row) else None
 
-        material = _text(cell("material_doc"))
-        mechanical = _text(cell("mechanical_doc"))
-        for col, pair in duo.items():                    # ⭐ 一列两义 ⇒ 按编号形态归位
-            v = _text(row[col]) if col < len(row) else ""
-            if v:
-                holder = doc_kind(v)
-                if holder == "mechanical_doc":
-                    mechanical, material = v, ""
-                else:
-                    material, mechanical = v, ""
-        doc_no = material or mechanical
-        if material and mechanical:
+        # ⭐ `TAIL-129`：单据号**就是一个字段**（⛔ 不再按编号形态分"材料/机械"两类 —— 用户裁定
+        #   「单据号不分机械和材料」；见 `FIELDS` 上方那段）。
+        #   ⚠️ 但文件里确实可能**两列都写着编号**（真表那张表头分两行写「材料：…（编号）」与
+        #      「外租机械：付款通知书（编号）」）⇒ **取第一个非空的**，两列都填了就**提示**一句
+        #      （只提示、不拦截：那是"一行对应一类单据"的用户口径，不是我们该拦的错）。
+        got_docs = [(_text(row[c]) if c < len(row) else "") for c in doc_cols]
+        got_docs = [x for x in got_docs if x]
+        doc_no = got_docs[0] if got_docs else ""
+        if len(got_docs) > 1:
             parsed.alerts.append(
-                f"第 {row_no} 行：「材料（其他支出）」与「外租机械（付款通知书）」两列都填了编号 —— "
-                f"本次取「{material}」；请核对（§4.3.3 一行对应一类单据）"
+                f"第 {row_no} 行：单据号在两列里都有值（{'、'.join(f'「{d}」' for d in got_docs)}）—— "
+                f"本次取「{doc_no}」；请核对（一行对应一类单据）"
             )
 
         pay_date_raw = _text(cell("pay_date"))
@@ -211,8 +212,6 @@ def parse_workbook(data: bytes, *, year_month: str = "") -> ParsedSheet:
             if _text(c) != "" and i not in cols
         }
         raw["_row_no"] = row_no
-        raw["_material_doc"] = material
-        raw["_mechanical_doc"] = mechanical
         values["raw"] = raw
         values["_row_no"] = row_no
         parsed.rows.append(values)
@@ -223,7 +222,14 @@ def parse_workbook(data: bytes, *, year_month: str = "") -> ParsedSheet:
 
 
 def attach_projects(rows: list[dict], projects: list[ProjectBrief]) -> list[dict]:
-    """给每行补**项目匹配结论**（§4.3.3：命中 1 条 = 正常；0 条 = 未匹配；多条 = 重名 N 条）。"""
+    """给每行补**项目匹配结论**（§4.3.3：命中 1 条 = 正常；0 条 = 未匹配；多条 = 重名 N 条）。
+
+    ⚠️ `match_candidates` 是**个数（int）**、`_candidate_labels` 才是**清单** ——
+       两者**分开给**（2026-09-27 真机抓出来的既有缺陷：`match_summary` 曾把前者当清单 `list()` ⇒
+       真有重名行时 `TypeError: 'int' object is not iterable`）。⛔ 别再让它们混用。
+    ⚠️ 清单这个键**必须 `_` 开头**：它是"预览用"的旁路键，`repo.merge_month` 按 `_` 前缀把这类键
+       挡在 `PlanRow(**payload)` 之外（此前写成"单点排除 `_row_no`"⇒ 新键当场漏进表字段）。
+    """
     out: list[dict] = []
     for row in rows:
         result = match_project(str(row.get("project_input") or ""), projects)
@@ -231,6 +237,7 @@ def attach_projects(rows: list[dict], projects: list[ProjectBrief]) -> list[dict
         item["project_id"] = result.project_id
         item["match_status"] = result.status
         item["match_candidates"] = result.candidates
+        item["_candidate_labels"] = list(result.candidate_labels)
         out.append(item)
     return out
 
@@ -283,7 +290,11 @@ def match_summary(rows: list[dict]) -> dict:
     ]
     multi = [
         {"row": r.get("_row_no"), "project_input": str(r.get("project_input") or ""),
-         "candidates": list(r.get("match_candidates") or [])}
+         # ⚠️⚠️ 这里**必须**取「清单」那个键（`_candidate_labels`）—— 原先取的是
+         #    `match_candidates`（**个数·int**）再套 `list()` ⇒ 一旦真有重名行就
+         #    `TypeError: 'int' object is not iterable`（2026-09-27 真机抓出来的既有缺陷：
+         #    此前一直没有"重名行"去碰它）。
+         "candidates": list(r.get("_candidate_labels") or [])}
         for r in rows if r.get("match_status") == MATCH_AMBIGUOUS
     ]
     return {
@@ -294,7 +305,7 @@ def match_summary(rows: list[dict]) -> dict:
     }
 
 
-__all__ = ["FIELDS", "ParsedSheet", "attach_projects", "doc_kind", "match_summary",
+__all__ = ["FIELDS", "ParsedSheet", "attach_projects", "match_summary",
            "norm_pay_date", "parse_workbook", "restore_rows", "stage_payload"]
 
 # ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：**导入页 `render_import_page` 已随旧渲染层删除**（授权 `D18`）——

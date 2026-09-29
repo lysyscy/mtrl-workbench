@@ -15,10 +15,16 @@ import re
 
 import app
 from tests.acc_plugin import acc
+from tests.shell_src import SHELL   # ⚠️ 壳源码的唯一出口（⛔ 别直接读 index.html）
 
 
 def _index() -> str:
-    return (pathlib.Path(app.__file__).resolve().parent / "web" / "index.html").read_text(encoding="utf-8")
+    """⚠️ 2026-09-28（`TAIL-164` · `P2-a` 拆件）：本函数**不再"只看 `index.html`"** —— 壳已是多件
+    （`base/view/ui/proj/pages-a/pages-b.js` ＋ 原有 5 件），本件各用例干的事都是"**在整支壳里找某一段**"，
+    拆件后那些段可能住在 `shell/*.js` ⇒ 一律返回**合并后的壳**（判据内容一字未改，只换取材方式）。
+    ⭐ 本仓纪律：壳源码只从 `tests.shell_src` 取，⛔ 别绕过它读单件（那也是 `P4`① 收敛读取点的本意）。
+    """
+    return SHELL
 
 
 def _actions() -> str:
@@ -26,18 +32,15 @@ def _actions() -> str:
 
 
 def _all_shell() -> str:
-    """**整支壳**（`index.html` ＋ `core.js` ＋ `actions.js`）拼起来。
+    """**整支壳**拼起来（＝ `shell_src.SHELL`：`index.html` ＋ 全部 `web/shell/*.js`，顺序 = `<script src>` 顺序）。
 
-    ⚠️ 判"某个函数有没有被调用"必须用**整支** —— 定义在 `index.html`、调用却散在
-       `actions.js` 与 `core.js` 里（`pruneJcPick` 就是：定义 1 处、调用 8 处）。
+    ⚠️ 判"某个函数有没有被调用"必须用**整支** —— 定义在一件、调用却散在另几件里
+       （`pruneJcPick` 就是：定义 1 处、调用 8 处）。
        ⛔ 只搜一个文件会得出"定义了没调用"的**假结论**（我第一版就这么误判了）。
+    ⚠️ 2026-09-28（`P2-a` 拆件）：原先这里**手拼 3 件**（`index.html`＋`core.js`＋`actions.js`），
+       拆件后那 3 件之外还有 7 件 ⇒ 手拼表**必然漏**（漏了还会静默得出"没调用"）⇒ 改走唯一出口。
     """
-    d = pathlib.Path(app.__file__).resolve().parent / "web"
-    return "\n".join([
-        (d / "index.html").read_text(encoding="utf-8"),
-        (d / "shell" / "core.js").read_text(encoding="utf-8"),
-        (d / "shell" / "actions.js").read_text(encoding="utf-8"),
-    ])
+    return SHELL
 
 
 def _fn(src: str, anchor: str, end: str) -> str:
@@ -59,7 +62,7 @@ def test_空态行跨列数派生且全选框回显三态():
     html = _index()
     empty = [ln for ln in html.splitlines() if "当前筛选条件下没有集采合同" in ln]
     assert empty, "找不到集采台账的空态提示行 —— 落点变了"
-    assert "colspan=\"${thCount(JC_THEAD)}\"" in empty[0], (
+    assert "EMPTYROW(thCount(JC_THEAD)" in empty[0], (
         "空态行的跨列数**没有由表头派生** —— ⛔ 写死的数字在表头改列后会错位，"
         "而且只有「筛到空」时才看得见：\n  " + empty[0].strip()[:160])
 
@@ -157,23 +160,34 @@ def test_筛选栏控件齐备且项目是第一个():
 
 
 @acc("ACC-JC-FETCH-001", "001-01")
-def test_触发方式写明且执行记录含定时自动那条():
-    """claim：「**触发方式写明**「人工点击 + 定时自动（一期启用）」，且**执行记录含定时自动触发那一条**」。
+def test_触发方式写明且不许把人工说成自动():
+    """claim（**2026-09-27 按后端真相改写**，见下方原委）：「**触发方式要写明**，且界面口径必须与后端一致
+    —— 抓取**一律人工点击**（`D9` 本工程无任何定时任务）」。
 
-    ⚠️ 两半都要钉，而且**要钉在对的接口上**：
-       ① 「定时自动」这句是**集采合同（`API-04`）**的口径（§6.4 / 技术栈 `OPEN-T9`）——
-          ⛔ 不能"随便哪个接口写了就算"，否则别的接口写一句同一句话就能骗过断言；
-       ② 执行记录里要**真的有一条**「定时自动触发」的记录行（⛔ 只有说明文字、没有记录行不算）。
+    ⚠️⚠️ **原委（必读，⛔ 别把这条改回去）**：本点原来的 claim 是
+      「触发方式写明『人工点击 ＋ **定时自动（一期启用）**』，且执行记录含**定时自动触发**那一条」，
+      观测点是壳里那张**接口清单表 `TASK`**（`index.html`）。三件事在 2026-09-27（`TAIL-117` 批次 7）同时暴露：
+        ① 那张表**零引用**（`m02` 的两张卡 2026-09-20 起改读**执行记录**真数据）⇒ 它**从不上屏**
+           ⇒ 这条 claim 过去是**假绿**（钉在一段没人渲染的代码上）；
+        ② 后端口径是**用户 2026-09-19 的裁定**：「抓取**只做人工点击**（**无定时**；与 `D9` 一致）」
+           （`app/mod11_jc/fetch_service.py` 文件头 ＋ `app/mod02_i8/fetch_task.py::MANUAL_ONLY`）；
+        ③ 而界面上却写着「一期启用『定时自动』· 系统每天自动跑一次」⇒ **说了不做的话**（守则 §4 最高优先级）。
+      ⇒ 本批：删掉那张不上屏的死码表、把界面文案订正成后端的真相，判据改成钉**这两件**。
+    ⭐ **用户 2026-09-27 就 `TAIL-125` 拍板选 ①（改契约面文字）⇒ 已同批改齐**：
+       `PRD/验收/验收基线.json` 的 `criterion` 与 `001-01` 的 claim 都改成人工口径（改前备份在
+       `.workbuddy/backups/交付面-*/`）＋ `PRD/验收/用例索引.md` 补了变更说明 ＋
+       `PRD/02-功能规格/MOD-11.md` 的同一句话同批订正。
+       ⚠️ 所以本条判据现在与**基线文字一致**（不再有"判据改了、基线没改"那种悬空）。
     """
     html = _index()
-    api04 = next((ln for ln in html.splitlines() if "'API-04'" in ln), None)
-    assert api04, "API 清单里找不到 `API-04`（采购合同信息）这一行 —— 落点变了"
-    assert "人工点击 + 定时自动（一期启用）" in api04, (
-        "`API-04` 那一行没写明触发方式「人工点击 + 定时自动（一期启用）」——\n"
-        f"  实际那一行是：{api04.strip()[:160]}")
-    assert "定时自动触发" in html, (
-        "执行记录里没有**定时自动触发**那条记录 ⇒ 页面只说了「会定时」，却拿不出跑过的凭据"
-        "（claim 后半句要求「执行记录**含**定时自动触发那一条」）")
+    # ① 界面**必须**写明"抓取一律要人点 / 没有定时任务"（这条口径在 `V.m02` 的口径说明里，真的上屏）
+    assert "抓取一律要人点" in html and "本系统没有任何定时任务" in html, (
+        "界面没有写明「抓取一律人工、无定时任务」—— 用户会把该抓的活放着不管（以为系统会自己跑）")
+    # ② ⛔ 不许再把"定时自动"说成已启用（后端没有定时任务 ⇒ 那是假话）
+    assert "一期启用「定时自动」" not in html, "界面又写回「一期启用定时自动」—— 与后端 `D9` 口径矛盾"
+    assert "定时自动触发" not in html, "界面又出现「定时自动触发」这条记录 —— 后端不会定时触发"
+    # ③ 集采那一处"自动"只允许是「抓完自动同步常用项目列表」（真实存在的那一件）
+    assert "自动同步一次常用项目列表" in html, "「抓完自动同步常用项目列表」这句口径丢了"
 
 
 @acc("ACC-JC-FETCH-001", "001-02")

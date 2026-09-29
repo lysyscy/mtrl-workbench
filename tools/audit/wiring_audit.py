@@ -56,6 +56,13 @@ FRAMEWORK_DECORATOR_HINTS = (
     "staticmethod", "classmethod", "property", "abstractmethod", "pytest.",
 )
 
+#: ⭐ 局部 `APIRouter` 上的 **HTTP 方法装饰器**（`@r.get(...)` / `@rr.post(...)`）也算**框架装配** ——
+#:   路由处理函数**本来就不该被显式调用**（由 FastAPI 在请求到达时调）。
+#:   ⚠️ **2026-09-28 补**（此前只认 `router.`/`app.` 等**前缀**）：用**局部变量名**注册的端点在旧版里
+#:   **一律被判成死代码** —— 实测把 `import_kit.api.build_router` 里 7 个 `@r.get`/`@r.post` 端点
+#:   ＋ 两个只经别名调用的函数误报（详见 `tools/wiring_expected.txt` 顶部留痕）。
+HTTP_METHODS = frozenset({"get", "post", "put", "delete", "patch", "head", "options"})
+
 
 def rel(p: Path) -> str:
     return str(p).replace("\\", "/").split("mtrl-workbench/")[-1]
@@ -90,7 +97,13 @@ class Def:
 
     @property
     def framework_wired(self) -> bool:
-        return any(d.startswith(FRAMEWORK_DECORATOR_HINTS) for d in self.decorators)
+        for d in self.decorators:
+            if d.startswith(FRAMEWORK_DECORATOR_HINTS):
+                return True
+            # ⭐ 局部 router 的 HTTP 方法装饰器（`r.get` / `rr.post` …）—— 同属框架装配
+            if "." in d and d.rsplit(".", 1)[1] in HTTP_METHODS:
+                return True
+        return False
 
 
 def decorator_name(node: ast.AST) -> str:
@@ -108,6 +121,9 @@ def scan(paths: list[Path]) -> tuple[list[Def], dict[str, list[tuple[str, int]]]
 
     ⚠️ **只收表达式里的 `Name`/`Attribute`** —— `import` 语句**不算装配**
        （`alias` 节点不是 `Name`）；这正是要抓的形态：**导入了却没调用**。
+    ⭐ **2026-09-28 补：别名也算引用** —— `from x import build_router as build_imp_router` 之后写
+       `build_imp_router(...)`，旧版只认 `build_router` 这个裸名 ⇒ 把**在用**的函数误判成死代码
+       （实测：`import_kit.api.build_router`/`domains_router` 被四个域与 `main.py` 以别名调用）。
     """
     defs: list[Def] = []
     refs: dict[str, list[tuple[str, int]]] = defaultdict(list)
@@ -117,6 +133,17 @@ def scan(paths: list[Path]) -> tuple[list[Def], dict[str, list[tuple[str, int]]]
         except (SyntaxError, UnicodeDecodeError):
             continue
         f = rel(p)
+        # ⭐ 本件内的别名表：`import x as y` / `from a.b import c as d` ⇒ `y`/`d` 指的是原名。
+        alias: dict[str, str] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                for a in node.names:
+                    if a.asname:
+                        alias[a.asname] = a.name.split(".")[-1]
+            elif isinstance(node, ast.Import):
+                for a in node.names:
+                    if a.asname:
+                        alias[a.asname] = a.name.split(".")[-1]
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 kind = "class" if isinstance(node, ast.ClassDef) else (
@@ -129,7 +156,7 @@ def scan(paths: list[Path]) -> tuple[list[Def], dict[str, list[tuple[str, int]]]
                     decorators=tuple(decorator_name(d) for d in node.decorator_list),
                 ))
             elif isinstance(node, ast.Name):
-                refs[node.id].append((f, node.lineno))
+                refs[alias.get(node.id, node.id)].append((f, node.lineno))
             elif isinstance(node, ast.Attribute):
                 refs[node.attr].append((f, node.lineno))
     return defs, refs
@@ -200,12 +227,22 @@ def main() -> int:
         w2.append(d)
 
     # ---- 可消号（已修好但白名单还留着）
+    # ⚠️ 2026-09-28 订正：旧版只拿 `W1`/`W2` 两个前缀去比 ⇒ **所有 `W1b` 登记行恒被当成"可消号"**
+    #    （20 条有效的 `W1b` 登记被误报成"该删行了" —— 而白名单纪律是"只准变短"，
+    #     照着这份假清单删 = 把有效的登记抹掉）。现按**每行声明的类别**逐个判"它还算不算那一类"。
+    def _kind(d: Def) -> str:
+        if d.cites_spec:
+            if d.framework_wired or external_refs(d, refs):
+                return ""
+            return "W1b" if has_test_ref(d) else "W1"
+        if d.public and not d.framework_wired and not external_refs(d, refs):
+            return "W2"
+        return ""
+
+    _kind_of_def = {(d.file, d.name): _kind(d) for d in defs}
     stale = sorted(
         e for e in expected
-        if not any(
-            (e == f"W1 {d.file}:{d.name}" or e == f"W2 {d.file}:{d.name}")
-            for d in defs
-        )
+        if _kind_of_def.get(tuple(e.split(" ", 1)[1].rsplit(":", 1))) != e.split(" ", 1)[0]
     )
 
     if args.json:

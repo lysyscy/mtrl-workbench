@@ -45,6 +45,57 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
         ": N2(m05MechSettle(k)",
         "test_机械结算源已接线_读真源",
     ),
+    # ⭐ 2026-09-28（`TAIL-141` · 方案 `B`）台账**显示层**重设计的三处高危回退（都能"看着更整齐"地改回去）
+    (
+        "M5 表尾又退回「合计：」（「现在欠多少」又变成一个没人读得懂的格子）",
+        "`截至 ${esc(upto)}<span class=\"mut sm\"> · 自期初起累计</span>`",
+        "'<b>合计：</b>'",
+        "test_台账的现状数_截至行与入口名都钉住",
+    ),
+    (
+        "M6 两个期初录入按钮又变成**同名并排**（§4.4：点错就录到错口径）",
+        ">＋ 录入${sc}期初</button>",
+        ">＋ 录入期初占位行</button>",
+        "test_台账的现状数_截至行与入口名都钉住",
+    ),
+    (
+        "M7 空月压暗被摘掉（台账空月也出行 ⇒ 哪个月真发生过事看不出来）",
+        "const z=!r.open&&!N2(r.s)&&!N2(r.p)&&!String(r.note||'').trim();",
+        "const z=false;",
+        "test_台账的现状数_截至行与入口名都钉住",
+    ),
+    # ⭐ 2026-09-28（`TAIL-142`）卡头按钮：两条最容易被"顺手简化"掉的
+    (
+        "M8 点开不变样（`on` 态被摘掉 ⇒ 用户看不出点上没有）",
+        """class="btn${pjIsOpen('ledPj')?' on':''}\"""",
+        """class="btn\"""",
+        "test_台账卡头按钮分组与点开有反馈都钉住",
+    ),
+    (
+        "M9 「导出总欠款」的范围按钮被挪出面板（又变成「点按钮后跑别处选项目」）",
+        'data-act="debtPick"',
+        'data-act="debtPickMoved"',
+        "test_台账卡头按钮分组与点开有反馈都钉住",
+    ),
+    (
+        "M10 「看哪个项目」那条从表格上方被拿掉（控件又离开了它管的那两张表）",
+        '<span class="mut sm">看哪个项目（两侧共用）</span>',
+        '<span class="mut sm">看项目</span>',
+        "test_台账卡头按钮分组与点开有反馈都钉住",
+    ),
+    # ⭐ 2026-09-29（`A1` 逐页 · 用户「你自己排个计划一页一页的看吧」）
+    (
+        "M11 台账标题行又说「与上方 KPI 不是同一个数」（那排 KPI 2026-09-28 已全删 ⇒ 让人去找不存在的东西）",
+        "—— 与上方那三栏不是同一个数（那三栏**按项目分列**，这里只算选中的那一个）",
+        "—— 与上方 KPI 不是同一个数（那是全部项目）",
+        "test_台账的现状数_截至行与入口名都钉住",
+    ),
+    (
+        "M12 卡头按钮又掉出右侧工具区（`.sp` 提前闭合 ⇒ 同一条守则的第二种形态）",
+        "撤销必须填原因</span>",
+        "撤销必须填原因</span></span>",
+        "test_ux_pages.py::test_卡头里的按钮都在右侧工具区",
+    ),
 ]
 
 
@@ -53,8 +104,11 @@ def md5(p: Path) -> str:
 
 
 def run_one(test_name: str) -> tuple[bool, str]:
+    """跑**一条**判据。入参可以只给判据名（默认落在本件），也可以给 `文件.py::判据名`
+    （⭐ 2026-09-29 起支持 —— 卡头形态那条判据在 `test_ux_pages.py` 里，但它是本页的高危回退点）。"""
+    node = test_name if "::" in test_name else f"test_wired_m05.py::{test_name}"
     r = subprocess.run(
-        [PY, "-m", "pytest", "-q", f"tests/test_wired_m05.py::{test_name}"],
+        [PY, "-m", "pytest", "-q", f"tests/{node}"],
         cwd=str(BACKEND), capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     return r.returncode == 0, (r.stdout or "")[-260:]

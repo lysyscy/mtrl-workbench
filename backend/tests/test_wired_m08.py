@@ -97,8 +97,9 @@ def test_合计行由表头派生且单价列不求和():
 
 @acc("ACC-INV-001", "001-08")
 def test_空态行跨列数由表头派生():
-    """旧页：空态提示行的 `colspan` 由表头列数派生。新壳同款：`colspan="${thCount(INV_THEAD)}"`。"""
-    assert 'colspan="${thCount(INV_THEAD)}"' in SHELL, "空态行的跨列数不再由表头派生"
+    """旧页：空态提示行的 `colspan` 由表头列数派生。
+    新壳同款：走**空态唯一出口** `EMPTYROW(thCount(INV_THEAD), …)`（跨列数仍由表头派生）。"""
+    assert "EMPTYROW(thCount(INV_THEAD)" in SHELL, "空态行的跨列数不再由表头派生"
     assert "没有库存单据明细" in SHELL, "空态文案丢了"
 
 
@@ -113,8 +114,10 @@ def test_抓取弹窗默认取本页核算年月且讲清强踢():
 def test_两种导出并存且透视那份写明独立通道():
     """旧页：`data-act="exp"` 与 `data-act="expPivot"` **并存**，后者写明工作簿形态与「主表那份不受影响」。"""
     assert 'data-act="expPivot"' in SHELL, "透视导出没接"
-    assert "主表那份朴素导出不受影响" in SHELL, "没写明透视是**独立通道**"
-    assert 'data-t="库存单据明细总表"' in SHELL, "朴素导出（R1）没接"
+    # ⚠️ 2026-09-27（守则 §3.1 · `TAIL-117` 批次 2/3）：悬停里那句实现话术（「脚本改 i8 导出源文件」）
+    #    与「朴素导出」这种内部叫法换成人话 ⇒ token 同步，**口径一字未改**（仍要求写明"是独立通道"）。
+    assert "单独的一条通道" in SHELL and "不影响主表那份" in SHELL, "没写明透视是**独立通道**"
+    assert 'data-t="库存单据明细总表"' in SHELL, "朴素导出没接"
 
 
 @acc("ACC-INV-001", "001-13")

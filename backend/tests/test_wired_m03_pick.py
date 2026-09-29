@@ -112,7 +112,7 @@ def test_壳里窗口外不执行并说明原因():
     head = reg[:reg.index("const ym=win.ym;")]
     assert "return; }" in head, "窗口外没有**提前返回**（会继续往下勾）"
     assert "付款计划 ${win.from} 号起生效、月末截止" in head, "没说明窗口起止"
-    assert "不在付款窗口内，暂不可勾选" in head, "没说明「为什么不可勾选」"
+    assert "还没到付款窗口，暂不可勾选" in head, "没说明「为什么不可勾选」"
     assert "pickSet.clear();" not in head, "窗口外就把已勾集合清了（应当**什么都不动**）"
 
 

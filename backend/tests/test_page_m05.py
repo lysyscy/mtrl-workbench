@@ -14,7 +14,9 @@
 
 from __future__ import annotations
 
-from app.mod05_flow.service import build_debt, build_flows, build_ledger, build_stats
+from app.mod05_flow.service import (
+    build_debt, build_flows, build_ledger, build_stats, order_project_ids,
+)
 from tests.acc_plugin import acc
 from tests.m05_helpers import FakeSession, dataset
 
@@ -35,6 +37,42 @@ def _ledger():
 
 def _stats():
     return build_stats(FakeSession(dataset()))
+
+
+@acc()
+def test_导出总欠款的行序_选了项目就按用户给的顺序():
+    """⭐ 2026-09-28（用户口径）：**总欠款导出也能自己选项目 ＋ 定顺序**（像月度会大表那样）。
+
+    行序口径（`service.order_project_ids`）：
+      · **没选** ⇒ 按**项目展示名**升序（＝原来的行为，⛔ 不改变老用户看到的东西）；
+      · **选了** ⇒ **严格按给它的顺序**；只保留"真有数"的项目（`cand`）；重复只取一次；
+        解析不到的脏名字**跳过**（⛔ 别让一个脏名字把整张表顶掉）。
+    """
+    cand, by_wh = {11, 22, 33}, {"仓A": 11, "仓B": 22, "仓C": 33}
+    label = {11: "B项目", 22: "A项目", 33: "C项目"}.__getitem__
+    assert order_project_ids(cand, by_wh, [], label) == [22, 11, 33], "没选项目时应按展示名升序"
+    assert order_project_ids(cand, by_wh, ["仓C", "仓A"], label) == [33, 11], "选了就按用户给的顺序"
+    assert order_project_ids(cand, by_wh, ["仓A", "仓A", "不存在的仓"], label) == [11], \
+        "重复的只取一次；解析不到的跳过"
+    assert order_project_ids(cand, by_wh, ["仓B", "不存在的仓", "仓C"], label) == [22, 33], \
+        "脏名字只跳过它自己，⛔ 不许把后面的都丢掉"
+
+
+@acc()
+def test_期初行在欠款与台账两侧必须给同一个id():
+    """⭐ 2026-09-28（用户走查：「期初占位行录入后点删除没反应」）。
+
+    壳里「删除期初行」按钮挂在**台账行**上（拿的是 `ledger.sides[].opening_id`），而它要去
+    `/api/m05/debt` 的 `openings[]` 那一侧取金额与项目 ⇒ **两侧必须给同一个 id**。
+    ⚠️ 原来 `debt.openings[]` **根本不返回 id** ⇒ 壳只能填假值 `''` ⇒ 删除按钮**恒匹配不上 + 静默 return**
+    = 用户看到的"点了没反应"。（同源缺陷的壳侧断言在 `tests/test_wired_m05.py`。）
+    """
+    led = _ledger()["sides"][0]
+    ids = [o.get("id") for o in _debt()["openings"]]
+    assert led.get("opening_id"), "台账侧没有 `opening_id` —— 删除按钮拿不到 id"
+    assert led["opening_id"] in ids, (
+        f"欠款侧 `openings[].id` 与台账 `opening_id` 对不上：{ids} vs {led['opening_id']}"
+        " ⇒ 壳「删除期初行」会静默点不动")
 
 
 @acc()

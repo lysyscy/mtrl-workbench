@@ -117,6 +117,60 @@ def effective_theme(u) -> str:
     return got or P.DEFAULT_THEME
 
 
+# ---------------------------------------------------------------- ⭐ 界面大小（`TAIL-129`）
+
+#: ⭐⭐ **界面大小档位的唯一真源**（`TAIL-129` · 用户 2026-09-27 裁定走**方案 B**：字号＋行距走 CSS 变量）。
+#:  `(键, 名称, 倍率)` —— 键**存库**（留痕可读）、倍率是给 CSS `--fscale` 用的字符串。
+#:  ⚠️ ⛔ **壳里不写死这张表**（加一档要改两处 = 两份真源）：壳从 `/api/m15/theme` 拿 `scales` 清单。
+#:  ⚠️ ⛔ **别存倍率**（库里存的是键）：想调"更大"到底多大，改这一处即对所有人生效。
+#:  ⚠️ 档位只做 **≥ 标准**（用户的原话是"看不清"，⛔ 不提供缩小 —— 少一档少一处误触面）。
+UI_SCALES: tuple[tuple[str, str, str], ...] = (
+    ("standard", "标准", "1"),
+    ("large", "大一点", "1.12"),
+    ("larger", "更大", "1.25"),
+    ("largest", "最大", "1.4"),
+)
+#: 未设置 / 认不出 ⇒ 用哪一档（⛔ 别散落成字面量）。
+DEFAULT_UI_SCALE = "standard"
+_SCALE_CSS: dict[str, str] = {k: s for k, _, s in UI_SCALES}
+
+
+def effective_ui_scale(u) -> str:
+    """这个账号**实际该用**的界面大小**档位键**（空 / 未设置 / 认不出 ⇒ 标准档）。
+
+    ⚠️ 与 `effective_theme` **同款三件事**（未设置 / 非法 / 未登录 ⇒ 都回落到标准档）——
+       前端拿到的永远是**一个能用的键**，⛔ 不是空串（否则壳还得再判一次"空算什么"）。
+    ⚠️ 用户**存的是键**（`large`），不是倍率 —— 倍率由本模块的 `UI_SCALES` 一处说了算。
+    """
+    got = (getattr(u, "ui_scale", "") or "").strip()
+    return got if got in _SCALE_CSS else DEFAULT_UI_SCALE
+
+
+def ui_scale_css(u) -> str:
+    """档位 → 喂给 CSS `--fscale` 的**倍率字符串**（如 `"1.25"`）。
+
+    ⚠️ 壳**直接用这个值**（`document.documentElement.style.setProperty('--fscale', v)`）——
+       ⛔ 别让壳自己拿键去查倍率：那是把这张表复制成第二份。
+    """
+    return _SCALE_CSS[effective_ui_scale(u)]
+
+
+def assert_ui_scale_usable(value: str) -> str:
+    """校验用户传来的档位键（⛔ **不静默回落** —— 与主题那边\"非法名静默回落\"**有意不同**）。
+
+    ⚠️ 为什么这一处要显式拒绝：主题的非法名**看得见**（页面还是有一套样式，用户能察觉），
+       而界面大小的非法值**什么都不会发生**（`--fscale` 设成一个乱值 ⇒ CSS 计算无效 ⇒
+       **看起来像"点了没反应"**）⇒ 必须当场说清"只能选这几档"。
+    """
+    v = (value or "").strip()
+    if v in _SCALE_CSS:
+        return v
+    allowed = " / ".join(f"{k}（{label}）" for k, label, _ in UI_SCALES)
+    raise MustReportError(
+        f"界面大小只能选这几档：{allowed} —— 当前「{v or '（空）'}」"
+    )
+
+
 def normalize_account(account: str | None) -> str:
     """登录账号**只做去空白**（§1.5.1：*不限制字符与长度*）—— ⛔ 不校验格式。
 
@@ -174,5 +228,7 @@ __all__ = [
     "STATUS_ACTIVE", "STATUS_DISABLED", "STATUSES", "STATE_DELETED",
     "active_admins", "assert_account_usable", "assert_is_admin",
     "assert_last_admin_protected", "assert_not_self_delete", "effective_theme",
+    "UI_SCALES", "DEFAULT_UI_SCALE", "effective_ui_scale", "ui_scale_css",
+    "assert_ui_scale_usable",
     "is_deleted", "normalize_account", "state_of", "transfer_plan",
 ]

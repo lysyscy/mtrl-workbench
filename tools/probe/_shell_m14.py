@@ -55,7 +55,7 @@ def check(page, errors: list[str]) -> None:
           kindKeys: RULE_KINDS.map(k => k.kind),
           src: RULE_SRC, beSrc: be0.source_label,
           tbody: t ? t.querySelectorAll('tbody tr').length : 0,
-          wiredLabel: document.querySelector('#ttl em').innerText,
+          wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
           headCount: (document.querySelector('#view h4 b') || {}).innerText || '',
         };
         /* ⭐ 写路径：经**后端**新增一条探针规则 ⇒ 再按 **id 差集**删掉它（净零） */
@@ -82,7 +82,7 @@ def check(page, errors: list[str]) -> None:
     }""")
     print("⑫ m14 =", m14)
     oks9 = [
-        ("已接后端" in m14["wiredLabel"], "顶栏说「已接后端真实数据」"),
+        ("未接通" not in m14["wiredLabel"], "接通页的顶栏不挂状态牌（用户裁定 B）"),
         (m14["rules"] == m14["beRules"] and m14["rules"] > 0 and m14["raw"] == m14["beRules"],
          f"⭐ 页面的规则条数 == 后端（{m14['rules']} vs {m14['beRules']}）"
          " —— 若 `RULE_EX` 还硬编码，这里就对不上"),

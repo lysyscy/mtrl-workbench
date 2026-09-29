@@ -107,7 +107,9 @@ def test_壳里出纸走按模板导出且没有打印通道():
     assert "Excel 打印" in s, "没写明出纸方式（按模板导出后在 Excel 打印）"
     assert "A3" not in s, "壳里还留着 A3 打印通道"
     # 导航里有本页（新壳的侧栏菜单）
-    assert "'m07','收发结存与活动大表'" in SHELL, "新壳侧栏里没有本页入口"
+    # ⭐ 2026-09-28 用户口径：界面上的「活动大表」改叫「**月度会大表**」（正式名仍是《说明书》§5.7 的
+    #   「经济活动分析大表」，壳里挂在那张卡片标题的悬停上）
+    assert "'m07','收发结存与月度会大表'" in SHELL, "新壳侧栏里没有本页入口（页名 = 收发结存与月度会大表）"
     # 路由层面：大表**没有**任何打印 / A3 入口（API 侧；旧页路由随本批删除）
     from app.main import create_app
 
@@ -146,3 +148,33 @@ def test_活动大表导出失败必须给人原因不静默():
     assert "后端没给原因" in _b, "失败时没把后端的中文原因给用户"
     assert "r.ok" in _b and "HTTP ${r.status}" in _b, \
         "非 2xx 没显式报错（会静默产出空文件）"
+
+
+@acc("ACC-RPT-BIG-001", "001-20")
+def test_大表零行时给后端那句空态而不是只剩三级表头():
+    """⭐ `A5`（2026-09-29 逐页）：大表原先 0 行时 `return ''` ⇒ 用户看到一张**只剩三级表头的大空表**
+    （20 列横表、没有任何「为什么空 / 下一步」）—— 与 `m04`（`A3`）/ `m06` 同族，本批第 3 例。
+
+    ⚠️ **文案的主人是后端**（`big_domain.empty_text`，随 `/api/m07/big` 的 `empty_text` 给）——
+       壳的空态行直接用 `BIG_EMPTY`，⛔ 壳里不编第二份；它此前是**死代码**（全仓没人调用）。
+    ⚠️⚠️ **跨列数必须走 `thCols`，⛔ 不是 `thCount`**：大表是**两行表头**（`<th>` 23 个 / 实列 20）
+       ⇒ `thCount` 会多算 ⇒ 空态行多出几格（`proj.js:120` 就记着这个坑）。
+    ⚠️ **触发的唯一局面 = 大表候选为空**：`selected` 口径 = 「未选题取**全部候选**」⇒ 只要还有
+       「在建」项目，未选题**照样有行** ⇒ 后端那句原文（「还没勾项目 —— 点上方「选题」挑几个」）
+       与这条口径**不符**（会把人指去点一个"点了也不会变"的按钮）⇒ 同批改准。
+    """
+    assert "if(!rs.length) return EMPTYROW(thCols(BIG_THEAD)" in SHELL, \
+        "大表 0 行时没给空态（只剩三级表头 = 用户以为页面坏了）"
+    assert "if(!rs.length) return '';" not in SHELL, "大表 0 行又退回**空串**形态"
+    assert "EMPTYROW(thCount(BIG_THEAD)" not in SHELL, \
+        "大表空态用了 `thCount` —— 它是两行表头，`thCount` 会多算列（必须用 `thCols`）"
+    assert "BIG_EMPTY = String(bg.empty_text || '')" in SHELL, \
+        "空态文案没取后端给的那句（壳里编第二份 = 第二份口径）"
+    assert '"empty_text": B.empty_text(data["month"])' in API, \
+        "后端没把 `empty_text` 随包给出 ⇒ 那句会退回死代码、壳的空态没文案"
+    # ⚠️ 文案对错**调函数看返回值**判（⛔ 不抠源码：文件里那段注释**引述**了旧写法作留痕 ⇒ 抠源码必假红）
+    from app.mod07_setl import big_domain as BD
+    txt = BD.empty_text("2026-08")
+    assert "还没勾项目" not in txt, \
+        "后端空态还说「还没勾项目」—— 与「未选题 = 全部候选」口径不符（会把人指去点一个点了不变的地方）"
+    assert "2026-08" in txt and "在建" in txt, "空态没点明年月 / 没点出候选口径（在建项目）"

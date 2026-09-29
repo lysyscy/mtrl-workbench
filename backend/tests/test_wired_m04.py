@@ -221,3 +221,50 @@ def test_后端两个新端点存在():
         j = src.find("\n@router.", i)                     # 到下一个路由为止（函数体边界）
         body = src[i:j if j > i else i + 2500]
         assert re.search(needle, body), why
+
+
+# ------------------------- ⭐ `A3` 逐页（`m04` · 2026-09-29）：三处「会让人做错事」的守卫
+
+
+@acc("ACC-PLAN-UI-001", "001-09")
+def test_筛不到行时必须给空态而不是一片空白():
+    """守则 §2.1/§5.4：**0 行 ≠ 空白** —— 用户会以为页面坏了、或不知道自己是不是筛过头了。
+
+    ⚠️ 这条是**正向守卫**：本批之前 `V.m04` 的合计行槽位是 `${list.length?sumRowOf(…):''}`
+       —— 空串 ⇒ 筛不到时**只剩表头**（同一处槽位 `m03` 给的是 `EMPTYROW`）。
+    """
+    assert "EMPTYROW(thCount(PL_THEAD),'当前筛选条件下没有付款计划'" in SHELL, \
+        "筛不到行时没给空态（守则 §2.1：列表空着不说明下一步）"
+    assert "monthAmt,0))}):''}" not in SHELL, "空态被退回空串形态（`${list.length?…:''}`）"
+    seg = SHELL.split("EMPTYROW(thCount(PL_THEAD)", 1)[1][:420]
+    assert "换个「单据年月 / 项目 / 审查结果」" in seg, "空态没说「怎么回到有数据」（§2.1 下一步）"
+    assert "导入付款计划 Excel" in seg, "空态没指出补数据的入口"
+
+
+@acc("ACC-PLAN-UI-001", "001-10")
+def test_删除选中置灰时说明为什么灰():
+    """守则 §4.6/§5.5：**置灰必须说明原因**（房内惯例 = 写进 `title`）。
+
+    ⚠️ 实测底数（2026-09-29）：全站 24 处 `disabled` 里 **10 处没有 `title`** ⇒ 本条**只钉本页**；
+       全站那 9 处是**跨页**的事（登记在台账），⛔ 别把本条写成"全站凡置灰必须有 title"（会误伤别的页）。
+    """
+    i = SHELL.find('data-act="plDel"')
+    assert i > 0, "找不到「删除选中」"
+    seg = SHELL[i:i + 320]
+    assert "title=" in seg, "「删除选中」置灰时没给理由（§4.6：灰按钮不给理由）"
+    assert "置灰" in seg and "先勾选" in seg, "置灰理由没写清「怎么解锁」"
+
+
+@acc("ACC-PLAN-UI-001", "001-11")
+def test_手动行保存挡重入():
+    """守则 §5.5「动作里挡重入」：连点两次「保存」= 两次 `POST /api/m04/plans`。
+
+    ⚠️ 后端**故意不挡**重复 —— 同月完全相同的行是**本业务的合法状态**（§4.3.3：重复由
+       「重复上报」提示、不靠自动去重掩盖）⇒ 连点会**静默多一行**，只能由界面挡。
+    """
+    body = _act("plRowSave")
+    assert "if(plSaving) return;" in body, "保存没挡重入（`plRowSave` 里没有 `plSaving` 闸）"
+    assert "plSaving=true" in body and "plSaving=false" in body, "挡重入标记没置 / 没复位"
+    # ⚠️ 只设一个没人读的标记 = 假守卫：草稿行的按钮必须**真的**变样（禁用 ＋ 文案）
+    assert "${plSaving?' disabled':''}" in SHELL, "保存按钮没有跟着禁用"
+    assert "保存中…" in SHELL, "保存中没给状态文案（用户会以为没点上）"

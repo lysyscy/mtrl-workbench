@@ -105,7 +105,12 @@ def merge_month(s: Session, *, year_month: str, rows: list[dict]) -> dict:
             cand = blanks[blank_i]
             blank_i += 1
 
-        payload = {k: v for k, v in item.items() if k != "_row_no"}
+        # ⚠️⚠️ **按前缀筛**旁路键（`_` 开头的是"界面 / 预览用"的键，⛔ 不是表字段）——
+        #    此前写的是**单点排除** `k != "_row_no"`，于是 2026-09-27 新加的
+        #    `match_candidate_labels`（预览要列"重名对上了哪几条"）**当场漏进 `PlanRow(**payload)`**
+        #    ⇒ `TypeError: 'match_candidate_labels' is an invalid keyword argument for PlanRow`
+        #    （真机与 pytest 一起红）。⭐ 教训：**约定要写进筛子**，别每个键单点排除一次。
+        payload = {k: v for k, v in item.items() if not str(k).startswith("_")}
         if cand is None:
             s.add(PlanRow(year_month=ym, is_manual=False, **payload))
             created += 1

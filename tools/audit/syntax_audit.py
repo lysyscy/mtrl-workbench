@@ -87,9 +87,18 @@ def rule_q1(paths: list[Path] | None = None) -> list[str]:
 
 
 def _extract_script(html: str) -> str:
-    """取最后一个 `<script>…</script>` 的内容（壳的执行代码就在那里）。"""
+    """取**所有内联 `<script>…</script>`** 的内容并起来（壳的执行代码就在其中一块里）。
+
+    ⚠️⚠️ 2026-09-28 修（实测踩到，隐藏了好几年）：原实现取 **`blocks[-1]`（最后一块）**，而
+      `index.html` 现在有 **两块** 内联脚本（真正的壳代码 260 KB ＋ 末尾一个 7 字节的空块）
+      ⇒ `Q2` 一直在 `node --check` 那个**空块** ⇒ **恒绿**。当场后果：我把一段含反引号的注释写进了
+      `V.m05` 返回的**模板字面量文本区**（它截断了模板串）⇒ 整页 `Unexpected identifier 'TAIL'`、
+      白屏（`PJs is not defined`），而本尺子仍报「✅ 通过」—— 是本条自己文档里点名要抓的那类错，
+      却因为**取错块**而漏掉。⇒ 改成**全部块一起查**（空块无害，真块必查）。
+    ⭐ 教训与「判据存在 ≠ 判据在管那件事」同族：**尺子取错了对象 ⇒ 绿得毫无意义**。
+    """
     blocks = re.findall(r"<script>(.*?)</script>", html, re.S)
-    return blocks[-1] if blocks else ""
+    return "\n".join(b for b in blocks if b.strip())
 
 
 def rule_q2(shell: Path | None = None) -> tuple[list[str], str]:

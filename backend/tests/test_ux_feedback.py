@@ -19,7 +19,7 @@ def _shell_and_core() -> str:
     return "\n".join(t for _, t in parts_text())
 
 
-@acc()
+@acc("ACC-UI-SHELL-001", "001-05")
 def test_mod01_小微壳默认置底_归档仍在最底():
     """用户 2026-09-21：「小微壳改为默认置底」⇒ 顺序 = **归档最底 > 小微壳 > 普通项目**（各段内按 ord）。"""
     P = lambda **kw: SimpleNamespace(status=kw.get("status", "active"),
@@ -30,24 +30,26 @@ def test_mod01_小微壳默认置底_归档仍在最底():
     assert got == ["normal", "normal", "shell", "normal:arch", "shell:arch"], got
 
 
-@acc()
+@acc("ACC-UI-SHELL-001", "001-06")
 def test_抓取结果一律弹窗_不再是提示条():
     """⭐ 用户口径「统一像集采台账」：nt / wh / iv 三条抓取的结果**必须弹窗**（集采本就是弹窗）。"""
     src = _shell_and_core()
-    for token in ("抓取结果 · 付款通知书（API-01）", "抓取结果 · 收发结存（API-02）",
-                  "抓取结果 · 库存单据明细（API-03）", "抓取被拒 · 付款通知书（API-01）",
-                  "抓取没能完成 · 收发结存（API-02）", "抓取没能完成 · 库存单据明细（API-03）"):
+    # ⚠️ 2026-09-27（守则 §3.1 · `TAIL-117` 批次 2）：标题里的接口代号「（API-0x）」**已撤出可见文案**
+    #    （用户看的是「抓取结果 · 付款通知书」，代号只在排障处留痕）⇒ 本判据的 token 同步去码。
+    for token in ("抓取结果 · 付款通知书", "抓取结果 · 收发结存",
+                  "抓取结果 · 库存单据明细", "抓取被拒 · 付款通知书",
+                  "抓取没能完成 · 收发结存", "抓取没能完成 · 库存单据明细"):
         assert f"fetchResultModal(`{token}`" in src, f"缺结果弹窗：{token}"
     assert "function fetchResultModal" in src
 
 
-@acc()
+@acc("ACC-UI-SHELL-001", "001-07")
 def test_导出点击即有反馈_不再让人以为没点住():
     """`dlExport` 一进来就给「正在准备文件」的反馈（导出是重动作，几秒很正常）。"""
     assert "正在从服务器准备文件" in dl_kernel()
 
 
-@acc()
+@acc("ACC-UI-SHELL-001", "001-08")
 def test_m08导出_走最近一次抓取的缓存_不碰i8():
     """⭐ 用户裁定「**抓取导出分开**」（与 m07 同一套心智）：
 
@@ -68,7 +70,7 @@ def test_m08导出_走最近一次抓取的缓存_不碰i8():
     assert "source_cache.save(SPEC_KEY" in fs, "抓取时必须存档源文件"
 
 
-@acc()
+@acc("ACC-UI-SHELL-001", "001-09")
 def test_源文件缓存_存取往返与未命中(monkeypatch, tmp_path):
     import app.mod02_i8.source_cache as SC
     monkeypatch.setattr(SC, "DIR", tmp_path)
@@ -79,7 +81,7 @@ def test_源文件缓存_存取往返与未命中(monkeypatch, tmp_path):
     assert SC.load("inv", "2026-09") == b"PK\x03\x04new"
 
 
-@acc()
+@acc("ACC-UI-SHELL-001", "001-10")
 def test_m02_接口清单已删_壳与原型都没有():
     """用户裁定：接口清单删除 —— 每个接口在系统里都有自己的位置（抓取在各页 · 同步在 m01）。"""
     proto = PROTO.read_text(encoding="utf-8", errors="replace") if PROTO.exists() else ""

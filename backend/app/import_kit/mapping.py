@@ -288,6 +288,42 @@ def type_conflict(prof: str, field_type: str) -> bool:
     return field_type not in _TYPE_OK.get(prof, _ALL_TYPES)
 
 
+#: 「像数据」的形态（表头行里出现这些 ⇒ 它是**数据行**，不是表头词）。
+#:  ⚠️ 一律复用**已有**的那几个正则（编号 / 日期 / 纯数字 / 中文月日），⛔ 不新写一套。
+_DATA_FORMATS = (_CODE, _YMD_TEXT, _YMD_NUM, _CN_MD)
+#: `2025-12-03 00:00:00` 这种**带时刻**的日期字面量（`_YMD_TEXT` 只认到"日"，认不了时刻）
+_YMD_TIME = re.compile(r"^\d{4}\s*[-/.年]\s*\d{1,2}\s*[-/.月]\s*\d{1,2}\s*日?(?:[ T]\d{1,2}:\d{2})?$")
+
+
+def _data_ish(value: str) -> bool:
+    """单个值**像数据**吗（编号 / 日期 / 金额 / 纯数字）—— `looks_like_data` 的逐格判据。"""
+    v = (value or "").strip()
+    if not v:
+        return False
+    if _YMD_TIME.match(v) or any(rx.match(v) for rx in _DATA_FORMATS):
+        return True
+    return _NUM.match(v.replace(",", "").replace("，", "")) is not None
+
+
+def looks_like_data(values, *, need: int = 2, ratio: float = 0.5) -> bool:
+    """这一行（或这一列）**像数据**吗 —— 而不是表头文字。⭐⭐ 2026-09-27 真表逼出来的（`TAIL-129`）。
+
+    ⚠️ **它守的是一件真出过的事**（用户报障原话：「**最后落库的单据号大多都变成供应商名了**」）：
+       通用面挑表头时只看"这一行非空"就把它当**二级表头的子行** ⇒ 真表的**第一行数据**被拼进了列名
+       （`收款单位` ＋ 首行数据的 `资产处集中采购`）⇒ 别名「资产处」被"包含词命中"抢走这一列
+       ⇒ `收款单位` 被认成"单据号" ⇒ 落库全是供应商名（**一行数据也顺带被当成表头吃掉**）。
+    ⇒ 判据：**非空格子里"像数据"的 ≥ `need` 格、且占比 ≥ `ratio`** ⇒ 这行是数据（⛔ 不许当表头）。
+    ⚠️ 两个门槛是**故意不严**的（⛔ 不是"有一格像数据就否"）：表头里出现 `2025` 这种年份格很常见。
+    ⛔ 也不许反过来拿它当"表头识别"用 —— 它只说"像数据"，**不说"是表头"**。
+    """
+    vals = [("" if v is None else str(v).strip()) for v in values]
+    nz = [v for v in vals if v]
+    if not nz:
+        return False
+    hits = sum(1 for v in nz if _data_ish(v))
+    return hits >= need and hits / len(nz) >= ratio
+
+
 #: 界面上的「忽略此列」哨兵（未映射列 ⇒ **原样保留**，⛔ 不报错丢弃）
 IGNORE = "（忽略 · 原样保留）"
 
@@ -316,5 +352,6 @@ def apply(rows, headers, mapping: dict[str, str], *, keep_raw: bool = True) -> l
 
 __all__ = [
     "IGNORE", "Field", "Suggestion", "apply", "dupes", "guess", "join_levels",
-    "level_of", "normalize", "profile", "secondary", "serial_hint", "type_conflict",
+    "level_of", "looks_like_data", "normalize", "profile", "secondary", "serial_hint",
+    "type_conflict",
 ]

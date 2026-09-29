@@ -166,6 +166,10 @@ def api_big(request: Request) -> dict:
       ⛔ 前端**不硬编码**列序或列型。
     - `mat_available` = 「主材累计（含税）」的取数口**是否已接入**（集采台账属 `M5`）——
       `False` 时该列给 `None`（**不可得，绝不写 0**，`TAIL-25`）。
+    - `empty_text` = 大表**空态**那句「为什么是空的」（主人 = `big_domain.empty_text`）——
+      ⚠️ 壳的空态行**直接用这一句**，⛔ 壳里不许自己编第二份（那是第二份口径）。
+      ⭐ `A5`（2026-09-29 逐页）：这条此前是**死代码**（全仓没人调用），而壳那边 `rows` 为 0 时
+      只 `return ''` ⇒ 用户看到的是一张**只剩三级表头的大空表**（且当天正值"空态"这条主线）。
     """
     st = BS.parse_state(query_params(request))
     with session_scope() as s:
@@ -187,6 +191,8 @@ def api_big(request: Request) -> dict:
         "manual_fmts": [B.MANUAL_FMT[k] for k in B.BIG_MANUAL_KEYS],
         "rows": [_big_row(r) for r in (data["rows"] or [])],
         "mat_available": bool(data["mat_available"]),
+        # ⭐ `A5`（2026-09-29）：大表空态文案随包给出（主人 = `big_domain.empty_text`）。
+        "empty_text": B.empty_text(data["month"]),
     }
 
 
