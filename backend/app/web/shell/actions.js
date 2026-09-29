@@ -2195,29 +2195,29 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  jcInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);                       /* ⭐ 子表明细**不在列表接口里** ⇒ 开弹窗前拉一次 */
    modal({title:`供应商发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcInvDlg({dataset:{id:j.id}}),body:
-     `<table class="dt cond" data-sort data-sort-key="modal:jcInv"><thead><tr>${JCINV_THEAD}</tr></thead><tbody>
-      ${j.invoices.length?j.invoices.map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入')}
-      ${jcSubOn('inv',j.id)?jcSubRow():''}
-      ${sumRowOf(JCINV_THEAD, [], {2:[()=>jcInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})}</tbody></table>
+     `${TBL({cls:'cond',key:'modal:jcInv',head:JCINV_THEAD,
+      rows:j.invoices.map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`),
+      empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
+      sum:(jcSubOn('inv',j.id)?jcSubRow():'')+sumRowOf(JCINV_THEAD, [], {2:[()=>jcInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="inv">＋ 增加一张发票</button></div>
       <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>发票子表（ENT-07）</b>：一合同 <b>1..N</b> 张、<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>（§6.4.1）。<br>${j.tradeCo?'本合同<b>有贸易公司</b> ⇒ <b>结算取「贸易公司发票」子表合计</b>，本子表<b>只作供应商侧台账</b>（§6.4.1）。':'本合同<b>无贸易公司</b> ⇒ <b>结算取本子表合计</b>（§6.4.1）。'}</div>`}); },
  jcTInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);
    modal({title:`贸易公司发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcTInvDlg({dataset:{id:j.id}}),body:
-     (j.tradeCo?`<table class="dt cond" data-sort data-sort-key="modal:jcTInv"><thead><tr>${JCINV_THEAD}</tr></thead><tbody>
-      ${(j.tradeInvoices||[]).length?(j.tradeInvoices||[]).map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcTInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入')}
-      ${jcSubOn('tinv',j.id)?jcSubRow():''}
-      ${sumRowOf(JCINV_THEAD, [], {2:[()=>jcTradeInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})}</tbody></table>
+     (j.tradeCo?`${TBL({cls:'cond',key:'modal:jcTInv',head:JCINV_THEAD,
+      rows:(j.tradeInvoices||[]).map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcTInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`),
+      empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
+      sum:(jcSubOn('tinv',j.id)?jcSubRow():'')+sumRowOf(JCINV_THEAD, [], {2:[()=>jcTradeInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="tinv">＋ 增加一张发票</button></div>
       <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>贸易公司发票子表（ENT-07 同款）</b>：<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>。<br>有贸易公司 ⇒ <b>结算取本子表合计</b>（与供应商侧<b>同一套逻辑</b>，§6.4.1）。</div>`
       :`<div class="tip" style="margin:0">本合同<b>无贸易公司</b> ⇒ <b>不启用该子表</b>（结算取供应商发票合计，§6.4.1）。</div>`)}); },
  jcPayDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);                       /* ⭐ 付款子表同理：列表不给明细 */
    modal({title:`付款子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcPayDlg({dataset:{id:j.id}}),body:
-     `<table class="dt cond" data-sort data-sort-key="modal:jcPay"><thead><tr>${JCPAY_THEAD}</tr></thead><tbody>
-      ${j.payments.length?j.payments.map((p,i)=>`<tr><td class="fc" style="white-space:nowrap">${esc(p[0]||'')}</td><td class="num">${M(p[1])}</td><td>${p[2]==='付款域引用'?tag('付款域引用','pri'):tag('手工','in')}</td><td class="ctr"><button class="btn sm dg" data-act="jcPayDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`).join(''):EMPTYROW(thCount(JCPAY_THEAD), '暂无付款', '点本卡右上角「＋ 加一行」录入')}
-      ${jcSubOn('pay',j.id)?jcSubRow():''}
-      ${sumRowOf(JCPAY_THEAD, [], {1:[()=>jcPay(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})}</tbody></table>
+     `${TBL({cls:'cond',key:'modal:jcPay',head:JCPAY_THEAD,
+      rows:j.payments.map((p,i)=>`<tr><td class="fc" style="white-space:nowrap">${esc(p[0]||'')}</td><td class="num">${M(p[1])}</td><td>${p[2]==='付款域引用'?tag('付款域引用','pri'):tag('手工','in')}</td><td class="ctr"><button class="btn sm dg" data-act="jcPayDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`),
+      empty:EMPTYROW(thCount(JCPAY_THEAD), '暂无付款', '点本卡右上角「＋ 加一行」录入'),
+      sum:(jcSubOn('pay',j.id)?jcSubRow():'')+sumRowOf(JCPAY_THEAD, [], {1:[()=>jcPay(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale));display:flex;gap:calc(6px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="pay">＋ 手工录入</button>
         <button class="btn sm pri" data-act="jcPayRef" data-id="${j.id}">从付款域引用（R8）</button></div>
       <div class="sm mut" style="margin-top:calc(7px * var(--fscale))">集采付款通知书的收款方都是「资产处集中采购」，真实供应商靠<b>人工录入的「集采实际供应商」</b>做关联锚点；<b>同一笔通知书不可重复引用</b>。</div>

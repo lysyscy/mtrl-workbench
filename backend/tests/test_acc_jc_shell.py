@@ -124,6 +124,12 @@ def test_子表草稿行列对齐且钉在合计行之前取消不入库():
         i_rows = seg.index(".map((v,i)") if ".map((v,i)" in seg else seg.index(".map((p,i)")
         i_draft = seg.index("jcSubRow()")
         i_sum = seg.index("sumRowOf(")
+        # ⭐ 2026-09-29（`TAIL-64` A′）：三张子表的**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table …>`）。
+        #   ⚠️ 换成 `TBL` 之后，**上面那三段的源码先后顺序一字未变**（`rows:` ⇒ `empty:` ⇒ `sum:` 仍在同一序上，
+        #      只是从「模板里的 `${…}` 三段」变成「一次调用里的三个参数」）—— 所以顺序那条判据照旧成立。
+        #   自证 = `tools/mut/_mut_tbl.py` 的 M31／M32／M33 去掉这三处委托 ⇒ 必须红。
+        assert "TBL({cls:'cond',key:'" + table + "',head:" in seg, (
+            f"`{dlg}`（`{table}`）的表没走统一出口 `TBL`（`TAIL-64` A′）")
         assert i_rows < i_draft < i_sum, (
             f"`{dlg}`（{table}）里三段的顺序不对 ⇒ 草稿行没有钉在「**数据行之后、合计行之前**」。"
             f"\n  实际位置：数据行 {i_rows} / 草稿行 {i_draft} / 合计行 {i_sum}")

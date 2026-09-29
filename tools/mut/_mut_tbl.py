@@ -7,8 +7,8 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-三十靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打 `shell/proj.js`、`M16`~`M21` 打 `shell/actions.js`、
-`M22`/`M23` 打 `shell/core.js`、`M24`~`M30` 打 `shell/legacy.js` —— 见下方"哑靶"说明）：
+三十三靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M33` 打
+`shell/actions.js`、`M22`/`M23` 打 `shell/core.js`、`M24`~`M30` 打 `shell/legacy.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
 - `M2` **掏空内核**：把 `TBL` 体内的 `+rows.join('')+` 改成 `+''+` ⇒ "内核没把 rows 拼进 tbody"必须红。
@@ -159,6 +159,16 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      _b("TBLBROKEN({cls:'sm',head:'<th>行</th><th>列</th><th>原值</th><th>原因</th>',"), "没走统一出口"),
     (LEGACY, "M30 去掉委托（导入页「技术细节」无表头表 不再走 `TBL`）",
      _b("TBL({cls:'sm',rows:tech.map(k =>"), _b("TBLBROKEN({cls:'sm',rows:tech.map(k =>"),
+     "没走统一出口"),
+    # ⭐ 2026-09-29（`TAIL-64` A′）：集采三张子表弹窗（**与原型共享** ⇒ 本批做了双边同步）
+    (ACTIONS, "M31 去掉委托（`modal:jcInv` 供应商发票子表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:jcInv',"), _b("TBLBROKEN({cls:'cond',key:'modal:jcInv',"),
+     "没走统一出口"),
+    (ACTIONS, "M32 去掉委托（`modal:jcTInv` 贸易公司发票子表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:jcTInv',"), _b("TBLBROKEN({cls:'cond',key:'modal:jcTInv',"),
+     "没走统一出口"),
+    (ACTIONS, "M33 去掉委托（`modal:jcPay` 付款子表 不再走 `TBL`）",
+     _b("TBL({cls:'cond',key:'modal:jcPay',"), _b("TBLBROKEN({cls:'cond',key:'modal:jcPay',"),
      "没走统一出口"),
 ]
 
