@@ -62,6 +62,8 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import os
+import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -87,11 +89,33 @@ from audit_work import (                                          # noqa: E402
 # ------------------------------------------------------------------- 四检（可选）
 
 
+def _resolve_node() -> Path | None:
+    """⭐ A8（2026-09-29 · `TAIL-188`）：node 从**本机写死**改成**三级回退** ——
+    `MTRL_NODE`（目标机显式指路）⇒ `PATH` 里的 `node`（装过就有）⇒ 旧默认（本机那份）。
+    ⚠️ 换机时**必然不同**（本机写死的是 `C:/Users/Administrator/.workbuddy/...`）⇒ 找不到就**照实说**，⛔ 不静默。"""
+    cands: list[Path] = []
+    env = os.environ.get("MTRL_NODE", "").strip()
+    if env:
+        cands.append(Path(env))
+    which = shutil.which("node")
+    if which:
+        cands.append(Path(which))
+    cands.append(Path(r"C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-3\node.exe"))
+    for c in cands:
+        if c.exists():
+            return c
+    return None
+
+
 def run_ui_checks() -> list[str]:
-    node = Path(r"C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-3\node.exe")
+    node = _resolve_node()
     root = delivery_root()
-    if not node.exists() or not root:
-        return ["  （跳过：找不到 node 或交付面根）"]
+    if not node:
+        return ["  （跳过：找不到 node —— 试过三处：环境变量 `MTRL_NODE` / PATH / 旧默认路径。"
+                "⚠️ 装 node 或设 `MTRL_NODE=<node.exe 全路径>`；详见 `docs/deployment.md`）"]
+    if not root:
+        return ["  （跳过：拿不到交付面根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=`"
+                "<交付面>/PRD/验收/验收基线.json`；目标机不装交付面属已知代价，详见 `docs/deployment.md`）"]
     demo = root / "demo"
     if not (demo / "_smoke.js").exists():
         return ["  （跳过：交付面 demo/ 里没有四检脚本）"]

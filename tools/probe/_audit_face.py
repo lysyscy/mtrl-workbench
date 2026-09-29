@@ -20,8 +20,19 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import sys
 
-FACE = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用")
+# ⭐ A8（2026-09-29 · `TAIL-188`）：交付面根**不再写死本机路径** ⇒ 走与 `doc_audit` **同一机制**
+#   （`audit_common.delivery_root()` = 读仓根 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 上溯两级）。
+#   ⚠️ 换机时交付面路径必然不同；拿不到 ⇒ 打印原因并退出 2（⛔ 不抛栈）。
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "audit"))
+from audit_common import delivery_root                          # noqa: E402
+
+FACE = delivery_root()
+if FACE is None:
+    print("⛔ 拿不到交付面根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=<交付面>/PRD/验收/验收基线.json`。")
+    print("   目标机若不装交付面，本条尺子本就跑不了（已知代价）⇒ 详见 `docs/deployment.md`。")
+    raise SystemExit(2)
 MOD_DIR = FACE / "PRD" / "02-功能规格"
 INDEX = FACE / "PRD" / "验收" / "用例索引.md"
 BASELINE = FACE / "PRD" / "验收" / "验收基线.json"

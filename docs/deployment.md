@@ -47,6 +47,18 @@ powershell -ExecutionPolicy Bypass -File D:\dev\mtrl-workbench\ops\selfcheck.ps1
 4. ⚠️ **改了 Python 代码必须 `ops\server_ctl.ps1 restart`**（服务**没有** `--reload`）
 5. ⚠️ 交付面（WPS 那个文件夹）**不在目标机、也不在包里** ⇒ `doc_audit --ui` / `ui_parity` / `acc_report`（四态报表）**跑不了** —— 那是已知代价；要跑它们得把交付面一起弄来（另说）
 
+## §四之补 · 换机会踩的三处路径（✅ 已做成可配 · A8 · 2026-09-29）
+
+- ✅ **三处路径可配**（A8 · 2026-09-29）：
+  | 要配的 | 怎么配 | ⛔ 不配会怎样 |
+  |---|---|---|
+  | **交付面定位** | 仓根 `.env`：`PRD_ACCEPTANCE_BASELINE=<交付面>/PRD/验收/验收基线.json`（**同一机制**：`doc_audit` 与 `_audit_face.py` 都读它） | 留空 ⇒ `doc_audit --ui` / `ui_parity` / `acc_report`（四态报表）**跑不了**（会打印「跳过 + 原因」） |
+  | **node** | 环境变量 `MTRL_NODE=<node.exe 全路径>`，或把 node 放进 `PATH` | 三级都找不到 ⇒ 交付面**四检跳过**（会打印试过哪三处 ⇒ ⛔ 不是静默） |
+  | **Playwright 浏览器** | `PLAYWRIGHT_BROWSERS_PATH` | 真机探针装不上浏览器 ⇒ 那几条真机段跑不了（⚠️ 探针是**开发期**工具，目标机可不跑） |
+  ⭐ 一句话：**要跑「验收那套」就把交付面与 node 配齐；只跑系统本身则什么都不用配**（`ops/selfcheck.ps1` 不依赖它们）。
+
+---
+
 ## §五 在目标机继续开发（包已按此配齐）
 
 - 仓 = 完整 git（**含全部历史** —— 唯一回退保障）；`tools/`（16 把尺子 ＋ 真机探针）· `backend/tests/`（641 判据）· `demo/`（原型 ＋ 四检）· 计划/台账/记忆**都在**。
