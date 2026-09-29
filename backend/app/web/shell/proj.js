@@ -106,12 +106,17 @@ const ntDraftRow=()=>{ const d=naD, cat=d.cat||'辅材', isJc=cat==='集采';
    ⚠️ 每行的 `<td>` 仍逐行写：值各不相同，收不了（这是**数据**，不是结构）。
    ⚠️ 表头 HTML **一字不改**（只搬进常量）—— `applySorts` 靠表头文本判列类型与可排性，改一个空格都可能改行为。 */
 /* ⭐ **表格件**（`TAIL-64` P0 · 2026-09-24）—— 一张表的**外壳**统一由它渲染：表头 / 行 / 空态 / 合计。
-   ⭐ 抽它的真理由 = **虚拟滚动只需要挂一处**（本件内），且「表该怎么开（`class` / `data-sort`）」只有一个口径。
-   契约：`TBL({head, rows, empty, sum, key})` ⇒ 返回完整 `<table …>…</table>`（⚠️ 不含外层 `.tw`）。
+   ⭐ 抽它的真理由 = **虚拟滚动只需要挂一处**（本件内），且「表该怎么开」只有一个口径。
+   契约：`TBL({head, rows, empty, sum, key, cls, sort, sty, headRows})` ⇒ 返回完整 `<table …>…</table>`（⚠️ 不含外层 `.tw`）。
+   ⭐⭐ `TAIL-64` P2③（2026-09-29 · 为 `m07` 的三张表把契约补齐）—— 三个**可选参**，默认值都保持旧行为：
+     · `sort`（默认 `true`）：给了 `key` 就**默认同时出 `data-sort`**（可排）；`sort:false` ⇒ **只出 `data-sort-key`**
+       —— 表的**身份**要有，但它**刻意不可排**（真例 = `m07:kinds` 分组表 · `m07:bigtable` 大表）。
+     · `sty` ⇒ 给 `<table>` 补一个内联 `style`（真例 = 大表 `min-width:1620px`）。
+     · `headRows:true` ⇒ `head` 里**自带 `<tr>`**（多行表头），本件不再包一层（真例 = 大表三级表头）。
    ⛔ 与 `sumRowOf` / `thCount` 的分工：那两个是**纯算法**（求和 / 数列），本件只管**拼装**。 */
-const TBL=({head='',rows=[],empty='',sum='',key='',cls=''})=>{
-  const attr=' class="dt'+(cls?' '+cls:'')+'"'+(key?' data-sort data-sort-key="'+key+'"':'');
-  const th=head?'<thead><tr>'+head+'</tr></thead>':'';
+const TBL=({head='',rows=[],empty='',sum='',key='',cls='',sort=true,sty='',headRows=false})=>{
+  const attr=' class="dt'+(cls?' '+cls:'')+'"'+(key?(sort?' data-sort data-sort-key="'+key+'"':' data-sort-key="'+key+'"'):'')+(sty?' style="'+sty+'"':'');
+  const th=head?(headRows?'<thead>'+head+'</thead>':'<thead><tr>'+head+'</tr></thead>'):'';
   return '<table'+attr+'>'+th+'<tbody>'
     +rows.join('')+(rows.length?'':empty)+sum+'</tbody></table>';
 };

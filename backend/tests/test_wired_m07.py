@@ -25,7 +25,7 @@ from tests.m07_shell_helpers import API, ROUTER, SHELL, _body, _slice  # noqa: F
 
 # ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉 ⇒ 下面那条判据改在**取数表**上证（判据不变）。
 from tests.shell_load_helpers import DEP_BEFORE, load_dep, loaders, page_load  # noqa: F401
-from tests.shell_src import with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看
+from tests.shell_src import tbl_kernel, with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看（`tbl_kernel`：`TAIL-64`）
 
 # ============== `ACC-SETL-001` / `ACC-SETL-EXT-001` 的**形态**半边（`§19` 批 2 搬家）
 #
@@ -52,13 +52,26 @@ def test_壳里提取表两类按序且合计行紧贴():
     """两类按 `extBlock('焊材')` → `extBlock('气体')` 渲染；**每块的合计行在该块之内**（紧贴本类数据行）；
     该表**刻意不可排**（⛔ 不带 `data-sort`）。"""
     s = _slice("m07")
-    assert "${extBlock('焊材')}${extBlock('气体')}" in s, "两类的渲染顺序变了"
+    # ⭐ 2026-09-29（`TAIL-64` P2③）：判据改成**与结构无关**的「**顺序**」钉法 —— ⛔ 别退回钉整串
+    #   `${extBlock('焊材')}${extBlock('气体')}`：表外壳抽进 `TBL` 之后两个块进了 `rows` 数组，写法一变就假红。
+    i_solder, i_gas = s.find("extBlock('焊材')"), s.find("extBlock('气体')")
+    assert 0 <= i_solder < i_gas, "两类的渲染顺序变了（焊材必须排在气体前面）"
     # ⚠️ 合计行在 **`extBlock` 的体内**（不在 `V.m07` 切片里 ⇒ 要取函数体）
     b = _body("extBlock")
     assert "sumRowOf(EXT_THEAD, list, {3:" in b and "lead:kind+'合计'" in b, \
         "块的合计行不在本块内 / 不是由共用出口出的"
-    assert '<table class="dt cond" data-sort-key="m07:kinds">' in s, \
-        "提取表带了 `data-sort`（它必须**刻意不可排**）"
+    # ⭐ 2026-09-29（`TAIL-64` P2③）：判据从「钉字面」改成「钉意图」——
+    #   原写法钉整串 `<table class="dt cond" data-sort-key="m07:kinds">`；表外壳抽进统一件 `TBL` 之后**当场假红**。
+    #   ⛔ 别退回钉字面（那等于宣布"以后不许抽通用件"）。现在断三件事：
+    #   ① 切片**委托** `TBL` 并交出表的身份（`key:'m07:kinds'`）；② **显式** `sort:false`（刻意不可排）；
+    #   ③ `TBL` 内核里「不可排」那条分支**真的只出 `data-sort-key`**、不出 `data-sort`。
+    #   ⚠️ 渲染形态那半由**原型侧真机**守：`demo/_smoke.js` 的分组表那条（表开标签不许含 `data-sort`）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M5（去掉委托）／M7（`sort:false` 改回 `true`）都必须红。
+    assert "TBL({cls:'cond',key:'m07:kinds',sort:false," in s, \
+        "提取表没走统一出口 `TBL`，或没显式声明「刻意不可排」（`sort:false`）"
+    kern = tbl_kernel()
+    assert "' data-sort data-sort-key=\"'" in kern and "' data-sort-key=\"'" in kern, \
+        "`TBL` 内核里「可排 / 不可排」两条分支不齐 ⇒ `sort:false` 那条保证（⛔ 不出 `data-sort`）没了"
 
 
 @acc("ACC-SETL-EXT-001", "001-04")
@@ -87,6 +100,10 @@ def test_壳里表体每仓一行且合计行由共用出口出():
     s = _slice("m07")
     assert "sumRowOf(WH_THEAD, rows," in s, "合计行不是由共用出口按行派生的"
     assert "balOf(w)" in s, "表体没逐行渲染"
+    # ⭐ 2026-09-29（`TAIL-64` P2③）：**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt" …>`）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M6 去掉这处委托 ⇒ 必须红。
+    assert "TBL({head:WH_THEAD,key:'m07:warehouses'," in s, \
+        "收发结存表没走统一出口 `TBL`（`TAIL-64` P2③）"
 
 
 @acc("ACC-SETL-001", "001-02")

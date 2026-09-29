@@ -7,10 +7,14 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-两靶（都打**壳** `index.html`，改完**立刻按 bytes 复原** ＋ MD5 校验）：
+七靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打的是 `shell/proj.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
 - `M2` **掏空内核**：把 `TBL` 体内的 `+rows.join('')+` 改成 `+''+` ⇒ "内核没把 rows 拼进 tbody"必须红。
+- ⭐ `M3`/`M4`（2026-09-29 · `TAIL-64` **P2② `m06`**）：`m06` 那**两张表**各自去掉委托
+  （差异表 / 主表 表①·表②）⇒ 两条新判据各自必须红。
+- ⭐ `M5`/`M6`/`M7`（2026-09-29 · `TAIL-64` **P2③ `m07`**）：`M5` 提取表去掉委托 · `M6` 大表去掉委托 ·
+  `M7` 把提取表的 `sort:false` 改回 `true`（⇒ "刻意不可排"那条必须红）。
 
 ⚠️ 判据 = **目标测试件 rc≠0**（不是整支尺子）＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc：别的用例红
 也会让 rc≠0）。
@@ -30,8 +34,17 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SHELL = ROOT / "backend" / "app" / "web" / "index.html"
+#: ⭐⭐ **2026-09-29 修一个"哑靶"（本件自己的仪器缺陷）**：`M2` 原来只在 `index.html` 里找 `TBL` 内核，
+#: 而壳 **2026-09-28 拆件（`P2-a`）**把 `TBL` 从 `index.html` **搬进了 `shell/proj.js`**
+#: （`V.*` 切片留在 `index.html`、顶层段搬走）⇒ `M2` 的靶串**从此一次都命中不到**（实测「命中 0 次」）。
+#: ⚠️ 它**不是假绿**（脚本会打印「未命中」并 `rc=1`），但那条变异**一直没被验证过**。
+#: ⇒ 现在每个靶**自带文件**：`M3`/`M4` 与 `M1` 打 `index.html`（切片在那儿）、`M2` 打 `shell/proj.js`。
+PROJ = ROOT / "backend" / "app" / "web" / "shell" / "proj.js"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
-TARGET = "tests/test_acc_usr_mgmt.py"          #: 承载那两条判据的测试件
+TARGETS: tuple[str, ...] = ("tests/test_acc_usr_mgmt.py",   #: `m15`（P1b）那两条判据
+                            "tests/test_wired_m06.py",      #: ⭐ `m06`（P2②）那两条判据
+                            "tests/test_wired_m07.py",      #: ⭐ `m07`（P2③）收发结存 + 提取表
+                            "tests/test_wired_m07_big.py")  #: ⭐ `m07`（P2③）月度会大表
 PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
 
 def _b(s: str) -> bytes:
@@ -39,12 +52,29 @@ def _b(s: str) -> bytes:
     return s.encode("utf-8")
 
 
-#: `(说明, 原文, 改坏成, 期望在输出里出现的断言原话)` —— 靶串都是**单行片段** ⇒ 不必做行尾归一
-CASES: list[tuple[str, bytes, bytes, str]] = [
-    ("M1 去掉委托（`m15` 主表不再走 `TBL`）", _b("TBL({head:'<th>登录账号</th>"),
+#: `(打哪个文件, 说明, 原文, 改坏成, 期望在输出里出现的断言原话)` —— 靶串都是**单行片段** ⇒ 不必做行尾归一
+CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
+    (SHELL, "M1 去掉委托（`m15` 主表不再走 `TBL`）", _b("TBL({head:'<th>登录账号</th>"),
      _b("TBLBROKEN({head:'<th>登录账号</th>"), "本页主表没走统一出口"),
-    ("M2 掏空内核（`TBL` 不再把 rows 拼进 tbody）", _b("+rows.join('')+"), _b("+''+"),
-     "内核没有把 rows 拼进 `tbody`"),
+    # ⚠️ `M2` 的靶在 `shell/proj.js`（`TBL` 内核所在件）—— 见文件头那段"哑靶"说明
+    (PROJ, "M2 掏空内核（`TBL` 不再把 rows 拼进 tbody）", _b("+rows.join('')+(rows.length"),
+     _b("+''+(rows.length"), "内核没有把 rows 拼进 `tbody`"),
+    # ⭐ 2026-09-29（`TAIL-64` P2② `m06`）：两张表**各自**去掉委托 ⇒ 两条新判据各自必须红
+    (SHELL, "M3 去掉委托（`m06` 差异表不再走 `TBL`）", _b("TBL({head:DIFF_THEAD,"),
+     _b("TBLBROKEN({head:DIFF_THEAD,"), "差异表的表外壳没走统一出口"),
+    (SHELL, "M4 去掉委托（`m06` 主表 表①·表② 不再走 `TBL`）", _b("TBL({head,rows:body,sum:sumRow+totRow})"),
+     _b("TBLBROKEN({head,rows:body,sum:sumRow+totRow})"), "主表（表①/表②）的表外壳没走统一出口"),
+    # ⭐ 2026-09-29（`TAIL-64` P2③ `m07`）：三张表各自去掉委托 / 把 `sort:false` 改回 `true`
+    (SHELL, "M5 去掉委托（`m07` 提取表 不再走 `TBL`）", _b("TBL({cls:'cond',key:'m07:kinds',sort:false,"),
+     _b("TBLBROKEN({cls:'cond',key:'m07:kinds',sort:false,"), "提取表没走统一出口"),
+    (SHELL, "M6 去掉委托（`m07` 大表 不再走 `TBL`）",
+     _b("TBL({head:BIG_THEAD,key:'m07:bigtable',sort:false,sty:'min-width:1620px',headRows:true,"),
+     _b("TBLBROKEN({head:BIG_THEAD,key:'m07:bigtable',sort:false,sty:'min-width:1620px',headRows:true,"),
+     "大表没走统一出口"),
+    (SHELL, "M7 提取表「刻意不可排」失效（`sort:false` 改回 `true`）",
+     _b("sort:false,head:EXT_THEAD"), _b("sort:true,head:EXT_THEAD"), "刻意不可排"),
+    (SHELL, "M8 提取表两类顺序颠倒（焊材 / 气体 互换）", _b("rows:[extBlock('焊材')+extBlock('气体')]"),
+     _b("rows:[extBlock('气体')+extBlock('焊材')]"), "两类的渲染顺序变了"),
 ]
 
 
@@ -52,43 +82,47 @@ def run_target() -> tuple[int, str]:
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1",
            # ⚠️ 子集跑 ⇒ 四态落**残档**（⛔ 别写权威档 `acc_results.json`）
            "ACC_RESULTS_PATH": str(PARTIAL_ACC)}
-    r = subprocess.run([str(PY), "-m", "pytest", "-q", TARGET, "-p", "no:cacheprovider",
+    r = subprocess.run([str(PY), "-m", "pytest", "-q", *TARGETS, "-p", "no:cacheprovider",
                         "--tb=line"], cwd=str(ROOT / "backend"), capture_output=True,
                        text=True, encoding="utf-8", errors="replace", env=env)
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
 
 def main() -> int:
-    src = SHELL.read_bytes()
-    md5_before = hashlib.md5(src).hexdigest()
+    files = sorted({c[0] for c in CASES})
+    orig = {p: p.read_bytes() for p in files}
+    md5_before = {p: hashlib.md5(b).hexdigest() for p, b in orig.items()}
 
     rc0, out0 = run_target()
-    print(f"基线（未改坏）{TARGET} rc={rc0}（应为 0）")
+    print(f"基线（未改坏）{' + '.join(TARGETS)} rc={rc0}（应为 0）")
     if rc0 != 0:
         print("  ⛔ 基线就红 ⇒ 先清红再来跑本件")
         return 1
 
     hit = 0
-    for desc, old, new, needle in CASES:
+    for path, desc, old, new, needle in CASES:
+        src = orig[path]
         if src.count(old) != 1:
-            print(f"  ⛔ {desc} —— 靶串命中 {src.count(old)} 次（期望 1）⇒ **未验证**")
+            print(f"  ⛔ {desc} —— 靶串在 `{path.name}` 里命中 {src.count(old)} 次（期望 1）⇒ **未验证**")
             continue
         try:
-            SHELL.write_bytes(src.replace(old, new, 1))
+            path.write_bytes(src.replace(old, new, 1))
             rc, out = run_target()
         finally:
-            SHELL.write_bytes(src)                     # ⭐ 立刻按原 bytes 复原
+            path.write_bytes(src)                     # ⭐ 立刻按原 bytes 复原
         ok = rc != 0 and needle in out
         print(("  ✅ " if ok else "  ⛔ 未命中 ") + desc + f"  → rc={rc}"
               + ("" if ok else f"（判据「{needle}」没出现在输出里）"))
         hit += ok
 
-    ok_md5 = hashlib.md5(SHELL.read_bytes()).hexdigest() == md5_before
+    bad = [p.name for p in files
+           if hashlib.md5(p.read_bytes()).hexdigest() != md5_before[p]]
     print()
     print(f"  命中 {hit}/{len(CASES)}")
-    print(f"  复原校验（MD5 逐字节）：{'✅ 复原' if ok_md5 else '❌ 未复原'}")
+    print(f"  复原校验（MD5 逐字节 · {len(files)} 件）："
+          + ("✅ 复原" if not bad else "❌ 未复原 " + ", ".join(bad)))
     print("⚠️ 本件只跑了目标件 ⇒ **接着必须重跑全套 pytest 写回权威四态**（否则报表掉绿）。")
-    return 0 if (hit == len(CASES) and ok_md5) else 1
+    return 0 if (hit == len(CASES) and not bad) else 1
 
 
 if __name__ == "__main__":

@@ -1012,12 +1012,12 @@ V.m06=()=>{
   const SEG=[1,6,11,15];
   const vs=i=>SEG.indexOf(i)>=0?' class="vsep"':'';
   const vsc=i=>SEG.indexOf(i)>=0?' vsep':'';
-  const head=`<tr><th class="fl">核算月</th>${IVC5.map((c,i)=>`<th${vs(1+i)}>入库${c}</th>`).join('')}${IVC5.map((c,i)=>`<th${vs(6+i)}>出库${c}</th>`).join('')}<th${vs(11)}>租分公司设备</th><th>内租设备</th><th>外租零租含税</th><th>外租包月含税</th><th${vs(15)}>外租零租不含税</th><th>外租包月不含税</th></tr>`;
+  const head=`<th class="fl">核算月</th>${IVC5.map((c,i)=>`<th${vs(1+i)}>入库${c}</th>`).join('')}${IVC5.map((c,i)=>`<th${vs(6+i)}>出库${c}</th>`).join('')}<th${vs(11)}>租分公司设备</th><th>内租设备</th><th>外租零租含税</th><th>外租包月含税</th><th${vs(15)}>外租零租不含税</th><th>外租包月不含税</th>`;   /* ⭐ `TAIL-64` P2②（2026-09-29）：本常量**只留 `<th>`** —— 外层 `<thead><tr>` 由表格件 `TBL` 统一拼（与 `*_THEAD` 那批同一个形态）⇒ ⛔ 别把 `<tr>` 加回来（会双套）。 */
   const mH=['租分公司设备','内租设备','外租零租含税','外租包月含税','外租零租不含税','外租包月不含税'];
   const row=(a,b,isAdj)=>`<tr><td class="fl fc">${a.ym}</td>${IVC5.map((c,i)=>`<td class="num${isAdj&&a.inC[c]!==b.inC[c]?' ed':''}${vsc(1+i)}">${M(a.inC[c])}</td>`).join('')}${IVC5.map((c,i)=>`<td class="num${isAdj&&a.outC[c]!==b.outC[c]?' ed':''}${vsc(6+i)}">${M(a.outC[c])}</td>`).join('')}${a.m.map((v,j)=>`<td class="num${vsc(11+j)}">${M(v)}</td>`).join('')}</tr>`;
   /* 表① = 原始；表② = 调整后（**逐月**与原始比对，被改过的格标 `ed`） */
-  const body = procTab===1 ? rows1.map((a,i)=>row(a,rows0[i],true)).join('')
-                           : rows0.map(a=>row(a,a,false)).join('');
+  const body = procTab===1 ? rows1.map((a,i)=>row(a,rows0[i],true))
+                           : rows0.map(a=>row(a,a,false));       /* ⭐ `TAIL-64` P2②：**不在这里 `join`** —— 直接把行数组交给 `TBL` 的 `rows`（拼装是它的事）。 */
   /* ⭐ 求和（2026-09-13 用户口径）：
      ① **每个数据列下方**加「合计」行 —— 入库 5 类 / 出库 5 类 / 机械 6 列**逐列垂直求和**；
      ② 另加「总求和」行 —— **入库 / 出库 / 机械** 三组各一个横向总计（用户要的"额外的总求和"）。
@@ -1076,8 +1076,8 @@ V.m06=()=>{
       <div class="tb2 ${procTab===1?'on':''}" data-act="procTab" data-i="1" tabindex="0" role="button">表② 调整后表</div>
       <div class="tb2 ${procTab===2?'on':''}" data-act="procTab" data-i="2" tabindex="0" role="button">差异表<span class="n">${adjs.length}</span></div>
     </div>
-    ${procTab===2?`<div class="tw"><table class="dt"><thead><tr>${DIFF_THEAD}</tr></thead><tbody>
-      ${adjs.length?adjs.map(iv=>{const a=adjOf(iv);return `<tr><td class="fc">${iv.docNo}</td><td class="fc">${iv.seq}</td><td>${esc(iv.mat)}</td><td class="sm">${esc(iv.wh)}</td>
+    ${procTab===2?`<div class="tw">${TBL({head:DIFF_THEAD,
+      rows:adjs.length?[adjs.map(iv=>{const a=adjOf(iv);return `<tr><td class="fc">${iv.docNo}</td><td class="fc">${iv.seq}</td><td>${esc(iv.mat)}</td><td class="sm">${esc(iv.wh)}</td>
         <td class="num">${M(iv.amt)}</td><td class="num ed">${M(a.newAmt)}</td><td class="num" title="差额 = 调整后 − i8 原值；方向看符号（正 = 上调 / 负 = 下调）">${SIG(a.newAmt-iv.amt)}</td>
         <td class="sm">${esc(a.remark)}</td><td class="sm">${esc(a.op)}</td><td class="fc sm">${a.time}</td>
         <td class="ctr"><span class="link" data-act="goInvAdj" data-wh="${esc(iv.wh)}" data-iv="${iv.id}" tabindex="0" role="button">查看原始行 →</span></td></tr>`}).join('')
@@ -1085,10 +1085,10 @@ V.m06=()=>{
         + `<tr class="sumrow" style="background:var(--sf2);font-weight:500"><td class="fl" colspan="4">合计</td>`
           + `<td class="num">${M(N2(adjs.reduce((s,iv)=>s+iv.amt,0)))}</td>`
           + `<td class="num">${M(N2(adjs.reduce((s,iv)=>s+adjOf(iv).newAmt,0)))}</td>`
-          + `<td class="num">${SIG(N2(adjs.reduce((s,iv)=>s+N2(adjOf(iv).newAmt-iv.amt),0)))}</td><td colspan="4"></td></tr>`
-      :EMPTYROW(thCount(DIFF_THEAD), '该项目无调整，原始表与调整后表一致', '无需处理')}
-    </tbody></table></div>`:
-    `<div class="tw"><table class="dt"><thead>${head}</thead><tbody>${body+sumRow+totRow}</tbody></table></div>`}
+          + `<td class="num">${SIG(N2(adjs.reduce((s,iv)=>s+N2(adjOf(iv).newAmt-iv.amt),0)))}</td><td colspan="4"></td></tr>`]
+      :[],
+      empty:EMPTYROW(thCount(DIFF_THEAD), '该项目无调整，原始表与调整后表一致', '无需处理')})}</div>`:
+    `<div class="tw">${TBL({head,rows:body,sum:sumRow+totRow})}</div>`}
     <div class="bd">
       <div class="tip" style="margin:0"><b>列结构说明：</b>外租分「<b>零租 / 包月</b>」两种计费方式，且<b>含税、不含税各记一列</b>。入/出库各 5 类 = 主辅材 · 工具 · 劳保 · 周转材料 · 临时设施。表内<b>一个核算月一行</b>；底部「合计」= 各数据列逐列求和，「总求和（本表）」= <b>入库 / 出库 / 机械左 4 列 / 不含税 2 列</b> 四段汇总（跟着<b>当前显示的那批</b>走）。<br><b>视觉分隔：</b>表内按上面那<b>四段</b>加了竖线 —— 入库 ｜ 出库 ｜ 机械左 4 列 ｜ 不含税 2 列；<b>表头 / 数据行 / 合计行 / 总求和行四处对齐</b>。</div>
     </div>
@@ -1125,15 +1125,14 @@ V.m07=()=>{
       <button class="btn" data-act="whReset">重置</button>
       <span class="pill" style="margin-left:auto">${rows.length} 仓 · ${sums(rows,'rows')} 行 · 报资产处</span>
     </div>
-    <div class="tw"><table class="dt" data-sort data-sort-key="m07:warehouses"><thead><tr>${WH_THEAD}</tr></thead><tbody>
-    ${rows.length?pjSort(rows).map(w=>`<tr><td class="fc">${esc(w.name)}</td><td class="num">${w.rows}</td>
+    <div class="tw">${TBL({head:WH_THEAD,key:'m07:warehouses',
+    rows:rows.length?pjSort(rows).map(w=>`<tr><td class="fc">${esc(w.name)}</td><td class="num">${w.rows}</td>
       ${kinds.map(k=>`<td class="num">${M(w[k[0]])}</td>`).join('')}
-      <td class="ctr">${tagOf(balOf(w))}</td></tr>`).join('')
-    + sumRowOf(WH_THEAD, rows, Object.assign({1:[rs=>sums(rs,'rows'),v=>v]},
+      <td class="ctr">${tagOf(balOf(w))}</td></tr>`):[],
+    sum:rows.length?sumRowOf(WH_THEAD, rows, Object.assign({1:[rs=>sums(rs,'rows'),v=>v]},
         ...kinds.map((k,i)=>({[2+i]:[rs=>N2(rs.reduce((a,w)=>a+w[k[0]],0)),M]}))),
-        {cells:{6:`<td class="ctr">${tagOf(totBal)}</td>`}})
-    :EMPTYROW(thCount(WH_THEAD), '<b>'+tmLabel(fWhYm)+'</b> 没有收发结存数据', '换个「核算年月」，或点左上角「抓取 i8」')}
-    </tbody></table></div>
+        {cells:{6:`<td class="ctr">${tagOf(totBal)}</td>`}}):'',
+    empty:EMPTYROW(thCount(WH_THEAD), '<b>'+tmLabel(fWhYm)+'</b> 没有收发结存数据', '换个「核算年月」，或点左上角「抓取 i8」')})}</div>
     <div class="bd"><div class="tip" style="margin:0"><b>交付形态：</b><b>${rows.length}</b> 个分仓库 xlsx ＋ 1 个总表 = <b>${rows.length + 1}</b> 个文件打包 zip；金额按 2 位小数对平（<b>差 1 分也算不平</b>）。</div></div>
   </div>
   <div class="grid2">
@@ -1149,9 +1148,8 @@ V.m07=()=>{
     <div class="bd">
       <!-- ⚠️ 本表【刻意不可排】：applySorts 会把任何含「合计」的行钉到表尾，而这里的合计要【紧贴本类数据行】 -->
       <!-- （⚠️ 上面这句注释里不能写反引号 —— V.m07 返回的是模板字面量，反引号会提前闭合字符串；也不要写 Markdown 的星号强调） -->
-      <table class="dt cond" data-sort-key="m07:kinds"><thead><tr>${EXT_THEAD}</tr></thead><tbody>
-      ${extBlock('焊材')}${extBlock('气体')}
-      </tbody></table>
+      ${TBL({cls:'cond',key:'m07:kinds',sort:false,head:EXT_THEAD,
+      rows:[extBlock('焊材')+extBlock('气体')]})}
       <div class="sm mut" style="margin-top:calc(8px * var(--fscale))">提取口径：气体按<b>白名单精确匹配</b>；焊材按<b>关键词 + 排除子串</b>。「<b>总金额</b>」= 全部月份累计（不随筛选变）；「<b>金额</b>」= 所选月份范围内的金额（走统一年月控件）。各「合计」行<b>紧贴</b>本类数据行。<br><b>结余</b>：${EXT_BAL_NOTE} —— <b>点格即改</b>（粒度 = 类别 × 仓库、不按月）。</div>
     </div></div>
     <div class="card"><h4>输出产物（§5.3.2）</h4><div class="bd">
@@ -1168,8 +1166,8 @@ V.m07=()=>{
     <span class="mut sm">核算月 ${bjMonth(-1)}</span>
     <button class="btn" data-act="bigPick">选择项目（${BIGSET.length} 项 · 可调顺序）</button>
     <button class="btn pri" data-act="bigExport" title="按模板导出：一份（全项目在一张表里 · 20 列 · 三级表头 ＋ 合计行）">按模板导出 Excel</button></span></h4>
-    <div class="tw"><table class="dt" data-sort-key="m07:bigtable" style="min-width:1620px"><thead>${BIG_THEAD}</thead><tbody>
-    ${bigRows(bjMonth(-1)).map((r,ri)=>{
+    <div class="tw">${TBL({head:BIG_THEAD,key:'m07:bigtable',sort:false,sty:'min-width:1620px',headRows:true,
+    rows:bigRows(bjMonth(-1)).map((r,ri)=>{
       const cell=(i,extra)=>{ const c=r.cells[i], f=BIGFMT[i];
         const ttl=c.from?`带入自 ${c.from} 的最近一次录入值（未确认，改一下就转为本月录入）`:`${bjMonth(-1)} 本月手填`;
         const mark=c.from?`<em class="ctag" title="带入自 ${c.from}">↺${c.from.slice(5)}月</em>`:'';
@@ -1187,16 +1185,15 @@ V.m07=()=>{
       ${cell(2)}${cell(3)}
       <td class="num" title="派生（不手填）：按项目取「集采台账结算」额 = 该项目集采合同结算金额之和，只计「纳入台账」的合同（§5.7.1）">${M(r.matC)}</td>
       ${cell(4)}${cell(5)}
-      </tr>`;}).join('')
-    + (()=>{ const rs=bigRows(bjMonth(-1)); if(!rs.length) return EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY, '先去「项目档案」把项目置为「在建」，或点「选择项目」看看候选');
+      </tr>`;}),
+    sum:(()=>{ const rs=bigRows(bjMonth(-1));
         /* 合计行（唯一出口 `sumRowOf`）：列 0-1 合并放标签；列 3-11 / 17 是**行字段**逐列求和；
            列 12 / 15 / 16 / 18 是**手填值（含带入）**逐列求和（与页面同一份 `bigCell` 取数，所见即所算）。 */
         const S=k=>r=>N2(r.reduce((a,x)=>a+x[k],0));
         const SC=i=>r=>N2(r.reduce((a,x)=>{ const v=bigCell(x.wh,bjMonth(-1),i).v; return a+(typeof v==='number'?v:0); },0));
-        return sumRowOf(BIG_THEAD, rs, {3:S('hwc'),4:S('hw'),5:S('qtc'),6:S('qt'),7:S('rentC'),8:S('rent'),
-          9:S('leaseC'),10:S('lease'),11:S('totC'),12:SC(1),15:SC(2),16:SC(3),17:S('matC'),18:SC(4)}, {leadSpan:2, leadCls:'fl'}); })()
-    }
-    </tbody></table></div>
+        return rs.length?sumRowOf(BIG_THEAD, rs, {3:S('hwc'),4:S('hw'),5:S('qtc'),6:S('qt'),7:S('rentC'),8:S('rent'),
+          9:S('leaseC'),10:S('lease'),11:S('totC'),12:SC(1),15:SC(2),16:SC(3),17:S('matC'),18:SC(4)}, {leadSpan:2, leadCls:'fl'}):''; })(),
+    empty:EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY, '先去「项目档案」把项目置为「在建」，或点「选择项目」看看候选')})}</div>
     <div class="bd"><div class="grid2">
       <div class="tip" style="margin:0"><b>这张表按「项目一行」铺开</b>：项目集合与顺序由上方「选择项目」定（多选、可调顺序，只影响本表）。<br><b>自动带出 4 组</b>（焊材 / 三气 ← 收发结存提取；外租机械 / 设备租赁 ← 过程资料机械）、<b>自动算 4 列</b>（合计 / 使用率 / 产值完成率 / 主材累计）、<b>手填 6 列</b>（开工时间 / 机械费测算 / 合同价 / 产值累计 / 工程用油 / 备注）。
       <details style="margin-top:calc(5px * var(--fscale))"><summary style="cursor:pointer" class="mut sm">逐列口径（点开查看）</summary>

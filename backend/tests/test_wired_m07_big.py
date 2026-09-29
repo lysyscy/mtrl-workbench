@@ -163,8 +163,13 @@ def test_大表零行时给后端那句空态而不是只剩三级表头():
        「在建」项目，未选题**照样有行** ⇒ 后端那句原文（「还没勾项目 —— 点上方「选题」挑几个」）
        与这条口径**不符**（会把人指去点一个"点了也不会变"的按钮）⇒ 同批改准。
     """
-    assert "if(!rs.length) return EMPTYROW(thCols(BIG_THEAD)" in SHELL, \
-        "大表 0 行时没给空态（只剩三级表头 = 用户以为页面坏了）"
+    # ⭐ 2026-09-29（`TAIL-64` P2③）：表外壳抽进统一件 `TBL` ⇒ 原写法（钉 `if(!rs.length) return EMPTYROW(...)`）
+    #   **当场假红**。⇒ 改钉**意图**（⛔ 别退回钉字面）：空态行**挂在 `TBL` 的 `empty` 通道上** ＋
+    #   跨列数走 `thCols` ＋ 文案取 `BIG_EMPTY`。自证 = `tools/mut/_mut_tbl.py` 的 M6（去掉这处委托 ⇒ 必须红）。
+    assert "empty:EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY," in SHELL, \
+        "大表 0 行时没给空态（只剩三级表头 = 用户以为页面坏了）／跨列数没走 `thCols`／文案没走 `BIG_EMPTY`"
+    assert "TBL({head:BIG_THEAD,key:'m07:bigtable',sort:false,sty:'min-width:1620px',headRows:true," in SHELL, \
+        "大表没走统一出口 `TBL`，或没声明「不可排 ＋ 内联宽度 ＋ 多行表头」（`TAIL-64` P2③）"
     assert "if(!rs.length) return '';" not in SHELL, "大表 0 行又退回**空串**形态"
     assert "EMPTYROW(thCount(BIG_THEAD)" not in SHELL, \
         "大表空态用了 `thCount` —— 它是两行表头，`thCount` 会多算列（必须用 `thCols`）"

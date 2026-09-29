@@ -158,7 +158,6 @@ m07 60c67bda  # 原型: <无此行>｜壳:    键仍是**仓库名**（§2.7.4�
 
 # ⭐ 2026-09-27 新增登记 11 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
-m07 987df275  # 原型:     :`<tr><td colspan="${thCount(WH_THEAD)}" class｜壳:     :EMPTYROW(thCount(WH_THEAD), '<b>'+tmLabel(fWh
 m08 33eb1000  # 原型:       :`<tr><td colspan="${thCount(INV_THEAD)}" cl｜壳:       :EMPTYROW(thCount(INV_THEAD), '当前筛选条件下没有库存单据
 m09 8446349c  # 原型:       :[`<tr><td colspan="${thCount(AWF_THEAD)}" c｜壳:       :[EMPTYROW(thCount(AWF_THEAD), '<b>'+tmLabel
 m12 ccfa5b35  # 原型:     ${(!vis.length&&!dfNewOn)?`<tr><td colspan="${｜壳:     ${(!vis.length&&!dfNewOn)?EMPTYROW(thCount(DF_
@@ -357,19 +356,11 @@ m06 6eb69377  # 原型:       <div class="tb2 ${procTab===0?'on':''}" data｜壳
 m06 9d68ac61  # 原型:       <div class="tb2 ${procTab===1?'on':''}" data｜壳:       <div class="tb2 ${procTab===0?'on':''}" data
 m06 1b1a6f6f  # 原型:       <div class="tb2 ${procTab===2?'on':''}" data｜壳:       <div class="tb2 ${procTab===1?'on':''}" data
 m06 1c1cf844  # 原型:     </div>｜壳:       <div class="tb2 ${procTab===2?'on':''}" data
-m06 dd943e1c  # 原型:     ${procTab===2?`<div class="tw"><table class="d｜壳:     </div>
-m06 6f21bf1a  # 原型:       ${adjs.length?adjs.map(iv=>{const a=adjOf(iv｜壳:     ${procTab===2?`<div class="tw"><table class="d
-m06 613f1ee6  # 原型:         <td class="num">${M(iv.amt)}</td><td class｜壳:       ${adjs.length?adjs.map(iv=>{const a=adjOf(iv
 m06 697828ee  # 原型:         <td class="ctr"><span class="link" data-ac｜壳:         <td class="sm">${esc(a.remark)}</td><td cl
 m06 e0a70c95  # 原型:         /* ⭐ 差异表也在数据列下方加合计（用户口径：表①②③都加）—— 可求和的只有「原｜壳:         <td class="ctr"><span class="link" data-ac
 m06 0b37ebfe  # 原型:         + `<tr class="sumrow" style="background:va｜壳:         /* ⭐ 差异表也在数据列下方加合计（用户口径：表①②③都加）—— 可求和的只有「原
 m06 8065d250  # 原型:           + `<td class="num">${M(N2(adjs.reduce((s｜壳:         + `<tr class="sumrow" style="background:va
 m06 f3f9a977  # 原型:           + `<td class="num">${M(N2(adjs.reduce((s｜壳:           + `<td class="num">${M(N2(adjs.reduce((s
-m06 908d9c15  # 原型:           + `<td class="num">${SIG(N2(adjs.reduce(｜壳:           + `<td class="num">${M(N2(adjs.reduce((s
-m06 6aa3dcaf  # 原型:       :`<tr><td colspan="${thCount(DIFF_THEAD)}" c｜壳:           + `<td class="num">${SIG(N2(adjs.reduce(
-m06 af0c2d05  # 原型:     </tbody></table></div>`:｜壳:       :EMPTYROW(thCount(DIFF_THEAD), '该项目无调整，原始表与调
-m06 d750fc81  # 原型:     `<div class="tw"><table class="dt"><thead>${he｜壳:     </tbody></table></div>`:
-m06 069108da  # 原型:     <div class="bd">｜壳:     `<div class="tw"><table class="dt"><thead>${he
 m06 bc90d5f7  # 原型:       <div class="tip" style="margin:0"><b>列结构说明：<｜壳:     <div class="bd">
 m06 138c8943  # 原型:     </div>｜壳:       <div class="tip" style="margin:0"><b>列结构说明：<
 m06 c657c35e  # 原型:   </div>`;｜壳:     </div>
@@ -829,13 +820,11 @@ m06 b09bee40  # 原型:         <td class="sm">${esc(a.remark)}</td><td cl｜壳
 
 # ⭐ 2026-09-29 新增登记 1 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
-m07 611eed66  # 原型:     + (()=>{ const rs=bigRows(bjMonth(-1)); if(!rs｜壳:     + (()=>{ const rs=bigRows(bjMonth(-1)); if(!rs
 
 # ⭐ 2026-09-29 新增登记 3 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
 m07 02966b32  # 原型:       return `<tr><td class="fc">${ri+1}</td>｜壳:       return `<tr><td class="fl fc">${ri+1}</td>
 m07 86ba22d4  # 原型:       <td class="sm" title="${esc(r.wh)}"><div sty｜壳:       <td class="fl sm" title="${esc(r.wh)}"><div 
-m07 1eb74a5f  # 原型:           9:S('leaseC'),10:S('lease'),11:S('totC')｜壳:           9:S('leaseC'),10:S('lease'),11:S('totC')
 
 # ⭐ 2026-09-29 新增登记 1 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
@@ -864,3 +853,35 @@ home 47fd7e2b  # 原型:   return `｜壳:      保留：归属待指定 / 付�
 # ⭐ 2026-09-29 新增登记 1 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
 m02 74ed3c2b  # 原型:         '<tr><td class="fc">2026-09-11 07:00:00</t｜壳:         '<tr><td class="fc">2026-09-11 07:00:00</t
+
+# ⭐ 2026-09-29 新增登记 8 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+# ⚠️ 这 8 条是**「结构性错位对」的换号**，⛔ 别当成"功能差异"读：
+#   壳的 `V.m06` 比原型**多 1 行** —— 壳在卡头加过「批量导出（先选项目）」那块**多选面板**（`procExpPjPanel()`，
+#   原型里没有 ⇒ 属**有意差异**，另有登记）⇒ 从那一行起两侧**逐行对位整体错开 1 行**，下面这几对都是**错位**看出来的。
+#   ⭐ 本次（`TAIL-64` P2② `m06`）把**差异表 / 主表的表外壳**改走统一出口 `TBL`（壳 ＋ 原型**同批同改**）
+#   ⇒ 本区段的错位对**指纹随之换号**，而**错位这件事的性质一字未改**（同 `m02` P2① 的做法）。
+#   ⛔ 要看 `m06` 的**真实差异**，请直接对读两侧 `V.m06` 全文，别读这些行。
+
+m06 bef311c2  # 原型:     ${procTab===2?`<div class="tw">${TBL({head:DIF｜壳:     </div>
+m06 b2fc4e25  # 原型:       rows:adjs.length?[adjs.map(iv=>{const a=adjO｜壳:     ${procTab===2?`<div class="tw">${TBL({head:DIF
+m06 d7036a8c  # 原型:         <td class="num">${M(iv.amt)}</td><td class｜壳:       rows:adjs.length?[adjs.map(iv=>{const a=adjO
+m06 58990604  # 原型:           + `<td class="num">${SIG(N2(adjs.reduce(｜壳:           + `<td class="num">${M(N2(adjs.reduce((s
+m06 d93129c0  # 原型:       :[],｜壳:           + `<td class="num">${SIG(N2(adjs.reduce(
+m06 8a0dae2e  # 原型:       empty:`<tr><td colspan="${thCount(DIFF_THEAD｜壳:       :[],
+m06 40ca7db0  # 原型:     `<div class="tw">${TBL({head,rows:body,sum:sum｜壳:       empty:EMPTYROW(thCount(DIFF_THEAD), '该项目无调整，
+m06 df7a063d  # 原型:     <div class="bd">｜壳:     `<div class="tw">${TBL({head,rows:body,sum:sum
+
+# ⭐ 2026-09-29 新增登记 5 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+# ⚠️ 这 5 条 = `TAIL-64` P2③（`m07` 三张表的表外壳走统一出口 `TBL`）之后的结果，逐条审过：
+#   · **前 4 条是"换号"** —— 它们守的是**壳侧早就有意偏离**（收发结存空态行 / 大表合计行多带 `leadCls:'fl'`）
+#     与**结构错位**；表外壳抽进 `TBL` 后这些行的**写法变了** ⇒ 指纹换号，而**偏离本身一字未改**
+#     （同 `m02` P2① / `m06` P2② 的做法）。
+#   · **第 5 条（`9b4c7148`）是新增** —— 壳侧把空态行挂在 `TBL` 的 `empty` 通道上；原型侧**不给 `empty`**
+#     （空表就画空表）。⭐ 这是壳 2026-09-29 `A5` 修掉的那个真缺陷（0 行时只剩三级表头）⇒ 属**有意偏离**。
+#   ⛔ 要看 `m07` 的真实差异，请直接对读两侧 `V.m07` 全文，别读这些行。
+
+m07 2d21a4a9  # 原型:     empty:`<tr><td colspan="${thCount(WH_THEAD)}" ｜壳:     empty:EMPTYROW(thCount(WH_THEAD), '<b>'+tmLabe
+m07 8b8767c1  # 原型:     sum:(()=>{ const rs=bigRows(bjMonth(-1)); if(!｜壳:     sum:(()=>{ const rs=bigRows(bjMonth(-1));
+m07 7bfdb1f4  # 原型:         return sumRowOf(BIG_THEAD, rs, {3:S('hwc')｜壳:         return rs.length?sumRowOf(BIG_THEAD, rs, {
+m07 15a7a78c  # 原型:           9:S('leaseC'),10:S('lease'),11:S('totC')｜壳:           9:S('leaseC'),10:S('lease'),11:S('totC')
+m07 9b4c7148  # 原型:     })}</div>｜壳:     empty:EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY, '

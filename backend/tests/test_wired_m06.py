@@ -18,7 +18,7 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
+from tests.shell_src import SHELL, with_kernel, with_tbl  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67` · `with_tbl`：`TAIL-64`）
 ROUTER = (ROOT / "backend" / "app" / "mod06_proc" / "router.py").read_text(encoding="utf-8")
 
 
@@ -280,6 +280,15 @@ def test_合计行格数由表头派生():
     assert "const sumRowOf=(thead,rows,sums,opt={})=>" in SHELL
     assert "const n=thCols(thead)" in SHELL, \
         "合计行的格数不再由表头派生 ⇒「跨列数 = 表头列数」这条保证没了"
+    # ⭐ 2026-09-29（`TAIL-64` P2②）：这两张表（**差异表** / **主表 表①·表②**）的**表外壳**也走统一出口
+    #   `TBL`。钉**意图**（⛔ 不钉"切片里必须有 `<table`" —— 通用件一抽就假红，同 P0/P1b 那两次教训）：
+    #   ① 切片**两处**都委托 `TBL`；② `TBL` 内核真把 rows 拼进 `tbody`（两段拼起来看）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M3/M4（去掉任一处委托 ⇒ 必须红）。
+    body = _view_body("V.m06")
+    assert "TBL({head:DIFF_THEAD," in body, "差异表的表外壳没走统一出口 `TBL`（`TAIL-64` P2②）"
+    assert "TBL({head,rows:body" in body, "主表（表①/表②）的表外壳没走统一出口 `TBL`（`TAIL-64` P2②）"
+    assert "rows.join('')" in with_tbl(body), \
+        "`TBL` 内核没有把 rows 拼进 `tbody` ⇒ 表被掏空了（判据两段拼接：切片委托 ＋ 内核真做事）"
 
 
 @acc("ACC-RPT-PROC-002", "001-08")
