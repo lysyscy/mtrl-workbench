@@ -17,7 +17,7 @@
 | `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `.workbuddy/plans/开发计划-主文档.md` |
 | `T7a`/`T7b` | **判据覆盖** —— 有登记的能力却没判据兜住（**登记档，不判红**） | `cover_gap.py` |
 | `T8` | ⭐ **已撤项复活** —— 用户裁定取消的东西**不得在代码里长回来** | `audit_common.CANCELLED` |
-| `T9` | ⭐ **纪律的「口径出处」标记** —— `MEMORY.md` §八 每条必须带 `[用户]`/`[交付面]`/`[助手自定]` | `.workbuddy/memory/MEMORY.md` |
+| `T9` | ⭐ **纪律册卫生（两半）** —— ① **口径出处标记**：`MEMORY.md` §八 每条必须带 `[用户]`/`[交付面]`/`[助手自定]`；② ⭐ **注入档里别复述守卫的阈值**（`T13`（行数预算 1700）那种 ⇒ **规则留、数字去**） | `.workbuddy/memory/MEMORY.md` |
 | `T10` | ⭐ **文档读预算** —— 每会话**注入/必读**档超预算（黄 + 登记；治「太长读不完 ⇒ 只 grep ⇒ 没搜到的就丢了」） | `ops/阈值表.md` ＋ `audit_meta.DOC_BUDGETS` |
 | `T11` | ⭐ **建议类报告必须带「待办登记回执」** —— `artifacts/` 里的审计/提案/建议**不许只活在报告里** | `artifacts/*.md` ↔ 计划 §15 |
 | `T12` | ⭐ **文档分层与命名约定** —— `plans/` 只许两份活文档（其余 `归档-` 打头）· `memory/` 日志必须进 `journal/` · 根只许 `README.md` | 根 `README.md` 的四层表 ＋ 本件三张白名单 |
@@ -79,7 +79,7 @@ from audit_drift import (                                         # noqa: E402
 from audit_meta import (                                          # noqa: E402
     HARD_LIMIT, LINE_LIMIT, check_doc_budgets, check_doc_layout, check_file_sizes,
     check_gate_liveness, check_guard_constants, check_plan_process, check_report_receipts,
-    check_rule_origins, check_tail_ledger,
+    check_rule_origins, check_rule_restatements, check_tail_ledger,
 )
 from audit_work import (                                          # noqa: E402
     check_artifacts_and_headers, check_retention, check_scratch_ttl,
@@ -213,6 +213,10 @@ def main() -> int:
     # ⭐ 这条守的是"自定规则静默腐化"—— 当天刚实测到一次：`MEMORY.md §八` 写着
     #    「每轮收尾提交 ＋ 推送」，而用户当天定的是「先不提交，继续攒」，**没尺子看得见**。
     raw += check_rule_origins()
+    # ⭐ `T9` ②（2026-09-29 立 · `TAIL-59` 的量测逼出来的）：**注入档里别复述守卫的阈值** ——
+    #   实测咬人的样子 = `MEMORY.md` 写着「`T13`（行数预算 1700）」而真源已 1800，**没有尺子看得见**。
+    #   ⚠️ 只查**注入档**（计划/归档里"历史叙事中的旧数字"是**对的留痕**，改了反而是篡改历史）。
+    raw += check_rule_restatements()
     # `T10`/`T11`（2026-09-21 立 · 用户：「文档太长了你也读不完 ⇒ 容易过期」）：
     #   `T10` = **文档读预算**（每会话注入/必读档超预算 ⇒ 黄 + 登记）；
     #   `T11` = **建议类报告必须带「待办登记回执」**（⇒ 报告里的建议不会烂在报告里）。
