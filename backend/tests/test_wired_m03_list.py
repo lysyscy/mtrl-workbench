@@ -69,7 +69,14 @@ def test_壳里列表页骨架齐备且表头18列():
     ⚠️ 旧页的「指标区」那一段本就**是空的**（MOD-03 这页没有 KPI）⇒ 新壳直接不渲染，不算丢。
     """
     assert '<details class="tip">' in SHELL, "口径说明段没了"
-    assert '<div class="fbar">' in SHELL, "筛选栏没了"
+    # ⭐ 2026-09-30（`TAIL-64` P4-b）：筛选栏的**外壳**已收进统一出口 `FBAR`
+    #   ⇒ 原先把 `<div class="fbar">` 钉死就**假红**了（那串现在**只在 `FBAR` 内核里**）。
+    #   ⛔ 别退回钉字面 —— 那等于宣布"以后不许抽通用件"（与 `TAIL-64` 相反）。
+    #   现在断的是**意图**："这一页的筛选栏还在"（它那几个筛选控件点名在）＋ **外壳走了出口**。
+    #   ⚠️ 全站"有没有漏掉没换的裸外壳"由 `test_ux_pages.py::test_筛选栏外壳全站都走统一出口` 一次看。
+    assert 'id="fCat"' in SHELL and 'data-act="filterReset"' in SHELL, \
+        "筛选栏没了（分类 / 审批 / 付款状态那几个控件 ＋「重置」）"
+    assert "FBAR({body:" in SHELL, "筛选栏的外壳没走统一出口 `FBAR`（`TAIL-64` P4-b）"
     # ⭐ 2026-09-29（`TAIL-64` P3）：表外壳走统一出口 `TBL` ⇒ 原先把整串
     #   `<div class="tw"><table class="dt" data-sort data-sort-key="m03:notices">` 钉死就假红了
     #   （那串搬进 `TBL` 内核后切片里不再出现）。⛔ 别退回钉字面（等于宣布"以后不许抽通用件"）。

@@ -121,6 +121,14 @@ const TBL=({head='',rows=[],empty='',sum='',key='',cls='',sort=true,sty='',headR
     +rows.join('')+(rows.length?'':empty)+sum+'</tbody></table>';
 };
 
+/* ⭐ **筛选栏件**（`TAIL-64` P4-a · 2026-09-30）—— 一根筛选栏的**外壳**统一由它渲染（`fbar` 那层）。
+ * 契约：`FBAR({cls, sty, body})` ⇒ 返回 `<div class="fbar [cls]"[ style="…"]>body</div>`。
+ * ⚠️ 本批（P4-a）**只收外壳**：栏里的控件（`.fi` / 按钮 / 汇总）留在调用点**原地** —— 与 `TBL` 的 P0 同款，
+ *    先证明「外壳换写法、控件留在原地」能做到**行数与渲染字节都不变**；⛔ 别顺手把控件也挪进来。
+ * `cls` 的合法取值 = `.fbar` 的变体（`pane` / `strip` / `strip mb6` / `plate`），声明在壳的样式块里。
+ * 自证 = 变异脚本（去掉委托 / 掏空内核 ⇒ 对应判据必须红）。 */
+const FBAR=({cls='',sty='',body=''})=>'<div class="fbar'+(cls?' '+cls:'')+'"'+(sty?' style="'+sty+'"':'')+'>'+body+'</div>';
+
 const thCount=h=>(String(h).match(/<th\b/g)||[]).length;   /* 一张表有几列 —— 从表头数出来，不写死 */
 /* ⚠️ **表头有几「列」**（不是有几个 `<th>`）—— **两行表头**时两者不等：月度会大表 `<th>` 共 23 个，而**列数是 20**
    （`rowspan` / `colspan` 各只占 1 个 `<th>`）⇒ `thCount` 会把列数**多算**、合计行就会多出几个空 `<td>`，

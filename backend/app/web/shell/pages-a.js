@@ -253,7 +253,7 @@ const ledPjPanel=()=>projPanel({list:ledProjs,selected:()=>[ledCur()],pickAct:'l
 /* 导出用的「项目」面板 —— **多选**（不走 `single`；面板自带「全选 / 清空」）。候选 = 台账候选（`ledProjs`，**键 = 仓库名**） */
 const ledExpPjPanel=()=>projPanel({list:ledProjs,selected:()=>ledExpPjs,allAct:'ledExpPjAll',noneAct:'ledExpPjNone',pickAct:'ledExpPjPick',meta:PROJ_META_KEY});
 /* 导出展开区（渲染在 `.tw` **之外** ⇒ 其内的浮层面板不会被裁） */
-const ledExpStrip=()=>`<div class="fbar strip">
+const ledExpStrip=()=>`${FBAR({cls:'strip',body:`
       <div class="fi"><span class="pill" style="margin:0" title="导出 = 每个项目一个工作簿，工作簿里 3 个工作表：辅材欠款 / 机械欠款 / 特殊费用月报表">① 逐月台账</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
         <button class="btn" data-act="ledExpPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"><span>${ledExpPjs.length?`已选 ${ledExpPjs.length} 个项目`:'请选择项目'}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
@@ -273,7 +273,7 @@ const ledExpStrip=()=>`<div class="fbar strip">
         <button class="btn sm${DEBTPICK.length?' pri':' gost'}" data-act="debtPick" title="「导出总欠款」包含哪些项目、按什么顺序（行序 = 你在这里排的）；空 = 全部项目。⚠️ 与上面①那个项目不是同一个东西（那个是导出台账用的）">选择项目（${DEBTPICK.length?`已选 ${DEBTPICK.length} 项`:'全部'}）</button>
         <button class="btn sm" data-act="debtExpAll" title="每个项目一行 · 行序 = 左边「选择项目」排的（空 = 全部项目）">导出总欠款</button>
       </div>
-    </div>`;
+    `})}`;
 /* —— 「录入期初占位行」的**项目**共用面板（单选）—— 2026-09-13 增行模式新增（第 9 个 `projPanel` 调用点）——
    ⭐ 它原来在**弹窗**里只能用原生 `<select>`（弹窗主体是滚动容器、浮层会被裁）；
       弹窗取消后改到**栏内展开区**、且整条展开区渲染在 `.tw` **之外** ⇒ 浮层不会被裁
@@ -282,7 +282,7 @@ const ledExpStrip=()=>`<div class="fbar strip">
 const lgPjPanel=()=>projPanel({list:()=>pjKeysOfRows(lgPjList()),selected:()=>[lgPjName],pickAct:'lgPjPick',meta:PROJ_META_KEY,single:true});
 /* 「期初占位行」的**增行展开区**（渲染在表格 `.tw` **之外**的上方条带；只在 `lgCat` 对应的那一栏出现）
    ⚠️ 只在该分类对应的一栏渲染 ⇒ **不会出现重复 id**（`lgCat`/`lgS`/`lgP`/`lgR`）。 */
-const lgStrip=()=>`<div class="fbar strip mb6">
+const lgStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><span class="pill" style="margin:0" title="期初占位行 = 本栏台账的第 1 行（起点）；保存后按其「分类」并入上方欠款">期初占位行</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         <button class="btn" data-act="lgPjToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"><span>${esc(pjLabel(lgPjName))}${pjArcMark(pjRowOf(lgPjName))}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
@@ -296,7 +296,7 @@ const lgStrip=()=>`<div class="fbar strip mb6">
       <button class="btn" data-act="lgCancel" title="丢弃这条期初录入（不入库）">取消</button>
       <span class="pill" style="margin-left:auto">${esc(ledCutLabel(lgCut))} ｜ 保存后为本栏<b>第 1 行</b></span>
       <div class="mut sm" style="flex-basis:100%">⭐ 本行两个金额是<b>手填的静止值</b>：实付请走<b>「手动新增通知书」</b>（统计结算恒 0）—— 它会自动冲减欠款合计与项目池，⛔ 但**不会**改本行这两个数（要它跟着反映 ⇒ 手工改「统计付款金额」）。⚠️ <b>两者成对使用</b>，分类与项目要和通知书一致，否则冲错池子；只加通知书不填本行 ⇒ 本栏会算成<b>负数</b>。</div>
-    </div>`;
+    `})}`;
 /* 造行：期初行 + 从「期初次月」到「最近一个有数据的月」逐月一行（空月也出行） */
 const ledRows=(sc,proj)=>{ const side=m05Side(sc); if(!side) return [];
   return (side.rows||[]).map(r=>({ ym:r.month, open:!!r.is_opening,
@@ -384,4 +384,5 @@ const pstData=()=>{ const st=M05.stats||{};
 };
 const PJ_TRAIL=[];
 /* MOD-01 筛选状态（R4：改动即时生效、无「应用」按钮；默认「在建」= §2.7 口径） */
-let fPj={status:'在建',type:'全部',q:''};
+let fPj={status:'在建',type:'全部',q:''};
+

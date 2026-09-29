@@ -52,14 +52,14 @@ const lgSteps = (steps, at) => `<div class="steps">` + steps.map((t, i) =>
 /* 选文件那一行（三个导入页同款）——⚠️ **文件对象存状态里**（`render()` 会重建 input ⇒ 只靠 input 会丢）；
    ⇒ 「解析」按钮的可用性看**状态里那个文件**，⛔ 不看 input 的 `files`（那正是"选完文件按钮还是灰的"的来源）。 */
 function lgPick(id, pickAct, parseAct, file, tip) {
-  return `<div class="fbar pane">`
+  return `${FBAR({cls:'pane',body:``
     + `<div class="fi"><label>选文件（.xlsx）</label>`
     + `<input class="inp" type="file" id="${esc(id)}" accept=".xlsx" data-act="${esc(pickAct)}"></div>`
     + `<div class="fi"><label>&nbsp;</label>`
     + `<button class="btn pri" data-act="${esc(parseAct)}"${file ? '' : ' disabled'} title="${file?'解析这个文件（一个字节都不写库）':'还没选文件 —— 选完才能解析'}">解析并预览（不写库）</button></div>`
     + `<div class="fi"><label>&nbsp;</label><span class="mut sm">${file
       ? `已选：<b class="fc">${esc(file.name)}</b>（${Math.max(1, Math.round(file.size / 1024))} KB）`
-      : esc(tip || '只读第一个工作表')}</span></div></div>`;
+      : esc(tip || '只读第一个工作表')}</span></div>`})}`;
 }
 /* 空态行（跨列数由调用方给）。
    ⭐ 2026-09-27（`TAIL-117` 批次 6）：**本件已改成"薄转发"** —— 空态行真正的主人 =
@@ -429,7 +429,7 @@ V.imp = () => {
         —— 两处毛病：①「项目」是**自造的原生下拉**；②**截止核算月被画给了所有域**，而集采/付款计划的
         落库根本不读它（`ACT.impCommit` 给的上下文包里它只是空转）⇒ 用户填了**不生效**（死控件）。 */
   const ctxBar = (IMP.hasPj || IMP.hasYm || IMP.hasCut)
-    ? `<div class="fbar pane">
+    ? `${FBAR({cls:'pane',body:`
       ${IMP.hasPj ? (IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
         <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
         <button class="btn" data-act="impPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))" title="${IMP.wrap ? esc('仓库名（§2.7.4）：' + IMP.wrap) : ''}"><span>${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
@@ -452,7 +452,7 @@ V.imp = () => {
         <span class="mut sm">格式 <b>YYYY-MM</b>（如 <code>2026-08</code>；写成别的样子会<b>被拒</b>）。
           这个月 <b>及以前</b>算历史段（用这份表，不再从 i8 取）；<b>之后</b>才走 i8 抓取。
           留空 = 取本批里最大的核算月。换项目会自动换成<b>那个项目</b>已设的值。</span></div>` : ''}
-      </div>` : '';
+      `})}` : '';
   /* ⛔ **该域要选项目、而还没选** ⇒ ④ 置灰（见下面 `prevCard` 里那个按钮）—— 「默认值不诱导」的落点：
      系统不再替用户挑第一个项目（`IMP.wrap` 初值 = 空），但也不能让人**点下去才发现没选**。 */
   const needPj = IMP.hasPj && !IMP.wrap;
@@ -475,10 +475,10 @@ V.imp = () => {
      ⛔ 别再按字段名挑颜色；将来真要分语气走 `B` 案（域自报 `note_kind`）。判据 = `tests/test_ux_colors.py`。 */
   const head = `<div class="card"><h4>数据导入<span class="sp"><span class="mut sm">一次导一个域的一种表 ·
     落库前一个字节都不写库</span></span></h4><div class="bd">${lgSteps(IMP_STEPS, IMP.step)}
-    <div class="fbar pane">
+    ${FBAR({cls:'pane',body:`
       <div class="fi"><label>导入哪个域</label>
         <select class="inp" data-act="impDomain">${doms || '<option value="">（后端还没挂任何域）</option>'}</select></div>
-      <div class="fi"><label>&nbsp;</label><span class="mut sm">${sch ? esc(sch.title) : '—'}</span></div></div>
+      <div class="fi"><label>&nbsp;</label><span class="mut sm">${sch ? esc(sch.title) : '—'}</span></div>`})}
     ${ctxBar}
     ${sch && sch.note ? `<div class="tip">${lgMd(sch.note)}</div>` : ''}
     ${sch && sch.keep_note ? `<div class="tip">${lgMd(sch.keep_note)}</div>` : ''}

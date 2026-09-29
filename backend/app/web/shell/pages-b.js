@@ -50,14 +50,14 @@ let mechWh='';
 /* ⭐ 同上：「录机械费」弹窗当前在填的**核算期**（手动填 ⇒ 换核算期要重开弹窗重载该月现值） */
 let mechYm='';
 const procExpPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>procExpPjs,allAct:'procExpPjAll',noneAct:'procExpPjNone',pickAct:'procExpPjPick',meta:PROJ_META_KEY});
-const procExpStrip=()=>`<div class="fbar strip">
+const procExpStrip=()=>`${FBAR({cls:'strip',body:`
       <div class="fi"><span class="pill" style="margin:0" title="按 17 列模板导出，每项目一份，报分公司工程科">按模板导出</span></div>
       <div class="fi"><span class="mut sm" style="margin:0">项目范围在<b>卡头那个按钮</b>里选（点它开多选面板）；已选 <b>${procExpPjs.length}</b> 个项目</span></div>
       <div class="fi" style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale))">
         <button class="btn sm pri" data-act="procExpOk" ${procExpPjs.length?'':'disabled'} title="${procExpPjs.length?'按所选项目导出（每项目一份）':'请先选项目'}">导出</button>
         <button class="btn sm" data-act="procExpCancel">取消</button></div>
       <div class="mut sm" style="flex-basis:100%">导出形态：<b>每项目一份</b>（17 列模板 · 报分公司工程科）；选 <b>2 个以上</b> ⇒ 打成一个 <b>zip</b>。文件名含项目展示名与当前年月（§7.1）。</div>
-    </div>`;
+    `})}`;
 const bigCands = () => pjKeysOfRows(pjNoShell().filter(p=>p.status==='在建'));   /* 候选 = 在建 · 非壳（实时算） */
 let BIGSET = [];   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/big` 的 `selected` 原地填充（行序 = 大表自己的顺序；未选择项目时后端给「全部候选」，与原型同款） */
 let BIGDRAFT = null;         /* 选择项目弹窗的**草稿**（「确定」前的临时顺序） */
@@ -280,7 +280,7 @@ let jcNewOn=false;                 /* 增行态开关（取代原弹窗的"是�
 /* 展开态在 `PJ_OPEN`（key='jcNPj'） */               /* 「项目」共用面板（**单选** —— 第 10 个 `projPanel` 调用点）是否展开 */
 let jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',pj:''};
 const jcNPjPanel=()=>projPanel({list:()=>pjKeysOfRows(ntPjList()),selected:()=>[jcND.pj],pickAct:'jcNPjPick',meta:PROJ_META_KEY,single:true});
-const jcNewStrip=()=>`<div class="fbar strip mb6">
+const jcNewStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><span class="pill" style="margin:0" title="建一张集采合同主表行（两态默认「纳入台账」，与抓取行一致）">手工新增合同</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         <button class="btn" data-act="jcNPjToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"><span>${esc(pjLabel(jcND.pj)||'请选择项目')}${pjArcMark(pjRowOf(jcND.pj))}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
@@ -296,7 +296,7 @@ const jcNewStrip=()=>`<div class="fbar strip mb6">
       <button class="btn pri" data-act="jcRowSave" title="建档（两态默认「纳入台账」，与抓取行一致）">保存</button>
       <button class="btn" data-act="jcRowCancel" title="丢弃这条录入（不入库）">取消</button>
       <span class="pill" style="margin-left:auto">发票金额 / 贸易公司发票金额 / 付款金额 = <b>各自子表合计</b>（建档后在各列右侧「子表」里录）</span>
-    </div>`;
+    `})}`;
 const jcVisible=()=>JCs.filter(j=>(fJc.tag==='全部'||j.tag===fJc.tag)
   &&(fJc.arch==='全部'||j.arch===fJc.arch)
   &&(!fJc.projs.length||fJc.projs.includes(j.proj))
@@ -306,4 +306,5 @@ const jcVisible=()=>JCs.filter(j=>(fJc.tag==='全部'||j.tag===fJc.tag)
   &&(!fJc.sup.trim()||(j.supplier||'').includes(fJc.sup.trim())));
 const pruneJcPick=()=>{ const vis=new Set(jcVisible().map(j=>j.id)); [...jcPick].forEach(id=>{ if(!vis.has(id)) jcPick.delete(id); }); };
 let busy=false;
-const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;gap:calc(6px * var(--fscale)) calc(12px * var(--fscale));font-size:calc(12px * var(--fscale));margin-bottom:calc(13px * var(--fscale))">${pairs.map(([k,v])=>`<div class="mut">${k}</div><div>${v}</div>`).join('')}</div>`;
+const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;gap:calc(6px * var(--fscale)) calc(12px * var(--fscale));font-size:calc(12px * var(--fscale));margin-bottom:calc(13px * var(--fscale))">${pairs.map(([k,v])=>`<div class="mut">${k}</div><div>${v}</div>`).join('')}</div>`;
+

@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 
 from tests.acc_plugin import acc
-from tests.shell_src import SHELL
+from tests.shell_src import SHELL, fbar_kernel, with_fbar
 
 #: ⭐ `P1-a`（2026-09-28 · 用户选 `A`）：**展开区的外框/间距只走变体类**，这四条内联整串不许回来。
 EXPAND_INLINE_GONE: tuple[str, ...] = (
@@ -637,3 +637,60 @@ def test_弹窗里的选择表与影响行表也走统一出口_TBL():
         "「选项目上大表」那张选择表没走统一出口 `TBL`，或没声明「刻意不可排」（`sort:false`）—— `TAIL-64` A′"
     assert "TBL({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',rows:[rows]})" in SHELL, \
         "「删除付款计划行确认」里那张影响行表没走统一出口 `TBL`（`TAIL-64` A′）"
+
+
+@acc()
+def test_筛选栏外壳只走统一出口_FBAR():
+    """⭐ `TAIL-64` **P4-a**（2026-09-30）：一根筛选栏的**外壳**（`fbar` 那层）走统一出口 `FBAR`。
+
+    ⚠️ **为什么必须有一条守它**：外壳换写法**渲染字节一字不变** ⇒
+       · 页面看起来一模一样（人眼看不出）；
+       · `U1` 是**原型 ⇄ 壳逐行比** —— 本批是**两侧同批同句**改的 ⇒ 它只会说"一致"，
+         **两侧一起写错也一样"一致"**；
+       · 真机看到的是**渲染结果**，更看不出源码是怎么拼的。
+       ⇒ 只有"把它改坏 ⇒ 本判据必须红"这一条，能证明这处**真的委托出去了、而且内核真把控件拼进了栏里**。
+    ⚠️ **本条钉的是 `m01` 那一处"试点"**（`P4-a`：先证明「外壳换写法、控件留在原地」能做到 Δ0）。
+       ⭐ **`P4-b` 已把它铺到全站**（2026-09-30）⇒ **"有没有漏网的裸外壳"改由一条扫描式判据看**：
+       `test_筛选栏外壳全站都走统一出口`（⛔ 别把 22 处的字面逐个抄进来 —— 那是维护不起的第二份名单）。
+    ⚠️ **判法 = 两段拼起来看**（照 `shell_src.with_tbl()` 那套 doctrine）：切片**委托** `FBAR`
+       ＋ **内核里**真把 `body` 拼进 `fbar` 那层。⛔ 别退回"切片里必须有 `<div class="fbar">` 字面"
+       —— 那等于宣布以后**不许抽通用件**（与 `TAIL-64` 相反）。
+    自证 = `tools/mut/_mut_fbar.py`：M1 去掉委托 / M2 掏空内核 ⇒ 本判据必须红。
+    """
+    i = SHELL.find("\nV.m01=()=>{")
+    j = SHELL.find("\n};", i) if i >= 0 else -1
+    m01 = SHELL[i:j] if i >= 0 and j > i else ""
+    assert m01, "壳里找不到 `V.m01` 切片"
+    assert "FBAR({body:" in m01, "`m01` 的筛选栏外壳没走统一出口 `FBAR`（`TAIL-64` P4-a）"
+    two = with_fbar(m01)
+    assert '<div class="fbar' in two, \
+        "`FBAR` 内核不再渲染 `fbar` 那一层 ⇒ 筛选栏会**没有外壳**（边框 / 底色 / 换行全丢）"
+    assert "'>'+body+'</div>'" in two, \
+        "`FBAR` 内核没有把 `body` 拼进栏内 ⇒ **栏里的筛选控件会全部消失**（外壳还在、里面是空的）"
+    # ⚠️ 墓碑：本页**不许再裸写**筛选栏外壳。⛔ **先剥块注释再判** —— 注释里会引述旧写法（本仓踩过）。
+    assert '<div class="fbar">' not in _strip_block_comments(m01), \
+        "`m01` 又写回裸的筛选栏外壳了（应委托 `FBAR`：`TAIL-64` P4-a）"
+
+
+@acc()
+def test_筛选栏外壳全站都走统一出口():
+    """⭐ `TAIL-64` **P4-b**（2026-09-30）：**全站**筛选栏的外壳都收进 `FBAR` —— 壳里**不许再裸写** `class="fbar…"`。
+
+    ⚠️ **为什么这条必须存在**：外壳换写法**渲染字节一字不变** ⇒ `U1`（两侧逐行比）／真机／人眼
+       **都看不出**某一处到底换没换 —— 这正是 `P4-a` 那条判据当初要写"⛔ 别把别的页写进来"的原因
+       （它钉不了 22 处）。本批铺开之后 ⇒ **一条扫描式判据**就能把漏网的裸外壳当场点出来，
+       ⛔ 不用逐页数、也⛔ 不用把 22 处字面抄成第二份名单（那种名单必然漂）。
+    ⚠️ **判法**：先**剥块注释**（`FBAR` 自己的说明里就**引述**了 `class="fbar [cls]"` —— 本仓踩过三次），
+       再数 `class="fbar` ⇒ 只许**内核那一处**（`'<div class="fbar'+…`）。
+    ⚠️ **覆盖面 = 合并后的整支壳**（`index.html` ＋ 全部 `shell/*.js`）—— ⛔ 只看 `index.html` 会**整批漏掉**
+       `actions.js` / `legacy.js` / `pages-a.js` / `pages-b.js` 里那 **10 处**（同 `_tbl_scan.py` 的教训）。
+    自证 = `tools/mut/_mut_fbar.py` 的 `M3`（内核不再出 `fbar` 那层）/ `M4`（又裸写一层外壳）必须红。
+    """
+    # ⚠️ **顺序有讲究**：先查**内核**（它一旦坏了，下面那个"数出来 = 0"会**误报成"全站没有裸外壳"**）
+    assert 'class="fbar' in fbar_kernel(), \
+        "`FBAR` 内核不再渲染 `fbar` 那层 ⇒ 筛选栏会**没有外壳**（边框 / 底色 / 换行全丢）"
+    code = _strip_block_comments(SHELL)
+    n = code.count('class="fbar')
+    assert n == 1, (
+        f"全站还有 **{n}** 处筛选栏是**裸写**的外壳（`class=\"fbar…\"` 只该出现在 `FBAR` 内核那 1 处）"
+        " —— 守则 §5.9「同类形态只留一处出口」：把新写的那几处也换成 `${FBAR({…})}`")

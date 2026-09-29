@@ -528,10 +528,10 @@ const ACT={
  fetchDlg:()=>{ const k=fetchKind, m=fetchM, from=m+'-01', to=monthEnd(m);
    const NM={nt:'付款通知书',wh:'收发结存表',iv:'库存单据明细表'}[k]||'付款通知书';
    const apiCode={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
-   const box=`<div class="fbar plate">
+   const box=`${FBAR({cls:'plate',body:`
         <div class="fi"><label>抓取月份</label>${tmBtn('fetchMonth',{scope:'fetch',val:m,modes:['月']})}</div>
         <div class="fi"><label>换算后传给 i8 的入参（只读）</label><div class="inp" style="background:var(--sf2);color:var(--tx2);border-style:dashed;font-family:var(--fm);white-space:nowrap">单据日期 ${from} ~ ${to}</div></div>
-      </div>`;
+      `})}`;
    const foot=`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="fetchNtOk">按 ${m} 抓取</button>`;
    if(k==='nt'){ const hit=NO.filter(n=>n.date>=from&&n.date<=to);
      const okN=hit.filter(ntLive).length, exN=hit.filter(n=>n.excl).length;
@@ -1670,10 +1670,10 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
    modal({title:'录机械费 · 按核算月手录 6 列',wide:true,reopen:()=>ACT.mechOpen(),
      body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">机械 6 列是<b>旁路载体</b>：重抓 i8 / 重导历史<b>都不覆盖</b>它（§5.2.5 ③）。空 ⇒ 0；<b>负数 / 非数字一律拒绝且不写库</b>（判定在后端，原值不变）。<br>
        ⚠️ <b>手录只用于「正式段」</b>（核算月 <b>晚于</b>该项目的<b>截止核算月</b>）⇒ 本表<b>只列可手录的月份</b>；<b>历史段</b>（≤ 截止月）的机械费以<b>过程资料导入</b>的值为准（要改历史值请改 Excel 后重导）。</div>
-       <div class="fbar plate">
+       ${FBAR({cls:'plate',body:`
          <div class="fi"><label>项目</label><select class="inp" id="mechPj" data-act="mechPjPick">${cands.map(k=>`<option value="${esc(k)}"${k===wh?' selected':''}>${esc(k)}</option>`).join('')||'<option value="">（没有候选项目）</option>'}</select></div>
          <span class="mut sm" style="margin:0">一次填<b>一个核算期</b>的 6 列（改核算期 ⇒ 重开并带出该月现值）· 改完点右下「保存」</span>
-         </div>
+         `})}
          <div style="overflow-x:auto">
          <table class="dt cond" style="font-size:calc(11.5px * var(--fscale))">
            <thead><tr><th style="white-space:nowrap">核算期</th>${MECH_LABELS.map(nm=>`<th style="white-space:nowrap">${esc(nm)}</th>`).join('')}</tr></thead>
@@ -1813,12 +1813,12 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
             <thead><tr><th style="white-space:nowrap">核算期</th>${names.map(nm=>`<th style="white-space:nowrap">${esc(nm||'（未命名）')}</th>`).join('')}</tr></thead>
             <tbody>${months.map(m=>`<tr>${ymCell(m)}${names.map((_,i)=>cell(m,i)).join('')}</tr>`).join('')}</tbody>
           </table></div>
-        <div class="fbar plate" style="margin-top:calc(8px * var(--fscale))">
+        ${FBAR({cls:'plate',sty:'margin-top:calc(8px * var(--fscale))',body:`
           <span class="mut sm" style="margin:0">行数可以<b>随时加减</b>（默认 3 行）—— 不够就「＋ 加一行」，多了就「－ 减一行」（⛔ 已填的格子不会被冲掉）</span>
           <span style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale))">
             <button class="btn sm" data-act="awfRowAdd">＋ 加一行</button>
             <button class="btn sm" data-act="awfRowDel">－ 减一行</button></span>
-        </div>`,
+        `})}`,
       footer:`<span class="mut sm" style="align-self:center">空格子<b>不写</b> · 一个非法 ⇒ <b>整批不写</b></span><button class="btn" data-act="closeModal" style="margin-left:auto">取消</button><button class="btn pri" data-act="awfBatchOk">保存</button>`}); },
   awfBatchOk:async ()=>{ const trs=[...document.querySelectorAll('#awfTbl tbody tr')];
     if(!trs.length) return toast('这一屏没有可填的格子');

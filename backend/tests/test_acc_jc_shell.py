@@ -159,7 +159,11 @@ def test_筛选栏控件齐备且项目是第一个():
        而且它在这一页是**多选**（与别的页的单选项目控件**不是一个形态**）⇒ 两件都要钉。
     """
     html = _index()
-    bar = _fn(html, '<div class="fbar">', '${jcNewOn?jcNewStrip()')
+    # ⭐ 2026-09-30（`TAIL-64` P4-b）：原先拿 `<div class="fbar">` 当**切片起点**——而筛选栏的**外壳**
+    #   已收进统一出口 `FBAR`（全站都走 `${FBAR({body:`）⇒ 那个字面**只在内核里**，会切到**别处**去。
+    #   ⇒ 换成**本页稳定且唯一**的锚点（卡头那枚导出的 `data-t`）—— 它在本页筛选栏**之前**，
+    #     所以下面那五件控件与「可多选」都仍在切片内（断的意图一字未改）。
+    bar = _fn(html, 'data-t="集采台账"', '${jcNewOn?jcNewStrip()')
     order = [k for k in ("jcPjToggle", "id=\"fTag\"", "id=\"fArch\"", "id=\"fSup\"", "jcReset")
              if k in bar]
     assert len(order) == 5, f"筛选栏控件不全（缺 {set(['jcPjToggle','fTag','fArch','fSup','jcReset']) - set(order)}）"

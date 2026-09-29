@@ -76,5 +76,30 @@ def with_tbl(act: str) -> str:
     return f"{act}\n{tbl_kernel()}"
 
 
-__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "dl_kernel", "part_paths",
-           "parts_text", "read_shell", "tbl_kernel", "with_kernel", "with_tbl"]
+def fbar_kernel() -> str:
+    """⭐ `TAIL-64` **P4-a**（2026-09-30）：壳里 **`FBAR` 筛选栏件**的源码。
+
+    为什么照 `tbl_kernel()` 再来一个：一根筛选栏的**外壳**（`<div class="fbar …">…</div>` 那一圈）
+    抽进 `FBAR` 之后，「切片里必须有 `<div class="fbar">` 字面」这类**钉源码形态**的判据会**假红**
+    （同 `P0` 实测的那次）。
+    ⇒ ⭐ 正确的判据是**两段拼起来看**：切片**委托** `FBAR` ＋ **内核里**真把 `body` 拼进 `fbar` 那层。
+    ⛔ 别把判据改回「切片里必须有 `<div class="fbar">`」—— 那等于宣布以后**不许抽通用件**。
+
+    ⚠️ 与 `tbl_kernel()` 的取法**不同**：`FBAR` 是**单行**声明 ⇒ 取到**行尾**即可
+       （`tbl_kernel()` 那套「找 `\\n}`」在它身上会一路吃到下一个多行函数，取出一大段无关代码）。
+    """
+    text = read_shell().replace("\r\n", "\n")     # 件的源码是 CRLF ⇒ 归一后再找行尾
+    i = text.find("const FBAR=")
+    if i < 0:
+        return ""
+    j = text.find("\n", i)
+    return text[i:j] if j > i else text[i:]
+
+
+def with_fbar(act: str) -> str:
+    """切片源码 **＋** 它委托的 `FBAR` 内核源码 ⇒ 判据**与结构无关**。"""
+    return f"{act}\n{fbar_kernel()}"
+
+
+__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "dl_kernel", "fbar_kernel", "part_paths",
+           "parts_text", "read_shell", "tbl_kernel", "with_fbar", "with_kernel", "with_tbl"]
