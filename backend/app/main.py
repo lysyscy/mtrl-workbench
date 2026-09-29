@@ -300,7 +300,9 @@ def create_app() -> FastAPI:
     def web_shell() -> FileResponse:
         return FileResponse(_APP_DIR / "web" / "index.html", media_type="text/html")
 
-    # ⭐ **壳的外链件**（`web/shell/*.js`）—— 性能 `P4`② 三刀真拆（2026-09-19）之后，壳的**接线层**在这三件里。
+    # ⭐ **壳的外链件**（`web/shell/*.js`）—— 壳的**接线层**都在这几件里（`P4`② 2026-09-19 起拆 · `P2-a` 2026-09-28 加件）。
+    #    ⚠️ **件清单的唯一出口 = `index.html` 的 `<script src>`**（`tools/audit/shell_source.py` 按它现读）
+    #       ⇒ ⛔ 别在此处写死件数或件名（会随拆件涨，写了必漂）。
     #    ⚠️ 路由名与文件名**必须**是 `/static/shell/<name>.js`：`tools/shell_source.py`（读壳的**唯一出口**）
     #       正是按这个形态反查文件的 ⇒ 换目录 / 换形态要**同批**改那里（否则测试读到的 ≠ 浏览器执行的）。
     #    ⚠️ **逐条显式注册**（⛔ 不用通配 `{name}` 参数）：件数很少、零路径穿越风险；加一件要**同时**改这里

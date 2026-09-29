@@ -44,8 +44,9 @@ _SHELL_SRC_RE = re.compile(r"/static/shell/([\w.\-]+)")
 def part_paths() -> list[Path]:
     """按**文档顺序**列出壳的每一件（`index.html` 永远第一件；后面按 `<script src>` 的出现顺序）。
 
-    ⚠️ 2026-09-24 订正：原文写「此刻没有外链 ⇒ 只有它一件」—— `P4`② 拆件后**已有 5 个外链**
-    （`shell/actions.js` · `legacy.js` · `api.js` · `core.js` · `print-export.js`）⇒ 现为 **6 件**。
+    ⚠️ **别在这里写死件数与件名** —— 唯一口径就是 `index.html` 里的 `<script src>`（本函数照它现读，
+    所以永远与浏览器执行顺序一致）。历史：`P4`②（2026-09-19）· 加 `api.js`（2026-09-24）· `P2-a` 六件（2026-09-28）
+    都改过它；2026-09-24 曾在此写「已有 5 个外链 ⇒ 现为 6 件」，到 2026-09-28 就过期了 —— 那正是本条要防的。
     """
     html = INDEX_HTML.read_text(encoding="utf-8")
     return [INDEX_HTML] + [SHELL_DIR / name for name in _SHELL_SRC_RE.findall(html)]

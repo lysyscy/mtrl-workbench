@@ -11,7 +11,7 @@
 | 15 个模块 → 工程包 → 壳切片归属 | 计划 `§3` ＋ `§0.3` 逐模块状态 |
 | 链路（谁调谁 · 断在哪） | `tools/chain_expected.txt`（`chain_audit` 守，102/102） |
 | 状态与进度 | 计划 `§0` 现状快照（数字由机器核） |
-| 前端壳（唯一前端） | `backend/app/web/`（`index.html` ＋ `shell/{core,actions,legacy,print-export}.js`） |
+| 前端壳（唯一前端） | `backend/app/web/`（`index.html` ＋ `shell/*.js`）—— ⭐ **件清单与加载顺序的唯一出口 = `tools/audit/shell_source.py`**（⚠️ 别在本页抄件名/件数：拆件会长） |
 
 ## 一图（30 秒版）
 
