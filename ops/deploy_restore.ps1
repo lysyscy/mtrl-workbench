@@ -99,11 +99,11 @@ else { Say '   ⚠️ 没有 backend\requirements.txt ⇒ 跳过（⚠️ 目标
 
 # ---- 4) .env：只检查 ----
 Step '4) .env（⛔ 不写：真口令不进包）'
-$envFile = Join-Path $RepoRoot 'backend\.env'
+$envFile = Join-Path $RepoRoot '.env'   # ⚠️ 在**仓根**（不是 backend/）
 if (Test-Path $envFile) {
     Say ('   ✓ 已有 ' + $envFile + '（⚠️ 逐项核：i8 账号 / 库口令 / ALLOWED_IP_CIDRS 是本机的还是目标机的）')
 } else {
-    Say '   ⛔ 缺 backend\.env ⇒ **停在这里之前请先补**（键名与取值见 docs\deployment.md §二）'
+    Say '   ⛔ 缺**仓根** `.env` ⇒ **停在这里之前请先补**（键名与取值见 docs\deployment.md §二）'
     Say '      （若目标机旧的那半开发留过 .env，直接用它的；没有就按 ops\init_db.sql 里的账号口令写）'
 }
 
