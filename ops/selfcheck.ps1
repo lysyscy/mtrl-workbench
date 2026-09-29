@@ -81,19 +81,40 @@ print(s.execute(text("select count(*) from information_schema.tables where table
     else { Bad ('库自检失败（后端自己的配置连不上或缺表）：' + ($out -join ' ')) }
 }
 
-# ---- ④ 运行时模板 ＋ SHA256 ----
+# ---- ④ 运行时模板 ＋ SHA256（⭐ 交给 Python 算：⛔ 不让 PowerShell 碰中文路径）----
 Write-Host ''
 Write-Host '④ 运行时模板'
-$want = @{
-    '模板_库存单据明细表.xlsx' = '6803d01b1b0793f02543b281e737f9de42c9b955b7f45da0d55547e15b5e6bd2'
-    '模板_收发结存表.xlsx'     = 'eab1c626dce769ac979408564cbffa52a8ca3bc42d80c76c40e0335f8c46d323'
+# ⚠️⚠️ 为什么不用 Get-FileHash：2026-09-29 实测 —— 本项在**非 UTF-8 控制台**（例如被 Python 子进程拉起）里
+#   拿**中文路径**取不到哈希 ⇒ `$h` 为空 ⇒ 误报「SHA256 不符」✗✗（当时两份模板其实完好）。
+#   ⇒ 改交后端 venv 的 Python（hashlib ＋ pathlib ⇒ 中文路径天然没问题），PS 只读最后一行 RESULT。
+if (-not (Test-Path $py)) {
+    Skip '没有 backend\.venv\Scripts\python.exe ⇒ 本项跳过（⚠️ 目标机要跑自检就必须有 venv）'
+} else {
+    $tplDir = Join-Path $RepoRoot 'backend\app\resources\templates'
+    $code = @"
+import hashlib, pathlib
+d = pathlib.Path(r'$tplDir')
+want = {
+    '模板_库存单据明细表.xlsx': '6803d01b1b0793f02543b281e737f9de42c9b955b7f45da0d55547e15b5e6bd2',
+    '模板_收发结存表.xlsx': 'eab1c626dce769ac979408564cbffa52a8ca3bc42d80c76c40e0335f8c46d323',
 }
-$tplDir = Join-Path $RepoRoot 'backend\app\resources\templates'
-foreach ($k in $want.Keys) {
-    $p = Join-Path $tplDir $k
-    if (-not (Test-Path $p)) { Bad ('缺模板 ' + $k + '（⛔ 报表导出会失败 —— 设计上就会显式报错）'); continue }
-    $h = (Get-FileHash $p -Algorithm SHA256).Hash.ToLower()
-    if ($h -eq $want[$k]) { Ok ($k + ' SHA256 ✓') } else { Bad ($k + ' SHA256 不符（文件被改动/回退/损坏）') }
+bad = []
+for k, v in want.items():
+    p = d / k
+    if not p.exists():
+        print('MISS ' + k); bad.append(k); continue
+    h = hashlib.sha256(p.read_bytes()).hexdigest()
+    print(('OK   ' if h == v else 'BAD  ') + k + '  ' + h)
+    if h != v: bad.append(k)
+print('RESULT ' + ('ALL-OK' if not bad else 'BAD:' + ','.join(bad)))
+"@
+    $tmp = Join-Path $env:TEMP 'mtrl_selfcheck_tpl.py'
+    [IO.File]::WriteAllText($tmp, $code, (New-Object Text.UTF8Encoding($false)))
+    $lines = @(& $py $tmp 2>&1)
+    foreach ($l in $lines) { if ($l -notlike 'RESULT*') { Write-Host ('   ' + $l) } }
+    $last = ($lines | Select-Object -Last 1)
+    if ($last -eq 'RESULT ALL-OK') { Ok '两份运行时模板 SHA256 ✓（交 Python 算）' }
+    else { Bad ('模板校验未过：' + $last) }
 }
 
 # ---- ⑤ 初始化入口的端点 ----
