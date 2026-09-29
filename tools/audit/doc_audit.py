@@ -28,7 +28,7 @@
 | `T17` | ⭐ **闸门清单里每一把尺子都必须真有入口** —— 在跑却**0 行输出**（僵尸闸门）⇒ 红 | 计划 `§22.1` 的 `foreach` |
 | `T18` | ⭐ **登记在册的路径 / glob 常量必须解析得到真东西** —— 空命中 = 那一片**从没被扫过** ⇒ 红 | `audit_meta.GUARDED` |
 | `T19` | ⭐ **文档指针（节号）守卫** —— 「`X.md` §N」必须真有那一节（`T3` 只管文件在不在）⇒ 红 | `audit_drift` |
-| `T20` | ⭐ **保留期与容量** —— `.workbuddy/backups/` 顶层条目 > 5（口径「留 5 份 · 月度清」）· `.workbuddy/scratch/` 活区规模超线 ⇒ 黄 | `README.md` §三/§四 ＋ `ops/阈值表.md` ＋ `audit_work.py` |
+| `T20` | ⭐ **保留期与容量** —— `.workbuddy/backups/` 顶层条目 > 5（口径「留 5 份 · 月度清」）· `.workbuddy/scratch/` 活区规模超线 · ⭐ **`tools/oneoff/` 件数 / 容量超线**（`TAIL-194`；处置口径 = `tools/README.md`）⇒ 黄 | `README.md` §三/§四 ＋ `tools/README.md` ＋ `ops/阈值表.md` ＋ `audit_work.py` |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。

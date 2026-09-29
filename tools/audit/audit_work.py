@@ -33,6 +33,12 @@ BACKUP_ARCHIVE_PREFIXES = ("_归档-", "_旧快照归档-")
 BACKUP_SKIP_SUFFIXES = ("_壳单文件基线.html",)
 #: `.workbuddy/scratch/`（**活区** · 详见该目录 `README.md`）的规模提示线：超 ⇒ 黄**一行**（⛔ 不逐件报）
 SCRATCH_MAX_FILES, SCRATCH_MAX_MB = 2000, 50
+#: ⭐ `tools/oneoff/`（**一次性 / 留痕的堆场** · 处置口径见 `tools/README.md`）的提示线：超 ⇒ 黄**一行**。
+#:   ⭐ 为什么管它（`TAIL-194` · 2026-09-29 结构审计 §三 `P1-8`）：**它是全仓唯一"没有保留期、也没有机器眼"
+#:   的目录**（对照 `.workbuddy/scratch`：明写「保留期 14 天 ＋ 索引 README ＋ `T20`」）⇒ 只会一直堆。
+#:   ⚠️ **件数**才是它的病（"翻不翻得动"的代理指标）；**容量不是瓶颈**（实测 1.2 MB）⇒ 容量线只是挡住
+#:   "往里扔大文件"。⚠️ 阈值出处 = `ops/阈值表.md`（改数先改表）。
+ONEOFF_MAX_FILES, ONEOFF_MAX_MB = 200, 5.0
 
 
 def _hit(code: str, rel: str, what: str, why: str, fix: str) -> dict:
@@ -147,6 +153,23 @@ def check_retention() -> list[dict]:
                 f"顶层 {len(counted)} 个条目 > 上限 {BACKUP_KEEP}（口径：留 {BACKUP_KEEP} 份 · 月度清）",
                 "⭐ 口径在 `README.md` 写着、却没人守 ⇒ 只会继续长；本条是它的机器眼（2026-09-28 立）",
                 f"把旧的**移进** `_旧快照归档-YYYYMMDD/`（可逆）或清掉；现值：{names}"))
+    oneoff = REPO_ROOT / "tools" / "oneoff"
+    if oneoff.is_dir():
+        fs = [f for f in oneoff.rglob("*") if f.is_file() and "__pycache__" not in f.parts]
+        mb = sum(f.stat().st_size for f in fs) / 1024 / 1024
+        if len(fs) > ONEOFF_MAX_FILES or mb > ONEOFF_MAX_MB:
+            hits.append(_hit(
+                "T20", "tools/oneoff/",
+                f"{len(fs)} 件 / {mb:.1f} MB > 提示线 {ONEOFF_MAX_FILES} 件 / {ONEOFF_MAX_MB} MB",
+                "它是**一次性 / 留痕的堆场**，此前**没有保留期、也没有机器眼**（`TAIL-194` · 结构审计 `P1-8`）"
+                " ⇒ 只会一直堆；⚠️ 件数是「翻不翻得动」的代理指标",
+                "按 `tools/README.md` 那一段处置口径走：**先查引用**（只读件 `tools/oneoff/_oneoff_measure.py`）"
+                " ⇒ ⛔ **不盲删**（会被台账/判据/记忆引用 ⇒ 造断链），把零引用的**移进** "
+                "`tools/oneoff/_归档-YYYYMMDD/`（可逆）"))
+        else:
+            print(f"  （信息）`tools/oneoff/`：{len(fs)} 件 · {mb:.1f} MB"
+                  f"（提示线 {ONEOFF_MAX_FILES} 件 / {ONEOFF_MAX_MB} MB ⇒ 余 {ONEOFF_MAX_FILES - len(fs)} 件）"
+                  " —— 处置口径见 `tools/README.md`")
     scratch = REPO_ROOT / ".workbuddy" / "scratch"
     if scratch.is_dir():
         fs = [f for f in scratch.rglob("*") if f.is_file()]
@@ -160,6 +183,7 @@ def check_retention() -> list[dict]:
     return hits
 
 
-__all__ = ["ARTIFACTS_MD_ALLOW", "BACKUP_KEEP", "SCRATCH_MAX_FILES", "SCRATCH_MAX_MB",
+__all__ = ["ARTIFACTS_MD_ALLOW", "BACKUP_KEEP", "ONEOFF_MAX_FILES", "ONEOFF_MAX_MB",
+           "SCRATCH_MAX_FILES", "SCRATCH_MAX_MB",
            "SCRATCH_TTL_DAYS", "WORK_HEADER_KEYS",
            "check_artifacts_and_headers", "check_retention", "check_scratch_ttl"]
