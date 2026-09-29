@@ -940,9 +940,8 @@ const ACT={
    const amtLive=N2(live.reduce((a,f)=>a+f.amt,0));
    const jcRow=j?`${esc(j.id)} · ${esc(j.material||'')} · ${esc(j.supplier||'')} · 欠款 <span class="fc">${M(jcDebt(j))}</span>`:'<span class="mut">未关联集采合同（仅「集采」分类的行可关联）</span>';
    const flRow=flows.length
-     ? `<div class="tw" style="max-height:34vh"><table class="dt cond"><thead><tr><th>流水号</th><th>付款日期</th><th>金额</th><th>方式</th><th>操作人</th><th>状态</th></tr></thead><tbody>`
-       + flows.map(f=>`<tr class="${f.voided?'ex':''}"><td class="fc">${f.id}</td><td class="now">${f.date}</td><td class="num">${M(f.amt)}</td><td>${enumTag('payMethod',f.method)}</td><td class="sm">${esc(f.op)}</td><td>${f.voided?enumTag('flowState','已撤销')+' <span class="mut sm">'+esc(f.reason)+'</span>':enumTag('flowState','生效')}</td></tr>`).join('')
-       + `</tbody></table></div>`
+     ? `<div class="tw" style="max-height:34vh">${TBL({cls:'cond',head:'<th>流水号</th><th>付款日期</th><th>金额</th><th>方式</th><th>操作人</th><th>状态</th>',
+       rows:flows.map(f=>`<tr class="${f.voided?'ex':''}"><td class="fc">${f.id}</td><td class="now">${f.date}</td><td class="num">${M(f.amt)}</td><td>${enumTag('payMethod',f.method)}</td><td class="sm">${esc(f.op)}</td><td>${f.voided?enumTag('flowState','已撤销')+' <span class="mut sm">'+esc(f.reason)+'</span>':enumTag('flowState','生效')}</td></tr>`)})}</div>`
      : '<div class="tip" style="margin:0">这行通知书<b>还没有付款流水</b> —— 尚未付款（或流水已全被撤销）。</div>';
    modal({title:`查看关联 · ${n.code||n.id}`,body:
      `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))"><b>只读视图</b> —— 看这行通知书的<b>关联与去向</b>：关联了哪张集采合同、已产生哪些付款流水。<b>不改任何数据</b>。</div>
