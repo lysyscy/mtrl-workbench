@@ -170,9 +170,8 @@ V.set = () => {
           <li><b>材料类 / 外租机械类打印版式 ID</b> → 「<b>付款通知书</b>」页的「打印机设置」</li>
         </ul></div></div>
     <div class="card"><h4>变更留痕<span class="sp mut sm">最近 ${(SET.logs || []).length} 条</span></h4>
-      <div class="bd np"><div class="tw" style="max-height:320px;min-height:0"><table class="dt"><thead><tr>
-        <th>时间</th><th>设置项</th><th>改前</th><th>改后</th><th>改动人</th></tr></thead>
-        <tbody>${rows || lgEmpty(5, '还没有改动记录')}</tbody></table></div></div></div>
+      <div class="bd np"><div class="tw" style="max-height:320px;min-height:0">${TBL({head:'<th>时间</th><th>设置项</th><th>改前</th><th>改后</th><th>改动人</th>',
+        rows:[rows || lgEmpty(5, '还没有改动记录')]})}</div></div></div>
     ${themeCard}
     ${scaleCard}`;
 };
@@ -578,9 +577,8 @@ V.imp = () => {
         return `${hint ? `<div class="tip" style="margin-top:calc(10px * var(--fscale))">${lgMd(hint)}</div>` : ''}`
              + `<details style="margin-top:calc(8px * var(--fscale))"><summary class="mut sm" style="cursor:pointer">`
              + `本系统要哪些列（共 ${fields.length} 列 · 你表里缺 ${miss} 列，点开看）</summary>`
-             + `<div class="tw" style="margin-top:calc(8px * var(--fscale))"><table class="dt sm"><thead><tr>`
-             + `<th style="text-align:left">列名</th><th style="text-align:left">你表里</th>`
-             + `<th style="text-align:left">去向</th></tr></thead><tbody>${rows}</tbody></table></div>`
+             + `<div class="tw" style="margin-top:calc(8px * var(--fscale))">${TBL({cls:'sm',head:'<th style="text-align:left">列名</th><th style="text-align:left">你表里</th><th style="text-align:left">去向</th>',
+             rows:[rows]})}</div>`
              + '</details>';
       })()}
       <div style="margin-top:calc(10px * var(--fscale))">
@@ -706,8 +704,8 @@ V.imp = () => {
       <div class="mut sm" style="margin-top:calc(10px * var(--fscale))">${pnote}
         · 「行」= <b>Excel 里的行号</b>（与"第 N 行…"那类报错**同一个数**，用来对号）</div>
       ${plegend}
-      <div class="tw" style="max-height:280px;margin-top:calc(6px * var(--fscale))"><table class="dt sm">
-        <thead><tr>${pcols}</tr></thead><tbody>${prows || lgEmpty(1, '没有数据行')}</tbody></table></div>
+      <div class="tw" style="max-height:280px;margin-top:calc(6px * var(--fscale))">${TBL({cls:'sm',head:pcols,
+        rows:[prows || lgEmpty(1, '没有数据行')]})}</div>
       ${pwarn}
       <div style="margin-top:calc(10px * var(--fscale))"><button class="btn pri" data-act="impCommit"${(needPj || IMP.busy) ? ' disabled' : ''} title="${IMP.busy?'正在落库 —— 请勿重复点击':(needPj?'先回第 ① 步选「这批数据进哪个项目」—— 没选就落不了库':'确认落库（这一步才真正写库）')}">${IMP.busy ? '正在落库…' : '④ 确认落库'}</button>
         <button class="btn" data-act="impReset">重来</button>

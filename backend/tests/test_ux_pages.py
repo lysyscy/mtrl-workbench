@@ -593,3 +593,21 @@ def test_壳新增的人工指认清单表也走统一出口_TBL():
     # ⚠️ 反例也钉住：那张 DOM 拼行的回收站表**故意**留在裸 `<table>` —— ⛔ 别"顺手"换掉它
     assert "card.innerHTML = `<h4>回收站 · 已删除账号" in SHELL and "tb.appendChild(tr)" in SHELL, \
         "回收站那张表的「DOM 拼行」形态变了 —— 它换不了 `TBL`（`rows` 是活节点，不是字符串）"
+
+
+@acc()
+def test_壳新增那四页里的清单表也走统一出口_TBL():
+    """`TAIL-64` A′ · `legacy.js`（「**四个暂留件**」= 系统设置 ＋ 三个历史导入页）里的清单表走统一出口 `TBL`。
+
+    ⚠️ **为什么单开一条守**：这四页是**壳新增**（原型里根本没有）⇒ `U1`（只比原型同名 `V.*` 切片）**看不见本件**；
+       而这几张表又**没有各自的 claim 判据** ⇒ 换 `TBL` 时**别的东西感知不到**。
+    ⚠️⚠️ **只钉已改的那三张，⛔ 不写"全部"**：同件里另有几张**还没换**（按自己的批次走）——
+       写"全部"会让本判据**下一批一开工就红**（那是**假红**：判据不该替别的批管进度）。
+    自证 = `tools/mut/_mut_tbl.py` 的 M24／M25／M26 去掉这三处委托 ⇒ 必须红。
+    """
+    assert "TBL({head:'<th>时间</th><th>设置项</th>" in SHELL, \
+        "「变更留痕」那张表没走统一出口 `TBL`（`TAIL-64` A′）"
+    assert "TBL({cls:'sm',head:'<th style=\"text-align:left\">列名</th>" in SHELL, \
+        "「本系统要哪些列」那张对照表没走统一出口 `TBL`（`TAIL-64` A′）"
+    assert "TBL({cls:'sm',head:pcols," in SHELL, \
+        "「预览」那张表（`pcols` / `prows`）没走统一出口 `TBL`（`TAIL-64` A′）"

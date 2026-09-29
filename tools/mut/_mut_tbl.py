@@ -7,8 +7,8 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-二十三靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打的是 `shell/proj.js`、`M16`~`M21` 打 `shell/actions.js`、
-`M22`/`M23` 打 `shell/core.js` —— 见下方"哑靶"说明）：
+二十六靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打 `shell/proj.js`、`M16`~`M21` 打 `shell/actions.js`、
+`M22`/`M23` 打 `shell/core.js`、`M24`~`M26` 打 `shell/legacy.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
 - `M2` **掏空内核**：把 `TBL` 体内的 `+rows.join('')+` 改成 `+''+` ⇒ "内核没把 rows 拼进 tbody"必须红。
@@ -45,6 +45,8 @@ SHELL = ROOT / "backend" / "app" / "web" / "index.html"
 ACTIONS = ROOT / "backend" / "app" / "web" / "shell" / "actions.js"
 #: ⭐ 同类：`core.js`（接线层，人工指认那两张表）—— 同上，⛔ 别假设源码在 `index.html`。
 CORE = ROOT / "backend" / "app" / "web" / "shell" / "core.js"
+#: ⭐ 同类：`legacy.js`（「四个暂留件」—— 系统设置 ＋ 三个历史导入页；**壳新增** ⇒ `U1` 看不见本件）。
+LEGACY = ROOT / "backend" / "app" / "web" / "shell" / "legacy.js"
 #: ⭐⭐ **2026-09-29 修一个"哑靶"（本件自己的仪器缺陷）**：`M2` 原来只在 `index.html` 里找 `TBL` 内核，
 #: 而壳 **2026-09-28 拆件（`P2-a`）**把 `TBL` 从 `index.html` **搬进了 `shell/proj.js`**
 #: （`V.*` 切片留在 `index.html`、顶层段搬走）⇒ `M2` 的靶串**从此一次都命中不到**（实测「命中 0 次」）。
@@ -136,6 +138,15 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
     (CORE, "M23 去掉委托（「陌生仓库名」指认清单表 不再走 `TBL`）",
      _b("TBL({cls:'cond',head:'<th>陌生仓库名</th>"), _b("TBLBROKEN({cls:'cond',head:'<th>陌生仓库名</th>"),
      "没走统一出口"),
+    # ⭐ 2026-09-29（`TAIL-64` A′）：`legacy.js`（四个暂留件）先落三张
+    (LEGACY, "M24 去掉委托（「变更留痕」表 不再走 `TBL`）",
+     _b("TBL({head:'<th>时间</th><th>设置项</th>"), _b("TBLBROKEN({head:'<th>时间</th><th>设置项</th>"),
+     "没走统一出口"),
+    (LEGACY, "M25 去掉委托（导入页「本系统要哪些列」对照表 不再走 `TBL`）",
+     _b('TBL({cls:\'sm\',head:\'<th style="text-align:left">列名</th>'),
+     _b('TBLBROKEN({cls:\'sm\',head:\'<th style="text-align:left">列名</th>'), "没走统一出口"),
+    (LEGACY, "M26 去掉委托（导入页「预览」表 不再走 `TBL`）",
+     _b("TBL({cls:'sm',head:pcols,"), _b("TBLBROKEN({cls:'sm',head:pcols,"), "没走统一出口"),
 ]
 
 
