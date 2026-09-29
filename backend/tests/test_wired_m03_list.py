@@ -19,7 +19,7 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
 
 _NT_THEAD_RE = re.compile(r"const NT_THEAD=`([\s\S]*?)`;")
 
@@ -70,8 +70,18 @@ def test_壳里列表页骨架齐备且表头18列():
     """
     assert '<details class="tip">' in SHELL, "口径说明段没了"
     assert '<div class="fbar">' in SHELL, "筛选栏没了"
-    assert '<div class="tw"><table class="dt" data-sort data-sort-key="m03:notices">' in SHELL, \
-        "数据区没了（或没声明 data-sort-key）"
+    # ⭐ 2026-09-29（`TAIL-64` P3）：表外壳走统一出口 `TBL` ⇒ 原先把整串
+    #   `<div class="tw"><table class="dt" data-sort data-sort-key="m03:notices">` 钉死就假红了
+    #   （那串搬进 `TBL` 内核后切片里不再出现）。⛔ 别退回钉字面（等于宣布"以后不许抽通用件"）。
+    #   现在断三件事：① 切片**委托** `TBL` 并交出自己的身份（`key:'m03:notices'` ＋ 表头出口 `NT_THEAD`）；
+    #   ② 行的**来源**仍是预算好的 `tb`（不是页里另拼一份）；③ 内核里「可排」那条分支**真的**出
+    #   `data-sort` ＋ `data-sort-key`。⚠️ 渲染形态那半由**原型侧真机**守（`demo/_smoke.js` 的这条表）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M12（去掉这处委托）必须红。
+    assert "TBL({head:NT_THEAD,key:'m03:notices',rows:[tb]})" in SHELL, \
+        "数据区没了（或没走统一出口 `TBL` / 没交出自己的身份 `m03:notices`）"
+    kern = tbl_kernel()
+    assert "' data-sort data-sort-key=\"'+key+'\"'" in kern, \
+        "`TBL` 内核里没把 `key` 落成 `data-sort data-sort-key`（可排序身份丢了）"
     heads = _nt_heads()
     assert len(heads) == 18, f"本表应 18 列（勾选 + 16 数据 + 操作），实得 {len(heads)}：{heads}"
     assert heads[-1] == "操作", f"末列应是「操作」，实得 {heads[-1]!r}"

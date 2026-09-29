@@ -507,13 +507,13 @@ V.home=()=>{
   <!-- 2026-09-28（用户口径 · 看板清账）：删掉这一整行两张卡 —— 「付款通知书台账状态」（4 小 KPI
        ＋ 流程说明）与「收发货结存 · 各仓库行数」（8 根柱），用户判「全无用」。⛔ 别再加回来（删除已登记）。
        ⚠️ 那张柱图的数据本来就是写死的演示数组（WH），删掉正好。 -->
-  <details class="tip"><summary>状态一览 · 展开查看各对象的状态与流转</summary><table class="dt" style="color:var(--tx)"><thead><tr><th>对象</th><th>状态</th><th>怎么流转</th></tr></thead><tbody>
+  <details class="tip"><summary>状态一览 · 展开查看各对象的状态与流转</summary>${TBL({head:'<th>对象</th><th>状态</th><th>怎么流转</th>',sty:'color:var(--tx)',rows:[`
     <tr><td>付款通知书</td><td>未付清 ⇄ 已付清</td><td>已付金额（流水汇总）≥ <b>审批金额</b> → 已付清；<b>无「部分付」</b>（统计字段只管算欠款、<b>不管判状态</b>）</td></tr>
     <tr><td>项目</td><td>在建 / 归档</td><td>手工改；各处筛选<b>默认「在建」</b></td></tr>
     <tr><td>集采合同存档</td><td>未存档 → 资产处 → 已存档</td><td>手工推进</td></tr>
     <tr><td>集采合同纳入</td><td>纳入台账 / 不纳入</td><td>抓来即<b>纳入台账</b>；改「不纳入」后<b>抓取不覆盖</b></td></tr>
     <tr><td>差异登记</td><td>待核对 → 已核对 / 差异保留</td><td>手工标记；差异清单可导出</td></tr>
-  </tbody></table></details>`;
+  `]})}</details>`;
   /* 业务事实监测告警卡已撤（2026-09-14 看板改造）：① 事实 1 并入上方「占位行待扶正」瓦片
      —— 两者同一数据源（PJs.filter(p => p.name.startsWith('未建仓-'))）；
      ② 事实 2（档案行数 vs i8 仓库数）按 2026-09-12 用户口径「不需要这个监控相关的东西」随卡移除。 */
@@ -632,7 +632,7 @@ V.m03=()=>{
       <button class="btn" data-act="filterReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(fNt.month)} 有效 ${NO.filter(n=>ntLive(n)&&inM(n)).length} 条 ｜ 剔除 ${NO.filter(n=>n.excl&&inM(n)).length} 条 ｜ i8 已撤单 ${NO.filter(n=>ntVoid(n)&&inM(n)).length} 条${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length?` ｜ <span class="tag t-dg" title="这些单据在 i8 侧被删了，但仍挂着付款流水 / 集采关联 —— 按 §4.2.7「有牵涉不许静默退出统计」，它们仍参与统计。请先撤销付款 / 解绑关联，处理完它才退出统计；切「分类 = 剔除」可见。">⚠ 其中 ${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length} 条有牵涉</span>`:''}（切「分类 = 剔除」查看）</span>
     </div>
-    <div class="tw"><table class="dt" data-sort data-sort-key="m03:notices"><thead><tr>${NT_THEAD}</tr></thead><tbody id="ntBody">${tb}</tbody></table></div>
+    <div class="tw">${TBL({head:NT_THEAD,key:'m03:notices',rows:[tb]})}</div>
   </div>`;
 };
 
@@ -682,8 +682,8 @@ V.m04=()=>{
       <button class="btn" data-act="plFilterReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(plf.ym)} 共 <b>${scoped.length}</b> 条</span>
     </div>
-    <div class="tw"><table class="dt" data-sort data-sort-key="m04:plans"><thead><tr>${PL_THEAD}</tr></thead><tbody>
-    ${list.map(p=>{const rv=plRev(p,PLs), hit=plHit(p), matched=rv==='完全匹配', edit=!matched;
+    <div class="tw">${TBL({head:PL_THEAD,key:'m04:plans',
+    rows:list.map(p=>{const rv=plRev(p,PLs), hit=plHit(p), matched=rv==='完全匹配', edit=!matched;
       if(p.id===plRowEditId) return plDraftRow();   /* 编辑中：该行**原地变草稿行**（不新增行；草稿层 `plD`） */
       return `<tr class="${matched?'':'hl'}">
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="plPick" data-id="${p.id}" ${plPick.has(p.id)?'checked':''}></td>
@@ -701,10 +701,8 @@ V.m04=()=>{
       <td>${tag(rv,revTag(rv))}${p.forced?' <span class="tag t-in">已强制通过</span>':''}</td>
       <td class="ctr">${matched?'<span class="mut sm">无需处理</span>':p.forced?`<span style="display:inline-flex;gap:calc(5px * var(--fscale));align-items:center"><span class="mut sm" style="max-width:190px" title="${esc(p.forceRemark)}">${esc(p.forceRemark)}</span><button class="btn sm" data-act="unforce" data-id="${p.id}" title="取消强制通过 → 回到「未处理」态（不产生留痕）">取消强制通过</button></span>`:`<button class="btn sm" data-act="force" data-id="${p.id}">强制通过</button>`}</td>
       <td class="ctr"><span style="display:inline-flex;gap:calc(5px * var(--fscale));align-items:center">${p.manual?`<button class="btn sm" data-act="plRowEdit" data-id="${p.id}" title="编辑本行 —— 只有手动行可编辑（导入行是项目端报来的源数据，要改请重新导入；其在 §4.3.3 的唯一例外口 = 「再次匹配」）">编辑</button>`:''}${edit?`<button class="btn sm" data-act="plRematch" data-id="${p.id}" title="按当前单据号重新比对 i8 通知书，刷新审查结果">再次匹配</button>`:''}<button class="btn sm dg" data-act="plDelRow" data-id="${p.id}" title="删除本行（删除前确认并说明影响范围）—— 手动行与导入行都可删（§4.3.6；与付款通知书「i8 抓取行永不删」不同）">删除</button></span></td>
-    </tr>`}).join('')}
-    ${(plRowEditId===PL_NEW_ID)?plDraftRow():''}
-    ${list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2(rs.reduce((a,p)=>a+p.flowAmt,0)),8:rs=>N2(rs.reduce((a,p)=>a+p.monthAmt,0))},{leadCls:'fl'}):EMPTYROW(thCount(PL_THEAD),'当前筛选条件下没有付款计划'+(plRowEditId===PL_NEW_ID?'（正在新增 1 行：填完点该行「保存」）':''),'换个「单据年月 / 项目 / 审查结果」，或点上方「导入付款计划 Excel（先选月份）」导一批')}
-    </tbody></table></div>
+    </tr>`;}).concat(plRowEditId===PL_NEW_ID?[plDraftRow()]:[]),
+    sum:list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2(rs.reduce((a,p)=>a+p.flowAmt,0)),8:rs=>N2(rs.reduce((a,p)=>a+p.monthAmt,0))},{leadCls:'fl'}):EMPTYROW(thCount(PL_THEAD),'当前筛选条件下没有付款计划'+(plRowEditId===PL_NEW_ID?'（正在新增 1 行：填完点该行「保存」）':''),'换个「单据年月 / 项目 / 审查结果」，或点上方「导入付款计划 Excel（先选月份）」导一批')})}</div>
     <div class="bd"><div class="tip" style="margin:0"><b>注意第 6 条口径：</b>是「<b>超过未付</b>」而不是「超过已付」——计划金额超过该单据的<b>未付</b>金额（§4.3.4）。</div></div>
   </div>`;
 };
@@ -1337,14 +1335,14 @@ V.m10=()=>`
       <dt>相关数据怎么办</dt><dd style="font-family:var(--fs)">过程资料机械列、月度会大表机械费 —— <b>全部先手填</b></dd>
       <dt>原设计 diff / 下钻</dt><dd style="font-family:var(--fs)">暂缓，结论保留备查</dd>
     </div></div></div>
-    <div class="card"><h4>原设计要点（保留备查，暂不实现）</h4><div class="bd np"><table class="dt cond"><tbody>
+    <div class="card"><h4>原设计要点（保留备查，暂不实现）</h4><div class="bd np">${TBL({cls:'cond',rows:[`
       <tr><td class="mut" style="width:110px">账期</td><td>上月 <b>21 日</b> → 本月 <b>20 日</b></td></tr>
       <tr><td class="mut">催收节奏</td><td>每月 <b>25-27 号</b>催收项目机械费报表</td></tr>
       <tr><td class="mut">核对方式</td><td>项目上报金额 vs i8 结算金额，diff 视图 + 差异行下钻</td></tr>
       <tr><td class="mut">差额处理</td><td><b>差额大</b> → 让项目当月补；<b>差额小</b> → 保留并向审计说明</td></tr>
       <tr><td class="mut">天然口径差</td><td>项目上报与 i8 的分类不一致（零租 / 包月 / 内租）</td></tr>
       <tr><td class="mut">两侧来源</td><td>项目上报侧 = 项目发来的 Excel；i8 侧 = <b>班组设备使用</b>报表（能否自动抓取 <b>待确认</b>）</td></tr>
-    </tbody></table></div></div>
+    `]})}</div></div>
   </div>
   <div class="card"><h4>机械费结算：由过程资料机械列<b>派生（只读）</b><span class="sp"><span class="mut sm">源头与录入都在 <b>过程资料（MOD-06）机械 6 列</b>，本页只做说明</span></span></h4><div class="bd">
     <div class="kv">
@@ -1393,19 +1391,17 @@ V.m12=()=>{
       <button class="btn" data-act="dfReset">重置</button>
       <span class="pill" style="margin-left:auto">手工清单 · 不自动同步 ｜ 半年十几~几十笔</span>
     </div>
-    <div class="tw"><table class="dt" data-sort data-sort-key="m12:diffs"><thead><tr>${DF_THEAD}</tr></thead><tbody>
-    ${vis.map(d=>`<tr><td class="fc">${d.id}</td><td class="fc">${d.month}</td>
+    <div class="tw">${TBL({head:DF_THEAD,key:'m12:diffs',
+    rows:vis.map(d=>`<tr><td class="fc">${d.id}</td><td class="fc">${d.month}</td>
       <td>${tag(d.type,'wn')}</td>
       <td class="sm" title="项目全名：${esc(d.proj)}"><div style="max-width:230px;white-space:normal;overflow-wrap:anywhere;line-height:1.4">${dispCell(d.proj)}</div></td>
       <td>${esc(d.detail)}</td><td class="num">${SIG(d.amount)}</td>
       <td>${enumTag('dfState',d.status)}</td>
       <td class="sm mut">${esc(d.remark)}</td>
       <td class="ctr now">${d.status==='待核对'?`<button class="btn sm" data-act="dfOk" data-id="${d.id}">标记已核对</button>`:'<span class="mut sm">—</span>'}
-        <button class="btn sm dg" data-act="dfDel" data-id="${d.id}" title="删除这条差异登记（本页是手工清单，删了即不再跟踪该笔）">删除</button></td></tr>`).join('')}
-    ${dfNewOn?dfDraftRow():''}
-    ${vis.length?sumRowOf(DF_THEAD,vis,{5:[rs=>rs.reduce((a,d)=>a+d.amount,0),SIG]},{tip:'差异金额带符号求和 ⇒ 净额（+ 上调 / − 下调 相抵）'}):''}
-    ${(!vis.length&&!dfNewOn)?EMPTYROW(thCount(DF_THEAD), '当前筛选（<b>'+esc(tmLabel(fDf.ym))+'</b> · <b>'+esc(fDf.stat)+'</b>）下没有差异记录', '点「重置」看全部，或点「＋ 登记差异」补一条'):''}
-    </tbody></table></div>
+        <button class="btn sm dg" data-act="dfDel" data-id="${d.id}" title="删除这条差异登记（本页是手工清单，删了即不再跟踪该笔）">删除</button></td></tr>`).concat(dfNewOn?[dfDraftRow()]:[]),
+    sum:vis.length?sumRowOf(DF_THEAD,vis,{5:[rs=>rs.reduce((a,d)=>a+d.amount,0),SIG]},{tip:'差异金额带符号求和 ⇒ 净额（+ 上调 / − 下调 相抵）'}):'',
+    empty:(!vis.length&&!dfNewOn)?EMPTYROW(thCount(DF_THEAD), '当前筛选（<b>'+esc(tmLabel(fDf.ym))+'</b> · <b>'+esc(fDf.stat)+'</b>）下没有差异记录', '点「重置」看全部，或点「＋ 登记差异」补一条'):''})}</div>
     <div class="bd"><div class="tip" style="margin:0"><b>登记口径（已确认 · 2026-09-13）：</b>此前<b>从未做过差异登记</b>（无 Excel / 纸质 / 系统载体）；量级 <b>半年十几~几十笔</b> ⇒ 本页只做<b>手工新建 / 增删改 ＋ 基本筛选 ＋ 导出</b>，<b>不做分页与批量导入</b>；<b>归属恒为「库存单据」</b>（修正动作只落库存单据，§5.8.3）。</div></div>
   </div>`;
 };
@@ -1461,8 +1457,8 @@ V.m11=()=>{
       <span class="pill" style="margin-left:auto">已勾选 <b>${jcPick.size}</b> 行 ｜ 显示 <b>${jcRows.length}</b> 条 ｜ 已手动标记的合同，后续全量抓取<b style="margin-left:calc(3px * var(--fscale))">持久保留、不被覆盖</b></span>
     </div>
     ${jcNewOn?jcNewStrip():''}
-    <div class="tw"><table class="dt" data-sort data-sort-key="m11:jc"><thead><tr>${JC_THEAD}</tr></thead><tbody>
-    ${jcRows.map((j,i)=>`<tr class="${j.tag==='不纳入'?'ex':''}">
+    <div class="tw">${TBL({head:JC_THEAD,key:'m11:jc',
+    rows:jcRows.map((j,i)=>`<tr class="${j.tag==='不纳入'?'ex':''}">
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="jcPick" data-id="${j.id}" ${jcPick.has(j.id)?'checked':''}></td>
       <td class="fc" title="序号 = 当前筛选下的行号（⛔ 不是数据库 id）">${i+1}</td><td class="now">${j.date}</td><td>${esc(j.material)}</td><td class="sm">${esc(j.supplier)}</td>
       <td class="num">${j.contractAmt?M(j.contractAmt):'<span class="mut" title="供应商合同价为空 —— 若是贸易公司合同，需从 Excel 的「供应商线」手工填进来（填完不被抓取覆盖）">— 待补</span>'}</td>
@@ -1483,8 +1479,8 @@ V.m11=()=>{
         ${j.tag==='不纳入'?`<button class="btn sm pri" data-act="jcTag" data-id="${j.id}" data-v="纳入台账">纳入台账</button>`
           :`<button class="btn sm" data-act="jcTag" data-id="${j.id}" data-v="不纳入">不纳入</button>`}
         <button class="btn sm" data-act="jcArch" data-id="${j.id}">推进存档</button>
-      </td></tr>`).join('')}
-    ${jcRows.length?sumRowOf(JC_THEAD,jcRows,{
+      </td></tr>`),
+    sum:jcRows.length?sumRowOf(JC_THEAD,jcRows,{
         5:rs=>N2(rs.reduce((a,j)=>a+j.contractAmt,0)),
         6:rs=>N2(rs.reduce((a,j)=>a+jcInvSum(j),0)),
         8:rs=>N2(rs.reduce((a,j)=>a+(Number(j.tradeContractAmt)||0),0)),
@@ -1493,8 +1489,7 @@ V.m11=()=>{
         11:rs=>N2(rs.reduce((a,j)=>a+jcPay(j),0)),
         12:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))},
         {tip:'当前筛选结果（含「不纳入」行）的合计；「贸易公司合同金额」为空的行按 0 计'})
-      :EMPTYROW(thCount(JC_THEAD), '当前筛选条件下没有集采合同', '换个「三态标记 / 合同存档情况 / 项目」，或清空「供应商」搜索词')}
-    </tbody></table></div>
+      :EMPTYROW(thCount(JC_THEAD), '当前筛选条件下没有集采合同', '换个「三态标记 / 合同存档情况 / 项目」，或清空「供应商」搜索词')})}</div>
     <div class="bd"><div class="grid3">
       <div class="tip" style="margin:0"><b>两态标记（§6.5.3）</b>：抓来即 <b>纳入台账</b>，可改 <b>不纳入</b>。<b>逐条</b>标记，或<b>勾选后一次批量标记</b>（范围 = 当前筛选结果）；⭐ <b>已手动标记的「不纳入」在后续全量抓取中持久保留</b>（抓取不许改回来）。</div>
       <div class="tip" style="margin:0"><b>发票子表</b>：一合同 <b>1..N</b> 张，<b>「发票日期 ＋ 金额」两列</b>（日期必填、金额不设上限）。<br><b>付款子表</b>：一合同 <b>0 / 1 / 多</b> 次，手工录入 + <b>可从付款域引用</b>（R8）。<br>录入入口 = <b>「发票金额 / 贸易公司发票金额 / 付款金额」列右侧的「子表」按钮</b>（就近拆开，无需再进操作列）。</div>

@@ -352,3 +352,17 @@ def test_旧看板渲染层不得复活():
     home_dir = Path(__file__).resolve().parents[1] / "app" / "home"
     assert not (home_dir / "view.py").exists(), "旧看板渲染页 `view.py` 又回来了"
     assert not (home_dir / "domain.py").exists(), "旧看板的 8 项口径出口 `domain.py` 又回来了"
+
+
+@acc()
+def test_状态一览表也走统一出口_TBL_且那抹内联色走sty参数():
+    """`TAIL-64` P3：本页「状态一览」`<details>` 里那张**静态表**也走统一出口 `TBL`。
+
+    ⚠️ 它是本页**最后一张裸表**，也是全站唯一一张**没有排序身份（`key` 为空）却带内联色**的表
+       ⇒ 必须走 `sty` 参数（`TBL` 契约里那条正是为它准备的）；⛔ 别退回
+       `<table class="dt" style="color:var(--tx)">`（那等于宣布"以后不许抽通用件"）。
+    ⚠️ 行为/字节由 `U1`（切片逐行）＋ 原型侧真机 `_smoke` 兜：本件只守"委托没被退回"。
+    自证 = `tools/mut/_mut_tbl.py` 的 M14 去掉这处委托 ⇒ 必须红。
+    """
+    assert "${TBL({head:'<th>对象</th>" in SHELL, "状态一览表没走统一出口 `TBL`（`TAIL-64` P3）"
+    assert "sty:'color:var(--tx)'" in SHELL, "那张表的内联色丢了（应走 `sty` 参数传）"

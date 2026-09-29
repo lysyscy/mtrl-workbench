@@ -108,9 +108,7 @@ m03 481132d8  # 原型:       <div class="fi"><label>付款状态</label><select
 m03 26d0b6fd  # 原型:       <button class="btn" data-act="filterReset">重｜壳:       <div class="fi"><label>分类</label><select cla
 m03 f4aeba89  # 原型:       <span class="pill" style="margin-left:auto">｜壳:       <div class="fi"><label>审批状态</label><select c
 m03 dc8fee68  # 原型:     </div>｜壳:       <div class="fi"><label>付款状态</label><select c
-m03 62047953  # 原型:     <div class="tw"><table class="dt" data-sort da｜壳:       <button class="btn" data-act="filterReset">重
 m03 8aba60fd  # 原型: };｜壳:     </div>
-m03 734ea280  # 原型: ｜壳:     <div class="tw"><table class="dt" data-sort da
 m03 b3b3fc69  # 原型: /* 全选框状态回显：全选中 → 勾选；部分选中 → 半选（indeterminate） */｜壳:   </div>`;
 m03 de3cd6f8  # 原型: <无此行>｜壳: };
 m03 d1e188c8  # 原型: <无此行>｜壳: /* 全选框状态回显：全选中 → 勾选；部分选中 → 半选（indeterminate） */
@@ -161,7 +159,6 @@ m07 60c67bda  # 原型: <无此行>｜壳:    键仍是**仓库名**（§2.7.4�
 # ⭐ 2026-09-27 新增登记 11 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
 m09 8446349c  # 原型:       :[`<tr><td colspan="${thCount(AWF_THEAD)}" c｜壳:       :[EMPTYROW(thCount(AWF_THEAD), '<b>'+tmLabel
-m12 ccfa5b35  # 原型:     ${(!vis.length&&!dfNewOn)?`<tr><td colspan="${｜壳:     ${(!vis.length&&!dfNewOn)?EMPTYROW(thCount(DF_
 
 # ⭐⭐ 2026-09-27（TAIL-117 批次 6「四态统一」）：11 张表的空态行改走唯一出口 EMPTYROW
 #   （为什么空 ＋ 下一步），块级空态走 EMPTYBOX；页级加载 / 错误态由 pageState / pageGate 出
@@ -410,10 +407,6 @@ m11 58ee2d0d  # 原型:         <option value="blank"${fJc.amt==='blank'?'｜壳
 m11 ff25a514  # 原型:         <option value="filled"${fJc.amt==='filled'｜壳:       <span class="pill" style="margin-left:auto">
 m11 e8fc6176  # 原型:       <button class="btn" data-act="jcPartyDlg" ti｜壳:     </div>
 m11 f655d4ad  # 原型:       <button class="btn" data-act="jcReset">重置</b｜壳:     ${jcNewOn?jcNewStrip():''}
-m11 4b1ae647  # 原型:       <span class="pill" style="margin-left:auto">｜壳:     <div class="tw"><table class="dt" data-sort da
-m11 ef1b94dc  # 原型:     </div>｜壳:     ${jcRows.map((j,i)=>`<tr class="${j.tag==='不纳入
-m11 cca5e9e4  # 原型:     <div class="tw"><table class="dt" data-sort da｜壳:       <td class="fc" title="序号 = 当前筛选下的行号（⛔ 不是数据库 
-m11 3eeaea3a  # 原型:     ${jcRows.map((j,i)=>`<tr class="${j.tag==='不纳入｜壳:       <td class="num">${j.contractAmt?M(j.contract
 m11 d635b031  # 原型:       <td class="ctr"><input type="checkbox" class｜壳:       <td class="num" style="white-space:nowrap">$
 m11 c2567a66  # 原型:       <td class="fc" title="序号 = 当前筛选下的行号（⛔ 不是数据库 ｜壳:       <td class="sm">${j.tradeCo?esc(j.tradeCo):'<
 m11 e63db522  # 原型:       <td class="num">${j.contractAmt?M(j.contract｜壳:       <td class="num">${j.tradeContractAmt?M(j.tra
@@ -431,21 +424,12 @@ m11 6d1c092a  # 原型:       <td class="ctr">${archChip(j.arch)}</td>｜壳:   
 m11 fd6710e7  # 原型:       <td><input class="inp plain" style="min-widt｜壳:         ${j.tag==='不纳入'?`<button class="btn sm pri
 m11 cc439e0c  # 原型:       <td><input class="inp plain" type="date" sty｜壳:           :`<button class="btn sm" data-act="jcTag
 m11 e485ba0f  # 原型:       <td class="ctr now">｜壳:         <button class="btn sm" data-act="jcArch" d
-m11 a59b5e69  # 原型:         ${j.tag==='不纳入'?`<button class="btn sm pri｜壳:       </td></tr>`).join('')}
-m11 189bd70d  # 原型:           :`<button class="btn sm" data-act="jcTag｜壳:     ${jcRows.length?sumRowOf(JC_THEAD,jcRows,{
 m11 226a9b0f  # 原型:         <button class="btn sm" data-act="jcArch" d｜壳:         5:rs=>N2(rs.reduce((a,j)=>a+j.contractAmt,
-m11 1e0dd000  # 原型:       </td></tr>`).join('')}｜壳:         6:rs=>N2(rs.reduce((a,j)=>a+jcInvSum(j),0)
-m11 91e0b023  # 原型:     ${jcRows.length?sumRowOf(JC_THEAD,jcRows,{｜壳:         8:rs=>N2(rs.reduce((a,j)=>a+(Number(j.trad
 m11 f4801aa2  # 原型:         5:rs=>N2(rs.reduce((a,j)=>a+j.contractAmt,｜壳:         9:rs=>N2(rs.reduce((a,j)=>a+jcTradeInvSum(
 m11 ca1959e5  # 原型:         6:rs=>N2(rs.reduce((a,j)=>a+jcInvSum(j),0)｜壳:         10:rs=>N2(rs.reduce((a,j)=>a+jcSettle(j),0
 m11 064d4fa3  # 原型:         8:rs=>N2(rs.reduce((a,j)=>a+(Number(j.trad｜壳:         11:rs=>N2(rs.reduce((a,j)=>a+jcPay(j),0)),
 m11 1532be8e  # 原型:         9:rs=>N2(rs.reduce((a,j)=>a+jcTradeInvSum(｜壳:         12:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))
 m11 09c6f92e  # 原型:         10:rs=>N2(rs.reduce((a,j)=>a+jcSettle(j),0｜壳:         {tip:'当前筛选结果（含「不纳入」行）的合计；「贸易公司合同金额」为空的行按 0
-m11 3092c099  # 原型:         11:rs=>N2(rs.reduce((a,j)=>a+jcPay(j),0)),｜壳:       :EMPTYROW(thCount(JC_THEAD), '当前筛选条件下没有集采合同'
-m11 51407970  # 原型:         12:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))｜壳:     </tbody></table></div>
-m11 a355408f  # 原型:         {tip:'当前筛选结果（含「不纳入」行）的合计；「贸易公司合同金额」为空的行按 0｜壳:     <div class="bd"><div class="grid3">
-m11 9708924a  # 原型:       :`<tr><td colspan="${thCount(JC_THEAD)}" cla｜壳:       <div class="tip" style="margin:0"><b>两态标记（§6
-m11 d9e25b4e  # 原型:     </tbody></table></div>｜壳:       <div class="tip" style="margin:0"><b>发票子表</b
 m11 e4b20ede  # 原型:     <div class="bd"><div class="grid3">｜壳:       <div class="tip" style="margin:0"><b>合同收发登记（
 m11 93bbfdc6  # 原型:       <div class="tip" style="margin:0"><b>两态标记（§6｜壳:     </div></div>
 m11 d9eb01de  # 原型:       <div class="tip" style="margin:0"><b>发票子表（EN｜壳:   </div>`;
@@ -571,21 +555,17 @@ home b76d550b  # 原型:       </div>｜壳:   </div></div>
 home f6b4b04e  # 原型:       <div class="hr"></div>｜壳:   <!-- 2026-09-28（用户口径 · 看板清账）：删掉这一整行两张卡 —— 「付款通知书
 home 176a1b49  # 原型:       <div class="flowline">剔除（4 类规则）→ 分类（机械 / 集采 ｜壳:        ＋ 流程说明）与「收发货结存 · 各仓库行数」（8 根柱），用户判「全无用」。⛔ 别再
 home 184a6e60  # 原型:               → 四金额字段（审批/付款=源数据；统计结算/统计付款=旁路，可手改不被｜壳:        ⚠️ 那张柱图的数据本来就是写死的演示数组（WH），删掉正好。 -->
-home c0e9a3c9  # 原型:               → 付款（实际付款方式默认取计划值，兜底「现汇」）→ 已付清 / 未付清｜壳:   <details class="tip"><summary>状态一览 · 展开查看各对象的状态与
 home 3fd05395  # 原型:     </div></div>｜壳:     <tr><td>付款通知书</td><td>未付清 ⇄ 已付清</td><td>已付金额（流
 home 1840b154  # 原型:     <div class="card"><h4>收发货结存 · 各仓库行数<span class｜壳:     <tr><td>项目</td><td>在建 / 归档</td><td>手工改；各处筛选<b>
 home e4cad72b  # 原型:       <div class="bars">${pjSort(WHs).map(w=>`<div｜壳:     <tr><td>集采合同存档</td><td>未存档 → 资产处 → 已存档</td><td
 home d8d44b4b  # 原型:         <span class="tk"><i class="${w.end<0?'r':'｜壳:     <tr><td>集采合同纳入</td><td>纳入台账 / 不纳入</td><td>抓来即<
 home 17840588  # 原型:         <span class="vl">${w.rows} 行</span></div>`｜壳:     <tr><td>差异登记</td><td>待核对 → 已核对 / 差异保留</td><td>
-home 0199079d  # 原型:     </div></div>｜壳:   </tbody></table></details>`;
 home 529c8806  # 原型:   </div>｜壳:   /* 业务事实监测告警卡已撤（2026-09-14 看板改造）：① 事实 1 并入上方「占位行待
-home e57a0263  # 原型:   <details class="tip"><summary>状态机汇总（§8.3） · 展开查看｜壳:      —— 两者同一数据源（PJs.filter(p => p.name.startsWith(
 home e0a2b67d  # 原型:     <tr><td>付款通知书</td><td>未付清 ⇄ 已付清</td><td>已付金额（流｜壳:      ② 事实 2（档案行数 vs i8 仓库数）按 2026-09-12 用户口径「不需要这个
 home c1bb1b77  # 原型:     <tr><td>项目</td><td>在建 / 归档</td><td>手工改；各处筛选<b>｜壳: };
 home 4e0a0144  # 原型:     <tr><td>集采合同存档</td><td>未存档 → 资产处 → 已存档</td><td｜壳: 
 home 2f6336c2  # 原型:     <tr><td>集采合同纳入</td><td>纳入台账 / 不纳入</td><td>抓来即<｜壳: /* ===============================================
 home f07584e6  # 原型:     <tr><td>差异登记</td><td>待核对 → 已核对 / 差异保留</td><td>｜壳:    4. MOD-03 付款通知书
-home 1acbce9a  # 原型:   </tbody></table></details>`;｜壳:    ===============================================
 
 # ⭐ 2026-09-28 新增登记 126 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
@@ -749,7 +729,6 @@ m03 3b3a6e8a  # 原型:         {tip:'当前筛选结果中「非剔除」行的
 m03 b2b95a99  # 原型:       <button class="btn pri" data-act="batchPay" ｜壳:       <button class="btn pri" data-act="batchPay" 
 m04 53ea511d  # 原型:       <button class="btn pri" data-act="exp" data-｜壳:       <button class="btn pri" data-act="exp" data-
 m04 13903ad9  # 原型:       <td class="ctr"><input type="checkbox" class｜壳:       <td class="ctr fl"><input type="checkbox" cl
-m04 331af8f5  # 原型:     ${list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2｜壳:     ${list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2
 m05 f2e80ce5  # 原型: <无此行>｜壳:     <button class="btn pri" data-act="exp" data-t=
 m01 7b2b7531  # 原型:       <button class="btn pri" data-act="exp" data-｜壳:       <button class="btn pri" data-act="exp" data-
 m06 78205c0f  # 原型:     </span></h4>｜壳:       <button class="btn pri" data-act="exp" data-
@@ -902,3 +881,42 @@ m05 d4e5d7c8  # 原型: <无此行>｜壳:     empty:EMPTYROW(thCount(FL_THEAD),
 #   ⛔ 要看 `m08` 的真实差异，请直接对读两侧 `V.m08` 全文，别读这些行。
 
 m08 b4d1470c  # 原型:     empty:`<tr><td colspan="${thCount(INV_THEAD)}"｜壳:     empty:EMPTYROW(thCount(INV_THEAD), '当前筛选条件下没有库
+
+# ⭐ 2026-09-29 新增登记 7 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+# ⚠️ 这 7 条 = `TAIL-64` **P3**（`m03` 付款通知书表 / `m04` 付款计划表 / `home` 状态一览表 走统一出口 `TBL`）之后的**换号**：
+#   · `m03`/`m04` 两侧**本来就对齐**（112/115 · 70/70）⇒ 各只换号 **2 条 / 1 条**（无级联）；
+#   · `home` 两侧**本来就错位**（88/80）⇒ 那 4 条里多数是**错位对**（如 `home 40664b21` = 我的新行对上原型另一处）
+#     ⛔ 别读成"功能差异"；要看 `home` 的真实差异请直接对读两侧 `V.home` 全文。
+#   ⭐ 三页**行数一条没变**（本次改法 = 「表外壳换写法、行留在原地」）⇒ ⛔ 没有级联换号。
+#   ⚠️ `m03` 那张表还**顺手摘掉一个死属性** `id="ntBody"`（全仓无任何 JS 查询它；`view.js` 只按标签名扫 `tbody`）
+#     —— 那是**唯一**一处渲染字节变化，已单独登记（`m03 9487a851` 那条）。
+
+home 057efd3b  # 原型:               → 付款（实际付款方式默认取计划值，兜底「现汇」）→ 已付清 / 未付清｜壳:   <details class="tip"><summary>状态一览 · 展开查看各对象的状态与
+home 40664b21  # 原型:     </div></div>｜壳:   `]})}</details>`;
+home 1e3e884c  # 原型:   <details class="tip"><summary>状态机汇总（§8.3） · 展开查看｜壳:      —— 两者同一数据源（PJs.filter(p => p.name.startsWith(
+home 5b15ad33  # 原型:   `]})}</details>`;｜壳:    ===============================================
+m03 abc1aeba  # 原型:     <div class="tw">${TBL({head:NT_THEAD,key:'m03:｜壳:       <button class="btn" data-act="filterReset">重
+m03 9487a851  # 原型: ｜壳:     <div class="tw">${TBL({head:NT_THEAD,key:'m03:
+m04 5cddf193  # 原型:     sum:list.length?sumRowOf(PL_THEAD,list,{5:rs=>｜壳:     sum:list.length?sumRowOf(PL_THEAD,list,{5:rs=>
+
+# ⭐ 2026-09-29 新增登记 13 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+# ⚠️ 这 13 条 = `TAIL-64` **P3 余量**（`m10` 静态说明表 · `m12:diffs` · `m11:jc` 三张收尾表 走统一出口 `TBL`）之后的**换号**：
+#   · `m10` **0 条**（它那两行不在 `U1` 的比较区内）· `m12` **1 条** · `m11` **12 条**；
+#   · `m11` 两侧**本来就整体错位**（89/87）⇒ 那 12 对基本是**错位对**（如 `m11 c46df8db`：原型那边是计数 pill、
+#     壳这边是我的新行）⛔ 别读成"功能差异"；要看真实差异请直接对读两侧 `V.m11` 全文。
+#   ⭐ 改法仍是「表外壳换写法、行留在原地」⇒ `m10` 行数未变 · `m12`/`m11` 各净减 2 / 1 行（**两侧同量**）⇒ ⛔ 无级联。
+#   ⚠️ `m12` 那页**只有 `U1` 这一道守卫**（它没有专属判据件）⇒ 这条登记就是"它还在走 `TBL`"的证据，⛔ 别随手删。
+
+m12 ff0591a2  # 原型:     empty:(!vis.length&&!dfNewOn)?`<tr><td colspan｜壳:     empty:(!vis.length&&!dfNewOn)?EMPTYROW(thCount
+m11 c46df8db  # 原型:       <span class="pill" style="margin-left:auto">｜壳:     <div class="tw">${TBL({head:JC_THEAD,key:'m11:
+m11 724b2f03  # 原型:     </div>｜壳:     rows:jcRows.map((j,i)=>`<tr class="${j.tag==='
+m11 6a984802  # 原型:     <div class="tw">${TBL({head:JC_THEAD,key:'m11:｜壳:       <td class="fc" title="序号 = 当前筛选下的行号（⛔ 不是数据库 
+m11 32fc87c3  # 原型:     rows:jcRows.map((j,i)=>`<tr class="${j.tag==='｜壳:       <td class="num">${j.contractAmt?M(j.contract
+m11 ad6bb0a5  # 原型:         ${j.tag==='不纳入'?`<button class="btn sm pri｜壳:       </td></tr>`),
+m11 ac5b9f53  # 原型:           :`<button class="btn sm" data-act="jcTag｜壳:     sum:jcRows.length?sumRowOf(JC_THEAD,jcRows,{
+m11 134dfc95  # 原型:       </td></tr>`),｜壳:         6:rs=>N2(rs.reduce((a,j)=>a+jcInvSum(j),0)
+m11 336e7d27  # 原型:     sum:jcRows.length?sumRowOf(JC_THEAD,jcRows,{｜壳:         8:rs=>N2(rs.reduce((a,j)=>a+(Number(j.trad
+m11 37a0b327  # 原型:         11:rs=>N2(rs.reduce((a,j)=>a+jcPay(j),0)),｜壳:       :EMPTYROW(thCount(JC_THEAD), '当前筛选条件下没有集采合同'
+m11 8016589f  # 原型:         12:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))｜壳:     <div class="bd"><div class="grid3">
+m11 2b27a90b  # 原型:         {tip:'当前筛选结果（含「不纳入」行）的合计；「贸易公司合同金额」为空的行按 0｜壳:       <div class="tip" style="margin:0"><b>两态标记（§6
+m11 d9766a57  # 原型:       :`<tr><td colspan="${thCount(JC_THEAD)}" cla｜壳:       <div class="tip" style="margin:0"><b>发票子表</b

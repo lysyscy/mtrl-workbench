@@ -7,7 +7,7 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-十一靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打的是 `shell/proj.js` —— 见下方"哑靶"说明）：
+十五靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打的是 `shell/proj.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
 - `M2` **掏空内核**：把 `TBL` 体内的 `+rows.join('')+` 改成 `+''+` ⇒ "内核没把 rows 拼进 tbody"必须红。
@@ -17,6 +17,9 @@
   `M7` 把提取表的 `sort:false` 改回 `true`（⇒ "刻意不可排"那条必须红）· `M8` 两类顺序颠倒。
 - ⭐ `M9`/`M10`（2026-09-29 · `TAIL-64` **P2④ `m05`**）：欠款台账 / 付款流水表各自去掉委托。
 - ⭐ `M11`（2026-09-29 · `TAIL-64` **P2⑤ `m08`**）：库存单据明细表去掉委托。
+- ⭐ `M12`/`M13`/`M14`（2026-09-29 · `TAIL-64` **P3**）：`m03` 付款通知书表 / `m04` 付款计划表 / `home` 状态一览表
+  各去掉一处委托。⚠️ `M14` 那处打的是 `${TBL({head:'<th>对象</th>` —— 该表**没有 `key`**（不参与排序）、
+  靠 `sty` 传内联色，是 `TBL` 契约里"最偏"的一个调用点。
 
 ⚠️ 判据 = **目标测试件 rc≠0**（不是整支尺子）＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc：别的用例红
 也会让 rc≠0）。
@@ -48,7 +51,11 @@ TARGETS: tuple[str, ...] = ("tests/test_acc_usr_mgmt.py",   #: `m15`（P1b）那
                             "tests/test_wired_m07.py",      #: ⭐ `m07`（P2③）收发结存 + 提取表
                             "tests/test_wired_m07_big.py",  #: ⭐ `m07`（P2③）月度会大表
                             "tests/test_wired_m05.py",      #: ⭐ `m05`（P2④）欠款台账 + 付款流水
-                            "tests/test_wired_m08.py")      #: ⭐ `m08`（P2⑤）库存单据明细
+                            "tests/test_wired_m08.py",      #: ⭐ `m08`（P2⑤）库存单据明细
+                            "tests/test_wired_m03_list.py",  #: ⭐ `m03`（P3）
+                            "tests/test_wired_m04.py",      #: ⭐ `m04`（P3）
+                            "tests/test_acc_home_todo.py",  #: ⭐ `home`（P3）状态一览表
+                            "tests/test_acc_jc_shell.py")   #: ⭐ `m11`（P3 余量）集采台账表
 PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
 
 def _b(s: str) -> bytes:
@@ -87,6 +94,16 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
     # ⭐ 2026-09-29（`TAIL-64` P2⑤ `m08`）：库存单据明细表去掉委托
     (SHELL, "M11 去掉委托（`m08` 库存单据明细表 不再走 `TBL`）", _b("TBL({head:ivThead(),key:'m08:invoices',"),
      _b("TBLBROKEN({head:ivThead(),key:'m08:invoices',"), "库存单据明细表没走统一出口"),
+    # ⭐ 2026-09-29（`TAIL-64` P3）：三页各去掉一处委托
+    (SHELL, "M12 去掉委托（`m03` 付款通知书表 不再走 `TBL`）", _b("TBL({head:NT_THEAD,key:'m03:notices',"),
+     _b("TBLBROKEN({head:NT_THEAD,key:'m03:notices',"), "数据区没了"),
+    (SHELL, "M13 去掉委托（`m04` 付款计划表 不再走 `TBL`）", _b("TBL({head:PL_THEAD,key:'m04:plans',"),
+     _b("TBLBROKEN({head:PL_THEAD,key:'m04:plans',"), "付款计划表没走统一出口"),
+    (SHELL, "M14 去掉委托（`home` 状态一览表 不再走 `TBL`）", _b("${TBL({head:'<th>对象</th>"),
+     _b("${TBLBROKEN({head:'<th>对象</th>"), "状态一览表没走统一出口"),
+    # ⭐ 2026-09-29（`TAIL-64` P3 余量）：`m10`/`m12`/`m11` 三张收尾表
+    (SHELL, "M15 去掉委托（`m11` 集采台账表 不再走 `TBL`）", _b("TBL({head:JC_THEAD,key:'m11:jc',"),
+     _b("TBLBROKEN({head:JC_THEAD,key:'m11:jc',"), "集采台账表没走统一出口"),
 ]
 
 

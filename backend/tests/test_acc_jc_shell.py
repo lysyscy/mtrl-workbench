@@ -65,6 +65,10 @@ def test_空态行跨列数派生且全选框回显三态():
     assert "EMPTYROW(thCount(JC_THEAD)" in empty[0], (
         "空态行的跨列数**没有由表头派生** —— ⛔ 写死的数字在表头改列后会错位，"
         "而且只有「筛到空」时才看得见：\n  " + empty[0].strip()[:160])
+    # ⭐ 2026-09-29（`TAIL-64` P3 余量）：表外壳走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt" …>`）。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M15 去掉这处委托 ⇒ 必须红。
+    assert "TBL({head:JC_THEAD,key:'m11:jc'," in html, \
+        "集采台账表没走统一出口 `TBL`（`TAIL-64` P3 余量）"
 
     bind = _fn(html, "BIND.m11=", "/* ====")
     assert "box.checked" in bind and "hit===vis.length" in bind, (

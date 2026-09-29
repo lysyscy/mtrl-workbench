@@ -239,6 +239,12 @@ def test_筛不到行时必须给空态而不是一片空白():
     seg = SHELL.split("EMPTYROW(thCount(PL_THEAD)", 1)[1][:420]
     assert "换个「单据年月 / 项目 / 审查结果」" in seg, "空态没说「怎么回到有数据」（§2.1 下一步）"
     assert "导入付款计划 Excel" in seg, "空态没指出补数据的入口"
+    # ⭐ 2026-09-29（`TAIL-64` P3）：表外壳走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt" …>`）。
+    #   ⚠️ 空态仍走 `sum:` 那个槽位（不是 `empty:`）—— 因为它与「草稿行」的渲染次序绑在一起，
+    #   换槽位会让"新增行时同时冒出空态"这个既有行为变样。
+    #   自证 = `tools/mut/_mut_tbl.py` 的 M13 去掉这处委托 ⇒ 必须红。
+    assert "TBL({head:PL_THEAD,key:'m04:plans'," in SHELL, \
+        "付款计划表没走统一出口 `TBL`（`TAIL-64` P3）"
 
 
 @acc("ACC-PLAN-UI-001", "001-10")
