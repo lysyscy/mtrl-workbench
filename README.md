@@ -19,7 +19,7 @@
 
 | 层 | 位置 | 谁读 | 职责 | 行数预算 | 机器扫 |
 |---|---|---|---|---|---|
-| **① 注入档** | `.workbuddy/memory/MEMORY.md` | ⭐ **每个新会话**（自动注入） | 只放**每轮都要用的规则**：坐标/禁区 · 铁律 · 收工闸门 · 工程纪律 · 本机坑 · 服务命令 | **200** | ✅ `T9` |
+| **① 注入档** | `.workbuddy/memory/MEMORY.md` | ⭐ **每个新会话**（自动注入） | 只放**每轮都要用的规则**：坐标/禁区 · 铁律 · 收工闸门 · 工程纪律 · 本机坑 · 服务命令 | 以 `T10` 输出为准（⛔ **别手抄** —— 抄了就漂） | ✅ `T9` |
 | **② 按需档** | `README.md`(本文件) · `MEMORY-细则.md` · `plans/{开发计划,执行情况}-主文档.md` · `ops/*.md` · **`docs/*.md`** · **`.workbuddy/work/README.md`** | 人 / AI **按需查** | 口径 · 台账 · 排期 · 细则 · 实测结论 · **架构/runbook/changelog** · **工作记录分区宪法** | 各见表 | ✅ `T1`–`T6` · `T10` · `T12` |
 | **③ 留痕档** | `memory/journal/YYYY-MM-DD.md` · `plans/archive/归档-*.md`（旧 `plans/归档-*.md` 同层共存） | ⛔ **没人回读**（只追加） | 过程 / 事故 / 逐次定案 / 被删内容的原文 | 不限 | ❌ **故意不扫** |
 | **④ 产物档** | `artifacts/` | 需要证据时 | 四态 `acc_results.json` · 截图 · **工具生成物白名单**（`变异覆盖台账.md`）—— ⛔ **过程类 md 不许进**（去 `work/`） | 不限 | `T11` 管**回执** · `T15` 管**白名单** |
@@ -38,6 +38,12 @@ D:\dev\mtrl-workbench\
 │   ├─ modules.md                   15 个模块一页纸（模块 ↔ 包 ↔ 壳页 ↔ 现状 · 指针）
 │   ├─ delivery-surface.md          交付面目录清单与同步状态（降低仓外单点依赖）
 │   └─ changelog.md                 面向使用的版本变更记录（部署节点 / TAIL 销号批次）
+├─ .codebuddy\                    【宿主侧 · 项目级】⛔ 非交付面 · 也**不是文档层**（别按四层审它）
+│   ├─ rules\前端设计守则\RULE.mdc    项目规则入口（唯一主人 = `ops/前端设计守则…`，⛔ 不复制条文）
+│   ├─ skills\docs-audit\            ⭐ 项目技能：**文档审计工作流**（分布 / 结构 / 内容 —— 见 §六 末）
+│   ├─ skills\*\references\          技能附页（分类与判读表 —— 技能自用，⛔ 不是口径）
+│   ├─ memory\                       【本机 · 不入 git】跨会话工作记忆（`YYYY-MM-DD.md` 逐轮追加）
+│   └─ teams\                        【本机 · 不入 git】团队协作临时区
 ├─ .env / .env.example            ↔ 配置（取值唯一出口 = app_settings.effective）
 ├─ ops\                           【工程侧底账】
 │   ├─ README.md                    实测结论索引（含"成立前提 / 何时必复做"）
@@ -61,8 +67,8 @@ D:\dev\mtrl-workbench\
 │   │   ├─ 20-experiments\        实验记录：实验-<主题>-YYYYMMDD.md（失败也记，文件名加 -失败）
 │   │   ├─ 30-troubleshooting\    问题排查：排查-<现象>-YYYYMMDD.md
 │   │   └─ 40-decisions\          决策记录：D<编号>-<主题>.md（D21 起；superseded 只加链不改写）
-│   ├─ backups\                   【⭐ 唯一手工备份点】（gitignore · 留最近 5 份 · 月度清）
-│   └─ scratch\                   旧临时区（存量 CB_MSG.txt；新临时件 → work\00-scratch\）
+│   ├─ backups\                   【⭐ 唯一手工备份点】（gitignore · 留最近 5 份 · 月度清；⚠️ **一天多批**只留**当日末个**）
+│   └─ scratch\                   【**活区**】临时件 ＋ 各尺子输出 ＋ 一次性脚本（**保留期 14 天**；索引 = 该目录 `README.md`；机器眼 = `T20`）
 ├─ artifacts\                     【产物】四态 / 截图 / golden 证据 / 运行子目录（⛔ 过程类 md 进 work\）
 ├─ tools\                         audit\ · mut\ · probe\ · oneoff\ ＋ *_expected.txt 登记表（⛔ 根上不放散件）
 ├─ backend\                       后端 ＋ 唯一前端壳（`backend/app/web/`）
@@ -87,7 +93,7 @@ D:\dev\mtrl-workbench\
 | 决策记录 | `D<编号>-<主题>.md`（D21 起） | `.workbuddy/work/40-decisions/` |
 | 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.workbuddy/work/00-scratch/`（TTL 14 天） |
 | 工程基准档 | 固定小写英文名（runbook / architecture / changelog） | `docs/` |
-| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.workbuddy/backups/`（**仅此一处**，留 5 份） |
+| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.workbuddy/backups/`（**仅此一处**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**） |
 | 产物 md | 仅工具生成物白名单（当前：`变异覆盖台账.md`） | `artifacts/` |
 
 **格式三条**：① 每份文档**开头必须写**"读者是谁 / 回答什么问题 / 什么时候读"（work 区另加"状态 ＋ 关联 ID"）；② **跨文档引用写全路径**
@@ -118,8 +124,13 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 `T1` 幽灵用例号 · `T2` 已废术语 · `T3` 幽灵路径 · `T4` 状态数字失配 · `T5` 文件行数 ·
 `T6` 尾巴台账 · `T7` 判据覆盖 · `T8` 撤项复活 · `T9` 纪律出处标记 · `T10` 文档读预算 ·
 `T11` 报告登记回执 · `T12` 分层与命名 · `T13` 过程回潮 · `T14` scratch TTL 与落点 ·
-`T15` 产物白名单与 work 文头 · `T16` `T7a` 登记册在位 —— ⭐ **权威表在 `tools/audit/doc_audit.py` 头部**，本处只列名。
+`T15` 产物白名单与 work 文头 · `T16` `T7a` 登记册在位 · `T17` 僵尸闸门 · `T18` 登记常量必须命中真东西 ·
+`T19` 文档指针（节号）· `T20` 保留期与容量 —— ⭐ **权威表在 `tools/audit/doc_audit.py` 头部**，本处只列名。
 ⚠️ 收工闸门（全套 pytest ＋ **13 把尺子**（12 项 ＋ `doc_audit`）＋ 四态 ＋ 四检）见 **`MEMORY.md` §〇之二**（⛔ 别只跑前 5 个）。
+
+⭐ **文档审计（分布 / 结构 / 内容）＝ 项目技能** `.codebuddy/skills/docs-audit/SKILL.md`（＋ 只读盘点器 `.codebuddy/skills/docs-audit/scripts/doc_inventory.py`）——
+它只**编排流程**（跑哪几把尺子 / 按用途怎么分类 / 七种病怎么找 / 队列怎么排），**口径仍指回本文件与 `tools/audit/doc_audit.py` 头部**；
+⚠️ 盘点器**不进**上面的闸门、**不判红**（要升级成第 14 把尺子 ⇒ 先问用户，同时改 `T` 表 ＋ `ops/阈值表.md` ＋ 闸门清单）。
 
 ## 七、⭐ 怎么加一份新文档（决策树 —— 先走这里，⛔ 别直接建文件）
 

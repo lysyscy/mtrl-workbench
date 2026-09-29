@@ -51,6 +51,7 @@
 | `实测快照/i8-20260916-common_project.json`<br>`实测快照/i8-20260916-warehouse_list.json` | 真机 i8 的**原始响应**留痕（只读） | **2026-09-16 21:07** 那一次抓取 | ——（只读留痕） | 要复核名单结论时，**先看这两份快照**再决定是否复抓 | 间接：`ACC-PRJ-SYNC-001` |
 | `模板法导出-实测结论.md` | **两个材料报表的成品文件怎么生成**（`demo/模板/模板清单.md` §一 **路径②**）—— "真·可操作透视表" = 以**用户手作成品 xlsx** 为基底做 **`zip` 字节替换**（sharedStrings / 数据 sheet / pivotCache 两件 / pivotTable ＋ `refreshOnLoad`），**外加缓存级对账** | 本机 `W11-20250421859` · venv Python 3.13.12 · openpyxl 3.1.5 / pandas 3.0.5 / xlsxwriter 3.2.9 · 输入 = **2026-09-17 真机抓取**的两份 i8 导出件（`artifacts/_diag/`）· 跑的是**交付面** `PRD素材包-20260911/input/` 里的现成管线 | `backend/.venv/Scripts/python.exe tools/probe/_probe_tpl.py` | ① **改这两份报表的模板**（用户手作件换代）② 改 `mod07_setl`/`mod08_inv` 的解析（列定义）③ i8 导出件表单结构变 ④ 换机 / 升 openpyxl / pandas / xlsxwriter | **本工程尚未接入**（现只出清单）⇒ 接 `TAIL-04` 时以本条为方法依据；成品对账口径见 `ACC-SETL-001/001-08` |
 | `init_db.sql` | 一次性**建库**（开发库与测试库**物理隔离**，依据技术栈 §3.0 / §3.1） | 本机 PG 16 · 需 postgres 超级用户 | `"C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -f "D:\dev\mtrl-workbench\ops\init_db.sql"` | 换机 / 重建库（**恢复演练**在 M8，见计划 §5.5） | 全套 `tests/test_acc_*`（库结构不对会直接红） |
+| `宿主hooks-实测结论.md` | 宿主**能不能用 hooks 做"到点自动提醒"** —— 能力盘点（事件名 / 配置位 / 字段）＋ ⛔ **负结果：本 IDE 会话不跑 hooks** | 本机 `W11-20250421859` · IDE 会话 · 三个挂载点各配一遍 ＋ **重启进程 ＋ 走完整一轮** | ——（宿主层；脚本 `~/.codebuddy/hooks/handoff_stop_hook.py` **不在本仓**，留作 CLI 备用、未接线） | ① 换 IDE / 换宿主 ② 宿主升版 ③ 真出现"**我漏了交接评估**"的事件（＝本负结果的重议条件） | 无（**断言测不了** ⇒ 只能靠每轮自检；用户 2026-09-25 裁定 `B`） |
 
 ## 一之二、运维脚本（**不是"实测结论"，但同样带前提** —— 2026-09-21 新增）
 
@@ -79,55 +80,19 @@
 
 ⚠️ **`ops/nssm/nssm.exe` 不提交**（二进制 · 见 `.gitignore`）；新机重建照上表第一条重新下载一次即可。
 
-## 一之三、本宿主的 **hooks 能力**（实测结论 · 2026-09-25 · `TAIL-95` 前置）
+## 一之三、本宿主的 **hooks 能力**（⭐ **已独立成件** · 2026-09-28）
 
-| 项 | 结论 | 依据 |
-|---|---|---|
-| 支持吗 | ✅ **支持** | CodeBuddy 官方市场自带 `plugin-dev/skills/hook-development/SKILL.md`，**逐字列出**事件：`PreToolUse` · `PostToolUse` · `Stop` · `SubagentStop` · `SessionStart` · `SessionEnd` · `UserPromptSubmit` · `PreCompact` · `Notification`；市场里多个插件**真在用**（`security-scan`→`Stop` · `security-guidance`→`PreToolUse` · `plugin-finder`→`UserPromptSubmit` · `weixin-minigame-helper`→`SessionStart`） |
-| 配置位（**用户级**） | **`.codebuddy/settings.json`** —— **direct 格式**（顶层直接写 `"Stop": [ … ]`） | 同上 · 该 skill 的 `## Settings Format (Direct)` |
-| 配置位（插件级） | `hooks/hooks.json` —— **wrapper 格式**（`{"hooks": { … }}`），路径用 `${CODEBUDDY_PLUGIN_ROOT}` | 同上 · `## Plugin hooks.json Format`；⚠️ 插件 hooks 与用户 hooks **并行合并**执行 |
-| hook 类型 | `"type": "command"`（跑外部命令）· `"type": "prompt"`（交模型判）＋ `matcher` ＋ `timeout` | 同上 |
-| 收到的字段 | 公共：`session_id` · `transcript_path` · `cwd` · `hook_event_name`；`Stop/SubagentStop` 另有 `stop_hook_active` · `reason`；`UserPromptSubmit` 有 `user_prompt`；`Pre/PostToolUse` 有 `tool_name`/`tool_input`/`tool_result` | 同上 ＋ `security-scan` 的 README／脚本 |
-| ⚠️ **未确认** | **`turn_id` 不在文档字段里** ⇒ 计数要按 **`session_id` ＋ `Stop` 次数**降级（或先实测一次拿到真实 payload） | 文档未列出该字段 |
+⭐ **结论与负结果全文** ⇒ **`ops/宿主hooks-实测结论.md`**（性质 / 方法 / 脚本 / 日期 / 本机 都写在那件头上）。
 
-⇒ **对 `project-handoff` 的意义**：它需要的三个事件（`SessionStart` / `UserPromptSubmit` / `Stop`）**全都有**，
-且 `Stop` 带 `stop_hook_active`（防循环）⇒ **技术上可以适配**。
-⚠️ 但落地要**改用户级配置**（`.codebuddy/settings.json`）＋ 可能触发宿主原生信任确认 ⇒ **必须先经用户同意**，
-⛔ 不许我擅自写。本机现状：**已挂第一步（2026-09-25 晚）** —— 见下「落地状态」。
+**一句话结论**：① 宿主**支持** hooks（官方 `hook-development` 逐字列出事件名 ＋ 市场 4 个插件真在用）；
+② ⛔ **本 IDE 会话不跑 hooks**（三个挂载点 · 重启 ＋ 完整一轮 · **0 触发** ⇒ 文档那套属 **CodeBuddy Code(CLI)**）；
+③ **用户 2026-09-25 裁定 `B`**：维持「每轮自检 ＋ 交接材料 ＋ 记忆」，⛔ 不装 CLI、⛔ 不再动宿主配置
+（重议条件 = 真出现"我漏了评估"的事件）。决定件 = `work/40-decisions/D27-交接提醒维持每轮自检.md`。
 
-### 落地状态（`TAIL-95` 第一步 · 2026-09-25）
-
-| 项 | 值 |
-|---|---|
-| 挂在哪 | 用户级 **`~/.codebuddy/settings.json`** 的 `Stop`（direct 格式 · `matcher:"*"` · `timeout:15`）｜改前备份 = 同目录 `settings.json.bak-20260925` |
-| 脚本 | **`~/.codebuddy/hooks/handoff_stop_hook.py`**（宿主层 · 不在本仓 ⇒ 本仓文档架构规则不受影响） |
-| 干什么 | ① **只认本项目**（`cwd` 含 `mtrl-workbench`，其余项目静默退出）② `stop_hook_active=true` ⇒ 静默（防循环）③ 其余 ⇒ 往 `~/.codebuddy/state/handoff-stop-hook.log` **写一行心跳**（含**真实字段名**）④ ⛔ **绝不往 stdout 写**、⛔ 异常全吞、**一律 `exit 0`** |
-| 自证（四用例 · 都 rc=0 ＋ stdout 空） | 本项目 ⇒ 心跳 ✓ ｜异项目 ⇒ 静默不写 ✓ ｜`stop_hook_active=true` ⇒ 静默 ✓ ｜**畸形输入** ⇒ 吞掉 ✓ |
-| ⭐ 实测到的真实 payload 字段 | `cwd` · `hook_event_name` · `session_id` · `stop_hook_active` · `transcript_path` —— **没有 `turn_id`** ⇒ 计数只能按 **`session_id`** |
-| ⛔ **未实现（别当已完成）** | 「**压缩到期却漏了评估**」的判定 —— 技能计数器需要一次压缩计数输入，而宿主 `PreCompact` 没有"自增"入口、payload 也无 `turn_id` ⇒ 当前 hook 只做**管道自证 ＋ 心跳**；要真做到点提醒，下一步得先解决"压缩次数怎么落账" |
-
-
-
-### ⛔ 负结果（2026-09-25 收口 · `TAIL-95`）：**本宿主的 IDE 会话不跑 hooks**
-
-实测条件：**三个挂载点同时配置** ＋ 用户**重启整个 VS Code 进程** ＋ 走完**一个完整回合**：
-
-| 挂载点 | 依据 | 结果 |
-|---|---|---|
-| 用户级 `~/.codebuddy/settings.json` 的 `Stop`（direct 格式） | 官方 `hook-development` 的 Settings Format | ⛔ **0 次触发** |
-| 用户级 `~/.codebuddy/hooks.json` 的 `Stop` | 技能附页口径「合并到用户 `hooks.json`」 | ⛔ **0 次触发** |
-| **项目级** `.codebuddy/settings.json` 的 `Stop` | direct 格式 | ⛔ **0 次触发** |
-
-· hook 脚本**逻辑本身已验证**（四用例：写心跳 ✓ · 异项目静默 ✓ · 防循环静默 ✓ · 畸形输入吞掉 ✓，都 `rc=0` 且 stdout 为空）；
-· 宿主日志 `~/.codebuddy/logs/` 里只有 `cli-memwatch-*.log` —— **没有** hook 加载/报错记录；
-· 「插件形式」**未试**：本机 `plugins/known_marketplaces.json` **只有两个内置 zip 市场**（`isBuiltIn:true`），
-  没有本地目录市场的样例 ⇒ 猜 schema 违反纪律（⛔ 不猜）。
-⇒ **判定**：官方文档列的事件名/配置位是 **CodeBuddy Code（CLI）** 的能力；**本 IDE 会话不加载 hooks**。
-**收口动作**：宿主配置**已还原**（`settings.json` ← `.bak-20260925`）· 两个新增文件**已删** ·
-脚本 `~/.codebuddy/hooks/handoff_stop_hook.py` **留作 CLI 路线备用**（未接线、零影响）。
-⚠️ **口径**：IDE 会话里**没有程序兜底** ⇒ 交接评估**只能靠每轮自检**（`project-handoff` 技能允许并要求的口径）。
-
-**用户裁定（2026-09-25）**：按 **`B`** —— 维持「每轮自检 ＋ 交接材料 ＋ 记忆」，⛔ **不装 CLI**、⛔ 不再动宿主配置（重议条件 = 真出现"我漏了评估"的事件）。决定件 = `work/40-decisions/D27-交接提醒维持每轮自检.md`。
+⚠️ **2026-09-28 订正（文档审计）**：本处原先**内联了约 49 行内容**，而本文件**自己的维护纪律**（§一 末）写的是
+「新增实测结论 ⇒ ① 文件自身写清（性质 / 方法 / 脚本 / 日期 / 本机）② **在本表加一行**」——
+把"内容"塞进"索引"是**职责混杂**（将来要复核 hooks 结论时，不知道"该改哪儿"、也不知道"这条还成立吗"）
+⇒ 已拆成独立件，并在 §一 表加一行。
 
 ## 二、引用这些结论时的三条纪律
 

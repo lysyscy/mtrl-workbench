@@ -18,7 +18,7 @@
 | 已完工单元的大段过程 | 继续占着计划正文 | `plans/archive/归档-类型-主题-YYYYMMDD.md` ＋ 原处指针 |
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
 | 提交信息草稿 | artifacts/commit_msgN.txt | `work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
-| 交付面文件的手工备份 | artifacts 根、.workbuddy 根 | `.workbuddy/backups/`（留最近 5 份） |
+| 交付面文件的手工备份 | artifacts 根、.workbuddy 根 | `.workbuddy/backups/`（留最近 5 份；⚠️ **一天多批只留当日末个**，中间批次改在当批设计件里写「改前差异说明」） |
 | 环境/部署/配置/架构知识 | MEMORY 注入档 | `docs/architecture.md` ＋ `ops/README.md`（随变更同批改） |
 | 使用者可感知的变化 | 活文档正文 | `docs/changelog.md`（部署节点登记） |
 
@@ -52,3 +52,18 @@
 ```
 
 结论性文字带 `[用户] / [交付面] / [助手自定]` 出处标记（T9 精神）；日期一律 `YYYY-MM-DD`；编号沿用 `TAIL-/D-/MOD-/ACC-`，⛔ 不另造前缀。
+
+## 五、两个 scratch 家 / 两个记忆家（⭐ 2026-09-29 写明，防"不知道哪个是现行的"）
+
+| 家 | 它是谁的活区 | 保留期 / 机器眼 | ⛔ 别搞混 |
+|---|---|---|---|
+| `.workbuddy/work/00-scratch/` | 我（Agent）在本区的草稿（`tmp-YYYYMMDD-主题.*` / `CB_MSG.txt`） | **TTL 14 天** · `T14` | 它是**本区**的，出区就按 §一 表升档 |
+| `.workbuddy/scratch/` | 仓级**活区**（各尺子输出 / 一次性脚本 / 交付面取证） | **14 天** · `T20` · 索引 = 该目录 `README.md` | ⛔ 它不是文档层；**先看那边 `README.md` 再动手** |
+
+**两个"记忆家"**（⛔ 都属留痕，只追加）：
+
+| 家 | 是什么 | 现状 |
+|---|---|---|
+| `.codebuddy/memory/journal/*.md` | **早期**逐日日志（历史） | **停在 2026-09-27** ⇒ 视作**已归档留痕**，⛔ 别往里续写 |
+| `.codebuddy/memory/YYYY-MM-DD.md` ＋ `MEMORY.md` | **现行**逐日日志 ＋ 长期记忆（IDE 侧） | ⭐ **要写日志就写这里**（当天的那个 `YYYY-MM-DD.md`） |
+| `.workbuddy/memory/MEMORY.md` ＋ `MEMORY-细则.md` | 会话**注入档**（另一条线 · `journal/` 同家） | 口径/纪律的主人；⚠️ 与上面那家**不是同一份** |
