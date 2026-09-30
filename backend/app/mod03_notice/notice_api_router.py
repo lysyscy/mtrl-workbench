@@ -527,7 +527,8 @@ def export_notices(req: ExportIn, session: Session = DBSession) -> dict:
     import base64
     from datetime import date
 
-    from app.report_export import nt_export as X
+    from app import export_registry as EXP
+    X = EXP.get("nt")
 
     # ⚠️ **取数层给全量**（见 docstring）—— 每一档都显式写出来，⛔ 别用 `notice_filters()` 的默认值
     filters = NoticeFilters(

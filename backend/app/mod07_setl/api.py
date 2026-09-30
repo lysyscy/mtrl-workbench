@@ -141,7 +141,8 @@ def api_big_export(period: str = ""):
 
     from fastapi.responses import FileResponse, JSONResponse
 
-    from app.report_export import service as EX
+    from app import export_registry as EXP
+    EX = EXP.get("service")
 
     try:
         with session_scope() as s:
@@ -320,7 +321,8 @@ def api_export_settlement(request: Request):
     from fastapi.responses import FileResponse, JSONResponse
     from urllib.parse import quote
 
-    from app.report_export import service as EX
+    from app import export_registry as EXP
+    EX = EXP.get("service")
 
     period = str(request.query_params.get("period") or "").strip() or default_month()
     try:
@@ -353,7 +355,8 @@ def api_export_extract(request: Request):
     from fastapi.responses import FileResponse, JSONResponse
     from urllib.parse import quote
 
-    from app.report_export import service as EX
+    from app import export_registry as EXP
+    EX = EXP.get("service")
 
     q = query_params(request)
     period = q.get("period")

@@ -180,7 +180,8 @@ def export_plans(payload: PlanExportIn, load: PageData = Depends(get_page_data))
     import base64
     from datetime import date
 
-    from app.report_export import pl_export as X
+    from app import export_registry as EXP
+    X = EXP.get("pl")
 
     data = load()                       # ⭐ 空参 = 全量（见 docstring）
     all_rows = data.get("rows") or []

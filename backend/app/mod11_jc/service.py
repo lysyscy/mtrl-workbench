@@ -286,7 +286,8 @@ def export_xlsx(s: Session, *, ids: list[int]) -> bytes:
        多算了一点，但换到的是"导出与屏幕**逐行一致**"——这笔账在本项目永远划算。
     ⚠️ 空 `ids` ⇒ **空表**（不回落全量）：⛔ "我一列都没勾/筛出 0 行，却导出了整本台账" 是最坏的一种意外。
     """
-    from app.report_export import jc_export
+    from app import export_registry as EXP
+    jc_export = EXP.get("jc")
 
     want = {int(x) for x in (ids or ())}
     if not want:

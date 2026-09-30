@@ -103,3 +103,11 @@ def _assert_test_db_isolated() -> None:
 # ⚠️ 调用点必须在**本文件末尾**（`_read_env_value` 得先定义好），
 #    但仍**早于任何测试模块**被导入 ⇒ 也就早于 `app.core.config` 的首次调用 ✓
 _point_tests_at_test_db()
+
+# ⭐ 导出件注册（`TAIL-195` 批 2b · 与 `app/main.py` **同一个** `register_all()`）：
+#    许多测试**直调**导出件（不经过 `app.main`）⇒ 这里也要填一次注册表。
+#    ⚠️⚠️ **必须在上面那句之后** —— 它 import `app.report_export`，而那条链会碰 `app.core.config`；
+#       先注册 = "在把 DATABASE_URL 换成测试库之前就把配置缓存了"（本文件开头那个坑，会静默打错库）。
+from app.export_bindings import register_all as _register_exporters  # noqa: E402
+
+_register_exporters()

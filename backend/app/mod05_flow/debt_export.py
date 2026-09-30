@@ -38,7 +38,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import openpyxl
-from app.report_export.save import save_workbook
+from app import export_registry as EXP   # ⭐ 包间只按名取（表见 `app/export_bindings.py`）
 
 #: 表头（**列序由用户指定**：A 序号 · B 项目 · C 集采 · D 辅材 · E 机械）。
 COLUMNS: tuple[str, ...] = ("序号", "项目", "集采", "辅材", "机械")
@@ -96,6 +96,7 @@ def build_xlsx(items: list[dict], out_dir: Path, *, mark_mech: bool = True,
     for col, width in zip("ABCDE", (6, 46, 16, 16, 16)):
         ws.column_dimensions[col].width = width
 
+    save_workbook = EXP.get("save").save_workbook
     out = save_workbook(wb, Path(out_dir) / file_name(today))
     return str(out)
 

@@ -125,7 +125,8 @@ def export_flows(payload: FlowExportIn, load: PageData = Depends(get_flows_data)
     import base64
     from datetime import date
 
-    from app.report_export import fl_export as X
+    from app import export_registry as EXP
+    X = EXP.get("fl")
 
     data = load()                       # ⭐ 空参 = **全量**（本端点的"筛选"靠传入的 id）
     all_rows = data.get("rows") or []
@@ -246,7 +247,8 @@ def api_ledger_export(
 
     from fastapi.responses import FileResponse, JSONResponse
 
-    from app.report_export import service as EX
+    from app import export_registry as EXP
+    EX = EXP.get("service")
 
     keys = [k.strip() for k in str(projects or "").split(",") if k.strip()]
     try:

@@ -52,6 +52,15 @@ from app.mod14_config.router import router as mod14_router
 #    （§1.5.1 末行：留痕的改前人 / 录入人「统一取当前登录用户」＝ 账号体系与业务字段的**唯一接点**）。
 from app.mod15_user.api import router as mod15_api_router
 
+# ⭐ 导出件注册（`TAIL-195` 批 2b · 装配层的活，与 `models_registry` 同款）：
+#    业务包从此**只按名取**导出器（`EXP.get("pj")`），⛔ 不再 import 导出层 ⇒「导出层 ⇄ 业务包」的环断开。
+#    ⚠️ 表在 `app/export_bindings.py`（**唯一一处**）；本处只是"进程一起就填上"。
+#    ⚠️ 放**模块顶层**（⛔ 别塞进 `create_app()`）：任何 `import app.main` 的路径都必须已注册
+#       —— 测试直调导出件那条路走 `backend/tests/conftest.py` 的同一个 `register_all()`。
+from app import export_bindings as _export_bindings                 # noqa: E402
+
+_export_bindings.register_all()
+
 # 各模块页面（单文件，托管在本进程；切片 MVP，完整前端在后续阶段）
 _APP_DIR = Path(__file__).resolve().parent
 # ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 1**）：**m01 / m02 已删** —— 这两页的读全部走

@@ -98,7 +98,8 @@ def export_projects(payload: ProjectExportIn) -> dict:
     import base64
     from datetime import date
 
-    from app.report_export import pj_export as X
+    from app import export_registry as EXP
+    X = EXP.get("pj")
 
     ids = [int(i) for i in (payload.ids or [])]
     with session_scope() as s:

@@ -10,7 +10,8 @@
 | 规则 | 禁什么 | 依据 |
 |---|---|---|
 | **A（上半）** | `app/core/**` ⛔ `import app.mod*` | `core` 是内核，全站依赖它 ⇒ 反向依赖即成环（`models_registry` 已挪走，余 3 处例外） |
-| **B（下半）** | `app/mod*/**` ⛔ `import app.report_export` | 方案 §3.3 第一半（`TAIL-195` 批 2 · 案②）—— 导出器要从**装配层注册表**取 |
+| **B（下半）** | `app/mod*/**` ⛔ `import app.report_export` | 方案 §3.3 第一半（`TAIL-195` 批 2 · 案②）—— 导出器**只许按名取**（`app.export_registry`，表在 `app/export_bindings.py`） |
+| **B2（下半）** | `app/export_registry.py` ⛔ `import` 任何 `app.*` | 规则 B 的**反绕过**：注册表必须是**叶子**，否则环换个名字继续存在 |
 | **C（下半）** | `mod03` ⛔ `import app.mod05_flow.repository`／`mod05` ⛔ `import app.mod03_notice.repository` | 计划 **§2.3**「包间只经 `service` 调用，**不得跨包直查对方表**」（方案 §3.3 第二半） |
 
 ⚠️ **判据是静态的**（只读源码 ＋ `ast` 解析，⛔ 不 import app 包）—— 所以对"**函数内延迟 import**"
@@ -25,6 +26,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 from tests.acc_plugin import acc
@@ -44,18 +46,13 @@ _ALLOW_A: dict[tuple[str, str], str] = {
         "项目三小件（唯一实现）要读 `Project` 模型；同上，属批 1b",
 }
 
-#: ── 规则 B（下半）── 相对 `backend/app` 的路径 → 为什么现在还留着（`TAIL-195` 批 2 · 案② 拆完即清空）
-_ALLOW_B: dict[str, str] = {
-    "mod01_projects/router.py": "导出动作（`pj_export`）—— 批 2 案②：改从装配层注册表取",
-    "mod03_notice/notice_api_router.py": "导出动作（`nt_export`）—— 同上",
-    "mod04_plan/router.py": "导出动作（`pl_export`）—— 同上",
-    "mod05_flow/debt_export.py": "导出动作（`report_export.save.save_workbook`）—— 同上",
-    "mod05_flow/router.py": "导出动作（`fl_export` ＋ `service`）—— 同上",
-    "mod06_proc/router.py": "导出动作（`service`）—— 同上",
-    "mod07_setl/api.py": "导出动作（`service`，3 处）—— 同上",
-    "mod08_inv/router.py": "导出动作（`service`）—— 同上",
-    "mod11_jc/service.py": "导出动作（`jc_export`）—— 同上",
-}
+#: ── 规则 B（下半）── 相对 `backend/app` 的路径 → 为什么现在还留着
+#: ⭐ **2026-09-30 批 2b 已清空**（12 处全改走 `app.export_registry` 按名取）⇒ 名单只剩空表：
+#:    ⛔ 别为了"加个导出调用"往里添条目 —— 业务包取导出器**只许**经注册表（表在 `app/export_bindings.py`）。
+_ALLOW_B: dict[str, str] = {}
+
+#: 注册表**必须是叶子**（业务包 import 它 ⇒ 它一旦 import 导出层，环就换个名字继续存在）
+_REGISTRY = APP / "export_registry.py"
 
 #: ── 规则 C（下半）── (相对 `backend/app` 的路径, 被禁的模块) → 为什么现在还留着
 #: ⭐ **2026-09-30 批 2a 已清空**（3 处全改走对方的 `service` 包间出口）⇒ 名单只剩空表：
@@ -184,6 +181,57 @@ def test_B_放行名单里不许留幽灵条目():
         "`_ALLOW_B` 里有**已经不存在**的条目（那处 import 已经没了 ⇒ 名单该删没删）：\n  "
         + "\n  ".join(stale)
     )
+
+
+@acc()
+def test_B2_注册表必须是叶子件():
+    """`app/export_registry.py` ⛔ 不得 `import` 任何 `app.*`。
+
+    ⭐ 为什么单立一条（它是规则 B 的**反绕过**那一半）：注册表一旦 import 了导出层，
+       「业务 → 注册表 → 导出层 → 业务」就是**换了个名字的同一个环**，而规则 B 照样绿 ⇒
+       那是"**绕开结构问题**"的假绿（比不立规则更坏）。⇒ 填表的事只许在 `app/export_bindings.py`。
+    """
+    assert _REGISTRY.exists(), f"`{_REGISTRY}` 不在 —— 规则 B 的落点没了（改路径要同批改本判据）"
+    hits = [(ln, m) for ln, cands in _import_targets(_REGISTRY) for m in cands
+            if m == "app" or m.startswith("app.")]
+    assert not hits, (
+        "`app/export_registry.py` 是**叶子件**（业务包 import 它）⇒ ⛔ 不许 import 任何 `app.*`：\n  "
+        + "\n  ".join(f"L{ln}: {m}" for ln, m in hits)
+        + "\n  ⇒ 要填表请改 `app/export_bindings.py`（装配层）—— 那里才是 import 导出层的地方。"
+    )
+
+
+#: 业务侧"按名取"的写法：`EXP.get("<名>")`（`EXP` 是各调用点给 `export_registry` 起的名）
+_GET_RE = re.compile(r'\bEXP\.get\("([a-z0-9_]+)"\)')
+
+
+@acc()
+def test_B3_业务按名取的每个名字都必须在绑定表里():
+    """规则 B 的**另一半**：业务写的名字必须与装配层那张表对得上。
+
+    ⭐ 为什么必须有：注册表的失败是**运行期**的（某条导出端点第一次被点到才炸）⇒ 光靠
+       `get()` 报错要等线上才发现。本判据把它提前到**每轮 pytest**。
+    """
+    from app import export_bindings as bindings
+
+    used: set[str] = set()
+    mods = sorted(p for p in APP.glob("mod*") if p.is_dir())
+    assert len(mods) >= 10, f"`{APP}` 下只扫到 {len(mods)} 个 `mod*` 包 —— 规则 B3 已失效"
+    for d in mods:
+        for p in _py_files(d):
+            used |= set(_GET_RE.findall(p.read_text(encoding="utf-8")))
+    assert used, ("一个 `EXP.get(\"…\")` 都没扫到 —— 写法变了，规则 B3 已失效"
+                  "（⛔ 别让它静默通过）")
+
+    unknown = sorted(used - set(bindings.BINDINGS))
+    assert not unknown, (
+        "业务包按名取的这些名字**不在**装配层的绑定表里（`app/export_bindings.BINDINGS`）⇒ "
+        "那条导出端点第一次被点到就会抛「没有注册」：\n  "
+        + "\n  ".join(unknown)
+        + "\n  ⇒ 在 `app/export_bindings.py` 的表里补上（⛔ 别在该模块里另开第二条取件路）。"
+    )
+    # 顺带确认那张表**填得进**注册表（`register_all` 幂等；漏填会在第一次取件时才炸）
+    bindings.register_all()
 
 
 # ------------------------------------------------------------------------- 规则 C

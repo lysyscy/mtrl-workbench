@@ -67,7 +67,8 @@ def api_proc_export(request: Request):
 
     from fastapi.responses import FileResponse, JSONResponse
 
-    from app.report_export import service as EX
+    from app import export_registry as EXP
+    EX = EXP.get("service")
 
     params = query_params(request)
     keys = [k.strip() for k in str(_one(params, "projects") or "").split(",") if k.strip()]

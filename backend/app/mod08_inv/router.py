@@ -199,7 +199,8 @@ def api_export_inventory(
     from fastapi.responses import FileResponse, JSONResponse
     from urllib.parse import quote
 
-    from app.report_export import service as EX
+    from app import export_registry as EXP
+    EX = EXP.get("service")
 
     period = str(request.query_params.get("period") or "").strip() or D.default_month()
     try:

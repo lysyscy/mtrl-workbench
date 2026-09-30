@@ -31,9 +31,13 @@ import subprocess
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 APP = ROOT / "backend" / "app"
 CORE = APP / "core"
-CONFIG = CORE / "config.py"          # 规则 A：不在放行名单里
+#: ⚠️ `M1` 的靶**刻意挑一个不在导入链上的 core 件**（`nav.py`）——
+#:    往 `config.py` 那种"启动链上"的件塞业务 import 会让 **pytest 收集期就崩**（rc=4），
+#:    而本件的判据要求"**那条断言的原话**出现在输出里"（⛔ 收集期报错不算命中 —— 见 §十七 老课）。
+NAV = CORE / "nav.py"                # 规则 A：不在放行名单里 且 不在 app 导入链上
 PROJECTS = CORE / "projects.py"      # 规则 A：在放行名单里（测"名单不是整件放行" ＋ "名单不许留幽灵"）
 MOD09_MODELS = APP / "mod09_fee" / "models.py"      # 规则 B：不在放行名单里的 mod 件
+REGISTRY = APP / "export_registry.py"               # 规则 B2：注册表必须**是叶子**
 MERGE03 = APP / "mod03_notice" / "merge.py"         # 规则 C：不在放行名单里的 mod03 件
 DOMAIN05 = APP / "mod05_flow" / "domain.py"         # 规则 C：不在放行名单里的 mod05 件
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
@@ -45,10 +49,9 @@ PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
 #: ⚠️ 锚串统一用 `from __future__ import annotations`（每个件恰好 1 次 ⇒ 唯一命中）。
 _FUTURE = b"from __future__ import annotations"
 CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
-    (CONFIG, "M1 规则A · 往不在名单里的 core 件塞一条业务 import",
-     b"from app.core.errors import NotConfiguredError",
-     b"from app.core.errors import NotConfiguredError\n"
-     b"from app.mod01_projects import models as _ghost  # noqa: F401",
+    (NAV, "M1 规则A · 往不在名单里的 core 件塞一条业务 import",
+     _FUTURE,
+     _FUTURE + b"\nfrom app.mod01_projects import models as _ghost  # noqa: F401",
      "反向依赖会成环"),
     (PROJECTS, "M2 规则A · 往名单里的件再塞**别的**业务包（名单若按整件放行 ⇒ 会漏）",
      b"from app.mod01_projects.models import Project",
@@ -71,6 +74,10 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      _FUTURE,
      _FUTURE + b"\nfrom app.mod03_notice import repository as _ghost  # noqa: F401",
      "直查了对方表"),
+    (REGISTRY, "M7 规则B2 · 注册表不再是叶子（环换个名字继续存在）",
+     b"from types import ModuleType",
+     b"from types import ModuleType\nfrom app.report_export import service as _ghost  # noqa: F401",
+     "叶子件"),
 ]
 
 
