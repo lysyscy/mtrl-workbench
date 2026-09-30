@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 
 from tests.acc_plugin import acc
-from tests.shell_src import read_shell                       # ⭐ 壳源的**唯一读取出口**（P4①立的规矩）
+from tests.shell_src import read_shell, tbl_kernel           # ⭐ 壳源的**唯一读取出口**（P4①立的规矩）
 
 
 def _render_body() -> str:
@@ -64,6 +64,40 @@ def test_虚拟滚动的设计红线():
     assert "VS_MIN=400" in read_shell(), "虚拟化阈值没了（小页也被虚拟化 = 固定开销不值）"
     # 红线③：BIND（注入按钮/钩子）必须在最后一块之后才调 —— 两个分支各调一次
     assert body.count("BIND[VIEW]") >= 2, "`BIND[VIEW]` 只调一处 ⇒ 另一条路径渲染完没有注入钩子"
+
+
+@acc()
+def test_表级虚拟滚动_两条路共用一个挂载点():
+    """⭐ `TAIL-64` **P5-a**（2026-09-30）：虚拟滚动下沉到**表级**后的三条**结构性**保证。
+
+    ⚠️ **为什么要有它**：`m08` 试点把"**谁在滚 / 谁被重画**"从**整页**换成**那张表自己** ⇒
+      ① **滚动监听的挂载点只能有一处、且必须在分派之前** —— 真机当场抓到过：写在页级那半里，
+         表级那条从 `startVirtual` 顶部就 `return` ⇒ **一个监听都挂不上**（滚动条能拖、内容一动不动），
+         而离线判据 / `node --check` / `U1` **全绿** ⇒ 只能靠这条把结构钉住；
+      ② **两条路必须归一**（`startVirtual(` 全壳只许"定义 ＋ 调用"两处）—— 另开第三条路 = 第三条要各自
+         记得调 `placePops` / `applyPjFilters` / `BIND`（本仓"漏一条"的经典病）；
+      ③ **`m08` 的调用点真的开标记** ＋ **`TBL` 内核真的出 `data-vs`（且默认关）** —— 否则"表级接管"
+         **悄悄不生效**（页级又被 `VSCROLL` 关着 ⇒ 那一页就完全不虚拟化了，1000+ 行照旧整表 parse）。
+    自证 = `tools/mut/_mut_p5a.py`：去掉 `vs:true` / 摘掉挂载点 / 内核不拼 `data-vs` ⇒ 本件必须红。
+    """
+    body = _render_body()
+    assert "vsBindScroll();" in body, \
+        "虚拟滚动的滚动监听没有统一挂载点（`vsBindScroll()` 不见了）—— 表级那条路会没人挂监听"
+    assert body.index("vsBindScroll();") < body.index("return startVirtualTables("), \
+        "滚动监听的挂载点排在了**表级分派之后** ⇒ 表级那条一 `return` 就把它跳过了"\
+        "（真机症状：滚动条能拖、内容一动不动；而离线全绿）"
+    src = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", read_shell(), flags=re.S))
+    n = src.count("startVirtual(")
+    assert n == 2, (
+        f"`startVirtual(` 全壳出现 {n} 次（应为 **2**：定义 ＋ `render()` 里那一次调用）—— "
+        "另开第三条渲染通道 = 那条要各自记得调 `placePops` / `applyPjFilters` / `BIND`")
+    #: ⚠️ **必须剥块注释再判**：`TBL` 内核那段注释里**引述**了 `data-vs="<key>"` 这个写法
+    #:    ⇒ 不剥的话"内核不再拼标记"这个变异**照样绿**（本仓"判据撞注释"第 4 次）。
+    kern = re.sub(r"/\*.*?\*/", "", tbl_kernel(), flags=re.S)
+    assert "vs=false" in kern and "(vs?' data-vs=" in kern, \
+        "`TBL` 内核没有「按标记出 `data-vs`」这条路（或丢了默认关）⇒ 表级虚拟滚动认领不到任何表"
+    assert "key:'m08:invoices',vs:true," in read_shell(), \
+        "`m08` 那张大表的调用点没开 `vs` 标记 ⇒ 它既不走表级、页级又被 `VSCROLL` 关着 ⇒ **完全不虚拟化**"
 
 
 @acc()
