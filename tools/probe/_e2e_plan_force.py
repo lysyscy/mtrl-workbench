@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-import app.core.models_registry  # noqa: F401,E402  （ORM 脚本必须先注册全表）
+import app.models_registry  # noqa: F401,E402  （ORM 脚本必须先注册全表）
 from app.core.db import session_scope  # noqa: E402
 from app.mod04_plan.models import PlanRow  # noqa: E402
 

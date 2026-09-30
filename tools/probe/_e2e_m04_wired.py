@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 # ⚠️ **必须先 import 注册表**：否则跨包外键（`plan_row.project_id → project.id`）报
 #    `NoReferencedTableError` —— 与 `tools/_e2e_m01_wired.py` 同一坑（MEMORY §七）。
-import app.core.models_registry  # noqa: E402,F401
+import app.models_registry  # noqa: E402,F401
 
 YM = "2099-01"          # 刻意用一个不可能有真实数据的年月 ⇒ 清理时好认
 fails: list[str] = []

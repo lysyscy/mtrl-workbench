@@ -53,7 +53,7 @@ def _snapshot(s) -> dict:
 
 
 def main() -> int:
-    import app.core.models_registry  # noqa: F401
+    import app.models_registry  # noqa: F401
     from app.core.db import session_scope
     from app.mod02_i8.client import I8Client
     from app.mod07_setl import fetch_service as FS7

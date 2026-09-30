@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
-import app.core.models_registry  # noqa: E402, F401
+import app.models_registry  # noqa: E402, F401
 
 # ⚠️ 2026-09-28（用户口径 · 看板清账）：删掉 4 个瓦片 —— `ntUnapproved` / `dfPending` / `fetchFail` /
 #    `printFail`（用户判「全无用」）。⭐ **claim 不变**：留下的每一项都必须**在页面上 · 顺序固定 ·

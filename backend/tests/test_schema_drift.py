@@ -9,7 +9,7 @@
 
 两条守卫各守一半：
 
-1. **登记完整**（纯静态）：`app/mod*/models.py` 的**每一个**都必须在 `core/models_registry.py` 里 import。
+1. **登记完整**（纯静态）：`app/mod*/models.py` 的**每一个**都必须在 `app/models_registry.py` 里 import。
    漏一个 ⇒ `autogenerate` **看不见**它 ⇒ 反过来判成"**要删掉这张表**"。
    ⚠️ 本次事故的直接原因就是它：`mod15_user` 那行**一直是注释**，而登录/账号体系**早就在跑**
    （`main.py` 挂了它的路由、`core/identity.py` 靠它取"当前登录用户"）⇒ 两处说法不一致，没人发现。
@@ -33,7 +33,9 @@ import pytest
 from tests.acc_plugin import acc
 
 APP = Path(__file__).resolve().parents[1] / "app"
-REGISTRY = APP / "core" / "models_registry.py"
+#: ⭐ 2026-09-30（`TAIL-195` 批 1）：登记表**已从 `core/` 挪到装配层**（`app/` 顶层，与 `main.py` 同级）
+#:   —— 它的性质是"把全部业务 models 装配进 metadata"，那是装配层的活，不是内核的活。
+REGISTRY = APP / "models_registry.py"
 
 
 def _code_lines(path: Path) -> list[str]:
@@ -62,7 +64,7 @@ def test_每一个_models_模块都登记进了模型注册表():
     code = "\n".join(_code_lines(REGISTRY))
     missing = [m for m in mods if f"from app.{m} import models" not in code]
     assert not missing, (
-        "这些模块的模型**没登记**进 `app/core/models_registry.py`："
+        "这些模块的模型**没登记**进 `app/models_registry.py`："
         + "、".join(f"`{m}`" for m in missing)
         +         "。\n  ⇒ `alembic autogenerate` 看不见它们，会把库里**已有的表判成「要删除」**"
           "（下一个人跑 `--autogenerate` 就会生成删表迁移）。\n"
@@ -94,7 +96,7 @@ def test_元数据与测试库没有分叉():
     from alembic.migration import MigrationContext
     from sqlalchemy import create_engine
 
-    import app.core.models_registry  # noqa: F401  ← 必须先注册全表（与 `alembic/env.py` 同源）
+    import app.models_registry  # noqa: F401  ← 必须先注册全表（与 `alembic/env.py` 同源）
     from app.core.config import get_settings
     from app.core.db import Base
 

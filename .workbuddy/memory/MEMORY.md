@@ -107,7 +107,7 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui     # ⭐⭐ 交�
 
 ## 七、Alembic 迁移必补两项
 - ① **新增 NOT NULL 列必须带 `server_default`**（含默认值的列也要 —— 否则非空表 upgrade 直接报错）② **外键必须命名**（autogenerate 无名约束 ⇒ **`downgrade()` 必失败**）。
-- **验证三连**：`alembic current` = head · `upgrade head` 成功 · **`alembic check` 无待生成操作**。ORM 冒烟脚本**必须先 `import app.core.models_registry`**（否则跨包 FK 报 `NoReferencedTableError`）。
+- **验证三连**：`alembic current` = head · `upgrade head` 成功 · **`alembic check` 无待生成操作**。ORM 冒烟脚本**必须先 `import app.models_registry`**（否则跨包 FK 报 `NoReferencedTableError`）。⚠️ 2026-09-30（`TAIL-195` 批 1）：该件**已从 `core/` 挪到装配层**（`app/` 顶层），⛔ 旧路径 `app.core.models_registry` 已不存在。
 
 ## 八、工程纪律
 

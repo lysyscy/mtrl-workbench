@@ -23,7 +23,7 @@ BASE = "http://127.0.0.1:8000"
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-import app.core.models_registry  # noqa: E402,F401  —— ⚠️ 必须先 import（否则跨包 FK 报错）
+import app.models_registry  # noqa: E402,F401  —— ⚠️ 必须先 import（否则跨包 FK 报错）
 FROM_YEAR_MONTH = "2099-07"        # 刻意用不可能有真实数据的月份 ⇒ 清理好认
 REMARK = "m05自检"
 fails: list[str] = []

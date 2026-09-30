@@ -11,7 +11,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-import app.core.models_registry  # noqa: F401  ← 模型注册（决定 autogenerate 可见性）
+import app.models_registry  # noqa: F401  ← 模型注册（决定 autogenerate 可见性）
 from app.core.config import get_settings
 from app.core.db import Base
 

@@ -390,7 +390,7 @@
 2. **删文件走专用工具**（`delete_file`：不走 shell、无需审批）；⛔ 别用 `Remove-Item`。
 3. **提交信息走文件 ＋ `git commit -F`**（⛔ 别内联多行 message —— PowerShell 引号会打架）。
 4. **自检回滚要逐字段赋值**（⛔ 别整体换对象引用 —— 换引用会把整个对象替换掉）。
-5. **ORM 冒烟脚本先 `import app.core.models_registry`**（否则跨包 FK 报 `NoReferencedTableError`）—— 全文见本档 `§十二`。
+5. **ORM 冒烟脚本先 `import app.models_registry`**（否则跨包 FK 报 `NoReferencedTableError`）—— 全文见本档 `§十二`。⚠️ 2026-09-30（`TAIL-195` 批 1）：该件**已从 `core/` 挪到装配层**（`app/` 顶层）。
 6. ⛔⛔ **跑靠 `finally` 复原的脚本（变异件那类）别接 `Select-Object -First N`** —— 收满 N 行就**掐断上游进程**
    ⇒ `finally` 不跑 ⇒ **靶件留坏态**（2026-09-24 实测两次：残留临时靶 ⇒ `T11` 假红；`执行情况-主文档.md`
    里的 `开发计划-主文档` 被换 3 处 ⇒ `T6` 真红）。⇒ 用 `-Last N`（读完全部）或**先落文件再读**。

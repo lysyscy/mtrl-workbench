@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
-import app.core.models_registry  # noqa: E402, F401
+import app.models_registry  # noqa: E402, F401
 
 import httpx  # noqa: E402
 
