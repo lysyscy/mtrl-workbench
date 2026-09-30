@@ -1257,7 +1257,7 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
      <div class="fld"><label>新密码（可为空）</label><input class="inp" id="upV" placeholder="留空即清空该账号密码"></div>
      <div class="fld" style="margin-top:calc(10px * var(--fscale))"><label>i8 账号（§7.8 · 绑定到本系统账号、每人一份）</label>
        <input class="inp" id="upI8U" value="${esc(u.i8||'')}" autocomplete="off"
-         placeholder="留空 = 解绑，抓取回落 .env 的 I8_USER"></div>
+         placeholder="留空 = 解绑（解绑后抓取会被拦下，提示你先填）"></div>
      <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>i8 密码</label>
        <input class="inp" id="upI8P" autocomplete="off" placeholder="留空 = 不改（要清空就把上面的账号也清掉）">
        <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">⚠️ 明文保存（i8 登录要原样用它，哈希就登不上）；列表里不显示
@@ -1294,7 +1294,8 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
      if(res.ok===false) return toast(`<b>看不到密码</b>：${esc(res.message||'')}`, 9000);
      const pw = res.password||'';
      /* ⭐ `§7.8` i8 绑定也在这个出口里（**同一个动作**：对管理员而言"把这个同事的凭据念给他"是一件事）。
-        ⚠️ 未绑定时**明说"回落 .env"**，⛔ 不显示成空框 —— 那会让人以为"数据没取到"。 */
+        ⚠️ 未绑定时**明说"抓取会被拦下"**（`TAIL-202` · 2026-09-30 起：不再静默改用共享账号 ——
+        那会顶掉同事的在线会话、执行记录也记错人），⛔ 不显示成空框 —— 那会让人以为"数据没取到"。 */
      const i8u = res.i8_user || '';
      const i8p = res.i8_password || '';
      const i8Block = i8u
@@ -1305,8 +1306,8 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
             ${i8p?'':'<div class="mut sm" style="margin-top:calc(4px * var(--fscale))">该账号的 i8 <b>密码为空</b> —— 抓取会拿空密码去登录（会失败）</div>'}</div>`
        : `<div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>i8 账号（§7.8 · 每人一份）</label>
             <input class="inp" value="（未绑定）" readonly>
-            <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">该账号<b>还没绑 i8</b> ⇒ 抓取回落 <code>.env</code> 的
-              <code>I8_USER</code>（过渡期口径）。在「改密 / i8 绑定」里填上即可。</div></div>`;
+            <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">该账号<b>还没绑 i8</b> ⇒ <b>抓取会被拦下</b>并提示先填
+              （⛔ 不会改用共享账号 —— 那会顶掉同事的在线会话、执行记录也记错人）。在「改密 / i8 绑定」里填上即可。</div></div>`;
      modal({title:`查看密码与 i8 绑定 · ${esc(u.name)}`, body:
        `<div class="tip">§1.5.1：密码<b>无格式要求、可为空</b>；本系统为科室内部 2 人使用，<b>明文保存</b>（管理员要能念给同事听）。</div>
         <div class="fld" style="margin-top:calc(10px * var(--fscale))"><label>登录账号</label><input class="inp" value="${esc(res.account||u.acc)}" readonly></div>

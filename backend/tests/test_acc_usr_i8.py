@@ -21,6 +21,7 @@ from __future__ import annotations
 from app.core import identity as ID
 from app.core import session as SESS
 from app.core.config import get_settings
+from app.core.errors import MustReportError
 from app.core.db import session_scope
 from app.mod15_user import repository as R
 from tests.acc_plugin import acc
@@ -44,8 +45,10 @@ def _drop_tmp() -> None:
 
 
 @acc("ACC-USR-MGMT-001", "001-13")
-def test_i8凭据取当前登录用户绑定且未绑回落env():
-    """① 绑了 ⇒ 用绑的；② 查无此人 ⇒ 回落 `.env`；③ **账号绑了但密码空 ⇒ 密码就是空**（⛔ 不回落）。"""
+def test_i8凭据取当前登录用户绑定且未绑拒抓取():
+    """① 绑了 ⇒ 用绑的；② **查无此人** ⇒ 回落 `.env`；③ **绑了但密码空 ⇒ 密码就是空**（⛔ 不回落）；
+    ⭐⭐ ④ `TAIL-202`（2026-09-30）：**有身份却没绑 i8 ⇒ 拒绝抓取并给人话提示**（⛔ 不回落）。
+    """
     env_user, env_pwd = _env_creds()
     _drop_tmp()
     try:
@@ -59,7 +62,9 @@ def test_i8凭据取当前登录用户绑定且未绑回落env():
             SESS.set_current_name("自检i8甲")
             assert ID.current_i8_credentials() == ("i8acc-A", "i8pwd-A"), (
                 "绑了 i8 账号却没用它 ⇒ 抓取仍拿 `.env` 的账号去登录（§7.8「每人一份」没落地）")
-            # ② 查无此人 ⇒ 回落 `.env`（过渡期口径：未登录 / 命令行脚本 / 测试进程都走这里）
+            # ② **查无此人** ⇒ 回落 `.env`（"没有身份"那一档：未登录 / 命令行脚本 / 测试进程 / 真机自检）
+            #    ⚠️ `TAIL-202` 之后**仍回落** —— 本次改的是「**有身份**（账号表里查得到）却没绑」那一档；
+            #    "查无此人"与 `_me()` 同口径 ⇒ 算**没有身份**，⛔ 别把它也拒了（那批不带真人身份的路径会成片崩）。
             SESS.set_current_name("__查无此人的名字__")
             assert ID.current_i8_credentials() == (env_user, env_pwd), (
                 "对不上账号时没有回落 `.env` ⇒ 那批不带 cookie 的路径（脚本 / 测试）会直接崩")
@@ -73,6 +78,26 @@ def test_i8凭据取当前登录用户绑定且未绑回落env():
             got = ID.current_i8_credentials()
             assert got == ("i8acc-B", ""), (
                 f"账号与密码**不是同一个来源**：拿到 {got!r} —— 密码回落了 `.env` ⇒ 混搭登录")
+            # ④ ⭐⭐ `TAIL-202`：**有身份却没绑 ⇒ 拒绝**（⛔ 不再静默改用共享账号）
+            #    ⚠️ 为什么这条值得钉：i8 登录自带**强踢** ⇒ 回落 = 拿共享账号登录 =
+            #       **把同事的在线会话顶掉**，而执行记录还写成"是他在抓"（用户查不出是谁干的）。
+            with session_scope() as s:
+                R.set_i8(s, uid, i8_user="", i8_password="")     # 解绑
+                s.commit()
+            SESS.set_current_name("自检i8甲")
+            try:
+                ID.current_i8_credentials()
+            except MustReportError as exc:
+                msg = exc.message
+                assert "自检i8甲" in msg and "用户管理" in msg, (
+                    f"拒绝时的提示没写清「是谁 / 去哪儿填」：{msg!r}")
+                for tech in (".env", "I8_USER"):
+                    assert tech not in msg, (
+                        f"给用户看的提示里出现了**内部配置名** {tech!r}（守则 §3.1）：{msg!r}")
+            else:
+                raise AssertionError(
+                    "有身份却没绑 i8 时**没有拒绝** —— 它悄悄回落用了共享账号 ⇒ "
+                    "会把同事的 i8 会话顶掉、执行记录也记错人（《说明书》§7.8「未填即拒绝抓取、不回落」）")
         finally:
             SESS.set_current_name("")       # ⚠️ 必须清（`ContextVar` 会串到下一个用例）
     finally:
@@ -143,3 +168,19 @@ def test_set_i8的三种写法省略密码不改解绑一并清空():
     assert "? { id, i8_user: i8User }" in SHELL, (
         "`API.m15I8` 在密码为 `null` 时**仍然带了 `i8_password` 键** "
         "⇒ 后端会把它当成「显式改成空」而不是「不改」")
+
+
+@acc("ACC-USR-MGMT-001", "001-13")
+def test_壳上关于未绑定的说法跟新口径一致():
+    """⭐ `TAIL-202`（2026-09-30 · 用户「全部按推荐」）：壳里那两处「未绑定」的说法必须与后端**同口径**
+    —— 说「**抓取会被拦下**，提示你先填」，⛔ 不许再说"回落"，也不许把内部配置名 `.env` / `I8_USER`
+    摆到用户眼前（守则 §3.1 技术细节不上屏；§4.1 文案与行为一致 —— 后端已经拦了，界面还说"回落"就是**说错话**）。
+
+    ⚠️ **为什么用整串当墓碑**：那两句**原样**在上屏文案里（不是注释）⇒ 整串墓碑不会误伤别处。
+    """
+    for tomb in ("抓取回落 .env 的 I8_USER", "抓取回落 <code>.env</code> 的"):
+        assert tomb not in SHELL, (
+            f"壳里还留着**旧口径**的说法 {tomb!r} —— 现在应当是「抓取会被拦下并提示先填」"
+            "（`TAIL-202`：有身份却没绑 i8 ⇒ 后端直接拒，⛔ 不再用共享账号顶掉同事的会话）")
+    assert SHELL.count("抓取会被拦下") >= 2, (
+        "壳里那两处「未绑定」的说法没改过来（① 改密 / i8 绑定弹窗的占位提示 ② 查看密码弹窗里的说明）")

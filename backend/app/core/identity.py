@@ -54,10 +54,18 @@ def current_i8_credentials() -> tuple[str, str]:
     ⭐ 与 `current_operator()` **同款三段式**（第一个非空为准）：
       ① **登录态** → 那个账号行上的 `i8_user` / `i8_password`（正常路径）；
       ② `.env` 的 `I8_USER` / `I8_PASSWORD` —— ⚠️ **过渡期兜底**：
-         未登录的路径（命令行脚本 / 测试进程）与"还没绑过 i8 的账号"都落这里，
-         行为与接入本函数**之前完全一样**（零破坏）；
+         未登录 / **查无此人**（身份解析不到，与 `_me()` 同口径）的路径都落这里
+         （命令行脚本 / 测试进程 / 真机自检都走这条）；
       ③ 两者皆空 ⇒ 返回空串，由 `http_login` 显式报「I8_USER 未配置」——
          ⛔ 不在这里抛：那会把"没配"伪装成一个身份层故障。
+
+    ⚠️⚠️ **2026-09-30（`TAIL-202` · 用户「全部按推荐」）—— "有身份但没绑"这一档改成【拒绝】**：
+      在账号表里**查得到这个人**、而他的 `i8_user` 是空的 ⇒ 抛 `MustReportError`（人话），⛔ **不回落**。
+      理由 =《说明书》**§7.8** 原话「登录体系落地后每人都必须在自己的账号里填，**未填即拒绝抓取并提示、
+      不回落** —— 回落等于用了别人的账号 ⇒ **留痕会记错人**」；而 i8 登录自带**强踢**
+      ⇒ 拿 `.env` 那个共享账号去登录，代价是**把同事的在线会话顶掉**。
+      ⛔ 「查无此人 / 未登录」**不算**"有身份"（查不到就是没有身份）⇒ 仍走 ②（否则命令行 / 测试
+      / 真机自检那些**不带真人身份**的路径会成片崩）。
 
     ⚠️⚠️ **账号与密码必须同一个来源**（⛔ 不许"账号取用户行、密码回落 `.env`"这种混搭）：
        那会拿**甲**的账号配**乙**的密码去登录 ⇒ i8 侧只会说"账号或密码错"，
@@ -67,6 +75,7 @@ def current_i8_credentials() -> tuple[str, str]:
        那是"用错的人顶了号"，比直接报错坏得多。取不到绑定（查无此人）走 ② 是**正常路径**。
     """
     from app.core.config import get_settings
+    from app.core.errors import MustReportError
     from app.core.session import current_name
 
     who = (current_name() or "").strip()
@@ -80,6 +89,12 @@ def current_i8_credentials() -> tuple[str, str]:
             bound = (row.i8_user or "").strip()
             if bound:
                 return bound, (row.i8_password or "")     # ⚠️ 密码**不 strip**（前后空格也是密码的一部分）
+            # ⭐⭐ 2026-09-30（`TAIL-202`）：**有身份但没绑 i8 ⇒ 拒绝**（见上方文档注释）。
+            #   ⚠️ 消息**不写任何内部名**（守则 §3.1）：不提 `.env` / 变量名 / 文件名。
+            raise MustReportError(
+                f"「{who}」还没在自己账号里填 i8 账号 —— 抓取要用你自己的 i8 账号"
+                "（用共享账号会顶掉同事的在线会话，执行记录也会记错人）。"
+                "请到「用户管理」里给自己填上（那个弹窗叫「改密 / i8 绑定」）。")
 
     env = get_settings()
     return (env.i8_user or "").strip(), (env.i8_password or "")
