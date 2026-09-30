@@ -43,6 +43,7 @@ from _shell_bigpin import check as check_bigpin  # noqa: E402 ← ㉜ 大表首�
 from _shell_jcpin import check as check_jcpin  # noqa: E402  ← ㉝ m11 行身份区固定（`TAIL-180` · 2026-09-29）
 from _shell_bootbar import check as check_bootbar  # noqa: E402 ← ㉞ 启动失败横幅不盖内容（`TAIL-182` · 2026-09-29）
 from _shell_vskeep import check as check_vskeep   # noqa: E402 ← ㉟ 表级虚拟滚动：本页内刷新不跳滚动（`TAIL-64` P5-a · 2026-09-30）
+from _shell_vskeep import check_risk as check_vsrisk  # noqa: E402 ← ㊱ 接管缺口机器眼（`TAIL-198` · 2026-09-30）
 
 BASE = "http://127.0.0.1:8000"
 errors: list[str] = []
@@ -634,6 +635,13 @@ def main() -> int:
         #      ⚠️ 必须排在 ㉞ **之前**：㉞ 会拦断 + 刷新页面状态。
         #      挪 `_shell_vskeep.py`。
         check_vskeep(page, errors)
+
+        # ---- ㊱ **接管缺口机器眼**（`TAIL-198` · 2026-09-30 · 用户「按推荐」）：
+        #      表级虚拟滚动的接管前提是「这张表**自带滚动容器**（`.tw`）」，而 `TBL` 现在**每张表**都带
+        #      `data-vs` ⇒ 那些不在 `.tw` 里的表**够阈值也接管不了**（行原样写回、不虚拟化、**不报错**）。
+        #      实测 9 张这样（今天都在阈值下 ⇒ 谁也没发现）⇒ 本段把它变成**有信号**：逐页量真实行数，
+        #      「够阈值却没接管」当场红。挪 `_shell_vskeep.py`。⚠️ 必须排在 ㉞ 之前（㉞ 会拦断刷新）。
+        check_vsrisk(page, errors)
 
         # ---- ㉞ **启动失败横幅「不许盖住内容」**（`TAIL-182` · `A` 案 · 2026-09-29 用户裁定）：
         #      那条横幅原先是 `position:fixed;top:0;z-index:9999` ⇒ **压在页面之上**，页首那一带的

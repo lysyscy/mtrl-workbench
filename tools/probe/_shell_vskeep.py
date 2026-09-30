@@ -1,4 +1,5 @@
-"""壳真机自检 · ㉟ **表级虚拟滚动：本页内刷新不跳滚动**（`TAIL-64` P5-a · 2026-09-30）。
+"""壳真机自检 · ㉟ **表级虚拟滚动：本页内刷新不跳滚动**（`TAIL-64` P5-a · 2026-09-30）
+＋ ㊱ **接管缺口机器眼**（`TAIL-198` · 2026-09-30 · 用户「按推荐」）。
 
 **它验什么**：`P5-a` 把虚拟滚动从"整页一张大表"下沉成"**每张表自己**"（`m08` 是试点页）。
 换的是"**谁在滚 / 谁被重画**"，而这条路上有两个**只有真机才知道**的老毛病（都犯过、都被用户报过）：
@@ -141,3 +142,64 @@ def check(page, errors: list[str]) -> None:
     if not r["lastIsSum"]:
         errors.append(f"㉟-④ 排序后贴底，最后一行不是合计行（「{r['lastTxt']}」）—— "
                       "虚拟化的**贴底钳制**必须让合计行如约出现（⛔ 不能留一个空垫高行在表尾）")
+
+
+#: ㊱ 量**这一屏**每张带标记的表：真实行数 / 有没有自带滚动容器 / 有没有被接管
+_RISK = r"""() => {
+  const mn = ((typeof VSCROLL !== 'undefined') && VSCROLL[VIEW] && VSCROLL[VIEW].min) || VS_MIN;
+  const out = [];
+  document.querySelectorAll('#view tbody[data-vs]').forEach(tb => {
+    out.push({key: tb.getAttribute('data-vs') || '', n: tb.children.length,
+              tw: !!tb.closest('.tw'),
+              claimed: (typeof VS_TS !== 'undefined') && VS_TS.some(x => x.tb === tb)});
+  });
+  return {view: VIEW, min: mn, tables: out};
+}"""
+
+#: ㊱ 逐页要逛哪些屏 —— ⛔ **别写死名单**（本仓最忌"名单式"）：从**导航项**里现读
+_RISK_PAGES = r"""() => [...document.querySelectorAll('[data-k]')]
+  .map(e => e.getAttribute('data-k') || '')
+  .filter(k => /^(home|m\d+)$/.test(k))"""
+
+
+def check_risk(page, errors: list[str]) -> None:
+    """㊱ ⭐ `TAIL-198` **接管缺口机器眼**：**"带标记却接管不了"的表一旦够阈值 ⇒ 红**。
+
+    **它守的是什么**：表级虚拟滚动的接管条件是「这张表**自带滚动容器**（`.tw`）」——
+    而 `TBL` 现在**每一张表**都带 `data-vs` 标记 ⇒ 那些**不在 `.tw` 里**的表，够阈值也**接管不了**，
+    行为是"行原样写回、**不虚拟化**"（`P5-c` 起，⛔ 不报错）。实测 2026-09-30：全站 **9 张**这样
+    （`home` · `m02` · `m07:kinds` · `m10` · `m14`×5）—— 今天都在 400 行阈值以下，所以**谁也没发现**。
+    ⇒ 本段把它从「**静默**」变成「**有信号**」：哪张表哪天涨上去（或阈值被调下来），这里当场红。
+
+    ⚠️ **为什么必须在真机**：行数是**数据**给的（`m02` 日志今天 50 行、明天可能上千）——离线只能读源码，
+       读不出"这一屏此刻有多少行"。
+    ⚠️ **红条件** = 「**没被接管** 且 **行数 ≥ 生效阈值**」；⚠️ 有容器却仍没接管 ⇒ 同样红（那是分派坏了）。
+    ⚠️ 逛的屏从**导航项**现读（⛔ 不写死名单：本仓吃过"名单式"的亏），跳过已撤页。
+    自证 = `tools/mut/_mut_vsrisk.py`：把阈值降到地板（等价于"表涨到阈值"）⇒ 本段必须红。
+    """
+    from _shell_common import goto
+
+    keys = page.evaluate(_RISK_PAGES)
+    print(f"㊱ 表级虚拟滚动的**接管缺口**（`TAIL-198` 机器眼）：逐页量 {len(keys)} 屏")
+    gaps: list[str] = []
+    seen = 0
+    for k in keys:
+        goto(page, k)
+        d = page.evaluate(_RISK)
+        seen += len(d["tables"])
+        for t in d["tables"]:
+            if (not t["claimed"]) and t["n"] >= d["min"]:
+                why = ("它**不在 `.tw` 里** ⇒ 表级接管不了" if not t["tw"]
+                       else "它有 `.tw` 却没被认领（分派坏了？）")
+                gaps.append(f"{k} · 表 `{t['key'] or '（无 key）'}`：**{t['n']} 行 ≥ 阈值 {d['min']}**"
+                            f"却没被接管 —— {why}")
+    print(f"   带标记的表共 **{seen}** 张 · 够阈值却没接管 **{len(gaps)}** 张")
+    if gaps:
+        for g in gaps[:5]:
+            print(f"   ⛔ {g}")
+        errors.append(
+            f"㊱ 有 **{len(gaps)}** 张带标记的表够阈值却没被接管（{gaps[0]}）—— "
+            "该虚拟化的**没虚拟化**（页面会变卡），而**屏幕上没有任何信号**："
+            "给那张表补一个 `.tw`（自有滚动容器），或把它收进带容器的那一层")
+    else:
+        print("   ✅ 凡够阈值的带标记表**都已被接管**（⚠️ 本段是**动态**的：数据一涨/阈值一调就会变脸）")
