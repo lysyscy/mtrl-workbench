@@ -1,15 +1,19 @@
-"""反向灵敏度 · `TAIL-195` 批 1（分层边界：`app/core/**` 不得反向依赖业务包）。
+"""反向灵敏度 · `TAIL-195` 分层边界（**六靶**：规则 A 三 ＋ 规则 B/C 各一 ＋ 规则 C 的幽灵检查）。
 
-做法：把**故意违规**塞进 `core`（改坏 → 跑 `tests/test_layering.py` 期望红 → **逐字节复原**）。
+做法：把**故意违规**塞进对应文件（改坏 → 跑 `tests/test_layering.py` 期望红 → **逐字节复原**）。
 不红 ⇒ 那条判据是假绿。
 
-三靶：
-- `M1` **新增一条反向依赖**（往不在名单里的 `core/config.py` 塞 `import app.mod01_projects`
-  —— 它**没触发任何 import 环**（只在 `ast` 层可见）⇒ 只有本判据看得见）⇒ 必须红。
-- `M2` **名单不是整件放行**：往**名单里**的 `core/projects.py` 再塞一条**别的**业务包
-  （`app.mod05_flow`）⇒ 必须红（若绿，说明名单退化成了"整个文件放行"）。
-- `M3` **名单不许留幽灵**：把 `core/projects.py` 那条**已登记**的 import 注释掉
-  ⇒ 「放行名单里不许留幽灵条目」必须红。
+- `M1` **规则 A · 新增反向依赖**（往不在名单的 `core/config.py` 塞 `import app.mod01_projects`
+  —— 它**没触发任何 import 环**（只在 `ast` 层可见）⇒ 只有本判据看得见）。
+- `M2` **规则 A · 名单不是整件放行**：往**名单里**的 `core/projects.py` 再塞**别的**业务包
+  （`app.mod05_flow`）（若绿 ⇒ 名单退化成了"整个文件放行"）。
+- `M3` **规则 A · 名单不许留幽灵**：把 `core/projects.py` 那条**已登记**的 import 注释掉。
+- `M4` **规则 B**：往一个 `mod*` 件（`mod09_fee/models.py`，不在名单里）塞 `import app.report_export`。
+- `M5` **规则 C（mod03 → mod05.repository）**：往 `mod03_notice/merge.py` 塞 `from app.mod05_flow
+  import repository`（⚠️ **就是这种写法** —— `node.module` 只有 `app.mod05_flow`，
+  按 `node.module` 判会**漏** ⇒ 本靶专门钉住"展开 `from X import Y`"那条修法）。
+- `M6` **规则 C（mod05 → mod03.repository）**：往 `mod05_flow/domain.py` 塞 `from app.mod03_notice
+  import repository`。
 
 ⚠️ 判据 = **目标测试件 rc≠0** ＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc）。
 ⚠️ 子集 pytest 用 `ACC_RESULTS_PATH` 指到 `artifacts/_mut_acc_results.json`（⭐ 别把权威四态冲成残档）。
@@ -25,30 +29,48 @@ import pathlib
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-CORE = ROOT / "backend" / "app" / "core"
-CONFIG = CORE / "config.py"          # 不在放行名单里
-PROJECTS = CORE / "projects.py"      # 在放行名单里（测"名单不是整件放行" ＋ "名单不许留幽灵"）
+APP = ROOT / "backend" / "app"
+CORE = APP / "core"
+CONFIG = CORE / "config.py"          # 规则 A：不在放行名单里
+PROJECTS = CORE / "projects.py"      # 规则 A：在放行名单里（测"名单不是整件放行" ＋ "名单不许留幽灵"）
+MOD09_MODELS = APP / "mod09_fee" / "models.py"      # 规则 B：不在放行名单里的 mod 件
+MERGE03 = APP / "mod03_notice" / "merge.py"         # 规则 C：不在放行名单里的 mod03 件
+DOMAIN05 = APP / "mod05_flow" / "domain.py"         # 规则 C：不在放行名单里的 mod05 件
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 TARGETS: tuple[str, ...] = ("tests/test_layering.py",)
 PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
 
 #: ⚠️ 靶串一律写 **ASCII 字面量**（含中文的靶要编 bytes ⇒ 见 `_mut_p5a._b` 的教训）：
-#:   本件的三条靶都是 import 语句，天然纯 ASCII。
+#:   本件的靶都是 import 语句，天然纯 ASCII。
+#: ⚠️ 锚串统一用 `from __future__ import annotations`（每个件恰好 1 次 ⇒ 唯一命中）。
+_FUTURE = b"from __future__ import annotations"
 CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
-    (CONFIG, "M1 往不在名单里的 core 件塞一条业务 import",
+    (CONFIG, "M1 规则A · 往不在名单里的 core 件塞一条业务 import",
      b"from app.core.errors import NotConfiguredError",
      b"from app.core.errors import NotConfiguredError\n"
      b"from app.mod01_projects import models as _ghost  # noqa: F401",
      "反向依赖会成环"),
-    (PROJECTS, "M2 往名单里的件再塞**别的**业务包（名单若按整件放行 ⇒ 会漏）",
+    (PROJECTS, "M2 规则A · 往名单里的件再塞**别的**业务包（名单若按整件放行 ⇒ 会漏）",
      b"from app.mod01_projects.models import Project",
      b"from app.mod01_projects.models import Project\n"
      b"from app.mod05_flow import models as _ghost  # noqa: F401",
      "反向依赖会成环"),
-    (PROJECTS, "M3 把已登记的反向依赖摘掉（名单就此变成幽灵条目）",
+    (PROJECTS, "M3 规则A · 把已登记的反向依赖摘掉（名单就此变成幽灵条目）",
      b"from app.mod01_projects.models import Project",
      b"# from app.mod01_projects.models import Project  # mutated M3",
      "已经不存在"),
+    (MOD09_MODELS, "M4 规则B · 业务包直接 import 导出层",
+     _FUTURE,
+     _FUTURE + b"\nfrom app.report_export import service as _ghost  # noqa: F401",
+     "改一侧牵动另一侧"),
+    (MERGE03, "M5 规则C · mod03 直查 mod05 的表（⚠️ `from 包 import 子模块` 写法）",
+     _FUTURE,
+     _FUTURE + b"\nfrom app.mod05_flow import repository as _ghost  # noqa: F401",
+     "直查了对方表"),
+    (DOMAIN05, "M6 规则C · mod05 直查 mod03 的表（同上写法）",
+     _FUTURE,
+     _FUTURE + b"\nfrom app.mod03_notice import repository as _ghost  # noqa: F401",
+     "直查了对方表"),
 ]
 
 
