@@ -5,11 +5,15 @@
 抽进 `PJB` 之后，**渲染字节一字不变** ⇒ 页面、`U1`（原型那侧还是旧形态、无从对位）、真机
 **都看不出**某一处换没换 ⇒ 只有"改坏了必须红"能证明它。
 
-两靶（改完**立刻按 bytes 复原** ＋ MD5 校验）：
+四靶（改完**立刻按 bytes 复原** ＋ MD5 校验）：
 - `M1` **去掉委托**：把 `V.m03` 那处的 `PJB({act:'pjToggle'` 改成 `PJBBROKEN({act:'pjToggle'`
   （合法标识符 ⇒ **不触发**语法错，只会让"项目按钮没走统一出口"那一条红）。
 - `M2` **掏空内核**：把 `PJB` 体内的 `'<span>'+label+'</span>'` 改成 `'<span>'+''+'</span>'`
   ⇒ "内核没把标签拼进按钮里"必须红（⚠️ 靶在 `shell/proj.js` —— `PJB` 住在那儿，⛔ 别假设在 `index.html`）。
+- `M3` **内核不再出那串共用样式**（`gap:calc(8px * var(--fscale))` → `gap:8px`）⇒
+  **全站扫描**那条判据的"先查内核"那半必须红（⚠️ 它排在扫描之前，正是为了不让"扫出来 = 0"盖掉内核坏）。
+- `M4` **又手写一枚**（在 `pages-b.js` 的调用点前插一枚手写的样板按钮）⇒ 扫描那半必须红
+  （靶**自带文件** `shell/pages-b.js` —— 本批新铺的 11 处散布在 4 件里，⛔ 别假设源码在 `index.html`）。
 
 ⚠️ 判据 = **目标测试件 rc≠0** ＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc）。
 ⚠️ 子集 pytest 用 `ACC_RESULTS_PATH` 指到 `artifacts/_mut_acc_results.json`（⭐ 别把权威四态冲成残档）。
@@ -29,6 +33,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SHELL = ROOT / "backend" / "app" / "web" / "index.html"
 #: ⭐ `PJB` 的口径件住在 `shell/proj.js`（同 `TBL`/`FBAR`）—— ⛔ 别假设源码在 `index.html`（哑靶的教训）。
 PROJ = ROOT / "backend" / "app" / "web" / "shell" / "proj.js"
+#: ⭐ 本批（`P4-d-b`）铺的 11 处散布在 **4 件** 里（`index.html` ＋ `legacy` / `pages-a` / `pages-b`）
+#: ⇒ 靶**自带文件**（`M4` 打 `shell/pages-b.js`）—— 同「别假设源码在 `index.html`」那条哑靶教训。
+PAGES_B = ROOT / "backend" / "app" / "web" / "shell" / "pages-b.js"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 TARGETS: tuple[str, ...] = ("tests/test_ux_pages.py",)   #: ⭐ P4-d 那条判据所在件
 PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
@@ -46,6 +53,21 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
     #    `</span>` **之后**（不在它紧邻处）—— 第一版写成 `'</span>'` 就**命中不到**（哑靶）。
     (PROJ, "M2 掏空内核（`PJB` 不再把标签拼进按钮里）", _b("span>'+label+'</span>"),
      _b("span>'+''+'</span>"), "没有把标签拼进按钮里"),
+    #: ⚠️ 靶串**必须带上 `'+w+'px`** —— 光用那串样式会**在 `PJB` 的注释里也命中一次**（注释原样引述了它），
+    #:    而变异件的规矩是"靶串恰好命中 1 次、否则**拒绝**（宁可不跑，也不打偏）"。
+    (PROJ, "M3 内核不再出那串共用样式（`gap` 退回裸 `8px`）",
+     _b("min-width:'+w+'px;display:inline-flex;align-items:center;"
+        "justify-content:space-between;gap:calc(8px * var(--fscale))\""),
+     _b("min-width:'+w+'px;display:inline-flex;align-items:center;"
+        "justify-content:space-between;gap:8px\""), "不再出那串共用样式"),
+    #: ⚠️ 靶自有文件：本批的 11 处**不在同一件里**（只有 7 处在 `index.html`）。
+    (PAGES_B, "M4 又手写一枚（调用点前插一枚手写的样板按钮）",
+     _b("${PJB({act:'jcNPjToggle'"),
+     _b("<button class=\"btn\" data-act=\"jcNPjToggle\" style=\"min-width:150px;"
+        "display:inline-flex;align-items:center;justify-content:space-between;"
+        "gap:calc(8px * var(--fscale))\"><span>x</span>"
+        "<span class=\"mut\" style=\"font-size:calc(9px * var(--fscale))\">▼</span></button>"
+        "\n        ${PJB({act:'jcNPjToggle'"), "是**手写**的样板"),
 ]
 
 

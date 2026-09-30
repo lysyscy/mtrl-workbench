@@ -136,12 +136,20 @@ const FBAR=({cls='',sty='',body=''})=>'<div class="fbar'+(cls?' '+cls:'')+'"'+(s
  *    与收尾那枚 `▼` 原本**逐处手写**（12 处），而 `min-width` 实测有 **6 种值** ⇒ §5.9「同类形态只留一处出口」。
  *    ⚠️ `w` 是**显式参数**（宽度按标签长短本就不同，⛔ 不是要抹平它 —— 是把它从长串里**抬出来**）。
  * `title` 只在需要时给（真例 = 通用导入面那枚，悬停要带仓库名）。
+ * ⭐ `P4-d-b` 铺量（2026-09-30）时量出**两种形态**，于是补两个参（**默认值都保持旧行为** ⇒ 老调用点零变化）：
+ *    · `cls`（默认 `'btn'`）—— 真例 = 台账那枚 `ledPjToggle` 的**动态 class**
+ *      （展开时 `btn on`，用户 2026-09-28 `TAIL-142` 要的"点开必须变样"）。
+ *    · `attrs`（默认 `''`）—— **排在 `style` 之前**的额外属性。真例 = 同一枚的 `title`：
+ *      它原本就写在 `style` **之前**（而 `title` 那个参是排在 `style` **之后**的，见下）。
+ *      ⚠️ 属性顺序在 HTML 里**无语义**，但本仓这一路的验收口径是「**渲染字节逐字节不变**」⇒ 照原样摆。
+ * ⚠️ `attrs` / `title` **都是"额外属性"但位置不同**（前者在 `style` 前、后者在后）——
+ *    ⛔ 别为某一处随手挑一个：挑错了**渲染字节就变了**（脚本里的自证会当场拦下）。
  * ⛔ 与 `projPanel` 的分工：本件只管**那枚按钮**，⛔ 不碰面板（面板仍走 `projPanel` 唯一出口 · 守则 §5.12）。
  * ⚠️ **本件只在壳侧**（⛔ 不进 `U5_GROUPS`）：原型那侧的按钮还是**旧形态**（`gap:8px`、无 `--fscale`），
  *    硬同步会让它的按钮退化成"没有 gap"（`var()` 未定义）⇒ 见 `tools/oneoff/_p4d_pjb_pilot.py` 的文件头。
  * 自证 = 变异脚本（去掉委托 / 掏空内核 ⇒ 对应判据必须红）。 */
-const PJB=({act='',w=126,label='',title=''})=>'<button class="btn" data-act="'+act+'" style="min-width:'+w+'px;'
-  +'display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"'
+const PJB=({act='',w=126,label='',title='',cls='btn',attrs=''})=>'<button class="'+cls+'" data-act="'+act+'"'+attrs
+  +' style="min-width:'+w+'px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"'
   +(title?' title="'+title+'"':'')+'><span>'+label+'</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>';
 
 const thCount=h=>(String(h).match(/<th\b/g)||[]).length;   /* 一张表有几列 —— 从表头数出来，不写死 */

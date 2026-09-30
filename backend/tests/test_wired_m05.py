@@ -238,13 +238,16 @@ def test_台账卡头按钮分组与点开有反馈都钉住():
     # ③ ⭐ 两个导出在同一条面板里，**各自的项目范围挨着自己的动作**（治"点按钮后跑到最左边选项目"）
     strip = SHELL[SHELL.index("const ledExpStrip=()=>"):SHELL.index("const lgPjPanel=()=>")]
     assert "① 逐月台账" in strip and "② 总欠款汇总" in strip, "两个导出没在同一条面板里（分两处又会让人来回跑）"
-    for act in ('data-act="ledExpPjToggle"', 'data-act="ledExpOk"', 'data-act="ledExpCancel"',
+    # ⚠️ 2026-09-30（`TAIL-64` `P4-d-b`）：那枚项目按钮**改走统一出口 `PJB`** ⇒ 它的落点改成**委托形式**
+    #    （**判词不变**：面板里这几件都在）；余下四枚是普通按钮，照旧钉 `data-act`。
+    for act in ("PJB({act:'ledExpPjToggle'", 'data-act="ledExpOk"', 'data-act="ledExpCancel"',
                 'data-act="debtPick"', 'data-act="debtExpAll"'):
         assert act in strip, f"面板里缺 {act}（导出件跑到别处去了）"
     assert "选择项目（" in strip, "「导出总欠款」的范围按钮不在它旁边"
     assert ">导出台账</button>" in strip and ">导出总欠款</button>" in strip, "两个导出的动作名不清楚"
     # ④ 两个 toggle 点开**必须自己带 `on`**（由展开态决定，⛔ 不是写死）
-    assert """class="btn${pjIsOpen('ledPj')?' on':''}\"""" in s, "项目选择器按钮不看展开态（点开自己不变样）"
+    # ⚠️ `P4-d-b`：那串动态类改由 `PJB` 的 `cls` 参**传进去**（判词不变：按钮仍看展开态、点开自己变样）。
+    assert """cls:`btn${pjIsOpen('ledPj')?' on':''}`""" in s, "项目选择器按钮不看展开态（点开自己不变样）"
     assert """class="btn pri${ledExpOn?' on':''}\"""" in s, "导出入口不看展开态（点开自己不变样）"
     assert ".btn.on{background:var(--pri-l);border-color:var(--pri-bd);color:var(--pri-d)}" in SHELL, \
         "缺 `.on` 按钮态（且必须复用 `--pri*` token，⛔ 不另造视觉语言 —— 守则 §4.5）"

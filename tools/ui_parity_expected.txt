@@ -289,10 +289,8 @@ m04 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳
 m04 58cd1bdc  # 原型:     ${order.map(r=>`<div class="kpi"><div class="k｜壳:     ${order.map(r=>`<div class="kpi"><div class="k
 m04 9fa2bdc8  # 原型:   <div class="card" style="margin-bottom:12px"><h4｜壳:   <div class="card" style="margin-bottom:calc(12px
 m04 abadfefa  # 原型:     <div style="margin-top:10px"><button class="bt｜壳:     <div style="margin-top:calc(10px * var(--fscal
-m04 d889d857  # 原型:         <button class="btn" data-act="plPjToggle" ｜壳:         <button class="btn" data-act="plPjToggle" 
 m04 8929ac17  # 原型:       <td class="ctr">${matched?'<span class="mut ｜壳:       <td class="ctr">${matched?'<span class="mut 
 m04 fa7984aa  # 原型:       <td class="ctr"><span style="display:inline-｜壳:       <td class="ctr"><span style="display:inline-
-m05 fee61cb6  # 原型: <无此行>｜壳:         <button class="btn" data-act="flPjToggle" 
 m05 d6582474  # 原型: <无此行>｜壳:       <div class="fi"><label>关键词</label><span styl
 m01 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
 m02 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
@@ -304,13 +302,11 @@ m07 0a356810  # 原型:       <div class="tip wn" style="margin:0"><b>⚠️ 大
 m07 f84b5f77  # 原型:     </div>｜壳:         <div style="margin-top:calc(4px * var(--fs
 m07 97393bf5  # 原型: };｜壳:     <div class="tip" style="margin:calc(10px * var
 m08 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
-m08 c707d39d  # 原型:         <button class="btn" data-act="invWhToggle"｜壳:         <button class="btn" data-act="invWhToggle"
 m08 4941a932  # 原型:       `<div class="bd" style="padding:8px 10px;bac｜壳:       `<div class="bd" style="padding:calc(8px * v
 m08 b257607f  # 原型:       :`<div class="bd" style="padding:6px 10px"><｜壳:       :`<div class="bd" style="padding:calc(6px * 
 m08 51be4834  # 原型:       <td class="num">${a?`<span class="ed" style=｜壳:       <td class="num">${a?`<span class="ed" style=
 m08 8d11dbcf  # 原型:     <div class="sm mut" style="margin-top:6px">合计行｜壳:     <div class="sm mut" style="margin-top:calc(6px
 m09 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
-m09 ebc1e3b8  # 原型:         <button class="btn" data-act="awfPjToggle"｜壳:         <button class="btn" data-act="awfPjToggle"
 m12 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
 m11 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
 m13 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
@@ -329,7 +325,6 @@ m15 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳
 m06 1434313c  # 原型:       <button class="btn pri" data-act="exp" data-｜壳:       ${pjIsOpen('procExpPj')?procExpPjPanel():''}
 m06 12be13af  # 原型:       <div class="fi pjwrap" style="position:relat｜壳:     ${procExpOn?procExpStrip():''}
 m06 2c38ee73  # 原型:         ${pjIsOpen('procPj')?procPjPanel():''}</di｜壳:       <div class="fi pjwrap" style="position:relat
-m06 7b5b0638  # 原型:       <span class="pill" style="margin-left:auto">｜壳:         <button class="btn" data-act="procPjToggle
 m06 6eb69377  # 原型:       <div class="tb2 ${procTab===0?'on':''}" data｜壳:     <div class="tabs">
 m06 9d68ac61  # 原型:       <div class="tb2 ${procTab===1?'on':''}" data｜壳:       <div class="tb2 ${procTab===0?'on':''}" data
 m06 1b1a6f6f  # 原型:       <div class="tb2 ${procTab===2?'on':''}" data｜壳:       <div class="tb2 ${procTab===1?'on':''}" data
@@ -379,7 +374,6 @@ m11 36ccf606  # 原型:   <div class="card" style="margin-bottom:0">｜壳:     
 m11 d953f386  # 原型:     <h4>集采台账 · 合同主表<span class="sp">｜壳:       <button class="btn" data-act="jcBatchTag" da
 m11 095cdb91  # 原型:       <button class="btn" data-act="jcFetch">抓取采购合｜壳:       <button class="btn" data-act="jcBatchTag" da
 m11 b86a0b1d  # 原型:       <button class="btn" data-act="jcBatchTag" da｜壳:       <div class="fi pjwrap" style="position:relat
-m11 1114e31a  # 原型:       <button class="btn pri" data-act="exp" data-｜壳:         <button class="btn" data-act="jcPjToggle" 
 m11 46f7aac9  # 原型:       <div class="fi pjwrap" style="position:relat｜壳:       <div class="fi"><label>两态标记</label><select c
 m11 07d6a559  # 原型:         <button class="btn" data-act="jcPjToggle" ｜壳:       <div class="fi"><label>合同存档情况</label><select
 m11 2cafcf0b  # 原型:         ${pjIsOpen('jcPj')?jcPjPanel():''}</div>｜壳:       <div class="fi"><label>供应商</label><input cla
@@ -617,7 +611,6 @@ m05 60730583  # 原型:           ${pstBars(pd.series,false,pd.labels)}｜壳:  
 m05 96dd25cb  # 原型:         </div>｜壳:            ⚠️ 本注释写在模板字面量的文本区里 ⇒ ⛔ 里面不许出现反引号（会把模板串截
 m05 50989973  # 原型:       </div>`｜壳:       <div style="display:flex;align-items:center;
 m05 1df1b2bd  # 原型:       :`<div class="ctr mut" style="padding:22px">｜壳:         <span class="mut sm">看哪个项目（两侧共用）</span>
-m05 4a551a8a  # 原型:     </div>｜壳:         <span class="pjwrap" style="position:relat
 m05 adb9ace7  # 原型:   </div>｜壳:       </div>
 m05 e2e504a1  # 原型:   <div class="card" style="margin-bottom:0"><h4>付款｜壳:       <div class="grid2">${ledHalf('辅材')}${ledHalf
 m05 9b5df346  # 原型:     <button class="btn pri" data-act="exp" data-t=｜壳:   </div>
@@ -926,3 +919,13 @@ m14 a8db0d10  # 原型: /* ===============================================｜壳
 # ⭐ 2026-09-30 新增登记 1 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
 
 m03 3f35462b  # 原型:       <div class="fi"><label>审批状态</label><select c｜壳:         ${PJB({act:'pjToggle',w:126,label:`${fNt.p
+
+# ⭐ 2026-09-30 新增登记 7 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+
+m04 8ceba50a  # 原型:         <button class="btn" data-act="plPjToggle" ｜壳:         ${PJB({act:'plPjToggle',w:126,label:`${plf
+m05 c9af024e  # 原型:     </div>｜壳:         <span class="pjwrap" style="position:relat
+m05 466406c6  # 原型: <无此行>｜壳:         ${PJB({act:'flPjToggle',w:128,label:`${flf
+m06 aaf44a3a  # 原型:       <span class="pill" style="margin-left:auto">｜壳:         ${PJB({act:'procPjToggle',w:210,label:`${e
+m08 2d782c95  # 原型:         <button class="btn" data-act="invWhToggle"｜壳:         ${PJB({act:'invWhToggle',w:150,label:`${in
+m09 9a6ef251  # 原型:         <button class="btn" data-act="awfPjToggle"｜壳:         ${PJB({act:'awfPjToggle',w:150,label:`${es
+m11 5ef8a36c  # 原型:       <button class="btn pri" data-act="exp" data-｜壳:         ${PJB({act:'jcPjToggle',w:126,label:`${fJc

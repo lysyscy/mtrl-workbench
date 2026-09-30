@@ -432,7 +432,7 @@ V.imp = () => {
     ? `${FBAR({cls:'pane',body:`
       ${IMP.hasPj ? (IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
         <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
-        <button class="btn" data-act="impPjToggle" style="min-width:186px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))" title="${IMP.wrap ? esc('仓库名（§2.7.4）：' + IMP.wrap) : ''}"><span>${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
+        ${PJB({act:'impPjToggle',w:186,label:`${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}`,title:`${IMP.wrap ? esc('仓库名（§2.7.4）：' + IMP.wrap) : ''}`})}
         ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>`
       /* ⛔ **候选为空 ≠ 这个域不要项目**（2026-09-29 修）：仍要把这一格画出来 —— ① 让人看见
          "这一步有项目这一环"（⛔ 不静默少一格，否则用户以为不用选）；② 给**真出路**

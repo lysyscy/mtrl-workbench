@@ -283,7 +283,7 @@ const jcNPjPanel=()=>projPanel({list:()=>pjKeysOfRows(ntPjList()),selected:()=>[
 const jcNewStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><span class="pill" style="margin:0" title="建一张集采合同主表行（两态默认「纳入台账」，与抓取行一致）">手工新增合同</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
-        <button class="btn" data-act="jcNPjToggle" style="min-width:150px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"><span>${esc(pjLabel(jcND.pj)||'请选择项目')}${pjArcMark(pjRowOf(jcND.pj))}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
+        ${PJB({act:'jcNPjToggle',w:150,label:`${esc(pjLabel(jcND.pj)||'请选择项目')}${pjArcMark(pjRowOf(jcND.pj))}`})}
         ${pjIsOpen('jcNPj')?jcNPjPanel():''}</div>
       <div class="fi"><label>合同日期</label><input class="inp" type="date" id="jcNDate" data-act="jcNSet" data-k="date" value="${esc(jcND.date)}"></div>
       <div class="fi"><label>材料名</label><input class="inp" style="min-width:150px" id="jcNMaterial" data-act="jcNSet" data-k="material" value="${esc(jcND.material)}" placeholder="例：热轧卷板 Q235B"></div>

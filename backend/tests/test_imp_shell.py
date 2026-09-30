@@ -272,7 +272,11 @@ def test_本页的项目浮层走通用机制():
     src = re.sub(r"/\*.*?\*/", "", SHELL, flags=re.S)
     assert 'class="fi pjwrap"' in src, \
         "导入页「项目」的**锚**没了 —— 浮层就不会被 `placePops` 提升为 `fixed`，后半截会被卡片裁掉"
-    assert 'data-act="impPjToggle"' in src, "「项目」浮层的触发按钮不见了"
+    # ⚠️ 2026-09-30（`TAIL-64` `P4-d-b`）：触发按钮**改走统一出口 `PJB`** ⇒ 源码里那个字面
+    #    `data-act="impPjToggle"` 变成了**实参** `act:'impPjToggle'`。**判词不变**（"本页那个触发按钮还在"），
+    #    落点换成**委托形式**（同 `P4-b` 给 `test_wired_m03_list` 的改法：⛔ 不退回钉字面 ——
+    #    那等于宣布以后不许抽通用件）。⭐ 通用件**真的拼出按钮**由 `test_ux_pages.py` 那两条 ＋ 变异守。
+    assert "PJB({act:'impPjToggle'" in src, "「项目」浮层的触发按钮不见了"
 
 
 @acc("ACC-UI-SHELL-001", "001-42")
