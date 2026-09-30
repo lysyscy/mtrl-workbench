@@ -171,8 +171,11 @@ const PJB=({act='',w=126,label='',title='',cls='btn',attrs=''})=>'<button class=
  * ⚠️ **换行写 `\n`**：JS 的模板字面量会把源码里的 `CRLF` **折成 `LF`**（本批实测 —— 壳各件虽然都是
  *    `CRLF`，但原文那几行渲染出来是 `LF`）⇒ 出口必须照它写，否则**渲染字节差两个字节**
  *    （本批的硬证据 = 渲染字节不变；自证脚本 `tools/oneoff/_p4ca_calib.py` 就是拿真 `node` 比的）。
+ * ⚠️ `post`（默认 `''`）= **条数与灰色提示之间那一段**。真例 = `m03` 那个 `&nbsp;` ——
+ *    ⛔ **按原样传参，不许顺手统一掉**：本批唯一的硬证据是「渲染字节逐字节不变」，
+ *    为一个不换行空格（会让排版表现略变）降级证明强度**不划算**（同 `P5-d` 那条「不放宽」）。
  * 自证 = 变异脚本（去掉委托 ／ 内核另写死条数 ／ 内核不包条目外壳 ⇒ 对应判据必须红）。 */
-const CALIB=({items=[]})=>'<details class="tip"><summary>口径说明 · '+items.length+' 条 <span class="mut sm">点开查看（默认收起，把空间让给数据）</span></summary>\n'
+const CALIB=({items=[],post=''})=>'<details class="tip"><summary>口径说明 · '+items.length+' 条 '+post+'<span class="mut sm">点开查看（默认收起，把空间让给数据）</span></summary>\n'
   +'    <ul style="margin:calc(6px * var(--fscale)) 0 0;padding-left:calc(17px * var(--fscale));line-height:1.8">\n'
   +'      <li>'+items.join('</li>\n      <li>')+'</li>\n'
   +'    </ul></details>';

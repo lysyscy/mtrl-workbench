@@ -19,7 +19,7 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, page_seg, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
 
 _NT_THEAD_RE = re.compile(r"const NT_THEAD=`([\s\S]*?)`;")
 
@@ -68,7 +68,14 @@ def test_壳里列表页骨架齐备且表头18列():
     （`.tw > table.dt`）→ 计数 pill ＋ 空态行；表头 = `NT_THEAD`，**18 列**、末列「操作」。
     ⚠️ 旧页的「指标区」那一段本就**是空的**（MOD-03 这页没有 KPI）⇒ 新壳直接不渲染，不算丢。
     """
-    assert '<details class="tip">' in SHELL, "口径说明段没了"
+    # ⭐ 2026-09-30（`TAIL-64` P4-c-b）：口径说明块已收进出口 `CALIB` ⇒ 原先把
+    #   `<details class="tip">` 钉死**退化成真空断言**了（内核里那一份也能让它过 ——
+    #   哪怕本页的块被整段删掉）。⛔ 别退回钉字面（＝宣布以后不许抽通用件）⇒ **改钉意图**：
+    #   **本页真的委托了出口**（⛔ 不是"全文随便哪儿有一份"）。
+    #   ⚠️ `m03` 是**唯一**带 `post`（那多出来的一个 `&nbsp;`）的页 ⇒ 两种开局都收。
+    _seg = page_seg("m03")
+    assert "CALIB({items:[" in _seg or "CALIB({post:" in _seg, \
+        "口径说明段没了（或没走统一出口 `CALIB` —— `TAIL-64` P4-c）"
     # ⭐ 2026-09-30（`TAIL-64` P4-b）：筛选栏的**外壳**已收进统一出口 `FBAR`
     #   ⇒ 原先把 `<div class="fbar">` 钉死就**假红**了（那串现在**只在 `FBAR` 内核里**）。
     #   ⛔ 别退回钉字面 —— 那等于宣布"以后不许抽通用件"（与 `TAIL-64` 相反）。

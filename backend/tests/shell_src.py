@@ -149,6 +149,26 @@ def with_calib(act: str) -> str:
     return f"{act}\n{calib_kernel()}"
 
 
-__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "calib_kernel", "dl_kernel", "fbar_kernel",
-           "part_paths", "parts_text", "pjb_kernel", "read_shell", "tbl_kernel", "with_calib",
-           "with_fbar", "with_kernel", "with_pjb", "with_tbl"]
+#: ⭐ `TAIL-64` **P4-c**：**口径说明块已收进 `CALIB` 出口的页**（`P4-c-b` 起 = 全站 **14** 块全转）。
+#:    ⚠️ 它是**壳的事实**（哪几页走了出口）⇒ 住这里，判据件之间**共用一个定义**
+#:    （`test_ux_numbers` 逐页核"委托 ＋ 不再裸写"；`test_ux_brief` 数"折叠出口还在不在"）。
+#:    ⚠️ 再加页 / 挪页时**同批**改这里（`m12` 虽已撤页，它的切片留痕仍在 ⇒ 也在名单里）。
+CALIB_PAGES: tuple[str, ...] = ("m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08",
+                                "m09", "m11", "m12", "m13", "m14", "m15")
+
+
+def page_seg(page: str) -> str:
+    """`V.<page>=` 那一段源码（**切片的定义只有一处** = `ui_parity.slices()`；⛔ 别在这儿再写一份）。
+
+    ⚠️ 给"必须**按页**判"的断言用：全局字符串里撞到的同款写法常来自**别的页**（本仓老课）。
+    """
+    from tools.audit.ui_parity import slices
+    seg = slices(read_shell().replace("\r\n", "\n").split("\n")).get(page)
+    if seg is None:
+        raise KeyError(f"壳里没有 `V.{page}=` 切片")
+    return "\n".join(seg)
+
+
+__all__ = ["CALIB_PAGES", "SHELL", "SHELL_PARTS", "SHELL_PATH", "calib_kernel", "dl_kernel",
+           "fbar_kernel", "page_seg", "part_paths", "parts_text", "pjb_kernel", "read_shell",
+           "tbl_kernel", "with_calib", "with_fbar", "with_kernel", "with_pjb", "with_tbl"]

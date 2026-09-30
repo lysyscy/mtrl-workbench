@@ -1,7 +1,8 @@
 ﻿# ops/selfcheck.ps1 —— 目标机自检（M8 ④「交接口径与自检命令」的正文 · TAIL-188）
 #
 # 设计要点：⭐ 刻意写成「不依赖交付面」的 —— 交付面（WPS 那个文件夹）不进包、目标机不装，
-#   所以四态报表（acc_report.py · 641 那个数）与 ui_parity / doc_audit --ui 在目标机跑不了（＝已知代价）。
+#   所以四态报表（acc_report.py）与 ui_parity / doc_audit --ui 在目标机跑不了（＝已知代价）。
+#   ⚠️ 这里**刻意不写条数**（原写「641 那个数」—— 判据点一涨它就过期，属"留痕被后续甩下"那族）。
 #   这里做的是「这系统自己能不能转」的五项，⛔ 不是验收：
 #     ① 服务在跑（mtrl-workbench-server = Running / Automatic）
 #     ② http://127.0.0.1:8000/app 返回 200
