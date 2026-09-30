@@ -320,7 +320,10 @@ def main() -> int:
               tables: document.querySelectorAll('#view table').length,
               wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
               firstDoc: (IVs[0]||{}).docNo||'',
-              vsRows: (typeof VS!=='undefined'&&VS)?VS.rows.length:-1,
+              /* ⭐ `TAIL-64` P5-c（2026-09-30）：原来读的是**页级**实例 `VS` —— 那条路已删 ⇒ 改读
+                 **表级**实例（`VS_TS`：本页被认领的表；⛔ `VS` 已经不存在了，读它恒得 -1）。 */
+              vsRows: (typeof VS_TS!=='undefined' && VS_TS.length)
+                      ? Math.max.apply(null, VS_TS.map(x=>x.rows.length)) : -1,
             };
         }""")
         # ⭐ 虚拟滚动（2026-09-21）：滚到底 ⇒ 合计行必须出现（**只挂窗口 ≠ 丢数据**的可观测证据）

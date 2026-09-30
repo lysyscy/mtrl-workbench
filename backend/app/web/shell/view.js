@@ -119,9 +119,11 @@ function render(){
      —— 起因 / 实测耗时 / 全局启用的来历见《开发计划》§15 `TAIL-66`。 */
   /* ⚠️ 虚拟滚动那条路也在 `startVirtual` 里就把 DOM 写完了 ⇒ 浮层定位**两条路都要跑**
      （`placePops` 幂等；漏一条 ⇒ 大表页上展开的浮层仍被卡片裁）。 */
-  /* ⭐ `TAIL-64` P5-a：`vsOn` 这一层门移进 `startVirtual` 内部（**表级**那条路不受 `VSCROLL` 的 `off` 管
-     —— 那个开关的意思是"**页级**对它关掉、改走表级"，见 `VSCROLL` 的注释）。 */
-  if(startVirtual(html, scroller, keep)){ placePops(); applyPjFilters(); return; }
+  /* ⭐ `TAIL-64` P5-a：`vsOn` 这一层门移进 `startVirtual` 内部。
+     ⭐ **P5-c**（2026-09-30）：**页级那条路已删** ⇒ 虚拟滚动只剩**表级**这一条。
+     ⚠️ `scroller` 这个参数**同批删掉**：它原本只给页级那半用，而页级那半其实一直**没用它**
+        （自己 `scrollHost()` 重取一个）⇒ 留着会让人以为"传进去就有用"。 */
+  if(startVirtual(html, keep)){ placePops(); applyPjFilters(); return; }
   $('#view').innerHTML=html;
   /* ⚠️ 还原时**重新解析**滚动容器：`.tw` 已被上一行整体重建（旧元素连同它的 scrollTop 一起没了）。 */
   const host2=scrollHost(); if(host2) host2.scrollTop=keep;
@@ -133,9 +135,12 @@ function render(){
    `{m07:{off:true}}` = 这页不虚拟化；`{m09:{min:800}}` = 这页阈值调到 800。
    ⛔ 加例外必须写理由（在这里注释），否则又变回"名单式"的黑洞。 */
 const VS_MIN=400;                 /* 全局默认阈值：≥ 这个行数才虚拟化 */
-/* 例外表（**现为空**）。⭐ `TAIL-64` P5-b（2026-09-30）：**表级那条路已经"一律优先"** ——
-   凡带 `data-vs` 标记的表（现在**每一张表**都带）一旦行数够，就由表级接管、页级那条自动让位
-   ⇒ ⛔ 不再需要 `m08` 那种"点名"例外（`P5-a` 试点期加过一次，`P5-b` 撤掉）。
+/* 例外表（**现为空**）＝ **逃生阀**（⛔ 不是"逐页点名"的名单）：某页哪天出回归，能在这里一键关掉 / 调阈值。
+   ⭐ `TAIL-64` P5-b（2026-09-30）：**表级那条路已经"一律优先"** —— 凡带 `data-vs` 标记的表
+   （现在**每一张表**都带）一旦行数够，就由表级接管 ⇒ 不再需要 `m08` 那种"点名"例外（`P5-a` 试点期加过、
+   `P5-b` 撤掉）。
+   ⭐ **P5-c**（同日）：页级那条路删掉之后，`off` **恢复 `TAIL-66` 的原意 = 「这页不虚拟化」** ——
+   `P5-a` 试点期它曾短暂表示"**页级**对它关掉、改走表级"，那个语义随页级那条路一起没了（⛔ 别再往那个方向理解）。
    ⛔ 加例外必须写理由（在这里），否则又变回"名单式"的黑洞。 */
 const VSCROLL={};
 function vsOn(v){ const c=VSCROLL[v]; return !(c && c.off); }
@@ -159,8 +164,11 @@ function vsEditing(){
         即 m07 手填 / m11 子表）才推迟；**表外的筛选框不挡滚动**。 */
   return !!(a.closest && a.closest('.tw'));
 }
-let VS=null;                                    /* 当前虚拟态（切页 / 重渲即重建） */
-/* ⭐ `TAIL-64` P5-a（2026-09-30）：**表级**虚拟滚动的实例表（一页可以有多张带 `data-vs` 的表）。 */
+/* ⭐ `TAIL-64` P5-a（2026-09-30）：**表级**虚拟滚动的实例表（一页可以有多张带 `data-vs` 的表）。
+   ⭐ **P5-c**（同日）：**页级那条路已删** ⇒ 壳里只剩这一个"虚拟态"（原先那个整页实例 `VS` 一并删掉：
+   ⛔ 本轮起"把整页重写成窗口"的形态不该再出现，见 `drawVirtual` 的红线②）。
+   ⚠️ 每次分派（`startVirtual`）**先清空**、认领时再填 —— 旧形态只在"本页没有带标记的表"那一支清空
+   ⇒ 别的分支会把上一页认领过的实例留到下页（真机量测读得到，见 `_p5c_survey.py`）。 */
 let VS_TS=[];
 const EH=28;
 const VS_WIN=45, VS_OVER=10;                   /* 窗口行数 / 回看行数（上垫高 = a×EH）—— `TAIL-94` 重写 */                                    /* 未渲染行的估算高（本表众数 ≈27px） */
@@ -173,9 +181,10 @@ const VS_WIN=45, VS_OVER=10;                   /* 窗口行数 / 回看行数（
      ⇒ 监听一律挂**不会被重建的 `#view`**，并且必须走**捕获阶段**（`scroll` **不冒泡**，
        只有"祖先 ＋ 捕获"两条都满足，才收得到后代 `.tw` 的滚动）。 */
 function scrollHost(){ const v=$('#view'); if(!v) return null;
-  /* ⭐ `TAIL-64` P5-a（2026-09-30）**表级**虚拟滚动：滚动容器 = **那张表自己的 `.tw`**（记在 `VS.tw` 上）。
-     ⚠️ 只有"当前虚拟态指着的那张表"才优先 —— 页级那条路的实例**没有** `tw` ⇒ 行为与以前逐字相同。 */
-  if(VS && VS.tw && document.contains(VS.tw)) return VS.tw;
+  /* ⭐ `TAIL-64` P5-a 曾在这里加过一条"当前虚拟态那张表优先"——⭐ **P5-c**（2026-09-30）**撤掉**：
+     那是 P5-a 两条路并存期的拐杖（页级实例**没有** `tw`）⇒ 页级删掉后它只会让"记/还哪个容器"
+     取决于**最后画过哪张表**（多表页上不可预期）。现在回到唯一那条口径：**第一个自带滚动的 `.tw`**；
+     而表级那条路**自己**按每张表记/还（见 `startVirtualTables`），⛔ 不靠这里。 */
   const t=v.querySelector('.tw'); return (t && t.scrollHeight>t.clientHeight+1) ? t : v; }
 function splitRows(html){
   /* ⚠️ 只认 **tbody 里的行**：第一个 `<tr>` 往往是 `<thead>` 的表头行 —— 截在那里，
@@ -203,58 +212,59 @@ function vsPad(h, colN){
 function vsTableHits(html){
   return [...String(html).matchAll(/<tbody[^>]*\bdata-vs="[^"]*"[^>]*>[\s\S]*?<\/tbody>/g)];
 }
-/* ⭐⭐ 滚动监听的**唯一挂载点**（`TAIL-64` P5-a 起两条路都要 —— ⛔ 别把它写在某一条路的里面：
-   表级那条在 `startVirtual` 顶部就 `return` 了，写在页级那半里 ⇒ **表级页一个监听都挂不上**
-   （2026-09-30 真机当场抓到：滚动条能拖、内容一动不动）。
+/* ⭐⭐ 滚动监听的**唯一挂载点** —— ⛔ 必须排在 `startVirtual` 里**任何 `return` 之前**
+   （它下面有三处提前退出：逃生阀 `vsOn`／本页没有带标记的表／分派）。⭐ 这条规矩的来历（`P5-a`）：
+   当时它写在**页级那半**里，而表级那条从函数顶部就 `return` ⇒ **表级页一个监听都挂不上**
+   （2026-09-30 真机当场抓到：滚动条能拖、内容一动不动；而离线判据全绿）。
+   ⚠️ `P5-c` 之后页级那条路已删，但**这条规矩不变** —— 剩下那三处 `return` 一样会把它跳过。
    ⚠️ 挂**不会被重建的 `#view`** ＋ **捕获阶段**（`scroll` **不冒泡** ⇒ 非捕获收不到 `.tw` 的滚动；
       挂 `.tw` 上则每次重绘随 DOM 蒸发 —— 2026-09-25 用户"滚快了下面渲染不出来"就是这两条一起犯的）。 */
 function vsBindScroll(){
   const v=$('#view');
   if(!v || v._vsScrollBound) return;
   v._vsScrollBound=true;
-  /* ⭐ P5-a：滚动的**来源**可能是某一张表自己的 `.tw`（表级）或整页（页级）⇒ 按来源挑实例。
-     ⚠️ 实例的 `tw` 正是事件目标时才认它（顺带保证"元素已从文档里摘掉"的老实例不会被误认）。 */
+  /* ⭐ `P5-c`：滚动的**来源**只可能是**某一张表自己的 `.tw`**（表级是唯一那条路）⇒ 按来源挑实例。
+     ⚠️ 实例的 `tw` **正是事件目标**时才认它 —— 顺带保证"元素已从文档里摘掉"的老实例不会被误认
+        （`VS_TS` 每页会清空，但清空之前那个旧元素可能还挂在事件流上）。 */
   v.addEventListener('scroll',(e)=>{
-    const t=e.target;
-    const it=(VS_TS.find(x=>x.tw===t)) || ((VS&&VS.view===VIEW)?VS:null);
+    const it=VS_TS.find(x=>x.tw===e.target);
     if(!it) return;
     if(it.raf) return;
-    it.raf=requestAnimationFrame(()=>{ it.raf=0; drawVirtual(false, it); });
+    it.raf=requestAnimationFrame(()=>{ it.raf=0; drawVirtual(it); });
   },true);
   /* ⭐ 焦点护栏的**补画**：编辑中被推迟的重画，焦点一离开就补上（否则会留着旧窗口不刷新）。 */
   v.addEventListener('focusout',()=>{
-    setTimeout(()=>{
-      [VS].concat(VS_TS).forEach(it=>{ if(it&&it.view===VIEW&&it.pending) drawVirtual(false, it); });
-    },0);
+    setTimeout(()=>{ VS_TS.forEach(it=>{ if(it&&it.pending) drawVirtual(it); }); },0);
   });
 }
-function startVirtual(html, scroller, keep){
-  /* ⭐⭐ `TAIL-64` P5-a（2026-09-30）：**本页若有带 `data-vs` 的表 ⇒ 走表级**（与页级**互斥**）。
-     ⚠️ 表级那条路**不看** `vsOn()` —— `VSCROLL` 的 `off` 含义是"**页级**对它关掉"（见其注释）。 */
-  vsBindScroll();                             /* ⛔ 必须先挂监听：表级那条会在下面直接 `return` */
+function startVirtual(html, keep){
+  /* ⭐⭐ `TAIL-64` P5-a（2026-09-30）：**本页若有带 `data-vs` 的表 ⇒ 由表级接管**。
+     ⭐ **P5-c**（同日）：页级那条路（"整页一张大表"）**已删** ⇒ 这里只分派给 `startVirtualTables`。
+     ⛔ **顺序不许动**：先**挂监听**（下面三处 `return` 都会跳过它 —— 而"没挂上监听"的真机症状是
+        「滚动条能拖、内容一动不动」，且**离线判据全绿**，2026-09-30 当场抓到过一次）
+        ⇒ 再**清空**实例表 ⇒ 再**逃生阀** ⇒ 再**分派**。
+     ⭐ 监听与**重画节奏**（`rAF`：每帧最多一次 —— ⛔ 别改回 30ms 去抖：那在快速滚动期间只画最后一下、
+        中间全是空白垫高行）都在 `vsBindScroll()` 里，就在下面第一行挂好。 */
+  vsBindScroll();
+  VS_TS=[];                              /* ⭐ P5-c：**每页一律先清空**（⛔ 别只在某一条支路里清 ⇒ 会串页） */
+  if(!vsOn(VIEW)) return false;          /* ⭐ 逃生阀：`VSCROLL` 的 `off` ＝ **本页不虚拟化**（`TAIL-66` 原意） */
   const ts=vsTableHits(html);
-  if(ts.length) return startVirtualTables(html, ts, keep);
-  VS_TS=[];                                   /* ⛔ 走页级 ⇒ 表级实例必须清空（否则滚动监听会认错对象） */
-  if(!vsOn(VIEW)) return false;
-  const sp=splitRows(html);
-  if(!sp || sp.rows.length < vsMin(VIEW)) return false;
-  VS={view:VIEW, pre:sp.pre, post:sp.post, rows:sp.rows, h:new Array(sp.rows.length).fill(0),
-      colN:((sp.pre.match(/<th\b/gi)||[]).length || (sp.rows[0].match(/<td\b/gi)||[]).length || 8),
-      base:0, t:0, raf:0, pending:false, a:-1, b:-1, tb:null};
-  drawVirtual(true);
-  /* ⚠️ 滚动位置的还原见 `render()`（本函数只负责**首帧** —— 此刻 DOM 里还是旧页面）。 */
-  const host0=scrollHost(); if(host0) host0.scrollTop=keep;
-  /* ⭐⭐ 监听与**重画节奏**（`rAF`：每帧最多一次 —— ⛔ 别改回 30ms 去抖：那在快速滚动期间只画最后一下、
-     中间全是空白垫高行）见 `vsBindScroll()`（**两条路共用**，已在 `startVirtual` 顶部挂好）。 */
-  return true;
+  if(!ts.length) return false;           /* 本页没有带标记的表 ⇒ 交回 `render()` 直写 */
+  return startVirtualTables(html, ts, keep);
 }
-/* ⭐⭐ `TAIL-64` P5-a（2026-09-30）**表级**虚拟滚动 —— 把"一张表自己滚"这条路铺出来。
-   **做法（⛔ 与页级那条路的差别只有三处）**：
+/* ⭐⭐ `TAIL-64` P5-a（2026-09-30）**表级**虚拟滚动 —— "让**每张表自己**滚"（`P5-c` 起是**唯一**那条路）。
+   **做法**：
      ① 首帧**按字符串拼**（页里每张 `data-vs` 的 `tbody` 先只放一个**全长垫高**）⇒ 整页仍是**一次**
         `innerHTML` —— ⛔ 不先写全量再改（那会让 1000+ 行被浏览器整批 parse，正是 `TAIL-66` 要避免的卡顿）；
      ② 写完立刻把 `keep` **还给那张表自己的 `.tw`**（此刻文档总高已 = 行数×估算高 ⇒ 还原不会被钳）；
-     ③ 再按**真实**容器画首帧（`drawVirtual(false, 实例)`）—— 窗口 / 垫高 / 实测回填**全部复用**同一条路。
-   ⚠️ 与页级**同页互斥**：本页一旦走了表级，页级那条就不再跑（`startVirtual` 里先判表级）。 */
+     ③ 再按**真实**容器画首帧（`drawVirtual(实例)`）—— 窗口 / 垫高 / 实测回填**全部复用**同一条路。
+   ⚠️ **认领表体时按刚打上的 `data-vs-i` 标记对位，⛔ 不按 `data-vs` 的值查**：`TBL` 的 `key` 缺省是 `'1'`
+      ⇒ **一页里多张表同键**（`m14` 实测 5 张全叫 `1`）⇒ 按值查会**把窗口画到别人那张表上**
+      （不报错 —— 只是那张表被替成另一个窗口，看起来就是花屏）。
+   ⚠️ **带标记但不在 `.tw` 里**（没自带滚动容器）的表**接管不了** ⇒ 行**原样写回**、本轮不虚拟化
+      （⛔ 别硬画：窗口是按"它自己的 `.tw`"算的 —— 没有容器 ⇒ 整张表只剩一个垫高行，看起来**表是空的**）。
+   ⚠️ 实测（`tools/oneoff/_p5c_survey.py`）：全站 17 页里**有 9 张带标记的表不在 `.tw` 里**
+      （`home`/`m02`/`m07` 的 `kinds`/`m10`/`m14` 五张）—— 它们今天都在阈值以下，所以谁也没发现。 */
 function startVirtualTables(html, hits, keep){
   const insts=[];
   let out=html;
@@ -262,71 +272,79 @@ function startVirtualTables(html, hits, keep){
   for(let i=hits.length-1;i>=0;i--){
     const sp=splitRows(hits[i][0]);
     if(!sp || sp.rows.length < vsMin(VIEW)) continue;      /* 这张表行数不够 ⇒ **它不动**，其余照常 */
+    const open=/<tbody\b[^>]*>/.exec(sp.pre);
+    /* ⛔ 连 `tbody` 开标签都找不到 ⇒ **这张表不动**（别冒险把行换成垫高：认不回它 = 一张空表）。 */
+    if(!open) continue;
     const key=(hits[i][0].match(/\bdata-vs="([^"]*)"/)||[,'1'])[1];
-    const inst={view:VIEW, key:key, pre:sp.pre, post:sp.post, rows:sp.rows,
+    const inst={view:VIEW, key:key, hit:i, pre:sp.pre, post:sp.post, rows:sp.rows,
                 h:new Array(sp.rows.length).fill(0),
                 colN:((sp.rows[0].match(/<td\b/gi)||[]).length || 8),
                 base:0, t:0, raf:0, pending:false, a:-1, b:-1, tb:null, tw:null};
-    out = out.slice(0,hits[i].index) + sp.pre + vsPad(sp.rows.length*EH, inst.colN) + sp.post
+    /* ⭐ 给这一张 `tbody` 打一个**唯一**标记（`hit` = 这块在页里的序号）—— 写完按它对位认领。 */
+    const at=open.index + open[0].length - 1;
+    const pre=sp.pre.slice(0, at) + ' data-vs-i="'+i+'"' + sp.pre.slice(at);
+    out = out.slice(0,hits[i].index) + pre + vsPad(sp.rows.length*EH, inst.colN) + sp.post
         + out.slice(hits[i].index + hits[i][0].length);
     insts.unshift(inst);
   }
-  if(!insts.length) return false;
-  VS_TS=insts;
+  if(!insts.length) return false;                          /* 一张都不够行数 ⇒ 交回 `render()` 直写 */
   $('#view').innerHTML=out;
   if(BIND[VIEW]) BIND[VIEW]();
+  const live=[];
   insts.forEach(inst=>{
-    inst.tb=$('#view').querySelector('tbody[data-vs="'+inst.key+'"]');
+    inst.tb=$('#view').querySelector('tbody[data-vs-i="'+inst.hit+'"]');
     inst.tw=(inst.tb && inst.tb.closest) ? inst.tb.closest('.tw') : null;
-    if(inst.tw) inst.tw.scrollTop=keep;
+    if(!inst.tb || !inst.tw){                              /* ⭐ 接管不了 ⇒ 行原样写回（见上面那条注记） */
+      if(inst.tb) inst.tb.innerHTML=inst.pre+inst.rows.join('')+inst.post;
+      return;
+    }
+    inst.tw.scrollTop=keep;                                /* ⭐ 记/还**这张表自己的** `.tw`（⛔ 还错对象不报错，只会悄悄跳顶） */
+    live.push(inst);
   });
+  VS_TS=live;
   /* ⭐ 首帧：按**真实**容器画（`force` = 此刻不适用焦点护栏 —— 表体还没行，推迟会把表画成空的）。 */
-  insts.forEach(inst=>{ inst.force=true; drawVirtual(false, inst); inst.force=false; });
+  live.forEach(inst=>{ inst.force=true; drawVirtual(inst); inst.force=false; });
   return true;
 }
 /* ⭐⭐ 虚拟滚动**重写**（`TAIL-94` · 2026-09-25）：**单一渲染路径 ＋ 文档总高恒定 ＋ 滚动中零写入**。
    前六次尝试全部回滚换来的三条结论（⛔ 别再犯）：
-   ① **不再 `$('#view').innerHTML=…`** —— 那会把真容器 `.tw` 一起换掉 ⇒ 打断滚轮手势、`scrollTop` 归零；
+   ① **滚动重画里绝不动 `#view`** —— 那会把真容器 `.tw` 一起换掉 ⇒ 打断滚轮手势、`scrollTop` 归零；
       而"程序化改 scrollTop 能动"的假象骗过两次自检（见 `ops/README.md` 两条纪律）。
+      ⚠️ `#view` 那句整页写在**首帧**（`render()` / `startVirtualTables` 拼接那一次）是允许的 ——
+         区别在"**用户已经开始滚之后**还改不改它"。
    ② **不在滚动中写 `scrollTop`** —— 锚定回拉那种"写一下修正"会顶掉用户这一格的滚轮量
       ⇒ 真机表现 =「往下能滚、**往上回不来**」（第 4 次尝试就是这么废的）。
    ③ ⇒ 只用 `tbody.innerHTML` 换**窗口行**（容器 / 表头 / `.tw` 一个字节都不动），
       并让**文档总高恒为 `n*EH`**：下垫高吸收"真高 − 估算"的差量；**贴底时改由上垫高吸收**
       —— 因为最后一行**必须是合计行**、⛔ 不能是空垫高行（真机自检抓过）。
-   ④ 于是窗口 = `f(scrollTop)` 的**纯函数**：无反馈环、无累积漂移、上下双向对称。 */
-function drawVirtual(first, inst){
-  if(inst) VS=inst;                             /* ⭐ P5-a：表级那条路**按实例**画（页级不传 ⇒ 行为不变） */
-  /* ⚠️ 读的必须是**真容器**（表级 = 那张表自己的 `.tw`；页级 = `scrollHost()`）——
-     读 `.view` 会恒得 `st≈0` ⇒ 窗口永不推进。 */
-  const sc=(VS&&VS.tw)||scrollHost()||$('.view'); if(!sc||!VS) return;
-  /* ⭐⭐ 焦点护栏（`TAIL-66`）：首帧必须画（否则空页）；滚动重画时若焦点在**表内**编辑控件里 ⇒ 推迟。
-     ⚠️ `VS.force` = **表级首帧**：那一刻表体还是空的（只有全长垫高）⇒ 被推迟就会画成一张空表。 */
-  if(!first && !VS.force && vsEditing()){ VS.pending=true; return; }
-  VS.pending=false;
-  const n=VS.rows.length, st=sc.scrollTop, vh=sc.clientHeight;
+   ④ 于是窗口 = `f(scrollTop)` 的**纯函数**：无反馈环、无累积漂移、上下双向对称。
+   ⭐ `TAIL-64` P5-c（2026-09-30）：本函数**只收一个表实例** —— 页级那条路已删，原先"整页写窗口"那个
+      `first` 分支（连同壳里那个整页实例 `VS`）一起没了。⛔ 别再长出第二条：**一条路一份口径**。 */
+function drawVirtual(inst){
+  /* ⚠️ 读的必须是**真容器** ＝ **这张表自己的 `.tw`** —— 读 `.view` 会恒得 `st≈0` ⇒ 窗口永不推进。
+     ⛔ 没有自带滚动容器的表**本来就接管不了**（认领时已挡掉，见 `startVirtualTables`）⇒ 这里直接返回。 */
+  const sc=inst&&inst.tw; if(!sc) return;
+  /* ⭐⭐ 焦点护栏（`TAIL-66`）：滚动重画时若焦点在**表内**编辑控件里 ⇒ **推迟**（⛔ 别改成"照画"：
+     那会让用户"输到一半滚一下就没了"，而且**不报错** —— 最坏的一类缺陷）。
+     ⚠️ `inst.force` = **首帧**：那一刻表体还是空的（只有全长垫高）⇒ 被推迟就会画成一张空表。 */
+  if(!inst.force && vsEditing()){ inst.pending=true; return; }
+  inst.pending=false;
+  const n=inst.rows.length, st=sc.scrollTop, vh=sc.clientHeight;
   let a,b;
   /* ⭐ 底部钳制（虚拟列表标配）：贴底 ⇒ 窗口**必须**收在最后一行（合计行永远如约出现）。 */
   if(st + vh >= n*EH - 2){ b=n; a=Math.max(0, n-VS_WIN-VS_OVER); }
   else { a=Math.max(0, Math.floor(st/EH)-VS_OVER); b=Math.min(n, a+VS_WIN+VS_OVER); }
   /* ⭐ 窗口没变 ⇒ 一个字节都别动（滚动中反复重写会打断手势）。 */
-  if(!first && a===VS.a && b===VS.b) return;
-  const topH0=a*EH, botH0=(n-b)*EH, winRows=VS.rows.slice(a,b);
-  const SP=h=>vsPad(h, VS.colN);                /* ⭐ P5-a：垫高行**抽成共用出口**（形态一字未改） */
-  if(first && !VS.tw){
-    /* 红线①：整页**一次**写完整片段（pre ＋ 上垫高 ＋ 窗口行 ＋ 下垫高 ＋ post），⛔ 不追加片段。 */
-    $('#view').innerHTML = VS.pre + SP(topH0) + winRows.join('') + SP(botH0) + VS.post;
-    if(BIND[VIEW]) BIND[VIEW]();
-    VS.tb=$('#view').querySelector('tbody');
-  }else{
-    /* ⭐⭐ 滚动重画：**只换 tbody 的行** —— `.tw` / 表头 / `#view` 都不动 ⇒ 手势不被打断、`scrollTop` 不用还。 */
-    const tb=(VS.tb && document.contains(VS.tb)) ? VS.tb
-      : (VS.tw ? VS.tw.querySelector('tbody') : $('#view').querySelector('tbody'));  /* ⚠️ 表级认它自己那张表的 tbody */
-    if(!tb) return;
-    VS.tb=tb;
-    tb.innerHTML = SP(topH0) + winRows.join('') + SP(botH0);
-  }
+  if(a===inst.a && b===inst.b) return;
+  const topH0=a*EH, botH0=(n-b)*EH, winRows=inst.rows.slice(a,b);
+  const SP=h=>vsPad(h, inst.colN);              /* ⭐ P5-a：垫高行**抽成共用出口**（形态一字未改） */
+  /* ⭐⭐ 滚动重画：**只换 tbody 的行** —— `.tw` / 表头 / `#view` 都不动 ⇒ 手势不被打断、`scrollTop` 不用还。 */
+  const tb=(inst.tb && document.contains(inst.tb)) ? inst.tb : sc.querySelector('tbody');
+  if(!tb) return;
+  inst.tb=tb;
+  tb.innerHTML = SP(topH0) + winRows.join('') + SP(botH0);
   /* 红线③：窗口行**实测回填**（行高 27~91px 不等高）＋ 差量吸收 ⇒ 文档总高恒为 `n*EH`。 */
-  const trs=VS.tb?VS.tb.children:null;
+  const trs=inst.tb?inst.tb.children:null;
   if(trs && trs.length){
     const hasTop=!!(trs[0] && trs[0].classList && trs[0].classList.contains('vsp'));
     let H=0;
@@ -335,7 +353,7 @@ function drawVirtual(first, inst){
       if(r.classList && r.classList.contains('vsp')) continue;
       const hh=r.getBoundingClientRect().height;
       const gi=a+i-(hasTop?1:0);
-      if(gi>=0 && gi<n) VS.h[gi]=+hh.toFixed(1);
+      if(gi>=0 && gi<n) inst.h[gi]=+hh.toFixed(1);
       H+=hh;
     }
     const delta=(b-a)*EH - H;                 /* 真高比估算高 ⇒ delta<0 */
@@ -346,9 +364,9 @@ function drawVirtual(first, inst){
       trs[0].style.height=Math.max(0, Math.round(topH0+delta))+'px';
     }
     const r0=trs[hasTop?1:0];
-    if(r0) VS.base=r0.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - topH0;
+    if(r0) inst.base=r0.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - topH0;
   }
-  VS.a=a; VS.b=b;
+  inst.a=a; inst.b=b;
 }
 
 const WIRED=new Set(['home','m03','m01','m02','m04','m05','m06','m07','m08','m09','m14','m11','m15',
