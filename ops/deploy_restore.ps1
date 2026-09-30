@@ -8,6 +8,10 @@
     0) 校 `SHA256SUMS.txt`（包在拷的过程中损坏 ⇒ 当场发现）
     1) 落仓：`git clone <包里的 bundle>` ⇒ **含全部历史**（`D18`）
     2) 把包内**非 git 件**放回：记忆档 / `nssm.exe` / 产物 / 壳基线
+    2b) ⭐ **交付面快照**（⭐ 2026-09-30 用户指示 · 包里**只带 2 件**：`face\材料科业务全流程说明书.md`
+        ＋ `face\PRD\验收\验收基线.json`）—— 本步**只报"怎么用"**：⛔ 不动任何交付面文件、⛔ 不写 `.env`
+        （守 `TAIL-88`）；要跑验收面那套尺子就把 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 指过去
+        （⚠️ **云那份仍是真源**：云同步到了就用云那份，要离线跑才指包内那份）
     3) `venv` ＋ 依赖（目标机已有环境 ⇒ 只会补缺）
     4) `.env`：**只检查、不写**（真口令不进包 —— 守 `TAIL-88`）⇒ 缺哪几个键就列出来
     5) 库：`-Mode empty`（建库＋迁移 ⇒ 干净可用）／ `-Mode asis`（灌包里那份现状 dump）
@@ -98,6 +102,24 @@ foreach ($rel in @('.codebuddy\memory', '.workbuddy\memory', 'ops\nssm', 'artifa
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $RepoRoot $rel)) | Out-Null
     Copy-Item -Recurse -Force $s (Join-Path $RepoRoot $rel)
     Say ('   ✓ ' + $rel)
+}
+
+# ---- 2b) 交付面快照（⭐ 2026-09-30 用户指示 · 包里只带那 2 件 · 本步⛔ 不写任何文件）----
+#  为什么只报不用：① 交付面是 **WPS 云同步树** ⇒ 目标机**多半本来就有**（2026-09-30 订正）；
+#    ② `.env` 里真口令/真路径**一律不替用户写**（本脚本第 4 步的口径）⇒ 这里只把"该填什么"打出来。
+Step '2b) 交付面快照（《说明书》＋ 验收基线 · 包里只带这 2 件）'
+$faceSnap = Join-Path $Pack 'face'
+if (-not (Test-Path -LiteralPath $faceSnap)) {
+    Say '   ⚠️ 包里没有 face\（产包时用了 -SkipFace，或交付面缺件）⇒ 只能靠 WPS 云同步那份'
+    Say '      ⚠️ 后果：云没同步到 ⇒ 四态报表（acc_report）与 doc_audit --ui 跑不了'
+} else {
+    $snapList = @(Get-ChildItem -LiteralPath $faceSnap -Recurse -File | ForEach-Object { $_.FullName.Substring($faceSnap.Length + 1) })
+    Say ('   ✓ 包内快照：' + ($snapList -join ' · '))
+    Say '   ⭐ 两种用法（挑一种写进**仓根 `.env`**）：'
+    Say '      ① **云同步到了**（推荐 · 云那份是真源）⇒ PRD_ACCEPTANCE_BASELINE=<交付面根>\PRD\验收\验收基线.json'
+    Say ('      ② **要离线跑**（云没同步）⇒ PRD_ACCEPTANCE_BASELINE=' + (Join-Path $faceSnap 'PRD\验收\验收基线.json'))
+    Say '      ⚠️ 改完 `.env` 要**重启后端**（它没有 --reload）；该键的读取方 = `doc_audit` / `_audit_face.py` / `acc_report`'
+    if ($DryRun) { Say '   [干跑]' }
 }
 
 # ---- 3) venv ＋ 依赖 ----

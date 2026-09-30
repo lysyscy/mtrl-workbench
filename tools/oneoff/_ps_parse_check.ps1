@@ -75,10 +75,49 @@ foreach ($f in $Files) {
     }
 }
 
+# ---- ③ 交付面快照那 2 件在不在（⭐ 2026-09-30 加 · 用户指示③「包内留一份快照」）----
+#  为什么：`pack.ps1` 步骤 2b 要取 2 件（《材料科业务全流程说明书.md》＋ `PRD\验收\验收基线.json`）——
+#    它们**在不在**只有真跑到那一步才知道，而"真跑"那一刻 = **去办公室前一天** ⇒
+#    到期才发现"云没同步下来 / 被改名"就晚了（同族教训：2026-09-29 壳基线路径写错、到期才发现）。
+#  口径：**交付面根只从 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 上溯两级拿**（＝ `audit_common.delivery_root()`
+#    **同一个主人** ⇒ ⛔ 本件不另写死一个绝对路径）；拿不到 ⇒ **显式报黄**（⛔ 不静默跳过 —— 本仓栽过两次的同一类错）。
+$envFile = Join-Path $root '.env'
+$faceRoot = ''
+if (Test-Path -LiteralPath $envFile) {
+    # ⚠️ 两处踩过、别改回去（2026-09-30 现场）：
+    #   ① **必须 `-Encoding UTF8`** —— `.env` 是 UTF-8，而 PS 5.1 的 `Get-Content` 默认按**本地代码页(GBK)** 读
+    #      ⇒ 中文路径整段**乱码** ⇒ `Test-Path` 全判假 ⇒ ⛔ 把"读错了"伪装成"交付面里真没有"（最贵那类假红）。
+    #   ② **上溯三级**（⛔ 不是两级）—— `Split-Path -Parent` 对**文件**先取"所在目录"（＝一级）
+    #      ⇒「文件 → 验收 → PRD → 交付面根」＝ 三次；⚠️ Python 那边 `Path.parents[2]` 是**两级**（语义相反），
+    #      照 Python 抄会**少一级** ⇒ 拿到的"根"其实是 `…\PRD` ✗（本次就是这么错的）。
+    foreach ($l in (Get-Content -LiteralPath $envFile -Encoding UTF8)) {
+        if ($l.Trim().StartsWith('PRD_ACCEPTANCE_BASELINE=')) {
+            $p = $l.Split('=', 2)[1].Trim()
+            if ($p) { $faceRoot = [IO.Path]::GetDirectoryName([IO.Path]::GetDirectoryName([IO.Path]::GetDirectoryName($p))) }
+        }
+    }
+}
 Write-Host ''
-if ($bad -or $pathBad) {
-    Write-Host ('=== 语法不过 ' + $bad + ' 份 · 路径不存在 ' + $pathBad + ' 处 ===')
+Write-Host '③ 交付面快照（`pack.ps1` 步骤 2b 要取的 2 件 · 用户 2026-09-30 指示）'
+$faceBad = 0
+if (-not $faceRoot) {
+    Write-Host '   ⚠️ 拿不到交付面根（仓根 `.env` 里没有 `PRD_ACCEPTANCE_BASELINE`）⇒ **跳过**（⚠️ 跳过 ≠ 通过）'
+} else {
+    Write-Host ('   交付面根 = ' + $faceRoot)
+    foreach ($rel in @('材料科业务全流程说明书.md', 'PRD\验收\验收基线.json')) {
+        if (Test-Path -LiteralPath (Join-Path $faceRoot $rel)) {
+            Write-Host ('   ✅ ' + $rel)
+        } else {
+            $faceBad++
+            Write-Host ('   ⛔ ' + $rel + '  ⇒ 交付面里没这一件（云没同步下来？被改名？）⇒ 包里将缺它')
+        }
+    }
+}
+
+Write-Host ''
+if ($bad -or $pathBad -or $faceBad) {
+    Write-Host ('=== 语法不过 ' + $bad + ' 份 · 仓内路径不存在 ' + $pathBad + ' 处 · 交付面快照缺 ' + $faceBad + ' 件 ===')
     exit 1
 }
-Write-Host '=== 全部语法 ✓ · 仓内路径字面量全在 ✓ ==='
+Write-Host '=== 全部语法 ✓ · 仓内路径字面量全在 ✓ · 交付面快照在位 ✓ ==='
 exit 0

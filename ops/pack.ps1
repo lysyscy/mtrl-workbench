@@ -21,6 +21,15 @@
          ⇒ ⛔ 把**路径写错**伪装成**真没有**（详见下面第 2 步的注释）
        ③ **库**：`db/init_db.sql`（空库路线 · 建库＋角色）＋ 可选 `db/<db>-<日期>.dump`（`-WithDump` · 只作对照）
        ＋ 随包放一份 `docs/deployment.md`（一页）
+       ④ ⭐ **交付面快照 · 只 2 件**（⭐ 用户 2026-09-30 指示 · 见 §20 指示③）：
+          `face\材料科业务全流程说明书.md` ＋ `face\PRD\验收\验收基线.json`
+          ⇒ 目标机 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 可**指包内**这份（⚠️ 口径：**云那份仍是真源**，
+          连得上云就改回 —— 免得「两处副本必漂」）。
+          ⛔ **交付面其余件一律不进包**（`demo\` · `PRD\` 余件 · `PRD素材包-*` · 交付面根 4 个 md）——
+          交付面是 **WPS 云同步树**（2026-09-30 订正）：目标机只要 WPS 同步了它**本来就在**，
+          要跑那套尺子只需**核路径 ＋ 在 `.env` 配 `PRD_ACCEPTANCE_BASELINE`**（≈零成本）；
+          ⇒ ⛔ 别整份拷（实测 **1404 件 / 42.27 MB**）。已做：参数 `$FaceRoot` 与 `-SkipFace`。
+
 
        ⛔ **一律不带**：`backend/.venv`（绝对路径，拷过去必崩）· `logs/` · `.workbuddy/scratch` ·
        `.workbuddy/backups/交付面-*`（交付面快照）· **`.env`**（真口令不进包 —— 守 `TAIL-88` 的"敏感件 0 命中"）。
@@ -39,6 +48,8 @@ param(
     [string] $DbUser    = 'mtrl',
     [switch] $WithDump,                                              # 另附一份"本机现状" dump（⛔ 不灌生产，只作对照）
     [switch] $SkipEvidence,                                          # 跳过 0b（刷新权威四态档）—— ⚠️ 只在"刚跑过全套 pytest"时用
+    [string] $FaceRoot  = '',                                        # 交付面根（⭐ 只用来取 ④ 那 2 件快照；留空 ⇒ 用本机默认路径）
+    [switch] $SkipFace,                                              # 跳过 ④ 交付面快照（⇒ 包里将没有那 2 件）
     [switch] $DryRun
 )
 
@@ -152,6 +163,43 @@ if ($snap) {
     $packProblems++
 }
 
+# ---- 3b) 交付面快照（⭐ 用户 2026-09-30 指示 · ⛔ 只 2 件，别整份拷）----
+#  为什么要它：交付面是 **WPS 云同步树** ⇒ 目标机**多半本来就有**（2026-09-30 订正）；
+#    但**云可能没同步 / 云那份会漂** ⇒ 用户点名留**一份包内快照**（`.env` 可指包内）。
+#  ⚠️ 两条教训照抄本文件既有写法（别重踩）：
+#    · **中文一律走 `.NET` / `-like` / Python**（`-Filter` 会命中 0）；
+#    · 缺件报**两类真因**（目录不存在 = 多半路径写错 / 文件不存在 = 真缺），⛔ 别混成一句"没找到"
+#      （那正是 2026-09-29「5 份壳基线一份都进不了包」的成因）。
+Step '2b) 交付面快照（《说明书》＋ 验收基线 · 用户 2026-09-30 指示）'
+$faceDone = 0
+if ($SkipFace) {
+    Say '   ⏭ -SkipFace ⇒ 跳过（⚠️ 包里将没有那 2 件 ⇒ 目标机只能靠云那份）'
+} else {
+    # ⚠️ 本机默认路径写在这里（⛔ 不写进 param 默认值 —— 目标机/换机时 `-FaceRoot` 可覆盖）
+    if (-not $FaceRoot) { $FaceRoot = 'D:\工作\AI\PRD编写夹 - Workbuddy专用' }
+    Say ('   源 = ' + $FaceRoot)
+    foreach ($rel in @('材料科业务全流程说明书.md', 'PRD\验收\验收基线.json')) {
+        $s = Join-Path $FaceRoot $rel
+        if (-not (Test-Path -LiteralPath $s)) {
+            $packProblems++
+            Say ('   ⛔ 缺：' + $rel)
+            if (-not (Test-Path -LiteralPath $FaceRoot)) {
+                Say ('      真因① = **交付面根都不存在**：' + $FaceRoot + '（WPS 云没同步下来？还是路径写错？）')
+            } else {
+                Say ('      真因② = 交付面根在，但**没有这一件**（云同步缺件 / 被改名？）')
+            }
+            Say '      ⚠️ 后果：目标机 `.env` 的 PRD_ACCEPTANCE_BASELINE 只能指云那份 ⇒ 云没同步到就断'
+            continue
+        }
+        $d = Join-Path $Out ('face\' + $rel)
+        if ($DryRun) { Say ('   [干跑] face\' + $rel); continue }
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $d) | Out-Null
+        Copy-Item -Force -LiteralPath $s -Destination $d
+        $faceDone++
+        Say ('   ✓ face\' + $rel)
+    }
+}
+
 # ---- 4) 库 ----
 Step '3) 库（空库 SQL ＋ 可选现状 dump）'
 if ($DryRun) { Say '   [干跑] db\init_db.sql' }
@@ -185,6 +233,9 @@ if (-not $DryRun) {
     $mf += ('HEAD     : ' + $head + '（工作区干净 —— 产包闸已挡过未提交）')
     $mf += '仓       : repo\mtrl-workbench.bundle（git bundle --all ⇒ 含全部历史，D18 的回退保障）'
     $mf += '非 git 件: .codebuddy\memory\** · .workbuddy\memory\** · ops\nssm\nssm.exe · artifacts\*'
+    # ⭐ 2026-09-30（用户指示③）：交付面**只带 2 件快照** —— MANIFEST 必须写明，⛔ 别让人以为整份都在包里
+    $mf += ('交付面快照: ' + $(if ($faceDone -ge 2) { 'face\材料科业务全流程说明书.md ＋ face\PRD\验收\验收基线.json（⭐ .env 的 PRD_ACCEPTANCE_BASELINE 可指包内这份；⚠️ 云那份仍是真源）' } elseif ($faceDone -eq 1) { '⚠️ 只带了 1 件（另 1 件缺 · 见产包日志）' } else { '⛔ 一件都没带（-SkipFace 或交付面缺件；见产包日志）⇒ 交付面只能靠 WPS 云同步' }))
+    $mf += '⛔ 交付面其余件不进包: demo\ · PRD\ 余件 · PRD素材包-* · 交付面根 4 个 md（= WPS 云同步树 ⇒ 目标机同步即有）'
     $mf += ('壳基线   : ' + $(if ($snapName) { '.workbuddy\backups\' + $snapName } else { '⛔ 缺！见产包日志里"真因①/②"那两行（目标机 --snapshot 一次即可）' }))
     $mf += ('库       : db\init_db.sql（空库路线；⚠️ 里面 <PASSWORD> 到目标机要换）' + $(if ($WithDump) { ' ＋ db\*.dump（⚠️ 只作对照，⛔ 不灌生产）' } else { '' }))
     $mf += '⛔ 一律不带: backend\.venv · logs\ · .workbuddy\scratch · .workbuddy\backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
