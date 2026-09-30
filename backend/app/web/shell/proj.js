@@ -161,6 +161,22 @@ const PJB=({act='',w=126,label='',title='',cls='btn',attrs=''})=>'<button class=
   +' style="min-width:'+w+'px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"'
   +(title?' title="'+title+'"':'')+'><span>'+label+'</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>';
 
+/* ⭐ **口径说明块件**（`TAIL-64` P4-c · 2026-09-30）—— 页首那个折叠的「口径说明 · N 条」块
+ * 统一由它渲染：`<details>` 外壳 ＋ 标题 ＋ **算出来的条数** ＋ `<ul>` ＋ 条目外壳。
+ * 契约：`CALIB({items:[…]})` ⇒ 返回完整块 HTML；**条数 = 条目个数**（本件算出，⛔ 调用点不再手抄那个数）。
+ * ⚠️ 为什么必须收：那个数字原先**逐处手抄** —— `m02` 曾写着「6 条」而块里实际 7 条
+ *    （用户在屏幕上读到一个**假的条数**，守则 §4.2「状态必须真实」· §2.6「能算的别让人自己数」）
+ *    ⇒ 收进本件后「条数 ⇄ 条目」由构造保证，那类漂移**从此不可能**（同族已犯过三次）。
+ * ⚠️ 收的只是**外壳**：条目正文（`items` 里每一段）**逐字留在调用点**，本件只负责包外壳与分隔。
+ * ⚠️ **换行写 `\n`**：JS 的模板字面量会把源码里的 `CRLF` **折成 `LF`**（本批实测 —— 壳各件虽然都是
+ *    `CRLF`，但原文那几行渲染出来是 `LF`）⇒ 出口必须照它写，否则**渲染字节差两个字节**
+ *    （本批的硬证据 = 渲染字节不变；自证脚本 `tools/oneoff/_p4ca_calib.py` 就是拿真 `node` 比的）。
+ * 自证 = 变异脚本（去掉委托 ／ 内核另写死条数 ／ 内核不包条目外壳 ⇒ 对应判据必须红）。 */
+const CALIB=({items=[]})=>'<details class="tip"><summary>口径说明 · '+items.length+' 条 <span class="mut sm">点开查看（默认收起，把空间让给数据）</span></summary>\n'
+  +'    <ul style="margin:calc(6px * var(--fscale)) 0 0;padding-left:calc(17px * var(--fscale));line-height:1.8">\n'
+  +'      <li>'+items.join('</li>\n      <li>')+'</li>\n'
+  +'    </ul></details>';
+
 const thCount=h=>(String(h).match(/<th\b/g)||[]).length;   /* 一张表有几列 —— 从表头数出来，不写死 */
 /* ⚠️ **表头有几「列」**（不是有几个 `<th>`）—— **两行表头**时两者不等：月度会大表 `<th>` 共 23 个，而**列数是 20**
    （`rowspan` / `colspan` 各只占 1 个 `<th>`）⇒ `thCount` 会把列数**多算**、合计行就会多出几个空 `<td>`，

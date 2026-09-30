@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 
 from tests.acc_plugin import acc
-from tests.shell_src import SHELL
+from tests.shell_src import SHELL, calib_kernel
 
 #: 金额 KPI 的下限 = **11**（看板欠款 4 ＋ 付款流水欠款 4 ＋ 集采台账 3）
 #: ⚠️ 集采那 4 个里有一个是「合同数」—— 它是**计数**不是金额，⛔ 不该带「元」（判据别把它算进来）。
@@ -100,6 +100,31 @@ def test_验收术语不许留在界面上():
         assert tomb not in SHELL, f"验收术语又回到界面上来了：{tomb!r} ⇒ 换成人话（如「差 1 分也算不平」）"
 
 
+#: ⭐ `TAIL-64` `P4-c`：**已经收进 `CALIB` 出口的页**（逐页增量 —— 试点从 `m13` 起，`P4-c-b` 再往下加）。
+#:    ⚠️ 与下面「条数一致」那条**分工不同、不要合并**：那条管**还没转**的块（`口径说明 · N 条` 还是手抄的），
+#:    本列表管**已经转了的**页 —— 那几页的条数是**算出来的**、源码里没有那个数字，扫描式判据再也看不见它们。
+_CALIB_DONE: tuple[str, ...] = ("m13",)
+
+#: `V.<页>=` 切片的起止（收尾口径与 `ui_parity.slices()` 一致：下一个顶层声明即止）
+_VIEW_START = re.compile(r"^V\.([A-Za-z0-9_]+)\s*=")
+_VIEW_END = re.compile(r"^(V\.[A-Za-z0-9_]+\s*=|BIND\.|const |function |let |var )")
+
+
+def _page_seg(txt: str, page: str) -> str:
+    """`V.<page>=` 那一段（⛔ 别全文数 —— 那就成了另一回事）。"""
+    out: list[str] = []
+    on = False
+    for ln in txt.split("\n"):
+        m = _VIEW_START.match(ln)
+        if m:
+            on = m.group(1) == page
+        elif on and _VIEW_END.match(ln):
+            break
+        if on:
+            out.append(ln)
+    return "\n".join(out)
+
+
 @acc()
 def test_口径说明的条数必须与实际的条数一致():
     """⭐ 2026-09-30（`TAIL-64` **P4-c 前哨** · 量测当场抓到的真缺陷）：页首那句
@@ -110,8 +135,9 @@ def test_口径说明的条数必须与实际的条数一致():
     这违反守则 **§4.2**（状态必须真实）与 **§2.6**（能算出来的别让人自己数）。
     ⚠️ **同族已犯过三次**（「保留 **4** 项」实为 6、「三步条 / `at` = 0/1/2」实为四步、「6 条」实为 7）
     —— 全是**留痕/数字被后续增删甩下**，而那类漂移**离线尺子原本全扫不到**（没人给判据）。
-    ⇒ 本判据把这一类变成**能机器判的**（`P4-c` 若把 N 改成"算出来的"，这条依然守着）。
 
+    ⚠️ **本条的适用范围**：只判**还是手抄的**那些块。某页一旦收进 `CALIB`（见 `_CALIB_DONE`），
+    它的条数就**不再出现在源码里**、本条扫不到它 ⇒ 由下面那一条 `…_CALIB` 接手（⛔ 两条都要在）。
     ⚠️ **判法按"块"**：`<li>` 只数到该块自己的 `</details>` 为止（⛔ 别全文数 —— 那就成了另一回事）。
     ⚠️ **只判壳**（用户看的是壳）：原型是**交付面**、由四检看管，⛔ 本判据不读仓外文件。
     自证 = `tools/mut/_mut_uxnum.py` 的 `M4`（把某块的条数改错 ⇒ 必须红）。
@@ -127,8 +153,47 @@ def test_口径说明的条数必须与实际的条数一致():
         n_blocks += 1
         if int(m.group(1)) != real:
             bad.append(f"声明 {m.group(1)} 条 / 实际 {real} 条")
-    assert n_blocks >= 10, (
-        f"只找到 {n_blocks} 块「口径说明 · N 条」—— 判据的靶跑偏了（壳里该有十几块）")
+    # ⚠️ 下限按「**两种形态合起来**」数（手抄块 ＋ 已转页）—— 否则 `P4-c-b` 一路转下去，
+    #    这条会先在**全转完**那天变成假红（靶其实还在，只是换了形态）。
+    assert n_blocks + len(_CALIB_DONE) >= 10, (
+        f"「口径说明」的块只认出 {n_blocks} 块手抄 ＋ {len(_CALIB_DONE)} 块走出口 —— 判据的靶跑偏了"
+        "（壳里该有十几块）")
     assert not bad, (
         "「口径说明 · N 条」的 N 与实际条数对不上 —— **用户会在屏幕上读到假的条数**"
         "（守则 §4.2 状态必须真实 · §2.6 能算的别让人自己数）：\n      " + "\n      ".join(bad))
+
+
+@acc()
+def test_口径说明块走统一出口_CALIB():
+    """⭐ 2026-09-30（`TAIL-64` `P4-c-a`）：页首那个折叠块的**外壳**（`<details>` ＋ 标题 ＋
+    **条数** ＋ `<ul>` ＋ 条目外壳）由出口 `CALIB` 出 ⇒ **「条数 ⇄ 条目」由构造保证**，
+    上面那条扫不到的"已转页"由本条接手。
+
+    ⚠️ **为什么不绑契约点**（同 `P4-b` / `P4-d-b` / `_mut_tbl` 那几批）：`P4-c-a` 是**渲染字节不变**
+    的机制改动，⛔ 没有用户可见的变化 ⇒ 为一个"机制"新开契约点不合口径。它是**工程自检**（`@acc()`）。
+
+    ⚠️⚠️ **断言顺序有讲究**：**先查内核**，再看调用点 —— 内核一坏，"调用点还在不在"会**误报**成
+    「全站没有问题」（`P4-b` 的 `M3` 当场抓到过同一个坑）。
+
+    ⚠️ **两根钉子**（缺一不可）：
+      ① **内核真按条目个数出条数 ＋ 真把条目包成外壳**（在 `shell/proj.js` 的 `CALIB` 里量，
+         ⛔ 先剥块注释 —— 注释里会引述写法，不剥就会**把注释当实现**）；
+      ② **每个已转的页**：真**委托**了出口 ＋ 本页**不再**裸写那个数字（守则 §4.2「状态必须真实」）。
+    自证 = `tools/mut/_mut_uxnum.py` 的 `M5`（内核写死条数）／`M6`（已转页又裸写一层）／
+    `M7`（内核不包条目外壳）—— 三条各自打上面一根钉子。
+    """
+    kern = re.sub(r"/\*.*?\*/", "", calib_kernel(), flags=re.S)   # ⛔ 先剥块注释
+    assert "const CALIB=" in kern, \
+        "壳里找不到 `const CALIB=` —— 口径说明块件被拆掉了？（`TAIL-64` P4-c）"
+    assert "items.length" in kern, \
+        "内核没按**条目个数**出条数 ⇒ 「口径说明 · N 条」又会变回**手抄的数字**（那正是本件要根治的病）"
+    assert "<li>'+items.join(" in kern, \
+        "内核没把条目包成 `<li>` —— 条目会裸着上屏（外层三件在、里面是空的）"
+    for page in _CALIB_DONE:
+        assert f"V.{page}=" in SHELL, f"`_CALIB_DONE` 里的 `{page}` 在壳里没有对应的切片"
+        seg = re.sub(r"/\*.*?\*/", "", _page_seg(SHELL, page), flags=re.S)
+        assert "CALIB({items:[" in seg, \
+            f"`{page}` 的口径说明块没走统一出口 `CALIB`（`TAIL-64` P4-c）—— 外壳又写回手抄的了？"
+        assert not re.search(r"口径说明 · \d+ 条", seg), \
+            f"`{page}` 又裸写了「口径说明 · N 条」—— 那个数字必须由出口**算出来**" \
+            "（守则 §4.2 状态必须真实 · §2.6 能算的别让人自己数）"
