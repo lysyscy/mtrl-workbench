@@ -87,15 +87,33 @@ def check(page, errors: list[str]) -> None:
             errors.append("建档弹窗确认后 20 s 内库里没出现那一行（建档没落库？）")
         # ⚠️ **还要等界面重绘**：原先那 1800 ms 同时盖住了"库写入"与"壳拿到响应后重绘"两件事
         #    —— 只等库 ⇒ 下面那些**界面**断言会读到还没重绘的画（实测会当场红，不是理论担心）。
+        # ⭐ 2026-09-30 再补一步（**一处竞态**：只 `settle()` 仍会读到"半新"的画）：
+        #    建档**确实落库了**（下面第 ⑦ 条 ✅），但壳还没把「待建档」清单**重取回来** ⇒
+        #    `#archBox` 还在 ⇒ 第 ⑧ 条「建完清单里这条消失」**假红**（实测：同一天四次跑，前几次绿、后几次红 ⇒ 典型的快慢竞态）。
+        #    ⇒ 与**上面那条 `wait_db`** 同一个思路：**等那件事真的发生**（⛔ 不睡固定毫秒、⛔ 也不把"settle 过了"当好了）。
+        #    ⚠️ 超时 ⇒ **不吞**：下面那条断言照旧读 `ui["box"]` 并报红（等不到 = 卡片真没消失 ⇒ 该红还是红）。
         from _shell_common import settle
+        try:
+            page.wait_for_function("() => !document.getElementById('archBox')", timeout=8000)
+        except Exception:                                     # noqa: BLE001 —— 超时不是异常处理，是"没等到"
+            pass
         settle(page)
         with session_scope() as s:
             rows = s.execute(select(Project).where(Project.name_full == ARCH_FULL)).scalars().all()
             got = [(r.id, str(r.warehouse_name or ""), str(r.project_type or "")) for r in rows]
-        ui = page.evaluate("""() => ({
+        # ⚠️ 2026-09-30：`boxText` / `boxHasItem` 是给**失败时看的** —— "卡片还在"有两种：
+        #    ① 还是**老内容**（没刷新）、② 已经**空了**（本卡 0 条）但容器没摘 —— 处置完全不同；
+        #    ⛔ 不给这两句，红的时候只能猜（本仓最贵那类**静默**）。
+        ui = page.evaluate("""(full) => ({
             box: !!document.getElementById('archBox'),
+            boxText: ((document.getElementById('archBox')||{}).innerText||'').replace(/\\s+/g,' ').slice(0,160),
+            /* ⭐ 只看**卡内那张表**的行 —— ⛔ 别用"整个卡里还能不能搜到这个全名"：
+               `TAIL-190` 要的「另有 N 条不属本卡」是个 `<ul>` 说明块（**应该在**，且会写出这个全名）
+               ⇒ 那样判会把"说明块"误当成"待办还在"。 */
+            toDoHasItem: [...document.querySelectorAll('#archBox tbody tr')]
+                           .some(tr => tr.innerText.includes(full)),
             toast: [...document.querySelectorAll('.toast')].map(t=>t.innerText).join(' | '),
-        })""")
+        })""", ARCH_FULL)
 
         oks = [
             (info["btns"] == 1 and len(info["tds"]) >= 4,
@@ -108,7 +126,18 @@ def check(page, errors: list[str]) -> None:
             (got == [(got[0][0], ARCH_WB, "normal")] if got else False,
              f"**只建了选中的那一个**（落库：{got}）"),
             ("已建档" in ui["toast"], f"界面如实报出结果：{ui['toast'][:70]}"),
-            (not ui["box"], "建完**清单里这条消失**（⛔ 不摆着让人对旧清单白干）"),
+            # ⭐⭐ 2026-09-30 **改判**（原判据**过时**，⛔ 不是"放宽判据"）：原判词是 `not ui["box"]`
+            #    （**整个卡片容器必须消失**）—— 那是 **`TAIL-190` 之前**的形态。`TAIL-190`（用户真机报障，
+            #    2026-09-29）明确要求「**丢掉的那几条也要画出来**」（否则用户看到"回执说有待人工 2 条、
+            #    卡是空的"只能猜是不是坏了）⇒ 那张卡**本来就该留着**：表头写「共 0 条 · 另有 N 条不属本卡」，
+            #    后者是个 `<ul>` **说明块**（`core.js` 的 `ARCP_DROP` 分支）。
+            #    ⚠️ 实测（2026-09-30）：建档**确实落库了**（上面第 ⑦ 条 ✅）、卡内表格也清空了（「共 0 条」），
+            #       而老判据读"容器在不在" ⇒ **假红**（且它会让人以为建档没生效）。
+            #    ⇒ 改钉**意图**：**卡内那张待办表里不再有这条**（⛔ 用 `#archBox tbody tr` 精确到表格，
+            #       不受 `TAIL-190` 那个说明块影响）。
+            (not ui["toDoHasItem"],
+             f"建完**这条待办从卡里消失**（⛔ 不摆着让人对旧清单白干；⚠️ 卡片本身可以留 —— `TAIL-190` 要求"
+             f"「另有 N 条不属本卡」也画出来）｜卡里现为：{ui['boxText']!r}"),
         ]
         for ok, what in oks:
             print(("  ✅ " if ok else "  ⛔ ") + what)

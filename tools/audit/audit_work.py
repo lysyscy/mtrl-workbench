@@ -155,21 +155,32 @@ def check_retention() -> list[dict]:
                 f"把旧的**移进** `_旧快照归档-YYYYMMDD/`（可逆）或清掉；现值：{names}"))
     oneoff = REPO_ROOT / "tools" / "oneoff"
     if oneoff.is_dir():
-        fs = [f for f in oneoff.rglob("*") if f.is_file() and "__pycache__" not in f.parts]
+        # ⭐⭐ 2026-09-30（用户「可以归档」）：**已入档的不计数** —— 口径与 `.workbuddy/backups/` 完全一致
+        #    （那边有 `BACKUP_ARCHIVE_PREFIXES = ("_归档-", "_旧快照归档-")`）。
+        #    ⚠️ 为什么这**不是"放松判据"**：`T20` 这一条的本意写得很清楚 ——「件数是**「翻不翻得动」**的代理指标」
+        #       ⇒ 躺在 `_归档-YYYYMMDD/` 里的件**已经不在"堆"里**（且⛔ 一个字节都没删，随时可移回）。
+        #    阈值仍是 200 件，改的只是**计数范围**；⭐ 而且下面**把入档件数照实打出来**（不遮、不藏）。
+        def _is_archived(f: pathlib.Path) -> bool:
+            return any(p.startswith("_归档-") for p in f.relative_to(oneoff).parts[:-1])
+
+        allf = [f for f in oneoff.rglob("*") if f.is_file() and "__pycache__" not in f.parts]
+        fs = [f for f in allf if not _is_archived(f)]
+        n_arch = len(allf) - len(fs)
+        note = f"（另有 `_归档-*` {n_arch} 件已按口径入档，不计）" if n_arch else ""
         mb = sum(f.stat().st_size for f in fs) / 1024 / 1024
         if len(fs) > ONEOFF_MAX_FILES or mb > ONEOFF_MAX_MB:
             hits.append(_hit(
                 "T20", "tools/oneoff/",
-                f"{len(fs)} 件 / {mb:.1f} MB > 提示线 {ONEOFF_MAX_FILES} 件 / {ONEOFF_MAX_MB} MB",
+                f"{len(fs)} 件 / {mb:.1f} MB > 提示线 {ONEOFF_MAX_FILES} 件 / {ONEOFF_MAX_MB} MB {note}",
                 "它是**一次性 / 留痕的堆场**，此前**没有保留期、也没有机器眼**（`TAIL-194` · 结构审计 `P1-8`）"
-                " ⇒ 只会一直堆；⚠️ 件数是「翻不翻得动」的代理指标",
+                " ⇒ 只会一直堆；⚠️ 件数是「翻不翻得动」的代理指标（**已入档的不计** —— 它们已不在堆里）",
                 "按 `tools/README.md` 那一段处置口径走：**先查引用**（只读件 `tools/oneoff/_oneoff_measure.py`）"
                 " ⇒ ⛔ **不盲删**（会被台账/判据/记忆引用 ⇒ 造断链），把零引用的**移进** "
                 "`tools/oneoff/_归档-YYYYMMDD/`（可逆）"))
         else:
             print(f"  （信息）`tools/oneoff/`：{len(fs)} 件 · {mb:.1f} MB"
                   f"（提示线 {ONEOFF_MAX_FILES} 件 / {ONEOFF_MAX_MB} MB ⇒ 余 {ONEOFF_MAX_FILES - len(fs)} 件）"
-                  " —— 处置口径见 `tools/README.md`")
+                  f"{note} —— 处置口径见 `tools/README.md`")
     scratch = REPO_ROOT / ".workbuddy" / "scratch"
     if scratch.is_dir():
         fs = [f for f in scratch.rglob("*") if f.is_file()]

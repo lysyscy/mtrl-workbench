@@ -129,6 +129,21 @@ const TBL=({head='',rows=[],empty='',sum='',key='',cls='',sort=true,sty='',headR
  * 自证 = 变异脚本（去掉委托 / 掏空内核 ⇒ 对应判据必须红）。 */
 const FBAR=({cls='',sty='',body=''})=>'<div class="fbar'+(cls?' '+cls:'')+'"'+(sty?' style="'+sty+'"':'')+'>'+body+'</div>';
 
+/* ⭐ **项目选择按钮件**（`TAIL-64` P4-d · 2026-09-30）—— 共用面板 `projPanel` 的**那枚 ▾ 按钮**
+ * 统一由它渲染（`pjwrap` 里那一层）。契约：`PJB({act, w, label, title})` ⇒ 返回完整 `<button…>…</button>`。
+ * ⚠️ 为什么把**按钮**也收了（`P4-d` 的第 ② 档）：那串
+ *    `style="min-width:Npx;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"`
+ *    与收尾那枚 `▼` 原本**逐处手写**（12 处），而 `min-width` 实测有 **6 种值** ⇒ §5.9「同类形态只留一处出口」。
+ *    ⚠️ `w` 是**显式参数**（宽度按标签长短本就不同，⛔ 不是要抹平它 —— 是把它从长串里**抬出来**）。
+ * `title` 只在需要时给（真例 = 通用导入面那枚，悬停要带仓库名）。
+ * ⛔ 与 `projPanel` 的分工：本件只管**那枚按钮**，⛔ 不碰面板（面板仍走 `projPanel` 唯一出口 · 守则 §5.12）。
+ * ⚠️ **本件只在壳侧**（⛔ 不进 `U5_GROUPS`）：原型那侧的按钮还是**旧形态**（`gap:8px`、无 `--fscale`），
+ *    硬同步会让它的按钮退化成"没有 gap"（`var()` 未定义）⇒ 见 `tools/oneoff/_p4d_pjb_pilot.py` 的文件头。
+ * 自证 = 变异脚本（去掉委托 / 掏空内核 ⇒ 对应判据必须红）。 */
+const PJB=({act='',w=126,label='',title=''})=>'<button class="btn" data-act="'+act+'" style="min-width:'+w+'px;'
+  +'display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"'
+  +(title?' title="'+title+'"':'')+'><span>'+label+'</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>';
+
 const thCount=h=>(String(h).match(/<th\b/g)||[]).length;   /* 一张表有几列 —— 从表头数出来，不写死 */
 /* ⚠️ **表头有几「列」**（不是有几个 `<th>`）—— **两行表头**时两者不等：月度会大表 `<th>` 共 23 个，而**列数是 20**
    （`rowspan` / `colspan` 各只占 1 个 `<th>`）⇒ `thCount` 会把列数**多算**、合计行就会多出几个空 `<td>`，
@@ -470,4 +485,5 @@ const ntActCell=n=>{
   if(n.manual) L.push(`<span class="tag t-in">手动</span> <button class="btn sm" data-act="ntEdit" data-id="${n.id}" title="编辑这一行手动新增的通知书（一切信息可改；「统计结算金额」恒 0 只读）">编辑</button> <button class="btn sm dg" data-act="ntDel" data-id="${n.id}" title="删除这一行手动新增的通知书（删除前列影响范围）">删除</button>`);
   if(ntHasFlow(n)) L.push(`<button class="btn sm dg" data-act="ntRevoke" data-id="${n.id}" title="撤销这笔已登记的付款流水（入口就近 —— 不必再跳到「付款流水与欠款统计」页）。撤销必须填原因并留痕；撤销后「已付金额」回退、状态按「已付金额 ≥ 审批金额」重判（§4.4.5）">撤销付款</button>`);
   if(ntHasLink(n)) L.push(`<button class="btn sm" data-act="ntTrace" data-id="${n.id}" title="查看这行通知书的关联与去向：集采合同关联、已登记付款流水（只读，不改任何数据）">查看关联</button>`);
-  return L.length?L.join(' '):'<span class="mut">—</span>'; };
+  return L.length?L.join(' '):'<span class="mut">—</span>'; };
+

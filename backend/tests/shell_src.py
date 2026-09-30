@@ -101,5 +101,29 @@ def with_fbar(act: str) -> str:
     return f"{act}\n{fbar_kernel()}"
 
 
+def pjb_kernel() -> str:
+    """⭐ `TAIL-64` **P4-d-a**（2026-09-30）：壳里 **`PJB` 项目选择按钮件**的源码。
+
+    同 `tbl_kernel()` / `fbar_kernel()` 的理由：那枚 ▾ 按钮（`pjwrap` 里那一层）抽进 `PJB` 之后，
+    「切片里必须有那串手写样板」这类判据会假红。
+
+    ⚠️ 取法与 `fbar_kernel()` **不同**：`PJB` 分**三行**拼串 ⇒ 打不到"行尾"，
+       改用**结束标记** `</button>';`（那是这条语句的收尾）。
+    """
+    text = read_shell().replace("\r\n", "\n")
+    i = text.find("const PJB=")
+    if i < 0:
+        return ""
+    marker = "</button>';"
+    j = text.find(marker, i)
+    return text[i:j + len(marker)] if j > i else text[i:]
+
+
+def with_pjb(act: str) -> str:
+    """切片源码 **＋** 它委托的 `PJB` 内核源码 ⇒ 判据**与结构无关**。"""
+    return f"{act}\n{pjb_kernel()}"
+
+
 __all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "dl_kernel", "fbar_kernel", "part_paths",
-           "parts_text", "read_shell", "tbl_kernel", "with_fbar", "with_kernel", "with_tbl"]
+           "parts_text", "pjb_kernel", "read_shell", "tbl_kernel", "with_fbar", "with_kernel",
+           "with_pjb", "with_tbl"]

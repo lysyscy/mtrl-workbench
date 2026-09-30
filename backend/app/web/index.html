@@ -624,7 +624,7 @@ V.m03=()=>{
       <div class="fi"><label>单据年月</label>${tmBtn('ntMonth',{scope:'nt',val:fNt.month,label:tmLabel(fNt.month),modes:['月','跨月','年','全部']})}</div>
       <div class="fi"><label>对应单据日期（闭区间）</label><input class="inp" readonly style="width:198px" value="${esc(tmRange(fNt.month))}" title="按单据日期起止筛选，闭区间；抓取按时间全量、不选项目、不分页（§4.2.1）"></div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
-        <button class="btn" data-act="pjToggle" style="min-width:126px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"><span>${fNt.projs.length?`已选 ${fNt.projs.length} 个`:'全部项目'}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
+        ${PJB({act:'pjToggle',w:126,label:`${fNt.projs.length?`已选 ${fNt.projs.length} 个`:'全部项目'}`})}
         ${pjIsOpen('pj')?pjPanel():''}</div>
       <div class="fi"><label>分类</label><select class="inp" id="fCat" data-act="filterNt">${optsOf(['全部'].concat(enumVals('cat'),['剔除']),fNt.cat)}</select></div>
       <div class="fi"><label>审批状态</label><select class="inp" id="fAstat" data-act="filterNt">${enumOpts('astat',fNt.astat,1)}</select></div>

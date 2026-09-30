@@ -285,7 +285,6 @@ m03 19c54a7b  # 原型:         ? `<div style="display:flex;flex-direction｜壳
 m03 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
 m03 fe293ff5  # 原型:       <span class="pill">批量改分类${pk.length?` · 已选 $｜壳:       <span class="mut sm" style="margin:0 calc(2p
 m03 fbe736ad  # 原型:       <button class="btn" data-act="batchUnEx" tit｜壳:       <span class="mut sm" style="margin:0 calc(2p
-m03 e50c7128  # 原型:       <div class="fi"><label>审批状态</label><select c｜壳:         <button class="btn" data-act="pjToggle" st
 m04 69d2f00a  # 原型:     <ul style="margin:6px 0 0;padding-left:17px;li｜壳:     <ul style="margin:calc(6px * var(--fscale)) 0 
 m04 58cd1bdc  # 原型:     ${order.map(r=>`<div class="kpi"><div class="k｜壳:     ${order.map(r=>`<div class="kpi"><div class="k
 m04 9fa2bdc8  # 原型:   <div class="card" style="margin-bottom:12px"><h4｜壳:   <div class="card" style="margin-bottom:calc(12px
@@ -923,3 +922,7 @@ m11 9c2750c7  # 原型:       <button class="btn" data-act="jcPartyDlg" ti｜壳
 m11 b5fad0c9  # 原型:     `})}｜壳:     rows:jcRows.map((j,i)=>`<tr class="${j.tag==='
 m14 9df7d606  # 原型:     ]})}</div></div>`;｜壳:     <div class="bd">${FBAR({body:`<div class="fi">
 m14 a8db0d10  # 原型: /* ===============================================｜壳:       <button class="btn pri sm" data-act="jciAdd"
+
+# ⭐ 2026-09-30 新增登记 1 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
+
+m03 3f35462b  # 原型:       <div class="fi"><label>审批状态</label><select c｜壳:         ${PJB({act:'pjToggle',w:126,label:`${fNt.p

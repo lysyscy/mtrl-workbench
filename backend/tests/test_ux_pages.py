@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 
 from tests.acc_plugin import acc
-from tests.shell_src import SHELL, fbar_kernel, with_fbar
+from tests.shell_src import SHELL, fbar_kernel, pjb_kernel, with_fbar
 
 #: ⭐ `P1-a`（2026-09-28 · 用户选 `A`）：**展开区的外框/间距只走变体类**，这四条内联整串不许回来。
 EXPAND_INLINE_GONE: tuple[str, ...] = (
@@ -694,3 +694,33 @@ def test_筛选栏外壳全站都走统一出口():
     assert n == 1, (
         f"全站还有 **{n}** 处筛选栏是**裸写**的外壳（`class=\"fbar…\"` 只该出现在 `FBAR` 内核那 1 处）"
         " —— 守则 §5.9「同类形态只留一处出口」：把新写的那几处也换成 `${FBAR({…})}`")
+
+
+@acc()
+def test_项目选择按钮只走统一出口_PJB():
+    """⭐ `TAIL-64` **P4-d-a**（2026-09-30）：`pjwrap` 里**那枚 ▾ 按钮**走统一出口 `PJB`。
+
+    ⚠️ **为什么要有它**：那串样板 —— `style="min-width:Npx;display:inline-flex;align-items:center;
+       justify-content:space-between;gap:calc(8px * var(--fscale))"` ＋ 收尾那枚
+       `<span class="mut" …>▼</span>` —— 原本**逐处手写**（12 处，`min-width` 实测 **6 种值**），
+       而换写法**渲染字节一字不变** ⇒ 人眼 / 真机 / `U1` 都看不出某处到底换没换。
+       ⇒ 与 `FBAR` 同族：**只有"改坏了必须红"这一条**能证明它真的委托出去了、内核真拼出了按钮。
+    ⚠️ **本批只钉 `V.m03` 这一处试点**（⛔ 别把别的页写进来 —— 那会让它下一批一开工就假红）。
+    ⚠️ **判法 = 两段拼起来看**（照 `with_tbl()` / `with_fbar()` 那套 doctrine）：切片**委托** `PJB`
+       ＋ **内核里**真拼出那枚按钮（含标签）＋ **不再手写**那串样板。
+    自证 = `tools/mut/_mut_pjb.py`：去掉委托 / 掏空内核 ⇒ 本判据必须红。
+    """
+    i = SHELL.find("\nV.m03=()=>{")
+    j = SHELL.find("\n};", i) if i >= 0 else -1
+    m03 = SHELL[i:j] if i >= 0 and j > i else ""
+    assert m03, "壳里找不到 `V.m03` 切片"
+    assert "PJB({act:'pjToggle'" in m03, \
+        "`m03` 的「项目（可多选）」按钮没走统一出口 `PJB`（`TAIL-64` P4-d）"
+    kern = pjb_kernel()
+    assert "data-act=" in kern and "▼" in kern, \
+        "`PJB` 内核不再出那枚按钮（或丢了 ▼）—— 项目选择控件会**点不开**"
+    assert "span>'+label+'</span>" in kern, \
+        "`PJB` 内核没有把标签拼进按钮里 ⇒ **按钮上什么都不显示**（外壳还在、里面是空的）"
+    # ⚠️ 墓碑：本页**不许再手写**那串按钮样板（⛔ 先剥块注释再判 —— 注释里会引述旧写法）
+    assert 'data-act="pjToggle" style="min-width:' not in _strip_block_comments(m03), \
+        "`m03` 又写回手写的按钮样板了（应委托 `PJB`：`TAIL-64` P4-d）"
