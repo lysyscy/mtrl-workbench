@@ -105,9 +105,18 @@ def main() -> int:
             line = t[:m.start()].count("\n") + 1
             sl = _slice_of(t, m.start())
             cond = len(re.findall(r"\$\{[^}]*\?", rows_expr)) + len(re.findall(r"\.map\(", rows_expr)) - 1
+            #: ⭐⭐ **表头来源**（`P5-d-b` 补量）：**决定"能不能转列定义式"** ——
+            #: 表头来自 `*_THEAD` 常量的调用点**不能**转（`t` 会把表头**抄第二份**，而那个常量还被
+            #: `thCount` / `sumRowOf` / `U5` 吃着）⇒ 只有**内联**的那些能安全转。
+            hm = re.search(r"(?<![\w$])head\s*:\s*([^,]+)", call)
+            h = (hm.group(1).strip() if hm else "")
+            head_src = ("（无 head）" if not h
+                        else ("内联" if h[:1] in "'\"`"
+                              else ("常量" if re.fullmatch(r"[A-Z][A-Z0-9_]*", h.split("(")[0].strip())
+                                    else "表达式")))
             rows.append({
                 "part": name.replace("backend/app/web/", ""),
-                "line": line, "slice": sl, "key": key.strip(),
+                "line": line, "slice": sl, "key": key.strip(), "head_src": head_src,
                 "call_lines": call.count("\n") + 1,
                 "rows_lines": rows_expr.count("\n") + 1 if rows_expr else 0,
                 "tr": rows_expr.count("<tr"), "td": rows_expr.count("<td"),
@@ -117,12 +126,12 @@ def main() -> int:
                 "rows_expr": (" ".join(rows_expr.split()))[:80],
             })
 
-    print(f"{'件':<18}{'行':<7}{'切片':<8}{'key':<22}{'rows 写法':<12}{'调用行':<7}{'模板行':<7}"
+    print(f"{'件':<18}{'行':<7}{'切片':<8}{'key':<22}{'表头':<9}{'rows 写法':<12}{'调用行':<7}{'模板行':<7}"
           f"{'tr/td':<9}{'条件/嵌套'}")
-    print("-" * 124)
+    print("-" * 132)
     for r in rows:
         print(f"{r['part']:<18}{r['line']:<7}{r['slice'] or '—':<8}{r['key'][:20]:<22}"
-              f"{r['rows_form']:<12}{r['call_lines']:<7}{r['rows_lines']:<7}"
+              f"{r['head_src']:<9}{r['rows_form']:<12}{r['call_lines']:<7}{r['rows_lines']:<7}"
               f"{str(r['tr']) + '/' + str(r['td']):<9}{r['cond']}")
 
     in_slice = [r for r in rows if r["slice"]]
@@ -144,6 +153,19 @@ def main() -> int:
     for r in pure[:12]:
         print(f"     {r['part']}:{r['line']}  slice={r['slice'] or '—'}  key={r['key'] or '（无）'}  "
               f"td={r['td']}  模板 {r['rows_lines']} 行")
+    by_head: dict[str, int] = {}
+    for r in rows:
+        by_head[r["head_src"]] = by_head.get(r["head_src"], 0) + 1
+    print("⑥ ⭐⭐ **表头来源**（`P5-d-b` 补量 —— 它决定「能不能转列定义式」）："
+          + " · ".join(f"{k} **{v}**" for k, v in sorted(by_head.items(), key=lambda x: -x[1])))
+    print("     ⛔ **表头来自 `*_THEAD` 常量的不能转** —— `cols[].t` 会把表头**抄第二份**，"
+          "而那个常量还被 `thCount` / `sumRowOf` / `U5` 吃着（见施工图 §7.12 必读①）；")
+    print("     ⚠️ 多行行模板的站点撞「**空白差**」口径（`\n` ＋ 缩进会进渲染字节）⇒ 必读②。")
+    can = [r for r in rows if r["head_src"] == "内联" and r["rows_form"] == "内联 .map"
+           and r["cond"] == 0 and not r["slice"] and r["rows_lines"] == 1]
+    print(f"     ✅ **本批口径下可安全转的**（内联表头 ＋ 纯取值 ＋ 单行模板 ＋ 不在 `V.*` ⇒ 零级联）：**{len(can)}** 处 ——")
+    for r in can:
+        print(f"        {r['part']}:{r['line']}  key={r['key'] or '（无）'}  td={r['td']}")
     OUT.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n逐处读数已落：{OUT.relative_to(ROOT)}")
     return 0

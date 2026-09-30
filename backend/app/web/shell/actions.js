@@ -1960,8 +1960,10 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
    const body = pjs.length===1
      ? `<div class="tip" style="margin:0">将生成 <b>1 个工作簿</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>工作簿内 <b>3 个工作表</b>：<b>辅材欠款</b> · <b>机械欠款</b> · <b>特殊费用月报表</b></div>`
      : `<div class="tip" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">逐月欠款台账_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个工作簿（每个 <b>3 个工作表</b>）。</div>
-        ${TBL({cls:'cond',key:'modal:ledExp',sty:'margin-top:calc(8px * var(--fscale))',head:'<th>#</th><th>工作簿（每项目一个）</th><th>工作表</th>',
-        rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td><td class="sm">辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>`)})}`;
+        ${TBL({cls:'cond',key:'modal:ledExp',sty:'margin-top:calc(8px * var(--fscale))',
+        cols:[{t:'<th>#</th>', r:(k,i)=>`<td class="fc">${i+1}</td>`},
+              {t:'<th>工作簿（每项目一个）</th>', r:k=>`<td>${esc(fnOf(k))}</td>`},
+              {t:'<th>工作表</th>', r:()=>`<td class="sm">辅材欠款 / 机械欠款 / 特殊费用月报表</td>`}], list:pjs})}`;
    modal({title:'导出 · 逐月欠款台账（每项目一个工作簿）',body,
      footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="ledExpSave">保存到本地</button>`}); },
  /* ⭐ 接线（`TAIL-04` 路径① · **片 2＋3**）：成品由**后端模板填充**生成 —— 每个项目**一本工作簿**

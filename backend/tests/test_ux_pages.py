@@ -774,6 +774,19 @@ def test_项目选择按钮全站都走统一出口():
         + f"\n（⛔ 允许的例外只有 `{_PJB_EXEMPT}` 那一处 · 见 `TAIL-196`）")
 
 
+#: ⭐ `TAIL-64` `P5-d`：**已转成列定义式的调用点** ⇒ `(表的 `key`, 它那串**手写 `rows:` 的整串**)`。
+#: ⚠️ 每转一处就往这里加一行；⛔ **别把"还没转的"写进来**（那会让它们下一批一开工就**假红**）。
+#: ⚠️ 旧串必须写**整串**：`modal:ledExp` 与邻近那张表的行模板**前缀同款**、只差一格 —— 只写前缀会**假红**
+#:    （本判据首版就栽在这）。
+_P5D_DONE: tuple[tuple[str, str], ...] = (
+    ("modal:procExp",
+     'rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)'),
+    ("modal:ledExp",
+     'rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td>'
+     '<td class="sm">辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>`)'),
+)
+
+
 @acc()
 def test_表格件支持列定义式_试点已接上():
     """⭐ `TAIL-64` **`P5-d-a`**（2026-09-30）：表格件新增**列定义式**（`cols:[{t,r}]` ＋ `list`）＋ 一处试点。
@@ -783,8 +796,9 @@ def test_表格件支持列定义式_试点已接上():
        ⇒ 试点挑**不在 `V.*` 里**的这一处 ⇒ **零 `U1` 级联**。
     ⚠️ **判法 = 两段拼起来看**（同 `with_tbl()` / `with_fbar()` / `with_pjb()` 那套 doctrine）：
        调用点**委托**（`cols:` ＋ `list:`）＋ **内核里**真的按 `cols` 派生 `head` / `rows`。
-    ⚠️ 本件**只钉这一处试点** ＋ 内核支持 —— ⛔ 别把其余 45 处写进来（那是 `P5-d-b/c` 的活，
-       写进来会让它们下一批一开工就**假红**）。
+    ⚠️ 覆盖面 = `_P5D_DONE` 那张**名单**（`P5-d-a` 起**每转一处加一行**）—— ⛔ **别把还没转的写进来**：
+       那会让它们下一批一开工就**假红**；⭐ 也**别改成"全站扫描"**（`*_THEAD` 那 **16 处转不了**、
+       多行模板那批还卡在「**空白差**」口径上 —— 见施工图 §7.12 的**必读①②**）。
     ⚠️ **墓碑**：试点那处**不许再手写** `head:` ＋ `rows:…map(` —— ⚠️ 更要紧的是"**看着改了、其实没用**"：
        `cols` 与 `rows` **同时给**时本件是 `cols` 优先 ⇒ 手写那份会被**静默忽略**。
     自证 = `tools/mut/_mut_tbl.py`：`M40`（内核不按 `cols` 派生）/ `M41`（试点又手写 `rows:`）必须红。
@@ -798,12 +812,17 @@ def test_表格件支持列定义式_试点已接上():
     assert "rows=list.map((x,i)=>'<tr>'+cols.map(c=>c.r(x,i)).join('')+'</tr>')" in kern, \
         "列定义式没有从 `cols` 派生**行** ⇒ 给了 `cols` 的表**一行都不出**"
     src = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", read_shell(), flags=re.S))
-    assert "TBL({cls:'cond',key:'modal:procExp'" in src, "`modal:procExp` 那张表不在（改名了？）"
-    #: ⚠️ 这两条**分开写、都别带结尾的 `})}`** —— 带了就被"尾随别的实参"骗过/误伤（`M42` 那种写法会**同时**
-    #:    给 `cols` 与手写 `rows`：它就是"看着改了、其实手写那份被静默忽略"，下面那条墓碑才该抓它）。
-    assert "cols:[{t:'<th>#</th>'" in src and "list:pjs" in src, \
-        "`modal:procExp` 那一处**试点**没走列定义式（`P5-d-a` 的目的就是它：`cols:` ＋ `list:`）"
-    #: ⚠️ 墓碑要钉**试点那一行的整串**，⛔ 别只写前缀：`modal:ledExp`（`actions.js` 里邻近那处）
-    #:    的行模板**前缀同款**、只是多一格 ⇒ 拿前缀当靶会**假红**（本判据首版就栽在这）。
-    assert 'rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)' not in src, \
-        "`modal:procExp` 那处**又写回手写的 `rows:`** 了 —— 试点白做（`P5-d-a` 的墓碑）"
+    #: ⚠️ 逐处核（**别只核一处**：`P5-d-a` 只算试点，`P5-d-b` 起要逐处守住）：
+    #:    ① 那处**真的走了列定义式**（`cols:` ＋ `list:` 就在它 `key` 之后不远处）；
+    #:    ② **墓碑**：那处的手写 `rows:` **整串**不许再出现。
+    for key, old_rows in _P5D_DONE:
+        if f"key:'{key}'" not in src:
+            raise AssertionError(f"`{key}` 那张表不在（改名了？）")
+        seg = src[src.index(f"key:'{key}'"):][:320]
+        #: ⚠️⚠️ 这条断言的**话术里不能出现花括号对**：它挂在一个 f-string 上 ⇒ `{t,r}` 会被当**表达式求值**
+        #:    （实测：变异跑出 `NameError: name 't' is not defined` ⇒ 「看着被抓住」其实是**报错**，不是判据红）。
+        assert "cols:[{t:'<th>#</th>'" in seg and "list:" in seg, \
+            f"`{key}` 那处没走列定义式（`P5-d` 的形态 = `cols:[…]` ＋ `list:`）"
+        assert old_rows not in src, (
+            f"`{key}` 那处**又写回手写的 `rows:`** 了 —— 转了白转（`P5-d` 的墓碑）。"
+            "⚠️ 更要紧的是「**看着改了、其实没用**」：`cols` 与 `rows` **同时给**时本件是 `cols` 优先")

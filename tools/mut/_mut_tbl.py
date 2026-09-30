@@ -7,7 +7,7 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-四十二靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2`/`M40` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M39`/`M41`/`M42` 打
+四十三靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2`/`M40` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M39`/`M41`~`M43` 打
 `shell/actions.js`、`M22`/`M23` 打 `shell/core.js`、`M24`~`M30` 打 `shell/legacy.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
@@ -196,15 +196,31 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      "没有从 `cols` 派生"),
     #: ⚠️ 靶取**收尾那一句**（`], list:pjs})}`）—— 它把"列定义 → 交回手写 `rows:`"这件事一击打中，
     #:    且是**单行**（⛔ 别拿跨行的 `cols:[…]` 当靶：本仓各件换行风格不统一 ⇒ 会变成哑靶）。
+    #: ⚠️ 锚点必须**认到 `modal:procExp` 那一处**：`], list:pjs})}` 这句（`P5-d-b` 之后）**两处都有**了
+    #:    ⇒ 光用它当靶 = "命中 2 次 ⇒ 未验证"（本件当场踩到）⇒ 带上它**独有的那一格**（第 2 列之后就是收尾）。
     (ACTIONS, "M41 试点交回**手写 `rows:`**（把 `list:` 去掉 ⇒ 列定义式白做）",
-     _b("], list:pjs})}"),
-     _b("], rows:pjs.map((k,i)=>`<tr><td class=\"fc\">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)})}"),
+     _b("r:k=>`<td>${esc(fnOf(k))}</td>`}], list:pjs})}"),
+     _b("r:k=>`<td>${esc(fnOf(k))}</td>`}], "
+        "rows:pjs.map((k,i)=>`<tr><td class=\"fc\">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)})}"),
+     #: ⚠️ 判据串认的是**最终会跑到的那条**：本靶把 `list:` 去掉、同时把**旧的手写 `rows:` 加回去**
+     #:    ⇒ `test_acc_x_exp.py` 的 `001-03`（"多项目分支里要么自己 `pjs.map`、要么交给 `list:`"）**照样过**
+     #:    （手写那份就是 `pjs.map`）⇒ 真正抓住它的是本件那条「**没走列定义式**」。
+     #: ⛔ 别按"我以为会先撞哪条"写判据串（踩过两次）。
      "没走列定义式"),
     #: ⚠️ `M42` 与 `M41` **同锚点、不同改法**：这条**同时**给 `cols` 与手写 `rows` ⇒ 渲染**看不出区别**
     #:    （本件里 `cols` 优先、手写那份被**静默忽略**）—— 正是"看着改了、其实没用"那一类。
     (ACTIONS, "M42 试点**同时**给 `cols` 与手写 `rows:`（后者被静默忽略）",
-     _b("], list:pjs})}"),
-     _b("], list:pjs, rows:pjs.map((k,i)=>`<tr><td class=\"fc\">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)})}"),
+     _b("r:k=>`<td>${esc(fnOf(k))}</td>`}], list:pjs})}"),
+     _b("r:k=>`<td>${esc(fnOf(k))}</td>`}], list:pjs, "
+        "rows:pjs.map((k,i)=>`<tr><td class=\"fc\">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)})}"),
+     "又写回手写的"),
+    #: ⭐ 2026-09-30（`P5-d-b`）：**第二处**（`modal:ledExp`）也要被守住 —— 靶取**它独有的那格**
+    #:    （`r:()=>…辅材欠款…`，⛔ 别拿 `cols:[{t:'<th>#</th>'` 当靶：两处的第一列同款 ⇒ 不唯一）。
+    (ACTIONS, "M43 第二处（`modal:ledExp`）又手写 `rows:`（转了白转）",
+     _b("r:()=>`<td class=\"sm\">辅材欠款 / 机械欠款 / 特殊费用月报表</td>`}], list:pjs})}"),
+     _b("r:()=>`<td class=\"sm\">辅材欠款 / 机械欠款 / 特殊费用月报表</td>`}], list:pjs, "
+        "rows:pjs.map((k,i)=>`<tr><td class=\"fc\">${i+1}</td><td>${esc(fnOf(k))}</td>"
+        "<td class=\"sm\">辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>`)})}"),
      "又写回手写的"),
 ]
 
