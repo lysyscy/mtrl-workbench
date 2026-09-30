@@ -111,3 +111,10 @@ _point_tests_at_test_db()
 from app.export_bindings import register_all as _register_exporters  # noqa: E402
 
 _register_exporters()
+
+# ⭐ `core` 取数口注册（`TAIL-195` 批 1b · 与 `app/main.py` **同一个** `register_all()`）：
+#    许多测试**直调** `core`（不经过 `app.main`）⇒ 这里也要接一次。
+#    ⚠️ 本件模块顶层**不 import 任何 app 件**（import 全在函数体里）⇒ 放这儿不会碰配置缓存（同上面那条注释）。
+from app import core_bindings as _core_bindings  # noqa: E402
+
+_core_bindings.register_all()

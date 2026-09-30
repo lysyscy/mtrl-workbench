@@ -53,8 +53,10 @@ MUTS = [
     (
         "M5 项目索引改用仓库名做键（下游按 id 找行会全空）",
         CORE,
-        "{p.id: p for p in s.execute(select(Project)).scalars().all()}",
-        "{p.warehouse_name: p for p in s.execute(select(Project)).scalars().all()}",
+        # ⚠️ 2026-09-30（`TAIL-195` 批 1b）：取数改成经**装配层注入的口**（`_ROWS_LOADER`）
+        #    ⇒ 靶串跟着改（形状「键 = id」这条口径仍在本件里）。
+        "{p.id: p for p in _ROWS_LOADER(s)}",
+        "{p.warehouse_name: p for p in _ROWS_LOADER(s)}",
         "test_项目索引以id为键",
     ),
     (

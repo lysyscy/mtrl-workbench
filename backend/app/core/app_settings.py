@@ -4,12 +4,16 @@
 ⚠️ 调用方一律走 `effective()`，**不得各自读 `.env`** —— 否则会出现「页面改了但没生效」。
 ⚠️ **单进程假设**（本工程 = 单后端进程，见《技术栈选型分析》）：进程内缓存 ＋ 保存后 `invalidate()`。
 ⚠️ 库不可用时**回落 `.env` 并记 warning**（不阻断启动；但**不静默**）。
+⚠️⭐ **「读库里那张设置表」不由本件做**（`TAIL-195` 批 1b）：那是**数据主人** `mod14_config` 的活，
+   本件只留**口**（`bind_values_loader`）—— 由装配层接上（`app/core_bindings.py`）。
+   ⛔ `core` 里别 import 业务包（计划 §2.3「依赖方向一律向外」；守卫 = `backend/tests/test_layering.py` 规则 A）。
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -69,16 +73,31 @@ SETTING_KEYS: tuple[str, ...] = tuple(s.key for s in SPECS)
 _CACHE: dict[str, str] | None = None
 
 
+#: ── 取数口（**装配层注入** · `TAIL-195` 批 1b）─────────────────────────────────
+#: 实现 = `mod14_config.repository.read_values`（数据主人那边那份，**唯一一份**）；
+#: 装配 = `app/core_bindings.py::register_all()`（`app/main.py` ＋ `backend/tests/conftest.py` 各调一次）。
+_VALUES_LOADER: Callable[[], dict[str, str]] | None = None
+
+
+def bind_values_loader(fn: Callable[[], dict[str, str]]) -> None:
+    """装配层接上「读库里全部设置」的实现。
+
+    ⚠️⚠️ 必须接**转发**（`lambda: R.read_values()`）—— ⛔ 别接模块级别名（`R.read_values`）：
+       那会在接的那一刻把函数对象**绑死**，测试里 `monkeypatch.setattr(…, "read_values", …)` 就再也打不着
+       （`TAIL-195` 批 2c 实测过这个坑：症状是 12 条判据当场红）。
+    """
+    global _VALUES_LOADER
+    _VALUES_LOADER = fn
+
+
 def _load_from_db() -> dict[str, str]:
-    """从库读**全部**设置；库不可用时回落空表（并记 warning，不静默）。"""
+    """从库读**全部**设置；库不可用 / 口没接上 ⇒ 回落空表（并记 warning，**不静默**）。"""
+    fn = _VALUES_LOADER
+    if fn is None:
+        logger.warning("系统设置的取数口没接上（回落 .env）—— 见 `app.core_bindings.register_all()`")
+        return {}
     try:
-        from sqlalchemy import select
-
-        from app.core.db import session_scope
-        from app.mod14_config.models import AppSetting
-
-        with session_scope() as s:
-            return {r.key: (r.value or "") for r in s.execute(select(AppSetting)).scalars()}
+        return fn()
     except Exception as exc:                                   # noqa: BLE001
         logger.warning("读系统设置失败（回落 .env）：%s: %s", type(exc).__name__, exc)
         return {}

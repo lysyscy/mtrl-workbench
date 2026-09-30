@@ -13,8 +13,28 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Callable
+
+logger = logging.getLogger(__name__)
+
 # `MOD-15` 落地前的中性占位 —— 不是任何人名（避免"写死一个真名"这种更难清理的形态）
 PLACEHOLDER_OPERATOR = "科室用户"
+
+#: ── 取数口（**装配层注入** · `TAIL-195` 批 1b）─────────────────────────────────
+#: 实现 = `mod15_user.repository.by_identity`（数据主人那边那份，**唯一一份**）；
+#: 装配 = `app/core_bindings.py::register_all()`。
+#: ⛔ `core` 里别 import 业务包（计划 §2.3「依赖方向一律向外」；守卫 = `tests/test_layering.py` 规则 A）。
+_BINDING_LOOKUP: Callable[..., object | None] | None = None
+
+
+def bind_binding_lookup(fn: Callable[..., object | None]) -> None:
+    """装配层接上「按身份取账号行」的实现（签名 `(session, 身份) → 行 | None`）。
+
+    ⚠️ 接**转发**（每次经模块取属性）—— ⛔ 别接模块级别名（同 `TAIL-195` 批 2c 实测的坑）。
+    """
+    global _BINDING_LOOKUP
+    _BINDING_LOOKUP = fn
 
 
 def current_operator() -> str:
@@ -81,10 +101,16 @@ def current_i8_credentials() -> tuple[str, str]:
     who = (current_name() or "").strip()
     if who:
         from app.core.db import session_scope
-        from app.mod15_user import repository as USR
+
+        if _BINDING_LOOKUP is None:
+            # ⛔ **不回落**（回落 = 拿 `.env` 那个共享账号去登录 ⇒ 顶掉同事的会话、留痕记错人）；
+            #    口没接上属装配问题，只在真机/测试环境理论上可能 ⇒ **显式拒绝**，不静默降级。
+            logger.error("身份取 i8 绑定的口没接上 —— 见 `app.core_bindings.register_all()`")
+            raise MustReportError(
+                f"暂时取不到「{who}」的 i8 绑定（身份服务没就绪）—— 请稍后重试；若一直如此，请找管理员。")
 
         with session_scope() as s:
-            row = USR.by_identity(s, who)
+            row = _BINDING_LOOKUP(s, who)
         if row is not None:
             bound = (row.i8_user or "").strip()
             if bound:

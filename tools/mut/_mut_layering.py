@@ -1,13 +1,15 @@
-"""反向灵敏度 · `TAIL-195` 分层边界（**六靶**：规则 A 三 ＋ 规则 B/C 各一 ＋ 规则 C 的幽灵检查）。
+"""反向灵敏度 · `TAIL-195` 分层边界（**八靶**：规则 A 三 ＋ B / B2 / C×2 / D 各一）。
 
 做法：把**故意违规**塞进对应文件（改坏 → 跑 `tests/test_layering.py` 期望红 → **逐字节复原**）。
 不红 ⇒ 那条判据是假绿。
 
-- `M1` **规则 A · 新增反向依赖**（往不在名单的 `core/config.py` 塞 `import app.mod01_projects`
+- `M1` **规则 A · 新增反向依赖**（往不在链上的 `core/nav.py` 塞 `import app.mod01_projects`
   —— 它**没触发任何 import 环**（只在 `ast` 层可见）⇒ 只有本判据看得见）。
-- `M2` **规则 A · 名单不是整件放行**：往**名单里**的 `core/projects.py` 再塞**别的**业务包
-  （`app.mod05_flow`）（若绿 ⇒ 名单退化成了"整个文件放行"）。
-- `M3` **规则 A · 名单不许留幽灵**：把 `core/projects.py` 那条**已登记**的 import 注释掉。
+- `M2` / `M3` **规则 A · 原"名单件"再长回来**（⭐ 2026-09-30 批 1b 后**名单已清空**：靶换成
+  "往原来那两处例外件 `core/app_settings.py` / `core/projects.py` 塞回直查业务包"——
+  它们正是刚拆干净的两件 ⇒ 再长回来必须被抓住）。
+  ⚠️ 旧的两条靶（**名单不是整件放行** / **名单不许留幽灵**）**随名单清空而退休**
+  （没有条目就没对象可测）—— 将来若再加名单，**必须把这两条靶加回来**（⛔ 不是"删掉不管"）。
 - `M4` **规则 B**：往一个 `mod*` 件（`mod09_fee/models.py`，不在名单里）塞 `import app.report_export`。
 - `M5` **规则 C（mod03 → mod05.repository）**：往 `mod03_notice/merge.py` 塞 `from app.mod05_flow
   import repository`（⚠️ **就是这种写法** —— `node.module` 只有 `app.mod05_flow`，
@@ -35,7 +37,8 @@ CORE = APP / "core"
 #:    往 `config.py` 那种"启动链上"的件塞业务 import 会让 **pytest 收集期就崩**（rc=4），
 #:    而本件的判据要求"**那条断言的原话**出现在输出里"（⛔ 收集期报错不算命中 —— 见 §十七 老课）。
 NAV = CORE / "nav.py"                # 规则 A：不在放行名单里 且 不在 app 导入链上
-PROJECTS = CORE / "projects.py"      # 规则 A：在放行名单里（测"名单不是整件放行" ＋ "名单不许留幽灵"）
+APP_SETTINGS = CORE / "app_settings.py"   # 规则 A：批 1b 前是"名单件"（测"拆干净了不许再长回来"）
+PROJECTS = CORE / "projects.py"      # 规则 A：同上（批 1b 前也是"名单件"）
 MOD09_MODELS = APP / "mod09_fee" / "models.py"      # 规则 B：不在放行名单里的 mod 件
 REGISTRY = APP / "export_registry.py"               # 规则 B2：注册表必须**是叶子**
 LEDGER_EXPORT = APP / "report_export" / "ledger_export.py"   # 规则 D：导出层不在业务包里
@@ -54,15 +57,14 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      _FUTURE,
      _FUTURE + b"\nfrom app.mod01_projects import models as _ghost  # noqa: F401",
      "反向依赖会成环"),
-    (PROJECTS, "M2 规则A · 往名单里的件再塞**别的**业务包（名单若按整件放行 ⇒ 会漏）",
-     b"from app.mod01_projects.models import Project",
-     b"from app.mod01_projects.models import Project\n"
-     b"from app.mod05_flow import models as _ghost  # noqa: F401",
+    (APP_SETTINGS, "M2 规则A · 原例外件再长回来（设置：塞回直查业务包的表）",
+     _FUTURE,
+     _FUTURE + b"\nfrom app.mod14_config.models import AppSetting as _ghost  # noqa: F401",
      "反向依赖会成环"),
-    (PROJECTS, "M3 规则A · 把已登记的反向依赖摘掉（名单就此变成幽灵条目）",
-     b"from app.mod01_projects.models import Project",
-     b"# from app.mod01_projects.models import Project  # mutated M3",
-     "已经不存在"),
+    (PROJECTS, "M3 规则A · 原例外件再长回来（项目：塞回业务包仓储）",
+     _FUTURE,
+     _FUTURE + b"\nfrom app.mod01_projects import repository as _ghost  # noqa: F401",
+     "反向依赖会成环"),
     (MOD09_MODELS, "M4 规则B · 业务包直接 import 导出层",
      _FUTURE,
      _FUTURE + b"\nfrom app.report_export import service as _ghost  # noqa: F401",

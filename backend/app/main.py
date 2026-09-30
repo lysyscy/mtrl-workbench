@@ -61,6 +61,15 @@ from app import export_bindings as _export_bindings                 # noqa: E402
 
 _export_bindings.register_all()
 
+# ⭐ `core` 取数口注册（`TAIL-195` 批 1b · **同款装配层的活**）：
+#    `core`（公共底座）里那三处"要读库"的地方 —— 系统设置 / 身份 → i8 绑定 / 全部项目行 ——
+#    从此**不再 import 业务包**：口留在 `core`，取数实现留在数据主人的包里，本处负责接上
+#    （表在 `app/core_bindings.py`，**唯一一处**）。
+#    ⚠️ 同样放**模块顶层**：任何 `import app.main` 的路径都必须已接上（测试那条路见 `tests/conftest.py`）。
+from app import core_bindings as _core_bindings                     # noqa: E402
+
+_core_bindings.register_all()
+
 # 各模块页面（单文件，托管在本进程；切片 MVP，完整前端在后续阶段）
 _APP_DIR = Path(__file__).resolve().parent
 # ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 1**）：**m01 / m02 已删** —— 这两页的读全部走

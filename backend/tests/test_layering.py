@@ -9,7 +9,7 @@
 
 | 规则 | 禁什么 | 依据 |
 |---|---|---|
-| **A（上半）** | `app/core/**` ⛔ `import app.mod*` | `core` 是内核，全站依赖它 ⇒ 反向依赖即成环（`models_registry` 已挪走，余 3 处例外） |
+| **A（上半）** | `app/core/**` ⛔ `import app.mod*` | `core` 是内核，全站依赖它 ⇒ 反向依赖即成环（**名单已清空**：`models_registry` 挪走 ＋ 另 3 处改成"口 ＋ 装配层注入"） |
 | **B（下半）** | `app/mod*/**` ⛔ `import app.report_export` | 方案 §3.3 第一半（`TAIL-195` 批 2 · 案②）—— 导出器**只许按名取**（`app.export_registry`，表在 `app/export_bindings.py`） |
 | **B2（下半）** | `app/export_registry.py` ⛔ `import` 任何 `app.*` | 规则 B 的**反绕过**：注册表必须是**叶子**，否则环换个名字继续存在 |
 | **C（下半）** | `mod03` ⛔ `import app.mod05_flow.repository`／`mod05` ⛔ `import app.mod03_notice.repository` | 计划 **§2.3**「包间只经 `service` 调用，**不得跨包直查对方表**」（方案 §3.3 第二半） |
@@ -38,14 +38,11 @@ MOD03 = APP / "mod03_notice"
 MOD05 = APP / "mod05_flow"
 
 #: ── 规则 A（上半）── (相对 `app/core/` 的文件名, 被 import 的业务顶层包) → 为什么现在还留着
-_ALLOW_A: dict[tuple[str, str], str] = {
-    ("app_settings.py", "app.mod14_config"):
-        "单点数据访问（读系统设置那一张表）；彻底去掉要引入仓储接口/依赖注入 —— 属批 1b",
-    ("identity.py", "app.mod15_user"):
-        "单点数据访问（按身份取 i8 绑定）；同上，属批 1b",
-    ("projects.py", "app.mod01_projects"):
-        "项目三小件（唯一实现）要读 `Project` 模型；同上，属批 1b",
-}
+#: ⭐ **2026-09-30 批 1b 已清空**：三处「`core` 里的函数运行期读业务包的表」改成
+#:    **口留在 `core`（`bind_*`）＋ 取数实现归数据主人 ＋ 装配层接线（`app/core_bindings.py`）** ⇒ 只剩空表。
+#:    ⛔ 别为了"core 里要用一下业务包"往里添条目 —— 正确做法是**再开一个口**（`core` 里加 `bind_*`）
+#:    并在 `app/core_bindings.py` 接上；`core` 只留**口**，取数归数据主人。
+_ALLOW_A: dict[tuple[str, str], str] = {}
 
 #: ── 规则 B（下半）── 相对 `backend/app` 的路径 → 为什么现在还留着
 #: ⭐ **2026-09-30 批 2b 已清空**（12 处全改走 `app.export_registry` 按名取）⇒ 名单只剩空表：
