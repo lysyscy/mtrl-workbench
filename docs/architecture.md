@@ -24,7 +24,7 @@ PostgreSQL（alembic 迁移 · 测试库物理隔离）
    ▼
 FastAPI 服务（NSSM `mtrl-workbench-server` · 单 worker · 8000）
    ├── 服务端渲染仅剩登录页；⭐ 唯一前端壳 = backend/app/web/
-   │     （V.* 切片与 demo 原型逐行一致 = ui_parity U1）
+   │     （⭐ 2026-09-30 `TAIL-201`：**已不再逐行对位原型** —— `ui_parity` 的 `U1`/`U5` 已退场；「壳变了没有」看 `shell_verify`）
    └── 导出：naive_export 内核（xlsx）/ tpl_fill（模板法）/ zip 字节替换（路径②）
 ```
 

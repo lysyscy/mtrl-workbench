@@ -399,7 +399,7 @@ _TAIL_ANCHOR_RE = re.compile(
     r"B 类\s*\*{0,2}(\d+)\*{0,2}\s*条?\s*·\s*"
     r"C 类\s*\*{0,2}(\d+)\*{0,2}\s*条?\s*·\s*"
     r"已销号\s*\*{0,2}(\d+)\*{0,2}")
-_U5_ANCHOR_RE = re.compile(r"登记\s*\*{0,2}(\d+)\*{0,2}\s*个规格件")
+# ⛔ `_U5_ANCHOR_RE` **已撤**（2026-09-30 `TAIL-201`：`U5` 退场 ⇒ 那条锚点没了；理由见上面 ③ 处）
 _FOREACH_RE = re.compile(r"foreach\s*\(\s*\$t\s+in\s+@\(([^)]*)\)")
 _RULERS_JUDGE_RE = re.compile(
     r"\*{0,2}(\d+)\s*把尺子全\s*`rc=0`\*{0,2}\s*（[^）]*?合计\s*\*{0,2}(\d+)\s*把")
@@ -461,20 +461,10 @@ def check_count_anchors() -> list[dict]:
             out.append(_anchor(LEDGER_REL, 1, "（找不到判定行）",
                                "`§22.1` 的判定行不见了 ⇒ 尺子把数失去对照物", ""))
 
-    # ③ `U5` 登记条目数（真值 = `ui_parity.U5_COUNT`）
-    try:
-        import sys
-        sys.path.insert(0, str(REPO_ROOT / "tools" / "audit"))
-        from ui_parity import U5_COUNT      # noqa: PLC0415
-    except Exception:                       # noqa: BLE001
-        U5_COUNT = None
-    if U5_COUNT is not None:
-        for rel, f in docs:
-            for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
-                for m in _U5_ANCHOR_RE.finditer(line):
-                    if int(m.group(1)) != U5_COUNT:
-                        out.append(_anchor(rel, i, "`U5` 登记 %s 个" % m.group(1),
-                                           "`ui_parity.U5_GROUPS` 实为 **%d** 个" % U5_COUNT, line))
+    # ③ ~~`U5` 登记条目数~~ —— ⛔ **已撤**（2026-09-30 `TAIL-201` 退场）：
+    #    原来这里 import `ui_parity.U5_COUNT`，再核活文档里"登记 N 个规格件"那句。
+    #    `U1`/`U5` 退场后那个常量不存在了 ⇒ 这条锚点连同 `_U5_ANCHOR_RE` 一起撤（⛔ 别留着 ——
+    #    它会**先崩 import**：`ui_parity` 一拆，本尺子就起不来，而症状是"整把尺子报错"、不是"少一条检查"）。
 
     # ④ ⭐ `ops/阈值表.md` **自己**：每行的数字必须能在它自称的「位置（真源）」里找到。
     #    ⚠️ 为什么加：本表自称"硬数字的唯一集中登记处"，却**不被任何尺子扫**；2026-09-24 探针实测

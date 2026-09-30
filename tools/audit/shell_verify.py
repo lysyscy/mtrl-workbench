@@ -44,7 +44,10 @@ python tools/audit/shell_verify.py <某一版单文件壳的路径>   # 指定�
 - **`只在现在`** 应只有：文件头注释、三行 `<script src>`、启动点那行。⚠️ 残留**也可能是"多出来"**
   （2026-09-19 实测就是 `core.js` 里**多**了两行变异态）⇒ ⛔ **别看单边**，判据是**两边合计**。
 - ⚠️ **能力边界**：比的是**逐行多重集**（`Counter` 差集）⇒ **不比顺序、不看语义**。
-  ⇒ 它**不等于**"壳完整性有守护"：把一段代码**原样挪到别处**它看不见（那是 `ui_parity` 的 `U1`/`U5` 的活）。
+  ⇒ 它**不等于**"壳完整性有守护"：把一段代码**原样挪到别处**它看不见（多重集**不看顺序**）。
+   ⚠️ **2026-09-30 `TAIL-201`**：`ui_parity` 的 `U1`/`U5`（逐行对位）**已退场** ⇒ 这一层
+      **现在没人守**，⭐ **本轮明确接受**这个缺口（见 §15 §四 `TAIL-201` 销号行）；
+      要补就从"把本件改成**顺序**比对"下手（⛔ 别退回去再养一份"第二真源"）。
 """
 
 from __future__ import annotations
@@ -69,7 +72,8 @@ BACKUPS = REPO / ".workbuddy" / "backups"
 SNAP_GLOB = "*_壳单文件基线.html"
 
 
-def _newest_snapshot() -> Path | None:
+def _newest_snapshot() -> Path | None:     # ⭐ 2026-09-30 `TAIL-201`：收回**私有**
+    #   （`ui_parity` 的 `U1`/`U5` 已退场 ⇒ 本件是唯一用它的；⛔ 当年「提为公开」那个理由没了）
     """最新那份「壳单文件基线」（`.workbuddy/backups/` · 文件名 `YYYYMMDD-HHMM_壳单文件基线.html`）。"""
     if not BACKUPS.exists():
         return None
