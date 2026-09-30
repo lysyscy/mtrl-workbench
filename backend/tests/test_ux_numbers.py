@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import re
+
 from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
@@ -96,3 +98,37 @@ def test_验收术语不许留在界面上():
     """
     for tomb in ("、<b>容差 0</b>", "· 容差 0</div>", "对平、<b>容差 0</b>"):
         assert tomb not in SHELL, f"验收术语又回到界面上来了：{tomb!r} ⇒ 换成人话（如「差 1 分也算不平」）"
+
+
+@acc()
+def test_口径说明的条数必须与实际的条数一致():
+    """⭐ 2026-09-30（`TAIL-64` **P4-c 前哨** · 量测当场抓到的真缺陷）：页首那句
+    「**口径说明 · N 条**」里的 `N` 是**手抄的** ⇒ 必须等于该块里**实际的 `<li>` 条数**。
+
+    ⚠️ **为什么必须有它**：`m02`（i8 接入层）屏幕写着「**6** 条」而实际有 **7** 条
+    （⭐ **原型那侧同样错** —— 同一位点、同样 6/7）⇒ 用户在屏幕上读到一个**假的条数**。
+    这违反守则 **§4.2**（状态必须真实）与 **§2.6**（能算出来的别让人自己数）。
+    ⚠️ **同族已犯过三次**（「保留 **4** 项」实为 6、「三步条 / `at` = 0/1/2」实为四步、「6 条」实为 7）
+    —— 全是**留痕/数字被后续增删甩下**，而那类漂移**离线尺子原本全扫不到**（没人给判据）。
+    ⇒ 本判据把这一类变成**能机器判的**（`P4-c` 若把 N 改成"算出来的"，这条依然守着）。
+
+    ⚠️ **判法按"块"**：`<li>` 只数到该块自己的 `</details>` 为止（⛔ 别全文数 —— 那就成了另一回事）。
+    ⚠️ **只判壳**（用户看的是壳）：原型是**交付面**、由四检看管，⛔ 本判据不读仓外文件。
+    自证 = `tools/mut/_mut_uxnum.py` 的 `M4`（把某块的条数改错 ⇒ 必须红）。
+    """
+    txt = re.sub(r"/\*.*?\*/", "", SHELL, flags=re.S)     # ⛔ 先剥块注释（注释里会引述旧写法）
+    bad: list[str] = []
+    n_blocks = 0
+    for m in re.finditer(r'<details class="tip"><summary>口径说明 · (\d+) 条', txt):
+        seg = txt[m.start(): m.start() + 4000]
+        end = seg.find("</details>")
+        seg = seg[:end if end > 0 else len(seg)]
+        real = len(re.findall(r"<li>", seg))
+        n_blocks += 1
+        if int(m.group(1)) != real:
+            bad.append(f"声明 {m.group(1)} 条 / 实际 {real} 条")
+    assert n_blocks >= 10, (
+        f"只找到 {n_blocks} 块「口径说明 · N 条」—— 判据的靶跑偏了（壳里该有十几块）")
+    assert not bad, (
+        "「口径说明 · N 条」的 N 与实际条数对不上 —— **用户会在屏幕上读到假的条数**"
+        "（守则 §4.2 状态必须真实 · §2.6 能算的别让人自己数）：\n      " + "\n      ".join(bad))
