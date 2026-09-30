@@ -76,9 +76,10 @@ def test_表级虚拟滚动_两条路共用一个挂载点():
          而离线判据 / `node --check` / `U1` **全绿** ⇒ 只能靠这条把结构钉住；
       ② **两条路必须归一**（`startVirtual(` 全壳只许"定义 ＋ 调用"两处）—— 另开第三条路 = 第三条要各自
          记得调 `placePops` / `applyPjFilters` / `BIND`（本仓"漏一条"的经典病）；
-      ③ **`m08` 的调用点真的开标记** ＋ **`TBL` 内核真的出 `data-vs`（且默认关）** —— 否则"表级接管"
-         **悄悄不生效**（页级又被 `VSCROLL` 关着 ⇒ 那一页就完全不虚拟化了，1000+ 行照旧整表 parse）。
-    自证 = `tools/mut/_mut_p5a.py`：去掉 `vs:true` / 摘掉挂载点 / 内核不拼 `data-vs` ⇒ 本件必须红。
+      ③ **`TBL` 内核真的出 `data-vs`**（⚠️ `P5-b` 起**一律带**：⛔ 别改成逐表开关 —— 那会退化成名单式）
+         ＋ **`startVirtual` 里真有「本页有没有带标记的表」那一步** —— 否则"表级接管"**悄悄不生效**
+         （页级那条一旦也不再跑 ⇒ 那一页 1000+ 行照旧整表 parse）。
+    自证 = `tools/mut/_mut_p5a.py`：改名标记 / 摘掉挂载点 / 摘掉分派 ⇒ 本件必须红。
     """
     body = _render_body()
     assert "vsBindScroll();" in body, \
@@ -94,10 +95,12 @@ def test_表级虚拟滚动_两条路共用一个挂载点():
     #: ⚠️ **必须剥块注释再判**：`TBL` 内核那段注释里**引述**了 `data-vs="<key>"` 这个写法
     #:    ⇒ 不剥的话"内核不再拼标记"这个变异**照样绿**（本仓"判据撞注释"第 4 次）。
     kern = re.sub(r"/\*.*?\*/", "", tbl_kernel(), flags=re.S)
-    assert "vs=false" in kern and "(vs?' data-vs=" in kern, \
-        "`TBL` 内核没有「按标记出 `data-vs`」这条路（或丢了默认关）⇒ 表级虚拟滚动认领不到任何表"
-    assert "key:'m08:invoices',vs:true," in read_shell(), \
-        "`m08` 那张大表的调用点没开 `vs` 标记 ⇒ 它既不走表级、页级又被 `VSCROLL` 关着 ⇒ **完全不虚拟化**"
+    assert "'<tbody data-vs=\"'+(key||'1')+'\">'" in kern, \
+        "`TBL` 内核不再在 `tbody` 上出 `data-vs` ⇒ 表级虚拟滚动认领不到任何表"\
+        "（⚠️ `P5-b` 起**一律带**：⛔ 别改成「逐表开关」—— 那会退化成名单式）"
+    #: ⚠️ 钉的是**调用**那一句（`=vsTableHits(html)`）—— 光写 `vsTableHits(html)` 会被**函数定义**满足（假绿）。
+    assert "=vsTableHits(html)" in body, \
+        "`startVirtual` 里没有「本页有没有带标记的表」这一步 ⇒ 表级那条路**永远不会接管**"
 
 
 @acc()

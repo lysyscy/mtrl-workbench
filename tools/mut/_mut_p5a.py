@@ -6,10 +6,10 @@
       靠真机才发现（滚动条能拖、内容一动不动）⇒ 只有"改坏了必须红"能证明它。
 
 三靶（改完**立刻按 bytes 复原** ＋ MD5 校验）：
-- `M1` **去掉标记**：`m08` 的 `TBL` 调用点去掉 `vs:true` ⇒ "那页完全不虚拟化"必须红。
-- `M2` **摘掉挂载点**：`view.js` 里 `vsBindScroll();` 那一次调用改成 `void 0;`（合法语句 ⇒ 不触发语法错）
-  ⇒ "表级那条路没人挂监听"必须红。
-- `M3` **内核不拼标记**：`TBL` 里 `(vs?' data-vs="'+(key||'1')+'"':'')` 换成 `''` ⇒ 同上必须红。
+- `M1` **内核不拼标记**：`TBL` 里 `'<tbody data-vs="'` 改成 `'<tbody data-vz="'`（合法字面 ⇒ 不触发语法错）
+  ⇒ "认领不到任何表"必须红。
+- `M2` **摘掉挂载点**：`view.js` 里 `vsBindScroll();` 那一次调用改成 `void 0;` ⇒ "表级那条路没人挂监听"必须红。
+- `M3` **摘掉分派**：`view.js` 里 `vsTableHits(html)` 换成 `[]` ⇒ "表级那条路永远不会接管"必须红。
 
 ⚠️ 判据 = **目标测试件 rc≠0** ＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc）。
 ⚠️ 子集 pytest 用 `ACC_RESULTS_PATH` 指到 `artifacts/_mut_acc_results.json`（⭐ 别把权威四态冲成残档）。
@@ -41,15 +41,16 @@ def _b(s: str) -> bytes:
 
 
 CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
-    (SHELL, "M1 去掉标记（`m08` 不再走表级虚拟滚动）",
-     _b("key:'m08:invoices',vs:true,"), _b("key:'m08:invoices',"),
-     "没开 `vs` 标记"),
+    (PROJ, "M1 内核不拼标记（`data-vs` 改名 ⇒ 认领不到任何表）",
+     _b("'<tbody data-vs=\"'+(key||'1')+'\">'"), _b("'<tbody data-vz=\"'+(key||'1')+'\">'"),
+     "认领不到任何表"),
     (VIEW, "M2 摘掉挂载点（表级那条路没人挂滚动监听）",
      _b("vsBindScroll();"), _b("void 0;"),
      "没有统一挂载点"),
-    (PROJ, "M3 内核不拼标记（`data-vs` 永远不出）",
-     _b("(vs?' data-vs=\"'+(key||'1')+'\"':'')"), _b("''"),
-     "认领不到任何表"),
+    #: ⚠️ 靶要取**调用那一句**（`=vsTableHits(html)`）—— 光写 `vsTableHits(html)` 会**同时命中定义**（哑靶）。
+    (VIEW, "M3 摘掉分派（表级那条路永远不会接管）",
+     _b("const ts=vsTableHits(html);"), _b("const ts=[];"),
+     "永远不会接管"),
 ]
 
 

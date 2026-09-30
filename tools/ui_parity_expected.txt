@@ -931,5 +931,3 @@ m09 9a6ef251  # 原型:         <button class="btn" data-act="awfPjToggle"｜壳
 m11 5ef8a36c  # 原型:       <button class="btn pri" data-act="exp" data-｜壳:         ${PJB({act:'jcPjToggle',w:126,label:`${fJc
 
 # ⭐ 2026-09-30 新增登记 1 条（口径：2026-09-25 用户裁定「登记簿可以变长」· 见 `journal/2026-09-25.md`）
-
-m08 12d73c6e  # 原型:     <div class="tw">${TBL({head:ivThead(),key:'m08｜壳:     <div class="tw">${TBL({head:ivThead(),key:'m08

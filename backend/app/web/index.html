@@ -1255,7 +1255,7 @@ V.m08=()=>{
     ${invColOpen!==''?
       `<div class="bd" style="padding:calc(8px * var(--fscale)) calc(10px * var(--fscale));background:var(--sf2);border-radius:6px;margin:0 calc(10px * var(--fscale)) calc(8px * var(--fscale))"><b class="sm">列筛选</b> <span class="mut sm">（Excel 式：点表头 ▾ 选列；条件之间是「与」）</span>${ivColPanel()}</div>`
       :`<div class="bd" style="padding:calc(6px * var(--fscale)) calc(10px * var(--fscale))"><span class="mut sm">点<b>任意表头的 ▾</b> 可按该列筛选（Excel 式）；已设列条件 <b>${ivColN()}</b> 列${ivColN()?'':'，当前无'}</span>${ivColN()?' <button class="btn sm" data-act="ivColClearAll">清除全部列筛选</button>':''}</div>`}
-    <div class="tw">${TBL({head:ivThead(),key:'m08:invoices',vs:true,
+    <div class="tw">${TBL({head:ivThead(),key:'m08:invoices',
     rows:list.map(iv=>{const a=adjOf(iv);return `<tr class="${a?'hl':''}">
       <td class="fc">${iv.docNo}</td><td class="fc">${iv.seq}</td>
       <td>${enumTag('ivDir',iv.dir)}</td>

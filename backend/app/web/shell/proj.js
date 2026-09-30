@@ -114,12 +114,13 @@ const ntDraftRow=()=>{ const d=naD, cat=d.cat||'辅材', isJc=cat==='集采';
      · `sty` ⇒ 给 `<table>` 补一个内联 `style`（真例 = 大表 `min-width:1620px`）。
      · `headRows:true` ⇒ `head` 里**自带 `<tr>`**（多行表头），本件不再包一层（真例 = 大表三级表头）。
    ⛔ 与 `sumRowOf` / `thCount` 的分工：那两个是**纯算法**（求和 / 数列），本件只管**拼装**。 */
-const TBL=({head='',rows=[],empty='',sum='',key='',cls='',sort=true,sty='',headRows=false,vs=false})=>{
-  /* ⭐ `vs:true` ⇒ 在 `tbody` 上留一个 `data-vs="<key>"` 标记：「这一张表**可以由表级虚拟滚动接管**」。
-     ⚠️ **不传就一个字节都不变**（老调用点零影响）· 标记**只说明"可以被接管"**，⛔ 不代表行为变了。 */
+const TBL=({head='',rows=[],empty='',sum='',key='',cls='',sort=true,sty='',headRows=false})=>{
+  /* ⭐ `data-vs` = 「这一张表**可以由表级虚拟滚动接管**」的标记（⚠️ **行数够才真的接管** —— 阈值那一侧说了算）。
+     ⚠️ **一律带、⛔ 不设开关**：本仓口径是「**别用名单式**」—— 改成「逐表开关 / 逐页点名」的话，
+     哪天某张表涨到阈值而没人记得加，它就**永远不生效、且不报错**（这正是 `TAIL-66` 当年的原话）。 */
   const attr=' class="dt'+(cls?' '+cls:'')+'"'+(key?(sort?' data-sort data-sort-key="'+key+'"':' data-sort-key="'+key+'"'):'')+(sty?' style="'+sty+'"':'');
   const th=head?(headRows?'<thead>'+head+'</thead>':'<thead><tr>'+head+'</tr></thead>'):'';
-  return '<table'+attr+'>'+th+'<tbody'+(vs?' data-vs="'+(key||'1')+'"':'')+'>'
+  return '<table'+attr+'>'+th+'<tbody data-vs="'+(key||'1')+'">'
     +rows.join('')+(rows.length?'':empty)+sum+'</tbody></table>';
 };
 
