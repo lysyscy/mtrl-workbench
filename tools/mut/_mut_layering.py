@@ -38,6 +38,7 @@ NAV = CORE / "nav.py"                # 规则 A：不在放行名单里 且 不�
 PROJECTS = CORE / "projects.py"      # 规则 A：在放行名单里（测"名单不是整件放行" ＋ "名单不许留幽灵"）
 MOD09_MODELS = APP / "mod09_fee" / "models.py"      # 规则 B：不在放行名单里的 mod 件
 REGISTRY = APP / "export_registry.py"               # 规则 B2：注册表必须**是叶子**
+LEDGER_EXPORT = APP / "report_export" / "ledger_export.py"   # 规则 D：导出层不在业务包里
 MERGE03 = APP / "mod03_notice" / "merge.py"         # 规则 C：不在放行名单里的 mod03 件
 DOMAIN05 = APP / "mod05_flow" / "domain.py"         # 规则 C：不在放行名单里的 mod05 件
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
@@ -78,6 +79,10 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      b"from types import ModuleType",
      b"from types import ModuleType\nfrom app.report_export import service as _ghost  # noqa: F401",
      "叶子件"),
+    (LEDGER_EXPORT, "M8 规则D · 导出层直查业务包的表",
+     _FUTURE,
+     _FUTURE + b"\nfrom app.mod06_proc import repository as _ghost  # noqa: F401",
+     "直查了业务包的表"),
 ]
 
 

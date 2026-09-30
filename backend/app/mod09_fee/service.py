@@ -198,4 +198,16 @@ def act_batch(s: Session, *, project_key: str, items: list, months: list) -> dic
 __all__ = [
     "parse_state", "candidates", "build_page_data",
     "act_add", "act_rename", "act_set_amount", "act_delete", "act_batch",
+    "project_by_key",        # ⭐ 包间出口（`TAIL-195` 批 2c）
 ]
+
+
+# --------------------------------------------- 包间出口（`TAIL-195` 批 2c）
+# ⚠️⚠️ 跨包调用**只许经这一层**（计划 §2.3：「包间只经 `service` 调用，**不得跨包直查对方表**」）。
+#    ⛔ 别的包**别** `import app.mod09_fee.repository` —— 守卫 = `backend/tests/test_layering.py` **规则 D**。
+#    ⚠️ 导出侧（`report_export`）要它拿「项目 id / 展示名」⇒ 别让那边自己去查档案表。
+# ⚠️⚠️ **必须写成函数、且每次经 `repository` 模块取** —— ⛔ 别写成模块级别名：
+#    那会在导入时把函数对象**绑死**，测试里的 `monkeypatch.setattr(...repository, "project_by_key", …)` 就打不着。
+def project_by_key(session, key):
+    """⭐ 包间出口：按 key 取项目档案行（取不到 ⇒ `None`）。"""
+    return R.project_by_key(session, key)

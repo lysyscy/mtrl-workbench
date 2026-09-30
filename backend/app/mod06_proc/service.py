@@ -10,12 +10,43 @@ from sqlalchemy.orm import Session
 from app.mod06_proc import domain as D
 from app.mod06_proc.repository import (
     load_batches,
-    load_cutoff,
     load_cutoffs,
-    load_history,
-    load_inv_rows,
-    load_mech,
 )
+
+
+# ⭐ **包间出口**（`TAIL-195` 批 2c）：下面四个 `load_*` 是**跨包取数**的口 ——
+#    计划 §2.3：「包间只经 `service` 调用，**不得跨包直查对方表**」⇒ 别的包（真例 = `report_export`
+#    的 `export_proc`）要取这些行，**经本模块**取，⛔ 别去 `import app.mod06_proc.repository`。
+#    守卫 = `backend/tests/test_layering.py` **规则 D**。
+# ⚠️⚠️ **必须写成函数、且每次经 `repository` 模块取** —— ⛔ 别写成模块级别名（`load_inv_rows = R.load_inv_rows`）：
+#    那会在导入时把函数对象**绑死**，测试里 `monkeypatch.setattr(mod06_proc.repository, "load_inv_rows", …)`
+#    就**再也打不着**（2026-09-30 实测：12 条判据当场红，症状是 `session=None` 一路传到真的查询里）。
+def load_inv_rows(session, **kw):
+    """⭐ 包间出口：库存单据行（`ACC-RPT-EXP-001` 表体的来源）。"""
+    from app.mod06_proc import repository as R
+
+    return R.load_inv_rows(session, **kw)
+
+
+def load_mech(session, **kw):
+    """⭐ 包间出口：过程资料的手工行。"""
+    from app.mod06_proc import repository as R
+
+    return R.load_mech(session, **kw)
+
+
+def load_history(session, **kw):
+    """⭐ 包间出口：历史段行。"""
+    from app.mod06_proc import repository as R
+
+    return R.load_history(session, **kw)
+
+
+def load_cutoff(session, **kw):
+    """⭐ 包间出口：某项目的截止核算月（§5.2.5）。"""
+    from app.mod06_proc import repository as R
+
+    return R.load_cutoff(session, **kw)
 
 
 def _many(p: dict, name: str) -> list[str]:

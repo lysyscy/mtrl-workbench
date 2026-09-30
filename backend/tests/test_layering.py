@@ -13,6 +13,7 @@
 | **B（下半）** | `app/mod*/**` ⛔ `import app.report_export` | 方案 §3.3 第一半（`TAIL-195` 批 2 · 案②）—— 导出器**只许按名取**（`app.export_registry`，表在 `app/export_bindings.py`） |
 | **B2（下半）** | `app/export_registry.py` ⛔ `import` 任何 `app.*` | 规则 B 的**反绕过**：注册表必须是**叶子**，否则环换个名字继续存在 |
 | **C（下半）** | `mod03` ⛔ `import app.mod05_flow.repository`／`mod05` ⛔ `import app.mod03_notice.repository` | 计划 **§2.3**「包间只经 `service` 调用，**不得跨包直查对方表**」（方案 §3.3 第二半） |
+| **D（下半）** | `app/report_export/**` ⛔ `import app.mod*.repository` | 同上（`TAIL-195` 批 2c）—— 导出层只许用业务包的 `domain` / `models` / `service` |
 
 ⚠️ **判据是静态的**（只读源码 ＋ `ast` 解析，⛔ 不 import app 包）—— 所以对"**函数内延迟 import**"
    那种形态同样有效（那正是本仓跨包引用的常见写法）。
@@ -53,6 +54,15 @@ _ALLOW_B: dict[str, str] = {}
 
 #: 注册表**必须是叶子**（业务包 import 它 ⇒ 它一旦 import 导出层，环就换个名字继续存在）
 _REGISTRY = APP / "export_registry.py"
+
+#: ── 规则 D（下半）── (相对 `backend/app` 的路径, 被禁模块) → 为什么现在还留着
+#: ⭐ **2026-09-30 批 2c 已清空**（`report_export/service.py` 那 2 处 `mod09_fee`/`mod06_proc` 的
+#:    `repository` 直查，改成走对方的 `service` 包间出口）⇒ 名单只剩空表。
+_ALLOW_D: dict[tuple[str, str], str] = {}
+
+RE = APP / "report_export"
+#: 「直查业务包的表」的形态：`app.modNN_xxx.repository`（含它的子模块）
+_BAD_REPO_RE = re.compile(r"^app\.mod\d+_[a-z_]+\.repository($|\.)")
 
 #: ── 规则 C（下半）── (相对 `backend/app` 的路径, 被禁的模块) → 为什么现在还留着
 #: ⭐ **2026-09-30 批 2a 已清空**（3 处全改走对方的 `service` 包间出口）⇒ 名单只剩空表：
@@ -272,5 +282,47 @@ def test_C_放行名单里不许留幽灵条目():
     stale = sorted(set(_ALLOW_C) - set(_scan_c()))
     assert not stale, (
         "`_ALLOW_C` 里有**已经不存在**的条目（那处 import 已经没了 ⇒ 名单该删没删）：\n  "
+        + "\n  ".join(f"{f} → {m}" for f, m in stale)
+    )
+
+
+# ------------------------------------------------------------------------- 规则 D
+
+
+def _scan_d() -> dict[tuple[str, str], int]:
+    """→ `{(相对 `backend/app` 的路径, 被禁模块): 次数}`（只扫导出层）。"""
+    found: dict[tuple[str, str], int] = {}
+    files = _py_files(RE)
+    assert len(files) >= 15, f"`{RE}` 下只扫到 {len(files)} 个 `.py` —— 路径变了，规则 D 已失效"
+    for p in files:
+        hits = [m for _, cands in _import_targets(p) for m in cands if _BAD_REPO_RE.match(m)]
+        for m in dict.fromkeys(hits):
+            found[(p.relative_to(APP).as_posix(), m)] = hits.count(m)
+    return found
+
+
+@acc()
+def test_D_导出层不得直查业务包的表():
+    """`app/report_export/**` ⛔ `import app.mod*.repository`（计划 §2.3：包间只经 `service` 调用）。
+
+    ⚠️ 导出层**允许**用的三种形态：`domain`（纯函数）/ `models`（表结构）/ `service`（包间出口）；
+       ⛔ 只有**直查对方表**（`repository`）才是"改一侧牵动另一侧"的病根。
+    """
+    found = _scan_d()
+    extra = sorted(k for k in found if k not in _ALLOW_D)
+    assert not extra, (
+        "导出层**直查了业务包的表**（`import app.mod*.repository`）—— 按计划 §2.3 只许经**包间出口**"
+        "（对方的 `service`）：\n  "
+        + "\n  ".join(f"{f} → {m}（{found[(f, m)]} 处）" for f, m in extra)
+        + "\n  ⇒ 改走对方包的 `service`（可在那边**再导出** `repository` 的名字当口）；"
+          "⛔ 别在本包复制一份取数（那是第二套口径）；⛔ 别把它加进 `_ALLOW_D`。"
+    )
+
+
+@acc()
+def test_D_放行名单里不许留幽灵条目():
+    stale = sorted(set(_ALLOW_D) - set(_scan_d()))
+    assert not stale, (
+        "`_ALLOW_D` 里有**已经不存在**的条目（那处 import 已经没了 ⇒ 名单该删没删）：\n  "
         + "\n  ".join(f"{f} → {m}" for f, m in stale)
     )

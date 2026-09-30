@@ -135,8 +135,7 @@ def export_ledger(session: Session, projects, ym: str = "") -> Path:
     """
     from app.mod05_flow import service as M5
     from app.mod09_fee import domain as M9D
-    from app.mod09_fee import repository as M9R
-    from app.mod09_fee import service as M9
+    from app.mod09_fee import service as M9       # ⭐ 包间出口（§2.3 · `TAIL-195` 批 2c）
     from app.report_export import ledger_export
 
     keys = [str(k) for k in (projects or ()) if str(k or "").strip()]
@@ -147,7 +146,7 @@ def export_ledger(session: Session, projects, ym: str = "") -> Path:
     out_dir = EXPORT_ROOT / ledger_export.FILE_SUFFIX / period_label(report_ym)
     made: list[str] = []
     for key in keys:
-        pj = M9R.project_by_key(session, key)
+        pj = M9.project_by_key(session, key)
         if pj is None:
             raise MustReportError(
                 f"导出台账：项目「{key}」**不在档案里** ⇒ 先建档再导（⛔ 不猜项目名、不臆造归属）。")
@@ -183,8 +182,7 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
     """
     from app.core.timing import today_cn, ym_of
     from app.mod06_proc import domain as D
-    from app.mod06_proc import repository as R
-    from app.mod06_proc import service as M6
+    from app.mod06_proc import service as M6       # ⭐ 包间出口（§2.3 · `TAIL-195` 批 2c）
     from app.report_export import process_export
 
     keys = [str(k) for k in (projects or ()) if str(k or "").strip()]
@@ -192,9 +190,9 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
         raise MustReportError("导出过程资料：**一个项目都没选** —— 请先在展开区里勾选要导出的项目。")
     tab_no = D.tab_of(tab)
     report_ym = str(ym or "").strip() or ym_of(today_cn())
-    inv_rows = R.load_inv_rows(session)
-    mech_rows = R.load_mech(session)
-    history_rows = R.load_history(session)
+    inv_rows = M6.load_inv_rows(session)
+    mech_rows = M6.load_mech(session)
+    history_rows = M6.load_history(session)
     known = M6.projects_of(inv_rows, history_rows)      # ⭐ 候选**唯一出口**（⛔ 不各写一份）
     displays = M6.displays_by_key(session)              # ⭐ 键→展示名（标题与文件名都用它）
     out_dir = EXPORT_ROOT / process_export.FILE_SUFFIX / period_label(report_ym)
@@ -209,7 +207,7 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
             raise MustReportError(
                 f"导出过程资料：项目「{key}」**不在档案里**（取不到展示名）⇒ 先建档再导"
                 "（⛔ 不拿仓库名冒充展示名）。")
-        cutoff = R.load_cutoff(session, warehouse=key)
+        cutoff = M6.load_cutoff(session, warehouse=key)
         raw = D.build_matrix(inv_rows=inv_rows, manual_rows=mech_rows, history_rows=history_rows,
                              warehouse=key, adjusted=False, cutoff_ym=cutoff)
         if tab_no == D.TAB_RAW:
