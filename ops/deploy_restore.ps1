@@ -22,6 +22,7 @@
     powershell -ExecutionPolicy Bypass -File ops\deploy_restore.ps1 -Pack D:\deliver\mtrl-20260929
     powershell -ExecutionPolicy Bypass -File ops\deploy_restore.ps1 -Pack <目录> -Mode asis
     powershell -ExecutionPolicy Bypass -File ops\deploy_restore.ps1 -Pack <目录> -DryRun
+    powershell -ExecutionPolicy Bypass -File ops\deploy_restore.ps1 -Pack <目录> -WriteBaseline   # ⭐ 顺手把**包内**那份验收基线写进仓根 `.env`（⚠️ 默认⛔ 不写；写前自动备份 `.env`）
 #>
 [CmdletBinding()]
 param(
@@ -30,6 +31,7 @@ param(
     [ValidateSet('empty', 'asis')][string] $Mode = 'empty',
     [string] $PgBin     = 'C:\Program Files\PostgreSQL\16\bin',
     [string] $DbName    = 'mtrl_workbench',
+    [switch] $WriteBaseline,                                         # ⭐ 显式开关（默认 ⛔ 不写）：把**包内**那份验收基线写进仓根 `.env`
     [switch] $DryRun
 )
 
@@ -119,6 +121,31 @@ if (-not (Test-Path -LiteralPath $faceSnap)) {
     Say '      ① **云同步到了**（推荐 · 云那份是真源）⇒ PRD_ACCEPTANCE_BASELINE=<交付面根>\PRD\验收\验收基线.json'
     Say ('      ② **要离线跑**（云没同步）⇒ PRD_ACCEPTANCE_BASELINE=' + (Join-Path $faceSnap 'PRD\验收\验收基线.json'))
     Say '      ⚠️ 改完 `.env` 要**重启后端**（它没有 --reload）；该键的读取方 = `doc_audit` / `_audit_face.py` / `acc_report`'
+    # ⭐ `-WriteBaseline`（2026-09-30 补 · 用户指示③「.env 的 PRD_ACCEPTANCE_BASELINE 默认指包内」）：
+    #    默认**只报不写**（守 `A6`：真 `.env` 不进包 / 脚本不替你写）；给了开关才动 ⇒ **只改那一行**，
+    #    且**写前先备份** `.env`（⇐ 万一那台机器上已经配了云那份，还能回头）。
+    if ($WriteBaseline) {
+        $blFile = Join-Path $RepoRoot '.env'
+        $blVal  = Join-Path $faceSnap 'PRD\验收\验收基线.json'
+        if (-not (Test-Path -LiteralPath $blFile)) {
+            Say ('   ⛔ -WriteBaseline 要写 ' + $blFile + '，但**它不存在** ⇒ 跳过（先照上表把 `.env` 建起来）')
+        } elseif ($DryRun) {
+            Say ('   [干跑] 把 ' + $blFile + ' 的 PRD_ACCEPTANCE_BASELINE 改为：' + $blVal)
+        } else {
+            $blBak = $blFile + '.bak-' + (Get-Date -Format 'yyyyMMdd-HHmm')
+            Copy-Item -LiteralPath $blFile -Destination $blBak -Force
+            $hit = $false
+            $out = foreach ($l in (Get-Content -LiteralPath $blFile -Encoding UTF8)) {
+                if ($l.TrimStart().StartsWith('PRD_ACCEPTANCE_BASELINE=')) { $hit = $true; 'PRD_ACCEPTANCE_BASELINE=' + $blVal } else { $l }
+            }
+            if (-not $hit) { $out = @($out) + ('PRD_ACCEPTANCE_BASELINE=' + $blVal) }
+            [IO.File]::WriteAllLines($blFile, [string[]]$out, (New-Object Text.UTF8Encoding($false)))
+            Say ('   ✓ 已写 PRD_ACCEPTANCE_BASELINE=' + $blVal)
+            Say ('      （`.env` 备份 = ' + (Split-Path -Leaf $blBak) + '；⚠️ **重启后端**才生效）')
+        }
+    } else {
+        Say '   ⏭ 未给 `-WriteBaseline` ⇒ **只报告、不写** `.env`（默认口径：真 `.env` 不进包 · 脚本不替你写）'
+    }
     if ($DryRun) { Say '   [干跑]' }
 }
 

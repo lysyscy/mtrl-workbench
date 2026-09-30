@@ -14,6 +14,8 @@
 powershell -ExecutionPolicy Bypass -File D:\dev\mtrl-workbench\ops\deploy_restore.ps1 -Pack D:\deliver\mtrl-20260929 -Mode empty
 # 2) 自检（⛔ 不是验收 —— 验收要交付面，那不在包内）
 powershell -ExecutionPolicy Bypass -File D:\dev\mtrl-workbench\ops\selfcheck.ps1
+# 1b) （可选）云还没同步到时，顺手把**包内**那份验收基线写进仓根 .env（⛔ 默认不写；写前自动备份 .env）：
+# powershell -ExecutionPolicy Bypass -File D:\dev\mtrl-workbench\ops\deploy_restore.ps1 -Pack <包目录> -WriteBaseline
 # 3) 打开 http://127.0.0.1:8000/app 看一眼（看板是默认落地页）
 # 4) 走四个初始化入口各一小段（§三）—— 这一步过了，才算 M8 ①
 ```
@@ -70,6 +72,7 @@ powershell -ExecutionPolicy Bypass -File D:\dev\mtrl-workbench\ops\selfcheck.ps1
    | **交付面那套尺子**（`doc_audit --ui` / `_audit_face.py`） | 它们把「基线上溯**两级**」当**交付面根**（`audit_common.delivery_root()`）⇒ 指包内那份时，它们会去包的 face 目录里找**整棵树**（只找到 2 件）⇒ **仍需云同步来的交付面整份** |
 
    ⚠️ 口径：**云那份仍是真源** —— 能连上云就把它改回云那份（免得「两处副本必漂」）。
+   ⭐ **手动改嫌麻烦？** `deploy_restore.ps1 -WriteBaseline` 能**只改那一行**（⛔ 默认不写、写前自动备份 `.env` —— 守 `A6`「真 `.env` 不进包 · 脚本不替你写」）。
    ⭐ **`ui_parity` 不在此列**（2026-09-30 `TAIL-200` → `TAIL-201`）：`U1`/`U5` 退场后它**只查壳自己** ⇒ **什么都不需要**（⛔ 交付面、⛔ 壳快照都不用）⇒ **目标机开箱就能跑**。
    ⭐ **`ui_parity` 不在此列**（2026-09-30 `TAIL-200` → `TAIL-201`）：`U1`/`U5` 退场后它**只查壳自己** ⇒ **什么都不需要**（⛔ 交付面、⛔ 壳快照都不用）⇒ **目标机开箱就能跑**。
 
