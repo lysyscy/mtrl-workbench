@@ -48,6 +48,16 @@ CATEGORY_LABELS: dict[str, str] = {
 MECH_SETTLE_SOURCE_READY = False
 
 
+# ------------------------------------------------- 包间出口（`TAIL-195` 批 2a）
+# ⚠️⚠️ 跨包调用**只许经这一层**（计划 §2.3：「包间只经 `service` 调用，**不得跨包直查对方表**」）。
+#    ⛔ 别的包**别** `import app.mod05_flow.repository` —— 守卫 = `backend/tests/test_layering.py` **规则 C**。
+#    ⭐ 下面三个名字与 `repository` 里那份**是同一个对象**（纯再导出，⛔ 不另写一套口径）——
+#       同款先例：`mod03_notice/repository.py` 再导出 `MOD-02` 的运行记录仓储。
+has_request_id = repo.has_request_id    # 付款提交的**幂等**判据（§4.4.4）
+create_flow = repo.create_flow          # 落一条流水（⛔ 别绕过它：它自动走 `sync_stat_paid` 重算唯一出口）
+list_flows = repo.list_flows            # 全部流水（含已撤销）—— 通知书列表与撤销入口要看
+
+
 # ---------------------------------------------------------------- 输入行视图
 
 

@@ -57,15 +57,10 @@ _ALLOW_B: dict[str, str] = {
     "mod11_jc/service.py": "导出动作（`jc_export`）—— 同上",
 }
 
-#: ── 规则 C（下半）── (相对 `backend/app` 的路径, 被禁的模块) → 为什么现在还留着（批 2 拆完即清空）
-_ALLOW_C: dict[tuple[str, str], str] = {
-    ("mod03_notice/list_view.py", "app.mod05_flow.repository"):
-        "列表视图要读流水 —— 批 2 改成走 `mod05` 的包间出口（§2.3：只经 `service`）",
-    ("mod03_notice/notice_pay_actions.py", "app.mod05_flow.repository"):
-        "付款要落一条流水 —— 同上（`create_flow` 要经包间出口）",
-    ("mod05_flow/repository.py", "app.mod03_notice.repository"):
-        "重算「统计付款金额」要读留痕 —— 同上（`list_stat_traces` 要经包间出口）",
-}
+#: ── 规则 C（下半）── (相对 `backend/app` 的路径, 被禁的模块) → 为什么现在还留着
+#: ⭐ **2026-09-30 批 2a 已清空**（3 处全改走对方的 `service` 包间出口）⇒ 名单只剩空表：
+#:    ⛔ 别为了"加个口子"往里添条目 —— 跨包读要经对方包的 `service`（§2.3）。
+_ALLOW_C: dict[tuple[str, str], str] = {}
 
 _BAD_TOP = "app.mod"
 

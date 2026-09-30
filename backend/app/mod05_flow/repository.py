@@ -181,13 +181,13 @@ def sync_stat_paid(s: Session, notice_id: int) -> Decimal | None:
     ⚠️ 由 **付款**（`create_flow`）· **撤销**（`revoke`）· **历史导入**（`commit_plan`）·
        **整批回滚**（`rollback_batch`）**四处统一调用** —— ⛔ 不得在别处再算一遍。
     """
-    from app.mod03_notice import repository as notices_repo    # 延迟导入，避免环
+    from app.mod03_notice import service as notices_service    # 延迟导入，避免环；⭐ 包间出口（§2.3）
     from app.mod03_notice.domain import F_STAT_PAID, was_manually_edited
 
     notice = s.get(PaymentNotice, int(notice_id))
     if notice is None:
         return None
-    traces = notices_repo.list_stat_traces(s, int(notice_id))  # 留痕 = 「是否手改」的唯一事实来源
+    traces = notices_service.list_stat_traces(s, int(notice_id))  # 留痕 = 「是否手改」的唯一事实来源
     if was_manually_edited(traces, int(notice_id), F_STAT_PAID):
         return to_money(notice.stat_paid)                 # 保护人工值（§4.2.5）
     total = effective_total_of(s, int(notice_id))

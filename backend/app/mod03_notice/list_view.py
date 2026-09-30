@@ -235,10 +235,10 @@ def _flows_by_notice(session):
     ⚠️ 含已撤销的那几条：撤销入口要判"有几条**生效**流水"（R18），
        查看关联要**列出已撤销的**及其撤销原因（R18 下半）。
     """
-    from app.mod05_flow.repository import list_flows
+    from app.mod05_flow import service as flow_service      # ⭐ 包间出口（§2.3 · `TAIL-195` 批 2a）
 
     grouped: dict[int, list[dict]] = {}
-    for f in list_flows(session):
+    for f in flow_service.list_flows(session):
         grouped.setdefault(int(f.notice_id), []).append(
             {
                 "id": f.id,

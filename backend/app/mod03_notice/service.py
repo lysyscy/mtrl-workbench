@@ -12,6 +12,7 @@
 - `run_batch()` 是**纯函数** —— 版式取数器 / 渲染器 / 投递器**全部依赖注入**，
   故 22 条判据里的绝大多数可**不连库、不启浏览器、不碰打印机**地断言。
 - 落库（运行记录）与真实依赖的组装在 `router.py`（薄层）。
+⭐ 本件**兼作 `MOD-03` 的包间出口**（`TAIL-195` 批 2a）：**跨包调用只许经本件**（见文末那段）。
 """
 
 from __future__ import annotations
@@ -271,10 +272,20 @@ def _reason(exc: BaseException) -> str:
     return text or type(exc).__name__
 
 
+# ------------------------------------------------- 包间出口（`TAIL-195` 批 2a）
+# ⚠️⚠️ 跨包调用**只许经这一层**（计划 §2.3：「包间只经 `service` 调用，**不得跨包直查对方表**」）。
+#    ⛔ 别的包**别** `import app.mod03_notice.repository` —— 守卫 = `backend/tests/test_layering.py` **规则 C**。
+#    ⭐ 与 `repository` 里那份**是同一个对象**（纯再导出，⛔ 不另写一套）——
+#       同款先例：`mod03_notice/repository.py` 再导出 `MOD-02` 的运行记录仓储。
+from app.mod03_notice import repository as _repo      # noqa: E402  ← 顶层导入安全（`repository` 不引 `service`）
+list_stat_traces = _repo.list_stat_traces             # 统计手改留痕（=「是否手改」的唯一事实来源）
+
+
 __all__ = [
     "MODE_PRINT", "MODE_PDF",
     "DesignLike", "DetailLike", "SignatureStoreLike",
     "ItemOutcome", "BatchResult",
     "render_notice_html",      # ★ 全工程唯一的渲染入口（生产与预览工具共用）
     "run_batch",
+    "list_stat_traces",        # ⭐ 包间出口（`TAIL-195` 批 2a）
 ]

@@ -82,7 +82,7 @@ def apply_batch_pay(
       ① `build_rows` 取数 ⇒ ② **以库里最新状态重算**（防"勾上之后才被改成不可付"；
          **撤单 / 剔除行一律排除** §4.2.7）⇒ ③ `confirm_batch` 判定（金额 / 方式 / 备注 / 状态）
       ⇒ ④ 有错 ⇒ **整批不产生任何流水**（不落半批）⇒ ⑤ **`request_id` 幂等**（拒重复提交）
-      ⇒ ⑥ `flow_repo.create_flow` 逐条落流水（一次付款一条独立流水）。
+      ⇒ ⑥ `flow_service.create_flow` 逐条落流水（一次付款一条独立流水）。
 
     `drafts = {notice_id: {"pay_method": str, "amount": Decimal | None}}` —— 表单/JSON 给的值；
     ⚠️ 金额**已由调用方解析**成 `Decimal`（解析器 = 本模块的 `parse_amount` ✓）。
@@ -94,7 +94,7 @@ def apply_batch_pay(
     from app.core.money import to_money
     from app.mod03_notice.domain import PayDraft, PayRow, confirm_batch
     from app.mod03_notice.list_view import build_rows
-    from app.mod05_flow import repository as flow_repo
+    from app.mod05_flow import service as flow_service      # ⭐ 包间出口（§2.3 · `TAIL-195` 批 2a）
 
     by_id = {r.notice_id: r for r in build_rows(session)}
     targets = [
@@ -133,14 +133,14 @@ def apply_batch_pay(
         raise MustReportError("整批未产生任何流水 —— " + "；".join(result.errors[:6]))
 
     rid = str(request_id or "").strip()
-    if flow_repo.has_request_id(session, rid):
+    if flow_service.has_request_id(session, rid):
         raise MustReportError(f"该提交（request_id={rid}）已经登记过流水 —— 已拒绝重复提交（§4.4.4）")
 
     created: list[int] = []
     total = Decimal("0")
     for item in result.flows:
         row = by_id[int(item["notice_id"])]
-        flow_repo.create_flow(
+        flow_service.create_flow(
             session,
             notice_id=row.notice_id,
             project_id=row.ownership_id,
