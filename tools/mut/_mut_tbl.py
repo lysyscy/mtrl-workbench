@@ -7,7 +7,7 @@
 - ⚠️ 但 P0 **没为这套新判据补反向灵敏度**（表 A 里查不到 `_mut_tbl*`）⇒ "改坏了会不会红"**没人证过**；
   本件补上（随 `TAIL-64` P1b 一起做）。
 
-三十九靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M39` 打
+四十二靶（改完**立刻按 bytes 复原** ＋ MD5 校验；⚠️ `M2`/`M40` 打 `shell/proj.js`、`M16`~`M21` 与 `M31`~`M39`/`M41`/`M42` 打
 `shell/actions.js`、`M22`/`M23` 打 `shell/core.js`、`M24`~`M30` 打 `shell/legacy.js` —— 见下方"哑靶"说明）：
 - `M1` **去掉委托**：把 `m15` 切片里的 `TBL({head:'<th>登录账号</th>…` 改成 `TBLBROKEN({…`
   （合法标识符 ⇒ **不触发**语法错，只会让"本页主表没走统一出口"那一条红）。
@@ -190,6 +190,22 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
     (ACTIONS, "M39 去掉委托（「删除付款计划行确认」影响行表 不再走 `TBL`）",
      _b("TBL({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',"),
      _b("TBLBROKEN({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',"), "没走统一出口"),
+    # ⭐ 2026-09-30（`TAIL-64` **`P5-d-a`** 试点）：**列定义式**（`cols:[{t,r}]` ＋ `list`）—— 内核 ＋ 试点各一靶。
+    (PROJ, "M40 内核不按 `cols` 派生（`c.t` 改名 ⇒ 给了 `cols` 的表没有表头）",
+     _b("head=cols.map(c=>c.t).join('')"), _b("head=cols.map(c=>c.tt).join('')"),
+     "没有从 `cols` 派生"),
+    #: ⚠️ 靶取**收尾那一句**（`], list:pjs})}`）—— 它把"列定义 → 交回手写 `rows:`"这件事一击打中，
+    #:    且是**单行**（⛔ 别拿跨行的 `cols:[…]` 当靶：本仓各件换行风格不统一 ⇒ 会变成哑靶）。
+    (ACTIONS, "M41 试点交回**手写 `rows:`**（把 `list:` 去掉 ⇒ 列定义式白做）",
+     _b("], list:pjs})}"),
+     _b("], rows:pjs.map((k,i)=>`<tr><td class=\"fc\">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)})}"),
+     "没走列定义式"),
+    #: ⚠️ `M42` 与 `M41` **同锚点、不同改法**：这条**同时**给 `cols` 与手写 `rows` ⇒ 渲染**看不出区别**
+    #:    （本件里 `cols` 优先、手写那份被**静默忽略**）—— 正是"看着改了、其实没用"那一类。
+    (ACTIONS, "M42 试点**同时**给 `cols` 与手写 `rows:`（后者被静默忽略）",
+     _b("], list:pjs})}"),
+     _b("], list:pjs, rows:pjs.map((k,i)=>`<tr><td class=\"fc\">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)})}"),
+     "又写回手写的"),
 ]
 
 

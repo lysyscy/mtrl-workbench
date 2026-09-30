@@ -1497,8 +1497,9 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
    const body = pjs.length===1
      ? `<div class="tip" style="margin:0">将生成 <b>1 个文件</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>内容 = <b>当前所显示的那张表</b>（<b>${procTabName()}</b>）按 <b>17 列模板</b>填充（核算月 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列），报<b>分公司工程科</b>（§5.2.2）。</div>`
      : `<div class="tip" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">过程资料_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个文件（每个 = 一个项目的 <b>${procTabName()}</b>）。</div>
-       ${TBL({cls:'cond',key:'modal:procExp',sty:'margin-top:calc(8px * var(--fscale))',head:'<th>#</th><th>文件（每项目一份）</th>',
-       rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)})}`;
+       ${TBL({cls:'cond',key:'modal:procExp',sty:'margin-top:calc(8px * var(--fscale))',
+       cols:[{t:'<th>#</th>', r:(k,i)=>`<td class="fc">${i+1}</td>`},
+             {t:'<th>文件（每项目一份）</th>', r:k=>`<td>${esc(fnOf(k))}</td>`}], list:pjs})}`;
    modal({title:'导出 · 过程资料（按模板 · 每项目一份）',body,
      footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="procExpSave">保存到本地</button>`}); },
  /* ⭐ 接线（`TAIL-04` 路径① · 片 4a）：成品由**后端模板填充**生成 —— 每个项目**一本工作簿**

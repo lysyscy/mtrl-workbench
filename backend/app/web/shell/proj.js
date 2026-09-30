@@ -114,7 +114,13 @@ const ntDraftRow=()=>{ const d=naD, cat=d.cat||'辅材', isJc=cat==='集采';
      · `sty` ⇒ 给 `<table>` 补一个内联 `style`（真例 = 大表 `min-width:1620px`）。
      · `headRows:true` ⇒ `head` 里**自带 `<tr>`**（多行表头），本件不再包一层（真例 = 大表三级表头）。
    ⛔ 与 `sumRowOf` / `thCount` 的分工：那两个是**纯算法**（求和 / 数列），本件只管**拼装**。 */
-const TBL=({head='',rows=[],empty='',sum='',key='',cls='',sort=true,sty='',headRows=false})=>{
+const TBL=({head='',rows=[],cols=null,list=[],empty='',sum='',key='',cls='',sort=true,sty='',headRows=false})=>{
+  /* ⭐ `cols` = **列定义式**（`TAIL-64` P5-d-a · 2026-09-30）：`cols:[{t,r}]` ＋ `list:[…]` ——
+     `t` = 表头那一格（**整段 `<th>` HTML`）· `r` = 取值器 `(x,i)=>` 这一格（**整段 `<td>` HTML`）。
+     给了 `cols` ⇒ `head` / `rows` **由它派生**（⛔ 别同时再传那两个：本件里 `cols` 优先、那两个被忽略）。 */
+  if(cols){ head=cols.map(c=>c.t).join('');
+    rows=list.map((x,i)=>'<tr>'+cols.map(c=>c.r(x,i)).join('')+'</tr>'); }
+
   /* ⭐ `data-vs` = 「这一张表**可以由表级虚拟滚动接管**」的标记（⚠️ **行数够才真的接管** —— 阈值那一侧说了算）。
      ⚠️ **一律带、⛔ 不设开关**：本仓口径是「**别用名单式**」—— 改成「逐表开关 / 逐页点名」的话，
      哪天某张表涨到阈值而没人记得加，它就**永远不生效、且不报错**（这正是 `TAIL-66` 当年的原话）。 */
