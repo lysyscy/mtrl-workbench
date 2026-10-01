@@ -31,7 +31,7 @@
           ⇒ ⛔ 别整份拷（实测 **1404 件 / 42.27 MB**）。已做：参数 `$FaceRoot` 与 `-SkipFace`。
 
 
-       ⛔ **一律不带**：`backend/.venv`（绝对路径，拷过去必崩）· `logs/` · `.workbuddy/scratch` ·
+       ⛔ **一律不带**：`backend/.venv`（绝对路径，拷过去必崩）· `logs/` · `.codebuddy/work/00-scratch/` ·
        `.codebuddy/backups/交付面-*`（交付面快照）· **`.env`**（真口令不进包 —— 守 `TAIL-88` 的"敏感件 0 命中"）。
 
   用法（本机 · 普通窗口即可）：
@@ -239,7 +239,7 @@ if (-not $DryRun) {
     $mf += '⛔ 交付面其余件不进包: demo\ · PRD\ 余件 · PRD素材包-* · 交付面根 4 个 md（= WPS 云同步树 ⇒ 目标机同步即有）'
     $mf += ('壳基线   : ' + $(if ($snapName) { '.codebuddy\backups\' + $snapName } else { '⛔ 缺！见产包日志里"真因①/②"那两行（目标机 --snapshot 一次即可）' }))
     $mf += ('库       : db\init_db.sql（空库路线；⚠️ 里面 <PASSWORD> 到目标机要换）' + $(if ($WithDump) { ' ＋ db\*.dump（⚠️ 只作对照，⛔ 不灌生产）' } else { '' }))
-    $mf += '⛔ 一律不带: backend\.venv · logs\ · .workbuddy\scratch · .codebuddy\backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
+    $mf += '⛔ 一律不带: backend\.venv · logs\ · .codebuddy\work\00-scratch · .codebuddy\backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
     $mf += '落地说明 : 部署-落地说明.md（= ops\deployment.md）'
     $mf += '校验     : SHA256SUMS.txt 覆盖本目录**全部文件**（本件也在内）—— 目标机脚本先校它'
     [IO.File]::WriteAllText((Join-Path $Out 'MANIFEST.txt'), ($mf -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding($false)))

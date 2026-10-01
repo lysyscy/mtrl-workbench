@@ -24,7 +24,8 @@ sys.stdout.reconfigure(encoding="utf-8")
 ROOT = pathlib.Path(r"D:\dev\mtrl-workbench")
 KERNEL = ROOT / "backend" / "app" / "report_export" / "naive_export.py"
 TEST = "tests/test_naive_export_parity.py"
-BAK = ROOT / ".workbuddy" / "scratch" / "naive_export.py.bak-mutnaive"
+#: ⚠️ 2026-10-01（`TAIL-204` 第 7 步）换落点：原 `.workbuddy/scratch` 那个根已不存在（`mkdir` ⇒ 复活旧根）。
+BAK = ROOT / ".codebuddy" / "work" / "00-scratch" / "naive_export.py.bak-mutnaive"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 
 MUTS = [

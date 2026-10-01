@@ -23,7 +23,9 @@ import sys
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = pathlib.Path(r"D:\dev\mtrl-workbench")
 BACKEND = ROOT / "backend"
-BAK = ROOT / ".workbuddy" / "scratch"
+#: ⚠️ 2026-10-01（`TAIL-204` 第 7 步）换落点：原 `.workbuddy/scratch` **那个根已不存在**（仓里只有 `.codebuddy\`）
+#:   ⇒ 而下面又 `mkdir` ⇒ 一跑就**在仓里复活旧根**（同族：`_mut_naive` / `_mut_save` / `_mut_vs` / `_mut_t20`）。
+BAK = ROOT / ".codebuddy" / "work" / "00-scratch"
 BAK.mkdir(parents=True, exist_ok=True)
 PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 TEST = "tests/test_amount_text_parity.py"

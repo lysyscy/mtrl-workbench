@@ -9,7 +9,7 @@
 |---|---|---|
 | 脑子里的构思、几条 bullet、和用户讨论的备选 | 正式文档、根目录 | `work/00-scratch/tmp-YYYYMMDD-主题.*`（**TTL 14 天**） |
 | 成型方案、模块设计、A/B 对比、技术选型研讨 | artifacts、plans 活文档内 | `work/10-designs/设计-主题-YYYYMMDD.md` |
-| 一次探针/实测/对比试验（成功或失败） | journal 一句话、artifacts 裸 json | `work/20-experiments/实验-主题-YYYYMMDD.md`（脚本 → `tools/probe/`） |
+| 一次探针/实测/对比试验（成功或失败） | journal 一句话、artifacts 裸 json | `work/30-troubleshooting/实验-主题-YYYYMMDD.md`（⭐ 2026-10-01 起 —— 原 `20-experiments` **已撤区**，`实验-` 前缀归 30 区；脚本 → `tools/probe/`） |
 | 稳定可复现的工程结论 | 长期留在 experiments | 升 `ops/<主题>-实测结论.md` ＋ ops/README 加索引行 |
 | 报错排查、事故复盘、用户报障闭环 | artifacts、ops/README 备注 | `work/30-troubleshooting/排查-现象-YYYYMMDD.md` |
 | 用户拍板的决定（口径/技术/工作方式） | 只写进 MEMORY 或对话 | `work/40-decisions/D<编号>-主题.md`（D21 起；MEMORY 留指针） |
@@ -25,9 +25,9 @@
 ## 二、升档 / 降档生命周期（防新区变新垃圾场）
 
 ```text
-00-scratch ──14天内──► 10/20/30 升档，或删除（⛔ 不许长期停留）
+00-scratch ──14天内──► 10/30 升档，或删除（⛔ 不许长期停留）
 10-designs ──定稿实施完──► plans/archive/归档-设计-*.md；契约级变更 ► 交付面 PRD（走改契约流程）
-20-experiments ──结论稳定──► ops/<主题>-实测结论.md ＋ ops/README 索引行
+30 区「实验-」那一类 ──结论稳定──► ops/<主题>-实测结论.md ＋ ops/README 索引行
 30-troubleshooting ──沉淀出规则──► MEMORY / 阈值表 / 测试（档案本身保留，供复发检索）
 40-decisions ──被推翻──► 只加 superseded 链接，⛔ 不改写原文
 任何"留到以后" ──当场──► 计划 §15 台账（TAIL 编号）
@@ -53,17 +53,16 @@
 
 结论性文字带 `[用户] / [交付面] / [助手自定]` 出处标记（T9 精神）；日期一律 `YYYY-MM-DD`；编号沿用 `TAIL-/D-/MOD-/ACC-`，⛔ 不另造前缀。
 
-## 五、两个 scratch 家 / 两个记忆家（⭐ 2026-09-29 写明，防"不知道哪个是现行的"）
+## 五、⭐ 各只有一个家（2026-10-01 `TAIL-204` 起收口 —— 原文这里是「两个 scratch 家 / 两个记忆家」）
 
-| 家 | 它是谁的活区 | 保留期 / 机器眼 | ⛔ 别搞混 |
+| 家 | 是什么 | 保留期 / 机器眼 | ⛔ 别搞混 |
 |---|---|---|---|
-| `.codebuddy/work/00-scratch/` | 我（Agent）在本区的草稿（`tmp-YYYYMMDD-主题.*` / `CB_MSG.txt`） | **TTL 14 天** · `T14` | 它是**本区**的，出区就按 §一 表升档 |
-| `.workbuddy/scratch/` | 仓级**活区**（各尺子输出 / 一次性脚本 / 交付面取证） | **14 天** · `T20` · 索引 = 该目录 `README.md` | ⛔ 它不是文档层；**先看那边 `README.md` 再动手** |
+| `.codebuddy/work/00-scratch/` | **全仓唯一的临时区**（`tmp-YYYYMMDD-主题.*` / `CB_MSG.txt` / 各尺子输出 / 一次性脚本） | **TTL 14 天** · `T14` | ⭐ **2026-10-01 起**：原仓级活区 `.workbuddy/scratch/` **已取消**（它的尺子也撤了 —— 那是**僵尸判据**）；出区就按 §一 表升档 |
 
-**两个"记忆家"**（⛔ 都属留痕，只追加）：
+**记忆**（⛔ 都属留痕，只追加）：
 
 | 家 | 是什么 | 现状 |
 |---|---|---|
-| `.codebuddy/memory/journal/*.md` | **早期**逐日日志（历史） | **停在 2026-09-27** ⇒ 视作**已归档留痕**，⛔ 别往里续写 |
-| `.codebuddy/memory/YYYY-MM-DD.md` ＋ `MEMORY.md` | **现行**逐日日志 ＋ 长期记忆（IDE 侧） | ⭐ **要写日志就写这里**（当天的那个 `YYYY-MM-DD.md`） |
-| `.codebuddy/memory/MEMORY.md` ＋ `细则.md` | 会话**注入档**（另一条线 · `journal/` 同家） | 口径/纪律的主人；⚠️ 与上面那家**不是同一份** |
+| `.codebuddy/memory/journal/YYYY-MM-DD.md` | **唯一**的逐日日志（append-only） | ⭐ **要写日志就写这里**；⭐ 2026-10-01 起**随仓走（进 git）**；⛔ 别在别处再开一份 |
+| `.codebuddy/memory/MEMORY.md` ＋ `细则.md` | 会话**注入档** ＋ 细则分册（同目录） | 口径/纪律的主人；⚠️ 原"项目侧另一份 `MEMORY.md`"**已并入**（它超注入上限、其实**从未被注入**） |
+| `.codebuddy/plans/开发计划-主文档.md` | **唯一**活文档（状态源 ＋ §15 台账） | ⭐「给用户看的那一页」= **根 `README.md` §〇**（原 `执行情况-主文档.md` 已取消） |

@@ -2,7 +2,7 @@
 
 据 `D:\\mtrl-workbench-文档架构审计-20260922.md` §七-15（长期维护）落地：
 - `T14`：`work/00-scratch/` 里的件**超 14 天**未升档/未删 ⇒ 黄；`tools/` 根与 `logs/` 再出现散件 ⇒ 黄。
-- `T15`：`artifacts/` 只许**工具生成物白名单**的 md；`work/` 五区的文档必须带**文头四行元信息**
+- `T15`：`artifacts/` 只许**工具生成物白名单**的 md；`work/` 四区的文档必须带**文头四行元信息**
   （读者 / 回答什么问题 / 什么时候读 / 状态 ＋ 关联 ID）—— 没有元信息的文档 = 下个 Agent 不知道它是否还活着。
 
 ⚠️ 与 `T12` 的分工：`T12` 管**目录与命名**（层级/前缀）；本件管**时间与元信息**（过期没、写没写头）。
@@ -20,7 +20,7 @@ from audit_common import RED, REPO_ROOT, YELLOW
 SCRATCH_TTL_DAYS = 14
 #: `artifacts/` 允许出现的 md（工具生成物白名单 · ⛔ 过程类 md 去 `work/`）
 ARTIFACTS_MD_ALLOW: tuple[str, ...] = ("变异覆盖台账.md", ".gitkeep")
-#: `work/` 五区文档的文头必须齐这四个词（`README.md` 与 `D索引-*.md` 豁免）
+#: `work/` 四区文档的文头必须齐这四个词（`README.md` 与 `D索引-*.md` 豁免）
 WORK_HEADER_KEYS: tuple[str, ...] = ("读者", "回答", "何时读", "状态")
 WORK_HEADER_EXEMPT: tuple[str, ...] = ("README.md", "D索引-")
 
@@ -40,11 +40,11 @@ BACKUP_SKIP_SUFFIXES = ("_壳单文件基线.html",)
 BACKUP_OTHER_PREFIXES = ("交付面-", "原型-备份-", "_smoke.js-备份-")
 #: 同上：`.bak` 散件（改交付面/文档**之前**留的）—— 也属"另一种用途"
 BACKUP_OTHER_SUFFIXES = (".bak",)
-#: `.workbuddy/scratch/`（**活区** · 详见该目录 `README.md`）的规模提示线：超 ⇒ 黄**一行**（⛔ 不逐件报）
-SCRATCH_MAX_FILES, SCRATCH_MAX_MB = 2000, 50
+#: ⭐ 2026-10-01（`TAIL-204` 第 7 步）**撤掉**「`.workbuddy/scratch/` 活区规模」这半条判据（连常量一起） ——
+#:   理由见 `check_retention()` 里那段说明：**它一直在扫一个不存在的目录** = 僵尸判据。
 #: ⭐ `tools/oneoff/`（**一次性 / 留痕的堆场** · 处置口径见 `tools/README.md`）的提示线：超 ⇒ 黄**一行**。
-#:   ⭐ 为什么管它（`TAIL-194` · 2026-09-29 结构审计 §三 `P1-8`）：**它是全仓唯一"没有保留期、也没有机器眼"
-#:   的目录**（对照 `.workbuddy/scratch`：明写「保留期 14 天 ＋ 索引 README ＋ `T20`」）⇒ 只会一直堆。
+#:   ⭐ 为什么管它（`TAIL-194` · 2026-09-29 结构审计 §三 `P1-8`）：它曾是**全仓唯一"没有保留期、也没有机器眼"
+#:   的目录**（对照当时还在的仓级活区 `.workbuddy/scratch`：明写「保留期 14 天 ＋ 索引 README ＋ `T20`」）⇒ 只会一直堆。
 #:   ⚠️ **件数**才是它的病（"翻不翻得动"的代理指标）；**容量不是瓶颈**（实测 1.2 MB）⇒ 容量线只是挡住
 #:   "往里扔大文件"。⚠️ 阈值出处 = `ops/阈值表.md`（改数先改表）。
 ONEOFF_MAX_FILES, ONEOFF_MAX_MB = 200, 5.0
@@ -70,7 +70,7 @@ def check_scratch_ttl() -> list[dict]:
                     "T14", f".codebuddy/work/00-scratch/{f.name}",
                     f"临时件已放 {days:.0f} 天（TTL {SCRATCH_TTL_DAYS} 天）",
                     "临时区变垃圾场（审计 P2 的复发形态）—— 过期件会让下个 Agent 以为是当前线索",
-                    "升档（设计→10-designs / 实验→20-experiments / 排查→30-troubleshooting）或删除"))
+                    "升档（设计→10-designs / 实验与排查→30-troubleshooting / 决策→40-decisions）或删除"))
     tools = REPO_ROOT / "tools"
     if tools.is_dir():
         for f in sorted(tools.glob("*.py")):
@@ -92,7 +92,7 @@ def check_scratch_ttl() -> list[dict]:
 
 
 def check_artifacts_and_headers() -> list[dict]:
-    """`T15`：artifacts md 白名单 ＋ work 五区文档的文头四行元信息。"""
+    """`T15`：artifacts md 白名单 ＋ work 四区文档的文头四行元信息。"""
     hits: list[dict] = []
     art = REPO_ROOT / "artifacts"
     if art.is_dir():
@@ -104,7 +104,7 @@ def check_artifacts_and_headers() -> list[dict]:
                     "产物区 gitignore、可随时清 ⇒ 过程类 md 放这里**换机即丢**（审计 P1 的机制）",
                     "按类型归位：设计→`work/10-designs/` · 排查→`work/30-troubleshooting/` · 审计→`plans/archive/`"))
     work = REPO_ROOT / ".codebuddy" / "work"
-    for zone in ("10-designs", "20-experiments", "30-troubleshooting", "40-decisions"):
+    for zone in ("10-designs", "30-troubleshooting", "40-decisions"):   # ⭐ 2026-10-01 五区 ⇒ 四区（撤 `20-experiments`）
         zdir = work / zone
         if not zdir.is_dir():
             continue
@@ -196,21 +196,17 @@ def check_retention() -> list[dict]:
             print(f"  （信息）`tools/oneoff/`：{len(fs)} 件 · {mb:.1f} MB"
                   f"（提示线 {ONEOFF_MAX_FILES} 件 / {ONEOFF_MAX_MB} MB ⇒ 余 {ONEOFF_MAX_FILES - len(fs)} 件）"
                   f"{note} —— 处置口径见 `tools/README.md`")
-    scratch = REPO_ROOT / ".workbuddy" / "scratch"
-    if scratch.is_dir():
-        fs = [f for f in scratch.rglob("*") if f.is_file()]
-        mb = sum(f.stat().st_size for f in fs) / 1024 / 1024
-        if len(fs) > SCRATCH_MAX_FILES or mb > SCRATCH_MAX_MB:
-            hits.append(_hit(
-                "T20", ".workbuddy/scratch/",
-                f"活区规模 {len(fs)} 件 / {mb:.1f} MB > 提示线 {SCRATCH_MAX_FILES} 件 / {SCRATCH_MAX_MB} MB",
-                "它是**活区**（临时件 ＋ 各尺子输出 ＋ 一次性脚本），保留期 14 天；长到这份上说明没人清",
-                "按该目录 `README.md` 的保留期清；⚠️ 删除不可逆 ⇒ 先移 `_keep-YYYYMMDD/` 再删（见 `TAIL-134`）"))
+    # ⚠️⚠️ 2026-10-01（`TAIL-204` 第 7 步）**这里原本还有"活区规模"半条判据 —— 已撤掉**，因为它是**僵尸判据**：
+    #    它扫的是 `REPO_ROOT / ".workbuddy" / "scratch"` —— 这个根**搬家后就不存在了**（仓里现在只有 `.codebuddy\`），
+    #    而那个仓级活区也早在 `TAIL-134`（2026-09-28）被清空 ⇒ **每次都在空集上跑** ⇒ 从不报、也永远不报。
+    #    ⭐ 这正是本仓点名的病：**"不报错，只是什么都没找到"，而"什么都没有"最容易被当成"正常"**。
+    #    ⇒ 处置 = **撤掉**（⛔ 不是改指向）：临时件现在**只有一处** `work/00-scratch/`，已由 `T14`（TTL 14 天）管 ✔。
+    #    ⚠️ 同族（同一天查出的）：`tools/mut/_mut_t20.py` 曾往那个**死路径**写 51 MB 稀疏文件 ⇒
+    #       一跑就**在仓里复活旧根**（而它自证"通过"，因为两边用的是同一个死路径）—— 那条变异已同批撤。
     return hits
 
 
 __all__ = ["ARTIFACTS_MD_ALLOW", "BACKUP_KEEP", "ONEOFF_MAX_FILES", "ONEOFF_MAX_MB",
-           "SCRATCH_MAX_FILES", "SCRATCH_MAX_MB",
            "SCRATCH_TTL_DAYS", "WORK_HEADER_KEYS",
            "check_artifacts_and_headers", "check_retention", "check_scratch_ttl"]
 

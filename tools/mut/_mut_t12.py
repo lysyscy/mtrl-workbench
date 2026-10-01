@@ -25,7 +25,12 @@ CASES = [
 def run_doc_audit() -> str:
     # ⚠️ 2026-09-23：审计件早已从 `tools/` 搬进 `tools/audit/` —— 旧路径下 subprocess 直接失败、
     #    `stdout` 为空 ⇒ 三处"造出来的违规"一条都看不见 ⇒ **假绿**（实测：`0/3 变红 ＋ 复原干净 ✅`）。
-    r = subprocess.run([PY, "tools/audit/doc_audit.py", "-v"], cwd=str(ROOT),
+    # ⚠️⚠️ 2026-10-01（`TAIL-204` 第 7 步）**第二个同款坑**：**漏了 `-X utf8`** —— 子进程按本机默认
+    #    编码（GBK）写 stdout，而本件按 `encoding="utf-8"` 解 ⇒ **中文全成乱码** ⇒ 拿文件名去比
+    #    **永远比不上** ⇒ 三处违规一条都认不出 ⇒ **又一次 `0/3 变红 ＋ 复原干净 ✅` 假绿**
+    #    （判据本身是好的：手工造同样三处，`doc_audit -v` 当场报 3 条 `[T12]`）。
+    #    ⭐ 同族：`_mut_t20.py` 的 `report()` 里**写着**这条规矩 —— 本件当初没抄到。
+    r = subprocess.run([PY, "-X", "utf8", "tools/audit/doc_audit.py", "-v"], cwd=str(ROOT),
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.stdout or ""
 

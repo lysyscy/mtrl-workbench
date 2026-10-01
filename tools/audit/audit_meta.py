@@ -313,14 +313,19 @@ ROOT_MD_ALLOW: tuple[str, ...] = ("README.md",)
 #: `memory/` 下允许的 `.md` 与子目录（日志必须进 `journal/`）
 MEMORY_MD_ALLOW: tuple[str, ...] = ("MEMORY.md", "细则.md", "IDE-细节.md")
 MEMORY_DIR_ALLOW: tuple[str, ...] = ("journal",)
-#: ⭐ `work/` 五区（Agent 工作记录 · 文档架构审计 2026-09-22 P2：五类缺三类是乱建文件的根因）
-WORK_DIR_ALLOW: tuple[str, ...] = ("00-scratch", "10-designs", "20-experiments",
+#: ⭐ `work/` **四区**（Agent 工作记录 · 文档架构审计 2026-09-22 P2：五类缺三类是乱建文件的根因）。
+#:   ⚠️ 2026-10-01（`TAIL-204` 第 7 步）**由五区收成四区**：`20-experiments` 从建区起**一件都没进过**
+#:   （用户 2026-10-01「以最精简为目的」· 出处 = `.codebuddy/memory/journal/2026-10-01.md` §14）⇒ 撤区；
+#:   ⭐「实验/实测/对比试验」这一类**不取消** —— 改由 `30-troubleshooting` 收
+#:   （那边同时认 `排查-` 与 `实验-` 两种前缀，见 `WORK_NAME_PREFIX`）。
+WORK_DIR_ALLOW: tuple[str, ...] = ("00-scratch", "10-designs",
                                    "30-troubleshooting", "40-decisions")
-#: 各区 md 的命名前缀（`00-scratch` 不查 —— 临时件形态自由；`40-decisions` 只查 D 开头）
+#: 各区 md 的命名前缀（`00-scratch` 不查 —— 临时件形态自由；`40-decisions` 只查 D 开头）。
+#: ⭐ 2026-10-01：`30-troubleshooting` 收**两种**前缀 —— `排查-`（报障/事故复盘）与 `实验-`（探针/实测/对比试验，
+#:   即原 `20-experiments` 那一类）。⛔ 别顺手把 `实验-` 也删掉：那一类**是存在的**，只是不再单开一个区。
 WORK_NAME_PREFIX: dict[str, tuple[str, ...]] = {
     "10-designs": ("设计-",),
-    "20-experiments": ("实验-",),
-    "30-troubleshooting": ("排查-",),
+    "30-troubleshooting": ("排查-", "实验-"),
     "40-decisions": ("D",),
 }
 
@@ -369,15 +374,15 @@ def check_doc_layout() -> list[dict]:
                                  "`memory/` 下出现了非白名单子目录",
                                  "`memory/` 只认 `journal/` 一个子目录",
                                  "并进 `journal/`，或改到别处（见 `README.md` 四层表）"))
-    # ⭐ `work/` 五区（2026-09-22 审计 P2 的机器化落地）：子目录白名单 ＋ 各区命名前缀
+    # ⭐ `work/` **四区**（2026-09-22 审计 P2 的机器化落地；⭐ 2026-10-01 由五区收成四区）：子目录白名单 ＋ 各区命名前缀
     work = REPO_ROOT / ".codebuddy" / "work"
     if work.is_dir():
         for d in sorted(x for x in work.iterdir() if x.is_dir()):
             if d.name not in WORK_DIR_ALLOW:
                 hits.append(_t12(f".codebuddy/work/{d.name}/",
-                                 "`work/` 下出现了五区之外的子目录",
-                                 "工作记录只认五区（见 `work/README.md`）—— 多出来的区 = 第二套分类学，必漂",
-                                 "并入五区之一，或先改 `work/README.md` ＋ 本文件 `WORK_DIR_ALLOW`"))
+                                 "`work/` 下出现了四区之外的子目录",
+                                 "工作记录只认四区（见 `work/README.md`）—— 多出来的区 = 第二套分类学，必漂",
+                                 "并入四区之一，或先改 `work/README.md` ＋ 本文件 `WORK_DIR_ALLOW`"))
         for zone, prefixes in WORK_NAME_PREFIX.items():
             zdir = work / zone
             if not zdir.is_dir():

@@ -35,7 +35,12 @@ def _tracked_text() -> dict[str, str]:
     """语料 = **跟踪件** ∪ **仓内的文书**（⚠️ 后者必须包含 —— `.codebuddy/memory/` 与
     `.workbuddy/backups/` **不入 git**，但恰恰引用了一批 oneoff 件；漏了它们 ⇒ 会把"其实有出处"
     的件误判成**零引用**（第一版就是这么错的，本仓的"假阴性"同族）。"""
-    out = subprocess.run(["git", "ls-files"], cwd=str(ROOT), capture_output=True, text=True,
+    #: ⚠️⚠️ 必须带 `-c core.quotepath=false`：git 默认给**非 ASCII 路径加双引号并转义**
+    #:   —— 实测 2026-10-01（`TAIL-204` 第 7 步真要跑本件时才发现）：`"tools\oneoff\_归档-20260930\清单.md"`
+    #:   被当成字面路径 ⇒ `Path(...)` 直接 `OSError [WinError 123]` **把整支脚本打挂**。
+    #:   ⇒ 本件此前**一直是坏的**（同族：本仓"量测件自己烂掉、而它不在任何闸门清单里"）。
+    out = subprocess.run(["git", "-c", "core.quotepath=false", "ls-files"],
+                         cwd=str(ROOT), capture_output=True, text=True,
                          encoding="utf-8", errors="replace").stdout
     rels = {r for r in out.splitlines() if r.strip()}
     skip_dirs = {".git", ".venv", "__pycache__", "node_modules"}
@@ -60,7 +65,9 @@ def _tracked_text() -> dict[str, str]:
 def main() -> int:
     corpus = _tracked_text()
     #: ⭐ 口径按**跟踪件**算（`__pycache__/*.pyc` 这种是本机产物、且不在版本库里 ⇒ 不算"堆着的件"）
-    listed = subprocess.run(["git", "ls-files", "tools/oneoff"], cwd=str(ROOT), capture_output=True,
+    #: ⚠️ 同上：**必须** `-c core.quotepath=false`（否则 `_归档-*/` 里那份中文名的件会把本步打挂）。
+    listed = subprocess.run(["git", "-c", "core.quotepath=false", "ls-files", "tools/oneoff"],
+                            cwd=str(ROOT), capture_output=True,
                             text=True, encoding="utf-8", errors="replace").stdout
     files = sorted((ROOT / r) for r in listed.splitlines() if r.strip())
     on_disk = [p for p in ONEOFF.rglob("*") if p.is_file()]

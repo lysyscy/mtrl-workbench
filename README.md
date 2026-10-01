@@ -5,6 +5,7 @@
 > ⚠️ 本文件**是地图 ＋ 一页现状，不是口径** —— 口径一律回主人处读（《说明书》/ `PRD/` / 各 `MOD-*`）。
 > ⛔ **改文档前先读「§四 命名与格式」与「§七 怎么加一份新文档」**。
 > ⭐ **2026-09-22 文档架构审计落地**：新增 `work/` 五区（Agent 工作记录）与 `docs/`（工程基准档）—— 见 §二/§三/§七。
+> ⚠️ **2026-10-01（`TAIL-204`）**：`work/` 收成**四区**（`20-experiments` 撤 —— 从建区起一件没用过）、`docs/` 已并入 `ops/`。
 
 ## 〇、⭐ 现在到哪了 ＋ 待办（**唯一"给人看的"一页**）
 
@@ -103,8 +104,8 @@ D:\dev\mtrl-workbench\
 │   ├─ rules\前端设计守则\RULE.mdc    项目规则入口（唯一主人 = `ops/前端设计守则…`，⛔ 不复制条文）
 │   ├─ skills\docs-audit\            ⭐ 项目技能：**文档审计工作流**（分布 / 结构 / 内容 —— 见 §六 末）
 │   ├─ skills\*\references\          技能附页（分类与判读表 —— 技能自用，⛔ 不是口径）
-│   └─ teams\                        【本机 · 不入 git】团队协作临时区
 │                                  ⭐ 治理侧（`memory\` / `plans\` / `work\` / `backups\`）**见下面第二块** —— ⛔ 只列一次，别两处各写一遍
+│                                  ⚠️ 2026-10-01：空的 `teams\`（宿主侧团队临时区，从没用过）已删
 ├─ .env / .env.example            ↔ 配置（取值唯一出口 = app_settings.effective）
 ├─ ops\                           【工程侧底账 · ⭐ **工程文档唯一落点**】
 │   ├─ README.md                    实测结论索引（含"成立前提 / 何时必复做"）＋ 工程基准档索引
@@ -125,11 +126,10 @@ D:\dev\mtrl-workbench\
 │   │   └─ archive\                ③ 留痕：**全部归档件**
 │   │                                命名 `归档-<类型>-<主题>-YYYYMMDD.md`；子夹 `归档-逐日日志-至20260927\`
 │   │                                ⚠️ 「给用户看的一页」（原 `执行情况-主文档.md`）2026-10-01 已并入根 `README.md` **§〇**，正文归档
-│   ├─ work\                      【⭐ Agent 开发工作记录五区 · 宪法 = work\README.md】
+│   ├─ work\                      【⭐ Agent 开发工作记录**四区** · 宪法 = work\README.md】
 │   │   ├─ 00-scratch\            临时草稿（gitignore · TTL 14 天 · 到期必清）
 │   │   ├─ 10-designs\            方案设计：设计-<主题>-YYYYMMDD.md
-│   │   ├─ 20-experiments\        实验记录：实验-<主题>-YYYYMMDD.md（失败也记，文件名加 -失败）
-│   │   ├─ 30-troubleshooting\    问题排查：排查-<现象>-YYYYMMDD.md
+│   │   ├─ 30-troubleshooting\    问题排查 **＋ 实验/实测**：`排查-<现象>-YYYYMMDD.md` · `实验-<主题>-YYYYMMDD.md`（⭐ 2026-10-01 起，原 `20-experiments` 撤区）
 │   │   └─ 40-decisions\          决策记录：D<编号>-<主题>.md（D21 起；superseded 只加链不改写）
 │   ├─ backups\                   【⭐ 备份唯一落点】（gitignore）· **手工快照**留最近 5 份（`T20` 守）
 │   │                              另有 `交付面-*\` = **改交付面之前**的快照（**另一用途 ⇒ 不计入那 5 份上限**）
@@ -154,7 +154,7 @@ D:\dev\mtrl-workbench\
 | 实测结论 | `<主题>-实测结论.md` | `ops/` |
 | 索引 / 地图 | `README.md` | 该层根的目录 |
 | 方案设计 | `设计-<主题>-YYYYMMDD.md` | `.codebuddy/work/10-designs/` |
-| 实验记录 | `实验-<主题>-YYYYMMDD.md` | `.codebuddy/work/20-experiments/` |
+| 实验记录 | `实验-<主题>-YYYYMMDD.md` | `.codebuddy/work/30-troubleshooting/`（⭐ 2026-10-01 起 —— 原 `20-experiments` 撤区） |
 | 问题排查 | `排查-<现象>-YYYYMMDD.md` | `.codebuddy/work/30-troubleshooting/` |
 | 决策记录 | `D<编号>-<主题>.md`（D21 起） | `.codebuddy/work/40-decisions/` |
 | 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.codebuddy/work/00-scratch/`（TTL 14 天） |
@@ -207,7 +207,7 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 3. 是"每轮都要遵守/要跑的规则"吗？ ⇒ **`MEMORY.md`**（⚠️ 它会超预算 ⇒ 先看能不能化成一句 + 指针）。
 4. 是**工作记录五类之一**吗？（⭐ 2026-09-22 新增 —— 先看 `.codebuddy/work/README.md` 的落点总表）：
    - 构思/草稿 → `work/00-scratch/`（TTL 14 天）；
-   - 方案设计 → `work/10-designs/`；实验 → `work/20-experiments/`（＋脚本 `tools/probe/`）；
+   - 方案设计 → `work/10-designs/`；实验/实测 → `work/30-troubleshooting/`（`实验-` 前缀；＋脚本 `tools/probe/`）；
    - 排查/事故 → `work/30-troubleshooting/`；拍板的决策 → `work/40-decisions/D<编号>`；
 5. 是"实测出来的结论"吗？ ⇒ **`ops/<主题>-实测结论.md`** ＋ **在 `ops/README.md` 加一行索引**。
 6. 是"一次性的报告/建议"吗？ ⇒ **`artifacts/`** ＋ ⭐ **必须带「待办登记回执」**（每条写"已登记为
