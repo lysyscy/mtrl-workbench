@@ -11,9 +11,10 @@
 
 from __future__ import annotations
 
+import sys
 import time
 
-from audit_common import REPO_ROOT, YELLOW
+from audit_common import RED, REPO_ROOT, YELLOW
 
 #: scratch 件存活上限（天）—— 审计 §六-9「TTL 14 天」
 SCRATCH_TTL_DAYS = 14
@@ -198,3 +199,33 @@ __all__ = ["ARTIFACTS_MD_ALLOW", "BACKUP_KEEP", "ONEOFF_MAX_FILES", "ONEOFF_MAX_
            "SCRATCH_MAX_FILES", "SCRATCH_MAX_MB",
            "SCRATCH_TTL_DAYS", "WORK_HEADER_KEYS",
            "check_artifacts_and_headers", "check_retention", "check_scratch_ttl"]
+
+
+def main() -> int:
+    """**单跑本模块的检查**（`T14` / `T15` / `T20`）。
+
+    ⚠️⭐ 2026-10-01（`TAIL-204` 入场实测）：本件此前**只有被 `doc_audit` 当模块调用时才有用** ——
+    **单跑 0 行输出、`rc` 恒 0**，而入门口令（计划 `§13.6`）的闸门清单里**逐行列着它**
+    （`tools\\audit\\audit_work.py`）⇒ 那是**第五例僵尸闸门**（同族见 `T17` 立条说明：
+    `shell_verify` / `cover_gap` / `audit_drift` / `audit_meta`，全是"一直在跑、其实什么都没判"）。
+    ⇒ 补本入口（形态照 `audit_meta.main()`：**不另写一套判定**，只把已有检查跑一遍并打出来）。
+    """
+    print("=" * 78)
+    print(" audit_work 单跑 —— T14/T15/T20"
+          "（⚠️ 三条**都是黄档**：形式问题该被看见、但不挡合入）")
+    print("=" * 78)
+    # ⚠️ 先打抬头再跑检查 —— `check_retention` 会打「（信息）…」行，
+    #    抬头若放在它后面，那些信息行会**跑到抬头之上**（看着像别人的输出）。
+    raw = check_scratch_ttl() + check_artifacts_and_headers() + check_retention()
+    reds = [h for h in raw if h["level"] == RED]
+    yellows = [h for h in raw if h["level"] == YELLOW]
+    print(f"必须修 {len(reds)}（本件无红档；出现红即上面有检查降级） · 疑似 {len(yellows)}")
+    for h in reds + yellows:
+        print(f"  [{h['code']}] {'红' if h['level'] == RED else '黄'}"
+              f" {h['rel']}:{h['line']}  {h['what']}")
+        print(f"        {h['why']} → {h['fix']}")
+    return 1 if reds else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

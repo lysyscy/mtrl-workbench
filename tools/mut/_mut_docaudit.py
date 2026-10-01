@@ -25,6 +25,15 @@
    量测逼出来的：`MEMORY.md` 写「`T13`（行数预算 1700）」而真源已 1800，**没有任何尺子看得见**）。
    ⚠️ 它是**黄档** ⇒ 判据必须写成 `needle`（元组），⛔ 拿"变红"判会得到"永远没命中"（同 `M7`/`M8`）。
 
+⭐⭐ 2026-10-01 **第四批（`M16`/`M17`）**：
+- `M16` = `T5`**第二半**（`>600` 的件必须被阈值表点名 ⇒ 黄）；
+- `M17` = **`T17` 第二半**（`TAIL-204` 入场实测）：**「入门口令」里逐行列出的闸门命令也要"真有入口"** ——
+  实测口令列着 `tools\audit\audit_work.py`，而那件**从来没有 `__main__`** ⇒ 单跑 **0 行输出**、
+  `rc` 恒 0 = **第五例僵尸闸门**，只因口令不是 `foreach` 而**整批漏网** ⇒ 判据已扩进 `T17`。
+- ⚠️ 同一轮**换掉了 `M7` 的靶**：原靶 `mod01_projects/router.py` **自己长到了 401 行** ⇒ 那条判据
+  **基线里就已命中** ⇒ 本件开头"基线已含该判据"当场**拒跑整支** —— **静默烂掉的又一例**
+  （它不在任何闸门清单里 ⇒ 没人会发现；判据换靶见 `T5_TARGET` 上方注释）。
+
 做法：逐条把实现**改坏** → 确认 `doc_audit` **报出来了** → 全部复原（**MD5 逐字节校验**）。
 ⚠️ 一律走 bytes ＋ 按目标文件行尾归一（`.md` 可能是 CRLF，`write_text` 会静默换成 LF ⇒ MD5 假 BAD）。
 ⚠️ 2026-09-24：**跑一半被取消** ⇒ `finally` 不执行 ⇒ `M11` 的临时靶**留在盘上**（当天实测一次：
@@ -105,10 +114,18 @@ def _pad_lines(src: bytes, target: int) -> bytes:
 #
 #: `ops/*.md` ∈ `SCAN_GLOBS` ⇒ `ops/阈值表.md` 在 `T1/T2/T3` 的扫描面内（且它不是留痕档 ⇒ 命中即红）
 THRESHOLD = ROOT / "ops" / "阈值表.md"
-#: `T5` 靶：现值**正好 400 行**（`CODE_DIRS` 下最大的一件）⇒ 补 1 行即越线
-T5_TARGET = ROOT / "backend" / "app" / "mod01_projects" / "router.py"
+#: `T5` 靶：挑一件**离 400 线还有余量**的件 ⇒ 补到 401 行即越线。
+#:   ⚠️ 2026-10-01 **换靶**（`TAIL-204` 入场实测）：原靶 `mod01_projects/router.py` **自己长到了 401 行**
+#:      ⇒ 它的「401 行」那条黄**基线里就有** ⇒ 本件开头那句"基线已含该判据 ⇒ 判据无效，先重定靶"
+#:      **当场拒跑**。这正是本仓点名过的**变异件静默烂掉** —— 而它**不在任何闸门清单里**（`_run_rulers`
+#:      不含 `tools/mut/**`）⇒ 烂了多久没人会知道，直到有人（本轮）真去跑它。
+#:   ⇒ 换到 `mod05_flow/importer.py`（现值 **299** 行，留 ~100 行余量 ⇒ 不随日常改动再烂）。
+T5_TARGET = ROOT / "backend" / "app" / "mod05_flow" / "importer.py"
 #: `T17` 靶：随便挑**一把在闸门清单里的尺子** —— 把它的 `__main__` 段整段截掉
 T17_TARGET = ROOT / "tools" / "audit" / "cover_gap.py"
+#: ⭐ `T17` **第二半**的靶（2026-10-01 立）：「入门口令」里逐行列着的那件 —— 同款改坏（截掉入口）。
+#:    ⚠️ 本件 2026-10-01 之前**根本没有入口**（单跑 0 行输出）；补齐后才有得截 ⇒ 靶才成立。
+T17_HANDOFF_TARGET = ROOT / "tools" / "audit" / "audit_work.py"
 #: `T11` 靶：`artifacts/` 下**名字含「建议」**的 md 必须有「待办登记回执」⇒ 造一个**没有**的（用完删掉）
 T11_TMP = ROOT / "artifacts" / "_mut_建议_临时.md"
 
@@ -123,8 +140,8 @@ MUTS_APPEND: list[dict] = [
      "path": THRESHOLD, "frag": lambda src: _fit(_b("\n\n\n四金额字段说明\n\n\n"), src)},
     {"desc": "M6 `T3` 幽灵路径（仓里没有 `core/nope_ghost.py`）", "mode": "red", "needle": "",
      "path": THRESHOLD, "frag": lambda src: _fit(_b("\n\n\n参见 `backend/app/core/nope_ghost.py`。\n\n\n"), src)},
-    {"desc": "M7 `T5` 代码行数越线（400 → 401 ⇒ 须登记拆分计划）", "mode": "needle",
-     "needle": ("backend/app/mod01_projects/router.py", "401 行"),
+    {"desc": "M7 `T5` 代码行数越线（补到 401 ⇒ 须登记拆分计划）", "mode": "needle",
+     "needle": ("backend/app/mod05_flow/importer.py", "401 行"),
      "path": T5_TARGET, "lines": 401, "frag": lambda src: _pad_lines(src, 401)},
     {"desc": "M8 `T10` 文档超预算（执行情况 195 → 201 > 200）", "mode": "needle",
      "needle": ("执行情况-主文档.md", "201 行（预算 200"),
@@ -176,6 +193,13 @@ MUTS_RED2: list[dict] = [
      "needle": ("importer.py", "阈值表没点名本件"), "path": THRESHOLD,
      "old_new": (_b("`backend/app/mod06_proc/importer.py` **668**"),
                  _b("`backend/app/mod06_proc/importer_zzz.py` **668**")), "all": False},
+    # ⭐⭐ `T17` **第二半**（2026-10-01 立 · `TAIL-204` 入场实测）：把**「入门口令」里那件**的 `__main__`
+    #    整段截掉 ⇒ 「跑它 = 空转」必须被判红。⚠️ 与 `M9` 的差别只在**清单来源**：
+    #    `M9` 打的是 `§22.1` 的 `foreach` 那一半（按**件名**）；本条打的是 `§13.6` 入门口令那一半（按**路径**）。
+    #    ⚠️ 判据串取 `入门口令里的` ＋ 件名 —— 只有本半的报法带这个前缀（`M9` 那条不带）⇒ 不会互相当成对方。
+    {"desc": "M17 `T17` **入门口令**里的件没有入口（跑它 = 空转）", "mode": "red",
+     "also": ("[T17]", "入门口令里的", "audit_work"), "path": T17_HANDOFF_TARGET,
+     "truncate": 'if __name__ == "__main__":'},
 ]
 
 

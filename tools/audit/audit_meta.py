@@ -665,22 +665,50 @@ def _gate_blocks() -> list[list[str]]:
             for m in GATE_LIST_RE.finditer(text)]
 
 
+#: ⭐⭐ 2026-10-01（`TAIL-204` 入场实测）：`T17` 原先**只认 `foreach` 清单** ⇒ 漏掉了**第二份闸门清单** ——
+#:    计划 `§13.6` 的「**入门口令**」里**逐行写着**要跑的件（`tools\oneoff\_run_rulers.py` ·
+#:    `tools\audit\acc_report.py` · … · `tools\audit\audit_work.py`）。
+#:    实测：口令列着 `audit_work.py`，而那件**是个没有 `__main__` 的模块** ⇒ 单跑 **0 行输出**、
+#:    `rc` 恒 0 ⇒ **第五例僵尸闸门**，只因口令不是 `foreach` 而**整批漏网**（接手人会"以为它判过了"）。
+#:    ⇒ 本检查扩**第二半**：口令代码块里出现的 `tools/<dir>/<name>.py` 也逐条查「在位 ＋ 有入口」。
+HANDOFF_ANCHOR = "入门口令"
+HANDOFF_CMD_RE = re.compile(r"tools[\\/]([\w]+)[\\/]([\w_]+)\.py")
+
+
+def _handoff_commands() -> list[str]:
+    """→ 计划「入门口令」代码块里出现的 `tools/<dir>/<name>.py`（相对路径 · 去重排序）。"""
+    p = REPO_ROOT / PLAN_DOC_REL
+    if not p.exists():
+        return []
+    text = p.read_text(encoding="utf-8", errors="replace")
+    i = text.find(HANDOFF_ANCHOR)
+    if i < 0:
+        return []
+    s = text.find("```", i)
+    e = text.find("```", s + 3) if s >= 0 else -1
+    if s < 0 or e < 0:
+        return []
+    return sorted({f"tools/{d}/{n}.py" for d, n in HANDOFF_CMD_RE.findall(text[s:e])})
+
+
 def check_gate_liveness() -> list[dict]:
     """`T17` · **闸门清单里每一把尺子都必须真有入口**（红）。
 
-    ⭐ 判据：那件在 `tools/audit/` 里**在位** ＋ 有 `if __name__ == \\"__main__\\"` ＋ 件里有 `print(`
+    ⭐ 判据：那件**在位** ＋ 有 `if __name__ == \\"__main__\\"` ＋ 件里有 `print(`
     （⛔ 有入口却一句不打 ⇒ 人看不见它在判什么 —— 另一种空转）。
+    ⭐ 两份清单都查：① `§22.1` 的 `foreach`（按件名，落在 `tools/audit/`）② **`§13.6` 入门口令里的命令行**
+    （按相对路径 —— 见 `HANDOFF_ANCHOR` 上方注释）。
     """
     def hit(what: str, why: str, fix: str) -> dict:
         return {"code": "T17", "side": "仓", "rel": PLAN_DOC_REL, "line": 1,
                 "what": what, "why": why, "fix": fix, "level": RED, "text": ""}
 
     blocks = _gate_blocks()
-    if not blocks:
-        return [hit("找不到闸门清单（`§22.1` 的 `foreach`）",
-                    "清单是唯一出处 ⇒ 没了就没法判「哪些尺子在闸门里」",
-                    "恢复 `foreach ($t in @(…))` 那一段")]
     out: list[dict] = []
+    if not blocks:
+        out.append(hit("找不到闸门清单（`§22.1` 的 `foreach`）",
+                       "清单是唯一出处 ⇒ 没了就没法判「哪些尺子在闸门里」",
+                       "恢复 `foreach ($t in @(…))` 那一段"))
     for names in blocks:
         for n in names:
             f = REPO_ROOT / GATE_RULER_DIR / f"{n}.py"
@@ -705,6 +733,23 @@ def check_gate_liveness() -> list[dict]:
                 out.append(hit(f"`{n}.py` 有入口却**一句都不打**",
                                "看不见它在判什么 ⇒ 另一种空转",
                                "让它正常时也打一行结论（件名 ＋ 判定）"))
+    # ⭐ 第二半（2026-10-01）：**「入门口令」里逐行写的闸门命令**同样要"真有入口"
+    #    （它是一份**独立的**清单 —— 不在 `foreach` 里，故原先无人守）。
+    for rel in _handoff_commands():
+        f = REPO_ROOT / rel
+        if not f.exists():
+            out.append(hit(f"入门口令里的 `{rel}` **不存在**",
+                           "口令让人跑一个不存在的件 ⇒ 那一行是报错或被跳过（⛔ 不是「在判」）",
+                           "核对路径；件改名/搬家了就同批改口令"))
+            continue
+        hsrc = f.read_text(encoding="utf-8", errors="replace")
+        if GATE_GUARD_RE.search(hsrc) is None:
+            out.append(hit(f"入门口令里的 `{rel}` **没有 `__main__`** ⇒ 跑它是空转",
+                           "0 行输出、`rc` 恒 0 —— 而口令让人**每条都跑** ⇒ 人会以为它判过了"
+                           "（2026-10-01 `TAIL-204` 入场实测：口令列着 `audit_work.py`，"
+                           "而那件一直是个没有入口的模块 = 第五例僵尸闸门）",
+                           f"给 `{rel}` 补 `main()` ＋ `if __name__ == \"__main__\":`，"
+                           "或把该行从口令里去掉"))
     if len(blocks) > 1 and any(set(b) != set(blocks[0]) for b in blocks[1:]):
         out.append(hit("闸门清单在多处 `foreach` 里**不一致**",
                        "两处分叉 ⇒ 谁都不知道该跑哪一份（清单失去唯一出处）",

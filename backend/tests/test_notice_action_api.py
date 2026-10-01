@@ -19,6 +19,7 @@ from decimal import Decimal
 
 from app.mod01_projects.models import Project
 from app.mod03_notice.list_data import build_page_data
+from app.mod03_notice.list_view import NoticeFilters
 from app.mod03_notice.models import PaymentNotice
 from app.mod05_flow.models import PaymentFlow
 from tests.acc_plugin import acc
@@ -87,8 +88,13 @@ def test_API_未勾选恢复剔除被拦():
 @acc("ACC-PAY-STAT-001", "001-10")
 def test_API的统计列仍不含HTML():
     """页面才注入输入框；`/api/m03/notice-list` 的显示值必须是纯文本。"""
-    session = FakeWriteSession({PaymentNotice: [_notice(1)], Project: [], PaymentFlow: []})
-    data = build_page_data(session, sort_col="", sort_dir=0, flows_of=lambda nid: [])
+    # ⚠️ 2026-10-01：本用例原先**不传 `filters`** ⇒ 走缺省「当月」（`default_period("notice")`），
+    #    而桩件 `doc_date` 固定 `2026-09-05` ⇒ **10 月跑就被月份筛掉**（`rows` 空 ⇒ 下标越界）。
+    #    ⇒ 按桩件**自己的单据月**显式给筛选：断言一字未动，只是把"今天"这个不确定因素去掉。
+    n = _notice(1)
+    session = FakeWriteSession({PaymentNotice: [n], Project: [], PaymentFlow: []})
+    data = build_page_data(session, filters=NoticeFilters(period=str(n.doc_date)[:7]),
+                           sort_col="", sort_dir=0, flows_of=lambda nid: [])
     item = {k: v for k, v in data["rows"][0].items() if k != "_row"}
     assert item["stat_settle_text"] == "10,000.00"
     assert not any("<input" in str(v) for v in item.values())

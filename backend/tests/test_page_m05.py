@@ -18,7 +18,7 @@ from app.mod05_flow.service import (
     build_debt, build_flows, build_ledger, build_stats, order_project_ids,
 )
 from tests.acc_plugin import acc
-from tests.m05_helpers import FakeSession, dataset
+from tests.m05_helpers import TODAY, FakeSession, dataset
 
 PROJECT_ID = 11
 
@@ -36,7 +36,10 @@ def _ledger():
 
 
 def _stats():
-    return build_stats(FakeSession(dataset()))
+    # ⚠️ 2026-10-01：`today` **必须显式传**（桩里现成的 `TODAY`）；否则走 `date.today()` ⇒
+    #    默认"本季度 ＋ 本窗口"会随真实日历漂 —— 实测 10-01 当天（Q4 第一周）窗口里
+    #    **一条 9 月数据都没有** ⇒ 左栏空 ⇒ 假红（09-30 跑则正常）。
+    return build_stats(FakeSession(dataset()), today=TODAY)
 
 
 @acc()
