@@ -93,6 +93,13 @@ def main() -> int:
                 head = re.sub(r"\s+", " ", _TAG.sub("", it)).strip()
                 print(f"  [{k}] {n:>4} 字  {head[:_HEAD]}{'…' if len(head) > _HEAD else ''}")
     print(f"\n\u2500\u2500 全站合计：**{total_items} 条 · {total_chars} 字** \u2500\u2500")
+
+    # 三种"说明"载体各有多少（改判据/撤块时要有个**量出来的**下限 —— ⛔ 别拍脑袋）
+    all_text = "".join(t for _, t in _parts())
+    print(f"   页内默认展开 `<div class=\"tip`          = {len(re.findall(r'<div class=.tip', all_text))}")
+    print(f"   折叠块 `<details class=\"tip\"`            = {all_text.count('<details class=\"tip\"')}")
+    # ⚠️ 别用 f-string 写这一行：`CALIB({` 里的那个 `{` 会把 f-string 解析断（2026-10-01 当场踩到）
+    print("   CALIB 调用点                          = %d" % all_text.count("CALIB({"))
     return 0
 
 
