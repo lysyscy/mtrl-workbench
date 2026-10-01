@@ -232,8 +232,7 @@ const ACT={
    /* ⭐ 2026-09-27（守则 §2.2/§3.1）：兜底提示改用**用户语言** —— 原措辞里有内部台账编号与后端术语
       （"导出端点"），用户看不懂也不知道该干什么。⛔ 那条"不假装成功"的底线不变。 */
    if(!route) return toast(`⏳ <b>「${esc(tt)}」这一页还没有导出功能</b>：`
-     + `本页不单独导出 —— 请用它自己的那个入口（或换一页导出）`
-     + `<br><span class="mut sm">⛔ 这里不假装成功：没有真文件生成，就绝不写「已导出」</span>`,9000);
+     + `本页不单独导出 —— 请用它自己的那个入口（或换一页导出）`,9000);
    const rows=route.rows();
    if(!rows.length) return toast(`当前筛选下<b>一行都没有</b> —— 没什么可导的（先点「重置」看全部）`);
    let d=null;
@@ -588,7 +587,7 @@ const ACT={
        + `${warned.length?`<br><span style="color:var(--wn)">⚠️ <b>${warned.length}</b> 条人工值越界（已保留原值、挂提醒）：${warned.slice(0,3).map(esc).join(' · ')}${warned.length>3?' …':''}</span>`:''}`
        + `${gg?`<br>⚠️ <b>i8 已撤单 ${gg} 条</b> —— 其中 <b>${gFree.length}</b> 条<b>已退出全部统计</b>（保留可查、终态不可复原，切「分类 = 剔除」可见）`
             + `${gBlocked.length?`；<b>${gBlocked.length}</b> 条<b>有牵涉 · 已硬拦</b>（仍参与统计）：请先<b>撤销付款 / 解绑关联</b>，处理完它才退出统计`  :''}`
-            + `<br><span class="mut sm">不做「删除付款通知书」按钮 —— i8 行是源数据、永不删除，排除撤单靠的是「退出统计」（§4.2.7）</span>`:''}`
+            + `<br><span class="mut sm">i8 行是源数据、永不删除 —— 排除撤单靠的是「退出统计」（§4.2.7）</span>`:''}`
        + `<br><span class="mut sm">旁路值（分类 / 集采实际供应商 / 调整单）不被覆盖</span>`,7200); }
    toast(`已按 <b>${m}</b> 抓取 ${NM}（${apiCode}）：入参 = <span class="fc">核算年月 ${m}</span> → 单据日期 ${from} ~ ${to}（闭区间）＋ <b>项目（phid 筛）</b><br>该月源数据已全量刷新；<b>调整单 / 手工值不被覆盖</b>`,5600); },
   /* 批量改分类（重做）：勾选 → 点一次「→ 辅材 / → 机械 / → 集采」即完成，不再走弹窗
@@ -1930,7 +1929,7 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
    const fn=await dlExport(url,{name:'总欠款.xlsx'});
    if(!fn) return;
    return toast(`已导出 <b>${esc(fn)}</b>：每项目一行（${DEBTPICK.length?`按所选 <b>${DEBTPICK.length}</b> 个项目、行序 = 你设的顺序`:'全部项目、按项目名排序'}）· C 集采 / D 辅材 / E 机械`
-     + `<br><span class="sm mut">⚠️「机械」未含机械费结算（该来源未接通）—— 表尾也写了这一句</span>`, 11000);
+     + `<br><span class="sm mut">⚠️「机械」未含机械费结算（该来源未接通）</span>`, 11000);
  },
  /* —— 「导出逐月欠款台账」展开区（2026-09-13 用户口径：一个入口 + 多选项目 + 每项目一簿三表）—— */
  ledExpToggle:()=>{

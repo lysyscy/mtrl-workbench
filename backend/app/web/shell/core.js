@@ -674,7 +674,7 @@ async function ivFetchBackend(month) {
       await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
       return fetchResultModal(`抓取没能完成 · 收发结存`,
         `已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
-        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`);
+        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel</span>`);
     }
     await reloadInv();
     await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
@@ -821,7 +821,7 @@ async function whFetchBackend(month) {
       await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
       return fetchResultModal(`抓取没能完成 · 库存单据明细`,
         `已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
-        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel（解析走同一条管线）</span>`);
+        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel</span>`);
     }
     await reloadM07();
     await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
@@ -844,7 +844,7 @@ async function whFetchBackend(month) {
     }
     if (rc.degraded && rc.message) msg += `<br>⚠️ ${esc(rc.message)}`;
     fetchResultModal(`抓取结果 · 收发结存`,
-      msg + `<br><span class="mut sm">⚠️ 解析条数与落库条数不一致时先怀疑幂等范围（见 ops 实测结论）</span>`);
+      msg);
   } catch (e) {
     await reloadM07();
     await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */

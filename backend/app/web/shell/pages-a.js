@@ -270,7 +270,7 @@ const ledExpStrip=()=>`${FBAR({cls:'strip',body:`
            （test_acc_x_exp 按"渲染面"扫那条，实测踩到）·注释别跑出注释边界。 -->
       <div style="flex-basis:100%;display:flex;align-items:center;gap:calc(6px * var(--fscale));flex-wrap:wrap;border-top:1px solid var(--bd);padding-top:calc(8px * var(--fscale))">
         <span class="pill" style="margin:0" title="总欠款汇总 = 每个项目一行：A 序号 · B 项目展示名 · C 集采 · D 辅材 · E 机械（实时口径）">② 总欠款汇总</span>
-        <button class="btn sm${DEBTPICK.length?' pri':' gost'}" data-act="debtPick" title="「导出总欠款」包含哪些项目、按什么顺序（行序 = 你在这里排的）；空 = 全部项目。⚠️ 与上面①那个项目不是同一个东西（那个是导出台账用的）">选择项目（${DEBTPICK.length?`已选 ${DEBTPICK.length} 项`:'全部'}）</button>
+        <button class="btn sm${DEBTPICK.length?' pri':' gost'}" data-act="debtPick" title="「导出总欠款」包含哪些项目、按什么顺序；空 = 全部项目。⚠️ 与上面①那个项目不是同一个东西（那个是导出台账用的）">选择项目（${DEBTPICK.length?`已选 ${DEBTPICK.length} 项`:'全部'}）</button>
         <button class="btn sm" data-act="debtExpAll" title="每个项目一行 · 行序 = 左边「选择项目」排的（空 = 全部项目）">导出总欠款</button>
       </div>
     `})}`;

@@ -98,7 +98,7 @@ const tmPanel=(id,cfg)=>{
     body=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:calc(4px * var(--fscale))">${ys.map(k=>D('mpPick',{id:id,scope:sc,val:String(k),m:'年'},String(k)===v?'pri':'',String(k))).join('')}</div>`;
   }else if(md==='季度'){
     body=yhead+grid([1,2,3,4].map(q=>D('mpPick',{id:id,scope:sc,val:y+'Q'+q,m:'季度'},(y+'Q'+q)===v?'pri':'','Q'+q)).join(''))
-      +`<div class="mut sm" style="margin-top:calc(6px * var(--fscale))">Q1 = 1–3 月 · Q2 = 4–6 月 · Q3 = 7–9 月 · Q4 = 10–12 月（自然季度）</div>`;
+      +`<div class="mut sm" style="margin-top:calc(6px * var(--fscale))">Q1–Q4 为自然季度</div>`;
   }else if(md==='周'){
     const wq=/^\d{4}Q[1-4]$/.test(mp.wq)?mp.wq:(st.mode==='周'?tmQof(st.mon):tmQNow());
     const qy=+wq.slice(0,4), qq=+wq.slice(5);

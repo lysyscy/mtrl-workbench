@@ -113,6 +113,11 @@ _JSX = re.compile(r"\$\{[\s\S]{0,600}?\}")
 _DETAILS = re.compile(r"<details[\s\S]*?</details>")
 
 
+def _tip_len(s: str) -> int:
+    """**渲染后**的估算字数（与真机 ㉖ 逐字同口径）：剥 `${…}` · 剥折叠区 · 剥标签 · 剥 `**` · 空白不计。"""
+    return len(re.sub(r"\s+", "", _TAG.sub("", _DETAILS.sub("", _JSX.sub("…", s))).replace("**", "")))
+
+
 def _tip_blocks() -> list[tuple[str, int, int, str]]:
     """壳里**每一个** `class="tip"` 块 ⇒ `(件名, 行号, 估算字数, 开头 40 字)`。
 
@@ -254,4 +259,79 @@ def test_用户可见串里不许出现工程代号():
         + "\n  ".join(bad)
         + "\n⇒ 直接删掉代号（⛔ 别改判据）；`§节号`（《说明书》节号，2026-09-27 裁定可留）与"
           "侧栏的 `MOD-xx` 编号**不在此列**。"
+    )
+
+
+#: ⭐ 第二轮（2026-10-01 · 审计件 §四 批 9）：**悬停文案也要有上限**。
+#: ⚠️ 上限**沿用 ㉖ 的同一个数**（200）⇒ ⛔ 不另立新阈值（守则 §3.4 / §5.9）。
+#: 为什么单列：悬停文案是**没有机器眼**的那一面里最大的一块（实测 151 处 · 约 5,108 字），
+#:   而它**照样是给用户看的**（鼠标放上去就读）⇒ 不守 = 迟早长回去（同"弹窗没有机器眼"那一族）。
+_TITLE_ATTR = re.compile(r'title="([^"$]{20,})"')
+_TITLE_JS = re.compile(r"\.title\s*=\s*'([^'$]{20,})'")
+
+
+@acc()
+def test_悬停文案也不超长():
+    """⭐ 第二轮（2026-10-01）：**悬停文案（`title`）的机器眼**（守则 §3.4 / §5.9）。
+
+    ⚠️ 为什么补它：第一轮守住了**说明块**（页内 ＋ 弹窗）与**域自报文案**，但**悬停文案没人守** ——
+       而它是"没有机器眼的面"里最大的一块（实测 **151 处 · 约 5,108 字**，最长 102 字）。
+       它与说明块**同一条口径**：默认不是"展开"的，但鼠标一放就读 ⇒ 太长同样是"同屏塞满"。
+    ⚠️ 口径与 ㉖ **逐字一致**：剥 `${…}` 与标签、剥 `**`、空白不计，上限 **200**（⛔ 不另立新数）。
+    ⚠️ **能证伪**：把任一 `title="…"` 写成 220 字 ⇒ 本件必红（自证见 `tools/oneoff/_tail209_mark_proof.py`）。
+    """
+    from tools.audit.shell_source import parts_text, strip_comments
+
+    over: list[str] = []
+    for name, text in parts_text():
+        for i, line in enumerate(strip_comments(text, html=name.endswith(".html")).splitlines(), 1):
+            for m in _TITLE_ATTR.finditer(line):
+                txt = _tip_len(m.group(1))
+                if txt > TIP_LIMIT:
+                    over.append(f"{name}:{i}  {txt} 字  {m.group(1)[:50]}…")
+            for m in _TITLE_JS.finditer(line):
+                txt = _tip_len(m.group(1))
+                if txt > TIP_LIMIT:
+                    over.append(f"{name}:{i}  {txt} 字  {m.group(1)[:50]}…")
+    assert not over, (
+        f"这些**悬停文案**超过 {TIP_LIMIT} 字（剥 `${{…}}` 与标签后的估算，与 ㉖ 同一条线）：\n  "
+        + "\n  ".join(over))
+
+
+#: ⭐ 第二轮（2026-10-01 · 批 9）：**工程侧的名字不许上屏**。
+#: 形态（都是"只可能出现在我们自己的文件里"的东西）：
+_DOC_SHAPES: tuple[tuple[str, str], ...] = (
+    (r"ops[/\\]", "工程侧底账目录（`ops/…` / `ops\\…`）"),
+    (r"见\s*ops", "同上（「见 ops …」这种写法）"),
+    (r"\.codebuddy", "治理层目录名"),
+    (r"artifacts[/\\]", "产物目录名"),
+    (r"tools[/\\]", "工具目录名"),
+    (r"\.md\b", "内部文档扩展名"),
+)
+
+
+@acc()
+def test_用户可见串里不许出现工程侧文件名():
+    """⭐ 第二轮（2026-10-01 · 批 9）：**内部的目录名 / 文档名不许上屏**（守则 §3.1 技术实现细节不上屏）。
+
+    **为什么**：真例（2026-10-01 审计挖出）—— 抓取回执里曾写着
+    「先怀疑**幂等**范围（**见 ops 实测结论**）」：`ops/` 是**我们工程侧底账的目录名**、`幂等`是开发术语，
+    而整句是**写给排障者的** ⇒ 用户拿到它**不知道该干什么**（守则 §3.7 要求"人话 ＋ 下一步"，它两条都不满足）。
+    ⚠️ 靶是**几个只可能属于我们自己的名字**（`ops/` · `.codebuddy` · `artifacts/` · `tools/` · `.md`）⇒
+       剥注释后**实测 0 假阳性**（壳里它们只活在注释里）。
+    ⚠️ **能证伪**：往任一壳件的字符串里写 `见 ops/README.md` ⇒ 本件必红。
+    """
+    from tools.audit.shell_source import parts_text, strip_comments
+
+    bad: list[str] = []
+    for name, text in parts_text():
+        clean = strip_comments(text, html=name.endswith(".html"))
+        for i, line in enumerate(clean.splitlines(), 1):
+            for pat, why in _DOC_SHAPES:
+                if re.search(pat, line):
+                    bad.append(f"{name}:{i}  [{why}]  {line.strip()[:100]}")
+                    break
+    assert not bad, (
+        "壳的用户可见文字里出现了**工程侧的文件 / 目录名**（守则 §3.1）：\n  " + "\n  ".join(bad)
+        + "\n⇒ 删掉它（要解释就写用户能懂的话 ＋ 下一步，⛔ 别把我们的文件名甩上去）。"
     )

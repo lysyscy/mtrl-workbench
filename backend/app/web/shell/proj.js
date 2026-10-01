@@ -519,7 +519,7 @@ const ntHasLink=n=>!!jcRefOf(n.id);
 const ntActCell=n=>{
   const L=[];
   if(n.manual) L.push(`<span class="tag t-in">手动</span> <button class="btn sm" data-act="ntEdit" data-id="${n.id}" title="编辑这一行手动新增的通知书（一切信息可改；「统计结算金额」恒 0 只读）">编辑</button> <button class="btn sm dg" data-act="ntDel" data-id="${n.id}" title="删除这一行手动新增的通知书（删除前列影响范围）">删除</button>`);
-  if(ntHasFlow(n)) L.push(`<button class="btn sm dg" data-act="ntRevoke" data-id="${n.id}" title="撤销这笔已登记的付款流水（入口就近 —— 不必再跳到「付款流水与欠款统计」页）。撤销必须填原因并留痕；撤销后「已付金额」回退、状态按「已付金额 ≥ 审批金额」重判（§4.4.5）">撤销付款</button>`);
+  if(ntHasFlow(n)) L.push(`<button class="btn sm dg" data-act="ntRevoke" data-id="${n.id}" title="撤销这笔已登记的付款流水。撤销必须填原因并留痕；撤销后「已付金额」回退、状态按「已付金额 ≥ 审批金额」重判（§4.4.5）">撤销付款</button>`);
   if(ntHasLink(n)) L.push(`<button class="btn sm" data-act="ntTrace" data-id="${n.id}" title="查看这行通知书的关联与去向：集采合同关联、已登记付款流水（只读，不改任何数据）">查看关联</button>`);
   return L.length?L.join(' '):'<span class="mut">—</span>'; };
 

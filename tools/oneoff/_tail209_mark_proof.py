@@ -1,16 +1,17 @@
-"""`TAIL-209` 余项 ② 自证：**壳源码扫查类的两条判据**都"真会拦、且不误伤注释"。
+"""壳源码扫查类判据的自证（`TAIL-209` ＋ 第二轮）：**每条都要"写进去必红 ＋ 注释里不算"**。
 
-被证的两条（都在 `backend/tests/test_ux_text.py`）：
-  `T1` = `test_壳源码里不许有双层星号_加粗标记`（`**` 加粗标记不许原样上屏）
-  `T2` = `test_用户可见串里不许出现工程代号`（`（R8）` / `DEV-J-01` / `链路 A` … 不许上屏）
+被证的四条（都在 `backend/tests/test_ux_text.py`）：
+  `T1` = `test_壳源码里不许有双层星号_加粗标记`（`**` 不许原样上屏）
+  `T2` = `test_用户可见串里不许出现工程代号`（`（R8）` / `DEV-J-01` / `链路 A` …）
+  `T3` = `test_悬停文案也不超长`（`title="…"` > 200 字）
+  `T4` = `test_用户可见串里不许出现工程侧文件名`（`ops/…` / `.codebuddy` / `.md` …）
 
-证 5 个点（缺一面这个自证就没意义）：
-  ① 基线：两条都绿；
-  ② 往壳件**字符串**里塞 `**x**` ⇒ `T1` **必须红**；
-  ③ 往壳件**字符串**里塞 `（R99）` ⇒ `T2` **必须红**；
-  ④ 往壳件**注释**里塞 `**…**` 与 `（R99）` ⇒ 两条**必须仍绿**（注释不是上屏文字 ——
-     壳里 `DEV-*` / `链路 X` / `决策 N` / 大量 `**` **只活在注释里**，这是"不误伤"的关键一条）；
-  ⑤ 逐字节还原（MD5 比对）。
+怎么证（每个 case 都注入到**同一个壳件**、跑完**逐字节还原**）：
+  ① 基线：四条都绿；
+  ② 逐条往**字符串**里塞该条要拦的东西 ⇒ 那条**必须红**；
+  ③ 把四样东西一起塞进**一条块注释** ⇒ 四条**必须仍绿**（注释不是上屏文字 ——
+     壳里 `DEV-*` / `链路 X` / `ops/…` / 大量 `**` **绝大多数只活在注释里**，这是"不误伤"的关键一条）；
+  ④ 逐字节还原（MD5 比对）。
 ⚠️ 别拿"加了一点点没红"当证据（2026-10-01 踩过：自证加长没顶破阈值 ⇒ 假通过）。
 ⚠️ 本件被 §13.6 的**入门口令**点名 ⇒ 必须有 `main()` ＋ `__main__`（`T17` 守）。
 """
@@ -24,11 +25,24 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 W = ROOT / "backend" / "app" / "web"
-CODE_TARGET = W / "shell" / "legacy.js"
-CMT_TARGET = W / "shell" / "api.js"
-ANCHOR = "<b>整批回滚后重导</b>"
-T1 = "tests/test_ux_text.py::test_壳源码里不许有双层星号_加粗标记"
-T2 = "tests/test_ux_text.py::test_用户可见串里不许出现工程代号"
+TARGET = W / "shell" / "legacy.js"
+TEST = "tests/test_ux_text.py::"
+
+T1 = TEST + "test_壳源码里不许有双层星号_加粗标记"
+T2 = TEST + "test_用户可见串里不许出现工程代号"
+T3 = TEST + "test_悬停文案也不超长"
+T4 = TEST + "test_用户可见串里不许出现工程侧文件名"
+
+#: 往**字符串**里塞的东西（每条对应一条判据）
+INJECT: tuple[tuple[str, str], ...] = (
+    (T1, 'var _probe1 = "**x**";'),
+    (T2, 'var _probe2 = "（R99）";'),
+    (T3, 'var _probe3 = 0; title="' + "测" * 220 + '";'),
+    (T4, 'var _probe4 = "见 ops/README.md";'),
+)
+#: 四样东西**一起塞进一条块注释**（四条都该绿）
+IN_COMMENT = ("\n/* var _c1 = \"**x**\"; var _c2 = \"（R99）\"; "
+              + 'title="' + "测" * 220 + '"; var _c4 = "见 ops/README.md"; */\n')
 
 _ENV = {"PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
 
@@ -38,49 +52,38 @@ def _rc(test: str) -> int:
            "-p", "no:cacheprovider", "--tb=no", "--no-header"]
     r = subprocess.run(run, cwd=ROOT / "backend", env={**os.environ, **_ENV},
                        capture_output=True, text=True, encoding="utf-8")
-    print(f"   {test.rsplit('::', 1)[-1][:28]:30s} rc={r.returncode}")
     return r.returncode
 
 
 def main() -> int:
-    code_orig, cmt_orig = CODE_TARGET.read_bytes(), CMT_TARGET.read_bytes()
-    h_code, h_cmt = hashlib.md5(code_orig).hexdigest(), hashlib.md5(cmt_orig).hexdigest()
-    code_txt = code_orig.decode("utf-8")
-    if code_txt.count(ANCHOR) != 1:
-        print(f"⛔ 锚点不唯一（{code_txt.count(ANCHOR)} 处）—— 自证要重定靶")
-        return 1
-
+    orig = TARGET.read_bytes()
+    h0 = hashlib.md5(orig).hexdigest()
+    text = orig.decode("utf-8")
     ok = False
     try:
-        print("① 基线（未改动）—— 两条都必须绿")
-        base = _rc(T1) == 0 and _rc(T2) == 0
+        print("① 基线（未改动）—— 四条都必须绿")
+        base = all(_rc(t) == 0 for t, _ in INJECT)
+        print(f"   基线 ⇒ {'✅ 全绿' if base else '❌ 有红的'}")
 
-        print("② 往**字符串**里塞 `**x**` ⇒ T1 必须红")
-        CODE_TARGET.write_text(code_txt.replace(ANCHOR, f"**x**{ANCHOR}", 1),
-                               encoding="utf-8", newline="")
-        t1_red = _rc(T1) != 0
-        CODE_TARGET.write_bytes(code_orig)
+        reds: list[bool] = []
+        for i, (test, frag) in enumerate(INJECT, 1):
+            name = test.split("::")[-1][:30]
+            TARGET.write_text(text + f"\n{frag}\n", encoding="utf-8", newline="")
+            rc = _rc(test)
+            reds.append(rc != 0)
+            print(f"   {i}) 塞进【{frag[:26]}…】⇒ {name} rc={rc}（必须非 0）")
+        TARGET.write_bytes(orig)
 
-        print("③ 往**字符串**里塞 `（R99）` ⇒ T2 必须红")
-        CODE_TARGET.write_text(code_txt.replace(ANCHOR, f"（R99）{ANCHOR}", 1),
-                               encoding="utf-8", newline="")
-        t2_red = _rc(T2) != 0
-        CODE_TARGET.write_bytes(code_orig)
-
-        print("④ 往**注释**里塞 `**…**` 与 `（R99）` ⇒ 两条必须仍绿（注释不是上屏文字）")
-        CMT_TARGET.write_text(cmt_orig.decode("utf-8")
-                              + "\n/* **自证用：注释里的星号与（R99）都不该被算** */\n",
-                              encoding="utf-8", newline="")
-        cmt_ok = _rc(T1) == 0 and _rc(T2) == 0
-        ok = base and t1_red and t2_red and cmt_ok
+        TARGET.write_text(text + IN_COMMENT, encoding="utf-8", newline="")
+        greens = [(_rc(t) == 0) for t, _ in INJECT]
+        print(f"③ 四样一起塞进【块注释】⇒ 四条 rc={'全 0 ✅' if all(greens) else '有非 0 ❌'}")
+        ok = base and all(reds) and all(greens)
     finally:
-        CODE_TARGET.write_bytes(code_orig)
-        CMT_TARGET.write_bytes(cmt_orig)
+        TARGET.write_bytes(orig)
 
-    clean = (hashlib.md5(CODE_TARGET.read_bytes()).hexdigest() == h_code
-             and hashlib.md5(CMT_TARGET.read_bytes()).hexdigest() == h_cmt)
-    print(f"⑤ 逐字节还原：{'✅ 一致' if clean else '❌ 不一致！'}")
-    print("结论：" + ("✅ 两条判据都有区分力（写进去必红）＋ 不误伤注释 ＋ 还原干净"
+    clean = hashlib.md5(TARGET.read_bytes()).hexdigest() == h0
+    print(f"④ 逐字节还原：{'✅ 一致' if clean else '❌ 不一致！'}")
+    print("结论：" + ("✅ 四条判据都有区分力（写进去必红）＋ 不误伤注释 ＋ 还原干净"
                      if ok and clean else "❌ 见上面"))
     return 0 if ok and clean else 1
 

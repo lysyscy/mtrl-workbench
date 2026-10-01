@@ -557,7 +557,7 @@ V.m03=()=>{
       <td class="sm">${esc(n.entry)}</td>
       <td class="num">${n.manual
         ? `<input class="inp num" style="width:96px" data-act="editApprove" data-id="${n.id}" value="${n.approve.toFixed(2)}" title="手动新增行：审批金额可直接手改（i8 抓取行仍只读）；全站口径「统计两金额 ≤ 审批金额」仍成立">`
-        : `<span class="mut">${M(n.approve)}</span>`}${impHasWarn(n)?` <span class="tag t-wn" title="再次导入时：i8 把审批金额改小了，这行有已被人工手改过的统计金额、现已越界 —— 系统保留了人工值（不自动改写业务判断），请你定夺">导入提醒</span>`:''}${ntVoidJoint(n)?` <span class="tag t-dg" title="该单据已在 i8 侧被删除（撤单），且仍挂着付款流水 / 集采关联 —— 按 §4.2.7，有牵涉时不许静默退出统计：请先撤销付款 / 解绑关联，处理完它才退出统计。">⚠ 撤单有牵涉</span>`:''}${ntVoid(n)&&!ntVoidJoint(n)?` <span class="tag t-wn" title="该单据已在 i8 侧被删除（撤单）—— 标记保留、可查，但已退出全部统计；单据号必变 ⇒ 此为终态，不做自动复原（§4.2.7）。">i8 已撤单</span>`:''}</td>
+        : `<span class="mut">${M(n.approve)}</span>`}${impHasWarn(n)?` <span class="tag t-wn" title="再次导入时：i8 把审批金额改小了，这行有已被人工手改过的统计金额、现已越界 —— 系统保留了人工值 —— 请你定夺">导入提醒</span>`:''}${ntVoidJoint(n)?` <span class="tag t-dg" title="该单据已在 i8 侧被删除（撤单），且仍挂着付款流水 / 集采关联 —— 有牵涉时不许静默退出统计：请先撤销付款 / 解绑关联，处理完它才退出统计。">⚠ 撤单有牵涉</span>`:''}${ntVoid(n)&&!ntVoidJoint(n)?` <span class="tag t-wn" title="该单据已在 i8 侧被删除（撤单）—— 标记保留、可查，但已退出全部统计；单据号必变 ⇒ 此为终态，不做自动复原（§4.2.7）。">i8 已撤单</span>`:''}</td>
       <td class="num"><input class="inp num ${payOver(n)?'ed':''}" style="width:96px" data-act="editss" data-id="${n.id}" data-k="pay" value="${payEff(n).toFixed(2)}" title="${payOver(n)?'本次会话已临时覆盖（刷新页面后恢复默认）；i8 原值 '+M(n.pay)+' 未改动':'自动 = 审批金额 '+M(n.approve)+' − 已付金额 '+M(p)+'（可手改，仅本次会话生效）'}" ${n.excl||ntVoid(n)?'disabled':''}></td>
       <td class="num">${p?M(p):'<span class="mut">0.00</span>'}${n.over?` <span class="tag t-dg" title="超付（§4.4.6）：已付金额 ${M(p)} 大于审批金额 ${M(n.approve)} —— NC 侧确实付了，是既成事实 ⇒ 流水照记、统计照实不封顶；系统不改写、不冲销，只在此提醒。⚠️ 与「付款动作禁止超付」（§4.4.4）不冲突：那条约束的是动作。">超付</span>`:""}</td>
       <td class="num">${n.manual
@@ -629,7 +629,7 @@ V.m03=()=>{
       <div class="fi"><label>审批状态</label><select class="inp" id="fAstat" data-act="filterNt">${enumOpts('astat',fNt.astat,1)}</select></div>
       <div class="fi"><label>付款状态</label><select class="inp" id="fStat" data-act="filterNt">${enumOpts('payState',fNt.stat,1)}</select></div>
       <button class="btn" data-act="filterReset">重置</button>
-      <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(fNt.month)} 有效 ${NO.filter(n=>ntLive(n)&&inM(n)).length} 条 ｜ 剔除 ${NO.filter(n=>n.excl&&inM(n)).length} 条 ｜ i8 已撤单 ${NO.filter(n=>ntVoid(n)&&inM(n)).length} 条${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length?` ｜ <span class="tag t-dg" title="这些单据在 i8 侧被删了，但仍挂着付款流水 / 集采关联 —— 按 §4.2.7「有牵涉不许静默退出统计」，它们仍参与统计。请先撤销付款 / 解绑关联，处理完它才退出统计；切「分类 = 剔除」可见。">⚠ 其中 ${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length} 条有牵涉</span>`:''}（切「分类 = 剔除」查看）</span>
+      <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(fNt.month)} 有效 ${NO.filter(n=>ntLive(n)&&inM(n)).length} 条 ｜ 剔除 ${NO.filter(n=>n.excl&&inM(n)).length} 条 ｜ i8 已撤单 ${NO.filter(n=>ntVoid(n)&&inM(n)).length} 条${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length?` ｜ <span class="tag t-dg" title="这些单据在 i8 侧被删了，但仍挂着付款流水 / 集采关联 —— 有牵涉时不许静默退出统计，它们仍参与统计。请先撤销付款 / 解绑关联，处理完它才退出统计；切「分类 = 剔除」可见。">⚠ 其中 ${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length} 条有牵涉</span>`:''}（切「分类 = 剔除」查看）</span>
     `})}
     <div class="tw">${TBL({head:NT_THEAD,key:'m03:notices',rows:[tb]})}</div>
   </div>`;
@@ -759,7 +759,7 @@ V.m05=()=>{
         <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 自期初起累计（各月 结算 − 付款，含期初占位行）—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含期初）</span><b class="fc">${MONEY(cur)}</b>
         ${mLast?`<span class="mut sm" title="最近一月（${esc(mLast.ym)}）：其他支出金额 − 付款 —— 当月新增，不是累计">· ${esc(mLast.ym)} 新增</span><b class="fc" style="color:var(--${N2(add)>0?'dg':'mut'})">${MONEY(add)}</b>`:''}
         <span style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale));flex-wrap:wrap">
-          <button class="btn sm" data-act="addLg" data-sc="${sc}" title="在本栏表格上方展开「期初占位行」录入区（不再弹窗）—— 期初占位行 = 台账第 1 行（按其「分类」取）；它的金额已按分类并入上方「${sc}」欠款">＋ 录入${sc}期初</button>
+          <button class="btn sm" data-act="addLg" data-sc="${sc}" title="在本栏表格上方展开「期初占位行」录入区 —— 期初占位行 = 台账第 1 行（按其「分类」取）；它的金额已按分类并入上方「${sc}」欠款">＋ 录入${sc}期初</button>
         </span></div>
       ${lgOn&&lgCat===sc?lgStrip():''}
       <div class="tw">${TBL({head:LED_THEAD,key:'m05:ledger-'+sc,
@@ -1223,7 +1223,7 @@ V.m08=()=>{
   <div class="card" style="margin-bottom:0">
     <h4>库存单据明细总表<span class="sp">
       <button class="btn" data-act="fetchOne" data-t="库存单据明细表">抓取 i8</button>
-      <button class="btn" data-act="expPivot" title="额外导出一份带「数据透视表」的工作簿：明细（列随 i8 源文件）+「过程资料」透视 +「安全文明施工费」透视；这是单独的一条通道，不影响主表那份「导出 Excel」">导出（含数据透视表）</button>
+      <button class="btn" data-act="expPivot" title="额外导出一份带「数据透视表」的工作簿：明细（列随 i8 源文件）+「过程资料」透视 +「安全文明施工费」透视；不影响主表那份「导出 Excel」">导出（含数据透视表）</button>
       <button class="btn pri" data-act="exp" data-t="库存单据明细总表" title="这一份（朴素）导出还没有落点 —— 点了会如实说明（⛔ 不假装成功）；含透视那份有自己的按钮">导出 Excel</button></span></h4>
     ${FBAR({body:`
       <div class="fi"><label>核算年月</label>${tmBtn('ivMonth',{scope:'iv',val:fIvYm,label:tmLabel(fIvYm),modes:['月','跨月','年','全部']})}</div>
@@ -1413,7 +1413,7 @@ V.m11=()=>{
   <div class="card" style="margin-bottom:0">
     <h4>集采台账 · 合同主表<span class="sp">
       <button class="btn" data-act="jcFetch" title="从 i8 抓采购合同 —— 会登录 i8、需二次确认；⚠️ 可能顶掉该账号其它在线会话（同事正在用 i8 时先择时）">抓取采购合同信息</button>
-      <button class="btn" data-act="jcAdd" title="在表格上方展开「手工新增合同」录入区（不再弹窗）—— 主表 19 字段里真正要录的 8 项在这里填；发票 / 付款金额建档后走各列「子表」">＋ 手工新增合同</button>
+      <button class="btn" data-act="jcAdd" title="在表格上方展开「手工新增合同」录入区 —— 主表 19 字段里真正要录的 8 项在这里填；发票 / 付款金额建档后走各列「子表」">＋ 手工新增合同</button>
       <button class="btn" data-act="jcBatchTag" data-v="纳入台账" ${jcPick.size?'':'disabled'} title="${jcPick.size?'把勾选行批量标记为「纳入台账」':'请先勾选要标记的行'}">批量纳入台账</button>
       <button class="btn" data-act="jcBatchTag" data-v="不纳入" ${jcPick.size?'':'disabled'} title="${jcPick.size?'把勾选行批量标记为「不纳入」':'请先勾选要标记的行'}">批量不纳入</button>
       <button class="btn pri" data-act="exp" data-t="集采台账" title="导出当前屏幕上这些行（含筛选）为 Excel —— 列是全列（隐藏列也会导出）">导出 Excel</button></span></h4>
@@ -1486,7 +1486,7 @@ V.m13=()=>`
   <div class="grid3">
     <div class="card" style="margin:0"><h4>导出 Excel —— 在你要导的那一页上</h4><div class="bd">
       <div class="sm" style="line-height:1.9">哪些页有：<b>每个列表页都有</b><br>导的是什么：<b>当前筛选下看到的那几行</b><br>文件名：日期 + 页名</div>
-      <div class="hr"></div><div class="mut sm">本页没有自己的数据，所以这里不放按钮 —— 请到具体那一页（如「付款流水」「集采台账」「项目档案」）点右上角的「导出 Excel」。</div></div></div>
+      <div class="hr"></div><div class="mut sm">本页没有自己的数据 —— 请到具体那一页（如「付款流水」「集采台账」「项目档案」）点右上角的「导出 Excel」。</div></div></div>
     <div class="card" style="margin:0"><h4>删除数据 —— 在每一行上</h4><div class="bd">
       <div class="sm" style="line-height:1.9">入口：<b>每条数据行上的「删除」</b><br>确认框：<b>先列影响范围</b>（关联数据、统计影响）再执行<br>删完：核心单据<b>留痕可查、统计自动重算</b></div>
       <div class="hr"></div><div class="tip wn" style="margin:0">删除<b>不可恢复</b> —— 确认框里列的那几行请看完再按。</div></div></div>

@@ -744,7 +744,7 @@ V.imp = () => {
         <button class="btn sm" data-act="impRollback" data-batch="${esc(r.batch)}">整批回滚</button></div>` : ''}
       ${lgBlocks(r.blocks)}
       ${tech.length ? `<details style="margin-top:calc(10px * var(--fscale))"><summary class="mut sm">技术明细（原始回执
-        ${tech.length} 项 · 排查用；⛔ 不是给你看的指标）</summary>
+        ${tech.length} 项 · 排查用）</summary>
         <div class="tw" style="margin-top:calc(6px * var(--fscale))">${TBL({cls:'sm',rows:tech.map(k =>
           `<tr><th style="width:30%">${esc(k)}</th><td>${esc(String(r[k]))}</td></tr>`)})}</div></details>` : ''}
       <div style="margin-top:calc(10px * var(--fscale))"><button class="btn" data-act="impReset">再导一份</button></div></div></div>`;
