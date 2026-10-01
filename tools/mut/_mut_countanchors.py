@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -28,14 +29,46 @@ PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
 THRESHOLDS = ROOT / "ops" / "阈值表.md"
 
 #: `(名称, 靶件, 旧串, 改成的错值, 期望命中的 what 关键词)`
-CASES = [
-    ("① 尾巴计数（§0.2 手抄的「已销号」）", PLAN,
-     "已销号 **80**（明细", "已销号 **79**（明细", "已销号79"),
-    ("② `§22.1` 尺子把数（与 `foreach` 项数自洽）", PLAN,
-     "**12 把尺子全 `rc=0`**", "**11 把尺子全 `rc=0`**", "尺子把数 11 把"),
-    ("④ `ops/阈值表.md`（数字 vs 自称真源）", THRESHOLDS,
-     "| **240** |", "| **241** |", "数字 **241**"),
-]
+#: ⚠️⚠️ 2026-10-01（`TAIL-205` 收口 · 新闸门 `_run_muts.py` 一跑就抓到）：**靶一律"现取"，⛔ 不抄数字** ——
+#:   本件原先把三处靶**写死**（`已销号 **80**` / `**12 把尺子全` / `| **240** |`）⇒ 文档一改写法/一涨数字，
+#:   靶就**静默失效**（实测症状：`❌ 靶串没找到 ⇒ 本件需重定靶` ＋ `0/3 命中`，而它**不在任何闸门里** ⇒ 没人知道）。
+#:   ⇒ 现在三条都**按同源正则从当前文档现取**（与本文件 docstring 那条"⛔ 不抄行号"同一条纪律）。
+def _tail_case(text: str) -> tuple[str, str, str]:
+    """① 尾巴计数（§0.2 手抄的「已销号 N」）—— 现取并把 N 减 1。"""
+    m = re.search(r"已销号 \*\*(\d+)\*\*", text)
+    if not m:
+        raise SystemExit("  ⛔ 找不到『已销号 **N**』锚 ⇒ 文档又改写法了 ⇒ 本件需重定靶")
+    n = int(m.group(1))
+    return m.group(0), m.group(0).replace(m.group(1), str(n - 1), 1), f"已销号{n - 1}"
+
+
+def _ruler_case(text: str) -> tuple[str, str, str]:
+    """② `§22.1`/§22 结算行的「N 把尺子全 rc=0」—— 现取并把 N 减 1。"""
+    m = re.search(r"\*\*(\d+) 把尺子全 `rc=0`\*\*", text)
+    if not m:
+        raise SystemExit("  ⛔ 找不到『**N 把尺子全 `rc=0`**』锚 ⇒ 文档又改写法了 ⇒ 本件需重定靶")
+    n = int(m.group(1))
+    return m.group(0), m.group(0).replace(f"**{n} 把", f"**{n - 1} 把", 1), f"尺子把数 {n - 1} 把"
+
+
+def _threshold_case(text: str) -> tuple[str, str, str]:
+    """④ `ops/阈值表.md` 的 `README.md` 行数预算 —— 现取并把数字加 1。"""
+    m = re.search(r"\| \*\*(\d+)\*\* \| `README\.md` 行数预算", text)
+    if not m:
+        raise SystemExit("  ⛔ 找不到『`README.md` 行数预算』那一行 ⇒ 本件需重定靶")
+    n = int(m.group(1))
+    return f"| **{n}** |", f"| **{n + 1}** |", f"数字 **{n + 1}**"
+
+
+def build_cases(texts: dict) -> list[tuple[str, pathlib.Path, str, str, str]]:
+    o1, n1, k1 = _tail_case(texts[PLAN])
+    o2, n2, k2 = _ruler_case(texts[PLAN])
+    o4, n4, k4 = _threshold_case(texts[THRESHOLDS])
+    return [
+        ("① 尾巴计数（§0.2 手抄的「已销号」）", PLAN, o1, n1, k1),
+        ("② `§22.1` 尺子把数（与 `foreach` 项数自洽）", PLAN, o2, n2, k2),
+        ("④ `ops/阈值表.md`（数字 vs 自称真源）", THRESHOLDS, o4, n4, k4),
+    ]
 
 
 def hits() -> list[dict]:
@@ -53,8 +86,9 @@ def main() -> int:
         print("  ⛔ 基线就有命中 ⇒ 先把数字改对再来跑本件")
         return 1
 
+    cases = build_cases(texts)
     ok_all = True
-    for name, target, old, new, needle in CASES:
+    for name, target, old, new, needle in cases:
         if old not in texts[target]:
             print(f"  ❌ {name} —— 靶串没找到（文档改了？）⇒ 本件需重定靶")
             ok_all = False
@@ -72,7 +106,7 @@ def main() -> int:
     after = hits()
     print(f"\n  复原校验（MD5 逐字节）：{'✅ 全部一致' if not bad else '❌ 未复原：' + '、'.join(bad)}")
     print(f"  复原后锚点命中 {len(after)} 条（期望 0）")
-    print(f"  反向灵敏度：**{len(CASES) if ok_all else 0}/{len(CASES)} 命中**")
+    print(f"  反向灵敏度：**{len(cases) if ok_all else 0}/{len(cases)} 命中**")
     return 0 if (ok_all and not bad and not after) else 1
 
 

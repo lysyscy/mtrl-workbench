@@ -1,4 +1,6 @@
 """收口闸门一把跑：16 把尺子逐个跑、只打印"该读的那几行"，rc≠0 的列进 `BAD`。
+⭐ 2026-10-01（`TAIL-205`）起**末尾多一步**：**守尺子的变异自证**（`tools/oneoff/_run_muts.py` · 8 支 · ~33 秒）
+   —— `tools/mut/**` 原先不在任何闸门里 ⇒ "加了反向灵敏度却没人跑" ⇒ 一天抓到 4 例假绿。
 
 **为什么单独落成文件**：2026-09-29 实测 —— 这套命令用 `python -c "…\\nfor …"` 的**内联多行**写法
 在 PowerShell 里**反复被吃掉换行**（`unexpected character after line continuation character` ✗）。
@@ -50,6 +52,16 @@ def main() -> int:
         print("%-34s rc=%d  %s" % (rel, p.returncode, " || ".join(keep[:3])[:175]))
         if p.returncode:
             bad.append(rel)
+    # ⭐⭐ 2026-10-01（`TAIL-205`）：**守尺子的变异自证** —— `tools/mut/**` 原先**不在任何闸门里**
+    #    ⇒ "加了反向灵敏度却没人跑" ⇒ 2026-10-01 一天抓到 4 例"靶烂掉 / 判法烂掉"（假绿）。
+    #    这几支的**靶是尺子自己**（`doc_audit` 的 T1–T19 / T4 锚点 / claim / 四检 / T12 / T14T15 / T20），
+    #    它们烂掉 = **一整片守卫静默失效** ⇒ **每次收工都跑**（8 支 · 实测约 33 秒 · 完全值）。
+    p = subprocess.run([PY, "-X", "utf8", str(ROOT / "tools" / "oneoff" / "_run_muts.py")],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(ROOT))
+    keep2 = [x for x in (p.stdout or "").strip().splitlines() if x.strip()][-1:]
+    print("%-34s rc=%d  %s" % ("守尺子的变异自证(_run_muts)", p.returncode, " || ".join(keep2)[:175]))
+    if p.returncode:
+        bad.append("守尺子的变异自证(_run_muts.py)")
     if with_pytest:
         env = {"ACC_RESULTS_PATH": str(ROOT / "artifacts" / "acc_results.json"),
                "PLAYWRIGHT_BROWSERS_PATH": r"C:\ProgramData\ms-playwright",

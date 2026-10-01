@@ -261,8 +261,11 @@
    ```
    backend\.venv\Scripts\python.exe -X utf8 -c "import os,subprocess,sys; env=dict(os.environ, ACC_RESULTS_PATH=r'D:\dev\mtrl-workbench\artifacts\acc_results.json', PLAYWRIGHT_BROWSERS_PATH=r'C:\ProgramData\ms-playwright', PYTHONIOENCODING='utf-8', PYTHONDONTWRITEBYTECODE='1'); sys.exit(subprocess.call([r'D:\dev\mtrl-workbench\backend\.venv\Scripts\python.exe','-m','pytest','-q','tests/','-p','no:cacheprovider','--tb=line'], cwd=r'D:\dev\mtrl-workbench\backend', env=env))"
    ```
-3. **收工闸门（16 把尺子 · 期望 `rc=0` ＋ `BAD: []`）**：
+3. **收工闸门（16 把尺子 ＋ **守尺子的变异自证** · 期望 `rc=0` ＋ `BAD: []`）**：
    `backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py`
+   ⭐ 2026-10-01（`TAIL-205`）：它**末尾多一步** —— 调 `tools\oneoff\_run_muts.py`（**8 支**「靶是尺子自己」的变异件 · ~33 秒）。
+     ⚠️ 为什么加：`tools/mut/**` 原先**不在任何闸门里** ⇒ 「加了反向灵敏度却没人跑」⇒ 2026-10-01 一天抓到 **4 例假绿 / 哑靶**。
+     全量按需：`_run_muts.py --all`（很慢 · ⛔ 别进闸门）。
    ＋ 分开跑：`tools\audit\acc_report.py`（四态）· `tools\audit\doc_audit.py --ui`（含交付面四检）· `tools\audit\audit_meta.py`（**黄档也读汇总行**）· `tools\probe\_audit_face.py`。
    ⚠️ 改过任何 `.ps1`（`ops\` 或 `tools\`）⇒ 补跑 `tools\oneoff\_ps_bom.py` ＋ `_ps_parse_check.ps1`。
 4. **改壳收工多一步**：`tools\audit\shell_verify.py --snapshot` **盖章**（前置：真机 `_shell_smoke` 整支 `rc=0` ＋ 确认没在跑/没中断过 `tools/mut/_mut_*`）。

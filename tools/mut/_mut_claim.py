@@ -33,7 +33,12 @@ DEFER_RE = re.compile(r"待裁定|尚待裁定|未裁定")
 
 
 def run_tool() -> tuple[int, str]:
-    p = subprocess.run([PY, TOOL], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+    # ⚠️⚠️ 2026-10-01（`TAIL-205` 收口 · 新闸门 `_run_muts.py` 一跑就抓到）：**漏了 `-X utf8`** ——
+    #    子进程按本机默认编码（GBK）写 stdout，而本件按 utf-8 解 ⇒ **`UnicodeDecodeError` 直接崩**，
+    #    连 `rc` 都取不到（本件 docstring 写着"判据是 rc"，实际它**从来没走到那一步**）。
+    #    ⭐ 同族（本轮第 3 例）：`_mut_t12` / `_mut_t14t15` —— 见 `_run_muts.py` 的头注。
+    p = subprocess.run([PY, "-X", "utf8", TOOL], cwd=ROOT, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -62,7 +67,11 @@ def main() -> int:
         print("  ⛔ 基线不干净（rc≠0，或锚行已在清单里）⇒ 停手")
         return 1
 
-    mutated = line.replace(DATE_RE.search(line).group(0), "", 1)
+    # ⚠️⚠️ 2026-10-01（`TAIL-205` 收口 · 新闸门 `_run_muts.py` 一跑就抓到）：**原来只删第一处日期** ——
+    #    而锚行（计划第 6 行）里**还含一个带日期的文件名**（`.codebuddy/memory/journal/2026-10-01.md`）
+    #    ⇒ 删完**仍有日期** ⇒ `C1` 不亮 ⇒ 本件报 `0/1 命中`（它报"没抓到"是对的，**错的是一开始的判法太窄**）。
+    #    ⇒ 改成把该行**所有日期样式**删掉（这才是"删掉它的日期"的本意）。
+    mutated = DATE_RE.sub("", line)
     if mutated == line:
         print("  ⛔ 日期没删掉（正则没命中）⇒ 停手")
         return 1

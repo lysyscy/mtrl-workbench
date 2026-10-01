@@ -24,7 +24,7 @@ ONEOFF = ROOT / "tools" / "oneoff"
 
 #: ⭐ **常驻工具**（不是"一次性"）—— 收工闸门/口径会反复引用它们 ⇒ ⛔ 别按一次性处置
 STANDING = (
-    "_run_rulers.py", "_ps_bom.py", "_ps_parse_check.ps1", "_list_tails.py",
+    "_run_rulers.py", "_run_muts.py", "_ps_bom.py", "_ps_parse_check.ps1", "_list_tails.py",
     "_page_measure.py", "_prepush_sensitive.py", "_oneoff_measure.py",
 )
 

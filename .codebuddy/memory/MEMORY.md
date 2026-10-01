@@ -10,7 +10,7 @@
 
 ## 〇、每轮必跑 ＋ 状态只信三处
 
-- **收工闸门**（⛔ 别只跑前几个）：16 把尺子 `tools\oneoff\_run_rulers.py` · **全套 pytest** · `doc_audit.py --ui`
+- **收工闸门**（⛔ 别只跑前几个）：16 把尺子 `tools\oneoff\_run_rulers.py`（⭐ 2026-10-01 起它**末尾自带「守尺子的变异自证」** `_run_muts.py` · 8 支 · ~33 秒）· **全套 pytest** · `doc_audit.py --ui`
   （⭐ 含**交付面四检**，最易漏）· `claim_audit` · `acc_report`（四态）。⚠️ 两条环境变量**缺一条就假红 / 拿旧数**：
   `PLAYWRIGHT_BROWSERS_PATH`（打印/渲染类红）· `ACC_RESULTS_PATH`（权威四态不刷新）——
   ⭐ **命令全文见 `细则.md` §〇之二**（⛔ 本处不复述）。⚠️ 跑批脚本必须 `if (rc != 0) { exit 1 }`；**`rc=0` ≠ 全绿** ⇒ 整行读汇总行。
