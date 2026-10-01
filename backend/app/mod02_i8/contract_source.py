@@ -194,7 +194,7 @@ def configured_url() -> str:
     """
     url = str(getattr(get_settings(), "i8_contract_list_url", "") or "").strip()
     if not url:
-        raise NotConfiguredError("i8 采购合同接口未配置（见 `I8_CONTRACT_LIST_URL`，或到「设置」页填写 i8 服务地址）")
+        raise NotConfiguredError("i8 采购合同取数还没配置 —— 请到「设置」页填写 i8 服务地址")
     return url
 
 

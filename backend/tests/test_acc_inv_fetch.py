@@ -250,7 +250,7 @@ def test_未二次确认即拒且失败降级且不自动重试登录():
     s2 = _sess()
     out = _run(s2, boom=RuntimeError("i8 接口 500"), calls=calls)
     assert out["ok"] is False and out["degraded"] is True
-    assert "i8 接口不可用" in out["message"], out["message"]
+    assert "i8 抓不到数" in out["message"], out["message"]
     assert "excel_import_available" not in out, "手动导入已删，不得再承诺这条通道"
     assert len(calls) == 1, "失败不得自动重试（更不得重试登录）"
 

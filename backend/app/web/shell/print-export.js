@@ -10,7 +10,7 @@
    ⛔ 不吞错、⛔ 不把"失败"说成"成功"；⛔ 不做本地打印/排版（DEV-P-07：接口不可用即砍这条功能）。 */
 async function m03RunBatch(rows, mode) {
   const ids = rows.map(n => Number(n.id)).filter(x => Number.isFinite(x));
-  if (!ids.length) return toast('这些行缺少后端 id ⇒ 请先刷新页面再试');
+  if (!ids.length) return toast('这些行还没载全 ⇒ 请先刷新页面再试');
   const what = mode === 'print' ? '批量打印' : '只导出 PDF';
   toast(`正在${what} <b>${ids.length}</b> 条 ……`, 4000);
   let r = null;
@@ -61,7 +61,7 @@ async function m03RunBatch(rows, mode) {
    ⚠️ **文件顶层的函数** ⇒ ⛔ 不许塞进 `ACT` 对象字面量（那个坑踩过三次：`jcLinkAct` /
       `jcFetchSinceOn` / `jcHideTrade`）。 */
 async function m03Download(url, okMsg) {
-  if (!url) return toast(`<b>下载没能开始</b>：后端没给下载地址${okMsg ? `<br>${okMsg}` : ''}`, 10000);
+  if (!url) return toast(`<b>下载没能开始</b>：系统没有给出下载地址${okMsg ? `<br>${okMsg}` : ''}`, 10000);
   const fn=await dlExport(url,{name:'付款通知书.pdf',label:'下载'});
   if(!fn) return;
   return toast(`${okMsg}<br>已开始下载 <b>${esc(fn)}</b>`, 11000);

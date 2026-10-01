@@ -436,12 +436,12 @@ async function ntFetchBackend(m) {
     await reloadNotices();
     await reloadM02IfOn();     /* ⭐ 刚写的那条记录要**立刻**在记录卡上看到（见 `reloadM02IfOn`） */
     return fetchResultModal(`抓取结果 · 付款通知书`,
-      `已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，落库 <b>${r.upserted}</b> 条。`);
+      `已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，写入 <b>${r.upserted}</b> 条。`);
   }
   /* 失败：把后端原因**原样**给用户（后端已写成中文）；属「归属未走完」⇒ 直接开补词弹窗 */
   await reloadM02IfOn();       /* ⚠️ 「抓取被拒」同样是**一条真记录**（`failed`）⇒ 卡上要能看到 */
   fetchResultModal(`抓取被拒 · 付款通知书`,
-    `<b style="color:var(--wn)">后端拒绝了这次抓取</b>：${esc(r.message || '未知原因')}`);
+    `<b style="color:var(--wn)">这次抓取被拒绝了</b>：${esc(r.message || '未知原因')}`);
   try { await openOwnDialog(); } catch (e) { /* 打不开弹窗也不影响上面那句原因 */ }
 }
 
@@ -500,8 +500,8 @@ async function openOwnDialog() {
     title: `待指定归属 · ${items.length} 条`,
     wide: true,
     body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">${OWN_SRC === 'jc'
-      ? `<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并落库（集采是<b>逐条落库</b>，已落的不受影响）。`
-      : `付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并落库。`}</div>${box}`,
+      ? `<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并写入（集采是<b>逐条写入</b>，已落的不受影响）。`
+      : `付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并写入。`}</div>${box}`,
     footer: `<button class="btn" data-act="closeModal">关闭</button>`,
   });
 }
@@ -524,7 +524,7 @@ async function ownWhCheck(i) {
   modal({
     title: `查 i8 仓库名单 · ${esc(name)}`,
     body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能<b>强制踢掉</b>该账号其它在线会话</b>（不会自动重试登录）—— 若同事正在用 i8，请先<b>择时</b>。</div>
-      <div class="tip" style="margin:0">查 i8 仓库名单里<b>有没有</b>「${esc(name)}」、以及它<b>挂在哪个项目全名</b>下 —— 用来判断该走「选已有小微」还是「只能手填」。⚠️ <b>只查不落库</b>。</div>`,
+      <div class="tip" style="margin:0">查 i8 仓库名单里<b>有没有</b>「${esc(name)}」、以及它<b>挂在哪个项目全名</b>下 —— 用来判断该走「选已有小微」还是「只能手填」。⚠️ <b>只查不写入</b>。</div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="ownWhOk" data-i="${i}">确认查询（会顶号）</button>`,
   });
@@ -690,7 +690,7 @@ async function ivFetchBackend(month) {
     await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
     fetchResultModal(`抓取没能完成`,
       `<b style="color:var(--wn)">${esc(String((e && e.message) || e))}</b><br>`
-      + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试；接口失败可走「手动导入」降级（解析同一条管线）</span>`);
+      + `<span class="mut sm">本系统<b>不会自动重试登录</b>—— 请确认 i8 账号后再试；i8 抓不到时可走「手动导入」</span>`);
   }
 }
 
@@ -808,7 +808,7 @@ async function reloadM07() {
 /* 写动作统一外壳：**失败把后端原因原样给用户**（不吞、不换句话），成败都回后端真实状态。 */
 async function bgFailed(name, r) {
   await reloadM07();
-  toast(`<b>${esc(name)}没能保存</b>：${esc((r && r.message) || '后端未说明原因')}`, 7000);
+  toast(`<b>${esc(name)}没能保存</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`, 7000);
 }
 
 /* 抓收发结存（`API-02`）—— ⚠️ **会登录 i8 并强踢在线用户**（D9 的二次确认由抓取弹窗承担）。 */
@@ -850,7 +850,7 @@ async function whFetchBackend(month) {
     await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
     fetchResultModal(`抓取没能完成`,
       `<b style="color:var(--wn)">${esc(String((e && e.message) || e))}</b><br>`
-      + `<span class="mut sm">本系统<b>不会自动重试登录</b>（D9，避免反复顶号）—— 请确认 i8 账号后再试；接口失败可走「手动导入」降级（解析同一条管线）</span>`);
+      + `<span class="mut sm">本系统<b>不会自动重试登录</b>—— 请确认 i8 账号后再试；i8 抓不到时可走「手动导入」</span>`);
   }
 }
 
@@ -1307,7 +1307,7 @@ BIND.m02 = function () {
     const h4 = card && card.querySelector('h4');
     if (h4) h4.textContent = '执行记录';
     const th = tbl.tHead && tbl.tHead.rows[0] && tbl.tHead.rows[0].cells[1];
-    if (th) th.textContent = '动作 / 接口';
+    if (th) th.textContent = '动作';
   }
   /* ⭐ 2026-09-27（`TAIL-127` · 用户裁定 **B**）：**「i8 服务地址」搬到本页** ——
      用户原话：「连接参数这个板块说实话可以删掉，因为**不可能有变动**；那系统设置就只剩下主题色了」。
@@ -1546,7 +1546,7 @@ function m02EchoKv() {
   return M02_IFACES.map(it => {
     const r = m02Latest(it);
     let dd;
-    if (it.api === 'API-04') dd = '<span class="mut">待接通 —— 该接口属<b>集采域</b>（M5 未开工）</span>';
+    if (it.api === 'API-04') dd = '<span class="mut">待接通 —— 集采那边的抓取还没做</span>';
     else if (M02_ERR) dd = '<span class="dg">⚠️ 执行记录没取到（见下方日志卡）</span>';
     else if (!r) dd = '<span class="mut">还没有执行记录（抓过 / 同步过就有了）</span>';
     else dd = `${m02StatusTag(r)} <span class="mut sm">${esc(m02When(r))}</span>`
@@ -1662,8 +1662,8 @@ async function reloadHome() {
 async function m02Sync(which) {
   const isWh = which === 'warehouses';
   const name = isWh ? '仓库名单' : '常用项目列表';
-  const tail = isWh ? '仓库名单本身<b>不落库</b>（它是建档的输入）；建档请用「常用项目列表」那一行'
-                    : '会按 phid <b>建档，重复的不会重复建</b>，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
+  const tail = isWh ? '仓库名单本身<b>不写入</b>（它是建档的输入）；建档请用「常用项目列表」那一行'
+                    : '会按 信息化编号 <b>建档，重复的不会重复建</b>，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
   modal({
     title: `同步 ${name}`,
     body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，并强制踢掉该账号其它在线会话</b> ——
@@ -1825,9 +1825,9 @@ function jcFetchPreview(d) {
   return `<div class="tip ok" style="margin-bottom:calc(10px * var(--fscale))"><b>抓取完成</b>：${esc(d.message || '')}</div>
    ${warn}
    <div style="font-size:calc(12.5px * var(--fscale))">
-     <div><b>匹配上</b>（已落库 · 默认「纳入台账」）· ${d.matched} 条</div>
+     <div><b>匹配上</b>（已写入 · 默认「纳入台账」）· ${d.matched} 条</div>
      ${list(d.matched_projects || [])}
-     <div style="margin-top:calc(10px * var(--fscale))"><b>未落库</b>（<b>归属未走完</b> ⇒ 按口径<b>不纳管</b>）· ${d.unmatched} 条</div>
+     <div style="margin-top:calc(10px * var(--fscale))"><b>未写入</b>（<b>归属未走完</b> ⇒ 按口径<b>不纳管</b>）· ${d.unmatched} 条</div>
      ${unsettledHtml}
      ${unsettled.length ? `<div style="margin-top:calc(8px * var(--fscale))"><button class="btn pri" data-act="ownJcOpen">`
         + `去指定归属（${unsettled.reduce((n, x) => n + (x.count || 0), 0)} 条）</button>`
@@ -2081,7 +2081,7 @@ function bootErrorBanner() {
       + failsTech.map(t => esc(t)).join('<br>') + '</div></details>'
     : '';
   const why = location.protocol === 'file:'
-    ? '你正在用 <b>file:// 直接打开这个 HTML 文件</b> —— 浏览器不许它读后端接口，所以页面是空的。'
+    ? '你正在用 <b>file:// 直接打开这个 HTML 文件</b> —— 浏览器不许它读系统数据，所以页面是空的。'
     : '这几项没能取到：<br><span class="fc">' + esc(BOOT_ERROR) + '</span><br>'
       + '<b>其余页的数据照常可用</b>（某一项失败不该拖垮全站）。'
       + '<b>下一步</b>：刷新页面重试；若一直这样，请把下面的「技术明细」发给管理员。' + det;

@@ -121,7 +121,7 @@ def degrade_to_excel(exc: BaseException) -> dict:
         "degraded": True,
         "excel_import_available": True,
         "message": (
-            f"i8 接口不可用（{type(exc).__name__}: {exc}）⇒ 已**降级为手动 Excel 导入**路径。"
+            f"i8 抓不到数（{type(exc).__name__}: {exc}）⇒ 已**降级为手动 Excel 导入**路径。"
             "请从 i8 导出该月数据后在本页导入。"
         ),
     }
@@ -136,7 +136,7 @@ def degrade_no_manual(exc: BaseException) -> dict:
     return {
         "degraded": True,
         "message": (
-            f"i8 接口不可用（{type(exc).__name__}: {exc}）⇒ 本次抓取**失败**（原因见上）。"
+            f"i8 抓不到数（{type(exc).__name__}: {exc}）⇒ 本次抓取**失败**（原因见上）。"
             "请稍后在 i8 可用时重试。"
         ),
     }

@@ -610,7 +610,7 @@ def parse_sheet(data: bytes) -> ImportPlan:
         why = "；".join(f"行 {a['line']}：{a['reason']}" for a in plan.anomalies[:3]) or "文件里没有数据行"
         raise MustReportError(
             f"文件里没有一行可用的定稿数据（共 {len(plan.anomalies)} 行异常）—— {why}。"
-            "历史段未被改动（不写库）"
+            "历史段未被改动（没有写入）"
         )
     return plan
 

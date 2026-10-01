@@ -262,7 +262,7 @@ const ACT={
    const map={'收发结存表':'m07','库存单据明细表':'m08','过程资料':'m06'};
    const k=map[tt];
    if(k){ go(k);
-     return toast(`「${esc(tt)}」的降级路径 = <b>在那一页的「导入」入口</b>上传 i8 导出的 Excel（与抓取<b>同一套解析 / 落库</b>，§3.6）—— 已跳过去`,7500); }
+     return toast(`「${esc(tt)}」的降级路径 = <b>在那一页的「导入」入口</b>上传 i8 导出的 Excel（与抓取<b>同一套解析 / 写入</b>，§3.6）—— 已跳过去`,7500); }
    toast(`⏳ <b>「${esc(tt)}」的手动导入入口尚未接通</b>：降级路径要有对应页面的导入入口 —— 在此之前⛔ 不演示假上传`,7500); },
  /* MOD-14 剔除规则：**真增 / 删 / 改**（2026-09-13 P6 裁定①·乙）。
     ⚠️ 只改这张**演示表**（`RULE_EX`）；**不重算**已产生的剔除标记（`NO[].exrule`）—— 页内已写明。
@@ -589,7 +589,7 @@ const ACT={
             + `${gBlocked.length?`；<b>${gBlocked.length}</b> 条<b>有牵涉 · 已硬拦</b>（仍参与统计）：请先<b>撤销付款 / 解绑关联</b>，处理完它才退出统计`  :''}`
             + `<br><span class="mut sm">i8 行是源数据、永不删除 —— 排除撤单靠的是「退出统计」（§4.2.7）</span>`:''}`
        + `<br><span class="mut sm">旁路值（分类 / 集采实际供应商 / 调整单）不被覆盖</span>`,7200); }
-   toast(`已按 <b>${m}</b> 抓取 ${NM}（${apiCode}）：入参 = <span class="fc">核算年月 ${m}</span> → 单据日期 ${from} ~ ${to}（闭区间）＋ <b>项目（phid 筛）</b><br>该月源数据已全量刷新；<b>调整单 / 手工值不被覆盖</b>`,5600); },
+   toast(`已按 <b>${m}</b> 抓取 ${NM}（${apiCode}）：入参 = <span class="fc">核算年月 ${m}</span> → 单据日期 ${from} ~ ${to}（闭区间）＋ <b>项目（按信息化编号筛）</b><br>该月源数据已全量刷新；<b>调整单 / 手工值不被覆盖</b>`,5600); },
   /* 批量改分类（重做）：勾选 → 点一次「→ 辅材 / → 机械 / → 集采」即完成，不再走弹窗
      ⭐ 改为「集采」时顺带**自动匹配供应商**（§6.6.3 触发时机）；离开集采时清空待确认标记 */
   /* ⭐ 已接后端：判定与落库全在后端（`POST /api/m03/actions/category`），前端只发勾选集 + 显示回执 */
@@ -696,19 +696,19 @@ const ACT={
        判据**判词一字未改、只换落点**：`test_plan_import.py` 里那几条搬进 `test_imp_m04_api.py`
        （其中「预览不写库」改由**直接查库**证明）。 */
  plImport:async ()=>{ await impSetDomain('m04_plan'); go('imp'); IMP.step=0; render();
-   toast('已打开「<b>数据导入</b>」并选好 <b>付款计划</b>：选文件 → 看列映射 → 预览（不写库）→ 确认落库',8000); },
+   toast('已打开「<b>数据导入</b>」并选好 <b>付款计划</b>：选文件 → 看列映射 → 预览（不写入）→ 确认写入',8000); },
  /* ⭐ 2026-09-18：**已接通**（`TAIL-35` ＋ `TAIL-27` 批 2）—— 手动行走 JSON 端点 `POST /api/m04/plans`
     （`plan_api_router.py`；与旧 PRG 端点**同一份判定** `plan_manual.manual_row_payload`）。
     ⚠️ 旧服务端页（`POST /m04/row/save` ＋ `render_m04`）已随 `§19` 批 2 删除 ⇒ **壳是唯一入口**；
     判据点 `ACC-PLAN-MANUAL-001` 已搬到 `tests/test_api_m04_manual.py`（端点）与 `test_wired_m04.py`（壳）。 */
- plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>它落库后<b>与导入行同住一表、同样要被审查</b>，且<b>导入不会清理它</b>（§9.5）',5600); },
+ plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>（尚未保存）—— 填完点该行「保存」写入、点「取消」丢弃<br>它写入后<b>与导入行同住一表、同样要被审查</b>，且<b>导入不会清理它</b>（§9.5）',5600); },
  plRowEdit:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
    if(!p.manual){ toast('<b>编辑只对「手动行」开放</b> —— 导入行是项目端报来的<b>源数据</b>：要改请<b>重新导入</b>（它在 §4.3.3 唯一的例外口 = 该行「再次匹配」）',6400); return; }
    plRowEditId=p.id;
    plD={ym:p.ym, proj:plProjKey(p.proj), docNo:p.docNo||'', flowAmt:String(p.flowAmt), monthAmt:String(p.monthAmt),
         date:p.date||'', method:p.method||'现汇', remark:p.remark||''};
    render();
-   toast(`正在<b>原地编辑</b>手动行 <b>${esc(p.id)}</b> —— 点「保存」落库、点「取消」保持原样`,5200); },
+   toast(`正在<b>原地编辑</b>手动行 <b>${esc(p.id)}</b> —— 点「保存」写入、点「取消」保持原样`,5200); },
  plRowSave:async ()=>{ const d=plD;
   /* ⭐ **挡重入**（守则 §5.5）：连点两次「保存」= 两次 `POST /api/m04/plans` ⇒ 落两行完全相同的计划行；
      ⚠️ 后端**不会挡** —— 同月完全相同的行是**本业务的合法状态**（§4.3.3：重复由「重复上报」提示、
@@ -747,7 +747,7 @@ const ACT={
  plRowSet:t=>{ const k=t.dataset.k; if(!k) return; plD[k]=String(t.value==null?'':t.value); },
  plRowCancel:()=>{ const was=(plRowEditId&&plRowEditId!==PL_NEW_ID)?plRowEditId:'';
    plRowEditId=''; plD={}; render();
-   toast(was?`已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未落库）`:'已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
+   toast(was?`已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未写入）`:'已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
  /* 「编辑」= 该行**原地变草稿行**（不新增行；文案与校验与新增共用 `plRowSave`）。
     ⚠️ **只有手动行可编辑**：对导入行请求编辑时**显式说明原因**（不静默忽略、不当作新增 —— §4.3.3.1） */
  /* 保存（新增 / 编辑**共用**）：年月必填且月度形态 → 项目必选 → 金额校验（非法 / 负数）
@@ -825,7 +825,7 @@ const ACT={
     ⭐ 2026-09-13 用户拍板：「手动新增 / 编辑」**弹窗取消**，改为**表内增行**（甲案：草稿行不落 `NO`）。
     草稿层仍是 `naD`（键与 `NT_COLS` 同名，另加 `pid`）⇒ "改一格不会冲掉别的格"这条老教训照旧成立。 */
  ntRowAdd:()=>{ naEditId=NT_NEW_ID; naD=ntBlank(); ntReveal(); render();
-   toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>已放宽「单据年月 / 分类 / 审批状态 / 付款状态」以便看见草稿行；<b>「项目」筛选未改动</b>',5600); },
+   toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」写入、点「取消」丢弃<br>已放宽「单据年月 / 分类 / 审批状态 / 付款状态」以便看见草稿行；<b>「项目」筛选未改动</b>',5600); },
  /* 草稿层写入口：输入即记录（表单元素走 `change` ⇒ 委托层直呼，⛔ 没有名单）；
     ⚠️ 只有「分类」变了需要重绘（它决定「集采实际供应商」是否可填）—— 其余字段不重绘，
        免得每改一格就把焦点丢掉。 */
@@ -835,7 +835,7 @@ const ACT={
    naD[k]=(k==='pid')?((PJs.find(x=>x.id===v)||pjRowOf(v)||{}).id||''):v;
    if(k==='cat') render(); },
  ntRowCancel:()=>{ const was=(naEditId&&naEditId!==NT_NEW_ID)?naEditId:''; naEditId=''; naD={}; render();
-   toast(was?`已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未落库）`:'已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
+   toast(was?`已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未写入）`:'已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
  /* 「编辑」= 该行**原地变草稿行**（不新增行；文案/校验与新增共用 `ntRowSave`） */
  ntEdit:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n||!n.manual) return;
    naEditId=n.id;
@@ -843,7 +843,7 @@ const ACT={
      doc:n.doc, biz:n.biz, recv:n.recv, cat:n.cat, astat:n.astat,
      approve:String(n.approve), sp:String(n.sp), sup:n.sup||''};
    ntReveal(); render();
-   toast(`正在<b>原地编辑</b>手动行 <b>${esc(n.id)}</b> —— 该行已变为草稿态；点「保存」落库、点「取消」保持原样`,5200); },
+   toast(`正在<b>原地编辑</b>手动行 <b>${esc(n.id)}</b> —— 该行已变为草稿态；点「保存」写入、点「取消」保持原样`,5200); },
  /* 保存 = 原弹窗的「确认新增 / 保存修改」——校验链**一字未改**（项目必选 → badMoney → overCap 拦截并保留原值） */
  ntRowSave:()=>{ const pj=PJs.find(p=>p.id===naD.pid);
    if(!pj){ toast('<b>请先选「付款项目」</b>：候选 = 全部已建档项目（含归档；壳除外，§六-9）'); return; }
@@ -968,7 +968,7 @@ const ACT={
   lgPjName=lgDefPjName(); lgCut=lgCutFor(lgPjName,lgCat);
   lgD.s='0.00'; lgD.p='0.00'; lgD.r=LG_R_DEF;                 /* 新开一次 → 草稿复位（原地改字段） */
   lgOn=true; pjClose('lgPj'); render();
-  toast(`已在「<b>${esc(lgCat)}</b>」栏上方展开期初占位行录入区 —— 填完点「保存」落库、点「取消」丢弃（<b>草稿不入库</b>）`,5400); },
+  toast(`已在「<b>${esc(lgCat)}</b>」栏上方展开期初占位行录入区 —— 填完点「保存」写入、点「取消」丢弃（<b>草稿不写入</b>）`,5400); },
  lgCancel:()=>{ lgOn=false; pjClose('lgPj'); render();
   toast('已取消期初占位行录入 —— <b>未写入任何数据</b>'); },
  /* 草稿层写入口：输入立即记下，展开区重绘时不丢 */
@@ -1430,7 +1430,7 @@ uiScaleSet:async t=>{
     属 `MOD-13` 跨域能力。⇒ 在"列得出影响范围"之前**不接删除**，否则 §7.2 就成了一句空话。 */
  delPjOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
     closeModal();
-    toast(`⏳ <b>删除尚未接通后端</b>：「${esc(p.disp||p.name)}」—— 删除前必须<b>列出影响范围</b>（§7.2），那是<b>跨模块统计</b>；<br>该能力未落地前不接删除 —— 避免"列不出影响范围就删了"`,7000); },
+    toast(`⏳ <b>删除这一项还没打通</b>：「${esc(p.disp||p.name)}」—— 先把「影响范围」列全才开放（见弹窗里那几项）`,7000); },
  /* ⭐ 2026-09-18 接通（`TAIL-27`）：两个同步都是**登录 i8**（会**强踢**该账号在线用户，D9）
     ⇒ 统一走 `m02Sync()` —— 它先弹**二次确认**（这是 D9 那道闸），确认后才发请求。
     ⚠️ 与 `m02` 表里 API-05/06 两行的「触发」**共用同一个入口**（一份能力只许一个主人）。 */
@@ -1675,7 +1675,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
      const a=mach6Arr(wh,ym); const v=(a&&a[j]!=null&&Number(a[j])!==0)?String(a[j]):'';
      return `<td><input class="inp num" style="width:100%;min-width:84px" data-act="mechCell" data-wh="${esc(wh)}" data-i="${j}" value="${esc(v)}" placeholder="0"></td>`;}).join('');
    modal({title:'录机械费 · 按核算月手录 6 列',wide:true,reopen:()=>ACT.mechOpen(),
-     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">手录的值<b>不会被重抓 i8 / 重导历史覆盖</b>（空 ⇒ 0）。<b>负数 / 非数字一律拒绝、不写库。</b><br>
+     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">手录的值<b>不会被重抓 i8 / 重导历史覆盖</b>（空 ⇒ 0）。<b>负数 / 非数字一律拒绝、不写入。</b><br>
        ⚠️ 手录<b>只用于正式段</b>（核算月 <b>晚于</b>该项目的<b>截止核算月</b>）⇒ 本表<b>只列可手录的月份</b>；<b>历史段的机械费以过程资料导入的 Excel 为准</b>（要改就改 Excel 重导）。</div>
        ${FBAR({cls:'plate',body:`
          <div class="fi"><label>项目</label><select class="inp" id="mechPj" data-act="mechPjPick">${cands.map(k=>`<option value="${esc(k)}"${k===wh?' selected':''}>${esc(k)}</option>`).join('')||'<option value="">（没有候选项目）</option>'}</select></div>
@@ -2044,7 +2044,7 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
  /* —— MOD-12 手工登记（2026-09-13 用户拍板「都改」）：新增 / 录入 / 保存 / 取消 / 删除 / 筛选 / 重置 ——
     范式与 `MOD-03` 手动行、集采子表**同款**：草稿层（`dfD`，键=字段名）+ 表内增行 + 保存才落库。 */
  dfAdd:()=>{ dfNewOn=true; dfClear(); render();
-   toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>「归属」恒为<b>库存单据</b>（§5.8.3）；金额<b>可正可负</b>（+ 上调 / − 下调）',6000); },
+   toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」写入、点「取消」丢弃<br>「归属」恒为<b>库存单据</b>（§5.8.3）；金额<b>可正可负</b>（+ 上调 / − 下调）',6000); },
  dfSet:t=>{ dfD[t.dataset.k]=t.value; },   /* 草稿层写入口（表单元素走 change ⇒ 委托层直呼；⛔ 无名单）；不重绘，免得每改一格丢焦点 */
  dfCancel:()=>{ dfNewOn=false; dfClear(); render(); toast('已取消登记 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
  dfSave:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记<b>不独立成页</b> —— '
@@ -2135,7 +2135,7 @@ jcFetch:()=>{ const def = jcFetchSinceOn || jcFetchSinceDefault(); modal({title:
     <div class="fld"><label>开始日期 —— 只抓<b>这之后</b>的单据（<b>增量</b>）</label>
       <input class="inp" id="jcFetchSince" type="date" value="${esc(def)}">
       <div class="sm mut" style="margin-top:calc(6px * var(--fscale))">默认 = 台账里<b>最新合同日期 − 3 天</b>（多留几天：i8 的<b>增补合同会沿用原单据日期</b>，卡太紧会漏；重复的会<b>自动挡掉</b>）。<br><b>清空</b> = 全量（<b>约 40 秒</b>，首次建档才需要）；带日期 = 增量（<b>1~5 秒</b>）。</div></div>
-    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 落库（新抓的默认<b>「纳入台账」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但<b>落库前会给你一眼看见</b>。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
+    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 写入（新抓的默认<b>「纳入台账」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但<b>写入前会给你一眼看见</b>。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
   footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcFetchOk">确认抓取（会顶号）</button>`}); },
 jcFetchOk:async()=>{ const el=$('#jcFetchSince');
   /* ⚠️ 读不到 / 格式不对 ⇒ 传**空串**（= 交给后端按默认增量走），⛔ 不传一个"看着像日期"的脏值：
@@ -2232,7 +2232,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  jcSubAdd:t=>{ const j=JCs.find(x=>x.id===t.dataset.id), kind=t.dataset.kind; if(!j||!JCSUB_KIND[kind]) return;
    jcSubKind=kind; jcSubId=j.id; jcSubD={date:(kind==='pay'?SYS_TODAY:''),amt:''};
    jcSubDlg(kind,j.id);
-   toast(`已在子表末尾生成<b>一行草稿</b>（尚未保存）—— ${kind==='pay'?'付款日期默认取系统当日，可改':'<b>发票日期必填</b>'}；填完点「保存」落库、点「取消」丢弃`,5600); },
+   toast(`已在子表末尾生成<b>一行草稿</b>（尚未保存）—— ${kind==='pay'?'付款日期默认取系统当日，可改':'<b>发票日期必填</b>'}；填完点「保存」写入、点「取消」丢弃`,5600); },
  jcSubSet:t=>{ if(!jcSubKind) return; jcSubD[t.dataset.k]=t.value; },   /* 写草稿层，**不重绘**（避免每改一格就把焦点丢掉） */
  jcSubCancel:()=>{ const k=jcSubKind, id=jcSubId; if(!k) return; jcSubReset(); jcSubDlg(k,id);
    toast('已取消 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
@@ -2261,17 +2261,17 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    else toast(`已增加发票 <b>${M(v)}</b>（${dt}）→ 发票合计 ${M(jcInvSum(j2))}`); },
  /* 子表删行 ⇒ `POST /api/m11/invoice/del` / `payment/del`（按**下标**取 id —— 见 `jcLoadSub` 里的 `j._ids`）。 */
  jcInvDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
-   const rid=((j._ids||{}).inv||[])[+t.dataset.i]; if(!rid) return toast('这行还没从后端载入，请关掉弹窗重开');
+   const rid=((j._ids||{}).inv||[])[+t.dataset.i]; if(!rid) return toast('这行还没载入，请关掉弹窗重开');
    if(!await jcAct(()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行')) return;
    const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
    await jcLoadSub(j2); ACT.jcInvDlg({dataset:{id:j2.id}}); render(); },
  jcTInvDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
-   const rid=((j._ids||{}).tinv||[])[+t.dataset.i]; if(!rid) return toast('这行还没从后端载入，请关掉弹窗重开');
+   const rid=((j._ids||{}).tinv||[])[+t.dataset.i]; if(!rid) return toast('这行还没载入，请关掉弹窗重开');
    if(!await jcAct(()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行')) return;
    const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
    await jcLoadSub(j2); ACT.jcTInvDlg({dataset:{id:j2.id}}); render(); },
  jcPayDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
-   const rid=((j._ids||{}).pay||[])[+t.dataset.i]; if(!rid) return toast('这行还没从后端载入，请关掉弹窗重开');
+   const rid=((j._ids||{}).pay||[])[+t.dataset.i]; if(!rid) return toast('这行还没载入，请关掉弹窗重开');
    if(!await jcAct(()=>API.m11PayDel({row_id:Number(rid)}), '已删除该付款行')) return;
    const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
    await jcLoadSub(j2); ACT.jcPayDlg({dataset:{id:j2.id}}); render(); },

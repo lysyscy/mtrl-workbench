@@ -112,10 +112,10 @@ const plDraftRow=()=>{ const d=plD, isNew=(plRowEditId===PL_NEW_ID);
   return `<tr class="draftrow">
     <td class="ctr fl"></td>
     <td class="fc">${isNew
-      ? '<span class="tag t-in" title="尚未保存 —— 填完点本行右侧「保存」落库；「取消」丢弃（草稿不入库）">手动 · 新增</span>'
-      : '<span class="tag t-in" title="正在原地编辑这条手动行 —— 点「保存」落库、点「取消」保持原样（不新增行）">手动 · 编辑</span>'}</td>
+      ? '<span class="tag t-in" title="尚未保存 —— 填完点本行右侧「保存」写入；「取消」丢弃（草稿不写入）">手动 · 新增</span>'
+      : '<span class="tag t-in" title="正在原地编辑这条手动行 —— 点「保存」写入、点「取消」保持原样（不新增行）">手动 · 编辑</span>'}</td>
     <td><input class="inp now" type="month" style="min-width:104px" data-act="plRowSet" data-k="ym" value="${esc(d.ym||'')}" title="年月 = 归月依据（必填 · 月度形态）；保存后按它归月归档"></td>
-    <td><select class="inp" style="min-width:180px" data-act="plRowSet" data-k="proj" title="归属项目（已建档项目 · 含归档、不含壳）—— 落库记项目 id">${plProjOptions(d.proj)}</select></td>
+    <td><select class="inp" style="min-width:180px" data-act="plRowSet" data-k="proj" title="归属项目（已建档项目 · 含归档、不含壳）—— 写入记项目 id">${plProjOptions(d.proj)}</select></td>
     <td><input class="inp plain" style="min-width:134px" data-act="plRowSet" data-k="docNo" value="${esc(d.docNo||'')}" placeholder="可空" title="单据号允许为空（与导入行同）；保存后按 §4.3.4 实时出审查结果"></td>
     <td class="num"><input class="inp num" style="width:96px" data-act="plRowSet" data-k="flowAmt" value="${esc(d.flowAmt||'0.00')}" title="该流程金额（比对 i8 通知书的审批金额）"></td>
     <td class="num"><span class="mut" title="保存后按命中的 i8 通知书派生（= 该单据已付金额）；单据号未命中 → 显示「—」">—</span></td>
@@ -126,7 +126,7 @@ const plDraftRow=()=>{ const d=plD, isNew=(plRowEditId===PL_NEW_ID);
     <td><input class="inp" style="min-width:128px" data-act="plRowSet" data-k="remark" value="${esc(d.remark||'')}" placeholder="—"></td>
     <td><span class="mut sm" title="保存后按 §4.3.4 实时判定 —— 手动行与导入行走同一条链路，不因来源被跳过">保存后判定</span></td>
     <td class="ctr"><span class="mut sm">—</span></td>
-    <td class="ctr now"><button class="btn sm pri" data-act="plRowSave"${plSaving?' disabled':''} title="${plSaving?'正在保存 —— 请勿重复点击（连点会落两行相同的计划行）':'校验通过后落库（落库后与导入行同样参与审查）'}">${plSaving?'保存中…':'保存'}</button> <button class="btn sm" data-act="plRowCancel"${plSaving?' disabled':''} title="丢弃这一行草稿（不入库）">取消</button></td>
+    <td class="ctr now"><button class="btn sm pri" data-act="plRowSave"${plSaving?' disabled':''} title="${plSaving?'正在保存 —— 请勿重复点击（连点会落两行相同的计划行）':'校验通过后写入（写入后与导入行同样参与审查）'}">${plSaving?'保存中…':'保存'}</button> <button class="btn sm" data-act="plRowCancel"${plSaving?' disabled':''} title="丢弃这一行草稿（不写入）">取消</button></td>
   </tr>`; };
 BIND.m04=()=>{ const box=$('#plAllBox'); if(!box) return;
   const ids=plVisible().map(p=>p.id);

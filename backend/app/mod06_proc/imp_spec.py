@@ -60,7 +60,7 @@ SPEC = DomainSpec(
     batch=True,
     ignored=_ignored(),
     note="必须有「核算月」（真模板里那列叫「时间」，也认 Excel 序列号）与至少一列材料列；"
-         "**只填了机械列的行也算数据**。落库前要选**项目**（按项目分别存）—— 机械 6 列**照样导入**。",
+         "**只填了机械列的行也算数据**。写入前要选**项目**（按项目分别存）—— 机械 6 列**照样导入**。",
     keep_note="未采（原样保留）：序号 / 尾部合计（小计）行 / 手写说明行。"
               "⚠️ 机械 6 列**是采的**（2026-09-26 起）—— 这里只说「不采什么」，⛔ 别再写成「机械不导入」。",
 )
@@ -77,15 +77,15 @@ def _blocks_of(bad: list[dict], skip_rows: list[dict]) -> list[dict]:
     """
     out: list[dict] = []
     if bad:
-        out.append({"title": f"⚠️ 落不了库的行（{len(bad)} 行 · 不会写进历史段）",
-                    "note": "这些行**不导入**，其余行照常落库。要它们也进去：改成标准格式后**重导一次**"
+        out.append({"title": f"⚠️ 写不进去的行（{len(bad)} 行 · 不会写进历史段）",
+                    "note": "这些行**不导入**，其余行照常写入。要它们也进去：改成标准格式后**重导一次**"
                             "（先把同批整批回滚，⛔ 别让两批叠着）。",
                     "columns": ["行", "原因"],
                     "rows": [[a["line"], a["reason"]] for a in bad]})
     if skip_rows:
         out.append({"title": f"本来就跳过的行（{len(skip_rows)} 行 · 不是数据行，**不用你改**）",
                     "note": "合计/小计行 · 手写说明行 · 空行 —— **本来就不该进库**（⛔ 不是你文件的毛病）。"
-                            "⚠️ 与上面「落不了库的行」**不是一回事**：那些才要你改文件。",
+                            "⚠️ 与上面「写不进去的行」**不是一回事**：那些才要你改文件。",
                     "columns": ["行", "原因"],
                     "rows": [[x["row"], x["why"]] for x in skip_rows]})
     return out
@@ -155,11 +155,11 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     opts = dict(options or {})
     warehouse = str(opts.get("warehouse") or "").strip()
     if not warehouse:
-        raise MustReportError("请先选**项目**（仓库名）—— 过程资料按项目分别存，没选就无从落库")
+        raise MustReportError("请先选**项目**（仓库名）—— 过程资料按项目分别存，没选就无从写入")
     rows, skip_rows, bad = I.plan_rows(records)
     if not rows:
         why = "；".join(f"行 {a['line']}：{a['reason']}" for a in bad[:3]) or "文件里没有数据行"
-        raise MustReportError(f"没有一行可落库的数据 —— {why}。历史段未被改动（不写库）")
+        raise MustReportError(f"没有一行能写入的数据 —— {why}。历史段未被改动（没有写入）")
     # ⚠️ `notes`（`ImportPlan` 的老字段）**不再拼**：那几行现在走**逐行**的 `skip_rows`（上面
     #    `_blocks_of` 与 `skipped` 都用它）⇒ 再拼一份文本就是"同一件事两个说法"。
     plan = I.ImportPlan(rows=rows, anomalies=bad, notes=[])

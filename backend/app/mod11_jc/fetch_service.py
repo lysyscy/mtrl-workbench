@@ -315,7 +315,7 @@ def run_fetch(
         "message": (
             f"抓取 {len(rows)} 条（未审批丢弃 {dropped}）· 匹配上 {len(m['matched'])} 条"
             f"（新增 {stats['inserted']} / 刷新 {stats['refreshed']}）· "
-            f"归属未走完、未落库 {len(m['unmatched'])} 条（按口径 = 不纳入；清单见执行记录）"
+            f"归属未走完、未写入 {len(m['unmatched'])} 条（按口径 = 不纳入；清单见执行记录）"
             + (f" · ⚠️ {sync_result.get('message')}" if sync_result.get("degraded") else "")
         ),
     }

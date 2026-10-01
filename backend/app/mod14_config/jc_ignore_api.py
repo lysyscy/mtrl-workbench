@@ -59,7 +59,7 @@ def api_jc_ignore_add(req: JcIgnoreIn) -> dict:
             elif out.get("reused"):
                 msg = f"「{name}」已在名单里（⛔ 没有重复添加）。"
             else:
-                msg = f"已加入剔除名单：「{name}」—— 它的合同从下次抓取起**不再落库**，也不再进「未落库」清单。"
+                msg = f"已加入剔除名单：「{name}」—— 它的合同从下次抓取起**不再写入**，也不再进「未写入」清单。"
             return _flash(True, msg, id=out.get("id"), reused=bool(out.get("reused")))
     except MustReportError as exc:
         return _flash(False, str(exc))

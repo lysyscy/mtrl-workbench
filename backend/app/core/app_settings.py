@@ -45,7 +45,7 @@ SPECS: tuple[SettingSpec, ...] = (
         key=SETTING_I8_BASE_URL,
         env_attr="i8_base_url",
         label="i8 服务地址",
-        hint="i8 装在哪台机器上（形如 http://主机:端口）。⚠️ **四个接口路径由它推导**，不单独配。",
+        hint="i8 装在哪台机器上（形如 http://主机:端口）。⚠️ **四项取数的地址由它推导**，不单独配。",
         kind="url",
     ),
     SettingSpec(

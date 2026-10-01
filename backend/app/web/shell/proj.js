@@ -79,7 +79,7 @@ const ntReveal=()=>{ fNt.month=String(naD.date||naDefDate()).slice(0,7);
 /* 草稿行（**列对齐** 18 格 —— 逐列与 `NT_THEAD` 对齐；值取草稿层，不是 `NO` 的行） */
 const ntDraftRow=()=>{ const d=naD, cat=d.cat||'辅材', isJc=cat==='集采';
   return `<tr class="draftrow">
-    <td class="ctr fl"><span class="tag t-in" title="尚未保存 —— 填完点本行右侧「保存」落库；「取消」丢弃（草稿不入库，与弹窗的「取消」等价）">新增</span></td>
+    <td class="ctr fl"><span class="tag t-in" title="尚未保存 —— 填完点本行右侧「保存」写入；「取消」丢弃（草稿不写入，与弹窗的「取消」等价）">新增</span></td>
     <td><input class="inp" type="date" data-act="ntRowSet" data-k="date" value="${esc(d.date||'')}" title="单据日期（决定归月）"></td>
     <td><input class="inp" style="min-width:104px" data-act="ntRowSet" data-k="code" value="${esc(d.code||'')}" placeholder="单据编码"></td>
     <td><select class="inp" style="min-width:150px" data-act="ntRowSet" data-k="pid" title="付款项目（已建档项目 · 含归档、不含壳，§六-9）">${ntOpts()}</select></td>
@@ -90,13 +90,13 @@ const ntDraftRow=()=>{ const d=naD, cat=d.cat||'辅材', isJc=cat==='集采';
     <td><input class="inp plain" style="min-width:132px" data-act="ntRowSet" data-k="sup" value="${esc(d.sup||'')}" placeholder="${isJc?'人工录入':'仅集采可填'}" ${isJc?'':'readonly'}></td>
     <td class="sm">${esc(CUR.name)}</td>
     <td class="num"><input class="inp num" style="width:96px" data-act="ntRowSet" data-k="approve" value="${esc(d.approve)}" title="手动行：审批金额可直接手改（i8 抓取行仍只读）；全站口径「统计两金额 ≤ 审批金额」仍成立"></td>
-    <td class="num"><span class="mut" title="尚未落库 —— 落库后按「审批金额 − 已付金额」派生">0.00</span></td>
+    <td class="num"><span class="mut" title="尚未写入 —— 写入后按「审批金额 − 已付金额」派生">0.00</span></td>
     <td class="num"><span class="mut">0.00</span></td>
     <td class="num"><span class="mut" title="手动新增行：这笔钱没有新结算（无 i8 单据）⇒ 统计结算金额恒为 0、不可修改；要入账请填「统计付款金额」">0.00</span></td>
     <td class="num"><input class="inp num" style="width:96px" data-act="ntRowSet" data-k="sp" value="${esc(d.sp)}" title="上限 = 审批金额（按发票走，只能往下调）"></td>
     <td class="ctr"><select class="inp" style="width:auto" data-act="ntRowSet" data-k="astat">${enumOpts('astat',d.astat)}</select></td>
     <td class="ctr">${stTag('未付清')}</td>
-    <td class="ctr now"><button class="btn sm pri" data-act="ntRowSave"${ntSaving?' disabled':''} title="${ntSaving?'正在保存 —— 请勿重复点击':'校验通过后落库（统计结算恒 0 · 录入人 = 当前登录用户）'}">${ntSaving?'保存中…':'保存'}</button> <button class="btn sm" data-act="ntRowCancel"${ntSaving?' disabled':''} title="丢弃这一行草稿（不入库）">取消</button></td>
+    <td class="ctr now"><button class="btn sm pri" data-act="ntRowSave"${ntSaving?' disabled':''} title="${ntSaving?'正在保存 —— 请勿重复点击':'校验通过后写入（统计结算恒 0 · 录入人 = 当前登录用户）'}">${ntSaving?'保存中…':'保存'}</button> <button class="btn sm" data-act="ntRowCancel"${ntSaving?' disabled':''} title="丢弃这一行草稿（不写入）">取消</button></td>
   </tr>`; };
 /* ===== 列定义 → 表头 / 空态跨列数（阶段 4 · **试点：只接 m03**）=====
    原先"表头 / 每行 `<td>` / 空态行 `colspan`"三处各写一遍 ⇒ **加一列要改三处**。
@@ -243,7 +243,7 @@ const sumRowOf=(thead,rows,sums,opt={})=>{
 const LED_THEAD=`      <th style="width:44px">序号</th><th>月份</th><th>其他支出金额</th><th>付款</th><th>欠款</th><th>备注</th><th>操作</th>`;
 /* MOD-05 付款流水的表头（与其余 7 张同款：抽常量 ⇒ 空态行的跨列数由 `thCount()` 派生，不写死） */
 const FL_THEAD=`<th>流水号</th><th>单据编码</th><th>付款项目</th><th>付款日期</th><th>付款金额</th><th>实际付款方式</th><th>备注</th><th>操作人</th><th>状态</th><th>操作</th>`;
-const PJ_THEAD=`<th data-nosort>排序<span class="mut">（自定义 · 全站跟随）</span></th><th>类型</th><th>展示名<span class="mut">（默认取仓库名 · 可改）</span></th><th>仓库名<span class="mut">（唯一标识 · 不可改）</span></th><th>项目全名<span class="mut">（可改 · 留痕）</span></th><th>phid<span class="mut">（不可改）</span></th><th>状态</th><th>所属壳</th><th>小微识别关键词</th><th>操作</th>`;
+const PJ_THEAD=`<th data-nosort>排序<span class="mut">（自定义 · 全站跟随）</span></th><th>类型</th><th>展示名<span class="mut">（默认取仓库名 · 可改）</span></th><th>仓库名<span class="mut">（唯一标识 · 不可改）</span></th><th>项目全名<span class="mut">（可改 · 留痕）</span></th><th>信息化编号<span class="mut">（不可改）</span></th><th>状态</th><th>所属壳</th><th>小微识别关键词</th><th>操作</th>`;
 const DIFF_THEAD=`<th>单据编号</th><th>序号</th><th>物料</th><th>仓库</th><th>原值（i8）</th><th>调整后</th><th>差额</th><th>备注</th><th>操作人</th><th>时间</th><th>操作</th>`;
 const INV_THEAD=`<th>单据编号</th><th>序号</th><th>方向</th><th>物料</th><th>规格</th><th>单位</th><th>数量</th><th>不含税单价</th><th>含税单价</th><th>金额</th><th>调整后金额</th><th>价税合计</th><th>业务类型</th><th>供应商 / 班组</th><th>单据日期</th><th>审核日期</th><th>仓库</th><th>wbs 名称</th><th>cbs 名称</th><th>操作</th>`;
 /* ⭐ 2026-09-13 用户口径：发票子表**录入时要填日期** ⇒ 新增「发票日期」列（供应商 / 贸易公司两子表共用本表头）。
@@ -272,7 +272,7 @@ const jcSubDlg=(k,id)=>{ if(!id) return;
 const jcSubRow=()=>{ const d=jcSubD;
   const dateCell=`<td style="white-space:nowrap"><input class="inp" type="date" style="min-width:134px" data-act="jcSubSet" data-k="date" value="${esc(d.date||'')}" title="必填 —— 发票日期 / 付款日期（决定归月）"></td>`;
   const amtCell=`<td class="num"><input class="inp num" style="width:110px" data-act="jcSubSet" data-k="amt" value="${esc(d.amt||'')}" placeholder="金额" title="必须 > 0；本子表不设上限"></td>`;
-  const ops=`<td class="ctr now"><button class="btn sm pri" data-act="jcSubSave" title="校验通过后落库（日期必填 · 金额必须 > 0、无上限）">保存</button> <button class="btn sm" data-act="jcSubCancel" title="丢弃这一行草稿（不入库）">取消</button></td>`;
+  const ops=`<td class="ctr now"><button class="btn sm pri" data-act="jcSubSave" title="校验通过后写入（日期必填 · 金额必须 > 0、无上限）">保存</button> <button class="btn sm" data-act="jcSubCancel" title="丢弃这一行草稿（不写入）">取消</button></td>`;
   if(jcSubKind==='pay') return `<tr class="draftrow">${dateCell}${amtCell}<td>${tag('手工','in')}</td>${ops}</tr>`;
   return `<tr class="draftrow"><td class="fc">新增</td>${dateCell}${amtCell}${ops}</tr>`; };
 /* MOD-11 集采台账的表头（第 9 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(JC_THEAD)`），不写死 */

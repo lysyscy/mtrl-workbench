@@ -335,7 +335,7 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
         f"能写入的应只有**两行合规行**（合计/说明行不许算进去）—— 拿到 {pre.get('writable')!r}；"
         "③ 没给这个数 = 域的预览钩子没接上（用户又只能走到 ④ 才知道）")
     blocks = {b["title"]: b for b in pre["blocks"]}
-    bad = next((b for t, b in blocks.items() if t.startswith("⚠️ 落不了库的行")), None)
+    bad = next((b for t, b in blocks.items() if t.startswith("⚠️ 写不进去的行")), None)
     assert bad, f"③ 没报出「落不了库的行」—— 用户又要走到 ④ 才知道：{list(blocks)}"
     assert [r[0] for r in bad["rows"]] == [5], f"落不了库的行号不对（应是 Excel 第 5 行）：{bad['rows']}"
     assert "核算月认不出" in bad["rows"][0][1]
@@ -372,7 +372,7 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     # ⚠️ 顶上那句数字**必须是真写进去的行数**（原来是"解析出多少行"：5 行里只写 2 行，却说"已导入 5 行"）
     assert "已导入 2 行" in out["message"], \
         f"回执头一句的数字不是**真写入**的行数（实测晋江那份：写 24 行却说「已导入 32 行」）：{out['message']}"
-    assert any(b["title"].startswith("⚠️ 落不了库的行") for b in out["report"].get("blocks") or []), \
+    assert any(b["title"].startswith("⚠️ 写不进去的行") for b in out["report"].get("blocks") or []), \
         "④ 回执里没有「落不了库的行」—— 只在 ③ 说过的信息，到落库后就断了"
     back = client.post("/api/imp/m06_proc/rollback",
                        json={"batch": out["report"]["batch"]}).json()
@@ -382,7 +382,7 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     ok_rows = [rows[0], (2, 45475, 100, "", "", "", 200, "", "", "", 0)] + rows[2:]
     pre2, _ = _prev(_book(ok_rows))
     assert pre2["writable"] == 3, f"改成标准写法后应能写 3 行：{pre2.get('writable')}"
-    assert not [b for b in pre2["blocks"] if b["title"].startswith("⚠️ 落不了库的行")], \
+    assert not [b for b in pre2["blocks"] if b["title"].startswith("⚠️ 写不进去的行")], \
         "标准写法下不该再有「落不了库的行」"
 
 

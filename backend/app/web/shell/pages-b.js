@@ -263,7 +263,7 @@ const dfDraftRow=()=>`<tr class="draftrow">
   <td class="num"><input class="inp num" style="width:104px" data-act="dfSet" data-k="amount" value="${esc(dfD.amount)}" placeholder="可正可负" title="带符号：+ 上调 / − 下调（§5.8.3），与调整单差额同源"></td>
   <td class="ctr"><select class="inp" style="width:auto" data-act="dfSet" data-k="status">${enumOpts('dfState',dfD.status)}</select></td>
   <td><input class="inp" style="min-width:130px" data-act="dfSet" data-k="remark" value="${esc(dfD.remark)}" placeholder="备注"></td>
-  <td class="ctr now"><button class="btn sm pri" data-act="dfSave" title="校验通过后落库（归属恒为「库存单据」）">保存</button> <button class="btn sm" data-act="dfCancel" title="丢弃这一行草稿（不入库）">取消</button></td></tr>`;
+  <td class="ctr now"><button class="btn sm pri" data-act="dfSave" title="校验通过后写入（归属恒为「库存单据」）">保存</button> <button class="btn sm" data-act="dfCancel" title="丢弃这一行草稿（不写入）">取消</button></td></tr>`;
 let fJc={tag:'纳入台账',arch:'全部',sup:'',projs:[],amt:''};
 /* 展开态在 `PJ_OPEN`（key='jcPj'） */                 /* 「项目」多选面板的展开态（第 4 个 projPanel 调用点） */
 /* 集采三态「批量标记」的勾选集合（§6.5.3）：范围 = **当前筛选结果**，筛选变化时裁剪 */

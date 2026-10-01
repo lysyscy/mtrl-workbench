@@ -158,7 +158,7 @@ def plan_archive(
 
     no_phid = [
         {"name_full": owner, "warehouses": list(whs),
-         "reason": "该全名有仓库、却不在 i8 常用项目列表（无 phid）—— "
+         "reason": "该全名有仓库、却不在 i8 常用项目列表（没有信息化编号）—— "
                    "请先把它加入 i8 常用项目列表，再同步一次"}
         for owner, whs in by_owner.items()
         if owner not in seen_common and owner not in existing_names and owner not in shell_names

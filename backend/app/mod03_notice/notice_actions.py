@@ -84,7 +84,7 @@ class CategoryChange:
             parts.append(f"另有 {len(self.unchanged)} 行本就是「{label}」、未变")
         if self.missing:
             parts.append(f"另有 {len(self.missing)} 行不在当前数据里、跳过")
-        parts.append("分类改动**落库、不留痕**，且再次抓取**不被覆盖**（§4.2.4）")
+        parts.append("分类改动**会写入、不留痕**，且再次抓取**不被覆盖**（§4.2.4）")
         return "；".join(parts)
 
 

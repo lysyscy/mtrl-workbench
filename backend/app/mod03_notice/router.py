@@ -155,7 +155,7 @@ def assign_ownership(req: AssignRequest) -> AssignResponse:
                 ok=True,
                 message=(
                     f"关键词「{keyword}」已去重追加到 <b>{label}</b>。"
-                    "请**再抓一次** —— 这次会自动命中并落库。"
+                    "请**再抓一次** —— 这次会自动命中并写入。"
                 ),
             )
 
@@ -180,7 +180,7 @@ def assign_ownership(req: AssignRequest) -> AssignResponse:
             ok=True,
             message=(
                 f"已建档并归集：<b>{name}</b>（关键词「{keyword}」）。"
-                "请**再抓一次** —— 这次会自动命中并落库。"
+                "请**再抓一次** —— 这次会自动命中并写入。"
             ),
         )
 

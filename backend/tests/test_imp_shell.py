@@ -93,7 +93,7 @@ def test_四步条同屏只许一条_且当前步要亮():
     assert code.count("lgSteps(") == 1, (
         f"`V.imp` 里画了 {code.count('lgSteps(')} 条步骤条 —— 用户 2026-09-26 报的正是"
         "「两条一模一样的四步条」（只许留卡里那条）")
-    assert "const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '④ 确认落库'];" in SHELL, \
+    assert "const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '④ 确认写入'];" in SHELL, \
         "四步的文案/步数变了（本页是四步向导 —— 改动要同批核 `IMP.step` 的推进点）"
     assert "i === at ? 'on' : (i < at ? 'dn' : '')" in SHELL, \
         "步骤条不再区分「当前步 `on` / 走过的 `dn`」—— 用户就不知道自己在第几步了"
@@ -110,7 +110,7 @@ def test_数据导入页在壳里_四步向导_且无死控件():
     assert page_load().get("imp") == ["数据导入"], page_load().get("imp")
     assert "数据导入" in loaders()
     # ③ 四步向导的四步文案都在（人看得见的流程）
-    for step in ("① 选域与文件", "② 列映射", "③ 预览校验", "④ 确认落库"):
+    for step in ("① 选域与文件", "② 列映射", "③ 预览校验", "④ 确认写入"):
         assert step in SHELL, f"四步向导缺一步：{step}"
     # ④ 无死控件（离线等价物）：每个 `data-act` 都能解析到 `ACT`
     acts = set(re.findall(r"\nACT\.(\w+)\s*=", SHELL))

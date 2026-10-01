@@ -70,8 +70,8 @@ def export_phids(session: Session) -> str:
             seen.append(phid)
     if not seen:
         raise MustReportError(
-            "本地项目档案里没有可用 phid（i8 项目编号）⇒ 无法按项目导出。"
-            "请先「同步常用项目列表」（API-06）建档。"
+            "本地项目档案里没有可用的信息化编号 ⇒ 无法按项目导出。"
+            "请先「同步常用项目列表」建档。"
         )
     return ",".join(seen)
 

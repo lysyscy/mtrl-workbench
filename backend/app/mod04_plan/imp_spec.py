@@ -87,7 +87,7 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
         raise MustReportError("导入前**必须先选「年月」**（本批数据一律归入所选月份，§4.3.3）")
     rows = _rows_of(records, ym)          # ⭐ 中文月日按所选年月补全在 `_rows_of` 里做（域内口径，通用面不管）
     if not rows:
-        raise MustReportError("没有一行可落库的数据 —— 该月未被改动（不写库）")
+        raise MustReportError("没有一行能写入的数据 —— 该月未被改动（没有写入）")
     rows = I.attach_projects(rows, project_briefs(s))
     out = repo.merge_month(s, year_month=ym, rows=rows)
     # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」· 四个域一起改）：回执**自报人话指标** ——

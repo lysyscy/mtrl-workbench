@@ -56,7 +56,7 @@ function lgPick(id, pickAct, parseAct, file, tip) {
     + `<div class="fi"><label>选文件（.xlsx）</label>`
     + `<input class="inp" type="file" id="${esc(id)}" accept=".xlsx" data-act="${esc(pickAct)}"></div>`
     + `<div class="fi"><label>&nbsp;</label>`
-    + `<button class="btn pri" data-act="${esc(parseAct)}"${file ? '' : ' disabled'} title="${file?'解析这个文件（一个字节都不写库）':'还没选文件 —— 选完才能解析'}">解析并预览（不写库）</button></div>`
+    + `<button class="btn pri" data-act="${esc(parseAct)}"${file ? '' : ' disabled'} title="${file?'解析这个文件（一个字节都不写入）':'还没选文件 —— 选完才能解析'}">解析并预览（不写入）</button></div>`
     + `<div class="fi"><label>&nbsp;</label><span class="mut sm">${file
       ? `已选：<b class="fc">${esc(file.name)}</b>（${Math.max(1, Math.round(file.size / 1024))} KB）`
       : esc(tip || '只读第一个工作表')}</span></div>`})}`;
@@ -223,7 +223,7 @@ async function i8SetOpen() {
   try { items = ((await API.m14Settings()) || {}).items || []; }
   catch (e) { return toast(`⚠️ 读不到当前连接参数：${esc(String((e && e.message) || e))}`, 8000); }
   const it = items.find(x => x.key === 'i8_base_url');
-  if (!it) return toast('后端没给「i8 服务地址」这一项 —— 见顶部横幅', 8000);
+  if (!it) return toast('系统里没有「i8 服务地址」这一项 —— 见顶部横幅', 8000);
   const src = it.stored ? '<span class="tag t-pri">本处所设</span>' : '<span class="tag t-in">.env</span>';
   const meta = it.stored
     ? `当前生效：<b class="fc">${esc(it.effective)}</b>（本处所设；清空输入框并保存即回落到 <code>.env</code>）`
@@ -294,7 +294,7 @@ const IMP = {domains: [], domain: '', schema: null, file: null, token: '', cols:
             busy: false,
             msg: '', kind: 'ok'};
 
-const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '④ 确认落库'];
+const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '④ 确认写入'];
 /* 映射表里「不导入」那一项的取值：⛔ 用**空串**而不是后端那个哨兵常量 ——
    后端 `_records` 见 `mapping_.get(src, IGNORE)`，空串是 falsy ⇒ 同样走"原样保留"那条路（实测口径），
    而抄一份哨兵字面量到壳里，一旦后端改了字面量，就会变成"把一个不存在的字段名当目标"（静默写脏）。 */
@@ -441,7 +441,7 @@ V.imp = () => {
         <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
         <button class="btn" disabled style="min-width:186px" title="库里还没有项目档案 —— 先去「i8 接入层」同步「常用项目列表」">（库里还没有项目档案）</button>
         <span class="mut sm">⚠️ <b>这个域要先有项目档案</b>：去 <b>「i8 接入层」</b>页同步
-          <b>「常用项目列表」</b>（按 phid 建档，重复的不会重复建；「一个全名挂多个仓库」的进 <b>「项目档案」</b>页的
+          <b>「常用项目列表」</b>（按 信息化编号 建档，重复的不会重复建；「一个全名挂多个仓库」的进 <b>「项目档案」</b>页的
           「待人工建档」卡处理）—— 建完<b>回本页刷新</b>，候选就在了。</span></div>`) : ''}
       ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
         <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
@@ -461,7 +461,7 @@ V.imp = () => {
     ? `<div class="tip">本批数据将写入：${
         [
           IMP.hasPj ? `项目 <b>${esc(IMP.wrap ? impPjLabel(IMP.wrap)
-            : (IMP.org.length ? '（还没选）' : '（库里还没有项目档案 —— 落不了库）'))}</b>`
+            : (IMP.org.length ? '（还没选）' : '（库里还没有项目档案 —— 没法写入）'))}</b>`
             + (IMP.wrap ? `<span class="mut sm">（仓库名 ${esc(IMP.wrap)}）</span>` : '') : '',
           IMP.hasYm ? `归属年月 <b>${esc(IMP.ym || bjMonth())}</b>` : '',
           IMP.hasCut ? `截止核算月 <b>${esc(IMP.cutoff || '（留空 ⇒ 取本批最大月）')}</b>`
@@ -473,10 +473,10 @@ V.imp = () => {
      ⇒ 同一个域的三句话长出三种颜色，而壳**根本不知道域写了什么** ⇒ 与"颜色只承担语义"相反。
      ⛔ 别再按字段名挑颜色；将来真要分语气走 `B` 案（域自报 `note_kind`）。判据 = `tests/test_ux_colors.py`。 */
   const head = `<div class="card"><h4>数据导入<span class="sp"><span class="mut sm">一次导一个域的一种表 ·
-    落库前一个字节都不写库</span></span></h4><div class="bd">${lgSteps(IMP_STEPS, IMP.step)}
+    写入前一个字节都不写入</span></span></h4><div class="bd">${lgSteps(IMP_STEPS, IMP.step)}
     ${FBAR({cls:'pane',body:`
       <div class="fi"><label>导入哪个域</label>
-        <select class="inp" data-act="impDomain">${doms || '<option value="">（后端还没挂任何域）</option>'}</select></div>
+        <select class="inp" data-act="impDomain">${doms || '<option value="">（还没挂任何导入域）</option>'}</select></div>
       <div class="fi"><label>&nbsp;</label><span class="mut sm">${sch ? esc(sch.title) : '—'}</span></div>`})}
     ${ctxBar}
     ${sch && sch.note ? `<div class="tip">${lgMd(sch.note)}</div>` : ''}
@@ -580,7 +580,7 @@ V.imp = () => {
              + '</details>';
       })()}
       <div style="margin-top:calc(10px * var(--fscale))">
-        <button class="btn pri" data-act="impPreview"${lack.length ? ' disabled' : ''} title="${lack.length?'还缺必填项 / 列映射 —— 上面已列出缺什么':'生成预览（这一步一个字节都不写库）'}">③ 预览校验（不写库）</button>
+        <button class="btn pri" data-act="impPreview"${lack.length ? ' disabled' : ''} title="${lack.length?'还缺必填项 / 列映射 —— 上面已列出缺什么':'生成预览（这一步一个字节都不写入）'}">③ 预览校验（不写入）</button>
         <button class="btn" data-act="impReset">重来</button></div></div>`;
   }
 
@@ -647,7 +647,7 @@ V.imp = () => {
     const pnote = `本步读到 <b class="fc">${ptotal}</b> 行`
       + (pw == null ? '' : ` · 能写入 <b class="fc">${pw}</b> 行`)
       + ` · 表格显示`
-      + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 落库按<b>全量</b>处理）`
+      + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 写入按<b>全量</b>处理）`
                                : `全部 <b class="fc">${plist.length}</b> 行`);
     /* ⭐ 表上方图例：只有真有行被标出来时才画（没有就别让人去找一个不存在的东西）。
        ⭐ 2026-09-27：**两类标记要说清区别**（守则 §2.8）—— 否则"灰底"会被当成"淡一点的警告"。 */
@@ -668,7 +668,7 @@ V.imp = () => {
       said.push(`有 <b>${nbad}</b> 行<b>不会写入</b>`
                 + (nskip ? ' —— 已在上表<b>逐行标出</b>（浅底 ＋ 左侧竖条 ＋ 行号旁的「不写入」，'
                            + '鼠标放上去看原因）'
-                         : '（原因见下面「落不了库的行」）'));
+                         : '（原因见下面「写不进去的行」）'));
     }
     if (nplain > 0) {
       said.push(`另有 <b>${nplain}</b> 行<b>本来就跳过</b>（合计/小计 · 说明 · 空行 ⇒ 不是数据行，`
@@ -679,22 +679,22 @@ V.imp = () => {
         + (nbad > 0
            ? '④ 只写能写入的那些；要它们也进去：先把文件改成标准格式，再<b>整批回滚后重导</b>'
              + '（⛔ 别让两批叠着）。'
-           : '④ 照常落库即可 —— 这一批<b>不需要你改文件</b>。')
+           : '④ 照常写入即可 —— 这一批<b>不需要你改文件</b>。')
         + '</div>'
       : '';
     prevCard = `<div class="card" style="margin-top:calc(12px * var(--fscale))"><h4>预览校验<span class="sp"><span class="mut sm">
-      这一步<b>一个字节都不写库</b></span></span></h4><div class="kpis">
+      这一步<b>一个字节都不写入</b></span></span></h4><div class="kpis">
       <div class="kpi"><div class="k">将写入</div><div class="v">${p.writable == null ? p.total : p.writable}</div>
         <div class="s">行</div></div>
       <div class="kpi"><div class="k">待处理</div><div class="v">${p.problem_count || probs.length}</div>
         <div class="s">处（行/列/原值/原因）</div></div>
-      <div class="kpi"><div class="k">本步写库量</div><div class="v">0</div><div class="s">确认前零写库</div></div>
+      <div class="kpi"><div class="k">本步写入量</div><div class="v">0</div><div class="s">确认前零写入</div></div>
       ${Object.keys(p.kpis || {}).map(k => `<div class="kpi"><div class="k">${esc(k)}</div>
         <div class="v">${esc(String(p.kpis[k]))}</div></div>`).join('')}</div>
       ${probs.length ? `<div class="tw" style="max-height:200px">${TBL({cls:'sm',head:'<th>行</th><th>列</th><th>原值</th><th>原因</th>',
         rows:probs.slice(0, 30).map(x => `<tr><td class="now">${esc(x.row)}</td><td class="now">${esc(x.column)}</td>
           <td class="now">${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`)})}</div>
-        <div class="tip wn" style="margin-top:calc(8px * var(--fscale))">这些问题<b>不影响其余行落库</b>；认不出的值一律原样留着给人看，⛔ 不静默改成 0/空。</div>`
+        <div class="tip wn" style="margin-top:calc(8px * var(--fscale))">这些问题<b>不影响其余行写入</b>；认不出的值一律原样留着给人看，⛔ 不静默改成 0/空。</div>`
       : '<div class="tip ok">没有发现问题行</div>'}
       ${scopeEcho}
       ${lgBlocks(p.blocks)}
@@ -704,10 +704,10 @@ V.imp = () => {
       <div class="tw" style="max-height:280px;margin-top:calc(6px * var(--fscale))">${TBL({cls:'sm',head:pcols,
         rows:[prows || lgEmpty(1, '没有数据行')]})}</div>
       ${pwarn}
-      <div style="margin-top:calc(10px * var(--fscale))"><button class="btn pri" data-act="impCommit"${(needPj || IMP.busy) ? ' disabled' : ''} title="${IMP.busy?'正在落库 —— 请勿重复点击':(needPj?'先回第 ① 步选「这批数据进哪个项目」—— 没选就落不了库':'确认落库（这一步才真正写库）')}">${IMP.busy ? '正在落库…' : '④ 确认落库'}</button>
+      <div style="margin-top:calc(10px * var(--fscale))"><button class="btn pri" data-act="impCommit"${(needPj || IMP.busy) ? ' disabled' : ''} title="${IMP.busy?'正在写入 —— 请勿重复点击':(needPj?'先回第 ① 步选「这批数据进哪个项目」—— 没选就没法写入':'确认写入（这一步才真正写进系统）')}">${IMP.busy ? '正在写入…' : '④ 确认写入'}</button>
         <button class="btn" data-act="impReset">重来</button>
         ${needPj ? `<span class="mut sm" style="margin-left:calc(8px * var(--fscale))">${IMP.org.length
-          ? '⚠️ 先回第 ① 步选「这批数据进哪个项目」 —— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）'
+          ? '⚠️ 先回第 ① 步选「这批数据进哪个项目」 —— 没选就没法写入（⛔ 系统不替你挑，免得写进错项目）'
           : '⚠️ <b>库里还没有项目档案</b> —— 这批数据无处可写：先去「i8 接入层」页同步「常用项目列表」，回本页刷新后再导'}</span>` : ''}</div></div></div>`;
   }
 
@@ -733,7 +733,7 @@ V.imp = () => {
     const handled = ['kpis', 'blocks', 'message', 'batch'];
     const tech = Object.keys(r).filter(k => scalar(k) && handled.indexOf(k) < 0);
     const kpis = Object.entries(r.kpis || {});
-    repCard = `<div class="card" style="margin-top:calc(12px * var(--fscale))"><h4>落库结果<span class="sp"><span class="mut sm">${
+    repCard = `<div class="card" style="margin-top:calc(12px * var(--fscale))"><h4>写入结果<span class="sp"><span class="mut sm">${
       IMP.wrap ? `写入项目：<b>${esc(impPjLabel(IMP.wrap))}</b>`
         + `<span class="mut">（仓库名 ${esc(IMP.wrap)}）</span>` : ''}</span></span></h4><div class="bd">
       ${r.message ? `<div class="tip ok">${lgMd(r.message)}</div>` : ''}
@@ -776,7 +776,7 @@ ACT.impParse = async () => {
                          : '先选「导入哪个域」（本卡第一行）—— 不同域认的列不一样';
     IMP.kind = 'wn'; render(); return;
   }
-  IMP.msg = '正在解析（预览阶段不写库）…'; IMP.kind = 'ok'; render();
+  IMP.msg = '正在解析（预览阶段不写入）…'; IMP.kind = 'ok'; render();
   const fd = new FormData(); fd.append('file', IMP.file); fd.append('sheet', '');
   let r = null;
   try { r = await API.impParse(IMP.domain, fd); }
@@ -809,7 +809,7 @@ ACT.impPjPick = t => { const v = (t && t.dataset && t.dataset.pj) || ''; if (!v)
   toast(`这批数据将导入项目 <b>${esc(IMP.pjDisp[v] || v)}</b>（键 = 仓库名，§2.7.4）`); };
 /* ② → ③：预览（不写库） */
 ACT.impPreview = async () => {
-  IMP.msg = '正在校验（预览阶段不写库）…'; IMP.kind = 'ok'; render();
+  IMP.msg = '正在校验（预览阶段不写入）…'; IMP.kind = 'ok'; render();
   let r = null;
   /* ⭐ 2026-09-26（`TAIL-106`）：**上下文一并递过去** —— 集采要在 ③ 就说出"**这批能配上几条**"，
      而它"算得出什么"取决于**这批进哪个项目**（域钩子收 `options`，与落库同一份上下文包）。
@@ -827,8 +827,8 @@ ACT.impCommit = async () => {
      说清去哪改（⛔ 别只靠后端那句 `请先选项目` 兜着：那时用户已经点了、还以为自己在导数据）。 */
   if (IMP.hasPj && !IMP.wrap) {
     IMP.msg = IMP.org.length
-      ? '请先在第 ① 步选「这批数据进哪个项目」—— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）'
-      : '库里还没有项目档案 ⇒ 这批数据无处可写：请先去「i8 接入层」页同步「常用项目列表」（按 phid 建档，重复的不会重复建），回本页刷新后再导';
+      ? '请先在第 ① 步选「这批数据进哪个项目」—— 没选就没法写入（⛔ 系统不替你挑，免得写进错项目）'
+      : '库里还没有项目档案 ⇒ 这批数据无处可写：请先去「i8 接入层」页同步「常用项目列表」（按 信息化编号 建档，重复的不会重复建），回本页刷新后再导';
     IMP.kind = 'wn'; render(); return;
   }
   /* ⭐ **上下文包 = 域声明的键一并给**（⛔ 壳里不再按域号挑那几个键 —— 2026-09-26 收口）：
@@ -843,7 +843,7 @@ ACT.impCommit = async () => {
      因为脚本 / 接口能绕过界面（本仓老规矩：界面挡不住的路要有后端挡）。 */
   if (IMP.busy) return;
   IMP.busy = true;
-  IMP.msg = '正在落库…'; IMP.kind = 'ok'; render();
+  IMP.msg = '正在写入…'; IMP.kind = 'ok'; render();
   let r = null;
   try { r = await API.impCommit(IMP.domain, { token: IMP.token, mapping: IMP.mapping,
                                             remember: true, options: options }); }

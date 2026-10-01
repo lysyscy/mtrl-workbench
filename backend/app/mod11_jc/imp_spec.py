@@ -53,11 +53,11 @@ SPEC = DomainSpec(
     source_label="项目集采台账（逐项目一份）",
     batch=True,              # ⭐ `TAIL-98`：有**整批回滚**（批次号形如 `JC-…`，回执带出、壳侧按钮据此出现）
     note="必须认出「**合同价**」列（供应商合同总价 / 合同总价 / 合同金额）—— 它是**匹配锚点**，"
-         "认不到就一条都配不上；落库要选**项目**（仓库名）—— 匹配范围就在这个项目内。"
+         "认不到就一条都配不上；写入要选**项目**（仓库名）—— 匹配范围就在这个项目内。"
          "⭐ **覆盖语义**：已存在的行**会被更新**，但**只动这 6 列** —— 材料名 / 付款方式 / 备注 / "
          "存档情况 / 存档号 / 寄回日期；**合同价 / 供应商 / 合同日期 / 甲方单位**是 i8 的、"
          "**不会被覆盖**。导错了可以**整批回滚**（回执里有批次号）。",
-    keep_note="不落库（系统自己算）：结算 / 付款 / 欠款；原样保留（本系统不录）：序号 / 重量 / 开票号 / 单价。",
+    keep_note="不写入（系统自己算）：结算 / 付款 / 欠款；原样保留（本系统不录）：序号 / 重量 / 开票号 / 单价。",
     ignored=tuple((lb, why) for lb, why in P.IGNORED_LABELS.items()),
     #: ⭐ **这一批怎么入库**（页头一句话 · 大白话 · 用户 2026-09-26 拷问后要的）——
     #: 措辞**照代码真值**：对号键 = `EXCEL_COLS` 之外的 `contract_amt`（`import_service._amount_key`）；
@@ -143,7 +143,7 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
         raise MustReportError(f"找不到项目（仓库名 {key!r}）—— 请先在「项目档案」建好")
     rows = _rows_of(records)
     if not rows:
-        raise MustReportError("没有一行可落库的数据 —— 台账未被改动（不写库）")
+        raise MustReportError("没有一行能写入的数据 —— 台账未被改动（没有写入）")
     out = B.apply_batch(s, rows, project_id=int(project_id), project_key=key,
                         operator=str(operator or ""), batch_no=(options or {}).get("batch"))
     out["project_key"] = key
@@ -249,7 +249,7 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
              "rows": [[x.get("row_no"), x.get("why") or ""]
                       for x in out.get("skip_items") or []],
              "empty": "（无）"},
-            {"title": "提醒（不影响本次落库）",
+            {"title": "提醒（不影响本次写入）",
              "columns": ["行", "说明"],
              "rows": [[x.get("row_no"), x.get("why") or ""] for x in out.get("warn_items") or []],
              "empty": "（无）"},

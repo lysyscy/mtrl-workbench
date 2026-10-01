@@ -341,7 +341,7 @@ def test_二次确认且失败降级不重试():
     assert out["ok"] is False and out["degraded"] is True
     # ⚠️ 2026-09-22（`TAIL-69`）：本域**从未建成**手动导入通道 —— 判词从「降级为手动导入」
     #    纠正为「**显式报错待人处理**」（⛔ 判据不删，改指真实现 —— 原判词是悬空承诺）。
-    assert "i8 接口不可用" in out["message"] and "excel_import_available" not in out
+    assert "i8 抓不到数" in out["message"] and "excel_import_available" not in out
     assert calls == ["2026-08"], "失败**不得重试**（导出调用只应发生一次）"
     records = s.by_model.get(RunRecord) or []
     assert len(records) == 1 and records[0].status == "failed"  # 失败要留执行记录

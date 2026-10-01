@@ -151,7 +151,7 @@ def resolve_ownership(
         return OwnershipDecision("normal", target_id=normals[0].id)
 
     # 壳未建档 / 项目未建档 ⇒ 走链路 A 建档（**不得用全名反查命中已存在的小微**，§9.8-6）
-    return OwnershipDecision("not_archived", reason="未建档 ⇒ 需走链路 A（抓 phid → 抓仓库 → 建档）")
+    return OwnershipDecision("not_archived", reason="未建档 ⇒ 需先补齐项目档案（抓 i8 的信息化编号与仓库）")
 
 
 def hit_keyword(keywords: list[str] | None, doc_name: str) -> bool:

@@ -50,7 +50,7 @@ SPEC = DomainSpec(
     max_rows=I.MAX_ROWS,
     batch=True,                       # 每次导入记批次号，同批可**整批回滚**后重导（§4.4.6 第四条）
     note="必须有「**单据号 / 付款金额 / 付款时间**」三列；**金额必须大于 0**、付款时间要认得出来。"
-         "⚠️ 单据号要和本地通知书**精确对上**（对不上的会列进「**未匹配清单**」、**不落库**）——"
+         "⚠️ 单据号要和本地通知书**精确对上**（对不上的会列进「**未匹配清单**」、**不写入**）——"
          "对不上最常见的原因是**该月通知书还没抓**。",
     keep_note="未采（原样保留）：表里其余列。⚠️ 付款方式**可空**（历史台账常常没记 —— 空就存空，"
               "⛔ 不替你填「现汇」）；填了但归不进四类的 ⇒ 记「其他」并把**原文留在备注**。",
@@ -195,8 +195,8 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     plan = I.split_by_match(_plan_of(records), I.known_notices(s))
     if not plan.rows:
         raise MustReportError(
-            "没有一行可落库的数据 —— 流水未被改动（不写库）。"
-            "未匹配 / 异常的行都不落库，见预览里的两张清单")
+            "没有一行能写入的数据 —— 流水未被改动（没有写入）。"
+            "未匹配 / 异常的行都不写入，见预览里的两张清单")
     out = I.commit(s, plan, batch=batch, operator=operator)
     report = I.check_report(s, out["batch"])
     return {
