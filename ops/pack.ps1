@@ -11,8 +11,8 @@
   包内容（⭐ 三类分开，别混）：
     ① **仓**：`git bundle --all`（含全部历史 —— `D18`：git 历史是唯一回退保障）
     ② **非 git 但必需**（被 .gitignore 挡在外面、缺了就"不能继续开发"或"跑不起来"的）：
-       · `.codebuddy/memory/**`（工作记忆 —— 本仓的跨会话方式）
-       · `.codebuddy/memory/**`（注入档 ＋ journal）
+       · `.codebuddy/memory/**`（工作记忆 —— 本仓的跨会话方式：注入档 ＋ 分册 ＋ **逐日日志** `journal/`）
+         ⭐ 2026-10-01（`TAIL-204` 第 2 步）起**只剩这一个记忆家**（原 `.workbuddy/memory/**` 已并入）
        · `ops/nssm/nssm.exe`（服务注册要它，**已 gitignore**）
        · `artifacts/变异覆盖台账.md` ＋ `artifacts/acc_results.json`（变异台账 ＋ 四态快照）
        · **`.codebuddy/backups/`** 里**最新一份** `*_壳单文件基线.html`（`shell_verify` 的默认基准）
@@ -115,7 +115,8 @@ else { & git -C $RepoRoot bundle create $bundle --all | Out-Null; Say ('   ✓ '
 # ---- 3) 非 git 但必需 ----
 Step '2) 非 git 但必需（记忆 / nssm.exe / 产物 / 壳基线）'
 $extra = @(
-    @{ Src = '.codebuddy\memory';                       Dst = '.codebuddy\memory';                    Kind = 'dir'  },
+    # ⭐ 2026-10-01（`TAIL-204` 第 2 步）：两个记忆家已并成一个 ⇒ ⛔ 原第二条 `.workbuddy\memory` 已删
+    #    （它当时被机械改名成 `.codebuddy\memory` ⇒ 与上面这条**重复**）
     @{ Src = '.codebuddy\memory';                       Dst = '.codebuddy\memory';                    Kind = 'dir'  },
     @{ Src = 'ops\nssm\nssm.exe';                       Dst = 'ops\nssm\nssm.exe';                     Kind = 'file' },
     @{ Src = 'artifacts\变异覆盖台账.md';                Dst = 'artifacts\变异覆盖台账.md';              Kind = 'file' },
@@ -232,7 +233,7 @@ if (-not $DryRun) {
     $mf += ('产出时间 : ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
     $mf += ('HEAD     : ' + $head + '（工作区干净 —— 产包闸已挡过未提交）')
     $mf += '仓       : repo\mtrl-workbench.bundle（git bundle --all ⇒ 含全部历史，D18 的回退保障）'
-    $mf += '非 git 件: .codebuddy\memory\** · .codebuddy\memory\** · ops\nssm\nssm.exe · artifacts\*'
+    $mf += '非 git 件: .codebuddy\memory\**（注入档＋分册＋逐日日志）· ops\nssm\nssm.exe · artifacts\*'
     # ⭐ 2026-09-30（用户指示③）：交付面**只带 2 件快照** —— MANIFEST 必须写明，⛔ 别让人以为整份都在包里
     $mf += ('交付面快照: ' + $(if ($faceDone -ge 2) { 'face\材料科业务全流程说明书.md ＋ face\PRD\验收\验收基线.json（⭐ .env 的 PRD_ACCEPTANCE_BASELINE 可指包内这份；⚠️ 云那份仍是真源）' } elseif ($faceDone -eq 1) { '⚠️ 只带了 1 件（另 1 件缺 · 见产包日志）' } else { '⛔ 一件都没带（-SkipFace 或交付面缺件；见产包日志）⇒ 交付面只能靠 WPS 云同步' }))
     $mf += '⛔ 交付面其余件不进包: demo\ · PRD\ 余件 · PRD素材包-* · 交付面根 4 个 md（= WPS 云同步树 ⇒ 目标机同步即有）'

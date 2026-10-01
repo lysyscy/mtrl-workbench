@@ -105,7 +105,7 @@
 ## 六、宿主 hooks 与「自动新开会话并交接」（2026-09-25 实测）
 
 - ⛔⛔ **本 IDE 会话不跑 hook**：用户级 `~/.codebuddy/settings.json` 的 `Stop` · 用户级 `hooks.json` 的 `Stop` · **项目级** `.codebuddy/settings.json` 的 `Stop` —— 三处同时配 ＋ 重启整个 VS Code ＋ 走完一个完整回合 ⇒ **0 次触发**；宿主日志只有 `cli-memwatch-*.log`，无 hook 加载记录；「插件形式」未试（本机只有两个内置 zip 市场 ⇒ 猜 schema 违纪）。官方文档列的事件/配置位属 **CodeBuddy Code（CLI）** 能力。
-- ⇒ `TAIL-95` 收口 **「实测判负」**（决定件 `D27`）：**维持每轮自检**（① 答复前自检三条件 ② 交接材料落 §13.6 ③ 记忆两处：`.codebuddy/memory/` ＋ `.codebuddy/memory/`）。⛔ 不装 CLI、⛔ 不再动宿主配置、⛔ **不许说"有 hook 帮我盯着"**。重议条件 = 真出现「我漏了评估」的事件。
+- ⇒ `TAIL-95` 收口 **「实测判负」**（决定件 `D27`）：**维持每轮自检**（① 答复前自检三条件 ② 交接材料落 §13.6 ③ 记忆**只此一处**：`.codebuddy/memory/` —— ⭐ 2026-10-01 `TAIL-204` 第 2 步起两处已并成一处）。⛔ 不装 CLI、⛔ 不再动宿主配置、⛔ **不许说"有 hook 帮我盯着"**。重议条件 = 真出现「我漏了评估」的事件。
 - 实测 payload 字段 = `cwd` · `hook_event_name` · `session_id` · `stop_hook_active` · `transcript_path`（⛔ **无 `turn_id`**）。用户级 = `.codebuddy/settings.json`（direct 格式）、插件级 = `hooks/hooks.json`（wrapper 格式）。
 - ⚠️ 历史留痕：`~/.codebuddy/hooks/handoff_stop_hook.py` 与 `settings.json.bak-20260925` 是当初挂过又实测无效的件，**别当"在生效"**（脚本留作 CLI 路线备用、未接线）。
 - ⭐ 通则：**「能力存在」 ≠ 「已生效」** —— 任何自动化都要实测到**最后一跳**。
