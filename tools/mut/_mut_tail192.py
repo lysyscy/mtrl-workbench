@@ -27,7 +27,7 @@ BACKEND = ROOT / "backend"
 PY = str(BACKEND / ".venv" / "Scripts" / "python.exe")
 
 ENV_EXAMPLE = ROOT / ".env.example"
-ARCHITECTURE = ROOT / "docs" / "architecture.md"
+ARCHITECTURE = ROOT / "ops" / "architecture.md"   # ⚠️ 2026-10-01 起文档落 `ops/`（`docs/` 已并入）
 CORE_JS = BACKEND / "app" / "web" / "shell" / "core.js"
 ACTIONS_JS = BACKEND / "app" / "web" / "shell" / "actions.js"
 

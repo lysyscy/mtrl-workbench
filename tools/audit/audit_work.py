@@ -32,6 +32,14 @@ BACKUP_KEEP = 5
 BACKUP_ARCHIVE_PREFIXES = ("_归档-", "_旧快照归档-")
 #: ⛔ 不计数：壳单文件基线由 `shell_verify` **自己**守 5 份（阈值表另有一行），不在本条重复管
 BACKUP_SKIP_SUFFIXES = ("_壳单文件基线.html",)
+#: ⛔ **另一用途 ⇒ 不计数**（2026-10-01 · `TAIL-204` 第 5 步）：`交付面-*` = **改交付面之前的**快照
+#:   （原址 `artifacts/delivery-backups/`；第 5 步把它并到"备份唯一落点"）。
+#:   ⚠️ 它与「**手工快照**留 5 份」**不是一件事** —— 混进同一个上限 ⇒ 上限**永远超**
+#:   （实测：并入当天 22 > 5 ⇒ 立刻报黄，而这是**新搬进来**的、不是"又攒了一堆"）。
+#:   ⇒ 与 `README.md` §三/§四 同批写明（口径改了才动计数范围，⛔ 不是放水）。
+BACKUP_OTHER_PREFIXES = ("交付面-", "原型-备份-", "_smoke.js-备份-")
+#: 同上：`.bak` 散件（改交付面/文档**之前**留的）—— 也属"另一种用途"
+BACKUP_OTHER_SUFFIXES = (".bak",)
 #: `.workbuddy/scratch/`（**活区** · 详见该目录 `README.md`）的规模提示线：超 ⇒ 黄**一行**（⛔ 不逐件报）
 SCRATCH_MAX_FILES, SCRATCH_MAX_MB = 2000, 50
 #: ⭐ `tools/oneoff/`（**一次性 / 留痕的堆场** · 处置口径见 `tools/README.md`）的提示线：超 ⇒ 黄**一行**。
@@ -133,15 +141,21 @@ def check_retention() -> list[dict]:
     hits: list[dict] = []
     backups = REPO_ROOT / ".codebuddy" / "backups"
     if backups.is_dir():
-        counted, archived = [], []
+        counted, archived, face = [], [], []
         for e in sorted(backups.iterdir()):
             name = e.name
             if name.startswith(BACKUP_ARCHIVE_PREFIXES):
                 archived.append(e)
                 continue
+            if name.startswith(BACKUP_OTHER_PREFIXES) or name.endswith(BACKUP_OTHER_SUFFIXES):
+                face.append(e)                              # ⭐ 交付面改前快照：另一用途 ⇒ 不计数
+                continue
             if name.endswith(BACKUP_SKIP_SUFFIXES):
                 continue
             counted.append(e)
+        if face:
+            print(f"  （信息）`backups/` 交付面改前快照：{len(face)} 件"
+                  f" —— ⛔ **另一用途、不计入上限**（口径见 `README.md` §三/§四）")
         if archived:
             n = sum(1 for a in archived for _ in a.rglob("*") if _.is_file())
             mb = sum(_.stat().st_size for a in archived for _ in a.rglob("*") if _.is_file()) / 1024 / 1024
