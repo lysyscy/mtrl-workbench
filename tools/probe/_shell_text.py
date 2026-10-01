@@ -183,7 +183,7 @@ def check(page, errors: list[str]) -> None:
     if over:
         errors.append(
             f"㉖ 有说明块**默认就铺满一屏**（> {LONG_LIMIT} 字 · 守则 §3.4 / §5.9）"
-            "—— 压成 1~2 句，或折进该页已有的「口径说明」：\n"
+            "—— 压成 1~2 句（本系统已不再有折叠的口径说明抽屉，见 `TAIL-213`）：\n"
             + "\n".join("      " + s for s in over))
 
     # ---- ⭐ ㉙ 页级 / 全站禁用（`TAIL-124` / `TAIL-105` · 2026-09-28）----

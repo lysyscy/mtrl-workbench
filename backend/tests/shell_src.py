@@ -124,49 +124,6 @@ def with_pjb(act: str) -> str:
     return f"{act}\n{pjb_kernel()}"
 
 
-def calib_kernel() -> str:
-    """⭐ `TAIL-64` **P4-c-a**（2026-09-30）：壳里 **`CALIB` 口径说明块件**的源码。
-
-    同 `tbl_kernel()` / `fbar_kernel()` / `pjb_kernel()` 的理由：页首那个折叠块的**外壳**
-    （`<details>` ＋ 标题 ＋ **条数** ＋ `<ul>` ＋ 条目外壳）抽进 `CALIB` 之后，
-    「这一段的源码里必须有 `口径说明 · N 条` 字面」这类**钉源码形态**的判据会假红（那串搬进内核了）。
-    ⇒ ⭐ 正确的判据是**两段拼起来看**：调用点**委托** `CALIB` ＋ **内核里**真的按条目个数出条数、
-    真的把条目包成既定的外壳。⛔ 别把判据改回「切片里必须有那串字面」（＝宣布以后不许抽通用件）。
-
-    ⚠️ 取法同 `pjb_kernel()`（用**结束标记**、不用"行尾"）—— 它是多行拼串。
-    """
-    text = read_shell().replace("\r\n", "\n")
-    i = text.find("const CALIB=")
-    if i < 0:
-        return ""
-    marker = "</ul></details>';"
-    j = text.find(marker, i)
-    return text[i:j + len(marker)] if j > i else text[i:]
-
-
-def with_calib(act: str) -> str:
-    """切片源码 **＋** 它委托的 `CALIB` 内核源码 ⇒ 判据**与结构无关**。"""
-    return f"{act}\n{calib_kernel()}"
-
-
-#: ⭐ `TAIL-64` **P4-c**：**口径说明块已收进 `CALIB` 出口的页**（`P4-c-b` 起 = 全站 **14** 块全转）。
-#:    ⚠️ 它是**壳的事实**（哪几页走了出口）⇒ 住这里，判据件之间**共用一个定义**
-#:    （`test_ux_numbers` 逐页核"委托 ＋ 不再裸写"；`test_ux_brief` 数"折叠出口还在不在"）。
-#:    ⚠️ 再加页 / 挪页时**同批**改这里（`m12` 虽已撤页，它的切片留痕仍在 ⇒ 也在名单里）。
-#: ⚠️ **2026-10-01（`TAIL-213` 甲 · 批 1）：`m03` 已撤块** —— 用户拍板「撤掉折叠的口径说明」
-#:   （原话「我一次也没进去看过」）⇒ 从名单里去掉；`m03` 改成**页内默认展开的一小段**
-#:   （判据 `test_wired_m03_list` 改钉"这页仍有一段口径说明、且不是收起来的折叠块"）。
-#: ⚠️ **2026-10-01（`TAIL-213` 甲 · 批 2）：`m07` / `m08` / `m13` / `m14` 也已撤块**（`m03` 见批 1）。
-#:    ⚠️ **订正**：批 2 动手时把「库存单据明细表」那块当成了 `m11` —— 判据当场红（`m08` 的切片里找不到调用点）
-#:    ⇒ 正确的号是 **`m08`**（`m11` 那块**没动**，仍在名单里）。教训：**撤块前先按 `page_seg()` 核号**，
-#:    ⛔ 别拿"我记忆里的页名"当号。
-#: ⚠️⚠️ **2026-10-01（`TAIL-213` 甲 · 批 3/4）：全站 14 块**已按用户拍板撤完
-#:   （`m03` → 批 1；`m07`/`m08`/`m13`/`m14` → 批 2；`m05`/`m01`/`m02`/`m09` → 批 3；`m04`/`m06`/`m11`/`m12`/`m15` → 批 4）
-#:   ⇒ 名单**清空**（`CALIB` 调用点 = 0）。⛔ 收尾批（撤内核 ＋ 撤 `calib_kernel()/with_calib()` ＋
-#:   改那两条判据）见计划 §15 `TAIL-213`；在那之前**别把它加回来**。
-CALIB_PAGES: tuple[str, ...] = ()
-
-
 def page_seg(page: str) -> str:
     """`V.<page>=` 那一段源码（**切片的定义只有一处** = `ui_parity.slices()`；⛔ 别在这儿再写一份）。
 
@@ -179,6 +136,6 @@ def page_seg(page: str) -> str:
     return "\n".join(seg)
 
 
-__all__ = ["CALIB_PAGES", "SHELL", "SHELL_PARTS", "SHELL_PATH", "calib_kernel", "dl_kernel",
-           "fbar_kernel", "page_seg", "part_paths", "parts_text", "pjb_kernel", "read_shell",
-           "tbl_kernel", "with_calib", "with_fbar", "with_kernel", "with_pjb", "with_tbl"]
+__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "dl_kernel", "fbar_kernel", "page_seg",
+           "part_paths", "parts_text", "pjb_kernel", "read_shell", "tbl_kernel",
+           "with_fbar", "with_kernel", "with_pjb", "with_tbl"]
