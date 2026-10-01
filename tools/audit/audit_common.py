@@ -273,10 +273,12 @@ SCAN_GLOBS: tuple[str, ...] = (
     #       与 ④ 产物档（`artifacts/` —— 由 `T11` 管"回执"，不管措辞）。
     # ⚠️ **`CLAUDE.md` 已删除**（2026-09-21 用户裁定：换工具后**无人读取**）—— 它的必用内容已并入
     #    `MEMORY.md`（注入档）与 `细则.md`，过程叙事下沉到 `plans/归档-历史单元条目.md`。
-    "README.md", "ops/*.md", ".codebuddy/plans/*.md", "docs/*.md",
+    # ⭐ 2026-10-01（`TAIL-204` 第 3 步）：`docs/*.md` **摘掉** —— `docs/` 已整目录并进 `ops/`（一类一夹），
+    #    留着它就是**一条都不命中的 glob**（`T18` 会当场报「那一片从没被扫过」）。
+    "README.md", "ops/*.md", ".codebuddy/plans/*.md",
     ".codebuddy/memory/MEMORY.md",
     # ⚠️ 2026-09-24 **摘掉 `.codebuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
-    #    它是**搬迁前的旧地址**，该件现址 = `docs/changelog.md`（`README.md`「工程基准档」那行）⇒
+    #    它是**搬迁前的旧地址**，该件现址 = `ops/changelog.md`（`README.md`「工程基准档」那行）⇒
     #    这条 glob **一条都不命中** = 那一片**从没被扫过**（`docs/*.md` 已把它盖住 ⇒ 摘掉 = 零损失）。
 )
 DELIVERY_GLOBS: tuple[str, ...] = (
@@ -285,7 +287,7 @@ DELIVERY_GLOBS: tuple[str, ...] = (
 
 #: ⭐⭐ 2026-09-24（用户裁定 **A**）：`T8` **从「只扫代码」扩到「也扫活文档」**。
 #:   **为什么要扩**：文档面原来交给 `T2`（`RETIRED_TERMS`），但那张词表**不含**已撤的
-#:   页 / 端点名 ⇒ 「用**现在时**描述已撤功能」这类（实测：`docs/modules.md` 把 `m05imp`、
+#:   页 / 端点名 ⇒ 「用**现在时**描述已撤功能」这类（实测：`ops/modules.md` 把 `m05imp`、
 #:   `m06imp`、`m04` 两步导入写成**现存功能**）**没有任何尺子看得见** ——
 #:   ⚠️ 实证：把 `docs/*.md` 加进漂移扫描面（`SCAN_GLOBS`）之后，`doc_audit` **仍然必须修 0**。
 #:   **怎么扩**：文档面**直接复用 `SCAN_GLOBS`**（它已是「会被当口径读的那几层」的**唯一定义**）

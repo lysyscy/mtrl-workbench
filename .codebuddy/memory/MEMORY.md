@@ -36,7 +36,7 @@
 | **设计件** | `.codebuddy/work/10-designs/`（计划里写 `work/10-designs/` 是**仓内简写**） |
 | 业务口径主人 | 交付面《材料科业务全流程说明书》（仓外 `D:\工作\AI\PRD编写夹 - Workbuddy专用`） |
 | 硬数字（阈值类） | `ops/阈值表.md`（唯一登记处） |
-| 起停 / 产包预案 / 配置主人 | `ops\server_ctl.ps1` ＋ `ops\README.md`（§一之二 · **§一之四 产包预案** · **§一之五 配置主人表**）· `docs\deployment.md` |
+| 起停 / 产包预案 / 配置主人 | `ops\server_ctl.ps1` ＋ `ops\README.md`（§一之二 · **§一之四 产包预案** · **§一之五 配置主人表**）· `ops\deployment.md` |
 | ⭐ **前端设计唯一基准** | `ops/前端设计守则-以使用用户为中心.md`（**`v3.1`**）—— ⛔ 别引作《前端设计规则》（从未存档）。动前端前过 §0/§1；交付前过 §6 十一条。⭐ 已登记为项目规则 `.codebuddy/rules/前端设计守则/RULE.mdc`（薄指针、不复制条文；⚠️ 改规则要**新开会话**才生效） |
 | 文档审计（分布/结构/内容） | 项目技能 `.codebuddy/skills/docs-audit/SKILL.md`（＋只读盘点器 `.codebuddy/skills/docs-audit/scripts/doc_inventory.py`）；⚠️ 盘点器**不进收工闸门、不判红** |
 

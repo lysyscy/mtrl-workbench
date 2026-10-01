@@ -20,7 +20,7 @@
          （真身 = `.codebuddy\backups\`）⇒ **5 份基线一份都进不了包**，而脚本还会说"没找到"
          ⇒ ⛔ 把**路径写错**伪装成**真没有**（详见下面第 2 步的注释）
        ③ **库**：`db/init_db.sql`（空库路线 · 建库＋角色）＋ 可选 `db/<db>-<日期>.dump`（`-WithDump` · 只作对照）
-       ＋ 随包放一份 `docs/deployment.md`（一页）
+       ＋ 随包放一份 `ops/deployment.md`（一页）
        ④ ⭐ **交付面快照 · 只 2 件**（⭐ 用户 2026-09-30 指示 · 见 §20 指示③）：
           `face\材料科业务全流程说明书.md` ＋ `face\PRD\验收\验收基线.json`
           ⇒ 目标机 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 可**指包内**这份（⚠️ 口径：**云那份仍是真源**，
@@ -224,7 +224,7 @@ if ($WithDump) {
 # ---- 5) 一页说明 ＋ 清单 ＋ 校验和 ----
 Step '4) 一页说明 ＋ MANIFEST ＋ SHA256SUMS'
 if (-not $DryRun) {
-    Copy-Item -Force (Join-Path $RepoRoot 'docs\deployment.md') (Join-Path $Out '部署-落地说明.md') -ErrorAction SilentlyContinue
+    Copy-Item -Force (Join-Path $RepoRoot 'ops\deployment.md') (Join-Path $Out '部署-落地说明.md') -ErrorAction SilentlyContinue
     # ⭐ **MANIFEST.txt**（2026-09-29 补：上面标题里一直写着 MANIFEST，其实**没有任何一行代码写它** ✗）——
     #    它是"**这个包是什么 / 有什么 / 缺什么**"的**落纸**：产包预案里"件清单 ＋ 壳基线在不在"必须有据可查，
     #    ⛔ 不靠人回忆（用户 2026-09-29 问的就是这个：产包有没有固定预案）。
@@ -240,7 +240,7 @@ if (-not $DryRun) {
     $mf += ('壳基线   : ' + $(if ($snapName) { '.codebuddy\backups\' + $snapName } else { '⛔ 缺！见产包日志里"真因①/②"那两行（目标机 --snapshot 一次即可）' }))
     $mf += ('库       : db\init_db.sql（空库路线；⚠️ 里面 <PASSWORD> 到目标机要换）' + $(if ($WithDump) { ' ＋ db\*.dump（⚠️ 只作对照，⛔ 不灌生产）' } else { '' }))
     $mf += '⛔ 一律不带: backend\.venv · logs\ · .workbuddy\scratch · .codebuddy\backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
-    $mf += '落地说明 : 部署-落地说明.md（= docs\deployment.md）'
+    $mf += '落地说明 : 部署-落地说明.md（= ops\deployment.md）'
     $mf += '校验     : SHA256SUMS.txt 覆盖本目录**全部文件**（本件也在内）—— 目标机脚本先校它'
     [IO.File]::WriteAllText((Join-Path $Out 'MANIFEST.txt'), ($mf -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding($false)))
     Say '   ✓ MANIFEST.txt（HEAD / 时间 / 件清单 / 壳基线状态 / ⛔ 排除项）'

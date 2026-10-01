@@ -21,7 +21,7 @@ from pathlib import Path
 SKIP_PARTS = {"node_modules", ".venv", ".git", "__pycache__", ".pytest_cache"}
 
 #: ② 层（按需档）里"必须有人指它"的落点前缀；① 层单列
-CORE_PREFIXES = ("README.md", "ops/", "docs/", "tools/README.md",
+CORE_PREFIXES = ("README.md", "ops/", "tools/README.md",
                  ".codebuddy/memory/MEMORY.md", ".codebuddy/memory/细则.md",
                  ".codebuddy/plans/开发计划-主文档.md", ".codebuddy/plans/执行情况-主文档.md",
                  ".codebuddy/work/README.md")

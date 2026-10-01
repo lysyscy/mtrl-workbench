@@ -9,7 +9,7 @@
 - `M1` `.env.example` 删掉 `SESSION_SECRET` 一行 ⇒ `test_样例必须覆盖配置的每一个字段` 必红。
 - `M2` `actions.js` 的局部 `apiCode` 改回 `const API=` ⇒ `test_数据出口_API_只许在_api_js_里定义` 必红
   （证明那条"防同名遮蔽"的判据有牙齿 —— 它防的正是 2026-09-29 实测到的那两处）。
-- `M3` `docs/architecture.md` 把指针换回**写死的件清单**（`shell/{core,actions}.js`）⇒ `test_活文档与注释不许写死壳件数` 必红。
+- `M3` `ops/architecture.md` 把指针换回**写死的件清单**（`shell/{core,actions}.js`）⇒ `test_活文档与注释不许写死壳件数` 必红。
 - `M4` `core.js` 头注不再说 `API` 去哪了 ⇒ `test_core_js_头注要说清_API_去哪了` 必红。
 
 跑法：`backend\\.venv\\Scripts\\python.exe tools\\mut\\_mut_tail192.py`（rc=0 = 全部按预期变红且已复原）

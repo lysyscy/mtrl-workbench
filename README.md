@@ -20,7 +20,7 @@
 | 层 | 位置 | 谁读 | 职责 | 行数预算 | 机器扫 |
 |---|---|---|---|---|---|
 | **① 注入档** | `.codebuddy/memory/MEMORY.md` | ⭐ **每个新会话**（自动注入） | 只放**每轮都要用的规则**：收工闸门 · 状态只信三处 · 铁律 · 用户偏好/汇报姿势 · 本机事实与坑 · 坐标禁区（⚠️ **口径/纪律全文在 `细则.md`** —— 2026-10-01 `TAIL-204` 第 2 步：原项目侧 `MEMORY.md` 因**超注入上限、实际从未被注入**，已并入分册） | 以 `T10` 输出为准（⛔ **别手抄** —— 抄了就漂） | ✅ `T9` |
-| **② 按需档** | `README.md`(本文件) · `细则.md` · `plans/{开发计划,执行情况}-主文档.md` · `ops/*.md` · **`docs/*.md`** · **`.codebuddy/work/README.md`** | 人 / AI **按需查** | 口径 · 台账 · 排期 · 细则 · 实测结论 · **架构/runbook/changelog** · **工作记录分区宪法** | 各见表 | ✅ `T1`–`T6` · `T10` · `T12` |
+| **② 按需档** | `README.md`(本文件) · `细则.md` · `plans/{开发计划,执行情况}-主文档.md` · `ops/*.md`（⭐ **含工程基准档** —— 2026-10-01 起 `docs/` 已并入）· **`.codebuddy/work/README.md`** | 人 / AI **按需查** | 口径 · 台账 · 排期 · 细则 · 实测结论 · **架构/runbook/changelog** · **工作记录分区宪法** | 各见表 | ✅ `T1`–`T6` · `T10` · `T12` |
 | **③ 留痕档** | `.codebuddy/memory/journal/YYYY-MM-DD.md`（**现役**逐日日志 —— ⭐ 2026-10-01 `TAIL-204` 第 2 步起在此，**随仓走**） · `.codebuddy/plans/archive/归档-*.md`（旧 `plans/归档-*.md` 同层共存）＋ `archive/归档-逐日日志-至20260927/`（**旧代日志**） | ⛔ **没人回读**（只追加） | 过程 / 事故 / 逐次定案 / 被删内容的原文 | 不限 | ❌ **故意不扫** |
 | **④ 产物档** | `artifacts/` | 需要证据时 | 四态 `acc_results.json` · 截图 · **工具生成物白名单**（`变异覆盖台账.md`）—— ⛔ **过程类 md 不许进**（去 `work/`） | 不限 | `T11` 管**回执** · `T15` 管**白名单** |
 
@@ -33,11 +33,6 @@
 ```
 D:\dev\mtrl-workbench\
 ├─ README.md                      ← 本文件：文档地图（唯一根 md，`T12` 守）
-├─ docs\                          【⭐ 工程基准档 · 人优先 · 入 git】
-│   ├─ architecture.md              架构总览（两代码面 / 15 模块映射 / 数据流 / 11 链路 —— 指针进计划 §2§3）
-│   ├─ modules.md                   15 个模块一页纸（模块 ↔ 包 ↔ 壳页 ↔ 现状 · 指针）
-│   ├─ delivery-surface.md          交付面目录清单与同步状态（降低仓外单点依赖）
-│   └─ changelog.md                 面向使用的版本变更记录（部署节点 / TAIL 销号批次）
 ├─ .codebuddy\                    【宿主侧 · 项目级】⛔ 非交付面 · 也**不是文档层**（别按四层审它）
 │   ├─ rules\前端设计守则\RULE.mdc    项目规则入口（唯一主人 = `ops/前端设计守则…`，⛔ 不复制条文）
 │   ├─ skills\docs-audit\            ⭐ 项目技能：**文档审计工作流**（分布 / 结构 / 内容 —— 见 §六 末）
@@ -45,8 +40,10 @@ D:\dev\mtrl-workbench\
 │   ├─ memory\                       【本机 · 不入 git】跨会话工作记忆（`YYYY-MM-DD.md` 逐轮追加）
 │   └─ teams\                        【本机 · 不入 git】团队协作临时区
 ├─ .env / .env.example            ↔ 配置（取值唯一出口 = app_settings.effective）
-├─ ops\                           【工程侧底账】
-│   ├─ README.md                    实测结论索引（含"成立前提 / 何时必复做"）
+├─ ops\                           【工程侧底账 · ⭐ **工程文档唯一落点**】
+│   ├─ README.md                    实测结论索引（含"成立前提 / 何时必复做"）＋ 工程基准档索引
+│   ├─ architecture.md modules.md deployment.md changelog.md delivery-surface.md
+│   │                              ⭐ **工程基准档**（2026-10-01 `TAIL-204` 第 3 步从 `docs\` 并入 —— `docs\` 已取消）
 │   ├─ 阈值表.md                    ⭐ 所有"硬数字"的集中登记处（出处 / 谁改过）
 │   ├─ *-实测结论.md                实测结论（命名：<主题>-实测结论.md）
 │   ├─ server_ctl.ps1 / nssm_*.ps1   服务起停与安装（⭐ 改后端必须 restart）
@@ -93,7 +90,7 @@ D:\dev\mtrl-workbench\
 | 问题排查 | `排查-<现象>-YYYYMMDD.md` | `.codebuddy/work/30-troubleshooting/` |
 | 决策记录 | `D<编号>-<主题>.md`（D21 起） | `.codebuddy/work/40-decisions/` |
 | 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.codebuddy/work/00-scratch/`（TTL 14 天） |
-| 工程基准档 | 固定小写英文名（runbook / architecture / changelog） | `docs/` |
+| 工程基准档 | 固定小写英文名（architecture / modules / deployment / changelog / delivery-surface） | `ops/`（⚠️ 2026-10-01 起 —— 原 `docs/` 已并入） |
 | 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.codebuddy/backups/`（**仅此一处**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**） |
 | 产物 md | 仅工具生成物白名单（当前：`变异覆盖台账.md`） | `artifacts/` |
 
@@ -146,7 +143,7 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 5. 是"实测出来的结论"吗？ ⇒ **`ops/<主题>-实测结论.md`** ＋ **在 `ops/README.md` 加一行索引**。
 6. 是"一次性的报告/建议"吗？ ⇒ **`artifacts/`** ＋ ⭐ **必须带「待办登记回执」**（每条写"已登记为
    `TAIL-xx`"或"不登记的理由"）—— `T11` 守。
-7. 是"环境/部署/配置/架构知识"吗？ ⇒ **`docs/architecture.md`** ＋ **`ops/README.md`**（随变更同批改）。
+7. 是"环境/部署/配置/架构知识"吗？ ⇒ **`ops/architecture.md`** ＋ **`ops/README.md`**（随变更同批改）。
 8. 以上都不是 ⇒ ⚠️ **先停下来问用户**（可能是新层级，要同时改本文件与 `T12` 白名单）。
 
 ## 八、三条常见坑（都踩过）

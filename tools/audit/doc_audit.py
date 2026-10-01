@@ -115,17 +115,17 @@ def run_ui_checks() -> tuple[list[str], list[str]]:
        仍 `rc=0`、`BAD: []`、四态全绿）—— 同族 = 「**打印了红 ≠ 拦住了**」。
        ⇒ 现在把非零的**件名回传**，由 `main()` 并进自己的 rc（`_run_rulers` 里那把尺子当场红）。
     ⚠️ **三种「跳过」不算失败**（找不到 node ／ 拿不到交付面根 ／ 交付面 demo 里没有四检脚本）——
-       那是 `docs/deployment.md` 写明的**目标机已知代价**：目标机不装交付面时本件**照样要能当闸门用**。
+       那是 `ops/deployment.md` 写明的**目标机已知代价**：目标机不装交付面时本件**照样要能当闸门用**。
        ⛔ 别把「跳过」也并进 rc：那会让目标机上**每一轮闸门都红**，人就开始忽略它（**比不判还坏**）。
     """
     node = _resolve_node()
     root = delivery_root()
     if not node:
         return ["  （跳过：找不到 node —— 试过三处：环境变量 `MTRL_NODE` / PATH / 旧默认路径。"
-                "⚠️ 装 node 或设 `MTRL_NODE=<node.exe 全路径>`；详见 `docs/deployment.md`）"], []
+                "⚠️ 装 node 或设 `MTRL_NODE=<node.exe 全路径>`；详见 `ops/deployment.md`）"], []
     if not root:
         return ["  （跳过：拿不到交付面根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=`"
-                "<交付面>/PRD/验收/验收基线.json`；目标机不装交付面属已知代价，详见 `docs/deployment.md`）"], []
+                "<交付面>/PRD/验收/验收基线.json`；目标机不装交付面属已知代价，详见 `ops/deployment.md`）"], []
     demo = root / "demo"
     if not (demo / "_smoke.js").exists():
         return ["  （跳过：交付面 demo/ 里没有四检脚本）"], []

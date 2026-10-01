@@ -764,7 +764,7 @@ def check_gate_liveness() -> list[dict]:
 #   （`doc_audit` 曾写 `tools/doc_audit.py` · `cover_gap` 曾写 `tools/cover_gap.py` ·
 #    `_mut_prg_form` 曾写 `tools/prg_form_audit.py`）⇒ 症状**全是假绿**：「检查在跑，其实扫的是空集」。
 #   ⚠️ **立本条当天就抓出第 4 例**：`SCAN_GLOBS` 里的 `.codebuddy/memory/CHANGELOG.md` 是**搬迁前的旧地址**
-#      （该件现址 = `docs/changelog.md`，见 `README.md`「工程基准档」那行）⇒ 那条 glob **一条都不命中**。
+#      （该件现址 = `ops/changelog.md`，见 `README.md`「工程基准档」那行）⇒ 那条 glob **一条都不命中**。
 #
 # ⭐ 判据（**静态、秒级** ⇒ 进 `doc_audit`，每轮自动跑）：
 #   · `path`：常量指向的件 / 目录**必须存在**；

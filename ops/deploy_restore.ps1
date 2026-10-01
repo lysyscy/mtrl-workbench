@@ -155,12 +155,12 @@ Step '3) venv ＋ 依赖'
 $venv = Join-Path $RepoRoot 'backend\.venv'
 if (Test-Path (Join-Path $venv 'Scripts\python.exe')) { Say '   ✓ venv 已在（目标机原有环境沿用）' }
 else {
-    Say '   ⚠️ 没有 venv ⇒ 建一个（⚠️ 目标机若已有 Python，注意版本要与本机一致，见 docs\deployment.md）'
+    Say '   ⚠️ 没有 venv ⇒ 建一个（⚠️ 目标机若已有 Python，注意版本要与本机一致，见 ops\deployment.md）'
     $null = Run 'python' @('-m', 'venv', $venv) $RepoRoot
 }
 $req = Join-Path $RepoRoot 'backend\requirements.txt'
 if (Test-Path $req) { $null = Run (Join-Path $venv 'Scripts\python.exe') @('-m', 'pip', 'install', '-r', $req) (Join-Path $RepoRoot 'backend') }
-else { Say '   ⚠️ 没有 backend\requirements.txt ⇒ 跳过（⚠️ 目标机缺包时按 docs\deployment.md 装）' }
+else { Say '   ⚠️ 没有 backend\requirements.txt ⇒ 跳过（⚠️ 目标机缺包时按 ops\deployment.md 装）' }
 
 # ---- 4) .env：只检查 ----
 Step '4) .env（⛔ 不写：真口令不进包）'
@@ -168,7 +168,7 @@ $envFile = Join-Path $RepoRoot '.env'   # ⚠️ 在**仓根**（不是 backend/
 if (Test-Path $envFile) {
     Say ('   ✓ 已有 ' + $envFile + '（⚠️ 逐项核：i8 账号 / 库口令 / ALLOWED_IP_CIDRS 是本机的还是目标机的）')
 } else {
-    Say '   ⛔ 缺**仓根** `.env` ⇒ **停在这里之前请先补**（键名与取值见 docs\deployment.md §二）'
+    Say '   ⛔ 缺**仓根** `.env` ⇒ **停在这里之前请先补**（键名与取值见 ops\deployment.md §二）'
     Say '      （若目标机旧的那半开发留过 .env，直接用它的；没有就按 ops\init_db.sql 里的账号口令写）'
 }
 
