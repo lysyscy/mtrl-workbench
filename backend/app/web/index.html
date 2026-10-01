@@ -1590,7 +1590,7 @@ V.m15=()=>{
       <td class="now sm mut">${u.last?esc(u.last):'<span class="mut">从未登录</span>'}</td>
       <td class="ctr now">${u.status==='已删除'
         ? `<button class="btn sm" data-act="userRestore" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="恢复该账号；只有管理员能管理账号（不是管理员时置灰）">恢复</button>`
-        : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${(iAmAdmin||u.id===CUR.id)?'':'disabled'} title="${u.id===CUR.id?'改我自己的密码（⛔ 不用找管理员）':'重置该账号密码；只有管理员能管理账号（不是管理员时置灰）'}">改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
+        : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${(iAmAdmin||u.id===CUR.id)?'':'disabled'} title="${u.id===CUR.id?'改我自己的密码（⛔ 不用找管理员）':'改**别人**的密码要管理员（你自己的密码在**你自己那一行**点「改密」）'}">改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
            <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
            ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
     </tr>`)]})}</div>

@@ -1252,7 +1252,13 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
      toast(esc(res.message||'已转让'), 8000);
    }catch(e){ toast(`<b>没能转让</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  userPwd:t=>{ const u=USERS.find(x=>x.id===t.dataset.id); if(!u) return;
-   if(CUR.role!=='admin'){ toast('只有管理员能管理账号'); return; }
+   /* ⭐ 2026-10-01（`TAIL-207`）：**本人改自己 ⇒ 放行**（⛔ 不要求管理员）。
+      ⚠️⚠️ 这里原先写死 `CUR.role!=='admin'` —— 后端两个端点（`/actions/password` 与
+      `/actions/i8`）**本来就放行"本人"**（`assert_may_set_password` · `api_set_i8` 的注释
+      都写着"改自己的不用管理员"）⇒ 壳里这道闸**只把本人挡在外面** ⇒ 按钮亮了、一点却被壳自己弹走
+      —— 用户 2026-10-01 报的「普通用户点改密显示只有管理员可以管理账号」**正是这一句**。
+      ⭐ 教训：这类动作有**两道闸**（① 按钮置灰 ② 动作里这道）—— **改一道不够，两道都要认同一个条件**。 */
+   if(CUR.role!=='admin' && String(u.id)!==String(CUR.id)){ toast('只有管理员能管理账号'); return; }
    modal({title:`密码与 i8 绑定 · ${esc(u.name)}`,body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">${u.id===CUR.id?'改<b>自己的</b>密码。':'管理员<b>重置他人密码</b>（§1.5.1「可管理其他账号」）。'}<b>无格式要求、可留空</b>（留空 = 清空该账号密码，空密码即可登录）。</div>
      <div class="fld"><label>新密码（可为空）</label><input class="inp" id="upV" placeholder="留空即清空该账号密码"></div>
      <div class="fld" style="margin-top:calc(10px * var(--fscale))"><label>i8 账号（§7.8 · 绑定到本系统账号、每人一份）</label>
