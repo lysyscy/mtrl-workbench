@@ -247,8 +247,9 @@ def check(page, errors: list[str]) -> None:
         #    ⚠️ 这一屏（还有 ③）**只有真上传才有** —— 离线断言、源码断言都看不见它；
         #       而「上传 → 认表头 → 给映射建议」正是这条通用面最核心的一段。
         stage = "真上传并解析"
-        #: ⚠️ 2026-10-01（`TAIL-204` 第 7 步）换落点：原 `.workbuddy/scratch` **那个根已不存在**
-        #:   ⇒ 这一段真上传会**写不进去**（而它报错的样子像"页面坏了"）。临时件现在只有 `work/00-scratch/`。
+        #: ⚠️ 2026-10-01（`TAIL-204` 第 7 步）**换落点**：原 `.workbuddy/scratch` 是**搬家遗留的旧落点** ——
+        #:   盘上一直在（被 `.gitignore` 藏着 ⇒ `git status` 看不见），探针这几张 `imp_smoke_*.xlsx`
+        #:   就一直在往那儿写；第 7 步把旧落点整棵清掉 ⇒ 改到**唯一的临时区** `work/00-scratch/`。
         fs = Path(__file__).resolve().parents[2] / ".codebuddy" / "work" / "00-scratch"
         dm = IMP_DOMAINS[0]
         fx = fs / f"imp_smoke_{dm}.xlsx"

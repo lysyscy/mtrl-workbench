@@ -44,7 +44,8 @@ ROOT = pathlib.Path(r"D:\dev\mtrl-workbench")
 SHELL_JS = ROOT / "backend" / "app" / "web" / "shell" / "view.js"
 GUARD = "  if(!inst.force && vsEditing()){ inst.pending=true; return; }"
 MIN400 = "const VS_MIN=400;"
-#: ⚠️ 2026-10-01（`TAIL-204` 第 7 步）换落点：原 `.workbuddy/scratch` 那个根已不存在（`mkdir` ⇒ 复活旧根）。
+#: ⚠️ 2026-10-01（`TAIL-204` 第 7 步）换落点：原 `.workbuddy/scratch` 是**搬家遗留的旧落点**（盘上一直在、
+#:   被 `.gitignore` 藏着），第 7 步已整棵清掉 ⇒ 换到唯一的临时区 `work/00-scratch/`（`T14` 管 TTL）。
 BAK = ROOT / ".codebuddy" / "work" / "00-scratch" / "view.js.bak-mutvs"
 #: ⭐ 切页 / 等这一屏画完**复用真机探针那两件**（⛔ 别在这里再写一份 sleep 版切换：那正是"假绿"的老病）
 sys.path.insert(0, str(ROOT / "tools" / "probe"))
