@@ -24,7 +24,7 @@ async function jcLinkAct(fn, okMsg) {
   let r = null;
   try { r = await fn(); }
   catch (e) { return toast(`<b>没能保存</b>：${esc(String((e && e.message) || e))}`, 7000); }
-  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`, 7000); return null; }
+  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`, 7000); return null; }
   toast(typeof okMsg === 'function' ? okMsg(r) : okMsg);
   await reloadNotices();     /* 付款域侧（m03 行上那个"已关联"态） */
   await reloadM11();         /* 集采侧（合同的付款子表） */
@@ -238,7 +238,7 @@ const ACT={
    let d=null;
    try{ d=await API.post(route.url,{ids:rows.map(r=>Number(r.id))}); }
    catch(e){ return toast(`<b>导出失败</b>：${esc(String((e&&e.message)||e))}`,8000); }
-   if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'后端未返回原因')}`,8000);
+   if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'系统没有给出原因，请重试')}`,8000);
    jcDownload(d.filename,d.content_b64);
    toast(`已导出 <b>${rows.length}</b> 行 ⇒ <b>${esc(d.filename)}</b>`
      + `<br><span class="mut sm">行 = 当前筛选下看到的那些（含顺序）· 列 = 页面表头去掉「操作」</span>`); },
@@ -263,7 +263,7 @@ const ACT={
    const k=map[tt];
    if(k){ go(k);
      return toast(`「${esc(tt)}」的降级路径 = <b>在那一页的「导入」入口</b>上传 i8 导出的 Excel（与抓取<b>同一套解析 / 落库</b>，§3.6）—— 已跳过去`,7500); }
-   toast(`⏳ <b>「${esc(tt)}」的手动导入入口尚未接通</b>：降级路径要有对应页面的导入入口（与全站其它导入走同一套管线）—— 在此之前⛔ 不演示假上传`,7500); },
+   toast(`⏳ <b>「${esc(tt)}」的手动导入入口尚未接通</b>：降级路径要有对应页面的导入入口 —— 在此之前⛔ 不演示假上传`,7500); },
  /* MOD-14 剔除规则：**真增 / 删 / 改**（2026-09-13 P6 裁定①·乙）。
     ⚠️ 只改这张**演示表**（`RULE_EX`）；**不重算**已产生的剔除标记（`NO[].exrule`）—— 页内已写明。
     配置类数据按 §9.4 = **硬删、不留痕**；弹窗内输入由「保存」按钮一次性读取（不挂 data-act ⇒ 走不到委托层）。 */
@@ -358,8 +358,8 @@ const ACT={
         （而且后面还会 `reloadNotices()` 把用户刚输入的值刷回去，人只会觉得"白输了"）。
         ⇒ **先判 `ok`**，失败就把话说清楚（并说明输入被还原是为什么）。 */
      .then(r=>{ if(!r || r.ok === false){
-         toast(`<b>保存失败</b>：${esc((r && r.message) || '后端未返回原因')}`
-           + `<br><span class="mut sm">这一格已还原成原来的值（后端没写进去）</span>`, 7000);
+         toast(`<b>保存失败</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`
+           + `<br><span class="mut sm">这一格已还原成原来的值</span>`, 7000);
          return reloadNotices(); }
        toast(r.message, r.changed?4800:4600); return reloadNotices(); })
      .catch(e=>{ toast(`<b>保存失败</b>：${esc(e.message||e)}`); render(); }); },
@@ -544,7 +544,7 @@ const ACT={
    return modal({title:`抓取 i8 ${NM}（按月）`,reopen:()=>ACT.fetchDlg(),body:
      `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这里只需选<b>月份</b>（<b>默认 ＝ 本页当前核算年月</b>，可改），系统自动换算成该月起止并按<b>项目</b>抓取（${apiCode} · §9.2）。</div>
       ${box}
-      <div class="tip" style="margin:0">抓取会<b>全量刷新该月 · 该项目</b>的源数据；<b>手工值与调整单不被覆盖</b>（§9.5 幂等）。<br>要抓别的月份，改上面的月份即可 —— <b>默认就是本页当前所选的那个月</b>。</div>`,
+      <div class="tip" style="margin:0">抓取会<b>全量刷新该月 · 该项目</b>的源数据；<b>手工值与调整单不被覆盖</b>（§9.5）。<br>要抓别的月份，改上面的月份即可 —— <b>默认就是本页当前所选的那个月</b>。</div>`,
      footer:foot}); },
  fetchNtOk:()=>{ const k=fetchKind, m=fetchM, from=m+'-01', to=monthEnd(m);
    /* ⭐ **接线（`TAIL-29`-② ④）**：付款通知书走**真抓**（后端 `/api/m03/notices/fetch`）；
@@ -672,7 +672,7 @@ const ACT={
     modal({title:'删除付款计划行确认',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 将删除 <span class="fc">${ids.length}</span> 行付款计划数据</b>。删除后需重新导入才能恢复。</div>
       ${kvBlock([['删除行数',`<span class="fc">${ids.length} 行</span>`],['影响范围','只影响付款计划表；<b>不影响付款通知书与欠款统计</b>']])}
       <div class="tw" style="max-height:220px">${TBL({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',rows:[rows]})}</div>
-      <div class="mut sm" style="margin-top:calc(6px * var(--fscale))">后端报出 ${impList.length} 行影响 · 涉及表：${esc(String((imp.affected_tables||['plan_row']).join('、')))}</div>`,
+      <div class="mut sm" style="margin-top:calc(6px * var(--fscale))">受影响 ${impList.length} 行 · 涉及表：${esc(String((imp.affected_tables||['plan_row']).join('、')))}</div>`,
       footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="plDelOk">确认删除</button>`}); },
  /* ⭐ 逐行删除：与批量删除**走同一套**（先取后端影响范围 → 确认 → 删） */
  plDelRow:t=>{ const id=t.dataset.id; if(!id) return; ACT.plConfirm([id]); },
@@ -875,7 +875,7 @@ const ACT={
         ⇒ 人只会看到"点了保存、填的东西没了"，还得重填一遍。 */
      .then(r=>{ if(!r || r.ok === false){
          ntSaving=false;
-         toast(`<b>保存失败</b>：${esc((r && r.message) || '后端未返回原因')}`
+         toast(`<b>保存失败</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`
            + `<br>草稿行已保留，改完再点「保存」`, 6000);
          return reloadNotices(); }
        naEditId=''; naD={}; ntSaving=false;
@@ -1016,7 +1016,7 @@ const ACT={
         cutoff_ym: lgCut, settle_amount: String(lgD.s||''), paid_amount: String(lgD.p||''),
         remark: String(lgD.r||''), end_ym: '',
       }), ()=>{ ledProj=pj; return `期初占位行已录入（<b>${lgCat}</b> · ${esc(ledCutLabel(lgCut))}）`
-                 + `，台账已切到 <b>${esc(pjLabel(ledCur()))}</b>，欠款与台账已由后端重算`; }); },
+                 + `，台账已切到 <b>${esc(pjLabel(ledCur()))}</b>，欠款与台账已重算`; }); },
  /* 删除前先看清影响范围（§7.2 / §9.4）：期初属「**用户自录、随时可重录**」那一档 ⇒ **真删**
    （§9.4 的 2026-09-20 定案：**按「删了能不能凭源数据复原」分**）。
    ⚠️ 2026-09-29 `A6` 订正：这里原写「核心业务数据『软删留痕』」—— 与后端 `repo.delete_opening`（就是 `s.delete`）**相反**，也与 §9.4 定案相反（行里根本没有留痕字段）。 */
@@ -1047,7 +1047,7 @@ const ACT={
  delLgOk:t=>{ const id=t.dataset.id; if(!id) return;
     closeModal();
     m05Act(()=>API.postForm('/m05/opening/delete', { opening_id:id, project_id:'', end_ym:'' }),
-      '期初占位行已删除（删了不能恢复、需要时随时可以重新录入），欠款与台账已由后端重算'); },
+      '期初占位行已删除（删了不能恢复、需要时随时可以重新录入），欠款与台账已重算'); },
 
   /* —— MOD-01 —— */
   /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` —— 全名**可改 + 留痕**（§2.3.1 / §9.3）。
@@ -1650,7 +1650,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
       原先这里**只看 catch** ⇒ 失败时**照样往下走**、还 toast「已按所选 N 个项目出表」
       ⇒ **把失败说成成功，而且一句原因都不给**（这一处最坏：失败完全静默）。 */
    if(!r || r.ok === false){ closeModal(); await reloadM07();
-     return toast(`<b>选择项目没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`,7000); }
+     return toast(`<b>选择项目没能保存</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`,7000); }
    closeModal(); await reloadM07();
    toast(`月度会大表已按所选 <b>${BIGSET.length}</b> 个项目出表（行序即刚才设置的行序）`); },
 
@@ -1717,7 +1717,7 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
      /* ⚠️⚠️ 2026-09-20 补：原来写的是 `toast((r&&r.message)||'已保存')` ——
         若那次 `ok:false` **恰好没带 `message`** ⇒ 会把**失败显示成「已保存」**（真假成功）。
         ⛔ 别拿"有没有 message"当成败判据；**成败只看 `ok`**。 */
-     if(!r || r.ok === false){ fail=`${ym}：${(r && r.message) || '后端未返回原因'}`; break; }
+     if(!r || r.ok === false){ fail=`${ym}：${(r && r.message) || '系统没有给出原因，请重试'}`; break; }
      ok++;
    }
    await reloadMech(); await reloadM07();
@@ -1851,9 +1851,9 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
     try{ r=await API.m09Batch({project:awfPj, items:items, months:months}); }
     catch(e){ return toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
     /* ⚠️ 同 `mechOk` / `awfAct` 那条教训：**成败只看 `ok`**（⛔ 别拿"有没有 message"当判据 —— 那会把失败显示成"已保存"）。 */
-    if(!r || r.ok === false) return toast(`<b>没能保存</b>：${esc((r&&r.message)||'后端未返回原因')}`,9000);
+    if(!r || r.ok === false) return toast(`<b>没能保存</b>：${esc((r&&r.message)||'系统没有给出原因，请重试')}`,9000);
     closeModal(); await reloadM09(); render();
-    toast(esc(r.message||'已保存（按「月 + 项名」幂等写入）')); },
+    toast(esc(r.message||'已保存（同一格重提交 ＝ 更新，不会重复）')); },
   /* ⭐ 行数自定义（用户口径「我不需要那么多行，行的数量要能自定义」）——
      ⛔ 不走"重排整张表"（那会把你**已经填好的格子冲掉**）：就是**往表里插一行 / 删一行**（纯 DOM）。
      新行的核算期 = 最后一行的**下一个月**（不合意就地改 —— 每行核算期本来就能手填）。 */
@@ -2071,7 +2071,7 @@ jcExport:async()=>{ const rows=jcVisible();
   let d=null;
   try{ d=await API.m11Export({ids:rows.map(j=>Number(j.id))}); }
   catch(e){ return toast(`<b>导出失败</b>：${esc(String((e&&e.message)||e))}`,7000); }
-  if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
+  if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'系统没有给出原因，请重试')}`,7000);
   jcDownload(d.filename, d.content_b64);
   toast(`已导出 <b>${rows.length}</b> 行 ⇒ <b>${esc(d.filename)}</b>`
     + '<br><span class="mut sm">列是<b>全列</b>（含贸易公司 3 列）—— 屏幕上的隐藏只影响屏幕</span>'); },
@@ -2101,7 +2101,7 @@ jcAmt:t=>{ fJc.amt=String(t.value||''); pruneJcPick(); render(); },
 jcPartyDlg:async()=>{ let d=null;
   try{ d=await API.m11PartyKinds(); }
   catch(e){ return toast(`<b>没能取到甲方分类</b>：${esc(String((e&&e.message)||e))}`,7000); }
-  if(!d||d.ok===false) return toast(`<b>没能取到甲方分类</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
+  if(!d||d.ok===false) return toast(`<b>没能取到甲方分类</b>：${esc((d&&d.message)||'系统没有给出原因，请重试')}`,7000);
   const items=d.items||[], kn=d.kind_names||{};
   const opt=k=>d.kinds.map(x=>`<option value="${x}"${x===k?' selected':''}>${esc(kn[x]||x)}</option>`).join('');
   const body=`<div class="tip${d.unknown?' wn':' ok'}" style="margin-bottom:calc(10px * var(--fscale))">${
@@ -2124,7 +2124,7 @@ jcPartySet:async t=>{ const nm=String(t.dataset.name||''), k=String(t.value||'')
   let d=null;
   try{ d=await API.m11SetPartyKind({name:nm, kind:k}); }
   catch(e){ return toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
-  if(!d||d.ok===false) return toast(`<b>没能保存</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
+  if(!d||d.ok===false) return toast(`<b>没能保存</b>：${esc((d&&d.message)||'系统没有给出原因，请重试')}`,7000);
   toast(esc(d.message||'已保存')+`<br><span class="mut sm">⚠️ 已有的合同<b>不会</b>重算金额落位 ⇒ 需要时请重抓一次或手改</span>`);
   /* ⚠️ 重开弹窗（刷新那行）—— `jcPartyDlg` 是 async ⇒ 不复用 `modal.reopen`（那只接同步表达式）。 */
   await ACT.jcPartyDlg(); },
@@ -2134,7 +2134,7 @@ jcFetch:()=>{ const def = jcFetchSinceOn || jcFetchSinceDefault(); modal({title:
   body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能顶掉该账号其它在线会话</b>。若同事正在用 i8，请先择时。</div>
     <div class="fld"><label>开始日期 —— 只抓<b>这之后</b>的单据（<b>增量</b>）</label>
       <input class="inp" id="jcFetchSince" type="date" value="${esc(def)}">
-      <div class="sm mut" style="margin-top:calc(6px * var(--fscale))">默认 = 台账里<b>最新合同日期 − 3 天</b>（多留几天：i8 的<b>增补合同会沿用原单据日期</b>，卡太紧会漏；重复的会被幂等挡掉）。<br><b>清空</b> = 全量（<b>约 40 秒</b>，首次建档才需要）；带日期 = 增量（<b>1~5 秒</b>）。</div></div>
+      <div class="sm mut" style="margin-top:calc(6px * var(--fscale))">默认 = 台账里<b>最新合同日期 − 3 天</b>（多留几天：i8 的<b>增补合同会沿用原单据日期</b>，卡太紧会漏；重复的会<b>自动挡掉</b>）。<br><b>清空</b> = 全量（<b>约 40 秒</b>，首次建档才需要）；带日期 = 增量（<b>1~5 秒</b>）。</div></div>
     <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 落库（新抓的默认<b>「纳入台账」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但<b>落库前会给你一眼看见</b>。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
   footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcFetchOk">确认抓取（会顶号）</button>`}); },
 jcFetchOk:async()=>{ const el=$('#jcFetchSince');
@@ -2447,7 +2447,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
     let d=null;
     try { d=await API.m03SupMatch({notice_id:Number(n.id)}); }
     catch(e){ return toast(`<b>没能匹配</b>：${esc(String((e&&e.message)||e))}`,7000); }
-    if(!d||d.ok===false){ return toast(`<b>没能匹配</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000); }
+    if(!d||d.ok===false){ return toast(`<b>没能匹配</b>：${esc((d&&d.message)||'系统没有给出原因，请重试')}`,7000); }
     const pool=d.pool||[], cands=d.cands||[], lvl=Number(d.level)||0;
     const lvlName=d.level_name||SUP_LVL_NAME[lvl]||'';     /* ⚠️ 后端为准，本地名只兜底 */
     if(!pool.length){ closeModal(); render();

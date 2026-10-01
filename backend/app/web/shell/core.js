@@ -1663,7 +1663,7 @@ async function m02Sync(which) {
   const isWh = which === 'warehouses';
   const name = isWh ? '仓库名单' : '常用项目列表';
   const tail = isWh ? '仓库名单本身<b>不落库</b>（它是建档的输入）；建档请用「常用项目列表」那一行'
-                    : '会按 phid <b>幂等建档</b>，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
+                    : '会按 phid <b>建档，重复的不会重复建</b>，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
   modal({
     title: `同步 ${name}`,
     body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，并强制踢掉该账号其它在线会话</b> ——
@@ -1701,7 +1701,7 @@ async function awfAct(fn, okMsg) {
     return toast(`<b>没能保存</b>：${esc(String((e && e.message) || e))}`, 7000);
   }
   await reloadM09();
-  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`, 7000); return null; }
+  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`, 7000); return null; }
   toast(typeof okMsg === 'function' ? okMsg(r) : okMsg);
   return r;
 }
@@ -1790,7 +1790,7 @@ async function jcAct(fn, okMsg) {
     return toast(`<b>没能保存</b>：${esc(String((e && e.message) || e))}`, 7000);
   }
   await reloadM11();
-  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '后端未返回原因')}`, 7000); return null; }
+  if (!r || r.ok === false) { toast(`<b>没能保存</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`, 7000); return null; }
   toast(typeof okMsg === 'function' ? okMsg(r) : okMsg);
   return r;
 }

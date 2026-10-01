@@ -208,7 +208,7 @@ async function m14Save(pairs) {
   let r = null;
   try { r = await API.m14SettingsSave(body); }
   catch (e) { return { ok: false, errors: [`没连上服务器或被拦断：${String((e && e.message) || e)}`] }; }
-  if (r && r.ok === false) return { ok: false, errors: (r.errors || ['后端未返回原因']) };
+  if (r && r.ok === false) return { ok: false, errors: (r.errors || ['系统没有给出原因，请重试']) };
   if (r && r.items) SET.items = r.items;        /* 就地刷新（留痕卡与下次打开弹窗都看得到新值） */
   if (r && r.logs) SET.logs = r.logs;
   return { ok: true, message: (r && r.message) || '已保存' };
@@ -441,7 +441,7 @@ V.imp = () => {
         <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
         <button class="btn" disabled style="min-width:186px" title="库里还没有项目档案 —— 先去「i8 接入层」同步「常用项目列表」">（库里还没有项目档案）</button>
         <span class="mut sm">⚠️ <b>这个域要先有项目档案</b>：去 <b>「i8 接入层」</b>页同步
-          <b>「常用项目列表」</b>（按 phid 幂等建档；「一个全名挂多个仓库」的进 <b>「项目档案」</b>页的
+          <b>「常用项目列表」</b>（按 phid 建档，重复的不会重复建；「一个全名挂多个仓库」的进 <b>「项目档案」</b>页的
           「待人工建档」卡处理）—— 建完<b>回本页刷新</b>，候选就在了。</span></div>`) : ''}
       ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
         <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
@@ -828,7 +828,7 @@ ACT.impCommit = async () => {
   if (IMP.hasPj && !IMP.wrap) {
     IMP.msg = IMP.org.length
       ? '请先在第 ① 步选「这批数据进哪个项目」—— 没选就落不了库（⛔ 系统不替你挑，免得写进错项目）'
-      : '库里还没有项目档案 ⇒ 这批数据无处可写：请先去「i8 接入层」页同步「常用项目列表」（按 phid 幂等建档），回本页刷新后再导';
+      : '库里还没有项目档案 ⇒ 这批数据无处可写：请先去「i8 接入层」页同步「常用项目列表」（按 phid 建档，重复的不会重复建），回本页刷新后再导';
     IMP.kind = 'wn'; render(); return;
   }
   /* ⭐ **上下文包 = 域声明的键一并给**（⛔ 壳里不再按域号挑那几个键 —— 2026-09-26 收口）：

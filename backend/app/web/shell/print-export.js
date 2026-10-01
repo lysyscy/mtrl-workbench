@@ -25,7 +25,7 @@ async function m03RunBatch(rows, mode) {
         用户只能看到两个 undefined，既报不准、我也查不动。
      ⇒ 现在就把它顶掉：失败**第一句就是中文真因**。 */
   if (!r || r.ok === false) {
-    return toast(`⚠️ <b>${what}没能完成</b>：${esc((r && r.message) || '后端未返回原因')}`, 12000);
+    return toast(`⚠️ <b>${what}没能完成</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`, 12000);
   }
   const bad = (r.items || []).filter(x => !x.ok);
   /* ⭐ `TAIL-46`-①：**已投递但无法核实**（`ok=true, unverified=true`）**不算失败** ——
