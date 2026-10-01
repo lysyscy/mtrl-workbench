@@ -14,6 +14,14 @@
    界面上传下来的是中文 ⇒ 在**这一处**转（映射只写一份，别在动作里各转一遍）。 */
 const CAT_API = { '辅材': 'material', '机械': 'mechanical', '集采': 'jc' };
 
+/* ---------- 共用文案（**一处在说、多处引用** ⇒ ⛔ 别在两处各写一遍）----------
+   ⭐ 2026-10-01（`TAIL-210` 批 3b）：这几句原先在 2 处逐字重复（同一件事、两处各写一遍
+   ⇒ 改一处必漏另一处）。⚠️ 判「要不要并」只看一句：**同一句在 ≥2 处、且将来会一起改**吗？
+   ⛔ `class="tip"` 块里的那两处**刻意不并**（抽成 `${CONST}` 会让离线那条长度判据对它们**失明**）。 */
+const I8_LOGIN_TIP = '本系统<b>不会自动重试登录</b>—— 请确认 i8 账号后再试；i8 抓不到时可走「手动导入」';
+const IMP_DEGRADE_TIP = '可到「导入」入口上传 i8 导出的 Excel';
+const OWN_KW_LABEL = '识别关键词（须出现在单据名里）';
+const OWN_KW_HINT = '选已有小微时，<b>须填一个出现在上面单据名里的关键词</b>（选中后<b>去重追加</b>到该小微名下，供下次自动命中）；填不出说明不是它。';
 /* ⭐ 名字格**按内容定宽**（`ACC-PRJ-LIST-001/001-07`「长项目名必须完整可读 —— ⛔ 不得被容器硬切」）
  *
  * ⚠️ 为什么必须这么干：`<input>` 的宽度**由 CSS 决定、不由内容决定** ⇒
@@ -480,12 +488,12 @@ async function openOwnDialog() {
     return `<div style="border:1px solid var(--bd2);border-radius:8px;padding:calc(10px * var(--fscale));margin-bottom:calc(10px * var(--fscale))">
       <div class="sm" style="margin-bottom:calc(6px * var(--fscale))"><b>${esc(it.project_name)}</b> <span class="mut">${note}</span></div>
       ${kvBlock([['单据编码', `<span class="fc">${esc(it.bill_no || '—')}</span>`], ['单据名称', `<span class="fc">${esc(it.doc_name || '—')}</span>`]])}
-      <p style="font-size:calc(12px * var(--fscale));margin:calc(6px * var(--fscale)) 0 calc(8px * var(--fscale))">选已有小微时，<b>须填一个出现在上面单据名里的关键词</b>（选中后<b>去重追加</b>到该小微名下，供下次自动命中）；填不出说明不是它。</p>
+      <p style="font-size:calc(12px * var(--fscale));margin:calc(6px * var(--fscale)) 0 calc(8px * var(--fscale))">${OWN_KW_HINT}</p>
       ${rows || '<div class="tip wn" style="margin:0 0 calc(9px * var(--fscale))">该壳下<b>暂无具体小微</b> → 只能走下面的「新小微」。</div>'}
       <div style="padding:calc(9px * var(--fscale));border:1px dashed var(--bd);border-radius:7px;margin-top:calc(8px * var(--fscale))">
         <div class="mut sm" style="margin-bottom:calc(7px * var(--fscale))">属于<b>新小微</b> → 录「仓库名 ＋ 关键词」建档</div>
         <div class="fld"><label>新小微的仓库名</label><input class="inp" id="ownNewName_${i}" placeholder="如：河南南阳热电项目仓库"></div>
-        <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>识别关键词（须出现在单据名里）</label><input class="inp" id="ownNewKw_${i}" placeholder="如：南阳"></div>
+        <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>${OWN_KW_LABEL}</label><input class="inp" id="ownNewKw_${i}" placeholder="如：南阳"></div>
         <div style="margin-top:calc(8px * var(--fscale))">
           <button class="btn gost" data-act="ownWhCheck" data-i="${i}">① 先查 i8 仓库名单</button>
           <span id="ownWhRes_${i}" class="sm" style="margin-left:calc(8px * var(--fscale))"></span>
@@ -674,7 +682,7 @@ async function ivFetchBackend(month) {
       await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
       return fetchResultModal(`抓取没能完成 · 收发结存`,
         `已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
-        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel</span>`);
+        + `<span class="mut sm">${IMP_DEGRADE_TIP}</span>`);
     }
     await reloadInv();
     await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
@@ -690,7 +698,7 @@ async function ivFetchBackend(month) {
     await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
     fetchResultModal(`抓取没能完成`,
       `<b style="color:var(--wn)">${esc(String((e && e.message) || e))}</b><br>`
-      + `<span class="mut sm">本系统<b>不会自动重试登录</b>—— 请确认 i8 账号后再试；i8 抓不到时可走「手动导入」</span>`);
+      + `<span class="mut sm">${I8_LOGIN_TIP}</span>`);
   }
 }
 
@@ -821,7 +829,7 @@ async function whFetchBackend(month) {
       await reloadM02IfOn();                 /* ⚠️ 见 `reloadM02IfOn`：降级**也写了一条执行记录**（`failed`） */
       return fetchResultModal(`抓取没能完成 · 库存单据明细`,
         `已<b>降级为手动导入</b>：${esc(r.message || '')}<br>`
-        + `<span class="mut sm">可到「导入」入口上传 i8 导出的 Excel</span>`);
+        + `<span class="mut sm">${IMP_DEGRADE_TIP}</span>`);
     }
     await reloadM07();
     await reloadM02IfOn();                   /* ⭐ 刚写的那条记录要立刻在记录卡上看到 */
@@ -850,7 +858,7 @@ async function whFetchBackend(month) {
     await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
     fetchResultModal(`抓取没能完成`,
       `<b style="color:var(--wn)">${esc(String((e && e.message) || e))}</b><br>`
-      + `<span class="mut sm">本系统<b>不会自动重试登录</b>—— 请确认 i8 账号后再试；i8 抓不到时可走「手动导入」</span>`);
+      + `<span class="mut sm">${I8_LOGIN_TIP}</span>`);
   }
 }
 

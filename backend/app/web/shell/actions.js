@@ -13,6 +13,15 @@
    ⭐ `#2`（2026-09-26）起**没有 `CHG` 名单了**：`change` 由委托层**直呼 `ACT[a]`**
    ⇒ "表单类动作漏登记 ⇒ `change` 被静默丢弃"那个老坑**在结构上不再可能**（见目录 ⑤）。
    ===================================================================== */
+/* ---------- 共用文案（**一处在说、多处引用** ⇒ ⛔ 别在两处各写一遍）----------
+   ⭐ 2026-10-01（`TAIL-210` 批 3b）：三条「表内增行」toast · 两条「取消」toast · `i8 账号`那枚 label
+   原先各写一遍。⚠️ `DRAFT_CANCEL_MSG` 是**函数**（两处只差一个局部变量 `was`）。
+   ⚠️ `OWN_KW_*` 两句声明在 `core.js`（那边也用）—— 本件在**运行期**引用后声明的 const，**本仓既有做法**。 */
+const DRAFT_HINT = '（尚未保存）—— 填完点该行「保存」写入、点「取消」丢弃';
+const DRAFT_CANCEL_MSG = was => was
+  ? `已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未写入）`
+  : '已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>';
+const I8_ACC_LABEL = 'i8 账号（§7.8 · 每人一份）';
 /* ⭐ `M5-5`：跨页写动作的**统一包装**（关联 / 解绑 / 集采实际供应商）—— 成功后**两侧同刷**。
    ⚠️ 为什么不复用集采页的 `jcAct`：那个只重建 `JCs`（集采页专用）。而这三件事都是**跨页**的 ——
       m03 的「关联区」与集采台账的「付款子表」是**同一份记录**（判据 `ACC-JC-PAY-001/001-01`）
@@ -701,7 +710,7 @@ const ACT={
     （`plan_api_router.py`；与旧 PRG 端点**同一份判定** `plan_manual.manual_row_payload`）。
     ⚠️ 旧服务端页（`POST /m04/row/save` ＋ `render_m04`）已随 `§19` 批 2 删除 ⇒ **壳是唯一入口**；
     判据点 `ACC-PLAN-MANUAL-001` 已搬到 `tests/test_api_m04_manual.py`（端点）与 `test_wired_m04.py`（壳）。 */
- plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>（尚未保存）—— 填完点该行「保存」写入、点「取消」丢弃<br>它写入后<b>与导入行同住一表、同样要被审查</b>，且<b>导入不会清理它</b>（§9.5）',5600); },
+ plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>${DRAFT_HINT}<br>它写入后<b>与导入行同住一表、同样要被审查</b>，且<b>导入不会清理它</b>（§9.5）',5600); },
  plRowEdit:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
    if(!p.manual){ toast('<b>编辑只对「手动行」开放</b> —— 导入行是项目端报来的<b>源数据</b>：要改请<b>重新导入</b>（它在 §4.3.3 唯一的例外口 = 该行「再次匹配」）',6400); return; }
    plRowEditId=p.id;
@@ -747,7 +756,7 @@ const ACT={
  plRowSet:t=>{ const k=t.dataset.k; if(!k) return; plD[k]=String(t.value==null?'':t.value); },
  plRowCancel:()=>{ const was=(plRowEditId&&plRowEditId!==PL_NEW_ID)?plRowEditId:'';
    plRowEditId=''; plD={}; render();
-   toast(was?`已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未写入）`:'已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
+   toast(DRAFT_CANCEL_MSG(was)); },
  /* 「编辑」= 该行**原地变草稿行**（不新增行；文案与校验与新增共用 `plRowSave`）。
     ⚠️ **只有手动行可编辑**：对导入行请求编辑时**显式说明原因**（不静默忽略、不当作新增 —— §4.3.3.1） */
  /* 保存（新增 / 编辑**共用**）：年月必填且月度形态 → 项目必选 → 金额校验（非法 / 负数）
@@ -825,7 +834,7 @@ const ACT={
     ⭐ 2026-09-13 用户拍板：「手动新增 / 编辑」**弹窗取消**，改为**表内增行**（甲案：草稿行不落 `NO`）。
     草稿层仍是 `naD`（键与 `NT_COLS` 同名，另加 `pid`）⇒ "改一格不会冲掉别的格"这条老教训照旧成立。 */
  ntRowAdd:()=>{ naEditId=NT_NEW_ID; naD=ntBlank(); ntReveal(); render();
-   toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」写入、点「取消」丢弃<br>已放宽「单据年月 / 分类 / 审批状态 / 付款状态」以便看见草稿行；<b>「项目」筛选未改动</b>',5600); },
+   toast('已在表尾生成<b>一行草稿</b>${DRAFT_HINT}<br>已放宽「单据年月 / 分类 / 审批状态 / 付款状态」以便看见草稿行；<b>「项目」筛选未改动</b>',5600); },
  /* 草稿层写入口：输入即记录（表单元素走 `change` ⇒ 委托层直呼，⛔ 没有名单）；
     ⚠️ 只有「分类」变了需要重绘（它决定「集采实际供应商」是否可填）—— 其余字段不重绘，
        免得每改一格就把焦点丢掉。 */
@@ -835,7 +844,7 @@ const ACT={
    naD[k]=(k==='pid')?((PJs.find(x=>x.id===v)||pjRowOf(v)||{}).id||''):v;
    if(k==='cat') render(); },
  ntRowCancel:()=>{ const was=(naEditId&&naEditId!==NT_NEW_ID)?naEditId:''; naEditId=''; naD={}; render();
-   toast(was?`已放弃对 <b>${esc(was)}</b> 的修改 —— 该行<b>保持原样</b>（草稿未写入）`:'已取消新增 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
+   toast(DRAFT_CANCEL_MSG(was)); },
  /* 「编辑」= 该行**原地变草稿行**（不新增行；文案/校验与新增共用 `ntRowSave`） */
  ntEdit:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n||!n.manual) return;
    naEditId=n.id;
@@ -1164,7 +1173,7 @@ const ACT={
      body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这张通知书的付款项目是<b>壳的全名</b>（同一全名下共 ${tot} 条档案），系统<b>不猜</b>。
        本次按「单据名称」在<b>该壳下</b>的关键词里匹配，命中 <b>${hit.length}</b> 个${hit.length===0?' → 需你指定':''}。<b>只在壳内找、不跨壳</b>（否则别的壳会把钱抢走）。</div>
        ${kvBlock([['单据编码',`<span class="fc">${esc(n.code)}</span>`],['单据名称',`<span class="fc">${esc(n.doc)}</span>`],['本次应付',M(payEff(n))]])}
-       <p style="font-size:calc(12px * var(--fscale));margin:0 0 calc(8px * var(--fscale))">选已有小微时，<b>须填一个出现在上面单据名里的关键词</b>（选中后<b>去重追加</b>到该小微名下，供下次自动命中）；填不出说明不是它。</p>
+       <p style="font-size:calc(12px * var(--fscale));margin:0 0 calc(8px * var(--fscale))">${OWN_KW_HINT}</p>
        ${cands.map(p=>`<div style="display:flex;align-items:center;gap:calc(9px * var(--fscale));padding:calc(7px * var(--fscale)) calc(8px * var(--fscale));border:1px solid var(--bd);border-radius:7px;margin-bottom:calc(7px * var(--fscale))">
          <button class="btn sm pri" style="flex:0 0 auto" data-act="ownOk" data-id="${n.id}" data-pid="${p.id}">归集到它</button>
          <span style="flex:1;min-width:0">${esc(pjDisp(p))}${pjArcMark(p)} <span class="mut sm">· 仓库名 ${esc(p.name)} · 关键词 ${esc(p.kw||'—')}${hit.some(h=>h.id===p.id)?' · <b>已命中</b>':''}</span></span>
@@ -1174,7 +1183,7 @@ const ACT={
        <div style="padding:calc(9px * var(--fscale));border:1px dashed var(--bd);border-radius:7px">
          <div class="mut sm" style="margin-bottom:calc(7px * var(--fscale))">属于<b>新小微</b> → 录关键词并建档（<b>仓库名手输</b>）</div>
          <div class="fld"><label>新小微的仓库名</label><input class="inp" id="ownNewName" placeholder="如：河南南阳热电项目仓库"></div>
-         <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>识别关键词（须出现在单据名里）</label><input class="inp" id="ownNewKw" placeholder="如：南阳"></div>
+         <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>${OWN_KW_LABEL}</label><input class="inp" id="ownNewKw" placeholder="如：南阳"></div>
          <div style="margin-top:calc(8px * var(--fscale))"><button class="btn pri" data-act="ownOk" data-id="${n.id}" data-pid="__new">建档并归集</button></div>
        </div>`,
      footer:`<button class="btn" data-act="closeModal">取消（保持「待指定」）</button>`}); },
@@ -1304,12 +1313,12 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
      const i8u = res.i8_user || '';
      const i8p = res.i8_password || '';
      const i8Block = i8u
-       ? `<div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>i8 账号（§7.8 · 每人一份）</label>
+       ? `<div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>${I8_ACC_LABEL}</label>
             <input class="inp" value="${esc(i8u)}" readonly></div>
           <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>i8 密码</label>
             <input class="inp" value="${esc(i8p)}" readonly>
             ${i8p?'':'<div class="mut sm" style="margin-top:calc(4px * var(--fscale))">该账号的 i8 <b>密码为空</b> —— 抓取会拿空密码去登录（会失败）</div>'}</div>`
-       : `<div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>i8 账号（§7.8 · 每人一份）</label>
+       : `<div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>${I8_ACC_LABEL}</label>
             <input class="inp" value="（未绑定）" readonly>
             <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">该账号<b>还没绑 i8</b> ⇒ <b>抓取会被拦下</b>并提示先填
               （⛔ 不会改用共享账号 —— 那会顶掉同事的在线会话、执行记录也记错人）。在「改密 / i8 绑定」里填上即可。</div></div>`;
@@ -2044,7 +2053,7 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
  /* —— MOD-12 手工登记（2026-09-13 用户拍板「都改」）：新增 / 录入 / 保存 / 取消 / 删除 / 筛选 / 重置 ——
     范式与 `MOD-03` 手动行、集采子表**同款**：草稿层（`dfD`，键=字段名）+ 表内增行 + 保存才落库。 */
  dfAdd:()=>{ dfNewOn=true; dfClear(); render();
-   toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」写入、点「取消」丢弃<br>「归属」恒为<b>库存单据</b>（§5.8.3）；金额<b>可正可负</b>（+ 上调 / − 下调）',6000); },
+   toast('已在表尾生成<b>一行草稿</b>${DRAFT_HINT}<br>「归属」恒为<b>库存单据</b>（§5.8.3）；金额<b>可正可负</b>（+ 上调 / − 下调）',6000); },
  dfSet:t=>{ dfD[t.dataset.k]=t.value; },   /* 草稿层写入口（表单元素走 change ⇒ 委托层直呼；⛔ 无名单）；不重绘，免得每改一格丢焦点 */
  dfCancel:()=>{ dfNewOn=false; dfClear(); render(); toast('已取消登记 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
  dfSave:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记<b>不独立成页</b> —— '

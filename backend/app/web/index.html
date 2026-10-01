@@ -1500,7 +1500,7 @@ V.m14=()=>`
     `<b>剔除规则 4 类</b>（业务类型 / 付款项目名 / 单据名称关键字 / 录入人）命中即剔除；<b>标记保留、可筛选、不销毁数据</b>（§4.2.2）。`,
     `<b>分类规则 3 步</b>（机械 → 集采 → 辅材），<b>只有三类、没有「其他」</b>；手改后重新抓取<b>不被覆盖</b>（§4.2.3 / §4.2.4）。`,
   ]})}
-  <div class="card"><h4>剔除规则（<b>${RULE_EX.length}</b> 类有效）<span class="sp"><button class="btn sm" data-act="ruleAdd" title="新增一条剔除规则（弹窗填「规则类别 / 命中值 / 业务含义」）">＋ 增加规则</button><span class="mut sm">命中即剔除，<b>标记保留、可筛选、不销毁数据</b></span></span></h4>
+  <div class="card"><h4>剔除规则（<b>${RULE_EX.length}</b> 类有效）<span class="sp"><button class="btn sm" data-act="ruleAdd" title="新增一条剔除规则（弹窗填「规则类别 / 命中值 / 业务含义」）">＋ 增加规则</button><span class="mut sm">命中即剔除</span></span></h4>
     <div class="bd np">${TBL({head:'<th>规则类别</th><th>命中值（多个用 ｜ 分隔）</th><th>剔除的业务含义</th><th>操作</th>',rows:[
       ...RULE_EX.map((r,i)=>`<tr><td><b>${esc(r[0])}</b></td><td class="fc">${esc(r[1])}</td><td class="sm mut">${esc(r[2])}</td>
       <td class="ctr"><button class="btn sm" data-act="ruleEdit" data-i="${i}" title="改这条规则的「规则类别 / 命中值 / 业务含义」">编辑</button> <button class="btn sm dg" data-act="ruleDel" data-i="${i}" title="删除这条规则（配置类数据 = 硬删、不留痕，§9.4）">删除</button></td></tr>`)

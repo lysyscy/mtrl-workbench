@@ -16,6 +16,9 @@
    —— 这条教训本仓记过（见 `actions.js` 里 `fJc` 那句）。
    ⛔ `IMP05`（历史付款导入旧页的状态）**已随该页下架删除**（`TAIL-75` `B5b` 第三步 · 2026-09-23
       用户裁定 `B`：同一件事只留一个入口 ⇒ 走通用面 `/api/imp/m05_flow/*`，见 `V.imp`）。 */
+/* ---------- 共用文案（**一处在说、多处引用** ⇒ ⛔ 别在两处各写一遍）----------
+   ⭐ 2026-10-01（`TAIL-210` 批 3b）：这个 label 在 `ctxBar` 的两个分支各写了一遍。 */
+const IMP_PJ_LABEL = '这批数据进哪个项目（键 = 仓库名，§2.7.4）';
 const SET = {items: [], logs: [], tips: [], errs: [], msg: '', kind: 'ok'};   /* 系统设置 */
 
 
@@ -430,7 +433,7 @@ V.imp = () => {
   const ctxBar = (IMP.hasPj || IMP.hasYm || IMP.hasCut)
     ? `${FBAR({cls:'pane',body:`
       ${IMP.hasPj ? (IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
-        <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
+        <label>${IMP_PJ_LABEL}</label>
         ${PJB({act:'impPjToggle',w:186,label:`${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}`,title:`${IMP.wrap ? esc('仓库名（§2.7.4）：' + IMP.wrap) : ''}`})}
         ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>`
       /* ⛔ **候选为空 ≠ 这个域不要项目**（2026-09-29 修）：仍要把这一格画出来 —— ① 让人看见
@@ -438,7 +441,7 @@ V.imp = () => {
          （去 `m02`「i8 接入层」同步 i8「常用项目列表」⇒ 按 phid 幂等建档）；③ 按钮**置灰**，
          ⛔ 不做成"可点的空面板"（点开是空的 = 假控件）。 */
       : `<div class="fi pjwrap" style="position:relative">
-        <label>这批数据进哪个项目（键 = 仓库名，§2.7.4）</label>
+        <label>${IMP_PJ_LABEL}</label>
         <button class="btn" disabled style="min-width:186px" title="库里还没有项目档案 —— 先去「i8 接入层」同步「常用项目列表」">（库里还没有项目档案）</button>
         <span class="mut sm">⚠️ <b>这个域要先有项目档案</b>：去 <b>「i8 接入层」</b>页同步
           <b>「常用项目列表」</b>（按 信息化编号 建档，重复的不会重复建；「一个全名挂多个仓库」的进 <b>「项目档案」</b>页的
