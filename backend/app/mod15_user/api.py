@@ -479,10 +479,11 @@ def api_password(req: PwdIn) -> dict:
         with session_scope() as s:
             me = _me(s)
             uid = _uid(req.id)
-            # ⚠️ **改自己的密码**不受"必须是管理员"限制（§1.5.1 只要求管理员**能管理其他账号**）
-            #    ⇒ 改**别人**的才要闸；⛔ 别把这条收得太紧（普通用户改不了自己的密码是另一种错）。
-            if me is None or me.id != uid:
-                D.assert_is_admin(me)
+            # ⭐ **改密闸 = 域层的具名函数**（2026-10-01 `TAIL-207` 从这里的 `if` 挪过去 ——
+            #    理由同 `assert_is_admin`：**防线在域层**，且纯函数好钉判据、不用起会话）。
+            #    **本人改自己 ⇒ 放行**（哪怕只是普通用户）；改**别人** ⇒ 仍要管理员。
+            #    出处 = 用户 2026-10-01「普通用户应该有改自己账户密码的权限」（决策件 `D28`）。
+            D.assert_may_set_password(me, uid)
             u = R.set_password(s, uid, req.password)
             return f"{u.name or u.account} 的密码已更新" + ("" if req.password else "（已清空 · 密码可为空）")
     return _run(go)

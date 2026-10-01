@@ -147,3 +147,63 @@ def test_只有在用管理员能管理账号_且不靠按钮禁用():
         assert res["ok"] is False, "普通用户**通过 API** 建号竟然成功了 —— 后端没设闸"
         assert "__自检_不该建成__" not in [u.account for u in R.all_users(s)], "被拒了却真建了行"
         s.rollback()
+
+
+@acc("ACC-USR-MGMT-001", "001-02")
+def test_本人可改自己密码而改别人仍要管理员():
+    """⭐ 用户 2026-10-01 拍板：「**普通用户应该有改自己账户密码的权限**」（`TAIL-207`）。
+
+    ⚠️ 钉的是**域层那个具名闸** `D.assert_may_set_password`（⛔ 不是"搜一眼壳里有没有那句话"）——
+       理由与本件上一条完全相同：**防线在域层**，换任何入口（壳 / JSON API / 将来的批处理）都得过它。
+    ⚠️ 为什么挂在 `001-02`：它讲的正是**管理动作的权限边界**（"管理员可管理**其他**账号"）
+       ⇒ 本断言钉的是同一条边界的**另一半**：本人对自己那一个动作**不需要**管理员。
+       ⭐ 用户原话与影响面 = 决策件 `.codebuddy/work/40-decisions/D28-普通用户可改自己密码.md`。
+    ⚠️ 四半都要钉（⛔ 少一半就退化成"一律放行"或"一律拒"）：
+       ① **本人**（哪怕只是普通用户）⇒ 放行；② 普通用户改**别人** ⇒ 拒；
+       ③ **取不到当前登录用户** ⇒ 拒（⛔ 别"没人就当本人"）；④ 管理员改别人 ⇒ 放行。
+    ⚠️ 壳那一半**同批钉**：置灰条件必须**认得出"这是我自己那行"**，否则普通人还是点不动。
+       只读**壳源码唯一出口** `tests.shell_src.SHELL`（⛔ 不直接读 `index.html`）。
+    ⚠️ 能证伪：把域层那句 `getattr(actor,"id",None)==target_id` 的方向调反 ⇒ ①② 必红；
+       把壳里 `||u.id===CUR.id` 摘掉 ⇒ ⑥ 必红。
+    """
+    from app.mod15_user import api as API
+    from tests.shell_src import SHELL
+
+    with session_scope() as s:
+        R.ensure_seeded(s)
+        admin = D.active_admins(R.all_users(s))[0]
+        plain = R.create(s, account="__自检_本人改密__", name="普通用户", password="旧密")
+        other = R.create(s, account="__自检_改别人__", name="另一个普通用户")
+        s.flush()
+
+        # ① 本人（普通用户）改自己 ⇒ **放行**（这是 2026-10-01 之前做不到的那件事）
+        D.assert_may_set_password(plain, plain.id)
+        # ② 普通用户改**别人** ⇒ 拒
+        with pytest.raises(MustReportError) as e:
+            D.assert_may_set_password(plain, other.id)
+        assert "管理员" in str(e.value), "拒了，但提示里没说要管理员（人话提示丢了）"
+        # ③ 取不到当前登录用户 ⇒ 拒（连"改自己"也不放行 —— 没有"我"这件事）
+        with pytest.raises(MustReportError):
+            D.assert_may_set_password(None, plain.id)
+        # ④ 管理员改别人 ⇒ 放行（⛔ 别把闸收成"只有本人"）
+        D.assert_may_set_password(admin, other.id)
+
+        # ⑤ ⭐ **走 API 那一层**也要拒（本件上一条的同一哲学：界面挡不住脚本）
+        real = API._me
+        API._me = lambda _s: plain                          # 冒充普通用户在调接口
+        try:
+            res = API.api_password(API.PwdIn(id=other.id, password="x"))
+        finally:
+            API._me = real
+        assert res["ok"] is False, "普通用户**通过 API** 改**别人**的密码竟然成功了 —— 后端没设闸"
+        s.rollback()
+
+    # ⑥ 壳那一半：置灰条件必须认得出「我自己那一行」，且**管理员那一半还在**
+    frag = [ln for ln in SHELL.splitlines() if 'data-act="userPwd"' in ln]
+    assert frag, '壳里找不到「改密」按钮（`data-act="userPwd"`）—— 判据要重定靶'
+    ln = frag[0]
+    assert "CUR.id" in ln, (
+        "「改密」按钮的置灰条件**没认「本人」** ⇒ 普通用户点不动自己的改密"
+        "（正是 `TAIL-207` 报的那件事）：\n  " + ln.strip()[:200])
+    assert "iAmAdmin" in ln, (
+        "置灰条件把「管理员」那一半漏了（管理员要能改**别人**的密码）：\n  " + ln.strip()[:200])

@@ -86,6 +86,29 @@ def assert_is_admin(actor) -> None:
             "⇒ 请让管理员来操作，或先**转让管理员**给你。")
 
 
+def assert_may_set_password(actor, target_id) -> None:
+    """**改密闸**：**本人改自己不受"必须是管理员"限制**；⛔ 改**别人**的才要管理员。
+
+    ⭐ 出处 = 用户 **2026-10-01** 拍板（`TAIL-207` · 决策件 `.codebuddy/work/40-decisions/D28-普通用户可改自己密码.md`）：
+       「**普通用户应该有改自己账户密码的权限**」。
+    口径依据：§1.5.1 只要求管理员**能管理「其他」账号**（"用户本人为管理员，可管理**其他**账号"）——
+       ⛔ 它**没有**说"只有管理员能碰密码"；把本人关在门外是**另一种错**
+       （每个人只能找管理员改密 ⇒ 管理员变成人工密码机）。
+
+    ⚠️ 两半都要钉（与 `assert_is_admin` 同一个哲学）：
+       ① **本人**（哪怕只是普通用户）⇒ **放行**；
+       ② **改别人** ⇒ 仍走 `assert_is_admin`；**取不到当前登录用户**（`actor is None`）⇒ **一律拒**
+          （⛔ 别"没人就当本人" —— 那比"没人就当管理员"更隐蔽）。
+
+    ⚠️⚠️ 为什么它在**域层**、而不是留在 `api.py` 里那个 `if`（2026-10-01 `TAIL-207` 挪的）：
+       与 `assert_is_admin` 同一条理由 —— **防线在域层**（命令行 / 批处理 / 将来的别处调用都会过这一层）；
+       而且它是**纯函数**（⛔ 不碰库）⇒ 判据可直接调它，不用起会话、不写一行库。
+    """
+    if actor is not None and getattr(actor, "id", None) == target_id:
+        return
+    assert_is_admin(actor)
+
+
 def assert_not_self_delete(actor, target) -> None:
     """⛔ **不能删除自己**（§1.5.1「防锁死」后半句）。
 
@@ -226,7 +249,7 @@ def transfer_plan(actor, target) -> dict:
 __all__ = [
     "ROLE_ADMIN", "ROLE_USER", "ROLES",
     "STATUS_ACTIVE", "STATUS_DISABLED", "STATUSES", "STATE_DELETED",
-    "active_admins", "assert_account_usable", "assert_is_admin",
+    "active_admins", "assert_account_usable", "assert_is_admin", "assert_may_set_password",
     "assert_last_admin_protected", "assert_not_self_delete", "effective_theme",
     "UI_SCALES", "DEFAULT_UI_SCALE", "effective_ui_scale", "ui_scale_css",
     "assert_ui_scale_usable",

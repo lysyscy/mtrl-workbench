@@ -1571,7 +1571,7 @@ V.m15=()=>{
     `<b>系统内 2 人</b>（§1.5.1），<b>两人业务权限无区别</b> ⇒ 本页<b>不设业务权限配置</b>（配了也没有区别）。<br>「角色」的<b>唯一</b>区别是：<b>能不能管理账号</b>。`,
     `<b>管理动作共 5 类</b>：新增账号 · 改密 · 停用 / 启用 · <b>删除用户</b> · <b>转让管理员</b>。`,
     `<b>管理员可授权转让</b>：转让后对方成为管理员、自己转为普通用户 —— 系统内<b>始终只保留一个管理员</b>。`,
-    `<b>账号名</b>：<b>非空 + 不重复</b>即可（不限制字符与长度）；<b>密码无格式要求、可为空</b>。`,
+    `<b>账号名</b>：<b>非空 + 不重复</b>即可（不限制字符与长度）；<b>密码无格式要求、可为空</b>。<br><b>改密</b>：<b>自己的密码自己就能改</b>（⛔ 不用找管理员）—— 改<b>别人</b>的才需要管理员。`,
     `<b>停用 ≠ 删除</b>：停用 = 暂不可登录（可再启用）；<b>删除 = 软删除</b> —— 账号名保留、不销毁数据，历史留痕里的人名仍认得出来，必要时可恢复。`,
     `<b>防锁死（本页硬规则）</b>：<b>不能停用 / 删除「最后一个在用管理员」</b>；也<b>不能删除自己</b>。`,
     `<b>系统外一律不设账号</b>（§1.5.2）：项目端 / 会计 / 资产处 / 大领导 / 供应商 / 班组。<b>与业务字段联动</b>：付款流水操作人、调整单操作人、留痕「改前人」<b>统一取当前登录用户</b>。`,
@@ -1590,7 +1590,7 @@ V.m15=()=>{
       <td class="now sm mut">${u.last?esc(u.last):'<span class="mut">从未登录</span>'}</td>
       <td class="ctr now">${u.status==='已删除'
         ? `<button class="btn sm" data-act="userRestore" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="恢复该账号；只有管理员能管理账号（不是管理员时置灰）">恢复</button>`
-        : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="重置该账号密码；只有管理员能管理账号（不是管理员时置灰）">改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
+        : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${(iAmAdmin||u.id===CUR.id)?'':'disabled'} title="${u.id===CUR.id?'改我自己的密码（⛔ 不用找管理员）':'重置该账号密码；只有管理员能管理账号（不是管理员时置灰）'}">改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
            <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
            ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
     </tr>`)]})}</div>
