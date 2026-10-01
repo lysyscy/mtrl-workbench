@@ -310,6 +310,66 @@ _DOC_SHAPES: tuple[tuple[str, str], ...] = (
 )
 
 
+_APP_DIR = __import__("pathlib").Path(__file__).resolve().parents[1] / "app"
+
+
+def _backend_user_strings() -> list[tuple[str, int, str]]:
+    """后端 `app/**/*.py` 里**会拼进回执 / 报错 / 说明**的字符串常量 ⇒ `(件, 行号, 值)`。
+
+    ⚠️ 三条边界（都是**量出来的**，⛔ 别放宽也别无谓收紧）：
+      ① **跳过"裸字符串语句"**（module / class / function 的 docstring ＋ **属性 docstring** ＋
+         拿字符串当注释的老写法）—— 那些值**无处可去**，不是上屏文字
+         （实测：不收这一条，会在 `mod03_notice/service.py` 的 `files:` 属性文档上**假阳一次**）；
+      ② **代号被反引号包住 ⇒ 不算** —— 本仓「工程侧笔记」一律用反引号包标识符
+         （真例：守卫表 `FORBIDDEN_TEXTS` 的墓碑值「（业务上无此数据，`DEV-R-03`）」—— 那张表本身就是"这些串**不许出现**"）；
+         而用户面上写代号**从不加反引号**（清掉的那 9 处无一例外）；
+      ③ 注释 **AST 根本看不见** ⇒ 不用管。
+    """
+    import ast
+    out: list[tuple[str, int, str]] = []
+    for p in sorted(_APP_DIR.rglob("*.py")):
+        tree = ast.parse(p.read_text(encoding="utf-8"))
+        skip: set[int] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Expr) and isinstance(node.value, (ast.Constant, ast.JoinedStr)):
+                for sub in ast.walk(node.value):
+                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                        skip.add(id(sub))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in skip:
+                out.append((p.relative_to(_APP_DIR.parent.parent).as_posix(), node.lineno, node.value))
+    return out
+
+
+@acc()
+def test_后端的用户可见串里也不许出现工程代号():
+    """⭐ `TAIL-211`（2026-10-01）：**把"工程代号混进用户可见文字"这一类也罩住后端**（守则 §2.5 / §3.1）。
+
+    ⚠️ **为什么必须补**：本件上面那几条源码扫查（`**` / 工程代号 / 工程侧文件名）**靶全是壳源码** ——
+       而后端**同样**会把串拼上屏（域自报文案 / `MustReportError` / 回执块标题）。
+       `TAIL-210` 第 3 批改词那轮当场撞到 **3 例**（`（API-06）` · `链路 A` · `（M5 未开工）`）：
+       前两例就在后端 —— **已顺手清掉，但当时没有任何判据兜住** ⇒ 这就是本条的来历。
+    ⚠️ **立判据当场又抓出 9 处**（量法 = `tools/oneoff/_text_ctx9.py --codes`）：`（决策 1 兜底）` ·
+       `（决策 2：…）`×2 · `（DEV-P-04）` · `（链路 A）` · `（API-05）`×2 · `（R1）` ·
+       以及 `report_export/resources.py` 那句给用户看的 `_RETRY` 里写着的 `ops/模板法导出-实测结论.md`
+       ＋ 交付面 / 仓内两条路径（清法 = `tools/oneoff/_tail211_codes.py`）。
+    ⚠️ **能证伪**：往任一后端**字符串**里写 `（R99）` ⇒ 本件必红（自证见 `tools/oneoff/_tail209_mark_proof.py` 的 `T5`）。
+       ⛔ 写进**注释 / docstring**、或把代号**用反引号包住** ⇒ 不红（那两种都是工程侧记法）。
+    """
+    bad: list[str] = []
+    for rel, lineno, v in _backend_user_strings():
+        stripped = re.sub(r"`[^`]*`", "", v)          # 反引号段 = 工程侧记号 ⇒ 不算
+        for pat, why in _CODE_SHAPES + _DOC_SHAPES:
+            if re.search(pat, stripped):
+                bad.append(f"{rel}:{lineno}  [{why}]  {stripped[:90]}")
+                break
+    assert not bad, (
+        "**后端**拼给用户的串里出现了**工程代号 / 工程侧文件名**（守则 §2.5 / §3.1）：\n  "
+        + "\n  ".join(bad)
+        + "\n⇒ 直接删掉它（⛔ 别改判据）；`§节号` 与 `MOD-xx` 编号**不在此列**。"
+    )
+
+
 @acc()
 def test_用户可见串里不许出现工程侧文件名():
     """⭐ 第二轮（2026-10-01 · 批 9）：**内部的目录名 / 文档名不许上屏**（守则 §3.1 技术实现细节不上屏）。

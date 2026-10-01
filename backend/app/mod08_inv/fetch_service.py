@@ -80,7 +80,7 @@ def _wh_loader(wh_rows):
     """把「已经取到的名单」包成 `recovery` 要的 loader（取不到 ⇒ 抛，由编排转成**降级说明**）。"""
     def _load() -> list[dict]:
         if wh_rows is None:
-            raise RuntimeError("仓库名单（API-05）本次没取到")
+            raise RuntimeError("仓库名单本次没取到")
         return wh_rows
 
     return _load

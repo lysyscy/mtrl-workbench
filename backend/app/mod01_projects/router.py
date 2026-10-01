@@ -367,7 +367,7 @@ def archive_row(req: ArchiveRowRequest) -> ArchiveRowOut:
             disp=str(row.disp or ""),
             message=(f"已建档：{row.name_full} → 仓库「{row.warehouse_name}」"
                      f"（{PE.TYPE_LABEL.get(ptype, ptype)}）—— 这是**系统写入**（§9.4 仓库名以 i8 为准）；"
-                     "⚠️ 同一项目的**其余仓库不再建行**（决策 2：一条普通项目只挂一个仓库）"),
+                     "⚠️ 同一项目的**其余仓库不再建行**"),
         )
 
 

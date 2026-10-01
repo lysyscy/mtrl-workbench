@@ -53,7 +53,7 @@ def jc_supplier_problem(row) -> str | None:
     if row is None:
         return "找不到该付款通知书"
     if str(getattr(row, "category", "") or "") != CATEGORY_JC:
-        return "仅「集采」分类的记录可填集采实际供应商（DEV-P-04）"
+        return "仅「集采」分类的记录可填集采实际供应商"
     return None
 
 

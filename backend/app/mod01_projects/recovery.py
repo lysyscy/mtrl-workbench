@@ -176,7 +176,7 @@ def plan_recovery(
                 "kind": kind,
                 "warehouse_name": wh, "owner_full_name": full,
                 "reason": f"同一全名命中 {len(hits)} 条非壳档案 —— 疑似名字没带「小微」的壳，"
-                          "需人工确认类型（决策 1 兜底）",
+                          "需人工确认类型",
             })
             continue
 
@@ -193,7 +193,7 @@ def plan_recovery(
             "kind": KIND_WAREHOUSE_MISMATCH,
             "warehouse_name": wh, "owner_full_name": full,
             "reason": f"该全名的档案行仓库名 = 「{current}」，本次报表里出现的是「{wh}」"
-                      "—— 一条普通项目只能挂一个仓库（决策 2：普通项目 ↔ 仓库 = 1 : 1），需人工核对",
+                      "—— 一条普通项目只能挂一个仓库（普通项目 ↔ 仓库 = 1 : 1），需人工核对",
         })
 
     return {"promote": promote, "create": create, "unresolved": unresolved}

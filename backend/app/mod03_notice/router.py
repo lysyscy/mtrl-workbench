@@ -164,7 +164,7 @@ def assign_ownership(req: AssignRequest) -> AssignResponse:
             return AssignResponse(ok=False, message="新建小微需要填「仓库名」")
         shell = next((p for p in projects if p.id == req.shell_id), None)
         if shell is None:
-            return AssignResponse(ok=False, message="壳未建档 ⇒ 必须先有壳后有微（链路 A）")
+            return AssignResponse(ok=False, message="壳未建档 ⇒ 必须先有壳后有微")
         try:
             proj_repo.create_project(
                 session,

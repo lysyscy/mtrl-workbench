@@ -358,7 +358,7 @@ PIVOT_SHEETS: tuple[str, ...] = ("报表1", "「过程资料」透视", "「安�
 def export_kinds() -> tuple[dict, ...]:
     """本页**并存**的两种导出（001-12）。"""
     return (
-        {"id": EXPORT_PLAIN, "label": "导出 Excel（R1）", "hint": "按页面列朴素导出，与列筛选结果一致"},
+        {"id": EXPORT_PLAIN, "label": "导出 Excel", "hint": "按页面列朴素导出，与列筛选结果一致"},
         {"id": EXPORT_PIVOT, "label": "导出（含数据透视表）", "hint": pivot_hint()},
     )
 

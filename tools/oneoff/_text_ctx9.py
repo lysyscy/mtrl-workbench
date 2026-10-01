@@ -54,14 +54,19 @@ def in_str(spans: list[tuple[int, int]], pos: int) -> bool:
 
 
 def _docstring_nodes(tree: "ast.AST") -> set[int]:
-    """收集**文档字符串**节点的 id（它们不是"上屏文字"，是留痕/说明）。"""
+    """收集**"文档字符串"式**节点的 id —— ⛔ 它们不是上屏文字（值无处可去，只是留痕）。
+
+    = 所有**裸字符串语句**（`ast.Expr`，value 是 str 常量或 f-string）里的**字符串片段**。
+    ⚠️ 不只 module/class/function 的 `body[0]`：**属性 docstring**（`x: T = v` 后面紧跟的那句）
+    与"拿字符串当注释"的老写法都在此列 —— 实测（`TAIL-211`）不这么收会**假阳性**
+    （`mod03_notice/service.py` 那个 `files:` 字段的文档就是被误报的那一处）。
+    """
     out: set[int] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            body = getattr(node, "body", None)
-            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
-                    and isinstance(body[0].value.value, str):
-                out.add(id(body[0].value))
+        if isinstance(node, ast.Expr) and isinstance(node.value, (ast.Constant, ast.JoinedStr)):
+            for sub in ast.walk(node.value):
+                if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                    out.add(id(sub))
     return out
 
 
@@ -125,7 +130,49 @@ def face_dump() -> None:
         print(f"   合计 {total} 行")
 
 
+def codes_scan() -> None:
+    """`TAIL-211` 取材件：按**形态**扫后端**字符串常量**里的「工程代号 / 工程侧文件名」。
+
+    ⚠️ 只报、不判（先量假阳性 —— 「要判语义」的扫查会把判据逼关掉，本仓的既定教训）。
+    ⛔ 文档字符串**跳过**（`DEV-J-01` 这种代号写在 docstring / 注释里是对的）。
+    """
+    import ast as _ast
+    code_shapes = (r"（R\d+）", r"（D\d+）", r"（决策\s?[A-Z]?\d+", r"DEV-[A-Z]-\d+",
+                   r"（ENT-\d+）", r"（API-0\d）", r"链路\s?[ABC]")
+    doc_shapes = (r"ops[/\\]", r"见\s*ops", r"\.codebuddy", r"artifacts[/\\]", r"tools[/\\]", r"\.md\b")
+    print("══ ⑤ 后端字符串常量 × 「工程代号 / 工程侧文件名」（ast 取 · ⛔ 跳过文档字符串）")
+    n = 0
+    for p in sorted((ROOT / "backend" / "app").rglob("*.py")):
+        src = p.read_text(encoding="utf-8")
+        try:
+            tree = _ast.parse(src)
+        except SyntaxError as e:
+            print(f"   ⚠️ {p}: {e}")
+            continue
+        skip = _docstring_nodes(tree)
+        for node in _ast.walk(tree):
+            if not (isinstance(node, _ast.Constant) and isinstance(node.value, str)):
+                continue
+            if id(node) in skip:
+                continue
+            v = node.value
+            # ⚠️ 边界：**反引号包住的记号不算** —— 本仓「工程侧笔记」一律用反引号包标识符
+            #    （真例：守卫表 `FORBIDDEN_TEXTS` 的墓碑值「（业务上无此数据，`DEV-R-03`）」）；
+            #    而用户面上写代号**从不加反引号**（实测 9 处真缺陷无一例外）。
+            v = re.sub(r"`[^`]*`", "", v)
+            hit = [pat for pat in code_shapes + doc_shapes if re.search(pat, v)]
+            if not hit:
+                continue
+            n += 1
+            rel = p.relative_to(ROOT).as_posix()
+            print(f"   {rel}:{node.lineno}  [{'|'.join(hit)}]  {re.sub(chr(92) + 's+', ' ', v)[:120]}")
+    print(f"   合计 {n} 处")
+
+
 def main() -> int:
+    if "--codes" in sys.argv:
+        codes_scan()
+        return 0
     if "--py" in sys.argv:
         py_strings()
         return 0
