@@ -1534,7 +1534,7 @@ V.m14=()=>`
       ...PJs.filter(p=>p.type==='small').map(p=>`<tr><td class="sm">${esc(p.name)}</td><td class="sm mut">${esc((PJs.find(x=>x.id===p.parent)||{}).full||'')}</td>
         <td class="fc">${esc(p.kw)}</td></tr>`)
     ]})}
-    <div class="bd"><div class="tip" style="margin:0"><b>设计要点（决策 3/4）：</b>关键词是<b>具体小微的属性</b>，存在<b>项目行</b>上（<span class="fc">|词1|词2|</span> 格式）；<b>允许重复</b>，命中多个时<b>弹窗让用户选</b>，选中后去重追加到该小微名下。</div></div></div></div>
+    <div class="bd"><div class="tip" style="margin:0"><b>设计要点：</b>关键词是<b>具体小微的属性</b>，存在<b>项目行</b>上（<span class="fc">|词1|词2|</span> 格式）；<b>允许重复</b>，命中多个时<b>弹窗让用户选</b>，选中后去重追加到该小微名下。</div></div></div></div>
   </div>
   <div class="card" style="margin-bottom:0"><h4>本系统的几条硬规矩（对数据有什么影响，先看这里）</h4><div class="bd np">${TBL({cls:'cond',rows:[
       ...['金额一律 2 位小数；差 1 分也算不符','源数据不动 —— 人工判断记在单独的旁路值上','人工改过的值，不会被导入/抓取覆盖','仓库名不可人工修改（只能系统建档或扶正时写）','小微必须先有壳、后有微（不可单独存在）','删除分档（按「删了能不能复原」分）：可复原的 / 你自己录的（期初 · 特殊费用 · 手动补录 · 付款计划）⇒ 真删；只有账号是软删（留痕里的人名要认得出来）','不标准值不清洗，原样入库 + 提供批量修改入口','材料月报不上报；过程资料才上报'].map((t,i)=>`<tr><td class="fc" style="width:40px">${i+1}</td><td>${t}</td></tr>`)

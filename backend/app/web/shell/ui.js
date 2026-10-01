@@ -235,7 +235,7 @@ function dispCell(full,n){
   const ow=ownOf(n);
   if(ow) return esc(pjDispOr(ow,'—'));
   const m=projMatches(full);
-  if(!m.length) return '<span class="tag t-dg" title="档案里没有该全名 → 触发自动建档（链路 A）">未建档</span>';
+  if(!m.length) return '<span class="tag t-dg" title="档案里没有该全名 → 触发自动建档">未建档</span>';
   if(m.length===1) return esc(pjDispOr(m[0],'—'));
   /* 壳全名 + 归属未判定 → 「待指定」：**可点**去指定（无行上下文时只提示、不可点） */
   if(!n) return `<span class="tag t-wn" title="该全名对应 ${m.length} 条档案（1 个壳 + ${m.length-1} 个具体小微共享同一全名）。系统禁止用全名反查，写操作一律按 id 定位，需先指定具体小微">壳下 ${m.length-1} 个小微 · 待指定</span>`;

@@ -2205,7 +2205,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
       sum:(jcSubOn('inv',j.id)?jcSubRow():'')+sumRowOf(JCINV_THEAD, [], {2:[()=>jcInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="inv">＋ 增加一张发票</button></div>
-      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>发票子表（ENT-07）</b>：一合同 <b>1..N</b> 张、<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>（§6.4.1）。<br>${j.tradeCo?'本合同<b>有贸易公司</b> ⇒ <b>结算取「贸易公司发票」子表合计</b>，本子表<b>只作供应商侧台账</b>（§6.4.1）。':'本合同<b>无贸易公司</b> ⇒ <b>结算取本子表合计</b>（§6.4.1）。'}</div>`}); },
+      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>发票子表</b>：一合同 <b>1..N</b> 张、<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>（§6.4.1）。<br>${j.tradeCo?'本合同<b>有贸易公司</b> ⇒ <b>结算取「贸易公司发票」子表合计</b>，本子表<b>只作供应商侧台账</b>（§6.4.1）。':'本合同<b>无贸易公司</b> ⇒ <b>结算取本子表合计</b>（§6.4.1）。'}</div>`}); },
  jcTInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);
    modal({title:`贸易公司发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcTInvDlg({dataset:{id:j.id}}),body:
@@ -2224,7 +2224,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       empty:EMPTYROW(thCount(JCPAY_THEAD), '暂无付款', '点本卡右上角「＋ 加一行」录入'),
       sum:(jcSubOn('pay',j.id)?jcSubRow():'')+sumRowOf(JCPAY_THEAD, [], {1:[()=>jcPay(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale));display:flex;gap:calc(6px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="pay">＋ 手工录入</button>
-        <button class="btn sm pri" data-act="jcPayRef" data-id="${j.id}">从付款域引用（R8）</button></div>
+        <button class="btn sm pri" data-act="jcPayRef" data-id="${j.id}">从付款域引用</button></div>
       <div class="sm mut" style="margin-top:calc(7px * var(--fscale))">集采付款通知书的收款方都是「资产处集中采购」，真实供应商靠<b>人工录入的「集采实际供应商」</b>做关联锚点；<b>同一笔通知书不可重复引用</b>。</div>
       <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>付款子表</b>：一合同 <b>0 / 1 / 多</b> 次，手工录入 ＋ 可从付款域引用。<br><b>欠款口径（§6.4.4）：</b>${j.tradeCo?`有贸易公司 → 贸易公司发票合计 ${M(jcTradeInvSum(j))}`:`无贸易公司 → 供应商发票合计 ${M(jcInvSum(j))}`} − 付款合计 ${M(jcPay(j))} = <b style="color:var(--dg)">${M(jcDebt(j))}</b>（<b>合同级实时，不拆月度</b>）</div>`}); },
  /* —— 集采三张子表的录入 = **表内增行**（2026-09-13 用户口径：发票子表录入要填日期；**取代原先那种浏览器原生输入小窗**）——

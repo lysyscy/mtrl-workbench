@@ -500,8 +500,8 @@ async function openOwnDialog() {
     title: `待指定归属 · ${items.length} 条`,
     wide: true,
     body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">${OWN_SRC === 'jc'
-      ? `<b>链路 C</b>：集采合同的<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并落库（集采是<b>逐条落库</b>，已落的不受影响）。`
-      : `<b>链路 C</b>：付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并落库。`}</div>${box}`,
+      ? `<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并落库（集采是<b>逐条落库</b>，已落的不受影响）。`
+      : `付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并落库。`}</div>${box}`,
     footer: `<button class="btn" data-act="closeModal">关闭</button>`,
   });
 }
@@ -834,7 +834,7 @@ async function whFetchBackend(month) {
       + `新增 <b>${st.inserted || 0}</b> · 更新 <b>${st.updated || 0}</b> · 删除 <b>${st.deleted || 0}</b>`;
     const rc = r.recovery || {};
     const pro = (rc.promoted || []).length, cre = (rc.created || []).length;
-    if (pro || cre) msg += `<br>链路 B：自动扶正 <b>${pro}</b> 行 · 自动建档 <b>${cre}</b> 行`
+    if (pro || cre) msg += `<br>自动扶正 <b>${pro}</b> 行 · 自动建档 <b>${cre}</b> 行`
       + (pro ? `<br><span class="mut sm">${esc((rc.promoted || []).join('；'))}</span>` : '');
     const pend = rc.unresolved_items || [];
     if (pend.length) {
@@ -1374,7 +1374,7 @@ BIND.m01 = function () {
     const abox = document.createElement('div');
     abox.id = 'archBox';
     abox.className = 'card';
-    abox.innerHTML = `<h4>待人工建档（链路 A · 多仓库）<span class="sp"><span class="mut sm">共 ${ARCP.length} 条${ARCP_DROP.length?` · 另有 ${ARCP_DROP.length} 条不属本卡（见下）`:''} · ${asrc}</span></span></h4>
+    abox.innerHTML = `<h4>待人工建档<span class="sp"><span class="mut sm">共 ${ARCP.length} 条${ARCP_DROP.length?` · 另有 ${ARCP_DROP.length} 条不属本卡（见下）`:''} · ${asrc}</span></span></h4>
       <div class="bd">
         ${ARCP_ERR ? `<div class="tip dg" style="margin:0 0 calc(8px * var(--fscale))">⚠️ <b>待建档清单没取到</b>：${esc(ARCP_ERR)}
           <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
@@ -1408,7 +1408,7 @@ BIND.m01 = function () {
   const box = document.createElement('div');
   box.id = 'pendBox';
   box.className = 'card';
-  box.innerHTML = `<h4>待人工指认（链路 B）<span class="sp"><span class="mut sm">共 ${PEND.length} 条 · ${src}</span></span></h4>
+  box.innerHTML = `<h4>待人工指认<span class="sp"><span class="mut sm">共 ${PEND.length} 条 · ${src}</span></span></h4>
     <div class="bd">
       ${PEND_ERR ? `<div class="tip dg" style="margin:0 0 calc(8px * var(--fscale))">⚠️ <b>待指认清单没取到</b>：${esc(PEND_ERR)}
         <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
