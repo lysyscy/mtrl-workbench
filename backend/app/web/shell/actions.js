@@ -538,12 +538,12 @@ const ACT={
      const vdN=hit.filter(ntVoid).length;
      const unN=hit.filter(n=>ntLive(n)&&n.astat==='未批').length;
      return modal({title:'抓取 i8 付款通知书（按月）',reopen:()=>ACT.fetchDlg(),body:
-       `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">i8 侧的抓取实现是<b>选择「单据日期」起止时间</b>；这里只需选<b>月份</b>（默认「北京时间当月」），系统自动换算为<b>当月 1 号 ~ 末日</b>（<b>闭区间</b>），并<b>全量、不选项目、不分页</b>。</div>
+       `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这里只需选<b>月份</b>（默认「北京时间当月」），系统自动换算成该月起止并<b>全量</b>抓取（不选项目、不分页）。</div>
       ${box}
       <div class="tip" style="margin:0"><b>${m}</b> 目前有 <b>${hit.length}</b> 条：有效 <b>${okN}</b> · 剔除 <b>${exN}</b> · i8 已撤单 <b>${vdN}</b>${unN?` · 其中未审批 <b>${unN}</b>`:''}。<br>抓取会<b>全量刷新源数据</b>，但<b>旁路值不受影响</b>（统计结算/统计付款金额 · 分类 · 集采实际供应商 · 调整单 —— 均不被导入覆盖）。</div>`,
        footer:foot}); }
    return modal({title:`抓取 i8 ${NM}（按月）`,reopen:()=>ACT.fetchDlg(),body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">i8 侧的抓取实现是<b>选择「单据日期」起止时间</b>；这里只需选<b>月份</b>（<b>默认 = 本页「核算年月」当前所选</b>，可改），系统自动换算为<b>当月 1 号 ~ 末日</b>（<b>闭区间</b>），并按<b>项目（phid 筛）</b>抓取（${apiCode} · §9.2）。</div>
+     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这里只需选<b>月份</b>（<b>默认 ＝ 本页当前核算年月</b>，可改），系统自动换算成该月起止并按<b>项目</b>抓取（${apiCode} · §9.2）。</div>
       ${box}
       <div class="tip" style="margin:0">抓取会<b>全量刷新该月 · 该项目</b>的源数据；<b>手工值与调整单不被覆盖</b>（§9.5 幂等）。<br>要抓别的月份，改上面的月份即可 —— <b>默认就是本页当前所选的那个月</b>。</div>`,
      footer:foot}); },
@@ -1041,7 +1041,7 @@ const ACT={
    const dd=N2(it.settle-it.paid);
    modal({title:'删除确认 · 期初占位行',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 删除前先看清下面这些影响</b>（关联数据 · 统计影响）—— §7.2 / §9.4。</div>
      ${kvBlock([['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.proj)}</span>`],['统计结算金额',`<span class="fc">${M(it.settle)}</span>`],['统计付款金额',`<span class="fc">${M(it.paid)}</span>`],['该行欠款',`<span class="fc">${M(dd)}</span>`]])}
-     <div class="tip" style="margin:0">删除后：<b>期初占位欠款 ${M(dd)} → 0</b>，<b>欠款合计</b>同步重算；⚠️ 这一行会被<b>真的删掉、删了不能恢复</b>（需要时随时可以<b>重新录入</b>）—— 期初属「你自己录、随时可重录」那一档（§9.4）。</div>`,
+     <div class="tip" style="margin:0">删除后：<b>期初占位欠款 ${M(dd)} → 0</b>、<b>欠款合计</b>同步重算。⚠️ 这一行<b>真删、不能恢复</b>（需要时随时可<b>重新录入</b>）。</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delLgOk" data-id="${it.id}">确认删除</button>`}); },
  /* ⭐ 已接后端：`POST /m05/opening/delete`（**真删** ＋ 统计重算由后端做 —— `mod05_flow.repository.delete_opening` 就是 `s.delete(row)`；
    ⚠️ 2026-09-29 订正：原写「软删留痕」与后端相反） */
@@ -2214,7 +2214,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
       sum:(jcSubOn('tinv',j.id)?jcSubRow():'')+sumRowOf(JCINV_THEAD, [], {2:[()=>jcTradeInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="tinv">＋ 增加一张发票</button></div>
-      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>贸易公司发票子表（ENT-07 同款）</b>：<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>。<br>有贸易公司 ⇒ <b>结算取本子表合计</b>（与供应商侧<b>同一套逻辑</b>，§6.4.1）。</div>`
+      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>贸易公司发票子表</b>：「发票日期 ＋ 金额」两列（<b>日期必填</b>、金额不设上限）。<br>有贸易公司 ⇒ <b>结算取本子表合计</b>（与供应商侧<b>同一套逻辑</b>，§6.4.1）。</div>`
       :`<div class="tip" style="margin:0">本合同<b>无贸易公司</b> ⇒ <b>不启用该子表</b>（结算取供应商发票合计，§6.4.1）。</div>`)}); },
  jcPayDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);                       /* ⭐ 付款子表同理：列表不给明细 */
@@ -2226,7 +2226,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       <div style="margin-top:calc(8px * var(--fscale));display:flex;gap:calc(6px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="pay">＋ 手工录入</button>
         <button class="btn sm pri" data-act="jcPayRef" data-id="${j.id}">从付款域引用（R8）</button></div>
       <div class="sm mut" style="margin-top:calc(7px * var(--fscale))">集采付款通知书的收款方都是「资产处集中采购」，真实供应商靠<b>人工录入的「集采实际供应商」</b>做关联锚点；<b>同一笔通知书不可重复引用</b>。</div>
-      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>付款子表（ENT-08）</b>：一合同 <b>0 / 1 / 多</b> 次，手工录入 + 可从付款域引用。<br><b>欠款口径（§6.4.4）：</b>${j.tradeCo?`有贸易公司 → 贸易公司发票合计 ${M(jcTradeInvSum(j))}`:`无贸易公司 → 供应商发票合计 ${M(jcInvSum(j))}`} − 付款合计 ${M(jcPay(j))} = <b style="color:var(--dg)">${M(jcDebt(j))}</b>（<b>合同级实时，不拆月度</b>）</div>`}); },
+      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>付款子表</b>：一合同 <b>0 / 1 / 多</b> 次，手工录入 ＋ 可从付款域引用。<br><b>欠款口径（§6.4.4）：</b>${j.tradeCo?`有贸易公司 → 贸易公司发票合计 ${M(jcTradeInvSum(j))}`:`无贸易公司 → 供应商发票合计 ${M(jcInvSum(j))}`} − 付款合计 ${M(jcPay(j))} = <b style="color:var(--dg)">${M(jcDebt(j))}</b>（<b>合同级实时，不拆月度</b>）</div>`}); },
  /* —— 集采三张子表的录入 = **表内增行**（2026-09-13 用户口径：发票子表录入要填日期；**取代原先那种浏览器原生输入小窗**）——
     `jcSubAdd` 进增行态（草稿只存 `jcSubD`）· `jcSubSet` 写草稿层（走 `change` 委托）· `jcSubSave` 校验后落库 · `jcSubCancel` 丢弃。
     ⚠️ 旧动作 `jcInvAdd` / `jcTInvAdd` / `jcPayAdd`（`prompt` 单值录入）已删除。 */

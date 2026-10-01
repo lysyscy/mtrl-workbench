@@ -232,9 +232,8 @@ function pjTypeDlg() {
   modal({
     title: `改类型 · ${esc(pjDisp(p))}`,
     body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">当前类型：<b>${esc(PJ_TYPE_LABEL[p.type] || p.type)}</b>。
-      三类判定（§2.2.1）本来是<b>自动</b>的：全名含「小微」⇒ <b>小微壳</b>；同一全名挂 <b>≥2 个仓库</b> ⇒ 待人工确认；其余算<b>普通项目</b>。
-      ⚠️ 有的壳的全名里<b>没有「小微」</b>（图纸上的叫法就是这样）⇒ 会被误判成普通项目 —— <b>这里就是人工纠正的入口</b>
-      （改动<b>会留痕</b>，在「修改留痕」卡里可查）。</div>
+      <b>三类判定</b>（§2.2.1）：全名含「小微」⇒ <b>小微壳</b>；同一全名挂 <b>≥2 个仓库</b> ⇒ 待人工确认；其余 ⇒ <b>普通项目</b>。
+      ⚠️ 有的壳全名里<b>没有「小微」</b> ⇒ 会被判成普通项目 —— <b>这里就是人工纠正的入口</b>（改动<b>留痕</b>，可在「修改留痕」卡查）。</div>
       <div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))">⛔ <b>不能选「具体小微」</b>：它得挂在一个壳下面、还占一个仓库名，由链路产生（人工指定只会造出挂不上的行）。</div>
       ${opt('shell', '不挂仓库；它名下的仓库 = 具体小微（今后走这条路）')}
       ${opt('normal', '要挂一个仓库名（候选键）—— 选了它，下面会让你填')}
@@ -525,8 +524,7 @@ async function ownWhCheck(i) {
   modal({
     title: `查 i8 仓库名单 · ${esc(name)}`,
     body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能<b>强制踢掉</b>该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）—— 若同事正在用 i8，请先<b>择时</b>。</div>
-      <div class="tip" style="margin:0">查什么：i8 仓库名单（<span class="fc">API-05</span>）里**有没有**「${esc(name)}」，以及它**挂在哪个项目全名**下 ——
-      用来判断该走「选已有小微」还是「只能手填」。⚠️ 只查**不落库**（名单本身不留档）。</div>`,
+      <div class="tip" style="margin:0">查 i8 仓库名单里<b>有没有</b>「${esc(name)}」、以及它<b>挂在哪个项目全名</b>下 —— 用来判断该走「选已有小微」还是「只能手填」。⚠️ <b>只查不落库</b>。</div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="ownWhOk" data-i="${i}">确认查询（会顶号）</button>`,
   });
@@ -1414,10 +1412,7 @@ BIND.m01 = function () {
     <div class="bd">
       ${PEND_ERR ? `<div class="tip dg" style="margin:0 0 calc(8px * var(--fscale))">⚠️ <b>待指认清单没取到</b>：${esc(PEND_ERR)}
         <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
-      <div class="tip" style="margin:0 0 calc(8px * var(--fscale))"><b>为什么这里要人来定</b>：材料报表出现了<b>陌生仓库</b>，
-        而它的全名在档案里命中 <b>≥2 条</b>非壳行 ⇒ 系统<b>无法自己决定</b>挂哪一条、也<b>不该猜</b>
-        （决策 1 兜底）—— 请你指明这条<b>真实仓库名</b>该写到<b>哪一行</b>上。
-        ⚠️ 只改仓库名（系统写入）；<b>类型纠正</b>不在这里做。</div>
+      <div class="tip" style="margin:0 0 calc(8px * var(--fscale))">材料报表出现了<b>陌生仓库</b>，其全名在档案里命中 <b>≥2 条</b>非壳行 ⇒ 系统<b>无法自己决定</b>挂哪条、也<b>不该猜</b> —— 请指明这条<b>真实仓库名</b>该写到<b>哪一行</b>上。⚠️ <b>只改仓库名</b>；<b>类型纠正</b>不在这里做。</div>
       ${TBL({cls:'cond',head:'<th>陌生仓库名</th><th>项目全名</th><th>同名档案行</th><th>系统为什么不自己定</th><th></th>',
       rows:[rows]})}
     </div>`;
