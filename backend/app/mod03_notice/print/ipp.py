@@ -15,7 +15,7 @@ import struct
 import httpx
 
 from app.core.config import get_settings
-from app.core.errors import MustReportError, NotConfiguredError
+from app.core.errors import MustReportError, NotConfiguredError, log_exc
 
 
 def _attr(tag: int, name: str, value: bytes) -> bytes:
@@ -89,7 +89,12 @@ def send_pdf(pdf: bytes, printer_uri: str | None = None) -> str:
             timeout=httpx.Timeout(20.0, connect=10.0),
         )
     except httpx.HTTPError as exc:
-        raise MustReportError(f"出纸失败：无法连接打印机（{uri}）—— {type(exc).__name__}: {exc}")
+        # ⚠️ **打印机地址仍要上屏**（`test_acc_pay_print` 的 `001-08`② 钉着"失败要**带出地址**"）——
+        #    ⇒ 这里只收**异常的类名与原文**（地址是**用户要去核对的东西**，不是技术串）。
+        log_exc(f"出纸失败：无法连接打印机（{uri}）", exc)
+        raise MustReportError(
+            f"出纸失败：无法连接打印机（{uri}）—— 请核对打印机地址、电源与网络，稍后重试"
+        ) from exc
 
     data = resp.content
     if len(data) < 4:

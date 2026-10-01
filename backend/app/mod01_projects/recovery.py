@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.errors import human_reason
 from app.mod01_projects.domain import DEFAULT_SMALL_KEYWORD, norm_full_name
 from app.mod01_projects.models import TYPE_SHELL, TYPE_SMALL
 from app.mod01_projects.repository import (
@@ -231,8 +232,8 @@ def recover_unknown_warehouses(
         wh_rows = load_warehouse_rows()
     except Exception as exc:                              # noqa: BLE001 —— 降级，不抛
         return _blank(
-            f"陌生仓库自动建档未完成（仓库名单取不到）：{type(exc).__name__}: {exc}"
-            " —— 数据已照常入库，可稍后重抓一次",
+            human_reason("陌生仓库自动建档未完成（仓库名单取不到）", exc,
+                         next_step="数据已照常入库，可稍后重抓一次"),
             degraded=True, unresolved=len(unknown))
 
     plan = plan_recovery(unknown_wh=unknown, warehouse_rows=wh_rows,
@@ -250,7 +251,7 @@ def recover_unknown_warehouses(
             promoted.append(f"{item['old_placeholder']} → {item['warehouse_name']}")
         except Exception as exc:                          # noqa: BLE001
             failures.append({"warehouse_name": item["warehouse_name"],
-                             "reason": f"扶正失败：{type(exc).__name__}: {exc}"})
+                             "reason": human_reason("扶正失败", exc)})
 
     for item in plan["create"]:
         try:
@@ -266,7 +267,7 @@ def recover_unknown_warehouses(
                            + ("（具体小微·关键词待补）" if item.get("keywords_pending") else ""))
         except Exception as exc:                          # noqa: BLE001
             failures.append({"warehouse_name": item["warehouse_name"],
-                             "reason": f"建档失败：{type(exc).__name__}: {exc}"})
+                             "reason": human_reason("建档失败", exc)})
 
     msg = (f"陌生仓库自动建档：扶正 {len(promoted)} · 新建 {len(created)} · "
            f"待人工 {len(failures)}")

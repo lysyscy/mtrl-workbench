@@ -48,6 +48,7 @@ from collections import Counter
 from decimal import Decimal
 
 from app.core import timing
+from app.core.errors import human_reason
 from app.mod11_jc import excel_parse as P
 from app.mod11_jc import repository as R
 
@@ -172,7 +173,7 @@ def preview(data: bytes, filename: str, *, store=None) -> dict:
         try:
             grid = P.read_grid(data, filename, name)
         except Exception as exc:                       # noqa: BLE001 —— 单表读坏不该拖垮整个预览
-            info.update({"error": f"{type(exc).__name__}: {exc}"[:120], "guess": False})
+            info.update({"error": human_reason("这个工作表读不了（已跳过）", exc), "guess": False})
             sheets.append(info)
             continue
         rows = len(grid)

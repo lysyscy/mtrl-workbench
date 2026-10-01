@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, Response
 
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.core.errors import MustReportError
+from app.core.errors import MustReportError, human_reason, log_exc
 from app.core.logging import get_logger
 from app.mod01_projects import repository as proj_repo
 from app.mod01_projects.domain import (
@@ -225,12 +225,13 @@ def warehouse_check(
             return WarehouseCheckOut(
                 warehouse_name=name,
                 degraded=True,
-                message=(
-                    f"没取到 i8 仓库名单：{type(exc).__name__}: {exc}"
-                    "（⚠️ 这只是**没查到**，**不等于名单里没有**；也没有可用的上次名单 —— 可稍后重试）"
+                message=human_reason(
+                    "没取到 i8 仓库名单", exc,
+                    next_step="⚠️ 这只是**没查到**，**不等于名单里没有**；也没有可用的上次名单 —— 可稍后重试",
                 ),
             )
-        head = (f"⚠️ 这次**没取到**名单（{type(exc).__name__}）⇒ 下面用的是 "
+        log_exc("i8 仓库名单没取到（改用缓存）", exc)
+        head = (f"⚠️ 这次**没取到**名单 ⇒ 下面用的是 "
                 f"**{cached_at or '未知时间'}** 那份缓存（{len(rows)} 条）：<br>")
 
     info = i8_warehouse_lookup(name, rows)
@@ -293,7 +294,7 @@ def batch(
         logger.exception("批量%s 失败（未预期异常）", req.mode)
         return JSONResponse(status_code=200, content={
             "ok": False,
-            "message": f"批量执行失败：{type(exc).__name__}: {exc}",
+            "message": human_reason("批量执行失败", exc),
         })
     # ⭐⭐ **导出不再落盘**（用户 2026-09-20：「导出换成浏览器下载」）⇒ 把这一批的字节交给
     #    `pdf_cache` 拿一个 token；前端凭下面这个 `download_url` 取一次

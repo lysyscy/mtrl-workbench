@@ -395,3 +395,74 @@ def test_用户可见串里不许出现工程侧文件名():
         "壳的用户可见文字里出现了**工程侧的文件 / 目录名**（守则 §3.1）：\n  " + "\n  ".join(bad)
         + "\n⇒ 删掉它（要解释就写用户能懂的话 ＋ 下一步，⛔ 别把我们的文件名甩上去）。"
     )
+
+
+#: ⭐ `TAIL-212`（2026-10-01）：**异常类名 / 原始报错串只许进运行日志**（守则 §3.1 / §3.7）。
+#: ⚠️ **唯一例外** = **执行记录**（`error_message=`）—— 它是排障面，判据钉着"失败要留下原因"
+#:    （`test_acc_inv_fetch`：`"boom" in rec.error_message`）。
+_EXC_TECH = ("type(exc).__name__", "type(e).__name__")
+_EXC_ALLOW = ("logger.", "log_exc(", "human_reason(", "error_message=")
+_EXC_EXEMPT = {_APP_DIR / "core" / "errors.py"}     # 技术串的**出口**自己（`log_exc` 就写在那儿）
+
+
+@acc()
+def test_用户可见串里不许拼异常原文():
+    """⭐⭐ `TAIL-212`（2026-10-01）：**异常类名 / 原始报错串不许拼进用户可见文案**（守则 §3.1 / §3.7）。
+
+    **为什么补**：真例（同日"技术串"收尾一路撞到）—— `mod02_i8/client.py` 把
+    「i8 接口 `<路径>` 返回 HTTP `<状态码>`：`<响应原文前 200 字>`」拼进异常**直接上屏**；
+    `fetch_task.degrade*` 把 `RuntimeError: …` 拼进回执；`report_export/resources.py` 把模板
+    **文件路径 ＋ 两条 SHA256** 塞进报错 ⇒ 用户拿到它**不知道该干什么**（§3.7 要"人话 ＋ 下一步"，它两条都不满足）。
+    实测这一类在 `backend/app` 还余 **23 处 / 15 件**（量法 = 搜 `type(exc).__name__`）。
+
+    ⚠️ **判法**（三条都是**刻意**这么定的）：
+      ① 走 **AST**（表达式节点的 `get_source_segment`）⇒ **注释与 docstring 天然看不见**
+         —— 本件头部那条教训（手写词法状态机被注释带偏、报出 130 多条假阳性）在这儿同样适用；
+      ② **逐行白名单**：`logger.` / `log_exc(` / `human_reason(` ＝ 技术串**该去的地方**；
+         `error_message=` ＝ **执行记录**（排障面，有判据钉着"要有原因"）；
+      ③ 出口件 `app/core/errors.py` 自己豁免（`log_exc` 的实现就在那儿，天经地义）。
+    ⚠️ **能证伪**：在任一**非日志、非 `error_message`**的行写 `f"失败：{type(exc).__name__}: {exc}"` ⇒ 本件必红；
+       ⛔ 写进**注释 / docstring** ⇒ 不红（自证见 `tools/oneoff/_tail209_mark_proof.py` 的 `T6`）。
+    """
+    import ast
+
+    bad: list[str] = []
+    for p in sorted(_APP_DIR.rglob("*.py")):
+        if p in _EXC_EXEMPT:
+            continue
+        src = p.read_text(encoding="utf-8", errors="replace")
+        lines = src.splitlines()
+        tree = ast.parse(src)
+        skip: set[int] = set()
+        for node in ast.walk(tree):
+            # 裸表达式语句（值**无处可去**）⇒ 与 `_backend_user_strings()` 的第 ① 条同口径，跳过
+            # ⚠️ 要连**子孙一起跳** —— 只跳 `node.value` 的话，里面那个 `type(exc).__name__`
+            #    节点仍会被 `walk` 单独访问到（2026-10-01 自证 `③″` 当场抓到：假红）。
+            if isinstance(node, ast.Expr) and not isinstance(node.value, ast.Constant):
+                skip.add(id(node))            # ⚠️ 连**语句节点自己**一起跳（`Expr` 的 segment 就是整句）
+                for sub in ast.walk(node.value):
+                    skip.add(id(sub))
+        hit: set[int] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant):        # 普通字符串 / docstring：值里没有运行期信息
+                continue
+            if id(node) in skip:
+                continue
+            seg = ast.get_source_segment(src, node) or ""
+            if not any(k in seg for k in _EXC_TECH):
+                continue
+            a = node.lineno
+            b = node.end_lineno or a
+            span = "\n".join(lines[a - 1:b])
+            if any(k in span for k in _EXC_ALLOW):
+                continue
+            hit.add(a)
+        rel = p.relative_to(_APP_DIR.parent.parent).as_posix()
+        bad += [f"{rel}:{ln}" for ln in sorted(hit)]
+    assert not bad, (
+        "**用户可见的串**里拼了**异常的类名 / 原文**（守则 §3.1 细节不上屏 / §3.7 人话＋下一步）：\n  "
+        + "\n  ".join(bad)
+        + "\n⇒ 改走 `app/core/errors.py` 的 `human_reason(人话前缀, exc)`"
+          "（它返回人话 ＋ 下一步，细节自己记进运行日志）；"
+          "⛔ `error_message=`（执行记录）是唯一例外。"
+    )

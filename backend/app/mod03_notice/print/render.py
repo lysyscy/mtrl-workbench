@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 
-from app.core.errors import ExternalServiceError
+from app.core.errors import ExternalServiceError, human_reason
 
 
 class PdfRenderer:
@@ -50,7 +50,7 @@ class PdfRenderer:
             finally:
                 page.close()
         except Exception as exc:  # noqa: BLE001
-            raise ExternalServiceError(f"PDF 渲染失败：{type(exc).__name__}: {exc}")
+            raise ExternalServiceError(human_reason("PDF 渲染失败", exc)) from exc
         return pdf
 
     def close(self) -> None:

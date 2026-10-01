@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.config import get_settings, i8_base_of
-from app.core.errors import NotConfiguredError
+from app.core.errors import NotConfiguredError, human_reason
 from app.core.logging import get_logger
 from app.mod02_i8.sm2_crypto import sm2_encrypt
 
@@ -154,6 +154,7 @@ def http_login(
         )
     except httpx.HTTPError as exc:
         # ⚠️ 只报错、不重试（D9）
-        return LoginResult(ok=False, detail=f"网络异常：{type(exc).__name__}: {exc}")
+        return LoginResult(ok=False, detail=human_reason(
+            "连不上 i8", exc, next_step="请核对「设置」页里的 i8 地址与网络，稍后重试"))
     finally:
         session.close()

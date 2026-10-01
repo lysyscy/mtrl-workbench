@@ -28,7 +28,7 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
-from app.core.errors import MustReportError
+from app.core.errors import MustReportError, human_reason
 from app.core.identity import current_operator
 # ⚠️⚠️ 2026-09-20 补：`default_since` 里调了 `logger.warning(...)` 但**本文件从没有 logger**
 #    ⇒ 一旦"库里最大合同日期"不是个合法日期（手改过 / 脏数据），那一步会抛
@@ -226,8 +226,9 @@ def run_fetch(
                     sync_result = do_sync(s, load_common=load_common, load_warehouses=load_wh)
                 except Exception as exc:                        # noqa: BLE001 —— 降级，不抛
                     sync_result = {"degraded": True,
-                                   "message": f"常用项目同步失败：{type(exc).__name__}: {exc}"
-                                              "（本次仍按**现有档案**匹配；可稍后重抓一次）"}
+                                   "message": human_reason(
+                                       "常用项目同步失败", exc,
+                                       next_step="本次仍按**现有档案**匹配；可稍后重抓一次")}
                     s.rollback()
             finally:
                 close = getattr(client, "close", None)

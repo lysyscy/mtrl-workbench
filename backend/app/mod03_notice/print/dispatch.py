@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Callable
 
 from app.core.config import get_settings
-from app.core.errors import MustReportError
+from app.core.errors import MustReportError, log_exc
 from app.mod03_notice.print.ipp import send_pdf
 from app.mod03_notice.settings_store import MODE_LABEL, validate_print_mode
 
@@ -124,9 +124,10 @@ def send_raw(pdf: bytes, printer_uri: str) -> str:
         with socket.create_connection((host, port), timeout=10.0) as sock:
             sock.sendall(pdf)
     except OSError as exc:
+        log_exc(f"RAW 投递失败（{host}:{port}）", exc)
         raise MustReportError(
-            f"RAW 投递失败（{host}:{port}）—— {type(exc).__name__}: {exc}"
-            "（有的打印机根本没开 9100 这个口）"
+            "RAW 投递失败 —— 打印机那边没接上（有的打印机根本没开 9100 这个口）；"
+            "请核对打印机地址，或把出纸通道改成「驱动」"
         ) from exc
     return (
         f"已投递（未核实）—— 已按 RAW {host}:{port} 整卷发完（这个通道没有回执）；"

@@ -23,6 +23,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.errors import human_reason
 from app.core.period import default_period
 
 #: 执行记录里的 `run_type`（`§3.1.3` 抓取 / `§4.6` 打印）
@@ -38,7 +39,7 @@ def _safe(fn, fallback, errors: dict, key: str):
     try:
         return fn()
     except Exception as exc:                                  # noqa: BLE001
-        errors[key] = f"{type(exc).__name__}: {exc}"
+        errors[key] = human_reason("这一项没取到", exc)
         return fallback
 
 

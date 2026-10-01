@@ -24,7 +24,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 
 from app.core import preview_store
 from app.core.db import session_scope
-from app.core.errors import MustReportError
+from app.core.errors import MustReportError, human_reason
 from app.core.identity import current_operator
 from app.import_kit import mapping
 from app.import_kit.parse import amount as parse_amount
@@ -249,7 +249,7 @@ def _coerce(value, ftype: str, *, row_no: int, label: str, problems: list[dict])
             return str(parse_amount(value))
         except Exception as exc:  # noqa: BLE001
             problems.append({"row": row_no, "column": label, "raw": text(value),
-                             "reason": f"不是数字（{type(exc).__name__}）⇒ 保留原值待人处理"})
+                             "reason": "不是数字 ⇒ 保留原值待人处理"})
             return None
     if ftype == "date":
         return date_text(value)
@@ -335,7 +335,7 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
         except MustReportError as exc:
             return {"ok": False, "message": str(exc)}
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "message": f"取本域选项失败：{type(exc).__name__}: {exc}"}
+            return {"ok": False, "message": human_reason("取本域选项失败", exc)}
 
     @r.post(base + "/parse")
     async def api_parse(file: UploadFile = File(...), sheet: str = Form("")) -> dict:
@@ -392,7 +392,7 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
         except MustReportError as exc:
             return {"ok": False, "message": str(exc)}
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "message": f"解析失败：{type(exc).__name__}: {exc}"}
+            return {"ok": False, "message": human_reason("解析失败", exc)}
 
     @r.post(base + "/preview")
     def api_preview(body: dict | None = None) -> dict:
@@ -443,7 +443,7 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
         except MustReportError as exc:
             return {"ok": False, "message": str(exc)}
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "message": f"预览失败：{type(exc).__name__}: {exc}"}
+            return {"ok": False, "message": human_reason("预览失败", exc)}
 
     @r.post(base + "/commit")
     def api_commit(body: dict | None = None) -> dict:
@@ -474,7 +474,7 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
         except MRE as exc:
             return {"ok": False, "message": str(exc)}
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "message": f"导入失败：{type(exc).__name__}: {exc}"}
+            return {"ok": False, "message": human_reason("导入失败", exc)}
 
     if hooks.rollback is not None:
         @r.post(base + "/rollback")
@@ -489,7 +489,7 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
             except MRE as exc:
                 return {"ok": False, "message": str(exc)}
             except Exception as exc:  # noqa: BLE001
-                return {"ok": False, "message": f"回滚失败：{type(exc).__name__}: {exc}"}
+                return {"ok": False, "message": human_reason("回滚失败", exc)}
 
     return r
 

@@ -13,6 +13,7 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
+from app.core.errors import human_reason
 from app.mod01_projects import archive as A
 from app.mod01_projects.models import TYPE_SHELL
 from app.mod01_projects.repository import all_projects, create_project
@@ -45,8 +46,8 @@ def build_plan(
             "plan": None,
             "counts": _blank_counts(),
             "degraded": True,
-            "message": (f"i8 名单同步失败：{type(exc).__name__}: {exc}"
-                        "（**未改动本地档案** —— 可稍后重试，或走手动导入）"),
+            "message": human_reason("i8 名单同步失败", exc,
+                                    next_step="**未改动本地档案** —— 可稍后重试，或走手动导入"),
         }
     plan = A.plan_archive(common_rows=common, warehouse_rows=warehouses,
                           existing=existing, taken_names=taken,

@@ -268,8 +268,12 @@ def _write_pdf(base: Path, name: str, pdf: bytes) -> Path:
 
 
 def _reason(exc: BaseException) -> str:
+    """出纸 / 渲染失败要**如实说原因**（001-08）—— 异常自己带的话优先。
+
+    ⚠️ `TAIL-212`：兜底**不许**回异常类名（那是技术串、用户看不懂）⇒ 给一句人话。
+    """
     text = str(exc).strip()
-    return text or type(exc).__name__
+    return text or "（打印服务没有说明原因）"
 
 
 # ------------------------------------------------- 包间出口（`TAIL-195` 批 2a）
