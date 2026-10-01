@@ -4,7 +4,7 @@
   口径（用户 2026-09-29）：目标机（办公室电脑）**还要继续调试开发** ⇒
     包 = **「可继续开发的可运行系统」**（⛔ 不是客户交付件）⇒ **开发链全带**
     （tests / tools / demo / 验收面 / 计划台账 / 记忆）。
-  设计件 = `.workbuddy/work/10-designs/设计-交付包与迁移-20260929.md`（§七/§七之補/§七之二）。
+  设计件 = `.codebuddy/work/10-designs/设计-交付包与迁移-20260929.md`（§七/§七之補/§七之二）。
   ⭐⭐ **产包预案**（前置条件 / 一键步骤 / 产包后自检 / 已知坑）＝ **`ops/README.md` §一之四** ——
      ⛔ **出问题先看它，别临场想**（用户 2026-09-29 原话：「**你是否对产包有固定的预案？**」）。
 
@@ -15,9 +15,9 @@
        · `.workbuddy/memory/**`（注入档 ＋ journal）
        · `ops/nssm/nssm.exe`（服务注册要它，**已 gitignore**）
        · `artifacts/变异覆盖台账.md` ＋ `artifacts/acc_results.json`（变异台账 ＋ 四态快照）
-       · **`.workbuddy/backups/`** 里**最新一份** `*_壳单文件基线.html`（`shell_verify` 的默认基准）
+       · **`.codebuddy/backups/`** 里**最新一份** `*_壳单文件基线.html`（`shell_verify` 的默认基准）
          ⚠️ **2026-09-29 干跑实测抓出**：这里原写成**顶层** `backups/` —— 仓里**没有**那个目录
-         （真身 = `.workbuddy\backups\`）⇒ **5 份基线一份都进不了包**，而脚本还会说"没找到"
+         （真身 = `.codebuddy\backups\`）⇒ **5 份基线一份都进不了包**，而脚本还会说"没找到"
          ⇒ ⛔ 把**路径写错**伪装成**真没有**（详见下面第 2 步的注释）
        ③ **库**：`db/init_db.sql`（空库路线 · 建库＋角色）＋ 可选 `db/<db>-<日期>.dump`（`-WithDump` · 只作对照）
        ＋ 随包放一份 `docs/deployment.md`（一页）
@@ -32,7 +32,7 @@
 
 
        ⛔ **一律不带**：`backend/.venv`（绝对路径，拷过去必崩）· `logs/` · `.workbuddy/scratch` ·
-       `.workbuddy/backups/交付面-*`（交付面快照）· **`.env`**（真口令不进包 —— 守 `TAIL-88` 的"敏感件 0 命中"）。
+       `.codebuddy/backups/交付面-*`（交付面快照）· **`.env`**（真口令不进包 —— 守 `TAIL-88` 的"敏感件 0 命中"）。
 
   用法（本机 · 普通窗口即可）：
     powershell -ExecutionPolicy Bypass -File ops\pack.ps1
@@ -131,29 +131,29 @@ foreach ($e in $extra) {
     Say ('   ✓ ' + $e.Src)
 }
 # ⚠️⚠️ 2026-09-29 修（**干跑 `-DryRun` 当场抓出**）：源路径原写成 `Join-Path $RepoRoot 'backups'` ——
-#    而仓里**根本没有顶层 `backups/`**（真身 = `.workbuddy\backups\`；**唯一主人** = `tools/audit/shell_verify.py`
-#    的 `BACKUPS = REPO / ".workbuddy" / "backups"`）⇒ **5 份基线一份都匹配不到**，
+#    而仓里**根本没有顶层 `backups/`**（真身 = `.codebuddy\backups\`；**唯一主人** = `tools/audit/shell_verify.py`
+#    的 `BACKUPS = REPO / ".codebuddy" / "backups"`）⇒ **5 份基线一份都匹配不到**，
 #    而 else 分支还会把它说成"包里没有壳基线" ⇒ ⛔ **把"路径写错"伪装成"真没有"**（最贵的一类：人就不查了）。
-# ⭐ 同批把**包内布局**改成与**仓内相对路径一致**（`.workbuddy\backups\`）—— 这样 `deploy_restore.ps1`
+# ⭐ 同批把**包内布局**改成与**仓内相对路径一致**（`.codebuddy\backups\`）—— 这样 `deploy_restore.ps1`
 #    那张"放回列表"才**左右对称**（原先五项里**只有这一项**不对称 ⇒ 那正是错的来源）。
 # ⚠️ 另一条同源坑（别删）：中文通配交给 `-Filter` 会**命中 0** ⇒ 已改 `Where-Object -like`（见 `ops/README.md` §一之四 ⑤）。
-$snapDir = Join-Path $RepoRoot '.workbuddy\backups'
+$snapDir = Join-Path $RepoRoot '.codebuddy\backups'
 $snap = Get-ChildItem $snapDir -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like '*_壳单文件基线.html' } |
         Sort-Object Name | Select-Object -Last 1
 $snapName = ''
 if ($snap) {
     $snapName = $snap.Name
-    $d = Join-Path $Out ('.workbuddy\backups\' + $snap.Name)
-    if ($DryRun) { Say ('   [干跑] .workbuddy\backups\' + $snap.Name) }
-    else { New-Item -ItemType Directory -Force -Path (Join-Path $Out '.workbuddy\backups') | Out-Null; Copy-Item -Force $snap.FullName $d; Say ('   ✓ .workbuddy\backups\' + $snap.Name + '（shell_verify 的默认基准）') }
+    $d = Join-Path $Out ('.codebuddy\backups\' + $snap.Name)
+    if ($DryRun) { Say ('   [干跑] .codebuddy\backups\' + $snap.Name) }
+    else { New-Item -ItemType Directory -Force -Path (Join-Path $Out '.codebuddy\backups') | Out-Null; Copy-Item -Force $snap.FullName $d; Say ('   ✓ .codebuddy\backups\' + $snap.Name + '（shell_verify 的默认基准）') }
 } else {
     # ⭐ 两类**必须分开报**（2026-09-29）：原先混成一句"一个都没匹配到" ⇒ 分不清是**真没有**还是**路径写错**。
     #    ⚠️ 同族教训 = `TAIL-190`（同步回执把两类待人工混成一个数 ⇒ 用户看到空卡，只能靠猜）。
     Say '   ⛔ **包里没有壳基线**'
     if (-not (Test-Path $snapDir)) {
         Say ('      真因① = **目录都不存在**：' + $snapDir)
-        Say '        ⚠️ 这多半是**路径写错**（真身必须是仓内 `.workbuddy\backups\`）⇒ 先查这个，⛔ 别急着去 --snapshot'
+        Say '        ⚠️ 这多半是**路径写错**（真身必须是仓内 `.codebuddy\backups\`）⇒ 先查这个，⛔ 别急着去 --snapshot'
     } else {
         $loose = @(Get-ChildItem $snapDir -File -ErrorAction SilentlyContinue).Count
         Say ('      真因② = 目录在（' + $loose + ' 个散件）但**没有** `*_壳单文件基线.html` 匹配')
@@ -236,9 +236,9 @@ if (-not $DryRun) {
     # ⭐ 2026-09-30（用户指示③）：交付面**只带 2 件快照** —— MANIFEST 必须写明，⛔ 别让人以为整份都在包里
     $mf += ('交付面快照: ' + $(if ($faceDone -ge 2) { 'face\材料科业务全流程说明书.md ＋ face\PRD\验收\验收基线.json（⭐ .env 的 PRD_ACCEPTANCE_BASELINE 可指包内这份；⚠️ 云那份仍是真源）' } elseif ($faceDone -eq 1) { '⚠️ 只带了 1 件（另 1 件缺 · 见产包日志）' } else { '⛔ 一件都没带（-SkipFace 或交付面缺件；见产包日志）⇒ 交付面只能靠 WPS 云同步' }))
     $mf += '⛔ 交付面其余件不进包: demo\ · PRD\ 余件 · PRD素材包-* · 交付面根 4 个 md（= WPS 云同步树 ⇒ 目标机同步即有）'
-    $mf += ('壳基线   : ' + $(if ($snapName) { '.workbuddy\backups\' + $snapName } else { '⛔ 缺！见产包日志里"真因①/②"那两行（目标机 --snapshot 一次即可）' }))
+    $mf += ('壳基线   : ' + $(if ($snapName) { '.codebuddy\backups\' + $snapName } else { '⛔ 缺！见产包日志里"真因①/②"那两行（目标机 --snapshot 一次即可）' }))
     $mf += ('库       : db\init_db.sql（空库路线；⚠️ 里面 <PASSWORD> 到目标机要换）' + $(if ($WithDump) { ' ＋ db\*.dump（⚠️ 只作对照，⛔ 不灌生产）' } else { '' }))
-    $mf += '⛔ 一律不带: backend\.venv · logs\ · .workbuddy\scratch · .workbuddy\backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
+    $mf += '⛔ 一律不带: backend\.venv · logs\ · .workbuddy\scratch · .codebuddy\backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
     $mf += '落地说明 : 部署-落地说明.md（= docs\deployment.md）'
     $mf += '校验     : SHA256SUMS.txt 覆盖本目录**全部文件**（本件也在内）—— 目标机脚本先校它'
     [IO.File]::WriteAllText((Join-Path $Out 'MANIFEST.txt'), ($mf -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding($false)))

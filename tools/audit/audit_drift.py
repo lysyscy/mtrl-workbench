@@ -180,8 +180,8 @@ def check_paths(docs: list) -> list[dict]:
 #    ③ 目标**解析不到 ⇒ 跳过**（那是 `T3` 的活，本守卫不为它二次报）；同行含 `SEC_REF_EXEMPT` ⇒ 跳过
 #       （"叙述某指针已废 / 已订正"的行**必须**能引用那个坏节号，否则没法写清历史）。
 SEC_REF_EXEMPT: tuple[str, ...] = ("不存在", "已废", "订正", "死指针", "原指针", "已删", "假陈述")
-#: 解析目标 md 时依次尝试的前缀（文档常省略 `backend/` 与 `.workbuddy/`）
-SEC_REF_PREFIXES: tuple[str, ...] = ("", "backend/", "backend/app/", ".workbuddy/")
+#: 解析目标 md 时依次尝试的前缀（文档常省略 `backend/` 与 `.codebuddy/`）
+SEC_REF_PREFIXES: tuple[str, ...] = ("", "backend/", "backend/app/", ".codebuddy/")
 
 #: 节号本体（中文数字 / 阿拉伯 · 都允许 `之N` 与 `.N` 后缀）
 _SEC_NUM = (r"\d+(?:\.\d+)*"

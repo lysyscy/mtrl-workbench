@@ -224,14 +224,14 @@ SOFT_EXEMPT: tuple[str, ...] = (
 )
 
 #: 文件级「留痕」白名单（**相对两侧根的完整相对路径**，glob）—— 命中只报黄
-#: ⚠️ 别写成 `plans/*.md` —— 实际相对名是 `.workbuddy/plans/…`，少前缀就不匹配（踩过一次）。
+#: ⚠️ 别写成 `plans/*.md` —— 实际相对名是 `.codebuddy/plans/…`，少前缀就不匹配（踩过一次）。
 LENIENT_GLOBS: tuple[str, ...] = (
     # ⭐ 2026-09-17 起：`plans/` 里**只有两份活文档**（`开发计划-主文档.md` / `执行情况-主文档.md`，
     #    按**严格标准**查），其余一律 `归档-*`（只留痕）⇒ **一条 glob 覆盖全部归档件**。
     #    ⚠️ 别再逐份列（`2026-09-1[0-9]-*.md` / 各方案名）—— **逐份列 = 新归档件必然漏网**，
     #    这正是"计划文档悄悄过期却查不出来"的老路。
     #    ℹ️ `handoff/` 已于同日并入 `plans/`（history 条目 = `plans/归档-历史单元条目.md`）。
-    ".workbuddy/plans/归档-*.md",
+    ".codebuddy/plans/归档-*.md",
 )
 
 #: 合法的「幽灵用例号」—— 文档里明写「不建用例」的编号
@@ -243,15 +243,15 @@ TOP_DIRS: tuple[str, ...] = (
     "alembic/", "artifacts/", "frontend/", "static/", "scripts/", "input/",
 )
 
-#: 治理目录下的**两份活文档**（2026-09-17 收敛：`.workbuddy/` 只留两份；2026-09-19 **换定位不换名**）
+#: 治理目录下的**两份活文档**（2026-09-17 收敛：`.codebuddy/` 只留两份；2026-09-19 **换定位不换名**）
 #: ⭐ 现分工：`开发计划-主文档.md` = **给 AI 的完整版**（规则 / 口径 / 台账 / 接手 / 闸门）；
 #: `执行情况-主文档.md` = **给用户看的一页**（现状 / 下一步 / 要你做什么）。
 #: ⚠️ `T4` 查**两份里所有**四态数字（2026-09-19 扩面，见 `audit_drift.check_status_line`）；
 #: `T6` 查「计划」里的尾巴台账（§15）＋「简略版」里必须指向计划。
-HANDBOOK_REL: str = ".workbuddy/plans/执行情况-主文档.md"
+HANDBOOK_REL: str = ".codebuddy/plans/执行情况-主文档.md"
 
 #: `T6` 尾巴台账（**唯一清点处** = 计划主文档 §15）—— 尾巴的单一清点处
-LEDGER_REL: str = ".workbuddy/plans/开发计划-主文档.md"
+LEDGER_REL: str = ".codebuddy/plans/开发计划-主文档.md"
 LEDGER_NAME: str = "开发计划-主文档"
 TAIL_MIN_CELLS: int = 6          # 表格行去掉首尾竖线后的最少格数（栏位齐全 = 含**落点** ＋ **阶段**）
 
@@ -273,7 +273,7 @@ SCAN_GLOBS: tuple[str, ...] = (
     #       与 ④ 产物档（`artifacts/` —— 由 `T11` 管"回执"，不管措辞）。
     # ⚠️ **`CLAUDE.md` 已删除**（2026-09-21 用户裁定：换工具后**无人读取**）—— 它的必用内容已并入
     #    `MEMORY.md`（注入档）与 `MEMORY-细则.md`，过程叙事下沉到 `plans/归档-历史单元条目.md`。
-    "README.md", "ops/*.md", ".workbuddy/plans/*.md", "docs/*.md",
+    "README.md", "ops/*.md", ".codebuddy/plans/*.md", "docs/*.md",
     ".workbuddy/memory/MEMORY.md",
     # ⚠️ 2026-09-24 **摘掉 `.workbuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
     #    它是**搬迁前的旧地址**，该件现址 = `docs/changelog.md`（`README.md`「工程基准档」那行）⇒
@@ -290,7 +290,7 @@ DELIVERY_GLOBS: tuple[str, ...] = (
 #:   ⚠️ 实证：把 `docs/*.md` 加进漂移扫描面（`SCAN_GLOBS`）之后，`doc_audit` **仍然必须修 0**。
 #:   **怎么扩**：文档面**直接复用 `SCAN_GLOBS`**（它已是「会被当口径读的那几层」的**唯一定义**）
 #:   ⇒ 两处口径用同一个常量，⛔ **不会再分裂**（本项目栽过"同一件事两个主人"）。
-#:   ⚠️ `SCAN_GLOBS` 含 `.workbuddy/plans/*.md`（其中 `归档-*.md` 体积大）⇒ 那类由
+#:   ⚠️ `SCAN_GLOBS` 含 `.codebuddy/plans/*.md`（其中 `归档-*.md` 体积大）⇒ 那类由
 #:      `LENIENT_GLOBS` 降成**黄**（留痕档里出现旧名是**对的**，只提示不判红）。
 CANCELLED_DOC_GLOBS: tuple[str, ...] = SCAN_GLOBS
 

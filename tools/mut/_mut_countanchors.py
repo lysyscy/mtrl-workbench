@@ -24,7 +24,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "audit"))
 from audit_drift import check_count_anchors  # noqa: E402
 
-PLAN = ROOT / ".workbuddy" / "plans" / "开发计划-主文档.md"
+PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
 THRESHOLDS = ROOT / "ops" / "阈值表.md"
 
 #: `(名称, 靶件, 旧串, 改成的错值, 期望命中的 what 关键词)`

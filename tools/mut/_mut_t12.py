@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 
 CASES = [
-    ("plans/ 里冒出第三份活文档", ROOT / ".workbuddy" / "plans" / "_tmp_t12_第三份.md"),
+    ("plans/ 里冒出第三份活文档", ROOT / ".codebuddy" / "plans" / "_tmp_t12_第三份.md"),
     ("仓库根冒出白名单外的 md", ROOT / "_tmp_t12_根.md"),
     ("日志没进 journal/", ROOT / ".workbuddy" / "memory" / "2026-01-01.md"),
 ]

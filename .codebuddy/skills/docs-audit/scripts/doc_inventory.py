@@ -32,9 +32,9 @@ DUP_MIN_LINES = 5        # 重复检测的最小体量（太短的文件撞 hash
 def repo_root() -> Path:
     here = Path(__file__).resolve()
     for cand in (here, *here.parents):
-        if (cand / "tools" / "audit" / "doc_audit.py").exists() and (cand / ".workbuddy").is_dir():
+        if (cand / "tools" / "audit" / "doc_audit.py").exists() and (cand / ".codebuddy").is_dir():
             return cand
-    raise SystemExit("找不到仓库根（期望含 tools/audit/doc_audit.py 与 .workbuddy/）")
+    raise SystemExit("找不到仓库根（期望含 tools/audit/doc_audit.py 与 .codebuddy/）")
 
 
 def iter_md(root: Path):
@@ -46,9 +46,9 @@ def iter_md(root: Path):
 
 
 def group_key(rel: str) -> str:
-    """分组键：`.workbuddy/<二级>` 单独成组（backups / memory / plans / work 各算一层），其余取顶层目录。"""
+    """分组键：`.codebuddy/<二级>` 单独成组（backups / memory / plans / work 各算一层），其余取顶层目录。"""
     parts = rel.split("/")
-    if len(parts) >= 2 and parts[0] in (".workbuddy", ".codebuddy"):
+    if len(parts) >= 2 and parts[0] in (".codebuddy", ".codebuddy"):
         return "/".join(parts[:2])
     return parts[0] if len(parts) > 1 else "(根)"
 

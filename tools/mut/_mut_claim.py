@@ -23,7 +23,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 TOOL = str(ROOT / "tools" / "audit" / "claim_audit.py")
-DOC = ROOT / ".workbuddy" / "plans" / "开发计划-主文档.md"
+DOC = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
 
 #: 与 `claim_audit.py` **同源**的四条正则（⛔ 别另写一套：口径只许一份）
 CLAIM_RE = re.compile(r"用户(裁定|拍板)|裁定\s*[ABC]\b|已裁定|裁定过")

@@ -1,4 +1,4 @@
-"""统一导入底座（`TAIL-69` · 设计 = `.workbuddy/work/10-designs/设计-统一导入模块-20260922.md`）。
+"""统一导入底座（`TAIL-69` · 设计 = `.codebuddy/work/10-designs/设计-统一导入模块-20260922.md`）。
 
 四步向导的**通用层**：`read`（读表）→ `map`（表头映射）→ `validate`（行校验）
 → `stage`（暂存）→ `commit`（落库）。

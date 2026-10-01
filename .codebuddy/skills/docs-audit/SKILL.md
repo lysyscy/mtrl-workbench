@@ -62,7 +62,7 @@ backend\.venv\Scripts\python.exe .codebuddy\skills\docs-audit\scripts\doc_invent
 
 每条写四格：**动作 / 代价 / 风险 / 落点**；按"低成本高收益"排。
 ⛔ 涉及**口径变更**、**删 / 归档文件**、**新增层级或目录** ⇒ 一律写成**选项**让用户拍（`README.md` §七-8）。
-产物落点：`.workbuddy/work/10-designs/设计-文档审计-<YYYYMMDD>.md`（命名见 `README.md` §四）；
+产物落点：`.codebuddy/work/10-designs/设计-文档审计-<YYYYMMDD>.md`（命名见 `README.md` §四）；
 ⭐ 若清单里含"建议" ⇒ 每条**必须带待办登记回执**（"已登记 `TAIL-xx`"或"不登记的理由"）—— `T11` 守。
 
 ### 第 5 步 · 收口（改完必须过闸门）

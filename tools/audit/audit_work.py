@@ -26,7 +26,7 @@ WORK_HEADER_EXEMPT: tuple[str, ...] = ("README.md", "D索引-")
 
 # ------------------------------------------------- T20 保留期与容量（2026-09-28 立）
 
-#: `.workbuddy/backups/` 顶层**允许的条目数**（口径出处 = `README.md` §三/§四「留 5 份 · 月度清」）
+#: `.codebuddy/backups/` 顶层**允许的条目数**（口径出处 = `README.md` §三/§四「留 5 份 · 月度清」）
 BACKUP_KEEP = 5
 #: 显式归档子目录（⛔ 不计入 `BACKUP_KEEP`；但会在报告里**如实打印它的件数与体积** —— 防"全塞进归档"糊弄）
 BACKUP_ARCHIVE_PREFIXES = ("_归档-", "_旧快照归档-")
@@ -50,7 +50,7 @@ def _hit(code: str, rel: str, what: str, why: str, fix: str) -> dict:
 def check_scratch_ttl() -> list[dict]:
     """`T14`：scratch 超期 ＋ 散件落点（tools 根 / logs）。"""
     hits: list[dict] = []
-    scratch = REPO_ROOT / ".workbuddy" / "work" / "00-scratch"
+    scratch = REPO_ROOT / ".codebuddy" / "work" / "00-scratch"
     now = time.time()
     if scratch.is_dir():
         for f in sorted(scratch.rglob("*")):
@@ -59,7 +59,7 @@ def check_scratch_ttl() -> list[dict]:
             days = (now - f.stat().st_mtime) / 86400
             if days > SCRATCH_TTL_DAYS:
                 hits.append(_hit(
-                    "T14", f".workbuddy/work/00-scratch/{f.name}",
+                    "T14", f".codebuddy/work/00-scratch/{f.name}",
                     f"临时件已放 {days:.0f} 天（TTL {SCRATCH_TTL_DAYS} 天）",
                     "临时区变垃圾场（审计 P2 的复发形态）—— 过期件会让下个 Agent 以为是当前线索",
                     "升档（设计→10-designs / 实验→20-experiments / 排查→30-troubleshooting）或删除"))
@@ -79,7 +79,7 @@ def check_scratch_ttl() -> list[dict]:
                     "T14", f"logs/{f.name}",
                     "`logs/` 里出现了非日志文件",
                     "logs 只放服务日志（审计 P13：探测便签混入过一次）",
-                    "移去 `.workbuddy/work/00-scratch/`"))
+                    "移去 `.codebuddy/work/00-scratch/`"))
     return hits
 
 
@@ -95,7 +95,7 @@ def check_artifacts_and_headers() -> list[dict]:
                     "`artifacts/` 根出现了白名单外的 md",
                     "产物区 gitignore、可随时清 ⇒ 过程类 md 放这里**换机即丢**（审计 P1 的机制）",
                     "按类型归位：设计→`work/10-designs/` · 排查→`work/30-troubleshooting/` · 审计→`plans/archive/`"))
-    work = REPO_ROOT / ".workbuddy" / "work"
+    work = REPO_ROOT / ".codebuddy" / "work"
     for zone in ("10-designs", "20-experiments", "30-troubleshooting", "40-decisions"):
         zdir = work / zone
         if not zdir.is_dir():
@@ -107,10 +107,10 @@ def check_artifacts_and_headers() -> list[dict]:
             missing = [k for k in WORK_HEADER_KEYS if k not in head]
             if missing:
                 hits.append(_hit(
-                    "T15", f".workbuddy/work/{zone}/{f.name}",
+                    "T15", f".codebuddy/work/{zone}/{f.name}",
                     f"文头缺元信息：{' / '.join(missing)}",
                     "没有『读者/回答什么/何时读/状态』⇒ 下个 Agent 不知它是否还在研、该不该读（审计 §5.3-1）",
-                    "补文头四行（模板见 `.workbuddy/work/README.md` §四）"))
+                    "补文头四行（模板见 `.codebuddy/work/README.md` §四）"))
     return hits
 
 
@@ -118,7 +118,7 @@ def check_retention() -> list[dict]:
     """`T20` · **保留期与容量** —— ⭐ 治「口径写了『留 5 份』，却没有任何机器看得见」。
 
     背景（2026-09-28 文档审计 · `work/10-designs/设计-文档审计-20260928.md` §四-7）：
-      `README.md` §三/§四 写着 `.workbuddy/backups/`「**留 5 份 · 月度清**」，而 2026-09-22 那份整改
+      `README.md` §三/§四 写着 `.codebuddy/backups/`「**留 5 份 · 月度清**」，而 2026-09-22 那份整改
       设计给出的验收判据**就是**「`backups/` 目录计数 ≤5（可数）」—— 却**从没被机器守过**
       ⇒ `TAIL-73` 销号时只验了"备份收敛到唯一点"、没验"≤5" ⇒ **43 个条目静默堆着**（含 09-18 的旧快照）。
 
@@ -131,7 +131,7 @@ def check_retention() -> list[dict]:
     ⚠️ **黄**（与 `T5`/`T10`/`T12` 同款哲学：可能定错的不该挡合入，但**必须被看见**）。
     """
     hits: list[dict] = []
-    backups = REPO_ROOT / ".workbuddy" / "backups"
+    backups = REPO_ROOT / ".codebuddy" / "backups"
     if backups.is_dir():
         counted, archived = [], []
         for e in sorted(backups.iterdir()):
@@ -150,13 +150,13 @@ def check_retention() -> list[dict]:
         if len(counted) > BACKUP_KEEP:
             names = " · ".join(x.name for x in counted[:8])
             hits.append(_hit(
-                "T20", ".workbuddy/backups/",
+                "T20", ".codebuddy/backups/",
                 f"顶层 {len(counted)} 个条目 > 上限 {BACKUP_KEEP}（口径：留 {BACKUP_KEEP} 份 · 月度清）",
                 "⭐ 口径在 `README.md` 写着、却没人守 ⇒ 只会继续长；本条是它的机器眼（2026-09-28 立）",
                 f"把旧的**移进** `_旧快照归档-YYYYMMDD/`（可逆）或清掉；现值：{names}"))
     oneoff = REPO_ROOT / "tools" / "oneoff"
     if oneoff.is_dir():
-        # ⭐⭐ 2026-09-30（用户「可以归档」）：**已入档的不计数** —— 口径与 `.workbuddy/backups/` 完全一致
+        # ⭐⭐ 2026-09-30（用户「可以归档」）：**已入档的不计数** —— 口径与 `.codebuddy/backups/` 完全一致
         #    （那边有 `BACKUP_ARCHIVE_PREFIXES = ("_归档-", "_旧快照归档-")`）。
         #    ⚠️ 为什么这**不是"放松判据"**：`T20` 这一条的本意写得很清楚 ——「件数是**「翻不翻得动」**的代理指标」
         #       ⇒ 躺在 `_归档-YYYYMMDD/` 里的件**已经不在"堆"里**（且⛔ 一个字节都没删，随时可移回）。

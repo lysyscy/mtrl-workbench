@@ -93,11 +93,11 @@ if ($DryRun) { Say '   [干跑]' } else { Say ('   ✓ 仓在 ' + $RepoRoot) }
 
 # ---- 2) 非 git 件放回 ----
 Step '2) 非 git 件放回（记忆 / nssm.exe / 产物 / 壳基线）'
-# ⚠️⚠️ 2026-09-29 修：本表原写成裸 `'backups'` —— 而仓里**没有**顶层 `backups/`（真身 = `.workbuddy\backups\`；
+# ⚠️⚠️ 2026-09-29 修：本表原写成裸 `'backups'` —— 而仓里**没有**顶层 `backups/`（真身 = `.codebuddy\backups\`；
 #    唯一主人 = `tools/audit/shell_verify.py` 的 `BACKUPS`）。⚠️ 本表每条 `$rel` 都是**包内相对路径 = 仓内相对路径**
-#    （其余四项本来就是这样）⇒ 改成 `.workbuddy\backups` 才**左右对称**；否则即使包里带了壳基线，
-#    也会被放到**目标机的顶层 `backups\`** ⇒ 而 `shell_verify` 只看 `.workbuddy\backups` ⇒ **照旧判红"没有基线"** ✗。
-foreach ($rel in @('.codebuddy\memory', '.workbuddy\memory', 'ops\nssm', 'artifacts', '.workbuddy\backups')) {
+#    （其余四项本来就是这样）⇒ 改成 `.codebuddy\backups` 才**左右对称**；否则即使包里带了壳基线，
+#    也会被放到**目标机的顶层 `backups\`** ⇒ 而 `shell_verify` 只看 `.codebuddy\backups` ⇒ **照旧判红"没有基线"** ✗。
+foreach ($rel in @('.codebuddy\memory', '.workbuddy\memory', 'ops\nssm', 'artifacts', '.codebuddy\backups')) {
     $s = Join-Path $Pack $rel
     if (-not (Test-Path $s)) { Say ('   ⚠️ 包里没有 ' + $rel + '（跳过）'); continue }
     if ($DryRun) { Say ('   [干跑] ' + $rel + ' -> ' + $RepoRoot); continue }

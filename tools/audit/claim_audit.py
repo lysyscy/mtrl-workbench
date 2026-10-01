@@ -37,8 +37,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 #: 只扫**活文档**（⛔ 不扫 `归档-*.md`：那是历史留痕，按本仓"留疤不改"的规矩不动它）
 DOCS = [
-    ROOT / ".workbuddy" / "plans" / "开发计划-主文档.md",
-    ROOT / ".workbuddy" / "plans" / "执行情况-主文档.md",
+    ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md",
+    ROOT / ".codebuddy" / "plans" / "执行情况-主文档.md",
 ]
 
 #: 「这是一条裁定」的提法（含"裁定 A/B/C"这种代号）

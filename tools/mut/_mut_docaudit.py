@@ -51,7 +51,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PLANS = ROOT / ".workbuddy" / "plans"
+PLANS = ROOT / ".codebuddy" / "plans"
 HAND = PLANS / "执行情况-主文档.md"
 PLAN = PLANS / "开发计划-主文档.md"
 MEM = ROOT / ".workbuddy" / "memory" / "MEMORY.md"

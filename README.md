@@ -13,14 +13,14 @@
 | **仓**（本仓库） | `D:\dev\mtrl-workbench` | 后端 `backend/app/` ＋ **唯一前端壳** `backend/app/web/` |
 | **面**（交付面） | `D:\工作\AI\PRD编写夹 - Workbuddy专用` | 原型 `demo/` ＋ `PRD/` ＋《说明书》—— **完成度的定义权** |
 | **底账** | `ops/`（工程侧） | 实测结论 / 阈值表 —— ⛔ **不属交付面** |
-| **治理** | `.workbuddy/`（本仓库内） | 本文件描述的那套文档体系 ⛔ **不交付**（打包时必须排除） |
+| **治理** | `.codebuddy/`（本仓库内） | 本文件描述的那套文档体系 ⛔ **不交付**（打包时必须排除） |
 
 ## 二、⭐ 文档四层（**按"谁读、什么时候读"分，⛔ 不按主题分**）
 
 | 层 | 位置 | 谁读 | 职责 | 行数预算 | 机器扫 |
 |---|---|---|---|---|---|
 | **① 注入档** | `.workbuddy/memory/MEMORY.md` | ⭐ **每个新会话**（自动注入） | 只放**每轮都要用的规则**：坐标/禁区 · 铁律 · 收工闸门 · 工程纪律 · 本机坑 · 服务命令 | 以 `T10` 输出为准（⛔ **别手抄** —— 抄了就漂） | ✅ `T9` |
-| **② 按需档** | `README.md`(本文件) · `MEMORY-细则.md` · `plans/{开发计划,执行情况}-主文档.md` · `ops/*.md` · **`docs/*.md`** · **`.workbuddy/work/README.md`** | 人 / AI **按需查** | 口径 · 台账 · 排期 · 细则 · 实测结论 · **架构/runbook/changelog** · **工作记录分区宪法** | 各见表 | ✅ `T1`–`T6` · `T10` · `T12` |
+| **② 按需档** | `README.md`(本文件) · `MEMORY-细则.md` · `plans/{开发计划,执行情况}-主文档.md` · `ops/*.md` · **`docs/*.md`** · **`.codebuddy/work/README.md`** | 人 / AI **按需查** | 口径 · 台账 · 排期 · 细则 · 实测结论 · **架构/runbook/changelog** · **工作记录分区宪法** | 各见表 | ✅ `T1`–`T6` · `T10` · `T12` |
 | **③ 留痕档** | `.workbuddy/memory/journal/YYYY-MM-DD.md` ⚠️ **2026-09-28 起已停用**（现役跨会话记忆 = `.codebuddy/memory/YYYY-MM-DD.md`，本机不入 git） · `plans/archive/归档-*.md`（旧 `plans/归档-*.md` 同层共存） | ⛔ **没人回读**（只追加） | 过程 / 事故 / 逐次定案 / 被删内容的原文 | 不限 | ❌ **故意不扫** |
 | **④ 产物档** | `artifacts/` | 需要证据时 | 四态 `acc_results.json` · 截图 · **工具生成物白名单**（`变异覆盖台账.md`）—— ⛔ **过程类 md 不许进**（去 `work/`） | 不限 | `T11` 管**回执** · `T15` 管**白名单** |
 
@@ -51,7 +51,7 @@ D:\dev\mtrl-workbench\
 │   ├─ *-实测结论.md                实测结论（命名：<主题>-实测结论.md）
 │   ├─ server_ctl.ps1 / nssm_*.ps1   服务起停与安装（⭐ 改后端必须 restart）
 │   └─ 素材包-索引.md · 原型断言-归属映射.md · i8-接口契约-旁证摘要.md
-├─ .workbuddy\                    【治理·不交付】
+├─ .codebuddy\                    【治理·不交付】
 │   ├─ memory\
 │   │   ├─ MEMORY.md              ① 注入档（唯一每会话必读）
 │   │   ├─ MEMORY-细则.md          ② 按需：细则分册（节号与 MEMORY 对齐）
@@ -82,22 +82,22 @@ D:\dev\mtrl-workbench\
 
 | 类型 | 命名 | 放哪 |
 |---|---|---|
-| 活文档 | `<用途>-主文档.md` | `.workbuddy/plans/`（**只许两份**） |
-| 留痕 | `归档-<类型>-<主题>-<日期>.md`（⭐ 必须 `归档-` 打头） | `.workbuddy/plans/`（含 `archive\`） |
+| 活文档 | `<用途>-主文档.md` | `.codebuddy/plans/`（**只许两份**） |
+| 留痕 | `归档-<类型>-<主题>-<日期>.md`（⭐ 必须 `归档-` 打头） | `.codebuddy/plans/`（含 `archive\`） |
 | 日志 | `YYYY-MM-DD.md` | `.workbuddy/memory/journal/` |
 | 实测结论 | `<主题>-实测结论.md` | `ops/` |
 | 索引 / 地图 | `README.md` | 该层根的目录 |
-| 方案设计 | `设计-<主题>-YYYYMMDD.md` | `.workbuddy/work/10-designs/` |
-| 实验记录 | `实验-<主题>-YYYYMMDD.md` | `.workbuddy/work/20-experiments/` |
-| 问题排查 | `排查-<现象>-YYYYMMDD.md` | `.workbuddy/work/30-troubleshooting/` |
-| 决策记录 | `D<编号>-<主题>.md`（D21 起） | `.workbuddy/work/40-decisions/` |
-| 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.workbuddy/work/00-scratch/`（TTL 14 天） |
+| 方案设计 | `设计-<主题>-YYYYMMDD.md` | `.codebuddy/work/10-designs/` |
+| 实验记录 | `实验-<主题>-YYYYMMDD.md` | `.codebuddy/work/20-experiments/` |
+| 问题排查 | `排查-<现象>-YYYYMMDD.md` | `.codebuddy/work/30-troubleshooting/` |
+| 决策记录 | `D<编号>-<主题>.md`（D21 起） | `.codebuddy/work/40-decisions/` |
+| 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.codebuddy/work/00-scratch/`（TTL 14 天） |
 | 工程基准档 | 固定小写英文名（runbook / architecture / changelog） | `docs/` |
-| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.workbuddy/backups/`（**仅此一处**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**） |
+| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.codebuddy/backups/`（**仅此一处**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**） |
 | 产物 md | 仅工具生成物白名单（当前：`变异覆盖台账.md`） | `artifacts/` |
 
 **格式三条**：① 每份文档**开头必须写**"读者是谁 / 回答什么问题 / 什么时候读"（work 区另加"状态 ＋ 关联 ID"）；② **跨文档引用写全路径**
-（⚠️ 反引号里的仓库内路径会被 `T3` 校验，写错就红 —— 但**交付面文档不得出现 `.workbuddy/…` 路径**）；
+（⚠️ 反引号里的仓库内路径会被 `T3` 校验，写错就红 —— 但**交付面文档不得出现 `.codebuddy/…` 路径**）；
 ③ **同一件事只在一处写**（真源唯一，其余给指针）。
 
 ## 五、关联关系（谁是真源、谁是副本）
@@ -138,7 +138,7 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 1. **能用既有文档承载吗？** 能 ⇒ ⛔ 别新建（`plans/` 只许两份 · 根只许本文件）。
 2. 是"过程 / 事故 / 逐次定案"吗？ ⇒ **`memory/journal/<今天>.md`**（append-only）。
 3. 是"每轮都要遵守/要跑的规则"吗？ ⇒ **`MEMORY.md`**（⚠️ 它会超预算 ⇒ 先看能不能化成一句 + 指针）。
-4. 是**工作记录五类之一**吗？（⭐ 2026-09-22 新增 —— 先看 `.workbuddy/work/README.md` 的落点总表）：
+4. 是**工作记录五类之一**吗？（⭐ 2026-09-22 新增 —— 先看 `.codebuddy/work/README.md` 的落点总表）：
    - 构思/草稿 → `work/00-scratch/`（TTL 14 天）；
    - 方案设计 → `work/10-designs/`；实验 → `work/20-experiments/`（＋脚本 `tools/probe/`）；
    - 排查/事故 → `work/30-troubleshooting/`；拍板的决策 → `work/40-decisions/D<编号>`；

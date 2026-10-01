@@ -99,7 +99,7 @@ def build_values(info: dict, detail: list[dict] | None = None, *, now: datetime 
         #    全量 355 张实测（`artifacts/_probe_acct_scan.json`）：**11 张错值 ＋ 63 张空白（74/353 = 21%）**，
         #    ⭐ **反向 0 例**（标准有值而自定义为空）⇒ 自定义字段是超集，方向唯一确定。
         #    ⚠️ 标准字段保留为**兜底**（保守起见；因反向 0 例、无数据能证伪它 ⇒ **不作断言**）。
-        #    诊断全文：`.workbuddy/work/30-troubleshooting/排查-收款账号印错-20260921.md`。
+        #    诊断全文：`.codebuddy/work/30-troubleshooting/排查-收款账号印错-20260921.md`。
         f"{h}.收款银行1": str(first.get("user_bank_EXName") or first.get("PhidBank_EXName") or ""),
         f"{h}.user_yhzh": str(first.get("user_yhzh") or first.get("RecAccNo") or ""),
         f"{h}.计划总额": money(plan_total),

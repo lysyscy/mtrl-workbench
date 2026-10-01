@@ -21,7 +21,7 @@ os.environ.setdefault("ACC_RESULTS_PATH", "../artifacts/_mut_acc_results.json")
 
 sys.stdout.reconfigure(encoding="utf-8")
 R = pathlib.Path(r"D:\dev\mtrl-workbench")
-SCRATCH = R / ".workbuddy" / "work" / "00-scratch" / "_t14_probe_tmp.txt"
+SCRATCH = R / ".codebuddy" / "work" / "00-scratch" / "_t14_probe_tmp.txt"
 ART = R / "artifacts" / "_t15_probe_tmp.md"
 TOOLS = R / "tools" / "_t14_probe_tmp.py"
 

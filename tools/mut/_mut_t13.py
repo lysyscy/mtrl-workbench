@@ -20,7 +20,7 @@ os.environ.setdefault("ACC_RESULTS_PATH", "../artifacts/_mut_acc_results.json")
 
 sys.stdout.reconfigure(encoding="utf-8")
 REPO = pathlib.Path(r"D:\dev\mtrl-workbench")
-PLAN = REPO / ".workbuddy" / "plans" / "开发计划-主文档.md"
+PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
 orig = PLAN.read_bytes()
 md5_orig = hashlib.md5(orig).hexdigest()
 nl = b"\r\n" if b"\r\n" in orig else b"\n"

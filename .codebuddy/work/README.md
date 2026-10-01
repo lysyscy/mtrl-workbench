@@ -1,4 +1,4 @@
-# `.workbuddy/work/` —— Agent 开发工作记录分区（宪法）
+# `.codebuddy/work/` —— Agent 开发工作记录分区（宪法）
 
 > 依据：`D:\mtrl-workbench-文档架构审计-20260922.md` §四/§六（P2 根因：记录五类缺三类 ⇒ 就近乱建文件）。
 > 本区 **入 git**（除 `00-scratch/`）；⭐ 开工前先看下面的"产出物 → 落点"表，**对号入座，不许先建文件再问归属**。
@@ -18,7 +18,7 @@
 | 已完工单元的大段过程 | 继续占着计划正文 | `plans/archive/归档-类型-主题-YYYYMMDD.md` ＋ 原处指针 |
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
 | 提交信息草稿 | artifacts/commit_msgN.txt | `work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
-| 交付面文件的手工备份 | artifacts 根、.workbuddy 根 | `.workbuddy/backups/`（留最近 5 份；⚠️ **一天多批只留当日末个**，中间批次改在当批设计件里写「改前差异说明」） |
+| 交付面文件的手工备份 | artifacts 根、.codebuddy 根 | `.codebuddy/backups/`（留最近 5 份；⚠️ **一天多批只留当日末个**，中间批次改在当批设计件里写「改前差异说明」） |
 | 环境/部署/配置/架构知识 | MEMORY 注入档 | `docs/architecture.md` ＋ `ops/README.md`（随变更同批改） |
 | 使用者可感知的变化 | 活文档正文 | `docs/changelog.md`（部署节点登记） |
 
@@ -40,7 +40,7 @@
 3. ⛔ `artifacts/` 放过程类 md（设计/排查/审计/备份）—— 只许工具生成物白名单。
 4. ⛔ 第二份待办/状态清单 —— 状态只信三处（acc_report / 计划 §0 / 执行情况），尾巴只信 §15。
 5. ⛔ 临时件放 tools 根、logs、artifacts 根 —— 一律 `00-scratch/`；一次性工具脚本 → `tools/oneoff/`。
-6. ⛔ 手工备份散落 —— 仓内靠 git；交付面备份只进 `.workbuddy/backups/`。
+6. ⛔ 手工备份散落 —— 仓内靠 git；交付面备份只进 `.codebuddy/backups/`。
 7. ⛔ 引用已删除文件（CLAUDE.md 教训）；搬迁当批改完全部路径（T3）。
 8. ⛔ scratch 超期不清（TTL 14 天，每轮收尾自查）。
 9. ⛔ work 区文档"定稿"后不升档 —— 关联 TAIL 销号当轮必须随收尾归档。
@@ -57,7 +57,7 @@
 
 | 家 | 它是谁的活区 | 保留期 / 机器眼 | ⛔ 别搞混 |
 |---|---|---|---|
-| `.workbuddy/work/00-scratch/` | 我（Agent）在本区的草稿（`tmp-YYYYMMDD-主题.*` / `CB_MSG.txt`） | **TTL 14 天** · `T14` | 它是**本区**的，出区就按 §一 表升档 |
+| `.codebuddy/work/00-scratch/` | 我（Agent）在本区的草稿（`tmp-YYYYMMDD-主题.*` / `CB_MSG.txt`） | **TTL 14 天** · `T14` | 它是**本区**的，出区就按 §一 表升档 |
 | `.workbuddy/scratch/` | 仓级**活区**（各尺子输出 / 一次性脚本 / 交付面取证） | **14 天** · `T20` · 索引 = 该目录 `README.md` | ⛔ 它不是文档层；**先看那边 `README.md` 再动手** |
 
 **两个"记忆家"**（⛔ 都属留痕，只追加）：

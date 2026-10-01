@@ -190,9 +190,9 @@ def check_rule_restatements() -> list[dict]:
 DOC_BUDGETS: tuple[tuple[str, int, str], ...] = (
     ("README.md", 240, "inject"),                              #: ⛔ 现值**别手抄** ⇒ 要现值跑 `doc_audit`（`T10` 会报）
     (".workbuddy/memory/MEMORY.md", 200, "inject"),             #: ⛔ 同上（现值由 `T10` 报）
-    (".workbuddy/plans/执行情况-主文档.md", 200, "must"),        #: ⛔ 同上
+    (".codebuddy/plans/执行情况-主文档.md", 200, "must"),        #: ⛔ 同上
     (".workbuddy/memory/MEMORY-细则.md", 420, "must"),          #: ⛔ 同上
-    (".workbuddy/plans/开发计划-主文档.md", 1800, "must"),   # ⭐⭐ 2026-09-29 **用户裁定 `A`：1700 → 1800**
+    (".codebuddy/plans/开发计划-主文档.md", 1800, "must"),   # ⭐⭐ 2026-09-29 **用户裁定 `A`：1700 → 1800**
                                                           #:   （文档审计 §五之补 · ①）**理由 = 容量**：台账按设计每条一行，
                                                           #:   09-29 一天新立/销号 **19 条**尾巴 ⇒ 顶穿 8 行是它**该长的样子**；
                                                           #:   ⛔ 「搬叙事」已证伪（§15 §四 销号行受 `T6` 保护、一行不能搬；
@@ -341,11 +341,11 @@ def check_doc_layout() -> list[dict]:
        要新增层级 ⇒ 先改 `README.md` 的四层表与这里的三张白名单（⛔ 别绕过）。
     """
     hits: list[dict] = []
-    plans = REPO_ROOT / ".workbuddy" / "plans"
+    plans = REPO_ROOT / ".codebuddy" / "plans"
     if plans.is_dir():
         for f in sorted(plans.glob("*.md")):
             if f.name not in PLANS_LIVE and not f.name.startswith("归档-"):
-                hits.append(_t12(f".workbuddy/plans/{f.name}",
+                hits.append(_t12(f".codebuddy/plans/{f.name}",
                                  "`plans/` 下出现了「第三份文档」",
                                  "`plans/` 只有两份活文档（计划 ＋ 执行情况），其余是**留痕** ⇒ "
                                  "多出来的第三份没人知道它是活文档还是留痕（`T6` 也只看计划那份）",
@@ -366,11 +366,11 @@ def check_doc_layout() -> list[dict]:
                                  "`memory/` 只认 `journal/` 一个子目录",
                                  "并进 `journal/`，或改到别处（见 `README.md` 四层表）"))
     # ⭐ `work/` 五区（2026-09-22 审计 P2 的机器化落地）：子目录白名单 ＋ 各区命名前缀
-    work = REPO_ROOT / ".workbuddy" / "work"
+    work = REPO_ROOT / ".codebuddy" / "work"
     if work.is_dir():
         for d in sorted(x for x in work.iterdir() if x.is_dir()):
             if d.name not in WORK_DIR_ALLOW:
-                hits.append(_t12(f".workbuddy/work/{d.name}/",
+                hits.append(_t12(f".codebuddy/work/{d.name}/",
                                  "`work/` 下出现了五区之外的子目录",
                                  "工作记录只认五区（见 `work/README.md`）—— 多出来的区 = 第二套分类学，必漂",
                                  "并入五区之一，或先改 `work/README.md` ＋ 本文件 `WORK_DIR_ALLOW`"))
@@ -382,7 +382,7 @@ def check_doc_layout() -> list[dict]:
                 if f.name == "README.md":
                     continue
                 if not f.name.startswith(tuple(prefixes)):
-                    hits.append(_t12(f".workbuddy/work/{zone}/{f.name}",
+                    hits.append(_t12(f".codebuddy/work/{zone}/{f.name}",
                                      "work 区文档命名不符（缺类型前缀）",
                                      "命名表是检索的抓手（审计 P2）—— 前缀错了 = 决策树对不上号",
                                      f"改名打头：{' / '.join(prefixes)}（如 `设计-主题-YYYYMMDD.md`）"))
@@ -390,7 +390,7 @@ def check_doc_layout() -> list[dict]:
         if f.name not in ROOT_MD_ALLOW:
             hits.append(_t12(f.name, "仓库根出现了白名单外的 md",
                              "根目录只放 `README.md`（文档地图）—— 根上散落的 md 没人维护、必然过期",
-                             "并进 `README.md`，或按四层放到 `ops/` / `.workbuddy/` / `artifacts/`"))
+                             "并进 `README.md`，或按四层放到 `ops/` / `.codebuddy/` / `artifacts/`"))
     return hits
 
 
@@ -604,7 +604,7 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
 #: 本条守卫盯两件事：
 #:   (a) 主文档**行数预算** —— 超了 = 过程又塞回来了（黄 ⇒ 下沉）；
 #:   (b) 标题里出现**过程词**（逐批记录 / 逐次记录 / 收官记录）⇒ 该块该下沉了（黄）。
-PLAN_DOC_REL = ".workbuddy/plans/开发计划-主文档.md"
+PLAN_DOC_REL = ".codebuddy/plans/开发计划-主文档.md"
 PLAN_LINE_BUDGET = 1800          #: ⭐ 2026-09-29 用户裁定 `A` 1700 → 1800（**与 `T10` 那个数同源** ——
 #:   `ops/阈值表.md:31` 写着「一个数、两处用」⇒ 改一处必须改另一处）
 PROCESS_TITLE_RE = re.compile(r"^#{2,4}.*(逐批记录|逐次记录|收官记录)")

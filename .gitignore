@@ -34,7 +34,7 @@ logs/*
 .cache/
 output/
 
-# ===== 自检 / 一次性脚本的**暂存区**（⚠️ 见 .workbuddy/plans 里的「临时脚本放哪」）=====
+# ===== 自检 / 一次性脚本的**暂存区**（⚠️ 见 .codebuddy/plans 里的「临时脚本放哪」）=====
 # ⚠️⚠️ 存在的唯一理由：**`%TEMP%` 在工作区之外** ⇒ 凡读写它的命令每条都要**走审批**，
 #   而审批弹窗常常没弹出来就超时 ⇒ 命令被取消、还留下垃圾文件（2026-09-20 实测踩过）。
 #   ⇒ 一律把一次性脚本写进这里（**工作区内** ⇒ 免审批），清理用编辑器 Delete（不走 shell）。
@@ -61,16 +61,22 @@ node_modules/
 #    同理是**共享资产**（接手的人该有同一套审计流程）⇒ 随仓走。
 #    ⚠️ 必须写成 `.codebuddy/*`（而不是 `.codebuddy/`）—— 否则 git **根本不下钻这个目录**，
 #    下面的 `!` 例外永远不生效（忽略规则的老坑，实测踩过）。
+# ⭐⭐ **例外3**（2026-10-01 · `TAIL-204` 第 1 步）：`.codebuddy/plans/` ＋ `.codebuddy/work/` = **治理层**
+#    （计划/台账/交接 ＋ 五区设计件）—— 它们是本仓的**唯一状态源** ⇒ 随仓走。
+#    ⚠️ 同批把 `.workbuddy/` 的那三个子夹搬了过来（`memory/` 的搬运在第 2 步，见 §四 的 ① 决定）。
+#    ⚠️ 子夹内的例外**照旧**：`.codebuddy/work/00-scratch/` 与 `.codebuddy/backups/` 仍被忽略（见本文件末尾）。
 .codebuddy/*
 !.codebuddy/rules/
 !.codebuddy/skills/
+!.codebuddy/plans/
+!.codebuddy/work/
 *.swp
 *~
 Thumbs.db
 desktop.ini
 
 # ⚠️ 刻意不排除的：
-#   .workbuddy/   —— 工作区治理目录（计划 / memory / 交接提示词），随仓走
+#   .codebuddy/   —— 工作区治理目录（计划 / memory / 交接提示词），随仓走
 #   frontend/dist/ —— D7 已定案：构建产物入仓（部署机免 Node）
 
 # ===== 2026-09-22 文档架构审计新增 =====
@@ -79,5 +85,5 @@ desktop.ini
 #   （实测 `git check-ignore -v` 返回 rc=1；而 `artifacts/*` 那行 rc=0 ⇒ 差别就在注释位置）。
 #   后果：`git add -A` 会把 **83 件 scratch 临时件 ＋ 壳基线备份**一起提交进版本库。
 #   ⇒ 本文件里 ⛔ **注释一律独立成行**（`#` 必须在行首）。
-.workbuddy/work/00-scratch/
-.workbuddy/backups/
+.codebuddy/work/00-scratch/
+.codebuddy/backups/

@@ -23,19 +23,19 @@ SKIP_PARTS = {"node_modules", ".venv", ".git", "__pycache__", ".pytest_cache"}
 #: ② 层（按需档）里"必须有人指它"的落点前缀；① 层单列
 CORE_PREFIXES = ("README.md", "ops/", "docs/", "tools/README.md",
                  ".workbuddy/memory/MEMORY.md", ".workbuddy/memory/MEMORY-细则.md",
-                 ".workbuddy/plans/开发计划-主文档.md", ".workbuddy/plans/执行情况-主文档.md",
-                 ".workbuddy/work/README.md")
+                 ".codebuddy/plans/开发计划-主文档.md", ".codebuddy/plans/执行情况-主文档.md",
+                 ".codebuddy/work/README.md")
 #: 留痕档：只追加、不回读 ⇒ ⛔ 它们"没人引用"不是病
-HISTORY_PREFIXES = (".workbuddy/memory/journal/", ".workbuddy/plans/归档-",
-                    ".workbuddy/plans/archive/", ".codebuddy/memory/")
+HISTORY_PREFIXES = (".workbuddy/memory/journal/", ".codebuddy/plans/归档-",
+                    ".codebuddy/plans/archive/", ".codebuddy/memory/")
 
 
 def repo_root() -> Path:
     here = Path(__file__).resolve()
     for cand in (here, *here.parents):
-        if (cand / "tools" / "audit" / "doc_audit.py").exists() and (cand / ".workbuddy").is_dir():
+        if (cand / "tools" / "audit" / "doc_audit.py").exists() and (cand / ".codebuddy").is_dir():
             return cand
-    raise SystemExit("找不到仓库根（期望含 tools/audit/doc_audit.py 与 .workbuddy/）")
+    raise SystemExit("找不到仓库根（期望含 tools/audit/doc_audit.py 与 .codebuddy/）")
 
 
 def main() -> int:
@@ -67,7 +67,7 @@ def main() -> int:
     hist_orphans = [(r, f) for r, f in rows if r.startswith(HISTORY_PREFIXES) and len(f) < args.min]
     other_weak = [(r, f) for r, f in rows
                   if not is_core(r) and not r.startswith(HISTORY_PREFIXES)
-                  and len(f) < max(args.min, 1) and not r.startswith(".workbuddy/backups/")]
+                  and len(f) < max(args.min, 1) and not r.startswith(".codebuddy/backups/")]
 
     print(f"扫描 {len(rows)} 份 md（跳过 node_modules/.venv/.git）")
     print(f"\n=== ⭐ ①② 层孤儿（**这才是病**，要修）{len(core_orphans)} 份 ===")
