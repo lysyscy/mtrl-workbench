@@ -295,7 +295,7 @@ const lgStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <button class="btn pri" data-act="addLgOk" title="写入期初占位行（统计结算 / 统计付款一并计入欠款）">保存</button>
       <button class="btn" data-act="lgCancel" title="丢弃这条期初录入（不入库）">取消</button>
       <span class="pill" style="margin-left:auto">${esc(ledCutLabel(lgCut))} ｜ 保存后为本栏<b>第 1 行</b></span>
-      <div class="mut sm" style="flex-basis:100%">⭐ 本行两个金额是<b>手填的静止值</b>：实付请走<b>「手动新增通知书」</b>（统计结算恒 0）—— 它会自动冲减欠款合计与项目池，⛔ 但**不会**改本行这两个数（要它跟着反映 ⇒ 手工改「统计付款金额」）。⚠️ <b>两者成对使用</b>，分类与项目要和通知书一致，否则冲错池子；只加通知书不填本行 ⇒ 本栏会算成<b>负数</b>。</div>
+      <div class="mut sm" style="flex-basis:100%">⭐ 本行两个金额是<b>手填的静止值</b>：实付请走<b>「手动新增通知书」</b>（统计结算恒 0）—— 它会自动冲减欠款合计与项目池，⛔ 但<b>不会</b>改本行这两个数（要它跟着反映 ⇒ 手工改「统计付款金额」）。⚠️ <b>两者成对使用</b>，分类与项目要和通知书一致，否则冲错池子；只加通知书不填本行 ⇒ 本栏会算成<b>负数</b>。</div>
     `})}`;
 /* 造行：期初行 + 从「期初次月」到「最近一个有数据的月」逐月一行（空月也出行） */
 const ledRows=(sc,proj)=>{ const side=m05Side(sc); if(!side) return [];

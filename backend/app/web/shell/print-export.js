@@ -35,12 +35,12 @@ async function m03RunBatch(rows, mode) {
   const unprinted = r.unprinted_bill_nos || [];
   const msg = [
     `<b>${what}完成</b>：成功 <b>${r.success}</b> / 共 ${r.total}`,
-    unver.length ? `（其中 <b>${unver.length}</b> 条**已投递但未核实**）` : '',
+    unver.length ? `（其中 <b>${unver.length}</b> 条<b>已投递但未核实</b>）` : '',
     r.failed ? ` · 失败 <b>${r.failed}</b>` : '',
-    unver.length ? `<br>⚠️ <b>已投递但未核实</b>的 ${unver.length} 条：请**看打印机实际出纸**，⛔ <b>别重复打印</b>` : '',
+    unver.length ? `<br>⚠️ <b>已投递但未核实</b>的 ${unver.length} 条：请<b>看打印机实际出纸</b>，⛔ <b>别重复打印</b>` : '',
     unprinted.length ? `<br>⚠️ <b>未产出的单号</b>：${esc(unprinted.join('、'))}` : '',
     bad.length ? `<br><span class="sm">失败原因：${esc(bad.slice(0, 3).map(x => `${x.bill_no || x.notice_id}：${x.reason || '未说明'}`).join('；'))}${bad.length > 3 ? ` …另 ${bad.length - 3} 条` : ''}</span>` : '',
-    mode === 'print' ? '<br><span class="sm mut">本系统只把勾选的通知书交给 i8（<b>不自建打印模板</b> · DEV-P-07）</span>' : '',
+    mode === 'print' ? '<br><span class="sm mut">本系统只把勾选的通知书交给 i8（<b>不自建打印模板</b>）</span>' : '',
   ].join('');
   /* ⭐⭐ 2026-09-20 **导出改浏览器下载**（用户口径：「如果导出的话，换成浏览器下载吧」）——
      后端**不再往本机写文件**（旧做法攒了 884 个、壳里还压根没用那条路径）；
@@ -110,7 +110,7 @@ async function m03PrinterOpen() {
   ];
   modal({
     title: '打印机设置',
-    body: `<div class="tip" style="margin:0 0 calc(10px * var(--fscale))">保存后<b>即时生效、无需重启</b>（后端写配置并清缓存）—— 打印投递按新设置走。</div>
+    body: `<div class="tip" style="margin:0 0 calc(10px * var(--fscale))">保存后<b>即时生效、无需重启</b> —— 打印投递按新设置走。</div>
       <div class="fld"><label>打印机 IPP 地址</label>
         <input class="inp" id="m03PrinterUrl" style="width:100%" value="${esc(cur)}" placeholder="ipp://192.168.5.248"></div>
       <div class="fld" style="margin-top:calc(8px * var(--fscale))"><label>出纸通道</label>
@@ -121,7 +121,7 @@ async function m03PrinterOpen() {
       原来能打的（Ricoh）保持<b>自动</b>不用动；换新机器先试<b>自动</b>，若打出来是<b>乱码</b>就改选<b>系统驱动</b>
       （有的打印机<b>没有 PDF 解释器</b>，只认位图格式，这时 IPP 会被直接拒收、RAW 会收下但打成乱码）。</div>
       <div class="fld" style="margin-top:calc(8px * var(--fscale))"><label>打印机名（只有选「系统驱动」才用得上）</label>
-        <input class="inp" id="m03PrinterName" list="m03PrinterNames" style="width:100%" value="${esc(nm)}" placeholder="如：RICOH IM 3000 PCL 6（名字要**一字不差**）">
+        <input class="inp" id="m03PrinterName" list="m03PrinterNames" style="width:100%" value="${esc(nm)}" placeholder="如：RICOH IM 3000 PCL 6（名字要一字不差）">
         <datalist id="m03PrinterNames">${prs.map(p => `<option value="${esc(p)}"></option>`).join('')}</datalist>
         <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">${prs.length
           ? `本机装了驱动的打印机有 <b>${prs.length}</b> 台（点输入框可选）：${esc(prs.slice(0, 4).join(' / '))}${prs.length > 4 ? ' …' : ''}`

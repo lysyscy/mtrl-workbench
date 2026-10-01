@@ -347,7 +347,7 @@ const jcLinkCands=n=>{ const k=ntProjKey(n), cur=jcRefOf(n.id), sup=String(n.sup
 const jcLinkCell=n=>{ const j=jcRefOf(n.id);
   return j
     ? `<span style="display:flex;align-items:center;gap:calc(5px * var(--fscale));white-space:nowrap">${tag('已关联 '+j.id,'in')}<button class="btn sm" data-act="jcLink" data-id="${n.id}" title="改关联到别的合同 / 或解绑（关联关系存集采合同付款子表，与 R8 同一份记录）">改 / 解绑</button></span>`
-    : `<button class="btn sm" data-act="jcLink" data-id="${n.id}" title="把这行集采通知书关联到一张集采合同（与「从付款域引用（R8）」写同一份记录、双向可见）">关联集采合同</button>`; };
+    : `<button class="btn sm" data-act="jcLink" data-id="${n.id}" title="把这行集采通知书关联到一张集采合同（与「从付款域引用」写同一份记录、双向可见）">关联集采合同</button>`; };
 
 /* ===== 集采供应商自动匹配（§6.6.3 · `DEV-J-01` 2026-09-14 改裁）=====
    ⚠️ **反着匹配**：不是"先从单据名里切出简称、再拿去比全名"，而是 **拿候选池去探测单据名** ——

@@ -235,7 +235,7 @@ const ACT={
      + `本页不单独导出 —— 请用它自己的那个入口（或换一页导出）`
      + `<br><span class="mut sm">⛔ 这里不假装成功：没有真文件生成，就绝不写「已导出」</span>`,9000);
    const rows=route.rows();
-   if(!rows.length) return toast(`当前筛选下**一行都没有** —— 没什么可导的（先点「重置」看全部）`);
+   if(!rows.length) return toast(`当前筛选下<b>一行都没有</b> —— 没什么可导的（先点「重置」看全部）`);
    let d=null;
    try{ d=await API.post(route.url,{ids:rows.map(r=>Number(r.id))}); }
    catch(e){ return toast(`<b>导出失败</b>：${esc(String((e&&e.message)||e))}`,8000); }
@@ -396,7 +396,7 @@ const ACT={
        const pairs = pid.map(([k, sel]) => [k, g(sel)]);
        const pidRes = await m14Save(pairs);
        if (!pidRes.ok) {
-         return toast('打印机设置**已保存**，但<b>版式 ID 没保存上</b>：'
+         return toast('打印机设置<b>已保存</b>，但<b>版式 ID 没保存上</b>：'
            + `${pidRes.errors.map(esc).join('<br>')}`
            + '<br>⚠️ 请核对后重试（打印机那部分已经生效了）', 12000);
        }
@@ -445,7 +445,7 @@ const ACT={
        <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" value="${SYS_TODAY}"></div>
        <div class="fld"><label>备注</label><input class="inp" id="bRemark" placeholder="选「其他」付款方式时必填"></div>
      </div>
-     <div class="tip" style="margin:0"><b>提交后：</b>每条写入一条<b>独立付款流水</b> → 「已付金额」累加 → 状态按 <span class="fc">已付金额 ≥ 审批金额</span> 自动判定（无「部分付」中间态，DEV-P-02）。</div>`;
+     <div class="tip" style="margin:0"><b>提交后：</b>每条写入一条<b>独立付款流水</b> → 「已付金额」累加 → 状态按 <span class="fc">已付金额 ≥ 审批金额</span> 自动判定（无「部分付」中间态）。</div>`;
    modal({wide:true,title:`批量付款 · 已勾选 ${rows.length} 条`,body,reopen:()=>ACT.batchPay(),
      footer:`<button class="btn" data-act="batchPayCancel">取消</button><button class="btn pri" data-act="batchPayOk"${bad.length?` disabled title="有 ${bad.length} 条不可付，请先删除这些行"`:''}>确认付款</button>`}); },
  /* 草稿记录：行内的付款方式 / 金额一改就存下，重建弹窗（删除行、排序）时不丢 */
@@ -702,7 +702,7 @@ const ACT={
     （`plan_api_router.py`；与旧 PRG 端点**同一份判定** `plan_manual.manual_row_payload`）。
     ⚠️ 旧服务端页（`POST /m04/row/save` ＋ `render_m04`）已随 `§19` 批 2 删除 ⇒ **壳是唯一入口**；
     判据点 `ACC-PLAN-MANUAL-001` 已搬到 `tests/test_api_m04_manual.py`（端点）与 `test_wired_m04.py`（壳）。 */
- plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>它落库后**与导入行同住一表、同样要被审查**，且**导入不会清理它**（§9.5）',5600); },
+ plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>它落库后<b>与导入行同住一表、同样要被审查</b>，且<b>导入不会清理它</b>（§9.5）',5600); },
  plRowEdit:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
    if(!p.manual){ toast('<b>编辑只对「手动行」开放</b> —— 导入行是项目端报来的<b>源数据</b>：要改请<b>重新导入</b>（它在 §4.3.3 唯一的例外口 = 该行「再次匹配」）',6400); return; }
    plRowEditId=p.id;
@@ -1094,7 +1094,7 @@ const ACT={
       return `「${esc(p.name||p.full)}」已${d<0?'上移':'下移'}一位${q?`（与「${esc(q.name||q.full)}」对调）`:''}<br>注：<b>归档项恒在最后</b>，所以移动不会跨过在建 / 归档的分界`;
     }); },
  editKw:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
-   modal({title:`小微识别关键词 · ${p.name}`,body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">关键词挂在<b>具体小微的行</b>上，格式 <span class="fc">|词1|词2|</span>；<b>允许重复</b>，命中多个时弹窗让用户选（决策 3/4）。</div>
+   modal({title:`小微识别关键词 · ${p.name}`,body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">关键词挂在<b>具体小微的行</b>上，格式 <span class="fc">|词1|词2|</span>；<b>允许重复</b>，命中多个时弹窗让用户选。</div>
      <div class="fld"><label>关键词（用 | 分隔）</label><input class="inp" id="kwV" value="${esc(p.kw)}"></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="editKwOk" data-id="${p.id}">保存</button>`}); },
  /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` 的 `match_keywords`。
@@ -2012,7 +2012,7 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
    const fn=await dlExport(url,{name:'经济活动分析大表.xlsx'});
    if(!fn) return;
    toast(`已导出 <b>${esc(fn)}</b>：一份（全项目一张表）· <b>20 列</b>（三级表头 ＋ 合计行）；`
-     + `派生列与合计**已算成数值**（⛔ 不留公式）`,8600); },
+     + `派生列与合计<b>已算成数值</b>（⛔ 不留公式）`,8600); },
 
  /* —— MOD-12 —— */
  /* ⭐ 2026-09-20（`M6` 第一片）**本段三个写动作全部接后端**。
@@ -2040,7 +2040,7 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
        ⇒ ⛔ 别只删这一半；要清就整体清（那是另一件大事，先问用户）。
        ⭐ 区别在于：**这是"完整的、仍能渲染的旧规格"**（读状态 / 本地草稿仍可用；真写库那三个已停用，
           因为 `diff_record` 表已 drop、接口已删）—— 而 `TASK` 那种**零引用死码**（本批已删）才是残骸。 */
- dfOk:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记**不独立成页** —— '
+ dfOk:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记<b>不独立成页</b> —— '
    + '差异登记在<b>库存单据的调整单</b>里；去「过程资料 → 差异表」可看差异并<b>跳回</b>被调整的行',7200),
  /* —— MOD-12 手工登记（2026-09-13 用户拍板「都改」）：新增 / 录入 / 保存 / 取消 / 删除 / 筛选 / 重置 ——
     范式与 `MOD-03` 手动行、集采子表**同款**：草稿层（`dfD`，键=字段名）+ 表内增行 + 保存才落库。 */
@@ -2048,9 +2048,9 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
    toast('已在表尾生成<b>一行草稿</b>（尚未保存）—— 填完点该行「保存」落库、点「取消」丢弃<br>「归属」恒为<b>库存单据</b>（§5.8.3）；金额<b>可正可负</b>（+ 上调 / − 下调）',6000); },
  dfSet:t=>{ dfD[t.dataset.k]=t.value; },   /* 草稿层写入口（表单元素走 change ⇒ 委托层直呼；⛔ 无名单）；不重绘，免得每改一格丢焦点 */
  dfCancel:()=>{ dfNewOn=false; dfClear(); render(); toast('已取消登记 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
- dfSave:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记**不独立成页** —— '
+ dfSave:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记<b>不独立成页</b> —— '
    + '差异登记在<b>库存单据的调整单</b>里；去「过程资料 → 差异表」可看差异并<b>跳回</b>被调整的行',7200),
- dfDel:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记**不独立成页** —— '
+ dfDel:()=>toast('<b>本页已停用</b>（2026-09-20 裁定）：差异登记<b>不独立成页</b> —— '
    + '差异登记在<b>库存单据的调整单</b>里；去「过程资料 → 差异表」可看差异并<b>跳回</b>被调整的行',7200),
  dfFilter:t=>{ fDf.stat=t.value; render(); },
  dfReset:()=>{ fDf.ym='全部'; fDf.stat='全部'; mp.open=null; render();
@@ -2068,14 +2068,14 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
    **列** = 全列（后端给，含贸易公司 3 列 —— 用户选的口径 (B)）。
    ⚠️ 空行集 ⇒ **明确拦**：⛔ 不导一本空表让人以为坏了，也⛔ 不悄悄改成"导全量"。 */
 jcExport:async()=>{ const rows=jcVisible();
-  if(!rows.length) return toast('当前筛选下**一行都没有** —— 没什么可导的（先点「重置」看全部）');
+  if(!rows.length) return toast('当前筛选下<b>一行都没有</b> —— 没什么可导的（先点「重置」看全部）');
   let d=null;
   try{ d=await API.m11Export({ids:rows.map(j=>Number(j.id))}); }
   catch(e){ return toast(`<b>导出失败</b>：${esc(String((e&&e.message)||e))}`,7000); }
   if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
   jcDownload(d.filename, d.content_b64);
   toast(`已导出 <b>${rows.length}</b> 行 ⇒ <b>${esc(d.filename)}</b>`
-    + '<br><span class="mut sm">列是**全列**（含贸易公司 3 列）—— 屏幕上的隐藏只影响屏幕</span>'); },
+    + '<br><span class="mut sm">列是<b>全列</b>（含贸易公司 3 列）—— 屏幕上的隐藏只影响屏幕</span>'); },
 
 /* ⭐ `M5-9` 隐藏 / 显示「贸易公司」三列（**纯屏幕**）。
    ⚠️⚠️ **切换时必须清该表的排序状态**：若用户先按「贸易公司合同金额」（第 9 列）排了序、再隐藏，
@@ -2087,7 +2087,7 @@ jcToggleTrade:()=>{ jcHideTrade=!jcHideTrade;
   jcApplyPin();                        /* ⚠️ **同理**，而且这里更要紧：隐藏 / 显示那三列会**改剩下的列宽**
                                           ⇒ 上面量出来的行身份区偏移**当场就过期了**（不重量 = 露缝 / 叠字） */
   toast(jcHideTrade
-    ? '已隐藏「贸易公司」三列（剩下的列会**自动变宽**）<br><span class="mut sm">只是屏幕上的事 —— 导出永远是全列</span>'
+    ? '已隐藏「贸易公司」三列（剩下的列会<b>自动变宽</b>）<br><span class="mut sm">只是屏幕上的事 —— 导出永远是全列</span>'
     : '已显示「贸易公司」三列'); },
 
 /* ⭐ `M5-6b`：「合同金额」筛选（为空 = **待补供应商价**）。
@@ -2116,7 +2116,7 @@ jcPartyDlg:async()=>{ let d=null;
       <td><select class="inp" data-act="jcPartySet" data-name="${esc(it.name)}"${it.kind==='unknown'?' style="border-color:var(--wn)"':''}>${opt(it.kind)}</select></td>
       <td class="num">${it.count||0}</td></tr>`),
     empty:EMPTYROW(3, '还没有甲方记录', '抓取一次后，i8 里的甲方单位会自动出现在这里')})}</div>
-    <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>⚠️ 改类型**不会**回头重算已有合同的金额</b> —— 与「改规则不重算历史」同款口径。
+    <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>⚠️ 改类型不会回头重算已有合同的金额</b> —— 与「改规则不重算历史」同款口径。
       已经落错列的行，改完分类后请<b>重抓一次</b>（贸易公司的价会被重新落位）或<b>手工改</b>。</div>`;
   modal({title:'甲方单位分类（决定合同价是谁的价）', wide:true, body,
     footer:`<button class="btn pri" data-act="closeModal">关闭</button>`}); },
@@ -2126,17 +2126,17 @@ jcPartySet:async t=>{ const nm=String(t.dataset.name||''), k=String(t.value||'')
   try{ d=await API.m11SetPartyKind({name:nm, kind:k}); }
   catch(e){ return toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
   if(!d||d.ok===false) return toast(`<b>没能保存</b>：${esc((d&&d.message)||'后端未返回原因')}`,7000);
-  toast(esc(d.message||'已保存')+`<br><span class="mut sm">⚠️ 已有的合同**不会**重算金额落位 ⇒ 需要时请重抓一次或手改</span>`);
+  toast(esc(d.message||'已保存')+`<br><span class="mut sm">⚠️ 已有的合同<b>不会</b>重算金额落位 ⇒ 需要时请重抓一次或手改</span>`);
   /* ⚠️ 重开弹窗（刷新那行）—— `jcPartyDlg` 是 async ⇒ 不复用 `modal.reopen`（那只接同步表达式）。 */
   await ACT.jcPartyDlg(); },
 /* ⭐ `M5-7`：抓取接通（`POST /api/m11/fetch`）。⚠️ 抓取**会顶号**（`D9`）⇒ **先二次确认**、说清后果。
    ⭐ `M5-6`：加「开始日期」（**增量**）—— 实测全量 40 秒、增量 1~5 秒（差 40~80 倍）。 */
 jcFetch:()=>{ const def = jcFetchSinceOn || jcFetchSinceDefault(); modal({title:'抓取采购合同信息· 二次确认',
-  body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能顶掉该账号其它在线会话</b>（决策 D9）。若同事正在用 i8，请先择时。</div>
+  body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能顶掉该账号其它在线会话</b>。若同事正在用 i8，请先择时。</div>
     <div class="fld"><label>开始日期 —— 只抓<b>这之后</b>的单据（<b>增量</b>）</label>
       <input class="inp" id="jcFetchSince" type="date" value="${esc(def)}">
       <div class="sm mut" style="margin-top:calc(6px * var(--fscale))">默认 = 台账里<b>最新合同日期 − 3 天</b>（多留几天：i8 的<b>增补合同会沿用原单据日期</b>，卡太紧会漏；重复的会被幂等挡掉）。<br><b>清空</b> = 全量（<b>约 40 秒</b>，首次建档才需要）；带日期 = 增量（<b>1~5 秒</b>）。</div></div>
-    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 落库（新抓的默认<b>「纳入台账」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但**落库前会给你一眼看见**。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
+    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 落库（新抓的默认<b>「纳入台账」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但<b>落库前会给你一眼看见</b>。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
   footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcFetchOk">确认抓取（会顶号）</button>`}); },
 jcFetchOk:async()=>{ const el=$('#jcFetchSince');
   /* ⚠️ 读不到 / 格式不对 ⇒ 传**空串**（= 交给后端按默认增量走），⛔ 不传一个"看着像日期"的脏值：
@@ -2178,7 +2178,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
     录入一律走「子表」，因此不再有主表直改动作（口径 2026-09-12 定案，取代原 jcPay） */
  jcMethod:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcAct(()=>API.m11Fields({id:j.id, fields:{method:t.value}}),
-    '付款方式为<b>自由文本、不限值</b>，不做枚举约束（DEV-J-03）'); },
+    '付款方式为<b>自由文本、不限值</b>，不做枚举约束'); },
  /* 合同收发登记（§6.7）**改为可手改**（2026-09-13 用户口径）：存档号 / 寄回日期 / 备注三列。
     ⚠️ 按 §9.3 的留痕清单（只给 统计两金额 / 调整单 / 项目全名与状态）⇒ 这三列**不留痕**（照既有口径、不新增）。
     ⚠️ 寄回日期用 `type="date"`（要的是**完整日期**；R6 只管"选年月"那种滚轮控件）。 */
@@ -2283,7 +2283,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       会让同一笔被两个合同各引一次、**付款重复计入** ⇒ 2026-09-13 收敛到全库。 */
    const used=jcUsedNids();
    const cam=NO.filter(n=>ntLive(n)&&n.cat==='集采'&&!used.has(n.id));
-   modal({title:'从付款域引用付款记录（R8）',body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">集采台账的付款信息可从付款域<b>一键关联引用</b>。因为供应商名不可靠，<b>不做自动匹配</b>（DEV-J-01），由你按「<b>集采实际供应商</b>」人工判断（§6.6.2）；<b>同一笔通知书只能引用一次</b>。</div>
+   modal({title:'从付款域引用付款记录',body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">集采台账的付款信息可从付款域<b>一键关联引用</b> —— 由你按「<b>集采实际供应商</b>」人工判断（§6.6.2）；<b>同一笔通知书只能引用一次</b>。</div>
      <div class="fld"><label>选择付款域中分类为「集采」的通知书</label><select class="inp" id="refId">${cam.length?cam.map(n=>`<option value="${n.id}">${esc(n.code)} · ${esc(n.sup||'未录入供应商')} · ${M(n.sp)}</option>`).join(''):'<option value="">（无可引用：已被引用过，或本月无集采单据）</option>'}</select></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcPayRefOk" data-id="${j.id}">引用</button>`}); },
  /* ⭐ `M5-7`：⛔ 原先这里是**本地 push 进付款数组**冒充落库（刷新就没了）⇒ 改为如实说明。

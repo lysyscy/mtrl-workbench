@@ -557,7 +557,7 @@ V.m03=()=>{
       <td class="sm">${esc(n.entry)}</td>
       <td class="num">${n.manual
         ? `<input class="inp num" style="width:96px" data-act="editApprove" data-id="${n.id}" value="${n.approve.toFixed(2)}" title="手动新增行：审批金额可直接手改（i8 抓取行仍只读）；全站口径「统计两金额 ≤ 审批金额」仍成立">`
-        : `<span class="mut">${M(n.approve)}</span>`}${impHasWarn(n)?` <span class="tag t-wn" title="再次导入时：i8 把审批金额改小了，这行有已被人工手改过的统计金额、现已越界 —— 系统保留了人工值（不自动改写业务判断），请你定夺">导入提醒</span>`:''}${ntVoidJoint(n)?` <span class="tag t-dg" title="该单据已在 i8 侧被删除（撤单），且**仍挂着付款流水 / 集采关联** —— 按 §4.2.7，有牵涉时**不许静默退出统计**：请先撤销付款 / 解绑关联，处理完它才退出统计。">⚠ 撤单有牵涉</span>`:''}${ntVoid(n)&&!ntVoidJoint(n)?` <span class="tag t-wn" title="该单据已在 i8 侧被删除（撤单）—— 标记保留、可查，但**已退出全部统计**；单据号必变 ⇒ 此为终态，不做自动复原（§4.2.7）。">i8 已撤单</span>`:''}</td>
+        : `<span class="mut">${M(n.approve)}</span>`}${impHasWarn(n)?` <span class="tag t-wn" title="再次导入时：i8 把审批金额改小了，这行有已被人工手改过的统计金额、现已越界 —— 系统保留了人工值（不自动改写业务判断），请你定夺">导入提醒</span>`:''}${ntVoidJoint(n)?` <span class="tag t-dg" title="该单据已在 i8 侧被删除（撤单），且仍挂着付款流水 / 集采关联 —— 按 §4.2.7，有牵涉时不许静默退出统计：请先撤销付款 / 解绑关联，处理完它才退出统计。">⚠ 撤单有牵涉</span>`:''}${ntVoid(n)&&!ntVoidJoint(n)?` <span class="tag t-wn" title="该单据已在 i8 侧被删除（撤单）—— 标记保留、可查，但已退出全部统计；单据号必变 ⇒ 此为终态，不做自动复原（§4.2.7）。">i8 已撤单</span>`:''}</td>
       <td class="num"><input class="inp num ${payOver(n)?'ed':''}" style="width:96px" data-act="editss" data-id="${n.id}" data-k="pay" value="${payEff(n).toFixed(2)}" title="${payOver(n)?'本次会话已临时覆盖（刷新页面后恢复默认）；i8 原值 '+M(n.pay)+' 未改动':'自动 = 审批金额 '+M(n.approve)+' − 已付金额 '+M(p)+'（可手改，仅本次会话生效）'}" ${n.excl||ntVoid(n)?'disabled':''}></td>
       <td class="num">${p?M(p):'<span class="mut">0.00</span>'}${n.over?` <span class="tag t-dg" title="超付（§4.4.6）：已付金额 ${M(p)} 大于审批金额 ${M(n.approve)} —— NC 侧确实付了，是既成事实 ⇒ 流水照记、统计照实不封顶；系统不改写、不冲销，只在此提醒。⚠️ 与「付款动作禁止超付」（§4.4.4）不冲突：那条约束的是动作。">超付</span>`:""}</td>
       <td class="num">${n.manual
@@ -756,7 +756,7 @@ V.m05=()=>{
     return `<div>
       <div style="display:flex;align-items:baseline;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-bottom:calc(6px * var(--fscale))">
         <b>${sc}欠款台账</b>
-        <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 自期初起累计（各月 结算 − 付款，含期初占位行）—— 与上方那三栏不是同一个数（那三栏**按项目分列**，这里只算选中的那一个）">本项目当前欠款（含期初）</span><b class="fc">${MONEY(cur)}</b>
+        <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 自期初起累计（各月 结算 − 付款，含期初占位行）—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含期初）</span><b class="fc">${MONEY(cur)}</b>
         ${mLast?`<span class="mut sm" title="最近一月（${esc(mLast.ym)}）：其他支出金额 − 付款 —— 当月新增，不是累计">· ${esc(mLast.ym)} 新增</span><b class="fc" style="color:var(--${N2(add)>0?'dg':'mut'})">${MONEY(add)}</b>`:''}
         <span style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale));flex-wrap:wrap">
           <button class="btn sm" data-act="addLg" data-sc="${sc}" title="在本栏表格上方展开「期初占位行」录入区（不再弹窗）—— 期初占位行 = 台账第 1 行（按其「分类」取）；它的金额已按分类并入上方「${sc}」欠款">＋ 录入${sc}期初</button>
@@ -1574,7 +1574,7 @@ V.m15=()=>{
       <td class="now sm mut">${u.last?esc(u.last):'<span class="mut">从未登录</span>'}</td>
       <td class="ctr now">${u.status==='已删除'
         ? `<button class="btn sm" data-act="userRestore" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="恢复该账号；只有管理员能管理账号（不是管理员时置灰）">恢复</button>`
-        : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${(iAmAdmin||u.id===CUR.id)?'':'disabled'} title="${u.id===CUR.id?'改我自己的密码（⛔ 不用找管理员）':'改**别人**的密码要管理员（你自己的密码在**你自己那一行**点「改密」）'}">改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
+        : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${(iAmAdmin||u.id===CUR.id)?'':'disabled'} title="${u.id===CUR.id?'改我自己的密码（⛔ 不用找管理员）':'改别人的密码要管理员（你自己的密码在你自己那一行点「改密」）'}">改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
            <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
            ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
     </tr>`)]})}</div>

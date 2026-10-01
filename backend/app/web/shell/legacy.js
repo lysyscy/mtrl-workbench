@@ -231,8 +231,7 @@ async function i8SetOpen() {
       : '未设置过，且 <code>.env</code> 也是空的');
   modal({
     title: 'i8 连接设置',
-    body: `<div class="tip" style="margin:0 0 calc(10px * var(--fscale))">i8 装在哪台机器上 —— <b>保存后即时生效</b>
-        （后端清缓存，无需重启服务）。⚠️ <b>i8 的账号密码不在这里</b>（那是每人一份，在「用户管理」页）。</div>
+    body: `<div class="tip" style="margin:0 0 calc(10px * var(--fscale))">i8 装在哪台机器上 —— <b>保存后即时生效、无需重启服务</b>。⚠️ <b>i8 的账号密码不在这里</b>（那是每人一份，在「用户管理」页）。</div>
       <div class="fld"><label>${esc(it.label)} ${src}</label>
         <input class="inp" id="m02I8Url" style="width:100%" value="${esc(it.stored)}"
           placeholder="${esc(it.env)}" autocomplete="off">
@@ -648,16 +647,16 @@ V.imp = () => {
     const pnote = `本步读到 <b class="fc">${ptotal}</b> 行`
       + (pw == null ? '' : ` · 能写入 <b class="fc">${pw}</b> 行`)
       + ` · 表格显示`
-      + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 落库按**全量**处理）`
+      + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 落库按<b>全量</b>处理）`
                                : `全部 <b class="fc">${plist.length}</b> 行`);
     /* ⭐ 表上方图例：只有真有行被标出来时才画（没有就别让人去找一个不存在的东西）。
        ⭐ 2026-09-27：**两类标记要说清区别**（守则 §2.8）—— 否则"灰底"会被当成"淡一点的警告"。 */
     const plegend = (nskip || nplain)
-      ? `<div class="mut sm" style="margin-top:calc(6px * var(--fscale))">⚠️ 表里有两类标记，**看颜色一眼分开**（鼠标放到那一行上看原因）：`
-        + `<br>· <span class="tag t-wn">不写入</span>（浅底 ＋ 左侧竖条）= **不会写进系统，要你处理**`
+      ? `<div class="mut sm" style="margin-top:calc(6px * var(--fscale))">⚠️ 表里有两类标记，<b>看颜色一眼分开</b>（鼠标放到那一行上看原因）：`
+        + `<br>· <span class="tag t-wn">不写入</span>（浅底 ＋ 左侧竖条）= <b>不会写进系统，要你处理</b>`
         + `（把文件改成标准格式后重导）；`
-        + `<br>· <span class="tag t-mut">不导入</span>（灰底、没有竖条）= **本来就跳过**`
-        + `（合计/小计 · 说明 · 空行 —— **不用你改**）。</div>`
+        + `<br>· <span class="tag t-mut">不导入</span>（灰底、没有竖条）= <b>本来就跳过</b>`
+        + `（合计/小计 · 说明 · 空行 —— <b>不用你改</b>）。</div>`
       : '';
     /* ⭐ 2026-09-26（用户报障后加）：**有行写不进去时必须当面说**，⛔ 不许让 ④ 点下去才知道。
        ⚠️ 数由**域**给（`writable` 与 `total` 是通用面的键）—— 壳里仍**不认域号**；
@@ -666,25 +665,25 @@ V.imp = () => {
     const nbad = nskip || (pw != null ? Math.max(0, ptotal - pw) : 0);
     const said = [];
     if (nbad > 0) {
-      said.push(`有 <b>${nbad}</b> 行**不会写入**`
-                + (nskip ? ' —— 已在上表**逐行标出**（浅底 ＋ 左侧竖条 ＋ 行号旁的「不写入」，'
+      said.push(`有 <b>${nbad}</b> 行<b>不会写入</b>`
+                + (nskip ? ' —— 已在上表<b>逐行标出</b>（浅底 ＋ 左侧竖条 ＋ 行号旁的「不写入」，'
                            + '鼠标放上去看原因）'
                          : '（原因见下面「落不了库的行」）'));
     }
     if (nplain > 0) {
-      said.push(`另有 <b>${nplain}</b> 行**本来就跳过**（合计/小计 · 说明 · 空行 ⇒ 不是数据行，`
-                + `已标成灰底，**不用你改**）`);
+      said.push(`另有 <b>${nplain}</b> 行<b>本来就跳过</b>（合计/小计 · 说明 · 空行 ⇒ 不是数据行，`
+                + `已标成灰底，<b>不用你改</b>）`);
     }
     const pwarn = said.length
       ? `<div class="tip wn" style="margin-top:calc(8px * var(--fscale))">⚠️ ${said.join('；')}。`
         + (nbad > 0
-           ? '④ 只写能写入的那些；要它们也进去：先把文件改成标准格式，再**整批回滚后重导**'
+           ? '④ 只写能写入的那些；要它们也进去：先把文件改成标准格式，再<b>整批回滚后重导</b>'
              + '（⛔ 别让两批叠着）。'
-           : '④ 照常落库即可 —— 这一批**不需要你改文件**。')
+           : '④ 照常落库即可 —— 这一批<b>不需要你改文件</b>。')
         + '</div>'
       : '';
     prevCard = `<div class="card" style="margin-top:calc(12px * var(--fscale))"><h4>预览校验<span class="sp"><span class="mut sm">
-      这一步**一个字节都不写库**</span></span></h4><div class="kpis">
+      这一步<b>一个字节都不写库</b></span></span></h4><div class="kpis">
       <div class="kpi"><div class="k">将写入</div><div class="v">${p.writable == null ? p.total : p.writable}</div>
         <div class="s">行</div></div>
       <div class="kpi"><div class="k">待处理</div><div class="v">${p.problem_count || probs.length}</div>
@@ -695,12 +694,12 @@ V.imp = () => {
       ${probs.length ? `<div class="tw" style="max-height:200px">${TBL({cls:'sm',head:'<th>行</th><th>列</th><th>原值</th><th>原因</th>',
         rows:probs.slice(0, 30).map(x => `<tr><td class="now">${esc(x.row)}</td><td class="now">${esc(x.column)}</td>
           <td class="now">${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`)})}</div>
-        <div class="tip wn" style="margin-top:calc(8px * var(--fscale))">这些问题**不影响其余行落库**；认不出的值一律原样留着给人看，⛔ 不静默改成 0/空。</div>`
+        <div class="tip wn" style="margin-top:calc(8px * var(--fscale))">这些问题<b>不影响其余行落库</b>；认不出的值一律原样留着给人看，⛔ 不静默改成 0/空。</div>`
       : '<div class="tip ok">没有发现问题行</div>'}
       ${scopeEcho}
       ${lgBlocks(p.blocks)}
       <div class="mut sm" style="margin-top:calc(10px * var(--fscale))">${pnote}
-        · 「行」= <b>Excel 里的行号</b>（与"第 N 行…"那类报错**同一个数**，用来对号）</div>
+        · 「行」= <b>Excel 里的行号</b>（与"第 N 行…"那类报错<b>同一个数</b>，用来对号）</div>
       ${plegend}
       <div class="tw" style="max-height:280px;margin-top:calc(6px * var(--fscale))">${TBL({cls:'sm',head:pcols,
         rows:[prows || lgEmpty(1, '没有数据行')]})}</div>

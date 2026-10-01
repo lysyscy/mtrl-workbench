@@ -76,6 +76,30 @@ def parts_text() -> list[tuple[str, str]]:
     return out
 
 
+#: 剥注释用的三条正则（⚠️ 为什么这么写见 `strip_comments` 的 docstring）
+_BLOCK_C = re.compile(r"/\*.*?\*/", re.S)
+_LINE_C = re.compile(r"(?<![:\"'\\])//[^\n]*")
+_HTML_C = re.compile(r"<!--.*?-->", re.S)
+
+
+def strip_comments(text: str, *, html: bool = False) -> str:
+    """剥掉 JS 块注释 / 行注释（`html=True` 时连 HTML 注释一起剥）—— ⭐ **保留换行**，行号不错位。
+
+    ⚠️ **为什么要有它**：离线"扫壳源码"的判据（`**` 上屏 / 内部编号 / 开发话术）**必须先剥注释** ——
+       本项目注释里**大量 Markdown 加粗**（`**…**`）与编号，不剥就会把它们当成"上屏文字" ⇒ **假红**。
+    ⚠️ **三条坑**（都是"扫源码"这类检查踩过的，⛔ 别改回去）：
+       ① 剥块注释若替换成 `""` ⇒ **换行跟着没了** ⇒ 报出来的行号**整体前移**
+          （2026-10-01 量测 `**` 时实测：报的行号全错，得重跑）⇒ 本函数**替换成等量换行**；
+       ② 行注释不能只匹配 `//` —— `https://` 那类会被腰斩 ⇒ 用**负向断言**（前面不是 `:` `"` `'` `\\`）；
+       ③ `index.html` 里还有 **HTML 注释**（`<!-- … -->`）⇒ `html=True` 时一并剥。
+    ⚠️ 本函数**只剥注释**，不判"这段字符串会不会上屏"（那是调用方的事）。
+    """
+    text = _BLOCK_C.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    if html:
+        text = _HTML_C.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+    return _LINE_C.sub("", text)
+
+
 def resolve(anchor: str) -> Path:
     """锚点文本**当前在哪一件**里 ⇒ 返回那一件的路径（⚠️ `P4`② 拆件后，锚点可能落在 `web/shell/*.js`）。
 

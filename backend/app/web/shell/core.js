@@ -500,7 +500,7 @@ async function openOwnDialog() {
     title: `待指定归属 · ${items.length} 条`,
     wide: true,
     body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">${OWN_SRC === 'jc'
-      ? `<b>链路 C</b>：集采合同的<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并落库（集采是**逐条落库**，已落的不受影响）。`
+      ? `<b>链路 C</b>：集采合同的<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并落库（集采是<b>逐条落库</b>，已落的不受影响）。`
       : `<b>链路 C</b>：付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>（铁律 5/6）。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并落库。`}</div>${box}`,
     footer: `<button class="btn" data-act="closeModal">关闭</button>`,
   });
@@ -523,7 +523,7 @@ async function ownWhCheck(i) {
   /* ⚠️ `D9`：查名单**要登录 i8**（可能**强踢**在线用户）⇒ 先二次确认，确认之后才发请求。 */
   modal({
     title: `查 i8 仓库名单 · ${esc(name)}`,
-    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能<b>强制踢掉</b>该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）—— 若同事正在用 i8，请先<b>择时</b>。</div>
+    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能<b>强制踢掉</b>该账号其它在线会话</b>（不会自动重试登录）—— 若同事正在用 i8，请先<b>择时</b>。</div>
       <div class="tip" style="margin:0">查 i8 仓库名单里<b>有没有</b>「${esc(name)}」、以及它<b>挂在哪个项目全名</b>下 —— 用来判断该走「选已有小微」还是「只能手填」。⚠️ <b>只查不落库</b>。</div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="ownWhOk" data-i="${i}">确认查询（会顶号）</button>`,
@@ -684,7 +684,7 @@ async function ivFetchBackend(month) {
       + `本次插入 <b>${st.inserted || 0}</b> · 更新 <b>${st.updated || 0}</b>`
       + ` · i8 侧已删 <b>${st.deleted || 0}</b>`
       + `${st.kept_with_adjustment ? ` · <b>保留调整单 ${st.kept_with_adjustment}</b>` : ''}`
-      + `<br><span class="mut sm">调整单独立存储、不被导入覆盖（ENT-04）</span>`);
+      + `<br><span class="mut sm">调整单独立存储、不被导入覆盖</span>`);
   } catch (e) {
     await reloadInv();
     await reloadM02IfOn();                   /* ⚠️ 抛了也可能已落一条失败记录 ⇒ 一并刷（不刷只会显示旧的） */
@@ -1230,7 +1230,7 @@ BIND.m11 = function () {
   hidBtn.dataset.act = 'jcToggleTrade';
   hidBtn.id = 'jcTradeBtn';
   hidBtn.title = '隐藏 / 显示「贸易公司名 · 贸易公司合同金额 · 贸易公司发票金额」三列'
-    + '（只影响屏幕；⭐ **导出永远是全列**）';
+    + '（只影响屏幕；⭐ 导出永远是全列）';
   anchor.insertAdjacentElement('afterend', hidBtn);   /* ⚠️ 锚点已从「导入按钮」改成 `jcFetch`（那个按钮已删） */
   jcApplyHide();                       /* ⚠️ 表是刚重建的 ⇒ 把"隐藏"偏好重新落上去（见 `jcApplyHide`） */
   /* ⭐⭐ `TAIL-180`（`B` 案 · 2026-09-29 用户裁定）：行身份区（勾选框 ＋ 序号 ＋ 合同日期 ＋ 材料名）钉住
@@ -1250,14 +1250,14 @@ BIND.m11 = function () {
   const expOld = [...host.querySelectorAll('[data-act="exp"]')].pop();
   if (expOld) {
     expOld.dataset.act = 'jcExport';
-    expOld.title = '导出**当前屏幕上这些行**（含筛选）为 Excel —— ⭐ 列是**全列**（隐藏列也会导出）';
+    expOld.title = '导出当前屏幕上这些行（含筛选）为 Excel —— ⭐ 列是全列（隐藏列也会导出）';
     expOld.textContent = '⬇ 导出 Excel';
   } else {
     // ⚠️ 兜底：万一页面结构变了、找不到那个按钮 ⇒ **补一个**（⛔ 不能"导出功能凭空消失"而不报错）
     const b = document.createElement('button');
     b.className = 'btn pri';
     b.dataset.act = 'jcExport';
-    b.title = '导出**当前屏幕上这些行**（含筛选）为 Excel —— ⭐ 列是**全列**（隐藏列也会导出）';
+    b.title = '导出当前屏幕上这些行（含筛选）为 Excel —— ⭐ 列是全列（隐藏列也会导出）';
     b.textContent = '⬇ 导出 Excel';
     hidBtn.insertAdjacentElement('afterend', b);
   }
@@ -1443,9 +1443,9 @@ async function openPendDialog(i) {
   PEND_DLG = it;
   modal({
     title: `人工指认 · ${it.wh}`,
-    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))"><b>链路 B · 材料侧扶正</b>：材料报表里出现了
-      <b>陌生仓库</b>，而它的全名在档案里命中 <b>${rows.length}</b> 条非壳行 ⇒ <b>系统不猜</b>（决策 1 兜底），
-      请你指明这条仓库名该写到<b>哪一行</b>。⚠️ 这是**系统写入**（不是人工改仓库名，§2.3.1）；
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">材料报表里出现了
+      <b>陌生仓库</b>，而它的全名在档案里命中 <b>${rows.length}</b> 条非壳行 ⇒ <b>系统不猜</b>，
+      请你指明这条仓库名该写到<b>哪一行</b>。⚠️ 这是<b>系统写入</b>（不是人工改仓库名，§2.3.1）；
       <b>类型纠正</b>不在这里做（另立）。</div>
       ${kvBlock([['陌生仓库名', `<span class="fc">${esc(it.wh)}</span>`],
                  ['项目全名', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.full)}</span>`],
@@ -1453,7 +1453,7 @@ async function openPendDialog(i) {
       <div class="fld"><label>写到哪一行（候选 = 该全名下的档案行，含归档行）</label>
         <select class="inp" id="pmRow">${opts}</select></div>
       ${usable.length ? '' : `<div class="tip dg" style="margin:0">⚠️ 这几行<b>都不是占位行</b>（都已有真实仓库名）
-        ⇒ 按决策 2（普通项目 ↔ 仓库 = 1 : 1）**不能靠扶正解决** —— 需要人工核对档案，属另一件事。</div>`}`,
+        ⇒ （普通项目 ↔ 仓库 = 1 : 1）<b>不能靠扶正解决</b> —— 需要人工核对档案，属另一件事。</div>`}`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="pjPromoteOk"${usable.length ? '' : ' disabled'} title="${usable.length?'把该小微写到选定的那一行':'候选里没有可写的占位行 —— 弹窗里已写明'}">按这一行扶正</button>`,
   });
@@ -1473,8 +1473,8 @@ async function openArchDialog(i) {
   ARCP_DLG = it;
   modal({
     title: `选定仓库 · ${esc(it.full)}`,
-    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))"><b>链路 A · 多仓库建档</b>：i8 名单里这个全名挂了
-      <b>${it.stored.length}</b> 个仓库，而<b>一条普通项目只挂一个仓库</b>（决策 2）⇒ <b>系统不猜</b>，
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">i8 名单里这个全名挂了
+      <b>${it.stored.length}</b> 个仓库，而<b>一条普通项目只挂一个仓库</b> ⇒ <b>系统不猜</b>，
       请你选定<b>一个</b>，系统按它建行（⛔ 仓库名不许手填，§9.4）。</div>
       ${kvBlock([['项目全名', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.full)}</span>`],
                  ['i8 名单里的仓库', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.stored.join('、'))}</span>`],
@@ -1662,11 +1662,11 @@ async function reloadHome() {
 async function m02Sync(which) {
   const isWh = which === 'warehouses';
   const name = isWh ? '仓库名单' : '常用项目列表';
-  const tail = isWh ? '仓库名单本身**不落库**（它是建档的输入）；建档请用「常用项目列表」那一行'
-                    : '会按 phid **幂等建档**，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
+  const tail = isWh ? '仓库名单本身<b>不落库</b>（它是建档的输入）；建档请用「常用项目列表」那一行'
+                    : '会按 phid <b>幂等建档</b>，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
   modal({
     title: `同步 ${name}`,
-    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，并强制踢掉该账号其它在线会话</b>（决策 <span class="fc">D9</span>，不会自动重试登录）——
+    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，并强制踢掉该账号其它在线会话</b> ——
       若其他同事正在用 i8，请先<b>择时</b>；系统<b>不会</b>自动重试登录。</div>
       <div class="tip" style="margin:0">${tail}</div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
@@ -1812,10 +1812,10 @@ function jcFetchPreview(d) {
      ⚠️ 口径（2026-09-25 · 用户「集采抓取与付款通知书同一套」）：未落库的**唯一**原因 = **归属没走完**
         （不再是"i8 常用列表里没有" —— 那是老口径的措辞），而落库前提 = 能归到一个**具体小微**。 */
   const KIND_TXT = {
-    needs_keyword: '该项目名是「小微壳」，但**单据名里认不出**是壳下哪个小微 ⇒ 出路：到「档案」页在该壳下**新建一个小微**'
-      + '（或给已有小微**补上**单据名里出现的关键词），补完**再抓一次**',
-    needs_choice: '该项目名是「小微壳」，单据名**同时命中壳下多个小微** ⇒ 出路：把关键词**补得更具体**，让它只命中一个，补完**再抓一次**',
-    not_archived: '该项目**还没建档** ⇒ 出路：先在「档案」页建档（或同步 i8 常用项目），建成后**再抓一次**',
+    needs_keyword: '该项目名是「小微壳」，但单据名里认不出是壳下哪个小微 ⇒ 出路：到「档案」页在该壳下新建一个小微'
+      + '（或给已有小微补上单据名里出现的关键词），补完再抓一次',
+    needs_choice: '该项目名是「小微壳」，单据名同时命中壳下多个小微 ⇒ 出路：把关键词补得更具体，让它只命中一个，补完再抓一次',
+    not_archived: '该项目还没建档 ⇒ 出路：先在「档案」页建档（或同步 i8 常用项目），建成后再抓一次',
   };
   const unsettled = (d.unsettled || []).filter(x => (x.count || 0) > 0);
   const unsettledHtml = unsettled.length
@@ -1827,7 +1827,7 @@ function jcFetchPreview(d) {
    <div style="font-size:calc(12.5px * var(--fscale))">
      <div><b>匹配上</b>（已落库 · 默认「纳入台账」）· ${d.matched} 条</div>
      ${list(d.matched_projects || [])}
-     <div style="margin-top:calc(10px * var(--fscale))"><b>未落库</b>（**归属未走完** ⇒ 按口径**不纳管**）· ${d.unmatched} 条</div>
+     <div style="margin-top:calc(10px * var(--fscale))"><b>未落库</b>（<b>归属未走完</b> ⇒ 按口径<b>不纳管</b>）· ${d.unmatched} 条</div>
      ${unsettledHtml}
      ${unsettled.length ? `<div style="margin-top:calc(8px * var(--fscale))"><button class="btn pri" data-act="ownJcOpen">`
         + `去指定归属（${unsettled.reduce((n, x) => n + (x.count || 0), 0)} 条）</button>`
