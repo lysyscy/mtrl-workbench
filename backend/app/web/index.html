@@ -662,7 +662,7 @@ V.m04=()=>{
   </div>
   <div class="card" style="margin-bottom:calc(12px * var(--fscale))"><h4>导入付款计划 Excel<span class="sp"><span class="mut sm">来源：项目端微信报送 · 需用户先手工添加「项目」列（填<b>展示名或仓库名</b>，系统据此匹配项目）</span></span></h4><div class="bd">
     <div class="steps"><div class="st dn">① 项目端微信报计划</div><div class="st dn">② 用户加「项目」列</div><div class="st on">③ 选月份 + 导入</div><div class="st">④ 逐笔比对审查</div><div class="st">⑤ 一键勾选付款</div></div>
-    <div class="tip" style="margin:0"><b>无效列处置口径：</b><span class="fc">科目 / 费用日期 / 收款单位 / 已付款金额 / 剩余付款金额</span> 原样入库、<b>不参与审查、不要求修正</b>（项目会瞎填，不值得修正）。单据号<b>允许为空</b>。<br>⚠️ 表格里的「<b>已付款金额 / 剩余付款金额</b>」<b>不是</b>导入表那两列 —— 它们按单据号命中 i8 通知书后由系统派生（见上方口径说明第 5 条）。</div>
+    <div class="tip" style="margin:0"><b>无效列</b>（<span class="fc">科目 / 费用日期 / 收款单位 / 已付款金额 / 剩余付款金额</span>）原样入库、<b>不参与审查</b>；表格里那两列金额是<b>系统按单据号派生的</b>，与导入表同名不同源。</div>
     <div style="margin-top:calc(10px * var(--fscale))"><button class="btn pri" data-act="plImport">导入付款计划 Excel（先选月份）</button> <button class="btn" data-act="plRowAdd" title="不依赖 Excel 的补录入口（§4.3.3.1）：在表尾生成一行草稿 —— 它与导入行同住一表、同样要被审查，且导入不会清理它（§9.5）">＋ 手动新增计划行</button></div>
   </div></div>
   <div class="card" style="margin-bottom:0">
@@ -826,7 +826,7 @@ V.m05=()=>{
     <button class="btn pri${ledExpOn?' on':''}" data-act="ledExpToggle" title="两个导出都在这条面板里：① 逐月台账 —— 每个项目一个工作簿（辅材欠款 / 机械欠款 / 特殊费用月报表）② 总欠款汇总 —— 每个项目一行（可挑项目与行序）">批量导出（先选项目）…</button>
     <span class="mut sm" style="flex-basis:100%;text-align:right">第 1 行 = 期初占位行 · 其后每月 1 行（空月也出行）</span>
   </span></h4>
-    <div class="bd"><div class="tip" style="margin:0"><b>看这两条就够</b>：<b>欠款 = 其他支出金额 − 付款</b> ⇒ 表里<b>每一行是当月新增</b>（<b>不是累计</b>）；要「现在一共还欠多少」看<b>每栏标题行</b>与<b>表尾「截至」行</b>（含期初，<b>只算卡头所选的那个项目</b> —— 与上方那三栏不是同一个数：那三栏<b>按项目分列</b>）；<b>第 1 行是期初占位行</b>；<b>备注点格即改</b>（离开即保存）。取数口径点页首「口径说明」。</div>
+    <div class="bd"><div class="tip" style="margin:0"><b>欠款 = 其他支出金额 − 付款</b>：每行是<b>当月新增</b>（不是累计）—— 要「一共还欠多少」看每栏<b>标题行</b>与表尾「<b>截至</b>」行（<b>只算所选项目</b>，与上方那三栏不是同一个数）。<b>备注点格即改</b>。</div>
       ${ledExpOn?ledExpStrip():''}
       <!-- ⭐ 2026-09-28（TAIL-144）：「看哪个项目」下移到两栏台账正上方 —— 原来挂在卡头右上角，而它管的是
            下面那两张表（用户截图报障：要在右上角选、离那么远）。守则 §2.7 控件贴在对象上 · §5.9。
@@ -843,7 +843,7 @@ V.m05=()=>{
     <span class="pill">取值 = Σ <b>统计付款金额</b> · 归${pd.g==='周'?'周':'月'}按<b>单据日期</b> · 项目按<b>归属</b></span>
     <span class="mut sm" title="本页不单独设导出按钮（2026-09-13 用户口径）：它是「付款流水」的汇总视图 —— 要看数就导出付款流水">汇总视图 · 不单独导出</span>
   </span></h4>
-    <div class="bd"><div class="tip" style="margin:0 0 calc(10px * var(--fscale))"><b>这一块是「付款」侧</b>：取值 = 统计付款金额，与上方欠款<b>同源互补</b>（<span class="fc">结算 = 付款 ＋ 欠款</span>）；归${pd.g==='周'?'周':'月'} / 归集一律按通知书的<b>单据日期</b>与<b>归属</b>，剔除行不计。<br><b>怎么用</b>：左栏看「按项目」（点条目 → 下方「付款流水」按该项目筛选，再点一次取消）；右栏看趋势（左上 / 右上可改选）。</div>
+    <div class="bd"><div class="tip" style="margin:0 0 calc(10px * var(--fscale))"><b>付款侧</b>：取值 = 统计付款金额（<span class="fc">结算 = 付款 ＋ 欠款</span>），按<b>单据日期 / 归属</b>归集，剔除行不计。点左栏条目 → 下方流水按该项目筛选。</div>
       ${pd.n?`<div class="grid2">
         <div>
           <div style="display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-bottom:calc(6px * var(--fscale))">
@@ -892,7 +892,7 @@ V.m05=()=>{
     sum:flList.length?sumRowOf(FL_THEAD, flOn, {4:[rs=>N2(rs.reduce((a,x)=>a+x.amt,0)),v=>'<b>'+M(v)+'</b>']},
         {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：</b>`,leadSpan:4,leadCls:'ctr',style:''}):'',
     empty:EMPTYROW(thCount(FL_THEAD), '该筛选条件下没有付款流水', '换个年月 / 项目 / 状态，或点「重置」')})}</div>
-    <div class="bd"><div class="tip" style="margin:0"><b>默认看「当前核算月」</b>（要看别的月份改左上「付款年月」），一个月内流水有限故<b>不分页</b>。<b>「付款项目」按归属归集</b>（壳全名下的流水拆到具体小微）。<br><b>别和上方台账那一列弄混</b>：本表 = <b>实际付款流水</b>（「已付金额」的来源）；台账的<b>「付款」列 = 统计付款金额</b>（油卡等会把它调小）—— 两者并存是<b>有意</b>的。<br><b>撤销入口就在这里</b>（必须填原因、留痕）：撤销后该通知书的「已付金额」回退、状态重判；<b>批量付款在「付款通知书」页</b>。</div></div>
+    <div class="bd"><div class="tip" style="margin:0">本表 = <b>实际付款流水</b>（「已付金额」的来源）；台账的「<b>付款</b>」列 = <b>统计付款金额</b>（油卡等会调小它）—— 两者并存是<b>有意</b>的。<b>撤销</b>在本页（须填原因，撤销后已付金额回退、状态重判）。</div></div>
   </div>`;
 };
 /* =====================================================================
@@ -1080,7 +1080,7 @@ V.m06=()=>{
       empty:EMPTYROW(thCount(DIFF_THEAD), '该项目无调整，原始表与调整后表一致', '无需处理')})}</div>`:
     `<div class="tw">${TBL({head,rows:body,sum:sumRow+totRow})}</div>`}
     <div class="bd">
-      <div class="tip" style="margin:0"><b>列结构说明：</b>外租分「<b>零租 / 包月</b>」两种计费方式，且<b>含税、不含税各记一列</b>。入/出库各 5 类 = 主辅材 · 工具 · 劳保 · 周转材料 · 临时设施。表内<b>一个核算月一行</b>；底部「合计」= 各数据列逐列求和，「总求和（本表）」= <b>入库 / 出库 / 机械左 4 列 / 不含税 2 列</b> 四段汇总（跟着<b>当前显示的那批</b>走）。<br><b>视觉分隔：</b>表内按上面那<b>四段</b>加了竖线 —— 入库 ｜ 出库 ｜ 机械左 4 列 ｜ 不含税 2 列；<b>表头 / 数据行 / 合计行 / 总求和行四处对齐</b>。</div>
+      <div class="tip" style="margin:0"><b>列结构：</b>外租分「<b>零租 / 包月</b>」两种计费、含税与不含税各一列；入 / 出库各 5 类 = 主辅材 · 工具 · 劳保 · 周转材料 · 临时设施（表内竖线按此分段）。底部「总求和」= <b>入库 / 出库 / 机械左 4 列 / 不含税 2 列</b> 四段汇总，跟着<b>当前显示的那批</b>走。</div>
     </div>
   </div>`;
 };
@@ -1184,13 +1184,13 @@ V.m07=()=>{
           9:S('leaseC'),10:S('lease'),11:S('totC'),12:SC(1),15:SC(2),16:SC(3),17:S('matC'),18:SC(4)}, {leadSpan:2, leadCls:'fl'}):''; })(),
     empty:EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY, '先去「项目档案」把项目置为「在建」，或点「选择项目」看看候选')})}</div>
     <div class="bd"><div class="grid2">
-      <div class="tip" style="margin:0"><b>这张表按「项目一行」铺开</b>：项目集合与顺序由上方「选择项目」定（多选、可调顺序，只影响本表）。<br><b>自动带出 4 组</b>（焊材 / 三气 ← 收发结存提取；外租机械 / 设备租赁 ← 过程资料机械）、<b>自动算 4 列</b>（合计 / 使用率 / 产值完成率 / 主材累计）、<b>手填 6 列</b>（开工时间 / 机械费测算 / 合同价 / 产值累计 / 工程用油 / 备注）。
+      <div class="tip" style="margin:0"><b>一行一个项目</b>（集合与顺序由上方「选择项目」定）。<b>自动带出 4 组</b>：焊材 / 三气 ← 收发结存提取，外租机械 / 设备租赁 ← 过程资料机械；<b>自动算 4 列</b>、<b>手填 6 列</b>（逐列口径见下条）。
       <details style="margin-top:calc(5px * var(--fscale))"><summary style="cursor:pointer" class="mut sm">逐列口径（点开查看）</summary>
         <div style="margin-top:calc(4px * var(--fscale))"><b>自动列</b> —— 焊材 / 三气：当月走提取的「金额」口径、累计走「总金额」口径；外租机械（<b>外租零租含税 ＋ 外租包月含税</b>）与设备租赁（含内租）（<b>内租设备</b>）取自<b>过程资料机械 6 列</b>，「开工累计」= 开工至今各月之和。<br><b>派生列</b> —— 合计 = 外租机械开工累计 ＋ 设备租赁开工累计 · 使用率 = 合计 ÷ 机械费测算 · 产值完成率 = 产值累计 ÷ 合同（预估）价 · <b>主材累计（含税）</b> = 该项目集采合同结算金额之和（<b>只计「纳入台账」的合同</b>）。</div>
       </details></div>
-      <div class="tip wn" style="margin:0"><b>⚠️ 大表中不得设「材料费」数据项</b>（业务上无此数据）；<b>「租分公司设备」与两个「不含税」列也不进本表</b>（其付款由会计直接划拨、不经材料科流程，§5.6.1.1）。<b>手填列不做补正</b>——错了就错了，下个月填对就行（§5.7.2）。出纸方式 = <b>按模板导出后在 Excel 打印</b>。</div>
+      <div class="tip wn" style="margin:0"><b>⚠️ 本表没有「材料费」这一项</b>（业务上无此数据）；<b>「租分公司设备」与两列「不含税」也不进本表</b>（其付款不经材料科流程）。<b>手填列不做补正</b> —— 填错了下个月填对即可。<b>出纸方式 = 按模板导出后在 Excel 打印</b>。</div>
     </div>
-    <div class="tip" style="margin:calc(10px * var(--fscale)) 0 0"><b>上次值带入：</b>本月未录入的手填格，自动向更早月份取<b>最近一次录入值</b>带入 —— 预填 + <b>黄底</b> + 左上角<b>「↺07月」</b>标出带入自哪个月，直接可用、也可就地改正；改动后即转为本月正常录入（白底）。<b>「最近一次」会跨月找</b>：若上月也没录，继续往前找；全程无记录则留空待填。<b>手填值不参与欠款计算</b>（大表机械费 ≠ 机械费派生结算）。</div>
+    <div class="tip" style="margin:calc(10px * var(--fscale)) 0 0"><b>上次值带入：</b>本月没录的手填格会自动带<b>上次录入值</b>（跨月往前找，可就地改）。⚠️ <b>手填值不参与欠款计算</b>（大表机械费 ≠ 机械费派生结算）。</div>
     </div></div>
   </div>`;
 };
@@ -1310,7 +1310,7 @@ V.m09=()=>{
         <td class="ctr"><button class="btn sm dg" data-act="awfDel" data-i="${i}">删除</button></td></tr>`)
       :[EMPTYROW(thCount(AWF_THEAD), '<b>'+tmLabel(awfYm)+'</b> · <b>'+esc(PROJ_META_KEY(awfPj).nm)+'</b> 还没有手填项', '点右上角「＋ 增加手填项」补录（按「核算年月 ＋ 项目」各存一份，未录的那一份不计入）')])
     ],sum:sumRowOf(AWF_THEAD, list, {2:()=>total,3:[()=>total,()=>total>0?PCT(1):'<span class="mut">—</span>']})})}</div>
-    <div class="bd"><div class="tip" style="margin:0"><b>自动项从哪来：</b>取库存单据里的 <span class="fc">CBS-安文费</span> 类目<b>出库</b>金额（<b>按所选核算年月 ＋ 所选项目</b>取，项目按<b>仓库名</b>认）。<b>手填项可以增项、项名也能改</b>。<br><b>手填项按「核算年月 ＋ 项目」各存一份</b>（材料报表类默认 = <b>上月</b>；项目按 <b>仓库名</b>）；还没录的那一份<b>不做带入</b>，为空就表示"该月 · 该项目"还没录。</div></div>
+    <div class="bd"><div class="tip" style="margin:0"><b>自动项</b> = 库存单据里 <span class="fc">CBS-安文费</span> 类目的<b>出库</b>金额（按所选的核算年月 ＋ 项目取，项目按<b>仓库名</b>认）。<b>手填项</b>按「核算年月 ＋ 项目」各存一份、可增项改名；没录的那一份不做带入。</div></div>
   </div>`;
 };
 
@@ -1481,7 +1481,7 @@ V.m11=()=>{
       :EMPTYROW(thCount(JC_THEAD), '当前筛选条件下没有集采合同', '换个「三态标记 / 合同存档情况 / 项目」，或清空「供应商」搜索词')})}</div>
     <div class="bd"><div class="grid3">
       <div class="tip" style="margin:0"><b>两态标记（§6.5.3）</b>：抓来即 <b>纳入台账</b>，可改 <b>不纳入</b>。<b>逐条</b>标记，或<b>勾选后一次批量标记</b>（范围 = 当前筛选结果）；⭐ <b>已手动标记的「不纳入」在后续全量抓取中持久保留</b>（抓取不许改回来）。</div>
-      <div class="tip" style="margin:0"><b>发票子表</b>：一合同 <b>1..N</b> 张，<b>「发票日期 ＋ 金额」两列</b>（日期必填、金额不设上限）。<br><b>付款子表</b>：一合同 <b>0 / 1 / 多</b> 次，手工录入 + <b>可从付款域引用</b>（R8）。<br>录入入口 = <b>「发票金额 / 贸易公司发票金额 / 付款金额」列右侧的「子表」按钮</b>（就近拆开，无需再进操作列）。</div>
+      <div class="tip" style="margin:0"><b>发票子表</b>：一合同 <b>1..N</b> 张（发票日期 ＋ 金额，<b>日期必填</b>）。<b>付款子表</b>：一合同 <b>0 / 1 / 多</b> 次，可手工录入或从<b>付款域引用</b>。</div>
       <div class="tip" style="margin:0"><b>合同收发登记（§6.7）</b>：未存档 → 资产处 → 已存档，手工推进；字段只有<b>存档情况 / 存档号 / 寄回日期</b> 三项 + 备注。</div>
     </div></div>
   </div>`;
@@ -1594,7 +1594,7 @@ V.m15=()=>{
            <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
            ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
     </tr>`)]})}</div>
-    <div class="bd"><div class="tip" style="margin:0"><b>这页能看什么：</b>系统里<b>有哪几个账号</b>（谁在用 / 已停用），以及<b>谁管的 i8 凭据</b>。<br><b>能做什么：</b>新增 / 停用账号 · 改名 · 重置密码 · 转让管理员 · 查看某个账号绑的 i8 用户名与密码。<br><b>为什么有用：</b>留痕里的「改前人」、付款流水的「操作人」都对到一个<b>真实账号</b>（⛔ 不是写死的名字）—— 出事时能顺着查到人。<span class="mut sm">两人权限相同 ⇒ 本页<b>不设权限差异</b>，只管"谁是谁"。</span></div></div>
+    <div class="bd"><div class="tip" style="margin:0"><b>这页管什么：</b>有<b>哪几个账号</b>（在用 / 已停用 / 已删除）、各自管的 <b>i8 凭据</b> —— 新增 / 停用 / 改密 / 转让管理员都在卡头与行内。<b>改密：本人的密码自己就能改</b>，改别人的才要管理员。<b>留痕里的「改前人」「操作人」对到真实账号</b>，出事能查到人。</div></div>
   </div>`;
 };
 

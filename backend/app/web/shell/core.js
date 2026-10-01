@@ -1380,14 +1380,11 @@ BIND.m01 = function () {
       <div class="bd">
         ${ARCP_ERR ? `<div class="tip dg" style="margin:0 0 calc(8px * var(--fscale))">⚠️ <b>待建档清单没取到</b>：${esc(ARCP_ERR)}
           <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
-        ${ARCP_DROP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))">⚠️ 这次同步<b>报出</b>的待人工里，
-          有 <b>${ARCP_DROP.length}</b> 条<b>不属这张卡</b>（所以下表里看不到它们）—— 逐条如下，各自说清<b>为什么</b>与<b>该去哪</b>：
+        ${ARCP_DROP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))">⚠️ 这次同步报出的待人工里，有 <b>${ARCP_DROP.length}</b> 条<b>不属这张卡</b>（下表看不到 —— <b>不是</b>报错）—— 逐条如下：
           <ul style="margin:calc(6px * var(--fscale)) 0 0 calc(18px * var(--fscale))">${ARCP_DROP.map(x =>
-            `<li><b>${esc(x.full_name)}</b>：${em(x.why_text || '')}</li>`).join('')}</ul>
-          ⛔ 卡里没有它们<b>不是</b>报错（同族的还有「缺 phid」那条 —— 那类要去 i8 侧加项目）。</div>` : ''}
-        ${ARCP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))"><b>为什么这里要人来定</b>：这个全名在 i8 名单里挂了
-          <b>≥2 个仓库</b>，而<b>一条普通项目只挂一个仓库</b>（决策 2）⇒ 系统<b>不猜</b> ——
-          请你<b>选定一个</b>，系统按它建行；⚠️ 其余仓库<b>不会</b>再建行。</div>
+            `<li><b>${esc(x.full_name)}</b>：${em(x.why_text || '')}</li>`).join('')}</ul></div>` : ''}
+        ${ARCP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))">这个全名在 i8 名单里挂了
+          <b>≥2 个仓库</b>，而一条项目只挂一个 ⇒ 请<b>选定一个</b>，系统按它建行（其余仓库<b>不会</b>再建行）。</div>
         ${TBL({cls:'cond',head:'<th>项目全名</th><th>待选仓库</th><th>系统为什么不自己定</th><th></th>',
         rows:[arows]})}` : ''}
       </div>`;

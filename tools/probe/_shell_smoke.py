@@ -190,6 +190,13 @@ def main() -> int:
 
         # ---- m04 付款计划：结构件在线 ＋ 空库时给**空态**（⛔ 不是"表都没了"）
         _goto(page, "m04")
+        # ⚠️⚠️ 2026-10-01（`TAIL-208`）：**先把日期筛到「全部时间」再读** —— 原判据直接比 `shown == plans`，
+        #    而 m04 的日期筛选**默认是当月**、库里付款计划又全在 2026-09 ⇒ 一到 10 月 `shown` 就是 0
+        #    ⇒ 这条**跨月必红**（把"立它时当月恰好有数据"当成了**恒定条件** · 实测 2026-10-01）。
+        #    ⭐ 修法 = **驱动筛选到有数据的范围**（`tmIn` 对 `'全部'` 恒真）：验的还是"页面真接上了数据源"，
+        #      但不依赖"当月恰好有数据"；⛔ **断言本身没放宽**（仍然是 `shown == plans`）。
+        page.evaluate("() => { plf.ym='全部'; plf.projs=[]; render(); }")
+        page.wait_for_timeout(400)
         m04 = page.evaluate("""() => {
             const pills=[...document.querySelectorAll('#view .pill')].map(x=>x.innerText).join(' | ');
             const m=pills.match(/显示\\s*(\\d+)\\s*条/);
