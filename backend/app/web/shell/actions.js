@@ -426,7 +426,7 @@ const ACT={
     return Object.keys(m).map(w=>w+' '+m[w]+' 条').join(' · '); })();
    Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });   /* 清掉已不在批次里的草稿 */
    const whyOf=n=>ntVoid(n)?'i8 已撤单':'已剔除';
-   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）—— <b>剔除行</b>按 §4.2.2 不进统计；<b>i8 已撤单行</b>的单据在 i8 侧已被删除。两者都<b>不该产生付款</b>；请先<b>恢复剔除 / 撤销已付 / 解绑关联</b>。</div>`:''}<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">已勾选 <b>${rows.length}</b> 条。<b>本次应付 = 付款金额</b>（默认 = 审批金额 − 已付金额；人工改过则以人工值为准）；「本次付款金额」<b>默认等于本次应付</b>，可改小。校验：<b>未审批</b>不可付（DEV-P-06）；<b>超出本次应付</b>被拦截（防超付）；付款方式选「其他」须填备注（DEV-P-01）。<b>任一校验不通过，整批不产生流水。</b></div>
+   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）—— <b>剔除行</b>按 §4.2.2 不进统计；<b>i8 已撤单行</b>的单据在 i8 侧已被删除。两者都<b>不该产生付款</b>；请先<b>恢复剔除 / 撤销已付 / 解绑关联</b>。</div>`:''}<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">已勾选 <b>${rows.length}</b> 条。<b>未审批</b>不可付；<b>超出本次应付</b>会被拦（防超付）；付款方式选「其他」须填备注。<b>任一校验不通过，整批不产生流水。</b></div>
      ${bad.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>${badWhy?`（${badWhy}）`:''}请点该行的「<b>删除</b>」把它移出本次付款，或关闭后调整勾选 —— <b>删除会同时取消该行的勾选</b>，<b>已填的方式与金额不会丢</b>。${bad.some(ntJcUnlinked)?'<br><b>⚠️ 其中「集采未关联合同」的行，出路不是「删除」</b> —— 回付款通知书页把那一行<b>关联到一张集采合同</b>（§4.4.3），再回来付款。':''}</div>`:''}
      <div class="tw" style="max-height:44vh">${TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD,
      rows:rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
@@ -1162,8 +1162,8 @@ const ACT={
  ownOpen:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
    const cands=ownCands(n), hit=matchKids(n.proj,n.doc), tot=projMatches(n.proj).length;
    modal({title:`指定归属 · ${esc(n.proj)}`,wide:true,
-     body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))"><b>链路 C</b>：这张通知书的付款项目是<b>壳的全名</b>，同一全名下共 ${tot} 条档案（1 个壳 + ${tot-1} 个具体小微），系统<b>不猜</b>（铁律 5/6）。
-       本次用「单据名称」在<b>该壳下</b>的关键词里匹配，命中 <b>${hit.length}</b> 个${hit.length===0?' → 需人工指定':''}。关键词允许重复（决策 4）；<b>匹配范围限定在该壳下</b>，不跨壳（否则别的壳会把钱抢走）。</div>
+     body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这张通知书的付款项目是<b>壳的全名</b>（同一全名下共 ${tot} 条档案），系统<b>不猜</b>。
+       本次按「单据名称」在<b>该壳下</b>的关键词里匹配，命中 <b>${hit.length}</b> 个${hit.length===0?' → 需你指定':''}。<b>只在壳内找、不跨壳</b>（否则别的壳会把钱抢走）。</div>
        ${kvBlock([['单据编码',`<span class="fc">${esc(n.code)}</span>`],['单据名称',`<span class="fc">${esc(n.doc)}</span>`],['本次应付',M(payEff(n))]])}
        <p style="font-size:calc(12px * var(--fscale));margin:0 0 calc(8px * var(--fscale))">选已有小微时，<b>须填一个出现在上面单据名里的关键词</b>（选中后<b>去重追加</b>到该小微名下，供下次自动命中）；填不出说明不是它。</p>
        ${cands.map(p=>`<div style="display:flex;align-items:center;gap:calc(9px * var(--fscale));padding:calc(7px * var(--fscale)) calc(8px * var(--fscale));border:1px solid var(--bd);border-radius:7px;margin-bottom:calc(7px * var(--fscale))">
@@ -1676,8 +1676,8 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
      const a=mach6Arr(wh,ym); const v=(a&&a[j]!=null&&Number(a[j])!==0)?String(a[j]):'';
      return `<td><input class="inp num" style="width:100%;min-width:84px" data-act="mechCell" data-wh="${esc(wh)}" data-i="${j}" value="${esc(v)}" placeholder="0"></td>`;}).join('');
    modal({title:'录机械费 · 按核算月手录 6 列',wide:true,reopen:()=>ACT.mechOpen(),
-     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">机械 6 列是<b>旁路载体</b>：重抓 i8 / 重导历史<b>都不覆盖</b>它（§5.2.5 ③）。空 ⇒ 0；<b>负数 / 非数字一律拒绝且不写库</b>（判定在后端，原值不变）。<br>
-       ⚠️ <b>手录只用于「正式段」</b>（核算月 <b>晚于</b>该项目的<b>截止核算月</b>）⇒ 本表<b>只列可手录的月份</b>；<b>历史段</b>（≤ 截止月）的机械费以<b>过程资料导入</b>的值为准（要改历史值请改 Excel 后重导）。</div>
+     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">手录的值<b>不会被重抓 i8 / 重导历史覆盖</b>（空 ⇒ 0）。<b>负数 / 非数字一律拒绝、不写库。</b><br>
+       ⚠️ 手录<b>只用于正式段</b>（核算月 <b>晚于</b>该项目的<b>截止核算月</b>）⇒ 本表<b>只列可手录的月份</b>；<b>历史段的机械费以过程资料导入的 Excel 为准</b>（要改就改 Excel 重导）。</div>
        ${FBAR({cls:'plate',body:`
          <div class="fi"><label>项目</label><select class="inp" id="mechPj" data-act="mechPjPick">${cands.map(k=>`<option value="${esc(k)}"${k===wh?' selected':''}>${esc(k)}</option>`).join('')||'<option value="">（没有候选项目）</option>'}</select></div>
          <span class="mut sm" style="margin:0">一次填<b>一个核算期</b>的 6 列（改核算期 ⇒ 重开并带出该月现值）· 改完点右下「保存」</span>
@@ -1813,9 +1813,8 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
        `closest('tr')` **逐行读**才不会被插删打乱 —— ⛔ 别再用"第几个格子"这种位置概念。 */
     const cell=(m,i)=>`<td><input class="inp num" style="width:100%;min-width:92px" data-act="awfCell" data-nm="${esc(names[i])}" value="${esc(m===end?String((rows[i]||[])[1]==null?'':(rows[i]||[])[1]):'')}" placeholder="—"></td>`;
     modal({title:'特殊费用 · 按月批量录入',wide:true,reopen:()=>ACT.awfBatch(),
-      body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">列 = <b>本页这一份（${esc(awfYm)} · ${esc(PROJ_META_KEY(awfPj).nm)}）的项名</b>，行 = <b><u>默认 3 行，行数随点随加减</u></b>（不够点「＋ 加一行」、多了点「－ 减一行」）· <b>每一行的核算期都能直接改</b>（止月 = 本页当前核算年月；那一行的金额会预填现值）。<br>
-        ⚠️ <b>空格子一律不写</b>（空 ≠ 0，⛔ 不会替你写 0）· <b>只要有一个非法金额 ⇒ 整批都不写</b>（原值不动）· 已有「<b>同月 + 同名</b>」的行 ⇒ <b>改它的金额</b>（⛔ 不是再添一条）。<br>
-        ⛔ 这里<b>不新建项名</b>：要加项名请回页面「＋ 增加手填项」（项名只认页面那一处定义）。</div>
+      body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">⚠️ <b>空格子一律不写</b>（空 ≠ 0，⛔ 不会替你写 0）· <b>只要有一个非法金额 ⇒ 整批都不写</b>（原值不动）· 已有「<b>同月 + 同名</b>」的行 ⇒ <b>改它的金额</b>（⛔ 不是再添一条）。<br>
+        ⛔ 这里<b>不新建项名</b> —— 要加项名请回页面点「＋ 增加手填项」（项名只认页面那一处定义）。</div>
         <div style="overflow:auto;max-height:52vh">
           <table class="dt cond" id="awfTbl" style="font-size:calc(11.5px * var(--fscale))">
             <thead><tr><th style="white-space:nowrap">核算期</th>${names.map(nm=>`<th style="white-space:nowrap">${esc(nm||'（未命名）')}</th>`).join('')}</tr></thead>
@@ -2107,10 +2106,9 @@ jcPartyDlg:async()=>{ let d=null;
   const items=d.items||[], kn=d.kind_names||{};
   const opt=k=>d.kinds.map(x=>`<option value="${x}"${x===k?' selected':''}>${esc(kn[x]||x)}</option>`).join('');
   const body=`<div class="tip${d.unknown?' wn':' ok'}" style="margin-bottom:calc(10px * var(--fscale))">${
-      d.unknown?`<b>⚠️ 有 ${d.unknown} 个甲方还没指定类型</b> —— 它们**排在最前面**。在指定之前，
-        它们的金额按「<b>正常</b>」落进「合同金额」列（这个选择**可逆**：指定后会一眼看出对不对）。`
+      d.unknown?`<b>⚠️ 有 ${d.unknown} 个甲方还没指定类型</b>（排在最前面）。指定前它们按「<b>正常</b>」落进「合同金额」列（可逆）。`
       :'全部甲方都已指定类型 ✅'}
-    <br><span class="mut sm">规则：<b>正常甲方</b> ⇒ i8 合同价 = <b>供应商价</b>（落「合同金额」）；<b>贸易公司甲方</b> ⇒ i8 合同价 = <b>贸易公司的价</b>（落「贸易公司合同金额」），而<b>真供应商价 i8 里没有</b> ⇒ 要人工从 Excel 的供应商线补进「合同金额」。</span></div>
+    <br><span class="mut sm">落列规则：<b>正常甲方</b> ⇒ 供应商价落「<b>合同金额</b>」；<b>贸易公司甲方</b> ⇒ 贸易公司的价落「<b>贸易公司合同金额</b>」，<b>供应商价 i8 里没有</b> ⇒ 要人工从 Excel 的供应商线补进「合同金额」。</span></div>
     <div class="tw" style="max-height:50vh">${TBL({cls:'cond',key:'modal:jcParty',
       head:'<th>甲方单位（i8 的「甲方单位」原样）</th><th style="width:150px">类型</th><th style="width:88px">合同数</th>',
     rows:items.map(it=>`<tr class="${it.kind==='unknown'?'hl':''}">
@@ -2308,7 +2306,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    const sel=cands.find(j=>j.id===jcLinkSel)||null;
    const same=sel?N2(jcDebt(sel))===N2(n.sp):false;
    modal({title:`关联集采合同 · ${n.code}`,reopen:()=>ACT.jcLink({dataset:{id:n.id}}),body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">把这行<b>集采通知书</b>关联到一张<b>集采合同</b> —— 这是「从付款域引用（R8）」的<b>反向入口</b>，两者<b>写同一份记录</b>（集采合同的付款子表）⇒ <b>双向可见</b>。<br>⚠️ <b>一条通知书只能关联一张合同</b>；<b>同一笔在全库范围内不可重复引用</b>（防付款重复计入）。<br>⭐ <b>候选只列本项目（仓库）的合同</b> —— 本行项目 = <b>${esc(pjLabel(pk)||'（未指定归属）')}</b>${pk?`（仓库名 <span class="fc">${esc(pk)}</span>）`:''}。</div>
+     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">把这行<b>集采通知书</b>关联到一张<b>集采合同</b>（关联后两边都看得到）。<br>⚠️ <b>一条通知书只能关联一张合同</b>；<b>同一笔在全库不可重复引用</b>（防付款重复计入）。<br>⭐ <b>候选只列本项目（仓库）的合同</b> —— 本行项目 = <b>${esc(pjLabel(pk)||'（未指定归属）')}</b>${pk?`（仓库名 <span class="fc">${esc(pk)}</span>）`:''}。</div>
      ${cands.length?`<div class="fld"><label>选择集采合同（仅本项目）</label><select class="inp" id="jcLinkId" data-act="jcLinkPick" data-id="${n.id}">${cands.map(j=>`<option value="${j.id}" ${sel&&sel.id===j.id?'selected':''}>${j.id} · ${esc(j.material)} · 欠款 ${M(jcDebt(j))}${j.proj===pk?'':' · 他项目（当前已关联）'}</option>`).join('')}</select></div>`
        :`<div class="tip" style="margin:0"><b>本项目下暂无集采合同</b> —— 请先到「集采台账」页为 <b>${esc(pjLabel(pk)||'该项目')}</b> 建档（或抓到 i8 合同），再回来关联。<br><span class="mut sm">本行项目：${esc(pjLabel(pk)||'（未指定归属）')}${pk?`（仓库名 ${esc(pk)}）`:''}</span></div>`}
      ${sel?`<div class="fld"><label>金额比对（只提示，不拦截）</label><div class="sm" style="line-height:1.8">本行统计付款金额 <b>${M(n.sp)}</b> ｜ ${sel.id} 当前欠款 <b>${M(jcDebt(sel))}</b>${same?' '+tag('一致','ok'):' '+tag('不一致 · 仍可关联','wn')}</div></div>`:''}`,

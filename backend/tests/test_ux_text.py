@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import re
+
 from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
@@ -95,3 +97,69 @@ def test_导入页的域自报文案要渲染加粗_不许满屏星号():
     for good in ("lgMd(sch.note)", "lgMd(sch.keep_note)", "lgMd(IMP.memory)",
                  "lgMd(sch.rule_note)", "lgMd(hint)"):
         assert good in SHELL, f"找不到该走的渲染出口：{good!r}（它被改名 / 被删了？）"
+
+
+#: ⭐ 说明块（`class="tip"`）的估算字数上限（**剥掉 `${…}` 与标签之后**）——
+#:   与真机 ㉖ 的 200 字**同一条线**（同一条口径：守则 §3.4 / §5.9「说明要短」）。
+TIP_LIMIT = 200
+_TAG = re.compile(r"<[^>]+>")
+_JSX = re.compile(r"\$\{[\s\S]{0,600}?\}")
+#: ⭐ **折叠区不计**（与真机 ㉖ 的口径一字不差：「上限 200 字 · ⚠️ 折叠区不设上限」）——
+#:   ⛔ 别把 `<details>` 里的内容算进"默认展开"的字数里（那样 `m07` 会假红：它块内挂着一个逐列口径）。
+_DETAILS = re.compile(r"<details[\s\S]*?</details>")
+
+
+def _tip_blocks() -> list[tuple[str, int, int, str]]:
+    """壳里**每一个** `class="tip"` 块 ⇒ `(件名, 行号, 估算字数, 开头 40 字)`。
+
+    ⚠️ 三样都是刻意这么做的：
+      ① **边界 = 配对的 `</div>`**（数嵌套）—— ⛔ 不用"到本行末尾"那种近似（会把**后面那块**粘进来 ⇒ 估出假高，
+         我在量测阶段就踩过：`m07` 明明压过、却被粘上后一块估成 310 字）；
+      ② **剥 `${…}` 与标签** —— 模板里的 JS 表达式**不是给用户读的字**（`${a.map(...)}` 计进去会失真）；
+      ③ **逐件读源码**（`part_paths` / `parts_text`）—— 因此报出来的是**件名:行号**，拿着就能改。
+    """
+    from tools.audit.shell_source import parts_text
+
+    out: list[tuple[str, int, int, str]] = []
+    for name, text in parts_text():
+        for m in re.finditer(r'<div class="tip', text):
+            seg, depth, i = text[m.start():m.start() + 4000], 0, 0
+            while i < len(seg):
+                op, cl = seg.find("<div", i), seg.find("</div>", i)
+                if cl < 0:
+                    break
+                if 0 <= op < cl:
+                    depth += 1
+                    i = op + 4
+                else:
+                    depth -= 1
+                    i = cl + 6
+                    if depth == 0:
+                        seg = seg[:i]
+                        break
+            txt = re.sub(r"\s+", "", _TAG.sub("", _DETAILS.sub("", _JSX.sub("…", seg))))
+            out.append((name, text[:m.start()].count("\n") + 1, len(txt), txt[:40]))
+    return out
+
+
+@acc()
+def test_说明块都不超长_弹窗也在内():
+    """⭐ `TAIL-209`（2026-10-01）：**说明块的机器眼要罩住弹窗**（守则 §3.4 / §5.9）。
+
+    ⚠️ **为什么必须补这一条**：真机 `㉖`（`tools/probe/_shell_text.py`）的靶是
+       `#view .tip`（**页内**）—— 而**弹窗不在 `#view` 里** ⇒ 弹窗那 50 多处说明
+       **没有机器眼**（只会越写越长、且**没人会红**）。本仓同族的病犯过多次
+       （判据的靶没覆盖到的地方＝"悄悄长回去"）。⇒ 这里补上**离线**这一半。
+    ⚠️ **为什么不改真机**：真机要"逐个打开弹窗"才能看到它们 —— 50 多个弹窗按顺序点开，
+       既慢又脆（哪一处改了个 data-act，探针就瞎了）⇒ **离线兜住"越写越长"这个主要风险**
+       （判分口径：剥掉 `${…}` 与标签后 **> 200 字**）。
+    ⚠️ **审视角**（用户 2026-10-01 口径）：本页的读者是**已经清楚业务流程的人**（科室 2 人）
+       ⇒ 判"留还是删"只问一句：**这句是"系统特有的行为/后果"（指导），还是"业务常识"（干扰）？**
+       ⛔ 业务常识（如"欠款 = 其他支出金额 − 付款"）不必解释；⭐ 系统特有行为
+       （"重抓重导不覆盖手录值" / "有非法值则整批不写"）**必须留**。
+    ⚠️ 能证伪：把任一说明块写长（> 200 字）⇒ 本件必红。
+    """
+    over = [f"{n}:{ln} {c} 字 · {head}…" for n, ln, c, head in _tip_blocks() if c > TIP_LIMIT]
+    assert not over, (
+        f"这些说明块超过 {TIP_LIMIT} 字（剥标签与 `${{…}}` 后的估算）—— 页内的与弹窗的**同一条线**：\n  "
+        + "\n  ".join(over))
