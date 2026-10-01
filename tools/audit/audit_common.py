@@ -140,7 +140,7 @@ CANCELLED_SCAN_GLOBS: tuple[str, ...] = (
     #    · **收** `tools/audit/`（尺子自己）与 `tools/probe/`（真机探针 —— 它若还在测已撤功能，
     #      那**是真问题**，必须报）；
     #    · ⛔ **不收** `tools/mut/`（变异脚本**天生要引用**已删标识符才造得出违规）与
-    #      `tools/oneoff/`（一次性脚本 = 历史叙事，与 `plans/归档-*` 同性质）。
+    #      `tools/oneoff/`（一次性脚本 = 历史叙事，与 `plans/archive/归档-*` 同性质）。
     # ⚠️⚠️ 2026-09-24 晚再修（`T18` 立起来当天抓的**第二例**）：**`tools/*.py` 已摘掉** ——
     #    09-24 那次只把 glob 改对了目录，却**留着根那一条**，而**根下 0 件 python** ⇒ 它**一条都不命中**
     #    = 那片"没人扫"。⭐ 教训：**"改对了主路径"不等于"清掉了死条目"** —— 后者只有 `T18` 看得见。
@@ -230,8 +230,8 @@ LENIENT_GLOBS: tuple[str, ...] = (
     #    按**严格标准**查），其余一律 `归档-*`（只留痕）⇒ **一条 glob 覆盖全部归档件**。
     #    ⚠️ 别再逐份列（`2026-09-1[0-9]-*.md` / 各方案名）—— **逐份列 = 新归档件必然漏网**，
     #    这正是"计划文档悄悄过期却查不出来"的老路。
-    #    ℹ️ `handoff/` 已于同日并入 `plans/`（history 条目 = `plans/归档-历史单元条目.md`）。
-    ".codebuddy/plans/归档-*.md",
+    #    ℹ️ `handoff/` 已于同日并入 `plans/`（history 条目 = `plans/archive/归档-历史单元条目.md`）。
+    ".codebuddy/plans/archive/归档-*.md",
 )
 
 #: 合法的「幽灵用例号」—— 文档里明写「不建用例」的编号
@@ -269,10 +269,10 @@ PATH_ROOTS: tuple[str, ...] = ("", "backend/", "backend/app/")
 SCAN_GLOBS: tuple[str, ...] = (
     # ⭐⭐ 2026-09-21 文档体系重构后，扫描面 = **会被当口径读的那几层**（按 `README.md` 的四层）：
     #    ① 注入档 `.codebuddy/memory/MEMORY.md` ② 按需档（根 `README.md` · `ops/*.md` · 计划与服务承诺）
-    #    ⛔ **不含** ③ 留痕档（`memory/journal/` · `plans/归档-*.md` —— 旧术语/旧数字在那儿是**对的**）
+    #    ⛔ **不含** ③ 留痕档（`memory/journal/` · `plans/archive/归档-*.md` —— 旧术语/旧数字在那儿是**对的**）
     #       与 ④ 产物档（`artifacts/` —— 由 `T11` 管"回执"，不管措辞）。
     # ⚠️ **`CLAUDE.md` 已删除**（2026-09-21 用户裁定：换工具后**无人读取**）—— 它的必用内容已并入
-    #    `MEMORY.md`（注入档）与 `细则.md`，过程叙事下沉到 `plans/归档-历史单元条目.md`。
+    #    `MEMORY.md`（注入档）与 `细则.md`，过程叙事下沉到 `plans/archive/归档-历史单元条目.md`。
     # ⭐ 2026-10-01（`TAIL-204` 第 3 步）：`docs/*.md` **摘掉** —— `docs/` 已整目录并进 `ops/`（一类一夹），
     #    留着它就是**一条都不命中的 glob**（`T18` 会当场报「那一片从没被扫过」）。
     "README.md", "ops/*.md", ".codebuddy/plans/*.md",

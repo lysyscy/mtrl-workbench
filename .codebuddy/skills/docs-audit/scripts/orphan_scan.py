@@ -26,7 +26,7 @@ CORE_PREFIXES = ("README.md", "ops/", "tools/README.md",
                  ".codebuddy/plans/开发计划-主文档.md", ".codebuddy/plans/执行情况-主文档.md",
                  ".codebuddy/work/README.md")
 #: 留痕档：只追加、不回读 ⇒ ⛔ 它们"没人引用"不是病
-HISTORY_PREFIXES = (".codebuddy/memory/journal/", ".codebuddy/plans/归档-",
+HISTORY_PREFIXES = (".codebuddy/memory/journal/", ".codebuddy/plans/archive/归档-",
                     ".codebuddy/plans/archive/", ".codebuddy/memory/")
 
 

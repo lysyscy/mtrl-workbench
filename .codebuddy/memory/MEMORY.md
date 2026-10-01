@@ -31,7 +31,7 @@
 |---|---|
 | **每会话必读**（本件）· **分册** | `.codebuddy/memory/MEMORY.md`（**注入档**）· **`细则.md`**（口径/纪律全文 ＋ **原项目 `MEMORY.md` 全文**）· `IDE-细节.md`（IDE 侧专题） |
 | 计划 · 台账 §15 · 排期 §14.3 · 闸门 §22.1 · **交接 §13.6** | `.codebuddy/plans/开发计划-主文档.md`（**按需查**，别通读） |
-| 历史叙事 / 已下沉过程块 | `.codebuddy/plans/归档-历史单元条目.md`（搜「下沉于 …」） |
+| 历史叙事 / 已下沉过程块 | `.codebuddy/plans/archive/归档-历史单元条目.md`（搜「下沉于 …」） |
 | 四态 / 进度 | `tools/audit/acc_report.py` 输出 · 计划 `§0` |
 | **设计件** | `.codebuddy/work/10-designs/`（计划里写 `work/10-designs/` 是**仓内简写**） |
 | 业务口径主人 | 交付面《材料科业务全流程说明书》（仓外 `D:\工作\AI\PRD编写夹 - Workbuddy专用`） |

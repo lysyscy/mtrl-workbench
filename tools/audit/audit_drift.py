@@ -79,7 +79,7 @@ def check_cancelled() -> list[dict]:
             if rel in CANCELLED_SKIP_RELS:
                 continue
             # ⭐ 2026-09-24（用户裁定 **A** · 文档面）：**留痕档不扫** —— `T8` 抓的是「**复活**」，
-            #   而 `plans/归档-*.md` / `memory/journal/` 里出现旧名是**有意的**（历史就该那样写）。
+            #   而 `plans/archive/归档-*.md` / `memory/journal/` 里出现旧名是**有意的**（历史就该那样写）。
             #   ⚠️ 不加这行的话，扩面第一跑 = **36 条红，其中 34 条来自留痕档** = 纯噪音
             #   （实测：`归档-历史单元条目.md` 一家占 22 条）。
             if rel.endswith(".md") and _is_lenient(rel):

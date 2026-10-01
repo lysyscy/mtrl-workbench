@@ -12,7 +12,7 @@
 | **3** | **地图 / 索引类** | 回答"我该读哪一份"；表里全是"指针" | 根 `README.md` · `ops/README.md` · `tools/README.md` · `.codebuddy/work/README.md` | `T3` 幽灵路径 · **`T18` 登记在册的路径/glob 必须命中真东西** · `T12` | **过期指针**（指向已删/已搬的件）· **地图上少了新层**（新目录没进 §三 树） |
 | **4** | **实测结论类** | 带"成立前提 / 何时必复做 / 复现命令" | `ops/<主题>-实测结论.md`（索引 = `ops/README.md`） | `T3`；索引行由 `ops/README.md` 的纪律守 | **前提变了没复做**（换机 / 改了被实测的那段代码）· **结论在、索引没加行** |
 | **5** | **工作记录类**（Agent 产物） | 前缀 `设计-` / `实验-` / `排查-` / `D<编号>-` ＋ 文头四行 | `.codebuddy/work/{10-designs,20-experiments,30-troubleshooting,40-decisions}`（宪法 = `work/README.md`） | `T14` 落点与 scratch TTL · `T15` 产物白名单与 work 文头 | **命名不符**（漏前缀 ⇒ 落错区）· **该进 decisions 的写成 designs** · scratch 超 14 天没清 |
-| **6** | **留痕类**（只追加、⛔ 没人回读） | "过程 / 事故 / 逐次定案"；只追加不改写 | `.codebuddy/memory/journal/YYYY-MM-DD.md` · `.codebuddy/plans/归档-*.md` · `.codebuddy/memory/*.md` | **⛔ 故意不扫**（在留痕档里出现旧术语/旧数字是**对的**） | **被当口径读**（有人跑到 journal 里找规矩）· **混层**（日志混在 `memory/` 根下 ⇒ 分不清纪律与流水账） |
+| **6** | **留痕类**（只追加、⛔ 没人回读） | "过程 / 事故 / 逐次定案"；只追加不改写 | `.codebuddy/memory/journal/YYYY-MM-DD.md` · `.codebuddy/plans/archive/归档-*.md` · `.codebuddy/memory/*.md` | **⛔ 故意不扫**（在留痕档里出现旧术语/旧数字是**对的**） | **被当口径读**（有人跑到 journal 里找规矩）· **混层**（日志混在 `memory/` 根下 ⇒ 分不清纪律与流水账） |
 | **7** | **快照 / 产物类**（不是给人读的"文档"） | 是留证 / 快照，不是叙述 | `.codebuddy/backups/**`（**唯一手工备份点** · 留 5 份 · 月度清）· `artifacts/**`（白名单，如 `变异覆盖台账.md`） | `T11` 建议类报告的回执 · `T15` 白名单 | **被算进"文档量"**（占比膨胀）· **备份没策略**（留几份？何时清？）· **过程类 md 进了 `artifacts/`** |
 
 ## 二、七种病 × 本仓真例（找到病时，**回这里对一行**）
