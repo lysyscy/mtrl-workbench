@@ -33,6 +33,11 @@ logger = get_logger()
 
 # 同表抓取串行锁登记表（D9：同一张表抓取互斥）
 _TABLE_LOCKS: dict[str, threading.Lock] = {}
+
+#: ⚠️ 给**用户**看的那句话（守则 §3.1 细节不上屏 / §3.7 人话 ＋ 下一步）——
+#:   具体是**哪个地址、什么状态码、返回了什么**，一律只进**运行日志**（`logger.warning`）。
+#:   ⭐ 2026-10-01 `TAIL-211` 收尾：原先这里把 `path` / `HTTP {状态码}` / **响应原文前 200 字**拼进异常 ⇒ 直接上屏。
+I8_TAKE_FAILED = "i8 那边的这次取数没成功 —— 请稍后重试；一直不行请联系维护人"
 _TABLE_LOCKS_GUARD = threading.Lock()
 
 
@@ -176,26 +181,32 @@ class I8Client:
                     # 刚写入的 cookie 已知不可用 ⇒ 从缓存抹掉（否则下次进程启动会先拿它白撞一次 401）。
                     # ⚠️ 这不改判定：异常照旧抛，只是顺手清掉一个**已被证伪**的凭证。
                     cookie_store.clear(self._creds()[0])
-                    raise ExternalServiceError("i8 会话重登后仍无效（401）")
+                    logger.warning("i8 会话重登后仍无效（401）")
+                    raise ExternalServiceError(
+                        "i8 登录没通过 —— 请核对「设置」页里该账号的 i8 凭据；仍不行请联系维护人")
             return resp
 
     def get_json(self, path: str, **kwargs: Any) -> Any:
         resp = self.request("GET", path, **kwargs)
         if resp.status_code >= 400:
-            raise ExternalServiceError(f"i8 接口 {path} 返回 HTTP {resp.status_code}：{resp.text[:200]}")
+            logger.warning("i8 取数失败：%s → HTTP %s：%s", path, resp.status_code, resp.text[:200])
+            raise ExternalServiceError(I8_TAKE_FAILED)
         try:
             return resp.json()
         except json.JSONDecodeError as exc:
-            raise ExternalServiceError(f"i8 接口 {path} 响应非 JSON：{resp.text[:200]}") from exc
+            logger.warning("i8 取数返回的不是 JSON：%s → %s", path, resp.text[:200])
+            raise ExternalServiceError(I8_TAKE_FAILED) from exc
 
     def post_json(self, path: str, **kwargs: Any) -> Any:
         resp = self.request("POST", path, **kwargs)
         if resp.status_code >= 400:
-            raise ExternalServiceError(f"i8 接口 {path} 返回 HTTP {resp.status_code}：{resp.text[:200]}")
+            logger.warning("i8 取数失败：%s → HTTP %s：%s", path, resp.status_code, resp.text[:200])
+            raise ExternalServiceError(I8_TAKE_FAILED)
         try:
             return resp.json()
         except json.JSONDecodeError as exc:
-            raise ExternalServiceError(f"i8 接口 {path} 响应非 JSON：{resp.text[:200]}") from exc
+            logger.warning("i8 取数返回的不是 JSON：%s → %s", path, resp.text[:200])
+            raise ExternalServiceError(I8_TAKE_FAILED) from exc
 
     def close(self) -> None:
         if self._session is not None:

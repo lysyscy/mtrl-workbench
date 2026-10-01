@@ -12,7 +12,10 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from app.core.errors import MustReportError
+from app.core.logging import get_logger
 from app.core.period import MODE_MONTH, parse_period, period_capabilities, period_range
+
+logger = get_logger()
 
 # ⚠️ 抓取**一律人工触发**（D9：本工程无任何定时任务，不引 APScheduler）；确认后关闭弹窗
 MANUAL_ONLY = True
@@ -117,11 +120,12 @@ def degrade_to_excel(exc: BaseException) -> dict:
        ⛔ **m08 不在列**：库存手动导入已按用户 2026-09-22 裁定删除 ⇒ m08 用
        `degrade_no_manual`（显式报错待人处理），**别再把 m08 接回本函数**。
     """
+    logger.warning("i8 抓不到数 ⇒ 降级为手动 Excel 导入：%s", exc)
     return {
         "degraded": True,
         "excel_import_available": True,
         "message": (
-            f"i8 抓不到数（{type(exc).__name__}: {exc}）⇒ 已**降级为手动 Excel 导入**路径。"
+            "i8 抓不到数 ⇒ 已**降级为手动 Excel 导入**路径。"
             "请从 i8 导出该月数据后在本页导入。"
         ),
     }
@@ -133,10 +137,11 @@ def degrade_no_manual(exc: BaseException) -> dict:
     依据 = 用户 2026-09-22 裁定：「库存单据手动导入给删掉，不要了」⇒ 库存数据唯一入口 = i8 抓取。
     ⚠️ 同样**不得静默**（`degraded=True` ＋ 原因），但**不得**再承诺"可手动导入"。
     """
+    logger.warning("i8 抓不到数（本域无手动兜底）：%s", exc)
     return {
         "degraded": True,
         "message": (
-            f"i8 抓不到数（{type(exc).__name__}: {exc}）⇒ 本次抓取**失败**（原因见上）。"
+            "i8 抓不到数 ⇒ 本次抓取**失败**。"
             "请稍后在 i8 可用时重试。"
         ),
     }

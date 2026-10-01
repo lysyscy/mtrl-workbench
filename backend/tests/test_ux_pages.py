@@ -137,7 +137,7 @@ def test_失败文案要给人话原因和下一步():
     ⚠️ **能证伪**：把任一出口里的 `errWhyByStatus(` 删掉（退回那句空洞文案）⇒ 本件必红。
     """
     assert "errWhyByStatus" in SHELL, "没有「失败原因分类成人话」的出口"
-    for frag in ("登录状态过期", "没有重启", "服务端内部出错"):
+    for frag in ("登录状态过期", "没有重启", "系统内部出错"):
         assert frag in SHELL, f"失败原因没有覆盖这一类（用户会又看到一句没说原因的话）：{frag}"
     # ⚠️ 只数**出口**（`errHuman` 自己的默认兜底里留着那句是对的 —— 那是"连原因都没有"时的最后一道）
     assert SHELL.count("errWhyByStatus(") >= 4, \

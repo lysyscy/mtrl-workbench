@@ -19,6 +19,9 @@ import hashlib
 from pathlib import Path
 
 from app.core.errors import MustReportError
+from app.core.logging import get_logger
+
+logger = get_logger()
 
 #: 模板目录（`app/resources/templates/`）
 TEMPLATE_DIR: Path = Path(__file__).resolve().parents[1] / "resources" / "templates"
@@ -81,15 +84,14 @@ def require_template(path: Path) -> Path:
     """
     p = Path(path)
     if not p.exists():
-        raise MustReportError(f"模板缺失：`{p}` —— 导出无法进行（模板是成品文件的**基底**）。{_RETRY}")
+        logger.warning("模板缺失：%s", p)
+        raise MustReportError(f"模板缺失 —— 导出无法进行（模板是成品文件的**基底**）。{_RETRY}")
     want = EXPECTED_SHA256.get(p.name)
     if want:
         got = sha256_of(p)
         if got != want:
-            raise MustReportError(
-                f"模板内容与登记不符（可能被回退 / 损坏）：`{p.name}`\n"
-                f"　实际 SHA256 = {got}\n　登记 SHA256 = {want}\n{_RETRY}"
-            )
+            logger.warning("模板内容与登记不符：%s 实际 %s / 登记 %s", p.name, got, want)
+            raise MustReportError(f"模板内容与登记不符（可能被回退 / 损坏）—— 导出无法进行。{_RETRY}")
     return p
 
 

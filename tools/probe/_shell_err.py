@@ -20,8 +20,9 @@ from __future__ import annotations
 EXPORT = "**/api/m01/projects/export*"
 #: 屏幕上**不许**出现的内部串（用户看不懂 / 或会误导）
 FORBIDDEN = ("HTTP", "/api/", "Error:", "500", "GET ", "POST ")
-#: 提示里**应当**有的"下一步"字样（守则 §2.2）
-NEXT_HINTS = ("重试", "管理员")
+#: 提示里**应当**有的"下一步"字样（守则 §2.2）—— ⚠️ 它是**取样**（"有没有给下一步"），
+#:   ⛔ 不是"必须出现某个词"：措辞换了（如 `管理员 ⇒ 维护人`）就把新词补进来，⛔ 别为此改文案。
+NEXT_HINTS = ("重试", "管理员", "维护人")
 
 
 def check(page, errors: list[str]) -> None:
