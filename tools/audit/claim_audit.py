@@ -36,9 +36,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 #: 只扫**活文档**（⛔ 不扫 `归档-*.md`：那是历史留痕，按本仓"留疤不改"的规矩不动它）
+#: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：原「两份活文档」里的 `执行情况-主文档.md` **已取消**
+#:   （用户裁定「只留待办」⇒ 待办并入 `README.md` §〇）⇒ 现在扫 **计划（给 AI 的完整版）＋ 根 `README.md`**。
+#:   ⚠️ **换件、不是减件**：`README.md` 正是"给人看、会把裁定复述给人"的那一份
+#:   ⇒ ⛔ 不能因为它从 `plans/` 搬到根上就把它漏出扫描面（那正好丢掉本哨存在的理由）。
 DOCS = [
     ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md",
-    ROOT / ".codebuddy" / "plans" / "执行情况-主文档.md",
+    ROOT / "README.md",
 ]
 
 #: 「这是一条裁定」的提法（含"裁定 A/B/C"这种代号）

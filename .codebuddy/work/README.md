@@ -38,7 +38,7 @@
 1. ⛔ 仓库根目录新建任何 md（唯一例外 `README.md`）；新增层级必须**先改根 README 四层表 ＋ `audit_meta.py` 白名单**，再建目录。
 2. ⛔ 活文档/正式设计稿里写草稿与过程叙事（T13）。
 3. ⛔ `artifacts/` 放过程类 md（设计/排查/审计/备份）—— 只许工具生成物白名单。
-4. ⛔ 第二份待办/状态清单 —— 状态只信三处（acc_report / 计划 §0 / 执行情况），尾巴只信 §15。
+4. ⛔ 第二份待办/状态清单 —— 状态只信三处（`tools/audit/acc_report.py` 的输出 / 计划 §0 现状快照 / **根 `README.md` §〇**），尾巴只信 §15。
 5. ⛔ 临时件放 tools 根、logs、artifacts 根 —— 一律 `00-scratch/`；一次性工具脚本 → `tools/oneoff/`。
 6. ⛔ 手工备份散落 —— 仓内靠 git；交付面备份只进 `.codebuddy/backups/`。
 7. ⛔ 引用已删除文件（CLAUDE.md 教训）；搬迁当批改完全部路径（T3）。

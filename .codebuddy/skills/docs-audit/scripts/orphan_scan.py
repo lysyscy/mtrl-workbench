@@ -23,7 +23,9 @@ SKIP_PARTS = {"node_modules", ".venv", ".git", "__pycache__", ".pytest_cache"}
 #: ② 层（按需档）里"必须有人指它"的落点前缀；① 层单列
 CORE_PREFIXES = ("README.md", "ops/", "tools/README.md",
                  ".codebuddy/memory/MEMORY.md", ".codebuddy/memory/细则.md",
-                 ".codebuddy/plans/开发计划-主文档.md", ".codebuddy/plans/执行情况-主文档.md",
+                 #: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：「给用户看的一页」= 根 `README.md`（已在上一行）
+                 #:   —— 原 `.codebuddy/plans/执行情况-主文档.md` 已"只留待办"并进 `README.md` §〇，⛔ 旧路径不存在。
+                 ".codebuddy/plans/开发计划-主文档.md",
                  ".codebuddy/work/README.md")
 #: 留痕档：只追加、不回读 ⇒ ⛔ 它们"没人引用"不是病
 HISTORY_PREFIXES = (".codebuddy/memory/journal/", ".codebuddy/plans/archive/归档-",

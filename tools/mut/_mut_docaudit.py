@@ -52,7 +52,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PLANS = ROOT / ".codebuddy" / "plans"
-HAND = PLANS / "执行情况-主文档.md"
+#: 「给人看的那一页」= **根 `README.md`**（⭐ 2026-10-01 `TAIL-204` 第 6 步换件：原 `plans/执行情况-主文档.md`
+#:   已"只留待办"并进 `README.md` §〇 ⇒ ⛔ 旧路径不存在；见 `audit_common.HANDBOOK_REL` 的说明）。
+HAND = ROOT / "README.md"
 PLAN = PLANS / "开发计划-主文档.md"
 MEM = ROOT / ".codebuddy" / "memory" / "MEMORY.md"
 REGISTRY = ROOT / "tools" / "t7_expected.txt"
@@ -143,9 +145,12 @@ MUTS_APPEND: list[dict] = [
     {"desc": "M7 `T5` 代码行数越线（补到 401 ⇒ 须登记拆分计划）", "mode": "needle",
      "needle": ("backend/app/mod05_flow/importer.py", "401 行"),
      "path": T5_TARGET, "lines": 401, "frag": lambda src: _pad_lines(src, 401)},
-    {"desc": "M8 `T10` 文档超预算（执行情况 195 → 201 > 200）", "mode": "needle",
-     "needle": ("执行情况-主文档.md", "201 行（预算 200"),
-     "path": HAND, "lines": 201, "frag": lambda src: _pad_lines(src, 201)},
+    # ⚠️ 2026-10-01（`TAIL-204` 第 6 步）**换靶**：原靶 = `plans/执行情况-主文档.md`（预算 200），
+    #    该件已取消（用户裁定「只留待办」⇒ 并进根 `README.md` §〇）⇒ 靶改成 **`README.md`（预算 240）**。
+    #    ⭐ 与 `M7` 换靶同因：**靶必须跟着"那件还在不在、预算还是不是那个数"走**，否则判据静默失效。
+    {"desc": "M8 `T10` 文档超预算（README 补到 241 > 240）", "mode": "needle",
+     "needle": ("README.md", "241 行（预算 240"),
+     "path": HAND, "lines": 241, "frag": lambda src: _pad_lines(src, 241)},
 ]
 
 # --------------------------------------------------- 第二次扩面（M9–M12 · 2026-09-24）
