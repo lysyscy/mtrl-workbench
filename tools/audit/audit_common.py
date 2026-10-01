@@ -268,14 +268,14 @@ PATH_ROOTS: tuple[str, ...] = ("", "backend/", "backend/app/")
 
 SCAN_GLOBS: tuple[str, ...] = (
     # ⭐⭐ 2026-09-21 文档体系重构后，扫描面 = **会被当口径读的那几层**（按 `README.md` 的四层）：
-    #    ① 注入档 `.workbuddy/memory/MEMORY.md` ② 按需档（根 `README.md` · `ops/*.md` · 计划与服务承诺）
+    #    ① 注入档 `.codebuddy/memory/MEMORY.md` ② 按需档（根 `README.md` · `ops/*.md` · 计划与服务承诺）
     #    ⛔ **不含** ③ 留痕档（`memory/journal/` · `plans/归档-*.md` —— 旧术语/旧数字在那儿是**对的**）
     #       与 ④ 产物档（`artifacts/` —— 由 `T11` 管"回执"，不管措辞）。
     # ⚠️ **`CLAUDE.md` 已删除**（2026-09-21 用户裁定：换工具后**无人读取**）—— 它的必用内容已并入
-    #    `MEMORY.md`（注入档）与 `MEMORY-细则.md`，过程叙事下沉到 `plans/归档-历史单元条目.md`。
+    #    `MEMORY.md`（注入档）与 `细则.md`，过程叙事下沉到 `plans/归档-历史单元条目.md`。
     "README.md", "ops/*.md", ".codebuddy/plans/*.md", "docs/*.md",
-    ".workbuddy/memory/MEMORY.md",
-    # ⚠️ 2026-09-24 **摘掉 `.workbuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
+    ".codebuddy/memory/MEMORY.md",
+    # ⚠️ 2026-09-24 **摘掉 `.codebuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
     #    它是**搬迁前的旧地址**，该件现址 = `docs/changelog.md`（`README.md`「工程基准档」那行）⇒
     #    这条 glob **一条都不命中** = 那一片**从没被扫过**（`docs/*.md` 已把它盖住 ⇒ 摘掉 = 零损失）。
 )

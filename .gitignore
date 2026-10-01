@@ -70,6 +70,10 @@ node_modules/
 !.codebuddy/skills/
 !.codebuddy/plans/
 !.codebuddy/work/
+# ⭐⭐ **例外4**（2026-10-01 · `TAIL-204` 第 2 步）：`.codebuddy/memory/` = **工作记忆随仓走**（用户裁定 ①）——
+#    注入档 `MEMORY.md` ＋ 分册 `细则.md` ＋ 逐日日志 `journal/`。⚠️ 它们此前在 `.workbuddy/memory/` 且**不进库**；
+#    第 2 步整体并过来后**进 git**（有版本保护 —— 也是"宿主侧目录可能被顺手清理"的缓解）。
+!.codebuddy/memory/
 *.swp
 *~
 Thumbs.db

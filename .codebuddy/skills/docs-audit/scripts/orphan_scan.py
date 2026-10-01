@@ -22,11 +22,11 @@ SKIP_PARTS = {"node_modules", ".venv", ".git", "__pycache__", ".pytest_cache"}
 
 #: ② 层（按需档）里"必须有人指它"的落点前缀；① 层单列
 CORE_PREFIXES = ("README.md", "ops/", "docs/", "tools/README.md",
-                 ".workbuddy/memory/MEMORY.md", ".workbuddy/memory/MEMORY-细则.md",
+                 ".codebuddy/memory/MEMORY.md", ".codebuddy/memory/细则.md",
                  ".codebuddy/plans/开发计划-主文档.md", ".codebuddy/plans/执行情况-主文档.md",
                  ".codebuddy/work/README.md")
 #: 留痕档：只追加、不回读 ⇒ ⛔ 它们"没人引用"不是病
-HISTORY_PREFIXES = (".workbuddy/memory/journal/", ".codebuddy/plans/归档-",
+HISTORY_PREFIXES = (".codebuddy/memory/journal/", ".codebuddy/plans/归档-",
                     ".codebuddy/plans/archive/", ".codebuddy/memory/")
 
 

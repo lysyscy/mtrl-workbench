@@ -20,7 +20,7 @@
 
 ⚠️ 判据 = **目标测试件 rc≠0**（不是整支尺子）＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc：别的用例红
 也会让 rc≠0）。
-⚠️ 子集 pytest **必须**把 `ACC_RESULTS_PATH` 指到 `artifacts/_mut_acc_results.json`（`MEMORY-细则 §十七`）
+⚠️ 子集 pytest **必须**把 `ACC_RESULTS_PATH` 指到 `artifacts/_mut_acc_results.json`（`细则 §十七`）
 —— ⛔ 否则把**权威四态**冲成残档、`T4` 报红；⚠️ 本件跑完**必须重跑全套**写回（脚本末尾会提醒）。
 
 用法：python tools/mut/_mut_fbar.py

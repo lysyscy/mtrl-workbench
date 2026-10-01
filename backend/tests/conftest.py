@@ -18,7 +18,7 @@ ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 #    那条默认分支**永远不触发** ⇒ 跑一支变异脚本（子集）照样把权威 `acc_results.json` 冲成十几条
 #    （本仓反复踩过四次，本条正是**治本**的那一处）。
 #    ⇒ 约定：**子集跑**默认写 `artifacts/_partial_acc_results.json`（插件内定）；
-#      **要写权威文件必须显式给** `ACC_RESULTS_PATH`（全套跑法见 `MEMORY-细则.md` §十七）。
+#      **要写权威文件必须显式给** `ACC_RESULTS_PATH`（全套跑法见 `细则.md` §十七）。
 
 
 # ⚠️⚠️⚠️ **2026-09-20 修：pytest 此前根本没连测试库** ——

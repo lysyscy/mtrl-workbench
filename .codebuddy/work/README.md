@@ -66,4 +66,4 @@
 |---|---|---|
 | `.codebuddy/memory/journal/*.md` | **早期**逐日日志（历史） | **停在 2026-09-27** ⇒ 视作**已归档留痕**，⛔ 别往里续写 |
 | `.codebuddy/memory/YYYY-MM-DD.md` ＋ `MEMORY.md` | **现行**逐日日志 ＋ 长期记忆（IDE 侧） | ⭐ **要写日志就写这里**（当天的那个 `YYYY-MM-DD.md`） |
-| `.workbuddy/memory/MEMORY.md` ＋ `MEMORY-细则.md` | 会话**注入档**（另一条线 · `journal/` 同家） | 口径/纪律的主人；⚠️ 与上面那家**不是同一份** |
+| `.codebuddy/memory/MEMORY.md` ＋ `细则.md` | 会话**注入档**（另一条线 · `journal/` 同家） | 口径/纪律的主人；⚠️ 与上面那家**不是同一份** |

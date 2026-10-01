@@ -3,7 +3,7 @@
 
 **为什么有它**：`tools/probe/_audit_face.py` 的尺子 `A` 报「能力编号 `1..N` 不连续」4 处，
 但**没人知道那些号是怎么没的**（计划/台账里没有"退号"记录）⇒ ⛔ 不能瞎补号（补错 = 造一条假能力）。
-本脚本用**交付面里历次快照**（`.codebuddy/_backup-*` ＋ 本仓 `.codebuddy/backups/交付面-*`）做**时间线**：
+本脚本用**交付面里历次快照**（`.workbuddy/_backup-*` ＋ 本仓 `.codebuddy/backups/交付面-*`）做**时间线**：
 逐快照解析每个 `MOD-*.md` 的能力表编号 ⇒ 打印「哪一轮少了哪个号」⇒ 成因自然浮出来。
 
 用法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\probe\\_mod_caps_timeline.py [MOD-03 MOD-04 …]`
@@ -17,7 +17,8 @@ import sys
 
 FACE = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用")
 REPO = pathlib.Path(__file__).resolve().parents[2]
-ROOTS = (FACE / ".codebuddy", REPO / ".codebuddy" / "backups")
+#: ⚠️ 交付面那份**仍叫 `.workbuddy`**（仓外 · 我们没改它）—— ⛔ 别跟着仓内一起改名（改了 ⇒ `not root.exists()` 静默扫空集）
+ROOTS = (FACE / ".workbuddy", REPO / ".codebuddy" / "backups")
 
 HEAD_RE = re.compile(r"^\|\s*#\s*\|\s*能力")
 ROW_RE = re.compile(r"^\|\s*(\d+)\s*\|(.*)$")

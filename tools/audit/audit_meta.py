@@ -84,7 +84,7 @@ def check_file_sizes() -> list[dict]:
 
 #: `T9` 认的三种标记（写在条目行内，可带后缀如 `[用户·2026-09-21]`）
 RULE_ORIGINS: tuple[str, ...] = ("[用户", "[交付面", "[助手自定")
-RULE_DOC_REL = ".workbuddy/memory/MEMORY.md"
+RULE_DOC_REL = ".codebuddy/memory/MEMORY.md"
 RULE_SECTION_RE = re.compile(r"^##\s*八[、.]\s*工程纪律")
 
 
@@ -189,9 +189,9 @@ def check_rule_restatements() -> list[dict]:
 #:    文件里，比原来"散在一个 333 行、没人自动读的文件里"更省 —— 原来我每轮都要去翻它）。
 DOC_BUDGETS: tuple[tuple[str, int, str], ...] = (
     ("README.md", 240, "inject"),                              #: ⛔ 现值**别手抄** ⇒ 要现值跑 `doc_audit`（`T10` 会报）
-    (".workbuddy/memory/MEMORY.md", 200, "inject"),             #: ⛔ 同上（现值由 `T10` 报）
+    (".codebuddy/memory/MEMORY.md", 200, "inject"),             #: ⛔ 同上（现值由 `T10` 报）
     (".codebuddy/plans/执行情况-主文档.md", 200, "must"),        #: ⛔ 同上
-    (".workbuddy/memory/MEMORY-细则.md", 420, "must"),          #: ⛔ 同上
+    (".codebuddy/memory/细则.md", 620, "must"),          #: ⛔ 同上；⭐ **2026-10-01（`TAIL-204` 第 2 步）420 → 620**：并入原项目侧 `MEMORY.md` 全文（173 行归档为附录）
     (".codebuddy/plans/开发计划-主文档.md", 1800, "must"),   # ⭐⭐ 2026-09-29 **用户裁定 `A`：1700 → 1800**
                                                           #:   （文档审计 §五之补 · ①）**理由 = 容量**：台账按设计每条一行，
                                                           #:   09-29 一天新立/销号 **19 条**尾巴 ⇒ 顶穿 8 行是它**该长的样子**；
@@ -307,7 +307,7 @@ PLANS_LIVE: tuple[str, ...] = ("开发计划-主文档.md", "执行情况-主文
 #: 根目录**允许**出现的 `.md`（文档地图；⛔ 别在根上散落别的 md）
 ROOT_MD_ALLOW: tuple[str, ...] = ("README.md",)
 #: `memory/` 下允许的 `.md` 与子目录（日志必须进 `journal/`）
-MEMORY_MD_ALLOW: tuple[str, ...] = ("MEMORY.md", "MEMORY-细则.md", "CHANGELOG.md")
+MEMORY_MD_ALLOW: tuple[str, ...] = ("MEMORY.md", "细则.md", "IDE-细节.md")
 MEMORY_DIR_ALLOW: tuple[str, ...] = ("journal",)
 #: ⭐ `work/` 五区（Agent 工作记录 · 文档架构审计 2026-09-22 P2：五类缺三类是乱建文件的根因）
 WORK_DIR_ALLOW: tuple[str, ...] = ("00-scratch", "10-designs", "20-experiments",
@@ -331,7 +331,7 @@ def check_doc_layout() -> list[dict]:
 
     ⭐ 依据 = `README.md` 的**四层**（① 注入 ② 按需 ③ 留痕 ④ 产物）：
       · `plans/` 下**只许两份活文档**，其余**必须 `归档-` 打头**（⚠️ 这条纪律早就写在
-        `MEMORY-细则.md §五`「⛔ 不许私自新建文档」里，但**此前没有任何尺子看着它** ⇒ 本次立 T12）；
+        `细则.md §五`「⛔ 不许私自新建文档」里，但**此前没有任何尺子看着它** ⇒ 本次立 T12）；
       · `memory/` 下**日志必须进 `journal/`**（⭐ `journal/` = 只追加不回读层 —— 混在 `memory/` 根下时，
         没人分得清"这是纪律还是流水账"，这正是用户报「文档乱」的机制之一）；
       · 仓库根**只许 `README.md`** 一份 md。
@@ -350,18 +350,18 @@ def check_doc_layout() -> list[dict]:
                                  "`plans/` 只有两份活文档（计划 ＋ 执行情况），其余是**留痕** ⇒ "
                                  "多出来的第三份没人知道它是活文档还是留痕（`T6` 也只看计划那份）",
                                  "改名 `归档-<主题>-<日期>.md`（留痕），或并进两份活文档之一"))
-    mem = REPO_ROOT / ".workbuddy" / "memory"
+    mem = REPO_ROOT / ".codebuddy" / "memory"
     if mem.is_dir():
         for f in sorted(mem.glob("*.md")):
             if f.name not in MEMORY_MD_ALLOW:
-                hits.append(_t12(f".workbuddy/memory/{f.name}",
+                hits.append(_t12(f".codebuddy/memory/{f.name}",
                                  "`memory/` 根下出现了非白名单的 md",
                                  "`memory/` 根只放**注入档与分册**；日志混在这里 ⇒ "
                                  "分不清「这是规则还是流水账」（用户报「文档乱」的机制之一）",
                                  "日志移到 `memory/journal/`（`YYYY-MM-DD.md`，⛔ 不改文件名）"))
         for d in sorted(x for x in mem.iterdir() if x.is_dir()):
             if d.name not in MEMORY_DIR_ALLOW:
-                hits.append(_t12(f".workbuddy/memory/{d.name}/",
+                hits.append(_t12(f".codebuddy/memory/{d.name}/",
                                  "`memory/` 下出现了非白名单子目录",
                                  "`memory/` 只认 `journal/` 一个子目录",
                                  "并进 `journal/`，或改到别处（见 `README.md` 四层表）"))
@@ -763,7 +763,7 @@ def check_gate_liveness() -> list[dict]:
 #   当天查出的三处失效**同一个根因** —— `tools/audit/` 的**路径 / glob 常量在 `TAIL-58` 搬目录后没跟改**
 #   （`doc_audit` 曾写 `tools/doc_audit.py` · `cover_gap` 曾写 `tools/cover_gap.py` ·
 #    `_mut_prg_form` 曾写 `tools/prg_form_audit.py`）⇒ 症状**全是假绿**：「检查在跑，其实扫的是空集」。
-#   ⚠️ **立本条当天就抓出第 4 例**：`SCAN_GLOBS` 里的 `.workbuddy/memory/CHANGELOG.md` 是**搬迁前的旧地址**
+#   ⚠️ **立本条当天就抓出第 4 例**：`SCAN_GLOBS` 里的 `.codebuddy/memory/CHANGELOG.md` 是**搬迁前的旧地址**
 #      （该件现址 = `docs/changelog.md`，见 `README.md`「工程基准档」那行）⇒ 那条 glob **一条都不命中**。
 #
 # ⭐ 判据（**静态、秒级** ⇒ 进 `doc_audit`，每轮自动跑）：
