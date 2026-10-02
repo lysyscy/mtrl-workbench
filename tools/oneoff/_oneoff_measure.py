@@ -69,7 +69,16 @@ def main() -> int:
     listed = subprocess.run(["git", "-c", "core.quotepath=false", "ls-files", "tools/oneoff"],
                             cwd=str(ROOT), capture_output=True,
                             text=True, encoding="utf-8", errors="replace").stdout
-    files = sorted((ROOT / r) for r in listed.splitlines() if r.strip())
+    all_files = sorted((ROOT / r) for r in listed.splitlines() if r.strip())
+    #: ⭐ 2026-10-02 **口径对齐 `T20`**（`audit_work.check_retention`）：**`_归档-YYYYMMDD/` 里的不计**
+    #:   —— 那边数的是"**还堆在顶层**的件"（归档件已不在堆里，且它会**照实打出**归档件数）。
+    #:   ⚠️ 本件此前**没跳归档** ⇒ 印出的"件数 / 零引用"与 `T20` 对不上 = **同一件事两个数**
+    #:      （本仓最贵的病）；实测：`T20` 说 190 件、本件说 282 件，而差的就是那 92 件归档件。
+    def _is_archived(f: Path) -> bool:
+        return any(x.startswith("_归档-") for x in f.relative_to(ONEOFF).parts[:-1])
+
+    files = [p for p in all_files if not _is_archived(p)]
+    n_arch = len(all_files) - len(files)
     on_disk = [p for p in ONEOFF.rglob("*") if p.is_file()]
     total_bytes = sum(p.stat().st_size for p in files)
 
@@ -89,8 +98,9 @@ def main() -> int:
         o for o in orphan if Path(o).name in STANDING
     ]
     print("=" * 78)
-    print(f" `tools/oneoff/` 现状：**{len(files)} 件（跟踪）** · {total_bytes / 1024:.0f} KB"
-          f"   ｜ 磁盘上另有 {len(on_disk) - len(files)} 件（`__pycache__` 等本机产物）")
+    print(f" `tools/oneoff/` 现状：**{len(files)} 件（在堆里 · 跟踪）** · {total_bytes / 1024:.0f} KB"
+          f"   ｜ 已入档 `_归档-*` **{n_arch} 件**（⛔ 不计 —— 口径同 `T20`）"
+          f"   ｜ 磁盘上另有 {len(on_disk) - len(all_files)} 件（`__pycache__` 等本机产物）")
     print(f"   · 被（其它跟踪件）引用：**{len(referenced)} 件**")
     print(f"   · **零引用**：**{len(orphan)} 件**")
     print(f"   · 其中**常驻工具**（⛔ 不是一次性）：{len(standing)} 件 —— {', '.join(sorted(Path(x).name for x in standing))}")
