@@ -40,6 +40,18 @@ BACKUP_SKIP_SUFFIXES = ("_壳单文件基线.html",)
 BACKUP_OTHER_PREFIXES = ("交付面-", "原型-备份-", "_smoke.js-备份-")
 #: 同上：`.bak` 散件（改交付面/文档**之前**留的）—— 也属"另一种用途"
 BACKUP_OTHER_SUFFIXES = (".bak",)
+#: ⭐⭐ 2026-10-02（`TAIL-217` · 用户选「②」）**交付面改前快照**（`交付面-*` / `原型-备份-*` /
+#:   `_smoke.js-备份-*` / `*.bak`）的**条目数 / 容量提示线**（超 ⇒ 黄**一行**）。
+#:   为什么加它：这一类此前的口径**只写**「另一用途 ⇒ 不计入手工快照 5 份上限」⇒ **自己一个上限都没有**
+#:   ⇒ 只能只增不减（实测 2026-10-02：**18 个条目 / 9.5 MB**，而**没有任何机器看得见它涨**）。
+#:   ⚠️ 单位 = **顶层条目数**（与 `BACKUP_KEEP` 同口径）；容量 = 递归文件字节。
+#:   ⚠️ **不计** `*_壳单文件基线.html`（那 5 份由 `shell_verify` 自守，见 `BACKUP_SKIP_SUFFIXES`）。
+FACE_KEEP, FACE_MAX_MB = 40, 25.0
+#: ⭐⭐ 2026-10-02（`TAIL-217` 同批）**显式归档子目录**（`_归档-*` / `_旧快照归档-*`）的**件数 / 容量提示线**。
+#:   加它的理由同上：归档此前**只被打印、从不被判** ⇒ 把东西「全塞归档」就能把上一条糊弄成假绿；
+#:   而归档本就是「**先移后清**」的中转站 ⇒ 它自己也必须有上限。⚠️ 单位 = **递归文件件数**
+#:   （归档子目录个数很少；里面件数才是「翻不翻得动」的代理指标 —— 与 `tools/oneoff/` 同哲学）。
+ARCHIVE_KEEP, ARCHIVE_MAX_MB = 60, 12.0
 #: ⭐ 2026-10-01（`TAIL-204` 第 7 步）**撤掉**「`.workbuddy/scratch/` 活区规模」这半条判据（连常量一起） ——
 #:   理由见 `check_retention()` 里那段说明：**它一直在扫一个不存在的目录** = 僵尸判据。
 #: ⭐ `tools/oneoff/`（**一次性 / 留痕的堆场** · 处置口径见 `tools/README.md`）的提示线：超 ⇒ 黄**一行**。
@@ -153,14 +165,39 @@ def check_retention() -> list[dict]:
             if name.endswith(BACKUP_SKIP_SUFFIXES):
                 continue
             counted.append(e)
+        def _stat(items: list) -> tuple[int, float, float | None]:
+            """→ (递归件数, MB, **最老一件**距今多少天) —— 三类上限与「何时清」共用同一把尺。"""
+            fs = [f for it in items for f in (it.rglob("*") if it.is_dir() else [it]) if f.is_file()]
+            mb = sum(f.stat().st_size for f in fs) / 1024 / 1024
+            oldest = min((f.stat().st_mtime for f in fs), default=None)
+            return len(fs), mb, ((time.time() - oldest) / 86400 if oldest else None)
+
         if face:
-            print(f"  （信息）`backups/` 交付面改前快照：{len(face)} 件"
-                  f" —— ⛔ **另一用途、不计入上限**（口径见 `README.md` §三/§四）")
+            n, mb, age = _stat(face)
+            print(f"  （信息）`backups/` 交付面改前快照：{len(face)} 个条目 · {n} 件 · {mb:.1f} MB"
+                  + (f" · 最老一件距今 {age:.0f} 天" if age is not None else "")
+                  + " —— ⛔ **不计入「手工快照 5 份」上限**（另一种用途）；**何时清** = `README.md` §四 末两行")
+            if len(face) > FACE_KEEP or mb > FACE_MAX_MB:
+                hits.append(_hit(
+                    "T20", ".codebuddy/backups/ 交付面改前快照",
+                    f"{len(face)} 个条目 / {mb:.1f} MB > 提示线 {FACE_KEEP} 个 / {FACE_MAX_MB} MB",
+                    "这一类**最容易只增不减** —— 老口径只说「另一用途、不计入 5 份上限」⇒ 它**自己一个上限都没有**"
+                    "（`TAIL-217` · 2026-10-02 立本条：此前只打印、不判 ⇒ 涨到多少都没人看见）",
+                    "按 `README.md` §四 的「何时清」：把**最旧的一批移进** `_旧快照归档-YYYYMMDD/`（可逆）；"
+                    "⚠️ 5 份 `*_壳单文件基线.html` 由 `shell_verify` 自管，⛔ 不在这条的范围里"))
         if archived:
-            n = sum(1 for a in archived for _ in a.rglob("*") if _.is_file())
-            mb = sum(_.stat().st_size for a in archived for _ in a.rglob("*") if _.is_file()) / 1024 / 1024
+            n, mb, age = _stat(archived)
             print(f"  （信息）`backups/` 显式归档：{len(archived)} 个子目录 · {n} 件 · {mb:.1f} MB"
-                  f" —— ⛔ 归档不计入上限，但它**应当被清掉或定期复核**（见 `TAIL-134`）")
+                  + (f" · 最老一件距今 {age:.0f} 天" if age is not None else "")
+                  + " —— 归档不计入「手工快照 5 份」，但**它自己有上限**；**何时清** = `README.md` §四 末两行")
+            if n > ARCHIVE_KEEP or mb > ARCHIVE_MAX_MB:
+                hits.append(_hit(
+                    "T20", ".codebuddy/backups/ 归档子目录",
+                    f"{n} 件 / {mb:.1f} MB > 提示线 {ARCHIVE_KEEP} 件 / {ARCHIVE_MAX_MB} MB",
+                    "归档是「**先移后清**」的中转站 ⇒ 它没有上限时，上一条就变成「换个地方堆」"
+                    "（原口径只在报告里**打印**件数、没有任何判定；`TAIL-217` · 2026-10-02 立本条）",
+                    "按 `README.md` §四 的「何时清」：**每次产包前一晚**复核一次 —— 真过期就删"
+                    "（⚠️ 删前先查引用：`tools/oneoff/_oneoff_measure.py` 那种只读量法；⛔ 不静默删）"))
         if len(counted) > BACKUP_KEEP:
             names = " · ".join(x.name for x in counted[:8])
             hits.append(_hit(
@@ -211,7 +248,8 @@ def check_retention() -> list[dict]:
     return hits
 
 
-__all__ = ["ARTIFACTS_MD_ALLOW", "BACKUP_KEEP", "ONEOFF_MAX_FILES", "ONEOFF_MAX_MB",
+__all__ = ["ARCHIVE_KEEP", "ARCHIVE_MAX_MB", "ARTIFACTS_MD_ALLOW", "BACKUP_KEEP",
+           "FACE_KEEP", "FACE_MAX_MB", "ONEOFF_MAX_FILES", "ONEOFF_MAX_MB",
            "SCRATCH_TTL_DAYS", "WORK_HEADER_KEYS",
            "check_artifacts_and_headers", "check_retention", "check_scratch_ttl"]
 
