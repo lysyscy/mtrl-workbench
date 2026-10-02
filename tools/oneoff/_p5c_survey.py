@@ -63,7 +63,7 @@ def main() -> int:
     from playwright.sync_api import sync_playwright
 
     from _shell_common import goto, settle
-    from _shell_smoke import _session_cookie
+    from _shell_common import session_cookie
 
     out: dict = {}
     with sync_playwright() as p:
@@ -72,7 +72,7 @@ def main() -> int:
         errs: list[str] = []
         page.on("console", lambda m: errs.append(f"[console.{m.type}] {m.text}") if m.type == "error" else None)
         page.on("pageerror", lambda e: errs.append(f"[pageerror] {e}"))
-        ck, val = _session_cookie()
+        ck, val = session_cookie()
         page.context.add_cookies([{"name": ck, "value": val, "url": BASE}])
         page.goto(BASE + "/app", wait_until="load", timeout=45000)
         page.wait_for_function("() => (PJs.length > 0) || (NO.length > 0) || BOOT_ERROR", timeout=20000)

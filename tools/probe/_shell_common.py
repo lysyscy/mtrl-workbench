@@ -4,9 +4,11 @@
    散在各 `_shell_*.py` 里，全是 `page.wait_for_timeout(600~1800)` 的**纯睡** ⇒ 既慢、又
    **超时也是绿的**（页面没动时下面的断言会读到上一屏，报出"这页好好的" = 假绿）。
 
-本件只放**与具体页面无关**的两件：
-  · `goto()`    —— 切页（等"这一屏画完"）
-  · `wait_db()` —— 等**库里的结果**出现（写动作的判据本来就是库里的行）
+本件只放**与具体页面无关**的三件：
+  · `goto()`          —— 切页（等"这一屏画完"）
+  · `wait_db()`       —— 等**库里的结果**出现（写动作的判据本来就是库里的行）
+  · `session_cookie()` —— 造一张「以**在用管理员**身份登录」的会话票
+    （⭐ `TAIL-215` 批 2 从 `_shell_smoke.py` 搬来 —— ⓪ 段与 `tools/oneoff/_p5c_survey.py` 共用）
 """
 
 from __future__ import annotations
@@ -83,4 +85,30 @@ def wait_db(pred, timeout: float = 20.0, interval: float = 0.15) -> bool:
     return False
 
 
-__all__ = ["goto", "wait_db"]
+def session_cookie() -> tuple[str, str]:
+    """造一张「以**在用管理员**身份登录」的会话票 —— 返回 `(cookie 名, 票)`。
+
+    ⭐ 2026-09-21（③ 收紧「未登录不回落首个管理员」之后**必须**补的一步）：
+       壳不再"没登录也算管理员"⇒ 不带会话跑本自检，所有**写动作**都会被后端**正当地**拒掉
+       （那是我们要的行为）⇒ 那几条链路就没法验了。⇒ 先给浏览器播一张会话票。
+
+    ⚠️ 用**壳自己的** `core/session.make`（⛔ 不硬编码账号/密码，⛔ 不绕开自己的签名）——
+       票的载荷 = 那个管理员的**姓名**（与登录页写进 cookie 的东西一致，见 `api_do_login`）。
+    ⚠️ 这里**不走登录页**是有意的：登录页 / 验签 / 会话隔离是 `test_acc_usr_login.py` 的事，
+       本件只关心**壳的运行时**。
+    """
+    import pathlib
+    import sys
+
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "backend"))
+    from app.core import session as SESS
+    from app.core.db import session_scope
+    from app.mod15_user import domain as D
+    from app.mod15_user import repository as R
+
+    with session_scope() as s:
+        admin = D.active_admins(R.all_users(s))[0]
+        return SESS.COOKIE_NAME, SESS.make(admin.name or admin.account)
+
+
+__all__ = ["goto", "session_cookie", "wait_db"]

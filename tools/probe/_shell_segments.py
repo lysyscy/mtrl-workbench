@@ -17,7 +17,7 @@
 | `id` | 屏幕上打的那个段号（① ⑥b ㊱ …）—— ⛔ 不许重复 |
 | `what` | 一句话：这一段验什么 |
 | `phase` | `pre` = 开页之前 · `boot` = **开屏那一屏**（⛔ 任何切页之前） · `body` = 主流程 |
-| `entry` | `"self:<名>"` = 段函数在**编排件**里（`_shell_smoke.py` 的 `seg_*`）；`模块:函数` = 外移件；或直接给可调用 |
+| `entry` | `模块:函数`（**每段一件**）或**直接给可调用** —— ⛔ `TAIL-215` 批 2 起**没有**「段函数放在编排件里」这一支（别把段代码塞回 `_shell_smoke.py`） |
 | `page` | 它自己切/用的页（`—` = 不碰屏幕） |
 | `net` | 会不会**拦断网络 / 刷新页面**（会 ⇒ 它跑完的页面状态不干净） |
 | `after` | ⭐ **必须排在这些段号之后**（注释里那句约束的结构化版本） |
@@ -49,7 +49,7 @@ class Seg:
     id: str
     what: str
     phase: str                                  # pre / boot / body
-    entry: object                               # "self:<名>" / "模块:函数" / 直接给可调用
+    entry: object                               # "模块:函数" / 直接给可调用
     page: str = "—"
     net: bool = False
     after: tuple[str, ...] = ()
@@ -72,32 +72,32 @@ def _live(page, errors):
 #: ⚠️ 相位必须**成块**（pre* → boot* → body*，⛔ 不许交错）；`last=True` 恰好一条且必须在表末。
 SEGMENTS: tuple[Seg, ...] = (
     # ---- phase=pre：**开页之前**
-    Seg("⓪", "播种会话票（以在用管理员身份）", "pre", "self:seg_session", "—",
+    Seg("⓪", "播种会话票（以在用管理员身份）", "pre", "_shell_session:check", "—",
         why="后面所有写动作的**前提**（不带票 ⇒ 写动作会被后端正当地拒掉）—— ⛔ 别删、别挪后"),
-    Seg("㉒", "开发库卫生：自检/调试脚本的残留不许留", "pre", "self:seg_dbhygiene", "库",
+    Seg("㉒", "开发库卫生：自检/调试脚本的残留不许留", "pre", "_shell_dbhygiene:check", "库",
         why="与页面无关 ⇒ 放在开页之前跑，省一次等待"),
 
     # ---- phase=boot：**开屏那一屏**（⛔ 任何切页之前）
-    Seg("①", "侧栏项数", "boot", "self:seg_nav", "开屏",
+    Seg("①", "侧栏项数", "boot", "_shell_nav:check", "开屏",
         why="读的是**开屏那一屏** ⇒ 必须在任何切页之前"),
-    Seg("②", "顶栏标题", "boot", "self:seg_ttl", "开屏",
+    Seg("②", "顶栏标题", "boot", "_shell_ttl:check", "开屏",
         why="同上（开屏那一屏）"),
-    Seg("③", "数据层 NO / PJs（证明真拉到后端）", "boot", "self:seg_data", "开屏",
+    Seg("③", "数据层 NO / PJs（证明真拉到后端）", "boot", "_shell_data:check", "开屏",
         why="同上（开屏那一屏）"),
 
     # ---- phase=body：主流程（**次序 = 本表次序**）
-    Seg("④", "m03 结构件（对照 `ui_parity` 口径）", "body", "self:seg_m03", "m03"),
-    Seg("⑤", "m01 渲染真数据（⛔ 不是「页面空着但不报错」）", "body", "self:seg_m01", "m01"),
-    Seg("⑥", "m04 付款计划：结构件在线 ＋ 筛选条条数 == 数据源", "body", "self:seg_m04", "m04"),
-    Seg("⑥b", "m04 手动行：点得出草稿行（**不落库**，验完收起）", "body", "self:seg_m04draft", "m04",
+    Seg("④", "m03 结构件（对照 `ui_parity` 口径）", "body", "_shell_m03:check", "m03"),
+    Seg("⑤", "m01 渲染真数据（⛔ 不是「页面空着但不报错」）", "body", "_shell_m01:check", "m01"),
+    Seg("⑥", "m04 付款计划：结构件在线 ＋ 筛选条条数 == 数据源", "body", "_shell_m04:check", "m04"),
+    Seg("⑥b", "m04 手动行：点得出草稿行（**不落库**，验完收起）", "body", "_shell_m04draft:check", "m04",
         after=("⑥",), why="接着 ⑥ 那一屏真点（同一页的下一步）⇒ 两段**必须相邻且保序**"),
-    Seg("⑦", "m05 付款流水与欠款：KPI 已撤成墓碑 ＋ 表在线 ＋ 后端欠款可取", "body", "self:seg_m05", "m05"),
-    Seg("⑦′", "台账「项目」面板展开/收起 round-trip", "body", "self:seg_panel", "m05",
+    Seg("⑦", "m05 付款流水与欠款：KPI 已撤成墓碑 ＋ 表在线 ＋ 后端欠款可取", "body", "_shell_m05:check", "m05"),
+    Seg("⑦′", "台账「项目」面板展开/收起 round-trip", "body", "_shell_panel:check", "m05",
         after=("⑦",), why="同上：接着 ⑦ 那一屏真点 ⇒ 相邻且保序"),
-    Seg("⑧", "m08 库存单据：全量行数 == 后端 ＋ **真滚轮**滚得动", "body", "self:seg_m08", "m08"),
-    Seg("⑨", "m06 过程资料：`procPj` 必须有值（加载时求值的坑已修）", "body", "self:seg_m06", "m06"),
-    Seg("⑩", "m07 收发结存与活动大表", "body", "self:seg_m07", "m07"),
-    Seg("⑩b", "m07 提取表「结余」列 == 后端 `balances`", "body", "self:seg_m07bal", "m07",
+    Seg("⑧", "m08 库存单据：全量行数 == 后端 ＋ **真滚轮**滚得动", "body", "_shell_m08:check", "m08"),
+    Seg("⑨", "m06 过程资料：`procPj` 必须有值（加载时求值的坑已修）", "body", "_shell_m06:check", "m06"),
+    Seg("⑩", "m07 收发结存与活动大表", "body", "_shell_m07:check", "m07"),
+    Seg("⑩b", "m07 提取表「结余」列 == 后端 `balances`", "body", "_shell_m07bal:check", "m07",
         after=("⑩",), why="同上：接着 ⑩ 那一屏读 ⇒ 相邻且保序"),
     Seg("⑪", "m09 特殊费用（含 ⑪b 写路径净零往返）", "body", "_shell_m09:check", "m09"),
     Seg("⑫", "m14 规则配置（含 ⑫b/⑫c：剔除名单卡）", "body", "_shell_m14:check", "m14"),

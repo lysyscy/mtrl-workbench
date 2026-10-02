@@ -12,6 +12,7 @@
 | 6 | 每条 `entry` **都解析得到真函数**（`self:<名>` ⇒ 编排件里有 `def <名>(`；`模块:函数` ⇒ 那件里有那个函数） | 表里写着、函数改名/删了 ⇒ 真机跑到那一段**当场崩**（而不是"悄悄少跑一段"） |
 | 7 | 编排件**真的遍历注册表**（`for seg in SEGMENTS` ＋ 有 `_boot`） | "表写了，但没人照它跑" ⇒ 注册表变**装饰品** |
 | 8 | 编排件里 ⛔ **不许再有裸 `check_<…>(page, errors)`** | 绕过注册表的**第二套编排** ⇒ 顺序又有了第二个出处 |
+| 9 | ⭐ **段代码不许放回编排件**（`entry` 里 ⛔ 无 `"self:…"`、编排件里 ⛔ 无 `def seg_*`） | 批 2 把 15 段搬成"每段一件"了 ⇒ 别哪天又塞回主件（那正是本尾巴要治的病） |
 
 ## ⚠️ 为什么金标清单**故意写死**在本件（而不是"从表里生成"）
 
@@ -136,6 +137,22 @@ def test_每条entry都解析得到真函数():
         elif not re.search(rf"^def {re.escape(fn)}\(", p.read_text(encoding="utf-8"), re.M):
             bad.append(f"{s.id}: `{e}` ⇒ `{mod}.py` 里**没有** `def {fn}(`")
     assert not bad, "注册表里的 entry 有解析不到的：\n  " + "\n  ".join(bad)
+
+
+@acc()
+def test_段代码不许放回编排件():
+    """`TAIL-215` 批 2：**每段一件** ⇒ `entry` 只许是 `模块:函数`（或直接给可调用）。
+
+    ⛔ `"self:…"`（段函数写在 `_shell_smoke.py` 里）那一支已随批 2 撤掉 —— 它等于「把段代码塞回主件」，
+       而那正是本尾巴要治的病（主件只该留 引导 ＋ 遍历注册表 ＋ 汇总）。
+    """
+    src = (PROBE / "_shell_segments.py").read_text(encoding="utf-8")
+    assert '"self:' not in src, (
+        "注册表里又出现 `self:` 形态的 entry ⇒ ⛔ 段代码别放回 `_shell_smoke.py`，"
+        "给它一个 `tools/probe/_shell_*.py`")
+    smoke = (PROBE / "_shell_smoke.py").read_text(encoding="utf-8")
+    assert re.search(r"^\s*def seg_", smoke, re.M) is None, \
+        "编排件里又出现了 `def seg_*`（段代码被塞回主件了）"
 
 
 @acc()
