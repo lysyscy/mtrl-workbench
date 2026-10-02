@@ -680,24 +680,47 @@ def _gate_blocks() -> list[list[str]]:
 #:    实测：口令列着 `audit_work.py`，而那件**是个没有 `__main__` 的模块** ⇒ 单跑 **0 行输出**、
 #:    `rc` 恒 0 ⇒ **第五例僵尸闸门**，只因口令不是 `foreach` 而**整批漏网**（接手人会"以为它判过了"）。
 #:    ⇒ 本检查扩**第二半**：口令代码块里出现的 `tools/<dir>/<name>.py` 也逐条查「在位 ＋ 有入口」。
-HANDOFF_ANCHOR = "入门口令"
+HANDOFF_ANCHOR = "入门口令（可复制）"
+#: ⭐⭐ 2026-10-02 **订正锚**（当天**连着踩了两层** · 都留在这儿，因为教训值钱）：
+#:  **第一层（裸词锚）**：原文锚是 `"入门口令"`，`text.find()` 取**全篇第一处** ——
+#:    当天 §0.2 新增的一段里只提了一句"上面那份**入门口令**" ⇒ **锚被挪到那段**，
+#:    紧随其后那个代码块里**一条 `tools/*.py` 都没有** ⇒ **本半静默空扫**
+#:    （`_mut_docaudit` 的 `M17` 当场从"必红"变"**未命中**"= **判据自己瞎了，而它看上去是绿的**）。
+#:  **第二层（子串锚）**：改成块标题 `"入门口令（可复制）"` 还不够 —— 它仍是**子串**，
+#:    实测全篇出现 **2 次**：① **修订行正文里引了一句** ② **块标题本身**；
+#:    `find()` 命中的是**正文那处**，而它后面那个 ``` 块**恰好**就是真口令块 ⇒
+#:    **"看着扫到 8 条、其实锚已经错位"**（把块标题改名 ⇒ 它照样扫得到 ⇒ 变异 `M18` 抓不到）。
+#:  ⇒ **最终口径 = 整行锚**：那一行去掉 `*` 与空白后**逐字等于** `HANDOFF_ANCHOR` 才算（正文引一句**不算**）
+#:    ＋ **空扫自证**（扫不到命令 ⇒ 判红）。⛔ 别再退回"子串"或"裸词"。
+#:  ⚠️ 这是本仓最贵那族病（「检查在跑，其实扫空集」，见 `T18` 立条说明）的又一例 ——
+#:     **锚必须锚到"结构性位置"，⛔ 不是锚到"某个词"**：词会被正文抢走，结构不会。
 HANDOFF_CMD_RE = re.compile(r"tools[\\/]([\w]+)[\\/]([\w_]+)\.py")
 
 
 def _handoff_commands() -> list[str]:
-    """→ 计划「入门口令」代码块里出现的 `tools/<dir>/<name>.py`（相对路径 · 去重排序）。"""
+    """→ 计划「入门口令」代码块里出现的 `tools/<dir>/<name>.py`（相对路径 · 去重排序）。
+
+    ⚠️ **锚 = 整行**（见上方两层订正）：`ln.strip().strip("*").strip() == HANDOFF_ANCHOR`
+       ⇒ 正文里**引一句**不算，只有**标题那一行**算。
+    ⚠️ 空集**不是"没问题"** —— 调用方必须当红报（2026-10-02 加）。
+    """
     p = REPO_ROOT / PLAN_DOC_REL
     if not p.exists():
         return []
-    text = p.read_text(encoding="utf-8", errors="replace")
-    i = text.find(HANDOFF_ANCHOR)
-    if i < 0:
-        return []
-    s = text.find("```", i)
-    e = text.find("```", s + 3) if s >= 0 else -1
-    if s < 0 or e < 0:
-        return []
-    return sorted({f"tools/{d}/{n}.py" for d, n in HANDOFF_CMD_RE.findall(text[s:e])})
+    lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    for i, ln in enumerate(lines):
+        if ln.strip().strip("*").strip() != HANDOFF_ANCHOR:      # ⭐ 整行锚（⛔ 不是子串）
+            continue
+        for j in range(i + 1, min(i + 6, len(lines))):           # 标题后不远处就是 ``` 开栏
+            if not lines[j].startswith("```"):
+                continue
+            for k in range(j + 1, len(lines)):
+                if lines[k].startswith("```"):
+                    block = "\n".join(lines[j + 1:k])
+                    return sorted({f"tools/{d}/{n}.py"
+                                   for d, n in HANDOFF_CMD_RE.findall(block)})
+            return []
+    return []
 
 
 def check_gate_liveness() -> list[dict]:
@@ -744,7 +767,16 @@ def check_gate_liveness() -> list[dict]:
                                "让它正常时也打一行结论（件名 ＋ 判定）"))
     # ⭐ 第二半（2026-10-01）：**「入门口令」里逐行写的闸门命令**同样要"真有入口"
     #    （它是一份**独立的**清单 —— 不在 `foreach` 里，故原先无人守）。
-    for rel in _handoff_commands():
+    cmds = _handoff_commands()
+    if not cmds:
+        # ⭐ 2026-10-02 补：**空扫自证** —— 本仓最贵的假绿就是「检查在跑，其实扫空集」
+        #    （见 `T18` 立条说明）；空扫时下面那条逐件核对**什么都没判**，而它看上去是绿的。
+        out.append(hit("入门口令里**一条 `tools/*.py` 都没扫到** ⇒ 本半在**空扫**（判据瞎了）",
+                       "空扫 = 上面那条逐件核对**一个字都没判**，而它看上去是绿的"
+                       "（2026-10-02 实测：§0.2 里提了一句「入门口令」⇒ 裸词锚被挪走 ⇒ 这半瞎了半天）",
+                       f"核对锚 `{HANDOFF_ANCHOR}` 与紧随其后那个代码块；"
+                       "改动过口令文案 ⇒ 把锚同批对齐（⛔ 别让本半静默空扫）"))
+    for rel in cmds:
         f = REPO_ROOT / rel
         if not f.exists():
             out.append(hit(f"入门口令里的 `{rel}` **不存在**",

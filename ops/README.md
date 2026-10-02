@@ -1,6 +1,6 @@
 # `ops/` 索引 —— 实测结论与工程底账
 
-> ⭐ **部署/起停/配置/备份** ⇒ 本件 ＋ `ops/*.ps1`（`server_ctl.ps1` / `nssm_install.ps1` / `nssm_uninstall.ps1` / `init_db.sql`）。
+> ⭐ **部署/起停/配置/备份** ⇒ 本件 ＋ `ops/*.ps1`（`server_ctl.ps1` / `nssm_install.ps1` / `nssm_uninstall.ps1` / **`install_hooks.ps1`**（⟵ 装 git 提交钩子 · 2026-10-02 新增）/ `init_db.sql`）＋ **`ops/hooks/pre-commit`**（提交钩子本体 · 见 §一之二）。
 > ⚠️ **2026-09-25 用户裁定**：「runbook **整份删除** —— 它纯粹是换机的时候搞出来的，换完机就无用了、反而会过期」
 > ⇒ **那件已整份删除**（原在 `docs/` 下）。⛔ 别再引它；要**换机 / 灾难恢复**时**重新问用户**，⛔ 别照旧文档抄。
 
@@ -68,6 +68,7 @@
 | `nssm_install.ps1` | **幂等**把后端注册成 NSSM 服务（服务名 `mtrl-workbench-server` · 单 worker · `0.0.0.0:8000` · 开机自启 · 崩溃自重启 · 日志分流 `../logs/server.out.log` / `server.err.log` 带 10 MB 轮转 · 依赖 `postgresql-x64-16`）。**先停并删除同名计划任务**（⛔ 不允许两个实例抢 8000） | ⚠️ **必须管理员** PowerShell；需要 `nssm.exe`（放 `ops/nssm/`，**已 gitignore**；获取渠道见脚本提示）。⭐ **换机 / 改启动参数（host、port、worker 数）/ 改 venv 路径 ⇒ 必复做** |
 | `nssm_uninstall.ps1` | 撤销服务注册（⛔ 不动数据、不动 `backend/`、不动 `.env`）；`-RestoreScheduledTask` 可恢复迁移前的计划任务形态 | 同上 |
 | `server_ctl.ps1` | 日常遥控：`status` / `start` / `stop` / `restart` / `log` / `port` / `pg`；⭐ `port` 那条会打印占用 8000 的**进程命令行与启动时间**（诊断"是不是旧进程"） | 普通窗口即可（`start`/`stop`/`restart` 需管理员）。⛔ **改完 Python 必须 `restart`**（无 `--reload`） |
+| ⭐ `install_hooks.ps1` ＋ `hooks/pre-commit`（2026-10-02 新增） | ⭐ **装 git 提交钩子**：`hooks/pre-commit` 跑**便宜子集 5 把**（`syntax_audit` / `doc_audit` / `audit_meta` / `audit_work` / `mut_cover --check` · 秒级）—— 它**只挡"明显红"，⛔ 不替代**收工闸门（`_run_rulers.py --all`）。⭐ 本仓此前**一个守卫触发点都没有** | `install_hooks.ps1` **幂等**（⛔ **不动 `git config`**）⇒ ⚠️ `.git/hooks/` **不被 git 跟踪** ⇒ **新环境 / 重装克隆后要跑一次**。⚠️ 钩子是**纯 shell** ⇒ ⛔ 不许依赖 `tail` / `sed`（实测 `tail: command not found` ⇒ **钩子自己把自己判红**） |
 | `_ps_bom.py`（⚠️ 在 **`tools/oneoff/`** —— 2026-09-29 订正：原写"在 `tools/`"**已过期**，照它找会**找不到文件** ✗） | 给 `.ps1` 补 **UTF-8 BOM** | ⚠️ **PS 5.1 按 GBK 读无 BOM 的 .ps1** ⇒ 中文字节会**吞掉紧跟的 ASCII 引号** ⇒ 满屏 `ParserError`（文件本身没错）。**每次改完 ops 下的 .ps1 就跑一次** |
 | `_ps_parse_check.ps1`（在 **`tools/oneoff/`** · ⭐ 2026-09-29 立） | ⭐ **`ops/*.ps1` 的闸（两段）**：① **语法**（PS parser 逐份解析）② ⭐ **仓内路径字面量必须真的存在**（`Join-Path $RepoRoot '…'` 形态；⚠️ **先剥注释再扫** —— 不剥会把"解释缺陷的注释"当成缺陷）⇒ 任一段不过就 `rc=1` | ⚠️ 仓里**此前没有任何 PS 尺子**（Python 有 `syntax_audit.py`、前端有 `node --check` 那一路，PowerShell 没有）⇒ 改完只能等**真跑那一刻**才炸 —— 而那通常正是"要去办公室产包"的时候 ✗。⚠️ 它**不管语义/参数**，那半靠 `-DryRun` 真跑（两者互补：它查"写死的路径在不在"，`-DryRun` 查"流程对不对"） |
 

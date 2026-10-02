@@ -12,8 +12,11 @@
 | **A（上半）** | `app/core/**` ⛔ `import app.mod*` | `core` 是内核，全站依赖它 ⇒ 反向依赖即成环（**名单已清空**：`models_registry` 挪走 ＋ 另 3 处改成"口 ＋ 装配层注入"） |
 | **B（下半）** | `app/mod*/**` ⛔ `import app.report_export` | 方案 §3.3 第一半（`TAIL-195` 批 2 · 案②）—— 导出器**只许按名取**（`app.export_registry`，表在 `app/export_bindings.py`） |
 | **B2（下半）** | `app/export_registry.py` ⛔ `import` 任何 `app.*` | 规则 B 的**反绕过**：注册表必须是**叶子**，否则环换个名字继续存在 |
-| **C（下半）** | `mod03` ⛔ `import app.mod05_flow.repository`／`mod05` ⛔ `import app.mod03_notice.repository` | 计划 **§2.3**「包间只经 `service` 调用，**不得跨包直查对方表**」（方案 §3.3 第二半） |
+| **C（一般式 · `TAIL-218`）** | **任一 `app/mod*/**` ⛔ `import` **别包**的 `repository`（⛔ 自己包的随便用） | 计划 **§2.3**「包间只经 `service` 调用，**不得跨包直查对方表**」——⭐ **2026-10-02 起升一般式**：原先只罩 `mod03`↔`mod05` **两条边**，实测另有 **17 处 / 13 件**没人管（其中 **11 处同族指向 `mod01_projects`**，而它**根本没有 `service.py`**）⇒ 施工图 = `work/10-designs/设计-分层门禁一般式-20261002.md` · 尾巴 = `TAIL-218` |
 | **D（下半）** | `app/report_export/**` ⛔ `import app.mod*.repository` | 同上（`TAIL-195` 批 2c）—— 导出层只许用业务包的 `domain` / `models` / `service` |
+
+⭐ **规则 C 有两张名单**（⛔ **性质不同，别混**）：`_ALLOW_C_PENDING`（**待清** · 只许变短）/ `_ALLOW_C_BY_DESIGN`（**按设计的例外** · 看理由、不看数量）。
+⭐ **出口那一层的约定全仓一致**（`mod03_notice` / `mod05_flow` / `mod06_proc` / `mod09_fee` 的 `service.py` 里都写着「⚠️⚠️ 跨包调用**只许经这一层**」）⇒ 别为单个调用者单开一层"只会转手的窗口"（用户 2026-10-02 明确否过那种形式主义）。
 
 ⚠️ **判据是静态的**（只读源码 ＋ `ast` 解析，⛔ 不 import app 包）—— 所以对"**函数内延迟 import**"
    那种形态同样有效（那正是本仓跨包引用的常见写法）。
@@ -34,8 +37,6 @@ from tests.acc_plugin import acc
 
 APP = Path(__file__).resolve().parents[1] / "app"
 CORE = APP / "core"
-MOD03 = APP / "mod03_notice"
-MOD05 = APP / "mod05_flow"
 
 #: ── 规则 A（上半）── (相对 `app/core/` 的文件名, 被 import 的业务顶层包) → 为什么现在还留着
 #: ⭐ **2026-09-30 批 1b 已清空**：三处「`core` 里的函数运行期读业务包的表」改成
@@ -60,11 +61,6 @@ _ALLOW_D: dict[tuple[str, str], str] = {}
 RE = APP / "report_export"
 #: 「直查业务包的表」的形态：`app.modNN_xxx.repository`（含它的子模块）
 _BAD_REPO_RE = re.compile(r"^app\.mod\d+_[a-z_]+\.repository($|\.)")
-
-#: ── 规则 C（下半）── (相对 `backend/app` 的路径, 被禁的模块) → 为什么现在还留着
-#: ⭐ **2026-09-30 批 2a 已清空**（3 处全改走对方的 `service` 包间出口）⇒ 名单只剩空表：
-#:    ⛔ 别为了"加个口子"往里添条目 —— 跨包读要经对方包的 `service`（§2.3）。
-_ALLOW_C: dict[tuple[str, str], str] = {}
 
 _BAD_TOP = "app.mod"
 
@@ -241,45 +237,185 @@ def test_B3_业务按名取的每个名字都必须在绑定表里():
     bindings.register_all()
 
 
-# ------------------------------------------------------------------------- 规则 C
+# ------------------------------------------------------------------------- 规则 C（一般式）
+
+#: 「翻别人账本」的形态：`app.modNN_xxx.repository`（含它的子模块）
+_BAD_CROSS_REPO_RE = re.compile(r"^app\.mod\d+_[a-z_]+\.repository($|\.)")
+
+#: ── ① **待清名单**（⛔ **只许变短**）：起点 13 条。每条写「翻谁的账本 · 准备怎么改」
+#:    ⚠️ 填法要求：**写具体落点**（哪个出口 / 哪一批），⛔ 别只写文件名 —— 名单要能自己催自己。
+_ALLOW_C_PENDING: dict[tuple[str, str], str] = {
+    ("mod03_notice/list_data.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
+    ("mod03_notice/notice_executors.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
+    ("mod03_notice/router.py", "app.mod01_projects.repository"): "批 2 · `all_projects`/`create_project`/`set_keywords` 都走 `P1S`",
+    ("mod08_inv/fetch_service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.export_phids`（顺手销掉本件的 `project_ids()` 薄名）",
+    ("mod07_setl/fetch_service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.export_phids`（顺手销掉本件的 `project_ids()` 薄名）",
+    ("mod07_setl/service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
+    ("mod07_setl/api.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
+    ("mod07_setl/big_service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
+    ("mod11_jc/api.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
+    ("mod11_jc/fetch_service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
+    ("mod07_setl/big_service.py", "app.mod06_proc.repository"): "批 3 · ⭐ **出口已现成** ⇒ 改走 `mod06_proc.service.load_mech`（一行）",
+    ("mod06_proc/repository.py", "app.mod08_inv.repository"): "批 3 · 走 `mod08_inv.service` 的同名出口（同包已有先例）",
+    ("mod03_notice/notice_pay_actions.py", "app.mod04_plan.repository"): "批 3 · 走 `mod04_plan.service` 的同名出口",
+}
+
+#: ── ② **按设计的例外**（⭐ **看理由，不看数量** —— ⛔ 与"待清"是两码事）
+#:    判它能不能进本表，只问一句：**给它加一个转手出口，结构会不会真的变好？**
+#:    ⛔ 若答案只是"把手伸过去改个名字" ⇒ 进本表（并写清出处），⛔ 别进 `_ALLOW_C_PENDING`。
+_ALLOW_C_BY_DESIGN: dict[tuple[str, str], str] = {
+    ("mod14_config/jc_ignore_api.py", "app.mod11_jc.repository"):
+        "页面在 M14 / 数据主人在集采域（本文件头三行）· 方向单向不成环 · 与付款侧 `rules_api.py` 同构；"
+        "⭐ 只有 1 个调用者 ⇒ 加 4 个 `return R.xxx()` 只是「把手伸过去改个名字」（用户 2026-10-02 否掉的做法）",
+}
+
+#: ⭐ **起点条数 —— 只许往下改**（想加条目 ⇒ 先回答"为什么不走出口"；⛔ 别把这条数调大）
+_C_PENDING_START: int = 13
+
+_LAYER_C_TABLES = (_ALLOW_C_PENDING, _ALLOW_C_BY_DESIGN)   #: 两张表（⛔ 别在别处再写一份）
 
 
 def _scan_c() -> dict[tuple[str, str], int]:
-    """→ `{(相对 `backend/app` 的路径, 被禁模块): 次数}` —— 两个方向都扫。"""
-    def touch(banned: str):
-        return lambda m: m == banned or m.startswith(banned + ".")
+    """→ `{(相对 `backend/app` 的路径, 被翻的 `repository`): 次数}`（**一般式** · 扫全部 `mod*` 包）。
 
+    ⚠️ **自己包的 `repository` 不受影响**（翻自己的账本正当）⇒ 按"本包前缀"排除。
+    ⚠️ **扫描面 = `app/mod*/**`** ⇒ `app/` 顶层（装配层 `core_bindings.py` / `export_bindings.py`）
+       **天然豁免** —— 装配层**就是**干"接线"这件事的地方，⛔ 不用往名单里塞条目。
+    ⚠️ 两条防"空扫"断言（⛔ 别让"扫到空集"伪装成"没有违规"）。
+    """
     found: dict[tuple[str, str], int] = {}
-    pairs = ((MOD03, "app.mod05_flow.repository"), (MOD05, "app.mod03_notice.repository"))
-    for base, banned in pairs:
-        files = _py_files(base)
-        assert len(files) >= 8, f"`{base}` 下只扫到 {len(files)} 个 `.py` —— 路径变了，规则 C 已失效"
-        for p in files:
-            n = _count_touching(p, touch(banned))
-            if n:
-                found[(p.relative_to(APP).as_posix(), banned)] = n
+    pkgs = sorted(p for p in APP.glob("mod*") if p.is_dir())
+    assert len(pkgs) >= 10, f"`{APP}` 下只扫到 {len(pkgs)} 个 `mod*` 包 —— 路径变了，规则 C 已失效"
+    scanned = 0
+    for d in pkgs:
+        own = f"app.{d.name}"
+        for p in _py_files(d):
+            scanned += 1
+            for _, cands in _import_targets(p):
+                for m in cands:
+                    if not _BAD_CROSS_REPO_RE.match(m):
+                        continue
+                    target = m.split(".repository", 1)[0]        # app.mod05_flow
+                    if target == own:                            # 翻自己的账本：正当
+                        continue
+                    key = (p.relative_to(APP).as_posix(), f"{target}.repository")
+                    found[key] = found.get(key, 0) + 1
+    assert scanned >= 100, (f"只扫到 {scanned} 个 `.py` —— 扫描面变了，规则 C 已失效"
+                            "（⛔ 别让空扫伪装成没有违规）")
     return found
+
+
+def _c_allowed() -> set[tuple[str, str]]:
+    return set(_ALLOW_C_PENDING) | set(_ALLOW_C_BY_DESIGN)
 
 
 @acc()
 def test_C_包间不得直查对方表_只许经包间出口():
-    """计划 §2.3「包间只经 `service` 调用，**不得跨包直查对方表**」的机器化（方案 §3.3 第二半）。"""
+    """计划 §2.3「包间只经 `service` 调用，**不得跨包直查对方表**」—— **一般式**（`TAIL-218`）。"""
     found = _scan_c()
-    extra = sorted(k for k in found if k not in _ALLOW_C)
+    extra = sorted(k for k in found if k not in _c_allowed())
     assert not extra, (
         "包间**直查了对方表**（`import` 对了对方的 `repository`）—— 按计划 §2.3 只许经**包间出口**：\n  "
         + "\n  ".join(f"{f} → {m}（{found[(f, m)]} 处）" for f, m in extra)
-        + "\n  ⇒ 修法：改走对方包的**包间出口**（`service`／只读 `api`），把查询留在那个包里；"
-          "⛔ 别复制一份查询到本包（那是第二套口径）；⛔ 别把它加进 `_ALLOW_C`。"
+        + "\n  ⇒ 修法：改走对方包的**包间出口**（`service`），把查询留在那个包里；"
+          "⛔ 别复制一份查询到本包（那是第二套口径）；"
+          "⛔ 别把它加进 `_ALLOW_C_PENDING`（那份名单只许变短）；"
+          "⭐ 若对方**没有**出口 ⇒ 给它开一个（`TAIL-218` 批 2/3 就是这么做的）。"
     )
 
 
 @acc()
-def test_C_放行名单里不许留幽灵条目():
-    stale = sorted(set(_ALLOW_C) - set(_scan_c()))
+def test_C_待清名单只许变短():
+    """⛔ **不许为了让它变绿而往待清名单里加条目** —— 加条目 = 用名单掩盖新长的病。"""
+    assert len(_ALLOW_C_PENDING) <= _C_PENDING_START, (
+        f"`_ALLOW_C_PENDING` 有 {len(_ALLOW_C_PENDING)} 条，超过起点 {_C_PENDING_START} —— "
+        "这条名单**只许变短**：新长出来的跨包直查必须**改走出口**（或进 `_ALLOW_C_BY_DESIGN` 并写清"
+        "为什么「加个转手出口也没用」）。"
+    )
+    print(f"\n[规则C] 待清剩 {len(_ALLOW_C_PENDING)} / 起点 {_C_PENDING_START}"
+          f"（按设计的例外 {len(_ALLOW_C_BY_DESIGN)} 条）")
+
+
+@acc()
+def test_C_待清名单里不许留幽灵条目():
+    stale = sorted(set(_ALLOW_C_PENDING) - set(_scan_c()))
     assert not stale, (
-        "`_ALLOW_C` 里有**已经不存在**的条目（那处 import 已经没了 ⇒ 名单该删没删）：\n  "
+        "`_ALLOW_C_PENDING` 里有**已经不存在**的条目（那处 import 已经没了 ⇒ 名单该删没删）：\n  "
         + "\n  ".join(f"{f} → {m}" for f, m in stale)
+        + "\n  ⇒ 改完一处就顺手销一条（销号 [用户] 不释放编号，同理：名单也别留旧账）。"
+    )
+
+
+@acc()
+def test_C_按设计的例外必须带理由():
+    """例外表**看理由不看数量** —— 每条必须带出处，且对象**必须还命中**。"""
+    assert _ALLOW_C_BY_DESIGN, (
+        "`_ALLOW_C_BY_DESIGN` 空了 —— 若确实一处都不剩，**请连本判据一起删掉**"
+        "（⛔ 别留一张空表假装还在守）。"
+    )
+    thin = sorted(k for k, why in _ALLOW_C_BY_DESIGN.items() if len((why or "").strip()) < 12)
+    assert not thin, (
+        "`_ALLOW_C_BY_DESIGN` 里这些条目**没写理由（或太短）** ⇒ 例外就成了「随便放行」：\n  "
+        + "\n  ".join(f"{f} → {m}" for f, m in thin)
+        + "\n  ⇒ 每条写清「为什么加个转手出口也没用」＋出处（文件头 / 裁定）。"
+    )
+    stale = sorted(set(_ALLOW_C_BY_DESIGN) - set(_scan_c()))
+    assert not stale, (
+        "`_ALLOW_C_BY_DESIGN` 里有**已经不存在**的条目（那个调用点改了/没了 ⇒ 例外该销没销）：\n  "
+        + "\n  ".join(f"{f} → {m}" for f, m in stale)
+    )
+
+
+# ------------------------------------------------------------------------- 包间出口（`TAIL-218` 批 1）
+
+#: 包间出口的**取样表**：`(出口所在模块, 出口函数名, 它该转发到的仓储模块)`。
+#: ⭐ **新增出口 ⇒ 往本表加一行**（表里每条都会被"打桩"验一次）。
+_EXPORT_SMOKE: tuple[tuple[str, str, str], ...] = (
+    ("app.mod06_proc.service", "load_inv_rows", "app.mod06_proc.repository"),
+    ("app.mod06_proc.service", "load_mech", "app.mod06_proc.repository"),
+    ("app.mod06_proc.service", "load_history", "app.mod06_proc.repository"),
+    ("app.mod06_proc.service", "load_cutoff", "app.mod06_proc.repository"),
+)
+
+
+@acc()
+def test_包间出口必须真转发_打得着桩():
+    """⭐ `TAIL-218` 批 1：**出口 ⛔ 不许写成模块级别名**（`load_mech = R.load_mech`）。
+
+    为什么单立一条（本仓**踩过**）：模块级别名会在 **import 那一刻**把函数对象绑死 ⇒
+    测试里 `monkeypatch.setattr(repository, "load_mech", …)` **再也打不着**、改实现也换不掉
+    （2026-09-30 实测：**12 条判据当场红**，症状是 `session=None` 一路传到真查询里）。
+
+    做法 = **打桩**：把仓储那份换成哨兵 ⇒ 出口**必须**把哨兵还回来。
+    ⭐ 钉的是**"是不是真转发"这个意图**，⛔ 不是钉代码写法（出口里怎么写都行，只要换得掉）。
+    """
+    import importlib
+
+    missing = [f"{m}.{n}" for m, n, _ in _EXPORT_SMOKE if not hasattr(importlib.import_module(m), n)]
+    assert not missing, (
+        f"`_EXPORT_SMOKE` 里这些出口**不存在**（改名 / 搬走 ⇒ 请更新那张表）：{missing}"
+    )
+
+    bad: list[str] = []
+    for mod_name, fn_name, repo_name in _EXPORT_SMOKE:
+        svc = importlib.import_module(mod_name)
+        repo = importlib.import_module(repo_name)
+        orig = getattr(repo, fn_name, None)
+        assert orig is not None, f"`{repo_name}.{fn_name}` 不在 ⇒ 出口没有对标的仓储函数"
+        sentinel = object()
+        setattr(repo, fn_name, lambda *a, **kw: sentinel)
+        try:
+            got = getattr(svc, fn_name)(None)
+        except Exception as exc:                      # 绑死的那种会把真函数跑起来 ⇒ 在这儿炸
+            got = f"<炸了：{type(exc).__name__}>"
+        finally:
+            setattr(repo, fn_name, orig)              # ⭐ 打桩必须复原
+        if got is not sentinel:
+            bad.append(f"{mod_name}.{fn_name}")
+    assert not bad, (
+        "这些包间出口**没走 `repository`**（写成了模块级别名？）—— 函数对象在 import 期被绑死 ⇒ "
+        "打桩打不着、改实现也换不掉：\n  " + "\n  ".join(bad)
+        + "\n  ⇒ 改成函数：`def f(session, **kw): from app.<包> import repository as R; return R.f(session, **kw)`"
     )
 
 

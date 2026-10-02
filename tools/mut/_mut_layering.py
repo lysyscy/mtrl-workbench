@@ -1,4 +1,4 @@
-"""反向灵敏度 · `TAIL-195` 分层边界（**八靶**：规则 A 三 ＋ B / B2 / C×2 / D 各一）。
+"""反向灵敏度 · `TAIL-195` 分层边界（**十一靶**：规则 A 三 ＋ B / B2 / C×2 / D 各一 ＋ `TAIL-218` 三）。
 
 做法：把**故意违规**塞进对应文件（改坏 → 跑 `tests/test_layering.py` 期望红 → **逐字节复原**）。
 不红 ⇒ 那条判据是假绿。
@@ -16,6 +16,14 @@
   按 `node.module` 判会**漏** ⇒ 本靶专门钉住"展开 `from X import Y`"那条修法）。
 - `M6` **规则 C（mod05 → mod03.repository）**：往 `mod05_flow/domain.py` 塞 `from app.mod03_notice
   import repository`。
+  ⭐ 2026-10-02（`TAIL-218` 规则 C 升**一般式**）：`M5`/`M6` **保留**（它们在新一般式下照样必红 ⇒ 免费的回归）；
+  下面三条是**升一般式**专门补的：
+- `M9` **规则 C 一般式 · 旧两条边之外的违规**：往 `mod09_fee/models.py` 塞
+  `from app.mod07_setl import repository` —— ⭐ **这一对旧的两条边版根本不管** ⇒ 专门证明"范围真的扩了"。
+- `M10` **规则 C · 待清名单里塞幽灵条目**：往判据件里塞一条**不存在的** `_ALLOW_C_PENDING`
+  ⇒ "不许留幽灵条目"必须红（⛔ 名单变假口径正是本仓最贵的病）。
+- `M11` **包间出口写成模块级别名**：把 `mod06_proc/service.py` 的 `load_mech` 改成
+  `load_mech = _R.load_mech` ⇒ **出口打桩判据**必红（⭐ 钉的是意图：**换不掉就不算出口**）。
 
 ⚠️ 判据 = **目标测试件 rc≠0** ＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc）。
 ⚠️ 子集 pytest 用 `ACC_RESULTS_PATH` 指到 `artifacts/_mut_acc_results.json`（⭐ 别把权威四态冲成残档）。
@@ -44,6 +52,8 @@ REGISTRY = APP / "export_registry.py"               # 规则 B2：注册表必�
 LEDGER_EXPORT = APP / "report_export" / "ledger_export.py"   # 规则 D：导出层不在业务包里
 MERGE03 = APP / "mod03_notice" / "merge.py"         # 规则 C：不在放行名单里的 mod03 件
 DOMAIN05 = APP / "mod05_flow" / "domain.py"         # 规则 C：不在放行名单里的 mod05 件
+LAYERING_TEST = ROOT / "backend" / "tests" / "test_layering.py"   # M10：往判据件自己塞幽灵条目
+MOD06_SERVICE = APP / "mod06_proc" / "service.py"   # M11：包间出口（要验"换得掉"）
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 TARGETS: tuple[str, ...] = ("tests/test_layering.py",)
 PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
@@ -52,6 +62,8 @@ PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
 #:   本件的靶都是 import 语句，天然纯 ASCII。
 #: ⚠️ 锚串统一用 `from __future__ import annotations`（每个件恰好 1 次 ⇒ 唯一命中）。
 _FUTURE = b"from __future__ import annotations"
+#: `M10` 的锚：判据件里**两张表之后**的那一行（纯 ASCII、恰好 1 次）—— ⛔ 别把它挪到两张表之前。
+_LAYER_C_ANCHOR = b"_LAYER_C_TABLES = (_ALLOW_C_PENDING, _ALLOW_C_BY_DESIGN)"
 CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
     (NAV, "M1 规则A · 往不在名单里的 core 件塞一条业务 import",
      _FUTURE,
@@ -85,6 +97,18 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      _FUTURE,
      _FUTURE + b"\nfrom app.mod06_proc import repository as _ghost  # noqa: F401",
      "直查了业务包的表"),
+    (MOD09_MODELS, "M9 规则C一般式 · ⭐ 旧两条边**之外**的违规（mod09 → mod07_setl.repository）",
+     _FUTURE,
+     _FUTURE + b"\nfrom app.mod07_setl import repository as _ghost  # noqa: F401",
+     "直查了对方表"),
+    (LAYERING_TEST, "M10 规则C · 待清名单里塞一条**幽灵**条目（名单变假口径）",
+     _LAYER_C_ANCHOR,
+     _LAYER_C_ANCHOR + b'\n_ALLOW_C_PENDING[("ghost/x.py", "app.ghost.repository")] = "ghost"',
+     "幽灵条目"),
+    (MOD06_SERVICE, "M11 包间出口写成**模块级别名**（函数对象被绑死 ⇒ 换不掉）",
+     b"def _many(p: dict, name: str) -> list[str]:",
+     b"from app.mod06_proc import repository as _R  # noqa: PLC0415\nload_mech = _R.load_mech  # ghost\n\n\ndef _many(p: dict, name: str) -> list[str]:",
+     "写成了模块级别名"),
 ]
 
 

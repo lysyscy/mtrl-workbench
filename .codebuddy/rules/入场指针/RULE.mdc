@@ -16,7 +16,8 @@ provider:
 1. **现在到哪了** ⇒ `.codebuddy/plans/开发计划-主文档.md` **§0.2**（当前位置块 —— 以**最新那一块**为准，旧块标了"已被上一块取代"）；
 2. **上一轮干到哪 / 怎么接** ⇒ 同一份的 **§13.6** 表里**最新那条修订行**（任务与版本 / 进展与证据 / 决定与限制 / 权威资料 / 接续动作 / 提交位置 / 验收方法）；
 3. **待办 ＋ 要用户验什么** ⇒ 根 `README.md` **§〇**（「给人看的」唯一一页）；
-4. **逐件实况** ⇒ `.codebuddy/memory/journal/<最近日期>.md`（append-only；⚠️ 旧日志在 `.codebuddy/plans/archive/`，那是**留痕**）。
+4. **逐件实况** ⇒ `.codebuddy/memory/journal/<最近日期>.md`（append-only；⚠️ 旧日志在 `.codebuddy/plans/archive/`，那是**留痕**）；
+5. ⭐ **长期记忆（唯一注入档 · 每会话必读）** ⇒ `.codebuddy/memory/MEMORY.md` —— **§一 用户偏好**（含"大白话 / 讲清铺路 / 拷问别上术语"）· **§八 工程纪律**（每条带 `[用户]`/`[交付面]`/`[助手自定]` 标记）· 其余按需。
 
 ## 按动作分派（动手前先读）
 
@@ -35,7 +36,7 @@ provider:
 backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --all
 ```
 
-16 把尺子 ＋ 守尺子的变异自证 ＋ 全套 pytest。**改过壳**再加：真机 `tools/probe/_shell_smoke.py` ＋ 壳基线 `tools/audit/shell_verify.py --snapshot` 盖章。
+尺子**全套**（⭐ **条数以脚本输出为准，⛔ 别抄**）＋ 守尺子的变异自证 ＋ 全套 pytest。**改过壳**再加：真机 `tools/probe/_shell_smoke.py` ＋ 壳基线 `tools/audit/shell_verify.py --snapshot` 盖章。
 ⭐ 本仓装了 `pre-commit` 钩子跑**便宜子集**（`ops/hooks/pre-commit`）—— 它只挡"明显红"，**不替代**上面那条。
 
 ## 两条硬约束
