@@ -11,7 +11,7 @@ import sys
 
 from audit_common import (
     HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, RED, REPO_ROOT, TAIL_MIN_CELLS,
-    TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root,
+    TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root, read_counts,
 )
 
 # ------------------------------------------------- T5 单文件 >400 行是否已登记
@@ -411,18 +411,22 @@ def _t6(rel: str, lineno: int, what: str, why: str, fix: str, text: str = "") ->
             "what": what, "why": why, "fix": fix, "level": RED, "text": text}
 
 
-def ledger_counts() -> dict[str, int] | None:
+def ledger_counts(text: str | None = None) -> dict[str, int] | None:
     """尾巴台账**四段各有多少行**（只数行，不做任何检查）。
 
     ⭐ 2026-09-24 从 `check_tail_ledger` 抽出：`T6` 用它核对顶部计数行，
     `audit_drift` 的 **`T4` 计数锚点**（黄档）用它核对**两份活文档**里手抄的尾巴计数
     ⇒ ⛔ **段解析与计数口径只留这一份**（别在别处再写一遍）。
+    ⭐ 2026-10-02（`/retro` 候选 1）加 `text` 形参：**用来数"还没落盘的新文本"** ——
+       `_tail_open.py` / `_tail_close.py` 的口径是"改完**先数**、数对了才写盘"，给它就**不必再临时落盘**。
     返回 `{"一": n, "二": n, "三": n, "四": n}`；台账 / 段找不到 ⇒ `None`。
     """
-    path = REPO_ROOT / LEDGER_REL
-    if not path.exists():
-        return None
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    if text is None:
+        path = REPO_ROOT / LEDGER_REL
+        if not path.exists():
+            return None
+        text = path.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
     start = next((k for k, l in enumerate(lines)
                   if re.match(r"^#{2,3}\s*[\d.]*\s*尾巴台账", l.strip())), None)
     if start is None:
@@ -590,13 +594,14 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
     _lc = ledger_counts() or {}
     counts = {k: _lc.get(k, 0) for k in ("一", "二", "三")}
     counts["四"] = _lc.get("四", 0)
-    m = re.search(r"A 类 \*\*(\d+)\*\* 条 · B 类 \*\*(\d+)\*\* 条 · C 类 \*\*(\d+)\*\* 条"
-                  r" · 已销号 \*\*(\d+)\*\* 条", "\n".join(lines))
-    if not m:
+    # ⚠️ 形态来自 `audit_common.COUNT_FULL_RE`（2026-10-02 收口：此前这里与 `_tail_close.py` 各写一遍）
+    #    ⚠️⚠️ 想拿**数字**必须走 `read_counts()` —— 那条正则的捕获组抓的是**装饰**，直接 `int()` 会崩
+    #    （2026-10-02 自测当场踩过；⭐ 是"立台账工具"的收尾断言抓出来的）
+    got = read_counts("\n".join(lines))
+    if got is None:
         hits.append(_t6(LEDGER_REL, 1, "找不到顶部的「当前状态」计数行",
                         "没有计数就没法一眼看出尾巴有没有在涨", "补一行：A 类 **n** 条 · B 类 … "))
     else:
-        got = tuple(int(x) for x in m.groups())
         want = (counts["一"], counts["二"], counts["三"], counts["四"])
         if got != want:
             hits.append(_t6(LEDGER_REL, 1, f"计数与实际不符：写的 {got}，实际 {want}",

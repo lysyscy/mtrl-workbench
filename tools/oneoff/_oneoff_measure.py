@@ -26,6 +26,8 @@ ONEOFF = ROOT / "tools" / "oneoff"
 STANDING = (
     "_run_rulers.py", "_run_muts.py", "_ps_bom.py", "_ps_parse_check.ps1", "_list_tails.py",
     "_page_measure.py", "_prepush_sensitive.py", "_oneoff_measure.py",
+    # ⭐ 2026-10-02（`/retro` 候选 1）：立/销台账是**每轮都可能用**的常驻件，⛔ 别按"一次性"处置
+    "_tail_open.py", "_tail_close.py",
 )
 
 _TEXT_EXT = {".md", ".py", ".ps1", ".txt", ".js", ".html", ".json", ".toml", ".ini", ".sql", ".mdc"}

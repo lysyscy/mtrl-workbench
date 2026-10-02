@@ -270,6 +270,50 @@ TAIL_SCHEDULE_RE = re.compile(r"^#{2,3}\s*[\d.]*\s*逐条排期")
 #: 路径解析时依次尝试的前缀（文档常省略 `backend/`）
 PATH_ROOTS: tuple[str, ...] = ("", "backend/", "backend/app/")
 
+#: ⭐ **顶部计数行的两处形态**（`T6` / `_tail_close.py` / `_tail_open.py` 共用 —— **形态只留这一份**）。
+#: 2026-10-02（`/retro` 候选 1）收口：此前 `audit_meta.check_tail_ledger` 与 `tools/oneoff/_tail_close.py`
+#: **各写一遍**（而 `_tail_open.py` 会成第三遍）⇒ 改一处形态必漏一处 = 本仓"同一件事两处写"的老病。
+#: ⚠️ 两处**写法本来就不同** ⇒ 不能合成一条：§0.2 那行是 `B 类 0`（无 `**`、无「条」），
+#:    §15 顶部那行每项都带 `**` 与「条」。
+COUNT_MIN_RE = re.compile(
+    r"(A 类 \*\*)\d+(\*\* 条 · B 类 )\d+( · C 类 \*\*)\d+(\*\* · 已销号 \*\*)\d+(\*\*)")
+COUNT_FULL_RE = re.compile(
+    r"(A 类 \*\*)\d+(\*\* 条 · B 类 \*\*)\d+(\*\* 条 · C 类 \*\*)\d+(\*\* 条 · 已销号 \*\*)\d+(\*\* 条)")
+
+
+def read_counts(text: str) -> tuple[int, int, int, int] | None:
+    """从文本里**读出** §15 顶部那行计数 ⇒ `(A, B, C, 已销号)`；没有那行 ⇒ `None`。
+
+    ⚠️ 为什么单独给一个读函数：`COUNT_FULL_RE` 的捕获组抓的是**装饰**（`A 类 **` 那一截），
+       好让 `write_counts()` 原样重建 —— 于是**想要数字的人必须走这里**，
+       ⛔ 别拿 `m.groups()` 去 `int()`（2026-10-02 自测当场踩：`ValueError: int('A 类 **')`，
+       ⭐ 是"立台账工具"的**收尾断言**把它抓出来的）。
+    """
+    m = COUNT_FULL_RE.search(text)
+    if not m:
+        return None
+    nums = [int(x) for x in re.findall(r"\d+", m.group(0))]
+    # ⚠️ **必须回 tuple** —— `T6` 拿它跟 `tuple(...)` 比（2026-10-02 自测第二踩：回 list ⇒
+    #    `[4,0,0,221] != (4,0,0,221)` ⇒ 报"计数与实际不符：写的 [4,…]，实际 (4,…)"，**两边其实一模一样**）
+    return tuple((nums + [0, 0, 0, 0])[:4])  # type: ignore[return-value]
+
+
+def write_counts(text: str, counts: dict[str, int]) -> tuple[str, int, int]:
+    """把**两处**计数行按 `counts` 重写 ⇒ `(新文本, §0.2 命中数, §15 顶部命中数)`。
+
+    ⭐ 计数**值**由调用方问真源（`audit_meta.ledger_counts()`）—— 本函数只管**写法**；
+    ⛔ 调用方别自己再写第二条正则（那正是本函数存在的理由）。
+    """
+    def _sub(rx: re.Pattern[str]) -> tuple[str, int]:
+        return rx.subn(
+            lambda m: (f"{m.group(1)}{counts.get('一', 0)}{m.group(2)}{counts.get('二', 0)}"
+                       f"{m.group(3)}{counts.get('三', 0)}{m.group(4)}{counts.get('四', 0)}{m.group(5)}"),
+            text)
+
+    text, n_min = _sub(COUNT_MIN_RE)
+    text, n_full = _sub(COUNT_FULL_RE)
+    return text, n_min, n_full
+
 SCAN_GLOBS: tuple[str, ...] = (
     # ⭐⭐ 2026-09-21 文档体系重构后，扫描面 = **会被当口径读的那几层**（按 `README.md` 的四层）：
     #    ① 注入档 `.codebuddy/memory/MEMORY.md` ② 按需档（根 `README.md` · `ops/*.md` · 计划与服务承诺）

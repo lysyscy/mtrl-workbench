@@ -32,6 +32,7 @@ import tempfile
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "audit"))
+import audit_common  # noqa: E402  ← ⭐ 计数行**形态**的唯一出处（`write_counts`）
 import audit_meta  # noqa: E402  ← ⭐ 计数的**真源**（`ledger_counts()`）
 
 PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
@@ -40,10 +41,8 @@ PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
 SEC_RE = re.compile(r"^#{2,3}\s*([一二三四])、")
 #: 尾巴行（**编号只认第一格** —— 与 `audit_meta.check_tail_ledger` 同口径）
 ROW_RE = re.compile(r"^\|\s*`?(TAIL-\d+)`?\s*\|")
-
-#: 顶部两处计数行（① §0.2 那块 ② §15 顶部）—— 用**分组**重写，保留原有加粗写法
-COUNT0_RE = re.compile(r"(A 类 \*\*)\d+(\*\* 条 · B 类 )\d+( · C 类 \*\*)\d+(\*\* · 已销号 \*\*)\d+(\*\*)")
-COUNT15_RE = re.compile(r"(A 类 \*\*)\d+(\*\* 条 · B 类 \*\*)\d+(\*\* 条 · C 类 \*\*)\d+(\*\* 条 · 已销号 \*\*)\d+(\*\* 条)")
+#: ⚠️ 2026-10-02（`/retro` 候选 1）：顶部两处计数行的**正则已移进 `audit_common.py`**
+#:    （`COUNT_MIN_RE` / `COUNT_FULL_RE` ＋ `write_counts()`）—— ⛔ 别在这里再写一遍。
 
 
 def sections(lines: list[str]) -> dict[str, list[int]]:
@@ -56,24 +55,14 @@ def sections(lines: list[str]) -> dict[str, list[int]]:
     return out
 
 
-def counts_via_source(text: str, plan: pathlib.Path) -> dict[str, int] | None:
-    """问**真源**要计数：把这段文本临时落成文件 ⇒ 调 `audit_meta.ledger_counts()`。
+def counts_via_source(text: str) -> dict[str, int] | None:
+    """问**真源**要计数 ⇒ `audit_meta.ledger_counts(text)`。
 
-    ⚠️ 为什么要落一次盘：`ledger_counts()` 是按**路径**读的（它要给 `T6`/`T4` 用），
-       本件宁可"多写一个临时文件"，也不在别处再镜像一遍它的解析口径。
-    ⚠️ 临时文件写在**目标件同目录**（`.codebuddy/plans/` 下）⇒ 与真件同前缀、路径可相对化；
-       用完**立刻删**（`finally`）。
+    ⭐ 2026-10-02（`/retro` 候选 1）：原先这里要"**把新文本临时落盘 ＋ monkeypatch `LEDGER_REL`**"
+    （因为 `ledger_counts()` 当时只按路径读）—— 现在真源直接吃文本 ⇒ **那套动作整段删掉**
+    （少一个临时件、少一处 monkeypatch ⇒ 少一类"临时件残留污染基线"的坑，本仓吃过）。
     """
-    old = audit_meta.LEDGER_REL
-    tmp = plan.with_name(f"~{plan.name}.tailclose-tmp")
-    try:
-        tmp.write_text(text, encoding="utf-8", newline="")
-        audit_meta.LEDGER_REL = str(tmp.relative_to(REPO)).replace("\\", "/")
-        got = audit_meta.ledger_counts()
-    finally:
-        audit_meta.LEDGER_REL = old
-        tmp.unlink(missing_ok=True)
-    return got
+    return audit_meta.ledger_counts(text)
 
 
 def main(argv: list[str]) -> int:
@@ -108,24 +97,19 @@ def main(argv: list[str]) -> int:
 
     # ③ 计数：**问真源**（⛔ 本件不镜像算法）
     text_new = "".join(l for k, l in enumerate(lines) if k != live_i)
-    c = counts_via_source(text_new, path)
+    c = counts_via_source(text_new)
     if not c:
-        print("⛔ 真源 `ledger_counts()` 在临时件上回 None（段标题形态变了？）⇒ **未写盘**")
+        print("⛔ 真源 `ledger_counts()` 在这份新文本上回 None（段标题形态变了？）⇒ **未写盘**")
         return 1
     print(f"② 真源重算：A {c.get('一', 0)} · B {c.get('二', 0)} · C {c.get('三', 0)}"
           f" · 已销号 {c.get('四', 0)}")
-    text_new, n0 = COUNT0_RE.subn(
-        lambda m: f"{m.group(1)}{c.get('一', 0)}{m.group(2)}{c.get('二', 0)}"
-                  f"{m.group(3)}{c.get('三', 0)}{m.group(4)}{c.get('四', 0)}{m.group(5)}", text_new)
-    text_new, n15 = COUNT15_RE.subn(
-        lambda m: f"{m.group(1)}{c.get('一', 0)}{m.group(2)}{c.get('二', 0)}"
-                  f"{m.group(3)}{c.get('三', 0)}{m.group(4)}{c.get('四', 0)}{m.group(5)}", text_new)
+    text_new, n0, n15 = audit_common.write_counts(text_new, c)
     if n0 != 1 or n15 != 1:
         print(f"⛔ 计数行命中：§0.2 {n0} 处 / §15 顶部 {n15} 处（各期望 1）⇒ **未写盘**"
               "（多半是计数行被改写过，形态变了）")
         return 1
     # 写完计数后再问一次真源：**数对上了才算过**（计数行本身不参与计数 ⇒ 应不变）
-    again = counts_via_source(text_new, path)
+    again = counts_via_source(text_new)
     if again != c:
         print(f"⛔ 复查不一致：写计数前 {c} / 写计数后 {again} ⇒ **未写盘**")
         return 1
