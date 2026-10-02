@@ -267,8 +267,11 @@ def test_台账卡头按钮分组与点开有反馈都钉住():
     # ⑧ 真机段在位（本批的新覆盖：**点开自己变样** ＋ 不开长 toast —— 离线看不见）
     probe = Path(__file__).resolve().parents[2] / "tools" / "probe" / "_shell_m05head.py"
     assert probe.exists(), "真机段 `_shell_m05head.py`（㉚）不在位"
-    assert "check_m05head(page, errors)" in (probe.parent / "_shell_smoke.py").read_text(encoding="utf-8"), \
-        "真机段 ㉚ 没被编排件 `_shell_smoke.py` 调用"
+    # ⭐⭐ 2026-10-02（`TAIL-215` 批 1）：编排**改成「遍历注册表」** ⇒ 锚点从"编排件里有那行调用"
+    #    改成"**注册表里有这一段**"。**意图一字未改**：这一段真被挂进编排了、⛔ 不是写了不跑。
+    #    ⚠️ 「表写了会不会真跑到」那半由 `backend/tests/test_shell_segments.py` 全局守（⛔ 不在这里复述）。
+    assert "_shell_m05head:check" in (probe.parent / "_shell_segments.py").read_text(encoding="utf-8"), \
+        "真机段 ㉚ 没进注册表 `_shell_segments.py` ⇒ 等于没跑"
 
 
 # --------------------------------------------------------------- 台账导出（`TAIL-04` 片 2＋3）

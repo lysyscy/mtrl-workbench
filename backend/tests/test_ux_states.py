@@ -130,8 +130,9 @@ def test_真机27号的判据还在():
     src = (ROOT / "tools" / "probe" / "_shell_states.py").read_text(encoding="utf-8")
     for need in ("def check(", "retryPage", "正在读取", "kind === 'error'"):
         assert need in src, f"真机 ㉗ 里缺 {need!r} —— 页级四态的真机判据被拆了？"
-    smoke = (ROOT / "tools" / "probe" / "_shell_smoke.py").read_text(encoding="utf-8")
-    assert "check_states(page, errors)" in smoke, "真机 ㉗ 没挂进编排件（`_shell_smoke.py`）⇒ 等于没跑"
+    # ⭐ 2026-10-02（`TAIL-215` 批 1）：编排改成「遍历注册表」⇒ 锚点改指**注册表**（意图一字未改）。
+    smoke = (ROOT / "tools" / "probe" / "_shell_segments.py").read_text(encoding="utf-8")
+    assert "_shell_states:check" in smoke, "真机 ㉗ 没进注册表（`_shell_segments.py`）⇒ 等于没跑"
 
 
 @acc("ACC-UI-SHELL-001", "001-53")
@@ -144,5 +145,6 @@ def test_真机31号的空态判据还在():
     src = (ROOT / "tools" / "probe" / "_shell_empty.py").read_text(encoding="utf-8")
     for need in ("def check(", "当前筛选条件下没有付款计划", "换个「单据年月", "正常路"):
         assert need in src, f"真机 ㉛（空态）里缺 {need!r} —— 空态的真机判据被拆了？"
-    smoke = (ROOT / "tools" / "probe" / "_shell_smoke.py").read_text(encoding="utf-8")
-    assert "check_empty(page, errors)" in smoke, "真机 ㉛ 没挂进编排件（`_shell_smoke.py`）⇒ 等于没跑"
+    # ⭐ 2026-10-02（`TAIL-215` 批 1）：同上，锚点改指**注册表**。
+    smoke = (ROOT / "tools" / "probe" / "_shell_segments.py").read_text(encoding="utf-8")
+    assert "_shell_empty:check" in smoke, "真机 ㉛ 没进注册表（`_shell_segments.py`）⇒ 等于没跑"
