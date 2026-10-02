@@ -36,7 +36,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.errors import MustReportError
+from app.core.errors import MustReportError, human_reason
 
 # ---------------------------------------------------------------- 常量
 
@@ -158,7 +158,8 @@ def _loads(value: Any, what: str) -> Any:
         try:
             return json.loads(value)
         except json.JSONDecodeError as exc:
-            raise MustReportError(f"版式的「{what}」不是合法 JSON：{exc}") from exc
+            raise MustReportError(human_reason(f"版式的「{what}」不是合法 JSON", exc,
+                                                next_step="请让维护人重新抓取一次版式；这一份暂时用不了")) from exc
     return value
 
 

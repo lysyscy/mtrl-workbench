@@ -37,7 +37,7 @@ import openpyxl
 import pandas as pd
 import xlsxwriter
 
-from app.core.errors import MustReportError
+from app.core.errors import MustReportError, log_exc
 from app.core.logging import get_logger
 from app.report_export.resources import SETL_TEMPLATE, require_template
 from app.report_export.schema_cols import (SFJC_COL_WIDTHS, SFJC_HEADER,
@@ -340,7 +340,11 @@ def verify(out_path, df, pv, grand, show_order):
         try:
             ET.fromstring(zf.read(name))
         except Exception as e:
-            problems.append(f'{name}: {e}')
+            # ⭐ `TAIL-220`（2026-10-02）：这一条 `problems` **会跟着报错上屏**（`build_zip` 里对账不过 ⇒
+            #    `MustReportError('成品文件透视表对账未通过…' + problems[:5])`）⇒ 原文（XML 解析异常＋
+            #    内部路径）**只许进日志**；上屏那句写成用户能懂的话（其余几条 `problems` 是**业务细节**、保留）。
+            log_exc(f"成品自检：{name} 读不成", e)
+            problems.append('成品文件的内部结构读不成（文件可能损坏）—— 已中止，未交付')
     cd = ET.fromstring(zf.read('xl/pivotCache/pivotCacheDefinition1.xml'))
     cr = ET.fromstring(zf.read('xl/pivotCache/pivotCacheRecords1.xml'))
     fields = cd.findall(f'{{{NS}}}cacheFields/{{{NS}}}cacheField')

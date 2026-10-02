@@ -32,6 +32,7 @@ powershell -ExecutionPolicy Bypass -File D:\dev\mtrl-workbench\ops\selfcheck.ps1
 | **`ALLOWED_IP_CIDRS`** | **仓根 `.env`**（键名见**仓根 `.env.example`**） | 办公室**局域网段**（i8 在**外网** ⇒ 目标机要能上外网） |
 | **打印机** | 页内「系统设置」/ 打印设置 | ⭐ 用户 2026-09-29 已确认：**现在设置里那套就是目标机的** ⇒ 一般不用改；装好驱动后用「打印机」输入框确认名字 |
 | **Python / PG / node / nssm** | 目标机环境 | 用户 2026-09-29 已确认"**该有的都有**"（本机就是由目标机那半移植过来继续开发的）⇒ 落地第一步**核一遍版本**即可 |
+| ⭐ **依赖镜像**（`ops\pip.ini`） | 仓内 **`ops\pip.ini`**（= **唯一主人**，随包走）⇒ 落地时由 `deploy_restore.ps1` 的**第 3b 步**复制成 **venv 级** `backend\.venv\pip.ini` | ⚠️ **不用你改**，但**要看一眼脚本那两行**：打印"✓ 依赖镜像已落 venv 级"＝成了；打印"⚠️ 与仓内真源不一致"＝这台机器**故意在用别的镜像**（**由你判**要不要覆盖）。⭐ 为什么有这一步：`.venv` **不进包**（gitignore）⇒ 不补这一下，目标机**重建 venv** 时会**悄悄**走默认 PyPI 官方源（国内可能极慢 / 超时）。判据 = `backend\tests\test_pipini_single_source.py`（两份**逐字节相同**） |
 
 ⚠️ **改了 `.env` 却不生效？** 见 `ops/README.md` **§一之五 配置主人表**（库 vs `.env` 谁优先 · 改完要不要重启）—— ⛔ 别在这里再抄一份。
 

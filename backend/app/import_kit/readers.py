@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 from collections.abc import Callable
 
-from app.core.errors import MustReportError
+from app.core.errors import MustReportError, human_reason
 from app.import_kit.parse import cell_text
 
 #: 真实表前面可能有一两行标题 ⇒ 表头行扫描上限（默认值，可覆盖）
@@ -62,7 +62,7 @@ def _read_xls(data: bytes, *, sheet: str | None, max_rows: int | None,
     try:
         book = xlrd.open_workbook(file_contents=data)
     except Exception as exc:  # noqa: BLE001
-        raise MustReportError(f"这个文件读不成 Excel（.xls）：{exc}") from exc
+        raise MustReportError(human_reason("这个文件读不成 Excel（老 .xls 格式）", exc, next_step="请确认它没损坏；先用 Excel 打开、另存为 .xlsx 再导也可以")) from exc
     names = [book.sheet_by_index(i).name for i in range(book.nsheets)]
     if sheet:
         if sheet not in names:
@@ -123,7 +123,7 @@ def read_grid(data: bytes, *, sheet: str | None = None, max_rows: int | None = N
     try:
         wb = load_workbook(io.BytesIO(data), data_only=True, read_only=not fill_merged_rows)
     except Exception as exc:  # noqa: BLE001
-        raise MustReportError(f"这个文件读不成 Excel（.xlsx）：{exc}") from exc
+        raise MustReportError(human_reason("这个文件读不成 Excel（.xlsx）", exc, next_step="请确认它没损坏、也没被加密；另存一份再导也可以")) from exc
     if sheet:
         if sheet not in wb.sheetnames:
             raise MustReportError(f"没有叫「{sheet}」的工作表（现有：{' / '.join(wb.sheetnames)}）")
@@ -162,14 +162,14 @@ def list_sheets(data: bytes) -> list[str]:
         try:
             book = xlrd.open_workbook(file_contents=data)
         except Exception as exc:  # noqa: BLE001
-            raise MustReportError(f"这个文件读不成 Excel（.xls）：{exc}") from exc
+            raise MustReportError(human_reason("这个文件读不成 Excel（老 .xls 格式）", exc, next_step="请确认它没损坏；先用 Excel 打开、另存为 .xlsx 再导也可以")) from exc
         return [book.sheet_by_index(i).name for i in range(book.nsheets)]
     from openpyxl import load_workbook
 
     try:
         wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
     except Exception as exc:  # noqa: BLE001
-        raise MustReportError(f"这个文件读不成 Excel（.xlsx）：{exc}") from exc
+        raise MustReportError(human_reason("这个文件读不成 Excel（.xlsx）", exc, next_step="请确认它没损坏、也没被加密；另存一份再导也可以")) from exc
     names = list(wb.sheetnames)
     wb.close()
     return names

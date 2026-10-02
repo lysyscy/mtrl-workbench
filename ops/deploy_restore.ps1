@@ -158,6 +158,31 @@ else {
     Say '   ⚠️ 没有 venv ⇒ 建一个（⚠️ 目标机若已有 Python，注意版本要与本机一致，见 ops\deployment.md）'
     $null = Run 'python' @('-m', 'venv', $venv) $RepoRoot
 }
+# ---- 3b) ⭐ 依赖镜像加固（2026-10-02 补 · `TAIL-188` 只读清点当场挖出的缺口）----
+#  为什么要有这一段：镜像 URL 原先**只**活在 `backend\.venv\pip.ini` 里，而 **`.venv` 是 gitignore 的**
+#    ⇒ **不进 bundle** ⇒ 目标机**重建 venv** 之后那份加固**当场失效**（悄悄走默认 PyPI 官方源 —— 国内
+#    可能极慢/超时），而 ⛔ **本脚本原先一个字都不报**（静默失效 = 本仓最贵那一类）。
+#  ⭐ 修法（用户 2026-10-02 选「乙」）：**真源搬进仓** = `ops\pip.ini`（随 bundle 走）⇒ 这里**复制成 venv 级**。
+#  ⚠️ **一处定义**：`ops\pip.ini` 是唯一主人，`backend\tests\test_pipini_single_source.py` 守"两份逐字节相同"。
+#  ⚠️ 已在**且不同**时**不静默覆盖**：报出来让人判（目标机可能故意用别的镜像）。
+$pipSrc = Join-Path $RepoRoot 'ops\pip.ini'
+$pipDst = Join-Path $venv 'pip.ini'
+if (-not (Test-Path -LiteralPath $pipSrc)) {
+    Say '   ⛔ 仓里没有 ops\pip.ini ⇒ 依赖会走默认 PyPI 源（国内可能极慢）—— 先把它补回来再继续'
+} elseif (-not (Test-Path -LiteralPath $pipDst)) {
+    if ($DryRun) { Say ('   [干跑] ' + $pipSrc + ' -> ' + $pipDst) }
+    else {
+        New-Item -ItemType Directory -Force -Path $venv | Out-Null
+        Copy-Item -Force -LiteralPath $pipSrc -Destination $pipDst
+        Say ('   ✓ 依赖镜像已落 venv 级：' + $pipDst + '（来自 ops\pip.ini）')
+    }
+} elseif ((Get-FileHash $pipSrc -Algorithm SHA256).Hash -ne (Get-FileHash $pipDst -Algorithm SHA256).Hash) {
+    Say '   ⚠️ venv 里那份 pip.ini 与仓内真源**不一致**（目标机可能故意用别的镜像）⇒ **只报不覆盖**：'
+    Say ('       仓内 ops\pip.ini = ' + ((Get-Content -LiteralPath $pipSrc -Encoding UTF8) -join ' | '))
+    Say ('       现有 venv\pip.ini = ' + ((Get-Content -LiteralPath $pipDst -Encoding UTF8) -join ' | '))
+} else {
+    Say '   ✓ 依赖镜像已在，且与仓内真源一致（venv 级 pip.ini）'
+}
 $req = Join-Path $RepoRoot 'backend\requirements.txt'
 if (Test-Path $req) { $null = Run (Join-Path $venv 'Scripts\python.exe') @('-m', 'pip', 'install', '-r', $req) (Join-Path $RepoRoot 'backend') }
 else { Say '   ⚠️ 没有 backend\requirements.txt ⇒ 跳过（⚠️ 目标机缺包时按 ops\deployment.md 装）' }

@@ -48,7 +48,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from app.core.errors import MustReportError
+from app.core.errors import MustReportError, human_reason
 from app.core.money import MoneyError, to_money
 from app.import_kit import mapping
 from app.import_kit.mapping import Field
@@ -467,7 +467,11 @@ def plan_rows(records) -> tuple[list[dict], list[dict], list[dict]]:
                 if val in (None, ""):
                     continue
                 row[key] = to_money(str(val))
-        except (MoneyError, ArithmeticError, ValueError) as exc:
+        except ArithmeticError as exc:          # ⭐ 外来（如 DivisionByZero）⇒ 原文不上屏，进日志
+            bad.append({"line": line, "reason": human_reason(
+                "金额认不出", exc, next_step="请把这一格改成数字（或先清空）")})
+            continue
+        except (MoneyError, ValueError) as exc:   # 我们自己的（`MoneyError` / `to_money` 的 `ValueError`）⇒ message 本就是人话
             bad.append({"line": line, "reason": f"金额认不出：{exc}"})
             continue
         rows.append(row)

@@ -466,3 +466,107 @@ def test_用户可见串里不许拼异常原文():
           "（它返回人话 ＋ 下一步，细节自己记进运行日志）；"
           "⛔ `error_message=`（执行记录）是唯一例外。"
     )
+
+
+#: ⭐⭐ `TAIL-220`（2026-10-02 · **架构走查候选③**）：**原始异常正文**（`{exc}`）拼进用户可见串 ——
+#: 上面那条**只挡类名**（`type(exc).__name__`）⇒ 这一类**落在它射程之外**（＝"有判据 ≠ 这一类被管着"）。
+#: ⚠️ **口径（判据的边界，写在这里免得含糊）**：
+#:   · **放行** = 该 `except` 的类型是「**我们自己的**」异常（见 `_EXC_OURS`）—— 本仓约定：`AppError` 家族
+#:     与 `MoneyError` / **我们主动抛的** `ValueError`，其 `message` **必须是人话**
+#:     （`core/errors.py` 头部那句「`message` 会原样呈给用户，务必写清"发生了什么"」）⇒ 把人话再拼一次**不算技术串**；
+#:   · **报红** = 该 `except` 是**外来的**（`Exception` / `JSONDecodeError` / `ArithmeticError` / `OSError`…）
+#:     ⇒ 原文（英文、带路径 / 行列号）直接甩给用系统的人看，两条都不满足 §3.7。
+#:   ⚠️ **已知边界**：`except ValueError` 一律按"我们的"放行 —— 哪天把**库抛的** `ValueError` 拼上屏，
+#:     本判据**看不见**（机器判不出"谁抛的"）⇒ 那一层靠 review；
+#:     ⛔ 但**别为了堵这个把判据放宽成"一律报红"** —— 会当场假红 8 处人话（2026-10-02 量过，见
+#:     `work/10-designs/设计-架构候选3-异常原文-20261002.md`）。
+_EXC_OURS = ("MustReportError", "MoneyError", "MRE", "AppError", "NotConfiguredError",
+             "ExternalServiceError", "DataConflictError", "DataIntegrityError", "ValueError")
+#: 异常惯用变量名（只认这些 —— 免得把别的同名变量算进来）
+_EXC_VARS = {"exc", "e", "err", "error", "_exc"}
+
+
+def _except_map(tree) -> dict:
+    """行号 ⇒ `(异常类型名, as 变量名)`；⚠️ **嵌套 `except` 内层赢**（按覆盖范围**从小到大**写入 ⇒ 后写的覆盖先写的）。"""
+    import ast
+
+    spans: list[tuple[int, int, str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ExceptHandler):
+            continue
+        tname = ast.unparse(node.type) if node.type is not None else "Exception"
+        start = node.lineno
+        end = max((getattr(n, "end_lineno", None) or getattr(n, "lineno", None) or start
+                   for n in ast.walk(node)), default=start)
+        spans.append((end - start, start, tname, node.name or ""))
+    out: dict = {}
+    for size, start, tname, var in sorted(spans):
+        for ln in range(start, start + size + 1):
+            out[ln] = (tname, var)
+    return out
+
+
+@acc()
+def test_用户可见串里不许拼异常正文():
+    """⭐ `TAIL-220`（2026-10-02）：**原始异常正文**不许拼进用户可见文案（守则 §3.1 / §3.7）。
+
+    **为什么补**：架构走查**候选③** + `TAIL-188` 清点这条线撞出来的 —— 上面那条判据（`TAIL-212`）的靶是
+    `type(exc).__name__`（**类名**），而**正文**（`{exc}`）一路没人管。实测（2026-10-02）真该改的有 5 处：
+    `import_kit/readers.py` 四处（`xlrd` / `openpyxl` 的库异常）＋ `report_export/setl_export.py`
+    （XML 解析异常，**而且那条 `problems` 会跟着报错上屏**）。
+    ⚠️ 另有一处是**量法误报**、判据必须放行的：`mod06_proc/router.py` 的 `except ValueError`
+    —— `mech_ui.parse_mech_values` 抛的是**我们自己写的人话**（`「辅材」不是数字：'abc'`）。
+
+    ⚠️ **能证伪**：任一处 `except Exception as exc:` 里写 `f"失败：{exc}"` ⇒ 本件必红；
+       而写在 `except MustReportError` / `error_message=` 那一行 ⇒ **不红**（自证 = `tools/mut/_mut_exctext.py`）。
+    """
+    import ast
+    import re as _re
+
+    bad: list[str] = []
+    for p in sorted(_APP_DIR.rglob("*.py")):
+        if p in _EXC_EXEMPT:
+            continue
+        src = p.read_text(encoding="utf-8", errors="replace")
+        lines = src.splitlines()
+        tree = ast.parse(src)
+        hof = _except_map(tree)
+        skip: set[int] = set()
+        for node in ast.walk(tree):
+            # 裸表达式语句（值**无处可去**）⇒ 与上面那条同口径，跳过（含子孙）
+            if isinstance(node, ast.Expr) and not isinstance(node.value, ast.Constant):
+                skip.add(id(node))
+                for sub in ast.walk(node.value):
+                    skip.add(id(sub))
+        for node in ast.walk(tree):
+            names: set[str] = set()
+            if isinstance(node, ast.JoinedStr):                     # f"…{exc}…"
+                for part in node.values:
+                    if isinstance(part, ast.FormattedValue) and isinstance(part.value, ast.Name):
+                        names.add(part.value.id)
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                    and node.func.attr == "format":                 # "…{0}".format(exc)
+                names |= {kw.value.id for kw in node.keywords if isinstance(kw.value, ast.Name)}
+                names |= {a.id for a in node.args if isinstance(a, ast.Name)}
+            names &= _EXC_VARS
+            if not names or id(node) in skip:
+                continue
+            a, b = node.lineno, node.end_lineno or node.lineno
+            tname, hvar = hof.get(a, ("", ""))
+            if hvar not in names:                 # ⛔ 不是"这个 except 的那个变量"⇒ 不算
+                continue
+            parts = set(_re.findall(r"[A-Za-z_][A-Za-z_0-9]*", tname))
+            if parts and all(x in _EXC_OURS for x in parts):        # 我们自己的异常 ⇒ message 本就是人话
+                continue
+            span = "\n".join(lines[a - 1:b])                        # ⚠️ 查**整行 span**（与上面那条同口径）
+            if any(k in span for k in _EXC_ALLOW):
+                continue
+            bad.append(f"{p.relative_to(_APP_DIR.parent.parent).as_posix()}:{a}  [except {tname}]")
+    assert not bad, (
+        "**用户可见的串**里拼了**原始异常正文**（守则 §3.1 细节不上屏 / §3.7 人话＋下一步）：\n  "
+        + "\n  ".join(bad)
+        + "\n⇒ 改走 `app/core/errors.py` 的 `human_reason(人话前缀, exc, next_step=…)`"
+          "（返回人话 ＋ 下一步，细节自己进运行日志）；"
+          "\n⚠️ 若这一处的异常**本来就是我们自己抛的人话**（`AppError` 家族 / `MoneyError` / 我们抛的 "
+          "`ValueError`）⇒ 它该被放行 —— 那种情形**修判据、别改代码**（见本件 `_EXC_OURS`）。"
+    )
