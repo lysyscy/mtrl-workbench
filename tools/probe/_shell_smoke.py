@@ -41,6 +41,7 @@ from _shell_m05head import check as check_m05head  # noqa: E402  ← ㉚ 台账�
 from _shell_empty import check as check_empty  # noqa: E402  ← ㉛ 空态（`TAIL-171`-① · 2026-09-29）
 from _shell_bigpin import check as check_bigpin  # noqa: E402 ← ㉜ 大表首列区固定（`TAIL-175` · 2026-09-29）
 from _shell_jcpin import check as check_jcpin  # noqa: E402  ← ㉝ m11 行身份区固定（`TAIL-180` · 2026-09-29）
+from _shell_m11cost import check as check_m11cost  # noqa: E402 ← ㊲ m11 重绘代价与行数无关（`TAIL-214` · 2026-10-02）
 from _shell_bootbar import check as check_bootbar  # noqa: E402 ← ㉞ 启动失败横幅不盖内容（`TAIL-182` · 2026-09-29）
 from _shell_vskeep import check as check_vskeep   # noqa: E402 ← ㉟ 表级虚拟滚动：本页内刷新不跳滚动（`TAIL-64` P5-a · 2026-09-30）
 from _shell_vskeep import check_risk as check_vsrisk  # noqa: E402 ← ㊱ 接管缺口机器眼（`TAIL-198` · 2026-09-30）
@@ -634,6 +635,17 @@ def main() -> int:
         #         还要验"**隐藏贸易公司三列之后重量了没有**"（隐藏会改剩下的列宽 ⇒ 旧偏移当场过期）。
         #      挪 `_shell_jcpin.py`。
         check_jcpin(page, errors)
+
+        # ---- ㊲ **`m11` 打开不卡：单次重绘的「几何读次数」与行数无关**（`TAIL-214` · 2026-10-02
+        #      用户报障「打开 mod11 页面有几秒的卡顿，之后才进入页面」）：
+        #      该表 `render()` 里 `jcApplyPin()` 原先**逐行**重算列偏移（`off(i)` 落在行循环里）
+        #      ⇒ 329 行 × 3 ≈ 987 次「`getBoundingClientRect()` 读 ↔ `style.left` 写」交替
+        #      = layout thrashing ⇒ 每次读都要对 20 列 × 330 行 ＋ sticky 钉列的大表**重排** ⇒ ≈3 s。
+        #      ⚠️ **量"次数"不量"耗时"**：耗时随机器波动，而"每行读几次几何"有干净指纹
+        #         （坏 = 每行 3 次；好 ≈ 只按列量 4 次）⇒ 判据 = 把行数缩到 1/6 再量一次的**斜率**。
+        #      ⚠️ 为什么必须在真机：离线看不见"渲染时读了几次几何"（⛔ 数源码里的出现次数不算
+        #         —— 循环里那一行可以跑 330 遍）。挪 `_shell_m11cost.py`。
+        check_m11cost(page, errors)
 
         # ---- ㉟ **表级虚拟滚动：本页内刷新不跳滚动**（`TAIL-64` P5-a · 2026-09-30）：
         #      P5-a 把虚拟滚动从"整页一张大表"下沉成"**每张表自己**"（`m08` 试点）⇒

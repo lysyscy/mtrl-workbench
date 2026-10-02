@@ -119,9 +119,23 @@ function jcApplyPin(){
      ⇒ 不单列会**静默抛** `Cannot read properties of undefined`（实测：真机 3 次 pageerror；
      ⚠️ 它**不报在界面上** —— 只有 `fl` 那句先跑到了，看起来"居然还是对的"，最难查的那种）。 */
   const off=i=>i===0?0:ths[i-1].getBoundingClientRect().right-L0;
+  /* ⭐⭐ `TAIL-214`（2026-10-02 · 用户报障「打开 mod11 页面有几秒的卡顿」）—— **偏移只跟列有关、跟行无关**
+     ⇒ 下面必须分成**两个相**（读全 ⇒ 再写全）：
+       ① **先把要用的偏移一次量完**（`OFF` 只有 4 个数：首格 ＋ `JC_PIN` 那 3 列）；
+       ② **再统一往格子上写**（`put` 只读 `OFF`，⛔ 里面不许再出现 `getBoundingClientRect`）。
+     ⚠️⚠️ 原先这里是把 `off(i)` **写在 `put` 里**的 ⇒ 330 行 × 3 列 = **987 次**
+        「`getBoundingClientRect()` 读 ↔ `style.left=` 写」**交替**；每次读都得先对
+        **20 列 × 330 行 ＋ sticky 钉列**的大表做一次**全量同步重排**（= layout thrashing）
+        ⇒ 单次 `render()` **≈ 3 s**（真机剖面实测：`getBoundingClientRect` 自耗时 3.4 s/次，
+        按调用者归账 ⇒ 正是这里那个 `off`）；而进 m11 要 `render()` **两次**（先画旧数据、
+        数据回来再画）⇒ 用户体感"几秒卡顿，之后才进入页面"。改完 ≈ 几十毫秒，且**与行数无关**。
+     ⚠️ 这条**只有真机能守**（离线看不见"渲染时读了几次几何"，数源码里的出现次数不算 ——
+        循环里那一行会跑 330 遍）⇒ 判据 = 真机 **㊲** `tools/probe/_shell_m11cost.py`
+        （量"每多一行多读几次几何"：坏 = **3.00** · 好 ≈ **0**）＋ 自证 `tools/mut/_mut_m11cost.py`。 */
+  const OFF={0:0}; JC_PIN.forEach(i=>{ OFF[i]=off(i); });
   const put=(el,i)=>{
     if(!el||el.colSpan>1) return;                         /* 空态行是 `colspan=20` 的单格 ⇒ 不是"一格一列" */
-    el.classList.add('fl'); el.style.left=off(i)+'px';
+    el.classList.add('fl'); el.style.left=OFF[i]+'px';
   };
   JC_PIN.forEach(i=>put(ths[i],i));
   [...tbl.querySelectorAll('tbody > tr')].forEach(tr=>{
