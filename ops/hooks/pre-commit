@@ -1,0 +1,75 @@
+#!/bin/sh
+# 提交前的**便宜子集**闸门（2026-10-02 立 · 出处 = `/retro` 复盘的候选 1）。
+#
+# 为什么是"子集"而不是全部：pytest / 真机 `_shell_smoke` / 盖章 / 产包干跑 属**"一批一次"**的粒度
+#   （慢、且要活服务 / 浏览器），留在收工入口 `tools/oneoff/_run_rulers.py --all`；
+#   这里只跑**秒级**、且能挡掉"明显红"的那几把：
+#     · syntax_audit  —— 能编译 / 能解析吗（`node --check` ＋ py 编译）
+#     · doc_audit     —— 文档漂移（T1–T12：断链 / 数字失配 / 台账 / 落点；⛔ 不含 `--ui` 交付面四检）
+#     · audit_meta    —— T5 行数纪律 ＋ T6 尾巴台账（编号重复 / 栏位 / 阶段 / 两处计数一致）
+#     · audit_work    —— T14/T15/T20（scratch TTL / artifacts 白名单 / 备份与 oneoff 容量）
+#     · mut_cover     —— 变异覆盖台账是否与生成结果一致（`--check`，不执行变异）
+#
+# 为什么**没有 CI**（刻意）：本机是**唯一**运行环境，且交付面在仓外的 WPS 云同步目录里
+#   ⇒ 远端跑不出"真机 ＋ 交付面"那一半，维护成本却照付。⇒ 守卫落在**本地钩子 ＋ 收工入口**两处。
+#
+# 装：`powershell -NoProfile -ExecutionPolicy Bypass -File ops\install_hooks.ps1`
+# 卸：删掉 `.git/hooks/pre-commit`
+# 跳过一次：`git commit --no-verify`（⛔ 不推荐 —— 跳过等于这一笔没有守卫）
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+PY="$ROOT/backend/.venv/Scripts/python.exe"
+if [ ! -x "$PY" ]; then
+  echo "pre-commit：找不到 venv 的 python（$PY）⇒ 本次跳过（⛔ 别静默：这行就是提示）"
+  exit 0
+fi
+
+bad=""
+
+#: 打印"最后 N 行" —— ⛔ **别用 `tail` / `sed` / `awk`**：实测在 sh 里它们**可能不在 PATH**
+#:   （2026-10-02：直接 `sh .git/hooks/pre-commit` 当场撞到 `tail: command not found` ⇒ 钩子自己把自己判红）。
+#:   纯 shell 版本：环形缓冲（`${buf#*<换行>}` = 去掉第一行）。
+NL='
+'
+tail_n() {
+  _n=${1:-10}
+  _buf=""
+  _cnt=0
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    if [ "$_cnt" -eq 0 ]; then _buf="$_line"; else _buf="$_buf$_NL$_line"; fi
+    _cnt=$((_cnt + 1))
+    if [ "$_cnt" -gt "$_n" ]; then
+      _buf="${_buf#*"$NL"}"        # 去掉第一行（`$NL` 是真的换行，⛔ 不是 `printf` 出来的）
+      _cnt=$((_cnt - 1))
+    fi
+  done
+  printf '%s\n' "$_buf"
+}
+
+for spec in \
+  "tools/audit/syntax_audit.py" \
+  "tools/audit/doc_audit.py" \
+  "tools/audit/audit_meta.py" \
+  "tools/audit/audit_work.py" \
+  "tools/audit/mut_cover.py --check"
+do
+  # shellcheck disable=SC2086
+  set -- $spec
+  script="$1"; shift
+  out=$("$PY" -X utf8 "$ROOT/$script" "$@" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "pre-commit ✅ $script $*"
+  else
+    echo "pre-commit ⛔ $script $*（rc=$rc）—— 末尾几行："
+    printf '%s\n' "$out" | tail_n 10 | while IFS= read -r l; do echo "    $l"; done
+    bad="$bad $script"
+  fi
+done
+
+if [ -n "$bad" ]; then
+  echo "pre-commit：上面这些红了 ⇒ 先清红再提交（明细 = 直接跑那一把尺子）。"
+  echo "            真机 / 全套 pytest / 盖章 / 产包干跑 不在这儿 —— 收工入口 = tools/oneoff/_run_rulers.py --all"
+  exit 1
+fi
+echo "pre-commit：便宜子集全绿（全套仍以 tools/oneoff/_run_rulers.py --all 为准）"
+exit 0

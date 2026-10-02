@@ -1,0 +1,44 @@
+---
+description: 接手 / 新会话入场指针 —— 开场必读的四份 ＋ 提交前的唯一闸门入口 ＋ 按动作分派的"先读哪一份"（⛔ 本规则不含内容，只放指针）
+alwaysApply: true
+enabled: true
+updatedAt: 2026-10-02T00:00:00.000Z
+provider:
+---
+
+# 入场指针（项目规则 · **只放指针**）
+
+⛔ **本规则不复制任何内容** —— 复制出来就有第二套口径（改一处漏一处，本仓最贵的病）。
+每条 = 「**什么情况下**读**哪一份**」。内容一律回主人处读。
+
+## 开场四步（接手 / 新会话）
+
+1. **现在到哪了** ⇒ `.codebuddy/plans/开发计划-主文档.md` **§0.2**（当前位置块 —— 以**最新那一块**为准，旧块标了"已被上一块取代"）；
+2. **上一轮干到哪 / 怎么接** ⇒ 同一份的 **§13.6** 表里**最新那条修订行**（任务与版本 / 进展与证据 / 决定与限制 / 权威资料 / 接续动作 / 提交位置 / 验收方法）；
+3. **待办 ＋ 要用户验什么** ⇒ 根 `README.md` **§〇**（「给人看的」唯一一页）；
+4. **逐件实况** ⇒ `.codebuddy/memory/journal/<最近日期>.md`（append-only；⚠️ 旧日志在 `.codebuddy/plans/archive/`，那是**留痕**）。
+
+## 按动作分派（动手前先读）
+
+| 要动的 | 先读 |
+|---|---|
+| **前端（壳）** | `ops/前端设计守则-以使用用户为中心.md`（前端口径唯一主人）＋ 本目录的 `前端设计守则/RULE.mdc` |
+| **任何"上屏文字"** | `.codebuddy/work/40-decisions/D29-文案审计口径-以熟手为准.md`（读者 = **已清楚业务流程的人**） |
+| **尾巴台账 / §15** | 计划 **§15 顶部三段** ＋ 跑 `tools/oneoff/_tail_close.py --id N`（销号 = 三处同改，⛔ 别手改） |
+| **判据 / 尺子** | 同批给**反向灵敏度** `tools/mut/_mut_*.py`（撤判据必须**同批撤靶**） |
+| **某个大件的结构** | `tools/oneoff/_skeleton.py <文件>`（⛔ 别对整份大文件做 grep —— 输出缓冲会被撑爆、结果只回一部分） |
+| **`ops\*.ps1` / `tools\**\*.ps1`** | `tools/oneoff/_ps_bom.py`（**必须带 BOM** —— 否则 PowerShell 5.1 按 ANSI 读中文 ⇒ 当场解析错）＋ `tools/oneoff/_ps_parse_check.ps1` |
+
+## 提交前（唯一入口）
+
+```
+backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --all
+```
+
+16 把尺子 ＋ 守尺子的变异自证 ＋ 全套 pytest。**改过壳**再加：真机 `tools/probe/_shell_smoke.py` ＋ 壳基线 `tools/audit/shell_verify.py --snapshot` 盖章。
+⭐ 本仓装了 `pre-commit` 钩子跑**便宜子集**（`ops/hooks/pre-commit`）—— 它只挡"明显红"，**不替代**上面那条。
+
+## 两条硬约束
+
+- ⛔ **提交要用户点头**：`git commit` 只在用户说了"提交"之后做。
+- ⛔ **交付面只读**：`D:\工作\AI\PRD编写夹 - Workbuddy专用`（仓外 · WPS 云同步会回退）。

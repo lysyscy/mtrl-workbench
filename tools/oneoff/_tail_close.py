@@ -1,0 +1,154 @@
+"""尾巴**销号**的机械三件事（一次性工具 · 2026-10-02 立 · 出处 = `/retro` 复盘的候选 4）。
+
+**为什么要有它**：销号不是"改一行"，是**三处同改** —— 而人（我）在本仓已经在这上面栽过：
+2026-10-02 办 `TAIL-214` 时，`doc_audit` 的 `T6` 当场判红两次（**编号重复**：销号后 §一 那行没删；
+**§14.3 行首格式**被 ✅ 前缀挡掉），连带 `_run_mut` 三支红 ⇒ 白跑两轮。
+
+**它做的**（全是机械的；**判断那部分仍是你写**）：
+  ① **§一/§二/§三 删行** —— 销号 ⇒ 只留 §四 的**留痕行**（⚠️ 那一行要你**先写好**：事项 / 依据 / 日期是判断）；
+  ② **顶部两处计数按真源重算后写对** —— ⛔ 不再手抄；
+  ③ **断言三件事**：§四 里已有该编号的留痕行 · §一/§二/§三 里**恰好 1 行** · 两处计数行都认得出来。
+
+⚠️⚠️ **计数一律问真源**：本件**不自己写第二套计数算法** —— 直接调
+   `tools/audit/audit_meta.py::ledger_counts()`（`T6` 与 `T4` 的计数锚点**共用**的那一份）。
+   实测教训（2026-10-02 · 本件第一版）：自己镜像了一遍段解析，算出的"已销号"= **214**，
+   而真源是 **216** ⇒ 差 2。⚠️ 若各写一份，`doc_audit` 的 `T6` 会立刻报「计数与实际不符」——
+   也就是说**这个错误一定会被抓住**，但更好的做法是**从一开始只有一份**。
+
+用法（**先干跑**）：
+    backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_tail_close.py --id 215
+    backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_tail_close.py --id 215 --apply
+    （自测用）… --plan .codebuddy\\work\\00-scratch\\_plan_copy.md   # ⛔ 只在副本上试，别指向真件之外的东西
+⚠️ **不达标的整批不写盘**（同 `tools/oneoff/` 里其它一次性件的口径）。
+"""
+
+from __future__ import annotations
+
+import argparse
+import pathlib
+import re
+import sys
+import tempfile
+
+REPO = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tools" / "audit"))
+import audit_meta  # noqa: E402  ← ⭐ 计数的**真源**（`ledger_counts()`）
+
+PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
+
+#: 段标题（`### 一、…` / `### 四、已销号（…）`）
+SEC_RE = re.compile(r"^#{2,3}\s*([一二三四])、")
+#: 尾巴行（**编号只认第一格** —— 与 `audit_meta.check_tail_ledger` 同口径）
+ROW_RE = re.compile(r"^\|\s*`?(TAIL-\d+)`?\s*\|")
+
+#: 顶部两处计数行（① §0.2 那块 ② §15 顶部）—— 用**分组**重写，保留原有加粗写法
+COUNT0_RE = re.compile(r"(A 类 \*\*)\d+(\*\* 条 · B 类 )\d+( · C 类 \*\*)\d+(\*\* · 已销号 \*\*)\d+(\*\*)")
+COUNT15_RE = re.compile(r"(A 类 \*\*)\d+(\*\* 条 · B 类 \*\*)\d+(\*\* 条 · C 类 \*\*)\d+(\*\* 条 · 已销号 \*\*)\d+(\*\* 条)")
+
+
+def sections(lines: list[str]) -> dict[str, list[int]]:
+    """段号 ⇒ 该段正文的行号（0 基；到下一个 `### [一二三四]、` 标题为止）—— **只用来定位行**。"""
+    marks = [(i, SEC_RE.match(l).group(1)) for i, l in enumerate(lines) if SEC_RE.match(l)]
+    out: dict[str, list[int]] = {}
+    for k, (start, name) in enumerate(marks):
+        end = marks[k + 1][0] if k + 1 < len(marks) else len(lines)
+        out.setdefault(name, []).extend(range(start + 1, end))
+    return out
+
+
+def counts_via_source(text: str, plan: pathlib.Path) -> dict[str, int] | None:
+    """问**真源**要计数：把这段文本临时落成文件 ⇒ 调 `audit_meta.ledger_counts()`。
+
+    ⚠️ 为什么要落一次盘：`ledger_counts()` 是按**路径**读的（它要给 `T6`/`T4` 用），
+       本件宁可"多写一个临时文件"，也不在别处再镜像一遍它的解析口径。
+    ⚠️ 临时文件写在**目标件同目录**（`.codebuddy/plans/` 下）⇒ 与真件同前缀、路径可相对化；
+       用完**立刻删**（`finally`）。
+    """
+    old = audit_meta.LEDGER_REL
+    tmp = plan.with_name(f"~{plan.name}.tailclose-tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8", newline="")
+        audit_meta.LEDGER_REL = str(tmp.relative_to(REPO)).replace("\\", "/")
+        got = audit_meta.ledger_counts()
+    finally:
+        audit_meta.LEDGER_REL = old
+        tmp.unlink(missing_ok=True)
+    return got
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(description="尾巴销号：三处同改（先干跑 · 计数问真源）")
+    ap.add_argument("--id", required=True, help="尾巴号（如 215）")
+    ap.add_argument("--apply", action="store_true", help="真写盘（默认只干跑）")
+    ap.add_argument("--plan", default=str(PLAN), help="计划主文档路径（默认仓内那份）")
+    a = ap.parse_args(argv)
+
+    n = str(a.id).lstrip("TILA-")            # 容错：允许传 `TAIL-215`
+    tag = f"TAIL-{n}"
+    path = pathlib.Path(a.plan).resolve()
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    sec = sections(lines)
+
+    # ① 断言：§四 里**已经有**留痕行（判断那部分要人先写好）
+    done = [i for i in sec.get("四", []) if ROW_RE.match(lines[i]) and ROW_RE.match(lines[i]).group(1) == tag]
+    if len(done) != 1:
+        print(f"⛔ §四（已销号）里 `{tag}` 的留痕行 {len(done)} 条（期望 1）"
+              " ⇒ 先把「事项 / 销号依据 / 日期」那一行写好（那是判断，本件不代笔）")
+        return 1
+
+    # ② 找 live 行（§一/§二/§三）⇒ 删掉
+    live = [(s, i) for s in "一二三" for i in sec.get(s, [])
+            if ROW_RE.match(lines[i]) and ROW_RE.match(lines[i]).group(1) == tag]
+    if len(live) != 1:
+        print(f"⛔ §一/§二/§三 里 `{tag}` 的行 {len(live)} 条（期望 1）"
+              f" ⇒ 要么没登记，要么已被销号过一次；清单 = {[f'§{s} 第 {i + 1} 行' for s, i in live]}")
+        return 1
+    sec_name, live_i = live[0]
+    print(f"① 删 §{sec_name} 第 {live_i + 1} 行：{lines[live_i].strip()[:96]}…")
+
+    # ③ 计数：**问真源**（⛔ 本件不镜像算法）
+    text_new = "".join(l for k, l in enumerate(lines) if k != live_i)
+    c = counts_via_source(text_new, path)
+    if not c:
+        print("⛔ 真源 `ledger_counts()` 在临时件上回 None（段标题形态变了？）⇒ **未写盘**")
+        return 1
+    print(f"② 真源重算：A {c.get('一', 0)} · B {c.get('二', 0)} · C {c.get('三', 0)}"
+          f" · 已销号 {c.get('四', 0)}")
+    text_new, n0 = COUNT0_RE.subn(
+        lambda m: f"{m.group(1)}{c.get('一', 0)}{m.group(2)}{c.get('二', 0)}"
+                  f"{m.group(3)}{c.get('三', 0)}{m.group(4)}{c.get('四', 0)}{m.group(5)}", text_new)
+    text_new, n15 = COUNT15_RE.subn(
+        lambda m: f"{m.group(1)}{c.get('一', 0)}{m.group(2)}{c.get('二', 0)}"
+                  f"{m.group(3)}{c.get('三', 0)}{m.group(4)}{c.get('四', 0)}{m.group(5)}", text_new)
+    if n0 != 1 or n15 != 1:
+        print(f"⛔ 计数行命中：§0.2 {n0} 处 / §15 顶部 {n15} 处（各期望 1）⇒ **未写盘**"
+              "（多半是计数行被改写过，形态变了）")
+        return 1
+    # 写完计数后再问一次真源：**数对上了才算过**（计数行本身不参与计数 ⇒ 应不变）
+    again = counts_via_source(text_new, path)
+    if again != c:
+        print(f"⛔ 复查不一致：写计数前 {c} / 写计数后 {again} ⇒ **未写盘**")
+        return 1
+    print("③ 两处计数已按真源改写（§0.2 ＋ §15 顶部各 1 处）· 复查一致 ✅")
+
+    # ④ 排期表：只提醒，不改（销号后 T6 不再要求它在 §14.3，但留着那行是留痕）
+    sched = [i for i, l in enumerate(text_new.splitlines(keepends=True))
+             if l.lstrip().startswith("|") and tag in l.split("|")[1]]
+    print(f"④ §14.3 排期表里该编号的行：{len(sched)} 处（{'留痕保留' if sched else '⚠️ 没有那行'}"
+          " —— 本件不动它）")
+
+    if not a.apply:
+        print("\n（干跑 —— 要真写盘加 --apply）")
+        return 0
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="", delete=False,
+                                     dir=path.parent, prefix="~tailclose-", suffix=".tmp") as fh:
+        fh.write(text_new)
+        tmp_out = pathlib.Path(fh.name)
+    tmp_out.replace(path)                       # 原子替换（同目录 ⇒ 不会跨盘）
+    print(f"\n✅ 已写盘：{path.relative_to(REPO).as_posix() if path.is_relative_to(REPO) else path}"
+          " ⇒ 接着跑 `tools/audit/doc_audit.py`（`T6` 应当不再判红）")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
