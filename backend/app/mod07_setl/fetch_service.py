@@ -29,7 +29,7 @@ from app.mod01_projects.recovery import (
     recover_unknown_warehouses,
     unknown_warehouses as shared_unknown_warehouses,
 )
-from app.mod01_projects.repository import export_phids
+from app.mod01_projects import service as P1S
 from app.mod02_i8 import fetch_task, report_export
 from app.mod02_i8.client import I8Client, serialize_fetch
 from app.mod02_i8.repository import save_run_record
@@ -47,15 +47,6 @@ def build_plan(year_month: str) -> dict:
     """抓取计划：**只允许单月**（§9.2）⇒ 复用 `report_export.single_month` 的四个独立值。"""
     y1, m1, y2, m2 = report_export.single_month(year_month)
     return {"ym": f"{int(y1):04d}-{int(m1):02d}", "start": (y1, m1), "end": (y2, m2)}
-
-
-def project_ids(s: Session) -> str:
-    """导出用的项目 id 串 —— 实体在 `MOD-01`（`repository.export_phids`：**保序去重**），此处只是**薄名**。
-
-    ⚠️ 别在本模块再写一份拼接：壳与其下的**具体小微**共享同一个 `phid`，不去重就会把项目导出两遍
-       （`ACC-PRJ-AUTO-001/001-03`；真机实测 2026-09-17）。
-    """
-    return export_phids(s)
 
 
 def unknown_warehouses(s: Session, rows: list[dict]) -> list[str]:
@@ -99,7 +90,7 @@ def run_fetch(
     if not confirmed:
         raise MustReportError(f"抓取前必须二次确认：{KICK_WARNING}")
 
-    ids = project_ids(s)
+    ids = P1S.export_phids(s)
     report_export.require_ready(SPEC_KEY)               # 登记不全（如 reportName 未定稿）⇒ 显式拒
     operator = operator or current_operator()
     client_factory = client_factory or (lambda: I8Client(allow_kick=True))
@@ -157,4 +148,4 @@ def run_fetch(
 
 
 __all__ = ["TABLE", "SPEC_KEY", "CONFIRM_TOKEN", "KICK_WARNING",
-           "build_plan", "project_ids", "unknown_warehouses", "run_fetch"]
+           "build_plan", "unknown_warehouses", "run_fetch"]

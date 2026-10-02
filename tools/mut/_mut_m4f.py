@@ -20,9 +20,10 @@ T_SETL = "tests/test_acc_setl_fetch.py"
 
 MUTS = [
     ("① 壳下**不建**具体小微（陌生仓库永远进不了档案）", REC,
-     "        if shells:\n", "        if False:\n", T_AUTO),
+     "        if kind == KIND_CREATE_SMALL:\n", "        if False:\n", T_AUTO),
     ("② 占位行**不扶正**（拿到真实名也不认）", REC,
-     "        if current.startswith(PLACEHOLDER_PREFIX):\n", "        if False:\n", T_AUTO),
+     '    return KIND_PROMOTE if getattr(rows[0], "is_placeholder", False) else KIND_REAL_WAREHOUSE\n',
+     "    return KIND_REAL_WAREHOUSE\n", T_AUTO),
     ("③ 扶正后**展示名不跟着换**（屏幕一直挂「未建仓-N」）", REPO,
      '    if str(project.disp or "") == old:\n', "    if False:\n", T_AUTO),
     ("④ 取数失败**不再降级**（异常直接冒出去，把抓取拖挂）", REC,

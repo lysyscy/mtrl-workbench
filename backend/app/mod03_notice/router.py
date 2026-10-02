@@ -32,7 +32,7 @@ from app.core.config import get_settings
 from app.core.db import session_scope
 from app.core.errors import MustReportError, human_reason, log_exc
 from app.core.logging import get_logger
-from app.mod01_projects import repository as proj_repo
+from app.mod01_projects import service as P1S
 from app.mod01_projects.domain import (
     append_keyword_dedup,
     candidates_of,
@@ -40,7 +40,6 @@ from app.mod01_projects.domain import (
     validate_keyword_in_doc,
 )
 from app.mod01_projects.models import TYPE_SMALL
-from app.mod01_projects.repository import all_projects
 from app.mod02_i8 import wh_cache
 from app.mod03_notice import pdf_cache
 from app.mod03_notice.domain import still_unsettled
@@ -108,7 +107,7 @@ def unresolved_notices() -> UnresolvedResponse:
           刚建过小微**，那些行**已经能归属了** ⇒ **当场不再出现**（否则对着已解决的清单白干）。
     """
     with session_scope() as session:
-        projects = all_projects(session)
+        projects = P1S.all_projects(session)
         items = still_unsettled(latest_unresolved(session), projects)
         out = [
             {
@@ -141,13 +140,13 @@ def assign_ownership(req: AssignRequest) -> AssignResponse:
         return AssignResponse(ok=False, message=str(exc))
 
     with session_scope() as session:
-        projects = all_projects(session)
+        projects = P1S.all_projects(session)
 
         if req.small_id:
             small = next((p for p in projects if p.id == req.small_id), None)
             if small is None:
                 return AssignResponse(ok=False, message=f"具体小微 {req.small_id} 不存在")
-            proj_repo.set_keywords(
+            P1S.set_keywords(
                 session, small, append_keyword_dedup(small.match_keywords, keyword)
             )
             label = small.disp or small.warehouse_name or small.name_full
@@ -166,7 +165,7 @@ def assign_ownership(req: AssignRequest) -> AssignResponse:
         if shell is None:
             return AssignResponse(ok=False, message="壳未建档 ⇒ 必须先有壳后有微")
         try:
-            proj_repo.create_project(
+            P1S.create_project(
                 session,
                 project_type=TYPE_SMALL,
                 name_full=shell.name_full,

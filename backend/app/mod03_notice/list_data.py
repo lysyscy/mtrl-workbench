@@ -211,11 +211,14 @@ def build_page_data(
 
 
 def _all_projects(session) -> list:
-    """全部已建档项目（空表也返回空列表，**不假装有数据**）。"""
-    from app.mod01_projects.repository import list_projects  # type: ignore
+    """全部已建档项目（空表也返回空列表，**不假装有数据**）。
+
+    ⭐ 取数经 `MOD-01` 的**包间出口**（`TAIL-218` 批 2）—— ⛔ 别去 `import …repository`（规则 C 守卫）。
+    """
+    from app.mod01_projects import service as P1S
 
     try:
-        return list(list_projects(session))
+        return list(P1S.list_projects(session))
     except Exception:  # noqa: BLE001
         return []
 

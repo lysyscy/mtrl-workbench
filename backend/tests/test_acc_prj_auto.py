@@ -102,12 +102,19 @@ def test_扶不了就新建壳下建具体小微且关键词留空():
     # ⭐ 新建的小微与**壳共享同一个 phid**（i8 侧项目编号只有壳有）⇒ 取数参数**必须保序去重**。
     #    真机实测（2026-09-17）：自动建了兰考那条小微后，13 条档案只剩 **12 个唯一 phid**
     #    —— 这条隐患**离线断言原本看不见**（断言只调函数、不看导出参数）。
+    # ⭐⭐ `TAIL-218` 批 2：取数口 = `MOD-01` 的**包间出口** `service.export_phids` ——
+    #    两条抓取链路 ⛔ **不再各自写一份薄名**（那正是"同一件事两处写"；本口就是为了销掉它才开的）。
+    from app.mod01_projects import service as P1S
     from app.mod01_projects.repository import export_phids
-    from app.mod07_setl.fetch_service import project_ids as ids7
-    from app.mod08_inv.fetch_service import project_ids as ids8
+    from app.mod07_setl import fetch_service as fs7
+    from app.mod08_inv import fetch_service as fs8
 
-    ids = ids7(s)
-    assert ids == ids8(s) == export_phids(s), "两条抓取链路必须共用同一个取数口（唯一出口）"
+    assert P1S.export_phids(s) == export_phids(s), "包间出口必须转发到唯一出口"
+    for mod in (fs7, fs8):
+        assert not hasattr(mod, "project_ids"), (
+            "⛔ 两条抓取链路别再各写一份薄名 —— 唯一出口 = `mod01_projects.service.export_phids`"
+        )
+    ids = P1S.export_phids(s)
     assert ids.split(",").count("ph-9") == 1, f"壳与其下小微共享 phid ⇒ 必须去重，实得 {ids!r}"
     # 去重是**保序**的（顺序影响不了结果，但参数必须可复现）
     assert ids.split(",") == list(dict.fromkeys(ids.split(",")))

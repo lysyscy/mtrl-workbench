@@ -12,7 +12,7 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
-from app.mod01_projects.repository import all_projects
+from app.mod01_projects import service as P1S
 from app.mod07_setl import big_domain as B
 from app.mod07_setl import big_repository as R
 from app.mod07_setl import extract as X
@@ -144,7 +144,7 @@ def build_big_data(s: Session, state: dict | None = None) -> dict:
     """页面 / 导出所需的一切（**同一份行装配** ⇒ 两处同序同值，§5.7.3）。"""
     st = dict(state or parse_state())
     month = st["month"]
-    cands = B.candidates(all_projects(s))
+    cands = B.candidates(P1S.all_projects(s))
     by_key = {c["warehouse"]: c for c in cands}
     order = B.resolve_order(R.load_order(s), cands, chosen=R.has_choice(s))
     projects = [by_key[w] for w in order if w in by_key]

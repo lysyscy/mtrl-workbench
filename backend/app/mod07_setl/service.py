@@ -86,12 +86,12 @@ def _project_context(s: Session) -> tuple[dict[str, str], list[str]]:
 
     ⭐ 顺序走 `mod01_projects.domain.ordered`（「归档后置 > ord > 原序」的**唯一出口**，§2.7.3）。
     """
+    from app.mod01_projects import service as P1S
     from app.mod01_projects.domain import ordered, status_label
-    from app.mod01_projects.repository import all_projects
 
     statuses: dict[str, str] = {}
     order: list[str] = []
-    for p in ordered(all_projects(s)):
+    for p in ordered(P1S.all_projects(s)):
         warehouse = str(getattr(p, "warehouse_name", "") or "")
         if not warehouse:
             continue

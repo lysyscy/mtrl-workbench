@@ -37,7 +37,7 @@ from app.core.identity import current_operator
 from app.core.logging import get_logger
 from app.mod01_projects.domain import norm_full_name, resolve_ownership
 from app.mod01_projects.pending import record_detail
-from app.mod01_projects.repository import all_projects
+from app.mod01_projects import service as P1S
 from app.mod01_projects.sync_service import sync_and_archive
 from app.mod02_i8 import fetch_task
 from app.mod02_i8.client import I8Client
@@ -258,7 +258,7 @@ def run_fetch(
         _r["party_kind"] = _kmap.get(str(_r.get("party_name") or "").strip(), KIND_PARTY_UNKNOWN)
 
     # ⭐ **再匹配**（档案已被上一步补过）——⚠️ 这一步会**复制**行 dict ⇒ 所以它必须在**上面那段之后**
-    m = match_projects(rows, all_projects(s))
+    m = match_projects(rows, P1S.all_projects(s))
 
     # ⭐ 分开落库：一张合同必有项目（§6.4.1）⇒ 只落**匹配上**的；匹配不上 = i8 常用列表里也没有 = 不需要
     stats = {"inserted": 0, "refreshed": 0, "skipped": 0}

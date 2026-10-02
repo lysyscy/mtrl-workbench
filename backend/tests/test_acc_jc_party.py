@@ -73,6 +73,7 @@ def test_抓取链路_分类要在匹配之前打上():
     """
     import inspect
 
+    from app.mod01_projects import service as P1S
     from app.mod11_jc import fetch_service as FS
 
     src = inspect.getsource(FS.run_fetch)
@@ -88,7 +89,7 @@ def test_抓取链路_分类要在匹配之前打上():
                  "supplier_name": "自检供应商", "material_name": "电缆桥架",
                  "contract_amt": Decimal("40124.09"), "party_name": "自检链路贸易",
                  "bill_name": "自检单据", "remark": "", "fields": {"BillName": "自检单据"}}]
-        m = FS.match_projects(rows, FS.all_projects(s))
+        m = FS.match_projects(rows, P1S.all_projects(s))
         assert len(m["matched"]) == 1, f"自检行没匹配上项目：{m}"
         kmap = R.party_kind_map(s)
         for _r in m["matched"]:                       # ⚠️ 对**副本**打分类（`run_fetch` 现在做的就是这件事）

@@ -353,12 +353,12 @@ def api_unsettled() -> dict:
     """
     # ⚠️ **局部导入**（口径件分居档案域两处：`still_unsettled` 在 mod03、`candidates_of` 在 mod01）
     #    —— 避开模块级循环依赖，手法同 `mod03_notice/router.py::_wh_loader_dep`。
+    from app.mod01_projects import service as P1S                    # noqa: PLC0415
     from app.mod01_projects.domain import candidates_of              # noqa: PLC0415
-    from app.mod01_projects.repository import all_projects           # noqa: PLC0415
     from app.mod03_notice.domain import still_unsettled              # noqa: PLC0415
 
     with session_scope() as session:
-        projects = all_projects(session)
+        projects = P1S.all_projects(session)
         items = still_unsettled(R.latest_unsettled(session), projects)
         out = [
             {**it,

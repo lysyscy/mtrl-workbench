@@ -23,5 +23,5 @@
 | `MOD-15` | 用户管理 | `mod15_user` | `m15` | ✅ 账号 CRUD/改密/停启用/软删恢复/转让/主题持久化 |
 | — | 看板·待办 | 随各包给数据 | `home` | ✅ 8 项待办（不占模块号） |
 
-**包内分工（读代码时的三条线）**：`domain.py` = 纯判定与口径（无 IO）· `repository.py` = 读写库（幂等/保护在这里）· `router.py` / `*_api.py` = HTTP 面（壳的唯一取数口 = `/api/…`）。
+**包内分工（读代码时的四条线）**：`domain.py` = 纯判定与口径（无 IO）· `repository.py` = 读写库（幂等/保护在这里）· `service.py` = **包间出口**（⛔ 别的包要本包数据**只许经它**，不得 `import` 本包 `repository` —— 计划 §2.3；守卫 = `backend/tests/test_layering.py` **规则 C**；⚠️ 按需开：`mod01_projects` 原先没有这一层，2026-10-02 `TAIL-218` 批 2 才补上）· `router.py` / `*_api.py` = HTTP 面（壳的唯一取数口 = `/api/…`）。
 **两个共用底座**：`report_export/`（导出内核）· `import_kit/`（导入底座 · `TAIL-69`）· `core/preview_store.py`（预览暂存唯一载具）。

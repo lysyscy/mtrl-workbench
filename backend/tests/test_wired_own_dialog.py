@@ -73,20 +73,24 @@ def test_弹窗数据源端点已挂():
 def test_提交端点在且先校验再写():
     """⭐ 顺序断言：**先**校验关键词（不在单据名里就拒绝）**再**写库。"""
     i_validate = ROUTER_SRC.find("keyword = validate_keyword_in_doc(")
-    i_write = ROUTER_SRC.find("proj_repo.set_keywords(", i_validate)
+    i_write = ROUTER_SRC.find("P1S.set_keywords(", i_validate)
     assert i_validate > 0 and i_write > i_validate, "没有「先校验、后写库」"
 
 
 @acc("ACC-PRJ-OWN-001", "001-06")
 def test_补词走去重追加而不是覆盖():
     """001-06：关键词**去重追加** —— ⛔ 直接赋值会把原有词覆盖掉。"""
-    i_write = ROUTER_SRC.find("proj_repo.set_keywords(")
+    i_write = ROUTER_SRC.find("P1S.set_keywords(")
     seg = ROUTER_SRC[i_write:i_write + 160]
     assert "append_keyword_dedup(" in seg, "补词没走 append_keyword_dedup（会覆盖原词）"
 
 
 @acc("ACC-PRJ-OWN-001", "001-06")
 def test_新建小微复用建档出口不另写一套():
-    """⭐ 「属于新小微」分支必须走 `create_project`（它内部含 001-05 的归档壳校验）。"""
-    assert "proj_repo.create_project(" in ROUTER_SRC
+    """⭐ 「属于新小微」分支必须走 `create_project`（它内部含 001-05 的归档壳校验）。
+
+    ⚠️ `TAIL-218` 批 2：写动作改经**包间出口** `mod01_projects.service`（别名 `P1S`）——
+    本断言钉的就是"**走对方的出口**，⛔ 不在本包另写一套建档"。
+    """
+    assert "P1S.create_project(" in ROUTER_SRC
     assert "TYPE_SMALL" in ROUTER_SRC

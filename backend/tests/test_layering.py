@@ -12,7 +12,7 @@
 | **A（上半）** | `app/core/**` ⛔ `import app.mod*` | `core` 是内核，全站依赖它 ⇒ 反向依赖即成环（**名单已清空**：`models_registry` 挪走 ＋ 另 3 处改成"口 ＋ 装配层注入"） |
 | **B（下半）** | `app/mod*/**` ⛔ `import app.report_export` | 方案 §3.3 第一半（`TAIL-195` 批 2 · 案②）—— 导出器**只许按名取**（`app.export_registry`，表在 `app/export_bindings.py`） |
 | **B2（下半）** | `app/export_registry.py` ⛔ `import` 任何 `app.*` | 规则 B 的**反绕过**：注册表必须是**叶子**，否则环换个名字继续存在 |
-| **C（一般式 · `TAIL-218`）** | **任一 `app/mod*/**` ⛔ `import` **别包**的 `repository`（⛔ 自己包的随便用） | 计划 **§2.3**「包间只经 `service` 调用，**不得跨包直查对方表**」——⭐ **2026-10-02 起升一般式**：原先只罩 `mod03`↔`mod05` **两条边**，实测另有 **17 处 / 13 件**没人管（其中 **11 处同族指向 `mod01_projects`**，而它**根本没有 `service.py`**）⇒ 施工图 = `work/10-designs/设计-分层门禁一般式-20261002.md` · 尾巴 = `TAIL-218` |
+| **C（一般式 · `TAIL-218`）** | **任一 `app/mod*/**` ⛔ `import` **别包**的 `repository`（⛔ 自己包的随便用） | 计划 **§2.3**「包间只经 `service` 调用，**不得跨包直查对方表**」——⭐ **2026-10-02 起升一般式**：原先只罩 `mod03`↔`mod05` **两条边**，实测另有 **17 处 / 13 件**没人管（其中 **11 处同族指向 `mod01_projects`**，而它**当时根本没有 `service.py`** —— ⭐ 批 2 已补上，那 11 处全清）⇒ 施工图 = `work/10-designs/设计-分层门禁一般式-20261002.md` · 尾巴 = `TAIL-218` |
 | **D（下半）** | `app/report_export/**` ⛔ `import app.mod*.repository` | 同上（`TAIL-195` 批 2c）—— 导出层只许用业务包的 `domain` / `models` / `service` |
 
 ⭐ **规则 C 有两张名单**（⛔ **性质不同，别混**）：`_ALLOW_C_PENDING`（**待清** · 只许变短）/ `_ALLOW_C_BY_DESIGN`（**按设计的例外** · 看理由、不看数量）。
@@ -244,17 +244,8 @@ _BAD_CROSS_REPO_RE = re.compile(r"^app\.mod\d+_[a-z_]+\.repository($|\.)")
 
 #: ── ① **待清名单**（⛔ **只许变短**）：起点 13 条。每条写「翻谁的账本 · 准备怎么改」
 #:    ⚠️ 填法要求：**写具体落点**（哪个出口 / 哪一批），⛔ 别只写文件名 —— 名单要能自己催自己。
+#:    ⭐ **2026-10-02 批 2 已办**：11 处指向 `mod01_projects` 的全清（`mod01_projects/service.py` 开出来）⇒ 13 → **3**。
 _ALLOW_C_PENDING: dict[tuple[str, str], str] = {
-    ("mod03_notice/list_data.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
-    ("mod03_notice/notice_executors.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
-    ("mod03_notice/router.py", "app.mod01_projects.repository"): "批 2 · `all_projects`/`create_project`/`set_keywords` 都走 `P1S`",
-    ("mod08_inv/fetch_service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.export_phids`（顺手销掉本件的 `project_ids()` 薄名）",
-    ("mod07_setl/fetch_service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.export_phids`（顺手销掉本件的 `project_ids()` 薄名）",
-    ("mod07_setl/service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
-    ("mod07_setl/api.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
-    ("mod07_setl/big_service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
-    ("mod11_jc/api.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
-    ("mod11_jc/fetch_service.py", "app.mod01_projects.repository"): "批 2 · 走 `P1S.all_projects`",
     ("mod07_setl/big_service.py", "app.mod06_proc.repository"): "批 3 · ⭐ **出口已现成** ⇒ 改走 `mod06_proc.service.load_mech`（一行）",
     ("mod06_proc/repository.py", "app.mod08_inv.repository"): "批 3 · 走 `mod08_inv.service` 的同名出口（同包已有先例）",
     ("mod03_notice/notice_pay_actions.py", "app.mod04_plan.repository"): "批 3 · 走 `mod04_plan.service` 的同名出口",
@@ -270,7 +261,8 @@ _ALLOW_C_BY_DESIGN: dict[tuple[str, str], str] = {
 }
 
 #: ⭐ **起点条数 —— 只许往下改**（想加条目 ⇒ 先回答"为什么不走出口"；⛔ 别把这条数调大）
-_C_PENDING_START: int = 13
+#:    ⚠️ 变了要同批改：施工图 `work/10-designs/设计-分层门禁一般式-20261002.md` §四 的分批进度 ＋ 计划 `§15`。
+_C_PENDING_START: int = 3
 
 _LAYER_C_TABLES = (_ALLOW_C_PENDING, _ALLOW_C_BY_DESIGN)   #: 两张表（⛔ 别在别处再写一份）
 
@@ -375,6 +367,12 @@ _EXPORT_SMOKE: tuple[tuple[str, str, str], ...] = (
     ("app.mod06_proc.service", "load_mech", "app.mod06_proc.repository"),
     ("app.mod06_proc.service", "load_history", "app.mod06_proc.repository"),
     ("app.mod06_proc.service", "load_cutoff", "app.mod06_proc.repository"),
+    # ⭐ `TAIL-218` 批 2：`mod01_projects` 新开的 5 个包间出口（11 处调用点改走它们）。
+    ("app.mod01_projects.service", "all_projects", "app.mod01_projects.repository"),
+    ("app.mod01_projects.service", "list_projects", "app.mod01_projects.repository"),
+    ("app.mod01_projects.service", "export_phids", "app.mod01_projects.repository"),
+    ("app.mod01_projects.service", "create_project", "app.mod01_projects.repository"),
+    ("app.mod01_projects.service", "set_keywords", "app.mod01_projects.repository"),
 )
 
 

@@ -28,10 +28,11 @@ MUTS = [
     ("② 空档案**不再报错**（拼出空串 ⇒ 可能导出全量）", REPO,
      "    if not seen:\n        raise MustReportError(\n", "    if False:\n        raise MustReportError(\n",
      T_AUTO),
-    ("③ 两条抓取链路**各写一份**取数口（去重被绕过 ⇒ 唯一出口失效）", FS7,
-     "    return export_phids(s)\n", "    return \",\".join(str(p.phid) for p in __import__("
-     "\"app.mod01_projects.repository\", fromlist=[\"all_projects\"]).all_projects(s) "
-     "if str(getattr(p, \"phid\", \"\") or \"\").strip())\n",
+    ("③ 抓取链路**又各写一份薄名**（⛔ 绕开唯一出口 —— 2026-10-02 `TAIL-218` 批 2 刚销掉的就是它）", FS7,
+     "def unknown_warehouses(s: Session, rows: list[dict]) -> list[str]:\n",
+     "def project_ids(s: Session) -> str:      #: ⛔ 变异：把批 2 销掉的那份薄名写回来\n"
+     "    return P1S.export_phids(s)\n\n\n"
+     "def unknown_warehouses(s: Session, rows: list[dict]) -> list[str]:\n",
      T_AUTO),
 ]
 

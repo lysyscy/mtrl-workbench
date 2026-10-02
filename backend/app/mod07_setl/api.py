@@ -231,9 +231,9 @@ class FetchRequest(BaseModel):
 
 def _cands(s) -> list[dict]:
     """大表候选（在建 · 非壳）—— 唯一出口 = `big_domain.candidates`。"""
-    from app.mod01_projects.repository import all_projects
+    from app.mod01_projects import service as P1S
 
-    return B.candidates(all_projects(s))
+    return B.candidates(P1S.all_projects(s))
 
 
 @router.post("/api/m07/big/cell")

@@ -33,7 +33,7 @@ from app.mod01_projects.domain import (
     needs_archive,
     resolve_ownership,
 )
-from app.mod01_projects.repository import all_projects
+from app.mod01_projects import service as P1S
 from app.mod02_i8.client import I8Client
 from app.mod02_i8.notice_source import NoticeDetailFetcher, NoticeFetcher  # 取数归 MOD-02
 from app.mod03_notice.classify import DEFAULT_RULES, decide_placement, rows_needing_ownership
@@ -200,7 +200,7 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         def _judge() -> list[tuple[int, dict, OwnershipDecision]]:
             """对 `need_own` 跑一遍归属判定（**每次都读最新档案** —— 建档后要重判）。"""
             with session_scope() as session:
-                projects = all_projects(session)
+                projects = P1S.all_projects(session)
                 return [
                     (
                         i,
