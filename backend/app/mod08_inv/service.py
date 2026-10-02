@@ -9,9 +9,20 @@ from sqlalchemy.orm import Session
 
 from app.core.period import default_period
 from app.mod08_inv import domain as D
-from app.mod08_inv.repository import load_rows
 
 DEFAULT_TABLE = "inventory"          # 材料报表类 ⇒ 默认核算年月 = 北京时间**上月**（§9.2）
+
+
+# ⭐ **包间出口**（`TAIL-218` 批 3）：`mod06_proc` 要库存单据明细 ⇒ **经本口取**，
+#    ⛔ 别去 `import app.mod08_inv.repository`。计划 §2.3「包间只经 `service` 调用」；守卫 = 规则 C。
+# ⚠️⚠️ **写成函数、且每次经 `repository` 模块取** —— ⛔ 别写成模块级别名（那会在 import 时把函数对象
+#    **绑死**，测试里 monkeypatch 打不着；2026-09-30 实测 12 条判据当场红）。
+# ⚠️ 本页自己取数也走它（⛔ 不留第二份"本包直连"的写法）。
+def load_rows(session, **kw):
+    """⭐ 包间出口：库存单据明细（**已叠加调整单**的规范行）。"""
+    from app.mod08_inv import repository as R
+
+    return R.load_rows(session, **kw)
 
 
 def parse_state(params: dict | None = None) -> dict:
@@ -118,4 +129,4 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     }
 
 
-__all__ = ["DEFAULT_TABLE", "parse_state", "state_to_query", "build_page_data"]
+__all__ = ["DEFAULT_TABLE", "load_rows", "parse_state", "state_to_query", "build_page_data"]

@@ -16,7 +16,7 @@ from app.mod01_projects import service as P1S
 from app.mod07_setl import big_domain as B
 from app.mod07_setl import big_repository as R
 from app.mod07_setl import extract as X
-from app.mod06_proc.repository import load_mech
+from app.mod06_proc import service as P6S
 from app.mod07_setl.repository import load_rows
 
 #: 主材累计（含税）的**取数口** —— 签名 `(仓库名) -> Decimal | None`。
@@ -87,7 +87,7 @@ def _extract_amounts(s: Session) -> dict:
 def _mech_amounts(s: Session) -> dict[str, dict[str, dict[str, object]]]:
     """机械：`{仓库: {月份: [6 列]}}`（过程资料机械 6 列的手录旁路表，§5.2.5）。"""
     out: dict[str, dict[str, list]] = {}
-    for row in load_mech(s):
+    for row in P6S.load_mech(s):
         wh = str(row.get("warehouse") or "")
         ym = str(row.get("ym") or "")
         if not wh or not ym:

@@ -44,11 +44,11 @@ def plan_methods_for_pay(session) -> dict[str, str]:
     ⚠️ 付款计划没导入 / 表还没建时**不该让付款窗口打不开** ⇒ 兜底空表（由 `default_pay_method` 兜「现汇」）。
     """
     try:
-        from app.mod04_plan.repository import list_rows
+        from app.mod04_plan import service as P4S       # ⭐ 包间出口（`TAIL-218` 批 3）
 
         return {
             str(r.doc_no or "").strip(): str(r.pay_method or "")
-            for r in list_rows(session)
+            for r in P4S.list_rows(session)
             if str(r.doc_no or "").strip() and str(r.pay_method or "").strip()
         }
     except Exception:  # noqa: BLE001

@@ -41,6 +41,17 @@ DERIVED_COLUMNS: tuple[str, ...] = ("paid_amount", "unpaid_amount")
 SUM_COLUMNS: tuple[str, ...] = ("flow_amount", "planned_amount")
 
 
+# ⭐ **包间出口**（`TAIL-218` 批 3）：`mod03_notice` 取「付款计划的付款方式」⇒ **经本口取**，
+#    ⛔ 别去 `import app.mod04_plan.repository`。计划 §2.3「包间只经 `service` 调用」；守卫 = 规则 C。
+# ⚠️⚠️ **写成函数、且每次经 `repository` 模块取** —— ⛔ 别写成模块级别名（那会在 import 时把函数对象
+#    **绑死**，测试里 monkeypatch 打不着；2026-09-30 实测 12 条判据当场红）。
+def list_rows(session, **kw):
+    """⭐ 包间出口：付款计划行（**从小到大**，与界面行号一致）。"""
+    from app.mod04_plan import repository as R
+
+    return R.list_rows(session, **kw)
+
+
 def notice_amounts(s: Session) -> dict[str, NoticeAmounts]:
     """`单据号 → 通知书比对视图`（审批金额 ＋ 已付金额＝**流水汇总**，§4.3.4 / §4.4.2）。
 
@@ -238,7 +249,7 @@ def draft_from_row(row) -> dict:
 
 
 __all__ = [
-    "DERIVED_COLUMNS", "SUM_COLUMNS",
+    "DERIVED_COLUMNS", "SUM_COLUMNS", "list_rows",
     "notice_amounts", "project_index", "project_key", "project_label", "row_to_dict",
     "build_page_data", "default_filters", "draft_from_row",
 ]

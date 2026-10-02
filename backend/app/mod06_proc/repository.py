@@ -24,10 +24,13 @@ from app.mod06_proc.models import (
 
 
 def load_inv_rows(s: Session) -> list[dict]:
-    """库存单据明细（**已叠加调整单**的规范行）—— 复用 `MOD-08` 的同一条出口。"""
-    from app.mod08_inv.repository import load_rows
+    """库存单据明细（**已叠加调整单**的规范行）—— 走 `MOD-08` 的**包间出口**（`TAIL-218` 批 3）。
 
-    return load_rows(s)
+    ⚠️ 原先是**跨包直查对方的表**（`import app.mod08_inv.repository`）⇒ 已改走 `mod08_inv.service`。
+    """
+    from app.mod08_inv import service as P8S
+
+    return P8S.load_rows(s)
 
 
 def load_mech(s: Session) -> list[dict]:

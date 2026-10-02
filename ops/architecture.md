@@ -48,4 +48,5 @@ FastAPI 服务（NSSM `mtrl-workbench-server` · 单 worker · 8000）
 | **手改保护** | 手改列 / 手动行 / 调整单 / 手动导入行 **永不被覆盖或清理** | 各域 `repository`（如 `merge_month` 只写非手改列）· 判据 `ACC-PLAN-MANUAL-001` · `ACC-INV-ADJ-*` |
 | **删除策略** | 配置类 = **硬删不留痕**；业务类 = 留痕/软删（可在回收站恢复） | `mod14_config` · `mod15_user`（软删）· 判据 `ACC-CFG-RULE-001` · `ACC-X-DEL-001` |
 | **幂等** | 同源重跑 = 更新不重复；换月/减行**不留残影**；失败整批回滚不留半成品 | 各域 `merge_month` / `upsert_details` / `preview_store` 批次 · 各导入判据 |
+| **包间调用** | 业务包之间**只许经对方的 `service`**（包间出口），⛔ 不得 `import` 对方 `repository`（翻账本）；⭐ 全仓现存 **1 处「按设计的例外」**（`mod14_config → mod11_jc.repository`，理由写在那个文件头） | `backend/tests/test_layering.py` **规则 C（一般式）**（待清名单**已清空** · 出口须经打桩判据）· 反向灵敏度 `tools/mut/_mut_layering.py` · 口径 = 计划 `§2.3` |
 
