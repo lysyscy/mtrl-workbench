@@ -28,6 +28,7 @@ provider:
 | **尾巴台账 / §15** | 计划 **§15 顶部三段** ＋ 跑 `tools/oneoff/_tail_close.py --id N`（销号 = 三处同改，⛔ 别手改） |
 | **判据 / 尺子** | 同批给**反向灵敏度** `tools/mut/_mut_*.py`（撤判据必须**同批撤靶**） |
 | **某个大件的结构** | `tools/oneoff/_skeleton.py <文件>`（⛔ 别对整份大文件做 grep —— 输出缓冲会被撑爆、结果只回一部分） |
+| **任何 `.py`（尤其含中文）** | ⭐ **落笔后第一件事** `py_compile <文件>`（`backend\.venv\Scripts\python.exe -X utf8 -m py_compile <文件>`）—— ⚠️ 中文句里夹 ASCII 直引号 ⇒ **首跑就语法错**，而 pytest 报出来的是"**收集期错误**"、看着像环境坏了 ⇒ 白查一轮。详见 `细则.md` §廿三-7 |
 | **`ops\*.ps1` / `tools\**\*.ps1`** | `tools/oneoff/_ps_bom.py`（**必须带 BOM** —— 否则 PowerShell 5.1 按 ANSI 读中文 ⇒ 当场解析错）＋ `tools/oneoff/_ps_parse_check.ps1` |
 
 ## 提交前（唯一入口）
