@@ -44,29 +44,13 @@ from tests.m07_helpers import dataset
 from tests.shell_load_helpers import exp_routes
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
+from tests.shell_src import SHELL, act_entry, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 API = (ROOT / "backend" / "app" / "mod07_setl" / "api.py").read_text(encoding="utf-8")
 INV_API = (ROOT / "backend" / "app" / "mod08_inv" / "router.py").read_text(encoding="utf-8")
 DIAG_INV = ROOT / "artifacts" / "_diag" / "inv_2026-09.xlsx"
 
-
-def _act(name: str) -> str:
-    """取壳里 `ACT` 的某个动作体（`\\n <名>:` 起，**花括号配平** —— ⛔ 不用"下一个动作"当终点）。"""
-    i = SHELL.find(f"\n {name}:")
-    assert i >= 0, f"壳里找不到动作 `{name}:`"
-    depth, k = 0, SHELL.find("{", i)
-    assert k > 0, f"`{name}` 里找不到起始花括号"
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    body = SHELL[i:k + 1]
-    assert len(body) < 3000, f"`{name}` 取到 {len(body)} 字符 —— 配平可能跑偏"
-    return body
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_act`（`SHELL.find` ＋ 花括号配平）——
+#    已**整把删掉**，取动作条改走壳的语义口径 `act_entry`（定义 = `tools/audit/shell_api.py`）。⛔ 别写回来。
 
 
 # ============================================================== 001-02
@@ -167,7 +151,7 @@ def test_壳侧导出按钮已接线且按content_type分流():
        「导出尚未落地」那句在**别的页**上是对的（其余页仍走路径①模板填充，属 `TAIL-04` 未完部分），
        把它当全站特征来查 ⇒ 一改别处就误红（实测首跑踩到）。
     """
-    act = _act("zipSfjc")
+    act = act_entry("zipSfjc")
     assert "尚未落地" not in act, "`zipSfjc` 还是旧提示 ⇒ 按钮按下去拿不到文件"
     assert "/api/m07/settlement/export?period=" in act, "`zipSfjc` 没打导出端点"
     assert "x-export-filename" in with_kernel(act), "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
@@ -283,7 +267,7 @@ def test_壳侧透视导出按钮真下载且端点按content_type分流():
     ⚠️ 断言**只钉 `expPivot` 这个动作自己的作用域**（`_act` 取花括号配平区间）——
        别处的同名 `toast(...)` 不得喂饱它。
     """
-    act = _act("expPivot")
+    act = act_entry("expPivot")
     _a = with_kernel(act)          # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
     assert "dlExport" in act and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
     assert "/api/m08/inventory/export?period=" in act, "`expPivot` 没打导出端点（拿不到文件）"
@@ -381,7 +365,7 @@ def test_库存单据只留真导出且透视提示与模板形态一致():
 
     # ② 两者走**不同实现**（"互不影响"的实质）：朴素那份仍走**通用 `exp`**，⛔ 不得被并进 `expPivot`
     exp_act = _action_text("exp")
-    pivot_act = _act("expPivot")
+    pivot_act = act_entry("expPivot")
     # ⚠️ 2026-09-27（守则 §2.2/§3.1 · `TAIL-117` 批次 2）：兜底**措辞换成人话**（原措辞里有内部台账编号
     #    与后端术语）⇒ token 同步；⭐ 但**两件**都还必须在：① 如实说"这页还没有导出功能"；
     #    ② 那句"不假装成功"的底线（⛔ 没有真文件就绝不写「已导出」）。

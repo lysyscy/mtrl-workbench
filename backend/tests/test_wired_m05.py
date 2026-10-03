@@ -17,32 +17,11 @@ from pathlib import Path
 
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
+from tests.shell_src import SHELL, page_slice, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 
-
-def _slice(name: str, limit: int = 18000) -> str:
-    """取壳里 `V.<name>=()=>{…}` 的切片（花括号配平）。
-
-    ⚠️ `limit` 是"配平跑偏"的**哨兵**（配平歪了会一路吃到下一个函数 ⇒ 长度暴涨），⛔ 不是预算线：
-       `V.m05` 2026-09-28 两次重设计（`TAIL-141` 显示层 ＋ `TAIL-142` 卡头按钮）后 **16.5k** ⇒
-       旧哨兵 16000 当场误报（"配平可能跑偏"），实测**配平是对的**。字长本身归 `T5`（>400 行文件）管，
-       ⛔ 别在这里再立一条预算。
-    """
-    i = SHELL.find(f"\nV.{name}=()=>{{")
-    assert i > 0, f"壳里找不到 `V.{name}=()=>{{`"
-    i += 1
-    depth, k = 0, SHELL.find("{", i)
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    body = SHELL[i:k + 1]
-    assert 2000 < len(body) < limit, f"`V.{name}` 切片长度 {len(body)} 可疑 —— 配平可能跑偏"
-    return body
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_slice`（`\nV.<名>=()=>{` ＋ 花括号配平）——
+#    已**整把删掉**，取页切片改走壳的语义口径 `page_slice`（定义 = `tools/audit/shell_api.py`）。
+#    ⚠️ 它当年那条教训（"别拿字长当预算线"）**没丢**：字长归 `T5`（>400 行文件）管，⛔ 别在这儿再立一条。
 
 
 # ------------------------------- `§19` 批 3：旧页删除后，几条**形态** claim 由新壳接管
@@ -54,13 +33,13 @@ def test_台账两侧共用同一个项目选择器且无切换口径():
     """§4.5.4：台账两侧**共用同一个**项目选择器（切一次两边都换）；⛔ 没有「切换口径」按钮。"""
     assert "const ledPjPanel=()=>projPanel({list:ledProjs,selected:()=>[ledCur()],pickAct:'ledPjPick'" in SHELL, \
         "两侧没有共用同一个项目选择器"
-    assert "切换口径" not in _slice("m05"), "壳里出现了「切换口径」按钮"
+    assert "切换口径" not in page_slice("m05"), "壳里出现了「切换口径」按钮"
 
 
 @acc("ACC-FLOW-LIST-001", "001-04")
 def test_撤销入口只在生效行且必须填原因():
     """§4.4.5：撤销按钮**只在生效行**出（已撤销那行给「—」）；撤销**必须填原因**（后端把关）。"""
-    s = _slice("m05")
+    s = page_slice("m05")
     assert 'data-act="revDlg"' in s, "流水行没有撤销入口"
     assert """${f.voided?'<span class="mut sm">—</span>':`<button class="btn sm dg" data-act="revDlg\"""" in s, \
         "撤销入口不是「只在生效行」出的"
@@ -70,7 +49,7 @@ def test_撤销入口只在生效行且必须填原因():
 @acc("ACC-FLOW-LIST-001", "001-06")
 def test_流水空态跨列由表头派生且不分页():
     """空态行的 `colspan` **由表头派生**（⛔ 不写死）；该表**不做分页**（一次给全）。"""
-    s = _slice("m05")
+    s = page_slice("m05")
     assert "EMPTYROW(thCount(FL_THEAD)" in s, "空态行的跨列数不再由表头派生"
     assert "没有付款流水" in s, "空态提示丢了"
     assert "不做分页" in s, "没写明「不做分页」"
@@ -107,7 +86,7 @@ def test_读写都走统一的出口与外壳():
     # ⭐ 2026-09-29（`TAIL-64` P2④）：本页**两张表的表外壳**也走统一出口 `TBL`（⛔ 别退回裸
     #   `<table class="dt" data-sort …>`）。⚠️ `m05:ledger-*` 的 key 是**拼出来**的（三栏台账共用一处渲染）。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M9（台账去委托）/ M10（流水去委托）⇒ 各自必须红。
-    s = _slice("m05")
+    s = page_slice("m05")
     assert "TBL({head:LED_THEAD,key:'m05:ledger-'+sc," in s, \
         "逐月欠款台账没走统一出口 `TBL`（`TAIL-64` P2④）"
     assert "TBL({head:FL_THEAD,key:'m05:flows'," in s, \
@@ -207,7 +186,7 @@ def test_台账的现状数_截至行与入口名都钉住():
     assert SHELL.count("与上方那三栏不是同一个数") >= 2, \
         "没写明「与上方那三栏不是同一个数」（那三栏**按项目分列**、台账这两栏只算选中的那一个）"
     # ⛔ 墓碑：`V.m05` 里那句 `const d=debts();` 随 KPI 删除一起消失（§5.1「答不出为什么需要它，就删」）
-    assert "const d=debts();" not in _slice("m05"), "`V.m05` 里又出现没有读者的 `const d=debts();`"
+    assert "const d=debts();" not in page_slice("m05"), "`V.m05` 里又出现没有读者的 `const d=debts();`"
 
 
 @acc("ACC-FLOW-LED-001", "001-13")
@@ -218,7 +197,7 @@ def test_台账卡头按钮分组与点开有反馈都钉住():
     守则：§2.7（**控件贴在它管的对象上**）· §4.4（相似元素不歧义）· §5.5（点开必须有反馈）·
     §3.4（说明贴在对象旁，别拿长 toast 顶替）· §5.9（优先级）。
     """
-    s = _slice("m05")
+    s = page_slice("m05")
     # ① ⭐ 控件贴对象：「看哪个项目」必须在**两栏台账之前**（它管的就是下面那两张表）。
     #    ⚠️ 这条是 `TAIL-144` 的核心：它原来挂在卡头右上角 ⇒ 用户"要在右上角选，离那么远"。
     #    ⚠️⚠️ 一律钉**标记串**（`<span class="mut sm">…</span>`），⛔ 别钉裸文案 —— 源码注释里也出现过

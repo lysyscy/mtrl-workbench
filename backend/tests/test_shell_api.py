@@ -143,6 +143,35 @@ def test_取函数体_认结构():
 
 
 @acc()
+def test_取动作条_缩进混用也要取到():
+    """⭐ 真壳靶：`ACT` 的成员缩进 **1 与 2 空格混用**（` awfAdd:` / `  zipSfjc:` 并存）。
+
+    ⚠️ 2026-10-03 批 2 **换真实调用点时当场暴露**：只认"2 空格"会漏掉一半的成员
+       ⇒ 现按"同层深度"找（⛔ 不按缩进）。本条钉住这个能力，⛔ 别退回钉缩进。
+    """
+    for name in ("awfAdd", "zipSfjc", "expPivot"):     # 2 空格 / 1 空格 / 1 空格
+        e = act_entry(name)
+        assert e.strip().startswith(f"{name}:"), f"`{name}` 没取对（缩进混用被漏？）：{e[:60]!r}"
+
+
+@acc()
+def test_取动作条_不命中山层里的同名键():
+    """⛔ 成员值里**嵌着**同名键（更深一层）⇒ 不许把它当成 `ACT` 的成员。"""
+    from tools.audit.shell_api import act_entry as A
+
+    fake = """const ACT={
+  outer:()=>fn({
+    dup:1,
+  }),
+  dup:()=>API.x(),
+};
+"""
+    e = A("dup", source=fake)
+    assert "API.x()" in e, f"取到的不是外层那条：{e[:60]!r}"
+    assert "inner" not in e and "dup:1" not in e, "命中了山层里的同名键"
+
+
+@acc()
 def test_取动作条_真壳里跨行的成员要取整():
     """⭐ 真壳靶：`awfAdd` 那条动作**跨两行**（第二行是回执文案）⇒ 截在换行就丢一半。"""
     e = act_entry("awfAdd")

@@ -49,24 +49,10 @@ from tests.m07_helpers import (
 
 CASE = "ACC-X-EXP-001"
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
+from tests.shell_src import SHELL, act_entry, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 
-
-def _act(name: str) -> str:
-    """取壳里某个动作体（`\\n <名>:` 起，**花括号配平** —— ⛔ 不用"下一个动作"当终点）。"""
-    i = SHELL.find(f"\n {name}:")
-    assert i >= 0, f"壳里找不到动作 `{name}:`"
-    depth, k = 0, SHELL.find("{", i)
-    assert k > 0, f"`{name}` 里找不到起始花括号"
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                return SHELL[i:k + 1]
-        k += 1
-    raise AssertionError(f"`{name}` 的花括号没配平")
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_act`（`SHELL.find` ＋ 花括号配平）——
+#    已**整把删掉**，取动作条改走壳的语义口径 `act_entry`（定义 = `tools/audit/shell_api.py`）。⛔ 别写回来。
 
 
 def _plan(*, status: str = "在建", period: str = "2026-08") -> dict:
@@ -366,8 +352,8 @@ def test_壳侧提取导出真下载且提示与模板形态一致(tmp_path):
 
     ⚠️ 断言只钉这两个动作**自己的作用域**（花括号配平区间）—— 别处的同名串不得喂饱它。
     """
-    dialog = _act("expExt")
-    save = _act("saveExt")
+    dialog = act_entry("expExt")
+    save = act_entry("saveExt")
     _a = with_kernel(save)         # ⭐ `TAIL-67`：下载代码已抽到 `dlExport` 通用件
     assert "dlExport" in save and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
     assert "/api/m07/extract/export?status=" in save, "`saveExt` 没打导出端点"

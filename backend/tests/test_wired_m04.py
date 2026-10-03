@@ -18,30 +18,12 @@ from pathlib import Path
 
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, act_entry  # noqa: F401  ← `P4`① 读取点收敛
 
-
-def _act(name: str, limit: int = 6000) -> str:
-    """取 `ACT` 里 `<name>:async ()=>{…}` 的**函数体**（⚠️ 必须**花括号配平**）。
-
-    ⚠️ 别用「起点 + 固定字符数」—— 那是**假绿/假红的温床**：截短了断言看不到要查的代码，
-       截长了会**吃进下一个动作**（反向灵敏度实测踩到：`plRowSave` 的 2400 字符窗口
-       把后面的 `plRowCancel` 吃了进来 ⇒ 「失败时不许清草稿」这条**误判**）。
-    """
-    i = SHELL.find(f"{name}:async ()=>{{")
-    assert i > 0, f"找不到 `{name}:async ()=>{{`"
-    depth, k = 0, SHELL.find("{", i)
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    body = SHELL[i:k + 1]
-    assert len(body) < limit, f"`{name}` 取到 {len(body)} 字符 —— 配平可能跑偏"
-    return body
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_act`（`SHELL.find` ＋ 花括号配平 ＋ 字符数哨兵）——
+#    已**整把删掉**，取动作条改走壳的语义口径 `act_entry`（定义 = `tools/audit/shell_api.py`）。
+#    ⚠️ 它当年那条教训（"别用起点＋固定字符数：截长了会吃进下一个动作"）**没丢** ——
+#       `act_entry` 本身就是按**结构**取到成员结束，正是那条教训的正确形态。⛔ 别写回来。
 
 
 # --------------------------------------------------------------- 接线点（正向）
@@ -147,7 +129,7 @@ def test_手动行判据不得在前端复写():
 
     前端只把**原值**送上去 —— 复写任何一道 = **第二份口径**（`D18`：判定一律后端）。
     """
-    body = _act("plRowSave")
+    body = act_entry("plRowSave")
     assert "API.m04PlanSave(" in body, "`plRowSave` 没调后端"
     for bad, why in (
         ("badMoney(", "还在前端复写**金额**校验"),
@@ -159,7 +141,7 @@ def test_手动行判据不得在前端复写():
 @acc()
 def test_手动行失败时保留已填内容():
     """§4.3.3.1：**校验失败 ⇒ 保留已填内容**（不清空重填）⇒ 失败分支**不许**清草稿层。"""
-    body = _act("plRowSave")
+    body = act_entry("plRowSave")
     assert "plRowEditId=''; plD={};" in body, "成功后没清草稿（行已落库，该清）"
     j = body.find("}catch(e){")
     assert j > 0, "`plRowSave` 没有 catch 分支"
@@ -268,7 +250,7 @@ def test_手动行保存挡重入():
     ⚠️ 后端**故意不挡**重复 —— 同月完全相同的行是**本业务的合法状态**（§4.3.3：重复由
        「重复上报」提示、不靠自动去重掩盖）⇒ 连点会**静默多一行**，只能由界面挡。
     """
-    body = _act("plRowSave")
+    body = act_entry("plRowSave")
     assert "if(plSaving) return;" in body, "保存没挡重入（`plRowSave` 里没有 `plSaving` 闸）"
     assert "plSaving=true" in body and "plSaving=false" in body, "挡重入标记没置 / 没复位"
     # ⚠️ 只设一个没人读的标记 = 假守卫：草稿行的按钮必须**真的**变样（禁用 ＋ 文案）
