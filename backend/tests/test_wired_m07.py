@@ -21,11 +21,12 @@ from pathlib import Path
 
 from tests.acc_plugin import acc
 
-from tests.m07_shell_helpers import API, ROUTER, SHELL, _body, _slice  # noqa: F401
+from tests.m07_shell_helpers import API, ROUTER, SHELL  # noqa: F401
 
 # ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉 ⇒ 下面那条判据改在**取数表**上证（判据不变）。
 from tests.shell_load_helpers import DEP_BEFORE, load_dep, loaders, page_load  # noqa: F401
-from tests.shell_src import tbl_kernel, with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看（`tbl_kernel`：`TAIL-64`）
+# ⭐ 2026-10-03（`TAIL-219` 批 2）：取片改走壳的语义口径（⛔ 别在本件自造剪刀）
+from tests.shell_src import func_body, page_slice, tbl_kernel, with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看（`tbl_kernel`：`TAIL-64`）
 
 # ============== `ACC-SETL-001` / `ACC-SETL-EXT-001` 的**形态**半边（`§19` 批 2 搬家）
 #
@@ -37,7 +38,7 @@ from tests.shell_src import tbl_kernel, with_kernel  # ⭐ `TAIL-67`：判据要
 def test_壳里重置回默认月且不串页():
     """「重置」= 核算年月回**默认月**（上月）；且本页**不得**带上别模块的筛选状态（跨页污染防线）。"""
     assert "whReset:()=>{ fWhYm=bjMonth(-1);" in SHELL, "重置没回到默认月"
-    s = _slice("m07")
+    s = page_slice("m07")
     assert 'name="pj"' not in s and "invWh" not in s, "本页串进了别模块的筛选状态"
 
 
@@ -51,13 +52,13 @@ def test_壳里提取页重置回在建与上月():
 def test_壳里提取表两类按序且合计行紧贴():
     """两类按 `extBlock('焊材')` → `extBlock('气体')` 渲染；**每块的合计行在该块之内**（紧贴本类数据行）；
     该表**刻意不可排**（⛔ 不带 `data-sort`）。"""
-    s = _slice("m07")
+    s = page_slice("m07")
     # ⭐ 2026-09-29（`TAIL-64` P2③）：判据改成**与结构无关**的「**顺序**」钉法 —— ⛔ 别退回钉整串
     #   `${extBlock('焊材')}${extBlock('气体')}`：表外壳抽进 `TBL` 之后两个块进了 `rows` 数组，写法一变就假红。
     i_solder, i_gas = s.find("extBlock('焊材')"), s.find("extBlock('气体')")
     assert 0 <= i_solder < i_gas, "两类的渲染顺序变了（焊材必须排在气体前面）"
     # ⚠️ 合计行在 **`extBlock` 的体内**（不在 `V.m07` 切片里 ⇒ 要取函数体）
-    b = _body("extBlock")
+    b = func_body("extBlock")
     assert "sumRowOf(EXT_THEAD, list, {3:" in b and "lead:kind+'合计'" in b, \
         "块的合计行不在本块内 / 不是由共用出口出的"
     # ⭐ 2026-09-29（`TAIL-64` P2③）：判据从「钉字面」改成「钉意图」——
@@ -97,7 +98,7 @@ def test_壳里导出走真下载且带当前筛选():
 def test_壳里表体每仓一行且合计行由共用出口出():
     """表体 = **每仓一行**（逐行算校验）；合计行由 `sumRowOf(WH_THEAD, rows, …)` 出 —— 行数与
     四个金额列的合计都**按行派生**（⭐ 校验格另算，见 001-09）。"""
-    s = _slice("m07")
+    s = page_slice("m07")
     assert "sumRowOf(WH_THEAD, rows," in s, "合计行不是由共用出口按行派生的"
     assert "balOf(w)" in s, "表体没逐行渲染"
     # ⭐ 2026-09-29（`TAIL-64` P2③）：**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt" …>`）。
@@ -168,7 +169,7 @@ def test_m07数据源改为后端填充():
     assert "let EXTM = {};" in SHELL, "`EXTM` 没改成「空容器 + 后端填充」"
     assert "let BIGVAL = {};" in SHELL, "`BIGVAL` 没改成「空容器 + 后端填充」"
     assert "let BIGSET = [];" in SHELL, "`BIGSET` 没改成「空数组 + 后端填充」"
-    body = _body("reloadM07")
+    body = func_body("reloadM07")
     for call in ("API.m07Settlement(", "API.m07Extract(", "API.m07Big("):
         assert call in body, f"`reloadM07()` 没读 `{call.rstrip('(')}`"
 
@@ -179,7 +180,7 @@ def test_未选题不得被前端兜底填满():
 
     若在重拉里写「空了就填全部候选」，用户点「清空」会被**悄悄改回全部候选**（假成功、不报错）。
     """
-    body = _body("reloadM07")
+    body = func_body("reloadM07")
     assert "bigCands()" not in body, "`reloadM07()` 里给 `BIGSET` 兜底填了全部候选（会吃掉用户的「清空」）"
 
 
@@ -215,16 +216,16 @@ def test_适配层把金额转成数字():
     #    （反向灵敏度实测：不加边界时，把 `in: N0(r.in)` 改回 `in: r.in` **照样绿** —— 假绿）。
     for k in ("begin", "in", "out", "end", "rows"):
         assert re.search(rf"(?:^|[\s,(]){k}:\s*N0\(", wh), f"`adaptWh` 的 `{k}` 没过 `N0()`"
-    man = _body("adaptManual")
+    man = func_body("adaptManual")
     assert "N0(v)" in man, "`adaptManual` 的金额列没过 `N0()`（手填列合计会恒 0）"
-    ext = _body("adaptExtract")
+    ext = func_body("adaptExtract")
     assert "N0(" in ext, "`adaptExtract` 的金额没过 `N0()`（提取金额求和会变字符串拼接）"
 
 
 @acc()
 def test_适配层按后端格式判断金额列():
     """⚠️ 哪几列是金额**由后端 `manual_fmts` 决定** —— ⛔ 前端不硬编码"下标 1..4 是金额"。"""
-    man = _body("adaptManual")
+    man = func_body("adaptManual")
     assert "fmts" in man and "'money'" in man, "`adaptManual` 没按后端格式判断金额列（硬编码了下标）"
 
 
@@ -257,7 +258,7 @@ def test_选题落库走后端():
 @acc()
 def test_m07抓取分支接后端():
     assert "if(k==='wh') return whFetchBackend(m);" in SHELL, "抓取弹窗的收发结存分支没接后端"
-    body = _body("whFetchBackend")
+    body = func_body("whFetchBackend")
     assert "API.m07Fetch(" in body, "`whFetchBackend` 没调 `/api/m07/fetch`"
     assert "r.ok === false" in body, "抓取降级（i8 失败 ⇒ 手动导入）没处理"
 
@@ -326,7 +327,7 @@ def test_结余演示容器已清成空容器():
 def test_结余适配层过N0且不给未录入补值():
     """⚠️ 后端金额出**字符串**（不过 `N0()` 会显示成带引号的串）；
     ⛔ **不给未录入补 0** —— 一补，「没填」与「填了 0」就再也分不开。"""
-    body = _body("adaptBalances")
+    body = func_body("adaptBalances")
     assert "N0(v)" in body, "结余没过 `N0()`"
     assert re.search(r"if \(v == null \|\| v === ''\) return;", body), \
         "空值（未录入）没被跳过 ⇒ 会给未录入补一个值（0 与「未录入」就分不开了）"
@@ -335,7 +336,7 @@ def test_结余适配层过N0且不给未录入补值():
 @acc("ACC-SETL-EXT-001", "001-11")
 def test_reloadM07填充结余():
     """⭐ 重拉是**唯一出口**：`BAL_EX` 必须由 `reloadM07()` 从后端 `balances` 原地填。"""
-    body = _body("reloadM07")
+    body = func_body("reloadM07")
     assert "adaptBalances(ex && ex.balances)" in body, "没读 `/api/m07/extract` 的 `balances`"
     assert "Object.keys(BAL_EX).forEach(k => delete BAL_EX[k]);" in body, \
         "`BAL_EX` 没「原地清空再填」（外部持有的引用会指向旧对象）"
@@ -344,7 +345,7 @@ def test_reloadM07填充结余():
 @acc("ACC-SETL-EXT-001", "001-09")
 def test_结余列渲染成可编辑输入且合计下标跟着移():
     """「点格即改」的形态判据 ＋ ⚠️ **加列后合计行的列下标必须跟着移**（否则合计算到「结余」列上）。"""
-    body = _body("extBlock")
+    body = func_body("extBlock")
     assert 'data-act="extBal"' in body, "「结余」列没渲染成可编辑输入"
     assert "extBalOf(" in body, "结余格没走取数出口"
     assert "v == null ? ''" in body, "未录入没给空值（⛔ 不写 0）"
@@ -432,7 +433,7 @@ def test_视图切片未被改动():
     ⚠️ 已知并**已登记**的例外只有 1 行（「已验收基线」文案引用了演示块 `WHM['2026-08']`，
        演示块删掉后不改会 `TypeError` 整页崩）—— 见 `tools/ui_parity_expected.txt` 的 `m07` 行。
     """
-    body = _slice("m07")
+    body = page_slice("m07")
     assert "API." not in body, "`V.m07` 里出现了 API 调用 ⇒ 原型渲染逻辑被改（该走适配层）"
     assert "WHM['2026-08']" not in body, "`V.m07` 仍引用演示基线（演示块已删 ⇒ 会崩）"
 

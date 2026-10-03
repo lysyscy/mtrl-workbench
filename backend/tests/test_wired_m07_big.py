@@ -10,8 +10,9 @@ import re
 
 from tests.acc_plugin import acc
 
-from tests.m07_shell_helpers import API, ROUTER, SHELL, _body, _slice  # noqa: F401
-from tests.shell_src import with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看
+from tests.m07_shell_helpers import API, ROUTER, SHELL  # noqa: F401
+# ⭐ 2026-10-03（`TAIL-219` 批 2）：取片改走壳的语义口径（⛔ 别在本件自造剪刀）
+from tests.shell_src import page_slice, with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看
 
 # ---- `ACC-RPT-BIG-001`（活动大表）的形态半边
 
@@ -43,7 +44,7 @@ def test_壳里表头不含已裁掉的列():
 @acc("ACC-RPT-BIG-001", "001-03")
 def test_壳里输入框只出现在手填列():
     """手填列**恰好 6 个**：表体只经一个 `cell()` 生成输入框（`cell(0)…cell(5)`），⛔ 没有第 7 个。"""
-    s = _slice("m07")
+    s = page_slice("m07")
     assert s.count('data-act="bigEdit"') == 1, "输入框渲染点不止一处（应只有一个 `cell()` 生成器）"
     for i in range(6):
         assert f"${{cell({i})}}" in s, f"手填列 `cell({i})` 没了"
@@ -53,7 +54,7 @@ def test_壳里输入框只出现在手填列():
 @acc("ACC-RPT-BIG-001", "001-04")
 def test_壳里派生列是纯文本格():
     """派生列（合计 / 使用率 / 产值完成率）在壳里是**纯文本格**（走 `M(...)` / `pct(...)`），⛔ 无输入框。"""
-    s = _slice("m07")
+    s = page_slice("m07")
     for expr in ("M(r.totC)", "pct(r.use)", "pct(r.done)"):
         assert expr in s, f"派生列的渲染点变了：{expr}"
 
@@ -66,7 +67,7 @@ def test_壳里主材累计走金额出口且取数口已接入():
     from app.mod07_setl import big_service as BS
 
     assert BS.MAIN_MATERIAL_PORT is not None, "取数口被摘掉了 ⇒ 主材累计会退回「—」（接入态不许静默丢）"
-    s = _slice("m07")
+    s = page_slice("m07")
     assert "M(r.matC)" in s, "主材累计的渲染点变了（它必须是派生文本格，不能变成手填）"
 
 
@@ -76,14 +77,14 @@ def test_壳里零与未录入在输入框上分得开():
     **严格 `==null`** —— ⛔ 不用 `||`/`?` 之类的真值判断（那会把 `0` 吞掉、显示成未录入）。"""
     assert "const bigDisp=(v,i)=>v==null?'':String(v);" in SHELL, \
         "`bigDisp` 对空值的判定变了（用真值判断会把合法的 0 吞掉）"
-    s = _slice("m07")
+    s = page_slice("m07")
     assert "bigDisp(c.v,i)" in s, "输入框的值没走 `bigDisp` 出口"
 
 
 @acc("ACC-RPT-BIG-001", "001-12")
 def test_壳里带入格可辨且带来源月():
     """带入格**仍是可编辑输入框**（`class="inp…ed"`）＋ 带**来源月**标记（`↺MM月`）。"""
-    s = _slice("m07")
+    s = page_slice("m07")
     assert "c.from?' ed':''" in s, "带入格没有带入态样式（不再是可辨的输入框）"
     assert "↺${c.from.slice(5)}月" in s, "带入格没有来源月标记"
 
@@ -92,7 +93,7 @@ def test_壳里带入格可辨且带来源月():
 def test_壳里行只由一份装配出():
     """「页面行序 = 导出页行序」在壳里的等价形态：**行只从 `bigRows(...)` 这一处装配**（表体 ＋ 合计行），
     ⛔ 没有第二份行序；导出走 `/api/m07/big/export`（复用同一个 `big_service`，另有断言）。"""
-    s = _slice("m07")
+    s = page_slice("m07")
     assert s.count("bigRows(") == 2, f"`bigRows(` 出现了 {s.count('bigRows(')} 次（应只用于表体与合计行）"
     assert "bigRows(bjMonth(-1)).map((r,ri)=>" in s, "表体不是由 `bigRows` 装配的"
     assert "/api/m07/big/export?period=" in SHELL, "导出没走 API（那一份才是与页面同源的）"
@@ -102,7 +103,7 @@ def test_壳里行只由一份装配出():
 def test_壳里出纸走按模板导出且没有打印通道():
     """出纸 = **按模板导出 → Excel 打印**（壳的 `bigExport` → `/api/m07/big/export?period=`）；
     ⛔ 没有打印通道 / A3 入口（连标题里都不许出现）。"""
-    s = _slice("m07")
+    s = page_slice("m07")
     assert 'data-act="bigExport"' in s, "壳里没有「按模板导出」入口"
     assert "Excel 打印" in s, "没写明出纸方式（按模板导出后在 Excel 打印）"
     assert "A3" not in s, "壳里还留着 A3 打印通道"

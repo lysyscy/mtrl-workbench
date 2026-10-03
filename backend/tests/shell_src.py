@@ -31,6 +31,14 @@ from tools.audit.shell_source import (  # noqa: E402
     parts_text,
     read_shell,
 )
+# ⭐ 2026-10-03（`TAIL-219` 批 1）：壳的**语义口径**也从这个唯一出口转发
+#    （`page_slice` / `func_body` / `act_entry` / `const_obj` —— 定义全在 `tools/audit/shell_api.py`）
+from tools.audit.shell_api import (  # noqa: E402
+    act_entry,
+    const_obj,
+    func_body,
+    page_slice,
+)
 
 def dl_kernel() -> str:
     """⭐ `TAIL-67`（2026-09-21）：`core.js` 里 **`dlExport` 通用件**的源码。
@@ -125,17 +133,16 @@ def with_pjb(act: str) -> str:
 
 
 def page_seg(page: str) -> str:
-    """`V.<page>=` 那一段源码（**切片的定义只有一处** = `ui_parity.slices()`；⛔ 别在这儿再写一份）。
+    """`V.<page>=` 那一段源码（**切片的定义只有一处**；⛔ 别在这儿再写一份）。
 
+    ⭐ 2026-10-03（`TAIL-219` 批 1）：定义已搬到 `tools/audit/shell_api.py::page_slice`
+    （唯一主人）—— 本处只转发（原先转发 `ui_parity.slices()`）。
     ⚠️ 给"必须**按页**判"的断言用：全局字符串里撞到的同款写法常来自**别的页**（本仓老课）。
     """
-    from tools.audit.ui_parity import slices
-    seg = slices(read_shell().replace("\r\n", "\n").split("\n")).get(page)
-    if seg is None:
-        raise KeyError(f"壳里没有 `V.{page}=` 切片")
-    return "\n".join(seg)
+    return page_slice(page)
 
 
-__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "dl_kernel", "fbar_kernel", "page_seg",
+__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "act_entry", "const_obj", "dl_kernel",
+           "fbar_kernel", "func_body", "page_seg", "page_slice",
            "part_paths", "parts_text", "pjb_kernel", "read_shell", "tbl_kernel",
            "with_fbar", "with_kernel", "with_pjb", "with_tbl"]

@@ -19,8 +19,10 @@ from __future__ import annotations
 from tests.acc_plugin import acc
 
 from tests.shell_load_helpers import (
-    DEP, DEP_BEFORE, PAGES, SHELL, boot_body, load_dep, load_paths_body, loaders, page_load,
+    DEP, DEP_BEFORE, PAGES, SHELL, load_dep, loaders, page_load,
 )
+# ⭐ 2026-10-03（`TAIL-219` 批 2）：函数体改走壳的语义口径（⛔ 别在本件自造剪刀）
+from tests.shell_src import func_body
 
 
 @acc()
@@ -45,11 +47,11 @@ def test_boot只拉初始视图而go按需拉():
 
     ⛔ `boot()` 里**不许**再有 `Promise.all([...])` 的那种"全量组"（改前形态）。
     """
-    boot = boot_body()
+    boot = func_body("boot")
     assert "loadPaths(PAGE_LOAD[VIEW]" in boot, "`boot()` 没有「只拉初始视图」（又回到全量拉？）"
     assert "Promise.all(" not in boot, "`boot()` 里又出现了全量组（13 路一次拉全 = 退回改前形态）"
     assert "loadPaths(PAGE_LOAD[k]" in SHELL, "`go(k)` 没有按需拉该页的清单"
-    assert "loadPaths(" in load_paths_body(), "`loadPaths()` 自己没有取数"
+    assert "loadPaths(" in func_body("loadPaths"), "`loadPaths()` 自己没有取数"
 
 
 @acc()
@@ -66,7 +68,7 @@ def test_依赖路必须等机械与库存():
                 for need in needs:
                     assert need in labels, \
                         f"`PAGE_LOAD['{page}']` 要吃「{dep_lbl}」却没列前置的「{need}」（会取到空值且不报错）"
-    body = load_paths_body()
+    body = func_body("loadPaths")
     i_pre = body.find("!LOAD_DEP.has(l)")
     i_dep = body.find("LOAD_DEP.has(l)", i_pre + 1)
     assert i_pre > 0 and i_dep > i_pre, "`loadPaths()` 里依赖组没排在后面（组间串行被拆了）"
@@ -79,7 +81,7 @@ def test_逐路容错未破():
     assert "fails.push(" in SHELL, "`soft()` 没有把失败**记下来**（横幅就点不了名）"
     assert "BOOT_ERROR = fails.join(" in SHELL and "if (BOOT_ERROR) bootErrorBanner();" in SHELL, \
         "失败没有汇总成常驻横幅（只弹 toast 会一闪而过，用户只看到'页面是空的'）"
-    body = load_paths_body()
+    body = func_body("loadPaths")
     assert "soft(l, LOADERS[l])" in body, "`loadPaths()` 没有逐路走 `soft()`（容错被绕过）"
 
 
@@ -186,7 +188,7 @@ def test_没到位就不补拉():
     assert "let BOOTING = true;" in SHELL, "没有 `BOOTING` 标志（启动期的补拉会照旧连发）"
     assert "if (BOOTING || m05Refetching || !LOADED.has('付款域')) return;" in SHELL, \
         "`m05Sync()` 的两道闸不在了（会重复拉 / 或在别的页上白拉）"
-    boot = boot_body()
+    boot = func_body("boot")
     i_load = boot.find("loadPaths(")
     i_off = boot.find("BOOTING = false;")
     assert i_off > 0 and i_load > 0 and i_off > i_load, \

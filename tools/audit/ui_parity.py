@@ -41,6 +41,7 @@ import re
 import sys
 
 from shell_source import SHELL_PARTS, SHELL_PATH, read_shell  # noqa: E402  ← `P4`① 读取点收敛
+import shell_api  # noqa: E402  ← ⭐ 2026-10-03 `TAIL-219` 批 1：切片算法搬去那边（唯一主人）
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 #: **历史原型路径** —— ⛔ 本件**不用它当基准**（`U1`/`U5` 已于 2026-09-30 `TAIL-201` 退场）。
@@ -52,10 +53,8 @@ PROTO = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\demo\材料�
 #    —— 否则 `U2`（演示数组残留）与 `U4`（`/api/mNN` 在不在）会**静默**只看原型切片那一件。
 SHELL = SHELL_PATH
 
-# 切片起点：行首的 `V.<名字> =`（⭐ `U3` 用它核「`WIRED` 的页真有切片」；⛔ `U1` 已随 `TAIL-201` 退场）
-VIEW_RE = re.compile(r"^V\.([A-Za-z0-9_]+)\s*=")
-# 切片终点：下一个 `V.` / `BIND.` / 顶层 `const` / `function` / 顶层 `let`|`var`
-END_RE = re.compile(r"^(V\.[A-Za-z0-9_]+\s*=|BIND\.|const |function |let |var )")
+# ⭐ 2026-10-03（`TAIL-219` 批 1）：切片起点 / 终点的正则**已搬走**，
+#    唯一主人 = `tools/audit/shell_api.py::slices_of_lines`（⛔ 别在本件里再写一份）。
 WIRED_RE = re.compile(r"const\s+WIRED\s*=\s*new\s+Set\(\s*\[([^\]]*)\]")
 
 # U2 · 演示数组（原型里的三张假数据表）—— 接后端之后它们必须消失
@@ -74,22 +73,12 @@ def read_lines(p: pathlib.Path) -> list[str]:
 
 
 def slices(lines: list[str]) -> dict[str, list[str]]:
-    """按行首 `V.<名字>=` 切片，直到下一个 `V.` / `BIND.` / 顶层声明。"""
-    out: dict[str, list[str]] = {}
-    cur: str | None = None
-    for ln in lines:
-        m = VIEW_RE.match(ln)
-        if m:
-            cur = m.group(1)
-            out[cur] = [ln]
-            continue
-        if cur is None:
-            continue
-        if END_RE.match(ln):
-            cur = None
-            continue
-        out[cur].append(ln)
-    return out
+    """按行首 `V.<名字>=` 切片，直到下一个 `V.` / `BIND.` / 顶层声明。
+
+    ⭐ 2026-10-03（`TAIL-219` 批 1）：**算法已搬到** `shell_api.slices_of_lines`（唯一主人）
+    —— 本处只转发，⛔ 别在本件里再写一份（那正是本次要治的"同一件事多处写"）。
+    """
+    return shell_api.slices_of_lines(lines)
 
 
 def main() -> int:

@@ -18,6 +18,8 @@ from tests.acc_plugin import acc  # noqa: F401  ← 五个使用方都要它
 
 ROOT = Path(__file__).resolve().parents[2]
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+# ⭐ 2026-10-03（`TAIL-219` 批 2）：取常量表改走壳的语义口径（定义 = `tools/audit/shell_api.py`）
+from tools.audit.shell_api import const_obj
 
 #: 已接后端的十页（`WIRED`）＋ 初始视图 `home`
 #: ⚠️ 加一页就往这里加一个（本表是 `test_wired_boot.py` 的**覆盖哨**：不在表里的页不会被检查到）。
@@ -34,11 +36,8 @@ DEP_BEFORE: dict[str, tuple[str, ...]] = {
 DEP = tuple(DEP_BEFORE)
 
 
-def _obj(name: str) -> str:
-    """取 `const <name> = { … };` 的字面量正文（到**行首的 `};`** 为止）。"""
-    m = re.search(rf"const {name} = \{{(.*?)\n\}};", SHELL, re.S)
-    assert m, f"壳里找不到 `const {name} = {{`（形态变了就同批改本件）"
-    return m.group(1)
+# ⭐ 2026-10-03（`TAIL-219` 批 2）：原先这里有个 `_obj(name)` 自造剪刀（正则截 `const X = {…}`）
+# —— **已整把删掉**，改用语义口径 `const_obj(name)`（认结构 · 找不到必抛）。⛔ 别写回来。
 
 
 def exp_routes() -> dict[str, str]:
@@ -50,7 +49,7 @@ def exp_routes() -> dict[str, str]:
         光看 `exp` 动作体已经看不出来了，端点串住在这张表里）。
     """
     out: dict[str, str] = {}
-    for line in _obj("EXP_ROUTES").splitlines():
+    for line in const_obj("EXP_ROUTES").splitlines():
         m = re.match(r"\s*'([^']+)':\s*\{.*?url:\s*'([^']+)'", line)
         if m:
             out[m.group(1)] = m.group(2)
@@ -61,7 +60,7 @@ def exp_routes() -> dict[str, str]:
 def page_load() -> dict[str, list[str]]:
     """`PAGE_LOAD`：页 → 它要的取数路（标签）。"""
     out: dict[str, list[str]] = {}
-    for line in _obj("PAGE_LOAD").splitlines():
+    for line in const_obj("PAGE_LOAD").splitlines():
         m = re.match(r"\s*([A-Za-z0-9_]+):\s*\[(.*?)\],", line)
         if m:
             out[m.group(1)] = re.findall(r"'([^']+)'", m.group(2))
@@ -71,31 +70,23 @@ def page_load() -> dict[str, list[str]]:
 
 def loaders() -> set[str]:
     """`LOADERS` 的**标签**集合（标签即"失败点名"用的中文名，用户能看懂）。"""
-    keys = set(re.findall(r"^\s*'([^']+)':", _obj("LOADERS"), re.M))
+    keys = set(re.findall(r"^\s*'([^']+)':", const_obj("LOADERS"), re.M))
     assert keys, "`LOADERS` 解析出 0 条 —— 形态变了（⛔ 别静默放过）"
     return keys
 
 
 def load_dep() -> set[str]:
-    """`LOAD_DEP`：必须等前置两路的那些路。"""
+    """`LOAD_DEP`：必须等前置两路的那些路。
+
+    ⚠️ 2026-10-03（`TAIL-219` 批 2）：本件其余三把剪刀已删（`_obj` / `boot_body` / `load_paths_body`），
+       **只剩这一个** —— 它取的是 `new Set([…])`，而语义口径目前只认 `{…}` 对象字面量
+       （要收它得给 `shell_api` 添一个 `const_items`；⚠️ 该件已 398 行、逼近 `T5` 的 400 档 ⇒ 先登记、别顺手加）。
+    """
     m = re.search(r"const LOAD_DEP = new Set\(\[(.*?)\]\);", SHELL, re.S)
     assert m, "壳里找不到 `const LOAD_DEP = new Set([…])`"
     return set(re.findall(r"'([^']+)'", m.group(1)))
 
 
-def boot_body() -> str:
-    """`boot()` 的函数体（终点 = 下一个顶层函数）。"""
-    i = SHELL.find("async function boot() {")
-    assert i >= 0, "壳里找不到 `boot()`"
-    j = SHELL.find("function bootErrorBanner()", i)
-    assert j > i, "找不到 `boot()` 的终点（`bootErrorBanner`）"
-    return SHELL[i:j]
-
-
-def load_paths_body() -> str:
-    """`loadPaths()` 的函数体（终点 = 下一个顶层声明）。"""
-    i = SHELL.find("async function loadPaths(labels) {")
-    assert i >= 0, "壳里找不到 `loadPaths()`"
-    j = SHELL.find("async function boot() {", i)
-    assert j > i
-    return SHELL[i:j]
+# ⭐ 2026-10-03（`TAIL-219` 批 2）：`boot_body()` / `load_paths_body()` 两把剪刀**已整把删掉** ——
+#    取函数体改走语义口径 `func_body(name)`（认结构 · 参数表＋花括号配平 · 找不到必抛）。
+#    调用方改成 `func_body("boot")` / `func_body("loadPaths")`。⛔ 别写回来。

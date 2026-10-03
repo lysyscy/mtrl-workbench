@@ -24,7 +24,7 @@ from app.mod15_user import domain as D
 from app.mod15_user import login as LG
 from app.mod15_user import repository as R
 from tests.acc_plugin import acc
-from tests.shell_load_helpers import boot_body   # ⭐ ⑤⑥ 要读 `boot()` 的函数体
+from tests.shell_src import func_body        # ⭐ ⑤⑥ 要读 `boot()` 的函数体（`TAIL-219` 批 2：改走语义口径）
 from tests.shell_src import SHELL                # ⚠️ 壳源码的唯一出口（⛔ 别直接读 index.html）
 
 
@@ -359,7 +359,7 @@ def test_当前登录用户是唯一出口且不得写死人名():
 
     # ⑥ ⭐ **首屏就得是真身份**：`boot()` 里必须去取它
     #    （⛔ 不是"等用户点进用户管理页才取" —— 那样顶栏第一帧必然是假的或空的）。
-    boot = boot_body()
+    boot = func_body("boot")
     assert "soft('当前登录用户', reloadWho)" in boot, (
         "`boot()` 没有（逐路容错地）取当前登录用户 ⇒ 顶栏第一帧是空的/假的"
         "（必须走 `soft('当前登录用户', reloadWho)` —— ⛔ 也不许让它把首屏拖成串行等待）")

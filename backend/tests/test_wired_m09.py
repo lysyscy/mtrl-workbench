@@ -25,70 +25,15 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, with_tbl  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, act_entry, func_body, page_slice, with_tbl  # noqa: F401  ← `P4`① 读取点收敛
 API = (ROOT / "backend" / "app" / "mod09_fee" / "api.py").read_text(encoding="utf-8")
 ROUTER = (ROOT / "backend" / "app" / "mod09_fee" / "router.py").read_text(encoding="utf-8")
 
-
-def _body(name: str) -> str:
-    """取壳里 `function <name>(…){…}` 的函数体（**花括号配平**，不靠"下一个函数"）。"""
-    i = SHELL.find(f"function {name}(")
-    assert i >= 0, f"壳里找不到 `function {name}(`"
-    depth, k = 0, SHELL.find("{", i)
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    body = SHELL[i:k + 1]
-    assert len(body) < 6000, f"`{name}` 取到 {len(body)} 字符 —— 配平可能跑偏"
-    return body
-
-
-def _slice(name: str, limit: int = 12000) -> str:
-    """取壳里 `V.<name>=()=>{…}` 的切片（花括号配平）。"""
-    i = SHELL.find(f"\nV.{name}=()=>{{")
-    assert i > 0, f"壳里找不到 `V.{name}=()=>{{`"
-    i += 1
-    depth, k = 0, SHELL.find("{", i)
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    body = SHELL[i:k + 1]
-    assert 2000 < len(body) < limit, f"`V.{name}` 切片长度 {len(body)} 可疑 —— 配平可能跑偏"
-    return body
-
-
-def _act(name: str) -> str:
-    """取壳里 `ACT` 的**某一条动作**（从 `  <name>:` 起，按括号配平扫到该条语句结束）。
-
-    ⚠️ 必须**只取这一条** —— 只写「文件里含 `API.m09Add(`」是**假绿**：
-       同名调用在两处出现（API 客户端定义里、动作里），把动作那处变异掉照样能通过。
-    """
-    i = SHELL.find(f"\n  {name}:")
-    assert i >= 0, f"壳里找不到 `ACT.{name}`"
-    i += 1
-    depth, k = 0, i
-    while k < len(SHELL):
-        c = SHELL[k]
-        if c in "([{":
-            depth += 1
-        elif c in ")]}":
-            depth -= 1
-        elif c == "\n" and depth == 0 and k > i:
-            break
-        k += 1
-    body = SHELL[i:k]
-    assert 20 < len(body) < 3000, f"`{name}` 取到 {len(body)} 字符 —— 配平可能跑偏"
-    return body
+# ⭐ 2026-10-03（`TAIL-219` 批 1 **试点**）：本件原先自带三把"剪刀"（`_body` / `_slice` / `_act`：
+#    靠 `SHELL.find` ＋ 花括号配平）⇒ 已**全部改走壳的语义口径**
+#    `tests.shell_src` 转发的 `func_body` / `page_slice` / `act_entry`
+#    （定义 = `tools/audit/shell_api.py` · **认结构**＝跳过字符串/模板串/注释/正则 · 找不到**必抛**）。
+#    ⛔ 别在这儿把剪刀写回来（要治的就是"同一件事各处剪一遍"）；⛔ 也别再各写一份。
 
 
 # ================================ `ACC-FEE-MON-001` 的**形态**半边（`§19` 批 2 搬家）
@@ -117,7 +62,7 @@ def test_壳里自动项与手填项同桌():
     `data-sort-key`**（`shell_src.with_tbl()` 把两段拼起来看）。
     ⛔ 别为了"省事"把判据改回钉字面 —— 那等于宣布**以后不许抽通用件**（与 `TAIL-64/67` 相反）。
     """
-    s = _slice("m09")
+    s = page_slice("m09")
     assert "TBL({" in s, "本页表格没走统一出口 `TBL`"
     assert "key:'m09:awf'" in s, "本页没把「m09:awf」这张表的 key 交给 `TBL`"
     assert 'data-sort-key="' in with_tbl(s), "`TBL` 内核没有输出 `data-sort-key`"
@@ -162,7 +107,7 @@ def test_壳里项目面板是单选且候选键来自后端():
 @acc("ACC-FEE-MON-001", "001-09")
 def test_壳里本页不设导出入口且写明随台账导出():
     """§7.1 / §5.5：本表**随「逐月欠款台账」导出**、**本页不设单独导出按钮**。"""
-    s = _slice("m09")
+    s = page_slice("m09")
     assert "逐月欠款台账" in s, "没写明它随台账导出"
     assert "export" not in s.lower(), "壳的 m09 视图里出现了导出入口（本页不该有）"
 
@@ -195,7 +140,7 @@ def test_m09演示容器已删():
 def test_m09数据源改为后端填充():
     assert "let AWF_ROWS = [];" in SHELL, "`AWF_ROWS` 没改成「空数组 + 后端填充」"
     assert "let AWF_PJS = [];" in SHELL, "`AWF_PJS` 没改成「空数组 + 后端填充」"
-    body = _body("reloadM09")
+    body = func_body("reloadM09")
     assert "API.m09Fee(" in body, "`reloadM09()` 没读 `/api/m09/fee`"
     for v in ("AWF_PJS = (d.projects", "AWF_ROWS = (d.manuals", "AWF_AUTO = N0(",
               "AWF_TOTAL = N0("):
@@ -251,7 +196,7 @@ def test_m09候选与默认项目由重拉落定():
        只写「文件里含 `AWF_PJS`」会被别处的同名子串喂饱。
     """
     assert "awfPj = (pjSort(ntPjList())[0]" not in SHELL, "默认项目又变回「加载时求值」了"
-    assert "awfPj = d.project" in _body("reloadM09"), \
+    assert "awfPj = d.project" in func_body("reloadM09"), \
         "`reloadM09()` 没按后端回包的 `project` 落定默认项目"
 
 
@@ -274,7 +219,7 @@ def test_m09面板候选用后端清单():
 def test_m09四个写动作都走后端():
     for name, call in (("awfAdd", "API.m09Add("), ("awfDel", "API.m09Delete("),
                        ("awfName", "API.m09Name("), ("awfAmt", "API.m09Amount(")):
-        body = _act(name)
+        body = act_entry(name)
         assert call in body, f"`ACT.{name}` 没调 `{call.rstrip('(')}`"
         assert "awfAct(" in body, f"`ACT.{name}` 没走 `awfAct`（失败路径会吞掉后端原因）"
 
@@ -283,7 +228,7 @@ def test_m09四个写动作都走后端():
 def test_m09不得本地改数据冒充落库():
     """⛔ 反向：写动作里不得再出现 `AWF_ROWS` 的本地增删 —— 那是"假成功"（库没变、页面变了）。"""
     for name in ("awfAdd", "awfDel", "awfName", "awfAmt"):
-        body = _act(name)
+        body = act_entry(name)
         for bad in ("AWF_ROWS.push", "AWF_ROWS.splice", "awfMut", "AWF_TOTAL ="):
             assert bad not in body, f"`ACT.{name}` 里出现 `{bad}` —— 本地改数据冒充落库"
 
@@ -291,7 +236,7 @@ def test_m09不得本地改数据冒充落库():
 @acc()
 def test_m09金额判据不在前端复写():
     """§5.5 的金额判据唯一出口 = 后端 `domain.amount_problem`（只拦非数字、**允许 0 与负数**）。"""
-    body = _act("awfAmt")
+    body = act_entry("awfAmt")
     for bad in ("isNaN(", "numOf(", "badMoneyMsg(", "amount_problem("):
         assert bad not in body, f"`ACT.awfAmt` 复写了金额判据（`{bad}`）⇒ 第二份口径"
 
@@ -299,7 +244,7 @@ def test_m09金额判据不在前端复写():
 @acc()
 def test_m09失败也要看回执():
     """后端对「金额不合法」回 **HTTP 200 ＋ `ok:false`** ⇒ 只判 `!r` 会把那句原因**吞掉**。"""
-    body = _body("awfAct")
+    body = func_body("awfAct")
     assert "r.ok === false" in body, "`awfAct()` 没判 `ok === false`（后端那句拒绝原因会被当成成功吞掉）"
     assert "reloadM09()" in body, "`awfAct()` 事后没重拉（失败也得以后端为准）"
 
@@ -309,7 +254,7 @@ def test_m09切月份切项目都重取数():
     """手填项**按「核算年月 ＋ 项目」各存一份** ⇒ 两个筛选一变都得重新取那一份（只 `render()` 会看到旧那一份）。"""
     assert "if(sc==='awf'){ awfYm=v; mp.open=null; reloadM09();" in SHELL, \
         "月份切换没重新取数（会看到上一月那一份）"
-    body = _act("awfPjPick")
+    body = act_entry("awfPjPick")
     assert "reloadM09()" in body, "切项目没重新取数（会看到上一个项目那一份）"
 
 
@@ -318,7 +263,7 @@ def test_m09切月份切项目都重取数():
 @acc()
 def test_m09切片不得直连后端():
     """⛔ `V.m09` 是**原型的渲染逻辑** ⇒ 一行不改（`ui_parity` 的 `U1` 也查）。"""
-    body = _slice("m09")
+    body = page_slice("m09")
     for bad in ("API.", "reloadM09(", "fetch("):
         assert bad not in body, f"`V.m09` 里出现 `{bad}` —— 原型渲染逻辑被改（该走适配层）"
 
