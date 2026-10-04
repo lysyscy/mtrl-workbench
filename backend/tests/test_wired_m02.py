@@ -20,13 +20,13 @@ from pathlib import Path
 
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import (  # noqa: F401  ← `P4`① 读取点收敛
+    SHELL, act_entry, bind_block, const_src, func_body,
+)
 
-
-def _fn(name: str, end: str) -> str:
-    """取壳里某段（`name` 起、`end` 止）—— 段内断言用，避免全文件宽松命中。"""
-    body = SHELL[SHELL.index(name):]
-    return body[:body.index(end)]
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_fn`（"标记 A → 标记 B"）——
+#    已**整把删掉**，取段改走壳的语义口径（函数 ⇒ `func_body` · 动作条 ⇒ `act_entry` ·
+#    `BIND` 块 ⇒ `bind_block` · 常量整句 ⇒ `const_src`）。⛔ 别写回来。
 
 
 # --------------------------------------------------------------- 接线点（正向）
@@ -60,14 +60,14 @@ def test_执行记录写完就刷且进页不被缓存住():
     ⚠️ 三个抓取入口的**成功 / 降级 / 抛异常**三条路**都要刷** —— 它们**都写了**一条执行记录
        （后两条尤其容易漏：界面上一句"没能完成"很容易被当成"什么都没发生"）。
     """
-    fresh = _fn("const ALWAYS_FRESH = new Set(", "\n\n")
+    fresh = const_src("ALWAYS_FRESH")
     assert "'i8 执行记录'" in fresh, \
         "「i8 执行记录」没进 `ALWAYS_FRESH` ⇒ 切回 m02 看到的还是旧记录（缓存住了）"
-    assert "ALWAYS_FRESH.has(l)" in _fn("async function loadPaths(labels) {", "\n}\n"), \
+    assert "ALWAYS_FRESH.has(l)" in func_body("loadPaths"), \
         "`loadPaths` 没认 `ALWAYS_FRESH`（那它就只是个摆设）"
 
     for fn in ("ntFetchBackend", "whFetchBackend", "ivFetchBackend"):
-        body = _fn(f"async function {fn}(", "\n}\n")
+        body = func_body(fn)
         n = body.count("reloadM02IfOn()")
         assert n >= 3, (
             f"`{fn}` 只在 {n} 处刷了执行记录 —— 成功 / 降级 / 抛异常**三条路都要刷**"
@@ -84,9 +84,9 @@ def test_回显与任务日志同源于执行记录():
     """
     assert "let M02_RECS = [];" in SHELL and "M02_RECS = (recs || []).map(" in SHELL
     assert "function m02EchoKv()" in SHELL and "function m02LogRows()" in SHELL
-    echo = _fn("function m02EchoKv()", "function m02LogRows()")
-    log = _fn("function m02LogRows()", "function m02LabelOf(")
-    latest = _fn("function m02Latest(", "function m02When(")
+    echo = func_body("m02EchoKv")
+    log = func_body("m02LogRows")
+    latest = func_body("m02Latest")
     assert "m02Latest(" in echo, "回显卡要走「按接口取最近一次」那个出口"
     assert "M02_RECS" in latest and "M02_RECS" in log, "两张卡必须读同一份记录（`M02_RECS`）"
     assert SHELL.count("API.m02Records") == 1, "只许一处取数（⛔ 别两张卡各取一次）"
@@ -100,7 +100,7 @@ def test_两张卡由渲染后注入且切片一行未改():
     ⚠️ 卡片里那句「（模拟）」在切片里**已改准并登记**（`ui_parity_expected.txt` 的 `m02` 行）——
        那是**唯一**一处显式偏离（`ui_parity` 的 `U1` 当场看得见）。
     """
-    bind = _fn("BIND.m02 = function ()", "BIND.m01 = function ()")
+    bind = bind_block("m02")
     assert "kv.innerHTML = m02EchoKv();" in bind, "回显卡没接真数据"
     assert "tb.innerHTML = m02LogRows();" in bind, "日志卡没接真数据"
 
@@ -120,10 +120,10 @@ def test_同步先二次确认才允许强踢():
     assert "m02SyncWh: () => API.post('/api/m02/sync/warehouses?allow_kick=true'" in SHELL
     assert "m02SyncPj: () => API.post('/api/m02/sync/common-projects?allow_kick=true'" in SHELL
     # ⚠️ 段的**起止**：`m02SyncOk` 在后面（`syncWh` 在前）⇒ 终点要用它之后那节的开头，⛔ 不能拿 `syncWh` 当终点
-    confirm = _fn("m02SyncOk:async t=>{", "/* —— MOD-06")
+    confirm = act_entry("m02SyncOk")
     assert "API.m02SyncWh()" in confirm or "API.m02SyncPj()" in confirm, \
         "确认之后才发请求（⛔ 别在弹窗打开时就发）"
-    dlg = _fn("async function m02Sync(which)", "async function boot()")
+    dlg = func_body("m02Sync")
     assert "强制踢掉" in dlg and "data-act=\"m02SyncOk\"" in dlg, "确认弹窗没讲清会顶号"
     # ⛔ 反面：不许在别处直接打这两个端点（绕开确认弹窗）
     assert SHELL.count("API.m02SyncWh()") + SHELL.count("API.m02SyncPj()") == 2, \
@@ -138,7 +138,7 @@ def test_同步回执与降级一律原样转述且刷新相关页():
     - 降级 ⇒ 明说「i8 侧不可用、**未改动本地档案**」；
     - 「常用项目列表」会**真的建档** ⇒ 顺手刷新档案与「待人工建档」卡（`TAIL-45`）。
     """
-    confirm = _fn("m02SyncOk:async t=>{", "/* —— MOD-06")
+    confirm = act_entry("m02SyncOk")
     assert "r.degraded" in confirm and "未改动本地档案" in confirm, "降级没说清（会让人以为同步过了）"
     assert "esc((r&&r.message)" in confirm, "回执要原样转（⛔ 不换句话）"
     assert "reloadM02()" in confirm, "同步完要刷新执行记录（回显与日志跟着变）"
@@ -166,10 +166,10 @@ def test_纯年月的执行记录也算付款通知书():
 
     ⚠️ 反过来也要看住：**认不出的一律不猜**（走原文），⛔ 别把别的记录硬塞给某一类。
     """
-    isif = _fn("function m02IsIf(it, r)", "function m02Latest(it)")
+    isif = func_body("m02IsIf")
     assert "bare_month" in isif and "/^\\d{4}-\\d{2}$/" in isif, "纯年月那条判据没写"
     assert "付款通知书" in SHELL and "bare_month: true" in SHELL
-    label = _fn("function m02LabelOf(r)", "\n\n")
+    label = func_body("m02LabelOf")
     # ⚠️ 2026-09-20：断言从"钉旧写法的字面"（原先是 `it ? … : r.target`）改成**钉意图** ——
     #    用户要求「里面显示的**接口名不直观**，换成直观的」⇒ 抓取接口改成「名字（型号）」，
     #    并且要给**打印 / 只导出 PDF** 那两类也补一层人话映射。
@@ -187,7 +187,7 @@ def test_反向_不再拿演示数组当回显():
     （`WHs` 归 m07 的演示、`JCs` 归集采域的原型页）⇒ 接线后**必须**由 `BIND.m02` 就地换成真数据，
     否则页面上写的就是假话（"抓过 675 行"而库里的数由用户在别页看）。
     """
-    bind = _fn("BIND.m02 = function ()", "BIND.m01 = function ()")
+    bind = bind_block("m02")
     assert "kv.innerHTML = m02EchoKv();" in bind, "回显卡没被真数据覆盖 ⇒ 演示值会露给用户"
 
 
@@ -196,7 +196,7 @@ def test_反向_没落点的接口不许假装成功():
     """⛔ `API-04 采购合同信息` 属**集采域（M5，未开工）** ⇒ 壳里必须**如实说未接通**，
     并且**不得**出现它的抓取端点调用（原型那句「已触发抓取（模拟）→ 成功」正是要删的假话）。
     """
-    act = _fn("fetchOne:t=>{", "manualUp:t=>")
+    act = act_entry("fetchOne")
     # ⚠️ 按**代码**认，⛔ 不按整段文本认 —— 上面那句解释里就写着 `API-04`（本仓实测踩过：
     #    「断言被自己的文档注释喂饱」）。
     assert "api==='API-04'" not in act and "tt==='采购合同信息'" not in act, \
@@ -210,7 +210,7 @@ def test_反向_降级路径指向真入口而不是假上传():
     """⛔ 「手动导入」不许演一个不存在的上传控件：有对应导入页的（`m07`/`m08`/`m06`）
     **把人送过去**（真入口，与抓取同一套管线）；没有的**如实说未接通**。
     """
-    up = _fn("manualUp:t=>{", "/* MOD-14")
+    up = act_entry("manualUp")
     assert "go(k)" in up, "有入口的要真跳过去（⛔ 只弹一句话等于没接）"
     assert "'m07':'m08'" in up or ("'收发结存表':'m07'" in up and "'库存单据明细表':'m08'" in up)
     assert "尚未接通" in up, "没有入口的要如实说（⛔ 不演示假上传）"

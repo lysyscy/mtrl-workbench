@@ -31,11 +31,16 @@ from tools.audit.shell_source import (  # noqa: E402
     parts_text,
     read_shell,
 )
-# ⭐ 2026-10-03（`TAIL-219` 批 1）：壳的**语义口径**也从这个唯一出口转发
-#    （`page_slice` / `func_body` / `act_entry` / `const_obj` —— 定义全在 `tools/audit/shell_api.py`）
+# ⭐ 2026-10-03（`TAIL-219` 批 1／2b）：壳的**语义口径**也从这个唯一出口转发
+#    （定义全在 `tools/audit/shell_api.py` · ⛔ 别在别处自造剪刀）
 from tools.audit.shell_api import (  # noqa: E402
     act_entry,
+    api_entry,
+    bind_block,
+    bind_blocks,
+    const_items,
     const_obj,
+    const_src,
     func_body,
     page_slice,
 )
@@ -142,7 +147,8 @@ def page_seg(page: str) -> str:
     return page_slice(page)
 
 
-__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "act_entry", "const_obj", "dl_kernel",
+__all__ = ["SHELL", "SHELL_PARTS", "SHELL_PATH", "act_entry", "api_entry", "bind_block",
+           "bind_blocks", "const_items", "const_obj", "const_src", "dl_kernel",
            "fbar_kernel", "func_body", "page_seg", "page_slice",
            "part_paths", "parts_text", "pjb_kernel", "read_shell", "tbl_kernel",
            "with_fbar", "with_kernel", "with_pjb", "with_tbl"]

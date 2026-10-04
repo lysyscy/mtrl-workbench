@@ -12,7 +12,9 @@
 `text()`（归一化全文）· `visible_text()`（剥注释后的全文）·
 `slices_of_lines(lines)`（逐页切片的**唯一算法** —— `ui_parity.slices()` 也走它）·
 `pages()` · `page_map()` / `page_slice(page)`（某页源码）·
-`func_body(name)`（函数整段声明）· `act_entry(name)`（`ACT` 里某一条）· `const_obj(name)`（`const X = {…}`）。
+`func_body(name)`（函数整段声明）· `act_entry(name)`（`ACT` 里某一条）· `const_obj(name)`（`const X = {…}`）·
+⭐ 批 2b 添的四类具名之物：`api_entry(name)`（`const API` 客户端某一条）· `bind_block(page)`（`BIND.<页>` 块）·
+`const_src(name)`（`const X = …;` 整句，含多段模板串拼接）· `const_items(name)`（数组 / `new Set([…])` 的项）。
 
 ## ⛔ 四条纪律（都是踩过的）
 1. **只读** —— ⛔ 不写壳、⛔ 不搬 `V.*` 切片（搬了 `shell_verify` 会多出一堆无谓差异）。
@@ -34,7 +36,7 @@ import re
 import sys
 from functools import lru_cache
 
-from jslex import blank_comments, match, scan_value, skip_string
+from jslex import blank_comments, match, scan_stmt, scan_value, skip_string
 from shell_source import read_shell, strip_comments
 
 # ── 0 · 归一化的壳全文（＋ 定位用的"同长置空版"）────────────────────────
@@ -157,17 +159,14 @@ def func_body(name: str, *, source: str | None = None) -> str:
     return src[m.start():e]
 
 
-def act_entry(name: str, *, source: str | None = None) -> str:
-    """壳里 `const ACT={ … }` 中**某一条动作**的源码（从行首到该成员结束）。
+def _member(obj_name: str, name: str, src: str, scan: str) -> str:
+    """`const <obj_name> = { … }` 里**同层**那条成员 `name: …` 的源码。
 
-    ⚠️ 必须**只取这一条** —— 只写「壳里含 `API.m09Add(`」是**假绿**：
-       同名调用在 `api.js` 的客户端定义里也有一份，把动作那处变异掉照样能通过。
-    ⚠️ 找成员**按"同层深度"**（⛔ 不按缩进：壳里 ACT 缩进 1/2 空格混用；也防命中山层里的同名键）。
+    ⚠️ 找成员**按"同层深度"**（⛔ 不按缩进：壳里缩进 1/2 空格混用；也防命中山层里的同名键）。
     """
-    src, scan = _src(source)
-    m = re.search(r"(?m)^const\s+ACT\s*=\s*\{", scan)
+    m = re.search(rf"(?m)^const\s+{re.escape(obj_name)}\s*=\s*\{{", scan)
     if not m:
-        raise LookupError("壳里找不到 `const ACT={`（列 0 定义）")
+        raise LookupError(f"壳里找不到 `const {obj_name} = {{`（列 0 定义）")
     b = scan.index("{", m.end() - 1)
     inner = src[b + 1:match(scan, b, "{", "}") - 1]
     key = re.compile(rf"[ \t]*{re.escape(name)}[ \t]*:")
@@ -195,7 +194,85 @@ def act_entry(name: str, *, source: str | None = None) -> str:
             if depth > 0:
                 depth -= 1
         i += 1
-    raise LookupError(f"`ACT` 里找不到动作 `{name}`")
+    raise LookupError(f"`{obj_name}` 里找不到 `{name}`")
+
+
+def act_entry(name: str, *, source: str | None = None) -> str:
+    """壳里 `const ACT={ … }` 中**某一条动作**的源码（从行首到该成员结束）。
+
+    ⚠️ 必须**只取这一条** —— 只写「壳里含 `API.m09Add(`」是**假绿**：
+       同名调用在 `api.js` 的客户端定义里也有一份，把动作那处变异掉照样能通过。
+    """
+    src, scan = _src(source)
+    return _member("ACT", name, src, scan)
+
+
+def api_entry(name: str, *, source: str | None = None) -> str:
+    """壳里 `const API = { … }`（唯一数据出口）中**某一条客户端方法**的源码。
+
+    ⚠️ 与 `act_entry` 同一条纪律：**只取这一条**（同名串在别处也有）。
+    """
+    src, scan = _src(source)
+    return _member("API", name, src, scan)
+
+
+def bind_blocks(page: str, *, source: str | None = None) -> list[str]:
+    """壳里**所有** `BIND.<页> = …` 块（每块 = 该行起，到**下一个顶层声明行**止 —— 与 `page_slice` 同一套口径）。
+
+    ⚠️⚠️ **同一页可能有多块**（实测 `BIND.m03` / `BIND.m11` 各两处）—— 一块在 `pages-a.js` 管"全选框"、
+    另一块在 `core.js` **链式注入**（先存 `_BIND_M03_OLD` 再包一层）。⇒ 要挑哪一块是**调用方**的事。
+    ⚠️ `BIND` 三种写法**并存**：`BIND.m03=()=>{…}` · `BIND.m06 = function () {…}` · `BIND.m15 = m15Trash;`
+       ⇒ ⛔ 别按其中某一种形态去钉。
+    """
+    src, scan = _src(source)
+    lines, slines = src.split("\n"), scan.split("\n")
+    start = re.compile(rf"^BIND\.{re.escape(page)}\s*=")
+    blocks: list[list[str]] = []
+    cur: list[str] | None = None
+    for i, ln in enumerate(slines):
+        if start.match(ln):
+            cur = [lines[i]]
+            blocks.append(cur)
+            continue
+        if cur is None:
+            continue
+        if _END_RE.match(ln):
+            cur = None
+            continue
+        cur.append(lines[i])
+    return ["\n".join(b) for b in blocks]
+
+
+def bind_block(page: str, *, source: str | None = None) -> str:
+    """**恰好一块**时的便利函数。⚠️ 命中 0 或**多处** ⇒ 抛（⛔ 绝不静默挑第一处 —— 那正是假绿的温床）。"""
+    bs = bind_blocks(page, source=source)
+    if len(bs) != 1:
+        raise LookupError(
+            f"`BIND.{page}` 命中 {len(bs)} 处（期望恰好 1）—— ⚠️ 同一页可能有多块"
+            "（实测 `m03`/`m11` 各两处）⇒ 请用 `bind_blocks()` 按**内容**挑，⛔ 别让它静默挑第一处"
+        )
+    return bs[0]
+
+
+def const_src(name: str, *, source: str | None = None) -> str:
+    """壳里 `const <name> = …;` 的**整条语句**（含多段模板串拼接的常量）。
+
+    ⚠️ 结尾按 `;` 判（⛔ 不按换行）—— 壳里有跨行的模板串拼接（`` const X=`…` + `…`; ``）。
+    """
+    src, scan = _src(source)
+    m = re.search(rf"(?m)^const\s+{re.escape(name)}\s*=", scan)
+    if not m:
+        raise LookupError(f"壳里找不到列 0 的 `const {name} =`")
+    return src[m.start():scan_stmt(scan, m.end())]
+
+
+def const_items(name: str, *, source: str | None = None) -> list[str]:
+    """`const <name> = ['a','b']` ／ `new Set(['a', …])` 的**字符串项**（按出现顺序）。"""
+    stmt = const_src(name, source=source)
+    m = re.search(r"\[(.*)\]", stmt, re.S)      # `new Set([…])` 与 `[…]` 都取方括号那一层
+    if not m:
+        raise LookupError(f"`const {name}` 里没有 `[…]`（只认数组 / `new Set([…])`）")
+    return [a or b for a, b in re.findall(r"'([^']*)'|\"([^\"]*)\"", m.group(1))]
 
 
 def const_obj(name: str, *, source: str | None = None) -> str:
@@ -221,7 +298,10 @@ def main() -> int:
         print(f"  func_body({fn!r}) = {len(func_body(fn)):>6} 字符")
     for act in ("awfAdd", "zipSfjc", "expPivot"):       # ⚠️ 前一个 2 空格、后两个 1 空格（缩进混用）
         print(f"  act_entry({act!r}) = {len(act_entry(act)):>6} 字符")
+    print(f"  api_entry('pjType') = {len(api_entry('pjType'))} 字符"
+          f" · bind_block('m02') = {len(bind_block('m02'))} 字符")
     print(f"  const_obj('EXP_ROUTES') = {len(const_obj('EXP_ROUTES'))} 字符"
+          f" · const_items('WIRED') = {len(const_items('WIRED'))} 项"
           f" · 全文 {len(text())} ⇒ 剥注释 {len(visible_text())}")
     return 0
 

@@ -52,12 +52,28 @@ M4_OLD = '    key = re.compile(rf"[ \\t]*{re.escape(name)}[ \\t]*:")'
 M4_NEW = '    key = re.compile(rf"  {re.escape(name)}[ \\t]*:")   # 变异 M4：钉死 2 空格'
 M4_TEST = "test_取动作条_缩进混用也要取到"
 
+#: 变异⑤（`shell_api.py`）：`BIND` 块**不封口**（一路吃到文件尾）⇒ 会把下一个 BIND / 别的块也吃进来
+M5_OLD = ("        if cur is None:\n            continue\n"
+          "        if _END_RE.match(ln):\n            cur = None\n            continue\n"
+          "        cur.append(lines[i])\n")
+M5_NEW = ("        if cur is None:\n            continue\n"
+          "        if False and _END_RE.match(ln):   # 变异 M5：块不封口\n            cur = None\n            continue\n"
+          "        cur.append(lines[i])\n")
+M5_TEST = "test_取_BIND_块_三种写法都要收"
+
+#: 变异⑥（`shell_api.py`）：`BIND` **多处命中也不抛**（静默挑第一处 ⇒ 换错块了照样绿）
+M6_OLD = "    if len(bs) != 1:\n        raise LookupError(\n"
+M6_NEW = "    if False and len(bs) != 1:   # 变异 M6：多处也静默挑第一处\n        raise LookupError(\n"
+M6_TEST = "test_取_BIND_块_多处命中必须抛"
+
 #: (标签, 靶件, 旧, 新, 该红的判据名)
 CASES = (
     ("①", LEX, M1_OLD, M1_NEW, M1_TEST),
     ("②", API, M2_OLD, M2_NEW, M2_TEST),
     ("③", API, M3_OLD, M3_NEW, M3_TEST),
     ("④", API, M4_OLD, M4_NEW, M4_TEST),
+    ("⑤", API, M5_OLD, M5_NEW, M5_TEST),
+    ("⑥", API, M6_OLD, M6_NEW, M6_TEST),
 )
 
 
@@ -111,7 +127,7 @@ def main() -> int:
     if fail:
         print("❌ " + "；".join(fail))
         return 1
-    print(f"✅ 有区分力：四条都必红 · 复原后 rc={rcN}")
+    print(f"✅ 有区分力：{len(CASES)} 条都必红 · 复原后 rc={rcN}")
     return 0
 
 

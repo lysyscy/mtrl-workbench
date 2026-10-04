@@ -14,12 +14,10 @@ from pathlib import Path
 
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, act_entry, api_entry, func_body  # noqa: F401  ← `P4`① 读取点收敛
 
-
-def _fn(name: str, end: str) -> str:
-    body = SHELL[SHELL.index(name):]
-    return body[:body.index(end)]
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_fn`（"标记 A → 标记 B"）——
+#    已**整把删掉**，取段改走壳的语义口径（函数 ⇒ `func_body` · 动作条 ⇒ `act_entry` · `API` 条目 ⇒ `api_entry`）。
 
 
 @acc("ACC-PRJ-OWN-001", "001-12")
@@ -38,7 +36,7 @@ def test_类型列的人工覆盖入口由钩子注入():
 @acc("ACC-PRJ-OWN-001", "001-12")
 def test_弹窗讲清口径且只有两个可选():
     """⚠️ 三类判定是**自动**的，人工覆盖是**例外** ⇒ 弹窗必须把这件事说清（含留痕、含"为什么不能选具体小微"）。"""
-    dlg = _fn("function pjTypeDlg()", "async function pjAct(")
+    dlg = func_body("pjTypeDlg")
     assert "§2.2.1" in dlg, "要指出口径的主人节"
     assert "小微" in dlg and "≥2 个仓库" in dlg, "要把自动判定的规则讲出来（用户才知道自己为什么来改）"
     assert "没有「小微」" in dlg, "要说清**根因**：有的壳全名不含「小微」⇒ 被误判"
@@ -52,8 +50,8 @@ def test_弹窗讲清口径且只有两个可选():
 def test_选普通项目才出现仓库名且空值当场拦下():
     """⚖️ 仓库名的规矩在**两端各拦一次**（壳里给人话、后端是判据）：
     选「普通项目」⇒ 才出现仓库名输入；不填 ⇒ 当场说清为什么（⛔ 别等后端 400）。"""
-    dlg = _fn("function pjTypeDlg()", "async function pjAct(")
-    ok = _fn("pjTypeOk:t=>{", "/* —— 链路 C")
+    dlg = func_body("pjTypeDlg")
+    ok = act_entry("pjTypeOk")
     assert "pjTypeNew === 'normal' ?" in dlg and 'id="pjTypeWh"' in dlg, "只在该填的时候才出现输入框"
     assert "!wh" in ok and "必须填仓库名" in ok and "不猜" in ok, "空值要在壳里就讲清（后端那道判据仍在）"
 
@@ -63,9 +61,9 @@ def test_反向_壳里不另写三类判定且只有一个出口():
     """⛔ 反向两条：
     ① 壳里**不许**再写一份"含小微 ⇒ 壳"之类的判定（那是 `classify_name` 的活）；
     ② 改类型**只有一个出口** `API.pjType`（⛔ 别处不许直接打那个端点）。"""
-    dlg = _fn("function pjTypeDlg()", "async function pjAct(")
+    dlg = func_body("pjTypeDlg")
     assert "indexOf('小微')" not in dlg and "includes('小微')" not in dlg, \
         "弹窗里只需**解释**口径，⛔ 不许自己判一遍"
     assert SHELL.count("API.pjType(") == 1, "改类型端点只许有一处调用方（唯一出口）"
-    api = _fn("pjType: (id, project_type, warehouse_name)", "m02Records:")
+    api = api_entry("pjType")
     assert "'PUT'" in api and "/type" in api, "走 PUT .../type（与后端端点一致）"

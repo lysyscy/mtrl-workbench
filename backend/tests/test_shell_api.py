@@ -27,7 +27,10 @@ import pytest
 
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL, act_entry, const_obj, func_body, page_slice  # noqa: F401
+from tests.shell_src import (  # noqa: F401
+    SHELL, act_entry, api_entry, bind_block, bind_blocks, const_items, const_obj,
+    const_src, func_body, page_slice,
+)
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -213,6 +216,55 @@ def test_取常量表_只认对象字面量():
     assert "url:" in obj, "取到的不是那张导出分发对象"
     with pytest.raises(LookupError):
         const_obj("WIRED")
+
+
+@acc()
+def test_取_API_客户端条目_只取这一条():
+    """⭐ 批 2b 新增口子：`const API = {…}`（唯一数据出口）里某一条 —— ⛔ 别取到旁边那条。"""
+    e = api_entry("pjType")
+    assert e.strip().startswith("pjType:") and "API.send(" in e, f"没取对：{e[:60]!r}"
+    assert "m02Records" not in e, "取多了 —— 吃进了下一条"
+
+
+@acc()
+def test_取_BIND_块_三种写法都要收():
+    """⭐ 批 2b 新增口子：`BIND` 三种写法并存（箭头 / 函数表达式 / 直接赋值）⇒ 都要收，且**只收自己那一块**。"""
+    b6 = bind_block("m06")
+    assert b6.startswith("BIND.m06 = function () {"), f"函数表达式那种没取对：{b6[:60]!r}"
+    b15 = bind_block("m15")
+    assert b15.startswith("BIND.m15 = m15Trash;"), f"直接赋值那种没取对：{b15[:60]!r}"
+    assert "BIND.m06" not in b15, "m15 那块吃进了下一个 BIND"
+    b3 = bind_blocks("m03")
+    assert len(b3) == 2, f"`m03` 应当有两块 BIND，实得 {len(b3)}"
+    assert any(x.startswith("BIND.m03=") for x in b3), "箭头那种没取到"
+    assert any(x.startswith("BIND.m03 = function () {") for x in b3), "函数表达式那块没取到"
+
+
+@acc()
+def test_取_BIND_块_多处命中必须抛():
+    """⚠️ 同一页有多块时**静默挑第一处 = 假绿**（实测 `m03`/`m11` 各两处，且第二块是**链式注入**）。"""
+    with pytest.raises(LookupError):
+        bind_block("m03")
+    assert len(bind_blocks("m03")) >= 2
+
+
+@acc()
+def test_取常量整句_多段模板串也取全():
+    """⭐ 批 2b 新增口子：`const X = \\`…\\`;` 整句（含**多段拼接** —— `BIG_THEAD` 那种）。"""
+    for name in ("NT_THEAD", "AWF_THEAD", "BIG_THEAD"):
+        s = const_src(name)
+        assert s.startswith(f"const {name}=") or s.startswith(f"const {name} ="), s[:40]
+        assert s.rstrip().endswith(";"), f"`{name}` 没取到语句结尾：{s[-40:]!r}"
+    assert const_src("BIG_THEAD").count("`") >= 4, "多段模板串拼接没取全（截在第一段了？）"
+
+
+@acc()
+def test_取常量项_数组与_Set_都认():
+    """⭐ 批 2b 新增口子：数组 / `new Set([…])` 的字符串项；对象字面量**不归它**（必抛）。"""
+    assert set(const_items("LOAD_DEP")) == {"收发结存与大表", "付款域"}
+    assert "m03" in const_items("WIRED") and "home" in const_items("WIRED")
+    with pytest.raises(LookupError):
+        const_items("EXP_ROUTES")          # 对象字面量 ⇒ 没有 `[…]`
 
 
 @acc()

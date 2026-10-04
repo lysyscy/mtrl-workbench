@@ -46,13 +46,10 @@ from app.mod04_plan import plan_ui as U
 from app.mod08_inv import domain as I
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, act_entry  # noqa: F401  ← `P4`① 读取点收敛
 
-
-def _fn(name: str, end: str) -> str:
-    """取壳里某段（`name` 起、`end` 止）—— 段内断言用，避免全文件宽松命中。"""
-    body = SHELL[SHELL.index(name):]
-    return body[:body.index(end)]
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_fn`（"标记 A → 标记 B"）——
+#    已**整把删掉**，取段改走壳的语义口径（这里要的是 `ACT` 的一条 ⇒ `act_entry`）。⛔ 别写回来。
 
 
 def _rows() -> list[dict]:
@@ -183,7 +180,7 @@ def test_手动行删除只删该行且清归属与勾选():
     NA.assert_manual_editable({"ph_id": "MANUAL-abc123", "bill_no": ""})   # 手动行放行
 
     # ③ 壳侧：删完把 id 从勾选集里退出来；⛔ 且不许本地 splice 冒充删除
-    ok = _fn("ntDelOk:t=>{", "/* ⭐ 撤销付款")
+    ok = act_entry("ntDelOk")
     assert "pickSet.delete(id)" in ok, "删完没退出勾选集（汇总条会继续算一个不存在的行）"
     assert "splice" not in ok, "⛔ 壳里还在本地 splice 冒充落库"
     assert "API.manualDelete(" in ok, "删除没走后端端点"

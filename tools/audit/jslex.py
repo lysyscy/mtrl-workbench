@@ -158,6 +158,31 @@ def scan_value(s: str, i: int) -> int:
     return n
 
 
+def scan_stmt(s: str, i: int) -> int:
+    """从 `i` 起扫**一条语句**；返回同层遇到 `;` **之后**的下标。
+
+    ⚠️ 只在 `;` 停（⛔ 不在换行停）—— 壳里有**跨行的模板串拼接**（`` const X=`…` + `…`; ``）
+       与跨行的数组/对象字面量；停在换行会当场截半。
+    """
+    depth = 0
+    n = len(s)
+    while i < n:
+        j = _skip_trivia(s, i)
+        if j != i:
+            i = j
+            continue
+        c = s[i]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            if depth > 0:
+                depth -= 1
+        elif c == ";" and depth == 0:
+            return i + 1
+        i += 1
+    raise ValueError(f"扫不到语句结束（`;`）：[…{s[max(0, i - 60):i]!r}]")
+
+
 def blank_comments(src: str, *, html: bool = False) -> str:
     """把注释**逐字符换成空格**（⛔ 保留换行）⇒ 长度与行号都和原文对齐，可拿偏移回原文取正文。
 
