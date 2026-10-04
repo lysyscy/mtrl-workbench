@@ -70,6 +70,18 @@ Say ('模式 = ' + $(if ($DryRun) { '干跑（不落盘）' } else { '落盘' })
 #:   今天那次缺陷（壳基线路径写错）就是靠**人读输出**才发现的，机器判不出来 ✗。
 $packProblems = 0
 
+# ---- ⚠️⚠️ 0) 「输出目录已存在且非空」⇒ 拒绝（2026-10-04 加 · **重产同一个 `-Out` 当场抓出**）----
+#  为什么：`Copy-Item -Recurse src dst` 在 dst **已存在**时会把 src **塞进** dst 里面
+#  （⇒ `.codebuddy\memory\memory\…` 一整份重复件：包"变脏"、SHA256SUMS 还把它当正式件统计）。
+#  ⚠️ 第一次产包**看不见**（目标目录还不存在）—— **只有重产同一个目录才现形**。
+#  ⇒ 两道一起上：这里**拒绝**往旧包里合并（⛔ 不静默合并、也⛔ 不静默删你的目录）
+#     ＋ 下面第 2 步的目录拷贝改成**拷内容**（幂等 · 不再嵌套）。
+if (-not $DryRun -and (Test-Path -LiteralPath $Out) -and @(Get-ChildItem -LiteralPath $Out -Force -ErrorAction SilentlyContinue).Count -gt 0) {
+    Say ('⛔ 输出目录已存在且非空：' + $Out)
+    Say '   ⇒ 换个 -Out（默认 `mtrl-<yyyyMMdd-HHmm>` 带时分 ⇒ 天然不撞）；或先把该目录清空 / 改名再产。'
+    exit 2
+}
+
 # ---- 0) 前置两件（⭐ 只打"绿的包"：闸门红 ⇒ 停手，别产出一个跑不起来/说不清的包）----
 #   预案（`ops/README.md` §一之四）在这里落成**脚本**（⛔ 不靠"我记得"）：
 #   0a 闸门全绿（16 把尺子）· 0b **证据新鲜**（权威四态档必须是刚跑出来的，⛔ 别把上一轮的当真）
@@ -137,7 +149,10 @@ foreach ($e in $extra) {
     if (-not (Test-Path $s)) { Say ('   ⛔ 缺：' + $e.Src + '（跳过 ⇒ 已记进"该带的件缺 N 项"；见末尾）'); $packProblems++; continue }
     if ($DryRun) { Say ('   [干跑] ' + $e.Src + ' -> ' + $e.Dst); continue }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $d) | Out-Null
-    if ($e.Kind -eq 'dir') { Copy-Item -Recurse -Force $s $d } else { Copy-Item -Force $s $d }
+    # ⚠️⚠️ 2026-10-04 修：原先 `Copy-Item -Recurse -Force $s $d` —— 在 `$d` **已存在**时会把源目录
+    #    **塞进**它里面（⇒ `.codebuddy\memory\memory\…`）⇒ 正解 = 拷**内容**（`$s\*`）⇒ 幂等合并。
+    if ($e.Kind -eq 'dir') { Copy-Item -Path (Join-Path $s '*') -Destination $d -Recurse -Force }
+    else { Copy-Item -Force $s $d }
     Say ('   ✓ ' + $e.Src)
 }
 # ⚠️⚠️ 2026-09-29 修（**干跑 `-DryRun` 当场抓出**）：源路径原写成 `Join-Path $RepoRoot 'backups'` ——

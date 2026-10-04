@@ -102,8 +102,13 @@ foreach ($rel in @('.codebuddy\memory', 'ops\nssm', 'artifacts', '.codebuddy\bac
     $s = Join-Path $Pack $rel
     if (-not (Test-Path $s)) { Say ('   ⚠️ 包里没有 ' + $rel + '（跳过）'); continue }
     if ($DryRun) { Say ('   [干跑] ' + $rel + ' -> ' + $RepoRoot); continue }
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent (Join-Path $RepoRoot $rel)) | Out-Null
-    Copy-Item -Recurse -Force $s (Join-Path $RepoRoot $rel)
+    $dstRel = Join-Path $RepoRoot $rel
+    New-Item -ItemType Directory -Force -Path $dstRel | Out-Null
+    # ⚠️⚠️ 2026-10-04 修（与 `ops\pack.ps1` 同源 —— 那道坑的**镜像**）：原先 `Copy-Item -Recurse -Force $s $dstRel`
+    #    在 `$dstRel` **已存在**时会把源目录**塞进**它里面 ⇒ `.codebuddy\memory\memory\…`。
+    #    ⚠️ 目标机上**必然**撞：仓是 clone 来的 ⇒ `.codebuddy\memory` **本来就在** ⇒ 每次落地都多造一份重复件。
+    #    ⇒ 正解 = 拷**内容**（`$s\*`）⇒ 幂等合并、不再嵌套。
+    Copy-Item -Path (Join-Path $s '*') -Destination $dstRel -Recurse -Force
     Say ('   ✓ ' + $rel)
 }
 
