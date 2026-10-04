@@ -20,16 +20,11 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, act_entry  # noqa: F401  ← `P4`① 读取点收敛
 
-
-def _plan_pick() -> str:
-    """「按付款计划勾选」处理器 `planPick` 的正文。"""
-    i = SHELL.find("planPick:()=>{ const win=plWin();")
-    assert i >= 0, "壳里找不到 `planPick` 处理器"
-    j = SHELL.find("/* —— MOD-03 · 手动新增", i)
-    assert j > i, "找不到 `planPick` 的收尾"
-    return SHELL[i:j]
+# ⭐ 2026-10-04（`TAIL-219` 批 2b 余下 ②）：本件那把自造剪刀 `_plan_pick()` 已换成语义窗口子
+#   `act_entry("planPick")`（`planPick` 是 `const ACT={…}` 里的一条 —— 两处取到的正文一致，
+#   仅首尾空白之差；量测件 `.codebuddy/work/00-scratch/_tail219_batch2b_rest.py`）。
 
 
 # ⚠️ 「只放宽视图参数」那一行：四个视图参数可以放宽，`fNt.projs`（项目筛选）**一个字都不许动**
@@ -42,7 +37,7 @@ def test_壳里计划命中的行被预勾选():
 
     新壳：命中判据 = **单据号相等 且 是付款候选**（`ntPayCand`）—— 与旧页同一口径。
     """
-    reg = _plan_pick()
+    reg = act_entry("planPick")
     assert "const plan=PLs.filter(p=>p.ym===ym);" in reg, "没按当月筛计划行"
     assert "NO.find(x=>x.code===c&&ntPayCand(x))" in reg, "命中判据丢了（应含 `ntPayCand`）"
     assert "hit++; pickSet.add(n.id); });" in reg, "命中的行没被勾上"
@@ -55,7 +50,7 @@ def test_壳里跨月单据也能勾上():
     """§4.3.5：视图放宽到「全部月份」⇒ 当月计划里混着的**上月/更早**通知书也能勾上；
     回执要点出「含跨月 N 条（<月份> ×N）」—— 让人知道勾进来的不全是当月。
     """
-    reg = _plan_pick()
+    reg = act_entry("planPick")
     assert _WIDEN in reg, "没把「单据年月」等视图参数放宽（跨月的行会被筛掉）"
     assert "fNt.month='全部'" in reg, "单据年月没放宽到「全部月份」"
     assert "含<b>跨月 ${cx}</b> 条" in reg, "回执没报「含跨月 N 条」"
@@ -68,7 +63,7 @@ def test_壳里项目筛选不动且被挡的行要报数():
     """用户口径（2026-09-12）：**「项目」筛选一律不动** —— 它是用户表达的业务范围；
     被项目挡掉的行**跳过并报数**（不静默少勾）。
     """
-    reg = _plan_pick()
+    reg = act_entry("planPick")
     assert _WIDEN in reg and "projs" not in _WIDEN, "放宽清单里混进了「项目」筛选项"
     assert "fNt.projs='全部'" not in reg and "fNt.projs=[]" not in reg, "把用户的「项目」筛选改了"
     assert "const cut=before-pickSet.size;" in reg, "没数出「被挡掉几条」"
@@ -81,7 +76,7 @@ def test_壳里空单据号不参与勾选():
     """§4.3.3：单据号**允许为空** ⇒ 空号认不出对应哪张通知书 ⇒ 不参与勾选；
     并在回执里说明「另 N 行无单据号 / 编号查不到」。
     """
-    reg = _plan_pick()
+    reg = act_entry("planPick")
     assert "const c=String(p.docNo||'').trim();" in reg, "没把计划行的单据号规范化（去空格）"
     assert "const n=c?NO.find(x=>x.code===c&&ntPayCand(x)):null;" in reg, \
         "空单据号没被排除（`c` 为空时应判为**查不到**而非命中）"
@@ -95,7 +90,7 @@ def test_壳里窗口外先禁用且点不了():
     ⚠️ 两处都留着：按钮 `disabled`（看得见）＋ 处理器开头 `if(!win.open)` 兜底（点得到也不执行）。
     """
     assert "data-act=\"planPick\" ${win.open?'':'disabled'}" in SHELL, "按钮没按窗口置灰"
-    reg = _plan_pick()
+    reg = act_entry("planPick")
     assert "const win=plWin();" in reg, "处理器没自己再判一次窗口"
     assert "if(!win.open){ toast(" in reg, "处理器没兜底拦窗口外"
     # 放宽的三档 ＋ 付款状态置「未付清」（与旧路由的 `period=&pay_status=unpaid` 同款）
@@ -108,7 +103,7 @@ def test_壳里窗口外不执行并说明原因():
 
     ⚠️ 旧实现在服务端也复检一次；动作改为纯客户端后那道复检**失去保护对象**（见模块 docstring）。
     """
-    reg = _plan_pick()
+    reg = act_entry("planPick")
     head = reg[:reg.index("const ym=win.ym;")]
     assert "return; }" in head, "窗口外没有**提前返回**（会继续往下勾）"
     assert "付款计划 ${win.from} 号起生效、月末截止" in head, "没说明窗口起止"
@@ -122,7 +117,7 @@ def test_壳里计划单据号来自当月且月份不可自选():
 
     新壳：`ym = win.ym`（窗口算出来的当月）⇒ 只取该月计划行 ⇒ 别的月的计划行不参与本次勾选。
     """
-    reg = _plan_pick()
+    reg = act_entry("planPick")
     assert "const ym=win.ym;" in reg, "月份不是由窗口出口给的（会变成可自选）"
     assert "const plan=PLs.filter(p=>p.ym===ym);" in reg, "没按当月过滤计划行"
     assert "PLs" in SHELL and "plans: () => API.get('/api/m04/plans?year_month=')" in SHELL, \

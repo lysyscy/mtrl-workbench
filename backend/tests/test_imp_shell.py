@@ -13,7 +13,7 @@ import re
 
 from tests.acc_plugin import acc
 from tests.shell_load_helpers import loaders, page_load
-from tests.shell_src import SHELL
+from tests.shell_src import SHELL, act_entry, func_body
 
 #: 本页自己的动作（`ACT.<名>` 必须都在）
 #: ⚠️ 2026-09-26（`TAIL-103`）：`impPj`（原来挂在自造的 `<select>` 上）**换成共用面板的两个动作** ——
@@ -25,13 +25,19 @@ PAGE_ACTS = ("impDomain", "impPick", "impParse", "impMap", "impPjToggle", "impPj
 
 
 def _imp_region() -> str:
-    """`impSetDomain` 到 `ACT.impRollback` 那一段（本页的全部代码 —— 含**切域**那段）。
+    """`impSetDomain` 函数起 → `ACT.impRollback` 动作起那一段（本页的全部代码 —— 含**切域**那段）。
 
     ⚠️ 起点 2026-09-26 从 `V.imp = ()` 前移到 `impSetDomain`：**域上下文就在这里读**，
        而"壳里不许认域号"这条判据必须把它框进来（起点留在 `V.imp` 会漏掉真出过问题的那一段）。
+
+    ⭐ 2026-10-04（`TAIL-219` 批 2b 余下 ①）：两个锚**不再写壳里的字面**，改成**先从语义窗按名字取**
+       （`func_body("impSetDomain")` / `act_entry("impRollback")`）再按位置切 ——
+       后者正是新添的 **"`ACT.<名> = …` 赋值式"** 支路（本页族全是这种形态）。
+    ⚠️ 它仍是一段"**两个具名之物之间**"的区间：窗里**没有、也不打算有**一个万能的 `between(a,b)`
+       （那等于把标记串请进窗里）⇒ 本函数**登记为正当**（不属于要清的剪刀；找不到时上面 `assert` 会喊）。
     """
-    i = SHELL.find("async function impSetDomain")
-    j = SHELL.find("ACT.impRollback")
+    i = SHELL.find(func_body("impSetDomain"))
+    j = SHELL.find(act_entry("impRollback"))
     assert i > 0 and j > i, "壳里找不到「数据导入」页（形态变了就同批改本件）"
     return SHELL[i:j]
 
@@ -135,13 +141,6 @@ def test_数据导入页在壳里_四步向导_且无死控件():
             f"动作 `{a}` 定义了却没用上（或没接在控件上）"
 
 
-def _act_body(name: str) -> str:
-    """取 `ACT.<name>` 的函数体（到行首 `};` 为止 —— 本页的动作体里没有跨行 `}`）。"""
-    i = SHELL.find(f"ACT.{name} =")
-    assert i > 0, f"壳里找不到 `ACT.{name}`"
-    return SHELL[i:SHELL.index("\n};", i)]
-
-
 @acc("ACC-IMP-MAP-001", "001-10")
 def test_导入回滚后把取数缓存全标脏():
     """⭐ 2026-09-23（`TAIL-78` · 查 `TAIL-75` 落库下游时查出）：**导入/回滚是跨页写 ⇒ 必须全标脏**。
@@ -155,7 +154,8 @@ def test_导入回滚后把取数缓存全标脏():
     """
     for act in ("impCommit", "impRollback"):
         # ⚠️ 剥块注释再查：本动作的注释里**引述**过那个写法（"原先这里手写清空"），不剥就假红。
-        body = re.sub(r"/\*.*?\*/", "", _act_body(act), flags=re.S)
+        # ⭐ 2026-10-04（`TAIL-219` 批 2b 余下 ①）：改走语义窗 `act_entry`（本页族是 `ACT.<名> = …` 赋值式）。
+        body = re.sub(r"/\*.*?\*/", "", act_entry(act), flags=re.S)
         # ⭐ `#3`（2026-09-26）**换落点**：判词不变（"导入/回滚改了别的域的数 ⇒ 不许留旧数"），
         #    但**不再要求业务动作自己写 `LOADED.clear()`** —— 那正是"靠自觉"（本仓 `TAIL-78` 就漏标过一路）。
         #    现在标脏的唯一主人 = **写出口**：`API.impCommit` / `API.impRollback` 都是写出口

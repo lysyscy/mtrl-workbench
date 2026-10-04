@@ -183,6 +183,46 @@ def test_取动作条_真壳里跨行的成员要取整():
     assert "API.m09Delete(" not in e, "取多了 —— 吃进了下一条动作"
 
 
+_FAKE_ASSIGN = """/* 说明里也写一遍：ACT.ghost = 1; —— ⛔ 别被注释骗走 */
+ACT.impThing = async () => {
+  const s = ';';                 /* 字符串里的分号不算语句结束 */
+  return API.impThing({t: 1});
+};
+const ACT={
+  memberThing:()=>API.memberThing(),
+};
+"""
+
+
+@acc()
+def test_取动作条_赋值式也要取到():
+    """⭐ 批 2b 余下 ①：`ACT.<名> = …;` **赋值式**（壳里 12 处 · `legacy.js` 的 i8 与导入两族）。
+
+    ⚠️ 2026-10-04 量出的**第三种形态**（同族前两例：`ACT` 成员缩进 1/2 混用 · 一页两处 `BIND`）——
+       `act_entry` 原先只扫对象字面量成员 ⇒ 这一族**整批看不见**（静默报"找不到动作"）。
+    """
+    e = act_entry("impRollback")
+    assert e.startswith("ACT.impRollback ="), f"没取到赋值式那条：{e[:60]!r}"
+    assert e.rstrip().endswith(";"), f"没取到语句结尾（截半了？）：{e[-40:]!r}"
+    assert "API.impRollback" in e, "取到的不是这条动作"
+    # 合成靶：字符串里的 `;` 与注释里的假定义都不许骗它
+    f = act_entry("impThing", source=_FAKE_ASSIGN)
+    assert "const s = ';';" in f, "赋值式的对象体被截半（字符串里的分号被当成语句结束？）"
+    assert "return API.impThing({t: 1});" in f, "没取到对象体末尾"
+    with pytest.raises(LookupError):
+        act_entry("ghost", source=_FAKE_ASSIGN)      # 注释里那条**不算存在**
+
+
+@acc()
+def test_取动作条_两种形态不唯一就抛():
+    """⛔ 同一个名字**成员与赋值式都命中** ⇒ 必须抛（静默挑一种 = 假绿）。"""
+    from tools.audit.shell_api import act_entry as A
+
+    fake = "const ACT={\n  dup:()=>API.x(),\n};\nACT.dup = () => API.y();\n"
+    with pytest.raises(LookupError):
+        A("dup", source=fake)
+
+
 @acc()
 def test_取函数体_真壳里的正则不被当成注释或字符串():
     """⭐ 真壳靶：`splitRows` 里有 `/<(\\/?)(tr|tbody)\\b[^>]*>/gi`；`vsTableHits` 里有夹引号的正则。"""
@@ -278,3 +318,29 @@ def test_页名清单与壳里_V_切片数一致():
         # ⚠️ 写法不唯一：`V.set = () => {` 带空格、`V.m09=()=>{` 不带 ⇒ 按正则判（⛔ 别钉字面）
         assert re.search(rf"^V\.{re.escape(page)}\s*=", SHELL, re.M), \
             f"`page_map()` 报了一个壳里没有的页：{page}"
+
+
+# ── 4 · ⛔ 不许再自造剪刀（清单**只许变短**）─────────────────────────────
+
+
+@acc()
+def test_壳的语义剪刀清单只许变短():
+    """⭐ 批 3（`TAIL-219` 收口）：老账分批还，**新账当场拦**。
+
+    ⚠️ 判词两条，都是"会做错的后果"：
+      ① **多了一把** ⇒ 新写的判据又在按字面剪壳文本（换一次壳写法它就静默剪错，而判据看着还绿）；
+      ② **少了一把**（白名单里的条目已经不是剪刀）⇒ 换掉了没销号（白名单变"幽灵条目"，
+         久而久之没人敢动它 —— 白名单就成了摆设）。
+    ⭐ 量法唯一 = `tests/shell_scissors.py`（AST 认**代码** · 注释/docstring 里的字样**不算**）。
+    ⛔ 要"消红"只能**走语义窗**或**在 `shell_scissors.ALLOW` 里登记正当并写清理由**。
+    """
+    from tests.shell_scissors import ALLOW, scan
+
+    found = {f"{rel}::{name}" for rel, name in scan()}
+    new = sorted(found - set(ALLOW))
+    assert not new, (
+        f"新长出自造剪刀：{new} —— 走语义窗 `tools/audit/shell_api.py`（页/函数/动作/常量/BIND/API 条目），"
+        "⛔ 别再自己从壳文本里按字面剪；确实该留 ⇒ 在 `tests/shell_scissors.py::ALLOW` 登记并写清理由"
+    )
+    stale = sorted(set(ALLOW) - found)
+    assert not stale, f"白名单里有条目已经不是剪刀了（换掉了就销号）：{stale}"

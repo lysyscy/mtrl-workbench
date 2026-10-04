@@ -18,46 +18,16 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, with_kernel, with_tbl  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67` · `with_tbl`：`TAIL-64`）
+from tests.shell_src import SHELL, act_entry, page_slice, with_kernel, with_tbl  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67` · `with_tbl`：`TAIL-64`）
 ROUTER = (ROOT / "backend" / "app" / "mod06_proc" / "router.py").read_text(encoding="utf-8")
 
 
-def _view_body(tag: str) -> str:
-    """取 `V.<tag>` 切片（**花括号配平**，不靠"下一个 V." —— 中间夹着顶层函数）。"""
-    i = SHELL.find(f"\n{tag}=()=>{{")
-    assert i > 0, f"壳里找不到 `{tag}=()=>{{`"
-    i += 1
-    depth, k = 0, SHELL.find("{", i)
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    return SHELL[i:k + 1]
-
-
-def _act_body(name: str) -> str:
-    """取 `ACT.<name>` 的函数体（**花括号配平** —— 体里嵌着模板串与 `.map()`，⛔ 不能靠"下一个动作名"切）。
-
-    ⚠️ 认法用**行首**（`^[ \\t]*name:`）—— ⛔ 不能拿 `f"\\n{name}:"`：动作是**缩进**在 `ACT = {…}` 里的
-       （实测踩到：缩进后那个写法一处都匹配不上）；也不能裸匹配 `name:`（`data-act="mechOpen"` 里也有）。
-    """
-    m = re.search(rf"(?m)^[ \t]*{name}:", SHELL)
-    assert m, f"壳里找不到 `ACT.{name}` 的定义"
-    i = m.start()
-    k, depth = SHELL.find("{", i), 0
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    return SHELL[i:k + 1]
+# ── ⭐ 2026-10-04（`TAIL-219` 批 2b 余下 ②）：本件两把自造剪刀已换成语义窗口子 ──────────
+#   · `page_slice("m06")` ⇒ `page_slice("m06")`：**页切片的唯一算法**（原先本件自写"花括号配平"，
+#     与 `ui_parity`/`shell_src` 那套**并存** = 同一件事两套算法 —— 正是本要治的病）。
+#     实测：`page_slice("m06")` 比旧切片**多**页尾那段横幅注释，而本件三条断言（无 `API.` / 无 `mechOpen` /
+#     有 `TBL({head:DIFF_THEAD,`）**换后仍成立** ⇒ 换得了（量测件 `.codebuddy/work/00-scratch/_tail219_batch2b_rest.py`）。
+#   · `_act_body(name)` ⇒ `act_entry(name)`：⭐ 逐字节一致（`procExpToggle` 789 / `mechOpen` 2577 都对上）。
 
 
 @acc()
@@ -116,7 +86,7 @@ def test_WIRED含m06():
 @acc()
 def test_视图切片未被改动():
     """⭐ 反向：`V.m06` 里不得出现 `API.` —— 渲染逻辑必须一行不改（`D18`）。"""
-    body = _view_body("V.m06")
+    body = page_slice("m06")
     assert 3000 < len(body) < 12000, f"`V.m06` 切片长度 {len(body)} 可疑 —— 配平可能跑偏"
     assert "API." not in body, "`V.m06` 里出现了 API 调用 ⇒ 原型渲染逻辑被改（该走适配层）"
 
@@ -132,7 +102,7 @@ def test_录机械费入口挂在BIND钩子且不改切片():
     """
     assert "BIND.m06 = function ()" in SHELL, "壳里没有 `BIND.m06`（录机械费入口没挂上）"
     assert 'data-act="mechOpen"' in SHELL, "入口按钮没挂 `mechOpen` 动作"
-    body = _view_body("V.m06")
+    body = page_slice("m06")
     assert "mechOpen" not in body, "入口被塞进了 `V.m06` 切片（应走**切片外**的 `BIND` 钩子）"
 
 
@@ -219,7 +189,7 @@ def test_导出面板一键开合_开合判据只认面板自身状态():
 
     ⚠️ **能证伪**：把 `const open=!pjIsOpen('procExpPj');` 换回 `procExpOn=!procExpOn;` ⇒ 本件必红。
     """
-    seg = _act_body("procExpToggle")
+    seg = act_entry("procExpToggle")
     assert "const open=!pjIsOpen('procExpPj');" in seg, \
         "开 / 关判据不是面板自身的开合态 ⇒ 点浮层外面收起后会与镜像变量走散（要点两下才出来）"
     assert "procExpOn=open;" in seg, "镜像变量没跟这一次开 / 关同步写（展开区会与面板不同步）"
@@ -284,7 +254,7 @@ def test_合计行格数由表头派生():
     #   `TBL`。钉**意图**（⛔ 不钉"切片里必须有 `<table`" —— 通用件一抽就假红，同 P0/P1b 那两次教训）：
     #   ① 切片**两处**都委托 `TBL`；② `TBL` 内核真把 rows 拼进 `tbody`（两段拼起来看）。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M3/M4（去掉任一处委托 ⇒ 必须红）。
-    body = _view_body("V.m06")
+    body = page_slice("m06")
     assert "TBL({head:DIFF_THEAD," in body, "差异表的表外壳没走统一出口 `TBL`（`TAIL-64` P2②）"
     assert "TBL({head,rows:body" in body, "主表（表①/表②）的表外壳没走统一出口 `TBL`（`TAIL-64` P2②）"
     assert "rows.join('')" in with_tbl(body), \
@@ -320,7 +290,7 @@ def test_机械录入口只送mech键_材料列没有输入面():
     for bad in ("values['in_", "values['out_", 'id="in_', 'id="out_'):
         assert bad not in SHELL, f"壳里出现了材料列的输入面：{bad}（材料列只读是铁律）"
 
-    body = _act_body("mechOpen")
+    body = act_entry("mechOpen")
     # ⭐ 结构护栏（claim 不变：**机械区块里只有机械 6 列的输入面**）——
     #   2026-09-28 改成"表头一行 ＋ 每月一行"后：`MECH_LABELS` 派生 **2 处**（表头 / 数据行），
     #   而输入面的**模板只有 1 处**（每行复用同一段）⇒ ⛔ 别在这里长出材料列的格子。
@@ -344,7 +314,7 @@ def test_录机械费第二次打开要回填该月现值():
     现法：每一行按自己的 `ym` 从 `MACH6`（= 后端 `mech`）取那一月的 6 列 ⇒ 填进该行格子；
        `null` / `0` 显示**空**（⛔ 不显示 0 —— `001-08`「不臆造 0」）。
     """
-    body = _act_body("mechOpen")
+    body = act_entry("mechOpen")
     assert "mach6Arr(wh,ym)" in body, "弹窗没有从 `MACH6` 取**该月现值**（第二次打开会是空盒）"
     assert "const a=mach6Arr(wh,ym)" in body, "取现值的写法变了"
     assert "Number(a[j])!==0" in body, "`0` 没按空显示（会把没填过的月份渲染成 0）"

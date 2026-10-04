@@ -325,21 +325,6 @@ def _m08_card_head() -> str:
     return SHELL[a:b]
 
 
-def _action_text(name: str) -> str:
-    """ACT 里某个动作的**文本区间**：`\\n <名>:` 起，到**下一个 ACT 条目**（`\\n <标识符>:`）止。
-
-    ⚠️ 与 `_act` 不同：后者靠**花括号配平**，只适用**带花括号**的 async 动作；
-       隐式返回的 `t=>toast(\\`…${}…\\`)` 里有模板字面量占位 `${…}` ⇒ 配平法会被那个 `{` 骗到。
-    """
-    m = re.search(rf"\n {re.escape(name)}:", SHELL)
-    assert m, f"壳里找不到动作 `{name}:`"
-    nxt = re.search(r"\n [A-Za-z_][A-Za-z0-9_]*:", SHELL[m.end():])
-    end = m.end() + nxt.start() if nxt else len(SHELL)
-    body = SHELL[m.start():end]
-    assert len(body) < 3000, f"`{name}` 取到 {len(body)} 字符 —— 切点可能跑偏"
-    return body
-
-
 @acc("ACC-INV-001", "001-12")
 def test_库存单据只留真导出且透视提示与模板形态一致():
     """绑 `ACC-INV-001/001-12` —— ⭐ **2026-09-29（`TAIL-185` · 用户裁定 `A`）claim 已改**：
@@ -364,7 +349,9 @@ def test_库存单据只留真导出且透视提示与模板形态一致():
         "`BIND.m08` 没把朴素导出摘掉（选择器或 `.remove()` 变了）"
 
     # ② 两者走**不同实现**（"互不影响"的实质）：朴素那份仍走**通用 `exp`**，⛔ 不得被并进 `expPivot`
-    exp_act = _action_text("exp")
+    # ⭐ 2026-10-04（`TAIL-219` 批 2b 余下 ②）：原先自造剪刀 `_action_text("exp")`（切到"下一个 ACT 条目"）
+    #    已换成语义窗口子 `act_entry("exp")` —— 实测那两条断言（`还没有导出功能` / `不假装成功`）换后仍成立。
+    exp_act = act_entry("exp")
     pivot_act = act_entry("expPivot")
     # ⚠️ 2026-09-27（守则 §2.2/§3.1 · `TAIL-117` 批次 2）：兜底**措辞换成人话**（原措辞里有内部台账编号
     #    与后端术语）⇒ token 同步；⭐ 但**两件**都还必须在：① 如实说"这页还没有导出功能"；

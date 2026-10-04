@@ -12,7 +12,7 @@
 `text()`（归一化全文）· `visible_text()`（剥注释后的全文）·
 `slices_of_lines(lines)`（逐页切片的**唯一算法** —— `ui_parity.slices()` 也走它）·
 `pages()` · `page_map()` / `page_slice(page)`（某页源码）·
-`func_body(name)`（函数整段声明）· `act_entry(name)`（`ACT` 里某一条）· `const_obj(name)`（`const X = {…}`）·
+`func_body(name)`（函数整段声明）· `act_entry(name)`（`ACT` 里某一条 —— ⚠️ **两种形态**：对象字面量成员 / `ACT.<名>=` 赋值式）· `const_obj(name)`（`const X = {…}`）·
 ⭐ 批 2b 添的四类具名之物：`api_entry(name)`（`const API` 客户端某一条）· `bind_block(page)`（`BIND.<页>` 块）·
 `const_src(name)`（`const X = …;` 整句，含多段模板串拼接）· `const_items(name)`（数组 / `new Set([…])` 的项）。
 
@@ -198,13 +198,31 @@ def _member(obj_name: str, name: str, src: str, scan: str) -> str:
 
 
 def act_entry(name: str, *, source: str | None = None) -> str:
-    """壳里 `const ACT={ … }` 中**某一条动作**的源码（从行首到该成员结束）。
+    """壳里某一条动作（`ACT`）的源码 —— ⚠️⚠️ **两种形态并存**（2026-10-04 批 2b 余下 ① 量出）：
+
+    ① **对象字面量成员**：`const ACT={ … <name>: … }`（`pages-a.js` 等）；
+    ② **赋值式**：`ACT.<name> = …;`（`legacy.js` 里 **12 处** —— i8 那两族 ＋ 导入页一族）。
+    ⇒ 两种都找；**命中 0 或 >1 ⇒ 抛**（⛔ 绝不静默挑一种 ——
+      "我以为只有一种形态"是本件最贵的坑，同一课已出现 **3 次**：缩进混用 / 一页两块 `BIND` / 本处的赋值式）。
 
     ⚠️ 必须**只取这一条** —— 只写「壳里含 `API.m09Add(`」是**假绿**：
        同名调用在 `api.js` 的客户端定义里也有一份，把动作那处变异掉照样能通过。
     """
     src, scan = _src(source)
-    return _member("ACT", name, src, scan)
+    forms: list[str] = []
+    try:
+        forms.append(_member("ACT", name, src, scan))
+    except LookupError:
+        pass                                    # 不是对象字面量成员 ⇒ 再看赋值式（⛔ 别在这儿返回空）
+    for m in re.finditer(rf"(?m)^ACT\.{re.escape(name)}\s*=", scan):
+        forms.append(src[m.start():scan_stmt(scan, m.end())])
+    if not forms:
+        raise LookupError(f"`ACT` 里找不到 `{name}`（对象字面量成员 / `ACT.{name} =` 赋值式都不命中）")
+    if len(forms) > 1:
+        raise LookupError(
+            f"`ACT.{name}` 命中 {len(forms)} 处 —— ⛔ 不静默挑一处（成员与赋值式两种形态不唯一）"
+        )
+    return forms[0]
 
 
 def api_entry(name: str, *, source: str | None = None) -> str:
@@ -298,6 +316,7 @@ def main() -> int:
         print(f"  func_body({fn!r}) = {len(func_body(fn)):>6} 字符")
     for act in ("awfAdd", "zipSfjc", "expPivot"):       # ⚠️ 前一个 2 空格、后两个 1 空格（缩进混用）
         print(f"  act_entry({act!r}) = {len(act_entry(act)):>6} 字符")
+    print(f"  act_entry('impRollback') = {len(act_entry('impRollback')):>6} 字符（赋值式形态）")
     print(f"  api_entry('pjType') = {len(api_entry('pjType'))} 字符"
           f" · bind_block('m02') = {len(bind_block('m02'))} 字符")
     print(f"  const_obj('EXP_ROUTES') = {len(const_obj('EXP_ROUTES'))} 字符"

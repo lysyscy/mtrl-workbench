@@ -12,6 +12,7 @@
 | 链路（谁调谁 · 断在哪） | `tools/chain_expected.txt`（`chain_audit` 守，102/102） |
 | 状态与进度 | 计划 `§0` 现状快照（数字由机器核） |
 | 前端壳（唯一前端） | `backend/app/web/`（`index.html` ＋ `shell/*.js`）—— ⭐ **件清单与加载顺序的唯一出口 = `tools/audit/shell_source.py`**（⚠️ 别在本页抄件名/件数：拆件会长） |
+| ⭐ **壳的语义口径**（页 / 函数 / 动作 / 常量表 / `BIND` 块 / `API` 客户端条目） | 唯一出口 = `tools/audit/shell_api.py`（"认结构"＝ `tools/audit/jslex.py`）；**测试侧唯一入口** = `backend/tests/shell_src.py`（只转发）—— ⛔ 别再自己从壳文本里按字面剪（守卫 = `backend/tests/shell_scissors.py`「剪刀清单只许变短」） |
 
 ## 一图（30 秒版）
 

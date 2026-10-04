@@ -6,12 +6,13 @@
   本批立了 `tools/audit/shell_api.py`（`page_slice` / `func_body` / `act_entry` / `const_obj`）
   ＋ 拆出 `tools/audit/jslex.py`（"认结构"的扫描器）。
 - 要守的性质：① **认结构**（配平跳过字符串/模板串/注释/正则）② **找不到 ⇒ 必抛**（⛔ 不静默回空）
-  ③ 定位**先剥注释** ④ `ACT` 成员**按同层深度找**（⛔ 不按缩进 —— 壳里 1/2 空格混用）。
+  ③ 定位**先剥注释** ④ `ACT` 成员**按同层深度找**（⛔ 不按缩进 —— 壳里 1/2 空格混用）
+  ⑤ `act_entry` **两种形态都认**（对象字面量成员 / `ACT.<名> =` 赋值式 · 后者壳里 12 处）。
 
 用法（在本仓根跑）：
     backend\\.venv\\Scripts\\python.exe -X utf8 tools\\mut\\_mut_shellapi.py
 
-⚠️ 逐字节复原 + MD5 校验（本仓规矩）；⚠️ 靶有**两件**（`shell_api.py` ＋ `jslex.py`），各自复原。
+⚠️ 逐字节复原 + MD5 校验（本仓规矩）；⚠️ 靶有**三件**（`shell_api.py` ＋ `jslex.py` ＋ M8 的 `test_ux_states.py`），各自复原。
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ R = pathlib.Path(r"D:\dev\mtrl-workbench")
 PY = R / "backend" / ".venv" / "Scripts" / "python.exe"
 API = R / "tools" / "audit" / "shell_api.py"
 LEX = R / "tools" / "audit" / "jslex.py"
+USTATES = R / "backend" / "tests" / "test_ux_states.py"   # ← M8 的靶：往它里面"长一把新剪刀"
 TEST = "tests/test_shell_api.py"          # ← 台账「验的判据」列抓这一串
 
 #: 变异①（`jslex.py`）：不认字符串 ⇒ 字符串里的 `}` 会被当成收尾
@@ -66,6 +68,20 @@ M6_OLD = "    if len(bs) != 1:\n        raise LookupError(\n"
 M6_NEW = "    if False and len(bs) != 1:   # 变异 M6：多处也静默挑第一处\n        raise LookupError(\n"
 M6_TEST = "test_取_BIND_块_多处命中必须抛"
 
+#: 变异⑦（`shell_api.py`）：`act_entry` **丢掉"赋值式"支路** ⇒ 壳里 12 处 `ACT.<名> =` 又看不见（= 退回批 2b 三之前的形态）
+M7_OLD = ('    for m in re.finditer(rf"(?m)^ACT\\.{re.escape(name)}\\s*=", scan):\n'
+          '        forms.append(src[m.start():scan_stmt(scan, m.end())])\n')
+M7_NEW = ('    for m in []:   # 变异 M7：丢掉赋值式支路（只认对象字面量成员）\n'
+          '        forms.append(src[m.start():scan_stmt(scan, m.end())])\n')
+M7_TEST = "test_取动作条_赋值式也要取到"
+
+#: 变异⑧（`test_ux_states.py`）：**往活区里"长一把新剪刀"** ⇒ "清单只许变短"那条必须红
+M8_OLD = 'def _seg(marker: str, stop: str = "\\n}") -> str:'
+M8_NEW = ('def _newScissor(x):\n'
+          '    return SHELL.find(x)\n\n\n'
+          'def _seg(marker: str, stop: str = "\\n}") -> str:')
+M8_TEST = "test_壳的语义剪刀清单只许变短"
+
 #: (标签, 靶件, 旧, 新, 该红的判据名)
 CASES = (
     ("①", LEX, M1_OLD, M1_NEW, M1_TEST),
@@ -74,6 +90,8 @@ CASES = (
     ("④", API, M4_OLD, M4_NEW, M4_TEST),
     ("⑤", API, M5_OLD, M5_NEW, M5_TEST),
     ("⑥", API, M6_OLD, M6_NEW, M6_TEST),
+    ("⑦", API, M7_OLD, M7_NEW, M7_TEST),
+    ("⑧", USTATES, M8_OLD, M8_NEW, M8_TEST),
 )
 
 
@@ -91,7 +109,7 @@ def run_test() -> tuple[int, str]:
 
 def main() -> int:
     fail: list[str] = []
-    orig = {p: p.read_bytes() for p in (API, LEX)}
+    orig = {p: p.read_bytes() for p in (API, LEX, USTATES)}
 
     rc0, out0 = run_test()
     print(f"基线：{TEST} ⇒ rc={rc0}")
@@ -119,7 +137,7 @@ def main() -> int:
         if p.read_bytes() != b:
             fail.append(f"{p.name} 没复原")
     if not fail:
-        print(f"复原 ✅ shell_api {md5(orig[API])} · jslex {md5(orig[LEX])}")
+        print(f"复原 ✅ shell_api {md5(orig[API])} · jslex {md5(orig[LEX])} · ux_states {md5(orig[USTATES])}")
     rcN, _ = run_test()
     if rcN != 0:
         fail.append(f"复原后判据仍红（rc={rcN}）—— 留下了坏态")

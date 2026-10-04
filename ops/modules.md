@@ -25,3 +25,4 @@
 
 **包内分工（读代码时的四条线）**：`domain.py` = 纯判定与口径（无 IO）· `repository.py` = 读写库（幂等/保护在这里）· `service.py` = **包间出口**（⛔ 别的包要本包数据**只许经它**，不得 `import` 本包 `repository` —— 计划 §2.3；守卫 = `backend/tests/test_layering.py` **规则 C**；⚠️ 按需开：`mod01_projects` 原先没有这一层，2026-10-02 `TAIL-218` 批 2 才补上）· `router.py` / `*_api.py` = HTTP 面（壳的唯一取数口 = `/api/…`）。
 **两个共用底座**：`report_export/`（导出内核）· `import_kit/`（导入底座 · `TAIL-69`）· `core/preview_store.py`（预览暂存唯一载具）。
+**壳侧的「界面口径」**：⭐ **唯一出口 = `tools/audit/shell_api.py`**（页 / 函数 / 动作 / 常量表 / `BIND` 块 / `API` 客户端条目；字节层 = `tools/audit/shell_source.py`，认结构 = `tools/audit/jslex.py`）—— 写判据要读壳**走它**，⛔ 别自造剪刀（守卫 = `backend/tests/shell_scissors.py`「剪刀清单只许变短」· `TAIL-219`）。
