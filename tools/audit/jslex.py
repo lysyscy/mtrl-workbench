@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+import sys
+
 _QUOTES = "'\"`"
 #: 正则字面量的**前一个非空白字符**落在这些里 ⇒ 那个 `/` 是正则而不是除号
 _REGEX_PREV = set("(=:[!&|?{};,+*%~^<>")
@@ -226,3 +228,24 @@ def _erase(out: list[str], a: int, b: int) -> None:
     for k in range(a, b):
         if out[k] != "\n":
             out[k] = " "
+
+
+def main() -> int:
+    """`python tools/audit/jslex.py` —— 认结构的小自检（**人能一眼看懂** · ⛔ 它不是判据）。
+
+    ⚠️ 本函数存在的**硬理由**：入门口令里列了本件 ⇒ 它**必须有 `__main__`**
+       （⛔ 否则跑它是空转、`rc` 恒 0 ⇒ 人会以为"判过了"；`doc_audit` 的 **T17** 就是抓这个的，
+       2026-10-04 实测抓到本件一次）。
+    """
+    s = "const A={b:'}', c:1};"
+    print(f"认结构（跳字符串）：{s}  ⇒  {s[:match(s, s.index('{'), '{', '}')]!r}")
+    t = "a /* { */ b\nc // }\nd"
+    b = blank_comments(t)
+    print(f"置空注释：长度 {len(t)} → {len(b)}（应相等）· 换行 {t.count(chr(10))} → {b.count(chr(10))}（应相等）")
+    print(f"正则判定：`= /x/` ⇒ {regex_ok('= /x/', 2)}（应 True）· `a / b` ⇒ {regex_ok('a / b', 2)}（应 False）")
+    print(f"扫语句：`x=1; y=2;` ⇒ 收在 {scan_stmt('x=1; y=2;', 0)}（应 4）")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
