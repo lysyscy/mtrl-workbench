@@ -87,13 +87,22 @@ if ((-not $SkipEvidence) -and (-not $DryRun) -and (Test-Path $py)) {
     #    权威档 `artifacts/acc_results.json` **不刷新** ⇒ 包里的四态快照会是**上一轮的**（＝旧证据被当真 ✗，
     #    本仓 `ops/README.md` 记过一次"拿旧证据当真、白追四步"）。
     # ⚠️ `artifacts/` 是 **gitignore** 的 ⇒ 刷新它**不会**弄脏工作区（下面的"未提交"闸不受影响 ✓）。
-    $env:ACC_RESULTS_PATH = 'artifacts/acc_results.json'
+    # ⚠️⚠️ 2026-10-04 修（**正式产包当场抓出**）：这里原写成**相对**路径 `'artifacts/acc_results.json'`，
+    #    而下面 `Push-Location backend` ⇒ pytest 的 cwd = `backend` ⇒ 那份档被写到 **`backend\artifacts\`**
+    #    ✗① 根下那份**没刷新**（＝旧证据被当真，正是本步要防的）✗② 还凭空造出未跟踪的 `backend\artifacts\`
+    #    ⇒ **`1) 仓` 那条"未提交"闸当场 `exit 1`** ⇒ 正式产包根本走不完。
+    #    ⇒ 正解 = **绝对路径**（拼在 `$RepoRoot` 上）；并补一条**新鲜度断言**（拿 mtime 兜底 ⇒ 再写错也当场红）。
+    $accJson = Join-Path $RepoRoot 'artifacts\acc_results.json'
+    $env:ACC_RESULTS_PATH = $accJson
     Push-Location (Join-Path $RepoRoot 'backend')
     & $py -X utf8 -m pytest -q 2>&1 | Select-Object -Last 3 | ForEach-Object { Say ('   ' + $_) }
     $rc = $LASTEXITCODE
     Pop-Location
     Remove-Item Env:\ACC_RESULTS_PATH -ErrorAction SilentlyContinue
     if ($rc -ne 0) { Say '⛔ 全套 pytest 不是 100% ⇒ 停手（包里的证据必须是真的）'; exit 1 }
+    if ((-not (Test-Path -LiteralPath $accJson)) -or ((Get-Item -LiteralPath $accJson).LastWriteTime -lt (Get-Date).AddMinutes(-30))) {
+        Say ('⛔ 权威四态档**没被刷新**（' + $accJson + ' 不在 · 或超过 30 分钟）⇒ 停手：包里那份会是旧证据'); exit 1
+    }
     Say '   ✓ 权威四态档已刷新（artifacts\acc_results.json）'
 }
 
