@@ -121,6 +121,23 @@ def main(argv: list[str]) -> int:
     print(f"④ §14.3 排期表里该编号的行：{len(sched)} 处（{'留痕保留' if sched else '⚠️ 没有那行'}"
           " —— 本件不动它）")
 
+    # ⑤ ⭐ 2026-10-04（`TAIL-225` 票体系）：**票文件标 `done`** —— 状态是票体系唯一的进度信号
+    #    （销了号票文件还写 `ready-for-agent` ⇒ 下一个人会再领一遍这张票）。
+    tdir = REPO / ".codebuddy" / "work" / "50-tickets"
+    tk = next((p for p in sorted(tdir.glob(f"{tag}-*.md"))), None) if tdir.is_dir() else None
+    if tk is None:
+        print(f"⛔ 找不到 {tag} 的票文件（`{tdir.name}/`）⇒ **未写盘**"
+              "（票体系下每张在办票都该有票文件；先去 `_tail_open.py` 建它）")
+        return 1
+    t_old = tk.read_bytes()
+    t_new, n_st = re.subn(r"(状态\**\s*[:：]\s*`?)[a-z\-]+(`?)", r"\1done\2",
+                          tk.read_text(encoding="utf-8"))
+    if n_st != 1:
+        print(f"⛔ 票文件里「状态」行命中 {n_st} 处（期望 1）⇒ **未写盘**"
+              f"（锚点 = `状态：<受控词>`；票格式见 `ops/agents/issue-tracker.md` §二）")
+        return 1
+    print(f"⑤ 票文件标 done：{tk.relative_to(REPO).as_posix()}")
+
     if not a.apply:
         print("\n（干跑 —— 要真写盘加 --apply）")
         return 0
@@ -129,7 +146,13 @@ def main(argv: list[str]) -> int:
         fh.write(text_new)
         tmp_out = pathlib.Path(fh.name)
     tmp_out.replace(path)                       # 原子替换（同目录 ⇒ 不会跨盘）
+    try:
+        tk.write_text(t_new, encoding="utf-8", newline="")
+    except OSError:
+        path.write_bytes("".join(lines).encode("utf-8"))     # 票文件写不动 ⇒ 主文档回滚（不留半成品）
+        raise
     print(f"\n✅ 已写盘：{path.relative_to(REPO).as_posix() if path.is_relative_to(REPO) else path}"
+          f" ＋ 票文件标 `done`（{tk.name}）"
           " ⇒ 接着跑 `tools/audit/doc_audit.py`（`T6` 应当不再判红）")
     return 0
 

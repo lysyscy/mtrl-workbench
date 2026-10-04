@@ -6,6 +6,8 @@
 > ⛔ **改文档前先读「§四 命名与格式」与「§七 怎么加一份新文档」**。
 > ⭐ **2026-09-22 文档架构审计落地**：新增 `work/` 五区（Agent 工作记录）与 `docs/`（工程基准档）—— 见 §二/§三/§七。
 > ⚠️ **2026-10-01（`TAIL-204`）**：`work/` 收成**四区**（`20-experiments` 撤 —— 从建区起一件没用过）、`docs/` 已并入 `ops/`。
+> ⭐ **2026-10-04**：新增根 **`AGENTS.md`**（**给 agent 的入口** —— 只放指针 ＋ 每条带"什么时候读它"）＋ **`ops/agents/`** 三页（票仓协议 / 分诊标签 / 领域文档）。⚠️ 原「根只许 `README.md`」那条是 **AGENT 自定**（用户 2026-10-04 订正：「我没说过只需建立 `README.md`」）⇒ 已放宽；地图仍归本件。
+> ⭐⭐ **2026-10-04（`TAIL-225` 票体系）**：`work/` 加回**第五区 `50-tickets/`** —— **一张票一个文件**（`TAIL-<编号>-<短名>.md`），**索引 = 计划 §15 一行一票**；协议 = `ops/agents/issue-tracker.md`。⚠️ 它不是新的分类学，是**尾巴的载体**（原先尾巴只活在 `§15` 表里一格，那格普遍 1000–2400 字 ⇒ 字墙的根）。
 
 ## 〇、⭐ 现在到哪了 ＋ 待办（**唯一"给人看的"一页**）
 
@@ -74,7 +76,8 @@
 
 ```
 D:\dev\mtrl-workbench\
-├─ README.md                      ← 本文件：文档地图（唯一根 md，`T12` 守）
+├─ AGENTS.md                      ⭐ **给 agent 的入口**（2026-10-04 新增 · **只放指针不放内容**：一张「你要断定的事 → 权威文件」表 ＋ 每条指针带"什么时候读它"）
+├─ README.md                      ← 本文件：文档地图 ＋ §〇 给人看的一页（根 md 有二：本件 ＋ `AGENTS.md`，`T12` 守）
 ├─ .codebuddy\                    【宿主侧 · 项目级】⛔ 非交付面 · 也**不是文档层**（别按四层审它）
 │   ├─ rules\前端设计守则\RULE.mdc    项目规则入口（唯一主人 = `ops/前端设计守则…`，⛔ 不复制条文）
 │   ├─ rules\入场指针\RULE.mdc        接手 / 新会话**入场指针**（开场四步 ＋ 按动作分派 ＋ 提交入口；⛔ 只放指针 · 2026-10-02 立）
@@ -87,6 +90,7 @@ D:\dev\mtrl-workbench\
 │   ├─ README.md                    实测结论索引（含"成立前提 / 何时必复做"）＋ 工程基准档索引
 │   ├─ architecture.md modules.md deployment.md changelog.md delivery-surface.md
 │   │                              ⭐ **工程基准档**（2026-10-01 `TAIL-204` 第 3 步从 `docs\` 并入 —— `docs\` 已取消）
+│   ├─ agents\                     ⭐ **给 agent 的制度页**（2026-10-04 新增）：`issue-tracker.md`（票仓协议）· `triage-labels.md` · `domain.md` —— 入口 = 根 `AGENTS.md`
 │   ├─ 阈值表.md                    ⭐ 所有"硬数字"的集中登记处（出处 / 谁改过）
 │   ├─ *-实测结论.md                实测结论（命名：<主题>-实测结论.md）
 │   ├─ server_ctl.ps1 / nssm_*.ps1   服务起停与安装（⭐ 改后端必须 restart）
@@ -102,11 +106,12 @@ D:\dev\mtrl-workbench\
 │   │   └─ archive\                ③ 留痕：**全部归档件**
 │   │                                命名 `归档-<类型>-<主题>-YYYYMMDD.md`；子夹 `归档-逐日日志-至20260927\`
 │   │                                ⚠️ 「给用户看的一页」（原 `执行情况-主文档.md`）2026-10-01 已并入根 `README.md` **§〇**，正文归档
-│   ├─ work\                      【⭐ Agent 开发工作记录**四区** · 宪法 = work\README.md】
+│   ├─ work\                      【⭐ Agent 开发工作记录**五区** · 宪法 = work\README.md】
 │   │   ├─ 00-scratch\            【⭐ 全仓唯一活区】临时草稿 ＋ **各尺子输出** ＋ 一次性脚本（gitignore · **TTL 14 天** · 到期必清；机器眼 = `T20`）
 │   │   ├─ 10-designs\            方案设计：设计-<主题>-YYYYMMDD.md
 │   │   ├─ 30-troubleshooting\    问题排查 **＋ 实验/实测**：`排查-<现象>-YYYYMMDD.md` · `实验-<主题>-YYYYMMDD.md`（⭐ 2026-10-01 起，原 `20-experiments` 撤区）
-│   │   └─ 40-decisions\          决策记录：D<编号>-<主题>.md（D21 起；superseded 只加链不改写）
+│   │   ├─ 40-decisions\          决策记录：D<编号>-<主题>.md（D21 起；superseded 只加链不改写）
+│   │   └─ 50-tickets\            ⭐ **票仓**：一张票一个文件 `TAIL-<编号>-<短名>.md`（2026-10-04 `TAIL-225` 立；**索引 = 计划 §15 一行一票**；`T6` 守"在办票必须有票文件"）
 │   └─ backups\                   【⭐ 备份唯一落点】（gitignore）· **手工快照**留最近 5 份（`T20` 守）
 │                                  另有 `交付面-*\` = **改交付面之前**的快照（**另一用途 ⇒ 不计入那 5 份上限**）
 │                                  ⚠️ **一天多批**只留**当日末个**快照（中间批次写"改前差异说明"，⛔ 不各建目录）
@@ -129,10 +134,12 @@ D:\dev\mtrl-workbench\
 | 日志 | `YYYY-MM-DD.md` | `.codebuddy/memory/journal/` |
 | 实测结论 | `<主题>-实测结论.md` | `ops/` |
 | 索引 / 地图 | `README.md` | 该层根的目录 |
+| **agent 入口 / 制度页** | 入口 = 固定名 `AGENTS.md` · 制度页 = 固定小写英文名 | 仓根 · `ops/agents/`（⭐ 2026-10-04 新增 —— 入口只放指针，⛔ 不复述口径） |
 | 方案设计 | `设计-<主题>-YYYYMMDD.md` | `.codebuddy/work/10-designs/` |
 | 实验记录 | `实验-<主题>-YYYYMMDD.md` | `.codebuddy/work/30-troubleshooting/`（⭐ 2026-10-01 起 —— 原 `20-experiments` 撤区） |
 | 问题排查 | `排查-<现象>-YYYYMMDD.md` | `.codebuddy/work/30-troubleshooting/` |
 | 决策记录 | `D<编号>-<主题>.md`（D21 起） | `.codebuddy/work/40-decisions/` |
+| **尾巴票** | `TAIL-<编号>-<短名>.md` | `.codebuddy/work/50-tickets/`（⭐ 2026-10-04 `TAIL-225` 起 —— 一张票一个文件；**索引 = 计划 §15 一行一票**；⭐ 用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄） |
 | 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.codebuddy/work/00-scratch/`（TTL 14 天） |
 | 工程基准档 | 固定小写英文名（architecture / modules / deployment / changelog / delivery-surface） | `ops/`（⚠️ 2026-10-01 起 —— 原 `docs/` 已并入） |
 | 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.codebuddy/backups/`（**备份唯一落点**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**）⭐ **何时清** = **每次产包前一晚**复核一次（超线就移/清；上限数字见 `ops/阈值表.md`，⛔ 不在此处抄） |
@@ -178,7 +185,7 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 
 ## 七、⭐ 怎么加一份新文档（决策树 —— 先走这里，⛔ 别直接建文件）
 
-1. **能用既有文档承载吗？** 能 ⇒ ⛔ 别新建（`plans/` 只许一份 · 根只许本文件）。
+1. **能用既有文档承载吗？** 能 ⇒ ⛔ 别新建（`plans/` 只许一份 · **根 md 只许本文件 ＋ `AGENTS.md`**）。
 2. 是"过程 / 事故 / 逐次定案"吗？ ⇒ **`memory/journal/<今天>.md`**（append-only）。
 3. 是"每轮都要遵守/要跑的规则"吗？ ⇒ **`MEMORY.md`**（⚠️ 它会超预算 ⇒ 先看能不能化成一句 + 指针）。
 4. 是**工作记录五类之一**吗？（⭐ 2026-09-22 新增 —— 先看 `.codebuddy/work/README.md` 的落点总表）：

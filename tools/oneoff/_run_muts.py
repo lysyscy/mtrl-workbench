@@ -32,6 +32,7 @@ MUT = ROOT / "tools" / "mut"
 #: ⭐ 关键集：靶是**尺子自身 / 结构守卫 / 文档面**的那几支（⇒ 它们烂掉 = 一整片守卫静默失效）
 KEY: tuple[tuple[str, str], ...] = (
     ("_mut_docaudit.py", "doc_audit 的 T1–T19（17 支）＋ T4 计数锚点"),
+    ("_mut_linewalls.py", "T21 文档「字墙」（单行 >800 字 · 基线只许变短）"),
     ("_mut_countanchors.py", "T4 的四类计数锚点"),
     ("_mut_claim.py", "claim_audit（裁定必须同行写日期＋出处）"),
     ("_mut_uicheck.py", "doc_audit --ui 的交付面四检"),

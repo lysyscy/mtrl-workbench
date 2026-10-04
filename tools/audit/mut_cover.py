@@ -84,6 +84,10 @@ IGNORED_REFS: tuple[str, ...] = (
     "_t14_probe_tmp.py",                            # `_mut_t14t15.py`：脚本**自己 write_text** 的探针件
     "_t8_probe_tmp.py",                             # `T8` 反向灵敏度脚本：自建探针（造在 mod08_inv 下、finally 里删）
     "_u5_proto_copy.html",                          # `_mut_u5.py`：脚本**自己复制**的原型副本
+    # ⭐ 2026-10-04（`TAIL-225` 票体系）：`_mut_docaudit.py` 的 `M19`/`M20` 靶是**票文件**（`.codebuddy/work/50-tickets/`）——
+    #   ⚠️ 本件的 `_file_index()` 只索引 `.py/.js/.html`（**md 本来就不在里面**）⇒ 不登记就会常挂两条假"找不到"（噪音淹信号）。
+    "TAIL-188-交付包与迁移.md",                      # M19：**真在**的票文件（只是不在 idx 的三种后缀里）
+    "TAIL-9999-幽灵票.md",                           # M20：脚本**自己 create** 的幽灵票（用完删）
 )
 
 

@@ -323,7 +323,11 @@ SCAN_GLOBS: tuple[str, ...] = (
     #    `MEMORY.md`（注入档）与 `细则.md`，过程叙事下沉到 `plans/archive/归档-历史单元条目.md`。
     # ⭐ 2026-10-01（`TAIL-204` 第 3 步）：`docs/*.md` **摘掉** —— `docs/` 已整目录并进 `ops/`（一类一夹），
     #    留着它就是**一条都不命中的 glob**（`T18` 会当场报「那一片从没被扫过」）。
-    "README.md", "ops/*.md", ".codebuddy/plans/*.md",
+    "README.md", "AGENTS.md", "ops/*.md", ".codebuddy/plans/*.md",
+    # ⭐ 2026-10-04：新增 `ops/agents/*.md`（给 agent 的制度页：票仓 / 分诊标签 / 领域文档）——
+    #   ⚠️ `ops/*.md` **不递归** ⇒ 不加这一条，那三页会**落在所有尺子之外**（本仓最贵的一族病：
+    #   "判据存在 ≠ 它看得见"）。⛔ `T18` 会盯着它：一条都不命中就判红。
+    "ops/agents/*.md",
     ".codebuddy/memory/MEMORY.md",
     # ⚠️ 2026-09-24 **摘掉 `.codebuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
     #    它是**搬迁前的旧地址**，该件现址 = `ops/changelog.md`（`README.md`「工程基准档」那行）⇒

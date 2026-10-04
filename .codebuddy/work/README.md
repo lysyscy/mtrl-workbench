@@ -13,7 +13,7 @@
 | 稳定可复现的工程结论 | 长期留在 experiments | 升 `ops/<主题>-实测结论.md` ＋ ops/README 加索引行 |
 | 报错排查、事故复盘、用户报障闭环 | artifacts、ops/README 备注 | `work/30-troubleshooting/排查-现象-YYYYMMDD.md` |
 | 用户拍板的决定（口径/技术/工作方式） | 只写进 MEMORY 或对话 | `work/40-decisions/D<编号>-主题.md`（D21 起；MEMORY 留指针） |
-| 待办、尾巴、"以后再说" | 自建 TODO.md、报告结尾 | **计划 §15 台账（唯一）** —— 本区禁止第二份待办清单 |
+| 待办、尾巴、"以后再说" | 自建 TODO.md、报告结尾 | ⭐ **票仓 = `.codebuddy/work/50-tickets/TAIL-<编号>-<短名>.md`**（2026-10-04 `TAIL-225` 起：**一张票一个文件**；用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄）＋ **索引 = 计划 §15 台账（一行一票 · 唯一）** —— 本区禁止第二份待办清单 |
 | 当天过程叙事 | 活文档正文 | `journal/当天.md`（append-only） |
 | 已完工单元的大段过程 | 继续占着计划正文 | `plans/archive/归档-类型-主题-YYYYMMDD.md` ＋ 原处指针 |
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
@@ -35,7 +35,7 @@
 
 ## 三、红线（⛔ 全部有实证为据，见审计 P1–P6）
 
-1. ⛔ 仓库根目录新建任何 md（唯一例外 `README.md`）；新增层级必须**先改根 README 四层表 ＋ `audit_meta.py` 白名单**，再建目录。
+1. ⛔ 仓库根目录新建任何 md（**两个例外**：`README.md`（地图 ＋ §〇 给人看的一页）· `AGENTS.md`（**给 agent 的入口**，2026-10-04 起 —— ⚠️ 原口径只许 `README.md`，那条是 **AGENT 自定**的，用户 2026-10-04 已订正））；新增层级必须**先改根 README 四层表 ＋ `audit_meta.py` 白名单**，再建目录。
 2. ⛔ 活文档/正式设计稿里写草稿与过程叙事（T13）。
 3. ⛔ `artifacts/` 放过程类 md（设计/排查/审计/备份）—— 只许工具生成物白名单。
 4. ⛔ 第二份待办/状态清单 —— 状态只信三处（`tools/audit/acc_report.py` 的输出 / 计划 §0 现状快照 / **根 `README.md` §〇**），尾巴只信 §15。

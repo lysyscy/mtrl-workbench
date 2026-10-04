@@ -31,6 +31,9 @@
 > `architecture.md`（架构总览：两代码面 / 模块映射 / 数据流）· `modules.md`（15 个模块一页纸）·
 > `deployment.md`（**落地一页** —— 产包/恢复脚本也取它）· `changelog.md`（版本变更记录）·
 > `delivery-surface.md`（交付面清单与同步状态）。⚠️ 它们不是"实测结论"（没有"成立前提/复做"两栏）⇒ 单独列在此处。
+>
+> ⭐ **`ops/agents/`**（2026-10-04 新增 · **给 agent 的制度页**，⛔ 不是实测结论、也不是给用户看的）：`issue-tracker.md`（**票仓协议** —— 票住哪 / 长什么样 / 状态 / 开工收尾）· `triage-labels.md`（票的 `状态` 行用词）· `domain.md`（领域文档怎么消费；⭐ **本仓不单建 `GLOSSARY.md`**）。入口 = 根 `AGENTS.md`。
+> ⚠️ 这三页**已进 `doc_audit` 的扫描面**（`audit_common.SCAN_GLOBS` 的 `ops/agents/*.md`）—— 今后改它们要过尺子。
 
 ---
 

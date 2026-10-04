@@ -10,8 +10,8 @@ import re
 import sys
 
 from audit_common import (
-    HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, RED, REPO_ROOT, TAIL_MIN_CELLS,
-    TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root, read_counts,
+    HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, LENIENT_GLOBS, RED, REPO_ROOT, SCAN_GLOBS,
+    TAIL_MIN_CELLS, TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root, read_counts,
 )
 
 # ------------------------------------------------- T5 单文件 >400 行是否已登记
@@ -309,7 +309,11 @@ def check_report_receipts() -> list[dict]:
 #:   ⇒ 从"两份"收成"一份"。⚠️ 收的是**件数**，⛔ 不是把"给人看的那一页"这件事一起砍掉 —— 它现在住在根 `README.md`。
 PLANS_LIVE: tuple[str, ...] = ("开发计划-主文档.md",)
 #: 根目录**允许**出现的 `.md`（文档地图；⛔ 别在根上散落别的 md）
-ROOT_MD_ALLOW: tuple[str, ...] = ("README.md",)
+#: ⭐ **2026-10-04 扩一员**：`AGENTS.md` —— ⚠️ 原先这里只许 `README.md`，而那条**是 AGENT 自定的**
+#:   （用户 2026-10-04 订正：「我没说过只需建立 README.md，这估计又是 AGENT 擅自曲解我的意思」）⇒
+#:   根 `AGENTS.md` = **给 agent 的唯一入口**（只放指针、不放内容；地图仍归 `README.md`），见本件同批的
+#:   `ops/agents/*` 三页 ＋ 根 `README.md` §三/§四 的分层表述。⛔ 它**不复述任何口径**。
+ROOT_MD_ALLOW: tuple[str, ...] = ("README.md", "AGENTS.md")
 #: `memory/` 下允许的 `.md` 与子目录（日志必须进 `journal/`）
 MEMORY_MD_ALLOW: tuple[str, ...] = ("MEMORY.md", "细则.md", "IDE-细节.md")
 MEMORY_DIR_ALLOW: tuple[str, ...] = ("journal",)
@@ -319,14 +323,18 @@ MEMORY_DIR_ALLOW: tuple[str, ...] = ("journal",)
 #:   ⭐「实验/实测/对比试验」这一类**不取消** —— 改由 `30-troubleshooting` 收
 #:   （那边同时认 `排查-` 与 `实验-` 两种前缀，见 `WORK_NAME_PREFIX`）。
 WORK_DIR_ALLOW: tuple[str, ...] = ("00-scratch", "10-designs",
-                                   "30-troubleshooting", "40-decisions")
+                                   "30-troubleshooting", "40-decisions", "50-tickets")
 #: 各区 md 的命名前缀（`00-scratch` 不查 —— 临时件形态自由；`40-decisions` 只查 D 开头）。
 #: ⭐ 2026-10-01：`30-troubleshooting` 收**两种**前缀 —— `排查-`（报障/事故复盘）与 `实验-`（探针/实测/对比试验，
 #:   即原 `20-experiments` 那一类）。⛔ 别顺手把 `实验-` 也删掉：那一类**是存在的**，只是不再单开一个区。
+#: ⭐ 2026-10-04（`TAIL-225` 票体系）：**加第五区 `50-tickets`** —— 一张票一个文件（`TAIL-<编号>-<短名>.md`），
+#:   索引 = 计划 `§15` 一行一票；协议 = `ops/agents/issue-tracker.md`。⚠️ 它不是"新的分类学"，
+#:   而是**尾巴的载体**（原来尾巴只活在 `§15` 表里一格）。
 WORK_NAME_PREFIX: dict[str, tuple[str, ...]] = {
     "10-designs": ("设计-",),
     "30-troubleshooting": ("排查-", "实验-"),
     "40-decisions": ("D",),
+    "50-tickets": ("TAIL-",),
 }
 
 
@@ -374,15 +382,15 @@ def check_doc_layout() -> list[dict]:
                                  "`memory/` 下出现了非白名单子目录",
                                  "`memory/` 只认 `journal/` 一个子目录",
                                  "并进 `journal/`，或改到别处（见 `README.md` 四层表）"))
-    # ⭐ `work/` **四区**（2026-09-22 审计 P2 的机器化落地；⭐ 2026-10-01 由五区收成四区）：子目录白名单 ＋ 各区命名前缀
+    # ⭐ `work/` **五区**（2026-09-22 审计 P2 的机器化落地；⭐ 2026-10-01 由五区收成四区；⭐ 2026-10-04 `TAIL-225` 加回第五区 `50-tickets`）
     work = REPO_ROOT / ".codebuddy" / "work"
     if work.is_dir():
         for d in sorted(x for x in work.iterdir() if x.is_dir()):
             if d.name not in WORK_DIR_ALLOW:
                 hits.append(_t12(f".codebuddy/work/{d.name}/",
-                                 "`work/` 下出现了四区之外的子目录",
-                                 "工作记录只认四区（见 `work/README.md`）—— 多出来的区 = 第二套分类学，必漂",
-                                 "并入四区之一，或先改 `work/README.md` ＋ 本文件 `WORK_DIR_ALLOW`"))
+                                 "`work/` 下出现了五区之外的子目录",
+                                 "工作记录只认五区（见 `work/README.md`）—— 多出来的区 = 第二套分类学，必漂",
+                                 "并入五区之一，或先改 `work/README.md` ＋ 本文件 `WORK_DIR_ALLOW`"))
         for zone, prefixes in WORK_NAME_PREFIX.items():
             zdir = work / zone
             if not zdir.is_dir():
@@ -409,6 +417,23 @@ def check_doc_layout() -> list[dict]:
 def _t6(rel: str, lineno: int, what: str, why: str, fix: str, text: str = "") -> dict:
     return {"code": "T6", "side": "仓", "rel": rel, "line": lineno,
             "what": what, "why": why, "fix": fix, "level": RED, "text": text}
+
+
+#: ⭐⭐ 2026-10-04（`TAIL-225` 票体系）：**票仓** —— 一张票一个文件，索引 = 本台账**一行一票**。
+#:   票长什么样 / 状态怎么记 / 怎么开工收尾的**主人** = `ops/agents/issue-tracker.md`（⛔ 本段不复述口径，
+#:   只写"机器怎么判"）。⚠️ 为什么要有这一层：尾巴原先**只活在 `§15` 表里一格**，那一格普遍 1000–2400 字
+#:   ⇒ 谁读都得在一行里穿过上万字（**字墙的根**，见 `T21` 与方案 §十一）。
+TICKET_DIR_REL = ".codebuddy/work/50-tickets"
+#: 票文件里**必须出现**的栏（⭐ **三个英文栏名来自 `/to-tickets`** —— 2026-10-04 用户指出
+#:   "票结构跟第二个项目不一样"后对齐；⛔ 票**不带**"读者/何时读"那类文档文头 —— 票是**工单**）
+TICKET_FIELDS: tuple[str, ...] = ("What to build", "Blocked by", "Status")
+#: ⭐ **验收 = `- [ ]` 复选框列表**（照参考项目：验收是**票面主体**，不是末尾一栏）
+TICKET_CHECKBOX_RE = re.compile(r"^\s*-\s*\[[ xX]\]", re.M)
+#: 票的合法**状态**（受控词；出处 = `ops/agents/issue-tracker.md` §三）
+TICKET_STATES: tuple[str, ...] = ("ready-for-agent", "claimed", "ready-for-human",
+                                  "needs-info", "needs-triage", "wontfix", "done")
+TICKET_NAME_RE = re.compile(r"^(TAIL-\d+)-.+\.md$")
+TICKET_STATE_RE = re.compile(r"\*\*Status:\*\*\s*`?([a-z\-]+)`?")
 
 
 def ledger_counts(text: str | None = None) -> dict[str, int] | None:
@@ -606,6 +631,52 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
         if got != want:
             hits.append(_t6(LEDGER_REL, 1, f"计数与实际不符：写的 {got}，实际 {want}",
                             "计数漂了 ⇒ 人会按错的数判断", "按实际条数改这一行（机器核对）"))
+
+    # ⭐⭐ 2026-10-04（`TAIL-225` 票体系）：**票文件必须在位** ＋ 票里得有该有的栏 ＋ 状态受控 ＋ 不许幽灵票。
+    #    ⚠️ **只查 `§一/§二/§三`（在办）** —— `§四` 那 223 条已销号行按**留痕**口径**不追改**
+    #       （方案 §十一-3：它们是"当初为什么这么定"的证据，不是待办）。
+    #    ⚠️ 形态 = **新增一层 + ⛔ 不放松任何现有判据**（本仓「先立门禁 ＋ 老账记账」那套打法）。
+    tdir = REPO_ROOT / TICKET_DIR_REL
+    tickets: dict[str, Path] = {}
+    if tdir.is_dir():
+        for f in sorted(tdir.glob("*.md")):
+            m_tk = TICKET_NAME_RE.match(f.name)
+            if m_tk:
+                tickets[m_tk.group(1)] = f
+    for n in sorted(live, key=int):
+        tag = f"TAIL-{n}"
+        if tag not in tickets:
+            hits.append(_t6(LEDGER_REL, 1, f"{tag} 没有票文件",
+                            "尾巴只活在索引表一格 ⇒ 过程与证据没处放（**字墙的根**）",
+                            f"建 `{TICKET_DIR_REL}/{tag}-<短名>.md` —— ⭐ 用 `tools/oneoff/_tail_open.py`"
+                            "（⛔ 别手抄；模板见 `ops/agents/issue-tracker.md` §二）"))
+    for tag, f in sorted(tickets.items(), key=lambda kv: int(kv[0].lstrip("TAIL-"))):
+        n = tag.lstrip("TAIL-")
+        if n not in ids:
+            hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1, "票仓里有幽灵票文件",
+                            "台账里没有这个编号 ⇒ 索引与票仓已经分叉（两份清单各说各话）",
+                            "在 §15 补一行索引，或用 `_tail_close.py` 正规销号（⚠️ 删前确认它真没用了）"))
+            continue
+        body = f.read_text(encoding="utf-8", errors="replace")
+        miss = [k for k in TICKET_FIELDS if k not in body]
+        if miss:
+            hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1, f"票里缺栏：{' / '.join(miss)}",
+                            "没写清「要什么 / 为什么不做 / 落点 / 什么时候做」⇒ 领票的人一头雾水",
+                            "按 `ops/agents/issue-tracker.md` §二 的模板补齐"))
+        if not TICKET_CHECKBOX_RE.search(body):
+            hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1, "票里没有**验收复选框**",
+                            "`- [ ]` 那串就是「怎么算做完」（照参考项目：验收是**票面主体**）",
+                            "补几条 `- [ ] …`（每条要能证伪 —— 跑哪条命令、看什么数）"))
+        m_st = TICKET_STATE_RE.search(body)
+        if not m_st:
+            hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1, "找不到 `**Status:**` 行",
+                            "状态是票体系唯一的进度信号",
+                            "写一行：`**Status:** ready-for-agent`（词表见 `ops/agents/issue-tracker.md` §三）"))
+        elif m_st.group(1) not in TICKET_STATES:
+            hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1,
+                            f"「状态」不是受控词：{m_st.group(1)}",
+                            "状态词表是机器与人对表的唯一抓手（出处 = `ops/agents/issue-tracker.md` §三）",
+                            f"改成：{' / '.join(TICKET_STATES)}"))
     return hits
 
 
@@ -651,6 +722,108 @@ def check_plan_process() -> list[dict]:
             hits.append(_t13(i, "标题含过程词（该块是过程，不是法规/现状）",
                              "过程留在主文档 = 过期语句的 incubator（写死即旧）",
                              "整块下沉归档件，原处留指针；标题改成「通法 / 清单 / 指针」形态"))
+    return hits
+
+
+# ------------------------------------------------- T21 文档「字墙」（单行过长）守卫
+#
+#: 阈值出处 = `ops/阈值表.md`（**唯一一处集中登记**）。
+#: ⭐⭐ 2026-10-04 立（`TAIL-224` · 用户裁定「④按推荐」＝ 文档重构方案 §六-4 甲案）：
+#:   「字墙」= **单行 >800 字** —— 它是"文档很乱"的**真身**：主文档 **88 行**超 800 字
+#:   （存量最多的一行 **4563 字**：一整天的交接工作塞进一行）。⚠️ `T10`（读预算）与 `T13`
+#:   （行数）都只看得见"**总共多少行**"，**看不见"一行有多长"** ⇒ 这类"行数在预算内、
+#:   单行上万字"的病**从没有尺子看得见**（方案 §三-4 的实证）。
+#: ⚠️ 为什么带**老账基线**，而不是像 `T5` 那样每次把 100+ 行全列出来：
+#:   ① 106 条黄会把 `doc_audit` 的「疑似」从 12 抬到 118 ⇒ **判据当场变噪音源**
+#:      （本仓老话：**噪音会把人逼到"把判据关掉"**）；
+#:   ② 字墙的失败方式是「**沉下去又长回来**」—— `§13.6` 已沉过 **4 次**（09-23 / 09-30 /
+#:      10-02 / 10-04）⇒ 要的是「**只许变短**」这道闸（同 `shell_scissors` / `_C_PENDING_START`
+#:      的思路），⛔ 不是"每次复述一遍存量"（那正是这条病当初没人治的原因）。
+#:   ⇒ 本检查的报法：**超基线 ⇒ 黄（字墙又长回来了）· 低于基线 ⇒ 黄（基线该下调了）**。
+LINE_WALL_CHARS = 800
+
+#: ⭐ **老账基线**（**只许变短**）：件 → 存量字墙条数。
+#:   ⚠️ 量法 = **活文档**（`SCAN_GLOBS` 命中、**减** `LENIENT_GLOBS` 的留痕/归档件）里
+#:      `len(line) > 800` 的行数；下面三个数 = 2026-10-04 立 `T21` 当场的实测值
+#:      （量测件 = `.codebuddy/work/00-scratch/tmp-20261004-linewalls.py` · 只读可复跑）。
+#:   ⇒ 把某件**下沉 / 拆行**之后**必须同批下调**这里的数（否则本检查报「基线过期」）；
+#:      ⛔ **不许上调**（上调 = 把闸放松 = 这条判据失去意义）。
+LINE_WALL_BASELINE: tuple[tuple[str, int], ...] = (
+    (".codebuddy/plans/开发计划-主文档.md", 88),
+    ("ops/前端设计守则-以使用用户为中心.md", 16),
+    ("ops/阈值表.md", 2),
+)
+
+
+def _t21(rel: str, lineno: int, what: str, why: str, fix: str) -> dict:
+    return {"code": "T21", "side": "仓", "rel": rel, "line": lineno,
+            "what": what, "why": why, "fix": fix, "level": YELLOW, "text": ""}
+
+
+def _live_docs() -> list[tuple[str, list[str]]]:
+    """→ [(相对名, 行表)]：**活文档** = `SCAN_GLOBS` 命中的 md **减去**留痕/归档（`LENIENT_GLOBS`）。
+
+    ⚠️ 复用 `audit_common` 的两个 glob（它们已是"会被当口径读的那几层"的**唯一定义**）
+    —— ⛔ 别在这儿另写一套扫描面（那会长出第二套口径，本仓最贵的病；`T18` 也会盯着常量）。
+    """
+    from fnmatch import fnmatch
+
+    out: list[tuple[str, list[str]]] = []
+    seen: set[Path] = set()
+    for pat in SCAN_GLOBS:
+        for p in sorted(REPO_ROOT.glob(pat)):
+            if not p.is_file() or p.suffix != ".md" or p in seen:
+                continue
+            seen.add(p)
+            rel = str(p.relative_to(REPO_ROOT)).replace("\\", "/")
+            if any(fnmatch(rel, g) for g in LENIENT_GLOBS):
+                continue
+            out.append((rel, p.read_text(encoding="utf-8", errors="replace").splitlines()))
+    return out
+
+
+def check_line_walls() -> list[dict]:
+    """`T21` · 文档「字墙」（单行过长）守卫（黄）—— 见上方常量注释。"""
+    base = dict(LINE_WALL_BASELINE)
+    hits: list[dict] = []
+    seen: set[str] = set()
+    for rel, lines in _live_docs():
+        seen.add(rel)
+        over = [(i, len(x)) for i, x in enumerate(lines, 1) if len(x) > LINE_WALL_CHARS]
+        cur = len(over)
+        b = base.get(rel)
+        if b is None:
+            if cur:
+                worst = max(over, key=lambda t: t[1])
+                hits.append(_t21(rel, worst[0],
+                                 f"新出现的「字墙」件：{cur} 行单行 > {LINE_WALL_CHARS} 字"
+                                 f"（最长第 {worst[0]} 行 {worst[1]} 字）",
+                                 "一行塞一整天的工作 ⇒ 接手的人得穿过上万字才找得到「下一步是哪一步」；"
+                                 "（`T10`/`T13` 只管总行数，看不见「一行有多长」）",
+                                 "把这几行拆成「一行一事」，或把过程叙述逐字下沉归档件；"
+                                 "确需保留则在 `ops/阈值表.md` 的基线里登记本件"))
+            continue
+        if cur > b:
+            w = sorted(over, key=lambda t: -t[1])[:2]
+            where = "；".join(f"第 {i} 行 {n} 字" for i, n in w)
+            hits.append(_t21(rel, w[0][0],
+                             f"字墙**又长回来了**：{cur} 行单行 > {LINE_WALL_CHARS} 字"
+                             f"（基线 {b} · 最长两处：{where}）",
+                             "字墙的失败方式是「沉下去又长回来」（`§13.6` 已沉过 4 次）"
+                             "⇒ 基线**只许变短**，新长的当场拦",
+                             "把这批新长的**拆行 / 下沉归档件**；⛔ 别上调 `LINE_WALL_BASELINE`"
+                             "（上调 = 把闸放松）"))
+        elif cur < b:
+            hits.append(_t21(rel, 1,
+                             f"字墙基线**过期**：本件实为 {cur} 行 ≤ 基线 {b} ⇒ 请下调",
+                             "基线只许变短；不跟改 ⇒ 那道闸会越来越松、最后形同虚设",
+                             f"把 `ops/阈值表.md` 与 `audit_meta.LINE_WALL_BASELINE` 里本件改成 {cur}"))
+    for rel, b in LINE_WALL_BASELINE:
+        if rel not in seen:
+            hits.append(_t21(rel, 1,
+                             f"基线里的件已**不在活文档扫描面内**（基线写着 {b} 行）",
+                             "件被删 / 改名 / 归档进留痕 ⇒ 这条基线成了幽灵（只增不减是它的常见烂法）",
+                             "从 `LINE_WALL_BASELINE` 撤下本行（`ops/阈值表.md` 同改）"))
     return hits
 
 
@@ -891,7 +1064,7 @@ def check_guard_constants() -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """**单跑本模块的检查**（`T5`/`T6`/`T9`/`T10`/`T11`/`T12`/`T13`/`T17`/`T18`）。
+    """**单跑本模块的检查**（`T5`/`T6`/`T9`/`T10`/`T11`/`T12`/`T13`/`T17`/`T18`/`T21`）。
 
     ⚠️ 2026-09-24（自查一轮）：`T17` 与 `T18` 是**同一天**新立的两条，而首版只把 `T17` 塞进了本入口
     ⇒ **单跑 `audit_meta.py` 时 `T18` 是哑的**（只在 `doc_audit` 里被动生效）= 同一件事做了一半。
@@ -908,11 +1081,12 @@ def main(argv: list[str] | None = None) -> int:
     cases = set(ar.load_json(ar.resolve_baseline(None)).get("cases") or {})
     raw = (check_file_sizes() + check_rule_origins() + check_doc_budgets()
            + check_report_receipts() + check_doc_layout() + check_tail_ledger(cases)
-           + check_plan_process() + check_gate_liveness() + check_guard_constants())
+           + check_plan_process() + check_line_walls() + check_gate_liveness()
+           + check_guard_constants())
     reds = [h for h in raw if h["level"] == RED]
     yellows = [h for h in raw if h["level"] == YELLOW]
     print("=" * 78)
-    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18"
+    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18/T21"
           "（⚠️ T1–T4/T8 在 `audit_drift` · T7 在 `cover_gap` · T14/T15 在 `audit_work`）")
     print("=" * 78)
     print(f"必须修 {len(reds)} · 疑似 {len(yellows)}")

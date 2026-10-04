@@ -2,7 +2,7 @@
 
 据 `D:\\mtrl-workbench-文档架构审计-20260922.md` §七-15（长期维护）落地：
 - `T14`：`work/00-scratch/` 里的件**超 14 天**未升档/未删 ⇒ 黄；`tools/` 根与 `logs/` 再出现散件 ⇒ 黄。
-- `T15`：`artifacts/` 只许**工具生成物白名单**的 md；`work/` 四区的文档必须带**文头四行元信息**
+- `T15`：`artifacts/` 只许**工具生成物白名单**的 md；`work/` 五区的文档必须带**文头四行元信息**
   （读者 / 回答什么问题 / 什么时候读 / 状态 ＋ 关联 ID）—— 没有元信息的文档 = 下个 Agent 不知道它是否还活着。
 
 ⚠️ 与 `T12` 的分工：`T12` 管**目录与命名**（层级/前缀）；本件管**时间与元信息**（过期没、写没写头）。
@@ -20,7 +20,7 @@ from audit_common import RED, REPO_ROOT, YELLOW
 SCRATCH_TTL_DAYS = 14
 #: `artifacts/` 允许出现的 md（工具生成物白名单 · ⛔ 过程类 md 去 `work/`）
 ARTIFACTS_MD_ALLOW: tuple[str, ...] = ("变异覆盖台账.md", ".gitkeep")
-#: `work/` 四区文档的文头必须齐这四个词（`README.md` 与 `D索引-*.md` 豁免）
+#: `work/` 五区文档的文头必须齐这四个词（`README.md` 与 `D索引-*.md` 豁免）
 WORK_HEADER_KEYS: tuple[str, ...] = ("读者", "回答", "何时读", "状态")
 WORK_HEADER_EXEMPT: tuple[str, ...] = ("README.md", "D索引-")
 
@@ -116,7 +116,11 @@ def check_artifacts_and_headers() -> list[dict]:
                     "产物区 gitignore、可随时清 ⇒ 过程类 md 放这里**换机即丢**（审计 P1 的机制）",
                     "按类型归位：设计→`work/10-designs/` · 排查→`work/30-troubleshooting/` · 审计→`plans/archive/`"))
     work = REPO_ROOT / ".codebuddy" / "work"
-    for zone in ("10-designs", "30-troubleshooting", "40-decisions"):   # ⭐ 2026-10-01 五区 ⇒ 四区（撤 `20-experiments`）
+    #: ⭐ 2026-10-01 五区 ⇒ 四区（撤 `20-experiments`）；⚠️ 2026-10-04（`TAIL-225`）加回第五区 `50-tickets`
+    #:   ⇒ ⭐ **但票仓不在本条的扫描面里**：票是**工单**（照第二个项目的票面：`What to build` / `Blocked by` /
+    #:   `Status` ＋ `- [ ]` 验收 ＋ `## Comments`），**不带"读者/何时读"那类文档文头** ⇒ 票的栏由 `T6` 守
+    #:   （⛔ 一条只在一处定义：别在 `T6` 里另写一套文头词表，也别在这儿管票）。
+    for zone in ("10-designs", "30-troubleshooting", "40-decisions"):
         zdir = work / zone
         if not zdir.is_dir():
             continue

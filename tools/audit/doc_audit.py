@@ -23,12 +23,13 @@
 | `T12` | ⭐ **文档分层与命名约定** —— `plans/` 只许两份活文档（其余 `归档-` 打头）· `memory/` 日志必须进 `journal/` · 根只许 `README.md` | 根 `README.md` 的四层表 ＋ 本件三张白名单 |
 | `T13` | ⭐ **主文档过程回潮** —— 计划主文档行数超预算（1700）· 标题出现过程词（逐批/逐次/收官记录）⇒ 黄：该块**该下沉归档了**（`§13.1`「完成的就扔出去」的机器守） | `.codebuddy/plans/开发计划-主文档.md` |
 | `T14` | ⭐ **scratch 超期 / 落点合规** —— `work/00-scratch/` 超 14 天未升档未删 · `tools/` 根与 `logs/` 再现散件 ⇒ 黄（`audit_work.py`） | 文件系统 mtime |
-| `T15` | ⭐ **产物白名单 ＋ 工作记录元信息** —— `artifacts/` 只许工具生成物 md · `work/` **四区**文档必须带文头四行（读者/回答什么/何时读/状态）⇒ 黄 | `audit_work.py` 白名单 |
+| `T15` | ⭐ **产物白名单 ＋ 工作记录元信息** —— `artifacts/` 只许工具生成物 md · `work/` **五区**文档（含票仓）必须带文头四行（读者/回答什么/何时读/状态）⇒ 黄 | `audit_work.py` 白名单 |
 | `T16` | ⭐ **`T7a` 登记册必须在位** —— 登记册**读不到 / 解析不出条目** ⇒ **红**（治「静默降级成全部未清」） | `cover_gap.CLEARED_REGISTRY` |
 | `T17` | ⭐ **闸门清单里每一把尺子都必须真有入口** —— 在跑却**0 行输出**（僵尸闸门）⇒ 红 | 计划 `§22.1` 的 `foreach` |
 | `T18` | ⭐ **登记在册的路径 / glob 常量必须解析得到真东西** —— 空命中 = 那一片**从没被扫过** ⇒ 红 | `audit_meta.GUARDED` |
 | `T19` | ⭐ **文档指针（节号）守卫** —— 「`X.md` §N」必须真有那一节（`T3` 只管文件在不在）⇒ 红 | `audit_drift` |
 | `T20` | ⭐ **保留期与容量** —— `.codebuddy/backups/` 顶层条目 > 5（口径「留 5 份 · 月度清」）⭐ **`tools/oneoff/` 件数 / 容量超线**（⚠️ 原第三条「`.workbuddy/scratch/` 活区规模」**2026-10-01 已撤** —— 它守的是**搬家遗留的旧落点**（盘上一直在、被 `.gitignore` 藏着 ⇒ `git status` 看不见），第 7 步已把旧落点**整棵清掉** ⇒ 判据**失去对象**；临时件现由 `T14` 管）（`TAIL-194`；处置口径 = `tools/README.md`）⇒ 黄 | `README.md` §三/§四 ＋ `tools/README.md` ＋ `ops/阈值表.md` ＋ `audit_work.py` |
+| `T21` | ⭐ **文档「字墙」**（单行 >800 字）—— 治"行数在预算内、**单行上万字**"那一类：`T10`/`T13` 只看得见总行数。⚠️ 带**只许变短**的老账基线（`LINE_WALL_BASELINE`）：超基线 ⇒ 黄「又长回来了」· 低于基线 ⇒ 黄「基线该下调」⇒ 黄 | `ops/阈值表.md` ＋ `audit_meta.LINE_WALL_CHARS` / `LINE_WALL_BASELINE` |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
@@ -78,8 +79,8 @@ from audit_drift import (                                         # noqa: E402
 )
 from audit_meta import (                                          # noqa: E402
     HARD_LIMIT, LINE_LIMIT, check_doc_budgets, check_doc_layout, check_file_sizes,
-    check_gate_liveness, check_guard_constants, check_plan_process, check_report_receipts,
-    check_rule_origins, check_rule_restatements, check_tail_ledger,
+    check_gate_liveness, check_guard_constants, check_line_walls, check_plan_process,
+    check_report_receipts, check_rule_origins, check_rule_restatements, check_tail_ledger,
 )
 from audit_work import (                                          # noqa: E402
     check_artifacts_and_headers, check_retention, check_scratch_ttl,
@@ -243,6 +244,12 @@ def main() -> int:
     #   **主文档过程回潮守卫** —— 行数超预算 ＋ 标题出现过程词 ⇒ 黄（该下沉归档了）。
     #   ⭐ 治的是"§13.1 早有『完成的就扔出去』的裁定，却只有触发点、没有机器守"。
     raw += check_plan_process()
+    # `T21`（2026-10-04 立 · `TAIL-224` · 用户裁定「④按推荐」＝ 文档重构方案 §六-4 甲案）：
+    #   **文档「字墙」**（单行 >800 字）—— ⭐ 治的是"行数在预算内、**单行上万字**"那一类病：
+    #   `T10`（读预算）与 `T13`（行数）都只看得见总行数，**看不见"一行有多长"**
+    #   （主文档 88 行超 800 字、最长一行 4563 字 —— 都是从没有尺子看见过的）。
+    #   ⚠️ 带**只许变短的老账基线**（`LINE_WALL_BASELINE`）—— 存量不逐条复述（否则 106 条黄 = 噪音源）。
+    raw += check_line_walls()
     # `T17`（2026-09-24 立 · `TAIL-82`）：**闸门清单里每一把尺子都必须真有入口** ——
     #   ⭐ 一天内核出四例"僵尸闸门"（`shell_verify` · `cover_gap` · `audit_drift` · `audit_meta`），
     #   其中三例**从来没有 `__main__`** ⇒ 在闸门清单里跑了几个月，**0 行输出、rc 恒 0、什么都没判**。
@@ -254,7 +261,7 @@ def main() -> int:
     raw += check_guard_constants()
     # `T14`/`T15`（2026-09-22 立 · 文档架构审计 §七-15 · 实现见 `audit_work.py`）：
     #   `T14` = scratch 超期（TTL 14 天）/ 落点合规；`T15` = artifacts md 白名单 ＋ work 文档文头四行。
-    #   ⭐ 治「新区变新垃圾场」：分区只是分类学，**过期与元信息要机器盯着**才算闭环（⭐ 2026-10-01 起四区）。
+    #   ⭐ 治「新区变新垃圾场」：分区只是分类学，**过期与元信息要机器盯着**才算闭环（⭐ 2026-10-01 四区 ⇒ 2026-10-04 五区）。
     raw += check_scratch_ttl()
     raw += check_artifacts_and_headers()
     # `T20`（2026-09-28 立 · 文档审计）：**保留期与容量** —— `backups/` 顶层条目 > 5（口径「留 5 份」）

@@ -27,6 +27,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import pathlib
 import re
 import subprocess
@@ -39,10 +40,32 @@ import audit_meta  # noqa: E402  ← ⭐ 计数的**真源**（`ledger_counts`�
 
 PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
 PY = REPO / "backend" / ".venv" / "Scripts" / "python.exe"
+#: ⭐ 2026-10-04（`TAIL-225` 票体系）：票仓 —— 立台账多一件事：**建票文件**（票 = 一个文件）
+TICKETS = REPO / ".codebuddy" / "work" / "50-tickets"
 
 ROW_RE = re.compile(r"^\|\s*`?(TAIL-\d+)`?\s*\|")
 SEC1_RE = re.compile(r"^#{2,3}\s*一、")
 SCHED_RE = re.compile(r"^#{2,3}\s*[\d.]*\s*逐条排期")
+
+
+def _slug(s: str) -> str:
+    """票文件短名：留中英文数字与连字符，其余（emoji / 标点 / 空白）去掉，最长 16 字。"""
+    return re.sub(r"[^\w\u4e00-\u9fff-]+", "", s).strip("-")[:16] or "票"
+
+
+def ticket_text(tag: str, a, state: str) -> str:
+    """按 `ops/agents/issue-tracker.md` §二 的模板生成票文件（⭐ 照第二个项目的票面）。"""
+    return (
+        f"# {tag}: {a.what[:40]}\n\n"
+        f"**What to build:** {a.what}\n\n"
+        f"**Blocked by:** {a.pre}\n\n"
+        f"**Status:** {state}\n\n"
+        f"- [ ] （领票时补：怎么算做完 · 要能证伪）\n\n"
+        f"---\n\n"
+        f"## Comments\n\n"
+        f"**{dt.date.today().isoformat()} · 建票（agent）。** 来源：{a.src}｜不做会怎样：{a.not_doing}｜"
+        f"落点：{a.where}｜阶段 / 时机：{a.when}｜**排期四问**（`§14.3` 同源）：{a.why}\n"
+    )
 
 
 def _cells(line: str) -> list[str]:
@@ -103,9 +126,17 @@ def main(argv: list[str]) -> int:
         ap.add_argument(f"--{f}", required=True)
     ap.add_argument("--apply", action="store_true", help="真写盘（默认只干跑）")
     ap.add_argument("--plan", default=str(PLAN))
+    ap.add_argument("--short", default="", help="票文件短名（默认由 --what 自动截）")
+    ap.add_argument("--state", default="ready-for-agent",
+                    help="票状态（受控词，见 ops/agents/issue-tracker.md §三）")
+    ap.add_argument("--tickets", default=str(TICKETS), help="票仓目录（自测可指副本）")
     a = ap.parse_args(argv)
     a.id = str(a.id).lstrip("TILA-")
     path = pathlib.Path(a.plan).resolve()
+    tag = f"TAIL-{a.id}"
+    #: ⚠️ **必须 resolve** —— 不 resolve 时 `tpath.relative_to(REPO)` 会抛 `ValueError`
+    #:   （自测传相对路径时**当场崩**，2026-10-04 本件自测抓到的第一个缺陷）
+    tpath = pathlib.Path(a.tickets).resolve() / f"{tag}-{_slug(a.short or a.what)}.md"
 
     orig = path.read_bytes()
     lines = orig.decode("utf-8").splitlines(keepends=True)
@@ -150,21 +181,32 @@ def main(argv: list[str]) -> int:
         return 1
 
     if not a.apply:
-        print("\n（干跑 —— 要真写盘加 --apply；⚠️ 真写盘会再做一次 `doc_audit` 收尾断言）")
+        print("（干跑 —— 要真写盘加 --apply；⚠️ 真写盘会再做一次 `doc_audit` 收尾断言）")
         return 0
 
+    # ④ ⭐ 2026-10-04（`TAIL-225` 票体系）：**建票文件** —— 票 = 一个文件，索引 = §15 一行一票。
+    #    ⚠️ 不建 ⇒ `T6` 立刻判红「没有票文件」（这正是那半条判据的牙）。
+    if tpath.exists():
+        print(f"⛔ 票文件已存在：{tpath.relative_to(REPO).as_posix()} ⇒ **未写盘**（先确认它是同一张票）")
+        return 1
+
     path.write_bytes(text_new.encode("utf-8"))
-    # ④ ⭐ 收尾断言：`T6` 必须认得这行新条目（＝ 三处都写到了）；不达标 ⇒ **逐字节回滚**
+    tpath.parent.mkdir(parents=True, exist_ok=True)
+    tpath.write_text(ticket_text(tag, a, a.state), encoding="utf-8", newline="")
+    # ⑤ ⭐ 收尾断言：`T6` 必须认得这行新条目 ＋ 那张新票（＝ 各处都写到了）；不达标 ⇒ **逐字节回滚**
     r = subprocess.run([str(PY), "-X", "utf8", str(REPO / "tools" / "audit" / "doc_audit.py")],
                        cwd=str(REPO), capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
     out = (r.stdout or "") + (r.stderr or "")
     if "必须修 0" not in out:
         path.write_bytes(orig)
-        print("⛔ 收尾断言不过（`doc_audit` 不是「必须修 0」）⇒ **已逐字节回滚**；它的输出尾部：")
+        tpath.unlink(missing_ok=True)
+        print("⛔ 收尾断言不过（`doc_audit` 不是「必须修 0」）⇒ **已逐字节回滚（含删掉刚建的票文件）**；"
+              "它的输出尾部：")
         print("\n".join(out.splitlines()[-12:]))
         return 1
-    print(f"✅ 已写盘 ＋ 收尾断言过（`doc_audit` 必须修 0）：{path.relative_to(REPO).as_posix()}")
+    print(f"✅ 已写盘 ＋ 收尾断言过（`doc_audit` 必须修 0）："
+          f"{path.relative_to(REPO).as_posix()} ＋ 票文件 {tpath.relative_to(REPO).as_posix()}（`{a.state}`）")
     return 0
 
 
