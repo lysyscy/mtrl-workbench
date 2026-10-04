@@ -32,7 +32,7 @@ from app.report_export import nt_export, pl_export
 from tests.acc_plugin import acc
 from tests.m03_action_helpers import FakeWriteSession, _notice
 from tests.shell_load_helpers import exp_routes
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, const_src  # noqa: F401  ← `P4`① 读取点收敛
 
 #: 壳里的 `data-act="exp"` 按钮的 `data-t`（**真源 = `index.html`**，本表只在测试里对账用）。
 #: ⚠️ 2026-09-21：`i8 接口清单` 的卡片已随「接口清单删除」裁定移除（m02 清单卡）⇒ 从本表摘除。
@@ -45,10 +45,11 @@ BUTTON_T = (
 
 
 def _th_labels(name: str) -> list[str]:
-    """从壳的 `<th>` 串（`NT_THEAD` / `PL_THEAD`）抽**列名** —— 去掉 HTML 标签与 JS 注释。"""
-    m = re.search(rf"const {name}=`(.+?)`;", SHELL, re.S)
-    assert m, f"壳里找不到 `{name}`（形态变了就同批改本件）"
-    raw = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S)
+    """从壳的 `<th>` 串（`NT_THEAD` / `PL_THEAD`）抽**列名** —— 去掉 HTML 标签与 JS 注释。
+
+    ⭐ 2026-10-03（`TAIL-219` 批 2b）：取句改走壳的语义口径 `const_src`（⛔ 别在本件再写正则）。
+    """
+    raw = re.sub(r"/\*.*?\*/", "", const_src(name), flags=re.S)
     return [re.sub(r"<[^>]+>", "", t).strip()
             for t in re.findall(r"<th\b[^>]*>(.*?)</th>", raw, re.S)]
 

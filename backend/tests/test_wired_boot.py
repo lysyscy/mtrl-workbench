@@ -19,10 +19,10 @@ from __future__ import annotations
 from tests.acc_plugin import acc
 
 from tests.shell_load_helpers import (
-    DEP, DEP_BEFORE, PAGES, SHELL, load_dep, loaders, page_load,
+    DEP, DEP_BEFORE, PAGES, SHELL, loaders, page_load,
 )
-# ⭐ 2026-10-03（`TAIL-219` 批 2）：函数体改走壳的语义口径（⛔ 别在本件自造剪刀）
-from tests.shell_src import func_body
+# ⭐ 2026-10-03（`TAIL-219` 批 2／2b）：函数体与常量项改走壳的语义口径（⛔ 别在本件自造剪刀）
+from tests.shell_src import const_items, func_body
 
 
 @acc()
@@ -58,7 +58,7 @@ def test_boot只拉初始视图而go按需拉():
 def test_依赖路必须等机械与库存():
     """⛔ **依赖屏障不许挪**：`LOAD_DEP` 那两路必须等 `机械 6 列`＋`库存单据`；
     且**凡清单里出现它们的页，必须同时含前置两路**（行为级 —— 比"顺序"断言更强）。"""
-    dep = load_dep()
+    dep = set(const_items("LOAD_DEP"))
     for lbl in DEP:
         assert lbl in dep, f"「{lbl}」不在 `LOAD_DEP` 里（它要吃前置路的产物）"
     pl = page_load()

@@ -16,7 +16,9 @@ from __future__ import annotations
 import re
 
 from tests.acc_plugin import acc
-from tests.shell_src import SHELL, fbar_kernel, pjb_kernel, read_shell, tbl_kernel, with_fbar
+from tests.shell_src import (  # noqa: F401  ← `P4`① 读取点收敛
+    SHELL, fbar_kernel, page_slice, pjb_kernel, read_shell, tbl_kernel, with_fbar,
+)
 
 #: ⭐ `P1-a`（2026-09-28 · 用户选 `A`）：**展开区的外框/间距只走变体类**，这四条内联整串不许回来。
 EXPAND_INLINE_GONE: tuple[str, ...] = (
@@ -205,14 +207,12 @@ def test_卡头里的按钮都在右侧工具区():
 #: ⚠️ 起止都用**真锚点**，别用 `\n};` 猜结尾：本页函数体里有多处缩进的 `};`（`scard` / `cardBtn` 闭包），
 #:    按列 0 猜会**截错**。⚠️ 也别把锚点写成**已撤项**的名字（`doc_audit` 的 `T8`"已撤项复活"会当场判红 ——
 #:    本件第一版就踩了）。形态变了就同批改本件。
-_SET_START = "V.set = () => {"
-_SET_END = "/* ============================================================ 动作（**一律追加**"
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：起止串 `_SET_START`/`_SET_END` **已删** —— 改走 `page_slice("set")`。⛔ 别写回来。
 
 
 def _set_region() -> str:
-    i, j = SHELL.find(_SET_START), SHELL.find(_SET_END)
-    assert i > 0 and j > i, "壳里找不到「系统设置」页（形态变了就同批改本件）"
-    return SHELL[i:j]
+    # ⭐ 2026-10-03（`TAIL-219` 批 2b）：改走壳的语义口径（该页 ⇒ `page_slice("set")`）
+    return page_slice("set")
 
 
 def _strip_block_comments(text: str) -> str:

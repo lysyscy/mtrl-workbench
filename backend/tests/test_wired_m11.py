@@ -13,16 +13,14 @@ from __future__ import annotations
 from tests.acc_plugin import acc
 from tests.shell_src import read_shell
 
-
-def _sh() -> str:
-    return read_shell()
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先那个 `_sh()` 只是 `read_shell()` 的改名 ⇒ **删掉**，直接调 `read_shell()`。
 
 
 # ---------------------------------------------------------------- 结构：接线接上了
 
 @acc()
 def test_数据源接到后端_四处注册齐():
-    s = _sh()
+    s = read_shell()
     assert "API.m11List" in s and "/api/m11/list" in s, "取数要走 `/api/m11/list`"
     assert "async function reloadM11" in s, "要有 `reloadM11`"
     assert "'集采台账': reloadM11" in s, "`LOADERS` 要认这一路（否则进页面不拉）"
@@ -34,7 +32,7 @@ def test_数据源接到后端_四处注册齐():
 def test_适配层把后端字符串金额转成数字():
     """⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 适配层必须过 `N0()`
     （漏了会让壳里求和变**字符串拼接**、合计安静地错）。"""
-    s = _sh()
+    s = read_shell()
     assert "function adaptJc" in s, "要有适配层（⛔ 不许把转形散落到 `V.m11` 里）"
     for frag in ("contractAmt: N0(x.contract_amt)", "settle: N0(x.settle)",
                  "pay_sum: N0(x.pay_sum)", "debt: N0(x.debt)",
@@ -66,7 +64,7 @@ def test_反向_判定搬家_金额读后端不再前端现算():
       ⚠️ 这个 bug **离线看不见**（`node --check` 能过、页面也没报错）—— 真机那半由
       `tools/probe/_shell_m11.py`（㉓）按"**页面显示 == 后端派生值**"逐行比。
     """
-    s = _sh()
+    s = read_shell()
     assert "const jcSettle=j=>N2(j.settle);" in s, "结算必须读后端字段"
     assert "const jcPay=j=>N2(j.pay_sum);" in s, "付款合计的键名是 `pay_sum`（后端 `DERIVED_MONEY_KEYS`）"
     assert "const jcDebt=j=>N2(j.debt);" in s
@@ -83,7 +81,7 @@ def test_反向_判定搬家_金额读后端不再前端现算():
 @acc()
 def test_反向_动作不再本地赋值冒充落库():
     """⭐ 反向断言②：**不许用本地赋值冒充落库**。"""
-    s = _sh()
+    s = read_shell()
     assert "JCs.forEach(j=>{ if(jcPick.has(j.id)){ j.tag=v; n++; } })" not in s, \
         "⛔ 批量标记不许再本地改数组（改完只是这一屏变了，刷新就没）"
     assert "j.tag=t.dataset.v" not in s, "⛔ 单条标记不许再本地改数组"
@@ -94,7 +92,7 @@ def test_反向_动作不再本地赋值冒充落库():
 @acc()
 def test_反向_没接的动作不假装成功():
     """⭐ 反向断言③：**不许对没接的动作说成功**，要如实说"尚未接通 ＋ 归哪条"。"""
-    s = _sh()
+    s = read_shell()
     assert "已抓取采购合同信息（API-04）：新增" not in s, "⛔ 抓取按钮不许再报假的「已抓取」"
     assert "尚未接通" in s, "没接的动作必须**如实**说明（技能第 4 步：不得假装成功）"
     assert "M5-5" in s, "取消关联要说明它归 `M5-5`（⛔ 不留给用户一个沉默的按钮）"
@@ -108,7 +106,7 @@ def test_子表弹窗按需拉明细_增删走_api():
       行对象被**重建** ⇒ 之后必须**重取**那一行，否则 `jcLoadSub` 写到一个已不在表里的旧对象上
       （弹窗看着"没变化"，且**不报错**）。
     """
-    s = _sh()
+    s = read_shell()
     assert "async function jcLoadSub" in s, "要有子表按需载入器（唯一数据来源）"
     assert s.count("await jcLoadSub(") >= 4, "三个弹窗 ＋ 增删之后都要重拉明细"
     for frag in ("API.m11InvAdd({id:j.id,", "API.m11PayAdd({id:j.id,",
@@ -122,7 +120,7 @@ def test_子表弹窗按需拉明细_增删走_api():
 
 @acc()
 def test_演示数组已清干净():
-    s = _sh()
+    s = read_shell()
     assert "const JC = [" not in s, "演示数组 `JC` 必须删（一份内容只许一个主人）"
     assert "const JC_COLS = [" not in s, "列序表 `JC_COLS` 随演示数据一起删"
 
@@ -134,7 +132,7 @@ def test_写动作接上了_api_且抓取要二次确认():
     ⚠️ 抓取另加两条：**必须先二次确认**（会顶号，`D9`）· 且走真端点（原先是假 toast）。
     ⚠️ 手工新增的项目键 = **仓库名**（§2.7.4），⛔ 不是 `project_id`（列表接口也不给 id）。
     """
-    s = _sh()
+    s = read_shell()
     assert "async function jcAct" in s, "写动作要有统一外壳（照 `awfAct`：成败都回后端真实状态）"
     for frag in ("API.m11Tag({id:j.id, tag:t.dataset.v})",     # 单条标记
                  "API.m11Tag({ids, tag:v})",                    # 批量标记

@@ -24,9 +24,9 @@ from tests.acc_plugin import acc
 from tests.m07_shell_helpers import API, ROUTER, SHELL  # noqa: F401
 
 # ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉 ⇒ 下面那条判据改在**取数表**上证（判据不变）。
-from tests.shell_load_helpers import DEP_BEFORE, load_dep, loaders, page_load  # noqa: F401
-# ⭐ 2026-10-03（`TAIL-219` 批 2）：取片改走壳的语义口径（⛔ 别在本件自造剪刀）
-from tests.shell_src import func_body, page_slice, tbl_kernel, with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看（`tbl_kernel`：`TAIL-64`）
+from tests.shell_load_helpers import DEP_BEFORE, loaders, page_load  # noqa: F401
+# ⭐ 2026-10-03（`TAIL-219` 批 2／2b）：取片改走壳的语义口径（⛔ 别在本件自造剪刀）
+from tests.shell_src import const_items, func_body, page_slice, tbl_kernel, with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看（`tbl_kernel`：`TAIL-64`）
 
 # ============== `ACC-SETL-001` / `ACC-SETL-EXT-001` 的**形态**半边（`§19` 批 2 搬家）
 #
@@ -404,7 +404,7 @@ def test_boot含m07且逐路容错():
        比原来的"文本次序"更强：次序写反 / 清单漏项 / 依赖组被拆掉，它都会红。
     """
     assert "收发结存与大表" in loaders(), "没有「收发结存与大表」这一路取数"
-    assert "收发结存与大表" in load_dep(), "它不在 `LOAD_DEP` 里（依赖屏障丢了）"
+    assert "收发结存与大表" in const_items("LOAD_DEP"), "它不在 `LOAD_DEP` 里（依赖屏障丢了）"
     for page, labels in page_load().items():
         if "收发结存与大表" in labels:
             for need in DEP_BEFORE["收发结存与大表"]:

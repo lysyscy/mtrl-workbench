@@ -75,16 +75,9 @@ def loaders() -> set[str]:
     return keys
 
 
-def load_dep() -> set[str]:
-    """`LOAD_DEP`：必须等前置两路的那些路。
-
-    ⚠️ 2026-10-03（`TAIL-219` 批 2）：本件其余三把剪刀已删（`_obj` / `boot_body` / `load_paths_body`），
-       **只剩这一个** —— 它取的是 `new Set([…])`，而语义口径目前只认 `{…}` 对象字面量
-       （要收它得给 `shell_api` 添一个 `const_items`；⚠️ 该件已 398 行、逼近 `T5` 的 400 档 ⇒ 先登记、别顺手加）。
-    """
-    m = re.search(r"const LOAD_DEP = new Set\(\[(.*?)\]\);", SHELL, re.S)
-    assert m, "壳里找不到 `const LOAD_DEP = new Set([…])`"
-    return set(re.findall(r"'([^']+)'", m.group(1)))
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：`load_dep()`（取 `new Set([…])` 的项）**已删** ——
+#    窗现在有了 `const_items(名)`（批 2b 添）⇒ 调用方直接 `set(const_items("LOAD_DEP"))`。
+#    ⇒ ⭐ 本件**一把剪刀都不剩**了（`_obj` / `boot_body` / `load_paths_body` / `load_dep` 全清）。⛔ 别写回来。
 
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2）：`boot_body()` / `load_paths_body()` 两把剪刀**已整把删掉** ——

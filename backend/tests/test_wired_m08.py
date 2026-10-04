@@ -19,34 +19,11 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, const_items, func_body  # noqa: F401  ← `P4`① 读取点收敛
 ROUTER = (ROOT / "backend" / "app" / "mod08_inv" / "router.py").read_text(encoding="utf-8")
 
-
-def _body(name: str, *, nxt: str) -> str:
-    """取壳里 `function <name>(…){…}` 的函数体（**用花括号配平**，不靠"下一个函数"）。"""
-    i = SHELL.find(f"function {name}(")
-    assert i >= 0, f"壳里找不到 `function {name}(`"
-    j = SHELL.find("{", i)
-    depth, k = 0, j
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    body = SHELL[i:k + 1]
-    assert len(body) < 4000, f"`{name}` 取到 {len(body)} 字符 —— 配平可能跑偏"
-    return body
-
-
-def _shell_list(const: str) -> list[str]:
-    """取壳里 `const X = ['a','b']` 的字符串项。"""
-    m = re.search(rf"const {const}\s*=\s*\[([^\]]*)\];", SHELL)
-    assert m, f"壳里找不到 `const {const} = [...]`"
-    return [x.strip().strip("'\"") for x in m.group(1).split(",") if x.strip()]
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带两把剪刀（`_body` / `_shell_list`）——
+#    已**整把删掉**，取段改走壳的语义口径（函数 ⇒ `func_body` · 常量项 ⇒ `const_items`）。⛔ 别写回来。
 
 
 # ============================================================== 1 · 数据源已换后端
@@ -154,7 +131,7 @@ def test_加载时求值的两处已改为重算():
     """`PROC_PJS` / `procPj` 不能停在"加载时算出来的空值"上（**静默失去候选**）。"""
     assert "const PROC_PJS=uniqBy(IVs" not in SHELL, "`PROC_PJS` 仍是加载时一次性求值"
     assert "let PROC_PJS=[];" in SHELL, "`PROC_PJS` 没有改成可重算的空数组"
-    body = _body("reloadInv", nxt="")
+    body = func_body("reloadInv")
     assert "PROC_PJS = uniqBy(IVs" in body, "`reloadInv()` 里没有重算 `PROC_PJS`"
     assert "procPj = PROC_PJS[0]" in body, "`reloadInv()` 里没有落定 `procPj` 初值"
     assert "let procPj=PROC_PJS[0]" not in SHELL, "`procPj` 仍是加载时求值"
@@ -177,10 +154,10 @@ def test_适配层覆盖全部列键():
 
     漏一个 ⇒ 壳里读 `iv.<键>` 恒 `undefined`（合计恒 0 / 状态列恒空），**而且不报错**。
     """
-    inv_body = _body("adaptInv", nxt="")
-    adj_body = _body("adaptAdj", nxt="")
-    miss_i = [k for k in _shell_list("IV_COLS") if f"{k}:" not in inv_body]
-    miss_a = [k for k in _shell_list("AD_COLS") if f"{k}:" not in adj_body]
+    inv_body = func_body("adaptInv")
+    adj_body = func_body("adaptAdj")
+    miss_i = [k for k in const_items("IV_COLS") if f"{k}:" not in inv_body]
+    miss_a = [k for k in const_items("AD_COLS") if f"{k}:" not in adj_body]
     assert not miss_i, f"`adaptInv` 漏了列键 {miss_i} ⇒ 壳里读它们是 undefined（静默失配）"
     assert not miss_a, f"`adaptAdj` 漏了列键 {miss_a} ⇒ 同理"
 
@@ -188,7 +165,7 @@ def test_适配层覆盖全部列键():
 @acc()
 def test_适配层把id转成字符串():
     """原型的 `data-*` 是字符串、`===` 比较不转会**静默找不到行**（`m03` 的教训）。"""
-    inv_body, adj_body = _body("adaptInv", nxt=""), _body("adaptAdj", nxt="")
+    inv_body, adj_body = func_body("adaptInv"), func_body("adaptAdj")
     assert "id: String(r.id)" in inv_body, "`adaptInv` 的 `id` 没转成字符串"
     assert "ivid: String(a.row_id)" in adj_body, "`adaptAdj` 的 `ivid` 没转成字符串"
 
@@ -197,7 +174,7 @@ def test_适配层把id转成字符串():
 def test_留痕转成对象数组():
     """`adjDlg` 里按 `x.field / x.before / x.after` 取值 ⇒ 必须是**对象数组**
     （原型演示数据给的是数组数组 ⇒ 那张卡会渲染出一排 `undefined`）。"""
-    body = _body("adaptAdj", nxt="")
+    body = func_body("adaptAdj")
     assert re.search(r"trail:\s*\[\{[^}]*field:", body), "`trail` 不是对象数组 ⇒ 留痕卡会显示 undefined"
 
 
@@ -209,10 +186,10 @@ def test_适配层把金额转成数字():
 
     ⚠️ 这条是**真发现**（首次真机验证时 e2e 报出来的），不是照抄的检查项。
     """
-    body = _body("adaptInv", nxt="")
+    body = func_body("adaptInv")
     for k in ("qty", "px", "pi", "amt", "tax"):
         assert re.search(rf"{k}:\s*N0\(", body), f"`adaptInv` 的 `{k}` 没过 `N0()`（字符串会拼进求和）"
-    assert "newAmt: N0(" in _body("adaptAdj", nxt=""), "`adaptAdj` 的 `newAmt` 没过 `N0()`"
+    assert "newAmt: N0(" in func_body("adaptAdj"), "`adaptAdj` 的 `newAmt` 没过 `N0()`"
 
 
 # ============================================================== 3 · 写动作走后端（含反向）

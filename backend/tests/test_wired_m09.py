@@ -25,7 +25,9 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, act_entry, func_body, page_slice, with_tbl  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import (  # noqa: F401  ← `P4`① 读取点收敛
+    SHELL, act_entry, const_src, func_body, page_slice, with_tbl,
+)
 API = (ROOT / "backend" / "app" / "mod09_fee" / "api.py").read_text(encoding="utf-8")
 ROUTER = (ROOT / "backend" / "app" / "mod09_fee" / "router.py").read_text(encoding="utf-8")
 
@@ -41,15 +43,13 @@ ROUTER = (ROOT / "backend" / "app" / "mod09_fee" / "router.py").read_text(encodi
 # 原先钉在**旧服务端页** `render_fee_page` 渲染出的 HTML 上；旧页删除（授权 `D18`）⇒ 形态改指新壳
 # （⛔ 判据不删）。实质（取数 / 判定 / 独立复算）仍留在 `tests/test_acc_fee_mon.py`。
 
-_AWF_THEAD_RE = re.compile(r"const AWF_THEAD=`([^`]*)`;")
-
-
 def _awf_heads() -> list[str]:
-    """壳里本表表头（`AWF_THEAD`）的**列标签**（去掉标签里的 HTML）。"""
-    m = _AWF_THEAD_RE.search(SHELL)
-    assert m, "壳里找不到 `const AWF_THEAD=`"
+    """壳里本表表头（`AWF_THEAD`）的**列标签**（去掉标签里的 HTML）。
+
+    ⭐ 2026-10-03（`TAIL-219` 批 2b）：取句改走壳的语义口径 `const_src`（⛔ 别在本件再写正则）。
+    """
     return [re.sub(r"<[^>]*>", "", h).strip()
-            for h in re.findall(r"<th[^>]*>([\s\S]*?)</th>", m.group(1))]
+            for h in re.findall(r"<th[^>]*>([\s\S]*?)</th>", const_src("AWF_THEAD"))]
 
 
 @acc("ACC-FEE-MON-001", "001-01")

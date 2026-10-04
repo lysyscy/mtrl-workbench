@@ -27,61 +27,14 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, act_entry, func_body, page_slice  # noqa: F401  ← `P4`① 读取点收敛
 RULES_API = (ROOT / "backend" / "app" / "mod14_config" / "rules_api.py").read_text(encoding="utf-8")
 REPO = (ROOT / "backend" / "app" / "mod03_notice" / "rules_repository.py").read_text(encoding="utf-8")
 CLASSIFY = (ROOT / "backend" / "app" / "mod03_notice" / "classify.py").read_text(encoding="utf-8")
 
-#: 切片切法**必须与 `tools/audit/ui_parity.py` 一致**（`V.<名>=` 起，到下一个顶层声明止）
-_END_RE = re.compile(r"^(?:V\.|BIND\.|const |let |function )")
-
-
-def _vslice(name: str) -> str:
-    """取壳里 `V.<名>=` 起、到下一个顶层声明止的切片。"""
-    out: list[str] = []
-    cur = False
-    for ln in SHELL.replace("\r\n", "\n").split("\n"):
-        if re.match(rf"^{re.escape(name)}\s*=", ln):
-            cur = True
-            out.append(ln)
-            continue
-        if cur:
-            if _END_RE.match(ln):
-                break
-            out.append(ln)
-    assert out, f"壳里找不到 `{name}=`"
-    return "\n".join(out)
-
-
-def _balanced(start: int, *, limit: int = 4000) -> str:
-    """从 `start` 处第一个 `{` 起做**花括号配平**（⛔ 不用"下一个同名键"当终点）。"""
-    depth, k = 0, SHELL.find("{", start)
-    assert k > 0, "找不到起始花括号"
-    while k < len(SHELL):
-        if SHELL[k] == "{":
-            depth += 1
-        elif SHELL[k] == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        k += 1
-    body = SHELL[start:k + 1]
-    assert len(body) < limit, f"取到 {len(body)} 字符 —— 配平可能跑偏"
-    return body
-
-
-def _fn(name: str) -> str:
-    """取壳里 `function <名>(…)` 的函数体。"""
-    i = SHELL.find(f"function {name}(")
-    assert i >= 0, f"壳里找不到 `function {name}(`"
-    return _balanced(i)
-
-
-def _act(name: str) -> str:
-    """取壳里 `ACT` 的某个动作（`\\n <名>:` 起，花括号配平）。"""
-    i = SHELL.find(f"\n {name}:")
-    assert i >= 0, f"壳里找不到动作 `{name}:`"
-    return _balanced(i)
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带**四把**剪刀（`_vslice` / `_balanced` / `_fn` / `_act`）——
+#    已**整把删掉**，取段改走壳的语义口径（页 ⇒ `page_slice` · 函数 ⇒ `func_body` · 动作条 ⇒ `act_entry`）。
+#    ⚠️ `_balanced` 那类"从某个下标起配平"的活，现在是窗内部的事（`jslex.match`）。⛔ 别写回来。
 
 
 # ============================================================== 001-01
@@ -91,7 +44,7 @@ def _act(name: str) -> str:
 def test_剔除规则真增删改且改动落到规则数据():
     """`001-01` 剔除规则真「增 / 删 / 改」：改动落到规则数据，且**卡头条数实时算**（不得写死）。"""
     # ① 三个动作都必须**调后端**（⛔ 不本地改数组冒充落库）
-    save, dele = _act("ruleSave"), _act("ruleDel")
+    save, dele = act_entry("ruleSave"), act_entry("ruleDel")
     assert "API.m14RuleAdd(" in save, "`ruleSave` 的新增没走后端"
     assert "API.m14RuleSet(" in save, "`ruleSave` 的修改没走后端"
     assert "API.m14RuleDel(" in dele, "`ruleDel` 没走后端"
@@ -104,12 +57,12 @@ def test_剔除规则真增删改且改动落到规则数据():
         assert "await reloadM14()" in body, f"`{name}` 写完没重拉（改了看不见）"
     # ④ 规则数据的**唯一来源**必须是后端：演示常量已清 ⇒ 只能由 `reloadM14()` 填
     #    （⛔ 只查「写了 `reloadM14()`」不够 —— 填不进去的话表格恒空，而上面几条照样通过）
-    reload_body = _fn("reloadM14")
+    reload_body = func_body("reloadM14")
     assert "RULE_RAW = d.rules" in reload_body, "`reloadM14()` 没把后端规则行落定到 `RULE_RAW`"
     assert "RULE_EX = RULE_RAW.map(" in reload_body, \
         "`reloadM14()` 没把后端规则行转成 `RULE_EX`（切片会渲染空表）"
     # ⑤ 卡头条数必须是**算出来的**
-    assert "RULE_EX.length" in _vslice("V.m14"), "卡头条数没跟着规则条数走（写死了）"
+    assert "RULE_EX.length" in page_slice("m14"), "卡头条数没跟着规则条数走（写死了）"
     # ⑥ 后端：三个端点都在，且**都走仓储**（判定不另写一套）
     for ep, fn in (("@router.post(\"/api/m14/rules\")", "def api_rule_add("),
                    ("@router.put(\"/api/m14/rules/{rule_id}\")", "def api_rule_update("),
@@ -129,7 +82,7 @@ def test_剔除规则真增删改且改动落到规则数据():
 @acc("ACC-CFG-RULE-001", "001-02")
 def test_分类规则表只读不渲染编辑入口():
     """`001-02` 分类规则表**保持只读**，不渲染编辑入口（判定顺序 = 业务口径，可编辑 = 允许改口径）。"""
-    sl = _vslice("V.m14")
+    sl = page_slice("m14")
     i = sl.find("RULE_CA.map")
     assert i > 0, "`V.m14` 里找不到分类规则表的 `RULE_CA.map(...)`"
     # ⚠️ 只取**分类规则那一行**的 map 段（⛔ 别把整页 `in` —— 上方的剔除规则表本来就有按钮）
@@ -144,7 +97,7 @@ def test_分类规则表只读不渲染编辑入口():
 @acc("ACC-CFG-RULE-001", "001-03")
 def test_规则与说明表不得被标为可排序():
     """`001-03` 规则 / 说明表不得被标为可排序（`data-sort` 是数据表的属性，不是配置表的）。"""
-    sl = _vslice("V.m14")
+    sl = page_slice("m14")
     assert "data-sort" not in sl, "`V.m14` 里有表被标了 `data-sort` ⇒ 配置 / 说明表被当成可排序数据表"
 
 
@@ -169,8 +122,8 @@ def test_命中值结构与口径一致():
     # ⛔ 「收款单位」不得出现在**可选类别**里（后端 `effective_payload` 负责剔除）
     assert "if k != classify.KIND_PAYEE" in REPO, "后端 `kinds` 没把「收款单位」排除 ⇒ 页面上能选它"
     # 壳侧：类别下拉来自后端（与真数据同源），⛔ 不是前端硬编码的类别表
-    assert "RULE_KINDS = d.kinds" in _fn("reloadM14"), "`reloadM14()` 没从后端落定可选类别"
-    assert "RULE_KINDS.map(" in _act("ruleForm"), "规则类别没用后端给的类别做下拉（硬编码了类别）"
+    assert "RULE_KINDS = d.kinds" in func_body("reloadM14"), "`reloadM14()` 没从后端落定可选类别"
+    assert "RULE_KINDS.map(" in act_entry("ruleForm"), "规则类别没用后端给的类别做下拉（硬编码了类别）"
 
 
 # ============================================================== 001-05
@@ -179,7 +132,7 @@ def test_命中值结构与口径一致():
 @acc("ACC-CFG-RULE-001", "001-05")
 def test_关键词编辑入口在项目行本页只读():
     """`001-05` 小微识别关键词的编辑入口在**项目行**（`MOD-01`），本页只作**只读展示**。"""
-    sl = _vslice("V.m14")
+    sl = page_slice("m14")
     i = sl.find("PJs.filter(p=>p.type==='small')")
     assert i > 0, "`V.m14` 里找不到小微识别关键字表"
     seg = sl[i:i + 900]
@@ -188,7 +141,7 @@ def test_关键词编辑入口在项目行本页只读():
     # 真入口确实在 `m01` 的项目行上（丢了它 = 关键词哪儿都改不了）
     # ⚠️ 必须**连属性名一起钉**（`data-act="editKw"`）—— 只查 `editKw` 会被 `editKwX`
     #    / `editKwOk` 这类同前缀标识符**喂饱**（反向灵敏度实测：改成 `editKwX` 照样绿）。
-    m01 = _vslice("V.m01")
+    m01 = page_slice("m01")
     assert 'data-act="editKw"' in m01, "项目行（`m01`）里没有关键词编辑入口 `data-act=\"editKw\"`"
     # ⛔ 反向：本页也**不得**出现那个入口（题眼是"入口在项目行"，不是"两处都有"）
-    assert 'data-act="editKw"' not in _vslice("V.m14"), "`m14` 也渲染了关键词编辑入口（越权）"
+    assert 'data-act="editKw"' not in page_slice("m14"), "`m14` 也渲染了关键词编辑入口（越权）"

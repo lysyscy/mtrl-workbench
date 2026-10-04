@@ -19,9 +19,9 @@ from pathlib import Path
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, page_seg, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, const_src, page_seg, page_slice, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
 
-_NT_THEAD_RE = re.compile(r"const NT_THEAD=`([\s\S]*?)`;")
+# ⭐ 2026-10-03（`TAIL-219` 批 2b）：`_NT_THEAD_RE`（自写正则）**已删** —— 取句走 `const_src`。⛔ 别写回来。
 
 
 def _nt_region() -> str:
@@ -37,23 +37,13 @@ def _nt_region() -> str:
        ⇒ 本函数取**两段并起来**：① 表头模板那一段（`proj.js`）② `V.m03` 切片那一段（`index.html`）。
        ⭐ 判据内容**一字未改**，只换取材方式（本仓既有做法：拆件后判据改指，⛔ 不是不许拆件）。
     """
-    i = SHELL.find("const NT_THEAD=")
-    assert i >= 0, "壳里找不到 `const NT_THEAD=`"
-    j = SHELL.find("`;", i)                    # ⚠️ 收到 `NT_THEAD` **自己**的收尾（⛔ 别用 `</div>\`;` —— 拆件后会跑到别的件里）
-    assert j > i, "找不到 `NT_THEAD` 模板的收尾"
-    head = SHELL[i:j]
-    k = SHELL.find("V.m03=()=>{")
-    assert k >= 0, "壳里找不到 `V.m03` 切片"
-    e = SHELL.find("</div>`;", k)
-    assert e > k, "找不到 `V.m03` 渲染的收尾"
-    return head + "\n" + SHELL[k:e]
+    # ⭐ 2026-10-03（`TAIL-219` 批 2b）：两段改走壳的语义口径（表头模板 ⇒ `const_src` · 页面 ⇒ `page_slice`）
+    return const_src("NT_THEAD") + "\n" + page_slice("m03")
 
 
 def _nt_heads() -> list[str]:
     """本表表头（`NT_THEAD`）的**列标签**（勾选列由 `<input>` 渲染 ⇒ 它的标签是空串）。"""
-    m = _NT_THEAD_RE.search(SHELL)
-    assert m, "壳里找不到 `const NT_THEAD=`"
-    raw = re.findall(r"<th[^>]*>([\s\S]*?)</th>", m.group(1))
+    raw = re.findall(r"<th[^>]*>([\s\S]*?)</th>", const_src("NT_THEAD"))
     return [re.sub(r"<[^>]*>", "", h).strip() for h in raw]
 
 
