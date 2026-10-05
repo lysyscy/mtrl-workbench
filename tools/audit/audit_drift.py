@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from audit_common import (
+    BACKTICK_RE,
     CANCELLED, CANCELLED_DOC_GLOBS, CANCELLED_SCAN_GLOBS, CANCELLED_SKIP_RELS, _is_lenient,
     GITIGNORE_REL, HANDBOOK_REL, HARD_EXEMPT, KNOWN_ABSENT, LEDGER_REL, OUTSIDE_ROOTS,
     PATH_ROOTS, REPO_ROOT,
@@ -268,7 +269,9 @@ def check_paths(docs: list) -> list[dict]:
 #    那会把 `frontend/dist/` 这类「已定案、将来才建」的写法一起判红（噪音淹掉信号）。
 # ⚠️ 豁免沿用 `T3` 的**同一份**词表与距离闸（`T3_OLD_PATH_HINTS` / `T3_HINT_WINDOW`）——
 #    行文里**贴着那个路径**说它「已不在仓内」的，不报（⛔ 词表与距离逻辑都只有一处定义）。
-_GITIGNORE_TOKEN_RE = re.compile(r"`([^`\n]+)`")
+_GITIGNORE_TOKEN_RE = BACKTICK_RE
+#: ⚠️ 上行的**实现**已收进 `audit_common.BACKTICK_RE`（唯一一份 · `/code-review` 2026-10-05 指出的
+#:   一处重复）—— ⛔ 别在别处再写一份反引号提取正则。
 #: token 里出现这些字符的一律**不核**：那是**模式 / 占位符 / 命令**，不是落点路径
 #: （`artifacts/*` · `.codebuddy/*` · `%TEMP%` · `<交付面根>/…` · `git check-ignore -v` …）
 _GITIGNORE_SKIP_CHARS = "*?[]{}<>%"

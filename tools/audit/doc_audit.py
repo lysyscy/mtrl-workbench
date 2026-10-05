@@ -35,6 +35,7 @@
 
 | `T24` | ⭐ **仓库根白名单**（2026-10-05 `TAIL-236` 同批修 ①b）—— 根上的**目录与非 md 文件**必须落在「常驻骨架（`ROOT_ALLOW`）∪ `.gitignore` 声明过的暂存件」里，多出来的 ⇒ **红**。⭐ 起因：根 `work/` 建起来后 `T3`/`T12`/`T14` **四层守卫没一层拦**（那片地方**不在任何扫描面内**）。⚠️ 根上的 md 归 `T12`（本行**不**重复管） | `audit_common.ROOT_ALLOW` ＋ 仓根 `.gitignore` |
 | `T25` | ⭐ **`.gitignore` 里的落点路径必须真存在**（2026-10-05 `TAIL-236` 同批修 ①b/③）—— `.gitignore` 反引号里的**仓库内目录落点**（含 `/` · 以 `TOP_DIRS` 前缀开头 · 不含模式字符）盘上核不到 ⇒ **红**。⭐ 治的是"照一份**没被核过**的落点找路 ⇒ 找到不存在的目录"（当天真实事故）；⚠️ `T3` 拦不住这一类（它只认**带后缀**的引用，而落点多是**目录**） | 仓根 `.gitignore` ＋ `audit_drift.check_gitignore_drops`（豁免沿用 `T3_OLD_PATH_HINTS`） |
+| `T26` | ⭐ **「结论已落地」⇒ 该降档**（2026-10-05 `TAIL-236` 第 3 批 · **黄 · 只报不动**）—— `work/10-designs/` · `work/30-troubleshooting/` 里处在「**已定稿 / 已实施**」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在** ⇒ 报黄「该降档」＋ 落地位置（＝**口径主人**）＋ 同批改那串（**去向**看 `.codebuddy/work/README.md` §二 本区那一行）。⛔「零机器引用」**不是判据**（只是信号）。⭐ 治的是 `work/README.md` §二「用完就丢」**只有规矩、没有机器眼** | `audit_work.check_downgrade_candidates` ＋ `work/README.md` §四（**声明行写法**的唯一主人）＋ `audit_meta.TICKET_CLOSED`（销号定义）＋ `ops/阈值表.md` |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
@@ -58,9 +59,10 @@
 
 ⚠️ 本工具**只读**（`--block` 也只打印、不写文件）。
 
-**本文件是薄壳** —— 检查逻辑已拆到同目录三件（`T5` 逼的，本文件曾 597 行）：
+**本文件是薄壳** —— 检查逻辑已拆到同目录四件（`T5` 逼的，本文件曾 597 行）：
 `audit_common.py`（常量 ＋ 扫描基础设施）· `audit_drift.py`（`T1`–`T4` · `T25` `.gitignore` 落点）·
-`audit_meta.py`（`T5`/`T6` 台账与行数 · `T9` 纪律出处 · `T10` 读预算 · `T11` 报告回执 · `T12` 分层约定 · `T21` 字墙 · `T22` 注入档粘连 · `T23` 活机器口径 · `T24` 仓库根白名单）。
+`audit_meta.py`（`T5`/`T6` 台账与行数 · `T9` 纪律出处 · `T10` 读预算 · `T11` 报告回执 · `T12` 分层约定 · `T21` 字墙 · `T22` 注入档粘连 · `T23` 活机器口径 · `T24` 仓库根白名单）·
+`audit_work.py`（`T14` scratch TTL · `T15` 文头与产物白名单 · `T20` 保留期 · `T26` 降档判据）。
 """
 
 from __future__ import annotations
@@ -90,7 +92,7 @@ from audit_meta import (                                          # noqa: E402
     check_report_receipts, check_rule_origins, check_rule_restatements, check_tail_ledger,
 )
 from audit_work import (                                          # noqa: E402
-    check_artifacts_and_headers, check_retention, check_scratch_ttl,
+    check_artifacts_and_headers, check_downgrade_candidates, check_retention, check_scratch_ttl,
 )
 
 
@@ -295,6 +297,14 @@ def main() -> int:
     #   ⭐ 治「新区变新垃圾场」：分区只是分类学，**过期与元信息要机器盯着**才算闭环（⭐ 2026-10-01 四区 ⇒ 2026-10-04 五区）。
     raw += check_scratch_ttl()
     raw += check_artifacts_and_headers()
+    # `T26`（2026-10-05 立 · `TAIL-236` 第 3 批）：⭐ **「结论已落地」⇒ 该降档**（**黄 · 只报不动**）——
+    #   件在「已定稿 / 已实施」档，且 ① 件内 `TAIL-` 票**全销号** ＋ ② 件内**声明的「落地位置」真存在**
+    #   ⇒ 报黄「该降档（下沉 / 归档）」。
+    #   ⭐ 治的是 `work/README.md` §二 那条「用完就丢」**只有规矩、没有机器眼**
+    #   （`ops/docs-governance.md` §三 那两行自己写着「应有判据、现无」）—— 那是用户"不安"的根因。
+    #   ⛔ 两个客观信号**别改轴**（`TAIL-236` 决定 3）；⛔「零机器引用」不是判据，只是信号。
+    #   ⚠️ **声明行写法**的唯一主人 = `.codebuddy/work/README.md` §四；销号定义 = `audit_meta.TICKET_CLOSED`。
+    raw += check_downgrade_candidates()
     # `T20`（2026-09-28 立 · 文档审计）：**保留期与容量** —— `backups/` 顶层条目 > 5（口径「留 5 份」）
     #   ＋ `tools/oneoff/` 件数 / 容量超线 ⇒ **黄**。
     #   ⚠️ 2026-10-01（`TAIL-204` 第 7 步）**撤掉**原来的第三条「`.workbuddy/scratch/` 活区规模」——
@@ -391,6 +401,12 @@ def main() -> int:
     if not any(h["code"] == "T25" for h in raw):
         print("`.gitignore` 落点 `T25` 结论：里面写的仓库内路径全部真存在 ✅"
               "（核不到即红 · 反向灵敏度 `M28`）")
+        print()
+    # ⭐ `T26` **同样"常态报一句"**（同 `T23`/`T24`/`T25`）：它是"没消息就是好消息"型
+    #   —— 一声不响时读者分不清"它判过且没有该降档的件"与"它压根没跑"。
+    if not any(h["code"] == "T26" for h in raw):
+        print("降档判据 `T26` 结论：过程区没有「已声明落地、件内票已全销号」的已定稿/已实施件 ✅"
+              "（有即报黄「该降档」· 只报不动 · 反向灵敏度 `_mut_downgrade`）")
         print()
     if args.ui:
         print("交付面四检")

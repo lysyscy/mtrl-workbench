@@ -46,6 +46,9 @@ KEY: tuple[tuple[str, str], ...] = (
     ("_mut_segments.py", "真机自检**段注册表**的顺序守卫（`TAIL-215` 批 1 · 离线 · 秒级）"),
     ("_mut_shellapi.py", "壳的**语义口径**（`TAIL-219` 批 1：认结构 / 找不到必抛 · 离线 · 秒级）"),
     ("_mut_livemachine.py", "T23 活机器口径（`TAIL-236` 批 2：缺一路/空命中/复述/接线 ＋ 正常不误报）"),
+    # ⚠️ 这一支的**方向与众不同**：票面要的是「抽掉一个信号 ⇒ 必须**不再**报」——
+    #    `_mut_docaudit` 的框架只会断言"报了" ⇒ 表达不出这个方向（见该件 docstring）。
+    ("_mut_downgrade.py", "T26 降档判据（`TAIL-236` 批 3：两个信号各撤一次必须不再报）"),
 )
 
 
@@ -59,9 +62,12 @@ def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
         if rc:
             tail = [x for x in ((r.stdout or "") + (r.stderr or "")).strip().splitlines() if x.strip()][-3:]
             for x in tail:
-                print(f"        {x[:170]}")
+                # ⚠️⭐ 2026-10-05（`/retro`）：**带上件名** —— 子进程的尾巴行是**先于**下面那行
+                #   "结果行"打印的 ⇒ 不加归属时，读者会把它当成**上一支**的失败原因
+                #   （当天实测误读一次：把 `_mut_linewalls` 的自检当成 `_mut_injectsplice` 的）。
+                print(f"        [{p.name}] {x[:170]}")
     except subprocess.TimeoutExpired:
-        print(f"        ⚠️ 超过 {timeout}s 未结束 ⇒ **算未验证**（⛔ 不当通过）")
+        print(f"        [{p.name}] ⚠️ 超过 {timeout}s 未结束 ⇒ **算未验证**（⛔ 不当通过）")
         rc = 124
     return rc, time.time() - t
 

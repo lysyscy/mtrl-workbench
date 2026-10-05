@@ -542,6 +542,28 @@ TICKET_NAME_RE = re.compile(r"^(TAIL-\d+)-.+\.md$")
 TICKET_STATE_RE = re.compile(r"\*\*Status:\*\*\s*`?([a-z\-]+)`?")
 
 
+def ticket_states() -> dict[str, str]:
+    """票仓现有票的 **`TAIL-<n>` → 状态词**（读不到 / 不是受控词 ⇒ `""` ＝ 按**未销号**算，保守）。
+
+    ⭐ 口径**只有一份**：票目录 / 文件名形态 / 状态正则 / 受控词表**全部**用本模块上面的常量
+    （⛔ 调用方别另抄一遍 —— 「改一处漏一处」是本仓最贵的病）。
+    ⭐ 为什么要单独给一个读函数：`T26`（降档判据，`TAIL-236` 第 3 批）要问
+    「件内提到的票**是不是全销号了**」，而**"销号"的定义**在 `TICKET_CLOSED` 里
+    （`T6` 与 `refs_query` 守着同一份）⇒ 谁都不许硬写 `"done"`。
+    """
+    out: dict[str, str] = {}
+    tdir = REPO_ROOT / TICKET_DIR_REL
+    if not tdir.is_dir():
+        return out
+    for f in sorted(tdir.glob("*.md")):
+        m = TICKET_NAME_RE.match(f.name)
+        if not m:
+            continue
+        st = TICKET_STATE_RE.search(f.read_text(encoding="utf-8", errors="replace"))
+        out[m.group(1)] = st.group(1) if (st and st.group(1) in TICKET_STATES) else ""
+    return out
+
+
 def ledger_counts(text: str | None = None) -> dict[str, int] | None:
     """尾巴台账**四段各有多少行**（只数行，不做任何检查）。
 

@@ -4,25 +4,138 @@
 - `T14`：`work/00-scratch/` 里的件**超 14 天**未升档/未删 ⇒ 黄；`tools/` 根与 `logs/` 再出现散件 ⇒ 黄。
 - `T15`：`artifacts/` 只许**工具生成物白名单**的 md；`work/` 五区的文档必须带**文头四行元信息**
   （读者 / 回答什么问题 / 什么时候读 / 状态 ＋ 关联 ID）—— 没有元信息的文档 = 下个 Agent 不知道它是否还活着。
+- `T26`（2026-10-05 `TAIL-236` 第 3 批）：**「结论已落地」⇒ 该降档**（只报不动）——
+  「已定稿 / 已实施」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在**
+  ⇒ 报黄。⭐ 治的是 `work/README.md` §二 那条「用完就丢」**只有规矩、没有机器眼**（`docs-governance.md`
+  §三 那两行自己写着「应有判据、现无」）。
 
 ⚠️ 与 `T12` 的分工：`T12` 管**目录与命名**（层级/前缀）；本件管**时间与元信息**（过期没、写没写头）。
-⛔ 两条都是**黄**：形式问题该被看见，但不挡合入（同 `T5`/`T10` 哲学）。
+⛔ 四条都是**黄**：形式 / 生命周期问题该被看见，但不挡合入（同 `T5`/`T10` 哲学）。
 """
 
 from __future__ import annotations
 
+import re
 import sys
 import time
 
-from audit_common import RED, REPO_ROOT, YELLOW
+from audit_common import BACKTICK_RE, RED, REPO_ROOT, YELLOW
+#: ⭐ 票侧口径（目录 / 状态词 / **"销号"的定义**）**只从 `audit_meta` 取**（`T6` 守同一份）。
+#: ⛔ 本件别另抄一个字面 —— `T26` 要判"件内票是不是全销号"，那正是最容易写成第二份口径的地方。
+from audit_meta import TICKET_CLOSED, ticket_states
 
 #: scratch 件存活上限（天）—— 审计 §六-9「TTL 14 天」
 SCRATCH_TTL_DAYS = 14
 #: `artifacts/` 允许出现的 md（工具生成物白名单 · ⛔ 过程类 md 去 `work/`）
 ARTIFACTS_MD_ALLOW: tuple[str, ...] = ("变异覆盖台账.md", ".gitkeep")
+#: 文头里**「状态」那一栏的栏名** —— ⛔ 只此一处：`WORK_HEADER_KEYS` 与 `T26` 都读它
+#: （各写一份字面 ⇒ 改词表时 `T26` 静默失配，而它看上去还是绿的 —— 本仓「加了半边的守卫」那族）。
+STATE_KEY = "状态"
 #: `work/` 五区文档的文头必须齐这四个词（`README.md` 与 `D索引-*.md` 豁免）
-WORK_HEADER_KEYS: tuple[str, ...] = ("读者", "回答", "何时读", "状态")
+WORK_HEADER_KEYS: tuple[str, ...] = ("读者", "回答", "何时读", STATE_KEY)
 WORK_HEADER_EXEMPT: tuple[str, ...] = ("README.md", "D索引-")
+#: 文档**文头窗口**（行数）—— `T15`（文头四行）与 `T26`（状态档）**共用同一个数**
+#: （⛔ 别各写一遍：两处不一致 = 一份文档在一个判据里"有状态"、在另一个里"没状态"）。
+WORK_HEAD_LINES = 15
+#: `work/` 里**带文头四行**的区（`T15` 判）—— ⛔ **区名只此一处列**，别处一律从它推。
+HEADER_ZONES: tuple[str, ...] = ("10-designs", "30-troubleshooting", "40-decisions")
+
+# ------------------------------------------- T26 「结论已落地」⇒ 该降档（只报不动 · 黄）
+#
+# ⭐⭐ 2026-10-05（`TAIL-236` 第 3 批）：**只给缺判据的「已定稿 / 已实施」两档补判据** ——
+#    这两档的含义就是「内容已冻结 / 结论已进代码」（`work/README.md` §四 的词表），
+#    本仓口径是**该降档**，而此前**没有任何机器看得见**
+#    （`ops/docs-governance.md` §三 那两行自己写着「应有判据、现无」）⇒
+#    `work/README.md` §二 那条"用完就丢"**执行不了** ⇒ 只进不出（= 用户不安的根因）。
+# ⛔⛔ **五档状态词一个字不动**（主人 = `.codebuddy/work/README.md` §四 · `T15` 机核那四行文头）：
+#    本判据只在两档上**加**机器眼，⛔ 不新增档位、不改词、不换轴（`TAIL-236` 决定 2）。
+DOWNGRADE_STATES: tuple[str, ...] = ("已定稿", "已实施")
+#: `T26` 的扫描面 = 上面那张区表里的**过程件两区** —— ⛔ **不含**决策区 `40-decisions/`：
+#: 决策件的协议是「只加不改 ＋ 被推翻只补一行」（`ops/docs-governance.md` §三）⇒ 降档语义不同。
+DOWNGRADE_ZONES: tuple[str, ...] = tuple(z for z in HEADER_ZONES if z != "40-decisions")
+#: ⭐ **「落地位置」声明行**的形态 —— **唯一主人 = `.codebuddy/work/README.md` §四**
+#:   （⛔ 别处只指路，别重述形态）。两种冒号位置都收（写作习惯差异，不是两种格式）：
+#:   `**落地位置**：`…` 与 `**落地位置：**`…`。
+DECL_RE = re.compile(r"\*\*落地位置[：:]?\*\*[：:]?\s*(\S.*)")
+#: 声明行里 `· 同批改：` 之后的那串**不参与"落地位置真存在"这条信号** —— 它只是"变了要一起改哪几处"
+#: 那半边（验收 3 要的"读得到"），核不到由 `T3` 报黄即可。⇒ 摘 token 前先把两段切开。
+DECL_SPLIT_RE = re.compile(r"\s*[·、,，]?\s*同批改\s*[：:]")
+
+
+def check_downgrade_candidates() -> list[dict]:
+    """`T26` · **「结论已落地」⇒ 该降档**（2026-10-05 `TAIL-236` 第 3 批 · **黄 · 只报不动**）。
+
+    ⭐⭐ **判据 = 两个客观信号**（`TAIL-236` Implementation Decisions 3 · ⛔ 别改这个轴）：
+      ① 件内提到的 `TAIL-` 票**全部销号**（口径 = `audit_meta.TICKET_CLOSED`，`T6` 守同一份）；
+      ② 件内**声明的「落地位置」真存在**（形态 = `work/README.md` §四；路径写反引号 ⇒ `T3` 也核）。
+    两条都成立 ⇒ 报黄：「本件结论已落地、却还在过程区 ⇒ **该降档**」＋ **落地位置**
+    （它同时就是「口径主人」）＋ 声明行里 `· 同批改：` 那串（验收 3 要的"读得到"）。
+    ⚠️ **走哪一步（归档仓外 / 沉进 `ops/` / 就地标收口）看 `.codebuddy/work/README.md` §二 里
+    本区那一行** —— 设计件与排查件的去向不同 ⇒ ⛔ 本判据**不替它规定去向**（别处重述 = 第二套口径）。
+    ⛔ **「零机器引用」不是判据** —— 它只是一个**信号**（2026-10-05 实测：一份机器引用 0 的母本
+       被四张票当唯一依据；`docs-governance.md` §三 第 2 问）⇒ 报告里给的是**指路**：
+       引用数去敲 `tools/audit/refs_query.py`（它自己的报告末尾本来就有「三路全 0 的件」那一行）。
+
+    **如实记账：这条判据的边界**（⛔ 别当它覆盖了全部）
+      · **只见"已声明落地位置"的件** —— 没声明行的件它一声不响。这是**有意的**：本批只"给两档
+        **补**判据"，而给存量件补声明行 = 改内容（那是另一件事）；⇒ 它报出来的是**作者自己声明
+        已落地**的那些，⛔ 不是"扫出了全部该降档的件"；
+      · 件内**没提到任何票** ⇒ ①「全部销号」**空真**（仍报）—— 声明行本身就是"已落地"的断言；
+      · 落地位置**核不到** ⇒ **本条不报**（交给 `T3`：它才是"路径必须存在"的主人）
+        —— ⛔ 两条判据各报各的，别在这儿重复报一次；`· 同批改：` 之后那串**同样不参与**这条信号。
+    ⚠️ 为什么是**黄**不是红：降档是**整理动作**，不是错（同 `T12`/`T15`/`T20` 的哲学：
+       可能定错的、或该由人决定的，不该挡合入，但**必须被看见**）。
+    """
+    hits: list[dict] = []
+    states = ticket_states()
+    for zone in DOWNGRADE_ZONES:
+        zdir = REPO_ROOT / ".codebuddy" / "work" / zone
+        if not zdir.is_dir():
+            continue
+        for f in sorted(zdir.glob("*.md")):
+            if f.name.startswith(WORK_HEADER_EXEMPT):
+                continue
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+            head = lines[:WORK_HEAD_LINES]
+            state = next((w for w in DOWNGRADE_STATES
+                          if any(w in l for l in head if STATE_KEY in l)), None)
+            if state is None:
+                continue                      # 不在那两档 ⇒ 不归本条（"在研/草稿"本该留在过程区）
+            decl, decl_no = "", 0
+            for i, l in enumerate(lines, 1):
+                m = DECL_RE.search(l)
+                if m:
+                    decl, decl_no = m.group(1), i
+                    break
+            if not decl:
+                continue                      # 没声明 ⇒ 无从机判（见 docstring 的边界）
+            parts = DECL_SPLIT_RE.split(decl, maxsplit=1)
+            land_txt, also_txt = parts[0], (parts[1] if len(parts) > 1 else "")
+            land = [p.strip().replace("\\", "/") for p in BACKTICK_RE.findall(land_txt)]
+            if not land:
+                continue
+            if any(not (REPO_ROOT / p.rstrip("/")).exists() for p in land):
+                continue                      # 落地位置核不到 ⇒ 交 `T3`（见 docstring 的边界）
+            also = [p.strip().replace("\\", "/") for p in BACKTICK_RE.findall(also_txt)]
+            tags = sorted({t for t in re.findall(r"TAIL-\d+", "\n".join(lines))})
+            open_tags = [t for t in tags if states.get(t) != TICKET_CLOSED]
+            if open_tags:
+                continue                      # 还有票没销号 ⇒ 结论尚未全部落地
+            tag_txt = ("件内票已全销号（%s）" % "、".join(tags)) if tags else "件内没提到票"
+            also_txt2 = ("；声明行还写着同批改：" + "、".join("`%s`" % p for p in also)) if also else ""
+            hits.append(_hit(
+                "T26", f".codebuddy/work/{zone}/{f.name}",
+                f"「{state}」档 · **结论已落地** ⇒ 该降档",
+                f"{tag_txt} ＋ 声明的落地位置真存在（{'、'.join('`%s`' % p for p in land)}）⇒ "
+                f"本件是**已完成的过程件**，却还留在过程区（`work/{zone}/`）——"
+                f"「用完就丢」缺的正是这一条机器眼（`ops/docs-governance.md` §三 那两行"
+                f"自己写着「应有判据、现无」）{also_txt2}",
+                "① 引用面**只是参考、⛔ 不是判据**：敲 `tools/audit/refs_query.py` 看三路计数；"
+                "② 落地位置即**口径主人** ⇒ 改它之前按 `ops/docs-governance.md` §二 核"
+                "「变了要同批改哪几处」；③ **去向**看 `.codebuddy/work/README.md` §二 里本区那一行"
+                "（⛔ 别照抄别的区）；⇒ ⛔ **只报不动**，搬之前要人点头",
+                line=decl_no))
+    return hits
 
 # ------------------------------------------------- T20 保留期与容量（2026-09-28 立）
 
@@ -62,8 +175,13 @@ ARCHIVE_KEEP, ARCHIVE_MAX_MB = 60, 12.0
 ONEOFF_MAX_FILES, ONEOFF_MAX_MB = 200, 5.0
 
 
-def _hit(code: str, rel: str, what: str, why: str, fix: str) -> dict:
-    return {"code": code, "side": "仓", "rel": rel, "line": 1,
+def _hit(code: str, rel: str, what: str, why: str, fix: str, line: int = 1) -> dict:
+    """本件四条黄档共用的命中形状 —— ⛔ 别在别处手拼同样的 dict（`/code-review` 2026-10-05 指出）。
+
+    ⚠️ `line` **只有"能点到具体那一行"的判据才传**（`T26` 点声明行）；其余默认 1 —— 它们的
+       "命中处"是**整件**（白名单外的 md / 超期临时件 / 仓库根多出来的条目），点行号没有意义。
+    """
+    return {"code": code, "side": "仓", "rel": rel, "line": line,
             "what": what, "why": why, "fix": fix, "level": YELLOW, "text": ""}
 
 
@@ -120,14 +238,15 @@ def check_artifacts_and_headers() -> list[dict]:
     #:   ⇒ ⭐ **但票仓不在本条的扫描面里**：票是**工单**（照第二个项目的票面：`What to build` / `Blocked by` /
     #:   `Status` ＋ `- [ ]` 验收 ＋ `## Comments`），**不带"读者/何时读"那类文档文头** ⇒ 票的栏由 `T6` 守
     #:   （⛔ 一条只在一处定义：别在 `T6` 里另写一套文头词表，也别在这儿管票）。
-    for zone in ("10-designs", "30-troubleshooting", "40-decisions"):
+    for zone in HEADER_ZONES:
         zdir = work / zone
         if not zdir.is_dir():
             continue
         for f in sorted(zdir.glob("*.md")):
             if f.name.startswith(WORK_HEADER_EXEMPT):
                 continue
-            head = "\n".join(f.read_text(encoding="utf-8", errors="replace").splitlines()[:15])
+            head = "\n".join(
+                f.read_text(encoding="utf-8", errors="replace").splitlines()[:WORK_HEAD_LINES])
             missing = [k for k in WORK_HEADER_KEYS if k not in head]
             if missing:
                 hits.append(_hit(
@@ -253,13 +372,15 @@ def check_retention() -> list[dict]:
 
 
 __all__ = ["ARCHIVE_KEEP", "ARCHIVE_MAX_MB", "ARTIFACTS_MD_ALLOW", "BACKUP_KEEP",
-           "FACE_KEEP", "FACE_MAX_MB", "ONEOFF_MAX_FILES", "ONEOFF_MAX_MB",
-           "SCRATCH_TTL_DAYS", "WORK_HEADER_KEYS",
-           "check_artifacts_and_headers", "check_retention", "check_scratch_ttl"]
+           "DOWNGRADE_STATES", "FACE_KEEP", "FACE_MAX_MB", "HEADER_ZONES",
+           "ONEOFF_MAX_FILES", "ONEOFF_MAX_MB", "SCRATCH_TTL_DAYS", "STATE_KEY",
+           "WORK_HEADER_KEYS", "WORK_HEAD_LINES",
+           "check_artifacts_and_headers", "check_downgrade_candidates", "check_retention",
+           "check_scratch_ttl"]
 
 
 def main() -> int:
-    """**单跑本模块的检查**（`T14` / `T15` / `T20`）。
+    """**单跑本模块的检查**（`T14` / `T15` / `T20` / `T26`）。
 
     ⚠️⭐ 2026-10-01（`TAIL-204` 入场实测）：本件此前**只有被 `doc_audit` 当模块调用时才有用** ——
     **单跑 0 行输出、`rc` 恒 0**，而入门口令（计划 `§13.6`）的闸门清单里**逐行列着它**
@@ -268,12 +389,13 @@ def main() -> int:
     ⇒ 补本入口（形态照 `audit_meta.main()`：**不另写一套判定**，只把已有检查跑一遍并打出来）。
     """
     print("=" * 78)
-    print(" audit_work 单跑 —— T14/T15/T20"
-          "（⚠️ 三条**都是黄档**：形式问题该被看见、但不挡合入）")
+    print(" audit_work 单跑 —— T14/T15/T20/T26"
+          "（⚠️ **都是黄档**：形式 / 生命周期问题该被看见、但不挡合入）")
     print("=" * 78)
     # ⚠️ 先打抬头再跑检查 —— `check_retention` 会打「（信息）…」行，
     #    抬头若放在它后面，那些信息行会**跑到抬头之上**（看着像别人的输出）。
-    raw = check_scratch_ttl() + check_artifacts_and_headers() + check_retention()
+    raw = (check_scratch_ttl() + check_artifacts_and_headers() + check_retention()
+           + check_downgrade_candidates())
     reds = [h for h in raw if h["level"] == RED]
     yellows = [h for h in raw if h["level"] == YELLOW]
     print(f"必须修 {len(reds)}（本件无红档；出现红即上面有检查降级） · 疑似 {len(yellows)}")
