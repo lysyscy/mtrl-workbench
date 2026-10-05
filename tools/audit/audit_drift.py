@@ -14,7 +14,8 @@ from pathlib import Path
 
 from audit_common import (
     CANCELLED, CANCELLED_DOC_GLOBS, CANCELLED_SCAN_GLOBS, CANCELLED_SKIP_RELS, _is_lenient,
-    HANDBOOK_REL, HARD_EXEMPT, KNOWN_ABSENT, LEDGER_REL, OUTSIDE_ROOTS, PATH_ROOTS, REPO_ROOT,
+    GITIGNORE_REL, HANDBOOK_REL, HARD_EXEMPT, KNOWN_ABSENT, LEDGER_REL, OUTSIDE_ROOTS,
+    PATH_ROOTS, REPO_ROOT,
     RETIRED_TERMS, SOFT_EXEMPT, T3_HINT_WINDOW, T3_OLD_PATH_HINTS, T3_SKIP_PREFIXES,
     TOP_DIRS, YELLOW, RED,
     _ACC_ID_RE, _ACC_RE, _MARKED_PATH_RE, _OUTSIDE_PATH_RE, _PATH_RE, _PLACEHOLDER, _STATUS_RE,
@@ -251,6 +252,71 @@ def check_paths(docs: list) -> list[dict]:
                                  why="在所有候选根下都找不到该文件（含同名匹配）"
                                      if not got else "只找到同名文件、无此相对路径",
                                  fix="核对文件名 / 补上真实路径 / 标注「非本工程」"))
+    return hits
+
+
+# ------------------------------------- T25 `.gitignore` 里的落点路径必须真存在
+#
+# ⭐⭐ 2026-10-05（`TAIL-236` 同批修 ①b/③）：`.gitignore` **不在任何尺子的扫描面内**
+#    ⇒ 里面写下的**落点路径烂掉没人看得见**。
+#    **起因（当天实测）**：我照着 `.gitignore` 注释里的落点去找工作区，结果**在仓库根建了个 `work/`**
+#    —— 那条注释本身没写错，错在**没有任何判据能告诉我"这个地址还行不行"**。
+#
+# ⚠️ **为什么不能靠 `T3`**：`T3` 的 `_PATH_RE` **要求带文件后缀**（`\.ext`）⇒ 而落点绝大多数是
+#    **目录形态**（`.../00-scratch/`）⇒ 对 `T3` **完全隐形**（同"加了半边的守卫"那族）。
+# ⚠️ **范围刻意窄**：只扫 `.gitignore` 一件，⛔ **不扩**成"全仓目录路径都要存在"——
+#    那会把 `frontend/dist/` 这类「已定案、将来才建」的写法一起判红（噪音淹掉信号）。
+# ⚠️ 豁免沿用 `T3` 的**同一份**词表与距离闸（`T3_OLD_PATH_HINTS` / `T3_HINT_WINDOW`）——
+#    行文里**贴着那个路径**说它「已不在仓内」的，不报（⛔ 词表与距离逻辑都只有一处定义）。
+_GITIGNORE_TOKEN_RE = re.compile(r"`([^`\n]+)`")
+#: token 里出现这些字符的一律**不核**：那是**模式 / 占位符 / 命令**，不是落点路径
+#: （`artifacts/*` · `.codebuddy/*` · `%TEMP%` · `<交付面根>/…` · `git check-ignore -v` …）
+_GITIGNORE_SKIP_CHARS = "*?[]{}<>%"
+
+
+def check_gitignore_drops() -> list[dict]:
+    """`T25` · **`.gitignore` 里写下的仓库内落点路径必须真实存在** ⇒ 红。
+
+    **认法**（刻意窄）：反引号 token × 含 `/` × 以 `TOP_DIRS` 里的前缀开头 × 不含模式字符
+    ⇒ 到仓根下**真核存在**。其余（裸文件名 / 相对子目录 / 带通配符 / 命令）**一概不看**。
+
+    ⚠️ **如实记账：这条判据的边界**（2026-10-05 `/code-review` 两轴各自点到，别当它覆盖了全部）：
+      · **不核**裸文件名（`face`）、**不核**不以上表前缀开头的相对子目录（`00-scratch/`）、
+        **不核**带通配符的写法（`artifacts/*`）⇒ 这三类里的死指针它照样看不见；
+      · 放行**按制度会消失 / 本机才有的**那几段（复用 `T3_SKIP_PREFIXES`：`backups/` · `work/00-scratch/`）
+        —— ⚠️ 否则**换一台机器**（这四处 gitignore 目录还没被建出来）就会当场假红，正是 `T3` 那条
+        「点名保留期目录」的同一个理由；
+      · 豁免沿用 `T3` 的距离闸（±`T3_HINT_WINDOW`），窗口**偏紧** ⇒ 提示词写在行首/远端时可能误报
+        （同 `T3`，⛔ 两处共用一份口径，别单独调）。
+    ⛔ **别再放宽范围**：一旦扩成"全仓目录路径都要存在"，`frontend/dist/` 这类「已定案、将来才建」的
+       写法会一起判红 ⇒ 噪音淹掉信号（本仓老教训）。
+    """
+    gi = REPO_ROOT / GITIGNORE_REL
+    if not gi.exists():
+        return []
+    hits: list[dict] = []
+    for i, line in enumerate(gi.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        for m in _GITIGNORE_TOKEN_RE.finditer(line):
+            tok = m.group(1).strip()
+            if any(ch in tok for ch in _GITIGNORE_SKIP_CHARS) or " " in tok:
+                continue
+            rel = tok.replace("\\", "/")
+            if "/" not in rel or not any(rel.startswith(d) for d in TOP_DIRS):
+                continue                     # 不是"仓库内相对路径"的写法 ⇒ 不归本条管
+            if any(rel.startswith(x) for x in T3_SKIP_PREFIXES):
+                continue                     # 按制度会消失/本机才有的那几段 ⇒ 同 `T3` 放行（见 docstring）
+            if _hint_applies(line, tok):
+                continue                     # 行文贴着它说"已不在仓内" ⇒ 不是幽灵
+            if (REPO_ROOT / rel.rstrip("/")).exists():
+                continue
+            hits.append({"code": "T25", "side": "仓", "rel": ".gitignore", "line": i,
+                         "what": tok,
+                         "why": "`.gitignore` 写着这个落点，而盘上**没有** ⇒ 它是**死指针**："
+                                "照它去找东西的人会扑空（2026-10-05 实测过：正是这类没被核过的落点"
+                                "把我引到一个**不存在的目录**上）",
+                         "fix": "改成真实路径；确认已废弃 ⇒ 在行文里注明它**已不在仓内**"
+                                "（`T25` 认 `T3` 那份豁免词表），或整条删掉",
+                         "level": RED, "text": line.strip()})
     return hits
 
 
@@ -573,11 +639,12 @@ def main(argv: list[str] | None = None) -> int:
     cases = set(ar.load_json(ar.resolve_baseline(None)).get("cases") or {})
     docs = iter_docs()
     raw = (check_acc_ids(cases, docs) + check_terms(docs) + check_paths(docs) + check_section_refs(docs)
-           + check_status_line() + check_count_anchors() + check_cancelled())
+           + check_status_line() + check_count_anchors() + check_cancelled()
+           + check_gitignore_drops())
     reds = [h for h in raw if h["level"] == RED]
     yellows = [h for h in raw if h["level"] == YELLOW]
     print("=" * 78)
-    print(" audit_drift 单跑 —— T1/T2/T3/T19/T4/T4' 计数锚点/T8"
+    print(" audit_drift 单跑 —— T1/T2/T3/T19/T25/T4/T4' 计数锚点/T8"
           "（⚠️ T5–T7/T9–T18 分别在 `audit_meta` / `cover_gap` / `audit_work`）")
     print("=" * 78)
     print(f"必须修 {len(reds)} · 疑似 {len(yellows)}")

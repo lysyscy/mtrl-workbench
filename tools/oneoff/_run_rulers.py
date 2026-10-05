@@ -33,6 +33,9 @@ CMDS: list[tuple[str, list[str]]] = [
     ("tools/audit/doc_audit.py", ["--ui"]),
     ("tools/audit/audit_drift.py", []),
     ("tools/audit/audit_meta.py", []),
+    # ⭐ 2026-10-05（`/retro` 候选④）：`audit_work` 此前**不在闸门里** ⇒ 它的输出没人看
+    #   （`T14`/`T15`/`T20` 三条黄档 · 单跑过是 0/0）⇒ 「工具上了没人跑」的第一例。
+    ("tools/audit/audit_work.py", []),
     ("tools/audit/syntax_audit.py", []),
     ("tools/audit/ui_parity.py", []),
     ("tools/audit/wiring_audit.py", []),

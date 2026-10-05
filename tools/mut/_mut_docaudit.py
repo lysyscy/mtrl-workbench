@@ -1,4 +1,4 @@
-"""**反向灵敏度**：证明「**2026-09-19 扩面后的 `T4`**」与「`T6` 的新落点检查」**真有区分力**。
+"""**反向灵敏度**：证明 `doc_audit` 的 `T1`–`T19` ＋ **`T24`/`T25`** ＋ `T4` 计数锚点（含 `T5`/`T10`/`T12` 等黄档）**真有区分力**。
 
 背景（为什么非做不可）：
 - `T4` 原实现只看「当前版本」行**后 8 行**里的**第一处**四态数字 ⇒ 实测漏过一次真漂移
@@ -19,7 +19,7 @@
    —— 治"搬目录后常量失效 ⇒ 检查静默扫空集"，本仓最贵的假绿）·
    `T19`（**文档指针（节号）守卫**：`X.md` §N 必须真有那一节 —— 立起来的当天就抓到 1 处真引用错误）。
    ⇒ 至此 `doc_audit` 的**红档**（`T1`–`T4`/`T6`/`T8`/`T9`/`T11`/`T16`/`T17`/`T18`/`T19`）都有反向灵敏度
-   ⇒ 本件共 **23 条**（`M1`–`M23`；`T22` 的自证在 `tools/mut/_mut_injectsplice.py`，⛔ 不在本件）。
+   ⇒ 本件共 **30 条**（`M1`–`M30`；`T22` 的自证在 `tools/mut/_mut_injectsplice.py`，⛔ 不在本件）。
 
 ⭐⭐⭐ 2026-10-05 **第五批（`M21`–`M23` · `TAIL-235` 丁-1）**：`T3` 的**三个新分支** ——
    仓外标记不再被洗掉 · 仓外白名单真核存在 · 治理区（`.codebuddy/`）纳入扫描面。
@@ -27,6 +27,18 @@
    看着像"治理区本来就干净" —— 真因是 **`_PATH_RE` 的首字符类不含 `.`** ⇒ 以点开头的路径整条不匹配。
    那就是**加了半边的守卫**：判据登记在册、实际一行没扫，而它看上去是绿的。
    ⇒ 本批三条**一起**把"常量 ＋ 正则"这对**配对**钉住。
+
+⭐⭐⭐ 2026-10-05 **第六批（`M27`–`M30` · `TAIL-236` 同批修 ①b/③）**：两场真事故的机器眼 ——
+   · `M27` = `T24`（**仓库根白名单**）：根上造一个白名单外的**目录** ⇒ 必须报。
+     起因：照着 `.gitignore` 注释里的旧落点**把 `work/` 建在了仓库根**，而
+     `T3` / `T12` / `T14` **四层守卫没一层拦**（那片地方**不在任何扫描面内**）。
+   · `M28` = `T25`（**`.gitignore` 里的落点必须真存在**）：往 `.gitignore` 追加一条含
+     核不到落点的注释 ⇒ 必须报。⚠️ `T3` **拦不住**这一类（它只认**带后缀**的引用，而落点多是**目录**）。
+   · `M29` = `T10` 的**字节档**：把注入档补到 > 14,400 B ⇒ 必须报。
+     ⚠️ 它同时钉住 **`_pad_bytes` 的两条约束**（填充行必须短、且不带标点 —— 否则惊动 `T21`/`T22`，
+     报的就不是 `T10` 了）。
+   · `M30` = **承重自证**：`work/xxx.md` 这类引用**必须被逼出来** ⇒ 证明"把 `work/` 加进
+     `TOP_DIRS`"这半边不是装饰（同 `M23`：**判据与靶必须配对**，常量加了而扫描面没跟 = 等于没加）。
 
 ⭐⭐ 2026-09-29 **第三批（`M15`）**：`T9` 当天长出**第二半** —— **注入档里别复述守卫的阈值**（`TAIL-59` 的
    量测逼出来的：`MEMORY.md` 写「`T13`（行数预算 1700）」而真源已 1800，**没有任何尺子看得见**）。
@@ -137,10 +149,30 @@ def _pad_lines(src: bytes, target: int) -> bytes:
     return src + (b"\n" * need if src.endswith(b"\n") else b"\n" * (need + 1))
 
 
+def _pad_bytes(src: bytes, target: int) -> bytes:
+    """追加**刚好越过** `target` 字节的填充行 —— `M29`（`T10` 的**字节档**）用。
+
+    ⚠️ 填充**只能是短行、且不带标点**（本次实测的两条约束）：
+      · 单行 > 800 字会惊动 `T21`（字墙）⇒ 那报的就不是 `T10` 了；
+      · 行尾标点紧跟列表符会惊动 `T22`（注入档粘连）⇒ 同上。
+    ⚠️ 追加的**行数**必须仍在该档的行预算内（`MEMORY.md` 预算 200 行 ⇒ 这里只加几十行）。
+    """
+    need = target - len(src)
+    assert need > 0, f"目标 {target} 字节 ≤ 现值 {len(src)} 字节 ⇒ 本件需重定靶"
+    filler = b"mut-byte-pad\n"
+    return src + filler * (need // len(filler) + 1)
+
+
 # --------------------------------------------------- 追加式变异（M4–M8 · 2026-09-24 扩面之一）
 #
 #: `ops/*.md` ∈ `SCAN_GLOBS` ⇒ `ops/阈值表.md` 在 `T1/T2/T3` 的扫描面内（且它不是留痕档 ⇒ 命中即红）
 THRESHOLD = ROOT / "ops" / "阈值表.md"
+#: ⭐ `T25`（2026-10-05 立）靶：**仓根 `.gitignore`** —— 往里追加一条含「核不到的落点」的注释
+#:   （用完**按 bytes 复原**）。⚠️ 它不在 `doc_audit` 的扫描面里 ⇒ 只有 `T25` 看得见它。
+GITIGNORE = ROOT / ".gitignore"
+#: ⭐ `T24`（2026-10-05 立）靶：在**仓库根**造一个白名单外的目录（用完 `rmdir`）——
+#:   复现的就是当天那场事故的形状（"根上多出一块没人看的地方"）。
+ROOT_ZONE = ROOT / "_mut_root_zone"
 #: `T5` 靶：挑一件**离 400 线还有余量**的件 ⇒ 补到 401 行即越线。
 #:   ⚠️ 2026-10-01 **换靶**（`TAIL-204` 入场实测）：原靶 `mod01_projects/router.py` **自己长到了 401 行**
 #:      ⇒ 它的「401 行」那条黄**基线里就有** ⇒ 本件开头那句"基线已含该判据 ⇒ 判据无效，先重定靶"
@@ -258,7 +290,12 @@ MUTS_RED2: list[dict] = [
     #   2026-10-05 实测过那个失效：`_PATH_RE` 首字符限 `[A-Za-z0-9_]` ⇒ 加中文前缀整条不匹配
     #   ⇒ 而那 3 条的 `ops/` **本来在 `TOP_DIRS` 内**（`T3` 该照到）⇒ **保护被消掉了、闸门还全绿**。
     {"desc": "M21 `T3` **仓外标记不再是豁免**（加 `〔已归档〕` 前缀 ⇒ 仍必须报）", "mode": "needle",
-     "needle": ("[T3]", "带仓外标记的引用核不到"), "path": THRESHOLD,
+     # ⚠️ 2026-10-05（`TAIL-236` 同批修 轮）：判据串**必须再窄一格**（加上注入的那个坏路径名）。
+     #   本条原先只判 `("[T3]", 带仓外标记的引用核不到)` ⇒ `TAIL-235` 票面第 24 行那句**探针字面**
+     #   在基线里就报了同一条消息 ⇒ 本件开头的"基线不许含该判据"当场拒跑**整支**
+     #   （＝ 本件的 `M27`–`M30` 也跟着没法验）。⇒ 加 `nope_ghost` 把判据钉到**注入的那一处**。
+     #   ⭐ 这正是本件 `M7` 那条注释早就写过的纪律：**黄/needle 判据一律写元组、且够窄**。
+     "needle": ("[T3]", "带仓外标记的引用核不到", "nope_ghost"), "path": THRESHOLD,
      "frag": lambda src: _fit(_b("\n\n\n留档指针：`〔已归档〕ops/nope_ghost.py`。\n\n\n"), src)},
     # ⚠️ ② 仓外白名单：文档里写**仓外绝对路径** ⇒ `T3` 到那个根下**真核存在**
     #   （此前这类引用对所有尺子隐形 —— 不是因为合法，而是因为路径含中文、正则压根不匹配）。
@@ -290,6 +327,24 @@ MUTS_RED2: list[dict] = [
      "old_new": (_b('    "旧路径", "已不存在", "已退场", "已搬走", "已移出", "不在仓内",\n'),
                  _b('    "旧路径", "已不存在", "已退场", "已搬走", "已移出", "不在仓内", "",\n')),
      "all": False},
+    # ⭐⭐⭐ 2026-10-05（`TAIL-236` 同批修 ①b/③）：**三条新判据**的反向灵敏度（`M27`–`M29`）
+    #   ＋ 一条**承重自证**（`M30`）。背景是当天两场真事故：
+    #   ① 照着 `.gitignore` 注释里的旧落点，**把 `work/` 建在了仓库根** —— `T3`/`T12`/`T14`
+    #      四层守卫**没一层拦**（那片地方不在任何扫描面内）；
+    #   ② 注入档**字节超顶**却被宿主**静默截断**，而只查行数的 `T10` **看不见它**。
+    #   `M30` 钉的是另一件事：**把 `work/` 加进 `TOP_DIRS` 这半边是不是真承重**
+    #   （同 `M23`：判据与靶必须配对 —— 常量加了、扫描面没跟，就等于没加）。
+    {"desc": "M27 `T24` 仓库根多出白名单外的**目录**（`_mut_root_zone/`）", "mode": "red",
+     "also": ("[T24]", "_mut_root_zone"), "path": ROOT_ZONE, "mkdir": "_mut_root_zone"},
+    {"desc": "M28 `T25` `.gitignore` 里写着**核不到的落点路径**", "mode": "red",
+     "also": ("[T25]", "nope_zone"), "path": GITIGNORE,
+     "frag": lambda src: _fit(_b("\n# 落点：`.codebuddy/work/nope_zone/`（变异注入 · 用完即复原）\n"), src)},
+    {"desc": "M29 `T10` **字节档**（注入档补到 > 14400 B ⇒ 必须报）", "mode": "needle",
+     "needle": ("MEMORY.md", "字节（预算 14400）"), "path": MEM,
+     "frag": lambda src: _pad_bytes(src, 14401)},
+    {"desc": "M30 `T3` 的 `work/` 前缀**承重**（`work/xxx.md` 这类引用必须被逼出来）", "mode": "red",
+     "also": ("[T3]", "work/nope_ghost.md"), "path": THRESHOLD,
+     "frag": lambda src: _fit(_b("\n\n\n另见 `work/nope_ghost.md`。\n\n\n"), src)},
 ]
 
 
@@ -329,7 +384,9 @@ def _apply(c: dict) -> None:
     """把一条变异**落地**（写成"坏"的状态）。"""
     p = c["path"]
     src = p.read_bytes() if p.exists() else b""     # ⚠️ `create` 式的靶**初始不存在**
-    if "create" in c:
+    if "mkdir" in c:
+        p.mkdir()                                   # `M27`：在根上造一个白名单外的目录
+    elif "create" in c:
         p.write_text(c["create"], encoding="utf-8", newline="")
     elif "rename_away" in c:
         p.rename(c["rename_away"])
@@ -351,7 +408,10 @@ def _apply(c: dict) -> None:
 
 def _restore(c: dict, src: bytes) -> None:
     p = c["path"]
-    if "create" in c:
+    if "mkdir" in c:
+        p.rmdir()
+        assert not p.exists(), "mkdir 式靶复原后目录仍在"
+    elif "create" in c:
         p.unlink(missing_ok=True)
     elif "rename_away" in c:
         c["rename_away"].rename(p)
@@ -380,10 +440,13 @@ def main() -> int:
         if "create" in c and c["path"].exists():
             print(f"  ⚠️ 发现上次中断的残留靶：{c['path'].name} ⇒ 先清掉（本件跑之前它不该存在）")
             c["path"].unlink()
+        if "mkdir" in c and c["path"].exists():
+            print(f"  ⚠️ 发现上次中断的残留靶目录：{c['path'].name} ⇒ 先删掉（本件跑之前它不该存在）")
+            c["path"].rmdir()
 
     #: ⚠️ 有的靶**初始不存在**（如 `M11` 那个临时报告 —— 它要"从无到有"地造出来）⇒ 只记**在位的**
     before = {c["path"]: c["path"].read_bytes() for c in cases if c["path"].exists()}
-    created = [c["path"] for c in cases if "create" in c]
+    created = [c["path"] for c in cases if "create" in c or "mkdir" in c]
 
     base_red, base_out = run_doc_audit()
     print(f"基线（未改坏）doc_audit 必须修 {base_red}（应为 0）· 输出 {len(base_out)} 字符")

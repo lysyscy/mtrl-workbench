@@ -9,11 +9,11 @@
 | **`audit/`** | **尺子**（⭐ **清单与条数的唯一出口 = `tools/oneoff/_run_rulers.py`，⛔ 别在此抄条数**）：`doc_audit` / `audit_drift` / `audit_meta` / `syntax_audit` / `ui_parity` / `wiring_audit` / `chain_audit` / `asset_audit` / `claim_audit` / `cover_gap` / `prg_form_audit` / `shell_verify` / `sticky_probe` ＋ 基础设施（`shell_source` ＝ 壳**读取**唯一出口 · ⭐ `shell_api` ＝ 壳**语义口径**：按名取页 / 函数 / 动作 / 常量表 · ⭐ `jslex` ＝ 认结构的小扫描器（跳字符串/注释/正则 · 配平），2026-10-03 `TAIL-219` 批 1／2b 立）＋ `acc_report`（四态报表）＋ `mut_cover`（变异覆盖台账生成器）＋ ⭐ `refs_query`（**只读**查询「某件还有谁在引用」＝ 三路计数 ＋ 逐路分布 ＋ 自报「不动的 N 件」；`--all` 全量盘点 · `--selftest` 连跑两遍验字节级 no-op · 口径唯一真源 = `audit_common.LIVE_MACHINE_GLOBS`，由 `T23` 钉住） | `backend\.venv\Scripts\python.exe tools\audit\<件>.py` |
 | **`mut/`** | **反向灵敏度**（`_mut_*.py` —— ⚠️ 件数**别写死**（会涨），跑 `audit/mut_cover.py` 看现值）：把实现**故意改坏** ⇒ 对应判据必须红 ⇒ **逐字节复原**。台账 = `artifacts/变异覆盖台账.md`（生成物，⛔ 不手改）。⭐⭐ **2026-10-01（`TAIL-205`）起：守尺子/守结构的那几支接进了收工闸门**（`tools/oneoff/_run_muts.py` 的 `KEY` 集 —— ⚠️ **条数看该件输出，⛔ 别在此抄**；靶是尺子/结构自己：`doc_audit` T1–T19 / T4 锚点 / `claim` / 四检 / T12 / T14T15 / T20 / 真机段注册表 / 壳语义口径 ⇒ 它们烂掉 = 一整片守卫静默失效）；⚠️ 起因是**一天抓到 4 例"靶烂掉/假绿"**（`tools/mut/**` 此前**不在任何闸门里**） | 逐个跑；⭐ **关键集**：`tools/oneoff/_run_muts.py`（~33 秒 · 已随 `_run_rulers.py` 自动跑）；全量按需：`… --all`（很慢）；台账：`tools/audit/mut_cover.py [--check]` |
 | **`probe/`** | **真机 / 端到端**（`_shell_smoke` ＋ `_shell_*` 分段 · `_e2e_*` 真库往返 · `i8_*` · render/print smoke · `_audit_face`） | 单独跑（需服务在跑 ＋ Playwright） |
-| **`oneoff/`** | **一次性 / 留痕**（`_apply_*` 机械改写 · `_doc_*` 文档回写 · `_acc_add_*` 判据登记 · `_fix_*`）＋ ⚠️ **常驻小工具**（`_run_rulers.py` 收工一把跑 · `_ps_bom.py` / `_ps_parse_check.ps1` · `_list_tails.py` · `_page_measure.py` · `_prepush_sensitive.py` · `_oneoff_measure.py`）—— ⛔ 不回读、不进收尾闸门；⭐ **保留与处置口径见文末那一段** | 按需（`_run_rulers.py` = 收工必跑） |
+| **`oneoff/`** | **一次性 / 留痕**（`_apply_*` 机械改写 · `_doc_*` 文档回写 · `_acc_add_*` 判据登记 · `_fix_*`）＋ ⚠️ **常驻小工具**（`_run_rulers.py` 收工一把跑 · `_ps_bom.py` / `_ps_parse_check.ps1` · `_list_tails.py` · `_page_measure.py` · `_prepush_sensitive.py` · `_oneoff_measure.py` · ⭐ `_doc_append.py`（**文档追加器**：往活文档追加一段且**接上去不出错** ＝ 幂等守卫 ＋ 行尾归一 ＋ 收尾断言；⚠️ 编辑工具在长 markdown 上不稳定 ⇒ **片段件仍要分段写**，本件只管「接上去」这一步）—— ⛔ 不回读、不进收尾闸门；⭐ **保留与处置口径见文末那一段** | 按需（`_run_rulers.py` = 收工必跑） |
 
 ## 纪律（⛔ 别破坏）
 
-1. **新增尺子 ⇒ 放 `audit/`**，并在 `doc_audit` 的 T 表、`ops/阈值表.md` 登记；
+1. **新增尺子 ⇒ 放 `audit/`**，并在 `doc_audit` 的 T 表、`ops/阈值表.md` 登记；⭐ **新增一条判据（`T*`）⇒ 同批核它接进了 `doc_audit`**（`T23` 半边④ 是范例：**拆掉接线就报红** ⇒ 忘了接线的判据自己会喊）；
 2. **新增变异 ⇒ 放 `mut/`**，docstring **第一段写「守什么」**（`mut_cover` 台账抓它），并在重跑 `mut_cover` 后把表 B 里对应条目删掉；
 3. **⛔ 全站只许一处 `wb.save(`**（`report_export/save.py`，`tests/test_export_save.py` 静态扫描守着）；
 4. 搬动任何件 ⇒ **同批改锚点路径**（`_mut_*.py` 按路径定位，搬了不改 = **静默失效**，`TAIL-57` 台账的"⚠️找不到"列会亮）。

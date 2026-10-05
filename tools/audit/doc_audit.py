@@ -20,7 +20,7 @@
 | `T9` | ⭐ **纪律册卫生（两半）** —— ① **口径出处标记**：`MEMORY.md` §八 每条必须带 `[用户]`/`[交付面]`/`[助手自定]`；② ⭐ **注入档里别复述守卫的阈值**（`T13`（行数预算 1700）那种 ⇒ **规则留、数字去**） | `.codebuddy/memory/MEMORY.md` |
 | `T10` | ⭐ **文档读预算** —— 每会话**注入/必读**档超预算（黄 + 登记；治「太长读不完 ⇒ 只 grep ⇒ 没搜到的就丢了」） | `ops/阈值表.md` ＋ `audit_meta.DOC_BUDGETS` |
 | `T11` | ⭐ **建议类报告必须带「待办登记回执」** —— `artifacts/` 里的审计/提案/建议**不许只活在报告里** | `artifacts/*.md` ↔ 计划 §15 |
-| `T12` | ⭐ **文档分层与命名约定** —— `plans/` 只许两份活文档（其余 `归档-` 打头）· `memory/` 日志必须进 `journal/` · 根只许 `README.md` | 根 `README.md` 的四层表 ＋ 本件三张白名单 |
+| `T12` | ⭐ **文档分层与命名约定** —— `plans/` 只许两份活文档（其余 `归档-` 打头）· `memory/` 日志必须进 `journal/` · 根上的 md 只许 `ROOT_MD_ALLOW` 那两件（⚠️ 根上的**目录与非 md 文件**归 `T24`） | 根 `README.md` 的四层表 ＋ 本件三张白名单 |
 | `T13` | ⭐ **主文档过程回潮** —— 计划主文档行数超预算（1700）· 标题出现过程词（逐批/逐次/收官记录）⇒ 黄：该块**该下沉归档了**（`§13.1`「完成的就扔出去」的机器守） | `.codebuddy/plans/开发计划-主文档.md` |
 | `T14` | ⭐ **scratch 超期 / 落点合规** —— `work/00-scratch/` 超 14 天未升档未删 · `tools/` 根与 `logs/` 再现散件 ⇒ 黄（`audit_work.py`） | 文件系统 mtime |
 | `T15` | ⭐ **产物白名单 ＋ 工作记录元信息** —— `artifacts/` 只许工具生成物 md · `work/` **五区**文档（含票仓）必须带文头四行（读者/回答什么/何时读/状态）⇒ 黄 | `audit_work.py` 白名单 |
@@ -32,6 +32,9 @@
 | `T22` | ⭐ **注入档「两行粘成一行」** —— 注入档三件里「**行尾标点后紧跟列表符/引用符**」⇒ 黄（治 `replace_in_file` 锚点末尾多写一个换行 ⇒ 下一行的列表符被吞进上一行；当天实测 `MEMORY.md` 93 → 92 行，而**闸门 rc=0 · pytest 全绿 · 无尺子看得见**）。⚠️ 固定语法模式 ⇒ **该做检查、不该写规则**（写进纪律没人执行） | `audit_meta.INJECT_DOCS` / `SPLICE_RE` ＋ `ops/阈值表.md` |
 | `T21` | ⭐ **文档「字墙」**（单行 >800 字）—— 治"行数在预算内、**单行上万字**"那一类：`T10`/`T13` 只看得见总行数。⚠️ 带**只许变短**的老账基线（`LINE_WALL_BASELINE`）：超基线 ⇒ 黄「又长回来了」· 低于基线 ⇒ 黄「基线该下调」⇒ 黄 | `ops/阈值表.md` ＋ `audit_meta.LINE_WALL_CHARS` / `LINE_WALL_BASELINE` |
 | `T23` | ⭐ **活机器口径六路齐全**（`TAIL-236` 第 2 批）—— 判「某件还有谁在引用」时**该扫的那几处**（含运维脚本 · 规则档 · 壳的脚本与页面）**少一路 ⇒ 红**；某条 glob **空命中 ⇒ 红**；查询命令的**代码**里又抄一份口径 ⇒ 黄。⭐ 治的是当天真发生的翻车：第一版口径漏两路 ⇒ 差点搬走**被引用**的设计件 | `audit_common.LIVE_MACHINE_GLOBS` ＋ `audit_meta.LIVE_MACHINE_REQUIRED` ＋ `ops/阈值表.md` |
+
+| `T24` | ⭐ **仓库根白名单**（2026-10-05 `TAIL-236` 同批修 ①b）—— 根上的**目录与非 md 文件**必须落在「常驻骨架（`ROOT_ALLOW`）∪ `.gitignore` 声明过的暂存件」里，多出来的 ⇒ **红**。⭐ 起因：根 `work/` 建起来后 `T3`/`T12`/`T14` **四层守卫没一层拦**（那片地方**不在任何扫描面内**）。⚠️ 根上的 md 归 `T12`（本行**不**重复管） | `audit_common.ROOT_ALLOW` ＋ 仓根 `.gitignore` |
+| `T25` | ⭐ **`.gitignore` 里的落点路径必须真存在**（2026-10-05 `TAIL-236` 同批修 ①b/③）—— `.gitignore` 反引号里的**仓库内目录落点**（含 `/` · 以 `TOP_DIRS` 前缀开头 · 不含模式字符）盘上核不到 ⇒ **红**。⭐ 治的是"照一份**没被核过**的落点找路 ⇒ 找到不存在的目录"（当天真实事故）；⚠️ `T3` 拦不住这一类（它只认**带后缀**的引用，而落点多是**目录**） | 仓根 `.gitignore` ＋ `audit_drift.check_gitignore_drops`（豁免沿用 `T3_OLD_PATH_HINTS`） |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
@@ -56,8 +59,8 @@
 ⚠️ 本工具**只读**（`--block` 也只打印、不写文件）。
 
 **本文件是薄壳** —— 检查逻辑已拆到同目录三件（`T5` 逼的，本文件曾 597 行）：
-`audit_common.py`（常量 ＋ 扫描基础设施）· `audit_drift.py`（`T1`–`T4`）·
-`audit_meta.py`（`T5`/`T6` 台账与行数 · `T9` 纪律出处 · `T10` 读预算 · `T11` 报告回执 · `T12` 分层约定 · `T21` 字墙 · `T22` 注入档粘连 · `T23` 活机器口径）。
+`audit_common.py`（常量 ＋ 扫描基础设施）· `audit_drift.py`（`T1`–`T4` · `T25` `.gitignore` 落点）·
+`audit_meta.py`（`T5`/`T6` 台账与行数 · `T9` 纪律出处 · `T10` 读预算 · `T11` 报告回执 · `T12` 分层约定 · `T21` 字墙 · `T22` 注入档粘连 · `T23` 活机器口径 · `T24` 仓库根白名单）。
 """
 
 from __future__ import annotations
@@ -76,11 +79,12 @@ from audit_common import (                                        # noqa: E402
     LIVE_MACHINE_GLOBS, RED, REPO_ROOT, SKIP, YELLOW, delivery_root, iter_docs,
 )
 from audit_drift import (                                         # noqa: E402
-    check_acc_ids, check_cancelled, check_count_anchors, check_paths, check_section_refs,
-    check_status_line, check_terms,
+    check_acc_ids, check_cancelled, check_count_anchors, check_gitignore_drops, check_paths,
+    check_section_refs, check_status_line, check_terms,
 )
 from audit_meta import (                                          # noqa: E402
-    HARD_LIMIT, LINE_LIMIT, check_doc_budgets, check_doc_layout, check_file_sizes,
+    HARD_LIMIT, LINE_LIMIT, check_doc_budgets, check_doc_layout, check_drop_zones,
+    check_file_sizes,
     check_gate_liveness, check_guard_constants, check_line_splices, check_line_walls,
     check_live_machine, check_plan_process,
     check_report_receipts, check_rule_origins, check_rule_restatements, check_tail_ledger,
@@ -216,6 +220,11 @@ def main() -> int:
     #   而「`X.md` §N」这种**指到某一节**的引用烂了 **没有任何尺子看得见**（实证：`MEMORY §十七`
     #   的「已下沉 `docs/runbook.md` §七」是**死指针** —— runbook 止于 §六，差点让那六条坑静默消失）。
     raw = check_acc_ids(cases, docs) + check_terms(docs) + check_paths(docs) + check_section_refs(docs)
+    # `T25`（2026-10-05 立 · `TAIL-236` 同批修 ①b/③）：⭐ **`.gitignore` 里的落点路径必须真存在** ——
+    #   `.gitignore` 此前**不在任何扫描面** ⇒ 里面写的落点烂了没人看得见（当天正是"照它找路
+    #   找进了不存在的目录"）。⚠️ `T3` 拦不住这一类：它只认**带文件后缀**的引用，而落点多是
+    #   **目录形态**（`.../00-scratch/`）⇒ 对 `T3` 完全隐形。
+    raw += check_gitignore_drops()
     raw += check_status_line()
     # `T4` **追加**（2026-09-24 立 · 用户「按推荐」）：**计数锚点**（黄）—— 手抄的、有机器真值的计数
     #   （尾巴计数 / `§22.1` 尺子把数 / `U5` 登记条目数）必须等于真值。⭐ 起因：一天内**两次**实测到
@@ -243,6 +252,13 @@ def main() -> int:
     #   根只许 `README.md`）—— ⭐ 把"目录约定"从**口头纪律**变成**机器守**（用户 2026-09-21 要求
     #   「尽量减少…需要我停下来检查文档」）。
     raw += check_doc_layout()
+    # `T24`（2026-10-05 立 · `TAIL-236` 同批修 ①b）：⭐ **仓库根白名单** —— `T12` 只管**根上的 md**，
+    #   ⇒ **目录与非 md 文件**落在根上**没有任何尺子看得见**。2026-10-05 实测：照 `.gitignore`
+    #   注释里的旧落点在仓库根建了 `work/`，而 `T3`/`T12`/`T14` 四层守卫**没一层拦**
+    #   （那片地方从此不在任何扫描面内）。⛔ 根上的 `.md` 仍归 `T12`（**`.mdc` 不跳**，见该函数 docstring）。
+    #   ⭐ **"接线掉了"也有牙**：本条一旦被从这里拆掉，`_mut_docaudit` 的 `M27`/`M28`（连同 `M29`/`M30`）
+    #   当场不命中 ⇒ 收工闸门里 `_run_muts` 报红（＝ `tools/README.md` 纪律 1 要的那条自检）。
+    raw += check_drop_zones()
     # `T13`（2026-09-22 立 · 用户问「为啥还是会有过期现象？是不是把太多过程塞到开发计划里了？」）：
     #   **主文档过程回潮守卫** —— 行数超预算 ＋ 标题出现过程词 ⇒ 黄（该下沉归档了）。
     #   ⭐ 治的是"§13.1 早有『完成的就扔出去』的裁定，却只有触发点、没有机器守"。
@@ -365,6 +381,16 @@ def main() -> int:
         print("活机器口径 `T23` 结论：%d 条 glob · 六路齐全 ✅"
               "（少一路 / 空命中 / 接线掉 ⇒ 报红；反向灵敏度 `_mut_livemachine` 每轮随闸门跑）"
               % len(LIVE_MACHINE_GLOBS))
+        print()
+    # ⭐ `T24`/`T25` **同样"常态报一句"**（与 `T23` 同一条理由）：落点守卫是"没消息就是好消息"型
+    #   —— 一声不响时，读者分不清"它判过且干净"与"它压根没跑"（本仓"判据存在 ≠ 被看见"那族）。
+    if not any(h["code"] == "T24" for h in raw):
+        print("仓库根落点 `T24` 结论：根上条目全部登记在册 ✅"
+              "（`ROOT_ALLOW` 常驻 ∪ `.gitignore` 暂存；多出来的即红 · 反向灵敏度 `M27`）")
+        print()
+    if not any(h["code"] == "T25" for h in raw):
+        print("`.gitignore` 落点 `T25` 结论：里面写的仓库内路径全部真存在 ✅"
+              "（核不到即红 · 反向灵敏度 `M28`）")
         print()
     if args.ui:
         print("交付面四检")

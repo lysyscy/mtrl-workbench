@@ -31,7 +31,9 @@ MUT = ROOT / "tools" / "mut"
 
 #: ⭐ 关键集：靶是**尺子自身 / 结构守卫 / 文档面**的那几支（⇒ 它们烂掉 = 一整片守卫静默失效）
 KEY: tuple[tuple[str, str], ...] = (
-    ("_mut_docaudit.py", "doc_audit 的 T1–T19 ＋ T4 计数锚点（本件 M1–M23）"),
+    # ⚠️ 说明里**不抄条数**（2026-10-05 `/code-review` 指出：那与本件 docstring 的"共 N 条"是
+    #    同一件事两处写 —— 而 docstring 自己就写着"条数看本件输出、⛔ 别在别处抄"）。
+    ("_mut_docaudit.py", "doc_audit 的 T1–T19 ＋ T24/T25 ＋ T4 计数锚点（条数看本件输出）"),
     ("_mut_injectsplice.py", "T22 注入档「两行粘成一行」（+ 正常排版不许误伤）"),
     ("_mut_linewalls.py", "T21 文档「字墙」（单行 >800 字 · 基线只许变短）"),
     ("_mut_countanchors.py", "T4 的四类计数锚点"),

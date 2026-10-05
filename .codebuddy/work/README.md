@@ -17,7 +17,7 @@
 | 当天过程叙事 | 活文档正文 | `journal/当天.md`（append-only） |
 | 已完工单元的大段过程 | 继续占着计划正文 | ⭐ **归档正文落仓外** `D:\dev\.归档-mtrl\`（2026-10-05 起）＋ 原处指针；仓内 `plans/archive/` **只放索引**（`归档-留痕索引-20261005.md`） |
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
-| 提交信息草稿 | artifacts/commit_msgN.txt | `work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
+| 提交信息草稿 | artifacts/commit_msgN.txt | `.codebuddy/work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
 | 交付面文件的手工备份 | artifacts 根、.codebuddy 根 | `.codebuddy/backups/`（留最近 5 份；⚠️ **一天多批只留当日末个**，中间批次改在当批设计件里写「改前差异说明」） |
 | 环境/部署/配置/架构知识 | MEMORY 注入档 | `ops/architecture.md` ＋ `ops/README.md`（随变更同批改） |
 | 使用者可感知的变化 | 活文档正文 | `ops/changelog.md`（部署节点登记） |

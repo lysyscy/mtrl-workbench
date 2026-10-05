@@ -14,7 +14,7 @@ from pathlib import Path
 from audit_common import (
     HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, LENIENT_GLOBS, LIVE_MACHINE_GLOBS, RED, REPO_ROOT,
     SCAN_GLOBS, TAIL_MIN_CELLS, TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root, read_counts,
-    DOC_SUFFIXES,
+    DOC_SUFFIXES, ROOT_ALLOW, GITIGNORE_REL,
 )
 
 # ------------------------------------------------- T5 单文件 >400 行是否已登记
@@ -190,14 +190,23 @@ def check_rule_restatements() -> list[dict]:
 #: ⭐⭐ 2026-09-21 **文档体系重构**：`CLAUDE.md` 删除（无人读取）⇒ 它的**必用部分并入注入档**，
 #:    故 `MEMORY.md` 预算由 90 提到 200（⚠️ 这是**有意的上调**：把"每轮必用的规则"集中到一个被注入的
 #:    文件里，比原来"散在一个 333 行、没人自动读的文件里"更省 —— 原来我每轮都要去翻它）。
-DOC_BUDGETS: tuple[tuple[str, int, str], ...] = (
-    ("README.md", 240, "inject"),                              #: ⛔ 现值**别手抄** ⇒ 要现值跑 `doc_audit`（`T10` 会报）
-    (".codebuddy/memory/MEMORY.md", 200, "inject"),             #: ⛔ 同上（现值由 `T10` 报）
+#:
+#: ⭐⭐ 2026-10-05（`TAIL-236` 同批修 ③）：**加第四格 = 字节档**。**为什么非加不可**（实测）：
+#:   宿主往每个会话注入 `MEMORY.md` 时有个**字节硬顶**（≈ 14,400 B），**超了是静默截断**
+#:   —— 被截掉的恰好是**文件尾部**（`§七`/`§八` 工程纪律，最不该丢的那段）。
+#:   ⚠️ 2026-10-05 实测：一度 **14,859 B > 硬顶**、**行数却还在 200 以内** ⇒ `T10` 只看得见行数
+#:   ⇒ **字节超了没有任何尺子拦**（当天是靠人肉量才发现）。⇒ 行数是代理指标，**字节才是宿主真正按的那个数**。
+#: ⚠️ `None` = 该档**不设字节上限**（只认行预算）—— ⛔ 别为了"整齐"给每行都编一个数：
+#:   编出来的数没有出处（本仓规矩：硬数字要么实测、要么不写）。
+#: ⚠️ **一条数只定义一次**：字节档只写在本表（`ops/阈值表.md` 那行只记出处与理由，⛔ 不复述件名清单）。
+DOC_BUDGETS: tuple[tuple[str, int, str, int | None], ...] = (
+    ("README.md", 240, "inject", None),                        #: ⛔ 现值**别手抄** ⇒ 要现值跑 `doc_audit`（`T10` 会报）；字节档 = `None`（它不是宿主自动注入的那一件）
+    (".codebuddy/memory/MEMORY.md", 200, "inject", 14400),      #: ⛔ 行现值由 `T10` 报；⭐ **字节档 14400** = 宿主注入的硬顶（超了**静默截断**，见上）
     #: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：原 `.codebuddy/plans/执行情况-主文档.md`（预算 **200**）**已取消** ——
     #:   用户裁定「只留待办」⇒ 待办并入**根 `README.md` §〇**（本表第 1 行就是它，预算 240）
     #:   ⇒ ⛔ **别为它再列一行**：那会变成"同一件事两处预算"（本仓最贵的病，必漂）。
-    (".codebuddy/memory/细则.md", 620, "must"),          #: ⛔ 同上；⭐ **2026-10-01（`TAIL-204` 第 2 步）420 → 620**：并入原项目侧 `MEMORY.md` 全文（173 行归档为附录）
-    (".codebuddy/plans/开发计划-主文档.md", 1800, "must"),   # ⭐⭐ 2026-09-29 **用户裁定 `A`：1700 → 1800**
+    (".codebuddy/memory/细则.md", 620, "must", None),          #: ⛔ 同上；⭐ **2026-10-01（`TAIL-204` 第 2 步）420 → 620**：并入原项目侧 `MEMORY.md` 全文（173 行归档为附录）
+    (".codebuddy/plans/开发计划-主文档.md", 1800, "must", None),   # ⭐⭐ 2026-09-29 **用户裁定 `A`：1700 → 1800**
                                                           #:   （文档审计 §五之补 · ①）**理由 = 容量**：台账按设计每条一行，
                                                           #:   09-29 一天新立/销号 **19 条**尾巴 ⇒ 顶穿 8 行是它**该长的样子**；
                                                           #:   ⛔ 「搬叙事」已证伪（§15 §四 销号行受 `T6` 保护、一行不能搬；
@@ -217,7 +226,7 @@ def check_doc_budgets() -> list[dict]:
        （2026-09-21 实测到过：三条待办只活在对话里、`计划` 里 0 处命中）。
     """
     hits: list[dict] = []
-    for rel, budget, tier in DOC_BUDGETS:
+    for rel, budget, tier, byte_budget in DOC_BUDGETS:
         p = REPO_ROOT / rel
         if not p.exists():
             hits.append({"code": "T10", "side": "仓", "rel": rel, "line": 1,
@@ -227,16 +236,30 @@ def check_doc_budgets() -> list[dict]:
                          "level": YELLOW, "text": ""})
             continue
         n = len(p.read_text(encoding="utf-8", errors="replace").splitlines())
-        if n <= budget:
-            continue
-        hits.append({"code": "T10", "side": "仓", "rel": rel, "line": 1,
-                     "what": f"{n} 行（预算 {budget}·{tier} 档）",
-                     "why": ("**每会话注入档**超预算 ⇒ 它天天吃上下文，且**没有检索能绕开**"
-                             if tier == "inject" else
-                             "**必读档**超预算 ⇒ 它会退化成\"读不完 ⇒ 只 grep ⇒ 没搜到的就丢了\""),
-                     "fix": "把**历史叙事**挪到 `artifacts/` 或 memory 日志（⛔ 别删真东西）；"
-                            "或在 `ops/阈值表.md` 登记维持理由",
-                     "level": YELLOW, "text": ""})
+        if n > budget:
+            hits.append({"code": "T10", "side": "仓", "rel": rel, "line": 1,
+                         "what": f"{n} 行（预算 {budget}·{tier} 档）",
+                         "why": ("**每会话注入档**超预算 ⇒ 它天天吃上下文，且**没有检索能绕开**"
+                                 if tier == "inject" else
+                                 "**必读档**超预算 ⇒ 它会退化成\"读不完 ⇒ 只 grep ⇒ 没搜到的就丢了\""),
+                         "fix": "把**历史叙事**挪到 `artifacts/` 或 memory 日志（⛔ 别删真东西）；"
+                                "或在 `ops/阈值表.md` 登记维持理由",
+                         "level": YELLOW, "text": ""})
+        # ⭐⭐ 2026-10-05（`TAIL-236` 同批修 ③）：**字节档** —— 见 `DOC_BUDGETS` 上方那段
+        #   （宿主按**字节**截断注入档，而行数看不见它 ⇒ 2026-10-05 实测 14,859 B 超顶却全绿）。
+        #   ⚠️ 行档与字节档**各报各的**（同一件可能只踩其中一个）—— ⛔ 别合并成一条，
+        #     否则"哪一条超了"在报告里就看不出来了。
+        if byte_budget is not None:
+            nb = len(p.read_bytes())
+            if nb > byte_budget:
+                hits.append({"code": "T10", "side": "仓", "rel": rel, "line": 1,
+                             "what": f"{nb} 字节（预算 {byte_budget}）",
+                             "why": "**注入档按字节算的那个数超了** ⇒ 宿主会**静默截断**"
+                                    "（被截掉的是**文件尾部**，而那是该档最要紧的部分）；"
+                                    "⚠️ 行数可能还在预算内 ⇒ 只查行数的判据**看不见它**",
+                             "fix": "压缩该档（细节下沉到不注入的分册 ＋ 只留指针）；"
+                                    "或在 `ops/阈值表.md` 登记维持理由",
+                             "level": YELLOW, "text": ""})
     return hits
 
 
@@ -411,6 +434,81 @@ def check_doc_layout() -> list[dict]:
             hits.append(_t12(f.name, "仓库根出现了白名单外的 md",
                              "根目录只放 `README.md`（文档地图）—— 根上散落的 md 没人维护、必然过期",
                              "并进 `README.md`，或按四层放到 `ops/` / `.codebuddy/` / `artifacts/`"))
+    return hits
+
+
+# ------------------------------------------------- T24 仓库根白名单（落点守卫）
+
+
+def _gitignore_tolerated() -> tuple[set[str], tuple[str, ...]]:
+    """`.gitignore` 里**声明过的根条目** ⇒ `(字面名集合, 通配模式元组)`（供 `T24` 用）。
+
+    ⚠️ 它**不是第二份白名单** —— 认的就是那份忽略规则本身（`T24` 与 `T25` 各读它一半）：
+      · 行首 `!`（负向规则）与行尾 `/` 都剥掉；
+      · 取**第一段**当"根条目名"（`artifacts/*` ⇒ `artifacts`）；带通配符的整条按 `fnmatch` 收。
+    ⛔ 注释行与空行不参与（`.gitignore` 的注释**本来就没有规则效力** —— 2026-09-24 那次事故就是
+    注释写法把整条规则废掉了）。
+    """
+    lit: set[str] = set()
+    pats: list[str] = []
+    f = REPO_ROOT / GITIGNORE_REL
+    if not f.exists():
+        return lit, ()
+    for raw in f.read_text(encoding="utf-8", errors="replace").splitlines():
+        s = raw.strip()
+        if not s or s.startswith("#"):
+            continue
+        s = s.lstrip("!").rstrip("/")
+        head = s.split("/")[0]
+        if head and not any(ch in head for ch in "*?["):
+            lit.add(head)
+        pats.append(s)
+    return lit, tuple(pats)
+
+
+def check_drop_zones() -> list[dict]:
+    """`T24` · **仓库根白名单**（2026-10-05 · `TAIL-236` 同批修 ①b · **红**）。
+
+    ⭐⭐ **它补的是整整一片没人看的地方**：`T12` 只查**根上的 md**（`ROOT_MD_ALLOW`）⇒
+       **目录与非 md 文件**落在根上，`T3` / `T12` / `T14` **一层都不拦**。
+       2026-10-05 实测到的样子：我照着 `.gitignore` 注释里的旧落点，**在仓库根建了一个 `work/`** ——
+       闸门全绿、没人看见，直到人肉发现（然后那个目录不在 `TOP_DIRS` 里，里面的东西
+       也**不在任何尺子的扫描面内**）。
+
+    **判什么**：根上的每个条目，必须落在下面**两处之一**：
+      ① `audit_common.ROOT_ALLOW` = **常驻**骨架条目（随仓走）；
+      ② `.gitignore` 声明过的条目 = **可再生 / 本机暂存**（缓存 · 虚拟环境 · 构建产物 …）。
+    ⚠️ **两份允许表职责不同、允许重叠**（⛔ 别把它们读成"同一份清单抄了两遍"）：
+       ① 是**权威**（少一条 ⇒ 根上那个条目就该报）；② 是**额外容忍**（本机暂存，不必进 ①）。
+       重叠的几项（`artifacts` / `logs` / `face` …）以 ① 为准 —— 判据取的是**并集**。
+    ⚠️ **已知妥协（2026-10-05 `/code-review` 指出，如实记下）**：往 `.gitignore` 里加一行同名规则
+       即可让根上某目录被容忍 ⇒ **存在这条旁路**。接受它的理由：那是一次**显式、可复核**的动作
+       （且 `T25` 会核 `.gitignore` 里写的落点是不是真存在）；⛔ 但它不是"不可能绕过"。
+    ⚠️ **根上的 `.md` 刻意跳过**：那半边归 `T12`（`ROOT_MD_ALLOW`）—— 两处各报一次就是
+       "同一件事两个主人"（老病）。⚠️ **只跳 `.md`、不跳 `.mdc`**（`/code-review` 抓到的"加了半边"）：
+       `T12` 只 `glob("*.md")` ⇒ 根上一个 `.mdc` **两把尺子都不报** ⇒ 那半边归本判据。
+    ⚠️ 为什么是**红**不是黄：根上多出来的东西不是"审美问题" —— 它**不在任何扫描面内**，
+       等于在仓库里开了一块**无人看守的地**（本次事故正是这样）。
+    """
+    from fnmatch import fnmatch  # noqa: PLC0415
+    allow = {x.rstrip("/") for x in ROOT_ALLOW}
+    tol_lit, tol_pat = _gitignore_tolerated()
+    hits: list[dict] = []
+    for p in sorted(REPO_ROOT.iterdir(), key=lambda x: x.name):
+        name = p.name
+        if p.is_file() and p.suffix == ".md":
+            continue                       # ⛔ 根上的 `.md` 归 `T12`；`.mdc` **不跳**（见 docstring）
+        if name in allow or name in tol_lit or any(fnmatch(name, g) for g in tol_pat):
+            continue
+        hits.append({"code": "T24", "side": "仓", "rel": name, "line": 1,
+                     "what": f"仓库根多出「{name}」",
+                     "why": "根目录是**仓库骨架**（`ROOT_ALLOW` ＋ `.gitignore` 两种身份）——"
+                            "白名单外的条目**不在任何尺子眼里**：2026-10-05 实测，根 `work/` 建起来后"
+                            "`T3`/`T12`/`T14` 四层守卫没一层拦，而那片地方从此无人看守",
+                     "fix": "移到它该在的地方（工作记录类 ⇒ `.codebuddy/work/`）；"
+                            "确实是新的**常驻**条目 ⇒ 同批登进 `audit_common.ROOT_ALLOW`；"
+                            "只是**本机暂存/缓存** ⇒ 在 `.gitignore` 里登记它",
+                     "level": RED, "text": ""})
     return hits
 
 
@@ -1204,6 +1302,11 @@ GUARDED: tuple[tuple[str, str, str], ...] = (
     #   而"这份登记本身没写坏"由本条的 `path_tuple` 核（文件件在不在）。
     ("audit_common", "OUTSIDE_ROOTS", "outside_prefix"),
     ("audit_common", "T3_OLD_PATH_HINTS", "nonempty"),
+    # ⭐ 2026-10-05（`TAIL-236` 同批修 ①b）：两处新登记 ——
+    #   · `ROOT_ALLOW` **不许为空**（空表 ⇒ `T24` 退化成"根上什么都报"，而它看着还在跑）；
+    #   · `GITIGNORE_REL` **必须指到真件**（指错 ⇒ `T25` 静默扫空集 ＝ `T18` 那一族假绿）。
+    ("audit_common", "ROOT_ALLOW", "nonempty"),
+    ("audit_common", "GITIGNORE_REL", "path"),
     ("audit_meta", "ALWAYS_READ_DOCS", "path_tuple"),
     ("audit_meta", "CODE_DIRS", "path_tuple"),
     ("audit_meta", "DOC_BUDGETS", "path_first"),
@@ -1309,13 +1412,14 @@ def main(argv: list[str] | None = None) -> int:
     import acc_report as ar                                        # noqa: PLC0415
     cases = set(ar.load_json(ar.resolve_baseline(None)).get("cases") or {})
     raw = (check_file_sizes() + check_rule_origins() + check_doc_budgets()
-           + check_report_receipts() + check_doc_layout() + check_tail_ledger(cases)
+           + check_report_receipts() + check_doc_layout() + check_drop_zones()
+           + check_tail_ledger(cases)
            + check_plan_process() + check_line_walls() + check_line_splices()
            + check_gate_liveness() + check_guard_constants() + check_live_machine())
     reds = [h for h in raw if h["level"] == RED]
     yellows = [h for h in raw if h["level"] == YELLOW]
     print("=" * 78)
-    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18/T21/T22/T23"
+    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18/T21/T22/T23/T24"
           "（⚠️ T1–T4/T8 在 `audit_drift` · T7 在 `cover_gap` · T14/T15 在 `audit_work`）")
     print("=" * 78)
     print(f"必须修 {len(reds)} · 疑似 {len(yellows)}")

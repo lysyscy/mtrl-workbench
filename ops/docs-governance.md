@@ -36,7 +36,7 @@
 
 | # | 口径 | 唯一主人 | 它变了要同批改哪几处 | 机器眼 |
 |---|---|---|---|---|
-| 1 | **分层 · 命名 · 怎么加一份新文档** | 根 `README.md` §二 / §四 / §七 | ① `ops/docs-governance.md` 本件 §一 · ② `tools/audit/audit_meta.py` 的 `PLANS_LIVE` / `WORK_DIR_ALLOW` / `WORK_NAME_PREFIX` / `ROOT_MD_ALLOW` · ③ `.codebuddy/rules/入场指针/RULE.mdc` 的分派表（若指向变动件） | `T12` |
+| 1 | **分层 · 命名 · 怎么加一份新文档** | 根 `README.md` §二 / §四 / §七 | ① `ops/docs-governance.md` 本件 §一 · ② `tools/audit/audit_meta.py` 的 `PLANS_LIVE` / `WORK_DIR_ALLOW` / `WORK_NAME_PREFIX` / `ROOT_MD_ALLOW` ＋ ⭐ `tools/audit/audit_common.py` 的 `ROOT_ALLOW`（**仓库根**允许的**常驻**条目 · `T24` 判）＋ 仓根 `.gitignore`（**暂存**件表 —— `T24` 也认它；`T25` 另核它里面写的**落点路径**真存在） · ③ `.codebuddy/rules/入场指针/RULE.mdc` 的分派表（若指向变动件） | `T12` · `T24` · `T25` |
 | 2 | **硬数字**（行数预算 · 上限 · 阈值） | `ops/阈值表.md`（表里写**出处**） | ① 对应常量（`audit_meta.DOC_BUDGETS` / `LINE_WALL_CHARS` …）· ② 同批变异件 `tools/mut/_mut_*.py`（**撤判据必须同批撤靶**） | `T4` ③ · `T5` · `T10` · `T21` |
 | 3 | **尺子清单与条数** | `tools/oneoff/_run_rulers.py`（唯一定义处） | ① `tools/audit/doc_audit.py` 头部权威表 · ② `tools/README.md` 分目录地图 · ③ `ops/阈值表.md`（若新增阈值） | `T17` 僵尸闸门 |
 | 4 | **工作记录落点 · 生命周期 · 文头** | `.codebuddy/work/README.md` §一 / §二 / §四 | ① 本件 §三 · ② `audit_work.WORK_HEADER_KEYS`（**判据与模板必须同一个词** —— 踩过：模板写「什么时候读」、判据认「何时读」⇒ 5 件白挂黄） | `T14` · `T15` |
@@ -44,7 +44,7 @@
 
 ## 三 · 生命周期：状态词 ↔ 通用状态（**映射只此一处**）
 
-> 状态词本身（`草稿 · 在研 · 已定稿 · 已实施 · 已归档`）的**主人 = `work/README.md` §四**（`T15` 机核那四个词）；升降档的**触发条件**主人 = 同件 §二。本表只做**一张对照**，方便与外部习惯对话。
+> 状态词本身（`草稿 · 在研 · 已定稿 · 已实施 · 已归档`）的**主人 = `.codebuddy/work/README.md` §四**（`T15` 机核那四个词）；升降档的**触发条件**主人 = 同件 §二。本表只做**一张对照**，方便与外部习惯对话。
 
 | 本仓状态词 | 通用叫法 | 典型落点 | 谁管它离开这一档 |
 |---|---|---|---|
