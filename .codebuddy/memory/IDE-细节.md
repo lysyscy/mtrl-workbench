@@ -104,9 +104,9 @@
 
 ## 六、宿主 hooks 与「自动新开会话并交接」（2026-09-25 实测）
 
-- ⛔⛔ **本 IDE 会话不跑 hook**：用户级 `~/.codebuddy/settings.json` 的 `Stop` · 用户级 `hooks.json` 的 `Stop` · **项目级** `.codebuddy/settings.json` 的 `Stop` —— 三处同时配 ＋ 重启整个 VS Code ＋ 走完一个完整回合 ⇒ **0 次触发**；宿主日志只有 `cli-memwatch-*.log`，无 hook 加载记录；「插件形式」未试（本机只有两个内置 zip 市场 ⇒ 猜 schema 违纪）。官方文档列的事件/配置位属 **CodeBuddy Code（CLI）** 能力。
+- ⛔⛔ **本 IDE 会话不跑 hook**：用户级 `~/.codebuddy/settings.json` 的 `Stop` · 用户级 `hooks.json` 的 `Stop` · **项目级**（`.codebuddy/settings.json` · **不在仓内**）的 `Stop` —— 三处同时配 ＋ 重启整个 VS Code ＋ 走完一个完整回合 ⇒ **0 次触发**；宿主日志只有 `cli-memwatch-*.log`，无 hook 加载记录；「插件形式」未试（本机只有两个内置 zip 市场 ⇒ 猜 schema 违纪）。官方文档列的事件/配置位属 **CodeBuddy Code（CLI）** 能力。
 - ⇒ `TAIL-95` 收口 **「实测判负」**（决定件 `D27`）：**维持每轮自检**（① 答复前自检三条件 ② 交接材料落 §13.6 ③ 记忆**只此一处**：`.codebuddy/memory/` —— ⭐ 2026-10-01 `TAIL-204` 第 2 步起两处已并成一处）。⛔ 不装 CLI、⛔ 不再动宿主配置、⛔ **不许说"有 hook 帮我盯着"**。重议条件 = 真出现「我漏了评估」的事件。
-- 实测 payload 字段 = `cwd` · `hook_event_name` · `session_id` · `stop_hook_active` · `transcript_path`（⛔ **无 `turn_id`**）。用户级 = `.codebuddy/settings.json`（direct 格式）、插件级 = `hooks/hooks.json`（wrapper 格式）。
+- 实测 payload 字段 = `cwd` · `hook_event_name` · `session_id` · `stop_hook_active` · `transcript_path`（⛔ **无 `turn_id`**）。用户级 = `~/.codebuddy/settings.json`（direct 格式）、插件级 = `hooks/hooks.json`（wrapper 格式）。
 - ⚠️ 历史留痕：`~/.codebuddy/hooks/handoff_stop_hook.py` 与 `settings.json.bak-20260925` 是当初挂过又实测无效的件，**别当"在生效"**（脚本留作 CLI 路线备用、未接线）。
 - ⭐ 通则：**「能力存在」 ≠ 「已生效」** —— 任何自动化都要实测到**最后一跳**。
 - **"自动新开会话并交接"三条路**：⭐ **Automations（本环境原生）= 能且现成**（存 `~/.codebuddy/automations/<id>/automation.toml`，运行态在 SQLite；每次运行即一段新会话 ⇒ prompt 令其"先读交接件"即完成交接；⚠️ 运行不与用户交互 ⇒ 遇岔路只能停/按假设）；⛔ CLI 无头本机不通（要装，⛔ 参数名不臆造）；⛔ 扩展命令**不能外部触发**（`…startNewChat` 有注册但**无 `uriHandler`/`onUri`**）。
@@ -202,7 +202,7 @@
   ⛔⛔ **别再手写 JS 词法分析器做"通用源码扫查"**：被 `//` · `/* */` · **HTML 注释** · **正则里的引号**（`replace(/[&<>"]/g,…)`）四样接连带偏 ⇒ 130+ 假阳性（注释里的 `TAIL-94` 被当成上屏）。离线只做墓碑，其余交真机读 DOM。
   ⚠️ **改文案会撞旧判据**（`尚未落地`/`路径②`/`不在付款窗口内`/弹窗 token）⇒ **同批换 token、口径不变**；⚠️ **改壳后探针取值也要跟**（`#ttl em` 对已接通页已不存在 ⇒ 8 处裸取值让真机 `TypeError`）。
   ⭐ **顶栏/侧栏状态牌口径（用户 2026-09-27 裁定 `B`）**：**只给"还没接通"的页标注**（`本页数据尚未接通` / 侧栏「未接通」），接通的页**不挂任何状态牌**；`ui_parity` 的 `U2` 已改形（未接通必须如实标注**且按页判**）。⛔ 别退回"每页一律挂一句"。
-  ⭐ **`tools/ui_parity_expected.txt` 的 `U1` 登记簿「可增可减」**（2026-09-25 用户裁定）：新功能/按守则改文案的**正当差异照登**（`--write-expected` 先人工审 · 只追加）；消号**人工删行**。
+  ⭐ **~~`tools/ui_parity_expected.txt`~~（**已退场**）的 `U1` 登记簿「可增可减」**⛔ **2026-09-30 `TAIL-201` 该登记簿已退场**（连同 `U1`/`U5`）⇒ 这条只作留痕，⛔ 别照着去写（原规则 = 2026-09-25 用户裁定）：新功能/按守则改文案的**正当差异照登**（`--write-expected` 先人工审 · 只追加）；消号**人工删行**。
 - ⭐⭐ **报错只有一个「人话出口」= `errHuman(why, tech)`**（`shell/api.js` · 2026-09-27 `TAIL-117` 批次 1 立）：
   `message` = 人话 ＋ 下一步（上屏），技术串（`方法 全路径 → HTTP 状态码`）进 `err.tech` ＋ `console.warn`（⛔ 不上屏）。
   ⭐ **为什么改在源头**：壳里 60 余处 `catch` 显示的都是 `e.message` ⇒ 改抛出处，全场受益；⛔ 改那 60 处 = 抄 60 份、漏一处就重现 `HTTP 500`。

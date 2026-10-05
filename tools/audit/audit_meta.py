@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import re
 import sys
+from pathlib import Path
 
 from audit_common import (
     HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, LENIENT_GLOBS, RED, REPO_ROOT, SCAN_GLOBS,
     TAIL_MIN_CELLS, TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root, read_counts,
+    DOC_SUFFIXES,
 )
 
 # ------------------------------------------------- T5 单文件 >400 行是否已登记
@@ -772,7 +774,7 @@ def _live_docs() -> list[tuple[str, list[str]]]:
     seen: set[Path] = set()
     for pat in SCAN_GLOBS:
         for p in sorted(REPO_ROOT.glob(pat)):
-            if not p.is_file() or p.suffix != ".md" or p in seen:
+            if not p.is_file() or p.suffix not in DOC_SUFFIXES or p in seen:
                 continue
             seen.add(p)
             rel = str(p.relative_to(REPO_ROOT)).replace("\\", "/")
@@ -824,6 +826,76 @@ def check_line_walls() -> list[dict]:
                              f"基线里的件已**不在活文档扫描面内**（基线写着 {b} 行）",
                              "件被删 / 改名 / 归档进留痕 ⇒ 这条基线成了幽灵（只增不减是它的常见烂法）",
                              "从 `LINE_WALL_BASELINE` 撤下本行（`ops/阈值表.md` 同改）"))
+    return hits
+
+
+# ------------------------------------------------- T22 注入档「两行粘成一行」
+#
+# ⭐⭐ 2026-10-05 立（`TAIL-235` 丁-2）。**先说它治的是什么**（当天实测）：
+#   `replace_in_file` 的 `old_str` 末尾多写了一个换行 ⇒ 下一行的**列表符被吞进上一行**
+#   ⇒ `MEMORY.md` 从 **93 行变 92 行**，两行变成一行。
+#   而它的失败方式极其恶劣：**工具只报「2 lines removed」、闸门 rc=0、pytest 全绿、
+#   没有任何尺子看得见** —— 因为 `MEMORY.md` **不在任何判据的栏位检查里**。
+#   ⇒ 后果不是"文档丑了"，是**一整条纪律和一个渲染示例被粘进了上一行的句子里**，
+#     而注入档每轮都读它 ⇒ 谁也发现不了。
+#
+# ⚠️ **为什么该做检查、不该写规则**：这是**固定语法模式**（不是判断题）⇒ 能机器判。
+#    写进 `MEMORY.md` 当纪律，**没有任何尺子会执行它** ⇒ 写了没牙。
+#
+#: `T22` 的目标集 = **常读三件**（每会话自动注入 / 接手必读的那三件）。
+#: ⛔ **刻意不叫"注入档三件"**（`/code-review` 指出的一处口径打架）：本仓的"注入档"**有精确含义** =
+#:    **唯一** `MEMORY.md`（`细则.md §394/436/584` ＋ `MEMORY.md §二` 都这么写，`DOC_BUDGETS` 的
+#:    `tier` 也是这么分的：`MEMORY.md`＝inject · `细则.md`＝must · `IDE-细节.md`＝不注入）。
+#:    票面那句"注入档三件"是**口语**；本表若照抄就等于**给同一个词第二套定义**（本仓最贵的病）。
+#:   ⚠️ 口径**只在这里定义一次**（`ops/阈值表.md` 那行只写"真源 = 本常量"，⛔ 不复述件名清单）。
+#:   ⚠️ `journal/`（逐日日志）与 `plans/` **不在内** —— 那是**只追加留痕**，
+#:     里面的粘连是**历史事实**，改了才是篡改（同 `LENIENT_GLOBS` 的哲学）。
+ALWAYS_READ_DOCS: tuple[str, ...] = (
+    ".codebuddy/memory/MEMORY.md",
+    ".codebuddy/memory/细则.md",
+    ".codebuddy/memory/IDE-细节.md",
+)
+#: 粘连特征 = **行尾标点**后面紧跟「列表符 / 引用符 + 空白」——
+#:   即"本该是下一行行首的符号，被拼到了上一行的句号后面"。
+#: ⛔⛔ **空白只许横向**（`[ \t]*`，⛔ **不能用 `\s*`**）：`\s` 含换行 ⇒ 它会匹配
+#:   「上一行以句号收尾 ＋ 下一行是列表项」这种**完全正常的排版**
+#:   （当天实测：全仓 **78 件** md 因此命中，注入档三件里也全是这种正常行 ⇒ **整条判据成废**）。
+#:   ⇒ 第一版量测就是栽在这：**78 件的"命中"里 0 件是粘连**。
+SPLICE_RE = re.compile(r"[。；：、，）】」!?！？][ \t]*(?:[-*+][ \t]|>[ \t]|\d+[.)][ \t])")
+
+
+def _t22(rel: str, lineno: int, what: str, why: str, fix: str, text: str = "") -> dict:
+    return {"code": "T22", "side": "仓", "rel": rel, "line": lineno, "what": what,
+            "why": why, "fix": fix, "level": YELLOW, "text": text}
+
+
+def check_line_splices() -> list[dict]:
+    """`T22` · **注入档三件里出现「标点后紧跟列表符/引用符」的粘连 ⇒ 黄**。
+
+    ⚠️ **只报黄、不报红**：粘连是**编辑事故**（工具用错），不是口径写错 ⇒
+       它的正确处置是"当场把那两行拆回去"，不该挡住别人的合入（同 `T5`/`T10` 哲学）。
+    """
+    hits: list[dict] = []
+    for rel in ALWAYS_READ_DOCS:
+        p = REPO_ROOT / rel
+        if not p.exists():
+            hits.append(_t22(rel, 1, "（文件不存在）",
+                             "注入档三件少了一件 ⇒ 接手的人读不到，而**没有任何尺子会提它**",
+                             "恢复该件，或从 `INJECT_DOCS` 撤下（撤下要同步改 `ops/阈值表.md`）"))
+            continue
+        for i, line in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            m = SPLICE_RE.search(line)
+            if not m:
+                continue
+            s = max(0, m.start() - 24)
+            hits.append(_t22(
+                rel, i, f"第 {i} 行有粘连：…{line[s:m.end() + 18]}…",
+                "**两行被粘成了一行**（本该另起一行的列表项 / 引用符，拼到了上一行的句号后面）"
+                "—— 实测成因是编辑工具的锚点末尾多写了一个换行；"
+                "而这类损坏**闸门 rc=0、pytest 全绿、没有任何尺子看得见**，"
+                "注入档却每轮都被读 ⇒ 没人会发现",
+                "把粘连的那两行**拆回两行**（⛔ 核一下行数：改前改后 `len(splitlines())` 应 +1）；"
+                "改已有 md 的脚本一律 `newline=\"\"` 读写"))
     return hits
 
 
@@ -989,6 +1061,8 @@ def check_gate_liveness() -> list[dict]:
 #   · `path`：常量指向的件 / 目录**必须存在**；
 #   · `glob` / `glob_delivery`：**必须至少命中 1 个真实件**（⛔ 空命中 = 那一片**从没被扫过**）；
 #   · `path_tuple`：逐个查；`path_first` = 每项取**第 0 个元素**当路径（如 `DOC_BUDGETS`）。
+#   ⭐ `TAIL-235` 丁-1 新增两档：`outside_prefix`（**仓外**根：在盘上真存在 ＋ 确实不在仓内）
+#     与 `nonempty`（词表不许为空 —— 空词表 = 这条判据**看着在跑、其实等于没有**）。
 # ⚠️ **只查登记在册的常量**（`GUARDED`）—— ⛔ **别自动扫"像路径的字符串"**：本仓有一批**故意**指向
 #   已删件的字符串（如 `RETIRED_TERMS` 的 `print/sign.py`）⇒ 全自动必误报一片。
 #   例外走 `GUARD_EXEMPT`（**每条写明理由**），与 `KNOWN_ABSENT` / `t7_expected.txt` 同款纪律。
@@ -999,6 +1073,13 @@ GUARDED: tuple[tuple[str, str, str], ...] = (
     ("audit_common", "CANCELLED_SCAN_GLOBS", "glob"),
     ("audit_common", "CANCELLED_SKIP_RELS", "path_tuple"),
     ("audit_common", "LENIENT_GLOBS", "glob"),
+    # ⚠️ `OUTSIDE_ROOTS` 是**仓外**根（不在 `REPO_ROOT` 下）⇒ ⛔ 不能用 `path` 档
+    #   （那档判 `(REPO_ROOT / raw).exists()` ⇒ 永远不存在 ⇒ 天天假红）。
+    #   它的"存在性"由 `T3` 的仓外白名单分支**逐条引用时**核（见 `audit_drift.check_paths`），
+    #   而"这份登记本身没写坏"由本条的 `path_tuple` 核（文件件在不在）。
+    ("audit_common", "OUTSIDE_ROOTS", "outside_prefix"),
+    ("audit_common", "T3_OLD_PATH_HINTS", "nonempty"),
+    ("audit_meta", "ALWAYS_READ_DOCS", "path_tuple"),
     ("audit_meta", "CODE_DIRS", "path_tuple"),
     ("audit_meta", "DOC_BUDGETS", "path_first"),
     ("audit_meta", "RECEIPT_DIR", "path"),
@@ -1056,6 +1137,29 @@ def check_guard_constants() -> list[dict]:
                                    "那一片**从没被扫过**（= 假绿入口；⚠️ 2026-09-24 立本条当天就抓出 "
                                    "`CHANGELOG.md` 一例：**旧地址搬家后没跟改**）",
                                    f"核对路径（多半是搬迁/改名后没同步）或把 `{raw}` 从常量里删掉"))
+            elif kind == "outside_prefix":
+                # ⭐ 仓外根（`D:/dev/.归档-mtrl` 这类）**不在 REPO_ROOT 下** ⇒ 只核两件事：
+                #   ① 它在**盘上真的存在**（否则 `T3` 的仓外分支恒黄）；
+                #   ② 它**确实不在仓内**（否则就该走仓内分支 ⇒ 两套口径）。
+                  # ⛔ 判“在不在仓内”**不能写 `base / raw`** —— 那是**绝对路径**，`pathlib` 遇绝对路径
+                  #    会**整条替换**（`REPO_ROOT / "D:/…"` == `D:/…`）⇒ 恒判“在仓内”＝天天假红。只能按父子关系判。
+                # ⚠️ ⛔ 换机时仓外根**必然不同** ⇒ 本条报"不存在"是**如实记账**，不是缺陷；
+                #    处置 = 改 `OUTSIDE_ROOTS` 常量（阈值表那一行同步）。
+                rp = Path(raw).resolve()
+                inside = rp == REPO_ROOT or REPO_ROOT in rp.parents
+                if not rp.exists():
+                    out.append(hit(f"`{key}` 里的仓外根 `{raw}` **在盘上不存在**",
+                                   "`T3` 的仓外白名单分支会恒报「找不到」⇒ 那一片等于没登记",
+                                   f"改 `audit_common.OUTSIDE_ROOTS`（换机必改；`ops/阈值表.md` 同步）"))
+                elif inside:
+                    out.append(hit(f"`{key}` 里的 `{raw}` **其实在仓内**",
+                                   "它在仓内就该走仓内分支（红）⇒ 登记成仓外 = 给幽灵开了后门",
+                                   "把它从 `OUTSIDE_ROOTS` 删掉"))
+            elif kind == "nonempty":
+                if not str(item).strip():
+                    out.append(hit(f"`{key}` 里有空项",
+                                   "空词表 = 这条豁免**对任何行都不生效** ⇒ 判据看起来在跑、其实等于没有",
+                                   "补词，或把这项从 `GUARDED` 删掉"))
             elif not (base / raw).exists():
                 out.append(hit(f"`{key}` 指向的 `{raw}` **不存在**",
                                "路径常量失效 ⇒ 用它的检查**静默扫空集**（本项目最贵的一类假绿）",
@@ -1064,7 +1168,7 @@ def check_guard_constants() -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """**单跑本模块的检查**（`T5`/`T6`/`T9`/`T10`/`T11`/`T12`/`T13`/`T17`/`T18`/`T21`）。
+    """**单跑本模块的检查**（`T5`/`T6`/`T9`/`T10`/`T11`/`T12`/`T13`/`T17`/`T18`/`T21`/`T22`）。
 
     ⚠️ 2026-09-24（自查一轮）：`T17` 与 `T18` 是**同一天**新立的两条，而首版只把 `T17` 塞进了本入口
     ⇒ **单跑 `audit_meta.py` 时 `T18` 是哑的**（只在 `doc_audit` 里被动生效）= 同一件事做了一半。
@@ -1081,12 +1185,12 @@ def main(argv: list[str] | None = None) -> int:
     cases = set(ar.load_json(ar.resolve_baseline(None)).get("cases") or {})
     raw = (check_file_sizes() + check_rule_origins() + check_doc_budgets()
            + check_report_receipts() + check_doc_layout() + check_tail_ledger(cases)
-           + check_plan_process() + check_line_walls() + check_gate_liveness()
-           + check_guard_constants())
+           + check_plan_process() + check_line_walls() + check_line_splices()
+           + check_gate_liveness() + check_guard_constants())
     reds = [h for h in raw if h["level"] == RED]
     yellows = [h for h in raw if h["level"] == YELLOW]
     print("=" * 78)
-    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18/T21"
+    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18/T21/T22"
           "（⚠️ T1–T4/T8 在 `audit_drift` · T7 在 `cover_gap` · T14/T15 在 `audit_work`）")
     print("=" * 78)
     print(f"必须修 {len(reds)} · 疑似 {len(yellows)}")

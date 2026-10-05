@@ -14,9 +14,10 @@ from pathlib import Path
 
 from audit_common import (
     CANCELLED, CANCELLED_DOC_GLOBS, CANCELLED_SCAN_GLOBS, CANCELLED_SKIP_RELS, _is_lenient,
-    HANDBOOK_REL, HARD_EXEMPT, KNOWN_ABSENT, LEDGER_REL, PATH_ROOTS, REPO_ROOT,
-    RETIRED_TERMS, SOFT_EXEMPT, TOP_DIRS, YELLOW, RED,
-    _ACC_ID_RE, _ACC_RE, _PATH_RE, _PLACEHOLDER, _STATUS_RE,
+    HANDBOOK_REL, HARD_EXEMPT, KNOWN_ABSENT, LEDGER_REL, OUTSIDE_ROOTS, PATH_ROOTS, REPO_ROOT,
+    RETIRED_TERMS, SOFT_EXEMPT, T3_HINT_WINDOW, T3_OLD_PATH_HINTS, T3_SKIP_PREFIXES,
+    TOP_DIRS, YELLOW, RED,
+    _ACC_ID_RE, _ACC_RE, _MARKED_PATH_RE, _OUTSIDE_PATH_RE, _PATH_RE, _PLACEHOLDER, _STATUS_RE,
     _hit, delivery_root, iter_docs,
 )
 
@@ -147,18 +148,104 @@ def _path_exists(raw: str, roots: list) -> str:
     return ""
 
 
+def _t3(rel: str, line_no: int, what: str, why: str, fix: str, level: str, text: str = "") -> dict:
+    """`T3` 自己的命中记录（⛔ **不走 `_hit`** —— 那条按"行文在不在说它废了"判档，
+    而下面三个分支的档位是**各自分支定死的**（仓内红 / 仓外黄），不能让邻行的话改档）。"""
+    return {"code": "T3", "side": "仓", "rel": rel, "line": line_no, "what": what,
+            "why": why, "fix": fix, "level": level, "text": text.strip()}
+
+
+def _outside_root_for(raw: str) -> str | None:
+    """→ `raw` 落在哪个登记的仓外根下（大小写不敏感）；不是仓外 ⇒ `None`。"""
+    low = raw.lower()
+    for r in OUTSIDE_ROOTS:
+        rl = r.lower().rstrip("/")
+        if low == rl or low.startswith(rl + "/"):
+            return rl
+    return None
+
+
+def _hint_applies(line: str, raw: str) -> bool:
+    """豁免词必须**贴着那个路径**（±`T3_HINT_WINDOW` 字符）—— ⛔ 不是"整行里有就算"。
+
+    ⚠️ 理由见 `audit_common.T3_HINT_WINDOW` 的注释（整行判会被句中描述词巧合命中，
+    当场遮住过本票自己行里的一个真幽灵）。拿不到 token 位置时**不放行**（宁可多报）。
+    ⚠️⚠️ 必须扫**该行的每一处**出现（`/code-review` 修完当场又踩了一次）：
+       同一行里写着 `~/.codebuddy/settings.json` 与 `.codebuddy/settings.json` 两份时，
+       `str.find` 只给**第一处**（带 `~` 的那个，位置偏前）⇒ 真正的豁免词落在窗口外
+       ⇒ 一条**正确的**"不在仓内"标注被误报成红。⇒ 判"**任一**出现贴着豁免词"。
+    """
+    start = 0
+    while True:
+        i = line.find(raw, start)
+        if i < 0:
+            return False
+        lo, hi = max(0, i - T3_HINT_WINDOW), i + len(raw) + T3_HINT_WINDOW
+        if any(w in line[lo:hi] for w in T3_OLD_PATH_HINTS):
+            return True
+        start = i + 1
+
+
 def check_paths(docs: list) -> list[dict]:
+    """`T3` · **幽灵路径** —— 仓内相对路径核不到 ⇒ 红；仓外/带标记的按各自口径报（见下）。
+
+    ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**三个分支**，仓外那两半是显式的
+      ① **仓内**（原有）：反引号里的仓内相对路径，两侧根都找不到 ⇒ **红**；
+      ② **仓外白名单**：反引号里的**绝对路径**落在 `OUTSIDE_ROOTS` 内 ⇒ 到那个根下**真核存在**
+         （⚠️ 这半是"搬走的原文还在不在"的守卫；此前这类引用**对所有尺子隐形**
+         —— 不是因为它合法，而是因为路径里有中文，`_PATH_RE` 压根不匹配 ⇒ **假绿**）；
+      ③ **带标记的引用**：`` 〔已归档〕ops/x.md `` ⇒ **剥掉标记按仓内核**，核不到 ⇒ **黄**
+         （⛔ **标记不是豁免** —— 这一半就是为了堵住"加个前缀把整条洗掉"那条路）。
+    """
     roots = [REPO_ROOT] + ([delivery_root()] if delivery_root() else [])
     hits = []
     for side, rel, path, lines, zones in docs:
         for i, line in enumerate(lines):
+            # ② 仓外白名单：绝对路径 → 到登记的仓外根下真核
+            for m in _OUTSIDE_PATH_RE.finditer(line):
+                raw = m.group(1).replace("\\", "/").rstrip("/")
+                root = _outside_root_for(raw)
+                if root is None:
+                    continue
+                tail = raw[len(root):].lstrip("/")
+                if Path(root + ("/" + tail if tail else "")).exists():
+                    continue
+                hits.append(_t3(
+                    rel, i + 1, f"仓外白名单根下找不到：`{raw}`",
+                    f"它登记在 `OUTSIDE_ROOTS`（仓外归档根）⇒ 本该能核；"
+                    f"现在 `{root}/{tail}` 不存在 ⇒ **搬走的原文可能已被清掉**"
+                    "（仓内索引与 git 历史都取不回的话就真丢了）",
+                    "把仓外那份恢复，或把该处改成指针（仓内索引件 / `git show <路径>`）",
+                    YELLOW, line))
+
+            # ③ 带标记的引用：剥掉标记 ⇒ 按仓内核（⛔ 标记不给豁免，只给"它已被看见"）
+            for m in _MARKED_PATH_RE.finditer(line):
+                raw = m.group(1).replace("\\", "/")
+                if _PLACEHOLDER.search(raw) or not any(raw.startswith(d) for d in TOP_DIRS):
+                    continue
+                if _path_exists(raw, roots) == "exact":
+                    continue
+                hits.append(_t3(
+                    rel, i + 1, f"带仓外标记的引用核不到：`{raw}`",
+                    "标记**不是豁免** —— 它只表示「作者知道它搬走了」；"
+                    "剥掉标记后仓内仍核不到 ⇒ 这条指针现在是**死的**"
+                    "（加标记前它会被照出来 ⇒ 标记一度把一道真实存在的保护消掉了）",
+                    "改成**仓外绝对路径**（落在 `OUTSIDE_ROOTS` 内 ⇒ 会被真核存在），"
+                    "或指向仓内索引件",
+                    YELLOW, line))
+
+            # ① 仓内（原有口径）
             for m in _PATH_RE.finditer(line):
                 raw = m.group(1).replace("\\", "/")
                 if _PLACEHOLDER.search(raw) or not any(raw.startswith(d) for d in TOP_DIRS):
                     continue
+                if any(raw.startswith(p) for p in T3_SKIP_PREFIXES):
+                    continue          # 该段按制度会消失 ⇒ 点名其中某件不算幽灵（见常量注释）
                 got = _path_exists(raw, roots)
                 if got == "exact":
                     continue
+                if _hint_applies(line, raw):
+                    continue          # 行文**紧贴着那个路径**在说它已作数 ⇒ 不是幽灵
                 hits.append(_hit("T3", side, rel, path, i, lines, zones,
                                  what=raw,
                                  why="在所有候选根下都找不到该文件（含同名匹配）"

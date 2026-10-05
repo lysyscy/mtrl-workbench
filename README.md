@@ -90,6 +90,7 @@ D:\dev\mtrl-workbench\
 │   ├─ README.md                    实测结论索引（含"成立前提 / 何时必复做"）＋ 工程基准档索引
 │   ├─ architecture.md modules.md deployment.md changelog.md delivery-surface.md
 │   │                              ⭐ **工程基准档**（2026-10-01 `TAIL-204` 第 3 步从 `docs\` 并入 —— `docs\` 已取消）
+│   ├─ docs-governance.md          ⭐⭐ **文档治理总纲**（2026-10-05 立 ｜ 本仓文档体系的**唯一总图**：哪条口径住在哪 · 生命周期 · 引用写法 · 人确认点 ｜ ⛔ 只放总图与指针）
 │   ├─ agents\                     ⭐ **给 agent 的制度页**（2026-10-04 新增）：`issue-tracker.md`（票仓协议）· `triage-labels.md` · `domain.md` —— 入口 = 根 `AGENTS.md`
 │   ├─ 阈值表.md                    ⭐ 所有"硬数字"的集中登记处（出处 / 谁改过）
 │   ├─ *-实测结论.md                实测结论（命名：<主题>-实测结论.md）
@@ -141,7 +142,7 @@ D:\dev\mtrl-workbench\
 | 决策记录 | `D<编号>-<主题>.md`（D21 起） | `.codebuddy/work/40-decisions/` |
 | **尾巴票** | `TAIL-<编号>-<短名>.md` | `.codebuddy/work/50-tickets/`（⭐ 2026-10-04 `TAIL-225` 起 —— 一张票一个文件；**索引 = 计划 §15 一行一票**；⭐ 用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄） |
 | 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.codebuddy/work/00-scratch/`（TTL 14 天） |
-| 工程基准档 | 固定小写英文名（architecture / modules / deployment / changelog / delivery-surface） | `ops/`（⚠️ 2026-10-01 起 —— 原 `docs/` 已并入） |
+| 工程基准档 | 固定小写英文名（architecture / modules / deployment / changelog / delivery-surface / **docs-governance**） | `ops/`（⚠️ 2026-10-01 起 —— 原 `docs/` 已并入） |
 | 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.codebuddy/backups/`（**备份唯一落点**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**）⭐ **何时清** = **每次产包前一晚**复核一次（超线就移/清；上限数字见 `ops/阈值表.md`，⛔ 不在此处抄） |
 | **交付面改前备份** | `交付面-<日期>-<时分>/` · `原型-备份-<日期>-<批次>前.html` · `_smoke.js-备份-<…>` · `*.bak` | 同上 `.codebuddy/backups/` —— ⚠️ **另一种用途**：改交付面（WPS 云同步树：`demo/` 原型 ＋ 说明书）**之前**的快照 ⇒ `T20` **不计入**"手工快照 5 份"上限（⭐ 2026-10-01 `TAIL-204` 第 5 步从 `artifacts/delivery-backups/` 并来；**旧口径只写"仅此一处"、把两种用途混成一个上限** ⇒ 并入当天就报"顶层 20 > 5"）。⭐ **何时清**（2026-10-02 `TAIL-217` 补 —— 此前这一类**一个上限都没有**、只增不减）：与上条**同一套**口径 —— **每次产包前一晚**复核一次，「交付面改前快照」超线就把**最旧的一批**移进 `_旧快照归档-YYYYMMDD/`（**可逆**）；**归档子目录**自己也超线 ⇒ 才轮到**真删**（⚠️ 删前先查引用；⛔ **不静默删**）。⭐ **不免清名单** = 5 份 `*_壳单文件基线.html`（`shell_verify` 自管、`ops/pack.ps1` 要带最新 1 份进包）⇒ ⛔ 不在这两条的范围里 |
 | 产物 md | 仅工具生成物白名单（当前：`变异覆盖台账.md`） | `artifacts/` |
@@ -196,7 +197,7 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 6. 是"一次性的报告/建议"吗？ ⇒ **`artifacts/`** ＋ ⭐ **必须带「待办登记回执」**（每条写"已登记为
    `TAIL-xx`"或"不登记的理由"）—— `T11` 守。
 7. 是"环境/部署/配置/架构知识"吗？ ⇒ **`ops/architecture.md`** ＋ **`ops/README.md`**（随变更同批改）。
-8. 以上都不是 ⇒ ⚠️ **先停下来问用户**（可能是新层级，要同时改本文件与 `T12` 白名单）。
+8. 以上都不是 ⇒ ⚠️ **先停下来问用户**（可能是新层级，要同时改本文件与 `T12` 白名单）—— ⛔ 问之前先查 **`ops/docs-governance.md`**（文档治理总纲 · 本体系的唯一总图）：它若已给了落点，照它办；它也答不上 ⇒ 才是真需要用户拍。
 
 ## 八、三条常见坑（都踩过）
 

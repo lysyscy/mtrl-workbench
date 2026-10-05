@@ -11,7 +11,7 @@
 |---|---|---|
 | `T1` | **幽灵用例号** —— 文档提到的 `ACC-*` 在验收基线里不存在 | `验收基线.json` |
 | `T2` | **已废除术语** —— 命中 `RETIRED_TERMS` | `audit_common.py` |
-| `T3` | **幽灵路径** —— 反引号里的仓库内路径两侧都找不到 | 文件系统 |
+| `T3` | **幽灵路径** —— 反引号里的仓库内路径两侧都找不到（⭐ 2026-10-05 `TAIL-235` 丁-1 扩半：① 扫描面进 `.codebuddy/`（**治理区此前整片无人管**）② **仓外绝对路径**落在 `OUTSIDE_ROOTS` 白名单内 ⇒ 到那个根下**真核存在** ③ 带 `〔已归档〕` 标记的引用**剥掉标记照核** ⇒ ⛔ **标记不是豁免**，加前缀不再能把坏路径洗掉） | 文件系统 |
 | `T4` | **状态数字失配** —— 执行情况「当前版本」行的四态 ≠ 实际 | `artifacts/acc_results.json` |
 | `T5` | **行数超限** —— 单文件 >400（黄 · 须登记拆分计划）/ >600（黄 · 须登记"为什么不拆"）<br>⚠️ 2026-09-21 **用户裁定：>600 从红降黄**（行数是代理指标，不作禁合入闸门） | 源文件行数（**输出即登记清单**）＋ `ops/阈值表.md` |
 | `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `.codebuddy/plans/开发计划-主文档.md` |
@@ -29,6 +29,7 @@
 | `T18` | ⭐ **登记在册的路径 / glob 常量必须解析得到真东西** —— 空命中 = 那一片**从没被扫过** ⇒ 红 | `audit_meta.GUARDED` |
 | `T19` | ⭐ **文档指针（节号）守卫** —— 「`X.md` §N」必须真有那一节（`T3` 只管文件在不在）⇒ 红 | `audit_drift` |
 | `T20` | ⭐ **保留期与容量** —— `.codebuddy/backups/` 顶层条目 > 5（口径「留 5 份 · 月度清」）⭐ **`tools/oneoff/` 件数 / 容量超线**（⚠️ 原第三条「`.workbuddy/scratch/` 活区规模」**2026-10-01 已撤** —— 它守的是**搬家遗留的旧落点**（盘上一直在、被 `.gitignore` 藏着 ⇒ `git status` 看不见），第 7 步已把旧落点**整棵清掉** ⇒ 判据**失去对象**；临时件现由 `T14` 管）（`TAIL-194`；处置口径 = `tools/README.md`）⇒ 黄 | `README.md` §三/§四 ＋ `tools/README.md` ＋ `ops/阈值表.md` ＋ `audit_work.py` |
+| `T22` | ⭐ **注入档「两行粘成一行」** —— 注入档三件里「**行尾标点后紧跟列表符/引用符**」⇒ 黄（治 `replace_in_file` 锚点末尾多写一个换行 ⇒ 下一行的列表符被吞进上一行；当天实测 `MEMORY.md` 93 → 92 行，而**闸门 rc=0 · pytest 全绿 · 无尺子看得见**）。⚠️ 固定语法模式 ⇒ **该做检查、不该写规则**（写进纪律没人执行） | `audit_meta.INJECT_DOCS` / `SPLICE_RE` ＋ `ops/阈值表.md` |
 | `T21` | ⭐ **文档「字墙」**（单行 >800 字）—— 治"行数在预算内、**单行上万字**"那一类：`T10`/`T13` 只看得见总行数。⚠️ 带**只许变短**的老账基线（`LINE_WALL_BASELINE`）：超基线 ⇒ 黄「又长回来了」· 低于基线 ⇒ 黄「基线该下调」⇒ 黄 | `ops/阈值表.md` ＋ `audit_meta.LINE_WALL_CHARS` / `LINE_WALL_BASELINE` |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
@@ -55,7 +56,7 @@
 
 **本文件是薄壳** —— 检查逻辑已拆到同目录三件（`T5` 逼的，本文件曾 597 行）：
 `audit_common.py`（常量 ＋ 扫描基础设施）· `audit_drift.py`（`T1`–`T4`）·
-`audit_meta.py`（`T5`/`T6` 台账与行数 · `T9` 纪律出处 · `T10` 读预算 · `T11` 报告回执 · `T12` 分层约定）。
+`audit_meta.py`（`T5`/`T6` 台账与行数 · `T9` 纪律出处 · `T10` 读预算 · `T11` 报告回执 · `T12` 分层约定 · `T21` 字墙 · `T22` 注入档粘连）。
 """
 
 from __future__ import annotations
@@ -79,7 +80,8 @@ from audit_drift import (                                         # noqa: E402
 )
 from audit_meta import (                                          # noqa: E402
     HARD_LIMIT, LINE_LIMIT, check_doc_budgets, check_doc_layout, check_file_sizes,
-    check_gate_liveness, check_guard_constants, check_line_walls, check_plan_process,
+    check_gate_liveness, check_guard_constants, check_line_splices, check_line_walls,
+    check_plan_process,
     check_report_receipts, check_rule_origins, check_rule_restatements, check_tail_ledger,
 )
 from audit_work import (                                          # noqa: E402
@@ -250,6 +252,12 @@ def main() -> int:
     #   （主文档 88 行超 800 字、最长一行 4563 字 —— 都是从没有尺子看见过的）。
     #   ⚠️ 带**只许变短的老账基线**（`LINE_WALL_BASELINE`）—— 存量不逐条复述（否则 106 条黄 = 噪音源）。
     raw += check_line_walls()
+    # `T22`（2026-10-05 立 · `TAIL-235` 丁-2）：⭐ **注入档「两行粘成一行」** ——
+    #   当天实测：编辑工具的锚点末尾多写一个换行 ⇒ 下一行的列表符被吞进上一行
+    #   ⇒ `MEMORY.md` 93 → 92 行，而**闸门 rc=0 · pytest 全绿 · 没有任何尺子看得见**
+    #   （`MEMORY.md` 不在任何判据的栏位检查里）⇒ 注入档每轮都读它、谁也发现不了。
+    #   ⚠️ **只报黄**：它是编辑事故不是口径错，正确处置是"当场拆回去"，不该挡别人合入。
+    raw += check_line_splices()
     # `T17`（2026-09-24 立 · `TAIL-82`）：**闸门清单里每一把尺子都必须真有入口** ——
     #   ⭐ 一天内核出四例"僵尸闸门"（`shell_verify` · `cover_gap` · `audit_drift` · `audit_meta`），
     #   其中三例**从来没有 `__main__`** ⇒ 在闸门清单里跑了几个月，**0 行输出、rc 恒 0、什么都没判**。

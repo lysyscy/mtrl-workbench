@@ -14,4 +14,4 @@
 
 ## Comments
 
-**2026-10-04 · 建票（agent）。** 来源：用户 2026-09-29 口述（出处 = `.codebuddy/memory/2026-09-29.md` §㉓/㉓之二）｜**不做会怎样：** 目标机上装不起来 / 落地无自检 ⇒ 系统交不出去｜**落点：** `work/10-designs/设计-交付包与迁移-20260929.md` ＋ `ops/{pack,deploy_restore,selfcheck}.ps1` ＋ `ops/deployment.md`｜**阶段 / 时机：** `M8`｜索引 = 计划 §15（**一行一票**）
+**2026-10-04 · 建票（agent）。** 来源：用户 2026-09-29 口述（出处 = `.codebuddy/memory/journal/2026-09-29.md` §㉓/㉓之二）｜**不做会怎样：** 目标机上装不起来 / 落地无自检 ⇒ 系统交不出去｜**落点：** `work/10-designs/设计-交付包与迁移-20260929.md` ＋ `ops/{pack,deploy_restore,selfcheck}.ps1` ＋ `ops/deployment.md`｜**阶段 / 时机：** `M8`｜索引 = 计划 §15（**一行一票**）

@@ -19,7 +19,14 @@
    —— 治"搬目录后常量失效 ⇒ 检查静默扫空集"，本仓最贵的假绿）·
    `T19`（**文档指针（节号）守卫**：`X.md` §N 必须真有那一节 —— 立起来的当天就抓到 1 处真引用错误）。
    ⇒ 至此 `doc_audit` 的**红档**（`T1`–`T4`/`T6`/`T8`/`T9`/`T11`/`T16`/`T17`/`T18`/`T19`）都有反向灵敏度
-   ⇒ 本件共 **14 条**（`M1`–`M14`）。
+   ⇒ 本件共 **23 条**（`M1`–`M23`；`T22` 的自证在 `tools/mut/_mut_injectsplice.py`，⛔ 不在本件）。
+
+⭐⭐⭐ 2026-10-05 **第五批（`M21`–`M23` · `TAIL-235` 丁-1）**：`T3` 的**三个新分支** ——
+   仓外标记不再被洗掉 · 仓外白名单真核存在 · 治理区（`.codebuddy/`）纳入扫描面。
+   ⚠️ **`M23` 存在的理由最硬**：当天扩面时先把 `.codebuddy/` 加进 `TOP_DIRS`、量测却报「0 处命中」，
+   看着像"治理区本来就干净" —— 真因是 **`_PATH_RE` 的首字符类不含 `.`** ⇒ 以点开头的路径整条不匹配。
+   那就是**加了半边的守卫**：判据登记在册、实际一行没扫，而它看上去是绿的。
+   ⇒ 本批三条**一起**把"常量 ＋ 正则"这对**配对**钉住。
 
 ⭐⭐ 2026-09-29 **第三批（`M15`）**：`T9` 当天长出**第二半** —— **注入档里别复述守卫的阈值**（`TAIL-59` 的
    量测逼出来的：`MEMORY.md` 写「`T13`（行数预算 1700）」而真源已 1800，**没有任何尺子看得见**）。
@@ -59,6 +66,8 @@ PLAN = PLANS / "开发计划-主文档.md"
 MEM = ROOT / ".codebuddy" / "memory" / "MEMORY.md"
 REGISTRY = ROOT / "tools" / "t7_expected.txt"
 GUARD_SRC = ROOT / "tools" / "audit" / "audit_meta.py"      #: `T18` 的靶（常量定义处）
+COMMON_SRC = ROOT / "tools" / "audit" / "audit_common.py"    #: `M25`/`M26` 的靶（`OUTSIDE_ROOTS` 所在件）
+IDE = ROOT / ".codebuddy" / "memory" / "IDE-细节.md"        #: `M24` 的靶（豁免词表的**实测承重件**）
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 
 
@@ -78,6 +87,8 @@ def _fit(frag: bytes, sample: bytes) -> bytes:
 #:    ⇒ 改成**动态锚点**：从**当前文档**正则取那处数字，再把捕获到的那个数改小 1（⛔ 别再写死）。
 _四态PAT = r"绿 (\d+) · 红 (\d+) · 待建 (\d+) · 未绑定 (\d+)"
 _尾巴PAT = r"A 类 \*\*\d+\*\* 条 · B 类 \*\*\d+\*\* 条 · C 类 \*\*\d+\*\* 条 · 已销号 \*\*(\d+)\*\* 条"
+#: `T9` 段界（真源 = `audit_meta.RULE_SECTION_RE`；⛔ 两处同改，理由见 `_dyn_rule_line`）
+_RULE_SEC_RE = re.compile(r"^##\s*八[、.]\s*工程纪律")
 
 
 def _dyn(pat: str, text: str) -> tuple[bytes, bytes]:
@@ -89,19 +100,33 @@ def _dyn(pat: str, text: str) -> tuple[bytes, bytes]:
 
 
 def _dyn_rule_line(text: str) -> tuple[bytes, bytes]:
-    """从 `MEMORY.md` 取**第一条「出处标记只有 `[助手自定`」的纪律行**，把那个标记毁掉。
+    """从 `MEMORY.md` 的 **§八「工程纪律」段内**取**第一条「出处标记只有 `[助手自定`」的纪律行**，
+    把那个标记毁掉。
 
     ⚠️ 为什么不能直接替换文件里**第一处** `[助手自定`：`§八` 的**引言块**里也写着这个词
     （那是"讲这条规矩"的文字，不是纪律行）⇒ 替换到它 ⇒ `T9` 根本不管 ⇒ 变异**假没命中**
     （2026-09-24 实测踩到）。⇒ 锚点必须**连整行一起取**（整行唯一 ⇒ 精确命中那一行）。
+    ⚠️⚠️ **2026-10-05（`TAIL-235` 丁-1 加 `M21`–`M23` 时当场暴露）**：光"连整行一起取"**还不够** ——
+       `MEMORY.md` 的 `§五`（协作习惯）里也有一条带 `[助手自定·2026-10-02]` 的条目行
+       （"破坏性操作先查牵连…"），而它**排在 §八 前面** ⇒ 原实现挑中它 ⇒ 变异落在 `T9`
+       **根本不扫的段**里 ⇒ **`M10` 静默失效、而它看上去是绿的**（实测"必须修 0"＝未命中）。
+       ⇒ 现在**只在 §八 段内挑**。
+       ⛔ 段界口径的真源 = `audit_meta.RULE_SECTION_RE`（⛔ 本件不 import 尺子：
+       `tools/audit/` 不在 `sys.path`，而为一处段界把尺子拖进变异件不值得）⇒
+       **改那段标题时两处同改**。
     """
-    for line in text.splitlines():
+    lines = text.splitlines()
+    start = next((k for k, l in enumerate(lines) if _RULE_SEC_RE.match(l.strip())), None)
+    if start is None:
+        raise AssertionError("MEMORY.md 里找不到 §八 段 ⇒ 本件需重定靶")
+    end = next((k for k in range(start + 1, len(lines)) if lines[k].startswith("## ")), len(lines))
+    for line in lines[start + 1:end]:
         if not line.strip().startswith("- ") or "[助手自定" not in line:
             continue
         if any(o in line for o in ("[用户", "[交付面")):      # ⚠️ 还有别的标记 ⇒ 毁一个它照样过
             continue
         return _b(line), _b(line.replace("[助手自定", "（助手自定", 1))
-    raise AssertionError("找不到「出处标记只有 `[助手自定`」的纪律行 ⇒ 本件需重定靶")
+    raise AssertionError("§八 里找不到「出处标记只有 `[助手自定`」的纪律行 ⇒ 本件需重定靶")
 
 
 def _pad_lines(src: bytes, target: int) -> bytes:
@@ -226,6 +251,45 @@ MUTS_RED2: list[dict] = [
      "also": ("[T6]", "幽灵票文件"), "path": GHOST_TICKET,
      "create": "# TAIL-9999: 幽灵票（本件用完即删）\n\n**What to build:** x\n\n**Blocked by:** None\n\n"
                "**Status:** ready-for-agent\n\n- [ ] x\n"},
+    # ⭐⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：`T3` **三个新分支**的反向灵敏度。
+    #   背景：当天扩面（治理区进扫描面 ＋ 仓外走显式白名单）之后，`.codebuddy/` 整片**第一次**有守卫，
+    #   而扩面**当场捞出 24 处真幽灵** ⇒ 这三条就是钉住"新加的那半边真有牙"。
+    # ⚠️ M21 是本轮**最要紧的一条**：它证明「`〔已归档〕` 前缀不再能把坏路径洗掉」。
+    #   2026-10-05 实测过那个失效：`_PATH_RE` 首字符限 `[A-Za-z0-9_]` ⇒ 加中文前缀整条不匹配
+    #   ⇒ 而那 3 条的 `ops/` **本来在 `TOP_DIRS` 内**（`T3` 该照到）⇒ **保护被消掉了、闸门还全绿**。
+    {"desc": "M21 `T3` **仓外标记不再是豁免**（加 `〔已归档〕` 前缀 ⇒ 仍必须报）", "mode": "needle",
+     "needle": ("[T3]", "带仓外标记的引用核不到"), "path": THRESHOLD,
+     "frag": lambda src: _fit(_b("\n\n\n留档指针：`〔已归档〕ops/nope_ghost.py`。\n\n\n"), src)},
+    # ⚠️ ② 仓外白名单：文档里写**仓外绝对路径** ⇒ `T3` 到那个根下**真核存在**
+    #   （此前这类引用对所有尺子隐形 —— 不是因为合法，而是因为路径含中文、正则压根不匹配）。
+    {"desc": "M22 `T3` **仓外白名单真核存在**（仓外根下点名一份不存在的件）", "mode": "needle",
+     "needle": ("[T3]", "仓外白名单根下找不到"), "path": THRESHOLD,
+     "frag": lambda src: _fit(_b("\n\n\n归档件见 `D:\\dev\\.归档-mtrl\\ops\\nope_ghost.md`。\n\n\n"), src)},
+    # ⚠️ ③ `TOP_DIRS` 新增 `.codebuddy/` 那一项**是不是承重**：
+    #   ⚠️⚠️ 当天真的踩过"加了半边"：先把 `.codebuddy/` 加进 `TOP_DIRS`，量测却报"0 处命中"，
+    #   看着像"治理区本来就干净"，真因是 **`_PATH_RE` 首字符类不含 `.`** ⇒ 压根不匹配。
+    #   ⇒ 这条就是**专门钉那个正则与那个常量配得上对**（判据与靶是一对，本仓老话）。
+    {"desc": "M23 `T3` 治理区纳入扫描面（`.codebuddy/…` 的幽灵路径必须报红）", "mode": "red",
+     "also": ("[T3]", "nope_ghost"), "path": THRESHOLD,
+     "frag": lambda src: _fit(_b("\n\n\n另见 `.codebuddy/work/50-tickets/nope_ghost.md`。\n\n\n"), src)},
+    # ⚠️ `M24`–`M26` 是 `/code-review`（2026-10-05）补的：审查指出三处「判据装了但没人证伪」
+    #   —— 豁免词表没有靶、仓外白名单登记没有靶、`T18` 新增的两档没有靶。
+    # ⚠️ `M24` 钉的是**距离闸**：提示词挪到**行尾远处** ⇒ 那个路径**必须仍报红**
+    #   （否则"整行命中就算"就回来了 ⇒ 泛词迟早巧合命中 ⇒ 又一次假绿）。
+    {"desc": "M24 `T3` 旧路径豁免**必须贴着那个路径**（提示词挪到行尾 ⇒ 仍须报红）", "mode": "red",
+     "also": ("[T3]", "models_registry"), "path": IDE,
+     "old_new": (_b("⛔ 旧路径 `app/core/models_registry.py` 不存在了"),
+                 _b("`app/core/models_registry.py` ⛔ 这条早已不是现在的落点（当年行内的标注写的是：旧路径）")), "all": False},
+    # ⚠️ `M25`/`M26` 钉 `T18` 的两个**新档**（`GUARDED` 加了它们，却没人为它们写靶）。
+    {"desc": "M25 `T18` 仓外根登记**在盘上不存在**（`outside_prefix` 档）", "mode": "red",
+     "also": ("[T18]", "仓外根"), "path": COMMON_SRC,
+     "old_new": (_b('OUTSIDE_ROOTS: tuple[str, ...] = ("D:/dev/.归档-mtrl",)'),
+                 _b('OUTSIDE_ROOTS: tuple[str, ...] = ("D:/dev/.归档-mtrl_typo",)')), "all": False},
+    {"desc": "M26 `T18` 豁免词表**不许有空项**（`nonempty` 档 · 空表 = 判据等于没有）", "mode": "red",
+     "also": ("[T18]", "空项"), "path": COMMON_SRC,
+     "old_new": (_b('    "旧路径", "已不存在", "已退场", "已搬走", "已移出", "不在仓内",\n'),
+                 _b('    "旧路径", "已不存在", "已退场", "已搬走", "已移出", "不在仓内", "",\n')),
+     "all": False},
 ]
 
 
