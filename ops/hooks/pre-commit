@@ -66,6 +66,26 @@ do
   fi
 done
 
+#: ---------------------------------------------------------------------------
+#: ④ 暂存区**文件名黑名单**（2026-10-05 `/retro` 候选 4 · 用户令并入 `TAIL-235` 丁批）
+#:   为什么先只做文件名：⛔ 内容扫描（`PASSWORD=` / `DATABASE_URL`）要 grep，而本钩子第 29 行
+#:   已记「`tail`/`sed`/`awk` 在 sh 里可能不在 PATH」⇒ 用 grep 同源风险；而**文件名**是纯 shell
+#:   可判的，零风险、零新文件。内容扫描留给丁批的独立审计件（那时走 venv python，不依赖 PATH）。
+#:   拦的是什么：`ops/init_db.sql` 的 `<PASSWORD>` 在本机部署时被填成**真口令**（项目既定做法）
+#:   ⇒ ⛔ 绝不提交；`.env` 同理（只有 `.env.example` 是模板，白名单放行）。
+for f in $(git diff --cached --name-only 2>/dev/null); do
+  case "$f" in
+    ops/init_db.sql|.env|.env.*)
+      case "$f" in
+        *.example) ;;                      # 模板，放行
+        *) echo "pre-commit ⛔ 暂存区含疑似口令文件：$f"
+           echo "            它在本机被填过真值（⛔ 绝不提交）。要用它 ⇒ 先把它移出暂存区。"
+           echo "            提交请用**列举式** git add（⛔ 别用 -A）。"
+           exit 1;;
+      esac;;
+  esac
+done
+
 if [ -n "$bad" ]; then
   echo "pre-commit：上面这些红了 ⇒ 先清红再提交（明细 = 直接跑那一把尺子）。"
   echo "            真机 / 全套 pytest / 盖章 / 产包干跑 不在这儿 —— 收工入口 = tools/oneoff/_run_rulers.py --all"
