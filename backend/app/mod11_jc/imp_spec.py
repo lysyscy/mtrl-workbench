@@ -147,6 +147,13 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     out = B.apply_batch(s, rows, project_id=int(project_id), project_key=key,
                         operator=str(operator or ""), batch_no=(options or {}).get("batch"))
     out["project_key"] = key
+    # ⭐⭐ 2026-10-05（`M8 ①` 落地那天用户问出来的）：本域原先**没给** `rows` ⇒ 通用面那句
+    #   「已导入 N 行」退回了 `len(records)`（= **解析出**多少行），于是配不上的 / 合计行也**算进了
+    #   "已导入"** —— 实测晋江那份：真写 **69** 条，回执却写「已导入 **72** 行」。
+    #   ⛔ 那是 `import_kit/api.py::api_commit` 明写不许发生的事（「域回执里给了写入行数（`rows`）就用它；
+    #   没给才退回解析行数」）⇒ **`m06` 给了、本域没给** = 同一通用面两个口径（⛔ 同一个口径两个主人）。
+    #   ⇒ 这里给的是**真写进去的行数**（`apply_batch` 的 `updated`：配上并更新的那些）。
+    out["rows"] = int(out.get("updated") or 0)
     # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」· 四个域一起改）：回执**自报人话指标** ——
     #    通用面只画 `kpis`，⛔ 不再把 `updated` / `undo_rows` / `message` 这些**程序用的键名**铺一排。
     #    ⚠️ 词与 `preview` **完全一样**（配上 / 配不上 / 同价冲突 / 不合格）—— 同一个数在两屏不许换说法。

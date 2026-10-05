@@ -73,3 +73,8 @@ watchfiles==1.2.0
 websockets==17.1
 win32_setctime==1.2.0
 xlsxwriter==3.2.9
+# ⭐ 2026-10-05 补（`M8 ①` 落地第一天撞到）：老 `.xls`（OLE2）台账读不了 ——
+#   `import_kit/readers.py::_read_xls` 按**魔术字节**认 `.xls` 并 `import xlrd`，但本清单原先**没登记它**
+#   ⇒ 换机落地后集采台账（用户手里就是 `.xls`）一律"解析失败"，且报错落到通用兜底、不指路。
+#   ⚠️ `xlrd` 2.x **只读 .xls、不读 .xlsx**（正是这里要的）；新格式仍由 `openpyxl` 负责（⛔ 别删 openpyxl）。
+xlrd==2.0.1
