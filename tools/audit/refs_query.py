@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -38,22 +39,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 #: ⛔ **下面 import 的是"口径"，本件一个字都不许另抄** —— 抄一份就有第二套口径（本仓最贵的病）。
 from audit_common import (                                         # noqa: E402
-    LENIENT_GLOBS, LIVE_MACHINE_GLOBS, REPO_ROOT, SCAN_GLOBS, TOP_DIRS,
+    DOC_SUFFIXES, LENIENT_GLOBS, LIVE_MACHINE_GLOBS, REPO_ROOT, SCAN_GLOBS, TOP_DIRS,
 )
 from audit_meta import (                                            # noqa: E402
-    TICKET_DIR_REL, TICKET_NAME_RE, TICKET_STATE_RE, TICKET_STATES,
+    TICKET_CLOSED, TICKET_DIR_REL, TICKET_NAME_RE, TICKET_STATE_RE, TICKET_STATES,
 )
 
 #: 票目录（前缀形态）—— 活文档那一路**排除**它，票的引用**单列第三路**。
 TICKET_PREFIX = TICKET_DIR_REL + "/"
 
-#: 盘点对象 = 文档件（⛔ 不是"活机器"—— 那是上面那个常量管的事）。
-DOC_SUFFIXES = (".md", ".mdc")
+#: 盘点对象 = 文档件（⛔ 后缀表**不在这里另抄** —— `/code-review` 当场抓过这一条：
+#: `DOC_SUFFIXES` 的真源是 `audit_common`，本件只 import）。
 
 #: ⛔ **分母里排除的目录 ＋ 每一条的理由**（`refs` 的数只有连分母一起看才有意义 ——
 #:    2026-10-05 实测教训「报数之前先问这个数分母是什么」）。
 #: ⚠️ 这里**故意只排"按制度会消失 / 不是文档"**的目录；留痕区（逐日日志 / 归档 / 设计件）
 #:    **一律留在分母里** —— 当天差点被搬走的就是设计件，排掉它等于把眼睛闭上。
+#: ⚠️⚠️ **它不是 `T14`/`T15` 那两张白名单**（`/code-review` 当场指出这里容易看错）：
+#:    那两张管的是「**尺子看不看**那一件」，本表管的是「**盘点分母里算不算**」——
+#:    同一个目录可以在两张表里都出现、也可以只在一张里（`artifacts/` 在 `T15` 白名单里，
+#:    但它是**生成物**，盘点时也不该当文档件数）⇒ **别把"加进这里"当成"尺子也不看它了"**。
 EXCLUDE_PREFIXES: tuple[tuple[str, str], ...] = (
     (".git/", "版本库内部"),
     ("backend/.venv/", "虚拟环境（非本仓产物）"),
@@ -161,11 +166,18 @@ def build_doc_corpus() -> tuple[Lines, int]:
     return c, len(lenient)
 
 
-def build_tickets() -> tuple[list[tuple[str, str]], int]:
-    """③ 未销号票 —— ⛔ 销号判定与票目录都走 `audit_meta`（`done` = 销号），不另抄。
-    → `([(票号, rel)], 已销号件数)`"""
+def build_tickets() -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """③ 票 —— ⛔ 销号判定与票目录都走 `audit_meta`（`TICKET_CLOSED` = 销号），不另抄。
+    → `(未销号 [(票号, rel)], 已销号 [(票号, rel)])`
+
+    ⚠️ **为什么连"已销号"一起返回**（`/code-review` 抓出的一处**方向性风险**）：
+       票面口径是"**未销号**票"（这是对的：销号票的引用不构成"还有人要它"），
+       但当天那起事故恰恰是「**票已销号、依据却悬空**」⇒ 只按未销号算**偏小**，
+       而偏小会让人误判"没人要它"。⇒ 口径**不改**（按票面），
+       **但把"只被已销号票引用"这件事单列一行报出来**（`_all_report` 末尾那行参考）。
+    """
     out: list[tuple[str, str]] = []
-    closed = 0
+    closed: list[tuple[str, str]] = []
     for p in sorted((REPO_ROOT / TICKET_DIR_REL).glob("*.md")):
         m = TICKET_NAME_RE.match(p.name)
         if not m:
@@ -173,8 +185,8 @@ def build_tickets() -> tuple[list[tuple[str, str]], int]:
         body = p.read_text(encoding="utf-8", errors="replace")
         st = TICKET_STATE_RE.search(body)
         # ⚠️ 状态读不到 ⇒ **按未销号算**（保守）并照样列出 —— 漏算比多算危险。
-        if st and st.group(1) in TICKET_STATES and st.group(1) == "done":
-            closed += 1
+        if st and st.group(1) in TICKET_STATES and st.group(1) == TICKET_CLOSED:
+            closed.append((m.group(1), _rel(p)))
             continue
         out.append((m.group(1), _rel(p)))
     return out, closed
@@ -278,7 +290,7 @@ def _resolve(target: str, docs: list[str]) -> tuple[str, str, str]:
 
 
 def _head(live: Lines, lanes, doc: Lines, lenient_n: int,
-          open_tickets, closed_n: int, tick: Lines) -> list[str]:
+          open_tickets, closed, tick: Lines) -> list[str]:
     """分母那一段 —— ⭐ **每个数都要带着分母出现**（2026-10-05 教训：先问「分母是什么」）。"""
     lane_txt = " ｜ ".join("%s %d 件/%d 行" % (lab, nf, nl) for lab, nf, nl in lanes)
     return [
@@ -289,8 +301,8 @@ def _head(live: Lines, lanes, doc: Lines, lenient_n: int,
         "       %s" % lane_txt,
         "  ② 活文档语料 %d 件 / %d 行（`SCAN_GLOBS` 减留痕区 %d 件、再减票目录）"
         % (len(doc.files), len(doc), lenient_n),
-        "  ③ 未销号票 %d 张（已销号 %d 张不计）/ 票正文 %d 行"
-        % (len(open_tickets), closed_n, len(tick)),
+        "  ③ 未销号票 %d 张（**已销号 %d 张另有一行参考**，见末尾）/ 票正文 %d 行"
+        % (len(open_tickets), len(closed), len(tick)),
         "  ⛔ 已排除的目录（分母之外，各有理由）：" + " · ".join(
             "%s（%s）" % (pre.rstrip("/"), why) for pre, why in EXCLUDE_PREFIXES),
         "  ⚠️ **引用数是保守偏大的**：凡本仓任何文件（含**尺子与本工具自己**）里写了那个路径，"
@@ -299,10 +311,11 @@ def _head(live: Lines, lanes, doc: Lines, lenient_n: int,
     ]
 
 
-def build_ticket_corpus(open_tickets: list[tuple[str, str]]) -> Lines:
-    """③ 未销号票的正文（逐行）—— ⛔ 只放**未销号**的（销号票的引用不构成"还有人要它"）。"""
+def build_ticket_corpus(tickets: list[tuple[str, str]]) -> Lines:
+    """③ 一批票的正文（逐行）—— ⚠️ **传哪一批由调用方决定**：未销号那批进第三路；
+    已销号那批**只**作末尾那行"参考"（口径按票面，方向靠这一行补）。"""
     c = Lines()
-    for _tid, rel in open_tickets:
+    for _tid, rel in tickets:
         c.add_file(REPO_ROOT / rel)
     return c
 
@@ -342,16 +355,22 @@ def _one_report(rel: str, name: str, note: str, lb: Blob, db: Blob, tb: Blob,
     return L
 
 
-def _all_report(docs: list[str], lb: Blob, db: Blob, tb: Blob) -> list[str]:
+def _all_report(docs: list[str], lb: Blob, db: Blob, tb: Blob, cb: Blob) -> list[str]:
     keep: list[tuple[int, int, int, int, str]] = []
     zeros: list[str] = []
+    only_closed: list[str] = []
     for rel in docs:
         name = rel.rsplit("/", 1)[-1]
         skip = frozenset({rel})
         a = len(find_refs(lb, rel, name, skip))
         b = len(find_refs(db, rel, name, skip))
         c = len(find_refs(tb, rel, name, skip))
-        (keep.append((a + b + c, a, b, c, rel)) if (a or b or c) else zeros.append(rel))
+        if a or b or c:
+            keep.append((a + b + c, a, b, c, rel))
+        else:
+            zeros.append(rel)
+            if find_refs(cb, rel, name, skip):
+                only_closed.append(rel)
     keep.sort(key=lambda x: (-x[0], x[4]))
     zeros.sort()
     L = ["⛔ 不动的 N 件（三路里任一路 > 0 ⇒ 删 / 搬之前先看这里）—— **这份表就是覆盖面自检**",
@@ -361,6 +380,10 @@ def _all_report(docs: list[str], lb: Blob, db: Blob, tb: Blob) -> list[str]:
     L.append("")
     L.append("不动的 %d 件 ＋ 各自引用数（上表）｜ 文档件共 %d 件 ｜ 三路全 0 的 %d 件（**候选**）"
              % (len(keep), len(docs), len(zeros)))
+    L.append("⚠️ 参考：**只被已销号票引用**的 %d 件（⛔ 不计入上面的判定）—— 销号票的引用不构成"
+             "「还有人要它」，但 2026-10-05 那起事故正是「票已销号、依据却悬空」⇒ 这一行是给你"
+             "看这个方向的：%s"
+             % (len(only_closed), "、".join(only_closed[:6]) if only_closed else "（无）"))
     if zeros:
         L.append("")
         L.append("三路全 0 的件（**候选 ≠ 可删** —— 2026-10-05 实测：机器引用 0 的母本被四张票当唯一依据）")
@@ -374,13 +397,14 @@ def collect(target: str | None) -> str:
     """盘点一份**完整报告**（纯读；⛔ 不打印时间戳/耗时 —— 那会让自测的"两遍字节相同"永远失败）。"""
     live, lanes = build_live_corpus()
     doc, lenient_n = build_doc_corpus()
-    open_tickets, closed_n = build_tickets()
+    open_tickets, closed = build_tickets()
     tick = build_ticket_corpus(open_tickets)
     lb, db, tb = Blob(live), Blob(doc), Blob(tick)
+    cb = Blob(build_ticket_corpus(closed))          # 已销号票：只作"参考"那一行
     tid_of = {rel: tid for tid, rel in open_tickets}
     docs = iter_doc_files()
-    out = _head(live, lanes, doc, lenient_n, open_tickets, closed_n, tick)
-    out += (_all_report(docs, lb, db, tb) if target is None
+    out = _head(live, lanes, doc, lenient_n, open_tickets, closed, tick)
+    out += (_all_report(docs, lb, db, tb, cb) if target is None
             else _one_report(*_resolve(target, docs), lb, db, tb, tid_of))
     out.append("")
     return "\n".join(out)
@@ -389,15 +413,39 @@ def collect(target: str | None) -> str:
 # ------------------------------------------------------------------- 自测
 
 def _fingerprint() -> tuple:
-    """扫描面（活机器 ＋ 活文档 ＋ 票）的 `(相对路径, 字节数, mtime_ns)` —— **no-op 的凭据**。"""
+    """扫描面（活机器 ＋ 活文档 ＋ 未销号票）的 `(相对路径, 字节数, **内容哈希**)`。
+
+    ⭐⭐ **为什么必须用内容哈希、不能用 mtime**（`/code-review` 当场抓出来的）：
+       票面验收写的是「**字节级** no-op」—— 而 `(大小, mtime)` **证明不了内容没变**：
+       ① 同大小不同内容它照样绿；② 单纯 touch 一下它会假红。
+       ⇒ 只认内容哈希这一种凭据。
+    """
     live, _ = build_live_corpus()
     doc, _n = build_doc_corpus()
-    tick, _c = build_tickets()
+    tick, _closed = build_tickets()
     fps = []
     for rel in sorted(set(live.files) | set(doc.files) | {r for _t, r in tick}):
-        st = (REPO_ROOT / rel).stat()
-        fps.append((rel, st.st_size, st.st_mtime_ns))
+        raw = (REPO_ROOT / rel).read_bytes()
+        fps.append((rel, len(raw), hashlib.md5(raw).hexdigest()))
     return tuple(fps)
+
+
+def _receipt(text: str) -> list[str]:
+    """**第二遍回执要贴的那几行**（票面第 2 批验收 2 的凭据）：
+    分母三行 ＋ **不动件逐件表**（含各自引用数）＋ 汇总行。
+
+    ⚠️ `/code-review` 抓到的缺陷：首版只回执了**汇总行**，而汇总行里写着"（上表）"
+    ⇒ **那张表根本没打出来** ⇒ 验收要的「不动的 N 件 ＋ 各自引用数」其实**没给全**。
+    """
+    lines = text.splitlines()
+    out = [ln for ln in lines
+           if ln.startswith(("  ① 活机器", "  ② 活文档", "  ③ 未销号票"))]
+    try:
+        i = next(k for k, ln in enumerate(lines) if ln.startswith("⛔ 不动的"))
+        j = next(k for k, ln in enumerate(lines) if ln.startswith("⚠️ 参考："))
+    except StopIteration:                      # 单件模式没有那张表 ⇒ 只给分母
+        return out
+    return out + lines[i:j + 1]
 
 
 def selftest() -> int:
@@ -413,7 +461,7 @@ def selftest() -> int:
     first = collect(None)
     fp1 = _fingerprint()
     same_fp_1 = fp0 == fp1
-    print("  %s 第 ① 遍：扫描面 %d 个文件，前后指纹%s"
+    print("  %s 第 ① 遍：扫描面 %d 个文件，前后**内容指纹**%s"
           % ("✅" if same_fp_1 else "⛔", len(fp0), "一致" if same_fp_1 else "**变了**（本件在写东西！）"))
     ok += bool(same_fp_1)
 
@@ -424,8 +472,8 @@ def selftest() -> int:
     print("  %s 第 ② 遍：输出与第 ① 遍%s（%d 字节）"
           % ("✅" if same_out else "⛔", "逐字节相同" if same_out else "**不同**",
              len(second.encode("utf-8"))))
-    print("  %s 第 ② 遍：扫描面指纹%s" % ("✅" if same_fp_2 else "⛔",
-                                        "一致（字节级 no-op）" if same_fp_2 else "**变了**"))
+    print("  %s 第 ② 遍：扫描面**内容指纹**%s（大小 ＋ md5 ⇒ 真的是字节级 no-op）"
+          % ("✅" if same_fp_2 else "⛔", "一致" if same_fp_2 else "**变了**"))
     ok += int(same_out) + int(same_fp_2)
 
     live, lanes = build_live_corpus()
@@ -454,7 +502,7 @@ def selftest() -> int:
     #   ⇒ 输出的「① 机器引用 2 处」而**逐路全 0**（总数不减、逐路不减，两边对不上）。
     #   ⚠️ 这类 bug **只有"总数 == 逐路之和、且 lane 落在合法范围"这条断言能抓** ——
     #   眼睛看输出只会觉得"逐路都是 0，挺好"。⇒ 做成常设断言。
-    live_c, _lane_rows = build_live_corpus()
+    live_c, lane_rows = build_live_corpus()
     lblob = Blob(live_c)
     probe2 = "tools/audit/audit_common.py"          # ⛔ 挑一个**保证有机器命中**的探针
     rel2, name2, _note2 = _resolve(probe2, iter_doc_files())
@@ -470,14 +518,22 @@ def selftest() -> int:
              if by_lane else "（无）"))
     ok += bool(lane_ok)
 
+    # ⭐ 票面 Testing Decisions「缝 B」要的是「**六路活机器口径齐全**」——
+    #   `/code-review` 指出首版只断言了"命中落在合法 lane 区间"，**没断言每一路都有文件**
+    #   ⇒ 那正是"空扫"（`T18`/`T23` 半边② 在报的同一族病）能从自测这边溜过去的原因。
+    empty_lanes = [lab for lab, nf, _nl in lane_rows if nf == 0]
+    six_ok = not empty_lanes
+    print("  %s 活机器**六路逐路都有文件**（%d 路 · 空的路：%s）"
+          % ("✅" if six_ok else "⛔", len(lane_rows),
+             "、".join(empty_lanes) if empty_lanes else "无"))
+    ok += bool(six_ok)
+
     print()
-    print("  自测 %d/7" % ok)
-    print("  —— 第二遍回执（**不动的 N 件 ＋ 各自引用数**，票面第 2 批验收的凭据）")
-    for line in second.splitlines():
-        if line.startswith("不动的 ") or line.startswith("  ① 活机器") or line.startswith("  ② 活文档") \
-                or line.startswith("  ③ 未销号票"):
-            print("  " + line)
-    return 0 if ok == 7 else 1
+    print("  自测 %d/8" % ok)
+    print("  —— 第二遍回执（票面第 2 批验收 2 的凭据：**不动的 N 件 ＋ 各自引用数**）")
+    for line in _receipt(second):
+        print("  " + line)
+    return 0 if ok == 8 else 1
 
 
 def main() -> int:

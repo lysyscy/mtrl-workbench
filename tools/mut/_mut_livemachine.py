@@ -8,12 +8,13 @@
 `.py` ⇒ **漏了运维脚本与规则档两路** ⇒ 差点把一份**被运维脚本引用**的设计件当死重搬走。
 而**"命令自己测自己"不够** —— 翻车那版正是"口径只写在脚本里、没人钉"。
 
-做法（五例，缺一不可）：
+做法（六例，缺一不可）：
   ① **拿掉一路**必须报红（漏扫那一处却仍然全绿 ＝ 那天那场翻车）；
   ② **glob 写坏**（空命中）必须报红（扫空集却装作扫过 ＝ `T18` 同族的假绿）；
   ③ 命令件里**再抄一份口径**必须报黄（"只定义一次"要有牙）；
-  ④ **正常数据必须一条不报**（这一条比"会报"更要紧：只会误报的判据比没有判据更坏）；
-  ⑤ **接线不许掉**（判据装了却没进 `doc_audit` ＝ 收工闸门里没有它 —— 本仓已有五例"僵尸闸门"）。
+  ④ **接线不许掉**（判据装了却没进 `doc_audit` ＝ 收工闸门里没有它 —— 本仓已有五例"僵尸闸门"）；
+  ⑤ ⭐ **后缀白名单**改坏也必须报红（`/code-review` 当场指出首版只钉了 glob ⇒ 第三半边是哑的）；
+  ⑥ **正常数据必须一条不报**（这一条比"会报"更要紧：只会误报的判据比没有判据更坏）。
 
 ⚠️ 一律 bytes ＋ 改完立刻按原 bytes 复原 ＋ 末尾 MD5 逐字节校验。
 ⚠️ 验判据走**子进程**（不是 import）—— 改完 `audit_common.py` 后本进程里的模块缓存
@@ -37,6 +38,8 @@ DOCAUDIT = ROOT / "tools" / "audit" / "doc_audit.py"
 #: `LIVE_MACHINE_GLOBS` 里那一行的**完整字面**（⛔ 必须是唯一的结构行，不是"含 ops 的第一行"）
 LANE_PS1 = '("ops/*.ps1", "④ 运维脚本", (".ps1",)),'
 LANE_PS1_BAD = '("ops/*.psX", "④ 运维脚本", (".ps1",)),'
+#: 只把**后缀白名单**换掉（glob 保持能命中）⇒ 专打"判据只钉了 glob"那一半
+LANE_PS1_BAD_SUF = '("ops/*.ps1", "④ 运维脚本", (".mdc",)),'
 
 #: 在子进程里单跑 `T23`（⛔ 不在本进程 import —— 模块缓存会拿旧值，＝ 假绿）
 PROBE = (
@@ -89,6 +92,9 @@ def main() -> int:
     cases.append(("L3", "`refs` 件代码里复述活机器路径 ⇒ 必须报黄", REFS, refs_src, "restate", "yellow"))
     # ④ 接线不许掉（装了却没进收工闸门 ＝ 本仓已有五例"僵尸闸门"）
     cases.append(("L4", "`doc_audit` 里的接线被拆掉 ⇒ 必须报红", DOCAUDIT, doc_src, "unwire", "red"))
+    # ⑤ ⭐ 第三半边（`/code-review` 指出首版只钉了 glob）：**后缀白名单**改坏也必须报红
+    cases.append(("L5", "**后缀白名单**改坏 ⇒ 必须报红（第三半边）", COMMON, common_src,
+                  "break_suffix", "suffix"))
 
     hit = 0
     for tag, desc, path, src, mode, expect in cases:
@@ -107,6 +113,10 @@ def main() -> int:
             elif mode == "break_glob":
                 assert text.count(LANE_PS1) == 1, "锚点不唯一 ⇒ 本件需重定靶"
                 path.write_bytes(text.replace(LANE_PS1, LANE_PS1_BAD, 1).encode("utf-8"))
+            elif mode == "break_suffix":
+                # ⚠️ 只换**后缀**、glob 不动 ⇒ 若判据只钉 glob，这一半就是哑的（首版正是这样）
+                assert text.count(LANE_PS1) == 1, "锚点不唯一 ⇒ 本件需重定靶"
+                path.write_bytes(text.replace(LANE_PS1, LANE_PS1_BAD_SUF, 1).encode("utf-8"))
             elif mode == "restate":
                 # ⚠️ 必须落在**代码**里：注释里的字面 `tokenize` 会剔掉 ⇒ 判据不会报（那是对的）
                 add = ('\n\n#: 变异注入（L3）：命令件里再抄一份活机器口径。\n'
@@ -123,25 +133,27 @@ def main() -> int:
             ok = n > 0 and "L 红" in out
         elif expect == "yellow":
             ok = n > 0 and "L 黄" in out
+        elif expect == "suffix":
+            ok = n > 0 and "L 红" in out and "后缀" in out
         else:                                     # empty
             ok = n > 0 and "一条都不命中" in out
         print("  %s %s %s  →  `T23` 命中 %d 条（期望 %s）"
               % ("✅" if ok else "⛔ 未命中", tag, desc, n, expect))
         hit += bool(ok)
 
-    # ④ 正常数据一条不报（这一条比"会报"更要紧）
+    # ⑥ 正常数据一条不报（这一条比"会报"更要紧）
     n2, _ = probe()
     ok4 = n2 == 0
-    print("  %s L5 正常数据**一条不报**（`T23` 命中 %d 条，期望 0）" % ("✅" if ok4 else "⛔", n2))
+    print("  %s L6 正常数据**一条不报**（`T23` 命中 %d 条，期望 0）" % ("✅" if ok4 else "⛔", n2))
     hit += bool(ok4)
 
     dirty = [p.name for p, b in ((COMMON, common_src), (REFS, refs_src), (DOCAUDIT, doc_src))
              if md5(p) != hashlib.md5(b).hexdigest()]
     print()
-    print("  命中 %d/5" % hit)
+    print("  命中 %d/6" % hit)
     print("  复原校验（MD5 逐字节）：%s"
           % ("✅ 全部复原" if not dirty else "❌ 未复原：" + "、".join(dirty)))
-    return 0 if (hit == 5 and not dirty) else 1
+    return 0 if (hit == 6 and not dirty) else 1
 
 
 if __name__ == "__main__":

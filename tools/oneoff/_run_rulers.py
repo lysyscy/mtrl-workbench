@@ -1,6 +1,11 @@
-"""收口闸门一把跑：16 把尺子逐个跑、只打印"该读的那几行"，rc≠0 的列进 `BAD`。
-⭐ 2026-10-01（`TAIL-205`）起**末尾多一步**：**守尺子的变异自证**（`tools/oneoff/_run_muts.py` · 8 支 · ~33 秒）
-   —— `tools/mut/**` 原先不在任何闸门里 ⇒ "加了反向灵敏度却没人跑" ⇒ 一天抓到 4 例假绿。
+"""收口闸门一把跑：`CMDS` 里的每一把逐个跑、只打印"该读的那几行"，rc≠0 的列进 `BAD`。
+⚠️ **条数别抄在这里**（⛔ 抄了必漂，`tools/README.md` 纪律）—— 清单的**唯一出处 = 本件 `CMDS`**。
+
+⭐ 2026-10-01（`TAIL-205`）起**末尾多一步**：**守尺子的变异自证**（`tools/oneoff/_run_muts.py` ·
+  ⛔ 支数看那件自己的输出）—— `tools/mut/**` 原先不在任何闸门里
+  ⇒ "加了反向灵敏度却没人跑" ⇒ 一天抓到 4 例假绿。
+⭐ 2026-10-05（`TAIL-236` 批 2）：`CMDS` 里也多了 `refs_query.py --selftest`
+  —— 同族：命令自身的自测不在闸门里 ⇒ 它的检索逻辑坏了没人知道。
 
 **为什么单独落成文件**：2026-09-29 实测 —— 这套命令用 `python -c "…\\nfor …"` 的**内联多行**写法
 在 PowerShell 里**反复被吃掉换行**（`unexpected character after line continuation character` ✗）。
@@ -18,8 +23,11 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 
-KEEP = ("必须修", "结论", "_smoke", "_links", "_ids", "_doccheck", "台账一致", "逐行一致",
-        "判据点合计", "幽灵", "[T6]", "[T10]", "[T13]", "[T20]")
+KEEP = ("必须修", "结论：", "_smoke", "_links", "_ids", "_doccheck", "台账一致", "逐行一致",
+        "判据点合计", "幽灵", "[T6]", "[T10]", "[T13]", "[T20]",
+        "自测 ")          # ⭐ `refs_query --selftest` 的"自测 N/N"那一行（2026-10-05 加）
+# ⚠️ 「结论**：**」带冒号：光靠 `结论` 会把**文件名里带"结论"两字**的件名也抓进来
+#    （实测 `refs` 那一行后面跟了两行 `ops/…-实测结论.md` ⇒ 闸门输出里全是噪声）。
 
 CMDS: list[tuple[str, list[str]]] = [
     ("tools/audit/doc_audit.py", ["--ui"]),
@@ -37,6 +45,10 @@ CMDS: list[tuple[str, list[str]]] = [
     ("tools/audit/sticky_probe.py", []),
     ("tools/audit/mut_cover.py", ["--check"]),
     ("tools/audit/acc_report.py", []),
+    # ⭐ 2026-10-05（`TAIL-236` 批 2 · `/code-review` 指出）：`refs` 命令**自身的自测**
+    #   原先不在任何闸门里 ⇒ "命令的检索逻辑坏了没人知道"（同 `tools/mut/**` 那族假绿）。
+    #   ⛔ 只进收工闸门、不进 `pre-commit`（那个只跑便宜子集）。
+    ("tools/audit/refs_query.py", ["--selftest"]),
     ("tools/probe/_audit_face.py", []),
 ]
 

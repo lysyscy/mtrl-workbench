@@ -435,6 +435,11 @@ TICKET_CHECKBOX_RE = re.compile(r"^\s*-\s*\[[ xX]\]", re.M)
 #: 票的合法**状态**（受控词；出处 = `ops/agents/issue-tracker.md` §三）
 TICKET_STATES: tuple[str, ...] = ("ready-for-agent", "claimed", "ready-for-human",
                                   "needs-info", "needs-triage", "wontfix", "done")
+#: ⭐ **"销号"＝哪个状态词**（`TICKET_STATES` 里的一个）—— 2026-10-05 立（`TAIL-236` 批 2）。
+#: ⛔ 为什么要**单列一个常量**：`/code-review` 抓到 `refs_query.py` 里**硬写 `"done"`** ——
+#:   那是"什么算销号"的**第二处字面** ⇒ 改词表时那处会静默漏掉（本仓最贵的病：改一处漏一处）。
+#: ⚠️ 真源仍是 `TICKET_STATES`（本常量**必须**是它的成员，⛔ 别单独当词表用）。
+TICKET_CLOSED: str = "done"
 TICKET_NAME_RE = re.compile(r"^(TAIL-\d+)-.+\.md$")
 TICKET_STATE_RE = re.compile(r"\*\*Status:\*\*\s*`?([a-z\-]+)`?")
 
@@ -913,16 +918,19 @@ def check_line_splices() -> list[dict]:
 # ⚠️⚠️ **`LIVE_MACHINE_REQUIRED` 为什么是"看起来的第二份字面"**：它是**判据的靶**。
 #    两者**故意住在两件里** —— 否则把执行清单里的一路删掉，判据会跟着一起删、**永远绿**
 #    （同族教训：`T3` 的豁免词表若并进四把尺子共用的 `HARD_EXEMPT`，会把 `T2` 一起赦掉）。
-LIVE_MACHINE_REQUIRED: tuple[str, ...] = (
-    "backend/app/**/*.py",
-    "backend/tests/**/*.py",
-    "tools/audit/**/*.py",
-    "tools/mut/**/*.py",
-    "tools/probe/**/*.py",
-    "ops/*.ps1",
-    ".codebuddy/rules/**/*.mdc",
-    "backend/app/web/**/*.js",
-    "backend/app/web/**/*.html",
+#: ⚠️ **形态 = `(glob, 后缀白名单)` 两项**（`/code-review` 当场指出首版只钉了 glob）：
+#:   `audit_common` 那张表的注释自称后缀白名单是"**第三半边**"，而首版的靶里**没有它**
+#:   ⇒ 把某一路的后缀改坏（`(".ps1",)` → `(".mdc",)`）判据**一声不响**。
+LIVE_MACHINE_REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("backend/app/**/*.py", (".py",)),
+    ("backend/tests/**/*.py", (".py",)),
+    ("tools/audit/**/*.py", (".py",)),
+    ("tools/mut/**/*.py", (".py",)),
+    ("tools/probe/**/*.py", (".py",)),
+    ("ops/*.ps1", (".ps1",)),
+    (".codebuddy/rules/**/*.mdc", (".mdc",)),
+    ("backend/app/web/**/*.js", (".js",)),
+    ("backend/app/web/**/*.html", (".html",)),
 )
 #: `refs` 查询命令件 —— 半边③ 守的就是它（⛔ 它的**代码**里不许再写一份活机器路径）。
 REFS_QUERY_REL = "tools/audit/refs_query.py"
@@ -973,14 +981,15 @@ def check_live_machine() -> list[dict]:
        它防的是"顺手又抄一份"，不是防"刻意绕过"。
     """
     out: list[dict] = []
-    have = {g for g, _label, _sufs in LIVE_MACHINE_GLOBS}
-    for g in LIVE_MACHINE_REQUIRED:
-        if g in have:
+    have = {(g, sufs) for g, _label, sufs in LIVE_MACHINE_GLOBS}
+    for g, sufs in LIVE_MACHINE_REQUIRED:
+        if (g, sufs) in have:
             continue
-        out.append(_t23(1, f"活机器口径**缺一路**：`{g}`",
+        out.append(_t23(1, f"活机器口径**缺一路，或那一路的后缀白名单对不上**：`{g}` {sufs}",
                         "少一路 ⇒ 引用盘点少扫那一处 ⇒ 会报「没人引用」"
-                        "（2026-10-05 实测：漏了运维脚本与规则档两路，差点搬走被引用的设计件）",
-                        f"把 `{g}` 加回 `audit_common.LIVE_MACHINE_GLOBS`"
+                        "（2026-10-05 实测：漏了运维脚本与规则档两路，差点搬走被引用的设计件）；"
+                        "**后缀对不上**同族 —— 那条路会扫到别的后缀上去，等于没扫对它",
+                        f"把 `{g}` ＋ 后缀 {sufs} 加回 `audit_common.LIVE_MACHINE_GLOBS`"
                         "（改口径要同批改 `ops/阈值表.md` 与 `LIVE_MACHINE_REQUIRED`）", RED))
     for glob, label, sufs in LIVE_MACHINE_GLOBS:
         if any(p.is_file() and p.suffix in sufs for p in REPO_ROOT.glob(glob)):
@@ -995,7 +1004,7 @@ def check_live_machine() -> list[dict]:
                         "恢复该件（只读工具 · `TAIL-236` 第 2 批）", RED))
     else:
         for i, raw in _code_lines(q, drop_strings=False).items():
-            for g in LIVE_MACHINE_REQUIRED:
+            for g, _sufs in LIVE_MACHINE_REQUIRED:
                 if g in raw:
                     out.append(_t23(i, f"`{REFS_QUERY_REL}` 的代码里又写了一份活机器路径：`{g}`",
                                     "口径**只定义一次**（`audit_common.LIVE_MACHINE_GLOBS`）——"
