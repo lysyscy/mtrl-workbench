@@ -41,7 +41,7 @@
 - PG 16：程序 `C:\Program Files\PostgreSQL\16` · 数据 `D:\pgsql\data` · 服务 `postgresql-x64-16` · 仅回环。
 - 后端 = NSSM 服务 `mtrl-workbench-server`（8000）：⚠️ **改后端 Python 必须 `ops\server_ctl.ps1 -Action restart`**（**无 `--reload`**）；⭐ **改壳不用重启** ⇒ 真机突然红了**先怀疑服务跑旧码**（`-Action status` 看 PID 启动时间）。⛔⛔ **别用 `Stop-Process` 强杀其子进程**（NSSM 会变 `Paused` = 脱管）。
 - Playwright 在 **`C:\ProgramData\ms-playwright`**（`PLAYWRIGHT_BROWSERS_PATH`；不带 ⇒ 落到不存在的 `systemprofile\…` ⇒ 打印/渲染用例直接红）。
-- 交付面 `demo/` ＋ `PRD/` **不在 git**（WPS 云同步树）⇒ 动它**先备份到仓侧 `.codebuddy/backups/交付面-*`**（⛔ 不在交付面建新文件）。
+- 交付面 `demo/` ＋ `PRD/` **不在 git**（WPS 云同步树）⇒ 动它**先备份到仓侧 `.codebuddy/backups/交付面-*`**（⛔ 不在交付面建新文件）。⭐ **2026-10-05 实测：它会被云同步"回退"**（一天丢两份：`PRD/验收/验收基线.json` ＋ `材料科业务全流程说明书.md`，真源退回 09-21 版）⇒ 恢复流程 ＝ 备份真源 → `copy2(face/ 快照 → 真源)` → MD5 双向核对（细节见票 `TAIL-231`；⚠️ 41 处差异**只有 2 处**被尺子看见 ⇒ 缺口票 `TAIL-234`）。
 - ⚠️ **中文路径 ＋ PowerShell 原语 = 不稳**：`Get-FileHash` / `-Filter '*中文*'` 取不到 ⇒ 交 Python 或 `Where-Object -like`。
 
 ## 四、本机高危坑（按代价排序 · 都是踩过的）

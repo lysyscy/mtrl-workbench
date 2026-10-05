@@ -130,12 +130,20 @@ def main(argv: list[str]) -> int:
               "（票体系下每张在办票都该有票文件；先去 `_tail_open.py` 建它）")
         return 1
     t_old = tk.read_bytes()
-    t_new, n_st = re.subn(r"(状态\**\s*[:：]\s*`?)[a-z\-]+(`?)", r"\1done\2",
-                          tk.read_text(encoding="utf-8"))
-    if n_st != 1:
-        print(f"⛔ 票文件里「状态」行命中 {n_st} 处（期望 1）⇒ **未写盘**"
-              f"（锚点 = `状态：<受控词>`；票格式见 `ops/agents/issue-tracker.md` §二）")
+    #  ⑤ 的锚点 = **`audit_meta.TICKET_STATE_RE`**（票面 `**Status:** <受控词>` 的**唯一机器主人** ——
+    #    `T6` 判票状态也用它）。⛔ 2026-10-05（`TAIL-231` 销号时踩到）：本件原先**自己写了一份正则**、
+    #    且只认中文「状态：」—— 而票面格式的真正主人 `tools/oneoff/_tail_open.py` 写的是
+    #    `**Status:** <受控词>` ⇒ 命中 0 处 ⇒ **任何票都无法用它销号**（`TAIL-225` 那次是手改票文件绕过去的）。
+    #    修法 = 删掉本地那份、改为问主人（与本件第 44–45 行「计数口径不写第二遍」同一条纪律）。
+    t_text = tk.read_text(encoding="utf-8")
+    hits = list(audit_meta.TICKET_STATE_RE.finditer(t_text))
+    if len(hits) != 1:
+        print(f"⛔ 票文件里 `**Status:**` 行命中 {len(hits)} 处（期望 1）⇒ **未写盘**"
+              f"（锚点主人 = `tools/audit/audit_meta.py::TICKET_STATE_RE`"
+              f"；票格式见 `ops/agents/issue-tracker.md` §二）")
         return 1
+    m_st = hits[0]
+    t_new = t_text[:m_st.start(1)] + "done" + t_text[m_st.end(1):]
     print(f"⑤ 票文件标 done：{tk.relative_to(REPO).as_posix()}")
 
     if not a.apply:
