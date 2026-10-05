@@ -43,6 +43,7 @@ KEY: tuple[tuple[str, str], ...] = (
     ("_mut_t20.py", "T20 保留期与容量（backups 上限 · oneoff 件数容量）"),
     ("_mut_segments.py", "真机自检**段注册表**的顺序守卫（`TAIL-215` 批 1 · 离线 · 秒级）"),
     ("_mut_shellapi.py", "壳的**语义口径**（`TAIL-219` 批 1：认结构 / 找不到必抛 · 离线 · 秒级）"),
+    ("_mut_livemachine.py", "T23 活机器口径（`TAIL-236` 批 2：缺一路/空命中/复述/接线 ＋ 正常不误报）"),
 )
 
 

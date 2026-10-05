@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import re
 import sys
+import tokenize
 from pathlib import Path
 
 from audit_common import (
-    HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, LENIENT_GLOBS, RED, REPO_ROOT, SCAN_GLOBS,
-    TAIL_MIN_CELLS, TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root, read_counts,
+    HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, LENIENT_GLOBS, LIVE_MACHINE_GLOBS, RED, REPO_ROOT,
+    SCAN_GLOBS, TAIL_MIN_CELLS, TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root, read_counts,
     DOC_SUFFIXES,
 )
 
@@ -899,6 +900,121 @@ def check_line_splices() -> list[dict]:
     return hits
 
 
+# ------------------------------------------------- T23 活机器口径（`refs` 的"六路"）
+#
+# ⭐⭐ 2026-10-05 立（`TAIL-236` 第 2 批）。**它防的是当天真发生过的翻车**：
+#   清「零机器引用的死重」时，第一版口径只扫后端与 `tools/` 下的 `.py`
+#   ⇒ **漏了运维脚本与规则档两路**（壳的脚本 / 页面也漏）
+#   ⇒ 差点把一份**被运维脚本引用**的设计件当死重搬走。
+#   ⭐ 治法**不是"再补一处"**：口径**只此一份**（`audit_common.LIVE_MACHINE_GLOBS`），
+#     查询命令与本条都 import 它 —— 而**光靠命令自己测自己不够**
+#     （当天翻车正是"口径只写在脚本里、没人钉"）⇒ 本条就是钉它的那半边。
+#
+# ⚠️⚠️ **`LIVE_MACHINE_REQUIRED` 为什么是"看起来的第二份字面"**：它是**判据的靶**。
+#    两者**故意住在两件里** —— 否则把执行清单里的一路删掉，判据会跟着一起删、**永远绿**
+#    （同族教训：`T3` 的豁免词表若并进四把尺子共用的 `HARD_EXEMPT`，会把 `T2` 一起赦掉）。
+LIVE_MACHINE_REQUIRED: tuple[str, ...] = (
+    "backend/app/**/*.py",
+    "backend/tests/**/*.py",
+    "tools/audit/**/*.py",
+    "tools/mut/**/*.py",
+    "tools/probe/**/*.py",
+    "ops/*.ps1",
+    ".codebuddy/rules/**/*.mdc",
+    "backend/app/web/**/*.js",
+    "backend/app/web/**/*.html",
+)
+#: `refs` 查询命令件 —— 半边③ 守的就是它（⛔ 它的**代码**里不许再写一份活机器路径）。
+REFS_QUERY_REL = "tools/audit/refs_query.py"
+#: 半边④ 守**接线**：`doc_audit`（收工闸门清单里那一把）里必须有 `T23` 的调用。
+DOC_AUDIT_REL = "tools/audit/doc_audit.py"
+WIRE_CALL = "check_live_machine("
+
+
+def _t23(lineno: int, what: str, why: str, fix: str, level: str) -> dict:
+    return {"code": "T23", "side": "仓", "rel": "tools/audit/audit_meta.py", "line": lineno,
+            "what": what, "why": why, "fix": fix, "level": level, "text": ""}
+
+
+def _code_lines(path: Path, drop_strings: bool = True) -> dict[int, str]:
+    """→ `{行号: 代码}`，**注释已剔除**（用 `tokenize`；⛔ 别拿正则剥注释 —— 注释里有 `#`
+    也有引号，正则一定会剥错）。
+
+    ⭐ 为什么要剔注释：口径**写在注释里是好的**（那是解释），**写在代码里才是第二套**
+    ⇒ 判据只该管后者。
+    ⚠️⚠️ **`drop_strings` 为什么必须是可关的**（当天被自己的变异件抓到）：
+       路径**必然以字符串形式出现** ⇒ 若把字符串也剔掉，半边③ 就**永远抓不到任何东西** ——
+       而它看上去是"有牙的"（会跑、会输出 0 命中）。
+       ⇒ 半边③（查"代码里又抄了一份路径"）必须**连字符串一起看**，只剔注释。
+    """
+    stringy: set[int] = set()
+    commy: set[int] = set()
+    with open(path, "rb") as fh:
+        for tok in tokenize.tokenize(fh.readline):
+            if tok.type == tokenize.STRING and drop_strings:
+                stringy.update(range(tok.start[0], tok.end[0] + 1))
+            elif tok.type == tokenize.COMMENT:
+                commy.add(tok.start[0])
+    out: dict[int, str] = {}
+    for i, raw in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        if i in stringy or i in commy:
+            continue
+        out[i] = raw
+    return out
+
+
+def check_live_machine() -> list[dict]:
+    """`T23` · 活机器口径**六路齐全**（红）＋ 每条 glob **真能命中**（红）
+    ＋ `refs` 件里**不许复述口径**（黄）。
+
+    ⚠️ 半边③ 是**形态类规则**（它认"代码里出现这串路径"这个形态）⇒ 按本仓纪律，
+       上线前的量测结果是：**正常数据上 0 命中**（口径在 `audit_common` 一处，命令只 import）。
+       ⚠️ 已知边界（如实记账）：把路径**拼出来**（`"ops/" + "*.ps1"`）能躲开这半边 ——
+       它防的是"顺手又抄一份"，不是防"刻意绕过"。
+    """
+    out: list[dict] = []
+    have = {g for g, _label, _sufs in LIVE_MACHINE_GLOBS}
+    for g in LIVE_MACHINE_REQUIRED:
+        if g in have:
+            continue
+        out.append(_t23(1, f"活机器口径**缺一路**：`{g}`",
+                        "少一路 ⇒ 引用盘点少扫那一处 ⇒ 会报「没人引用」"
+                        "（2026-10-05 实测：漏了运维脚本与规则档两路，差点搬走被引用的设计件）",
+                        f"把 `{g}` 加回 `audit_common.LIVE_MACHINE_GLOBS`"
+                        "（改口径要同批改 `ops/阈值表.md` 与 `LIVE_MACHINE_REQUIRED`）", RED))
+    for glob, label, sufs in LIVE_MACHINE_GLOBS:
+        if any(p.is_file() and p.suffix in sufs for p in REPO_ROOT.glob(glob)):
+            continue
+        out.append(_t23(1, f"活机器口径里的 `{glob}`（{label}）**一条都不命中**",
+                        "空命中 = 那一片**从没被扫过** ⇒ 盘点假装扫过（`T18` 同族的假绿）",
+                        f"核对路径与后缀白名单（当前 {sufs}），或从 `LIVE_MACHINE_GLOBS` 撤下这一条", RED))
+    q = REPO_ROOT / REFS_QUERY_REL
+    if not q.exists():
+        out.append(_t23(1, f"`{REFS_QUERY_REL}` **不在位**",
+                        "查询命令没了 ⇒「某件还有谁在引用」又只能靠回忆（这正是本条要治的病）",
+                        "恢复该件（只读工具 · `TAIL-236` 第 2 批）", RED))
+    else:
+        for i, raw in _code_lines(q, drop_strings=False).items():
+            for g in LIVE_MACHINE_REQUIRED:
+                if g in raw:
+                    out.append(_t23(i, f"`{REFS_QUERY_REL}` 的代码里又写了一份活机器路径：`{g}`",
+                                    "口径**只定义一次**（`audit_common.LIVE_MACHINE_GLOBS`）——"
+                                    "命令里再抄一份 ⇒ 改一处漏一处，正是当天翻车的那一族",
+                                    "删掉这处字面、改用 `LIVE_MACHINE_GLOBS`（注释里可以写，⛔ 代码里不行）",
+                                    YELLOW))
+    # ⚠️ 半边④：**判据自检接线** —— 本仓已有五例「僵尸闸门」（在闸门清单里跑、其实什么都没判），
+    #   而"装了判据只接了一半"也发生过（`T18` 首版只在 `doc_audit` 里被动生效、单跑是哑的）。
+    da = REPO_ROOT / DOC_AUDIT_REL
+    if not da.exists():
+        out.append(_t23(1, f"`{DOC_AUDIT_REL}` 不在位", "收工闸门那一把尺子没了", "恢复该件", RED))
+    elif not any(WIRE_CALL in raw for raw in _code_lines(da).values()):
+        out.append(_t23(1, "`doc_audit` 里**没有 `T23` 的调用**",
+                        "判据装了却没进收工闸门 ＝ 闸门里没有它（同族：五例「僵尸闸门」"
+                        "＋ `T18` 首版单跑是哑的）",
+                        f"在 `doc_audit.main()` 的 `raw` 累加里加一行 `{WIRE_CALL}...)`", RED))
+    return out
+
+
 # ------------------------------------------------- T17 闸门清单活性（治「僵尸闸门」）
 #
 # ⭐⭐ 2026-09-24 立（`TAIL-82`）：一天内核出**四例僵尸闸门**（症状同款：**一直在跑、`rc` 一直是 0、
@@ -1168,7 +1284,7 @@ def check_guard_constants() -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """**单跑本模块的检查**（`T5`/`T6`/`T9`/`T10`/`T11`/`T12`/`T13`/`T17`/`T18`/`T21`/`T22`）。
+    """**单跑本模块的检查**（`T5`/`T6`/`T9`/`T10`/`T11`/`T12`/`T13`/`T17`/`T18`/`T21`/`T22`/`T23`）。
 
     ⚠️ 2026-09-24（自查一轮）：`T17` 与 `T18` 是**同一天**新立的两条，而首版只把 `T17` 塞进了本入口
     ⇒ **单跑 `audit_meta.py` 时 `T18` 是哑的**（只在 `doc_audit` 里被动生效）= 同一件事做了一半。
@@ -1186,11 +1302,11 @@ def main(argv: list[str] | None = None) -> int:
     raw = (check_file_sizes() + check_rule_origins() + check_doc_budgets()
            + check_report_receipts() + check_doc_layout() + check_tail_ledger(cases)
            + check_plan_process() + check_line_walls() + check_line_splices()
-           + check_gate_liveness() + check_guard_constants())
+           + check_gate_liveness() + check_guard_constants() + check_live_machine())
     reds = [h for h in raw if h["level"] == RED]
     yellows = [h for h in raw if h["level"] == YELLOW]
     print("=" * 78)
-    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18/T21/T22"
+    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18/T21/T22/T23"
           "（⚠️ T1–T4/T8 在 `audit_drift` · T7 在 `cover_gap` · T14/T15 在 `audit_work`）")
     print("=" * 78)
     print(f"必须修 {len(reds)} · 疑似 {len(yellows)}")
