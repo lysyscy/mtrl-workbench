@@ -15,7 +15,7 @@
 | 用户拍板的决定（口径/技术/工作方式） | 只写进 MEMORY 或对话 | `work/40-decisions/D<编号>-主题.md`（D21 起；MEMORY 留指针） |
 | 待办、尾巴、"以后再说" | 自建 TODO.md、报告结尾 | ⭐ **票仓 = `.codebuddy/work/50-tickets/TAIL-<编号>-<短名>.md`**（2026-10-04 `TAIL-225` 起：**一张票一个文件**；用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄）＋ **索引 = 计划 §15 台账（一行一票 · 唯一）** —— 本区禁止第二份待办清单 |
 | 当天过程叙事 | 活文档正文 | `journal/当天.md`（append-only） |
-| 已完工单元的大段过程 | 继续占着计划正文 | `plans/archive/归档-类型-主题-YYYYMMDD.md` ＋ 原处指针 |
+| 已完工单元的大段过程 | 继续占着计划正文 | ⭐ **归档正文落仓外** `D:\dev\.归档-mtrl\`（2026-10-05 起）＋ 原处指针；仓内 `plans/archive/` **只放索引**（`归档-留痕索引-20261005.md`） |
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
 | 提交信息草稿 | artifacts/commit_msgN.txt | `work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
 | 交付面文件的手工备份 | artifacts 根、.codebuddy 根 | `.codebuddy/backups/`（留最近 5 份；⚠️ **一天多批只留当日末个**，中间批次改在当批设计件里写「改前差异说明」） |
@@ -26,7 +26,7 @@
 
 ```text
 00-scratch ──14天内──► 10/30 升档，或删除（⛔ 不许长期停留）
-10-designs ──定稿实施完──► plans/archive/归档-设计-*.md；契约级变更 ► 交付面 PRD（走改契约流程）
+10-designs ──定稿实施完──► **归档（仓外 `D:\dev\.归档-mtrl\`）**；契约级变更 ► 交付面 PRD（走改契约流程）
 30 区「实验-」那一类 ──结论稳定──► ops/<主题>-实测结论.md ＋ ops/README 索引行
 30-troubleshooting ──沉淀出规则──► MEMORY / 阈值表 / 测试（档案本身保留，供复发检索）
 40-decisions ──被推翻──► 只加 superseded 链接，⛔ 不改写原文

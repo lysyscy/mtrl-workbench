@@ -55,43 +55,6 @@ def lines(p: Path) -> int:
     return len(p.read_text(encoding="utf-8", errors="replace").splitlines())
 
 
-def do_a(apply: bool) -> None:
-    """归一逐日日志：根下 N 件 ⇒ journal/（journal 下的旧副本先备份到仓外再删）。"""
-    roots = sorted(MEM.glob("20*.md"))
-    print(f"\n{'=' * 78}\n A · 归一逐日日志（执行「journal 是唯一逐日日志」）\n{'=' * 78}")
-    print(f"  memory/ 根下 {len(roots)} 件 · journal/ 下 {len(list(JOURNAL.glob('*.md')))} 件")
-    for p in roots:
-        q = JOURNAL / p.name
-        note = ""
-        if q.exists():
-            a = p.read_text(encoding="utf-8", errors="replace").splitlines()
-            b = q.read_text(encoding="utf-8", errors="replace").splitlines()
-            note = "✅ 内容逐行相同（副本）" if a == b else "⚠️⚠️ 内容不同！以根下为准，但请人核"
-        print(f"  · {p.name}  {lines(p):>5,} 行  {p.stat().st_size:>9,} B  {note}")
-    if not apply:
-        print("  ⏱ 干跑（加 --apply 落盘）")
-        return
-    # ① 旧副本先备份到仓外（防中途失败）
-    if list(JOURNAL.glob("*.md")):
-        bak = OUT / "memory-journal-重复副本"
-        bak.mkdir(parents=True, exist_ok=True)
-        for p in sorted(JOURNAL.glob("*.md")):
-            shutil.copy2(p, bak / p.name)
-            print(f"  ① 旧副本已备份 → {bak / p.name}")
-    # ② 删 journal 下的旧副本（索引 + 工作区）
-    for p in sorted(JOURNAL.glob("*.md")):
-        rc, out = git("rm", "--cached", "-q", "--", str(p.relative_to(ROOT)).replace("\\", "/"))
-        if rc != 0:
-            print(f"  ⚠️ git rm --cached 失败：{out}")
-        p.unlink()
-    print(f"  ② journal/ 下旧副本已删（{len(list(JOURNAL.glob('*.md')))} 件剩余）")
-    # ③ git mv 根下 → journal/
-    for p in roots:
-        rc, out = git("mv", str(p.relative_to(ROOT)).replace("\\", "/"),
-                      str((JOURNAL / p.name).relative_to(ROOT)).replace("\\", "/"))
-        print(f"  ③ git mv {p.name} → journal/  rc={rc} {out[:80]}")
-
-
 def do_b(apply: bool) -> None:
     """归档件移仓外。"""
     files = sorted(ARCHIVE.rglob("*.md"))
@@ -119,29 +82,10 @@ def do_b(apply: bool) -> None:
     print(f"  git rm -r --cached .codebuddy/plans/archive  rc={rc} {out[:100]}")
 
 
-def do_c(apply: bool) -> None:
-    """旧版《说明书》移仓外。"""
-    print(f"\n{'=' * 78}\n C · 旧版《说明书》移仓外（backups/）\n{'=' * 78}")
-    if not OLD_SPEC.exists():
-        print(f"  ⚠️ 不存在：{OLD_SPEC.name}")
-        return
-    print(f"  · {OLD_SPEC.name}  {lines(OLD_SPEC):,} 行 · {OLD_SPEC.stat().st_size:,} 字节"
-          f"  ⇒ 目标 {OUT / 'backups'}")
-    if not apply:
-        print("  ⏱ 干跑（加 --apply 落盘）")
-        return
-    dest = OUT / "backups"
-    dest.mkdir(parents=True, exist_ok=True)
-    before = md5(OLD_SPEC)
-    shutil.move(str(OLD_SPEC), str(dest / OLD_SPEC.name))
-    after = md5(dest / OLD_SPEC.name)
-    print(f"  {'✅' if before == after else '❌'} 移动完成 md5 {before[:12]}")
-
-
 def do_d(apply: bool) -> None:
     """甲2 + 丙（用户 2026-10-05 点头：激进档 ＋ 全清 6 件）—— 零机器引用的设计件 ＋ ops 实测类。
 
-    ⚠️ **只搬「机器引用 0」的**：`10-designs` 里另有 9 件被测试/代码钉着（分层门禁/识别样本/…）⇒ 碰了 pytest 会红。
+    ⚠️ **只搬「机器引用 0」的**：`10-designs` 里另有 **10** 件被测试/代码钉着（分层门禁/识别样本/…）⇒ 碰了 pytest 会红。
     ⚠️ 保留 `设计-表格筛选配置化-20260924.md`（809 行 · `TAIL-64` 未做完的 P4-c/P5-c 还要它 · 用户裁定保留）。
     """
     live: list[tuple[str, str]] = []
@@ -216,6 +160,8 @@ def do_e(apply: bool) -> None:
        逐处改会加重它已超的 1800 行预算（`T10`/`T13`）⇒ 按「留痕不改成失真」的老办法，
        **在归档索引件里如实记账**。`T3`（幽灵路径）照不到 `.codebuddy/` ⇒ 不影响判据。
     """
+    MARK = "〔已归档〕"
+    NOTE = "（⭐ 已归档 · 2026-10-05 `TAIL-235`）"
     gone = ("宿主hooks-实测结论", "i8-名单同步实测结论", "M0-0B-渲染实测结论",
             "原型断言-归属映射", "实测快照/i8-20260916")
     print(f"\n{'=' * 78}\n E · 同批改活指针（索引不许指着不存在的件）\n{'=' * 78}")
@@ -246,34 +192,69 @@ def do_e(apply: bool) -> None:
                            "仓外 `D:\\dev\\.归档-mtrl\\ops\\`，原文可 `git show` 取回）")
                 for ln in ls]
 
-    def thr(ls: list[str]) -> list[str]:
-        return [ln.replace("设计-文档审计-20260929.md", "〔已归档〕设计-文档审计-20260929.md")
-                 .replace("设计-文档审计-20261002.md", "〔已归档〕设计-文档审计-20261002.md")
-                for ln in ls]
+    def _dedup(ln: str) -> str:
+        """去掉重复的 `〔已归档〕` 前缀 —— ⚠️ 本函数头一次跑就留下了 `〔已归档〕〔已归档〕`
+        （`ops_readme` 有"先删再插"守卫、`thr`/`asset` 原来没有 ⇒ 重跑即脏）。"""
+        while MARK + MARK in ln:
+            ln = ln.replace(MARK + MARK, MARK)
+        return ln
 
-    def asset(ls: list[str]) -> list[str]:
-        return [ln.replace("原型断言-归属映射.md", "〔已归档〕原型断言-归属映射.md")
-                for ln in ls]
+    def _mark(ls: list[str], *stems: str) -> list[str]:
+        """把 `stems` 指向的件标成「已归档」。
+
+        ⛔⛔ **为什么替换时要去掉目录前缀**（`/code-review` 抓到的真问题）：`audit_common._PATH_RE`
+        首字符限 `[A-Za-z0-9_]` ⇒ `` `work/10-designs/X.md` ``（首字符 `w`）**会被 `T3` 当成仓内路径**去查、
+        查不到就判红；而给它加 `〔已归档〕` 前缀又**把整条洗成不匹配** ⇒ **制造假绿**（`ops/` 本来在
+        `TOP_DIRS` 内，那个保护是真实存在的）。⇒ 改成**只留中文文件名**（首字符非 ASCII ⇒ `T3` 天然照不到）
+        ＋ 括注归档事实；`claim_audit` 的 `C2` 认 `` `…md` `` ⇒ 出处仍然可核。
+        ⚠️ 幂等靠**整段（含目录前缀）匹配** —— 已改过的行不再含 `work/10-designs/…` ⇒ 第二次跑是 no-op。
+        """
+        out = []
+        for ln in ls:
+            for s in stems:
+                # ⚠️ 替换串**必须带上收尾那个反引号**（`…md`）—— 否则括注会插到反引号**外面**、
+                # 原文那个收尾反引号就变成孤立的（实测踩过一次：`…md`（…）` §五之补`）。
+                ln = (ln.replace(f"work/10-designs/{MARK}{s}.md`", f"{s}.md`{NOTE}")
+                        .replace(f"ops/{MARK}{s}.md`", f"{s}.md`{NOTE}"))
+            out.append(_dedup(ln))
+        return out
 
     def root_readme(ls: list[str]) -> list[str]:
         return [ln.replace(" · 原型断言-归属映射.md", "") for ln in ls]
 
     _rewrite("ops/README.md", lambda ls: ops_readme_text(ops_readme(ls)))
-    _rewrite("ops/阈值表.md", thr)
-    _rewrite("ops/素材包-索引.md", asset)
+    _rewrite("ops/阈值表.md", lambda ls: _mark(ls, "设计-文档审计-20260929", "设计-文档审计-20261002"))
+    _rewrite("ops/素材包-索引.md", lambda ls: _mark(ls, "原型断言-归属映射"))
     _rewrite("README.md", root_readme)
+
+
+#: ⚠️ 2026-10-05 已执行并过闸的动作 —— ⛔ **默认拒绝重跑**（`/code-review` 抓到的安全风险：
+#:   `do_b` 会把 `plans/archive/` 连**唯一索引件**一起搬走 ⇒ `LENIENT_GLOBS`（`.codebuddy/plans/archive/归档-*.md`）
+#:   空命中 ⇒ `T18` 判红「那一片从没被扫过」）。⇒ 真要重跑必须显式 `--force`。
+#: ⛔ 另两个动作（A 归一 journal · C 旧版说明书）**已删除** —— 已完成且被本守卫拦住，留着只是
+#:   「为过期需求留的可执行抽象」（`/code-review` 判 `Speculative Generality`）⇒ 当时的做法在 git 历史里。
+DONE_ACTIONS = "B"
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="真落盘（缺省＝干跑）")
-    ap.add_argument("--only", default="ABC", help="只跑某几个动作")
+    ap.add_argument("--only", default="D", help="只跑某几个动作（B 需 --force）")
+    ap.add_argument("--force", action="store_true",
+                    help="⚠️ 显式允许重跑已落盘的动作（%s）" % DONE_ACTIONS)
     args = ap.parse_args()
+    hit = [c for c in args.only if c in DONE_ACTIONS]
+    if hit and not args.force:
+        print(f"⛔ 动作 {'/'.join(hit)} 已于 2026-10-05 执行并过闸，**默认拒绝重跑**：")
+        print("   · `do_b` 会把 `plans/archive/` 连**唯一索引件**一起搬走")
+        print("     ⇒ `LENIENT_GLOBS` 空命中 ⇒ `T18` 判红（那一片从没被扫过）")
+        print("   ⇒ 确认那些件还在原处、且真的要重跑，才加 `--force`。")
+        return 1
     if args.apply:
         OUT.mkdir(parents=True, exist_ok=True)
         print(f"仓外归档根 = {OUT}")
     for ch in args.only:
-        {"A": do_a, "B": do_b, "C": do_c, "D": do_d, "E": do_e}[ch](args.apply)
+        {"B": do_b, "D": do_d, "E": do_e}[ch](args.apply)
     return 0
 
 
