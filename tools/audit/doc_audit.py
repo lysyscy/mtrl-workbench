@@ -346,7 +346,11 @@ def main() -> int:
                 print(f"  {n:>3} 条  {rel}")
         else:
             for h in group:
-                print(f"  [{h['code']}] {h['side']}·{h['rel']}:{h['line']}  {h['what']}")
+                # ⭐ 2026-10-06（`/retro` ⑤）：**每行自带档位标签**（`红/黄/豁免`）——
+                #   原来档位只出现在**段标题**里 ⇒ 一旦用 `Select-String` 过滤输出，
+                #   每行属于哪一段就**看不出来**（当天为此又临时写了个分组探针脚本）。
+                print(f"  [{'红' if h['level'] == RED else ('豁免' if h['level'] == SKIP else '黄')}]"
+                      f" [{h['code']}] {h['side']}·{h['rel']}:{h['line']}  {h['what']}")
                 print(f"        {h['why']} → {h['fix']}")
                 if args.verbose:
                     print(f"        原文：{h['text'][:150]}")

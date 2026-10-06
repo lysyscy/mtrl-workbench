@@ -40,6 +40,10 @@ from audit_meta import WORK_DIR_ALLOW                               # noqa: E402
 from audit_work import (                                            # noqa: E402
     DOWNGRADE_STATES, STATE_KEY, WORK_HEAD_LINES, check_downgrade_candidates,
 )
+#: 引用口径**只从 `refs_query` 取**（活机器六路 / 活文档 / 未销号票 —— ⛔ 本件不另扫一份）。
+from refs_query import (                                            # noqa: E402
+    Blob, build_doc_corpus, build_live_corpus, build_ticket_corpus, build_tickets, find_refs,
+)
 
 #: 仓外归档根 = `OUTSIDE_ROOTS[0]`（`T18` 守着它在盘上真存在 ⇒ ⛔ 不在此写死第二份）
 OUT_ROOT = Path(OUTSIDE_ROOTS[0])
@@ -63,7 +67,11 @@ INDEX_REL = ".codebuddy/plans/archive/归档-留痕索引-20261005.md"
 #:   ⛔ 两边必须同一个词；命令找不到它就**拒绝**，绝不静默写到别处）。
 INDEX_TABLE_HEAD = "| 降档日期 | 件（仓内原名） | 仓外落点（会被 `T3` 真核） | 备注 |"
 #: 自测用的样本件（**脚本自己创建**，用完即删 —— ⛔ 不拿真件做实验）
-SAMPLE_REL = ".codebuddy/work/10-designs/设计-_mut降档样本-20990101.md"
+#: ⚠️⚠️ **名字必须与别的自测样本不同**（2026-10-06 当场撞过）：`tools/mut/_mut_downgrade.py` 里有一件
+#:    `设计-_mut降档样本-…`，而 `tools/mut/**` **属活机器那一路** ⇒ 同名样本会被它"引用" ⇒
+#:    本件的**引用守卫**据此判定"这件还有人用" ⇒ **自测的搬运一步都走不下去**（拦得对，但卡死了自测）。
+#:    ⇒ 教训：自测样本的名字也是**接口**的一部分，两个自测撞名就互相污染。
+SAMPLE_REL = ".codebuddy/work/10-designs/设计-_mut降档自测件-20990101.md"
 RULE_COUNT_MIN = 5          #: 从钩子件里解析出的尺子名单少于这个数 ⇒ 本件需重定靶
 #: 闸门侧那份秒级尺子名单的**真源**（⛔ 本件只读它，不另抄）
 HOOK_REL = "ops/hooks/pre-commit"
@@ -181,6 +189,29 @@ def _t26_says(rel: str) -> str:
                                           if state else "不在「已定稿 / 已实施」两档"))
 
 
+def _refs_of(rel: str) -> list[tuple[str, str, int]]:
+    """→ `[(路名, 引用方, 行号)]`（活机器 / 活文档 / 未销号票）—— ⛔ 口径全部 import `refs_query`。
+
+    ⭐⭐ **为什么要这个守卫**（2026-10-06 `/retro` 当场暴露，票面 `Implementation Decisions` 3
+    只写了前半句）：**判据不看引用、动作要看**。
+      · 判据（`T26`）不看引用 ＝ 对：它只报"该降档"，搬不搬是人的决定；
+      · **动作必须看** —— 2026-10-06 实测：**11 件设计件每一件都有活引用**（三路全 0 的 27 件里
+        一件设计件都没有）⇒ 搬任何一件都会留下**死指针**，而 `T3` 只扫文档面、
+        **照不到 `.py` docstring / 一次性脚本里的指针** ⇒ 搬完**没有人喊**。
+    ⇒ `--apply` 前有引用就**拒绝**，并把位置逐条列出来（让人同批改）。
+    """
+    name = rel.rsplit("/", 1)[-1]
+    skip = frozenset({rel})
+    live, _lanes = build_live_corpus()
+    doc, _lenient = build_doc_corpus()
+    open_tickets, _closed = build_tickets()
+    tick = build_ticket_corpus(open_tickets)
+    out: list[tuple[str, str, int]] = []
+    for blob, label in ((Blob(live), "机器"), (Blob(doc), "文档"), (Blob(tick), "票")):
+        out += [(label, o, n) for _lane, o, n in find_refs(blob, rel, name, skip)]
+    return out
+
+
 def _index_line(zone: str, name: str, out_abs: Path) -> str:
     """仓内索引那一行。⚠️ **取回指令故意不加反引号** —— 加了 `T3` 会把已搬走的仓内路径当幽灵报红。"""
     rel_in = f".codebuddy/work/{zone}/{name}"
@@ -267,12 +298,16 @@ def do_downgrade(name: str, apply: bool) -> int:
     rel = path.relative_to(ROOT).as_posix()
     line = _index_line(zone, fname, out_abs)
     st = _index_check(out_abs)
+    refs = _refs_of(rel)
     print("降档 · %s" % fname)
     print("  区     %s（依据 `.codebuddy/work/README.md` §二：本区定稿实施完 ⇒ 归档仓外）" % zone)
     print("  仓内   %s" % rel)
     print("  仓外   %s" % out_abs)
     print("  索引   %s" % INDEX_REL)
     print("  判据   %s" % _t26_says(rel))
+    print("  引用   %s" % ("**零引用**（三路都没有人用它）" if not refs
+                         else "%d 处（%s）" % (len(refs), " · ".join(
+                             "%s %s:%d" % (lane, o, n) for lane, o, n in refs[:6]))))
     if st == "no-index":
         print("⛔ 仓内索引件不在：%s ⇒ 拒绝（不留没有指针的搬运）" % INDEX_REL)
         return 1
@@ -282,6 +317,16 @@ def do_downgrade(name: str, apply: bool) -> int:
     if not apply:
         print("\n[dry] 未动手（真搬要加 --apply）· 计划写进登记表的那一行：\n  %s" % line)
         return 0
+    if refs:
+        print("⛔ **它还有 %d 处活引用 ⇒ 拒绝搬**" % len(refs))
+        print("   理由：搬走 ⇒ 这些指针全变死指针，而 `T3` 只扫文档面、**照不到 `.py` / 脚本里的指针**")
+        print("        ⇒ 搬完**没有任何尺子会喊**（这正是 2026-10-06 实测：`refs_query --all` 显示"
+              "11 件设计件每一件都有引用）")
+        for lane, o, n in refs[:15]:
+            print("     %s %s:%d" % (lane, o, n))
+        print("   ⛔ 先**同批**改掉这些指针（或确认它们只是留痕叙述），再重跑；"
+              "复查：`tools/audit/refs_query.py %s`" % fname)
+        return 1
 
     if not out_abs.parent.is_dir():
         out_abs.parent.mkdir(parents=True, exist_ok=True)
@@ -382,6 +427,20 @@ def _selftest() -> int:
         rc = do_downgrade(sample.name, apply=False)
         no_move = sample.is_file() and not out_abs.is_file() and str(out_abs) not in idx.read_text(encoding="utf-8")
         chk("干跑 rc=%d · 原件仍在原处、索引未动" % rc, rc == 0 and no_move)
+
+        print("  ④ 之二 **它还有活引用 ⇒ 拒绝搬**（`T3` 只扫文档面、照不到 `.py` 里的指针）")
+        # 造一个"引用方"：真机探针目录下的临时 .py（属活机器那一路）⇒ 点名样本件。
+        # ⚠️ 必须在**跑前基线之后**造、**跑后基线之前**删 —— 否则两遍尺子的输入不一样，⑨ 的对照就不成立。
+        referrer = ROOT / "tools" / "probe" / "_mut_refers_sample.py"
+        referrer.write_text('"""自测临时件（`_doc_downgrade.py --selftest` 用后即删）：造一处活引用。"""\n'
+                            '#: 指向 %s\nX = 1\n' % SAMPLE_REL, encoding="utf-8", newline="")
+        try:
+            rc = do_downgrade(sample.name, apply=True)
+            refused = rc != 0 and sample.is_file() and not out_abs.is_file()
+        finally:
+            referrer.unlink(missing_ok=True)
+        chk("有引用时 rc=%d（非 0）· 件仍在原处=%s" % (rc, sample.is_file()),
+            rc != 0 and refused)
 
         print("  ⑤ 真搬（--apply）⇒ 三件事：仓外留原文 ＋ 仓内已移出 ＋ 索引留行")
         rc = do_downgrade(sample.name, apply=True)

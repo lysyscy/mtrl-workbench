@@ -47,7 +47,9 @@ tail_n() {
 }
 
 for spec in \
-  "tools/audit/syntax_audit.py" \
+  # ⭐ 2026-10-06（`/retro`）：`--staged` 让 `Q4` 只查**本轮暂存的 `.py`**（模块必须有主文头
+  #   「守什么」）—— 存量一次性脚本没主文头是**存量债**，不该在提交那一刻全点成红。
+  "tools/audit/syntax_audit.py --staged" \
   "tools/audit/doc_audit.py" \
   "tools/audit/audit_meta.py" \
   "tools/audit/audit_work.py" \
