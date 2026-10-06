@@ -55,8 +55,15 @@ def _slug(s: str) -> str:
 
 def ticket_text(tag: str, a, state: str) -> str:
     """按 `ops/agents/issue-tracker.md` §二 的模板生成票文件（⭐ 照第二个项目的票面）。"""
+    # ⭐⭐ 2026-10-06（`TAIL-237` 收工时顺手修）：首行原先是 `a.what[:40]` —— **中文按字符算**，
+    #   于是标题常在半句处折断（实测三张新票全中：`TAIL-237` 停在「…每轮只跑快集实测」、
+    #   `TAIL-238` 停在「…时引用的」）。而**下一行 `What to build:` 本来就是完整的**
+    #   ⇒ 那个截断既无信息、又让首行读不成句 ⇒ 直接用完整首句。
+    #   ⛔ 只保护"首行必须是单行"（`what` 里若有换行会破坏标题），⛔ 不再按字数截断
+    #   （真要防超长，靠 `what` 本身写短 —— `T21` 字墙会抓超长单行）。
+    head = (a.what.splitlines() or [a.what])[0]
     return (
-        f"# {tag}: {a.what[:40]}\n\n"
+        f"# {tag}: {head}\n\n"
         f"**What to build:** {a.what}\n\n"
         f"**Blocked by:** {a.pre}\n\n"
         f"**Status:** {state}\n\n"
