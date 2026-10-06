@@ -52,6 +52,10 @@ CMDS: list[tuple[str, list[str]]] = [
     #   原先不在任何闸门里 ⇒ "命令的检索逻辑坏了没人知道"（同 `tools/mut/**` 那族假绿）。
     #   ⛔ 只进收工闸门、不进 `pre-commit`（那个只跑便宜子集）。
     ("tools/audit/refs_query.py", ["--selftest"]),
+    # ⭐ 2026-10-06（`TAIL-236` 第 4 批）：**降档动作命令自身的自测**进闸门 —— 同族理由
+    #   （"命令的搬运逻辑坏了没人知道"）。⚠️ 它自测里会**跑一遍那 5 把秒级尺子**（跑前/跑后比 rc），
+    #   所以比别的 `--selftest` 慢一档（十几秒）—— 换来的是"降档动作不会悄悄改变闸门结论"有断言。
+    ("tools/oneoff/_doc_downgrade.py", ["--selftest"]),
     ("tools/probe/_audit_face.py", []),
 ]
 

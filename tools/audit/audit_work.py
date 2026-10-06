@@ -133,7 +133,8 @@ def check_downgrade_candidates() -> list[dict]:
                 "① 引用面**只是参考、⛔ 不是判据**：敲 `tools/audit/refs_query.py` 看三路计数；"
                 "② 落地位置即**口径主人** ⇒ 改它之前按 `ops/docs-governance.md` §二 核"
                 "「变了要同批改哪几处」；③ **去向**看 `.codebuddy/work/README.md` §二 里本区那一行"
-                "（⛔ 别照抄别的区）；⇒ ⛔ **只报不动**，搬之前要人点头",
+                "（⛔ 别照抄别的区）；④ 要搬 ⇒ `tools/oneoff/_doc_downgrade.py <件名> --apply`"
+                "（**唯一入口** · 默认干跑 · 可逆）—— 本判据**只报不动**",
                 line=decl_no))
     return hits
 
