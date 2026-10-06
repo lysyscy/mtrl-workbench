@@ -59,6 +59,40 @@ CMDS: list[tuple[str, list[str]]] = [
     ("tools/probe/_audit_face.py", []),
 ]
 
+#: ⭐ 触发全套变异自证的**改动形状**（`TAIL-237`）—— ⛔ **单一出口**，别在别处再写一份。
+#: ⚠️ 判据的用意：慢集那几支的**靶是仓内的尺子/文档面** ⇒ 只有动了这些，它们才可能变哑。
+#: ⛔ **故意不含**（每条都是查案查出来的，不是随手剔的）：
+#:   · `backend/app` 与 `shell/` —— 那两处的守卫是 pytest（判据层），本票不动它；
+#:   · `ops/` —— 只出运维脚本，不进任何变异件的靶；
+#:   · ⭐ **`.codebuddy/`** —— 票面/日志/台账**每轮都在写** ⇒ 留在表里等于**判据恒真**：
+#:     最常见的"写文档"流程一节能都省不到（`/code-review` 2026-10-06 抓出，实测 325.9s > 改前 308.7s）。
+#:     而它并不需要慢集来守 —— 票面/台账的真守卫是 `T6`（票面栏齐全 ＋ 登记即排期），
+#:     那是**收工闸门里的常驻尺子**，本来就每轮跑。
+#:   · ⭐ **仓外交付面**（`_mut_uicheck` 的靶）—— git 看不见它 ⇒ 留在慢集等于"外部被回退了也不验"。
+#:     正解：那支已**移出慢集**（见 `_run_muts.py` 的 `SLOW_KEY`）⇒ 交付面每轮都被验。
+_SLOW_TRIGGERS = ("tools/audit/", "tools/mut/", "tools/probe/", "tools/oneoff/",
+                  "backend/tests/", "README.md", "AGENTS.md")
+
+
+def _touched_rulers() -> list[str]:
+    """工作区（vs `HEAD`）里有没有动过**尺子/判据/闸门脚本** ⇒ 该跑全套。返回命中清单（空 = 没动）。
+
+    ⭐ **为什么用 `git diff` 而不是"记住上次跑过"**：后一种要引入状态（时间戳/计数/记忆文件）⇒
+    本仓吃过"靠回忆 ⇒ 静默失效"的亏。`git diff` 是**现成、可复核、提交后自然归零**的事实。
+    ⚠️ **必须把 untracked 也算进来**（`/code-review` 2026-10-06 抓出）：只看已跟踪件时，
+    「**新建一把尺子**」——恰恰是最该跑全套的场景——会让判据失灵、闸门静默跳过慢集。
+    ⇒ 两问都问（`diff` ＝已跟踪件的改动，`ls-files --others` ＝尚未跟踪的新件）。
+    """
+    import subprocess as sp
+
+    def _git(*args: str) -> list[str]:
+        p = sp.run(["git", *args], cwd=str(ROOT), capture_output=True, text=True,
+                   encoding="utf-8", errors="replace")
+        return [x.strip().replace("\\", "/") for x in (p.stdout or "").splitlines() if x.strip()]
+
+    names = _git("diff", "--name-only", "HEAD") + _git("ls-files", "--others", "--exclude-standard")
+    return sorted({n for n in names for t in _SLOW_TRIGGERS if n.startswith(t) or n == t})
+
 
 def main() -> int:
     with_pytest = "--all" in sys.argv
@@ -73,12 +107,25 @@ def main() -> int:
             bad.append(rel)
     # ⭐⭐ 2026-10-01（`TAIL-205`）：**守尺子的变异自证** —— `tools/mut/**` 原先**不在任何闸门里**
     #    ⇒ "加了反向灵敏度却没人跑" ⇒ 2026-10-01 一天抓到 4 例"靶烂掉 / 判法烂掉"（假绿）。
-    #    这几支的**靶是尺子自己**（`doc_audit` 的 T1–T19 / T4 锚点 / claim / 四检 / T12 / T14T15 / T20），
-    #    它们烂掉 = **一整片守卫静默失效** ⇒ **每次收工都跑**（8 支 · 实测约 33 秒 · 完全值）。
-    p = subprocess.run([PY, "-X", "utf8", str(ROOT / "tools" / "oneoff" / "_run_muts.py")],
+    # ⭐⭐⭐ 2026-10-06（`TAIL-237` · 用户「改点东西太慢」）：**这一支按需触发** ——
+    #    实测全套 **185 秒**（慢集 4 支占 156 秒）⇒ 改一行代码也要等 3 分钟。
+    #    ⇒ 判据 = **本轮有没有动"尺子/判据/文档/交付面"**（`git diff` 工作区 vs HEAD）：
+    #      · 没动 ⇒ 只跑**快集**（实测 29 秒）—— 改业务代码这种小修小改走这条；
+    #      · 动了 ⇒ 跑**全套**（尺子自己的靶被改了 ⇒ 必须重验，否则它们烂掉没人知道）。
+    #    ⚠️ **零状态**：判据是"工作区有没有相关改动"⇒ 提交后自然变快；⛔ 不引计数/时间戳/记忆文件。
+    mut_args: list[str] = []
+    hit = _touched_rulers()
+    if hit:
+        mut_args = []
+        print(f"  ⏭ 变异自证跑**全套**（本轮动过 {len(hit)} 处尺子/判据/闸门脚本：{', '.join(hit[:4])}"
+              f"{' …' if len(hit) > 4 else ''}）")
+    else:
+        mut_args = ["--fast"]
+    p = subprocess.run([PY, "-X", "utf8", str(ROOT / "tools" / "oneoff" / "_run_muts.py")] + mut_args,
                        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(ROOT))
     keep2 = [x for x in (p.stdout or "").strip().splitlines() if x.strip()][-1:]
-    print("%-34s rc=%d  %s" % ("守尺子的变异自证(_run_muts)", p.returncode, " || ".join(keep2)[:175]))
+    print("%-34s rc=%d  %s  %s" % ("守尺子的变异自证(_run_muts)", p.returncode,
+                                    "全套" if not mut_args else "快集", " || ".join(keep2)[:150]))
     if p.returncode:
         bad.append("守尺子的变异自证(_run_muts.py)")
     if with_pytest:

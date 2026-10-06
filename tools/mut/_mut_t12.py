@@ -3,7 +3,7 @@
 
 ⭐ 依据本仓纪律：**新加的尺子必须证明"改坏了它会红"**（否则就是假绿）。
    ⚠️ 每次造完**立即删掉**（`finally`）⇒ ⛔ 不留残件。
-用法：`backend\\.venv\\Scripts\\python.exe tools\\_mut_t12.py`（期望输出 `3/3 变红 ＋ 复原干净`）
+用法：`backend\\.venv\\Scripts\\python.exe` + 本件路径（本件在 `tools/mut/` 下）`（期望输出 `3/3 变红 ＋ 复原干净`）
 """
 from __future__ import annotations
 

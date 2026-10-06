@@ -13,6 +13,14 @@
     backend\\.venv\\Scripts\\python.exe -X utf8 tools\\mut\\_mut_shellapi.py
 
 ⚠️ 逐字节复原 + MD5 校验（本仓规矩）；⚠️ 靶有**三件**（`shell_api.py` ＋ `jslex.py` ＋ M8 的 `test_ux_states.py`），各自复原。
+
+⚠️⚠️ **2026-10-06（`TAIL-233`）修：靶件全是 CRLF，而锚点是带 `\n` 的源码字面**
+    ⇒ 8 个 case 里 7 个的锚点含换行 ⇒ **全部打空**、件死在**第一个** `assert`
+    ⇒ 症状只有一句「变异① 锚点没命中」，而实际是**一条都没验过**（本仓"哑得最彻底"那一种：
+    **不是某条没牙，是整件没跑**）。实测三件靶全是纯 CRLF（`jslex.py` 251/0 · `shell_api.py` 329/0
+    · `test_ux_states.py` 150/0）。⇒ 比对前**行尾归一**（`_norm`）、写回**按该件原本的行尾**（`_fit`）
+    —— 后半句是必须的：⛔ 否则一次变异就把 CRLF 件悄悄改成 LF ⇒ 收尾的 MD5 复原校验必红，
+    而**报错指向复原、指向不到真正的原因**。`_fit` 是 `_mut_linewalls.py` 里那份现成配方的同族复用。
 """
 
 from __future__ import annotations
@@ -23,7 +31,10 @@ import subprocess
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8")
-R = pathlib.Path(r"D:\dev\mtrl-workbench")
+# ⭐ 2026-10-06（`TAIL-233` · `/code-review` Standards 轴）：原先**写死绝对路径**
+#    ⇒ 换机器/换盘就整支跑不起来，且症状是"锚点没命中"（伪装成"靶漂了"）。
+#    ⇒ 与同批 `_mut_segments.py` 同一口径（`__file__` 上溯两级 = 仓根）。
+R = pathlib.Path(__file__).resolve().parents[2]
 PY = R / "backend" / ".venv" / "Scripts" / "python.exe"
 API = R / "tools" / "audit" / "shell_api.py"
 LEX = R / "tools" / "audit" / "jslex.py"
@@ -99,6 +110,21 @@ def md5(b: bytes) -> str:
     return hashlib.md5(b).hexdigest()
 
 
+def _norm(b: bytes) -> str:
+    """靶件字节 → 文本，**行尾归一为 LF**（比对锚点用；见文件头 2026-10-06 那段）。
+
+    ⚠️ `_mut_segments.py` 里有**逐字相同**的一份。**⛔ 别在本件改一份、忘了另一份** ——
+    两处任一漂了，那一支就会重新变成"一件都没验过"（且症状是"锚点没命中"，极像别的问题）。
+    """
+    return b.decode("utf-8").replace("\r\n", "\n")
+
+
+def _fit(text: str, orig: bytes) -> bytes:
+    """把归一后的文本写回**该件原本的行尾风格**（⛔ 别把 CRLF 件写成 LF ⇒ 复原校验会背黑锅）。"""
+    b = text.encode("utf-8")
+    return b.replace(b"\n", b"\r\n") if b"\r\n" in orig else b
+
+
 def run_test() -> tuple[int, str]:
     r = subprocess.run([str(PY), "-X", "utf8", "-m", "pytest", TEST, "-q", "-o", "addopts=",
                         "-p", "no:cacheprovider"],
@@ -120,9 +146,9 @@ def main() -> int:
 
     try:
         for tag, target, old, new, name in CASES:
-            src = orig[target].decode("utf-8")
+            src = _norm(orig[target])                       # ⭐ 归一后再比对（靶件是 CRLF）
             assert old in src, f"⚠️ 变异{tag} 锚点没命中（`{target.name}` 变了？先核再改本件）"
-            target.write_bytes(src.replace(old, new, 1).encode("utf-8"))
+            target.write_bytes(_fit(src.replace(old, new, 1), orig[target]))
             rc, out = run_test()
             hit = name in out
             print(f"  变异{tag}（{target.name}：{name}）⇒ rc={rc} · 命中该条={hit}")

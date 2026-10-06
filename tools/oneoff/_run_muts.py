@@ -16,6 +16,7 @@
 跑法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_run_muts.py`
       `… --all`          #: 跑 `tools/mut/**` 全部（很慢：有的支要跑 pytest/真机 ⇒ 按需，别进闸门）
       `… --all --timeout 900`
+      `… --fast`         #: ⭐ 2026-10-06（`TAIL-237`）**只跑快集**（跳 `SLOW_KEY`）—— 收工闸门默认走这条
 """
 
 from __future__ import annotations
@@ -28,6 +29,29 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 MUT = ROOT / "tools" / "mut"
+
+#: ⭐⭐ 慢集 = **每支实测 >20 秒**的那些（`TAIL-237`）—— ⭐ **秒数看每次运行自己打的那行**（⛔ 别抄进代码/文档，
+#:   它随机器与靶件变化；2026-10-06 首次分层时抄了 6 处，同日 `/code-review` 判它违规并已全部撤掉）。
+#: ⭐ **为什么按秒数分、而不是按"我以为它重要吗"**：本件**每轮都打印每支秒数** ⇒ 分层依据是**量出来的**，
+#:   不靠谁记得住 ⇒ 别人接手也复现得出。
+#: ⛔ **单一出口**：别在别处再写一份"哪些是慢的"（本仓规矩：同一条口径只许有一处）。
+#: ⚠️ **漂移怎么办**：`FAST_BUDGET` ＋ `SLOW_BUDGET` 那两道提醒会自动喊（见 `main`）—— ⛔ 不靠人记得回来改。
+FAST_BUDGET = 20.0
+SLOW_BUDGET = 60.0
+
+#: 慢集（`--fast` 跳过它们；跑全套时照跑）
+SLOW_KEY: frozenset[str] = frozenset({
+    "_mut_docaudit.py", "_mut_shellapi.py", "_mut_segments.py",
+})
+
+#: ⭐⭐ **刻意留在快集、且超预算也不提醒挪走**的那几支（`/code-review` 2026-10-06 抓出后才补上，
+#:   否则第一轮就出现"提醒说该挪、而它挪了就会出事故"的自相矛盾 ⇒ **提醒变成噪音**）：
+#:   `_mut_uicheck` —— 靶在**仓外交付面**，`git diff` 看不见 ⇒ 挪进慢集等于"**外部被回退也不验**"
+#:   （`TAIL-234` 记的正是交付面被云同步回退过一次、41 处差异尺子只看见 2 处）。
+#:   它实测在 `FAST_BUDGET` 上下 ⇒ **这一条是"按理由豁免超时提醒"，不是"免检"**。
+KEEP_FAST: dict[str, str] = {
+    "_mut_uicheck.py": "靶在仓外交付面，git 看不见 ⇒ 必须每轮验（挪进慢集＝外部回退不验）",
+}
 
 #: ⭐ 关键集：靶是**尺子自身 / 结构守卫 / 文档面**的那几支（⇒ 它们烂掉 = 一整片守卫静默失效）
 KEY: tuple[tuple[str, str], ...] = (
@@ -77,6 +101,7 @@ def main() -> int:
     timeout = 900
     if "--timeout" in args:
         timeout = int(args[args.index("--timeout") + 1])
+    fast_only = "--fast" in args
     if "--all" in args:
         cases = [(p.name, "（按需全跑）") for p in sorted(MUT.glob("_mut_*.py"))]
     else:
@@ -85,18 +110,44 @@ def main() -> int:
         if miss:
             print("⛔ 关键集里有件**不在了**（改名/删件 ⇒ 本件要跟改）：", ", ".join(miss))
             return 1
+        if fast_only:
+            skipped = [n for n, _ in cases if n in SLOW_KEY]
+            cases = [(n, w) for n, w in cases if n not in SLOW_KEY]
 
     bad: list[str] = []
-    print(f"── 变异自证（{len(cases)} 支 · timeout {timeout}s/支）")
+    fast_hit: list[str] = []
+    slow_hit: list[str] = []
+    spent = 0.0
+    mode = "快集（--fast）" if fast_only and not ("--all" in args) else "关键集"
+    print(f"── 变异自证（{len(cases)} 支 · {mode} · timeout {timeout}s/支）")
+    if fast_only and not ("--all" in args):
+        print(f"   ⏭ 已按需跳过慢集 {len(SLOW_KEY)} 支 —— ⛔ 本次**没验**它们；"
+              f"动了尺子/判据/闸门脚本请跑不带 `--fast` 的全套")
     for name, why in cases:
         rc, sec = run_one(MUT / name, timeout)
+        spent += sec
         flag = "✅" if rc == 0 else "⛔"
         print(f"  {flag} {name:32s} rc={rc:<3d} {sec:6.1f}s   {why}")
         if rc:
             bad.append(name)
+        if name not in SLOW_KEY and name not in KEEP_FAST and sec > FAST_BUDGET:
+            fast_hit.append(f"{name}（{sec:.1f}s）")
+        if name in SLOW_KEY and sec > SLOW_BUDGET:
+            slow_hit.append(f"{name}（{sec:.1f}s）")
+    # ⚠️⭐ 2026-10-06（`TAIL-237`）：**秒数只在这里算** —— 上面每行都是当次实测值。
+    #   ⛔ 别把它抄进代码注释/文档/票名（首次分层时抄了 6 处，同日 `/code-review` 判违规并已撤掉）。
+    print(f"── 本次合计 {spent:.1f} 秒（{len(cases)} 支）")
     print("BAD:", bad)
     if bad:
         print("  ⚠️ 上面这些 = **反向灵敏度没跑过**（要么判据变了、要么靶烂了）—— ⛔ 别当它是「环境问题」，去看那一支。")
+    # ⚠️⭐ **分层漂移的机器提醒** —— 快集里长出慢支 / 慢集里长出超长支时自动喊，
+    #   ⛔ 不靠"谁记得回来看一眼"（那正是本仓反复吃的那类静默漂移）。
+    if fast_hit:
+        print(f"  ⚠️ **快集超时提醒**：{'、'.join(fast_hit)} 已超 {FAST_BUDGET:.0f}s "
+              f"⇒ 该挪进 `SLOW_KEY`（本件单一出口），否则每轮都在吃它的秒数。")
+    if slow_hit:
+        print(f"  ⚠️ **慢集过长提醒**：{'、'.join(slow_hit)} 已超 {SLOW_BUDGET:.0f}s "
+              f"⇒ 该看它为什么变慢（靶件变大？多跑了一次真机？）。")
     return 1 if bad else 0
 
 
