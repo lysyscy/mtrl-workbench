@@ -259,9 +259,16 @@ def check_artifacts_and_headers() -> list[dict]:
 
 
 def check_retention() -> list[dict]:
-    """`T20` · **保留期与容量** —— ⭐ 治「口径写了『留 5 份』，却没有任何机器看得见」。
+    r"""`T20` · **保留期与容量** —— ⭐ 治「口径写了『留 5 份』，却没有任何机器看得见」。
 
-    背景（2026-09-28 文档审计 · `work/10-designs/设计-文档审计-20260928.md` §四-7）：
+    ⚠️ 本 docstring 是 **raw 字符串**（前缀 r）：下面有仓外绝对路径 `D:\dev\...` ——
+    非 raw 会把它当转义序列（`\d` ⇒ SyntaxWarning，将来是 SyntaxError）。
+    ⛔ 也别把注释放到 docstring **前面**：那样它就不再是 docstring（`__doc__` 变 None）。
+    ⛔ 写"本件是 raw"时**别把三引号本身写进来**（那会当场把 docstring 提前结束 ⇒ SyntaxError）。
+
+    背景（2026-09-28 文档审计 §四-7 —— ⭐ **那份审计件已于 2026-10-06 降档到仓外**
+    `D:\dev\.归档-mtrl\work-10-designs\设计-文档审计-20260928.md`，⛔ 仓内已无原件；
+    要原文走仓外那份或 git `show HEAD:.codebuddy/work/10-designs/设计-文档审计-20260928.md`）：
       `README.md` §三/§四 写着 `.codebuddy/backups/`「**留 5 份 · 月度清**」，而 2026-09-22 那份整改
       设计给出的验收判据**就是**「`backups/` 目录计数 ≤5（可数）」—— 却**从没被机器守过**
       ⇒ `TAIL-73` 销号时只验了"备份收敛到唯一点"、没验"≤5" ⇒ **43 个条目静默堆着**（含 09-18 的旧快照）。
