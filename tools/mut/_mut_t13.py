@@ -29,7 +29,10 @@ nl = b"\r\n" if b"\r\n" in orig else b"\n"
 def run_t13() -> int:
     """返回 T13 命中**条数**（⛔ 别用退出码 —— 上次把语义接反，两处抓到反而报假红）。"""
     r = subprocess.run(
-        [str(REPO / "backend" / ".venv" / "Scripts" / "python.exe"), "-c",
+        # ⚠️ 2026-10-06（`TAIL-239`）：`-X utf8` 是**必需** —— 少了它 `l.startswith("T13 命中")` 永不成立
+        #   ⇒ `run_t13()` 回落成 **−1** ⇒ 误报「基线误报」＋「变异未被抓到」（那三句实测全是假的）。
+        #   **口径主人＝ `_run_muts.py` 题头 ⑤**。
+        [str(REPO / "backend" / ".venv" / "Scripts" / "python.exe"), "-X", "utf8", "-c",
          "import sys; sys.path.insert(0, r'tools/audit');"
          "from audit_meta import check_plan_process;"
          "h = check_plan_process();"

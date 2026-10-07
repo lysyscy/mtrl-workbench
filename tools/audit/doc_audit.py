@@ -36,6 +36,8 @@
 | `T24` | ⭐ **仓库根白名单**（2026-10-05 `TAIL-236` 同批修 ①b）—— 根上的**目录与非 md 文件**必须落在「常驻骨架（`ROOT_ALLOW`）∪ `.gitignore` 声明过的暂存件」里，多出来的 ⇒ **红**。⭐ 起因：根 `work/` 建起来后 `T3`/`T12`/`T14` **四层守卫没一层拦**（那片地方**不在任何扫描面内**）。⚠️ 根上的 md 归 `T12`（本行**不**重复管） | `audit_common.ROOT_ALLOW` ＋ 仓根 `.gitignore` |
 | `T25` | ⭐ **`.gitignore` 里的落点路径必须真存在**（2026-10-05 `TAIL-236` 同批修 ①b/③）—— `.gitignore` 反引号里的**仓库内目录落点**（含 `/` · 以 `TOP_DIRS` 前缀开头 · 不含模式字符）盘上核不到 ⇒ **红**。⭐ 治的是"照一份**没被核过**的落点找路 ⇒ 找到不存在的目录"（当天真实事故）；⚠️ `T3` 拦不住这一类（它只认**带后缀**的引用，而落点多是**目录**） | 仓根 `.gitignore` ＋ `audit_drift.check_gitignore_drops`（豁免沿用 `T3_OLD_PATH_HINTS`） |
 | `T26` | ⭐ **「结论已落地」⇒ 该降档**（2026-10-05 `TAIL-236` 第 3 批 · **黄 · 只报不动**）—— `work/10-designs/` · `work/30-troubleshooting/` 里处在「**已定稿 / 已实施**」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在** ⇒ 报黄「该降档」＋ 落地位置（＝**口径主人**）＋ 同批改那串（**去向**看 `.codebuddy/work/README.md` §二 本区那一行）。⛔「零机器引用」**不是判据**（只是信号）。⭐ 治的是 `work/README.md` §二「用完就丢」**只有规矩、没有机器眼** | `audit_work.check_downgrade_candidates` ＋ `work/README.md` §四（**声明行写法**的唯一主人）＋ `audit_meta.TICKET_CLOSED`（销号定义）＋ `ops/阈值表.md` |
+| `T27` | ⭐ **交付面「页脚之后不许有内容」**（2026-10-06 `TAIL-234`）—— ⛔ `T1`–`T26` 没一层能看见"内容掉到落款后面"（当天实测：`MOD-14.md` 两条 `ACC-*` 验收条目就在页脚**下面**，而用例号 / 路径都是真的 ⇒ 只是**位置错了**）。⚠️ **归档目录按实测排除**（6 处全在 `.workbuddy/归档-audit/` 下 ⇒ 那是留痕、不是缺陷） | `audit_face.check_footer_tail` ＋ `audit_common.FOOTER_MARKER` / `FOOTER_SCAN_GLOB` / `FOOTER_EXCLUDE_PARTS` |
+| `T28` | ⭐ **交付面 `PRD/` 规格件「只许变长」＋ 编号表只许变多**（2026-10-06 `TAIL-234`）—— 治 **WPS 云同步整体盖回历史快照**（本机至少两次）。⚠️ **形态必须是「相对基线 · 只许变长」**：⛔ 绝对行数会让每一次正常增删都报红。⭐ 实测退化件**多数等长**（24 件里只 2 件变短）⇒ 另钉一个**机械可算、抗改词**的锚点（编号表最大行号）；新件未登记基线 ⇒ **黄** | `audit_face.check_prd_baseline` ＋ `audit_face.PRD_DOC_BASELINE`（**唯一真源** · `--stamp` 重录）＋ `audit_common.PRD_DOC_GLOB` |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
@@ -59,10 +61,11 @@
 
 ⚠️ 本工具**只读**（`--block` 也只打印、不写文件）。
 
-**本文件是薄壳** —— 检查逻辑已拆到同目录四件（`T5` 逼的，本文件曾 597 行）：
+**本文件是薄壳** —— 检查逻辑已拆到同目录五件（`T5` 逼的，本文件曾 597 行）：
 `audit_common.py`（常量 ＋ 扫描基础设施）· `audit_drift.py`（`T1`–`T4` · `T25` `.gitignore` 落点）·
 `audit_meta.py`（`T5`/`T6` 台账与行数 · `T9` 纪律出处 · `T10` 读预算 · `T11` 报告回执 · `T12` 分层约定 · `T21` 字墙 · `T22` 注入档粘连 · `T23` 活机器口径 · `T24` 仓库根白名单）·
-`audit_work.py`（`T14` scratch TTL · `T15` 文头与产物白名单 · `T20` 保留期 · `T26` 降档判据）。
+`audit_work.py`（`T14` scratch TTL · `T15` 文头与产物白名单 · `T20` 保留期 · `T26` 降档判据）·
+`audit_face.py`（`T27` 页脚尾部 · `T28` `PRD` 规格件基线 —— ⭐ **交付面**那两处。单独成件是因为它有**自己的基线表** ＋ **自己的行数定义**；塞进 `audit_meta` 会把那件 1475 行的继续撑大）。
 """
 
 from __future__ import annotations
@@ -90,6 +93,9 @@ from audit_meta import (                                          # noqa: E402
     check_gate_liveness, check_guard_constants, check_line_splices, check_line_walls,
     check_live_machine, check_plan_process,
     check_report_receipts, check_rule_origins, check_rule_restatements, check_tail_ledger,
+)
+from audit_face import (                                          # noqa: E402
+    check_footer_tail, check_prd_baseline, summary as face_summary,
 )
 from audit_work import (                                          # noqa: E402
     check_artifacts_and_headers, check_downgrade_candidates, check_retention, check_scratch_ttl,
@@ -314,6 +320,13 @@ def main() -> int:
     #   "目录计数 ≤5（可数）"**从没被机器守过** ⇒ `TAIL-73` 销号只验了"唯一点"、没验"≤5" ⇒
     #   **口径在、判据无 ⇒ 静默漂**（43 个条目堆着，含 09-18 的旧快照）。
     raw += check_retention()
+    # ⭐ `T27`/`T28`（2026-10-06 立 · `TAIL-234`）—— **交付面尾部守卫**，实现在同目录 `audit_face.py`：
+    #   ① `T27` =「页脚标记之后还有非空行」—— ⛔ `T1`–`T26` 没一层能看见"内容掉到落款后面"
+    #      （当天实测：`MOD-14.md` 两条 `ACC-*` 验收条目就在页脚下面，而**用例号是真的、路径是真的**）；
+    #   ② `T28` =「`PRD/` 规格件**只许变长** + 编号表只许变多」—— 治WPS 云同步**整体盖回旧快照**
+    #      （实测退化件**多数等长** ⇒ 只钉行数不够）。
+    #   ⚠️ 两条都**只定义一次**（标记 / 排除目录 / 扫描面在 `audit_common`，基线表在 `audit_face`）。
+    raw += check_footer_tail() + check_prd_baseline()
     # `T16`（2026-09-24 立 · `TAIL-20`）：**`T7a` 登记册必须在位** —— 读不到就静默降级成
     #   「全部未清」，而那个方向看着还更安全 ⇒ 必须升成红档才看得见。
     raw += check_cover_registry()
@@ -411,6 +424,12 @@ def main() -> int:
     if not any(h["code"] == "T26" for h in raw):
         print("降档判据 `T26` 结论：过程区没有「已声明落地、件内票已全销号」的已定稿/已实施件 ✅"
               "（有即报黄「该降档」· 只报不动 · 反向灵敏度 `_mut_downgrade`）")
+        print()
+    # ⭐ `T27`/`T28` **同样"常态报一句"**（同 `T23`/`T24`/`T25`/`T26`）：同样是"没消息就是好消息"型——
+    #   而这一对**比前几条更需要有**：它们扫的是**交付面**，人肉翻不到。
+    #   ⚠️ 这一句的**内容由 `audit_face.summary()` 出**（⛔ 别在两处各数一遍件数 —— 那正是"同一件事两处写"）。
+    if not any(h["code"] in ("T27", "T28") for h in raw):
+        print(face_summary() + "（页脚之后不许有内容 · 规格件只许变长；反向灵敏度 `_mut_facedoc`）")
         print()
     if args.ui:
         print("交付面四检")

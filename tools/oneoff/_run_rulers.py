@@ -6,6 +6,9 @@
   ⇒ "加了反向灵敏度却没人跑" ⇒ 一天抓到 4 例假绿。
 ⭐ 2026-10-05（`TAIL-236` 批 2）：`CMDS` 里也多了 `refs_query.py --selftest`
   —— 同族：命令自身的自测不在闸门里 ⇒ 它的检索逻辑坏了没人知道。
+⭐⭐ 2026-10-06（`TAIL-241`）：末尾那把 pytest **按需触发 + 按范围选测**
+  （`tools/oneoff/_pytestscope.py` —— **该跑什么的单一出口**；⛔ 秒数看那次运行自己的输出）。
+  两种形态都要看得见：跑了 ⇒ 打印「跑了哪些 / 跳过了哪些」；跳过 ⇒ 打印**为什么跳**。
 
 **为什么单独落成文件**：2026-09-29 实测 —— 这套命令用 `python -c "…\\nfor …"` 的**内联多行**写法
 在 PowerShell 里**反复被吃掉换行**（`unexpected character after line continuation character` ✗）。
@@ -13,6 +16,7 @@
 
 跑法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_run_rulers.py`
       `… --all`   #: 连 pytest 一起跑（默认只跑尺子 —— 没动代码时不必）
+                   #: ⚠️ `--all` **不再等于「pytest 全套」** —— 跑哪些由 `_pytestscope` 说了算
 """
 from __future__ import annotations
 
@@ -22,6 +26,10 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
+#: ⭐ 2026-10-06（`TAIL-241`）：**pytest 段的选测范围**由 `_pytestscope` 独家说了算
+#:   （三张名单 ＋ import 闭包 ＋ 缺口自检都在那件里 ⇒ 本件⛔ 不再自己判断跑什么）。
+sys.path.insert(0, str(ROOT / "tools" / "oneoff"))
+import _pytestscope as _scope      # noqa: E402
 
 KEEP = ("必须修", "结论：", "_smoke", "_links", "_ids", "_doccheck", "台账一致", "逐行一致",
         "判据点合计", "幽灵", "[T6]", "[T10]", "[T13]", "[T20]",
@@ -83,14 +91,11 @@ def _touched_rulers() -> list[str]:
     「**新建一把尺子**」——恰恰是最该跑全套的场景——会让判据失灵、闸门静默跳过慢集。
     ⇒ 两问都问（`diff` ＝已跟踪件的改动，`ls-files --others` ＝尚未跟踪的新件）。
     """
-    import subprocess as sp
-
-    def _git(*args: str) -> list[str]:
-        p = sp.run(["git", *args], cwd=str(ROOT), capture_output=True, text=True,
-                   encoding="utf-8", errors="replace")
-        return [x.strip().replace("\\", "/") for x in (p.stdout or "").splitlines() if x.strip()]
-
-    names = _git("diff", "--name-only", "HEAD") + _git("ls-files", "--others", "--exclude-standard")
+    # ⭐ 单一出口：`changed_paths()` 住在 `_pytestscope`（`git diff` 口径只此一处）
+    # ⚠️ 它算不出来时返回 `None` ⇒ 这里**按「全都动过」处理**（宁可跑全套，也别静默跳慢集）
+    names = _scope.changed_paths()
+    if names is None:
+        return list(_SLOW_TRIGGERS)
     return sorted({n for n in names for t in _SLOW_TRIGGERS if n.startswith(t) or n == t})
 
 
@@ -129,18 +134,42 @@ def main() -> int:
     if p.returncode:
         bad.append("守尺子的变异自证(_run_muts.py)")
     if with_pytest:
-        env = {"ACC_RESULTS_PATH": str(ROOT / "artifacts" / "acc_results.json"),
-               "PLAYWRIGHT_BROWSERS_PATH": r"C:\ProgramData\ms-playwright",
-               "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
-        import os
-        e = dict(os.environ, **env)
-        p = subprocess.run([PY, "-m", "pytest", "-q", "tests/", "-p", "no:cacheprovider", "--tb=line"],
-                           cwd=str(ROOT / "backend"), env=e, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace")
-        tail = [x for x in (p.stdout or "").strip().splitlines() if x.strip()][-2:]
-        print("%-34s rc=%d  %s" % ("pytest", p.returncode, " || ".join(tail)[:175]))
-        if p.returncode:
-            bad.append("pytest")
+        # ⭐⭐ 2026-10-06（`TAIL-241` 第 0/1 批）：**pytest 按需触发 + 按范围选测**。
+        #   第 0 批：`backend/` 与「pytest 在仓外也读的那些落点」都没动 ⇒ 整把跳过（**零漏跑风险**）。
+        #   第 1 批：动了 ⇒ 按 import 闭包选测，**并强制含全仓敏感清单**；算不出就退回全套。
+        #   ⛔ 本段只负责"跑与打印"；**该跑什么**由 `_pytestscope` 独家说了算（单一出口）。
+        # ⭐⭐ **选集自检每轮都跑**（`TAIL-239` 同族）：新加一个测试件而没落进任何一档 ⇒ 当场报红。
+        #   ⛔ 放在这里而不是 `CMDS`：它必须**紧挨着选测**（选测错了它得立刻说话）。
+        cover_rc, cover_line = _scope.report_cover()   # ⛔ 结论由那件自己写，本段只转发
+        print("%-34s rc=%d  %s" % ("选集自检(_pytestscope)", cover_rc, cover_line))
+        if cover_rc:
+            bad.append("选集自检(_pytestscope --cover-only)")
+        pl = _scope.plan(_scope.changed_paths())
+        if not pl.run:
+            print("%-34s ⏭ 跳过  %s" % ("pytest", pl.reason))
+        else:
+            # ⚠️ 环境变量**由 `_pytestscope` 独家给**（⛔ 别在这儿再抄一份）：
+            #   **子集跑不许写权威四态档** —— 那是 `TAIL-241` 当场踩到的坑（闸门自己污染自己）。
+            import os
+            e = dict(os.environ, **_scope.pytest_env(pl))
+            cmd = [PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--tb=line"] + pl.argv()
+            p = subprocess.run(cmd, cwd=str(ROOT / "backend"), env=e, capture_output=True,
+                               text=True, encoding="utf-8", errors="replace")
+            tail = [x for x in (p.stdout or "").strip().splitlines() if x.strip()][-2:]
+            print("%-34s rc=%d  %s" % ("pytest", p.returncode, " || ".join(tail)[:175]))
+            # ⛔ **不许只跑子集就报绿**：必须能说出「跑了哪些 / 跳过了哪些」
+            #   （否则「变绿」与「没跑」分不开 —— 票面铁律）。
+            allf = sorted(x.name for x in (ROOT / "backend" / "tests").glob("test_*.py"))
+            if pl.files:
+                ran, skipped = set(pl.files), [n for n in allf if n not in set(pl.files)]
+                print("   ▸ 跑了 %d 件：%s" % (len(ran), " ".join(sorted(ran)[:6])
+                                              + (" …" if len(ran) > 6 else "")))
+                print("   ⏭ 跳过 %d 件（够不着本轮改动）：%s"
+                      % (len(skipped), " ".join(skipped[:6]) + (" …" if len(skipped) > 6 else "")))
+            else:
+                print("   ▸ 跑全套 %d 件（%s）" % (len(allf), pl.reason))
+            if p.returncode:
+                bad.append("pytest")
     print("BAD:", bad)
     return 1 if bad else 0
 

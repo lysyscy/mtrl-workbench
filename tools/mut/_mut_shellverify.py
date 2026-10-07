@@ -31,7 +31,11 @@ CASES = ["加行", "改行", "删行"]
 
 
 def run_tool() -> int:
-    p = subprocess.run([PY, TOOL], cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+    # ⚠️ 2026-10-06（`TAIL-239`）：`-X utf8` 是**必需** —— 少了它尺子会自己崩（`UnicodeEncodeError`）
+    #   ⇒ 本件误报「基线不是 0 ⇒ 壳现在就有漂移」（实测壳当时逐行一致）。
+    #   **这一族的口径主人（含一手证据）＝ `_run_muts.py` 的题头 ⑤**。
+    p = subprocess.run([PY, "-X", "utf8", TOOL], cwd=ROOT, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
     return p.returncode
 
 

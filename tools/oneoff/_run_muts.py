@@ -7,16 +7,28 @@
       ② `_mut_t12` **漏 `-X utf8`** ⇒ 子进程中文输出乱码 ⇒ 拿文件名比永远比不上 ⇒ `0/3` 却报"复原干净"（**假绿**）
       ③ `_mut_t14t15` 同款漏 `-X utf8`（返回 -1 ⇒ 三条全"未被抓到"）＋ **靶假设过期**（要求基线 0 命中，现实有 5 条黄）
       ④ `_oneoff_measure.py` 漏 `core.quotepath=false` ⇒ 非 ASCII 路径直接崩（**一直是坏的**）
+      ⑤ ⭐ 2026-10-06（`TAIL-239`）**同族又三例，且全是"假红"**：`_mut_shellverify` / `_mut_prg_form` /
+         `_mut_t8_m08imp` / `_mut_t13` 调子进程时也漏 `-X utf8` ⇒ 子进程往 cp936 管道写 `✅` 时抛
+         `UnicodeEncodeError` ⇒ **尺子自己崩、rc 非 0** ⇒ 变异件据此误报「基线不干净 / 没抓到 /
+         守卫是假的 / 尺子误报」。⚠️ 一手证据：同一把尺子带 `-X utf8` rc=0、不带就 `UnicodeEncodeError`。
+         ⛔ **`errors="replace"` 单用不够** —— 那样能拿到长度正确、`json.loads` 也过的**替换字符**
+         （"看着能用、其实内容已坏"）。⇒ **本段是这一族的口径主人**，各变异件只留一行指针。
     ⇒ 根因不是"某支写错了"，是**"没人跑"**。本件把最关键的一撮**接进收工闸门**（`_run_rulers.py` 调它）
       ⇒ 它们的烂掉**最迟下一次收工就被看见**。
 
 **跑什么**：`KEY` 那一套（⚠️ 条数看本件输出，⛔ 别在别处抄 —— 会涨）—— 选它们的标准 =
-**靶是"尺子 / 结构 / 文档面"本身**（业务面的变异件由各自域负责，按需用 `--all` 扫）。
+**靶是"尺子 / 结构 / 文档面"本身**（业务面的变异件由各自域负责，按需用 `--all` 扫）；
+**有意不跑的进 `KEEP_OUT` 并逐支写清理由** ⛔ 不许留"既不在 `KEY` 也不在 `KEEP_OUT`"的件
+（那样的件**不会被任何一轮跑**，而没有任何痕迹说明它被故意跳过 —— 本族已 5 次静默失效）。
+
+⭐⭐ **每档都先跑"选集自检"**（`TAIL-239` 第 3 步）：`KEY` ∪ `KEEP_OUT` 必须盖住 `tools/mut/_mut_*.py` 全集，
+否则**报红并列出缺口件名**；反向灵敏度 = `tools/mut/_mut_keycover.py`（造一支不在名单里的件 ⇒ 必须报红）。
 
 跑法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_run_muts.py`
       `… --all`          #: 跑 `tools/mut/**` 全部（很慢：有的支要跑 pytest/真机 ⇒ 按需，别进闸门）
       `… --all --timeout 900`
       `… --fast`         #: ⭐ 2026-10-06（`TAIL-237`）**只跑快集**（跳 `SLOW_KEY`）—— 收工闸门默认走这条
+      `… --cover-only`   #: ⭐ 2026-10-06（`TAIL-239`）**只做选集自检**就退出（不跑任何变异件）
 """
 
 from __future__ import annotations
@@ -30,7 +42,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 MUT = ROOT / "tools" / "mut"
 
-#: ⭐⭐ 慢集 = **每支实测 >20 秒**的那些（`TAIL-237`）—— ⭐ **秒数看每次运行自己打的那行**（⛔ 别抄进代码/文档，
+#: ⭐⭐ 慢集 = **每支实测超 `FAST_BUDGET`**的那些（`TAIL-237`）——⭐ **秒数看每次运行自己打的那行**（⛔ 别抄进代码/文档，
 #:   它随机器与靶件变化；2026-10-06 首次分层时抄了 6 处，同日 `/code-review` 判它违规并已全部撤掉）。
 #: ⭐ **为什么按秒数分、而不是按"我以为它重要吗"**：本件**每轮都打印每支秒数** ⇒ 分层依据是**量出来的**，
 #:   不靠谁记得住 ⇒ 别人接手也复现得出。
@@ -76,7 +88,181 @@ KEY: tuple[tuple[str, str], ...] = (
     # ⚠️ 这一支的**方向与众不同**：票面要的是「抽掉一个信号 ⇒ 必须**不再**报」——
     #    `_mut_docaudit` 的框架只会断言"报了" ⇒ 表达不出这个方向（见该件 docstring）。
     ("_mut_downgrade.py", "T26 降档判据（`TAIL-236` 批 3：两个信号各撤一次必须不再报）"),
+    # ⭐ 2026-10-06（`TAIL-234`）：`T27` 页脚尾部＋ `T28` `PRD` 规格件基线。
+    #   ⚠️ **靶同样在仓外交付面** ⇒ 与 `_mut_uicheck` 同理：不接进来 = 收了判据却没人跑它。
+    #   ⭐ 里面有一靶用的是**旧根那份真实退化件**（本机被云同步盖回过的快照）⇒ 不是"造出来的假红"。
+    ("_mut_facedoc.py", "T27/T28 交付面尾部两张网（页脚后无内容 · PRD 规格件只许变长）"),
+    # ══════════════════════════════════════════════════════════════════
+    # ⭐⭐ 2026-10-06（`TAIL-239`）：下面这一段是**量出来的**，不是"我觉得它重要"。
+    #   做法 = 逐支读 `_mut_*.py` 的 docstring 第一段（`tools/mut/` 全集）＋ 归类：
+    #     ① 靶＝`CMDS` 里那把**尺子本身** ＋ **离线**（不起服务、不开浏览器）＋ 秒级 ⇒ 进关键集；
+    #     ② 实测超快集预算 ⇒ `SLOW_KEY`（本轮无新增）；
+    #     ③ 有意不跑 ⇒ `KEEP_OUT`（**逐支带理由**，见下）。
+    #   ⚠️ 前两支（`_mut_chain` / `_mut_uicheck` 那类）已经栽过 5 次「加了反向灵敏度却没人跑」，
+    #   所以这次不只加行，还装了**选集自己的机器眼**（`cover_gap()` ＋ `_mut_keycover.py`）。
+    ("_mut_chain.py", "chain_audit 的反向灵敏度（靶＝链路对账尺子本身 · 离线）"),
+    ("_mut_asset.py", "asset_audit 的 A1/A2/A4（靶＝尺子本身 · 离线）"),
+    ("_mut_shell.py", "ui_parity 的 U2/U2b/U3（靶＝尺子本身 · 离线）"),
+    ("_mut_u4.py", "ui_parity 的 U4「标了已接后端就要真有 /api/mNN」（靶＝尺子本身 · 离线）"),
+    ("_mut_prg_form.py", "prg_form_audit「PRG 端点不许拿 Query 收必填」（靶＝尺子本身 · 离线）"),
+    ("_mut_shellverify.py", "shell_verify 盖章式闸门（加行/改行/删行三形态都得让它红）"),
+    ("_mut_t8_m08imp.py", "audit_drift 的 T8「m08 撤项不许复活」（靶＝尺子本身 · 离线）"),
+    ("_mut_wiring.py", "wiring_audit「口径说了要做的事，代码里接上了吗」（靶＝尺子本身 · 离线）"),
+    # ⚠️⭐ 本票第 3 步新建的守卫**自己也得进关键集** —— 它要是没进，下一个 239 就是它。
+    ("_mut_keycover.py", "**选集机器眼**：`KEY` ∪ `KEEP_OUT` 有缺口就报红（治「没人跑」这件事本身）"),
+    # ⚠️ 2026-10-06（`TAIL-241` 第 4 步）：pytest 选测范围的反向灵敏度
+    #   —— 守的是「按改动范围跑」那条判据（漏跑比慢跑严重得多 ⇒ 它必须自己有牙）。
+    #   ⛔ 没进 `SLOW_KEY`：它只真跑**一支见证件**（不是整套选测集）⇒ 实测在快集预算内。
+    ("_mut_pytestscope.py", "选测范围的判据（漏跑/跳过/缺口三个方向都造得出红）"),
 )
+
+#: ⭐⭐ **有意不跑名单**（`TAIL-239` 第 3 步 · 治复发）—— **逐支带理由**。
+#:
+#: **为什么需要它**：本件原来只有"进/不进"两档 ⇒ 新写一支 `_mut_*.py` 的人**默认它会被跑**，
+#:   实际不会 ⇒ 「加了反向灵敏度却没人跑」（本族已 5 次：`TAIL-205` / `TAIL-233` / `TAIL-236` /
+#:   `TAIL-237` / 本票）。有了这份名单，"不跑"就从**默认的沉默**变成**必须写下来的判断**。
+#:
+#: ⛔ **单一出口**：哪支在跑、哪支有意不跑，只在本件说了算；⛔ 别在别处再写一份清单。
+#: ⛔ **理由不许写"不重要"/"以后再说"** —— 那等于没写（本仓吃过"靠回忆 ⇒ 静默失效"的亏）。
+#:   下面每条都落到**可复核的事实**（靶是什么 · 跑起来要什么 · 谁在守）。
+#:
+#: ⭐ 三类理由的**速查**（细节逐支写在行尾）：
+#:   · **靶是业务面断言**（`backend/tests/test_*.py` 里的业务/接线用例）⇒ 闸门只收"尺子/结构/文档面"
+#:     （本件题头那条选集标准），业务面由各自域**自己的 pytest** 守；且每处变异都要拉起一次
+#:     pytest ⇒ 分钟级 ⇒ 进闸门等于把闸门时长拉爆（按需 `--all` 仍能全跑）。
+#:   · **靶要真机**（浏览器 / 起服务 / `tools/probe/`）⇒ 收工闸门是真机**另一档**的活。
+#:   · **当前红 / 靶假设过期** ⇒ ⛔ 塞进闸门＝每轮假红（那比不跑更坏：假红会让人学会忽略闸门）。
+KEEP_OUT: dict[str, str] = {
+    # ---- 靶要真机（浏览器 / 起服务 / `tools/probe/`）----
+    "_mut_sticky.py": "靶＝`sticky_probe`（合计行视口吸附的真机探针）· 靶在闸门里但**要真机** ⇒ 属真机那一档",
+    "_mut_vs.py": "靶＝`tools/probe/` 的虚拟滚动阈值 ＋ 焦点护栏 · **要 playwright 真机**",
+    "_mut_vsrisk.py": "靶＝`tools/probe/_shell_smoke.py`（㊱ 接管缺口）· **要真机**",
+    "_mut_m11cost.py": "靶＝`tools/probe/_shell_smoke.py`（㊲ m11 打开不卡）· **要真机**",
+
+    # ---- 当前红 / 靶假设过期（⛔ 修好前塞进闸门＝每轮假红；已在当日日志留痕）----
+    "_mut_t13.py": "靶＝`T13` 有牙（两处变异都抓到、复原 MD5 一致），但它要求『**基线 0 命中**』"
+                  "⇒ 而主文档行数**确实超 `T13` 预算**（**真黄档**，数字见 `ops/阈值表.md`，"
+                  "⛔ 别抄在这里 —— 本票要治的正是那种「抄一份必过期」）⇒ rc=1。口径待定 ⇒ 不进闸门（票 `TAIL-243`）",
+    "_mut_syntax.py": "`M4` 靶的**锚点过期**：脚本钉『三条规则都能区分』，尺子自检结论已改成『**四条**』"
+                     "⇒ 该靶恒判未命中（实测 4/5）；且它要 `node --check` ＋ 动壳件 ⇒ 实测超快集预算",
+
+    # ---- 靶是业务面断言（由各自域 pytest 守；分钟级 ⇒ 按需 `--all`）----
+    "_mut_a6.py": "靶＝`tests/test_ux_pages.py`（m01 空态指路 / 删除确认两条 UX 守卫）· 业务面",
+    "_mut_a7.py": "靶＝`tests/test_ux_pages.py`（m11 抓取按钮 / 台账行身份区）· 业务面",
+    "_mut_a175.py": "靶＝`tests/test_ux_pages.py`（大表首列区固定）· 几何由真机 ㉜ 量 · 业务面",
+    "_mut_acct.py": "靶＝收款账号字段（`TAIL-60/61` 修法）· 业务面",
+    "_mut_amount.py": "靶＝`tests/test_amount_text_parity.py`（金额文本）· 业务面",
+    "_mut_archive_chain.py": "靶＝`TAIL-29`-③ 抓取链路接自动建档 · 业务面",
+    "_mut_archpick.py": "靶＝`ACC-PRJ-SYNC-001`（档案取数口径）· 业务面",
+    "_mut_auth.py": "靶＝`ACC-USR-MGMT-001/001-01`（未登录 ⇒ 无身份）· 业务面",
+    "_mut_b4.py": "靶＝m11 接入建议/校验/记忆三条边界（纪律）· 业务面",
+    "_mut_big.py": "靶＝`ACC-RPT-BIG-001`（活动大表）· 业务面",
+    "_mut_boot.py": "靶＝`tests/test_wired_boot.py`（性能分组并行 / 页级按需取数）· 业务面",
+    "_mut_core_bindings.py": "靶＝`tests/test_core_bindings.py`（core 取数口 ＋ 装配层接线）· 接线断言 pytest",
+    "_mut_core_projects.py": "靶＝`TAIL-36` 项目三小件唯一实现 · 业务面",
+    "_mut_d25.py": "靶＝`D25` 四条用户裁定（负数照收 / 非数据行跳过 / 标段行认月）· 业务面",
+    "_mut_deps.py": "靶＝`tests/test_deps_declared.py`（依赖清单不许漏登记）· 接线断言 pytest",
+    "_mut_excl_overpay.py": "靶＝『剔除行可勾选』＋『超付挂提醒』· 业务面",
+    "_mut_exctext.py": "靶＝`tests/test_ux_text.py`（用户可见串不许拼异常正文）· 业务面",
+    "_mut_fbar.py": "靶＝`FBAR` 统一筛选栏外壳出口（`TAIL-64` P4）· 接线断言 pytest",
+    "_mut_fix3.py": "靶＝顶栏假身份 / 主题切换器 / i8 `None` 语义 · 业务面",
+    "_mut_home_wired.py": "靶＝`§19` 批 5『看板接真数据』· 业务面",
+    "_mut_i8cookie.py": "靶＝`§7.8` i8 凭据（cookie 缓存复用 / 未绑即拒）· 业务面",
+    "_mut_impkit.py": "靶＝`TAIL-69`『预览不写库』· 业务面",
+    "_mut_impstale.py": "靶＝`TAIL-78`『导入/回滚 ⇒ 取数缓存全标脏』· 业务面",
+    "_mut_layering.py": "靶＝`tests/test_layering.py`（分层边界十一靶）· 接线断言 pytest",
+    "_mut_ledger.py": "靶＝`ACC-RPT-EXP-001`（台账导出）· 业务面",
+    "_mut_m01wired.py": "靶＝`tests/test_wired_m01.py` · 业务面",
+    "_mut_m02wired.py": "靶＝`tests/test_wired_m02.py`（`TAIL-27` 壳接线）· 业务面",
+    "_mut_m03act.py": "靶＝`tests/test_wired_m03_action.py` · 业务面",
+    "_mut_m03list.py": "靶＝`tests/test_wired_m03_list.py` · 业务面",
+    "_mut_m03pay.py": "靶＝`tests/test_wired_m03_pay.py` · 业务面",
+    "_mut_m03pick.py": "靶＝`tests/test_wired_m03_pick.py` · 业务面",
+    "_mut_m04forms.py": "靶＝m04 强制通过 · 业务面",
+    "_mut_m04wired.py": "靶＝`tests/test_wired_m04.py` · 业务面",
+    "_mut_m05wired.py": "靶＝`tests/test_wired_m05.py` · 业务面",
+    "_mut_m06wired.py": "靶＝`tests/test_wired_m06.py`（`MOD-06` 机械源接线）· 业务面",
+    "_mut_m07bal.py": "靶＝结余录入片 · 业务面",
+    "_mut_m08wired.py": "靶＝`tests/test_wired_m08.py` · 业务面",
+    "_mut_m09.py": "靶＝`MOD-09` 壳接线 · 业务面",
+    "_mut_m14.py": "靶＝`MOD-14` 壳接线（`ACC-CFG-RULE-001`）· 业务面",
+    "_mut_m4.py": "靶＝`ACC-RPT-EXP-001`（过程资料导出）· 业务面",
+    "_mut_m4b.py": "靶＝`ACC-RPT-BIG-001`（活动大表）· 业务面",
+    "_mut_m4c.py": "靶＝`TAIL-03/02/01`（机械手录 / 历史导入 / 手动导入 Excel）· 业务面",
+    "_mut_m4d.py": "靶＝真机抓取暴露的两处修复 · 业务面",
+    "_mut_m4e.py": "靶＝`ACC-PRJ-SYNC-001/001-06` · 业务面",
+    "_mut_m4f.py": "靶＝链路 B（`ACC-PRJ-AUTO-001` 7 点 ＋ `ACC-SETL-FETCH-001/001-10`）· 业务面",
+    "_mut_m4g.py": "靶＝导出项目参数保序去重 · 业务面",
+    "_mut_m6.py": "靶＝`ACC-INIT-001` / `ACC-ODDVAL-001` · 业务面",
+    "_mut_m7w.py": "靶＝`MOD-07` 壳接线 · 业务面",
+    "_mut_m9.py": "靶＝`ACC-FEE-MON-001`（11 个判据点）· 业务面",
+    "_mut_mapping.py": "靶＝`import_kit.mapping` / `profile_store`（`TAIL-75` B1）· 业务面",
+    "_mut_naive.py": "靶＝`tests/test_naive_export_parity.py`（薄委托下的内核）· 业务面",
+    "_mut_own_109.py": "靶＝`ACC-PRJ-OWN-001/001-09` · 业务面",
+    "_mut_own_dialog.py": "靶＝`TAIL-29`-②④ 链路 C 弹窗 · 业务面",
+    "_mut_owncfg.py": "靶＝`ACC-PRJ-OWN-001` ＋ `ACC-CFG-RULE-001` · 业务面",
+    "_mut_ownwh.py": "靶＝`TAIL-39`『兜底前先查 i8 仓库名单』· 业务面",
+    "_mut_p1.py": "靶＝路径①（模板填充）片 1 · 业务面",
+    "_mut_p5a.py": "靶＝表级虚拟滚动（`TAIL-64` `P5-a`/`P5-c`）· 接线断言 pytest",
+    "_mut_pipini.py": "靶＝`tests/test_pipini_single_source.py`（依赖镜像只有一处定义）· 接线断言 pytest",
+    "_mut_pjb.py": "靶＝`PJB` 统一项目选择按钮出口（`TAIL-64` P4-d）· 接线断言 pytest",
+    "_mut_print.py": "靶＝打印链路（`TAIL-46` ②③）· 业务面",
+    "_mut_prjtype.py": "靶＝`TAIL-42`『人工覆盖三类判定』· 业务面",
+    "_mut_proc.py": "靶＝`ACC-RPT-EXP-001`（过程资料成品）· 业务面",
+    "_mut_promote.py": "靶＝`TAIL-30`-③ 人工指认（链路 B）· 业务面",
+    "_mut_rules.py": "靶＝`TAIL-40` 剔除规则落库 · 业务面",
+    "_mut_save.py": "靶＝`tests/test_export_save.py`（落盘不建目录等）· 业务面",
+    "_mut_stale.py": "靶＝`tests/test_wired_boot.py::跨页写动作后全标脏` · 业务面",
+    "_mut_tail04.py": "靶＝`TAIL-04` 导出切片 · 业务面",
+    "_mut_tail04_pages.py": "靶＝`TAIL-04` 最后两页 ＋ `exp` 真分发 · 业务面",
+    "_mut_tail192.py": "靶＝`TAIL-192` 结构审计 P0 四件 · 接线断言 pytest",
+    "_mut_tail193.py": "靶＝`tests/test_dup_guards.py` 防扩散墓碑 · 接线断言 pytest",
+    "_mut_tail35.py": "靶＝`TAIL-35`（m04 导入 ＋ 手动行）· 业务面",
+    "_mut_tail43.py": "靶＝`TAIL-43` 六处断言 · 业务面",
+    "_mut_tbl.py": "靶＝`TBL` 统一表外壳（`TAIL-64`）· 接线断言 pytest",
+    "_mut_theme.py": "靶＝主题断言（规范表 / 对比度 AA / 侧栏角色）· 接线断言 pytest",
+    "_mut_time.py": "靶＝`tests/test_acc_i8_time.py`（壳的业务时钟取自北京时间）· 业务面",
+    "_mut_trailscope.py": "靶＝`tests/test_trail_scope.py`（留痕范围判据）· 接线断言 pytest",
+    "_mut_trash.py": "靶＝`ACC-USR-MGMT-001/001-09`（回收站）· 业务面",
+    "_mut_unresolved.py": "靶＝`TAIL-41`（未命中清单的新鲜度）· 业务面",
+    "_mut_uxnum.py": "靶＝`tests/test_ux_numbers.py`（金额大数带单位 / 不可得金额不许冒充 0）· 接线断言 pytest",
+
+    # ---- 一次性靶（脚本自称"用完即删"，留着只为可复核 ⇒ 不进闸门）----
+    "_mut_jc.py": "靶＝`M5` 集采域内核 11 条断言 · 件自己的 docstring 写着**「用完即删」**（一次性靶类）· 业务面",
+}
+
+
+def cover_gap() -> tuple[list[str], list[str]]:
+    """**选集的机器眼**（`TAIL-239` 第 3 步）→ `(缺口件名, 名单里已不在盘的件名)`。
+
+    ⭐ **为什么必须有它**：本件原来只回答"哪些要跑"，**没人回答"那没跑的那些呢"** ——
+    而"没跑且没人说为什么"正是本族 5 次静默失效的根（`TAIL-205`/`233`/`236`/`237`/本票）。
+    ⇒ 现在**每一支 `_mut_*.py` 必须落在 `KEY` 或 `KEEP_OUT` 之一**，否则当场报红并列出它。
+    ⚠️ **两侧都查**：缺口（新件忘了登记）· 陈旧（改名/删件后名单没跟改）—— 后者同样让选集失真。
+    ⛔ 本函数**只读**：不跑任何变异件。
+    """
+    on_disk = {p.name for p in MUT.glob("_mut_*.py")}
+    listed = {n for n, _ in KEY} | set(KEEP_OUT)
+    return sorted(on_disk - listed), sorted(listed - on_disk)
+
+
+def report_cover() -> int:
+    """打印选集自检结果并给 rc（`0`＝两份名单合起来盖住了全集）。"""
+    gap, stale = cover_gap()
+    if gap:
+        print(f"⛔ **选集有缺口**：{len(gap)} 支 `_mut_*.py` 既不在 `KEY` 也不在 `KEEP_OUT`")
+        print("   ⇒ 它们**不会被任何一轮跑**（`TAIL-239`：加了反向灵敏度却没人跑，本族已 5 次）")
+        for n in gap:
+            print(f"     · {n}")
+        print("   ⇒ 两选一：**① 该跑** ⇒ 加进 `KEY`（并想清快集/慢集）"
+              "　**② 有意不跑** ⇒ 进 `KEEP_OUT` 并**写下为什么**（⛔ 不许写「不重要」）")
+    if stale:
+        print(f"⛔ **名单陈旧**：{len(stale)} 支已不在盘上（改名/删件 ⇒ 本件要跟改）："
+              f"{', '.join(stale)}")
+    if not gap and not stale:
+        print(f"✅ 选集一致：`KEY` {len(KEY)} 支 ∪ `KEEP_OUT` {len(KEEP_OUT)} 支 "
+              f"＝ 盘上 {len(list(MUT.glob('_mut_*.py')))} 支（⛔ 条数别抄在别处）")
+    return 1 if (gap or stale) else 0
 
 
 def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
@@ -105,14 +291,17 @@ def main() -> int:
     if "--timeout" in args:
         timeout = int(args[args.index("--timeout") + 1])
     fast_only = "--fast" in args
+    # ⚠️⭐ 2026-10-06（`TAIL-239` 第 3 步）：**选集自检在最前面跑，且各档都跑** ——
+    #   缺口件在 `--fast` / 全套 / `--all` 三条路上都"不会被跑" ⇒ 哪条路都得先报出来。
+    #   （原先只查 `KEY` 里有没有件消失的那段并进来了 —— 覆盖面更大：缺口 + 名单陈旧都归它。）
+    if "--cover-only" in args:
+        return report_cover()
+    if report_cover():
+        return 1
     if "--all" in args:
         cases = [(p.name, "（按需全跑）") for p in sorted(MUT.glob("_mut_*.py"))]
     else:
         cases = [(n, why) for n, why in KEY if (MUT / n).exists()]
-        miss = [n for n, _ in KEY if not (MUT / n).exists()]
-        if miss:
-            print("⛔ 关键集里有件**不在了**（改名/删件 ⇒ 本件要跟改）：", ", ".join(miss))
-            return 1
         if fast_only:
             skipped = [n for n, _ in cases if n in SLOW_KEY]
             cases = [(n, w) for n, w in cases if n not in SLOW_KEY]

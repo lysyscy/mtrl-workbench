@@ -19,7 +19,9 @@ PROBE.write_text('# 假装有人把 m08imp 加回来了\nX = "m08imp"\n', encodi
 try:
     # ⚠️ 别跑 `audit_drift.py` 单件 —— T8 是 doc_audit 接线进去的，单跑它**不含 T8**（实测假绿）。
     r = subprocess.run(
-        [str(REPO / "backend" / ".venv" / "Scripts" / "python.exe"), "-c",
+        # ⚠️ 2026-10-06（`TAIL-239`）：`-X utf8` 是**必需** —— 少了它输出成乱码 ⇒ 下面那个 `"红" in l`
+        #   永不成立 ⇒ 误报「守卫是假的」。**口径主人＝ `_run_muts.py` 题头 ⑤**。
+        [str(REPO / "backend" / ".venv" / "Scripts" / "python.exe"), "-X", "utf8", "-c",
          "import sys; sys.path.insert(0, r'tools/audit');"
          "from audit_drift import check_cancelled;"
          "h = check_cancelled();"

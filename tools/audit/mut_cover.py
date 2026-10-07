@@ -88,6 +88,17 @@ IGNORED_REFS: tuple[str, ...] = (
     #   ⚠️ 本件的 `_file_index()` 只索引 `.py/.js/.html`（**md 本来就不在里面**）⇒ 不登记就会常挂两条假"找不到"（噪音淹信号）。
     "TAIL-188-交付包与迁移.md",                      # M19：**真在**的票文件（只是不在 idx 的三种后缀里）
     "TAIL-9999-幽灵票.md",                           # M20：脚本**自己 create** 的幽灵票（用完删）
+    # ⭐ 2026-10-06（`TAIL-239`）：`_mut_keycover.py`（选集机器眼）**故意造**两个不存在的件名 ——
+    #   ① `_mut_tmp_unlisted_probe.py`：它**自己 write_text** 出来证明"缺口会被报红"，`finally` 里删；
+    #   ② `_mut_tmp_never_existed_probe.py`：只作为**字符串**插进 `KEEP_OUT` 字典体（证明"陈旧会被报红"），
+    #      从来不落盘。⇒ 不登记就会在台账里挂两条**永久假**「⚠️找不到」，而真过期的目标会被淹没
+    #   （这正是 `IGNORED_REFS` 存在的理由）。
+    "_mut_tmp_unlisted_probe.py",
+    "_mut_tmp_never_existed_probe.py",
+    # ⭐ 2026-10-06（`TAIL-241` 第 4 步）：`_mut_pytestscope.py` 同样**故意**往 `SELF_ONLY`
+    #   里塞一个不存在的件名（证明「名单陈旧」那半边会报红，不是死代码）⇒ 不登记就会在台账里
+    #   挂一条**永久假**「⚠️找不到」，而真过期的目标会被淹没（同上两支的道理）。
+    "_mut_pytestscope_never_existed.py",
 )
 
 
