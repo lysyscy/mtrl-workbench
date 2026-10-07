@@ -46,16 +46,24 @@ tail_n() {
   printf '%s\n' "$_buf"
 }
 
+# ⚠️⚠️ **这份列表里不许出现 `#` 注释行** —— `for spec in \` 是**续行**结构，
+#   而注释要吃到"下一个没被续行吃掉的新行"才结束 ⇒ 列表里任何一行注释都会把**它后面整段**
+#   变成注释 ⇒ `sh` 报 `syntax error near unexpected token`。
+#   ⭐ 2026-10-07 实测：这条已经害过一次 —— 2026-10-06 有人把注释加了进来，而**已安装的那份
+#   副本一直是旧的**（两份 MD5 不同）⇒ 坏版本从没被 git 跑过，直到今天同步才炸。
+#   ⇒ 注释一律写在 `for spec in` **上面**；新条目只能加在**最后一行**（末行不带 `\`）。
+#
+# 列表说明：
+#   · `syntax_audit --staged`（2026-10-06）：让 `Q4` 只查**本轮暂存的 `.py`**（模块必须有主文头
+#     「守什么」）—— 存量一次性脚本没主文头是**存量债**，不该在提交那一刻全点成红。
+#   · `bytes_guard --staged`（2026-10-07）：暂存件的行尾 / 坏字符 / BOM / 编码。
 for spec in \
-  # ⭐ 2026-10-06（`/retro`）：`--staged` 让 `Q4` 只查**本轮暂存的 `.py`**（模块必须有主文头
-  #   「守什么」）—— 存量一次性脚本没主文头是**存量债**，不该在提交那一刻全点成红。
   "tools/audit/syntax_audit.py --staged" \
   "tools/audit/doc_audit.py" \
   "tools/audit/audit_meta.py" \
   "tools/audit/audit_work.py" \
-  # ⭐ 2026-10-07（`/retro` 候选1）：`bytes_guard` —— 暂存件的行尾 / 坏字符 / BOM / 编码
-    "tools/audit/bytes_guard.py --staged" \
-    "tools/audit/mut_cover.py --check"
+  "tools/audit/mut_cover.py --check" \
+  "tools/audit/bytes_guard.py --staged"
 do
   # shellcheck disable=SC2086
   set -- $spec
