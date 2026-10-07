@@ -192,6 +192,19 @@ def check(files: list[Path], title: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    if "--paths" in argv:
+        names = argv[argv.index('--paths') + 1:]
+        if not names:
+            # 无差异仍检查入口自己，不能空扫伪装成通过。
+            names = ['tools/oneoff/_run_rulers.py']
+        files = []
+        for name in names:
+            p = (ROOT/name).resolve()
+            if not p.is_relative_to(ROOT) or not p.is_file() or p.suffix.lower() not in TEXT_SUFFIXES:
+                print('字节哨输入无法证明：', name)
+                return 1
+            files.append(p)
+        return check(files, '实际改动文本')
     if "--staged" in argv:
         return check(staged_text(), "本轮暂存")
     return check(iter_text(), "全量 · 仓内文本件")

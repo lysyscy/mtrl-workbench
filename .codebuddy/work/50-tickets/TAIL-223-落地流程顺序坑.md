@@ -1,10 +1,10 @@
 # TAIL-223: 落地流程顺序坑
 
-**What to build:** 把 `ops/init_db.sql` 改成**可重跑**：现在建角色的 `<PASSWORD>` 与建库落在同一次 `deploy_restore` 里，第一次跑必然用字面 `<PASSWORD>` 建出角色，而 `CREATE ROLE` 不可重跑 ⇒ 库口令永远改不过来。
+**What to build:** 核实部署建角色/配置顺序与可重跑性：旧票的“第一次必用占位符”不适用于已完成部署的本机；未来重装仍需明确安全顺序与配置位置。
 
-**Blocked by:** None (can start immediately) · ⚠️ 修它要动**交付关键件** ⇒ ⛔ 别赶在产包前动
+**Blocked by:** None (can start immediately) · 先核实风险与安全方案，当前票不读取凭据正文或重跑部署
 
-**Status:** ready-for-agent
+**Status:** wontfix
 
 - [ ] `init_db.sql` 跑两次不报「角色已存在」（口令能改过来）
 - [ ] 文档里的顺序与脚本实际顺序一致
@@ -15,3 +15,8 @@
 ## Comments
 
 **2026-10-04 · 建票（agent）。** 来源：用户 2026-10-04「甲」（检查产包流程时量出 · 出处 = `memory/journal/2026-10-04.md` §4）｜**不做会怎样：** 照 `ops/deployment.md` 手工落地的人必踩：`selfcheck` 第③项红，**原因不明显**｜**落点：** `ops/init_db.sql`（可重跑）＋ `ops/deployment.md` §一/§二 ＋ `ops/deploy_restore.ps1` 第 5 步措辞｜**阶段 / 时机：** `随时`｜索引 = 计划 §15（**一行一票**）
+
+**2026-10-07 · TAIL-246 核实与处置（Codex）。** 保留部署风险待核项。2026-10-05 已成功部署且 journal 明记本地 SQL 含真实口令；旧票“第一次必然占位符”不能当当前事实。源码 deploy_restore 第5步仍调用建库脚本，重跑性未实测。凭据正文未输出、文件未改；任何后续核验在安全副本/隔离库进行。
+
+
+**2026-10-07 · 用户决定不再执行（Codex）。** 用户2026-10-07明确决定不再执行。未来部署顺序及可重跑性未复核；撤出票仓不表示风险已排除。

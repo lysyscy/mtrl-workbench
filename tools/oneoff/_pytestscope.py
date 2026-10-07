@@ -477,3 +477,128 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+# 全套pytest成功产生的真实读入证据；不是手工镜像测试清单。
+_INPUT_FILES = set()
+_INPUT_SHARED = set()
+_INPUT_NODE = None
+_INPUT_OUTPUT = None
+
+
+def _input_audit(event, args):
+    """只记录壳源码读入及调用者模块；不记录数据内容、口令或数据库值。"""
+    # 子进程/远程请求可在本进程之外读壳，不能只记录本地open而漏掉它们。
+    if event == 'open':
+        if not args or not isinstance(args[0], (str, bytes)):
+            return
+        try:
+            path = pathlib.Path(args[0]).resolve()
+            path.relative_to(ROOT/'backend/app/web')
+        except (ValueError, OSError, TypeError):
+            return
+    elif event not in {'subprocess.Popen', 'socket.connect', 'http.client.connect'}:
+        return
+    if _INPUT_NODE:
+        _INPUT_FILES.add(_INPUT_NODE)
+    found = False
+    frame = sys._getframe(1)
+    while frame:
+        name = frame.f_globals.get('__file__')
+        if name:
+            try:
+                module_path = pathlib.Path(name).resolve()
+                module_path.relative_to(BACKEND)
+                _INPUT_SHARED.add(_mod_name(module_path))
+                found = True
+            except (ValueError, OSError):
+                pass
+        frame = frame.f_back
+    if not found and not _INPUT_NODE:
+        _INPUT_SHARED.add('@unknown')
+
+
+def pytest_runtest_setup(item):
+    """测试上下文从setup覆盖fixture、call及teardown；共享读入另沿模块依赖扩散。"""
+    global _INPUT_NODE
+    _INPUT_NODE = item.path.name
+
+
+def pytest_runtest_logfinish(nodeid, location):
+    global _INPUT_NODE
+    _INPUT_NODE = None
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """完整成功才保存读取证据；失败先清掉，不能供下一次局部选择复用。"""
+    if _INPUT_OUTPUT is None:
+        return
+    import json
+    output = pathlib.Path(_INPUT_OUTPUT)
+    if exitstatus:
+        output.unlink(missing_ok=True)
+        return
+    data = {'version': 1, 'files': sorted(_INPUT_FILES), 'shared': sorted(_INPUT_SHARED),
+            'tests': sorted(p.name for p in TESTS.glob('test_*.py'))}
+    output.write_text(json.dumps(data, sort_keys=True), encoding='utf-8', newline='\n')
+
+
+def text_plan(data) -> Plan:
+    """从已验证完整运行的真实壳读入选测试；缺证、坏档、无法传递均全跑。"""
+    if not isinstance(data, dict) or data.get('version') != 1:
+        return Plan(True, '壳读入证据缺失/版本未知')
+    names = {p.name for p in TESTS.glob('test_*.py')}
+    if any(not isinstance(data.get(k), list) or not all(isinstance(v, str) for v in data[k])
+           for k in ('files', 'shared', 'tests')) or set(data['tests']) != names:
+        return Plan(True, '壳读入证据损坏或测试名字空间变化')
+    picked = set(data['files'])
+    if not picked <= names:
+        return Plan(True, '读取证据选到清单外')
+    mods, tests = build_graph()
+    for shared in data['shared']:
+        if shared in {p[len('backend/'):-3].replace('/', '.') for p, _ in AUTO_LOADED}:
+            return Plan(True, 'pytest自动加载输入读取壳，影响全套')
+        users = {n for n, m in tests.items() if shared in _reach(mods, m)}
+        if not users:
+            return Plan(True, '共享壳读入无法传递到测试：'+shared)
+        picked |= users
+    if not picked:
+        return Plan(True, '壳读取证据为空，不能无证跳过')
+    return Plan(True, '完整运行实际读取壳的测试及共享读入依赖', picked)
+
+
+def input_selftest():
+    """真实输入链与坏元数据的兜底，不按预设测试名单比相等。"""
+    names = sorted(p.name for p in TESTS.glob('test_*.py'))
+    for data in [None, {}, {'version': 1, 'files': [], 'shared': [], 'tests': names},
+                 {'version': 1, 'files': ['outside.py'], 'shared': [], 'tests': names},
+                 {'version': 1, 'files': [], 'shared': ['@unknown'], 'tests': names}]:
+        assert text_plan(data).run_all, '未知/坏/空/越界读取证据必须全跑'
+    # 明确的实际读取者只要求被选；不钉住全套名单形状。
+    sample = names[0]
+    assert sample in text_plan({'version': 1, 'files': [sample], 'shared': [], 'tests': names}).files
+    import os, tempfile
+    with tempfile.TemporaryDirectory() as temp:
+        e = dict(os.environ, PYTEST_INPUTS_PATH=str(pathlib.Path(temp)/'inputs.json'),
+                 PYTHONPATH=str(ROOT/'tools/oneoff'))
+        code = "import _pytestscope as s; s._INPUT_NODE='" + sample + "'; s._INPUT_FILES.clear(); (s.ROOT/'backend/app/web/index.html').read_bytes(); assert s._INPUT_NODE in s._INPUT_FILES, '真实open未被接入输入证据'"
+        result = subprocess.run([sys.executable, '-X', 'utf8', '-c', code], env=e, capture_output=True, text=True, encoding='utf-8')
+        assert result.returncode == 0, result.stderr
+        # Exercise actual pytest plugin discovery and setup/call/finish hooks.
+        probe = pathlib.Path(temp)/sample
+        probe.write_text('def test_read():\n    from pathlib import Path\n    Path('+repr(str(ROOT/'backend/app/web/index.html'))+').read_bytes()\n', encoding='utf-8')
+        e['ACC_RESULTS_PATH'] = str(pathlib.Path(temp)/'partial.json')
+        result = subprocess.run([sys.executable, '-X', 'utf8', '-m', 'pytest', '-q', '-p', '_pytestscope', str(probe)], cwd=temp, env=e, capture_output=True, text=True, encoding='utf-8')
+        assert result.returncode == 0, result.stdout + result.stderr
+        import json
+        observed = json.loads((pathlib.Path(temp)/'inputs.json').read_text(encoding='utf-8'))
+        assert sample in observed['files'], 'pytest真实读入未被记录'
+    print('自测 壳真实读入选测、真实pytest插件接线、未知共享输入、空证据与越界兜底通过')
+
+
+import os as _input_os
+if _input_os.environ.get('PYTEST_INPUTS_PATH'):
+    # Existing public environment helper is not a pytest hook.
+    # Mark it optional so pytest plugin discovery preserves the CLI API.
+    setattr(pytest_env, 'pytest_impl', {'optionalhook': True})
+    _INPUT_OUTPUT = _input_os.environ['PYTEST_INPUTS_PATH']
+    pathlib.Path(_INPUT_OUTPUT).unlink(missing_ok=True)
+    sys.addaudithook(_input_audit)

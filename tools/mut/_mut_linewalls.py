@@ -129,7 +129,7 @@ def main() -> int:
     for c in cases:
         if c["mode"] == "count":
             # ② 相对判据：记下基线里那个「数」（没有就当 0 ⇒ 塞一行后必须是 1）
-            c["base_n"] = _wall_count(base_out, c["count_name"]) or 0
+            c["base_n"] = sum(len(line) > LINE_WALL_CHARS for line in c["path"].read_text(encoding="utf-8").splitlines())
         elif _needle_hit(c["needle"], base_out):
             print(f"  ⛔ 基线的输出里**已经**有「{c['needle']}」⇒ 本件这条判据无效，先重定靶")
             return 1

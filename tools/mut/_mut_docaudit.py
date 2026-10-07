@@ -89,6 +89,7 @@ REGISTRY = ROOT / "tools" / "t7_expected.txt"
 GUARD_SRC = ROOT / "tools" / "audit" / "audit_meta.py"      #: `T18` 的靶（常量定义处）
 COMMON_SRC = ROOT / "tools" / "audit" / "audit_common.py"    #: `M25`/`M26` 的靶（`OUTSIDE_ROOTS` 所在件）
 IDE = ROOT / ".codebuddy" / "memory" / "IDE-细节.md"        #: `M24` 的靶（豁免词表的**实测承重件**）
+RUNNER = ROOT / "tools" / "oneoff" / "_run_rulers.py"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 
 
@@ -198,7 +199,7 @@ T5_TARGET = ROOT / "backend" / "app" / "mod05_flow" / "importer.py"
 T17_TARGET = ROOT / "tools" / "audit" / "cover_gap.py"
 #: ⭐ `T17` **第二半**的靶（2026-10-01 立）：「入门口令」里逐行列着的那件 —— 同款改坏（截掉入口）。
 #:    ⚠️ 本件 2026-10-01 之前**根本没有入口**（单跑 0 行输出）；补齐后才有得截 ⇒ 靶才成立。
-T17_HANDOFF_TARGET = ROOT / "tools" / "audit" / "audit_work.py"
+T17_REGISTERED_TARGET = ROOT / "tools" / "audit" / "audit_work.py"
 #: ⭐ `T11` 靶：`artifacts/` 下**名字含「建议」**的 md 必须有「待办登记回执」⇒ 造一个**没有**的（用完删掉）
 T11_TMP = ROOT / "artifacts" / "_mut_建议_临时.md"
 #: ⭐⭐ 2026-10-04（`TAIL-225` 票体系）`T6` 的**票文件**靶：
@@ -274,20 +275,14 @@ MUTS_RED2: list[dict] = [
      "needle": ("importer.py", "阈值表没点名本件"), "path": THRESHOLD,
      "old_new": (_b("`backend/app/mod06_proc/importer.py` **668**"),
                  _b("`backend/app/mod06_proc/importer_zzz.py` **668**")), "all": False},
-    # ⭐⭐ `T17` **第二半**（2026-10-01 立 · `TAIL-204` 入场实测）：把**「入门口令」里那件**的 `__main__`
-    #    整段截掉 ⇒ 「跑它 = 空转」必须被判红。⚠️ 与 `M9` 的差别只在**清单来源**：
-    #    `M9` 打的是 `§22.1` 的 `foreach` 那一半（按**件名**）；本条打的是 `§13.6` 入门口令那一半（按**路径**）。
-    #    ⚠️ 判据串取 `入门口令里的` ＋ 件名 —— 只有本半的报法带这个前缀（`M9` 那条不带）⇒ 不会互相当成对方。
-    {"desc": "M17 `T17` **入门口令**里的件没有入口（跑它 = 空转）", "mode": "red",
-     "also": ("[T17]", "入门口令里的", "audit_work"), "path": T17_HANDOFF_TARGET,
+    # TAIL-245：注册项入口与空扫仍要证伪，靶从历史口令迁到唯一 CMDS。
+    {"desc": "M17 `T17` CMDS 登记项没有入口（跑它 = 空转）", "mode": "red",
+     "also": ("[T17]", "闸门里的", "audit_work"), "path": T17_REGISTERED_TARGET,
      "truncate": 'if __name__ == "__main__":'},
-    # ⭐⭐ `T17` 第二半的**空扫自证**（2026-10-02 立 · 当天**真实踩到**）：把口令块的**标题**改掉
-    #    ⇒ 锚找不着 ⇒ 判据必须报「**一条都没扫到（空扫）**」，⛔ 不是静静地什么都没判。
-    #    ⚠️ 复现的就是当天那次假绿：§0.2 里提了一句"上面那份入门口令" ⇒ **裸词锚被挪走**
-    #       ⇒ `M17` 从"必红"变成"**未命中**"（判据自己瞎了，而它看上去是绿的）。
-    {"desc": "M18 `T17`② 口令块锚找不着 ⇒ 本半**空扫**必须判红", "mode": "red",
-     "also": ("[T17]", "空扫"), "path": PLAN,
-     "old_new": (_b("**入门口令（可复制）**"), _b("**入场口令（可复制）**")), "all": False},
+    {"desc": "M18 `T17` CMDS 定义锚消失 ⇒ 空扫必须判红", "mode": "red",
+     "also": ("[T17]", "空扫"), "path": RUNNER,
+     "old_new": (_b("CMDS: list[tuple[str, list[str]]] = ["),
+                 _b("CMDS_MISSING: list[tuple[str, list[str]]] = [")), "all": False},
     # ⭐⭐ 2026-10-04（`TAIL-225` 票体系）：`T6` 新长的两查 —— **票文件必须在位** ＋ **不许幽灵票**。
     #    ⚠️ 靶必须挑**在办的**票（`§一`），因为这两查只对在办生效（`§四` 存量按留痕口径不追改）。
     {"desc": "M19 `T6` 在办票**没有票文件**（把 `TAIL-188` 的票文件挪开）", "mode": "red",

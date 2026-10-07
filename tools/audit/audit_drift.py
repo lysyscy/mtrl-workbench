@@ -556,9 +556,6 @@ _TAIL_ANCHOR_RE = re.compile(
     r"C 类\s*\*{0,2}(\d+)\*{0,2}\s*条?\s*·\s*"
     r"已销号\s*\*{0,2}(\d+)\*{0,2}")
 # ⛔ `_U5_ANCHOR_RE` **已撤**（2026-09-30 `TAIL-201`：`U5` 退场 ⇒ 那条锚点没了；理由见上面 ③ 处）
-_FOREACH_RE = re.compile(r"foreach\s*\(\s*\$t\s+in\s+@\(([^)]*)\)")
-_RULERS_JUDGE_RE = re.compile(
-    r"\*{0,2}(\d+)\s*把尺子全\s*`rc=0`\*{0,2}\s*（[^）]*?合计\s*\*{0,2}(\d+)\s*把")
 
 
 def _anchor(rel: str, line_no: int, what: str, why: str, text: str) -> dict:
@@ -589,33 +586,13 @@ def check_count_anchors() -> list[dict]:
                         out.append(_anchor(rel, i, "尾巴计数 A%d·B%d·C%d·已销号%d" % got,
                                            "台账实际是 A%d·B%d·C%d·已销号%d" % want, line))
 
-    # ② `§22.1` 尺子把数（真值 = 同一代码块 `foreach` 的项数 ⇒ 应写「N 把 ＋ doc_audit ＝ N+1 把」）
-    plan = REPO_ROOT / LEDGER_REL
-    if plan.exists():
-        lines = plan.read_text(encoding="utf-8").splitlines()
-        n_rulers: int | None = None
-        for line in lines:
-            m = _FOREACH_RE.search(line)
-            if m:
-                n_rulers = len([x for x in m.group(1).split(",") if x.strip()])
-                break
-        found_judge = False
-        for i, line in enumerate(lines, 1):
-            m = _RULERS_JUDGE_RE.search(line)
-            if not m:
-                continue
-            found_judge = True
-            if n_rulers is None:
-                out.append(_anchor(LEDGER_REL, i, "（找不到 `foreach`）",
-                                   "判定行写了把数，但同文件里找不到 `foreach` 项数 ⇒ 无从核对", line))
-            elif (int(m.group(1)), int(m.group(2))) != (n_rulers, n_rulers + 1):
-                out.append(_anchor(
-                    LEDGER_REL, i, "尺子把数 %s 把 / 合计 %s 把" % (m.group(1), m.group(2)),
-                    "同一代码块的 `foreach` 实为 **%d** 项 ⇒ 应写「%d 把 ＋ `doc_audit` ＝ %d 把」"
-                    % (n_rulers, n_rulers, n_rulers + 1), line))
-        if not found_judge:
-            out.append(_anchor(LEDGER_REL, 1, "（找不到判定行）",
-                               "`§22.1` 的判定行不见了 ⇒ 尺子把数失去对照物", ""))
+    # ② 清单真值只读 CMDS，不再核历史 foreach 与手抄把数。
+    from audit_meta import gate_commands
+    try:
+        gate_commands()
+    except (OSError, ValueError, SyntaxError, TypeError) as exc:
+        out.append(_anchor("tools/oneoff/_run_rulers.py", 1, "CMDS 清单无法读取",
+                           str(exc), ""))
 
     # ③ ~~`U5` 登记条目数~~ —— ⛔ **已撤**（2026-09-30 `TAIL-201` 退场）：
     #    原来这里 import `ui_parity.U5_COUNT`，再核活文档里"登记 N 个规格件"那句。

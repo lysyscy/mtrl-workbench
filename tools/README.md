@@ -1,8 +1,7 @@
 # tools/ · 索引（`TAIL-58` · 2026-09-21 分目录）
 
-> ⛔ **本件是地图，不是口径** —— 各尺子的口径与阈值在 `ops/阈值表.md`，收工闸门在 `MEMORY.md §〇之二`。
-> ⭐ **该跑哪把尺子**：平时只跑 5 条常用（见 `.codebuddy/memory/MEMORY.md` §〇之二），**收尾跑全套** —— ⭐ **清单与条数的唯一出口 = `tools/oneoff/_run_rulers.py`**
-> （＝下表 `audit/` 各尺子 ＋ `probe/_audit_face` ＋ `acc_report` ＋ `mut_cover`；⚠️ 别在此处抄条数，会上涨）。
+> **本件是地图**：口径与阈值回 ops/阈值表.md；日常流程与核验范围回 ops/agents/issue-tracker.md §四；可执行命令回 .codebuddy/memory/IDE-细节.md §十一。
+> **工具清单唯一出口** = tools/oneoff/_run_rulers.py 的 `CMDS`。相关核验的输入与通过回执见 tools/oneoff/_gatescope.py；影响分类、守护后果与失败兜底见 tools/oneoff/_impactscope.py；命令与完整/相关边界回 IDE-细节.md §十一。
 
 | 目录 | 放什么 | 怎么跑 |
 |---|---|---|
@@ -35,7 +34,7 @@
 
 | 类 | 怎么判 | 处置 |
 |---|---|---|
-| ① **常驻小工具** | 收工闸门 / 口径 / 别的件会**反复**引用它（`_run_rulers.py` · `_run_muts.py` · ⭐ **`_pytestscope.py`**（**pytest 该跑什么的单一出口** · 2026-10-06 `TAIL-241`：三张名单 ＋ import 闭包 ＋ 缺口自检 ＋ `--cover-only`；⛔ 秒数看每次运行自己的输出）· `_ps_*.ps1` · `_list_tails.py` · `_page_measure.py` · `_prepush_sensitive.py` · `_oneoff_measure.py` · ⭐ **`_tail_open.py` / `_tail_close.py`**（立/销台账 · 2026-10-02 补）· ⭐ **`_doc_downgrade.py`**（降档动作 · 2026-10-06）） | ⛔ **长期保留** —— 名字带 `oneoff` **不代表**它是"一次性" |
+| ① **常驻小工具** | 收工闸门 / 口径 / 别的件会**反复**引用它（`_run_rulers.py` · `_run_muts.py` · ⭐ **`_pytestscope.py`**（**pytest 该跑什么的单一出口** · 2026-10-06 `TAIL-241`：三张名单 ＋ import 闭包 ＋ 缺口自检 ＋ `--cover-only`；⛔ 秒数看每次运行自己的输出）· `_gatescope.py`（输入摘要、通过回执与保守兜底；执行清单仍归 `CMDS` / `KEY`）· `_ps_*.ps1` · `_list_tails.py` · `_page_measure.py` · `_prepush_sensitive.py` · `_oneoff_measure.py` · ⭐ **`_tail_open.py` / `_tail_close.py`**（立/销台账 · 2026-10-02 补）· ⭐ **`_doc_downgrade.py`**（降档动作 · 2026-10-06）） | ⛔ **长期保留** —— 名字带 `oneoff` **不代表**它是"一次性" |
 | ② **被引用的留痕件** | 台账 / 设计件 / 判据 / 记忆里**提到了它的文件名** | ⛔ **长期保留** —— 它们是"当初怎么做的"的唯一书面凭证；删了就**断链**（`T3` 幽灵路径 / 交付面 `_links` 会报）。⚠️⭐ **移也断链**（同删）⇒ **2026-10-02 `/retro` 复量：188 件里零引用 0 件**（那 39 个 `_tail*` **全**属类②）⇒ **件数上限（`T20` 的 200）不可能靠"清理"缓解** —— 到线时该动的是**引用方式**（台账/日志少写文件名）或**连同引用一起入档**，⛔ 别指望"哪天能把它们删掉" |
 | ③ **零引用的** | **没有任何**仓内文书提到它 | ⭐ **候选清理**：**移进** `tools/oneoff/_归档-YYYYMMDD/`（可逆、⛔ 不删）；或写明留档理由 |
 

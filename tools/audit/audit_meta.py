@@ -897,7 +897,7 @@ LINE_WALL_CHARS = 800
 #:   ⇒ 把某件**下沉 / 拆行**之后**必须同批下调**这里的数（否则本检查报「基线过期」）；
 #:      ⛔ **不许上调**（上调 = 把闸放松 = 这条判据失去意义）。
 LINE_WALL_BASELINE: tuple[tuple[str, int], ...] = (
-    (".codebuddy/plans/开发计划-主文档.md", 88),
+    (".codebuddy/plans/开发计划-主文档.md", 84),
     ("ops/前端设计守则-以使用用户为中心.md", 16),
     ("ops/阈值表.md", 2),
 )
@@ -1171,145 +1171,38 @@ def check_live_machine() -> list[dict]:
 #    `audit_meta`**（后三件**从来没有 `__main__`** ⇒ 单跑 **0 行输出**、`rc` 恒 0 ⇒ **从未生效过**）。
 # ⭐ 这一族里**「入口根本不存在」是机器能判的** ⇒ 本检查专管它；
 #    另一半（入口在、但判据没牙）由 `tools/mut/_mut_*.py` ＋ 台账表 B 管 —— **两半合起来才闭环**。
-# ⚠️ 清单**唯一出处 = 计划 `§22.1` 的 `foreach ($t in @(...))`** ⇒ ⛔ 别在这里另抄一份（抄必漂）。
-GATE_LIST_RE = re.compile(r"foreach\s*\(\s*\$t\s+in\s*@\(([^)]*)\)")
+# TAIL-245：现行清单只读 CMDS；历史 foreach / 交接口令不再定义闸门。
 GATE_RULER_DIR = "tools/audit"
-#: ⚠️ **判据必须是「入口那一行」的正则，⛔ 不能用子串 `"__main__" in src`** ——
-#:    2026-09-24 被 `_mut_docaudit` 的 `M9` **当场抓到**：把靶的入口整段截掉，本检查**居然不报**，
-#:    因为**件说明（docstring）里也写着 `__main__` 这个词** ⇒ 子串测试把"注释里提到"当成了"入口在"。
-#:    ⭐ 这正是本仓「存在性检查／整页 `in` 全是假绿温床」（`§十二`）的又一例。
 GATE_GUARD_RE = re.compile(r"^if\s+__name__\s*==\s*['\"]__main__['\"]\s*:", re.M)
 
 
-def _gate_blocks() -> list[list[str]]:
-    """→ 计划里**每一处** `foreach ($t in @(...))` 的项名（通常 §22.1 一处 ＋ 接手开场白一处）。"""
-    p = REPO_ROOT / PLAN_DOC_REL
-    text = p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
-    return [[x.strip().strip("'\"") for x in m.group(1).split(",") if x.strip()]
-            for m in GATE_LIST_RE.finditer(text)]
-
-
-#: ⭐⭐ 2026-10-01（`TAIL-204` 入场实测）：`T17` 原先**只认 `foreach` 清单** ⇒ 漏掉了**第二份闸门清单** ——
-#:    计划 `§13.6` 的「**入门口令**」里**逐行写着**要跑的件（`tools\oneoff\_run_rulers.py` ·
-#:    `tools\audit\acc_report.py` · … · `tools\audit\audit_work.py`）。
-#:    实测：口令列着 `audit_work.py`，而那件**是个没有 `__main__` 的模块** ⇒ 单跑 **0 行输出**、
-#:    `rc` 恒 0 ⇒ **第五例僵尸闸门**，只因口令不是 `foreach` 而**整批漏网**（接手人会"以为它判过了"）。
-#:    ⇒ 本检查扩**第二半**：口令代码块里出现的 `tools/<dir>/<name>.py` 也逐条查「在位 ＋ 有入口」。
-HANDOFF_ANCHOR = "入门口令（可复制）"
-#: ⭐⭐ 2026-10-02 **订正锚**（当天**连着踩了两层** · 都留在这儿，因为教训值钱）：
-#:  **第一层（裸词锚）**：原文锚是 `"入门口令"`，`text.find()` 取**全篇第一处** ——
-#:    当天 §0.2 新增的一段里只提了一句"上面那份**入门口令**" ⇒ **锚被挪到那段**，
-#:    紧随其后那个代码块里**一条 `tools/*.py` 都没有** ⇒ **本半静默空扫**
-#:    （`_mut_docaudit` 的 `M17` 当场从"必红"变"**未命中**"= **判据自己瞎了，而它看上去是绿的**）。
-#:  **第二层（子串锚）**：改成块标题 `"入门口令（可复制）"` 还不够 —— 它仍是**子串**，
-#:    实测全篇出现 **2 次**：① **修订行正文里引了一句** ② **块标题本身**；
-#:    `find()` 命中的是**正文那处**，而它后面那个 ``` 块**恰好**就是真口令块 ⇒
-#:    **"看着扫到 8 条、其实锚已经错位"**（把块标题改名 ⇒ 它照样扫得到 ⇒ 变异 `M18` 抓不到）。
-#:  ⇒ **最终口径 = 整行锚**：那一行去掉 `*` 与空白后**逐字等于** `HANDOFF_ANCHOR` 才算（正文引一句**不算**）
-#:    ＋ **空扫自证**（扫不到命令 ⇒ 判红）。⛔ 别再退回"子串"或"裸词"。
-#:  ⚠️ 这是本仓最贵那族病（「检查在跑，其实扫空集」，见 `T18` 立条说明）的又一例 ——
-#:     **锚必须锚到"结构性位置"，⛔ 不是锚到"某个词"**：词会被正文抢走，结构不会。
-HANDOFF_CMD_RE = re.compile(r"tools[\\/]([\w]+)[\\/]([\w_]+)\.py")
-
-
-def _handoff_commands() -> list[str]:
-    """→ 计划「入门口令」代码块里出现的 `tools/<dir>/<name>.py`（相对路径 · 去重排序）。
-
-    ⚠️ **锚 = 整行**（见上方两层订正）：`ln.strip().strip("*").strip() == HANDOFF_ANCHOR`
-       ⇒ 正文里**引一句**不算，只有**标题那一行**算。
-    ⚠️ 空集**不是"没问题"** —— 调用方必须当红报（2026-10-02 加）。
-    """
-    p = REPO_ROOT / PLAN_DOC_REL
-    if not p.exists():
-        return []
-    lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
-    for i, ln in enumerate(lines):
-        if ln.strip().strip("*").strip() != HANDOFF_ANCHOR:      # ⭐ 整行锚（⛔ 不是子串）
-            continue
-        for j in range(i + 1, min(i + 6, len(lines))):           # 标题后不远处就是 ``` 开栏
-            if not lines[j].startswith("```"):
-                continue
-            for k in range(j + 1, len(lines)):
-                if lines[k].startswith("```"):
-                    block = "\n".join(lines[j + 1:k])
-                    return sorted({f"tools/{d}/{n}.py"
-                                   for d, n in HANDOFF_CMD_RE.findall(block)})
-            return []
-    return []
+def gate_commands() -> list:
+    """现读唯一 CMDS 的路径及参数，不执行导入或历史文档中的代码。"""
+    sys.path.insert(0, str(REPO_ROOT / "tools/oneoff"))
+    from _gatescope import commands
+    return commands(REPO_ROOT)
 
 
 def check_gate_liveness() -> list[dict]:
-    """`T17` · **闸门清单里每一把尺子都必须真有入口**（红）。
-
-    ⭐ 判据：那件**在位** ＋ 有 `if __name__ == \\"__main__\\"` ＋ 件里有 `print(`
-    （⛔ 有入口却一句不打 ⇒ 人看不见它在判什么 —— 另一种空转）。
-    ⭐ 两份清单都查：① `§22.1` 的 `foreach`（按件名，落在 `tools/audit/`）② **`§13.6` 入门口令里的命令行**
-    （按相对路径 —— 见 `HANDOFF_ANCHOR` 上方注释）。
-    """
-    def hit(what: str, why: str, fix: str) -> dict:
-        return {"code": "T17", "side": "仓", "rel": PLAN_DOC_REL, "line": 1,
+    """T17：CMDS 不许空扫；每个登记路径在位、有入口且可见输出。"""
+    def hit(what, why, fix):
+        return {"code": "T17", "side": "仓", "rel": "tools/oneoff/_run_rulers.py", "line": 1,
                 "what": what, "why": why, "fix": fix, "level": RED, "text": ""}
-
-    blocks = _gate_blocks()
-    out: list[dict] = []
-    if not blocks:
-        out.append(hit("找不到闸门清单（`§22.1` 的 `foreach`）",
-                       "清单是唯一出处 ⇒ 没了就没法判「哪些尺子在闸门里」",
-                       "恢复 `foreach ($t in @(…))` 那一段"))
-    for names in blocks:
-        for n in names:
-            f = REPO_ROOT / GATE_RULER_DIR / f"{n}.py"
-            if not f.exists():
-                out.append(hit(f"闸门里的 `{n}` 在 `{GATE_RULER_DIR}/` 里不存在",
-                               "清单指的件不在 ⇒ 那一行跑起来是报错或被跳过（⛔ 不是「在判」）",
-                               f"补上 `{GATE_RULER_DIR}/{n}.py`，或把它从清单里删掉"))
-                continue
-            src = f.read_text(encoding="utf-8", errors="replace")
-            m = GATE_GUARD_RE.search(src)
-            if m is None:
-                out.append(hit(f"`{n}.py` **没有 `__main__`** ⇒ 跑它是空转",
-                               "0 行输出、`rc` 恒 0 —— 而它在闸门清单里 ⇒ 人会以为它判过了"
-                               "（2026-09-24 实测三例：`cover_gap` / `audit_drift` / `audit_meta`）",
-                               f"给 `{GATE_RULER_DIR}/{n}.py` 补 `main()` ＋ "
-                               "`if __name__ == \"__main__\":`"))
-            elif "print(" not in src:
-                # ⚠️ 这一条是**弱判据**（`print(` 可能在件里任何地方）—— 它能抓的只是"件里根本没有输出"，
-                #    抓不了"入口那条路不打印"。⭐ 试过"只看入口之后有没有 print(" ⇒ **12 把尺子全被误判**
-                #    （打印都写在 `main()` 里，守卫那几行只是 `sys.exit(main())`）⇒ 已退回弱判据。
-                #    ⛔ 别为了"更严"把弱判据升级成错判据 —— 「判据绿」不等于「判得对」。
-                out.append(hit(f"`{n}.py` 有入口却**一句都不打**",
-                               "看不见它在判什么 ⇒ 另一种空转",
-                               "让它正常时也打一行结论（件名 ＋ 判定）"))
-    # ⭐ 第二半（2026-10-01）：**「入门口令」里逐行写的闸门命令**同样要"真有入口"
-    #    （它是一份**独立的**清单 —— 不在 `foreach` 里，故原先无人守）。
-    cmds = _handoff_commands()
-    if not cmds:
-        # ⭐ 2026-10-02 补：**空扫自证** —— 本仓最贵的假绿就是「检查在跑，其实扫空集」
-        #    （见 `T18` 立条说明）；空扫时下面那条逐件核对**什么都没判**，而它看上去是绿的。
-        out.append(hit("入门口令里**一条 `tools/*.py` 都没扫到** ⇒ 本半在**空扫**（判据瞎了）",
-                       "空扫 = 上面那条逐件核对**一个字都没判**，而它看上去是绿的"
-                       "（2026-10-02 实测：§0.2 里提了一句「入门口令」⇒ 裸词锚被挪走 ⇒ 这半瞎了半天）",
-                       f"核对锚 `{HANDOFF_ANCHOR}` 与紧随其后那个代码块；"
-                       "改动过口令文案 ⇒ 把锚同批对齐（⛔ 别让本半静默空扫）"))
-    for rel in cmds:
-        f = REPO_ROOT / rel
-        if not f.exists():
-            out.append(hit(f"入门口令里的 `{rel}` **不存在**",
-                           "口令让人跑一个不存在的件 ⇒ 那一行是报错或被跳过（⛔ 不是「在判」）",
-                           "核对路径；件改名/搬家了就同批改口令"))
+    out = []
+    try:
+        registered = gate_commands()
+    except (OSError, ValueError, SyntaxError, TypeError) as exc:
+        return [hit("CMDS 清单无法读取 ⇒ 空扫", str(exc), "恢复唯一 CMDS 登记")]
+    for rel, _args in registered:
+        path = REPO_ROOT / rel
+        if not path.is_file():
+            out.append(hit(f"闸门里的 `{rel}` 不存在", "登记项不在", "补件或订正 CMDS"))
             continue
-        hsrc = f.read_text(encoding="utf-8", errors="replace")
-        if GATE_GUARD_RE.search(hsrc) is None:
-            out.append(hit(f"入门口令里的 `{rel}` **没有 `__main__`** ⇒ 跑它是空转",
-                           "0 行输出、`rc` 恒 0 —— 而口令让人**每条都跑** ⇒ 人会以为它判过了"
-                           "（2026-10-01 `TAIL-204` 入场实测：口令列着 `audit_work.py`，"
-                           "而那件一直是个没有入口的模块 = 第五例僵尸闸门）",
-                           f"给 `{rel}` 补 `main()` ＋ `if __name__ == \"__main__\":`，"
-                           "或把该行从口令里去掉"))
-    if len(blocks) > 1 and any(set(b) != set(blocks[0]) for b in blocks[1:]):
-        out.append(hit("闸门清单在多处 `foreach` 里**不一致**",
-                       "两处分叉 ⇒ 谁都不知道该跑哪一份（清单失去唯一出处）",
-                       "对齐 —— 唯一出处 = `§22.1`"))
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if GATE_GUARD_RE.search(source) is None:
+            out.append(hit(f"闸门里的 `{rel}` 没有 `__main__` ⇒ 空转", "入口被移除", "补执行入口"))
+        elif "print(" not in source:
+            out.append(hit(f"闸门里的 `{rel}` 一句都不打", "输出不可见", "补可见结果"))
     return out
 
 

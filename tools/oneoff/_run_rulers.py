@@ -15,6 +15,8 @@
 ⇒ 凡是"反复要跑的一串命令"，落成脚本；⛔ 别在命令行里拼多行 Python。
 
 跑法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_run_rulers.py`
+      `… --related` #: 普通改动按实际影响运行；关键/未知差异完整重验
+      `… --full` #: 全部CMDS、KEY串行与pytest全套；成功才建立完整内容基点
       `… --all`   #: 连 pytest 一起跑（默认只跑尺子 —— 没动代码时不必）
                    #: ⚠️ `--all` **不再等于「pytest 全套」** —— 跑哪些由 `_pytestscope` 说了算
 """
@@ -23,6 +25,7 @@ from __future__ import annotations
 import pathlib
 import subprocess
 import sys
+import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
@@ -30,6 +33,7 @@ PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 #:   （三张名单 ＋ import 闭包 ＋ 缺口自检都在那件里 ⇒ 本件⛔ 不再自己判断跑什么）。
 sys.path.insert(0, str(ROOT / "tools" / "oneoff"))
 import _pytestscope as _scope      # noqa: E402
+import _gatescope as _gate         # noqa: E402
 
 KEEP = ("必须修", "结论：", "_smoke", "_links", "_ids", "_doccheck", "台账一致", "逐行一致",
         "判据点合计", "幽灵", "[T6]", "[T10]", "[T13]", "[T20]",
@@ -69,6 +73,7 @@ CMDS: list[tuple[str, list[str]]] = [
     #   所以比别的 `--selftest` 慢一档（十几秒）—— 换来的是"降档动作不会悄悄改变闸门结论"有断言。
     ("tools/oneoff/_doc_downgrade.py", ["--selftest"]),
     ("tools/probe/_audit_face.py", []),
+    ("tools/oneoff/_gatescope.py", ["--selftest"]),
 ]
 
 #: ⭐ 触发全套变异自证的**改动形状**（`TAIL-237`）—— ⛔ **单一出口**，别在别处再写一份。
@@ -103,17 +108,78 @@ def _touched_rulers() -> list[str]:
     return sorted({n for n in names for t in _SLOW_TRIGGERS if n.startswith(t) or n == t})
 
 
-def main() -> int:
+def _main() -> int:
+    unknown = set(sys.argv[1:]) - {'--all', '--full', '--related'}
+    if unknown:
+        print('未知参数，不能证明核验范围：', sorted(unknown))
+        return 1
+    started = time.perf_counter()
     with_pytest = "--all" in sys.argv
+    full_pytest = "--full" in sys.argv
+    import os
+    os.environ.pop("ACC_RESULTS_PATH", None)
     bad: list[str] = []
-    for rel, args in CMDS:
+    related = "--related" in sys.argv and not full_pytest
+    try:
+        if _gate.commands(ROOT) != CMDS:
+            raise ValueError("执行清单与 CMDS 定义不一致")
+    except (OSError, ValueError, SyntaxError) as exc:
+        print("选集自检 rc=1", str(exc))
+        return 1
+    receipt = _gate.open_receipts(related=related, git_ok=_scope.changed_paths() is not None)
+    if related:
+        import _impactscope as impact
+        try:
+            if receipt is None or receipt.invalid or receipt.external_changed:
+                raise ValueError('输入、环境、git或失败回执不可信')
+            delta = impact.changes_since_proof(receipt)
+            origin = '完整核验通过基点' if delta is not None else 'HEAD（无完整通过证明）'
+            if delta is None:
+                delta = impact.git_changes()
+            kind, reason = impact.classify(delta)
+            if impact.unclassified(CMDS):
+                kind, reason = 'full', '有未声明守护后果的检查，不能静默跳过'
+            print('影响基点：', origin, '实际差异', len(delta), flush=True)
+        except (OSError, ValueError, UnicodeError, subprocess.SubprocessError) as exc:
+            kind, reason = 'full', '影响计算失败：' + type(exc).__name__
+        if kind != 'full':
+            rc = impact.run(kind, reason, CMDS, PY, receipt, delta)
+            print('总墙钟 %.2fs' % (time.perf_counter()-started), flush=True)
+            return rc
+        print('影响兜底完整路径：', reason, flush=True)
+        related = False
+        full_pytest = True
+        if receipt is not None:
+            receipt.full = True
+    initial_inputs = _gate.inventory(ROOT, receipt.faces) if receipt is not None else None
+    if receipt is not None:
+        receipt.path.unlink(missing_ok=True)
+        receipt.verified = {}
+        receipt.verified_shell = None
+    required = {rel for rel, args in CMDS if receipt is None or receipt.required(rel, args)}
+    selected = [(rel, args) for rel, args in CMDS if rel in required]
+    _gate.validate_selection({rel for rel, _ in selected}, {rel for rel, _ in CMDS}, required)
+    print("核验范围：", receipt.reason if receipt else "复用不可用，完整重验", flush=True)
+    for rel, _ in CMDS:
+        if rel not in required:
+            print("  ⏭", rel, "代码、输入与环境摘要未变；复用上次通过证明")
+    for rel, args in selected:
+        t = time.perf_counter()
         p = subprocess.run([PY, "-X", "utf8", str(ROOT / rel)] + args, capture_output=True,
                            text=True, encoding="utf-8", errors="replace", cwd=str(ROOT))
         ls = [x for x in (p.stdout or "").strip().splitlines() if x.strip()]
         keep = [x for x in ls if any(k in x for k in KEEP)]
         print("%-34s rc=%d  %s" % (rel, p.returncode, " || ".join(keep[:3])[:175]))
+        print('  检查耗时 %.2fs' % (time.perf_counter()-t), flush=True)
         if p.returncode:
+            print('\n'.join((p.stderr or '').splitlines()[-4:]), flush=True)
+        effective_rc = p.returncode or (1 if not p.stdout.strip() else 0)
+        if receipt is not None:
+            receipt.record(rel, args, effective_rc)
+        if effective_rc:
             bad.append(rel)
+    if receipt is not None:
+        receipt.save(1 if bad else 0)
     # ⭐⭐ 2026-10-01（`TAIL-205`）：**守尺子的变异自证** —— `tools/mut/**` 原先**不在任何闸门里**
     #    ⇒ "加了反向灵敏度却没人跑" ⇒ 2026-10-01 一天抓到 4 例"靶烂掉 / 判法烂掉"（假绿）。
     # ⭐⭐⭐ 2026-10-06（`TAIL-237` · 用户「改点东西太慢」）：**这一支按需触发** ——
@@ -124,7 +190,15 @@ def main() -> int:
     #    ⚠️ **零状态**：判据是"工作区有没有相关改动"⇒ 提交后自然变快；⛔ 不引计数/时间戳/记忆文件。
     mut_args: list[str] = []
     hit = _touched_rulers()
-    if hit:
+    if full_pytest:
+        mut_args = []
+        print("  完整核验：变异KEY全部串行执行")
+    elif related and receipt is not None and not receipt.full:
+        mut_args = ["--related"]
+        print("  ⏭ 变异自证按输入与通过证明选择；共用靶串行")
+    elif related and (receipt is None or receipt.full):
+        print("  ⏭ 相关核验兜底：变异自证完整重验")
+    elif hit:
         mut_args = []
         print(f"  ⏭ 变异自证跑**全套**（本轮动过 {len(hit)} 处尺子/判据/闸门脚本：{', '.join(hit[:4])}"
               f"{' …' if len(hit) > 4 else ''}）")
@@ -132,12 +206,19 @@ def main() -> int:
         mut_args = ["--fast"]
     p = subprocess.run([PY, "-X", "utf8", str(ROOT / "tools" / "oneoff" / "_run_muts.py")] + mut_args,
                        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(ROOT))
-    keep2 = [x for x in (p.stdout or "").strip().splitlines() if x.strip()][-1:]
+    mut_lines = [x for x in (p.stdout or "").strip().splitlines() if x.strip()]
+    if "--related" in mut_args:
+        for line in mut_lines:
+            if "⏭" in line or "本次合计" in line:
+                print(line)
+    keep2 = mut_lines[-1:]
     print("%-34s rc=%d  %s  %s" % ("守尺子的变异自证(_run_muts)", p.returncode,
-                                    "全套" if not mut_args else "快集", " || ".join(keep2)[:150]))
+                                    "相关集" if "--related" in mut_args else "全套" if not mut_args else "快集", " || ".join(keep2)[:150]))
     if p.returncode:
+        print('\n'.join(x for x in mut_lines if '⛔' in x or 'rc=' in x or 'BAD:' in x), flush=True)
+        print('\n'.join((p.stderr or '').splitlines()[-8:]), flush=True)
         bad.append("守尺子的变异自证(_run_muts.py)")
-    if with_pytest:
+    if with_pytest or full_pytest:
         # ⭐⭐ 2026-10-06（`TAIL-241` 第 0/1 批）：**pytest 按需触发 + 按范围选测**。
         #   第 0 批：`backend/` 与「pytest 在仓外也读的那些落点」都没动 ⇒ 整把跳过（**零漏跑风险**）。
         #   第 1 批：动了 ⇒ 按 import 闭包选测，**并强制含全仓敏感清单**；算不出就退回全套。
@@ -148,7 +229,7 @@ def main() -> int:
         print("%-34s rc=%d  %s" % ("选集自检(_pytestscope)", cover_rc, cover_line))
         if cover_rc:
             bad.append("选集自检(_pytestscope --cover-only)")
-        pl = _scope.plan(_scope.changed_paths())
+        pl = _scope.Plan(True, '关键/未知影响完整核验') if full_pytest else _scope.plan(_scope.changed_paths())
         # ⭐ 2026-10-07（`/retro` 候选①）：**先说清"这轮会不会写权威四态档"**。
         #   为什么必须说：子集跑写权威档那一次（`TAIL-241`），闸门**自己是绿的**、下一轮 `T4` 才红
         #   ⇒ 故障与肇因隔了一轮，中间任何一次读数都会把它当成"别处弄坏的"。
@@ -163,7 +244,12 @@ def main() -> int:
             #   **子集跑不许写权威四态档** —— 那是 `TAIL-241` 当场踩到的坑（闸门自己污染自己）。
             import os
             e = dict(os.environ, **_scope.pytest_env(pl))
+            if full_pytest:
+                e['PYTEST_INPUTS_PATH'] = str(ROOT/'artifacts/_pytest_inputs.json')
+                e['PYTHONPATH'] = str(ROOT/'tools/oneoff') + os.pathsep + e.get('PYTHONPATH', '')
             cmd = [PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--tb=line"] + pl.argv()
+            if full_pytest:
+                cmd += ['-p', '_pytestscope']
             p = subprocess.run(cmd, cwd=str(ROOT / "backend"), env=e, capture_output=True,
                                text=True, encoding="utf-8", errors="replace")
             tail = [x for x in (p.stdout or "").strip().splitlines() if x.strip()][-2:]
@@ -181,8 +267,30 @@ def main() -> int:
                 print("   ▸ 跑全套 %d 件（%s）" % (len(allf), pl.reason))
             if p.returncode:
                 bad.append("pytest")
+    if receipt is not None:
+        final_inputs = _gate.inventory(ROOT, receipt.faces)
+        moving = {n for n in set(initial_inputs) | set(final_inputs)
+                  if initial_inputs.get(n) != final_inputs.get(n)} - {
+                      'repo/artifacts/acc_results.json', 'repo/artifacts/变异覆盖台账.md'}
+        if moving:
+            print('核验期间输入改变：', sorted(moving), flush=True)
+            bad.append('输入改变，不能生成完整证明')
+        receipt.save(1 if bad else 0, complete=full_pytest and not bad)
+    print('总墙钟 %.2fs' % (time.perf_counter()-started), flush=True)
     print("BAD:", bad)
     return 1 if bad else 0
+
+
+def main() -> int:
+    """入口任何失败或中断都销毁旧证明，包括参数和清单自检提前失败。"""
+    try:
+        rc = _main()
+    except BaseException:
+        (ROOT/'artifacts/_gate_receipts.json').unlink(missing_ok=True)
+        raise
+    if rc:
+        (ROOT/'artifacts/_gate_receipts.json').unlink(missing_ok=True)
+    return rc
 
 
 if __name__ == "__main__":

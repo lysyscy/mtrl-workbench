@@ -113,13 +113,10 @@
 - ⭐ **"新建会话"只是载体；交接的本质 = 交接件 ＋ `.codebuddy/memory/`**（新会话自动读项目记忆）。
 - 交接评估走 **`project-handoff` 技能**：只在"安全位置 ＋ 明确后续 ＋ 具体收益"**三条同时成立**时提醒；⛔ **提醒 ≠ 授权保存**；展示格式 = 最终正文**最前**单独一段、以「交接建议：」开头。
 
-## 七、交接载体（2026-09-25 定 · 本项目约定）
+## 七、交接载体
 
-- ⭐ 材料写在计划主文档 **§13.6「交接记录区」**（增量更新，⛔ 不另建交接文件）；编号 **`HANDOFF-YYYYMMDD-NN`**，新版**取代**旧版（旧版留痕在下方、标「别按它接续」）。
-- §13.6 固定骨架：交接区表 → 任务与版本（含提交位置）→ 权威资料指针 → 已确认限制 → 本轮成果 → **可复制开场白**（§22.1 命令）→ 接续动作/第一步 → 接手核验续记。
-- ⛔ **四态数字不写死**（点 `tools/audit/acc_report.py` 拿现值）；⛔ 尾巴/待办**只**记 §15；⚠️ **提交 hash 也别写死**（写 `master` ＋"以 `git log -1` 为准"）。
-- ⚠️ **技能口径**：保存交接**不附带**提交/推送（要提交得用户另行点头）。
-- ⭐ **现行交接 = `HANDOFF-20260926-01`**（目标 = 收口「数据导入」链 → 本轮 `TAIL-106` 口径查清）；`-02` 及更早已标「已取代」。
+当前交接只回主计划§13.6最新行；读取入口回 AGENTS.md，历史交接查 .codebuddy/plans/archive/归档-留痕索引-20261005.md 的TAIL-247整理登记。
+提示词仅在聊天回复提供，不写进票或规格；来源见 .codebuddy/memory/MEMORY.md §一。保存交接不附带提交或推送。
 
 ## 八、文件行数口径（曾误判一次 · 已订正）
 
@@ -151,10 +148,10 @@
 - ⭐⭐ **页级四态只有一处出口**（`TAIL-117` 批次 6 · 2026-09-27）：`core.js::pageState()`（`loading`／`error`／`ready`）＋ `pageGate()` 出状态页 ＋ `retryPage()` 重试（只重拉**本页那几路**）＋ `markPending()`（进页前"预告"要拉哪几路，第一帧就出「正在读取」）。⭐ **三本账别混**：`LOADED`（拉过没有 · 缓存）/`PENDING`（此刻在拉吗 · 加载态）/`FAILED`（这一路坏了吗 · 错误态）—— 拿"未 LOADED"当加载态 ⇒ 写动作 `LOADED.clear()` 之后**整页永久卡住**。`render()` 里 `const st=pageState();` 不 `ready` 就画状态页并 `return`（⛔ 不走走虚拟滚动 / `BIND[VIEW]` / `placePops()`）。判据 = `tests/test_ux_states.py`（7 条）＋ 真机 **㉗**（`tools/probe/_shell_states.py`）。
 - ⭐⭐ **空态只有一处出口**：表内 = `EMPTYROW(cols, why, next)`（`index.html` 公共件区），块级 = `EMPTYBOX(why, next)`；通用导入面那半走 `legacy.js::lgEmpty(cols, text)`（**已改成薄转发**，它的文案由**域**给）。⭐ 一条空态必须回答两件事：**为什么空 ＋ 下一步点哪儿**。⛔ 别再手写 `<tr><td colspan=… class="ctr mut">`（判据会红）。
 - ⚠️⚠️ **所有取数必须过 `api.js::rawFetch`**：`fetch` 自己被拒那条路（服务没起 / 断网 / 被拦）原来会把浏览器的 **`Failed to fetch`** **原样上屏**（批次 6 的 ㉗ 当场抓到）。裸取数只允许 **2 处**：`rawFetch` 自己 ＋ `core.js::dlExport`（导出下载，自有一份人话 catch）。判据 = `tests/test_ux_states.py::test_取数一律过连不上的人话包装`。
-- ⚠️ **报四态前必须带 `ACC_RESULTS_PATH` 跑一次全套 pytest**：跑**局部**会把 `artifacts/acc_results.json` 覆盖成"只有那几个文件"⇒ `acc_report` 虚报 **绿 562 · 红 5**、`audit_drift` 的 T4 跟着红（2026-09-27 实际踩到）。
+- ⚠️ **局部测试与权威四态分开**：结果档规则和命令见本件 §十一；局部结果不覆盖权威档，完整核验才刷新权威档。2026-09-27 的覆盖事故源于旧环境变量用法，仅作教训，⛔ 不据此要求每轮全套 pytest。
 - ⭐⭐ **真机共用件 `_shell_common.settle()` 现在等两步**：① `pageState().kind !== 'loading'`（"不忙了"）② 再等 DOM 稳定。⚠️ 状态页的 DOM **也是稳的** ⇒ 只等稳定会在**加载中**就返回（实测 `m06` 量到 `tables: 0` 假红）；但**只等"不忙"、不等"没问题"**（`error` 态也放过去，让断言如实报红）。
 - ⚠️⚠️ **`rc=0` ≠ 全绿**（2026-09-27 用户问「你有保证文档及时归档么？」问出来的）：**黄档不改 rc**
-  （`T5` 行数 · `T9` · **`T10`/`T13` 文档预算**）⇒ 收尾跑 12 把尺子时**必须读一眼各自的"必须修 N · 疑似 M"汇总**，⛔ 别只 grep rc。真例：主文档 **1872 > 1700** 连续超预算而尺子一直 rc=0（黄不拦合入是**有意**裁定，但没人看就拖成常态）。⇒ 已写进 `开发计划-主文档.md` §22.1 收尾四件。
+  （`T5` 行数 · `T9` · **`T10`/`T13` 文档预算**）⇒ 运行核验时**必须读一眼各自的"必须修 N · 疑似 M"汇总**，⛔ 别只 grep rc。真例：主文档 **1872 > 1700** 连续超预算而尺子一直 rc=0（黄不拦合入是**有意**裁定，但没人看就拖成常态）。⇒ 现行操作见本件 §十一，范围见 ops/agents/issue-tracker.md §四。
 - ⭐ **归档纪律（主文档 §13.5）**：**已执行完的叙述一律已删或收成指针** —— 一旦 `T10`/`T13` 报黄，就把
   **已完成的过程块逐字下沉** `归档-历史单元条目.md`（append-only，格式：`## 下沉于 YYYY-MM-DD（来源说明）`
   ＋"⭐ **来源**：……**逐字搬来**"），原处留 **2~3 行指针**。实例（2026-09-27）：§13.6 三份**已取代**的
@@ -255,19 +252,25 @@
 
 1. **审计件起手**（中文/emoji 不乱、不崩）：
    `cd d:\dev\mtrl-workbench; [Console]::OutputEncoding=[Text.Encoding]::UTF8; backend\.venv\Scripts\python.exe -X utf8 tools\audit\<件>.py`
-2. **全套 pytest**（必须显式给 `ACC_RESULTS_PATH`，否则四态权威档不刷新 ⇒ 拿旧证据当真）——用 Python 包装器：
+2. **完整核验 / 刷新权威四态**：先用下面的子进程包装器跑全套 pytest；环境变量只传给这一次子进程。随后跑第 3 项入口**不带 `--all`**，避免再次跑 pytest。普通改动的局部结果不刷新权威档。
    ⚠️ **2026-09-30 订正**：包装器**⛔ 别用裸 `python`** —— 本机实测解析不到
    （`Python was not found; … Microsoft Store`、`exit 9009`）⇒ **一律写 `backend\.venv\Scripts\python.exe`**。
    ```
    backend\.venv\Scripts\python.exe -X utf8 -c "import os,subprocess,sys; env=dict(os.environ, ACC_RESULTS_PATH=r'D:\dev\mtrl-workbench\artifacts\acc_results.json', PLAYWRIGHT_BROWSERS_PATH=r'C:\ProgramData\ms-playwright', PYTHONIOENCODING='utf-8', PYTHONDONTWRITEBYTECODE='1'); sys.exit(subprocess.call([r'D:\dev\mtrl-workbench\backend\.venv\Scripts\python.exe','-m','pytest','-q','tests/','-p','no:cacheprovider','--tb=line'], cwd=r'D:\dev\mtrl-workbench\backend', env=env))"
    ```
-3. **收工闸门（16 把尺子 ＋ **守尺子的变异自证** · 期望 `rc=0` ＋ `BAD: []`）**：
-   `backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py`
-   ⭐ 2026-10-01（`TAIL-205`）：它**末尾多一步** —— 调 `tools\oneoff\_run_muts.py`（**8 支**「靶是尺子自己」的变异件 · ~33 秒）。
-     ⚠️ 为什么加：`tools/mut/**` 原先**不在任何闸门里** ⇒ 「加了反向灵敏度却没人跑」⇒ 2026-10-01 一天抓到 **4 例假绿 / 哑靶**。
-     全量按需：`_run_muts.py --all`（很慢 · ⛔ 别进闸门）。
-   ＋ 分开跑：`tools\audit\acc_report.py`（四态）· `tools\audit\doc_audit.py --ui`（含交付面四检）· `tools\audit\audit_meta.py`（**黄档也读汇总行**）· `tools\probe\_audit_face.py`。
-   ⚠️ 改过任何 `.ps1`（`ops\` 或 `tools\`）⇒ 补跑 `tools\oneoff\_ps_bom.py` ＋ `_ps_parse_check.ps1`。
+3. **运行入口**：核验范围按 ops/agents/issue-tracker.md §四执行；脚本的清单与运行能力以 tools/oneoff/_run_rulers.py 为准。
+   ```powershell
+   $env:PLAYWRIGHT_BROWSERS_PATH='C:\ProgramData\ms-playwright'
+   $env:PYTHONIOENCODING='utf-8'
+   $env:PYTHONDONTWRITEBYTECODE='1'
+   Remove-Item Env:ACC_RESULTS_PATH -ErrorAction SilentlyContinue
+   backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --all
+   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+   ```
+   `--all` 会按当轮范围决定 pytest；它不承诺全套 pytest。第 2 项已经跑过全套时，本项去掉 `--all`。读取整行 `BAD` 及各项汇总，不在入口前后另抄尺子清单重复执行；某项失败或后续相关输入改变时，才重跑受影响的核验。
+   **普通改动相关核验**：同环境使用 `backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --related --all`。影响策略与已证边界见 tools/oneoff/_impactscope.py；范围、守护后果及兜底回issue-tracker §四。只有同环境完整通过的内容基点可排除既有dirty，否则与HEAD比较。无关项明确跳过；单页静态文字按完整pytest实际读入证据选测，局部结果隔离；保留真机壳自检与成功后的壳章。证据存在artifacts/_pytest_inputs.json，由完整通过回执绑定摘要；缺证/坏档/未知共享输入则pytest全跑。冷启动、完整证明前置及总墙钟必须分别如实报告，不能用入口内部耗时代替总耗时。
+   **关键/未知影响完整入口**：同环境运行 `backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --full`，实际执行全部CMDS、KEY变异（串行）与pytest全套；本入口成功才生成完整影响基点。普通入口遇关键或无法证明的差异自动走这条路径；提交前仍执行AGENTS指定入口。完整入口不能同时另跑写靶；第2项的旧分步方法仍可使用，但不会自动建立本入口的完整基点。回执为artifacts/_gate_receipts.json，可丢弃、只存摘要和已验证的壳文字，不包含凭据；权威结果只由完整pytest刷新。
+   ⚠️ 改过 `.ps1`，补跑 tools/oneoff/_ps_bom.py 与 tools/oneoff/_ps_parse_check.ps1。
 4. **改壳收工多一步**：`tools\audit\shell_verify.py --snapshot` **盖章**（前置：真机 `_shell_smoke` 整支 `rc=0` ＋ 确认没在跑/没中断过 `tools/mut/_mut_*`）。
    ⛔⛔ **2026-09-30 实测补一条：`tools/mut/_mut_*.py` 一律"独占"跑 —— ⛔ 别与任何别的闸门/探针并行。**
    变异件会**临时改磁盘上的壳源码**（改完才复原）⇒ 并发跑的判据读到**被改坏的源** ⇒ **假红**。
@@ -296,7 +299,7 @@
    `N6′`「名单不许回来」），而靶还是旧写法（往原型插 `const CHG=[];`）—— 那句话现在**落在注释块里**，
    改与不改**都不影响运行** ⇒ 「摘掉也不红」= 静默失效。
    ⇒ 读到「**变异件报未命中**」时，第一件事是**问它的判词还在不在**（判词会变，变异件不会自己跟着变）。
-5. **产包当天（去办公室前一天）**：`ops\pack.ps1 -DryRun` ⇒ **`rc` 必须 = 0**（缺件 rc=1）⇒ 再 `ops\pack.ps1 -Out D:\deliver\mtrl-<日期>`（脚本自带"未提交不让打包"闸）。
+5. **未来换机或重装需要产包时**：`ops\pack.ps1 -DryRun` ⇒ **`rc` 必须 = 0**（缺件 rc=1）⇒ 再 `ops\pack.ps1 -Out D:\deliver\mtrl-<日期>`（脚本自带"未提交不让打包"闸）。
 6. **服务起停**：`ops\server_ctl.ps1 -Action restart`（改后端 Python 必跑；⛔ 没有 `--reload`）· `-Action status`（看 PID 启动时间）· `-Action log` / `port` / `pg`。
 
 ## 十二、`验收基线.json` 的实测格式（2026-09-29 从 `MEMORY.md` 下沉）

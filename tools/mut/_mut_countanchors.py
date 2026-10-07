@@ -7,7 +7,7 @@
 ⚠️ 判据**不是 rc**：锚点是**黄档**（同 `T5`/`T10` 哲学"形式问题该被看见、不挡合入"）⇒ `doc_audit` 的 rc 不变，
    要判的是"**报告里出现了那条**"（本件直接调检查函数取命中列表，最精确）。
 
-靶（`T4` 计数锚点的 4 类里挑 3 类）：① 尾巴计数（活文档）② `§22.1` 尺子把数（活文档）
+靶：① 尾巴计数（活文档）② CMDS 定义锚（实际执行清单；TAIL-245 同批改靶）
 ④ `ops/阈值表.md` 自己（数字 vs 它自称的真源）。⚠️ ③（`U5` 登记数）没配靶：它的真值来自
 ~~`ui_parity.U5_COUNT`~~（⛔ 2026-09-30 `TAIL-201`：`U5` 退场 ⇒ 那条锚点**已撤**），改文档里的数同样会报 —— 但三条已够证明这类检查有牙，⛔ 不为凑数硬加。
 
@@ -27,6 +27,7 @@ from audit_drift import check_count_anchors  # noqa: E402
 
 PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
 THRESHOLDS = ROOT / "ops" / "阈值表.md"
+RUNNER = ROOT / "tools" / "oneoff" / "_run_rulers.py"
 
 #: `(名称, 靶件, 旧串, 改成的错值, 期望命中的 what 关键词)`
 #: ⚠️⚠️ 2026-10-01（`TAIL-205` 收口 · 新闸门 `_run_muts.py` 一跑就抓到）：**靶一律"现取"，⛔ 不抄数字** ——
@@ -43,12 +44,11 @@ def _tail_case(text: str) -> tuple[str, str, str]:
 
 
 def _ruler_case(text: str) -> tuple[str, str, str]:
-    """② `§22.1`/§22 结算行的「N 把尺子全 rc=0」—— 现取并把 N 减 1。"""
-    m = re.search(r"\*\*(\d+) 把尺子全 `rc=0`\*\*", text)
+    """② CMDS 清单锚移除必须报黄；历史命令不再是计数主人。"""
+    m = re.search(r"(?m)^CMDS(?=:)", text)
     if not m:
-        raise SystemExit("  ⛔ 找不到『**N 把尺子全 `rc=0`**』锚 ⇒ 文档又改写法了 ⇒ 本件需重定靶")
-    n = int(m.group(1))
-    return m.group(0), m.group(0).replace(f"**{n} 把", f"**{n - 1} 把", 1), f"尺子把数 {n - 1} 把"
+        raise SystemExit("找不到 CMDS 定义锚")
+    return "CMDS:", "CMDS_MISSING:", "CMDS 清单"
 
 
 def _threshold_case(text: str) -> tuple[str, str, str]:
@@ -62,11 +62,11 @@ def _threshold_case(text: str) -> tuple[str, str, str]:
 
 def build_cases(texts: dict) -> list[tuple[str, pathlib.Path, str, str, str]]:
     o1, n1, k1 = _tail_case(texts[PLAN])
-    o2, n2, k2 = _ruler_case(texts[PLAN])
+    o2, n2, k2 = _ruler_case(texts[RUNNER])
     o4, n4, k4 = _threshold_case(texts[THRESHOLDS])
     return [
         ("① 尾巴计数（§0.2 手抄的「已销号」）", PLAN, o1, n1, k1),
-        ("② `§22.1` 尺子把数（与 `foreach` 项数自洽）", PLAN, o2, n2, k2),
+        ("② CMDS 清单缺失必须报黄", RUNNER, o2, n2, k2),
         ("④ `ops/阈值表.md`（数字 vs 自称真源）", THRESHOLDS, o4, n4, k4),
     ]
 
@@ -76,7 +76,7 @@ def hits() -> list[dict]:
 
 
 def main() -> int:
-    before = {p: p.read_bytes() for p in (PLAN, THRESHOLDS)}
+    before = {p: p.read_bytes() for p in (PLAN, THRESHOLDS, RUNNER)}
     md5_before = {p: hashlib.md5(b).hexdigest() for p, b in before.items()}
     texts = {p: b.decode("utf-8") for p, b in before.items()}
 

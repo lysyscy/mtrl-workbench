@@ -41,6 +41,9 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 MUT = ROOT / "tools" / "mut"
+sys.path.insert(0, str(ROOT / "tools" / "oneoff"))
+import _gatescope as _gate  # noqa: E402
+import _pytestscope as _scope  # noqa: E402
 
 #: ⭐⭐ 慢集 = **每支实测超 `FAST_BUDGET`**的那些（`TAIL-237`）——⭐ **秒数看每次运行自己打的那行**（⛔ 别抄进代码/文档，
 #:   它随机器与靶件变化；2026-10-06 首次分层时抄了 6 处，同日 `/code-review` 判它违规并已全部撤掉）。
@@ -125,6 +128,7 @@ KEY: tuple[tuple[str, str], ...] = (
     # ⚠️ 2026-10-07（`/retro` 候选1）：新尺子 `bytes_guard`（行尾 / 坏字符 / BOM / 编码）的反向灵敏度
     #   —— 四条规则各造一次红 ＋ **正常件必须放行**（防"永远红"那个方向）。靶件落 `tools/audit/` 下、用完即删。
     #   ⚠️ 它是**当场被 `cover_gap()` 报红抓出来的**（新写的一支忘了登记）—— 那道自检第一次真派上用场。
+    ("_mut_gatescope.py", "相关核验通过回执：漏跑/清单外、输入变更、失败失效、权威档隔离"),
     ("_mut_bytesguard.py", "bytes_guard 的 B1–B4（混行尾 / U+FFFD / ps1 缺 BOM / 非 UTF-8 ＋ 正常件放行）"),
     # ⚠️ 2026-10-07（`TAIL-244`）：靶＝`syntax_audit` 的**内建 `--selftest`** —— 它那段自证
     #   一直"写了、当时能过、此后没人碰" ⇒ 尺子腐化了没人知；⛔ 而这把尺子本身就在闸门 `CMDS` 里。
@@ -342,8 +346,25 @@ def main() -> int:
     if fast_only and not ("--all" in args):
         print(f"   ⏭ 已按需跳过慢集 {len(SLOW_KEY)} 支 —— ⛔ 本次**没验**它们；"
               f"动了尺子/判据/闸门脚本请跑不带 `--fast` 的全套")
+    import os
+    os.environ.pop("ACC_RESULTS_PATH", None)
+    related = "--related" in args
+    if related and ("--fast" in args or "--all" in args):
+        print("相关集不能与 --fast / --all 混用")
+        return 1
+    receipt = _gate.open_receipts(related=related, git_ok=_scope.changed_paths() is not None)
+    required = {name for name, _ in cases if receipt is None or
+                receipt.required("tools/mut/" + name, [])}
+    selected = [(name, why) for name, why in cases if name in required]
+    _gate.validate_selection({name for name, _ in selected}, {name for name, _ in cases}, required)
+    for name, _ in cases:
+        if name not in required:
+            print("   ⏭", name, "检查、输入、环境未变，复用已有通过证明")
+    cases = selected
     for name, why in cases:
         rc, sec = run_one(MUT / name, timeout)
+        if receipt is not None:
+            receipt.record("tools/mut/" + name, [], rc)
         spent += sec
         flag = "✅" if rc == 0 else "⛔"
         print(f"  {flag} {name:32s} rc={rc:<3d} {sec:6.1f}s   {why}")
@@ -367,6 +388,8 @@ def main() -> int:
     if slow_hit:
         print(f"  ⚠️ **慢集过长提醒**：{'、'.join(slow_hit)} 已超 {SLOW_BUDGET:.0f}s "
               f"⇒ 该看它为什么变慢（靶件变大？多跑了一次真机？）。")
+    if receipt is not None:
+        receipt.save(1 if bad else 0)
     return 1 if bad else 0
 
 
