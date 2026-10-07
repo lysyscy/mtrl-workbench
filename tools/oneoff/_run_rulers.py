@@ -145,6 +145,13 @@ def main() -> int:
         if cover_rc:
             bad.append("选集自检(_pytestscope --cover-only)")
         pl = _scope.plan(_scope.changed_paths())
+        # ⭐ 2026-10-07（`/retro` 候选①）：**先说清"这轮会不会写权威四态档"**。
+        #   为什么必须说：子集跑写权威档那一次（`TAIL-241`），闸门**自己是绿的**、下一轮 `T4` 才红
+        #   ⇒ 故障与肇因隔了一轮，中间任何一次读数都会把它当成"别处弄坏的"。
+        print("%-34s %s" % ("四态档落点", _scope.acc_note(pl)))
+        # ⭐ 2026-10-07（`/retro` 候选②）：把「假改动」摆到眼前 —— **`git status` 说改了、`git diff` 说没改**
+        #   的那几件（本轮 3 件）最容易让人去"修"一个没改过的文件；⛔ 不判红（闸门读的是 diff）。
+        print("%-34s %s" % ("假改动", _scope.fake_dirty_note()))
         if not pl.run:
             print("%-34s ⏭ 跳过  %s" % ("pytest", pl.reason))
         else:

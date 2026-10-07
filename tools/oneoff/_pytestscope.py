@@ -385,22 +385,59 @@ def report_cover() -> tuple:
     return 1, "⛔ 选集有缺口/陈旧 %d 条（上面逐条列了）" % (len(gaps) + len(stale))
 
 
-def pytest_env(pl) -> dict:
-    """给 pytest 子进程的环境变量（**单一出口**）—— 里面那行路径是本轮踩过的坑。
+def acc_path(pl) -> pathlib.Path:
+    """本轮 pytest 的四态档**落点**（**单一出口**）：全套 ⇒ 权威档；子集 ⇒ 局部档。
 
-    权威四态档只许由「全套」刷新（TAIL-241 当场踩到）：本件让 pytest 开始跑子集，
-    而闸门当时无条件把 ACC_RESULTS_PATH 指向权威档 ⇒ 子集跑完，权威档里只剩那几十件的结果
-    （实测：绿 138 · 未绑定 506）⇒ 下一轮 doc_audit 的 T4 立刻报红 ⇒ 闸门自己污染自己
+    ⛔⛔ **权威四态档只许由「全套」刷新**（`TAIL-241` 当场踩到）：本件让 pytest 开始跑子集，
+    而闸门当时**无条件**把 `ACC_RESULTS_PATH` 指向权威档 ⇒ 子集跑完，权威档里只剩那几十件的结果
+    （实测：绿 138 · 未绑定 506）⇒ **下一轮** `doc_audit` 的 `T4` 立刻报红 ⇒ **闸门自己污染自己**
     （与「变异件跑子集冲权威档」同族，机理一模一样）。
-    ⇒ 子集跑一律写局部档；那份只给当次结果落个位置，不许被当权威。
     """
+    return ROOT / "artifacts" / ("acc_results.json" if pl.run_all else "_partial_acc_results.json")
+
+
+def acc_note(pl) -> str:
+    """闸门打印的那一句（⛔ 措辞只此一处 · 闸门那边只转发，不许再写一遍）。"""
+    if pl.run_all:
+        return "%s（权威档 · 本轮会刷新四态）" % acc_path(pl).name
+    return "%s（⛔ 局部档 · 本轮⛔不刷新四态）" % acc_path(pl).name
+
+
+def pytest_env(pl) -> dict:
+    """给 pytest 子进程的环境变量（**单一出口**）—— 落点路径由 `acc_path` 独家给。"""
     out = {"PLAYWRIGHT_BROWSERS_PATH": r"C:\ProgramData\ms-playwright",
            "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
-    out["ACC_RESULTS_PATH"] = str(
-        ROOT / "artifacts" / ("acc_results.json" if pl.run_all else "_partial_acc_results.json"))
+    out["ACC_RESULTS_PATH"] = str(acc_path(pl))
     return out
 
 # --------------------------------------------------------------- git 改动面
+def _porcelain() -> list:
+    """git status --porcelain 的每行（只 rstrip —— `strip()` 会把状态码那两列的前导空格也去掉）。"""
+    q = subprocess.run(["git", "status", "--porcelain"], cwd=str(ROOT), capture_output=True,
+                       text=True, encoding="utf-8", errors="replace")
+    return [] if q.returncode else [x.rstrip() for x in (q.stdout or "").splitlines() if x.strip()]
+
+
+def fake_dirty() -> list:
+    """**假改动**：`git status` 说改了、`git diff HEAD` 说没改的那几件（未跟踪不算）。
+
+    ⛔ **它不影响选测**：本件的 `changed_paths()` 读的是 `git diff --name-only HEAD`
+    （不是 `status`）。受影响的只有**人读 `git status` 时被带偏**。
+    """
+    said = {ln[3:].strip().replace("\\", "/") for ln in _porcelain()
+            if ln[:2] != "??" and ln[3:].strip()}
+    return sorted(said - set(changed_paths() or []))
+
+
+def fake_dirty_note() -> str:
+    """门间打印那一句（⛔ 措辞只此一处）。"""
+    bad = fake_dirty()
+    if not bad:
+        return "✅ 无（status 与 diff HEAD 说的是同一批件）"
+    return "⚠️ 无 %d 件（内容与 HEAD 逐字节相同，仅 mtime 脏）：%s" % (
+        len(bad), "、".join(x.split("/")[-1] for x in bad[:4]))
+
+
 def changed_paths():
     """工作区 vs `HEAD` 的改动路径（**含未跟踪新件**）—— ⛔ 零状态（提交后自然归零）。
 
