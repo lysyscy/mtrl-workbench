@@ -45,6 +45,10 @@ CMDS: list[tuple[str, list[str]]] = [
     #   （`T14`/`T15`/`T20` 三条黄档 · 单跑过是 0/0）⇒ 「工具上了没人跑」的第一例。
     ("tools/audit/audit_work.py", []),
     ("tools/audit/syntax_audit.py", []),
+    # ⭐ 2026-10-07（`/retro` 候选1）：`bytes_guard` ——行尾混排 / U+FFFD 坏字符 / BOM 装错 / 非 UTF-8。
+    #   此前这四条**只有散文纪律**（`MEMORY §四`）⇒ 实际是"想起来才扫"；落盘事故正是**静默**的那类。
+    #   ⛔ 判据零假阳（字节事实），证伪件 `_mut_bytesguard.py` 随闸门跑。
+    ("tools/audit/bytes_guard.py", []),
     ("tools/audit/ui_parity.py", []),
     ("tools/audit/wiring_audit.py", []),
     ("tools/audit/chain_audit.py", []),

@@ -572,4 +572,5 @@ function applySorts(html,scope){
     return open[0]+newHead+tbOpen+out.concat(pin).join('\n')+'</tbody>'+tbl.slice(tbl.lastIndexOf('</tbody>')+8);
   });
 }
-
+
+

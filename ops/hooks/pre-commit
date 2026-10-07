@@ -53,7 +53,9 @@ for spec in \
   "tools/audit/doc_audit.py" \
   "tools/audit/audit_meta.py" \
   "tools/audit/audit_work.py" \
-  "tools/audit/mut_cover.py --check"
+  # ⭐ 2026-10-07（`/retro` 候选1）：`bytes_guard` —— 暂存件的行尾 / 坏字符 / BOM / 编码
+    "tools/audit/bytes_guard.py --staged" \
+    "tools/audit/mut_cover.py --check"
 do
   # shellcheck disable=SC2086
   set -- $spec

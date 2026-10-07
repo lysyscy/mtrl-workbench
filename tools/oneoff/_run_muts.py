@@ -54,6 +54,11 @@ SLOW_BUDGET = 60.0
 #: 慢集（`--fast` 跳过它们；跑全套时照跑）
 SLOW_KEY: frozenset[str] = frozenset({
     "_mut_docaudit.py", "_mut_shellapi.py", "_mut_segments.py",
+    # ⚠️ `_mut_syntax.py`（`TAIL-244` 定档）：靶＝`syntax_audit`（内建 `--selftest` ＋ 活树五靶），
+    #   **每处靶都要 `node --check`、且有两处真去动壳件**（`print-export.js` / `index.html`）
+    #   ⇒ 秒数紧贴快集线、余量太小 ⇒ 归慢集（⛔ 别为消提醒改 `FAST_BUDGET`，票面已明写）。
+    #   ⭐ 它**同时留在 `KEY`**：慢集只表示"`--fast` 跳过"，而动了 `tools/mut/` 的那轮闸门仍跑全套。
+    "_mut_syntax.py",
 })
 
 #: ⭐⭐ **刻意留在快集、且超预算也不提醒挪走**的那几支（`/code-review` 2026-10-06 抓出后才补上，
@@ -96,7 +101,7 @@ KEY: tuple[tuple[str, str], ...] = (
     # ⭐⭐ 2026-10-06（`TAIL-239`）：下面这一段是**量出来的**，不是"我觉得它重要"。
     #   做法 = 逐支读 `_mut_*.py` 的 docstring 第一段（`tools/mut/` 全集）＋ 归类：
     #     ① 靶＝`CMDS` 里那把**尺子本身** ＋ **离线**（不起服务、不开浏览器）＋ 秒级 ⇒ 进关键集；
-    #     ② 实测超快集预算 ⇒ `SLOW_KEY`（本轮无新增）；
+    #     ② 实测秒数紧贴快集线 ⇒ `SLOW_KEY`（⛔ 秒数看每次运行自己打的那行，别抄）；
     #     ③ 有意不跑 ⇒ `KEEP_OUT`（**逐支带理由**，见下）。
     #   ⚠️ 前两支（`_mut_chain` / `_mut_uicheck` 那类）已经栽过 5 次「加了反向灵敏度却没人跑」，
     #   所以这次不只加行，还装了**选集自己的机器眼**（`cover_gap()` ＋ `_mut_keycover.py`）。
@@ -114,6 +119,17 @@ KEY: tuple[tuple[str, str], ...] = (
     #   —— 守的是「按改动范围跑」那条判据（漏跑比慢跑严重得多 ⇒ 它必须自己有牙）。
     #   ⛔ 没进 `SLOW_KEY`：它只真跑**一支见证件**（不是整套选测集）⇒ 实测在快集预算内。
     ("_mut_pytestscope.py", "选测范围的判据（漏跑/跳过/缺口三个方向都造得出红）"),
+    # ⚠️ 2026-10-07（`TAIL-244`）：靶＝`syntax_audit` 的**内建 `--selftest`** —— 它那段自证
+    #   一直"写了、当时能过、此后没人碰" ⇒ 尺子腐化了没人知；⛔ 而这把尺子本身就在闸门 `CMDS` 里。
+    #   ⭐ 已归 `SLOW_KEY`（要 node ＋ 动壳件）；⛔ 理由里不钉条数（尺子加规则就成假话）。
+    # ⚠️ 2026-10-07（`/retro` 候选1）：新尺子 `bytes_guard`（行尾 / 坏字符 / BOM / 编码）的反向灵敏度
+    #   —— 四条规则各造一次红 ＋ **正常件必须放行**（防"永远红"那个方向）。靶件落 `tools/audit/` 下、用完即删。
+    #   ⚠️ 它是**当场被 `cover_gap()` 报红抓出来的**（新写的一支忘了登记）—— 那道自检第一次真派上用场。
+    ("_mut_bytesguard.py", "bytes_guard 的 B1–B4（混行尾 / U+FFFD / ps1 缺 BOM / 非 UTF-8 ＋ 正常件放行）"),
+    # ⚠️ 2026-10-07（`TAIL-244`）：靶＝`syntax_audit` 的**内建 `--selftest`** —— 它那段自证
+    #   一直"写了、当时能过、此后没人碰" ⇒ 尺子腐化了没人知；⛔ 而这把尺子本身就在闸门 `CMDS` 里。
+    #   ⭐ 已归 `SLOW_KEY`（要 node ＋ 动壳件）；⛔ 理由里不钉条数（尺子加规则就成假话）。
+    ("_mut_syntax.py", "syntax_audit 的各条规则靶 ＋ 内建 `--selftest`（靶＝尺子本身 · 要 node --check · 动壳件 ⇒ 慢集）"),
 )
 
 #: ⭐⭐ **有意不跑名单**（`TAIL-239` 第 3 步 · 治复发）—— **逐支带理由**。
@@ -143,8 +159,6 @@ KEEP_OUT: dict[str, str] = {
     "_mut_t13.py": "靶＝`T13` 有牙（两处变异都抓到、复原 MD5 一致），但它要求『**基线 0 命中**』"
                   "⇒ 而主文档行数**确实超 `T13` 预算**（**真黄档**，数字见 `ops/阈值表.md`，"
                   "⛔ 别抄在这里 —— 本票要治的正是那种「抄一份必过期」）⇒ rc=1。口径待定 ⇒ 不进闸门（票 `TAIL-243`）",
-    "_mut_syntax.py": "`M4` 靶的**锚点过期**：脚本钉『三条规则都能区分』，尺子自检结论已改成『**四条**』"
-                     "⇒ 该靶恒判未命中（实测 4/5）；且它要 `node --check` ＋ 动壳件 ⇒ 实测超快集预算",
 
     # ---- 靶是业务面断言（由各自域 pytest 守；分钟级 ⇒ 按需 `--all`）----
     "_mut_a6.py": "靶＝`tests/test_ux_pages.py`（m01 空态指路 / 删除确认两条 UX 守卫）· 业务面",
@@ -240,6 +254,12 @@ def cover_gap() -> tuple[list[str], list[str]]:
     ⇒ 现在**每一支 `_mut_*.py` 必须落在 `KEY` 或 `KEEP_OUT` 之一**，否则当场报红并列出它。
     ⚠️ **两侧都查**：缺口（新件忘了登记）· 陈旧（改名/删件后名单没跟改）—— 后者同样让选集失真。
     ⛔ 本函数**只读**：不跑任何变异件。
+
+    ⚠️⚠️ **`SLOW_KEY` 为什么不在这份名单里**（`TAIL-244` 实测才弄清、此前没人说得清）：
+    `SLOW_KEY` **不是第三档**，它是 `KEY` 的**子集语义** —— 它只回答"`--fast`（收工闸门默认那条）
+    跳过它"，跑全套时照跑（`main()` 的用例一律从 `KEY` 取，`SLOW_KEY` 只做过滤）。
+    ⇒ **只登记在 `SLOW_KEY`、没登记在 `KEY`** 的件名会被**静默忽略**（没人跑、也没人写为什么）
+    —— 那是本族同款的静默失效 ⇒ 这条子集关系由 `report_cover()` 单独断言（`orphan_slow`）。
     """
     on_disk = {p.name for p in MUT.glob("_mut_*.py")}
     listed = {n for n, _ in KEY} | set(KEEP_OUT)
@@ -247,8 +267,10 @@ def cover_gap() -> tuple[list[str], list[str]]:
 
 
 def report_cover() -> int:
-    """打印选集自检结果并给 rc（`0`＝两份名单合起来盖住了全集）。"""
+    """打印选集自检结果并给 rc（`0`＝名单盖住全集 ＋ 慢集没有孤儿）。"""
     gap, stale = cover_gap()
+    # ⭐ `TAIL-244`：`SLOW_KEY` 里**不在 `KEY`** 的名字 = 没有任何一轮会跑它（见 `cover_gap` 说明）
+    orphan_slow = sorted(SLOW_KEY - {n for n, _ in KEY})
     if gap:
         print(f"⛔ **选集有缺口**：{len(gap)} 支 `_mut_*.py` 既不在 `KEY` 也不在 `KEEP_OUT`")
         print("   ⇒ 它们**不会被任何一轮跑**（`TAIL-239`：加了反向灵敏度却没人跑，本族已 5 次）")
@@ -259,10 +281,15 @@ def report_cover() -> int:
     if stale:
         print(f"⛔ **名单陈旧**：{len(stale)} 支已不在盘上（改名/删件 ⇒ 本件要跟改）："
               f"{', '.join(stale)}")
-    if not gap and not stale:
+    if orphan_slow:
+        print(f"⛔ **慢集有孤儿**：{len(orphan_slow)} 支在 `SLOW_KEY` 里却**不在 `KEY`** ⇒ "
+              f"**没有任何一轮会跑它们**（`--fast` 的用例从 `KEY` 取，慢集只做过滤）："
+              f"{', '.join(orphan_slow)}")
+        print("   ⇒ 修法：把它也加进 `KEY`（`SLOW_KEY` 只是给 `KEY` 打上「`--fast` 跳过」的标记）")
+    if not gap and not stale and not orphan_slow:
         print(f"✅ 选集一致：`KEY` {len(KEY)} 支 ∪ `KEEP_OUT` {len(KEEP_OUT)} 支 "
               f"＝ 盘上 {len(list(MUT.glob('_mut_*.py')))} 支（⛔ 条数别抄在别处）")
-    return 1 if (gap or stale) else 0
+    return 1 if (gap or stale or orphan_slow) else 0
 
 
 def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
