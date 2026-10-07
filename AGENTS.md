@@ -47,5 +47,5 @@
 backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --all
 ```
 
-尺子**全套**（⭐ 条数以脚本输出为准，⛔ 别抄）＋ 守尺子的**变异自证** ＋ **全套 pytest**；**改过壳**再加真机 `tools/probe/_shell_smoke.py` ＋ 壳基线盖章。
+尺子**全套**（⭐ 条数以脚本输出为准，⛔ 别抄）＋ 守尺子的**变异自证** ＋ **pytest**（⚠️ `--all` **不再等于全套 pytest** —— 跑哪些由 `tools/oneoff/_pytestscope.py` 按当轮改动算；**改过壳**再加真机 `tools/probe/_shell_smoke.py` ＋ 壳基线盖章。
 ⛔ **提交要用户点头** · ⛔ **交付面在仓外、只读**（`D:\工作\AI\PRD编写夹 - Workbuddy专用`，WPS 云同步会回退）。

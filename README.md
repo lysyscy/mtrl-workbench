@@ -177,7 +177,7 @@ backend\.venv\Scripts\python.exe tools\audit\doc_audit.py --ui   # ⭐ 交付面
 `T11` 报告登记回执 · `T12` 分层与命名 · `T13` 过程回潮 · `T14` scratch TTL 与落点 ·
 `T15` 产物白名单与 work 文头 · `T16` `T7a` 登记册在位 · `T17` 僵尸闸门 · `T18` 登记常量必须命中真东西 ·
 `T19` 文档指针（节号）· `T20` 保留期与容量 —— ⭐ **权威表在 `tools/audit/doc_audit.py` 头部**，本处只列名。
-⚠️ 收工闸门（全套 pytest ＋ **尺子全套** ＋ 四态 ＋ 四检）见 **`MEMORY.md` §〇之二**（⛔ 别只跑前 5 个）——
+⚠️ 收工闸门（**尺子全套** ＋ 四态 ＋ 四检 ＋ pytest）见 **`MEMORY.md` §〇之二**（⛔ 别只跑前 5 个）——
 ⭐ **尺子清单与条数的唯一出口 = `tools/oneoff/_run_rulers.py`**（⛔ 别在本页抄条数：新增尺子就会涨；分目录地图在 `tools/README.md`）。
 
 ⭐ **文档审计（分布 / 结构 / 内容）＝ 项目技能** `.codebuddy/skills/docs-audit/SKILL.md`（＋ 只读盘点器 `.codebuddy/skills/docs-audit/scripts/doc_inventory.py`）——
