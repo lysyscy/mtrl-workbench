@@ -26,6 +26,13 @@ from app.mod03_notice.models import EXCLUDE_NONE
 from app.mod03_notice.notice_actions import CATEGORY_CHOICES, category_name
 from app.mod05_flow.domain import classify
 
+# 审批状态字面量 ⛔ **同一个出口**（§4.4.1 唯一需要识别的字面量 =「已批」，附录 E 枚举 = 已批 / 未批）
+# —— 另有一处同值声明在 `mod02_i8.notice_source`，`tests/test_i8_contract.py` 钉着两处不漂移。
+from app.mod03_notice.domain import APPROVE_STATUS_DONE
+
+#: 审批状态的**合法取值**（附录 E：已批 / 未批，**无例外**）
+APPROVE_STATUS_CHOICES: tuple[str, ...] = ("已批", "未批")
+
 _ZERO = to_money(0)
 
 
@@ -94,6 +101,7 @@ def manual_row_payload(
     stat_paid: object = None,
     ownership_id: int | None = None,
     remark: str = "",
+    approve_status: str = "",
     # ⚠️ 下面两个**收下但一律忽略**（不是"签名里没有"）——
     #    §4.2.6：统计结算金额**恒 0 且不可改**；录入人 = **当前登录用户**、不由手填。
     #    收下是为了让"乱传也不生效"这条**真的被防住**（而不是靠调用方不传）。
@@ -142,6 +150,19 @@ def manual_row_payload(
     if not cat:
         cat = classify(str(biz_type or ""), str(payee or ""))
 
+    # ⭐ 审批状态（§4.2.6「手动行一切信息都可改」＋ 附录 E 枚举 = 已批 / 未批；无例外）。
+    # ⚠️ **空值落「已批」**（2026-10-08 修）：手动行**没有 i8 审批**，审批状态由人定；
+    #    但旧实现**压根没这个字段**（前端没发、后端没收）⇒ 落库取列默认值 `""`
+    #    ⇒ `PayRow.block()` 判「非已批」⇒ **手动行永远付不了款**（用户 2026-10-08 实测报障）。
+    #    空值给「已批」而不是让它继续空着：空 ⇒ 看不见原因、也付不了，比给个默认值更坏。
+    astat = str(approve_status or "").strip()
+    if not astat:
+        astat = APPROVE_STATUS_DONE
+    if astat not in APPROVE_STATUS_CHOICES:
+        raise MustReportError(
+            f"审批状态只能是「{' / '.join(APPROVE_STATUS_CHOICES)}」（附录 E），没有其它取值"
+        )
+
     values = {
         "ph_id": new_manual_ph_id(),
         "is_manual": True,
@@ -152,6 +173,7 @@ def manual_row_payload(
         "payee": str(payee or ""),
         "input_by": str(entered_by or ""),          # ⑤ 录入人 = 当前登录用户（不从表单取）
         "category": cat,
+        "approve_status": astat,
         "excluded": False,
         "exclude_source": EXCLUDE_NONE,
         "amount_approved": approved,
@@ -300,7 +322,7 @@ def apply_manual_delete(session, notice_id: int) -> tuple[object, str]:
 
 
 __all__ = [
-    "MANUAL_PH_PREFIX", "STAT_SETTLE_FIXED",
+    "MANUAL_PH_PREFIX", "STAT_SETTLE_FIXED", "APPROVE_STATUS_CHOICES",
     "new_manual_ph_id", "is_manual_ph_id", "is_manual_row", "assert_manual_editable",
     "ManualRow", "manual_row_payload", "manual_project_options",
     "apply_manual_save",

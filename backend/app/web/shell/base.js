@@ -391,7 +391,7 @@ function modal(o){
   /* 弹窗内的表格同样支持表头排序：用 sortKey 给每类弹窗一个稳定键
      （不传则按标题推导并去掉数字，保证「已勾选 3 条」这类变化不会换键） */
   const sk=o.sortKey||('modal:'+String(o.title||'').replace(/[\d\s·]+/g,''));
-  root.innerHTML=`<div class="mask" data-act="maskBg"><div class="modal ${o.wide?'wide':''}">
+  root.innerHTML=`<div class="mask" data-act="maskBg"><div class="modal ${o.wide?'wide':''}${o.monthPicker?' month-picker':''}">
     <h3>${o.title}<span class="x" data-act="closeModal" tabindex="0" role="button" title="关闭（Esc）">×</span></h3>
     <div class="mb">${applySorts(o.body,sk)}</div>
     ${o.footer===null?'':`<div class="mf">${o.footer||'<button class="btn" data-act="closeModal">关闭</button>'}</div>`}
@@ -435,7 +435,7 @@ const enumOpts=(k,cur,all)=>optsOf(all?['全部'].concat(enumVals(k)):enumVals(k
 const catTag=c=>enumTag('cat',c);
 const astatTag=a=>enumTag('astat',a);
 const stTag=s=>enumTag('payState',s);
-const revTag=r=>enumTone('plRev',r);
+const revTag=r=>({'完全匹配':'ok','无单据号':'plan-missing','单据号查不到':'plan-notfound','重复上报':'plan-duplicate','超过未付':'plan-over','金额不符':'plan-amount'}[r]||enumTone('plRev',r));
 
 /* ===== 写路径 · 金额校验与上限（2026-09-13 阶段 3 收口）=====
    为什么要收口：**「上限 = 审批金额」与「非法即拦、保留原值」是铁律 3 的落点**，

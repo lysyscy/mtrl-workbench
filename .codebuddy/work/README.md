@@ -1,24 +1,24 @@
 # `.codebuddy/work/` —— Agent 开发工作记录分区（宪法）
 
-> 依据：`D:\mtrl-workbench-文档架构审计-20260922.md` §四/§六（P2 根因：记录五类缺三类 ⇒ 就近乱建文件）。
+> 读者：产生或查找工作资料的agent。回答：落点与用途。何时读：产生独立工作资料或整理结构时。
 > 本区 **入 git**（除 `00-scratch/`）；⭐ 开工前先看下面的"产出物 → 落点"表，**对号入座，不许先建文件再问归属**。
 
 ## 一、产出物 → 唯一落点
 
 | 你刚产出了什么 | 不要放哪 | 放这 |
 |---|---|---|
-| 脑子里的构思、几条 bullet、和用户讨论的备选 | 正式文档、根目录 | `work/00-scratch/tmp-YYYYMMDD-主题.*`（**TTL 14 天**） |
-| 成型方案、模块设计、A/B 对比、技术选型研讨 | artifacts、plans 活文档内 | `work/10-designs/设计-主题-YYYYMMDD.md` |
-| 一次探针/实测/对比试验（成功或失败） | journal 一句话、artifacts 裸 json | `work/30-troubleshooting/实验-主题-YYYYMMDD.md`（⭐ 2026-10-01 起 —— 原 `20-experiments` **已撤区**，`实验-` 前缀归 30 区；脚本 → `tools/probe/`） |
+| 脑子里的构思、几条 bullet、和用户讨论的备选 | 正式文档、根目录 | `.codebuddy/work/00-scratch/tmp-YYYYMMDD-主题.*`（**TTL 14 天**） |
+| 成型方案、模块设计、A/B 对比、技术选型研讨 | artifacts、plans 活文档内 | `.codebuddy/work/10-designs/设计-主题-YYYYMMDD.md` |
+| 一次探针/实测/对比试验（成功或失败） | journal 一句话、artifacts 裸 json | `.codebuddy/work/30-troubleshooting/实验-主题-YYYYMMDD.md`（⭐ 2026-10-01 起 —— 原 `20-experiments` **已撤区**，`实验-` 前缀归 30 区；脚本 → `tools/probe/`） |
 | 稳定可复现的工程结论 | 长期留在 experiments | 升 `ops/<主题>-实测结论.md` ＋ ops/README 加索引行 |
-| 报错排查、事故复盘、用户报障闭环 | artifacts、ops/README 备注 | `work/30-troubleshooting/排查-现象-YYYYMMDD.md` |
-| 用户拍板的决定（口径/技术/工作方式） | 只写进 MEMORY 或对话 | `work/40-decisions/D<编号>-主题.md`（D21 起；MEMORY 留指针） |
+| 报错排查、事故复盘、用户报障闭环 | artifacts、ops/README 备注 | `.codebuddy/work/30-troubleshooting/排查-现象-YYYYMMDD.md` |
+| 用户拍板的决定（口径/技术/工作方式） | 只写进 MEMORY 或对话 | `.codebuddy/work/40-decisions/D<编号>-主题.md`（D21 起；MEMORY 留指针） |
 | 待办、尾巴、"以后再说" | 自建 TODO.md、报告结尾 | ⭐ **票仓 = `.codebuddy/work/50-tickets/TAIL-<编号>-<短名>.md`**（2026-10-04 `TAIL-225` 起：**一张票一个文件**；用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄）＋ **索引 = 计划 §15 台账（一行一票 · 唯一）** —— 本区禁止第二份待办清单 |
-| 当天过程叙事 | 活文档正文 | `journal/当天.md`（append-only） |
-| 已完工单元的大段过程 | 继续占着计划正文 | ⭐ **归档正文落仓外** `D:\dev\.归档-mtrl\`（2026-10-05 起）＋ 原处指针；仓内 `plans/archive/` **只放索引**（`归档-留痕索引-20261005.md`） |
+| 需要保留的当天过程证据 | 活文档正文 | `.codebuddy/memory/journal/YYYY-MM-DD.md`（append-only）；何时记录回 ops/agents/issue-tracker.md §四 |
+| 已完工单元的大段过程 | 继续占着计划正文 | 退出默认阅读；是否保留独立归档按用途判断，Git已有过程不复制全文。现有仓外归档经 `.codebuddy/plans/archive/归档-留痕索引-20261005.md` 追溯 |
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
 | 提交信息草稿 | artifacts/commit_msgN.txt | `.codebuddy/work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
-| 交付面文件的手工备份 | artifacts 根、.codebuddy 根 | `.codebuddy/backups/`（留最近 5 份；⚠️ **一天多批只留当日末个**，中间批次改在当批设计件里写「改前差异说明」） |
+| 交付面文件的手工备份 | artifacts 根、.codebuddy 根 | `.codebuddy/backups/`；类型、保留及清理唯一规则回 README.md §四 |
 | 环境/部署/配置/架构知识 | MEMORY 注入档 | `ops/architecture.md` ＋ `ops/README.md`（随变更同批改） |
 | 使用者可感知的变化 | 活文档正文 | `ops/changelog.md`（部署节点登记） |
 
@@ -26,28 +26,14 @@
 
 ```text
 00-scratch ──14天内──► 10/30 升档，或删除（⛔ 不许长期停留）
-10-designs ──定稿实施完──► **归档（仓外 `D:\dev\.归档-mtrl\`）**；契约级变更 ► 交付面 PRD（走改契约流程）
+10-designs ──定稿实施完──► 稳定结论回主人，退出默认阅读；是否另存归档按用途判断
 30 区「实验-」那一类 ──结论稳定──► ops/<主题>-实测结论.md ＋ ops/README 索引行
 30-troubleshooting ──沉淀出规则──► MEMORY / 阈值表 / 测试（档案本身保留，供复发检索）
 40-decisions ──被推翻──► 只加 superseded 链接，⛔ 不改写原文
 任何"留到以后" ──当场──► 计划 §15 台账（TAIL 编号）
 ```
 
-> ⭐ **降档动作怎么走**（2026-10-06 `TAIL-236` 批 4 立）＝ `tools/oneoff/_doc_downgrade.py <件名> --apply`
-> —— **默认干跑**（不给 `--apply` 只打印计划）· ⛔ **不给件名即拒** · ⛔ **它没有删除分支**
-> （「真删要点头」的实现方式 ＝ **这里根本没有删除**）· ⛔ **只降 `10-designs`**（30 区按上面那一行走、
-> 决策区只加不改 ⇒ 那两个区**拒绝并指路**，⛔ 别照抄本区）。
-> · **可逆三件** ＝ 仓外留原文 ＋ 仓内索引（`.codebuddy/plans/archive/归档-留痕索引-20261005.md` 的
->   「降档登记」表）留一行 ＋ git 历史里还有一份。⭐ 那一行里的**仓外绝对路径会被 `T3` 真核存在**
->   ⇒ 仓外那份被清掉 ⇒ **当场报黄**（"可逆"这一环有机器眼，不是说说而已）。
-> · ⭐⭐ **判据不看引用、动作要看**（票面 `Implementation Decisions` 3 只写了前半句）：
->   `T26` 只报"该降档"、**不查引用**（那是对的 —— 搬不搬是人的决定）；而 `--apply` **会查三路引用，
->   有就拒绝**并把位置逐条列出来。⭐ **为什么**：2026-10-06 实测 **11 件设计件每一件都有活引用**
->   ⇒ 搬任何一件都会留下死指针，而 `T3` 只扫文档面、**照不到 `.py` docstring / 一次性脚本里的指针**
->   ⇒ 搬完**没有任何尺子会喊**。
-> · ⚠️ **区名与布局的文档主人 = README.md §三；机器白名单 = `audit_meta.WORK_DIR_ALLOW`**（`T12` 守它）：要**加区 / 改区名**，或想问
->   「本区归谁管 / 这件该不该搬」⇒ **先改它**，本表与判据都从它推
->   （⛔ 别在任何文档里另抄一份五区清单 —— 抄了必漂，那是本仓最贵的病）。
+独立设计仅在执行或验收对应任务时读，已实施后结论回主人，默认路径不再引用它。历史原文可经Git恢复；需要独立仓外恢复时才用 tools/oneoff/_doc_downgrade.py，并检查活引用。
 
 ## 三、红线（⛔ 全部有实证为据，见审计 P1–P6）
 
@@ -59,7 +45,7 @@
 6. ⛔ 手工备份散落 —— 仓内靠 git；交付面备份只进 `.codebuddy/backups/`。
 7. ⛔ 引用已删除文件（CLAUDE.md 教训）；搬迁当批改完全部路径（T3）。
 8. ⛔ scratch 超期不清（TTL 14 天，每轮收尾自查）。
-9. ⛔ work 区文档"定稿"后不升档 —— 关联 TAIL 销号当轮必须随收尾归档。
+9. 定稿实施后的资料退出默认阅读；稳定结论回主人。是否另存归档按用途判断，Git已有过程不再复制全文。
 
 ## 四、文头四行元信息（本区强制）
 
@@ -91,12 +77,12 @@
 |---|---|---|---|
 | `.codebuddy/work/00-scratch/` | **全仓唯一的临时区**（`tmp-YYYYMMDD-主题.*` / `CB_MSG.txt` / 各尺子输出 / 一次性脚本） | **TTL 14 天** · `T14` | ⭐ **2026-10-01 起**：原仓级活区 `.workbuddy/scratch/` **已取消**（它的尺子也撤了 —— 那是**僵尸判据**）；出区就按 §一 表升档 |
 
-**记忆**（⛔ 都属留痕，只追加）：
+**记忆与状态**（只追加要求仅适用于日志；现行主人按变化更新）：
 
 | 家 | 是什么 | 现状 |
 |---|---|---|
 | `.codebuddy/memory/journal/YYYY-MM-DD.md` | **唯一**的逐日日志（append-only） | ⭐ **要写日志就写这里**；⭐ 2026-10-01 起**随仓走（进 git）**；⛔ 别在别处再开一份 |
-| `.codebuddy/memory/MEMORY.md` ＋ `细则.md` | 会话**注入档** ＋ 细则分册（同目录） | 口径/纪律的主人；⚠️ 原"项目侧另一份 `MEMORY.md`"**已并入**（它超注入上限、其实**从未被注入**） |
+| `.codebuddy/memory/MEMORY.md` ＋ `细则.md` | 会话**注入档** ＋ 细则分册（同目录） | 每轮必要项与专题参考；执行流程回 ops/agents/issue-tracker.md §四，业务含义回交付面 |
 | `.codebuddy/plans/开发计划-主文档.md` | **唯一**活文档（状态源 ＋ §15 台账） | ⭐「给用户看的那一页」= **根 `README.md` §〇**（原 `执行情况-主文档.md` 已取消） |
 
 ## 六、资料用途与默认读取边界（TAIL-247）
@@ -105,7 +91,8 @@
 
 | 设计件（完整路径） | 用途与阅读入口 |
 |---|---|
-| .codebuddy/work/10-designs/设计-开发治理整改-20261007.md | 本轮唯一现行规格；领TAIL-246～249时读。 |
+| .codebuddy/work/10-designs/设计-开发治理整改-20261007.md | TAIL-246～249的执行与验收依据；这些票已收口，追溯该整改时才读，当前流程回issue-tracker§四。 |
+| .codebuddy/work/10-designs/设计-agent阅读与核验减负整改-20261008.md | TAIL-251～253已实施规格；追溯整改依据或核验对应票时读，日常流程回issue-tracker§四。 |
 | .codebuddy/work/10-designs/设计-文件拆分必要性判据-20260924.md | 仍生效的拆分判断依据；遇T5黄或决定拆件时读，取值回阈值表。 |
 | .codebuddy/work/10-designs/设计-识别样本-真实模板-20260922.md | 保留的真样表识别证据；改导入识别时按测试引用查。 |
 | .codebuddy/work/10-designs/设计-统一导入模块-20260922.md | 已实施的导入设计依据；追查统一导入取舍时读，业务正文回交付面。 |

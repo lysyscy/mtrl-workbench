@@ -149,12 +149,44 @@ def test_汇总pill把撤单里有牵涉的单独报一档():
 def test_壳里剔除来源分档不混作一谈():
     """旧页：切「分类 = 剔除」时按来源分档打标签（`人工批量剔除` / `规则命中` / `i8 已撤单`）。
     新壳：来源分档走唯一出口 `exrule`（`exclude_source === 'manual' ? 人工批量剔除 : 规则命中`）
-    ＋ 行标签出口 `ntArchTag`；且说明里点明**规则命中任何情况下都不随人工恢复放回**（§4.2.2）。
+    ＋ 行标签出口 `ntArchTag`（§4.2.2）。
+    ⚠️ **两类的分档仍要分开标** —— 哪怕两者都能恢复，用户也要看得出"这一条当初是被谁剔掉的"。
     """
     assert "exrule: x.exclude_source === 'manual' ? '人工批量剔除' : '规则命中'," in SHELL, \
         "剔除来源分档出口没了"
     assert "const ntArchTag=n=>n.excl?tag('剔除','dg'):" in SHELL, "行标签出口 `ntArchTag` 没了"
-    assert "任何情况下都不在此恢复" in SHELL, "「规则命中的剔除此处不恢复」这条口径没讲清"
+    # ⭐ 2026-10-08 用户裁定：**规则命中的也能用「恢复剔除」放回** ⇒ 按钮提示不得再写
+    #    "任何情况下都不在此恢复"，那正是让用户以为按钮坏了的兑现不了的承诺。
+    assert "任何情况下都不在此恢复" not in SHELL, \
+        "「恢复剔除」的提示还在说规则命中的不恢复（与实际行为相反 = 界面在说假话）"
+    assert "「人工批量剔除」和「规则命中」两类都恢复" in SHELL, \
+        "「恢复剔除」的提示没讲清两类都能恢复，也没说清想长期剔除该改规则并再抓一次"
+
+
+# ---------------------------------------------------------------- 集采关联的判据来源
+
+@acc()
+def test_壳里集采关联判据只认notice_ids_不认按需加载的子表():
+    """⭐ 2026-10-08 BUG 钉子：集采合同**明明关联成功了**，付款时仍报「集采未关联合同」。
+
+    根因：`jcRefOf` / `jcUsedNids` 读的是 `j.payments`，而那是**子表明细** ——
+    `adaptJc` 里恒为 `[]`，只有打开过那张合同的子表弹窗（`jcLoadSub`）才被填上
+    ⇒ 没打开过弹窗就**恒判"未关联"**，且**不报错**。
+    ⛔ 正确来源是 `j.notice_ids`（`/api/m11/list` 每行都给；后端 `service.build_list` 的注释
+    早就写明"不带 `notice_ids` ⇒ 这三处静默变空"）—— 修的就是这个错位。
+    ⚠️ **整行断言**（⛔ 不从壳文本里按字面剪一段 —— `tests/shell_scissors.py` 守着这条）；
+       顺带好处：换写法就红，比切片更严。
+    """
+    assert ("const jcUsedNids=()=>new Set(JCs.flatMap(j=>(j.notice_ids||[]).map(String)));"
+            in SHELL), "全库已引用集合 `jcUsedNids` 没读 `j.notice_ids`（去重会失效 + 关联反查恒空）"
+    assert ("const jcRefOf=nid=>JCs.find(j=>(j.notice_ids||[]).some(x=>String(x)===String(nid)))||null;"
+            in SHELL), "「已关联」的反查出口 `jcRefOf` 没走 `notice_ids`"
+    # ⛔ 旧的错误写法不得复活（读按需加载的子表 ⇒ 没打开过弹窗就恒判未关联）
+    assert "(j.payments||[]).filter(p=>p[3])" not in SHELL, "`jcUsedNids` 又改回读子表 `j.payments` 了"
+    assert "(j.payments||[]).some(p=>p[3]===nid)" not in SHELL, "`jcRefOf` 又改回读子表 `j.payments` 了"
+    # 依赖它的两处必须都还在（修这一处才能一处生效）
+    for name in ("ntJcUnlinked=n=>n.cat==='集采'&&!jcRefOf(n.id)", "ntHasLink=n=>!!jcRefOf(n.id)"):
+        assert name in SHELL, f"{name} 没了（付款闸 / 操作列依赖它）"
 
 
 # ---------------------------------------------------------------- 排序与空态

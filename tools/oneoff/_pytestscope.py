@@ -1,33 +1,8 @@
-"""**pytest 选测范围**（`TAIL-241` 第 1 批）—— 「本轮该跑哪些测试件」的**单一出口**。
+"""pytest影响范围：按实际import闭包、文本读取和目录扫描选择使用者。
 
-⭐ **为什么要有它**：收工闸门末尾那把 pytest 是每轮固定成本里最大的一块。
-全跑 ⇒ 改一行文档也付全额。
-
-⚠️⚠️ **第一原则：漏跑比慢跑严重得多**（票面原话）⇒一切拿不准的地方
-**一律退回全跑**，并打一行「算不出 ⇒ 全跑」。宁可慢，不许静默漏。
-
-**三档判定**（判据 = 测试件**实际读什么**，⛔ 不按文件名猜）：
-  ① **全仓敏感**（`REPO_WIDE`）：扫 `app/**` 的文本/AST ⇒ 只要 `backend/app` 动过就必跑；
-  ② **包敏感**：靠 `import` 闭包算（改一个模块 ⇒ 传递依赖它的那些测试件必跑）；
-  ③ **够不着**（`SELF_ONLY`）：只读自己 / 工具 / 守则 ⇒ 不随包触发，**逐支带理由**。
-
-**机器眼**（`TAIL-239` 同族）：`cover_gap()` 双向查 ——
-  · **缺口**：盘上每个 `test_*.py` 必须够得着（在 `REPO_WIDE`、或 import 得到 `app.*`、或在 `SELF_ONLY`）；
-  · **陈旧**：三张名单里登记的件必须真在盘上。
-⇒ 新加一个测试件而没落进任何一档 ⇒ 当场报红（否则它永远不被跑，且没有任何痕迹）。
-
-跑法：
-    backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_pytestscope.py --cover-only
-    backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_pytestscope.py --explain -- backend/app/mod09_fee/router.py
-
-⚠️ **不拆的理由**（`T5` 黄档：本件超了行数线 —— 数字以 `ops/阈值表.md` 为准，⛔ 别抄）：
-三张名单 ＋ 闭包 ＋ 自检 ＋ CLI 是**同一件事的四个面**，
-拆开就得再定一个「名单在哪个件」的指针 ⇒ 多一处能漂的地方（同 `_doc_downgrade` 先例：命令与它的自测同件）。
-
-⚠️⚠️ **本件的件名不许含「`test` + 下划线」那段**（2026-10-06 当场踩到）：
-`test_wiring_guards` 的正则 `test_[\\w]+\\.py` 会把**件名里那一段**当成"引用了一个测试件"
-⇒ 报「幽灵判据」。`TAIL-241` 首版的名字里夹了「test + 下划线」⇒ 每轮闸门都红一条
-⇒ 改名去掉那段。**教训**：新件的**名字**也是判据的输入面（`T8` 扫字面、`test_wiring_guards` 扫名字）。
+工具共享模块采用传递使用者；已删除件保留反向依赖。无法确定依赖由入口显式调查。
+REPO_WIDE只代表确实扫描运行源码的测试；局部结果不刷新权威四态。
+自检和CLI与登记同处，登记覆盖仍双向检查。
 """
 from __future__ import annotations
 
@@ -202,52 +177,89 @@ def _outside_hit(paths: list) -> list:
     return sorted(set(out))
 
 
-def plan(changed) -> Plan:
-    """`changed` = 工作区 vs `HEAD` 的改动路径（**已含未跟踪新件**）→ 这一轮跑什么。
+def outside_tests(paths) -> set[str]:
+    """仓外读入的直接及共享helper使用者；不把helper当测试，也不补无关全仓名单。"""
+    prefixes = {pref for pref, _ in OUTSIDE_PREFIXES if any(p.startswith(pref) for p in paths)}
+    mods, files = build_graph()
+    graph = dict(mods)
+    source_files = {_mod_name(p): p for folder in ('app', 'tests') for p in (BACKEND/folder).rglob('*.py')}
+    source_files.update({p.relative_to(ROOT).with_suffix('').as_posix().replace('/', '.'): p
+                         for p in (ROOT/'tools').rglob('*.py') if not any(x.startswith('_归档') for x in p.parts)})
+    aliases = {}
+    for module in source_files:
+        aliases.setdefault(module.rsplit('.', 1)[-1], set()).add(module)
+    data_readers = set()
+    for module, p in source_files.items():
+        tree = ast.parse(p.read_text(encoding='utf-8'))
+        docstrings = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)
+                      and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)}
+        literals = [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant)
+                    and isinstance(n.value, str) and id(n) not in docstrings]
+        edges = set(graph.get(module, ()))
+        for n in ast.walk(tree):
+            imports = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or '', *[(n.module+'.'+a.name) if n.module else a.name for a in n.names]] if isinstance(n, ast.ImportFrom) else []
+            for name in imports:
+                if name in source_files: edges.add(name)
+                if '.' not in name: edges |= aliases.get(name, set())
+        graph[module] = edges
+        # 具体文档/脚本输入；只要无法收窄的目录遍历或动态载入，就保守覆盖该前缀。
+        local_prefixes = {_outside_prefix_of(v) for v in literals} - {''}
+        opaque = any(isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                     and n.func.attr in {'glob', 'rglob', 'walk', 'iterdir', 'spec_from_file_location', 'import_module'} for n in ast.walk(tree))
+        named = any(path in v or pathlib.Path(path).name in v for path in paths for v in literals)
+        if named or (opaque and local_prefixes & prefixes): data_readers.add(module)
+    changed_modules = {p[:-3].replace('/', '.') for p in paths if p.startswith('tools/') and p.endswith('.py')}
+    sources = changed_modules | data_readers
+    return {n for n, module in files.items() if _reach(graph, module) & sources}
 
-    ⛔ **拿不准就全跑**：壳（`web/`）、非 `.py` 的 backend 件、被删掉的模块、
-    **pytest 自动加载的件**（`AUTO_LOADED`，它们没有 import 边可依赖）、
-    以及 **`changed` 本身算不出来**（`None`）⇒ 一律全跑，并在理由里写明是哪一条。
-    """
+
+def plan(changed) -> Plan:
+    """按使用者选测；未知依赖返回待查，自动加载共享输入才扩大。"""
     if changed is None:
-        return Plan(True, "算不出改了哪些（git 失败）⇒ 全跑")
+        return Plan(False, "待查：git失败，未确定实际输入")
     changed = sorted({p.replace("\\", "/") for p in changed})
     inside = [p for p in changed if p.startswith("backend/")]
     outside = _outside_hit([p for p in changed if not p.startswith("backend/")])
     if outside:
         # ⭐ 动了仓外部位 ⇒ 跑「读那些落点的测试件」＋必跑清单（**不是全跑**）：
         #   读哪些由 `outside_readers()` **现算**，⛔ 不必手工登记（首版手工登记，当场漏了三处）。
-        hit = {pref for pref, _ in OUTSIDE_PREFIXES
-               if any(p.startswith(pref) for p in outside)}
-        readers = outside_readers()
-        picked = {n for n, prefs in readers.items() if prefs & hit}
-        picked |= {n for n, _ in REPO_WIDE}
+        picked = outside_tests(outside)
         files = {p.name for p in TESTS.glob("test_*.py")}
         picked = {n for n in picked if n in files}
         if not picked:
-            return Plan(True, "动了仓外部位却算不出谁读它 ⇒ 全跑")
-        return Plan(True, "动了 pytest 在 backend/ 之外也读的落点（%d 处：%s）⇒ 跑读它的 %d 件"
-                    % (len(outside), "、".join(outside[:3]), len(picked)), picked)
+            return Plan(False, "实际import和文本消费图未发现pytest使用者；对应工具检查仍由入口执行")
+        if inside:
+            inner = plan(inside)
+            if inner.run_all:
+                return inner
+            picked |= set(inner.files)
+        return Plan(True, "仓外读入及共享helper依赖（%d处）⇒ %d件测试" % (len(outside), len(picked)), picked)
     if not inside:
         return Plan(False, "本轮既没动 backend/，也没动 pytest 读的仓外部位")
     auto = [p for p in inside if p in {a for a, _ in AUTO_LOADED}]
     if auto:
-        return Plan(True, "动了 pytest **自动加载**的件（%s）⇒ 它没有 import 边、算不出 ⇒ 全跑"
+        return Plan(True, "动了 pytest **自动加载**的件（%s）⇒ 全套pytest共享自动加载输入 ⇒ 全跑"
                     % "、".join(auto))
     shell = [p for p in inside if p.startswith("backend/app/web/")]
     if shell:
         return Plan(True, "动了壳（backend/app/web/ · %d 处）⇒ 读壳文本的测试件一律全跑" % len(shell))
     odd = [p for p in inside if not p.endswith(".py")]
     if odd:
-        return Plan(True, "动了 backend/ 下的非 .py 件（%d 处）⇒ 算不出依赖 ⇒ 全跑" % len(odd))
+        return Plan(False, "待查：后端非Python输入的实际消费（%d处）" % len(odd))
     mods, files = build_graph()
     seeds = []
     for p in inside:
+        source = ROOT/p
+        if source.is_file():
+            try:
+                ast.parse(source.read_text(encoding='utf-8'))
+            except (SyntaxError, UnicodeError):
+                return Plan(False, '待查：模块语法或编码无法证明：'+p)
         m = p[len("backend/"):-3].replace("/", ".")
         if m.endswith(".__init__"):
             m = m[: -len(".__init__")]
-        if m not in mods:
-            return Plan(True, "改动里有算不出模块的一件（%s）⇒ 全跑" % p)
+        if m not in mods and (BACKEND / p[len('backend/'):]).exists():
+            return Plan(False, "待查：模块语法或载入无法证明：%s" % p)
         seeds.append(m)
     rev: dict = {}
     for m, imps in mods.items():
@@ -260,7 +272,7 @@ def plan(changed) -> Plan:
     picked |= {n for n, _ in REPO_WIDE}
     picked = {n for n in picked if n in files}
     if not picked:
-        return Plan(True, "选测集算出来是空的 ⇒ 全跑")
+        return Plan(False, "待查：运行模块没有已发现的回归使用者")
     return Plan(True, "改动 %d 处 ⇒ 选 %d / %d 件（其余够不着）"
                 % (len(inside), len(picked), len(files)), picked)
 

@@ -9,7 +9,7 @@
  *    （`actions.js` / `core.js` 里有些表**加载期就求值**到本件的常量）。⛔ 别调顺序。
  * ⚠️ 本件的代码是**原样搬出**（逐字未改，含注释）；来历与搬法见计划 §15 `TAIL-164`。 */
 
-let fNt={month:bjMonth(),cat:'全部',astat:'全部',stat:'未付清',projs:[]};   /* 年月默认「北京时间当月」；付款状态默认「未付清」 */
+let fNt={month:bjMonth(),cat:'全部',astat:'全部',stat:'未付清',projs:[],q:''};   /* 年月默认「北京时间当月」；付款状态默认「未付清」 */
 /* —— 「手动新增 / 编辑付款通知书」弹窗（2026-09-12 用户口径）——
    用途：付「期初占位行」的款 —— 那笔钱没有 i8 单据，只能手工补一行通知书。
    `naD` 是弹窗的**草稿层**：弹窗里的年月组件一改动就要重建弹窗，
@@ -40,7 +40,20 @@ const ntHit=f=>{ const ex=f.cat==='剔除';
     &&arch(n)
     &&(ex||f.cat==='全部'||n.cat===f.cat)
     &&(ex||f.astat==='全部'||n.astat===f.astat)
-    &&(ex||f.stat==='全部'||statOf(n)===f.stat)); };
+    &&(ex||f.stat==='全部'||statOf(n)===f.stat)
+    &&ntSearchMatch(n,f.q)); };
+/* 搜索的是表格实际展示的值，包括派生金额、项目展示名和状态。 */
+const ntSearchMatch=(n,q)=>{
+  const norm=v=>String(v==null?'':v).toLocaleLowerCase().replace(/[,，\s]/g,'');
+  const needle=norm(q); if(!needle) return true;
+  const j=jcRefOf(n.id), p=ownOf(n);
+  return [n.date,n.code,n.proj,p&&pjDisp(p),n.cat,n.doc,n.biz,n.recv,n.sup,n.entry,
+    n.approve,payEff(n),paidOf(n.id),n.ss,n.sp,
+    ...[n.approve,payEff(n),paidOf(n.id),n.ss,n.sp].map(M),
+    n.astat,statOf(n),n.excl?'剔除':'',ntVoid(n)?'i8 已撤单':'',n.manual?'手动':'',
+    supHas(n)?'自动匹配 待确认':'',j?'已关联 '+j.id:'关联集采合同',n.over?'超付':'']
+    .some(v=>norm(v).includes(needle));
+};
 /* 筛选变化后清理「已勾选」里不可见的行，避免出现选不中/看不见却被计入的幽灵勾选 */
 const prunePick=()=>{ const vis=new Set(ntHit(fNt).map(n=>n.id)); [...pickSet].forEach(i=>{ if(!vis.has(i)) pickSet.delete(i); }); };
 
@@ -318,9 +331,14 @@ const BP_THEAD=`<th>单据编码</th><th>付款项目</th><th>审批状态</th><
       与「从付款域引用（R8）」**共用同一份记录** ⇒ 两个方向双向可见，不会"同一事实两处存"。
    ⚠️ **一对一**：一条通知书最多关联一张合同（换合同 = 先解绑旧的再写新的）。
    ⚠️ **去重范围 = 全库**（§6.6.2「同一笔付款通知书只能被引用一次」，**不分公司**）。 */
-const jcUsedNids=()=>new Set(JCs.flatMap(j=>(j.payments||[]).filter(p=>p[3]).map(p=>p[3])));
+/* ⚠️⚠️ **判据只能读 `j.notice_ids`**（`/api/m11/list` 每行都给，字符串数组），⛔ **不得读 `j.payments`**：
+   `j.payments` 是**子表明细**，`adaptJc` 里恒为 `[]`，只有**打开过那张合同的子表弹窗**
+   （`jcLoadSub`）才会被填上 ⇒ 拿它判"关联了没有"＝没打开过弹窗就恒判"未关联"。
+   症状：关联明明做成功了，付款闸仍报「集采未关联合同」、关联区仍显示"关联集采合同"按钮，
+   而后端 `service.build_list` 的注释早就写明"不带 `notice_ids` 这三处会静默变空"—— 正是这一处。 */
+const jcUsedNids=()=>new Set(JCs.flatMap(j=>(j.notice_ids||[]).map(String)));
 /* 反查：这条付款通知书被哪张集采合同引用了（**派生** —— MOD-03 的「已关联」态不是新增字段） */
-const jcRefOf=nid=>JCs.find(j=>(j.payments||[]).some(p=>p[3]===nid))||null;
+const jcRefOf=nid=>JCs.find(j=>(j.notice_ids||[]).some(x=>String(x)===String(nid)))||null;
 /* 「关联集采合同」的**候选出口**（2026-09-13 用户口径 + **2026-09-14 收窄**）：**只列该付款通知书行"实际项目（仓库）"下、且「供应商」等于该行「集采实际供应商」的合同**。
    项目键 = 该行的**归属档案行的仓库名**（`ntProjKey`，§2.7.4）—— 与 `JC_COLS.proj` **同一个键空间** ⇒ 直接判等。
    ⭐ **供应商收窄**（§6.6.3 附则）：候选 = 「本项目 ＋ 已匹配到的那家供应商」的合同；

@@ -12,6 +12,9 @@
   ③ 两处计数按 `audit_meta.ledger_counts()`（**真源**）重算 ⇒ `audit_common.write_counts()` 只管写法
   ④ ⭐ **收尾断言**：真写盘后再跑一次 `doc_audit`，它必须「必须修 0」（＝ `T6` 认得这行新条目）；
      ⚠️ **不达标 ⇒ 逐字节回滚**（本仓口径：不达标的整批不留痕）。
+  ⑤ ⭐ **空表也能插**（2026-10-07 · `TAIL-250` 补）：A/B/C 三段全空是**常态**（在办尾巴清零后
+     就是这个样子）⇒ 插入锚点 = 最后一条数据行；没有数据行时 = **分隔行**（没有分隔行 = 表头行）。
+     ⛔ 少了这条，A 类清零的那一刻起**任何新尾巴都开不了票**（首版就栽在这里）。
 
 ⚠️ **编号顺延**（`_tail_close.py` 不释放编号 ⇒ 别重用）；本件会**拒绝**已存在的编号。
 ⚠️ 干跑**不写盘**；真写盘才做 ④。
@@ -79,11 +82,18 @@ def _cells(line: str) -> list[str]:
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
-def _table(lines: list[str], start: int, stop_prefix: str = "## ") -> tuple[int, list[int]]:
-    """从 `start` 往下找**第一张表** ⇒ `(表头行号, 数据行号列表)`（分隔行与表头不计入数据）。"""
+def _table(lines: list[str], start: int, stop_prefix: str = "## ") -> tuple[int, list[int], int]:
+    """从 `start` 往下找**第一张表** ⇒ `(表头行号, 数据行号列表, 插入锚点行号)`。
+
+    ⭐ **插入锚点**（2026-10-07 · `TAIL-250` 补）：**空表也必须能插行** ——
+    A/B/C 三段全空是**常态**（在办尾巴清零后就是这个样子），而本件原先要求「至少有一条数据行」
+    ⇒ 那一刻起**任何新尾巴都开不了**（干跑即报「§一 或 §14.3 里找不到数据行」）。
+    ⇒ 锚点 = 最后一条数据行；没有数据行时 = **分隔行**（没有分隔行则 = 表头行）。
+    """
     hdr = next(k for k in range(start, len(lines))
                if lines[k].lstrip().startswith("|"))
     rows: list[int] = []
+    sep = hdr
     for k in range(hdr + 1, len(lines)):
         s = lines[k].strip()
         if s.startswith(stop_prefix) or (s and not s.startswith("|")):
@@ -92,9 +102,10 @@ def _table(lines: list[str], start: int, stop_prefix: str = "## ") -> tuple[int,
             continue
         c = _cells(s)
         if not c or set(c[0]) <= {"-", ":"}:        # 分隔行
+            sep = k
             continue
         rows.append(k)
-    return hdr, rows
+    return hdr, rows, (rows[-1] if rows else sep)
 
 
 def build_rows(args, hdr1: list[str], hdr_s: list[str]) -> tuple[str, str]:
@@ -159,20 +170,19 @@ def main(argv: list[str]) -> int:
     if i1 is None or isd is None:
         print("⛔ 找不到 §15 §一 或 §14.3（段标题形态变了？）⇒ 未写盘")
         return 1
-    h1, r1 = _table(lines, i1 + 1)
-    hs, rs = _table(lines, isd + 1)
-    if not r1 or not rs:
-        print("⛔ §一 或 §14.3 里找不到数据行 ⇒ 未写盘")
-        return 1
+    h1, r1, a1 = _table(lines, i1 + 1)
+    hs, rs, as_ = _table(lines, isd + 1)
+    if not r1:
+        print(f"ℹ §15 §一 当前是**空表**（A 类清零的常态）⇒ 插在表头/分隔行之后（第 {a1 + 1} 行）")
     row1, row_s = build_rows(a, _cells(lines[h1]), _cells(lines[hs]))
-    print(f"① §15 §一 第 {r1[-1] + 1} 行之后插：{row1[:88]}…")
-    print(f"② §14.3 第 {rs[-1] + 1} 行之后插：{row_s[:88]}…")
+    print(f"① §15 §一 第 {a1 + 1} 行之后插：{row1[:88]}…")
+    print(f"② §14.3 第 {as_ + 1} 行之后插：{row_s[:88]}…")
 
-    new = lines[:r1[-1] + 1] + [row1 + "\n"] + lines[r1[-1] + 1:]
+    new = lines[:a1 + 1] + [row1 + "\n"] + lines[a1 + 1:]
     # ⚠️ §14.3 的行号在插入后**整体下移 1** ⇒ 重新定位（⛔ 别拿旧行号硬算）
     isd = next((k for k, l in enumerate(new) if SCHED_RE.match(l)), None)
-    _hs, rs2 = _table(new, isd + 1)
-    new = new[:rs2[-1] + 1] + [row_s + "\n"] + new[rs2[-1] + 1:]
+    _hs, _rs, as2 = _table(new, isd + 1)
+    new = new[:as2 + 1] + [row_s + "\n"] + new[as2 + 1:]
     text_new = "".join(new)
 
     # ③ 计数：**问真源**（⛔ 本件不镜像算法；形态由 `audit_common` 管）
@@ -210,7 +220,7 @@ def main(argv: list[str]) -> int:
         tpath.unlink(missing_ok=True)
         print("⛔ 收尾断言不过（`doc_audit` 不是「必须修 0」）⇒ **已逐字节回滚（含删掉刚建的票文件）**；"
               "它的输出尾部：")
-        print("\n".join(out.splitlines()[-12:]))
+        print("\n".join(line for line in out.splitlines() if "[红]" in line or "必须修" in line))
         return 1
     print(f"✅ 已写盘 ＋ 收尾断言过（`doc_audit` 必须修 0）："
           f"{path.relative_to(REPO).as_posix()} ＋ 票文件 {tpath.relative_to(REPO).as_posix()}（`{a.state}`）")

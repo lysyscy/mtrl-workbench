@@ -18,7 +18,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
+PY = pathlib.Path(sys.executable)
 RULER = ROOT / "tools" / "audit" / "bytes_guard.py"
 TDIR = ROOT / "tools" / "audit"
 PFX = "_mut_tmp_bytesguard_"
@@ -32,6 +32,7 @@ BAD = (
     ("fffd.txt", b"\xe5\xa4\xb4\n\xef\xbf\xbd\n\xe5\xb0\xbe\n", "U+FFFD"),
     ("nobom.ps1", "Write-Host \"没有 BOM 的 ps1\"\n".encode("utf-8"), "缺 BOM"),
     ("gbk.txt", "中文标题\n".encode("gbk"), "UTF-8"),
+    ("rule.mdc", b"AAA\r\nBBB\n", "混排行尾"),
 )
 
 
@@ -41,7 +42,7 @@ def run_ruler() -> tuple[int, str]:
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
 
-def main() -> int:
+def _main() -> int:
     good = TDIR / (PFX + "good.txt")
     targets = [TDIR / (PFX + n) for n, _, _ in BAD]
     ruler_md5 = hashlib.md5(RULER.read_bytes()).hexdigest()
@@ -62,7 +63,7 @@ def main() -> int:
         for p in targets:
             p.unlink(missing_ok=True)
         rc, out = run_ruler()
-        cases.append(("撤掉四个靶件后必须回到全绿（rc=0）", rc == 0,
+        cases.append(("撤掉坏靶件后必须回到全绿（rc=0）", rc == 0,
                       f"rc={rc} · 报红 {out.count('⛔')} 条"))
     finally:
         for p in [good, *targets]:
@@ -80,6 +81,22 @@ def main() -> int:
     print(f"\n  反向灵敏度：**{hits}/{len(cases)} 命中**"
           f"（少一条 = 有判据是哑的、或有'永远红'的方向没被钉住 ⇒ 报出来，别当通过）")
     return 0 if hits == len(cases) else 1
+
+
+def main() -> int:
+    if '--in-copy' in sys.argv:
+        return _main()
+    import tempfile, shutil
+    with tempfile.TemporaryDirectory(prefix='mtrl-bytes-proof-') as temp:
+        root = pathlib.Path(temp)
+        for source in (pathlib.Path(__file__), RULER):
+            dest = root/source.relative_to(ROOT)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, dest)
+        result = subprocess.run([str(PY), '-X', 'utf8', str(root/'tools/mut/_mut_bytesguard.py'), '--in-copy'],
+                                cwd=root, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        print(result.stdout + result.stderr)
+        return result.returncode
 
 
 if __name__ == "__main__":

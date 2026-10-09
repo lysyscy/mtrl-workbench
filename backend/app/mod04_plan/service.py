@@ -1,7 +1,7 @@
 """`MOD-04` 组装层 —— 拉数据 → 跑审查 → 筛选 → 排序 → 视图数据（**给页面与 API 共用**）。
 
 ⚠️ **不重写任何判定**：审查走 `domain.audit_rows`、筛选走 `plan_ui.filter_plan_rows`、
-   排序走 `page.sort_rows`、窗口态走 `plan_ui.window_button` —— 本文件只做**取数与装配**。
+  排序走 `page.sort_rows`、按钮态走 `plan_ui.window_button` —— 本文件只做**取数与装配**。
 """
 
 from __future__ import annotations
@@ -190,7 +190,7 @@ def build_page_data(
         ],
         "draft": draft_data,
         "draft_error": draft_error,
-        "window": window_button(today.day),
+        "window": window_button(),
         "filter_fields": list(FILTER_FIELDS),
         "sort_col": sort_col,
         "sort_dir": sort_dir,

@@ -1,19 +1,19 @@
 ﻿# ops/selfcheck.ps1 —— 目标机自检（M8 ④「交接口径与自检命令」的正文 · TAIL-188）
 #
-# 设计要点：⭐ 刻意写成「不依赖交付面」的 —— 交付面（WPS 那个文件夹）不进包、目标机不装，
-#   所以四态报表（acc_report.py）与 ui_parity / doc_audit --ui 在目标机跑不了（＝已知代价）。
+# 设计要点：本自检不依赖交付面。完整现行交付面可另行复制/配置，见 ops/deployment.md §四；
+#   相关验收按所需输入/工具判断。ui_parity只查壳自身，不因交付面缺失自动不可运行。
 #   ⚠️ 这里**刻意不写条数**（原写「641 那个数」—— 判据点一涨它就过期，属"留痕被后续甩下"那族）。
 #   这里做的是「这系统自己能不能转」的五项，⛔ 不是验收：
 #     ① 服务在跑（mtrl-workbench-server = Running / Automatic）
 #     ② http://127.0.0.1:8000/app 返回 200
-#     ③ 库连得上、表建齐（走**后端自己的配置**去连 —— 口径只认一份）
+#     ③ 库连得上、基础表数量检查（走**后端自己的配置**去连 —— 口径只认一份）
 #     ④ 两份运行时模板在，且 SHA256 对得上（防回退/拷贝损坏 —— 历史踩过）
 #     ⑤ 三个历史导入域 ＋ 库存单据端点在（从 /openapi.json 里找；拿不到就照实说「跳过 + 原因」）
 #
 # 用法（目标机 · 普通窗口即可）：
 #   powershell -ExecutionPolicy Bypass -File ops\selfcheck.ps1
 #   powershell -ExecutionPolicy Bypass -File ops\selfcheck.ps1 -Base http://127.0.0.1:8000 -RepoRoot D:\dev\mtrl-workbench
-# 退出码：0 = 五项全过（⚠️ 有「跳过」也照实打印）；1 = 有 ⛔。
+# 退出码：0 = 没有计入失败（可能有跳过，须逐项看）；1 = 有 ⛔。安装自检不证明真实备份恢复或完整业务数据。
 #
 # ⚠️⚠️ 本文件必须是 **UTF-8 with BOM**（PS 5.1 读无 BOM 的 UTF-8 会按 ANSI 解 ⇒ 中文全乱 ⇒ 解析崩 —— 2026-09-29 实测踩过）。
 # ⚠️ 也⛔ 别用 <# #> 块注释（本机实测解析报 Unexpected attribute）；一律用 # 行注释。
@@ -32,7 +32,7 @@ function Ok($m)   { Write-Host ('   ✅ ' + $m) }
 function Bad($m)  { Write-Host ('   ⛔ ' + $m); $script:fail++ }
 function Skip($m) { Write-Host ('   ⚠️ ' + $m + '（跳过 —— ⛔ 但要知道这笔账）') }
 
-Write-Host '=== ops/selfcheck.ps1 · 目标机自检（⛔ 不是验收；验收要交付面，那不在包内）==='
+Write-Host '=== ops/selfcheck.ps1 · 目标机自检（安装层检查；跳过须另核，真实恢复与相关验收分开）==='
 Write-Host ('仓 = ' + $RepoRoot + ' · 站 = ' + $Base)
 
 # ---- ① 服务 ----

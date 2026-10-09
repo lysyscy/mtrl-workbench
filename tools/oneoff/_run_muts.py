@@ -1,36 +1,9 @@
-"""**守尺子的变异自证** —— 一把跑那几个「守尺子 / 守结构 / 守文档面」的变异件（它们是"尺子的尺子"）。
+"""按受影响机制选择隔离自证。
 
-⭐⭐ 为什么有它（`TAIL-205` · 2026-10-01）：
-    `tools/mut/**` 有 90+ 支**反向灵敏度**，却**不在任何闸门里**（`_run_rulers.py` 不含它）⇒
-    加了"能证伪的判据"却**没人会跑** ⇒ **靶烂掉/判法烂掉都没人知道**。2026-10-01 一天抓到 4 例：
-      ① `_mut_t20` **靶太薄**（基线手工快照已 0/5，只加 2 个到不了 6 ⇒ **哑靶**，报 `None → None`）
-      ② `_mut_t12` **漏 `-X utf8`** ⇒ 子进程中文输出乱码 ⇒ 拿文件名比永远比不上 ⇒ `0/3` 却报"复原干净"（**假绿**）
-      ③ `_mut_t14t15` 同款漏 `-X utf8`（返回 -1 ⇒ 三条全"未被抓到"）＋ **靶假设过期**（要求基线 0 命中，现实有 5 条黄）
-      ④ `_oneoff_measure.py` 漏 `core.quotepath=false` ⇒ 非 ASCII 路径直接崩（**一直是坏的**）
-      ⑤ ⭐ 2026-10-06（`TAIL-239`）**同族又三例，且全是"假红"**：`_mut_shellverify` / `_mut_prg_form` /
-         `_mut_t8_m08imp` / `_mut_t13` 调子进程时也漏 `-X utf8` ⇒ 子进程往 cp936 管道写 `✅` 时抛
-         `UnicodeEncodeError` ⇒ **尺子自己崩、rc 非 0** ⇒ 变异件据此误报「基线不干净 / 没抓到 /
-         守卫是假的 / 尺子误报」。⚠️ 一手证据：同一把尺子带 `-X utf8` rc=0、不带就 `UnicodeEncodeError`。
-         ⛔ **`errors="replace"` 单用不够** —— 那样能拿到长度正确、`json.loads` 也过的**替换字符**
-         （"看着能用、其实内容已坏"）。⇒ **本段是这一族的口径主人**，各变异件只留一行指针。
-    ⇒ 根因不是"某支写错了"，是**"没人跑"**。本件把最关键的一撮**接进收工闸门**（`_run_rulers.py` 调它）
-      ⇒ 它们的烂掉**最迟下一次收工就被看见**。
-
-**跑什么**：`KEY` 那一套（⚠️ 条数看本件输出，⛔ 别在别处抄 —— 会涨）—— 选它们的标准 =
-**靶是"尺子 / 结构 / 文档面"本身**（业务面的变异件由各自域负责，按需用 `--all` 扫）；
-**有意不跑的进 `KEEP_OUT` 并逐支写清理由** ⛔ 不许留"既不在 `KEY` 也不在 `KEEP_OUT`"的件
-（那样的件**不会被任何一轮跑**，而没有任何痕迹说明它被故意跳过 —— 本族已 5 次静默失效）。
-
-⭐⭐ **每档都先跑"选集自检"**（`TAIL-239` 第 3 步）：`KEY` ∪ `KEEP_OUT` 必须盖住 `tools/mut/_mut_*.py` 全集，
-否则**报红并列出缺口件名**；反向灵敏度 = `tools/mut/_mut_keycover.py`（造一支不在名单里的件 ⇒ 必须报红）。
-
-跑法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_run_muts.py`
-      `… --all`          #: 跑 `tools/mut/**` 全部（很慢：有的支要跑 pytest/真机 ⇒ 按需，别进闸门）
-      `… --all --timeout 900`
-      `… --fast`         #: ⭐ 2026-10-06（`TAIL-237`）**只跑快集**（跳 `SLOW_KEY`）—— 收工闸门默认走这条
-      `… --cover-only`   #: ⭐ 2026-10-06（`TAIL-239`）**只做选集自检**就退出（不跑任何变异件）
+--cases明确选件；无参数不跑全套。KEY与KEEP_OUT仍双向检查登记覆盖。
+当前原生隔离件为gate、bytes、face；其余旧入口拒绝对正式工作文件写靶，
+未来涉及对应判据时先隔离再验证。历史原因按需查Git与原票。
 """
-
 from __future__ import annotations
 
 import pathlib
@@ -99,7 +72,7 @@ KEY: tuple[tuple[str, str], ...] = (
     # ⭐ 2026-10-06（`TAIL-234`）：`T27` 页脚尾部＋ `T28` `PRD` 规格件基线。
     #   ⚠️ **靶同样在仓外交付面** ⇒ 与 `_mut_uicheck` 同理：不接进来 = 收了判据却没人跑它。
     #   ⭐ 里面有一靶用的是**旧根那份真实退化件**（本机被云同步盖回过的快照）⇒ 不是"造出来的假红"。
-    ("_mut_facedoc.py", "T27/T28 交付面尾部两张网（页脚后无内容 · PRD 规格件只许变长）"),
+    ("_mut_facedoc.py", "T27/T28 交付面尾部两张网（页脚后内容、缺件/能力编号损失及篇幅提示）"),
     # ══════════════════════════════════════════════════════════════════
     # ⭐⭐ 2026-10-06（`TAIL-239`）：下面这一段是**量出来的**，不是"我觉得它重要"。
     #   做法 = 逐支读 `_mut_*.py` 的 docstring 第一段（`tools/mut/` 全集）＋ 归类：
@@ -297,6 +270,9 @@ def report_cover() -> int:
 
 
 def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
+    if p.name not in {'_mut_gatescope.py', '_mut_bytesguard.py', '_mut_facedoc.py'}:
+        print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
+        return 2, 0.0
     t = time.time()
     try:
         r = subprocess.run([PY, "-X", "utf8", str(p)], cwd=str(ROOT),
@@ -318,6 +294,11 @@ def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
 
 def main() -> int:
     args = sys.argv[1:]
+    if '--selftest' in args:
+        return selftest()
+    if not args:
+        print('按影响明确选择 --cases <变异件名...>；普通改动不默认执行全部KEY')
+        return 2
     timeout = 900
     if "--timeout" in args:
         timeout = int(args[args.index("--timeout") + 1])
@@ -336,6 +317,15 @@ def main() -> int:
         if fast_only:
             skipped = [n for n, _ in cases if n in SLOW_KEY]
             cases = [(n, w) for n, w in cases if n not in SLOW_KEY]
+    if '--cases' in args:
+        requested = []
+        for name in args[args.index('--cases')+1:]:
+            if name.startswith('--'): break
+            requested.append(name)
+        if not requested or set(requested)-{n for n, _ in KEY}:
+            print('变异选择为空或不在KEY登记中，未执行')
+            return 2
+        cases = [(n,w) for n,w in cases if n in requested]
 
     bad: list[str] = []
     fast_hit: list[str] = []
@@ -391,6 +381,27 @@ def main() -> int:
     if receipt is not None:
         receipt.save(1 if bad else 0)
     return 1 if bad else 0
+
+
+def selftest():
+    """覆盖登记与隔离拒绝在临时名字空间验证，正式文件不作靶。"""
+    import tempfile
+    from unittest.mock import patch
+    with tempfile.TemporaryDirectory() as temp:
+        folder = pathlib.Path(temp)
+        for name in {n for n, _ in KEY} | set(KEEP_OUT):
+            (folder/name).write_text('"""fixture"""\n', encoding='utf-8')
+        with patch.dict(globals(), MUT=folder):
+            assert cover_gap() == ([], []), '正常登记不能误伤'
+            extra=folder/'_mut_unregistered.py'; extra.write_text('pass\n',encoding='utf-8')
+            assert cover_gap()[0], '未登记不能静默漏选'
+            extra.unlink()
+            (folder/KEY[0][0]).unlink()
+            assert cover_gap()[1], '陈旧登记不能静默放行'
+        with patch.object(subprocess,'run',side_effect=AssertionError('不得启动正式写靶脚本')):
+            assert run_one(folder/'_mut_docaudit.py', 1)[0] != 0
+    print('自测 变异登记缺口、陈旧项、正常放行及非隔离脚本拒绝通过')
+    return 0
 
 
 if __name__ == "__main__":

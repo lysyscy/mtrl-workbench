@@ -55,6 +55,75 @@ def _trace() -> str:
     return _slice("ntTrace:t=>{", "/* —— MOD-05 —— */", what="查看关联处理器")
 
 
+def _nt_row_save() -> str:
+    """「保存手动行」处理器 `ACT.ntRowSave`。"""
+    return _slice("ntRowSave:()=>{", "/* 手动行的「审批金额」表内可改", what="手动行保存处理器")
+
+
+def _sup_accept() -> str:
+    """「采用自动匹配值」处理器 `ACT.supAccept`。"""
+    return _slice("supAccept:async t=>{", "supReject:async t=>{", what="采用处理器")
+
+
+@acc()
+def test_壳里手动行保存必须把审批状态发出去():
+    """⭐ 2026-10-08 BUG 钉子（前端那一半）：草稿行**有**审批状态下拉（默认「已批」），
+    可它原先**只留在草稿里、从不发**给后端 ⇒ 落库空值 ⇒ 列表显示为空 ⇒ 付不了款。
+
+    ⚠️ 断的是**发送**这一步 —— 断言必须钉住 `body` 里真的有它（只断言"下拉存在"会假绿）。
+    """
+    reg = _nt_row_save()
+    assert "approve_status:f.astat" in reg, \
+        "保存时没把审批状态发给后端（草稿里选的值到不了库里 ⇒ 列表显示为空、付不了款）"
+    # 值必须有兜底：草稿默认项是下拉第一项（optsOf 在 cur 为空时不加 selected）⇒ `||'已批'` 是主力路径
+    assert "astat:naD.astat||'已批'" in reg, "审批状态没了兜底（草稿未显式选中时会发空串）"
+
+
+def _sup_match_run() -> str:
+    """「自动匹配」处理器 `ACT.supMatchRun`。"""
+    return _slice("supMatchRun:async t=>{", "supPick:t=>{", what="自动匹配处理器")
+
+
+# ---------------------------------------------------------------- 集采供应商：采用
+
+@acc()
+def test_壳里采用自动匹配值_取值必须来自待确认标记_不得读列表空值():
+    """⭐ 2026-10-08 BUG 钉子：「自动匹配」命中后点「采用」，**供应商这一行没变**。
+
+    根因在**两处**，缺一都不会犯：
+      ① 后端 `NoticeRow` 漏装 `jc_supplier` ⇒ `notice-list` 每行恒回空串 ⇒ `n.sup` 恒空；
+      ② 「采用」的值取自 `n.sup` ⇒ 提交 `supplier:''` ⇒ **把刚匹配上的值清空**，
+         而后端对空串照样回 `ok:true` ⇒ 界面上只弹一句绿色回执，看着像"点了没反应"。
+    ⇒ 这里钉住「采用」只认 `SUP_SUG[n.id]`（= 预填时真正落库的那个值），⛔ 不读 `n.sup`。
+    """
+    a = _sup_accept()
+    assert "const v=String(SUP_SUG[n.id]||'').trim();" in a, \
+        "「采用」改成读别的来源了（⛔ 不得取 `n.sup`：那是列表读回值，读链路一偏就会提交空串）"
+    # ⛔ 只查**取值表达式**（注释里可以、也应该写明"不许取 n.sup"）
+    assert "String(n.sup" not in a, "「采用」又改回读 `n.sup` 了（那正是提交空串、把值清空的来源）"
+    # ⚠️ 空值必须**拒绝**而不是当采纳值提交（否则又是一次"采纳＝清空"）
+    assert "if(!v) return toast(" in a, "「采用」没有对空值设闸 —— 空值提交下去等于清空该字段"
+    # ⚠️ 标记要在 `jcLinkAct` **之前**清：它内部会 reload + render，事后再清界面不更新（看着像没生效）
+    di, ci = a.find("delete SUP_SUG[n.id];"), a.find("await jcLinkAct(")
+    assert 0 <= di < ci, "「采用」的待确认标记仍写在 `jcLinkAct` 之后 ⇒ 界面还显示「待确认 + 采用」"
+
+
+@acc()
+def test_壳里自动匹配命中一家_预填后当场重画出采用按钮():
+    """预填成功后必须**当场**出现「采用 / 不采用」—— 标记就是这两个按钮的渲染条件（`supAutoCell`）。
+
+    ⇒ 判据 = **标记与 `render()` 的先后**：`jcLinkAct` 内部已经 render 过一次，
+    标记若在它**之后**才落而不补一次 render，这一轮就画不出按钮（要点别的才冒出来）。
+    """
+    m = _sup_match_run()
+    si, ci = m.find("SUP_SUG[n.id]=hit;"), m.find("await jcLinkAct(")
+    assert 0 <= si, "1 家命中后没标「待确认」（`SUP_SUG`）⇒ 没有「采用 / 不采用」可点"
+    assert 0 <= ci, "预填没走 `jcLinkAct`（那才是落库 + 双侧重拉）"
+    si2, ri = m.find("SUP_SUG[n.id]=hit;", ci), m.find("render();", si if si > ci else 0)
+    assert si2 >= 0 and si2 < ri, \
+        "标记写在最后一次 render 之后 ⇒ 这一轮画不出「采用」按钮（看着像「匹配上了但没法采用」）"
+
+
 # ---------------------------------------------------------------- 操作列
 
 

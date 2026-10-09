@@ -30,6 +30,81 @@ from app.mod05_flow.domain import CATEGORY_MATERIAL
 from app.mod05_flow.models import CATEGORIES
 
 
+# ============================================================ 恢复剔除时回填归属（2026-10-08）
+
+@dataclass
+class RefillReport:
+    """恢复剔除时**回填归属**的结果（§2.5.1 链路 C）。"""
+
+    filled: list[int] = field(default_factory=list)      # 回填成功的行
+    kept: list[int] = field(default_factory=list)       # 本来就有归属（人工指定过 ⇒ 不覆盖）
+    unresolved: list[int] = field(default_factory=list)  # 判不出归属（保持空，如实显示「未建档」）
+
+    @property
+    def message(self) -> str:
+        if not self.filled and not self.kept and not self.unresolved:
+            return ""
+        parts = []
+        if self.filled:
+            parts.append(f"已按项目档案回填 {len(self.filled)} 条的付款项目归属")
+        if self.kept:
+            parts.append(f"{len(self.kept)} 条原本就有归属，保持不变")
+        if self.unresolved:
+            parts.append(
+                f"{len(self.unresolved)} 条判不出归属（项目档案里没有对应项目）"
+                "—— 页面上显示「未建档」，请到「项目档案」建档或补关键词后重试"
+            )
+        return "；".join(parts)
+
+
+def refill_ownership(session, ids) -> RefillReport:
+    """**恢复剔除时把归属补上**（⭐ 2026-10-08 用户裁定）。
+
+    ⚠️ **为什么需要**：抓取时**规则剔除的行故意不带归属**（`classify.rows_needing_ownership`
+       的注释写明：拿它们跑「整批归属校验」会把整批误拦 ⇒ 落库时 `ownership_id=None`）。
+       ⇒ 一旦用户把这些行**恢复剔除**，它们就以"没有归属"的状态回到日常列表 ——
+       页面上「付款项目」显示**未建档**（`ownOf` 取不到档案行 ⇒ 项目键为空），
+       并且**只要用户选了任何项目筛选，按计划勾选就会把它们全挡掉**（用户 2026-10-08 实测报障）。
+
+    ⚠️ **判定复用归属链路的唯一出口** `mod01_projects.domain.resolve_ownership`
+       （⛔ 不在本层另写一份"全名怎么匹配"）。**它按归一化后的全名比对**，所以
+       「档案全名末尾带 i8 编号、单据全名不带」这种常见差异**能正确命中**。
+    ⚠️ **已经指定过归属的行绝不覆盖**（人工判断优先，与 `merge.PROTECTED` 同一原则）。
+    ⚠️ 判不出的**保持空**并如实报数 —— 不硬塞一个，也不为此让整次恢复失败。
+    """
+    from app.mod01_projects import service as P1S
+    from app.mod01_projects.domain import resolve_ownership
+    from app.mod03_notice import repository as repo
+
+    want = {int(x) for x in (ids or ())}
+    report = RefillReport()
+    if not want:
+        return report
+    rows = repo.get_notices_by_ids(session, sorted(want))
+    if not rows:
+        return report
+    projects = P1S.all_projects(session)
+    for row in rows:
+        if int(row.id) not in want:
+            continue
+        if row.ownership_id:
+            report.kept.append(int(row.id))
+            continue
+        d = resolve_ownership(
+            name_full=str(row.project_name or ""),
+            doc_name=str((row.fields or {}).get("BillName") or ""),
+            projects=projects,
+        )
+        if d.settled and d.target_id:
+            row.ownership_id = int(d.target_id)
+            report.filled.append(int(row.id))
+        else:
+            report.unresolved.append(int(row.id))
+    if report.filled:
+        session.flush()
+    return report
+
+
 # 分类的中文名（**唯一出口**；页面不再各写一份 colmap）
 CATEGORY_NAMES: dict[str, str] = {
     "material": "辅材",

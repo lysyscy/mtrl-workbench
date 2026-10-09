@@ -310,23 +310,6 @@ def cancel_force() -> dict:
     return {"forced_through": False, "forced_remark": ""}
 
 
-# ---------------------------------------------------------------- 生效窗口（§4.3.2 / §4.3.7）
-
-
-WINDOW_START_DAY = 10   # 每月 10 号起生效（10 号 → 月底）
-
-
-def in_effective_window(day_of_month: int) -> bool:
-    """是否落在付款计划生效窗口（每月 **10 号 → 月底**）。窗口外按钮**先禁用**（PLAN-UI-001-08）。"""
-    return WINDOW_START_DAY <= int(day_of_month) <= 31
-
-
-def window_label(day_of_month: int) -> str:
-    if in_effective_window(day_of_month):
-        return "生效中（每月 10 号 → 月底）"
-    return "未到生效窗口（每月 10 号起生效）"
-
-
 # ---------------------------------------------------------------- 默认筛选（IMPORT-001-07）
 
 
@@ -352,6 +335,6 @@ __all__ = [
     "PROJECT_COLUMN_HEADER", "duplicate_keys", "audit_row", "audit_rows", "re_audit",
     "can_edit_doc", "derived_columns", "COLUMN_ORDER", "column_order_ok",
     "force_through", "cancel_force",
-    "WINDOW_START_DAY", "in_effective_window", "window_label", "default_plan_filters",
+    "default_plan_filters",
     "EDITABLE_COLUMNS", "MATCH_MATCHED", "MATCH_UNMATCHED", "MATCH_AMBIGUOUS",
 ]

@@ -43,7 +43,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 #: 只管**文本件**（二进制件的行尾/编码规则无意义 ⇒ 进来就是噪音）
-TEXT_SUFFIXES = {".py", ".md", ".js", ".html", ".css", ".json", ".sql", ".yml", ".yaml",
+TEXT_SUFFIXES = {".py", ".md", ".mdc", ".js", ".html", ".css", ".json", ".sql", ".yml", ".yaml",
                  ".ps1", ".sh", ".txt", ".cfg", ".ini", ".toml", ".mjs", ".cjs"}
 
 #: 不是本仓手写的源码（虚拟环境 / 缓存 / 产物 / 备份）

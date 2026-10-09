@@ -115,11 +115,21 @@ def api_exclude(req: IdsIn, session: Session = DBSession) -> dict:
 
 @api_router.post("/api/m03/actions/restore")
 def api_restore(req: IdsIn, session: Session = DBSession) -> dict:
-    """**恢复剔除**（§4.2.2）—— 必须先勾选；**只恢复人工剔除的行**，规则命中的一律不恢复。"""
+    """**恢复剔除**（§4.2.2）—— 必须先勾选；**人工剔除与规则命中的都恢复**（⭐ 2026-10-08 用户裁定）。
+
+    ⚠️ **恢复后一并回填归属**（⭐ 2026-10-08）：规则剔除的行**落库时故意不带归属**
+       （`classify.rows_needing_ownership`：避免整批归属校验被误拦）⇒ 不回填的话，
+       它们回到列表就是"付款项目未建档" ＋ 项目筛选一挡就再也勾不上（用户实测报障）。
+    """
+    from app.mod03_notice.notice_actions import refill_ownership
+
     try:
         report = restore_excluded(repo.notices_as_dicts(session, ids=req.ids), req.ids)
         repo.set_excluded(session, report.restored, excluded=False, source=EXCLUDE_NONE)
-        return {"ok": True, "restored": list(report.restored), "message": report.message}
+        refill = refill_ownership(session, report.restored)
+        message = report.message + ("；" + refill.message if refill.message else "")
+        return {"ok": True, "restored": list(report.restored),
+                "ownership_filled": list(refill.filled), "message": message}
     except MustReportError as exc:
         return {"ok": False, "restored": [], "message": exc.message}
 
@@ -179,6 +189,7 @@ class ManualSaveIn(BaseModel):
 
     row_id: str = ""
     doc_date: str = ""
+    approve_status: str = ""
     bill_no: str = ""
     bill_name: str = ""
     biz_type: str = ""

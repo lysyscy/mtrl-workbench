@@ -1,10 +1,7 @@
-"""相关核验的通过回执：登记仍归 CMDS / KEY，未知输入重跑，输入与环境未变才复用。
+"""独立核验回执：输入、运行环境和检查实现一致才复用。
 
-TAIL-245：已逐件核对下列可复用项的读入；范围故意放宽至工具、后端、运维、
-交付面及运行时。其余项含全仓扫描、时间或运行态，尚不能收窄，始终重跑。
-回执只记内容摘要，不记凭据或修改权威四态；丢失、坏档、失败均重验。
-默认入口完整执行；--related的影响分类回_impactscope，关键/未知退回--full。
-完整通过内容基点与逐项回执分开；环境变化/失败失效，共用靶仍串行。
+失败清除整体证明与失败项，独立成功项保留。坏档禁用复用，影响选择仍归入口；
+是否全验由用户明确要求或实际广泛依赖决定。回执可删，不构成权威四态。
 """
 from __future__ import annotations
 
@@ -125,6 +122,8 @@ def input_signature(rel: str, args: list[str], files: dict, context: str) -> str
         selected = {n: h for n, h in files.items() if n.startswith('repo/tools/') or
                     n == 'repo/artifacts/变异覆盖台账.md'}
         selected['namespace'] = digest('\n'.join(sorted(files)).encode())
+    elif rel == 'pytest':
+        selected = {n: h for n, h in files.items() if not n.startswith('repo/artifacts/')}
     else:
         return None
     return digest(json.dumps([VERSION, rel, args, context, selected],
@@ -181,13 +180,9 @@ class Receipts:
         valid = bool(old)
         previous = old.get('files', {})
         changed = {p for p in set(previous)|set(self.files) if previous.get(p) != self.files.get(p)}
-        critical = any(p.startswith(('repo/tools/', 'repo/backend/', 'face',
-                                     'repo/.codebuddy/memory/', 'repo/ops/agents/')) or
-                       p in {'repo/.env', 'repo/README.md', 'repo/AGENTS.md'} for p in changed)
         self.external_changed = valid and any(not n.startswith('repo/') for n in changed)
-        structural = set(previous) != set(self.files)
-        self.full = not related or not valid or not git_ok or critical or structural
-        self.reason = ('完整入口' if not related else '新/删件、关键/未知输入、环境或回执变化'
+        self.full = not related or not valid or not git_ok
+        self.reason = ('显式完整入口' if not related else '环境或回执不可复用'
                        if self.full else '输入基点可信；只复用已有通过证明')
         self.invalid = (self.path.exists() and not valid) or old.get('passed') is False or not git_ok
         self.verified = old.get('verified', {}) if valid else {}
@@ -227,7 +222,8 @@ class Receipts:
             self.failed = True
         # 父入口与串行变异子入口共用回执，合并各自确实更新的键，避免覆盖对方证据。
         current = read_receipt(self.path, self.root, self.context)
-        merged = dict(current.get('records', {}))
+        merged = dict(self.records)
+        merged.update(current.get('records', {}))
         for key in self.dirty:
             merged.pop(key, None)
             if key in self.records:
@@ -242,7 +238,7 @@ class Receipts:
         if complete and not self.failed:
             inputs = digest(inputs_path.read_bytes()) if inputs_path.is_file() else ''
         data = {'version': VERSION, 'root': str(self.root.resolve()), 'context': self.context,
-                'files': files, 'records': {} if self.failed else merged,
+                'files': files, 'records': merged,
                 'passed': not self.failed,
                 'verified': {} if self.failed else verified,
                 'verified_shell': '' if self.failed else shell,
@@ -254,7 +250,7 @@ class Receipts:
 
 
 def open_receipts(*, related=False, git_ok=True):
-    """打不开真实输入/运行时即禁用复用；完整检查仍继续，避免坏档成为免检。"""
+    """打不开真实输入/运行时即禁用复用；选定检查仍继续，避免坏档成为免检。"""
     try:
         sys.path.insert(0, str(ROOT/'tools/audit'))
         from audit_common import delivery_root
@@ -262,7 +258,7 @@ def open_receipts(*, related=False, git_ok=True):
         faces = tuple(dict.fromkeys([delivery_root(), PROTO.parent.parent]))
         return Receipts(related=related, faces=faces, git_ok=git_ok)
     except (OSError, ValueError, TypeError) as exc:
-        print('相关核验：输入无法确定，禁用复用、完整重验（'+type(exc).__name__+'）')
+        print('相关核验：输入无法确定，禁用复用、按影响重验（'+type(exc).__name__+'）')
         return None
 
 
@@ -308,11 +304,18 @@ def selftest() -> None:
         stable.save()
         new = root/'new.md'
         new.write_text('new', encoding='utf-8')
-        assert session().full, '新件全跑'
+        assert not session().required(rel, args), '新增说明不使未变化的检查证明失效'
         new.unlink()
         ticket.unlink()
-        assert session().full, '删件全跑'
+        assert not session().required(rel, args), '删除说明不使未变化的检查证明失效'
         ticket.write_text('new', encoding='utf-8')
+        independent = session()
+        independent.record(rel, args, 0)
+        independent.record('unknown.py', [], 1)
+        independent.save(1)
+        assert not session().required(rel, args), '独立失败不使成功项失效'
+        assert session().required('unknown.py', []), '失败项不能复用'
+        assert not session().verified, '局部成功不能伪造整体证明'
         failed = session()
         failed.record(rel, args, 1)
         failed.save()

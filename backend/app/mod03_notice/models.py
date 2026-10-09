@@ -31,7 +31,7 @@ from app.core.db import Base, MONEY
 # 剔除来源（§4.2.2）
 EXCLUDE_NONE = ""                 # 未剔除
 EXCLUDE_BY_RULE = "rule"          # 规则命中自动剔除
-EXCLUDE_BY_MANUAL = "manual"      # 人工批量剔除（**只有这一类可被「恢复剔除」放开**）
+EXCLUDE_BY_MANUAL = "manual"      # 人工批量剔除（⭐ 2026-10-08 用户裁定：**与规则命中的一样**可被「恢复剔除」放开）
 
 
 class PaymentNotice(Base):

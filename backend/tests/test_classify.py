@@ -138,22 +138,31 @@ def test_人工剔除不会被规则结果降级():
 
 
 @acc("ACC-PAY-CAT-001", "001-02")
-def test_恢复剔除只放人工剔除且必须勾选():
+def test_恢复剔除人工与规则命中的都放回且必须勾选():
+    """⭐ 2026-10-08 用户裁定：**规则命中的也恢复**（原先只放人工剔除的）。
+
+    ⚠️ 改这条的理由：旧口径说"要放开只能改规则配置"，而 `mod14_config.rules_api` 明写
+    **改规则不重算历史剔除标记**、再次导入时 `merge.PROTECTED` 又不覆盖这两个字段
+    ⇒ 规则命中的行**没有任何放开出口**。既然那条路走不通，就让「恢复剔除」本身能放开。
+    代价（用户已知）：恢复后重新进统计与付款，再次抓取不会反弹。
+    """
     rows = [
-        {"id": 1, "exclude_source": "manual"},     # 可恢复
-        {"id": 2, "exclude_source": "rule"},       # 规则命中 ⇒ 不恢复
-        {"id": 3, "exclude_source": ""},           # 本就未剔除
+        {"id": 1, "exclude_source": "manual"},     # 人工批量剔除 ⇒ 恢复
+        {"id": 2, "exclude_source": "rule"},       # ⭐ 规则命中 ⇒ **也恢复**（旧口径是不恢复）
+        {"id": 3, "exclude_source": ""},           # 本就未剔除 ⇒ 不动
     ]
     with pytest.raises(MustReportError):
         restore_excluded(rows, [])                 # **不做整表一键放回**
 
     rep = restore_excluded(rows, [1, 2, 3])
-    assert rep.restored == [1]
-    assert rep.kept_by_rule == [2]
-    assert rep.untouched == [3]
-    # **分开回报**（口径要求界面把两类说清）
-    assert "已恢复 1 条人工剔除" in rep.message
-    assert "规则命中" in rep.message and "不恢复" in rep.message
+    assert rep.restored == [1, 2], "人工 ＋ 规则命中的都要放回"
+    assert rep.restored_by_rule == [2], "「其中规则命中的那几条」要单独记一份（回执要分档说清）"
+    assert rep.untouched == [3], "本就未剔除的行不该被算成恢复"
+    assert not hasattr(rep, "kept_by_rule"), "旧字段 `kept_by_rule`（=不恢复）已随口径作废，别留着骗人"
+    # **分开回报**（口径要求界面把两类说清）＋ 把"要长期剔除该改规则"讲明白
+    assert "已恢复 2 条" in rep.message
+    assert "「规则命中」" in rep.message and "一并放回" in rep.message
+    assert "不恢复" not in rep.message, "回执还在说「不恢复」（与实际行为相反 = 界面在说假话）"
 
 
 @acc("ACC-PAY-CAT-001", "001-03")

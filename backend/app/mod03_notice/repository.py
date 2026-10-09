@@ -177,6 +177,10 @@ def get_notices_by_ids(session: Session, ids: list[int]) -> list[PaymentNotice]:
 MANUAL_EDITABLE_FIELDS: tuple[str, ...] = (
     "bill_no", "doc_date", "project_name", "biz_type", "payee",
     "category", "amount_approved", "stat_paid", "ownership_id", "fields",
+    # ⚠️ 2026-10-08 补：审批状态。§4.2.6「手动行**一切信息**都可手动修改」⇒ 它该能改；
+    #    不在白名单里 ⇒ `update_manual_notice` 会**静默跳过**（实测：选了「未批」保存后仍是「已批」）。
+    #    ⛔ 不含 `approve_status` 的后果与它当初压根没这个字段一样：改了不生效、界面不说原因。
+    "approve_status",
 )
 
 

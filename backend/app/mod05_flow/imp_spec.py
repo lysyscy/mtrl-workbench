@@ -44,16 +44,13 @@ FIELDS = tuple(
 
 SPEC = DomainSpec(
     domain=DOMAIN,
-    title="历史付款流水（§4.4.6）",
+    title='历史付款流水',
     fields=FIELDS,
     source_label="NC / 网银导出的历史付款流水台账",
     max_rows=I.MAX_ROWS,
     batch=True,                       # 每次导入记批次号，同批可**整批回滚**后重导（§4.4.6 第四条）
-    note="必须有「**单据号 / 付款金额 / 付款时间**」三列；**金额必须大于 0**、付款时间要认得出来。"
-         "⚠️ 单据号要和本地通知书**精确对上**（对不上的会列进「**未匹配清单**」、**不写入**）——"
-         "对不上最常见的原因是**该月通知书还没抓**。",
-    keep_note="未采（原样保留）：表里其余列。⚠️ 付款方式**可空**（历史台账常常没记 —— 空就存空，"
-              "⛔ 不替你填「现汇」）；填了但归不进四类的 ⇒ 记「其他」并把**原文留在备注**。",
+    note='按单据号匹配已有通知书，可一次导入多个项目。未匹配或金额、日期异常的行不写入。',
+    keep_note='付款方式可留空；无法识别的方式记为「其他」，原文保留在备注。',
 )
 
 #: 与引擎字段名对应的**中文列名**（`_plan_of` 取值用；⛔ 只此一处）
@@ -116,18 +113,18 @@ def _problems(plan: I.ImportPlan, split: I.ImportPlan) -> list[dict]:
 def _blocks(plan: I.ImportPlan) -> list[dict]:
     """域侧补的预览区块（**未匹配 / 异常 / 未识别**三张表 —— 即 §4.4.6 的"必须逐条列出来"）。"""
     return [
-        {"title": "未匹配清单（单据号在本地找不到 —— 多半是该月通知书还没抓）",
+        {"title": '未匹配清单（单据号未找到，不写入）',
          "note": "⚠️ 这些行**不入库**（⛔ 不静默丢弃，也不替它猜一张通知书安上）；"
                  "先抓齐该月通知书，再用同一份文件重导这一批。",
          "columns": ["行", "单据号", "付款金额", "付款时间"],
          "rows": [[u.get("line"), u.get("bill_no"), u.get("amount"), u.get("pay_date")]
                   for u in plan.unmatched],
          "empty": "（无 —— 全部单据号都匹配上了）"},
-        {"title": "异常清单（不入库）",
+        {"title": '异常清单（金额或日期异常，不写入）',
          "columns": ["行", "单据号", "原因"],
          "rows": [[a.get("line"), a.get("bill_no") or "—", a.get("reason")] for a in plan.anomalies],
          "empty": "（无）"},
-        {"title": "未识别的付款方式取值（已归入「其他」、原文进备注）",
+        {"title": '未识别的付款方式取值（按「其他」写入）',
          "columns": ["付款方式（原文）"],
          "rows": [[x] for x in plan.unknown_methods],
          "empty": "（无）"},
@@ -140,16 +137,14 @@ def _report_blocks(report: dict) -> list[dict]:
         return f"{to_money(x):.2f}"
 
     return [
-        {"title": "核对报告 · 漏记清单（该批月份里**一条流水都没有**的通知书）",
-         "note": "⚠️ 供发现 **Excel 漏记** —— 历史欠款能否对平就看它：这些单据要么真的没付、"
-                 "要么这份台账漏记了。",
+        {"title": '漏记清单（尚无付款流水的通知书）',
+         "note": '核对是否确实未付，或 Excel 漏记了付款。',
          "columns": ["单据号", "单据日期", "付款项目", "审批金额"],
          "rows": [[r.get("bill_no"), r.get("doc_date"), r.get("project_name"),
                    money(r.get("amount_approved"))] for r in report.get("rows") or []],
          "empty": "（无 —— 这些月份的每张通知书都有流水了）"},
-        {"title": "超付清单（§4.4.6「核对报告单列」）—— 实付合计 **大于** 审批金额",
-         "note": "⚠️ 流水**照记**（NC 侧确实付了，事实不得篡改）、统计付款金额**照实不封顶**；"
-                 "此处只**如实单列**，与 §4.4.4「付款动作禁止超付」不冲突（那条约束的是动作）。",
+        {"title": '超付清单（实付超过审批金额）',
+         "note": '历史流水按实际金额导入。请核对以下超付单据。',
          "columns": ["单据号", "单据日期", "付款项目", "审批金额", "实付合计", "超出"],
          "rows": [[r.get("bill_no"), r.get("doc_date"), r.get("project_name"),
                    money(r.get("amount_approved")), money(r.get("amount_paid")),

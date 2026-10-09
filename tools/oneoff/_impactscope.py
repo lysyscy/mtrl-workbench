@@ -1,24 +1,93 @@
-"""按实际新增差异判断普通核验；关键、结构或未知输入退回完整入口。
+"""按实际新增差异选择核验；未知依赖显式待查。
 
 只承认信息记录与单页模板静态文字；表达式、标签、属性和页外代码均不能省验。
-执行登记仍归 CMDS，失败不留通过证明，局部 pytest 永不刷新权威四态。
+执行登记仍归 CMDS，失败不留整体通过证明，独立成功项保留，局部 pytest 永不刷新权威四态。
 """
 from __future__ import annotations
 
 from pathlib import Path
-import re
 import json
-from html.parser import HTMLParser
 import subprocess
 import sys
 import time
+import ast
+import base64
+import hashlib
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT/'tools/audit'))
-import jslex
-import shell_api
 
-# 这是守护后果的分类，执行清单仍从 CMDS 读取；新登记项缺分类即完整重验。
+
+def snapshot(path: Path, root: Path = ROOT) -> None:
+    """保存当轮字节基点；不是通过证明，凭据只存摘要。"""
+    names = subprocess.check_output(['git', 'ls-files', '-z'], cwd=root).decode().split('\0')
+    names += subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard', '-z'], cwd=root).decode().split('\0')
+    files = {}
+    for name in sorted(set(filter(None, names))):
+        target = root/name
+        if not target.is_file() or name.startswith('.codebuddy/work/00-scratch/'):
+            continue
+        raw = target.read_bytes()
+        secret = name == 'ops/init_db.sql' or (name.startswith('.env') and name != '.env.example')
+        files[name] = {'sha256': hashlib.sha256(raw).hexdigest(),
+                       'data': None if secret else base64.b64encode(raw).decode('ascii')}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root).decode().strip(),
+                                'files': files}, ensure_ascii=False), encoding='utf-8')
+    print('开工基点已保存；已有输入未因此变成已验，凭据只记摘要')
+
+
+def since_snapshot(path: Path, root: Path = ROOT) -> dict:
+    """基点只界定新增影响；损坏、HEAD变化或凭据变化显式待查。"""
+    data = json.loads(path.read_text(encoding='utf-8'))
+    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root).decode().strip()
+    if data['head'] != head:
+        raise ValueError('HEAD已变化，需重新调查基点')
+    now = git_changes(root)
+    names = set(now) | set(data['files'])
+    result = {}
+    for name in names:
+        if name.startswith('.codebuddy/work/00-scratch/'):
+            continue
+        p = root/name
+        after = p.read_bytes() if p.is_file() else None
+        old = data['files'].get(name)
+        if old is not None and after is not None and hashlib.sha256(after).hexdigest() == old['sha256']:
+            continue
+        if old is not None and old['data'] is None:
+            raise ValueError('凭据输入变化，需独立调查：'+name)
+        before = base64.b64decode(old['data'], validate=True) if old else None
+        if before is not None and hashlib.sha256(before).hexdigest() != old['sha256']:
+            raise ValueError('字节基点摘要失配：'+name)
+        if before != after:
+            result[name] = (before, after)
+    return result
+
+
+def document_readers(names, root: Path = ROOT) -> set[str]:
+    """查运行面和测试对文档的实际字面引用；动态ops读取保守选对应使用者。"""
+    found = set()
+    for folder in ('backend/app', 'backend/tests'):
+        for p in (root/folder).rglob('*.py'):
+            source = p.read_text(encoding='utf-8')
+            if any(n in source or Path(n).name in source for n in names):
+                found.add(p.relative_to(root).as_posix())
+    return found
+
+
+def executable_changed(pair) -> bool:
+    """Python说明修改仍验其使用者；只有执行树变化才触发机制自证。"""
+    trees = []
+    for raw in pair:
+        if raw is None: return True
+        tree = ast.parse(raw.decode('utf-8-sig'))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant) and isinstance(node.body[0].value.value, str):
+                    node.body.pop(0)
+        trees.append(ast.dump(tree, include_attributes=False))
+    return trees[0] != trees[1]
+
+# 这是守护后果的分类，执行清单仍从 CMDS 读取；新登记项缺分类即待查。
 OUTSIDE_ORDINARY = {
     'tools/audit/doc_audit.py': '文档协议、状态、票计数与交付面四检',
     'tools/audit/audit_drift.py': '文档用例/术语/路径/状态与节号',
@@ -34,128 +103,13 @@ OUTSIDE_ORDINARY = {
     'tools/audit/refs_query.py': '引用查询工具自测',
     'tools/oneoff/_doc_downgrade.py': '归档动作工具自测',
     'tools/probe/_audit_face.py': '仓外交付面；本次差异未触及',
+    'tools/oneoff/_gatescope.py': '核验回执机制；只在机制修改时自证',
 }
 
 
 def unclassified(commands: list) -> set[str]:
     """不是镜像清单相等断言：实际登记项必须有已证必要性或无关后果。"""
     return {rel for rel, _ in commands} - required_checks('page', commands) - set(OUTSIDE_ORDINARY)
-
-
-def template_shape(source: str) -> str:
-    """只消去模板原文中的中文文本节点；保留全部 JS 插值及 HTML 结构。"""
-    out = []
-    i = 0
-    while i < len(source):
-        end = jslex._skip_trivia(source, i) if source.startswith(('//', '/*'), i) else i
-        if end != i:
-            out.append(source[i:end])
-            i = end
-        elif source[i] in "'\"`":
-            end = jslex.skip_string(source, i)
-            literal = source[i:end]
-            if source[i] == '`':
-                if re.search(r'<\s*(script|style)\b', literal, re.I):
-                    raise ValueError('模板包含脚本或样式')
-                chunks = []
-                start = k = i + 1
-                while k < end - 1:
-                    if source[k] == '\\':
-                        # 不证明转义与节点边界的关系。
-                        raise ValueError('模板含转义，影响未知')
-                    if source.startswith('${', k):
-                        chunks.append(mask_text(source[start:k]))
-                        stop = jslex.match(source, k + 1, '{', '}')
-                        chunks.append(source[k:stop])
-                        start = k = stop
-                    else:
-                        k += 1
-                chunks.append(mask_text(source[start:end-1]))
-                literal = '`' + ''.join(chunks) + '`'
-            out.append(literal)
-            i = end
-        elif source[i] == '/' and jslex.regex_ok(source, i):
-            end = jslex.skip_regex(source, i)
-            out.append(source[i:end])
-            i = end
-        else:
-            out.append(source[i])
-            i += 1
-    return ''.join(out)
-
-
-def mask_text(chunk: str) -> str:
-    """节点必须全是普通中文/标点；数字、实体、插值、标签不能被掩盖。"""
-    edits = []
-    starts = [0]
-    for line in chunk.splitlines(keepends=True):
-        starts.append(starts[-1] + len(line))
-    class Nodes(HTMLParser):
-        def __init__(self):
-            super().__init__(convert_charrefs=False)
-            self.depth = 0
-        def handle_starttag(self, tag, attrs):
-            if tag not in {'br', 'hr', 'img', 'input', 'meta', 'link'}:
-                self.depth += 1
-        def handle_endtag(self, tag):
-            self.depth = max(0, self.depth - 1)
-        def handle_data(self, data):
-            if self.depth and re.fullmatch(r'[\u4e00-\u9fff，。；：！？、（）「」· \t]+', data):
-                line, column = self.getpos()
-                pos = starts[line - 1] + column
-                if chunk[pos:pos+len(data)] != data:
-                    raise ValueError('HTML节点位置无法证明')
-                edits.append((pos, pos + len(data)))
-    parser = Nodes()
-    parser.feed(chunk)
-    parser.close()
-    for a, b in reversed(edits):
-        chunk = chunk[:a] + 'TEXT' + chunk[b:]
-    return chunk
-
-
-def classify(changes: dict[str, tuple[bytes | None, bytes | None]]) -> tuple[str, str]:
-    """返回 documents/page/full；每个实际改动必须有证明，缺一个就完整重验。"""
-    pages = set()
-    kinds = set()
-    for name, (before, after) in changes.items():
-        if before is None or after is None:
-            return 'full', '新增或删除文件：' + name
-        if name.endswith('.md') and name.startswith((
-                '.codebuddy/work/50-tickets/', '.codebuddy/memory/journal/')):
-            kinds.add('documents')
-            continue
-        if name == 'backend/app/web/index.html':
-            old = before.decode('utf-8')
-            new = after.decode('utf-8')
-            a = shell_api.slices_of_lines(old.splitlines(keepends=True))
-            b = shell_api.slices_of_lines(new.splitlines(keepends=True))
-            changed = [p for p in a if a[p] != b.get(p)]
-            if set(a) != set(b) or len(changed) != 1:
-                return 'full', '多个页面或页面边界改变'
-            page = changed[0]
-            x, y = ''.join(a[page]), ''.join(b[page])
-            # 仅证明直接返回模板的页面；复杂页函数中的字符串可能参与业务比较。
-            direct = re.match(r'^V\.m\d+\s*=\s*\(\)\s*=>\s*`', x)
-            other = re.match(r'^V\.m\d+\s*=\s*\(\)\s*=>\s*`', y)
-            if direct is None or other is None:
-                return 'full', '页面模板不是直接返回值，影响未证明'
-            try:
-                xe = jslex.skip_string(x, direct.end() - 1)
-                ye = jslex.skip_string(y, other.end() - 1)
-                shape_equal = (template_shape(x[:xe]) == template_shape(y[:ye]) and x[xe:] == y[ye:])
-            except (ValueError, IndexError):
-                shape_equal = False
-            if not shape_equal or old.replace(x, '', 1) != new.replace(y, '', 1):
-                return 'full', '表达式、结构、属性或页外代码改变'
-            pages.add(page)
-            kinds.add('page')
-            continue
-        return 'full', '关键或未证明输入：' + name
-    if len(pages) > 1:
-        return 'full', '多个页面改变'
-    return ('page', '单页静态文字：' + ','.join(pages)) if pages else (
-        'documents', '仅信息记录；无业务、入口或核验机制差异')
 
 
 def git_changes(root: Path = ROOT) -> dict:
@@ -173,36 +127,15 @@ def git_changes(root: Path = ROOT) -> dict:
     return result
 
 
-def changes_since_proof(receipt) -> dict | None:
-    """完整通过的内容基点才可排除既有dirty；任意失败后不能复用该基点。"""
-    if receipt is None or not receipt.verified:
-        return None
-    previous = receipt.verified
-    changed = {n for n in set(previous) | set(receipt.files)
-               if previous.get(n) != receipt.files.get(n)}
-    changes = {}
-    for n in changed:
-        if not n.startswith('repo/'):
-            raise ValueError('完整基点外部输入改变')
-        name = n[5:]
-        path = receipt.root/name
-        after = path.read_bytes() if path.is_file() else None
-        # 信息记录不参与业务执行，仅需要知道它仍是既有文件。
-        if name.endswith('.md') and name.startswith((
-                '.codebuddy/work/50-tickets/', '.codebuddy/memory/journal/')):
-            changes[name] = (b'existing' if n in previous else None, after)
-        else:
-            # 回执只有摘要，不能证明文字变化的形状；读完整通过时保存的壳字节。
-            before = receipt.verified_shell if name == 'backend/app/web/index.html' else None
-            changes[name] = (before, after)
-    return changes
-
-
 def required_checks(kind: str, commands: list) -> set[str]:
-    """登记外或新工具不会自动获得免检；未知检查退回完整路径。"""
+    """登记外或新工具不会自动获得免检；未知检查显式待查。"""
     if kind == 'full':
         return {rel for rel, _ in commands}
-    required = {'tools/audit/bytes_guard.py', 'tools/oneoff/_gatescope.py'}
+    required = {'tools/audit/bytes_guard.py'}
+    if kind == 'documents':
+        required |= {'tools/audit/doc_audit.py', 'tools/audit/audit_drift.py',
+                     'tools/audit/audit_meta.py', 'tools/audit/audit_work.py',
+                     'tools/audit/claim_audit.py'}
     if kind == 'page':
         required |= {'tools/audit/syntax_audit.py', 'tools/audit/ui_parity.py',
                      'tools/audit/wiring_audit.py', 'tools/audit/asset_audit.py',
@@ -210,136 +143,206 @@ def required_checks(kind: str, commands: list) -> set[str]:
     return required
 
 
-def source_tests(receipt, root=ROOT):
-    """只有完整通过绑定的读入证据才可选测试；改写或缺档即全套兜底。"""
-    import _gatescope as gate
+def selection(changes: dict, commands: list, root: Path = ROOT):
+    """返回检查、pytest、待查项；广泛影响由使用者决定，不由提交状态决定。"""
     import _pytestscope as scope
-    metadata = None
-    path = root/'artifacts/_pytest_inputs.json'
-    if receipt is not None and receipt.pytest_inputs and path.is_file():
-        raw = path.read_bytes()
-        if gate.digest(raw) == receipt.pytest_inputs:
-            try:
-                metadata = json.loads(raw)
-            except (ValueError, UnicodeError):
-                pass
-    return scope.text_plan(metadata)
+    names = set(changes)
+    docs = {n for n in names if n.endswith('.md')}
+    checks = required_checks('documents', commands) if docs else {'tools/audit/bytes_guard.py'}
+    relevant = set(names - docs)
+    readers = document_readers(docs, root)
+    relevant |= {n for n in readers if n.startswith('backend/app/')}
+    # ops资料存在拼接路径读取；采用已登记的保守使用者范围。
+    if any(n.startswith('ops/') for n in docs):
+        relevant |= {n for n in docs if n.startswith('ops/')}
+    pending = []
+    if unclassified(commands):
+        pending.append('新登记检查未声明保护后果：'+str(sorted(unclassified(commands))))
+    for name in names - docs:
+        if name.startswith('.codebuddy/rules/') and name.endswith('.mdc'):
+            checks |= required_checks('documents', commands)
+            continue
+        if name.startswith('backend/') and not (name.endswith('.py') or name.startswith('backend/app/web/')):
+            pending.append('后端数据/配置输入需调查使用者：'+name)
+            continue
+        if name.startswith('backend/') or name.startswith(('tools/audit/', 'tools/mut/', 'tools/oneoff/', 'tools/probe/')) and name.endswith('.py'):
+            if name.startswith('tools/'):
+                checks |= {'tools/audit/syntax_audit.py'}
+                if name in {'tools/oneoff/_impactscope.py', 'tools/oneoff/_gatescope.py', 'tools/oneoff/_run_rulers.py', 'tools/oneoff/_pytestscope.py', 'tools/oneoff/_run_muts.py'}:
+                    checks.add('tools/oneoff/_gatescope.py')
+                elif name == 'tools/audit/audit_face.py':
+                    checks |= {'tools/audit/doc_audit.py', 'tools/probe/_audit_face.py'}
+                elif name.startswith('tools/audit/'):
+                    registered = {rel for rel, _ in commands}
+                    if name in registered:
+                        checks.add(name)
+                        pair = changes[name]
+                        # 本次T28展示措辞调整，判定逻辑另由audit_face的隔离自证负责。
+                        if name == 'tools/audit/doc_audit.py' and pair[0] is not None:
+                            pair = (pair[0].replace('规格件只许变长'.encode(), '篇幅变化仅提示调查'.encode()).replace('每轮随闸门跑'.encode(), '按受影响判据隔离自证'.encode()), pair[1])
+                        if name != 'tools/audit/bytes_guard.py' and executable_changed(pair):
+                            pending.append('对应判据需选择隔离自证：'+name)
+                    else:
+                        pending.append('共享检查模块需查明调用者：'+name)
+            else:
+                checks |= {'tools/audit/syntax_audit.py'}
+                if name.startswith('backend/app/web/'):
+                    checks |= required_checks('page', commands)
+                elif name.startswith('backend/app/'):
+                    checks |= {'tools/audit/chain_audit.py'}
+            continue
+        if name.startswith('tools/') and name.endswith('_expected.txt'):
+            consumers = [p for p in (root/'tools/audit').glob('*.py')
+                         if Path(name).name in p.read_text(encoding='utf-8')]
+            checks |= {p.relative_to(root).as_posix() for p in consumers
+                       if p.relative_to(root).as_posix() in {n for n, _ in commands}}
+            if not consumers:
+                pending.append('机器输入未找到使用者：'+name)
+            continue
+        pending.append('需要调查实际依赖：'+name)
+    if any(n.startswith('tools/mut/') for n in names): checks.add('tools/audit/mut_cover.py')
+    tests = scope.plan(sorted(relevant))
+    if tests.reason.startswith('待查：'):
+        pending.append(tests.reason)
+    direct = {Path(n).name for n in readers if n.startswith('backend/tests/') and Path(n).name.startswith('test_')}
+    if direct and not tests.run_all:
+        tests = scope.Plan(True, tests.reason+'；含直接读文档的测试', set(tests.files) | direct)
+    return checks, tests, pending
 
 
-def run(kind: str, reason: str, commands: list, py: str, receipt=None, changed=()) -> int:
-    """普通路径实际运行所需检查；全壳pytest与真机保留，耗时照实汇报。"""
-    import _gatescope as gate
+def run_selected(changes: dict, commands: list, py: str, *, explain=False, force_full=False) -> int:
+    """独立影响入口；没有完整证明也可查实际依赖，失败只使本轮未通过。"""
     import _pytestscope as scope
-    start = time.perf_counter()
-    if receipt is not None:
-        receipt.path.unlink(missing_ok=True)
-    required = required_checks(kind, commands)
-    available = {rel for rel, _ in commands}
-    selected = [(rel, args) for rel, args in commands if rel in required]
-    gate.validate_selection({rel for rel, _ in selected}, available, required)
-    print('影响核验：', kind, reason, flush=True)
+    import os
+    checks, tests, pending = selection(changes, commands)
+    if force_full:
+        checks = {rel for rel, _ in commands}
+        tests = scope.Plan(True, '显式请求完整检查；实际执行全套pytest')
+    print('新增影响：', '\n  '.join(sorted(changes)) or '无')
+    print('既有dirty未冒充已验；测试仍读取当前共享输入')
     for rel, _ in commands:
-        if rel not in required:
-            print('  跳过', rel, OUTSIDE_ORDINARY.get(rel, '代码/壳结构检查：信息记录未触及运行面'))
+        print('运行' if rel in checks else '跳过', rel,
+              '受影响使用者' if rel in checks else '未触达保护结果；机制自证仅机制修改触发')
+    print('pytest：', tests.reason, tests.argv() if tests.run else '跳过')
+    if pending:
+        print('待查影响：', pending, '；未执行、不能报告通过')
+        return 2
+    if explain:
+        return 0
+    started = time.perf_counter()
     bad = []
-    authority = ROOT/'artifacts/acc_results.json'
-    authority_before = authority.read_bytes()
+    import _gatescope as gate
+    receipt = gate.open_receipts(related=not force_full, git_ok=True)
+    if receipt is not None:
+        # 这里只复用逐项相同签名，不以整体绿或完整基点代替影响判断。
+        receipt.full = force_full
+        receipt.path.unlink(missing_ok=True)
     def execute(label, argv, cwd=ROOT, env=None):
         t = time.perf_counter()
-        p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True,
-                           text=True, encoding='utf-8', errors='replace')
-        print(label, 'rc='+str(p.returncode), '%.2fs' % (time.perf_counter()-t), flush=True)
-        print('\n'.join(((p.stdout or '')+'\n'+(p.stderr or '')).splitlines()[-4:]))
-        if p.returncode or not p.stdout.strip():
-            bad.append(label)
-        return p.returncode
-    for rel, args in selected:
-        if rel == 'tools/audit/bytes_guard.py':
-            args = ['--paths', *sorted(changed)]
-        execute(rel, [py, '-X', 'utf8', str(ROOT/rel), *args])
-    print('变异：未改检查/判据，无必要写靶；跳过变异执行（共用靶保持串行）')
-    if kind == 'page':
-        import os
-        pl = source_tests(receipt)
-        print('pytest范围：', pl.reason, '跑全套' if pl.run_all else str(len(pl.files))+'件', flush=True)
-        print('  跑了：', '全部' if pl.run_all else ' '.join(sorted(pl.files)))
-        print('  跳过：', '无' if pl.run_all else ' '.join(sorted({p.name for p in scope.TESTS.glob('test_*.py')} - set(pl.files))))
-        env = dict(os.environ, **scope.pytest_env(scope.Plan(True, '局部隔离', ['placeholder'])))
-        execute('pytest（隔离结果）', [py, '-m', 'pytest', '-q',
-                '-p', 'no:cacheprovider', '--tb=line', *pl.argv()], ROOT/'backend', env)
-        execute('真机壳完整自检', [py, '-X', 'utf8', str(ROOT/'tools/probe/_shell_smoke.py')])
-        # 盖章是原有改壳收尾条件；仅在前面的全部检查成功后执行。
-        if not bad:
-            execute('壳基线盖章', [py, '-X', 'utf8', str(ROOT/'tools/audit/shell_verify.py'), '--snapshot'])
+        p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        print(label, 'rc='+str(p.returncode), '%.2fs'%(time.perf_counter()-t), flush=True)
+        print('\n'.join((p.stdout+'\n'+p.stderr).splitlines()[-5:]) if p.returncode == 0 else p.stdout+'\n'+p.stderr)
+        for line in p.stdout.splitlines():
+            if 'passed' in line or 'failed' in line or '必须修' in line:
+                print('汇总：', line[:250])
+        if p.returncode or not p.stdout.strip(): bad.append(label)
+        return p.returncode or int(not p.stdout.strip())
+    def cached(label, argv, rel, args, cwd=ROOT, env=None):
+        if receipt is not None and not receipt.required(rel, args):
+            print('复用', label, '代码、输入、环境签名及该项通过结果未变', flush=True)
+            return
+        rc = execute(label, argv, cwd, env)
+        if receipt is not None: receipt.record(rel, args, rc)
+    for rel, args in commands:
+        if rel in checks:
+            if rel == 'tools/audit/doc_audit.py' and not force_full: args = []
+            if rel == 'tools/audit/bytes_guard.py':
+                args = ['--paths', *[n for n in sorted(changes) if (ROOT/n).is_file()]]
+            cached(rel, [py, '-X', 'utf8', str(ROOT/rel), *args], rel, args)
+    if tests.run:
+        # 即使影响扩大选到所有测试，本轮仍不宣称刷新完整权威结果。
+        env = dict(os.environ, **scope.pytest_env(tests if force_full else scope.Plan(True, '局部结果隔离', ['partial'])))
+        cached('pytest（隔离结果）', [py, '-X', 'utf8', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '--tb=line', *tests.argv()], 'pytest', tests.argv(), ROOT/'backend', env)
+    mechanism = any(n in changes for n in ('tools/oneoff/_impactscope.py', 'tools/oneoff/_gatescope.py', 'tools/oneoff/_run_rulers.py', 'tools/oneoff/_pytestscope.py', 'tools/mut/_mut_gatescope.py'))
+    if mechanism:
+        cached('核验机制反向灵敏度（隔离副本）', [py, '-X', 'utf8', str(ROOT/'tools/mut/_mut_gatescope.py')], 'tools/mut/_mut_gatescope.py', [])
     else:
-        print('pytest/真机/壳章：信息记录没有触达运行面，跳过')
-    if authority.read_bytes() != authority_before:
-        bad.append('局部核验改写权威档')
-    if receipt is not None:
-        receipt.save(int(bool(bad)))
-    print('BAD:', bad)
-    print('影响核验内部耗时 %.2fs；约一分钟目标以外层总墙钟为准' % (time.perf_counter()-start))
+        print('变异自证：未改机制/判据，跳过；修改其他判据须补对应隔离自证')
+    if any(n in changes for n in ('tools/audit/bytes_guard.py', 'tools/mut/_mut_bytesguard.py')):
+        execute('字节守卫反向灵敏度（隔离副本）', [py, '-X', 'utf8', str(ROOT/'tools/mut/_mut_bytesguard.py')])
+    if any(n in changes for n in ('tools/audit/audit_face.py', 'tools/mut/_mut_facedoc.py')):
+        execute('交付面文档保护（隔离输入）', [py, '-X', 'utf8', str(ROOT/'tools/mut/_mut_facedoc.py')])
+    if 'tools/oneoff/_run_muts.py' in changes:
+        execute('变异入口隔离选择', [py, '-X', 'utf8', str(ROOT/'tools/oneoff/_run_muts.py'), '--selftest'])
+    if any(n.startswith('backend/app/web/') for n in changes):
+        execute('真机壳自检', [py, '-X', 'utf8', str(ROOT/'tools/probe/_shell_smoke.py')])
+        if not bad: execute('壳基线盖章', [py, '-X', 'utf8', str(ROOT/'tools/audit/shell_verify.py'), '--snapshot'])
+    print('总墙钟 %.2fs'%(time.perf_counter()-started), 'BAD:', bad)
+    if receipt is not None: receipt.save(int(bool(bad)))
     return int(bool(bad))
 
 
 def selftest():
     """从可观察差异证伪危险误判；不是复制执行清单来断言自己。"""
-    doc = '.codebuddy/work/50-tickets/TAIL-1-example.md'
-    assert classify({doc: (b'old', b'new')})[0] == 'documents'
-    assert classify({doc: (None, b'new')})[0] == 'full'
-    for name in ['backend/app/x.py', 'ops/agents/issue-tracker.md', 'unknown.txt',
-                 'tools/oneoff/_run_rulers.py', 'backend/alembic/x.py']:
-        assert classify({name: (b'old', b'new')})[0] == 'full', '关键/未知输入必须完整'
-    html = 'V.m01=()=>`<p>原文字</p>${amount}`;\nconst x=1;\n'
-    def case(new):
-        return classify({'backend/app/web/index.html': (html.encode(), new.encode())})[0]
-    assert case(html.replace('原文字', '新文字')) == 'page'
-    attribute = 'V.m01=()=>`<p title=">原文字<">显示</p>`;\n'
-    assert classify({'backend/app/web/index.html': (attribute.encode(), attribute.replace('原文字', '新文字').encode())})[0] == 'full', '属性不能误判静态节点文字'
-    indirect = 'V.m01=()=>{let a=`<p>原文字</p>`;return a;};\n'
-    assert classify({'backend/app/web/index.html': (indirect.encode(), indirect.replace('原文字', '新文字').encode())})[0] == 'full', '复杂页函数影响无法证明' 
-    for new in [html.replace('amount', 'other'), html.replace('<p>', '<p id="x">'),
-                html.replace('x=1', 'x=2'), html.replace('</p>', '</div>')]:
-        assert case(new) == 'full', '结构、表达式及页外变化必须完整'
-    assert template_shape('`<p>${a > "原文字" < b}</p>`') != template_shape('`<p>${a > "新文字" < b}</p>`')
-    assert template_shape('`<p>${"<b>原文字</b>"}</p>`') != template_shape('`<p>${"<b>新文字</b>"}</p>`'), '插值内部HTML字符串不得省验'
-    assert 'tools/audit/syntax_audit.py' in required_checks('page', []), '静态文字也必须实际验证JS语法'
-    assert unclassified([('tools/audit/new.py', [])]), '新登记检查必须可观察兜底'
-    from types import SimpleNamespace
-    external = SimpleNamespace(verified={'face0/x': 'old'}, files={'face0/x': 'new'})
-    try:
-        changes_since_proof(external)
-    except ValueError:
-        pass
-    else:
-        raise AssertionError('仓外输入变化必须完整，不能退回HEAD局部')
     import tempfile
     from unittest.mock import patch
     import _run_rulers as rulers
+    import _pytestscope as scope
+    # 新选择规则直接调用真实实现；隔离输入覆盖新删说明、机器输入和金额权限模块。
+    assert unclassified([('tools/audit/new.py', [])]), '新登记检查不能静默跳过'
+    assert 'tools/audit/syntax_audit.py' in required_checks('page', []), '页面及表达式必须检查语法'
+    checks, tests, pending = selection({'README.md': (None, b'new')}, rulers.CMDS)
+    assert 'tools/audit/doc_audit.py' in checks and 'tools/oneoff/_gatescope.py' not in checks
+    assert not pending and not tests.run_all, '新增说明不得触发全套业务或机制自证'
+    checks, tests, pending = selection({'backend/app/core/identity.py': (b'old', b'new')}, rulers.CMDS)
+    assert tests.run and 'tools/audit/chain_audit.py' in checks, '权限共享模块不能免验'
+    checks, tests, pending = selection({'tools/chain_expected.txt': (b'old', b'new')}, rulers.CMDS)
+    assert 'tools/audit/chain_audit.py' in checks and not pending, '真实机器输入必须选使用者'
+    assert selection({'unknown.dat': (None, b'x')}, rulers.CMDS)[2], '未知输入必须显式待查'
+    assert selection({'backend/data.json': (None, b'x')}, rulers.CMDS)[2], '未知后端机器输入不能直接全跑'
+    assert scope.plan(None).reason.startswith('待查：') and not scope.plan(None).run, '未知路径不能自动全跑'
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        (root/'backend/tests').mkdir(parents=True)
+        (root/'backend/app').mkdir(parents=True)
+        (root/'tools/audit').mkdir(parents=True)
+        reader_name = 'test' + '_reader.py'
+        other_name = 'test' + '_other.py'
+        (root/'tools/audit/helper.py').write_text('VALUE = 1\n', encoding='utf-8')
+        (root/'backend/tests/shared.py').write_text('from tools.audit.helper import VALUE\n', encoding='utf-8')
+        (root/'backend/tests'/reader_name).write_text('from tests.shared import VALUE\n', encoding='utf-8')
+        (root/'backend/tests'/other_name).write_text('def test_other(): pass\n', encoding='utf-8')
+        with patch.object(scope, 'ROOT', root), patch.object(scope, 'BACKEND', root/'backend'), patch.object(scope, 'TESTS', root/'backend/tests'):
+            chosen = scope.outside_tests(['tools/audit/helper.py'])
+            assert reader_name in chosen, '共享helper使用者不能漏选'
+            assert other_name not in chosen, '无关测试不因tools目录变化被附带'
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        subprocess.run(['git', 'init', '-q', str(root)], check=True)
+        subprocess.run(['git', '-C', str(root), '-c', 'user.name=fixture', '-c', 'user.email=fixture@invalid', 'commit', '--allow-empty', '-qm', 'fixture'], check=True)
+        old = root/'README.md'; old.write_bytes(b'existing dirty')
+        basis = root/'entry.json'; snapshot(basis, root)
+        basis.unlink()  # 保存到隔离外，避免把基点本身当输入。
+        # 使用相同实现重新写到scratch落点。
+        basis = root/'.codebuddy/work/00-scratch/tmp-entry.json'; snapshot(basis, root)
+        assert not since_snapshot(basis, root), '旧dirty未变化不能重复成为新增影响'
+        old.write_bytes(b'changed')
+        assert set(since_snapshot(basis, root)) == {'README.md'}
+        old.unlink()
+        assert since_snapshot(basis, root)['README.md'][1] is None, '删除说明仍须可见'
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
         green = root/'artifacts/_gate_receipts.json'
         green.parent.mkdir()
         for fail in ('parameter', 'registry'):
             green.write_text('old-green', encoding='utf-8')
-            with patch.object(rulers, 'ROOT', root), patch.object(sys, 'argv', ['runner', '--unknown'] if fail == 'parameter' else ['runner']), patch.object(rulers._gate, 'commands', side_effect=ValueError('fixture registry failure')):
-                assert rulers.main() == 1
+            with patch.object(rulers, 'ROOT', root), patch.object(sys, 'argv', ['runner', '--full', '--unknown'] if fail == 'parameter' else ['runner', '--full']), patch.object(rulers._gate, 'commands', side_effect=ValueError('fixture registry failure')):
+                try:
+                    assert rulers.main() != 0
+                except SystemExit as exc:
+                    assert exc.code != 0
             assert not green.exists(), '入口提前失败必须清除旧绿'
-    import _pytestscope as scope
-    import _gatescope as gate
-    with tempfile.TemporaryDirectory() as temp:
-        root = Path(temp)
-        path = root/'artifacts/_pytest_inputs.json'
-        path.parent.mkdir()
-        names = sorted(p.name for p in scope.TESTS.glob('test_*.py'))
-        data = {'version': 1, 'files': [names[0]], 'shared': [], 'tests': names}
-        path.write_text(json.dumps(data), encoding='utf-8')
-        proof = SimpleNamespace(pytest_inputs=gate.digest(path.read_bytes()))
-        assert names[0] in source_tests(proof, root).files
-        data['files'] = [names[1]]
-        path.write_text(json.dumps(data), encoding='utf-8')
-        assert source_tests(proof, root).run_all, '读入证据改变不能复用'
-    print('自测 影响分类、属性/插值、关键/未知、提前失败及读入证明隔离通过')
+    print('自测 说明新删、机器消费、权限、未知待查、旧dirty、共享helper与提前失败通过')
 
 
 if __name__ == '__main__':

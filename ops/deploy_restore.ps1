@@ -2,7 +2,7 @@
   ops/deploy_restore.ps1 —— **在目标机（办公室电脑）一把落**（M8 · `TAIL-188`）
 
   配合 `ops/pack.ps1`：本机产包 ⇒ 整个目录拷过来 ⇒ 在本脚本里跑一次。
-  ⭐ **"落地成功"才算 `M8` ②「恢复演练成功一次」**（本机自己那遍⛔ 不算 —— 机器不同 ≠ 环境相同）。
+  安装与 selfcheck 只证明安装层；真实备份恢复须在隔离空库还原并核对数据，完成标准回 ops/deployment.md §三。
 
   落地七步（每步都打印做了什么，⛔ 不静默）：
     0) 校 `SHA256SUMS.txt`（包在拷的过程中损坏 ⇒ 当场发现）
@@ -11,14 +11,16 @@
     2b) ⭐ **交付面快照**（⭐ 2026-09-30 用户指示 · 包里**只带 2 件**：`face\材料科业务全流程说明书.md`
         ＋ `face\PRD\验收\验收基线.json`）—— 本步**只报"怎么用"**：⛔ 不动任何交付面文件、⛔ 不写 `.env`
         （守 `TAIL-88`）；要跑验收面那套尺子就把 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 指过去
-        （⚠️ **云那份仍是真源**：云同步到了就用云那份，要离线跑才指包内那份）
+        （完整现行交付面需显式复制/配置，主人回 ops/deployment.md §四；包内两件仅作快照对照）
     3) `venv` ＋ 依赖（目标机已有环境 ⇒ 只会补缺）
-    4) `.env`：**只检查、不写**（真口令不进包 —— 守 `TAIL-88`）⇒ 缺哪几个键就列出来
-    5) 库：`-Mode empty`（建库＋迁移 ⇒ 干净可用）／ `-Mode asis`（灌包里那份现状 dump）
+    4) `.env`：只查文件存在、不检查键、不写；缺失仍继续，执行前须另核配置完整性
+    5) 库：`-Mode empty`（建库＋迁移）／ `-Mode asis`（包内dump覆盖同名对象；不是服务故障的默认修复）
     6) 服务：调既有的 `ops\nssm_install.ps1`（幂等）
     7) 探活 ＋ 跑 `ops\selfcheck.ps1`
 
-  用法（目标机 · **管理员**窗口）：
+  前提与权限先读 ops/deployment.md §〇：缺.env仍继续、子进程退出码未统一拦截；末尾输出不是成功回执。
+  DryRun跳过Run内子进程及部分写入，新仓分支仍可创建父目录，不能视为全程只读。
+  用法（已确认目标机/包/数据权限 · **管理员**窗口）：
     powershell -ExecutionPolicy Bypass -File ops\deploy_restore.ps1 -Pack D:\deliver\mtrl-20260929
     powershell -ExecutionPolicy Bypass -File ops\deploy_restore.ps1 -Pack <目录> -Mode asis
     powershell -ExecutionPolicy Bypass -File ops\deploy_restore.ps1 -Pack <目录> -DryRun
@@ -113,23 +115,23 @@ foreach ($rel in @('.codebuddy\memory', 'ops\nssm', 'artifacts', '.codebuddy\bac
 }
 
 # ---- 2b) 交付面快照（⭐ 2026-09-30 用户指示 · 包里只带那 2 件 · 本步⛔ 不写任何文件）----
-#  为什么只报不用：① 交付面是 **WPS 云同步树** ⇒ 目标机**多半本来就有**（2026-09-30 订正）；
+#  完整现行交付面须显式复制/配置，位置回 ops/deployment.md §四，不假设WPS同步；
 #    ② `.env` 里真口令/真路径**一律不替用户写**（本脚本第 4 步的口径）⇒ 这里只把"该填什么"打出来。
 Step '2b) 交付面快照（《说明书》＋ 验收基线 · 包里只带这 2 件）'
 $faceSnap = Join-Path $Pack 'face'
 if (-not (Test-Path -LiteralPath $faceSnap)) {
-    Say '   ⚠️ 包里没有 face\（产包时用了 -SkipFace，或交付面缺件）⇒ 只能靠 WPS 云同步那份'
-    Say '      ⚠️ 后果：云没同步到 ⇒ 四态报表（acc_report）与 doc_audit --ui 跑不了'
+    Say '   ⚠️ 包里没有 face\（产包时用了 -SkipFace，或交付面缺件）⇒ 核对并配置完整现行交付面（见 ops\deployment.md §四）'
+    Say '      ⚠️ 后果：完整交付面未配齐 ⇒ 相关验收无法据完整输入执行'
 } else {
     $snapList = @(Get-ChildItem -LiteralPath $faceSnap -Recurse -File | ForEach-Object { $_.FullName.Substring($faceSnap.Length + 1) })
     Say ('   ✓ 包内快照：' + ($snapList -join ' · '))
     Say '   ⭐ 两种用法（挑一种写进**仓根 `.env`**）：'
-    Say '      ① **云同步到了**（推荐 · 云那份是真源）⇒ PRD_ACCEPTANCE_BASELINE=<交付面根>\PRD\验收\验收基线.json'
-    Say ('      ② **要离线跑**（云没同步）⇒ PRD_ACCEPTANCE_BASELINE=' + (Join-Path $faceSnap 'PRD\验收\验收基线.json'))
+    Say '      ① **完整现行交付面已配置** ⇒ PRD_ACCEPTANCE_BASELINE=<交付面根>\PRD\验收\验收基线.json'
+    Say ('      ② **包内快照仅作历史对照**（不替代完整交付面）⇒ PRD_ACCEPTANCE_BASELINE=' + (Join-Path $faceSnap 'PRD\验收\验收基线.json'))
     Say '      ⚠️ 改完 `.env` 要**重启后端**（它没有 --reload）；该键的读取方 = `doc_audit` / `_audit_face.py` / `acc_report`'
     # ⭐ `-WriteBaseline`（2026-09-30 补 · 用户指示③「.env 的 PRD_ACCEPTANCE_BASELINE 默认指包内」）：
     #    默认**只报不写**（守 `A6`：真 `.env` 不进包 / 脚本不替你写）；给了开关才动 ⇒ **只改那一行**，
-    #    且**写前先备份** `.env`（⇐ 万一那台机器上已经配了云那份，还能回头）。
+    #    且**写前先备份** `.env`（现有配置可恢复；包内快照不自动成为完整现行真源）。
     if ($WriteBaseline) {
         $blFile = Join-Path $RepoRoot '.env'
         $blVal  = Join-Path $faceSnap 'PRD\验收\验收基线.json'
@@ -198,15 +200,15 @@ $envFile = Join-Path $RepoRoot '.env'   # ⚠️ 在**仓根**（不是 backend/
 if (Test-Path $envFile) {
     Say ('   ✓ 已有 ' + $envFile + '（⚠️ 逐项核：i8 账号 / 库口令 / ALLOWED_IP_CIDRS 是本机的还是目标机的）')
 } else {
-    Say '   ⛔ 缺**仓根** `.env` ⇒ **停在这里之前请先补**（键名与取值见 ops\deployment.md §二）'
-    Say '      （若目标机旧的那半开发留过 .env，直接用它的；没有就按 ops\init_db.sql 里的账号口令写）'
+    Say '   ⛔ 缺**仓根** `.env` ⇒ **实际脚本仍继续，执行前须先补齐**（键名与取值见 ops\deployment.md §二）'
+    Say '      （按已确认目标机与角色配置；勿照抄旧机实值，见 ops\deployment.md §二）'
 }
 
 # ---- 5) 库 ----
 Step ('5) 库 · ' + $Mode)
 $psql = Join-Path $PgBin 'psql.exe'
 if ($Mode -eq 'empty') {
-    Say '   · 建库＋角色：ops\init_db.sql（⚠️ 先把里面的 <PASSWORD> 换成目标机口令，并同步写进 backend\.env）'
+    Say '   · 建库＋角色：ops\init_db.sql（⚠️ 先把里面的 <PASSWORD> 换成目标机口令，并同步写进仓根 .env）'
     $null = Run $psql @('-U', 'postgres', '-f', (Join-Path $RepoRoot 'ops\init_db.sql')) $RepoRoot
     Say '   · 建表：alembic upgrade head'
     $null = Run (Join-Path $venv 'Scripts\python.exe') @('-m', 'alembic', 'upgrade', 'head') (Join-Path $RepoRoot 'backend')
@@ -232,6 +234,7 @@ if (Test-Path $check) { $null = Run 'powershell' @('-ExecutionPolicy', 'Bypass',
 else { Say '   ⚠️ 没有 ops\selfcheck.ps1 ⇒ 请手工打开 http://127.0.0.1:8000/app 看一眼' }
 
 Say ''
-Say '=== 落地流程走完 ==='
-Say '⭐ 通关判据（`M8` ②）＝ selfcheck 全 ✅ ⇒ 然后进 `M8` ①：在「数据导入」页走四个初始化入口各一小段。'
+Say '=== 已到流程末尾（不作成功证明） ==='
+Say '⚠️ 流程末尾不等于成功：本脚本未统一拦截子进程失败；须核对各步退出码和selfcheck实际结果。'
+Say '⭐ 安装层自检与真实备份恢复分别核验；恢复到隔离空库并核对数据才证明可恢复，见 ops\deployment.md §三。'
 Say '⚠️ 出问题先看：ops\server_ctl.ps1 log（服务日志）· ops\server_ctl.ps1 port（8000 被谁占）· ops\server_ctl.ps1 pg（PG 服务）'

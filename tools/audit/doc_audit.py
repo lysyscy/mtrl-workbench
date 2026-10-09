@@ -37,7 +37,7 @@
 | `T25` | ⭐ **`.gitignore` 里的落点路径必须真存在**（2026-10-05 `TAIL-236` 同批修 ①b/③）—— `.gitignore` 反引号里的**仓库内目录落点**（含 `/` · 以 `TOP_DIRS` 前缀开头 · 不含模式字符）盘上核不到 ⇒ **红**。⭐ 治的是"照一份**没被核过**的落点找路 ⇒ 找到不存在的目录"（当天真实事故）；⚠️ `T3` 拦不住这一类（它只认**带后缀**的引用，而落点多是**目录**） | 仓根 `.gitignore` ＋ `audit_drift.check_gitignore_drops`（豁免沿用 `T3_OLD_PATH_HINTS`） |
 | `T26` | ⭐ **「结论已落地」⇒ 该降档**（2026-10-05 `TAIL-236` 第 3 批 · **黄 · 只报不动**）—— `work/10-designs/` · `work/30-troubleshooting/` 里处在「**已定稿 / 已实施**」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在** ⇒ 报黄「该降档」＋ 落地位置（＝**口径主人**）＋ 同批改那串（**去向**看 `.codebuddy/work/README.md` §二 本区那一行）。⛔「零机器引用」**不是判据**（只是信号）。⭐ 治的是 `work/README.md` §二「用完就丢」**只有规矩、没有机器眼** | `audit_work.check_downgrade_candidates` ＋ `work/README.md` §四（**声明行写法**的唯一主人）＋ `audit_meta.TICKET_CLOSED`（销号定义）＋ `ops/阈值表.md` |
 | `T27` | ⭐ **交付面「页脚之后不许有内容」**（2026-10-06 `TAIL-234`）—— ⛔ `T1`–`T26` 没一层能看见"内容掉到落款后面"（当天实测：`MOD-14.md` 两条 `ACC-*` 验收条目就在页脚**下面**，而用例号 / 路径都是真的 ⇒ 只是**位置错了**）。⚠️ **归档目录按实测排除**（6 处全在 `.workbuddy/归档-audit/` 下 ⇒ 那是留痕、不是缺陷） | `audit_face.check_footer_tail` ＋ `audit_common.FOOTER_MARKER` / `FOOTER_SCAN_GLOB` / `FOOTER_EXCLUDE_PARTS` |
-| `T28` | ⭐ **交付面 `PRD/` 规格件「只许变长」＋ 编号表只许变多**（2026-10-06 `TAIL-234`）—— 治 **WPS 云同步整体盖回历史快照**（本机至少两次）。⚠️ **形态必须是「相对基线 · 只许变长」**：⛔ 绝对行数会让每一次正常增删都报红。⭐ 实测退化件**多数等长**（24 件里只 2 件变短）⇒ 另钉一个**机械可算、抗改词**的锚点（编号表最大行号）；新件未登记基线 ⇒ **黄** | `audit_face.check_prd_baseline` ＋ `audit_face.PRD_DOC_BASELINE`（**唯一真源** · `--stamp` 重录）＋ `audit_common.PRD_DOC_GLOB` |
+| `T28` | 交付面篇幅变短提示调查；能力编号损失或缺件仍报红。篇幅不能证明业务丢失，不阻挡已授权精简 | audit_face.check_prd_baseline ＋ audit_face.PRD_DOC_BASELINE |
 
 > ⭐ **`T8` 是"如何永久记住某功能已取消"的答案**：撤项登记进 `audit_common.CANCELLED`，
 > 每次跑 `doc_audit` 都扫**代码面**（`clean=True` 复活报红 / `clean=False` 还有残骸报黄）。
@@ -406,7 +406,7 @@ def main() -> int:
     # —— 否则闸门里那条判据**跑过但看不见**（本仓"判据存在 ≠ 被看见"那族）。
     if not any(h["code"] == "T23" for h in raw):
         print("活机器口径 `T23` 结论：%d 条 glob · 六路齐全 ✅"
-              "（少一路 / 空命中 / 接线掉 ⇒ 报红；反向灵敏度 `_mut_livemachine` 每轮随闸门跑）"
+              "（少一路 / 空命中 / 接线掉 ⇒ 报红；反向灵敏度 `_mut_livemachine` 按受影响判据隔离自证）"
               % len(LIVE_MACHINE_GLOBS))
         print()
     # ⭐ `T24`/`T25` **同样"常态报一句"**（与 `T23` 同一条理由）：落点守卫是"没消息就是好消息"型
@@ -429,7 +429,7 @@ def main() -> int:
     #   而这一对**比前几条更需要有**：它们扫的是**交付面**，人肉翻不到。
     #   ⚠️ 这一句的**内容由 `audit_face.summary()` 出**（⛔ 别在两处各数一遍件数 —— 那正是"同一件事两处写"）。
     if not any(h["code"] in ("T27", "T28") for h in raw):
-        print(face_summary() + "（页脚之后不许有内容 · 规格件只许变长；反向灵敏度 `_mut_facedoc`）")
+        print(face_summary() + "（页脚之后不许有内容 · 篇幅变化仅提示调查；反向灵敏度 `_mut_facedoc`）")
         print()
     if args.ui:
         print("交付面四检")

@@ -6,6 +6,7 @@
 - `ACC-JC-PAY-001/001-01` **两个方向写同一份关联记录、双向可见**
 - `ACC-JC-PAY-001/001-03` **一条通知书只能关联一个合同**（一对一；换合同 = **先解绑再写新**）
 - （另加实现层自检：解绑 · 幂等 · **零金额也允许引用** · 非集采分类不许填供应商）
+- ⭐ 2026-10-08 新增：**恢复剔除时回填归属**（规则剔除行落库时故意不带归属 ⇒ 恢复后必须补上）
 """
 
 from __future__ import annotations
@@ -22,6 +23,86 @@ from app.mod11_jc import service as SV
 from tests.acc_plugin import acc
 
 WH_L = "__自检仓_集采关联__"
+
+
+@acc()
+def test_恢复剔除时自动回填归属_判不出则如实保持空():
+    """⭐ 2026-10-08 BUG 钉子：被**规则剔除**的行恢复后，**付款项目显示"未建档"**、
+    且**一选项目筛选就再也勾不上**（用户实测报障）。
+
+    ⚠️ 根因在抓取管线（`classify.rows_needing_ownership` 的注释写明）：规则剔除的行
+    **故意 `ownership_id=None`**（否则整批归属校验会被误拦）⇒ 恢复时必须**补上归属**。
+    ⚠️ 判据同时钉住三条边界：
+      ① **归一化后能命中**（档案全名末尾带 i8 编号、单据全名不带 —— 库里 30 行都是这个形态）；
+      ② **已指定过归属的行不被覆盖**（人工判断优先，同 `merge.PROTECTED`）；
+      ③ **判不出就保持空**并报数 —— 不硬塞、也不让整次恢复失败。
+    """
+    from app.mod03_notice.notice_actions import refill_ownership
+
+    with session_scope() as s:
+        p = pj_repo.create_project(s, project_type=TYPE_NORMAL,
+                                   name_full="__自检_恢复归属__项目",
+                                   warehouse_name="__自检_恢复归属__仓库__", phid="")
+        s.flush()
+        hit = PaymentNotice(ph_id="__自检_ph_恢复归属_命中__", doc_date="2026-08-23",
+                            project_name="__自检_恢复归属__项目(TBLX999)",
+                            fields={"BillName": "自检单据"}, category="jc",
+                            ownership_id=None, excluded=False, exclude_source="")
+        manual = PaymentNotice(ph_id="__自检_ph_恢复归属_已指定__", doc_date="2026-08-23",
+                               project_name="__自检_恢复归属__项目(TBLX999)",
+                               fields={"BillName": "自检单据"}, category="jc",
+                               ownership_id=int(p.id), excluded=False, exclude_source="")
+        none = PaymentNotice(ph_id="__自检_ph_恢复归属_判不出__", doc_date="2026-08-23",
+                             project_name="__自检_压根没有这个项目__",
+                             fields={"BillName": "自检单据"}, category="jc",
+                             ownership_id=None, excluded=False, exclude_source="")
+        s.add_all([hit, manual, none])
+        s.flush()
+        ids = [int(hit.id), int(manual.id), int(none.id)]
+
+        rep = refill_ownership(s, ids)
+        assert rep.filled == [ids[0]], f"归一化后应能命中档案（实际={rep.filled}）"
+        assert rep.kept == [ids[1]], "已指定过归属的行不该被回填覆盖"
+        assert rep.unresolved == [ids[2]], "判不出的行应如实进 `unresolved`（不硬塞归属）"
+        assert hit.ownership_id == int(p.id), "回填没落到行上"
+        assert none.ownership_id is None, "判不出的行不该被塞一个归属"
+        assert "未建档" in rep.message, "回执没告诉人「判不出」时会看到什么"
+        assert "保持不变" in rep.message, "回执没说明已指定过的行保持不变"
+        # 端点回执拼上这段（前端原样显示）
+        assert refill_ownership(s, []).message == "", "空 id 不该产生任何回执噪音"
+        s.rollback()
+
+
+@acc()
+def test_恢复剔除端点真的调了回填_不是只写了函数没人用():
+    """⚠️ 上一条只测了 `refill_ownership` **函数本身** —— 把它从端点上摘掉，那条照样绿。
+    ⇒ 这条钉**端点 → 回填**这段接线（反向灵敏度：端点里改成 `refill_ownership(session, [])` ⇒ 本条必红）。
+
+    场景 = 抓取时的真实形态：规则剔除行 `ownership_id=None`、项目全名与档案全名差一段 i8 编号。
+    """
+    from app.mod03_notice.notice_api_router import IdsIn, api_restore
+
+    with session_scope() as s:
+        p = pj_repo.create_project(s, project_type=TYPE_NORMAL,
+                                   name_full="__自检_端点回填__项目",
+                                   warehouse_name="__自检_端点回填__仓库__", phid="")
+        s.flush()
+        n = PaymentNotice(ph_id="__自检_ph_端点回填__", doc_date="2026-08-23",
+                          project_name="__自检_端点回填__项目(TBLX888)",
+                          fields={"BillName": "自检单据"}, category="jc",
+                          ownership_id=None, excluded=True, exclude_source="rule")
+        s.add(n)
+        s.flush()
+        nid = int(n.id)
+
+        r = api_restore(IdsIn(ids=[nid]), session=s)
+        assert r["ok"] is True and r["restored"] == [nid], f"恢复没成功：{r}"
+        assert r.get("ownership_filled") == [nid], \
+            f"恢复后**没有回填归属**（这正是用户报障那条）：{r}"
+        assert "回填" in r["message"], f"回执没提回填：{r['message']!r}"
+        s.expire_all()
+        assert s.get(PaymentNotice, nid).ownership_id == int(p.id), "归属没落到行上"
+        s.rollback()
 
 
 def _project(s, wh: str = WH_L) -> Project:

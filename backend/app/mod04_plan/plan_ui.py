@@ -18,12 +18,9 @@ from app.core.period import ALL_MODES, MODE_ALL, MODE_MONTH, MODE_SPAN, MODE_YEA
 from app.mod04_plan.domain import (
     BUCKET_ALL,
     EDITABLE_COLUMNS,
-    WINDOW_START_DAY,
     bucket,
     can_edit_doc,
-    in_effective_window,
     re_audit,
-    window_label,
 )
 
 # ---------------------------------------------------------------- 筛选栏（§4.3.3 / §4.3.4）
@@ -221,20 +218,23 @@ def delete_rows(rows: list[dict], targets, picked, *, confirmed: bool) -> tuple[
     return kept, {int(x) for x in (picked or set())} - want
 
 
-# ---------------------------------------------------------------- 生效窗口按钮态（§4.3.2 / §4.3.7）
+# ---------------------------------------------------------------- 「按计划勾选」按钮态（§4.3.5）
 
+def window_button(ym: str = "") -> dict:
+    """「按付款计划勾选」按钮的**可用性**（§4.3.5）。
 
-def window_button(day_of_month: int) -> dict:
-    """「按付款计划勾选」按钮的**可用性**（§4.3.2 / §4.3.7）：窗口外**先禁用**，不是点了才拦。"""
-    day = int(day_of_month)
-    if in_effective_window(day):
-        return {"enabled": True, "label": window_label(day), "reason": ""}
+    ⭐ **2026-10-08 用户裁定：不再按日期禁用、月份改为可选。**
+       原口径是"每月 10 号 → 月底才可点"（§4.3.2 的生效窗口），可那只是**制度上的习惯** ——
+       制度本身也只约束人、不拦系统（§4.3.7「系统不做任何拦截或标记」），
+       做成**按钮置灰**反而挡住正常补勾（用户 2026-10-08 报障：想按别的月份勾选却点不动）。
+    ⇒ 本函数**恒可点**；`ym` 只用于**回显**（勾哪个月由人挑，空 = 由调用方决定）。
+    ⚠️ 保留 `reason` 键：装配层与页面都读它（⛔ 别删，删了页面拿不到键）。
+    """
+    month = str(ym or "").strip()
     return {
-        "enabled": False,
-        "label": "",
-        "reason": (
-            f"付款计划每月 {WINDOW_START_DAY} 号起生效、当月底结束 —— 今天是 {day} 号，尚未进入生效窗口"
-        ),
+        "enabled": True,
+        "label": f"按 {month} 付款计划勾选" if month else "按付款计划勾选",
+        "reason": "",
     }
 
 

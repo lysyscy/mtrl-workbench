@@ -1,43 +1,11 @@
 #!/usr/bin/env python
-"""**交付面尾部守卫** —— `T27`（页脚之后不许有内容）＋ `T28`（`PRD/` 规格件**只许变长**）。
+"""交付面文档保护：页脚后遗漏、缺件及能力编号损失；篇幅变化提示调查。
 
-> 2026-10-06 立（`TAIL-234`）· 由 `doc_audit` 调用（同一份 `raw` ⇒ 同一个 rc）
-
-## 为什么是这两条（**都是真事故打出来的，不是想出来的**）
-
-- **`T27`**：当天实测 `MOD-14.md` 的两条 `ACC-*` 验收清单条目**掉到了页脚之后** ⇒ 渲染出来是
-  页脚下面的孤行。⚠️ `T1`–`T26` **没有一层能看见它** —— 用例号是真的、路径是真的、只是**位置错了**
-  （本仓最贵的一族：「内容齐了」≠「摆对了」）。
-- **`T28`**：WPS 云同步把整个交付面**盖回过历史快照**（至少两次）。实测退化件与真源的差别
-  **多数是"等长"**（24 件里只有 2 件变短）⇒ **只钉行数不够**，必须再钉一个**抗改词、抗改行**的锚点。
-
-## 三条形态纪律（⛔ 违反其中任何一条，这张网就会变成噪音源）
-
-1. **相对基线·只许变长** —— ⛔ 不用「绝对行数」：那会让**每一次正常增删都报红**。
-   （与 `T21` 的「只许变短」同款思路，方向相反。）
-2. **锚点只取机械可算的那一个**（编号表的**最大行号**）—— ⛔ 不手挑 24 条关键句：
-   手挑的锚点会随正常改词而失效，**失效的那天没人记得它曾管过什么** ⇒ 判据自己悄悄退场。
-   ⚠️ 行号锚点**抗改词、抗改行**，只对**删行 / 删整节**有牙 ⇒ 已知缺口写在下面「⛔ 抓不到什么」。
-3. **单一出口** —— 标记、排除目录、扫描面、基线表**全部只定义一次**
-   （前三个在 `audit_common`、基线表在本件）⇒ ⛔ 别在尺子、变异脚本、探针里各写一遍。
-
-##⛔ 抓不到什么（**明写，免得把覆盖当全校**）
-
-- 「等长但整段换成旧内容」（回退删掉的行数与新增的恰好抵平）⇒ 要靠人眼。
-- `PRD/00-总览.md` **没有页脚标记** ⇒ 该件不在 `T27` 眼里（不是"判过了"，是**没覆盖**）。
-- 每件的**编号表**被整表删掉又按新内容重建（行数不降、行号不降）⇒ 抓不到。
-
-## 目标机（**不装交付面**）上的代价
-
-⛔ 拿不到交付面根 ⇒ 两条都**跳过、不并进 rc**（同 `doc_audit --ui` 的三条「跳过」：那是
-`ops/deployment.md` 写明的已知代价，⛔ 判红只会让人开始忽略它 —— **比不判还坏**）。
-
-用法：
-    backend/.venv/Scripts/python.exe tools/audit/audit_face.py            # 跑两条（有红即非零退出）
-    backend/.venv/Scripts/python.exe tools/audit/audit_face.py --stamp# ⭐ 打印当前基线表（重录时用）
-
-⚠️ **重录基线的口径**：改了件（有意增删）⇒ **同批**把该件的数抄进 `PRD_DOC_BASELINE`
-⇒ 「一个数两处用」同批改两处。⛔ 别为了让红变绿去改判据。
+T27保护有效内容可见；T28的篇幅是线索，不能证明业务丢失，故只提示。
+能力编号减少或整件消失仍阻挡交付，授权退场时应更新其唯一基线。
+新根已离开WPS同步树，历史事故不构成永久只许增字的规则。
+同一实现支持隔离输入；自证在 tools/mut/_mut_facedoc.py，不写正式交付面。
+基线仍在PRD_DOC_BASELINE；有意调整用--stamp查看，不靠刷基线遮蔽未知缺口。
 """
 from __future__ import annotations
 
@@ -134,8 +102,8 @@ def _excluded(rel: str) -> bool:
 #: ⇒ 判据一改它不跟着变（本仓老路："同一件事两处写"＝必漂）⇒ **两边都调本函数**。
 #: 第三段 `是否被排除` 是给变异件用的：它要证明"排除清单 **load-bearing**"
 #:（那几处孤儿**确实还在**，只是被排除掉了 ⇒ 不是把扫描面缩窄当修复）。
-def scan_footer_tails() -> list[tuple[str, list[str], bool]]:
-    root = delivery_root()
+def scan_footer_tails(root=None) -> list[tuple[str, list[str], bool]]:
+    root = delivery_root() if root is None else pathlib.Path(root)
     if not root or not root.is_dir():
         return []
     out: list[tuple[str, list[str], bool]] = []
@@ -152,7 +120,7 @@ def scan_footer_tails() -> list[tuple[str, list[str], bool]]:
     return out
 
 
-def check_footer_tail() -> list[dict]:
+def check_footer_tail(root=None) -> list[dict]:
     """`T27`：**页脚标记之后还有非空行** ⇒ 红（⚠️ 排除目录按实测，不按想象）。
 
     ⭐ 扫描在 `scan_footer_tails()`（**唯一一份**）· 本函数只把它的结果变成命中。
@@ -160,7 +128,7 @@ def check_footer_tail() -> list[dict]:
     真出现了"两处页脚"也该由人去核，本条只抓"标记之后还有东西"这一种形态）。
     """
     hits: list[dict] = []
-    for rel, tail, excluded in scan_footer_tails():
+    for rel, tail, excluded in scan_footer_tails(root):
         if excluded or not tail:
             continue
         hits.append(_hit(
@@ -176,13 +144,14 @@ def check_footer_tail() -> list[dict]:
 # ----------------------------------------------------------------------- T28 基线
 
 
-def check_prd_baseline() -> list[dict]:
-    """`T28`**：`PRD/` 规格件**只许变长** ＋ **编号表只许变多**（红）／新件未登记（黄）。
+def check_prd_baseline(root=None, baseline=None) -> list[dict]:
+    """`T28`**：篇幅减少提示调查（黄）；能力编号减少/整件消失报红，新件未登记提示。
 
     ⚠️ **为什么"缺件"也判红**：交付面被云同步盖回旧版时，最先消失的往往就是**整件**
     （本仓真发生过）。修法 = 确认是有意删的之后，同批把基线表里那一行删掉。
     """
-    root = delivery_root()
+    root = delivery_root() if root is None else pathlib.Path(root)
+    baseline = PRD_DOC_BASELINE if baseline is None else baseline
     if not root or not root.is_dir():
         return []
     hits: list[dict] = []
@@ -194,7 +163,7 @@ def check_prd_baseline() -> list[dict]:
         seen.add(rel)
         lines = _lines_of(f)
         n_now, row_now = len(lines), _row_max(lines)
-        base = PRD_DOC_BASELINE.get(rel)
+        base = baseline.get(rel)
         if base is None:
             hits.append(_hit(
                 "T28", rel, f"新件未登记基线（现 {n_now} 行 · 编号表最大 {row_now}）",
@@ -206,17 +175,17 @@ def check_prd_baseline() -> list[dict]:
         if n_now < n_base:
             hits.append(_hit(
                 "T28", rel, f"变短了：{n_now} 行 < 基线 {n_base} 行（少 {n_base - n_now} 行）",
-                "交付面被**整体换回旧版本**的典型签名（WPS 云同步至少干过两次）—— "
+                "篇幅变化仅是需调查的线索，已授权精简不得因此阻挡交付—— "
                 "⛔ 少掉的内容没有任何尺子看得见：本仓真出现过整份`MOD-11` 被换回 `TAIL-97` 之前",
                 "确认是**有意**精简 ⇒ 同批把本表这一行改成新行数；"
-                "⛔ 若不是有意（本票的常态就是这一种）⇒ 按备份/重新同步**恢复**"))
+                "⛔ 若不是有意（本票的常态就是这一种）⇒ 按备份/重新同步**恢复**", level=YELLOW))
         if row_base and row_now < row_base:
             hits.append(_hit(
                 "T28", rel, f"编号表最大行号变小：{row_now} < 基线 {row_base}（**等长也抓得到**的那一半）",
                 "⭐ 行数相等时**抓不到**内容被换旧，这一半就是为它准备的："
                 "编号表少到最后一行 ⇒ 一定是少了一节能力",
                 "同上：有意删节 ⇒ 同批改本表；⛔ 若不是有意 ⇒ 恢复"))
-    for rel in sorted(set(PRD_DOC_BASELINE) - seen):
+    for rel in sorted(set(baseline) - seen):
         hits.append(_hit(
             "T28", rel, "基线里有、盘上已没有这件",
             "整件消失是交付面回退最重的一种形态 —— **比变短更危险**（连人眼都不容易立刻发现）",

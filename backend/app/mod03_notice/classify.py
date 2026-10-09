@@ -232,17 +232,18 @@ def decide_placement(
 class RestoreReport:
     """「恢复剔除」的**分档回报**（§4.2.2：混有规则命中时必须分开说清）。"""
 
-    restored: list[int] = field(default_factory=list)        # 恢复了的人工剔除行
-    kept_by_rule: list[int] = field(default_factory=list)    # 勾选中属于"规则命中"⇒ **不恢复**
+    restored: list[int] = field(default_factory=list)        # 真正被恢复的行（**人工 ＋ 规则命中都算**）
+    restored_by_rule: list[int] = field(default_factory=list)  # 其中「来自规则命中」的（⚠️ **也给恢复了**，见 `restore_excluded`）
     untouched: list[int] = field(default_factory=list)       # 勾选中本就未剔除的行
 
     @property
     def message(self) -> str:
-        parts = [f"已恢复 {len(self.restored)} 条人工剔除"]
-        if self.kept_by_rule:
+        parts = [f"已恢复 {len(self.restored)} 条"]
+        if self.restored_by_rule:
             parts.append(
-                f"另有 {len(self.kept_by_rule)} 条是**规则命中**、不恢复"
-                "（要放开只能改剔除规则配置）"
+                f"其中 {len(self.restored_by_rule)} 条是「规则命中」的 —— 已一并放回，"
+                "重新计入统计与付款"
+                "（要长期剔除请改「规则配置」，改完再抓一次才会重新剔除）"
             )
         if self.untouched:
             parts.append(f"另有 {len(self.untouched)} 条本就未剔除")
@@ -252,10 +253,18 @@ class RestoreReport:
 def restore_excluded(rows: list[dict], picked) -> RestoreReport:
     """「恢复剔除」按**勾选行**生效（§4.2.2）。
 
-    ⚠️ 三条口径，一条都不能少：
+    ⚠️ 三条口径：
     1. **必须先勾选**（`picked` 为空 ⇒ 显式报错，不做"一键全放回"）；
-    2. **只恢复 `exclude_source == manual` 的行** —— 规则命中的**一律不恢复**；
-    3. 勾选里混有规则命中 / 未剔除的行 ⇒ **不报错，但分开回报**（`RestoreReport.message`）。
+    2. **人工剔除 ＋ 规则命中的都恢复**（⭐ **2026-10-08 用户裁定**，此前列口径为"规则命中的不恢复"）；
+    3. 勾选里混有本就未剔除的行 ⇒ **不报错，但分开回报**（`RestoreReport.message`）。
+
+    ⭐ **为什么改这条口径**（原先那句"要放开只能改规则配置"在本系统里是**兑现不了**的承诺）：
+       `mod14_config.rules_api` 明写「改规则**不重算**历史剔除标记」，而再次导入时
+       `merge.PROTECTED` 又不覆盖 `excluded` / `exclude_source`
+       ⇒ 规则命中的行**没有任何放开出口**（按钮却照旧提示"要放开请改规则配置"）。
+       既然那条路走不通，就让「恢复剔除」本身能放开；想让某行长期被剔除，**改规则配置**仍是正解
+       —— 只是需要**再抓一次**才生效（回执已如实说明）。
+    ⚠️ 代价（用户已知）：恢复后该行**重新进统计与付款**；再次抓取**不会**自动反弹（人工标记受保护）。
     """
     want = {int(x) for x in (picked or ())}
     if not want:
@@ -270,7 +279,9 @@ def restore_excluded(rows: list[dict], picked) -> RestoreReport:
         if source == EXCLUDE_BY_MANUAL:
             report.restored.append(rid)
         elif source == EXCLUDE_BY_RULE:
-            report.kept_by_rule.append(rid)
+            # ⭐ 2026-10-08 用户裁定：**规则命中的也放回**（原先在此归 `kept_by_rule` = 不恢复）。
+            report.restored.append(rid)
+            report.restored_by_rule.append(rid)
         else:
             report.untouched.append(rid)
     return report

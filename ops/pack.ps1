@@ -23,21 +23,20 @@
        ＋ 随包放一份 `ops/deployment.md`（一页）
        ④ ⭐ **交付面快照 · 只 2 件**（⭐ 用户 2026-09-30 指示 · 见 §20 指示③）：
           `face\材料科业务全流程说明书.md` ＋ `face\PRD\验收\验收基线.json`
-          ⇒ 目标机 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 可**指包内**这份（⚠️ 口径：**云那份仍是真源**，
-          连得上云就改回 —— 免得「两处副本必漂」）。
+          ⇒ 包内仅为历史快照对照；完整现行交付面需显式复制/配置，见 ops/deployment.md §四。
           ⛔ **交付面其余件一律不进包**（`demo\` · `PRD\` 余件 · `PRD素材包-*` · 交付面根 4 个 md）——
-          交付面是 **WPS 云同步树**（2026-09-30 订正）：目标机只要 WPS 同步了它**本来就在**，
-          要跑那套尺子只需**核路径 ＋ 在 `.env` 配 `PRD_ACCEPTANCE_BASELINE`**（≈零成本）；
-          ⇒ ⛔ 别整份拷（实测 **1404 件 / 42.27 MB**）。已做：参数 `$FaceRoot` 与 `-SkipFace`。
+          现行交付面不依赖WPS同步；换机按用途显式准备完整资料，
+          所需完整资料/工具与配置按 ops/deployment.md §四核定；
+          ⇒ 本产包仍只取两件快照；完整资料另行准备。参数 `$FaceRoot` 与 `-SkipFace` 保留。
 
 
        ⛔ **一律不带**：`backend/.venv`（绝对路径，拷过去必崩）· `logs/` · `.codebuddy/work/00-scratch/` ·
-       `.codebuddy/backups/交付面-*`（交付面快照）· **`.env`**（真口令不进包 —— 守 `TAIL-88` 的"敏感件 0 命中"）。
+       `.codebuddy/backups/交付面-*`（交付面快照）· **`.env`**（不打包.env；SQL仍原样复制，文件名0命中不能证明无口令，见deployment §二）。
 
   用法（本机 · 普通窗口即可）：
     powershell -ExecutionPolicy Bypass -File ops\pack.ps1
     powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -Out D:\deliver\mtrl-20260929 -WithDump
-    powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -DryRun        # 只列会打什么，不落盘
+    powershell -ExecutionPolicy Bypass -File ops\pack.ps1 -DryRun        # 不生成包；仍执行0a按影响核验（可能写检查回执）
 #>
 [CmdletBinding()]
 param(
@@ -64,7 +63,7 @@ function Step($m) { Write-Host ''; Write-Host ('── ' + $m) }
 Say '=== ops/pack.ps1 · 产交付包（可继续开发的可运行系统）==='
 Say ('仓   = ' + $RepoRoot)
 Say ('输出 = ' + $Out)
-Say ('模式 = ' + $(if ($DryRun) { '干跑（不落盘）' } else { '落盘' }))
+Say ('模式 = ' + $(if ($DryRun) { '干跑（不产包；仍运行0a核验）' } else { '落盘' }))
 #: ⭐ 2026-09-29：**"该带的件"缺了几项** —— **干跑时它非零 ⇒ `exit 1`**（见末尾）。
 #:   为什么要有它：原先"缺件"只打印一行 ⛔、**rc 仍是 0** ⇒ 照抄"干跑"的人（或自动化）会当它**通过** ⇒
 #:   今天那次缺陷（壳基线路径写错）就是靠**人读输出**才发现的，机器判不出来 ✗。
@@ -84,12 +83,12 @@ if (-not $DryRun -and (Test-Path -LiteralPath $Out) -and @(Get-ChildItem -Litera
 
 # ---- 0) 前置两件（⭐ 只打"绿的包"：闸门红 ⇒ 停手，别产出一个跑不起来/说不清的包）----
 #   预案（`ops/README.md` §一之四）在这里落成**脚本**（⛔ 不靠"我记得"）：
-#   0a 闸门全绿（16 把尺子）· 0b **证据新鲜**（权威四态档必须是刚跑出来的，⛔ 别把上一轮的当真）
-Step '0a) 闸门（16 把尺子）'
+#   0a按当前入口选择影响核验（含DryRun；可能写回执，不自动代表全量）· 0b刷新权威四态档
+Step '0a) 按当前入口选择核验（DryRun也执行）'
 $py = Join-Path $RepoRoot 'backend\.venv\Scripts\python.exe'
 if (Test-Path $py) {
     & $py -X utf8 (Join-Path $RepoRoot 'tools\oneoff\_run_rulers.py') | Select-Object -Last 3 | ForEach-Object { Say ('   ' + $_) }
-    if ($LASTEXITCODE -ne 0) { Say '⛔ 闸门不是全绿 ⇒ 停手（先修尺子，再产包）'; exit 1 }
+    if ($LASTEXITCODE -ne 0) { Say '⛔ 核验未通过 ⇒ 停手（调查失败或待查影响，再产包）'; exit 1 }
 } else {
     Say ('   ⚠️ 没找到 ' + $py + ' ⇒ 跳过闸门（⚠️ 本机没装 venv：包会缺"能自检"的前提）')
 }
@@ -189,8 +188,7 @@ if ($snap) {
 }
 
 # ---- 3b) 交付面快照（⭐ 用户 2026-09-30 指示 · ⛔ 只 2 件，别整份拷）----
-#  为什么要它：交付面是 **WPS 云同步树** ⇒ 目标机**多半本来就有**（2026-09-30 订正）；
-#    但**云可能没同步 / 云那份会漂** ⇒ 用户点名留**一份包内快照**（`.env` 可指包内）。
+#  包内只留两件历史快照；完整现行交付面仍须显式复制/配置，主人回 ops/deployment.md §四。
 #  ⚠️ 两条教训照抄本文件既有写法（别重踩）：
 #    · **中文一律走 `.NET` / `-like` / Python**（`-Filter` 会命中 0）；
 #    · 缺件报**两类真因**（目录不存在 = 多半路径写错 / 文件不存在 = 真缺），⛔ 别混成一句"没找到"
@@ -198,10 +196,10 @@ if ($snap) {
 Step '2b) 交付面快照（《说明书》＋ 验收基线 · 用户 2026-09-30 指示）'
 $faceDone = 0
 if ($SkipFace) {
-    Say '   ⏭ -SkipFace ⇒ 跳过（⚠️ 包里将没有那 2 件 ⇒ 目标机只能靠云那份）'
+    Say '   ⏭ -SkipFace ⇒ 跳过（⚠️ 包里将没有那 2 件 ⇒ 目标机须另配完整现行交付面）'
 } else {
     # ⚠️ 本机默认路径写在这里（⛔ 不写进 param 默认值 —— 目标机/换机时 `-FaceRoot` 可覆盖）
-    if (-not $FaceRoot) { $FaceRoot = 'D:\工作\AI\PRD编写夹 - Workbuddy专用' }
+    if (-not $FaceRoot) { $FaceRoot = 'D:\dev\PRD编写夹 - Workbuddy专用' }
     Say ('   源 = ' + $FaceRoot)
     foreach ($rel in @('材料科业务全流程说明书.md', 'PRD\验收\验收基线.json')) {
         $s = Join-Path $FaceRoot $rel
@@ -209,11 +207,11 @@ if ($SkipFace) {
             $packProblems++
             Say ('   ⛔ 缺：' + $rel)
             if (-not (Test-Path -LiteralPath $FaceRoot)) {
-                Say ('      真因① = **交付面根都不存在**：' + $FaceRoot + '（WPS 云没同步下来？还是路径写错？）')
+                Say ('      真因① = **交付面根都不存在**：' + $FaceRoot + '（核对现行根及-FaceRoot参数）')
             } else {
-                Say ('      真因② = 交付面根在，但**没有这一件**（云同步缺件 / 被改名？）')
+                Say ('      真因② = 交付面根在，但**没有这一件**（核对完整资料及文件名）')
             }
-            Say '      ⚠️ 后果：目标机 `.env` 的 PRD_ACCEPTANCE_BASELINE 只能指云那份 ⇒ 云没同步到就断'
+            Say '      ⚠️ 后果：包内快照不足；目标机完整现行交付面需另行配置，见 ops\deployment.md §四'
             continue
         }
         $d = Join-Path $Out ('face\' + $rel)
@@ -228,7 +226,7 @@ if ($SkipFace) {
 # ---- 4) 库 ----
 Step '3) 库（空库 SQL ＋ 可选现状 dump）'
 if ($DryRun) { Say '   [干跑] db\init_db.sql' }
-else { Copy-Item -Force (Join-Path $RepoRoot 'ops\init_db.sql') (Join-Path $dirDb 'init_db.sql'); Say '   ✓ db\init_db.sql（空库路线：建库＋角色；⚠️ 里面 <PASSWORD> 要换）' }
+else { Copy-Item -Force (Join-Path $RepoRoot 'ops\init_db.sql') (Join-Path $dirDb 'init_db.sql'); Say '   ✓ db\init_db.sql（空库路线：建库＋角色；⚠️ 原样复制，产包前须确认不含实值，见deployment §二）' }
 if ($WithDump) {
     $pgdump = Join-Path $PgBin 'pg_dump.exe'
     if (-not (Test-Path $pgdump)) { Say ('   ⛔ 找不到 ' + $pgdump + ' ⇒ 跳过着一条（用 -PgBin 指路）') }
@@ -240,7 +238,7 @@ if ($WithDump) {
                               ConvertFrom-SecureString -AsPlainText
             & $pgdump -U $DbUser -d $DbName -Fc -f $dump
             Remove-Item Env:\PGPASSWORD
-            Say ('   ✓ ' + (Split-Path -Leaf $dump) + '（⚠️ 只作对照/回滚，⛔ 不灌生产）')
+            Say ('   ✓ ' + (Split-Path -Leaf $dump) + '（⚠️ 只作复现/对照，⛔ 不作为生产回滚或起点）')
         }
     }
 }
@@ -259,11 +257,11 @@ if (-not $DryRun) {
     $mf += '仓       : repo\mtrl-workbench.bundle（git bundle --all ⇒ 含全部历史，D18 的回退保障）'
     $mf += '非 git 件: .codebuddy\memory\**（注入档＋分册＋逐日日志）· ops\nssm\nssm.exe · artifacts\*'
     # ⭐ 2026-09-30（用户指示③）：交付面**只带 2 件快照** —— MANIFEST 必须写明，⛔ 别让人以为整份都在包里
-    $mf += ('交付面快照: ' + $(if ($faceDone -ge 2) { 'face\材料科业务全流程说明书.md ＋ face\PRD\验收\验收基线.json（⭐ .env 的 PRD_ACCEPTANCE_BASELINE 可指包内这份；⚠️ 云那份仍是真源）' } elseif ($faceDone -eq 1) { '⚠️ 只带了 1 件（另 1 件缺 · 见产包日志）' } else { '⛔ 一件都没带（-SkipFace 或交付面缺件；见产包日志）⇒ 交付面只能靠 WPS 云同步' }))
-    $mf += '⛔ 交付面其余件不进包: demo\ · PRD\ 余件 · PRD素材包-* · 交付面根 4 个 md（= WPS 云同步树 ⇒ 目标机同步即有）'
+    $mf += ('交付面快照: ' + $(if ($faceDone -ge 2) { 'face\材料科业务全流程说明书.md ＋ face\PRD\验收\验收基线.json（仅历史快照对照；不替代完整现行交付面）' } elseif ($faceDone -eq 1) { '⚠️ 只带了 1 件（另 1 件缺 · 见产包日志）' } else { '⛔ 一件都没带（-SkipFace 或交付面缺件；见产包日志）⇒ 须另行准备完整现行交付面' }))
+    $mf += '⛔ 交付面其余件不进包: demo\ · PRD\ 余件 · PRD素材包-* · 交付面根 4 个 md（换机按用途显式复制/配置，见 ops/deployment.md §四）'
     $mf += ('壳基线   : ' + $(if ($snapName) { '.codebuddy\backups\' + $snapName } else { '⛔ 缺！见产包日志里"真因①/②"那两行（目标机 --snapshot 一次即可）' }))
-    $mf += ('库       : db\init_db.sql（空库路线；⚠️ 里面 <PASSWORD> 到目标机要换）' + $(if ($WithDump) { ' ＋ db\*.dump（⚠️ 只作对照，⛔ 不灌生产）' } else { '' }))
-    $mf += '⛔ 一律不带: backend\.venv · logs\ · .codebuddy\work\00-scratch · .codebuddy\backups\交付面-* · .env（真口令不进包，守 TAIL-88）'
+    $mf += ('库       : db\init_db.sql（空库路线；⚠️ 原样复制，产包前须确认不含实值，见deployment §二）' + $(if ($WithDump) { ' ＋ db\*.dump（⚠️ 只作对照，⛔ 不灌生产）' } else { '' }))
+    $mf += '⛔ 一律不带: backend\.venv · logs\ · .codebuddy\work\00-scratch · .codebuddy\backups\交付面-* · .env（不打包.env；SQL原样复制，内容敏感风险须另核，见deployment §二）'
     $mf += '落地说明 : 部署-落地说明.md（= ops\deployment.md）'
     $mf += '校验     : SHA256SUMS.txt 覆盖本目录**全部文件**（本件也在内）—— 目标机脚本先校它'
     [IO.File]::WriteAllText((Join-Path $Out 'MANIFEST.txt'), ($mf -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding($false)))
@@ -275,7 +273,7 @@ if (-not $DryRun) {
     # ⛔ 敏感件自检：包里出现这些名字就报出来（守 TAIL-88 的口径）
     $bad = $files | Where-Object { $_.Name -match '^\.env$|cookie|password|secret' }
     if ($bad) { Say ('   ⛔ 包里有疑似敏感件，请人工确认：' + (($bad | ForEach-Object { $_.Name }) -join ', ')) }
-    else { Say '   ✓ 敏感件自检：0 命中' }
+    else { Say '   ✓ 文件名敏感扫描：0 命中（不检查SQL内容，不证明无口令）' }
 }
 Say ''
 if ($packProblems -gt 0) {
@@ -285,7 +283,7 @@ if ($packProblems -gt 0) {
         Say '   （⛔ 别把干跑当"放宽版"：它是产包那天**唯一能机器判**的一步 ⇒ 它绿了，那天照抄才有底）'
         exit 1
     }
-    Say '⚠️ 正式产包**放行**（MANIFEST 里已如实写明缺哪项）—— 但先想清楚：目标机会不会因此少东西'
+    Say '⚠️ 脚本仍产包（MANIFEST列明缺项）；这不保证包完整或无敏感内容，正式使用前按deployment核前提'
 }
 Say ('=== 完成 · 包在 ' + $Out + ' ===')
-Say '下一步：把整个目录拷到目标机 ⇒ 在目标机跑 ops\deploy_restore.ps1 -Pack <该目录> -Mode empty ⇒ 再跑 ops\selfcheck.ps1'
+Say '下一步：先按 ops\deployment.md §〇核目标机、权限和数据方案；经确认再部署。selfcheck只证安装，真实恢复另验隔离库。'

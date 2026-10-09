@@ -72,10 +72,13 @@
 from __future__ import annotations
 
 import hashlib
+import errno
 import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -205,8 +208,50 @@ T11_TMP = ROOT / "artifacts" / "_mut_建议_临时.md"
 #: ⭐⭐ 2026-10-04（`TAIL-225` 票体系）`T6` 的**票文件**靶：
 #:   ① 把一张**在办票**的票文件挪开 ⇒ 必须报「没有票文件」（用完挪回）
 #:   ② 造一张**幽灵票文件**（编号在台账里不存在）⇒ 必须报「幽灵票文件」（用完删掉）
-TICKET = ROOT / ".codebuddy" / "work" / "50-tickets" / "TAIL-188-交付包与迁移.md"
+#: 2026-10-08（TAIL-250接续）：M19使用隔离的在办票夹具；真实票销号或在办清零不应让
+#:   自证失效。调用同一T6实现，先证基线无红，再只移走票文件；不改真实票仓/主计划。
+sys.path.insert(0, str(ROOT / "tools" / "audit"))
+import audit_meta                    # noqa: E402
+
+
 GHOST_TICKET = ROOT / ".codebuddy" / "work" / "50-tickets" / "TAIL-9999-幽灵票.md"
+
+
+def _missing_ticket_fixture() -> tuple[int, str]:
+    """同一T6：有票时无红，移走票后只能命中缺票，再还原为无红。"""
+    scratch = ROOT / ".codebuddy" / "work" / "00-scratch"
+    with tempfile.TemporaryDirectory(prefix="tmp-docaudit-ticket-", dir=scratch) as name:
+        fixture = Path(name)
+        ledger = fixture / audit_meta.LEDGER_REL
+        ledger.parent.mkdir(parents=True)
+        ledger.write_text(
+            "## 14. 排期\n### 14.3 逐条排期\n"
+            "| 尾巴 | 建议时机 | 理由 | 前置 |\n|---|---|---|---|\n"
+            "| TAIL-1 | 立刻 | 夹具 | 无 |\n"
+            "## 15. 尾巴台账\n"
+            "A 类 **1** 条 · B 类 **0** 条 · C 类 **0** 条 · 已销号 **0** 条\n"
+            "### 一、A类\n| # | 事项 | 来源 | 不做会怎样 | 落点 | 阶段 / 时机 | 状态 |\n"
+            "|---|---|---|---|---|---|---|\n"
+            "| TAIL-1 | 夹具 | 自证 | 未验 | 夹具 | 立刻 | 在办 |\n"
+            "### 二、B类\n### 三、C类\n### 四、已销号\n",
+            encoding="utf-8")
+        (fixture / audit_meta.HANDBOOK_REL).write_text(audit_meta.LEDGER_NAME, encoding="utf-8")
+        ticket = fixture / audit_meta.TICKET_DIR_REL / "TAIL-1-夹具.md"
+        ticket.parent.mkdir(parents=True)
+        body = "**What to build:** 夹具\n**Blocked by:** None\n**Status:** claimed\n- [ ] 缺票能被T6检出\n"
+        ticket.write_text(body, encoding="utf-8")
+        saved_root = audit_meta.REPO_ROOT
+        try:
+            audit_meta.REPO_ROOT = fixture
+            baseline = audit_meta.check_tail_ledger(set())
+            assert not baseline, f"M19夹具基线应无红：{baseline}"
+            ticket.unlink()
+            hits = audit_meta.check_tail_ledger(set())
+            ticket.write_text(body, encoding="utf-8")
+            assert not audit_meta.check_tail_ledger(set()), "M19恢复后应无红"
+        finally:
+            audit_meta.REPO_ROOT = saved_root
+        return len(hits), "\n".join(f"[T6] {h['what']}" for h in hits)
 
 #: ⚠️ 追加块**前后各留 3 空行**：`_hit` 的豁免窗口 = 命中行 **±2 行** ⇒ 贴着正文追加可能被邻行的
 #:    「已删 / 改为 / 原」之类词**降档**（那就成了"变异没命中"，看着跟"检查瞎了"**一模一样**）。
@@ -285,9 +330,8 @@ MUTS_RED2: list[dict] = [
                  _b("CMDS_MISSING: list[tuple[str, list[str]]] = [")), "all": False},
     # ⭐⭐ 2026-10-04（`TAIL-225` 票体系）：`T6` 新长的两查 —— **票文件必须在位** ＋ **不许幽灵票**。
     #    ⚠️ 靶必须挑**在办的**票（`§一`），因为这两查只对在办生效（`§四` 存量按留痕口径不追改）。
-    {"desc": "M19 `T6` 在办票**没有票文件**（把 `TAIL-188` 的票文件挪开）", "mode": "red",
-     "also": ("[T6]", "没有票文件"), "path": TICKET,
-     "rename_away": TICKET.with_suffix(".md._mut_tmp")},
+    {"desc": "M19 `T6` 在办票**没有票文件**（隔离夹具移走票文件）", "mode": "red",
+     "also": ("[T6]", "没有票文件"), "path": PLAN, "ticket_fixture": True},
     {"desc": "M20 `T6` 票仓里有**幽灵票文件**（造一张台账里没有的编号）", "mode": "red",
      "also": ("[T6]", "幽灵票文件"), "path": GHOST_TICKET,
      "create": "# TAIL-9999: 幽灵票（本件用完即删）\n\n**What to build:** x\n\n**Blocked by:** None\n\n"
@@ -409,11 +453,11 @@ def _apply(c: dict) -> None:
     elif "rename_away" in c:
         p.rename(c["rename_away"])
     elif "frag" in c:
-        p.write_bytes(_fit(c["frag"](src), src))
+        _write_bytes(p, _fit(c["frag"](src), src))
     elif "truncate" in c:
         idx = src.find(c["truncate"].encode("utf-8"))
         assert idx > 0, f"被截断的锚点没找到：{c['truncate']}（靶件改写法了 ⇒ 本件需重定靶）"
-        p.write_bytes(src[:idx])                      # 从入口那行起**整段截掉**（含它自己）
+        _write_bytes(p, src[:idx])                      # 从入口那行起**整段截掉**（含它自己）
     else:
         old, new_lf = c["old_new"]
         old, new = _fit(old, src), _fit(new_lf, src)
@@ -421,7 +465,19 @@ def _apply(c: dict) -> None:
         many = c.get("all") or c.get("first")       # `first` 也只改一处，但**允许多次命中**
         assert n >= 1 if many else n == 1, \
             f"锚点命中 {n} 次（期望 {'≥1' if many else '1'}）⇒ **未验证**"
-        p.write_bytes(src.replace(old, new, 1 if c.get("first") else -1))
+        _write_bytes(p, src.replace(old, new, 1 if c.get("first") else -1))
+
+
+def _write_bytes(path: Path, source: bytes) -> None:
+    """Windows短暂文件占用时有限重试写入，失败仍抛出；变异和复原都使用它。"""
+    for attempt in range(5):
+        try:
+            path.write_bytes(source)
+            return
+        except OSError as exc:
+            if attempt == 4 or exc.errno not in {errno.EINVAL, errno.EACCES, errno.EBUSY}:
+                raise
+            time.sleep(0.1 * (attempt + 1))
 
 
 def _restore(c: dict, src: bytes) -> None:
@@ -435,7 +491,7 @@ def _restore(c: dict, src: bytes) -> None:
         c["rename_away"].rename(p)
         assert p.read_bytes() == src, "rename 复原后内容不一致"
     else:
-        p.write_bytes(src)
+        _write_bytes(p, src)
 
 
 def main() -> int:
@@ -481,13 +537,17 @@ def main() -> int:
     for c in cases:
         src = c["path"].read_bytes() if c["path"].exists() else b""   # ⚠️ `create` 式的靶**初始不存在**
         try:
-            _apply(c)
-            if "lines" in c:                                   # 自检：追加式必须**恰好**到目标行数
-                got_lines = len(c["path"].read_text(encoding="utf-8").splitlines())
-                assert got_lines == c["lines"], f"追加后 {got_lines} 行 ≠ 目标 {c['lines']} 行"
-            red, out = run_doc_audit()
+            if c.get("ticket_fixture"):
+                red, out = _missing_ticket_fixture()
+            else:
+                _apply(c)
+                if "lines" in c:                               # 自检：追加式必须恰好到目标行数
+                    got_lines = len(c["path"].read_text(encoding="utf-8").splitlines())
+                    assert got_lines == c["lines"], f"追加后 {got_lines} 行 ≠ 目标 {c['lines']} 行"
+                red, out = run_doc_audit()
         finally:
-            _restore(c, src)                                   # ⭐ 逐条立刻按原 bytes 还原
+            if not c.get("ticket_fixture"):
+                _restore(c, src)                               # ⭐ 逐条立刻按原 bytes 还原
         if c["mode"] == "red":
             ok = red > 0
             tail = f"必须修 {red}（变红）"

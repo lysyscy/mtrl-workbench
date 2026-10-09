@@ -10,7 +10,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = ROOT/'tools/oneoff/_gatescope.py'
-PY = ROOT/'backend/.venv/Scripts/python.exe'
+PY = Path(sys.executable)
 
 
 def probe():
@@ -22,7 +22,7 @@ def probe():
                           text=True, encoding='utf-8', errors='replace')
 
 
-def main():
+def _main():
     original = TARGET.read_bytes()
     source = original.decode('utf-8')
     cases = [
@@ -31,7 +31,9 @@ def main():
         ('失败仍记绿', '        if rc != 0:', '        if False:'),
         ('漏跑和清单外失牙', 'if not required <= selected or not selected <= available:', 'if False:'),
     ]
-    good = probe().returncode == 0
+    normal = probe()
+    good = normal.returncode == 0
+    if not good: print('正常自测失败', normal.stdout, normal.stderr)
     for label, old, new in cases:
         assert source.count(old) == 1, label+'：靶锚必须唯一'
         try:
@@ -39,19 +41,18 @@ def main():
             result = probe()
             hit = result.returncode != 0 and 'AssertionError' in result.stderr
             print(label, '必红', hit)
+            if not hit: print('漏响应诊断', label, result.stdout[-1200:], result.stderr[-1200:])
             good &= hit
         finally:
             TARGET.write_bytes(original)
     assert TARGET.read_bytes() == original, '靶未恢复'
     impact = ROOT/'tools/oneoff/_impactscope.py'
     raw = impact.read_bytes()
-    src = raw.decode('utf-8')
+    src = raw.decode('utf-8').replace('\r\n', '\n')
     for label, old, new in [
-        ('读取证据摘要失牙', 'if gate.digest(raw) == receipt.pytest_inputs:', 'if True:'),
-        ('仓外改变退回局部', "raise ValueError('完整基点外部输入改变')", 'return None'),
-        ('属性保护失牙', 'parser.feed(chunk)', '''return re.sub(r'(?<=>)[\u4e00-\u9fff，。；：！？、（）「」· \t]+(?=<)', 'TEXT', chunk)'''),
-        ('未知误判普通', "return 'full', '关键或未证明输入：' + name", "return 'documents', '错误免检'"),
-        ('插值失去保护', 'chunks.append(source[k:stop])', 'chunks.append(mask_text(source[k:stop]))'),
+        ('说明误触机制全验', "checks = required_checks('documents', commands) if docs else {'tools/audit/bytes_guard.py'}", "checks = {rel for rel, _ in commands}"),
+        ('机器输入使用者漏选', "if Path(name).name in p.read_text(encoding='utf-8')", "if False and Path(name).name in p.read_text(encoding='utf-8')"),
+        ('旧dirty当新增', '    result = {}\n    for name in names:', "    result = {name: (None, (root/name).read_bytes()) for name in names if (root/name).is_file() and not name.startswith('.codebuddy/work/00-scratch/')}\n    for name in names:"),
         ('必要语法检查漏选', "'tools/audit/syntax_audit.py', 'tools/audit/ui_parity.py',", "'tools/audit/ui_parity.py',"),
         ('新检查无分类被跳过', 'return {rel for rel, _ in commands} - required_checks', 'return set() # required_checks'),
     ]:
@@ -61,6 +62,7 @@ def main():
             result = probe()
             hit = result.returncode != 0 and 'AssertionError' in result.stderr
             print(label, '必红', hit)
+            if not hit: print('漏响应诊断', label, result.stdout[-1200:], result.stderr[-1200:])
             good &= hit
         finally:
             impact.write_bytes(raw)
@@ -69,7 +71,7 @@ def main():
     saved = entry.read_bytes()
     text = saved.decode('utf-8')
     eol = '\r\n' if b'\r\n' in saved else '\n'
-    anchor = "    if rc:" + eol + "        (ROOT/'artifacts/_gate_receipts.json').unlink(missing_ok=True)"
+    anchor = "    if rc:"
     assert text.count(anchor) == 1
     try:
         entry.write_bytes(text.replace(anchor, anchor.replace('if rc:', 'if False:'), 1).encode('utf-8'))
@@ -95,9 +97,37 @@ def main():
     finally:
         scoped.write_bytes(saved)
     assert scoped.read_bytes() == saved
+    anchor = 'if _reach(graph, module) & sources'
+    assert text.count(anchor) == 1
+    try:
+        scoped.write_bytes(text.replace(anchor, 'if module in sources', 1).encode('utf-8'))
+        result = probe()
+        hit = result.returncode != 0 and 'AssertionError' in result.stderr
+        print('共享helper使用者漏选', '必红', hit)
+        good &= hit
+    finally:
+        scoped.write_bytes(saved)
     good &= probe().returncode == 0
     print('反向灵敏度与逐字节复原：'  , '通过' if good else '失败')
     return 0 if good else 1
+
+
+def main():
+    """正式工作文件不作变异靶；同一实现与反例在隔离副本里执行。"""
+    if '--in-copy' in sys.argv:
+        return _main()
+    import tempfile
+    import shutil
+    with tempfile.TemporaryDirectory(prefix='mtrl-gate-proof-') as temp:
+        root = Path(temp)
+        for name in ('tools', 'backend/app', 'backend/tests'):
+            shutil.copytree(ROOT/name, root/name, ignore=shutil.ignore_patterns('__pycache__'))
+        result = subprocess.run([str(PY), '-X', 'utf8', str(root/'tools/mut/_mut_gatescope.py'), '--in-copy'],
+                                cwd=root, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                                env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
+        print(result.stdout)
+        print(result.stderr)
+        return result.returncode
 
 
 if __name__ == '__main__':

@@ -82,6 +82,35 @@ def test_API_未勾选恢复剔除被拦():
     assert body["ok"] is False and "勾选" in body["message"]
 
 
+@acc()
+def test_API_恢复剔除真的落库且两类都放回():
+    """⭐ 2026-10-08 BUG 钉子（端点层 · **落库**这一段原先全仓 0 覆盖）。
+
+    用户报障：被规则剔除的单据点「恢复剔除」没反应。
+    端点此前回 `ok:true` ＋ `restored:[]`（规则命中的被归入"不恢复"）⇒ **一行都没改**，
+    而前端只弹一句回执 ⇒ 看着像按钮坏了。
+    ⚠️ 判据 = **两个字段都要落库**：`excluded=False` **且** `exclude_source` 清空
+    ——只清前者的话，来源还留着"规则命中"，界面与后续判断都会继续当它被剔除了。
+    """
+    rows = [
+        _notice(1, excluded=True, exclude_source="manual"),
+        _notice(2, excluded=True, exclude_source="rule"),      # ⭐ 规则命中的也要放回
+        _notice(3, excluded=False, exclude_source=""),
+    ]
+    client, fake = _client(rows)
+    body = client.post("/api/m03/actions/restore", json={"ids": [1, 2, 3]}).json()
+    assert body["ok"] is True and sorted(body["restored"]) == [1, 2], \
+        f"规则命中的没被恢复（这正是用户报障那条）：{body}"
+    assert "「规则命中」" in body["message"], f"回执没分档说清哪几条是规则命中的：{body['message']!r}"
+    assert "不恢复" not in body["message"], "回执还在说「不恢复」= 界面在说假话"
+    got = {n.id: n for n in fake.by_model[PaymentNotice]}
+    for nid in (1, 2):                                     # ⚠️ 逐条验，别只验一条
+        assert got[nid].excluded is False, f"第 {nid} 条 `excluded` 没置回 False（还在剔除态）"
+        assert str(got[nid].exclude_source or "") == "", \
+            f"第 {nid} 条 `exclude_source` 没清空（来源还留着 ⇒ 界面继续当它被剔除）"
+    assert got[3].excluded is False                        # 本就未剔除的行不受影响
+
+
 # ============================================================ 列表查询（能力 11 · 统计列的纯度）
 
 

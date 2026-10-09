@@ -179,14 +179,21 @@ def test_删除只影响付款计划表():
 
 
 @acc("ACC-PLAN-UI-001", "001-08")
-def test_生效窗口外按钮先禁用():
-    assert window_button(9)["enabled"] is False
-    assert window_button(1)["enabled"] is False
-    assert window_button(10)["enabled"] is True
-    assert window_button(28)["enabled"] is True
-    assert window_button(31)["enabled"] is True
-    closed = window_button(9)
-    assert closed["reason"] and "10" in closed["reason"]     # 窗口外必须说清原因（不是点了才拦）
-    assert closed["label"] == ""
-    opened = window_button(10)
-    assert opened["label"] and opened["reason"] == ""
+def test_按计划勾选按钮恒可点且月份可选():
+    """⭐ 2026-10-08 用户裁定：**不再按日期禁用、月份改为可选**。
+
+    原口径是"每月 10 号 → 月底才可点、月份定死当月"（§4.3.2 生效窗口）。取消的理由：
+    那条窗口只是**制度上的习惯**，制度本身也只约束人、不拦系统（§4.3.7「系统不做任何拦截或标记」），
+    做成**按钮置灰**反而挡住正常补勾（用户 2026-10-08 报障）。
+    ⚠️ `reason` 键**保留**（装配层与页面都读它）；`ym` 只用于回显。
+    """
+    for arg in ("", "2026-10"):
+        b = window_button(arg)
+        assert b["enabled"] is True, f"按钮又被按日期/别的条件禁用了（arg={arg!r}）"
+        assert b["reason"] == "", f"不该再有「不可点的原因」（arg={arg!r}）：{b['reason']!r}"
+    assert window_button("2026-10")["label"] == "按 2026-10 付款计划勾选", "回显没带所选月份"
+    assert window_button("")["label"] == "按付款计划勾选", "没月份时也该给出可读的按钮文案"
+    # ⛔ 旧口径的基础件已删（留着就会有人又拿它把按钮置灰 —— 那正是这次报障）
+    from app.mod04_plan import domain as _d
+    assert not hasattr(_d, "in_effective_window"), "`in_effective_window` 还在（会复活按日期禁用）"
+    assert not hasattr(_d, "WINDOW_START_DAY"), "`WINDOW_START_DAY` 还在（= 那个 10 号的门槛）"
