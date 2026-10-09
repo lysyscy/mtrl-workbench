@@ -208,7 +208,7 @@ if (Test-Path $envFile) {
 Step ('5) 库 · ' + $Mode)
 $psql = Join-Path $PgBin 'psql.exe'
 if ($Mode -eq 'empty') {
-    Say '   · 建库＋角色：ops\init_db.sql（⚠️ 先把里面的 <PASSWORD> 换成目标机口令，并同步写进仓根 .env）'
+    Say '   · 建库＋角色：ops\init_db.sql（⚠️ 里面的口令就是本机那一份；目标机沿用即可，不必再改 —— 要改就改仓根 .env 并同跑本脚本）'
     $null = Run $psql @('-U', 'postgres', '-f', (Join-Path $RepoRoot 'ops\init_db.sql')) $RepoRoot
     Say '   · 建表：alembic upgrade head'
     $null = Run (Join-Path $venv 'Scripts\python.exe') @('-m', 'alembic', 'upgrade', 'head') (Join-Path $RepoRoot 'backend')

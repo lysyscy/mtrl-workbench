@@ -226,7 +226,7 @@ if ($SkipFace) {
 # ---- 4) 库 ----
 Step '3) 库（空库 SQL ＋ 可选现状 dump）'
 if ($DryRun) { Say '   [干跑] db\init_db.sql' }
-else { Copy-Item -Force (Join-Path $RepoRoot 'ops\init_db.sql') (Join-Path $dirDb 'init_db.sql'); Say '   ✓ db\init_db.sql（空库路线：建库＋角色；⚠️ 原样复制，产包前须确认不含实值，见deployment §二）' }
+else { Copy-Item -Force (Join-Path $RepoRoot 'ops\init_db.sql') (Join-Path $dirDb 'init_db.sql'); Say '   ✓ db\init_db.sql（空库路线：建库＋角色；口令随本机那份，目标机沿用）' }
 if ($WithDump) {
     $pgdump = Join-Path $PgBin 'pg_dump.exe'
     if (-not (Test-Path $pgdump)) { Say ('   ⛔ 找不到 ' + $pgdump + ' ⇒ 跳过着一条（用 -PgBin 指路）') }
