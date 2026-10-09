@@ -239,10 +239,8 @@ function pjTypeDlg() {
       <span style="flex:1;min-width:0"><b>${esc(PJ_TYPE_LABEL[k])}</b> <span class="mut sm">· ${desc}</span></span></div>`;
   modal({
     title: `改类型 · ${esc(pjDisp(p))}`,
-    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">当前类型：<b>${esc(PJ_TYPE_LABEL[p.type] || p.type)}</b>。
-      <b>三类判定</b>（§2.2.1）：全名含「小微」⇒ <b>小微壳</b>；同一全名挂 <b>≥2 个仓库</b> ⇒ 待人工确认；其余 ⇒ <b>普通项目</b>。
-      ⚠️ 有的壳全名里<b>没有「小微」</b> ⇒ 会被判成普通项目 —— <b>这里就是人工纠正的入口</b>（改动<b>留痕</b>，可在「修改留痕」卡查）。</div>
-      <div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))">⛔ <b>不能选「具体小微」</b>：它得挂在一个壳下面、还占一个仓库名，由链路产生（人工指定只会造出挂不上的行）。</div>
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">当前类型：<b>${esc(PJ_TYPE_LABEL[p.type] || p.type)}</b>。修改类型会留痕。</div>
+      <div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))">这里只能改为普通项目或小微壳。</div>
       ${opt('shell', '不挂仓库；它名下的仓库 = 具体小微（今后走这条路）')}
       ${opt('normal', '要挂一个仓库名（候选键）—— 选了它，下面会让你填')}
       ${pjTypeNew === 'normal' ? `<div style="margin-top:calc(6px * var(--fscale))"><div class="sm mut" style="margin-bottom:calc(4px * var(--fscale))">仓库名（普通项目必填）</div>
@@ -508,8 +506,8 @@ async function openOwnDialog() {
     title: `待指定归属 · ${items.length} 条`,
     wide: true,
     body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">${OWN_SRC === 'jc'
-      ? `<b>项目名落在「壳」上</b>，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 那几条这次会自动命中并写入（集采是<b>逐条写入</b>，已落的不受影响）。`
-      : `付款项目名落在<b>壳</b>上，而「单据名称」没能在该壳下的小微关键词里命中 ⇒ 系统<b>不猜</b>。<br>⭐ 补完关键词后请<b>再抓一次</b> —— 本批数据<b>不暂存</b>，那次会自动命中并写入。`}</div>${box}`,
+      ? `补关键词或建小微后，请重新抓取未完成归属的合同；已写入的合同不受影响。`
+      : `本批未归属数据不暂存；补关键词或建小微后，请重新抓取。`}</div>${box}`,
     footer: `<button class="btn" data-act="closeModal">关闭</button>`,
   });
 }
@@ -531,8 +529,8 @@ async function ownWhCheck(i) {
   /* ⚠️ `D9`：查名单**要登录 i8**（可能**强踢**在线用户）⇒ 先二次确认，确认之后才发请求。 */
   modal({
     title: `查 i8 仓库名单 · ${esc(name)}`,
-    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能<b>强制踢掉</b>该账号其它在线会话</b>（不会自动重试登录）—— 若同事正在用 i8，请先<b>择时</b>。</div>
-      <div class="tip" style="margin:0">查 i8 仓库名单里<b>有没有</b>「${esc(name)}」、以及它<b>挂在哪个项目全名</b>下 —— 用来判断该走「选已有小微」还是「只能手填」。⚠️ <b>只查不写入</b>。</div>`,
+    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))">会登录 i8，可能顶掉该账号在线会话；请避开同事使用时段。</div>
+      <div class="tip" style="margin:0">查询「${esc(name)}」及所属项目，只查询、不写入。</div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="ownWhOk" data-i="${i}">确认查询（会顶号）</button>`,
   });
@@ -776,20 +774,28 @@ const adaptWh = r => ({
 
 /* ⭐ **重拉（唯一出口）**：写动作 / 切换核算年月之后一律走它 —— 以后端为准，⛔ 前端不自己造状态。
    ⚠️ `WHM` / `EXTM` / `BIGVAL` 一律**原地清空再填**（对象身份不变 —— 外部持有的是引用）。 */
+let extractRequest=0;
+async function reloadExtract(){
+  const request=++extractRequest;
+  EXT_STATE.loaded=false;EXT_STATE.error='';
+  const year=fExt.year,status=fExt.status;
+  try{
+    const ex=await API.m07Extract(year,status);
+    if(request!==extractRequest) return;
+    if(!ex||!ex.annual) {EXT_STATE.error='库存汇总未读取，请重试';return;}
+    const ext=adaptExtract(ex.amounts);
+    Object.keys(EXTM).forEach(k=>delete EXTM[k]);Object.assign(EXTM,ext);
+    Object.keys(BAL_EX).forEach(k=>delete BAL_EX[k]);Object.assign(BAL_EX,adaptBalances(ex.balances));
+    EXT_ANNUAL=ex.annual;EXT_STATE.loaded=true;EXT_STATE.year=year;
+  }catch(e){if(request!==extractRequest) return;EXT_STATE.error=e.message||'库存汇总读取失败，请重试';throw e;}
+}
 async function reloadM07() {
-  const [st, ex, bg] = await Promise.all([
-    API.m07Settlement(fWhYm), API.m07Extract(), API.m07Big(),
+  const [st, bg] = await Promise.all([
+    API.m07Settlement(fWhYm), API.m07Big(), reloadExtract(),
   ]);
   const ym = (st && st.ym) || fWhYm;
   Object.keys(WHM).forEach(k => delete WHM[k]);
   (st.rows || []).forEach((r, i) => { (WHM[ym] = WHM[ym] || []).push(adaptWh(r)); });
-  const ext = adaptExtract(ex && ex.amounts);
-  Object.keys(EXTM).forEach(k => delete EXTM[k]);
-  Object.keys(ext).forEach(k => { EXTM[k] = ext[k]; });
-  /* 「结余」手工录入值（唯一取数出口 = 后端 `balances`）—— 同法**原地清空再填**（保对象引用）。 */
-  const bal = adaptBalances(ex && ex.balances);
-  Object.keys(BAL_EX).forEach(k => delete BAL_EX[k]);
-  Object.keys(bal).forEach(k => { BAL_EX[k] = bal[k]; });
   if (bg) {
     if (bg.manual_keys && bg.manual_keys.length) {
       BIG_MKEYS.length = 0; bg.manual_keys.forEach(k => BIG_MKEYS.push(k));
@@ -1451,10 +1457,7 @@ async function openPendDialog(i) {
   PEND_DLG = it;
   modal({
     title: `人工指认 · ${it.wh}`,
-    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">材料报表里出现了
-      <b>陌生仓库</b>，而它的全名在档案里命中 <b>${rows.length}</b> 条非壳行 ⇒ <b>系统不猜</b>，
-      请你指明这条仓库名该写到<b>哪一行</b>。⚠️ 这是<b>系统写入</b>（不是人工改仓库名，§2.3.1）；
-      <b>类型纠正</b>不在这里做（另立）。</div>
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">该全名有 ${rows.length} 条候选档案；请选择要写入仓库名的占位行。</div>
       ${kvBlock([['陌生仓库名', `<span class="fc">${esc(it.wh)}</span>`],
                  ['项目全名', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.full)}</span>`],
                  ['系统当时为什么没自己定', `<span style="font-size:calc(11.5px * var(--fscale))">${em(it.reason)}</span>`]])}
@@ -1481,9 +1484,7 @@ async function openArchDialog(i) {
   ARCP_DLG = it;
   modal({
     title: `选定仓库 · ${esc(it.full)}`,
-    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">i8 名单里这个全名挂了
-      <b>${it.stored.length}</b> 个仓库，而<b>一条普通项目只挂一个仓库</b> ⇒ <b>系统不猜</b>，
-      请你选定<b>一个</b>，系统按它建行（⛔ 仓库名不许手填，§9.4）。</div>
+    body: `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">该全名在 i8 有 ${it.stored.length} 个仓库；请选择一个未被占用的仓库建档。</div>
       ${kvBlock([['项目全名', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.full)}</span>`],
                  ['i8 名单里的仓库', `<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.stored.join('、'))}</span>`],
                  ['已被别的行占用（不列）', `<span style="font-size:calc(11.5px * var(--fscale))">${gone.length ? esc(gone.join('、')) : '（无）'}</span>`],
@@ -1670,12 +1671,11 @@ async function reloadHome() {
 async function m02Sync(which) {
   const isWh = which === 'warehouses';
   const name = isWh ? '仓库名单' : '常用项目列表';
-  const tail = isWh ? '仓库名单本身<b>不写入</b>（它是建档的输入）；建档请用「常用项目列表」那一行'
-                    : '会按 信息化编号 <b>建档，重复的不会重复建</b>，并把「待人工建档」清单留在执行记录里（去 <b>m01</b> 处理）';
+  const tail = isWh ? '只读取仓库名单；建档请同步常用项目列表'
+                    : '新项目建档，已有项目不重复建档；待人工项目请到项目档案处理';
   modal({
     title: `同步 ${name}`,
-    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，并强制踢掉该账号其它在线会话</b> ——
-      若其他同事正在用 i8，请先<b>择时</b>；系统<b>不会</b>自动重试登录。</div>
+    body: `<div class="tip dg" style="margin:0 0 calc(10px * var(--fscale))">会登录 i8，并顶掉该账号其他在线会话；请避开同事使用时段。</div>
       <div class="tip" style="margin:0">${tail}</div>`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="m02SyncOk" data-which="${which}">确认同步（会顶号）</button>`,

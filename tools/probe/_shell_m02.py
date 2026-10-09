@@ -79,7 +79,7 @@ def check(page, errors: list[str]) -> None:
             ("付款通知书 还没有执行记录" not in got["kv"],
              "付款通知书那行没被误报成「还没有执行记录」（纯年月 target 也算它）"),
             ("已撤单" not in got["kv"], "⛔ 演示表达式那几行（含「模拟」字样）没再露出来"),
-            ("强制踢掉" in dlg["text"] and dlg["okBtn"], "同步确认弹窗讲清了会顶号 ＋ 确认键在"),
+            (("顶掉" in dlg["text"] or "强制踢掉" in dlg["text"]) and dlg["okBtn"], "同步确认弹窗讲清了会顶号 ＋ 确认键在"),
         ]
         for ok, what in oks:
             print(("  ✅ " if ok else "  ⛔ ") + what)

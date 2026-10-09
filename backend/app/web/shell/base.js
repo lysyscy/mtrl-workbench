@@ -45,6 +45,7 @@ let EXTM = {};   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/extract` 
    ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/extract` 的 `balances` 转形填充（演示值不搬进来）；
    ⭐ **未录入的键不出现**（域值 `null`）⇒ 导出里如实留空；**`0` 是合法录入值**。 */
 let BAL_EX = {};
+let EXT_ANNUAL = {}, EXT_STATE = {loaded:false,error:'',year:''};
 /* 结余列的性质说明 —— **唯一出口**（表格 `title` 与表下说明都用它，⛔ 别在别处再写一遍）。 */
 const EXT_BAL_NOTE = '结余 = 历史结余 · 由用户手工录入（未录入 ⇒ 导出里如实留空；0 是合法值）';
 /* 结余取数出口：**未录入给 `null`**（不是 0 —— 0 会被读成"确实为 0"）。 */

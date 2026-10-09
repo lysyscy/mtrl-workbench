@@ -34,14 +34,12 @@ def test_类型列的人工覆盖入口由钩子注入():
 
 
 @acc("ACC-PRJ-OWN-001", "001-12")
-def test_弹窗讲清口径且只有两个可选():
-    """⚠️ 三类判定是**自动**的，人工覆盖是**例外** ⇒ 弹窗必须把这件事说清（含留痕、含"为什么不能选具体小微"）。"""
+def test_弹窗讲清范围与留痕且只有两个可选():
+    """人工覆盖只讲操作范围与留痕；自动判定规则由域内核负责，不在弹窗复述。"""
     dlg = func_body("pjTypeDlg")
-    assert "§2.2.1" in dlg, "要指出口径的主人节"
-    assert "小微" in dlg and "≥2 个仓库" in dlg, "要把自动判定的规则讲出来（用户才知道自己为什么来改）"
-    assert "没有「小微」" in dlg, "要说清**根因**：有的壳全名不含「小微」⇒ 被误判"
-    assert "留痕" in dlg, "要告诉用户改动留痕（可查）"
-    assert "不能选「具体小微」" in dlg and "由链路产生" in dlg, "⛔ 具体小微不由人工指定，要写明"
+    assert "当前类型" in dlg and "PJ_TYPE_LABEL[p.type]" in dlg, "要显示当前真实类型"
+    assert "修改类型会留痕" in dlg, "要告诉用户改动留痕（可查）"
+    assert "这里只能改为普通项目或小微壳" in dlg, "要讲清可修改范围，具体小微不由人工指定"
     assert "opt('small'" not in SHELL and "opt('shell'" in SHELL and "opt('normal'" in SHELL, \
         "只给两个选项（普通项目 / 小微壳）"
 

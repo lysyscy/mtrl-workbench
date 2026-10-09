@@ -207,7 +207,7 @@ const API = {
 
   /* ---- MOD-07 收发结存与月度会大表（⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()`） ---- */
   m07Settlement: ym => API.get(`/api/m07/settlement?period=${encodeURIComponent(ym || '')}`),
-  m07Extract: () => API.get('/api/m07/extract'),
+  m07Extract: (year='',status='全部') => API.get('/api/m07/extract?year='+encodeURIComponent(year)+'&status='+encodeURIComponent(status)),
   m07BalCell: body => API.post('/api/m07/extract/balance', body),
   m07Big: () => API.get('/api/m07/big'),
   m07BigCell: body => API.post('/api/m07/big/cell', body),

@@ -77,6 +77,7 @@ class NoticeRow:
     flows: tuple = ()                       # 该行**全部**流水（含已撤销）—— 撤销 / 查看关联要用
     has_link: bool = False                  # 是否有关联集采合同（`MOD-11` 落地前恒 False）
     edited_fields: tuple = ()               # 已被人工手改过的统计字段（判据 = **留痕**，§4.2.7 / R8 的"已改"态）
+    jc_supplier: str = ""                   # 集采实际供应商（人工录入 / 自动匹配确认；**不被 i8 导入覆盖**，§4.2.7）
 
     @property
     def pay_amount(self) -> Decimal:
@@ -216,6 +217,9 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None) -> list
                 flows=tuple(flows_of(int(n.id)) or ()),
                 has_link=bool(links_of(int(n.id))),
                 edited_fields=tuple(manual_edited_fields(traces_of(int(n.id)), int(n.id))),
+                # ⛔ **不许漏装**：`list_data._row_dict` 已改为直取本字段（不再 `getattr` 兜空）——
+                #    漏装会当场 `AttributeError` 变红，而不是静默变成空串（那会让「点采用」把值清空）。
+                jc_supplier=str(n.jc_supplier or ""),
             )
         )
     return rows

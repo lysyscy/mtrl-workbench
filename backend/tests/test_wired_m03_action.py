@@ -85,7 +85,13 @@ def test_壳里有生效流水才出撤销付款且单条就地开窗():
     assert "撤销付款" in reg, "按钮文案丢了"
     rev = _revoke()
     assert "if(live.length===1) return ACT.revDlg(" in rev, "单条流水没有就地开**共用的**撤销弹窗"
-    assert "撤销必须填写原因" in SHELL, "「撤销必须填原因」这条没讲清"
+    from tests.shell_src import act_entry
+    dlg = act_entry("revDlg")
+    ok = act_entry("revOk")
+    assert "撤销须填原因" in dlg and 'id="rReason"' in dlg, "撤销必须填原因并提供输入框"
+    assert "已付金额减少，付款状态重新判定" in dlg, "要说明撤销的真实后果"
+    assert "if(!rs) return" in ok and "撤销原因必填" in ok, "空原因须拦下并反馈"
+    assert ok.index("if(!rs) return") < ok.index("API.flowRevoke(f.id, rs)"), "原因校验须在提交前"
 
 
 @acc("ACC-PAY-ACTION-001", "001-02")
@@ -109,7 +115,10 @@ def test_壳里查看关联是纯只读且流水含已撤销():
     reg = _act_cell()
     assert 'data-act="ntTrace"' in reg and "查看关联" in reg, "查看关联入口没了"
     tr = _trace()
-    assert "只读视图" in tr, "弹窗没自称只读"
+    import re
+    assert "关联集采合同与付款流水" in tr, "要说明查看范围"
+    assert set(re.findall(r'data-act="([^"]+)"', tr)) == {"closeModal"}, "只读窗口只允许关闭"
+    assert "API." not in tr, "查看关联不得发起写请求"
     assert 'data-act="closeModal">关闭</button>' in tr, "弹窗出现了「关闭」以外的按钮（就不只读了）"
     assert "const live=flows.filter(f=>!f.voided), voided=flows.filter(f=>f.voided);" in tr, \
         "流水没分出「生效 / 已撤销」两档"

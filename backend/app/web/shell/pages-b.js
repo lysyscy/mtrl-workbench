@@ -34,24 +34,28 @@ const procTabName=()=>procTab===2?'差异表':(procTab===1?'表② 调整后表'
    **复用共用的项目面板 `projPanel`，但由调用点声明为「单选」**（2026-09-13 用户口径）；
    显示名走 `PROJ_META_KEY`（仓库名 → 展示名）。 */
 const procPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>[procPj],pickAct:'procPjPick',meta:PROJ_META_KEY,single:true});
-/* —— 过程资料「按模板导出（每项目一份）」的**多选项目**展开区（2026-09-13 用户口径）——
-   原按钮只演示一份；现改为：点开展开区 → **多选项目**（默认 = 本页当前所选）→
-   选 N 个项目生成 **N 个文件**（每个 = 该项目的过程资料，17 列模板）→ ≥2 个 ⇒ 打成一个 zip。
-   ⚠️ 展开区渲染在 `.tw` **之外**（浮层面板才不被裁）。 */
-let procExpOn=false, procExpPjs=[];
+/* 过程资料批量导出：同一弹窗复选项目并确认，默认当前项目；每项目一本，多个项目ZIP。 */
+let procExpPjs=[];
 /* ⭐ 2026-09-28：「录机械费」弹窗当前选的项目（换项目 = 重开弹窗重载月份与已有值；见 `ACT.mechPjPick`） */
 let mechWh='';
 /* ⭐ 同上：「录机械费」弹窗当前在填的**核算期**（手动填 ⇒ 换核算期要重开弹窗重载该月现值） */
 let mechYm='';
-const procExpPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>procExpPjs,allAct:'procExpPjAll',noneAct:'procExpPjNone',pickAct:'procExpPjPick',meta:PROJ_META_KEY});
-const procExpStrip=()=>`${FBAR({cls:'strip',body:`
-      <div class="fi"><span class="pill" style="margin:0" title="按 17 列模板导出，每项目一份，报分公司工程科">按模板导出</span></div>
-      <div class="fi"><span class="mut sm" style="margin:0">项目范围在<b>卡头那个按钮</b>里选（点它开多选面板）；已选 <b>${procExpPjs.length}</b> 个项目</span></div>
-      <div class="fi" style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale))">
-        <button class="btn sm pri" data-act="procExpOk" ${procExpPjs.length?'':'disabled'} title="${procExpPjs.length?'按所选项目导出（每项目一份）':'请先选项目'}">导出</button>
-        <button class="btn sm" data-act="procExpCancel">取消</button></div>
-      <div class="mut sm" style="flex-basis:100%">导出形态：<b>每项目一份</b>（17 列模板 · 报分公司工程科）；选 <b>2 个以上</b> ⇒ 打成一个 <b>zip</b>。文件名含项目展示名与当前年月（§7.1）。</div>
-    `})}`;
+const procExpDlg=()=>{
+  const keys=pjSort(PROC_PJS),selected=new Set(procExpPjs);
+  modal({title:`批量导出 · ${procTabName()}`,wide:true,body:`
+    <div class="tip">导出所选项目的当前表；每项目一份，多个项目打包为 ZIP。</div>
+    <div style="display:flex;gap:calc(8px * var(--fscale));margin-bottom:calc(8px * var(--fscale))"><button class="btn sm" data-act="procExpPjAll">全选</button><button class="btn sm" data-act="procExpPjNone">清空</button><span id="procExportCount" class="mut sm">已选 ${selected.size} 个项目</span></div>
+    <div id="procExportProjects" style="max-height:48vh;overflow:auto;display:flex;flex-direction:column;gap:calc(8px * var(--fscale))">
+      ${keys.map(key=>`<label style="display:flex;align-items:flex-start;gap:calc(8px * var(--fscale));overflow-wrap:anywhere"><input type="checkbox" class="chk" data-act="procExpPjPick" data-pj="${esc(key)}" ${selected.has(key)?'checked':''}><span>${esc(pjLabel(key))}</span></label>`).join('')}
+    </div><div id="procExportError" class="sm" role="alert"></div>`,
+    footer:`<button class="btn" data-act="procExpCancel">取消</button><button class="btn pri" data-act="procExpSave" title="${selected.size?'导出所选项目':'请先选择项目'}" ${selected.size?'':'disabled'}>导出</button>`});
+};
+const procExpSelection=()=>{
+  const selected=new Set(procExpPjs);
+  document.querySelectorAll('#procExportProjects input').forEach(el=>el.checked=selected.has(el.dataset.pj));
+  const count=document.querySelector('#procExportCount');if(count) count.textContent=`已选 ${selected.size} 个项目`;
+  const save=document.querySelector('[data-act="procExpSave"]');if(save){save.disabled=!selected.size;save.title=selected.size?'导出所选项目':'请先选择项目';}
+};
 const bigCands = () => pjKeysOfRows(pjNoShell().filter(p=>p.status==='在建'));   /* 候选 = 在建 · 非壳（实时算） */
 let BIGSET = [];   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/big` 的 `selected` 原地填充（行序 = 大表自己的顺序；未选择项目时后端给「全部候选」，与原型同款） */
 let BIGDRAFT = null;         /* 选择项目弹窗的**草稿**（「确定」前的临时顺序） */
@@ -66,7 +70,7 @@ let DEBTPICK = [];           /* 已选项目（**仓库名**数组，顺序 = �
 let DEBTDRAFT = null;        /* 选择项目弹窗的草稿（「确定」前的临时顺序） */
 /* ⭐ 大表每一格的取数（**唯一出口**：页面渲染 / 导出共用）。
    `ym` = 核算月（默认 `bjMonth(-1)`，§9.2 材料报表类）。
-   · 焊材 / 三气：取自**收发结存提取**（`EXTM`）—— 当月走 `extMon`、累计走 `extTotal`（全部月份之和）。
+   · 焊材 / 三气：取自库存入库原单（`EXTM`）—— 当月走 `extMon`、累计走 `extAllTotal`（全部月份之和）。
    · 外租机械 = **外租零租含税 ＋ 外租包月含税**（= 进结算那两列）⇒ 当月复用 `machExtRent`、累计复用 `machSettleOf`。
    · 设备租赁（含内租）= **内租设备**（机械 6 列的第 1 列）。
    · **合计 = 外租机械开工累计 ＋ 设备租赁开工累计**（用户口径；已按模板图逐行核对）。
@@ -76,7 +80,8 @@ const bigRentCum  = wh => machSettleOf(wh);
 const bigLease    = (wh,ym) => N2(mach6Arr(wh,ym)[1]);
 const bigLeaseCum = wh => N2(Object.keys(MACH6[wh]||{}).reduce((a,k)=>a+bigLease(wh,k),0));
 const bigTotalCum = wh => N2(bigRentCum(wh) + bigLeaseCum(wh));
-const bigHWCum = wh => extTotal('焊材', wh), bigQTCum = wh => extTotal('气体', wh);
+const extAllTotal=(kind,wh)=>EXT_STATE.loaded?N2(extMons().reduce((sum,month)=>sum+extMon(kind,wh,month),0)):null;
+const bigHWCum = wh => extAllTotal('焊材', wh), bigQTCum = wh => extAllTotal('气体', wh);
 /* ⭐ **主材累计（含税）** 的**取数唯一出口**（2026-09-13 用户裁定：由手填改为**派生**）——
    口径 = **按项目取「集采台账结算」额**：= 该项目集采合同**结算金额之和**（§5.7.1）。
      · 结算口径本身**照搬** `jcSettle`（有贸易公司 → 贸易公司发票子表合计；无 → 供应商发票子表合计，§6.4.1），
@@ -87,30 +92,27 @@ const bigHWCum = wh => extTotal('焊材', wh), bigQTCum = wh => extTotal('气体
 /* ⚠️ 「主材累计（含税）」的取数口**集采台账属 M5**：未接入时给 `null`（页面显「—」），⛔ 不写 0 冒充「确实没有」（`TAIL-25`；口径 = 后端 `mat_available`）。 */
 const bigMatCum = wh => MAT_OK ? N2(JCs.filter(j => j.tag === '纳入台账' && j.proj === wh).reduce((a, j) => a + jcSettle(j), 0)) : null;
 /* （原 `TOK` / `pickExtra` 已废：大表不再按"项目全名关键词"匹配，改按**仓库名**走上面的出口。） */
-/* ---------- 焊材 / 气体提取的**取数出口**（2026-09-13） ----------
-   · `extWhs(kind)` = 该类别下出现过的仓库（**排序走共性出口 `pjSort`**）。
-   · `extMon(kind, wh, m)` = 某仓库某月的金额（缺省 0）；`extMons()` = 有数据的月份（升序）。
-   · `extSum(kind, wh)` = **「金额」列** = 所选**月份范围**内的金额（`fExt.ym` 走 `tmIn`：月 / 连续月 / 年 / 全部）。
-   · `extTotal(kind, wh)` = **「总金额」列** = 全部月份的累计（**不随月份筛选变**）。
-   · `extVisible(kind)` = 按「项目状态」过滤后的行（状态取自**项目档案行** `pjRowOf(仓库名).status`）。 */
-let fExt = { status: '在建', ym: bjMonth(-1) };   /* 项目状态默认「在建」（用户口径）；月份默认上月（§9.2） */
+/* 库存焊材 / 气体：EXTM保存全部核算月金额供大表累计；年度页面读后端年度网格。
+   extMon/extAllTotal未读取返回null，成功读取后的缺月为0。
+   extSum为所选年金额，extTotal为往年加所选年金额；人工结余由BAL_EX独立保存。 */
+let fExt = { status: '在建', year: bjMonth(-1).slice(0,4) };   /* 项目状态默认「在建」（用户口径）；年份默认上月所属年（§9.2） */
 const extMons = () => Object.keys(EXTM).sort();
-const extMon = (kind, wh, m) => { const h = ((EXTM[m] || {})[kind] || []).find(x => x[0] === wh); return h ? h[1] : 0; };
+const extMon = (kind, wh, m) => { if(!EXT_STATE.loaded) return null; const h = ((EXTM[m] || {})[kind] || []).find(x => x[0] === wh); return h ? h[1] : 0; };
 const extWhs = kind => { const s = new Set(); extMons().forEach(m => (EXTM[m][kind] || []).forEach(x => s.add(x[0]))); return pjSort([...s]); };
 const extStatusOf = wh => { const p = pjRowOf(wh); return p ? p.status : ''; };
-const extVisible = kind => extWhs(kind).filter(w => fExt.status === '全部' || extStatusOf(w) === fExt.status);
-const extSum = (kind, wh) => N2(extMons().reduce((a, m) => a + (tmIn(fExt.ym, m) ? extMon(kind, wh, m) : 0), 0));
-const extTotal = (kind, wh) => N2(extMons().reduce((a, m) => a + extMon(kind, wh, m), 0));
-/* 提取表的一「块」= 该类别的数据行 + **紧贴其后的合计行**（用户口径：焊材的求和要贴着焊材数据行）。
-   空（被筛没了）时给提示行；跨列数由 `thCount(EXT_THEAD)` 派生。页面与导出**共用**这一份取数。 */
+const extVisible = kind => EXT_STATE.loaded?((EXT_ANNUAL[kind]||{}).rows||[]).map(row=>row.warehouse):[];
+const extAnnualOf=(kind,wh)=>((EXT_ANNUAL[kind]||{}).rows||[]).find(row=>row.warehouse===wh);
+const extSum=(kind,wh)=>{const row=extAnnualOf(kind,wh);return row?N0(row.total)-N0(row.prior):null;};
+const extTotal=(kind,wh)=>{const row=extAnnualOf(kind,wh);return row?N0(row.total):null;};
 function extBlock(kind){
-  const list = extVisible(kind), tagCls = kind === '焊材' ? 't-wn' : 't-pri';
-  if (!list.length) return EMPTYROW(thCount(EXT_THEAD), '当前筛选条件下没有'+kind+'数据', '换个「项目状态」或月份');
-  /* 结余格 = **点格即改**（`ACT.extBal`）：未录入 ⇒ 空 + 「待填」占位（⛔ 不写 0）；`0` 照写 `0`（合法值）。 */
-  const balCell = w => { const v = extBalOf(kind, w);
-    return `<td class="num"><input class="inp num" data-act="extBal" data-k="${esc(kind)}" data-p="${esc(w)}" value="${v == null ? '' : esc(String(v))}" placeholder="待填" title="${esc(EXT_BAL_NOTE)}"></td>`; };
-  const rows = list.map(w => `<tr><td><span class="tag ${tagCls}">${kind}</span></td><td class="sm">${esc(w)}</td>${balCell(w)}<td class="num">${M(extTotal(kind, w))}</td><td class="num">${M(extSum(kind, w))}</td></tr>`).join('');
-  return rows + sumRowOf(EXT_THEAD, list, {3:rs=>N2(rs.reduce((a,w)=>a+extTotal(kind,w),0)),4:rs=>N2(rs.reduce((a,w)=>a+extSum(kind,w),0))}, {lead:kind+'合计',sticky:false});
+  const head=extHead();
+  if(!EXT_STATE.loaded) return EMPTYROW(thCount(head),EXT_STATE.error||'正在读取库存年度汇总…','');
+  const grid=EXT_ANNUAL[kind]||{},list=grid.rows||[];
+  if(!list.length) return EMPTYROW(thCount(head),'当前筛选条件下没有'+kind+'数据','换个项目状态或年份');
+  const rows=list.map(row=>{const wh=row.warehouse,bal=extBalOf(kind,wh);
+    return `<tr><td class="fl">${esc(kind)}</td><td class="sm fl" style="min-width:180px;max-width:260px;white-space:normal;overflow-wrap:anywhere">${esc(wh)}</td><td class="num">${M(N0(row.prior))}</td>${row.cells.map(v=>`<td class="num">${M(N0(v))}</td>`).join('')}<td class="num">${M(N0(row.total))}</td><td class="num"><input class="inp num" data-act="extBal" data-k="${esc(kind)}" data-p="${esc(wh)}" value="${bal==null?'':esc(String(bal))}" placeholder="未录入" title="独立人工结余，不计入往年金额和总金额"></td></tr>`;
+  }).join('');
+  return rows+`<tr class="sum"><td class="fl">${kind}合计</td><td class="fl"></td>${(grid.sum_row||[]).map(v=>`<td class="num">${M(N0(v))}</td>`).join('')}<td></td></tr>`;
 }
 /* 手填值解析（OPEN-05）：当月已录入 → 用当月值（无标记）；否则向更早月份取「最近一次录入值」带入（标来源月）。
    注意用 != null 判断：0 是合法录入值，不能被当作「未录入」。 */

@@ -286,8 +286,9 @@ const AWF_THEAD=`<th>数据项</th><th>来源</th><th>金额</th><th>占合计</
 /* MOD-07 收发结存的表头（第 11 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(WH_THEAD)`），不写死 */
 const WH_THEAD=`<th>仓库名</th><th>行数</th><th>期初金额</th><th>收金额</th><th>发金额</th><th>结存金额</th><th>校验</th>`;
 /* MOD-07 焊材 / 气体提取的表头（第 12 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(EXT_THEAD)`）。
-   ⭐ 2026-09-18 用户裁定（甲）：本表**加一列「结余」**（位置照成品模板 = 仓库之后、金额之前），**点格即改**。 */
-const EXT_THEAD=`<th>类别</th><th>仓库</th><th>结余<b class="mut">（手工录入）</b></th><th>总金额<b class="mut">（累计）</b></th><th>金额<b class="mut">（按所选月份）</b></th>`;
+   TAIL-266：往年、12月、总金额；独立人工结余置末，原模板列序保持。 */
+const EXT_THEAD=`<th class="fl">类别</th><th class="fl">项目</th><th>往年金额</th>${Array.from({length:12},(_,i)=>`<th>MONTH-${i+1}</th>`).join('')}<th>总金额</th><th>人工结余</th>`;
+const extHead=()=>EXT_THEAD.replace(/MONTH-(\d+)/g,(_,m)=>`${fExt.year}-${String(m).padStart(2,'0')}`);
 /* MOD-07 月度会大表的表头（第 13 张抽出来的表）—— 用户给的**最终模板**（20 列 · **两行表头**）。
    ⚠️ 两行表头的 `<th>` 总数（23）≠ 数据列数（20）⇒ 本表**刻意不可排**：
       `applySorts` 按 `thead` 里 `<th>` 的下标定位列（`data-i`），两行表头会整体错位。

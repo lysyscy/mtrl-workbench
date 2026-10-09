@@ -45,7 +45,7 @@ def test_壳里重置回默认月且不串页():
 @acc("ACC-SETL-EXT-001", "001-05")
 def test_壳里提取页重置回在建与上月():
     """「重置」= 项目状态回**默认**（在建）＋ 金额月份回**默认**（上月）。"""
-    assert "fExtReset:()=>{ fExt.status='在建'; fExt.ym=bjMonth(-1);" in SHELL, "提取页重置没回默认"
+    assert "fExtReset:async()=>{fExt.status='在建';fExt.year=bjMonth(-1).slice(0,4);" in SHELL, "提取页重置没回默认"
 
 
 @acc("ACC-SETL-EXT-001", "001-03")
@@ -59,7 +59,7 @@ def test_壳里提取表两类按序且合计行紧贴():
     assert 0 <= i_solder < i_gas, "两类的渲染顺序变了（焊材必须排在气体前面）"
     # ⚠️ 合计行在 **`extBlock` 的体内**（不在 `V.m07` 切片里 ⇒ 要取函数体）
     b = func_body("extBlock")
-    assert "sumRowOf(EXT_THEAD, list, {3:" in b and "lead:kind+'合计'" in b, \
+    assert "grid.sum_row" in b and "${kind}合计" in b, \
         "块的合计行不在本块内 / 不是由共用出口出的"
     # ⭐ 2026-09-29（`TAIL-64` P2③）：判据从「钉字面」改成「钉意图」——
     #   原写法钉整串 `<table class="dt cond" data-sort-key="m07:kinds">`；表外壳抽进统一件 `TBL` 之后**当场假红**。
@@ -79,10 +79,10 @@ def test_壳里提取表两类按序且合计行紧贴():
 def test_壳里按项目状态过滤且空态跨列派生():
     """① 可见行按**项目状态**过滤（`extVisible`）；③ 该状态下没有数据 ⇒ 空态提示行，
     `colspan` **由表头派生**，并点名是哪一类。"""
-    assert "const extVisible = kind => extWhs(kind).filter(w => fExt.status === '全部'" in SHELL, \
+    assert "API.m07Extract(year,status)" in func_body("reloadExtract") and "EXT_ANNUAL[kind]" in SHELL, \
         "可见行不再按项目状态过滤"
-    assert "EMPTYROW(thCount(EXT_THEAD)" in SHELL, "空态行的跨列数不再由表头派生"
-    assert "当前筛选条件下没有" in SHELL and "换个「项目状态」或月份" in SHELL, "空态提示丢了"
+    assert "EMPTYROW(thCount(head)" in func_body("extBlock"), "空态行的跨列数不再由表头派生"
+    assert "当前筛选条件下没有" in SHELL and "换个项目状态或年份" in SHELL, "空态提示丢了"
 
 
 @acc("ACC-SETL-EXT-001", "001-06")
@@ -171,7 +171,7 @@ def test_m07数据源改为后端填充():
     assert "let EXTM = {};" in SHELL, "`EXTM` 没改成「空容器 + 后端填充」"
     assert "let BIGVAL = {};" in SHELL, "`BIGVAL` 没改成「空容器 + 后端填充」"
     assert "let BIGSET = [];" in SHELL, "`BIGSET` 没改成「空数组 + 后端填充」"
-    body = func_body("reloadM07")
+    body = func_body("reloadM07") + func_body("reloadExtract")
     for call in ("API.m07Settlement(", "API.m07Extract(", "API.m07Big("):
         assert call in body, f"`reloadM07()` 没读 `{call.rstrip('(')}`"
 
@@ -338,9 +338,9 @@ def test_结余适配层过N0且不给未录入补值():
 @acc("ACC-SETL-EXT-001", "001-11")
 def test_reloadM07填充结余():
     """⭐ 重拉是**唯一出口**：`BAL_EX` 必须由 `reloadM07()` 从后端 `balances` 原地填。"""
-    body = func_body("reloadM07")
-    assert "adaptBalances(ex && ex.balances)" in body, "没读 `/api/m07/extract` 的 `balances`"
-    assert "Object.keys(BAL_EX).forEach(k => delete BAL_EX[k]);" in body, \
+    body = func_body("reloadExtract")
+    assert "adaptBalances(ex.balances)" in body, "没读 `/api/m07/extract` 的 `balances`"
+    assert "Object.keys(BAL_EX).forEach(k=>delete BAL_EX[k]);" in body, \
         "`BAL_EX` 没「原地清空再填」（外部持有的引用会指向旧对象）"
 
 
@@ -350,8 +350,8 @@ def test_结余列渲染成可编辑输入且合计下标跟着移():
     body = func_body("extBlock")
     assert 'data-act="extBal"' in body, "「结余」列没渲染成可编辑输入"
     assert "extBalOf(" in body, "结余格没走取数出口"
-    assert "v == null ? ''" in body, "未录入没给空值（⛔ 不写 0）"
-    assert "{3:rs=>" in body and "4:rs=>" in body, "合计行的列下标没跟着移（列 +1 之后仍按旧下标）"
+    assert "bal==null?''" in body, "未录入没给空值（⛔ 不写 0）"
+    assert "grid.sum_row" in body and "<td></td></tr>" in body, "年度合计须来自后端网格，独立结余合计留空"
     assert "{2:rs=>" not in body, "合计行还在按旧下标取列"
 
 
@@ -360,9 +360,10 @@ def test_表头含结余列且列序照模板():
     m = re.search(r"const EXT_THEAD=`([^`]*)`", SHELL)
     assert m, "找不到 `EXT_THEAD`"
     head = m.group(1)
-    assert head.count("<th") == 5, f"提取表表头应为 5 列（加「结余」），实得 {head.count('<th')}"
-    assert head.index("仓库") < head.index("结余") < head.index("总金额"), \
-        f"「结余」列的位置不对（应照成品模板：仓库之后、金额之前）：{head}"
+    assert '类别' in head and '项目' in head and '往年金额' in head
+    assert 'Array.from({length:12}' in head, "年度必须连续12月"
+    line = SHELL[SHELL.index('const EXT_THEAD='):].splitlines()[0]
+    assert line.index('往年金额') < line.index('MONTH-') < line.index('总金额') < line.index('人工结余')
 
 
 @acc("ACC-SETL-EXT-001", "001-09")

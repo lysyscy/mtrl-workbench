@@ -15,6 +15,8 @@ from decimal import Decimal
 from app.mod01_projects.models import STATUS_ARCHIVED, TYPE_SHELL, Project
 from app.mod06_proc.models import ProcMechManual
 from app.mod07_setl.models import AnalysisBigManual, AnalysisBigProject, SetlDetail
+from app.mod08_inv.models import InvDetail
+from tests.m07_helpers import inventory_rows
 from tests.m08_helpers import FakeSession  # noqa: F401  —— 会话桩共用（不另写一份）
 
 YM_NOW, YM_PREV, YM_EARLIER = "2026-08", "2026-07", "2026-06"
@@ -142,6 +144,7 @@ def dataset(*, order=None) -> dict:
     return {
         Project: make_projects(),
         SetlDetail: make_setl(),
+        InvDetail: inventory_rows(make_setl()),
         ProcMechManual: make_mech(),
         AnalysisBigManual: make_manual(),
         AnalysisBigProject: list(order or []),

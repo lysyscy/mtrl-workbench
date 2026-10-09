@@ -301,7 +301,7 @@ const ACT={
      + RULE_KINDS.map(k=>`<option value="${esc(k.kind)}"${k.kind===cur.kind?' selected':''}>${esc(k.label)}</option>`).join('')
      + `</select>`;
    modal({title:i>=0?`编辑剔除规则 · ${esc(r[0])}`:'新增剔除规则',
-     body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">配置类数据<b>硬删</b>、不留痕（§9.4）；改规则<b>只影响后续抓取</b>，已产生的剔除标记<b>不重算</b>（§4.2.2）。</div>
+     body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">修改只影响后续抓取，已有剔除标记不重算。</div>
        <div class="fld"><label>规则类别 <b>*</b></label>${sel}</div>
        <div class="fld"><label>命中值 <b>*</b>（多个用 ｜ 分隔）</label><input class="inp" id="rxHit" value="${esc(i>=0?r[1]:'')}" placeholder="例：水电｜水费｜电费"></div>
        <div class="fld"><label>剔除的业务含义</label><input class="inp" id="rxWhy" value="${esc(i>=0?r[2]:'')}" placeholder="例：期间费用，非材料/机械"></div>`,
@@ -448,8 +448,8 @@ const ACT={
     return Object.keys(m).map(w=>w+' '+m[w]+' 条').join(' · '); })();
    Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });   /* 清掉已不在批次里的草稿 */
    const whyOf=n=>ntVoid(n)?'i8 已撤单':'已剔除';
-   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）—— <b>剔除行</b>按 §4.2.2 不进统计；<b>i8 已撤单行</b>的单据在 i8 侧已被删除。两者都<b>不该产生付款</b>；请先<b>恢复剔除 / 撤销已付 / 解绑关联</b>。</div>`:''}<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">已勾选 <b>${rows.length}</b> 条。<b>未审批</b>不可付；<b>超出本次应付</b>会被拦（防超付）；付款方式选「其他」须填备注。<b>任一校验不通过，整批不产生流水。</b></div>
-     ${bad.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>${badWhy?`（${badWhy}）`:''}请点该行的「<b>删除</b>」把它移出本次付款，或关闭后调整勾选 —— <b>删除会同时取消该行的勾选</b>，<b>已填的方式与金额不会丢</b>。${bad.some(ntJcUnlinked)?'<br><b>⚠️ 其中「集采未关联合同」的行，出路不是「删除」</b> —— 回付款通知书页把那一行<b>关联到一张集采合同</b>（§4.4.3），再回来付款。':''}</div>`:''}
+   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）；剔除或撤单记录不产生付款，请核对已付与关联记录。</div>`:''}<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">已勾选 <b>${rows.length}</b> 条。付款方式选「其他」须填备注；<b>任一校验不通过，整批不产生流水。</b></div>
+     ${bad.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>${badWhy?`（${badWhy}）`:''}请移出不可付记录，或关闭后调整勾选；移出会取消该行勾选，其他行已填方式与金额保留。${bad.some(ntJcUnlinked)?'<br>集采未关联合同的记录须先在付款通知书页关联合同。':''}</div>`:''}
      <div class="tw" style="max-height:44vh">${TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD,
      rows:rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
        const plan=PLs.find(pl=>pl.docNo===n.code), dm=plan?plan.method:'现汇';
@@ -467,7 +467,7 @@ const ACT={
        <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" value="${SYS_TODAY}"></div>
        <div class="fld"><label>备注</label><input class="inp" id="bRemark" placeholder="选「其他」付款方式时必填"></div>
      </div>
-     <div class="tip" style="margin:0"><b>提交后：</b>每条写入一条<b>独立付款流水</b> → 「已付金额」累加 → 状态按 <span class="fc">已付金额 ≥ 审批金额</span> 自动判定（无「部分付」中间态）。</div>`;
+     <div class="tip" style="margin:0">确认后每条生成一笔付款流水，并更新已付金额与付款状态。</div>`;
    modal({wide:true,title:`批量付款 · 已勾选 ${rows.length} 条`,body,reopen:()=>ACT.batchPay(),
      footer:`<button class="btn" data-act="batchPayCancel">取消</button><button class="btn pri" data-act="batchPayOk"${bad.length?` disabled title="有 ${bad.length} 条不可付，请先删除这些行"`:''}>确认付款</button>`}); },
  /* 草稿记录：行内的付款方式 / 金额一改就存下，重建弹窗（删除行、排序）时不丢 */
@@ -519,7 +519,7 @@ const ACT={
      .catch(e=>{ unlock(); return toast(`<b>提交失败</b>：${esc(e.message||e)}`,6000); }); },
  revDlg:t=>{ const f=FLs.find(x=>x.id===t.dataset.fid); if(!f) return;
    const n=NO.find(x=>x.id===f.nid)||{};
-   modal({title:`撤销付款流水 · ${f.id}`,body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))"><b>撤销必须填写原因</b>（留痕）。撤销后该通知书的「已付金额」随之减少、状态<b>自动回退</b>（按 §4.4.2 判定基准 = <b>审批金额</b> 重判）。</div>
+   modal({title:`撤销付款流水 · ${f.id}`,body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">撤销须填原因；该通知书的已付金额减少，付款状态重新判定。</div>
      ${kvBlock([['流水号',`<span class="fc">${f.id}</span>`],['单据编码',`<span class="fc">${n.code||'—'}</span>`],
        ['付款项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(n.proj||'—')}</span>`],
        ['付款金额',`<span class="fc">${M(f.amt)}</span>`],['付款日期',`<span class="fc">${f.date}</span>`],
@@ -560,14 +560,14 @@ const ACT={
      const vdN=hit.filter(ntVoid).length;
      const unN=hit.filter(n=>ntLive(n)&&n.astat==='未批').length;
      return modal({title:'抓取 i8 付款通知书（按月）',monthPicker:true,reopen:()=>ACT.fetchDlg(),body:
-       `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这里只需选<b>月份</b>（默认「北京时间当月」），系统自动换算成该月起止并<b>全量</b>抓取（不选项目、不分页）。</div>
+       `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">按所选月份全量抓取付款通知书。</div>
       ${box}
-      <div class="tip" style="margin:0"><b>${m}</b> 目前有 <b>${hit.length}</b> 条：有效 <b>${okN}</b> · 剔除 <b>${exN}</b> · i8 已撤单 <b>${vdN}</b>${unN?` · 其中未审批 <b>${unN}</b>`:''}。<br>抓取会<b>全量刷新源数据</b>，但<b>旁路值不受影响</b>（统计结算/统计付款金额 · 分类 · 集采实际供应商 · 调整单 —— 均不被导入覆盖）。</div>`,
+      <div class="tip" style="margin:0"><b>${m}</b> 目前有 <b>${hit.length}</b> 条：有效 <b>${okN}</b> · 剔除 <b>${exN}</b> · i8 已撤单 <b>${vdN}</b>${unN?` · 其中未审批 <b>${unN}</b>`:''}。<br>抓取刷新源数据；统计金额、人工分类、集采实际供应商及调整单不被覆盖。</div>`,
        footer:foot}); }
    return modal({title:`抓取 i8 ${NM}（按月）`,monthPicker:true,reopen:()=>ACT.fetchDlg(),body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这里只需选<b>月份</b>（<b>默认 ＝ 本页当前核算年月</b>，可改），系统自动换算成该月起止并按<b>项目</b>抓取（${apiCode} · §9.2）。</div>
+     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">按所选核算月逐项目抓取。</div>
       ${box}
-      <div class="tip" style="margin:0">抓取会<b>全量刷新该月 · 该项目</b>的源数据；<b>手工值与调整单不被覆盖</b>（§9.5）。<br>要抓别的月份，改上面的月份即可 —— <b>默认就是本页当前所选的那个月</b>。</div>`,
+      <div class="tip" style="margin:0">刷新各项目该月源数据，手工值与调整单不被覆盖。</div>`,
      footer:foot}); },
  fetchNtOk:()=>{ const k=fetchKind, m=fetchM, from=m+'-01', to=monthEnd(m);
    /* ⭐ **接线（`TAIL-29`-② ④）**：付款通知书走**真抓**（后端 `/api/m03/notices/fetch`）；
@@ -776,7 +776,7 @@ const ACT={
  /* 保存（新增 / 编辑**共用**）：年月必填且月度形态 → 项目必选 → 金额校验（非法 / 负数）
     ⚠️ 校验不过 ⇒ **保留草稿行与已填内容**（§4.3.3.1：显式报错 + 不清空重填） */
  force:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); const rv=plRev(p,PLs);
-   modal({title:`强制通过 · ${rv}`,body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))">审查结果 = <b>${rv}</b>。系统<b>只提示、不拦截</b>；强制通过<b>必须写备注</b>（留痕），发现问题由用户<b>追问项目</b>。<br><span class="mut sm">强制通过后如需撤回，可在该行点「取消强制通过」回到「未处理」态。</span></div>
+   modal({title:`强制通过 · ${rv}`,body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))">审查结果 = <b>${rv}</b>。强制通过须填备注，之后可在该行取消强制通过。</div>
      ${kvBlock([['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${dispCell(p.proj)}</span>`],['单据号',p.docNo||'<span class="tag t-dg">未填</span>'],['i8 流程金额',M(p.flowAmt)],['本月预付款金额',M(p.monthAmt)]])}
      <div class="fld"><label>强制通过备注 <b>*</b></label><input class="inp" id="fRemark" placeholder="例：已向项目核实，金额无误"></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="forceOk" data-id="${p.id}">强制通过</button>`}); },
@@ -830,7 +830,7 @@ const ACT={
    if(cands.length===1){ planYm=cands[0]; return ACT.planPickRun(); }
    planSel=(cands.includes(planYm)?planYm:cands[0]);
    modal({title:'按付款计划勾选 · 选月份',reopen:()=>ACT.planPick(),body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">按<b>哪个月</b>的付款计划勾选？<br>⭐ <b>任何时候都能点</b>（不再限「10 号 → 月底」，2026-10-08 口径）。<br>⚠️ 勾选会<b>放宽</b>「单据年月 / 分类 / 审批状态」并把付款状态置为「<b>未付清</b>」，让命中的行都能看到、便于逐条核对 —— <b>实际付什么、付多少仍由你自行修改</b>。</div>
+     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">勾选会放宽单据年月、分类和审批筛选，并切到未付清；付款金额仍可修改。</div>
        <div class="fld"><label>选择月份</label><select class="inp" id="planYmId" data-act="planPickSet">${optsOf(cands,planSel)}</select></div>
        <div class="sm mut">候选 = 库里已导入计划的月份（${yms.length?yms.join(' · '):'暂无'}）${cands.length>yms.length?' ＋ 当月':''}<br>某月没有计划行时勾不到东西 —— 勾选结果里会写明。</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="planPickOk">按所选月份勾选</button>`}); },
@@ -941,7 +941,7 @@ const ACT={
   API.manualDeleteImpact({notice_id:id})
     .then(imp=>{ if(!imp.ok) return toast(imp.message);
       modal({title:'删除确认 · 手动新增付款通知书',
-        body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 删除前先看清下面这些影响</b>（关联数据 · 统计影响）—— §7.2 / §9.4。<br>${imp.message}</div>
+        body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">${imp.message}</div>
     ${kvBlock([['单据',`<span class="fc">${esc(imp.label)}</span>`],['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(imp.project_name)}</span>`],['单据日期',`<span class="fc">${esc(imp.doc_date)}</span>`],['统计结算金额',`<span class="fc">${esc(imp.stat_settle)}</span>（恒 0）`],['统计付款金额',`<span class="fc">${esc(imp.stat_paid)}</span>`],['已付金额（流水）',`<span class="fc">${esc(imp.amount_paid)}</span>`]])}
     <div class="tip" style="margin:0">${imp.effects.map(x=>`· ${esc(x)}`).join('<br>')}</div>`,
         footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="ntDelOk" data-id="${id}">确认删除</button>`}); })
@@ -986,7 +986,7 @@ const ACT={
        rows:flows.map(f=>`<tr class="${f.voided?'ex':''}"><td class="fc">${f.id}</td><td class="now">${f.date}</td><td class="num">${M(f.amt)}</td><td>${enumTag('payMethod',f.method)}</td><td class="sm">${esc(f.op)}</td><td>${f.voided?enumTag('flowState','已撤销')+' <span class="mut sm">'+esc(f.reason)+'</span>':enumTag('flowState','生效')}</td></tr>`)})}</div>`
      : '<div class="tip" style="margin:0">这行通知书<b>还没有付款流水</b> —— 尚未付款（或流水已全被撤销）。</div>';
    modal({title:`查看关联 · ${n.code||n.id}`,body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))"><b>只读视图</b> —— 看这行通知书的<b>关联与去向</b>：关联了哪张集采合同、已产生哪些付款流水。<b>不改任何数据</b>。</div>
+     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">关联集采合同与付款流水</div>
       ${kvBlock([['单据',`<span class="fc">${esc(n.id)} · ${esc(n.code||'（未填编码）')}</span>`],
         ['付款项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(n.proj)}</span>`],
         ['单据名称',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(n.doc||'—')}</span>`],
@@ -1081,7 +1081,7 @@ const ACT={
      if(l) it={id, proj:l.proj, settle:numOr0(l.settle), paid:numOr0(l.paid)}; }
    if(!it) return toast(`没找到这条期初占位行（id=${esc(id)}）—— 它可能已被删除，<b>请刷新页面</b>再试`, 7000);
    const dd=N2(it.settle-it.paid);
-   modal({title:'删除确认 · 期初占位行',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 删除前先看清下面这些影响</b>（关联数据 · 统计影响）—— §7.2 / §9.4。</div>
+   modal({title:'删除确认 · 期初占位行',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">删除不可撤销。</div>
      ${kvBlock([['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.proj)}</span>`],['统计结算金额',`<span class="fc">${M(it.settle)}</span>`],['统计付款金额',`<span class="fc">${M(it.paid)}</span>`],['该行欠款',`<span class="fc">${M(dd)}</span>`]])}
      <div class="tip" style="margin:0">删除后：<b>期初占位欠款 ${M(dd)} → 0</b>、<b>欠款合计</b>同步重算。⚠️ 这一行<b>真删、不能恢复</b>（需要时随时可<b>重新录入</b>）。</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delLgOk" data-id="${it.id}">确认删除</button>`}); },
@@ -1136,7 +1136,7 @@ const ACT={
       return `「${esc(p.name||p.full)}」已${d<0?'上移':'下移'}一位${q?`（与「${esc(q.name||q.full)}」对调）`:''}<br>注：<b>归档项恒在最后</b>，所以移动不会跨过在建 / 归档的分界`;
     }); },
  editKw:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
-   modal({title:`小微识别关键词 · ${p.name}`,body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">关键词挂在<b>具体小微的行</b>上，格式 <span class="fc">|词1|词2|</span>；<b>允许重复</b>，命中多个时弹窗让用户选。</div>
+   modal({title:`小微识别关键词 · ${p.name}`,body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">多个关键词用 | 分隔。</div>
      <div class="fld"><label>关键词（用 | 分隔）</label><input class="inp" id="kwV" value="${esc(p.kw)}"></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="editKwOk" data-id="${p.id}">保存</button>`}); },
  /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` 的 `match_keywords`。
@@ -1204,8 +1204,8 @@ const ACT={
  ownOpen:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
    const cands=ownCands(n), hit=matchKids(n.proj,n.doc), tot=projMatches(n.proj).length;
    modal({title:`指定归属 · ${esc(n.proj)}`,wide:true,
-     body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这张通知书的付款项目是<b>壳的全名</b>（同一全名下共 ${tot} 条档案），系统<b>不猜</b>。
-       本次按「单据名称」在<b>该壳下</b>的关键词里匹配，命中 <b>${hit.length}</b> 个${hit.length===0?' → 需你指定':''}。<b>只在壳内找、不跨壳</b>（否则别的壳会把钱抢走）。</div>
+     body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">这张通知书的付款项目是<b>壳的全名</b>（同一全名下共 ${tot} 条档案）。
+       本次按「单据名称」在<b>该壳下</b>的关键词里匹配，命中 <b>${hit.length}</b> 个${hit.length===0?' → 需你指定':''}。仅可归集到该壳下的小微。</div>
        ${kvBlock([['单据编码',`<span class="fc">${esc(n.code)}</span>`],['单据名称',`<span class="fc">${esc(n.doc)}</span>`],['本次应付',M(payEff(n))]])}
        <p style="font-size:calc(12px * var(--fscale));margin:0 0 calc(8px * var(--fscale))">${OWN_KW_HINT}</p>
        ${cands.map(p=>`<div style="display:flex;align-items:center;gap:calc(9px * var(--fscale));padding:calc(7px * var(--fscale)) calc(8px * var(--fscale));border:1px solid var(--bd);border-radius:7px;margin-bottom:calc(7px * var(--fscale))">
@@ -1263,7 +1263,7 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
           ⛔ 别以为按钮 `disabled` 就等于拦住了（claim `001-07`：「直接调写操作也必须被拦」）。
        ⚠️ 写完之后一律 `await reloadM15(); render();` —— ⛔ **不手工往 `USERS` 里塞行**：
           库才是真相，壳照它重画（不然就会出现"壳里有一条、库里没有"）。 */
- userAdd:()=>{ modal({title:'新增账号',body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">管理员可<b>建号</b>（§1.5.1）。新增账号一律是<b>普通用户</b> —— 两人权限无区别，<b>不需要选角色</b>。</div>
+ userAdd:()=>{ modal({title:'新增账号',body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">新增账号为普通用户。</div>
    <div class="fld"><label>登录账号（非空、不重复即可）</label><input class="inp" id="uAcc" placeholder="如 wanglijia"></div>
    <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>姓名</label><input class="inp" id="uName" placeholder="如 王丽佳"></div>
    <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>初始密码（可为空）</label><input class="inp" id="uPwd" placeholder="留空即可；无格式要求"></div>`,
@@ -1280,7 +1280,7 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
    }catch(e){ toast(`<b>没能创建</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
  userTransfer:()=>{ const cands=USERS.filter(u=>u.id!==CUR.id&&u.status==='在用');
    if(!cands.length){ toast('没有可转让的在用账号（先新增或启用一个）'); return; }
-   modal({title:'转让管理员（授权转让）',body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>授权转让</b>：转让后对方成为<b>管理员</b>、你自己转为<b>普通用户</b> —— 系统内<b>始终只保留一个管理员</b>（防锁死）。</div>
+   modal({title:'转让管理员（授权转让）',body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))">转让后对方为管理员，你转为普通用户。</div>
      <div class="fld"><label>转让给（限在用账号）</label><select class="inp" id="utId">${cands.map(u=>`<option value="${u.id}">${esc(u.name)}（${esc(u.acc)}）</option>`).join('')}</select></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userTransferOk">确认转让</button>`}); },
  userTransferOk:async()=>{ const el=$('#utId'); const u=el&&USERS.find(x=>String(x.id)===String(el.value)); if(!u){ toast('未选择转让对象'); return; }
@@ -1301,15 +1301,14 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
       —— 用户 2026-10-01 报的「普通用户点改密显示只有管理员可以管理账号」**正是这一句**。
       ⭐ 教训：这类动作有**两道闸**（① 按钮置灰 ② 动作里这道）—— **改一道不够，两道都要认同一个条件**。 */
    if(CUR.role!=='admin' && String(u.id)!==String(CUR.id)){ toast('只有管理员能管理账号'); return; }
-   modal({title:`密码与 i8 绑定 · ${esc(u.name)}`,body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">${u.id===CUR.id?'改<b>自己的</b>密码。':'管理员<b>重置他人密码</b>（§1.5.1「可管理其他账号」）。'}<b>无格式要求、可留空</b>（留空 = 清空该账号密码，空密码即可登录）。</div>
+   modal({title:`密码与 i8 绑定 · ${esc(u.name)}`,body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">新密码留空会清空该账号密码，空密码即可登录。</div>
      <div class="fld"><label>新密码（可为空）</label><input class="inp" id="upV" placeholder="留空即清空该账号密码"></div>
      <div class="fld" style="margin-top:calc(10px * var(--fscale))"><label>i8 账号（§7.8 · 绑定到本系统账号、每人一份）</label>
        <input class="inp" id="upI8U" value="${esc(u.i8||'')}" autocomplete="off"
          placeholder="留空 = 解绑（解绑后抓取会被拦下，提示你先填）"></div>
      <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>i8 密码</label>
        <input class="inp" id="upI8P" autocomplete="off" placeholder="留空 = 不改（要清空就把上面的账号也清掉）">
-       <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">⚠️ 明文保存（i8 登录要原样用它，哈希就登不上）；列表里不显示
-         ⇒ <b>这个框默认是空的</b>，空 = 不改它。</div></div>`,
+       <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">i8 密码留空保持原值；清空 i8 账号会解绑。</div></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="userPwdOk" data-id="${u.id}">保存</button>`}); },
  userPwdOk:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u) return;
    /* ⚠️ ⛔ **不 `.trim()`**：§1.5.1 说密码「无格式要求」⇒ 前后的空格**也是密码的一部分**。
@@ -1357,7 +1356,7 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
             <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">该账号<b>还没绑 i8</b> ⇒ <b>抓取会被拦下</b>并提示先填
               （⛔ 不会改用共享账号 —— 那会顶掉同事的在线会话、执行记录也记错人）。在「改密 / i8 绑定」里填上即可。</div></div>`;
      modal({title:`查看密码与 i8 绑定 · ${esc(u.name)}`, body:
-       `<div class="tip">§1.5.1：密码<b>无格式要求、可为空</b>；本系统为科室内部 2 人使用，<b>明文保存</b>（管理员要能念给同事听）。</div>
+       `<div class="tip">当前账号的密码与 i8 绑定</div>
         <div class="fld" style="margin-top:calc(10px * var(--fscale))"><label>登录账号</label><input class="inp" value="${esc(res.account||u.acc)}" readonly></div>
         <div class="fld" style="margin-top:calc(6px * var(--fscale))"><label>当前密码</label>
           <input class="inp" id="viewPw" value="${esc(pw)}" readonly>
@@ -1384,7 +1383,7 @@ ownJcOpen:()=>openOwnDialogFor('jc'),
    if(u.id===CUR.id){ toast('<b>不能删除自己</b>（当前登录账号）'); return; }
    if(u.status==='在用'&&u.role==='admin'&&USERS.filter(x=>x.role==='admin'&&x.status==='在用').length<=1){
      toast('<b>不能删除最后一个管理员</b>（防锁死）'); return; }
-   modal({title:'删除账号确认',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 删除 = 软删除</b>：账号名保留、不销毁数据 —— 历史留痕（改前人 / 操作人）里的这个人名<b>仍然认得出来</b>，必要时可恢复。</div>
+   modal({title:'删除账号确认',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">删除后不能登录；账号姓名与已有记录保留。</div>
      ${kvBlock([['登录账号',`<span class="fc">${esc(u.acc)}</span>`],['姓名',`<span class="fc">${esc(u.name)}</span>`],['角色',u.role==='admin'?'管理员':'普通用户'],['影响','不再能登录；<b>已产生的留痕记录不受影响</b>']])}`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="userDelOk" data-id="${u.id}">确认删除</button>`}); },
  userDelOk:async t=>{ const u=USERS.find(x=>String(x.id)===String(t.dataset.id)); if(!u||u.status==='已删除') return;
@@ -1454,7 +1453,7 @@ uiScaleSet:async t=>{
       §2.5「用业务术语，不用内部话术」 ⇒ 改成人话：用户在删除前要知道的是
       **这条删除不可撤销、先看清它会影响到哪些地方**；⚠️ `（§7.2）` 这个出处标记**保留**
       （用户 2026-09-27 裁定 `B`：`§节号` 上屏保留 —— 见 `tools/probe/_shell_text.py` 文件头）。 */
-   modal({title:'删除确认',body:`<div class="tip dg"><b>⚠️ 删除不可撤销 —— 先看清它会影响到下面哪些地方</b>（§7.2）</div>
+   modal({title:'删除确认',body:`<div class="tip dg"><b>删除不可撤销。</b></div>
      ${kvBlock([['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(p.full)}</span>`],
        ['关联付款通知书',`<span class="fc">${NO.filter(n=>n.proj===p.full).length} 条</span>`],
        /* ⚠️ 下面三项要**跨模块数**（付款流水 / 库存单据 / 集采合同）⇒ 属 `MOD-13`，尚未落地。
@@ -1465,8 +1464,8 @@ uiScaleSet:async t=>{
        ['关联库存单据行',`<span class="mut">待接通（这一项还没做）</span>`],
        ['关联集采合同',`<span class="mut">待接通（这一项还没做）</span>`]]
        .concat(PJs.filter(x=>x.parent===p.id).length?[['所属小微（仓库名）',`<span class="wn">${PJs.filter(x=>x.parent===p.id).map(x=>esc(x.name)).join(' / ')}</span>`]]:[]))}
-     <div class="tip" style="margin:0">项目档案属<b>配置类数据 ⇒ 硬删</b>（§9.4）；被引用的核心业务数据（通知书 / 流水 / 库存单据 / 集采合同）<b>不随删</b> —— 它们仍保留原项目全名，页面上会显示为<b>未建档</b>。</div>
-     <div class="tip" style="margin:0"><b>删除这一项还没打通</b>：删除前得先把「影响范围」列全，而上面还有 3 项数不出来 —— 等这几项能列全就开放（所以下面那枚按钮现在是灰的）。</div>`,
+     <div class="tip" style="margin:0">删除项目档案后，通知书、流水、库存单据与集采合同仍保留，页面显示为未建档。</div>
+     <div class="tip" style="margin:0">关联影响尚未全部读到，当前不能删除。</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delPjOk" data-id="${p.id}" disabled title="这一项还没打通：删除前得先把「影响范围」列全，而现还有 3 项数不出来 —— 等它们能列全就开放">确认删除</button>`}); },
  /* ⏳ **尚未接通后端（诚实提示，⛔ 不做假成功）** —— 删除本身（配置类硬删 §9.4）不难，
     难的是**先列影响范围**（§7.2）：要数关联的付款通知书 / 流水 / 库存单据 / 集采合同 = **跨模块统计**，
@@ -1512,45 +1511,17 @@ uiScaleSet:async t=>{
  pjArcToggle:t=>{ pjToggle(String(t.dataset.pk||'')+'Arc'); },   /* ⭐ 归档折叠（①② 2026-09-27）：展开态走 `PJ_OPEN` */
 procPjToggle:()=>{ pjToggle('procPj'); render(); },
  procPjPick:t=>{ procPj=t.dataset.pj; pjClose('procPj'); render(); },
- /* —— 过程资料「按模板导出」展开区（2026-09-13：多选项目 · 每项目一份 · ≥2 打 zip）—— */
+ /* 过程资料按模板导出：在同一弹窗多选项目并确认/取消，每项目一本，多个项目ZIP。 */
  procExpToggle:()=>{
-   /* ⭐⭐ 2026-09-28（用户报障"点没了还得再点两下才出来"）：**开 / 关的唯一真相 = 面板自己的开合态**
-      —— `pjIsOpen('procExpPj')`。⛔ 不能拿 `procExpOn` 当判据：**点浮层外面收起时它不会跟着合**
-      ⇒ 两边走散后，再点按钮就变成"关一个已经关了的" ⇒ 要点**两下**才出来（这就是那条报障的根）。
-      ⚠️ `procExpOn` 降级为"下方展开区是否可见"的**镜像**（随本次开 / 关同步写，⛔ 别再用它当判据）。 */
-   const open=!pjIsOpen('procExpPj');
-   procExpOn=open;
-    if(procExpOn&&!procExpPjs.length&&procPj) procExpPjs=[procPj];   /* 默认 = 本页当前所选项目 */
-   /* ⛔ 也别让页面的「项目」筛选面板同时开着（两个面板会互相遮）。 */
-   if(open){ PJ_OPEN['procExpPj']=true; pjClose('procPj'); } else pjClose('procExpPj');
-   render();
-   /* ⭐ 2026-09-28（`TAIL-142` 同批收口，与台账那个**同款**）：这条也是 **6200ms 长机制说明**，而面板
-      （`procExpStrip`）里本来就有同一段「导出形态：每项目一份 … 选 2 个以上打成 zip」 ⇒ toast 只留回执。 */
-   if(procExpOn) toast('已展开「按模板导出」：默认选中<b>本页当前项目</b>（可多选）'); },
- procExpPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
-   const i=procExpPjs.indexOf(v); if(i>=0) procExpPjs.splice(i,1); else procExpPjs.push(v); render(); },
- procExpPjAll:()=>{ procExpPjs=pjSort(PROC_PJS).slice(); render(); },
- procExpPjNone:()=>{ procExpPjs=[]; render(); },
- procExpCancel:()=>{ procExpOn=false; pjClose('procExpPj'); procExpPjs=[]; render(); toast('已收起导出面板（<b>未导出任何文件</b>）'); },
- procExpOk:()=>{ const pjs=procExpPjs.slice(); if(!pjs.length) return toast('请先选择要导出的项目');
-   /* ⚠️ 文件名 = **展示名 ＋ 域 ＋ 表名 ＋ 年月**（与后端 `domain.export_file_name` 同构）——
-      ⚠️ **表名进文件名**：三张表（表① / 表② / 差异表）**同一形态**，只有数据与文件名不同
-      （用户 2026-09-18 裁）；导出**跟随当前所显示的那张表**。 */
-      const ym=bjMonth(), fnOf=k=>`${pjLabel(k)}_过程资料_${procTabName()}_${ym}.xlsx`;
-      /* ⭐ 2026-09-20 用户裁定：**导出清单弹窗里的表要可排序**（判据 `ACC-X-EXP-001/001-06`）。
-      ⚠️⚠️ 排序的**开关是 `data-sort`（无值属性）**，⛔ **不是** `data-sort-key`：
-        `data-sort-key` 只是**排序状态的键（表的身份）**。`index.html` 里那段注入逻辑
-        **精确匹配 `data-sort`**（就是为此专门写过一版修正，见那里的注释）⇒
-        **只加 `data-sort-key` 的话表照样点不动** —— 那就是"看着改了、其实没生效"。
-      ⛔ 别照着 `modal:expExt-*` 抄：那张是**刻意不可排**的（`INDEX` 里点名的分组表，合计行要 pin 在表尾）。 */
-   const body = pjs.length===1
-     ? `<div class="tip" style="margin:0">将生成 <b>1 个文件</b>：<span class="fc">${esc(fnOf(pjs[0]))}</span><br>内容 = <b>当前所显示的那张表</b>（<b>${procTabName()}</b>）按 <b>17 列模板</b>填充（核算月 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列），报<b>分公司工程科</b>（§5.2.2）。</div>`
-     : `<div class="tip" style="margin:0">选了 <b>${pjs.length}</b> 个项目 ⇒ 打成一个 <b>zip</b>：<span class="fc">过程资料_${ym}.zip</span>，内含 <b>${pjs.length}</b> 个文件（每个 = 一个项目的 <b>${procTabName()}</b>）。</div>
-       ${TBL({cls:'cond',key:'modal:procExp',sty:'margin-top:calc(8px * var(--fscale))',
-       cols:[{t:'<th>#</th>', r:(k,i)=>`<td class="fc">${i+1}</td>`},
-             {t:'<th>文件（每项目一份）</th>', r:k=>`<td>${esc(fnOf(k))}</td>`}], list:pjs})}`;
-   modal({title:'导出 · 过程资料（按模板 · 每项目一份）',body,
-     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="procExpSave">保存到本地</button>`}); },
+   if(!procExpPjs.length&&procPj) procExpPjs=[procPj];
+   pjClose('procPj');pjClose('procExpPj');procExpDlg();
+ },
+ procExpPjPick:t=>{const v=t.dataset.pj;if(!v) return;
+   const i=procExpPjs.indexOf(v);if(i>=0) procExpPjs.splice(i,1);else procExpPjs.push(v);procExpSelection();},
+ procExpPjAll:()=>{procExpPjs=pjSort(PROC_PJS).slice();procExpSelection();},
+ procExpPjNone:()=>{procExpPjs=[];procExpSelection();},
+ procExpCancel:()=>{procExpPjs=[];closeModal();},
+ procExpOk:()=>procExpDlg(),
  /* ⭐ 接线（`TAIL-04` 路径① · 片 4a）：成品由**后端模板填充**生成 —— 每个项目**一本工作簿**
    （`汇总表` 18 列：序号 ｜ 时间 ｜ 入库 5 类 ｜ 出库 5 类 ｜ 机械 6 列 ＋ 小计 / 合计 / 脚注尾块）；
    选 **≥2 个项目** ⇒ 打成一个 zip。
@@ -1572,7 +1543,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
      : `已导出 <b>${esc(fn)}</b>：<b>${pjs.length}</b> 个项目 ⇒ 一个 zip（每项目一本 · 每本 = <b>${procTabName()}</b>）`,8600); },
  procTab:t=>{ procTab=+t.dataset.i; render(); },
  /* `exportProc` 已按 2026-09-13 用户口径**删除**（原按钮只演示一份）——
-    改为 `procExpToggle` 展开区：**多选项目** → 每项目一份 → ≥2 个打成 zip（`procExpOk` 给清单预览）。 */
+    改为 `procExpToggle` 同窗选择项目并确认，每项目一份，≥2个打成ZIP。 */
  /* 库存单据明细：**额外**一份「含数据透视表」的导出（用户口径 2026-09-13）——
     ⚠️ 它**不影响**主表那份朴素导出（「导出 Excel」照旧）。 */
  /* ⭐ 「含数据透视表」那份 = 走**路径②**（脚本直接改 i8 导出源文件，§7.1 / `模板清单` §一）——
@@ -1603,8 +1574,10 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
      + `—— 金额按 <b>2 位小数对平（差 1 分也算不平）</b>`,7600); },
  whReset:()=>{ fWhYm=bjMonth(-1); render(); toast(`已重置：核算年月回到 <b>${tmLabel(fWhYm)}</b>（材料报表 = 北京时间上月，§9.2）`); },
  /* —— 焊材 / 气体提取（**核对工具**；数据唯一去向 = 月度会大表）—— */
- fExtStatus:t=>{ fExt.status=t.value; render(); },
- fExtReset:()=>{ fExt.status='在建'; fExt.ym=bjMonth(-1); render(); toast(`已重置：项目状态回到「在建」、金额月份回到 <b>${tmLabel(fExt.ym)}</b>（§9.2）`); },
+ fExtStatus:async t=>{fExt.status=t.value;const pending=reloadExtract();render();try{await pending;}catch(e){}render();},
+ fExtYear:async t=>{const value=String(t.value).trim();if(!/^\d{4}$/.test(value)) return toast('年份须为四位数字');
+   fExt.year=value;const pending=reloadExtract();render();try{await pending;}catch(e){}render();},
+ fExtReset:async()=>{fExt.status='在建';fExt.year=bjMonth(-1).slice(0,4);const pending=reloadExtract();render();try{await pending;}catch(e){}render();},
  /* 「结余」点格即改（2026-09-18 用户裁定 甲）：粒度 = **类别 × 仓库 · 不按月**（维护的是"当前的结存"）。
     ⭐ 接线：**判定与落库一律后端**（`service.save_balance_cell` ⇒ `extract.parse_balance`）——
       空 ⇒ 清空 / 非数字 / 负数 都由后端判，⛔ 前端不复写判据；
@@ -1618,18 +1591,12 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
    await reloadM07();
    if(raw===''){ toast(`已清空 <b>${esc(NAME)}</b> ⇒ 导出里该格<b>如实留空</b>`); return; }
    toast(`已保存 <b>${esc(NAME)}</b> = ${M(r.value)}<br><span class="mut sm">历史结余 · 手工录入 —— 导出时按类别 × 仓库带上</span>`); },
- /* 导出：行 = **所筛选项目** · 列 = 项目 → 最早有数据的月 → …（逐月连续）→ 求和（用户口径） */
- expExt:()=>{ const ms=extMons();
-   const blk=kind=>{ const list=extVisible(kind);
-     const head=`<tr><th>项目</th>${ms.map(m=>`<th>${m}</th>`).join('')}<th>求和</th></tr>`;
-     const body=list.length?list.map(w=>`<tr><td class="sm">${esc(w)}</td>${ms.map(m=>{const v=extMon(kind,w,m);return `<td class="num">${v?M(v):'<span class="mut">—</span>'}</td>`;}).join('')}<td class="num">${M(extTotal(kind,w))}</td></tr>`).join('')
-       + sumRowOf(head, list, Object.assign({[ms.length+1]:rs=>N2(rs.reduce((a,w)=>a+extTotal(kind,w),0))},
-           ...ms.map((m,i)=>({[i+1]:rs=>N2(rs.reduce((a,w)=>a+extMon(kind,w,m),0))}))))
-       :EMPTYROW(ms.length+2, '当前筛选条件下没有'+kind+'数据', '换个「项目状态」或月份');
-     return `<div class="tip" style="margin:calc(10px * var(--fscale)) 0 calc(6px * var(--fscale))"><b>${kind}</b> · 项目 × 月份</div><div class="tw">${TBL({cls:'cond',key:'modal:expExt-'+kind,sort:false,headRows:true,head,rows:[body]})}</div>`; };
-   modal({title:'导出 · 焊材 / 气体提取（按 项目 × 月份）',body:
-     `<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">将导出 <b>1 个工作簿</b>（<b>2 个工作表</b>：<b>焊材</b> / <b>气</b>），每表 = <b>项目 | 结余 | 1月…12月 | 合计</b>（按模板填充）。<br>下表是<b>按月核对视图</b>（列 = <b>${ms[0]||'—'} → … → 求和</b>，自「最早有数据的月」起<b>逐月连续</b>），<b>不是</b>成品的列结构。</div>`+blk('焊材')+blk('气体'),
-     footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="saveExt">保存到本地</button>`}); },
+ /* 年度汇总预览沿用后端网格；成品另保留原两张模板的人工结余和本年合计。 */
+ expExt:()=>{
+   if(!EXT_STATE.loaded) return toast(EXT_STATE.error||'请等库存年度汇总读取完成');
+   modal({title:`导出 · 焊材 / 气体年度汇总 ${fExt.year}`,wide:true,body:`<div class="tip">年度汇总与当前筛选一致；保留原焊材、气模板中的独立人工结余及本年合计。</div><div class="tw">${TBL({cls:'cond',key:'modal:expExt',sort:false,head:extHead(),rows:[extBlock('焊材')+extBlock('气体')]})}</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="saveExt">导出</button>`});
+ },
  /* ⭐ 接线（`TAIL-04` 路径① · 片 1）：成品由**后端模板填充**生成（`模板-焊材气体.xlsx` 的两个 sheet）。
     失败时后端回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（模板缺失/损坏 · 拿不到报告月 · **显示区对账不过**）
     ⇒ 据 `content-type` 分流：JSON ⇒ 弹原因；否则当文件下载。
@@ -1637,12 +1604,11 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
     ⚠️ 筛选**原样带给后端**（`status` / `period`）—— ⛔ 不在前端另筛一遍（否则又是第二份口径）。 */
  saveExt:async ()=>{
    const url='/api/m07/extract/export?status='+encodeURIComponent(fExt.status)
-     +'&period='+encodeURIComponent(fExt.ym);
+     +'&period='+encodeURIComponent(fExt.year);
    const fn=await dlExport(url,{name:'焊材气体提取表.xlsx'});
    if(!fn) return;
-   toast(`已导出 <b>${esc(fn)}</b>：<b>工作表 1</b> = 焊材、<b>工作表 2</b> = 气；每表 = 项目 | 结余 | 1月…12月 | 合计。` +
-     `⚠️「结余」= <b>历史结余 · 由用户手工录入</b>（录入入口 = 本页「结余」列<b>点格即改</b>）；` +
-     `<b>未录入 ⇒ 该格如实留空</b>（⛔ 不写 0）、<b>0 是合法录入值</b>`,8600); },
+   toast(`已导出 <b>${esc(fn)}</b>：年度汇总及原人工结余模板。`); },
+
  /* 大表手填录入（OPEN-05）：当月未录入的格子先带入、再就地改正 → 转为本月正常录入。
     列型三种：`ym` 年月（`YYYY-MM`）· `m` 金额（元 · **非负**）· `t` 文本（备注）。手填值不参与欠款计算。 */
  bigEdit:async t=>{ const wh=t.dataset.p, i=+t.dataset.i, NAME=BIGCOLS[i], raw=String(t.value).trim();
@@ -1666,7 +1632,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
  bigPick:t=>{ if(!t||!t.dataset||t.dataset.keep!=='1') BIGDRAFT=BIGSET.slice();
    modal({ title:`选择项目 · 月度会大表的项目（已选 ${BIGDRAFT.length} / 候选 ${bigCands().length}）`,
      reopen:()=>ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}),
-     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">勾选要上表的项目；<b>已选的</b>可用 <b>↑ / ↓</b> 调顺序。点「确定」后 <b>大表 / 导出</b> 两处一律按这个顺序。</div>
+     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">可调整所选项目顺序，大表与导出按此顺序排列。</div>
        <div style="max-height:52vh;overflow:auto">${TBL({cls:'cond',key:'modal:bigPick',sort:false,head:'<th style="width:34px">选</th><th style="width:40px">序</th><th>项目（候选 = 项目档案里「在建」的项目）</th><th style="width:82px">调顺序</th>',
        rows:bigCands().map(wh=>{ const k=BIGDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
          return `<tr><td class="ctr"><input type="checkbox" data-act="bigSelTog" data-wh="${esc(wh)}"${on?' checked':''}></td>
@@ -1719,7 +1685,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
      body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">任何核算月都能手录修改。<b>导入和手录互相覆盖，以最后保存的值为准</b>；i8 抓取不改机械费。空格按 0 保存；负数或非数字不写入。</div>
        ${FBAR({cls:'plate',body:`
          <div class="fi"><label>项目</label><select class="inp" id="mechPj" data-act="mechPjPick">${cands.map(k=>`<option value="${esc(k)}"${k===wh?' selected':''}>${esc(k)}</option>`).join('')||'<option value="">（没有候选项目）</option>'}</select></div>
-         <span class="mut sm" style="margin:0">一次填<b>一个核算期</b>的 6 列（改核算期 ⇒ 重开并带出该月现值）· 改完点右下「保存」</span>
+         <span class="mut sm" style="margin:0">切换核算期会读取该月现值。</span>
          `})}
          <div style="overflow-x:auto">
          <table class="dt cond" style="font-size:calc(11.5px * var(--fscale))">
@@ -1786,7 +1752,7 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
     +`<div class="f2"><div class="fld"><label>调整后金额 <b>*</b></label><input class="inp num" id="adjAmt" value="${(a?a.newAmt:iv.amt).toFixed(2)}"></div>
       <div class="fld"><label>差额</label><input class="inp num" id="adjDiff" readonly value="0.00"></div></div>
      <div class="fld"><label>调整备注 <b>*</b></label><input class="inp" id="adjRemark" value="${esc(a?a.remark:'')}" placeholder="说明为什么调"></div>
-     ${a?`<div class="tip" style="margin:0"><b>留痕：</b>${a.trail.map(x=>`${x.field} ${M(x.before)} → ${M(x.after)}`).join('；')}<br><b>操作人 / 时间：</b>${esc(a.op)} · ${a.time}</div>`:'<div class="tip wn" style="margin:0">调整单<b>打在单据行上</b>，<b>不被 i8 导出覆盖</b>，必须留痕 + 留备注。</div>'}`,
+     ${a?`<div class="tip" style="margin:0"><b>留痕：</b>${a.trail.map(x=>`${x.field} ${M(x.before)} → ${M(x.after)}`).join('；')}<br><b>操作人 / 时间：</b>${esc(a.op)} · ${a.time}</div>`:'<div class="tip wn" style="margin:0">只调整这条单据，重抓不会覆盖；备注必填。</div>'}`,
      footer:`<button class="btn" data-act="closeModal">取消</button>${a?'<button class="btn dg" data-act="adjDel" data-iv="'+iv.id+'">撤销调整单</button>':''}<button class="btn pri" data-act="adjOk" data-iv="${iv.id}">保存调整单</button>`});
    setTimeout(()=>{ const f=$('#adjAmt'),g=$('#adjDiff'); if(f&&g){ f.oninput=()=>g.value=SIG(N2(parseFloat(f.value)||0)-iv.amt); f.dispatchEvent(new Event('input')); } },0); },
  /* ⭐ **已接后端**：判定与落库一律后端（`POST /api/m08/adjust`）——
@@ -1827,86 +1793,51 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
   awfAmt:t=>awfAct(()=>API.m09Amount({ym:awfYm, project:awfPj, index:+t.dataset.i, value:t.value}), r=>r.message),
   /* 重置 = 回到默认核算年月 ＋ 默认项目（候选第一个）—— `R4` 要求列表 / 报表页提供「重置」 */
   /* ⭐⭐ `TAIL-156` `P2`：**月度批量录入**（用户口径「一次录好几个月太麻烦」）——
-     列 = 本页当前那一份（`awfYm × awfPj`）的**项名**（⛔ 弹窗里不建新项名：项名只认页面那一处定义）；
-     行 = **最近 12 个核算月**（止月 = 本页当前核算年月）；填完**一次提交**（`POST /api/m09/fee/batch`）。
+     行 = 本页当前项名；列 = 首月起连续核算月（默认3月，以本页月结束），可新增下一核算月。
+     改首月只重排月份标签，金额保留在原位置；填完一次提交（`POST /api/m09/fee/batch`）。
      ⚠️ 三件必须**提前说清**（守则 §2.4 / §5.5）：**空格子一律不写**（空 ≠ 0）· **有一个非法金额 ⇒ 整批不写** ·
        已有「同月 + 同名」⇒ **改它的值**（⛔ 不是再添一条）。 */
-  awfBatch:()=>{ const rows=awfList();
-    if(!rows.length) return toast('<b>这一份还没有项名</b> —— 先在页面上点「＋ 增加手填项」把项名建好，再回来批量填（项名只认页面这一处）',9000);
-    const names=rows.map(r=>String(r[0]==null?'':r[0]));
-    const end=awfYm||bjMonth(-1);
-    /* ⭐ 默认**只 3 行**（用户口径「我不需要那么多行，行的数量要能自定义」）——
-       不够点「＋ 加一行」、多了点「－ 减一行」（见 `awfRowAdd`/`awfRowDel`，都是**纯 DOM 插删行**，
-       ⛔ 不重排整张表 —— 重排会把已经填好的格子冲掉）。 */
-    const months=Array.from({length:3},(_,k)=>ymAdd(end,k-2));
-    /* ⭐⭐ 核算期**每一行都能手填**（用户口径「这个核算期要能自定义」）—— 默认值仍是最近 12 个月，
-       但可以把任意一行改成任何月份（跨年 / 跳月都行）。
-       ⛔ 不搞"起止月区间"那种控件：那要重排表格 ⇒ **填了一半被重排**最难查（已填的值也会丢）。
-       直接改行头最省事，且已填的格子一个都不动。 */
-    const ymCell=m=>`<td style="white-space:nowrap"><input class="inp" data-act="awfYmCell" style="min-width:96px" value="${esc(m)}" placeholder="YYYY-MM" title="这一行的核算期，可直接改（YYYY-MM）">${m===end?'<span class="mut sm"> · 本页</span>':''}</td>`;
-    /* ⚠️ 格子**不带行号**（`data-r` 已删）：行是**可插可删**的（见 `awfRowAdd`），保存时按
-       `closest('tr')` **逐行读**才不会被插删打乱 —— ⛔ 别再用"第几个格子"这种位置概念。 */
-    const cell=(m,i)=>`<td><input class="inp num" style="width:100%;min-width:92px" data-act="awfCell" data-nm="${esc(names[i])}" value="${esc(m===end?String((rows[i]||[])[1]==null?'':(rows[i]||[])[1]):'')}" placeholder="—"></td>`;
-    modal({title:'特殊费用 · 按月批量录入',wide:true,reopen:()=>ACT.awfBatch(),
-      body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">⚠️ <b>空格子一律不写</b>（空 ≠ 0，⛔ 不会替你写 0）· <b>只要有一个非法金额 ⇒ 整批都不写</b>（原值不动）· 已有「<b>同月 + 同名</b>」的行 ⇒ <b>改它的金额</b>（⛔ 不是再添一条）。<br>
-        ⛔ 这里<b>不新建项名</b> —— 要加项名请回页面点「＋ 增加手填项」（项名只认页面那一处定义）。</div>
-        <div style="overflow:auto;max-height:52vh">
-          <table class="dt cond" id="awfTbl" style="font-size:calc(11.5px * var(--fscale))">
-            <thead><tr><th style="white-space:nowrap">核算期</th>${names.map(nm=>`<th style="white-space:nowrap">${esc(nm||'（未命名）')}</th>`).join('')}</tr></thead>
-            <tbody>${months.map(m=>`<tr>${ymCell(m)}${names.map((_,i)=>cell(m,i)).join('')}</tr>`).join('')}</tbody>
-          </table></div>
-        ${FBAR({cls:'plate',sty:'margin-top:calc(8px * var(--fscale))',body:`
-          <span class="mut sm" style="margin:0">行数可以<b>随时加减</b>（默认 3 行）—— 不够就「＋ 加一行」，多了就「－ 减一行」（⛔ 已填的格子不会被冲掉）</span>
-          <span style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale))">
-            <button class="btn sm" data-act="awfRowAdd">＋ 加一行</button>
-            <button class="btn sm" data-act="awfRowDel">－ 减一行</button></span>
-        `})}`,
-      footer:`<span class="mut sm" style="align-self:center">空格子<b>不写</b> · 一个非法 ⇒ <b>整批不写</b></span><button class="btn" data-act="closeModal" style="margin-left:auto">取消</button><button class="btn pri" data-act="awfBatchOk">保存</button>`}); },
-  awfBatchOk:async ()=>{ const trs=[...document.querySelectorAll('#awfTbl tbody tr')];
-    if(!trs.length) return toast('这一屏没有可填的格子');
-    /* ⭐ 逐行读（行是**可插可删**的 ⇒ ⛔ 别按"第几个格子"定位，那会被插删打乱）；
-       ⭐ 核算期每行可手填 ⇒ 提交前**先按行校验**：认不出的（空 / 不是 `YYYY-MM`）**整批退回**；
-       ⚠️ 但只在**该行真的填了金额**时才拦 —— 整行都空 = 用户没打算录那一行 ⇒ 跳过不算错
-          （守则 §2.4：要求与后果提前说；§5.5：不能提交的要**说清原因**，⛔ 别让人填完才被拒）。 */
-    const items=[], months=[];
-    for(let k=0;k<trs.length;k++){
-      const tr=trs[k], yEl=tr.querySelector('[data-act="awfYmCell"]');
-      const raw=String((yEl&&yEl.value)||'').trim();
-      const vals={}; let has=false;
-      tr.querySelectorAll('[data-act="awfCell"]').forEach(el=>{
-        const nm=String(el.dataset.nm||''), v=String(el.value==null?'':el.value);
-        if(!items.includes(nm)) items.push(nm);
-        vals[nm]=v; if(v.trim()!=='') has=true; });
-      if(!raw && !has) continue;
-      if(!/^\d{4}-\d{2}$/.test(raw)) return toast(`<b>第 ${k + 1} 行的核算期认不出</b>（要写成 <b>YYYY-MM</b>，例：2026-09）—— 这一批<b>一格都没写</b>`,9000);
-      months.push({ym:raw, values:vals});
-    }
-    if(!months.length) return toast('整张表都是空的 —— 没有要写的内容（⛔ 不会替你写 0）');
-    if(!items.length) return toast('没有项名可写 —— 先在页面上把项名建好');
-    let r=null;
-    try{ r=await API.m09Batch({project:awfPj, items:items, months:months}); }
-    catch(e){ return toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}`,7000); }
-    /* ⚠️ 同 `mechOk` / `awfAct` 那条教训：**成败只看 `ok`**（⛔ 别拿"有没有 message"当判据 —— 那会把失败显示成"已保存"）。 */
-    if(!r || r.ok === false) return toast(`<b>没能保存</b>：${esc((r&&r.message)||'系统没有给出原因，请重试')}`,9000);
-    closeModal(); await reloadM09(); render();
-    toast(esc(r.message||'已保存（同一格重提交 ＝ 更新，不会重复）')); },
-  /* ⭐ 行数自定义（用户口径「我不需要那么多行，行的数量要能自定义」）——
-     ⛔ 不走"重排整张表"（那会把你**已经填好的格子冲掉**）：就是**往表里插一行 / 删一行**（纯 DOM）。
-     新行的核算期 = 最后一行的**下一个月**（不合意就地改 —— 每行核算期本来就能手填）。 */
-  awfRowAdd:()=>{ const tb=document.querySelector('#awfTbl tbody');
-    const trs=tb?[...tb.querySelectorAll('tr')]:[];
-    if(!trs.length) return;
-    const last=trs[trs.length-1], yEl=last.querySelector('[data-act="awfYmCell"]');
-    const cur=String((yEl&&yEl.value)||'').trim();
-    const clone=last.cloneNode(true);
-    clone.querySelectorAll('input').forEach(el=>{
-      if(el.dataset.act==='awfYmCell') el.value=/^\d{4}-\d{2}$/.test(cur)?ymAdd(cur,1):cur;
-      else el.value=''; });
-    tb.appendChild(clone); },
-  awfRowDel:()=>{ const tb=document.querySelector('#awfTbl tbody');
-    const trs=tb?[...tb.querySelectorAll('tr')]:[];
-    if(trs.length<=1) return toast('只剩一行了 —— 至少留一行（要清空就把格子里填的删掉）');
-    trs[trs.length-1].remove(); },
+  awfBatch:()=>{
+    const rows=awfList();if(!rows.length) return toast('先在页面增加手填项，再按月录入');
+    const end=awfYm||bjMonth(-1),months=Array.from({length:3},(_,k)=>ymAdd(end,k-2));
+    modal({title:'特殊费用 · 按月批量录入',wide:true,body:`
+      <div class="fld"><label>首个核算月</label><input class="inp" type="month" data-act="awfYmCell" value="${months[0]}"></div>
+      <div class="tip">空格不写；非法金额整批不写；同月同项更新原值。</div>
+      <div style="overflow:auto;max-height:48vh"><table class="dt cond" id="awfTbl">
+        <thead><tr><th class="fl">数据项</th>${months.map(m=>`<th data-ym="${m}">${m}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(([name,amount])=>`<tr><th class="fl" style="min-width:140px">${esc(name)}</th>${months.map(m=>`<td><input class="inp num" style="min-width:110px;width:100%" data-act="awfCell" data-nm="${esc(name)}" value="${m===end?esc(String(amount)):''}" placeholder="—"></td>`).join('')}</tr>`).join('')}</tbody>
+      </table></div><div style="display:flex;gap:calc(8px * var(--fscale));margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="awfRowAdd">＋ 下一核算月</button><button class="btn sm" data-act="awfRowDel">－ 最后一个月</button></div><div id="awfBatchError" class="sm" role="alert"></div>`,
+      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="awfBatchOk">保存</button>`});
+  },
+  awfYmCell:t=>{
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(t.value)) return;
+    document.querySelectorAll('#awfTbl thead th[data-ym]').forEach((el,i)=>{el.dataset.ym=ymAdd(t.value,i);el.textContent=el.dataset.ym;});
+  },
+  awfBatchOk:async()=>{
+    const start=document.querySelector('[data-act="awfYmCell"]'),error=document.querySelector('#awfBatchError');
+    const fail=message=>{if(error){error.textContent=message;error.style.color='var(--dg-d)';}};
+    if(!start||!/^\d{4}-(0[1-9]|1[0-2])$/.test(start.value)) return fail('请选择有效的首个核算月');
+    ACT.awfYmCell(start);
+    const heads=[...document.querySelectorAll('#awfTbl thead th[data-ym]')],trs=[...document.querySelectorAll('#awfTbl tbody tr')];
+    const items=trs.map(tr=>tr.querySelector('[data-act="awfCell"]').dataset.nm);
+    const months=heads.map((head,i)=>({ym:head.dataset.ym,values:Object.fromEntries(trs.map(tr=>{const el=tr.querySelectorAll('[data-act="awfCell"]')[i];return [el.dataset.nm,el.value];}))}));
+    let r;try{r=await API.m09Batch({project:awfPj,items,months});}catch(e){return fail(e.message||'保存失败，请重试');}
+    if(!r||r.ok===false) return fail((r&&r.message)||'保存失败，请重试');
+    closeModal();await reloadM09();render();toast(esc(r.message||'已保存'));
+  },
+  awfRowAdd:()=>{
+    const table=document.querySelector('#awfTbl');if(!table) return;
+    const heads=table.querySelectorAll('thead th[data-ym]'),last=heads[heads.length-1],month=ymAdd(last.dataset.ym,1);
+    last.insertAdjacentHTML('afterend',`<th data-ym="${month}">${month}</th>`);
+    table.querySelectorAll('tbody tr').forEach(tr=>{const cell=tr.lastElementChild.cloneNode(true);cell.querySelector('input').value='';tr.appendChild(cell);});
+  },
+  awfRowDel:()=>{
+    const table=document.querySelector('#awfTbl');if(!table) return;
+    const heads=table.querySelectorAll('thead th[data-ym]');if(heads.length<=1) return toast('至少保留一个核算月');
+    const trs=[...table.querySelectorAll('tbody tr')];
+    if(trs.some(tr=>tr.lastElementChild.querySelector('input').value.trim())) return toast('最后一个月已有金额，请先清空再移除');
+    heads[heads.length-1].remove();trs.forEach(tr=>tr.lastElementChild.remove());
+  },
   awfReset:()=>{ awfYm=bjMonth(-1); awfPj=AWF_PJS[0]||''; pjClose('awfPj');
     reloadM09().then(()=>toast(`特殊费用月报表已重置：核算年月回到 <b>${tmLabel(bjMonth(-1))}</b>、项目回到 <b>${esc(PROJ_META_KEY(awfPj).nm)}</b>（材料报表类默认 = 上月，§9.2）`)); },
 
@@ -1931,7 +1862,7 @@ mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
    if(!keep) DEBTDRAFT=(DEBTPICK.length?DEBTPICK.slice():debtCands().slice());
    modal({ title:`选择项目 · 导出总欠款要包含哪些项目（已选 ${DEBTDRAFT.length} / 候选 ${debtCands().length}）`,
      reopen:()=>ACT.debtPick({dataset:{keep:'1'},tagName:'BUTTON'}),
-     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">勾选要导出的项目；<b>已选的</b>可用 <b>↑ / ↓</b> 调顺序（<b>导出的行序就是这个</b>）。<b>全清空 = 全部项目</b>（与原来的行为一致）。</div>
+     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">可调整导出行序；<b>全清空按全部项目导出。</b></div>
        <div style="max-height:52vh;overflow:auto">${TBL({cls:'cond',key:'modal:debtPick',sort:false,head:'<th style="width:34px">选</th><th style="width:40px">序</th><th>项目（候选 = 项目档案全部，含归档）</th><th style="width:82px">调顺序</th>',
        rows:debtCands().map(wh=>{ const k=DEBTDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
          return `<tr><td class="ctr"><input type="checkbox" data-act="debtPickTog" data-wh="${esc(wh)}"${on?' checked':''}></td>
@@ -2151,8 +2082,7 @@ jcPartyDlg:async()=>{ let d=null;
       <td><select class="inp" data-act="jcPartySet" data-name="${esc(it.name)}"${it.kind==='unknown'?' style="border-color:var(--wn)"':''}>${opt(it.kind)}</select></td>
       <td class="num">${it.count||0}</td></tr>`),
     empty:EMPTYROW(3, '还没有甲方记录', '抓取一次后，i8 里的甲方单位会自动出现在这里')})}</div>
-    <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>⚠️ 改类型不会回头重算已有合同的金额</b> —— 与「改规则不重算历史」同款口径。
-      已经落错列的行，改完分类后请<b>重抓一次</b>（贸易公司的价会被重新落位）或<b>手工改</b>。</div>`;
+    <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0">改分类不重算已有合同金额；已有金额落错列时，请重抓或手工修改。</div>`;
   modal({title:'甲方单位分类（决定合同价是谁的价）', wide:true, body,
     footer:`<button class="btn pri" data-act="closeModal">关闭</button>`}); },
 jcPartySet:async t=>{ const nm=String(t.dataset.name||''), k=String(t.value||'');
@@ -2170,8 +2100,8 @@ jcFetch:()=>{ const def = jcFetchSinceOn || jcFetchSinceDefault(); modal({title:
   body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 这一步会登录 i8，可能顶掉该账号其它在线会话</b>。若同事正在用 i8，请先择时。</div>
     <div class="fld"><label>开始日期 —— 只抓<b>这之后</b>的单据（<b>增量</b>）</label>
       <input class="inp" id="jcFetchSince" type="date" value="${esc(def)}">
-      <div class="sm mut" style="margin-top:calc(6px * var(--fscale))">默认 = 台账里<b>最新合同日期 − 3 天</b>（多留几天：i8 的<b>增补合同会沿用原单据日期</b>，卡太紧会漏；重复的会<b>自动挡掉</b>）。<br><b>清空</b> = 全量（<b>约 40 秒</b>，首次建档才需要）；带日期 = 增量（<b>1~5 秒</b>）。</div></div>
-    <div class="sm" style="line-height:1.9">流程：<b>抓合同</b> → <b>补材料名</b>（只补<b>库里还没有的</b>，逐条问 i8 详情）→ <b>同步「常用项目列表」</b> → <b>按项目匹配</b> → 写入（新抓的默认<b>「纳入台账」</b>）。<br>⚠️ 匹配不上的按口径 = <b>不纳入</b>（i8 的常用列表里也没有 ⇒ 不需要），但<b>写入前会给你一眼看见</b>。<br>⚠️ <b>未审批</b>的合同<b>不抓</b>。</div>`,
+      <div class="sm mut" style="margin-top:calc(6px * var(--fscale))">留空抓取全部日期；填写日期只抓取该日期之后的单据。</div></div>
+    <div class="sm" style="line-height:1.9">未审批合同不抓取；新合同默认纳入台账，未完成归属的合同不写入，结果中可查看并处理。</div>`,
   footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcFetchOk">确认抓取（会顶号）</button>`}); },
 jcFetchOk:async()=>{ const el=$('#jcFetchSince');
   /* ⚠️ 读不到 / 格式不对 ⇒ 传**空串**（= 交给后端按默认增量走），⛔ 不传一个"看着像日期"的脏值：
@@ -2211,6 +2141,19 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
      `合同存档情况推进为「<b>${esc(next)}</b>」（未存档 → 资产处 → 已存档，§6.7.2）<br><span class="mut sm">存档号请在该列手填</span>`); },
  /* 主表「发票金额 / 贸易公司发票金额 / 付款金额」已改为**只读汇总**（= 各自子表合计）——
     录入一律走「子表」，因此不再有主表直改动作（口径 2026-09-12 定案，取代原 jcPay） */
+ jcMaterialOpen:t=>{
+   const j=JCs.find(x=>x.id===t.dataset.id);if(!j) return;
+   modal({title:`材料名 · 合同 ${j.id}`,body:`<div class="fld"><label>材料名</label><input class="inp" id="jcMaterialValue" maxlength="128" value="${esc(j.material||'')}" data-submit-act="jcMaterialSave" data-id="${j.id}"></div><div id="jcMaterialError" class="sm" role="alert"></div>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcMaterialSave" data-id="${j.id}">保存</button>`});
+   document.querySelector('#jcMaterialValue').focus();
+ },
+ jcMaterialSave:async t=>{
+   const field=document.querySelector('#jcMaterialValue');if(!field||field.dataset.busy==='1') return;
+   const j=JCs.find(x=>x.id===t.dataset.id);if(!j) return;
+   const value=field.value.trim();field.dataset.busy='1';
+   let r;try{r=await API.m11Fields({id:j.id,fields:{material_name:value}});}catch(e){r={ok:false,message:e.message};}
+   if(!r||r.ok===false){field.dataset.busy='';const err=document.querySelector('#jcMaterialError');err.textContent=(r&&r.message)||'保存失败，请重试';err.style.color='var(--dg-d)';return;}
+   closeModal();await reloadM11();render();toast('材料名已保存');
+ },
  jcMethod:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcAct(()=>API.m11Fields({id:j.id, fields:{method:t.value}}),
     '付款方式为<b>自由文本、不限值</b>，不做枚举约束'); },
@@ -2240,7 +2183,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
       sum:(jcSubOn('inv',j.id)?jcSubRow():'')+sumRowOf(JCINV_THEAD, [], {2:[()=>jcInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="inv">＋ 增加一张发票</button></div>
-      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>发票子表</b>：一合同 <b>1..N</b> 张、<b>「发票日期 ＋ 金额」两列</b>（<b>录入必填日期</b>）；<b>金额不设上限</b>（§6.4.1）。<br>${j.tradeCo?'本合同<b>有贸易公司</b> ⇒ <b>结算取「贸易公司发票」子表合计</b>，本子表<b>只作供应商侧台账</b>（§6.4.1）。':'本合同<b>无贸易公司</b> ⇒ <b>结算取本子表合计</b>（§6.4.1）。'}</div>`}); },
+      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0">${j.tradeCo?'本合同有贸易公司，本表不计入结算；结算取贸易公司发票合计。':'本合同无贸易公司，本表合计计入结算。'}</div>`}); },
  jcTInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);
    modal({title:`贸易公司发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcTInvDlg({dataset:{id:j.id}}),body:
@@ -2249,7 +2192,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
       sum:(jcSubOn('tinv',j.id)?jcSubRow():'')+sumRowOf(JCINV_THEAD, [], {2:[()=>jcTradeInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="tinv">＋ 增加一张发票</button></div>
-      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>贸易公司发票子表</b>：「发票日期 ＋ 金额」两列（<b>日期必填</b>、金额不设上限）。<br>有贸易公司 ⇒ <b>结算取本子表合计</b>（与供应商侧<b>同一套逻辑</b>，§6.4.1）。</div>`
+      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0">本表合计计入结算。</div>`
       :`<div class="tip" style="margin:0">本合同<b>无贸易公司</b> ⇒ <b>不启用该子表</b>（结算取供应商发票合计，§6.4.1）。</div>`)}); },
  jcPayDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);                       /* ⭐ 付款子表同理：列表不给明细 */
@@ -2260,8 +2203,8 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       sum:(jcSubOn('pay',j.id)?jcSubRow():'')+sumRowOf(JCPAY_THEAD, [], {1:[()=>jcPay(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale));display:flex;gap:calc(6px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="pay">＋ 手工录入</button>
         <button class="btn sm pri" data-act="jcPayRef" data-id="${j.id}">从付款域引用</button></div>
-      <div class="sm mut" style="margin-top:calc(7px * var(--fscale))">集采付款通知书的收款方都是「资产处集中采购」，真实供应商靠<b>人工录入的「集采实际供应商」</b>做关联锚点；<b>同一笔通知书不可重复引用</b>。</div>
-      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>付款子表</b>：一合同 <b>0 / 1 / 多</b> 次，手工录入 ＋ 可从付款域引用。<br><b>欠款口径（§6.4.4）：</b>${j.tradeCo?`有贸易公司 → 贸易公司发票合计 ${M(jcTradeInvSum(j))}`:`无贸易公司 → 供应商发票合计 ${M(jcInvSum(j))}`} − 付款合计 ${M(jcPay(j))} = <b style="color:var(--dg)">${M(jcDebt(j))}</b>（<b>合同级实时，不拆月度</b>）</div>`}); },
+      <div class="sm mut" style="margin-top:calc(7px * var(--fscale))">引用前请核对集采实际供应商；同一通知书不能重复引用。</div>
+      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>欠款口径（§6.4.4）：</b>${j.tradeCo?`有贸易公司 → 贸易公司发票合计 ${M(jcTradeInvSum(j))}`:`无贸易公司 → 供应商发票合计 ${M(jcInvSum(j))}`} − 付款合计 ${M(jcPay(j))} = <b style="color:var(--dg)">${M(jcDebt(j))}</b>（<b>合同级实时，不拆月度</b>）</div>`}); },
  /* —— 集采三张子表的录入 = **表内增行**（2026-09-13 用户口径：发票子表录入要填日期；**取代原先那种浏览器原生输入小窗**）——
     `jcSubAdd` 进增行态（草稿只存 `jcSubD`）· `jcSubSet` 写草稿层（走 `change` 委托）· `jcSubSave` 校验后落库 · `jcSubCancel` 丢弃。
     ⚠️ 旧动作 `jcInvAdd` / `jcTInvAdd` / `jcPayAdd`（`prompt` 单值录入）已删除。 */
@@ -2318,7 +2261,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       会让同一笔被两个合同各引一次、**付款重复计入** ⇒ 2026-09-13 收敛到全库。 */
    const used=jcUsedNids();
    const cam=NO.filter(n=>ntLive(n)&&n.cat==='集采'&&!used.has(n.id));
-   modal({title:'从付款域引用付款记录',body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">集采台账的付款信息可从付款域<b>一键关联引用</b> —— 由你按「<b>集采实际供应商</b>」人工判断（§6.6.2）；<b>同一笔通知书只能引用一次</b>。</div>
+   modal({title:'从付款域引用付款记录',body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">按集采实际供应商核对；同一通知书只能引用一次。</div>
      <div class="fld"><label>选择付款域中分类为「集采」的通知书</label><select class="inp" id="refId">${cam.length?cam.map(n=>`<option value="${n.id}">${esc(n.code)} · ${esc(n.sup||'未录入供应商')} · ${M(n.sp)}</option>`).join(''):'<option value="">（无可引用：已被引用过，或本月无集采单据）</option>'}</select></div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcPayRefOk" data-id="${j.id}">引用</button>`}); },
  /* ⭐ `M5-7`：⛔ 原先这里是**本地 push 进付款数组**冒充落库（刷新就没了）⇒ 改为如实说明。
@@ -2341,7 +2284,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    const sel=cands.find(j=>j.id===jcLinkSel)||null;
    const same=sel?N2(jcDebt(sel))===N2(n.sp):false;
    modal({title:`关联集采合同 · ${n.code}`,reopen:()=>ACT.jcLink({dataset:{id:n.id}}),body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">把这行<b>集采通知书</b>关联到一张<b>集采合同</b>（关联后两边都看得到）。<br>⚠️ <b>一条通知书只能关联一张合同</b>；<b>同一笔在全库不可重复引用</b>（防付款重复计入）。<br>⭐ <b>候选只列本项目（仓库）的合同</b> —— 本行项目 = <b>${esc(pjLabel(pk)||'（未指定归属）')}</b>${pk?`（仓库名 <span class="fc">${esc(pk)}</span>）`:''}。</div>
+     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">一张通知书只能关联一份合同，不能重复引用。候选为本项目合同；本行项目：<b>${esc(pjLabel(pk)||'（未指定归属）')}</b>${pk?`（仓库名 <span class="fc">${esc(pk)}</span>）`:''}。</div>
      ${cands.length?`<div class="fld"><label>选择集采合同（仅本项目）</label><select class="inp" id="jcLinkId" data-act="jcLinkPick" data-id="${n.id}">${cands.map(j=>`<option value="${j.id}" ${sel&&sel.id===j.id?'selected':''}>${esc(j.date||"日期未填")} · ${esc(j.material)} · ${esc(j.supplier)} · 合同金额 ${M(j.contractAmt)} · 欠款 ${M(jcDebt(j))}${j.proj===pk?'':' · 他项目（当前已关联）'}</option>`).join('')}</select></div>`
        :`<div class="tip" style="margin:0"><b>本项目下暂无集采合同</b> —— 请先到「集采台账」页为 <b>${esc(pjLabel(pk)||'该项目')}</b> 建档（或抓到 i8 合同），再回来关联。<br><span class="mut sm">本行项目：${esc(pjLabel(pk)||'（未指定归属）')}${pk?`（仓库名 ${esc(pk)}）`:''}</span></div>`}
      ${sel?`<div class="fld"><label>金额比对（只提示，不拦截）</label><div class="sm" style="line-height:1.8">本行统计付款金额 <b>${M(n.sp)}</b> ｜ ${sel.id} 当前欠款 <b>${M(jcDebt(sel))}</b>${same?' '+tag('一致','ok'):' '+tag('不一致 · 仍可关联','wn')}</div></div>`:''}`,
@@ -2451,7 +2394,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    if(sc==='iv'){ fIvYm=v; mp.open=null; render();
      toast(v==='全部'?`库存单据已切到 <b>全部时间</b>（不限单据日期）`:`库存单据已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }
    if(sc==='wh'){ fWhYm=v; mp.open=null; reloadM07(); toast(`收发结存已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（`WHM[月]` 现在来自后端；只 `render()` 会看到空表） */
-   if(sc==='ext'){ fExt.ym=v; mp.open=null; render(); toast(`提取「金额」列已切到 <b>${tmLabel(v)}</b>`); return; }
+   if(sc==='ext'){mp.open=null;ACT.fExtYear({value:String(v).slice(0,4)});return;}
    if(sc==='pstb'){ pst.ym=v; mp.open=null; render(); return; }                                   /* 付款统计·左栏「按项目」的桶 */
    if(sc==='psta'){ if(/^\d{4}$/.test(v)) pst.year=+v; else if(/^\d{4}Q[1-4]$/.test(v)) pst.q=v;
      mp.open=null; render(); return; }                                                            /* 付款统计·右栏 年 / 季度 */
@@ -2461,13 +2404,35 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
   toast(v==='全部'?`已切换到 <b>全部时间</b>（不限单据日期）`
     :`已切换到 <b>${tmLabel(v)}</b>${/^\d{4}-\d{2}$/.test(v)?`（单据日期区间 ${v}-01 ~ ${monthEnd(v)}，闭区间）`:''}`); },
  mpClose:t=>{ mp.open=null; ACT.mpRefresh(t&&t.dataset?t.dataset.scope:null); },
-  supEditOpen:t=>{
+  supManualFilter:t=>{
+    const box=document.querySelector('#supManualCandidates'); if(!box) return;
+    const q=t.value.trim();
+    const pool=JSON.parse(box.dataset.pool||'[]');
+    const cands=[...new Set(pool)].filter(name=>!q||name.includes(q));
+    box.innerHTML=cands.map(name=>`<button class="btn" style="white-space:normal;text-align:left" data-act="supManualPick" data-value="${esc(name)}">${esc(name)}</button>`).join('');
+    const state=document.querySelector('#supManualPoolState');
+    if(state) state.textContent=box.dataset.error|| (box.dataset.loaded==='1'?(cands.length?'':'本项目无匹配供应商，可直接录入'):'正在读取本项目供应商…');
+  },
+  supManualPick:t=>{
+    const field=document.querySelector('#supManualValue'); if(!field) return;
+    field.value=t.dataset.value; ACT.supManualFilter(field); field.focus();
+  },
+  supEditOpen:async t=>{
     const n=NO.find(x=>x.id===t.dataset.id); if(!n||!ntLive(n)) return;
     modal({title:`集采实际供应商 · ${n.code}`,body:`
-      <div class="fld"><label>供应商名称</label><input class="inp" id="supManualValue" value="${esc(n.sup||'')}" data-submit-act="supManualSave" data-id="${n.id}" placeholder="输入供应商全名"></div>
+      <div class="fld"><label>供应商名称</label><input class="inp" id="supManualValue" value="${esc(n.sup||'')}" data-submit-act="supManualSave" data-id="${n.id}" maxlength="128" placeholder="输入简称搜索，或直接录入全名"></div>
+      <div id="supManualPoolState" class="sm mut">正在读取本项目供应商…</div>
+      <div id="supManualCandidates" data-pool="[]" style="display:flex;flex-direction:column;gap:calc(6px * var(--fscale));max-height:35vh;overflow:auto"></div>
       <div id="supManualError" class="sm" role="alert"></div>`,
       footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="supManualSave" data-id="${n.id}">保存</button>`});
     const field=document.querySelector('#supManualValue'); if(field){field.focus();field.select();}
+    const box=document.querySelector('#supManualCandidates');
+    try{
+      const d=await API.m03SupMatch({notice_id:Number(n.id)});
+      if(!box.isConnected) return;
+      if(!d||d.ok===false){box.dataset.error=(d&&d.message)||'候选读取失败，可直接录入';ACT.supManualFilter(field);return;}
+      box.dataset.pool=JSON.stringify(d.pool||[]);box.dataset.loaded='1';ACT.supManualFilter(field);
+    }catch(e){if(box.isConnected){box.dataset.error='候选读取失败，可直接录入';ACT.supManualFilter(field);}}
   },
   supManualSave:async t=>{
     const field=document.querySelector('#supManualValue'); if(!field||field.dataset.busy==='1') return;
@@ -2529,7 +2494,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
     /* ≥2 家：开弹窗让用户选（候选 = 歧义集本身） */
     supSel=null;
     modal({title:`选择供应商 · ${n.code}`,reopen:()=>ACT.supMatchRun({dataset:{id:n.id}}),
-      body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">按 <b>${esc(lvlName)}</b> 命中 <b>${cands.length}</b> 家 —— <b>同等级内的多命中构成歧义</b>，<b>不猜</b>，请你选。<br>⚠️ 系统<b>绝不</b>取"最长的 / 第一个 / 最像的"（§6.6.3「明确不做」）。</div>
+      body:`<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">按 <b>${esc(lvlName)}</b> 命中 <b>${cands.length}</b> 家，请选择要采用的供应商。</div>
       <div class="fld"><label>这些是本项目集采合同里，其「${esc(lvlName)}」出现在单据名中的供应商</label>
       <select class="inp" id="supPickId" data-act="supPick" data-id="${n.id}">${cands.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}</select></div>
       <div class="sm mut">单据名称：<span class="fc">${esc(n.doc)}</span><br>本项目供应商池（${pool.length} 家）：${pool.map(esc).join(' · ')}</div>`,
@@ -2629,6 +2594,7 @@ document.addEventListener('change',e=>{
       关键词存进 `PJ_TXT`（⛔ 不重绘），重绘时由 `render()` 收尾把它填回去。
    ⚠️ 与 `change` / `click` 同一个委托风格：**没有名单**（`data-act` 只可能挂在真实输入上）。 */
 document.addEventListener('input',e=>{
+  if(e.target.id==='supManualValue'&&!e.isComposing){ACT.supManualFilter(e.target);return;}
   const search=e.target.closest('[data-act="ntSearch"]');
   if(search&&!e.isComposing){ACT.ntSearch(search);return;}
   const t=e.target.closest('[data-act="pjSearch"]'); if(!t) return;

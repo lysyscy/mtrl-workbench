@@ -13,6 +13,7 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.mod07_setl.models import SOURCE_AUTO, SetlDetail, WeldGasBalance
+from app.mod08_inv.models import InvDetail
 from tests.m08_helpers import FakeSession  # noqa: F401  —— 会话桩共用（不另写一份）
 
 # 三个核算月；**行数合计互不相同**（17 / 18 / 4）⇒ 001-03 的"切月有区分力"成立
@@ -130,6 +131,13 @@ EXTRACT_DETAILS: tuple[tuple[str, str, str, str, str], ...] = (
 )
 
 
+def inventory_rows(details):
+    """保留原收发结存桩，补相同已知金额的库存原单以验证共同源消费者。"""
+    return [InvDetail(id=i, ym=d.ym, warehouse_name=d.warehouse_name, material_name=d.resource_name,
+                      direction='入库', amount=d.in_amt, doc_no=f'TEST-{i}', seq='1')
+            for i,d in enumerate(details,1)]
+
+
 def extract_dataset(with_balances: bool = False) -> dict:
     """提取页用的桩：**明细 + 项目档案**（状态 / ord 决定筛选与行序）。
 
@@ -155,7 +163,7 @@ def extract_dataset(with_balances: bool = False) -> dict:
                 status=cfg["status"], ord=cfg["ord"])
         for i, (wh, cfg) in enumerate(PROJECTS.items(), start=1)
     ]
-    data: dict = {SetlDetail: details, Project: projects}
+    data: dict = {SetlDetail: details, InvDetail: inventory_rows(details), Project: projects}
     if with_balances:
         data.update(balance_dataset())
     return data

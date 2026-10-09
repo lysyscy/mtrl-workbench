@@ -35,6 +35,7 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 from app.core.errors import MustReportError
 from app.mod07_setl.domain import period_label
 from app.report_export import resources, tpl_fill
+from app.report_export.save import save_workbook
 
 #: 类别 → 模板里的 sheet 名（`模板清单` §二 登记：`焊材` / `气`）
 SHEET_OF_KIND: dict[str, str] = {"焊材": "焊材", "气体": "气"}
@@ -102,7 +103,7 @@ def file_name(report_ym: str) -> str:
     return "%s_%s.xlsx" % (FILE_PREFIX, period_label(str(report_ym or "").strip()))
 
 
-def build_xlsx(grids: dict, root, report_ym: str) -> str:
+def build_xlsx(grids: dict, root, report_ym: str, *, annual_grids: dict | None = None) -> str:
     """两个 sheet → 一个 xlsx ⇒ 返回**成品绝对路径**。
 
     - 模板一律走 `resources.require_template`（缺失 / 被回退 ⇒ **显式拒做**）；
@@ -122,6 +123,44 @@ def build_xlsx(grids: dict, root, report_ym: str) -> str:
         raise MustReportError(
             "成品**显示区对账未通过** ⇒ 已中止，未交付："
             + "；".join(problems[:5]) + ("" if len(problems) <= 5 else "（等共 %d 条）" % len(problems)))
+    if annual_grids is not None:
+        from openpyxl import load_workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        wb = load_workbook(out)
+        for kind, grid in annual_grids.items():
+            sheet = wb.create_sheet(kind + '年度汇总')
+            sheet.append(['项目', '往年金额', *grid['months'], '总金额'])
+            for row in grid['rows']:
+                sheet.append([row['warehouse'], row['prior'], *row['cells'], row['total']])
+            sheet.append(['合计', *grid['sum_row']])
+            sheet.freeze_panes = 'C2'
+            sheet.column_dimensions['A'].width = 36
+            for cell in sheet[1]:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill('solid', fgColor='E8EEF4')
+            for col in range(2,16):
+                sheet.column_dimensions[get_column_letter(col)].width = 16
+                for cell in list(sheet.columns)[col-1][1:]:
+                    cell.number_format = '#,##0.00'
+            for cell in sheet['A']:
+                cell.alignment = Alignment(wrap_text=True, vertical='center')
+        save_workbook(wb, out)
+        check = load_workbook(out, data_only=True)
+        for kind, grid in annual_grids.items():
+            actual = list(check[kind+'年度汇总'].values)
+            expected = [['项目','往年金额',*grid['months'],'总金额'],
+                        *[[row['warehouse'],row['prior'],*row['cells'],row['total']] for row in grid['rows']],
+                        ['合计',*grid['sum_row']]]
+            from decimal import Decimal
+            def comparable(value):
+                if isinstance(value, (int, float, Decimal)):
+                    return Decimal(str(value)).quantize(Decimal('0.01'))
+                return value
+            if [[comparable(value) for value in row] for row in actual] != [
+                    [comparable(value) for value in row] for row in expected]:
+                check.close()
+                raise MustReportError('年度汇总导出对账失败，请重试')
+        check.close()
     return str(out)
 
 

@@ -170,7 +170,7 @@ def test_重置回到默认月份与在建():
 
     default = parse_extract_state({})
     assert default["status"] == "在建" == X.STATUS_DEFAULT
-    assert default["period"] == D.default_month()           # 月份默认 = 上月（§9.2）
+    assert default["period"] == D.default_month()[:4]       # 年份默认 = 上月所属年（TAIL-266）
     # 带参数的筛选**原样生效**（不被默认值盖掉）
     st = parse_extract_state({"status": "全部", "ext_period": "2026-06"})
     assert st == {"status": "全部", "period": "2026-06", "explicit": True}

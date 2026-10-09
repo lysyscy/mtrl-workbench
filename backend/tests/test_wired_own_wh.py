@@ -28,7 +28,9 @@ def test_新小微那块有查名单入口且先二次确认():
     assert 'data-act="ownWhCheck"' in dlg, "没有「先查 i8 仓库名单」这个入口"
     assert "id=\"ownWhRes_" in dlg, "没有就地显示结果的位置"
     check = func_body("ownWhCheck")
-    assert "强制踢掉" in check and 'data-act="ownWhOk"' in check, "要先二次确认、讲清会顶号"
+    assert "会登录 i8，可能顶掉该账号在线会话" in check and 'data-act="ownWhOk"' in check, "要先二次确认、讲清会顶号"
+    assert "只查询、不写入" in check, "必须说明查询不写入的范围"
+    assert "API.whCheck(" not in check, "打开确认窗不得提前登录查询"
     ok = func_body("ownWhOk")
     assert "allow_kick: true" in ok and "API.whCheck(" in ok, "确认之后才发请求（⛔ 别在按钮点下就发）"
 

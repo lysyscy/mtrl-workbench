@@ -135,33 +135,30 @@ def test_录机械费走后端且不在前端复写判据():
 
 @acc("ACC-RPT-EXP-001", "001-03")
 def test_导出展开区是独立出口_全壳恰好一处():
-    """⭐ 判据点**搬家**（`§19` 批 2）：旧页断言展开区渲染在 `.tw`（**滚动容器**）**之外**、
-    全页**恰好一处** —— 否则浮层面板会被裁掉。新壳对应：展开区是**独立渲染出口**
-    `procExpStrip`，且在壳里**只被调用一次**（⛔ 不是表体模板里的一段）。"""
-    assert "const procExpStrip=()=>" in SHELL, "展开区没有独立出口"
-    assert SHELL.count("procExpStrip()") == 1, "展开区不是恰好一处（会被裁 / 会重复）"
-    assert "procExpOn?procExpStrip()" in SHELL, "展开区不是按开关独立渲染的一段"
-
+    """TAIL-265：项目与确认在独立弹窗，取消关闭；不再依赖表内浮层或镜像开关。"""
+    assert SHELL.count("const procExpDlg=()=>") == 1, "导出弹窗必须有唯一构造出口"
+    body = SHELL[SHELL.index("const procExpDlg=()=>"):SHELL.index("const procExpSelection=()=>")]
+    assert "modal({" in body and 'id="procExportProjects"' in body
+    assert 'data-act="procExpSave"' in body and 'data-act="procExpCancel"' in body
+    assert "procExpStrip" not in page_slice("m06"), "页面仍渲染旧展开区"
 
 @acc("ACC-RPT-EXP-001", "001-01")
 def test_导出展开区是多选_每项目一份_多项目打zip():
-    """⭐ 判据点**搬家**（`§19` 批 2）：旧页的展开区是 checkbox ＋ 全选/清空（**区域内不得出现 radio**）
-    ＋ 每项目一份、≥2 个打成 zip。新壳对应：`procExpPjs` **数组 ＋ 多选面板**
-    （`selected:()=>procExpPjs`、**不带 `single:true`**、`allAct`/`noneAct` 给全选/清空）＋ 面板写明口径。"""
-    panel = SHELL[SHELL.index("const procExpPjPanel="):]
-    panel = panel[:panel.index("\n")]
-    assert "selected:()=>procExpPjs" in panel and "single:true" not in panel, \
-        "导出项目面板不是多选（或混进了单选 `single:true`）"
-    assert "allAct:'procExpPjAll'" in panel and "noneAct:'procExpPjNone'" in panel, \
-        "多选面板缺「全选 / 清空」"
-    assert "每项目一份" in SHELL and "zip" in SHELL, "面板没写清「每项目一份 / ≥2 打成 zip」"
-
+    """TAIL-265：同窗复选框、全选/清空，保留每项目一份与多项目ZIP出口。"""
+    body = SHELL[SHELL.index("const procExpDlg=()=>"):SHELL.index("const procExpSelection=()=>")]
+    assert 'type="checkbox"' in body and 'type="radio"' not in body
+    assert 'data-act="procExpPjPick"' in body
+    assert 'data-act="procExpPjAll"' in body and 'data-act="procExpPjNone"' in body
+    assert "每项目一份" in body and "ZIP" in body
+    assert "const pjs=procExpPjs.slice();" in act_entry("procExpSave")
 
 @acc("ACC-RPT-EXP-001", "001-01")
 def test_一个项目都没选时导出按钮禁用():
-    """旧页：清空后导出按钮 **disabled** —— ⛔ 不静默退回"当前项目"（那是一次用户没要求的导出）。"""
-    assert "${procExpPjs.length?'':'disabled'}" in SHELL, "0 个项目时导出按钮没有禁用"
-
+    """清空后禁用导出且处理器防空；不静默回退当前项目。"""
+    body = SHELL[SHELL.index("const procExpDlg=()=>"):SHELL.index("const bigCands =")]
+    assert re.search(r"\$\{selected\.size\?'':'\s*disabled'\}", body), "初始空选择没有禁用导出"
+    assert re.search(r"\w+\.disabled\s*=\s*!selected\.size", body), "全选/清空后没有同步禁用状态"
+    assert "if(!pjs.length) return toast(" in act_entry("procExpSave")
 
 @acc("ACC-RPT-EXP-001", "001-04")
 def test_导出取数跟随当前所显示的表():
@@ -173,27 +170,21 @@ def test_导出取数跟随当前所显示的表():
 
 @acc("ACC-RPT-EXP-001", "001-02")
 def test_导出展开区默认选中本页当前项目():
-    """⭐ 判据点**搬家**（`§19` 批 2）：原先钉在旧页的导出展开区（未动过 ⇒ 勾选 = 本页当前项目；
-    且**不改动**页面那个单选项目）。新壳对应一句：**展开区没选过东西时，默认取当前项目** ⇒
-    ⛔ 不许默认取"第一个候选"或空（那会导出用户没选的项目）。"""
-    assert ("if(procExpOn&&!procExpPjs.length&&procPj) procExpPjs=[procPj];" in SHELL), \
-        "导出展开区没默认选中本页当前项目"
-
+    """弹窗没有选择时默认当前项目；不修改页面单选，也不取首个候选。"""
+    body = act_entry("procExpToggle")
+    assert "if(!procExpPjs.length&&procPj) procExpPjs=[procPj];" in body
+    assert "procPj=" not in body and "PROC_PJS[0]" not in body
+    assert "procExpDlg();" in body
 
 @acc()
 def test_导出面板一键开合_开合判据只认面板自身状态():
-    """⭐ 2026-09-28（用户报障原话「弹出的选择项目控件**点没了的话，还要再点两下按钮才能出来**」）：
-    开关按钮的判据**只能是面板自己的开合态**（`pjIsOpen`），⛔ 不能用另一个镜像变量 ——
-    镜像**不会**跟着「点浮层外面收起」一起合 ⇒ 状态走散后，下一次点按钮就变成
-    "**关一个已经关了的**" ⇒ 要点**两下**才出来。这正是那条报障的根。
-
-    ⚠️ **能证伪**：把 `const open=!pjIsOpen('procExpPj');` 换回 `procExpOn=!procExpOn;` ⇒ 本件必红。
-    """
-    seg = act_entry("procExpToggle")
-    assert "const open=!pjIsOpen('procExpPj');" in seg, \
-        "开 / 关判据不是面板自身的开合态 ⇒ 点浮层外面收起后会与镜像变量走散（要点两下才出来）"
-    assert "procExpOn=open;" in seg, "镜像变量没跟这一次开 / 关同步写（展开区会与面板不同步）"
-
+    """TAIL-265：点击直接开同一弹窗，取消后单次点击重开，取消不下载。"""
+    body = act_entry("procExpToggle")
+    assert "procExpDlg();" in body and "procExpOn" not in body
+    assert "pjClose('procPj');pjClose('procExpPj');" in body
+    cancel = act_entry("procExpCancel")
+    assert "closeModal();" in cancel and "procExpPjs=[]" in cancel
+    assert "dlExport" not in cancel and "procExpSave" not in cancel
 
 @acc()
 def test_过程资料机械手录不按截止月拦截():

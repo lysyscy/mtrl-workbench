@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.mod07_setl import domain as D
 from app.mod07_setl import extract as X
+from app.mod07_setl import inventory_extract as I
 from app.mod07_setl.repository import load_balances, load_rows, save_balance
 
 
@@ -66,18 +67,18 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
 
 
 def parse_extract_state(params: dict | None = None) -> dict:
-    """提取页的筛选状态：**项目状态**（默认「在建」）＋ **金额月份**（默认上月，四种模式）。
+    """提取页的筛选状态：**项目状态**（默认「在建」）＋ **年份**（默认报表核算期所属年；旧期间参数兼容）。
 
     ⚠️ **「不带这个参数」与「显式传空」是两件事**：
-    - 不带 `ext_period` ⇒ 用本表默认年月（上月，§9.2）；
-    - **显式传空串 ⇒ 不筛月份（= 全部）** —— 页面上那格写着「留空=全部」，
-      再把空串当"没选"回落成上月，就是**占位符骗人**（清空筛选后看到的数据不是全部）。
+    - 不带 `ext_period` ⇒ 上月所属年（§9.2）；
+    - 旧调用显式空串仍表示全部期间；年度页面只提交年份。
+      原模板保留旧期间兼容，新增年度网格使用默认年。
     """
     p = params or {}
     status = _one(p, "status") or X.STATUS_DEFAULT
     if status not in X.STATUS_OPTIONS:
         status = X.STATUS_DEFAULT                                   # 认不出的取值 ⇒ 回落默认，不臆造
-    period = _one(p, "ext_period") if "ext_period" in p else D.default_month()
+    period = _one(p, "ext_period") if "ext_period" in p else D.default_month()[:4]
     return {"status": status, "period": period, "explicit": bool(_one(p, "status"))}
 
 
@@ -109,7 +110,7 @@ def _visible(amounts: dict, kind: str, st: dict, statuses: dict, order: list[str
 def build_extract_data(s: Session, state: dict | None = None) -> dict:
     """提取页所需的一切：两个分组块（含**紧贴**本类数据行的合计行）＋ 计数 ＋ 导出矩阵。"""
     st = dict(state or parse_extract_state())
-    amounts = X.extract_amounts(load_rows(s))
+    amounts = I.load_amounts(s)
     statuses, order = _project_context(s)
     blocks: list[dict] = []
     for kind in X.KINDS:
@@ -124,6 +125,7 @@ def build_extract_data(s: Session, state: dict | None = None) -> dict:
             amounts, kind, warehouses=_visible(amounts, kind, st, statuses, order))
             for kind in X.KINDS],
         "rules": X.default_rules(),
+        "annual": annual_grids(s, amounts, st),
     }
 
 
@@ -151,8 +153,7 @@ def build_extract_export(s: Session, state: dict | None = None) -> dict:
       （**唯一取数出口**）；未录入 ⇒ `None` ⇒ 产物该格**如实留空**（⛔ 不写 0）。
     """
     st = dict(state or parse_extract_state())
-    details = load_rows(s)
-    amounts = X.extract_amounts(details)
+    amounts = I.load_amounts(s)
     balances = load_balances(s)
     statuses, order = _project_context(s)
     report_ym = export_report_ym(st["period"], X.extract_months(amounts))
@@ -163,7 +164,17 @@ def build_extract_export(s: Session, state: dict | None = None) -> dict:
             warehouses=_visible(amounts, kind, st, statuses, order),
             year=report_ym[:4] if report_ym else "", balances=balances)
     return {"state": st, "report_ym": report_ym, "year": report_ym[:4] if report_ym else "",
-            "grids": grids}
+            "grids": grids, "annual_grids": annual_grids(s, amounts, st)}
+
+
+def annual_grids(s: Session, amounts: dict, state: dict) -> dict:
+    """页面、合计和年度导出共用网格；筛选、档案顺序仍走现有出口。"""
+    year = str(state.get('period') or D.default_month())[:4]
+    if len(year) != 4 or not year.isdigit():
+        year = D.default_month()[:4]
+    statuses, order = _project_context(s)
+    return {kind:I.annual_grid(amounts, kind, warehouses=_visible(amounts, kind, state, statuses, order), year=year)
+            for kind in X.KINDS}
 
 
 def save_balance_cell(s: Session, *, kind: str, warehouse: str, raw) -> dict:

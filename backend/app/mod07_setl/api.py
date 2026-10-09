@@ -24,6 +24,7 @@ from app.core.identity import current_operator
 from app.mod07_setl import big_domain as B
 from app.mod07_setl import big_service as BS
 from app.mod07_setl import extract as X
+from app.mod07_setl import inventory_extract as I
 from app.mod07_setl import service as S
 from app.mod07_setl.big_repository import load_manual
 from app.mod07_setl.domain import AMOUNT_KEYS, ROWCOUNT_KEY, WAREHOUSE_KEY, default_month
@@ -101,7 +102,7 @@ def api_settlement(request: Request) -> dict:
 
 
 @router.get("/api/m07/extract")
-def api_extract() -> dict:
+def api_extract(year: str = "", status: str = "全部") -> dict:
     """**焊材 / 气体提取**（§5.3.3）→ `{类别: {仓库: {核算月: 金额}}}` ＋ 「结余」录入值。
 
     ⭐ 口径（关键词 / 白名单 / 排除子串）**唯一出口 = `extract.extract_amounts`** ——
@@ -110,8 +111,9 @@ def api_extract() -> dict:
       粒度 = 类别 × 仓库 · 不按月）；**未录入的键不出现**（≠ 0 —— 0 是合法录入值）。
     """
     with session_scope() as s:
-        amounts = X.extract_amounts(load_rows(s))
+        amounts = I.load_amounts(s)
         balances = load_balances(s)
+        annual = S.annual_grids(s, amounts, S.parse_extract_state({"ext_period":year, "status":status}))
     out: dict[str, dict[str, dict[str, object]]] = {}
     for kind in X.KINDS:
         by_wh = (amounts or {}).get(kind) or {}
@@ -121,6 +123,10 @@ def api_extract() -> dict:
         }
     return {
         "amounts": out,
+        "annual": {kind:{**grid, "rows":[{**row, "prior":_s(row['prior']),
+                    "cells":[_s(value) for value in row['cells']], "total":_s(row['total'])}
+                    for row in grid['rows']], "sum_row":[_s(value) for value in grid['sum_row']]}
+                    for kind,grid in annual.items()},
         "kinds": list(X.KINDS),
         "balances": {
             str(kind): {str(wh): _s(v) for wh, v in ((balances or {}).get(kind) or {}).items()}

@@ -16,6 +16,7 @@ from app.mod01_projects import service as P1S
 from app.mod07_setl import big_domain as B
 from app.mod07_setl import big_repository as R
 from app.mod07_setl import extract as X
+from app.mod07_setl import inventory_extract as I
 from app.mod06_proc import service as P6S
 from app.mod07_setl.repository import load_rows
 
@@ -80,8 +81,8 @@ def state_query(state: dict) -> str:
 # ============================================================ 自动列取数（§5.7.1）
 
 def _extract_amounts(s: Session) -> dict:
-    """焊材 / 三气：**收发结存提取**（§5.3.3）—— 当月走「金额」口径、累计走「总金额」口径。"""
-    return X.extract_amounts(load_rows(s))
+    """焊材 / 三气：**库存入库提取**（§5.3.3）—— 当月走「金额」口径、累计走「总金额」口径。"""
+    return I.load_amounts(s)
 
 
 def _mech_amounts(s: Session) -> dict[str, dict[str, dict[str, object]]]:

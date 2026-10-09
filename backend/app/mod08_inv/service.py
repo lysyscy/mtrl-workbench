@@ -25,6 +25,12 @@ def load_rows(session, **kw):
     return R.load_rows(session, **kw)
 
 
+def load_original_details(session, **kw):
+    """包间只读出口：库存原单明细，不叠加人工调整金额。"""
+    from app.mod08_inv import repository as R
+    return R.list_details(session, **kw)
+
+
 def parse_state(params: dict | None = None) -> dict:
     """把扁平查询参数解析成**筛选状态**（视图与路由共用同一个出口，不在各处各解一遍）。"""
     p = params or {}
@@ -129,4 +135,4 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     }
 
 
-__all__ = ["DEFAULT_TABLE", "load_rows", "parse_state", "state_to_query", "build_page_data"]
+__all__ = ["DEFAULT_TABLE", "load_rows", "load_original_details", "parse_state", "state_to_query", "build_page_data"]

@@ -96,7 +96,7 @@ def check(page, errors: list[str]) -> None:
             (got["btn"] and got["resHost"], "「① 先查 i8 仓库名单」入口与结果位都在"),
             ("查" in got["hint"], f"按钮上写清了要干什么（{got['hint'][:24]}）"),
             ("必须先跑" in got["note"] or "假档案行" in got["note"], "旁边讲清了「不查就建」的后果"),
-            ("强制踢掉" in dlg["text"] and dlg["ok"], "先二次确认、讲清会顶号"),
+            (("顶掉" in dlg["text"] or "强制踢掉" in dlg["text"]) and dlg["ok"], "先二次确认、讲清会顶号"),
             ("先查" in blocked["text"] and "假档案行" in blocked["text"], "没查过就提交 ⇒ 当场拦下并说清原因"),
             (blocked["stillOpen"], "被拦之后弹窗还在（⛔ 没有偷偷提交）"),
         ]

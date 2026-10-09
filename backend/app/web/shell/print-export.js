@@ -103,32 +103,28 @@ async function m03PrinterOpen() {
   /* ⚠️ 通道口径照用户调好的 `i8一键打印_新版`（2026-09-18）——**只把说明摆出来**，
        判定全在后端（`settings_store.validate_print_mode`）。 */
   const MODES = [
-    ['auto', '自动（推荐）', '依次试：IPP → 系统驱动 → RAW 9100。换任何打印机都能打，不用先知道它的脾气'],
-    ['ipp', 'IPP', '只用标准方式。好处是能确认打印机真的收件、打完了（Ricoh IM 3000 用这个）'],
-    ['driver', '系统驱动', '走 Windows 打印驱动出纸，最稳的一条路 —— ⚠️ 这台电脑必须装过那台打印机的驱动，且下面要选「打印机名」'],
-    ['raw', 'RAW 9100', '只用 RAW 通道。只对"自己能读 PDF"的打印机有意义 —— ⚠️ 多数小型机用它可能打出乱码'],
+    ['auto', '自动（推荐）', '自动选择出纸通道'],
+    ['ipp', 'IPP', '只用 IPP 通道'],
+    ['driver', '系统驱动', '须在本机安装驱动并填写打印机名'],
+    ['raw', 'RAW 9100', '不支持该通道的打印机可能打出乱码'],
   ];
   modal({
     title: '打印机设置',
-    body: `<div class="tip" style="margin:0 0 calc(10px * var(--fscale))">保存后<b>即时生效、无需重启</b> —— 打印投递按新设置走。</div>
+    body: `<div class="tip" style="margin:0 0 calc(10px * var(--fscale))">保存后按新设置打印。</div>
       <div class="fld"><label>打印机 IPP 地址</label>
         <input class="inp" id="m03PrinterUrl" style="width:100%" value="${esc(cur)}" placeholder="ipp://192.168.5.248"></div>
       <div class="fld" style="margin-top:calc(8px * var(--fscale))"><label>出纸通道</label>
         <select class="inp" id="m03PrintMode" style="width:100%">
           ${MODES.map(m => `<option value="${m[0]}" ${m[0] === mode ? 'selected' : ''}>${m[1]} —— ${m[2]}</option>`).join('')}
         </select></div>
-      <div class="tip wn" style="margin:calc(8px * var(--fscale)) 0 0"><b>打不出纸 / 打出乱码时看这里</b>：不同打印机认的投递方式不一样 ——
-      原来能打的（Ricoh）保持<b>自动</b>不用动；换新机器先试<b>自动</b>，若打出来是<b>乱码</b>就改选<b>系统驱动</b>
-      （有的打印机<b>没有 PDF 解释器</b>，只认位图格式，这时 IPP 会被直接拒收、RAW 会收下但打成乱码）。</div>
+      <div class="tip wn" style="margin:calc(8px * var(--fscale)) 0 0">优先选自动；无法出纸或出现乱码时，可尝试系统驱动。</div>
       <div class="fld" style="margin-top:calc(8px * var(--fscale))"><label>打印机名（只有选「系统驱动」才用得上）</label>
         <input class="inp" id="m03PrinterName" list="m03PrinterNames" style="width:100%" value="${esc(nm)}" placeholder="如：RICOH IM 3000 PCL 6（名字要一字不差）">
         <datalist id="m03PrinterNames">${prs.map(p => `<option value="${esc(p)}"></option>`).join('')}</datalist>
         <div class="mut sm" style="margin-top:calc(4px * var(--fscale))">${prs.length
           ? `本机装了驱动的打印机有 <b>${prs.length}</b> 台（点输入框可选）：${esc(prs.slice(0, 4).join(' / '))}${prs.length > 4 ? ' …' : ''}`
           : '⚠️ 没取到本机打印机名（这台机器没装 <span class="fc">pywin32</span> 或不是 Windows）⇒ 名字要手填'}</div></div>
-      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>打印版式（i8 模板编号）</b> —— 从「系统设置」搬到这里
-        （打印相关的都在一处）。⚠️ 它们是 i8 那边的模板编号，<b>不确定就别动</b>：改错了会印错版式。
-        这一类改动<b>逐项留痕</b>（系统设置页的「变更留痕」看得到）。</div>
+      <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0">打印版式填写 i8 模板编号；不确定时请勿修改，改错会印错版式。</div>
       ${pidField('m03PidMat', 'i8_print_id_material')}${pidField('m03PidMech', 'i8_print_id_mechanical')}`,
     footer: `<button class="btn" data-act="closeModal">取消</button>
       <button class="btn pri" data-act="m03PrinterSave">保存</button>`,

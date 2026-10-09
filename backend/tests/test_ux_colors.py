@@ -62,8 +62,12 @@ def test_颜色语义错位不许回来():
     bad = [f"{tomb!r}（{why}）" for tomb, why in TOMBSTONES if tomb in SHELL]
     assert not bad, (
         "颜色语义又被用错了（守则 §4.5：绿＝已完成 / 黄＝风险）：\n      " + "\n      ".join(bad))
-    # 那两处"zip"预览（同款、但整串较长）单列，避免上面列表太长
-    for tail in ("过程资料_${ym}.zip", "逐月欠款台账_${ym}.zip"):
+    # MOD06改为同窗选项目，其范围说明同样不能预告成功绿或警示黄。
+    proc = SHELL[SHELL.index("const procExpDlg=()=>"):SHELL.index("const procExpSelection=()=>")]
+    assert '<div class="tip">导出所选项目' in proc
+    assert 'class="tip ok"' not in proc and 'class="tip wn"' not in proc
+    # 台账ZIP预览仍存在，保持原观测面。
+    for tail in ("逐月欠款台账_${ym}.zip",):
         i = SHELL.find(tail)
         assert i > 0, f"找不到 {tail!r} 那段导出预览（落点变了？）"
         seg = SHELL[max(0, i - 260):i + 40]

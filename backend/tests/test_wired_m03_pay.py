@@ -96,8 +96,8 @@ def test_壳里存在不可付行则确认付款禁用并给原因与解决路�
     assert "whyCell(n)" in reg, "行内只写「不可付」、没说清是哪种原因"
     assert "badWhy" in reg, "顶部提示只有条数、没有「为什么」"
     assert "ntPayBlock(n)" in reg, "原因没走唯一出口 `ntPayBlock`（另写一套文案 ⇒ 必然漂）"
-    assert "把它移出本次付款" in reg, "没给解决路径（只说不行、不说怎么办）"
-    assert "已填的方式与金额不会丢" in reg, "没讲清「移出不丢已填值」（用户不敢移）"
+    assert "请移出不可付记录，或关闭后调整勾选" in reg, "没给解决路径（只说不行、不说怎么办）"
+    assert "移出会取消该行勾选，其他行已填方式与金额保留" in reg, "没讲清移出后勾选变化及保留其他行草稿"
     # ⭐ 2026-09-29（`TAIL-64` A′）：这张表的**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt cond" …>`）。
     #   ⚠️ 它在这条判据里是**第二例**「委托 ＋ 内核」——同一条判据守着同一段切片的两处委托（`ntPayBlock` 与 `TBL`）。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M34 去掉这处委托 ⇒ 必须红。
@@ -172,7 +172,7 @@ def test_壳里撤单行与剔除行不得进入付款():
     # ⭐ claim 的「显式告知」：**按行说真因** —— 剔除与撤单是两回事，⛔ 不能一律写成"i8 已撤单"
     assert "const whyOf=n=>ntVoid(n)?'i8 已撤单':'已剔除';" in reg, "排除提示没按行区分真因"
     assert "已自动排除 ${drop.length} 条不可付款的记录" in reg, "排除时没显式告知（会静默少几行）"
-    assert "恢复剔除 / 撤销已付 / 解绑关联" in reg, "没给解决路径（只说不行、不说怎么办）"
+    assert "剔除或撤单记录不产生付款，请核对已付与关联记录" in reg, "要讲清不产生付款及核对已付/关联的后续路径"
     assert ".filter(Boolean).filter(ntPayCand);" in _batch_pay_ok(), "提交时没有兜底复检准入"
 
 

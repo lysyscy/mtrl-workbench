@@ -359,12 +359,11 @@ def test_壳侧提取导出真下载且提示与模板形态一致(tmp_path):
     assert "/api/m07/extract/export?status=" in save, "`saveExt` 没打导出端点"
     assert "x-export-filename" in with_kernel(save), "壳侧没读后端带出的文件名（那就是自己拼了一份命名）"
     assert "'application/json'" in with_kernel(save), "没按 `content-type` 分流失败原因"
-    assert "fExt.status" in save and "fExt.ym" in save, "筛选没带给后端（会导出成别的集合）"
+    assert "fExt.status" in save and "fExt.year" in save, "筛选没带给后端（会导出成别的集合）"
     # ⭐ 提示语必须与模板实际形态一致：2 个工作表（焊材 / 气）＋ 列 = 项目|结余|1月…12月|合计
-    assert "气" in dialog and "工作表" in dialog, f"提示没写工作表结构：{dialog[:120]}"
-    for token in ("结余", "1月…12月", "合计"):
-        assert token in dialog, f"提示缺成品的列：{token}"
-    assert "不是</b>成品的列结构" in dialog or "不是" in dialog, "必须说清下表 ≠ 成品的列结构"
+    for token in ("年度汇总", "当前筛选", "独立人工结余", "本年合计"):
+        assert token in dialog, f"提示缺导出范围和原模板含义：{token}"
+    assert "extBlock('焊材')" in dialog and "extBlock('气体')" in dialog
 
 
 @acc(CASE, "001-05")

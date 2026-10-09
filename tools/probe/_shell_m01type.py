@@ -57,8 +57,8 @@ def check(page, errors: list[str]) -> None:
         oks = [
             (got["n"] >= 1 and got["hasId"], f"类型格挂上了动作（{got['n']} 格 · 文字「{got['txt']}」）"),
             ("人工" in got["mouseHint"] or "改类型" in got["mouseHint"], "格子上有提示（知道点得动）"),
-            ("§2.2.1" in dlg["text"] and "小微" in dlg["text"], "弹窗点出口径的主人节与自动规则"),
-            ("具体小微" in dlg["text"] and "不能选" in dlg["text"], "写明⛔ 不能人工指定「具体小微」"),
+            ("普通项目或小微壳" in dlg["text"], "弹窗说明允许改为哪两种类型"),
+            (picked["hasShellOpt"] and not picked["hasSmallOpt"], "界面不允许人工指定具体小微"),
             (picked["hasWh"], "选「普通项目」才出现仓库名输入框"),
             (picked["hasShellOpt"] and not picked["hasSmallOpt"], "可选项只有 普通项目 / 小微壳"),
         ]

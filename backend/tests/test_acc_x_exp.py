@@ -137,7 +137,7 @@ def _strip_js_comments(seg: str) -> str:
 #:   去注释的正则匹配不上 ⇒ 注释里的 `**` 会被当成泄漏（我第一版栽在这）。
 RENDER_SEGMENTS = {
     "ledExpStrip": ("ledExpStrip=()=>", "\n/*"),
-    "procExpStrip": ("procExpStrip=()=>", "\n/*"),
+    "procExpDlg": ("procExpDlg=()=>", "const procExpSelection"),
     "ledExpOk": ("ledExpOk:()=>", "ledExpSave"),
     "procExpOk": ("procExpOk:()=>", "procExpSave"),
 }
@@ -161,7 +161,7 @@ def test_导出展开区在滚动容器之外且全页恰好一处():
     """
     html = _index()
     slices = _view_slices(html)
-    for strip, flag in (("ledExpStrip", "ledExpOn"), ("procExpStrip", "procExpOn")):
+    for strip, flag in (("ledExpStrip", "ledExpOn"),):
         call = f"${{{flag}?{strip}():''}}"
         assert html.count(call) == 1, (
             f"`{strip}` 的渲染点在**全页出现 {html.count(call)} 次** —— claim 要求**恰好一处**"
@@ -192,8 +192,7 @@ def test_多项目导出的清单预览有单多两条形态():
        `list:` ⇒ 那时由**内核**逐项一行；见下面那句的两段式判法）——
        ⛔ 只写一句"内含 N 个"（数字）**不算清单**：用户要看的是**哪几个项目**在里面。
     """
-    for key, end, unit in (("ledExpOk:", "ledExpSave", "工作表"),
-                           ("procExpOk:", "procExpSave", "个文件")):
+    for key, end, unit in (("ledExpOk:", "ledExpSave", "工作表"),):
         seg = _fn_body(_actions(), key, end)
         assert "pjs.length===1" in seg, f"`{key}` 没有**单/多**两条形态（claim 要求两条都在）"
         # ⚠️ 切三元分支要认**行首那个 `:`** —— 按"第一个 `:`"切会在 `style="margin:0"` 上断开
@@ -247,7 +246,6 @@ def test_导出相关渲染面无Markdown泄漏():
 
 #: 导出清单弹窗里的表（`001-06`）：`弹窗名 → (标题片段, 排序键)`
 EXPORT_MODAL_TABLES = {
-    "procExpOk": ("导出 · 过程资料", "modal:procExp"),
     "ledExpOk": ("导出 · 逐月欠款台账", "modal:ledExp"),
 }
 #: ⚠️ **刻意不可排**的表 —— `index.html` 注释里点名的（`MOD-07` 焊材/气体提取的**分组表**）：

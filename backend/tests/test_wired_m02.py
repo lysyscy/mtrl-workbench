@@ -124,7 +124,8 @@ def test_同步先二次确认才允许强踢():
     assert "API.m02SyncWh()" in confirm or "API.m02SyncPj()" in confirm, \
         "确认之后才发请求（⛔ 别在弹窗打开时就发）"
     dlg = func_body("m02Sync")
-    assert "强制踢掉" in dlg and "data-act=\"m02SyncOk\"" in dlg, "确认弹窗没讲清会顶号"
+    assert "会登录 i8，并顶掉该账号其他在线会话" in dlg and "data-act=\"m02SyncOk\"" in dlg, "确认弹窗没讲清会顶号"
+    assert "API.m02SyncWh(" not in dlg and "API.m02SyncPj(" not in dlg, "打开确认窗不得提前执行同步"
     # ⛔ 反面：不许在别处直接打这两个端点（绕开确认弹窗）
     assert SHELL.count("API.m02SyncWh()") + SHELL.count("API.m02SyncPj()") == 2, \
         "两个同步端点各只许有一处调用方（且必须在确认处理函数里）"

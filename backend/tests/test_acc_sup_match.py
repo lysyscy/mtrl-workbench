@@ -105,3 +105,65 @@ def test_端点真跑一次_只算不写():
         # ⚠️ **只算不写**：本端点不得改动任何字段（落库一律走 jc-supplier）
         assert str(n.jc_supplier or "") == "", "端点不许顺手落库（预填须经人「采用」）"
         s.rollback()
+
+
+@acc()
+def test_写入集采实际供应商_列表必须读得回同一个值():
+    """⭐ 2026-10-08 BUG 钉子（往返）：`jc-supplier` 写进去的值，**列表必须原样读回**。
+
+    ⚠️ 为什么这条必须钉：`NoticeRow` 曾经**漏装** `jc_supplier` ⇒ `_row_dict` 的
+    `getattr(..., "")` 兜底把缺口**静默变成空串** ⇒ 页面上那一格恒空、点「采用」反而清空，
+    而后端全部回 `ok:true`、所有既有判据照样绿。
+    ⇒ 这里既验「写得进」，也验「读得回」；`_row_dict` 已改为**直取**（漏装会当场红，不再兜空）。
+    """
+    from app.mod03_notice.notice_api_router import JcSupplierIn, api_jc_supplier, get_notice_list
+
+    def _list(s):
+        """走**真实列表端点**（前端那一格就是从它来的）—— 参数显式给全，⛔ 不吃 `Query(...)` 默认值。
+        ⚠️ `period=""` = **全部时间**（`None` 会落"当月"默认值，判据会被日期漂移带偏）。"""
+        return get_notice_list(period="", project=[], category="", approve_status="",
+                               pay_status="", sort="", dir=0, session=s)["items"]
+
+    nid = 0
+    with session_scope() as s:
+        p = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full=f"{WH}往返项目",
+                                   warehouse_name=WH, phid="")
+        s.flush()
+        n = PaymentNotice(ph_id="__自检_ph_供应商往返__", doc_date="2026-09-18",
+                          fields={"BillName": "四分自检项目/主材钢材/业祥/100元"},
+                          category="jc", ownership_id=int(p.id))
+        s.add(n)
+        s.commit()
+        nid = int(n.id)
+
+    try:
+        # ① 写：走真实端点（`category="jc"` ⇒ `jc_supplier_problem` 放行）
+        with session_scope() as s:
+            w = api_jc_supplier(JcSupplierIn(notice_id=nid, supplier="  业祥建设  "), session=s)
+        assert w["ok"] is True and w["supplier"] == "业祥建设", f"写入失败或没去空白：{w}"
+
+        # ② 读：走**列表端点**（前端那一格就是从它来的）
+        with session_scope() as s:
+            items = _list(s)
+        got = next((i for i in items if int(i["notice_id"]) == nid), None)
+        assert got is not None, "刚写的那条没出现在列表里"
+        assert got["jc_supplier"] == "业祥建设", \
+            f"列表读回来的集采实际供应商不对（实际={got['jc_supplier']!r}）—— 这一格在页面上恒空就是它造成的"
+
+        # ③ 清空也要读得回空串（否则「不采用」清不掉）
+        with session_scope() as s:
+            assert api_jc_supplier(JcSupplierIn(notice_id=nid, supplier=""), session=s)["ok"] is True
+        with session_scope() as s:
+            items = _list(s)
+        got = next(i for i in items if int(i["notice_id"]) == nid)
+        assert got["jc_supplier"] == "", f"清空后列表仍回 {got['jc_supplier']!r}"
+    finally:
+        # ⚠️ 本条**故意落库**（要跨会话往返）⇒ 自己收拾干净，⛔ 不能留给下一个用例
+        with session_scope() as s:
+            row = s.get(PaymentNotice, nid)
+            if row is not None:
+                s.delete(row)
+            for r in list(s.query(pj_repo.Project).filter(
+                    pj_repo.Project.warehouse_name == WH)):
+                s.delete(r)
+            s.commit()

@@ -118,7 +118,7 @@ def export_extract(session: Session, period: str, status: str = "") -> Path:
     if period is not None:                       # ⚠️「不带 period」与「显式传空」是两件事（同页面）
         raw["ext_period"] = str(period)
     plan = M7.build_extract_export(session, M7.parse_extract_state(raw))
-    return Path(weldgas_export.build_xlsx(plan["grids"], EXPORT_ROOT, plan["report_ym"]))
+    return Path(weldgas_export.build_xlsx(plan["grids"], EXPORT_ROOT, plan["report_ym"], annual_grids=plan["annual_grids"]))
 
 
 def export_ledger(session: Session, projects, ym: str = "") -> Path:

@@ -74,7 +74,7 @@ def test_台账导出一次点到位的按钮名要能看出先选项目():
     ② ⛔ **别拿面板开合态当这个按钮的判据** —— `m05` 的面板挂在**展开区里**（不在按钮上）⇒ **点卡头按钮本身就等于
        "点到浮层外面"**，通用收起逻辑会先关掉面板，此时再按面板状态取反 ⇒ **永远只能开、收不掉**
        （真机 `㉚-④′` 实测抓到：「收起后按钮仍带 `on` —— 状态不真实」）。⚠️ 这与 `m06` **相反**：
-       那边面板**就挂在按钮上**，所以判据必须是面板状态（⛔ 拿镜像变量才会"要点两下"）—— **两页形态不同，判据也不同**；
+       TAIL-265已将MOD06改为同窗选项目，无浮层镜像开关；本条仍只保护MOD05的展开区；
     ③ 按钮名要**一眼看出「要先选项目」**（原先是孤零零的「导出…」，用户报「**不知道去哪里找**」）。
 
     ⚠️ **能证伪**：删掉 `if(ledExpOn){ PJ_OPEN['ledExpPj']=true; }`（退回"只开展开区"）⇒ 本件必红。
@@ -92,40 +92,23 @@ def test_台账导出一次点到位的按钮名要能看出先选项目():
 @acc()
 @acc()
 def test_m09月度批量录入_入口挂BIND且提交交给后端():
-    """⭐ `TAIL-156` `P2`（用户口径「一次录好几个月太麻烦」⇒ 月度批量录入弹窗）：
-    ① 入口走 **`BIND` 钩子**（⛔ 不改 `V.m09` 切片 —— `D18`：原型渲染逻辑一行不改；与 `BIND.m06` 同款）；
-    ② 列（项名）取自**本页当前那一份**（`awfList()`）—— ⛔ 弹窗里不许长出第二处项名定义；
-    ③ 提交**交给后端唯一出口** `/api/m09/fee/batch`（⛔ 别在壳里逐格调老端点，也别自己判金额）；
-    ④ **成败只看 `ok`**（⛔ 拿"有没有 message"当判据 ⇒ 会把失败显示成"已保存"，本仓踩过）。
-
-    ⚠️ **能证伪**：把提交改回逐格 `API.m09Amount(`、或把 `r.ok === false` 那句删掉 ⇒ 本件必红。
-    """
-    assert "BIND.m09 = function ()" in SHELL, "`m09` 批量录入入口没挂 `BIND` 钩子（会破坏「切片一行不改」）"
-    assert 'data-act="awfBatch"' in SHELL, "入口按钮没挂 `awfBatch` 动作"
+    """TAIL-265：项名取当前页；首月递增为列，提交唯一批量出口，失败不清空。"""
+    assert "BIND.m09 = function ()" in SHELL and 'data-act="awfBatch"' in SHELL
     body = SHELL[SHELL.index("awfBatch:()=>"):SHELL.index("awfBatchOk:")]
-    assert "awfList()" in body, "列（项名）不是取自本页那一份"
-    ok = SHELL[SHELL.index("awfBatchOk:async"):]
-    ok = ok[:ok.index("awfReset:")] if "awfReset:" in ok else ok[:4000]
-    assert "API.m09Batch(" in ok, "批量提交没走后端批量入口"
-    assert "r.ok === false" in ok, "没把 `ok:false` 当失败（会把失败显示成「已保存」）"
-    assert "API.m09Amount(" not in ok and "API.m09Name(" not in ok, \
-        "批量提交在逐格调老端点（应走批量入口 `/api/m09/fee/batch`）"
-    # ⭐ 2026-09-28（用户口径「这个核算期要能自定义」）：核算期**每行可手填**，且提交前**按行校验**。
-    assert 'data-act="awfYmCell"' in body, "核算期不能自定义（用户口径「这个核算期要能自定义」）"
-    assert "行的核算期认不出" in ok, \
-        "提交前没按行校验核算期（认不出的月份会静默不写 / 或写进错月）"
-    assert "!raw && !has" in ok, \
-        "没把「整行都空」与「填了金额但核算期认不出」分开 —— 后者必须**说清并整批退回**，⛔ 不能静默跳过"
-    # ⭐ 2026-09-28（用户口径「我不需要那么多行，行的数量要能自定义」）
-    assert 'data-act="awfRowAdd"' in body and 'data-act="awfRowDel"' in body, \
-        "行数不能自定义（用户口径「行的数量要能自定义」）"
-    assert "ymAdd(cur,1)" in SHELL, "「＋ 加一行」没按最后一行的下一个月接（会插出重复月份）"
-    assert "cloneNode(true)" in SHELL and ".remove()" in SHELL, \
-        "加 / 减行不是**纯 DOM 插删**（改成重排整张表会把你已填的格子冲掉）"
-    assert "#awfTbl tbody tr" in ok, "保存没**逐行**走表（行可插可删 ⇒ 必须按行读）"
-    assert "data-r=" not in (body + ok), \
-        "格子还在按**行号**定位（`data-r`）—— 行可插可删，按行号读会错位（插一行就把后面的全读串）"
-
+    ok = SHELL[SHELL.index("awfBatchOk:async"):SHELL.index("awfRowAdd:()=>")]
+    assert "awfList()" in body, "项名不是当前页数据"
+    assert "API.m09Batch(" in ok and re.search(r"r\.ok\s*===\s*false", ok)
+    assert "API.m09Amount(" not in ok and "API.m09Name(" not in ok
+    assert 'data-act="awfYmCell"' in body and "请选择有效的首个核算月" in ok
+    assert "return fail(" in ok and ok.index("return fail(") < ok.index("API.m09Batch("), "无效首月未拦提交"
+    assert "ACT.awfYmCell(start);" in ok, "提交前未同步月份标签"
+    assert "#awfTbl thead th[data-ym]" in ok and "#awfTbl tbody tr" in ok
+    assert "heads.map((head,i)=>" in ok and "values:Object.fromEntries(trs.map(" in ok
+    assert 'data-act="awfRowAdd"' in body and 'data-act="awfRowDel"' in body
+    add = SHELL[SHELL.index("awfRowAdd:()=>"):SHELL.index("awfRowDel:()=>")]
+    assert "ymAdd(last.dataset.ym,1)" in add and "cloneNode(true)" in add
+    assert "cell.querySelector('input').value=''" in add, "新增月复制了旧金额"
+    assert "data-r=" not in body+ok, "保存仍依赖可能错位的旧行号"
 
 @acc()
 @acc()
@@ -413,15 +396,18 @@ def test_删除确认里不许把要求句甩给用户():
        「`必须列出` 这种**要求句式**一律不许上屏」（⚠️ 先**剥块注释**再判 —— 注释里会引述旧写法作留痕，
        那是本仓踩过三次的老课）。
     ⚠️ 判法两半：① **要求句式**不许上屏（一般式墓碑）；② 删除确认里必须留下**人话的后果**
-       （`m01`「删除不可撤销」· `m03`/`m05`「先看清下面这些影响」）。
+       （项目删除不可撤销；通知书展示实际message/effects；期初展示金额与欠款后果）。
     ⚠️ 能证伪：任一处改回要求句、或把人话后果删掉 ⇒ 本件必红（反向灵敏度 `_mut_a6.py` 各打一次）。
     """
     clean = _strip_block_comments(SHELL)
     assert "必须列出" not in clean, \
         "界面上又出现**写给实现的要求句**（『必须列出…』）—— 用户要知道的是「删了会怎样」，不是我们的待办"
-    assert "删除不可撤销" in clean and clean.count("先看清下面这些影响") >= 2, \
-        f"删除确认里没有人话的**后果说明**（`m01` 收尾句 {clean.count('删除不可撤销')} 处 / " \
-        f"`m03`+`m05` 那句 {clean.count('先看清下面这些影响')} 处，期望 ≥1 / ≥2）"
+    project = clean[clean.index("delPj:t=>"):clean.index("delPjOk:")]
+    notice = clean[clean.index("ntDel:t=>"):clean.index("ntDelOk:")]
+    opening = clean[clean.index("delLg:t=>"):clean.index("delLgOk:")]
+    assert "删除不可撤销" in project, "项目删除没有不可撤销后果"
+    assert "${imp.message}" in notice and "imp.effects.map(" in notice, "通知书删除没展示真实影响回执"
+    assert "欠款合计" in opening and "重新录入" in opening, "期初删除没有金额后果及重录说明"
 
 
 @acc("ACC-UI-SHELL-001", "001-58")
@@ -762,8 +748,6 @@ def test_项目选择按钮全站都走统一出口():
 #: ⚠️ 旧串必须写**整串**：`modal:ledExp` 与邻近那张表的行模板**前缀同款**、只差一格 —— 只写前缀会**假红**
 #:    （本判据首版就栽在这）。
 _P5D_DONE: tuple[tuple[str, str], ...] = (
-    ("modal:procExp",
-     'rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td></tr>`)'),
     ("modal:ledExp",
      'rows:pjs.map((k,i)=>`<tr><td class="fc">${i+1}</td><td>${esc(fnOf(k))}</td>'
      '<td class="sm">辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>`)'),
@@ -772,19 +756,10 @@ _P5D_DONE: tuple[tuple[str, str], ...] = (
 
 @acc()
 def test_表格件支持列定义式_试点已接上():
-    """⭐ `TAIL-64` **`P5-d-a`**（2026-09-30）：表格件新增**列定义式**（`cols:[{t,r}]` ＋ `list`）＋ 一处试点。
+    """列定义式仍派生表头/行；逐一保护现行调用者。
 
-    ⚠️ **为什么试点挑 `modal:procExp`**（施工图 §7.10 的只读量测）：`TBL` 有 **46 个调用点**，
-       其中 **30 个落在 `V.*` 切片里**（`U1` **逐行对位** ⇒ 每碰一行就是一条「换号 ＋ 幽灵」）
-       ⇒ 试点挑**不在 `V.*` 里**的这一处 ⇒ **零 `U1` 级联**。
-    ⚠️ **判法 = 两段拼起来看**（同 `with_tbl()` / `with_fbar()` / `with_pjb()` 那套 doctrine）：
-       调用点**委托**（`cols:` ＋ `list:`）＋ **内核里**真的按 `cols` 派生 `head` / `rows`。
-    ⚠️ 覆盖面 = `_P5D_DONE` 那张**名单**（`P5-d-a` 起**每转一处加一行**）—— ⛔ **别把还没转的写进来**：
-       那会让它们下一批一开工就**假红**；⭐ 也**别改成"全站扫描"**（`*_THEAD` 那 **16 处转不了**、
-       多行模板那批还卡在「**空白差**」口径上 —— 见施工图 §7.12 的**必读①②**）。
-    ⚠️ **墓碑**：试点那处**不许再手写** `head:` ＋ `rows:…map(` —— ⚠️ 更要紧的是"**看着改了、其实没用**"：
-       `cols` 与 `rows` **同时给**时本件是 `cols` 优先 ⇒ 手写那份会被**静默忽略**。
-    自证 = `tools/mut/_mut_tbl.py`：`M40`（内核不按 `cols` 派生）/ `M41`（试点又手写 `rows:`）必须红。
+    TAIL-265撤掉MOD06文件名预览表，迁移为复选框弹窗；台账文件预览仍走列定义式。
+    内核保护与每个现行调用点的委托、手写rows墓碑都保留，不以撤表证明机制通过。
     """
     # ⚠️ **先查内核**：它坏了，下面"试点看着对"也证明不了什么（同 `PJB` 那条的顺序讲究）
     kern = re.sub(r"/\*.*?\*/", "", tbl_kernel(), flags=re.S)
@@ -798,6 +773,7 @@ def test_表格件支持列定义式_试点已接上():
     #: ⚠️ 逐处核（**别只核一处**：`P5-d-a` 只算试点，`P5-d-b` 起要逐处守住）：
     #:    ① 那处**真的走了列定义式**（`cols:` ＋ `list:` 就在它 `key` 之后不远处）；
     #:    ② **墓碑**：那处的手写 `rows:` **整串**不许再出现。
+    assert _P5D_DONE, "列定义式没有任何现行观测面"
     for key, old_rows in _P5D_DONE:
         if f"key:'{key}'" not in src:
             raise AssertionError(f"`{key}` 那张表不在（改名了？）")

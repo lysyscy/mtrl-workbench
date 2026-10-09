@@ -174,7 +174,7 @@ async function i8SetOpen() {
       : '未设置过，且 <code>.env</code> 也是空的');
   modal({
     title: 'i8 连接设置',
-    body: `<div class="tip" style="margin:0 0 calc(10px * var(--fscale))">i8 装在哪台机器上 —— <b>保存后即时生效、无需重启服务</b>。⚠️ <b>i8 的账号密码不在这里</b>（那是每人一份，在「用户管理」页）。</div>
+    body: `<div class="tip" style="margin:0 0 calc(10px * var(--fscale))">保存即时生效；个人 i8 账号与密码在用户管理修改。</div>
       <div class="fld"><label>${esc(it.label)} ${src}</label>
         <input class="inp" id="m02I8Url" style="width:100%" value="${esc(it.stored)}"
           placeholder="${esc(it.env)}" autocomplete="off">
