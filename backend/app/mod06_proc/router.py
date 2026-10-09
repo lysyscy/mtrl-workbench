@@ -188,17 +188,7 @@ class MechSaveRequest(BaseModel):
 
 @router.post("/api/m06/mech")
 def api_mech_save(req: MechSaveRequest) -> dict:
-    """⭐ **`TAIL-38`：「录机械费」的写入口** —— 壳侧面板（原型 `V.m06` 没画这个入口，§5.2.5 ③）。
-
-    ⚠️ 校验**唯一出口 = `mech_ui.parse_mech_values`**（空 ⇒ 0；非数字 / 负数 ⇒ 拒）——
-      与 PRG 端点（`POST /m06/mech`）**同一份判定**，⛔ 不在本层另写一套。
-    ⭐⭐ **历史段的月份会被拒**（2026-09-26 用户裁定：「机械费手录**仅限于正式启用系统后**」）——
-      挡板在**唯一写出口** `repository.save_mech`（⛔ 不是在本层判、也不是只靠界面）；
-      理由原样给用户看（"这一格不能手录：… 属历史段 … 以过程资料导入的值为准"）。
-
-    ⚠️ 手录值落**旁路载体**（`proc_mech_manual`）⇒ 重抓 i8 / 重导历史**都不覆盖它**（§5.2.5 ③）。
-    ⚠️ 失败 **抛 `MustReportError`** ⇒ 400 ＋ 原样原因（壳侧把它给用户，不静默）。
-    """
+    """保存实际提交的机械列；任意月份可改，校验失败不写入。"""
     warehouse = str(req.warehouse or "").strip()
     if not warehouse:
         raise MustReportError("没有选中项目 —— 项目键 = 仓库名。")
@@ -206,7 +196,8 @@ def api_mech_save(req: MechSaveRequest) -> dict:
     if not ym:
         raise MustReportError(f"核算月认不出：{req.ym or '（空）'} —— 请写 2026-08 这种形态。")
     try:
-        values = mech_ui.parse_mech_values(req.values)
+        values = {k: v for k, v in mech_ui.parse_mech_values(req.values).items()
+                  if k in req.values}
     except ValueError as exc:
         raise MustReportError(f"未保存：{exc}") from exc
 
@@ -217,8 +208,7 @@ def api_mech_save(req: MechSaveRequest) -> dict:
     return {
         "ok": True, "ym": ym, "warehouse": warehouse,
         "columns": list(D.MECH_COLUMNS),
-        "message": f"已保存 {ym} 的机械 {len(D.MECH_COLUMNS)} 列手录值"
-                   "（旁路载体，重抓 / 重导都不会覆盖它）",
+        "message": f"已保存 {ym} 的机械费",
     }
 
 

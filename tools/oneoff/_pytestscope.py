@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -213,6 +214,71 @@ def outside_tests(paths) -> set[str]:
     return {n for n, module in files.items() if _reach(graph, module) & sources}
 
 
+def shell_plan() -> Plan:
+    """沿源码读入、浏览器访问与import闭包选择壳使用者，不隐式执行全套。"""
+    try:
+        mods, files = build_graph()
+        readers = set()
+        sources = {_mod_name(p): p for p in TESTS.glob('*.py')}
+        sources.update({p.relative_to(ROOT).with_suffix('').as_posix().replace('/', '.'): p
+                        for folder in ('audit', 'probe') for p in (ROOT/'tools'/folder).glob('*.py')})
+        aliases = {}
+        for module in sources:
+            aliases.setdefault(module.rsplit('.', 1)[-1], set()).add(module)
+        for module, p in sorted(sources.items()):
+            tree = ast.parse(p.read_text(encoding='utf-8'))
+            edges = set(mods.get(module, ()))
+            for node in ast.walk(tree):
+                imports = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or '', *[(node.module+'.'+a.name) if node.module else a.name for a in node.names]] if isinstance(node, ast.ImportFrom) else []
+                for name in imports:
+                    if name in sources: edges.add(name)
+                    if '.' not in name: edges |= aliases.get(name, set())
+            mods[module] = edges
+            docs = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)
+                    and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)}
+            literals = [n.value.replace('\\', '/') for n in ast.walk(tree)
+                        if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs]
+            if any(v in {'web', 'shell', '/app'} or 'app/web' in v or
+                   'index.html' in v or re.search(r'\.js\b', v) or 'shell_' in v for v in literals):
+                readers.add(module)
+        picked = {n for n, m in files.items() if _reach(mods, m) & readers}
+        if not picked:
+            return Plan(False, '待查：未发现壳源码或浏览器使用者')
+        picked |= {n for n, _ in REPO_WIDE if n in files}
+        return Plan(True, '壳源码/浏览器及共享helper使用者：%d / %d件' % (len(picked), len(files)), picked)
+    except (OSError, SyntaxError, UnicodeError) as exc:
+        return Plan(False, '待查：壳使用者读取失败：'+type(exc).__name__)
+
+
+def shell_selftest():
+    """独立夹具证壳直接/传递/浏览器使用者、无关排除及未知不扩成全套。"""
+    import tempfile
+    from unittest.mock import patch
+    module = sys.modules[__name__]
+    with tempfile.TemporaryDirectory() as folder:
+        root = pathlib.Path(folder)
+        tests = root/'backend/tests'; tests.mkdir(parents=True)
+        prefix = 'test' + '_'
+        (tests/'reader.py').write_text("text='index.html'", encoding='utf-8')
+        (tests/(prefix+'direct.py')).write_text("text='core.js'", encoding='utf-8')
+        (tests/(prefix+'shared.py')).write_text('from tests import reader', encoding='utf-8')
+        (tests/(prefix+'browser.py')).write_text("url='/app'", encoding='utf-8')
+        (tests/'plugin.py').write_text("output='results.json'", encoding='utf-8')
+        (tests/(prefix+'other.py')).write_text('from tests import plugin', encoding='utf-8')
+        audit=root/'tools/audit'; audit.mkdir(parents=True)
+        (audit/'shell_source.py').write_text("path='backend/app/web'", encoding='utf-8')
+        (tests/'wrapped.py').write_text('from tools.audit import shell_source', encoding='utf-8')
+        (tests/(prefix+'tool.py')).write_text('from tests import wrapped', encoding='utf-8')
+        with patch.object(module, 'ROOT', root), patch.object(module, 'BACKEND', root/'backend'), patch.object(module, 'TESTS', tests):
+            selected = plan(['backend/app/web/shell/core.js'])
+            assert selected.run and not selected.run_all
+            assert set(selected.files) == {prefix+n for n in ('direct.py', 'shared.py', 'browser.py', 'tool.py')}
+            (tests/'reader.py').write_text('bad syntax !', encoding='utf-8')
+            unknown = plan(['backend/app/web/index.html'])
+            assert not unknown.run and unknown.reason.startswith('待查：')
+    print('壳选集自证：直接/传递/浏览器选中，无关排除，未知待查')
+
+
 def plan(changed) -> Plan:
     """按使用者选测；未知依赖返回待查，自动加载共享输入才扩大。"""
     if changed is None:
@@ -242,7 +308,14 @@ def plan(changed) -> Plan:
                     % "、".join(auto))
     shell = [p for p in inside if p.startswith("backend/app/web/")]
     if shell:
-        return Plan(True, "动了壳（backend/app/web/ · %d 处）⇒ 读壳文本的测试件一律全跑" % len(shell))
+        selected = shell_plan()
+        remaining = [p for p in inside if p not in shell]
+        if remaining and not selected.reason.startswith('待查：'):
+            other = plan(remaining)
+            if other.reason.startswith('待查：') or other.run_all:
+                return other
+            selected.files = sorted(set(selected.files) | set(other.files))
+        return selected
     odd = [p for p in inside if not p.endswith(".py")]
     if odd:
         return Plan(False, "待查：后端非Python输入的实际消费（%d处）" % len(odd))

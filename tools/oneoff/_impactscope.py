@@ -63,6 +63,51 @@ def since_snapshot(path: Path, root: Path = ROOT) -> dict:
     return result
 
 
+def snapshot_summary(path: Path, root: Path = ROOT) -> dict:
+    """只返回基点元数据和新增路径，字节正文及凭据内容不进入输出。"""
+    data = json.loads(path.read_text(encoding='utf-8'))
+    return {'head': data['head'], 'files': len(data['files']),
+            'digest_only': sum(v['data'] is None for v in data['files'].values()),
+            'changed': sorted(since_snapshot(path, root))}
+
+
+def smoke_evidence(result, root: Path = ROOT) -> Path:
+    """保留完整真机输出与壳/环境摘要；现场数据是否变化由本轮实际证据确认。"""
+    import os
+    shell = [(p.relative_to(root).as_posix(), hashlib.sha256(p.read_bytes()).hexdigest())
+             for p in sorted((root/'backend/app/web').rglob('*')) if p.is_file()]
+    header = {'rc': result.returncode, 'shell_sha256': hashlib.sha256(json.dumps(shell).encode()).hexdigest(),
+              'environment_sha256': hashlib.sha256(json.dumps(dict(os.environ), sort_keys=True).encode()).hexdigest()}
+    path = root/'.codebuddy/work/00-scratch'/('tmp-'+time.strftime('%Y%m%d-%H%M%S')+'-shell-smoke.log')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(header)+'\n'+result.stdout+'\n'+result.stderr, encoding='utf-8')
+    return path
+
+
+def retro_selftest():
+    """实测摘要不输出正文，真机成功/失败均留完整证据，不把失败当成通过。"""
+    import tempfile
+    from types import SimpleNamespace
+    with tempfile.TemporaryDirectory() as folder:
+        root = Path(folder)
+        subprocess.run(['git', 'init', '-q', str(root)], check=True)
+        (root/'README.md').write_text('baseline-private-content', encoding='utf-8')
+        subprocess.run(['git', 'add', 'README.md'], cwd=root, check=True)
+        subprocess.run(['git', '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture'], cwd=root, check=True)
+        basis=root/'.codebuddy/work/00-scratch/basis.json'; snapshot(basis, root)
+        (root/'README.md').write_text('changed-private-content', encoding='utf-8')
+        summary=snapshot_summary(basis, root)
+        assert summary['files'] == 1
+        assert summary['changed'] == ['README.md']
+        assert 'private-content' not in json.dumps(summary) and 'data' not in summary
+        for rc in (0, 1):
+            path=smoke_evidence(SimpleNamespace(returncode=rc, stdout='complete-output', stderr='diagnostic'), root)
+            lines=path.read_text(encoding='utf-8').splitlines()
+            assert json.loads(lines[0])['rc'] == rc
+            assert lines[1:] == ['complete-output', 'diagnostic']
+    print('摘要/真机证据自证：正文不输出，完整输出与真实返回码保留')
+
+
 def document_readers(names, root: Path = ROOT) -> set[str]:
     """查运行面和测试对文档的实际字面引用；动态ops读取保守选对应使用者。"""
     found = set()
@@ -271,6 +316,10 @@ def run_selected(changes: dict, commands: list, py: str, *, explain=False, force
     def execute(label, argv, cwd=ROOT, env=None):
         t = time.perf_counter()
         p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        if label == '真机壳自检':
+            evidence = smoke_evidence(p, ROOT)
+            print('真机证据：'+str(evidence)+'；rc='+str(p.returncode)+
+                  '。通过且输入、环境、现场数据未变时复用本次结果，变化状态另验。')
         print(label, 'rc='+str(p.returncode), '%.2fs'%(time.perf_counter()-t), flush=True)
         print('\n'.join((p.stdout+'\n'+p.stderr).splitlines()[-5:]) if p.returncode == 0 else p.stdout+'\n'+p.stderr)
         for line in p.stdout.splitlines():

@@ -94,35 +94,15 @@ def test_视图切片未被改动():
 # ============================================================== `TAIL-38` · 录机械费入口
 
 
-@acc()
-def test_录机械费入口挂在BIND钩子且不改切片():
-    """⭐ 原型 `V.m06` **没画**「录机械费」入口（机械 6 列在原型里是只读的）⇒ 按 §5.2.5 ③ 自行设计。
-
-    ⛔ **不改 `V.m06` 一行**：走原型自己的 `BIND` 钩子（渲染后往页首注入一条工具栏）。
-    """
-    assert "BIND.m06 = function ()" in SHELL, "壳里没有 `BIND.m06`（录机械费入口没挂上）"
-    assert 'data-act="mechOpen"' in SHELL, "入口按钮没挂 `mechOpen` 动作"
-    body = page_slice("m06")
-    assert "mechOpen" not in body, "入口被塞进了 `V.m06` 切片（应走**切片外**的 `BIND` 钩子）"
-
 
 @acc()
 def test_录机械费走后端且不在前端复写判据():
     """⭐ 反向：不许本地改 `MACH6` 冒充落库（假成功）；校验（负数 / 非数字）也不在前端复写。"""
-    i = SHELL.find("mechOk:async ()=>{")
-    assert i > 0, "`mechOk` 没改成 async（异步走后端）"
-    # ⚠️ 2026-09-26：原先这里切**固定 900 字符** —— 往 `mechOk` 里加几行注释/兜底就把
-    #    `reloadMech()` 挤出窗口 ⇒ **假红**（本次就是这么红的）。改成切到**本动作结束**
-    #    （下一个段头块注释为止），不再靠魔法数字。
-    seg = SHELL[i:]
-    nxt = seg.find("\n/*", 1)
-    body = seg[:nxt] if nxt > 0 else seg[:4000]
-    assert len(body) > 200, "切出来的 `mechOk` 太短 —— 本页形态变了就同批改本件"
-    assert "API.m06MechSave(" in body, "`mechOk` 没走 `/api/m06/mech`"
-    assert "MACH6[" not in body, "`mechOk` 还在本地改 `MACH6` 冒充落库（假成功）"
-    assert "reloadMech()" in body, "`mechOk` 成功后没「以后端为准重拉」"
-    assert "MECH_SECTIONS" not in body, "机械任意月份都应允许手录"
-    assert "不能手录" not in body
+    body = act_entry("procMechSave")
+    assert "API.m06MechSave(" in body
+    assert "MACH6[" not in body
+    assert "reloadMech()" in body
+    assert "MECH_SECTIONS" not in body
 
 
 
@@ -190,8 +170,8 @@ def test_导出面板一键开合_开合判据只认面板自身状态():
 def test_过程资料机械手录不按截止月拦截():
     """导入截止月不再作为机械手录挡板。"""
     assert "MECH_SECTIONS = d.sections || {};" in SHELL, "后端机械段标记未落定"
-    assert 'data-act="mechOpen"' in SHELL, "实际机械手录入口丢失"
-    assert "MECH_SECTIONS[wh]" not in act_entry("mechOk"), "仍按历史段拒绝机械手录"
+    assert "API.m06MechSave(" in act_entry("procMechSave")
+    assert "MECH_SECTIONS[wh]" not in act_entry("procMechSave"), "仍按历史段拒绝机械手录"
 
 
 @acc("ACC-RPT-PROC-001", "001-01")
@@ -253,50 +233,10 @@ def test_正式段空态在壳里渲染成破折号而不是零():
 
 @acc("ACC-RPT-PROC-002", "001-03")
 def test_机械录入口只送mech键_材料列没有输入面():
-    """⭐ 判据点**搬家**（`§19` 批 2）：原先钉在旧页 html（`name="mech_i"` 有、`name="in_/out_"` 没有）。
-    改指**新壳**的「录机械费」弹窗：它**只**由 `MECH_LABELS`（**后端**给的列名）生成 `mech_` 键，
-    ⛔ 不产生任何**材料列**的输入面（机械列可录 ≠ 材料列可录 —— §5.2）。
-
-    ⭐ 2026-09-23（`TAIL-76` ②）：补**结构护栏** —— 原先只断言"壳里没有 `id="in_`"（全壳字面扫），
-       钉不住"**机械区块里**恰好只有那 6 个输入面"。原靶 `mech_ui.block_html` 随旧页 2026-09-18 删除
-       ⇒ 那半条 claim 一度**改坏了也没人知道**。现在按**弹窗体内**数：除「核算月」那一个输入框外，
-       ⛔ 不许再有任何输入面。
-    """
-    # ⭐ 2026-09-28（用户口径：改成"按核算月一屏手填"）：键仍是 `mech_<列序号>`，⛔ claim 一字未变。
-    assert "'mech_'+" in SHELL, "机械值没按 `mech_` 键组装"
-    assert 'data-act="mechCell"' in SHELL, "机械列没有可手填的格子"
+    """机械提交不产生材料列写入。"""
+    assert "'mech_'+" in act_entry("procMechSave")
     for bad in ("values['in_", "values['out_", 'id="in_', 'id="out_'):
-        assert bad not in SHELL, f"壳里出现了材料列的输入面：{bad}（材料列只读是铁律）"
-
-    body = act_entry("mechOpen")
-    # ⭐ 结构护栏（claim 不变：**机械区块里只有机械 6 列的输入面**）——
-    #   2026-09-28 改成"表头一行 ＋ 每月一行"后：`MECH_LABELS` 派生 **2 处**（表头 / 数据行），
-    #   而输入面的**模板只有 1 处**（每行复用同一段）⇒ ⛔ 别在这里长出材料列的格子。
-    assert body.count("MECH_LABELS.map(") == 2, "机械列没由 `MECH_LABELS` 派生（表头 ＋ 数据行各一处）"
-    assert body.count("<input") == 2, \
-        f"机械区块的输入面不是「核算期 1 ＋ 6 列 1 处模板」（实测 {body.count('<input')}）—— 多出来的就是材料列的输入面"
-    assert 'data-i="${j}"' in body, "机械列格子没按列序号派生（`mech_` 键就对不上了）"
-    m = re.search(r"const MECH_LABELS = \[(.*?)\];", SHELL, re.S)
-    assert m and len(re.findall(r"'[^']+'", m.group(1))) == 6, \
-        "`MECH_LABELS` 兜底不是 6 列（§5.2.5 ③「机械 6 列」）"
-
-
-@acc()
-def test_录机械费第二次打开要回填该月现值():
-    """⭐ `TAIL-76` ①：**录第二次**要能看见**现值**（原靶 `mech_ui._value_of` 随旧页 2026-09-18 删除）。
-
-    ⚠️ 2026-09-28：形态改成"**按核算月一屏手填**"（用户口径）—— 这条**更要紧**（整屏都是现值才敢改一格），
-       ⛔ 别因为改了形态就把回填丢了：丢了 ⇒ 打开是**空盒**，而保存是"空 ⇒ 0"（§4.4 旁路载体的口径）
-       ⇒ 用户只改其中一格、点保存，**其余列会被清成 0** —— 而且界面上全程看不出这件事。
-
-    现法：每一行按自己的 `ym` 从 `MACH6`（= 后端 `mech`）取那一月的 6 列 ⇒ 填进该行格子；
-       `null` / `0` 显示**空**（⛔ 不显示 0 —— `001-08`「不臆造 0」）。
-    """
-    body = act_entry("mechOpen")
-    assert "mach6Arr(wh,ym)" in body, "弹窗没有从 `MACH6` 取**该月现值**（第二次打开会是空盒）"
-    assert "const a=mach6Arr(wh,ym)" in body, "取现值的写法变了"
-    assert "Number(a[j])!==0" in body, "`0` 没按空显示（会把没填过的月份渲染成 0）"
-    assert 'value="${esc(v)}"' in body, "现值没写进格子的 `value` ⇒ 界面上看不见现值"
+        assert bad not in SHELL
 
 
 @acc()

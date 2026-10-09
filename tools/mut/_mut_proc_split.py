@@ -1,10 +1,8 @@
 """双截止和机械覆盖：只改隔离副本，正常通过后确认指定缺陷能被判据捕获。"""
 from pathlib import Path
-import os
-import shutil
 import subprocess
 import sys
-import tempfile
+from _isolated import isolated_backend
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES = [
@@ -24,18 +22,7 @@ CASES = [
 
 
 def main():
-    env = os.environ.copy()
-    sys.path.insert(0, str(ROOT / "backend"))
-    from app.core.config import get_settings
-    env["TEST_DATABASE_URL"] = get_settings().test_database_url
-    env["PYTHONIOENCODING"] = "utf-8"
-    with tempfile.TemporaryDirectory(prefix="tmp-proc-split-mut-", dir=ROOT / ".codebuddy/work/00-scratch") as folder:
-        base = Path(folder) / "backend"
-        base.mkdir()
-        for name in ("app", "tests"):
-            shutil.copytree(ROOT / "backend" / name, base / name, ignore=shutil.ignore_patterns("__pycache__"))
-        shutil.copy2(ROOT / "backend/pytest.ini", base / "pytest.ini")
-        env["ACC_RESULTS_PATH"] = str(Path(folder) / "results.json")
+    with isolated_backend("tmp-proc-split-mut-") as (base, env):
         for label, rel, old, new, test in CASES:
             cmd = [str(ROOT / "backend/.venv/Scripts/python.exe"), "-X", "utf8", "-m", "pytest",
                    "tests/test_proc_split_cutoffs.py::" + test, "-q", "--tb=short"]

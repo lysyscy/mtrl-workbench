@@ -24,6 +24,11 @@
    Windows 路径**用正斜杠或 raw 字符串**（`D:\dev\...` 的 `\d` 是非法转义 ⇒ `syntax_audit` 判红）。
    ⚠️ 2026-10-06 两条都当场踩过：前者在 `audit_work.py`、后者在 `syntax_audit.py` 自己身上。
 
+## 隔离机械存储反例
+
+`tools/mut/_isolated.py::isolated_backend`供`tools/mut/_mut_proc_split.py`与`tools/mut/_mut_tail270.py`共用：复制后端到scratch，子进程传测试库与独立四态出口，结束清临时副本；不复制凭据。新增同类反例优先复用，测试库写入仍由用例事务回滚。
+一次性编辑脚本与可重复核验脚本分开；改过的锚不会作为下一次核验的前置动作。开工快照摘要与真机证据读取命令回 .codebuddy/memory/IDE-细节.md §十一。
+
 ## `oneoff/` 的保留与处置口径（`TAIL-194` · 2026-09-29 立 · ⭐ **本处是唯一主人**）
 
 **三类件，处置不同**（⚠️ 判"属于哪一类"的唯一办法 = **查引用**）：

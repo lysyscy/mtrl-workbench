@@ -36,10 +36,8 @@ const procTabName=()=>procTab===2?'差异表':(procTab===1?'表② 调整后表'
 const procPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>[procPj],pickAct:'procPjPick',meta:PROJ_META_KEY,single:true});
 /* 过程资料批量导出：同一弹窗复选项目并确认，默认当前项目；每项目一本，多个项目ZIP。 */
 let procExpPjs=[];
-/* ⭐ 2026-09-28：「录机械费」弹窗当前选的项目（换项目 = 重开弹窗重载月份与已有值；见 `ACT.mechPjPick`） */
-let mechWh='';
-/* ⭐ 同上：「录机械费」弹窗当前在填的**核算期**（手动填 ⇒ 换核算期要重开弹窗重载该月现值） */
-let mechYm='';
+/* 按提交顺序保存单格，未完成的输入留在当前格。 */
+let procMechWrites=Promise.resolve();
 const procExpDlg=()=>{
   const keys=pjSort(PROC_PJS),selected=new Set(procExpPjs);
   modal({title:`批量导出 · ${procTabName()}`,wide:true,body:`

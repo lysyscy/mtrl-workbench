@@ -48,13 +48,15 @@ console.log(JSON.stringify({a,b,c,invalid,invalidMaterial}));
 
 @acc()
 def test_mechanical_history_month_reaches_real_save_action():
-    body = act_entry("mechOk").strip().removeprefix("mechOk:")
+    body = act_entry("procMechSave").strip().removeprefix("procMechSave:")
     result = run_js("""
+let procMechWrites=Promise.resolve();
 const calls=[], MECH_SECTIONS={A:{'2025-01':'history'}};
-const document={querySelectorAll:()=>[{dataset:{wh:'A',i:'0'},value:'123.45'}],
-getElementById:()=>({value:'2025-01'})};
+const document={activeElement:null};
 const API={m06MechSave:async p=>{calls.push(p);return {ok:true}}};
-const reloadMech=async()=>{},reloadM07=async()=>{},closeModal=()=>{},render=()=>{},toast=()=>{},esc=x=>x;
-const save=""" + body + "; save().then(()=>console.log(JSON.stringify(calls)));"
-    )
+const reloadMech=async()=>{},reloadProc=async()=>{},reloadM07=async()=>{},render=()=>{},toast=()=>{},esc=x=>x;
+const save=""" + body + """;
+const t={dataset:{wh:'A',ym:'2025-01',i:'0'},value:'123.45',defaultValue:'1200',blur:()=>{}};
+save(t).then(()=>console.log(JSON.stringify(calls)));
+""")
     assert result == [{"warehouse": "A", "ym": "2025-01", "values": {"mech_0": "123.45"}}]

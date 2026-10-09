@@ -57,6 +57,7 @@ def _main() -> int:
     import _impactscope as impact
     parser = argparse.ArgumentParser()
     parser.add_argument('--start', type=pathlib.Path)
+    parser.add_argument('--inspect', type=pathlib.Path)
     parser.add_argument('--since', type=pathlib.Path)
     parser.add_argument('--explain', action='store_true')
     parser.add_argument('--paths', nargs='+')
@@ -64,6 +65,9 @@ def _main() -> int:
     parser.add_argument('--all', action='store_true')
     parser.add_argument('--full', action='store_true')
     args = parser.parse_args()
+    if args.inspect:
+        print(json.dumps(impact.snapshot_summary(args.inspect), ensure_ascii=False, indent=2))
+        return 0
     if args.start:
         impact.snapshot(args.start)
         return 0

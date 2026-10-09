@@ -13,6 +13,35 @@ from app.mod06_proc.models import (ProcMechManual, ProcHistoryBatch, ProcHistory
                                    ProcCutoff, ProcMechImportChange)
 
 
+@acc()
+def test_single_cell_api_preserves_other_amounts_and_origins(session, monkeypatch):
+    from contextlib import contextmanager
+    from app.mod06_proc import router
+    from app.core.errors import MustReportError
+
+    @contextmanager
+    def scope():
+        yield session
+
+    monkeypatch.setattr(router, "session_scope", scope)
+    row = R.save_mech(session, ym="2025-01", warehouse="A",
+                      values={"mech_0": 1200, "mech_1": 765})
+    row.source_batches = {"mech_1": "import-1"}
+    router.api_mech_save(router.MechSaveRequest(warehouse="A", ym="2025-01",
+                                               values={"mech_0": "15000"}))
+    assert row.mech_0 == Decimal("15000")
+    assert row.mech_1 == Decimal("765")
+    assert row.source_batches["mech_1"] == "import-1"
+    for invalid in ("-1", "abc"):
+        with pytest.raises(MustReportError):
+            router.api_mech_save(router.MechSaveRequest(warehouse="A", ym="2025-01",
+                                                       values={"mech_0": invalid}))
+        assert row.mech_0 == Decimal("15000")
+    router.api_mech_save(router.MechSaveRequest(warehouse="A", ym="2025-01",
+                                               values={"mech_0": ""}))
+    assert row.mech_0 == 0 and row.mech_1 == Decimal("765")
+
+
 @pytest.fixture
 def session():
     from app.core.config import get_settings

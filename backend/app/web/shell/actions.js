@@ -1663,70 +1663,28 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
    closeModal(); await reloadM07();
    toast(`月度会大表已按所选 <b>${BIGSET.length}</b> 个项目出表（行序即刚才设置的行序）`); },
 
- /* ⭐ `TAIL-38`：录机械费（`m06` 的机械 6 列是**旁路载体**；原型没画入口 ⇒ §5.2.5 ③ 自行设计）。
-    判定与落库**全在后端**：空 ⇒ 0、负数 / 非数字 ⇒ 拒且不写库（`mech_ui.parse_mech_values`）。
-    机械导入与手录共用有效值；截止月仅用于本次导入过滤。 */
- mechOpen:()=>{ const cands=(typeof PROC_PJS==='object'&&PROC_PJS&&PROC_PJS.length)?PROC_PJS:bigCands();
-   const wh=(mechWh&&cands.indexOf(mechWh)>=0)?mechWh:((cands.indexOf(procPj)>=0)?procPj:(cands[0]||''));
-   mechWh=wh;
-   const now=bjMonth(-1);                                  /* 材料报表类默认 = 北京时间上月（§9.2） */
-   /* ⭐⭐ 2026-09-28（用户口径，第二次定稿）：形态 = **一张表、表头一行、数据只有一行** ——
-      数据行 = 「**手动填的核算期** ＋ 机械 6 列（列名在后端，`MECH_LABELS`）」，一次填**一个核算期**。
-      ⛔ 不再是"一屏列出好多个月份行"（那是我上一版理解错的形态，用户当场纠正："不要好多行了，就要一行"）。
-      ⚠️ 核算期是**手动填**的输入框 ⇒ 改它必须**重开弹窗**把新月份那一刻的现值带出来
-         （见 `mechYmSet`）—— ⛔ 只改输入框不重载的话，格子里的数还是旧月的 ⇒ 一点保存就**串月**。
-      ⚠️ 表头**必须一行**（用户口径"每列的表头要在一行里"）⇒ 表头 `nowrap` ＋ 表格字号降到 11.5px。 */
-   const ym=(mechYm&&/^\d{4}-\d{2}$/.test(mechYm))?mechYm:now;   /* 手动填的核算期优先；默认上月（§9.2） */
-   mechYm=ym;
-   const rowOf=()=>MECH_LABELS.map((_,j)=>{
-     const a=mach6Arr(wh,ym); const v=(a&&a[j]!=null&&Number(a[j])!==0)?String(a[j]):'';
-     return `<td><input class="inp num" style="width:100%;min-width:84px" data-act="mechCell" data-wh="${esc(wh)}" data-i="${j}" value="${esc(v)}" placeholder="0"></td>`;}).join('');
-   modal({title:'录机械费 · 按核算月手录 6 列',wide:true,reopen:()=>ACT.mechOpen(),
-     body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">任何核算月都能手录修改。<b>导入和手录互相覆盖，以最后保存的值为准</b>；i8 抓取不改机械费。空格按 0 保存；负数或非数字不写入。</div>
-       ${FBAR({cls:'plate',body:`
-         <div class="fi"><label>项目</label><select class="inp" id="mechPj" data-act="mechPjPick">${cands.map(k=>`<option value="${esc(k)}"${k===wh?' selected':''}>${esc(k)}</option>`).join('')||'<option value="">（没有候选项目）</option>'}</select></div>
-         <span class="mut sm" style="margin:0">切换核算期会读取该月现值。</span>
-         `})}
-         <div style="overflow-x:auto">
-         <table class="dt cond" style="font-size:calc(11.5px * var(--fscale))">
-           <thead><tr><th style="white-space:nowrap">核算期</th>${MECH_LABELS.map(nm=>`<th style="white-space:nowrap">${esc(nm)}</th>`).join('')}</tr></thead>
-           <tbody><tr><td><input class="inp" id="mechYm" data-act="mechYmSet" style="min-width:88px" value="${esc(ym)}" placeholder="YYYY-MM" title="手动填核算期（YYYY-MM）—— 填完会重新带出该月现值"></td>${rowOf()}</tr></tbody></table></div>`,
-     footer:`<span class="mut sm" style="align-self:center">只提交<b>改动过</b>的月份</span><button class="btn" data-act="closeModal" style="margin-left:auto">取消</button><button class="btn pri" data-act="mechOk">保存</button>`}); },
- /* ⭐ 换项目 = **重开弹窗重载该项目的月份与已有值** —— ⛔ 别只改下拉不重载：那张表还是上一个项目的数据，
-    一点保存就会把**上一个项目的值写进新项目**（串数据）。⚠️ 先 `closeModal()` 再开，⛔ 不许直接叠加。 */
- mechPjPick:t=>{ mechWh=String((t&&t.value)||''); closeModal(); ACT.mechOpen(); },
-/* ⭐ 手动改核算期 ⇒ **关掉重开**（把新月份那一刻的现值带出来）—— ⛔ 不能只改输入框：
-   格子里的数还是旧月份的，一点保存就把**旧月的值写进新月**（串数据）。 */
-mechYmSet:t=>{ const v=String((t&&t.value)||'').trim();
-  if(!/^\d{4}-\d{2}$/.test(v)) return toast('核算期要写成 <b>YYYY-MM</b>（例：2026-09）');
-  mechYm=v; closeModal(); ACT.mechOpen(); },
- mechOk:async ()=>{ const cells=[...document.querySelectorAll('[data-act="mechCell"]')];
-   if(!cells.length) return toast('这一屏没有可手录的核算月');
-   /* ⭐ 项目名取**表格自己带的那份**（`data-wh`，渲染时写死）—— ⛔ 别取下拉框的当前值：
-      下拉若已换、表还是旧项目的数，就会把**旧值写进新项目**（串数据）。 */
-   const wh=String(cells[0].dataset.wh||'');
-   const ym=String(((document.getElementById('mechYm')||{}).value)||'').trim();
-   if(!/^\d{4}-\d{2}$/.test(ym)) return toast('核算期要写成 <b>YYYY-MM</b>（例：2026-09）—— 没有提交任何值');
-   const values={};
-   cells.forEach(el=>{ values['mech_'+(el.dataset.i||'0')]=String(el.value==null?'':el.value); });
-   /* ⭐ 形态 = **一行 = 一个核算期**（用户口径）⇒ 只有一个月要提交；下游（挡板 / 保存 / 提示）照旧按月那套走。 */
-   const yms=[ym], byYm={}; byYm[ym]=values;
-   let ok=0, fail='';
-   for(const ym of yms){
-     let r = null;
-     try{ r=await API.m06MechSave({warehouse:wh,ym:ym,values:byYm[ym]}); }
-     catch(e){ fail=`${ym}：${String((e&&e.message)||e)}`; break; }
-     /* ⚠️⚠️ 2026-09-20 补：原来写的是 `toast((r&&r.message)||'已保存')` ——
-        若那次 `ok:false` **恰好没带 `message`** ⇒ 会把**失败显示成「已保存」**（真假成功）。
-        ⛔ 别拿"有没有 message"当成败判据；**成败只看 `ok`**。 */
-     if(!r || r.ok === false){ fail=`${ym}：${(r && r.message) || '系统没有给出原因，请重试'}`; break; }
-     ok++;
-   }
-   await reloadMech(); await reloadM07();
-   /* 部分失败：**不关弹窗**（用户填的那些还在，改完重按保存即可），并说清"到哪个月为止成功了" */
-   if(fail){ render(); return toast(`<b>保存中断</b>（已成功 <b>${ok}</b> / ${yms.length} 个月）：${esc(fail)}`,8000); }
-   closeModal(); render();
-   toast(`已保存 <b>${ok}</b> 个核算月的机械费（${esc(yms[0])}${yms.length>1?` ~ ${esc(yms[yms.length-1])}`:''}）`); },
+ /* 只在change（失焦）或回车提交；input不写入。 */
+ procMechSave:t=>{
+   const value=String(t.value??'');
+   if(value===(t.dataset.saved??t.defaultValue)) return procMechWrites;
+   t.dataset.saved=value;
+   const payload={warehouse:t.dataset.wh,ym:t.dataset.ym,values:{['mech_'+t.dataset.i]:value}};
+   t.blur();
+   procMechWrites=procMechWrites.then(async()=>{
+     try{
+       const r=await API.m06MechSave(payload);
+       if(!r || r.ok===false) throw errHuman((r&&r.message)||'机械费没能保存，请重试。','m06 save rejected');
+       await reloadMech(); await reloadProc(); await reloadM07();
+       /* 不重建正在编辑的格子；下次渲染使用刚读回的矩阵。 */
+       if(!document.activeElement?.matches('[data-act="procMechSave"]')) render();
+       toast('机械费已保存');
+     }catch(e){
+       if(t.dataset.saved===value) delete t.dataset.saved;
+       toast(esc(e.message),7000);
+     }
+   });
+   return procMechWrites;
+ },
 
  /* —— MOD-08 —— */
  /* 「项目」筛选（**通用控件** = 共用项目面板，**多选**；2026-09-13 用户口径）—— 键 = 仓库名（§2.7.4）。 */

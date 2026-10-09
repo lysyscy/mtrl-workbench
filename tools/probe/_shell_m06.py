@@ -22,7 +22,7 @@ def check(page, errors) -> None:
         pjCands: (typeof PROC_PJS === 'object' && PROC_PJS) ? PROC_PJS.length : -1,
         tabs: document.querySelectorAll('#view .tb2').length,
         tables: document.querySelectorAll('#view table').length,
-        mechEntry: !!document.getElementById('mechEntry'),
+        mechCells: document.querySelectorAll('[data-act="procMechSave"]').length,
         wiredLabel: (document.querySelector('#ttl em')||{}).innerText||'',
     })""")
     print("⑨ m06 =", m06)
@@ -33,8 +33,7 @@ def check(page, errors) -> None:
         (bool(m06["procPj"]) and m06["pjCands"] > 0,
          f"⭐ 项目候选已落定（procPj={m06['procPj'][:18]!r} · 候选 {m06['pjCands']} 个）"
          " —— 若仍是「加载时求值」，这里会是空的"),
-        (m06["mechEntry"],
-         "⭐ `TAIL-38`「录机械费」入口已在页面上（`BIND.m06` 注入 —— 原型没画，§5.2.5 ③ 自行设计）"),
+        (m06["mechCells"] > 0, "机械费数据格可编辑"),
     ]
     for ok, what in oks5:
         print(("  ✅ " if ok else "  ⛔ ") + what)

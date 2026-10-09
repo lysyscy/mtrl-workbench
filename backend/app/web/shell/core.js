@@ -1045,36 +1045,10 @@ async function reloadProc() {
   if (!PROC_PJS.includes(procPj)) procPj = PROC_PJS[0] || '';
 }
 
-/* ⭐⭐ `TAIL-38`：「录机械费」入口 —— 原型 `V.m06` **没画**这个入口（机械 6 列在原型里是**只读**的），
-   而服务端页 `/m06` 才有 PRG 写入口 ⇒ 壳里**没法录**（机械欠款会长期停在 0）。按 §5.2.5 ③ 自行设计。
-   ⛔ **不改 `V.m06` 一行**：走原型自己的 `BIND` 钩子（渲染后往页首注入一条工具栏）——
-      判定与落库全在后端（`POST /api/m06/mech`）。⚠️ 机械值是**旁路载体**，重抓 / 重导都不覆盖它。 */
+/* 过程资料只保留可用的批量导出入口。 */
 BIND.m06 = function () {
-  const host = document.querySelector('#view');
-  if (!host) return;
-  /* ⭐⭐ 2026-09-29（用户裁定 `A` · `TAIL-173`）：**摘掉卡头那枚「导出 Excel」（朴素那份）** —— 它
-     **永远只会说"这一页还没有导出功能"**（`EXP_ROUTES` 里没有「过程资料」），而同一张卡头里已经有
-     **真入口**「批量导出（先选项目）…」⇒ 两枚导出并排、其中一枚点了必然空转 = 让用户以为坏了
-     （守则 §4.4：相似元素不制造歧义）。
-     ⚠️ **走 BIND 在渲染后摘除，⛔ 不改 `V.m06` 那一行**（同 `BIND.m11` 改导出按钮的做法）：
-        切片是**逐行对位**核对的 ⇒ 删一行会让它后面**所有行**报漂移（`A4` 那次 101 条的教训）；
-        而且 `tests/test_tail04_pages.py` 把 `data-act="exp" data-t=…` 的**名单钉在源码上** ⇒ 删源码必红。
-     ⚠️ **兜底那句不许删**（它在 `EXP_ROUTES` 上面的分支里）：`m08` 朴素那份 / 已取消的差异清单仍在用它。
-     ⚠️ **幂等**：`render()` 每次重画 `#view` ⇒ 本钩子每次都要重摘一遍。 */
-  const naive = host.querySelector('[data-act="exp"][data-t="过程资料"]');
+  const naive = document.querySelector('#view [data-act="exp"][data-t="过程资料"]');
   if (naive) naive.remove();
-  if (document.getElementById('mechEntry')) return;
-  const bar = document.createElement('div');
-  bar.id = 'mechEntry';
-  /* ⭐ `A4`（2026-09-29 逐页）：改走**变体类** —— 原先这里把 `.fbar` 的声明在 JS 里**又写了一遍**
-     （`border` / `border-radius` / `margin-bottom`），而那个 `margin-bottom:10px` **漏了 `--fscale`**
-     ⇒ 用户把「界面大小」调大时**这一处不跟着变**（守则 §5.11：漏一处 = 半成品相）。
-     ⚠️ `.fbar.plate`（`index.html` 样式块里那四个变体类之一）的声明与它**逐像素等价**、只差那个倍率。 */
-  bar.className = 'fbar plate';
-  bar.innerHTML = '<div class="fi"><label>机械费手录</label>'
-    + '</div>'
-    + '<button class="btn pri" data-act="mechOpen">录机械费</button>';
-  host.prepend(bar);
 };
 
 /* ⭐⭐ `TAIL-185`（`A` 案 · 2026-09-29 **用户裁定**）：**摘掉 `m08` 卡头那枚「点了必然空转」的朴素导出**。
