@@ -57,6 +57,18 @@ const procExpSelection=()=>{
   const save=document.querySelector('[data-act="procExpSave"]');if(save){save.disabled=!selected.size;save.title=selected.size?'导出所选项目':'请先选择项目';}
 };
 const bigCands = () => pjKeysOfRows(pjNoShell().filter(p=>p.status==='在建'));   /* 候选 = 在建 · 非壳（实时算） */
+/* ⭐ 2026-10-09（用户报障「排序能排、行不动」）：弹窗里的行**必须按草稿顺序画**。
+   原来rows 直接 `bigCands()`（=档案顺序）⇒ 「序」列显示对了、行却不动，看起来像排序坏了。
+   口径：已选的按**草稿顺序**排在前面，未选的按候选顺序接在后面 —— 与「先选后排」的用法一致。*/
+const bigOrdered = () => { const d=BIGDRAFT||[], c=bigCands();
+  return [...d.filter(wh=>c.includes(wh)), ...c.filter(wh=>!d.includes(wh))]; };
+/* 集采台账筛选区：**说出所选的是哪些项目**（2026-10-09 用户要求）。
+   原文只显示「已选 N 个」⇒ 筛完看不见筛的是什么（§4.7 同一对象的名称口径一致）。
+   1 个 =「XX集采台账」｜2-3 个 =「XX、XX集采台账」｜4+ =「XX、XX、XX等 N 个项目集采台账」（§4.6 禁用态另有原因才置灰）。*/
+const jcProjTxt = () => { const ks=fJc.projs||[]; if(!ks.length) return '';
+  const nm=k=>pjDispOr(pjRowOf(k),k);
+  return ks.length>3 ? `${ks.slice(0,3).map(nm).join('、')}等 ${ks.length} 个项目集采台账`
+                     : `${ks.map(nm).join('、')}集采台账`; };
 let BIGSET = [];   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/big` 的 `selected` 原地填充（行序 = 大表自己的顺序；未选择项目时后端给「全部候选」，与原型同款） */
 let BIGDRAFT = null;         /* 选择项目弹窗的**草稿**（「确定」前的临时顺序） */
 

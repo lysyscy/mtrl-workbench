@@ -1370,6 +1370,7 @@ V.m11=()=>{
         <option value="filled"${fJc.amt==='filled'?' selected':''}>非空</option></select></div>
       <button class="btn" data-act="jcPartyDlg" title="甲方单位分类 —— 它决定「i8 抓来的合同价是谁的价」">甲方单位分类</button>
       <button class="btn" data-act="jcReset">重置</button>
+      ${jcProjTxt()?`<div style="font-size:calc(15px * var(--fscale));font-weight:600;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:calc(10px * var(--fscale))" title="${esc(jcProjTxt())}">${esc(jcProjTxt())}</div>`:''}
       <span class="pill" style="margin-left:auto">已勾选 <b>${jcPick.size}</b> 行 ｜ 显示 <b>${jcRows.length}</b> 条</span>
     `})}
     ${jcNewOn?jcNewStrip():''}

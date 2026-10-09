@@ -1634,7 +1634,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
      reopen:()=>ACT.bigPick({dataset:{keep:'1'},tagName:'BUTTON'}),
      body:`<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">可调整所选项目顺序，大表与导出按此顺序排列。</div>
        <div style="max-height:52vh;overflow:auto">${TBL({cls:'cond',key:'modal:bigPick',sort:false,head:'<th style="width:34px">选</th><th style="width:40px">序</th><th>项目（候选 = 项目档案里「在建」的项目）</th><th style="width:82px">调顺序</th>',
-       rows:bigCands().map(wh=>{ const k=BIGDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
+       rows:bigOrdered().map(wh=>{ const k=BIGDRAFT.indexOf(wh), on=k>=0, p=pjRowOf(wh);
          return `<tr><td class="ctr"><input type="checkbox" data-act="bigSelTog" data-wh="${esc(wh)}"${on?' checked':''}></td>
          <td class="fc">${on?k+1:''}</td><td class="sm">${esc(p?pjDispOr(p,wh):wh)}</td>
          <td class="ctr now"><button class="btn sm" data-act="bigSelUp" data-wh="${esc(wh)}"${(on&&k>0)?'':' disabled'}>↑</button> <button class="btn sm" data-act="bigSelDown" data-wh="${esc(wh)}"${(on&&k<BIGDRAFT.length-1)?'':' disabled'} title="${(on&&k<BIGDRAFT.length-1)?'把这一行往下挪一位':'只有「选中了某一行」且它不是最后一行时才能下移'}">↓</button></td></tr>`; })})}</div>`,
@@ -2378,7 +2378,11 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  mpToggle:t=>{ const id=t.dataset.id; mp.open=mp.open===id?null:id; mp.mode=''; mp.a=''; mp.b=''; mp.wq='';
    mp.year=Number(String(t.dataset.val).slice(0,4))||mp.year; ACT.mpRefresh(t.dataset.scope); },
  mpYear:t=>{ mp.year=(mp.year||Number(String(t.dataset.val).slice(0,4)))+(+t.dataset.d); ACT.mpRefresh(t.dataset.scope); },
- mpMode:t=>{ mp.mode=t.dataset.m; mp.a=''; mp.b=''; mp.wq=''; ACT.mpRefresh(t.dataset.scope); },   /* 面板内切模式（面板有哪些模式由**调用点**声明） */
+ mpMode:t=>{ const m=t.dataset.m; mp.a=''; mp.b=''; mp.wq='';
+  /* ⭐2026-10-09（用户报障「选全部还要再点一次切换为全部」）：「全部」是**终值**，不是"进面板看看"⇒ 点它就生效。
+     其余模式仍需在面板里点具体值（月/ 年要指到哪个月、周要先选季度）—— 那是**选择本身有两步**，不是重复确认。 */
+  if(m==='全部'){ ACT.mpPick({dataset:{id:t.dataset.id,scope:t.dataset.scope,val:'全部',m:'全部'}}); return; }
+  mp.mode=m; ACT.mpRefresh(t.dataset.scope); },   /* 面板内切模式（面板有哪些模式由**调用点**声明） */
  mpWQ:t=>{ mp.wq=t.dataset.qy+'Q'+t.dataset.qq; ACT.mpRefresh(t.dataset.scope); },                  /* 周面板：先选季度 → 换该季度的周列表 */
  mpPick:t=>{ const sc=t.dataset.scope, m=t.dataset.m; let v=t.dataset.val;
    if(m==='跨月'){ const a=mp.a||'', b=mp.b||'';                     /* 两击选区间：先点起点、再点终点（只同年内） */
