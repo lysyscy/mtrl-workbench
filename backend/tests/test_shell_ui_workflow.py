@@ -258,7 +258,7 @@ def test_默认页删说明保留操作与反馈(ui_page):
     assert '输出产物' not in p.inner_text('#view')
     assert p.locator('[data-act="bigExport"]').count() == 1
     p.evaluate("VIEW='m14';render();")
-    assert p.locator('#view > .card').count() == 2
+    assert p.locator('#view > .card:has([data-act="ruleAdd"]), #view > .card:has([data-act="jciAdd"])').count() == 2
     assert ''.join(p.inner_text('#view .tip').split()) == '剔除规则中不得配置「收款单位=资产处集中采购」：集采不走剔除，而是参与分类。'
     assert p.locator('[data-act="ruleAdd"]').count() == 1
     assert p.locator('[data-act="jciAdd"]').count() == 1

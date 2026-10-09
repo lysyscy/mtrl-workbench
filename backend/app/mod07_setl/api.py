@@ -123,10 +123,11 @@ def api_extract(year: str = "", status: str = "全部") -> dict:
         }
     return {
         "amounts": out,
-        "annual": {kind:{**grid, "rows":[{**row, "prior":_s(row['prior']),
+        "annual": {kind:{**grid, "rows":[{**row, "prior":_s(row['prior']), "balance":_s(row['balance']),
                     "cells":[_s(value) for value in row['cells']], "total":_s(row['total'])}
                     for row in grid['rows']], "sum_row":[_s(value) for value in grid['sum_row']]}
                     for kind,grid in annual.items()},
+        "annual_totals": S.extract_year_totals(amounts, balances),
         "kinds": list(X.KINDS),
         "balances": {
             str(kind): {str(wh): _s(v) for wh, v in ((balances or {}).get(kind) or {}).items()}

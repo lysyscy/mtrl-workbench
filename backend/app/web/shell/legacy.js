@@ -477,6 +477,7 @@ V.imp = () => {
       rows:[
         attrRow('导入到', c => {
           const k = kindOf(c);
+          if(sch&&sch.fixed_mapping) return `<span>${esc(c.field||c.src)}</span>`;
           /* ⭐⭐ 2026-09-26 用户裁定：「**不参与的就不要给下拉选项了**」——
              导入既然不用它，给个"能点但点了没用"的下拉＝**误导**（守则 §4 相似元素不制造歧义 ·
              §5.5 不能点的要置灰或隐藏）⇒ 这一类（含"按口径不采"的列）**默认只显示去向标签**。
@@ -610,11 +611,11 @@ V.imp = () => {
       ${probs.length?`<details class="imp-block" open><summary>校验问题 · ${probs.length} 处</summary><div class="tw" style="max-height:260px">${TBL({cls:'sm',head:'<th>行</th><th>列</th><th>原值</th><th>原因</th>',
         rows:probs.map(x=>`<tr><td>${esc(x.row)}</td><td>${esc(x.column)}</td><td>${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`)})}</div></details>`:''}
       <div class="mut sm" style="margin-top:calc(10px * var(--fscale))">${pnote}
-        · 行号对应 Excel 里的行号</div>
+        · ${sch&&sch.fixed_mapping?'以下按项目归并展示，来源工作表见解析结果':'行号对应 Excel 里的行号'}</div>
       ${plegend}
       <div class="tw" style="max-height:280px;margin-top:calc(6px * var(--fscale))">${TBL({cls:'sm',head:pcols,
         rows:[prows || lgEmpty(1, '没有数据行')]})}</div>
-      ${lgBlocks(p.blocks)}
+      ${p.confirmation?lgBlocks(p.blocks,true):lgBlocks(p.blocks)}
       <div class="imp-actions"><button class="btn pri" data-act="impCommit"${(needPj || IMP.busy) ? ' disabled' : ''} title="${IMP.busy?'正在写入 —— 请勿重复点击':(needPj?'先回第 ① 步选「这批数据进哪个项目」—— 没选就没法写入':'确认写入（这一步才真正写进系统）')}">${IMP.busy ? '正在写入…' : '④ 确认写入'}</button>
         <button class="btn" data-act="impStep" title="处理中请稍候，完成后可返回核对" data-step="1"${IMP.busy?' disabled':''}>上一步</button>
         ${needPj ? `<span class="mut sm" style="margin-left:calc(8px * var(--fscale))">${IMP.org.length
@@ -672,7 +673,7 @@ ACT.impStep=t=>{
   if(step<0||step>max) return;
   IMP.step=step; IMP.msg=''; pjClose('impPj'); render();
 };
-ACT.impYmEdit=t=>{IMP.ym=t.value;IMP.preview=null;IMP.problems=[];};
+ACT.impYmEdit=t=>{IMP.ym=t.value;IMP.preview=null;IMP.problems=[]; if(IMP.schema&&IMP.schema.fixed_mapping){IMP.token='';IMP.cols=[];IMP.mapping={};IMP.step=0;render();}};
 ACT.impCutEdit=t=>{IMP.cutoff=t.value;IMP.preview=null;IMP.problems=[];};
 ACT.impMechCutEdit=t=>{IMP.mechanicalCutoff=t.value;IMP.preview=null;IMP.problems=[];};
 ACT.impDomain = async t => {
@@ -697,7 +698,7 @@ ACT.impParse = async () => {
     IMP.kind = 'wn'; render(); return;
   }
   IMP.working='解析'; IMP.fileName=IMP.file.name; IMP.msg = '正在识别工作表和列…'; IMP.kind = 'ok'; render();
-  const fd = new FormData(); fd.append('file', IMP.file); fd.append('sheet', '');
+  const fd = new FormData(); fd.append('file', IMP.file); fd.append('sheet', ''); fd.append('year_month', impOptions().year_month);
   let r = null;
   try { r = await API.impParse(IMP.domain, fd); IMP.working=''; }
   catch (e) { IMP.working=''; IMP.msg = `解析失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
@@ -744,6 +745,7 @@ ACT.impPreview = async () => {
 };
 /* ③ → ④：确认落库（`options` = 域上下文：过程资料要"进哪个项目"；`remember` = 记下这套映射） */
 ACT.impCommit = async () => {
+  const confirmed=IMP.confirmed===true; IMP.confirmed=false;
   if(!IMP.preview||IMP.step!==2||IMP.working) return;
   /* ⛔ **兜底拦住"没选项目就落库"**（2026-09-26）：按钮已按 `needPj` 置灰，但**程序化调用 / 键盘
      回车**也可能走到这里 —— 而落错项目的代价是**静默**的（`m06` 写历史段、不报错）⇒ 拦在本地并
@@ -759,7 +761,13 @@ ACT.impCommit = async () => {
      `m11` 读 `project_key`），多给的键对它只是**字典里的空转**。
      ⚠️ 壳**不知道**哪个域要哪个键（那是域的事）⇒ ⛔ 别再加回"`if (域号) 只给这几个`"的写法。
      ⚠️ 打包本体搬到 `impOptions()` —— **预览用的就是它**（同一份，⛔ 不许两处各拼一遍）。 */
+  if(IMP.preview.confirmation&&confirmed!==true){
+    const c=IMP.preview.confirmation;
+    return modal({wide:true,title:c.title,body:`<p>${esc(c.message)}</p>${lgBlocks(IMP.preview.blocks,true)}`,
+      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="impConfirmCommit">确认导入</button>`});
+  }
   const options = impOptions();
+  if(IMP.preview.confirmation) options.confirmed=confirmed;
   /* ⛔ **同一动作不许并发提交**（2026-09-26 · `TAIL-108`）：连点两次「④ 确认落库」会发两次请求 ——
      而默认批号到**秒** ⇒ 第二次会撞批号唯一约束，用户看到 `IntegrityError …重复键违反唯一约束`（天书）。
      ⚠️ 这里挡"人点的路"，后端另有一道（`imp_spec._batch_no`：撞了就换号）—— 两道都要，
@@ -788,6 +796,7 @@ ACT.impCommit = async () => {
      （业务动作里手写清空 = "靠自觉"，下一个人还得记得写；判据见 `test_wired_boot.py`）。 */
   render();
 };
+ACT.impConfirmCommit = () => { ACT.closeModal(); IMP.confirmed=true; return ACT.impCommit(); };
 ACT.impRollback = async t => {
   let r = null;
   try { r = await API.impRollback(IMP.domain, { batch: t.dataset.batch }); }

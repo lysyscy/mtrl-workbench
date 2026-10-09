@@ -92,7 +92,7 @@ def test_成品形态与模板登记一致(tmp_path):
             ws = wb[sheet]
             # 表头**照模板保留**（⛔ 不改用户的外观）：结余 ＋ 1月…12月 ＋ 合计
             head = [ws.cell(row=1, column=c).value for c in range(1, 16)]
-            assert head[1] == "结余" and head[2:14] == [f"{m}月" for m in range(1, 13)] \
+            assert head[1] == "2025-11及之前" and head[2:14] == [f"{m}月" for m in range(1, 13)] \
                 and head[14] == "合计", f"[{sheet}] 表头与模板不符：{head}"
             assert ws.max_column == 15, f"[{sheet}] 列数 ≠ 15：{ws.max_column}"
             # 数据区首行 = 标记文字所在行（模板 A2）—— 标记本身**不许留在产物里**
@@ -361,7 +361,7 @@ def test_壳侧提取导出真下载且提示与模板形态一致(tmp_path):
     assert "'application/json'" in with_kernel(save), "没按 `content-type` 分流失败原因"
     assert "fExt.status" in save and "fExt.year" in save, "筛选没带给后端（会导出成别的集合）"
     # ⭐ 提示语必须与模板实际形态一致：2 个工作表（焊材 / 气）＋ 列 = 项目|结余|1月…12月|合计
-    for token in ("年度汇总", "当前筛选", "独立人工结余", "本年合计"):
+    for token in ("年度汇总", "当前筛选", "2025-11及之前", "合计"):
         assert token in dialog, f"提示缺导出范围和原模板含义：{token}"
     assert "extBlock('焊材')" in dialog and "extBlock('气体')" in dialog
 

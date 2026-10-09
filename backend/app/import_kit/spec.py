@@ -92,6 +92,7 @@ class DomainSpec:
         """给界面的**字段契约**（壳侧渲染向导用；⛔ 壳里不许再抄一份字段名）。"""
         return {
             "domain": self.domain, "title": self.title, "required": list(self.required),
+            "fixed_mapping": bool(self.extra.get("fixed_mapping")),
             "note": self.note, "keep_note": self.keep_note, "batch": bool(self.batch),
             "rule_note": self.rule_note, "field_list_hint": self.field_list_hint,
             "ignored": [{"label": lb, "why": why} for lb, why in self.ignored],
@@ -151,6 +152,8 @@ class Hooks:
     #:   ⇒ 把"只有域自己算得出的那几块"交回域内补，⛔ 通用层不碰业务判定。
     #:   ⚠️ 它是**只读**的：`preview_store` 仍是预览的**唯一载具**（确认前零写库）。
     preview: PreviewHook | None = None
+    # 多工作表报表由域读取为规范表；通用面仍承担暂存、预览和确认写入。
+    read_file: Callable[[bytes, str], dict] | None = None
 
 
 class Registry:

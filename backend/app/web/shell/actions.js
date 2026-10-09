@@ -290,6 +290,12 @@ const ACT={
  /* MOD-14 剔除规则：**真增 / 删 / 改**（2026-09-13 P6 裁定①·乙）。
     ⚠️ 只改这张**演示表**（`RULE_EX`）；**不重算**已产生的剔除标记（`NO[].exrule`）—— 页内已写明。
     配置类数据按 §9.4 = **硬删、不留痕**；弹窗内输入由「保存」按钮一次性读取（不挂 data-act ⇒ 走不到委托层）。 */
+ mechRuleSave:async t=>{
+   const i=+t.dataset.i, r=(window.MECH_RULES||[])[i]; if(!r) return;
+   const aliases=($('#mechRule'+i).value||'').split(/[｜|]/).map(x=>x.trim()).filter(Boolean);
+   const res=await API.m14MechRuleSet({warehouse:r.warehouse,aliases});
+   toast(res.message); if(res.ok){ await reloadM14(); render(); }
+ },
  ruleAdd:()=>ACT.ruleForm(-1),
  ruleEdit:t=>ACT.ruleForm(+t.dataset.i),
  ruleForm:i=>{ const r=i>=0?RULE_EX[i]:null; if(i>=0&&!r) return;
@@ -1578,23 +1584,23 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
  fExtYear:async t=>{const value=String(t.value).trim();if(!/^\d{4}$/.test(value)) return toast('年份须为四位数字');
    fExt.year=value;const pending=reloadExtract();render();try{await pending;}catch(e){}render();},
  fExtReset:async()=>{fExt.status='在建';fExt.year=bjMonth(-1).slice(0,4);const pending=reloadExtract();render();try{await pending;}catch(e){}render();},
- /* 「结余」点格即改（2026-09-18 用户裁定 甲）：粒度 = **类别 × 仓库 · 不按月**（维护的是"当前的结存"）。
+ /* 「结余」点格即改（2026-09-18 用户裁定 甲）：粒度 = **类别 × 仓库 · 不按月**（维护的是2025-11及之前金额）。
     ⭐ 接线：**判定与落库一律后端**（`service.save_balance_cell` ⇒ `extract.parse_balance`）——
       空 ⇒ 清空 / 非数字 / 负数 都由后端判，⛔ 前端不复写判据；
       ⛔ 也不本地改 `BAL_EX` 冒充落库：成功后**以后端为准重拉**（`reloadM07()`）。 */
  extBal:async t=>{ const kind=t.dataset.k, wh=t.dataset.p, raw=String(t.value==null?'':t.value).trim();
-   const NAME=`结余（${kind} · ${wh}）`;
+   const NAME=`2025-11及之前（${kind} · ${wh}）`;
    let r=null;
    try{ r=await API.m07BalCell({kind:kind,warehouse:wh,raw:raw}); }
    catch(e){ return bgFailed(NAME,{message:String((e&&e.message)||e)}); }
    if(!r||r.ok===false) return bgFailed(NAME,r);
    await reloadM07();
    if(raw===''){ toast(`已清空 <b>${esc(NAME)}</b> ⇒ 导出里该格<b>如实留空</b>`); return; }
-   toast(`已保存 <b>${esc(NAME)}</b> = ${M(r.value)}<br><span class="mut sm">历史结余 · 手工录入 —— 导出时按类别 × 仓库带上</span>`); },
- /* 年度汇总预览沿用后端网格；成品另保留原两张模板的人工结余和本年合计。 */
+   toast(`已保存 <b>${esc(NAME)}</b> = ${M(r.value)}<br><span class="mut sm">2025-11及之前金额已计入合计</span>`); },
+ /* 年度汇总预览沿用后端网格；成品保留原两张固定15列模板，合计包含历史列。 */
  expExt:()=>{
    if(!EXT_STATE.loaded) return toast(EXT_STATE.error||'请等库存年度汇总读取完成');
-   modal({title:`导出 · 焊材 / 气体年度汇总 ${fExt.year}`,wide:true,body:`<div class="tip">年度汇总与当前筛选一致；保留原焊材、气模板中的独立人工结余及本年合计。</div><div class="tw">${TBL({cls:'cond',key:'modal:expExt',sort:false,head:extHead(),rows:[extBlock('焊材')+extBlock('气体')]})}</div>`,
+   modal({title:`导出 · 焊材 / 气体年度汇总 ${fExt.year}`,wide:true,body:`<div class="tip">年度汇总与当前筛选一致；焊材、气模板固定15列，合计包含2025-11及之前金额与所选年12个月；2025年1—11月留空。</div><div class="tw">${TBL({cls:'cond',key:'modal:expExt',sort:false,head:extHead(),rows:[extBlock('焊材')+extBlock('气体')]})}</div>`,
      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="saveExt">导出</button>`});
  },
  /* ⭐ 接线（`TAIL-04` 路径① · 片 1）：成品由**后端模板填充**生成（`模板-焊材气体.xlsx` 的两个 sheet）。
@@ -1607,7 +1613,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
      +'&period='+encodeURIComponent(fExt.year);
    const fn=await dlExport(url,{name:'焊材气体提取表.xlsx'});
    if(!fn) return;
-   toast(`已导出 <b>${esc(fn)}</b>：年度汇总及原人工结余模板。`); },
+   toast(`已导出 <b>${esc(fn)}</b>：年度汇总及焊材、气模板。`); },
 
  /* 大表手填录入（OPEN-05）：当月未录入的格子先带入、再就地改正 → 转为本月正常录入。
     列型三种：`ym` 年月（`YYYY-MM`）· `m` 金额（元 · **非负**）· `t` 文本（备注）。手填值不参与欠款计算。 */

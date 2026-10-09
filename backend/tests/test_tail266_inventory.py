@@ -30,10 +30,10 @@ def test_inventory_year_months_future_and_balance_are_independent():
     gas=data['annual_grids']['气体']['rows'][0]
     assert weld['prior'] == D('100')
     assert weld['cells'] == [D('25'),D('0'),D('0'),D('0'),D('0'),D('0'),D('0'),D('0'),D('20'),D('0'),D('0'),D('0')]
-    assert weld['total'] == D('145')
+    assert weld['total'] == D('501')
     assert gas['cells'][1] == D('30') and gas['total'] == D('30')
     assert data['grids']['焊材']['rows'][0]['balance'] == D('456')
-    assert data['grids']['焊材']['rows'][0]['total'] == D('45')
+    assert data['grids']['焊材']['rows'][0]['total'] == D('501')
 
 
 @acc()
@@ -41,7 +41,7 @@ def test_all_source_consumers_share_inventory_amounts():
     from app.mod07_setl import big_service
     s=FakeSession(inventory_data())
     page=service.build_extract_data(s, {'status':'全部','period':'2026'})
-    assert page['annual']['焊材']['rows'][0]['total'] == D('145')
+    assert page['annual']['焊材']['rows'][0]['total'] == D('501')
     assert big_service._extract_amounts(s)['焊材']['甲仓']['2026-01'] == D('25')
 
 
@@ -57,9 +57,9 @@ def test_real_export_keeps_original_sheets_and_adds_annual_cents(tmp_path):
     assert wb.sheetnames == ['焊材','气','焊材年度汇总','气体年度汇总']
     annual = list(wb['焊材年度汇总'].values)
     assert annual[1][:3] == ('甲仓',100,25.13)
-    assert annual[1][-1] == 145.13
+    assert annual[1][-2] == 501.13 and annual[1][-1] == 456
     original = [row for row in wb['焊材'].values if row[0] == '甲仓'][0]
-    assert original[1] == 456 and original[2] == 25.13 and original[14] == 45.13
+    assert original[1] == 456 and original[2] == 25.13 and original[14] == 501.13
     wb.close()
 
 
@@ -84,7 +84,7 @@ def test_stored_inventory_months_and_balance_share_page_export_and_big():
         exported = service.build_extract_export(s, state)
         own = lambda grid: next(row for row in grid['焊材']['rows'] if row['warehouse'] == '__TAIL266__')
         assert own(page['annual']) == own(exported['annual_grids'])
-        assert own(page['annual'])['total'] == D('145')
+        assert own(page['annual'])['total'] == D('501')
         assert own(exported['grids'])['balance'] == D('456')
         amounts = big_service._extract_amounts(s)['焊材']['__TAIL266__']
         assert amounts['2026-01'] == D('25') and sum(amounts.values()) == D('1045')

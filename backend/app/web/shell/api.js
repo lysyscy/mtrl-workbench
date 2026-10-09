@@ -288,6 +288,8 @@ const API = {
 
   /* ---- MOD-14 剔除规则（`TAIL-40`）⚠️ 唯一主人在库；⛔ 前端不做任何本地改数据冒充落库 ---- */
   m14Rules: () => API.get('/api/m14/rules'),
+  m14MechRules: () => API.get('/api/m14/mech-match'),
+  m14MechRuleSet: body => API.send('PUT', '/api/m14/mech-match', body),
   m14RuleAdd: body => API.post('/api/m14/rules', body),
   m14RuleSet: (id, body) => API.send('PUT', `/api/m14/rules/${id}`, body),
   /* ⭐ `MOD-15` 用户管理（§1.5）：整页数据 = 列表 ＋ **当前登录用户** ＋ 三态计数。

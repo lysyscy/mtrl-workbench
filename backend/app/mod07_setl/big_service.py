@@ -18,7 +18,7 @@ from app.mod07_setl import big_repository as R
 from app.mod07_setl import extract as X
 from app.mod07_setl import inventory_extract as I
 from app.mod06_proc import service as P6S
-from app.mod07_setl.repository import load_rows
+from app.mod07_setl.repository import load_rows, load_balances
 
 #: 主材累计（含税）的**取数口** —— 签名 `(仓库名) -> Decimal | None`。
 #: ⭐ **2026-09-21（`TAIL-25`）已接入**（M5 集采台账已落地）—— 见下方 `_main_material_port`；
@@ -108,7 +108,7 @@ def _amounts(s: Session, warehouses, month: str) -> dict[str, dict]:
     """装配整表所需的**自动列取数**（唯一出口）—— 逐仓给 9 个键。
 
     口径（§5.7.1）：
-    - 焊材 / 三气：**提取**（`extract`，当月 = 该核算月；累计 = 全部月份之和）
+    - 焊材 / 三气：**提取**（`extract`，当月 = 该核算月；累计复用历史列＋会议所属年12个月合计）
     - 外租机械 = **外租零租含税 ＋ 外租包月含税**（机械 6 列下标 2 / 3）
     - 设备租赁（含内租）= **内租设备**（下标 1）
     - 主材累计（含税）= 集采台账结算额 ⇒ **取数口未接入时给 `None`**（不可得，不写 0）
@@ -116,6 +116,10 @@ def _amounts(s: Session, warehouses, month: str) -> dict[str, dict]:
     from app.core.money import sum_money
 
     ex = _extract_amounts(s)
+    balances = load_balances(s)
+    totals = {kind:{row['warehouse']:row['total'] for row in X.extract_template_grid(
+        ex, kind, warehouses=warehouses, year=month[:4], balances=balances)['rows']}
+        for kind in X.KINDS}
     mech = _mech_amounts(s)
     out: dict[str, dict] = {}
     for wh in warehouses or ():
@@ -126,9 +130,9 @@ def _amounts(s: Session, warehouses, month: str) -> dict[str, dict]:
         rent_cum = sum_money([_m(m, ym, 2) for ym in months] + [_m(m, ym, 3) for ym in months])
         lease_cum = sum_money([_m(m, ym, 1) for ym in months])
         out[wh] = {
-            "hw_cum": X.extract_total(hw),
+            "hw_cum": totals['焊材'][wh],
             "hw_mon": hw.get(month) or 0,
-            "qt_cum": X.extract_total(qt),
+            "qt_cum": totals['气体'][wh],
             "qt_mon": qt.get(month) or 0,
             "rent_cum": rent_cum,
             "rent_mon": sum_money([_m(m, month, 2), _m(m, month, 3)]),

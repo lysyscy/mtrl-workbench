@@ -80,7 +80,7 @@ let DEBTPICK = [];           /* 已选项目（**仓库名**数组，顺序 = �
 let DEBTDRAFT = null;        /* 选择项目弹窗的草稿（「确定」前的临时顺序） */
 /* ⭐ 大表每一格的取数（**唯一出口**：页面渲染 / 导出共用）。
    `ym` = 核算月（默认 `bjMonth(-1)`，§9.2 材料报表类）。
-   · 焊材 / 三气：取自库存入库原单（`EXTM`）—— 当月走 `extMon`、累计走 `extAllTotal`（全部月份之和）。
+   · 焊材 / 三气：取自库存入库原单（`EXTM`）—— 当月走 `extMon`、累计读后端年度合计（含历史列）。
    · 外租机械 = **外租零租含税 ＋ 外租包月含税**（= 进结算那两列）⇒ 当月复用 `machExtRent`、累计复用 `machSettleOf`。
    · 设备租赁（含内租）= **内租设备**（机械 6 列的第 1 列）。
    · **合计 = 外租机械开工累计 ＋ 设备租赁开工累计**（用户口径；已按模板图逐行核对）。
@@ -90,8 +90,9 @@ const bigRentCum  = wh => machSettleOf(wh);
 const bigLease    = (wh,ym) => N2(mach6Arr(wh,ym)[1]);
 const bigLeaseCum = wh => N2(Object.keys(MACH6[wh]||{}).reduce((a,k)=>a+bigLease(wh,k),0));
 const bigTotalCum = wh => N2(bigRentCum(wh) + bigLeaseCum(wh));
-const extAllTotal=(kind,wh)=>EXT_STATE.loaded?N2(extMons().reduce((sum,month)=>sum+extMon(kind,wh,month),0)):null;
-const bigHWCum = wh => extAllTotal('焊材', wh), bigQTCum = wh => extAllTotal('气体', wh);
+let EXT_TOTALS = {};
+const extAllTotal=(kind,wh,year)=>EXT_STATE.loaded?N0(((EXT_TOTALS[year]||{})[kind]||{})[wh]??extBalOf(kind,wh)):null;
+const bigHWCum = (wh,year) => extAllTotal('焊材', wh,year), bigQTCum = (wh,year) => extAllTotal('气体', wh,year);
 /* ⭐ **主材累计（含税）** 的**取数唯一出口**（2026-09-13 用户裁定：由手填改为**派生**）——
    口径 = **按项目取「集采台账结算」额**：= 该项目集采合同**结算金额之和**（§5.7.1）。
      · 结算口径本身**照搬** `jcSettle`（有贸易公司 → 贸易公司发票子表合计；无 → 供应商发票子表合计，§6.4.1），
@@ -104,7 +105,7 @@ const bigMatCum = wh => MAT_OK ? N2(JCs.filter(j => j.tag === '纳入台账' && 
 /* （原 `TOK` / `pickExtra` 已废：大表不再按"项目全名关键词"匹配，改按**仓库名**走上面的出口。） */
 /* 库存焊材 / 气体：EXTM保存全部核算月金额供大表累计；年度页面读后端年度网格。
    extMon/extAllTotal未读取返回null，成功读取后的缺月为0。
-   extSum为所选年金额，extTotal为往年加所选年金额；人工结余由BAL_EX独立保存。 */
+   extSum为所选年金额，extTotal为历史列加所选年金额；历史手录值由BAL_EX保存。 */
 let fExt = { status: '在建', year: bjMonth(-1).slice(0,4) };   /* 项目状态默认「在建」（用户口径）；年份默认上月所属年（§9.2） */
 const extMons = () => Object.keys(EXTM).sort();
 const extMon = (kind, wh, m) => { if(!EXT_STATE.loaded) return null; const h = ((EXTM[m] || {})[kind] || []).find(x => x[0] === wh); return h ? h[1] : 0; };
@@ -112,7 +113,7 @@ const extWhs = kind => { const s = new Set(); extMons().forEach(m => (EXTM[m][ki
 const extStatusOf = wh => { const p = pjRowOf(wh); return p ? p.status : ''; };
 const extVisible = kind => EXT_STATE.loaded?((EXT_ANNUAL[kind]||{}).rows||[]).map(row=>row.warehouse):[];
 const extAnnualOf=(kind,wh)=>((EXT_ANNUAL[kind]||{}).rows||[]).find(row=>row.warehouse===wh);
-const extSum=(kind,wh)=>{const row=extAnnualOf(kind,wh);return row?N0(row.total)-N0(row.prior):null;};
+const extSum=(kind,wh)=>{const row=extAnnualOf(kind,wh);return row?N0(row.total)-N0(row.balance):null;};
 const extTotal=(kind,wh)=>{const row=extAnnualOf(kind,wh);return row?N0(row.total):null;};
 function extBlock(kind){
   const head=extHead();
@@ -120,9 +121,9 @@ function extBlock(kind){
   const grid=EXT_ANNUAL[kind]||{},list=grid.rows||[];
   if(!list.length) return EMPTYROW(thCount(head),'当前筛选条件下没有'+kind+'数据','换个项目状态或年份');
   const rows=list.map(row=>{const wh=row.warehouse,bal=extBalOf(kind,wh);
-    return `<tr><td class="fl">${esc(kind)}</td><td class="sm fl" style="min-width:180px;max-width:260px;white-space:normal;overflow-wrap:anywhere">${esc(wh)}</td><td class="num">${M(N0(row.prior))}</td>${row.cells.map(v=>`<td class="num">${M(N0(v))}</td>`).join('')}<td class="num">${M(N0(row.total))}</td><td class="num"><input class="inp num" data-act="extBal" data-k="${esc(kind)}" data-p="${esc(wh)}" value="${bal==null?'':esc(String(bal))}" placeholder="未录入" title="独立人工结余，不计入往年金额和总金额"></td></tr>`;
+    return `<tr><td class="fl">${esc(kind)}</td><td class="sm fl" style="min-width:180px;max-width:260px;white-space:normal;overflow-wrap:anywhere">${esc(wh)}</td><td class="num">${M(N0(row.prior))}</td>${row.cells.map(v=>`<td class="num">${v==null?'':M(N0(v))}</td>`).join('')}<td class="num">${M(N0(row.total))}</td><td class="num"><input class="inp num" data-act="extBal" data-k="${esc(kind)}" data-p="${esc(wh)}" value="${bal==null?'':esc(String(bal))}" placeholder="未录入" title="2025-11及之前金额，计入合计"></td></tr>`;
   }).join('');
-  return rows+`<tr class="sum"><td class="fl">${kind}合计</td><td class="fl"></td>${(grid.sum_row||[]).map(v=>`<td class="num">${M(N0(v))}</td>`).join('')}<td></td></tr>`;
+  return rows+`<tr class="sum"><td class="fl">${kind}合计</td><td class="fl"></td>${(grid.sum_row||[]).map(v=>`<td class="num">${v==null?'':M(N0(v))}</td>`).join('')}<td></td></tr>`;
 }
 /* 手填值解析（OPEN-05）：当月已录入 → 用当月值（无标记）；否则向更早月份取「最近一次录入值」带入（标来源月）。
    注意用 != null 判断：0 是合法录入值，不能被当作「未录入」。 */
@@ -143,7 +144,7 @@ function bigRows(month){
     const cap=bigCell(wh,month,1).v;                                /* 机械费测算（手填） */
     const cont=bigCell(wh,month,2).v, outv=bigCell(wh,month,3).v;   /* 合同（预估）价 / 产值累计（手填） */
     return { wh, disp:p?pjDispOr(p,wh):wh, cells, carryN:cells.filter(c=>c.from).length,
-      hwc:bigHWCum(wh), hw:extMon('焊材',wh,month), qtc:bigQTCum(wh), qt:extMon('气体',wh,month),
+      hwc:bigHWCum(wh,month.slice(0,4)), hw:extMon('焊材',wh,month), qtc:bigQTCum(wh,month.slice(0,4)), qt:extMon('气体',wh,month),
       rentC, rent:bigRent(wh,month), leaseC, lease:bigLease(wh,month), totC,
       matC:bigMatCum(wh),                     /* 主材累计（含税）= 派生（按项目取集采台账结算额） */
       use:(cap?N2(totC/cap):null),            /* 使用率 = 合计 ÷ 机械费测算 */

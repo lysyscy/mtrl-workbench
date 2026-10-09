@@ -374,9 +374,10 @@ function placePops(){
     const b=w.querySelector(':scope > button'); if(!b) return;
     const r=b.getBoundingClientRect();
     p.style.position='fixed';
-    p.style.top=(r.bottom+5)+'px';
-    /* 只给"按钮下方到窗口底"这段（最少 140px）—— 浮层自己的 `overflow-y:auto` 兜住更长的清单 */
-    p.style.maxHeight=Math.max(140, innerHeight-r.bottom-14)+'px';
+    /* 下方不足一个可操作面板时向上展开；高度受视口约束。 */
+    const above=innerHeight-r.bottom-14<140 && r.top>innerHeight-r.bottom;
+    p.style.maxHeight=Math.max(40, above?r.top-14:innerHeight-r.bottom-14)+'px';
+    p.style.top=(above?Math.max(6,r.top-p.offsetHeight-5):r.bottom+5)+'px';
     /* 左右也夹进视口（按钮靠右时浮层不许把右边顶出去） */
     const wide=Math.min(340, Math.max(178, p.offsetWidth||260));
     p.style.left=Math.max(6, Math.min(r.left, innerWidth-wide-6))+'px';

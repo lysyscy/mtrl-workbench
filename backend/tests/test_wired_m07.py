@@ -363,7 +363,7 @@ def test_表头含结余列且列序照模板():
     assert '类别' in head and '项目' in head and '往年金额' in head
     assert 'Array.from({length:12}' in head, "年度必须连续12月"
     line = SHELL[SHELL.index('const EXT_THEAD='):].splitlines()[0]
-    assert line.index('往年金额') < line.index('MONTH-') < line.index('总金额') < line.index('人工结余')
+    assert line.index('往年金额') < line.index('MONTH-') < line.index('合计') < line.index('2025-11及之前')
 
 
 @acc("ACC-SETL-EXT-001", "001-09")

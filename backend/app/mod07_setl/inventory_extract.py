@@ -13,17 +13,21 @@ def load_amounts(s: Session) -> dict:
     return X.extract_amounts(rows)
 
 
-def annual_grid(amounts, kind: str, *, warehouses, year: str) -> dict:
-    """成功读取后的缺月为零；往年为年初前，总额截至所选年末，人工结余独立。"""
+def annual_grid(amounts, kind: str, *, warehouses, year: str, balances=None) -> dict:
+    """往年仅展示；历史值及年度合计复用模板网格，2025年早月留空。"""
     months = X.month_columns(year)
+    template = X.extract_template_grid(amounts, kind, warehouses=warehouses, year=year, balances=balances)
+    by_wh = {row["warehouse"]:row for row in template["rows"]}
     rows = []
     for warehouse in warehouses:
         values = amounts.get(kind, {}).get(warehouse, {})
         prior = sum_money([value for ym,value in values.items() if ym < months[0]])
-        cells = [values.get(ym, Decimal('0.00')) for ym in months]
+        base = by_wh[warehouse]
+        cells = [None if ym <= '2025-11' else (value or Decimal('0.00'))
+                 for ym, value in zip(months, base['cells'])]
         rows.append({'warehouse':warehouse, 'prior':prior, 'cells':cells,
-                     'total':sum_money([prior, *cells])})
-    sums = [sum_money([row['cells'][i] for row in rows]) for i in range(12)]
+                     'balance':base['balance'], 'total':base['total']})
+    sums = [None if months[i] <= '2025-11' else sum_money([row['cells'][i] for row in rows]) for i in range(12)]
     return {'kind':kind, 'year':year, 'months':months, 'rows':rows,
             'sum_row':[sum_money([row['prior'] for row in rows]), *sums,
                        sum_money([row['total'] for row in rows])]}

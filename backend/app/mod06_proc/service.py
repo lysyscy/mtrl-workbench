@@ -256,4 +256,19 @@ def _export_data(state: dict, *, projects: list[str], warehouse: str,
     }
 
 
-__all__ = ["parse_state", "build_page_data", "build_import_data", "projects_of", "displays_by_key"]
+def mech_match_rules(session):
+    """规则配置与报表导入共用的机械项目名规则出口。"""
+    from app.mod06_proc import mech_matching
+
+    return mech_matching.list_rules(session)
+
+
+def save_mech_match_rule(session, **kwargs):
+    """保存规则配置页提交的机械项目名规则。"""
+    from app.mod06_proc import mech_matching
+
+    return mech_matching.save_rule(session, **kwargs)
+
+
+__all__ = ["parse_state", "build_page_data", "build_import_data", "projects_of", "displays_by_key",
+           "mech_match_rules", "save_mech_match_rule"]

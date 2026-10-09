@@ -33,6 +33,7 @@ MEASURE = """
     const triggerInView = (() => { const r = b.getBoundingClientRect();
       return r.top >= 0 && r.bottom <= innerHeight; })();
     const triggerBottom = Math.round(b.getBoundingClientRect().bottom);
+    const triggerTop = Math.round(b.getBoundingClientRect().top);
     b.click();
     const b2 = find(k.act, k.id);
     const wrap = b2 && b2.closest('.pjwrap');
@@ -53,7 +54,7 @@ MEASURE = """
     const desc = el => el ? (el.tagName + '.' + String(el.className || '').slice(0, 18)
                               + (el.dataset && el.dataset.act ? '[' + el.dataset.act + ']' : '')) : 'null';
     out.push({id: k.id, pos: getComputedStyle(panel).position,
-              top: Math.round(r.top), triggerBottom: triggerBottom, triggerInView: triggerInView,
+              top: Math.round(r.top), triggerTop: triggerTop, triggerBottom: triggerBottom, triggerInView: triggerInView,
               items: items.length, visible: inside.length, scrolls: panel.scrollHeight > panel.clientHeight + 1,
               probeHittable: probe ? !!(hit && panel.contains(hit)) : null,
               probeEl: desc(probe), hitEl: desc(hit),
@@ -63,6 +64,11 @@ MEASURE = """
   return out;
 }
 """
+
+
+def anchored(g: dict) -> bool:
+    """下展贴按钮底，上展贴按钮顶；两种都须跟随锚点。"""
+    return abs(g['top']-(g['triggerBottom']+5)) <= 8 or abs(g['panelBottom']-(g['triggerTop']-5)) <= 8
 
 
 def check(page, errors: list[str]) -> None:
@@ -83,7 +89,7 @@ def check(page, errors: list[str]) -> None:
                 errors.append(f"㉑ {key} 时间选择器 {g['id']}：位置是 {g['pos']}，"
                               "**没有**被 `placePops` 提升为 `fixed` ⇒ 会被卡片 `overflow:hidden` 裁"
                               "（`TAIL-109`/`TAIL-110`）")
-            if abs(g["top"] - (g["triggerBottom"] + 5)) > 8:
+            if not anchored(g):
                 errors.append(f"㉑ {key} 时间选择器 {g['id']}：浮层顶 {g['top']} 与按钮底 "
                               f"{g['triggerBottom']} ＋ 5 对不上 ⇒ 它在**粘在原地**、没跟着按钮")
             if g["triggerInView"] and g["visible"] and not g["probeHittable"]:

@@ -786,7 +786,7 @@ async function reloadExtract(){
     const ext=adaptExtract(ex.amounts);
     Object.keys(EXTM).forEach(k=>delete EXTM[k]);Object.assign(EXTM,ext);
     Object.keys(BAL_EX).forEach(k=>delete BAL_EX[k]);Object.assign(BAL_EX,adaptBalances(ex.balances));
-    EXT_ANNUAL=ex.annual;EXT_STATE.loaded=true;EXT_STATE.year=year;
+    EXT_TOTALS=ex.annual_totals||{};EXT_ANNUAL=ex.annual;EXT_STATE.loaded=true;EXT_STATE.year=year;
   }catch(e){if(request!==extractRequest) return;EXT_STATE.error=e.message||'库存汇总读取失败，请重试';throw e;}
 }
 async function reloadM07() {
@@ -875,6 +875,9 @@ const MECH_LABELS = ['租分公司设备', '内租设备', '外租零租含税',
 /* 规则配置（`MOD-14`）—— 剔除规则读后端（**唯一主人在库**）。
    ⚠️ 「加载时算出来的派生量」一律在**本函数里重算**（本项目反复踩的坑：写在数据层 ⇒ 静默空）。 */
 async function reloadM14() {
+  const dm = await API.m14MechRules();
+  if(!dm.ok) throw errHuman(dm.message || '机械项目匹配规则读取失败，请刷新重试');
+  window.MECH_RULES = dm.items || [];
   const d = await API.m14Rules();
   RULE_RAW = d.rules || [];
   RULE_KINDS = d.kinds || [];

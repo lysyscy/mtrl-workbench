@@ -173,7 +173,8 @@ def annual_grids(s: Session, amounts: dict, state: dict) -> dict:
     if len(year) != 4 or not year.isdigit():
         year = D.default_month()[:4]
     statuses, order = _project_context(s)
-    return {kind:I.annual_grid(amounts, kind, warehouses=_visible(amounts, kind, state, statuses, order), year=year)
+    balances = load_balances(s)
+    return {kind:I.annual_grid(amounts, kind, warehouses=_visible(amounts, kind, state, statuses, order), year=year, balances=balances)
             for kind in X.KINDS}
 
 
@@ -202,3 +203,13 @@ def save_balance_cell(s: Session, *, kind: str, warehouse: str, raw) -> dict:
 __all__ = ["parse_state", "state_to_query", "build_page_data",
            "parse_extract_state", "build_extract_data",
            "export_report_ym", "build_extract_export", "save_balance_cell"]
+
+
+def extract_year_totals(amounts: dict, balances: dict) -> dict:
+    """大表页面读取各年同源合计；项目状态筛选不影响会议选题。"""
+    years = {ym[:4] for ym in X.extract_months(amounts)}
+    return {year:{kind:{row['warehouse']:str(row['total'])
+        for row in X.extract_template_grid(amounts, kind,
+            warehouses=set(amounts.get(kind, {})) | set(balances.get(kind, {})),
+            year=year, balances=balances)['rows']} for kind in X.KINDS}
+        for year in years}

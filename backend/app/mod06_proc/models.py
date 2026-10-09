@@ -14,6 +14,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base, MONEY
 
 
+class ProcMechMatchRule(Base):
+    """机械报表项目名对照；仓库键关联档案，别名由规则配置编辑。"""
+
+    __tablename__ = "proc_mech_match_rule"
+
+    warehouse_name: Mapped[str] = mapped_column(String(255), primary_key=True)
+    aliases: Mapped[list] = mapped_column(JSON, default=list)
+
+
 class ProcMechManual(Base):
     """过程资料 · 机械 6 列手录值（一「核算月 × 仓库」一行）；任何月份可编辑。"""
 

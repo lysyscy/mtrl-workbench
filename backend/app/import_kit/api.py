@@ -338,9 +338,17 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
             return {"ok": False, "message": human_reason("取本域选项失败", exc)}
 
     @r.post(base + "/parse")
-    async def api_parse(file: UploadFile = File(...), sheet: str = Form("")) -> dict:
+    async def api_parse(file: UploadFile = File(...), sheet: str = Form(""), year_month: str = Form("")) -> dict:
         try:
             data = await file.read()
+            if hooks.read_file is not None:
+                payload = {"domain": spec.domain, **hooks.read_file(data, year_month)}
+                token = preview_store.save(payload)
+                return {"ok": True, "token": token, "sheet": payload["sheet"], "sheets": payload["sheets"],
+                        "header_row": 1, "header_rows": [1], "source": spec.source_label,
+                        "cols": [{"src": name, "field": name, "conf": 1, "why": "按已确认的报表来源读取",
+                                  "level": "auto", "samples": [], "profile": {}, "ignored": ""}
+                                 for name in payload["headers"]], "dupes": {}, "memory": None}
             if sheet:                                     # 用户指定了工作表
                 grid, _ = read_grid(data, sheet=sheet, max_rows=spec.max_rows,
                                     fill_merged_rows=HEADER_SCAN_ROWS)
@@ -413,6 +421,8 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
         try:
             payload = preview_store.load(str((body or {}).get("token") or ""))
             mapping_ = dict((body or {}).get("mapping") or {})
+            if spec.extra.get("fixed_mapping"):
+                mapping_ = {name: name for name in payload["headers"]}
             records, problems = _records(payload["grid_rows"], payload["headers"], spec, mapping_,
                                          first_row=int(payload.get("first_row") or 2))
             out = {"ok": True, "total": len(records), "problems": problems[:200],
@@ -456,6 +466,8 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
                 #       全部透传等于让域**随便往界面上加东西**（守则 §3「用户不该看到内部字段」）。
                 if "skipped" in extra:
                     out["skipped"] = list(extra["skipped"] or [])
+                if "confirmation" in extra:
+                    out["confirmation"] = dict(extra["confirmation"])
             return out
         except MustReportError as exc:
             return {"ok": False, "message": str(exc)}
@@ -469,6 +481,8 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
         try:
             payload = preview_store.load(str((body or {}).get("token") or ""))
             mapping_ = dict((body or {}).get("mapping") or {})
+            if spec.extra.get("fixed_mapping"):
+                mapping_ = {name: name for name in payload["headers"]}
             if bool((body or {}).get("remember")) and mapping_:
                 store.save(spec.domain, payload["headers"], mapping_,
                            source_label=spec.source_label)

@@ -56,7 +56,7 @@ EXPECTED_SHA256: dict[str, str] = {
     "模板-过程资料.xlsx":
         "74cc3db92a5c4926a2e29ed1be60c4fe1a5625c9e1a0025dc80037186a087eb4",
     "模板-焊材气体.xlsx":
-        "8214be459fdb1e200230d4db26d2cd5bf65ed7842163a2a3ceb5d830d653580e",
+        "9a049140ce738792865a2101afa40cde543ca1c8d241697628f0a6068a549d55",
     "模板-开会大表.xlsx":
         "5d4620f523898e3c6f62fd1f1a72c88854374c6565f41e7a16c094be27e3dd90",
 }

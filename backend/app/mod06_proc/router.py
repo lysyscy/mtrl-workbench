@@ -109,6 +109,10 @@ def api_proc_matrix():
 #    ⛔ 别再往本文件加导入路由（`D18` 口径 ＋ "同一件事不留两个入口"）。
 router.include_router(build_imp_router(imp_spec.SPEC, imp_spec.HOOKS))
 
+from app.mod06_proc import mech_report_spec  # noqa: E402
+
+router.include_router(build_imp_router(mech_report_spec.SPEC, mech_report_spec.HOOKS))
+
 
 # ============================================================ JSON API（前端壳：原型直接接数据）
 

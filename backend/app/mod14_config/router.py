@@ -29,5 +29,9 @@ from app.mod14_config.jc_ignore_api import router as jc_ignore_router  # noqa: E
 router.include_router(rules_router)
 router.include_router(jc_ignore_router)      # ⭐ `TAIL-96` 集采剔除名单（与上面同构）
 
+from app.mod14_config.mech_rules_api import router as mech_rules_router  # noqa: E402
+
+router.include_router(mech_rules_router)
+
 
 __all__ = ["router"]

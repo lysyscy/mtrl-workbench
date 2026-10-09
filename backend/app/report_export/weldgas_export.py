@@ -76,7 +76,7 @@ def sum_cells(grid: dict) -> dict:
     sums = grid.get("sum_row") or []
     cells: dict = {}
     for letter, value in zip(letters, sums):
-        cells[letter] = value
+        cells[letter] = "" if value is None else value
     if sums:
         cells[COL_TOTAL] = sums[-1]
     return cells
@@ -129,16 +129,16 @@ def build_xlsx(grids: dict, root, report_ym: str, *, annual_grids: dict | None =
         wb = load_workbook(out)
         for kind, grid in annual_grids.items():
             sheet = wb.create_sheet(kind + '年度汇总')
-            sheet.append(['项目', '往年金额', *grid['months'], '总金额'])
+            sheet.append(['项目', '往年金额', *grid['months'], '合计', '2025-11及之前'])
             for row in grid['rows']:
-                sheet.append([row['warehouse'], row['prior'], *row['cells'], row['total']])
-            sheet.append(['合计', *grid['sum_row']])
+                sheet.append([row['warehouse'], row['prior'], *row['cells'], row['total'], row['balance']])
+            sheet.append(['合计', *grid['sum_row'], None])
             sheet.freeze_panes = 'C2'
             sheet.column_dimensions['A'].width = 36
             for cell in sheet[1]:
                 cell.font = Font(bold=True)
                 cell.fill = PatternFill('solid', fgColor='E8EEF4')
-            for col in range(2,16):
+            for col in range(2,17):
                 sheet.column_dimensions[get_column_letter(col)].width = 16
                 for cell in list(sheet.columns)[col-1][1:]:
                     cell.number_format = '#,##0.00'
@@ -148,9 +148,9 @@ def build_xlsx(grids: dict, root, report_ym: str, *, annual_grids: dict | None =
         check = load_workbook(out, data_only=True)
         for kind, grid in annual_grids.items():
             actual = list(check[kind+'年度汇总'].values)
-            expected = [['项目','往年金额',*grid['months'],'总金额'],
-                        *[[row['warehouse'],row['prior'],*row['cells'],row['total']] for row in grid['rows']],
-                        ['合计',*grid['sum_row']]]
+            expected = [['项目','往年金额',*grid['months'],'合计','2025-11及之前'],
+                        *[[row['warehouse'],row['prior'],*row['cells'],row['total'],row['balance']] for row in grid['rows']],
+                        ['合计',*grid['sum_row'], None]]
             from decimal import Decimal
             def comparable(value):
                 if isinstance(value, (int, float, Decimal)):

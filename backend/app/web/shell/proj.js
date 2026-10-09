@@ -300,7 +300,7 @@ const AWF_THEAD=`<th>数据项</th><th>来源</th><th>金额</th><th>占合计</
 const WH_THEAD=`<th>仓库名</th><th>行数</th><th>期初金额</th><th>收金额</th><th>发金额</th><th>结存金额</th><th>校验</th>`;
 /* MOD-07 焊材 / 气体提取的表头（第 12 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(EXT_THEAD)`）。
    TAIL-266：往年、12月、总金额；独立人工结余置末，原模板列序保持。 */
-const EXT_THEAD=`<th class="fl">类别</th><th class="fl">项目</th><th>往年金额</th>${Array.from({length:12},(_,i)=>`<th>MONTH-${i+1}</th>`).join('')}<th>总金额</th><th>人工结余</th>`;
+const EXT_THEAD=`<th class="fl">类别</th><th class="fl">项目</th><th>往年金额</th>${Array.from({length:12},(_,i)=>`<th>MONTH-${i+1}</th>`).join('')}<th>合计</th><th>2025-11及之前</th>`;
 const extHead=()=>EXT_THEAD.replace(/MONTH-(\d+)/g,(_,m)=>`${fExt.year}-${String(m).padStart(2,'0')}`);
 /* MOD-07 月度会大表的表头（第 13 张抽出来的表）—— 用户给的**最终模板**（20 列 · **两行表头**）。
    ⚠️ 两行表头的 `<th>` 总数（23）≠ 数据列数（20）⇒ 本表**刻意不可排**：

@@ -1104,7 +1104,7 @@ V.m07=()=>{
       <button class="btn" data-act="expExt">导出年度汇总</button></span></h4>
     ${FBAR({body:`
       <div class="fi"><label>项目状态（默认在建）</label><select class="inp" id="fExtStatus" data-act="fExtStatus">${optsOf(enumVals('pjStatus').concat(['全部']),fExt.status)}</select></div>
-      <div class="fi"><label>年份</label><input class="inp" type="number" min="1900" max="9999" step="1" style="width:110px" data-act="fExtYear" value="${fExt.year}"></div>
+      <div class="fi"><label>年份</label>${tmBtn('extYear',{scope:'ext',val:fExt.year,modes:['年']})}</div>
       <button class="btn" data-act="fExtReset">重置</button>
       <span class="pill" style="margin-left:auto">焊材 ${extVisible('焊材').length} 项 · 气体 ${extVisible('气体').length} 项</span>
     `})}
@@ -1414,7 +1414,6 @@ V.m11=()=>{
    16. MOD-14 规则配置
    ===================================================================== */
 V.m14=()=>`
-  
   <div class="card"><h4>剔除规则（<b>${RULE_EX.length}</b> 类有效）<span class="sp"><button class="btn sm" data-act="ruleAdd" title="新增一条剔除规则（弹窗填「规则类别 / 命中值 / 业务含义」）">＋ 增加规则</button></span></h4>
     <div class="bd np">${TBL({head:'<th>规则类别</th><th>命中值（多个用 ｜ 分隔）</th><th>剔除的业务含义</th><th>操作</th>',rows:[
       ...RULE_EX.map((r,i)=>`<tr><td><b>${esc(r[0])}</b></td><td class="fc">${esc(r[1])}</td><td class="sm mut">${esc(r[2])}</td>
@@ -1439,7 +1438,14 @@ V.m14=()=>`
       <div class="fi"><label>理由（可选）</label><input class="inp" id="jciWhy" placeholder="例：老项目，款已付清"></div>
       <button class="btn pri sm" data-act="jciAdd" title="加入后：该项目从下次抓取起不再写入，也不再进「未写入」清单">加入剔除名单</button>`})}</div>
     
-  </div>`;
+  </div>
+  <div class="card"><h4>机械报表项目匹配（${(window.MECH_RULES||[]).length} 项）</h4>
+    <div class="bd np">${TBL({head:'<th>项目</th><th>报表项目名（多个用 ｜ 分隔）</th><th>操作</th>',rows:
+      (window.MECH_RULES||[]).map((r,i)=>`<tr><td>${esc(r.display)}</td><td><input class="inp" style="width:100%" id="mechRule${i}" value="${esc(r.aliases.join(' ｜ '))}" aria-label="${esc(r.display)}的报表项目名"></td><td><button class="btn sm" data-act="mechRuleSave" data-i="${i}">保存</button></td></tr>`)
+    })}</div>
+  </div>
+
+`;
 
 /* =====================================================================
    17. MOD-15 用户管理（§1.5 角色与权限）

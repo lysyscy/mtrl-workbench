@@ -196,11 +196,11 @@ def extract_block(amounts, kind: str, *, warehouses, period: str) -> dict:
 # ============================================================ 「结余」手工录入（2026-09-18 裁定）
 
 #: 该列的**性质说明**（页面提示 / 导出弹窗 / 断言的**唯一出口**，⛔ 别在别处再写一遍）
-BALANCE_NOTE = "历史结余 · 由用户手工录入（系统没有来源）"
+BALANCE_NOTE = "2025-11及之前 · 手工录入，计入合计"
 
-MSG_BAL_SAVED = "已保存结余（历史结余 · 手工录入）"
-MSG_BAL_CLEARED = "已清空结余 ⇒ 该格**如实留空**（导出里也不写 0）"
-MSG_BAL_BAD = "结余要填数字（2 位小数 · 不得为负）；本次未保存，原值不变"
+MSG_BAL_SAVED = "已保存2025-11及之前金额"
+MSG_BAL_CLEARED = "已清空2025-11及之前金额 ⇒ 该格**如实留空**（导出里也不写 0）"
+MSG_BAL_BAD = "2025-11及之前金额要填数字（2 位小数 · 不得为负）；本次未保存，原值不变"
 MSG_BAL_NO_KIND = "认不出的类别（只认 焊材 / 气体）"
 MSG_BAL_NO_WH = "没找到这个仓库（键 = 仓库名）"
 
@@ -216,7 +216,7 @@ def parse_balance(raw) -> dict:
     if s == "":
         return {"ok": True, "value": None, "message": ""}
     try:
-        v = require_non_negative(s, field="结余")
+        v = require_non_negative(s, field="2025-11及之前")
     except MoneyError:                                  # 非数字 / 负数 ⇒ 一律拒（不猜、不静默变 0）
         return {"ok": False, "value": None, "message": MSG_BAL_BAD}
     return {"ok": True, "value": v, "message": ""}
@@ -237,17 +237,10 @@ def month_columns(year: str) -> list[str]:
 
 
 def extract_template_grid(amounts, kind: str, *, warehouses, year: str, balances=None) -> dict:
-    """**模板形态**的显示网格（行 = 项目 · 列 = `结余` ＋ 该年 12 个月 ＋ `合计`）。
+    """固定15列：历史手录值＋所选年12个月＋合计；2025年1—11月留空。
 
-    - 行 = `warehouses`（调用方已按**项目状态 + 档案顺序**筛好 —— 与页面同一份口径）；
-    - `结余` = `balances[kind][仓库]` —— ⚠️ **2026-09-18 用户裁定：结余 = 历史结余、由用户手动录入**
-      ⇒ **系统没有任何来源**（⛔ 不是收发结存的 `end_amt` 派生，那是错的）；
-      **未录入 ⇒ `None`** ⇒ 实现层**写空**（⛔ 既不写 0、也不把模板里的示例值带走）；
-      ⭐ `balances` 的唯一主人 = `repository.load_balances`（录入入口 = 提取页「结余」列）。
-    - 月份格 = 该月金额（**该月无数据 ⇒ `None`**，⛔ 不写 0 —— 0 会被读成"确实为 0"）；
-    - `合计` = **该年 12 个月之和**（= 模板「合计」列 / 页面「总金额（累计）」在该年的口径；
-      与页面 `extract_total` 的差别只在于**限年**，而 12 列本身就是该年 ⇒ 两者同源）；
-    - `sum_row` = 各月列之和 ＋ 合计列之和（模板合计行那一行）。⚠️ `结余` 列**不参与**（模板即如此）。
+    历史值仍按类别×仓库存储；未录入留空，合计按零参与。
+    页面、模板和会议大表共用此出口，不把其他年份入库金额加入合计。
     """
     months = month_columns(year)
     by_ym_all = (amounts or {}).get(kind) or {}
@@ -255,14 +248,14 @@ def extract_template_grid(amounts, kind: str, *, warehouses, year: str, balances
     rows: list[dict] = []
     for w in warehouses or ():
         by_ym = by_ym_all.get(w) or {}
-        cells = [(by_ym.get(m) or None) for m in months]
+        cells = [None if m <= '2025-11' else (by_ym.get(m) or None) for m in months]
         rows.append({
             "warehouse": w,
             "balance": bal.get(w),
             "cells": cells,
-            "total": sum_money([c for c in cells if c is not None]),
+            "total": sum_money([v for v in [bal.get(w), *cells] if v is not None]),
         })
-    sums = [sum_money([r["cells"][i] for r in rows if r["cells"][i] is not None])
+    sums = [None if months[i] <= '2025-11' else sum_money([r["cells"][i] for r in rows if r["cells"][i] is not None])
             for i in range(len(months))]
     return {"kind": kind, "year": str(year or ""), "months": months, "rows": rows,
             "sum_row": sums + [sum_money([r["total"] for r in rows])]}

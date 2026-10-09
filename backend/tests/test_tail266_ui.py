@@ -13,7 +13,8 @@ def test_annual_columns_balance_and_unread_state(page):
       EXT_STATE.loaded=true;EXT_STATE.error='';
       EXTM={'2025-12':{'焊材':[['甲仓',100]]},'2026-01':{'焊材':[['甲仓',25]]},'2027-01':{'焊材':[['甲仓',900]]}};
       BAL_EX['焊材']={'甲仓':456};
-      EXT_ANNUAL={'焊材':{rows:[{warehouse:'甲仓',prior:'100',cells:['25',...Array(11).fill('0')],total:'125'}],sum_row:['100','25',...Array(11).fill('0'),'125']},'气体':{rows:[],sum_row:[]}};
+      EXT_TOTALS={'2026':{'焊材':{'甲仓':'481'}}};
+      EXT_ANNUAL={'焊材':{rows:[{warehouse:'甲仓',prior:'100',balance:'456',cells:['25',...Array(11).fill('0')],total:'481'}],sum_row:['100','25',...Array(11).fill('0'),'481']},'气体':{rows:[],sum_row:[]}};
       ACT.expExt();
     }''')
     head = page.locator('[data-sort-key="modal:expExt"] thead th')
@@ -24,9 +25,9 @@ def test_annual_columns_balance_and_unread_state(page):
     assert cells.nth(2).inner_text() == '100.00'
     assert cells.nth(3).inner_text() == '25.00'
     assert cells.nth(4).inner_text() == '0.00'
-    assert cells.nth(15).inner_text() == '125.00'
+    assert cells.nth(15).inner_text() == '481.00'
     assert cells.last.locator('input').input_value() == '456'
-    assert page.evaluate("bigHWCum('甲仓')") == 1025
+    assert page.evaluate("bigHWCum('甲仓','2026')") == 481
     page.locator('[data-sort-key="modal:expExt"]').evaluate('(table)=>{table.parentElement.scrollLeft=400;}')
     first_box, second_box = cells.first.bounding_box(), cells.nth(1).bounding_box()
     assert abs(first_box['x'] + first_box['width'] - second_box['x']) <= 2

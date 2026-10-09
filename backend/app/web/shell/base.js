@@ -47,7 +47,7 @@ let EXTM = {};   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/extract` 
 let BAL_EX = {};
 let EXT_ANNUAL = {}, EXT_STATE = {loaded:false,error:'',year:''};
 /* 结余列的性质说明 —— **唯一出口**（表格 `title` 与表下说明都用它，⛔ 别在别处再写一遍）。 */
-const EXT_BAL_NOTE = '结余 = 历史结余 · 由用户手工录入（未录入 ⇒ 导出里如实留空；0 是合法值）';
+const EXT_BAL_NOTE = '2025-11及之前金额由用户手工录入，计入合计（未录入留空；0 是合法值）';
 /* 结余取数出口：**未录入给 `null`**（不是 0 —— 0 会被读成"确实为 0"）。 */
 const extBalOf = (kind, wh) => { const m = BAL_EX[kind]; const v = m ? m[wh] : undefined; return v === undefined ? null : v; };
 
@@ -557,7 +557,7 @@ function applySorts(html,scope){
     if(st.i>=0&&st.d!==0&&can[st.i]&&data.length>1){
       const vals=data.map(r=>_cellRaw((r.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi)||[])[st.i]));
       const tp=_colType(vals);
-      out=data.map((r,k)=>({r,v:vals[k]})).sort((a,b)=>_cmp(a.v,b.v,tp,st.d)).map(o=>o.r);
+      out=data.map((r,k)=>({r,v:vals[k]})).sort((a,b)=>_cmp(a.v,b.v,'s',st.d)).map(o=>o.r);
     }
     /* 表头：注入 class / 点击动作 / 排序指示器 */
     const newTh=ths.map((th,k)=>{

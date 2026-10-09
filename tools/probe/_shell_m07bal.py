@@ -35,7 +35,7 @@ def check(page, errors) -> None:
     print("⑩b m07 结余列 =", m07b)
     oks7 = [
         (bool(m07b.get("found")) and len(m07b.get("ths") or []) == 17
-         and "结余" in "".join(m07b.get("ths") or []),
+         and "2025-11及之前" in "".join(m07b.get("ths") or []),
          f"⭐ 「结余」列就位（表头 17 列）：{m07b.get('ths')}"),
         (m07b.get("n", 0) >= 1 or m07b.get("empty"),
          "⭐ 每个数据行都有可编辑的「结余」格（该筛选下没有数据时如实给空态行）"),
