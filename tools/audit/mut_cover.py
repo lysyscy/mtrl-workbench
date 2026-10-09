@@ -11,12 +11,12 @@
 
 ## 用法
 
-    backend/.venv/Scripts/python.exe tools/mut_cover.py            # 重新生成台账（覆盖写）
-    backend/.venv/Scripts/python.exe tools/mut_cover.py --check    # 只比对，变了 ⇒ rc=1（可挂闸门）
+    backend/.venv/Scripts/python.exe tools/audit/mut_cover.py            # 重新生成台账（覆盖写）
+    backend/.venv/Scripts/python.exe tools/audit/mut_cover.py --check    # 只比对，变了 ⇒ rc=1（可挂闸门）
 
 ## 设计约束
 
-- **rglob `tools/**/_mut_*.py`**（⛔ 不写死 `tools/` 一层）—— `TAIL-58` 分目录后本件**不失效**；
+- 递归查找现行变异，排除 `_归档-*` 子树；归档不是现行覆盖或可执行证明；
 - 台账是**生成物**（`artifacts/`，⛔ 不手改）—— 手改会被下次生成覆盖；要改内容去改本件；
 - ⛔ **只读源码**，本件不执行任何变异（跑变异请逐个跑对应脚本）。
 """
@@ -118,7 +118,7 @@ def _file_index() -> dict[str, list[str]]:
     idx: dict[str, list[str]] = {}
     for base in ("backend/app", "backend/tests", "tools", ""):
         for p in (ROOT / base).glob("**/*") if base else ROOT.glob("*.html"):
-            if p.is_file() and p.suffix in (".py", ".js", ".html"):
+            if p.is_file() and p.suffix in (".py", ".js", ".html") and not any(x.startswith("_归档") for x in p.parts):
                 idx.setdefault(p.name, []).append(str(p.relative_to(ROOT)).replace("\\", "/"))
     return idx
 
@@ -127,6 +127,8 @@ def scan() -> list[dict]:
     idx = _file_index()
     rows: list[dict] = []
     for p in sorted(ROOT.glob("tools/**/_mut_*.py")):
+        if any(x.startswith("_归档") for x in p.parts):
+            continue
         t = p.read_text(encoding="utf-8", errors="replace")
         rel = str(p.relative_to(ROOT)).replace("\\", "/")
         raw = sorted({x.replace("\\", "/") for x in
@@ -153,7 +155,7 @@ def scan() -> list[dict]:
 def render(rows: list[dict]) -> str:
     now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     L = [
-        "# 变异覆盖台账（**生成物** · `tools/mut_cover.py` 生成 ⛔ 不手改）",
+        "# 变异覆盖台账（**生成物** · `tools/audit/mut_cover.py` 生成 ⛔ 不手改）",
         "",
         f"> 生成于 {now} · 变异件 **{len(rows)}** 个 · 判据线见计划 §0（本台账只管**反向灵敏度**这一层）。",
         "> ⭐ 读法：**表 A** = 已有的变异（改坏谁 ⇒ 哪条判据必须红）；**表 B** = 登记在案的**尚未覆盖**的守卫。",
@@ -197,7 +199,7 @@ def render(rows: list[dict]) -> str:
         "4. 重跑本件 ⇒ 台账自动多一行；若它守的原来是表 B 里那条 ⇒ **把那行从 `UNCOVERED` 删掉**。",
         "",
         "---",
-        f"_{len(rows)} 变异件 · {sum(len(r['tests']) for r in rows)} 条判据引用 · 生成器 `tools/mut_cover.py`_",
+        f"_{len(rows)} 变异件 · {sum(len(r['tests']) for r in rows)} 条判据引用 · 生成器 `tools/audit/mut_cover.py`_",
         "",
     ]
     return "\n".join(L)
@@ -214,7 +216,7 @@ def main() -> int:
         norm = lambda s: "\n".join(l for l in s.splitlines() if not l.startswith("> 生成于"))
         old = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
         if norm(old) != norm(text):
-            print("⚠️ 台账与生成结果不一致 ⇒ 重跑 `tools/mut_cover.py`")
+            print("⚠️ 台账与生成结果不一致 ⇒ 重跑 `tools/audit/mut_cover.py`")
             return 1
         print(f"台账一致 ✔（{len(rows)} 变异件）")
         return 0

@@ -543,7 +543,7 @@ LIVE_MACHINE_GLOBS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("backend/app/**/*.py", "① 后端业务代码", (".py",)),
     ("backend/tests/**/*.py", "② 后端测试", (".py",)),
     ("tools/audit/**/*.py", "③ 尺子", (".py",)),
-    ("tools/mut/**/*.py", "③ 反向灵敏度", (".py",)),
+    ("tools/mut/_mut_*.py", "③ 反向灵敏度", (".py",)),
     ("tools/probe/**/*.py", "③ 真机探针", (".py",)),
     ("ops/*.ps1", "④ 运维脚本", (".ps1",)),
     (".codebuddy/rules/**/*.mdc", "⑤ 规则档（每轮自动注入给用户看）", (".mdc",)),

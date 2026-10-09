@@ -42,9 +42,13 @@ CMDS: list[tuple[str, list[str]]] = [
     ("tools/audit/sticky_probe.py", []),
     ("tools/audit/mut_cover.py", ["--check"]),
     ("tools/audit/acc_report.py", []),
+    ("tools/probe/_audit_face.py", []),
+]
+
+# 工具自测另行登记；显式完整检查也仅按工具及依赖变化选中。
+SELFTESTS: list[tuple[str, list[str]]] = [
     ("tools/audit/refs_query.py", ["--selftest"]),
     ("tools/oneoff/_doc_downgrade.py", ["--selftest"]),
-    ("tools/probe/_audit_face.py", []),
     ("tools/oneoff/_gatescope.py", ["--selftest"]),
 ]
 
@@ -64,7 +68,7 @@ def _main() -> int:
         impact.snapshot(args.start)
         return 0
     try:
-        if _gate.commands(ROOT) != CMDS:
+        if _gate.commands(ROOT) != CMDS or _gate.commands(ROOT, 'SELFTESTS') != SELFTESTS:
             raise ValueError('执行清单与CMDS定义不一致')
         delta = impact.since_snapshot(args.since) if args.since else impact.git_changes()
         if args.paths:
@@ -73,7 +77,7 @@ def _main() -> int:
                 raise ValueError('指定路径不在实际差异中：'+str(sorted(unknown_paths)))
             print('显式本轮范围；其他差异未验：', sorted(set(delta)-set(args.paths)))
             delta = {n: delta[n] for n in args.paths}
-        return impact.run_selected(delta, CMDS, PY, explain=args.explain, force_full=args.full)
+        return impact.run_selected(delta, CMDS + SELFTESTS, PY, explain=args.explain, force_full=args.full)
     except (OSError, ValueError, KeyError, TypeError, SyntaxError, subprocess.SubprocessError) as exc:
         print('待查影响，不能报告通过：', type(exc).__name__, str(exc))
         return 2

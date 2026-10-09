@@ -232,7 +232,7 @@
 1. **开工基点（有已有dirty时）**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --start .codebuddy/work/00-scratch/tmp-YYYYMMDD-entry.json`。快照只界定新增差异，不是通过证明；凭据只记摘要。
 2. **查看选择**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --since <开工基点> --explain`。
 3. **按影响运行**：上一命令去掉 `--explain`；无基点时与HEAD比较。`--paths <实际差异路径...>` 可明确本轮范围，其余差异打印为未验。默认、`--related`和`--all`均采用此选择，不因提交扩大。
-4. **显式完整检查**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --full`；仅用于已经查明广泛影响或完整结果刷新，不能用作未知影响的自动兜底。完整检查不附带全部KEY；自证按受影响机制用对应隔离入口执行，不能对正式工作文件或仓外资料写靶。
+4. **显式完整检查**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --full`；仅用于已经查明广泛影响或完整结果刷新，不能用作未知影响的自动兜底。完整检查不固定附带工具自测（仍按工具及依赖变化选中），不附带全部KEY；自证按受影响机制用对应隔离入口执行，不能对正式工作文件或仓外资料写靶。
 5. **改壳**：相关回归与 `tools/probe/_shell_smoke.py` 成功后运行 `tools/audit/shell_verify.py --snapshot`。**改运行后端**：`ops/server_ctl.ps1 -Action restart`；改工具Python无需重启服务。
 
 Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；输出使用UTF-8。`ACC_RESULTS_PATH`不得全局导出，局部结果由选择器隔离。读取整行BAD与退出码；相关失败不能报通过。中断/失败只重验受影响项，临时脚本放00-scratch。

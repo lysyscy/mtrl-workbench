@@ -1,7 +1,7 @@
 """按受影响机制选择隔离自证。
 
 --cases明确选件；无参数不跑全套。KEY与KEEP_OUT仍双向检查登记覆盖。
-当前原生隔离件为gate、bytes、face；其余旧入口拒绝对正式工作文件写靶，
+原生隔离入口按已检查的实现明确放行；其余旧入口拒绝对正式工作文件写靶，
 未来涉及对应判据时先隔离再验证。历史原因按需查Git与原票。
 """
 from __future__ import annotations
@@ -126,6 +126,12 @@ KEY: tuple[tuple[str, str], ...] = (
 #:   · **靶要真机**（浏览器 / 起服务 / `tools/probe/`）⇒ 收工闸门是真机**另一档**的活。
 #:   · **当前红 / 靶假设过期** ⇒ ⛔ 塞进闸门＝每轮假红（那比不跑更坏：假红会让人学会忽略闸门）。
 KEEP_OUT: dict[str, str] = {
+    "_mut_design_rules.py": "现行前端守则结构的原生隔离自证；仅守则/判据变化按需",
+    "_mut_proc_split.py": "分域截止与机械覆盖的原生隔离自证；仅相关业务或判据变化按需",
+    "_mut_proc_split_shell.py": "分域截止/月编辑壳判据的原生隔离自证；仅对应壳或判据变化按需",
+    "_mut_tail262.py": "历史替换/i8优先/批量拒写的原生隔离自证；仅对应机制变化按需",
+    "_mut_tail264_266.py": "候选/合同键/批录/年度汇总的隔离覆盖输入；仅对应机制变化按需",
+    "_mut_ui_workflow.py": "供应商确认及导入范围的原生隔离自证；仅对应流程/判据变化按需",
     # ---- 靶要真机（浏览器 / 起服务 / `tools/probe/`）----
     "_mut_sticky.py": "靶＝`sticky_probe`（合计行视口吸附的真机探针）· 靶在闸门里但**要真机** ⇒ 属真机那一档",
     "_mut_vs.py": "靶＝`tools/probe/` 的虚拟滚动阈值 ＋ 焦点护栏 · **要 playwright 真机**",
@@ -133,14 +139,8 @@ KEEP_OUT: dict[str, str] = {
     "_mut_m11cost.py": "靶＝`tools/probe/_shell_smoke.py`（㊲ m11 打开不卡）· **要真机**",
 
     # ---- 当前红 / 靶假设过期（⛔ 修好前塞进闸门＝每轮假红；已在当日日志留痕）----
-    "_mut_t13.py": "靶＝`T13` 有牙（两处变异都抓到、复原 MD5 一致），但它要求『**基线 0 命中**』"
-                  "⇒ 而主文档行数**确实超 `T13` 预算**（**真黄档**，数字见 `ops/阈值表.md`，"
-                  "⛔ 别抄在这里 —— 本票要治的正是那种「抄一份必过期」）⇒ rc=1。口径待定 ⇒ 不进闸门（票 `TAIL-243`）",
 
     # ---- 靶是业务面断言（由各自域 pytest 守；分钟级 ⇒ 按需 `--all`）----
-    "_mut_a6.py": "靶＝`tests/test_ux_pages.py`（m01 空态指路 / 删除确认两条 UX 守卫）· 业务面",
-    "_mut_a7.py": "靶＝`tests/test_ux_pages.py`（m11 抓取按钮 / 台账行身份区）· 业务面",
-    "_mut_a175.py": "靶＝`tests/test_ux_pages.py`（大表首列区固定）· 几何由真机 ㉜ 量 · 业务面",
     "_mut_acct.py": "靶＝收款账号字段（`TAIL-60/61` 修法）· 业务面",
     "_mut_amount.py": "靶＝`tests/test_amount_text_parity.py`（金额文本）· 业务面",
     "_mut_archive_chain.py": "靶＝`TAIL-29`-③ 抓取链路接自动建档 · 业务面",
@@ -148,20 +148,14 @@ KEEP_OUT: dict[str, str] = {
     "_mut_auth.py": "靶＝`ACC-USR-MGMT-001/001-01`（未登录 ⇒ 无身份）· 业务面",
     "_mut_b4.py": "靶＝m11 接入建议/校验/记忆三条边界（纪律）· 业务面",
     "_mut_big.py": "靶＝`ACC-RPT-BIG-001`（活动大表）· 业务面",
-    "_mut_boot.py": "靶＝`tests/test_wired_boot.py`（性能分组并行 / 页级按需取数）· 业务面",
     "_mut_core_bindings.py": "靶＝`tests/test_core_bindings.py`（core 取数口 ＋ 装配层接线）· 接线断言 pytest",
     "_mut_core_projects.py": "靶＝`TAIL-36` 项目三小件唯一实现 · 业务面",
     "_mut_d25.py": "靶＝`D25` 四条用户裁定（负数照收 / 非数据行跳过 / 标段行认月）· 业务面",
     "_mut_deps.py": "靶＝`tests/test_deps_declared.py`（依赖清单不许漏登记）· 接线断言 pytest",
     "_mut_excl_overpay.py": "靶＝『剔除行可勾选』＋『超付挂提醒』· 业务面",
-    "_mut_exctext.py": "靶＝`tests/test_ux_text.py`（用户可见串不许拼异常正文）· 业务面",
-    "_mut_fbar.py": "靶＝`FBAR` 统一筛选栏外壳出口（`TAIL-64` P4）· 接线断言 pytest",
-    "_mut_fix3.py": "靶＝顶栏假身份 / 主题切换器 / i8 `None` 语义 · 业务面",
-    "_mut_home_wired.py": "靶＝`§19` 批 5『看板接真数据』· 业务面",
     "_mut_i8cookie.py": "靶＝`§7.8` i8 凭据（cookie 缓存复用 / 未绑即拒）· 业务面",
     "_mut_impkit.py": "靶＝`TAIL-69`『预览不写库』· 业务面",
     "_mut_impstale.py": "靶＝`TAIL-78`『导入/回滚 ⇒ 取数缓存全标脏』· 业务面",
-    "_mut_layering.py": "靶＝`tests/test_layering.py`（分层边界十一靶）· 接线断言 pytest",
     "_mut_ledger.py": "靶＝`ACC-RPT-EXP-001`（台账导出）· 业务面",
     "_mut_m01wired.py": "靶＝`tests/test_wired_m01.py` · 业务面",
     "_mut_m02wired.py": "靶＝`tests/test_wired_m02.py`（`TAIL-27` 壳接线）· 业务面",
@@ -188,30 +182,23 @@ KEEP_OUT: dict[str, str] = {
     "_mut_m7w.py": "靶＝`MOD-07` 壳接线 · 业务面",
     "_mut_m9.py": "靶＝`ACC-FEE-MON-001`（11 个判据点）· 业务面",
     "_mut_mapping.py": "靶＝`import_kit.mapping` / `profile_store`（`TAIL-75` B1）· 业务面",
-    "_mut_naive.py": "靶＝`tests/test_naive_export_parity.py`（薄委托下的内核）· 业务面",
     "_mut_own_109.py": "靶＝`ACC-PRJ-OWN-001/001-09` · 业务面",
     "_mut_own_dialog.py": "靶＝`TAIL-29`-②④ 链路 C 弹窗 · 业务面",
     "_mut_owncfg.py": "靶＝`ACC-PRJ-OWN-001` ＋ `ACC-CFG-RULE-001` · 业务面",
     "_mut_ownwh.py": "靶＝`TAIL-39`『兜底前先查 i8 仓库名单』· 业务面",
     "_mut_p1.py": "靶＝路径①（模板填充）片 1 · 业务面",
     "_mut_p5a.py": "靶＝表级虚拟滚动（`TAIL-64` `P5-a`/`P5-c`）· 接线断言 pytest",
-    "_mut_pipini.py": "靶＝`tests/test_pipini_single_source.py`（依赖镜像只有一处定义）· 接线断言 pytest",
-    "_mut_pjb.py": "靶＝`PJB` 统一项目选择按钮出口（`TAIL-64` P4-d）· 接线断言 pytest",
     "_mut_print.py": "靶＝打印链路（`TAIL-46` ②③）· 业务面",
     "_mut_prjtype.py": "靶＝`TAIL-42`『人工覆盖三类判定』· 业务面",
     "_mut_proc.py": "靶＝`ACC-RPT-EXP-001`（过程资料成品）· 业务面",
     "_mut_promote.py": "靶＝`TAIL-30`-③ 人工指认（链路 B）· 业务面",
     "_mut_rules.py": "靶＝`TAIL-40` 剔除规则落库 · 业务面",
-    "_mut_save.py": "靶＝`tests/test_export_save.py`（落盘不建目录等）· 业务面",
     "_mut_stale.py": "靶＝`tests/test_wired_boot.py::跨页写动作后全标脏` · 业务面",
     "_mut_tail04.py": "靶＝`TAIL-04` 导出切片 · 业务面",
     "_mut_tail04_pages.py": "靶＝`TAIL-04` 最后两页 ＋ `exp` 真分发 · 业务面",
-    "_mut_tail192.py": "靶＝`TAIL-192` 结构审计 P0 四件 · 接线断言 pytest",
-    "_mut_tail193.py": "靶＝`tests/test_dup_guards.py` 防扩散墓碑 · 接线断言 pytest",
     "_mut_tail35.py": "靶＝`TAIL-35`（m04 导入 ＋ 手动行）· 业务面",
     "_mut_tail43.py": "靶＝`TAIL-43` 六处断言 · 业务面",
     "_mut_tbl.py": "靶＝`TBL` 统一表外壳（`TAIL-64`）· 接线断言 pytest",
-    "_mut_theme.py": "靶＝主题断言（规范表 / 对比度 AA / 侧栏角色）· 接线断言 pytest",
     "_mut_time.py": "靶＝`tests/test_acc_i8_time.py`（壳的业务时钟取自北京时间）· 业务面",
     "_mut_trailscope.py": "靶＝`tests/test_trail_scope.py`（留痕范围判据）· 接线断言 pytest",
     "_mut_trash.py": "靶＝`ACC-USR-MGMT-001/001-09`（回收站）· 业务面",
@@ -270,7 +257,9 @@ def report_cover() -> int:
 
 
 def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
-    if p.name not in {'_mut_gatescope.py', '_mut_bytesguard.py', '_mut_facedoc.py'}:
+    if p.name not in {'_mut_gatescope.py', '_mut_bytesguard.py', '_mut_facedoc.py', '_mut_tbl.py',
+                       '_mut_design_rules.py', '_mut_proc_split.py', '_mut_proc_split_shell.py',
+                       '_mut_tail262.py', '_mut_tail264_266.py', '_mut_ui_workflow.py'}:
         print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
         return 2, 0.0
     t = time.time()
@@ -322,10 +311,11 @@ def main() -> int:
         for name in args[args.index('--cases')+1:]:
             if name.startswith('--'): break
             requested.append(name)
-        if not requested or set(requested)-{n for n, _ in KEY}:
-            print('变异选择为空或不在KEY登记中，未执行')
+        registry = dict(KEY) | KEEP_OUT
+        if not requested or set(requested)-set(registry):
+            print('变异选择为空或不在活件登记中，未执行')
             return 2
-        cases = [(n,w) for n,w in cases if n in requested]
+        cases = [(n, registry[n]) for n in dict.fromkeys(requested)]
 
     bad: list[str] = []
     fast_hit: list[str] = []
@@ -335,7 +325,7 @@ def main() -> int:
     print(f"── 变异自证（{len(cases)} 支 · {mode} · timeout {timeout}s/支）")
     if fast_only and not ("--all" in args):
         print(f"   ⏭ 已按需跳过慢集 {len(SLOW_KEY)} 支 —— ⛔ 本次**没验**它们；"
-              f"动了尺子/判据/闸门脚本请跑不带 `--fast` 的全套")
+              f"只补验受影响判据/机制的对应隔离自证")
     import os
     os.environ.pop("ACC_RESULTS_PATH", None)
     related = "--related" in args
@@ -400,6 +390,12 @@ def selftest():
             assert cover_gap()[1], '陈旧登记不能静默放行'
         with patch.object(subprocess,'run',side_effect=AssertionError('不得启动正式写靶脚本')):
             assert run_one(folder/'_mut_docaudit.py', 1)[0] != 0
+        from types import SimpleNamespace
+        with patch.object(subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='fixture', stderr='')) as dispatch:
+            for name in ('_mut_tbl.py', '_mut_design_rules.py', '_mut_proc_split.py',
+                         '_mut_proc_split_shell.py', '_mut_tail262.py', '_mut_tail264_266.py', '_mut_ui_workflow.py'):
+                assert run_one(folder/name, 1)[0] == 0, '已确认隔离入口不得被拒绝'
+            assert dispatch.call_count == 7
     print('自测 变异登记缺口、陈旧项、正常放行及非隔离脚本拒绝通过')
     return 0
 

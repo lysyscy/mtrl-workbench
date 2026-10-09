@@ -107,6 +107,31 @@ OUTSIDE_ORDINARY = {
 }
 
 
+# 实际使用者：refs读取common/meta；降档还调用work/refs；回执自测调用
+# 影响选择、pytest输入观察器和变异登记；回执入口还导入交付根/原型根。
+# 修改这些实现或自测时才验证工具，导入链也属于实际运行依赖。
+SELFTEST_DEPENDENCIES = {
+    'tools/audit/refs_query.py': {
+        'tools/audit/refs_query.py', 'tools/audit/audit_common.py', 'tools/audit/audit_meta.py',
+    },
+    'tools/oneoff/_doc_downgrade.py': {
+        'tools/oneoff/_doc_downgrade.py', 'tools/audit/audit_common.py',
+        'tools/audit/audit_meta.py', 'tools/audit/audit_work.py', 'tools/audit/refs_query.py',
+        'ops/hooks/pre-commit', 'tools/audit/doc_audit.py', 'tools/audit/audit_drift.py',
+        'tools/audit/audit_face.py', 'tools/audit/syntax_audit.py', 'tools/audit/shell_source.py',
+        'tools/audit/bytes_guard.py',
+        'tools/audit/mut_cover.py', 'tools/oneoff/_gatescope.py', 'tools/oneoff/_run_rulers.py',
+        '.codebuddy/work/README.md',
+    },
+    'tools/oneoff/_gatescope.py': {
+        'tools/oneoff/_gatescope.py', 'tools/oneoff/_impactscope.py',
+        'tools/oneoff/_pytestscope.py', 'tools/oneoff/_run_rulers.py',
+        'tools/oneoff/_run_muts.py', 'tools/mut/_mut_gatescope.py',
+        'tools/audit/audit_common.py', 'tools/audit/ui_parity.py',
+        'tools/audit/shell_source.py', 'tools/audit/shell_api.py', 'tools/audit/jslex.py',
+    },
+}
+
 def unclassified(commands: list) -> set[str]:
     """不是镜像清单相等断言：实际登记项必须有已证必要性或无关后果。"""
     return {rel for rel, _ in commands} - required_checks('page', commands) - set(OUTSIDE_ORDINARY)
@@ -130,7 +155,7 @@ def git_changes(root: Path = ROOT) -> dict:
 def required_checks(kind: str, commands: list) -> set[str]:
     """登记外或新工具不会自动获得免检；未知检查显式待查。"""
     if kind == 'full':
-        return {rel for rel, _ in commands}
+        return {rel for rel, _ in commands} - set(SELFTEST_DEPENDENCIES)
     required = {'tools/audit/bytes_guard.py'}
     if kind == 'documents':
         required |= {'tools/audit/doc_audit.py', 'tools/audit/audit_drift.py',
@@ -199,8 +224,12 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
             if not consumers:
                 pending.append('机器输入未找到使用者：'+name)
             continue
+        if name == 'ops/hooks/pre-commit':
+            continue  # 降档自测实际解析此入口，相关自测在下方选择。
         pending.append('需要调查实际依赖：'+name)
     if any(n.startswith('tools/mut/') for n in names): checks.add('tools/audit/mut_cover.py')
+    checks |= {rel for rel, deps in SELFTEST_DEPENDENCIES.items() if names & deps}
+    # 工具自测只证其自身；共享模块的其他消费者仍须调查，不消除待查。
     tests = scope.plan(sorted(relevant))
     if tests.reason.startswith('待查：'):
         pending.append(tests.reason)
@@ -216,7 +245,7 @@ def run_selected(changes: dict, commands: list, py: str, *, explain=False, force
     import os
     checks, tests, pending = selection(changes, commands)
     if force_full:
-        checks = {rel for rel, _ in commands}
+        checks = required_checks('full', commands) | (checks & set(SELFTEST_DEPENDENCIES))
         tests = scope.Plan(True, '显式请求完整检查；实际执行全套pytest')
     print('新增影响：', '\n  '.join(sorted(changes)) or '无')
     print('既有dirty未冒充已验；测试仍读取当前共享输入')
@@ -224,6 +253,8 @@ def run_selected(changes: dict, commands: list, py: str, *, explain=False, force
         print('运行' if rel in checks else '跳过', rel,
               '受影响使用者' if rel in checks else '未触达保护结果；机制自证仅机制修改触发')
     print('pytest：', tests.reason, tests.argv() if tests.run else '跳过')
+    import _gatescope as gate
+    gate.validate_selection(checks, {rel for rel, _ in commands}, checks)
     if pending:
         print('待查影响：', pending, '；未执行、不能报告通过')
         return 2
@@ -291,15 +322,55 @@ def selftest():
     # 新选择规则直接调用真实实现；隔离输入覆盖新删说明、机器输入和金额权限模块。
     assert unclassified([('tools/audit/new.py', [])]), '新登记检查不能静默跳过'
     assert 'tools/audit/syntax_audit.py' in required_checks('page', []), '页面及表达式必须检查语法'
-    checks, tests, pending = selection({'README.md': (None, b'new')}, rulers.CMDS)
+    checks, tests, pending = selection({'README.md': (None, b'new')}, rulers.CMDS + rulers.SELFTESTS)
     assert 'tools/audit/doc_audit.py' in checks and 'tools/oneoff/_gatescope.py' not in checks
     assert not pending and not tests.run_all, '新增说明不得触发全套业务或机制自证'
-    checks, tests, pending = selection({'backend/app/core/identity.py': (b'old', b'new')}, rulers.CMDS)
+    checks, tests, pending = selection({'backend/app/core/identity.py': (b'old', b'new')}, rulers.CMDS + rulers.SELFTESTS)
     assert tests.run and 'tools/audit/chain_audit.py' in checks, '权限共享模块不能免验'
-    checks, tests, pending = selection({'tools/chain_expected.txt': (b'old', b'new')}, rulers.CMDS)
+    checks, tests, pending = selection({'tools/chain_expected.txt': (b'old', b'new')}, rulers.CMDS + rulers.SELFTESTS)
     assert 'tools/audit/chain_audit.py' in checks and not pending, '真实机器输入必须选使用者'
-    assert selection({'unknown.dat': (None, b'x')}, rulers.CMDS)[2], '未知输入必须显式待查'
-    assert selection({'backend/data.json': (None, b'x')}, rulers.CMDS)[2], '未知后端机器输入不能直接全跑'
+    assert selection({'unknown.dat': (None, b'x')}, rulers.CMDS + rulers.SELFTESTS)[2], '未知输入必须显式待查'
+    assert selection({'backend/data.json': (None, b'x')}, rulers.CMDS + rulers.SELFTESTS)[2], '未知后端机器输入不能直接全跑'
+    registered = rulers.CMDS + rulers.SELFTESTS
+    # 隔离选择输入；明确期望来自实际消费者，不能沿待测依赖表自说自话。
+    with patch.object(scope, 'plan', return_value=scope.Plan(False, 'fixture')):
+        for dep, expected in (
+            ('tools/audit/refs_query.py', {'tools/audit/refs_query.py', 'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/audit/audit_common.py', {'tools/audit/refs_query.py', 'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/audit/audit_meta.py', {'tools/audit/refs_query.py', 'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/audit/audit_work.py', {'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/oneoff/_doc_downgrade.py', {'tools/oneoff/_doc_downgrade.py'}),
+            ('ops/hooks/pre-commit', {'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/oneoff/_gatescope.py', {'tools/oneoff/_gatescope.py', 'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/oneoff/_impactscope.py', {'tools/oneoff/_gatescope.py'}),
+            ('tools/oneoff/_pytestscope.py', {'tools/oneoff/_gatescope.py'}),
+            ('tools/oneoff/_run_rulers.py', {'tools/oneoff/_gatescope.py', 'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/oneoff/_run_muts.py', {'tools/oneoff/_gatescope.py'}),
+            ('tools/mut/_mut_gatescope.py', {'tools/oneoff/_gatescope.py'}),
+        ):
+            chosen, _, _ = selection({dep: (b'VALUE = 1', b'VALUE = 2')}, registered)
+            assert expected <= chosen, '工具或依赖变化漏自测：'+dep
+        _, _, shared_pending = selection({'tools/audit/audit_common.py': (b'VALUE=1', b'VALUE=2')}, registered)
+        assert any('共享检查模块' in p for p in shared_pending), '自测依赖不等于所有消费者已证'
+    chosen, _, _ = selection({'README.md': (b'old', b'new')}, registered)
+    assert not chosen & set(SELFTEST_DEPENDENCIES), '无关说明不得重复工具自测'
+    assert not required_checks('full', registered) & set(SELFTEST_DEPENDENCIES), '完整清单不得固定附带工具自测'
+    import io
+    from contextlib import redirect_stdout
+    import _gatescope as gate
+    # 调用真实完整入口，只把外部命令换成可观察输出，不能把选集实现mock掉。
+    with patch.object(scope, 'plan', return_value=scope.Plan(False, 'fixture')), \
+            patch.object(gate, 'open_receipts', return_value=None), \
+            patch.object(subprocess, 'run', return_value=type('Result', (), {'returncode': 0, 'stdout': 'passed', 'stderr': ''})()) as runner:
+        with redirect_stdout(io.StringIO()):
+            assert run_selected({'README.md': (b'old', b'new')}, registered, sys.executable, force_full=True) == 0
+        called = {str(arg[0][0][3]).replace('\\', '/') for arg in runner.call_args_list if len(arg[0][0]) > 3}
+        assert not any(n.endswith(tuple(SELFTEST_DEPENDENCIES)) for n in called), '完整入口不得固定自测'
+        runner.reset_mock()
+        with redirect_stdout(io.StringIO()):
+            assert run_selected({'tools/oneoff/_impactscope.py': (b'x=1', b'x=2')}, registered, sys.executable, force_full=True) == 0
+        called = [arg[0][0] for arg in runner.call_args_list]
+        assert any(str(ROOT/'tools/oneoff/_gatescope.py') in c for c in called), '完整入口也须选相关自测'
     assert scope.plan(None).reason.startswith('待查：') and not scope.plan(None).run, '未知路径不能自动全跑'
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)

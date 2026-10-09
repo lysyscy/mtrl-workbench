@@ -28,11 +28,11 @@ CODE_ONLY = frozenset({
 EXCLUDED = frozenset({'.git', '.venv', '__pycache__', 'node_modules', 'logs'})
 
 
-def commands(root: Path = ROOT) -> list[tuple[str, list[str]]]:
+def commands(root: Path = ROOT, registry: str = 'CMDS') -> list[tuple[str, list[str]]]:
     """从唯一 CMDS 定义读字面量；空扫、重复、动态清单和越界路径均失败。"""
     tree = ast.parse((root/'tools/oneoff/_run_rulers.py').read_text(encoding='utf-8'))
     definitions = [n.value for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign))
-                   and any(isinstance(t, ast.Name) and t.id == 'CMDS'
+                   and any(isinstance(t, ast.Name) and t.id == registry
                            for t in (n.targets if isinstance(n, ast.Assign) else [n.target]))]
     if len(definitions) != 1:
         raise ValueError('CMDS 清单缺失或重复 ⇒ 空扫')
@@ -374,7 +374,7 @@ def main() -> int:
     if '--selftest' in sys.argv:
         selftest()
         from _run_muts import KEY
-        registered = {rel for rel, _ in commands()} | {'tools/mut/'+n for n, _ in KEY}
+        registered = {rel for rel, _ in commands() + commands(ROOT, 'SELFTESTS')} | {'tools/mut/'+n for n, _ in KEY}
         assert CODE_ONLY <= registered, '输入元数据不得指向登记外项目'
     else:
         from _run_muts import KEY

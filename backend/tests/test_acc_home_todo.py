@@ -275,7 +275,7 @@ def test_抓取到期与失败取自执行记录(monkeypatch):
     #    · `'看板计数' in SHELL` ⇒ 把 `LOADERS` 的键改名、而 `PAGE_LOAD` 里那个字符串还在 ⇒ **仍是绿的**；
     #    · `'runFailInfo' in SHELL` ⇒ 改名成 `runFailInfoX` 后**子串仍命中** ⇒ **仍是绿的**；
     #    · `'/api/home/run-counts' in SHELL` ⇒ 注释里也写着这个串 ⇒ **仍是绿的**。
-    #    ⇒ 三条全落空（`tools/mut/_mut_home_wired.py` 的 M5/M6/M7 实测无区分力）。
+    #    ⇒ 三条全落空（`tools/mut/_归档-20261009/_mut_home_wired.py` 的 M5/M6/M7 实测无区分力）。
     for line in ("  homeRunCounts: () => API.get('/api/home/run-counts'),",
                  "  '看板计数': reloadHome,",
                  "function runFailInfo(rec) {"):

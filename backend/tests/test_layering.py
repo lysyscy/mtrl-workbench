@@ -24,7 +24,7 @@
 ⚠️ 规则 **B** 只管 `app/mod*/`；**测试**（`backend/tests/**`）直接 import `app.report_export` 是**正当的**
    （测试不在应用的依赖图里，它就该直接调被测件）。
 
-反向灵敏度：`tools/mut/_mut_layering.py`（每条规则各一靶 ⇒ 必红）。
+反向灵敏度：`tools/mut/_归档-20261009/_mut_layering.py`（每条规则各一靶 ⇒ 必红）。
 """
 
 from __future__ import annotations

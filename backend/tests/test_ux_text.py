@@ -405,6 +405,52 @@ _EXC_ALLOW = ("logger.", "log_exc(", "human_reason(", "error_message=")
 _EXC_EXEMPT = {_APP_DIR / "core" / "errors.py"}     # 技术串的**出口**自己（`log_exc` 就写在那儿）
 
 
+def _cached_source_segment(lines: list[bytes], node) -> str:
+    """AST列号按UTF-8字节切片；每件预拆源码，保持get_source_segment语义。"""
+    if (getattr(node, 'end_lineno', None) is None or
+            getattr(node, 'end_col_offset', None) is None or not hasattr(node, 'lineno')):
+        return ""
+    a, b = node.lineno - 1, node.end_lineno - 1
+    if a == b:
+        return lines[a][node.col_offset:node.end_col_offset].decode('utf-8')
+    return (lines[a][node.col_offset:] + b''.join(lines[a + 1:b]) +
+            lines[b][:node.end_col_offset]).decode('utf-8')
+
+
+def _exception_class_hits(src: str) -> list[int]:
+    """原扫描范围和逐行例外不变，只把重复全源码拆行移出节点循环。"""
+    import ast
+    lines = src.splitlines()
+    tree = ast.parse(src)
+    # 只按Python解析器的CR/LF拆行，FF与Unicode分隔符仍留在源码行里。
+    source_lines = [m.group().encode('utf-8') for m in re.finditer(r'[^\r\n]*(?:\r\n|\n|\r|$)', src)]
+    skip: set[int] = set()
+    for node in ast.walk(tree):
+        # 裸表达式语句（值**无处可去**）⇒ 与 `_backend_user_strings()` 的第 ① 条同口径，跳过
+        # ⚠️ 要连**子孙一起跳** —— 只跳 `node.value` 的话，里面那个 `type(exc).__name__`
+        #    节点仍会被 `walk` 单独访问到（2026-10-01 自证 `③″` 当场抓到：假红）。
+        if isinstance(node, ast.Expr) and not isinstance(node.value, ast.Constant):
+            skip.add(id(node))            # ⚠️ 连**语句节点自己**一起跳（`Expr` 的 segment 就是整句）
+            for sub in ast.walk(node.value):
+                skip.add(id(sub))
+    hit: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant):        # 普通字符串 / docstring：值里没有运行期信息
+            continue
+        if id(node) in skip:
+            continue
+        seg = _cached_source_segment(source_lines, node)
+        if not any(k in seg for k in _EXC_TECH):
+            continue
+        a = node.lineno
+        b = node.end_lineno or a
+        span = "\n".join(lines[a - 1:b])
+        if any(k in span for k in _EXC_ALLOW):
+            continue
+        hit.add(a)
+    return sorted(hit)
+
+
 @acc()
 def test_用户可见串里不许拼异常原文():
     """⭐⭐ `TAIL-212`（2026-10-01）：**异常类名 / 原始报错串不许拼进用户可见文案**（守则 §3.1 / §3.7）。
@@ -424,41 +470,13 @@ def test_用户可见串里不许拼异常原文():
     ⚠️ **能证伪**：在任一**非日志、非 `error_message`**的行写 `f"失败：{type(exc).__name__}: {exc}"` ⇒ 本件必红；
        ⛔ 写进**注释 / docstring** ⇒ 不红（自证见 `tools/oneoff/_tail209_mark_proof.py` 的 `T6`）。
     """
-    import ast
-
     bad: list[str] = []
     for p in sorted(_APP_DIR.rglob("*.py")):
         if p in _EXC_EXEMPT:
             continue
         src = p.read_text(encoding="utf-8", errors="replace")
-        lines = src.splitlines()
-        tree = ast.parse(src)
-        skip: set[int] = set()
-        for node in ast.walk(tree):
-            # 裸表达式语句（值**无处可去**）⇒ 与 `_backend_user_strings()` 的第 ① 条同口径，跳过
-            # ⚠️ 要连**子孙一起跳** —— 只跳 `node.value` 的话，里面那个 `type(exc).__name__`
-            #    节点仍会被 `walk` 单独访问到（2026-10-01 自证 `③″` 当场抓到：假红）。
-            if isinstance(node, ast.Expr) and not isinstance(node.value, ast.Constant):
-                skip.add(id(node))            # ⚠️ 连**语句节点自己**一起跳（`Expr` 的 segment 就是整句）
-                for sub in ast.walk(node.value):
-                    skip.add(id(sub))
-        hit: set[int] = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Constant):        # 普通字符串 / docstring：值里没有运行期信息
-                continue
-            if id(node) in skip:
-                continue
-            seg = ast.get_source_segment(src, node) or ""
-            if not any(k in seg for k in _EXC_TECH):
-                continue
-            a = node.lineno
-            b = node.end_lineno or a
-            span = "\n".join(lines[a - 1:b])
-            if any(k in span for k in _EXC_ALLOW):
-                continue
-            hit.add(a)
         rel = p.relative_to(_APP_DIR.parent.parent).as_posix()
-        bad += [f"{rel}:{ln}" for ln in sorted(hit)]
+        bad += [f"{rel}:{ln}" for ln in _exception_class_hits(src)]
     assert not bad, (
         "**用户可见的串**里拼了**异常的类名 / 原文**（守则 §3.1 细节不上屏 / §3.7 人话＋下一步）：\n  "
         + "\n  ".join(bad)
@@ -518,7 +536,7 @@ def test_用户可见串里不许拼异常正文():
     —— `mech_ui.parse_mech_values` 抛的是**我们自己写的人话**（`「辅材」不是数字：'abc'`）。
 
     ⚠️ **能证伪**：任一处 `except Exception as exc:` 里写 `f"失败：{exc}"` ⇒ 本件必红；
-       而写在 `except MustReportError` / `error_message=` 那一行 ⇒ **不红**（自证 = `tools/mut/_mut_exctext.py`）。
+       而写在 `except MustReportError` / `error_message=` 那一行 ⇒ **不红**（自证 = `tools/mut/_归档-20261009/_mut_exctext.py`）。
     """
     import ast
     import re as _re

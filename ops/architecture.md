@@ -17,7 +17,7 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 | tools | 检查与操作工具的用途、读写边界见 tools/README.md；不以检查结果替代业务口径。 |
 | ops | 服务、部署、备份与恢复；凭据仅从.env读取，不硬编码。 |
 
-分层守卫见 backend/tests/test_layering.py 与 tools/mut/_mut_layering.py；core业务注入不另抄取数实现。
+分层守卫见 backend/tests/test_layering.py；历史自证在 tools/mut/_归档-20261009/_mut_layering.py；core业务注入不另抄取数实现。
 
 ## 二、共用实现约束
 

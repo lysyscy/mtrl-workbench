@@ -35,7 +35,7 @@
 |---|---|---|---|---|
 | 1 | **分层 · 命名 · 怎么加一份新文档** | 根 `README.md` §二 / §四 / §七 | ① `ops/docs-governance.md` 本件 §一 · ② `tools/audit/audit_meta.py` 的 `PLANS_LIVE` / `WORK_DIR_ALLOW` / `WORK_NAME_PREFIX` / `ROOT_MD_ALLOW` ＋ ⭐ `tools/audit/audit_common.py` 的 `ROOT_ALLOW`（**仓库根**允许的**常驻**条目 · `T24` 判）＋ 仓根 `.gitignore`（**暂存**件表 —— `T24` 也认它；`T25` 另核它里面写的**落点路径**真存在） · ③ AGENTS.md的路由（若指向变动件）；宿主入场RULE只指AGENTS | `T12` · `T24` · `T25` |
 | 2 | **硬数字**（行数预算 · 上限 · 阈值） | `ops/阈值表.md`（表里写**出处**） | ① 对应常量（`audit_meta.DOC_BUDGETS` / `LINE_WALL_CHARS` …）· ② 同批变异件 `tools/mut/_mut_*.py`（**撤判据必须同批撤靶**） | `T4` ③ · `T5` · `T10` · `T21` |
-| 3 | **尺子清单与条数** | `tools/oneoff/_run_rulers.py`（唯一定义处） | ① `tools/audit/doc_audit.py` 头部权威表 · ② `tools/README.md` 分目录地图 · ③ `ops/阈值表.md`（若新增阈值） | `T17` 僵尸闸门 |
+| 3 | **尺子清单与条数** | `tools/oneoff/_run_rulers.py`（CMDS固定检查＋SELFTESTS按依赖自测，唯一定义处） | ① `tools/audit/doc_audit.py` 头部权威表 · ② `tools/README.md` 分目录地图 · ③ `ops/阈值表.md`（若新增阈值） | `T17` 僵尸闸门 |
 | 4 | **工作记录落点 · 生命周期 · 文头** | `.codebuddy/work/README.md` §一 / §二 / §四 | ① 本件 §三 · ② `audit_work.WORK_HEADER_KEYS` / `WORK_HEAD_LINES` / `DOWNGRADE_STATES`（**判据与模板必须同一个词** —— 踩过：模板写「什么时候读」、判据认「何时读」⇒ 5 件白挂黄）＋ ⭐ 它 §四 里那行**「落地位置」声明**的写法（＝ `T26` 的输入）＋ ③ ⭐ **降档动作**命令的落点表 ＋ 索引登记表头（`tools/oneoff/_doc_downgrade.py` ＋ `.codebuddy/plans/archive/归档-留痕索引-20261005.md`） | `T14` · `T15` · `T26` |
 | 5 | **尾巴与票** | 计划 `§15` 台账（一行一票）＋ `ops/agents/issue-tracker.md`（协议） | ① 票文件 `.codebuddy/work/50-tickets/TAIL-<编号>-<短名>.md` · ② `§14.3` 排期 ③ 两处计数 —— ⛔ 三处同改，**一律走 `_tail_open.py` / `_tail_close.py`，别手改** | `T6` · `T11` |
 

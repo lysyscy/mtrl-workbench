@@ -119,11 +119,11 @@ def _hook_rulers() -> list[list[str]]:
     ⚠️ 解析**失败要报错**，⛔ 不许 `IndexError` 崩在半路（那是"钩子改版式了"的信号）。
     """
     txt = (ROOT / HOOK_REL).read_text(encoding="utf-8")
-    try:
-        block = txt.split("for spec in \\", 1)[1].split("\ndo", 1)[0]
-        specs = [s.split() for s in re.findall(r'"([^"]+)"', block)]
-    except IndexError as exc:                      # pragma: no cover
-        raise SystemExit("⛔ 解析 %s 的尺子名单失败（钩子改版式了？）⇒ 本件需重定靶：%s" % (HOOK_REL, exc))
+    # 只认实际循环行；注释中的同名字面和引号不能成为执行清单。
+    match = re.search(r"(?ms)^for spec in \\\n(.*?)^do\s*$", txt)
+    if match is None:
+        raise SystemExit("⛔ 解析 %s 的尺子名单失败：实际循环不在位" % HOOK_REL)
+    specs = [s.split() for s in re.findall(r'"([^"\n]+)"', match.group(1))]
     assert len(specs) >= RULE_COUNT_MIN, \
         f"从 {HOOK_REL} 只解析出 {len(specs)} 条尺子（期望 ≥{RULE_COUNT_MIN}）⇒ 本件需重定靶"
     return specs
@@ -413,7 +413,7 @@ def _selftest() -> int:
         # ⚠️ **只在有红时打关键行** —— 全绿那行含「必须修 0」⇒ 会被收工闸门的摘要过滤选中，
         #   把真正的结论行「自测 N/N」挤出前三行（`refs_query` 那行会被挡住；实测才发现）。
         print("     %-34s rc=%d 红=%s%s" % (nm, r, n, ("  " + k[:46]) if n != 0 else ""))
-    chk("跑前无红", all(n <= 0 for _nm, _r, n, _k in before))
+    chk("跑前各项退出0且无红", all(r == 0 and n <= 0 for _nm, r, n, _k in before))
     y_base = next((int(re.search(r"疑似 (\d+)", k).group(1)) for nm, _r, _n, k in before
                    if nm.endswith("doc_audit.py") and "疑似" in k), -1)
 
@@ -479,7 +479,7 @@ def _selftest() -> int:
         after = _ruler_state()
         amap = {x[0]: x for x in after}
         same_rc = [x[0] for x in before if amap[x[0]][1] != x[1]]
-        reds = [x[0] for x in after if x[2] > 0]
+        reds = [x[0] for x in after if x[1] != 0 or x[2] > 0]
         y_now = next((int(re.search(r"疑似 (\d+)", k).group(1)) for nm, _r, _n, k in after
                       if nm.endswith("doc_audit.py") and "疑似" in k), -2)
         t26_gone = not any(h["rel"] == SAMPLE_REL for h in check_downgrade_candidates())

@@ -54,6 +54,9 @@ def _main():
         ('机器输入使用者漏选', "if Path(name).name in p.read_text(encoding='utf-8')", "if False and Path(name).name in p.read_text(encoding='utf-8')"),
         ('旧dirty当新增', '    result = {}\n    for name in names:', "    result = {name: (None, (root/name).read_bytes()) for name in names if (root/name).is_file() and not name.startswith('.codebuddy/work/00-scratch/')}\n    for name in names:"),
         ('必要语法检查漏选', "'tools/audit/syntax_audit.py', 'tools/audit/ui_parity.py',", "'tools/audit/ui_parity.py',"),
+        ('自测依赖冒充全部消费者已证', "pending.append('共享检查模块需查明调用者：'+name)", 'pass'),
+        ('工具依赖漏自测', 'checks |= {rel for rel, deps in SELFTEST_DEPENDENCIES.items() if names & deps}', 'checks |= set()'),
+        ('完整入口固定工具自测', "checks = required_checks('full', commands) | (checks & set(SELFTEST_DEPENDENCIES))", 'checks = {rel for rel, _ in commands}'),
         ('新检查无分类被跳过', 'return {rel for rel, _ in commands} - required_checks', 'return set() # required_checks'),
     ]:
         assert src.count(old) == 1, label+'：靶锚必须唯一'

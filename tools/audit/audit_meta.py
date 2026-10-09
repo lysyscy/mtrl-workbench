@@ -1069,7 +1069,7 @@ LIVE_MACHINE_REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("backend/app/**/*.py", (".py",)),
     ("backend/tests/**/*.py", (".py",)),
     ("tools/audit/**/*.py", (".py",)),
-    ("tools/mut/**/*.py", (".py",)),
+    ("tools/mut/_mut_*.py", (".py",)),
     ("tools/probe/**/*.py", (".py",)),
     ("ops/*.ps1", (".ps1",)),
     (".codebuddy/rules/**/*.mdc", (".mdc",)),
@@ -1184,7 +1184,7 @@ def gate_commands() -> list:
     """现读唯一 CMDS 的路径及参数，不执行导入或历史文档中的代码。"""
     sys.path.insert(0, str(REPO_ROOT / "tools/oneoff"))
     from _gatescope import commands
-    return commands(REPO_ROOT)
+    return commands(REPO_ROOT) + commands(REPO_ROOT, 'SELFTESTS')
 
 
 def check_gate_liveness() -> list[dict]:
