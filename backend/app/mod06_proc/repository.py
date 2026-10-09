@@ -16,10 +16,12 @@ from app.mod06_proc.domain import CATEGORIES, MECH_COLUMNS, MATERIAL_KEYS
 from app.mod06_proc.models import (
     BATCH_ACTIVE,
     BATCH_ROLLED_BACK,
+    BATCH_REPLACED,
     ProcCutoff,
     ProcHistoryBatch,
     ProcHistorySnapshot,
     ProcMechManual,
+    ProcMechImportChange,
 )
 
 
@@ -45,36 +47,28 @@ def load_mech(s: Session) -> list[dict]:
 
 
 def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: int | None = None):
-    """写机械 6 列手录值（**旁路载体**：不被重抓 / 重导覆盖，§5.2.5 ③）—— ⭐ **只服务正式段**。
-
-    ⭐⭐ **挡板就在这一处（唯一写出口）**（用户 2026-09-26 裁定：「机械费手录**仅限于正式启用系统后**」）：
-      该月若落**历史段**（`ym ≤ 该项目的截止核算月`）⇒ **拒绝**（历史段的机械费以**过程资料导入**为准）。
-      ⚠️ 为什么挡在这里、而不是只在界面上：界面只挡"人点的路"，脚本 / 接口绕过去照样写
-         —— 而页面**只读快照** ⇒ 录进去的值**根本不显示** ⇒ 用户以为存了、去看却没有
-         （同一格两个来源 = 谁也说不清哪个对；这正是本条口径要堵的）。
-    """
-    from app.core.errors import MustReportError
+    """任意月份机械手录；只覆盖提交列，并撤除这些格的导入来源归属。"""
     from app.core.money import require_non_negative
-    from app.mod06_proc.domain import SECTION_HISTORY, section_of
+    from app.mod06_proc.domain import normalize_ym
 
-    ym = str(ym or "")
-    cutoff = load_cutoff(s, warehouse=warehouse)
-    if section_of(ym, cutoff) == SECTION_HISTORY:
-        raise MustReportError(
-            f"{ym} 这一格不能手录 —— 它属**历史段**（{warehouse} 的截止核算月 = {cutoff}）："
-            "历史段的机械费以「**过程资料导入**」的值为准（要改请改 Excel 后重导）。"
-            "机械费手录只在**正式段**（截止月之后）用。"
-        )
-
-    rows = list(s.execute(select(ProcMechManual)).scalars())
+    ym = normalize_ym(ym)
+    if not ym:
+        raise ValueError("核算月认不出，请写 YYYY-MM")
+    parsed = {key: require_non_negative(value, field=key) for key, value in values.items()
+              if key in {f"mech_{i}" for i in range(len(MECH_COLUMNS))}}
+    rows = list(s.execute(select(ProcMechManual).where(
+        ProcMechManual.warehouse_name == warehouse, ProcMechManual.ym == ym)).scalars())
     found = next((x for x in rows if x.ym == ym and x.warehouse_name == warehouse), None)
     if found is None:
         found = ProcMechManual(ym=ym, warehouse_name=warehouse, project_id=project_id)
         s.add(found)
-    for i in range(len(MECH_COLUMNS)):
-        key = f"mech_{i}"
-        if key in values:
-            setattr(found, key, require_non_negative(values[key], field=key))
+    origins = dict(found.source_batches or {})
+    origins["__manual"] = "manual"
+    for key, value in parsed.items():
+        setattr(found, key, value)
+        origins.pop(key, None)
+    found.source_batches = origins
+    found.updated_at = datetime.now()
     s.flush()
     return found
 
@@ -110,6 +104,8 @@ def load_history(s: Session, *, active_only: bool = True) -> list[dict]:
             continue
         row = {"ym": r.ym or "", "warehouse": r.warehouse_name or "", "batch_no": r.batch_no}
         for key, (prefix, idx) in mapping.items():
+            if prefix != "mech" and r.material_present is False:
+                continue
             row[key] = getattr(r, f"{prefix}_{idx}", 0)
         out.append(row)
     return out
@@ -157,13 +153,20 @@ def load_cutoffs(s: Session) -> dict[str, str]:
     return out
 
 
-def set_cutoff(s: Session, *, warehouse: str, cutoff_ym: str) -> ProcCutoff:
+def load_mechanical_cutoffs(s: Session) -> dict[str, str]:
+    return {r.warehouse_name: str(r.mechanical_cutoff_ym or "")
+            for r in s.execute(select(ProcCutoff)).scalars()}
+
+
+def set_cutoff(s: Session, *, warehouse: str, cutoff_ym: str, mechanical_cutoff_ym: str | None = None) -> ProcCutoff:
     rows = list(s.execute(select(ProcCutoff)).scalars())
     found = next((x for x in rows if x.warehouse_name == warehouse), None)
     if found is None:
         found = ProcCutoff(warehouse_name=warehouse)
         s.add(found)
     found.cutoff_ym = str(cutoff_ym or "")
+    if mechanical_cutoff_ym is not None:
+        found.mechanical_cutoff_ym = mechanical_cutoff_ym
     found.updated_at = datetime.now()
     s.flush()
     return found
@@ -172,47 +175,75 @@ def set_cutoff(s: Session, *, warehouse: str, cutoff_ym: str) -> ProcCutoff:
 def import_snapshot(
     s: Session, *, warehouse: str, rows: list[dict], batch_no: str, operator: str,
     cutoff_ym: str | None = None, project_id: int | None = None,
+    material_cutoff_ym: str | None = None, mechanical_cutoff_ym: str | None = None,
 ) -> ProcHistoryBatch:
-    """把一批定稿快照写进**历史段**（§5.2.5 ①）。
+    """两个截止只筛选本次输入；材料替换项目历史，机械逐月列覆盖统一有效值。"""
+    from app.core.money import to_money
+    from app.mod06_proc.importer import selected_cutoffs
+    from app.mod06_proc.domain import normalize_ym
+    from decimal import Decimal
 
-    - **一次设定、可改**：`cutoff_ym` 给定则用它；**不给 ⇒ 默认 = 导入数据里最大的核算月**（001-05）。
-    - ⭐ **不动正式段**：本函数只写快照表与截止值，**不触碰库存单据 / 机械手录**（001-04）。
-    """
     if not rows:
-        raise ValueError("历史段导入为空 —— 不写入（避免把历史段清空）")
-    # ⭐⭐ 2026-09-26（用户报「**截止核算月的格式要求一下吧**」）—— **"要求"必须有人执行**：
-    #    改前这一格**原样入库**（`cutoff_ym` 直接写进 `proc_cutoff`）⇒ 写个 `2026/8` / `八月`
-    #    都能静默存进去；而**分段是按字符串比的**（`domain.section_of`：`ym <= cutoff`）
-    #    ⇒ 分段会**悄悄错**（页面上表现成"某个月莫名其妙算到了另一段"）。
-    #    ⇒ 归一出口 = `domain.normalize_ym`（与「核算月」同一处，⛔ 不另写一套）；
-    #      **认不出当场拒**（说清要什么形态），含糊的写法（`2026/8`）**照收并归一**成 `2026-08`。
-    cutoff = str(cutoff_ym or "").strip()
-    if cutoff:
-        from app.core.errors import MustReportError
-        from app.mod06_proc.domain import normalize_ym
-
-        norm = normalize_ym(cutoff)
-        if not norm:
-            raise MustReportError(
-                f"截止核算月认不出：{cutoff!r} —— 请写 **YYYY-MM** 这种形态（如 `2026-08`）；"
-                "留空 = 取本批里最大的核算月。")
-        cutoff = norm
-    else:
-        cutoff = max(str(r.get("ym") or "") for r in rows) or ""
+        raise ValueError("导入为空，原数据未改动")
+    limits = selected_cutoffs(rows, cutoff_ym=cutoff_ym, material_cutoff_ym=material_cutoff_ym,
+                             mechanical_cutoff_ym=mechanical_cutoff_ym)
+    cutoff, mech_cutoff = limits["material_cutoff_ym"], limits["mechanical_cutoff_ym"]
     mapping = _snapshot_keys()
-
-    batch = ProcHistoryBatch(batch_no=batch_no, warehouse_name=warehouse, cutoff_ym=cutoff,
-                             row_count=len(rows), operator=operator, status=BATCH_ACTIVE)
-    s.add(batch)
-    for r in rows:
-        snap = ProcHistorySnapshot(batch_no=batch_no, ym=str(r.get("ym") or ""),
-                                   warehouse_name=warehouse, project_id=project_id)
+    planned = {}
+    for row in rows:
+        ym = normalize_ym(row.get("ym"))
+        if not ym:
+            raise ValueError("核算月认不出，原数据未改动")
         for key, (prefix, idx) in mapping.items():
-            if r.get(key) not in (None, ""):
-                setattr(snap, f"{prefix}_{idx}", r[key])
-        s.add(snap)
-    set_cutoff(s, warehouse=warehouse, cutoff_ym=cutoff)
-    s.flush()
+            limit = mech_cutoff if prefix == "mech" else cutoff
+            if (limit and ym > limit) or row.get(key) in (None, ""):
+                continue
+            value = to_money(row[key])
+            monthly = planned.setdefault(ym, {})
+            monthly[key] = monthly.get(key, Decimal("0.00")) + value
+    if not planned:
+        raise ValueError("截止月及以前没有可写入的数据，原数据未改动")
+    with s.begin_nested():
+        for old in load_batches(s):
+            if old.warehouse_name == warehouse and old.status == BATCH_ACTIVE:
+                old.status = BATCH_REPLACED
+        batch = ProcHistoryBatch(batch_no=batch_no, warehouse_name=warehouse, cutoff_ym=cutoff,
+                                 mechanical_cutoff_ym=mech_cutoff, row_count=len(planned),
+                                 operator=operator, status=BATCH_ACTIVE)
+        s.add(batch)
+        # Flush the unique batch key before changing any effective values.
+        s.flush()
+        effective_by_month = {row.ym: row for row in s.execute(
+            select(ProcMechManual).where(ProcMechManual.warehouse_name == warehouse)).scalars()
+            if row.warehouse_name == warehouse} if any(
+                key.startswith("mech_") for keys in planned.values() for key in keys) else {}
+        for ym, keys in planned.items():
+            values = {f"{mapping[key][0]}_{mapping[key][1]}": value for key, value in keys.items()}
+            s.add(ProcHistorySnapshot(batch_no=batch_no, ym=ym, warehouse_name=warehouse,
+                                      project_id=project_id,
+                                      material_present=any(k in MATERIAL_KEYS for k in keys), **values))
+            mechanical = {key: value for key, value in keys.items() if key.startswith("mech_")}
+            if not mechanical:
+                continue
+            effective = effective_by_month.get(ym)
+            if effective is None:
+                effective = ProcMechManual(ym=ym, warehouse_name=warehouse, project_id=project_id,
+                                           **{f"mech_{i}": 0 for i in range(len(MECH_COLUMNS))})
+                s.add(effective)
+                effective_by_month[ym] = effective
+            origins = dict(effective.source_batches or {})
+            if not effective.id:
+                origins["__created_by"] = batch_no
+            for key, value in mechanical.items():
+                s.add(ProcMechImportChange(batch_no=batch_no, warehouse_name=warehouse, ym=ym,
+                                          column_key=key, before_amount=getattr(effective, key) or 0,
+                                          before_batch=origins.get(key, "")))
+                setattr(effective, key, value)
+                origins[key] = batch_no
+            effective.source_batches = origins
+            effective.updated_at = datetime.now()
+        set_cutoff(s, warehouse=warehouse, cutoff_ym=cutoff, mechanical_cutoff_ym=mech_cutoff)
+        s.flush()
     return batch
 
 
@@ -224,7 +255,54 @@ def rollback_batch(s: Session, *, batch_no: str) -> int:
     batch = batches[0]
     count = sum(1 for r in s.execute(select(ProcHistorySnapshot)).scalars()
                 if r.batch_no == batch_no)
+    if batch.status == BATCH_ROLLED_BACK:
+        return 0
+    changes = [change for change in s.execute(select(ProcMechImportChange).where(
+        ProcMechImportChange.warehouse_name == batch.warehouse_name)).scalars()
+        if change.warehouse_name == batch.warehouse_name]
+    change_lookup = {(c.batch_no, c.ym, c.column_key): c for c in changes}
+    batch_lookup = {b.batch_no: b for b in load_batches(s)}
+    effective_lookup = {r.ym: r for r in s.execute(select(ProcMechManual).where(
+        ProcMechManual.warehouse_name == batch.warehouse_name)).scalars()
+        if r.warehouse_name == batch.warehouse_name}
+    for change in changes:
+        if change.batch_no != batch_no:
+            continue
+        effective = effective_lookup.get(change.ym)
+        if effective is None:
+            continue
+        origins = dict(effective.source_batches or {})
+        if origins.get(change.column_key) != batch_no:
+            continue
+        # A predecessor that was separately rolled back must not be resurrected.
+        previous = change
+        visited = set()
+        while previous.before_batch and previous.before_batch not in visited:
+            visited.add(previous.before_batch)
+            prior_batch = batch_lookup.get(previous.before_batch)
+            if prior_batch is None or prior_batch.status != BATCH_ROLLED_BACK:
+                break
+            prior_change = change_lookup.get((previous.before_batch, change.ym, change.column_key))
+            if prior_change is None:
+                break
+            previous = prior_change
+        setattr(effective, change.column_key, previous.before_amount)
+        if previous.before_batch:
+            origins[change.column_key] = previous.before_batch
+        else:
+            origins.pop(change.column_key, None)
+        effective.source_batches = origins
+        effective.updated_at = datetime.now()
     batch.status = BATCH_ROLLED_BACK
+    for effective in effective_lookup.values():
+        origins = dict(effective.source_batches or {})
+        creator = origins.get("__created_by")
+        creator_batch = batch_lookup.get(creator)
+        no_remaining_import = not any(origins.get(f"mech_{i}") for i in range(len(MECH_COLUMNS)))
+        if (creator and creator_batch is not None and creator_batch.status == BATCH_ROLLED_BACK
+                and not origins.get("__manual") and no_remaining_import
+                and all((getattr(effective, f"mech_{i}") or 0) == 0 for i in range(len(MECH_COLUMNS)))):
+            s.delete(effective)
     s.flush()
     return count
 

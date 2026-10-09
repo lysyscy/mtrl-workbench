@@ -50,6 +50,7 @@ class DomainSpec:
     note: str = ""                               # 界面「本域要求」那段
     keep_note: str = ""                          # 「刻意不采」说明（原样保留的列）
     batch: bool = False                          # 有无批次回滚
+    protect_populated_columns: bool = False      # 记忆空映射不得遮掉自动认出的有值列
     #: ⭐ **明确不采的列**：`((列名的任一写法, 为什么不采), …)`（写法按 `mapping.normalize` 比）。
     #:
     #: ⚠️ 为什么要这一条（`B5-0` 接 `m06` 实测逼出来的）：机械 6 列**认得出但按口径不导入**，

@@ -195,17 +195,11 @@ def test_待建档入口与清单同源且与指认那路各报各的():
     assert "ARCP_ERR ? " in SHELL and "待建档清单没取到" in SHELL, "取不到时页面上要说出来"
     assert "document.getElementById('archBox')" in SHELL and "host.prepend(abox)" in SHELL, \
         "卡片要**幂等**注入（先撤旧的再按当前清单重建）"
-    # ⭐⭐ 2026-09-29（`TAIL-190` 用户真机报障）：**丢掉的那几条也要画出来** ——
-    #    报障形态 = 「回执说有待人工 2 条、而卡是空的」（那 2 条是「壳下具体小微」，按设计不在卡上）
-    #    ⇒ ① 触发条件不能只看清单长度（否则**整张卡都不出现**）；
-    #       ② 后端算好的「为什么丢 ＋ 该去哪」要接上（壳侧⛔ 不重算）；③ 卡片头上写明还有几条不属本卡。
-    assert "if (ARCP.length || ARCP_ERR || ARCP_DROP.length)" in SHELL, \
-        "卡片触发条件还是只看清单长度 ⇒ 清单为空、但「有丢掉的那几条」时**整张卡都不出现**（＝报障现场）"
-    assert "ARCP_DROP" in SHELL and "d.dropped_items" in SHELL, \
-        "后端算好的「为什么丢掉 ＋ 该去哪」没接上（壳侧⛔ 不许自己重算）"
-    assert "另有 ${ARCP_DROP.length} 条不属本卡" in SHELL, "卡片头上没说清还有几条不属本卡"
-    assert "不是</b>报错" in SHELL, \
-        "没写明「卡里没有它们 ≠ 报错」—— 用户看到空卡只会以为系统坏了"
+    # TAIL-263 隐藏其他同步条目，保留实际待办/失败；源同步数据仍接入而不删除。
+    assert "if (ARCP.length || ARCP_ERR)" in SHELL, "实际待办或读取错误必须显示"
+    assert "ARCP_DROP = d.dropped_items || [];" in SHELL, "其他同步源数据不得删除"
+    assert "另有 ${ARCP_DROP.length} 条不属本卡" not in SHELL
+    assert "ARCP_DROP.map(" not in SHELL
     assert "ARCP_SRC" in SHELL, "要如实标清单来源（⛔ 不装作「刚刚」）"
 
 

@@ -260,6 +260,8 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .mask{position:fixed;inset:0;background:var(--mask);display:flex;align-items:center;justify-content:center;z-index:90;padding:calc(24px * var(--fscale))}
 .modal{background:var(--sf);border-radius:10px;box-shadow:0 12px 32px var(--shadow-md);width:100%;max-width:calc(640px * var(--fscale));max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
 .modal.wide{max-width:calc(940px * var(--fscale))}
+.modal.month-picker{max-width:calc(760px * var(--fscale));min-height:min(calc(500px * var(--fscale)),86vh)}
+.modal.month-picker .mb{flex:1}
 .modal h3{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));border-bottom:1px solid var(--bd);font-size:calc(13.5px * var(--fscale));font-weight:500;display:flex;align-items:center}
 .modal h3 .x{margin-left:auto;cursor:pointer;color:var(--mut);font-size:calc(17px * var(--fscale));line-height:1;padding:0 3px}
 .modal h3 .x:hover{color:var(--dg-d)}
@@ -321,6 +323,50 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .link{color:var(--pri);cursor:pointer;text-decoration:none;border-bottom:1px dashed var(--pri-hl)}
 .link:hover{color:var(--pri-d);border-bottom-style:solid}
 
+
+/* 待办工作区与导入向导：宽度随内容，沿用主题与用户字号。 */
+.todo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(14px * var(--fscale))}
+.todo-grid .kpi{padding:calc(20px * var(--fscale));display:grid;grid-template-columns:1fr auto;gap:calc(12px * var(--fscale));margin:0;box-shadow:none}
+.todo-grid .k{font-size:calc(15px * var(--fscale));font-weight:600;align-self:center}
+.todo-grid .v{font-size:calc(28px * var(--fscale));grid-column:2;grid-row:1}
+.todo-grid .s{grid-column:1 / -1;line-height:1.7;display:flex;justify-content:space-between;gap:calc(16px * var(--fscale));align-items:start}
+.todo-grid .s .link{white-space:nowrap;font-weight:600}
+.todo-grid .todo-clear{border-color:var(--bd);background:var(--bg)}
+.todo-grid .todo-clear .v{color:var(--mut)}
+.imp-workspace{max-width:1500px;margin:0 auto}
+.imp-workspace .tw{min-height:0}
+.imp-workspace .card{margin-top:calc(12px * var(--fscale))}
+.imp-summary{display:flex;gap:calc(20px * var(--fscale));align-items:center;flex-wrap:wrap;padding:calc(12px * var(--fscale)) 0;border-top:1px solid var(--bd)}
+.imp-summary strong{color:var(--tx)}
+.imp-actions{display:flex;align-items:center;gap:calc(10px * var(--fscale));flex-wrap:wrap;margin-top:calc(16px * var(--fscale));padding-top:calc(12px * var(--fscale));border-top:1px solid var(--bd)}
+.imp-metrics{display:flex;gap:calc(28px * var(--fscale));flex-wrap:wrap;padding:calc(16px * var(--fscale));background:var(--bg);border:1px solid var(--bd);border-radius:6px}
+.imp-metrics .metric{display:flex;gap:calc(8px * var(--fscale));align-items:baseline}
+.imp-metrics b{font-size:calc(21px * var(--fscale))}
+.imp-block{border:1px solid var(--bd);border-radius:6px;margin-top:calc(10px * var(--fscale));padding:calc(10px * var(--fscale))}
+.imp-block summary{cursor:pointer;font-weight:600;line-height:1.6}
+.imp-block .tw{margin-top:calc(8px * var(--fscale))}
+.t-plan-missing{background:var(--bg);color:var(--mut);border-color:var(--bd)}
+.t-plan-notfound{background:var(--in-l);color:var(--in-d);border-color:var(--in-bd)}
+.t-plan-duplicate{background:var(--vi-l);color:var(--vi);border-color:var(--vi)}
+.t-plan-over{background:var(--dg-l);color:var(--dg-d);border-color:var(--dg-bd)}
+.t-plan-amount{background:var(--wn-l);color:var(--wn-d);border-color:var(--wn-bd)}
+@media(max-width:1000px){.todo-grid{grid-template-columns:1fr}.todo-grid .s{flex-wrap:wrap}}
+.set-layout{display:grid;gap:calc(14px * var(--fscale));width:100%}.set-layout .set-card{margin:0}
+.set-theme-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(170px * var(--fscale))),1fr));gap:calc(12px * var(--fscale))}
+.thcard.set-theme{display:flex;flex-direction:column;align-items:stretch;gap:calc(10px * var(--fscale));padding:calc(12px * var(--fscale));min-width:0;background:var(--sample-bg);color:var(--sample-tx);border:2px solid var(--sample-bd);position:relative}
+.thcard.set-theme.on{border-color:var(--sample-pri);box-shadow:0 0 0 2px var(--sample-pri)}
+.set-theme-preview{display:flex;height:calc(95px * var(--fscale));border:1px solid var(--sample-bd);border-radius:5px;overflow:hidden}
+.set-preview-sidebar{width:23%;padding:calc(12px * var(--fscale)) calc(6px * var(--fscale));background:var(--sample-pri);display:flex;flex-direction:column;gap:calc(8px * var(--fscale))}
+.set-preview-sidebar i{height:calc(4px * var(--fscale));background:var(--sample-bg);opacity:.75;border-radius:2px}
+.set-preview-main{flex:1;min-width:0;padding:calc(12px * var(--fscale));display:flex;flex-direction:column;gap:calc(8px * var(--fscale))}
+.set-preview-title{background:var(--sample-tx);height:calc(5px * var(--fscale));width:55%;opacity:.65;border-radius:2px}
+.set-preview-toolbar{background:var(--sample-pri);height:calc(10px * var(--fscale));width:32%;border-radius:3px}
+.set-preview-table{display:flex;flex-direction:column;gap:calc(5px * var(--fscale));border:1px solid var(--sample-bd);padding:calc(5px * var(--fscale));flex:1}.set-preview-table i{height:2px;background:var(--sample-bd)}
+.set-theme-swatches{display:flex;gap:calc(7px * var(--fscale));justify-content:center}.set-theme-swatches i{height:calc(15px * var(--fscale));width:calc(15px * var(--fscale));border-radius:50%;border:1px solid var(--sample-bd)}
+.set-scale-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(150px * var(--fscale))),1fr));gap:calc(12px * var(--fscale))}
+.btn.set-scale{display:flex;flex-direction:column;align-items:center;gap:calc(12px * var(--fscale));padding:calc(20px * var(--fscale)) calc(12px * var(--fscale));min-width:0}
+.set-scale-preview{width:70%;height:calc(45px * var(--fscale));display:flex;flex-direction:column;justify-content:center;gap:calc(5px * var(--fscale));color:inherit}
+.set-scale-preview i{display:block;height:calc(3px * var(--fscale) * var(--sample-scale));background:currentColor;opacity:.45;border-radius:2px}.set-scale-preview i:nth-child(2){width:80%}.set-scale-preview i:nth-child(3){width:60%}
 </style>
 </head>
 <body>
@@ -369,7 +415,7 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
    ── ② 页面视图 `V.*`（**按代码顺序**，不是导航顺序）：`V.home` 看板 · `V.m03` 付款通知书 · `V.m04` 付款计划 ·
       `V.m05` 付款流水与欠款统计 · `V.m01` 项目档案 · `V.m02` i8 接入层 · `V.m06` 过程资料 ·
       `V.m07` 收发结存与月度会大表 · `V.m08` 库存单据与调整单 · `V.m09` 特殊费用月报表 · `V.m10` 机械费 ·
-      `V.m12` 差异登记 · `V.m11` 集采台账 · `V.m13` 导出与删除 · `V.m14` 规则配置 · `V.m15` 用户管理
+      `V.m12` 差异登记 · `V.m11` 集采台账 · `V.m14` 规则配置 · `V.m15` 用户管理
    ── ③ 动作与事件：`18. 交互处理器`（`const ACT=` —— 全部交互动作都在这）· `事件委托`
      （click / change / input / keydown ＋ 点面板外收起 —— 都在 `actions.js` 尾部，**没有名单**）·
      文件最末的「启动」区块（搜 `render()` 的首次调用）
@@ -473,10 +519,10 @@ V.home=()=>{
   const fDone=!hErr&&HC.fetchDue===0;                                       /* 本月有没有**成功**的抓取 */
   const fFail=hErr?null:HL.fetchFail;                                       /* 最近一次抓取失败 */
   const pFail=hErr?null:HL.printFail;                                       /* 打印投递失败 */
-  const tN=nUn+nOwn+nPl+nAdj+ph.length+nNoLink+nVoidJ+(fDone?0:1)+(fFail?1:0)+(pFail?1:0);
+  const tN=nOwn+nPl+ph.length+nNoLink+nVoidJ+(fDone?0:1);
   /* 瓦片出口：`k` 把手 · `n` 待办数 · `cls` 语义色 · `v` 显示值 · `s` 说明（自带尾分隔）· `pg` 落点页 · `tx` 链接文字 */
-  const tile=(k,n,cls,t,v,s,pg,tx)=>'<div class="kpi '+cls+'" data-todo="'+k+'" data-n="'+n+'"><div class="k">'+t
-    +'</div><div class="v">'+v+'</div><div class="s">'+s+'<span class="link" data-act="go" data-k="'+pg+'" tabindex="0" role="button">'+tx+' →</span></div></div>';
+  const tile=(k,n,cls,t,v,s,pg,tx)=>'<div class="kpi '+(n?cls:'todo-clear')+'" data-todo="'+k+'" data-n="'+n+'"><div class="k">'+t
+    +'</div><div class="v">'+v+'</div><div class="s"><span>'+s+'</span><span class="link" data-act="go" data-k="'+pg+'" tabindex="0" role="button">'+tx+' →</span></div></div>';
   /* ⚠️ ⑦⑬⑭ 三格**依赖取数**：拿不到就**如实说**（显「—」＋原因），
      ⛔ 不拿 0 冒充"没有待办"（铁律 4：「没数据就留空 / 标待接通，不写 0 冒充」）。 */
   const runTile=(k,n,cls,t,v,s,pg,tx)=>hErr
@@ -488,32 +534,15 @@ V.home=()=>{
      ⚠️ 上面那几个口径表达式（nUn / nAdj / fFail / pFail）**刻意留着** —— 它们是本域出口的留痕，
      删了会让"口径只许有一个出口"这条判据失去靶子（判据改指见 test_acc_home_todo.py）。 */
   const todoTiles=[
-    tile('ownership',nOwn,'wn','归属待指定',nOwn,'壳全名未判定归属的行（口径上常态为 0） · ','m03','去指定归属'),
-    tile('planUnmatched',nPl,'wn','付款计划未匹配',nPl,'审查结果 ≠ 完全匹配 · ','m04','去付款计划'),
+    tile('ownership',nOwn,'wn','归属待指定',nOwn,'尚未确定所属项目的通知书','m03','去指定归属'),
+    tile('planUnmatched',nPl,'wn','付款计划未匹配',nPl,'需要核对单据号或金额的计划行','m04','去付款计划'),
     tile('placeholder',ph.length,'wn','占位行待扶正',ph.length,ph.length?('陌生仓库占位行：「'+esc(ph.map(p=>p.name).join('、'))+'」 · '):'— · ','m01','去项目档案'),
     tile('jcUnlinked',nNoLink,'wn','集采未关联合同',nNoLink,'未挂合同的集采通知书<b>付不了款</b>（已付清的不计） · ','m03','去关联合同'),
     tile('voidJoint',nVoidJ,'dg','撤单但有牵涉',nVoidJ,'i8 已撤单却仍挂着付款 / 关联 —— 仍参与统计，要先撤销付款 / 解绑 · ','m03','去处理'),
     runTile('fetchDue',fDone?0:1,fDone?'ok':'wn','本月抓取',fDone?'已抓':'未抓','本月（'+bjMonth()+'）'+(fDone?'已有成功抓取':'尚无成功抓取')+' · ','m02','去抓取任务')
   ];
-  return `
-  <div class="tip"><b>只列「需要你处理的事」</b>，每条都能点进去处理。⭐ 本页<b>没有欠款数字</b> —— 欠款在「逐月欠款台账」看与导出。⚠️ <b>这里空着 ＝ 没事要办</b>（正常状态，不是坏了）。</div>
-  <!-- 2026-09-28（用户口径 · 看板清账）：这一行 4 张欠款 KPI（合计 / 辅材 / 机械 / 集采）<b>整行删掉</b>
-       —— 用户判「无用」。⛔ 别再加回来（删除已登记）。要看欠款去 m05（那边保留同源的 4 条 KPI）。
-       ⚠️ 本注释在模板字面量的文本区 ⇒ ⛔ 不许出现反引号（会截断模板串）。 -->
-  <div class="card"><h4>待办<span class="sp"><span class="mut sm">${tN?`共 ${tN} 项需处理`:'当前没有需要处理的事'} · 点链接直达</span></span></h4><div class="bd">
-    <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin:0">${todoTiles.join('')}</div>
-    <div class="tip" style="margin:calc(10px * var(--fscale)) 0 0"><b>怎么看这一页</b>：每项都是「有具体去处的事」—— 数字由数据源<b>实时算出</b>，点链接直达对应页面处理。⚠️ 业务事实「付款通知书一定早于仓库」被打破时，<b>占位行待扶正</b>会亮 —— 那是「陌生仓库」告警：说明有项目绕过了付款流程，供事后复盘。</div>
-  </div></div>
-  <!-- 2026-09-28（用户口径 · 看板清账）：删掉这一整行两张卡 —— 「付款通知书台账状态」（4 小 KPI
-       ＋ 流程说明）与「收发货结存 · 各仓库行数」（8 根柱），用户判「全无用」。⛔ 别再加回来（删除已登记）。
-       ⚠️ 那张柱图的数据本来就是写死的演示数组（WH），删掉正好。 -->
-  <details class="tip"><summary>状态一览 · 展开查看各对象的状态与流转</summary>${TBL({head:'<th>对象</th><th>状态</th><th>怎么流转</th>',sty:'color:var(--tx)',rows:[`
-    <tr><td>付款通知书</td><td>未付清 ⇄ 已付清</td><td>已付金额（流水汇总）≥ <b>审批金额</b> → 已付清；<b>无「部分付」</b>（统计字段只管算欠款、<b>不管判状态</b>）</td></tr>
-    <tr><td>项目</td><td>在建 / 归档</td><td>手工改；各处筛选<b>默认「在建」</b></td></tr>
-    <tr><td>集采合同存档</td><td>未存档 → 资产处 → 已存档</td><td>手工推进</td></tr>
-    <tr><td>集采合同纳入</td><td>纳入台账 / 不纳入</td><td>抓来即<b>纳入台账</b>；改「不纳入」后<b>抓取不覆盖</b></td></tr>
-    <tr><td>差异登记</td><td>待核对 → 已核对 / 差异保留</td><td>手工标记；差异清单可导出</td></tr>
-  `]})}</details>`;
+  return `<div class="card"><h4>待办<span class="sp"><span class="mut sm">${tN?`共 ${tN} 项需处理`:'当前没有需要处理的事'}</span></span></h4>
+    <div class="bd"><div class="todo-grid">${todoTiles.join('')}</div></div></div>`;
   /* 业务事实监测告警卡已撤（2026-09-14 看板改造）：① 事实 1 并入上方「占位行待扶正」瓦片
      —— 两者同一数据源（PJs.filter(p => p.name.startsWith('未建仓-'))）；
      ② 事实 2（档案行数 vs i8 仓库数）按 2026-09-12 用户口径「不需要这个监控相关的东西」随卡移除。 */
@@ -524,7 +553,6 @@ V.home=()=>{
    ===================================================================== */
 V.m03=()=>{
   const inM=n=>tmIn(fNt.month,n.date);
-  const win=plWin();
   const list=ntHit(fNt);
   const pk=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
   /* 「已勾选付款金额」取【本次应付】(payEff) 而非 i8 原值 n.pay —— 与「付款金额」列同义，
@@ -552,7 +580,7 @@ V.m03=()=>{
       <td class="sm">${esc(n.biz)}</td>
       <td class="sm">${esc(n.recv)}</td>
       <td>${(!n.excl&&!ntVoid(n)&&n.cat==='集采')
-        ? `<div style="display:flex;flex-direction:column;gap:calc(4px * var(--fscale))"><input class="inp plain${supHas(n)?' ed':''}" style="min-width:132px" data-act="editSup" data-id="${n.id}" value="${esc(n.sup)}" placeholder="人工录入" title="${supHas(n)?'自动匹配预填值 —— 尚未确认（点「采用」转正式值 / 直接改一下也算确认）':'该字段是「按供应商统计欠款」与集采台账付款引用的关联锚点（§6.6.3）'}">${supAutoCell(n)}${jcLinkCell(n)}</div>`
+        ? `<div style="display:flex;flex-direction:column;gap:calc(4px * var(--fscale))"><div style="display:flex;align-items:center;gap:calc(6px * var(--fscale))"><span class="${supHas(n)?'ed':''}">${esc(n.sup)||'<span class="mut">未录入</span>'}</span><button class="btn sm" data-act="supEditOpen" data-id="${n.id}">${n.sup?'修改':'录入'}</button></div>${supAutoCell(n)}${jcLinkCell(n)}</div>`
         : '<span class="mut sm" title="仅「集采」分类的记录可填该字段；i8 不提供该字段，抓取后为空">—</span>'}</td>
       <td class="sm">${esc(n.entry)}</td>
       <td class="num">${n.manual
@@ -578,7 +606,7 @@ V.m03=()=>{
         {tip:'当前筛选结果中「非剔除」行的合计 —— 剔除行不计入（与欠款口径一致）',leadCls:'fl'})
        : EMPTYROW(thCount(NT_THEAD), '当前筛选条件下没有付款通知书'+(ntDraftOn()?'（正在新增 1 行：填完点该行「保存」）':''), '换个筛选条件；或点右上角「＋ 手动新增通知书」补一行、或「抓取 i8 付款通知书（按月）」'));
   return `
-    <div class="tip"><b>付款状态</b>看<b>已付金额 vs 审批金额</b>（⛔ 不看统计金额）；<b>统计结算 / 统计付款金额</b>只能往下调（上限 = 审批金额）；<b>付款金额</b>手改只本次会话有效，<b>统计两金额</b>才持久（留痕、不被导入覆盖）。</div>
+    <div class="tip"><b>统计结算 / 统计付款金额</b>只能往下调（上限 = 审批金额）；<b>付款金额</b>手改只本次会话有效，<b>统计两金额</b>才持久（留痕、不被导入覆盖）。</div>
   <div class="selbar">
     <div class="m"><span class="k">已勾选</span><span class="v">${pk.length} 行</span>${pk.length>pkPay.length?` <span class="tag t-wn" title="选中的行里有剔除行 / i8 撤单行 —— 它们不进付款批次（付款闸只收付款候选）；能被勾选是为了另一件事：「恢复剔除」。下面两项金额只算能付款的那些行。">其中 ${pk.length-pkPay.length} 条不进付款批次</span>`:""}</div>
     <div class="dv"></div>
@@ -586,8 +614,8 @@ V.m03=()=>{
     <div class="dv"></div>
     <div class="m"><span class="k">已勾选本次应付</span><span class="v">${MONEY(pkP)}</span></div>
     <div class="act">
-      ${pk.length?'':`<span class="sm mut">可先「按 ${win.ym} 付款计划勾选」</span>`}
-      <button class="btn" data-act="planPick" ${win.open?'':'disabled'} title="${win.open?`按 ${win.ym} 付款计划把命中的通知书一次勾上（含跨月单据），之后再逐条核对、改金额`:`付款计划 ${win.from} 号起生效、月末截止；今天是 ${SYS_TODAY}，还没到付款窗口，暂不可勾选`}">按 ${win.ym} 付款计划勾选</button>
+      ${pk.length?'':`<span class="sm mut">可先「按付款计划勾选」</span>`}
+      <button class="btn" data-act="planPick" title="按<b>你选定月份</b>的付款计划，把命中的通知书一次勾上（含跨月单据），之后再逐条核对、改金额<br>⭐ ${esc(planYm)} · 月份可在点开后的选择里改；<b>任何时候都能点</b>（不再限「10 号 → 月底」，2026-10-08 口径）">按付款计划勾选${planYm?` · ${esc(planYm)}`:''}</button>
       <button class="btn" data-act="ntPrint" ${pk.length?'':'disabled'} title="把已勾选的付款通知书交给 i8 打印｜⚠️ 本系统不自建打印模板 —— 该功能不可用时会取消，不做兜底">批量打印${pk.length?` · ${pk.length} 条`:''}</button>
       <button class="btn pri" data-act="batchPay" ${pk.length?'':'disabled'} title="${pk.length?'把已勾选的付款通知书提交付款（剔除行 / i8 撤单行不进批次）':'未勾选时置灰 —— 先勾选要付的行'}">付款${pk.length?` · ${pk.length} 条`:''}</button>
     </div>
@@ -601,7 +629,7 @@ V.m03=()=>{
       ${enumVals('cat').map(c=>`<button class="btn" data-act="batchCatApply" data-c="${c}" ${pk.length?'':'disabled'} title="把已勾选的行直接改为「${c}」，一次点击完成（未勾选时置灰 —— 先勾选行再用）">→ ${c}</button>`).join('')}
       <span class="mut sm" style="margin:0 calc(2px * var(--fscale))">｜</span>
       <button class="btn dg" data-act="batchEx" ${pk.length?'':'disabled'} title="把已勾选的这些行标成「剔除」：默认不再显示、也不计入欠款 —— 标记保留，随时可用「恢复剔除」放回来（未勾选时置灰 —— 先勾选行再用）">批量剔除</button>
-      <button class="btn" data-act="batchUnEx" title="只对已勾选的行生效：把勾选行里「人工批量剔除」的记录恢复（规则命中的剔除任何情况下都不在此恢复 —— 要放开请改「规则配置」，§4.2.2）">恢复剔除</button>
+      <button class="btn" data-act="batchUnEx" title="只对已勾选的行生效：把勾选行里被剔除的记录恢复回来 —— 「人工批量剔除」和「规则命中」两类都恢复（§4.2.2）。恢复后这一行重新计入欠款与付款；想让它长期被剔除，请改「规则配置」并再抓一次（改规则本身不重算已有的剔除标记）">恢复剔除</button>
       <span class="mut sm" style="margin:0 calc(2px * var(--fscale))">｜</span>
       <button class="btn pri" data-act="exp" data-t="付款通知书台账" title="导出当前筛选下看到的这些行">导出 Excel</button>
     </span></h4>
@@ -614,6 +642,7 @@ V.m03=()=>{
       <div class="fi"><label>分类</label><select class="inp" id="fCat" data-act="filterNt">${optsOf(['全部'].concat(enumVals('cat'),['剔除']),fNt.cat)}</select></div>
       <div class="fi"><label>审批状态</label><select class="inp" id="fAstat" data-act="filterNt">${enumOpts('astat',fNt.astat,1)}</select></div>
       <div class="fi"><label title="已付金额 ≥ 审批金额 ＝ 已付清（不看统计金额）">付款状态</label><select class="inp" id="fStat" data-act="filterNt">${enumOpts('payState',fNt.stat,1)}</select></div>
+      <div class="fi"><label>搜索</label><input class="inp" type="search" id="ntSearch" data-act="ntSearch" value="${esc(fNt.q||'')}" placeholder="搜索各列内容" style="width:220px"></div>
       <button class="btn" data-act="filterReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(fNt.month)} 有效 ${NO.filter(n=>ntLive(n)&&inM(n)).length} 条 ｜ 剔除 ${NO.filter(n=>n.excl&&inM(n)).length} 条 ｜ i8 已撤单 ${NO.filter(n=>ntVoid(n)&&inM(n)).length} 条${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length?` ｜ <span class="tag t-dg" title="这些单据在 i8 侧被删了，但仍挂着付款流水 / 集采关联 —— 有牵涉时不许静默退出统计，它们仍参与统计。请先撤销付款 / 解绑关联，处理完它才退出统计；切「分类 = 剔除」可见。">⚠ 其中 ${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length} 条有牵涉</span>`:''}（切「分类 = 剔除」查看）</span>
     `})}
@@ -631,19 +660,19 @@ V.m04=()=>{
   const cnt6={}; list.forEach(p=>{ const r=plRev(p,PLs); cnt6[r]=(cnt6[r]||0)+1; });
   const picked=list.filter(p=>plPick.has(p.id)).length;
   return `
-    <div class="tip">「<b>项目</b>」列填<b>展示名或仓库名</b>（⛔ 不是全名）—— 匹配不上标「未匹配」、重名标「重名 N 条」；系统<b>只提示、不拦截</b>（强制通过必须写备注）；手改列<b>会写入、不被导入覆盖</b>；数据按月归档，同月允许完全相同的行（靠「重复上报」提示，⛔ 不自动去重）。</div>
+    
   <div class="kpis">
     ${order.map(r=>`<div class="kpi"><div class="k">${r}</div><div class="v" style="font-size:calc(17px * var(--fscale));color:var(--${revTag(r)==='ok'?'ok':revTag(r)==='wn'?'wn':'dg'})">${cnt6[r]||0}</div><div class="s">笔 · 当前筛选</div></div>`).join('')}
   </div>
-  <div class="card" style="margin-bottom:calc(12px * var(--fscale))"><h4>导入付款计划 Excel<span class="sp"><span class="mut sm">来源：项目端微信报送 · 需用户先手工添加「项目」列（填<b>展示名或仓库名</b>，系统据此匹配项目）</span></span></h4><div class="bd">
-    <div class="steps"><div class="st dn">① 项目端微信报计划</div><div class="st dn">② 用户加「项目」列</div><div class="st on">③ 选月份 + 导入</div><div class="st">④ 逐笔比对审查</div><div class="st">⑤ 一键勾选付款</div></div>
-    <div class="tip" style="margin:0"><b>无效列</b>（<span class="fc">科目 / 费用日期 / 收款单位 / 已付款金额 / 剩余付款金额</span>）原样入库、<b>不参与审查</b>；表格里那两列金额是<b>系统按单据号派生的</b>，与导入表同名不同源。</div>
+  <div class="card" style="margin-bottom:calc(12px * var(--fscale))"><h4>导入付款计划 Excel</h4><div class="bd">
+    
+    
     <div style="margin-top:calc(10px * var(--fscale))"><button class="btn pri" data-act="plImport">导入付款计划 Excel（先选月份）</button> <button class="btn" data-act="plRowAdd" title="不依赖 Excel 的补录入口（§4.3.3.1）：在表尾生成一行草稿 —— 它与导入行同住一表、同样要被审查，且导入不会清理它（§9.5）">＋ 手动新增计划行</button></div>
   </div></div>
   <div class="card" style="margin-bottom:0">
     <h4>审查结果<span class="sp">
       <button class="btn dg" data-act="plDel" ${picked?'':'disabled'} title="删除已勾选的行；删除前会确认并说明影响范围（未勾选时置灰 —— 先勾选行再用）">删除选中${picked?` · ${picked} 行`:''}</button>
-      <span class="pill">「按付款计划勾选」已移到 <b>付款通知书</b> 页（含跨月单据）—— 勾选与付款在一处才顺手</span>
+      
       <button class="btn pri" data-act="exp" data-t="付款计划审查结果" title="导出当前筛选下看到的这些行">导出 Excel</button>
     </span></h4>
     ${FBAR({body:`
@@ -675,8 +704,8 @@ V.m04=()=>{
       <td class="ctr">${matched?'<span class="mut sm">无需处理</span>':p.forced?`<span style="display:inline-flex;gap:calc(5px * var(--fscale));align-items:center"><span class="mut sm" style="max-width:190px" title="${esc(p.forceRemark)}">${esc(p.forceRemark)}</span><button class="btn sm" data-act="unforce" data-id="${p.id}" title="取消强制通过 → 回到「未处理」态（不产生留痕）">取消强制通过</button></span>`:`<button class="btn sm" data-act="force" data-id="${p.id}">强制通过</button>`}</td>
       <td class="ctr"><span style="display:inline-flex;gap:calc(5px * var(--fscale));align-items:center">${p.manual?`<button class="btn sm" data-act="plRowEdit" data-id="${p.id}" title="编辑本行 —— 只有手动行可编辑（导入行是项目端报来的源数据，要改请重新导入；其在 §4.3.3 的唯一例外口 = 「再次匹配」）">编辑</button>`:''}${edit?`<button class="btn sm" data-act="plRematch" data-id="${p.id}" title="按当前单据号重新比对 i8 通知书，刷新审查结果">再次匹配</button>`:''}<button class="btn sm dg" data-act="plDelRow" data-id="${p.id}" title="删除本行（删除前确认并说明影响范围）—— 手动行与导入行都可删（§4.3.6；与付款通知书「i8 抓取行永不删」不同）">删除</button></span></td>
     </tr>`;}).concat(plRowEditId===PL_NEW_ID?[plDraftRow()]:[]),
-    sum:list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2(rs.reduce((a,p)=>a+p.flowAmt,0)),8:rs=>N2(rs.reduce((a,p)=>a+p.monthAmt,0))},{leadCls:'fl'}):EMPTYROW(thCount(PL_THEAD),'当前筛选条件下没有付款计划'+(plRowEditId===PL_NEW_ID?'（正在新增 1 行：填完点该行「保存」）':''),'换个「单据年月 / 项目 / 审查结果」，或点上方「导入付款计划 Excel（先选月份）」导一批')})}</div>
-    <div class="bd"><div class="tip" style="margin:0"><b>注意第 6 条口径：</b>是「<b>超过未付</b>」而不是「超过已付」——计划金额超过该单据的<b>未付</b>金额（§4.3.4）。</div></div>
+    sum:list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2(rs.reduce((a,p)=>a+p.flowAmt,0)),8:rs=>N2(rs.reduce((a,p)=>a+p.monthAmt,0))},{leadCls:'fl'}):EMPTYROW(thCount(PL_THEAD),'当前筛选条件下没有付款计划','')})}</div>
+    
   </div>`;
 };
 /* 全选框状态回显（与 MOD-03 同款逻辑：全选 / 半选） */
@@ -708,11 +737,11 @@ V.m05=()=>{
     ks.delete('');
     return [...ks].map(k=>[k,projValOf(sc,k)]).sort((a,b)=>b[1]-a[1]); };
   const barCard=sc=>{ const list=barsOf(sc), mx=Math.max(...list.map(x=>x[1]),1);
-    return `<div class="card"><h4>按项目看<b>${sc}</b>欠款<span class="sp"><span class="mut sm">${sc==='集采'?'Σ「纳入台账」合同的欠款（与集采台账同源 · 合同级实时、不拆月度）':'§4.5.1 口径 ＋ 本分类期初'}</span></span></h4><div class="bd">
+    return `<div class="card"><h4>按项目看<b>${sc}</b>欠款</h4><div class="bd">
       <div class="bars">${list.map(([k,dd])=>
         `<div class="br"><span class="nm" title="${esc(pjLabel(k))}">${esc(pjLabel(k))}</span>
           <span class="tk"><i class="${dd>0?'o':'g'}" style="width:${Math.max(2,(dd/mx*100)).toFixed(1)}%"></i></span>
-          <span class="vl">${M(dd)}</span></div>`).join('')}</div>
+          <span class="vl">${M(dd)}</span></div>`).join('')||`<div class="mut">没有${sc}欠款数据</div>`}</div>
     </div></div>`; };
   /* —— 逐月欠款台账（§4.5.1 口径，见上文 4.9 段）——
      ⭐ 2026-09-13 用户口径：**与两侧台账卡合并为一个统一模块** —— 一张卡：卡头放两侧共用的
@@ -755,7 +784,7 @@ V.m05=()=>{
         2:[rs=>N2(rs.reduce((a,x)=>a+x.s,0)),v=>'<b>'+M(v)+'</b>'],
         3:[rs=>N2(rs.reduce((a,x)=>a+x.p,0)),v=>'<b>'+M(v)+'</b>'],
         4:[rs=>N2(rs.reduce((a,x)=>a+x.s-x.p,0)),v=>'<b>'+M(v)+'</b><span class="mut sm"> 当前欠款</span>']},
-        {lead:`截至 ${esc(upto)}<span class="mut sm"> · 自期初起累计</span>`,leadSpan:2,leadCls:'ctr',style:'',
+        {lead:`截至 ${esc(upto)}`,leadSpan:2,leadCls:'ctr',style:'',
          tip:`这一行是自期初起累计（含第 1 行期初占位行），不是"当月数字相加"；其中「欠款」那格 = 本项目截至 ${upto} 还欠多少，与本栏上方那个数同一个出口`}):'',
       empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；期初底数用本栏右上角「＋ 录入${sc}期初」补`)})}</div></div>`; };
   /* —— 付款流水（**实际付款记录**）——
@@ -784,16 +813,15 @@ V.m05=()=>{
        不是注释，反引号会当场**截断模板串**（实测踩到 ⇒ 整页白屏 `PJs is not defined`）；
        只有 `${}` 里的注释才安全。 —— 这次重排的来历见《开发计划》§15 `TAIL-142`。 */
   return `
-    <div class="tip">欠款口径 = <b>结算 − 付款</b>，与「已付金额」<b>无关</b>（付款状态另按已付 ≥ 审批判定）；<b>机械欠款是派生的</b>（源头在过程资料机械 6 列、本页只读）；<b>期初占位行</b>手填后按其分类并入辅材 / 机械。</div>
+    
   <!-- 2026-09-28（用户口径 · 看板清账）：本页 4 条 KPI（欠款合计 / 辅材 / 机械 / 集采）<b>全删</b>
        —— 用户判「无用」。要看这三类欠款请看下方「<b>按项目看…欠款</b>」那三栏（那才是能定位到项目的数）。
        ⛔ 别再加回来（删除已登记）。⚠️ 本注释在模板字面量的文本区 ⇒ ⛔ 不许出现反引号。 -->
   <div class="grid2" style="grid-template-columns:repeat(3,1fr)">${barCard('集采')}${barCard('辅材')}${barCard('机械')}</div>
   <div class="card" style="margin-bottom:calc(12px * var(--fscale))"><h4>逐月欠款台账<span class="sp" style="flex-wrap:wrap;justify-content:flex-end">
     <button class="btn pri${ledExpOn?' on':''}" data-act="ledExpToggle" title="两个导出都在这条面板里：① 逐月台账 —— 每个项目一个工作簿（辅材欠款 / 机械欠款 / 特殊费用月报表）② 总欠款汇总 —— 每个项目一行（可挑项目与行序）">批量导出（先选项目）…</button>
-    <span class="mut sm" style="flex-basis:100%;text-align:right">第 1 行 = 期初占位行 · 其后每月 1 行（空月也出行）</span>
   </span></h4>
-    <div class="bd"><div class="tip" style="margin:0"><b>欠款 = 其他支出金额 − 付款</b>：每行是<b>当月新增</b>（不是累计）—— 要「一共还欠多少」看每栏<b>标题行</b>与表尾「<b>截至</b>」行（<b>只算所选项目</b>，与上方那三栏不是同一个数）。<b>备注点格即改</b>。</div>
+    <div class="bd">
       ${ledExpOn?ledExpStrip():''}
       <!-- ⭐ 2026-09-28（TAIL-144）：「看哪个项目」下移到两栏台账正上方 —— 原来挂在卡头右上角，而它管的是
            下面那两张表（用户截图报障：要在右上角选、离那么远）。守则 §2.7 控件贴在对象上 · §5.9。
@@ -810,7 +838,7 @@ V.m05=()=>{
     <span class="pill">取值 = Σ <b>统计付款金额</b> · 归${pd.g==='周'?'周':'月'}按<b>单据日期</b> · 项目按<b>归属</b></span>
     <span class="mut sm" title="本页不单独设导出按钮（2026-09-13 用户口径）：它是「付款流水」的汇总视图 —— 要看数就导出付款流水">汇总视图 · 不单独导出</span>
   </span></h4>
-    <div class="bd"><div class="tip" style="margin:0 0 calc(10px * var(--fscale))"><b>付款侧</b>：取值 = 统计付款金额（<span class="fc">结算 = 付款 ＋ 欠款</span>），按<b>单据日期 / 归属</b>归集，剔除行不计。点左栏条目 → 下方流水按该项目筛选。</div>
+    <div class="bd">
       ${pd.n?`<div class="grid2">
         <div>
           <div style="display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-bottom:calc(6px * var(--fscale))">
@@ -859,7 +887,7 @@ V.m05=()=>{
     sum:flList.length?sumRowOf(FL_THEAD, flOn, {4:[rs=>N2(rs.reduce((a,x)=>a+x.amt,0)),v=>'<b>'+M(v)+'</b>']},
         {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：</b>`,leadSpan:4,leadCls:'ctr',style:''}):'',
     empty:EMPTYROW(thCount(FL_THEAD), '该筛选条件下没有付款流水', '换个年月 / 项目 / 状态，或点「重置」')})}</div>
-    <div class="bd"><div class="tip" style="margin:0">本表 = <b>实际付款流水</b>（「已付金额」的来源）；台账的「<b>付款</b>」列 = <b>统计付款金额</b>（油卡等会调小它）—— 两者并存是<b>有意</b>的。<b>撤销</b>在本页（须填原因，撤销后已付金额回退、状态重判）。</div></div>
+    
   </div>`;
 };
 /* =====================================================================
@@ -874,7 +902,7 @@ V.m01=()=>{
     &&(!q||(p.name||'').includes(q)||(p.full||'').includes(q)||(p.disp||'').includes(q))));
   const typeTag=t=>enumTag('pjType',t);
   return `
-    <div class="tip">项目名尾部的括号编号（如 <span class="fc">(XMCB2025080001)</span>）由系统<b>统一剥掉</b>（导出 / 两种同步用同一套规则）；「<b>归档</b>」<b>只改状态、不动业务数据</b>；筛选默认「在建」但候选里仍含归档项目（排最后、标注「已归档」）。</div>
+    
   <div class="card" style="margin-bottom:0">
     <h4>项目档案<span class="sp">
       <button class="btn" data-act="syncWh" title="从 i8 拉最新的仓库名单（会登录 i8，需二次确认）">同步仓库名单</button>
@@ -905,7 +933,6 @@ V.m01=()=>{
         <button class="btn sm dg" data-act="delPj" data-id="${p.id}">删除</button></td>
     </tr>`)
     ],empty:EMPTYROW(thCount(PJ_THEAD), '当前筛选条件下没有项目档案', '换个筛选条件；或点右上角「同步常用项目列表」「同步仓库名单」，从 i8 拉项目 / 仓库进来即自动建档')})}</div>
-    <div class="bd"><div class="tip" style="margin:0"><b>两行共用同一个「项目全名」是正常的</b>：一个壳下面可挂多个具体小微，系统按<b>仓库名</b>区分、不会串账（⛔ 不用手工改全名）。</div></div>
   </div>
   ${PJ_TRAIL.length?`<div class="card"><h4>修改留痕（全名 / 状态）</h4><div class="bd np">${TBL({cls:'cond',head:'<th>时间</th><th>项目</th><th>字段</th><th>改前值</th><th>改后值</th><th>改动人</th>',rows:[
     ...PJ_TRAIL.slice(-8).reverse().map(t=>`<tr><td class="fc">${t[0]}</td><td>${esc(t[1])}</td><td>${t[2]}</td><td class="sm mut">${esc(t[3])}</td><td class="sm">${esc(t[4])}</td><td>${t[5]}</td></tr>`)
@@ -968,17 +995,19 @@ V.m06=()=>{
      ⚠️ 机械 **6 列全部**参与（含「外租零租不含税 / 外租包月不含税」两列 —— 用户明确要求一并加）。
      ⚠️ 合计跟着**当前显示的那批**走（表① 看原始 / 表② 看调整后），不是恒取其中一批。 */
   const cur = procTab===1 ? rows1 : rows0;
-  const sumIn = c => N2(cur.reduce((s,r)=>s+r.inC[c],0));
-  const sumOut = c => N2(cur.reduce((s,r)=>s+r.outC[c],0));
-  const sumM = i => N2(cur.reduce((s,r)=>s+r.m[i],0));
-  const totIn = N2(IVC5.reduce((s,c)=>s+sumIn(c),0));
-  const totOut = N2(IVC5.reduce((s,c)=>s+sumOut(c),0));
+  const totals = procAgg(procPj,procTab===1);
+  const sumIn = c => totals.inC[c];
+  const sumOut = c => totals.outC[c];
+  const sumM = i => totals.m[i];
+  const segments = PROC_MATRIX[procPj]?.segments?.[procTab===1?'adjusted':'raw']||[];
+  const totIn = segments[0]?.total;
+  const totOut = segments[1]?.total;
   /* 机械 6 列**分两段**（列序：0 租分公司设备 · 1 内租设备 · 2 外租零租含税 · 3 外租包月含税 ·
      4 外租零租不含税 · 5 外租包月不含税）：**左 4 列**一段、**不含税 2 列单独**一段 ——
      用户 2026-09-13 明确：不含税两列**单独求和**，不并入左 4 列那一段。 */
   const MACH_TAX_N = 4;
-  const totMTax = N2(a0.m.slice(0, MACH_TAX_N).reduce((s,_,i)=>s+sumM(i), 0));
-  const totMNoTax = N2(a0.m.slice(MACH_TAX_N).reduce((s,_,i)=>s+sumM(i + MACH_TAX_N), 0));
+  const totMTax = segments[2]?.total;
+  const totMNoTax = segments[3]?.total;
   const sumRow = `<tr class="sumrow" style="background:var(--sf2);font-weight:500"><td class="fl">合计</td>`
     + IVC5.map((c,i)=>`<td class="num${vsc(1+i)}">${M(sumIn(c))}</td>`).join('')
     + IVC5.map((c,i)=>`<td class="num${vsc(6+i)}">${M(sumOut(c))}</td>`).join('')
@@ -992,7 +1021,7 @@ V.m06=()=>{
     + `<td class="num vsep" colspan="${MACH_TAX_N}">机械合计 ${M(totMTax)}</td>`
     + `<td class="num vsep" colspan="${a0.m.length - MACH_TAX_N}">不含税合计 ${M(totMNoTax)}</td></tr>`;
   return `
-    <div class="tip">材料数据是<b>单向流</b>：i8 → 库存单据（<b>唯一可改的源</b>）→ 本页（引用、派生只读）—— 本页材料费<b>随库存单据变</b>、不独立维护；机械 6 列<b>先手录</b>；调整单<b>打在库存单据的行上</b>（不被 i8 导出覆盖）。</div>
+    
   <div class="card" style="margin-bottom:0">
     <h4>过程资料<span class="sp pjwrap" style="position:relative"><!-- ⭐ 2026-09-28（用户口径）：多选面板直接开在这个按钮正下方 —— 原先项目多选塞在下方展开区里，用户得从卡头右上角跑到「项目筛选的下一行最左」去选 ⇒ 报障"会被迷惑"。⚠️ 锚 = 本 span（pjwrap 类），且它的<b>第一个直接子按钮</b>就是触发按钮（placePops 按 「:scope &gt; button」 定位）⇒ ⛔ 别把面板搬去别处渲染。⚠️ 注释在模板字面量的文本区 ⇒ ⛔ 不许出现反引号（会截断模板串，本次踩过一次）。 -->
       <button class="btn${pjIsOpen('procExpPj')?' on':''}" data-act="procExpToggle" title="按 17 列模板导出（每项目一份）；点开可多选项目，选 ≥ 2 个打成 zip">批量导出（先选项目）…</button>
@@ -1004,7 +1033,6 @@ V.m06=()=>{
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         ${PJB({act:'procPjToggle',w:210,label:`${esc(PROJ_META_KEY(procPj).nm)}`})}
         ${pjIsOpen('procPj')?procPjPanel():''}</div>
-      <span class="pill" style="margin-left:auto">17 列 ｜ 每项目每月一份 ｜ 报分公司工程科<span title="机械 6 列按核算月分段：历史段（≤ 截止核算月）的值来自过程资料导入的快照，界面不许手改；手录段（截止月之后）由「录机械费」处手填（旁路表，重抓 i8 / 重导历史都不覆盖）"> ｜ 机械${mechCutLabel(procPj)?`历史段截至 <b>${esc(mechCutLabel(procPj))}</b>，此后为手录段`:'历史段：本项目暂无导入快照（机械 6 列全部可手录）'}</span></span>
     `})}
     <div class="tabs">
       <div class="tb2 ${procTab===0?'on':''}" data-act="procTab" data-i="0" tabindex="0" role="button">表① 原始表</div>
@@ -1024,9 +1052,7 @@ V.m06=()=>{
       :[],
       empty:EMPTYROW(thCount(DIFF_THEAD), '该项目无调整，原始表与调整后表一致', '无需处理')})}</div>`:
     `<div class="tw">${TBL({head,rows:body,sum:sumRow+totRow})}</div>`}
-    <div class="bd">
-      <div class="tip" style="margin:0"><b>列结构：</b>入 / 出库各 5 类 ＝ 主辅材 · 工具 · 劳保 · 周转材料 · 临时设施。底部「总求和」＝ <b>入库 / 出库 / 机械左 4 列 / 不含税 2 列</b> 四段汇总（跟当前显示的那批走）。</div>
-    </div>
+    
   </div>`;
 };
 
@@ -1045,7 +1071,7 @@ V.m07=()=>{
   const tagOf=b=>Math.round(b*100)===0?'<span class="tag t-ok">已对平</span>':'<span class="tag t-dg">差 '+M(b)+'</span>';
   const totBal=balOf({begin:sum('begin'),in:sum('in'),out:sum('out'),end:sum('end')});
   return `
-    <div class="tip">认项目只靠<b>「仓库」列</b>（本表没有全名列）—— 表里出现档案里没有的名字就是「<b>陌生仓库</b>」，系统会自动建档 / 扶正。</div>
+    
   <div class="card"><h4>收发结存<span class="sp">
     <button class="btn" data-act="fetchOne" data-t="收发结存表">抓取 i8</button>
     <button class="btn pri" data-act="zipSfjc">导出分仓库 zip</button></span></h4>
@@ -1062,11 +1088,11 @@ V.m07=()=>{
         ...kinds.map((k,i)=>({[2+i]:[rs=>N2(rs.reduce((a,w)=>a+w[k[0]],0)),M]}))),
         {cells:{6:`<td class="ctr">${tagOf(totBal)}</td>`}}):'',
     empty:EMPTYROW(thCount(WH_THEAD), '<b>'+tmLabel(fWhYm)+'</b> 没有收发结存数据', '换个「核算年月」，或点左上角「抓取 i8」')})}</div>
-    <div class="bd"><div class="tip" style="margin:0"><b>交付形态：</b><b>${rows.length}</b> 个分仓库 xlsx ＋ 1 个总表 = <b>${rows.length + 1}</b> 个文件打包 zip；金额按 2 位小数对平（<b>差 1 分也算不平</b>）。</div></div>
+    
   </div>
   <div class="grid2">
-    <div class="card"><h4>焊材 / 气体提取（R22 · §5.3.3）<span class="sp">
-      <span class="mut sm">数据唯一去向 = 月度会大表；本表只作核对</span>
+    <div class="card"><h4>焊材 / 气体提取<span class="sp">
+      
       <button class="btn" data-act="expExt">导出（项目 × 月份）</button></span></h4>
     ${FBAR({body:`
       <div class="fi"><label>项目状态（默认在建）</label><select class="inp" id="fExtStatus" data-act="fExtStatus">${optsOf(enumVals('pjStatus').concat(['全部']),fExt.status)}</select></div>
@@ -1079,17 +1105,9 @@ V.m07=()=>{
       <!-- （⚠️ 上面这句注释里不能写反引号 —— V.m07 返回的是模板字面量，反引号会提前闭合字符串；也不要写 Markdown 的星号强调） -->
       ${TBL({cls:'cond',key:'m07:kinds',sort:false,head:EXT_THEAD,
       rows:[extBlock('焊材')+extBlock('气体')]})}
-      <div class="sm mut" style="margin-top:calc(8px * var(--fscale))">提取口径：气体按<b>白名单精确匹配</b>；焊材按<b>关键词 + 排除子串</b>。「<b>总金额</b>」= 全部月份累计（不随筛选变）；「<b>金额</b>」= 所选月份范围内的金额（走统一年月控件）。各「合计」行<b>紧贴</b>本类数据行。<br><b>结余</b>：${EXT_BAL_NOTE} —— <b>点格即改</b>（粒度 = 类别 × 仓库、不按月）。</div>
+      
     </div></div>
-    <div class="card"><h4>输出产物（§5.3.2）</h4><div class="bd">
-      <div class="flowline">导出分仓库 zip 包
- ├─ ${rows.length} 个分仓库 xlsx（每仓一个）
- └─ ${rows.length?'第四工程公司'+fWhYm+'收发结存表.xlsx':'—'}
-       ├─ Sheet1 / 报表1
-       └─ 原表加一个数据透视表（求和项：期初/收/发/结存金额）
-</div>
-      <div class="tip" style="margin-top:calc(10px * var(--fscale))"><b>透视表怎么保证是最新的：</b>系统按<b>已建好透视表的模板</b>注入本月数据，并设成<b>打开即自动刷新</b> —— 您在 Excel 里打开就是最新数，不用手工「刷新」。</div>
-    </div></div>
+    
   </div>
   <div class="card" style="margin-bottom:0"><h4 title="正式名 = 经济活动分析大表（《材料科业务全流程说明书》§5.7）；用户 2026-09-28 定：界面上叫「月度会大表」">月度会大表<span class="sp">
     <span class="mut sm">核算月 ${bjMonth(-1)}</span>
@@ -1123,15 +1141,7 @@ V.m07=()=>{
         return rs.length?sumRowOf(BIG_THEAD, rs, {3:S('hwc'),4:S('hw'),5:S('qtc'),6:S('qt'),7:S('rentC'),8:S('rent'),
           9:S('leaseC'),10:S('lease'),11:S('totC'),12:SC(1),15:SC(2),16:SC(3),17:S('matC'),18:SC(4)}, {leadSpan:2, leadCls:'fl'}):''; })(),
     empty:EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY, '先去「项目档案」把项目置为「在建」，或点「选择项目」看看候选')})}</div>
-    <div class="bd"><div class="grid2">
-      <div class="tip" style="margin:0"><b>自动带出 4 组</b>：焊材 / 三气 ← 收发结存提取，外租机械 / 设备租赁 ← 过程资料机械；<b>自动算 4 列</b>、<b>手填 6 列</b>（逐列口径见下条）。
-      <details style="margin-top:calc(5px * var(--fscale))"><summary style="cursor:pointer" class="mut sm">逐列口径（点开查看）</summary>
-        <div style="margin-top:calc(4px * var(--fscale))"><b>自动列</b> —— 焊材 / 三气：当月走提取的「金额」口径、累计走「总金额」口径；外租机械（<b>外租零租含税 ＋ 外租包月含税</b>）与设备租赁（含内租）（<b>内租设备</b>）取自<b>过程资料机械 6 列</b>，「开工累计」= 开工至今各月之和。<br><b>派生列</b> —— 合计 = 外租机械开工累计 ＋ 设备租赁开工累计 · 使用率 = 合计 ÷ 机械费测算 · 产值完成率 = 产值累计 ÷ 合同（预估）价 · <b>主材累计（含税）</b> = 该项目集采合同结算金额之和（<b>只计「纳入台账」的合同</b>）。</div>
-      </details></div>
-      <div class="tip wn" style="margin:0"><b>⚠️ 本表没有「材料费」这一项</b>（业务上无此数据）；<b>「租分公司设备」与两列「不含税」也不进本表</b>（其付款不经材料科流程）。<b>手填列不做补正</b> —— 填错了下个月填对即可。<b>出纸方式 = 按模板导出后在 Excel 打印</b>。</div>
-    </div>
-    <div class="tip" style="margin:calc(10px * var(--fscale)) 0 0"><b>上次值带入：</b>本月没录的手填格会自动带<b>上次录入值</b>（跨月往前找，可就地改）。⚠️ <b>手填值不参与欠款计算</b>（大表机械费 ≠ 机械费派生结算）。</div>
-    </div></div>
+  </div>
   </div>`;
 };
 
@@ -1163,7 +1173,7 @@ V.m08=()=>{
                  11:rs=>N2(rs.reduce((a,iv)=>a+Number(ivRaw(iv,11)),0))};
   return `
   
-  ${invOnlyAdj?`<div class="tip">当前为<b>差异跳转视图</b>：只显示被调整单改过的行（来自过程资料 → 差异表 → 点击差异行）。<span class="link" data-act="clearInvAdj" tabindex="0" role="button">清除筛选，看全部 →</span></div>`:''}
+  ${invOnlyAdj?`<div class="filter-status">当前为<b>差异跳转视图</b>：只显示被调整单改过的行（来自过程资料 → 差异表 → 点击差异行）。<span class="link" data-act="clearInvAdj" tabindex="0" role="button">清除筛选，看全部 →</span></div>`:''}
   <div class="card" style="margin-bottom:0">
     <h4>库存单据明细总表<span class="sp">
       <button class="btn" data-act="fetchOne" data-t="库存单据明细表">抓取 i8</button>
@@ -1180,8 +1190,8 @@ V.m08=()=>{
       <span class="pill" style="margin-left:auto">${list.length} 行 · 入库 ${M(inS)} · 出库 ${M(outS)} · 调整净额 ${SIG(adS)}</span>
     `})}
     ${invColOpen!==''?
-      `<div class="bd" style="padding:calc(8px * var(--fscale)) calc(10px * var(--fscale));background:var(--sf2);border-radius:6px;margin:0 calc(10px * var(--fscale)) calc(8px * var(--fscale))"><b class="sm">列筛选</b> <span class="mut sm">（Excel 式：点表头 ▾ 选列；条件之间是「与」）</span>${ivColPanel()}</div>`
-      :`<div class="bd" style="padding:calc(6px * var(--fscale)) calc(10px * var(--fscale))"><span class="mut sm">点<b>任意表头的 ▾</b> 可按该列筛选（Excel 式）；已设列条件 <b>${ivColN()}</b> 列${ivColN()?'':'，当前无'}</span>${ivColN()?' <button class="btn sm" data-act="ivColClearAll">清除全部列筛选</button>':''}</div>`}
+      `<div class="bd" style="padding:calc(8px * var(--fscale)) calc(10px * var(--fscale));background:var(--sf2);border-radius:6px;margin:0 calc(10px * var(--fscale)) calc(8px * var(--fscale))"><b class="sm">列筛选</b> ${ivColPanel()}</div>`
+      :`<div class="bd" style="padding:calc(6px * var(--fscale)) calc(10px * var(--fscale))"><span class="mut sm">列条件 ${ivColN()}</span>${ivColN()?' <button class="btn sm" data-act="ivColClearAll">清除全部列筛选</button>':''}</div>`}
     <div class="tw">${TBL({head:ivThead(),key:'m08:invoices',
     rows:list.map(iv=>{const a=adjOf(iv);return `<tr class="${a?'hl':''}">
       <td class="fc">${iv.docNo}</td><td class="fc">${iv.seq}</td>
@@ -1194,11 +1204,7 @@ V.m08=()=>{
       <td class="ctr now"><button class="btn sm ${a?'':'pri'}" data-act="adjDlg" data-iv="${iv.id}">${a?'查看/改调整单':'打调整单'}</button></td></tr>`;}),
     sum:list.length?sumRowOf(INV_THEAD,list,invSums,{tip:'只求 数量 / 金额 / 调整后金额 / 价税合计；两个单价列不求和（单位价无求和含义）'}):'',
     empty:EMPTYROW(thCount(INV_THEAD), '当前筛选条件下没有库存单据明细'+(invOnlyAdj?'（该项目本月未打调整单）':''), '换个「核算年月 / 项目 / 出入库方向」，或清掉表头的列筛选')})}</div>
-    <div class="sm mut" style="margin-top:calc(6px * var(--fscale))">合计行只求<b>数量 / 金额 / 调整后金额 / 价税合计</b>；两个<b>单价列刻意不求和</b>（单位价求和无业务含义）⇒ 在合计行里留空。</div>
-    <div class="bd"><div class="grid2">
-      <div class="tip" style="margin:0">调整单<b>打在单据行上</b>（⛔ 不是按项目 / 月打总单）· <b>不被 i8 导出覆盖</b> · <b>留痕 ＋ 留备注</b>。<b>差异的修正只改库存单据</b>（过程资料的材料费引用本页、随之反映）。</div>
-      <div class="tip" style="margin:0"><b>已验证：</b>重新抓取 i8 数据后——原始金额回到 i8 值，但<b>调整单依然保留</b>。因为调整单<b>独立存储</b>，抓取只刷新原始表、不动调整单。</div>
-    </div></div>
+    
   </div>`;
 };
 
@@ -1218,27 +1224,27 @@ V.m09=()=>{
   /* ⚠️ `total` 为 0（该月既无自动项、也无手填项）时，占合计列要给「—」而不是 `NaN%` */
   const pc=x=>total>0?PCT(x/total):'<span class="mut">—</span>';
   return `
-    <div class="tip">本页是<b>一张独立报表</b>（<b>不是</b>库存单据的第 3 张透视表）；⚠️ 「<b>安文费</b>」是那个 CBS 类目（＝自动项），<b>不是这张报表的名字</b> —— 两者别再混着叫。</div>
+    
   <div class="card" style="margin-bottom:0"><h4>特殊费用月报表<span class="sp">
     <button class="btn" data-act="awfAdd">＋ 增加手填项</button>
-    <span class="mut sm" title="本页不单独导出（2026-09-13 用户口径）：它随「逐月欠款台账」一起导出，作为每个项目工作簿的第 3 个工作表">随「逐月欠款台账」导出</span></span></h4>
+    </span></h4>
     ${FBAR({body:`
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         ${PJB({act:'awfPjToggle',w:150,label:`${esc(PROJ_META_KEY(awfPj).nm)}`})}
         ${pjIsOpen('awfPj')?awfPjPanel():''}</div>
       <div class="fi"><label>核算年月</label>${tmBtn('awfMonth',{scope:'awf',val:awfYm,label:tmLabel(awfYm),modes:['月']})}</div>
       <button class="btn" data-act="awfReset">重置</button>
-      <span class="pill" style="margin-left:auto">1 个自动项 ＋ <b>${list.length}</b> 个手填项 ｜ 每项目每月一份 ｜ 报分公司工程科</span>
+      
     `})}
     <div class="tw">${TBL({head:AWF_THEAD,key:'m09:awf',rows:[
-      `<tr><td><b>安全文明施工费</b>（按 CBS 分类）</td><td>${tag('系统生成（唯一自动项）','ok')}</td><td class="num">${M(auto)}</td><td class="num">${pc(auto)}</td><td class="ctr mut sm">自动项不可改</td></tr>`,
+      `<tr><td><b>安全文明施工费</b></td><td>${tag('系统生成','ok')}</td><td class="num">${M(auto)}</td><td class="num">${pc(auto)}</td><td class="ctr mut sm">—</td></tr>`,
       ...(list.length?list.map((r,i)=>`<tr><td><input class="inp plain" data-act="awfName" data-i="${i}" value="${esc(r[0])}"></td><td>${tag('手填','wn')}</td>
         <td class="num"><input class="inp num" style="width:110px" data-act="awfAmt" data-i="${i}" value="${r[1].toFixed(2)}"></td>
         <td class="num">${pc(r[1])}</td>
         <td class="ctr"><button class="btn sm dg" data-act="awfDel" data-i="${i}">删除</button></td></tr>`)
       :[EMPTYROW(thCount(AWF_THEAD), '<b>'+tmLabel(awfYm)+'</b> · <b>'+esc(PROJ_META_KEY(awfPj).nm)+'</b> 还没有手填项', '点右上角「＋ 增加手填项」补录（按「核算年月 ＋ 项目」各存一份，未录的那一份不计入）')])
     ],sum:sumRowOf(AWF_THEAD, list, {2:()=>total,3:[()=>total,()=>total>0?PCT(1):'<span class="mut">—</span>']})})}</div>
-    <div class="bd"><div class="tip" style="margin:0"><b>自动项</b> = 库存单据里 <span class="fc">CBS-安文费</span> 类目的<b>出库</b>金额（按所选的核算年月 ＋ 项目取，项目按<b>仓库名</b>认）。<b>手填项</b>按「核算年月 ＋ 项目」各存一份、可增项改名；没录的那一份不做带入。</div></div>
+    
   </div>`;
 };
 
@@ -1332,7 +1338,7 @@ V.m11=()=>{
   const jcRows=jcVisible();
   const d=N2(inc.reduce((a,j)=>a+jcDebt(j),0));
   return `
-    <div class="tip">集采只做<b>台账管理</b>（竞价平台不接）；<b>集采欠款在这里算</b> —— 合同级实时、<b>不拆月度</b>（付款域不算它）；付款方式是<b>自由文本</b>、不限值（与付款域的枚举刻意不同）；<b>结算金额按有无贸易公司取不同子表口径</b>；主表那三列金额<b>只读</b>，录入走子表。</div>
+    
   <!-- 2026-09-28（用户口径 · 看板清账）：本页 4 条 KPI（合同数 / 结算金额合计 / 付款金额合计 / 集采欠款）
        <b>全删</b> —— 用户判「无用」。⛔ 别再加回来（删除已登记）。要看合计请看<b>表尾合计行</b>（仍在）。
        ⚠️ 本注释在模板字面量的文本区 ⇒ ⛔ 不许出现反引号（会截断模板串）。 -->
@@ -1356,7 +1362,7 @@ V.m11=()=>{
         <option value="filled"${fJc.amt==='filled'?' selected':''}>非空</option></select></div>
       <button class="btn" data-act="jcPartyDlg" title="甲方单位分类 —— 它决定「i8 抓来的合同价是谁的价」">甲方单位分类</button>
       <button class="btn" data-act="jcReset">重置</button>
-      <span class="pill" style="margin-left:auto">已勾选 <b>${jcPick.size}</b> 行 ｜ 显示 <b>${jcRows.length}</b> 条 ｜ 已手动标记的合同，后续全量抓取<b style="margin-left:calc(3px * var(--fscale))">持久保留、不被覆盖</b></span>
+      <span class="pill" style="margin-left:auto">已勾选 <b>${jcPick.size}</b> 行 ｜ 显示 <b>${jcRows.length}</b> 条</span>
     `})}
     ${jcNewOn?jcNewStrip():''}
     <div class="tw">${TBL({head:JC_THEAD,key:'m11:jc',
@@ -1392,44 +1398,23 @@ V.m11=()=>{
         12:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))},
         {tip:'当前筛选结果（含「不纳入」行）的合计；「贸易公司合同金额」为空的行按 0 计'})
       :EMPTYROW(thCount(JC_THEAD), '当前筛选条件下没有集采合同', '换个「三态标记 / 合同存档情况 / 项目」，或清空「供应商」搜索词')})}</div>
-    <div class="bd"><div class="grid3">
-      <div class="tip" style="margin:0"><b>两态标记（§6.5.3）</b>：抓来即 <b>纳入台账</b>，可改 <b>不纳入</b>。可<b>逐条</b>标记或<b>勾选后批量</b>。⭐ <b>已手动标记的「不纳入」在后续全量抓取中持久保留</b>（⛔ 抓取不许改回来）。</div>
-      <div class="tip" style="margin:0"><b>发票子表</b>：一合同 <b>1..N</b> 张（发票日期 ＋ 金额，<b>日期必填</b>）。<b>付款子表</b>：一合同 <b>0 / 1 / 多</b> 次，可手工录入或从<b>付款域引用</b>。</div>
-      <div class="tip" style="margin:0"><b>合同收发登记（§6.7）</b>：未存档 → 资产处 → 已存档，手工推进；字段只有<b>存档情况 / 存档号 / 寄回日期</b> 三项 + 备注。</div>
-    </div></div>
   </div>`;
 };
 
 /* =====================================================================
-   16. MOD-13 导出与删除（⭐ 2026-09-28 `TAIL-131`：页名原叫「**跨域能力**」——
-      那是**内部叫法**（守则 §2.5/§3.3），用户看不懂"跨域"是干什么的 ⇒ 改成人话页名）/ MOD-14 规则配置
+   16. MOD-14 规则配置
    ===================================================================== */
-V.m13=()=>`
-    <div class="tip"><b>导出</b>导的是你当前筛选看到的那几行（含顺序），文件名带<b>日期 ＋ 页名</b>；<b>删除</b>前系统会先列出<b>会影响什么</b> —— 删完核心单据<b>留痕可查</b>，规则类配置<b>直接删掉、不留痕</b>。</div>
-  <div class="grid3">
-    <div class="card" style="margin:0"><h4>导出 Excel —— 在你要导的那一页上</h4><div class="bd">
-      <div class="sm" style="line-height:1.9">哪些页有：<b>每个列表页都有</b><br>导的是什么：<b>当前筛选下看到的那几行</b><br>文件名：日期 + 页名</div>
-      <div class="hr"></div><div class="mut sm">本页没有自己的数据 —— 请到具体那一页（如「付款流水」「集采台账」「项目档案」）点右上角的「导出 Excel」。</div></div></div>
-    <div class="card" style="margin:0"><h4>删除数据 —— 在每一行上</h4><div class="bd">
-      <div class="sm" style="line-height:1.9">入口：<b>每条数据行上的「删除」</b><br>确认框：<b>先列影响范围</b>（关联数据、统计影响）再执行<br>删完：核心单据<b>留痕可查、统计自动重算</b></div>
-      <div class="hr"></div><div class="tip wn" style="margin:0">删除<b>不可恢复</b> —— 确认框里列的那几行请看完再按。</div></div></div>
-    <div class="card" style="margin:0"><h4>附件 —— 现在还不能传</h4><div class="bd">
-      <div class="sm" style="line-height:1.9"><b>单据附件 / 审批后附件</b> —— <span class="tag t-wn">暂不支持</span><br><b>入库附件批量审查 + 导出 zip</b> —— <span class="tag t-in">以后再做</span></div>
-      <div class="hr"></div><div class="mut sm">本系统也<b>不做提醒与督办</b>（不推消息、也没有时间节点总表）—— 盯时间节点仍按原来的方式办。</div></div></div>
-  </div>`;
-
 V.m14=()=>`
   
-  <div class="card"><h4>剔除规则（<b>${RULE_EX.length}</b> 类有效）<span class="sp"><button class="btn sm" data-act="ruleAdd" title="新增一条剔除规则（弹窗填「规则类别 / 命中值 / 业务含义」）">＋ 增加规则</button><span class="mut sm">命中即剔除</span></span></h4>
+  <div class="card"><h4>剔除规则（<b>${RULE_EX.length}</b> 类有效）<span class="sp"><button class="btn sm" data-act="ruleAdd" title="新增一条剔除规则（弹窗填「规则类别 / 命中值 / 业务含义」）">＋ 增加规则</button></span></h4>
     <div class="bd np">${TBL({head:'<th>规则类别</th><th>命中值（多个用 ｜ 分隔）</th><th>剔除的业务含义</th><th>操作</th>',rows:[
       ...RULE_EX.map((r,i)=>`<tr><td><b>${esc(r[0])}</b></td><td class="fc">${esc(r[1])}</td><td class="sm mut">${esc(r[2])}</td>
       <td class="ctr"><button class="btn sm" data-act="ruleEdit" data-i="${i}" title="改这条规则的「规则类别 / 命中值 / 业务含义」">编辑</button> <button class="btn sm dg" data-act="ruleDel" data-i="${i}" title="删除这条规则（配置类数据 = 硬删、不留痕，§9.4）">删除</button></td></tr>`)
     ]})}</div>
-    <div class="bd"><div class="tip wn" style="margin:0"><b>剔除规则中不得配置「收款单位 = 资产处集中采购」</b>：集采<b>不走剔除</b>，而是参与<b>分类</b>（第 ② 步）。</div>
-      <div class="tip" style="margin:calc(6px * var(--fscale)) 0 0"><b>本页「命中值」以系统配置为准</b>（当前来源：${esc(RULE_SRC)}）。⭐ 本表<b>可增 / 删 / 改</b>（配置类数据 = 硬删、不留痕，§9.4）；改动<b>只影响后续抓取</b>，已产生的剔除标记不受影响、也不重算。</div></div>
+    <div class="bd"><div class="tip wn" style="margin:0"><b>剔除规则中不得配置「收款单位 = 资产处集中采购」</b>：集采<b>不走剔除</b>，而是参与<b>分类</b>。</div>
+      </div>
   </div>
-  <div class="grid2">
-      <div class="card"><h4>集采项目剔除名单（<b>${(window.JCI_ALL||[]).filter(x=>x.active).length}</b> 项在用）<span class="sp"><span class="mut sm">命中即<b>抓取时剔除</b>：不写入、也不再进「未写入」清单</span></span></h4>
+  <div class="card" style="margin-bottom:0"><h4>集采项目剔除名单（<b>${(window.JCI_ALL||[]).filter(x=>x.active).length}</b> 项在用）</h4>
     <div class="bd np">${TBL({head:'<th>项目全名</th><th>加入理由</th><th>操作人</th><th>加入时间</th><th>状态 / 操作</th>',rows:[
       ...((window.JCI_ALL||[]).length ? (window.JCI_ALL||[]).map(x=>{
         const act = x.active
@@ -1444,21 +1429,8 @@ V.m14=()=>`
     <div class="bd">${FBAR({body:`<div class="fi"><label>加入一项（粘贴<b>项目全名</b>）</label><input class="inp" id="jciName" placeholder="例：某某项目安装工程"></div>
       <div class="fi"><label>理由（可选）</label><input class="inp" id="jciWhy" placeholder="例：老项目，款已付清"></div>
       <button class="btn pri sm" data-act="jciAdd" title="加入后：该项目从下次抓取起不再写入，也不再进「未写入」清单">加入剔除名单</button>`})}</div>
-    <div class="bd"><div class="tip" style="margin:0">⭐ <b>命中口径 ＝ 项目全名一致</b> ⇒ 写<b>人看的全名</b>即可。<br>⛔ 与付款侧「剔除规则」<b>各一份、不共用</b>；本名单<b>只影响集采抓取</b>、<b>不动已入库的历史合同</b>。</div></div>
-  </div>
-<div class="card"><h4>分类规则（判定顺序）</h4><div class="bd np">${TBL({head:'<th>顺序</th><th>条件</th><th>归入分类</th>',rows:[
-      ...RULE_CA.map(r=>`<tr><td class="fc">${r[0]}</td><td class="fc sm">${esc(r[1])}</td><td>${catTag(r[2])}</td></tr>`)
-    ]})}
-    <div class="bd"><div class="tip" style="margin:0"><b>分类只有三类</b>（机械 / 集采 / 辅材），<b>没有「其他」类</b>。任何剔除后剩余的通知书<b>必然落入三类之一</b>。手改后重新抓取导入，<b>分类不被覆盖</b>（人工判断优先于自动规则）。</div></div></div></div>
-    <div class="card"><h4>小微识别关键字配置<span class="sp"><span class="mut sm">已从全局 small_map 迁到项目行</span></span></h4><div class="bd np">${TBL({head:'<th>具体小微（仓库名）</th><th>所属壳</th><th>识别关键词</th>',rows:[
-      ...PJs.filter(p=>p.type==='small').map(p=>`<tr><td class="sm">${esc(p.name)}</td><td class="sm mut">${esc((PJs.find(x=>x.id===p.parent)||{}).full||'')}</td>
-        <td class="fc">${esc(p.kw)}</td></tr>`)
-    ]})}
-    <div class="bd"><div class="tip" style="margin:0"><b>设计要点：</b>关键词是<b>具体小微的属性</b>，存在<b>项目行</b>上（<span class="fc">|词1|词2|</span> 格式）；<b>允许重复</b>，命中多个时<b>弹窗让用户选</b>，选中后去重追加到该小微名下。</div></div></div></div>
-  </div>
-  <div class="card" style="margin-bottom:0"><h4>本系统的几条硬规矩（对数据有什么影响，先看这里）</h4><div class="bd np">${TBL({cls:'cond',rows:[
-      ...['金额一律 2 位小数；差 1 分也算不符','源数据不动 —— 人工判断记在单独的旁路值上','人工改过的值，不会被导入/抓取覆盖','仓库名不可人工修改（只能系统建档或扶正时写）','小微必须先有壳、后有微（不可单独存在）','删除分档（按「删了能不能复原」分）：可复原的 / 你自己录的（期初 · 特殊费用 · 手动补录 · 付款计划）⇒ 真删；只有账号是软删（留痕里的人名要认得出来）','不标准值不清洗，原样入库 + 提供批量修改入口','材料月报不上报；过程资料才上报'].map((t,i)=>`<tr><td class="fc" style="width:40px">${i+1}</td><td>${t}</td></tr>`)
-    ]})}</div></div>`;
+    
+  </div>`;
 
 /* =====================================================================
    17. MOD-15 用户管理（§1.5 角色与权限）
@@ -1472,7 +1444,7 @@ V.m15=()=>{
   /* 防锁死：**最后一个「在用管理员」**不能停用 / 删除（其余账号随便动） */
   const lockAdmin=u=>u.role==='admin'&&u.status==='在用'&&admins.length<=1;
   return `
-    <div class="tip">系统内只有 <b>2 人</b>、<b>业务权限无区别</b>（「角色」唯一的区别是<b>能不能管理账号</b>）；<b>停用 ≠ 删除</b>（删除是软删除：账号名保留、数据不销毁、可恢复）；<b>不能停用 / 删除「最后一个在用管理员」</b>、也不能删除自己；<b>系统外一律不设账号</b>。</div>
+    
   <div class="card" style="margin-bottom:0"><h4>账号列表
     <span class="sp"><span class="mut sm">当前登录 <b>${esc(CUR.name)}</b>（${iAmAdmin?'管理员':'普通用户'}）· 在用 <b>${on.length}</b> · 停用 <b>${offN}</b> · 已删除 <b>${delN}</b></span>
     ${iAmAdmin?`<button class="btn" data-act="userTransfer">转让管理员</button>`:''}
@@ -1491,7 +1463,7 @@ V.m15=()=>{
            <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
            ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
     </tr>`)]})}</div>
-    <div class="bd"><div class="tip" style="margin:0"><b>这页管什么：</b>有<b>哪几个账号</b>（在用 / 已停用 / 已删除）、各自管的 <b>i8 凭据</b> —— 新增 / 停用 / 改密 / 转让管理员都在卡头与行内。<b>改密：本人的密码自己就能改</b>，改别人的才要管理员。<b>留痕里的「改前人」「操作人」对到真实账号</b>，出事能查到人。</div></div>
+    
   </div>`;
 };
 

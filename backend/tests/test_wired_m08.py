@@ -131,16 +131,16 @@ def test_加载时求值的两处已改为重算():
     """`PROC_PJS` / `procPj` 不能停在"加载时算出来的空值"上（**静默失去候选**）。"""
     assert "const PROC_PJS=uniqBy(IVs" not in SHELL, "`PROC_PJS` 仍是加载时一次性求值"
     assert "let PROC_PJS=[];" in SHELL, "`PROC_PJS` 没有改成可重算的空数组"
-    body = func_body("reloadInv")
-    assert "PROC_PJS = uniqBy(IVs" in body, "`reloadInv()` 里没有重算 `PROC_PJS`"
-    assert "procPj = PROC_PJS[0]" in body, "`reloadInv()` 里没有落定 `procPj` 初值"
+    body = func_body("reloadProc")
+    assert "PROC_PJS = d.projects" in body, "过程资料候选须包含后端历史项目"
+    assert "procPj = PROC_PJS[0]" in body, "过程资料首次读取须落定当前项目"
     assert "let procPj=PROC_PJS[0]" not in SHELL, "`procPj` 仍是加载时求值"
 
 
 @acc()
 def test_仓库候选与数据源同源():
     """⚠️ 候选用演示主数据 `WHs` ⇒ 与 i8 真名对不上，**选了也筛不出行**（静默失配）。"""
-    assert "pjSort(PROC_PJS)" in SHELL, "库存单据「项目」候选没改成真数据"
+    assert "pjSort(uniqBy(IVs,iv=>iv.wh))" in SHELL, "库存候选须只取真实库存仓库"
     assert "pjSort(WHs.map(w=>w.name))" not in SHELL, "「项目」候选还在用演示 `WHs`"
     assert "WHs.map(w=>w.name).forEach" not in SHELL, "「全选项目」还在用演示 `WHs`"
 

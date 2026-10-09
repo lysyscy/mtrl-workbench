@@ -11,8 +11,7 @@
 3. **规则类别必须是后端认的 key** —— 原型是一个自由文本输入框；而 §4.2.2 只有四类，
    填「收款单位」后端会拒、填错别字更看不出问题 ⇒ 改成**后端 `kinds` 撑起来的下拉**。
 4. **卡头条数必须是算出来的**（`RULE_EX.length`），⛔ 不许写死。
-5. **分类规则表只读 / 规则与说明表不可排序 / 关键词编辑入口在项目行** ——
-   这三条是判定顺序的归属边界（可编辑 = 允许就地改业务口径）。
+5. TAIL-263 撤掉分类规则与小微识别说明模块；真实分类仍走后端，关键词编辑入口保留在项目行。
 
 ⚠️ **`001-04` 刻意不断言「几条命中值」** —— 该判据点原文即「条数在此不复述」
    （条数的主人 =《说明书》§4.2.2 那张表，抄一份到测试里必然静默过期）。
@@ -81,14 +80,13 @@ def test_剔除规则真增删改且改动落到规则数据():
 
 @acc("ACC-CFG-RULE-001", "001-02")
 def test_分类规则表只读不渲染编辑入口():
-    """`001-02` 分类规则表**保持只读**，不渲染编辑入口（判定顺序 = 业务口径，可编辑 = 允许改口径）。"""
+    """TAIL-263 撤掉分类说明模块，真实分类仍由后端完成。"""
     sl = page_slice("m14")
-    i = sl.find("RULE_CA.map")
-    assert i > 0, "`V.m14` 里找不到分类规则表的 `RULE_CA.map(...)`"
-    # ⚠️ 只取**分类规则那一行**的 map 段（⛔ 别把整页 `in` —— 上方的剔除规则表本来就有按钮）
-    seg = sl[i:i + 700]
-    for bad in ("button", "data-act", "input"):
-        assert bad not in seg, f"分类规则表的渲染段里出现了 `{bad}` ⇒ 它被做成了可编辑（§4.2.3 只读）"
+    assert "RULE_CA.map" not in sl and "<h4>分类规则" not in sl, "默认页分类说明又出现了"
+    from app.mod03_notice.classify import decide_placement
+    from app.mod05_flow.domain import CATEGORY_JC, PAYEE_JC
+    assert decide_placement({"payee": PAYEE_JC}).category == CATEGORY_JC
+    assert "API.setCategory(" in act_entry("batchCatApply"), "付款通知书实际分类编辑入口丢失"
 
 
 # ============================================================== 001-03
@@ -131,13 +129,10 @@ def test_命中值结构与口径一致():
 
 @acc("ACC-CFG-RULE-001", "001-05")
 def test_关键词编辑入口在项目行本页只读():
-    """`001-05` 小微识别关键词的编辑入口在**项目行**（`MOD-01`），本页只作**只读展示**。"""
+    """TAIL-263 撤掉关键词说明模块；实际编辑入口仍在项目行。"""
     sl = page_slice("m14")
-    i = sl.find("PJs.filter(p=>p.type==='small')")
-    assert i > 0, "`V.m14` 里找不到小微识别关键字表"
-    seg = sl[i:i + 900]
-    for bad in ("input", "button", "data-act"):
-        assert bad not in seg, f"本页的关键词表里出现了 `{bad}` ⇒ 越权可编辑（入口该在项目行）"
+    assert "PJs.filter(p=>p.type==='small')" not in sl, "默认页小微识别说明又出现了"
+    assert "小微识别关键字配置" not in sl
     # 真入口确实在 `m01` 的项目行上（丢了它 = 关键词哪儿都改不了）
     # ⚠️ 必须**连属性名一起钉**（`data-act="editKw"`）—— 只查 `editKw` 会被 `editKwX`
     #    / `editKwOk` 这类同前缀标识符**喂饱**（反向灵敏度实测：改成 `editKwX` 照样绿）。

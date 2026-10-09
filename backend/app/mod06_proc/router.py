@@ -1,10 +1,6 @@
-"""`MOD-06` 路由：过程资料页（`/m06`）＋ **机械手录**（`/m06/mech`）＋ **历史导入三步**（`/m06/import*`）。
-
-⚠️ 只读页面：**材料列没有写路径**（§5.2.3 单向流）—— 要改材料数据回 `/m08` 打调整单。
-⚠️ 本模块**只有两条写路径**：① **机械手录**（`/m06/mech` → 旁路表，两段都可录，§5.2.5 ③）
-   ② **历史导入**（`/m06/import/*` → 只写历史段快照，§5.2.5 ①②）。
-⚠️ 写操作一律 **PRG**（POST → 303 → GET）或就地回显；校验失败**一个字都不写库**。
-⚠️ 查询参数的解析出口与 `MOD-08` 共用（`query_params`），不各写一份。
+"""MOD-06 过程资料读取、机械手录和通用导入 API。
+材料只读；任何月份机械可手录，导入同月列可覆盖手录。
+导入唯一入口 /api/imp/m06_proc/*；写失败不改变有效数据。
 """
 
 from __future__ import annotations
@@ -83,6 +79,19 @@ def api_proc_export(request: Request):
                         headers={"X-Export-Filename": quote(path.name)})
 
 
+@router.get("/api/m06/matrix")
+def api_proc_matrix():
+    """过程资料所有项目、核算月与汇总的唯一读取出口。"""
+    from app.mod06_proc.service import build_matrices
+    from app.core.errors import human_reason
+
+    try:
+        with session_scope() as s:
+            return {"ok": True, **build_matrices(s)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "message": human_reason("读取过程资料失败", exc)}
+
+
 # ⚠️ 2026-09-18（`§19` 批 2）：**PRG 版机械手录已删**（`POST /m06/mech` ＋ `mech_save`）——
 #    壳走的是 JSON 版 `POST /api/m06/mech`（与它**同一份判定** `mech_ui.parse_mech_values`
 #    ＋ `repo.save_mech` ✓，见本文件下方）。⛔ 别把"机械手录"整条当成没实现。
@@ -147,10 +156,10 @@ def api_mech() -> dict:
         wh, ym = _key(r)
         if wh and ym:
             manual[(wh, ym)] = _vals(r)
-    for r in snaps:
-        wh, ym = _key(r)
-        if wh and ym:
-            snap.setdefault((wh, ym), _vals(r))       # 同月多行（一标/三标）⇒ 取第一条（与页面同"命中第一条"语义）
+    for wh in {str(r.get("warehouse") or "") for r in snaps}:
+        for ym, bucket in D.snapshot_by_month(snaps, warehouse=wh).items():
+            if wh and ym:
+                snap[(wh, ym)] = _vals(bucket)
 
     # ⭐ 逐月按**分界月**定来源（`column_source` = 唯一出口，⛔ 不在这里另判）：
     #    历史段 ⇒ 快照值；正式段 ⇒ 手录值。两边都取不到 ⇒ 全 0（`MACH6` 只能给数；页面表体的

@@ -11,6 +11,7 @@ from app.mod06_proc import domain as D
 from app.mod06_proc.repository import (
     load_batches,
     load_cutoffs,
+    load_mechanical_cutoffs,
 )
 
 
@@ -29,7 +30,7 @@ def load_inv_rows(session, **kw):
 
 
 def load_mech(session, **kw):
-    """⭐ 包间出口：过程资料的手工行。"""
+    """包间出口：导入和手录共用的有效机械值。"""
     from app.mod06_proc import repository as R
 
     return R.load_mech(session, **kw)
@@ -122,7 +123,7 @@ def import_projects(s: Session) -> list[str]:
     ⚠️ 并集里**保留** i8 出现过、档案里没有的仓库名：m06 落库**不要求**档案行
       （`import_snapshot(project_id=None)` 照样写、页面按仓库名读）⇒ 那些项目也导得进去 ✓。
     """
-    keys = set(projects_of(load_inv_rows(s), load_history(s)))
+    keys = set(projects_of(load_inv_rows(s), load_history(s) + load_mech(s)))
     keys |= set(displays_by_key(s))
     return sorted(k for k in keys if k)
 
@@ -144,10 +145,7 @@ def displays_by_key(s: Session) -> dict[str, str]:
 
 
 def build_import_data(s: Session, *, warehouse: str = "") -> dict:
-    """**历史导入页**的数据（§5.2.5 ①②）—— 项目候选 ＋ 当前截止核算月 ＋ 已登记批次。
-
-    ⚠️ 本页**读取**现有数据，**不写任何东西**；写路径在 `importer.commit`（只写历史段）。
-    """
+    """导入项目候选、两类上次截止与批次；只读，不修改截止或数据。"""
     # ⭐ `TAIL-114`（2026-09-27 用户裁定）：导入页候选 = **档案里的全部**（含归档）∪ 有数据的
     #   —— 见 `import_projects` 的 docstring（"导历史"要能给还没数据的项目做）。
     #   ⚠️ **过程资料页**仍走 `projects_of`（用户确认：那里只显示有数据的项目没问题）。
@@ -162,6 +160,8 @@ def build_import_data(s: Session, *, warehouse: str = "") -> dict:
         #   而用户会换项目 ⇒ 只给一格就会把 A 项目的分界写给 B（真缺陷，见 `load_cutoffs`）。
         #   ⚠️ 口径仍只有一处：本键由 `load_cutoffs` 给，与 `cutoff_ym` 同一张表。
         "cutoffs": load_cutoffs(s),
+        "mechanical_cutoff_ym": load_mechanical_cutoffs(s).get(current, ""),
+        "mechanical_cutoffs": load_mechanical_cutoffs(s),
         "batches": [b for b in load_batches(s) if not current or b.warehouse_name == current],
     }
 
@@ -173,7 +173,7 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     history_rows = load_history(s)                     # 历史段快照（只取未回滚批次）
 
     # 候选项目 = **库存单据里出现过的仓库名** ＋ **只有历史段的项目**（照原型；项目键 = 仓库名，§2.7.4）
-    projects = projects_of(inv_rows, history_rows)
+    projects = projects_of(inv_rows, history_rows + mech_rows)
     warehouse = st["warehouse"] if st["warehouse"] in projects else (projects[0] if projects else "")
 
     cutoff = load_cutoff(s, warehouse=warehouse)       # 分界 = 截止核算月（§5.2.5 ①）
@@ -204,6 +204,23 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
         "export": _export_data(st, projects=projects, warehouse=warehouse,
                                displays=displays_by_key(s)),
     }
+
+
+def build_matrices(s: Session) -> dict:
+    """壳与成品导出共用领域矩阵：所有有库存或有效历史的项目。"""
+    inv, manual, history = load_inv_rows(s), load_mech(s), load_history(s)
+    projects = projects_of(inv, history + manual)
+    cutoffs = load_cutoffs(s)
+    matrices = {}
+    for warehouse in projects:
+        tables = {name: D.build_matrix(inv_rows=inv, manual_rows=manual, history_rows=history,
+                                       warehouse=warehouse, adjusted=adjusted,
+                                       cutoff_ym=cutoffs.get(warehouse) or "")
+                  for name, adjusted in (("raw", False), ("adjusted", True))}
+        matrices[warehouse] = {**tables, "cutoff_ym": cutoffs.get(warehouse) or "",
+                               "totals": {name: D.column_totals(rows) for name, rows in tables.items()},
+                               "segments": {name: D.segment_totals(rows) for name, rows in tables.items()}}
+    return {"projects": projects, "matrices": matrices}
 
 
 def _export_data(state: dict, *, projects: list[str], warehouse: str,

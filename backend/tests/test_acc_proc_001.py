@@ -171,7 +171,7 @@ def test_材料费只作引用只读且无编辑入口():
     #    ⛔ 别为了"这一行看着整齐"把机械列塞回来：那等于又给出一份"恒为手录"的第二说法
     #      （改前就是这样，正是这次要收掉的东西）。
     assert all(k not in D.COLUMN_SOURCE for k in D.MECH_KEYS)
-    assert D.MECH_SOURCE_BY_SECTION == {D.SECTION_HISTORY: D.SOURCE_SNAPSHOT,
+    assert D.MECH_SOURCE_BY_SECTION == {D.SECTION_HISTORY: D.SOURCE_MANUAL,
                                         D.SECTION_FORMAL: D.SOURCE_MANUAL}
     assert D.MATERIAL_READONLY is True
 

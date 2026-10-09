@@ -249,7 +249,7 @@ def test_范围栏画在第一步_且没选项目不许落库():
     assert "hasOwnProperty.call(ctx, 'projects')" in code and "IMP.hasPj" in code, \
         "`hasPj` 没从域给的 `projects` 键算出来 —— 那「这个域要不要项目」又从哪知道？"
     # 候选为空 ⇒ 这一格**照样画**（⛔ 不静默少一格）＋ **置灰**（⛔ 不做可点的空面板）＋ **给真出路**
-    assert "(IMP.hasPj || IMP.hasYm || IMP.hasCut)" in code, \
+    assert "(IMP.hasPj || IMP.hasYm || IMP.hasCut || IMP.hasMechCut)" in code, \
         "范围栏的渲染条件没跟上 —— 候选为空时用户看不到「有项目这一环」"
     assert 'class="btn" disabled style="min-width:186px" title="库里还没有项目档案' in code, \
         "空候选时那个按钮不是**置灰**的 —— 点开一个空面板 = 假控件（守则 §5.5）"
@@ -369,9 +369,9 @@ def test_不会落库的行要在行上直接标():
     assert "skiprow${plain ? ' plain' : ''}" in code and "kind || 'bad'" in code, (
         "两类标记没有分开渲染（`kind=skip` → 灰底 `.plain`；且**缺 `kind` 按 `bad` 走**，"
         "保守：宁可多提醒一句「要处理」，也别把该处理的悄悄归成「不用管」）")
-    assert "plegend" in code and "不用你改" in code and "鼠标放到那一行上看原因" in code, \
+    assert "plegend" in code and "不用你改" in code and "处理说明" in code, \
         "表上方没有**两类图例**（看表的人分不清「要处理」与「本来就跳过」）"
-    assert "已在上表" in code and "逐行标出" in code, (
+    assert "原因已标在对应行" in code and "lgMd(hit.why)" in code, (
         "底部那句还是只让人去读别处的文字 —— 必须指向「行上**已经标好了**」")
     assert ".dt tbody tr.skiprow{box-shadow:inset 3px 0 0 var(--wn);background:var(--wn-l)}" in SHELL, (
         "`tr.skiprow` 的样式没定义 —— 要**浅底 ＋ 左侧警示竖条**（视觉语言同「i8 已撤单行」`.ntvoid`，"
@@ -388,7 +388,7 @@ def test_截止核算月要写清格式要求():
     code = _imp_code()
     assert 'id="impCut"' in code, "「截止核算月」输入框不见了（真机判词钉着它）"
     assert "YYYY-MM" in code, "「截止核算月」旁边没写**格式要求**"
-    assert 'placeholder="2026-08"' in code, \
+    assert 'placeholder="2025-11"' in code and 'placeholder="2026-09"' in code, \
         "占位里没给一个**示例格式**（占位本身就是最好的示范：用户照着填就不会错）"
 
 
@@ -504,19 +504,9 @@ def test_预览的行要能对得上号_不许静默截断也不许藏行号():
 
 @acc("ACC-UI-SHELL-001", "001-49")
 def test_截止核算月要说清它是什么_不是只给一个名字():
-    """⭐ 2026-09-26（用户报障）：「**截止核算月填写的意义写的不明确**」。
-
-    原来只有一个 `截止核算月（历史段分界）` ＋ placeholder「留空 ⇒ 取本批最大月」——
-    ⛔ 「历史段分界」是**内部黑话**：用户看不出"填了会怎样、不填会怎样"。
-
-    判词：那一格必须用**大白话**说清三件事 —— ①**及以前**按这份表（不再问 i8）②**之后**走 i8 抓取
-    ③留空 = 取本批最大月。⚠️ 控件 id 仍是 `#impCut`（真机判词钉着它，⛔ 别改 id）。
-
-    ⚠️ **能证伪**：把那句说明删掉、或退回只有"历史段分界"四个字 ⇒ 本件必红。
-    """
+    """双截止月只过滤本次导入，不再定义后续手录分界。"""
     code = _imp_code()
-    assert 'id="impCut"' in code, "「截止核算月」输入框不见了（真机判词钉着 `#impCut`）"
-    for must in ("历史段 / 正式段的分界月", "及以前", "之后", "留空 = 取本批里最大的核算月"):
-        assert must in code, f"「截止核算月」的说明里缺「{must}」—— 用户看不出这一格填了会怎样"
-    assert "历史段分界）" not in code, (
-        "还留着「（历史段分界）」那种黑话当**唯一**说明 —— 用户 2026-09-26 报的就是「看不懂这一格」")
+    for must in ('id="impCut"', 'id="impMechCut"', '材料截止月', '机械截止月', '及以前', '留空取本批最大核算月'):
+        assert must in code, f"导入范围缺少 {must}"
+    assert '历史段 / 正式段的分界月' not in code
+    assert '之后走 i8' not in code

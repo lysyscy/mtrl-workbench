@@ -18,7 +18,7 @@
       用户裁定 `B`：同一件事只留一个入口 ⇒ 走通用面 `/api/imp/m05_flow/*`，见 `V.imp`）。 */
 /* ---------- 共用文案（**一处在说、多处引用** ⇒ ⛔ 别在两处各写一遍）----------
    ⭐ 2026-10-01（`TAIL-210` 批 3b）：这个 label 在 `ctxBar` 的两个分支各写了一遍。 */
-const IMP_PJ_LABEL = '这批数据进哪个项目（键 = 仓库名，§2.7.4）';
+const IMP_PJ_LABEL = '这批数据进哪个项目';
 const SET = {items: [], logs: [], tips: [], errs: [], msg: '', kind: 'ok'};   /* 系统设置 */
 
 
@@ -59,7 +59,7 @@ function lgPick(id, pickAct, parseAct, file, tip) {
     + `<div class="fi"><label>选文件（.xlsx）</label>`
     + `<input class="inp" type="file" id="${esc(id)}" accept=".xlsx" data-act="${esc(pickAct)}"></div>`
     + `<div class="fi"><label>&nbsp;</label>`
-    + `<button class="btn pri" data-act="${esc(parseAct)}"${file ? '' : ' disabled'} title="${file?'解析这个文件（一个字节都不写入）':'还没选文件 —— 选完才能解析'}">解析并预览（不写入）</button></div>`
+    + `<button class="btn pri" data-act="${esc(parseAct)}"${file&&!IMP.working ? '' : ' disabled'} title="${file?'解析这个文件（一个字节都不写入）':'还没选文件 —— 选完才能解析'}">下一步：核对列</button></div>`
     + `<div class="fi"><label>&nbsp;</label><span class="mut sm">${file
       ? `已选：<b class="fc">${esc(file.name)}</b>（${Math.max(1, Math.round(file.size / 1024))} KB）`
       : esc(tip || '只读第一个工作表')}</span></div>`})}`;
@@ -74,111 +74,51 @@ const lgEmpty = (cols, text) => EMPTYROW(cols, esc(text));
    如历史付款流水的「未匹配清单」与「核对报告」）。
    ⚠️ 一律**通用渲染**（题 ＋ 说明 ＋ 表）：⛔ 壳里**不许出现任何域名 / 列名** ——
       那全由**后端**（域钩子 `Hooks.preview` / `commit` 的回执）给 ⇒ 加一个域不必改本页。 */
-function lgBlocks(blocks) {
-  return (blocks || []).map(b => `<div style="margin-top:calc(12px * var(--fscale))">
-    <h4 style="font-size:calc(12.5px * var(--fscale));margin:0 0 calc(5px * var(--fscale))">${lgMd(b.title || '')}</h4>
-    ${b.note ? `<p class="mut sm" style="margin:0 0 calc(5px * var(--fscale))">${lgMd(b.note)}</p>` : ''}
-    <div class="tw" style="max-height:260px;min-height:0">${TBL({head:(b.columns || []).map(c => `<th>${esc(c)}</th>`).join(''),
-      rows:(b.rows || []).length
-        ? b.rows.map(r => `<tr>${(r || []).map(c =>
-            `<td>${esc(c == null ? '' : String(c))}</td>`).join('')}</tr>`)
-        : [],
-      empty:lgEmpty((b.columns || []).length || 1, b.empty || '（无）')})}</div></div>`).join('');
+function lgBlocks(blocks, expanded = false) {
+  return (blocks||[]).map(b=>{
+    const rows=b.rows||[];
+    return `<details class="imp-block"${rows.length&&expanded?' open':''}><summary>${lgMd(b.title||'明细')} <span class="mut sm">${rows.length} 条</span></summary>
+      ${rows.length&&b.note?`<p class="mut sm">${lgMd(b.note)}</p>`:''}
+      <div class="tw" style="max-height:260px;min-height:0">${TBL({head:(b.columns || []).map(c=>`<th>${esc(c)}</th>`).join(''),
+        rows:rows.map(r=>`<tr>${(r||[]).map(c=>`<td>${lgMd(c==null?'':String(c))}</td>`).join('')}</tr>`),
+        empty:lgEmpty((b.columns||[]).length||1,b.empty||'没有此类记录')})}</div></details>`;
+  }).join('');
 }
 
 /* ============================================================ `V.set` —— 系统设置（§7.8） */
 
 V.set = () => {
-  /* ⭐⭐ 2026-09-27（`TAIL-127` · 用户走查裁定 **B**）—— 本页**不再摆连接参数的输入框**。
-     用户原话：「连接参数这个板块说实话可以删掉，因为**不可能有变动**；那系统设置就只剩下主题色了」。
-     ⇒ 三个参数各自搬回**它起作用的地方**（守则 §5.8「**换地方，不是删掉**」）：
-       · `i8 服务地址`          → 「**i8 接入层**」页卡头的「i8 连接设置」按钮（`ACT.i8SetOpen`）
-       · 两个**打印版式 ID**    → 「**付款通知书**」页「打印机设置」弹窗里（打印相关的都在那儿）
-     ⚠️ **能力一处没丢**：取值仍走 `GET/POST /api/m14/settings`（落库 ＋ 格式校验 ＋ **逐项留痕** ＋ 清缓存）。
-     ⚠️ 那两个入口渲染时**照旧用后端给的 `it.label` / `it.hint` / `it.stored` / `it.effective`** ——
-        ⛔ 别在这儿另写一份文案（反直觉提示「配反了会印错版式」必须原样来自后端，`001-04` 钉着它）。
-     ⚠️ **留痕卡留着**（"这些参数被谁改成什么"的账），卡头写清现在去哪儿改。 */
-  const tips = (SET.tips || []).map(t => `<li>${em(t)}</li>`).join('');
-  const rows = (SET.logs || []).map(l => `<tr><td class="now">${esc(l.at)}</td><td class="fc">${esc(l.key)}</td>
-    <td>${esc(l.old) || '（空）'}</td><td>${esc(l.new) || '（空）'}</td><td>${esc(l.operator) || '—'}</td></tr>`).join('');
   const errs = (SET.errs || []).length
     ? `<div class="tip dg">${SET.errs.map(e => esc(e)).join('<br>')}</div>` : '';
-  /* ⭐ **外观主题**（`ACC-UI-THEME-001/001-06`）—— 用户 2026-09-21 两次裁定的合体：
-     ① 「移进 `MOD-14` 更符合逻辑」② 「**不要某一套的色板预览**，要**每一套的主题色**，
-        旁边显示颜色值，颜色点要**圆形**，观感要高级一点」。
-     ⚠️ 它**按用户**保存（判据要的是"A 与 B 各挑各的"）⇒ 所以它**不进** `SET.items`
-        （那是"会变、且与「谁的账号」无关的连接参数"，`ACC-CFG-SETUP-001/001-01`）—— 它只是**住在本页**的一张卡片。
-     ⛔ 也别把它改成系统级配置：那会把「按用户隔离」这条判据做没。
-     ⭐ 切换**就地生效、不刷新页面**（`ACT.themeSet` → `applyThemeLive()`）。
-     ⭐⭐ **每套一张"配色标本"卡**：卡面用它**自己那套**的 底色/文字/边框 画（取值由**后端**从唯一真源解析出来），
-        左边一个**圆形主色点**、旁边是**主色色值** ⇒ 明暗差异**一眼可见**
-        —— 这正是用户"**感觉不到颜色变化**"的解药（浅色那几套只差一个主色，在满屏表格里根本看不出来）。 */
   const pcard = p => {
     const on = p.name === CUR_THEME;
-    return `<button class="thcard${on ? ' on' : ''}" data-act="themeSet" data-theme="${esc(p.name)}"
-        title="${esc(p.name)}｜适用：${esc(p.scene)}｜风格：${esc(p.style)}（点了即时生效）"
-        style="background:${p.bg};color:${p.tx};border-color:${on ? p.pri : p.bd}">
-      <span class="thdot" style="background:${p.pri}"></span>
-      <span class="thmeta">
-        <b>${esc(p.name)}</b>
-        <i class="thhex">${esc(p.pri)}</i>
-        <i class="thscene">${esc(p.scene)}</i>
+    return `<button class="thcard set-theme${on ? ' on' : ''}" data-act="themeSet" data-theme="${esc(p.name)}"
+        aria-label="${esc(p.name)}" aria-pressed="${on}" title="${esc(p.name)}"
+        style="--sample-bg:${p.bg};--sample-tx:${p.tx};--sample-pri:${p.pri};--sample-bd:${p.bd}">
+      <span class="set-theme-preview" aria-hidden="true">
+        <span class="set-preview-sidebar"><i></i><i></i><i></i></span>
+        <span class="set-preview-main"><i class="set-preview-title"></i><i class="set-preview-toolbar"></i>
+          <span class="set-preview-table"><i></i><i></i><i></i></span></span>
       </span>
-      ${on ? `<span class="thck" style="color:${p.pri}">✓</span>` : ''}
+      <span class="set-theme-swatches" aria-hidden="true"><i style="background:${p.pri}"></i>
+        <i style="background:${p.bg}"></i><i style="background:${p.tx}"></i></span>
     </button>`;
   };
-  const themeCard = `<div class="card"><h4>外观主题
-    <span class="sp mut sm">按<b>你的账号</b>保存 · 只改你自己看到的样子（§7.7）</span></h4>
-    <div class="bd">
-      <p class="mut sm" style="margin:0 0 calc(9px * var(--fscale))">点一张卡<b>立即生效</b> —— ⛔ 不刷新页面、也不会把你踢回别的页。
-        每张卡用它<b>自己那套的底色与文字色</b>画的 ⇒ 明暗差异一眼可见；左边<b>圆点 = 该套主色</b>，旁边是色值。</p>
-      <div class="thgrid">${THEME_PALETTE.map(pcard).join('')
-        || '<span class="mut">（取不到主题清单 —— 见顶部横幅）</span>'}</div>
-      <p class="mut sm" style="margin-top:calc(9px * var(--fscale))">当前：<b class="fc">${esc(CUR_THEME) || '默认'}</b>　·　
-        ⚠️ 主题<b>只管屏幕</b>：打印件与导出的 Excel 颜色与它无关（§7.7）。</p>
+  const themeCard = `<div class="card set-card"><h4>外观主题</h4><div class="bd">
+    <div class="thgrid set-theme-grid">${THEME_PALETTE.map(pcard).join('')}</div>
     </div></div>`;
-  /* ⭐⭐ `TAIL-129`（2026-09-27 用户裁定走**方案 B**）：「**界面大小**」卡 —— 与主题卡**同款**
-     （按<b>你的账号</b>保存 · 点了**即时生效不刷新**）。
-     ⚠️ **档位清单来自后端**（`reloadTheme` 填的 `UI_SCALES` ⇒ 真源 = `domain.UI_SCALES`），
-        壳⛔ 不写死"哪几档 / 几倍"（写死就是第二份真源：加一档得改两处）。
-     ⚠️ 键走 `data-key`（⛔ 不读 `value` —— `<button>` 也有 `value`（默认空串），
-        那正是主题当年"换了没反应"的坑）。 */
   const scard = s => {
     const on = s.key === CUR_UI_SCALE;
-    return `<button class="btn ${on ? 'pri' : 'gost'}" data-act="uiScaleSet" data-key="${esc(s.key)}"
-        title="${esc(s.label)}（${esc(s.css)} 倍）—— 点了即时生效">${on ? '✓ ' : ''}${esc(s.label)}</button>`;
+    return `<button class="btn set-scale ${on ? 'pri' : 'gost'}" data-act="uiScaleSet" data-key="${esc(s.key)}"
+        aria-label="${esc(s.label)}" aria-pressed="${on}" style="--sample-scale:${esc(s.css)}">
+      <span class="set-scale-preview" aria-hidden="true"><i></i><i></i><i></i></span>
+      <b>${esc(s.label)}</b></button>`;
   };
-  const curLabel = (UI_SCALES.find(x => x.key === CUR_UI_SCALE) || {}).label || '标准';
-  const scaleCard = `<div class="card"><h4>界面大小
-    <span class="sp mut sm">按<b>你的账号</b>保存 · 只改你自己看到的样子</span></h4>
-    <div class="bd">
-      <p class="mut sm" style="margin:0 0 calc(9px * var(--fscale))"><b>字小看不清就点大一档</b> —— 点了<b>立即生效</b>：
-        ⛔ 不刷新页面、也不会把你踢回别的页。只影响<b>屏幕上的字号与行距（表格框会跟着变宽）</b>；
-        ⚠️ <b>打印件与导出的 Excel 不受影响</b>。</p>
-      <div style="display:flex;gap:calc(8px * var(--fscale));flex-wrap:wrap">
-        ${UI_SCALES.map(scard).join('')
-          || '<span class="mut">（取不到档位清单 —— 见顶部横幅）</span>'}
-      </div>
-      <p class="mut sm" style="margin-top:calc(9px * var(--fscale))">当前：<b class="fc">${esc(curLabel)}</b>　·　
-        想连按钮一起整屏放大，也可以用浏览器的 <span class="fc">Ctrl</span> ＋ 滚轮（浏览器会按站点记住）。</p>
+  const scaleCard = `<div class="card set-card"><h4>界面大小</h4><div class="bd">
+    <div class="set-scale-grid">${UI_SCALES.map(scard).join('')}</div>
     </div></div>`;
-  return `<details class="tip"><summary>口径说明（§7.8：这些都是<b>会变、且变的时候不该改文件重启</b>的参数）</summary>
-      <ul style="margin:calc(6px * var(--fscale)) 0 0 calc(18px * var(--fscale));line-height:1.8">${tips}</ul></details>
-    ${lgNotice(SET)}${errs}
-    <div class="card"><h4>i8 地址与打印版式<span class="sp mut sm">搬到「用它的那一页」了</span></h4>
-      <div class="bd"><p class="mut sm" style="margin:0 0 calc(6px * var(--fscale))">这些<b>连接参数</b>（i8 地址 · 两个打印版式 ID）
-        <b>配一次能用很久</b> ⇒ 不再占这一页，改到<b>用它的地方</b>去改（改动一样<b>留痕</b>，见下方记录）：</p>
-        <ul class="sm" style="margin:0 0 0 calc(18px * var(--fscale));line-height:1.9">
-          <li><b>i8 服务地址</b> → 「<b>i8 接入层</b>」页卡头的「i8 连接设置」</li>
-          <li><b>材料类 / 外租机械类打印版式 ID</b> → 「<b>付款通知书</b>」页的「打印机设置」</li>
-        </ul></div></div>
-    <div class="card"><h4>变更留痕<span class="sp mut sm">最近 ${(SET.logs || []).length} 条</span></h4>
-      <div class="bd np"><div class="tw" style="max-height:320px;min-height:0">${TBL({head:'<th>时间</th><th>设置项</th><th>改前</th><th>改后</th><th>改动人</th>',
-        rows:[rows || lgEmpty(5, '还没有改动记录')]})}</div></div></div>
-    ${themeCard}
-    ${scaleCard}`;
+  return `${lgNotice(SET)}${errs}<div class="set-layout">${themeCard}${scaleCard}</div>`;
 };
-
 /* ============================================================ ⛔ `V.m05imp` —— **已下架**（`TAIL-75` `B5b` 第三步）
  * `m05imp`（历史付款导入页）＋ `reportHtml()`（它的核对报告渲染）**整段删除**（2026-09-23 **用户裁定 `B`**）：
  *   同一件事只留一个入口 —— 历史付款导入**走通用导入面**（`V.imp` 的 `m05_flow` 域）。
@@ -212,7 +152,7 @@ async function m14Save(pairs) {
   try { r = await API.m14SettingsSave(body); }
   catch (e) { return { ok: false, errors: [`没连上服务器或被拦断：${String((e && e.message) || e)}`] }; }
   if (r && r.ok === false) return { ok: false, errors: (r.errors || ['系统没有给出原因，请重试']) };
-  if (r && r.items) SET.items = r.items;        /* 就地刷新（留痕卡与下次打开弹窗都看得到新值） */
+  if (r && r.items) SET.items = r.items;        /* 下次打开设置弹窗使用新值 */
   if (r && r.logs) SET.logs = r.logs;
   return { ok: true, message: (r && r.message) || '已保存' };
 }
@@ -253,8 +193,7 @@ ACT.i8SetSave = async () => {
     return toast(`<b>没能保存</b>：${got.errors.map(esc).join('<br>')}`, 9500);
   }
   closeModal();
-  return toast(`i8 连接设置已保存${v ? `：<b>${esc(v)}</b>` : '（已清空 ⇒ 回落到 <code>.env</code>）'}`
-    + '<br>改动已留痕（系统设置页的「变更留痕」看得到）', 9000);
+  return toast(`i8 连接设置已保存${v ? `：<b>${esc(v)}</b>` : '（已清空 ⇒ 回落到 <code>.env</code>）'}`, 9000);
 };
 /* ⛔ 付款导入的四个动作（`imp05Pick/Parse/Ok/Rollback`）**已随旧页下架删除**
    （`TAIL-75` `B5b` 第三步 · 2026-09-23 用户裁定 `B`）—— 那条路现在是通用面的
@@ -290,11 +229,11 @@ ACT.i8SetSave = async () => {
    ⛔ **`m06imp`（过程资料历史导入页）已下架**（`B5c` · 2026-09-22）：同一件事不留两个入口 ——
       `m05imp`（历史付款导入）**暂留**，等 `m05` 也挂上通用面再删（`B5c-2`）。 */
 const IMP = {domains: [], domain: '', schema: null, file: null, token: '', cols: [], mapping: {},
-            memory: '', preview: null, report: null, step: 0, org: [], wrap: '', cutoff: '',
-            ym: '', pjDisp: {}, cutoffs: {}, hasCut: false, hasYm: false, hasPj: false,
+            memory: '', preview: null, report: null, step: 0, org: [], wrap: '', cutoff: '', mechanicalCutoff: '',
+            ym: '', pjDisp: {}, cutoffs: {}, mechanicalCutoffs: {}, hasMechCut: false, hasCut: false, hasYm: false, hasPj: false,
             /* ⭐ `busy` = **正在落库**（`TAIL-108`）：提交期间把 ④ 置灰 ＋ 挡住重入
                —— 连点两次会发两次请求，而默认批号到**秒** ⇒ 第二次撞批号唯一约束（`IntegrityError` 天书）。 */
-            busy: false,
+            busy: false, working: '', fileName: '',
             msg: '', kind: 'ok'};
 
 const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '④ 确认写入'];
@@ -311,14 +250,16 @@ async function reloadImp() {
 
 /* 切域 ⇒ 重取该域的**字段契约**，并把上一次的进度清干净（⛔ 不许残留上一域的文件/映射）。 */
 async function impSetDomain(domain) {
-  IMP.domain = String(domain || '');
+  if(IMP.busy||IMP.working) return;
+  IMP.fileName=''; IMP.domain = String(domain || '');
   IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {}; IMP.memory = '';
   IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = '';
-  IMP.org = []; IMP.wrap = ''; IMP.cutoff = ''; IMP.ym = ''; IMP.cutoffs = {};
+  IMP.org = []; IMP.wrap = ''; IMP.cutoff = ''; IMP.mechanicalCutoff = ''; IMP.mechanicalCutoffs = {}; IMP.hasMechCut = false; IMP.ym = ''; IMP.cutoffs = {};
   pjClose('impPj'); IMP.pjDisp = {}; IMP.hasCut = false; IMP.hasYm = false; IMP.hasPj = false;
   if (!IMP.domain) { IMP.schema = null; return; }
-  IMP.schema = await API.impSchema(IMP.domain);
-  await impLoadCtx();
+  IMP.schema = null; IMP.working='加载'; render();
+  try { IMP.schema = await API.impSchema(IMP.domain); await impLoadCtx(); }
+  finally { IMP.working=''; }
 }
 
 /* ⭐ **域上下文**（候选项目 / 截止核算月 / 归属年月…）一律走通用面**唯一**一条读端点
@@ -375,13 +316,16 @@ async function impLoadCtx() {
        「档案还没建」与「建了但还没选」两种情形。判据 = `tests/test_imp_shell.py`。 */
   IMP.hasPj = Object.prototype.hasOwnProperty.call(ctx, 'projects');
   IMP.hasYm = Object.prototype.hasOwnProperty.call(ctx, 'year_month');
-  IMP.hasCut = Object.prototype.hasOwnProperty.call(ctx, 'cutoff_ym');
+  IMP.hasCut = Object.prototype.hasOwnProperty.call(ctx, 'material_cutoff_ym') || Object.prototype.hasOwnProperty.call(ctx, 'cutoff_ym');
+  IMP.hasMechCut = Object.prototype.hasOwnProperty.call(ctx, 'mechanical_cutoff_ym');
   IMP.ym = IMP.hasYm ? String(ctx.year_month || '') : '';
   /* ⭐⭐ **截止核算月 = 每个项目一张表**（2026-09-26 修真缺陷）：它本身**按项目存**
      （`repository.load_cutoff`），而落库会把界面上这个值**写进所选项目**；此前只在**进域那一刻**
      取一次（取的是"候选人里的第一个"）⇒ **换项目后那个框不跟着换 ⇒ A 项目的分界被写给 B、且不报错**。
      ⇒ 现在只认域给的 `cutoffs`（`{仓库名: 截止月}`），选中项目后由 `ACT.impPjPick` 填。 */
-  IMP.cutoffs = (ctx.cutoffs && typeof ctx.cutoffs === 'object') ? ctx.cutoffs : {};
+  IMP.cutoffs = ctx.material_cutoffs || ctx.cutoffs || {};
+  IMP.mechanicalCutoffs = ctx.mechanical_cutoffs || {};
+  IMP.mechanicalCutoff = '';
   /* ⚠️ **不预填** `ctx.cutoff_ym` —— 那是"第一个项目"的那一格，与上面同一个坑（它只是那一项的值）。 */
   IMP.cutoff = '';
 }
@@ -391,9 +335,11 @@ async function impLoadCtx() {
    （而落库照旧用另一份 ⇒ 两边悄悄走形）。⚠️ 多给的键对域只是**字典里的空转**（各域只读它认识的）。 */
 function impOptions() {
   const cut = document.querySelector('#impCut');
+  const mechCut = document.querySelector('#impMechCut');
   const ym = document.querySelector('#impYm');
   return {warehouse: IMP.wrap, project_key: IMP.wrap,
-          cutoff_ym: (cut && cut.value) || '', year_month: (ym && ym.value) || bjMonth()};
+          cutoff_ym: cut ? cut.value : IMP.cutoff, material_cutoff_ym: cut ? cut.value : IMP.cutoff,
+          mechanical_cutoff_ym: mechCut ? mechCut.value : IMP.mechanicalCutoff, year_month: (ym && ym.value) || IMP.ym || bjMonth()};
 }
 
 V.imp = () => {
@@ -408,7 +354,7 @@ V.imp = () => {
         「数据导入」页的 `page_load` 只有 `['数据导入']` ⇒ 档案**可能没加载** ⇒ 那样满屏黄字「未建档」，
         比原来的下拉还糟。`PJs` 恰好在（用户刚去过档案页）就用它 —— 能顺带标出**归档**与**未建档**。 */
   const impPjMeta = v => (PJs.length ? PROJ_META_KEY(v)
-    : {nm: IMP.pjDisp[v] || v, warn: false, arc: false, title: '仓库名（§2.7.4）：' + v});
+    : {nm: IMP.pjDisp[v] || v, warn: false, arc: false, title: '仓库名：' + v});
   /* ⭐⭐ **「候选键 → 显示名」的唯一出口**（2026-09-26 用户报障：「**候选和选择后显示的不一样**」）。
      此前**三处各自算**：① 下拉按钮 `IMP.pjDisp[键] || 键`（域给的 display，域没给就退化成**仓库名**）·
      ③ 只读回显同款 · 候选面板却走 `impPjMeta`（**档案展示名**）⇒ 同一个键能显示**两个名字**
@@ -430,11 +376,11 @@ V.imp = () => {
      ⚠️ 2026-09-26 所修（用户报障）：更早这里是 `IMP.domain === 'm04_plan' ? 年月 : (项目 ＋ 截止核算月)`
         —— 两处毛病：①「项目」是**自造的原生下拉**；②**截止核算月被画给了所有域**，而集采/付款计划的
         落库根本不读它（`ACT.impCommit` 给的上下文包里它只是空转）⇒ 用户填了**不生效**（死控件）。 */
-  const ctxBar = (IMP.hasPj || IMP.hasYm || IMP.hasCut)
+  const ctxBar = (IMP.hasPj || IMP.hasYm || IMP.hasCut || IMP.hasMechCut)
     ? `${FBAR({cls:'pane',body:`
       ${IMP.hasPj ? (IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
         <label>${IMP_PJ_LABEL}</label>
-        ${PJB({act:'impPjToggle',w:186,label:`${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}`,title:`${IMP.wrap ? esc('仓库名（§2.7.4）：' + IMP.wrap) : ''}`})}
+        ${PJB({act:'impPjToggle',w:186,label:`${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}`,title:`${IMP.wrap ? esc('仓库名：' + IMP.wrap) : ''}`})}
         ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>`
       /* ⛔ **候选为空 ≠ 这个域不要项目**（2026-09-29 修）：仍要把这一格画出来 —— ① 让人看见
          "这一步有项目这一环"（⛔ 不静默少一格，否则用户以为不用选）；② 给**真出路**
@@ -443,49 +389,49 @@ V.imp = () => {
       : `<div class="fi pjwrap" style="position:relative">
         <label>${IMP_PJ_LABEL}</label>
         <button class="btn" disabled style="min-width:186px" title="库里还没有项目档案 —— 先去「i8 接入层」同步「常用项目列表」">（库里还没有项目档案）</button>
-        <span class="mut sm">⚠️ <b>这个域要先有项目档案</b>：去 <b>「i8 接入层」</b>页同步
-          <b>「常用项目列表」</b>（按 信息化编号 建档，重复的不会重复建；「一个全名挂多个仓库」的进 <b>「项目档案」</b>页的
-          「待人工建档」卡处理）—— 建完<b>回本页刷新</b>，候选就在了。</span></div>`) : ''}
-      ${IMP.hasYm ? `<div class="fi"><label>本批归属年月（§4.3.3 —— 这批数据全归该月）</label>
-        <input class="inp" id="impYm" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
-      ${IMP.hasCut ? `<div class="fi"><label>截止核算月（＝历史段 / 正式段的分界月）</label>
-        <input class="inp" id="impCut" value="${esc(IMP.cutoff)}" placeholder="2026-08"
-               title="格式 YYYY-MM（如 2026-08）">
-        <span class="mut sm">格式 <b>YYYY-MM</b>（如 <code>2026-08</code>；写成别的样子会<b>被拒</b>）。
-          这个月 <b>及以前</b>算历史段（用这份表，不再从 i8 取）；<b>之后</b>才走 i8 抓取。
-          留空 = 取本批里最大的核算月。换项目会自动换成<b>那个项目</b>已设的值。</span></div>` : ''}
+        <span class="mut sm">先到「i8 接入层」同步常用项目列表，建档后回本页刷新。</span></div>`) : ''}
+      ${IMP.hasYm ? `<div class="fi"><label>本批归属年月</label>
+        <input class="inp" id="impYm" data-act="impYmEdit" value="${esc(IMP.ym || bjMonth())}" placeholder="2026-09"></div>` : ''}
+      ${IMP.hasCut ? `<div class="fi"><label>材料截止月</label>
+        <input class="inp" id="impCut" data-act="impCutEdit" value="${esc(IMP.cutoff)}" placeholder="2025-11"
+               title="格式 YYYY-MM；留空取本批最大核算月"></div>` : ''}
+      ${IMP.hasMechCut ? `<div class="fi"><label>机械截止月</label>
+        <input class="inp" id="impMechCut" data-act="impMechCutEdit" value="${esc(IMP.mechanicalCutoff)}" placeholder="2026-09"
+               title="格式 YYYY-MM；留空取本批最大核算月"></div>` : ''}
+      ${IMP.hasCut || IMP.hasMechCut ? '<span class="mut sm">两类分别导入截止月及以前的数据；截止后不导入，不限制以后手录。留空取本批最大核算月。</span>' : ''}
       `})}` : '';
   /* ⛔ **该域要选项目、而还没选** ⇒ ④ 置灰（见下面 `prevCard` 里那个按钮）—— 「默认值不诱导」的落点：
      系统不再替用户挑第一个项目（`IMP.wrap` 初值 = 空），但也不能让人**点下去才发现没选**。 */
   const needPj = IMP.hasPj && !IMP.wrap;
   /* **③ 的只读回显**：范围栏在 ①，而 ④ 按钮在 ③ ⇒ 中间隔着两屏 ⇒ 点落库前必须能**复核一眼**
      （守则 §4 防误导：宁可少给信息，也不能让用户不知道自己正要写哪儿）。⛔ 这里**不给控件**（改在 ①）。 */
-  const scopeEcho = (IMP.hasPj || IMP.hasYm || IMP.hasCut)
+  const scopeEcho = (IMP.hasPj || IMP.hasYm || IMP.hasCut || IMP.hasMechCut)
     ? `<div class="tip">本批数据将写入：${
         [
           IMP.hasPj ? `项目 <b>${esc(IMP.wrap ? impPjLabel(IMP.wrap)
             : (IMP.org.length ? '（还没选）' : '（库里还没有项目档案 —— 没法写入）'))}</b>`
             + (IMP.wrap ? `<span class="mut sm">（仓库名 ${esc(IMP.wrap)}）</span>` : '') : '',
           IMP.hasYm ? `归属年月 <b>${esc(IMP.ym || bjMonth())}</b>` : '',
-          IMP.hasCut ? `截止核算月 <b>${esc(IMP.cutoff || '（留空 ⇒ 取本批最大月）')}</b>`
-            + `<span class="mut sm">（该月及以前按这份表，之后走 i8）</span>` : '',
-        ].filter(Boolean).join(' · ')}<span class="mut sm">　要改请回第 ① 步（「导入哪个域」下面那一栏）</span></div>`
+          IMP.hasCut ? `材料截止月 <b>${esc((IMP.preview&&IMP.preview.material_cutoff_ym)||IMP.cutoff||'（留空 ⇒ 取本批最大月）')}</b>` : '',
+          IMP.hasMechCut ? `机械截止月 <b>${esc((IMP.preview&&IMP.preview.mechanical_cutoff_ym)||IMP.mechanicalCutoff||'（留空 ⇒ 取本批最大月）')}</b>` : '',
+        ].filter(Boolean).join(' · ')}<button class="btn sm" data-act="impStep" title="处理中请稍候，完成后可修改" data-step="0"${IMP.busy?' disabled':''}>修改范围</button></div>`
     : '';
   /* ⭐ 2026-09-27（用户裁定 `A` · 守则 §4.5）：① 步里那三句域自报文案（`note` / `keep_note` / `memory`）
      **一律用普通 `tip`**。原先由**壳替域挑颜色**（`note` 普通 · `keep_note` 警示黄 · `memory` 成功绿）
      ⇒ 同一个域的三句话长出三种颜色，而壳**根本不知道域写了什么** ⇒ 与"颜色只承担语义"相反。
      ⛔ 别再按字段名挑颜色；将来真要分语气走 `B` 案（域自报 `note_kind`）。判据 = `tests/test_ux_colors.py`。 */
-  const head = `<div class="card"><h4>数据导入<span class="sp"><span class="mut sm">一次导一个域的一种表 ·
-    写入前一个字节都不写入</span></span></h4><div class="bd">${lgSteps(IMP_STEPS, IMP.step)}
-    ${FBAR({cls:'pane',body:`
-      <div class="fi"><label>导入哪个域</label>
-        <select class="inp" data-act="impDomain">${doms || '<option value="">（还没挂任何导入域）</option>'}</select></div>
-      <div class="fi"><label>&nbsp;</label><span class="mut sm">${sch ? esc(sch.title) : '—'}</span></div>`})}
-    ${ctxBar}
-    ${sch && sch.note ? `<div class="tip">${lgMd(sch.note)}</div>` : ''}
-    ${sch && sch.keep_note ? `<div class="tip">${lgMd(sch.keep_note)}</div>` : ''}
-    ${lgPick('iimp', 'impPick', 'impParse', IMP.file, '解析时自动挑「认得出表头」的那张工作表')}
-    ${IMP.memory ? `<div class="tip">${lgMd(IMP.memory)}</div>` : ''}
+  const domainTitle=sch?sch.title:'请选择导入类型';
+  const highest=IMP.report?3:IMP.preview?2:IMP.cols.length?1:0;
+  const head = `<div class="card"><h4>数据导入<span class="sp"><span class="mut sm">${IMP.step===3?'本次结果':'确认写入前不会修改业务数据'}</span></span></h4><div class="bd">
+    ${lgSteps(IMP_STEPS, IMP.step)}
+    ${IMP.step>0?`<div class="imp-summary"><strong>${esc(domainTitle)}</strong><span>${esc(IMP.fileName||(IMP.file&&IMP.file.name)||'')}</span>
+      ${IMP.step<3?`<span style="margin-left:auto"><button class="btn sm" data-act="impStep" title="处理中请稍候，完成后可修改" data-step="0"${IMP.busy||IMP.working?' disabled':''}>文件与范围</button>
+        ${IMP.step===2?`<button class="btn sm" data-act="impStep" title="处理中请稍候，完成后可返回核对" data-step="1"${IMP.busy?' disabled':''}>核对列</button>`:''}</span>`:''}</div>`:''}
+    ${IMP.step===0?`${FBAR({cls:'pane',body:`<div class="fi"><label>导入类型</label><select class="inp" data-act="impDomain"${IMP.working?' disabled':''}>${doms||'<option value="">暂无导入类型</option>'}</select></div>`})}
+      ${ctxBar}
+      ${sch&&sch.note?`<div class="tip">${lgMd(sch.note)}</div>`:''}
+      ${lgPick('iimp','impPick','impParse',IMP.file,'自动识别工作表和表头')}
+      ${highest>0?`<div class="imp-actions"><button class="btn" data-act="impStep" title="处理中请稍候，完成后可返回核对" data-step="1"${IMP.working?' disabled':''}>继续核对已解析的列</button></div>`:''}`:''}
   </div></div>`;
 
   /* ---- ② 列映射 ---- */
@@ -498,7 +444,7 @@ V.imp = () => {
        ⛔ 不显示置信度数字与算法名（它们不是"用户要的信息"）。
      ⚠️ 判据与真机证据认 `<select data-act="impMap" data-src="…">`，⛔ 不许改这两个属性。 */
   let mapCard = '';
-  if (IMP.cols.length) {
+  if (IMP.cols.length && IMP.step === 1) {
     const optsOf = (c) => {
       const cur = IMP.mapping[c.src] || '';
       const fields = ((sch && sch.fields) || []).map(f =>
@@ -513,8 +459,8 @@ V.imp = () => {
     const impacts = {};                      /* 字段 → 完整说明（进悬停） */
     const kkinds = {};                       /* 字段 → 去向（写台账 / 当钥匙 / 不参与） */
     ((sch && sch.impacts) || []).forEach(x => { impacts[x.label] = x.what; kkinds[x.label] = x.kind || ''; });
-    const kindOf = (c) => (c.ignored ? '不参与' : (kkinds[c.field] || ''));
-    const whatOf = (c) => (c.ignored ? String(c.ignored) : (impacts[c.field] || ''));
+    const kindOf = (c) => (IMP.mapping[c.src] ? (kkinds[IMP.mapping[c.src]] || '') : '不参与');
+    const whatOf = (c) => (IMP.mapping[c.src] ? (impacts[IMP.mapping[c.src]] || '') : String(c.ignored || '不导入此列'));
     const tagOf = (k) => (k === '写台账' ? '<span class="tag t-wn">写台账</span>'
                         : k === '当钥匙' ? '<span class="tag t-in">当钥匙</span>'
                         : k === '不参与' ? '<span class="mut sm">不参与</span>' : '');
@@ -522,12 +468,10 @@ V.imp = () => {
       `<tr><th style="text-align:left;white-space:nowrap;vertical-align:middle;min-width:92px" class="mut sm">${label}</th>`
       + IMP.cols.map(c => `<td>${cellOf(c)}</td>`).join('') + '</tr>';
     mapCard = `<div class="card" style="margin-top:calc(12px * var(--fscale))"><h4>列映射<span class="sp"><span class="mut sm">
-      横看 = 你表里的每一列 · 系统只给建议，<b>选哪个由你定</b></span></span></h4>
+      核对每列的去向，认错的可以改</span></span></h4><div class="bd">
       ${sch && sch.rule_note ? `<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">${lgMd(sch.rule_note)}</div>` : ''}
-      ${(sch && sch.impacts && sch.impacts.length) ? `<div class="sm mut" style="margin-bottom:calc(8px * var(--fscale))">
-        <b>去向</b>：${tagOf('写台账')} 会盖掉台账里的值（<b>含往发票子表加一张票</b>）·
-        ${tagOf('当钥匙')} 拿它去找那张合同（合同上的原值<b>不动</b>）·
-        ${tagOf('不参与')} 导入不用它 —— 把鼠标停在格子上看完整说明</div>` : ''}
+      ${IMP.memory?`<details class="imp-block"><summary>已沿用上次列对应，可修改</summary>${lgMd(IMP.memory)}</details>`:''}
+      ${sch&&sch.keep_note?`<details class="imp-block"><summary>哪些内容不导入</summary>${lgMd(sch.keep_note)}</details>`:''}
       <div class="tw">${TBL({cls:'sm',head:'<th style="min-width:92px"></th>'+IMP.cols.map(c => `<th style="vertical-align:bottom;min-width:136px">
         <div style="font-weight:600;white-space:normal">${esc(c.src)}</div></th>`).join(''),
       rows:[
@@ -540,7 +484,7 @@ V.imp = () => {
              这样"平时不误导"与"认错了还能纠"两头都占（用 `<details>` 实现 ⇒ ⛔ 不需要额外 JS 状态）。
              ⚠️ 要映射的列**必须照旧有** `data-act="impMap"`（判据与真机都认它）—— 这里的下拉也在，
              只是**折叠着**（`details` 收起来时不可见）。 */
-          if (c.ignored || k === '不参与') {
+          if (k === '不参与') {
             return `<details style="display:inline-block;max-width:100%">`
                  + `<summary class="sm" style="cursor:pointer" title="${esc(whatOf(c))}">`
                  + `<span class="mut">不参与</span> <span class="tag t-in">改</span></summary>`
@@ -549,18 +493,18 @@ V.imp = () => {
           }
           return `<select class="inp" style="width:100%" data-act="impMap" data-src="${esc(c.src)}">${optsOf(c)}</select>`;
         }),
-        IMP.cols.some(c => !c.ignored && ['写台账', '当钥匙'].includes(kindOf(c)))
+        IMP.cols.some(c => ['写台账', '当钥匙'].includes(kindOf(c)))
           ? attrRow('去向', c => {
               const k = kindOf(c);
               /* ⚠️「不参与」这一列**上面那格已经写着**它了 ⇒ 这行留空，⛔ 别重复（同一格两处"不参与"＝噪音） */
-              return (c.ignored || !k || k === '不参与')
+              return (!k || k === '不参与')
                 ? '' : `<span title="${esc(whatOf(c))}">${tagOf(k)}</span>`;
             })
           : '' /* ⚠️ **一行"去向"都没内容 ⇒ 整行不画**（本域没这条信息，画个空行像坏了）*/
       ]})}</div>
-      <div class="tip ${lack.length ? 'wn' : 'ok'}" style="margin-top:calc(10px * var(--fscale))">${lack.length
-        ? `还差必填字段：<b>${esc(lack.join(' / '))}</b> —— 选好才能到下一步（⛔ 系统不替你填默认值）`
-        : '必填都齐了，可以往下走'}</div>
+      <div class="tip ${lack.length ? 'wn' : ''}" style="margin-top:calc(10px * var(--fscale))">${lack.length
+        ? `缺少必填列：<b>${esc(lack.join(' / '))}</b>。请在上表补齐对应列。`
+        : '必填列已齐全，可以检查数据。'}</div>
       ${(() => {
         /* ⭐ ④ 「本系统要哪些列」—— **新增**（2026-09-26 用户报「缺贸易公司发票金额」）：
            ② 这一屏**只列"你表里有的源列"** ⇒ 表里没有的列**从不出现** ⇒ 会被读成"系统不支持它"。
@@ -568,7 +512,7 @@ V.imp = () => {
            （用户裁定：缺列提醒⛔ **不能藏在折叠里** —— 藏了等于没提醒）。 */
         const fields = (sch && sch.fields) || [];
         if (!fields.length) return '';
-        const has = (lb) => IMP.cols.some(c => c.field === lb);
+        const has = (lb) => IMP.cols.some(c => IMP.mapping[c.src] === lb);
         const rows = fields.map(f =>
           `<tr><td>${esc(f.label)}${f.required ? '<span class="mut sm">（必填）</span>' : ''}</td>`
           + `<td>${has(f.label) ? '有' : '<span class="mut">表里没有</span>'}</td>`
@@ -577,19 +521,19 @@ V.imp = () => {
         const hint = String((sch && sch.field_list_hint) || '');
         return `${hint ? `<div class="tip" style="margin-top:calc(10px * var(--fscale))">${lgMd(hint)}</div>` : ''}`
              + `<details style="margin-top:calc(8px * var(--fscale))"><summary class="mut sm" style="cursor:pointer">`
-             + `本系统要哪些列（共 ${fields.length} 列 · 你表里缺 ${miss} 列，点开看）</summary>`
+             + `本系统要哪些列 · ${fields.length} 列，未对应 ${miss} 列</summary>`
              + `<div class="tw" style="margin-top:calc(8px * var(--fscale))">${TBL({cls:'sm',head:'<th style="text-align:left">列名</th><th style="text-align:left">你表里</th><th style="text-align:left">去向</th>',
              rows:[rows]})}</div>`
              + '</details>';
       })()}
       <div style="margin-top:calc(10px * var(--fscale))">
-        <button class="btn pri" data-act="impPreview"${lack.length ? ' disabled' : ''} title="${lack.length?'还缺必填项 / 列映射 —— 上面已列出缺什么':'生成预览（这一步一个字节都不写入）'}">③ 预览校验（不写入）</button>
-        <button class="btn" data-act="impReset">重来</button></div></div>`;
+        <button class="btn pri" data-act="impPreview"${lack.length||IMP.working ? ' disabled' : ''} title="${lack.length?'还缺必填项 / 列映射 —— 上面已列出缺什么':'生成预览（这一步一个字节都不写入）'}">${IMP.working?'正在检查…':'③ 预览校验（不写入）'}</button>
+        <button class="btn" data-act="impStep" title="处理中请稍候，完成后可修改" data-step="0">上一步</button></div></div></div>`;
   }
 
   /* ---- ③ 预览校验 ---- */
   let prevCard = '';
-  if (IMP.preview) {
+  if (IMP.preview && IMP.step === 2) {
     const p = IMP.preview;
     const probs = (IMP.problems || []);
     /* ⚠️ 2026-09-26：**「范围」栏已整体挪到 ①（`ctxBar`）** —— 这一屏只留**只读回显**（`scopeEcho`），
@@ -643,72 +587,36 @@ V.imp = () => {
       return `<tr${hit ? ` class="skiprow${plain ? ' plain' : ''}" title="${tip}"` : ''}>`
         + cell(r._row, tag)
         + Object.keys(r).filter(k => k !== '_row').map(k => cell(r[k])).join('')
-        + '</tr>';
+        + `<td>${hit?lgMd(hit.why):''}</td></tr>`;
     }).join('');
     const pcols = plist.length
-      ? Object.keys(plist[0]).map(k => `<th>${esc(k === '_row' ? '行' : k)}</th>`).join('') : '';
-    const pnote = `本步读到 <b class="fc">${ptotal}</b> 行`
-      + (pw == null ? '' : ` · 能写入 <b class="fc">${pw}</b> 行`)
-      + ` · 表格显示`
-      + (ptotal > plist.length ? `前 <b class="fc">${plist.length}</b> 行（全量已随本批暂存，④ 写入按<b>全量</b>处理）`
-                               : `全部 <b class="fc">${plist.length}</b> 行`);
-    /* ⭐ 表上方图例：只有真有行被标出来时才画（没有就别让人去找一个不存在的东西）。
-       ⭐ 2026-09-27：**两类标记要说清区别**（守则 §2.8）—— 否则"灰底"会被当成"淡一点的警告"。 */
-    const plegend = (nskip || nplain)
-      ? `<div class="mut sm" style="margin-top:calc(6px * var(--fscale))">⚠️ 表里有两类标记，<b>看颜色一眼分开</b>（鼠标放到那一行上看原因）：`
-        + `<br>· <span class="tag t-wn">不写入</span>（浅底 ＋ 左侧竖条）= <b>不会写进系统，要你处理</b>`
-        + `（把文件改成标准格式后重导）；`
-        + `<br>· <span class="tag t-mut">不导入</span>（灰底、没有竖条）= <b>本来就跳过</b>`
-        + `（合计/小计 · 说明 · 空行 —— <b>不用你改</b>）。</div>`
-      : '';
-    /* ⭐ 2026-09-26（用户报障后加）：**有行写不进去时必须当面说**，⛔ 不许让 ④ 点下去才知道。
-       ⚠️ 数由**域**给（`writable` 与 `total` 是通用面的键）—— 壳里仍**不认域号**；
-       数优先用 `skipped` 的**逐行**结果（比 `total - writable` 这个差值可靠），
-       ⭐ 且**两类分开说**（守则 §4.7 口径透明：合成一个"3 行"⇒ 用户以为三行都要自己改）。 */
-    const nbad = nskip || (pw != null ? Math.max(0, ptotal - pw) : 0);
-    const said = [];
-    if (nbad > 0) {
-      said.push(`有 <b>${nbad}</b> 行<b>不会写入</b>`
-                + (nskip ? ' —— 已在上表<b>逐行标出</b>（浅底 ＋ 左侧竖条 ＋ 行号旁的「不写入」，'
-                           + '鼠标放上去看原因）'
-                         : '（原因见下面「写不进去的行」）'));
-    }
-    if (nplain > 0) {
-      said.push(`另有 <b>${nplain}</b> 行<b>本来就跳过</b>（合计/小计 · 说明 · 空行 ⇒ 不是数据行，`
-                + `已标成灰底，<b>不用你改</b>）`);
-    }
-    const pwarn = said.length
-      ? `<div class="tip wn" style="margin-top:calc(8px * var(--fscale))">⚠️ ${said.join('；')}。`
-        + (nbad > 0
-           ? '④ 只写能写入的那些；要它们也进去：先把文件改成标准格式，再<b>整批回滚后重导</b>'
-             + '（⛔ 别让两批叠着）。'
-           : '④ 照常写入即可 —— 这一批<b>不需要你改文件</b>。')
-        + '</div>'
-      : '';
-    prevCard = `<div class="card" style="margin-top:calc(12px * var(--fscale))"><h4>预览校验<span class="sp"><span class="mut sm">
-      这一步<b>一个字节都不写入</b></span></span></h4><div class="kpis">
-      <div class="kpi"><div class="k">将写入</div><div class="v">${p.writable == null ? p.total : p.writable}</div>
-        <div class="s">行</div></div>
-      <div class="kpi"><div class="k">待处理</div><div class="v">${p.problem_count || probs.length}</div>
-        <div class="s">处（行/列/原值/原因）</div></div>
-      <div class="kpi"><div class="k">本步写入量</div><div class="v">0</div><div class="s">确认前零写入</div></div>
-      ${Object.keys(p.kpis || {}).map(k => `<div class="kpi"><div class="k">${esc(k)}</div>
-        <div class="v">${esc(String(p.kpis[k]))}</div></div>`).join('')}</div>
-      ${probs.length ? `<div class="tw" style="max-height:200px">${TBL({cls:'sm',head:'<th>行</th><th>列</th><th>原值</th><th>原因</th>',
-        rows:probs.slice(0, 30).map(x => `<tr><td class="now">${esc(x.row)}</td><td class="now">${esc(x.column)}</td>
-          <td class="now">${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`)})}</div>
-        <div class="tip wn" style="margin-top:calc(8px * var(--fscale))">这些问题<b>不影响其余行写入</b>；认不出的值一律原样留着给人看，⛔ 不静默改成 0/空。</div>`
-      : '<div class="tip ok">没有发现问题行</div>'}
+      ? Object.keys(plist[0]).map(k => `<th>${esc(k === '_row' ? '行' : k)}</th>`).join('')+'<th>处理说明</th>' : '';
+    const pnote = `本步读到 <b>${ptotal}</b> 行 · 显示 <b>${plist.length}</b> 行${ptotal>plist.length?'（仅显示部分，全量参与校验与写入）':''}`;
+    const plegend=(nskip||nplain)?`<div class="mut sm" style="margin:calc(8px * var(--fscale)) 0">
+      ${nskip?'<span class="tag t-wn">不写入</span> 需处理':''}
+      ${nplain?'<span class="tag t-mut">不导入</span> 合计、说明等正常跳过，不用你改':''}</div>`:'';
+    const nbad=nskip;
+    const pwarn=nbad?`<div class="tip wn">${nbad} 行不会写入。原因已标在对应行；可先返回修改文件，再重新解析。</div>`:'';
+    prevCard = `<div class="card"><h4>预览校验<span class="sp"><span class="mut sm">尚未写入</span></span></h4><div class="bd">
       ${scopeEcho}
-      ${lgBlocks(p.blocks)}
+      <div class="imp-metrics">
+        <span class="metric">将写入 <b>${p.writable==null?p.total:p.writable}</b> 行</span>
+        <span class="metric">不写入 <b>${nskip}</b> 行</span>
+        <span class="metric">正常跳过 <b>${nplain}</b> 行</span>
+        ${(p.problem_count||probs.length)?`<span class="metric">校验问题 <b>${p.problem_count||probs.length}</b> 处</span>`:''}
+      </div>
+      ${Object.keys(p.kpis||{}).length?`<details class="imp-block"><summary>分类统计</summary><div class="imp-metrics">${Object.keys(p.kpis||{}).map(k=>`<span class="metric">${esc(k)} <b>${esc(String(p.kpis[k]))}</b></span>`).join('')}</div></details>`:''}
+      ${pwarn}
+      ${probs.length?`<details class="imp-block" open><summary>校验问题 · ${probs.length} 处</summary><div class="tw" style="max-height:260px">${TBL({cls:'sm',head:'<th>行</th><th>列</th><th>原值</th><th>原因</th>',
+        rows:probs.map(x=>`<tr><td>${esc(x.row)}</td><td>${esc(x.column)}</td><td>${esc(x.raw)}</td><td>${esc(x.reason)}</td></tr>`)})}</div></details>`:''}
       <div class="mut sm" style="margin-top:calc(10px * var(--fscale))">${pnote}
-        · 「行」= <b>Excel 里的行号</b>（与"第 N 行…"那类报错<b>同一个数</b>，用来对号）</div>
+        · 行号对应 Excel 里的行号</div>
       ${plegend}
       <div class="tw" style="max-height:280px;margin-top:calc(6px * var(--fscale))">${TBL({cls:'sm',head:pcols,
         rows:[prows || lgEmpty(1, '没有数据行')]})}</div>
-      ${pwarn}
-      <div style="margin-top:calc(10px * var(--fscale))"><button class="btn pri" data-act="impCommit"${(needPj || IMP.busy) ? ' disabled' : ''} title="${IMP.busy?'正在写入 —— 请勿重复点击':(needPj?'先回第 ① 步选「这批数据进哪个项目」—— 没选就没法写入':'确认写入（这一步才真正写进系统）')}">${IMP.busy ? '正在写入…' : '④ 确认写入'}</button>
-        <button class="btn" data-act="impReset">重来</button>
+      ${lgBlocks(p.blocks)}
+      <div class="imp-actions"><button class="btn pri" data-act="impCommit"${(needPj || IMP.busy) ? ' disabled' : ''} title="${IMP.busy?'正在写入 —— 请勿重复点击':(needPj?'先回第 ① 步选「这批数据进哪个项目」—— 没选就没法写入':'确认写入（这一步才真正写进系统）')}">${IMP.busy ? '正在写入…' : '④ 确认写入'}</button>
+        <button class="btn" data-act="impStep" title="处理中请稍候，完成后可返回核对" data-step="1"${IMP.busy?' disabled':''}>上一步</button>
         ${needPj ? `<span class="mut sm" style="margin-left:calc(8px * var(--fscale))">${IMP.org.length
           ? '⚠️ 先回第 ① 步选「这批数据进哪个项目」 —— 没选就没法写入（⛔ 系统不替你挑，免得写进错项目）'
           : '⚠️ <b>库里还没有项目档案</b> —— 这批数据无处可写：先去「i8 接入层」页同步「常用项目列表」，回本页刷新后再导'}</span>` : ''}</div></div></div>`;
@@ -727,7 +635,7 @@ V.imp = () => {
         四个域都自报了 kpis 这件事由判据钉着（`test_imp_m06_api` / `test_imp_m04_api` /
         `test_imp_m05_api` / `test_imp_m11_api` 的「回执自报人话指标」）。 */
   let repCard = '';
-  if (IMP.report) {
+  if (IMP.report && IMP.step === 3) {
     const r = IMP.report;
     /* ⚠️ 回执的标量项里，**壳自己已经处理掉的**不再重复画：`kpis` / `blocks` 另画；
        `message` 走整行；`batch` 走批次行 ⇒ 剩下的（`updated`/`undo_rows`/`project key`…）
@@ -743,11 +651,10 @@ V.imp = () => {
       ${kpis.length ? `<div class="kpis">${kpis.map(([k, v]) => `<div class="kpi"><div class="k">${lgMd(k)}</div>
         <div class="v">${esc(String(v))}</div></div>`).join('')}</div>` : ''}
       ${r.batch ? `<div class="tip">本次批次 <b class="fc">${esc(r.batch)}</b>
-        <span class="mut sm">（要撤销这一批就点右边 —— 撤销按 §4.4.6 留痕、不做物理删）</span>
+        <span class="mut sm">（撤销本次导入）</span>
         <button class="btn sm" data-act="impRollback" data-batch="${esc(r.batch)}">整批回滚</button></div>` : ''}
       ${lgBlocks(r.blocks)}
-      ${tech.length ? `<details style="margin-top:calc(10px * var(--fscale))"><summary class="mut sm">技术明细（原始回执
-        ${tech.length} 项 · 排查用）</summary>
+      ${tech.length ? `<details style="margin-top:calc(10px * var(--fscale))"><summary class="mut sm">技术明细 · ${tech.length} 项，排查用</summary>
         <div class="tw" style="margin-top:calc(6px * var(--fscale))">${TBL({cls:'sm',rows:tech.map(k =>
           `<tr><th style="width:30%">${esc(k)}</th><td>${esc(String(r[k]))}</td></tr>`)})}</div></details>` : ''}
       <div style="margin-top:calc(10px * var(--fscale))"><button class="btn" data-act="impReset">再导一份</button></div></div></div>`;
@@ -755,22 +662,32 @@ V.imp = () => {
 
   /* ⚠️ 这里**不再画步骤条**（2026-09-26 用户按截图指出：「两条一模一样的四步条」⇒「**只留卡里那条**」）——
      卡内的 `head` 里那份是**它自己**的（`lgSteps(IMP_STEPS, IMP.step)`），本行原先又画了一遍 ⇒ 同屏两条。 */
-  return `${lgNotice(IMP)}${head}${mapCard}${prevCard}${repCard}`;
+  return `<div class="imp-workspace">${head}${IMP.msg?`<div class="tip ${IMP.kind==='err'?'dg':IMP.kind==='wn'?'wn':IMP.working||IMP.busy?'':'ok'}" role="status">${lgMd(IMP.msg)}</div>`:''}${mapCard}${prevCard}${repCard}</div>`;
 };
 
 /* 切域（表单元素 ⇒ 由 `change` 委托直呼 `ACT[a]`，⛔ 没有名单） */
+ACT.impStep=t=>{
+  if(IMP.busy||IMP.working||IMP.report) return;
+  const step=Number(t.dataset.step), max=IMP.preview?2:IMP.cols.length?1:0;
+  if(step<0||step>max) return;
+  IMP.step=step; IMP.msg=''; pjClose('impPj'); render();
+};
+ACT.impYmEdit=t=>{IMP.ym=t.value;IMP.preview=null;IMP.problems=[];};
+ACT.impCutEdit=t=>{IMP.cutoff=t.value;IMP.preview=null;IMP.problems=[];};
+ACT.impMechCutEdit=t=>{IMP.mechanicalCutoff=t.value;IMP.preview=null;IMP.problems=[];};
 ACT.impDomain = async t => {
   IMP.msg = '';
   try { await impSetDomain(t.value); }
   catch (e) { IMP.msg = `取域契约失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; }
   render();
 };
-ACT.impPick = t => { IMP.file = (t.files || [])[0] || null; IMP.msg = ''; render(); };
-ACT.impReset = () => { IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {};
+ACT.impPick = t => { if(IMP.working||IMP.busy) return; IMP.file=(t.files||[])[0]||null; IMP.fileName=IMP.file?IMP.file.name:''; IMP.token='';IMP.cols=[];IMP.mapping={};IMP.preview=null;IMP.report=null;IMP.memory='';IMP.msg='';render(); };
+ACT.impReset = () => { if(IMP.busy||IMP.working) return; IMP.fileName=''; IMP.file = null; IMP.token = ''; IMP.cols = []; IMP.mapping = {};
   IMP.memory = ''; IMP.preview = null; IMP.report = null; IMP.step = 0; IMP.msg = ''; pjClose('impPj');
   render(); };
 /* ① → ②：解析（不写库）。预选 = 后端给的建议；**记忆命中的映射盖在建议之上**（并标明来源）。 */
 ACT.impParse = async () => {
+  if(IMP.working||IMP.busy) return;
   /* ⚠️ 原先这里是一句**静默 `return`**（2026-09-26 改）：按钮虽已按 `IMP.file` 置灰，但**状态与界面
      可能不同步**（真机自检当场撞上：点了没有任何反应、页上也没有一句话 ⇒ 只看得到"失败"，
      看不出为什么）。⇒ 按守则 §5.5「不能点的要说明原因」补一句**说清缺什么**。 */
@@ -779,11 +696,11 @@ ACT.impParse = async () => {
                          : '先选「导入哪个域」（本卡第一行）—— 不同域认的列不一样';
     IMP.kind = 'wn'; render(); return;
   }
-  IMP.msg = '正在解析（预览阶段不写入）…'; IMP.kind = 'ok'; render();
+  IMP.working='解析'; IMP.fileName=IMP.file.name; IMP.msg = '正在识别工作表和列…'; IMP.kind = 'ok'; render();
   const fd = new FormData(); fd.append('file', IMP.file); fd.append('sheet', '');
   let r = null;
-  try { r = await API.impParse(IMP.domain, fd); }
-  catch (e) { IMP.msg = `解析失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
+  try { r = await API.impParse(IMP.domain, fd); IMP.working=''; }
+  catch (e) { IMP.working=''; IMP.msg = `解析失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
   if (!r || r.ok === false) { IMP.msg = (r && r.message) || '解析失败'; IMP.kind = 'err'; render(); return; }
   IMP.token = r.token; IMP.cols = r.cols || []; IMP.step = 1; IMP.preview = null; IMP.report = null;
   IMP.mapping = {};
@@ -798,33 +715,36 @@ ACT.impParse = async () => {
   IMP.kind = IMP.msg ? 'wn' : 'ok';
   render();
 };
-ACT.impMap = (t) => { IMP.mapping[t.dataset.src] = t.value || ''; render(); };
+ACT.impMap = (t) => { if(IMP.working||IMP.busy) return; IMP.mapping[t.dataset.src]=t.value||''; IMP.preview=null; IMP.problems=[]; render(); };
 /* 「项目」共用面板（**单选**）—— 第 11 个 `projPanel` 调用点。
    ⚠️ 展开是 `<button>`、选择是面板内的 `radio` ⇒ 都走 **click 委托**
       （`change` 委托只管 `<select>` / `<input type=file>` 那种表单元素；⭐ `#2` 起它也不需要登记）。 */
 ACT.impPjToggle = () => { pjToggle('impPj'); render(); };
 ACT.impPjPick = t => { const v = (t && t.dataset && t.dataset.pj) || ''; if (!v) return;
-  IMP.wrap = v;
+  IMP.wrap = v; IMP.preview=null; IMP.problems=[];
   /* ⭐ **截止核算月跟着所选项目换**（2026-09-26 修真缺陷）：它按项目存、且落库会写进所选项目 ⇒
      换项目时必须换成**那个项目自己**的（没有记录 ⇒ 空 ⇒ 落库时取本批最大月，与输入框的 placeholder 一致）。 */
   if (IMP.hasCut) IMP.cutoff = String((IMP.cutoffs || {})[v] || '');
+  if (IMP.hasMechCut) IMP.mechanicalCutoff = String((IMP.mechanicalCutoffs || {})[v] || '');
   pjClose('impPj'); render();
-  toast(`这批数据将导入项目 <b>${esc(IMP.pjDisp[v] || v)}</b>（键 = 仓库名，§2.7.4）`); };
+  toast(`已选择项目：<b>${esc(IMP.pjDisp[v] || v)}</b>`); };
 /* ② → ③：预览（不写库） */
 ACT.impPreview = async () => {
-  IMP.msg = '正在校验（预览阶段不写入）…'; IMP.kind = 'ok'; render();
+  if(IMP.working||IMP.busy) return;
+  IMP.working='校验'; IMP.msg = '正在检查数据，尚未写入…'; IMP.kind = 'ok'; render();
   let r = null;
   /* ⭐ 2026-09-26（`TAIL-106`）：**上下文一并递过去** —— 集采要在 ③ 就说出"**这批能配上几条**"，
      而它"算得出什么"取决于**这批进哪个项目**（域钩子收 `options`，与落库同一份上下文包）。
      ⚠️ 通用的几个域收不收 `options` 由**它们的签名**决定（后端按签名判），壳多给不吃亏。 */
   try { r = await API.impPreview(IMP.domain, { token: IMP.token, mapping: IMP.mapping,
-                                              options: impOptions() }); }
-  catch (e) { IMP.msg = `预览失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
+                                              options: impOptions() }); IMP.working=''; }
+  catch (e) { IMP.working=''; IMP.msg = `预览失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
   if (!r || r.ok === false) { IMP.msg = (r && r.message) || '预览失败'; IMP.kind = 'err'; render(); return; }
   IMP.preview = r; IMP.problems = r.problems || []; IMP.step = 2; IMP.msg = ''; render();
 };
 /* ③ → ④：确认落库（`options` = 域上下文：过程资料要"进哪个项目"；`remember` = 记下这套映射） */
 ACT.impCommit = async () => {
+  if(!IMP.preview||IMP.step!==2||IMP.working) return;
   /* ⛔ **兜底拦住"没选项目就落库"**（2026-09-26）：按钮已按 `needPj` 置灰，但**程序化调用 / 键盘
      回车**也可能走到这里 —— 而落错项目的代价是**静默**的（`m06` 写历史段、不报错）⇒ 拦在本地并
      说清去哪改（⛔ 别只靠后端那句 `请先选项目` 兜着：那时用户已经点了、还以为自己在导数据）。 */
@@ -853,7 +773,7 @@ ACT.impCommit = async () => {
   catch (e) { IMP.busy = false; IMP.msg = `导入失败：${String((e && e.message) || e)}`; IMP.kind = 'err'; render(); return; }
   IMP.busy = false;
   if (!r || r.ok === false) { IMP.msg = (r && r.message) || '导入失败'; IMP.kind = 'err'; render(); return; }
-  IMP.report = r.report || {}; IMP.step = 3; IMP.msg = r.message || '已导入'; IMP.kind = 'ok';
+  IMP.report = r.report || {}; IMP.step = 3; IMP.msg = '';  IMP.kind = 'ok';
   IMP.preview = null; IMP.token = ''; IMP.file = null;
   /* ⭐⭐ 2026-09-23（`TAIL-78` · 查 `TAIL-75` 落库下游时查出）：**导入是跨页写** ⇒ 这里必须
      **全标脏**（`LOADED.clear()`）。原先只删「机械 6 列 / 收发结存与大表」两路 —— 那是**旧导入页

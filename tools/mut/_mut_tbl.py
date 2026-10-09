@@ -18,9 +18,8 @@
   `M7` 把提取表的 `sort:false` 改回 `true`（⇒ "刻意不可排"那条必须红）· `M8` 两类顺序颠倒。
 - ⭐ `M9`/`M10`（2026-09-29 · `TAIL-64` **P2④ `m05`**）：欠款台账 / 付款流水表各自去掉委托。
 - ⭐ `M11`（2026-09-29 · `TAIL-64` **P2⑤ `m08`**）：库存单据明细表去掉委托。
-- ⭐ `M12`/`M13`/`M14`（2026-09-29 · `TAIL-64` **P3**）：`m03` 付款通知书表 / `m04` 付款计划表 / `home` 状态一览表
-  各去掉一处委托。⚠️ `M14` 那处打的是 `${TBL({head:'<th>对象</th>` —— 该表**没有 `key`**（不参与排序）、
-  靠 `sty` 传内联色，是 `TBL` 契约里"最偏"的一个调用点。
+- ⭐ `M12`/`M13`：`m03` 付款通知书表 / `m04` 付款计划表各去掉一处委托。
+  `M14` 随 TAIL-261 用户删项改指：恢复看板「状态一览」必须被删项断言发现；隔离自证见 `_mut_ui_workflow.py`。
 
 ⚠️ 判据 = **目标测试件 rc≠0**（不是整支尺子）＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc：别的用例红
 也会让 rc≠0）。
@@ -111,8 +110,8 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      _b("TBLBROKEN({head:NT_THEAD,key:'m03:notices',"), "数据区没了"),
     (SHELL, "M13 去掉委托（`m04` 付款计划表 不再走 `TBL`）", _b("TBL({head:PL_THEAD,key:'m04:plans',"),
      _b("TBLBROKEN({head:PL_THEAD,key:'m04:plans',"), "付款计划表没走统一出口"),
-    (SHELL, "M14 去掉委托（`home` 状态一览表 不再走 `TBL`）", _b("${TBL({head:'<th>对象</th>"),
-     _b("${TBLBROKEN({head:'<th>对象</th>"), "状态一览表没走统一出口"),
+    (SHELL, "M14 复活已撤状态一览（TAIL-261 改指用户删项）", _b('<h4>待办<span class="sp">'),
+     _b('<h4>待办 状态一览<span class="sp">'), "看板又出现已撤掉内容"),
     # ⭐ 2026-09-29（`TAIL-64` P3 余量）：`m10`/`m12`/`m11` 三张收尾表
     (SHELL, "M15 去掉委托（`m11` 集采台账表 不再走 `TBL`）", _b("TBL({head:JC_THEAD,key:'m11:jc',"),
      _b("TBLBROKEN({head:JC_THEAD,key:'m11:jc',"), "集采台账表没走统一出口"),
@@ -141,9 +140,9 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
      _b("TBL({cls:'cond',head:'<th>陌生仓库名</th>"), _b("TBLBROKEN({cls:'cond',head:'<th>陌生仓库名</th>"),
      "没走统一出口"),
     # ⭐ 2026-09-29（`TAIL-64` A′）：`legacy.js`（四个暂留件）先落三张
-    (LEGACY, "M24 去掉委托（「变更留痕」表 不再走 `TBL`）",
-     _b("TBL({head:'<th>时间</th><th>设置项</th>"), _b("TBLBROKEN({head:'<th>时间</th><th>设置项</th>"),
-     "没走统一出口"),
+    (LEGACY, "M24 复活设置页已撤变更留痕说明（TAIL-263）",
+     _b('<h4>外观主题</h4>'), _b('<h4>外观主题</h4><p>变更留痕</p>'),
+     "系统设置页又出现已撤内容"),
     (LEGACY, "M25 去掉委托（导入页「本系统要哪些列」对照表 不再走 `TBL`）",
      _b('TBL({cls:\'sm\',head:\'<th style="text-align:left">列名</th>'),
      _b('TBLBROKEN({cls:\'sm\',head:\'<th style="text-align:left">列名</th>'), "没走统一出口"),

@@ -53,11 +53,9 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     ("backend/app/web/index.html", "候选面板不再读后端清单（键可能不是仓库名）",
      "const awfPjPanel=()=>projPanel({list:()=>AWF_PJS,",
      "const awfPjPanel=()=>projPanel({list:()=>[],"),
-    # ⚠️ 2026-09-23：这段文案在壳里有**两处**（`title=` 提示 ＋ 可见文字）⇒ 变异要**一起改掉**，
-    #    只改可见文字的话 `title` 里还留着「逐月欠款台账」⇒ 断言仍绿（实测踩过）。
-    ("backend/app/web/index.html", "导出说明里不再点明「随逐月欠款台账」",
-     '它随「逐月欠款台账」一起导出，作为每个项目工作簿的第 3 个工作表">随「逐月欠款台账」导出</span>',
-     '它单独导出">导出</span>'),
+    # TAIL-263 默认说明撤掉；检查共用台账导出实际入口而不是默认提示。
+    ("backend/app/web/index.html", "特殊费用随台账导出的真实入口丢失",
+     'data-act="ledExpToggle"', 'data-act="disabledLedExpToggle"'),
     ("backend/app/mod09_fee/domain.py", "表头首列改成库存单据的特征列名（不再是「数据项」）",
      '{"key": "item", "label": "数据项", "type": "text"},',
      '{"key": "item", "label": "物料", "type": "text"},'),

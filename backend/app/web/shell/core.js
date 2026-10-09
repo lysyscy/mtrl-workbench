@@ -649,10 +649,8 @@ async function reloadInv() {
   const d = await API.m08Inventory();
   IVs = (d.rows || []).map(adaptInv);
   ADs = (d.adjustments || []).map(adaptAdj);
-  PROC_PJS = uniqBy(IVs, iv => iv.wh);
-  if (!procPj || !IVs.some(iv => iv.wh === procPj)) procPj = PROC_PJS[0] || '';
   if (invWhs.length) {          /* 筛选里失效的项目名清掉（原地改，外部持有的是数组引用） */
-    const kept = invWhs.filter(k => PROC_PJS.indexOf(k) >= 0);
+    const kept = invWhs.filter(k => IVs.some(iv=>iv.wh===k));
     if (kept.length !== invWhs.length) { invWhs.length = 0; kept.forEach(k => invWhs.push(k)); }
   }
   render();
@@ -1033,6 +1031,14 @@ async function reloadMech() {
   }
 }
 
+async function reloadProc() {
+  const d = await API.m06Matrix();
+  if (d.ok === false) throw errHuman(d.message || '过程资料没能读取，请重试。', 'm06 matrix rejected');
+  PROC_MATRIX = d.matrices || {};
+  PROC_PJS = d.projects || [];
+  if (!PROC_PJS.includes(procPj)) procPj = PROC_PJS[0] || '';
+}
+
 /* ⭐⭐ `TAIL-38`：「录机械费」入口 —— 原型 `V.m06` **没画**这个入口（机械 6 列在原型里是**只读**的），
    而服务端页 `/m06` 才有 PRG 写入口 ⇒ 壳里**没法录**（机械欠款会长期停在 0）。按 §5.2.5 ③ 自行设计。
    ⛔ **不改 `V.m06` 一行**：走原型自己的 `BIND` 钩子（渲染后往页首注入一条工具栏）——
@@ -1059,8 +1065,8 @@ BIND.m06 = function () {
      ⇒ 用户把「界面大小」调大时**这一处不跟着变**（守则 §5.11：漏一处 = 半成品相）。
      ⚠️ `.fbar.plate`（`index.html` 样式块里那四个变体类之一）的声明与它**逐像素等价**、只差那个倍率。 */
   bar.className = 'fbar plate';
-  bar.innerHTML = '<div class="fi"><label>机械费手录（§5.2.5 ③）</label>'
-    + '<span class="mut sm">机械 6 列是<b>旁路载体</b> —— 重抓 i8 / 重导历史都<b>不覆盖</b>它</span></div>'
+  bar.innerHTML = '<div class="fi"><label>机械费手录</label>'
+    + '</div>'
     + '<button class="btn pri" data-act="mechOpen">录机械费</button>';
   host.prepend(bar);
 };
@@ -1365,11 +1371,8 @@ BIND.m01 = function () {
         A：名单同步报出的"一个全名挂 ≥2 个仓库"选哪一个）⇒ 失败原因**各报各的**。 */
   const aold = document.getElementById('archBox');
   if (aold) aold.remove();
-  /* ⭐ 2026-09-29（`TAIL-190` · 用户真机报障）：**丢掉的那几条也要画出来**，否则用户看到的是
-     「回执说有待人工 2 条、卡是空的」—— 只能猜是不是坏了（本仓最贵那类**静默**）。
-     ⚠️ 触发条件**不能只看 `ARCP.length`**：本次实测那 2 条**全是「壳下具体小微」**（按设计不属本卡）
-     ⇒ 只按清单长度画的写法会**整张卡都不出现** ✗（那正是他看到的"空"）。 */
-  if (ARCP.length || ARCP_ERR || ARCP_DROP.length) {
+  /* TAIL-263：只展示实际待人工建档与读取失败，其他同步条目不占默认页面。 */
+  if (ARCP.length || ARCP_ERR) {
     const asrc = ARCP_SRC && ARCP_SRC.target
       ? `清单来自<b>最近一次「常用项目列表」同步</b>：<span class="fc">${esc(ARCP_SRC.target)}</span>`
         + (ARCP_SRC.at ? ` · ${esc(ARCP_SRC.at)}` : '')
@@ -1382,13 +1385,10 @@ BIND.m01 = function () {
     const abox = document.createElement('div');
     abox.id = 'archBox';
     abox.className = 'card';
-    abox.innerHTML = `<h4>待人工建档<span class="sp"><span class="mut sm">共 ${ARCP.length} 条${ARCP_DROP.length?` · 另有 ${ARCP_DROP.length} 条不属本卡（见下）`:''} · ${asrc}</span></span></h4>
+    abox.innerHTML = `<h4>待人工建档<span class="sp"><span class="mut sm">共 ${ARCP.length} 条 · ${asrc}</span></span></h4>
       <div class="bd">
         ${ARCP_ERR ? `<div class="tip dg" style="margin:0 0 calc(8px * var(--fscale))">⚠️ <b>待建档清单没取到</b>：${esc(ARCP_ERR)}
           <br>其余档案数据照常显示（这一路失败不拖垮本页）—— 可刷新页面重试。</div>` : ''}
-        ${ARCP_DROP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))">⚠️ 这次同步报出的待人工里，有 <b>${ARCP_DROP.length}</b> 条<b>不属这张卡</b>（下表看不到 —— <b>不是</b>报错）—— 逐条如下：
-          <ul style="margin:calc(6px * var(--fscale)) 0 0 calc(18px * var(--fscale))">${ARCP_DROP.map(x =>
-            `<li><b>${esc(x.full_name)}</b>：${em(x.why_text || '')}</li>`).join('')}</ul></div>` : ''}
         ${ARCP.length ? `<div class="tip" style="margin:0 0 calc(8px * var(--fscale))">这个全名在 i8 名单里挂了
           <b>≥2 个仓库</b>，而一条项目只挂一个 ⇒ 请<b>选定一个</b>，系统按它建行（其余仓库<b>不会</b>再建行）。</div>
         ${TBL({cls:'cond',head:'<th>项目全名</th><th>待选仓库</th><th>系统为什么不自己定</th><th></th>',
@@ -1869,7 +1869,7 @@ const PAGE_LOAD = {
      这一路（它填 `JCs`）。⛔ 不加的话那条柱子会恒 0 —— 那是**假数**（比不显示更坏）。
      ⚠️ `JCs` 是跨页共享的（看板 / 大表主材累计 / m03 集采关联也读它）⇒ 多这一路不会重复取。 */
   m05: ['付款域', '修改留痕', '机械 6 列', '集采台账'],
-  m06: ['机械 6 列', '库存单据', '收发结存与大表'],   /* 过程资料读 `MACH6`/`IVs`/`EXTM`/`BIGVAL` */
+  m06: ['过程资料', '机械 6 列', '库存单据', '收发结存与大表'],
   m07: ['机械 6 列', '库存单据', '收发结存与大表'],
   m08: ['库存单据'],
   m09: ['特殊费用月报表'],
@@ -1912,6 +1912,7 @@ const LOADERS = {
     const pl = await API.plans(); PLs = (pl.rows || []).map(adaptPlan);
   },
   '机械 6 列': reloadMech,
+  '过程资料': reloadProc,
   '库存单据': reloadInv,
   /* ⚠️ `m09` 的自动项与手填项**都由后端自己算**（`mod09_fee/repository.inv_rows` 直读 `inv_detail`）
      ⇒ 与壳里的 `IVs` 无关、**不依赖 `reloadInv` 的顺序**。 */

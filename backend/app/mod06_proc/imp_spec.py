@@ -1,24 +1,6 @@
-"""`m06` 过程资料 · **通用导入域的声明与钩子**（`TAIL-75`）—— 本域接上通用导入面的那一件。
-
-⭐ 分工（设计 §六/§七）：读表 / 表头定位 / 映射建议 / 记忆 / 预览 / 暂存全在 `import_kit`；
-   本件**只声明"要什么"**并给两个钩子，而两个钩子**原样复用既有落库口径**
-   （`importer.commit` → `repository.import_snapshot`）—— ⛔ **不新写第二条落库路**
-   （那正是"同一口径两个主人"的老毛病）。
-
-⭐⭐ **字段清单 = 核算月 ＋ 材料 10 列 ＋ 机械 6 列**（`I.FIELDS` 全部）。
-  ⚠️⚠️ 2026-09-26（`TAIL-107` · 用户裁定）**改了这里的口径**，原话是：「导入过程资料，**机械费也要
-     导进去**，**机械费手录仅限于正式启用系统后**，历史机械费都填在过程资料 excel 里」
-     ⇒ 机械 6 列**从此要落库**（进历史段快照）。
-  ⭐ 改前是反的（"机械 6 列刻意不在字段里 / 机械全段手录，导入只提示不落库"）—— 那条口径已作废；
-     ⛔ **别再为了"少写几列"把机械列过滤掉**：filter 一加，机械费就成了"认得出、不写、全程不报错"
-     （`TAIL-107` 之前的形态，用户得手工敲 29 行 × 6 列）。
-
-⭐⭐ **2026-09-26（用户报障后收口）—— 本域的两条口径都归到 `importer.plan_rows` 一处**：
-  ① **合计/小计行 · 说明行 · 空行 ⇒ 跳过**（旧路 `parse_sheet` 一直如此，搬到通用面时丢了）；
-  ② **不合规的核算月文本 ⇒ 这一行不收**（用户原话：「不合规的核算月文本**不收**，我说了正式导入的时候
-     会改成标准格式」）—— ⚠️ **取代** 2026-09-22 那条「`2025年9月（一标）` 照收」（那只剩旧路在用）。
-  ⛔ **预览（`preview`）与落库（`commit`）必须是同一个函数**：此前各写一套 ⇒ ③ 说"没问题"、④ 才报
-     「第 19 行认不出」（实测晋江那份真文件），用户**走到最后才知道**。
+"""MOD-06 通用导入域声明和钩子。
+预览与提交共用 importer.plan_rows，材料与机械分别按截止月筛选。
+机械手录和导入同级；标段月份识别并按同月汇总；异常金额整批拒写。
 """
 
 from __future__ import annotations
@@ -58,11 +40,10 @@ SPEC = DomainSpec(
     source_label="各项目手填的消耗汇总表",
     max_rows=I.MAX_ROWS,
     batch=True,
+    protect_populated_columns=True,
     ignored=_ignored(),
-    note="必须有「核算月」（真模板里那列叫「时间」，也认 Excel 序列号）与至少一列材料列；"
-         "**只填了机械列的行也算数据**。写入前要选**项目**（按项目分别存）—— 机械 6 列**照样导入**。",
-    keep_note="未采（原样保留）：序号 / 尾部合计（小计）行 / 手写说明行。"
-              "⚠️ 机械 6 列**是采的**（2026-09-26 起）—— 这里只说「不采什么」，⛔ 别再写成「机械不导入」。",
+    note='每次导入一个项目的历史资料；材料和机械列均可导入。合计、说明和空行自动跳过。',
+    keep_note='序号、合计、小计、说明和空行不导入；材料与机械列均可导入。',
 )
 
 
@@ -77,34 +58,62 @@ def _blocks_of(bad: list[dict], skip_rows: list[dict]) -> list[dict]:
     """
     out: list[dict] = []
     if bad:
-        out.append({"title": f"⚠️ 写不进去的行（{len(bad)} 行 · 不会写进历史段）",
-                    "note": "这些行**不导入**，其余行照常写入。要它们也进去：改成标准格式后**重导一次**"
-                            "（先把同批整批回滚，⛔ 别让两批叠着）。",
+        out.append({"title": f"⚠️ 写不进去的行（{len(bad)} 行）",
+                    "note": '本次导入不会写入，原历史保留。修正以下行后重新预览。',
                     "columns": ["行", "原因"],
                     "rows": [[a["line"], a["reason"]] for a in bad]})
     if skip_rows:
-        out.append({"title": f"本来就跳过的行（{len(skip_rows)} 行 · 不是数据行，**不用你改**）",
-                    "note": "合计/小计行 · 手写说明行 · 空行 —— **本来就不该进库**（⛔ 不是你文件的毛病）。"
-                            "⚠️ 与上面「写不进去的行」**不是一回事**：那些才要你改文件。",
+        out.append({"title": f"本来就跳过的行（{len(skip_rows)} 行）",
+                    "note": '合计、说明、空行及截止月后的行不导入；原因见各行。',
                     "columns": ["行", "原因"],
                     "rows": [[x["row"], x["why"]] for x in skip_rows]})
     return out
 
 
-def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` 不参与本域的判定
-    """域预览补丁（`Hooks.preview`）：⭐ **③ 就说出"能写几行 / 哪几行写不了"**。
+def _cutoff_options(options):
+    opts = options or {}
+    return {k: opts.get(k) for k in ("cutoff_ym", "material_cutoff_ym", "mechanical_cutoff_ym")}
 
-    ⚠️ 与落库**同一个函数**（`I.plan_rows`）—— "预览说没事、落库才炸"正是用户 2026-09-26 报障的实质
-      （实测：④ 报「第 19 行的核算月认不出」，而 ③ 只报了一条无关的行 35）。⛔ 别在这里另算一套行数。
-    ⚠️ **只读**（`plan_rows` 是纯函数，不碰库）⇒ 「确认前一个字节都不写库」不受影响。
-    """
-    rows, skip_rows, bad = I.plan_rows(records)
-    return {"writable": len(rows),
+
+def _category_block(records, rows, options, bad, skipped):
+    limits = I.selected_cutoffs(rows, **_cutoff_options(options))
+    labels = {field.key: field.label for field in FIELDS}
+    bad_by_line = {item["line"]: item["reason"] for item in bad}
+    skip_by_line = {item["row"]: item["why"] for item in skipped}
+    details = []
+    for record in records or []:
+        ym = I.ym_of(record.get("核算月")) or I._ym_loose(record.get("核算月"))[0]
+        if not ym:
+            continue
+        def mark(keys, cutoff):
+            line = record.get("_row", 0)
+            if line in skip_by_line:
+                return "不导入，" + skip_by_line[line]
+            if line in bad_by_line:
+                return "不导入，本行须修正"
+            if bad:
+                return "不导入，须先修正其他异常行"
+            if not any(record.get(labels[key]) not in (None, "") for key in keys):
+                return "空格，不写入"
+            if cutoff and ym > cutoff:
+                return f"不导入，超过 {cutoff}"
+            return "导入"
+        details.append([record.get("_row", ""), ym, mark(D.MATERIAL_KEYS, limits["material_cutoff_ym"]),
+                        mark(D.MECH_KEYS, limits["mechanical_cutoff_ym"])])
+    return {"title": "材料与机械的导入范围", "note": "两类分别筛选；空格不写入，明确填写 0 会覆盖原值。材料同月显示优先 i8，机械覆盖本次写入的月份和列。",
+            "columns": ["行", "核算月", "材料", "机械"], "rows": details}
+
+
+def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` 不参与本域的判定
+    """只读预览：共享计划确认可写数、异常/跳过及逐行材料机械范围；截止分别回显。"""
+    rows, skip_rows, bad = I.plan_rows(records, **_cutoff_options(options))
+    writable = 0 if bad else len(rows)
+    return {"writable": writable, **I.selected_cutoffs(rows, **_cutoff_options(options)),
             # ⭐ 2026-09-27（用户报障「所有不写入的行都要标」）：两个数**分开报**（守则 §4.7 口径透明）
             #    —— 用户看到"3 行没进去"会以为三行都要自己改，而其中"本来就跳过"的那几行
             #    （合计/说明/空行）**什么都不用做**。⛔ 别合成一个"不写入的行"。
-            "kpis": {"能写入的行": len(rows), "不写入的行": len(bad),
-                     "本来就跳过（合计/说明/空行）": len(skip_rows)},
+            "kpis": {"能写入的行": writable, "不写入的行": len(bad),
+                     "正常跳过（含截止月后）": len(skip_rows)},
             # ⭐ 2026-09-26（用户报障 · 原话：「**这些不会落库的行，要在行上直接标**，比如给一个浅色底，
             #    或者其他明确提示，这才叫好的前端设计，而不是还要**抬头去看文字说明**」）：
             #    域**自报**哪几行写不进去（通用面按 `row` 标在那一行上、把 `why` 挂成悬停原因）。
@@ -115,7 +124,7 @@ def preview(s, records, mapping_, options):  # noqa: ARG001 —— `mapping_` �
             #       （合计/说明/空行，不用你改）⇒ 壳给**两种标记**，⛔ 不能混成一种颜色/一个词。
             "skipped": ([{"row": a["line"], "kind": "bad", "why": a["reason"]} for a in bad]
                         + [{"row": x["row"], "kind": "skip", "why": x["why"]} for x in skip_rows]),
-            "blocks": _blocks_of(bad, skip_rows)}
+            "blocks": [_category_block(records, rows, options, bad, skip_rows)] + _blocks_of(bad, skip_rows)}
 
 
 def _batch_no(s, opts: dict) -> str:
@@ -149,14 +158,16 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
 
     ⭐⭐ 2026-09-26 用户裁定的两条口径，**都落在 `I.plan_rows` 这一处**（与 ③ 预览共用）：
       「**合计/说明行跳过**」＋「**不合规的核算月文本不收**（正式导入时会改成标准格式）」。
-    ⚠️ **异常行只跳过自己** —— 其余行照常落库（仓内既有口径：`test_acc_oddval` 明写"好的两行照常进"）；
-       只有**一行都没有**时才拒绝整批（历史段一个字不动）。
+    校验出现异常行时整批拒写，保留原有效历史；正常合计、说明、空行及截止后的行仍跳过。
     """
     opts = dict(options or {})
     warehouse = str(opts.get("warehouse") or "").strip()
     if not warehouse:
         raise MustReportError("请先选**项目**（仓库名）—— 过程资料按项目分别存，没选就无从写入")
-    rows, skip_rows, bad = I.plan_rows(records)
+    rows, skip_rows, bad = I.plan_rows(records, **_cutoff_options(opts))
+    if bad:
+        why = "；".join(f"第 {a['line']} 行：{a['reason']}" for a in bad[:3])
+        raise MustReportError(f"本次导入未写入，原历史保留。请修正后重新预览：{why}")
     if not rows:
         why = "；".join(f"行 {a['line']}：{a['reason']}" for a in bad[:3]) or "文件里没有数据行"
         raise MustReportError(f"没有一行能写入的数据 —— {why}。历史段未被改动（没有写入）")
@@ -164,7 +175,7 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     #    `_blocks_of` 与 `skipped` 都用它）⇒ 再拼一份文本就是"同一件事两个说法"。
     plan = I.ImportPlan(rows=rows, anomalies=bad, notes=[])
     out = I.commit(s, plan, warehouse=warehouse, batch=_batch_no(s, opts),
-                   operator=operator, cutoff_ym=str(opts.get("cutoff_ym") or "") or None)
+                   operator=operator, **_cutoff_options(opts))
     out["cutoff_default"] = plan.default_cutoff        # 界面用来回显"默认截止月 = 最大核算月"
     # ⭐ ④ 的回执也要**说清有几行没写进去**（⛔ 不许只在 ③ 说过、到这里就悄悄算了）
     out["不写入的行数"] = len(bad)
@@ -173,7 +184,7 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
     # ⭐ 2026-09-26（用户报障「**落库结果可读性比较差**」· 四个域一起改）：回执**自报人话指标** ——
     #    通用面只画 `kpis`（原始键仍留着：排查与判据都要看它们）。
     out["kpis"] = {"写入行数": int(out.get("rows") or 0), "不写入的行数": len(bad),
-                   "本来就跳过（合计/说明/空行）": len(skip_rows)}
+                   "正常跳过（含截止月后）": len(skip_rows)}
     return out
 
 
@@ -183,12 +194,7 @@ def rollback(s, batch, operator):
 
 
 def options(s) -> dict:
-    """**域上下文**（界面上的"项目 / 截止核算月 / 已有批次"）—— 复用 `service.build_import_data`。
-
-    ⚠️ 2026-09-23（`B5c-2`）：原先这些走域专属端点 `/api/m06/import/data`；现在走通用面的
-       `GET /api/imp/m06_proc/options`（壳**只认这一条**）⇒ 那条旧端点可以退休了。
-       ⛔ 口径与取值**一字未改**（还是 `build_import_data` 这一处出口）。
-    """
+    """按项目提供材料和机械上次导入截止；旧 cutoff_ym/cutoffs 为材料兼容别名。"""
     data = build_import_data(s, warehouse="")
     return {
         "projects": list(data["projects"]),
@@ -197,6 +203,10 @@ def options(s) -> dict:
         #   它继续给着，是为了壳侧**不认域号**这条纪律下仍能读懂"这个域有项目维度"。
         "warehouse": str(data["warehouse"] or ""),
         "cutoff_ym": str(data["cutoff_ym"] or ""),
+        "material_cutoff_ym": str(data["cutoff_ym"] or ""),
+        "mechanical_cutoff_ym": str(data.get("mechanical_cutoff_ym") or ""),
+        "material_cutoffs": dict(data.get("cutoffs") or {}),
+        "mechanical_cutoffs": dict(data.get("mechanical_cutoffs") or {}),
         # ⭐ **每个项目的截止核算月表**（2026-09-26）：界面上的「截止核算月」曾只在**进域那一刻**取一次，
         #   用户换项目后那个框**不跟着换**，而落库会把它**写进新项目**（A 的分界写给 B，且不报错）⇒
         #   现在壳按**当前选中的项目**查这张表。⚠️ 与 `cutoff_ym` 同表同口径（`repository.load_cutoffs`）。

@@ -50,10 +50,10 @@ def _by_month(s: FakeSession) -> dict[str, dict]:
 # ------------------------------------------------------------ 001-01 历史段不引用库存单据
 
 @acc(CASE, "001-01")
-def test_历史段材料来自快照不引用库存单据():
+def test_同月库存优先_无库存历史材料取快照():
     rows = _by_month(_sess())
     assert rows["2026-05"]["section"] == D.SECTION_HISTORY
-    assert rows["2026-05"][f"in_主辅材"] == Decimal("1000.00")
+    assert rows["2026-05"][f"in_主辅材"] == Decimal("9999.00")
     assert rows["2026-06"][f"out_主辅材"] == Decimal("200.00")
 
     # ⭐ 改库存单据（历史段内的那个月）之后，历史段金额**不变**（快照说了算）
@@ -61,7 +61,9 @@ def test_历史段材料来自快照不引用库存单据():
     for r in s.by_model[InvDetail]:
         if r.ym == "2026-05":
             r.amount = Decimal("88888.00")
-    assert _by_month(s)["2026-05"][f"in_主辅材"] == Decimal("1000.00"), "历史段不得引用库存单据"
+    assert _by_month(s)["2026-05"][f"in_主辅材"] == Decimal("88888.00"), "同月材料优先库存"
+    s.by_model[InvDetail] = [r for r in s.by_model[InvDetail] if r.ym != "2026-05"]
+    assert _by_month(s)["2026-05"]["in_主辅材"] == Decimal("1000.00"), "无库存历史取快照"
 
 
 # ------------------------------------------------------------ 001-02 正式段引用 ＋ 分界移动
@@ -73,7 +75,7 @@ def test_正式段只读引用库存单据且分界可移动():
     assert rows["2026-07"][f"in_主辅材"] == Decimal("100.00")
     assert rows["2026-08"][f"in_主辅材"] == Decimal("200.00")
     assert rows["2026-09"][f"out_工具"] == Decimal("50.00")
-    assert all(D.column_source(k, ym="2026-07", cutoff_ym=CUTOFF_YM) == D.SOURCE_INV
+    assert all(D.column_source(k, ym="2026-07", cutoff_ym=CUTOFF_YM, has_inventory=True) == D.SOURCE_INV
                for k in D.MATERIAL_KEYS), "正式段材料列 = 只读引用库存单据"
 
     # ⭐ 把截止核算月往后挪 ⇒ 该月转历史段（快照里没有 ⇒ 空态，**不回落库存单据**）
@@ -81,8 +83,8 @@ def test_正式段只读引用库存单据且分界可移动():
     s.by_model[ProcCutoff][0].cutoff_ym = "2026-08"
     moved = _by_month(s)
     assert moved["2026-07"]["section"] == D.SECTION_HISTORY
-    assert moved["2026-07"]["material_empty"] is True
-    assert moved["2026-07"][f"in_主辅材"] is None
+    assert moved["2026-07"]["material_empty"] is False
+    assert moved["2026-07"][f"in_主辅材"] == Decimal("100.00")
     assert moved["2026-09"]["section"] == D.SECTION_FORMAL
 
 
@@ -90,62 +92,19 @@ def test_正式段只读引用库存单据且分界可移动():
 
 @acc(CASE, "001-03")
 def test_机械六列_历史段以导入值为准_正式段手录():
-    """⭐⭐ 2026-09-26（用户裁定 · `TAIL-107`）**这条口径变了**（可核出处 = `TAIL-107` 的"来源"格原话）：
-
-    「导入过程资料，**机械费也要导进去**，**机械费手录仅限于正式启用系统后**，历史机械费都填在
-    过程资料 excel 里」。
-
-    ⚠️ 改前是「机械 6 列**全段可手录**（含历史段）」—— 那条已作废（同一格两个来源 = 谁也说不清哪个对）。
-
-    判词（四半，缺一半都不算）：
-      ① **来源按段切**：历史段 ⇒ `SOURCE_SNAPSHOT`（导入快照）· 正式段 ⇒ `SOURCE_MANUAL`（手录）；
-      ② **读到的值也按段**：历史段读到的是**快照值**（5.00），⛔ **不是**手录表里那一格（7.00）；
-      ③ **可编辑性**：历史段**不可**手录 · 正式段**可**；材料列两段都不可；
-      ④ **挡板在写出口**（`repository.save_mech`）：往历史段录 ⇒ **拒**（⛔ 不是"录了但不显示"）。
-    """
-    rows = _by_month(_sess())
-    assert rows["2026-06"]["section"] == D.SECTION_HISTORY
-    # ① 来源按段切
-    assert all(D.column_source(k, ym="2026-06", cutoff_ym=CUTOFF_YM) == D.SOURCE_SNAPSHOT
-               for k in D.MECH_KEYS), "历史段的机械列来源 = **导入的快照**"
-    assert all(D.column_source(k, ym="2026-07", cutoff_ym=CUTOFF_YM) == D.SOURCE_MANUAL
-               for k in D.MECH_KEYS), "正式段的机械列来源 = **手录**"
-    # ② 值也按段（快照 5.00 压过手录 7.00 —— 这两个数在桩里是刻意不一致的）
-    assert rows["2026-06"]["mech_0"] == Decimal("5.00"), \
-        "历史段机械列要取**快照值**（桩里手录表还有一格 7.00 ⇒ 那格**不该被读到**）"
-    assert rows["2026-07"]["mech_0"] == Decimal("1.00"), "正式段机械列取手录值"
-    assert rows["2026-10"]["mech_0"] == Decimal("9.00"), "正式段（只有手录、无库存单据）照常取手录"
-    # ③ 可编辑性
-    assert not any(D.column_editable(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS), \
-        "历史段**不许**手录（以导入值为准）"
-    assert all(D.column_editable(k, ym="2026-07", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS), \
-        "正式段可手录"
-    assert not any(D.column_editable(k, ym="2026-07", cutoff_ym=CUTOFF_YM) for k in D.MATERIAL_KEYS), \
-        "材料列两段都不可编辑（引用 / 快照）"
-
-    # ④ 挡板 = **唯一写出口** `repository.save_mech`（⛔ 不是只在界面上挡）
+    """机械导入和手录共用有效表，任何月份可编辑；材料仍只读。"""
     s = _sess()
-    with pytest.raises(Exception) as bad:
-        save_mech(s, ym="2026-05", warehouse=WAREHOUSE, values={"mech_1": Decimal("3.50")})
-    assert "历史段" in str(bad.value) and "导入" in str(bad.value), \
-        "拒绝必须说清「为什么」与「怎么办」（守则 §5.5）"
-    save_mech(s, ym="2026-07", warehouse=WAREHOUSE, values={"mech_1": Decimal("4.50")})
-    assert _by_month(s)["2026-07"]["mech_1"] == Decimal("4.50"), "正式段手录没生效"
-
-    # ⭐ **录入口真的在界面上**（此前只有「域出口说可编辑」、界面根本没有录入口 —— `TAIL-03`）。
-    #    ⚠️ 2026-09-18（`§19` **批 2**）：这一段原先借**旧服务端页**的 HTML 观测（`name="mech_i"`
-    #    输入框 / `action="/m06/mech"`）⇒ 旧页整体删除（授权 `D18`）后 **claim 没删、观测面搬了**：
-    #    · 「录入口在」＋「走后端、不在前端复写判据」⇒ `tests/test_wired_m06.py` 的壳侧断言；
-    #    · 「机械列可录 / **材料列不可录**」⇒ 上面 `column_editable` 两条**域出口**断言 ＋
-    #      `test_wired_m06.py::test_机械录入口只送mech键_材料列没有输入面` 各占一半 ✓
-    #    （⛔ 不再借页面 html 复述一遍 —— 同一 claim 写成两份，改坏一处仍会全绿）。
-
-    # ⭐ 入参口径两条仍在（**空按 0 / 负数被拦**）—— 与"哪一段能录"是两件事，⛔ 别混。
-    #    ⚠️ 改前这里是"**两段都真的录得进**（历史段 + 正式段）"；2026-09-26 起历史段**录音被拒**
-    #       （那条断言已由上面的挡板判据取代 ✓）。
-    assert mech_ui.parse_mech_values({"mech_1": "0"})["mech_1"] == Decimal("0.00"), "0 合法"
+    rows = _by_month(s)
+    assert rows["2026-06"]["mech_0"] == Decimal("7.00")
+    for ym in ("2026-06", "2026-07"):
+        assert all(D.column_source(k, ym=ym, cutoff_ym=CUTOFF_YM) == D.SOURCE_MANUAL for k in D.MECH_KEYS)
+        assert all(D.column_editable(k, ym=ym, cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS)
+        assert not any(D.column_editable(k, ym=ym, cutoff_ym=CUTOFF_YM) for k in D.MATERIAL_KEYS)
+    save_mech(s, ym="2026-06", warehouse=WAREHOUSE, values={"mech_0": Decimal("12.34")})
+    assert _by_month(s)["2026-06"]["mech_0"] == Decimal("12.34")
+    assert mech_ui.parse_mech_values({"mech_1": "0"})["mech_1"] == Decimal("0.00")
     with pytest.raises(ValueError):
-        mech_ui.parse_mech_values({"mech_1": "-0.01"}), "负数必须被拦"
+        mech_ui.parse_mech_values({"mech_1": "-0.01"})
 
 
 # ------------------------------------------------------------ 001-04 两段互不覆盖
@@ -161,20 +120,23 @@ def test_两段互不覆盖():
     for r in s.by_model[InvDetail]:
         r.amount = Decimal("12345.00")
     after_refetch = _by_month(s)
-    assert {ym: after_refetch[ym][f"in_主辅材"] for ym in hist_before} == hist_before, \
-        "重抓 i8 **不得**动历史段"
+    assert after_refetch["2026-05"]["in_主辅材"] == Decimal("12345.00")
+    assert s.by_model[ProcHistorySnapshot][0].in_0 == Decimal("1000.00"), "i8重抓不改快照记录"
     assert after_refetch["2026-07"][f"in_主辅材"] == Decimal("12345.00"), "正式段应随重抓变"
 
     # ② 「重导历史」= 新批次快照 ⇒ 正式段一格都不动
     s2 = _sess()
-    s2.by_model[ProcHistoryBatch].append(make_batch("H20260916-02"))
-    s2.by_model[ProcHistorySnapshot].append(
-        make_snapshot(303, ym="2026-06", ins="777.00", batch_no="H20260916-02"))
+    import_snapshot(s2, warehouse=WAREHOUSE, batch_no="H20260916-02",
+                    rows=[{"ym": "2026-06", "in_主辅材": "777.00"}], operator="自检",
+                    cutoff_ym=CUTOFF_YM)
     after_reimport = _by_month(s2)
     assert {ym: after_reimport[ym][f"in_主辅材"] for ym in formal_before} == formal_before, \
         "重导历史 **不得**动正式段"
-    assert after_reimport["2026-06"][f"out_主辅材"] == Decimal("200.00"), "同月快照按批次相加"
-    assert after_reimport["2026-06"][f"in_主辅材"] == Decimal("777.00")
+    assert after_reimport["2026-06"][f"in_主辅材"] == Decimal("777.00"), "无库存的月份使用新有效历史"
+    assert after_reimport["2026-06"][f"out_主辅材"] == Decimal("0.00"), "旧批次必须退出有效历史"
+    s2.by_model[InvDetail] = [r for r in s2.by_model[InvDetail] if r.ym != "2026-06"]
+    assert _by_month(s2)["2026-06"]["in_主辅材"] == Decimal("777.00")
+    assert _by_month(s2)["2026-06"]["out_主辅材"] == Decimal("0.00"), "旧批次整体退出"
 
 
 # ------------------------------------------------------------ 001-05 截止核算月
@@ -217,7 +179,7 @@ def test_历史段不提供行内编辑入口():
     # 回滚是「再导一次」的配套动作（置状态、**不物理删**）
     assert rollback_batch(s, batch_no="H20260916-01") == 2
     assert s.by_model[ProcHistoryBatch][0].status == "rolled_back"
-    assert _by_month(s)["2026-05"]["material_empty"] is True, "整批回滚后历史段为空（不回落库存单据）"
+    assert _by_month(s)["2026-05"]["in_主辅材"] == Decimal("9999.00"), "回滚历史不影响库存优先"
 
     # ⭐ **唯一修改通道真的能改**（`TAIL-02`）：再导一次 ⇒ 历史段跟着变，**正式段一格不动**
     s2 = _sess()
@@ -227,10 +189,11 @@ def test_历史段不提供行内编辑入口():
                           operator="科室用户", cutoff_ym=CUTOFF_YM)
     assert out["rows"] == 1 and out["cutoff_ym"] == CUTOFF_YM, "截止核算月应保持不动"
     assert _by_month(s2)["2026-07"]["in_主辅材"] == formal_before, "重导历史不得动正式段"
-    # ① 旧批**仍生效** ⇒ 同月按批次相加（既有口径，见 001-04）
-    assert _by_month(s2)["2026-05"]["in_主辅材"] == Decimal("5321.00")
-    # ② 正路 = 「同批回滚后重导」：回滚旧批 ⇒ 该月只剩新批的数
+    # 重导替换历史；有库存月份仍优先显示库存。
+    assert _by_month(s2)["2026-05"]["in_主辅材"] == Decimal("9999.00")
+    # 回滚已替换旧批不影响新批；无库存时读取新历史。
     importer.rollback(s2, batch_no="H20260916-01")
+    s2.by_model[InvDetail] = [r for r in s2.by_model[InvDetail] if r.ym != "2026-05"]
     assert _by_month(s2)["2026-05"]["in_主辅材"] == Decimal("4321.00"), "回滚旧批后应只剩新批"
 
 
@@ -240,14 +203,14 @@ def test_历史段不提供行内编辑入口():
 def test_机械列与材料列同构且数据源可插拔():
     # ⭐ 两类列走**同一个**出口：只靠 column_source(key, ym, cutoff) 决定数据源
     hist = {D.column_source(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MATERIAL_KEYS}
-    formal = {D.column_source(k, ym="2026-07", cutoff_ym=CUTOFF_YM) for k in D.MATERIAL_KEYS}
+    formal = {D.column_source(k, ym="2026-07", cutoff_ym=CUTOFF_YM, has_inventory=True) for k in D.MATERIAL_KEYS}
     mech_h = {D.column_source(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS}
     mech_f = {D.column_source(k, ym="2026-07", cutoff_ym=CUTOFF_YM) for k in D.MECH_KEYS}
     assert hist == {D.SOURCE_SNAPSHOT} and formal == {D.SOURCE_INV}
     # ⭐ 2026-09-26（`TAIL-107`）：机械 6 列**走的还是这同一个出口**，只是结果也**按段切**
     #    （历史段 = 快照 / 正式段 = 手录）—— "同构、数据源可插拔"这条 claim 没变，变的是插头插在哪。
-    assert mech_h == {D.SOURCE_SNAPSHOT} and mech_f == {D.SOURCE_MANUAL}
-    assert D.column_source(D.MATERIAL_KEYS[0], ym="2026-06", cutoff_ym="") == D.SOURCE_INV
+    assert mech_h == mech_f == {D.SOURCE_MANUAL}
+    assert D.column_source(D.MATERIAL_KEYS[0], ym="2026-06", cutoff_ym="", has_inventory=True) == D.SOURCE_INV
     # 两类列**同一张表、同一套渲染出口** ⇒ 换机械费数据源时不动界面。
     # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页 html 的 `class="tw"` 计数观测；旧页删（`D18`）后
     #    这条的**实质**由上面 `column_source` 四条 ✓ ＋ 壳侧「合计行格数由表头派生」

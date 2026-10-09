@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from copy import deepcopy
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -66,6 +69,15 @@ class FakeSession:
 
     def flush(self) -> None:
         pass
+
+    @contextmanager
+    def begin_nested(self):
+        before = deepcopy(self.by_model)
+        try:
+            yield self
+        except Exception:
+            self.by_model = before
+            raise
 
 
 def make_detail(

@@ -66,7 +66,7 @@ def test_壳里自动项与手填项同桌():
     assert "TBL({" in s, "本页表格没走统一出口 `TBL`"
     assert "key:'m09:awf'" in s, "本页没把「m09:awf」这张表的 key 交给 `TBL`"
     assert 'data-sort-key="' in with_tbl(s), "`TBL` 内核没有输出 `data-sort-key`"
-    assert "安全文明施工费</b>（按 CBS 分类）" in s, "自动项那一行没了"
+    assert "安全文明施工费</b>" in s, "自动项那一行没了"
     # ⭐ 同样**不钉形态**（原来钉的是 `${list.length?list.map(` —— 进了 `TBL` 的 `rows` 数组后，
     #    这段变成 `...(list.length?list.map(...)`，`${` 没了 ⇒ 当场假红）。
     #    ⇒ 钉**意图**：数据源是后端 `awfList()` ＋ 逐行由 `list` 渲染 ＋ 项名可改的入口还在。
@@ -106,9 +106,10 @@ def test_壳里项目面板是单选且候选键来自后端():
 
 @acc("ACC-FEE-MON-001", "001-09")
 def test_壳里本页不设导出入口且写明随台账导出():
-    """§7.1 / §5.5：本表**随「逐月欠款台账」导出**、**本页不设单独导出按钮**。"""
+    """TAIL-263 撤掉默认说明，实际台账导出入口及确认仍含本表，本页无单独导出按钮。"""
     s = page_slice("m09")
-    assert "逐月欠款台账" in s, "没写明它随台账导出"
+    assert 'data-act="ledExpToggle"' in page_slice("m05"), "随台账导出的真实入口丢失"
+    assert "特殊费用月报表" in act_entry("ledExpOk"), "导出确认未显示特殊费用工作表"
     assert "export" not in s.lower(), "壳的 m09 视图里出现了导出入口（本页不该有）"
 
 

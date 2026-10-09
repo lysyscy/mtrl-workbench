@@ -88,7 +88,7 @@ COLUMN_SOURCE: dict[str, str] = {k: SOURCE_INV for k in MATERIAL_KEYS}
 #:   · 正式段（> 截止核算月）⇒ **手录**
 #:     （用户原话：「机械费手录仅限于**正式启用系统后**」）。
 MECH_SOURCE_BY_SECTION: dict[str, str] = {
-    SECTION_HISTORY: SOURCE_SNAPSHOT,
+    SECTION_HISTORY: SOURCE_MANUAL,
     SECTION_FORMAL: SOURCE_MANUAL,
 }
 
@@ -100,29 +100,18 @@ def section_of(ym: str, cutoff_ym: str | None) -> str:
     return SECTION_FORMAL
 
 
-def column_source(key: str, *, ym: str, cutoff_ym: str | None) -> str:
-    """⭐ **每列的「列取值出口」（唯一）** —— 机械列与材料列**在这一个出口上同构**（§5.2.5 ③）。
-
-    - 材料 10 列：历史段 ⇒ `SOURCE_SNAPSHOT`；正式段 ⇒ `SOURCE_INV`
-    - 机械 6 列：历史段 ⇒ `SOURCE_SNAPSHOT`（**导入值**）；正式段 ⇒ `SOURCE_MANUAL`（手录）
-      ⭐ 2026-09-26 用户裁定 —— 改前是"恒 `SOURCE_MANUAL`（全段手录）"。
-    - 认不出的 key ⇒ 按材料列那一套（随段切）——⛔ 不静默返回 `SOURCE_MANUAL` 那种"看起来有答案"的值。
-
-    ⇒ **接机械费报表 / 改机械费来源只改本函数、不动页面**（判据 `ACC-RPT-PROC-002/001-07`）。
-    """
+def column_source(key: str, *, ym: str, cutoff_ym: str | None, has_inventory: bool = False) -> str:
+    """列来源唯一出口：材料同月优先 i8，无 i8 读有效历史；机械统一有效表。"""
     if key in MECH_KEYS:
-        return MECH_SOURCE_BY_SECTION[section_of(ym, cutoff_ym)]
-    return SOURCE_SNAPSHOT if section_of(ym, cutoff_ym) == SECTION_HISTORY else SOURCE_INV
+        return SOURCE_MANUAL
+    if has_inventory:
+        return SOURCE_INV
+    return SOURCE_SNAPSHOT
 
 
 def column_editable(key: str, *, ym: str, cutoff_ym: str | None) -> bool:
-    """该列在该核算月**是否可在页面行内编辑**。
-
-    - 材料列：**恒只读**（引用 / 快照，§5.2.3）；⭐ **历史段尤其不得行内编辑**（§5.2.5 ②）
-    - 机械列：⭐ **只在正式段可手录**（历史段以导入值为准 ⇒ 同一格不许两个来源；
-      用户 2026-09-26：「机械费手录**仅限于正式启用系统后**」）
-    """
-    return key in MECH_KEYS and section_of(ym, cutoff_ym) == SECTION_FORMAL
+    """机械任何月份可编辑，材料只读；截止只筛选本次导入。"""
+    return key in MECH_KEYS
 
 # ⛔ 本页**不得出现**的自算表述 / 不得提供的入口（001-08：材料费只作引用 · 只读）
 FORBIDDEN_PHRASES: tuple[str, ...] = ("理论上 =", "理论上=")
@@ -273,24 +262,21 @@ def build_matrix(
     adjusted: bool,
     cutoff_ym: str | None = None,
 ) -> list[dict]:
-    """过程资料表体：**一个核算月一行、月份升序**（001-02），**按截止核算月分两段**（§5.2.5）。
-
-    - **历史段**（核算月 ≤ 截止核算月）：材料 10 列 ＋ **机械 6 列**都取**导入的定稿快照**，
-      **不引用库存单据、也不读手录**；
-    - **正式段**（> 截止核算月）：材料列**只读引用**库存单据；机械 6 列取**手录旁路表**。
-    - ⭐ 哪一列读哪个来源**一律问 `column_source`**（唯一出口）—— ⛔ 别在这里硬编码列名清单。
-    ⭐ **两段互不覆盖**：两个来源分别读、各成一段，本函数**从不把一段写进另一段**（001-04）。
-    ⚠️ 该段该月**无数据** ⇒ 材料 10 列为 `None`（**空态、不臆造 0**，001-08），行上带 `material_empty=True`。
-    """
+    """按月份组装有效金额；截止仅保留展示分组兼容，不遮挡任何已写入金额。"""
     formal = material_by_month(inv_rows, warehouse=warehouse, adjusted=adjusted)
     history = snapshot_by_month(history_rows or [], warehouse=warehouse)
     mech = mech_by_month(manual_rows or [], warehouse=warehouse)
 
-    months = sorted(set(formal) | set(history) | set(mech))
+    inv_months = {str(r.get("ym") or "") for r in inv_rows or ()
+                  if str(r.get("warehouse") or "") == warehouse and r.get("ym")}
+    months = sorted(inv_months | set(history) | set(mech))
     rows: list[dict] = []
     for ym in months:
         section = section_of(ym, cutoff_ym)
-        bucket = (history if section == SECTION_HISTORY else formal).get(ym)
+        source = column_source(MATERIAL_KEYS[0], ym=ym, cutoff_ym=cutoff_ym,
+                               has_inventory=ym in inv_months)
+        bucket = (formal if source == SOURCE_INV else history).get(ym)
+        history_bucket = history.get(ym)
         # ⚠️⚠️ 「该月材料有没有数据」**只看材料 10 列**（⛔ 别看 bucket 整体是不是空）：
         #    自 2026-09-26 起历史段的 bucket 里**还装着机械列** ⇒ 若用 `bucket is None` 判，
         #    那种"**只有机械费、材料一列没填**"的月份会被判成"材料也有数"⇒ 材料列从 `None`（空态）
@@ -299,14 +285,9 @@ def build_matrix(
         row: dict = {YM_KEY: ym, "section": section, "material_empty": not has_mat}
         for key in DATA_KEYS:
             if key in MECH_KEYS:
-                if column_source(key, ym=ym, cutoff_ym=cutoff_ym) == SOURCE_SNAPSHOT:
-                    # 历史段：机械费 = 导入值（该月连快照行都没有 ⇒ 空态，⛔ 不臆造 0）
-                    row[key] = None if bucket is None else bucket.get(key, Decimal("0.00"))
-                else:
-                    # 正式段：机械费 = 手录（"空按 0" 是手录侧既有口径）
-                    idx = int(key.split("_")[1])
-                    row[key] = mech.get(ym, [Decimal("0.00")] * len(MECH_COLUMNS))[idx]
-            elif bucket is None:
+                idx = int(key.split("_")[1])
+                row[key] = mech.get(ym, [Decimal("0.00")] * len(MECH_COLUMNS))[idx]
+            elif not has_mat:
                 row[key] = None                      # 空态（不臆造 0）
             else:
                 row[key] = bucket.get(key, Decimal("0.00"))

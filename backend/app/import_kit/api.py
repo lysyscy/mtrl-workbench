@@ -368,6 +368,20 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
             ]
             # ⭐ 记忆预填（表头指纹为准；界面照旧显示"来自记忆 · 可改"）
             memory = store.prefill(spec.domain, headers)
+            if memory and spec.protect_populated_columns:
+                remembered, note, similarity = memory
+                remembered = dict(remembered)
+                restored = []
+                for suggestion in suggestions:
+                    if (suggestion.field and not remembered.get(suggestion.src)
+                            and suggestion.level == "auto"
+                            and any(row[index] not in (None, "") for row in grid[data_at:]
+                                    for index in [headers.index(suggestion.src)] if index < len(row))):
+                        remembered[suggestion.src] = suggestion.field
+                        restored.append(suggestion.src)
+                if restored:
+                    note = f"{note}；以下列有值，已恢复识别：{'、'.join(restored)}"
+                memory = remembered, note, similarity
             payload = {"domain": spec.domain, "sheet": name, "header_row": top + 1,
                        "headers": headers, "grid_rows": grid[data_at:],
                        "first_row": data_at + 1}         # 首行数据的 Excel 行号（报问题用，1 起）
@@ -425,6 +439,9 @@ def build_router(spec: DomainSpec, hooks: Hooks, store: ProfileStore | None = No
                 out["problem_count"] = len(problems)
                 if extra.get("writable") is not None:
                     out["writable"] = int(extra["writable"])
+                for key in ("material_cutoff_ym", "mechanical_cutoff_ym"):
+                    if key in extra:
+                        out[key] = str(extra[key] or "")
                 if extra.get("kpis"):
                     out["kpis"] = dict(extra["kpis"])
                 if extra.get("blocks"):

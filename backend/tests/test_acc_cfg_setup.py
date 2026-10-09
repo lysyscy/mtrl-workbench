@@ -122,7 +122,7 @@ def test_设置页只列连接参数不含账号密码与端点路径():
     # ⭐ 另一半：**壳确实是照着这份数据渲染的**（否则上面那些约束只约束了一份没人看的 JSON）
     shell = _shell_src()
     assert "it.label" in shell and "it.hint" in shell and "it.stored" in shell, \
-        "壳 V.set 没有逐字渲染后端给的设置项 ⇒ 页面上看到的东西不受本条约束"
+        "连接和打印设置弹窗没有逐字渲染后端给的设置项 ⇒ 页面上看到的东西不受本条约束"
     assert "/api/m14/settings" in shell, "壳的保存没走系统设置端点"
 
 

@@ -105,7 +105,7 @@ def test_壳里出纸走按模板导出且没有打印通道():
     ⛔ 没有打印通道 / A3 入口（连标题里都不许出现）。"""
     s = page_slice("m07")
     assert 'data-act="bigExport"' in s, "壳里没有「按模板导出」入口"
-    assert "Excel 打印" in s, "没写明出纸方式（按模板导出后在 Excel 打印）"
+    assert "/api/m07/big/export?period=" in SHELL, "按模板实际导出端点丢失"
     assert "A3" not in s, "壳里还留着 A3 打印通道"
     # 导航里有本页（新壳的侧栏菜单）
     # ⭐ 2026-09-28 用户口径：界面上的「活动大表」改叫「**月度会大表**」（正式名仍是《说明书》§5.7 的

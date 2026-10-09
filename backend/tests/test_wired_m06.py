@@ -121,9 +121,9 @@ def test_录机械费走后端且不在前端复写判据():
     assert "API.m06MechSave(" in body, "`mechOk` 没走 `/api/m06/mech`"
     assert "MACH6[" not in body, "`mechOk` 还在本地改 `MACH6` 冒充落库（假成功）"
     assert "reloadMech()" in body, "`mechOk` 成功后没「以后端为准重拉」"
-    # ⭐ 2026-09-26（`TAIL-107`）：往历史段手录要**在本地就拦住并说清**（别等后端拒、那时人已填完 6 格）
-    assert "MECH_SECTIONS" in body and "history" in body, \
-        "`mechOk` 没有拦「往历史段手录」这一档 —— 用户会填完 6 格才被拒（守则 §5.5：要提前说清）"
+    assert "MECH_SECTIONS" not in body, "机械任意月份都应允许手录"
+    assert "不能手录" not in body
+
 
 
 # --------------------------------------- `ACC-RPT-PROC-001` 的**形态**半边（搬家 · §19 批 2）
@@ -196,24 +196,11 @@ def test_导出面板一键开合_开合判据只认面板自身状态():
 
 
 @acc()
-def test_过程资料页标出机械历史段的截止月():
-    """⭐ 2026-09-28（用户口径：「想知道的话，在过程资料页给历史段加一个标记就好了」）：
-    机械 6 列按核算月分**两段** —— **历史段**（≤ 截止核算月）= 过程资料导入的快照值、界面不许手改；
-    **手录段**（截止月之后）= 「录机械费」处手填（旁路表）。页面要**说清分界在哪个月**，
-    否则用户看不出"这一个月是快照值还是手填值"、也看不出手录会不会被拒（守则 §5.5）。
-
-    ⚠️ 能证伪：把 `mechCutLabel(procPj)` 那半句摘掉 ⇒ 本件必红。
-    ⚠️ 判段的**唯一出口** = 后端给的 `MECH_SECTIONS`（`domain.section_of`）——
-       ⛔ 壳里不许拿截止月自己比大小（那是第二份口径）。
-    """
-    assert "const mechCutLabel=wh=>" in SHELL, "「历史段截止月」没有唯一出口"
-    assert "filter(k=>s[k]==='history')" in SHELL, \
-        "截止月不是从后端给的段（`MECH_SECTIONS`）里取的 —— 壳里自判段就是第二份口径"
-    assert "mechCutLabel(procPj)" in SHELL, "过程资料页没有按**当前所选项目**取该项目的分界月"
-    assert "历史段截至" in SHELL and "此后为手录段" in SHELL, \
-        "过程资料页没把分界月说给用户看（用户看不出这月是快照值还是手填值）"
-    assert "暂无导入快照" in SHELL, \
-        "没有快照的项目＝机械 6 列全部可手录，也该说清（⛔ 不能显示成空白让人猜）"
+def test_过程资料机械手录不按截止月拦截():
+    """导入截止月不再作为机械手录挡板。"""
+    assert "MECH_SECTIONS = d.sections || {};" in SHELL, "后端机械段标记未落定"
+    assert 'data-act="mechOpen"' in SHELL, "实际机械手录入口丢失"
+    assert "MECH_SECTIONS[wh]" not in act_entry("mechOk"), "仍按历史段拒绝机械手录"
 
 
 @acc("ACC-RPT-PROC-001", "001-01")

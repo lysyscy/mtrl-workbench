@@ -90,6 +90,16 @@ def _parse(client, sheet: str = "", book: bytes | None = None):
                        data={"sheet": sheet})
 
 
+@acc()
+def test_记忆不采集不能悄悄丢弃有金额的已识别列(client, monkeypatch):
+    monkeypatch.setattr(ProfileStore, "prefill", lambda self, domain, headers:
+                        ({"时间": "核算月", "线上入库（不含税）工具": ""}, "旧记忆", 1.0))
+    got = _parse(client).json()
+    assert got["ok"]
+    assert got["memory"]["mapping"]["线上入库（不含税）工具"] == "入库工具"
+    assert "已恢复识别" in got["memory"]["note"]
+
+
 @acc("ACC-IMP-MAP-001", "001-08")
 def test_通用面端到端_认列到落库再到回滚(client):
     """⭐ 第一个真域挂上通用面：挑表 / 认列（两级拼名 ＋ 序列号核算月）/ 预览 / 落库 / 整批回滚。"""
@@ -113,7 +123,7 @@ def test_通用面端到端_认列到落库再到回滚(client):
     #    ⚠️ 契约三条（m04/m05/m11 同款）：是 list · **条数与 `不写入的行` 一致** · 每项带行号与人话原因。
     assert_skipped_contract(pre,
                             expect_bad=pre["kpis"]["不写入的行"],
-                            expect_skip=pre["kpis"]["本来就跳过（合计/说明/空行）"])
+                            expect_skip=pre["kpis"]["正常跳过（含截止月后）"])
 
     wh = "__自检仓_IMP_M06_" + uuid.uuid4().hex[:8] + "__"
     body["options"] = {"warehouse": wh}
@@ -315,7 +325,7 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     """
     rows = [
         (1, 45444, 5006.98, 595, 5994, "", 12000, 100, 200, "", 1100),        # 合规
-        (2, "2025年9月（一标）", 100, "", "", "", 200, "", "", "", 0),           # ✗ 核算月不是标准格式
+        (2, "九月（一标）", 100, "", "", "", 200, "", "", "", 0),           # ✗ 核算月不是标准格式
         ("", "小计", 5106.98, 595, 5994, "", 12200, 100, 200, "", 1100),       # 合计/小计行 ⇒ 跳过
         ("", "说明：6月总出库也多了53.54", "", "", "", "", "", "", "", "", ""),   # 说明行 ⇒ 跳过
         (3, 45507, 700, "", "", "", "", "", "", "", ""),                      # 合规
@@ -331,8 +341,8 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
 
     pre, token = _prev(_book(rows))
     assert pre["ok"] and pre["total"] == 5, pre
-    assert pre.get("writable") == 2, (
-        f"能写入的应只有**两行合规行**（合计/说明行不许算进去）—— 拿到 {pre.get('writable')!r}；"
+    assert pre.get("writable") == 0, (
+        f"异常行必须在预览中阻止整批写入—— 拿到 {pre.get('writable')!r}；"
         "③ 没给这个数 = 域的预览钩子没接上（用户又只能走到 ④ 才知道）")
     blocks = {b["title"]: b for b in pre["blocks"]}
     bad = next((b for t, b in blocks.items() if t.startswith("⚠️ 写不进去的行")), None)
@@ -351,7 +361,7 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     assert (5, "bad") in sk, f"落不了库的那一行（第 5 行）要带 `kind=bad`：{sorted(sk)}"
     assert (6, "skip") in sk and (7, "skip") in sk, \
         f"合计/小计行与说明行（第 6、7 行）要带 `kind=skip`（**也要在行上标**）：{sorted(sk)}"
-    assert pre["kpis"]["本来就跳过（合计/说明/空行）"] == 2, (
+    assert pre["kpis"]["正常跳过（含截止月后）"] == 2, (
         f"「本来就跳过」的数与 `skipped` 对不上（守则 §4.7：同一页同一个数不换说法）：{pre['kpis']}")
     # ⚠️ **说明行不许再被报成"必填为空 ⇒ 需处理"**（2026-09-26：同一行两个说法 —— 域说"不导入"、
     #    通用面说"需处理"，用户会去追一条根本不用管的问题。真文件里那行是 Excel 第 7 行）
@@ -364,19 +374,8 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
     wh = "__自检仓_ODD_" + uuid.uuid4().hex[:8] + "__"
     out = client.post("/api/imp/m06_proc/commit",
                       json={**body, "token": token, "options": {"warehouse": wh}}).json()
-    assert out["ok"] and out["report"]["rows"] == 2, out
-    assert out["report"]["不写入的行数"] == 1, \
-        f"④ 回执没说清少写了几行 —— 用户会以为全导进去了：{out['report']}"
-    assert out["report"]["本来就跳过的行数"] == 2, \
-        f"④ 回执要把「本来就跳过」（合计/说明行）**分开**报（与 ③ 同一个数）：{out['report']}"
-    # ⚠️ 顶上那句数字**必须是真写进去的行数**（原来是"解析出多少行"：5 行里只写 2 行，却说"已导入 5 行"）
-    assert "已导入 2 行" in out["message"], \
-        f"回执头一句的数字不是**真写入**的行数（实测晋江那份：写 24 行却说「已导入 32 行」）：{out['message']}"
-    assert any(b["title"].startswith("⚠️ 写不进去的行") for b in out["report"].get("blocks") or []), \
-        "④ 回执里没有「落不了库的行」—— 只在 ③ 说过的信息，到落库后就断了"
-    back = client.post("/api/imp/m06_proc/rollback",
-                       json={"batch": out["report"]["batch"]}).json()
-    assert back["ok"] and back["report"]["revoked"] == 2, back
+    assert out["ok"] is False and "原历史保留" in out["message"], out
+    assert "第 5 行" in out["message"], out
 
     # ⭐ 反向灵敏度：把那条文本月换成标准写法 ⇒ 三行全能写（拦的是"认不出"，不是别的）
     ok_rows = [rows[0], (2, 45475, 100, "", "", "", 200, "", "", "", 0)] + rows[2:]

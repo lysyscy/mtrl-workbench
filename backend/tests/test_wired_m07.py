@@ -130,17 +130,19 @@ def test_壳里抓取弹窗默认取本页年月且讲清强踢():
 
 @acc("ACC-SETL-001", "001-07")
 def test_壳里文件数恒为仓数加一():
-    """「分仓库工作簿 ＋ **1 个总表**」⇒ 文件数恒 = 仓数 ＋ 1（回执里两个数同源算出，⛔ 不写死）。"""
-    assert "个分仓库 xlsx ＋ 1 个总表（zip）" in SHELL, "回执没按「仓数 ＋ 1」说清产出物"
+    """「分仓库工作簿 ＋ 1 个总表」⇒ 回执文件数按仓数加一。"""
+    assert "个分仓库 xlsx ＋ 1 个总表（zip）" in SHELL, "回执没有正确文件数"
 
 
 @acc("ACC-SETL-001", "001-08")
 def test_壳里产出物清单按仓数加总表且真导出():
-    """「分仓库工作簿 ＋ 1 个总表」：产出物清单**逐项**列出（分仓库那份按仓数、总表一份），
-    且导出走**真端点**（⛔ 不是死按钮）。"""
-    assert "个分仓库 xlsx（每仓一个）" in SHELL, "产出物清单没按仓数列出分仓库工作簿"
-    assert "收发结存表.xlsx" in SHELL, "产出物清单没列总表"
-    assert "zipSfjc" in SHELL and "/api/m07/settlement/export?period=" in SHELL, "导出没走真端点"
+    """TAIL-263 撤掉输出产物说明模块，真实分仓/总表导出入口与端点保留。"""
+    assert 'data-act="zipSfjc"' in page_slice("m07"), "收发结存实际导出入口丢失"
+    assert "/api/m07/settlement/export?period=" in SHELL, "导出没走真端点"
+    from app.mod07_setl.domain import zip_manifest, WAREHOUSE_KEY
+    manifest = zip_manifest([{WAREHOUSE_KEY: "甲仓"}, {WAREHOUSE_KEY: "乙仓"}], "2026-09")
+    assert sum(x["kind"] == "warehouse" for x in manifest) == 2
+    assert len(manifest) == 3 and manifest[-1]["name"].endswith("收发结存表.xlsx")
 
 
 @acc("ACC-SETL-001", "001-09")

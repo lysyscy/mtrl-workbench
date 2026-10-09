@@ -12,24 +12,18 @@
 const IVC5=['主辅材','工具','劳保','周转材料','临时设施'];
 const amtOf=iv=>{const a=ADs.find(x=>x.ivid===iv.id); return a?a.newAmt:iv.amt};
 const adjOf=iv=>ADs.find(x=>x.ivid===iv.id);
-/* ⭐ 候选键 = **仓库名**（库存单据自带，§2.7.4）。
-   ⚠️ **必须由 `reloadInv()` 重算**：`IVs` 接后端后是**异步填充**的 —— 若仍写成加载时
-      `uniqBy(IVs,…)` 一次性求值，取数回来时它早已定死成空数组（**静默失去候选**，不报错）。 */
 let PROC_PJS=[];
-/* procTab 默认 = 1（**表② 调整后表**）；pjIsOpen('procPj') = 「项目」单选面板的开合（用户口径 2026-09-13） */
+let PROC_MATRIX={};
 let procPj='', procTab=1;   /* 初值同理由 `reloadInv()` 落定（不能取加载时的 `PROC_PJS[0]`） */
-/* 该项目的**核算月**清单（升序）= 库存单据里出现过的月份 —— 这就是「过程资料 = 每项目每月一份」
-   的月份维度。⚠️ 月份**只从库存单据来**，不新立口径。 */
-const procMonths=proj=>[...new Set(IVs.filter(iv=>iv.wh===proj).map(iv=>String(iv.dd).slice(0,7)))].sort();
-/* 聚合的**唯一出口**：传 `ym` = 只算该核算月；**不传 `ym` = 全月合计**（自检用的就是后者 ⇒ 语义不变）。
-   ⚠️ `proj` = **仓库名**（§2.7.4）。机械 6 列同样按核算月取（`mach6Arr`），全月合计时**逐列相加**。 */
+/* 项目、核算月、明细与合计均取后端同一领域矩阵。 */
+const procMonths=proj=>(PROC_MATRIX[proj]?.raw||[]).map(r=>r.ym);
 function procAgg(proj,adjusted,ym){
-  const g=IVs.filter(iv=>iv.wh===proj&&(!ym||String(iv.dd).slice(0,7)===ym)), inC={}, outC={};
-  IVC5.forEach(c=>{ const pick=d=>g.filter(iv=>iv.dir===d&&iv.c5===c);
-    inC[c]=N2(pick('入库').reduce((a,iv)=>a+(adjusted?amtOf(iv):iv.amt),0));
-    outC[c]=N2(pick('出库').reduce((a,iv)=>a+(adjusted?amtOf(iv):iv.amt),0)); });
-  const m = ym ? mach6Arr(proj,ym)
-               : MACH6_Z.map((_,i)=>N2(Object.keys(MACH6[proj]||{}).reduce((a,k)=>a+MACH6[proj][k][i],0)));
+  const matrix=PROC_MATRIX[proj]||{}, tab=adjusted?'adjusted':'raw';
+  const values=ym ? (matrix[tab]||[]).find(r=>r.ym===ym)||{} : matrix.totals?.[tab]||{};
+  const num=k=>values[k]==null?null:Number(values[k]);
+  const inC={},outC={};
+  IVC5.forEach(c=>{inC[c]=num('in_'+c);outC[c]=num('out_'+c);});
+  const m=MACH6_Z.map((_,i)=>num('mech_'+i));
   return {inC,outC,m};
 }
 /* 表体数据源：**一个核算月一行**（`[{ym,inC,outC,m}]`）—— 表① 与表② 是同一批月份，按下标对齐 */
@@ -155,7 +149,7 @@ let invWhs=[], fIvCol={}, invColOpen='', invOnlyAdj=false, fIvDir='全部', fIvY
 /* ⚠️ 候选 = **库存单据里真实出现过的仓库名**（`PROC_PJS`）——
    原先用演示主数据 `WHs.map(w=>w.name)`：那 8 个演示仓库名与 i8 真名对不上，
    **选了候选也筛不出任何行**（静默失配、不报错）。 */
-const invWhPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>invWhs,allAct:'invWhAll',noneAct:'invWhNone',pickAct:'invWh',meta:PROJ_META_KEY});
+const invWhPanel=()=>projPanel({list:()=>pjSort(uniqBy(IVs,iv=>iv.wh)),selected:()=>invWhs,allAct:'invWhAll',noneAct:'invWhNone',pickAct:'invWh',meta:PROJ_META_KEY});
 /* ---------- 「每列可筛」（Excel 式自动筛选）----------
    `IV_FCOL` = 列元数据的**唯一出处**：`i` = 该列在 `INV_THEAD` 里的下标（0 起算；**末列「操作」不参与**），
    `k` = 取数字段（`adj` = 调整后金额，派生自调整单），`t` = 列型 ——

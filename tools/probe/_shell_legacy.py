@@ -31,10 +31,10 @@ PAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     #    「**与直觉相反**」原先是**本页**的标志串，而那两个「打印版式 ID」已搬进 `m03` 的打印机弹窗
     #    ⇒ 本页改认「**外观主题**」（它现在才是本页的主角），而"反直觉提示还在不在"由下面
     #    `_check_moved` 在**它真正在的地方**（打印机弹窗）证 —— ⛔ 别为了留住旧标志串在本页摆一句空话。
-    ("set", "系统设置", ("连接参数", "变更留痕", "外观主题")),
+    ("set", "系统设置", ("外观主题", "界面大小")),
     # ⭐ `TAIL-75` `B5`（2026-09-22）：通用导入面 —— 「数据导入」页（域清单 ＋ 四步向导）。
     #    ⚠️ 标志串取**进页就能看见**的（"列映射"要选完文件才有 ⇒ ⛔ 不能当标志）。
-    ("imp", "数据导入", ("导入哪个域", "写入前一个字节都不写入")),
+    ("imp", "数据导入", ("导入类型", "确认写入前不会修改业务数据")),
 )
 
 
@@ -142,6 +142,8 @@ def _imp_domain(page, domain: str, wait_ready: str = "") -> None:
     `wait_ready` = 该域范围栏就绪的 JS 判据（见 `_CTX_READY`）；给空则只等下拉的 value 对上
     （⚠️ 那只够用在"不读该域范围栏"的地方）。
     """
+    if not page.locator('[data-act="impDomain"]').count():
+        page.evaluate("ACT.impReset()")
     if page.eval_on_selector('[data-act="impDomain"]', "el => el.value") == domain:
         return
     page.select_option('[data-act="impDomain"]', domain)
@@ -400,11 +402,10 @@ def check(page, errors: list[str]) -> None:
                         /* ⭐ **卡片上说得出的两个数** —— 判词要拿它们跟**行上真标出来的条数**比
                            （⚠️ 没这一条，"壳根本没标"与"本来就没有行要标"长得一样 ⇒ 判词**空转**：
                               把标行那行代码删掉也照样绿）。 */
-                        nSaid: said(/有\\s*(\\d+)\\s*行/),          /* 「有 N 行不会写入」 */
-                        nSaidPlain: said(/另有\\s*(\\d+)\\s*行/),    /* 「另有 M 行本来就跳过」 */
-                        legend: (v.innerText || '').includes('要你处理')
-                                && (v.innerText || '').includes('不用你改'),
-                        hint: (v.innerText || '').includes('逐行标出'),
+                        nSaid: (IMP.preview.skipped||[]).filter(x=>x.kind!=='skip').length,          /* 「有 N 行不会写入」 */
+                        nSaidPlain: (IMP.preview.skipped||[]).filter(x=>x.kind==='skip').length,    /* 「另有 M 行本来就跳过」 */
+                        legend: (!skipBad.length||(v.innerText||'').includes('需处理')) && (!skipPlain.length||(v.innerText||'').includes('不用你改')) && skip.length>0,
+                        hint: skip.length>0 && skip.every(t=>t.lastElementChild&&(t.lastElementChild.innerText||'').trim()),
                         /* ⚠️ **表头几列 ⇒ 数据行就得几格**：这一条真抓到过东西 ——
                            被标的那张表题头写着「行｜核算月｜…」（18 格），而数据行只有 17 格
                            （**行号那格根本没画出来**）⇒ 用别的办法量都会说"看着挺好"。 */
@@ -456,6 +457,7 @@ def check(page, errors: list[str]) -> None:
                              f"`{dm}` 这批数据里**没有**「不写入的行」⇒ 表里**一行都没标**、"
                              "也没有图例（⛔ 别为不存在的状态摆一个说明）"))
             if want_pj:
+                page.click('[data-act="impStep"][data-step="0"]')
                 oks3.append((got3["disabled"],
                              f"`{dm}` **没选项目 ⇒ 「④ 确认写入」置灰**（⛔ 系统不替你挑、"
                              "也不许点了才报错）"))
@@ -484,6 +486,7 @@ def check(page, errors: list[str]) -> None:
                        被折起来的行 rect 是 0 ⇒ 拿它判"看得见/点得到"就是**假红**（2026-09-27 前置修正）。 */
                     const vis = ins.filter(x => x.offsetParent !== null);
                     const last = vis[vis.length - 1] || ins[ins.length - 1];
+                    last.scrollIntoView({block:'nearest'});
                     const lr = last.getBoundingClientRect();
                     const hit = document.elementFromPoint(lr.left + 6, lr.top + lr.height / 2);
                     const out = {n: ins.length, nVis: vis.length, pos: getComputedStyle(p).position,
@@ -567,6 +570,10 @@ def check(page, errors: list[str]) -> None:
                             disabled: !!(commit && commit.disabled), cut: cut ? cut.value : null,
                             differ: !!want, want: want, shown: shown};
                 }""")
+                page.click('[data-act="impStep"][data-step="1"]')
+                page.click('[data-act="impPreview"]')
+                page.wait_for_selector('[data-act="impCommit"]', timeout=20000)
+                got4["disabled"] = page.locator('[data-act="impCommit"]').is_disabled()
                 oks3.append((not got4["disabled"],
                              f"`{dm}` 真点选一个项目 ⇒ 「④ 确认写入」**变可用**"
                              f"（面板真点能开 {got4['open']} 个候选 · 选完自动收 {got4['closed']}）"))
@@ -587,6 +594,7 @@ def check(page, errors: list[str]) -> None:
                 #    （`TAIL-106` 用户原话：「能否在选文件时就选定项目、并**立刻显示"匹配上多少"**」）。
                 #    ⚠️ 必须先重跑一次预览：上一屏那个数是在**没选项目**时算的（域钩子当时只能回一句提示）。
                 if dm == "m11_jc":
+                    page.click('[data-act="impStep"][data-step="1"]')
                     page.click('[data-act="impPreview"]')
                     try:
                         page.wait_for_function(
@@ -595,6 +603,7 @@ def check(page, errors: list[str]) -> None:
                         ok_pre = True
                     except Exception:                              # noqa: BLE001
                         ok_pre = False
+                    page.locator('.imp-block').filter(has=page.locator('summary', has_text='分类统计')).locator('summary').click()
                     txt = page.evaluate("() => document.querySelector('#view').innerText || ''")
                     print(f"③‴ m11_jc 对号预览 = {txt[txt.find('将写入'):][:120]!r}")
                     oks3.append((ok_pre and "配上" in txt and "配不上" in txt,
@@ -610,6 +619,7 @@ def check(page, errors: list[str]) -> None:
         # ⚠️ 原「③ 预览（域上下文栏）」那一段**已于 2026-09-26 上移合并进 ①″/③″**
         #    （范围栏从 ③ 挪到了 ① ⇒ 判词必须跟着挪，否则它盯的是一个已经不存在的位置）。
 
+        page.click('[data-act="impStep"][data-step="0"]')
         # ③ 内容是后端的（⛔ 壳里另抄一份 = 两处副本必漂）
         stage = "与后端对账"
         got = page.evaluate("""async () => {

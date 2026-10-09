@@ -222,38 +222,23 @@ def _strip_block_comments(text: str) -> str:
 
 
 @acc("ACC-UI-SHELL-001", "001-37")
-def test_系统设置页不再摆连接参数_指路卡必须在():
-    """⭐ 用户 2026-09-27 裁定 `B`（`TAIL-127`）：三个连接参数**搬到它们起作用的地方** ——
-    `i8 地址` → 「i8 接入层」页卡头的「i8 连接设置」；两个**打印版式 ID** → 「付款通知书」页的
-    「打印机设置」弹窗。本页只剩**一段指路**（守则 §5.8「**换地方，不是删掉**」）。
-
-    ⚠️ **能证伪**：把连接参数的输入框搬回本页（旧写法 `ACT.setSave` 那种"整页就是那几个框"）
-      或删掉指路 → 本件必红。
-    ⚠️ **为什么必须钉指路**：只钉"不许有输入框"是**半个守卫** —— 全删掉也能通过，
-      而用户就再也找不到那三个参数了（§5.8 的反面）。
-    """
-    body = _strip_block_comments(_set_region())
-    assert "setSave" not in body, (
-        "「系统设置」页又出现了**整页交全部键**的旧保存写法（`ACT.setSave`）—— 用户 2026-09-27 裁定 `B`："
-        "连接参数不占这一页（守则 §5.8）")
-    assert "i8 地址与打印版式" in body, "指路卡不见了 —— 那三个参数在界面上就没有'指路牌'了（§5.8）"
-    for hint in ("<b>i8 服务地址</b> → 「<b>i8 接入层</b>」页卡头的「i8 连接设置」",
-                 "<b>材料类 / 外租机械类打印版式 ID</b> → 「<b>付款通知书</b>」页的「打印机设置」"):
-        assert hint in body, f"指路卡少了一条通往'用它的那一页'的路：{hint!r}（改名 / 被删了？）"
+def test_系统设置页只保留主题和尺寸操作():
+    """TAIL-263：默认设置页移除连接参数说明和变更留痕，实际配置入口仍由下一条守护。"""
+    body = _strip_block_comments(_set_region()).split("\n};", 1)[0]
+    for removed in ("setSave", "i8 地址与打印版式", "变更留痕", "SET.logs", "SET.tips", "thhex", "thscene"):
+        assert removed not in body, f"系统设置页又出现已撤内容：{removed}"
+    assert 'aria-label="${esc(p.name)}"' in body, "主题选择缺少无障碍名称"
+    assert 'aria-pressed="${on}"' in body, "设置选择缺少当前档位状态"
 
 
 @acc("ACC-UI-SHELL-001", "001-38")
-def test_系统设置页只剩三张卡_外观主题_界面大小_变更留痕():
-    """⭐ 三张卡是这一页**现在**的全部内容（`TAIL-127` 之后）：外观主题（按用户存）·
-    界面大小（按用户存 · 点了即时生效）· 变更留痕（每一处改动的账）。
-
-    ⚠️ **能证伪**：任一张卡被删 / 被改名（用户按名字找功能会找错，守则 §4.4）⇒ 本件必红。
-    """
+def test_系统设置页两张卡包含真实选择与预览():
     body = _set_region()
-    for card in ("<h4>外观主题", "<h4>界面大小", "<h4>变更留痕"):
-        assert card in body, f"「系统设置」页少了一张卡：{card!r}"
-    assert "${themeCard}" in body and "${scaleCard}" in body, \
-        "主题卡 / 界面大小卡没有真的渲染进本页（只剩下一段没用的模板？）"
+    for card in ("<h4>外观主题", "<h4>界面大小"):
+        assert card in body, f"系统设置页少了一张卡：{card}"
+    for part in ("${themeCard}", "${scaleCard}", "THEME_PALETTE.map(pcard)", "UI_SCALES.map(scard)",
+                 'data-act="themeSet"', 'data-act="uiScaleSet"', "set-theme-preview", "set-scale-preview"):
+        assert part in body, f"系统设置缺少真实选择或预览：{part}"
 
 
 @acc("ACC-UI-SHELL-001", "001-39")
@@ -572,8 +557,8 @@ def test_删除分档的界面说法必须与定案一致():
         "`m05` 期初行又说「软删留痕」了 —— 后端就是真删、§9.4 定案也把期初划在硬删档（假的安全感）"
     assert "核心数据删除是「软删 + 留痕」" not in clean, \
         "`m14` 的「硬规矩」表又用回 §9.4 改判前的「按类别分」说法了"
-    assert "删了不能恢复" in clean and "按「删了能不能复原」分" in clean, \
-        "删除分档的界面说法没留下**真实口径**（期初=真删 · 按可复原性分）"
+    assert "删了不能恢复" in clean and "随时可以重新录入" in clean, \
+        "期初删除确认必须保留不可恢复的真实后果及重新录入入口"
 
 
 @acc()
@@ -601,13 +586,11 @@ def test_壳新增那四页里的清单表也走统一出口_TBL():
 
     ⚠️ **为什么单开一条守**：这四页是**壳新增**（原型里根本没有）⇒ `U1`（只比原型同名 `V.*` 切片）**看不见本件**；
        而这几张表又**没有各自的 claim 判据** ⇒ 换 `TBL` 时**别的东西感知不到**。
-    ⚠️⚠️ **本件已「全清」⇒ 七张全钉**（2026-09-29：`legacy.js` 里裸 `<table>` 归零，`tools/oneoff/_tbl_scan.py` 可复核）。
+    ⚠️⚠️ **本件已「全清」⇒ 现行六张全钉**（2026-09-29：`legacy.js` 里裸 `<table>` 归零，`tools/oneoff/_tbl_scan.py` 可复核）。
        ⛔ 演进史值得记：**先落 3 张时本判据只钉那 3 张** —— 因为"写全部"会让它**下一批一开工就假红**
        （判据不该替别的批管进度）；等本件真做完了，才把七张一次钉齐。
-    自证 = `tools/mut/_mut_tbl.py` 的 M24／M25／M26／M27／M28／M29／M30 去掉这七处委托 ⇒ 必须红。
+    自证 = `tools/mut/_mut_tbl.py` 的 M24／M25／M26／M27／M28／M29／M30 去掉现行六处委托；M24 保护设置页删项 ⇒ 必须红。
     """
-    assert "TBL({head:'<th>时间</th><th>设置项</th>" in SHELL, \
-        "「变更留痕」那张表没走统一出口 `TBL`（`TAIL-64` A′）"
     assert "TBL({cls:'sm',head:'<th style=\"text-align:left\">列名</th>" in SHELL, \
         "「本系统要哪些列」那张对照表没走统一出口 `TBL`（`TAIL-64` A′）"
     assert "TBL({cls:'sm',head:pcols," in SHELL, \

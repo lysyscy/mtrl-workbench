@@ -143,7 +143,7 @@ def test_真机31号的空态判据还在():
     ⇒ 新增 `tools/probe/_shell_empty.py`（挑 `m04`：筛到没数据的月 ⇒ 必须给空态；再筛回当月 ⇒
     **正常路没被改坏**），本判据守"它还在、还挂着"（⛔ 别哪天被顺手删掉、文档还写着"已挂判据"）。"""
     src = (ROOT / "tools" / "probe" / "_shell_empty.py").read_text(encoding="utf-8")
-    for need in ("def check(", "当前筛选条件下没有付款计划", "换个「单据年月", "正常路"):
+    for need in ("def check(", "当前筛选条件下没有付款计划", "ok_empty", "正常路"):
         assert need in src, f"真机 ㉛（空态）里缺 {need!r} —— 空态的真机判据被拆了？"
     # ⭐ 2026-10-02（`TAIL-215` 批 1）：同上，锚点改指**注册表**。
     smoke = (ROOT / "tools" / "probe" / "_shell_segments.py").read_text(encoding="utf-8")

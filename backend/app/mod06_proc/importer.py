@@ -1,44 +1,6 @@
-"""`MOD-06` 过程资料**历史导入**（§5.2.5 ①②）—— 解析 · 校验 · 预览 · 批次 · 核对报告。
-
-> **为什么需要它**：本系统上线前各项目的过程资料**已在用户 Excel 里定稿**；且部分项目在 i8 里被改过、
-> **与库存单据并不一致** ⇒ 只靠「从库存单据引用」（§5.2.3 单向流）搬不进历史账
-> ⇒ 需要一条**历史进系统的通道**（与付款域的「历史付款流水导入」同构，§5.2.5 ②）。
-
-## 列契约（**按表头文字认列 · 列序不限**）
-
-| 列 | 含义 | 必填 |
-|---|---|---|
-| **核算月** | `2026-08`（也接受 `2026/8` · `2026.08` · `202608`；别名 `核算年月` / `月份` / **`时间`**） | ✅ |
-| `domain.PROC_COLUMNS` 的 10 个材料列 | 入库 / 出库各 5 类（主辅材 · 工具 · 劳保 · 周转材料 · 临时设施） | **至少 1 列** |
-| `domain.PROC_COLUMNS` 的 **机械 6 列** | 租分公司设备 · 内租设备 · 外租（零租/包月 含税/不含税） | 否 |
-
-- ⭐ **列名的唯一主人 = `domain.PROC_COLUMNS`** —— 本文件不另抄一份列名，只按 label 认列。
-- ⭐⭐ **2026-09-26（`TAIL-107`）：机械 6 列也导入**（进历史段快照）—— 用户原话：「导入过程资料，
-  **机械费也要导进去**，机械费手录仅限于正式启用系统后，历史机械费都填在过程资料 excel 里」。
-  ⚠️ 改前是反的（"机械列不导入、全段手录"）⇒ ⛔ 别再把机械列从 `map_columns` 里过滤掉：
-     一过滤就成了"认得出、不写、全程不报错"（用户得手工敲）。
-  ⭐ 顺带一条：**只填了机械列、材料全空的行也算数据行**（`_has_amounts` 现在把机械列算进去）。
-- ⚠️ 认不出的列**列出来提示**（用户台账常带附注列）—— **不算错**；但**机械列与材料列一列都没有 ⇒ 报错**
-  （那说明这文件不是过程资料，导进去只会污染历史段）。
-
-## 三条硬纪律
-
-1. **落库前必须预览**：预览阶段**一个字节都不写库**；
-2. **异常行逐条列出**（行号 + 原因），**不静默丢弃**；
-3. **改历史段 = 再导一次**（同批**整批回滚**后重导 / 另起新批次）—— 回滚只置状态、**不物理删**（§5.2.5 ②）。
-
-⚠️ 本模块**只做 Excel 的解析与编排**：金额判定走 `core.money`，落库走 `repository.import_snapshot`，
-  ⛔ 本层**不自己写库**、也**不碰正式段**（库存单据）与**机械手录**。
-
-⭐ **2026-09-22（`TAIL-75` B3）：识别层收编到 `import_kit` 引擎**（落库与机械口径**一字未改**）。
-   用户那三份真「材料机械消耗汇总表」逼出来的四件（实测见 `设计-识别样本-真实模板-20260922.md`）：
-
-| 真文件现象 | 原来 | 现在 |
-|---|---|---|
-| **两级表头**（r2 分组头 ＋ r3 叶子：`线上入库（不含税）` › `主辅材`），且**父/子在项目间互换**（慧能把「含税/不含税」放 r2、把「外租设备（零租）」放 r3，与晋江/南平**正好相反**） | 只按**单行**精确匹配 label ⇒ **三份全拒**（"找不到表头"） | 两级**拼名**，且**两种顺序都试**（父+子 / 子+父） |
-| 「**时间**」列 = 核算月，值是 **Excel 日期序列号**（`45444` ⇒ 2024-06） | `normalize_ym` 只认 `2026-08` 一类 ⇒ **认不出** | 序列号（20000~60000）按 1900 日期系统换算 ⇒ `YYYY-MM`；也认 `2025.09` 这种**浮点年月**与 `20250901` |
-| 尾部有**合计/小计行** | 当数据行 ⇒ 报"核算月认不出"的**噪音异常** | 识别为**合计行**并跳过（记一条提示） |
-| 一个工作簿可能有别的 sheet（慧能那张叫 `0.0`） | 只读**第一张** | 按"**哪张认得出表头**"挑（⛔ 不猜位置） |
+"""MOD-06 材料、机械导入的解析、预览及提交编排。
+双截止仅筛选本次输入；先排除未选类别，再校验金额；同月标段行聚合。
+真实写入唯一出口 repository.import_snapshot；i8 原单不改。
 """
 
 from __future__ import annotations
@@ -297,19 +259,7 @@ def _is_total_row(row: list) -> bool:
 
 
 def _ym_loose(value) -> tuple[str, str]:
-    """放宽解析：文本**以 `YYYY年M月` 开头** ⇒ `(核算月, 提示)`；认不出 ⇒ `("", "")`。
-
-    ⚠️⚠️ **本函数只服务域内旧路 `parse_sheet`（页面已下架、`router` 里也没有它的路由）** ——
-      ⛔ **现行唯一入口（通用导入面）不走这条路**：那里 `plan_rows` 用 `ym_of`，认不出就**不收这一行**。
-      ⭐ **用户 2026-09-26 已改口径**（原话：「不合规的核算月文本**不收**，我说了正式导入的时候会改成
-      标准格式」）⇒ 本条取代下面的 2026-09-22 旧裁定。⛔ 别拿"系统会收 `2025年9月（一标）`"当凭据：
-      那只是**旧路**的遗留（测试还钉着它），真导数据请写标准格式。
-
-    ⭐ 真文件：「**2025年9月（一标）**」—— 用户 2026-09-22 当时的裁定是「**数据没错，是大设备**」
-      ⇒ 认月、**值原样不动**（⛔ 不换算、⛔ 不因后缀就丢行）；同月多行由页面侧**相加**（`snapshot_by_month`）。
-    ⛔ 只在**有材料金额**的行上走这条路（说明行先按"非数据行"跳过），且要求**从行首匹配** ——
-      免得从一句说明里"抠"出个年月来。
-    """
+    """识别从行首开始的 YYYY年M月 标段月份；先认标准格式再尝试此补充，不从说明中猜月。"""
     text = _norm(str(value))
     m = _YM_LOOSE.match(text)
     if not m:
@@ -378,6 +328,8 @@ def _skip_why(kind: str) -> str:
         return "手写说明行 —— 不是数据行，**本来就跳过**（不用你改）"
     if "空" in kind:
         return "空行 —— **本来就跳过**（不用你改）"
+    if kind.startswith("截止核算月"):
+        return f"{kind} —— **不导入**；若需导入该月，请返回修改截止核算月"
     return f"{kind} —— **本来就跳过**（不是数据行，不用你改）"
 
 
@@ -414,29 +366,10 @@ def _record_cells(rec: dict) -> list[str]:
     return [_norm(v) for v in vals]
 
 
-def plan_rows(records) -> tuple[list[dict], list[dict], list[dict]]:
-    """通用面的 `records` → `(能落库的行, 本就跳过的行, 落不了库的行)` —— ⭐ **预览与落库共用这一处**。
-
-    ⭐ 为什么必须共用（2026-09-26 用户报障的根）：④ 落库报「第 19 行的核算月认不出」，而 ③ 预览
-      **一个字都没说**（实测晋江那份真文件：预览只报了一条无关的行 35）⇒ 用户"走到最后才知道"。
-      ⇒ ③ 拿本函数算「将写入」并**列出落不了库的行**，④ 拿同一份真写。
-
-    ⭐⭐ 2026-09-27（用户报障 · 原话：「**请将所有不写入输出的行也进行标注**」· 截图里红框框的是
-      **第 33 行「小计」/ 第 34 行「合计」**）：第二项从**一句提示文字**（`_lines_note`，如
-      "合计/小计行 2 行（行 33、34）—— 不导入"）改成**逐行清单** `[{row, kind, why}]`
-      —— 行号本来就聚在 `skipped` 里、只是被拼成了句子 ⇒ 通用面据此把那几行**也标出来**，
-      并且把「**要你处理**」（`bad`）与「**本来就跳过**」（本项）**分成两种标记**：
-      ⛔ 两者混成一种颜色/一个词，用户会以为"合计行也要我去改"（守则 §2.8）。
-      ⚠️ 真正的**数据行**照旧只有两种去向：落 / 不落（`bad`）；本项是"**根本不是数据行**"。
-
-    跳过与异常（**沿用域内既有口径**，⛔ 别在这里改判）：
-      · **合计/小计行 · 说明行 · 空行** ⇒ 跳过（算**本就该跳**，不算异常）—— 旧路 `parse_sheet` 一直如此；
-      · **核算月认不出** ⇒ **这一行不收**，进"落不了库的行"并**逐条列出**（⭐ 用户 2026-09-26 裁定：
-        「不合规的核算月文本**不收**（正式导入时会改成标准格式）」）；
-      · **金额认不出** ⇒ 同上（⛔ 不静默丢、也不替它编数）；
-      · **其余行照常落库** —— 仓内既有口径：异常行只跳过自己，其余照写（`test_acc_oddval` 明写
-        "好的两行照常进"）；**一行都没有**时才由调用方拒绝整批。
-    """
+def plan_rows(records, *, cutoff_ym: str | None = None, material_cutoff_ym: str | None = None, mechanical_cutoff_ym: str | None = None) -> tuple[list[dict], list[dict], list[dict]]:
+    """通用预览与提交共用：非数据行跳过，两类分别过滤截止月后再验金额；任一异常由调用方整批拒写。"""
+    cutoff = normalized_cutoff(material_cutoff_ym if material_cutoff_ym is not None else cutoff_ym)
+    mech_cutoff = normalized_cutoff(mechanical_cutoff_ym if mechanical_cutoff_ym is not None else cutoff_ym)
     key_of = {f.label: f.key for f in FIELDS}
     # ⚠️ "有没有金额"= **材料列 ＋ 机械列**（⭐ `TAIL-107`：只填机械列的行也算数据行）——
     #    ⛔ 别只挑材料列：那样"只填了机械费的那些月"会被当空行丢掉（而那正是用户要导的东西）。
@@ -448,11 +381,11 @@ def plan_rows(records) -> tuple[list[dict], list[dict], list[dict]]:
     for rec in records or []:
         line = int(rec.get("_row") or 0)
         kind = _row_kind_of(cells=_record_cells(rec),
-                            has_amounts=any(str(rec.get(lb) or "").strip() for lb in amount_labels))
+                            has_amounts=any(rec.get(lb) not in (None, "") for lb in amount_labels))
         if kind:
             skipped.setdefault(kind, []).append(line)
             continue
-        ym = ym_of(rec.get("核算月"))
+        ym = ym_of(rec.get("核算月")) or _ym_loose(rec.get("核算月"))[0]
         if not ym:
             bad.append({"line": line, "reason":
                         f"核算月认不出：{str(rec.get('核算月') or '（空）')!r} —— 写 2026-08 / 2025年9月 "
@@ -462,6 +395,9 @@ def plan_rows(records) -> tuple[list[dict], list[dict], list[dict]]:
         try:
             for label, key in key_of.items():
                 if key == "ym":
+                    continue
+                limit = mech_cutoff if key in D.MECH_KEYS else cutoff
+                if limit and ym > limit:
                     continue
                 val = rec.get(label)
                 if val in (None, ""):
@@ -474,11 +410,35 @@ def plan_rows(records) -> tuple[list[dict], list[dict], list[dict]]:
         except (MoneyError, ValueError) as exc:   # 我们自己的（`MoneyError` / `to_money` 的 `ValueError`）⇒ message 本就是人话
             bad.append({"line": line, "reason": f"金额认不出：{exc}"})
             continue
+        if len(row) == 1:
+            skipped.setdefault(f"材料截止月 {cutoff or '不限'}、机械截止月 {mech_cutoff or '不限'}筛选后无金额（{ym}）", []).append(line)
+            continue
         rows.append(row)
     # ⭐ 逐行清单（不是一句汇总）：通用面要按 `row` 把这几行**在行上**标出来（守则 §2.7/§2.8）。
     skip_rows = [{"row": line, "kind": k, "why": _skip_why(k)}
                  for k, lines in skipped.items() for line in lines]
     return rows, skip_rows, bad
+
+
+def normalized_cutoff(value) -> str:
+    """预览与落库共用截止月校验；留空由可写行最大月推断。"""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    norm = D.normalize_ym(text)
+    if not norm:
+        raise MustReportError(f"截止核算月认不出：{text!r} —— 请写 YYYY-MM（如 2025-11）；留空取本批最大核算月")
+    return norm
+
+
+def selected_cutoffs(rows, *, cutoff_ym=None, material_cutoff_ym=None, mechanical_cutoff_ym=None):
+    """空截止分别取该类有效输入的最大月；旧单截止同时限制两类。"""
+    def maximum(keys):
+        return max((row["ym"] for row in rows if any(row.get(k) not in (None, "") for k in keys)), default="")
+    return {
+        "material_cutoff_ym": normalized_cutoff(material_cutoff_ym if material_cutoff_ym is not None else cutoff_ym) or maximum(D.MATERIAL_KEYS),
+        "mechanical_cutoff_ym": normalized_cutoff(mechanical_cutoff_ym if mechanical_cutoff_ym is not None else cutoff_ym) or maximum(D.MECH_KEYS),
+    }
 
 
 @dataclass
@@ -625,27 +585,23 @@ def next_batch(*, at: datetime | None = None) -> str:
 
 
 def commit(s, plan: ImportPlan, *, warehouse: str, batch: str, operator: str = "",
-           cutoff_ym: str | None = None) -> dict:
-    """**落库**（§5.2.5 ①）：写快照 ＋ 记批次 ＋ 设定该项目的**截止核算月**。
-
-    ⭐ 只走 `repository.import_snapshot` ⇒ **只写历史段**：**不碰正式段（库存单据）、不碰机械手录**。
-    """
+           cutoff_ym: str | None = None, material_cutoff_ym: str | None = None,
+           mechanical_cutoff_ym: str | None = None) -> dict:
+    """通过 repository.import_snapshot 写材料快照及统一有效机械，保留两类截止及批次溯源。"""
     from app.mod06_proc import repository as repo
 
     batch_obj = repo.import_snapshot(
         s, warehouse=warehouse, rows=plan.rows, batch_no=batch,
-        operator=operator, cutoff_ym=str(cutoff_ym or plan.default_cutoff or ""),
+        operator=operator, cutoff_ym=cutoff_ym, material_cutoff_ym=material_cutoff_ym,
+        mechanical_cutoff_ym=mechanical_cutoff_ym,
     )
     return {"batch": batch_obj.batch_no, "rows": batch_obj.row_count,
-            "cutoff_ym": batch_obj.cutoff_ym, "months": plan.months}
+            "cutoff_ym": batch_obj.cutoff_ym, "material_cutoff_ym": batch_obj.cutoff_ym,
+            "mechanical_cutoff_ym": batch_obj.mechanical_cutoff_ym, "months": plan.months}
 
 
 def check_report(s, *, warehouse: str, batch_no: str, cutoff_ym: str) -> dict:
-    """⭐ **核对报告**（与付款域同构的「漏记清单」）：本批月份 ＋ **会被显示成空态的月份**。
-
-    「会被显示成空态的月份」= **截止核算月及以前**、**i8 库存单据里有数据**、而**本批快照里没有**的月份
-    —— 历史段**不回落** i8（§5.2.5 ①），所以这些月一定印空 ⇒ 要么确实该空，要么**Excel 漏了**。
-    """
+    """兼容核对报告：列出截止内有 i8、无导入快照的月份；金额显示仍整月优先 i8，不因缺快照而变空。"""
     from app.mod06_proc import repository as repo
 
     snap_months = {str(r.get("ym") or "") for r in repo.load_history(s)

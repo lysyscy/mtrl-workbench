@@ -80,12 +80,9 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "from app.mod03_notice import rules_repository as RR\n"
      "from app.mod03_notice.classify import decide_placement  # noqa: F401",
      T1),
-    # ---- 001-02 · 分类规则只读
-    ("分类规则表渲染出编辑按钮（越权可编辑）",
-     "shell",
-     "<td>${catTag(r[2])}</td></tr>",
-     '<td>${catTag(r[2])}<button class="btn sm" data-act="ruleEdit">改</button></td></tr>',
-     T2),
+    # ---- 001-02 · 分类说明默认不再展示
+    ("默认页分类说明模块复活",
+     "shell", "<h4>集采项目剔除名单", "<h4>分类规则</h4><h4>集采项目剔除名单", T2),
     # ---- 001-03 · 配置/说明表不得可排序
     ("剔除规则表被标成可排序",
      "shell",
@@ -104,11 +101,8 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "+ [].map(k=>",
      T4),
     # ---- 001-05 · 关键词入口在项目行
-    ("本页关键词表被做成可编辑",
-     "shell",
-     '<td class="fc">${esc(p.kw)}</td></tr>',
-     '<td><input class="inp" value="${esc(p.kw)}"></td></tr>',
-     T5),
+    ("默认页关键词说明模块复活",
+     "shell", "<h4>集采项目剔除名单", "<h4>小微识别关键字配置</h4><h4>集采项目剔除名单", T5),
     ("项目行（m01）的关键词入口没了",
      "shell",
      'data-act="editKw"',

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 #: 空态那两段原话（`V.m04` 的 `EMPTYROW(...)` —— 与源码里的**同一份口径**）
 WHY = "当前筛选条件下没有付款计划"
-NEXT = "换个「单据年月 / 项目 / 审查结果」"
+NEXT = ""  # TAIL-263：默认空态仅保留没有付款计划，筛选操作仍在上方。
 #: 筛到没有数据的月（`plf.ym` 是 m04 的年月筛选状态）
 EMPTY_YM = "2000-01"
 
@@ -48,7 +48,7 @@ def check(page, errors: list[str]) -> None:
         "() => { plf.ym='" + EMPTY_YM + "'; plf.projs=[]; plf.review='全部'; render(); }")
     page.wait_for_timeout(700)
     a = _read(page)
-    ok_empty = (WHY in a["txt"]) and (NEXT in a["txt"])
+    ok_empty = (WHY in a["txt"]) and a["rows"] == 1
     print(f"   {'✅' if ok_empty else '⛔'}㉛-① 筛到没数据的月 ⇒ 空态："
           f"{'在' if ok_empty else '**不在**'}（表体 {a['rows']} 行 · 期望 1 = 只有空态那一行）")
     if not ok_empty:
@@ -64,10 +64,19 @@ def check(page, errors: list[str]) -> None:
     #    而今天 10-01（月初）当月本来就是空的 ⇒ 这条判据**跨月必红**（实测）。
     #    ⇒ 改成筛「**全部时间**」（`tmIn` 对 `'全部'` 恒真）：验的是同一条事（正常路没被改坏），
     #      但**不依赖"当月恰好有数据"**。⛔ **没放宽阈值**（仍是"表体 ≥2 行 ＋ 有合计行"）。
-    page.evaluate("() => { plf.ym='全部'; plf.projs=[]; plf.review='全部'; render(); }")
-    page.wait_for_timeout(700)
-    c = _read(page)
+    # 空库也要验证正常分支：只在浏览器内加入一条隔离样本，结束后恢复，绝不写业务表。
+    saved = page.evaluate("() => ({rows:PLs.slice(),filter:JSON.parse(JSON.stringify(plf))})")
+    try:
+        page.evaluate("""() => {
+            if (!PLs.length) PLs.push({id:'probe-empty-normal',date:'2026-09-01',code:'probe',proj:'',
+                year_month:'2026-09',monthAmt:10,flowAmt:10,review:'完全匹配',supplier:'',material:''});
+            plf.ym='全部'; plf.projs=[]; plf.review='全部'; render();
+        }""")
+        page.wait_for_timeout(700)
+        c = _read(page)
+    finally:
+        page.evaluate("(s) => {PLs.splice(0,PLs.length,...s.rows);Object.assign(plf,s.filter);render();}", saved)
     ok_norm = ("合计" in c["txt"]) and (c["rows"] >= 2)
-    print(f"   {'✅' if ok_norm else '⛔'}㉛-② 筛回当月 ⇒ 正常路：表体 {c['rows']} 行（含合计行 ⇒ 期望 ≥2）")
+    print(f"   {'✅' if ok_norm else '⛔'}㉛-② 筛回全部时间 ⇒ 正常路：表体 {c['rows']} 行（含合计行 ⇒ 期望 ≥2）")
     if not ok_norm:
         errors.append("㉛-② 筛回当月后行或合计行不见了 —— 空态那条分支把**正常路**改坏了")

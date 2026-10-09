@@ -278,6 +278,7 @@ const API = {
 
   /* ---- MOD-06 过程资料：机械 6 列手录值（旁路表，全量） ---- */
   m06Mech: () => API.get('/api/m06/mech'),
+  m06Matrix: () => API.get('/api/m06/matrix'),
   /* ⭐ `TAIL-38`：「录机械费」写入口 —— 校验与落库**全在后端**
      （`mech_ui.parse_mech_values` ＋ `repository.save_mech`），与 PRG 端点同一份判定。 */
   m06MechSave: body => API.post('/api/m06/mech', body),
