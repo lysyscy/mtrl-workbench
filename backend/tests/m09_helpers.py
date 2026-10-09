@@ -20,6 +20,9 @@ from tests.m04_helpers import make_project
 
 
 class _Result:
+    def __iter__(self):
+        return iter(self._rows)
+
     def __init__(self, rows: list) -> None:
         self._rows = rows
 

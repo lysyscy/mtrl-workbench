@@ -269,7 +269,7 @@ const JC_PROJ_LIST=()=>pjSort(uniqBy(JCs,j=>j.proj));
          `_shell_legacy.py` 的面板 round-trip（真点一下 ⇒ 收起）＋ `pjPick` 里那行统一收起。
    选中值一律走 `data-pj`（含义 = 该面板的筛选键 = **仓库名**）。 */
 const PROJ_META_KEY=v=>{ const p=pjRowOf(v);
-  return { nm:p?pjDisp(p):'未建档', warn:!p, arc:arcOf(p), title:'仓库名：'+v }; };
+  return { nm:p?pjDisp(p):'未建档', warn:!p, arc:arcOf(p), title:p?`${p.status} · ${PJ_TYPE_LABEL[p.type]||'未判定类型'}`:'未建档' }; };
 const PROJ_META_FULL=v=>{ const m=projMatches(v);
   return { nm:m.length===1?pjDisp(m[0]):(m.length>1?`${m.length-1} 个小微（同一壳）`:'未建档'),
            warn:m.length!==1, arc:arcOfFull(v), title:'项目全名：'+v }; };

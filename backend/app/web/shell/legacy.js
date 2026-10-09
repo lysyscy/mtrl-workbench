@@ -354,7 +354,7 @@ V.imp = () => {
         「数据导入」页的 `page_load` 只有 `['数据导入']` ⇒ 档案**可能没加载** ⇒ 那样满屏黄字「未建档」，
         比原来的下拉还糟。`PJs` 恰好在（用户刚去过档案页）就用它 —— 能顺带标出**归档**与**未建档**。 */
   const impPjMeta = v => (PJs.length ? PROJ_META_KEY(v)
-    : {nm: IMP.pjDisp[v] || v, warn: false, arc: false, title: '仓库名：' + v});
+    : {nm: IMP.pjDisp[v] || v, warn: false, arc: false, title: '项目状态和类型尚未读取'});
   /* ⭐⭐ **「候选键 → 显示名」的唯一出口**（2026-09-26 用户报障：「**候选和选择后显示的不一样**」）。
      此前**三处各自算**：① 下拉按钮 `IMP.pjDisp[键] || 键`（域给的 display，域没给就退化成**仓库名**）·
      ③ 只读回显同款 · 候选面板却走 `impPjMeta`（**档案展示名**）⇒ 同一个键能显示**两个名字**

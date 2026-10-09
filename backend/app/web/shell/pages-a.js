@@ -61,10 +61,10 @@ const plProjKey=v=>{ const p=plProjOne(v); return pjKey(p); };   /* 筛选键 = 
 /* 候选项目 = 计划行里**能匹配到**的项目（**键 = 仓库名**，去重）；**含归档**，归档靠后并标注
    （2026-09-13 用户口径：所有项目候选都含归档；原「只列在建」已作废。与付款通知书页同口径） */
 const PL_PROJ_LIST=()=>pjKeysOfRows(uniqBy(PLs,p=>plProjOne(p.proj)));
-/* 「项目」列的展示：匹配到 → 显示规范展示名（悬停给出填报值与仓库名）；未匹配 / 重名 → 明示 */
+/* 「项目」列的展示：匹配到 → 显示规范展示名（悬停只给状态）；未匹配 / 重名 → 明示 */
 const plProjCell=v=>{ const h=plProjHit(v), raw=esc(String(v==null?'':v))||'—';
   if(h.length===1){ const p=h[0];
-    return `<span class="fc" title="填报：${raw} ｜ 匹配到：${esc(pjDisp(p))}（仓库名 ${esc(p.name)} · ${esc(p.status)}）">${esc(pjDisp(p))}</span>`; }
+    return `<span class="fc" title="${esc(p.status)}">${esc(pjDisp(p))}</span>`; }
   if(!h.length) return `<span class="fc">${raw}</span> <span class="tag t-dg" title="档案里没有这个展示名 / 仓库名 —— 请核对项目名，或先到「项目档案」建档">未匹配</span>`;
   return `<span class="fc">${raw}</span> <span class="tag t-wn" title="有 ${h.length} 条档案的展示名 / 仓库名相同，需人工核对">重名 ${h.length} 条</span>`; };
 /* 当前筛选结果 —— 页面、全选框回显、多选删除共用同一份口径（审查结果按**实时派生值**筛） */
@@ -188,6 +188,9 @@ const LEDNOTE={};                          /* { '口径|项目键|月': 文本 }
 const ntProjKey=n=>pjKey(ownOf(n));
 const ntProjName=n=>{ const k=ntProjKey(n); return k?pjLabel(k):(isShellFull(n.proj)?'（待指定归属）':n.proj); };
 const ntYm=n=>String(n.date||'').slice(0,7);
+const debtSourceTip=sc=>sc==='集采'
+  ? '本项目集采欠款 = 集采台账中纳入台账合同的结算金额−付款金额之和；结算取对应发票子表，付款取付款子表；不计不纳入合同，不按日期截断'
+  : `本项目${sc}欠款 = ${sc==='辅材'?'付款通知书辅材统计结算金额之和':'过程资料全部已存月份外租零租含税＋外租包月含税'} − 付款通知书同分类统计付款金额之和 ＋ 本分类期初结算−期初付款；通知书剔除行不计，i8撤单有付款或集采关联仍计入，不按月份截断`;
 /* 期初占位行存的是**项目全名** → 归一到**仓库名**（候选键，§2.7.4），才能与台账的项目键对上 */
 const lgProjKeyOf=v=>pjKey(pjRowOf(v));
 const nextYm=m=>{ const [y,mm]=String(m).split('-').map(Number); const t=new Date(y,mm,1);

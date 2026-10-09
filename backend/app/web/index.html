@@ -704,8 +704,8 @@ V.m04=()=>{
       <td><div style="max-width:230px">${plProjCell(p.proj)}</div></td>
       <td>${edit?`<input class="inp plain" style="min-width:134px" data-act="plCell" data-id="${p.id}" data-f="docNo" value="${esc(p.docNo||'')}" placeholder="填单据号 → 再次匹配">`:(p.docNo?`<span class="fc">${esc(p.docNo)}</span>`:'<span class="tag t-dg">未填</span>')}</td>
       <td class="num">${M(p.flowAmt)}</td>
-      <td class="num">${hit?M(paidOf(hit.id)):'<span class="mut">—</span>'}</td>
-      <td class="num">${hit?M(N2(hit.approve-paidOf(hit.id))):'<span class="mut">—</span>'}</td>
+      <td class="num" title="已付款金额 = 付款流水中同一通知书的生效付款金额之和；按单据号匹配通知书，不含已撤销流水；未匹配显示—">${hit?M(paidOf(hit.id)):'<span class="mut">—</span>'}</td>
+      <td class="num" title="剩余付款金额 = 单据号匹配的付款通知书审批金额 − 同单据生效流水付款合计；不含已撤销流水，未匹配显示—">${hit?M(N2(hit.approve-paidOf(hit.id))):'<span class="mut">—</span>'}</td>
       <td class="num">${M(p.monthAmt)}</td>
       <td><input class="inp now" type="date" style="min-width:112px" data-act="plCell" data-id="${p.id}" data-f="date" value="${esc(p.date||'')}" title="行内可改、立刻写入（不留痕）；完整日期一律用原生日期选择器（与「单据日期 / 合同日期」同款，§六 第 30 条）"></td>
       <td data-v="${esc(p.method||'')}"><select class="inp" data-act="plCell" data-id="${p.id}" data-f="method">${optsOf(enumVals('payMethod'),p.method)}</select></td>
@@ -714,7 +714,7 @@ V.m04=()=>{
       <td class="ctr">${matched?'<span class="mut sm">无需处理</span>':p.forced?`<span style="display:inline-flex;gap:calc(5px * var(--fscale));align-items:center"><span class="mut sm" style="max-width:190px" title="${esc(p.forceRemark)}">${esc(p.forceRemark)}</span><button class="btn sm" data-act="unforce" data-id="${p.id}" title="取消强制通过 → 回到「未处理」态（不产生留痕）">取消强制通过</button></span>`:`<button class="btn sm" data-act="force" data-id="${p.id}">强制通过</button>`}</td>
       <td class="ctr"><span style="display:inline-flex;gap:calc(5px * var(--fscale));align-items:center">${p.manual?`<button class="btn sm" data-act="plRowEdit" data-id="${p.id}" title="编辑本行 —— 只有手动行可编辑（导入行是项目端报来的源数据，要改请重新导入；其在 §4.3.3 的唯一例外口 = 「再次匹配」）">编辑</button>`:''}${edit?`<button class="btn sm" data-act="plRematch" data-id="${p.id}" title="按当前单据号重新比对 i8 通知书，刷新审查结果">再次匹配</button>`:''}<button class="btn sm dg" data-act="plDelRow" data-id="${p.id}" title="删除本行（删除前确认并说明影响范围）—— 手动行与导入行都可删（§4.3.6；与付款通知书「i8 抓取行永不删」不同）">删除</button></span></td>
     </tr>`;}).concat(plRowEditId===PL_NEW_ID?[plDraftRow()]:[]),
-    sum:list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2(rs.reduce((a,p)=>a+p.flowAmt,0)),8:rs=>N2(rs.reduce((a,p)=>a+p.monthAmt,0))},{leadCls:'fl'}):EMPTYROW(thCount(PL_THEAD),'当前筛选条件下没有付款计划','')})}</div>
+    sum:list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2(rs.reduce((a,p)=>a+p.flowAmt,0)),8:rs=>N2(rs.reduce((a,p)=>a+p.monthAmt,0))},{leadCls:'fl',tip:'当前年月、项目及审查结果筛选后的已保存计划行合计；含导入和手动行，不含未保存草稿，只求流程金额和本月预付款'}):EMPTYROW(thCount(PL_THEAD),'当前筛选条件下没有付款计划','')})}</div>
     
   </div>`;
 };
@@ -751,7 +751,7 @@ V.m05=()=>{
       <div class="bars">${list.map(([k,dd])=>
         `<div class="br"><span class="nm" title="${esc(pjLabel(k))}">${esc(pjLabel(k))}</span>
           <span class="tk"><i class="${dd>0?'o':'g'}" style="width:${Math.max(2,(dd/mx*100)).toFixed(1)}%"></i></span>
-          <span class="vl">${M(dd)}</span></div>`).join('')||`<div class="mut">没有${sc}欠款数据</div>`}</div>
+          <span class="vl" title="${esc(debtSourceTip(sc))}">${M(dd)}</span></div>`).join('')||`<div class="mut">没有${sc}欠款数据</div>`}</div>
     </div></div>`; };
   /* —— 逐月欠款台账（§4.5.1 口径，见上文 4.9 段）——
      ⭐ 2026-09-13 用户口径：**与两侧台账卡合并为一个统一模块** —— 一张卡：卡头放两侧共用的
@@ -784,8 +784,8 @@ V.m05=()=>{
       return `<tr${r.open?' class="hl"':''}>
       <td class="fc">${i+1}${r.open?` <span class="tag t-in">期初 · ${esc(r.cat||'')}</span>`:''}</td>
       <td class="now">${r.open?esc(ledCutLabel(r.ym)):(z?`<span class="mut">${r.ym}</span>`:r.ym)}</td>
-      <td class="num"${sc==='机械'&&!r.open?' title="机械费结算金额 = 派生只读，取自过程资料机械 6 列的「外租零租含税 ＋ 外租包月含税」；租分公司设备 / 内租设备不参与欠款统计"':''}>${cell(r.s)}</td>
-      <td class="num">${cell(r.p)}</td>
+      <td class="num"${sc==='机械'&&!r.open?' title="机械费结算金额 = 派生只读，取自过程资料机械 6 列的「外租零租含税 ＋ 外租包月含税」；租分公司设备 / 内租设备不参与欠款统计"':` title="${r.open?'本项目、本分类期初占位行的统计结算金额':'辅材其他支出金额 = 付款通知书中本项目、本单据年月、分类为辅材的统计结算金额之和；剔除行不计入'}"`}>${cell(r.s)}</td>
+      <td class="num" title="${r.open?'本项目、本分类期初占位行的统计付款金额':'付款 = 付款通知书中本项目、本单据年月、同分类的统计付款金额之和；剔除行不计入，不是实际付款流水金额'}">${cell(r.p)}</td>
       <td class="num" style="color:var(--${N2(r.s-r.p)>0?'dg':'mut'})">${cell(N2(r.s-r.p))}</td>
       <td>${r.open?`<span class="mut sm">${esc(r.note)}</span>`
         :`<input class="inp" style="max-width:150px" data-act="ledNote" data-sc="${sc}" data-proj="${esc(lp)}" data-m="${r.ym}" value="${esc(r.note)}" placeholder="—" title="点这一格就能改：离开它即保存（清空 = 清除这格备注）">`}</td>
@@ -895,7 +895,7 @@ V.m05=()=>{
       <td>${f.voided?enumTag('flowState','已撤销')+' <span class="mut sm">'+esc(f.reason)+'</span>':enumTag('flowState','生效')}</td>
       <td class="ctr now">${f.voided?'<span class="mut sm">—</span>':`<button class="btn sm dg" data-act="revDlg" data-fid="${f.id}">撤销</button>`}</td></tr>`;}),
     sum:flList.length?sumRowOf(FL_THEAD, flOn, {4:[rs=>N2(rs.reduce((a,x)=>a+x.amt,0)),v=>'<b>'+M(v)+'</b>']},
-        {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：</b>`,leadSpan:4,leadCls:'ctr',style:''}):'',
+        {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：</b>`,leadSpan:4,leadCls:'ctr',style:'',tip:'当前付款年月、项目、方式、状态及关键词筛选结果的付款金额合计；只计生效流水，已撤销不计入'}):'',
     empty:EMPTYROW(thCount(FL_THEAD), '该筛选条件下没有付款流水', '换个年月 / 项目 / 状态，或点「重置」')})}</div>
     
   </div>`;
@@ -1018,7 +1018,7 @@ V.m06=()=>{
   const MACH_TAX_N = 4;
   const totMTax = segments[2]?.total;
   const totMNoTax = segments[3]?.total;
-  const sumRow = `<tr class="sumrow" style="background:var(--sf2);font-weight:500"><td class="fl">合计</td>`
+  const sumRow = `<tr class="sumrow" style="background:var(--sf2);font-weight:500"><td class="fl" title="所选项目、当前原始或调整后表的全部月份逐列合计；材料按本表有效历史段和i8取值，机械含六列，含税与不含税分段">合计</td>`
     + IVC5.map((c,i)=>`<td class="num${vsc(1+i)}">${M(sumIn(c))}</td>`).join('')
     + IVC5.map((c,i)=>`<td class="num${vsc(6+i)}">${M(sumOut(c))}</td>`).join('')
     + a0.m.map((_,i)=>`<td class="num${vsc(11+i)}">${M(sumM(i))}</td>`).join('') + `</tr>`;
@@ -1094,7 +1094,7 @@ V.m07=()=>{
       <td class="ctr">${tagOf(balOf(w))}</td></tr>`):[],
     sum:rows.length?sumRowOf(WH_THEAD, rows, Object.assign({1:[rs=>sums(rs,'rows'),v=>v]},
         ...kinds.map((k,i)=>({[2+i]:[rs=>N2(rs.reduce((a,w)=>a+w[k[0]],0)),M]}))),
-        {cells:{6:`<td class="ctr">${tagOf(totBal)}</td>`}}):'',
+        {cells:{6:`<td class="ctr">${tagOf(totBal)}</td>`},tip:'当前核算年月及项目状态筛选后的仓库合计；汇总明细行数和期初、收入、支出、期末金额，结存校验标记不求和'}):'',
     empty:EMPTYROW(thCount(WH_THEAD), '<b>'+tmLabel(fWhYm)+'</b> 没有收发结存数据', '换个「核算年月」，或点左上角「抓取 i8」')})}</div>
     
   </div>
@@ -1131,14 +1131,14 @@ V.m07=()=>{
       return `<tr><td class="fl fc">${ri+1}</td>
       <td class="fl sm" title="${esc(r.wh)}"><div style="max-width:180px;white-space:normal;overflow-wrap:anywhere;line-height:1.4">${esc(r.disp)}</div></td>
       ${cell(0)}
-      <td class="num">${M(r.hwc)}</td><td class="num">${M(r.hw)}</td><td class="num">${M(r.qtc)}</td><td class="num">${M(r.qt)}</td>
-      <td class="num">${M(r.rentC)}</td><td class="num">${M(r.rent)}</td><td class="num">${M(r.leaseC)}</td><td class="num">${M(r.lease)}</td>
+      <td class="num" title="${esc(bigExtractTip('焊材',true))}">${M(r.hwc)}</td><td class="num" title="${esc(bigExtractTip('焊材',false))}">${M(r.hw)}</td><td class="num" title="${esc(bigExtractTip('气体',true))}">${M(r.qtc)}</td><td class="num" title="${esc(bigExtractTip('气体',false))}">${M(r.qt)}</td>
+      <td class="num" title="外租机械开工累计 = 过程资料本项目全部已存月份的外租零租含税＋外租包月含税；不按所看月份截断，不计内租、租分公司设备及不含税两列">${M(r.rentC)}</td><td class="num" title="外租机械当月 = 过程资料本项目核算月的外租零租含税＋外租包月含税；不计内租、租分公司设备及不含税两列">${M(r.rent)}</td><td class="num" title="设备租赁开工累计 = 过程资料本项目全部已存月份的内租设备金额之和；不按所看月份截断，不计租分公司设备和外租四列">${M(r.leaseC)}</td><td class="num" title="设备租赁当月 = 过程资料本项目核算月的内租设备金额；不计租分公司设备和外租四列">${M(r.lease)}</td>
       <td class="num">${M(r.totC)}</td>
       ${cell(1)}
-      <td class="num">${pct(r.use)}</td>
-      <td class="num">${pct(r.done)}</td>
+      <td class="num" title="使用率 = 本项目外租机械开工累计＋设备租赁开工累计，再除以本行机械费测算；测算取本月录入或最近一次带入值，分母空或0显示—">${pct(r.use)}</td>
+      <td class="num" title="产值完成率 = 本行产值累计（含税）÷合同（预估）价；两项取本月录入或最近一次带入值，不跨项目；分母空或0显示—">${pct(r.done)}</td>
       ${cell(2)}${cell(3)}
-      <td class="num" title="派生（不手填）：按项目取「集采台账结算」额 = 该项目集采合同结算金额之和，只计「纳入台账」的合同（§5.7.1）">${M(r.matC)}</td>
+      <td class="num" title="派生（不手填）：按项目取「集采台账结算」额 = 该项目集采合同结算金额之和，只计「纳入台账」的合同（§5.7.1）；汇总全部已存合同，不按核算月或发票日期截断">${M(r.matC)}</td>
       ${cell(4)}${cell(5)}
       </tr>`;}),
     sum:(()=>{ const rs=bigRows(bjMonth(-1));
@@ -1147,7 +1147,7 @@ V.m07=()=>{
         const S=k=>r=>N2(r.reduce((a,x)=>a+x[k],0));
         const SC=i=>r=>N2(r.reduce((a,x)=>{ const v=bigCell(x.wh,bjMonth(-1),i).v; return a+(typeof v==='number'?v:0); },0));
         return rs.length?sumRowOf(BIG_THEAD, rs, {3:S('hwc'),4:S('hw'),5:S('qtc'),6:S('qt'),7:S('rentC'),8:S('rent'),
-          9:S('leaseC'),10:S('lease'),11:S('totC'),12:SC(1),15:SC(2),16:SC(3),17:S('matC'),18:SC(4)}, {leadSpan:2, leadCls:'fl'}):''; })(),
+          9:S('leaseC'),10:S('lease'),11:S('totC'),12:SC(1),15:SC(2),16:SC(3),17:S('matC'),18:SC(4)}, {leadSpan:2, leadCls:'fl',tip:'当前大表所选在建、非壳项目的金额合计；含手填金额的带入值，累计范围见各格提示，开工时间、比率和备注不求和'}):''; })(),
     empty:EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY, '先去「项目档案」把项目置为「在建」，或点「选择项目」看看候选')})}</div>
   </div>
   </div>`;
@@ -1206,7 +1206,7 @@ V.m08=()=>{
       <td>${enumTag('ivDir',iv.dir)}</td>
       <td>${esc(iv.mat)}</td><td class="sm mut">${esc(iv.spec)}</td><td class="sm">${esc(iv.unit)}</td>
       <td class="num">${iv.qty}</td><td class="num">${M(iv.px)}</td><td class="num">${M(iv.pi)}</td><td class="num">${M(iv.amt)}</td>
-      <td class="num">${a?`<span class="ed" style="padding:calc(1px * var(--fscale)) calc(4px * var(--fscale));border-radius:3px">${M(a.newAmt)}</span> <span class="sm" style="color:var(--dg)">${SIG(a.newAmt-iv.amt)}</span>`:'<span class="mut">—</span>'}</td>
+      <td class="num" title="调整后金额取同一库存单据行的调整单；差额 = 调整后金额 − 库存原单金额，不改价税合计；没有调整单显示—">${a?`<span class="ed" style="padding:calc(1px * var(--fscale)) calc(4px * var(--fscale));border-radius:3px">${M(a.newAmt)}</span> <span class="sm" style="color:var(--dg)">${SIG(a.newAmt-iv.amt)}</span>`:'<span class="mut">—</span>'}</td>
       <td class="num">${M(iv.tax)}</td><td class="sm">${esc(iv.biz)}</td><td class="sm">${esc(iv.cp)}</td><td class="now">${iv.dd}</td><td class="now">${iv.ad}</td>
       <td class="sm">${esc(iv.wh)}</td><td class="sm mut">${esc(iv.wbs)}</td><td class="sm mut">${esc(iv.cbs)}</td>
       <td class="ctr now"><button class="btn sm ${a?'':'pri'}" data-act="adjDlg" data-iv="${iv.id}">${a?'查看/改调整单':'打调整单'}</button></td></tr>`;}),
@@ -1245,13 +1245,13 @@ V.m09=()=>{
       
     `})}
     <div class="tw">${TBL({head:AWF_THEAD,key:'m09:awf',rows:[
-      `<tr><td><b>安全文明施工费</b></td><td>${tag('系统生成','ok')}</td><td class="num">${M(auto)}</td><td class="num">${pc(auto)}</td><td class="ctr mut sm">—</td></tr>`,
+      `<tr><td><b>安全文明施工费</b></td><td>${tag('系统生成','ok')}</td><td class="num" title="安全文明施工费 = 库存单据明细中本项目、本核算月、CBS-安文费的出库原金额之和；不取入库、价税合计或调整后金额">${M(auto)}</td><td class="num" title="${AWF_RATIO_TIP}">${pc(auto)}</td><td class="ctr mut sm">—</td></tr>`,
       ...(list.length?list.map((r,i)=>`<tr><td><input class="inp plain" data-act="awfName" data-i="${i}" value="${esc(r[0])}"></td><td>${tag('手填','wn')}</td>
         <td class="num"><input class="inp num" style="width:110px" data-act="awfAmt" data-i="${i}" value="${r[1].toFixed(2)}"></td>
-        <td class="num">${pc(r[1])}</td>
+        <td class="num" title="${AWF_RATIO_TIP}">${pc(r[1])}</td>
         <td class="ctr"><button class="btn sm dg" data-act="awfDel" data-i="${i}">删除</button></td></tr>`)
       :[EMPTYROW(thCount(AWF_THEAD), '<b>'+tmLabel(awfYm)+'</b> · <b>'+esc(PROJ_META_KEY(awfPj).nm)+'</b> 还没有手填项', '点右上角「＋ 增加手填项」补录（按「核算年月 ＋ 项目」各存一份，未录的那一份不计入）')])
-    ],sum:sumRowOf(AWF_THEAD, list, {2:()=>total,3:[()=>total,()=>total>0?PCT(1):'<span class="mut">—</span>']})})}</div>
+    ],sum:sumRowOf(AWF_THEAD, list, {2:()=>total,3:[()=>total,()=>`<span title="${AWF_RATIO_TIP}">${total>0?PCT(1):'—'}</span>`]},{tip:'所选项目及核算月的安全文明施工费＋全部手填项；手填0及负数也计入，不跨项目或月份；合计不大于0时占合计显示—'})})}</div>
     
   </div>`;
 };
@@ -1379,13 +1379,13 @@ V.m11=()=>{
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="jcPick" data-id="${j.id}" ${jcPick.has(j.id)?'checked':''}></td>
       <td class="fc" title="序号 = 当前筛选下的行号（⛔ 不是数据库 id）">${i+1}</td><td class="now">${j.date}</td><td><button class="btn sm" style="white-space:normal;text-align:left" data-act="jcMaterialOpen" data-id="${j.id}" title="修改材料名">${esc(j.material)||'填写材料名'}</button></td><td class="sm">${esc(j.supplier)}</td>
       <td class="num">${j.contractAmt?M(j.contractAmt):'<span class="mut" title="供应商合同价为空 —— 若是贸易公司合同，需从 Excel 的「供应商线」手工填进来（填完不被抓取覆盖）">— 待补</span>'}</td>
-      <td class="num" style="white-space:nowrap">${M(jcInvSum(j))} <button class="btn sm" data-act="jcInvDlg" data-id="${j.id}" title="打开「供应商发票子表」（发票日期 + 金额 · 1..N 张）">子表</button></td>
+      <td class="num" style="white-space:nowrap" title="发票金额 = 本合同供应商发票子表金额合计；不计贸易公司发票，不按发票日期截断">${M(jcInvSum(j))} <button class="btn sm" data-act="jcInvDlg" data-id="${j.id}" title="打开「供应商发票子表」（发票日期 + 金额 · 1..N 张）">子表</button></td>
       <td class="sm">${j.tradeCo?esc(j.tradeCo):'<span class="mut">—</span>'}</td>
       <td class="num">${j.tradeContractAmt?M(j.tradeContractAmt):'<span class="mut">—</span>'}</td>
-      <td class="num" style="white-space:nowrap">${j.tradeCo?`${M(jcTradeInvSum(j))} <button class="btn sm" data-act="jcTInvDlg" data-id="${j.id}" title="打开「贸易公司发票子表」（同款 · 发票日期 + 金额）">子表</button>`:'<span class="mut">—</span>'}</td>
-      <td class="num"><b>${M(jcSettle(j))}</b></td>
-      <td class="num" style="white-space:nowrap"><b>${M(jcPay(j))}</b> <button class="btn sm" data-act="jcPayDlg" data-id="${j.id}" title="打开「付款子表」（手工录入 / 从付款域引用）">子表</button></td>
-      <td class="num" style="color:${jcDebt(j)>0?'var(--dg)':'var(--ok)'}"><b>${M(jcDebt(j))}</b></td>
+      <td class="num" style="white-space:nowrap" title="贸易公司发票金额 = 本合同贸易公司发票子表金额合计；不计供应商发票，不按发票日期截断，无贸易公司显示—">${j.tradeCo?`${M(jcTradeInvSum(j))} <button class="btn sm" data-act="jcTInvDlg" data-id="${j.id}" title="打开「贸易公司发票子表」（同款 · 发票日期 + 金额）">子表</button>`:'<span class="mut">—</span>'}</td>
+      <td class="num" title="结算金额 = 本合同发票子表金额合计；有贸易公司取贸易公司发票，无贸易公司取供应商发票，两侧不相加，不按发票日期截断"><b>${M(jcSettle(j))}</b></td>
+      <td class="num" style="white-space:nowrap" title="付款金额 = 本合同付款子表金额合计；手工和付款域引用都计入，不跨合同、不按付款日期截断"><b>${M(jcPay(j))}</b> <button class="btn sm" data-act="jcPayDlg" data-id="${j.id}" title="打开「付款子表」（手工录入 / 从付款域引用）">子表</button></td>
+      <td class="num" style="color:${jcDebt(j)>0?'var(--dg)':'var(--ok)'}" title="欠款金额 = 本合同结算金额 − 付款子表金额合计；结算按有无贸易公司取对应发票子表，付款含手工及付款域引用，不按日期截断"><b>${M(jcDebt(j))}</b></td>
       <td><input class="inp plain" style="min-width:110px" data-act="jcMethod" data-id="${j.id}" value="${esc(j.method)}" title="${esc(j.method)}" placeholder="自由文本"></td>
       <td><input class="inp" style="min-width:104px" data-act="jcRemark" data-id="${j.id}" value="${esc(j.remark)}" placeholder="可填"></td>
       <td class="ctr">${tagChip(j.tag)}</td>

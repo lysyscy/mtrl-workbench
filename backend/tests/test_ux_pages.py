@@ -351,7 +351,7 @@ def test_大表的首列区固定_序号与项目名称两列一起钉():
         "大表表头首列区没挂 `.fl`（往右填时看不见自己在给哪个项目填）"
     assert '<td class="fl fc">${ri+1}</td>' in clean and '<td class="fl sm" title="${esc(r.wh)}">' in clean, \
         "大表**数据行**首列区没跟表头一起钉（`001-52` 同口径：横滚时表头浮着、行里那两格滚走）"
-    assert "{leadSpan:2, leadCls:'fl'}" in clean, \
+    assert re.search(r"sumRowOf\(BIG_THEAD,(?:(?!\}\):'').)*?\{leadSpan:2,\s*leadCls:'fl'(?:,|\})", clean, re.S), \
         "大表**合计行**首格没钉（它是 `colspan=2`，一格就该盖住首列区两列）"
     assert '.dt[data-sort-key="m07:bigtable"] .fl + .fl{left:calc(39px * var(--fscale))}' in clean, \
         ("大表第 2 列没让开首列的宽 —— 要么露缝（露出被滚走的内容）、要么叠住首列的字；"

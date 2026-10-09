@@ -35,6 +35,9 @@ class _Result:
     def all(self) -> list:
         return list(self._rows)
 
+    def __iter__(self):
+        return iter(self._rows)
+
 
 class FakeSession:
     """按**模型类型**分发的最小会话桩（`execute` / `get` / `add` / `flush` / `delete`）。"""

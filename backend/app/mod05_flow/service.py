@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError
-from app.core.money import to_money
+from app.core.money import sum_money, to_money
 from app.core.projects import project_index, project_key, project_label
 from app.mod01_projects.models import Project
 from app.mod05_flow import domain as dom
@@ -381,12 +381,17 @@ def build_ledger(
     rows = notice_debt_views(s)
     today = today or date.today()
     sides = []
+    # 同一有效机械值供导入、手录、过程资料和台账读取；只接外租含税两列。
+    from app.mod06_proc import service as P6S
+
+    wh = project_key(s.get(Project, int(project_id)))
+    mech_settle = {str(r['ym']): sum_money([r.get('mech_2'), r.get('mech_3')])
+                   for r in P6S.load_mech(s) if wh and r.get('warehouse') == wh and r.get('ym')}
     for cat in dom.LEDGER_SIDES:
         openings = opening_views(s, project_id=project_id)
         mine = [o for o in openings if o.category == cat]
         opening = mine[0] if mine else None
         monthly = dom.monthly_aggregate(rows, cat, int(project_id))
-        mech_settle = {} if cat != CATEGORY_MECH else {}
         ledger: list[LedgerRow] = dom.build_ledger(
             category=cat,
             monthly=monthly,

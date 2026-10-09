@@ -93,6 +93,8 @@ const bigTotalCum = wh => N2(bigRentCum(wh) + bigLeaseCum(wh));
 let EXT_TOTALS = {};
 const extAllTotal=(kind,wh,year)=>EXT_STATE.loaded?N0(((EXT_TOTALS[year]||{})[kind]||{})[wh]??extBalOf(kind,wh)):null;
 const bigHWCum = (wh,year) => extAllTotal('焊材', wh,year), bigQTCum = (wh,year) => extAllTotal('气体', wh,year);
+/* 会议大表与年度提取同源；累计不是按所看月份截断。 */
+const bigExtractTip=(kind,cum)=>`${kind==='气体'?'三气':kind}${cum?'累计 = 手录2025-11及之前＋会议月份所属年12个月的提取金额；2025年1—11月不重复计入，往年展示金额不再加进合计':'当月 = 本项目核算月的提取金额'}；来源为库存单据明细原单入库金额，${kind==='气体'?'资源名称按气体白名单精确匹配':'按焊材关键词包含并排除工具等子串'}，不取出库、价税合计或调整金额`;
 /* ⭐ **主材累计（含税）** 的**取数唯一出口**（2026-09-13 用户裁定：由手填改为**派生**）——
    口径 = **按项目取「集采台账结算」额**：= 该项目集采合同**结算金额之和**（§5.7.1）。
      · 结算口径本身**照搬** `jcSettle`（有贸易公司 → 贸易公司发票子表合计；无 → 供应商发票子表合计，§6.4.1），
@@ -228,6 +230,7 @@ const ivColPanel=()=>{ const i=Number(invColOpen), c=ivColMeta(i); if(!c) return
 };
 const sumAdj=iv=>{const a=adjOf(iv); return a?N2(a.newAmt-iv.amt):0};
 const awfPjPanel=()=>projPanel({list:()=>AWF_PJS,selected:()=>[awfPj],pickAct:'awfPjPick',meta:PROJ_META_KEY,single:true});
+const AWF_RATIO_TIP='占合计 = 本行金额÷本项目本核算月合计（安全文明施工费＋全部手填项，含0及负数）；不跨项目或月份，合计不大于0显示—';
 /* ⚠️ 默认项目**不在这里赋** —— 原先写 `(pjSort(ntPjList())[0]||{name:''}).name`，那是**加载时求值**：
    `PJs` 异步填充 ⇒ 取数回来时它早已定死成空（**静默失去默认项目**，且不报错）。
    ⇒ 改由 `reloadM09()` 按后端回包的 `project` 落定（后端 `service._resolve` 已把"没给 / 给了无效值"
