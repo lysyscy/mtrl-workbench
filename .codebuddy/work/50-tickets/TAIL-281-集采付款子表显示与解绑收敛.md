@@ -2,7 +2,7 @@
 
 **What to build:** 集采合同的付款子表里，已付款的关联按**每笔付款显示一行**并看得出是哪张通知书；**没付款的不再显示一堆 0 元空行**。引用行不再提供含义不清的「解绑」——解绑与改关联只在付款通知书页做；点子表里的引用行能跳到那张通知书并高亮它。撤销付款后明确告诉用户集采合同的已付款有没有跟着变。
 
-**Blocked by:** None (can start immediately) —— ⚠️ 但与 `TAIL-276` **未提交**的壳改动同文件（`mod11_jc/repository.py`、`proj.js`、`actions.js`、`core.js`、`api.js`）；开工前先确认 `TAIL-276` 的处置，避免两批差异混成一票。
+**Blocked by:** None (can start immediately) —— ⚠️ `TAIL-276` 已由 `4ddcfd5` 入库并销号（§14.3／§15 §四 已登记），其中「关联只存关系＋读取取统计付款金额、零值不回退审批金额」**已落地**，本票别重复实现；但与 `TAIL-282`／`TAIL-283` 可能同文件（`shell/actions.js`、`core.js`、`proj.js`、`index.html`）⇒ 开工前先确认那两票的处置，避免两批差异混成一票。
 
 **Status:** ready-for-agent
 

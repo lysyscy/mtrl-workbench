@@ -33,4 +33,12 @@
 
 **2026-10-10 · 追加核验收尾。** 本次完整壳自检39段rc0，console/page错误0，日志 `.codebuddy/work/00-scratch/tmp-20261010-tail276-all-projects-shell.txt`；随后壳基线快照rc0。字节/壳规则/接线/票结构检查均rc0。仅改开放勾选的两处限制及针对性用例，其他旧输入不重复核验。
 
+**2026-10-11 · 核验与推送现状（agent；⚠️ 本段前半的判断已更正）。** 用户授权「提交并推送」⇒ 复查发现：**本票那批未提交 dirty 已由 `4ddcfd5` 提交并推送**（提交信息「焊材/气体历史列显隐 · 付款流水默认生效 · 集采发票草稿默认当日」，含 `mod11_jc/repository.py`＋`service.py`、壳 5 件、`test_acc_jc_pay_link.py`、`test_tail276_jc.py`），**并非本会话提交**；本会话只补交文档记录。`TAIL-282`／`283`／`284` 由 `e2d5cbf` 立票。
+
+- **核验方式**：按 §四「按实际影响」**手工取**，**未用 `_run_rulers.py`** —— 该工具的 `--since` 只认快照文件、不接受 git ref，无法界定这批**既有** dirty（无开工基点时它会全部跳过）。实测：相关 11 个测试文件 `pytest` rc0；`tools/probe/_shell_smoke.py` **39 段 rc0**、console/page 错误 **0**（证据 `.codebuddy/work/00-scratch/tmp-20261011-shell.txt`）；`node --check` 壳 11 件 rc0；`py_compile` 5 件 rc0；壳自检通过后 `shell_verify.py --snapshot` rc0（壳章已刷新）。⚠️ 该批代码此时**已入库** ⇒ 本轮核验是**对已提交版本的复验**，不是提交前核验。
+- ⚠️ **本机工具坑（值得记）**：`python ... | Select-Object` / `| Select-String` 时，PowerShell 报出的 `exitCode` 是**管道**的 ⇒ 本轮两次把壳自检真实的 rc=0 误读成 rc=1。**取退出码必须写成 `> $null 2>&1; Write-Output $LASTEXITCODE`，不接管道。**
+- **销号状态**：主计划 §14.3 已标「✅ 已完成」、§15 §四 已登记本票（2026-10-10）⇒ **已销号**；**仅本票文件的 `**Status:**` 仍是 `claimed`、5 个验收项仍未勾** —— 票面字段未同步，需要时按 §15 口径补齐。
+- **未验**：票面记录的浏览器手工项（隔离浏览器建档保存、历史合同保存、三张真机截图）本轮**未重跑**；**未做双轴 code-review**（用户暂定不做）。
+- ⚠️ **归属提醒**：一并入库的 `mod11_jc/repository.py`＋`service.py`（关联只存关系、读取取统计付款金额、零值不回退审批金额）**实质是 `TAIL-281` 的活**，以未销号状态入库 ⇒ `TAIL-281` 开工须知这层已落地，别重复实现。
+
 **2026-10-10 · 用户授权销号。** 当前HEAD `4ddcfd571d729dbdc7bc7618e268d48a712cbd83`、接手dirty为空；实现已随后续提交入库。票面验收按本轮最终裁定同步，原建票口径作为历史留痕保留。再次运行 `backend/.venv/Scripts/python.exe -X utf8 -m pytest backend/tests/test_tail276_jc.py backend/tests/test_acc_jc_shell.py -q`：12项通过，退出码0；其他未变输入复用前述证据。新增TAIL-281的显示与解绑要求另票待做。用户原定双轴审查暂不做，本次仅完成销号资料同步，无提交/推送、无生产数据写入。
