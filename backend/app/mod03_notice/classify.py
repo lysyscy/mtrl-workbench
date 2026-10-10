@@ -159,7 +159,7 @@ def rows_needing_ownership(rows: list[dict], rules=DEFAULT_RULES) -> list[tuple[
 
     ⛔ **判定必须走 `is_excluded`（同一份 `DEFAULT_RULES`）** —— 不许在编排层另写一份
        剔除判定（「同一件事被实现两遍」是本项目反复踩的坑）。
-    ✅ 保留**原序号**，让调用方仍能按抓取顺序落库（剔除行照旧落库，只是 `ownership_id=None`）。
+    ✅ 保留**原序号**，让调用方仍能按抓取顺序落库。剔除行跳过阻断校验，写入后非阻断尝试归属。
     """
     return [(i, row) for i, row in enumerate(rows or ()) if not is_excluded(row, rules)]
 

@@ -182,13 +182,13 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         #     ⚠️ 判定输入只有两样：**项目全名**（i8 的 `PhidPc_EXName`）＋ **单据名**（`fields.BillName`）
         #        —— 全名撞上壳 ⇒ 再看单据名命中了壳下哪个小微的关键词。
         # ⭐ **（`TAIL-29`-①）先剔掉「规则剔除行」，再校验归属** ——
-        #    §4.2.2「指定项目不在统计范围」的行**与本域无关、天生没有归属**；
+        #    §4.2.2「指定项目不在统计范围」的行不要求归属确定；
         #    让它们参与「整批校验」会把**整批误拦**。实测：2026-09 的 61 行里，
         #    「集团公司第四分公司机关工程」×2 行就把 61 行**全拦下** ⇒ 该月一条都进不来。
         #    ⛔ **判定必须用同一份规则源**（`classify.is_excluded` → `match_exclude_rule` → `DEFAULT_RULES`）
         #       —— **不许在编排层另写一份剔除判定**（「同一件事被实现两遍」是本项目反复踩的坑）。
         #    ⇒ 剔除行**照旧落库**（落库时 `decide_placement` 会给它打 `exclude_source=rule`），
-        #      只是**不参与归属校验**、`ownership_id=None`。
+        #      只是**不参与阻断归属校验**；写入后尝试现有档案归属，判不出的留空。
         # ⭐ **（`TAIL-40`）规则来源改为「库 → 出厂默认」**：本批**读一次**生效规则集，随后
         #    **同时**喂给「挑需校验的行」与「落库时的剔除判定」—— 一处读取、两处同一份
         #    （⛔ 不许在编排层另写一份剔除判定，也不许两处各读一次）。
@@ -278,7 +278,7 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
                 )
             raise MustReportError(message) from exc
 
-        # 行序号 → 归属（**剔除行恒为 None**）；按**原顺序**落库，不打乱行序语义
+        # 行序号 → 有效行归属；剔除行写入后尝试非阻断回填，不参与整批校验。
         ownership_of: dict[int, int | None] = {i: d.target_id for i, _, d in judged}
 
         with session_scope() as session:
@@ -294,12 +294,21 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
                 elif changed:
                     updated += 1
             upserted = created + updated
+            # 剔除不要求归属确定，但能唯一匹配现有档案的也应支持项目筛选。
+            # 已有归属保留；缺档案/小微待定留空，不触发建档或阻断导入。
+            from sqlalchemy import select
+            from app.mod03_notice.notice_actions import refill_ownership
+            excluded_ids = list(session.scalars(select(PaymentNotice.id).where(
+                PaymentNotice.ph_id.in_([row["ph_id"] for row in rows]),
+                PaymentNotice.excluded.is_(True), PaymentNotice.ownership_id.is_(None),
+            )))
+            refill = refill_ownership(session, excluded_ids)
             finish_run_record(
                 session, rec, status="success", success=upserted, fail=0,
                 # ⭐ **成功也要写标记**（`TAIL-41` 的关键一条）：它就是"最近一次"—— 没有 `reason`
                 #    ⇒ 读侧据此判定"本次已走完 ⇒ 没有未命中清单"（⛔ 不再回溯更早那条）。
                 detail=fetch_detail(created=created, updated=updated, total=len(rows),
-                                    excluded=n_excluded),
+                                    excluded=n_excluded, ownership_filled=len(refill.filled)),
             )
         return len(rows), upserted
 
