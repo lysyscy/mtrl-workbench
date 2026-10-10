@@ -282,6 +282,12 @@ def _reason(exc: BaseException) -> str:
 #    ⭐ 与 `repository` 里那份**是同一个对象**（纯再导出，⛔ 不另写一套）——
 #       同款先例：`mod03_notice/repository.py` 再导出 `MOD-02` 的运行记录仓储。
 from app.mod03_notice import repository as _repo      # noqa: E402  ← 顶层导入安全（`repository` 不引 `service`）
+def stat_paid_is_protected(s, notice_id: int) -> bool:
+    """统计付款金额是否受人工留痕保护。"""
+    from app.mod03_notice.domain import F_STAT_PAID, was_manually_edited
+    return was_manually_edited(_repo.list_stat_traces(s, notice_id), notice_id, F_STAT_PAID)
+
+
 list_stat_traces = _repo.list_stat_traces             # 统计手改留痕（=「是否手改」的唯一事实来源）
 
 

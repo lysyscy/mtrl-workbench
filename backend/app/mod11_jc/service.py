@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.mod11_jc import domain as D
 from app.mod11_jc import repository as R
-from app.mod11_jc.models import INVOICE_KINDS, SRC_MANUAL, SRC_NOTICE, TAG_IN
+from app.mod11_jc.models import INVOICE_KINDS, SRC_MANUAL, SRC_NOTICE, TAG_IN, JcPayment
+from app.core.money import sum_money
 
 
 def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
@@ -60,6 +61,42 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
     }
 
 
+def payment_display_rows(s: Session, payments: list[dict]) -> list[dict]:
+    """统计与实付一致才按笔展示；关联与合同金额仍用原始付款行。"""
+    from app.mod05_flow import service as flows
+
+    ids = [int(p["notice_id"]) for p in payments if p["source"] == SRC_NOTICE and p["notice_id"] is not None]
+    by_notice: dict[int, list] = {}
+    for f in flows.flows_of_notices(s, ids):
+        if f.status == "effective":
+            by_notice.setdefault(f.notice_id, []).append(f)
+    out = []
+    for p in payments:
+        if p["source"] != SRC_NOTICE:
+            out.append({**p, "display_kind": "manual"})
+            continue
+        live = by_notice.get(p["notice_id"], [])
+        if not live and p["amount"] == 0:
+            continue
+        if live and p["amount"] == sum_money(f.amount for f in live):
+            out.extend({**p, "date": f.pay_date, "amount": f.amount,
+                        "flow_id": f.id, "display_kind": "flow"} for f in live)
+        else:
+            out.append({**p, "display_kind": "stat", "mismatch": True})
+    return out
+
+
+def notice_payment_effect(s: Session, notice_id: int) -> dict | None:
+    """读取关联合同的付款合计，供撤销事务前后回执使用。"""
+    link = R.payment_of_notice(s, notice_id)
+    if link is None:
+        return None
+    c = R.contract_of(s, link.contract_id)
+    amounts = D.contract_amounts(trade_co=c.trade_co, invoices=R.invoices_of(s, c.id),
+                                 payments=R.payments_of(s, c.id))
+    return {"contract_id": c.id, "pay_sum": amounts["pay_sum"]}
+
+
 def build_detail(s: Session, contract_id: int) -> dict | None:
     """单个合同的**明细**（两张发票子表 + 付款子表 + 派生金额）—— 子表弹窗的数据源。
 
@@ -88,6 +125,7 @@ def build_detail(s: Session, contract_id: int) -> dict | None:
         "supplier_invoices": [r for r in invoices if r["kind"] != "trade"],
         "trade_invoices": [r for r in invoices if r["kind"] == "trade"],
         "payments": payments,
+        "payment_display_rows": payment_display_rows(s, payments),
         **amounts,
     }
 
@@ -208,7 +246,10 @@ def act_add_payment(s: Session, *, contract_id: int, date, amount,
 
 
 def act_del_payment(s: Session, *, payment_id: int) -> dict:
-    """付款子表删行。"""
+    """删除手工付款行；通知书关系由正式解绑入口处理。"""
+    row = s.get(JcPayment, int(payment_id))
+    if row is not None and row.source == SRC_NOTICE:
+        return {"ok": False, "kind": "err", "message": "请到付款通知书页改关联或解绑"}
     if not R.delete_payment(s, payment_id):
         return {"ok": False, "kind": "err", "message": f"找不到付款行 {payment_id}"}
     return {"ok": True, "kind": "ok", "message": "已删除"}

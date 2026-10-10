@@ -87,7 +87,7 @@ def api_detail(id: int) -> dict:
         d = SV.build_detail(s, int(id))
     if d is None:
         return {"ok": False, "kind": "err", "message": f"找不到合同 {id}", "data": None}
-    for key in ("supplier_invoices", "trade_invoices", "payments"):
+    for key in ("supplier_invoices", "trade_invoices", "payments", "payment_display_rows"):
         d[key] = [
             {**{k: (_s(v) if k == "amount" else v) for k, v in r.items()}}
             for r in (d.get(key) or [])

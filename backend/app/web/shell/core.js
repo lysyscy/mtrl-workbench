@@ -138,7 +138,7 @@ function adaptNotice(x) {
     manual: !!x.is_manual,
     /* 后端算好的三个状态值**直接带上**（前端不重算）：已付 / 是否撤单 / 有无生效流水 */
     paidApi: numOr0(x.amount_paid), revoked: !!x.is_revoked,
-    hasFlow: !!x.has_effective_flow, oid: x.ownership_id,
+    hasFlow: !!x.has_effective_flow, hasAnyFlow: !!x.has_any_flow, oid: x.ownership_id,
     /* ⭐ `P4` 超付（§4.4.6）：**判定在后端**（`NoticeRow.is_overpaid`）—— 壳只拿来渲染 */
     over: !!x.is_overpaid,
   };
@@ -1759,6 +1759,7 @@ async function jcLoadSub(j) {
   j.tradeInvoices = (d.trade_invoices || []).map(money);
   j.payments = (d.payments || []).map(r => [r.date, N0(r.amount),
     (r.source === 'notice' ? '付款域引用' : '手工'), (r.notice_id == null ? null : String(r.notice_id))]);
+  j.paymentDisplayRows = (d.payment_display_rows || []).map(r => ({...r, amount:N0(r.amount)}));
   j._ids = {
     inv: (d.supplier_invoices || []).map(r => String(r.id)),
     tinv: (d.trade_invoices || []).map(r => String(r.id)),

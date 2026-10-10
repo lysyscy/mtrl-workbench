@@ -129,7 +129,7 @@ def test_子表草稿行列对齐且钉在合计行之前取消不入库():
     for dlg, table in (("jcInvDlg:", "modal:jcInv"), ("jcTInvDlg:", "modal:jcTInv"),
                        ("jcPayDlg:", "modal:jcPay")):
         seg = _fn(_all_shell(), dlg, "jcSubAdd" if dlg == "jcPayDlg:" else "＋ 增加一张发票</button>")
-        i_rows = seg.index(".map((v,i)") if ".map((v,i)" in seg else seg.index(".map((p,i)")
+        i_rows = seg.index("rows:")
         i_draft = seg.index("jcSubRow()")
         i_sum = seg.index("sumRowOf(")
         # ⭐ 2026-09-29（`TAIL-64` A′）：三张子表的**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table …>`）。

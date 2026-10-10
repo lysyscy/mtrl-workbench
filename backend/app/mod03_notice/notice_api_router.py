@@ -426,6 +426,7 @@ def _api_item(rec: dict) -> dict:
         "stat_settle": str(row.stat_settle),
         "stat_paid": str(row.stat_paid),
         "has_effective_flow": bool(row.effective_flows),
+        "has_any_flow": bool(row.flows),
         "has_link": bool(row.has_link),
         # ⭐ `P4` 超付（§4.4.6）：**判定在后端**（`NoticeRow.is_overpaid`），壳侧只负责把
         #    「超付」标记渲出来 —— ⛔ 壳里不许再算一遍 `amount_paid > amount_approved`。

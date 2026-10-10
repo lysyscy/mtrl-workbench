@@ -9,6 +9,7 @@
  *    （`actions.js` / `core.js` 里有些表**加载期就求值**到本件的常量）。⛔ 别调顺序。
  * ⚠️ 本件的代码是**原样搬出**（逐字未改，含注释）；来历与搬法见计划 §15 `TAIL-164`。 */
 
+let ntFocusId='';
 let fNt={month:bjMonth(),cat:'全部',astat:'全部',stat:'未付清',projs:[],q:''};   /* 年月默认「北京时间当月」；付款状态默认「未付清」 */
 /* —— 「手动新增 / 编辑付款通知书」弹窗（2026-09-12 用户口径）——
    用途：付「期初占位行」的款 —— 那笔钱没有 i8 单据，只能手工补一行通知书。
@@ -47,7 +48,7 @@ const ntSearchMatch=(n,q)=>{
   const norm=v=>String(v==null?'':v).toLocaleLowerCase().replace(/[,，\s]/g,'');
   const needle=norm(q); if(!needle) return true;
   const j=jcRefOf(n.id), p=ownOf(n);
-  return [n.date,n.code,n.proj,p&&pjDisp(p),n.cat,n.doc,n.biz,n.recv,n.sup,n.entry,
+  return [n.id,n.date,n.code,n.proj,p&&pjDisp(p),n.cat,n.doc,n.biz,n.recv,n.sup,n.entry,
     n.approve,payEff(n),paidOf(n.id),n.ss,n.sp,
     ...[n.approve,payEff(n),paidOf(n.id),n.ss,n.sp].map(M),
     n.astat,statOf(n),n.excl?'剔除':'',ntVoid(n)?'i8 已撤单':'',n.manual?'手动':'',
@@ -362,7 +363,7 @@ const jcLinkCands=n=>{ const k=ntProjKey(n), cur=jcRefOf(n.id), sup=String(n.sup
 /* MOD-03「集采实际供应商」列内的关联区（入口就近放该列 —— 它本就是这行集采单据的专属格） */
 const jcLinkCell=n=>{ const j=jcRefOf(n.id);
   return j
-    ? `<span style="display:flex;align-items:center;gap:calc(5px * var(--fscale));white-space:nowrap">${tag('已关联 '+j.id,'in')}<button class="btn sm" data-act="jcLink" data-id="${n.id}" title="改关联到别的合同 / 或解绑（关联关系存集采合同付款子表，与 R8 同一份记录）">改 / 解绑</button></span>`
+    ? `<span style="display:flex;align-items:center;gap:calc(5px * var(--fscale));white-space:nowrap"><button class="btn sm" data-act="ntTrace" data-id="${n.id}" title="查看关联">${tag('已关联','in')}</button><button class="btn sm" data-act="jcLink" data-id="${n.id}" title="改关联到别的合同 / 或解绑（关联关系存集采合同付款子表，与 R8 同一份记录）">改 / 解绑</button></span>`
     : `<button class="btn sm" data-act="jcLink" data-id="${n.id}" title="把这行集采通知书关联到一张集采合同（与「从付款域引用」写同一份记录、双向可见）">关联集采合同</button>`; };
 
 /* ===== 集采供应商自动匹配（§6.6.3 · `DEV-J-01` 2026-09-14 改裁）=====
@@ -536,6 +537,6 @@ const ntActCell=n=>{
   const L=[];
   if(n.manual) L.push(`<span class="tag t-in">手动</span> <button class="btn sm" data-act="ntEdit" data-id="${n.id}" title="编辑这一行手动新增的通知书（一切信息可改；「统计结算金额」恒 0 只读）">编辑</button> <button class="btn sm dg" data-act="ntDel" data-id="${n.id}" title="删除这一行手动新增的通知书（删除前列影响范围）">删除</button>`);
   if(ntHasFlow(n)) L.push(`<button class="btn sm dg" data-act="ntRevoke" data-id="${n.id}" title="撤销这笔已登记的付款流水。撤销必须填原因并留痕；撤销后「已付金额」回退、状态按「已付金额 ≥ 审批金额」重判（§4.4.5）">撤销付款</button>`);
-  if(ntHasLink(n)) L.push(`<button class="btn sm" data-act="ntTrace" data-id="${n.id}" title="查看这行通知书的关联与去向：集采合同关联、已登记付款流水（只读，不改任何数据）">查看关联</button>`);
+  if(n.hasAnyFlow) L.push(`<button class="btn sm" data-act="ntFlows" data-id="${n.id}" title="查看生效和已撤销的流水">查看流水</button>`);
   return L.length?L.join(' '):'<span class="mut">—</span>'; };
 

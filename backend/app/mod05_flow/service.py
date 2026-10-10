@@ -55,6 +55,7 @@ MECH_SETTLE_SOURCE_READY = False
 #       同款先例：`mod03_notice/repository.py` 再导出 `MOD-02` 的运行记录仓储。
 has_request_id = repo.has_request_id    # 付款提交的**幂等**判据（§4.4.4）
 create_flow = repo.create_flow          # 落一条流水（⛔ 别绕过它：它自动走 `sync_stat_paid` 重算唯一出口）
+flows_of_notices = repo.flows_of_notices
 list_flows = repo.list_flows            # 全部流水（含已撤销）—— 通知书列表与撤销入口要看
 
 

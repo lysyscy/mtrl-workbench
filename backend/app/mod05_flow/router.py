@@ -224,7 +224,21 @@ def api_revoke(
         flow = repo.get_flow(s, flow_id)
         if flow is None:
             raise MustReportError(f"流水 {flow_id} 不存在")
-        return repo.revoke(s, flow, reason=reason, changed_by=changed_by)
+        from app.mod11_jc import service as jc
+        from app.mod03_notice import service as notices
+
+        nid = int(flow.notice_id or 0)
+        before = jc.notice_payment_effect(s, nid) if nid else None
+        protected = bool(before and notices.stat_paid_is_protected(s, nid))
+        result = repo.revoke(s, flow, reason=reason, changed_by=changed_by)
+        if before:
+            after = jc.notice_payment_effect(s, nid)
+            result["jc_effect"] = {"contract_id": before["contract_id"],
+                                   "before": str(before["pay_sum"]), "after": str(after["pay_sum"]),
+                                   "protected": protected}
+        else:
+            result["jc_effect"] = None
+        return result
 
 
 # --------------------------------------------------------------- 页面（PRG）

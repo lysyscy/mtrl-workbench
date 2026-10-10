@@ -377,6 +377,9 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .dt[data-sort-key="m07:kinds"] th:first-child,.dt[data-sort-key="modal:expExt"] th:first-child{width:calc(76px * var(--fscale))}
 .dt[data-sort-key="m07:kinds"] th:nth-child(2),.dt[data-sort-key="modal:expExt"] th:nth-child(2){width:calc(200px * var(--fscale))}
 .dt[data-sort-key="m07:kinds"] .fl:nth-child(2),.dt[data-sort-key="modal:expExt"] .fl:nth-child(2){left:calc(76px * var(--fscale))}
+.jc-pay-ref{cursor:pointer}
+.jc-pay-ref:hover td{background:var(--sf2)}
+tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -2px var(--pri)}
 </style>
 </head>
 <body>
@@ -580,7 +583,7 @@ V.m03=()=>{
   const tb=list.map(n=>{
     if(n.id===naEditId) return ntDraftRow();   /* 编辑中：该行**原地变草稿行**（不新增行）；草稿层 `naD` */
     const p=paidOf(n.id), st=statOf(n);
-    return `<tr class="${ntArchCls(n)} ${pickSet.has(n.id)?'pick':''}">
+    return `<tr data-notice-id="${n.id}" class="${ntArchCls(n)} ${pickSet.has(n.id)?'pick':''} ${ntFocusId===n.id?'nt-focus':''}">
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="pick" data-id="${n.id}" ${pickSet.has(n.id)?'checked':''} ${ntSelectable(n)?'':'disabled'}></td>
       <td class="now">${n.date}</td>
       <td class="fc">${n.code}</td>

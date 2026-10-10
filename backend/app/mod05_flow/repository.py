@@ -39,6 +39,15 @@ def list_flows(s: Session) -> list[PaymentFlow]:
     return list(s.execute(stmt).scalars().all())
 
 
+def flows_of_notices(s: Session, notice_ids: list[int]) -> list[PaymentFlow]:
+    """一次取指定通知书的全部流水，供合同明细分笔展示。"""
+    if not notice_ids:
+        return []
+    return list(s.execute(select(PaymentFlow).where(
+        PaymentFlow.notice_id.in_(notice_ids)
+    ).order_by(PaymentFlow.pay_date, PaymentFlow.id)).scalars().all())
+
+
 def get_flow(s: Session, flow_id: int) -> PaymentFlow | None:
     return s.get(PaymentFlow, int(flow_id))
 

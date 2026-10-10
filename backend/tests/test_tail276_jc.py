@@ -121,15 +121,15 @@ def test_shell_create_history_and_dates(ui_page):
     assert added['contract_date'] == '' and added['supplier'] == '' and added['trade_co'] is None
     assert added['remark'] == '历史未结金额；核对截至日：2026-09-30；'
     ui_page.evaluate("""async () => {
-      API.m11Detail=async()=>({data:{supplier_invoices:[{id:1,date:'2026-09-30',amount:'100000'}],payments:[{id:2,date:'2026-10-03',amount:'30000',source:'notice',notice_id:101}]}});
+      API.m11Detail=async()=>({data:{supplier_invoices:[{id:1,date:'2026-09-30',amount:'100000'}],payments:[{id:2,date:'2026-10-03',amount:'30000',source:'notice',notice_id:101}],payment_display_rows:[{id:2,date:'2026-10-03',amount:'30000',source:'notice',notice_id:101,display_kind:'flow'}]}});
       await ACT.jcInvDlg({dataset:{id:'9'}});
     }""")
     assert '核对截至日' in ui_page.locator('#modalRoot').inner_text()
     assert ui_page.locator('#modalRoot tbody tr').first.locator('td').nth(1).inner_text() == '2026-09-30'
     ui_page.evaluate("ACT.jcPayDlg({dataset:{id:'9'}})")
     assert '2026-10-03' in ui_page.locator('#modalRoot').inner_text()
-    assert '通知书统计付款累计' in ui_page.locator('#modalRoot').inner_text()
-    assert ui_page.locator('#modalRoot [data-act="jcPayDel"]').inner_text() == '解绑'
+    assert '付款流水 · 通知书 DOC-101' in ui_page.locator('#modalRoot').inner_text()
+    assert ui_page.locator('#modalRoot [data-act="jcPayDel"]').count() == 0
 
 
 @acc()
