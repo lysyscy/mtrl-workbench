@@ -106,6 +106,14 @@ KEY: tuple[tuple[str, str], ...] = (
     #   一直"写了、当时能过、此后没人碰" ⇒ 尺子腐化了没人知；⛔ 而这把尺子本身就在闸门 `CMDS` 里。
     #   ⭐ 已归 `SLOW_KEY`（要 node ＋ 动壳件）；⛔ 理由里不钉条数（尺子加规则就成假话）。
     ("_mut_syntax.py", "syntax_audit 的各条规则靶 ＋ 内建 `--selftest`（靶＝尺子本身 · 要 node --check · 动壳件 ⇒ 慢集）"),
+    # ⚠️ 2026-10-10（迁移复核轮）：下面三支是 **2026-10-09/10 由外部 agent 新写却漏登记**的 ——
+    #   `report_cover()` 有缺口就 `return 1` ⇒ 自那两笔提交起，`--fast`/全套/`--all`/`--cases`
+    #   **全部在跑之前 rc=1 退出**，整道变异闸门瘫了两天（而唯一会喊的 `_mut_keycover` 自己也走这个入口）。
+    #   ⇒ 三支都属「尺子/机制面」按 `TAIL-239` 的选集标准进关键集；靶均在隔离副本（跑完工作区无残留）。
+    #   ⛔ 理由里不钉条数（尺子加规则就成假话）；秒数看每次运行自己打的那行。
+    ("_mut_sort.py", "壳内金额/空值/草稿的排序口径（靶＝`shell/base.js` 的隔离副本 · 不写正式壳）"),
+    ("_mut_docguide.py", "原型导读的历史/现行边界（靶＝demo 文档的内存替换 · 不写产品资料）"),
+    ("_mut_retro.py", "核验与证据出口（隔离副本内造共享漏选/全量误杀/摘要泄漏/失败变绿）"),
 )
 
 #: ⭐⭐ **有意不跑名单**（`TAIL-239` 第 3 步 · 治复发）—— **逐支带理由**。
@@ -198,6 +206,14 @@ KEEP_OUT: dict[str, str] = {
     "_mut_tail04_pages.py": "靶＝`TAIL-04` 最后两页 ＋ `exp` 真分发 · 业务面",
     "_mut_tail35.py": "靶＝`TAIL-35`（m04 导入 ＋ 手动行）· 业务面",
     "_mut_tail43.py": "靶＝`TAIL-43` 六处断言 · 业务面",
+    # ⚠️ 2026-10-10（迁移复核轮）：这四支同批由外部 agent 新写（2026-10-09/10）且**漏登记**，
+    #   按 `TAIL-237` 的按需口径归此处 —— 靶都是 `TAIL-269～273` 的**业务面判据**，且每处变异
+    #   要拉起一次 pytest（脚本自带 45s 超时）⇒ 进闸门等于把闸门时长拉爆。
+    #   ⛔ 触发条件写在理由里（不许写「不重要」）：改动下列任一机制或其判据时，用 `--cases <件名>` 按需跑。
+    "_mut_tail269.py": "靶＝`TAIL-269` 焊材历史列计入合计/2025 早月留空 · 业务面；**改焊材历史聚合或年份控件时按需跑**",
+    "_mut_tail270.py": "靶＝`TAIL-270` 机械费单格保存不吞其它列金额与来源 · 业务面；**改过程资料机械费编辑/保存时按需跑**",
+    "_mut_tail271.py": "靶＝`TAIL-271` 机械报表判据（错误月份/量、缺月归零、跳过确认、事务失败必须被真实用例判红）· 业务面；**改机械费报表导入或差异确认时按需跑**",
+    "_mut_tail273.py": "靶＝`TAIL-273` 壳内派生来源与大表合计首格（断线/错项目/解列固定单元格）· 业务面；**改派生金额或悬浮说明时按需跑**",
     "_mut_tbl.py": "靶＝`TBL` 统一表外壳（`TAIL-64`）· 接线断言 pytest",
     "_mut_time.py": "靶＝`tests/test_acc_i8_time.py`（壳的业务时钟取自北京时间）· 业务面",
     "_mut_trailscope.py": "靶＝`tests/test_trail_scope.py`（留痕范围判据）· 接线断言 pytest",
@@ -258,8 +274,15 @@ def report_cover() -> int:
 
 def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
     if p.name not in {'_mut_gatescope.py', '_mut_bytesguard.py', '_mut_facedoc.py', '_mut_tbl.py',
-                       '_mut_design_rules.py', '_mut_proc_split.py', '_mut_proc_split_shell.py',
-                       '_mut_tail262.py', '_mut_tail264_266.py', '_mut_tail274.py', '_mut_ui_workflow.py'}:
+                      '_mut_design_rules.py', '_mut_proc_split.py', '_mut_proc_split_shell.py',
+                      '_mut_tail262.py', '_mut_tail264_266.py', '_mut_tail274.py', '_mut_ui_workflow.py',
+                      # ⚠️ 2026-10-10（迁移复核轮）新放行七支 —— 放行条件＝**逐支实测过**：
+                      #   ① 单跑 rc=0 且各带自己的"未写靶"断言（`正式壳未写靶` / `仓外文件未写靶` 等）；
+                      #   ② 跑完 `git status` 只剩本轮自己的改动（无残留靶、无临时件）；
+                      #   ③ 靶在隔离副本/子进程内（`copytree` 到临时 base、`cwd=base`、内存替换）。
+                      #   ⚠️ 后四支（业务面）**按需跑**（`KEEP_OUT`）：实测合计 ≈80s ⇒ 进闸门等于拉爆时长。
+                      '_mut_sort.py', '_mut_docguide.py', '_mut_retro.py',
+                      '_mut_tail269.py', '_mut_tail270.py', '_mut_tail271.py', '_mut_tail273.py'}:
         print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
         return 2, 0.0
     t = time.time()
