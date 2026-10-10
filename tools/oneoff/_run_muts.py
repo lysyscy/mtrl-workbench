@@ -131,6 +131,7 @@ KEEP_OUT: dict[str, str] = {
     "_mut_proc_split_shell.py": "分域截止/月编辑壳判据的原生隔离自证；仅对应壳或判据变化按需",
     "_mut_tail262.py": "历史替换/i8优先/批量拒写的原生隔离自证；仅对应机制变化按需",
     "_mut_tail264_266.py": "候选/合同键/批录/年度汇总的隔离覆盖输入；仅对应机制变化按需",
+    "_mut_tail274.py": "期初三行与台账累计的原生隔离自证；仅对应金额/判据变化按需",
     "_mut_ui_workflow.py": "供应商确认及导入范围的原生隔离自证；仅对应流程/判据变化按需",
     # ---- 靶要真机（浏览器 / 起服务 / `tools/probe/`）----
     "_mut_sticky.py": "靶＝`sticky_probe`（合计行视口吸附的真机探针）· 靶在闸门里但**要真机** ⇒ 属真机那一档",
@@ -259,7 +260,7 @@ def report_cover() -> int:
 def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
     if p.name not in {'_mut_gatescope.py', '_mut_bytesguard.py', '_mut_facedoc.py', '_mut_tbl.py',
                        '_mut_design_rules.py', '_mut_proc_split.py', '_mut_proc_split_shell.py',
-                       '_mut_tail262.py', '_mut_tail264_266.py', '_mut_ui_workflow.py'}:
+                       '_mut_tail262.py', '_mut_tail264_266.py', '_mut_tail274.py', '_mut_ui_workflow.py'}:
         print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
         return 2, 0.0
     t = time.time()

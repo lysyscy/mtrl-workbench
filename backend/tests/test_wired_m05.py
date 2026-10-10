@@ -87,7 +87,7 @@ def test_读写都走统一的出口与外壳():
     #   `<table class="dt" data-sort …>`）。⚠️ `m05:ledger-*` 的 key 是**拼出来**的（三栏台账共用一处渲染）。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M9（台账去委托）/ M10（流水去委托）⇒ 各自必须红。
     s = page_slice("m05")
-    assert "TBL({head:LED_THEAD,key:'m05:ledger-'+sc," in s, \
+    assert "TBL({head:(sc==='机械'?LED_THEAD.replace('其他支出金额','机械结算金额'):LED_THEAD),key:'m05:ledger-'+sc," in s, \
         "逐月欠款台账没走统一出口 `TBL`（`TAIL-64` P2④）"
     assert "TBL({head:FL_THEAD,key:'m05:flows'," in s, \
         "付款流水表没走统一出口 `TBL`（`TAIL-64` P2④）"
@@ -163,8 +163,10 @@ def test_台账的现状数_截至行与入口名都钉住():
     assert "本项目当前欠款（含期初）" in SHELL, "标题行没给「本项目当前欠款」⇒ 用户又得自己把「欠款」列加一遍"
     assert "MONEY(cur)" in SHELL, "当前欠款数值未渲染"
     # ⭐ 它必须与**表尾那一格同源**（同一处算出来）—— 两处各算一份 ⇒ 迟早打架（§4.7）
-    assert "const cur=N2(rows.reduce((a,r)=>a+(r.s-r.p),0));" in SHELL, \
+    assert "const totals=rows;" in SHELL and "const cur=N2(totals.reduce((a,r)=>a+(r.s-r.p),0));" in SHELL, \
         "标题行那个数不是从表尾同一个出口算出来的（各算一份 ⇒ 迟早打架）"
+    assert "side.display_rows||side.rows" in SHELL and 'data-act="ledOpeningPay"' in SHELL, \
+        "页面须消费共享显示行并允许修改期初合计付款"
     # ② 表尾正名（§4.7）：原来叫「合计：」⇒ 会被读成"各月数字相加"
     assert "lead:'<b>合计：</b>'" not in SHELL, "表尾又退回「合计：」（那会被读成各月数字相加）"
     assert "截至 ${esc(upto)}" in SHELL, "表尾实际截至月标签丢失"
@@ -173,7 +175,7 @@ def test_台账的现状数_截至行与入口名都钉住():
     assert ">＋ 录入${sc}期初</button>" in SHELL, "期初录入按钮文案没带分类名（两栏认错就录错池子）"
     assert "＋ 录入期初占位行</button>" not in SHELL, "同名并排的旧按钮文案又回来了"
     # ④ 空月压暗（§5.9）—— ⚠️ 台账**空月也出行**，不压暗则"哪个月真发生过事"看不出来
-    assert "const z=!r.open&&!N2(r.s)&&!N2(r.p)" in SHELL, "空月压暗没了（每个月看起来一样重）"
+    assert "const z=!historical&&!r.open&&!N2(r.s)&&!N2(r.p)" in SHELL, "空月压暗没了（每个月看起来一样重）"
     # 备注可编辑性要**提前说**（§2.4：不给提示，用户不知道点一下就改）
     assert 'data-act="ledNote"' in SHELL, "备注实际编辑入口丢失"
     # ⑤ ⭐ 2026-09-29（`A1` 逐页）：**引用了已经删掉的东西 = 页面在讲一件不存在的事**（守则 §4.2 状态必须真实）。

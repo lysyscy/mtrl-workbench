@@ -237,6 +237,9 @@ class LedgerRow:
     payment: Decimal = _ZERO
     remark: str = ""
     is_opening: bool = False
+    row_kind: str = "month"
+    month_label: str = ""
+    counts_in_total: bool = True
 
     @property
     def debt(self) -> Decimal:
@@ -274,10 +277,12 @@ def build_ledger(
     mech_settle_by_month: dict[str, Decimal] | None = None,
     end_ym: str | None = None,
     remarks: dict[str, str] | None = None,
+    opening_auto: Decimal | None = None,
 ) -> list[LedgerRow]:
     """逐月台账（`LED-001-01/02/03/04/06`）。
 
-    - **第 1 行 = 期初占位行**（月份 = 其「截止年月」；**只带本口径的期初**）
+    - `opening_auto`给出时，历史段拆成手动、自动、合计；合计行不重复参与外层累计
+    - 较晚截止月的已有期初仍保留其起点；只带本口径的期初
     - 其后从**期初次月**起**逐月连续**出行；**空月也出行**（三列记 0）
     - 「其他支出金额」：辅材 = 该月统计结算合计；**机械 = 派生只读**（`mech_settle_by_month`）
     - 「付款」：同分类的统计付款合计
@@ -287,6 +292,28 @@ def build_ledger(
     seq = 1
 
     start_ym = None
+    if opening_auto is not None:
+        cutoff = "2025-11"
+        manual = opening if opening is not None and opening.cutoff_ym <= cutoff else None
+        settle = to_money(manual.settle_amount if manual else 0)
+        paid = to_money(manual.paid_amount if manual else 0)
+        auto = to_money(opening_auto)
+        for kind, label, other, pay in (
+            ("opening_manual", "手动", settle, paid),
+            ("opening_auto", "自动", _ZERO, auto),
+            ("opening_total", "合计", settle, paid + auto),
+        ):
+            rows.append(LedgerRow(
+                seq=seq, month=cutoff, other_expense=other, payment=pay,
+                is_opening=manual is not None and kind == "opening_manual",
+                row_kind=kind, month_label=f"2025-11及之前 · {label}",
+                counts_in_total=kind != "opening_total",
+                remark=remarks.get(cutoff, "") if kind == "opening_manual" else "",
+            ))
+            seq += 1
+        start_ym = "2025-12"
+        if manual is not None:
+            opening = None
     if opening is not None:
         start_ym = opening.cutoff_ym
         rows.append(

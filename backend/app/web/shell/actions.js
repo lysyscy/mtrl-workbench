@@ -1011,11 +1011,13 @@ const ACT={
     ⭐ 2026-09-13 增行模式（用户拍板 C-1 / C-7）：**「录入期初占位行」弹窗取消** ⇒
        改为**栏内展开区**，且整条展开区渲染在 `.tw` **之外**（表格上方的独立条带）。 */
  addLg:t=>{ const sc=t&&t.dataset?t.dataset.sc:''; if(sc) lgCat=sc;
-  /* 项目默认 = **欠款台账当前选中的项目**；截止年月默认 = **该项目「该分类」已有数据的最早月 − 1**（2026-09-13 口径）。
+  /* 项目默认 = 台账当前项目；截止月与金额读取该分类已有手动记录，新记录默认历史段。
      ⚠️ 只在「进入增行态」时算一次；展开区内重绘（选截止年月 / 改分类）**不重算** —— 否则会把用户选的值冲掉。
         唯一例外：**改「分类」**要重算 —— 辅材 / 机械 的最早数据月各算各的，不重算就会给出错的默认值。 */
   lgPjName=lgDefPjName(); lgCut=lgCutFor(lgPjName,lgCat);
-  lgD.s='0.00'; lgD.p='0.00'; lgD.r=LG_R_DEF;                 /* 新开一次 → 草稿复位（原地改字段） */
+  const existing=LGs.find(l=>l.cat===lgCat&&lgProjKeyOf(l.proj)===lgPjName&&l.cutoff===lgCut);
+  lgD.s=existing?String(existing.settle):'0.00';
+  lgD.p=existing?String(existing.paid):'0.00'; lgD.r=LG_R_DEF;
   lgOn=true; pjClose('lgPj'); render();
   toast(`已在「<b>${esc(lgCat)}</b>」栏上方展开期初占位行录入区 —— 填完点「保存」写入、点「取消」丢弃（<b>草稿不写入</b>）`,5400); },
  lgCancel:()=>{ lgOn=false; pjClose('lgPj'); render();
@@ -1057,6 +1059,10 @@ const ACT={
  /* 保存 = 原弹窗的「保存」——**只读草稿层**，不再从 DOM 取值（增行模式：没有弹窗可读） */
  /* ⭐ 已接后端：`POST /m05/opening`（PRG 表单端点 · 同一「口径 + 项目 + 截止年月」重复录入 = **覆盖**）
     ⚠️ 草稿层（`lgD`）的取数方式不变，只是**落库不再由前端 push**。 */
+ ledOpeningPay:t=>{ const project=pjRowOf(t.dataset.proj); if(!project||!project.id) return toast('请重新选择项目');
+   return m05Act(()=>API.send('POST','/api/m05/ledger/opening-payment', {
+     project_id:project.id, category:CAT_API[t.dataset.sc], payment:t.value,
+   }), '期初付款已保存，手动金额已按合计反算'); },
  addLgOk:()=>{ const pj=lgPjName; if(!pj){ toast('<b>请先选「项目」</b>（点展开区里的「项目」按钮）'); return; }
     const row=pjRowOf(pj);
     if(!row||!row.id){ toast('<b>项目没对上档案</b>（请重选）—— 未写入任何数据'); return; }

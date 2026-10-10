@@ -374,7 +374,7 @@ def build_ledger(
 ) -> dict:
     """逐月台账（§4.5.4）—— **两侧（辅材 / 机械）共用同一个项目选择器**，各自一套行。
 
-    - 第 1 行 = 期初占位行（只带**本口径**的期初；有则给「删除」入口）
+    - 历史段为手动、自动、合计；删除入口仅给真实手动期初记录
     - 空月也出行（三列记 0）
     - 机械侧「其他支出金额」= **派生只读**，**无手填入口**（`MECH_HAS_MANUAL_INPUT=False`）
     """
@@ -392,6 +392,11 @@ def build_ledger(
         mine = [o for o in openings if o.category == cat]
         opening = mine[0] if mine else None
         monthly = dom.monthly_aggregate(rows, cat, int(project_id))
+        # 空单据日期归期初；仍取统计付款，保留用户手改统计金额的口径。
+        historical_notices = [r for r in rows if not r.excluded and r.category == cat
+                              and r.ownership_id == int(project_id) and not r.doc_date]
+        automatic = sum_money([r.pay_stat for r in historical_notices])
+        history_segment = opening is None or opening.cutoff_ym <= "2025-11" or bool(historical_notices)
         ledger: list[LedgerRow] = dom.build_ledger(
             category=cat,
             monthly=monthly,
@@ -399,13 +404,15 @@ def build_ledger(
             mech_settle_by_month=mech_settle if cat == CATEGORY_MECH else None,
             end_ym=end_ym or None,
             remarks=repo.remarks_map(s, category=cat, project_id=int(project_id)),
+            opening_auto=automatic if history_segment else None,
         )
         opening_row = repo.list_openings(s, project_id=int(project_id), category=cat)
         sides.append({
             "category": cat,
             "label": CATEGORY_LABELS[cat],
             "opening_id": opening_row[0].id if opening_row else None,
-            "opening_default": dom.opening_defaults(rows, cat, today),
+            "opening_default": ({"cutoff_ym": "2025-11", "fallback": False}
+                                if history_segment else dom.opening_defaults(rows, cat, today)),
             "has_manual_input": not (cat == CATEGORY_MECH and not dom.MECH_HAS_MANUAL_INPUT),
             "rows": [
                 {
@@ -415,11 +422,31 @@ def build_ledger(
                     "debt": f"{r.debt:.2f}",
                     "remark": r.remark,
                     "is_opening": r.is_opening,
+                    "row_kind": r.row_kind,
+                    "month_label": r.month_label,
+                    "counts_in_total": r.counts_in_total,
                     "remark_key": dom.ledger_remarks_key(cat, int(project_id), r.month),
                 }
                 for r in ledger
             ],
         })
+    for side in sides:
+        raw = side["rows"]
+        manual = next((r for r in raw if r["row_kind"] == "opening_manual"), None)
+        auto = next((r for r in raw if r["row_kind"] == "opening_auto"), None)
+        visible = []
+        for row in raw:
+            if row["row_kind"] in ("opening_manual", "opening_auto"):
+                continue
+            shown = dict(row)
+            if row["row_kind"] == "opening_total":
+                shown.update(month_label="2025-11及之前", counts_in_total=True,
+                             is_opening=bool(manual and manual["is_opening"]),
+                             manual_payment=manual["payment"], automatic_payment=auto["payment"],
+                             remark=manual["remark"])
+            shown["seq"] = len(visible) + 1
+            visible.append(shown)
+        side["display_rows"] = visible
     return {
         "project_id": int(project_id),
         "project_options": project_options(s),
@@ -430,6 +457,26 @@ def build_ledger(
 
 
 # ---------------------------------------------------------------- ④ 付款统计（与台账同源）
+
+
+def set_opening_payment(s: Session, *, project_id: int, category: str, payment: str) -> dict:
+    """编辑期初合计付款；按保存时的自动统计金额反算手动值。"""
+    side = next((x for x in build_ledger(s, project_id=project_id)["sides"]
+                 if x["category"] == category), None)
+    if side is None:
+        raise MustReportError("请选择辅材或机械台账")
+    auto = next((r for r in side["rows"] if r["row_kind"] == "opening_auto"), None)
+    if auto is None:
+        raise MustReportError("当前台账没有2025-11及之前的期初段")
+    existing = next((o for o in repo.list_openings(s, project_id=project_id, category=category)
+                     if o.cutoff_ym <= "2025-11"), None)
+    paid = to_money(payment) - to_money(auto["payment"])
+    opening = repo.upsert_opening(s, category=category, project_id=project_id,
+                                 cutoff_ym=existing.cutoff_ym if existing else "2025-11",
+                                 settle_amount=existing.settle_amount if existing else 0,
+                                 paid_amount=paid, remark=existing.remark if existing else "")
+    return {"ok": True, "opening_id": opening.id, "manual_payment": f"{paid:.2f}",
+            "automatic_payment": auto["payment"]}
 
 
 def _current_bucket(granularity: str, today: date) -> str:

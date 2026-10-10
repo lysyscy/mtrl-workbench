@@ -197,24 +197,17 @@ const nextYm=m=>{ const [y,mm]=String(m).split('-').map(Number); const t=new Dat
   return ymOf(t); };
 const prevYm=m=>{ const [y,mm]=String(m).split('-').map(Number); const t=new Date(y,mm-2,1);
   return ymOf(t); };
-/* ---------- 「录入期初占位行」的两个默认值（2026-09-12 口径 + 2026-09-13 细化）----------
-   ① 项目默认 = **欠款台账当前选中的项目**（同屏已有上下文，不必再选一遍）
-   ② 截止年月默认 = **该项目「该分类」已有数据的最早月的前一月**（期初＝上线前的余额 ⇒ 落在第一笔账之前）
-   ⭐ 2026-09-13 用户口径：**辅材与机械各自独立计算**（同一项目的两个分类完全可能落在不同月份）。
-      「已有数据」按**该分类**取：辅材 = 未剔除辅材通知书（按归属归集）；机械 = 机械 6 列的月份
-      —— 与台账月行的数据源同一份。
-   该分类完全没有数据 → 回退到原默认「上月」。 */
+/* 录入默认项目沿用台账；已有手动记录保留其截止月，新记录默认历史段2025-11。 */
 /* 期初占位行的项目候选（与该弹窗下拉**同一集合**）：**含归档**、归档靠后（2026-09-13 用户口径）。
    候选键 = **仓库名**（`pjRowsWithKey` 已把壳剔除 —— 壳没有仓库名） */
 const lgPjList=()=>pjRowsWithKey(pjNoShell());
 const lgDefPjName=()=>{ const L=lgPjList(), cur=ledCur();
   const hit=L.find(p=>pjKey(p)===cur||pjDisp(p)===cur);
   return (hit||L[0]||{}).name||''; };
-const lgEarliest=(key,cat)=>{ const ms=[];
-  NO.filter(n=>ntLive(n)&&n.cat===cat&&ntProjKey(n)===key).forEach(n=>ms.push(ntYm(n)));
-  if(cat==='机械') Object.keys(MACH6[key]||{}).forEach(k=>ms.push(k));
-  return ms.filter(Boolean).sort()[0]||''; };
-const lgCutFor=(v,cat)=>{ const e=lgEarliest(pjKey(pjRowOf(v)),cat); return e?prevYm(e):bjMonth(-1); };
+const lgCutFor=(v,cat)=>{
+  const key=pjKey(pjRowOf(v));
+  const existing=LGs.find(l=>l.cat===cat&&lgProjKeyOf(l.proj)===key);
+  return existing?existing.cutoff:'2025-11'; };
 const ledCutLabel=m=>/^\d{4}-\d{2}$/.test(String(m||''))?`截止 ${m.slice(0,4)} 年 ${Number(m.slice(5,7))} 月底`:'截止时间未填';
 /* 台账可选项目 = 该口径下**有数据**的项目（通知书；机械结算源未接线 ⇒ 暂不计）+ **该口径的**期初占位行。**键 = 仓库名**
    ⚠️ 原第 2 行按**演示** `MACH6` 的键补候选 —— 那是演示数据 ⇒ 会往选择器里塞**幻影项目**（真库里没有的仓库名）。
@@ -236,8 +229,9 @@ const ledOpen=(sc,proj)=>{ const side=m05Side(sc); if(!side) return null;
   const r=(side.rows||[]).find(x=>x.is_opening); if(!r) return null;
   return { id:side.opening_id, cat:side.label, cutoff:r.month, settle:numOr0(r.other_expense),
            paid:numOr0(r.payment), remark:r.remark||'' }; };
-/* 台账「项目」候选（两侧共用同一个选择器）＝ **两个口径的并集** —— 否则只有单侧数据的项目就选不出来 */
-const ledProjs=()=>pjSort(uniqBy([...LED_PROJS('辅材'),...LED_PROJS('机械')],v=>v));
+/* 两侧共用候选：数据项目与已建档非壳项目；未建仓-N原键保留，无数据也能查看/导出。 */
+const ledProjs=()=>pjSort(uniqBy([...LED_PROJS('辅材'),...LED_PROJS('机械'),
+  ...pjNoShell().map(p=>p.name)],v=>v));
 /* 当前生效的台账项目（选的这个项目若不在候选里，回落到第一个） */
 const ledCur=()=>{ const l=ledProjs(); return l.includes(ledProj)?ledProj:(l[0]||''); };
 /* ⭐ 台账「项目」选择器 = **共用面板（单选）**（2026-09-13 用户口径「A 改」）——
@@ -289,7 +283,7 @@ const lgPjPanel=()=>projPanel({list:()=>pjKeysOfRows(lgPjList()),selected:()=>[l
 /* 「期初占位行」的**增行展开区**（渲染在表格 `.tw` **之外**的上方条带；只在 `lgCat` 对应的那一栏出现）
    ⚠️ 只在该分类对应的一栏渲染 ⇒ **不会出现重复 id**（`lgCat`/`lgS`/`lgP`/`lgR`）。 */
 const lgStrip=()=>`${FBAR({cls:'strip mb6',body:`
-      <div class="fi"><span class="pill" style="margin:0" title="期初占位行 = 本栏台账的第 1 行（起点）；保存后按其「分类」并入上方欠款">期初占位行</span></div>
+      <div class="fi"><span class="pill" style="margin:0" title="只保存手动结算和付款，自动付款独立更新">手动期初</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         ${PJB({act:'lgPjToggle',w:150,label:`${esc(pjLabel(lgPjName))}${pjArcMark(pjRowOf(lgPjName))}`})}
         ${pjIsOpen('lgPj')?lgPjPanel():''}</div>
@@ -300,12 +294,13 @@ const lgStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><label>备注</label><input class="inp" style="min-width:160px" id="lgR" data-act="lgR" value="${esc(lgD.r)}"></div>
       <button class="btn pri" data-act="addLgOk" title="写入期初占位行（统计结算 / 统计付款一并计入欠款）">保存</button>
       <button class="btn" data-act="lgCancel" title="丢弃这条期初录入（不入库）">取消</button>
-      <span class="pill" style="margin-left:auto">${esc(ledCutLabel(lgCut))} ｜ 保存后为本栏<b>第 1 行</b></span>
+      <span class="pill" style="margin-left:auto">${esc(ledCutLabel(lgCut))} ｜ 保存手动金额</span>
       <div class="mut sm" style="flex-basis:100%">⭐ 本行两个金额是<b>手填的静止值</b>：实付请走<b>「手动新增通知书」</b>（统计结算恒 0）—— 它会自动冲减欠款合计与项目池，⛔ 但<b>不会</b>改本行这两个数（要它跟着反映 ⇒ 手工改「统计付款金额」）。⚠️ <b>两者成对使用</b>，分类与项目要和通知书一致，否则冲错池子；只加通知书不填本行 ⇒ 本栏会算成<b>负数</b>。</div>
     `})}`;
 /* 造行：期初行 + 从「期初次月」到「最近一个有数据的月」逐月一行（空月也出行） */
 const ledRows=(sc,proj)=>{ const side=m05Side(sc); if(!side) return [];
-  return (side.rows||[]).map(r=>({ ym:r.month, open:!!r.is_opening,
+  return (side.display_rows||side.rows||[]).map(r=>({ ym:r.month, open:!!r.is_opening,
+    kind:r.row_kind||'month', label:r.month_label||'', manual:numOr0(r.manual_payment), auto:numOr0(r.automatic_payment),
     id: r.is_opening ? side.opening_id : r.seq, cat: side.label,
     s: numOr0(r.other_expense), p: numOr0(r.payment), note: r.remark||'' })); };
 /* —— 付款流水（**实际付款记录**）的筛选出口 ——

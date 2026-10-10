@@ -200,6 +200,19 @@ def api_stats(
     return load(granularity=granularity, year=year or None, quarter=quarter or None)
 
 
+class OpeningPaymentIn(BaseModel):
+    project_id: int
+    category: str
+    payment: str
+
+
+@router.post("/api/m05/ledger/opening-payment")
+def api_opening_payment(body: OpeningPaymentIn) -> dict:
+    with session_scope() as s:
+        return svc.set_opening_payment(s, project_id=body.project_id,
+                                      category=body.category, payment=body.payment)
+
+
 @router.post("/api/m05/flows/{flow_id}/revoke")
 def api_revoke(
     flow_id: int,

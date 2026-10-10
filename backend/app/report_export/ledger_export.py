@@ -88,6 +88,8 @@ def title_of(display: str, sheet: str) -> str:
 def month_text(row: dict) -> str:
     """「月份」列的**页面文本**：期初占位行 = `截止 YYYY 年 M 月底`，其余 = `YYYY-MM`。"""
     ym = str(row.get("month") or "")
+    if row.get("month_label"):
+        return str(row["month_label"])
     if row.get("is_opening") and len(ym) >= 7 and ym[4] == "-":
         return CUT_MONTH_FMT.format(y=int(ym[:4]), m=int(ym[5:7]))
     return ym
@@ -95,7 +97,7 @@ def month_text(row: dict) -> str:
 
 def ledger_spec(sheet: str, side: dict, *, display: str) -> dict:
     """一侧台账 → 引擎 `spec`（`label` = 序号；「合计行」进 `tail` 的偏移 0）。"""
-    rows = list(side.get("rows") or ())
+    rows = list(side.get("display_rows", side.get("rows")) or ())
     data = [
         (r.get("seq"), {
             LEDGER_COL["month"]: month_text(r),
