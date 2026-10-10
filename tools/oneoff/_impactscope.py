@@ -355,7 +355,10 @@ def run_selected(changes: dict, commands: list, py: str, *, explain=False, force
     if 'tools/oneoff/_run_muts.py' in changes:
         execute('变异入口隔离选择', [py, '-X', 'utf8', str(ROOT/'tools/oneoff/_run_muts.py'), '--selftest'])
     if any(n.startswith('backend/app/web/') for n in changes):
-        execute('真机壳自检', [py, '-X', 'utf8', str(ROOT/'tools/probe/_shell_smoke.py')])
+        if bad:
+            print('暂缓完整壳自检：相关检查尚未通过，先修复并局部复验', bad)
+        else:
+            execute('真机壳自检', [py, '-X', 'utf8', str(ROOT/'tools/probe/_shell_smoke.py')])
         if not bad: execute('壳基线盖章', [py, '-X', 'utf8', str(ROOT/'tools/audit/shell_verify.py'), '--snapshot'])
     print('总墙钟 %.2fs'%(time.perf_counter()-started), 'BAD:', bad)
     if receipt is not None: receipt.save(int(bool(bad)))
@@ -420,6 +423,25 @@ def selftest():
             assert run_selected({'tools/oneoff/_impactscope.py': (b'x=1', b'x=2')}, registered, sys.executable, force_full=True) == 0
         called = [arg[0][0] for arg in runner.call_args_list]
         assert any(str(ROOT/'tools/oneoff/_gatescope.py') in c for c in called), '完整入口也须选相关自测'
+    # 只替换外部命令；真实入口须先执行相关pytest，再决定完整真机与盖章。
+    changes = {'backend/app/web/shell/base.js': (b'old', b'new')}
+    for fail in (False, True):
+        def command_result(argv, **kwargs):
+            failed = fail and 'pytest' in argv
+            return type('Result', (), {'returncode': int(failed),
+                                       'stdout': 'FAILED amount sort' if failed else 'passed', 'stderr': ''})()
+        with patch.object(scope, 'plan', return_value=scope.Plan(True, 'fixture', ['fixture.py'])), \
+                patch.object(gate, 'open_receipts', return_value=None), \
+                patch.object(subprocess, 'run', side_effect=command_result) as runner, \
+                patch(__name__+'.smoke_evidence', return_value=Path('fixture-smoke.log')), \
+                redirect_stdout(io.StringIO()):
+            assert run_selected(changes, registered, sys.executable) == int(fail)
+        calls = [c.args[0] for c in runner.call_args_list]
+        pytest_at = next(i for i,c in enumerate(calls) if 'pytest' in c)
+        smoke_at = [i for i,c in enumerate(calls) if str(ROOT/'tools/probe/_shell_smoke.py') in c]
+        snapshots = [c for c in calls if '--snapshot' in c]
+        assert (not smoke_at and not snapshots) if fail else (smoke_at[0] > pytest_at and snapshots), \
+            '相关pytest失败应暂缓完整真机与盖章，通过后才执行'
     assert scope.plan(None).reason.startswith('待查：') and not scope.plan(None).run, '未知路径不能自动全跑'
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)

@@ -13,13 +13,16 @@
 from __future__ import annotations
 
 import re
+import json
+import shutil
+import subprocess
 from datetime import date
 from pathlib import Path
 
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, const_src, page_seg, page_slice, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, const_src, func_body, page_seg, page_slice, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：`_NT_THEAD_RE`（自写正则）**已删** —— 取句走 `const_src`。⛔ 别写回来。
 
@@ -204,6 +207,36 @@ def test_壳里金额列按数值排序而不是按字符串():
         "千分位 / 货币符没有统一剥离出口（转数会拿到 NaN）"
     assert "if(/\\bdraftrow\\b/.test(openTag)||/合计|总计|小计/.test(_plain(r))||tdc<ths.length) pin.push(r);" in SHELL, \
         "合计行 / 草稿行没走 pin 通道（会被排序卷进数据行里）"
+
+
+@acc()
+def test_表头排序实际行序_金额空值与合计草稿():
+    """调用真实HTML排序出口；金额按值排序，空值末尾，原序和固定行不丢。"""
+    node = shutil.which('node')
+    assert node, '行为判据需要Node运行真实排序出口'
+    kernel = '\n'.join(['let SORT={};', *[const_src(n) for n in
+                        ('NOSORT_COL', '_plain', '_num', '_date')],
+                        *[func_body(n) for n in ('_cellRaw', '_colType', '_cmp', 'applySorts')]])
+    script = kernel + r'''
+const row=(id,cell,cls='')=>`<tr data-row="${id}" class="${cls}"><td>${id}</td><td>${cell}</td></tr>`;
+const data=[row('万元','¥10,000.00'),row('空值',''),row('九百','900.00'),
+            row('零','0.00'),row('负值','-5.00'),row('输入','<input value="20">')];
+const html='<table data-sort data-sort-key="fixture"><thead><tr><th>行</th><th>金额</th></tr></thead><tbody>'
+            +row('合计','10,915.00')+data.join('')+row('草稿','1','draftrow')+'</tbody></table>';
+const out={};for(const [name,d] of [['升序',1],['降序',-1],['原序',0]]){
+  SORT.fixture={i:1,d};
+  out[name]=[...applySorts(html,'fixture').matchAll(/<tr data-row="([^"]+)"/g)].map(m=>m[1]);
+}
+console.log(JSON.stringify(out));
+'''
+    result = subprocess.run([node, '-e', script], capture_output=True, text=True,
+                            encoding='utf-8', timeout=15)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        '升序': ['负值', '零', '输入', '九百', '万元', '空值', '合计', '草稿'],
+        '降序': ['万元', '九百', '输入', '零', '负值', '空值', '合计', '草稿'],
+        '原序': ['万元', '空值', '九百', '零', '负值', '输入', '合计', '草稿'],
+    }, '用户可见行序不符合金额升降序、空值末尾或固定行口径'
 
 
 @acc("ACC-PAY-LIST-001", "001-12")

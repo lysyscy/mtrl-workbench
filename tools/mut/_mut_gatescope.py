@@ -58,6 +58,7 @@ def _main():
         ('工具依赖漏自测', 'checks |= {rel for rel, deps in SELFTEST_DEPENDENCIES.items() if names & deps}', 'checks |= set()'),
         ('完整入口固定工具自测', "checks = required_checks('full', commands) | (checks & set(SELFTEST_DEPENDENCIES))", 'checks = {rel for rel, _ in commands}'),
         ('新检查无分类被跳过', 'return {rel for rel, _ in commands} - required_checks', 'return set() # required_checks'),
+        ('相关失败仍启动完整真机', '        if bad:\n            print(\'暂缓完整壳自检：', '        if False:\n            print(\'暂缓完整壳自检：'),
     ]:
         assert src.count(old) == 1, label+'：靶锚必须唯一'
         try:

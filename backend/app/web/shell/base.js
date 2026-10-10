@@ -557,7 +557,7 @@ function applySorts(html,scope){
     if(st.i>=0&&st.d!==0&&can[st.i]&&data.length>1){
       const vals=data.map(r=>_cellRaw((r.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi)||[])[st.i]));
       const tp=_colType(vals);
-      out=data.map((r,k)=>({r,v:vals[k]})).sort((a,b)=>_cmp(a.v,b.v,'s',st.d)).map(o=>o.r);
+      out=data.map((r,k)=>({r,v:vals[k]})).sort((a,b)=>_cmp(a.v,b.v,tp,st.d)).map(o=>o.r);
     }
     /* 表头：注入 class / 点击动作 / 排序指示器 */
     const newTh=ths.map((th,k)=>{
