@@ -193,11 +193,11 @@ def api_ledger(
 @router.get("/api/m05/stats")
 def api_stats(
     granularity: str = Query("", description="week（默认）/ month"),
-    year: int = Query(0), quarter: int = Query(0),
+    year: int = Query(0), quarter: int = Query(0), bucket: str = Query(""),
     load: PageData = Depends(get_stats_data),
 ) -> dict:
     """付款统计（左按项目 · 右时间轴；**换粒度不换口径**）。"""
-    return load(granularity=granularity, year=year or None, quarter=quarter or None)
+    return load(granularity=granularity, year=year or None, quarter=quarter or None, bucket=bucket)
 
 
 class OpeningPaymentIn(BaseModel):

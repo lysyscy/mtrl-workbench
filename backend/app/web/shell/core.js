@@ -301,6 +301,7 @@ const m05Params = () => ({
   granularity: M05_GRAN_API[pst.gran] || 'week',
   year: Number(pstYear()) || 0,
   quarter: Number(String(pstQq()).slice(5)) || 0,
+  bucket: pst.gran==='周' ? pst.ym||'' : '',
   pj: ledCur(),
 });
 let m05Refetching = false;
@@ -322,7 +323,7 @@ async function reloadM05() {
   LGs.splice(0, LGs.length, ...((debt.openings || []).map(adaptOpening)));   /* `const` ⇒ 原地改 */
   M05.debt = debt; M05.stats = st; M05.ledger = lg;
   M05_FETCHED.gran = p.granularity; M05_FETCHED.year = p.year;
-  M05_FETCHED.quarter = p.quarter; M05_FETCHED.pj = p.pj;
+  M05_FETCHED.quarter = p.quarter; M05_FETCHED.pj = p.pj; M05_FETCHED.bucket = p.bucket;
   render();
 }
 /* 参数（粒度 / 轴 / 台账项目）变了就**自动补拉** —— 收敛成一个点，
@@ -335,7 +336,7 @@ async function m05Sync() {
   if (BOOTING || m05Refetching || !LOADED.has('付款域')) return;
   const p = m05Params();
   if (p.granularity === M05_FETCHED.gran && p.year === M05_FETCHED.year
-      && p.quarter === M05_FETCHED.quarter && p.pj === M05_FETCHED.pj) return;
+      && p.quarter === M05_FETCHED.quarter && p.pj === M05_FETCHED.pj && p.bucket === M05_FETCHED.bucket) return;
   m05Refetching = true;
   try { await reloadM05(); } catch (e) { /* 取数失败 ⇒ 交给常驻提示 */ } finally { m05Refetching = false; }
 }

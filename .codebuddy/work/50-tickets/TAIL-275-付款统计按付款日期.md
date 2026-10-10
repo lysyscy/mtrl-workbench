@@ -84,3 +84,9 @@ pytest（隔离结果） rc=0 161.88s
 **2026-10-10 · 空周窗口显示修复及提交授权。** 用户截图反馈“没有付款数据”，授权修复并提交推送。开工基点`tail275-empty-start.json`。现场Q4周窗口left=0、buckets=2，但全年实际付款1,965,483.03；上一轮用left非空决定整卡展示，误隐藏选桶/时间范围入口。改为按窗口桶存在决定展示，空窗口保留选择器、零合计及空桶提示，无改金额或日期口径。
 
 核验：`_run_rulers.py --since tail275-empty-start.json --explain` rc=0，使用既有_pytestscope选择并核对实际影响；仅付款统计显示分支新增变化，其他运行输入及此前成功证据复用。`pytest backend/tests/test_tail275_stats.py backend/tests/test_page_m05.py -q` rc=0（13项）；新增空窗口测试在隔离旧实现中rc=1，修复后rc=0（首次测试选择器误写data-act，纠正为真实data-id后重做隔离红验）。`tail275-empty-live.py` rc=0，默认空周仍可选时间，切9月显示1,965,483.03、51笔。syntax_audit、wiring_audit、bytes_guard、ui_parity均rc=0；完整`_shell_smoke.py` rc=0，39段、无console/page错误；shell_verify仅预期2行差异，复核后--snapshot及再验均rc=0。无生产数据写入，无新一轮双轴复审，无权威四态刷新。此次现场与回归验证约数分钟，完整壳为主要耗时；票保持done，可交付。本次提交包含275与已授权retro全部修改。
+
+**2026-10-10 · 周选择无反应补修。** 用户授权修复并提交推送；基点`tail275-week-start.json`。选择器列整季度，但统计仅取最近8周，窗口外选择被pstData退回旧桶；pstb原来只改本地ym，未驱动跨季度或窗口取数。新增stats查询bucket作为窗口截止桶；选周同步轴年/季度及请求参数，自动补拉；改轴清除旧选桶。本周快捷键按实际周所属季度，季度首个跨月周保留面板季度。默认窗口、8周上限、周一标签、_current_bucket、金额及台账口径不变。
+
+核验：`_run_rulers.py --since tail275-week-start.json --explain`选择影响，沿既有_pytestscope核对相关消费者；`pytest backend/tests/test_tail275_stats.py backend/tests/test_acc_flow_pst.py backend/tests/test_page_m05.py -q` rc=0（23项）；`pytest backend/tests/test_tail275_stats.py backend/tests/test_wired_m05.py backend/tests/test_shell_api.py -q` rc=0（41项）。隔离旧actions调用新增测试rc=1，修复实现rc=0。`tail275-week-live.py` rc=0：06-29、07-06、08-03、09-28均选中正确周，历史季度面板本周快捷键可返回当前周。`ops/server_ctl.ps1 -Action restart` rc=0；syntax_audit、wiring_audit、bytes_guard、ui_parity均rc=0。只读现场，无生产付款调整；无新增双轴复审或权威四态刷新。
+
+最终完整`_shell_smoke.py` rc=0（39段、无console/page错误）；壳差异15行均为本次选桶参数及联动，复核后`shell_verify.py --snapshot`及再验rc=0。此前在完整壳执行期间补修了本周快捷键的季度选择，因此最后对冻结代码重新完成完整壳核验，没有沿用旧输入结果。主要耗时为完整壳约两分钟/次，其余定点验证；可交付，票保持done。此前空窗口修复及275/retro已提交推送`69b3ca2`；本次按授权提交周选择补修。

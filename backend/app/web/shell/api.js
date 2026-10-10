@@ -244,7 +244,7 @@ const API = {
   flows: () => API.get('/api/m05/flows?year_month='),
   debt: () => API.get('/api/m05/debt'),
   stats: q => API.get('/api/m05/stats?granularity=' + encodeURIComponent(q.granularity || 'week')
-    + '&year=' + (q.year || 0) + '&quarter=' + (q.quarter || 0)),
+    + '&year=' + (q.year || 0) + '&quarter=' + (q.quarter || 0) + '&bucket=' + encodeURIComponent(q.bucket || '')),
   ledger: pid => API.get('/api/m05/ledger?project_id=' + pid),
   flowRevoke: (id, reason) => API.send('POST',
     `/api/m05/flows/${id}/revoke?reason=${encodeURIComponent(reason || '')}`, null),

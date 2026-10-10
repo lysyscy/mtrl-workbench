@@ -25,6 +25,23 @@ def test_empty_payment_window_keeps_time_controls(ui_page):
 
 
 @acc()
+def test_week_picker_refetches_early_and_cross_quarter_weeks(ui_page):
+    s = FakeSession({Project: [], PaymentNotice: [], PaymentFlow: []})
+    for week in ('2026-06-29', '2026-07-06', '2026-08-03', '2026-09-28'):
+        st = build_stats(s, granularity='week', year=2026, quarter=3,
+                         today=date(2026, 10, 10), bucket=week)
+        assert week in st['buckets'] and len(st['buckets']) <= 8
+        ui_page.evaluate('''st => {
+          BOOTING=true; VIEW='m05'; pst.gran='周'; pst.ym='2026-09-28';
+          pst.q='2026Q4'; mp.wq='2026Q3'; M05.stats=st;
+        }''', st)
+        ui_page.evaluate("v=>ACT.mpPick({dataset:{scope:'pstb',m:'周',val:v}})", week)
+        assert ui_page.evaluate('m05Params().bucket') == week
+        assert ui_page.evaluate('m05Params().quarter') == 3
+        assert ui_page.evaluate('pstData().bk') == week
+
+
+@acc()
 def test_selected_bucket_window_total_count_and_ledger(ui_page):
     s = FakeSession({Project: [make_project(11, '甲仓', '甲项目')],
         PaymentNotice: [make_notice_row(1, doc_date='2026-08-03', paid='150'),

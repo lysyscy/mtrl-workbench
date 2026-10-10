@@ -483,17 +483,17 @@ def _current_bucket(granularity: str, today: date) -> str:
     return dom.bucket_of(today.isoformat(), granularity)
 
 
-def window_buckets(granularity: str, *, year: int, quarter: int | None, today: date) -> list[str]:
+def window_buckets(granularity: str, *, year: int, quarter: int | None, today: date, bucket: str = "") -> list[str]:
     """最近 N 个桶（含当期）—— N 取域内核的 `WINDOW`（组装层只做切片，不改口径）。"""
     allb = dom.time_buckets(granularity, year=year, quarter=quarter)
-    cur = _current_bucket(granularity, today)
+    cur = bucket if bucket in allb else _current_bucket(granularity, today)
     tail = [b for b in allb if b <= cur] or allb
     return tail[-dom.WINDOW[granularity]:]
 
 
 def build_stats(
     s: Session, *, granularity: str = "", year: int | None = None,
-    quarter: int | None = None, project_id: int | None = None, today: date | None = None,
+    quarter: int | None = None, project_id: int | None = None, today: date | None = None, bucket: str = "",
 ) -> dict:
     """付款统计（§4.5.5）：**左栏 = 按项目 · 右栏 = 时间轴**；换粒度**不换口径**。"""
     today = today or date.today()
@@ -501,7 +501,7 @@ def build_stats(
     year = int(year or today.year)
     if gran == dom.GRAN_WEEK and not quarter:
         quarter = (today.month - 1) // 3 + 1
-    buckets = window_buckets(gran, year=year, quarter=quarter, today=today)
+    buckets = window_buckets(gran, year=year, quarter=quarter, today=today, bucket=bucket)
 
     notices = notice_debt_views(s)
     rows = payment_stat_views(notices, repo.list_flows(s))
