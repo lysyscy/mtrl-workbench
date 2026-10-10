@@ -18,7 +18,7 @@
 | 已完工单元的大段过程 | 继续占着计划正文 | 退出默认阅读；是否保留独立归档按用途判断，Git已有过程不复制全文。现有仓外归档经 `.codebuddy/plans/archive/归档-留痕索引-20261005.md` 追溯 |
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
 | 提交信息草稿 | artifacts/commit_msgN.txt | `.codebuddy/work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
-| 交付面文件的手工备份 | artifacts 根、.codebuddy 根 | `.codebuddy/backups/`；类型、保留及清理唯一规则回 README.md §四 |
+| `delivery/` 产品资料的手工备份 | artifacts 根、.codebuddy 根 | `.codebuddy/backups/`；类型、保留及清理唯一规则回 README.md §四 |
 | 环境/部署/配置/架构知识 | MEMORY 注入档 | `ops/architecture.md` ＋ `ops/README.md`（随变更同批改） |
 | 使用者可感知的变化 | 活文档正文 | `ops/changelog.md`（部署节点登记） |
 
@@ -42,7 +42,7 @@
 3. ⛔ `artifacts/` 放过程类 md（设计/排查/审计/备份）—— 只许工具生成物白名单。
 4. ⛔ 第二份待办/状态清单 —— 状态只信三处（`tools/audit/acc_report.py` 的输出 / 计划 §0 现状快照 / **根 `README.md` §〇**），尾巴只信 §15。
 5. ⛔ 临时件放 tools 根、logs、artifacts 根 —— 一律 `00-scratch/`；一次性工具脚本 → `tools/oneoff/`。
-6. ⛔ 手工备份散落 —— 仓内靠 git；交付面备份只进 `.codebuddy/backups/`。
+6. ⛔ 手工备份散落 —— 仓内靠 git；`delivery/` 产品资料需要手工备份时只进 `.codebuddy/backups/`。
 7. ⛔ 引用已删除文件（CLAUDE.md 教训）；搬迁当批改完全部路径（T3）。
 8. ⛔ scratch 超期不清（TTL 14 天，每轮收尾自查）。
 9. 定稿实施后的资料退出默认阅读；稳定结论回主人。是否另存归档按用途判断，Git已有过程不再复制全文。
@@ -82,7 +82,7 @@
 | 家 | 是什么 | 现状 |
 |---|---|---|
 | `.codebuddy/memory/journal/YYYY-MM-DD.md` | **唯一**的逐日日志（append-only） | ⭐ **要写日志就写这里**；⭐ 2026-10-01 起**随仓走（进 git）**；⛔ 别在别处再开一份 |
-| `.codebuddy/memory/MEMORY.md` ＋ `细则.md` | 会话**注入档** ＋ 细则分册（同目录） | 每轮必要项与专题参考；执行流程回 ops/agents/issue-tracker.md §四，业务含义回交付面 |
+| `.codebuddy/memory/MEMORY.md` ＋ `细则.md` | 会话**注入档** ＋ 细则分册（同目录） | 每轮必要项与专题参考；执行流程回 ops/agents/issue-tracker.md §四，业务含义回 `delivery/` |
 | `.codebuddy/plans/开发计划-主文档.md` | **唯一**活文档（状态源 ＋ §15 台账） | ⭐「给用户看的那一页」= **根 `README.md` §〇**（原 `执行情况-主文档.md` 已取消） |
 
 ## 六、资料用途与默认读取边界（TAIL-247）
@@ -110,7 +110,7 @@
 | .codebuddy/work/40-decisions/D22-TAIL-71不建一致性清单卡片.md | 取消一致性卡片的理由。 |
 | .codebuddy/work/40-decisions/D23-通用导入改映射式.md | 采用表头映射导入的决定。 |
 | .codebuddy/work/40-decisions/D24-AI建议层用本地模型.md | AI建议层技术取舍，实际待办回§15。 |
-| .codebuddy/work/40-decisions/D25-过程资料导入四条口径裁定.md | 过程资料导入原始裁定，现行业务回交付面。 |
+| .codebuddy/work/40-decisions/D25-过程资料导入四条口径裁定.md | 过程资料导入原始裁定，现行业务回 `delivery/`。 |
 | .codebuddy/work/40-decisions/D26-导入只留通用面.md | 统一导入入口的裁定。 |
 | .codebuddy/work/40-decisions/D27-交接提醒维持每轮自检.md | 交接自检与宿主hooks的历史选择。 |
 | .codebuddy/work/40-decisions/D28-普通用户可改自己密码.md | 用户密码修改的裁定。 |

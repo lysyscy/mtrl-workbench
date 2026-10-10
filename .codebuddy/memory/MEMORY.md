@@ -17,7 +17,7 @@
 
 ## 二、真源指针
 
-MEMORY.md为唯一注入档；细则.md与IDE-细节.md为按需分册。业务取值回仓外说明书/PRD，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
+MEMORY.md为唯一注入档；细则.md与IDE-细节.md为按需分册。业务取值回`delivery/`说明书/PRD，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
 
 ## 三、本机事实（碰环境时使用）
 
@@ -42,7 +42,7 @@ MEMORY.md为唯一注入档；细则.md与IDE-细节.md为按需分册。业务�
 
 ## 六、坐标与禁区
 
-仓：D:/dev/mtrl-workbench；交付面：D:/dev/PRD编写夹 - Workbuddy专用；旧WPS根已停用，不放回D:/工作。仓外历史经归档索引定位。本轮已授权整理仓外过程与陈旧指针，业务含义保持。
+仓：D:/dev/mtrl-workbench；现行产品资料：仓内`delivery/`；旧交付面根仅余未交付的本机`.workbuddy/`。仓外历史经归档索引定位。本轮只迁移产品资料并更新读取指针，业务含义保持。
 需要逐日日志时只放 .codebuddy/memory/journal/YYYY-MM-DD.md；现行要求回主人，不把过程作为默认必读。
 
 ## 八、工程纪律

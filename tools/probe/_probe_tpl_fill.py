@@ -11,7 +11,7 @@ from pathlib import Path
 import openpyxl
 
 ROOT = Path(__file__).resolve().parents[2]
-DEMO = Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用") / "demo" / "模板"
+DEMO = ROOT / "delivery" / "demo" / "模板"
 FILES = ("模板-逐月欠款台账.xlsx", "模板-过程资料.xlsx", "模板-焊材气体.xlsx", "模板-开会大表.xlsx")
 
 

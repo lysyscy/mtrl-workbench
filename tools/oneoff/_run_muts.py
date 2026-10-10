@@ -59,7 +59,6 @@ KEY: tuple[tuple[str, str], ...] = (
     ("_mut_countanchors.py", "T4 的四类计数锚点"),
     ("_mut_claim.py", "claim_audit（裁定必须同行写日期＋出处）"),
     ("_mut_uicheck.py", "doc_audit --ui 的交付面四检"),
-    ("_mut_covergap.py", "cover_gap（口径覆盖缺口登记册）"),
     ("_mut_t12.py", "T12 分层与命名"),
     ("_mut_t14t15.py", "T14/T15（scratch TTL · work 区文头 · artifacts 白名单）"),
     ("_mut_t20.py", "T20 保留期与容量（backups 上限 · oneoff 件数容量）"),

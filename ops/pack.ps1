@@ -198,8 +198,9 @@ $faceDone = 0
 if ($SkipFace) {
     Say '   ⏭ -SkipFace ⇒ 跳过（⚠️ 包里将没有那 2 件 ⇒ 目标机须另配完整现行交付面）'
 } else {
-    # ⚠️ 本机默认路径写在这里（⛔ 不写进 param 默认值 —— 目标机/换机时 `-FaceRoot` 可覆盖）
-    if (-not $FaceRoot) { $FaceRoot = 'D:\dev\PRD编写夹 - Workbuddy专用' }
+    # ⚠️ 默认取**仓内产品资料根**（2026-10-10 资料迁入仓内 `delivery/` 后随 `$RepoRoot` 走；
+    #   目标机/换机时 `-FaceRoot` 仍可覆盖 ⇒ 不写死本机绝对路径）
+    if (-not $FaceRoot) { $FaceRoot = Join-Path $RepoRoot 'delivery' }
     Say ('   源 = ' + $FaceRoot)
     foreach ($rel in @('材料科业务全流程说明书.md', 'PRD\验收\验收基线.json')) {
         $s = Join-Path $FaceRoot $rel

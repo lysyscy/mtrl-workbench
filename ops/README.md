@@ -11,7 +11,7 @@
 | ops/modules.md | 模块映射及剔除规则/人工指认/模板填充的实现约束；定位模块或改这些能力时读。 |
 | ops/deployment.md | 本机部署与初始化入口；查部署步骤或恢复边界时读。 |
 | ops/changelog.md | 部署节点的版本变化；核对版本行为时读。 |
-| ops/delivery-surface.md | 仓外交付面资料清单；找业务规则时先定位这里。 |
+| ops/delivery-surface.md | 仓内 `delivery/` 产品资料清单；找业务规则时先定位这里。 |
 | ops/docs-governance.md | 治理口径主人、引用与归档衔接；动文档结构时读。 |
 | ops/阈值表.md | 硬数字、预算及来源；疑问或修改数字时读。 |
 | ops/前端设计守则-以使用用户为中心.md | 交互与颜色规则；改前端前读。 |
@@ -39,8 +39,8 @@
 > ⚠️ **教训（这条比结论本身值钱）**：`ops/README.md` 里那句"**M7 上线后必须用真实服务复做一次**"是**对的**，
 > 而且**第一次复做就抓到一个真故障** ⇒ 「近似环境下的结论」**不能当"已验"用**。
 | `M3-合计行置底实测结论.md` | 「合计行**视口吸附置底**」的**正确写法**：`position:sticky` 必须落在 **`<tr>`** 上；写在 `>td` 上**永不生效**（⚠️ 原型自己当时就是写错的 ⇒ **只抄原型必错、且静默**） | 本机 headless chromium · 表位于 `.tw` 滚动容器内 | `backend/.venv/Scripts/python.exe tools/audit/sticky_probe.py` | ① 改动合计行 / 滚动容器 CSS ② 换浏览器内核 ③ 新页要加"置底行" | **双保险**：`backend/tests/test_page_shell.py`＋`backend/tests/test_theme.py`—— 断言 `tr.sumrow{position:sticky` **在**、`>td{position:sticky` **不在** |
-| `i8-接口契约-旁证摘要.md` | i8 接口**形态**（URL / 参数 / 字段名）的旁证摘录 —— ⭐ **并含 2026-09-17 真机实测纠正**（§真机实测纠正：收发结存**真实表头两行**·第 2 行才是列名；抓取**幂等范围 = 核算年月＋仓库**） | 来源 = `PRD素材包-20260911/` 里的**可读实现** ⇒ 它是**旁证、不是口径**；⚠️ 素材包含**已作废口径**；⭐ 其中「真机实测纠正」一节是**真机**结论（**冲突时以它为准**） | ——（阅读用；**不在其上写代码前先核验**） | ⭐ **改抓取 / 改导出解析前先看"真机实测纠正"一节**；技术栈 §9 更新时同步 | `backend/tests/test_i8_contract.py`（接口形态）· `backend/tests/test_acc_inv_fetch.py`（幂等范围 = 001-06）· `backend/tests/test_acc_setl_fetch.py`（合并表头 = 001-05） |
-| `模板法导出-实测结论.md` | **两个材料报表的成品文件怎么生成**（`demo/模板/模板清单.md` §一 **路径②**）—— "真·可操作透视表" = 以**用户手作成品 xlsx** 为基底做 **`zip` 字节替换**（sharedStrings / 数据 sheet / pivotCache 两件 / pivotTable ＋ `refreshOnLoad`），**外加缓存级对账** | 本机 `W11-20250421859` · venv Python 3.13.12 · openpyxl 3.1.5 / pandas 3.0.5 / xlsxwriter 3.2.9 · 输入 = **2026-09-17 真机抓取**的两份 i8 导出件（`artifacts/_diag/`）· 跑的是**交付面** `PRD素材包-20260911/input/` 里的现成管线 | 历史命令见正文；脚本仍含旧根，先核输入与路径，不直接当当前已验 | ① **改这两份报表的模板**（用户手作件换代）② 改 `mod07_setl`/`mod08_inv` 的解析（列定义）③ i8 导出件表单结构变 ④ 换机 / 升 openpyxl / pandas / xlsxwriter | **已接入** backend/app/report_export/（TAIL-04已完成）；改模板生成逻辑时以本条为方法旁证；成品对账口径见 `ACC-SETL-001/001-08` |
+| `i8-接口契约-旁证摘要.md` | i8 接口**形态**（URL / 参数 / 字段名）的旁证摘录 —— ⭐ **并含 2026-09-17 真机实测纠正**（§真机实测纠正：收发结存**真实表头两行**·第 2 行才是列名；抓取**幂等范围 = 核算年月＋仓库**） | 来源 = `delivery/PRD素材包-20260911/` 里的**可读实现** ⇒ 它是**旁证、不是口径**；⚠️ 素材包含**已作废口径**；⭐ 其中「真机实测纠正」一节是**真机**结论（**冲突时以它为准**） | ——（阅读用；**不在其上写代码前先核验**） | ⭐ **改抓取 / 改导出解析前先看"真机实测纠正"一节**；技术栈 §9 更新时同步 | `backend/tests/test_i8_contract.py`（接口形态）· `backend/tests/test_acc_inv_fetch.py`（幂等范围 = 001-06）· `backend/tests/test_acc_setl_fetch.py`（合并表头 = 001-05） |
+| `模板法导出-实测结论.md` | **两个材料报表的成品文件怎么生成**（`delivery/demo/模板/模板清单.md` §一 **路径②**）—— "真·可操作透视表" = 以**用户手作成品 xlsx** 为基底做 **`zip` 字节替换**（sharedStrings / 数据 sheet / pivotCache 两件 / pivotTable ＋ `refreshOnLoad`），**外加缓存级对账** | 本机 `W11-20250421859` · venv Python 3.13.12 · openpyxl 3.1.5 / pandas 3.0.5 / xlsxwriter 3.2.9 · 输入 = **2026-09-17 真机抓取**的两份 i8 导出件（`artifacts/_diag/`）· 跑的是**交付面** `delivery/PRD素材包-20260911/input/` 里的现成管线 | 历史命令见正文；脚本仍含旧根，先核输入与路径，不直接当当前已验 | ① **改这两份报表的模板**（用户手作件换代）② 改 `mod07_setl`/`mod08_inv` 的解析（列定义）③ i8 导出件表单结构变 ④ 换机 / 升 openpyxl / pandas / xlsxwriter | **已接入** backend/app/report_export/（TAIL-04已完成）；改模板生成逻辑时以本条为方法旁证；成品对账口径见 `ACC-SETL-001/001-08` |
 | **—（已归档 · 2026-10-05 `TAIL-235`）** | 原型断言归属映射（治理侧 · 无判据）· i8 名单同步原始返回（`实测快照/` 两份 json）· 渲染能否在会话 0 内跑 · 宿主 hooks 能力（含**负结果**：本 IDE 不跑 hooks） —— **正文已移出仓外** `D:\dev\.归档-mtrl\ops\`（原文可 `git show` 取回）| ⛔ **别再新增实测结论到这个落点** | 同左（脚本已随件归档）| ① 换机 / 升 Playwright / 改打印链路 ② 名单抓不到或条数明显变 ③ **原型 `_smoke.js` 一改就过期** ④ 换 IDE / 升宿主 | ⛔ 无判据（随件归档）|
 | `init_db.sql` | 一次性**建库**（开发库与测试库**物理隔离**，依据技术栈 §3.0 / §3.1） | 本机 PG 16 · 需 postgres 超级用户 | 本机路径见 .codebuddy/memory/MEMORY.md §三；脚本见 ops/deployment.md（本轮不执行建库） | 换机 / 重建库（**恢复演练**在 M8，见计划 §5.5） | 全套 `tests/test_acc_*`（库结构不对会直接红） |
 

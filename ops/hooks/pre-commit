@@ -10,8 +10,8 @@
 #     · audit_work    —— T14/T15/T20（scratch TTL / artifacts 白名单 / 备份与 oneoff 容量）
 #     · mut_cover     —— 变异覆盖台账是否与生成结果一致（`--check`，不执行变异）
 #
-# 为什么**没有 CI**（刻意）：本机是**唯一**运行环境，且交付面在仓外的 WPS 云同步目录里
-#   ⇒ 远端跑不出"真机 ＋ 交付面"那一半，维护成本却照付。⇒ 守卫落在**本地钩子 ＋ 收工入口**两处。
+# 为什么**没有 CI**（刻意）：本机是**唯一**运行环境，真机依赖本机服务与浏览器
+#   ⇒ 远端跑不出真机验证，维护成本却照付。⇒ 守卫落在**本地钩子 ＋ 收工入口**两处。
 #
 # 装：`powershell -NoProfile -ExecutionPolicy Bypass -File ops\install_hooks.ps1`
 # 卸：删掉 `.git/hooks/pre-commit`

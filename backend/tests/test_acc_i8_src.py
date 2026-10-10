@@ -28,7 +28,7 @@ from tests.acc_plugin import acc
 CASE = "ACC-I8-SRC-001"
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SPEC = Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\材料科业务全流程说明书.md")
+_SPEC = _REPO_ROOT / "delivery" / "材料科业务全流程说明书.md"
 
 
 @contextmanager

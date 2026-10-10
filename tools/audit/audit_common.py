@@ -259,7 +259,7 @@ KNOWN_ABSENT: frozenset[str] = frozenset({"ACC-X-ATT-001", "ACC-X-ATT-002"})
 
 #: `T3` 只检查这些顶级目录开头的路径（`C:\…`、URL、SSH 一律不管）
 TOP_DIRS: tuple[str, ...] = (
-    "backend/", "tools/", "ops/", "demo/", "PRD/", "app/", "tests/",
+    "backend/", "tools/", "ops/", "delivery/", "demo/", "PRD/", "app/", "tests/",
     "alembic/", "artifacts/", "frontend/", "static/", "scripts/", "input/",
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**治理区进 `T3` 的眼**。
     #    ⚠️ 此前**整个 `.codebuddy/` 不在表内** ⇒ 票仓 / 记忆档 / 规则档 / 决策档里写下的
@@ -289,14 +289,14 @@ TOP_DIRS: tuple[str, ...] = (
 #: ⚠️ **与 `.gitignore` 的分工**（⚠️ 是"职责不同"，⛔ **不是**"同一份清单的两份"）：
 #:   · 本表 = **权威**的**常驻**条目（仓库骨架，长在仓里、随仓走）—— 少一条 ⇒ 根上那个条目就该报；
 #:   · `.gitignore` = **额外容忍**的**可再生 / 本机暂存**条目（缓存、虚拟环境、构建产物…）。
-#:   ⇒ `T24` 判"根上多出来的东西合不合法"时取**并集**（**允许重叠**：`artifacts` / `logs` / `face` 等
+#:   ⇒ `T24` 判"根上多出来的东西合不合法"时取**并集**（**允许重叠**：`artifacts` / `logs` 等
 #:     两处都有 —— 以本表为准，重叠本身无害）。
 #:   ⚠️ **已知妥协**：`.gitignore` 里加一行同名规则即可容忍根上某目录（旁路）—— 见 `check_drop_zones` 的 docstring。
 #: ⚠️ **`README.md` / `AGENTS.md` 刻意不列**：根上的 `.md` 归 `T12`（`ROOT_MD_ALLOW`）
 #:   ⇒ 列进来就是**同一件事两处写**（本仓最贵的病，必漂）。
 #: ⚠️ 目录带尾斜杠、文件不带（判据按**名字**比，斜杠只是可读性）。
 ROOT_ALLOW: tuple[str, ...] = (
-    ".codebuddy/", ".git/", "artifacts/", "backend/", "face/", "logs/", "ops/", "tools/",
+    ".codebuddy/", ".git/", "artifacts/", "backend/", "delivery/", "face/", "logs/", "ops/", "tools/",
     ".env", ".env.example", ".gitignore",
 )
 
@@ -613,9 +613,14 @@ def read_env(key: str) -> str:
 
 
 def delivery_root() -> Path | None:
-    """交付面根 = `.env` 里 `PRD_ACCEPTANCE_BASELINE`（…/PRD/验收/验收基线.json）上溯两级。"""
+    """产品资料根 = `.env` 的 `PRD_ACCEPTANCE_BASELINE`（delivery/PRD/验收/验收基线.json）上溯两级。"""
     p = read_env("PRD_ACCEPTANCE_BASELINE")
-    return Path(p).resolve().parents[2] if p else None
+    if not p:
+        return None
+    path = Path(p)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    return path.resolve().parents[2]
 
 
 def _is_lenient(rel: str) -> bool:

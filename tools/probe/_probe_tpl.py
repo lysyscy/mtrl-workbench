@@ -12,7 +12,7 @@ sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import openpyxl
 
-PKG = r"D:\工作\AI\PRD编写夹 - Workbuddy专用\PRD素材包-20260911"
+PKG = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "delivery", "PRD素材包-20260911")
 INPUT = os.path.join(PKG, "input")
 TPL_DIR = os.path.join(PKG, "data", "templates")
 DIAG = r"D:\dev\mtrl-workbench\artifacts\_diag"

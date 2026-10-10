@@ -99,6 +99,8 @@ def doc_full(path: str) -> str:
     """真源文档全文（归一化）。不存在 ⇒ 空串（由调用方报红）。"""
     if path not in _FULL_CACHE:
         p = Path(path)
+        if not p.is_absolute():
+            p = ROOT / p
         _FULL_CACHE[path] = norm(p.read_text(encoding="utf-8")) if p.exists() else ""
     return _FULL_CACHE[path]
 
@@ -106,6 +108,8 @@ def doc_full(path: str) -> str:
 def section_markers(doc: str, start: str, end: str) -> list[str]:
     """节内**代码块**里以 ①/②/… 或 `a.` 开头的分支行。"""
     p = Path(doc)
+    if not p.is_absolute():
+        p = ROOT / p
     if not p.exists():
         return []
     lines = p.read_text(encoding="utf-8").replace("\r\n", "\n").split("\n")
@@ -138,6 +142,8 @@ def baseline_ids() -> set[str]:
     if not url:
         return set()
     p = Path(url)
+    if not p.is_absolute():
+        p = ROOT / p
     if not p.exists():
         return set()
     data = json.loads(p.read_text(encoding="utf-8"))

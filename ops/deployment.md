@@ -82,9 +82,8 @@ powershell -ExecutionPolicy Bypass -File D:\dev\mtrl-workbench\ops\selfcheck.ps1
 2. `ops\server_ctl.ps1 pg`（PG 服务在不在）· `logs\server.err.log`（后端异常）
 3. 页面报"没能取到" ⇒ ⭐ 点**重试**（只重拉本页那几路）；报错文案一律是"人话 + 下一步"
 4. ⚠️ **改了 Python 代码必须 `ops\server_ctl.ps1 restart`**（服务**没有** `--reload`）
-5. **交付面真源**的当前路径与读取边界见 ops/delivery-surface.md §一/§三（2026-10-06迁出云同步）。
-   仓根 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 应指向新根 `PRD/验收/验收基线.json`；本轮未改配置。
-   包内face只有《说明书》与验收基线快照，仅供历史对照；整份交付面检查仍需新根完整资料。未来换机需显式复制/配置完整真源，不能等待WPS同步。
+5. **产品资料真源**位于仓内 `delivery/`，清单与读取边界见 ops/delivery-surface.md §一/§三。
+   `.env` 的 `PRD_ACCEPTANCE_BASELINE` 指向 `delivery/PRD/验收/验收基线.json`；换机时克隆仓库即可取得完整资料。
    `ui_parity` 只查壳自身；配置方法统一见下节。
 
 ## §四之补 · 换机会踩的三处路径（✅ 已做成可配 · A8 · 2026-09-29）
@@ -92,10 +91,10 @@ powershell -ExecutionPolicy Bypass -File D:\dev\mtrl-workbench\ops\selfcheck.ps1
 - ✅ **三处路径可配**（A8 · 2026-09-29）：
   | 要配的 | 怎么配 | ⛔ 不配会怎样 |
   |---|---|---|
-  | **交付面定位** | 仓根 `.env`：`PRD_ACCEPTANCE_BASELINE=<交付面>/PRD/验收/验收基线.json`（**同一机制**：`doc_audit` 与 `_audit_face.py` 都读它） | 留空 ⇒ `doc_audit --ui` / `acc_report`（四态报表）**跑不了**（会打印「跳过 + 原因」）；⚠️ **`ui_parity` 不受影响**（2026-09-30 `TAIL-201`：它只查壳自己，不用任何基准） |
+| **产品资料定位** | 仓根 `.env`：`PRD_ACCEPTANCE_BASELINE=delivery/PRD/验收/验收基线.json`（**同一机制**：`doc_audit` 与 `_audit_face.py` 都读它） | 留空 ⇒ `doc_audit --ui` / `acc_report`（四态报表）**跑不了**（会打印「跳过 + 原因」）；⚠️ **`ui_parity` 不受影响**（2026-09-30 `TAIL-201`：它只查壳自己，不用任何基准） |
   | **node** | 环境变量 `MTRL_NODE=<node.exe 全路径>`，或把 node 放进 `PATH` | 三级都找不到 ⇒ 交付面**四检跳过**（会打印试过哪三处 ⇒ ⛔ 不是静默） |
   | **Playwright 浏览器** | `PLAYWRIGHT_BROWSERS_PATH`；核服务账号可访问的浏览器安装，配置主人回ops/README.md | 运行PDF/导出和真机探针均可能需要浏览器；仅不跑开发探针不免运行依赖。换机须实际核对服务导出 |
-  交付面与node按验收用途配齐；系统运行仍须满足实际运行依赖，尤其服务账号能找到导出所需浏览器。selfcheck未覆盖实际导出，不能凭它退出0免掉这项。
+  仓内产品资料与node按验收用途配齐；系统运行仍须满足实际运行依赖，尤其服务账号能找到导出所需浏览器。selfcheck未覆盖实际导出，不能凭它退出0免掉这项。
 
 ---
 

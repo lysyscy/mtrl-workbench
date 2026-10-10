@@ -15,9 +15,11 @@ import pathlib
 import re
 import sys
 
-FACE = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用")
+#: ⚠️ 2026-10-10：产品资料已迁入仓内 `delivery/`，**但历次快照仍在旧根的 `.workbuddy/` 里**
+#:   （旧根 `D:\dev\PRD编写夹 - Workbuddy专用` 只剩这一处本机治理数据）⇒ 指针跟着它走。
+FACE = pathlib.Path(r"D:\dev\PRD编写夹 - Workbuddy专用")
 REPO = pathlib.Path(__file__).resolve().parents[2]
-#: ⚠️ 交付面那份**仍叫 `.workbuddy`**（仓外 · 我们没改它）—— ⛔ 别跟着仓内一起改名（改了 ⇒ `not root.exists()` 静默扫空集）
+#: ⚠️ 旧根那份**仍叫 `.workbuddy`**（⛔ 别跟着仓内一起改名 —— 改了 ⇒ `not root.exists()` 静默扫空集）
 ROOTS = (FACE / ".workbuddy", REPO / ".codebuddy" / "backups")
 
 HEAD_RE = re.compile(r"^\|\s*#\s*\|\s*能力")

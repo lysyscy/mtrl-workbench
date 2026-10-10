@@ -140,8 +140,8 @@ def run_ui_checks() -> tuple[list[str], list[str]]:
         return ["  （跳过：找不到 node —— 试过三处：环境变量 `MTRL_NODE` / PATH / 旧默认路径。"
                 "⚠️ 装 node 或设 `MTRL_NODE=<node.exe 全路径>`；详见 `ops/deployment.md`）"], []
     if not root:
-        return ["  （跳过：拿不到交付面根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=`"
-                "<交付面>/PRD/验收/验收基线.json`；目标机不装交付面属已知代价，详见 `ops/deployment.md`）"], []
+        return ["  （跳过：拿不到产品资料根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=delivery/PRD/验收/验收基线.json`；"
+                "从仓库根目录运行，详见 `ops/deployment.md`）"], []
     demo = root / "demo"
     if not (demo / "_smoke.js").exists():
         return ["  （跳过：交付面 demo/ 里没有四检脚本）"], []
