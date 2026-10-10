@@ -90,3 +90,11 @@ pytest（隔离结果） rc=0 161.88s
 核验：`_run_rulers.py --since tail275-week-start.json --explain`选择影响，沿既有_pytestscope核对相关消费者；`pytest backend/tests/test_tail275_stats.py backend/tests/test_acc_flow_pst.py backend/tests/test_page_m05.py -q` rc=0（23项）；`pytest backend/tests/test_tail275_stats.py backend/tests/test_wired_m05.py backend/tests/test_shell_api.py -q` rc=0（41项）。隔离旧actions调用新增测试rc=1，修复实现rc=0。`tail275-week-live.py` rc=0：06-29、07-06、08-03、09-28均选中正确周，历史季度面板本周快捷键可返回当前周。`ops/server_ctl.ps1 -Action restart` rc=0；syntax_audit、wiring_audit、bytes_guard、ui_parity均rc=0。只读现场，无生产付款调整；无新增双轴复审或权威四态刷新。
 
 最终完整`_shell_smoke.py` rc=0（39段、无console/page错误）；壳差异15行均为本次选桶参数及联动，复核后`shell_verify.py --snapshot`及再验rc=0。此前在完整壳执行期间补修了本周快捷键的季度选择，因此最后对冻结代码重新完成完整壳核验，没有沿用旧输入结果。主要耗时为完整壳约两分钟/次，其余定点验证；可交付，票保持done。此前空窗口修复及275/retro已提交推送`69b3ca2`；本次按授权提交周选择补修。
+
+**2026-10-10 · 左右独立最终裁定。** 用户指出左选一周右侧才展开一周，先要求说明逻辑再确认；现已明确授权实施并提交推送。此前把左桶作为右窗口截止点的补修不符合交互目标，本次取代该逻辑。开工差异`tail275-independent-start.json`；右侧quarter/year固定输出整季度全部周或全年12个月，包括零付款桶，窗口合计仅这些桶。左侧bucket独立投影项目、合计及笔数，支持右轴范围以外的周/月；两侧选择互不修改范围。移除不再使用的最近N桶组装函数，_current_bucket仅用于左默认桶且未修改。§4.5.5时间范围行同步用户最终裁定。
+
+核验：`_run_rulers.py --since tail275-independent-start.json --explain` rc=0，按既有_pytestscope核对相关消费者，未变结果复用。`pytest backend/tests/test_tail275_stats.py backend/tests/test_acc_flow_pst.py backend/tests/test_page_m05.py backend/tests/test_wired_m05.py -q` rc=0（38项）；新增独立性及跨年轴回归后`pytest backend/tests/test_tail275_stats.py backend/tests/test_shell_api.py -q` rc=0（27项）。`tools/mut/_mut_tail275.py` rc=0（6/6正常绿、隔离红，适配新的selected输出）；`mut_cover.py` rc=0。`ops/server_ctl.ps1 -Action restart` rc=0；`tail275-independent-live.py` rc=0，左选06-29/07-06/09-28右轴及合计不变，切右季度左桶不变，左选2025-09右轴仍2026全年12月。syntax_audit、wiring_audit、bytes_guard、ui_parity均rc=0。无新增双轴复审、无权威四态刷新、无生产付款操作。
+
+完整壳首次完成39段但rc=1：仅旧TAIL-30人工指认演练400及其3个结果断言失败，其他段通过；样本清理净零。带同样管理员会话独立运行该段rc=0，未改MOD-01代码；首次400原因未确认，不当作成功结果。原测试中断后重新完整执行的成本已付出，后续不因无关成功项反复扩大业务范围。`doc_audit.py` rc=0；现场付款统计仅只读，壳演练自身使用专用样本并复原。
+
+最终完整壳再验rc=0（39段，无console/page错误）；预期壳差异16行均为左右选择解耦及selected展示，`shell_verify.py --snapshot`与随后再验均rc=0。无未通过的当前核验结果；先前演练失败及复验过程保留，不推断未知原因。主要耗时为两次完整壳及一次中断壳、隔离6反例；本轮总耗时约十余分钟。按用户已确认逻辑可交付，票保持done；提交推送包括独立左右统计及对应资料/回归。

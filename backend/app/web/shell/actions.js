@@ -2370,12 +2370,9 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    if(sc==='wh'){ fWhYm=v; mp.open=null; reloadM07(); toast(`收发结存已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（`WHM[月]` 现在来自后端；只 `render()` 会看到空表） */
    if(sc==='ext'){mp.open=null;ACT.fExtYear({value:String(v).slice(0,4)});return;}
    if(sc==='pstb'){ pst.ym=v;
-     if(m==='周'){ let q=mp.wq||tmQof(v);
-       if(!tmWeeksOfQ(Number(q.slice(0,4)),Number(q.slice(5))).some(w=>w[0]===v)) q=tmQof(v);
-       pst.q=q; pst.year=Number(q.slice(0,4)); }
      mp.open=null; render(); return; }                                   /* 选周同步所属窗口并补拉 */
-   if(sc==='psta'){ if(/^\d{4}$/.test(v)) pst.year=+v; else if(/^\d{4}Q[1-4]$/.test(v)) pst.q=v;
-     pst.ym=''; mp.open=null; render(); return; }                                                            /* 付款统计·右栏 年 / 季度 */
+   if(sc==='psta'){ if(/^\d{4}$/.test(v)) pst.year=+v; else if(/^\d{4}Q[1-4]$/.test(v)){ pst.q=v; pst.year=Number(v.slice(0,4)); }
+     mp.open=null; render(); return; }                                                            /* 付款统计·右栏 年 / 季度 */
   if(sc==='df'){ fDf.ym=v; mp.open=null; render(); toast(`差异登记已切到 <b>${tmLabel(v)}</b>（核算月）`); return; }
   fNt.month=v;   /* 已取消「全局核算期」：年月只作用于本表自身的筛选 */
   mp.open=null; prunePick(); render();

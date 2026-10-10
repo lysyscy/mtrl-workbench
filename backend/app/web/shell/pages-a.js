@@ -359,7 +359,8 @@ const pstData=()=>{ const st=M05.stats||{};
   let bi=buckets.findIndex(b=>g==='周'?b===selected:b.slice(0,7)===selected.slice(0,7));
   if(bi<0) bi=buckets.findIndex(b=>g==='周'?b===m05BucketKey():b.slice(0,7)===m05BucketKey().slice(0,7));
   if(bi<0) bi=buckets.length-1;
-  const bk=bi>=0?buckets[bi]:'';
+  const picked=st.selected;
+  const bk=picked?picked.bucket:(bi>=0?buckets[bi]:'');
   const year=st.year||pstYear(), q=st.quarter||pstQq();
   return { g, bk, ax: g==='周'?`${year}-${q}`:String(year),
     keys:buckets,
@@ -369,9 +370,9 @@ const pstData=()=>{ const st=M05.stats||{};
     bkLabel: g==='周'&&bk ? (bk.slice(5)+' ~ '+m05Sun(bk).slice(5)) : bk,
     axLabel: g==='周' ? `${year} 年 Q${q}（${(q-1)*3+1}–${q*3} 月）` : `${year} 年`,
     title: g==='周' ? `${year} 年 Q${q}` : `${year} 年`,
-    byPj: left.map(r=>[r.key||r.label, numOr0((r.cells||[])[bi])])
+    byPj: (picked?picked.projects.map(r=>[r.key||r.label,numOr0(r.amount)]):left.map(r=>[r.key||r.label, numOr0((r.cells||[])[bi])]))
              .filter(x=>x[0]).sort((a,b)=>b[1]-a[1]),
-    bkTotal: numOr0(right[bi]), bkCnt: numOr0((st.counts||[])[bi]),
+    bkTotal: numOr0(picked?picked.total:right[bi]), bkCnt: numOr0(picked?picked.count:(st.counts||[])[bi]),
     total: N2(right.reduce((a,v)=>a+numOr0(v),0)),
     n: !!buckets.length }; // 空窗口仍保留选桶/时间范围入口，便于查看有付款的期间。
 };

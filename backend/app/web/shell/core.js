@@ -301,7 +301,7 @@ const m05Params = () => ({
   granularity: M05_GRAN_API[pst.gran] || 'week',
   year: Number(pstYear()) || 0,
   quarter: Number(String(pstQq()).slice(5)) || 0,
-  bucket: pst.gran==='周' ? pst.ym||'' : '',
+  bucket: pst.ym||'',
   pj: ledCur(),
 });
 let m05Refetching = false;

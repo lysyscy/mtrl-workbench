@@ -30,15 +30,33 @@ def test_week_picker_refetches_early_and_cross_quarter_weeks(ui_page):
     for week in ('2026-06-29', '2026-07-06', '2026-08-03', '2026-09-28'):
         st = build_stats(s, granularity='week', year=2026, quarter=3,
                          today=date(2026, 10, 10), bucket=week)
-        assert week in st['buckets'] and len(st['buckets']) <= 8
+        assert week in st['buckets'] and len(st['buckets']) >= 13
         ui_page.evaluate('''st => {
           BOOTING=true; VIEW='m05'; pst.gran='周'; pst.ym='2026-09-28';
           pst.q='2026Q4'; mp.wq='2026Q3'; M05.stats=st;
         }''', st)
         ui_page.evaluate("v=>ACT.mpPick({dataset:{scope:'pstb',m:'周',val:v}})", week)
         assert ui_page.evaluate('m05Params().bucket') == week
-        assert ui_page.evaluate('m05Params().quarter') == 3
+        assert ui_page.evaluate('m05Params().quarter') == 4
         assert ui_page.evaluate('pstData().bk') == week
+        ui_page.evaluate("ACT.mpPick({dataset:{scope:'psta',m:'季度',val:'2025Q2'}})")
+        assert ui_page.evaluate('m05Params().year') == 2025
+        assert ui_page.evaluate('m05Params().quarter') == 2
+        assert ui_page.evaluate('m05Params().bucket') == week
+
+
+@acc()
+def test_stats_axis_and_selected_bucket_are_independent():
+    s = FakeSession({Project: [], PaymentNotice: [], PaymentFlow: []})
+    a = build_stats(s, granularity='week', year=2026, quarter=4, bucket='2026-07-06')
+    b = build_stats(s, granularity='week', year=2026, quarter=4, bucket='2026-10-26')
+    assert a['buckets'] == b['buckets'] and len(a['buckets']) >= 13
+    assert a['right'] == b['right']
+    assert a['selected']['bucket'] == '2026-07-06'
+    assert b['selected']['bucket'] == '2026-10-26'
+    c = build_stats(s, granularity='month', year=2026, bucket='2025-09')
+    assert c['buckets'] == [f'2026-{m:02d}' for m in range(1, 13)]
+    assert c['selected']['bucket'] == '2025-09'
 
 
 @acc()
@@ -49,9 +67,10 @@ def test_selected_bucket_window_total_count_and_ledger(ui_page):
                         make_notice_row(3, doc_date='2026-01-04', paid='900')],
         PaymentFlow: [make_flow(1, notice_id=1, amount='100', pay_date='2026-09-02'),
                       make_flow(2, notice_id=2, amount='80', pay_date='2026-08-03'),
-                      make_flow(3, notice_id=3, amount='900', pay_date='2026-01-03')]})
-    st = build_stats(s, granularity='month', today=date(2026, 10, 10))
+                      make_flow(3, notice_id=3, amount='900', pay_date='2025-01-03')]})
+    st = build_stats(s, granularity='month', today=date(2026, 10, 10), bucket='2026-09')
     assert st['total'] == '1080.00' and sum(map(float, st['right'])) == 180
+    assert len(st['buckets']) == 12
     p = ui_page
     p.evaluate('''st => {
       BOOTING=true; VIEW='m05'; pst.gran='月'; pst.ym='2026-09'; pst.year=2026;
@@ -64,12 +83,15 @@ def test_selected_bucket_window_total_count_and_ledger(ui_page):
     text = p.locator('.card').filter(has=p.locator('h4', has_text='付款统计')).inner_text()
     assert '100.00' in text and '180.00' in text and '1 笔' in text
     p.evaluate("ACT.mpPick({dataset:{scope:'pstb',m:'月',val:'2026-08'}})")
+    p.evaluate('st=>{M05.stats=st;render()}', build_stats(s, granularity='month', year=2026, bucket='2026-08'))
     pd = p.evaluate('pstData()')
     assert pd['bk'] == '2026-08' and pd['bkTotal'] == 80 and pd['bkCnt'] == 1
     assert pd['total'] == 180 and pd['byPj'] == [['甲仓', 80]]
     assert monthly_aggregate(notice_debt_views(s), CATEGORY_MATERIAL, 11)['2026-08']['pay'] == 230
     p.evaluate("ACT.mpPick({dataset:{scope:'pstb',m:'月',val:'2020-01'}})")
-    assert p.evaluate('pstData().bk') in st['buckets']
+    p.evaluate('st=>{M05.stats=st;render()}', build_stats(s, granularity='month', year=2026, bucket='2020-01'))
+    assert p.evaluate('pstData().bk') == '2020-01'
+    assert p.evaluate('pstData().total') == 180
     assert '为了监控拖了很久的付款' in p.locator('body').inner_text()
     assert p.evaluate('LED_THEAD').count('按单据日期') == 1
 

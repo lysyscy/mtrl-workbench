@@ -15,7 +15,7 @@ CASES = [
     ('剔除混入统计', 'app/mod05_flow/service.py',
      'if not n.excluded', 'if True'),
     ('选桶失效', 'app/web/shell/pages-a.js',
-     "const selected=String(pst.ym||'');", "const selected='';"),
+     'const picked=st.selected;', 'const picked=undefined;'),
     ('窗口误用全量', 'app/web/shell/pages-a.js',
      'total: N2(right.reduce((a,v)=>a+numOr0(v),0))', 'total: numOr0(st.total)'),
 ]

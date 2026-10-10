@@ -483,14 +483,6 @@ def _current_bucket(granularity: str, today: date) -> str:
     return dom.bucket_of(today.isoformat(), granularity)
 
 
-def window_buckets(granularity: str, *, year: int, quarter: int | None, today: date, bucket: str = "") -> list[str]:
-    """最近 N 个桶（含当期）—— N 取域内核的 `WINDOW`（组装层只做切片，不改口径）。"""
-    allb = dom.time_buckets(granularity, year=year, quarter=quarter)
-    cur = bucket if bucket in allb else _current_bucket(granularity, today)
-    tail = [b for b in allb if b <= cur] or allb
-    return tail[-dom.WINDOW[granularity]:]
-
-
 def build_stats(
     s: Session, *, granularity: str = "", year: int | None = None,
     quarter: int | None = None, project_id: int | None = None, today: date | None = None, bucket: str = "",
@@ -501,13 +493,14 @@ def build_stats(
     year = int(year or today.year)
     if gran == dom.GRAN_WEEK and not quarter:
         quarter = (today.month - 1) // 3 + 1
-    buckets = window_buckets(gran, year=year, quarter=quarter, today=today, bucket=bucket)
+    buckets = dom.time_buckets(gran, year=year, quarter=quarter)
+    selected = dom.bucket_of(bucket + '-01' if len(bucket) == 7 else bucket, gran) if bucket else _current_bucket(gran, today)
 
     notices = notice_debt_views(s)
     rows = payment_stat_views(notices, repo.list_flows(s))
     index = project_index(s)                      # ⚠️ 循环外取一次（别在循环里回查 = 伪 N+1）
     names = {pid: project_label(p) for pid, p in index.items()}
-    grid = dom.payment_stats(rows, granularity=gran, buckets=set(buckets))
+    grid = dom.payment_stats(rows, granularity=gran, buckets=set(buckets) | {selected})
 
     left = []
     for key in sorted(grid, key=lambda k: str(k)):
@@ -530,6 +523,15 @@ def build_stats(
         "buckets": buckets,
         "left": left,
         "right": right,
+        "selected": {
+            "bucket": selected,
+            "projects": [{"key": r["key"], "label": r["label"],
+                          "amount": f"{to_money(grid[k].get(selected, 0)):.2f}"}
+                         for k, r in zip(sorted(grid, key=lambda k: str(k)), left)
+                         if grid[k].get(selected, 0)],
+            "total": f"{sum((grid[k].get(selected, 0) for k in grid), Decimal('0')):.2f}",
+            "count": sum(1 for r in rows if dom.bucket_of(r.pay_date, gran) == selected),
+        },
         "total": f"{sum((r.amount for r in rows), Decimal('0')):.2f}",
         "counts": [sum(1 for r in rows if dom.bucket_of(r.pay_date, gran) == b)
                    for b in buckets],
@@ -553,6 +555,6 @@ def payment_stat_views(notices: list[NoticeDebtView], flows: list[PaymentFlow]) 
 __all__ = [
     "CATEGORY_LABELS", "MECH_SETTLE_SOURCE_READY",
     "notice_debt_views", "opening_views", "project_index", "project_label", "project_options",
-    "build_flows", "build_debt", "build_debt_live", "build_ledger", "build_stats", "window_buckets",
+    "build_flows", "build_debt", "build_debt_live", "build_ledger", "build_stats",
     "total_debt_rows", "export_total_debt", "order_project_ids",
 ]
