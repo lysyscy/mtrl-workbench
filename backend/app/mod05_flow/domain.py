@@ -1,7 +1,7 @@
 """付款流水 / 付款统计 / 欠款统计 / 逐月台账 域内核（**纯函数**）。
 
 依据：《说明书》§4.2.3（分类三类）· §4.4.2（付款状态两态 / 一次付款一条流水）· §4.4.5（撤销必填原因）
-      · §4.5.1（欠款三类口径）· §4.5.2（期初占位行）· §4.5.4（逐月台账）· §4.5.5（付款统计，与台账同源互补）。
+      · §4.5.1（欠款三类口径）· §4.5.2（期初占位行）· §4.5.4（逐月台账）· §4.5.5（实际付款统计）。
 """
 
 from __future__ import annotations
@@ -378,7 +378,7 @@ def opening_defaults(rows: list[NoticeDebtView], category: str, now: date | None
     return {"cutoff_ym": default_period("process", now), "fallback": True}
 
 
-# ============================================================ §4.5.5 付款统计（与台账同源）
+# ============================================================ §4.5.5 实际付款统计
 
 
 GRAN_MONTH = "month"
@@ -390,33 +390,35 @@ LAYOUT = {"left": "by_project", "right": "timeline"}   # 左栏=按项目 · 右
 _DATE_LIKE = re.compile(r"^\d{4}-\d{2}(-\d{2})?$")
 
 
-def bucket_of(doc_date: str, granularity: str) -> str:
-    """按**单据日期**归桶（§4.5.5）：月 = `YYYY-MM`；周 = 该周**周一**日期 `YYYY-MM-DD`。"""
-    d = date.fromisoformat(str(doc_date)[:10])
+def bucket_of(value: str, granularity: str) -> str:
+    """日期归桶：月 = `YYYY-MM`；周 = 该周**周一**日期 `YYYY-MM-DD`。"""
+    d = date.fromisoformat(str(value)[:10])
     if granularity == GRAN_MONTH:
         return f"{d.year:04d}-{d.month:02d}"
     return (d - timedelta(days=d.weekday())).isoformat()   # 周一 ~ 周日，标签取周一
 
 
-def sum_pay_stat(rows: list[NoticeDebtView]) -> Decimal:
-    """Σ「统计付款金额」—— **与逐月台账「付款」列同一出口**（PST-001-01）。剔除行不计。"""
-    return sum((r.pay_stat for r in rows if not r.excluded), _ZERO)
+@dataclass
+class PaymentStatView:
+    """付款统计专用投影；金额和日期来自有效流水，项目取通知书归属。"""
+
+    pay_date: str
+    amount: Decimal
+    ownership_id: int | None
 
 
 def payment_stats(
-    rows: list[NoticeDebtView], *, granularity: str = GRAN_WEEK, buckets: list[str] | None = None
+    rows: list[PaymentStatView], *, granularity: str = GRAN_WEEK, buckets: list[str] | None = None
 ) -> dict:
-    """付款统计：`{项目: {桶: Σ统计付款金额}}`（全部由 `sum_pay_stat` 同源累加）。"""
+    """付款统计：`{项目: {桶: Σ有效流水实际付款金额}}`。"""
     grid: dict = {}
     for r in rows:
-        if r.excluded:
-            continue
         key = r.ownership_id if r.ownership_id is not None else UNASSIGNED
-        b = bucket_of(r.doc_date, granularity)
+        b = bucket_of(r.pay_date, granularity)
         if buckets is not None and b not in buckets:
             continue
         grid.setdefault(key, {}).setdefault(b, _ZERO)
-        grid[key][b] += r.pay_stat
+        grid[key][b] += r.amount
     return grid
 
 
@@ -468,6 +470,6 @@ __all__ = [
     "LEDGER_SIDES", "SHARED_PROJECT_SELECTOR", "SHARED_EXPORT_ENTRY",
     "HAS_SWITCH_CALIBER_BUTTON", "MECH_HAS_MANUAL_INPUT", "ledger_remarks_key", "opening_defaults",
     "GRAN_MONTH", "GRAN_WEEK", "DEFAULT_GRANULARITY", "WINDOW", "LAYOUT",
-    "bucket_of", "sum_pay_stat", "payment_stats", "time_buckets", "project_labels", "is_date_like",
+    "bucket_of", "PaymentStatView", "payment_stats", "time_buckets", "project_labels", "is_date_like",
     "toggle_project_filter",
 ]

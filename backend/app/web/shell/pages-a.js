@@ -328,27 +328,17 @@ const flVisible=()=>FLs.filter(f=>tmIn(flf.ym,f.date)&&flHit(f)
    面板里却没有对应勾选框 ⇒ 状态与界面脱节）。这条是原「单选下拉」时代的既定行为，**必须保留**。 */
 const flPjPanel=()=>projPanel({list:()=>pjSort(uniqBy([...flProjs(),...flf.projs],v=>v)),selected:()=>flf.projs,allAct:'flPjAll',noneAct:'flPjNone',pickAct:'flPjPick',meta:PROJ_META_KEY});
 /* —— 付款统计 · 取数（《说明书》§4.5.5）——
-   取值 = Σ「统计付款金额」（与「逐月欠款台账」的「付款」列**同一个出口**）
-   ⇒ 与欠款统计**同源互补**：结算 = 付款 + 欠款。剔除行一律不计。
-   归月 / 归周 = 通知书的**单据日期**；**周 = 周一 ~ 周日**（标签取该周周一）；项目按**归属**归集。
+   取值 = Σ有效流水实际付款金额。欠款旁路字段的人工调整不改变付款事实。剔除行不计。
+   归月 / 归周 = 有效流水的**付款日期**；**周 = 周一 ~ 周日**（标签取该周周一）；项目按**归属**归集。
    ⭐ 2026-09-13 用户口径：**左栏「按项目」= 选定桶内**的分布（桶 = 月 或 周，可自己选）；
       **右栏趋势**：月粒度看**选定年的 12 个月**、周粒度看**选定季度的全部周**。 */
 const wkMon=d=>{ const t=new Date(d+'T00:00:00'); if(isNaN(t.getTime())) return '';
   t.setDate(t.getDate()-((t.getDay()+6)%7));
   return ymdOf(t); };
 const tmSun=mon=>tmD(new Date(new Date(mon+'T00:00:00').getTime()+6*864e5));     /* 该周周日 */
-const pstMonthsOfYear=y=>Array.from({length:12},(_,i)=>y+'-'+tp2(i+1));
-const pstBucket=(n,g)=>{ const d=String(n.date||'').slice(0,10); return d?(g==='周'?wkMon(d):d.slice(0,7)):''; };
-const pstRows=()=>NO.filter(ntLive).filter(n=>pstBucket(n,pst.gran));
-const pstSum=list=>N2(list.reduce((a,n)=>a+n.sp,0));
-const pstAt=(g,k)=>pstRows().filter(n=>pstBucket(n,g)===k);
-/* 该粒度下**最新有数据的桶** —— 左栏「按项目」的默认值；完全没数据时用当期 */
-const pstLatest=g=>{ const ks=[...new Set(NO.filter(ntLive).map(n=>pstBucket(n,g)).filter(Boolean))].sort();
-  return ks[ks.length-1]||(g==='周'?wkMon(SYS_TODAY):SYS_YM); };
-const pstY=()=>pst.ym||pstLatest(pst.gran);
 const pstYear=()=>pst.year||Number(SYS_YM.slice(0,4));
 const pstQq=()=>/^\d{4}Q[1-4]$/.test(pst.q||'')?pst.q:tmQNow();
-/* ⭐ 已接后端：付款统计**读 `/api/m05/stats`**（§4.5.5 的唯一出口，与欠款同源互补）。
+/* ⭐ 已接后端：付款统计**读 `/api/m05/stats`**（§4.5.5 的唯一出口）。
    ⚠️ 桶（周 / 月）与粒度由后端给；前端只做「当前桶 → 按项目条」这一层**显示**映射。 */
 const m05BucketKey=()=>{ const now=new Date();
   const p=n=>String(n).padStart(2,'0');
@@ -365,11 +355,12 @@ const m05InBucket=(date,bk,g)=>{ const s=String(date||''); if(!s||!bk) return fa
 const pstData=()=>{ const st=M05.stats||{};
   const g=M05_GRAN_UI[st.granularity]||pst.gran;
   const buckets=st.buckets||[], right=st.right||[], left=st.left||[];
-  let bi=buckets.indexOf(m05BucketKey()); if(bi<0) bi=buckets.length-1;
+  const selected=String(pst.ym||'');
+  let bi=buckets.findIndex(b=>g==='周'?b===selected:b.slice(0,7)===selected.slice(0,7));
+  if(bi<0) bi=buckets.findIndex(b=>g==='周'?b===m05BucketKey():b.slice(0,7)===m05BucketKey().slice(0,7));
+  if(bi<0) bi=buckets.length-1;
   const bk=bi>=0?buckets[bi]:'';
   const year=st.year||pstYear(), q=st.quarter||pstQq();
-  const live=FLs.filter(f=>!f.voided);
-  const bkRows=live.filter(f=>m05InBucket(f.date,bk,g));
   return { g, bk, ax: g==='周'?`${year}-${q}`:String(year),
     keys:buckets,
     labels: g==='周' ? buckets.map(b=>b.slice(5)+' ~ '+m05Sun(b).slice(5))
@@ -380,8 +371,9 @@ const pstData=()=>{ const st=M05.stats||{};
     title: g==='周' ? `${year} 年 Q${q}` : `${year} 年`,
     byPj: left.map(r=>[r.key||r.label, numOr0((r.cells||[])[bi])])
              .filter(x=>x[0]).sort((a,b)=>b[1]-a[1]),
-    bkTotal: N2(bkRows.reduce((a,f)=>a+f.amt,0)), bkCnt: bkRows.length,
-    n: !!(left.length || numOr0(st.total)) };
+    bkTotal: numOr0(right[bi]), bkCnt: numOr0((st.counts||[])[bi]),
+    total: N2(right.reduce((a,v)=>a+numOr0(v),0)),
+    n: !!buckets.length }; // 空窗口仍保留选桶/时间范围入口，便于查看有付款的期间。
 };
 const PJ_TRAIL=[];
 /* MOD-01 筛选状态（R4：改动即时生效、无「应用」按钮；默认「在建」= §2.7 口径） */

@@ -241,7 +241,7 @@ const sumRowOf=(thead,rows,sums,opt={})=>{
 
 /* —— 各表**表头常量**（唯一出处）：表头与"空态行的跨列数"都从它来 —— 见上方 `thCount` ——
    ⚠️ 一律**逐字搬**，不要顺手改标记/空格：`applySorts` 靠表头文本判列类型与可排性。 */
-const LED_THEAD=`      <th style="width:44px">序号</th><th>月份</th><th>其他支出金额</th><th>付款</th><th>欠款</th><th>备注</th><th>操作</th>`;
+const LED_THEAD=`      <th style="width:44px">序号</th><th>月份（按单据日期）</th><th>其他支出金额</th><th>付款</th><th>欠款</th><th>备注</th><th>操作</th>`;
 /* MOD-05 付款流水的表头（与其余 7 张同款：抽常量 ⇒ 空态行的跨列数由 `thCount()` 派生，不写死） */
 const FL_THEAD=`<th>流水号</th><th>单据编码</th><th>付款项目</th><th>付款日期</th><th>付款金额</th><th>实际付款方式</th><th>备注</th><th>操作人</th><th>状态</th><th>操作</th>`;
 const PJ_THEAD=`<th data-nosort>排序<span class="mut">（自定义 · 全站跟随）</span></th><th>类型</th><th>展示名<span class="mut">（默认取仓库名 · 可改）</span></th><th>仓库名<span class="mut">（唯一标识 · 不可改）</span></th><th>项目全名<span class="mut">（可改 · 留痕）</span></th><th>信息化编号<span class="mut">（不可改）</span></th><th>状态</th><th>所属壳</th><th>小微识别关键词</th><th>操作</th>`;

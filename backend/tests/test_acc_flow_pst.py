@@ -12,12 +12,12 @@ from app.mod05_flow.domain import (
     LAYOUT,
     UNASSIGNED,
     NoticeDebtView,
+    PaymentStatView,
     bucket_of,
     is_date_like,
     monthly_aggregate,
     payment_stats,
     project_labels,
-    sum_pay_stat,
     time_buckets,
     toggle_project_filter,
 )
@@ -38,16 +38,12 @@ def _view(doc_date, pay, owner=1, excluded=False):
 
 
 @acc("ACC-FLOW-PST-001", "001-01")
-def test_取值与台账付款列同一出口():
-    rows = [_view("2026-08-03", "100"), _view("2026-08-04", "50"), _view("2026-08-05", "999", excluded=True)]
-    # 同一取值出口：sum_pay_stat
-    assert sum_pay_stat(rows) == to_money("150")
-    # 与逐月台账「付款」列一致（同源）
+def test_付款统计不受欠款人工调整影响():
+    rows = [_view("2026-08-03", "150")]
     led_pay = monthly_aggregate(rows, CATEGORY_MATERIAL, 1)["2026-08"]["pay"]
-    assert led_pay == sum_pay_stat(rows)
-    # 统计网格的桶内合计同样由该出口累加
-    stats = payment_stats(rows, granularity=GRAN_MONTH)
-    assert stats[1]["2026-08"] == sum_pay_stat(rows)
+    assert led_pay == to_money("150")
+    stats = payment_stats([PaymentStatView("2026-09-02", to_money("100"), 1)], granularity=GRAN_MONTH)
+    assert stats == {1: {"2026-09": to_money("100")}}
 
 
 @acc("ACC-FLOW-PST-001", "001-02")
@@ -84,3 +80,57 @@ def test_按项目列表为完整项目名不被当日期截断():
     assert "泗阳百通4#锅炉项目仓库" in labels and "甲展示名" in labels   # **完整**项目名
     assert not any(is_date_like(x) for x in labels)                     # 不得形如日期（周粒度下会被误当日期）
     assert is_date_like("2026-08-17") is True                           # 反证：日期形态确实会被识别
+
+
+@acc("ACC-FLOW-PST-001", "001-03")
+def test_跨月周桶与周一标签():
+    rows = [PaymentStatView("2026-08-31", to_money("20"), 1),
+            PaymentStatView("2026-09-06", to_money("30"), 1)]
+    assert payment_stats(rows, granularity=GRAN_WEEK) == {1: {"2026-08-31": to_money("50")}}
+    assert payment_stats(rows, granularity=GRAN_MONTH) == {1: {"2026-08": to_money("20"), "2026-09": to_money("30")}}
+
+
+@acc("ACC-FLOW-PST-001", "001-01")
+def test_组装单笔调整与撤销剔除及台账日期():
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod01_projects.models import Project
+    from app.mod05_flow.models import PaymentFlow, FLOW_REVOKED
+    from app.mod05_flow.service import build_stats, notice_debt_views
+    from tests.m05_helpers import FakeSession, make_notice_row, make_flow, make_project
+
+    s = FakeSession({Project: [make_project(11, "甲仓")],
+        PaymentNotice: [make_notice_row(1, doc_date="2026-08-03", paid="150"),
+                        make_notice_row(2, paid="999", excluded=True)],
+        PaymentFlow: [make_flow(1, notice_id=1, amount="100", pay_date="2026-09-02"),
+                      make_flow(2, notice_id=1, amount="900", status=FLOW_REVOKED),
+                      make_flow(3, notice_id=2, amount="999"),
+                      make_flow(4, notice_id=None, amount="999")]})
+    st = build_stats(s, granularity=GRAN_MONTH, today=date(2026, 10, 10))
+    ix = st["buckets"].index("2026-09")
+    assert st["left"][0]["cells"][ix] == st["right"][ix] == "100.00"
+    assert st["counts"][ix] == 1
+    assert st["total"] == "100.00"
+    assert monthly_aggregate(notice_debt_views(s), CATEGORY_MATERIAL, 11)["2026-08"]["pay"] == to_money("150")
+
+
+@acc("ACC-FLOW-PST-001", "001-01")
+def test_跨桶多笔付款与欠款调整独立():
+    from app.mod05_flow.service import payment_stat_views
+    from tests.m05_helpers import make_flow
+    n = _view("2026-08-03", "150")
+    fs = [make_flow(1, notice_id=n.notice_id, amount="40", pay_date="2026-09-02"),
+          make_flow(2, notice_id=n.notice_id, amount="60", pay_date="2026-10-03")]
+    rows = payment_stat_views([n], fs)
+    expected = {1: {"2026-09": to_money("40"), "2026-10": to_money("60")}}
+    assert payment_stats(rows, granularity=GRAN_MONTH) == expected
+    n.pay_stat = to_money("20")
+    n.settle_stat = to_money("50")
+    assert payment_stats(payment_stat_views([n], fs), granularity=GRAN_MONTH) == expected
+    fs[1].pay_date = "2026-09-03"
+    assert payment_stats(payment_stat_views([n], fs), granularity=GRAN_MONTH) == {1: {"2026-09": to_money("100")}}
+    assert payment_stat_views([n], []) == []  # 只有欠款旁路值不制造付款事实。
+    from app.mod05_flow.models import FLOW_REVOKED
+    fs[0].status = FLOW_REVOKED
+    fs.append(make_flow(3, notice_id=n.notice_id, amount="55", pay_date="2026-10-09"))
+    assert payment_stats(payment_stat_views([n], fs), granularity=GRAN_MONTH) == {1: {"2026-09": to_money("60"), "2026-10": to_money("55")}}
+    assert n.pay_stat == to_money("20")  # 撤回重付修改事实，欠款人工值仍保留。

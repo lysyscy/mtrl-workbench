@@ -3,8 +3,8 @@
 ⚠️ **不重写任何判定**：撤销走 `domain.revoke_flow`、欠款走 `domain.debt_by_category`、台账走
    `domain.build_ledger`、统计走 `domain.payment_stats`、状态走 `domain.payment_status`
    —— 本文件只做**取数与装配**。
-⚠️ **付款统计与逐月台账的「付款」列同源**（都经 `domain.sum_pay_stat` / `monthly_aggregate`），
-   不另算一套（§4.5.5「同源互补」）。
+⚠️ 付款统计读有效流水的实际金额和付款日期；欠款/台账读旁路统计金额，
+   台账仍按单据日期归月。人工修正欠款不改变付款事实（§4.5.5）。
 
 口径：《说明书》§4.4.2（付款登记 / 两态）· §4.4.5（撤销必填原因）· §4.5.1（欠款三类）
       · §4.5.2（期初占位行）· §4.5.4（逐月台账）· §4.5.5（付款统计）。
@@ -62,7 +62,7 @@ list_flows = repo.list_flows            # 全部流水（含已撤销）—— �
 
 
 def notice_debt_views(s: Session) -> list[NoticeDebtView]:
-    """付款通知书 → 欠款视图（**欠款 / 台账 / 统计共用同一批行**，同一出口）。"""
+    """付款通知书 → 欠款/台账视图；付款统计只借其归属和剔除信息。"""
     out: list[NoticeDebtView] = []
     for n in repo.notice_rows(s):
         cat = str(n.category or "").strip() or CATEGORY_MATERIAL
@@ -456,7 +456,7 @@ def build_ledger(
     }
 
 
-# ---------------------------------------------------------------- ④ 付款统计（与台账同源）
+# ---------------------------------------------------------------- ④ 实际付款统计
 
 
 def set_opening_payment(s: Session, *, project_id: int, category: str, payment: str) -> dict:
@@ -503,7 +503,8 @@ def build_stats(
         quarter = (today.month - 1) // 3 + 1
     buckets = window_buckets(gran, year=year, quarter=quarter, today=today)
 
-    rows = notice_debt_views(s)
+    notices = notice_debt_views(s)
+    rows = payment_stat_views(notices, repo.list_flows(s))
     index = project_index(s)                      # ⚠️ 循环外取一次（别在循环里回查 = 伪 N+1）
     names = {pid: project_label(p) for pid, p in index.items()}
     grid = dom.payment_stats(rows, granularity=gran, buckets=set(buckets))
@@ -529,11 +530,24 @@ def build_stats(
         "buckets": buckets,
         "left": left,
         "right": right,
-        "total": f"{dom.sum_pay_stat(rows):.2f}",
+        "total": f"{sum((r.amount for r in rows), Decimal('0')):.2f}",
+        "counts": [sum(1 for r in rows if dom.bucket_of(r.pay_date, gran) == b)
+                   for b in buckets],
         "layout": dom.LAYOUT,
         "project_id": project_id,
         "project_options": project_options(s),
     }
+
+
+def payment_stat_views(notices: list[NoticeDebtView], flows: list[PaymentFlow]) -> list[dom.PaymentStatView]:
+    """按通知书归属/剔除关联有效流水；欠款人工值不参与付款统计。"""
+    included = {n.notice_id: n for n in notices if not n.excluded}
+    rows = []
+    for f in flows:
+        n = included.get(f.notice_id)
+        if f.status == FLOW_EFFECTIVE and n is not None:
+            rows.append(dom.PaymentStatView(str(f.pay_date or ""), to_money(f.amount), n.ownership_id))
+    return rows
 
 
 __all__ = [

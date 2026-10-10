@@ -758,8 +758,7 @@ V.m05=()=>{
         「项目」选择器，卡内左右两栏（左辅材 / 右机械），每栏自带小标题与该侧「＋ 录入期初占位行 / 导出 Excel」；
         **不再有「辅材 / 机械」切换按钮**。 */
   const lp=ledCur();
-  /* ⛔ 表头 `LED_THEAD` **一字未动** —— 它在 `ui_parity` 的 `U5` 登记表里（原型与壳这段必须**逐字一致**）；
-     ⚠️ 口径：本栏两个数**只属于「卡头所选的那个项目」**，与**上方那三栏**（按项目分列）**不是同一个数**
+  /* ⚠️ 口径：本栏两个数**只属于「卡头所选的那个项目」**，与**上方那三栏**（按项目分列）**不是同一个数**
        ⇒ 一律写明「本项目」（§4.7：同一个数不许两处换说法、不同口径不许并排不说明）。
      —— 本栏显示设计（现状行 / 合计行正名 / 空月压暗 / 按钮带分类名）的来历与逐条理由：
         见《开发计划》§15 `TAIL-141`（`P2-b` 注释分级：故事下沉台账，代码里只留"为什么必须这么写"）。 */
@@ -843,11 +842,12 @@ V.m05=()=>{
         <span class="mut sm">看哪个项目（两侧共用）</span>
         <span class="pjwrap" style="position:relative;display:inline-block">${PJB({act:'ledPjToggle',w:150,label:`${esc(pjLabel(lp))}${pjArcMark(pjRowOf(lp))}`,cls:`btn${pjIsOpen('ledPj')?' on':''}`,attrs:' title="台账左右两栏「共用」这一个项目（切一次两边都换）；⛔ 它只管屏幕上看哪一行 —— 导出要包含哪些项目在「导出…」那条面板里"'})}${pjIsOpen('ledPj')?ledPjPanel():''}</span>
       </div>
+      <div class="mut sm">台账按单据日期归月，为了监控拖了很久的付款：单据日期越早，拖延越久。</div>
       <div class="grid2">${ledHalf('辅材')}${ledHalf('机械')}</div></div>
   </div>
   <div class="card" style="margin-bottom:calc(12px * var(--fscale))"><h4>付款统计<span class="sp" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn sm${pd.g==='周'?'':' gost'}" data-act="pstGran" data-g="周">按周（周一 ~ 周日）</button>
     <button class="btn sm${pd.g==='月'?'':' gost'}" data-act="pstGran" data-g="月">按月</button>
-    <span class="pill">取值 = Σ <b>统计付款金额</b> · 归${pd.g==='周'?'周':'月'}按<b>单据日期</b> · 项目按<b>归属</b></span>
+    <span class="pill">取值 = Σ <b>实际付款金额</b> · 归${pd.g==='周'?'周':'月'}按<b>付款日期</b> · 项目按<b>归属</b></span>
     <span class="mut sm" title="本页不单独设导出按钮（2026-09-13 用户口径）：它是「付款流水」的汇总视图 —— 要看数就导出付款流水">汇总视图 · 不单独导出</span>
   </span></h4>
     <div class="bd">
@@ -867,11 +867,11 @@ V.m05=()=>{
             ${tmBtn('pstAxis',{scope:'psta',val:pd.ax,label:pd.axLabel,modes:[pd.g==='周'?'季度':'年']})}
             <span class="mut sm">窗口合计 <b>${M(pd.total)}</b></span>
           </div>
-          <div class="mut sm" style="margin-bottom:calc(5px * var(--fscale))">${pd.g==='周'?'周 = 周一至周日，标签为该周起止':'月 = 自然月（未到的月记 0）'} · 分桶依据 = 单据日期</div>
+          <div class="mut sm" style="margin-bottom:calc(5px * var(--fscale))">${pd.g==='周'?'周 = 周一至周日，标签为该周起止':'月 = 自然月（未到的月记 0）'}</div>
           ${pstBars(pd.series,false,pd.labels)}
         </div>
       </div>`
-      :EMPTYBOX('没有付款数据（取值 = 统计付款金额）', '换个时间范围或粒度（左上 / 右上），或清掉筛选')}
+      :EMPTYBOX('没有付款数据（取值 = 实际付款金额）', '换个时间范围或粒度（左上 / 右上），或清掉筛选')}
     </div>
   </div>
   <div class="card" style="margin-bottom:0"><h4>付款流水（实际付款记录）<span class="sp"><span class="mut sm">多次付款各记一条独立流水 · <b>撤销入口在本页</b> · 撤销必须填原因</span>
