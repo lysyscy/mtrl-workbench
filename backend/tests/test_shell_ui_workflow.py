@@ -279,3 +279,121 @@ def test_项目页实际待办与错误保留(ui_page):
     p.evaluate("ARCP=[];ARCP_ERR='获取失败，请重试';render();")
     assert '待建档清单没取到' in p.inner_text('#archBox')
     assert '获取失败，请重试' in p.inner_text('#archBox')
+
+
+@acc()
+def test_付款流水默认只看生效且随时能看全部(ui_page):
+    """⭐ 2026-10-10 用户裁定：状态**初始与重置都默认「生效」**；「全部 / 已撤销」仍随时可手动切。
+
+    ⚠️ 这里同时钉住"默认收紧"最容易踩的两头：
+      ① **默认确实生效**（初始进页面只看到 1 条生效、已撤销那条不在屏幕上）；
+      ② **没有把已撤销藏起来**（切「全部」两条都在、切「已撤销」能看到它与撤销原因；「重置」回「生效」）。
+    ⛔ 数据本身一条没少 —— `FLs` 仍是后端给的全量（壳内筛，不是后端改口径）。
+    """
+    p=ui_page
+    # ⚠️ **刻意不设 `flf.state`** —— 这一条要验的就是**页面自己的初始值**；
+    #   在这里摆上 `flf.state='生效'` 会把"初始默认"这半变成自证（变异成「全部」也照样绿）。
+    p.evaluate('''() => {
+      const ym=bjMonth();
+      FLs.splice(0);
+      FLs.push({id:'F1',nid:'101',date:ym+'-05',amt:'100.00',method:'现汇',remark:'第一笔',op:'测试',voided:false,reason:''},
+                {id:'F2',nid:'101',date:ym+'-08',amt:'50.00',method:'现汇',remark:'撤掉的那笔',op:'测试',voided:true,reason:'付错了'});
+      flf.ym=ym;flf.projs=[];flf.method='全部';flf.q='';
+      VIEW='m05';render();
+    }''')
+    assert p.evaluate('flf.state') == '生效', "付款流水的初始状态不是「生效」"
+    assert p.evaluate('flVisible().map(f=>f.id)') == ['F1'], "初始不是「只看生效」"
+    assert p.input_value('#flState') == '生效'
+    assert p.locator('[data-sort-key="m05:flows"] tbody tr:not(.sumrow)').count() == 1
+    assert '合计（生效 1 条 · 不含已撤销）' in p.inner_text('#view')
+    p.select_option('#flState', '全部')
+    assert p.evaluate('flVisible().map(f=>f.id)') == ['F1', 'F2']
+    p.select_option('#flState', '已撤销')
+    rows = p.locator('[data-sort-key="m05:flows"] tbody tr:not(.sumrow)')
+    assert rows.count() == 1 and '付错了' in rows.first.inner_text()
+    p.click('[data-act="flReset"]')
+    assert p.evaluate('flVisible().map(f=>f.id)') == ['F1']
+    assert p.input_value('#flState') == '生效'
+    assert p.evaluate('FLs.length') == 2, "默认收紧不该动数据（后端仍是全量）"
+
+
+@acc()
+def test_撤销付款跳转只定位生效流水(ui_page):
+    """「撤销付款」有**多条**生效流水时跳 `MOD-05` 并逐条撤 ⇒ 落地页必须**只定位生效的那些**。
+
+    ⚠️ 反面情形一起钉：那条**已撤销**的流水不该混进这屏（用户要撤的是生效的那几条，
+    混进来等于让他自己再筛一遍）；关键词仍按单据编码定位。
+    """
+    p=ui_page
+    p.evaluate('''() => {
+      FLs.splice(0);
+      FLs.push({id:'F1',nid:'101',date:bjMonth()+'-05',amt:'100.00',method:'现汇',remark:'',op:'测试',voided:false,reason:''},
+                {id:'F2',nid:'101',date:bjMonth()+'-06',amt:'60.00',method:'现汇',remark:'',op:'测试',voided:false,reason:''},
+                {id:'F3',nid:'101',date:bjMonth()+'-07',amt:'20.00',method:'现汇',remark:'',op:'测试',voided:true,reason:'上月已撤'});
+      VIEW='m03';render();
+    }''')
+    p.evaluate("ACT.ntRevoke({dataset:{id:'101'}})")
+    assert p.evaluate('VIEW') == 'm05'
+    assert p.evaluate('flf.q') == 'DOC-101'
+    assert p.evaluate('flf.state') == '生效'
+    assert p.evaluate('flVisible().map(f=>f.id)') == ['F1', 'F2'], "跳转过来混进了已撤销的流水"
+    assert p.input_value('#flState') == '生效'
+
+
+@acc()
+def test_发票子表新增草稿默认北京时间当日且可改(ui_page):
+    """⭐ 2026-10-10 用户裁定：**供应商发票 / 贸易公司发票 / 付款**三张子表新增草稿的日期
+    都默认取**北京时间当日**、**可改**；「历史未结金额」那行仍按**核对截至日**（日期语义不同，不可同日）。
+
+    ⚠️ 三条钉：① 默认值取的是 `SYS_TODAY`（⛔ 不写死日期字面量，`ACC-I8-TIME` 也钉着这条）；
+      ② 改的是**草稿层**、保存时按改后的日期发出去（不是改完就当落库，也不是发默认值）；
+      ③ **校验不变**（日期仍必填、金额仍须 > 0）。
+    """
+    p=ui_page
+    p.evaluate('''() => {
+      window.pushJc=()=>{JCs.push(
+               {id:'J1',proj:'测试仓库',date:'2026-01-01',material:'钢材',supplier:'甲供应商',contractAmt:12000,
+                inv_sum:'100.00',trade_inv_sum:'0.00',pay_sum:'0.00',tradeCo:'',remark:''},
+               {id:'J2',proj:'测试仓库',date:'2026-01-01',material:'铝材',supplier:'乙供应商',contractAmt:20000,
+                inv_sum:'0.00',trade_inv_sum:'50.00',pay_sum:'0.00',tradeCo:'某贸易公司',remark:''},
+               {id:'J3',proj:'测试仓库',date:'2026-01-01',material:'历史材料',supplier:'丙供应商',contractAmt:300,
+                inv_sum:'300.00',trade_inv_sum:'0.00',pay_sum:'0.00',tradeCo:'',
+                remark:JC_HISTORY_PREFIX+'2025-06-30'});};
+      window.saved=[];
+      API.m11Detail=async()=>({data:{supplier_invoices:[],trade_invoices:[],payments:[]}});
+      API.m11InvAdd=async b=>{saved.push(b);return {ok:true};};
+      API.m11PayAdd=async b=>{saved.push(b);return {ok:true};};
+      API.m11List=async()=>({rows:[]});
+      window.TODAY=SYS_TODAY;
+      pushJc();
+    }''')
+    today = p.evaluate('TODAY')
+    assert len(today) == 10 and today[4] == '-' and today[7] == '-', f"不是 YYYY-MM-DD：{today}"
+    # ① 供应商发票
+    p.evaluate("ACT.jcInvDlg({dataset:{id:'J1'}})")
+    p.click('[data-act="jcSubAdd"][data-kind="inv"]')
+    assert p.input_value('[data-act="jcSubSet"][data-k="date"]') == today
+    # ② 可改：改的是草稿层，保存按改后的日期发出去
+    p.fill('[data-act="jcSubSet"][data-k="date"]', '2026-02-03')
+    p.locator('[data-act="jcSubSet"][data-k="date"]').dispatch_event('change')
+    assert p.evaluate('jcSubD.date') == '2026-02-03'
+    p.fill('[data-act="jcSubSet"][data-k="amt"]', '888')
+    p.locator('[data-act="jcSubSet"][data-k="amt"]').dispatch_event('change')
+    p.click('[data-act="jcSubSave"]')
+    p.wait_for_function('saved.length===1')
+    assert p.evaluate('saved[0]') == {'id': 'J1', 'kind': 'supplier', 'date': '2026-02-03', 'amount': '888'}
+    # ③ 贸易公司发票（同款）—— ⚠️ 保存会 `reloadM11()` 重拉（`JCs` 被清空）⇒ 先把合同放回去
+    p.evaluate("closeModal();pushJc();ACT.jcTInvDlg({dataset:{id:'J2'}})")
+    p.click('[data-act="jcSubAdd"][data-kind="tinv"]')
+    assert p.input_value('[data-act="jcSubSet"][data-k="date"]') == today
+    # ④ 付款子表（原有行为不许被这次改动带坏）
+    p.evaluate("closeModal();ACT.jcPayDlg({dataset:{id:'J1'}})")
+    p.click('[data-act="jcSubAdd"][data-kind="pay"]')
+    assert p.input_value('[data-act="jcSubSet"][data-k="date"]') == today
+    # ⑤ 例外：历史未结金额仍按核对截至日（那一行的日期含义 = 结转核对日，不是"今天开的票"）
+    p.evaluate("closeModal();ACT.jcInvDlg({dataset:{id:'J3'}})")
+    p.click('[data-act="jcSubAdd"][data-kind="inv"]')
+    assert p.input_value('[data-act="jcSubSet"][data-k="date"]') == '2025-06-30'
+    # ⑥ 校验不变：日期清空后不许落库（必填这条口径没动）
+    p.evaluate("jcSubD.date='';jcSubD.amt='100';ACT.jcSubSave()")
+    assert p.evaluate('saved.length') == 1, "日期为空也写进去了 —— 必填校验被改坏了"

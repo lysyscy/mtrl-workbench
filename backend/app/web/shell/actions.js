@@ -390,7 +390,7 @@ const ACT={
          toast(`<b>保存失败</b>：${esc((r && r.message) || '系统没有给出原因，请重试')}`
            + `<br><span class="mut sm">这一格已还原成原来的值</span>`, 7000);
          return reloadNotices(); }
-       toast(r.message, r.changed?4800:4600); return reloadNotices(); })
+       toast(r.message, r.changed?4800:4600); return (k==='sp'?reloadM11():Promise.resolve()).then(()=>reloadNotices()); })
      .catch(e=>{ toast(`<b>保存失败</b>：${esc(e.message||e)}`); render(); }); },
  /* ⭐ 批量打印付款通知书（§4.6 场景五 · REQ-R6 · API-07）—— 2026-09-14 补出口：
     口径 = **勾选通知书 → 人工点击 → 调 i8 接口批量打印**（入参就是勾选的通知书）。
@@ -971,8 +971,10 @@ const ACT={
    const live=FLs.filter(f=>f.nid===n.id&&!f.voided);
    if(!live.length){ toast('这行通知书当前<b>没有生效的付款流水</b> —— 无需撤销'); render(); return; }
    if(live.length===1) return ACT.revDlg({ dataset:{fid:live[0].id}, tagName:'BUTTON' });
-   /* 多条：跳到流水页并只筛这一单（流水页有"关键词"筛选，用它把单据编码填进去） */
-   flf.ym=fNt.month; flf.projs=[]; flf.method='全部'; flf.state='全部'; flf.q=n.code||'';
+   /* 多条：跳到流水页并只筛这一单（流水页有"关键词"筛选，用它把单据编码填进去）
+        ⚠️ 状态取「生效」＝ 与 `flf` 的默认值一致（2026-10-10 用户裁定）—— 逐条撤的对象本来就只有生效流水，
+           跳过去却混着一屏已撤销的行 = 让用户自己再筛一遍。⛔ 不改后端：那边仍是全量查询。 */
+     flf.ym=fNt.month; flf.projs=[]; flf.method='全部'; flf.state='生效'; flf.q=n.code||'';
    pjClose('flPj');   /* 面板收起（变量名是 `pjIsOpen('flPj')`，交互路径与 `rollback` 都用它） */
    go('m05');   /* `go` 内部已 render + 滚动到顶；离开 m03 它会自动 clear pickSet */
    toast(`该行有 <b>${live.length}</b> 条生效流水 —— 已跳到「付款流水与欠款统计」并筛出 <b>${esc(n.code||n.id)}</b><br>请逐条点「撤销」并分别填写原因（撤销是<b>逐条留痕</b>的动作，不做一次撤全部）`,6800); },
@@ -1033,7 +1035,7 @@ const ACT={
     ⚠️ ⭐ 「付款项目」自 2026-09-13 起是**共用面板（多选）** ⇒ 本动作**不再读 `#flPj`**（该控件已不存在），
        只联动「实际付款方式 / 状态」两个下拉；项目那一路走 `flPjPick` / `flPjAll` / `flPjNone`。 */
  flFilter:()=>{ const b=$('#flMethod'), c=$('#flState');
-  flf.method=(b&&b.value)||'全部'; flf.state=(c&&c.value)||'全部'; render(); },
+  flf.method=(b&&b.value)||'全部'; flf.state=(c&&c.value)||'生效'; render(); },
  /* —— 付款流水「付款项目」共用面板（能力由调用点声明：**多选**） —— */
  flPjToggle:()=>{ pjToggle('flPj'); render(); },
  flPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
@@ -1043,8 +1045,8 @@ const ACT={
  /* ⭐ 关键词**只在这一个按钮里生效**（输入框不挂 data-act ⇒ 走不到委托层）—— 别的动作不会带着它去搜 */
  flSearch:()=>{ const i=$('#flQ'); flf.q=String((i&&i.value)||'').trim(); render();
   toast(flf.q?`付款流水已按关键词 <b>${esc(flf.q)}</b> 搜索`:'已清空关键词'); },
- flReset:()=>{ flf.ym=bjMonth(); flf.projs.length=0; flf.method='全部'; flf.state='全部'; flf.q=''; pjClose('flPj'); render();
-  toast('付款流水筛选已重置（年月回到默认「当月」，§9.2）'); },
+ flReset:()=>{ flf.ym=bjMonth(); flf.projs.length=0; flf.method='全部'; flf.state='生效'; flf.q=''; pjClose('flPj'); render();
+  toast('付款流水筛选已重置（年月回到默认「当月」，状态回到「生效」，§9.2）'); },
  /* —— 付款统计（§4.5「付款」侧）—— 粒度切换 · 点项目条联动下方流水 —— */
  pstGran:t=>{ pst.gran=(t&&t.dataset&&t.dataset.g)||'周'; pst.ym=''; mp.open=null; render(); },   /* 换粒度 → 桶回到该粒度下"最新有数据"的那个（兜底也随默认值走「周」） */
  pstPj:t=>{ const k=(t&&t.dataset&&t.dataset.pj)||''; if(!k) return;
@@ -1107,6 +1109,13 @@ const ACT={
   /* —— MOD-01 —— */
   /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` —— 全名**可改 + 留痕**（§2.3.1 / §9.3）。
      ⚠️ 尾码剥离（`strip_trailing_code`）在**后端**做：导出 / 仓库同步 / 项目同步**三处共用同一份**。 */
+  pjCreateOpen:()=>modal({title:'手工建档 · 无仓库项目',body:`<div class="fld"><label for="pjCreateFull">项目全名</label><input class="inp" id="pjCreateFull" style="width:100%"></div><div class="fld"><label for="pjCreateDisp">展示名</label><input class="inp" id="pjCreateDisp" style="width:100%" placeholder="留空取项目全名"></div>`,footer:`<button class="btn" data-act="pjCreateCancel">取消</button><button class="btn pri" data-act="pjCreateSave">保存</button>`}),
+  pjCreateCancel:()=>closeModal(),
+  pjCreateSave:async()=>{ const full=String($('#pjCreateFull').value||'').trim(), disp=String($('#pjCreateDisp').value||'').trim()||full;
+    if(!full) return toast('请填写项目全名');
+    const r=await pjAct(()=>API.pjCreate({project_type:'normal',name_full:full,disp}), '项目已建档');
+    if(r){ closeModal(); fPj.status='在建'; fPj.type='全部'; fPj.q=full; render(); }
+  },
   editFull:t=>{ const p=PJs.find(x=>x.id===t.dataset.id), v=t.value.trim(); if(!p||v===p.full) return;
     pjAct(()=>API.pjUpdate(p.id,{name_full:v}),
       `项目全名已修改并<b>留痕</b>（尾部的括号编号由系统统一剥掉）`); },
@@ -2147,12 +2156,12 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
     ⇒ 原「一个按钮装三张子表」的 `jcDetail` 已删除。 */
  jcInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);                       /* ⭐ 子表明细**不在列表接口里** ⇒ 开弹窗前拉一次 */
-   modal({title:`供应商发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcInvDlg({dataset:{id:j.id}}),body:
-     `${TBL({cls:'cond',key:'modal:jcInv',head:JCINV_THEAD,
+   modal({title:`${jcHistoryDate(j)?'历史未结金额':'供应商发票子表'} · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcInvDlg({dataset:{id:j.id}}),body:
+     `${jcHistoryDate(j)?`<div class="tip">历史未结金额，核对截至日 ${esc(jcHistoryDate(j))}；日期表示结转核对日期，已扣除此前付款。</div>`:''}${TBL({cls:'cond',key:'modal:jcInv',head:jcHistoryDate(j)?JCINV_THEAD.replace('发票日期','核对截至日'):JCINV_THEAD,
       rows:j.invoices.map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`),
       empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
-      sum:(jcSubOn('inv',j.id)?jcSubRow():'')+sumRowOf(JCINV_THEAD, [], {2:[()=>jcInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
-      <div style="margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="inv">＋ 增加一张发票</button></div>
+      sum:(jcSubOn('inv',j.id)?(jcHistoryDate(j)?jcSubRow().replace('发票日期 / 付款日期（决定归月）','核对截至日'):jcSubRow()):'')+sumRowOf(JCINV_THEAD, [], {2:[()=>jcInvSum(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
+      <div style="margin-top:calc(8px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="inv">${jcHistoryDate(j)?'＋ 录入历史未结金额':'＋ 增加一张发票'}</button></div>
       <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0">${j.tradeCo?'本合同有贸易公司，本表不计入结算；结算取贸易公司发票合计。':'本合同无贸易公司，本表合计计入结算。'}</div>`}); },
  jcTInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);
@@ -2168,20 +2177,24 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
   await jcLoadSub(j);                       /* ⭐ 付款子表同理：列表不给明细 */
    modal({title:`付款子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcPayDlg({dataset:{id:j.id}}),body:
      `${TBL({cls:'cond',key:'modal:jcPay',head:JCPAY_THEAD,
-      rows:j.payments.map((p,i)=>`<tr><td class="fc" style="white-space:nowrap">${esc(p[0]||'')}</td><td class="num">${M(p[1])}</td><td>${p[2]==='付款域引用'?tag('付款域引用','pri'):tag('手工','in')}</td><td class="ctr"><button class="btn sm dg" data-act="jcPayDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`),
+      rows:j.payments.map((p,i)=>`<tr><td class="fc" style="white-space:nowrap">${esc(p[0]||'')}</td><td class="num">${M(p[1])}</td><td>${p[2]==='付款域引用'?tag('通知书统计付款累计','pri'):tag('手工','in')}</td><td class="ctr"><button class="btn sm dg" data-act="jcPayDel" data-id="${j.id}" data-i="${i}">${p[2]==='付款域引用'?'解绑':'删'}</button></td></tr>`),
       empty:EMPTYROW(thCount(JCPAY_THEAD), '暂无付款', '点本卡右上角「＋ 加一行」录入'),
       sum:(jcSubOn('pay',j.id)?jcSubRow():'')+sumRowOf(JCPAY_THEAD, [], {1:[()=>jcPay(j),v=>'<b>'+M(v)+'</b>']}, {style:'background:var(--sf2)'})})}
       <div style="margin-top:calc(8px * var(--fscale));display:flex;gap:calc(6px * var(--fscale))"><button class="btn sm" data-act="jcSubAdd" data-id="${j.id}" data-kind="pay">＋ 手工录入</button>
         <button class="btn sm pri" data-act="jcPayRef" data-id="${j.id}">从付款域引用</button></div>
-      <div class="sm mut" style="margin-top:calc(7px * var(--fscale))">引用前请核对集采实际供应商；同一通知书不能重复引用。</div>
+      <div class="sm mut" style="margin-top:calc(7px * var(--fscale))">引用金额随通知书统计付款金额更新；日期显示最近实际付款日。解绑只解除关联，保留真实流水。</div>
       <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0"><b>欠款口径（§6.4.4）：</b>${j.tradeCo?`有贸易公司 → 贸易公司发票合计 ${M(jcTradeInvSum(j))}`:`无贸易公司 → 供应商发票合计 ${M(jcInvSum(j))}`} − 付款合计 ${M(jcPay(j))} = <b style="color:var(--dg)">${M(jcDebt(j))}</b>（<b>合同级实时，不拆月度</b>）</div>`}); },
  /* —— 集采三张子表的录入 = **表内增行**（2026-09-13 用户口径：发票子表录入要填日期；**取代原先那种浏览器原生输入小窗**）——
     `jcSubAdd` 进增行态（草稿只存 `jcSubD`）· `jcSubSet` 写草稿层（走 `change` 委托）· `jcSubSave` 校验后落库 · `jcSubCancel` 丢弃。
     ⚠️ 旧动作 `jcInvAdd` / `jcTInvAdd` / `jcPayAdd`（`prompt` 单值录入）已删除。 */
  jcSubAdd:t=>{ const j=JCs.find(x=>x.id===t.dataset.id), kind=t.dataset.kind; if(!j||!JCSUB_KIND[kind]) return;
-   jcSubKind=kind; jcSubId=j.id; jcSubD={date:(kind==='pay'?SYS_TODAY:''),amt:''};
+   /* ⭐ 2026-10-10 用户裁定：三张子表（供应商发票 / 贸易公司发票 / 付款）新增草稿的日期**都默认北京时间当日**
+      （`SYS_TODAY` ＝ 壳里唯一的北京时间取值，⛔ 不许写死日期字面量），且**随时可改**（改的是草稿层 `jcSubD`）。
+      ⚠️「历史未结金额」例外：那一行的日期语义是**核对截至日**（见下面覆盖行），不是"今天开的票"。 */
+   jcSubKind=kind; jcSubId=j.id; jcSubD={date:SYS_TODAY,amt:''};
+   if(kind==='inv'&&jcHistoryDate(j)) jcSubD.date=jcHistoryDate(j);
    jcSubDlg(kind,j.id);
-   toast(`已在子表末尾生成<b>一行草稿</b>（尚未保存）—— ${kind==='pay'?'付款日期默认取系统当日，可改':'<b>发票日期必填</b>'}；填完点「保存」写入、点「取消」丢弃`,5600); },
+     toast(`已在子表末尾生成<b>一行草稿</b>（尚未保存）—— ${(kind==='inv'&&jcHistoryDate(j))?'核对截至日已按合同填好、可改':`${kind==='pay'?'付款':'发票'}日期默认取系统当日、可改`}；填完点「保存」写入、点「取消」丢弃`,5600); },
  jcSubSet:t=>{ if(!jcSubKind) return; jcSubD[t.dataset.k]=t.value; },   /* 写草稿层，**不重绘**（避免每改一格就把焦点丢掉） */
  jcSubCancel:()=>{ const k=jcSubKind, id=jcSubId; if(!k) return; jcSubReset(); jcSubDlg(k,id);
    toast('已取消 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
@@ -2190,7 +2203,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
     ⚠️⚠️ `jcAct` 内部会 `reloadM11()` ⇒ **行对象被重建**（`JCs` 是原地换内容）⇒ 之后必须**重取**那一行，
     否则 `jcLoadSub` 会写到一个已经不在表里的旧对象上 —— **静默失效**（弹窗看着"没变化"）。 */
  jcSubSave:async()=>{ const j=JCs.find(x=>x.id===jcSubId), kind=jcSubKind; if(!j||!kind) return jcSubReset();
-   const dt=String(jcSubD.date||'').trim(), nm=(kind==='pay'?'付款金额':'发票金额'), dn=(kind==='pay'?'付款日期':'发票日期');
+   const dt=String(jcSubD.date||'').trim(), nm=(kind==='pay'?'付款金额':(jcHistoryDate(j)?'历史未结金额':'发票金额')), dn=(kind==='pay'?'付款日期':(jcHistoryDate(j)?'核对截至日':'发票日期'));
    if(!/^\d{4}-\d{2}-\d{2}$/.test(dt)) return toast(`<b>请先填「${dn}」</b>：本子表录入<b>必须填日期</b>（草稿行第一个框）`);
    const v=numOf(jcSubD.amt); if(badMoney(v,{positive:1})) return toast(badMoneyMsg(nm,{positive:1}));
    /* 金额**不设上限**（2026-09-13 用户口径）—— 这里**刻意不接** `overCap`（与「统计两金额 ≤ 审批金额」那条无关）。 */
@@ -2198,7 +2211,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
      () => (kind==='pay' ? API.m11PayAdd({id:j.id, date:dt, amount:String(v)})
            : API.m11InvAdd({id:j.id, kind:(kind==='tinv'?'trade':'supplier'), date:dt, amount:String(v)})),
      () => (kind==='pay' ? `已录入付款 <b>${M(v)}</b>（${dt}）`
-           : (kind==='tinv' ? `已增加贸易公司发票 <b>${M(v)}</b>（${dt}）` : `已增加发票 <b>${M(v)}</b>（${dt}）`)));
+           : (kind==='tinv' ? `已增加贸易公司发票 <b>${M(v)}</b>（${dt}）` : `已增加${jcHistoryDate(j)?'历史未结金额':'发票'} <b>${M(v)}</b>（${dt}）`)));
    if(!r) return;
    const j2=JCs.find(x=>x.id===j.id); if(!j2) return;      /* ⚠️ 见上方：`jcAct` 重建了行 ⇒ 重取 */
    jcSubReset();
@@ -2207,7 +2220,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    if(JCSUB_KIND[kind]) jcSubDlg(kind,j2.id);               /* 重开弹窗，让新行露面 */
    if(kind==='pay') toast(`已录入付款 <b>${M(v)}</b>（${dt}）→ 欠款 ${M(jcDebt(j2))}`);
    else if(kind==='tinv') toast(`已增加贸易公司发票 <b>${M(v)}</b>（${dt}）→ 结算金额 ${M(jcSettle(j2))}`);
-   else toast(`已增加发票 <b>${M(v)}</b>（${dt}）→ 发票合计 ${M(jcInvSum(j2))}`); },
+   else toast(`已增加${jcHistoryDate(j)?'历史未结金额':'发票'} <b>${M(v)}</b>（${dt}）→ 发票合计 ${M(jcInvSum(j2))}`); },
  /* 子表删行 ⇒ `POST /api/m11/invoice/del` / `payment/del`（按**下标**取 id —— 见 `jcLoadSub` 里的 `j._ids`）。 */
  jcInvDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
    const rid=((j._ids||{}).inv||[])[+t.dataset.i]; if(!rid) return toast('这行还没载入，请关掉弹窗重开');
@@ -2282,32 +2295,38 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
        ⇒ 本次改制时**补上真正的建档动作 `jcRowSave`**（草稿层 `jcND`，与既有 `naD` / `lgD` 同源）。 */
  jcAdd:()=>{ const cands=pjKeysOfRows(ntPjList());
    jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',
-     pj:(fJc.projs.length===1?fJc.projs[0]:(cands[0]||''))};   /* 项目默认 = 当前筛选唯一项，否则候选第一个 */
+     pj:(fJc.projs.length===1?fJc.projs[0]:(cands[0]||'')),history:false,cutoff:''};   /* 项目默认 = 当前筛选唯一项，否则候选第一个 */
    jcNewOn=true; pjClose('jcNPj'); render();
    toast('已在表格上方展开「手工新增合同」录入区 —— 填完点「保存」建档、点「取消」丢弃（<b>草稿不入库</b>）<br><span class="mut sm">发票金额 / 贸易公司发票金额 / 付款金额 = 各自子表合计（建档后在各列右侧「子表」里录）</span>',6000); },
  jcRowCancel:()=>{ jcNewOn=false; pjClose('jcNPj'); render(); toast('已取消手工新增合同 —— <b>未写入任何数据</b>'); },
  /* 草稿写入口（不重绘 —— 免得每改一格就丢焦点；本展开区没有"改一格要连带重绘"的字段） */
+ jcNHistory:t=>{ jcND.history=t.checked; if(!jcND.history) jcND.date=SYS_TODAY; jcHistoryDefaults(); render(); },
  jcNSet:t=>{ const k=t.dataset.k; if(k) jcND[k]=t.value; },
  /* 「项目」共用面板（**单选**）—— 第 10 个 `projPanel` 调用点 */
  jcNPjToggle:()=>{ pjToggle('jcNPj'); render(); },
- jcNPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; jcND.pj=v; pjClose('jcNPj'); render();
+ jcNPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return; jcND.pj=v; jcHistoryDefaults(); pjClose('jcNPj'); render();
    toast(`新增合同的项目已定为 <b>${esc(pjLabel(v))}</b>`); },
  /* 建档（替代原弹窗那句挂 `silent` 的空"保存"） */
  /* 建档 ⇒ `POST /api/m11/add`。⭐ 三态**不由这里给** —— 后端按「手工新增 = 纳入台账」填
     （判据 `001-07` 原文；⛔ 前端不许自己写死一个默认值，那样就成第二份口径了）。
     ⚠️ 项目传的是 **`project_key`（仓库名）**（§2.7.4），翻译成 id 在后端做。 */
  jcRowSave:async()=>{ if(!jcND.pj){ toast('<b>请先选「项目」</b>（点「项目」按钮展开候选）'); return; }
+   if(jcND.history){
+     if(!/^\d{4}-\d{2}-\d{2}$/.test(jcND.cutoff)) return toast('请填写核对截至日');
+     if(JCs.some(j=>j.proj===jcND.pj&&jcHistoryDate(j))) return toast('本项目已有历史汇总，请修改原行的子表');
+     jcHistoryDefaults();
+   }
    const amt=numOf(jcND.contractAmt,{empty0:1});
    if(badMoney(amt)){ toast(badMoneyMsg('合同金额')); return; }
    const tAmt=(String(jcND.tradeContractAmt||'').trim()==='')?'':numOf(jcND.tradeContractAmt,{empty0:1});
    if(tAmt!==''&&badMoney(tAmt)){ toast(badMoneyMsg('贸易公司合同金额')); return; }
-   const dt=/^\d{4}-\d{2}-\d{2}$/.test(String(jcND.date||''))?jcND.date:SYS_TODAY;
+   const dt=jcND.history?'':(/^\d{4}-\d{2}-\d{2}$/.test(String(jcND.date||''))?jcND.date:SYS_TODAY);
    const r=await jcAct(()=>API.m11Add({
        project_key:jcND.pj, contract_date:dt,
        material_name:String(jcND.material||'').trim(), supplier:String(jcND.supplier||'').trim(),
        contract_amt:String(amt), trade_co:String(jcND.tradeCo||'').trim()||null,
        trade_contract_amt:(tAmt===''?null:String(tAmt)),
-       method:String(jcND.method||'').trim(), remark:String(jcND.remark||'').trim()}),
+       method:String(jcND.method||'').trim(), remark:(jcND.history?JC_HISTORY_PREFIX+jcND.cutoff+'；':'')+String(jcND.remark||'').trim()}),
      x=>`已新增集采合同 <b>#${x.id}</b>（${esc(pjLabel(jcND.pj))} · ${esc(String(jcND.material||'').trim()||'（未填材料名）')}）—— 三态默认 <b>${esc(x.tag||'纳入台账')}</b><br><span class="mut sm">发票 / 付款金额请在该行「子表」里录入</span>`);
    if(r){
      /* 新增后**保证看得见**（同 MOD-03 / MOD-04 的做法）：放宽三档筛选；

@@ -258,8 +258,9 @@ const JCPAY_THEAD=`<th>日期</th><th>金额</th><th>来源</th><th>操作</th>`
    草稿**只存 `jcSubD`、不落 `JCs` 子表** ⇒ 取消即丢弃、子表合计与欠款不受影响。
    ⚠️ 弹窗表都带 `data-sort`，草稿行是**列对齐行**（`<td>` 数 = 表头列数）⇒ 靠行级 `.draftrow`
       并入 `applySorts` 的 pin 通道（钉表尾、不参与排序）；草稿行渲染在**合计行之前** ⇒ pin 后仍是「草稿行 → 合计行」。
-   ⚠️ 付款日期默认取 `SYS_TODAY`（原先写死 `'2026-09-11'` 那个日期字面量已删除）。
-   发票日期**必填**（未填不许保存）。 */
+   ⚠️ 三张子表的日期都默认取 `SYS_TODAY`（北京时间当日；原先写死 `'2026-09-11'` 那个日期字面量已删除，
+   2026-10-10 起**发票侧也从当日起步**，可改）。日期仍**必填**（未填不许保存）。
+   ⚠️「历史未结金额」的日期例外：那行默认填**核对截至日**（日期语义 = 结转核对日，不是"今天开的票"，见 `ACT.jcSubAdd`）。 */
 const JCSUB_KIND={inv:'invoices',tinv:'tradeInvoices',pay:'payments'};
 let jcSubKind='', jcSubId='';
 let jcSubD={date:'',amt:''};
@@ -301,7 +302,15 @@ const WH_THEAD=`<th>仓库名</th><th>行数</th><th>期初金额</th><th>收金
 /* MOD-07 焊材 / 气体提取的表头（第 12 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(EXT_THEAD)`）。
    TAIL-266：往年、12月、总金额；独立人工结余置末，原模板列序保持。 */
 const EXT_THEAD=`<th class="fl">类别</th><th class="fl">项目</th><th>往年金额</th>${Array.from({length:12},(_,i)=>`<th>MONTH-${i+1}</th>`).join('')}<th>合计</th><th>2025-11及之前</th>`;
-const extHead=()=>EXT_THEAD.replace(/MONTH-(\d+)/g,(_,m)=>`${fExt.year}-${String(m).padStart(2,'0')}`);
+/* ⭐ 2026-10-10（用户裁定）：人工历史列「2025-11及之前」**只在所选年份 ≤ 2025 时显示**。
+   为什么：这一列是"2025-11 之前"一次性结转过来的手录额，**2025-12 起已经并进每行合计**；
+   选 2026 及以后的年份时它既不按年变化、又已经计在合计里，单独摆一列只会让人误以为要按年再录一次。
+   ⚠️ **只改显示** —— 金额、年度合计、月度会大表累计、后端网格与 Excel 固定15列模板口径一律不动；
+   列的**录入入口（点格即改）也随之收进同一个条件**（该列不显示 ⇒ 没有可点的格）。 */
+const extBalColOn=()=>{ const y=String(fExt.year||'');   /* 年份不是四位数字（首帧/异常态）⇒ 照旧显示，⛔ 宁多显示不藏数据 */
+  return /^\d{4}$/.test(y)?Number(y)<=2025:true; };
+const extHead=()=>{ const h=EXT_THEAD.replace(/MONTH-(\d+)/g,(_,m)=>`${fExt.year}-${String(m).padStart(2,'0')}`);
+  return extBalColOn()?h:h.replace(/<th>2025-11及之前<\/th>$/,''); };
 /* MOD-07 月度会大表的表头（第 13 张抽出来的表）—— 用户给的**最终模板**（20 列 · **两行表头**）。
    ⚠️ 两行表头的 `<th>` 总数（23）≠ 数据列数（20）⇒ 本表**刻意不可排**：
       `applySorts` 按 `thead` 里 `<th>` 的下标定位列（`data-i`），两行表头会整体错位。

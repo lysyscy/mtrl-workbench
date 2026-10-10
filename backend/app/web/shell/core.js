@@ -1754,10 +1754,10 @@ async function jcLoadSub(j) {
      ⛔ 别凭印象写；少读一层 `data` 就会静默拿不到东西、弹窗永远显示"暂无"）。 */
   const resp = await API.m11Detail(j.id);
   const d = (resp && resp.data) || {};
-  const money = r => [r.invoice_date, N0(r.amount)];
+  const money = r => [r.date, N0(r.amount)];
   j.invoices = (d.supplier_invoices || []).map(money);
   j.tradeInvoices = (d.trade_invoices || []).map(money);
-  j.payments = (d.payments || []).map(r => [r.pay_date, N0(r.amount),
+  j.payments = (d.payments || []).map(r => [r.date, N0(r.amount),
     (r.source === 'notice' ? '付款域引用' : '手工'), (r.notice_id == null ? null : String(r.notice_id))]);
   j._ids = {
     inv: (d.supplier_invoices || []).map(r => String(r.id)),

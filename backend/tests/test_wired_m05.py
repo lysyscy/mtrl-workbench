@@ -17,7 +17,7 @@ from pathlib import Path
 
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL, page_slice, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
+from tests.shell_src import SHELL, act_entry, page_slice, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_slice`（`\nV.<名>=()=>{` ＋ 花括号配平）——
 #    已**整把删掉**，取页切片改走壳的语义口径 `page_slice`（定义 = `tools/audit/shell_api.py`）。
@@ -53,6 +53,33 @@ def test_流水空态跨列由表头派生且不分页():
     assert "EMPTYROW(thCount(FL_THEAD)" in s, "空态行的跨列数不再由表头派生"
     assert "没有付款流水" in s, "空态提示丢了"
     assert "不做分页" in s, "没写明「不做分页」"
+
+
+@acc("ACC-FLOW-LIST-001", "001-02")
+def test_流水状态初始与重置都默认生效():
+    """⭐ 2026-10-10 用户裁定：状态**初始值与「重置」都默认「生效」**（日常只关心还没撤销的钱）。
+
+    ⚠️ 三条边界，一条一条钉：
+      ① **只是默认** —— 状态下拉里的「全部 / 已撤销」必须还在（`enumOpts('flowState',…,1)` 的 `1`
+         = 前置伪值「全部」）；⛔ 不许把已撤销做成"看不到也选不到"；
+      ② **后端查询语义不许跟着收窄** —— 壳仍只传 `year_month`、不传 `status`，
+         全量由后端返回、壳内 `flHit` 自己筛（导出台账取的是 `flVisible()`，与屏幕所见一致）；
+      ③ **「撤销付款」跳过来的定位**也只定位生效流水（逐条撤的对象本就只有生效的那些）。
+    """
+    assert "let flf={ym:bjMonth(),projs:[],method:'全部',state:'生效',q:''};" in SHELL, \
+        "付款流水的初始状态不是「生效」"
+    assert "flf.state='生效'" in act_entry("flReset"), "「重置」没有把状态复位成「生效」"
+    assert "flf.state=(c&&c.value)||'生效'" in act_entry("flFilter"), "状态下拉的兜底值不是「生效」"
+    # ① 手动看全部 / 已撤销的能力还在（⛔ 别把伪值「全部」删了）
+    assert "enumOpts('flowState',flf.state,1)" in page_slice("m05"), \
+        "状态筛选少了「全部 / 已撤销」的可选值（默认收紧 ≠ 藏起已撤销）"
+    # ② 后端仍是全量查询：壳不传 status
+    assert "flows: () => API.get('/api/m05/flows?year_month=')" in SHELL, \
+        "壳开始给列表接口传筛选了 —— 后端全量语义不许被前端改掉"
+    # ③ 撤销入口的跳转只定位生效流水
+    rev = act_entry("ntRevoke")
+    assert "flf.state='生效'" in rev, "「撤销付款」跳到流水页时不是「只看生效」"
+    assert "flf.state='全部'" not in SHELL, "还有地方把状态摆回「全部」（初始 / 重置 / 跳转三处都该是生效）"
 
 
 # --------------------------------------------------------------- 接线点（正向）

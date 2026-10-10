@@ -225,7 +225,7 @@ def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
     ⭐ 判据 `001-03`「一条通知书**只能关联一个合同**（换合同 = **先解绑再写新**）」⇒ 见下面第 1 步。
     ⚠️ **⛔ 不做金额校验**（判据 `001-04`：通知书金额与合同欠款不一致 ⇒ **只提示、不拦**）。
        注意这与"子表**手工录入**金额必须 > 0"**不冲突** —— 那条管的是**录入**，这里是**引用既有付款事实**：
-       金额取通知书的**统计付款金额**（没填就退到审批金额），**为 0 也允许**（关系先建上，金额以后核）。
+       关联只记录关系；读取时动态取通知书**统计付款金额**，零值保持零，不回退审批金额。
     """
     from app.mod03_notice.models import PaymentNotice
     from app.mod11_jc.models import JcContract
@@ -250,10 +250,8 @@ def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
         return {"ok": False, "kind": "err",
                 "message": "该付款通知书已被引用过（全库去重，不分合同）—— 请刷新后重试"}
 
-    n = s.get(PaymentNotice, int(notice_id))
-    amount = Decimal(str(getattr(n, "stat_paid", 0) or 0)) or Decimal(str(getattr(n, "amount_approved", 0) or 0))
-    row = R.insert_payment(s, contract_id=int(contract_id), pay_date=str(getattr(n, "doc_date", "") or "")[:10],
-                           amount=amount, source=SRC_NOTICE, notice_id=int(notice_id))
+    row = R.insert_payment(s, contract_id=int(contract_id), pay_date="",
+                           amount=0, source=SRC_NOTICE, notice_id=int(notice_id))
     return {"ok": True, "kind": "ok", "changed": True, "payment_id": int(row.id),
             "contract_id": int(contract_id), "moved_from": moved_from,
             "message": (f"已从集采合同 #{moved_from} 改关联到 #{contract_id}"

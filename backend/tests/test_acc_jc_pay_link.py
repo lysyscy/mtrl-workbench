@@ -203,16 +203,15 @@ def test_解绑_零金额引用_与非集采分类不许填供应商():
         p = _project(s)
         c = _contract(s, project_id=p.id)
         # ① **零金额也允许引用**：关联是"关系"，不是"录入" ⇒ ⛔ 不受"子表金额必须 > 0"那条约束
-        #    ⚠️ 要**两个金额都为 0** 才走到 0 —— 引用金额取「统计付款金额」，**没填（0）则退到审批金额**
-        #    （`stat_paid or amount_approved`：`Decimal(0)` 是 falsy ⇒ 0 视为"没填"）。
+        # 统计付款为零也保持零，不回退审批金额。
         n0 = _notice(s, ph="__自检_ph_零额__", paid="0", approved="0")
         r = SV.act_link_notice(s, notice_id=n0.id, contract_id=c.id)
         assert r["ok"] is True, "金额为 0 也必须能关联（金额以后核，关系先建上）"
         assert Decimal(str(R.payment_of_notice(s, n0.id).amount)) == Decimal("0")
-        # 再验"兜底"那一半：统计付款额为 0、审批额有值 ⇒ 取审批额（不是 0）
+        # 审批额有值也不能当成统计付款额
         n1 = _notice(s, ph="__自检_ph_兜底__", paid="0", approved="888")
         SV.act_link_notice(s, notice_id=n1.id, contract_id=c.id)
-        assert Decimal(str(R.payment_of_notice(s, n1.id).amount)) == Decimal("888.00")
+        assert R.payments_of(s, c.id)[-1]["amount"] == Decimal("0.00")
         SV.act_unlink_notice(s, notice_id=n1.id)
 
         # ② 解绑：两侧同时变回"未关联"

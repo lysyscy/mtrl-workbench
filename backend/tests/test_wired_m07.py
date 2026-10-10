@@ -26,7 +26,7 @@ from tests.m07_shell_helpers import API, ROUTER, SHELL  # noqa: F401
 # ⚠️ 2026-09-19（`P3` 主体）：`boot()` 不再逐路拉 ⇒ 下面那条判据改在**取数表**上证（判据不变）。
 from tests.shell_load_helpers import DEP_BEFORE, loaders, page_load  # noqa: F401
 # ⭐ 2026-10-03（`TAIL-219` 批 2／2b）：取片改走壳的语义口径（⛔ 别在本件自造剪刀）
-from tests.shell_src import const_items, func_body, page_slice, tbl_kernel, with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看（`tbl_kernel`：`TAIL-64`）
+from tests.shell_src import const_items, const_src, func_body, page_slice, tbl_kernel, with_kernel  # ⭐ `TAIL-67`：判据要连通用件一起看（`tbl_kernel`：`TAIL-64`）
 
 # ============== `ACC-SETL-001` / `ACC-SETL-EXT-001` 的**形态**半边（`§19` 批 2 搬家）
 #
@@ -351,8 +351,36 @@ def test_结余列渲染成可编辑输入且合计下标跟着移():
     assert 'data-act="extBal"' in body, "「结余」列没渲染成可编辑输入"
     assert "extBalOf(" in body, "结余格没走取数出口"
     assert "bal==null?''" in body, "未录入没给空值（⛔ 不写 0）"
-    assert "grid.sum_row" in body and "<td></td></tr>" in body, "年度合计须来自后端网格，独立结余合计留空"
+    assert "grid.sum_row" in body, "年度合计须来自后端网格"
+    # ⚠️ 2026-10-10：合计行末格改成**跟着表头显隐**（原先是无条件 `<td></td></tr>`）⇒
+    #   这里钉的是「占位格由 `balCol` 决定」，⛔ 别写死整串（表头一改就假红）。
+    assert "${balCol?'<td></td>':''}</tr>" in body, \
+        "合计行的结余占位格没跟着表头一起显隐（会多出一个空列 / 少一个占位）"
     assert "{2:rs=>" not in body, "合计行还在按旧下标取列"
+
+
+@acc("ACC-SETL-EXT-001", "001-09")
+def test_结余列只在年份不晚于2025时显示且三处同步():
+    """⭐ 2026-10-10 用户裁定：人工历史列「2025-11及之前」**只在所选年份 ≤ 2025 时显示**。
+
+    ⚠️ 三处必须**同一个开关**（少一处就是"表头没了、格子还在"这类歪表）：
+      ① **表头** `extHead()`（同时决定空态行的跨列数 —— `thCount(head)` 自动跟随）；
+      ② **数据行**的可编辑格（录入入口）；
+      ③ **合计行**的占位格。
+    ⛔ 本条**只管显示**：金额、年度合计、月度会大表累计、Excel 固定15列模板口径都不许动。
+    """
+    gate = const_src("extBalColOn")
+    assert "<=2025" in gate, f"显隐条件不是「年份 ≤ 2025」：{gate[:140]}"
+    head = const_src("extHead")
+    assert "extBalColOn()" in head, "表头没走显隐开关"
+    assert "2025-11及之前</th>$" in head.replace("\\/", "/"), \
+        "表头是按「整列字面量」摘掉的，不是按末列 —— 列序一变就会摘错列"
+    body = func_body("extBlock")
+    assert body.count("extBalColOn()") == 1, "数据行与合计行没有共用同一个开关"
+    assert "${balCol?`<td class=\"num\"><input" in body, "数据行的可编辑格没跟着显隐"
+    # ⛔ 显示条件收窄 ≠ 改口径：这四个出口必须原样还在
+    for keep in ("N0(row.total)", "grid.sum_row", "extBalOf(", 'data-act="extBal"'):
+        assert keep in body, f"动显示时把 `{keep}` 弄丢了 —— 合计/取数/录入入口的口径不许变"
 
 
 @acc("ACC-SETL-EXT-001", "001-09")

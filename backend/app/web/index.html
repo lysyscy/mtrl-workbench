@@ -917,6 +917,7 @@ V.m01=()=>{
     
   <div class="card" style="margin-bottom:0">
     <h4>项目档案<span class="sp">
+      <button class="btn" data-act="pjCreateOpen">＋ 手工建档</button>
       <button class="btn" data-act="syncWh" title="从 i8 拉最新的仓库名单（会登录 i8，需二次确认）">同步仓库名单</button>
       <button class="btn" data-act="syncPj" title="从 i8 拉最新的常用项目列表（会登录 i8，需二次确认）">同步常用项目列表</button>
       <button class="btn pri" data-act="exp" data-t="项目档案" title="导出当前筛选下看到的这些行">导出 Excel</button>
@@ -934,7 +935,7 @@ V.m01=()=>{
         <button class="btn sm" data-act="ordUp" data-id="${p.id}" title="上移一位">↑</button><button class="btn sm" data-act="ordDown" data-id="${p.id}" title="下移一位">↓</button></td>
       <td>${typeTag(p.type)}</td>
       <td>${p.type==='shell'?'<span class="mut sm">壳无展示名</span>':`<input class="inp plain" style="${nameW(p.disp||p.name,162)}" data-act="editDisp" data-id="${p.id}" value="${esc(p.disp)}" placeholder="默认取仓库名">`}</td>
-      <td class="sm">${p.name?(p.name.startsWith('未建仓-')?`<span class="tag t-wn">占位</span> <span class="fc">${esc(p.name)}</span>`:`<span class="fc">${esc(p.name)}</span>`):'<span class="mut">壳无仓库</span>'}</td>
+      <td class="sm">${p.name?(p.name.startsWith('未建仓-')?`<span class="tag t-wn">无仓库（历史项目）</span> <span class="fc">${esc(p.name)}</span>`:`<span class="fc">${esc(p.name)}</span>`):'<span class="mut">壳无仓库</span>'}</td>
       <td><input class="inp plain" style="${nameW(p.full,240)}" data-act="editFull" data-id="${p.id}" value="${esc(p.full)}" ${p.parent?'readonly':''} title="${p.parent?'具体小微借壳全名，不可单独修改':''}"></td>
       <td class="fc sm">${p.phid||'<span class="mut">无</span>'}</td>
       <td><select class="inp plain" style="width:auto" data-act="editStatus" data-id="${p.id}">${optsOf(enumVals('pjStatus'),p.status)}</select></td>

@@ -18,16 +18,37 @@ def test_annual_columns_balance_and_unread_state(page):
       ACT.expExt();
     }''')
     head = page.locator('[data-sort-key="modal:expExt"] thead th')
-    assert head.count() == 17
+    # ⭐ 2026-10-10 用户裁定：人工历史列「2025-11及之前」**只在年份 ≤ 2025 时显示** ⇒ 2026 年是 16 列。
+    assert head.count() == 16, f"2026 年应隐藏人工历史列，实际表头：{[head.nth(i).inner_text() for i in range(head.count())]}"
+    assert '2025-11及之前' not in ''.join(head.nth(i).inner_text() for i in range(head.count()))
     assert head.nth(3).inner_text() == '2026-01'
     assert head.nth(14).inner_text() == '2026-12'
     cells = page.locator('[data-sort-key="modal:expExt"] tbody tr').first.locator('td')
+    assert cells.count() == 16, "数据行没跟着表头少一格"
     assert cells.nth(2).inner_text() == '100.00'
     assert cells.nth(3).inner_text() == '25.00'
     assert cells.nth(4).inner_text() == '0.00'
     assert cells.nth(15).inner_text() == '481.00'
-    assert cells.last.locator('input').input_value() == '456'
+    assert cells.locator('input[data-act="extBal"]').count() == 0, \
+        "2026 年不该再给人工历史列的录入格（列不显示就没有可点的格）"
+    rows26 = page.locator('[data-sort-key="modal:expExt"] tbody tr')
+    assert rows26.count() == 3, "焊材数据行 + 合计行 + 气体空态行"
+    assert rows26.nth(1).locator('td').count() == 16, "合计行的占位格没跟着表头一起少"
+    assert rows26.nth(2).locator('td').get_attribute('colspan') == '16', "空态行跨列数没跟着表头走"
+    # ⛔ 显示收窄 ≠ 改口径：合计与大表累计一个数都没动
     assert page.evaluate("bigHWCum('甲仓','2026')") == 481
+    # 回到 2025 年：该列连同录入格、合计行占位一起回来，值仍是后端那份
+    page.evaluate("() => { fExt.year='2025'; ACT.expExt(); }")
+    head25 = page.locator('[data-sort-key="modal:expExt"] thead th')
+    assert head25.count() == 17
+    assert head25.nth(16).inner_text() == '2025-11及之前'
+    rows25 = page.locator('[data-sort-key="modal:expExt"] tbody tr')
+    assert rows25.nth(0).locator('td').count() == 17
+    assert rows25.nth(0).locator('td').last.locator('input[data-act="extBal"]').input_value() == '456'
+    assert rows25.nth(1).locator('td').count() == 17
+    assert rows25.nth(1).locator('td').last.inner_text() == '', "合计行的历史列格应留空占位（不求和）"
+    assert rows25.nth(2).locator('td').get_attribute('colspan') == '17'
+    assert page.evaluate("() => { fExt.year='2026'; ACT.expExt(); return extHead().includes('2025-11及之前'); }") is False
     page.locator('[data-sort-key="modal:expExt"]').evaluate('(table)=>{table.parentElement.scrollLeft=400;}')
     first_box, second_box = cells.first.bounding_box(), cells.nth(1).bounding_box()
     assert abs(first_box['x'] + first_box['width'] - second_box['x']) <= 2

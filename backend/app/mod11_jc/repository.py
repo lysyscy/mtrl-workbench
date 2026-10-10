@@ -22,6 +22,7 @@ from app.mod11_jc.models import (
     KIND_PARTY_UNKNOWN,
     PARTY_KIND_NAMES,
     SRC_MANUAL,
+    SRC_NOTICE,
     TAG_IN,
     JcContract,
     JcInvoice,
@@ -101,11 +102,7 @@ def invoices_of(s: Session, contract_id: int) -> list[dict]:
 
 def payments_of(s: Session, contract_id: int) -> list[dict]:
     """该合同的付款子表行（手工 ＋ 付款域引用 · §6.4.3）。"""
-    stmt = select(JcPayment).where(JcPayment.contract_id == int(contract_id)).order_by(JcPayment.id)
-    return [
-        {"id": r.id, "date": r.pay_date, "amount": r.amount, "source": r.source, "notice_id": r.notice_id}
-        for r in s.execute(stmt).scalars().all()
-    ]
+    return payments_of_many(s, [contract_id]).get(int(contract_id), [])
 
 
 def invoices_of_many(s: Session, contract_ids: list[int]) -> dict[int, list[dict]]:
@@ -127,12 +124,29 @@ def payments_of_many(s: Session, contract_ids: list[int]) -> dict[int, list[dict
     ids = [int(i) for i in contract_ids]
     if not ids:
         return {}
-    stmt = select(JcPayment).where(JcPayment.contract_id.in_(ids)).order_by(JcPayment.contract_id, JcPayment.id)
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod05_flow.models import PaymentFlow, FLOW_EFFECTIVE
+
+    # 金额取通知书统计付款；日期只取最近生效流水。两者均批量读，旧关联金额不参与计算。
+    dates = select(
+        PaymentFlow.notice_id, func.max(PaymentFlow.pay_date).label("date")
+    ).where(
+        PaymentFlow.status == FLOW_EFFECTIVE,
+        PaymentFlow.notice_id.in_(select(JcPayment.notice_id).where(JcPayment.contract_id.in_(ids))),
+    ).group_by(PaymentFlow.notice_id).subquery()
+    stmt = select(JcPayment, PaymentNotice.stat_paid, dates.c.date).outerjoin(
+        PaymentNotice, PaymentNotice.id == JcPayment.notice_id
+    ).outerjoin(dates, dates.c.notice_id == JcPayment.notice_id).where(
+        JcPayment.contract_id.in_(ids)
+    ).order_by(JcPayment.contract_id, JcPayment.id)
     out: dict[int, list[dict]] = {i: [] for i in ids}
-    for r in s.execute(stmt).scalars().all():
-        out.setdefault(r.contract_id, []).append(
-            {"id": r.id, "date": r.pay_date, "amount": r.amount, "source": r.source, "notice_id": r.notice_id}
-        )
+    for r, stat_paid, actual_date in s.execute(stmt).all():
+        linked = r.source == SRC_NOTICE
+        out.setdefault(r.contract_id, []).append({
+            "id": r.id, "date": (actual_date or "") if linked else r.pay_date,
+            "amount": Decimal(str(stat_paid or 0)) if linked else r.amount,
+            "source": r.source, "notice_id": r.notice_id,
+        })
     return out
 
 

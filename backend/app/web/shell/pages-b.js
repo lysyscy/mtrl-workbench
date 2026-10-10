@@ -118,14 +118,15 @@ const extAnnualOf=(kind,wh)=>((EXT_ANNUAL[kind]||{}).rows||[]).find(row=>row.war
 const extSum=(kind,wh)=>{const row=extAnnualOf(kind,wh);return row?N0(row.total)-N0(row.balance):null;};
 const extTotal=(kind,wh)=>{const row=extAnnualOf(kind,wh);return row?N0(row.total):null;};
 function extBlock(kind){
-  const head=extHead();
+  const head=extHead(), balCol=extBalColOn();
   if(!EXT_STATE.loaded) return EMPTYROW(thCount(head),EXT_STATE.error||'正在读取库存年度汇总…','');
   const grid=EXT_ANNUAL[kind]||{},list=grid.rows||[];
   if(!list.length) return EMPTYROW(thCount(head),'当前筛选条件下没有'+kind+'数据','换个项目状态或年份');
   const rows=list.map(row=>{const wh=row.warehouse,bal=extBalOf(kind,wh);
-    return `<tr><td class="fl">${esc(kind)}</td><td class="sm fl" style="min-width:180px;max-width:260px;white-space:normal;overflow-wrap:anywhere">${esc(wh)}</td><td class="num">${M(N0(row.prior))}</td>${row.cells.map(v=>`<td class="num">${v==null?'':M(N0(v))}</td>`).join('')}<td class="num">${M(N0(row.total))}</td><td class="num"><input class="inp num" data-act="extBal" data-k="${esc(kind)}" data-p="${esc(wh)}" value="${bal==null?'':esc(String(bal))}" placeholder="未录入" title="2025-11及之前金额，计入合计"></td></tr>`;
+    return `<tr><td class="fl">${esc(kind)}</td><td class="sm fl" style="min-width:180px;max-width:260px;white-space:normal;overflow-wrap:anywhere">${esc(wh)}</td><td class="num">${M(N0(row.prior))}</td>${row.cells.map(v=>`<td class="num">${v==null?'':M(N0(v))}</td>`).join('')}<td class="num">${M(N0(row.total))}</td>${balCol?`<td class="num"><input class="inp num" data-act="extBal" data-k="${esc(kind)}" data-p="${esc(wh)}" value="${bal==null?'':esc(String(bal))}" placeholder="未录入" title="2025-11及之前金额，计入合计"></td>`:''}</tr>`;
   }).join('');
-  return rows+`<tr class="sum"><td class="fl">${kind}合计</td><td class="fl"></td>${(grid.sum_row||[]).map(v=>`<td class="num">${v==null?'':M(N0(v))}</td>`).join('')}<td></td></tr>`;
+  /* 合计行的末格是**占位**（不求和 —— 历史列的合计由每行合计相加得出）⇒ 跟着表头一起显隐 */
+  return rows+`<tr class="sum"><td class="fl">${kind}合计</td><td class="fl"></td>${(grid.sum_row||[]).map(v=>`<td class="num">${v==null?'':M(N0(v))}</td>`).join('')}${balCol?'<td></td>':''}</tr>`;
 }
 /* 手填值解析（OPEN-05）：当月已录入 → 用当月值（无标记）；否则向更早月份取「最近一次录入值」带入（标来源月）。
    注意用 != null 判断：0 是合法录入值，不能被当作「未录入」。 */
@@ -288,23 +289,31 @@ const jcPjPanel=()=>projPanel({list:JC_PROJ_LIST,selected:()=>fJc.projs,allAct:'
       ⇒ **一律不出现在新增区**（建档后走各列右侧的「子表」）。 */
 let jcNewOn=false;                 /* 增行态开关（取代原弹窗的"是否开着"） */
 /* 展开态在 `PJ_OPEN`（key='jcNPj'） */               /* 「项目」共用面板（**单选** —— 第 10 个 `projPanel` 调用点）是否展开 */
-let jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',pj:''};
+let jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',pj:'',history:false,cutoff:''};
+const JC_HISTORY_PREFIX='历史未结金额；核对截至日：';
+const jcHistoryDate=j=>String(j.remark||'').startsWith(JC_HISTORY_PREFIX)?String(j.remark).slice(JC_HISTORY_PREFIX.length,JC_HISTORY_PREFIX.length+10):'';
+const jcHistoryDefaults=()=>{ const p=pjRowOf(jcND.pj); if(!p) jcND.history=false;
+  if(jcND.history){ jcND.material=p.full; jcND.date=''; jcND.supplier=''; jcND.contractAmt=''; jcND.tradeCo=''; jcND.tradeContractAmt=''; }
+};
 const jcNPjPanel=()=>projPanel({list:()=>pjKeysOfRows(ntPjList()),selected:()=>[jcND.pj],pickAct:'jcNPjPick',meta:PROJ_META_KEY,single:true});
 const jcNewStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><span class="pill" style="margin:0" title="建一张集采合同主表行（两态默认「纳入台账」，与抓取行一致）">手工新增合同</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         ${PJB({act:'jcNPjToggle',w:150,label:`${esc(pjLabel(jcND.pj)||'请选择项目')}${pjArcMark(pjRowOf(jcND.pj))}`})}
         ${pjIsOpen('jcNPj')?jcNPjPanel():''}</div>
-      <div class="fi"><label>合同日期</label><input class="inp" type="date" id="jcNDate" data-act="jcNSet" data-k="date" value="${esc(jcND.date)}"></div>
+      <label class="fi"><span>历史汇总</span><input type="checkbox" data-act="jcNHistory" ${jcND.history?'checked':''}></label>
+      ${jcND.history?`<div class="fi"><label for="jcNCutoff">核对截至日</label><input class="inp" type="date" id="jcNCutoff" data-act="jcNSet" data-k="cutoff" value="${esc(jcND.cutoff)}"></div>`:''}
+      <div class="fi"><label>合同日期</label><input class="inp" type="date" id="jcNDate" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="date" value="${esc(jcND.date)}"></div>
       <div class="fi"><label>材料名</label><input class="inp" style="min-width:150px" id="jcNMaterial" data-act="jcNSet" data-k="material" value="${esc(jcND.material)}" placeholder="例：热轧卷板 Q235B"></div>
-      <div class="fi"><label>供应商</label><input class="inp" style="min-width:150px" id="jcNSupplier" data-act="jcNSet" data-k="supplier" value="${esc(jcND.supplier)}"></div>
-      <div class="fi"><label>合同金额</label><input class="inp num" style="width:118px" id="jcNAmt" data-act="jcNSet" data-k="contractAmt" value="${esc(jcND.contractAmt)}"></div>
-      <div class="fi"><label>贸易公司名</label><input class="inp" style="min-width:130px" id="jcNTradeCo" data-act="jcNSet" data-k="tradeCo" value="${esc(jcND.tradeCo)}" placeholder="留空 = 无贸易公司"></div>
-      <div class="fi"><label>贸易公司合同金额</label><input class="inp num" style="width:118px" id="jcNTradeAmt" data-act="jcNSet" data-k="tradeContractAmt" value="${esc(jcND.tradeContractAmt)}" placeholder="—"></div>
+      <div class="fi"><label>供应商</label><input class="inp" style="min-width:150px" id="jcNSupplier" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="supplier" value="${esc(jcND.supplier)}"></div>
+      <div class="fi"><label>合同金额</label><input class="inp num" style="width:118px" id="jcNAmt" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="contractAmt" value="${esc(jcND.contractAmt)}"></div>
+      <div class="fi"><label>贸易公司名</label><input class="inp" style="min-width:130px" id="jcNTradeCo" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="tradeCo" value="${esc(jcND.tradeCo)}" placeholder="留空 = 无贸易公司"></div>
+      <div class="fi"><label>贸易公司合同金额</label><input class="inp num" style="width:118px" id="jcNTradeAmt" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="tradeContractAmt" value="${esc(jcND.tradeContractAmt)}" placeholder="—"></div>
       <div class="fi"><label>付款方式</label><input class="inp" style="min-width:130px" id="jcNMethod" data-act="jcNSet" data-k="method" value="${esc(jcND.method)}" placeholder="自由文本 · 例 60±7天承兑"></div>
       <div class="fi"><label>备注</label><input class="inp" style="min-width:130px" id="jcNRemark" data-act="jcNSet" data-k="remark" value="${esc(jcND.remark)}"></div>
       <button class="btn pri" data-act="jcRowSave" title="建档（两态默认「纳入台账」，与抓取行一致）">保存</button>
       <button class="btn" data-act="jcRowCancel" title="丢弃这条录入（不入库）">取消</button>
+      ${jcND.history?'<div class="tip">每项目手工建一行历史汇总；历史未结金额在供应商发票子表录入，已扣除截至日以前的付款，不要重复录入这些付款。</div>':''}
       <span class="pill" style="margin-left:auto">发票金额 / 贸易公司发票金额 / 付款金额 = <b>各自子表合计</b>（建档后在各列右侧「子表」里录）</span>
     `})}`;
 const jcVisible=()=>JCs.filter(j=>(fJc.tag==='全部'||j.tag===fJc.tag)

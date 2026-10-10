@@ -29,16 +29,29 @@ def check(page, errors) -> None:
             bad.push(i.dataset.k + '|' + i.dataset.p + ': ' + i.value + ' ≠ ' + want);
           }
         });
-        return {found: true, ths: ths, n: ins.length, bad: bad,
-                empty: !!tbl.querySelector('tbody td[colspan]')};
+        const rows = [...tbl.querySelectorAll('tbody tr')].map(tr => {
+          const tds = [...tr.querySelectorAll('td')];
+          const span = tr.querySelector('td[colspan]');
+          return {n: span ? Number(span.getAttribute('colspan')) : tds.length,
+                  inputs: tds.filter(td => td.querySelector('input[data-act="extBal"]')).length};
+        });
+        return {found: true, ths: ths, n: ins.length, bad: bad, year: String(fExt.year),
+                rows: rows, empty: !!tbl.querySelector('tbody td[colspan]')};
     }""")
     print("⑩b m07 结余列 =", m07b)
+    # ⭐ 2026-10-10 用户裁定：「2025-11及之前」人工历史列**只在所选年份 ≤ 2025 时显示**
+    #   ⇒ 表头 17 列（有该列）/ 16 列（没有）；数据行 · 合计行 · 空态行的跨列数都必须跟着走。
+    want_cols = 17 if (m07b.get("year") or "").isdigit() and int(m07b["year"]) <= 2025 else 16
+    off_cols = sorted({r["n"] for r in (m07b.get("rows") or []) if r["n"] != want_cols})
+    editable = sum(r["inputs"] for r in (m07b.get("rows") or []))
     oks7 = [
-        (bool(m07b.get("found")) and len(m07b.get("ths") or []) == 17
-         and "2025-11及之前" in "".join(m07b.get("ths") or []),
-         f"⭐ 「结余」列就位（表头 17 列）：{m07b.get('ths')}"),
-        (m07b.get("n", 0) >= 1 or m07b.get("empty"),
-         "⭐ 每个数据行都有可编辑的「结余」格（该筛选下没有数据时如实给空态行）"),
+        (bool(m07b.get("found")) and len(m07b.get("ths") or []) == want_cols
+         and (("2025-11及之前" in "".join(m07b.get("ths") or [])) == (want_cols == 17)),
+         f"⭐ 「结余」列与年份匹配（{m07b.get('year')} 年 ⇒ 表头 {want_cols} 列）：{m07b.get('ths')}"),
+        (not off_cols,
+         f"⭐ 数据行/合计行/空态行的列数都 == 表头 {want_cols} 列（歪列就是这里红）：{off_cols}"),
+        ((editable >= 1 or m07b.get("empty")) if want_cols == 17 else editable == 0,
+         f"⭐ 人工历史列的录入格随列一起显隐（本屏 {editable} 个 · 共 {m07b.get('n')}）：{want_cols} 列"),
         (m07b.get("bad") == [],
          f"⭐ 页面结余格逐格 == 后端 `balances`（未录入 ⇒ 空）：{m07b.get('bad')}"),
     ]
