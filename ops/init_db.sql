@@ -6,7 +6,6 @@
 -- 执行方式（需要 postgres 超级用户）：
 --   "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -f "D:\dev\mtrl-workbench\ops\init_db.sql"
 --
--- ⚠️ 执行前把 4ZZvOquyuzQxVCg39m3XQIZvU6-W 换成你自己定的强口令，并同步写进 .env（不进版本库）。
 -- ============================================================
 
 -- 1) 专用账号（仅本机访问；PG 已 listen_addresses='127.0.0.1'）

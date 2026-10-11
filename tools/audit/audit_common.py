@@ -296,7 +296,7 @@ TOP_DIRS: tuple[str, ...] = (
 #:   ⇒ 列进来就是**同一件事两处写**（本仓最贵的病，必漂）。
 #: ⚠️ 目录带尾斜杠、文件不带（判据按**名字**比，斜杠只是可读性）。
 ROOT_ALLOW: tuple[str, ...] = (
-    ".codebuddy/", ".git/", "artifacts/", "backend/", "delivery/", "face/", "logs/", "ops/", "tools/",
+    ".codebuddy/", ".git/", "artifacts/", "backend/", "delivery/", "logs/", "ops/", "tools/",
     ".env", ".env.example", ".gitignore",
 )
 
