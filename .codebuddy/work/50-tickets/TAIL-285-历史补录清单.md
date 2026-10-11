@@ -49,7 +49,7 @@
 ### 2026-10-11 · 执行中止：KFTZS 变体命中与既定数字不同（待用户裁定后接续）
 
 - **已办**：源件复制到 `artifacts/hist_supplement/source/附件1、付款计划.xlsx`；SHA256＝`06ca44e263bef5593c141f08731fbf62902e10b9bfe2ff7f158747b719765ac5`。开工 `git rev-parse HEAD; git status --short` 与库基线记录见 `artifacts/hist_supplement/source/开工归档.json`；HEAD＝`14d53aa8280daf27b813ba0a726b25ccfcd589e7`。已有改动原样保留，未提交。
-- **抽取阶段初稿**：新增 `tools/probe/_hist_extract.py`，按标题动态定界；8 张主表列映射及区块边界进 extract 下 CSV，全部13表的1483行逐行保留原文、公式、分类与依据。初稿：排除596／待确认444／佐证380／候选63，合计1483；候选仅为抽取级线索，**不是拟写入批准数**。金额/日期解析、汇总核对仍须接续核验，不能据此写入。
+- **抽取阶段初稿**：新增 `tools/probe/_hist_extract.py`，按标题动态定界；8 张主表列映射及区块边界进 extract 下 CSV，全部13表的1483行逐行保留原文、公式、分类与依据。初稿：排除596／待确认444／佐证380／候选63，合计1483；候选仅为抽取级线索，**不是拟写入批准数**。金额/日期解析、汇总核对仍须接续核验，不能据此写入。（⚠️ 该脚本**已删除**，见文末「工具链删除记录」）
 - **命令**：`backend/.venv/Scripts/python.exe -X utf8 -m py_compile tools/probe/_hist_extract.py tools/probe/_hist_match.py` 通过；`backend/.venv/Scripts/python.exe -X utf8 tools/probe/_hist_extract.py --source artifacts/hist_supplement/source/附件1、付款计划.xlsx` 两次得到同分类数；`backend/.venv/Scripts/python.exe -X utf8 tools/probe/_hist_match.py --plan artifacts/hist_supplement/extract/抽取明细.jsonl` 两次均在编号基线闸中止（脚本返回2）。
 - **只读证据**：匹配工具使用 `session_scope`，事务第一句 `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`；`SHOW transaction_read_only=on`，只执行SELECT，取数后主动rollback。库内通知书1146／FKTZS1143；Excel去重535／精确395／未精确140均一致；**变体命中8，而既定数字4**。库快照及逐编号原文、目标通知书证据见 `artifacts/hist_supplement/match/只读库快照.json`、`artifacts/hist_supplement/match/基线比对.json`。
 - **差异明细（均在8月龙源机械段）**：`KFTZS2026080197`（161行）→`FKTZS2026080197`（notice_id239，河南鑫焕建设工程有限公司，23500.00）；`KFTZS2026080192`（162行）→`FKTZS2026080192`（240，太康县奕卓机械租赁有限公司，23180.00）；`KFTZS2026080199`（163行）→`FKTZS2026080199`（238，太康县顺泰机械租赁有限公司，22610.00）；`KFTZS2026080191`（164行）→`FKTZS2026080191`（241，周口鼎泰工程机械租赁有限公司，5900.00）。四条源收款单位及G金额均与库内目标收款单位及审批金额一致；这里只报告证据，不裁定写入。
@@ -62,7 +62,7 @@
 
 **用户本轮裁定**：①四条KFTZS按手填错i8，变体基线4→8；②第二轮日期＝B费用日期对通知书单据日期；③「确认126个按i6整类排除」；④「确认3个另类整类排除」；⑤四组3/4月同号同额重复，用户指出「大概率是项目误填；要保证单号，流程金额，付款金额进行综合判定；单号不一定正确」。因此四组八行不自动选日、不当成超付批准。以上记录在 `artifacts/hist_supplement/plan/用户裁定.json`，设计稿初版原结论未改。
 
-**抽取与核对证据**：正式工具 `tools/probe/_hist_extract.py` / `tools/probe/_hist_match.py`；固定命令按设计稿§八（`--source artifacts/hist_supplement/source/附件1、付款计划.xlsx` / `--plan artifacts/hist_supplement/extract/抽取明细.jsonl`）。13张表1483行全部有sheet/行号/原文/公式/分类/依据；抽取终版＝候选53＋排除596＋待确认454＋佐证380＝1483。列映射与区块边界CSV在extract下；8月慧能57～85、宜化86～93，安徽国风94～103不并入。G按E−F相等且邻月同编号/费用日期/收款单位/项目演变一致取用；邻月缺失或矛盾、裸日期无法交叉确证均不放行。3月I列按逐表列义取付款日期，`7.2`三行均保留待确认。
+**抽取与核对证据**：正式工具 `tools/probe/_hist_extract.py` / `tools/probe/_hist_match.py`；固定命令按设计稿§八（`--source artifacts/hist_supplement/source/附件1、付款计划.xlsx` / `--plan artifacts/hist_supplement/extract/抽取明细.jsonl`）。13张表1483行全部有sheet/行号/原文/公式/分类/依据；抽取终版＝候选53＋排除596＋待确认454＋佐证380＝1483。列映射与区块边界CSV在extract下；8月慧能57～85、宜化86～93，安徽国风94～103不并入。G按E−F相等且邻月同编号/费用日期/收款单位/项目演变一致取用；邻月缺失或矛盾、裸日期无法交叉确证均不放行。3月I列按逐表列义取付款日期，`7.2`三行均保留待确认。（⚠️ 本节提到的两个脚本**已删除**，见文末）
 
 **五张清单**（`artifacts/hist_supplement/match/核对报告.json`）：未匹配95行（含无有效编号行、3个FKTZS未抓编号的6处出现，已批准i6/另类原文移入排除）／缺关联0／未批0／重复嫌疑10（库内已有2行＋四组两月疑似重复8行）／超付候选4组（是假设两月都写时的模拟，**全部未进冻结rows**）。缺关联0、未批0的扫描面＝抽取已具备日期与金额证据的候选；不得解读为全库/全部待确认行均无此问题。第二轮唯一候选0；反向未被本次匹配的通知书清单随核对报告保存。
 
@@ -197,7 +197,7 @@
 
 用户明确「可以继续」。按已保存的自主核验裁定处理全部剩余110行：不用邻月/Excel F累计作为金额准入；编号或金额＋项目/标题综合匹配，重复金额再用真实供应商、流程额与时间消歧；excluded=true的已批通知书允许其他口代付，原剔除状态不变；缺失或误读的方式兜底现汇。真正未批/撤单、退回、无实付金额、无可靠日期及超额不靠授权伪造事实。原i6 126个、另类3个整类排除与8月两个区块硬排除继续保留，设计稿初版数字和月度结论均未修改。
 
-新增正式工具 `tools/probe/_hist_autonomous_review.py`。执行 `backend/.venv/Scripts/python.exe -X utf8 tools/probe/_hist_autonomous_review.py --refresh`，事务READ ONLY/REPEATABLE READ，SHOW确认on，只有SELECT，主动rollback；新快照 `match/自主核验只读快照.json` 验1146张通知书/FKTZS1143，不重扫Excel既定基线。后续不带--refresh的重跑只读固定文件。脚本持续检查原七份冻结哈希，任何变化或原296笔在新快照出现同日同额/超额立即停止。本轮正式工具不依赖scratch。
+新增正式工具 `tools/probe/_hist_autonomous_review.py`。执行 `backend/.venv/Scripts/python.exe -X utf8 tools/probe/_hist_autonomous_review.py --refresh`，事务READ ONLY/REPEATABLE READ，SHOW确认on，只有SELECT，主动rollback；新快照 `match/自主核验只读快照.json` 验1146张通知书/FKTZS1143，不重扫Excel既定基线。后续不带--refresh的重跑只读固定文件。脚本持续检查原七份冻结哈希，任何变化或原296笔在新快照出现同日同额/超额立即停止。本轮正式工具不依赖scratch。（⚠️ 该脚本**已删除**，见文末「工具链删除记录」）
 
 **结果**：原逐项批准296条、18728676.85元保持原件；授权自主核定新增47条通知书付款分录、19519169.02元，序号297～343。合并343条、38247845.87元，超付例外0、空方式0。新增11条被剔除通知书代付、14条兜底现汇，按用户授权分别留原状态与方式依据，不把自主判断写成用户逐项确认。两条紫盈设备付款合计17056986.23元，解释了新增金额的大部分。
 
@@ -289,3 +289,12 @@
 ### 2026-10-11 · 用户授权提交推送
 
 用户明确可以提交推送；范围为本票只读脚本、设计稿、相关票据与主计划唯一差异行，不纳入backend/.codebuddy/及其他工作。提交前限定全部_hist脚本及相关5份文档审计rc0，四项doc_audit/audit_drift/audit_meta/audit_work与syntax/bytes/claim通过，隔离测试有效证据复用，8.07秒、BAD空；日志tmp-20261011-hist-submit-audit.txt（TTL2026-10-25）。冻结及Excel按仓库忽略规则留本地，冻结哈希仍90933de4fc9cdee50457260ee3a387dc3bda5eaf0f35968d01d0c45df1b4fa8c；本提交不写库。提交版本可由git log -- 本票定位。
+
+### 2026-10-11 · 用户裁定：工具链删除（本票的全部 `_hist_*.py`）
+
+- **用户原话**（紧随 TAIL-286 收尾）：「本次只是一次数据导入，以后再也不需要类似操作」「除了证据一概不留，退路也不留」「一并删完提交推送」。
+- **已删除 17 件 / 197 KB**（均落 `tools/probe/`）：`_hist_extract.py` · `_hist_match.py` · `_hist_recheck.py` · `_hist_resolve_remaining.py` · `_hist_freeze_5.py` · `_hist_freeze_28.py` · `_hist_freeze_13.py` · `_hist_freeze_approved_batch.py` · `_hist_finalize_examples.py` · `_hist_project_scope.py` · `_hist_supplier_review.py` · `_hist_bill_first_review.py` · `_hist_missing_bill_review.py` · `_hist_pending_review.py` · `_hist_autonomous_review.py` · `_hist_feedback_review.py` · `_hist_L_revision.py`。
+- ⭐ **可逆**：这 17 件在 `1437f14` 已入库 ⇒ 要取回用 `git checkout 1437f14 -- tools/probe/`（⛔ 与 TAIL-286 那批不同，那批从未入库）。
+- **保留的（证据）**：`artifacts/hist_supplement/**`（抽取明细／五张清单／冻结清单与哈希／只读快照／核对报告／用户裁定）＋ TAIL-286 的写前 dump。冻结清单与哈希 `90933de4…4fa8c` **不受影响**，仍是那批写入的唯一依据。
+- ⚠️ **后果**：本文上面 Comments 里的命令**今后不可再跑**（脚本已不在仓内）；同类导入不会再有工具链可用。
+- **删除后核验**：`_run_rulers --paths <本轮 3 份文档 ＋ 17 件删除>` **rc=0 · `BAD: []` · 总墙钟 27.58 s** —— doc_audit / audit_drift / audit_meta / audit_work / syntax_audit / bytes_guard / claim_audit **必须修均 0**（doc_audit 豁免由 33 升到 39，即本轮补的「已删除」标注生效），隔离 pytest 11.87 s rc=0。⚠️ 无 `--since` 的裸跑会因**既有**的 `backend/.codebuddy/` 三张 TAIL-281 截图被判「待查影响」rc=2 —— 那不是本轮的差异。
