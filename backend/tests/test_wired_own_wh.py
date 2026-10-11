@@ -14,7 +14,7 @@ from pathlib import Path
 
 from tests.acc_plugin import acc
 
-from tests.shell_src import SHELL, api_entry, func_body  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import api_entry, func_body
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_fn`（"标记 A → 标记 B"）——
 #    已**整把删掉**，取段改走壳的语义口径（函数 ⇒ `func_body` · `API` 条目 ⇒ `api_entry`）。⛔ 别写回来。

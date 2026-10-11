@@ -488,6 +488,11 @@ def shell_selftest():
                     proj.write_bytes(pair[1] or b'')
                     assert set(plan([path], changes={path: pair}).files) == set(plan([path]).files)
                 proj.write_bytes(new)
+                gaps, _ = cover_gap()
+                assert not any(prefix+'direct.py' in gap for gap in gaps), '实际壳使用者被误报覆盖缺口'
+                assert any(prefix+'other.py' in gap for gap in gaps), '真正无使用者的测试不能被盖住'
+                with patch.object(module, 'shell_plan', return_value=Plan(False, 'fixture')):
+                    assert any(prefix+'direct.py' in gap for gap in cover_gap()[0]), '壳选择证明丢失时覆盖检查必须报缺口'
                 mixed = plan([path, 'backend/tests/'+prefix+'nt.py'], changes={path: (old, new)})
                 assert prefix+'nt.py' in mixed.files, '测试自身改动不能被壳收窄排除'
                 assert set(plan([path, 'tools/oneoff/unread.py'], changes={path: (old, new)}).files) == \
@@ -627,7 +632,7 @@ def outside_readers() -> dict:
 def cover_gap() -> tuple:
     """**选集的机器眼** → `(缺口说明, 陈旧说明)`。两个方向都造得出红（见随票的证伪件）。
 
-    · **缺口**：① 盘上每个 `test_*.py` 都够得着（在 `REPO_WIDE`、或 import 得到 `app.*`、或在 `SELF_ONLY`）；
+    · **缺口**：① 盘上每个 `test_*.py` 都够得着（在 `REPO_WIDE`、或 import 得到 `app.*`、或仓外/壳选择器会带跑、或在 `SELF_ONLY`）；
       ② `OUTSIDE_PREFIXES` 里的落点真在盘上；③ 盘上每个 pytest **自动加载**的件都在 `AUTO_LOADED` 里
       （`conftest.py` 这类件**没有 import 边** ⇒ 漏了它就等于漏跑一大片）。
     · **陈旧**：名单里登记的测试件仍在盘上、且分类还成立。
@@ -637,11 +642,13 @@ def cover_gap() -> tuple:
     wide = {n for n, _ in REPO_WIDE}
     selfonly = {n for n, _ in SELF_ONLY}
     gets_app = {n: any(m.startswith("app.") for m in reach[n]) for n in files}
-    readers = set(outside_readers())
+    outside = set(outside_readers())
+    # 壳读者已有真实选测出口；不另登记一份名单，也不误报为永远跑不到。
+    readers = outside | set(shell_plan().files)
     gaps = []
     for n in sorted(files):
         if n in wide or n in readers:
-            continue                      # 必跑清单／仓外触发面会带它跑
+            continue                      # 必跑清单／仓外或壳触发面会带它跑
         if gets_app[n] and n not in selfonly:
             continue                      # 自动够得着（import 闭包会带它跑）
         if not gets_app[n] and n not in selfonly:
@@ -664,7 +671,7 @@ def cover_gap() -> tuple:
               % n for n, _ in SELF_ONLY if n in files and gets_app[n]]
     stale += ["`SELF_ONLY` 里的 `%s` 现在被 `outside_readers()` 认成读仓外部位 ⇒ "
               "它已由那一档带跑，登记已过期" % n
-              for n, _ in SELF_ONLY if n in readers]
+              for n, _ in SELF_ONLY if n in outside]
     return gaps, stale
 
 
