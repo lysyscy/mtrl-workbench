@@ -206,7 +206,7 @@ DOC_BUDGETS: tuple[tuple[str, int, str, int | None], ...] = (
     #:   用户裁定「只留待办」⇒ 待办并入**根 `README.md` §〇**（本表第 1 行就是它，预算 240）
     #:   ⇒ ⛔ **别为它再列一行**：那会变成"同一件事两处预算"（本仓最贵的病，必漂）。
     (".codebuddy/memory/细则.md", 620, "must", None),          #: ⛔ 同上；⭐ **2026-10-01（`TAIL-204` 第 2 步）420 → 620**：并入原项目侧 `MEMORY.md` 全文（173 行归档为附录）
-    (".codebuddy/plans/开发计划-主文档.md", 600, "must", None),  # 2026-10-11: 715 → 418 行；为后续主计划收缩保留余量
+    (".codebuddy/plans/开发计划-主文档.md", 300, "must", None),  # TAIL-295：主计划瘦身完成，预算300行
 )
 #: ⭐⭐ **注入档字节「逼近线」**（2026-10-06 · `/retro` ③）＝ 硬顶 − 900 B。
 #: ⭐ **为什么要有它**（实测同日）：硬顶是 **14,400 B**，而那天余量只剩 **~0.5 KB** ⇒
@@ -898,7 +898,7 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
 #:   (a) 主文档**行数预算** —— 超了 = 过程又塞回来了（黄 ⇒ 下沉）；
 #:   (b) 标题里出现**过程词**（逐批记录 / 逐次记录 / 收官记录）⇒ 该块该下沉了（黄）。
 PLAN_DOC_REL = ".codebuddy/plans/开发计划-主文档.md"
-PLAN_LINE_BUDGET = 600          #: 与 T10 同值；下调理由见 ops/阈值表.md
+PLAN_LINE_BUDGET = 300          #: 与 T10 同值；下调理由见 ops/阈值表.md
 #:   `ops/阈值表.md:31` 写着「一个数、两处用」⇒ 改一处必须改另一处）
 PROCESS_TITLE_RE = re.compile(r"^#{2,4}.*(逐批记录|逐次记录|收官记录)")
 #: 标题里写着「下沉/归档/索引」的 = **指针节**，不是过程本体 ⇒ 豁免
@@ -961,7 +961,7 @@ LINE_WALL_CHARS = 800
 #:   ＋ §0.2 判据涨数流水 ＋ §14.3 已办长行 ＋ §20.2 ＋ §23」全部下沉仓外、
 #:   原处留短索引/指针（尺子量测件 = `.codebuddy/work/00-scratch/tmp-trim-plan-250.py` 干跑时打印）。
 LINE_WALL_BASELINE: tuple[tuple[str, int], ...] = (
-    (".codebuddy/plans/开发计划-主文档.md", 5),
+    (".codebuddy/plans/开发计划-主文档.md", 0),
     (".codebuddy/plans/票索引-已销号.md", 7),
     ("ops/前端设计守则-以使用用户为中心.md", 0),
     ("ops/阈值表.md", 1),

@@ -11,7 +11,7 @@
 - ⚠️ 必须给 `doc_audit` 带 **`-v`** —— 默认只把黄档**按件聚合成「N 条 <路径>」** ⇒ 判据串在输出里
   **根本看不见**（`_mut_docaudit.py` 2026-09-24 踩过：黄档判据"永远不命中" = 假绿）。
 
-做法：逐条把场景**造出来** ⇒ 确认 `doc_audit -v` **报出来了** ⇒ 逐字节复原（MD5 校验）。
+做法：复制真实扫描输入和判据到隔离仓，逐条造场景，调用 doc_audit 使用的真实 check_line_walls，确认命中并逐字节复原（MD5）；正式件不作靶。
 
 ⚠️ 靶**动态取**（从 `audit_meta.LINE_WALL_BASELINE` 现读，⛔ 不把各件的基线条数写死在这里）——
    否则"下沉几行字墙 ⇒ 基线该下调"这件事一发生，本件就**静默失效**（本仓的老课：写死的锚点必烂）。
@@ -32,6 +32,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,12 +62,12 @@ def md5(p: Path) -> str:
 
 
 def run_doc_audit() -> str:
-    """跑 `doc_audit -v`，全量输出（⚠️ 不看退出码 —— rc 还含黄档，两回事）。"""
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
-    r = subprocess.run([str(PY), str(ROOT / "tools" / "audit" / "doc_audit.py"), "-v"],
-                       cwd=str(ROOT), capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", env=env)
-    return (r.stdout or "") + (r.stderr or "")
+    """在隔离仓调用 doc_audit 使用的同一T21函数，保留逐条判据输出。"""
+    code = "import sys;sys.path.insert(0,sys.argv[1]);import audit_common as c,audit_meta as m;from pathlib import Path;c.REPO_ROOT=m.REPO_ROOT=Path(sys.argv[2]);print('\\n'.join('[T21] '+h['rel']+' '+h['what'] for h in m.check_line_walls()))"
+    result = subprocess.run([str(PY), '-X', 'utf8', '-c', code, str(ROOT/'tools/audit'), str(ROOT)], capture_output=True, text=True, encoding='utf-8', errors='strict')
+    assert result.returncode == 0, result.stderr
+    return result.stdout
+
 
 
 def _needle_hit(needle: tuple[str, ...], out: str) -> bool:
@@ -107,7 +109,7 @@ def _make_cases() -> list[dict]:
         # ② 基线件**又长回来了**（超基线）⇒ 必须报「又长回来了」⭐ **相对判据**（见文件头 2026-10-06）
         {"desc": f"字墙又长回来（往基线件 `{Path(rel0).name}` 塞一行 {len(LONG)} 字）", "mode": "count",
          "count_name": Path(rel0).name,
-         "path": PLAN, "frag": _append_long},
+         "path": ROOT / rel0, "frag": _append_long},
         # ③ 基线**该下调了**（把基线件的数上调 ⇒ 实际 < 基线）⇒ 必须报「基线过期」
         {"desc": "基线过期（把基线件的数上调 100 ⇒ 实际低于基线）", "mode": "needle",
          "needle": ("[T21]", "基线**过期**", Path(rel0).name),
@@ -122,7 +124,7 @@ def _make_cases() -> list[dict]:
     ]
 
 
-def main() -> int:
+def _run_cases() -> int:
     cases = _make_cases()
     before = {c["path"]: c["path"].read_bytes() for c in cases}
     base_out = run_doc_audit()
@@ -165,6 +167,30 @@ def main() -> int:
     print(f"  命中 {hit}/{len(cases)}")
     print(f"  复原校验（MD5 逐字节）：{'✅ 全部复原' if not dirty else '❌ 未复原：' + '、'.join(map(str, dirty))}")
     return 0 if (hit == len(cases) and not dirty) else 1
+
+
+def main() -> int:
+    """复制真实扫描输入与判据后变异；正式工作件从不作为靶。"""
+    global ROOT, META, PLAN, CLEAN_DOC
+    original = ROOT
+    from audit_common import iter_docs
+    with tempfile.TemporaryDirectory(prefix='tmp-linewalls-', dir=original/'.codebuddy/work/00-scratch') as name:
+        fixture = Path(name)
+        sources = {doc[2] for doc in iter_docs()}
+        sources.update((original/'tools/audit').glob('*.py'))
+        for source in sources:
+            if source.is_file() and source.is_relative_to(original):
+                target = fixture/source.relative_to(original)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
+        ROOT = fixture
+        META = fixture/'tools/audit/audit_meta.py'
+        PLAN = fixture/'.codebuddy/plans/开发计划-主文档.md'
+        CLEAN_DOC = fixture/'ops/README.md'
+        try:
+            return _run_cases()
+        finally:
+            ROOT = original
 
 
 if __name__ == "__main__":
