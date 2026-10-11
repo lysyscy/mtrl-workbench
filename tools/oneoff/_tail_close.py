@@ -75,7 +75,8 @@ def main(argv: list[str]) -> int:
     n = str(a.id).lstrip("TILA-")            # 容错：允许传 `TAIL-215`
     tag = f"TAIL-{n}"
     path = pathlib.Path(a.plan).resolve()
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    p_old = path.read_bytes()
+    lines = p_old.decode("utf-8").splitlines(keepends=True)
     sec = sections(lines)
 
     # ① 断言：§四 里**已经有**留痕行（判断那部分要人先写好）
@@ -135,7 +136,7 @@ def main(argv: list[str]) -> int:
     #    且只认中文「状态：」—— 而票面格式的真正主人 `tools/oneoff/_tail_open.py` 写的是
     #    `**Status:** <受控词>` ⇒ 命中 0 处 ⇒ **任何票都无法用它销号**（`TAIL-225` 那次是手改票文件绕过去的）。
     #    修法 = 删掉本地那份、改为问主人（与本件第 44–45 行「计数口径不写第二遍」同一条纪律）。
-    t_text = tk.read_text(encoding="utf-8")
+    t_text = t_old.decode("utf-8")
     hits = list(audit_meta.TICKET_STATE_RE.finditer(t_text))
     if len(hits) != 1:
         print(f"⛔ 票文件里 `**Status:**` 行命中 {len(hits)} 处（期望 1）⇒ **未写盘**"
@@ -157,7 +158,7 @@ def main(argv: list[str]) -> int:
     try:
         tk.write_text(t_new, encoding="utf-8", newline="")
     except OSError:
-        path.write_bytes("".join(lines).encode("utf-8"))     # 票文件写不动 ⇒ 主文档回滚（不留半成品）
+        path.write_bytes(p_old)     # 票文件写不动 ⇒ 主文档逐字节回滚（不留半成品）
         raise
     print(f"\n✅ 已写盘：{path.relative_to(REPO).as_posix() if path.is_relative_to(REPO) else path}"
           f" ＋ 票文件标 `done`（{tk.name}）"

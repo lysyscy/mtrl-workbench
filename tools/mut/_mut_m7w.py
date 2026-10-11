@@ -10,7 +10,7 @@
 2. 变异片段**含中文**时用 `str` ＋ `.encode()`（`b"…"` 只允许 ASCII）；
 3. **行尾按目标文件归一**（本仓源码行尾不统一）；
 4. 变异点**必须唯一命中**，否则重写（不得当成"已通过"）；
-5. 跑完**必须再跑一次全套 `pytest`**（否则 `acc_results.json` 留的是变异态 ⇒ 报表数字是假的）。
+5. 默认重跑复原态全套 `pytest`；显式 `--no-full-suite` 跳过，本轮不刷新权威四态。
 
 ⚠️ 本次首跑就抓出 **2 处假绿**（断言写得不够紧）—— 已同步改紧：
    · `in: N0(` 这条正则缺前缀边界 ⇒ 被 `begin:` 里的子串 `in:` 喂饱；
@@ -60,15 +60,10 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "shell", "await API.m07BigSelection(picked);",
      "BIGSET.length=0; picked.forEach(k=>BIGSET.push(k));",
      "test_选题落库走后端"),
-    # ⚠️ 2026-09-19 订正（顺手清一条**过时**变异）：原锚点是 `zipSfjc` 的「导出尚未落地」提示，
-    #    而 `TAIL-04` 落地后 `zipSfjc` 已改成**真产出并下载**（`test_wired_m07.py` 现在断言的是相反方向）
-    #    ⇒ 原锚点/原测试名都不复存在（脚本报 SKIP = **未验证**）。现改指**仍然活着**的那条同族主张：
-    #    全站通用导出动作 `exp` **必须仍是那条诚实提示**（`test_tail04_export.py` 钉着）。
-    ("通用 exp 回到假成功（谎报已生成文件）",
-     "shell",
-     "⏳ <b>导出尚未落地</b>（属 TAIL-04）：本页按当前筛选应导出",
-     "已生成 <b>导出结果.xlsx</b>（假成功）：本页按当前筛选应导出",
-     "test_库存单据两种导出并存互不影响且透视提示与模板形态一致"),
+    # 导出已落地：绑定当前收发结存下载入口，不再指已退役的 exp 提示。
+    ("收发结存导出按钮不再调用真实出口",
+     "shell", "/api/m07/settlement/export?period=", "/api/m07/settlement/removed?period=",
+     "test_壳侧导出按钮已接线且按content_type分流"),
     ("抓取端点不要求二次确认（D9 形同虚设）",
      "api", "confirmed=req.confirm", "confirmed=True",
      "test_抓取端点必须显式确认"),
@@ -89,9 +84,9 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "if(sc==='wh'){ fWhYm=v; mp.open=null; render();",
      "test_月份切换会重新取数"),
     # ---- `TAIL-38`（录机械费入口）----
-    ("录机械费入口没挂上 BIND 钩子",
+    ("过程资料默认页没挂上 BIND 钩子",
      "shell", "BIND.m06 = function ()", "BIND.m06x = function ()",
-     "test_录机械费入口挂在BIND钩子且不改切片"),
+     "test_卡头不再出现那枚永不出结果的导出按钮"),
     ("录机械费不再走后端（本地改 MACH6）",
      "shell", "API.m06MechSave(", "MACH6[wh]= (",
      "test_录机械费走后端且不在前端复写判据"),
@@ -99,8 +94,8 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "shell", "d.columns && d.columns.length", "false",
      "test_机械列名由后端给"),
     ("机械写端点不复用 mech_ui 判据（另写一套）",
-     "m06r", "values = mech_ui.parse_mech_values(req.values)",
-     "values = {k: Decimal(v) for k, v in (req.values or {}).items()}",
+     "m06r", "mech_ui.parse_mech_values(req.values).items()",
+     "{}.items()",
      "test_后端机械写端点存在"),
 ]
 
@@ -150,12 +145,17 @@ def main() -> int:
     print(f"\n命中 {hit}/{len(MUTATIONS) - miss} · SKIP {miss} · "
           f"MD5 {'逐字节复原 ✅' if ok_md5 else '⛔ 不一致'}")
 
-    # ⚠️ 必须再跑一次全套（复原态）：否则 acc_results.json 留的是子集运行的结果 ⇒ 四态报表数字是假的
-    print("重跑全套 pytest（复原态）…")
-    full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
-                          cwd=ROOT / "backend", capture_output=True, text=True)
-    print("  全套 pytest 退出码 =", full.returncode)
-    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full.returncode == 0) else 1
+    # 默认保留复原态完整测试；写权威四态仍需显式结果出口。
+    if "--no-full-suite" in sys.argv:
+        print("跳过全套 pytest（--no-full-suite）：本轮不刷新权威四态")
+        full_rc = 0
+    else:
+        print("重跑全套 pytest（复原态）…")
+        full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
+                              cwd=ROOT / "backend", capture_output=True, text=True)
+        print("  全套 pytest 退出码 =", full.returncode)
+        full_rc = full.returncode
+    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full_rc == 0) else 1
 
 
 if __name__ == "__main__":

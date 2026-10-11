@@ -26,6 +26,7 @@ def _main():
     original = TARGET.read_bytes()
     source = original.decode('utf-8')
     cases = [
+        ('pytest 产物误入签名', "('repo/artifacts/', 'repo/backend/.codebuddy/')", "('repo/artifacts/',)"),
         ('无证明跳过', 'return self.full or sign is None or record !=', 'return False and record !='),
         ('忽略输入内容变化', 'return hashlib.sha256(value).hexdigest()', "return 'constant'"),
         ('失败仍记绿', '        if rc != 0:', '        if False:'),

@@ -6,7 +6,7 @@
 用法：`cd D:\\dev\\mtrl-workbench && backend/.venv/Scripts/python.exe tools/_mut_tail04.py`
 
 ⚠️ 本仓纪律（memory §十七）：bytes 写入 / 中文片段用 `str+.encode()` / 行尾按目标文件归一 /
-变异点必须唯一命中 / 跑完必须再跑一次全套 `pytest`。
+变异点必须唯一命中 / 默认重跑全套 `pytest`（`--no-full-suite` 显式跳过，不刷新权威四态）。
 """
 
 from __future__ import annotations
@@ -63,11 +63,11 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "svc", '    if len(ym) != 7 or ym[4] != "-" or not (ym[:4].isdigit() and ym[5:].isdigit()):',
      "    if False:", T_FAIL),
     ("失败不再回 `ok:false`（壳分不出流）",
-     "api", '        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})',
-     '        return JSONResponse(status_code=400, content={})', T_WIRE),
+     "api", 'path = EX.export_settlement(s, period)\n    except MustReportError as exc:\n        return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})',
+     'path = EX.export_settlement(s, period)\n    except MustReportError as exc:\n        return JSONResponse(status_code=200, content={"ok": True, "message": str(exc)})', T_WIRE),
     # ---- 壳侧真下载
     ("壳侧不再按 content-type 分流（JSON 当文件下）",
-     "shell", "   if(ct.includes('application/json')){", "   if(false){", T_WIRE),
+     "shell", "  if (ct.includes('application/json')) {", "  if (false) {", T_WIRE),
     # ---- 001-08 现在钉的是「清单 == 真产出」
     ("产出物少一个分仓库文件（清单说 3 个、实际给 2 个）",
      "setl", "    for wh in show_order:\n        sub = df[df['仓库'] == wh].copy()",
@@ -120,11 +120,16 @@ def main() -> int:
     print(f"\n命中 {hit}/{len(MUTATIONS) - miss} · SKIP {miss} · "
           f"MD5 {'逐字节复原 ✅' if ok_md5 else '⛔ 不一致'}")
 
-    print("重跑全套 pytest（复原态）…")
-    full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
-                          cwd=ROOT / "backend", capture_output=True, text=True)
-    print("  全套 pytest 退出码 =", full.returncode)
-    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full.returncode == 0) else 1
+    if "--no-full-suite" in sys.argv:
+        print("跳过全套 pytest（--no-full-suite）：本轮不刷新权威四态")
+        full_rc = 0
+    else:
+        print("重跑全套 pytest（复原态）…")
+        full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
+                              cwd=ROOT / "backend", capture_output=True, text=True)
+        print("  全套 pytest 退出码 =", full.returncode)
+        full_rc = full.returncode
+    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full_rc == 0) else 1
 
 
 if __name__ == "__main__":

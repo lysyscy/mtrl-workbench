@@ -3,7 +3,7 @@
 
 用法：`cd D:\\dev\\mtrl-workbench && backend/.venv/Scripts/python.exe tools/_mut_tail35.py`
 
-纪律同 `_mut_m7w.py`：bytes 级 · 行尾归一 · 变异点唯一命中 · 跑完重跑全套 `pytest` · MD5 复核。
+纪律同 `_mut_m7w.py`：bytes 级 · 行尾归一 · 变异点唯一命中 · 默认重跑全套 `pytest`（`--no-full-suite` 显式跳过，不刷新权威四态） · MD5 复核。
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 FILES = {
     "shell": SHELL_PATH,
     "m04api": ROOT / "backend" / "app" / "mod04_plan" / "plan_api_router.py",
+    "m04imp": ROOT / "backend" / "app" / "mod04_plan" / "imp_spec.py",
 }
 
 #: (说明, 目标文件, 原文片段, 改坏成, 应当变红的测试名)
@@ -32,12 +33,12 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
     ("导入客户端不再是 multipart",
      "shell", "new FormData()", "{}",
      "test_导入与手动行走后端"),
-    ("plImportOk 退回同步（假导入）",
-     "shell", "plImportOk:async ()=>{", "plImportOk:()=>{",
+    ("付款计划导入按钮不再跳到通用导入面",
+     "shell", "plImport:async ()=>{ await impSetDomain('m04_plan');", "plImport:async ()=>{ await impSetDomain('m05_flow');",
      "test_导入与手动行走后端"),
     ("失败时把草稿清空（§4.3.3.1 要求保留已填内容）",
-     "shell", "}catch(e){\n     await reloadPlans();          /* 回后端真实状态",
-     "}catch(e){\n     plD={};\n     await reloadPlans();          /* 回后端真实状态",
+     "shell", "}catch(e){\n     plSaving=false;",
+     "}catch(e){\n     plD={};\n     plSaving=false;",
      "test_手动行失败时保留已填内容"),
     ("手动行保存回到前端复写金额校验（第二份口径）",
      "shell", "const r=await API.m04PlanSave({", "const r=await badMoney({",
@@ -52,9 +53,9 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "payload = _manual_row_payload(",
      "test_后端两个新端点存在"),
     ("后端导入端点不走 merge_month（丢幂等）",
-     "m04api",
-     "result = repo.merge_month(session, year_month=year_month, rows=rows)",
-     "result = {'created': len(rows)}",
+     "m04imp",
+     "out = repo.merge_month(s, year_month=ym, rows=rows)",
+     "out = {'created': len(rows)}",
      "test_后端两个新端点存在"),
 ]
 
@@ -100,11 +101,16 @@ def main() -> int:
     ok = all(md5_after[k] == md5_before[k] for k in FILES)
     print(f"\n命中 {hit}/{len(MUTATIONS) - miss} · SKIP {miss} · MD5 {'逐字节复原 ✅' if ok else '⛔ 不一致'}")
 
-    print("重跑全套 pytest（复原态）…")
-    full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
-                          cwd=ROOT / "backend", capture_output=True, text=True)
-    print("  全套 pytest 退出码 =", full.returncode)
-    return 0 if (ok and miss == 0 and hit == len(MUTATIONS) and full.returncode == 0) else 1
+    if "--no-full-suite" in sys.argv:
+        print("跳过全套 pytest（--no-full-suite）：本轮不刷新权威四态")
+        full_rc = 0
+    else:
+        print("重跑全套 pytest（复原态）…")
+        full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
+                              cwd=ROOT / "backend", capture_output=True, text=True)
+        print("  全套 pytest 退出码 =", full.returncode)
+        full_rc = full.returncode
+    return 0 if (ok and miss == 0 and hit == len(MUTATIONS) and full_rc == 0) else 1
 
 
 if __name__ == "__main__":

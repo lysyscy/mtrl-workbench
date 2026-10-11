@@ -10,7 +10,7 @@
 2. 变异片段**含中文**时用 `str` ＋ `.encode()`（`b"…"` 只允许 ASCII）；
 3. **行尾按目标文件归一**（本仓源码行尾不统一）；
 4. 变异点**必须唯一命中**，否则重写（不得当成"已通过"）；
-5. 跑完**必须再跑一次全套 `pytest`**（否则 `acc_results.json` 留的是变异态 ⇒ 报表数字是假的）。
+5. 默认重跑复原态全套 `pytest`；显式 `--no-full-suite` 跳过，本轮不刷新权威四态。
 
 ⚠️ 本次首跑抓出 **3 处假绿**（两处是**断言**不够紧、一处是**变异点**没改干净）—— 已同步收紧：
    · `awfPj = d.project` 那条断言**放错了测试**（写在「数据源」那条里，而变异号指的是「候选与默认项目」那条）
@@ -61,15 +61,15 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "shell", "awfAdd:()=>awfAct(()=>API.m09Add(", "awfAdd:()=>awfAct(()=>localAdd(",
      "test_m09四个写动作都走后端"),
     ("awfDel 本地删数据冒充落库",
-     "shell", "awfDel:t=>awfAct(()=>API.m09Delete(",
-     "awfDel:t=>{AWF_ROWS.splice(+t.dataset.i,1);return awfAct(()=>API.m09Delete(",
+     "shell", "awfDel:t=>awfAct(()=>API.m09Delete({ym:awfYm, project:awfPj, index:+t.dataset.i}), r=>r.message)",
+     "awfDel:t=>(AWF_ROWS.splice(+t.dataset.i,1),awfAct(()=>API.m09Delete({ym:awfYm, project:awfPj, index:+t.dataset.i}), r=>r.message))",
      "test_m09不得本地改数据冒充落库"),
     ("awfAmt 在前端复写金额判据",
      "shell", "awfAmt:t=>awfAct(()=>API.m09Amount(",
      "awfAmt:t=>awfAct(()=>isNaN(+t.value) ? null : API.m09Amount(",
      "test_m09金额判据不在前端复写"),
     ("awfAct 不判 ok===false（后端那句原因被吞）",
-     "shell", "if (!r || r.ok === false) {", "if (!r) {",
+     "shell", "  await reloadM09();\n  if (!r || r.ok === false) {", "  await reloadM09();\n  if (!r) {",
      "test_m09失败也要看回执"),
     ("月份切换不再重新取数（看到上一月那一份）",
      "shell", "if(sc==='awf'){ awfYm=v; mp.open=null; reloadM09();",
@@ -150,12 +150,17 @@ def main() -> int:
     print(f"\n命中 {hit}/{len(MUTATIONS) - miss} · SKIP {miss} · "
           f"MD5 {'逐字节复原 ✅' if ok_md5 else '⛔ 不一致'}")
 
-    # ⚠️ 必须再跑一次全套（复原态）：否则 acc_results.json 留的是子集运行的结果 ⇒ 四态报表数字是假的
-    print("重跑全套 pytest（复原态）…")
-    full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
-                          cwd=ROOT / "backend", capture_output=True, text=True)
-    print("  全套 pytest 退出码 =", full.returncode)
-    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full.returncode == 0) else 1
+    # 默认保留复原态完整测试；写权威四态仍需显式结果出口。
+    if "--no-full-suite" in sys.argv:
+        print("跳过全套 pytest（--no-full-suite）：本轮不刷新权威四态")
+        full_rc = 0
+    else:
+        print("重跑全套 pytest（复原态）…")
+        full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
+                              cwd=ROOT / "backend", capture_output=True, text=True)
+        print("  全套 pytest 退出码 =", full.returncode)
+        full_rc = full.returncode
+    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full_rc == 0) else 1
 
 
 if __name__ == "__main__":

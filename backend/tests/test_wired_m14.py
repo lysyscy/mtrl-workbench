@@ -21,12 +21,13 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
-from tests.shell_src import SHELL, act_entry, func_body, page_slice  # noqa: F401  ← `P4`① 读取点收敛
+from tests.shell_src import SHELL, act_entry, const_src, func_body, page_slice  # noqa: F401  ← `P4`① 读取点收敛
 RULES_API = (ROOT / "backend" / "app" / "mod14_config" / "rules_api.py").read_text(encoding="utf-8")
 REPO = (ROOT / "backend" / "app" / "mod03_notice" / "rules_repository.py").read_text(encoding="utf-8")
 CLASSIFY = (ROOT / "backend" / "app" / "mod03_notice" / "classify.py").read_text(encoding="utf-8")
@@ -95,8 +96,16 @@ def test_分类规则表只读不渲染编辑入口():
 @acc("ACC-CFG-RULE-001", "001-03")
 def test_规则与说明表不得被标为可排序():
     """`001-03` 规则 / 说明表不得被标为可排序（`data-sort` 是数据表的属性，不是配置表的）。"""
-    sl = page_slice("m14")
-    assert "data-sort" not in sl, "`V.m14` 里有表被标了 `data-sort` ⇒ 配置 / 说明表被当成可排序数据表"
+    script = """
+const V = {}, window = {JCI_ALL: [], MECH_RULES: []};
+const RULE_EX = [['类别', '命中值', '含义']];
+const esc = x => String(x == null ? '' : x);
+const FBAR = ({body}) => body;
+""" + const_src('TBL') + '\n' + page_slice('m14') + '\nconsole.log(V.m14());'
+    result = subprocess.run(['node'], input=script, capture_output=True,
+                            text=True, encoding='utf-8', errors='replace')
+    assert result.returncode == 0, result.stderr
+    assert 'data-sort' not in result.stdout, '配置表渲染出了排序标记'
 
 
 # ============================================================== 001-04

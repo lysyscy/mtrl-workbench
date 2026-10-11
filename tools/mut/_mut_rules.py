@@ -3,7 +3,7 @@
 
 用法：`cd D:\\dev\\mtrl-workbench && backend/.venv/Scripts/python.exe tools/_mut_rules.py`
 
-⚠️ 纪律（见 memory §十七 / 细则 §十七）：一律走 bytes · 变异点必须**唯一命中** · 跑完**再跑全套** · 末尾核 MD5。
+⚠️ 纪律（见 memory §十七 / 细则 §十七）：一律走 bytes · 变异点必须**唯一命中** · 默认重跑全套（`--no-full-suite` 显式跳过，不刷新权威四态） · 末尾核 MD5。
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 FILES = {
     "repo": ROOT / "backend" / "app" / "mod03_notice" / "rules_repository.py",
-    "router": ROOT / "backend" / "app" / "mod03_notice" / "router.py",
+    "router": ROOT / "backend" / "app" / "mod03_notice" / "notice_executors.py",
     "classify": ROOT / "backend" / "app" / "mod03_notice" / "classify.py",
     "api": ROOT / "backend" / "app" / "mod14_config" / "rules_api.py",
 }
@@ -91,11 +91,16 @@ def main() -> int:
     print(f"\n命中 {hit}/{len(MUTATIONS) - miss} · SKIP {miss} · "
           f"MD5 {'逐字节复原 ✅' if ok_md5 else '⛔ 不一致'}")
 
-    print("重跑全套 pytest（复原态）…")
-    full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
-                          cwd=ROOT / "backend", capture_output=True, text=True)
-    print("  全套 pytest 退出码 =", full.returncode)
-    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full.returncode == 0) else 1
+    if "--no-full-suite" in sys.argv:
+        print("跳过全套 pytest（--no-full-suite）：本轮不刷新权威四态")
+        full_rc = 0
+    else:
+        print("重跑全套 pytest（复原态）…")
+        full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
+                              cwd=ROOT / "backend", capture_output=True, text=True)
+        print("  全套 pytest 退出码 =", full.returncode)
+        full_rc = full.returncode
+    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full_rc == 0) else 1
 
 
 if __name__ == "__main__":

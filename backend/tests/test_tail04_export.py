@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 import zipfile
 from pathlib import Path
@@ -160,7 +161,10 @@ def test_壳侧导出按钮已接线且按content_type分流():
     assert "dlExport" in act and "createObjectURL" in _a and ".download" in _a, "没真的触发下载（拿不到文件）"
     # 后端两条分支都要在：成功给 zip、失败给 JSON＋中文原因
     assert "application/zip" in API, "成功分支不是 zip"
-    assert '"ok": False' in API.replace("'", '"'), "失败分支没回 `ok:false`（壳就分不出流）"
+    endpoint = next(n for n in ast.parse(API).body
+                    if isinstance(n, ast.FunctionDef) and n.name == 'api_export_settlement')
+    body = ast.get_source_segment(API, endpoint)
+    assert '"ok": False' in body.replace("'", '"'), "收发结存失败分支没回 `ok:false`"
 
 
 # ============================================================== 库存单据明细表成品（第二片 · ACC-X-EXP-001/001-05）

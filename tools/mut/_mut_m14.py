@@ -10,7 +10,7 @@
 2. 变异片段**含中文**时用 `str` ＋ `.encode()`（`b"…"` 只允许 ASCII）；
 3. **行尾按目标文件归一**（本仓源码行尾不统一）；
 4. 变异点**必须唯一命中**，否则重写（不得当成"已通过"）；
-5. 跑完**必须再跑一次全套 `pytest`**（否则 `acc_results.json` 留的是变异态 ⇒ 报表数字是假的）。
+5. 默认重跑复原态全套 `pytest`；显式 `--no-full-suite` 跳过，本轮不刷新权威四态。
 """
 
 from __future__ import annotations
@@ -86,8 +86,8 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
     # ---- 001-03 · 配置/说明表不得可排序
     ("剔除规则表被标成可排序",
      "shell",
-     '<table class="dt"><thead><tr><th>规则类别</th>',
-     '<table class="dt" data-sort><thead><tr><th>规则类别</th>',
+     "${TBL({head:'<th>规则类别</th>",
+     "${TBL({key:'rules',head:'<th>规则类别</th>",
      T3),
     # ---- 001-04 · 结构与后端同源
     ("RULE_KINDS 不从后端落定（下拉空 / 只能硬编码）",
@@ -156,12 +156,17 @@ def main() -> int:
     print(f"\n命中 {hit}/{len(MUTATIONS) - miss} · SKIP {miss} · "
           f"MD5 {'逐字节复原 ✅' if ok_md5 else '⛔ 不一致'}")
 
-    # ⚠️ 必须再跑一次全套（复原态）：否则 acc_results.json 留的是子集运行的结果 ⇒ 四态报表数字是假的
-    print("重跑全套 pytest（复原态）…")
-    full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
-                          cwd=ROOT / "backend", capture_output=True, text=True)
-    print("  全套 pytest 退出码 =", full.returncode)
-    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full.returncode == 0) else 1
+    # 默认保留复原态完整测试；写权威四态仍需显式结果出口。
+    if "--no-full-suite" in sys.argv:
+        print("跳过全套 pytest（--no-full-suite）：本轮不刷新权威四态")
+        full_rc = 0
+    else:
+        print("重跑全套 pytest（复原态）…")
+        full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
+                              cwd=ROOT / "backend", capture_output=True, text=True)
+        print("  全套 pytest 退出码 =", full.returncode)
+        full_rc = full.returncode
+    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full_rc == 0) else 1
 
 
 if __name__ == "__main__":

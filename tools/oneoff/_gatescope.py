@@ -136,7 +136,7 @@ def input_signature(rel: str, args: list[str], files: dict, context: str) -> str
         selected = {n: h for n, h in files.items()
                     if n.startswith(('repo/backend/app/web/', 'repo/tools/probe/'))}
     elif rel == 'pytest':
-        selected = {n: h for n, h in files.items() if not n.startswith('repo/artifacts/')}
+        selected = {n: h for n, h in files.items() if not n.startswith(('repo/artifacts/', 'repo/backend/.codebuddy/'))}
     else:
         return None
     return digest(json.dumps([VERSION, rel, args, context, selected],
@@ -354,6 +354,34 @@ def selftest() -> None:
             damaged.save()
             assert not read_receipt(moving.path, root, 'fixture')['records'], '坏档合并不能留绿'
         assert authority.read_text(encoding='utf-8') == 'authority', '子集不能改权威档'
+        # pytest 产物不能触发自身；真实输入、环境与参数仍让旧回执失效。
+        pytest_args = ['-q', 'tests/']
+        proven = session()
+        proven.record('pytest', pytest_args, 0)
+        proven.save()
+        assert not session().required('pytest', pytest_args), 'pytest 同输入可复用'
+        for name in ('artifacts/acc_results.json',
+                     'backend/.codebuddy/results.json',
+                     '.codebuddy/work/00-scratch/result.json'):
+            product = root/name
+            product.parent.mkdir(parents=True, exist_ok=True)
+            product.write_text('product changed', encoding='utf-8')
+            assert not session().required('pytest', pytest_args), '产物变化不能让 pytest 重跑'
+        assert not any(n.startswith('repo/.codebuddy/work/00-scratch/')
+                       for n in inventory(root)), 'scratch 已由 inventory 排除'
+        for name in ('backend/app/web/index.html', 'backend/tests/test_theme.py',
+                     'tools/audit/syntax_audit.py'):
+            real = root/name
+            real.parent.mkdir(parents=True, exist_ok=True)
+            before = real.read_bytes() if real.exists() else None
+            real.write_text('real input changed', encoding='utf-8')
+            assert session().required('pytest', pytest_args), '代码、测试或工具变化必须重跑 pytest'
+            if before is None:
+                real.unlink()
+            else:
+                real.write_bytes(before)
+        assert Receipts(root, related=True, context='other-env').required('pytest', pytest_args), '环境变化必须重跑 pytest'
+        assert session().required('pytest', ['-q', '-x', 'tests/']), '参数变化必须重跑 pytest'
         registry = root/'tools/oneoff/_run_rulers.py'
         registry.parent.mkdir(parents=True)
         registry.write_text("CMDS = [('tools/a.py', [])]", encoding='utf-8')
