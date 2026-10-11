@@ -341,9 +341,7 @@ def api_sup_match(req: SupMatchIn, session: Session = DBSession) -> dict:
        "预填值须经人**采用**才转正式"都由壳侧编排 ⇒ 落库一律走 `jc-supplier` 那个端点。
     ⚠️ 项目键 = 该行**归属档案行的仓库名**（§2.7.4），与集采合同的项目键**同一空间** ⇒ 直接判等。
     """
-    from sqlalchemy import select
-
-    from app.mod01_projects.models import Project
+    from app.mod01_projects import service as PS
     from app.mod03_notice.models import PaymentNotice
     from app.mod03_notice.sup_match import LVL_NAMES, match_of, pool_of, row_pool_rows
 
@@ -352,10 +350,8 @@ def api_sup_match(req: SupMatchIn, session: Session = DBSession) -> dict:
         return {"ok": False, "message": f"找不到付款通知书 {req.notice_id}"}
     key = ""
     if row.ownership_id is not None:
-        proj = session.execute(
-            select(Project.warehouse_name).where(Project.id == int(row.ownership_id))
-        ).scalar()
-        key = str(proj or "")
+        key = next((str(p.warehouse_name or "") for p in PS.all_projects(session)
+                    if p.id == int(row.ownership_id)), "")
     pool = pool_of(row_pool_rows(session), project_key=key)
     # ⚠️ **单据名称在 `fields["BillName"]` 里**（`payment_notice` 表**没有独立列** —— 同 `list_view` 的 `NoticeRow.bill_name`）。
     #    ⛔ 别写 `getattr(row, "bill_name")`：那永远取不到、会**静默变成"永不匹配"**。

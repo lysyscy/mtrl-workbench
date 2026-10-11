@@ -5,7 +5,7 @@
    9 个业务包反过来依赖、`mod03`/`mod05` 互相直查对方的表 ⇒ 这些地方**没有一处尺子看得见**。
    本件把它们变成**每轮非过不可**的判据。
 
-三条规则（各自带**放行名单**起步 ⇒ 拆一处、销一条，名单只许变短）：
+分层规则（各自带**放行名单**起步 ⇒ 拆一处、销一条，名单只许变短）：
 
 | 规则 | 禁什么 | 依据 |
 |---|---|---|
@@ -14,6 +14,7 @@
 | **B2（下半）** | `app/export_registry.py` ⛔ `import` 任何 `app.*` | 规则 B 的**反绕过**：注册表必须是**叶子**，否则环换个名字继续存在 |
 | **C（一般式 · `TAIL-218`）** | **任一 `app/mod*/**` ⛔ `import` **别包**的 `repository`（⛔ 自己包的随便用） | 计划 **§2.3**「包间只经 `service` 调用，**不得跨包直查对方表**」——⭐ **2026-10-02 起升一般式**：原先只罩 `mod03`↔`mod05` **两条边**，实测另有 **17 处 / 13 件**没人管（其中 **11 处同族指向 `mod01_projects`**，而它**当时根本没有 `service.py`** —— ⭐ 批 2 已补上，那 11 处全清）⇒ ⭐ **批 3 后全仓已无待清项**（只剩 1 处**按设计的例外**）⇒ 施工图 = `work/10-designs/设计-分层门禁一般式-20261002.md` · 尾巴 = `TAIL-218` |
 | **D（下半）** | `app/report_export/**` ⛔ `import app.mod*.repository` | 同上（`TAIL-195` 批 2c）—— 导出层只许用业务包的 `domain` / `models` / `service` |
+| **C2（TAIL-299）** | `app/mod*/**` 不得把别包models的类或列当查询目标 | 五形态；typing/domain/join条件放行。待清与按设计例外分表登记，全部条目必须仍命中 |
 
 ⭐ **规则 C 有两张名单**（⛔ **性质不同，别混**）：`_ALLOW_C_PENDING`（**待清** · 只许变短）/ `_ALLOW_C_BY_DESIGN`（**按设计的例外** · 看理由、不看数量）。
 ⭐ **出口那一层的约定全仓一致**（`mod03_notice` / `mod05_flow` / `mod06_proc` / `mod09_fee` 的 `service.py` 里都写着「⚠️⚠️ 跨包调用**只许经这一层**」）⇒ 别为单个调用者单开一层"只会转手的窗口"（用户 2026-10-02 明确否过那种形式主义）。
@@ -24,19 +25,183 @@
 ⚠️ 规则 **B** 只管 `app/mod*/`；**测试**（`backend/tests/**`）直接 import `app.report_export` 是**正当的**
    （测试不在应用的依赖图里，它就该直接调被测件）。
 
-反向灵敏度：`tools/mut/_归档-20261009/_mut_layering.py`（每条规则各一靶 ⇒ 必红）。
+反向灵敏度：`tools/mut/_mut_layering.py`（每条规则各一靶 ⇒ 必红）。
 """
 
 from __future__ import annotations
 
 import ast
+import importlib.util
 import re
+from collections import Counter
+
 from pathlib import Path
 
 from tests.acc_plugin import acc
 
 APP = Path(__file__).resolve().parents[1] / "app"
 CORE = APP / "core"
+
+
+def _query_targets(source: str, own: str, package: str | None = None) -> list[tuple[str, str, int]]:
+    """C2：只识别查询目标；typing/domain/where/join 条件不算目标。
+
+    支持类别名、models模块别名及绝对/相对import；返回(函数, 模型, 行)。
+    ORM接收者认Session注解、session_scope绑定和本仓s/session约定，普通映射get放行。
+    """
+    tree = ast.parse(source)
+    hits = []
+
+    def dotted(node):
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            base = dotted(node.value)
+            return f"{base}.{node.attr}" if base else ""
+        return ""
+
+    def resolve(node, aliases):
+        name = dotted(node)
+        head, _, tail = name.partition('.')
+        return aliases.get(head, head) + ('.' + tail if tail else '')
+
+    def selected(node, aliases, statements):
+        if isinstance(node, ast.Name):
+            return node.id in statements
+        if isinstance(node, ast.Call):
+            if resolve(node.func, aliases) in ('sqlalchemy.select', 'sqlalchemy.sql.select', 'sqlalchemy.sql.expression.select'):
+                return True
+            if isinstance(node.func, ast.Attribute):
+                return selected(node.func.value, aliases, statements)
+        return False
+
+    def visit(node, aliases, sessions, statements, function="<module>"):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            aliases = dict(aliases)
+            sessions, statements = set(sessions), set(statements)
+            if not isinstance(node, ast.Module):
+                function = node.name
+            # 函数调用发生在模块加载后；定义之后的模块import同样生效。
+            # 各词法作用域先取自己的imports，不能把别的函数局部import混进来。
+            def collect(scope):
+                for child in ast.iter_child_nodes(scope):
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        continue
+                    if isinstance(child, ast.ImportFrom):
+                        module = child.module or ''
+                        if child.level:
+                            module = importlib.util.resolve_name('.' * child.level + module, package or own)
+                        for a in child.names:
+                            aliases[a.asname or a.name] = f"{module}.{a.name}"
+                    elif isinstance(child, ast.Import):
+                        for a in child.names:
+                            aliases[a.asname or a.name.split('.')[0]] = a.name if a.asname else a.name.split('.')[0]
+                    else:
+                        collect(child)
+            collect(node)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for arg in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
+                    if arg.annotation and any(resolve(part, aliases) in ('sqlalchemy.orm.Session', 'sqlalchemy.orm.session.Session')
+                                              for part in ast.walk(arg.annotation)):
+                        sessions.add(arg.arg)
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    if dotted(node.value) in sessions:
+                        sessions.add(target.id)
+                    if selected(node.value, aliases, statements):
+                        statements.add(target.id)
+        if isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                if (isinstance(item.context_expr, ast.Call) and isinstance(item.optional_vars, ast.Name)
+                        and resolve(item.context_expr.func, aliases) == 'app.core.db.session_scope'):
+                    sessions.add(item.optional_vars.id)
+        if isinstance(node, ast.Call):
+            name = dotted(node.func)
+            resolved = resolve(node.func, aliases)
+            method = node.func.attr if isinstance(node.func, ast.Attribute) else name
+            is_select = resolved in ('sqlalchemy.select', 'sqlalchemy.sql.select', 'sqlalchemy.sql.expression.select')
+            receiver = node.func.value if isinstance(node.func, ast.Attribute) else None
+            is_session = dotted(receiver) in sessions
+            if is_select or (method in ('get', 'query') and is_session) or (method == 'select_from' and selected(receiver, aliases, statements)):
+                args = node.args if is_select or method in ('query', 'select_from') else node.args[:1]
+                if method == 'get' and not args:
+                    args = [kw.value for kw in node.keywords if kw.arg == 'entity']
+                models = set()
+                for arg in args:
+                    for part in ast.walk(arg):
+                        ref = dotted(part)
+                        first, _, rest = ref.partition('.')
+                        ref = aliases.get(first, first) + ('.' + rest if rest else '')
+                        match = re.match(r'^(app\.mod\d+_[a-z0-9_]+)\.models\.([A-Z]\w*)(?:\.|$)', ref)
+                        if match and match[1] != own:
+                            models.add(f"{match[1]}.models.{match[2]}")
+                hits.extend((function, model, node.lineno) for model in sorted(models))
+        for child in ast.iter_child_nodes(node):
+            visit(child, aliases, sessions, statements, function)
+
+    visit(tree, {}, {'s', 'session'}, set())
+    return hits
+
+
+# 按查询处登记（文件、函数、模型）；同处再多一次查询也必须报红。
+# 待清项逐条归TAIL-300；按设计锁不占待清名额。起点只许变短。
+_ALLOW_C2_PENDING: dict[tuple[str, str, str], str] = {
+    ("mod03_notice/sup_match.py", "row_pool_rows", "app.mod11_jc.models.JcContract"): "TAIL-300：供应商匹配池",
+    ("mod03_notice/list_view.py", "_links_by_notice", "app.mod11_jc.models.JcPayment"): "TAIL-300：批量通知书关联",
+    ("mod04_plan/service.py", "notice_amounts", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：审批金额",
+    ("mod04_plan/service.py", "notice_amounts", "app.mod05_flow.models.PaymentFlow"): "TAIL-300：生效已付",
+    ("mod05_flow/repository.py", "notice_rows", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：欠款/台账输入",
+    ("mod05_flow/repository.py", "revoke", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：撤销手改判断；实扫补入",
+    ("mod05_flow/repository.py", "revoke_info", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：撤销事实快照；实扫补入",
+    ("mod05_flow/repository.py", "sync_stat_paid", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：统计金额同步的锁定读；实扫补入，保持同事务",
+    ("mod09_fee/repository.py", "inv_rows", "app.mod08_inv.models.InvDetail"): "TAIL-300：只读原单，不叠加调整",
+    ("mod11_jc/repository.py", "payments_of_many", "app.mod05_flow.models.PaymentFlow"): "TAIL-300：批量生效日期",
+    ("mod11_jc/repository.py", "payments_of_many", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：批量统计付款",
+    ("mod11_jc/service.py", "act_link_notice", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：存在校验",
+    ("mod01_projects/pending.py", "latest_pending", "app.mod02_i8.models.RunRecord"): "TAIL-300：待建档记录；实扫补入",
+    ("mod01_projects/archive_pending.py", "latest_pending", "app.mod02_i8.models.RunRecord"): "TAIL-300：归档待建档记录；实扫补入",
+    ("mod03_notice/repository.py", "latest_unresolved", "app.mod02_i8.models.RunRecord"): "TAIL-300：未归属抓取记录；实扫补入",
+    ("mod11_jc/repository.py", "latest_unsettled", "app.mod02_i8.models.RunRecord"): "TAIL-300：最近抓取记录",
+}
+_ALLOW_C2_BY_DESIGN: dict[tuple[str, str, str], str] = {
+    ("mod05_flow/router.py", "api_revoke", "app.mod03_notice.models.PaymentNotice"):
+        "撤销付款必须在付款侧同一事务内锁通知书行，从事实重读/确认到撤销流水/重算都保持锁；转手另开事务会破坏临界区",
+}
+_C2_PENDING_START = 16  # 原预估10；2026-10-12完整实扫补6处，按实际登记
+
+
+def _scan_c2() -> Counter:
+    """只扫app/mod*/**，与C同面；app顶层、home、report_export在面外。
+
+    包数/件数下限防空扫；名单逐条命中由独立判据验证。
+    可删除条件：业务包不再接触别包models，规则C足以守住全部直查入口。
+    """
+    pkgs = sorted(p for p in APP.glob('mod*') if p.is_dir())
+    assert len(pkgs) >= 10, '规则 C2 包数不足，扫描面失效'
+    files = [(d, p) for d in pkgs for p in _py_files(d)]
+    assert len(files) >= 100, '规则 C2 件数不足，扫描面失效'
+    found = Counter()
+    for d, p in files:
+        package = 'app.' + '.'.join(p.parent.relative_to(APP).parts)
+        for fn, model, _ in _query_targets(p.read_text(encoding='utf-8'), f'app.{d.name}', package):
+            found[(p.relative_to(APP).as_posix(), fn, model)] += 1
+    return found
+
+
+@acc()
+def test_C2_不得把别包模型当查询目标():
+    allowed = set(_ALLOW_C2_PENDING) | set(_ALLOW_C2_BY_DESIGN)
+    extra = {key: n for key, n in _scan_c2().items() if key not in allowed or n != 1}
+    assert not extra, f'跨包查询目标必须走主人service；新直查或同处增加查询：{extra}'
+
+
+@acc()
+def test_C2_名单逐条命中且待清只许变短():
+    assert len(_ALLOW_C2_PENDING) <= _C2_PENDING_START, 'C2 待清名单不许变长'
+    assert not set(_ALLOW_C2_PENDING) & set(_ALLOW_C2_BY_DESIGN), 'C2 两张名单不能重叠'
+    stale = (set(_ALLOW_C2_PENDING) | set(_ALLOW_C2_BY_DESIGN)) - set(_scan_c2())
+    assert not stale, f'C2 名单未被扫出：{stale}'
 
 #: ── 规则 A（上半）── (相对 `app/core/` 的文件名, 被 import 的业务顶层包) → 为什么现在还留着
 #: ⭐ **2026-09-30 批 1b 已清空**：三处「`core` 里的函数运行期读业务包的表」改成
@@ -369,6 +534,7 @@ _EXPORT_SMOKE: tuple[tuple[str, str, str], ...] = (
     ("app.mod06_proc.service", "load_cutoff", "app.mod06_proc.repository"),
     # ⭐ `TAIL-218` 批 2：`mod01_projects` 新开的 5 个包间出口（11 处调用点改走它们）。
     ("app.mod01_projects.service", "all_projects", "app.mod01_projects.repository"),
+    ("app.mod01_projects.service", "warehouse_index", "app.mod01_projects.repository"),
     ("app.mod01_projects.service", "list_projects", "app.mod01_projects.repository"),
     ("app.mod01_projects.service", "export_phids", "app.mod01_projects.repository"),
     ("app.mod01_projects.service", "create_project", "app.mod01_projects.repository"),

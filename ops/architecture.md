@@ -17,7 +17,7 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 | tools | 检查与操作工具的用途、读写边界见 tools/README.md；不以检查结果替代业务口径。 |
 | ops | 服务、部署、备份与恢复；凭据仅从.env读取，不硬编码。 |
 
-分层守卫见 backend/tests/test_layering.py；历史自证在 tools/mut/_归档-20261009/_mut_layering.py；core业务注入不另抄取数实现。
+分层守卫见 backend/tests/test_layering.py；由C2判据守「不得跨包把对方模型当查询目标」，typing/domain/join条件的正当引用不受限。活的隔离自证在 tools/mut/_mut_layering.py；core业务注入不另抄取数实现。
 
 ## 二、共用实现约束
 
@@ -125,6 +125,8 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 壳的语义读取入口是 tools/audit/shell_api.py，测试侧只转发的入口是 backend/tests/shell_src.py；剪刀清单由 backend/tests/shell_scissors.py 守护。
 
 **列表页的「列身份」**（`TAIL-298` · `m11` 是样板）：一张表的列清单**一个主人** —— 业务包的 `domain.JC_COLUMNS`（`m11_jc`）⇒ ① 壳的表头由它**现生成**（`shell/pages-b.js::jcThead`，⛔ 壳里不再写列字面量）；② 屏幕行为（默认隐藏 / 钉列）只写**列 id**（`JC_HIDE_IDS` / `JC_PIN_IDS` = 后端 `key`，⛔ 不写列号 —— 列号是"位置"，加一列就得人肉同步且**漏改不报错**）；③ Excel 导出由它**派生**（`report_export/jc_export.py`：列集 = `JC_COLUMNS − PAGE_ONLY_KEYS`、表头字 = `export_label`（缺省 = `label`，屏幕注解不进 Excel）、合计列 = `SUM_KEYS`）。判据：`backend/tests/test_tail298_columns.py`（导出派生 ＋ **值级**键覆盖）· `backend/tests/test_ux_pages.py::001-61`（行为表 id ∈ 规格 ＋ 偏移量出来）· 真机 ㉝ `tools/probe/_shell_jcpin.py`；自证 `tools/mut/_mut_tail298_columns.py`。
+
+TAIL-301补齐行与合计：`V.m11` 单元格按id绑定、由同份列清单排列，普通新列读同名行字段；API的 `sum_keys` 派生自 `domain.SUM_KEYS`，`pages-b.js::jcSumColumns` 按id查位并保留原求和算法。判据 `backend/tests/test_tail301_columns.py` 演练加列/调序，隔离自证 `tools/mut/_mut_tail301_columns.py`。
 
 ## 四、渲染层删改保护
 

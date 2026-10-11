@@ -260,6 +260,7 @@ def api_revoke(
         from app.mod03_notice import service as notices
 
         nid = int(flow.notice_id or 0)
+        # 付款侧须在当前事务内锁通知书，覆盖事实确认、撤销流水与统计重算。
         if nid:
             from app.mod03_notice.models import PaymentNotice
             s.get(PaymentNotice, nid, with_for_update={"key_share": True}, populate_existing=True)

@@ -398,7 +398,8 @@ def build_ledger(
     # 同一有效机械值供导入、手录、过程资料和台账读取；只接外租含税两列。
     from app.mod06_proc import service as P6S
 
-    wh = project_key(s.get(Project, int(project_id)))
+    from app.mod01_projects import service as PS
+    wh = project_key(next((p for p in PS.all_projects(s) if p.id == int(project_id)), None))
     mech_settle = {str(r['ym']): sum_money([r.get('mech_2'), r.get('mech_3')])
                    for r in P6S.load_mech(s) if wh and r.get('warehouse') == wh and r.get('ym')}
     for cat in dom.LEDGER_SIDES:

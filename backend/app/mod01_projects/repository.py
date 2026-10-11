@@ -51,6 +51,11 @@ def all_projects(session: Session) -> list[Project]:
     return list(session.execute(select(Project)).scalars().all())
 
 
+def warehouse_index(session: Session) -> dict[str, Project]:
+    """仓库名→档案行；批量翻译仓库名/id共用，空仓库不入索引。"""
+    return {str(p.warehouse_name): p for p in all_projects(session) if p.warehouse_name}
+
+
 def export_phids(session: Session) -> str:
     """导出用的项目 id 串（i8 报表参数，技术栈 §9.8：`xmid` / `pc`）—— **保序去重**。
 

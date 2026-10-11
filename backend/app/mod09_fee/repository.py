@@ -11,7 +11,8 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.mod01_projects.models import Project
+from app.mod01_projects.models import Project  # typing
+from app.mod01_projects import service as PS
 from app.mod08_inv.models import InvDetail
 from app.mod09_fee.models import FeeManualItem
 
@@ -31,7 +32,7 @@ def project_by_key(s: Session, warehouse_name: str) -> Project | None:
     key = str(warehouse_name or "").strip()
     if not key:
         return None
-    return s.execute(select(Project).where(Project.warehouse_name == key)).scalars().first()
+    return PS.warehouse_index(s).get(key)
 
 
 def items_of(s: Session, *, ym: str, project_id: int) -> list[dict]:

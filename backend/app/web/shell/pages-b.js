@@ -88,6 +88,27 @@ const JC_PIN_IDS = ['project_seq', 'date', 'material'];
    ⚠️ 取数前是**空数组** ⇒ 表头只剩控件列；那一帧由页级四态（`pageGate`「正在读取这一页的数据…」）
       顶住 —— 正常路径下 `V.m11` 渲染时数据已到（进页 `go()` ⇒ `loadPaths` ⇒ `reloadM11` ⇒ 再 `render()`）。 */
 const JC_COLUMNS = [];
+const JC_SUM_KEYS = [];  /* /api/m11/list 的 sum_keys = domain.SUM_KEYS，壳不另列求和名单。 */
+/** 普通新增列按后端同名字段生成；特殊控件由 V.m11 的 id 映射提供。 */
+function jcDefaultCell(j,c){
+  const v = j.columnValues[c.key];
+  return c.type === 'num' ? `<td class="num">${M(N0(v))}</td>` : `<td>${esc(v == null ? '' : String(v))}</td>`;
+}
+/** 现有七列仍走原取值（子表/列表共用）；新增金额列读同名行字段。 */
+function jcSumValue(j,key){
+  const values = {
+    contract_amt: () => j.contractAmt, inv_sum: () => jcInvSum(j),
+    trade_contract_amt: () => (Number(j.tradeContractAmt)||0),
+    trade_inv_sum: () => jcTradeInvSum(j), settle: () => jcSettle(j),
+    pay_sum: () => jcPay(j), debt: () => jcDebt(j)
+  };
+  return values[key] ? values[key]() : N0(j.columnValues[key]);
+}
+/** sumRowOf 的位置映射仅在这里由列 id 派生，+1 是最前面的勾选控件列。 */
+function jcSumColumns(){
+  return Object.fromEntries(JC_SUM_KEYS.map(key => [jcColIndex(key)+1,
+    rs => N2(rs.reduce((a,j) => a+jcSumValue(j,key),0))]));
+}
 /** 列 id ⇒ 它在列清单里的**位置**（`-1` = 清单里没有这个 id：写错了 / 还没取到列清单）。 */
 const jcColIndex = key => JC_COLUMNS.findIndex(c => c.key === key);
 /** 表头里那一格的字：屏幕注解（「（自动）」「（自由文本）」）染灰 —— 文字**由后端 `label` 带出**，

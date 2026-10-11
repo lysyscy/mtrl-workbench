@@ -74,6 +74,7 @@ def api_list(request: Request) -> dict:
         "count": int(data["count"]),
         "totals": {k: _s(v) for k, v in (data["totals"] or {}).items()},
         "columns": [dict(c) for c in data["columns"]],
+        "sum_keys": list(data["sum_keys"]),
         "projects": list(data["projects"] or []),
         # 三态取值域（壳的筛选下拉与批量标记按钮都用它 ⇒ ⛔ 别在壳里另抄一份）
         "tags": list(D.TAGS),

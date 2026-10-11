@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.mod01_projects import domain as PJ
+from app.mod01_projects import domain as PJ, service as PS
 from app.mod01_projects.models import Project
 from app.mod09_fee import domain as D
 from app.mod09_fee import repository as R
@@ -38,7 +37,7 @@ def parse_state(params: dict | None = None) -> dict:
 
 def candidates(s: Session) -> list:
     """项目候选 —— **唯一出口** = `mod01_projects.domain.build_candidates`（§2.7.4：键 = 仓库名 · 显示 = 展示名）。"""
-    rows = s.execute(select(Project)).scalars().all()
+    rows = PS.all_projects(s)
     return PJ.build_candidates(PJ.ordered(list(rows)))
 
 

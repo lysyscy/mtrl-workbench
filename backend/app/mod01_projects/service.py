@@ -14,7 +14,7 @@
    ⭐ 机器眼 = `test_layering.py::test_包间出口必须真转发_打得着桩`（取样表 `_EXPORT_SMOKE`）。
 
 ⚠️ 出参**照实**回（⛔ 不做形状转换 —— 转形是壳适配层的活，本层只出语义，同 `mod11_jc/service.py` 文件头）。
-⚠️ ⛔ **不写"只为转手而转手"的出口** —— 本件 5 个口都有真调用者（`list_projects` 那一处原本自己
+⚠️ ⛔ **不写"只为转手而转手"的出口** —— 本件出口都有真调用者（`list_projects` 那一处原本自己
    就是一层薄名，换转发对象即可 ⇒ 见施工图 §3.3 的取舍判据）。
 """
 
@@ -56,4 +56,11 @@ def set_keywords(session, *args, **kw):
     return R.set_keywords(session, *args, **kw)
 
 
-__all__ = ["all_projects", "list_projects", "export_phids", "create_project", "set_keywords"]
+def warehouse_index(session):
+    """仓库名→档案行；多包共用同一索引，按id取仓库名可遍历values。"""
+    from app.mod01_projects import repository as R
+
+    return R.warehouse_index(session)
+
+
+__all__ = ["all_projects", "list_projects", "export_phids", "create_project", "set_keywords", "warehouse_index"]

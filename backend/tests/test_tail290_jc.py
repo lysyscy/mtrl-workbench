@@ -52,7 +52,7 @@ def test_browser_sequence_columns_and_export(ui_page):
     p=ui_page
     from app.mod03_notice.page import render_theme
     p.add_style_tag(content=render_theme('默认'))
-    p.evaluate('''arg=>{JC_COLUMNS.splice(0,JC_COLUMNS.length,...arg.cols);JCs.splice(0,JCs.length,...arg.rows.map(adaptJc));VIEW='m11';fJc.tag='全部';fJc.arch='全部';fJc.sup='';render();}''',{'rows':data,'cols':cols})
+    p.evaluate('''arg=>{JC_COLUMNS.splice(0,JC_COLUMNS.length,...arg.cols);JC_SUM_KEYS.splice(0,JC_SUM_KEYS.length,...arg.sum_keys);JCs.splice(0,JCs.length,...arg.rows.map(adaptJc));VIEW='m11';fJc.tag='全部';fJc.arch='全部';fJc.sup='';render();}''',{'rows':data,'cols':cols,'sum_keys':list(D.SUM_KEYS)})
     print(p.evaluate('({filter:fJc,rows:jcVisible().map(j=>j.projectSeq)})'))
     assert p.locator('table[data-sort-key="m11:jc"] th').count()==21
     assert p.locator('table[data-sort-key="m11:jc"] th').nth(8).is_hidden()
@@ -78,9 +78,9 @@ def test_browser_sequence_columns_and_export(ui_page):
       PJs.splice(0,PJs.length,{id:'1',type:'normal',name:r.project_key,disp:'测试项目',full:'测试项目全名',status:'在建',phid:'1',kw:''});
       NO[0].sup=r.supplier;
       API.m11Detail=async()=>({ok:true,data:{}});
-      API.m11List=async()=>({rows:contractRows,columns:arg.cols});
+      API.m11List=async()=>({rows:contractRows,columns:arg.cols,sum_keys:arg.sum_keys});
       API.flows=async()=>({rows:[]});
-    }''',{'rows':data,'cols':cols})
+    }''',{'rows':data,'cols':cols,'sum_keys':list(D.SUM_KEYS)})
     identity=p.evaluate("JCs.find(j=>j.contractNo==='00CGHT前导').id")
     for act in ['jcInvDlg','jcTInvDlg','jcPayDlg']:
         p.evaluate('(args)=>ACT[args.act]({dataset:{id:args.id}})',{'act':act,'id':identity})

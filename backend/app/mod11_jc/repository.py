@@ -2,7 +2,7 @@
 
 ⚠️ **判定一律调 `domain` 出口**（结算 / 欠款 / 子表校验 / 两态）—— 本文件里⛔ 不出现第二个"结算口径"。
 ⚠️ **项目键 = 仓库名**（§2.7.4）：比较 / 筛选一律用它，**写库仍按档案 id** ⇒ 本层负责把 `project_id`
-   翻译成 `warehouse_name`（`select(Project.warehouse_name)`），⛔ 不让上层各自 join 一遍。
+   经项目出口翻译成 `warehouse_name`，⛔ 不让上层各自 join 一遍。
 ⚠️ 派生金额（发票合计 / 付款合计 / 结算 / 欠款）**一律不落库**（§6.4.1 末行）⇒ 本层只回原始子表行。
 """
 
@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError   # `TAIL-96` 补：`add_ignored` 空名要抛它（拆件漏 import ⇒ 运行时 NameError）
-from app.mod01_projects.models import Project
+from app.mod01_projects import service as PS
 from app.mod02_i8.models import RunRecord   # `TAIL-93`：认「最近一次集采抓取」的运行记录
 from app.mod11_jc import domain as D          # ⚠️ 只**调**它的出口（三态归一 / 判定），⛔ 不在本层复写逻辑
 from app.mod11_jc.models import (
@@ -33,7 +33,7 @@ from app.mod11_jc.models import (
 
 def _project_key(s: Session, project_id: int) -> tuple[str, str]:
     """`project_id` → `(仓库名, 展示名)`（§2.7.4：**键 = 仓库名**，展示名只用于显示）。"""
-    p = s.get(Project, int(project_id)) if project_id else None
+    p = next((p for p in PS.all_projects(s) if p.id == int(project_id)), None) if project_id else None
     if p is None:
         return "", ""
     return str(p.warehouse_name or ""), str(getattr(p, "display_name", "") or p.warehouse_name or "")
@@ -53,9 +53,9 @@ def list_contracts(
     - `tags` 三态多值（空 ⇒ 不筛）；`arch` / `supplier` 支持**包含**匹配（供应商是自由文本，取子串）。
     ⚠️ 未给任何筛选 ⇒ **全量**（判据「复位后回到全量」）。
     """
-    stmt = select(JcContract, Project.warehouse_name).join(
-        Project, Project.id == JcContract.project_id, isouter=True
-    )
+    projects = PS.warehouse_index(s)
+    wh_by_id = {int(p.id): str(p.warehouse_name) for p in projects.values()}
+    stmt = select(JcContract)
     if tags:
         stmt = stmt.where(JcContract.tag.in_([str(t) for t in tags]))
     if str(arch or "").strip():
@@ -63,11 +63,13 @@ def list_contracts(
     if str(supplier or "").strip():
         stmt = stmt.where(JcContract.supplier.contains(str(supplier).strip()))
     if str(project_key or "").strip():
-        stmt = stmt.where(Project.warehouse_name == str(project_key).strip())
+        project = projects.get(str(project_key).strip())
+        stmt = stmt.where(JcContract.project_id == project.id) if project else stmt.where(False)
     stmt = stmt.order_by(JcContract.contract_date.desc(), JcContract.id.desc())
 
     out: list[dict] = []
-    for row, wh in s.execute(stmt).all():
+    for row in s.execute(stmt).scalars().all():
+        wh = wh_by_id.get(row.project_id, "")
         out.append({
             "id": row.id,
             "contract_no": row.contract_no,
@@ -168,15 +170,17 @@ def project_id_by_key(s: Session, project_key: str) -> int | None:
     key = str(project_key or "").strip()
     if not key:
         return None
-    return s.execute(select(Project.id).where(Project.warehouse_name == key)).scalars().first()
+    project = PS.warehouse_index(s).get(key)
+    return project.id if project else None
 
 
 def project_choices(s: Session) -> list[dict]:
     """「项目」筛选 / 新增合同的候选（键 = 仓库名 · 展示名另给）—— 同 `MOD-09` 的口径：**唯一出口**。"""
-    stmt = select(Project).order_by(Project.ord, Project.id)
+    # 保留本视图原有ord/id顺序和全部档案（含无仓库行）。
+    rows = sorted(PS.all_projects(s), key=lambda p: (p.ord, p.id))
     return [
         {"key": str(p.warehouse_name or ""), "display": str(getattr(p, "display_name", "") or p.warehouse_name or "")}
-        for p in s.execute(stmt).scalars().all()
+        for p in rows
     ]
 
 

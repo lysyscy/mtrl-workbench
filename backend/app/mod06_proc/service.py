@@ -135,13 +135,10 @@ def displays_by_key(s: Session) -> dict[str, str]:
     ⭐ 用途：导出成品的**标题与文件名**一律用**展示名**（用户 2026-09-18 裁），
        且**页面清单预览**与**真实产物**必须同名（`ACC-RPT-EXP-001/001-01`）⇒ 两边共用本函数。
     """
-    from sqlalchemy import select
-
-    from app.mod01_projects import domain as PJ
-    from app.mod01_projects.models import Project
+    from app.mod01_projects import domain as PJ, service as PS
 
     return {c.key: c.display
-            for c in PJ.build_candidates(list(s.execute(select(Project)).scalars().all()))}
+            for c in PJ.build_candidates(PS.all_projects(s))}
 
 
 def build_import_data(s: Session, *, warehouse: str = "") -> dict:

@@ -29,6 +29,7 @@ SLOW_BUDGET = 60.0
 
 #: 慢集（`--fast` 跳过它们；跑全套时照跑）
 SLOW_KEY: frozenset[str] = frozenset({
+    "_mut_layering.py",  # 完整mod*隔离扫面多靶，实测超过快集预算；仍留KEY按需执行。
     "_mut_docaudit.py", "_mut_shellapi.py", "_mut_segments.py",
     # ⚠️ `_mut_syntax.py`（`TAIL-244` 定档）：靶＝`syntax_audit`（内建 `--selftest` ＋ 活树五靶），
     #   **每处靶都要 `node --check`、且有两处真去动壳件**（`print-export.js` / `index.html`）
@@ -39,6 +40,7 @@ SLOW_KEY: frozenset[str] = frozenset({
     #   （`copytree` backend/app ＋ tests）再拉起一次真 pytest** ⇒ 实测贴着快集线（秒数看每次运行自己打的那行）。
     #   ⭐ 同 `_mut_syntax.py`：它**同时留在 `KEY`**（慢集只表示 `--fast` 跳过）。
     "_mut_tail298_columns.py",
+    "_mut_tail301_columns.py",  # 隔离副本中启动浏览器判据，按需慢集。
 })
 
 #: ⭐⭐ **刻意留在快集、且超预算也不提醒挪走**的那几支（`/code-review` 2026-10-06 抓出后才补上，
@@ -52,6 +54,7 @@ KEEP_FAST: dict[str, str] = {
 
 #: ⭐ 关键集：靶是**尺子自身 / 结构守卫 / 文档面**的那几支（⇒ 它们烂掉 = 一整片守卫静默失效）
 KEY: tuple[tuple[str, str], ...] = (
+    ("_mut_layering.py", "分层A/B/B2/C/D/C2：隔离直查红、正当引用绿、名单与扫面承重"),
     # ⚠️ 说明里**不抄条数**（2026-10-05 `/code-review` 指出：那与本件 docstring 的"共 N 条"是
     #    同一件事两处写 —— 而 docstring 自己就写着"条数看本件输出、⛔ 别在别处抄"）。
     ("_mut_docaudit.py", "doc_audit 的 T1–T19 ＋ T24/T25 ＋ T4 计数锚点（条数看本件输出）"),
@@ -121,6 +124,7 @@ KEY: tuple[tuple[str, str], ...] = (
     # ⚠️ 2026-10-11（`TAIL-298`）：列身份（列清单一个主人 / 导出派生 / 行为表按 id）——
     #   靶在 `_isolated.isolated_backend` 的临时副本（改字节只在副本内），子进程跑真 pytest
     #   （conftest 把库换成测试库）⇒ 离线、不刷权威四态 ⇒ 属"尺子/机制面"，进关键集。
+    ("_mut_tail301_columns.py", "TAIL-301 行列派生与合计身份：API缺键 / 行序固定 / 控件偏移错 / 求错金额"),
     ("_mut_tail298_columns.py", "`TAIL-298` 列身份：列清单删一列 / 键名漂（值级） / 行为表写错 id / 钉列不连续"),
 )
 
@@ -315,7 +319,9 @@ def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
                       # ⚠️ 2026-10-11（`TAIL-298` 收尾）：本票新写的列身份反例 —— 逐支实跑过：
                       #   ① 基线三个节点 rc=0；② 四处变异各自 rc=1 且断言消息命中；③ 跑完 MD5 复核已复原；
                       #   ④ 靶全在 `_isolated.isolated_backend` 的临时副本（正式件与权威四态都未动）。
-                      '_mut_tail298_columns.py'}:
+                      '_mut_tail298_columns.py',
+                      # TAIL-301：临时副本内基线绿、各靶独立红、按原bytes复原，不写正式壳。
+                      '_mut_tail301_columns.py', '_mut_layering.py'}:
         print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
         return 2, 0.0
     t = time.time()

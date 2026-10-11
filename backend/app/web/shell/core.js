@@ -1729,6 +1729,7 @@ function adaptJc(x) {
   return {
     /* ⚠️ id **必须 String** —— 原型到处 `x.id===t.dataset.id`，而 `dataset` 出来永远是字符串。
        后端给数字 ⇒ 不转就**静默失配**（勾选后汇总恒 0，同 `adaptNotice` 那条教训）。 */
+    columnValues: {...x},                 /* 新增普通列保留后端同名字段；现有控件仍读适配字段。 */
     id: String(x.id),
     date: x.date || '', material: x.material || '', supplier: x.supplier || '',
     projectSeq: x.project_seq == null ? null : Number(x.project_seq), contractNo: x.contract_no || '',
@@ -1761,13 +1762,14 @@ async function reloadM11() {
   const d = await API.m11List();
   const rows = (d.rows || []).map(adaptJc);
   /* ⭐⭐ `TAIL-298`：**列清单也只从后端来**（`/api/m11/list` 的 `columns` = `domain.JC_COLUMNS`）
-     —— 表头（`pages-b.js::jcThead`）与屏幕行为表（隐藏 / 钉列按 **id** 定位）都吃它。
+     —— 表头/行格与屏幕行为表（隐藏 / 钉列按 **id** 定位）都吃它；合计身份另取 sum_keys。
      ⚠️ 同样**原地**替换（`JC_COLUMNS` 是 `const` ⇒ 只许改内容）—— 与 `JCs` 那条同一个理由。
      ⚠️ 只留屏幕要的三项：`key`（列的身份 · 行为表按它定位）· `label`（表头的字）· `type`；
         ⛔ 别把 `export_label` 这些**导出侧**的字段也搬进来（屏幕不导出）。 */
   const cols = (d.columns || []).map(c => ({key: String(c.key || ''), label: String(c.label || ''),
                                             type: String(c.type || 'text')}));
   JC_COLUMNS.length = 0; cols.forEach(c => JC_COLUMNS.push(c));
+  JC_SUM_KEYS.splice(0, JC_SUM_KEYS.length, ...(d.sum_keys || []));
   JCs.length = 0;                       /* ⚠️ **原地**替换（`JCs` 是 `const` ⇒ 只许改内容；同 `LGs` 的教训）。
                                            理由：`JCs` **跨页共享** —— 整支换引用会让 `JC_PROJ_LIST` 等派生量失效。 */
   rows.forEach(r => JCs.push(r));

@@ -1392,36 +1392,38 @@ V.m11=()=>{
     `})}
     ${jcNewOn?jcNewStrip():''}
     <div class="tw">${TBL({head:jcThead(),key:'m11:jc',
-    rows:jcRows.map((j,i)=>`<tr class="${j.tag==='不纳入'?'ex':''}">
-      <td class="ctr fl"><input type="checkbox" class="chk" data-act="jcPick" data-id="${j.id}" ${jcPick.has(j.id)?'checked':''}></td>
-      <td class="fc" title="项目内动态序号，筛选不变">${j.projectSeq == null ? '—' : j.projectSeq}</td><td class="now">${j.date}</td><td><button class="btn sm" style="white-space:normal;text-align:left" data-act="jcMaterialOpen" data-id="${j.id}" title="修改材料名">${esc(j.material)||'填写材料名'}</button></td><td class="fc">${esc(j.contractNo||'—')}</td><td class="sm">${esc(j.supplier)}</td>
-      <td class="num">${j.contractAmt?M(j.contractAmt):'<span class="mut" title="供应商合同价为空 —— 若是贸易公司合同，需从 Excel 的「供应商线」手工填进来（填完不被抓取覆盖）">— 待补</span>'}</td>
-      <td class="num" style="white-space:nowrap" title="发票金额 = 本合同供应商发票子表金额合计；不计贸易公司发票，不按发票日期截断">${M(jcInvSum(j))} <button class="btn sm" data-act="jcInvDlg" data-id="${j.id}" title="打开「供应商发票子表」（发票日期 + 金额 · 1..N 张）">子表</button></td>
-      <td class="sm">${j.tradeCo?esc(j.tradeCo):'<span class="mut">—</span>'}</td>
-      <td class="num">${j.tradeContractAmt?M(j.tradeContractAmt):'<span class="mut">—</span>'}</td>
-      <td class="num" style="white-space:nowrap" title="贸易公司发票金额 = 本合同贸易公司发票子表金额合计；不计供应商发票，不按发票日期截断，无贸易公司显示—">${j.tradeCo?`${M(jcTradeInvSum(j))} <button class="btn sm" data-act="jcTInvDlg" data-id="${j.id}" title="打开「贸易公司发票子表」（同款 · 发票日期 + 金额）">子表</button>`:'<span class="mut">—</span>'}</td>
-      <td class="num" title="结算金额 = 本合同发票子表金额合计；有贸易公司取贸易公司发票，无贸易公司取供应商发票，两侧不相加，不按发票日期截断"><b>${M(jcSettle(j))}</b></td>
-      <td class="num" style="white-space:nowrap" title="付款金额 = 本合同付款子表金额合计；手工和付款域引用都计入，不跨合同、不按付款日期截断"><b>${M(jcPay(j))}</b> <button class="btn sm" data-act="jcPayDlg" data-id="${j.id}" title="打开「付款子表」（手工录入 / 从付款域引用）">子表</button></td>
-      <td class="num" style="color:${jcDebt(j)>0?'var(--dg)':'var(--ok)'}" title="欠款金额 = 本合同结算金额 − 付款子表金额合计；结算按有无贸易公司取对应发票子表，付款含手工及付款域引用，不按日期截断"><b>${M(jcDebt(j))}</b></td>
-      <td><input class="inp plain" style="min-width:110px" data-act="jcMethod" data-id="${j.id}" value="${esc(j.method)}" title="${esc(j.method)}" placeholder="自由文本"></td>
-      <td><input class="inp" style="min-width:104px" data-act="jcRemark" data-id="${j.id}" value="${esc(j.remark)}" placeholder="可填"></td>
-      <td class="ctr">${tagChip(j.tag)}</td>
-      <td class="ctr">${archChip(j.arch)}</td>
-      <td><input class="inp plain" style="min-width:104px" data-act="jcArchNo" data-id="${j.id}" value="${esc(j.archNo)}" placeholder="存档号"></td>
-      <td><input class="inp plain" type="date" style="min-width:134px" data-act="jcRetDate" data-id="${j.id}" value="${esc(j.retDate)}"></td>
-      <td class="ctr now">
+    rows:jcRows.map(j=>{
+      const cells = {
+        project_seq: `<td class="fc" title="项目内动态序号，筛选不变">${j.projectSeq == null ? '—' : j.projectSeq}</td>`,
+        date: `<td class="now">${j.date}</td>`,
+        material: `<td><button class="btn sm" style="white-space:normal;text-align:left" data-act="jcMaterialOpen" data-id="${j.id}" title="修改材料名">${esc(j.material)||'填写材料名'}</button></td>`,
+        contract_no: `<td class="fc">${esc(j.contractNo||'—')}</td>`,
+        supplier: `<td class="sm">${esc(j.supplier)}</td>`,
+        contract_amt: `<td class="num">${j.contractAmt?M(j.contractAmt):'<span class="mut" title="供应商合同价为空 —— 若是贸易公司合同，需从 Excel 的「供应商线」手工填进来（填完不被抓取覆盖）">— 待补</span>'}</td>`,
+        inv_sum: `<td class="num" style="white-space:nowrap" title="发票金额 = 本合同供应商发票子表金额合计；不计贸易公司发票，不按发票日期截断">${M(jcInvSum(j))} <button class="btn sm" data-act="jcInvDlg" data-id="${j.id}" title="打开「供应商发票子表」（发票日期 + 金额 · 1..N 张）">子表</button></td>`,
+        trade_co: `<td class="sm">${j.tradeCo?esc(j.tradeCo):'<span class="mut">—</span>'}</td>`,
+        trade_contract_amt: `<td class="num">${j.tradeContractAmt?M(j.tradeContractAmt):'<span class="mut">—</span>'}</td>`,
+        trade_inv_sum: `<td class="num" style="white-space:nowrap" title="贸易公司发票金额 = 本合同贸易公司发票子表金额合计；不计供应商发票，不按发票日期截断，无贸易公司显示—">${j.tradeCo?`${M(jcTradeInvSum(j))} <button class="btn sm" data-act="jcTInvDlg" data-id="${j.id}" title="打开「贸易公司发票子表」（同款 · 发票日期 + 金额）">子表</button>`:'<span class="mut">—</span>'}</td>`,
+        settle: `<td class="num" title="结算金额 = 本合同发票子表金额合计；有贸易公司取贸易公司发票，无贸易公司取供应商发票，两侧不相加，不按发票日期截断"><b>${M(jcSettle(j))}</b></td>`,
+        pay_sum: `<td class="num" style="white-space:nowrap" title="付款金额 = 本合同付款子表金额合计；手工和付款域引用都计入，不跨合同、不按付款日期截断"><b>${M(jcPay(j))}</b> <button class="btn sm" data-act="jcPayDlg" data-id="${j.id}" title="打开「付款子表」（手工录入 / 从付款域引用）">子表</button></td>`,
+        debt: `<td class="num" style="color:${jcDebt(j)>0?'var(--dg)':'var(--ok)'}" title="欠款金额 = 本合同结算金额 − 付款子表金额合计；结算按有无贸易公司取对应发票子表，付款含手工及付款域引用，不按日期截断"><b>${M(jcDebt(j))}</b></td>`,
+        method: `<td><input class="inp plain" style="min-width:110px" data-act="jcMethod" data-id="${j.id}" value="${esc(j.method)}" title="${esc(j.method)}" placeholder="自由文本"></td>`,
+        remark: `<td><input class="inp" style="min-width:104px" data-act="jcRemark" data-id="${j.id}" value="${esc(j.remark)}" placeholder="可填"></td>`,
+        tag: `<td class="ctr">${tagChip(j.tag)}</td>`,
+        arch: `<td class="ctr">${archChip(j.arch)}</td>`,
+        arch_no: `<td><input class="inp plain" style="min-width:104px" data-act="jcArchNo" data-id="${j.id}" value="${esc(j.archNo)}" placeholder="存档号"></td>`,
+        ret_date: `<td><input class="inp plain" type="date" style="min-width:134px" data-act="jcRetDate" data-id="${j.id}" value="${esc(j.retDate)}"></td>`,
+        ops: `<td class="ctr now">
         ${j.tag==='不纳入'?`<button class="btn sm pri" data-act="jcTag" data-id="${j.id}" data-v="纳入台账">纳入台账</button>`
           :`<button class="btn sm" data-act="jcTag" data-id="${j.id}" data-v="不纳入">不纳入</button>`}
         <button class="btn sm" data-act="jcArch" data-id="${j.id}">推进存档</button>
-      </td></tr>`),
-    sum:jcRows.length?sumRowOf(jcThead(),jcRows,{
-        6:rs=>N2(rs.reduce((a,j)=>a+j.contractAmt,0)),
-        7:rs=>N2(rs.reduce((a,j)=>a+jcInvSum(j),0)),
-        9:rs=>N2(rs.reduce((a,j)=>a+(Number(j.tradeContractAmt)||0),0)),
-        10:rs=>N2(rs.reduce((a,j)=>a+jcTradeInvSum(j),0)),
-        11:rs=>N2(rs.reduce((a,j)=>a+jcSettle(j),0)),
-        12:rs=>N2(rs.reduce((a,j)=>a+jcPay(j),0)),
-        13:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))},
+      </td>`
+      };
+      return `<tr class="${j.tag==='不纳入'?'ex':''}">
+      <td class="ctr fl"><input type="checkbox" class="chk" data-act="jcPick" data-id="${j.id}" ${jcPick.has(j.id)?'checked':''}></td>
+      ${JC_COLUMNS.map(c => cells[c.key] ?? jcDefaultCell(j,c)).join('')}</tr>`;
+    }),
+    sum:jcRows.length?sumRowOf(jcThead(),jcRows,jcSumColumns(),
         {tip:'当前筛选结果（含「不纳入」行）的合计；「贸易公司合同金额」为空的行按 0 计'})
       :EMPTYROW(thCount(jcThead()), '当前筛选条件下没有集采合同', '换个「三态标记 / 合同存档情况 / 项目」，或清空「供应商」搜索词')})}</div>
   </div>`;

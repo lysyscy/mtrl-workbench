@@ -89,10 +89,10 @@ def row_pool_rows(session) -> list[dict]:  # pragma: no cover - 薄查库层，�
     """
     from sqlalchemy import select
 
-    from app.mod01_projects.models import Project
+    from app.mod01_projects import service as PS
     from app.mod11_jc.models import JcContract
 
-    wh = {int(r[0]): str(r[1] or "") for r in session.execute(select(Project.id, Project.warehouse_name))}
+    wh = {int(p.id): str(p.warehouse_name) for p in PS.warehouse_index(session).values()}
     return [
         {"project_key": wh.get(int(c.project_id or 0), ""), "supplier": str(c.supplier or "")}
         for c in session.execute(select(JcContract)).scalars()

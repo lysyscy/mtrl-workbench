@@ -58,6 +58,7 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
         "count": len(out),
         "totals": {k: v.quantize(Decimal("0.01")) for k, v in totals.items()},
         "columns": [dict(c) for c in D.JC_COLUMNS],
+        "sum_keys": list(D.SUM_KEYS),
         "projects": R.project_choices(s),
     }
 
