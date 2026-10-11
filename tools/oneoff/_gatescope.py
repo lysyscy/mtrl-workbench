@@ -275,7 +275,7 @@ def open_receipts(*, related=False, git_ok=True):
         return None
 
 
-def selftest() -> None:
+def selftest(*, dependencies=True) -> None:
     """见证同一未提交批次中的相关/无关变化，以及坏档、失败和漏跑的后果。"""
     rel, args = 'tools/audit/syntax_audit.py', []
     with tempfile.TemporaryDirectory() as tmp:
@@ -404,11 +404,12 @@ def selftest() -> None:
                 pass
             else:
                 raise AssertionError('漏跑/清单外必须报错')
-    import _impactscope
-    _impactscope.selftest()
-    import _pytestscope
-    _pytestscope.input_selftest()
-    _pytestscope.shell_selftest()
+    if dependencies:
+        import _impactscope
+        _impactscope.selftest()
+        import _pytestscope
+        _pytestscope.input_selftest()
+        _pytestscope.shell_selftest()
     # ⭐ 2026-10-11（`/retro` 候选 1）：**真机自检的复用边界** —— 改壳必重跑，改别处（含改测试、
     #    改工具、改文档）可复用上轮 rc=0；环境变了也必重跑。三向各断言一次。
     #    ⚠️ 夹具里的件名用**真实存在**的（`test_wiring_guards` 会拦"引用了不存在的测试件"）。

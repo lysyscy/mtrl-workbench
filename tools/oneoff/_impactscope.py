@@ -351,9 +351,10 @@ def run_selected(changes: dict, commands: list, py: str, *, explain=False, force
         # 即使影响扩大选到所有测试，本轮仍不宣称刷新完整权威结果。
         env = dict(os.environ, **scope.pytest_env(tests if force_full else scope.Plan(True, '局部结果隔离', ['partial'])))
         cached('pytest（隔离结果）', [py, '-X', 'utf8', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '--tb=line', *tests.argv()], 'pytest', tests.argv(), ROOT/'backend', env)
-    mechanism = any(n in changes for n in ('tools/oneoff/_impactscope.py', 'tools/oneoff/_gatescope.py', 'tools/oneoff/_run_rulers.py', 'tools/oneoff/_pytestscope.py', 'tools/mut/_mut_gatescope.py'))
-    if mechanism:
-        cached('核验机制反向灵敏度（隔离副本）', [py, '-X', 'utf8', str(ROOT/'tools/mut/_mut_gatescope.py')], 'tools/mut/_mut_gatescope.py', [])
+    mechanism_paths = set(changes) & {'tools/oneoff/_impactscope.py', 'tools/oneoff/_gatescope.py', 'tools/oneoff/_run_rulers.py', 'tools/oneoff/_pytestscope.py', 'tools/mut/_mut_gatescope.py'}
+    if mechanism_paths:
+        mutation_args = ['--paths', *sorted(mechanism_paths)]
+        cached('核验机制反向灵敏度（隔离副本）', [py, '-X', 'utf8', str(ROOT/'tools/mut/_mut_gatescope.py'), *mutation_args], 'tools/mut/_mut_gatescope.py', mutation_args)
     else:
         print('变异自证：未改机制/判据，跳过；修改其他判据须补对应隔离自证')
     if any(n in changes for n in ('tools/audit/bytes_guard.py', 'tools/mut/_mut_bytesguard.py')):
@@ -443,6 +444,8 @@ def selftest():
             assert run_selected({'tools/oneoff/_impactscope.py': (b'x=1', b'x=2')}, registered, sys.executable, force_full=True) == 0
         called = [arg[0][0] for arg in runner.call_args_list]
         assert any(str(ROOT/'tools/oneoff/_gatescope.py') in c for c in called), '完整入口也须选相关自测'
+        mutation = next(c for c in called if str(ROOT/'tools/mut/_mut_gatescope.py') in c)
+        assert mutation[-2:] == ['--paths', 'tools/oneoff/_impactscope.py'], '实际改动必须传到反例入口'
     # 只替换外部命令；真实入口须先执行相关pytest，再决定完整真机与盖章。
     changes = {'backend/app/web/shell/base.js': (b'old', b'new')}
     for fail in (False, True):
