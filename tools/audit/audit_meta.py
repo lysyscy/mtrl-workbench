@@ -801,19 +801,29 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
                         "在 §14 恢复 `### 14.3 逐条排期`（含「建议时机 / 理由 / 前置」三栏）"))
     else:
         sched: set[str] = set()
+        history: set[str] = set()
+        historical = False
         for l in full[si:]:
             if l.startswith("## "):
                 break
+            if l.startswith("### ") and "已办排期（历史）" in l:
+                historical = True
             m_row = re.match(r"^\|\s*`?TAIL-(\d+)`?", l.strip())
             if m_row:
-                sched.add(m_row.group(1))
+                (history if historical else sched).add(m_row.group(1))
         for n in sorted(live, key=int):
             if n not in sched:
                 hits.append(_t6(LEDGER_REL, 1,
                                 f"TAIL-{n} 登记了但没在 §14.3 排期表里",
                                 "只登记、不排期 ⇒ 没人知道它该在哪个阶段做（**正是用户点出的病**）",
                                 "在 §14.3 补一行（写清四问理由与前置），使其与「阶段」栏一致"))
-        for n in sorted(sched - live - set(ids), key=int):
+        for n in sorted(sched & closed_ids, key=int):
+            hits.append(_t6(LEDGER_REL, 1, f"TAIL-{n} 已办排期仍留在活动区",
+                            "已办行冒充活动排期", "迁入同份计划的已办排期（历史）区，保留原行"))
+        for n in sorted(history & live, key=int):
+            hits.append(_t6(LEDGER_REL, 1, f"TAIL-{n} 活动排期误入已办区",
+                            "活动票不能作为已办留痕", "将原行移回 §14.3 活动区"))
+        for n in sorted((sched | history) - set(ids), key=int):
             hits.append(_t6(LEDGER_REL, 1,
                             f"§14.3 排期表里的 TAIL-{n} 在台账里不存在",
                             "排期表留了个幽灵编号 ⇒ 两份清单已经分叉",

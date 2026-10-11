@@ -40,6 +40,7 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools" / "audit"))
 import audit_common  # noqa: E402  ← ⭐ 计数行**形态**的唯一出处（`write_counts`）
 import audit_meta  # noqa: E402  ← ⭐ 计数的**真源**（`ledger_counts`）
+import acc_report  # noqa: E402  ← 用例号真源与正式T6一致
 
 PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
 PY = REPO / "backend" / ".venv" / "Scripts" / "python.exe"
@@ -144,6 +145,7 @@ def main(argv: list[str]) -> int:
         ap.add_argument(f"--{f}", required=True)
     ap.add_argument("--apply", action="store_true", help="真写盘（默认只干跑）")
     ap.add_argument("--plan", default=str(PLAN))
+    ap.add_argument("--closed-index", default=str(REPO / audit_common.CLOSED_INDEX_REL))
     ap.add_argument("--short", default="", help="票文件短名（默认由 --what 自动截）")
     ap.add_argument("--state", default="ready-for-agent",
                     help="票状态（受控词，见 ops/agents/issue-tracker.md §三）")
@@ -178,15 +180,16 @@ def main(argv: list[str]) -> int:
     print(f"① §15 §一 第 {a1 + 1} 行之后插：{row1[:88]}…")
     print(f"② §14.3 第 {as_ + 1} 行之后插：{row_s[:88]}…")
 
-    new = lines[:a1 + 1] + [row1 + "\n"] + lines[a1 + 1:]
+    newline = "\r\n" if b"\r\n" in orig else "\n"
+    new = lines[:a1 + 1] + [row1 + newline] + lines[a1 + 1:]
     # ⚠️ §14.3 的行号在插入后**整体下移 1** ⇒ 重新定位（⛔ 别拿旧行号硬算）
     isd = next((k for k, l in enumerate(new) if SCHED_RE.match(l)), None)
     _hs, _rs, as2 = _table(new, isd + 1)
-    new = new[:as2 + 1] + [row_s + "\n"] + new[as2 + 1:]
+    new = new[:as2 + 1] + [row_s + newline] + new[as2 + 1:]
     text_new = "".join(new)
 
     # ③ 计数：**问真源**（⛔ 本件不镜像算法；形态由 `audit_common` 管）
-    c = audit_meta.ledger_counts(text_new)
+    c = audit_meta.ledger_counts(text_new, pathlib.Path(a.closed_index).read_text(encoding="utf-8"))
     if not c:
         print("⛔ 真源 `ledger_counts()` 在这份新文本上回 None（段标题形态变了？）⇒ **未写盘**")
         return 1
@@ -197,8 +200,9 @@ def main(argv: list[str]) -> int:
         print("⛔ 计数行命中数不对 ⇒ **未写盘**（多半是计数行被改写过，形态变了）")
         return 1
 
+    check_name = "doc_audit" if path == PLAN.resolve() else "隔离T6"
     if not a.apply:
-        print("（干跑 —— 要真写盘加 --apply；⚠️ 真写盘会再做一次 `doc_audit` 收尾断言）")
+        print(f"（干跑 —— 要真写盘加 --apply；真写盘会做 {check_name} 收尾断言）")
         return 0
 
     # ④ ⭐ 2026-10-04（`TAIL-225` 票体系）：**建票文件** —— 票 = 一个文件，索引 = §15 一行一票。
@@ -211,18 +215,33 @@ def main(argv: list[str]) -> int:
     tpath.parent.mkdir(parents=True, exist_ok=True)
     tpath.write_text(ticket_text(tag, a, a.state), encoding="utf-8", newline="")
     # ⑤ ⭐ 收尾断言：`T6` 必须认得这行新条目 ＋ 那张新票（＝ 各处都写到了）；不达标 ⇒ **逐字节回滚**
-    r = subprocess.run([str(PY), "-X", "utf8", str(REPO / "tools" / "audit" / "doc_audit.py")],
+    if path != PLAN.resolve():
+        saved_root, saved_ledger, saved_closed, saved_tickets = (
+            audit_meta.REPO_ROOT, audit_meta.LEDGER_REL, audit_meta.CLOSED_INDEX_REL, audit_meta.TICKET_DIR_REL)
+        try:
+            audit_meta.REPO_ROOT = path.parent
+            audit_meta.LEDGER_REL = path.name
+            audit_meta.CLOSED_INDEX_REL = str(pathlib.Path(a.closed_index).resolve())
+            audit_meta.TICKET_DIR_REL = str(tpath.parent)
+            cases = set(acc_report.load_json(acc_report.resolve_baseline(None)).get("cases") or {})
+            hits = audit_meta.check_tail_ledger(cases)
+        finally:
+            audit_meta.REPO_ROOT, audit_meta.LEDGER_REL, audit_meta.CLOSED_INDEX_REL, audit_meta.TICKET_DIR_REL = (
+                saved_root, saved_ledger, saved_closed, saved_tickets)
+        out = "必须修 0" if not hits else str(hits)
+    else:
+        r = subprocess.run([str(PY), "-X", "utf8", str(REPO / "tools" / "audit" / "doc_audit.py")],
                        cwd=str(REPO), capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
-    out = (r.stdout or "") + (r.stderr or "")
-    if "必须修 0" not in out:
+        out = (r.stdout or "") + (r.stderr or "")
+    if "必须修 0" not in out or (path == PLAN.resolve() and r.returncode != 0):
         path.write_bytes(orig)
         tpath.unlink(missing_ok=True)
-        print("⛔ 收尾断言不过（`doc_audit` 不是「必须修 0」）⇒ **已逐字节回滚（含删掉刚建的票文件）**；"
+        print(f"⛔ 收尾断言不过（{check_name} 未通过）⇒ **已逐字节回滚（含删掉刚建的票文件）**；"
               "它的输出尾部：")
         print("\n".join(line for line in out.splitlines() if "[红]" in line or "必须修" in line))
         return 1
-    print(f"✅ 已写盘 ＋ 收尾断言过（`doc_audit` 必须修 0）："
+    print(f"✅ 已写盘 ＋ 收尾断言过（{check_name} 必须修 0）："
           f"{path.relative_to(REPO).as_posix()} ＋ 票文件 {tpath.relative_to(REPO).as_posix()}（`{a.state}`）")
     return 0
 

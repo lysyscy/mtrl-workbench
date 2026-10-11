@@ -8,6 +8,7 @@
   ① **§一/§二/§三 删活动行** —— 先由人把事项 / 依据 / 日期追加到已销号姊妹件；
   ② **顶部两处计数按真源重算后写对** —— ⛔ 不再手抄；
   ③ **断言三件事**：姊妹件里已有该编号 · 活动区里**恰好 1 行** · 两处计数行都认得出来。
+  ④ §14.3 的活动排期原行迁入同份计划的「已办排期（历史）」区；票文件标 done。
 
 ⚠️⚠️ **计数一律问真源**：本件**不自己写第二套计数算法** —— 直接调
    `tools/audit/audit_meta.py::ledger_counts()`（`T6` 与 `T4` 的计数锚点**共用**的那一份），
@@ -73,6 +74,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--apply", action="store_true", help="真写盘（默认只干跑）")
     ap.add_argument("--plan", default=str(PLAN), help="计划主文档路径（默认仓内那份）")
     ap.add_argument("--closed-index", default=str(CLOSED_INDEX), help="已销号姊妹件（默认仓内那份）")
+    ap.add_argument("--tickets", default=str(REPO / audit_meta.TICKET_DIR_REL), help="票仓目录（自测指隔离副本）")
     a = ap.parse_args(argv)
 
     n = str(a.id).lstrip("TILA-")            # 容错：允许传 `TAIL-215`
@@ -124,15 +126,35 @@ def main(argv: list[str]) -> int:
         return 1
     print("③ 两处计数已按真源改写（计划概览 ＋ §15 顶部各 1 处）· 复查一致 ✅")
 
-    # ④ 排期表：只提醒，不改（历史排期保留为留痕）
-    sched = [i for i, l in enumerate(text_new.splitlines(keepends=True))
-             if l.lstrip().startswith("|") and tag in l.split("|")[1]]
-    print(f"④ §14.3 排期表里该编号的行：{len(sched)} 处（{'留痕保留' if sched else '⚠️ 没有那行'}"
-          " —— 本件不动它）")
+    # ④ 只搬活动排期的原行；历史区保留完整行，不重写四问。
+    schedule_lines = text_new.splitlines(keepends=True)
+    begin = next((i for i, l in enumerate(schedule_lines) if audit_meta.TAIL_SCHEDULE_RE.match(l.strip())), None)
+    if begin is None:
+        print("⛔ 找不到活动排期区 ⇒ 未写盘")
+        return 1
+    boundary = next((i for i in range(begin + 1, len(schedule_lines))
+                     if schedule_lines[i].startswith("## ")), len(schedule_lines))
+    history = next((i for i in range(begin + 1, boundary)
+                    if schedule_lines[i].startswith("### ") and "已办排期（历史）" in schedule_lines[i]), None)
+    if history is None:
+        print("⛔ 找不到同份计划的已办排期（历史）区 ⇒ 未写盘")
+        return 1
+    sched = [i for i in range(begin + 1, history)
+             if re.match(r"^\|\s*`?" + re.escape(tag) + r"`?(?:\s|\|)", schedule_lines[i])]
+    if len(sched) != 1:
+        print(f"⛔ 活动排期 {tag} 命中 {len(sched)} 行（期望 1）⇒ 未写盘")
+        return 1
+    end = next((i for i in range(history + 1, len(schedule_lines))
+                if schedule_lines[i].startswith("## ")), len(schedule_lines))
+    anchor = max(i for i in range(history + 1, end) if schedule_lines[i].startswith("|"))
+    schedule_lines.insert(anchor + 1, schedule_lines[sched[0]])
+    del schedule_lines[sched[0]]
+    text_new = "".join(schedule_lines)
+    print(f"④ {tag} 活动排期原行迁入已办排期（历史）区")
 
     # ⑤ ⭐ 2026-10-04（`TAIL-225` 票体系）：**票文件标 `done`** —— 状态是票体系唯一的进度信号
     #    （销了号票文件还写 `ready-for-agent` ⇒ 下一个人会再领一遍这张票）。
-    tdir = REPO / ".codebuddy" / "work" / "50-tickets"
+    tdir = pathlib.Path(a.tickets).resolve()
     tk = next((p for p in sorted(tdir.glob(f"{tag}-*.md"))), None) if tdir.is_dir() else None
     if tk is None:
         print(f"⛔ 找不到 {tag} 的票文件（`{tdir.name}/`）⇒ **未写盘**"
@@ -153,7 +175,7 @@ def main(argv: list[str]) -> int:
         return 1
     m_st = hits[0]
     t_new = t_text[:m_st.start(1)] + "done" + t_text[m_st.end(1):]
-    print(f"⑤ 票文件标 done：{tk.relative_to(REPO).as_posix()}")
+    print(f"⑤ 票文件标 done：{tk}")
 
     if not a.apply:
         print("\n（干跑 —— 要真写盘加 --apply）")

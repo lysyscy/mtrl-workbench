@@ -75,6 +75,7 @@ import hashlib
 import errno
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -527,7 +528,112 @@ def _restore(c: dict, src: bytes) -> None:
         _write_bytes(p, src)
 
 
+def tail293_selftest() -> int:
+    """隔离副本证明 T6 活动/已办/幽灵判红、MD5复原与开销票实际搬行。"""
+    scratch = ROOT / ".codebuddy/work/00-scratch"
+    with tempfile.TemporaryDirectory(prefix="tmp-20261011-tail293-", dir=scratch) as name:
+        fixture = Path(name)
+        print(f"隔离副本：{fixture}")
+        for rel in (audit_meta.LEDGER_REL, audit_common.CLOSED_INDEX_REL, audit_meta.HANDBOOK_REL):
+            target = fixture / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / rel, target)
+        tickets = fixture / audit_meta.TICKET_DIR_REL
+        shutil.copytree(ROOT / audit_meta.TICKET_DIR_REL, tickets)
+        plan = fixture / audit_meta.LEDGER_REL
+        closed = fixture / audit_common.CLOSED_INDEX_REL
+        # 开票的自定义计划检查以计划父目录为根；入口README也来自同一副本。
+        shutil.copyfile(fixture / audit_meta.HANDBOOK_REL, plan.parent / audit_meta.HANDBOOK_REL)
+        saved_root = audit_meta.REPO_ROOT
+        try:
+            audit_meta.REPO_ROOT = fixture
+            assert not audit_meta.check_tail_ledger(set()), "隔离T6基线不干净"
+            initial_counts = audit_meta.ledger_counts()
+            source = plan.read_bytes()
+            rows = source.splitlines(keepends=True)
+            start = next(i for i, row in enumerate(rows) if audit_meta.TAIL_SCHEDULE_RE.match(row.decode().strip()))
+            history = next(i for i, row in enumerate(rows) if "### 14.4 已办排期（历史）".encode() in row)
+            row = next(r for r in rows[start:history] if re.match(rb"^\|\s*`?TAIL-\d+", r))
+            tag = re.search(rb"TAIL-\d+", row).group().decode()
+            done_tag = re.search(r"TAIL-\d+", closed.read_text(encoding="utf-8")).group()
+            ticket = next(tickets.glob(f"{tag}-*.md"))
+
+            def check_bad(label, path, changed, needle):
+                original = path.read_bytes()
+                before = md5(path)
+                try:
+                    path.write_bytes(changed)
+                    hits = audit_meta.check_tail_ledger(set())
+                    assert any(needle in hit["what"] for hit in hits), (label, hits)
+                    print(f"{label}：T6红 {len(hits)}；{next(h['what'] for h in hits if needle in h['what'])}")
+                finally:
+                    path.write_bytes(original)
+                assert md5(path) == before
+                assert not audit_meta.check_tail_ledger(set())
+                print(f"复原 MD5 {before} = {md5(path)}；T6绿")
+
+            check_bad("活动缺排期", plan, source.replace(row, b"", 1), "登记了但没在")
+            done_row = row.replace(tag.encode(), done_tag.encode(), 1)
+            check_bad("已办冒充活动", plan, source.replace(row, row + done_row, 1), "已办排期仍留在活动区")
+            check_bad("幽灵活动编号", plan, source.replace(row, row + row.replace(tag.encode(), b"TAIL-9999", 1), 1), "在台账里不存在")
+            check_bad("幽灵历史编号", plan, source.replace(b"## 15.", row.replace(tag.encode(), b"TAIL-9999", 1) + b"## 15.", 1), "在台账里不存在")
+            check_bad("活动误入历史", plan, source.replace(row, b"", 1).replace(b"## 15.", row + b"## 15.", 1), "登记了但没在")
+            check_bad("票栏位不全", ticket, ticket.read_bytes().replace(b"What to build", b"Missing field", 1), "票里缺栏")
+            ledger_row = next(r for r in rows[history:] if r.startswith(f"| `{tag}` |".encode()))
+            check_bad("台账栏位不全", plan, source.replace(ledger_row, f"| `{tag}` | 缺栏 |\r\n".encode(), 1), "栏位不全")
+            body = ticket.read_bytes()
+            match = audit_meta.TICKET_STATE_RE.search(body.decode())
+            check_bad("票状态非受控", ticket, body.replace(match.group().encode(), b"**Status:** bogus", 1), "不是受控词")
+            # 正常已办历史不误伤，且该行不会让活动缺行反例变绿。
+            original = plan.read_bytes()
+            plan.write_bytes(original.replace(b"## 15.", done_row + b"## 15.", 1))
+            assert not audit_meta.check_tail_ledger(set())
+            plan.write_bytes(original)
+            print("正常已办历史：T6绿")
+
+            def run(script, args):
+                result = subprocess.run([str(PY), "-X", "utf8", str(ROOT / "tools/oneoff" / script), *args],
+                                        cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
+                print(result.stdout)
+                assert result.returncode == 0, result.stderr + result.stdout
+                print(f"{script} rc={result.returncode}")
+
+            number = str(max(int(n) for n in re.findall(r"TAIL-(\d+)", source.decode() + closed.read_text(encoding="utf-8"))) + 1)
+            open_args = ["--id", number, "--what", "隔离开销票", "--src", "自证", "--not-doing", "未验",
+                         "--where", "治理脚本", "--when", "随时", "--why", "①小②缺③脚本④搬行", "--pre", "无",
+                         "--plan", str(plan), "--closed-index", str(closed), "--tickets", str(tickets)]
+            hashes = {p: md5(p) for p in (plan, closed)}
+            run("_tail_open.py", open_args)
+            assert all(md5(p) == h for p, h in hashes.items())
+            run("_tail_open.py", open_args + ["--apply"])
+            assert not audit_meta.check_tail_ledger(set())
+            opened = plan.read_bytes()
+            moving = next(r for r in opened.splitlines(keepends=True) if r.startswith(f"| `TAIL-{number}` 隔离开销票".encode()))
+            closed_rows = closed.read_bytes().splitlines(keepends=True)
+            anchor = max(i for i, r in enumerate(closed_rows) if r.startswith(b"|"))
+            closed_rows.insert(anchor + 1, f"| `TAIL-{number}` | 隔离开销票 | 自证通过 | 2026-10-11 |\r\n".encode())
+            closed.write_bytes(b"".join(closed_rows))
+            close_args = ["--id", number, "--plan", str(plan), "--closed-index", str(closed), "--tickets", str(tickets)]
+            tk = next(tickets.glob(f"TAIL-{number}-*.md"))
+            hashes = {p: md5(p) for p in (plan, closed, tk)}
+            run("_tail_close.py", close_args)
+            assert all(md5(p) == h for p, h in hashes.items())
+            run("_tail_close.py", close_args + ["--apply"])
+            after = plan.read_bytes()
+            assert after.count(moving) == 1
+            assert after.index(moving) > after.index("### 14.4 已办排期（历史）".encode())
+            assert not audit_meta.check_tail_ledger(set())
+            assert audit_meta.ledger_counts() == {"活跃": initial_counts["活跃"], "四": initial_counts["四"] + 1}
+            print("开票/销号副本真跑：原行逐字节搬入历史，活动数恢复、已销号+1；T6绿")
+        finally:
+            audit_meta.REPO_ROOT = saved_root
+    print("TAIL-293隔离自证通过；正式文档未作变异靶")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:] == ["--tail293"]:
+        return tail293_selftest()
     # ⭐ M1 / M3 的锚点**现取**（见 `_四态PAT` / `_尾巴PAT` 上方注释）
     cases: list[dict] = [
         {"desc": "M1 简略版的四态数字改错（原 T4 看不见这一处 —— 扩面后才抓得到）", "mode": "red",
