@@ -40,3 +40,6 @@
 **未验边界：** 四条跳转未在正式库真数据上人工走一遍；浏览器证据来自隔离夹具（真虚拟表 550 行 × fixture 数据）。未试 i8 真抓后合同编号为空的行、真实孤儿流水的现场样本。未提交/推送，原有本地提交未动。
 
 **2026-10-11 · 销号后按最终状态复跑（agent）。** 票面记录补两轴 review 行、README §〇 追加、§13.6 交接行更新、旧交接入当日日志之后，`tools/oneoff/_run_rulers.py --paths` 再跑一次：rc=0 · `BAD: []` · 总墙钟 208.57s —— 重跑只重放受影响的文档面（pytest 隔离 167.21s），真机壳自检按签名**复用**（`tmp-20261011-201042-shell-smoke.log`，rc=0）；`doc_audit.py` 必须修 0（T1/T6 无红）、`audit_meta.py` rc=0（仅既有 T5 长件黄）、`git diff --check` rc=0。
+**2026-10-11 · 提交。** `29bac6c` —— 三票同批入库（实现 / 判据 / 隔离变异 / 工具登记 / 台账文档，47 件）；已推送 `origin/master`。
+
+**2026-10-11 · 收尾补修（agent）。** 清 `backend/.codebuddy/` 时查出它会**复生**：`test_tail292_nav.py`（2 处）与 `test_tail281_jc.py`（3 处）的截图写的是**相对路径**，而 pytest 的 cwd 是 `backend/` ⇒ 每次跑到那几条用例就在 `backend/.codebuddy/work/00-scratch/` 重造一份，还会让影响入口多出一条「待查影响」（`TAIL-285` 记过同款）。已按 `test_tail265_ui.py` 的既有写法把 5 处落点锚到仓根（`Path(__file__).resolve().parents[2]`）；证据：cwd=backend 复跑 `tests/test_tail292_nav.py` rc=0 · `backend/.codebuddy` 不再出现 · 截图落在仓根 `00-scratch/`。

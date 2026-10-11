@@ -1,4 +1,6 @@
 """292 四条引用导航：真实虚拟表、歧义、失联与临时筛选返回。"""
+from pathlib import Path
+
 import pytest
 from tests.acc_plugin import acc
 from tests.test_shell_ui_workflow import ui_page  # noqa: F401
@@ -59,7 +61,7 @@ def test_notice_exact_id_in_550_virtual_rows(ui_page,entry):
     row=p.locator('tr.nt-focus')
     box=row.bounding_box();assert box and 0<=box['y']<1000
     assert row.get_attribute('data-notice-id')=='1540'
-    if entry=='flow': p.screenshot(path='.codebuddy/work/00-scratch/tmp-20261011-292-notice-focus.png')
+    if entry=='flow': p.screenshot(path=str(Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch/tmp-20261011-292-notice-focus.png'))
     if entry=='jc': assert p.evaluate('navCalls')==1
     p.click('[data-act="refBack"]')
     assert p.evaluate('VIEW')=='m05' and p.evaluate('JSON.stringify(fNt)===oldNT')
@@ -99,7 +101,7 @@ def test_inventory_original_id_virtual_and_return(ui_page):
     p.wait_for_selector('tr.nt-focus[data-inv-id="2540"]')
     assert p.evaluate("VIEW==='m08' && VS_TS.length>0 && !invOnlyAdj && fIvYm==='全部'")
     box=p.locator('tr.nt-focus').bounding_box();assert box and 0<=box['y']<1000
-    p.screenshot(path='.codebuddy/work/00-scratch/tmp-20261011-292-inventory-focus.png')
+    p.screenshot(path=str(Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch/tmp-20261011-292-inventory-focus.png'))
     p.click('[data-act="refBack"]')
     assert p.evaluate("VIEW==='m06' && JSON.stringify([fIvYm,invWhs,fIvDir,invOnlyAdj,fIvCol])===oldIV")
     p.evaluate("ACT.goInvAdj({dataset:{iv:'9999',wh:'仓A'}})")
