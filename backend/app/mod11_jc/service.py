@@ -27,6 +27,7 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
     ⚠️ **筛选后的行数就是 `count`**；判据要求「筛选后行数 = **独立复算**、**复位后回到全量**」⇒
        本函数**不缓存、不带隐式默认筛选**（不给参数 = 全量）。
     """
+    sequences = D.project_sequences(R.list_contracts(s))
     rows = R.list_contracts(s, tags=tags, arch=arch, supplier=supplier, project_key=project_key)
     inv_map = R.invoices_of_many(s, [r["id"] for r in rows])
     pay_map = R.payments_of_many(s, [r["id"] for r in rows])
@@ -39,7 +40,7 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
             invoices=inv_map.get(r["id"], []),
             payments=pay_map.get(r["id"], []),
         )
-        row = {**r, **amounts}
+        row = {**r, **amounts, "project_seq": sequences.get(r["id"])}
         # ⭐ **本行引用过的付款通知书 id**（`M5-7` 接线时补 —— 子表**本来就在内存里**，只差带出来）。
         # ⚠️ 为什么必须带：`m03`（付款通知书页）的「集采关联」是**反查**的 ——
         #    `jcUsedNids`（全库已引用集合）· `jcRefOf`（这条被哪张合同引用）· `jcLinkCands`（候选）
@@ -110,6 +111,8 @@ def build_detail(s: Session, contract_id: int) -> dict | None:
     amounts = D.contract_amounts(trade_co=c.trade_co, invoices=invoices, payments=payments)
     return {
         "id": c.id,
+        "project_seq": D.project_sequences(R.list_contracts(s)).get(c.id),
+        "contract_no": c.contract_no,
         "date": c.contract_date,
         "material": c.material_name,
         "supplier": c.supplier,
@@ -333,7 +336,8 @@ def export_xlsx(s: Session, *, ids: list[int]) -> bytes:
         return jc_export.build_xlsx([])
     data = build_list(s)
     all_rows = data.get("rows") or data.get("items") or []
-    rows = [r for r in all_rows if int(r.get("id") or 0) in want]
+    by_id = {int(r["id"]): r for r in all_rows}
+    rows = [by_id[int(i)] for i in dict.fromkeys(ids) if int(i) in by_id]
     return jc_export.build_xlsx(rows)
 
 

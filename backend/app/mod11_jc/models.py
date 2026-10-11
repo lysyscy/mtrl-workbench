@@ -86,9 +86,7 @@ class JcContract(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)      # 序号（系统）
     # ⭐ **合同编号**（= i8 的 `BillNo`，如 `CGHT2026090188`）—— **抓取的幂等键**。
-    #    ⚠️ §6.4.1 的 19 字段清单里**没有这一列**，是 `M5-6` 抓取落库时才发现的**真缺口**：
-    #    没有它就无法"重抓同一批不重复插"，也没法判断"这张合同上次人工标记过没有"。
-    #    ⇒ 定位 = **内部幂等键**（⛔ 不是给人看的业务列，页面不必展示）；人工新增的可以不填（空串）。
+    #    ⇒ 既作抓取幂等键，也作屏幕 / 导出的「合同编号」列；人工新增的可以不填（空串）。
     #    ⚠️ **不设唯一约束**：手工新增 / Excel 导入的行可能是**空编号**，一加唯一键第二条就冲突
     #    （与 `jc_payment.notice_id` 的多 `NULL` 同理）⇒ 去重在**落库时按值判**，⛔ 不靠数据库拦。
     contract_no: Mapped[str] = mapped_column(String(64), index=True, default="")         # 合同编号（i8）

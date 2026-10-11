@@ -234,29 +234,47 @@ def api_opening_payment(body: OpeningPaymentIn) -> dict:
                                       category=body.category, payment=body.payment)
 
 
+@router.get("/api/m05/flows/{flow_id}/revoke-info")
+def api_revoke_info(flow_id: int) -> dict:
+    with session_scope() as s:
+        flow = repo.get_flow(s, flow_id)
+        if flow is None or flow.status != FLOW_EFFECTIVE:
+            raise MustReportError("该流水不存在或已撤销，请刷新页面")
+        return {"ok": True, **repo.revoke_info(s, flow)}
+
+
 @router.post("/api/m05/flows/{flow_id}/revoke")
 def api_revoke(
     flow_id: int,
     reason: str = Query(..., description="**必填**（空 ⇒ 语义错误）"),
-    changed_by: str = Query(""),
+    changed_by: str = "",
+    stat_choice: str = "",
+    expected: str = "",
 ) -> dict:
     """撤销一条流水（§4.4.5）—— 原因交给 `domain.revoke_flow` 把关（**空原因被拒**）。"""
     with session_scope() as s:
-        flow = repo.get_flow(s, flow_id)
+        flow = repo.get_flow(s, flow_id, for_update=True)
         if flow is None:
             raise MustReportError(f"流水 {flow_id} 不存在")
         from app.mod11_jc import service as jc
         from app.mod03_notice import service as notices
 
         nid = int(flow.notice_id or 0)
+        if nid:
+            from app.mod03_notice.models import PaymentNotice
+            s.get(PaymentNotice, nid, with_for_update={"key_share": True}, populate_existing=True)
+        info = repo.revoke_info(s, flow)
+        if expected and expected != info["expected"]:
+            raise MustReportError("流水或统计付款金额已变化，请重新打开撤销窗口")
         before = jc.notice_payment_effect(s, nid) if nid else None
         protected = bool(before and notices.stat_paid_is_protected(s, nid))
-        result = repo.revoke(s, flow, reason=reason, changed_by=changed_by)
+        result = repo.revoke(s, flow, reason=reason, changed_by=changed_by, stat_choice=stat_choice)
+        result["notice_id"] = flow.notice_id
         if before:
             after = jc.notice_payment_effect(s, nid)
             result["jc_effect"] = {"contract_id": before["contract_id"],
                                    "before": str(before["pay_sum"]), "after": str(after["pay_sum"]),
-                                   "protected": protected}
+                                   "protected": protected and stat_choice != "auto"}
         else:
             result["jc_effect"] = None
         return result

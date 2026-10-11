@@ -45,7 +45,7 @@ def test_display_and_revoke_receipt(monkeypatch):
         d = S.build_detail(s, c.id)
         assert d['pay_sum'] == Decimal('450') and d['debt'] == Decimal('550')
         assert len(d['payment_display_rows']) == 1 and d['payment_display_rows'][0]['amount'] == Decimal('450')
-        r = flow_api.api_revoke(f1.id, reason='保护人工值', changed_by='测试')
+        r = flow_api.api_revoke(f1.id, reason='保护人工值', changed_by='测试', stat_choice='keep')
         assert r['jc_effect'] == {'contract_id': c.id, 'before': '450.00', 'after': '450.00', 'protected': True}
         # 统计0却有实付必须保留差异可见性；全撤销且统计0才隐藏。
         apply_stat_change(s, notice_id=n.id, field='stat_paid', value='0', changed_by='测试')
@@ -136,10 +136,12 @@ def test_browser_flow_dialogs_and_virtual_jump(ui_page):
     p.evaluate('''() => {
       FLs=[{id:'31',nid:'1520',date:'2026-10-02',amt:300,method:'现汇',voided:false}];
       reloadM05=async()=>{throw {message:'付款域刷新失败'};};
+      API.flowRevokeInfo=async()=>({ok:true,manual:true,expected:'snapshot'});
       API.flowRevoke=async()=>({flow_id:31,status:'revoked',jc_effect:{contract_id:11,before:'450.00',after:'450.00',protected:true}});
       ACT.revDlg({dataset:{fid:'31'}});
     }''')
     p.fill('#rReason', '撤销测试')
+    p.check('input[name="revStat"][value="keep"]')
     p.click('[data-act="revOk"]')
     p.wait_for_function("document.body.innerText.includes('本次保留人工值')")
     p.wait_for_function("document.body.innerText.includes('部分页面刷新失败')")

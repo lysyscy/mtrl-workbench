@@ -77,9 +77,9 @@ function jcFetchSinceDefault() {
   const p = n => String(n).padStart(2, '0');
   return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
 }
-/* ⭐⭐ `M5-9`：集采台账的「隐藏贸易公司三列」开关状态（**纯屏幕** · 刷新即回默认「显示」）。
+/* ⭐⭐ `M5-9`：集采台账的「隐藏贸易公司三列」开关状态（**纯屏幕** · 刷新即回默认「隐藏」）。
    ⚠️ **不持久化**：它是显示偏好，不是业务数据（`SORT` 也是运行态、同样不持久化 —— 两者一致）。 */
-let jcHideTrade=false;
+let jcHideTrade=true;
 
 /* ⭐ `M5-9`：把「隐藏贸易公司列」这个**屏幕偏好**落到表上。
    ⚠️⚠️ **不能只在 `BIND.m11` 里做一次** —— `render()` 会**重建整张表**（class 随之丢掉）
@@ -91,13 +91,13 @@ function jcApplyHide(){
     /* ⚠️ 用**内联 `display`**，⛔ **不写 CSS 规则**：CSS 得放进真正的 `<style>` 段，而本页样式与脚本
        在同一文件里 —— 我上次把规则插进了 `<script>` 段 ⇒ 那句 CSS 成了**语法错** ⇒ **整段脚本崩掉**
        （症状是 `PJs is not defined`；`syntax_audit` 查的是壳的 JS 件、**没覆盖**这段 ⇒ 没拦住）。
-       ⚠️ 列号 8/9/10 是**位置**：贸易公司名 / 贸易公司合同金额 / 贸易公司发票金额
+       ⚠️ 列号 9/10/11 是**位置**：贸易公司名 / 贸易公司合同金额 / 贸易公司发票金额
           ⇒ **改 `JC_THEAD` 列序要同步改这里**（这也是"通用列管理"该按列的**稳定身份**定位的原因）。
        ⚠️ `display:none` ⇒ 剩下的列**自动变宽**（`table.dt` 是 `width:100%` + `table-layout:auto`）
           ＝ 用户要的「隐藏后其他列宽跟着自适应」。⛔ 别用 `visibility:hidden`（那**留着宽度**，白搭）。 */
     tbl.querySelectorAll(
-      'thead > tr > th:nth-child(8), thead > tr > th:nth-child(9), thead > tr > th:nth-child(10),'
-      + ' tbody > tr > td:nth-child(8), tbody > tr > td:nth-child(9), tbody > tr > td:nth-child(10)'
+      'thead > tr > th:nth-child(9), thead > tr > th:nth-child(10), thead > tr > th:nth-child(11),'
+      + ' tbody > tr > td:nth-child(9), tbody > tr > td:nth-child(10), tbody > tr > td:nth-child(11)'
     ).forEach(el => { el.style.display = jcHideTrade ? 'none' : ''; });
   }
   const b=document.querySelector('#jcTradeBtn');
@@ -546,8 +546,11 @@ const ACT={
        unlock(); pickSet.clear(); payDraft={}; closeModal();
        toast(r.message,5200); return reloadNotices(); })
      .catch(e=>{ unlock(); return toast(`<b>提交失败</b>：${esc(e.message||e)}`,6000); }); },
- revDlg:t=>{ const f=FLs.find(x=>x.id===t.dataset.fid); if(!f) return;
+ revDlg:async t=>{ const f=FLs.find(x=>x.id===t.dataset.fid); if(!f) return;
    const n=NO.find(x=>x.id===f.nid)||{};
+   let info;
+   try{ info=await API.flowRevokeInfo(f.id); }catch(e){ return toast(`无法读取撤销信息：${esc(e.message)}；请重试。`); }
+   if(!info||info.ok===false) return toast(esc((info&&info.message)||'无法读取撤销信息，请重试。'));
    /* ⭐ `TAIL-283`：弹窗里凡是写「流水号」的地方一律显示**真 `flowNo`**（⛔ 不再是数据库行号 `f.id`）——
       `f.id` 只留给下面按钮的 `data-fid` 与 `flowRevoke(f.id,…)`（**定位键，绝不能换**）。 */
    modal({title:`撤销付款流水 · ${esc(f.flowNo)||'—'}`,body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">撤销须填原因；该通知书的已付金额减少，付款状态重新判定。</div>
@@ -555,16 +558,22 @@ const ACT={
        ['付款项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(n.proj||'—')}</span>`],
        ['付款金额',`<span class="fc">${M(f.amt)}</span>`],['付款日期',`<span class="fc">${f.date}</span>`],
        ['实际付款方式',enumTag('payMethod',f.method)]])}
+     ${info.manual?'<div class="fld"><label>统计付款金额 <b>*</b></label><div><label><input type="radio" name="revStat" value="keep"> 保留人工值</label><br><label><input type="radio" name="revStat" value="auto"> 恢复按有效流水自动算</label></div></div>':''}
      <div class="fld"><label>撤销原因 <b>*</b></label><input class="inp" id="rReason" placeholder="例：收款单位变更，需重付"></div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="revOk" data-fid="${f.id}">确认撤销</button>`}); },
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="revOk" data-fid="${f.id}" data-manual="${info.manual?'1':'0'}" data-expected="${esc(info.expected||'')}">确认撤销</button>`}); },
  /* ⭐ 已接后端：`POST /api/m05/flows/{id}/revoke?reason=`（§4.4.5 —— **原因必填由后端把关**；
     撤销后已付金额回退、状态按 §4.4.2 重判，都在后端做） */
  revOk:async t=>{ const f=FLs.find(x=>x.id===t.dataset.fid); if(!f) return;
     const rs=(($('#rReason')&&$('#rReason').value)||'').trim();
     if(!rs) return toast('<b>撤销原因必填</b>（撤销留痕）');
+    const choice=t.dataset.manual==='1'?(document.querySelector('input[name="revStat"]:checked')||{}).value||'':'';
+    if(t.dataset.manual==='1'&&!choice) return toast('请选择保留人工值或恢复按有效流水自动算');
+    if(t.disabled) return;
+    t.disabled=true;
     let r;
-    try{ r=await API.flowRevoke(f.id, rs); }
+    try{ r=await API.flowRevoke(f.id, rs, choice, t.dataset.expected||''); }
     catch(e){ return toast(`撤销失败：${esc(e.message)}；请重试。`,9000); }
+    finally{ t.disabled=false; }
     if(!r||r.ok===false) return toast(esc((r&&r.message)||'撤销未完成，请重试。'));
     /* ⭐ `TAIL-282`：撤销成功 ⇒ 该通知书的拟付草稿作废（已付金额马上会变，旧数字不再作数）。
        ⚠️ 清的是**受影响的 `notice_id`**（`f.nid`）—— ⛔ 不是撤销接口用的 `flow_id`，两者不是一个号。
@@ -1026,7 +1035,7 @@ const ACT={
  /* ⭐ 查看关联（2026-09-14 新增）：**纯只读** —— 从通知书反查"这笔钱付到哪去了"。
    内容两块：① 集采合同关联（`jcRefOf`，写的是集采合同付款子表那份记录）；
              ② 已登记付款流水（生效 + 已撤销都列，撤销的显示原因 —— 这才是"去向"的完整视图）。
-   ⚠️ 零口径风险：不写任何数据、不改任何状态；两个弹窗按钮一律「关闭」。 */
+   ⚠️ 不写业务数据；合同定位按钮只做只读跳转，可返回原页。 */
  ntFlows:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
    try{ const flows=await ntLoadFlows(n); if(!flows) return;
      modal({title:`查看流水 · ${esc(n.code||n.id)}`,body:ntFlowTable(flows),
@@ -1036,13 +1045,14 @@ const ACT={
    try{ const flows=await ntLoadFlows(n); if(!flows) return;
      await reloadM11(); const j=jcRefOf(n.id);
      const contract=j?kvBlock([
+       ['项目内序号',j.projectSeq == null ? '—' : String(j.projectSeq)],['合同编号',esc(j.contractNo||'—')],
        ['合同日期',esc(j.date||'—')],['材料名',esc(j.material||'—')],['供应商',esc(j.supplier||'—')],
        ['项目',esc(pjLabel(j.proj))],['合同金额',M(j.contractAmt)],['结算金额',M(jcSettle(j))],
        ['付款金额',M(jcPay(j))],['欠款金额',M(jcDebt(j))],['付款方式',esc(j.method||'—')],
        ['存档情况',esc(j.arch)+(j.archNo?' · '+esc(j.archNo):'')],['备注',esc(j.remark||'—')]
      ]):'<div class="tip">未关联集采合同。</div>';
      modal({title:`查看关联 · ${esc(n.code||n.id)}`,body:
-       `<b>集采合同</b>${contract}<b>付款流水</b>${ntFlowTable(flows)}`,
+       `<b>集采合同</b>${contract}${j?`<button class="btn sm" data-act="jcContract" data-id="${j.id}">查看集采合同 →</button>`:''}<b>付款流水</b>${ntFlowTable(flows)}`,
        footer:'<button class="btn" data-act="closeModal">关闭</button>'});
    }catch(e){ toast(esc(e.message)); } },
 
@@ -1618,7 +1628,14 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
    const fn=await dlExport(url,{name:'库存单据明细表.xlsx'});
    if(!fn) return;
    toast('已导出「库存单据明细（含数据透视表）」：<b>工作表 1</b> = 明细（<b>列随 i8 源文件</b>，与页面列不同）；<b>工作表 2</b> = <b>「过程资料」透视</b>（按仓 × 出入库方向 × 物料性质）；<b>工作表 3</b> = <b>「安全文明施工费」透视</b>（按仓 × 金额）<br>⭐ 用的是<b>最近一次抓取</b>的源文件 —— 若该月有新单据，先抓取再导出<br>⚠️ 这份是<b>单独的一条通道</b>，主表那个「导出 Excel」<b>不受影响</b>',6400); },
- goInvAdj:t=>{ invWhs.length=0; invWhs.push(t.dataset.wh); invOnlyAdj=true; go('m08'); setTimeout(()=>toast(`已跳转库存单据页并自动筛出：<b>${esc(t.dataset.wh)}</b> 被调整过的行`),120); },
+ goInvAdj:async t=>{try{
+   const whs=[...invWhs];await reloadInv();invWhs.splice(0,invWhs.length,...whs);
+   const iv=IVs.find(x=>String(x.id)===String(t.dataset.iv));
+   if(!iv) return toast('找不到这条库存原始行，请刷新后核对。');
+   await refNavigate('m08','data-inv-id',String(iv.id),'库存原始行',()=>{
+     invWhs.length=0;invWhs.push(iv.wh);invOnlyAdj=false;fIvYm='全部';fIvDir='全部';fIvCol={};invColOpen='';
+   });
+ }catch(e){toast(esc(e.message));} },
 
  /* —— MOD-07 —— */
  /* ⭐ 接线（`TAIL-04`）：成品由**后端模板法**生成 —— 分仓库 xlsx ＋ 1 个总表打成**一个 zip**。
@@ -2053,7 +2070,10 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
 jcExport:async()=>{ const rows=jcVisible();
   if(!rows.length) return toast('当前筛选下<b>一行都没有</b> —— 没什么可导的（先点「重置」看全部）');
   let d=null;
-  try{ d=await API.m11Export({ids:rows.map(j=>Number(j.id))}); }
+  const table=document.createElement('template');
+  table.innerHTML=applySorts(V.m11(),'m11');
+  const ids=[...table.content.querySelectorAll('table[data-sort-key="m11:jc"] [data-act="jcPick"]')].map(el=>Number(el.dataset.id));
+  try{ d=await API.m11Export({ids}); }
   catch(e){ return toast(`<b>导出失败</b>：${esc(String((e&&e.message)||e))}`,7000); }
   if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'系统没有给出原因，请重试')}`,7000);
   jcDownload(d.filename, d.content_b64);
@@ -2194,7 +2214,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
     ⇒ 原「一个按钮装三张子表」的 `jcDetail` 已删除。 */
  jcInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);                       /* ⭐ 子表明细**不在列表接口里** ⇒ 开弹窗前拉一次 */
-   modal({title:`${jcHistoryDate(j)?'历史未结金额':'供应商发票子表'} · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcInvDlg({dataset:{id:j.id}}),body:
+   modal({title:`${jcHistoryDate(j)?'历史未结金额':'供应商发票子表'} · ${jcIdentity(j)} · ${esc(j.material)}`,reopen:()=>ACT.jcInvDlg({dataset:{id:j.id}}),body:
      `${jcHistoryDate(j)?`<div class="tip">历史未结金额，核对截至日 ${esc(jcHistoryDate(j))}；日期表示结转核对日期，已扣除此前付款。</div>`:''}${TBL({cls:'cond',key:'modal:jcInv',head:jcHistoryDate(j)?JCINV_THEAD.replace('发票日期','核对截至日'):JCINV_THEAD,
       rows:j.invoices.map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`),
       empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
@@ -2203,7 +2223,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
       <div class="tip" style="margin:calc(12px * var(--fscale)) 0 0">${j.tradeCo?'本合同有贸易公司，本表不计入结算；结算取贸易公司发票合计。':'本合同无贸易公司，本表合计计入结算。'}</div>`}); },
  jcTInvDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   await jcLoadSub(j);
-   modal({title:`贸易公司发票子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcTInvDlg({dataset:{id:j.id}}),body:
+   modal({title:`贸易公司发票子表 · ${jcIdentity(j)} · ${esc(j.material)}`,reopen:()=>ACT.jcTInvDlg({dataset:{id:j.id}}),body:
      (j.tradeCo?`${TBL({cls:'cond',key:'modal:jcTInv',head:JCINV_THEAD,
       rows:(j.tradeInvoices||[]).map((v,i)=>`<tr><td class="fc">${i+1}</td><td style="white-space:nowrap">${esc(v[0]||'')}</td><td class="num">${M(v[1])}</td><td class="ctr"><button class="btn sm dg" data-act="jcTInvDel" data-id="${j.id}" data-i="${i}">删</button></td></tr>`),
       empty:EMPTYROW(thCount(JCINV_THEAD), '暂无发票', '点本卡右上角「＋ 加一行」录入'),
@@ -2214,7 +2234,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  jcPayDlg:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
   if((j.notice_ids||[]).some(id=>!NO.some(n=>n.id===id))) await reloadNotices();
   await jcLoadSub(j);                       /* ⭐ 付款子表同理：列表不给明细 */
-   modal({title:`付款子表 · ${j.id} ${esc(j.material)}`,reopen:()=>ACT.jcPayDlg({dataset:{id:j.id}}),body:
+   modal({title:`付款子表 · ${jcIdentity(j)} · ${esc(j.material)}`,reopen:()=>ACT.jcPayDlg({dataset:{id:j.id}}),body:
      `${TBL({cls:'cond',key:'modal:jcPay',head:JCPAY_THEAD,
       rows:(j.paymentDisplayRows||[]).map(p=>`<tr ${p.source==='notice'?`class="jc-pay-ref" data-act="jcPayNotice" data-nid="${p.notice_id}" title="点击查看付款通知书"`:''}><td class="fc now">${esc(p.date||'—')}</td><td class="num">${M(p.amount)}</td><td>${p.source==='notice'?tag(p.display_kind==='flow'?'付款流水':'统计付款累计','pri')+' · 通知书 '+esc((NO.find(n=>n.id===String(p.notice_id))||{}).code||p.notice_id)+(p.mismatch?' · 与实付不一致':''):tag('手工','in')}</td><td class="ctr">${p.source==='notice'?`<button class="btn sm" data-act="jcPayNotice" data-nid="${p.notice_id}">查看通知书 →</button>`:`<button class="btn sm dg" data-act="jcPayDel" data-id="${j.id}" data-rid="${p.id}">删</button>`}</td></tr>`),
       empty:EMPTYROW(thCount(JCPAY_THEAD), '暂无付款', '点本卡右上角「＋ 加一行」录入'),
@@ -2271,18 +2291,23 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    if(!await jcAct(()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行')) return;
    const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
    await jcLoadSub(j2); ACT.jcTInvDlg({dataset:{id:j2.id}}); render(); },
- jcPayNotice:async t=>{
-   const nid=String(t.dataset.nid);
-   try{
-     await reloadNotices(); const n=NO.find(x=>x.id===nid);
-     if(!n) return toast('这张通知书当前无法找到，请刷新后核对。');
-     closeModal(); ntFocusId=nid;
-     fNt={month:'全部',cat:n.excl||ntVoid(n)?'剔除':'全部',astat:'全部',stat:'全部',projs:[],q:n.code||n.id};
-     go('m03'); await loadPaths(PAGE_LOAD.m03||[]); render();
-     const row=$('#view').querySelector(`tr[data-notice-id="${nid}"]`);
-     if(row) row.scrollIntoView({block:'center',inline:'nearest'});
-     toast(`已定位通知书 <b>${esc(n.code||nid)}</b>（已按单据搜索，可清空搜索看全部）`);
-   }catch(e){ toast(esc(e.message)); }
+ jcPayNotice:async t=>{await refNotice(String(t.dataset.nid));},
+ flNotice:async t=>{const f=FLs.find(x=>x.id===t.dataset.fid);if(!f||!f.nid)return toast('找不到对应通知书。');await refNotice(String(f.nid));},
+ plNotice:async t=>{try{
+   const p=PLs.find(x=>x.id===t.dataset.id);if(!p)return toast('找不到这条付款计划。');
+   await reloadNotices();const hits=plNoticeHits(p);
+   if(hits.length!==1)return toast(hits.length?'单据号有多条通知书，无法唯一定位。':'找不到对应通知书。');
+   await refNotice(String(hits[0].id));
+ }catch(e){toast(esc(e.message));}},
+ jcContract:async t=>{try{
+   await reloadM11();const j=JCs.find(x=>x.id===String(t.dataset.id));
+   if(!j)return toast('找不到这份集采合同，请刷新后核对。');
+   await refNavigate('m11','data-jc-id',j.id,'集采合同',()=>{fJc={tag:'全部',arch:'全部',sup:'',projs:[j.proj],amt:''};});
+ }catch(e){toast(esc(e.message));}},
+ refBack:()=>{if(!refReturn)return;const r=refReturn;refReturn=null;
+   fNt=r.fNt;fJc=r.fJc;fIvYm=r.fIvYm;fIvDir=r.fIvDir;fIvCol=r.fIvCol;invOnlyAdj=r.invOnlyAdj;
+   invWhs.splice(0,invWhs.length,...r.invWhs);ntFocusId=r.ntFocusId;refFocus=r.refFocus;
+   go(r.view);requestAnimationFrame(()=>{const h=scrollHost();if(h)h.scrollTop=r.scroll;});
  },
  jcPayDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
    const rid=t.dataset.rid; if(!rid) return toast('这行还没载入，请关掉弹窗重开');
@@ -2307,7 +2332,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    closeModal();
    /* ⭐ `M5-5`：与 m03 侧「关联集采合同」调**同一个端点** —— 方向不同、**落点相同**（同一份记录）。 */
    await jcLinkAct(()=>API.m11Link({notice_id:Number(nid), contract_id:Number(j.id)}),
-     x=>`已把付款通知书引用到集采合同 <b>#${j.id}</b>${x.moved_from?`（原关联 #${x.moved_from} 已解除）`:''}<br><span class="mut sm">两侧同时可见（同一份记录）· 同一笔通知书全库只能引用一次</span>`); },
+     x=>`已把付款通知书引用到集采合同 <b>${jcIdentity(j)}</b>${x.moved_from?`（原关联已解除）`:''}<br><span class="mut sm">两侧同时可见（同一份记录）· 同一笔通知书全库只能引用一次</span>`); },
  /* —— 「关联集采合同」反向入口的动作（2026-09-13 用户裁定）——
     一对一 · 与 R8 共用同一份记录 · 去重按全库 · 金额不一致只提示不拦 · 关联 / 解绑**不留痕**。
     弹窗内所选合同走草稿 `jcLinkSel`：改选择要**重绘弹窗**（金额比对随之更新）。 */
@@ -2320,10 +2345,10 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    const same=sel?N2(jcDebt(sel))===N2(n.sp):false;
    modal({title:`关联集采合同 · ${n.code}`,reopen:()=>ACT.jcLink({dataset:{id:n.id}}),body:
      `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">一张通知书只能关联一份合同，不能重复引用。候选为本项目合同；本行项目：<b>${esc(pjLabel(pk)||'（未指定归属）')}</b>${pk?`（仓库名 <span class="fc">${esc(pk)}</span>）`:''}。</div>
-     ${cands.length?`<div class="fld"><label>选择集采合同（仅本项目）</label><select class="inp" id="jcLinkId" data-act="jcLinkPick" data-id="${n.id}">${cands.map(j=>`<option value="${j.id}" ${sel&&sel.id===j.id?'selected':''}>${esc(j.date||"日期未填")} · ${esc(j.material)} · ${esc(j.supplier)} · 合同金额 ${M(j.contractAmt)} · 欠款 ${M(jcDebt(j))}${j.proj===pk?'':' · 他项目（当前已关联）'}</option>`).join('')}</select></div>`
+     ${cands.length?`<div class="fld"><label>选择集采合同（仅本项目）</label><select class="inp" id="jcLinkId" data-act="jcLinkPick" data-id="${n.id}">${cands.map(j=>`<option value="${j.id}" ${sel&&sel.id===j.id?'selected':''}>${jcIdentity(j)} · ${esc(j.date||"日期未填")} · ${esc(j.material)} · ${esc(j.supplier)} · 合同金额 ${M(j.contractAmt)} · 欠款 ${M(jcDebt(j))}${j.proj===pk?'':' · 他项目（当前已关联）'}</option>`).join('')}</select></div>`
        :`<div class="tip" style="margin:0"><b>本项目下暂无集采合同</b> —— 请先到「集采台账」页为 <b>${esc(pjLabel(pk)||'该项目')}</b> 建档（或抓到 i8 合同），再回来关联。<br><span class="mut sm">本行项目：${esc(pjLabel(pk)||'（未指定归属）')}${pk?`（仓库名 ${esc(pk)}）`:''}</span></div>`}
-     ${sel?`<div class="fld"><label>金额比对（只提示，不拦截）</label><div class="sm" style="line-height:1.8">本行统计付款金额 <b>${M(n.sp)}</b> ｜ ${sel.id} 当前欠款 <b>${M(jcDebt(sel))}</b>${same?' '+tag('一致','ok'):' '+tag('不一致 · 仍可关联','wn')}</div></div>`:''}`,
-     footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消关联（${cur.id}）</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${cands.length?'':'disabled'} title="${cands.length?'':'本项目下没有可选合同 —— 先到「集采台账」建档'}">${cur?'改关联到所选合同':'关联'}</button>`}); },
+     ${sel?`<div class="fld"><label>金额比对（只提示，不拦截）</label><div class="sm" style="line-height:1.8">本行统计付款金额 <b>${M(n.sp)}</b> ｜ ${jcIdentity(sel)} 当前欠款 <b>${M(jcDebt(sel))}</b>${same?' '+tag('一致','ok'):' '+tag('不一致 · 仍可关联','wn')}</div></div>`:''}`,
+     footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消关联（序号 ${cur.projectSeq == null ? '—' : cur.projectSeq}）</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${cands.length?'':'disabled'} title="${cands.length?'':'本项目下没有可选合同 —— 先到「集采台账」建档'}">${cur?'改关联到所选合同':'关联'}</button>`}); },
  jcLinkPick:t=>{ jcLinkSel=t.value; render(); if(lastModal&&lastModal.reopen) lastModal.reopen(); },
  jcLinkOk:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
    const j=JCs.find(x=>x.id===jcLinkSel); if(!j) return toast('没有可关联的集采合同');
@@ -2336,12 +2361,12 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    closeModal();
    /* ⭐ `M5-5`：后端保证「一对一」（换合同 = **先解绑再写新**）＋ 全库去重；⛔ 壳里不碰任何数组。 */
    await jcLinkAct(()=>API.m11Link({notice_id:Number(n.id), contract_id:Number(j.id)}),
-     x=>`已关联到集采合同 <b>#${j.id}</b>${x.moved_from?`（原关联 #${x.moved_from} 已解除）`:''}<br><span class="mut sm">两侧同时可见（同一份记录）· 金额不一致只提示不拦</span>`); },
+     x=>`已关联到集采合同 <b>${jcIdentity(j)}</b>${x.moved_from?`（原关联已解除）`:''}<br><span class="mut sm">两侧同时可见（同一份记录）· 金额不一致只提示不拦</span>`); },
  /* 取消关联（`m03` 侧）。⭐ `M5-5`：解绑 = 摘掉那条关联记录 ⇒ **两侧同时**变回"未关联"（只有一份记录）。 */
  jcUnlink:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
    closeModal();
    await jcLinkAct(()=>API.m11Unlink({notice_id:Number(n.id)}),
-     x=>`已取消与集采合同 <b>#${x.contract_id}</b> 的关联（两侧同时解除）`); },
+     x=>`已取消与集采合同 <b>${jcIdentity(JCs.find(j=>String(j.id)===String(x.contract_id))||{})}</b> 的关联（两侧同时解除）`); },
  /* —— MOD-11 · 手工新增集采合同 = **表内增行（展开区）**（2026-09-13 用户口径）——
     ⚠️ 原来这个动作只开弹窗，而弹窗的「保存」挂的是 `data-act="silent"`（**根本没有落库动作**）
        ⇒ 本次改制时**补上真正的建档动作 `jcRowSave`**（草稿层 `jcND`，与既有 `naD` / `lgD` 同源）。 */

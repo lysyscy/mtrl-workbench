@@ -105,7 +105,7 @@ class NoticeStatLog(Base):
     ⚠️ 本表同时是「**是否手改**」的**唯一事实来源**（§4.2.7 再导入合并的判据）：
        不另开 `edited` 之类的状态位 —— 同一件事存两份，副本必然静默过期。
 
-    ⚠️ 写入只走 `domain.adjust_stat` 的返回值，**不**在别处补写第二套排法。
+    ⚠️ 人工调整与恢复自动均追加状态事件；不删旧人工留痕、不另存模式位。
     """
     __tablename__ = "notice_stat_log"
 
@@ -113,7 +113,7 @@ class NoticeStatLog(Base):
     notice_id: Mapped[int] = mapped_column(
         ForeignKey("payment_notice.id", ondelete="CASCADE"), index=True
     )
-    field: Mapped[str] = mapped_column(String(32), index=True)      # stat_settle / stat_paid
+    field: Mapped[str] = mapped_column(String(32), index=True)      # stat_settle / stat_paid / stat_paid_auto（恢复事件）
     before_amount: Mapped[float] = mapped_column(MONEY, default=0)  # 改前值
     after_amount: Mapped[float] = mapped_column(MONEY, default=0)   # 改后值
     changed_by: Mapped[str] = mapped_column(String(64), default="")  # 改动人

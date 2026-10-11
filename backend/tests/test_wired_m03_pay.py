@@ -46,7 +46,7 @@ def _batch_pay() -> str:
 
 def _batch_pay_ok() -> str:
     """提交出口 `batchPayOk`（整批重算 + 拦截 + 走后端）。"""
-    return _slice("batchPayOk:t=>{", "revDlg:t=>{", what="批量付款提交出口")
+    return _slice("batchPayOk:t=>{", "revDlg:async t=>{", what="批量付款提交出口")
 
 
 def _batch_pay_del() -> str:

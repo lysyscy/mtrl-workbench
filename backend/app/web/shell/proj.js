@@ -10,6 +10,7 @@
  * ⚠️ 本件的代码是**原样搬出**（逐字未改，含注释）；来历与搬法见计划 §15 `TAIL-164`。 */
 
 let ntFocusId='';
+let refFocus={view:'',attr:'',id:''}, refReturn=null;
 let fNt={month:bjMonth(),cat:'全部',astat:'全部',stat:'未付清',projs:[],q:''};   /* 年月默认「北京时间当月」；付款状态默认「未付清」 */
 /* —— 「手动新增 / 编辑付款通知书」弹窗（2026-09-12 用户口径）——
    用途：付「期初占位行」的款 —— 那笔钱没有 i8 单据，只能手工补一行通知书。
@@ -138,6 +139,18 @@ const TBL=({head='',rows=[],cols=null,list=[],empty='',sum='',key='',cls='',sort
   /* ⭐ `data-vs` = 「这一张表**可以由表级虚拟滚动接管**」的标记（⚠️ **行数够才真的接管** —— 阈值那一侧说了算）。
      ⚠️ **一律带、⛔ 不设开关**：本仓口径是「**别用名单式**」—— 改成「逐表开关 / 逐页点名」的话，
      哪天某张表涨到阈值而没人记得加，它就**永远不生效、且不报错**（这正是 `TAIL-66` 当年的原话）。 */
+  // 引用行身份随完整行HTML进入虚拟窗口，重画仍高亮同一数据库id。
+  if(key==='m11:jc'||key==='m08:invoices') rows=rows.map(row=>{
+    const jc=key==='m11:jc', hit=row.match(jc?/data-act="jcPick"[^>]*data-id="([^"]+)"/:/data-act="adjDlg"[^>]*data-iv="([^"]+)"/);
+    if(!hit) return row;
+    const attr=jc?'data-jc-id':'data-inv-id', id=hit[1];
+    return row.replace(/<tr\b([^>]*)>/,(_,attrs)=>{
+      if(refFocus.view===VIEW&&refFocus.attr===attr&&refFocus.id===id){
+        attrs=/class="/.test(attrs)?attrs.replace('class="','class="nt-focus '):attrs+' class="nt-focus"';
+      }
+      return '<tr'+attrs+' '+attr+'="'+id+'">';
+    });
+  });
   const attr=' class="dt'+(cls?' '+cls:'')+'"'+(key?(sort?' data-sort data-sort-key="'+key+'"':' data-sort-key="'+key+'"'):'')+(sty?' style="'+sty+'"':'');
   const th=head?(headRows?'<thead>'+head+'</thead>':'<thead><tr>'+head+'</tr></thead>'):'';
   return '<table'+attr+'>'+th+'<tbody data-vs="'+(key||'1')+'">'
@@ -298,7 +311,7 @@ const jcSubRow=()=>{ const d=jcSubD;
      （列数不变 = 20；只调次序）。⚠️ 表内**刻意不设「项目」列** —— 「项目」只作为**筛选**（通用控件）。 */
 const JC_THEAD=`
       <th class="ctr fl" style="width:34px"><input type="checkbox" class="chk" id="jcAllBox" data-act="jcPickAll" title="全选 / 取消全选（仅当前筛选结果）"></th>
-      <th>序号</th><th>合同日期</th><th>材料名</th><th>供应商</th><th>合同金额</th><th>发票金额</th><th>贸易公司名</th><th>贸易公司合同金额</th><th>贸易公司发票金额</th>
+      <th>序号</th><th>合同日期</th><th>材料名</th><th>合同编号</th><th>供应商</th><th>合同金额</th><th>发票金额</th><th>贸易公司名</th><th>贸易公司合同金额</th><th>贸易公司发票金额</th>
       <th>结算金额<b class="mut">（自动）</b></th><th>付款金额</th><th>欠款金额<b class="mut">（自动）</b></th>
       <th>付款方式<b class="mut">（自由文本）</b></th><th>备注</th><th>三态</th>
       <th>合同存档情况</th><th>存档号</th><th>寄回日期</th><th>操作</th>`;
@@ -354,6 +367,7 @@ const BP_THEAD=`<th>单据编码</th><th>付款项目</th><th>审批状态</th><
    而后端 `service.build_list` 的注释早就写明"不带 `notice_ids` 这三处会静默变空"—— 正是这一处。 */
 const jcUsedNids=()=>new Set(JCs.flatMap(j=>(j.notice_ids||[]).map(String)));
 /* 反查：这条付款通知书被哪张集采合同引用了（**派生** —— MOD-03 的「已关联」态不是新增字段） */
+const jcIdentity=j=>`序号 ${j.projectSeq == null ? '—' : j.projectSeq} · 合同编号 ${esc(j.contractNo||'—')}`;
 const jcRefOf=nid=>JCs.find(j=>(j.notice_ids||[]).some(x=>String(x)===String(nid)))||null;
 /* 「关联集采合同」的**候选出口**（2026-09-13 用户口径 + **2026-09-14 收窄**）：**只列该付款通知书行"实际项目（仓库）"下、且「供应商」等于该行「集采实际供应商」的合同**。
    项目键 = 该行的**归属档案行的仓库名**（`ntProjKey`，§2.7.4）—— 与 `JC_COLS.proj` **同一个键空间** ⇒ 直接判等。

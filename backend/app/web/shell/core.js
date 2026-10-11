@@ -1728,6 +1728,7 @@ function adaptJc(x) {
        后端给数字 ⇒ 不转就**静默失配**（勾选后汇总恒 0，同 `adaptNotice` 那条教训）。 */
     id: String(x.id),
     date: x.date || '', material: x.material || '', supplier: x.supplier || '',
+    projectSeq: x.project_seq == null ? null : Number(x.project_seq), contractNo: x.contract_no || '',
     contractAmt: N0(x.contract_amt),
     tradeCo: x.trade_co || '',
     tradeContractAmt: (x.trade_contract_amt == null ? '' : N0(x.trade_contract_amt)),
@@ -2116,3 +2117,47 @@ function bootErrorBanner() {
 }
 
 /* 启动 */
+
+
+/* 292 引用导航：只认数据库行id，借用现有虚拟实例定位；临时筛选可返回。 */
+function refLocate(attr,id){
+  const needle=attr+'="'+id+'"';
+  for(const inst of VS_TS){
+    const i=inst.rows.findIndex(row=>row.includes(needle));
+    if(i<0)continue;
+    inst.tw.scrollTop=i*EH;inst.force=true;drawVirtual(inst);inst.force=false;
+  }
+  const row=$('#view').querySelector('tr['+attr+'="'+CSS.escape(id)+'"]');
+  if(row)row.scrollIntoView({block:'center',inline:'nearest'});
+  return !!row;
+}
+async function refNavigate(view,attr,id,label,prepare){
+  const old={view:VIEW,to:view,fNt:structuredClone(fNt),fJc:structuredClone(fJc),
+    fIvYm,fIvDir,fIvCol:structuredClone(fIvCol),invOnlyAdj,invWhs:[...invWhs],ntFocusId,
+    refFocus:{...refFocus},scroll:(scrollHost()||{}).scrollTop||0};
+  await loadPaths(PAGE_LOAD[view]||[]);
+  if((PAGE_LOAD[view]||[]).some(l=>FAILED.has(l)))return toast('目标页读取失败，请重试。');
+  const rows=view==='m03'?NO:view==='m11'?JCs:IVs;
+  if(!rows.some(x=>String(x.id)===id))return toast('目标行已失联，请刷新后核对。');
+  prepare();refReturn=old;refFocus={view,attr,id};closeModal();go(view);
+  requestAnimationFrame(()=>{
+    if(VIEW!==view)return;
+    refLocate(attr,id);toast('已定位'+label+'；可点「返回原页」恢复跳转前筛选。');
+  });
+}
+async function refNotice(nid){try{
+  await reloadNotices();const n=NO.find(x=>x.id===nid);
+  if(!n)return toast('这张通知书当前无法找到，请刷新后核对。');
+  await refNavigate('m03','data-notice-id',nid,'通知书 '+esc(n.code||nid),()=>{
+    ntFocusId=nid;fNt={month:'全部',cat:n.excl||ntVoid(n)?'剔除':'全部',astat:'全部',stat:'全部',projs:[],q:n.code||n.id};
+  });
+}catch(e){toast(esc(e.message));}}
+for(const view of ['m03','m11','m08']){
+  const previous=BIND[view];
+  BIND[view]=()=>{if(previous)previous();
+    if(!refReturn||refReturn.to!==VIEW)return;
+    const bar=document.createElement('div');bar.className='filter-status';
+    bar.innerHTML='<span>当前为引用定位视图，筛选已临时调整。</span> <button class="btn sm" data-act="refBack">返回原页</button>';
+    $('#view').prepend(bar);
+  };
+}

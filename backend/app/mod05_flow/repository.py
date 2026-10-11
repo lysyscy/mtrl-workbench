@@ -23,7 +23,6 @@ from app.mod05_flow.models import (
     FLOW_REVOKED,
     FLOW_SOURCE_IMPORTED,
     FLOW_SOURCE_MANUAL,
-    FLOW_EFFECTIVE,
     FlowRevokeLog,
     LedgerRemark,
     OpeningBalance,
@@ -48,7 +47,9 @@ def flows_of_notices(s: Session, notice_ids: list[int]) -> list[PaymentFlow]:
     ).order_by(PaymentFlow.pay_date, PaymentFlow.id)).scalars().all())
 
 
-def get_flow(s: Session, flow_id: int) -> PaymentFlow | None:
+def get_flow(s: Session, flow_id: int, *, for_update: bool = False) -> PaymentFlow | None:
+    if for_update:
+        return s.get(PaymentFlow, int(flow_id), with_for_update=True, populate_existing=True)
     return s.get(PaymentFlow, int(flow_id))
 
 
@@ -142,11 +143,18 @@ def create_flow(
     return row
 
 
-def revoke(s: Session, flow: PaymentFlow, *, reason: str, changed_by: str = "") -> dict:
+def revoke(s: Session, flow: PaymentFlow, *, reason: str, changed_by: str = "", stat_choice: str = "") -> dict:
     """撤销一条流水（§4.4.5）—— 原因**先过 `domain.revoke_flow`**（空原因直接抛错、不落库）。
 
-    ⚠️ 撤销**只回退流水汇总**：不动 i8 源数据、不动两个统计字段（§4.4.5 · §9.3 旁路思路）。
+    ⚠️ 撤销不动 i8 源数据；人工统计保留或恢复自动由显式选择决定（§4.4.5 · §9.3 旁路思路）。
     """
+    from app.core.errors import MustReportError
+    from app.mod03_notice import domain as notices_domain, service as notices_repo
+    if flow.status != FLOW_EFFECTIVE:
+        raise MustReportError("该流水已撤销，请刷新页面")
+    notice = s.get(PaymentNotice, int(flow.notice_id)) if flow.notice_id is not None else None
+    traces = notices_repo.list_stat_traces(s, notice.id) if notice else []
+    choice = notices_domain.revoke_stat_choice(stat_choice, manual=bool(notice and notices_domain.stat_paid_is_manual(traces, notice.id)))
     patch = revoke_flow(reason)
     flow.status = str(patch["status"])
     flow.revoke_reason = str(patch["revoke_reason"])
@@ -158,6 +166,10 @@ def revoke(s: Session, flow: PaymentFlow, *, reason: str, changed_by: str = "") 
             changed_by=str(changed_by or ""),
         )
     )
+    if choice == "auto":
+        s.flush()
+        notices_repo.restore_stat_paid_auto(s, notice, changed_by=changed_by or current_operator(),
+                                           total=effective_total_of(s, notice.id))
     # ⭐ 撤销后同样重算（§4.4.5 / §4.4.7）—— 漏了会出「撤销了但欠款没变」
     if flow.notice_id is not None:
         sync_stat_paid(s, int(flow.notice_id))
@@ -183,7 +195,7 @@ def sync_stat_paid(s: Session, notice_id: int) -> Decimal | None:
 
     规则：
     - **未被人工改过**（无留痕）⇒ `stat_paid` = 该通知书的**有效流水汇总**；
-    - **手改过**（有留痕）⇒ **保留人工值**，本函数**不动它**；
+    - **当前人工覆盖生效** ⇒ 保留人工值；最后状态事件为恢复自动时继续跟随流水；
     - ⚠️ **流水驱动写入不受"手改拦截"约束、也不封顶** —— 实付 > 审批金额是既成事实，
       照实写入并由调用侧挂提醒（§4.4.6；与 §4.4.4「付款动作禁止超付」不冲突）。
 
@@ -193,7 +205,7 @@ def sync_stat_paid(s: Session, notice_id: int) -> Decimal | None:
     from app.mod03_notice import service as notices_service    # 延迟导入，避免环；⭐ 包间出口（§2.3）
     from app.mod03_notice.domain import F_STAT_PAID, was_manually_edited
 
-    notice = s.get(PaymentNotice, int(notice_id))
+    notice = s.get(PaymentNotice, int(notice_id), with_for_update={"key_share": True}, populate_existing=True)
     if notice is None:
         return None
     traces = notices_service.list_stat_traces(s, int(notice_id))  # 留痕 = 「是否手改」的唯一事实来源
@@ -401,10 +413,23 @@ def notice_rows(s: Session) -> list[PaymentNotice]:
 
 __all__ = [
     "list_flows", "get_flow", "list_flows_of_notice", "next_flow_no", "has_request_id",
-    "create_flow", "revoke",
+    "create_flow", "revoke", "revoke_info",
     "effective_total_of", "sync_stat_paid",
     "flows_in_batch", "rollback_batch", "notices_without_flow", "notices_overpaid",
     "FLOW_SOURCE_MANUAL", "FLOW_SOURCE_IMPORTED", "FLOW_EFFECTIVE", "FLOW_REVOKED",
     "list_openings", "get_opening", "upsert_opening", "delete_opening",
     "remarks_map", "set_remark", "notice_rows",
 ]
+
+
+def revoke_info(s: Session, flow: PaymentFlow) -> dict:
+    """撤销窗口的当前模式和事实快照；提交时在行锁内重读比对。"""
+    from hashlib import sha256
+    from app.mod03_notice import domain as notices_domain, service as notices_repo
+    notice = s.get(PaymentNotice, int(flow.notice_id)) if flow.notice_id is not None else None
+    traces = notices_repo.list_stat_traces(s, notice.id) if notice else []
+    facts = (flow.id, flow.notice_id, flow.project_id, str(flow.amount), flow.pay_date,
+             flow.pay_method, flow.remark, flow.status, str(notice.stat_paid) if notice else None,
+             [(t.field, str(t.before), str(t.after), t.changed_at.isoformat()) for t in traces])
+    return {"manual": bool(notice and notices_domain.stat_paid_is_manual(traces, notice.id)),
+            "notice_id": flow.notice_id, "expected": sha256(repr(facts).encode()).hexdigest()}

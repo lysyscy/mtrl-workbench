@@ -20,7 +20,7 @@
 ⇒ 现在按**稳定键**（合同日期 ＋ 材料 ＋ 合同金额，金额用 `num()` 归一避开千分位）做**多重集配对**：
 同键的合同按出现顺序一一对上，剩下的只计数、不当成金额不一致。配对不上的**多了/少了**要报出来，
 因为那说明页面画的不是后端这批合同（或页面把行序/内容搞乱了）—— 判据本身也得跟着查。
-⚠️ **合计行**仍与**全量** `totals` 比（页面合计就是全量口径，⛔ 别顺手改成按筛选算）。
+⚠️ **合计行**与已配对的当前筛选合同独立求和比较；不拿全量合计比较筛选结果。
 ⚠️ 反向灵敏度 = `tools/mut/_mut_probe_m11.py`（改坏页面那份数据 ⇒ 必须报红；零文件改动）。
 """
 
@@ -78,11 +78,13 @@ async () => {
   const diff = [];
   const 未配上 = [];
   let paired = 0;
+  const sumWant = Object.fromEntries(Object.keys(cols).map(k=>[k,0]));
   for (const p of page) {
     const q = bucket.get(p.键);
     if (!q || !q.length) { 未配上.push(p.日期 || '?日期'); continue; }
     const a = q.shift();
     paired += 1;
+    for (const k of Object.keys(cols)) sumWant[k] += a.值[k];
     for (const k of Object.keys(cols)) {
       if (!(k in p.值) || cols[k] < 0) continue;
       if (Math.abs(a.值[k] - p.值[k]) > 0.005) {
@@ -93,7 +95,7 @@ async () => {
   const sumDiff = [];
   for (const k of Object.keys(cols)) {
     if (!(k in sum) || cols[k] < 0) continue;
-    const want = num((d.totals || {})[key[k]]), got = sum[k];
+    const want = num(sumWant[k]), got = sum[k];
     if (Math.abs(want - got) > 0.005) sumDiff.push({列: k, 页面: got, 后端: want});
   }
   return {nPage: page.length, nApi: (d.rows || []).length, paired: paired, miss: 未配上.length,

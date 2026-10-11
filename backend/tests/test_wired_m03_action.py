@@ -179,7 +179,7 @@ def test_壳里有生效流水才出撤销付款且单条就地开窗():
     assert "撤销须填原因" in dlg and 'id="rReason"' in dlg, "撤销必须填原因并提供输入框"
     assert "已付金额减少，付款状态重新判定" in dlg, "要说明撤销的真实后果"
     assert "if(!rs) return" in ok and "撤销原因必填" in ok, "空原因须拦下并反馈"
-    assert ok.index("if(!rs) return") < ok.index("API.flowRevoke(f.id, rs)"), "原因校验须在提交前"
+    assert ok.index("if(!rs) return") < ok.index("API.flowRevoke(f.id, rs,"), "原因校验须在提交前"
 
 
 @acc("ACC-PAY-ACTION-001", "001-02")
@@ -216,10 +216,10 @@ def test_壳里查看关联是纯只读且流水含已撤销():
     tr, tb = _trace(), _flow_table()
     assert "查看关联 · " in tr and "<b>集采合同</b>" in tr and "<b>付款流水</b>" in tr, \
         "查看关联弹窗没把「集采合同 / 付款流水」两块都列出来"
-    assert set(re.findall(r'data-act="([^"]+)"', tr)) == {"closeModal"}, "只读窗口只允许关闭"
+    assert set(re.findall(r'data-act="([^"]+)"', tr)) == {"closeModal", "jcContract"}, "只读窗口只允许关闭和合同定位"
     assert set(re.findall(r'data-act="([^"]+)"', tb)) == set(), "流水子表里不该有任何动作按钮"
     assert "API." not in tr and "API." not in tb, "查看关联 / 查看流水不得发起写请求"
-    assert 'data-act="closeModal">关闭</button>' in tr, "弹窗出现了「关闭」以外的按钮（就不只读了）"
+    assert 'data-act="closeModal">关闭</button>' in tr, "只读弹窗必须可关闭"
     assert "enumTag('flowState','已撤销')" in tb and "esc(f.reason)" in tb, \
         "已撤销的流水没有连**原因**一起显示"
     # ⭐ 2026-09-29（`TAIL-64` A′）：那张「流水子表」的**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt cond">`）。

@@ -53,6 +53,7 @@ def still_unsettled(items, projects, *, resolve=None) -> list[dict]:
 
 F_APPROVED = "amount_approved"     # 审批金额（i8 源；只读、不被人工改覆盖）
 F_STAT_SETTLE = "stat_settle"      # 统计结算金额（**旁路**；可手改、留痕）
+F_STAT_PAID_AUTO = "stat_paid_auto"  # 恢复自动的状态事件，沿用统计留痕载体
 F_STAT_PAID = "stat_paid"          # 统计付款金额（**旁路**；可手改、留痕）
 
 DERIVED_PAY = "pay_amount"         # 列表「付款金额」= 派生默认值 + 会话级覆盖（**不属于那三个**）
@@ -112,7 +113,7 @@ class StatTrace:
 
     @property
     def label(self) -> str:
-        return STAT_LABELS.get(self.field, self.field)
+        return "恢复按有效流水自动算" if self.field == F_STAT_PAID_AUTO else STAT_LABELS.get(self.field, self.field)
 
 
 def adjust_stat(
@@ -174,6 +175,8 @@ def manual_edited_fields(traces: list[StatTrace] | tuple | None, notice_id: int)
         for t in (traces or ())
         if t is not None and int(t.notice_id) == int(notice_id) and t.field in STAT_FIELDS
     }
+    if not stat_paid_is_manual(traces, notice_id):
+        edited.discard(F_STAT_PAID)
     return tuple(f for f in STAT_FIELDS if f in edited)
 
 
@@ -412,3 +415,21 @@ __all__ = [
     "PayRow", "BatchCheck", "verify_row", "check_batch",
     "PayDraft", "remove_from_batch", "ConfirmResult", "confirm_batch",
 ]
+
+
+def stat_paid_is_manual(traces, notice_id: int) -> bool:
+    """当前模式只认最后的付款统计状态事件，不以数值或历史手改存在性判定。"""
+    events = [t for t in (traces or ()) if int(t.notice_id) == int(notice_id)
+              and t.field in (F_STAT_PAID, F_STAT_PAID_AUTO)]
+    return bool(events and events[-1].field == F_STAT_PAID)
+
+
+def revoke_stat_choice(choice: str, *, manual: bool) -> str:
+    """人工覆盖的撤销必须显式选择；未知选择一律拒绝。"""
+    if choice not in ("", "keep", "auto"):
+        raise MustReportError("统计付款金额的处理选择无效，请重新打开撤销窗口")
+    if manual and not choice:
+        raise MustReportError("请选择保留人工值或恢复按有效流水自动算")
+    if not manual and choice:
+        raise MustReportError("统计付款金额已恢复自动，请重新打开撤销窗口")
+    return choice

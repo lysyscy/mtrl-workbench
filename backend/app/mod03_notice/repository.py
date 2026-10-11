@@ -92,7 +92,7 @@ def list_stat_traces(session: Session, notice_id: int) -> list[StatTrace]:
     rows = session.execute(
         select(NoticeStatLog)
         .where(NoticeStatLog.notice_id == int(notice_id))
-        .order_by(NoticeStatLog.changed_at)
+        .order_by(NoticeStatLog.changed_at, NoticeStatLog.id)
     ).scalars().all()
     return [
         StatTrace(
@@ -121,7 +121,7 @@ def stat_trace_index(session: Session) -> dict[int, list[StatTrace]]:
     ⚠️ 供列表页判「这两格有没有被手改过」（R8 的"已改"态）—— **不得逐行查**（那是 N+1，工程底线一票否决）。
     """
     rows = session.execute(
-        select(NoticeStatLog).order_by(NoticeStatLog.changed_at)
+        select(NoticeStatLog).order_by(NoticeStatLog.changed_at, NoticeStatLog.id)
     ).scalars().all()
     out: dict[int, list[StatTrace]] = {}
     for r in rows:
@@ -148,6 +148,8 @@ def adjust_notice_stat(
     返回 `None` 表示**值没变、什么都没做**（§4.2.7：不做无意义的重算，也不产生空留痕）。
     四种拒绝（非法金额 / 非旁路字段 / 超上限 / 值没变）里前三种由 `adjust_stat` **显式抛出**。
     """
+    notice = session.get(PaymentNotice, int(notice.id),
+                         with_for_update={"key_share": True}, populate_existing=True)
     trace = adjust_stat(
         notice_id=int(notice.id),
         field=field,
@@ -297,3 +299,15 @@ def upsert_notice(session: Session, *, ph_id: str, **fields) -> PaymentNotice:
 # ⚠️ 运行记录（RunRecord）的读写已归 MOD-02（`app.mod02_i8.repository`），
 #    本文件顶部已**再导出** `create_run_record` / `finish_run_record`，调用方无需改。
 
+
+
+def restore_stat_paid_auto(session: Session, notice: PaymentNotice, *, changed_by: str, total) -> None:
+    """追加恢复事件，保留全部人工留痕；金额由付款域的唯一重算出口写入。"""
+    from datetime import datetime
+    from app.mod03_notice.domain import F_STAT_PAID_AUTO
+    add_stat_trace(session, StatTrace(
+        notice_id=notice.id, field=F_STAT_PAID_AUTO,
+        before=notice.stat_paid, after=total,
+        changed_by=changed_by, changed_at=datetime.now(),
+        note="撤销付款时恢复按有效流水自动算",
+    ))

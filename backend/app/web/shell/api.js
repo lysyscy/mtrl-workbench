@@ -247,8 +247,9 @@ const API = {
   stats: q => API.get('/api/m05/stats?granularity=' + encodeURIComponent(q.granularity || 'week')
     + '&year=' + (q.year || 0) + '&quarter=' + (q.quarter || 0) + '&bucket=' + encodeURIComponent(q.bucket || '')),
   ledger: pid => API.get('/api/m05/ledger?project_id=' + pid),
-  flowRevoke: (id, reason) => API.send('POST',
-    `/api/m05/flows/${id}/revoke?reason=${encodeURIComponent(reason || '')}`, null),
+  flowRevokeInfo: id => API.get(`/api/m05/flows/${id}/revoke-info`),
+  flowRevoke: (id, reason, statChoice='', expected='') => API.send('POST',
+    `/api/m05/flows/${id}/revoke?reason=${encodeURIComponent(reason || '')}&stat_choice=${encodeURIComponent(statChoice)}&expected=${encodeURIComponent(expected)}`, null),
   /* ⚠️ 期初录入 / 期初删除 / 台账备注 **目前只有 PRG 表单端点**（收 `Form`）⇒ 用表单编码发；
      它们回 303，我们**不看那页 HTML**，改「重拉数据 ＋ 自己的回执」（同一批落库出口）。 */
   postForm: async (url, obj) => {

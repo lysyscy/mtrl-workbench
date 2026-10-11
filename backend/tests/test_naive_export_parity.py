@@ -69,12 +69,14 @@ def test_fl_表头加粗冻结_金额写数字_末行合计():
 
 
 @acc()
-def test_jc_序号列写行号_列宽上限28():
+def test_jc_项目内序号_列宽上限28():
     rows = _rows(JC.COLUMNS, money_keys=JC.MONEY_KEYS, seq_key=JC.SEQ_KEY)
+    for r, seq in zip(rows, [3, 1, None]):
+        r[JC.SEQ_KEY] = seq
     ws = _sheet(JC.build_xlsx(rows))
     cells = _cells(ws)
     i = [k for _, k in JC.COLUMNS].index(JC.SEQ_KEY)
-    assert [r[i] for r in cells[1:1 + len(rows)]] == [1, 2, 3]   # ⭐ 序号 = 行号
+    assert [r[i] for r in cells[1:1 + len(rows)]] == [3, 1, "—"]   # 全量派生号，不随导出行序变
     # ⛔ 列宽上限是 28（不是内核默认 32）—— 统一成 32 会改掉本页导出形态
     assert max(w.width for w in ws.column_dimensions.values()) <= 28
 
@@ -103,10 +105,14 @@ def test_三件与内核同输出_证明只有一个主人():
     （⇒ 谁改内核都改三处；谁在三件里偷偷另写一份，这里就会红）。"""
     for mod, extra in ((FL, {"money_keys": FL.MONEY_KEYS, "total_keys": FL.TOTAL_KEYS}),
                        (JC, {"money_keys": JC.MONEY_KEYS, "total_keys": JC.MONEY_KEYS,
-                             "seq_key": JC.SEQ_KEY, "width_max": 28}),
+                             "width_max": 28}),
                        (PJ, {"int_keys": PJ.NUMBER_KEYS})):
         rows = _rows(mod.COLUMNS, money_keys=extra.get("money_keys", frozenset()),
                      seq_key=extra.get("seq_key"))
+        if mod is JC:
+            for r in rows:
+                r[JC.SEQ_KEY] = r.get(JC.SEQ_KEY) or "—"
+                r["contract_no"] = r.get("contract_no") or "—"
         a = _cells(_sheet(mod.build_xlsx(rows)))
         b = _cells(_sheet(N.build_xlsx(rows, columns=mod.COLUMNS,
                                        sheet_name=mod.SHEET_NAME, **extra)))

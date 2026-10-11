@@ -172,9 +172,9 @@ def check(page, errors: list[str]) -> None:
         errors.append("㉝-⑤ 隐藏三列后量不出结构 —— 本段验不了")
         return
     _chain("⑤", d2["head"], errors, d2["headFl"])
-    hid = d2["head"][3]["w"] < d["head"][3]["w"] - 1 or d2["sw"] < d["sw"] - 1
+    hid = abs(d2["head"][3]["w"] - d["head"][3]["w"]) > 1 or abs(d2["sw"] - d["sw"]) > 1
     print(("   ✅" if hid else "   ⚠️")
-          + f"㉝-⑤ 隐藏那三列后**重量**：表内容 {d['sw']} ⇒ {d2['sw']}（真的变窄了 = 剩下的列变宽 ⇒ "
+          + f"㉝-⑤ 切换贸易公司三列后**重量**：表内容 {d['sw']} ⇒ {d2['sw']}（列宽确实改变 ⇒ "
             f"偏移必须重量；链 = {[c['l'] for c in d2['head']]}）")
     if not hid:
-        errors.append("㉝-⑤ 隐藏三列后表的宽度没变 ⇒ 本段没能真的验到「重量」这条（换一种隐藏机制了？）")
+        errors.append("㉝-⑤ 切换三列后表的宽度没变 ⇒ 本段没能真的验到「重量」这条（换一种隐藏机制了？）")

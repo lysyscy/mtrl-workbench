@@ -20,18 +20,15 @@ from __future__ import annotations
 from decimal import Decimal
 from io import BytesIO
 
-#: 「序号」这一列**没有对应的行字典键** —— 它是**屏幕上的行号**（1,2,3…），不是数据库 `id`。
-#: ⚠️⚠️ 用户 **2026-09-20 提过两次**（第一次被别的事岔开忘了）：页面上那格显示的必须是**序号**。
-#:   早先页面渲染的是 `${j.id}`（数据库主键，形如 `1135`）—— 在人眼里那根本不是"第几行"，
-#:   所以这次页面与导出**一起改成行号**（⛔ 别直接把 `id` 当序号导出去）。
-SEQ_KEY = "__seq__"
+SEQ_KEY = "project_seq"
 
 #: 导出的列（**顺序 = 页面表头顺序**去掉「勾选 / 操作」）⇒ 导出的表与屏幕**并排看能对上**。
-#: 第二项 = 行字典里的键（`mod11_jc.service.build_list` 的输出直接可用）；`SEQ_KEY` 是特例（行号）。
+#: 第二项 = 行字典里的键（`mod11_jc.service.build_list` 的输出直接可用）；`SEQ_KEY` 读取后端项目内动态号。
 COLUMNS: tuple[tuple[str, str], ...] = (
     ("序号", SEQ_KEY),
     ("合同日期", "date"),
     ("材料名", "material"),
+    ("合同编号", "contract_no"),
     ("供应商", "supplier"),
     ("合同金额", "contract_amt"),
     ("发票金额", "inv_sum"),
@@ -72,7 +69,7 @@ def build_xlsx(rows: list[dict]) -> bytes:
     """行字典列表 ⇒ 一本 xlsx 的**字节**（不落盘：调用方决定给谁）。
 
     ⭐ `TAIL-62`（2026-09-21）：**实现已下沉到 `naive_export`**（本件是它的前身之一）⇒ 薄委托。
-      ⛔ 两个**本页口径**必须照旧带给内核：① `SEQ_KEY` = 「序号」列写**行号**；
+      ⛔ 两个**本页口径**必须照旧带给内核：① `SEQ_KEY` = 「序号」列读**项目内动态号**；
       ② 列宽上限 **28**（不是内核默认的 32 —— ⛔ 统一成 32 会**改掉本页导出形态**，
       本轮是"换实现"，**不是"改口径"**）。
 
@@ -81,9 +78,10 @@ def build_xlsx(rows: list[dict]) -> bytes:
        —— 写成 `"1234.56"` 那种"看着是数、其实是文本"的表，是本项目最讨厌的一类假象。
     """
     from app.report_export import naive_export as N
+    rows = [{**r, SEQ_KEY: r.get(SEQ_KEY) or "—", "contract_no": r.get("contract_no") or "—"} for r in rows]
     return N.build_xlsx(rows, columns=COLUMNS, sheet_name=SHEET_NAME,
                         money_keys=MONEY_KEYS, total_keys=MONEY_KEYS,
-                        seq_key=SEQ_KEY, width_max=28)
+                        width_max=28)
 
 
 __all__ = ["COLUMNS", "MONEY_KEYS", "SHEET_NAME", "build_xlsx"]

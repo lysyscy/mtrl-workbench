@@ -39,7 +39,7 @@ class FakeSession:
         entity = stmt.column_descriptions[0]["entity"]
         return _Result(self.by_model.get(entity, []))
 
-    def get(self, model, ident):  # noqa: ANN001
+    def get(self, model, ident, **kwargs):  # noqa: ANN001
         for row in self.by_model.get(model, []):
             if getattr(row, "id", None) == ident:
                 return row

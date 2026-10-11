@@ -205,15 +205,15 @@ def test_列表每行带引用过的通知书id_否则m03的集采关联会静�
 
 
 @acc("ACC-JC-UI-001", "001-01")
-def test_主表字段数19列且列清单与两态取值域只有一个出口():
+def test_主表字段数20列且列清单与两态取值域只有一个出口():
     """判据 `001-01`「主表字段数与字段名以 §6.4.1 为准」的**可机器化部分**：
 
     ⚠️ 判据原文说「**不在本文件复述数字**」⇒ 这里只钉两件**结构性**事实：
-    ① 列清单**只有一个出口**（`domain.JC_COLUMNS`）且 **19 列**（数量与 §6.4.1 一致）；
+    ① 列清单**只有一个出口**（`domain.JC_COLUMNS`）且 **20 列**（数量与 §6.4.1 一致）；
     ② **两态**取值域同样只有一个出口（`domain.TAGS`）。⛔ 壳与 API 里都不得另抄一份。
     """
     with session_scope() as s:
         data = SV.build_list(s)
     assert [c["key"] for c in data["columns"]] == [c["key"] for c in D.JC_COLUMNS], "列清单必须来自 domain"
-    assert len(data["columns"]) == 19, "§6.4.1 的 19 列（序号 … 操作）"
+    assert len(data["columns"]) == 20, "§6.4.1 加合同编号后的 20 列（序号 … 操作）"
     assert D.TAGS == (D.TAG_IN, D.TAG_OUT), "两态取值域的顺序即口径（⛔ 「待确认」已取消）"

@@ -705,7 +705,7 @@ V.m04=()=>{
       <td class="fc">${p.id}${p.manual?' <span class="tag t-in" title="手动行（§4.3.3.1）：用户在页内补录的 —— 与导入行同住一表、走同一条审查链路；导入不会清理它（§9.5）">手动</span>':''}</td>
       <td class="fc now">${p.ym}</td>
       <td><div style="max-width:230px">${plProjCell(p.proj)}</div></td>
-      <td>${edit?`<input class="inp plain" style="min-width:134px" data-act="plCell" data-id="${p.id}" data-f="docNo" value="${esc(p.docNo||'')}" placeholder="填单据号 → 再次匹配">`:(p.docNo?`<span class="fc">${esc(p.docNo)}</span>`:'<span class="tag t-dg">未填</span>')}</td>
+      <td>${edit?`<input class="inp plain" style="min-width:134px" data-act="plCell" data-id="${p.id}" data-f="docNo" value="${esc(p.docNo||'')}" placeholder="填单据号 → 再次匹配">${hit?`<button class="link" data-act="plNotice" data-id="${p.id}" title="查看付款通知书">查看 →</button>`:''}`:(p.docNo?(hit?`<button class="link fc" data-act="plNotice" data-id="${p.id}" title="查看付款通知书">${esc(p.docNo)}</button>`:`<span class="fc" title="${plNoticeHits(p).length>1?'单据号有多条通知书，无法唯一定位':'找不到对应通知书'}">${esc(p.docNo)}</span>`):'<span class="tag t-dg">未填</span>')}</td>
       <td class="num">${M(p.flowAmt)}</td>
       <td class="num" title="已付款金额 = 付款流水中同一通知书的生效付款金额之和；按单据号匹配通知书，不含已撤销流水；未匹配显示—">${hit?M(paidOf(hit.id)):'<span class="mut">—</span>'}</td>
       <td class="num" title="剩余付款金额 = 单据号匹配的付款通知书审批金额 − 同单据生效流水付款合计；不含已撤销流水，未匹配显示—">${hit?M(N2(hit.approve-paidOf(hit.id))):'<span class="mut">—</span>'}</td>
@@ -898,7 +898,7 @@ V.m05=()=>{
          `data-flow-id` = 屏幕行序的证据（导出按它取序，见 `pages-a.js::flDomIds`）。 */
       return `<tr class="${f.voided?'ex':''}" data-flow-id="${f.id}">
       <td class="fc">${esc(f.flowNo)||'<span class="mut">—</span>'}</td>
-      <td class="fc">${esc(f.doc)}</td>
+      <td class="fc">${f.nid?`<button class="link fc" data-act="flNotice" data-fid="${f.id}" title="查看付款通知书">${esc(f.doc)||'—'}</button>`:`<span title="找不到对应通知书">${esc(f.doc)||'—'}</span>`}</td>
       <td class="now">${esc(f.docDate)||'<span class="mut">—</span>'}</td>
       <td class="sm" title="${esc(f.billName)}"><div style="max-width:240px">${esc(f.billName)||'<span class="mut">—</span>'}</div></td>
       <td title="付款项目全名：${n?esc(n.proj):''}"><div style="max-width:260px">${n?dispCell(n.proj,n):'<span class="mut">—</span>'}</div></td>
@@ -1394,7 +1394,7 @@ V.m11=()=>{
     <div class="tw">${TBL({head:JC_THEAD,key:'m11:jc',
     rows:jcRows.map((j,i)=>`<tr class="${j.tag==='不纳入'?'ex':''}">
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="jcPick" data-id="${j.id}" ${jcPick.has(j.id)?'checked':''}></td>
-      <td class="fc" title="序号 = 当前筛选下的行号（⛔ 不是数据库 id）">${i+1}</td><td class="now">${j.date}</td><td><button class="btn sm" style="white-space:normal;text-align:left" data-act="jcMaterialOpen" data-id="${j.id}" title="修改材料名">${esc(j.material)||'填写材料名'}</button></td><td class="sm">${esc(j.supplier)}</td>
+      <td class="fc" title="项目内动态序号，筛选不变">${j.projectSeq == null ? '—' : j.projectSeq}</td><td class="now">${j.date}</td><td><button class="btn sm" style="white-space:normal;text-align:left" data-act="jcMaterialOpen" data-id="${j.id}" title="修改材料名">${esc(j.material)||'填写材料名'}</button></td><td class="fc">${esc(j.contractNo||'—')}</td><td class="sm">${esc(j.supplier)}</td>
       <td class="num">${j.contractAmt?M(j.contractAmt):'<span class="mut" title="供应商合同价为空 —— 若是贸易公司合同，需从 Excel 的「供应商线」手工填进来（填完不被抓取覆盖）">— 待补</span>'}</td>
       <td class="num" style="white-space:nowrap" title="发票金额 = 本合同供应商发票子表金额合计；不计贸易公司发票，不按发票日期截断">${M(jcInvSum(j))} <button class="btn sm" data-act="jcInvDlg" data-id="${j.id}" title="打开「供应商发票子表」（发票日期 + 金额 · 1..N 张）">子表</button></td>
       <td class="sm">${j.tradeCo?esc(j.tradeCo):'<span class="mut">—</span>'}</td>
@@ -1415,13 +1415,13 @@ V.m11=()=>{
         <button class="btn sm" data-act="jcArch" data-id="${j.id}">推进存档</button>
       </td></tr>`),
     sum:jcRows.length?sumRowOf(JC_THEAD,jcRows,{
-        5:rs=>N2(rs.reduce((a,j)=>a+j.contractAmt,0)),
-        6:rs=>N2(rs.reduce((a,j)=>a+jcInvSum(j),0)),
-        8:rs=>N2(rs.reduce((a,j)=>a+(Number(j.tradeContractAmt)||0),0)),
-        9:rs=>N2(rs.reduce((a,j)=>a+jcTradeInvSum(j),0)),
-        10:rs=>N2(rs.reduce((a,j)=>a+jcSettle(j),0)),
-        11:rs=>N2(rs.reduce((a,j)=>a+jcPay(j),0)),
-        12:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))},
+        6:rs=>N2(rs.reduce((a,j)=>a+j.contractAmt,0)),
+        7:rs=>N2(rs.reduce((a,j)=>a+jcInvSum(j),0)),
+        9:rs=>N2(rs.reduce((a,j)=>a+(Number(j.tradeContractAmt)||0),0)),
+        10:rs=>N2(rs.reduce((a,j)=>a+jcTradeInvSum(j),0)),
+        11:rs=>N2(rs.reduce((a,j)=>a+jcSettle(j),0)),
+        12:rs=>N2(rs.reduce((a,j)=>a+jcPay(j),0)),
+        13:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))},
         {tip:'当前筛选结果（含「不纳入」行）的合计；「贸易公司合同金额」为空的行按 0 计'})
       :EMPTYROW(thCount(JC_THEAD), '当前筛选条件下没有集采合同', '换个「三态标记 / 合同存档情况 / 项目」，或清空「供应商」搜索词')})}</div>
   </div>`;

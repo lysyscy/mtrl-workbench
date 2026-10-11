@@ -181,7 +181,8 @@ def test_合同候选显示日期金额且仍按编号排序(ui_page):
     }''')
     options=p.locator('#jcLinkId option')
     assert options.evaluate_all('els=>els.map(x=>x.value)') == ['2','12']
-    assert options.nth(0).inner_text().startswith('2026-10-01')
+    assert '2026-10-01' in options.nth(0).inner_text()
+    assert options.nth(0).inner_text().startswith('序号 — · 合同编号 — · ')
     assert '合同金额 20,000.00' in options.nth(0).inner_text()
 
 

@@ -70,6 +70,7 @@ def list_contracts(
     for row, wh in s.execute(stmt).all():
         out.append({
             "id": row.id,
+            "contract_no": row.contract_no,
             "date": row.contract_date,
             "material": row.material_name,
             "supplier": row.supplier,

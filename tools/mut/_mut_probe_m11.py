@@ -36,6 +36,8 @@ sys.path[:0] = [str(ROOT / "tools" / "probe")]
 MUTS = {
     "M1 页面那份发票金额没跟着后端走（改 JCs 的 inv_sum）":
         "JCs[0].inv_sum = String((Number(JCs[0].inv_sum) || 0) + 12345.67); render();",
+    "M4 合计行单独错误（不改逐行数据）":
+        "const original=V.m11; V.m11=()=>{const box=document.createElement('template');box.innerHTML=original();box.content.querySelector('.sumrow').children[12].textContent='99999999.00';return box.innerHTML;};render();",
     "M2 配对键之一被改坏（改 1/4 那批 JCs 的 date ⇒ 后端找不到这些合同）":
         "for (let i=0;i<Math.ceil(JCs.length/4);i++) JCs[i].date='1999-01-01'; render();",
     "M3 配对键之二被改坏（改 1/4 那批 JCs 的 contractAmt）":

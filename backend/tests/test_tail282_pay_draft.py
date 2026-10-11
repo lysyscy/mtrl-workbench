@@ -137,6 +137,7 @@ def test_撤销成功后即使刷新失败也作废草稿且回执仍在(ui_page
       ACT.editss({dataset:{id:'101',k:'pay'},value:'300'});
       FLs.splice(0, FLs.length, {id:'F1', nid:'101', date:'2026-10-02', amt:200, method:'现汇',
         remark:'', op:'', voided:false, reason:'', projKey:'', proj:'', doc:''});
+      API.flowRevokeInfo = async () => ({ok:true,manual:false,expected:'snapshot'});
       API.flowRevoke = async () => ({ok:true, message:'已撤销', jc_effect:null});
       API.flows = async () => { window.__flFail = 1; throw new Error('流水读不回来'); };
       ACT.revDlg({dataset:{fid:'F1'}});

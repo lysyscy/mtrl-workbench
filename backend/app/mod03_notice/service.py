@@ -289,6 +289,7 @@ def stat_paid_is_protected(s, notice_id: int) -> bool:
 
 
 list_stat_traces = _repo.list_stat_traces             # 统计手改留痕（=「是否手改」的唯一事实来源）
+restore_stat_paid_auto = _repo.restore_stat_paid_auto  # 恢复模式与留痕，同事务包间出口
 
 
 __all__ = [
@@ -298,4 +299,5 @@ __all__ = [
     "render_notice_html",      # ★ 全工程唯一的渲染入口（生产与预览工具共用）
     "run_batch",
     "list_stat_traces",        # ⭐ 包间出口（`TAIL-195` 批 2a）
+    "restore_stat_paid_auto",
 ]

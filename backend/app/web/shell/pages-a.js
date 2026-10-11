@@ -43,7 +43,8 @@ let planSel='';           /* 选月份弹窗里的**草稿**选择（同 `supSel
    ⚠️ 保留签名 `(p, all)`：`V.m04` 里各处调用**一行都不用改**（第 2 个参数留着不读）。 */
 const plRev=(p)=>String((p&&p.result)||'').trim()||'—';
 /* 按单据号命中的 i8 通知书（供「已付款金额 / 剩余付款金额」两列取数）；查不到 → null */
-const plHit=p=>{ const c=String(p.docNo||'').trim(); return c?(NO.find(x=>x.code===c)||null):null; };
+const plNoticeHits=p=>{const c=String(p.docNo||'').trim();return c?NO.filter(n=>String(n.code||'').trim()===c):[];};
+const plHit=p=>{const hits=plNoticeHits(p);return hits.length===1?hits[0]:null;};
 /* 审查结果的**筛选归并**（2026-09-12）：判定仍是 §4.3.4 的 6 种，筛选下拉只给
    「完全匹配 / 未匹配」两档 —— 「未匹配」= 除「完全匹配」以外的全部判定。 */
 const revIs=(rv,f)=> f==='全部' || (f==='未匹配' ? rv!=='完全匹配' : rv===f);

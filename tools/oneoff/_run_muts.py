@@ -134,6 +134,7 @@ KEY: tuple[tuple[str, str], ...] = (
 #:   · **当前红 / 靶假设过期** ⇒ ⛔ 塞进闸门＝每轮假红（那比不跑更坏：假红会让人学会忽略闸门）。
 KEEP_OUT: dict[str, str] = {
     "_mut_probe_m11.py": "真机集采金额配对；改 tools/probe/_shell_m11.py 的金额或配对判法时按需跑，需运行服务与真数据，不能混入离线快集",
+    "_mut_probe_jcpin.py": "真机贸易列显隐重量；改 tools/probe/_shell_jcpin.py 的显隐或宽度判法时按需跑，需运行服务与真机，不能混入离线快集",
     "_mut_tail275.py": "业务统计付款日期、实际金额、撤销剔除与选桶；改付款统计或选桶合计时按需跑隔离 pytest，不属于常驻尺子快慢集",
     "_mut_tail276.py": "集采关联统计金额、审批额回退与日期适配；改集采付款引用或日期出口时按需跑隔离 pytest",
     "_mut_tail281.py": "集采分笔引用、删除保护与撤销回执；改这些业务出口时按需跑隔离 pytest",
@@ -220,6 +221,9 @@ KEEP_OUT: dict[str, str] = {
     "_mut_tail270.py": "靶＝`TAIL-270` 机械费单格保存不吞其它列金额与来源 · 业务面；**改过程资料机械费编辑/保存时按需跑**",
     "_mut_tail271.py": "靶＝`TAIL-271` 机械报表判据（错误月份/量、缺月归零、跳过确认、事务失败必须被真实用例判红）· 业务面；**改机械费报表导入或差异确认时按需跑**",
     "_mut_tail273.py": "靶＝`TAIL-273` 壳内派生来源与大表合计首格（断线/错项目/解列固定单元格）· 业务面；**改派生金额或悬浮说明时按需跑**",
+    "_mut_tail290.py": "靶＝`TAIL-290` 项目内动态号（数全量/页面筛选行号/导出行号）· 业务面；**改集采序号派生、序号/合同编号上屏或导出对位时按需跑**（隔离子进程 pytest，分钟级）",
+    "_mut_tail291.py": "靶＝`TAIL-291` 恢复自动必须持续跟随（一次性回写/缺恢复事件/缺原因闸）· 业务面；**改撤销二选一、付款模式派生或原因闸时按需跑**（隔离子进程 pytest，分钟级）",
+    "_mut_tail292.py": "靶＝`TAIL-292` 引用导航（错行/歧义唯一化/虚拟定位退化/只读按钮）· 业务面；**改引用定位、返回原页或候选唯一化时按需跑**（隔离子进程 pytest，分钟级）",
     "_mut_tbl.py": "靶＝`TBL` 统一表外壳（`TAIL-64`）· 接线断言 pytest",
     "_mut_time.py": "靶＝`tests/test_acc_i8_time.py`（壳的业务时钟取自北京时间）· 业务面",
     "_mut_trailscope.py": "靶＝`tests/test_trail_scope.py`（留痕范围判据）· 接线断言 pytest",
@@ -288,7 +292,11 @@ def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
                       #   ③ 靶在隔离副本/子进程内（`copytree` 到临时 base、`cwd=base`、内存替换）。
                       #   ⚠️ 后四支（业务面）**按需跑**（`KEEP_OUT`）：实测合计 ≈80s ⇒ 进闸门等于拉爆时长。
                       '_mut_sort.py', '_mut_docguide.py', '_mut_retro.py',
-                      '_mut_tail269.py', '_mut_tail270.py', '_mut_tail271.py', '_mut_tail273.py'}:
+                      '_mut_tail269.py', '_mut_tail270.py', '_mut_tail271.py', '_mut_tail273.py',
+                      # ⚠️ 2026-10-11（TAIL-290~292 收尾）：本批新写的四支，逐支实跑过 ——
+                      #   三支业务面（隔离 copytree ＋ 子进程 pytest，按需 `--cases`）与一支真机
+                      #   （内存替换探针源码、不写正式件）⇒ 放行它们自己的隔离入口。
+                      '_mut_tail290.py', '_mut_tail291.py', '_mut_tail292.py', '_mut_probe_jcpin.py'}:
         print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
         return 2, 0.0
     t = time.time()

@@ -35,12 +35,13 @@ ZERO = Decimal("0.00")
 MSG_BAD_AMOUNT = "金额不合法：必须是大于 0 的数字（不设上限），已保留原值"
 MSG_NEED_DATE = "日期必填：发票要能对上所属期（默认取系统当日，可改）"
 
-#: 集采台账**表头**（19 列）—— 与原型 `JC_THEAD` **同名同序**（视图 / 导出⛔ 不写字面量）
+#: 集采台账**表头**（20 列）—— 与原型 `JC_THEAD` **同名同序**（视图 / 导出⛔ 不写字面量）
 #  ⚠️ 顺序即口径（`ACC-JC-UI-001/001-12` 钉着"三列紧贴操作列左侧"），别按"好看"重排。
 JC_COLUMNS: tuple[dict[str, Any], ...] = (
     {"key": "idx", "label": "序号", "type": "text"},
     {"key": "date", "label": "合同日期", "type": "date"},
     {"key": "material", "label": "材料名", "type": "text"},
+    {"key": "contract_no", "label": "合同编号", "type": "text"},
     {"key": "supplier", "label": "供应商", "type": "text"},
     {"key": "contract_amt", "label": "合同金额", "type": "num"},
     {"key": "inv_sum", "label": "发票金额", "type": "num"},          # = 供应商发票子表合计（派生）
@@ -277,3 +278,15 @@ __all__ = [
     "normalize_tag", "tag_after_fetch",
     "link_hint", "dedup_blocked", "pick_candidates",
 ]
+
+
+def project_sequences(rows: list[dict]) -> dict[int, int]:
+    """全项目纳入合同的动态号；调用方筛选与返回行序不参与编号。"""
+    counts: dict[str, int] = {}
+    result: dict[int, int] = {}
+    included = [r for r in rows if r["tag"] == TAG_IN]
+    for row in sorted(included, key=lambda r: (not bool(r["date"]), r["date"] or "", r["id"])):
+        key = row["project_key"]
+        counts[key] = counts.get(key, 0) + 1
+        result[row["id"]] = counts[key]
+    return result
