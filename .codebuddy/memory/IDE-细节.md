@@ -239,6 +239,8 @@ Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；�
 
 **命令卫生三条（2026-10-11 实测）**：① 每条 shell 命令前置 `$ProgressPreference='SilentlyContinue';` —— 否则每条都吐 1–3 KB 的 `#< CLIXML … 正在准备首次使用模块` 噪声；② 要看中文路径就 `git -c core.quotepath=false …`（否则是 `"\345\274\200…"` 转义）；③ ⛔ 别用 `… | Select-Object -First N` 截断后再看退出码 —— PowerShell 会把 rc 变成 1（假红），要 rc 就整条跑、或截断后单独读 `$LASTEXITCODE`。
 
+**命令卫生两条（2026-10-11 晚补 · `TAIL-296` 实测）**：④ ⛔ **每条命令只做一件事** —— `cmd /c "… & … && …"` 长链在两壳混用下出现过三次「空输出 + rc=1」；中途取消还会把整条链留在半状态（当场吃了两次）。要串就落成脚本文件再跑。⑤ **要按中文过滤就用 `python -X utf8` 读盘**，⛔ 别用 cmd 的 `findstr /c:中文…` —— 控制台编码不合时它**静默 0 命中**，看起来像"查过了、没有"。
+
 **怀疑"这条红是先前就有的"（一行配方）**：`git -C <仓根> archive --format=zip -o .codebuddy/work/00-scratch/head-web.zip HEAD backend/app/web/` ⇒ 解到 `00-scratch/head-web/`；`$env:MTRL_UI_FIXTURE_WEB='<解出来的 web 目录>'` 跑**同一条**用例；跑完 `Remove-Item Env:MTRL_UI_FIXTURE_WEB`。判据：HEAD 版壳下**同样红 ⇒ 不是本轮引入**（2026-10-11 据此认定了 6 条既有腐化）。静态件（读 `SHELL` 的断言）同理先看 `git diff HEAD` 有没有碰到那一行。
 
 **Git推送遇代理中断（2026-10-11实测）**：HTTPS报`curl 52 Empty reply from server`且SSH也被重置时，先用`git -c http.proxy= push <HTTPS远端> <当前分支>`作单次直连尝试；不改全局代理。随后用同样的单次选项读取远端分支SHA，与本地HEAD比较；连接中断或输出`Everything up-to-date`本身不能证明推送成功。只在已有提交/推送授权下执行。

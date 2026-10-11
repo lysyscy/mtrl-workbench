@@ -2,8 +2,12 @@
 
 据 `D:\\mtrl-workbench-文档架构审计-20260922.md` §七-15（长期维护）落地：
 - `T14`：`work/00-scratch/` 里的件**超 14 天**未升档/未删 ⇒ 黄；`tools/` 根与 `logs/` 再出现散件 ⇒ 黄。
-- `T15`：`artifacts/` 只许**工具生成物白名单**的 md；`work/` 五区的文档必须带**文头四行元信息**
+- `T15`：`artifacts/` 只许**工具生成物白名单**的 md；`work/` 的**三区**文档（`HEADER_ZONES`：
+  `10-designs` / `30-troubleshooting` / `40-decisions`）必须带**文头四行元信息**
   （读者 / 回答什么问题 / 什么时候读 / 状态 ＋ 关联 ID）—— 没有元信息的文档 = 下个 Agent 不知道它是否还活着。
+- ⭐ `T15` **新条**（2026-10-11 `TAIL-296` · 同属本件）：**决策区**（`40-decisions/`）的件，
+  **状态词必须 ∈ 五档**，且「已定稿 / 已实施」档**必须有「落地位置」行** —— 此前这两件事
+  **在决策区没有任何尺子看得见**（6 件状态写成"已办结/已拍板/已定案"、5 件缺落地位置，全是手查出来的）。
 - `T26`（2026-10-05 `TAIL-236` 第 3 批）：**「结论已落地」⇒ 该降档**（只报不动）——
   「已定稿 / 已实施」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在**
   ⇒ 报黄。⭐ 治的是 `work/README.md` §二 那条「用完就丢」**只有规矩、没有机器眼**（`docs-governance.md`
@@ -31,7 +35,7 @@ ARTIFACTS_MD_ALLOW: tuple[str, ...] = ("变异覆盖台账.md", ".gitkeep")
 #: 文头里**「状态」那一栏的栏名** —— ⛔ 只此一处：`WORK_HEADER_KEYS` 与 `T26` 都读它
 #: （各写一份字面 ⇒ 改词表时 `T26` 静默失配，而它看上去还是绿的 —— 本仓「加了半边的守卫」那族）。
 STATE_KEY = "状态"
-#: `work/` 五区文档的文头必须齐这四个词（`README.md` 与 `D索引-*.md` 豁免）
+#: `work/` 的 `HEADER_ZONES` 三区文档，文头必须齐这四个词（`README.md` 与 `D索引-*.md` 豁免）
 WORK_HEADER_KEYS: tuple[str, ...] = ("读者", "回答", "何时读", STATE_KEY)
 WORK_HEADER_EXEMPT: tuple[str, ...] = ("README.md", "D索引-")
 #: 文档**文头窗口**（行数）—— `T15`（文头四行）与 `T26`（状态档）**共用同一个数**
@@ -39,6 +43,22 @@ WORK_HEADER_EXEMPT: tuple[str, ...] = ("README.md", "D索引-")
 WORK_HEAD_LINES = 15
 #: `work/` 里**带文头四行**的区（`T15` 判）—— ⛔ **区名只此一处列**，别处一律从它推。
 HEADER_ZONES: tuple[str, ...] = ("10-designs", "30-troubleshooting", "40-decisions")
+
+#: ⛔⛔ **五档状态词一个字不动**（主人 = `.codebuddy/work/README.md` §四）—— `T15` 新条按它判「状态出档」。
+#: ⚠️ `DOWNGRADE_STATES`（下面 T26 那两档）是它的**子集**：改词表时两处一起看（⛔ 别处不另抄字面）。
+STATE_WORDS: tuple[str, ...] = ("草稿", "在研", "已定稿", "已实施", "已归档")
+#: `T15` 新条（2026-10-11 `TAIL-296`）的扫描面 = **决策区**。⚠️ **为什么只有这一区**（⛔ 别顺手扩到另两区）：
+#:   · 决策件**永不出档**（`.codebuddy/work/README.md` §二：只加不改、被推翻只补一行）⇒
+#:     它必须自己说清「结论落到哪、谁改它」，否则下一个人只能把全部正文再读一遍；
+#:   · 另两区（过程件）的存量件**故意不补声明行** —— `T26` 的 docstring 已写明那是**另一件事**
+#:     （给存量件补声明行 = 改内容）⇒ 把它们扫进来只会当场多出十余条**本票不拥有的**黄；
+#:   · ⛔ 要扩面属另一张票（`TAIL-297` 尺子体检），⛔ 不是在这儿调扫描面。
+#: ⚠️ 区名**从 `HEADER_ZONES` 推**（照 `DOWNGRADE_ZONES` 的先例）⇒ 区名仍只有一处字面。
+DECISION_ZONES: tuple[str, ...] = tuple(z for z in HEADER_ZONES if z == "40-decisions")
+#: 「状态」那一栏的**值**（判它 ∈ 五档）—— 从 `状态` 起，切到行内第一个分隔符为止。
+#: ⚠️ 必须切：文头常写成 `状态：**已实施**（原记「已办结」…）｜关联：…` ⇒ 不切的话括号与后半行
+#:    里的词会一起被算进来（那正好是"判据看着绿、其实没判"那一族）。
+STATE_VALUE_RE = re.compile(rf"{STATE_KEY}\s*[:：]?\s*\**([^｜|（(\n]*)")
 
 # ------------------------------------------- T26 「结论已落地」⇒ 该降档（只报不动 · 黄）
 #
@@ -222,8 +242,48 @@ def check_scratch_ttl() -> list[dict]:
     return hits
 
 
+def _decision_state_hits(rel: str, lines: list[str]) -> list[dict]:
+    """`T15` 新条的单件判定（2026-10-11 `TAIL-296`）—— 决策区：**状态词 ∈ 五档** ＋ **后两档必须有「落地位置」行**。
+
+    ⭐ **治什么**（本轮实测，不是推演）：决策区 12 件里**6 件状态词出档**（写成"已办结 / 已拍板 / 已定案 /
+    "⏳ 待实施"…）⇒ 机器判不了"这份还能不能再引用"，下一个人也要重猜一遍；而「已定稿 / 已实施」该声明
+    「结论落到哪」这条，此前**只在过程件两区**被 `T26` 当**输入**读（没这一行它一声不响）⇒ 决策件没人守。
+
+    ⚠️ **与 `T26` 的分工**（⛔ 别混、也别合并）：
+      · `T26` 判**过程件**：「已声明落地 ＋ 件内票全销号 ⇒ **该降档**（只报不动）」；
+      · 本条判**决策件**：「状态词必须在五档里 ＋ 后两档**必须**有落地位置行」—— 决策件**永不降档**
+        （协议见 `.codebuddy/work/README.md` §二）⇒ 两件事语义不同，⛔ 合起来写会让两边都读不懂。
+    ⚠️ **落地位置真不真存在，不归本条**：仓内路径由 `T3` 核（反引号）、"声明了但核不到"由 `T26`/`T3`
+      按各自分工报 —— ⛔ 本条只判那一行「在不在」（同 `T26` docstring：「路径必须存在」的主人只有一处）。
+    ⚠️ **黄**（同本件其余四条）：形式问题该被看见、但不挡合入。
+    """
+    head = "\n".join(lines[:WORK_HEAD_LINES])
+    #: 首尾的 `：`/`*`/空白都要剥掉（写法多样：`状态：**已实施**` / `**状态**：已定稿` / `状态 已定稿`）
+    fields = [m.group(1).strip(" ：:*") for m in STATE_VALUE_RE.finditer(head)]
+    words = [w for f in fields for w in STATE_WORDS if w in f]
+    if not words:
+        got = "、".join(f for f in fields if f) or "（文头里没有『状态』那一栏）"
+        return [_hit(
+            "T15", rel,
+            f"状态词出档：不在五档里（现值：{got}）",
+            "决定件的状态词是接手人判断「能不能再引用它」的唯一信号；写成"
+            "「已办结 / 已拍板 / 已定案 / 待实施」这类**自造档** ⇒ 机器判不了、下一个人也要重猜一遍"
+            "（2026-10-11 `TAIL-296` 实测：决策区 12 件里 6 件出档）",
+            f"改成五档之一：{' / '.join(STATE_WORDS)}"
+            "（词表主人 = `.codebuddy/work/README.md` §四；原文别动，把原说法括在「原记…」里）")]
+    if any(w in DOWNGRADE_STATES for w in words) and not any(DECL_RE.search(l) for l in lines):
+        return [_hit(
+            "T15", rel,
+            f"「{words[0]}」档缺「落地位置」行",
+            "这两档的含义就是**结论已冻结 / 已进代码** ⇒ 必须有一行说清「结论真正落到哪个文件」；"
+            "没有它，接手的人只能再把全部正文读一遍（`T26` 对过程件读的是同一行 —— ⛔ 写法全仓只一处）",
+            "补一行：`**落地位置**：`<结论真正落到的文件>`、<另一处> · 同批改：`<它变了要一起改的文件>`"
+            "（写法主人 = `.codebuddy/work/README.md` §四）")]
+    return []
+
+
 def check_artifacts_and_headers() -> list[dict]:
-    """`T15`：artifacts md 白名单 ＋ work 四区文档的文头四行元信息。"""
+    """`T15`：artifacts md 白名单 ＋ work 三区（`HEADER_ZONES`）文档的文头四行元信息 ＋ 决策区状态词/落地位置（见 `_decision_state_hits`）。"""
     hits: list[dict] = []
     art = REPO_ROOT / "artifacts"
     if art.is_dir():
@@ -236,6 +296,8 @@ def check_artifacts_and_headers() -> list[dict]:
                     "按类型归位：设计→`work/10-designs/` · 排查→`work/30-troubleshooting/` · 审计→`plans/archive/`"))
     work = REPO_ROOT / ".codebuddy" / "work"
     #: ⭐ 2026-10-01 五区 ⇒ 四区（撤 `20-experiments`）；⚠️ 2026-10-04（`TAIL-225`）加回第五区 `50-tickets`
+    #:   ⚠️ 那两句说的是 `work/` 的**区总数**（`audit_meta.WORK_DIR_ALLOW`，5 个）；**本条的扫描面** = 上面
+    #:   `HEADER_ZONES`（3 个，2026-10-11 `TAIL-296` 订正）—— ⛔ 两个数不是一个数，别混用。
     #:   ⇒ ⭐ **但票仓不在本条的扫描面里**：票是**工单**（照第二个项目的票面：`What to build` / `Blocked by` /
     #:   `Status` ＋ `- [ ]` 验收 ＋ `## Comments`），**不带"读者/何时读"那类文档文头** ⇒ 票的栏由 `T6` 守
     #:   （⛔ 一条只在一处定义：别在 `T6` 里另写一套文头词表，也别在这儿管票）。
@@ -246,15 +308,18 @@ def check_artifacts_and_headers() -> list[dict]:
         for f in sorted(zdir.glob("*.md")):
             if f.name.startswith(WORK_HEADER_EXEMPT):
                 continue
-            head = "\n".join(
-                f.read_text(encoding="utf-8", errors="replace").splitlines()[:WORK_HEAD_LINES])
+            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+            head = "\n".join(lines[:WORK_HEAD_LINES])
+            rel = f".codebuddy/work/{zone}/{f.name}"
             missing = [k for k in WORK_HEADER_KEYS if k not in head]
             if missing:
                 hits.append(_hit(
-                    "T15", f".codebuddy/work/{zone}/{f.name}",
+                    "T15", rel,
                     f"文头缺元信息：{' / '.join(missing)}",
                     "没有『读者/回答什么/何时读/状态』⇒ 下个 Agent 不知它是否还在研、该不该读（审计 §5.3-1）",
                     "补文头四行（模板见 `.codebuddy/work/README.md` §四）"))
+            if zone in DECISION_ZONES:
+                hits += _decision_state_hits(rel, lines)   # ⭐ `TAIL-296` 新条（状态 ∈ 五档 · 落地位置在位）
     return hits
 
 
@@ -380,9 +445,9 @@ def check_retention() -> list[dict]:
 
 
 __all__ = ["ARCHIVE_KEEP", "ARCHIVE_MAX_MB", "ARTIFACTS_MD_ALLOW", "BACKUP_KEEP",
-           "DOWNGRADE_STATES", "FACE_KEEP", "FACE_MAX_MB", "HEADER_ZONES",
+           "DECISION_ZONES", "DOWNGRADE_STATES", "FACE_KEEP", "FACE_MAX_MB", "HEADER_ZONES",
            "ONEOFF_MAX_FILES", "ONEOFF_MAX_MB", "SCRATCH_TTL_DAYS", "STATE_KEY",
-           "WORK_HEADER_KEYS", "WORK_HEAD_LINES",
+           "STATE_WORDS", "WORK_HEADER_KEYS", "WORK_HEAD_LINES",
            "check_artifacts_and_headers", "check_downgrade_candidates", "check_retention",
            "check_scratch_ttl"]
 

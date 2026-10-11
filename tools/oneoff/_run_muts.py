@@ -60,7 +60,7 @@ KEY: tuple[tuple[str, str], ...] = (
     ("_mut_claim.py", "claim_audit（裁定必须同行写日期＋出处）"),
     ("_mut_uicheck.py", "doc_audit --ui 的交付面四检"),
     ("_mut_t12.py", "T12 分层与命名"),
-    ("_mut_t14t15.py", "T14/T15（scratch TTL · work 区文头 · artifacts 白名单）"),
+    ("_mut_t14t15.py", "T14/T15（scratch TTL · work 区文头 · artifacts 白名单 · 决策区状态词与落地位置）"),
     ("_mut_t20.py", "T20 保留期与容量（backups 上限 · oneoff 件数容量）"),
     ("_mut_segments.py", "真机自检**段注册表**的顺序守卫（`TAIL-215` 批 1 · 离线 · 秒级）"),
     ("_mut_shellapi.py", "壳的**语义口径**（`TAIL-219` 批 1：认结构 / 找不到必抛 · 离线 · 秒级）"),
