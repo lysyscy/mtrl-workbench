@@ -24,6 +24,8 @@ from app.mod05_flow import imp_spec
 from app.mod05_flow import repository as repo
 from app.mod05_flow import service as svc
 from app.mod05_flow.domain import default_flow_period
+# ⭐ `TAIL-283`：导出合计的基数判「生效 / 已撤销」用**域里的常量**（⛔ 别在本文件写 'effective' 字面）
+from app.mod05_flow.models import FLOW_EFFECTIVE
 # ⛔ 历史付款流水导入的**沿革**（别再往回搬）：`import_router.py`（三条 PRG）＋ `import_view.py`（服务端渲染页）
 #    2026-09-21 随「四个暂留件收口」**已删除**；能力搬成 JSON API `import_api.py` ＋ 壳 `V.m05imp`；
 #    ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · **用户裁定 `B`**）：`import_api.py` **连件删除**、
@@ -110,17 +112,19 @@ def export_flows(payload: FlowExportIn, load: PageData = Depends(get_flows_data)
     """导出**付款流水**（`TAIL-04` · `REQ-R1` · §7.1）⇒ `{ok, filename, rows, content_b64}`。
 
     ⭐ **行** = 传入的那些 id（= **屏幕上看到的**，**连它的顺序一起**）；
-    **列** = 页面表头 `FL_THEAD` 去掉「操作」⇒ 9 列；**取值** = **页面显示的那个值**。
+    **列** = 页面表头 `FL_THEAD` 去掉「操作」⇒ **14 列**（`TAIL-283` 起）；**取值** = **页面显示的那个值**。
 
     ⚠️ **本端点不用 join 通知书 / 项目** —— `/api/m05/flows` 的 `rows` 里**已经有**：
-      · `doc_no`（单据编码，= 通知书的 `bill_no`）
+      · `doc_no`（单据编码，= 通知书的 `bill_no`）· `flow_no`（**真业务流水号**）
+      · 通知书五项（`doc_date` / `bill_name` / `payee` / `amount_approved` / `category_label`，
+        由 `service._flow_dict` 用**一次预读**的通知书字典装配；失联行五项为空 ⇒ 流水照出）
       · `project_display`（付款项目 = **展示名**，由 `service._flow_dict` 走
         `core.projects.project_label` 算好 —— ⛔ 不是仓库名那个"键"、更不是 `project_id`）
       · `status_label`（**已给中文**「生效 / 已撤销」）
       ⇒ ⭐ **取数端本来就够**，本端点只做"按 id 挑 ＋ 换列名 ＋ 拼状态文案"。
 
     ⚠️ **状态那格**：页面把「撤销原因」**并进状态格里**（`已撤销 ＋ 原因`）⇒
-       导出也**并进去**（保持 9 列与页面一致）；⛔ 另开一列会让表与屏幕**对不上号**。
+       导出也**并进去**（与页面一致）；⛔ 另开一列会让表与屏幕**对不上号**。
     """
     import base64
     from datetime import date
@@ -128,7 +132,11 @@ def export_flows(payload: FlowExportIn, load: PageData = Depends(get_flows_data)
     from app import export_registry as EXP
     X = EXP.get("fl")
 
-    data = load()                       # ⭐ 空参 = **全量**（本端点的"筛选"靠传入的 id）
+    # ⭐⭐ `TAIL-283`：这里**必须显式传空** ⇒ **全量**。`load()` 不传 = 后端默认**当月** ——
+    #    而页面上翻到历史月份、或把「付款年月」摆到「年 / 全部」看到的那些行，
+    #    id 传进来了却**挑不到行** ⇒ 屏幕上看得见、导出来是空的（原注释写"空参=全量"，
+    #    与运行代码**正相反**，本次连同注释一起改对）。
+    data = load(year_month="")
     all_rows = data.get("rows") or []
     by_id = {int(r["id"]): r for r in all_rows if r.get("id") is not None}
     ids = [int(i) for i in (payload.ids or [])]
@@ -141,9 +149,15 @@ def export_flows(payload: FlowExportIn, load: PageData = Depends(get_flows_data)
         return f"{txt}（{reason}）" if reason else txt
 
     out = [{
-        "id": r.get("id"),
+        "flow_no": r.get("flow_no") or "",
         "doc_no": r.get("doc_no") or "",
+        "doc_date": r.get("doc_date") or "",
+        "bill_name": r.get("bill_name") or "",
         "project_display": r.get("project_display") or "",
+        "payee": r.get("payee") or "",
+        "category_label": r.get("category_label") or "",
+        # ⚠️ `None`（通知书失联）= 留空；`"0.00"` = 审批额**真的**是 0 ⇒ 两种不许混。
+        "amount_approved": r.get("amount_approved"),
         "pay_date": r.get("pay_date") or "",
         "amount": r.get("amount"),
         "pay_method": r.get("pay_method") or "",
@@ -151,7 +165,14 @@ def export_flows(payload: FlowExportIn, load: PageData = Depends(get_flows_data)
         "created_by": r.get("created_by") or "",
         "status_text": _status(r),
     } for r in picked]
-    blob = X.build_xlsx(out)
+    # ⭐ 合计基数 = 已选行里**生效**的那些（与屏幕同口径：**已撤销不进合计**）。
+    # ⚠️ 边界：选中行**全是已撤销**时屏幕仍画「合计（生效 0 条）¥0.00」⇒ 导出也要有那一行；
+    #    共用内核在 `total_rows=[]` 时**不写**合计行 ⇒ 用它的显式参数 `total_always=True`
+    #    （⛔ 原先在这里塞一条合成行 `{"amount":"0.00"}` 逼内核写 —— 语义只活在本端点、
+    #     内核看不见，且将来 `TOTAL_KEYS` 加列会静默补 0；2026-10-11 双轴 review 改掉）。
+    #    `rows` 为空（一个 id 都没挑到）时内核仍不写合计行 ⇒ 不会凭空补一排 0。
+    blob = X.build_xlsx(out, total_rows=[r for r in picked if r.get("status") == FLOW_EFFECTIVE],
+                        total_always=True)
     name = f"付款流水_{date.today().strftime('%Y%m%d')}.xlsx"
     return {"ok": True, "filename": name, "rows": len(out),
             "content_b64": base64.b64encode(blob).decode("ascii")}

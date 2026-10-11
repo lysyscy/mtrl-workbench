@@ -309,15 +309,29 @@ const ledRows=(sc,proj)=>{ const side=m05Side(sc); if(!side) return [];
 const ntOf=f=>NO.find(x=>x.id===f.nid)||null;
 const flMonthOf=f=>String(f.date||'').slice(0,7);
 const flProjOf=f=>{ const n=ntOf(f); return n?ntProjKey(n):''; };   /* 项目键 = 仓库名（§2.7.4） */
-const flDocNo=f=>{ const n=ntOf(f); return n?(n.code||''):''; };
+/* ⭐ `TAIL-283`：单据编码**后端随流水一起给**（`_flow_dict` 的 `doc_no`）⇒ ⛔ 不再经 `NO` 缓存取
+   —— 那有两个坏处：没载入通知书列表时恒空；通知书失联（`notice_id` 为空 / 指向已删除的单）时
+   也取不到 ⇒ 一条**明明有编码**的流水看起来像少了东西（而流水本身照旧要能查）。 */
+const flDocNo=f=>f.doc||'';
 const flProjs=()=>pjSort(uniqBy(FLs,f=>flProjOf(f)).filter(Boolean));
 /* 月份条件已上移到 `tmIn(flf.ym, f.date)`（支持 月 / 跨月 / 年 / 全部）—— 这里只管**非时间**的三个条件 */
 /* 「付款项目」= **多选**（全站约定：只有 MOD-09 是单选）· 键 = 仓库名、**按归属**归集（§2.7.4） */
 const flHit=f=>(!flf.projs.length||flf.projs.indexOf(flProjOf(f))>=0)
   &&(flf.method==='全部'||f.method===flf.method)
   &&(flf.state==='全部'||(flf.state==='已撤销'?f.voided:!f.voided));
+/* ⭐ `TAIL-283`：关键词 = **流水号 / 单据编码**（与搜索框 placeholder 同口径）——
+   ⛔ 不再拿**数据库行号** `f.id` 顶流水号（那是"说错话"：拿它搜会命中一个屏幕上看不见的数）。 */
 const flVisible=()=>FLs.filter(f=>tmIn(flf.ym,f.date)&&flHit(f)
-  &&(!flf.q||(String(f.id||'')+' '+flDocNo(f)).toLowerCase().includes(flf.q.toLowerCase())));
+  &&(!flf.q||(String(f.flowNo||'')+' '+flDocNo(f)).toLowerCase().includes(flf.q.toLowerCase())));
+/* ⭐ `TAIL-283`：**屏幕行序**只在 DOM 里 —— 表头点击排序（`applySorts`）是"HTML 字符串 → HTML 字符串"
+   的纯函数，`flVisible()` 出来的仍是**数组原序** ⇒ 导出要跟屏幕一致，只能按渲染后的数据行取序
+   （数据行挂 `data-flow-id`；合计行 / 空态行没有该属性，天然不入）。
+   ⚠️ 虚拟滚动（≥400 行）时表体只留一个窗口 ⇒ 用「DOM 数据行数 = 当前可见行数」当护栏，
+   不等就交回数组顺序：**宁可行序不同，也⛔ 不悄悄少导行**。 */
+const flDomIds=()=>{ const rows=flVisible();
+  const dom=Array.from(document.querySelectorAll('#view table[data-sort-key="m05:flows"] tbody tr[data-flow-id]'));
+  return dom.length===rows.length ? dom.map(tr=>Number(tr.dataset.flowId))
+                                  : rows.map(r=>Number(r.id)); };
 /* ⭐ 付款流水的「付款项目」筛选 = **共用面板 `projPanel`**（2026-09-13 用户口径：不得自造控件）。
    候选 = **流水里出现过的项目**（`flProjs()`，键 = 仓库名，归档排最后由 `pjSort` 处理）；
    ⚠️ 原先这里是自造的**原生 `<select>` 单选** —— 既破坏「统一多选面板」这条复用点，

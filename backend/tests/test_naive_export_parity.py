@@ -58,8 +58,14 @@ def test_fl_表头加粗冻结_金额写数字_末行合计():
             i = [k for _, k in FL.COLUMNS].index(key)
             assert isinstance(cells[1][i], float), f"{key} 不是数字：{cells[1][i]!r}"
     assert cells[-1][0] == "合计"                                # 合计行在最后、首格写明
-    assert isinstance(cells[-1][[k for _, k in FL.COLUMNS].index(
-        next(iter(FL.MONEY_KEYS)))], float)
+    # ⭐ 2026-10-11（`TAIL-283`）：**「写数字」的列 ≠ 「要合计」的列** —— 本表新增的「审批金额」
+    #   是"同一张通知书在每笔上重复出现的对照数" ⇒ 写数字、但**不参与合计**（加起来是假数）。
+    #   原断言从 `MONEY_KEYS` 里随便取一个当合计列 ⇒ 两个集合拆开后会**假红**（它其实测的是"哪个集合"）。
+    assert FL.TOTAL_KEYS == frozenset({"amount"}), "合计口径变了（本表只该合付款金额）"
+    for key in FL.TOTAL_KEYS:
+        assert isinstance(cells[-1][[k for _, k in FL.COLUMNS].index(key)], float)
+    assert cells[-1][[k for _, k in FL.COLUMNS].index("amount_approved")] in ("", None), \
+        "审批金额被合计进去了（它是每笔重复的对照数）"
 
 
 @acc()
@@ -95,7 +101,7 @@ def test_pj_ord列写int():
 def test_三件与内核同输出_证明只有一个主人():
     """⭐ 这条是 `TAIL-62` 的**目的**：三件的输出必须**等于**内核直接产出
     （⇒ 谁改内核都改三处；谁在三件里偷偷另写一份，这里就会红）。"""
-    for mod, extra in ((FL, {"money_keys": FL.MONEY_KEYS, "total_keys": FL.MONEY_KEYS}),
+    for mod, extra in ((FL, {"money_keys": FL.MONEY_KEYS, "total_keys": FL.TOTAL_KEYS}),
                        (JC, {"money_keys": JC.MONEY_KEYS, "total_keys": JC.MONEY_KEYS,
                              "seq_key": JC.SEQ_KEY, "width_max": 28}),
                        (PJ, {"int_keys": PJ.NUMBER_KEYS})):

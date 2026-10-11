@@ -46,7 +46,11 @@ MUTS: list[tuple[str, Path, bytes, bytes, str]] = [
     (
         "M1 不可付行不再算「bad」（「确认付款」永远可点）",
         SHELL,
-        _b("const bad=rows.filter(n=>!(n.astat==='已批'&&payEff(n)>0));"),
+        # ⚠️ 2026-10-11：锚点随 `TAIL-91`（判据收进唯一出口 `ntPayBlock`）更新 ——
+        #    旧锚 `const bad=rows.filter(n=>!(n.astat==='已批'&&payEff(n)>0));` 早已不在壳里
+        #    ⇒ 本变异**静默失效**（"命中 0 次 ⇒ 未验证"），那条断言有没有区分力就没人知道了。
+        #    **变异意图一字未改**：把「哪些行不可付」算空 ⇒ 「确认付款」永远可点。
+        _b("const bad=rows.filter(n=>ntPayBlock(n));"),
         _b("const bad=[];"),
         "test_壳里存在不可付行则确认付款禁用并给原因与解决路径",
     ),

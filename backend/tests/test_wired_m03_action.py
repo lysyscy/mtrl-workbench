@@ -45,14 +45,29 @@ def _draft_row() -> str:
     return _slice("const ntDraftRow=()=>{", "</tr>`; };", what="草稿行出口")
 
 
+# ⚠️ 2026-10-11（`TAIL-281` 改形后同步）：`ntRevoke` / `ntTrace` **都变成了 `async`**
+#    （它们各自要先 `await ntLoadFlows(...)` / `reloadM11()` 才能取到真数据）
+#    ⇒ 起点锚从 `xxx:t=>{` 改成 `xxx:async t=>{`。**判词一字未改**，只是指回现在的真身。
+#    （这两条红是 `TAIL-281` 留下的既有测试腐化：本轮用 HEAD 版壳复跑证实与 TAIL-282/283 无关。）
+
+
 def _revoke() -> str:
     """「撤销付款」处理器 `ntRevoke`。"""
-    return _slice("ntRevoke:t=>{", "ntTrace:t=>{", what="撤销付款处理器")
+    return _slice("ntRevoke:async t=>{", "ntTrace:async t=>{", what="撤销付款处理器")
 
 
 def _trace() -> str:
-    """「查看关联」处理器 `ntTrace`。"""
-    return _slice("ntTrace:t=>{", "/* —— MOD-05 —— */", what="查看关联处理器")
+    """「查看关联」处理器 `ntTrace`（⭐ `TAIL-281` 起它由**集采列的「已关联」标签**打开）。"""
+    return _slice("ntTrace:async t=>{", "/* —— MOD-05 —— */", what="查看关联处理器")
+
+
+def _flow_table() -> str:
+    """两个弹窗**共用**的流水子表渲染 `ntFlowTable`（⭐ `TAIL-281` 把两处收成一份）。
+
+    ⚠️ 为什么要单独取它：`TAIL-281` 之后「流水子表」不再内联在 `ntTrace` 里
+    ⇒ 只切 `ntTrace` 那段会**看不到表**，「含已撤销 / 带原因 / 只读」这几条会变成假绿。
+    """
+    return _slice("function ntFlowTable(flows){", "\n}", what="流水子表渲染")
 
 
 def _nt_row_save() -> str:
@@ -136,8 +151,12 @@ def test_壳里操作列_i8行无编辑删除_手动行才有():
     reg = _act_cell()
     assert "if(n.manual) L.push(" in reg, "编辑/删除没有绑在「手动行」上（i8 抓取行会拿到写入口）"
     assert 'data-act="ntEdit"' in reg and 'data-act="ntDel"' in reg, "手动行的编辑/删除按钮没了"
-    # 顺序固定：手动行徽标 → 编辑/删除 → 撤销付款 → 查看关联（i8 行就是后两个）
-    assert reg.index("if(n.manual)") < reg.index("if(ntHasFlow(n))") < reg.index("if(ntHasLink(n))"), \
+    # 顺序固定：手动行徽标 → 编辑/删除 → 撤销付款 → 查看流水（i8 行就是后两个）
+    # ⚠️ 2026-10-11 同步（`TAIL-281` 改形，判词不变）：最后那个入口由「查看关联」(`ntHasLink`)
+    #   换成**「查看流水」(`n.hasAnyFlow` = 有任意流水，含已撤销才出)**；
+    #   「查看关联 · 完整合同」搬去**集采实际供应商列**的「已关联」标签上（`proj.js::jcLinkCell`）。
+    #   ⚠️ 撤销付款的条件仍是 `ntHasFlow`（**有生效**流水）—— 与"有任意流水"**不是同一条**。
+    assert reg.index("if(n.manual)") < reg.index("if(ntHasFlow(n))") < reg.index("if(n.hasAnyFlow)"), \
         "操作列的按钮顺序变了"
 
 
@@ -180,36 +199,58 @@ def test_壳里查看关联是纯只读且流水含已撤销():
     """查看关联 = **纯只读**：不写任何数据、不改任何状态；两个弹窗按钮一律「关闭」。
 
     流水子表要**生效 ＋ 已撤销都列**（撤销的显示**原因**）——「去向」的完整视图。
+
+    ⚠️ 2026-10-11 同步（`TAIL-281` 改形，**判词一字未改**，只把断言指回现在的真身）：
+      · 操作列那个入口现在叫**「查看流水」**（`ntFlows`，有任意流水才出）；**「查看关联」**
+        （`ntTrace`）搬去**集采实际供应商列**的「已关联」标签上（`proj.js::jcLinkCell`）。
+      · 流水子表**两个弹窗共用一份渲染** `ntFlowTable` ⇒ 只读与"含已撤销"那几条必须连它一起看
+        （⛔ 只看 `ntTrace` 那一小段会变成假绿：表已经不在那儿了）。
+      · 原两条已随实现下线：弹窗里那句范围说明、「另有 N 条已撤销，不计入」——
+        后者描述的是旧的两档写法，现在是一张表 ＋ 状态列（已撤销那行连**原因**一起显示）。
     """
     reg = _act_cell()
-    assert 'data-act="ntTrace"' in reg and "查看关联" in reg, "查看关联入口没了"
-    tr = _trace()
+    assert 'data-act="ntFlows"' in reg and "查看流水" in reg, "操作列的「查看流水」入口没了"
+    assert 'data-act="ntTrace"' in SHELL and 'title="查看关联"' in SHELL, \
+        "集采列「已关联」标签上的「查看关联」入口没了"
     import re
-    assert "关联集采合同与付款流水" in tr, "要说明查看范围"
+    tr, tb = _trace(), _flow_table()
+    assert "查看关联 · " in tr and "<b>集采合同</b>" in tr and "<b>付款流水</b>" in tr, \
+        "查看关联弹窗没把「集采合同 / 付款流水」两块都列出来"
     assert set(re.findall(r'data-act="([^"]+)"', tr)) == {"closeModal"}, "只读窗口只允许关闭"
-    assert "API." not in tr, "查看关联不得发起写请求"
+    assert set(re.findall(r'data-act="([^"]+)"', tb)) == set(), "流水子表里不该有任何动作按钮"
+    assert "API." not in tr and "API." not in tb, "查看关联 / 查看流水不得发起写请求"
     assert 'data-act="closeModal">关闭</button>' in tr, "弹窗出现了「关闭」以外的按钮（就不只读了）"
-    assert "const live=flows.filter(f=>!f.voided), voided=flows.filter(f=>f.voided);" in tr, \
-        "流水没分出「生效 / 已撤销」两档"
-    assert "enumTag('flowState','已撤销')" in tr and "esc(f.reason)" in tr, \
+    assert "enumTag('flowState','已撤销')" in tb and "esc(f.reason)" in tb, \
         "已撤销的流水没有连**原因**一起显示"
-    assert "另有 ${voided.length} 条已撤销，不计入" in tr, \
-        "「已付金额（生效流水合计）」没说明已撤销的不计入（两格是两件事）"
     # ⭐ 2026-09-29（`TAIL-64` A′）：那张「流水子表」的**表外壳**也走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt cond">`）。
     #   ⚠️ 它**没有排序身份**（没有 `key` ⇒ 不参与排序）—— 与本仓多数表不同，是本批里唯一的「**纯展示表**」。
-    #   自证 = `tools/mut/_mut_tbl.py` 的 M35 去掉这处委托 ⇒ 必须红。
-    assert "TBL({cls:'cond',head:'<th>流水号</th>" in tr, \
-        "「查看关联」的流水子表没走统一出口 `TBL`（`TAIL-64` A′）"
+    #   ⚠️ 2026-10-11（双轴 review 纠正）：这条断言**在 HEAD 上早已过期** —— 实现那边首列一直写着
+    #      「流水记录 ID」（它本来就是数据库行号），且 `TBL({cls:'cond',` 与 `head:` 之间**有换行** ⇒
+    #      旧锚点 `TBL({cls:'cond',head:'<th>流水号</th>` **恒不命中**，此前那条红被本函数更前面
+    #      「查看关联入口没了」挡着、没暴露出来。⇒ 本轮只把锚点指回现在的真身；
+    #      **「流水记录 ID」这个名字不是本轮改的**（`TAIL-283` 只把"流水号"这个词收回给真业务号
+    #      `flow_no`，用在流水表与撤销弹窗那些地方）。
+    assert "TBL({cls:'cond'," in tb and "head:'<th>流水记录 ID</th>" in tb, \
+        "「查看关联」的流水子表没走统一出口 `TBL`，或首列不再叫「流水记录 ID」"
 
 
 @acc("ACC-PAY-ACTION-001", "001-05")
 def test_壳里查看关联不臆造集采取值():
-    """没有集采实际供应商 / 没关联合同 ⇒ **给说明，不给假值**（⛔ 不臆造）。"""
+    """没有集采合同关联 ⇒ **给说明，不给假值**（⛔ 不臆造）；没有流水 ⇒ 同样只说实话。
+
+    ⚠️ 2026-10-11 同步（`TAIL-281` 改形，**判词一字未改**）：那张合同块已按票面**补齐 11 项**
+    （合同日期 · 材料名 · 供应商 · 项目 · 合同金额 · 结算金额 · 付款金额 · 欠款金额 · 付款方式 ·
+    存档情况 · 备注），旧的「集采实际供应商 / 集采合同关联」两格随旧分档下线。
+    ⇒ 断言改成钉**现在的分岔结构**：有合同才渲染那 11 项（且都走既有取值出口），
+    没合同只给一句说明 —— 两处都⛔ 不编数。
+    """
     tr = _trace()
-    assert "['集采实际供应商',n.sup?" in tr, "集采实际供应商那格没按「有没有值」分岔"
-    assert "['集采合同关联',jcRow]" in tr, "集采合同关联那格没了"
-    assert "未关联集采合同（仅「集采」分类的行可关联）" in tr, "没关联时的说明文案丢了"
-    assert "还没有付款流水" in tr, "没有流水的空态提示没了"
+    # 分岔：`j?...:tip` —— 「有合同」那一支才渲染合同块
+    assert "const contract=j?kvBlock([" in tr, "合同块没有按「有没有关联」分岔（无关联时可能编出假值）"
+    assert "['项目',esc(pjLabel(j.proj))]" in tr and "['欠款金额',M(jcDebt(j))]" in tr, \
+        "补全后的合同项没走既有取值出口（项目展示名 / 欠款金额）"
+    assert "未关联集采合同。" in tr, "没关联时的说明文案丢了"
+    assert "暂无付款流水。" in _flow_table(), "没有流水的空态提示没了"
 
 
 # ---------------------------------------------------------------- 草稿行 / 统计格

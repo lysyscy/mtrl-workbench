@@ -34,6 +34,16 @@
   （`sumRows=list.filter(ntLive)`），切到「分类 = 剔除」时该视图全是剔除行 ⇒ **页面没有合计行**
   （不给一排 0，免得看着像坏了）⇒ 导出也**必须没有**（⛔ 凭空补一个 = 假值）。
 
+⭐ `total_always` = **基数为空也要写合计行**（默认 `False` ⇒ 旧行为零影响）：
+- 它是**调用方对"屏幕上有没有这一行"的显式声明**，不是"补一排 0"——
+  `MOD-05` 付款流水就是这个口径：选中行**全是已撤销**时，页面照样写着
+  「合计（生效 0 条）¥0.00」⇒ 导出**必须有**那一行（否则表与屏幕对不上）。
+- ⚠️ 2026-10-11（`TAIL-283` 双轴 review 的判断项）：此前调用方是**塞一条合成行**
+  `[{"amount": "0.00"}]` 来逼内核写这一行 —— 语义只活在调用方、内核看不见，
+  且合成行只带 `amount` 一个键（将来 `TOTAL_KEYS` 加列会**静默补 0**）⇒ 改成这个显式参数。
+- ⚠️ 它**不能**让"一行数据都没有"也写合计行：外层 `total_keys and (rows or ())` 仍然生效
+  （那条守的是 `MOD-03` 的"空视图没有合计行"）。
+
 ## 与另外三件的关系（⚠️ 先说清，免得下一个人困惑）
 
 `jc_export.py` / `fl_export.py` / `pj_export.py` **各自带一份同源实现**（它们是本件的**前身**，
@@ -74,6 +84,7 @@ def build_xlsx(
     money_keys: frozenset[str] | set[str] = frozenset(),
     total_keys: frozenset[str] | set[str] = frozenset(),
     total_rows: list[dict] | None = None,
+    total_always: bool = False,
     seq_key: str | None = None,
     int_keys: frozenset[str] | set[str] = frozenset(),
     width_max: int = 32,
@@ -120,10 +131,11 @@ def build_xlsx(
     for n, r in enumerate(rows or (), start=1):
         ws.append([_cell(r, key, n) for _, key in columns])
 
-    # 合计行 —— `total_rows is None` ⇒ 全部行；给空序列 ⇒ **不写**（与页面同口径，见模块头）
+    # 合计行 —— `total_rows is None` ⇒ 全部行；给空序列 ⇒ **不写**（与页面同口径，见模块头）；
+    #   `total_always=True` ⇒ 基数为空也写（`MOD-05` 全已撤销时屏幕上就是零合计那一行）。
     if total_keys and (rows or ()) :
         base = rows if total_rows is None else total_rows
-        if base:
+        if base or total_always:
             total = ["" for _ in columns]
             total[0] = TOTAL_LEAD
             for i, (_, key) in enumerate(columns):

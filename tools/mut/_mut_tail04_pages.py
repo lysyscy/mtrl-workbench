@@ -60,8 +60,10 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "pl", '    ("处理", "handle_text"),\n', "", T_COLS),
     # ---- `exp` 真分发
     ("某页被接到**别的**端点（页面上看不出来）",
-     "actions", "'付款流水':        { rows: () => flVisible(), url: '/api/m05/flows/export' }",
-     "'付款流水':        { rows: () => flVisible(), url: '/api/m03/notices/export' }", T_DISPATCH),
+     # ⚠️ 2026-10-11（`TAIL-283`）：这条路由多了 `ids`（屏幕行序）⇒ 锚点随实现同批更新；
+     #    **变异意图一字未改**：把它指到**别的**端点（页面上看不出来）。
+     "actions", "'付款流水':        { rows: () => flVisible(), ids: () => flDomIds(), url: '/api/m05/flows/export' }",
+     "'付款流水':        { rows: () => flVisible(), ids: () => flDomIds(), url: '/api/m03/notices/export' }", T_DISPATCH),
     ("把「库存单据明细总表」也接进分发表（毁掉「朴素/透视两份并存」）",
      "actions", "  '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },",
      "  '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },\n"
@@ -82,7 +84,9 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
     ("撤单有牵涉时不再按「已付金额 > 0」认（判据换成永不成立）",
      "live", "(self.amount_paid > 0 or self.has_link)", "(False)", T_LIVE),
     ("一行有效行都没有也硬写合计行（凭空一排 0）",
-     "naive", "        if base:", "        if True:", T_NT_EMPTY),
+     # ⚠️ 2026-10-11：内核那句判定多了 `total_always`（`TAIL-283` 的显式语义）⇒ 锚点跟着改；
+     #    **变异意图一字未改**（无视"基数为空就不写"）。
+     "naive", "        if base or total_always:", "        if True:", T_NT_EMPTY),
     # ---- 合计行口径（MOD-04：只合两列）
     ("付款计划的合计把「已付款金额」也并进去（页面不合计它）",
      "pl", 'TOTAL_KEYS: frozenset[str] = frozenset({"flow_amount", "planned_amount"})',
@@ -163,11 +167,21 @@ def main() -> int:
     print(f"\n命中 {hit}/{len(MUTATIONS) - miss} · SKIP {miss} · "
           f"MD5 {'逐字节复原 ✅' if ok_md5 else '⛔ 不一致'}")
 
-    print("重跑全套 pytest（复原态）…")
-    full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
-                          cwd=ROOT / "backend", capture_output=True, text=True)
-    print("  全套 pytest 退出码 =", full.returncode)
-    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full.returncode == 0) else 1
+    # ⚠️ 这一趟**不是重复检查**（2026-10-11 `/retro` 查证）：各条变异只在**隔离出口**上跑目标件
+    #    （`ACC_RESULTS_PATH` 指临时档）⇒ 它同时也是**权威四态**（`artifacts/acc_results.json`）
+    #    的写回。⛔ 别当"和按影响入口重叠"删掉。
+    #    ⭐ 新增 `--no-full-suite`：本回合**已经另外刷过权威**（例如另跑过一支带全套的脚本）时，
+    #    用它跳过这一趟；跳过即"本轮不刷新权威"，⛔ 别在票面宣称刷新过。
+    if "--no-full-suite" in sys.argv:
+        print("跳过全套 pytest（--no-full-suite）：本轮不刷新权威四态")
+        full_rc = 0
+    else:
+        print("重跑全套 pytest（复原态）…")
+        full = subprocess.run([str(PY), "-m", "pytest", "-q", "tests/"],
+                              cwd=ROOT / "backend", capture_output=True, text=True)
+        print("  全套 pytest 退出码 =", full.returncode)
+        full_rc = full.returncode
+    return 0 if (ok_md5 and miss == 0 and hit == len(MUTATIONS) and full_rc == 0) else 1
 
 
 if __name__ == "__main__":

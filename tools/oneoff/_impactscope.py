@@ -71,6 +71,12 @@ def snapshot_summary(path: Path, root: Path = ROOT) -> dict:
             'changed': sorted(since_snapshot(path, root))}
 
 
+def latest_smoke_log(root: Path = ROOT) -> Path | None:
+    """最近一份真机自检证据 —— 复用那一路要能指出"复用的是哪一份"（日志名带时间戳，按名排序即按时间）。"""
+    logs = sorted((root/'.codebuddy/work/00-scratch').glob('tmp-*-shell-smoke.log'))
+    return logs[-1] if logs else None
+
+
 def smoke_evidence(result, root: Path = ROOT) -> Path:
     """保留完整真机输出与壳/环境摘要；现场数据是否变化由本轮实际证据确认。"""
     import os
@@ -328,11 +334,13 @@ def run_selected(changes: dict, commands: list, py: str, *, explain=False, force
         if p.returncode or not p.stdout.strip(): bad.append(label)
         return p.returncode or int(not p.stdout.strip())
     def cached(label, argv, rel, args, cwd=ROOT, env=None):
+        """返回**是否真跑了**（复用 ⇒ `False`）—— 真机自检那一路要凭它决定打印哪条证据指针。"""
         if receipt is not None and not receipt.required(rel, args):
             print('复用', label, '代码、输入、环境签名及该项通过结果未变', flush=True)
-            return
+            return False
         rc = execute(label, argv, cwd, env)
         if receipt is not None: receipt.record(rel, args, rc)
+        return True
     for rel, args in commands:
         if rel in checks:
             if rel == 'tools/audit/doc_audit.py' and not force_full: args = []
@@ -358,7 +366,14 @@ def run_selected(changes: dict, commands: list, py: str, *, explain=False, force
         if bad:
             print('暂缓完整壳自检：相关检查尚未通过，先修复并局部复验', bad)
         else:
-            execute('真机壳自检', [py, '-X', 'utf8', str(ROOT/'tools/probe/_shell_smoke.py')])
+            # ⭐ 2026-10-11（`/retro` 候选 1）：**走回执复用** —— 壳字节与环境摘要未变时，上轮 rc=0 的
+            #    真机证据仍然算数（证明输入见 `_gatescope.input_signature` 里那条分支）。
+            #    实测本仓同一壳字节曾连跑三次（02:28 / 02:46 / 03:23）⇒ 白跑 ~3 分钟。
+            if not cached('真机壳自检', [py, '-X', 'utf8', str(ROOT/'tools/probe/_shell_smoke.py')],
+                          'tools/probe/_shell_smoke.py', []):
+                prior = latest_smoke_log(ROOT)
+                if prior is not None:
+                    print('真机证据：'+str(prior)+'；rc=0。通过且输入、环境、现场数据未变时复用本次结果，变化状态另验。')
         if not bad: execute('壳基线盖章', [py, '-X', 'utf8', str(ROOT/'tools/audit/shell_verify.py'), '--snapshot'])
     print('总墙钟 %.2fs'%(time.perf_counter()-started), 'BAD:', bad)
     if receipt is not None: receipt.save(int(bool(bad)))

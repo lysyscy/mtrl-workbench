@@ -45,8 +45,8 @@
 **单上下文**（single-context）：术语主人 = `delivery/材料科业务全流程说明书.md` / `delivery/PRD/`（＋ `D29` 用词统一表）；决定 = `.codebuddy/work/40-decisions/`。
 ⛔ **不单建 `GLOSSARY.md`**（那会长出第二套口径；真要建由 `/domain-modeling` 按需懒建）。见 `ops/agents/domain.md`。
 
-## 提交前（唯一入口）
+## 提交前
 
-读取 ops/agents/issue-tracker.md §四，按实际影响核验；提交动作不扩大范围。运行命令见 .codebuddy/memory/IDE-细节.md §十一。已有未变化的有效结果可复用，相关未验输入须补验。
+按指针表「日常改动怎么做 / 何时用 skills / 核验范围 / 票怎么开收」那一行读取 `ops/agents/issue-tracker.md` §四，**按实际影响核验**（提交动作不扩大范围）；已有未变化的有效结果可复用，相关未验输入须补验。运行命令见 .codebuddy/memory/IDE-细节.md §十一。
 
-⛔ 提交须用户授权；凭据不提交。现行业务资料位于 `delivery/`；本轮只迁移资料位置与更新读取指针，业务含义不改。
+⛔ 提交须用户授权；凭据不提交。现行业务资料位于 `delivery/`。

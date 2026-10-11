@@ -122,6 +122,19 @@ def input_signature(rel: str, args: list[str], files: dict, context: str) -> str
         selected = {n: h for n, h in files.items() if n.startswith('repo/tools/') or
                     n == 'repo/artifacts/变异覆盖台账.md'}
         selected['namespace'] = digest('\n'.join(sorted(files)).encode())
+    elif rel == 'tools/probe/_shell_smoke.py':
+        # ⭐ 2026-10-11（`/retro` 候选 1 · 省不必要的检查）：真机自检的**证明输入 = 壳字节 ＋ 环境**
+        #    （`context` 已折进末尾那道 digest）—— 范围与 `_impactscope.smoke_evidence()` 写在证据头里的
+        #    那两个 sha256 **同一份**（`backend/app/web/**` ＋ 全环境）⇒ ⛔ 不另造指纹。
+        #    ⚠️ 此前它落到下面那句「未证输入 ⇒ 返回 None ⇒ 必跑」：实测**同一壳字节连跑三次**
+        #    （02:28 / 02:46 / 03:23，`shell_sha256` 与 `environment_sha256` 逐字相同）⇒ 白跑 ~3 分钟
+        #    ＋ 三份重复证据。
+        #    ⚠️ **盖章**（`tools/audit/shell_verify.py --snapshot`）**不走这条**：那是"本轮壳就是这个样"
+        #    的记录（0.1 s），留着比省掉值。
+        #    ⚠️ **探针自己也算了进去**（`tools/probe/**` ＝ `_shell_smoke` ＋ 段注册表 `_shell_segments`
+        #    ＋ 各段）：⛔ 漏掉它就会把"**没跑过的探针版本**"记成绿 —— 加一段、改判词的下一轮直接复用旧结果。
+        selected = {n: h for n, h in files.items()
+                    if n.startswith(('repo/backend/app/web/', 'repo/tools/probe/'))}
     elif rel == 'pytest':
         selected = {n: h for n, h in files.items() if not n.startswith('repo/artifacts/')}
     else:
@@ -367,7 +380,25 @@ def selftest() -> None:
     _impactscope.selftest()
     import _pytestscope
     _pytestscope.input_selftest()
-    print('自测 相关核验回执、输入变化、失败、兜底、双向选集与权威档隔离全部通过')
+    # ⭐ 2026-10-11（`/retro` 候选 1）：**真机自检的复用边界** —— 改壳必重跑，改别处（含改测试、
+    #    改工具、改文档）可复用上轮 rc=0；环境变了也必重跑。三向各断言一次。
+    #    ⚠️ 夹具里的件名用**真实存在**的（`test_wiring_guards` 会拦"引用了不存在的测试件"）。
+    smoke_files = {'repo/backend/app/web/shell/base.js': 'h1',
+                   'repo/backend/tests/test_theme.py': 'h2', 'face/f.md': 'h3'}
+    smoke_sig = input_signature('tools/probe/_shell_smoke.py', [], smoke_files, 'ctx')
+    assert smoke_sig is not None, '真机自检没有已证输入 ⇒ 又会变成每轮必跑'
+    assert input_signature('tools/probe/_shell_smoke.py', [],
+                           {**smoke_files, 'repo/backend/tests/test_theme.py': 'CHANGED'}, 'ctx') == smoke_sig, \
+        '与壳无关的改动（测试/工具/文档）不该让真机自检重跑'
+    assert input_signature('tools/probe/_shell_smoke.py', [],
+                           {**smoke_files, 'repo/backend/app/web/shell/base.js': 'CHANGED'}, 'ctx') != smoke_sig, \
+        '壳字节变了必须重跑真机自检'
+    assert input_signature('tools/probe/_shell_smoke.py', [], smoke_files, 'other-env') != smoke_sig, \
+        '环境变了必须重跑真机自检'
+    assert input_signature('tools/probe/_shell_smoke.py', [],
+                           {**smoke_files, 'repo/tools/probe/_shell_segments.py': 'CHANGED'}, 'ctx') != smoke_sig, \
+        '探针或段注册表变了必须重跑（否则会把没跑过的探针版本记成绿）'
+    print('自测 相关核验回执、输入变化、失败、兜底、双向选集、真机自检复用边界与权威档隔离全部通过')
 
 
 def main() -> int:

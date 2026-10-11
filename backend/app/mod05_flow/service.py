@@ -114,6 +114,19 @@ def _flow_dict(f: PaymentFlow, notices: dict[int, object], projects: dict[int, P
         "pay_date": f.pay_date,
         "notice_id": f.notice_id,
         "doc_no": str(getattr(n, "bill_no", "") or ""),
+        # ⭐ `TAIL-283`：这笔流水**来自哪张付款通知书**的五项展示信息 —— 数据源 = 上面那份
+        #    **一次预读**的通知书字典（⛔ 不逐行查库、⛔ 不依赖前端 `NO` 缓存）；
+        #    `n is None`（`notice_id` 为 NULL 或指向已删除的通知书）= **失联** ⇒ 五项如实留空，
+        #    ⛔ 绝不 join 过滤掉这条流水，也⛔ 不拿 0 冒充"没有这个数"。
+        #    ⚠️ 「通知书日期」是**单据日期**（`doc_date`），与下面「付款日期」（`pay_date`）不是一回事。
+        #    ⚠️ 「通知书名称」的取值口径 = 通知书列表同一条（`fields['BillName']`，⛔ 模型没有独立列）。
+        "doc_date": str(getattr(n, "doc_date", "") or "") if n else "",
+        "bill_name": str((getattr(n, "fields", None) or {}).get("BillName") or "") if n else "",
+        "payee": str(getattr(n, "payee", "") or "") if n else "",
+        # ⚠️ 当前审批金额（i8 源事实，随源变化）—— **不是**"付款发生时的历史快照"（那东西没存）。
+        #    失联 ⇒ `None`（前端画「—」、Excel 留空）；真实等于 0 ⇒ `"0.00"`（两件事，别混）。
+        "amount_approved": f"{to_money(n.amount_approved):.2f}" if n else None,
+        "category_label": CATEGORY_LABELS.get(str(getattr(n, "category", "") or ""), "") if n else "",
         "project_id": f.project_id,
         "project_display": project_label(projects.get(f.project_id) if f.project_id else None),
         # ⚠️ `project_key` = **仓库名**（§2.7.4 的归并键）：前端「付款项目」筛选与付款统计

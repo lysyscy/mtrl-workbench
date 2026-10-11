@@ -237,6 +237,14 @@
 
 Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；输出使用UTF-8。`ACC_RESULTS_PATH`不得全局导出，局部结果由选择器隔离。读取整行BAD与退出码；相关失败不能报通过。中断/失败只重验受影响项，临时脚本放00-scratch。
 
+**命令卫生三条（2026-10-11 实测）**：① 每条 shell 命令前置 `$ProgressPreference='SilentlyContinue';` —— 否则每条都吐 1–3 KB 的 `#< CLIXML … 正在准备首次使用模块` 噪声；② 要看中文路径就 `git -c core.quotepath=false …`（否则是 `"\345\274\200…"` 转义）；③ ⛔ 别用 `… | Select-Object -First N` 截断后再看退出码 —— PowerShell 会把 rc 变成 1（假红），要 rc 就整条跑、或截断后单独读 `$LASTEXITCODE`。
+
+**怀疑"这条红是先前就有的"（一行配方）**：`git -C <仓根> archive --format=zip -o .codebuddy/work/00-scratch/head-web.zip HEAD backend/app/web/` ⇒ 解到 `00-scratch/head-web/`；`$env:MTRL_UI_FIXTURE_WEB='<解出来的 web 目录>'` 跑**同一条**用例；跑完 `Remove-Item Env:MTRL_UI_FIXTURE_WEB`。判据：HEAD 版壳下**同样红 ⇒ 不是本轮引入**（2026-10-11 据此认定了 6 条既有腐化）。静态件（读 `SHELL` 的断言）同理先看 `git diff HEAD` 有没有碰到那一行。
+
+**真机自检可复用**：按影响入口在**壳字节与探针都没变**时会打「复用 真机壳自检 …」并指出沿用哪份证据 —— 看到那行直接引用它，⛔ 不必再手动跑一遍（证明输入＝`backend/app/web/**` ＋ `tools/probe/**` ＋ 环境摘要）。
+
+**权威四态**：`acc_report` 读的 `artifacts/acc_results.json` 由**整套 pytest** 写；变异脚本各自跑的是隔离出口 ⇒ 有的脚本末尾会**再跑一趟全套**，那是**权威写回、不是重复检查**（⛔ 别当重叠删掉）；同一回合已另刷过就给它加 `--no-full-suite` 跳过，跳过即"本轮不刷新权威"。
+
 ## 十二、`验收基线.json` 的实测格式（2026-09-29 从 `MEMORY.md` 下沉）
 
 - ⭐ 写法 = `json.dumps(obj, indent=2, ensure_ascii=False)` ⇒ **换行全 CRLF**、**末尾一个 CRLF**；待改的用例在 **`obj["cases"]`** 下。

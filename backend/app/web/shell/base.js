@@ -334,13 +334,36 @@ const paidOf=nid=>{ const n=NO.find(x=>x.id===nid);
 function statOf(n){ if(n.excl) return '—'; return paidOf(n.id)>=n.approve?'已付清':'未付清'; }
 const hasT=(n,label)=>hasTrail(n.trail,label);   /* 留痕读取的唯一出口（形状见上） */
 /* 付款金额（本次应付）：默认 = 审批金额 − 已付金额，随付款 / 撤销实时变化。
-   人工手改 = 【仅本次会话的临时覆盖】，只写在 payOv 上：
+   人工手改 = 【仅本次会话的临时覆盖】，记在下面这张表里（键 = 通知书 id）：
      · 不写 i8 原值 n.pay（源数据永不被改写）
      · 不写库、不影响「统计付款金额」与欠款口径
-     · 刷新页面即失效，自动恢复为派生默认
-   页面刷新后 payOv 不存在 → 回到派生默认，这正是所要的行为。 */
-const payOver=n=>n.payOv!=null;
-const payEff=n=>payOver(n)?N2(n.payOv):N2(n.approve-paidOf(n.id));
+     · 刷新页面即失效（只在内存），自动恢复为派生默认
+   ⭐⭐ `TAIL-282`（2026-10-11）：覆盖**原先挂在行对象的 `payOv` 字段上** ⇒ 而 `reloadNotices()`
+     每次都 `NO=items.map(adaptNotice)` **整体换行对象**（匹配 / 手动保存 / 采用 / 放弃集采供应商
+     四条路都会走它）⇒ 用户先算好的数被**冲回默认值**。⇒ 覆盖改按 `String(n.id)` 存在这里，
+     与"每次都会换掉的行对象"**解耦**。
+   ⚠️ 每条草稿连**创建时的金额事实**（审批额 / 后端已付汇总）一起存：事实一变
+     （真付款 / 撤销 / 审批额或已付额改动 / 列表不再返回该单）⇒ 这条草稿**作废**，回派生默认 ——
+     免得拿一个过期数字去付款。**保留 / 作废的规则只此一处**（`payOvEntry`），
+     ⛔ 别在 `editss` / `jcLinkAct` / `reloadNotices` 各写一遍（三份必然漂）。
+   ⚠️ `0` 是**有效覆盖**（= 本次不付）⇒ 一律用 `undefined` / `!==null` 判，⛔ 不许 `||`、`!!`。 */
+const PAY_OV={};
+const payFacts=n=>({approve:N2(n.approve),paid:N2(paidOf(n.id))});
+function payOvEntry(n){ const id=String(n.id), e=PAY_OV[id];
+  if(e===undefined) return null;
+  const f=payFacts(n);
+  if(e.approve!==f.approve||e.paid!==f.paid){ delete PAY_OV[id]; return null; }
+  return e; }
+function setPayOv(n,v){ const f=payFacts(n); PAY_OV[String(n.id)]={amount:N2(v),...f}; }
+/* 显式作废：**写成功是强事实信号**（真付款 / 撤销已落库）⇒ 不必等重拉回来对账
+   （重拉可能失败 —— 那时过期金额会留在页面上，用户再付款看到的数就是错的）。 */
+function dropPayOv(ids){ (ids||[]).forEach(i=>{ if(i!==''&&i!=null) delete PAY_OV[String(i)]; }); }
+/* 重拉之后的对账：列表不再返回的（已删除 / 被筛掉）不许变幽灵草稿；剩下的按金额事实比对。 */
+function reconcilePayOv(){ const cur=new Set(NO.map(n=>String(n.id)));
+  Object.keys(PAY_OV).forEach(id=>{ if(!cur.has(id)) delete PAY_OV[id]; });
+  NO.forEach(n=>payOvEntry(n)); }
+const payOver=n=>payOvEntry(n)!==null;
+const payEff=n=>{ const e=payOvEntry(n); return e!==null?N2(e.amount):N2(n.approve-paidOf(n.id)); };
 /* ⭐⭐ **主表那 5 个派生金额列一律读后端派生值**（`M5-7` 判定搬家；唯一出口 = `mod11_jc.domain`）。
    ⛔ 原实现在浏览器里按**子表数组**现算 —— 那是**第二份口径**（早晚与后端分叉），而且
       `/api/m11/list` **故意不给子表明细**（`adaptJc` 里那三个数组**恒为空**）⇒ 算出来**恒 0**。
@@ -484,7 +507,8 @@ const trailOf=(list,field)=>(list||[]).filter(t=>t&&t.field===field);
    ── 只处理标了 data-sort 的表。不可排的列：表头为空 / 操作 / 处理 / 含复选框 / 标 data-nosort。
    ── 排序状态的键 = 表自己声明的 **`data-sort-key`**（稳定身份）；未声明时才回退「scope + 出现次序」。
        ⇒ **加一张可排表不会串位**；新表**必须**声明 data-sort-key。
-   ── 合计行（含「合计 / 总计 / 小计」）与跨列提示行钉在最后，不参与排序。
+   ── 合计行（`sumrow` 类 / **首格**写「合计 · 总计 · 小计」的那行）与跨列提示行钉在最后，不参与排序。
+      ⚠️ 判定**只看首格**（⛔ 不扫整行文本 —— 数据里本来就可能有「合计」两个字，见下方 2026-10-11 那条）。
    ── 排序只重排行，不改任何单元格内容。
    ===================================================================== */
 let SORT={};                                            /* { 表键: {i:列索引, d:1|-1|0} } */
@@ -555,7 +579,17 @@ function applySorts(html,scope){
          ⚠️ 必须**锚在行首那个 `<tr>` 标签的 class 上**，不能靠"`<td>` 数 < 表头列数" ——
             `MOD-03` 的草稿行是**列对齐行**（`<td>` 数 = 列数），那条判据**保不住它**（实测推演）。 */
       const openTag=(r.match(/^<tr\b[^>]*>/i)||[''])[0];
-      if(/\bdraftrow\b/.test(openTag)||/合计|总计|小计/.test(_plain(r))||tdc<ths.length) pin.push(r); else data.push(r);
+      /* ⚠️ 「合计行」的识别**只看首个格子（＋ `sumrow` 类）**，⛔ 不再扫**整行文本**里的
+         「合计 / 总计 / 小计」（2026-10-11 `TAIL-283`）：那一列里现在有**自由文本**
+         （付款流水的「通知书名称」＝ i8 的 `fields['BillName']`），一张叫
+         「某某项目合计材料请款」的通知书会让**普通数据行**被钉到表尾 —— 排序后它不跟着走，
+         而且**不报错**（最难查的那种）。
+         真合计行一律由 `sumRowOf` 产出：`sticky` 默认带 `sumrow` 类、`lead`（默认「合计」）
+         就在**首格**；`index.html` 里两处手写的合计行（收发结存 / 大表）同样两样都满足。
+         跨列提示行仍由下面那条「`<td>` 数 < 表头列数」收住（`MOD-05` 台账表尾「截至…」就靠它）。 */
+      const firstTd=(r.match(/<td\b[^>]*>[\s\S]*?<\/td>/i)||[''])[0];
+      if(/\bdraftrow\b/.test(openTag)||/\bsumrow\b/.test(openTag)
+         ||/合计|总计|小计/.test(_plain(firstTd))||tdc<ths.length) pin.push(r); else data.push(r);
     });
     let out=data;
     if(st.i>=0&&st.d!==0&&can[st.i]&&data.length>1){

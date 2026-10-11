@@ -28,7 +28,7 @@ from tests._auth import TestClient          # ⭐ 带会话票（见该件注释
 from app.main import create_app
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.notice_api_router import get_session
-from app.report_export import nt_export, pl_export
+from app.report_export import fl_export, nt_export, pl_export
 from tests.acc_plugin import acc
 from tests.m03_action_helpers import FakeWriteSession, _notice
 from tests.shell_load_helpers import exp_routes
@@ -153,6 +153,13 @@ def test_导出列就是页面表头去掉勾选与操作():
     assert pl_page[0] == "" and pl_page[-1] == "操作", f"`PL_THEAD` 首/末列不是预期：{pl_page}"
     assert _export_labels(pl_export.COLUMNS) == pl_page[1:-1], (
         "`pl_export.COLUMNS` 与 `PL_THEAD`（去掉勾选 / 操作）不一致")
+
+    # ⭐ 2026-10-11（`TAIL-283`）：付款流水那张表**没有勾选列**（首列就是流水号）
+    #   ⇒ 导出 = 表头去掉「操作」那**最后一列**。
+    fl_page = _th_labels("FL_THEAD")
+    assert fl_page[-1] == "操作" and fl_page[0] == "流水号", f"`FL_THEAD` 首/末列不是预期：{fl_page}"
+    assert _export_labels(fl_export.COLUMNS) == fl_page[:-1], (
+        "`fl_export.COLUMNS` 与 `FL_THEAD`（去掉操作）不一致 —— 表与屏幕对不上号了")
 
 
 # ============================================================== 001-08 · 合计行口径

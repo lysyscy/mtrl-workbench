@@ -232,9 +232,11 @@ function applyThemeLive() {
       （`tests/test_tail04_export.py` 会当场红）。
    ⛔ `集采台账` 也**不在本表**：`BIND.m11` 渲染时已把它的按钮改指 `jcExport`（走全列口径）⇒ 到不了这里。 */
 const EXP_ROUTES = {
-  /* `data-t`（与按钮上那个**逐字一致**）→ 拿行出口 ＋ 端点 */
+  /* `data-t`（与按钮上那个**逐字一致**）→ 拿行出口 ＋ 端点；
+     ⭐ 可选第三项 `ids`：**屏幕上真实的行序**（默认 = 行出口数组的顺序）—— 目前只有「付款流水」
+     需要它（那张表点过表头排序后，行序只体现在 DOM 里，见 `pages-a.js::flDomIds`）。 */
   '项目档案':        { rows: () => pjVisible(), url: '/api/m01/projects/export' },
-  '付款流水':        { rows: () => flVisible(), url: '/api/m05/flows/export' },
+  '付款流水':        { rows: () => flVisible(), ids: () => flDomIds(), url: '/api/m05/flows/export' },
   '付款通知书台账':   { rows: () => ntHit(fNt),  url: '/api/m03/notices/export' },
   '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },
 };
@@ -270,8 +272,11 @@ const ACT={
      + `本页不单独导出 —— 请用它自己的那个入口（或换一页导出）`,9000);
    const rows=route.rows();
    if(!rows.length) return toast(`当前筛选下<b>一行都没有</b> —— 没什么可导的（先点「重置」看全部）`);
+   /* ⭐ `TAIL-283`：行序以**屏幕为准** —— 有 `ids` 出口的路由（付款流水）按渲染后的 DOM 取序，
+      其余三张表行序 = 数组顺序（它们没有"点表头改行序"这条交互）。 */
+   const ids=route.ids?route.ids():rows.map(r=>Number(r.id));
    let d=null;
-   try{ d=await API.post(route.url,{ids:rows.map(r=>Number(r.id))}); }
+   try{ d=await API.post(route.url,{ids}); }
    catch(e){ return toast(`<b>导出失败</b>：${esc(String((e&&e.message)||e))}`,8000); }
    if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'系统没有给出原因，请重试')}`,8000);
    jcDownload(d.filename,d.content_b64);
@@ -381,7 +386,9 @@ const ACT={
    /* 付款金额：只做本次会话的临时覆盖 —— 不写 i8 原值、不影响统计口径与欠款，刷新即恢复默认。
       ⚠️ 会话级覆盖**不留痕**（口径 2026-09-12 定案：留痕只给统计两金额与调整单）。 */
    if(k==='pay'){
-     n.payOv=v;
+     /* ⭐ `TAIL-282`：改走**统一草稿出口**（按通知书 id 存）—— ⛔ 不再写行对象上的 `payOv`：
+        供应商那四条路都会 `reloadNotices()` 整体换行对象，挂在行上的值当场就没。 */
+     setPayOv(n,v);
      render();
      toast(`<b>付款金额</b>已临时改为 ${M(v)}（原 ${M(old)}）<br>这是<b>本次会话的覆盖</b>，<b>刷新页面后会恢复为「审批金额 − 已付金额」</b><br>i8 原值 ${M(n.pay)} 与「统计付款金额」<b>均未改动</b>（会话级覆盖不留痕）`,5400);
      return;
@@ -532,13 +539,19 @@ const ACT={
    const unlock=()=>{ busy=false; if(t){ t.disabled=false; t.textContent='确认付款'; } };
    API.batchPay({ids:rows.map(n=>Number(n.id)), drafts, pay_date:dt, remark:rm, request_id:rid})
      .then(r=>{ if(!r.ok){ unlock(); return toast(`<b>提交被拦下，整批未产生任何流水</b><br>${esc(r.message)}`,6000); }
+       /* ⭐ `TAIL-282`：**付款成功这一瞬**就作废本次付款那些通知书的拟付草稿 ——
+          ⛔ 不能等下面那次 `reloadNotices()`：它可能失败，那时旧草稿会带着**过期金额**留在页面上，
+          用户再付款看到的数就是错的。整批同成同败 ⇒ 受影响的就是本次提交的这几行。 */
+       dropPayOv(rows.map(n=>n.id));
        unlock(); pickSet.clear(); payDraft={}; closeModal();
        toast(r.message,5200); return reloadNotices(); })
      .catch(e=>{ unlock(); return toast(`<b>提交失败</b>：${esc(e.message||e)}`,6000); }); },
  revDlg:t=>{ const f=FLs.find(x=>x.id===t.dataset.fid); if(!f) return;
    const n=NO.find(x=>x.id===f.nid)||{};
-   modal({title:`撤销付款流水 · ${f.id}`,body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">撤销须填原因；该通知书的已付金额减少，付款状态重新判定。</div>
-     ${kvBlock([['流水号',`<span class="fc">${f.id}</span>`],['单据编码',`<span class="fc">${n.code||'—'}</span>`],
+   /* ⭐ `TAIL-283`：弹窗里凡是写「流水号」的地方一律显示**真 `flowNo`**（⛔ 不再是数据库行号 `f.id`）——
+      `f.id` 只留给下面按钮的 `data-fid` 与 `flowRevoke(f.id,…)`（**定位键，绝不能换**）。 */
+   modal({title:`撤销付款流水 · ${esc(f.flowNo)||'—'}`,body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">撤销须填原因；该通知书的已付金额减少，付款状态重新判定。</div>
+     ${kvBlock([['流水号',`<span class="fc">${esc(f.flowNo)||'—'}</span>`],['单据编码',`<span class="fc">${n.code||'—'}</span>`],
        ['付款项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(n.proj||'—')}</span>`],
        ['付款金额',`<span class="fc">${M(f.amt)}</span>`],['付款日期',`<span class="fc">${f.date}</span>`],
        ['实际付款方式',enumTag('payMethod',f.method)]])}
@@ -553,9 +566,14 @@ const ACT={
     try{ r=await API.flowRevoke(f.id, rs); }
     catch(e){ return toast(`撤销失败：${esc(e.message)}；请重试。`,9000); }
     if(!r||r.ok===false) return toast(esc((r&&r.message)||'撤销未完成，请重试。'));
+    /* ⭐ `TAIL-282`：撤销成功 ⇒ 该通知书的拟付草稿作废（已付金额马上会变，旧数字不再作数）。
+       ⚠️ 清的是**受影响的 `notice_id`**（`f.nid`）—— ⛔ 不是撤销接口用的 `flow_id`，两者不是一个号。
+       ⛔ 也不能只靠下面那次 `reloadNotices()`：刷新失败时这条草稿会留在页面上。 */
+    dropPayOv([f.nid]);
     closeModal();
     const e=r.jc_effect;
-    const receipt=`已撤销流水 <b>${esc(f.id)}</b>（原因：${esc(rs)}）`+(e?
+    /* ⚠️ 回执里报的是**真流水号**（同上面弹窗：`f.id` 只是定位键，⛔ 不上屏当"流水号"） */
+   const receipt=`已撤销流水 <b>${esc(f.flowNo)||'—'}</b>（原因：${esc(rs)}）`+(e?
       `<br>集采合同 ${esc(e.contract_id)} 付款金额：${M(N0(e.before))} → ${M(N0(e.after))}`+
       (e.protected?'；统计付款金额曾手工修改，本次保留人工值。':''):'<br>该通知书未关联集采合同。');
     toast(receipt,9000);

@@ -214,6 +214,13 @@ def outside_tests(paths) -> set[str]:
     return {n for n, module in files.items() if _reach(graph, module) & sources}
 
 
+#: ⚠️ 2026-10-11（`/retro` 量测 · 记在规则主人处）：本分支的**爆炸半径** = "import 到了带壳字面量的
+#:    模块"的测试件数。**三个口径都量过，⛔ 别混着说**：
+#:      · **整壳读者**（测试文件里出现标识符 `SHELL` 本身）＝ **61 / 188 件** —— 它们真依赖壳任意一处；
+#:      · **纯读点读者**（只用 `const_src` / `func_body` / `page_slice` 这些出口）＝ **0 件**；
+#:      · 下面那行打印的两个数（自有壳**字面量** / 经 import 闭包带入）＝ 又一种口径。
+#:    ⇒ **按读点收窄目前收益为 0**，而放松那扇门就是漏跑（本文件上面已写明"漏跑比慢跑严重得多"）。
+#:    ⇒ 要收窄，先把测试**迁到纯读点读者**（有靶、可量、可单开票），⛔ 不在这里悄悄放松。
 def shell_plan() -> Plan:
     """沿源码读入、浏览器访问与import闭包选择壳使用者，不隐式执行全套。"""
     try:
@@ -244,8 +251,14 @@ def shell_plan() -> Plan:
         picked = {n for n, m in files.items() if _reach(mods, m) & readers}
         if not picked:
             return Plan(False, '待查：未发现壳源码或浏览器使用者')
+        # ⭐ 2026-10-11（`/retro` 报告面）：把"为什么是这么多件"直接打出来 ——
+        #    自有壳字面量（直接读者）vs 只经 import 闭包被带入。看到 61 与 79 的来历，
+        #    ⛔ 不必再去猜"这 140 件是不是白跑"（量测结论见上面 `shell_plan` 前那段）。
+        direct = sum(1 for n, m in files.items() if n in picked and m in readers)
+        closed = len(picked) - direct
         picked |= {n for n, _ in REPO_WIDE if n in files}
-        return Plan(True, '壳源码/浏览器及共享helper使用者：%d / %d件' % (len(picked), len(files)), picked)
+        return Plan(True, '壳源码/浏览器及共享helper使用者：%d / %d件（自有壳字面量 %d · 闭包带入 %d）'
+                    % (len(picked), len(files), direct, closed), picked)
     except (OSError, SyntaxError, UnicodeError) as exc:
         return Plan(False, '待查：壳使用者读取失败：'+type(exc).__name__)
 

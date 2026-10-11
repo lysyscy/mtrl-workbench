@@ -35,8 +35,12 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     ),
     (
         "M3 撤销又变成「只改内存」",
-        "    m05Act(()=>API.flowRevoke(f.id, rs),",
-        "    f.voided=true; f.reason=rs; render(); m05Act(()=>API.flowRevoke(f.id, rs),",
+        # ⚠️ 2026-10-11：`TAIL-281` 把 `revOk` 从 `m05Act(()=>API.flowRevoke(...))` 改成
+        #    直接 `await API.flowRevoke(...)`（它要拿回执里的 `jc_effect`）⇒ 旧锚早已不在壳里
+        #    （脚本如实报「变异串没找到 ⇒ 本项作废」，不是假绿）⇒ 锚点跟着改。
+        #    **变异意图一字未改**：撤销又变成"只改内存"。
+        "r=await API.flowRevoke(f.id, rs);",
+        "f.voided=true; f.reason=rs; render(); r=await API.flowRevoke(f.id, rs);",
         "test_写动作不許用本地赋值冒充落库",
     ),
     (
@@ -60,15 +64,19 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     ),
     (
         "M7 空月压暗被摘掉（台账空月也出行 ⇒ 哪个月真发生过事看不出来）",
-        "const z=!r.open&&!N2(r.s)&&!N2(r.p)&&!String(r.note||'').trim();",
+        # ⚠️ 2026-10-11：判据后来收紧成"**历史段与期初行不压暗**"（多了 `!historical`）⇒ 锚点跟着改。
+        #    **变异意图一字未改**：把压暗判据摘成恒 false。
+        "const z=!historical&&!r.open&&!N2(r.s)&&!N2(r.p)&&!String(r.note||'').trim();",
         "const z=false;",
         "test_台账的现状数_截至行与入口名都钉住",
     ),
     # ⭐ 2026-09-28（`TAIL-142`）卡头按钮：两条最容易被"顺手简化"掉的
     (
         "M8 点开不变样（`on` 态被摘掉 ⇒ 用户看不出点上没有）",
-        """class="btn${pjIsOpen('ledPj')?' on':''}\"""",
-        """class="btn\"""",
+        # ⚠️ 2026-10-11：`TAIL-64` `P4-d-b` 把那枚按钮改走统一出口 `PJB` ⇒ 动态类改由 `cls` 参数
+        #    传进去（`cls:`btn…' on'…``）⇒ 锚点跟着改。**变异意图一字未改**。
+        """cls:`btn${pjIsOpen('ledPj')?' on':''}`""",
+        """cls:`btn`""",
         "test_台账卡头按钮分组与点开有反馈都钉住",
     ),
     (

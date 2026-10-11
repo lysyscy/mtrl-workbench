@@ -205,8 +205,16 @@ def test_壳里金额列按数值排序而不是按字符串():
     assert "_cmp(a.v,b.v,tp,st.d)" in SHELL, "排序没按列类型比较"
     assert "const _num=s=>{const t=String(s).replace(/[,¥%\\s]/g,'');" in SHELL, \
         "千分位 / 货币符没有统一剥离出口（转数会拿到 NaN）"
-    assert "if(/\\bdraftrow\\b/.test(openTag)||/合计|总计|小计/.test(_plain(r))||tdc<ths.length) pin.push(r);" in SHELL, \
-        "合计行 / 草稿行没走 pin 通道（会被排序卷进数据行里）"
+    # ⚠️ 2026-10-11（`TAIL-283`）**改形**：「合计行」的识别从"扫整行文本"收窄成
+    #   **`sumrow` 类 ＋ 只看首格** —— 扫整行会把**名称里带「合计」的普通数据行**也钉到表尾
+    #   （付款流水新上的「通知书名称」是自由文本，实测复现）。**判词一字未改**：
+    #   合计行 / 草稿行走同一条 pin 通道（钉表尾、不参与排序），数据行才进排序。
+    assert "if(/\\bdraftrow\\b/.test(openTag)||/\\bsumrow\\b/.test(openTag)" in SHELL, \
+        "草稿行 / 合计行没走 pin 通道（会被排序卷进数据行里）"
+    assert "/合计|总计|小计/.test(_plain(firstTd))" in SHELL, \
+        "合计行的文字识别没了（`sumRowOf` 产出的首格「合计」必须能钉住）"
+    assert "tdc<ths.length) pin.push(r); else data.push(r);" in SHELL, \
+        "跨列提示行没走 pin 通道"
 
 
 @acc()

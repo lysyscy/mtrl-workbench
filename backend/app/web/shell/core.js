@@ -208,6 +208,10 @@ async function reloadNotices() {
   items.forEach(x => {
     if (x.ownership_id != null) OWN[String(x.notice_id)] = String(x.ownership_id);
   });
+  /* ⭐ `TAIL-282`：拟付草稿按**新读到的事实**对账 —— 审批额 / 已付额变了的、列表不再返回的
+     （已删除 / 被筛掉）一律作废，其余保留（供应商那四条路都经由这里，草稿才不会被冲掉）。
+     ⚠️ 保留 / 作废的规则主人是 `base.js::payOvEntry`，这里只是它的批量出口。 */
+  reconcilePayOv();
   render();
 }
 
@@ -273,11 +277,27 @@ const M05_GRAN_UI = { week: '周', month: '月' };
 
 function adaptFlow(x) {
   return {
+    /* ⚠️ `id` **必须 String** —— 它是**数据库行主键**，只服务"撤销 / 导出定位"
+       （`revDlg` 的 `data-fid`、`export_flows(ids)` 的入参），⛔ **不是**表格第 0 列那个流水号。 */
     id: String(x.id), nid: (x.notice_id == null ? '' : String(x.notice_id)),
+    /* ⭐ `TAIL-283`：第 0 列「流水号」显示的是**真业务流水号** `flow_no`（旧版拿 `id` 冒充 = 说错话）。
+       ⚠️ 老流水 `flow_no` 为空是**事实**（历史导入没给号）⇒ 如实留空，⛔ 不编一个。 */
+    flowNo: x.flow_no || '',
     date: x.pay_date || '', amt: numOr0(x.amount), method: x.pay_method || '',
-    remark: x.remark || '', op: x.created_at || '',
+    remark: x.remark || '',
+    /* ⚠️ 「操作人」= `created_by`（后端 2026-09-20 补的列）；**旧版错取 `created_at`** ——
+       那是**时间**不是人。老行 `created_by` 是空串（当时没记）⇒ **如实留空**，⛔ 不拿时间顶上。 */
+    op: x.created_by || '',
     voided: x.status !== 'effective', reason: x.revoke_reason || '',
     projKey: x.project_key || '', proj: x.project_display || '', doc: x.doc_no || '',
+    /* ⭐ `TAIL-283`：这笔流水**来自哪张通知书**的五项（后端 `_flow_dict` 已按**一次预读**的通知书
+       字典装配好，前端只做转形）。⚠️ 通知书失联（`notice_id` 为空 / 指向已删除的单）时后端给空 /
+       `null` ⇒ 这里**如实留空 / `null`**：`amountApproved` 走 `null` 是为了让页面画「—」、
+       ⛔ 不许过 `numOr0` 把"没有这个数"糊成 0（真实等于 0 是另一回事，那时后端给 `"0.00"`）。 */
+    docDate: x.doc_date || '', billName: x.bill_name || '', payee: x.payee || '',
+    categoryLabel: x.category_label || '',
+    amountApproved: (x.amount_approved == null || x.amount_approved === '')
+      ? null : Number(x.amount_approved),
   };
 }
 /* 期初行：只喂「按项目看欠款」的柱子（台账行改读后端）⇒ 按原型 `LG_COLS` 的关键字段给 */

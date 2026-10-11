@@ -111,8 +111,20 @@ def test_壳里本次应付为0也不可付():
 
     两处都要拦：① 窗口组装时算进 `bad`（按钮直接禁用）；② 提交时逐行复算拦下（兜底）。
     """
-    assert "const payEff=n=>payOver(n)?N2(n.payOv):N2(n.approve-paidOf(n.id));" in SHELL, \
-        "「本次应付」的口径出口没了（默认 = 审批金额 − 已付金额）"
+    # ⭐ 2026-10-11（`TAIL-282`）**改形**：原先这里逐字钉 `payOver(n)?N2(n.payOv):…` ——
+    #   那是**实现写法**（覆盖挂在行对象上），而它恰恰是本票的故障本体：`reloadNotices()`
+    #   `NO=items.map(adaptNotice)` 整体换行对象 ⇒ 挂在行上的覆盖被冲回默认值。
+    #   ⇒ 静态只钉**口径**（默认仍是「审批金额 − 已付金额」；覆盖不再挂行对象、必须有共用出口），
+    #   草稿的生命周期（存活 / 作废 / 0 有效）由真机反例守：`tests/test_tail282_pay_draft.py`。
+    assert "const payEff=n=>{" in SHELL, "「本次应付」的口径出口没了"
+    assert "N2(n.approve-paidOf(n.id))" in SHELL, "默认口径不再是「审批金额 − 已付金额」"
+    # ⚠️ 2026-10-11（双轴 review 的判断题）：这里原写成 `".payOv" not in SHELL` —— 那是**全文负扫**，
+    #   与本文件开头的纪律（"断言一律在**切片**里找，不到全文里撞"）相抵，且此后任何**注释/说明**
+    #   里出现 `.payOv` 都会假红，报错还会把人指向"实现又挂回行对象"。⇒ 改成钉**读/写出口**这一段。
+    ov = _slice("const PAY_OV={};", "/* ⭐⭐ **主表那 5 个派生金额列", what="拟付草稿出口")
+    assert "const payOver=n=>payOvEntry(n)!==null;" in ov, "「有没有覆盖」没走共用出口"
+    assert "n.payOv" not in ov, "覆盖又挂回行对象了（`reloadNotices` 换行对象时会把它冲掉）"
+    assert "payOvEntry(n)" in SHELL, "草稿的保留 / 作废规则没有共用出口（会被抄成好几份）"
     assert "payEff(n)<=0" in _pay_block(), "唯一出口没把「本次应付为 0」算作不可付"
     ok = _batch_pay_ok()
     assert "if(can<=0){ errs.push(" in ok, "提交时没有兜底拦「本次应付为 0」"

@@ -323,15 +323,23 @@ def test_撤销付款跳转只定位生效流水(ui_page):
 
     ⚠️ 反面情形一起钉：那条**已撤销**的流水不该混进这屏（用户要撤的是生效的那几条，
     混进来等于让他自己再筛一遍）；关键词仍按单据编码定位。
+
+    ⚠️ 2026-10-11（本轮发现并修）：本用例原先只往 `FLs` 里塞三行 —— 而 `ntRevoke` 走的是
+       `ntLoadFlows`（**先经 `API.flows()` 从后端读回这一单的流水**，再决定"直接开弹窗"还是"跳页筛选"）
+       ⇒ 替身必须给在**取数出口**上，否则取数失败、它当场 return，本用例恒红。
+       实测：本用例在**改动前的壳**上同样红（`MTRL_UI_FIXTURE_WEB` 指 HEAD 版壳跑过）
+       ⇒ 这是**既有**的用例缺陷（`TAIL-281` 改走 `ntLoadFlows` 时漏改），与 `TAIL-283` 无关。
     """
     p=ui_page
-    p.evaluate('''() => {
-      FLs.splice(0);
-      FLs.push({id:'F1',nid:'101',date:bjMonth()+'-05',amt:'100.00',method:'现汇',remark:'',op:'测试',voided:false,reason:''},
-                {id:'F2',nid:'101',date:bjMonth()+'-06',amt:'60.00',method:'现汇',remark:'',op:'测试',voided:false,reason:''},
-                {id:'F3',nid:'101',date:bjMonth()+'-07',amt:'20.00',method:'现汇',remark:'',op:'测试',voided:true,reason:'上月已撤'});
+    p.evaluate('''(rows) => {
+      API.flows = async () => ({rows: rows});
       VIEW='m03';render();
-    }''')
+    }''', [dict(id='F1', notice_id=101, flow_no='FL-1', doc_no='DOC-101', pay_date='2026-10-05',
+                amount='100.00', pay_method='现汇', status='effective'),
+           dict(id='F2', notice_id=101, flow_no='FL-2', doc_no='DOC-101', pay_date='2026-10-06',
+                amount='60.00', pay_method='现汇', status='effective'),
+           dict(id='F3', notice_id=101, flow_no='FL-3', doc_no='DOC-101', pay_date='2026-10-07',
+                amount='20.00', pay_method='现汇', status='revoked', revoke_reason='上月已撤')])
     p.evaluate("ACT.ntRevoke({dataset:{id:'101'}})")
     assert p.evaluate('VIEW') == 'm05'
     assert p.evaluate('flf.q') == 'DOC-101'
@@ -397,3 +405,139 @@ def test_发票子表新增草稿默认北京时间当日且可改(ui_page):
     # ⑥ 校验不变：日期清空后不许落库（必填这条口径没动）
     p.evaluate("jcSubD.date='';jcSubD.amt='100';ACT.jcSubSave()")
     assert p.evaluate('saved.length') == 1, "日期为空也写进去了 —— 必填校验被改坏了"
+
+
+# ============================================================== `TAIL-283` 付款流水列义
+# ⚠️ 这些用例**替换 `API.notices` 的回包**（= 后端真事实），⛔ 不整体覆写 `reloadNotices` ——
+#   那样会把被测函数绕开（同 `test_tail282_pay_draft.py` 的纪律）。
+
+
+#: 一条**后端形状**的流水（`service._flow_dict` 那套键名）—— 用例里一律交给**真实 `adaptFlow`**
+#: 转形（⛔ 别手摆壳字段）：这样"后端给什么、页面显示什么"这条链才是真的。
+FL0 = dict(id=71, notice_id=101, flow_no='FL-X9', pay_date='2026-09-05', amount='300.00',
+           pay_method='现汇', remark='', created_by='乙', status='effective', revoke_reason='',
+           project_key='测试仓库', project_display='测试项目', doc_no='DOC-101',
+           doc_date='2026-09-01', bill_name='钢材付款', payee='甲公司',
+           amount_approved='1000.00', category_label='集采')
+
+
+@acc()
+def test_付款流水补通知书五列并改对操作人与流水号(ui_page):
+    """票面验收：五项通知书信息上身；「操作人」= `created_by`（⛔ 不是创建时间）；
+    「流水号」= 真 `flow_no`（⛔ 不是数据库行号）；**失联流水照样整条可查**、审批金额未知画「—」
+    （⛔ 不伪 0）；`notice_id` 指向已删除通知书的流水也不消失。"""
+    p = ui_page
+    p.evaluate('''(f0) => {
+      const ym = bjMonth();
+      FLs.splice(0);
+      FLs.push(adaptFlow({...f0, pay_date: ym+'-05'}));
+      FLs.push(adaptFlow({...f0, id:72, notice_id:null, flow_no:'', pay_date: ym+'-06',
+        amount:'200.00', pay_method:'', created_by:'', project_key:'', project_display:'', doc_no:'',
+        doc_date:'', bill_name:'', payee:'', amount_approved:null, category_label:''}));
+      FLs.push(adaptFlow({...f0, id:73, notice_id:999, flow_no:'FL-3', pay_date: ym+'-07',
+        amount:'100.00', status:'revoked', revoke_reason:'冲正', project_key:'', project_display:'',
+        doc_no:'', doc_date:'', bill_name:'', payee:'', amount_approved:null, category_label:''}));
+      flf.ym=ym; flf.projs=[]; flf.method='全部'; flf.q=''; flf.state='全部';
+      VIEW='m05'; render();
+    }''', FL0)
+    rows = p.locator('[data-sort-key="m05:flows"] tbody tr[data-flow-id]')
+    assert rows.count() == 3, "失联 / 通知书已删除的流水被丢掉了"
+    assert p.locator('[data-sort-key="m05:flows"] tbody tr[data-flow-id]:first-child td').count() == 15, \
+        "流水行的格子数不是 15（表头、行、合计三处的列序必须逐字对应）"
+
+    def cell(i: int, j: int) -> str:
+        return rows.nth(i).locator('td').nth(j).inner_text().strip()
+
+    # 第 1 行：数据齐全 —— 逐格对账（0 流水号 / 1 编码 / 2 单据日期 / 3 名称 / 4 项目 / 5 收款单位
+    #           / 6 分类 / 7 审批金额 / 8 付款日期 / 9 付款金额 / 12 操作人 / 13 状态）
+    assert [cell(0, j) for j in (0, 1, 2, 3, 5, 6, 7, 12)] == \
+        ['FL-X9', 'DOC-101', '2026-09-01', '钢材付款', '甲公司', '集采', '1,000.00', '乙'], \
+        "通知书五项 / 流水号 / 操作人的取值不对"
+    assert cell(0, 9) == '300.00' and '生效' in cell(0, 13)
+    # 第 2 行：`notice_id` 为空（历史/导入的失联流水）—— 新列留白/—，**付款金额与流水号仍在**
+    assert cell(1, 0) == '—' and cell(1, 7) == '—', "失联流水的新列没有如实留空 / 留「—」"
+    assert cell(1, 9) == '200.00', "失联流水的付款金额被吞了"
+    # 第 3 行：`notice_id` 指向已删除的通知书 —— 同样照常显示，且带撤销原因
+    assert cell(2, 7) == '—', "通知书失联时审批金额被伪成了别的数"
+    assert cell(2, 9) == '100.00' and '已撤销' in cell(2, 13) and '冲正' in cell(2, 13)
+    # ⭐「未知」与「真是 0」必须分开：未知的排序值留空（`data-v=""`），真实的 0 才写 0
+    assert p.evaluate('''() => [...document.querySelectorAll(
+        '#view table[data-sort-key="m05:flows"] tbody tr[data-flow-id] td:nth-child(8)')]
+        .map(td => td.dataset.v).join('|')''') == '1000||', \
+        "审批金额未知时被写成了 0（拿 0 冒充「没有这个数」）"
+    # ⭐ 票面 #3 的**第三处**口径：关键词搜的就是**流水号 / 单据编码**（页面列 · 搜索 · Excel 三处同一个东西）。
+    #   ⚠️ 这个 fixture 里 `NO` 是空的 ⇒ 只有**不依赖 NO 缓存**才可能搜到；
+    #   反过来，拿**数据库行号** `71` 必须**搜不到**（它从来不是流水号 —— 那是"说错话"的那一版）。
+    assert p.evaluate("flf.q='fl-x9';flVisible().map(f=>f.id)") == ['71'], \
+        "关键词搜不到「流水号」（来源可能又回到数据库行号或 NO 缓存）"
+    assert p.evaluate("flf.q='doc-101';flVisible().map(f=>f.id)") == ['71'], "关键词搜不到「单据编码」"
+    assert p.evaluate("flf.q='71';flVisible().map(f=>f.id)") == [], \
+        "拿数据库行号当流水号也搜出了行 —— 「流水号」这一列又说错话了"
+
+
+@acc()
+def test_付款流水合计只加实付且导出按屏幕行序(ui_page):
+    """票面验收：**合计只加实付金额**（审批金额是每笔重复的对照数 ⇒ ⛔ 不纵向求和）；
+    导出取的是**屏幕上真实的行序**（表头点击排序后行序只在 DOM 里 ⇒ ⛔ 不是数组原序）。"""
+    p = ui_page
+    p.evaluate('''(f0) => {
+      const ym = bjMonth();
+      FLs.splice(0);
+      FLs.push(adaptFlow({...f0, pay_date: ym+'-05'}));
+      FLs.push(adaptFlow({...f0, id:72, notice_id:null, flow_no:'FL-2', pay_date: ym+'-06',
+        amount:'200.00', amount_approved:'20.00', doc_no:'', project_key:'', project_display:''}));
+      FLs.push(adaptFlow({...f0, id:73, notice_id:null, flow_no:'FL-3', pay_date: ym+'-07',
+        amount:'100.00', amount_approved:null, status:'revoked', revoke_reason:'冲正',
+        doc_no:'', project_key:'', project_display:''}));
+      flf.ym=ym; flf.projs=[]; flf.method='全部'; flf.q=''; flf.state='全部';
+      API.post = async (url, body) => { window.__post = {url:url, ids:body.ids};
+                                        return {ok:true, filename:'x.xlsx', content_b64:''}; };
+      VIEW='m05'; render();
+    }''', FL0)
+    # ① 合计行：只加**生效**的实付（300＋200），已撤销那笔不进；审批金额那一列**根本不参与**
+    sumcells = p.locator('[data-sort-key="m05:flows"] tbody tr.sumrow td')
+    assert sumcells.count() == 7, "合计行的跨列数变了（leadSpan 该是 9：9 格合并 + 6 个数据格）"
+    assert sumcells.nth(0).get_attribute('colspan') == '9', "合计行首格的 colspan 不是 9"
+    assert sumcells.nth(1).inner_text().strip() == '500.00', \
+        "合计不是「只加生效实付」（300＋200=500）—— 多加了或口径变了"
+    assert '2,000.00' not in sumcells.all_inner_texts().__str__(), \
+        "审批金额被纵向求和了（同一张单的每笔是**对照数**，加起来是假数）"
+
+    # ② 点表头「审批金额」升序 ⇒ DOM 行序 = 20 → 1000 → 未知（空值恒排最后）
+    p.click('[data-sort-key="m05:flows"] thead th:nth-child(8)')
+    dom = p.evaluate('''() => [...document.querySelectorAll(
+        '#view table[data-sort-key="m05:flows"] tbody tr[data-flow-id]')].map(tr => tr.dataset.flowId)''')
+    assert dom == ['72', '71', '73'], f"表头排序后的屏幕行序不对：{dom}（未知值必须排最后）"
+    assert p.evaluate('flVisible().map(f=>f.id)') == ['71', '72', '73'], \
+        "数组序本来就不该被排序改动（它是筛选结果，不是屏幕行序）"
+    # ③ 导出走的 id 顺序 = **屏幕行序**
+    p.evaluate("async () => { await ACT.exp({dataset:{t:'付款流水'}}); }")
+    assert p.evaluate('window.__post') == {'url': '/api/m05/flows/export', 'ids': [72, 71, 73]}, \
+        "导出没按屏幕上看到的行序取 id（点过表头排序后 Excel 与屏幕对不上）"
+
+
+@acc()
+def test_通知书名含合计词的行不被排序钉到表尾(ui_page):
+    """⭐ `TAIL-283` 附带发现：全站排序的「合计行」判定原先是**扫整行文本**里的「合计/总计/小计」——
+    而通知书的「名称」是**自由文本**（`fields['BillName']`，来自 i8）⇒ 一张叫「…合计…」的单会让
+    **普通数据行**被钉到表尾（不报错，只是排序后它不跟着走）。
+
+    ⚠️ 这里**直接调真实实现** `applySorts`（纯函数：HTML 字符串 → HTML 字符串）＋ 隔离输入，
+    不去动正式页面数据（纪律同"判据用隔离靶"）。"""
+    p = ui_page
+    order = p.evaluate('''() => {
+      SORT['t'] = {i:0, d:1};                       /* 强制：按第 0 列升序 */
+      const h = applySorts('<table data-sort data-sort-key="t"><thead><tr><th>金额</th><th>名称</th></tr></thead>'
+        + '<tbody><tr><td class="num">100</td><td>项目合计材料请款</td></tr>'
+        + '<tr><td class="num">200</td><td>普通单据</td></tr></tbody></table>', 'x');
+      return [...h.matchAll(/<td class="num">(\\d+)<\\/td>/g)].map(m => m[1]);
+    }''')
+    assert order == ['100', '200'], \
+        f"名称里带「合计」的**普通数据行**被当成合计行钉到表尾了：{order}"
+    assert p.evaluate('''() => {
+      SORT['t2'] = {i:0, d:1};
+      const h = applySorts('<table data-sort data-sort-key="t2"><thead><tr><th>金额</th><th>名称</th></tr></thead>'
+        + '<tbody><tr><td class="num">100</td><td>甲</td></tr>'
+        + '<tr class="sumrow"><td>合计</td><td>200</td></tr></tbody></table>', 'x');
+      return [...h.matchAll(/<td(?: class="num")?>(\\d+)<\\/td>/g)].map(m => m[1]);
+    }''') == ['100', '200'], "真合计行（带 sumrow 类、首格写「合计」）没有被钉到表尾"
