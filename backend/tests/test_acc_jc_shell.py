@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import pathlib
 import re
+from functools import lru_cache
 
 import app
 from tests.acc_plugin import acc
 from tests.shell_src import SHELL   # ⚠️ 壳源码的唯一出口（⛔ 别直接读 index.html）
+# ⚠️ 抹注释（`_fn` 用）：`tools.audit.jslex` 是**同长**那一支（换行/偏移不变）；⛔ 别改成删字符那支
+from tools.audit.jslex import blank_comments
 
 
 def _index() -> str:
@@ -43,9 +46,29 @@ def _all_shell() -> str:
     return SHELL
 
 
+@lru_cache(maxsize=8)
+def _blanked(src: str) -> str:
+    """整篇抹注释（**从文档开头**跑 lexer ⇒ 字符串/注释状态才是对的）。
+
+    ⚠️ 2026-10-11（`TAIL-298` 收尾）实测：**拿半截源码**去抹会炸 —— 切片起点若落在标签/属性中间
+       （如 `data-…="…"` 之后再没有配对的引号），lexer 会抛「字符串没闭合」。
+       ⇒ 一条铁律：**整篇抹一次，再按原文下标切片**（`blank_comments` 等长 ⇒ 两边下标通用）。
+    """
+    return blank_comments(src, html=True)
+
+
 def _fn(src: str, anchor: str, end: str) -> str:
+    """切出 `[anchor, end)` 那一段 —— ⚠️ 段里的**注释已抹成空格**（等长，行号/偏移不变）。
+
+    ⚠️ 为什么必须抹掉注释：本件好几条断言是**计数式**的（`row.count("<td") == row.count("</td>")` 那类），
+       而段原本是**原文**（含注释）⇒ 谁在注释里写一句「手写 `<td>` 串」就会让判据**假红**
+       （2026-10-11 真实发生：白跑一整轮按影响入口，见 `TAIL-298` Comments）。
+    ⚠️ 下标一律取自**原文**（`src`），取完再回 `_blanked(src)` 上切 —— 因为本件有 `end` 锚点**本身长在
+       注释里**（`"/* MOD-09 特殊费用月报表的表头"`）⇒ 抹完就找不到了。
+    """
     i = src.index(anchor)
-    return src[i:src.index(end, i)]
+    j = src.index(end, i)
+    return _blanked(src)[i:j]
 
 
 @acc("ACC-JC-UI-001", "001-03")
@@ -54,21 +77,24 @@ def test_空态行跨列数派生且全选框回显三态():
     **表头全选框必须回显状态**（全选 → 勾选，取消一行 → 半选）」。
 
     ⚠️ 两半都要钉，而且都有"最容易偷懒"的写法：
-       ① 空态行的 `colspan` **必须由表头派生**（`thCount(JC_THEAD)`）—— ⛔ 写死一个数字，
+       ① 空态行的 `colspan` **必须由表头派生**（`thCount(…)`）—— ⛔ 写死一个数字，
           表头一改列就错位（多一块/少一块），而且**空态时才看得见** ⇒ 平时测不出来；
        ② 全选框**要有三种态**：全选中 → `checked`；部分选中 → `indeterminate`（半选）；
           一个没选 → 都不是。⛔ 只做 `checked` 的话，用户筛了一半勾选时看不出"还差几条"。
+    ⭐ 2026-10-11（`TAIL-298`）：跨列数取自**后端列清单现生成的表头**（`jcThead()`）——
+       `m11` 那 20 列字面量已从壳里退场（列的唯一主人 = `domain.JC_COLUMNS`）。
     """
     html = _index()
     empty = [ln for ln in html.splitlines() if "当前筛选条件下没有集采合同" in ln]
     assert empty, "找不到集采台账的空态提示行 —— 落点变了"
-    assert "EMPTYROW(thCount(JC_THEAD)" in empty[0], (
+    assert "EMPTYROW(thCount(jcThead())" in empty[0], (
         "空态行的跨列数**没有由表头派生** —— ⛔ 写死的数字在表头改列后会错位，"
         "而且只有「筛到空」时才看得见：\n  " + empty[0].strip()[:160])
     # ⭐ 2026-09-29（`TAIL-64` P3 余量）：表外壳走统一出口 `TBL`（⛔ 别退回裸 `<table class="dt" …>`）。
+    #   ⭐ 2026-10-11（`TAIL-298`）：表头那一项由 `JC_THEAD` 字面量改成 `jcThead()`（按列清单现生成）。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M15 去掉这处委托 ⇒ 必须红。
-    assert "TBL({head:JC_THEAD,key:'m11:jc'," in html, \
-        "集采台账表没走统一出口 `TBL`（`TAIL-64` P3 余量）"
+    assert "TBL({head:jcThead(),key:'m11:jc'," in html, \
+        "集采台账表没走统一出口 `TBL`（`TAIL-64` P3 余量），或表头没按列清单现生成（`TAIL-298`）"
 
     bind = _fn(html, "BIND.m11=", "/* ====")
     assert "box.checked" in bind and "hit===vis.length" in bind, (
@@ -142,7 +168,7 @@ def test_子表草稿行列对齐且钉在合计行之前取消不入库():
             f"`{dlg}`（{table}）里三段的顺序不对 ⇒ 草稿行没有钉在「**数据行之后、合计行之前**」。"
             f"\n  实际位置：数据行 {i_rows} / 草稿行 {i_draft} / 合计行 {i_sum}")
 
-    row = _fn(html, "const jcSubRow=", "/* MOD-11 集采台账的表头")
+    row = _fn(html, "const jcSubRow=", "/* MOD-09 特殊费用月报表的表头")
     assert 'class="draftrow"' in row, (
         "草稿行没有 `draftrow` 这个类 ⇒ 它**不会被 pin 到表尾**：用户一点表头排序，"
         "草稿行就会被排走、合计行窜到它前面（「钉在合计行之前」就破了）")

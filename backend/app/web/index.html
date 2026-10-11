@@ -1391,7 +1391,7 @@ V.m11=()=>{
       <span class="pill" style="margin-left:auto">已勾选 <b>${jcPick.size}</b> 行 ｜ 显示 <b>${jcRows.length}</b> 条</span>
     `})}
     ${jcNewOn?jcNewStrip():''}
-    <div class="tw">${TBL({head:JC_THEAD,key:'m11:jc',
+    <div class="tw">${TBL({head:jcThead(),key:'m11:jc',
     rows:jcRows.map((j,i)=>`<tr class="${j.tag==='不纳入'?'ex':''}">
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="jcPick" data-id="${j.id}" ${jcPick.has(j.id)?'checked':''}></td>
       <td class="fc" title="项目内动态序号，筛选不变">${j.projectSeq == null ? '—' : j.projectSeq}</td><td class="now">${j.date}</td><td><button class="btn sm" style="white-space:normal;text-align:left" data-act="jcMaterialOpen" data-id="${j.id}" title="修改材料名">${esc(j.material)||'填写材料名'}</button></td><td class="fc">${esc(j.contractNo||'—')}</td><td class="sm">${esc(j.supplier)}</td>
@@ -1414,7 +1414,7 @@ V.m11=()=>{
           :`<button class="btn sm" data-act="jcTag" data-id="${j.id}" data-v="不纳入">不纳入</button>`}
         <button class="btn sm" data-act="jcArch" data-id="${j.id}">推进存档</button>
       </td></tr>`),
-    sum:jcRows.length?sumRowOf(JC_THEAD,jcRows,{
+    sum:jcRows.length?sumRowOf(jcThead(),jcRows,{
         6:rs=>N2(rs.reduce((a,j)=>a+j.contractAmt,0)),
         7:rs=>N2(rs.reduce((a,j)=>a+jcInvSum(j),0)),
         9:rs=>N2(rs.reduce((a,j)=>a+(Number(j.tradeContractAmt)||0),0)),
@@ -1423,7 +1423,7 @@ V.m11=()=>{
         12:rs=>N2(rs.reduce((a,j)=>a+jcPay(j),0)),
         13:rs=>N2(rs.reduce((a,j)=>a+jcDebt(j),0))},
         {tip:'当前筛选结果（含「不纳入」行）的合计；「贸易公司合同金额」为空的行按 0 计'})
-      :EMPTYROW(thCount(JC_THEAD), '当前筛选条件下没有集采合同', '换个「三态标记 / 合同存档情况 / 项目」，或清空「供应商」搜索词')})}</div>
+      :EMPTYROW(thCount(jcThead()), '当前筛选条件下没有集采合同', '换个「三态标记 / 合同存档情况 / 项目」，或清空「供应商」搜索词')})}</div>
   </div>`;
 };
 

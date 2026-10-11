@@ -297,24 +297,15 @@ const jcSubRow=()=>{ const d=jcSubD;
   const ops=`<td class="ctr now"><button class="btn sm pri" data-act="jcSubSave" title="校验通过后写入（日期必填 · 金额必须 > 0、无上限）">保存</button> <button class="btn sm" data-act="jcSubCancel" title="丢弃这一行草稿（不写入）">取消</button></td>`;
   if(jcSubKind==='pay') return `<tr class="draftrow">${dateCell}${amtCell}<td>${tag('手工','in')}</td>${ops}</tr>`;
   return `<tr class="draftrow"><td class="fc">新增</td>${dateCell}${amtCell}${ops}</tr>`; };
-/* MOD-11 集采台账的表头（第 9 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(JC_THEAD)`），不写死 */
-/* ⚠️⚠️ **这里曾经被我插进一段 CSS 规则**（`table.jc-hidetrade > … { display:none }`）——
-   大错：**本文件这一段的上下文是 `<script>`（JS），不是 `<style>`** ⇒ 那句 CSS 成了**语法错**
-   ⇒ **整段脚本崩掉**（症状是页面里 `PJs is not defined`，因为 `let PJs` 根本没执行到）。
-   ⚠️ `syntax_audit` 的 `node --check` 查的是壳的 **JS 件**、**没覆盖到 `index.html` 的这段** ⇒ 没拦住。
-   ⇒ 已改成**在 `jcApplyHide()` 里直接设内联 `display`**（见 `shell/actions.js`）——
-     效果一样（`table.dt` 是 `width:100%` + `auto` ⇒ 剩下的列**自动变宽**），且**零 CSS 风险**。
-   ⛔ 别再往这段加 CSS/HTML：要加样式请找真正的 `<style>` 段。 */
-
-/* MOD-11 集采台账的表头（第 9 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(JC_THEAD)`），不写死。
-   ⭐ 2026-09-13 用户口径：**「合同存档情况 / 存档号 / 寄回日期」三项整体右移，紧贴「操作」左边**
-     （列数不变 = 20；只调次序）。⚠️ 表内**刻意不设「项目」列** —— 「项目」只作为**筛选**（通用控件）。 */
-const JC_THEAD=`
-      <th class="ctr fl" style="width:34px"><input type="checkbox" class="chk" id="jcAllBox" data-act="jcPickAll" title="全选 / 取消全选（仅当前筛选结果）"></th>
-      <th>序号</th><th>合同日期</th><th>材料名</th><th>合同编号</th><th>供应商</th><th>合同金额</th><th>发票金额</th><th>贸易公司名</th><th>贸易公司合同金额</th><th>贸易公司发票金额</th>
-      <th>结算金额<b class="mut">（自动）</b></th><th>付款金额</th><th>欠款金额<b class="mut">（自动）</b></th>
-      <th>付款方式<b class="mut">（自由文本）</b></th><th>备注</th><th>三态</th>
-      <th>合同存档情况</th><th>存档号</th><th>寄回日期</th><th>操作</th>`;
+/* ⭐ `TAIL-298`：`JC_THEAD` 那个 **20 列字面量已删** —— `m11` 的表头现在由**后端列清单**生成
+   （`pages-b.js::jcThead()`，列的唯一主人 = `domain.JC_COLUMNS`）⇒ 本轮治好的**四个面**
+   （表头 / 隐藏 / 钉列 / Excel 导出）加列**只改列清单那一处**。
+   ⚠️ **仍有几处位置口径在别处**（本票明确不动、按 A 案「v1 只做 m11」留作后续）：
+      `V.m11` 的行模板（`index.html` 里那一串手写的单元格标记）与 `sumRowOf` 的**列下标**映射
+      （`{6:…,7:…,9:…,10:…,11:…,12:…,13:…}` ↔ `domain.SUM_KEYS`）—— 加列 / 调序若发生在那两串
+      左边，它们仍会**静默错位 / 错算**（界面上不报错）⇒ 要彻底收口得另开一票（双轴评审 2026-10-11 判断项）。
+   ⚠️ 旧值留痕见 Git 历史；⭐ **这张表曾是"别往本段塞 CSS"那段警告的现场**：要加样式请找真正的
+      `<style>` 段（隐藏列现在是 `actions.js::jcApplyHide` 里的内联 `display`，零 CSS 风险）。 */
 /* MOD-09 特殊费用月报表的表头 —— 空态（该月还没有手填项）的跨列数由它派生，不写死 */
 const AWF_THEAD=`<th>数据项</th><th>来源</th><th>金额</th><th>占合计</th><th>操作</th>`;
 /* MOD-07 收发结存的表头（第 11 张抽出来的表）—— 空态行的跨列数由它派生（`thCount(WH_THEAD)`），不写死 */

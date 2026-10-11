@@ -17,7 +17,7 @@ import re
 
 from tests.acc_plugin import acc
 from tests.shell_src import (  # noqa: F401  ← `P4`① 读取点收敛
-    SHELL, fbar_kernel, page_slice, pjb_kernel, read_shell, tbl_kernel, with_fbar,
+    SHELL, const_items, fbar_kernel, page_slice, pjb_kernel, read_shell, tbl_kernel, with_fbar,
 )
 
 #: ⭐ `P1-a`（2026-09-28 · 用户选 `A`）：**展开区的外框/间距只走变体类**，这四条内联整串不许回来。
@@ -457,7 +457,7 @@ def test_集采抓取按钮要写清后果():
 
 
 @acc("ACC-UI-SHELL-001", "001-61")
-def test_集采台账行身份区要钉住_且偏移必须是量出来的():
+def test_集采台账行身份区钉列与隐藏列都按id定位_偏移必须量出来():
     """守则 §5.9（核心数据一眼可见）· §4.2（别让人做错事）。
 
     ⚠️ `TAIL-180`（`B` 案 · 2026-09-29 **用户裁定**）：`m11` 合同主表 **21 列 · 330 行**（2026-10-11 加「合同编号」后；贸易三列改默认隐藏、仍可切换），而
@@ -472,10 +472,42 @@ def test_集采台账行身份区要钉住_且偏移必须是量出来的():
        （`render()` 重建整张表；隐藏 / 显示贸易公司三列还会**改剩下的列宽**）。
     ⚠️ 钉的必须是**连续前缀**（`sticky` 的硬约束）：序号(#1) 与 材料名(#3) 中间隔着 合同日期(#2)
        ⇒ 一并钉上（只钉两头会让 #2 被盖住 / 从缝里露出来）。
-    ⚠️ 能证伪：删掉任一处 `jcApplyPin()` 调用 / 把「量宽」换成写死的偏移 / 把 `i===0` 那一条拿掉
-       ⇒ 本件必红（反向灵敏度 `tools/mut/_归档-20261009/_mut_a7.py` 各打一次）；**屏幕上是否真严丝合缝**
-       离线判不了 ⇒ 由真机 **㉝**（`tools/probe/_shell_jcpin.py`）看管（含"隐藏三列后重量"那条）。
+    ⭐⭐ 2026-10-11（`TAIL-298`）：**钉哪几列 / 藏哪几列一律按 id 说话**（`JC_PIN_IDS` / `JC_HIDE_IDS` ·
+       id = 后端列清单 `domain.JC_COLUMNS` 的 `key`）—— ⛔ 不再是写死的列号：`TAIL-290` 加一列
+       「合同编号」时那两处列号都得人肉同步，**漏改不报错**（悄悄藏错列 / 钉错列）。⇒ 本件钉两件：
+       ① **每个 id 都在规格里**（写错 ⇒ 当场红，⛔ 不等真机上看出"某列没被藏 / 没被钉"）；
+       ② 钉列 id 恰是列清单的**连续前缀**（`sticky` 的硬约束在**身份**这一层同样成立）。
+    ⚠️ 能证伪：把两条 id 里任一改错 / 删掉任一处 `jcApplyPin()` 调用 / 把「量宽」换成写死的偏移
+       / 把 `i===0` 那一条拿掉 ⇒ 本件必红（反向灵敏度 `tools/mut/_mut_tail298_columns.py`）；
+       **屏幕上是否真严丝合缝**离线判不了 ⇒ 由真机 **㉝**（`tools/probe/_shell_jcpin.py`）看管
+       （含"隐藏三列后重量"与"表头列数 = 1 ＋ 列清单长度"这两条）。
     """
+    from app.mod11_jc import domain as D          # noqa: PLC0415 —— 只在本次对账时取「规格」
+
+    keys = [c["key"] for c in D.JC_COLUMNS]
+    pin_ids = const_items("JC_PIN_IDS")
+    hide_ids = const_items("JC_HIDE_IDS")
+
+    # ① 每个 id 都必须**在规格里真有那一列**（`TAIL-298` 的可证伪点：写错 id ⇒ 静默失效）
+    unknown = sorted((set(pin_ids) | set(hide_ids)) - set(keys))
+    assert not unknown, (
+        "`m11` 屏幕行为表里这些 id 在**后端列清单**（`domain.JC_COLUMNS`）里不存在"
+        "（拼错 / 列改名了）：\n  " + "\n  ".join(unknown)
+        + "\n  ⇒ id 以 `domain.JC_COLUMNS` 的 `key` 为准（⛔ 别改本件去迁就它）——"
+          " 写错的直接后果是那一列**悄悄不藏 / 不钉**，界面上一点提示都没有")
+    assert pin_ids, "钉列 id 表空了 —— 行身份区没钉（`sticky` 那件事整个没了）"
+
+    # ② 钉列 = 列清单的**连续前缀**（`sticky` 硬约束：中间不能空一格）
+    assert pin_ids == keys[:len(pin_ids)], (
+        "钉列必须是列清单的**连续前缀**（`sticky` 的硬约束 —— 中间隔着不钉的一列会露缝 / 被盖住）："
+        f"\n  钉列 id = {pin_ids}\n  许可    = {keys[:len(pin_ids)]}")
+    assert len(pin_ids) >= 2, (
+        f"行身份区只有 {len(pin_ids)} 列 —— 形态变了（用户要的是「勾选框 ＋ 序号 ＋ 合同日期 ＋ 材料名」）")
+
+    # ③ 隐藏那三列 = 「贸易公司」三列（用户 2026-09-20 口径：不常用 ⇒ 默认收起，仍可切换）
+    assert set(hide_ids) == {"trade_co", "trade_contract_amt", "trade_inv_sum"}, (
+        f"「隐藏贸易公司三列」的 id 集合变了：{hide_ids} —— 改口径要显式改本件")
+
     clean = _strip_block_comments(SHELL)
     assert "function jcApplyPin()" in clean, \
         "`m11` 行身份区的钉列函数不见了（`jcApplyPin`）—— 往右填那 4 列时看不见在给哪条合同填"
@@ -492,6 +524,12 @@ def test_集采台账行身份区要钉住_且偏移必须是量出来的():
     assert '.dt[data-sort-key="m11:jc"] .fl' not in clean, \
         ("`m11` 的钉列**不许**退回静态 CSS 规则（`.dt[data-sort-key=\"m11:jc\"] .fl{left:…}`）——"
          "实测列宽随视口变，静态值会错位")
+    # ④ `TAIL-298`：两处**列号**硬编都退场（隐藏那三列的 `nth-child(9/10/11)` 与钉列的 `[1,2,3]`）
+    for fn in ("function jcApplyHide()", "function jcApplyPin()"):
+        body = clean.split(fn, 1)[1].split("\nfunction ", 1)[0]
+        assert "jcColIndex" in body, f"`{fn}` 没按 id 定位（`jcColIndex`）—— 又写回列号了？"
+        assert "nth-child(9)" not in body and "JC_PIN = [1, 2, 3]" not in body, \
+            f"`{fn}` 里又出现写死的列号（`TAIL-298` 治的就是「加一列要人肉同步」那件事）"
 
 
 @acc("ACC-UI-SHELL-001", "001-62")

@@ -268,7 +268,9 @@ let THEME_PALETTE=[];
 let IVs=[], ADs=[];   /* ⭐ 已接后端：由 `reloadInv()` 从 `/api/m08/inventory` 填充（原先由演示数组 `IV`/`AD` 生成 —— 已删） */
 /* ⭐ `M5-7` 起：`JCs` 由 `reloadM11()` 从 `/api/m11/list` **原地填充**（原先的演示数组 `JC` 与列序 `JC_COLS` **已删**；
    行形状见 `adaptJc` —— 字段名与 `JC_COLS` 时代**一致**，所以 `V.m11` 一行没改）。
-   ⚠️ 它是 `const` ⇒ 只许改**内容**（`length=0` ＋ `push`），⛔ 不许整支换引用（`JC_PROJ_LIST` 等派生量会失效）。 */
+   ⚠️ 它是 `const` ⇒ 只许改**内容**（`length=0` ＋ `push`），⛔ 不许整支换引用（`JC_PROJ_LIST` 等派生量会失效）。
+   ⚠️ 另有一个**运行时列清单** `JC_COLUMNS`（`pages-b.js` · `TAIL-298`）= 后端 `domain.JC_COLUMNS` 的
+      本地副本（表头与隐藏 / 钉列行为表都吃它）—— 与上面这个**已删的演示列序 `JC_COLS` 不是一回事**（名字相近，别混）。 */
 const JCs=[], DFs=[], LGs=[]   /* ⭐ 已接后端：由 `reloadM05()` 从 `/api/m05/debt` 的 `openings` **原地填充**（原先由演示数组 `LG` 生成 —— 已删）；⚠️ 它是 `const` ⇒ 只许 `splice` 原地改 */;
 /* ⭐ 2026-09-20：`DFs` **也**接后端了（`M6` 第一片）—— 原先写的是 `DF.map(r=>O(r,DF_COLS))`（演示数组），
    现在由 `reloadM12()` 原地填充。⚠️ 它是 `const`（还跟 `JCs`/`LGs` 写在同一行声明里）⇒ 只许改**内容**。 */

@@ -161,6 +161,90 @@ def test_导出列就是页面表头去掉勾选与操作():
     assert _export_labels(fl_export.COLUMNS) == fl_page[:-1], (
         "`fl_export.COLUMNS` 与 `FL_THEAD`（去掉操作）不一致 —— 表与屏幕对不上号了")
 
+    # ⭐⭐ 2026-10-11（`TAIL-298`）：`m11` 的**屏幕表头已不住壳里** —— 它 = 域内核那张列清单
+    #   （`domain.JC_COLUMNS`，`V.m11` 的表头就是拿它生成的）⇒ 本件按同一条口径对账：
+    #   次序 = 屏幕列序（去「操作」）；导出的字 = `export_label`（缺省 = `label`，屏幕注解不进 Excel）。
+    from app.mod11_jc import domain as JC_D
+    from app.report_export import jc_export  # noqa: PLC0415 —— 局部取件：本段只服务 m11 这一页
+    jc_rows = [c for c in JC_D.JC_COLUMNS if c["key"] not in JC_D.PAGE_ONLY_KEYS]
+    assert _export_labels(jc_export.COLUMNS) == [c.get("export_label") or c["label"] for c in jc_rows], (
+        "`jc_export.COLUMNS` 与「屏幕表头（域内核列清单）去掉操作列」不一致 —— 表与屏幕对不上号了")
+    assert len(jc_rows) == len(jc_export.COLUMNS) == 19, "m11 屏幕 20 列（含操作）/ 导出 19 列"
+    # ⛔ 壳里不许再长回那张 20 列字面量（有 ⇒ 又是两份列清单，`TAIL-298` 治的就是它）。
+    #   ⚠️ 判"字面量退场"要认**声明**与**表头串**，⛔ 别拿标识符当判据 —— 注释里提 `JC_THEAD`
+    #      （说"那个字面量已删"）是正常的，按标识符判会当场假红。
+    assert "const JC_THEAD" not in SHELL, "m11 的表头字面量又回来了 —— 列清单的唯一主人是 `domain.JC_COLUMNS`"
+    for frag in ("<th>贸易公司合同金额</th>", "<th>结算金额<b class=\"mut\">（自动）</b></th>"):
+        assert frag not in SHELL, f"壳里又写死了 m11 的表头片段：{frag}"
+    assert "TBL({head:jcThead(),key:'m11:jc'," in SHELL, \
+        "m11 的表头必须按列清单现生成（`pages-b.js::jcThead()`）"
+
+
+@acc()
+def test_朴素导出其余四页的列键都在该页行字典里(monkeypatch):
+    """`TAIL-298`：`naive_export` 的**每个调用页**都要有一条「`COLUMNS` 的每个 key 都出现在**该页产出的
+    行字典**里」的断言 —— 堵 `r.get(key)` 那类**静默空列**（键名漂了不报错，只是那一列永远空着）。
+    （`m11` 那一页在 `tests/test_tail298_columns.py` —— 它走真库；本件管其余四页。）
+
+    ⚠️ **每页的"真实行字典"必须来自该页自己的产出行代码**（⛔ 别拿 `COLUMNS` 造一行再自证 —— 那是循环论证）：
+      · `nt` / `pl`：`_export_row(...)` —— 导出端点逐行调的就是它（纯函数，可直接调）；
+      · `fl` / `pj`：那两页的行字典是**端点里现拼的字面量** ⇒ 打桩**内核**，把真正交给它的那批行截下来
+        （走真端点那条路：取数 → 按 id 挑 → 拼行 → 交内核）。
+        · `fl` 的取数是**注入的**（`load=` 形参）⇒ 给个桩即可，⛔ 不必替库；
+        · `pj` 的取数走 `session_scope` ⇒ 只把那**一层**换成桩（本判据要验的是**行字典的键**，⛔ 不是 SQL）；
+          真建档案行会写库，与"库级断言非破坏"冲突（走真库的那份在 `m11` 那条里做）。
+    """
+    from contextlib import nullcontext  # noqa: PLC0415
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from app.mod03_notice import notice_api_router as NTR  # noqa: PLC0415
+    from app.mod04_plan import router as PLR  # noqa: PLC0415
+    from app.mod05_flow import router as FLR  # noqa: PLC0415
+    from app.mod01_projects import router as PJR  # noqa: PLC0415
+    from app.report_export import pj_export  # noqa: PLC0415
+
+    def _keys(mod) -> set[str]:
+        return {k for _, k in mod.COLUMNS}
+
+    def _capture(which: str):
+        """把交给**内核**的那批行截下来（返回值只需是个 bytes —— 本判据不看书）。"""
+        def _f(rows, **kw):
+            got[which] = rows
+            return b""
+        return _f
+
+    # ① nt / pl：行字典由 `_export_row` 产（空记录也走得通 —— 那几格留空本来就是本页口径）
+    assert _keys(nt_export) <= set(NTR._export_row({})), "付款通知书导出有列在这页的行字典里不存在"
+    assert _keys(pl_export) <= set(PLR._export_row({})), "付款计划导出有列在这页的行字典里不存在"
+
+    # ② fl：行字典在端点里现拼 ⇒ 打桩内核截行（取数走注入的 `load`，一行够 —— 键才是判据）
+    got: dict = {}
+    monkeypatch.setattr(fl_export, "build_xlsx", _capture("fl"))
+    FLR.export_flows(FLR.FlowExportIn(ids=[1]), load=lambda **kw: {"rows": [{"id": 1}]})
+    assert got.get("fl"), "没截到 `fl` 的行 —— 那条路变了（⛔ 别让它静默通过）"
+    assert _keys(fl_export) <= set(got["fl"][0]), "付款流水导出有列在这页的行字典里不存在"
+
+    # ③ pj：同上，但取数那层的 `session_scope` 换成桩（列表本身仍是**端点里的真代码**）
+    fake = SimpleNamespace(id=1, ord=1, project_type="normal", disp="自检展示名", warehouse_name="自检仓",
+                           name_full="自检仓项目", phid="", status="active",
+                           parent_shell_id=None, match_keywords=["自检词"])
+
+    class _FakeSession:
+        def execute(self, *_a, **_kw):
+            return self
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return [fake]
+
+    monkeypatch.setattr(PJR, "session_scope", lambda: nullcontext(_FakeSession()))
+    monkeypatch.setattr(pj_export, "build_xlsx", _capture("pj"))
+    PJR.export_projects(PJR.ProjectExportIn(ids=[1]))
+    assert got.get("pj"), "没截到 `pj` 的行 —— 那条路变了（⛔ 别让它静默通过）"
+    assert _keys(pj_export) <= set(got["pj"][0]), "项目档案导出有列在这页的行字典里不存在"
+
 
 # ============================================================== 001-08 · 合计行口径
 

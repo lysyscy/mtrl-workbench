@@ -67,6 +67,40 @@ const jcProjTxt = () => { const ks=fJc.projs||[]; if(!ks.length) return '';
   const nm=k=>pjDispOr(pjRowOf(k),k);
   return ks.length>3 ? `${ks.slice(0,3).map(nm).join('、')}等 ${ks.length} 个项目集采台账`
                      : `${ks.map(nm).join('、')}集采台账`; };
+/* ⭐⭐ `TAIL-298`：`m11` 的**屏幕行为表** ＋ **表头生成** —— 列**按 id 说话**（⛔ 不按列号）。
+   为什么：`TAIL-290` 加一列「合同编号」时，隐藏列（`jcApplyHide`）与钉列（`jcApplyPin`）里
+   写死的列号都得人肉同步，**漏改不报错**（悄悄藏错列 / 钉错列）；而列号本来是"位置"，不是"身份"。
+   ⇒ ① 列的**唯一主人** = 后端 `domain.JC_COLUMNS`（`/api/m11/list` 的 `columns`）：壳里⛔ 不再写那
+        20 列字面量（旧 `JC_THEAD` 已从 `proj.js` 删除），表头由 `jcThead()` 现生成；
+      ② 屏幕行为（隐藏 / 钉列）只写 **id**（= 后端列的 `key`）—— 写错 id ⇒ 判据当场红
+        （`tests/test_ux_pages.py::001-61` 拿这两条与 `domain.JC_COLUMNS` 对账）。
+   ⚠️ `JC_PIN_IDS` 必须是**连续前缀**（`sticky` 的硬约束）：序号 / 合同日期 / 材料名 —— 只钉两头会让
+      夹在中间那一列从缝里露出来或被盖住（详见 `actions.js::jcApplyPin` 那段注释）。
+   ⚠️ `JC_HIDE_IDS` 那三列 = 「贸易公司名 / 贸易公司合同金额 / 贸易公司发票金额」（用户 2026-09-20 口径）。
+   ⚠️ 两条都写成**顶层数组常量**（⛔ 别裹进对象）—— 判据侧要能用壳的唯一剪刀 `const_items(名)` 取它们
+      （`tests/test_ux_pages.py::001-61`）。 */
+const JC_HIDE_IDS = ['trade_co', 'trade_contract_amt', 'trade_inv_sum'];
+const JC_PIN_IDS = ['project_seq', 'date', 'material'];
+/* ⭐ `m11` 的列清单**只从后端来**（`/api/m11/list` 的 `columns` = `domain.JC_COLUMNS`）。
+   ⚠️ 命名：与后端那张清单**同名**（`JC_COLUMNS`）—— 别与 `base.js` 注释里那个**已删的演示列序
+      `JC_COLS`** 混（那是 `M5-7` 拆掉的旧物，按位置取值的；这里存的是**后端逐列的身份与表头字**）。
+   ⚠️ 与 `JCs` 同款：`const` 数组、只许**原地**改内容（⛔ 不整支换引用）。
+   ⚠️ 取数前是**空数组** ⇒ 表头只剩控件列；那一帧由页级四态（`pageGate`「正在读取这一页的数据…」）
+      顶住 —— 正常路径下 `V.m11` 渲染时数据已到（进页 `go()` ⇒ `loadPaths` ⇒ `reloadM11` ⇒ 再 `render()`）。 */
+const JC_COLUMNS = [];
+/** 列 id ⇒ 它在列清单里的**位置**（`-1` = 清单里没有这个 id：写错了 / 还没取到列清单）。 */
+const jcColIndex = key => JC_COLUMNS.findIndex(c => c.key === key);
+/** 表头里那一格的字：屏幕注解（「（自动）」「（自由文本）」）染灰 —— 文字**由后端 `label` 带出**，
+ *  ⛔ 别按列名硬编一份（那就是第二份列清单）。规则 = **贴到结尾的那一段全角括号**。 */
+const jcThLabel = t => esc(t).replace(/（[^（）]*）$/, m => `<b class="mut">${m}</b>`);
+/** `m11` 合同主表的表头：**控件列（勾选框）＋ 列清单逐列生成** —— ⛔ 壳里不再写列字面量。
+ *  ⚠️ 勾选框那一列**不进**后端列清单（它是屏幕控件、不是数据列）⇒ 由本函数补在最前
+ *     ⇒ 表头列数 = **1 ＋ 列清单长度**（真机自检 `tools/probe/_shell_jcpin.py` 按这个等式核）。 */
+function jcThead(){
+  const ctl = '<th class="ctr fl" style="width:34px"><input type="checkbox" class="chk" id="jcAllBox"'
+    + ' data-act="jcPickAll" title="全选 / 取消全选（仅当前筛选结果）"></th>';
+  return ctl + JC_COLUMNS.map(c => `<th>${jcThLabel(String(c.label || ''))}</th>`).join('');
+}
 let BIGSET = [];   /* ⭐ 已接后端：由 `reloadM07()` 从 `/api/m07/big` 的 `selected` 原地填充（行序 = 大表自己的顺序；未选择项目时后端给「全部候选」，与原型同款） */
 let BIGDRAFT = null;         /* 选择项目弹窗的**草稿**（「确定」前的临时顺序） */
 

@@ -1235,14 +1235,17 @@ BIND.m11 = function () {
      ② ⭐ **隐藏「贸易公司」三列**（用户 2026-09-20：「列太多了，贸易公司那 3 列不常用」）
 
      ⚠️ **为什么用 CSS 隐藏（`nth-child`）而不是改表头/行渲染**：
-        裁列要同时动**三处**（表头 `JC_THEAD` / 行 / **合计行**）＋ 清排序状态；
+        裁列要同时动**三处**（表头 / 行 / **合计行**）＋ 清排序状态；
         而 `display:none` **一次覆盖三处**，且 `table-layout:auto` 会让**剩下的列自动变宽**
         —— 正好是用户要的"隐藏后其他列宽跟着自适应"。⛔ 不用 `visibility:hidden`（那**留着宽度**，白搭）。
      ⚠️⚠️ **切换时必须清该表的排序状态**（`SORT['m11:jc']`）：
-        若用户**先**按「贸易公司合同金额」（第 9 列）排了序、**再**隐藏 ⇒ `SORT.i=9` 仍在生效
+        若用户**先**按「贸易公司合同金额」排了序、**再**隐藏 ⇒ 那个列的 `SORT.i` 仍在生效
         （对一列**看不见**的列排序）⇒ 界面看着"没排序"，人会以为排序坏了。
-     ⚠️ 列号是**写死的位置**（8/9/10）—— 它跟着 `JC_THEAD` 的列序走；⚠️ **改表头列序要同步改这里**
-        （这也是"通用列管理"值得单独做一次的原因：通用件该按列的**稳定身份**定位，而不是位置）。 */
+     ⭐ `TAIL-298`：隐藏哪三列**按 id 说话**（`JC_HIDE_IDS` · id = 后端列的 `key`）—— ⛔ 不再写
+        列号（列号是"位置"，加列 / 调序就得人肉同步，漏改**不报错**）；实现在
+        `actions.js::jcApplyHide`：`:nth-child(i+2)` —— `i` = 该列在**列清单**里的位置（0 起），
+        DOM 里 `#1` 是控件列（勾选框）⇒ **`+2`**（⚠️ 写成 `+1` 会整体**少藏一格**，把「发票金额」
+        当贸易公司名藏掉；2026-10-11 真机 ㉝-⑦ 抓到过一次）。 */
   const hidBtn = document.createElement('button');
   hidBtn.className = 'btn';
   hidBtn.dataset.act = 'jcToggleTrade';
@@ -1757,6 +1760,14 @@ function adaptJc(x) {
 async function reloadM11() {
   const d = await API.m11List();
   const rows = (d.rows || []).map(adaptJc);
+  /* ⭐⭐ `TAIL-298`：**列清单也只从后端来**（`/api/m11/list` 的 `columns` = `domain.JC_COLUMNS`）
+     —— 表头（`pages-b.js::jcThead`）与屏幕行为表（隐藏 / 钉列按 **id** 定位）都吃它。
+     ⚠️ 同样**原地**替换（`JC_COLUMNS` 是 `const` ⇒ 只许改内容）—— 与 `JCs` 那条同一个理由。
+     ⚠️ 只留屏幕要的三项：`key`（列的身份 · 行为表按它定位）· `label`（表头的字）· `type`；
+        ⛔ 别把 `export_label` 这些**导出侧**的字段也搬进来（屏幕不导出）。 */
+  const cols = (d.columns || []).map(c => ({key: String(c.key || ''), label: String(c.label || ''),
+                                            type: String(c.type || 'text')}));
+  JC_COLUMNS.length = 0; cols.forEach(c => JC_COLUMNS.push(c));
   JCs.length = 0;                       /* ⚠️ **原地**替换（`JCs` 是 `const` ⇒ 只许改内容；同 `LGs` 的教训）。
                                            理由：`JCs` **跨页共享** —— 整支换引用会让 `JC_PROJ_LIST` 等派生量失效。 */
   rows.forEach(r => JCs.push(r));

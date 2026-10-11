@@ -35,10 +35,17 @@ ZERO = Decimal("0.00")
 MSG_BAD_AMOUNT = "金额不合法：必须是大于 0 的数字（不设上限），已保留原值"
 MSG_NEED_DATE = "日期必填：发票要能对上所属期（默认取系统当日，可改）"
 
-#: 集采台账**表头**（20 列）—— 与原型 `JC_THEAD` **同名同序**（视图 / 导出⛔ 不写字面量）
+#: 集采台账**表头**（20 列）—— ⭐ **列的唯一主人**（`TAIL-298`）：屏幕表头 / 屏幕行为表（隐藏·钉列）
+#:   与 Excel 导出**一律从它派生**，⛔ 壳里不再另写一份 20 列字面量、导出也不另写一份列清单。
 #  ⚠️ 顺序即口径（`ACC-JC-UI-001/001-12` 钉着"三列紧贴操作列左侧"），别按"好看"重排。
+#: ⭐ `key` = 列的**稳定身份**：壳的屏幕行为表按它定位（`web/shell/pages-b.js` 的
+#:   `JC_HIDE_IDS` / `JC_PIN_IDS` —— 隐藏与钉列**各一条 id 清单**），⛔ 不按列号 ——
+#:   加一列 / 调列序**不该**改行为，列号那套正是 `TAIL-298` 要治的静默错位。
+#:   ⇒ 行为表里写错的 id 在这里找不到 ⇒ 判据当场红（`tests/test_ux_pages.py::001-61`）。
+#: ⭐ `export_label`（可选）= **Excel 表头的字**（缺省 = `label`）：屏幕上带「（自动）」「（自由文本）」
+#:   这类**屏内注解**，导出**不带**（Excel 里那是噪声）—— 见 `report_export/jc_export.py`。
 JC_COLUMNS: tuple[dict[str, Any], ...] = (
-    {"key": "idx", "label": "序号", "type": "text"},
+    {"key": "project_seq", "label": "序号", "type": "text"},   # 项目内动态号（TAIL-290）＝行字典 / 导出的同名键
     {"key": "date", "label": "合同日期", "type": "date"},
     {"key": "material", "label": "材料名", "type": "text"},
     {"key": "contract_no", "label": "合同编号", "type": "text"},
@@ -48,10 +55,10 @@ JC_COLUMNS: tuple[dict[str, Any], ...] = (
     {"key": "trade_co", "label": "贸易公司名", "type": "text"},
     {"key": "trade_contract_amt", "label": "贸易公司合同金额", "type": "num"},
     {"key": "trade_inv_sum", "label": "贸易公司发票金额", "type": "num"},  # = 贸易发票子表合计（派生）
-    {"key": "settle", "label": "结算金额（自动）", "type": "num"},    # 系统自动算
+    {"key": "settle", "label": "结算金额（自动）", "export_label": "结算金额", "type": "num"},    # 系统自动算
     {"key": "pay_sum", "label": "付款金额", "type": "num"},           # = 付款子表合计（派生）
-    {"key": "debt", "label": "欠款金额（自动）", "type": "num"},      # 系统自动算
-    {"key": "method", "label": "付款方式（自由文本）", "type": "text"},
+    {"key": "debt", "label": "欠款金额（自动）", "export_label": "欠款金额", "type": "num"},      # 系统自动算
+    {"key": "method", "label": "付款方式（自由文本）", "export_label": "付款方式", "type": "text"},
     {"key": "remark", "label": "备注", "type": "text"},
     {"key": "tag", "label": "三态", "type": "tag"},
     {"key": "arch", "label": "合同存档情况", "type": "tag"},
@@ -61,6 +68,10 @@ JC_COLUMNS: tuple[dict[str, Any], ...] = (
 )
 
 #: 子表表头（两张发票子表**共用** · §6.4.2「同款同规则」）—— 「发票日期 ＋ 金额」两列
+#: ⚠️ `TAIL-298` **同批核对**：这两张子表的「序号」是弹窗里按**行序**现生成的行号（壳 `i+1`），
+#:   行字典（`R.invoices_of`）里**没有**这个键、也**没有导出**（`JCINV_THEAD` 那列是 `#`）
+#:   ⇒ 它**不是**「元数据 / 行字典 / 导出三者同名」那一类（主表「序号」才是，见 `JC_COLUMNS`）。
+#:   ⇒ ⛔ 别拿 `idx` 去 `row.get(...)` 取值（会静默拿到空）。
 INV_COLUMNS: tuple[dict[str, Any], ...] = (
     {"key": "idx", "label": "序号", "type": "text"},
     {"key": "date", "label": "发票日期", "type": "date"},
@@ -68,6 +79,7 @@ INV_COLUMNS: tuple[dict[str, Any], ...] = (
 )
 
 #: 付款子表表头（日期 ＋ 金额 ＋ **来源** · §6.4.3「每条标明来源」）
+#: ⚠️ 「序号」同上（`TAIL-298` 同批核对）；`source` 是真键（`R.payments_of` 给 `manual` / `notice`）。
 PAY_COLUMNS: tuple[dict[str, Any], ...] = (
     {"key": "idx", "label": "序号", "type": "text"},
     {"key": "date", "label": "付款日期", "type": "date"},

@@ -82,30 +82,34 @@ function jcFetchSinceDefault() {
 let jcHideTrade=true;
 
 /* ⭐ `M5-9`：把「隐藏贸易公司列」这个**屏幕偏好**落到表上。
-   ⚠️⚠️ **不能只在 `BIND.m11` 里做一次** —— `render()` 会**重建整张表**（class 随之丢掉）
+   ⚠️⚠️ **不能只在 `BIND.m11` 里做一次** —— `render()` 会**重建整张表**（内联样式随之丢掉）
       ⇒ 每渲染一次都要重新落（否则一改筛选，隐藏就"自己弹回来了"，而且**不报错**）。
-   ⚠️ `classList.toggle(cls, 布尔)` 一次搞定"加上/去掉"，⛔ 不用 if/else 两行（那种写法忘掉一支就静默）。 */
+   ⭐ `TAIL-298`：列**按 id 定位**（`JC_HIDE_IDS` · id = 后端列的 `key`，见 `pages-b.js`）——
+      ⛔ 不写列号：列号是"位置"，跟着列序走 ⇒ 加列 / 调序就得人肉同步，漏改**不报错**（悄悄藏错列，
+      `TAIL-290` 加「合同编号」那批就是这种账）；写错 id 由判据 `tests/test_ux_pages.py::001-61` 拦。 */
 function jcApplyHide(){
   const tbl=document.querySelector('#view table[data-sort-key="m11:jc"]');
   if(tbl){
     /* ⚠️ 用**内联 `display`**，⛔ **不写 CSS 规则**：CSS 得放进真正的 `<style>` 段，而本页样式与脚本
        在同一文件里 —— 我上次把规则插进了 `<script>` 段 ⇒ 那句 CSS 成了**语法错** ⇒ **整段脚本崩掉**
        （症状是 `PJs is not defined`；`syntax_audit` 查的是壳的 JS 件、**没覆盖**这段 ⇒ 没拦住）。
-       ⚠️ 列号 9/10/11 是**位置**：贸易公司名 / 贸易公司合同金额 / 贸易公司发票金额
-          ⇒ **改 `JC_THEAD` 列序要同步改这里**（这也是"通用列管理"该按列的**稳定身份**定位的原因）。
        ⚠️ `display:none` ⇒ 剩下的列**自动变宽**（`table.dt` 是 `width:100%` + `table-layout:auto`）
-          ＝ 用户要的「隐藏后其他列宽跟着自适应」。⛔ 别用 `visibility:hidden`（那**留着宽度**，白搭）。 */
-    tbl.querySelectorAll(
-      'thead > tr > th:nth-child(9), thead > tr > th:nth-child(10), thead > tr > th:nth-child(11),'
-      + ' tbody > tr > td:nth-child(9), tbody > tr > td:nth-child(10), tbody > tr > td:nth-child(11)'
-    ).forEach(el => { el.style.display = jcHideTrade ? 'none' : ''; });
+          ＝ 用户要的「隐藏后其他列宽跟着自适应」。⛔ 别用 `visibility:hidden`（那**留着宽度**，白搭）。
+       ⚠️ 表头 / 数据行 / **合计行**三处的同一列都靠 `:nth-child(i+2)` 选中 —— `i` = 该列在**列清单**里的
+          位置（0 起），而 DOM 里 **#1 = 控件列（勾选框）**、列清单第 0 项在 **#2** ⇒ `+2`
+          （⚠️ 2026-10-11 真机实测：写成 `+1` 会**整体少藏一格**（把「发票金额」当贸易公司名藏掉），
+           而且界面看着"就是少了三列"—— 只有 ㉝-⑦ 那种"逐列按 id 核"才看得见）。
+          `i` 现算 ⇒ 列清单还没到 / id 写错时**一个都不选**（⛔ 别瞎藏）。 */
+    const hit = JC_HIDE_IDS.map(jcColIndex).filter(i => i >= 0);
+    const sel = hit.map(i => `thead > tr > th:nth-child(${i+2}), tbody > tr > td:nth-child(${i+2})`).join(',');
+    if(sel) tbl.querySelectorAll(sel).forEach(el => { el.style.display = jcHideTrade ? 'none' : ''; });
   }
   const b=document.querySelector('#jcTradeBtn');
   if(b) b.textContent = jcHideTrade ? '👁 显示贸易公司列' : '🙈 隐藏贸易公司列';
 }
 
 /* ⭐⭐ `TAIL-180`（`B` 案 · 2026-09-29 **用户裁定**）：`m11` 合同主表的**行身份区**（勾选框 ＋ 序号 ＋
-   合同日期 ＋ 材料名）一起钉 —— 表 **20 列 · 330 行**，往右滚去填那 **4 个可编辑列**（付款方式 / 备注 /
+   合同日期 ＋ 材料名）一起钉 —— 表 **21 列 · 330 行**，往右滚去填那 **4 个可编辑列**（付款方式 / 备注 /
    存档号 / 寄回日期，正好落在最右）时，**看不见自己在给哪条合同填**（**会填错行**；
    同族 = 月度会大表 `TAIL-175`，那页已按 `A` 案钉好）。
    ⚠️⚠️ **为什么本页是"量出来的偏移"，而大表是静态 `calc(Npx * var(--fscale))`**（⛔ 两页形态不同，别照抄）：
@@ -116,14 +120,21 @@ function jcApplyHide(){
       ⇒ 本页一律**渲染后按表头实测**，`left` 取**相邻格的真实右缘**（⛔ 不取整 —— 取整会攒出 1px 的缝）。
    ⚠️ **钉的必须是「连续前缀」**（`sticky` 的硬约束）：序号(#1) 与 材料名(#3) 中间隔着 合同日期(#2)
       ⇒ 只钉两头会让 #2 从缝里露出来 / 被盖住 ⇒ **一并钉上 #2**（用户选 `B` 时点的是"行身份区"）。
-   ⚠️ 列号（0/1/2/3）是**位置**、跟着 `JC_THEAD` 的列序走 —— 改列序要同步改这里（同 `jcApplyHide` 那条口径）。
+   ⭐ `TAIL-298`：钉哪几列**按 id 现算**（`JC_PIN_IDS` · id = 后端列的 `key`，见 `pages-b.js`）——
+      ⛔ 不再写列号：列号是"位置"，跟着列序走 ⇒ 加列 / 调序就得人肉同步，漏改**不报错**（钉错列）；
+      写错 id 由判据 `tests/test_ux_pages.py::001-61` 当场拦（它拿那两条 id 与 `domain.JC_COLUMNS` 对账）。
+      ⚠️ 首格 0（勾选框）在原型切片里**本来就带 `fl`**（`TAIL-170`-③）⇒ 不在这儿管。
    ⚠️ 幂等：`render()` 会**重建整张表** ⇒ 每次渲染都要重新落（同 `jcApplyHide`，⛔ 别只做一次）。 */
-const JC_PIN = [1, 2, 3];   /* ⭐ 首格 0（勾选框）在原型切片里**本来就带 `fl`**（`TAIL-170`-③）⇒ 不在这儿管 */
 function jcApplyPin(){
   const tbl=document.querySelector('#view table[data-sort-key="m11:jc"]');
   if(!tbl) return;
   const head=tbl.querySelector('thead > tr'); if(!head) return;
   const ths=[...head.children];
+  /* 列 id ⇒ 列位：`+1` = **控件列占首位**（与 `jcThead()` 生成的表头同一套列序）。 */
+  const cols=JC_PIN_IDS.map(jcColIndex);
+  if(cols.some(i=>i<0)) return;                           /* 列清单还没到 / id 写错 ⇒ ⛔ 别瞎设偏移 */
+  const JC_PIN=cols.map(i=>i+1);
+  if(!JC_PIN.length||JC_PIN[0]!==1||!JC_PIN.every((v,i)=>v===JC_PIN[0]+i)) return;   /* 硬约束：连续前缀 */
   if(ths.length<=JC_PIN[JC_PIN.length-1]) return;         /* 列数不像预期 ⇒ ⛔ 别瞎设偏移 */
   const L0=ths[0].getBoundingClientRect().left;
   /* 第 i 列的 `left` = **它前面那一格的右缘**（真实边界，见上）。

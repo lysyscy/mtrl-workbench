@@ -9,6 +9,9 @@
 - **列** = **全列**（**含**「贸易公司」那 3 列）—— 用户明确选 **(B)**：
   屏幕上的「隐藏列」**只是屏幕的事**，导出永远给人**完整的表**（Excel 里显隐/列宽是他自己的事）。
   ⭐ 所以这里是「**行跟筛选、列不跟隐藏**」—— 两句不矛盾。
+  ⭐⭐ `TAIL-298`：**列清单不在这里写** —— 它从**域内核** `domain.JC_COLUMNS` **派生**
+  （去 `PAGE_ONLY_KEYS`、表头用 `export_label`）⇒ 屏幕 / 行为表 / 导出**同一个主人**，
+  ⛔ 别再往本件里抄一份列定义（抄了就是"改列序要人肉同步"那个老病）。
 
 ⚠️ **不做"看起来像个表"的假合计**：只对**金额列**求和；材料名 / 供应商 / 备注那些**不合计**
   （对文本求和没有意义，硬凑一个数只会让人以为那是业务指标）。
@@ -20,37 +23,25 @@ from __future__ import annotations
 from decimal import Decimal
 from io import BytesIO
 
-SEQ_KEY = "project_seq"
+from app.mod11_jc import domain as D          # ⭐ 分层规则 D 允许：导出层可用业务包的 `domain`
 
-#: 导出的列（**顺序 = 页面表头顺序**去掉「勾选 / 操作」）⇒ 导出的表与屏幕**并排看能对上**。
-#: 第二项 = 行字典里的键（`mod11_jc.service.build_list` 的输出直接可用）；`SEQ_KEY` 读取后端项目内动态号。
-COLUMNS: tuple[tuple[str, str], ...] = (
-    ("序号", SEQ_KEY),
-    ("合同日期", "date"),
-    ("材料名", "material"),
-    ("合同编号", "contract_no"),
-    ("供应商", "supplier"),
-    ("合同金额", "contract_amt"),
-    ("发票金额", "inv_sum"),
-    ("贸易公司名", "trade_co"),
-    ("贸易公司合同金额", "trade_contract_amt"),
-    ("贸易公司发票金额", "trade_inv_sum"),
-    ("结算金额", "settle"),
-    ("付款金额", "pay_sum"),
-    ("欠款金额", "debt"),
-    ("付款方式", "method"),
-    ("备注", "remark"),
-    ("三态", "tag"),
-    ("合同存档情况", "arch"),
-    ("存档号", "arch_no"),
-    ("寄回日期", "ret_date"),
+#: 行字典里**项目内动态号**（`TAIL-290`）的键 —— 与 `domain.JC_COLUMNS` 首列、`service.build_list` 三者**同名**。
+SEQ_KEY = D.JC_COLUMNS[0]["key"]
+
+#: 导出的列 = **域内核那张列清单**去掉「操作」（`PAGE_ONLY_KEYS`）—— ⭐ `TAIL-298` 起**不再自写一份**：
+#:  屏幕表头 / 屏幕行为表（隐藏·钉列）/ 导出**同一个主人**（`domain.JC_COLUMNS`），⛔ 谁也别再抄第二份。
+#:  · 顺序 = 屏幕列序 ⇒ 导出的表与屏幕**并排看能对上**；
+#:  · 表头的字 = `export_label`（缺省 = `label`）—— 屏幕上「（自动）」「（自由文本）」是**屏内注解**，
+#:    Excel 不带（用户 2026-10-11 口径：「导出表头的字与键名对齐」）；
+#:  · 第二项 = 行字典里的键（`mod11_jc.service.build_list` 的输出直接可用；序号列 = `SEQ_KEY`）。
+COLUMNS: tuple[tuple[str, str], ...] = tuple(
+    (c.get("export_label") or c["label"], c["key"])
+    for c in D.JC_COLUMNS if c["key"] not in D.PAGE_ONLY_KEYS
 )
 
-#: 金额列（**只对这些列合计**）—— 见模块头「不做假合计」。
-MONEY_KEYS: frozenset[str] = frozenset({
-    "contract_amt", "inv_sum", "trade_contract_amt", "trade_inv_sum",
-    "settle", "pay_sum", "debt",
-})
+#: 金额列（**只对这些列合计**）= 域内核的 `SUM_KEYS`（页面 `sumRowOf` 求的就是这几列）——
+#: 见模块头「不做假合计」。⚠️ 本页「写数字」与「要合计」**恰好是同一集**；⛔ 别的页不是（别照抄）。
+MONEY_KEYS: frozenset[str] = frozenset(D.SUM_KEYS)
 
 SHEET_NAME = "集采台账"
 

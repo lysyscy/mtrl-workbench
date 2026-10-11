@@ -12,7 +12,10 @@
   ④ **合计行**：首格「合计」也钉（不钉 ⇒ 钉住的那几格左边**露个洞**），且它与后面几格接得上；
   ⑤ ⭐ **隐藏「贸易公司」三列之后要重量**（隐藏会**改剩下的列宽** ⇒ 旧偏移当场过期）——
      本页偏移是**量出来的**（⛔ 不是静态算式，实测列宽随视口变），这条专打"只量一次"的写法；
-  ⑥ 顺带证明**这段不是空跑**：表必须**真的能横滚**、**真的有数据行**。
+  ⑥ 顺带证明**这段不是空跑**：表必须**真的能横滚**、**真的有数据行**；
+  ⑦ ⭐⭐ **`TAIL-298`：列的身份** —— 表头列数 = **1 个控件列 ＋ 后端列清单长度**、逐列表头文字与
+     `columns[].label` **同名同序**、且**被隐藏的列 id 集合 = 屏幕偏好那三列**（按 id 定位，⛔ 不按列号）。
+     这三条只有真机能判（壳里已经没有那张 20 列字面量可查了 —— 离线只能判"字面量退场 ＋ 由列清单生成"）。
 
 ⚠️ 为什么必须在真机：离线判据只能证明"源码里有 `jcApplyPin` 且它量了宽"，**证明不了屏幕上真严丝合缝**
   （`sticky` 的错位 / 露底是它的经典失败模式，且**不报错**）。
@@ -52,6 +55,25 @@ JS = r"""(arg) => {
     opaque: heads.map(opq),
     sumCells: cells(sum).map(box), sumFl: cells(sum).map(e => e.classList.contains('fl')),
     sumLead: sum && sum.children[0] ? (sum.children[0].innerText || '').trim().slice(0, 4) : '',
+  };
+}"""
+
+
+COLS_JS = r"""async (sel) => {
+  const d = await (await fetch('/api/m11/list')).json();
+  const cols = (d.columns || []).map(c => ({key: String(c.key || ''), label: String(c.label || '')}));
+  const tb = document.querySelector(sel);
+  if (!tb) return {err: '没找到 `m11` 合同主表（选择器或页变了？）'};
+  const ths = [...tb.querySelectorAll('thead > tr > th')];
+  const txt = x => (x.innerText || '').replace(/[↕\s]/g, '');     /* 排序箭头是 `applySorts` 加的 ⇒ 去掉 */
+  const hid = ths.slice(1).map(x => getComputedStyle(x).display === 'none');
+  return {
+    n: ths.length,
+    cols: cols.map(c => c.key),
+    labels: ths.slice(1).map(txt),
+    want: cols.map(c => c.label),
+    hiddenKeys: cols.filter((c, i) => hid[i]).map(c => c.key),
+    wantHidden: (typeof jcHideTrade !== 'undefined' && jcHideTrade) ? (JC_HIDE_IDS || []) : [],
   };
 }"""
 
@@ -178,3 +200,31 @@ def check(page, errors: list[str]) -> None:
             f"偏移必须重量；链 = {[c['l'] for c in d2['head']]}）")
     if not hid:
         errors.append("㉝-⑤ 切换三列后表的宽度没变 ⇒ 本段没能真的验到「重量」这条（换一种隐藏机制了？）")
+
+    # ⑦ ⭐⭐ `TAIL-298`：**列的身份**（表头列数 / 逐列表头文字 / 隐藏的列 id）—— 见文件头 ⑦。
+    #   ⚠️ 三条都对着**同一个端点**（`/api/m11/list` 的 `columns` = `domain.JC_COLUMNS`）核 ——
+    #      壳里已经没有那张 20 列字面量可查了，离线只能判"字面量退场 ＋ 由列清单生成"。
+    c = page.evaluate(COLS_JS, TBL)
+    if c.get("err"):
+        errors.append(f"㉝-⑦ {c['err']} —— 本段验不了（⛔ 别让它静默通过）")
+        return
+    ok_n = c["n"] == 1 + len(c["cols"])
+    ok_l = c["labels"] == c["want"]
+    ok_h = set(c["hiddenKeys"]) == set(c["wantHidden"])
+    print(f"   · ㉝-⑦ 表头 {c['n']} 格 · 后端列清单 {len(c['cols'])} 列 · "
+          f"隐藏的列 = {c['hiddenKeys']}（屏幕偏好 = {c['wantHidden']}）")
+    if not ok_n:
+        errors.append(
+            f"㉝-⑦ 表头 {c['n']} 格 ≠ **1 个控件列 ＋ 列清单 {len(c['cols'])} 列** —— 表头没按 "
+            "`/api/m11/list` 的 `columns` 生成（或壳里又写回了一张列字面量 · `TAIL-298`）")
+    if not ok_l:
+        bad = [(i, a, b) for i, (a, b) in enumerate(zip(c["labels"], c["want"])) if a != b]
+        errors.append(
+            f"㉝-⑦ 表头文字与列清单**对不上**（{len(bad)} 处，前 3 处 = {bad[:3]}）—— "
+            "屏幕上那一列的字不再来自 `domain.JC_COLUMNS` 的 `label`")
+    if not ok_h:
+        errors.append(
+            f"㉝-⑦ 隐藏的列 id = {sorted(c['hiddenKeys'])}，而屏幕偏好要藏的是 "
+            f"{sorted(c['wantHidden'])} —— 隐藏没有按 id 落（按列号的写法一加列就藏错 · `TAIL-298`）")
+    print(("   ✅" if ok_n and ok_l and ok_h else "   ⛔")
+          + "㉝-⑦ 表头 = 控件列 ＋ 列清单；文字逐列同名同序；隐藏的正是偏好那几列")

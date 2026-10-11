@@ -124,6 +124,8 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 
 壳的语义读取入口是 tools/audit/shell_api.py，测试侧只转发的入口是 backend/tests/shell_src.py；剪刀清单由 backend/tests/shell_scissors.py 守护。
 
+**列表页的「列身份」**（`TAIL-298` · `m11` 是样板）：一张表的列清单**一个主人** —— 业务包的 `domain.JC_COLUMNS`（`m11_jc`）⇒ ① 壳的表头由它**现生成**（`shell/pages-b.js::jcThead`，⛔ 壳里不再写列字面量）；② 屏幕行为（默认隐藏 / 钉列）只写**列 id**（`JC_HIDE_IDS` / `JC_PIN_IDS` = 后端 `key`，⛔ 不写列号 —— 列号是"位置"，加一列就得人肉同步且**漏改不报错**）；③ Excel 导出由它**派生**（`report_export/jc_export.py`：列集 = `JC_COLUMNS − PAGE_ONLY_KEYS`、表头字 = `export_label`（缺省 = `label`，屏幕注解不进 Excel）、合计列 = `SUM_KEYS`）。判据：`backend/tests/test_tail298_columns.py`（导出派生 ＋ **值级**键覆盖）· `backend/tests/test_ux_pages.py::001-61`（行为表 id ∈ 规格 ＋ 偏移量出来）· 真机 ㉝ `tools/probe/_shell_jcpin.py`；自证 `tools/mut/_mut_tail298_columns.py`。
+
 ## 四、渲染层删改保护
 
 该表是删改前的检查清单，不能推断每个旧文件/端点仍存在；历史行保留提醒，实况以代码、调用方和判据为准。

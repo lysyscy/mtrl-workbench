@@ -38,8 +38,10 @@ CASES = [
      _b("TBLBROKEN({head,rows:body,sum:sumRow+totRow})"), "主表（表①/表②）的表外壳没走统一出口"),
     (SHELL, "M13 去掉委托（`m04` 付款计划表 不再走 `TBL`）", _b("TBL({head:PL_THEAD,key:'m04:plans',"),
      _b("TBLBROKEN({head:PL_THEAD,key:'m04:plans',"), "付款计划表没走统一出口"),
-    (SHELL, "M15 去掉委托（`m11` 集采台账表 不再走 `TBL`）", _b("TBL({head:JC_THEAD,key:'m11:jc',"),
-     _b("TBLBROKEN({head:JC_THEAD,key:'m11:jc',"), "集采台账表没走统一出口"),
+    # ⚠️ 2026-10-11（`TAIL-298`）：`m11` 的表头由 `JC_THEAD` 字面量改成 `jcThead()`（按后端列清单现生成）
+    #    ⇒ 本锚点同批跟上（⛔ 不改 = 靶串命中 0 次 ⇒ 这一支静默失效，本件自己会打「未验证」）。
+    (SHELL, "M15 去掉委托（`m11` 集采台账表 不再走 `TBL`）", _b("TBL({head:jcThead(),key:'m11:jc',"),
+     _b("TBLBROKEN({head:jcThead(),key:'m11:jc',"), "集采台账表没走统一出口"),
     (PROJ, "M40 内核不按 `cols` 派生（`c.t` 改名 ⇒ 给了 `cols` 的表没有表头）",
      _b("head=cols.map(c=>c.t).join('')"), _b("head=cols.map(c=>c.tt).join('')"),
      "没有从 `cols` 派生")

@@ -17,7 +17,7 @@
 | 前端目标、布局、交互与视觉验收 | `ops/前端设计守则-以使用用户为中心.md` **§0 → §9** —— **改界面或处理显示／交互报障之前** |
 | 任何"上屏文字"该怎么写 | `.codebuddy/work/40-decisions/D29-文案审计口径-以熟手为准.md` —— **写字之前** |
 | 某个硬数字为什么是这个值 | `ops/阈值表.md` —— **怀疑数字错时** |
-| **日常改动怎么做 / 何时用 skills / 核验范围 / 票怎么开收** | `ops/agents/issue-tracker.md` **§四**（流程）＋其余节（票协议）—— **开始改动之前** |
+| **日常改动怎么做 / 何时用 skills / 核验范围 / 票怎么开收 · 提交前跑什么** | `ops/agents/issue-tracker.md` **§四**（流程）＋其余节（票协议）；运行命令见 `.codebuddy/memory/IDE-细节.md` **§十一** —— **开始改动 / 提交之前** |
 | 某个决定**当初为什么这么定** | `.codebuddy/work/40-decisions/D*.md` —— **想推翻它之前** |
 | 每轮都要守的纪律 ＋ 用户偏好 | `.codebuddy/memory/MEMORY.md`（**每会话自动注入**）—— **动手前** |
 | 专题实现约束 | `.codebuddy/memory/细则.md` 的对应标题 —— **涉及打印、主题、历史数据、配置出口、模块搬运或判据时**先取标题，再读命中小节；业务含义仍回 `delivery/` 主人 |
@@ -45,8 +45,4 @@
 **单上下文**（single-context）：术语主人 = `delivery/材料科业务全流程说明书.md` / `delivery/PRD/`（＋ `D29` 用词统一表）；决定 = `.codebuddy/work/40-decisions/`。
 ⛔ **不单建 `GLOSSARY.md`**（那会长出第二套口径；真要建由 `/domain-modeling` 按需懒建）。见 `ops/agents/domain.md`。
 
-## 提交前
-
-按指针表「日常改动怎么做 / 何时用 skills / 核验范围 / 票怎么开收」那一行读取 `ops/agents/issue-tracker.md` §四，**按实际影响核验**（提交动作不扩大范围）；已有未变化的有效结果可复用，相关未验输入须补验。运行命令见 .codebuddy/memory/IDE-细节.md §十一。
-
-⛔ 提交须用户授权；凭据不提交。现行业务资料位于 `delivery/`。
+⛔ **权限边界**：提交须用户授权（`§四` 同款）；凭据（`.env`）不提交 —— `ops/hooks/pre-commit` 会拦。

@@ -35,6 +35,10 @@ SLOW_KEY: frozenset[str] = frozenset({
     #   ⇒ 秒数紧贴快集线、余量太小 ⇒ 归慢集（⛔ 别为消提醒改 `FAST_BUDGET`，票面已明写）。
     #   ⭐ 它**同时留在 `KEY`**：慢集只表示"`--fast` 跳过"，而动了 `tools/mut/` 的那轮闸门仍跑全套。
     "_mut_syntax.py",
+    # ⚠️ `TAIL-298`（2026-10-11 收工）：本票新写的列身份反例 —— 4 处变异，每处要**先建隔离副本
+    #   （`copytree` backend/app ＋ tests）再拉起一次真 pytest** ⇒ 实测贴着快集线（秒数看每次运行自己打的那行）。
+    #   ⭐ 同 `_mut_syntax.py`：它**同时留在 `KEY`**（慢集只表示 `--fast` 跳过）。
+    "_mut_tail298_columns.py",
 })
 
 #: ⭐⭐ **刻意留在快集、且超预算也不提醒挪走**的那几支（`/code-review` 2026-10-06 抓出后才补上，
@@ -114,6 +118,10 @@ KEY: tuple[tuple[str, str], ...] = (
     ("_mut_sort.py", "壳内金额/空值/草稿的排序口径（靶＝`shell/base.js` 的隔离副本 · 不写正式壳）"),
     ("_mut_docguide.py", "原型导读的历史/现行边界（靶＝demo 文档的内存替换 · 不写产品资料）"),
     ("_mut_retro.py", "核验与证据出口（隔离副本内造共享漏选/全量误杀/摘要泄漏/失败变绿）"),
+    # ⚠️ 2026-10-11（`TAIL-298`）：列身份（列清单一个主人 / 导出派生 / 行为表按 id）——
+    #   靶在 `_isolated.isolated_backend` 的临时副本（改字节只在副本内），子进程跑真 pytest
+    #   （conftest 把库换成测试库）⇒ 离线、不刷权威四态 ⇒ 属"尺子/机制面"，进关键集。
+    ("_mut_tail298_columns.py", "`TAIL-298` 列身份：列清单删一列 / 键名漂（值级） / 行为表写错 id / 钉列不连续"),
 )
 
 #: ⭐⭐ **有意不跑名单**（`TAIL-239` 第 3 步 · 治复发）—— **逐支带理由**。
@@ -152,6 +160,9 @@ KEEP_OUT: dict[str, str] = {
     "_mut_vs.py": "靶＝`tools/probe/` 的虚拟滚动阈值 ＋ 焦点护栏 · **要 playwright 真机**",
     "_mut_vsrisk.py": "靶＝`tools/probe/_shell_smoke.py`（㊱ 接管缺口）· **要真机**",
     "_mut_m11cost.py": "靶＝`tools/probe/_shell_smoke.py`（㊲ m11 打开不卡）· **要真机**",
+    # ⚠️ 2026-10-11（`TAIL-298` 收尾 / `/retro` 候选 1）：靶＝**真机前置**（服务 vs 磁盘列清单）——
+    #   它是"先排掉'服务在跑旧模块'"那道闸，只跑前置那半（不遍历 39 段）⇒ 仍要活服务 ＋ 浏览器。
+    "_mut_smoke_fresh.py": "靶＝`tools/probe/_shell_smoke.py` 的真机前置（服务列清单 vs 磁盘）· **要真机**；改该前置或其取数时按需跑",
 
     # ---- 当前红 / 靶假设过期（⛔ 修好前塞进闸门＝每轮假红；已在当日日志留痕）----
 
@@ -296,7 +307,15 @@ def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
                       # ⚠️ 2026-10-11（TAIL-290~292 收尾）：本批新写的四支，逐支实跑过 ——
                       #   三支业务面（隔离 copytree ＋ 子进程 pytest，按需 `--cases`）与一支真机
                       #   （内存替换探针源码、不写正式件）⇒ 放行它们自己的隔离入口。
-                      '_mut_tail290.py', '_mut_tail291.py', '_mut_tail292.py', '_mut_probe_jcpin.py'}:
+                      '_mut_tail290.py', '_mut_tail291.py', '_mut_tail292.py', '_mut_probe_jcpin.py',
+                      # ⚠️ 2026-10-11（`TAIL-298` 收尾 `/retro` 候选 1）：真机前置的反例 ——
+                      #   内存 exec 探针源码两遍（原样必须放行 / 磁盘侧塞哨兵必须指名报红），
+                      #   ⛔ 不写正式探针件、不写库（同 `_mut_probe_jcpin.py` 那一档）。
+                      '_mut_smoke_fresh.py',
+                      # ⚠️ 2026-10-11（`TAIL-298` 收尾）：本票新写的列身份反例 —— 逐支实跑过：
+                      #   ① 基线三个节点 rc=0；② 四处变异各自 rc=1 且断言消息命中；③ 跑完 MD5 复核已复原；
+                      #   ④ 靶全在 `_isolated.isolated_backend` 的临时副本（正式件与权威四态都未动）。
+                      '_mut_tail298_columns.py'}:
         print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
         return 2, 0.0
     t = time.time()
