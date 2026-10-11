@@ -111,7 +111,14 @@ def _fit(frag: bytes, sample: bytes) -> bytes:
 #:    脚本一个"未验证"打出来、退出码却是 1，看起来跟"变异没命中"**长得一模一样**。
 #:    ⇒ 改成**动态锚点**：从**当前文档**正则取那处数字，再把捕获到的那个数改小 1（⛔ 别再写死）。
 _四态PAT = r"绿 (\d+) · 红 (\d+) · 待建 (\d+) · 未绑定 (\d+)"
-_尾巴PAT = r"A 类 \*\*\d+\*\* 条 · B 类 \*\*\d+\*\* 条 · C 类 \*\*\d+\*\* 条 · 已销号 \*\*(\d+)\*\* 条"
+def _dyn_tail(text: str) -> tuple[bytes, bytes]:
+    """用唯一计数形态源取活跃数靶，改错后应由 T6/T4 看见。"""
+    match = audit_common.COUNT_FULL_RE.search(text)
+    counts = audit_common.read_counts(text)
+    assert match and counts is not None, "新计数形态锚点没找到"
+    old = match.group(0)
+    new = old.replace(str(counts[0]), str(counts[0] - 1), 1)
+    return _b(old), _b(new)
 #: `T9` 段界（真源 = `audit_meta.RULE_SECTION_RE`；⛔ 两处同改，理由见 `_dyn_rule_line`）
 _RULE_SEC_RE = re.compile(r"^##\s*八[、.]\s*工程纪律")
 
@@ -211,47 +218,72 @@ T11_TMP = ROOT / "artifacts" / "_mut_建议_临时.md"
 #: 2026-10-08（TAIL-250接续）：M19使用隔离的在办票夹具；真实票销号或在办清零不应让
 #:   自证失效。调用同一T6实现，先证基线无红，再只移走票文件；不改真实票仓/主计划。
 sys.path.insert(0, str(ROOT / "tools" / "audit"))
+import audit_common                  # noqa: E402
 import audit_meta                    # noqa: E402
 
 
 GHOST_TICKET = ROOT / ".codebuddy" / "work" / "50-tickets" / "TAIL-9999-幽灵票.md"
 
 
-def _missing_ticket_fixture() -> tuple[int, str]:
-    """同一T6：有票时无红，移走票后只能命中缺票，再还原为无红。"""
+def _run_t6_fixture(closed_rows=(), state="claimed", remove_ticket=False):
+    """用最小隔离仓运行同一 T6；可注入缺号、已销号仍在活动区或缺票。"""
     scratch = ROOT / ".codebuddy" / "work" / "00-scratch"
     with tempfile.TemporaryDirectory(prefix="tmp-docaudit-ticket-", dir=scratch) as name:
         fixture = Path(name)
         ledger = fixture / audit_meta.LEDGER_REL
         ledger.parent.mkdir(parents=True)
+        closed = fixture / audit_common.CLOSED_INDEX_REL
+        closed.parent.mkdir(parents=True, exist_ok=True)
+        archive = (
+            "# 票索引-已销号\n\n## 一、索引与追加规则\n\n"
+            "| # | 事项 | 销号依据 | 日期 |\n|---|---|---|---|\n"
+            + "".join(f"| {tag} | 夹具 | 证据 | 2026-10-11 |\n" for tag in closed_rows)
+        )
+        closed.write_text(archive, encoding="utf-8")
         ledger.write_text(
             "## 14. 排期\n### 14.3 逐条排期\n"
             "| 尾巴 | 建议时机 | 理由 | 前置 |\n|---|---|---|---|\n"
             "| TAIL-1 | 立刻 | 夹具 | 无 |\n"
             "## 15. 尾巴台账\n"
-            "A 类 **1** 条 · B 类 **0** 条 · C 类 **0** 条 · 已销号 **0** 条\n"
+            f"活跃 **1** 条 · 已销号 **{len(closed_rows)}** 条\n"
+            "> 已销号短索引：票索引-已销号.md §一。\n"
             "### 一、A类\n| # | 事项 | 来源 | 不做会怎样 | 落点 | 阶段 / 时机 | 状态 |\n"
             "|---|---|---|---|---|---|---|\n"
             "| TAIL-1 | 夹具 | 自证 | 未验 | 夹具 | 立刻 | 在办 |\n"
-            "### 二、B类\n### 三、C类\n### 四、已销号\n",
+            "### 二、B类\n### 三、C类\n",
             encoding="utf-8")
         (fixture / audit_meta.HANDBOOK_REL).write_text(audit_meta.LEDGER_NAME, encoding="utf-8")
         ticket = fixture / audit_meta.TICKET_DIR_REL / "TAIL-1-夹具.md"
         ticket.parent.mkdir(parents=True)
-        body = "**What to build:** 夹具\n**Blocked by:** None\n**Status:** claimed\n- [ ] 缺票能被T6检出\n"
+        body = f"**What to build:** 夹具\n**Blocked by:** None\n**Status:** {state}\n- [ ] 缺号与活动状态可被 T6 检出\n"
         ticket.write_text(body, encoding="utf-8")
         saved_root = audit_meta.REPO_ROOT
         try:
             audit_meta.REPO_ROOT = fixture
             baseline = audit_meta.check_tail_ledger(set())
-            assert not baseline, f"M19夹具基线应无红：{baseline}"
-            ticket.unlink()
+            if remove_ticket:
+                ticket.unlink()
             hits = audit_meta.check_tail_ledger(set())
-            ticket.write_text(body, encoding="utf-8")
-            assert not audit_meta.check_tail_ledger(set()), "M19恢复后应无红"
         finally:
             audit_meta.REPO_ROOT = saved_root
-        return len(hits), "\n".join(f"[T6] {h['what']}" for h in hits)
+        return baseline, hits
+
+
+def _missing_ticket_fixture() -> tuple[int, str]:
+    """证明缺票、姊妹件缺号与 done 行留在活动区均能由 T6 判红。"""
+    baseline, missing = _run_t6_fixture(remove_ticket=True)
+    assert not baseline, f"T6 夹具基线应无红：{baseline}"
+    assert any("没有票文件" in h["what"] for h in missing), f"缺票未命中：{missing}"
+
+    _, gap = _run_t6_fixture(closed_rows=("TAIL-3",))
+    assert any("编号不连续" in h["what"] for h in gap), f"姊妹件挖号未命中：{gap}"
+
+    _, done = _run_t6_fixture(state="done")
+    assert any("仍留在活动区" in h["what"] for h in done), f"已销号活动行未命中：{done}"
+    report = ["姊妹件缺 TAIL-2：" + next(h["what"] for h in gap if "编号不连续" in h["what"]),
+              "done 票仍在活动区：" + next(h["what"] for h in done if "仍留在活动区" in h["what"])]
+    return len(missing), "\n".join(f"[T6] {h['what']}" for h in missing) + "\n" + "\n".join(report)
+
 
 #: ⚠️ 追加块**前后各留 3 空行**：`_hit` 的豁免窗口 = 命中行 **±2 行** ⇒ 贴着正文追加可能被邻行的
 #:    「已删 / 改为 / 原」之类词**降档**（那就成了"变异没命中"，看着跟"检查瞎了"**一模一样**）。
@@ -299,11 +331,12 @@ MUTS_RED2: list[dict] = [
      "also": ("[T18]", "RECEIPT_DIR"), "path": GUARD_SRC,
      "old_new": (_b('RECEIPT_DIR = "artifacts"'), _b('RECEIPT_DIR = "artifacts_typo"')), "all": False},
     # ⭐⭐ `T19`（2026-09-24 立 · `TAIL-84`）：造一处**指到不存在的节**的引用 ⇒ 必须报（红）。
-    #    ⚠️ 靶选 `ops/阈值表.md`（`ops/*.md` ∈ 扫描面 ⇒ 命中即红）；⚠️ 引用必须**紧贴**
+    #    ⚠️ 靶选 `ops/阈值表.md`（`ops/*.md` ∈ 扫描面 ⇒ 命中即红）；同时验证以点开头的治理路径可解析。
+    #    ⚠️ 引用必须**紧贴**
     #    （本守卫只认「`X.md` 与 `§N` 相距 ≤8 字符」—— 松散写法是刻意排除的，见其注释）。
-    {"desc": "M14 `T19` 文档指针**指到不存在的节**（`ops/阈值表.md` 里没有 §九九）", "mode": "red",
+    {"desc": "M14 `T19` 文档指针**指到不存在的节**（.codebuddy 姊妹件里没有 §九九）", "mode": "red",
      "also": ("[T19]", "§九九"), "path": THRESHOLD,
-     "frag": lambda src: _fit(_b("\n\n\n另见 `ops/阈值表.md` §九九。\n\n\n"), src)},
+     "frag": lambda src: _fit(_b("\n\n\n另见 `.codebuddy/plans/票索引-已销号.md` §九九。\n\n\n"), src)},
     # ⭐⭐ `T9`②（2026-09-29 立 · `TAIL-59` 量测）：在**注入档**里复述一个守卫的阈值 ⇒ 必须报（**黄**）。
     #    ⚠️ 为什么只盯这一个形态：量测证明"数字级"扫描**噪音压倒信号**（阈值表 27 行里 26 行"命中"，
     #      绝大多数是巧合 —— `6`/`300`/`1000` 在任何文档里都会自然出现）⇒ 只有"**指名复述**"
@@ -502,7 +535,7 @@ def main() -> int:
         {"desc": "M2 简略版里不再指向计划文档（台账就没人看得见）", "mode": "red", "needle": "",
          "path": HAND, "old_new": (_b("开发计划-主文档"), _b("某份计划文档")), "all": True},
         {"desc": "M3 台账顶部计数与实际不符（人按错的数判断尾巴有多少）", "mode": "red", "needle": "",
-         "path": PLAN, "old_new": _dyn(_尾巴PAT, PLAN.read_text(encoding="utf-8")), "all": False},
+         "path": PLAN, "old_new": _dyn_tail(PLAN.read_text(encoding="utf-8")), "all": False},
         *MUTS_APPEND,
         *MUTS_RED2,
     ]

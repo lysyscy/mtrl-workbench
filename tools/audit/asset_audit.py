@@ -29,6 +29,8 @@ import re
 import sys
 from pathlib import Path
 
+from audit_common import CLOSED_INDEX_REL
+
 ROOT = Path(__file__).resolve().parents[2]
 INDEX = ROOT / "ops" / "素材包-索引.md"
 PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
@@ -82,8 +84,11 @@ def load_sections() -> dict[str, list[list[str]]]:
 
 
 def tail_ids() -> set[str]:
-    txt = PLAN.read_text(encoding="utf-8")
-    return set(TAIL_RE.findall(txt))
+    parts = [PLAN.read_text(encoding="utf-8")]
+    closed = ROOT / CLOSED_INDEX_REL
+    if closed.exists():
+        parts.append(closed.read_text(encoding="utf-8"))
+    return set(TAIL_RE.findall("\n".join(parts)))
 
 
 def acc_ids() -> set[str]:

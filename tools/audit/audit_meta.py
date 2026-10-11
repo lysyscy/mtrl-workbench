@@ -12,7 +12,7 @@ import tokenize
 from pathlib import Path
 
 from audit_common import (
-    HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, LENIENT_GLOBS, LIVE_MACHINE_GLOBS, RED, REPO_ROOT,
+    CLOSED_INDEX_REL, HANDBOOK_REL, LEDGER_NAME, LEDGER_REL, LENIENT_GLOBS, LIVE_MACHINE_GLOBS, RED, REPO_ROOT,
     SCAN_GLOBS, TAIL_MIN_CELLS, TAIL_SCHEDULE_RE, TAIL_STAGE_RE, YELLOW, delivery_root, read_counts,
     DOC_SUFFIXES, ROOT_ALLOW, GITIGNORE_REL,
 )
@@ -206,15 +206,7 @@ DOC_BUDGETS: tuple[tuple[str, int, str, int | None], ...] = (
     #:   用户裁定「只留待办」⇒ 待办并入**根 `README.md` §〇**（本表第 1 行就是它，预算 240）
     #:   ⇒ ⛔ **别为它再列一行**：那会变成"同一件事两处预算"（本仓最贵的病，必漂）。
     (".codebuddy/memory/细则.md", 620, "must", None),          #: ⛔ 同上；⭐ **2026-10-01（`TAIL-204` 第 2 步）420 → 620**：并入原项目侧 `MEMORY.md` 全文（173 行归档为附录）
-    (".codebuddy/plans/开发计划-主文档.md", 1800, "must", None),   # ⭐⭐ 2026-09-29 **用户裁定 `A`：1700 → 1800**
-                                                          #:   （文档审计 §五之补 · ①）**理由 = 容量**：台账按设计每条一行，
-                                                          #:   09-29 一天新立/销号 **19 条**尾巴 ⇒ 顶穿 8 行是它**该长的样子**；
-                                                          #:   ⛔ 「搬叙事」已证伪（§15 §四 销号行受 `T6` 保护、一行不能搬；
-                                                          #:   那三处叙事各是一整行）⇒ ⛔ 不许不明说地超着，故**明说调到 1800**。
-                                                          #: ⭐ 2026-09-23 **统一成 1700**：
-                                                          #: 此前 `T10` 用 1800、`T13` 用 1700
-                                                          #: （同一件事两处写）⇒ 现已并成一个数       #: ⛔ **现值别手抄进注释** —— 2026-09-24 实测 **1510**，这里曾写「现 ~1746」（09-23 瘦身前的值）
-                                                          #: ⇒ **手抄的数字必漂**；要现值就跑 `doc_audit`（`T10` 会报）。
+    (".codebuddy/plans/开发计划-主文档.md", 600, "must", None),  # 2026-10-11: 715 → 418 行；为后续主计划收缩保留余量
 )
 #: ⭐⭐ **注入档字节「逼近线」**（2026-10-06 · `/retro` ③）＝ 硬顶 − 900 B。
 #: ⭐ **为什么要有它**（实测同日）：硬顶是 **14,400 B**，而那天余量只剩 **~0.5 KB** ⇒
@@ -350,10 +342,11 @@ def check_report_receipts() -> list[dict]:
 # ------------------------------------------------- T12 文档分层与命名约定
 
 
-#: `plans/` 下**只许**这些活文档（其余一律必须 `归档-` 打头）。
+#: `plans/` 下**只许**当前状态主文档与已销号短索引（其余一律必须 `归档-` 打头）。
 #: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：`执行情况-主文档.md` **已取消**（用户裁定「只留待办」⇒ 并进 `README.md` §〇）
-#:   ⇒ 从"两份"收成"一份"。⚠️ 收的是**件数**，⛔ 不是把"给人看的那一页"这件事一起砍掉 —— 它现在住在根 `README.md`。
-PLANS_LIVE: tuple[str, ...] = ("开发计划-主文档.md",)
+#:   ⇒ 从"两份"收成"一份"。⚠️ 收的是当前状态页件数，⛔ 不是把"给人看的那一页"一起砍掉 —— 它现在住在根 `README.md`。
+#: ⭐ 2026-10-11（`TAIL-294`）：新增只追加的「已销号短索引」作为编号与依据的机器输入，不承载当前状态或排期。
+PLANS_LIVE: tuple[str, ...] = ("开发计划-主文档.md", "票索引-已销号.md")
 #: 根目录**允许**出现的 `.md`（文档地图；⛔ 别在根上散落别的 md）
 #: ⭐ **2026-10-04 扩一员**：`AGENTS.md` —— ⚠️ 原先这里只许 `README.md`，而那条**是 AGENT 自定的**
 #:   （用户 2026-10-04 订正：「我没说过只需建立 README.md，这估计又是 AGENT 擅自曲解我的意思」）⇒
@@ -393,7 +386,7 @@ def check_doc_layout() -> list[dict]:
     """`T12` · **文档分层与命名约定**（2026-09-21 立 · 文档体系重构的落地闸门）。
 
     ⭐ 依据 = `README.md` 的**四层**（① 注入 ② 按需 ③ 留痕 ④ 产物）：
-      · `plans/` 下**只许两份活文档**，其余**必须 `归档-` 打头**（⚠️ 这条纪律早就写在
+      · `plans/` 下**只许当前状态主文档与指定的已销号短索引**，其余**必须 `归档-` 打头**（⚠️ 这条纪律早就写在
         `细则.md §五`「⛔ 不许私自新建文档」里，但**此前没有任何尺子看着它** ⇒ 本次立 T12）；
       · `memory/` 下**日志必须进 `journal/`**（⭐ `journal/` = 只追加不回读层 —— 混在 `memory/` 根下时，
         没人分得清"这是纪律还是流水账"，这正是用户报「文档乱」的机制之一）；
@@ -410,9 +403,9 @@ def check_doc_layout() -> list[dict]:
             if f.name not in PLANS_LIVE and not f.name.startswith("归档-"):
                 hits.append(_t12(f".codebuddy/plans/{f.name}",
                                  "`plans/` 下出现了「第三份文档」",
-                                 "`plans/` 只有两份活文档（计划 ＋ 执行情况），其余是**留痕** ⇒ "
-                                 "多出来的第三份没人知道它是活文档还是留痕（`T6` 也只看计划那份）",
-                                 "改名 `归档-<主题>-<日期>.md`（留痕），或并进两份活文档之一"))
+                                 "`plans/` 只允许当前状态计划与指定的已销号短索引，其余是**留痕** ⇒ "
+                                 "多出来的文档没人知道它是活文档还是留痕（`T6` 也只看计划与指定短索引）",
+                                 "改名 `归档-<主题>-<日期>.md`（留痕），或并进已登记的现行文档"))
     mem = REPO_ROOT / ".codebuddy" / "memory"
     if mem.is_dir():
         for f in sorted(mem.glob("*.md")):
@@ -584,43 +577,60 @@ def ticket_states() -> dict[str, str]:
     return out
 
 
-def ledger_counts(text: str | None = None) -> dict[str, int] | None:
-    """尾巴台账**四段各有多少行**（只数行，不做任何检查）。
-
-    ⭐ 2026-09-24 从 `check_tail_ledger` 抽出：`T6` 用它核对顶部计数行，
-    `audit_drift` 的 **`T4` 计数锚点**（黄档）用它核对**两份活文档**里手抄的尾巴计数
-    ⇒ ⛔ **段解析与计数口径只留这一份**（别在别处再写一遍）。
-    ⭐ 2026-10-02（`/retro` 候选 1）加 `text` 形参：**用来数"还没落盘的新文本"** ——
-       `_tail_open.py` / `_tail_close.py` 的口径是"改完**先数**、数对了才写盘"，给它就**不必再临时落盘**。
-    返回 `{"一": n, "二": n, "三": n, "四": n}`；台账 / 段找不到 ⇒ `None`。
-    """
+def ledger_counts(text: str | None = None, closed_text: str | None = None) -> dict[str, int] | None:
+    """尾巴计数真源：计划中的活跃行 + 已销号姊妹件中的历史行。"""
     if text is None:
         path = REPO_ROOT / LEDGER_REL
         if not path.exists():
             return None
         text = path.read_text(encoding="utf-8", errors="replace")
+    if closed_text is None:
+        path = REPO_ROOT / CLOSED_INDEX_REL
+        if not path.exists():
+            return None
+        closed_text = path.read_text(encoding="utf-8", errors="replace")
+
     lines = text.splitlines()
-    start = next((k for k, l in enumerate(lines)
-                  if re.match(r"^#{2,3}\s*[\d.]*\s*尾巴台账", l.strip())), None)
+    start = next((k for k, line in enumerate(lines)
+                  if re.match(r"^#{2,3}\s*[\d.]*\s*尾巴台账", line.strip())), None)
     if start is None:
         return None
     end = next((k for k in range(start + 1, len(lines)) if lines[k].startswith("## ")), len(lines))
     section = ""
-    cnt: dict[str, int] = {}
-    for raw in lines[start:end]:
-        line = raw.strip()
-        m_sec = re.match(r"^#{2,3}\s*([一二三四])\s*[、.]", line)
-        if m_sec:
-            section = m_sec.group(1)
+    active = 0
+    for line in lines[start:end]:
+        stripped = line.strip()
+        match = re.match(r"^#{2,3}\s*([一二三])\s*[、.]", stripped)
+        if match:
+            section = match.group(1)
             continue
-        if not line.startswith("|"):
+        if section not in ("一", "二", "三") or not stripped.startswith("|"):
             continue
-        cells = [c.strip() for c in line.strip("|").split("|")]
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if cells and re.match(r"`?TAIL-\d+`?", cells[0]):
+            active += 1
+
+    closed_lines = closed_text.splitlines()
+    table = next((k for k, line in enumerate(closed_lines)
+                  if line.strip().startswith("| # |")), None)
+    if table is None:
+        return None
+    closed = 0
+    for line in closed_lines[table + 1:]:
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            # 原台账有多条长记录跨物理行；续行仍属当前表格，空行才是表格边界。
+            if not stripped:
+                if closed:
+                    break
+                continue
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
         first = cells[0] if cells else ""
         if first == "#" or not first or set(first) <= {"-", ":"}:
             continue
-        cnt[section] = cnt.get(section, 0) + 1
-    return cnt
+        closed += 1
+    return {"活跃": active, "四": closed}
 
 
 def check_tail_ledger(cases: set[str]) -> list[dict]:
@@ -643,9 +653,9 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
     hits: list[dict] = []
     path = REPO_ROOT / LEDGER_REL
     if not path.exists():
-        return [_t6(LEDGER_REL, 1, "台账（计划主文档）不存在",
-                    "尾巴没有单一清点处 ⇒ 会一轮轮掉队",
-                    f"创建 {LEDGER_REL}（含 §15 尾巴台账：A/B/C/已销号 四段）")]
+        return [_t6(LEDGER_REL, 1, "活跃尾巴台账（计划主文档）不存在",
+                    "活跃尾巴没有单一清点处 ⇒ 会一轮轮掉队",
+                    f"恢复 {LEDGER_REL} 的 §15 活跃票索引")]
 
     handbook = REPO_ROOT / HANDBOOK_REL
     hand_text = handbook.read_text(encoding="utf-8", errors="replace") if handbook.exists() else ""
@@ -666,8 +676,8 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
                   if re.match(r"^#{2,3}\s*[\d.]*\s*尾巴台账", l.strip())), None)
     if start is None:
         hits.append(_t6(LEDGER_REL, 1, "找不到「尾巴台账」段（计划 §15）",
-                        "台账被删/被改名 ⇒ 尾巴没有单一清点处",
-                        "在计划里恢复 `## 15. 尾巴台账`（含 A/B/C/已销号 四段 + 计数行）"))
+                        "活跃票索引被删/改名 ⇒ 尾巴没有单一清点处",
+                        "恢复计划 §15 的活跃票表、计数行与姊妹件指针"))
         return hits
     end = next((k for k in range(start + 1, len(lines)) if lines[k].startswith("## ")), len(lines))
     lines = lines[start:end]
@@ -683,6 +693,10 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
         m_sec = re.match(r"^#{2,3}\s*([一二三四])\s*[、.]", line)
         if m_sec:
             section = m_sec.group(1)
+            if section == "四":
+                hits.append(_t6(LEDGER_REL, offset + i + 1, "主计划仍包含已销号区",
+                                "已销号记录应只在姊妹件；主计划 §15 仅保留活跃区与指针",
+                                f"把已销号短索引放到 `{CLOSED_INDEX_REL}`，移除主计划 §四"))
             continue
         if not line.startswith("|"):
             continue
@@ -704,8 +718,7 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
             ids[n] = offset + i + 1
             if section in ("一", "二", "三"):
                 live.add(n)
-        # 栏位齐全：**尾巴（一/二/三）必须有落点** —— 那是"谁在哪做"；
-        # 已销号（四）只要求四格（编号 / 事项 / 销号依据 / 日期）。
+        # 活跃票（一/二/三）必须有落点；姊妹件历史行另按四列核验。
         need = TAIL_MIN_CELLS if section in ("一", "二", "三") else 4
         if len(cells) < need or any(not c for c in cells):
             hits.append(_t6(LEDGER_REL, offset + i + 1, f"栏位不全（{len(cells)} 格，需 ≥{need}）",
@@ -730,6 +743,49 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
                                     f"{first} 的「阶段」不是受控词：{val or '（空）'}",
                                     "说不清在哪个阶段处理 ⇒ 这条尾巴还没想清楚（只登记未排期）",
                                     "填 `M0`–`M8` 之一 / `立刻` / `持续` / `随时`，并回 §14.3 补一行"))
+
+    # 已销号短索引是编号连续性的第二半，表格中的旧式无编号记录只保留原文。
+    closed_path = REPO_ROOT / CLOSED_INDEX_REL
+    closed_ids: set[str] = set()
+    if not closed_path.exists():
+        hits.append(_t6(CLOSED_INDEX_REL, 1, "已销号姊妹件不存在",
+                        "已销号索引缺失 ⇒ 编号连续性与历史依据都无法核对",
+                        f"恢复 `{CLOSED_INDEX_REL}` 并保留原始四列表格"))
+    else:
+        archived = closed_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        table_at = next((k for k, line in enumerate(archived)
+                         if line.strip().startswith("| # |")), None)
+        if table_at is None:
+            hits.append(_t6(CLOSED_INDEX_REL, 1, "找不到已销号四列表格",
+                            "历史索引无法读取 ⇒ 编号与依据不完整",
+                            "恢复 `| # | 事项 | 销号依据 | 日期 |` 表头"))
+        else:
+            for j, raw in enumerate(archived[table_at + 1:], table_at + 2):
+                line = raw.strip()
+                if not line.startswith("|"):
+                    # 原台账有多条长记录跨物理行；续行仍属当前表格，空行才是表格边界。
+                    if not line:
+                        if closed_ids:
+                            break
+                        continue
+                    continue
+                cells = [cell.strip() for cell in line.strip("|").split("|")]
+                first = cells[0] if cells else ""
+                if first == "#" or not first or set(first) <= {"-", ":"}:
+                    continue
+                if len(cells) < 4 or any(not cell for cell in cells):
+                    hits.append(_t6(CLOSED_INDEX_REL, j, f"已销号索引栏位不全（{len(cells)} 格，需 4）",
+                                    "短索引缺事项、依据或日期 ⇒ 历史依据不可追溯",
+                                    "补齐四列，按原表格格式追加"))
+                match = re.match(r"`?(TAIL-(\d+))`?", first)
+                if match:
+                    tag, number = match.groups()
+                    if number in ids:
+                        hits.append(_t6(CLOSED_INDEX_REL, j, f"编号 {tag} 重复（另一处在第 {ids[number]} 行）",
+                                        "同一票同时在活动区与已销号区 ⇒ 状态冲突",
+                                        "从活动区移除已销号行，或撤回错误的历史行"))
+                    ids[number] = j
+                    closed_ids.add(number)
 
     nums = sorted(int(n) for n in ids)
     if nums and nums != list(range(1, len(nums) + 1)):
@@ -764,25 +820,23 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
                             "删掉该行，或补进台账 §一/§二/§三"))
 
     # ⭐ 计数口径 = `ledger_counts()`（**唯一一份**；`T4` 的计数锚点同时用它）
-    _lc = ledger_counts() or {}
-    counts = {k: _lc.get(k, 0) for k in ("一", "二", "三")}
-    counts["四"] = _lc.get("四", 0)
+    _lc = ledger_counts() or {"活跃": 0, "四": 0}
+    counts = _lc
     # ⚠️ 形态来自 `audit_common.COUNT_FULL_RE`（2026-10-02 收口：此前这里与 `_tail_close.py` 各写一遍）
     #    ⚠️⚠️ 想拿**数字**必须走 `read_counts()` —— 那条正则的捕获组抓的是**装饰**，直接 `int()` 会崩
     #    （2026-10-02 自测当场踩过；⭐ 是"立台账工具"的收尾断言抓出来的）
     got = read_counts("\n".join(lines))
     if got is None:
         hits.append(_t6(LEDGER_REL, 1, "找不到顶部的「当前状态」计数行",
-                        "没有计数就没法一眼看出尾巴有没有在涨", "补一行：A 类 **n** 条 · B 类 … "))
+                        "没有计数就没法一眼看出尾巴有没有在涨", "补一行：活跃 **n** 条 · 已销号 **m** 条"))
     else:
-        want = (counts["一"], counts["二"], counts["三"], counts["四"])
+        want = (counts["活跃"], counts["四"])
         if got != want:
             hits.append(_t6(LEDGER_REL, 1, f"计数与实际不符：写的 {got}，实际 {want}",
                             "计数漂了 ⇒ 人会按错的数判断", "按实际条数改这一行（机器核对）"))
 
     # ⭐⭐ 2026-10-04（`TAIL-225` 票体系）：**票文件必须在位** ＋ 票里得有该有的栏 ＋ 状态受控 ＋ 不许幽灵票。
-    #    ⚠️ **只查 `§一/§二/§三`（在办）** —— `§四` 那 223 条已销号行按**留痕**口径**不追改**
-    #       （方案 §十一-3：它们是"当初为什么这么定"的证据，不是待办）。
+    #    ⚠️ 活跃区只读计划 §15；已销号短索引单独存放，编号连续性跨两件合并核对。
     #    ⚠️ 形态 = **新增一层 + ⛔ 不放松任何现有判据**（本仓「先立门禁 ＋ 老账记账」那套打法）。
     tdir = REPO_ROOT / TICKET_DIR_REL
     tickets: dict[str, Path] = {}
@@ -793,6 +847,12 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
                 tickets[m_tk.group(1)] = f
     for n in sorted(live, key=int):
         tag = f"TAIL-{n}"
+        if tag in tickets:
+            status_match = TICKET_STATE_RE.search(tickets[tag].read_text(encoding="utf-8", errors="replace"))
+            if status_match and status_match.group(1) == "done":
+                hits.append(_t6(LEDGER_REL, 1, f"已销号行 {tag} 仍留在活动区",
+                                "票文件已标 done，但活动台账仍显示待办 ⇒ 状态冲突",
+                                "把已销号依据追加到姊妹件，再用 `_tail_close.py` 移除活动行"))
         if tag not in tickets:
             hits.append(_t6(LEDGER_REL, 1, f"{tag} 没有票文件",
                             "尾巴只活在索引表一格 ⇒ 过程与证据没处放（**字墙的根**）",
@@ -838,7 +898,7 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
 #:   (a) 主文档**行数预算** —— 超了 = 过程又塞回来了（黄 ⇒ 下沉）；
 #:   (b) 标题里出现**过程词**（逐批记录 / 逐次记录 / 收官记录）⇒ 该块该下沉了（黄）。
 PLAN_DOC_REL = ".codebuddy/plans/开发计划-主文档.md"
-PLAN_LINE_BUDGET = 1800          #: ⭐ 2026-09-29 用户裁定 `A` 1700 → 1800（**与 `T10` 那个数同源** ——
+PLAN_LINE_BUDGET = 600          #: 与 T10 同值；下调理由见 ops/阈值表.md
 #:   `ops/阈值表.md:31` 写着「一个数、两处用」⇒ 改一处必须改另一处）
 PROCESS_TITLE_RE = re.compile(r"^#{2,4}.*(逐批记录|逐次记录|收官记录)")
 #: 标题里写着「下沉/归档/索引」的 = **指针节**，不是过程本体 ⇒ 豁免
@@ -901,9 +961,10 @@ LINE_WALL_CHARS = 800
 #:   ＋ §0.2 判据涨数流水 ＋ §14.3 已办长行 ＋ §20.2 ＋ §23」全部下沉仓外、
 #:   原处留短索引/指针（尺子量测件 = `.codebuddy/work/00-scratch/tmp-trim-plan-250.py` 干跑时打印）。
 LINE_WALL_BASELINE: tuple[tuple[str, int], ...] = (
-    (".codebuddy/plans/开发计划-主文档.md", 7),
+    (".codebuddy/plans/开发计划-主文档.md", 5),
+    (".codebuddy/plans/票索引-已销号.md", 7),
     ("ops/前端设计守则-以使用用户为中心.md", 0),
-    ("ops/阈值表.md", 2),
+    ("ops/阈值表.md", 1),
 )
 
 

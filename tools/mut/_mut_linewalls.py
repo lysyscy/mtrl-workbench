@@ -13,7 +13,7 @@
 
 做法：逐条把场景**造出来** ⇒ 确认 `doc_audit -v` **报出来了** ⇒ 逐字节复原（MD5 校验）。
 
-⚠️ 靶**动态取**（从 `audit_meta.LINE_WALL_BASELINE` 现读，⛔ 不把 88/16/2 写死在这里）——
+⚠️ 靶**动态取**（从 `audit_meta.LINE_WALL_BASELINE` 现读，⛔ 不把各件的基线条数写死在这里）——
    否则"下沉几行字墙 ⇒ 基线该下调"这件事一发生，本件就**静默失效**（本仓的老课：写死的锚点必烂）。
 
 ⚠️⚠️ **2026-10-06（`TAIL-233`）修：案例② 原来把"基线输出里没有『又长回来了』"当前置，
@@ -98,7 +98,7 @@ def _append_long(src: bytes) -> bytes:
 
 def _make_cases() -> list[dict]:
     """⭐ 动态取靶（见文件头「靶动态取」的说明）。"""
-    rel0, n0 = LINE_WALL_BASELINE[0]                       #: 头一件（现是主文档；⚠️ 别把它的条数写死在这儿）
+    rel0, n0 = LINE_WALL_BASELINE[0]                       #: 头一件（主计划；⚠️ 别把它的条数写死在这儿）
     return [
         # ① 一件**没在基线里**的活文档长出字墙 ⇒ 必须报「新出现的「字墙」件」
         {"desc": f"新出现的字墙件（往 `{CLEAN_DOC.name}` 塞一行 {len(LONG)} 字）", "mode": "needle",

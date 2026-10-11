@@ -103,6 +103,7 @@
 | .codebuddy/work/10-designs/设计-交付包与迁移-20260929.md | 旧迁移取舍与脚本旁证；当前部署回ops/deployment.md，不重问旧六问。 |
 | .codebuddy/work/10-designs/设计-分层门禁一般式-20261002.md | 已实施分层门禁的推导依据；当前模块规则回ops/architecture.md与测试。 |
 | .codebuddy/work/10-designs/设计-架构候选3-异常原文-20261002.md | 已收口异常文案分类证据；当前上屏文字回D29与前端守则。 |
+| .codebuddy/work/10-designs/设计-主文档与D件二期治理-20261011.md | TAIL-294～297的目标形态、搬运落点与尺子清单；领这几张票或改对应判据前读，日常接手回AGENTS.md。 |
 
 | 决定件（完整路径） | 一句话用途；需要核对或推翻该决定时才读 |
 |---|---|

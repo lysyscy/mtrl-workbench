@@ -345,7 +345,7 @@ _SEC_NUM = (r"\d+(?:\.\d+)*"
 #: 标题里的节号：`## 十七、…` / `## §十七 …` / `### §廿二之二` / `### 14.3 …`
 _HEAD_SEC_RE = re.compile(r"^#{1,4}\s*(?:§\s*)?(" + _SEC_NUM + r")")
 #: 引用：反引号里的 `X.md` **紧接着**（≤8 字符）`§N`
-_REF_SEC_RE = re.compile(r"`([A-Za-z0-9_][\w./\\-]*\.md)`[^`\n]{0,8}?§\s*(" + _SEC_NUM + r")")
+_REF_SEC_RE = re.compile(r"`([\w.][\w./\\-]*\.md)`[^`\n]{0,8}?§\s*(" + _SEC_NUM + r")")
 
 
 def _head_secs(p: Path) -> set[str]:
@@ -551,9 +551,7 @@ def _check_threshold_doc() -> list[dict]:
 #:  （`claim_audit` 的黄计数 · `§15` 的 `U5` 登记数 42↔43）⇒ 用户「按推荐」把它们钉住。
 #: ⛔ **只报黄**（同 `T5`/`T10` 哲学：形式问题该被看见、不挡合入）。
 _TAIL_ANCHOR_RE = re.compile(
-    r"A 类\s*\*{0,2}(\d+)\*{0,2}\s*条\s*·\s*"
-    r"B 类\s*\*{0,2}(\d+)\*{0,2}\s*条?\s*·\s*"
-    r"C 类\s*\*{0,2}(\d+)\*{0,2}\s*条?\s*·\s*"
+    r"活跃\s*\*{0,2}(\d+)\*{0,2}\s*条?\s*·\s*"
     r"已销号\s*\*{0,2}(\d+)\*{0,2}")
 # ⛔ `_U5_ANCHOR_RE` **已撤**（2026-09-30 `TAIL-201`：`U5` 退场 ⇒ 那条锚点没了；理由见上面 ③ 处）
 
@@ -577,14 +575,14 @@ def check_count_anchors() -> list[dict]:
     if lc is None:
         out.append(_anchor(LEDGER_REL, 1, "（台账读不到）", "计数锚点拿不到真源 ⇒ 无从核对", ""))
     else:
-        want = (lc.get("一", 0), lc.get("二", 0), lc.get("三", 0), lc.get("四", 0))
+        want = (lc.get("活跃", 0), lc.get("四", 0))
         for rel, f in docs:
             for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
                 for m in _TAIL_ANCHOR_RE.finditer(line):
                     got = tuple(int(g) for g in m.groups())
                     if got != want:
-                        out.append(_anchor(rel, i, "尾巴计数 A%d·B%d·C%d·已销号%d" % got,
-                                           "台账实际是 A%d·B%d·C%d·已销号%d" % want, line))
+                        out.append(_anchor(rel, i, "尾巴计数 活跃%d·已销号%d" % got,
+                                           "台账实际是 活跃%d·已销号%d" % want, line))
 
     # ② 清单真值只读 CMDS，不再核历史 foreach 与手抄把数。
     from audit_meta import gate_commands

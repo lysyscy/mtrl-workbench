@@ -191,8 +191,8 @@ def main(argv: list[str]) -> int:
         print("⛔ 真源 `ledger_counts()` 在这份新文本上回 None（段标题形态变了？）⇒ **未写盘**")
         return 1
     text_new, n0, n15 = audit_common.write_counts(text_new, c)
-    print(f"③ 真源重算：A {c.get('一', 0)} · B {c.get('二', 0)} · C {c.get('三', 0)} · 已销号 {c.get('四', 0)}"
-          f" ⇒ 计数行命中 §0.2 {n0} 处 / §15 顶部 {n15} 处（各期望 1）")
+    print(f"③ 真源重算：活跃 {c.get('活跃', 0)} · 已销号 {c.get('四', 0)}"
+          f" ⇒ 计数行命中计划概览 {n0} 处 / §15 顶部 {n15} 处（各期望 1）")
     if n0 != 1 or n15 != 1:
         print("⛔ 计数行命中数不对 ⇒ **未写盘**（多半是计数行被改写过，形态变了）")
         return 1

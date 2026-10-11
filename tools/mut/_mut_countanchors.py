@@ -3,13 +3,13 @@
 做法：把**手抄的计数**改错 ⇒ `check_count_anchors()` **必须命中**（那条锚报出）⇒ 立刻**逐字节复原**（MD5）。
 
 ⚠️ 这类"锚点型"检查最容易退化成**永远绿**（正则没命中 = 不报，没人看得出）——
-   本件就是它的自证：**三条靶各改错一处 ⇒ 必须各自报一条**；⛔ 一条都不报 = 它瞎了。
+   本件就是它的自证：**四条靶各改错一处 ⇒ 必须各自报一条**；⛔ 一条都不报 = 它瞎了。
 ⚠️ 判据**不是 rc**：锚点是**黄档**（同 `T5`/`T10` 哲学"形式问题该被看见、不挡合入"）⇒ `doc_audit` 的 rc 不变，
    要判的是"**报告里出现了那条**"（本件直接调检查函数取命中列表，最精确）。
 
-靶：① 尾巴计数（活文档）② CMDS 定义锚（实际执行清单；TAIL-245 同批改靶）
-④ `ops/阈值表.md` 自己（数字 vs 它自称的真源）。⚠️ ③（`U5` 登记数）没配靶：它的真值来自
-~~`ui_parity.U5_COUNT`~~（⛔ 2026-09-30 `TAIL-201`：`U5` 退场 ⇒ 那条锚点**已撤**），改文档里的数同样会报 —— 但三条已够证明这类检查有牙，⛔ 不为凑数硬加。
+靶：① 尾巴活跃计数 ② 尾巴已销号计数 ③ CMDS 定义锚（实际执行清单；TAIL-245 同批改靶）
+⑤ `ops/阈值表.md` 自己（数字 vs 它自称的真源）。⚠️ ④（`U5` 登记数）没配靶：它的真值来自
+   ~~`ui_parity.U5_COUNT`~~（⛔ 2026-09-30 `TAIL-201`：`U5` 退场 ⇒ 那条锚点**已撤**），改文档里的数同样会报 —— 不为凑数硬加。
 
 用法：python tools/mut/_mut_countanchors.py
 """
@@ -23,6 +23,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "audit"))
+import audit_common  # noqa: E402
 from audit_drift import check_count_anchors  # noqa: E402
 
 PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
@@ -34,13 +35,17 @@ RUNNER = ROOT / "tools" / "oneoff" / "_run_rulers.py"
 #:   本件原先把三处靶**写死**（`已销号 **80**` / `**12 把尺子全` / `| **240** |`）⇒ 文档一改写法/一涨数字，
 #:   靶就**静默失效**（实测症状：`❌ 靶串没找到 ⇒ 本件需重定靶` ＋ `0/3 命中`，而它**不在任何闸门里** ⇒ 没人知道）。
 #:   ⇒ 现在三条都**按同源正则从当前文档现取**（与本文件 docstring 那条"⛔ 不抄行号"同一条纪律）。
-def _tail_case(text: str) -> tuple[str, str, str]:
-    """① 尾巴计数（§0.2 手抄的「已销号 N」）—— 现取并把 N 减 1。"""
-    m = re.search(r"已销号 \*\*(\d+)\*\*", text)
-    if not m:
-        raise SystemExit("  ⛔ 找不到『已销号 **N**』锚 ⇒ 文档又改写法了 ⇒ 本件需重定靶")
-    n = int(m.group(1))
-    return m.group(0), m.group(0).replace(m.group(1), str(n - 1), 1), f"已销号{n - 1}"
+def _tail_cases(text: str) -> tuple[tuple[str, str, str], tuple[str, str, str]]:
+    """尾巴计数按唯一形态源现取，分别证明活跃与已销号两个锚点都能报错。"""
+    m = audit_common.COUNT_FULL_RE.search(text)
+    counts = audit_common.read_counts(text)
+    if not m or counts is None:
+        raise SystemExit("  ⛔ 找不到活跃/已销号计数锚 ⇒ 文档形态变化，需重定靶")
+    old = m.group(0)
+    active_new = old.replace(str(counts[0]), str(counts[0] - 1), 1)
+    closed_new = old.replace(str(counts[1]), str(counts[1] - 1), 1)
+    return ((old, active_new, f"活跃{counts[0] - 1}"),
+            (old, closed_new, f"已销号{counts[1] - 1}"))
 
 
 def _ruler_case(text: str) -> tuple[str, str, str]:
@@ -61,13 +66,14 @@ def _threshold_case(text: str) -> tuple[str, str, str]:
 
 
 def build_cases(texts: dict) -> list[tuple[str, pathlib.Path, str, str, str]]:
-    o1, n1, k1 = _tail_case(texts[PLAN])
-    o2, n2, k2 = _ruler_case(texts[RUNNER])
-    o4, n4, k4 = _threshold_case(texts[THRESHOLDS])
+    (o1, n1, k1), (o2, n2, k2) = _tail_cases(texts[PLAN])
+    o3, n3, k3 = _ruler_case(texts[RUNNER])
+    o5, n5, k5 = _threshold_case(texts[THRESHOLDS])
     return [
-        ("① 尾巴计数（§0.2 手抄的「已销号」）", PLAN, o1, n1, k1),
-        ("② CMDS 清单缺失必须报黄", RUNNER, o2, n2, k2),
-        ("④ `ops/阈值表.md`（数字 vs 自称真源）", THRESHOLDS, o4, n4, k4),
+        ("① 尾巴活跃计数", PLAN, o1, n1, k1),
+        ("② 尾巴已销号计数", PLAN, o2, n2, k2),
+        ("③ CMDS 清单缺失必须报黄", RUNNER, o3, n3, k3),
+        ("⑤ `ops/阈值表.md`（数字 vs 自称真源）", THRESHOLDS, o5, n5, k5),
     ]
 
 

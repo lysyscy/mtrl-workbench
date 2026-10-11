@@ -5,12 +5,13 @@
 **§14.3 行首格式**被 ✅ 前缀挡掉），连带 `_run_mut` 三支红 ⇒ 白跑两轮。
 
 **它做的**（全是机械的；**判断那部分仍是你写**）：
-  ① **§一/§二/§三 删行** —— 销号 ⇒ 只留 §四 的**留痕行**（⚠️ 那一行要你**先写好**：事项 / 依据 / 日期是判断）；
+  ① **§一/§二/§三 删活动行** —— 先由人把事项 / 依据 / 日期追加到已销号姊妹件；
   ② **顶部两处计数按真源重算后写对** —— ⛔ 不再手抄；
-  ③ **断言三件事**：§四 里已有该编号的留痕行 · §一/§二/§三 里**恰好 1 行** · 两处计数行都认得出来。
+  ③ **断言三件事**：姊妹件里已有该编号 · 活动区里**恰好 1 行** · 两处计数行都认得出来。
 
 ⚠️⚠️ **计数一律问真源**：本件**不自己写第二套计数算法** —— 直接调
-   `tools/audit/audit_meta.py::ledger_counts()`（`T6` 与 `T4` 的计数锚点**共用**的那一份）。
+   `tools/audit/audit_meta.py::ledger_counts()`（`T6` 与 `T4` 的计数锚点**共用**的那一份），
+   输出「活跃 N · 已销号 M」。
    实测教训（2026-10-02 · 本件第一版）：自己镜像了一遍段解析，算出的"已销号"= **214**，
    而真源是 **216** ⇒ 差 2。⚠️ 若各写一份，`doc_audit` 的 `T6` 会立刻报「计数与实际不符」——
    也就是说**这个错误一定会被抓住**，但更好的做法是**从一开始只有一份**。
@@ -36,8 +37,9 @@ import audit_common  # noqa: E402  ← ⭐ 计数行**形态**的唯一出处（
 import audit_meta  # noqa: E402  ← ⭐ 计数的**真源**（`ledger_counts()`）
 
 PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
+CLOSED_INDEX = REPO / audit_common.CLOSED_INDEX_REL
 
-#: 段标题（`### 一、…` / `### 四、已销号（…）`）
+#: 段标题（`### 一、…` 至 `### 三、…`）
 SEC_RE = re.compile(r"^#{2,3}\s*([一二三四])、")
 #: 尾巴行（**编号只认第一格** —— 与 `audit_meta.check_tail_ledger` 同口径）
 ROW_RE = re.compile(r"^\|\s*`?(TAIL-\d+)`?\s*\|")
@@ -55,14 +57,14 @@ def sections(lines: list[str]) -> dict[str, list[int]]:
     return out
 
 
-def counts_via_source(text: str) -> dict[str, int] | None:
+def counts_via_source(text: str, closed_text: str) -> dict[str, int] | None:
     """问**真源**要计数 ⇒ `audit_meta.ledger_counts(text)`。
 
     ⭐ 2026-10-02（`/retro` 候选 1）：原先这里要"**把新文本临时落盘 ＋ monkeypatch `LEDGER_REL`**"
     （因为 `ledger_counts()` 当时只按路径读）—— 现在真源直接吃文本 ⇒ **那套动作整段删掉**
     （少一个临时件、少一处 monkeypatch ⇒ 少一类"临时件残留污染基线"的坑，本仓吃过）。
     """
-    return audit_meta.ledger_counts(text)
+    return audit_meta.ledger_counts(text, closed_text)
 
 
 def main(argv: list[str]) -> int:
@@ -70,6 +72,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--id", required=True, help="尾巴号（如 215）")
     ap.add_argument("--apply", action="store_true", help="真写盘（默认只干跑）")
     ap.add_argument("--plan", default=str(PLAN), help="计划主文档路径（默认仓内那份）")
+    ap.add_argument("--closed-index", default=str(CLOSED_INDEX), help="已销号姊妹件（默认仓内那份）")
     a = ap.parse_args(argv)
 
     n = str(a.id).lstrip("TILA-")            # 容错：允许传 `TAIL-215`
@@ -78,12 +81,18 @@ def main(argv: list[str]) -> int:
     p_old = path.read_bytes()
     lines = p_old.decode("utf-8").splitlines(keepends=True)
     sec = sections(lines)
+    archive_path = pathlib.Path(a.closed_index).resolve()
+    if not archive_path.exists():
+        print(f"⛔ 已销号姊妹件不存在：{archive_path} ⇒ 未写盘")
+        return 1
+    archive_text = archive_path.read_text(encoding="utf-8")
 
-    # ① 断言：§四 里**已经有**留痕行（判断那部分要人先写好）
-    done = [i for i in sec.get("四", []) if ROW_RE.match(lines[i]) and ROW_RE.match(lines[i]).group(1) == tag]
+    # ① 断言：姊妹件里**已经有**人写好的留痕行
+    done = [line for line in archive_text.splitlines()
+            if ROW_RE.match(line) and ROW_RE.match(line).group(1) == tag]
     if len(done) != 1:
-        print(f"⛔ §四（已销号）里 `{tag}` 的留痕行 {len(done)} 条（期望 1）"
-              " ⇒ 先把「事项 / 销号依据 / 日期」那一行写好（那是判断，本件不代笔）")
+        print(f"⛔ 姊妹件里 `{tag}` 的留痕行 {len(done)} 条（期望 1）"
+              " ⇒ 先在表尾追加「事项 / 销号依据 / 日期」（判断，本件不代笔）")
         return 1
 
     # ② 找 live 行（§一/§二/§三）⇒ 删掉
@@ -98,25 +107,24 @@ def main(argv: list[str]) -> int:
 
     # ③ 计数：**问真源**（⛔ 本件不镜像算法）
     text_new = "".join(l for k, l in enumerate(lines) if k != live_i)
-    c = counts_via_source(text_new)
+    c = counts_via_source(text_new, archive_text)
     if not c:
         print("⛔ 真源 `ledger_counts()` 在这份新文本上回 None（段标题形态变了？）⇒ **未写盘**")
         return 1
-    print(f"② 真源重算：A {c.get('一', 0)} · B {c.get('二', 0)} · C {c.get('三', 0)}"
-          f" · 已销号 {c.get('四', 0)}")
+    print(f"② 真源重算：活跃 {c.get('活跃', 0)} · 已销号 {c.get('四', 0)}")
     text_new, n0, n15 = audit_common.write_counts(text_new, c)
     if n0 != 1 or n15 != 1:
-        print(f"⛔ 计数行命中：§0.2 {n0} 处 / §15 顶部 {n15} 处（各期望 1）⇒ **未写盘**"
+        print(f"⛔ 计数行命中：计划概览 {n0} 处 / §15 顶部 {n15} 处（各期望 1）⇒ **未写盘**"
               "（多半是计数行被改写过，形态变了）")
         return 1
     # 写完计数后再问一次真源：**数对上了才算过**（计数行本身不参与计数 ⇒ 应不变）
-    again = counts_via_source(text_new)
+    again = counts_via_source(text_new, archive_text)
     if again != c:
         print(f"⛔ 复查不一致：写计数前 {c} / 写计数后 {again} ⇒ **未写盘**")
         return 1
-    print("③ 两处计数已按真源改写（§0.2 ＋ §15 顶部各 1 处）· 复查一致 ✅")
+    print("③ 两处计数已按真源改写（计划概览 ＋ §15 顶部各 1 处）· 复查一致 ✅")
 
-    # ④ 排期表：只提醒，不改（销号后 T6 不再要求它在 §14.3，但留着那行是留痕）
+    # ④ 排期表：只提醒，不改（历史排期保留为留痕）
     sched = [i for i, l in enumerate(text_new.splitlines(keepends=True))
              if l.lstrip().startswith("|") and tag in l.split("|")[1]]
     print(f"④ §14.3 排期表里该编号的行：{len(sched)} 处（{'留痕保留' if sched else '⚠️ 没有那行'}"
