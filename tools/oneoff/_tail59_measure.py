@@ -23,10 +23,10 @@ TABLE = ROOT / "ops" / "阈值表.md"
 
 #: 「复述面」= 每会话**注入 / 必读**的档（⭐ 定义见根 `README.md` §二 的四层：①②层）
 FACES: tuple[str, ...] = (
-    ".workbuddy/memory/MEMORY.md",
-    ".workbuddy/memory/MEMORY-细则.md",
+    ".codebuddy/memory/MEMORY.md",
+    ".codebuddy/memory/细则.md",
     "README.md",
-    ".workbuddy/plans/执行情况-主文档.md",
+    ".codebuddy/plans/开发计划-主文档.md",
     "ops/README.md",
 )
 #: 「真源面」——数字出现**在这里是对的**（那是它的主人）
@@ -42,7 +42,7 @@ SOURCES: tuple[str, ...] = (
     "backend/tests/test_wiring_guards.py",
     "backend/app/core/session.py",
 )
-_PLAN = ".workbuddy/plans/开发计划-主文档.md"
+_PLAN = ".codebuddy/plans/开发计划-主文档.md"
 
 #: 阈值表第一格里的数字（`| **400** |` / `| **±2 行** |` / `| **200px / 30 行** |`）
 _CELL_RE = re.compile(r"^\|\s*\*{0,2}([^|]+?)\*{0,2}\s*\|")

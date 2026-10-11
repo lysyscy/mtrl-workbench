@@ -133,6 +133,12 @@ KEY: tuple[tuple[str, str], ...] = (
 #:   · **靶要真机**（浏览器 / 起服务 / `tools/probe/`）⇒ 收工闸门是真机**另一档**的活。
 #:   · **当前红 / 靶假设过期** ⇒ ⛔ 塞进闸门＝每轮假红（那比不跑更坏：假红会让人学会忽略闸门）。
 KEEP_OUT: dict[str, str] = {
+    "_mut_probe_m11.py": "真机集采金额配对；改 tools/probe/_shell_m11.py 的金额或配对判法时按需跑，需运行服务与真数据，不能混入离线快集",
+    "_mut_tail275.py": "业务统计付款日期、实际金额、撤销剔除与选桶；改付款统计或选桶合计时按需跑隔离 pytest，不属于常驻尺子快慢集",
+    "_mut_tail276.py": "集采关联统计金额、审批额回退与日期适配；改集采付款引用或日期出口时按需跑隔离 pytest",
+    "_mut_tail281.py": "集采分笔引用、删除保护与撤销回执；改这些业务出口时按需跑隔离 pytest",
+    "_mut_tail282_283.py": "拟付会话草稿及流水页面/导出；改相关出口时先准备隔离输入，旧入口直接写正式靶，拒绝当作可执行证明",
+    "_mut_tail297.py": "登记缺口、现行票盘点、敏感目录及中文路径探针；改对应治理工具时按需跑内存隔离反例",
     "_mut_design_rules.py": "现行前端守则结构的原生隔离自证；仅守则/判据变化按需",
     "_mut_proc_split.py": "分域截止与机械覆盖的原生隔离自证；仅相关业务或判据变化按需",
     "_mut_proc_split_shell.py": "分域截止/月编辑壳判据的原生隔离自证；仅对应壳或判据变化按需",
@@ -273,7 +279,7 @@ def report_cover() -> int:
 
 
 def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
-    if p.name not in {'_mut_gatescope.py', '_mut_bytesguard.py', '_mut_facedoc.py', '_mut_tbl.py',
+    if p.name not in {'_mut_gatescope.py', '_mut_bytesguard.py', '_mut_facedoc.py', '_mut_tbl.py', '_mut_tail297.py',
                       '_mut_design_rules.py', '_mut_proc_split.py', '_mut_proc_split_shell.py',
                       '_mut_tail262.py', '_mut_tail264_266.py', '_mut_tail274.py', '_mut_ui_workflow.py',
                       # ⚠️ 2026-10-10（迁移复核轮）新放行七支 —— 放行条件＝**逐支实测过**：
@@ -406,21 +412,24 @@ def selftest():
             (folder/name).write_text('"""fixture"""\n', encoding='utf-8')
         with patch.dict(globals(), MUT=folder):
             assert cover_gap() == ([], []), '正常登记不能误伤'
+            assert report_cover() == 0, '正常登记不能报红'
             extra=folder/'_mut_unregistered.py'; extra.write_text('pass\n',encoding='utf-8')
             assert cover_gap()[0], '未登记不能静默漏选'
+            assert report_cover() == 1, '未登记必须返回非零'
             extra.unlink()
             (folder/KEY[0][0]).unlink()
             assert cover_gap()[1], '陈旧登记不能静默放行'
+            assert report_cover() == 1, '陈旧登记必须返回非零'
         with patch.object(subprocess,'run',side_effect=AssertionError('不得启动正式写靶脚本')):
             assert run_one(folder/'_mut_docaudit.py', 1)[0] != 0
         from types import SimpleNamespace
         with patch.object(subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='fixture', stderr='')) as dispatch:
             for name in ('_mut_tbl.py', '_mut_design_rules.py', '_mut_proc_split.py',
-                         '_mut_proc_split_shell.py', '_mut_tail262.py', '_mut_tail264_266.py', '_mut_ui_workflow.py'):
+                         '_mut_proc_split_shell.py', '_mut_tail262.py', '_mut_tail264_266.py', '_mut_ui_workflow.py', '_mut_tail297.py'):
                 assert run_one(folder/name, 1)[0] == 0, '已确认隔离入口不得被拒绝'
-            assert dispatch.call_count == 7
+            assert dispatch.call_count == 8
     print('自测 变异登记缺口、陈旧项、正常放行及非隔离脚本拒绝通过')
-    return 0
+    return report_cover()
 
 
 if __name__ == "__main__":

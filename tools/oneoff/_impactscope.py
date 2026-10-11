@@ -155,6 +155,10 @@ OUTSIDE_ORDINARY = {
     'tools/oneoff/_doc_downgrade.py': '归档动作工具自测',
     'tools/probe/_audit_face.py': '仓外交付面；本次差异未触及',
     'tools/oneoff/_gatescope.py': '核验回执机制；只在机制修改时自证',
+    'tools/oneoff/_run_muts.py': '变异登记与隔离拒绝自测',
+    'tools/oneoff/_list_tails.py': '现行票索引读取自测',
+    'tools/oneoff/_prepush_sensitive.py': '推送前审计读取与敏感目录自测',
+    'tools/probe/_cn_path_probe.py': '中文路径只读候选量测自测；非新增文档闸门',
 }
 
 
@@ -162,6 +166,12 @@ OUTSIDE_ORDINARY = {
 # 影响选择、pytest输入观察器和变异登记；回执入口还导入交付根/原型根。
 # 修改这些实现或自测时才验证工具，导入链也属于实际运行依赖。
 SELFTEST_DEPENDENCIES = {
+    'tools/oneoff/_run_muts.py': {'tools/oneoff/_run_muts.py'},
+    'tools/oneoff/_list_tails.py': {'tools/oneoff/_list_tails.py'},
+    'tools/oneoff/_prepush_sensitive.py': {'tools/oneoff/_prepush_sensitive.py'},
+    'tools/probe/_cn_path_probe.py': {
+        'tools/probe/_cn_path_probe.py', 'tools/audit/audit_common.py', 'tools/audit/audit_drift.py',
+    },
     'tools/audit/refs_query.py': {
         'tools/audit/refs_query.py', 'tools/audit/audit_common.py', 'tools/audit/audit_meta.py',
     },
@@ -219,6 +229,14 @@ def required_checks(kind: str, commands: list) -> set[str]:
     return required
 
 
+def mutation_candidates(name: str, root: Path = ROOT) -> list[str]:
+    """从活变异登记和源码反查候选；仅供人选，不表示已执行或已证隔离。"""
+    import _run_muts as runner
+    registered = {n for n, _ in runner.KEY} | set(runner.KEEP_OUT)
+    return sorted(p.name for p in (root/'tools/mut').glob('_mut_*.py')
+                  if p.name in registered and Path(name).name in p.read_text(encoding='utf-8'))
+
+
 def selection(changes: dict, commands: list, root: Path = ROOT):
     """返回检查、pytest、待查项；广泛影响由使用者决定，不由提交状态决定。"""
     import _pytestscope as scope
@@ -257,7 +275,10 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
                         if name == 'tools/audit/doc_audit.py' and pair[0] is not None:
                             pair = (pair[0].replace('规格件只许变长'.encode(), '篇幅变化仅提示调查'.encode()).replace('每轮随闸门跑'.encode(), '按受影响判据隔离自证'.encode()), pair[1])
                         if name != 'tools/audit/bytes_guard.py' and executable_changed(pair):
-                            pending.append('对应判据需选择隔离自证：'+name)
+                            candidates = mutation_candidates(name, root)
+                            pending.append('对应判据需选择隔离自证：'+name+'；可配候选：'+
+                                           (', '.join(candidates) or '未找到，需调查')+
+                                           '（仅反查源码；须先确认隔离入口）')
                     else:
                         pending.append('共享检查模块需查明调用者：'+name)
             else:
@@ -400,6 +421,14 @@ def selftest():
     assert selection({'unknown.dat': (None, b'x')}, rulers.CMDS + rulers.SELFTESTS)[2], '未知输入必须显式待查'
     assert selection({'backend/data.json': (None, b'x')}, rulers.CMDS + rulers.SELFTESTS)[2], '未知后端机器输入不能直接全跑'
     registered = rulers.CMDS + rulers.SELFTESTS
+    with tempfile.TemporaryDirectory() as temp:
+        folder=Path(temp); (folder/'tools/mut').mkdir(parents=True)
+        (folder/'tools/mut/_mut_t14t15.py').write_text('audit_work.py',encoding='utf-8')
+        (folder/'tools/mut/_mut_unknown.py').write_text('audit_work.py',encoding='utf-8')
+        assert mutation_candidates('tools/audit/audit_work.py',folder)==['_mut_t14t15.py'], '仅活登记的对应变异可列候选'
+        with patch.object(scope, 'plan', return_value=scope.Plan(False,'fixture')):
+            _checks,_tests,waiting=selection({'tools/audit/audit_work.py':(b'x=1',b'x=2')},registered,folder)
+        assert any('可配候选：_mut_t14t15.py' in item for item in waiting), '待查必须列候选且仍非通过'
     # --since的旧新字节必须原样到达选择器，不能在下游另取HEAD差异。
     supplied = {'backend/app/web/shell/proj.js': (b'older\r\n', b'newer\r\n')}
     with patch.object(scope, 'plan', return_value=scope.Plan(False, 'fixture')) as planner:

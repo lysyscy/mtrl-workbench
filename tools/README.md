@@ -49,6 +49,10 @@
 
 ## 按需自证与归档
 
+TAIL-297 清点的历史一次性脚本原文移入 `tools/oneoff/_归档-20261011/`，逐件用途、引用与两问理由见 `.codebuddy/work/50-tickets/TAIL-297-尺子体检.md` Comments；归档源字节未改，旧地址是当时操作的证据。恢复重放须从 Git 取对应原树和环境，不能在归档目录直接运行。现役 `_list_tails.py` 读取主计划与已销号姊妹件；`_prepush_sensitive.py` 核现行治理目录且 git 失败不当空结果；`_tail59_measure.py` 使用现行资料面。
+
+`tools/probe/_cn_path_probe.py` 默认只量 D 件中文相对引用，`--documents` 量既有文档扫描面；有缺失候选返回非零，候选须区分历史、简称及未持久化产物，不表示 T3 已扩面。绝对仓外路径仍由 T3 原分支核存在。自测登记回 `_run_rulers.SELFTESTS`，反向见证为 `tools/mut/_mut_tail297.py`；待查判据的可配变异由 `_impactscope.mutation_candidates` 从活件登记与源码反查，只列候选，不当隔离或通过证明。
+
 三个工具的 `--selftest` 可独立运行，普通修改与显式完整检查均只在工具/相关依赖变化时选中；选择及回执失效后果由 `_gatescope` 隔离自证验证。归档动作还依赖现行钩子及其检查实现；引用查询依赖公共扫描/票规则。依赖触发的唯一登记回 tools/oneoff/_impactscope.py。
 
 变异按受影响机制明确选件，`_run_muts.py --cases` 允许KEY与KEEP_OUT中的活件；只有提供隔离输入的入口可执行。归档件不参加活件登记/机器引用/覆盖扫描，恢复说明在 tools/mut/_归档-20261009/README.md。保留件不代表本轮全部可执行；旧直接写靶件仍须先隔离。`mut_cover --check`只验生成台账与源码登记一致，不执行变异、不证明断言会红。

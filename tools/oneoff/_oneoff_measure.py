@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import subprocess
+import os
 import sys
 from pathlib import Path
 
@@ -35,24 +36,23 @@ _TEXT_EXT = {".md", ".py", ".ps1", ".txt", ".js", ".html", ".json", ".toml", ".i
 
 def _tracked_text() -> dict[str, str]:
     """语料 = **跟踪件** ∪ **仓内的文书**（⚠️ 后者必须包含 —— `.codebuddy/memory/` 与
-    `.workbuddy/backups/` **不入 git**，但恰恰引用了一批 oneoff 件；漏了它们 ⇒ 会把"其实有出处"
+    `.codebuddy/backups/` **不入 git**，但恰恰引用了一批 oneoff 件；漏了它们 ⇒ 会把"其实有出处"
     的件误判成**零引用**（第一版就是这么错的，本仓的"假阴性"同族）。"""
     #: ⚠️⚠️ 必须带 `-c core.quotepath=false`：git 默认给**非 ASCII 路径加双引号并转义**
     #:   —— 实测 2026-10-01（`TAIL-204` 第 7 步真要跑本件时才发现）：`"tools\oneoff\_归档-20260930\清单.md"`
     #:   被当成字面路径 ⇒ `Path(...)` 直接 `OSError [WinError 123]` **把整支脚本打挂**。
     #:   ⇒ 本件此前**一直是坏的**（同族：本仓"量测件自己烂掉、而它不在任何闸门清单里"）。
-    out = subprocess.run(["git", "-c", "core.quotepath=false", "ls-files"],
-                         cwd=str(ROOT), capture_output=True, text=True,
+    out = subprocess.run(["git", "-C", str(ROOT), "-c", "core.quotepath=false", "ls-files"],
+                         capture_output=True, text=True, check=True,
                          encoding="utf-8", errors="replace").stdout
     rels = {r for r in out.splitlines() if r.strip()}
     skip_dirs = {".git", ".venv", "__pycache__", "node_modules"}
-    for p in ROOT.rglob("*"):
-        if not p.is_file() or p.suffix.lower() not in _TEXT_EXT:
-            continue
-        rel = p.relative_to(ROOT).as_posix()
-        if any(part in skip_dirs for part in p.relative_to(ROOT).parts):
-            continue
-        rels.add(rel)
+    for base, directories, filenames in os.walk(ROOT):
+        directories[:] = [name for name in directories if name not in skip_dirs]
+        for name in filenames:
+            p = Path(base)/name
+            if p.suffix.lower() in _TEXT_EXT:
+                rels.add(p.relative_to(ROOT).as_posix())
     files: dict[str, str] = {}
     for rel in sorted(rels):
         if Path(rel).suffix.lower() not in _TEXT_EXT:
@@ -64,14 +64,15 @@ def _tracked_text() -> dict[str, str]:
     return files
 
 
+def workspace_files(folder=ONEOFF):
+    """与T20一样盘点实际工作树；未提交移动不再去stat旧Git路径。"""
+    return sorted(p for p in folder.rglob('*') if p.is_file() and "__pycache__" not in p.parts)
+
+
 def main() -> int:
     corpus = _tracked_text()
-    #: ⭐ 口径按**跟踪件**算（`__pycache__/*.pyc` 这种是本机产物、且不在版本库里 ⇒ 不算"堆着的件"）
-    #: ⚠️ 同上：**必须** `-c core.quotepath=false`（否则 `_归档-*/` 里那份中文名的件会把本步打挂）。
-    listed = subprocess.run(["git", "-c", "core.quotepath=false", "ls-files", "tools/oneoff"],
-                            cwd=str(ROOT), capture_output=True,
-                            text=True, encoding="utf-8", errors="replace").stdout
-    all_files = sorted((ROOT / r) for r in listed.splitlines() if r.strip())
+    # 与T20同源范围：工作树中的文件，排除缓存；移动未提交也可量。
+    all_files = workspace_files()
     #: ⭐ 2026-10-02 **口径对齐 `T20`**（`audit_work.check_retention`）：**`_归档-YYYYMMDD/` 里的不计**
     #:   —— 那边数的是"**还堆在顶层**的件"（归档件已不在堆里，且它会**照实打出**归档件数）。
     #:   ⚠️ 本件此前**没跳归档** ⇒ 印出的"件数 / 零引用"与 `T20` 对不上 = **同一件事两个数**
@@ -100,10 +101,10 @@ def main() -> int:
         o for o in orphan if Path(o).name in STANDING
     ]
     print("=" * 78)
-    print(f" `tools/oneoff/` 现状：**{len(files)} 件（在堆里 · 跟踪）** · {total_bytes / 1024:.0f} KB"
+    print(f" `tools/oneoff/` 现状：**{len(files)} 件（在堆里 · 工作树）** · {total_bytes / 1024:.0f} KB"
           f"   ｜ 已入档 `_归档-*` **{n_arch} 件**（⛔ 不计 —— 口径同 `T20`）"
           f"   ｜ 磁盘上另有 {len(on_disk) - len(all_files)} 件（`__pycache__` 等本机产物）")
-    print(f"   · 被（其它跟踪件）引用：**{len(referenced)} 件**")
+    print(f"   · 被其它文书引用：**{len(referenced)} 件**")
     print(f"   · **零引用**：**{len(orphan)} 件**")
     print(f"   · 其中**常驻工具**（⛔ 不是一次性）：{len(standing)} 件 —— {', '.join(sorted(Path(x).name for x in standing))}")
     print("=" * 78)

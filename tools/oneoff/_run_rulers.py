@@ -47,6 +47,10 @@ CMDS: list[tuple[str, list[str]]] = [
 
 # 工具自测另行登记；显式完整检查也仅按工具及依赖变化选中。
 SELFTESTS: list[tuple[str, list[str]]] = [
+    ("tools/oneoff/_run_muts.py", ["--selftest"]),
+    ("tools/oneoff/_list_tails.py", ["--selftest"]),
+    ("tools/oneoff/_prepush_sensitive.py", ["--selftest"]),
+    ("tools/probe/_cn_path_probe.py", ["--selftest"]),
     ("tools/audit/refs_query.py", ["--selftest"]),
     ("tools/oneoff/_doc_downgrade.py", ["--selftest"]),
     ("tools/oneoff/_gatescope.py", ["--selftest"]),

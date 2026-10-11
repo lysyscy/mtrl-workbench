@@ -8,7 +8,7 @@
    —— ⚠️ 命中**不等于**有问题（本仓有 `.env.example` / `cookie_store.py` / `ops/nssm_*.ps1` 这类**本来就该跟踪**的），
    所以要**逐条人看**；
 2. **这些"本该不进版本库"的东西确实没被跟踪**（`.env` / `.venv` / `logs/` / `artifacts/` 里的运行产物 /
-   `.workbuddy/backups/` / `00-scratch/`）；
+   `.codebuddy/backups/` / `00-scratch/`）；
 3. **待推送的 diff 里有没有真凭据**（私钥块 / cookie 串 / 带非空值的 `password=` / `secret=`）。
 
 跑法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_prepush_sensitive.py`
@@ -51,11 +51,38 @@ DIFF_PATTERNS = (
 
 
 def _git(*args: str) -> str:
-    return subprocess.run(["git", *args], cwd=str(ROOT), capture_output=True, text=True,
+    return subprocess.run(["git", "-C", str(ROOT), "-c", "core.quotepath=false", *args],
+                          capture_output=True, text=True, check=True,
                           encoding="utf-8", errors="replace").stdout
 
 
+EXCLUDED_DIRS = ("backend/.venv/", ".venv/", "logs/", ".codebuddy/backups/",
+                 ".codebuddy/work/00-scratch/", ".git/")
+
+
+def tracked_hits(files, directory):
+    return [f for f in files if f.startswith(directory) and not f.endswith('/.gitkeep')]
+
+
+def selftest():
+    from unittest.mock import patch
+    files = ['.codebuddy/backups/private.txt', '.codebuddy/work/00-scratch/private.txt',
+             'backend/.venv/private.txt', 'logs/.gitkeep', 'tools/audit/bytes_guard.py']
+    hits = [f for d in EXCLUDED_DIRS for f in tracked_hits(files,d)]
+    assert set(hits) == set(files[:3]), '现行敏感目录必须命中且占位件不误伤'
+    with patch.object(subprocess, 'run', side_effect=subprocess.CalledProcessError(128,'git')):
+        try:
+            _git('ls-files')
+        except subprocess.CalledProcessError:
+            pass
+        else:
+            raise AssertionError('git失败不能当空清单通过')
+    print('自测 现行敏感目录、占位件与git失败拒绝通过')
+    return 0
+
+
 def main() -> int:
+    if '--selftest' in sys.argv: return selftest()
     ap = argparse.ArgumentParser()
     ap.add_argument("--diff", default="origin/master..HEAD", help="要审的提交区间（默认 origin/master..HEAD）")
     args = ap.parse_args()
@@ -80,14 +107,14 @@ def main() -> int:
     #:    第一版没排除它 ⇒ 把 `logs/.gitkeep` / `00-scratch/.gitkeep` 报成"⛔ 被跟踪"（**误报**）。
     #:    ⭐ 本仓的规矩：**别喊狼来了**（噪声一多，真命中就没人看了）。
     def _real(d: str) -> list[str]:
-        return [f for f in files if f.startswith(d) and not f.endswith(".gitkeep")]
+        return tracked_hits(files, d)
 
     untracked_ok = True
     for name in MUST_NOT_TRACK:
         hit = [f for f in files if (f == name or f.endswith("/" + name))]
         print(f"   {'⛔ 被跟踪！' if hit else '✅ 未跟踪'}  {name}" + (f"  → {hit}" if hit else ""))
         untracked_ok = untracked_ok and not hit
-    for d in (".venv/", "logs/", ".workbuddy/backups/", ".workbuddy/work/00-scratch/", ".git/"):
+    for d in EXCLUDED_DIRS:
         hit = _real(d)
         note = "" if not hit else f"  → {len(hit)} 件：{hit[:5]}"
         print(f"   {'⛔ 被跟踪！' if hit else '✅ 未跟踪'}  {d}*（`.gitkeep` 不算）{note}")

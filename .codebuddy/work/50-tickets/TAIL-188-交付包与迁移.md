@@ -16,7 +16,7 @@
 
 ## Comments
 
-**2026-10-04 · 建票（agent）。** 来源：用户 2026-09-29 口述（出处 = `.codebuddy/memory/journal/2026-09-29.md` §㉓/㉓之二）｜**不做会怎样：** 目标机上装不起来 / 落地无自检 ⇒ 系统交不出去｜**落点：** `work/10-designs/设计-交付包与迁移-20260929.md` ＋ `ops/{pack,deploy_restore,selfcheck}.ps1` ＋ `ops/deployment.md`｜**阶段 / 时机：** `M8`｜索引 = 计划 §15（**一行一票**）
+**2026-10-04 · 建票（agent）。** 来源：用户 2026-09-29 口述（出处 = `.codebuddy/memory/journal/2026-09-29.md` §㉓/㉓之二）｜**不做会怎样：** 目标机上装不起来 / 落地无自检 ⇒ 系统交不出去｜**落点：** `.codebuddy/work/10-designs/设计-交付包与迁移-20260929.md` ＋ `ops/{pack,deploy_restore,selfcheck}.ps1` ＋ `ops/deployment.md`｜**阶段 / 时机：** `M8`｜索引 = 计划 §15（**一行一票**）
 
 **2026-10-07 · TAIL-246 核实与处置（Codex）。** 2026-10-05 主计划 §13.6 修订27和 journal/2026-10-05.md 证明原地部署、空库建表与自检已完成。本轮只读服务状态：后端和PG均 Running/Automatic。empty模式只建库与迁移；selfcheck证明装好，不证明真实备份对隔离空库还原成功。未找到名称匹配 mtrl/pgsql 的备份计划任务（匹配到的为Windows通用备份任务）；名称筛选不能排除别名/其他调度，故每日备份、异盘校验及恢复仍未核实，不再次部署。MANIFEST属于下次产包检查，不再作为本次原地部署欠项。
 
