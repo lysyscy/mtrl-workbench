@@ -281,7 +281,7 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
     if any(n.startswith('tools/mut/') for n in names): checks.add('tools/audit/mut_cover.py')
     checks |= {rel for rel, deps in SELFTEST_DEPENDENCIES.items() if names & deps}
     # 工具自测只证其自身；共享模块的其他消费者仍须调查，不消除待查。
-    tests = scope.plan(sorted(relevant))
+    tests = scope.plan(sorted(relevant), changes=changes)
     if tests.reason.startswith('待查：'):
         pending.append(tests.reason)
     direct = {Path(n).name for n in readers if n.startswith('backend/tests/') and Path(n).name.startswith('test_')}
@@ -399,6 +399,11 @@ def selftest():
     assert selection({'unknown.dat': (None, b'x')}, rulers.CMDS + rulers.SELFTESTS)[2], '未知输入必须显式待查'
     assert selection({'backend/data.json': (None, b'x')}, rulers.CMDS + rulers.SELFTESTS)[2], '未知后端机器输入不能直接全跑'
     registered = rulers.CMDS + rulers.SELFTESTS
+    # --since的旧新字节必须原样到达选择器，不能在下游另取HEAD差异。
+    supplied = {'backend/app/web/shell/proj.js': (b'older\r\n', b'newer\r\n')}
+    with patch.object(scope, 'plan', return_value=scope.Plan(False, 'fixture')) as planner:
+        selection(supplied, registered)
+        assert planner.call_args.kwargs['changes'] is supplied
     # 隔离选择输入；明确期望来自实际消费者，不能沿待测依赖表自说自话。
     with patch.object(scope, 'plan', return_value=scope.Plan(False, 'fixture')):
         for dep, expected in (

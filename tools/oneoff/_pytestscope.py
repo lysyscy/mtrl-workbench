@@ -214,14 +214,135 @@ def outside_tests(paths) -> set[str]:
     return {n for n, module in files.items() if _reach(graph, module) & sources}
 
 
-#: ⚠️ 2026-10-11（`/retro` 量测 · 记在规则主人处）：本分支的**爆炸半径** = "import 到了带壳字面量的
-#:    模块"的测试件数。**三个口径都量过，⛔ 别混着说**：
-#:      · **整壳读者**（测试文件里出现标识符 `SHELL` 本身）＝ **61 / 188 件** —— 它们真依赖壳任意一处；
-#:      · **纯读点读者**（只用 `const_src` / `func_body` / `page_slice` 这些出口）＝ **0 件**；
-#:      · 下面那行打印的两个数（自有壳**字面量** / 经 import 闭包带入）＝ 又一种口径。
-#:    ⇒ **按读点收窄目前收益为 0**，而放松那扇门就是漏跑（本文件上面已写明"漏跑比慢跑严重得多"）。
-#:    ⇒ 要收窄，先把测试**迁到纯读点读者**（有靶、可量、可单开票），⛔ 不在这里悄悄放松。
-def shell_plan() -> Plan:
+# 旧/retro计数为历史输入；本轮真实计数与ROI回TAIL-289 Comments。
+# 首批仅认可FL/NT常量内修改及完整具名读点；无法证明仍保留旧选集。
+def _shell_api():
+    """复用现行具名段解析口，不另建JS解析器。"""
+    audit = str(ROOT/'tools/audit')
+    if audit not in sys.path:
+        sys.path.insert(0, audit)
+    import shell_api
+    return shell_api
+
+
+def _constant_change(changes):
+    """只证明proj中FL/NT单句修改；句外任何字节变化均回退旧选择。"""
+    path = 'backend/app/web/shell/proj.js'
+    if not changes or set(changes) != {path}:
+        return None
+    old, new = changes[path]
+    if old is None or new is None or old == new or (ROOT/path).read_bytes() != new:
+        return None
+    api = _shell_api()
+    before, after = old.decode('utf-8'), new.decode('utf-8')
+    for name in ('FL_THEAD', 'NT_THEAD'):
+        pattern = rf'(?m)^const\s+{name}\s*='
+        if any(len(re.findall(pattern, api.blank_comments(s))) != 1 for s in (before, after)):
+            continue
+        left, right = [api.const_src(name, source=s) for s in (before, after)]
+        if not left.endswith(';') or not right.endswith(';'):
+            continue
+        if before.count(left) != 1 or after.count(right) != 1:
+            continue
+        if before.split(left) != after.split(right):
+            continue
+        import shell_source
+        parts = shell_source.part_paths()
+        if parts.count(ROOT/path) != 1:
+            return None
+        texts = [p.read_text(encoding='utf-8') for p in parts]
+        i = parts.index(ROOT/path)
+        texts[i] = before.replace('\r\n', '\n')
+        full_old = '\n'.join(texts)
+        texts[i] = after.replace('\r\n', '\n')
+        full_new = '\n'.join(texts)
+        if any(len(re.findall(pattern, api.blank_comments(s, html=True))) != 1
+               for s in (full_old, full_new)):
+            return None
+        return full_old, full_new
+    return None
+
+
+def _pure_shell_points(tree, known_modules=()):
+    """只接纳完整、直接、字面量具名调用；别名/动态/其他读法不能算空集。"""
+    allowed = {'const_src', 'func_body', 'act_entry', 'page_slice'}
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == 'tests.shell_src':
+            if node.level or any(a.asname or a.name not in allowed for a in node.names):
+                return None
+            imported |= {a.name for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(('tests', 'tools')) and node.module != 'tests.acc_plugin':
+            return None
+        elif isinstance(node, ast.Import) and any(a.name.startswith(('tests', 'tools')) for a in node.names):
+            return None
+    if not imported:
+        return None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name in imported:
+            return None
+        if isinstance(node, ast.arg) and node.arg in imported:
+            return None
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if isinstance(node, ast.ImportFrom) and node.module == 'tests.shell_src':
+                continue
+            if any((a.asname or a.name.split('.')[0]) in imported for a in node.names):
+                return None
+            modules = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or '']
+            # 来源不在标准库/已解析仓库图中的helper不能证明没有整壳依赖。
+            if any(m.split('.')[0] not in sys.stdlib_module_names and m not in known_modules
+                   for m in modules):
+                return None
+            if any(m.split('.')[0] in {'playwright', 'requests', 'httpx', 'urllib', 'importlib'} for m in modules):
+                return None
+            if any(m == 'subprocess' for m in modules) and (isinstance(node, ast.ImportFrom) or any(a.asname for a in node.names)):
+                return None
+    calls, points = set(), set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            if node.func.id in {'eval', 'exec', 'getattr', 'globals', 'locals', 'vars', '__import__', 'open'}:
+                return None
+            if node.func.id in imported:
+                if len(node.args) != 1 or node.keywords or not isinstance(node.args[0], ast.Constant) or not isinstance(node.args[0].value, str):
+                    return None
+                calls.add(id(node.func))
+                points.add((node.func.id, node.args[0].value))
+        if isinstance(node.func, ast.Attribute):
+            if isinstance(node.func.value, ast.Name) and node.func.value.id == 'subprocess':
+                if node.func.attr != 'run' or not node.args or not isinstance(node.args[0], ast.List) or \
+                        len(node.args[0].elts) != 1 or not isinstance(node.args[0].elts[0], ast.Constant) or \
+                        node.args[0].elts[0].value != 'node' or any(k.arg == 'shell' for k in node.keywords):
+                    return None
+            if node.func.attr in {'glob', 'rglob', 'walk', 'iterdir', 'import_module', 'spec_from_file_location'}:
+                return None
+            if node.func.attr in {'read_text', 'read_bytes', 'open'}:
+                # 首批允许样板已有的后端.py直读；动态路径仍保守。
+                path = node.func.value
+                if not isinstance(path, ast.BinOp) or not isinstance(path.op, ast.Div) or \
+                        not isinstance(path.right, ast.Constant) or not isinstance(path.right.value, str) or \
+                        not path.right.value.endswith('.py'):
+                    return None
+    if any(isinstance(n, ast.Name) and n.id in imported and id(n) not in calls for n in ast.walk(tree)):
+        return None
+    return points or None
+
+
+def _points_unchanged(points, sources):
+    """比较测试实际取出的源码，不把页/函数内引用的常量当成运行时依赖图。"""
+    api = _shell_api()
+    for kind, name in points:
+        if kind == 'page_slice':
+            values = ['\n'.join(api.slices_of_lines(s.split('\n'))[name]) for s in sources]
+        else:
+            values = [getattr(api, kind)(name, source=s) for s in sources]
+        if values[0] != values[1]:
+            return False
+    return True
+
+
+def shell_plan(changes=None) -> Plan:
     """沿源码读入、浏览器访问与import闭包选择壳使用者，不隐式执行全套。"""
     try:
         mods, files = build_graph()
@@ -232,8 +353,10 @@ def shell_plan() -> Plan:
         aliases = {}
         for module in sources:
             aliases.setdefault(module.rsplit('.', 1)[-1], set()).add(module)
+        trees = {}
         for module, p in sorted(sources.items()):
             tree = ast.parse(p.read_text(encoding='utf-8'))
+            trees[module] = tree
             edges = set(mods.get(module, ()))
             for node in ast.walk(tree):
                 imports = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or '', *[(node.module+'.'+a.name) if node.module else a.name for a in node.names]] if isinstance(node, ast.ImportFrom) else []
@@ -257,8 +380,30 @@ def shell_plan() -> Plan:
         direct = sum(1 for n, m in files.items() if n in picked and m in readers)
         closed = len(picked) - direct
         picked |= {n for n, _ in REPO_WIDE if n in files}
+        removed = set()
+        try:
+            named = _constant_change(changes)
+        except (OSError, UnicodeError, LookupError, ValueError):
+            named = None
+        if named:
+            # 去掉唯一认可的读点门；任何另一条整壳helper路径都禁止排除。
+            graph = {m: set(edges)-{'tests.shell_src'} for m, edges in mods.items()}
+            wide = {n for n, _ in REPO_WIDE}
+            for n in picked-wide:
+                m = files[n]
+                points = _pure_shell_points(trees[m], mods) if m in trees else None
+                if not points or _reach(graph, m) & readers:
+                    continue
+                try:
+                    if _points_unchanged(points, named):
+                        removed.add(n)
+                except (LookupError, KeyError, ValueError):
+                    pass
+            picked -= removed
+        if not picked:
+            return Plan(False, '具名常量改动与全部已证读点不交集')
         return Plan(True, '壳源码/浏览器及共享helper使用者：%d / %d件（自有壳字面量 %d · 闭包带入 %d）'
-                    % (len(picked), len(files), direct, closed), picked)
+                    % (len(picked), len(files), direct, closed) + '；已证不交集排除 %d件'%len(removed), picked)
     except (OSError, SyntaxError, UnicodeError) as exc:
         return Plan(False, '待查：壳使用者读取失败：'+type(exc).__name__)
 
@@ -267,6 +412,7 @@ def shell_selftest():
     """独立夹具证壳直接/传递/浏览器使用者、无关排除及未知不扩成全套。"""
     import tempfile
     from unittest.mock import patch
+    _shell_api()  # 在切到夹具ROOT前加载仓库的真实解析器。
     module = sys.modules[__name__]
     with tempfile.TemporaryDirectory() as folder:
         root = pathlib.Path(folder)
@@ -286,13 +432,74 @@ def shell_selftest():
             selected = plan(['backend/app/web/shell/core.js'])
             assert selected.run and not selected.run_all
             assert set(selected.files) == {prefix+n for n in ('direct.py', 'shared.py', 'browser.py', 'tool.py')}
+            (tests/'shell_src.py').write_text("path='index.html'", encoding='utf-8')
+            for label, body in {
+                'fl': "from tests.shell_src import const_src\nx=const_src('FL_THEAD')",
+                'nt': "from tests.shell_src import const_src\nx=const_src('NT_THEAD')",
+                'whole': "from tests.shell_src import SHELL\nx=SHELL",
+                'dynamic': "from tests.shell_src import const_src\nx=const_src(name)",
+                'alias': "from tests.shell_src import const_src as read\nx=read('NT_THEAD')",
+                'mixed': "from tests.shell_src import const_src\nfrom tests import reader\nx=const_src('NT_THEAD')",
+                'wide': "from tests.shell_src import const_src\nx=const_src('NT_THEAD')",
+                'unknown': "from tests.shell_src import custom\nx=custom('NT_THEAD')",
+                'shadow': "from tests.shell_src import const_src\ndef f(const_src):\n    return const_src('NT_THEAD')",
+                'outside': "from tests.shell_src import const_src\nx=const_src('NT_THEAD')\ny=Path(name).read_text()",
+                'opaque': "from tests.shell_src import const_src\nfrom opaque_helper import read\nx=const_src('NT_THEAD')\nassert read()",
+            }.items():
+                (tests/(prefix+label+'.py')).write_text(body, encoding='utf-8')
+            path = 'backend/app/web/shell/proj.js'
+            proj = root/path; proj.parent.mkdir(parents=True)
+            index = proj.parent.parent/'index.html'
+            index.write_text('<script src="/static/shell/proj.js"></script>', encoding='utf-8')
+            old = b"const FL_THEAD='old';\nconst NT_THEAD='old';\n"
+            import shell_source
+            with patch.object(shell_source, 'part_paths', return_value=[index, proj]), \
+                    patch.object(module, 'REPO_WIDE', ((prefix+'wide.py', 'fixture'),)):
+                def check(name):
+                    new = old.replace((name+"='old'").encode(), (name+"='new'").encode())
+                    proj.write_bytes(new)
+                    legacy = plan([path])
+                    narrowed = plan([path], changes={path: (old, new)})
+                    wanted = prefix+('fl' if name == 'FL_THEAD' else 'nt')+'.py'
+                    skipped = prefix+('nt' if name == 'FL_THEAD' else 'fl')+'.py'
+                    assert wanted in narrowed.files, '匹配读点被错误排除'
+                    assert skipped not in narrowed.files, '同文件不交集没有真正排除'
+                    assert set(legacy.files)-set(narrowed.files) == {skipped}
+                    print(name, len(legacy.files), '->', len(narrowed.files), '排除', skipped)
+                    return new
+                new = check('FL_THEAD')
+                check('NT_THEAD')
+                # 错误排除通过真实plan出口发生，正例断言必须真的报红。
+                original = module.shell_plan
+                def omit(*args, **kwargs):
+                    result = original(*args, **kwargs)
+                    result.files = [n for n in result.files if n != prefix+'fl.py']
+                    return result
+                with patch.object(module, 'shell_plan', side_effect=omit):
+                    try:
+                        check('FL_THEAD')
+                    except AssertionError as exc:
+                        assert str(exc) == '匹配读点被错误排除'
+                    else:
+                        raise AssertionError('故意漏选未能报红')
+                for pair in [(None, new), (old, None), (old, new+b'// extra\n'),
+                             (old, new+b"const FL_THEAD='duplicate';\n"),
+                             (old, new.replace(b"'new';", b"'new'"))]:
+                    proj.write_bytes(pair[1] or b'')
+                    assert set(plan([path], changes={path: pair}).files) == set(plan([path]).files)
+                proj.write_bytes(new)
+                mixed = plan([path, 'backend/tests/'+prefix+'nt.py'], changes={path: (old, new)})
+                assert prefix+'nt.py' in mixed.files, '测试自身改动不能被壳收窄排除'
+                assert set(plan([path, 'tools/oneoff/unread.py'], changes={path: (old, new)}).files) == \
+                    set(plan([path], changes={path: (old, new)}).files), '无pytest使用者的仓外改动不能吞掉壳使用者'
+                assert set(plan([path, 'backend/app/web/index.html'], changes={path: (old, new)}).files) == set(plan([path]).files)
             (tests/'reader.py').write_text('bad syntax !', encoding='utf-8')
             unknown = plan(['backend/app/web/index.html'])
             assert not unknown.run and unknown.reason.startswith('待查：')
     print('壳选集自证：直接/传递/浏览器选中，无关排除，未知待查')
 
 
-def plan(changed) -> Plan:
+def plan(changed, *, changes=None) -> Plan:
     """按使用者选测；未知依赖返回待查，自动加载共享输入才扩大。"""
     if changed is None:
         return Plan(False, "待查：git失败，未确定实际输入")
@@ -305,13 +512,15 @@ def plan(changed) -> Plan:
         picked = outside_tests(outside)
         files = {p.name for p in TESTS.glob("test_*.py")}
         picked = {n for n in picked if n in files}
-        if not picked:
-            return Plan(False, "实际import和文本消费图未发现pytest使用者；对应工具检查仍由入口执行")
         if inside:
-            inner = plan(inside)
+            inner = plan(inside, changes=changes)
+            if inner.reason.startswith('待查：'):
+                return inner
             if inner.run_all:
                 return inner
             picked |= set(inner.files)
+        if not picked:
+            return Plan(False, "实际import和文本消费图未发现pytest使用者；对应工具检查仍由入口执行")
         return Plan(True, "仓外读入及共享helper依赖（%d处）⇒ %d件测试" % (len(outside), len(picked)), picked)
     if not inside:
         return Plan(False, "本轮既没动 backend/，也没动 pytest 读的仓外部位")
@@ -321,13 +530,15 @@ def plan(changed) -> Plan:
                     % "、".join(auto))
     shell = [p for p in inside if p.startswith("backend/app/web/")]
     if shell:
-        selected = shell_plan()
+        selected = shell_plan({p: changes[p] for p in shell if changes and p in changes}
+                              if changes and all(p in changes for p in shell) else None)
         remaining = [p for p in inside if p not in shell]
         if remaining and not selected.reason.startswith('待查：'):
-            other = plan(remaining)
+            other = plan(remaining, changes=changes)
             if other.reason.startswith('待查：') or other.run_all:
                 return other
             selected.files = sorted(set(selected.files) | set(other.files))
+            selected.run = selected.run or other.run
         return selected
     odd = [p for p in inside if not p.endswith(".py")]
     if odd:

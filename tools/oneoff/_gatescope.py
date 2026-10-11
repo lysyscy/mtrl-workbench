@@ -408,6 +408,7 @@ def selftest() -> None:
     _impactscope.selftest()
     import _pytestscope
     _pytestscope.input_selftest()
+    _pytestscope.shell_selftest()
     # ⭐ 2026-10-11（`/retro` 候选 1）：**真机自检的复用边界** —— 改壳必重跑，改别处（含改测试、
     #    改工具、改文档）可复用上轮 rc=0；环境变了也必重跑。三向各断言一次。
     #    ⚠️ 夹具里的件名用**真实存在**的（`test_wiring_guards` 会拦"引用了不存在的测试件"）。
