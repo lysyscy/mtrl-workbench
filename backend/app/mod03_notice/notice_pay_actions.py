@@ -79,7 +79,7 @@ def apply_batch_pay(
     （`POST /api/m03/actions/batch-pay`）**共用这一份**：⛔ 不许两份判定、不许两份文案。
 
     管线（与 `act_pay` 原来的逐句一致，只是搬了个家）：
-      ① `build_rows` 取数 ⇒ ② **以库里最新状态重算**（防"勾上之后才被改成不可付"；
+      ① 所选通知书 / 实际流水 / 关联批量取数 ⇒ ② **以库里最新状态重算**（防"勾上之后才被改成不可付"；
          **撤单 / 剔除行一律排除** §4.2.7）⇒ ③ `confirm_batch` 判定（金额 / 方式 / 备注 / 状态）
       ⇒ ④ 有错 ⇒ **整批不产生任何流水**（不落半批）⇒ ⑤ **`request_id` 幂等**（拒重复提交）
       ⇒ ⑥ `flow_service.create_flow` 逐条落流水（一次付款一条独立流水）。
@@ -93,10 +93,17 @@ def apply_batch_pay(
     """
     from app.core.money import to_money
     from app.mod03_notice.domain import PayDraft, PayRow, confirm_batch
-    from app.mod03_notice.list_view import build_rows
-    from app.mod05_flow import service as flow_service      # ⭐ 包间出口（§2.3 · `TAIL-195` 批 2a）
+    from app.mod03_notice.repository import get_notices_by_ids
+    from app.mod05_flow import service as flow_service
+    from app.mod05_flow.domain import CATEGORY_MATERIAL, effective_total
+    from app.mod11_jc import service as contracts
 
-    by_id = {r.notice_id: r for r in build_rows(session)}
+    selected_ids = list(dict.fromkeys(ids))
+    by_id = {int(n.id): n for n in get_notices_by_ids(session, selected_ids)}
+    flows: dict[int, list[dict]] = {}
+    for f in flow_service.flows_of_notices(session, selected_ids):
+        flows.setdefault(int(f.notice_id), []).append({"amount": f.amount, "status": f.status})
+    links = contracts.links_by_notice(session, notice_ids=selected_ids)
     targets = [
         by_id[i] for i in ids
         if i in by_id and not by_id[i].i8_revoked and not by_id[i].excluded
@@ -106,22 +113,20 @@ def apply_batch_pay(
 
     pay_rows = [
         PayRow(
-            notice_id=r.notice_id,
-            approve_status=r.approve_status,
-            payable=r.pay_amount,
-            # ⭐ ⑤ 集采未关联不可付（§4.4.3）：两样都取自 `NoticeRow` ——
-            #    `build_rows` 已把分类与「有没有关联」**一次查完**（`_links_by_notice`，⛔ 无 N+1），
-            #    本层**不另查库**、也不另判一遍（判定唯一出口 = `domain.PayRow.block()`）。
-            category=r.category,
-            jc_linked=r.has_link,
+            notice_id=int(r.id),
+            approve_status=str(r.approve_status or ""),
+            payable=to_money(r.amount_approved) - effective_total(flows.get(int(r.id), [])),
+            # 人工统计金额不参与实付；集采闸仍由 PayRow.block 判定。
+            category=str(r.category or "").strip() or CATEGORY_MATERIAL,
+            jc_linked=bool(links.get(int(r.id))),
         )
         for r in targets
     ]
     plan = plan_methods or {}
     submitted = {}
     for r in targets:
-        d = (drafts or {}).get(r.notice_id) or {}
-        submitted[r.notice_id] = PayDraft(
+        d = (drafts or {}).get(int(r.id)) or {}
+        submitted[int(r.id)] = PayDraft(
             # ⚠️ 表单没给 ⇒ 用**与窗口渲染同一个出口**的默认值（§4.4.2）
             pay_method=str(d.get("pay_method") or default_pay_method(r.bill_no, plan)),
             amount=d.get("amount"),
@@ -142,7 +147,7 @@ def apply_batch_pay(
         row = by_id[int(item["notice_id"])]
         flow_service.create_flow(
             session,
-            notice_id=row.notice_id,
+            notice_id=int(row.id),
             project_id=row.ownership_id,
             amount=item["amount"],
             pay_date=item["pay_date"],

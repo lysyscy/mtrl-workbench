@@ -409,6 +409,6 @@ def list_contracts(session, **kw):
     return repository.list_contracts(session, **kw)
 
 
-def links_by_notice(session):
+def links_by_notice(session, notice_ids: list[int] | None = None):
     from app.mod11_jc import repository
-    return repository.links_by_notice(session)
+    return repository.links_by_notice(session, notice_ids=notice_ids)

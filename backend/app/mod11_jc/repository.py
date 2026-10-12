@@ -657,10 +657,14 @@ def set_ignored_active(s: Session, *, ignore_id: int, active: bool) -> int:
     return 1
 
 
-def links_by_notice(session) -> dict[int, list[int]]:
-    """一次读取通知书到合同关联，与付款子表使用同一份事实。"""
+def links_by_notice(session, notice_ids: list[int] | None = None) -> dict[int, list[int]]:
+    """一次读取通知书到合同关联；None 全量，空集合不查询。"""
+    if notice_ids is not None and not notice_ids:
+        return {}
     grouped: dict[int, list[int]] = {}
     stmt = select(JcPayment.notice_id, JcPayment.contract_id).where(JcPayment.notice_id.is_not(None))
+    if notice_ids is not None:
+        stmt = stmt.where(JcPayment.notice_id.in_(notice_ids))
     for nid, cid in session.execute(stmt).all():
         if nid is not None:
             grouped.setdefault(int(nid), []).append(int(cid))
