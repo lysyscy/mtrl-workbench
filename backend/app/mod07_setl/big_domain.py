@@ -278,24 +278,6 @@ def rate_text(value) -> str:
     return f"{(Decimal(str(value)) * 100):.1f}%"
 
 
-# ============================================================ 主材累计（含税）—— 集采结算额
-
-def main_material_total(contracts, *, project_key: str) -> Decimal:
-    """主材累计（含税）= **按项目取「集采台账结算」额**（§5.7.1 末条 · §6.4.1 结算口径）。
-
-    `contracts` 每行 = 集采合同落库行的**最小投影**（三个要素，都是《说明书》已定义的）：
-    `{"project": 仓库名, "in_ledger": 是否纳入台账, "settle": 结算金额}`。
-
-    ⭐ **只计「纳入台账」的合同**（用户 2026-09-13 裁定「甲」），与 `MOD-11` 的「Σ 结算金额」**同口径**。
-    ⚠️ 集采台账属 **M5**，本函数是**规则**（可独立验证）；**取数口**在 `big_service`，未接入时给 `None`。
-    """
-    return sum_money([
-        c.get("settle")
-        for c in (contracts or ())
-        if str(c.get("project") or "") == str(project_key or "") and bool(c.get("in_ledger"))
-    ])
-
-
 # ============================================================ 项目集合与顺序（§5.7.3）
 
 def candidates(projects) -> list[dict]:
@@ -474,7 +456,7 @@ __all__ = [
     "MAIN_MATERIAL_NOTE", "MAIN_MATERIAL_UNAVAILABLE", "PRINT_CHANNEL", "FORBIDDEN_TEXTS",
     "MSG_BAD_YM", "MSG_BAD_MONEY", "MSG_SAVED", "MSG_CLEARED", "MSG_NO_PROJECT", "MSG_NO_COLUMN",
     "default_month", "parse_month", "parse_manual", "manual_cell", "label_of",
-    "total_of", "use_rate", "output_rate", "rate_text", "main_material_total",
+    "total_of", "use_rate", "output_rate", "rate_text",
     "candidates", "normalize_selection", "resolve_order", "move_in_list",
     "assemble_rows", "cell_value", "totals_row", "carry_count", "empty_text",
     "boundary_violations",

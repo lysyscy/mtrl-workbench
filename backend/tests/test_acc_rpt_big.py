@@ -146,34 +146,35 @@ def test_派生列独立复算():
 
 
 @acc(CASE, "001-05")
-def test_主材累计取集采结算额_只计纳入台账():
-    """§5.7.1 末条：主材累计（含税）= **按项目取集采台账结算额**，且**只计「纳入台账」的合同**。
+def test_主材累计取集采结算额_只计纳入台账(monkeypatch):
+    """主材口径在MOD11 owner interface验证，不保留失去生产调用者的helper。"""
+    from app.mod11_jc import service as contracts, repository as repo
+    from app.mod11_jc.models import TAG_IN, TAG_OUT
 
-    `contracts` 每行 = 集采合同落库行的最小投影：`{"project": 仓库名, "in_ledger": 是否纳入台账, "settle": 结算金额}`。
-    """
-    contracts = [
-        {"project": WH_A, "in_ledger": True, "settle": "100.00"},
-        {"project": WH_A, "in_ledger": True, "settle": "20.50"},
-        {"project": WH_A, "in_ledger": False, "settle": "999.00"},      # 未纳入台账 ⇒ 不计
-        {"project": WH_B, "in_ledger": True, "settle": "7.00"},         # 别的项目 ⇒ 不计
+    session = object()
+    rows = [
+        {"id": 1, "project_key": WH_A, "tag": TAG_IN, "trade_co": ""},
+        {"id": 2, "project_key": WH_A, "tag": TAG_IN, "trade_co": "贸易公司"},
+        {"id": 3, "project_key": WH_A, "tag": TAG_OUT, "trade_co": ""},
+        {"id": 4, "project_key": WH_B, "tag": TAG_IN, "trade_co": ""},
     ]
-    assert B.main_material_total(contracts, project_key=WH_A) == Decimal("120.50")
-    assert B.main_material_total(contracts, project_key=WH_B) == Decimal("7.00")
-    # 该项目确实没有纳入台账的合同 ⇒ **0**（与"取数口未接入"是两回事）
-    assert B.main_material_total(contracts, project_key=WH_D) == Decimal("0.00")
-    # ⭐ 2026-09-21（`TAIL-25`）取数口**已接入**（M5 集采台账落地）⇒ 该列显示**真数**；
-    #    "不可得 ⇒ `None`"的那条路保留给**显式摘除**（`set_main_material_port(None)`）——
-    #    ⚠️ 两件事不许混：**没合同 = 0**（上面那行），**取不到数 = None**（现在只有显式摘除才发生）。
+    def selected(s, *, tags):
+        assert s is session and tags == [TAG_IN]
+        return [r for r in rows if r["tag"] in tags]
+    monkeypatch.setattr(contracts, "list_contracts", selected)
+    invoices = {
+        1: [{"kind": "supplier", "amount": "100.00"}, {"kind": "trade", "amount": "999"}],
+        2: [{"kind": "supplier", "amount": "888"}, {"kind": "trade", "amount": "20.50"}],
+        3: [{"kind": "supplier", "amount": "999"}],
+        4: [{"kind": "supplier", "amount": "7.00"}],
+    }
+    def batch(s, ids):
+        assert s is session and ids == [1, 2, 4]
+        return {i: invoices[i] for i in ids}
+    monkeypatch.setattr(repo, "invoices_of_many", batch)
+    assert contracts.settlement_totals_by_project(session, {WH_A, WH_B, WH_D}) == {
+        WH_A: Decimal("120.50"), WH_B: Decimal("7.00"), WH_D: Decimal("0.00")}
     assert S.MAIN_MATERIAL_PORT is not None
-    # ⚠️ 2026-09-19（`§19` 批 2）：原先拿**旧页**的 `_cell_html` 渲染那一格、断言里面是「—」不是 `0.00`；
-    # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里主材累计走金额出口且取数口未接入`
-    # （壳里它是**派生文本格**（`M(r.matC)`），⛔ 不是手填输入框；「0.00 与取数口没接」两件事不许混 ✓）。
-    mat = next(c for c in B.BIG_COLUMNS if c["key"] == "mat_cum")
-    assert mat["kind"] == B.KIND_DERIVED, "主材累计不是派生列了"
-
-
-# ============================================================ 手填与写入语义（001-06 / 001-07 / 001-08）
-
 
 @acc(CASE, "001-06")
 def test_手填值落在本月_编辑一格不连带确认同行其他格():

@@ -7,7 +7,7 @@
 **取数一律复用现场出口**（⛔ 不另写一套算钱的）：
   · 台账行 = `mod11_jc.service.build_list`（集采台账页同一个函数）
   · 三类欠款 = `mod05_flow.service.build_debt`（欠款页 / 看板同一个函数）
-  · 主材累计 = `mod07_setl.domain.main_material_total`（大表同一个函数）
+  · 当前主材累计 = `mod11_jc.service.settlement_totals_by_project`（大表同一个owner）
 
 用法：`backend\\.venv\\Scripts\\python.exe tools\\probe\\_probe_tail97_impact.py`
 """
@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
 
 from app.core.db import session_scope                        # noqa: E402
 from app.mod05_flow import service as M05                    # noqa: E402
-from app.mod07_setl import big_domain as BIGD                # noqa: E402
 from app.mod11_jc import service as M11                      # noqa: E402
 from app.mod11_jc.models import TAG_IN, TAG_OUT             # noqa: E402
 
@@ -60,6 +59,7 @@ def main() -> int:
         #    ⇒ 本件**跟着改**，否则【三】会继续显示那个已经修掉的 0。
         home = M05.build_debt_live(s)
         projects = list(data.get("projects") or [])
+        current = M11.settlement_totals_by_project(s, {str(r.get("project_key") or "") for r in rows})
 
     total = {"n": len(rows), "settle": Z, "pay": Z, "debt": Z}
     for r in rows:
@@ -102,13 +102,10 @@ def main() -> int:
     whs = sorted({w for w in settled_wh if w})
     hit = 0
     for wh in whs:
-        before = BIGD.main_material_total(
-            [{"project": r.get("project_key"), "in_ledger": str(r.get("tag") or "") == TAG_IN,
-              "settle": r.get("settle")} for r in rows], project_key=wh)
-        after = BIGD.main_material_total(
-            [{"project": r.get("project_key"),
-              "in_ledger": str(r.get("tag") or "") in (TAG_IN, LEGACY_PENDING),
-              "settle": r.get("settle")} for r in rows], project_key=wh)
+        before = current[wh]
+        # 仅假设迁入历史待确认行的增量；现行结算额已经由owner给出。
+        after = before + sum((Decimal(str(r.get("settle") or 0)) for r in rows
+                              if r.get("project_key") == wh and r.get("tag") == LEGACY_PENDING), Z)
         if before != after:
             hit += 1
             print(f"  {wh:<28} {money(before):>16} => {money(after):>16}   (+{money(after - before)})")

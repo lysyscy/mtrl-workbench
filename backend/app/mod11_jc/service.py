@@ -20,6 +20,19 @@ from app.mod11_jc.models import INVOICE_KINDS, SRC_MANUAL, SRC_NOTICE, TAG_IN, J
 from app.core.money import sum_money
 
 
+def settlement_totals_by_project(s: Session, warehouse_keys: set[str]) -> dict[str, Decimal]:
+    """同会话批量读取纳入合同的结算；无合同为0，空项目集合不查询。"""
+    totals = dict.fromkeys(warehouse_keys, D.ZERO)
+    if not totals:
+        return totals
+    rows = [r for r in list_contracts(s, tags=[TAG_IN]) if r["project_key"] in totals]
+    invoices = R.invoices_of_many(s, [r["id"] for r in rows])
+    for r in rows:
+        totals[r["project_key"]] += D.settle_amount(
+            trade_co=r["trade_co"], invoices=invoices.get(r["id"], []))
+    return totals
+
+
 def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
                supplier: str = "", project_key: str = "") -> dict:
     """集采台账**主表**（含派生金额与合计行）—— 判据 `ACC-JC-UI-001/001-02` / `001-11` 的数据源。
@@ -394,7 +407,7 @@ def act_set_party_kind(s: Session, *, name: str, kind: str) -> dict:
 
 
 __all__ = [
-    "build_list", "build_detail", "debt_of_ledger",
+    "build_list", "build_detail", "debt_of_ledger", "settlement_totals_by_project",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
     "act_update_contract", "act_add_invoice", "act_del_invoice",
     "act_add_payment", "act_del_payment",
