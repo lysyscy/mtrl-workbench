@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from tests.acc_plugin import acc
-from tests.shell_src import SHELL, parts_text
+from tests.shell_src import SHELL, parts_text, func_body
 
 #: 造错的口（唯一）——名字变了就同批改本件（⛔ 别让判据静默失效）
 ERR_HUMAN = "errHuman"
@@ -85,11 +85,10 @@ def test_首屏取数失败的横幅_人话在外技术明细折叠():
 
     ⚠️ **能证伪**：把 `<details>` 去掉、直接把 `failsTech` 拼进可见区 ⇒ 本件必红。
     """
-    core = _part("shell/core.js")
-    i = core.find("function bootErrorBanner")
-    assert i > 0, "找不到 `bootErrorBanner`（首屏取数失败的常驻说明）"
-    seg = core[i:i + 2000]
+    seg = func_body("bootErrorBanner")
     assert "<details" in seg and "技术明细" in seg, \
         "横幅没有把原始串折进「技术明细」—— 用户会看到 `GET /api/… → HTTP 500`"
     assert "failsTech" in seg, "横幅的技术明细不是取自 `failsTech`（人话与技术串没有分开收）"
     assert ("重试" in seg) and ("管理员" in seg), "横幅没说**下一步**（守则 §2.2）"
+    assert "esc(BOOT_ERROR)" in seg and "failsTech.map(t => esc(t))" in seg, "两半均须安全转义"
+    assert "<details open" not in seg, "技术明细默认折叠"

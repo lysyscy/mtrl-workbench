@@ -1944,22 +1944,21 @@ const LOADERS = {
    顺序写反 ⇒ 大表机械列 / 机械欠款**取到空值，且不报错**（`test_wired_boot.py` 有结构性断言）。 */
 const LOAD_DEP = new Set(['收发结存与大表', '付款域']);
 
-const fails = [];
+let fails = [];               /* 当前失败快照，由 FAILED 派生 */
 /* ⚠️ **每一路取数独立容错**：任何一路失败（某端点临时 500 / 还没上线 / 网络抖）**不得拖垮其他页**。
    ⭐ 实测踩到：`/api/m06/mech` 404（后端加了端点但服务没重启）⇒ 原来的单个 `try` 把后面**全部**跳过，
       `m08`/`m05` 明明已接线却显示空表 —— **看起来像功能没做**（假故障、最难查的那类）。
    ⇒ 逐路 `soft()`：坏的那路在顶部横幅里**点名**，其余页**照常可用**。 */
-const failsTech = [];          /* ⭐ 与上面 `fails` 并排的**技术明细**（只进横幅折叠区）—— 见 `soft` */
+let failsTech = [];          /* ⭐ 与上面 `fails` 并排的**技术明细**（只进横幅折叠区）—— 见 `soft` */
 const soft = async (label, fn) => {
-  try { await fn(); FAILED.delete(label); }        /* ⭐ 重试成功 ⇒ 摘掉"这一路坏了"的名 */
+  try { await fn(); FAILED.delete(label); FAILED_TECH.delete(label); }        /* ⭐ 重试成功 ⇒ 摘掉"这一路坏了"的名 */
   catch (e) {
     FAILED.set(label, String((e && e.message) || e));   /* ⭐ `TAIL-117` 批次 6：按**路名**记失败（页级四态要用） */
     /* ⭐ 2026-09-27（`TAIL-117` 批次 1）：两半**分开收** ——
        `fails` = **上屏的那半**（`e.message` 已经过 `api.js` 的「人话出口」，守则 §3.7）；
        `failsTech` = **原始串那半**（方法 / 全路径 / 状态码）⇒ 只进横幅的「技术明细」折叠区。
        ⚠️ `BOOT_ERROR` 仍必须是**字符串**（`test_wired_boot` 与真机都按字符串判真假 ⇒ ⛔ 别改成数组）。 */
-    fails.push(`${label}：${String((e && e.message) || e)}`);
-    failsTech.push(`${label}：${String((e && e.tech) || (e && e.message) || e)}`);
+    FAILED_TECH.set(label, String((e && e.tech) || (e && e.message) || e));
   }
 };
 const LOADED = new Set();          /* 已经拉过的路（同一页反复进出不重复拉） */
@@ -1970,6 +1969,15 @@ const LOADED = new Set();          /* 已经拉过的路（同一页反复进出
      `LOADED.clear()` 之后，若拿"未 LOADED"当加载态 ⇒ **整页永远卡在"正在读取"**）。 */
 const PENDING = new Set();
 const FAILED = new Map();
+const FAILED_TECH = new Map();
+
+/* 当前错误统一收尾：快照只取仍失败的路，恢复也要同步横幅移除。 */
+function syncBootErrors() {
+  fails = Array.from(FAILED, ([label, why]) => `${label}：${why}`);
+  failsTech = Array.from(FAILED, ([label, why]) => `${label}：${FAILED_TECH.get(label) || why}`);
+  BOOT_ERROR = fails.join('；');
+  bootErrorBanner();
+}
 /* ⭐⭐ 2026-09-20：**台账类取数不许被 `LOADED` 缓存住** —— 用户实测：「**执行记录并不会自动刷新**」。
    ⚠️ 缓存口径「同一页反复进出不重复拉」对**台账页**正好是错的：「i8 执行记录」的内容
       **由别的动作产生**（抓取 / 同步 / 批量打印 / 只导出 PDF 都往 `run_record` 里写一条），
@@ -2005,9 +2013,8 @@ async function loadPaths(labels) {
     fresh.forEach(l => PENDING.delete(l));
   }
   fresh.forEach(l => LOADED.add(l));
-  BOOT_ERROR = fails.join('；');
   render();                          /* 各路内部多数已 render 一次；这里兜一次（幂等） */
-  if (BOOT_ERROR) bootErrorBanner();
+  syncBootErrors();
 }
 
 /* ⭐⭐⭐ 2026-09-27（`TAIL-117` 批次 6「四态统一」· 守则 §4.2 / §3.3 / §2.2 / §5.9）：
@@ -2053,7 +2060,8 @@ function pageGate(st) {
 /** 重试本页依赖的取数（页级错误态那个按钮的唯一落点）。 */
 async function retryPage() {
   const deps = PAGE_LOAD[VIEW] || [];
-  deps.forEach(l => { FAILED.delete(l); LOADED.delete(l); });
+  deps.forEach(l => { FAILED.delete(l); FAILED_TECH.delete(l); LOADED.delete(l); });
+  syncBootErrors();
   await loadPaths(deps);
   render();
 }
@@ -2079,11 +2087,10 @@ async function boot() {
   render();
   await loadPaths(PAGE_LOAD[VIEW] || []);
   await who;
-  /* ⚠️ `loadPaths` 自己也赋了一次 —— 两路并发时"它收尾在前、我这路失败在后"就会被漏掉 ⇒ 这里兜一次 */
-  BOOT_ERROR = fails.join('；');
+  /* 身份读取可能晚于 loadPaths 收尾；两路都结束后再同步当前快照。 */
   BOOTING = false;        /* ⏳ `P3`①：启动收尾才允许 `m05Sync()` 补拉（见它的注释） */
   render();
-  if (BOOT_ERROR) bootErrorBanner();
+  syncBootErrors();
 }
 
 /* ⚠️ 取数失败 ⇒ **在页面上常驻说明**（⛔ 不只 toast —— 它一闪而过，用户只看到"页面是空的"、
@@ -2091,6 +2098,8 @@ async function boot() {
    页面读后端接口 ⇒ 数据必然空。⭐ 实测踩到：展示壳时预览面板打开的正是
    `file:///…/app/web/index.html`，于是"看起来和原型没区别、还没有数据"。 */
 function bootErrorBanner() {
+  let el = document.getElementById('boot-error-banner');
+  if (!BOOT_ERROR) { if (el) el.remove(); return; }
   /* ⭐ 2026-09-27（`TAIL-117` 批次 1 · 守则 §3.1 / §3.7 / §5.9）：横幅**分两截** ——
      ① 可见区**只放人话 ＋ 下一步**（`BOOT_ERROR` 里的 `e.message` 已经过 `api.js` 的人话出口）；
      ② 原始串（`GET /api/… → HTTP 500`）折进「技术明细」，排障要看就展开
@@ -2105,7 +2114,10 @@ function bootErrorBanner() {
     : '这几项没能取到：<br><span class="fc">' + esc(BOOT_ERROR) + '</span><br>'
       + '<b>其余页的数据照常可用</b>（某一项失败不该拖垮全站）。'
       + '<b>下一步</b>：刷新页面重试；若一直这样，请把下面的「技术明细」发给管理员。' + det;
-  const el = document.createElement('div');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'boot-error-banner';
+  }
   el.className = 'tip dg';
   /* ⭐⭐ `TAIL-182`（`A` 案 · 2026-09-29 **用户裁定**）：**不许再盖住内容**。
      原先这里是 `position:fixed;left:0;right:0;top:0;z-index:9999` ⇒ 整带宽横幅**压在页面之上** ⇒

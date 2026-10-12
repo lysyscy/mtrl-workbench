@@ -119,6 +119,8 @@ def test_逐路容错要按路记名():
     """
     assert "FAILED.set(label" in SHELL, "`soft()` 没按路名记失败（`FAILED.set(label, …)`）"
     assert "FAILED.delete(label)" in SHELL, "`soft()` 成功时没摘掉失败名 ⇒ 重试成功也仍显示错误态"
+    assert "FAILED_TECH.set(label" in SHELL and "FAILED_TECH.delete(label)" in SHELL, "技术错误须随同路替换与恢复"
+    assert "FAILED_TECH.delete(l)" in SHELL, "页级重试须同步清除该路技术错误"
     assert "fresh.forEach(l => PENDING.delete(l));" in SHELL, \
         "`loadPaths` 没在 `finally` 里摘 `PENDING` ⇒ 中途抛异常会让整页永久卡在「正在读取」"
 

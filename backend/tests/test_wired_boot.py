@@ -6,7 +6,7 @@
    `go(k)` 拉 `k` 那一格 ⇒ 打开页面**不再**把 13 路全量拉一遍（实测：首屏请求 **18 → 3**，到数据可用 **216 → 88 ms**）。
 ② **依赖屏障**：`收发结存与大表` / `付款域` 要吃 `机械 6 列` ＋ `库存单据` 的产物 ⇒ 它们进 `LOAD_DEP` 组
    （**组间串行**、组内并发）。⚠️ 顺序写反 ⇒ 大表机械列 / 机械欠款**取到空值，且不报错**。
-③ **逐路容错**：每一路都走 `soft()`；坏的那路进 `fails` ⇒ 顶部横幅**点名**，其余页照常可用。
+③ **逐路容错**：每一路都走 `soft()`；坏的那路记入当前 `FAILED` ⇒ 顶部横幅**点名**，其余页照常可用。
 ④ **没到位就不补拉**：两道闸 —— `BOOTING`（启动期）与 `!LOADED.has('付款域')`（这页还没取过数）。
 ⑤ `boot()` 里**不许**再出现"全量组"（`Promise.all`）—— 那是改前的形态（`P2` 的产物）。
 
@@ -76,11 +76,14 @@ def test_依赖路必须等机械与库存():
 
 @acc()
 def test_逐路容错未破():
-    """`soft()` 的**唯一职责**：吞异常并入 `fails`（顶部横幅点名），⛔ 一路失败不许拖垮全站。"""
+    """逐路容错记录当前失败，加载与启动收尾都同步横幅（含全部恢复）。"""
     assert "const soft = async (label, fn) =>" in SHELL, "没有逐路容错出口 `soft()`"
-    assert "fails.push(" in SHELL, "`soft()` 没有把失败**记下来**（横幅就点不了名）"
-    assert "BOOT_ERROR = fails.join(" in SHELL and "if (BOOT_ERROR) bootErrorBanner();" in SHELL, \
-        "失败没有汇总成常驻横幅（只弹 toast 会一闪而过，用户只看到'页面是空的'）"
+    assert "FAILED.set(label" in SHELL, "没有按路名记录当前失败"
+    sync = func_body("syncBootErrors")
+    assert "Array.from(FAILED," in sync and "BOOT_ERROR = fails.join(" in sync
+    assert "bootErrorBanner();" in sync and "if (BOOT_ERROR)" not in sync, "全部恢复也须同步移除横幅"
+    assert "syncBootErrors();" in func_body("boot") and "syncBootErrors();" in func_body("loadPaths")
+    assert "soft('当前登录用户', reloadWho)" in func_body("boot")
     body = func_body("loadPaths")
     assert "soft(l, LOADERS[l])" in body, "`loadPaths()` 没有逐路走 `soft()`（容错被绕过）"
 

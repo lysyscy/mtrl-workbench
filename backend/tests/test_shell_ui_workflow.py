@@ -542,3 +542,107 @@ def test_通知书名含合计词的行不被排序钉到表尾(ui_page):
         + '<tr class="sumrow"><td>合计</td><td>200</td></tr></tbody></table>', 'x');
       return [...h.matchAll(/<td(?: class="num")?>(\\d+)<\\/td>/g)].map(m => m[1]);
     }''') == ['100', '200'], "真合计行（带 sumrow 类、首格写「合计」）没有被钉到表尾"
+
+
+
+@acc()
+def test_当前错误同路替换逐页恢复与唯一横幅(ui_page):
+    p = ui_page
+    p.evaluate("""async () => {
+      BOOTING=false; VIEW='m15';
+      window.userError='第一次读取失败，请重试';
+      window.userTech='GET /api/first → HTTP 500';
+      LOADERS['用户管理']=async()=>{throw {message:window.userError,tech:window.userTech};};
+      LOADERS['规则配置']=async()=>{throw {message:'配置读取失败，请重试',tech:'GET /api/config → HTTP 503'};};
+      LOADED.delete('用户管理'); LOADED.delete('规则配置');
+      await loadPaths(['用户管理','规则配置']);
+      window.firstBanner=document.getElementById('boot-error-banner');
+    }""")
+    banner = p.locator('#boot-error-banner')
+    assert banner.count() == 1
+    assert '第一次读取失败' in banner.inner_text()
+    assert '配置读取失败' in banner.inner_text()
+    assert 'HTTP' not in banner.inner_text()
+    assert p.locator('#view [data-act="retryPage"]').is_visible()
+    assert p.evaluate("pageState().kind") == 'error'
+    assert banner.locator('details').evaluate('(el)=>el.open') is False
+    assert p.evaluate("""() => {
+      const el=document.getElementById('boot-error-banner'), view=document.getElementById('view');
+      return el.parentElement===document.querySelector('.app > main') && el.nextElementSibling===view
+        && getComputedStyle(el).position!=='fixed' && el.getBoundingClientRect().bottom<=view.getBoundingClientRect().top;
+    }""")
+
+    # 同路再失败只留最新两半；HTML样式的错误文本仍按文字显示。
+    p.evaluate("""async () => {
+      window.userError='第二次读取失败 <img src=x onerror="window.errorInjected=true">，请重试';
+      window.userTech='GET /api/latest <script>window.errorInjected=true</script> → HTTP 502';
+      LOADED.delete('用户管理'); await loadPaths(['用户管理']);
+      syncBootErrors(); syncBootErrors();
+    }""")
+    assert banner.count() == 1
+    assert p.evaluate("document.getElementById('boot-error-banner')===window.firstBanner")
+    assert '第二次读取失败' in banner.inner_text() and '第一次读取失败' not in banner.inner_text()
+    assert 'GET /api/first' not in banner.text_content()
+    assert p.evaluate('window.errorInjected || false') is False
+    assert banner.locator('img,script').count() == 0
+    assert p.locator('#view img,#view script').count() == 0
+    banner.locator('summary').click()
+    assert 'GET /api/latest' in banner.inner_text()
+    assert 'GET /api/config' in banner.inner_text()
+    banner.locator('summary').click()
+
+    # 真点页级重试：读取期间为loading，恢复后无关错误及其明细仍在。
+    p.evaluate("""() => {
+      LOADERS['用户管理']=()=>new Promise(resolve=>{window.finishUserRetry=resolve;});
+    }""")
+    p.locator('#view [data-act="retryPage"]').click()
+    p.wait_for_function("pageState().kind==='loading'")
+    p.evaluate('render()')  # 以既有渲染出口核对 pageState/pageGate 的 loading 契约
+    assert '正在读取' in p.locator('#view').inner_text()
+    p.evaluate('window.finishUserRetry()')
+    p.wait_for_function("pageState().kind==='ready'")
+    assert banner.count() == 1
+    assert '用户管理' not in banner.text_content()
+    assert '配置读取失败' in banner.inner_text()
+    assert 'GET /api/config' in banner.text_content()
+    assert p.evaluate("[...FAILED.keys()]") == ['规则配置']
+    assert p.evaluate("[...FAILED_TECH.keys()]") == ['规则配置']
+
+    # 恢复最后一路后节点和两份快照都消失，重复同步也不再生成空横幅。
+    p.evaluate("""async () => {
+      VIEW='m14'; LOADERS['规则配置']=async()=>{}; await retryPage();
+      syncBootErrors(); syncBootErrors();
+    }""")
+    assert banner.count() == 0
+    assert p.evaluate("[BOOT_ERROR,typeof BOOT_ERROR,fails.length,failsTech.length,FAILED.size,FAILED_TECH.size,pageState().kind]") == ['', 'string', 0, 0, 0, 0, 'ready']
+
+
+@acc()
+def test_启动身份错误晚于页面加载且恢复保留其它错误(ui_page):
+    p = ui_page
+    # 首屏路径已缓存；身份失败晚于loadPaths收尾，boot必须收进当前横幅。
+    p.evaluate("""() => {
+      VIEW='m03'; BOOTING=true;
+      API.users=()=>new Promise((resolve,reject)=>{window.rejectWho=reject;});
+      window.bootRun=boot();
+    }""")
+    p.evaluate("window.rejectWho({message:'身份读取失败，请刷新重试',tech:'GET /api/users → HTTP 500'})")
+    p.evaluate('window.bootRun')
+    banner = p.locator('#boot-error-banner')
+    assert banner.count() == 1 and '当前登录用户' in banner.inner_text()
+    assert 'HTTP' not in banner.inner_text()
+    assert p.evaluate("pageState().kind") == 'ready'
+    p.evaluate("""async () => {
+      await soft('规则配置',async()=>{throw {message:'配置读取失败，请重试',tech:'GET /api/config → HTTP 503'};});
+      API.users=async()=>({me:{id:'1',username:'test',name:'测试',role:'admin'}});
+      await boot();
+    }""")
+    assert banner.count() == 1
+    assert '当前登录用户' not in banner.text_content()
+    assert '配置读取失败' in banner.inner_text()
+    assert p.evaluate("FAILED_TECH.has('当前登录用户')") is False
+    p.evaluate("""async () => {
+      await soft('规则配置',async()=>{}); await boot();
+    }""")
+    assert banner.count() == 0
+    assert p.evaluate('[BOOT_ERROR,fails.length,failsTech.length]') == ['', 0, 0]
