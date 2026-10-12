@@ -97,7 +97,7 @@ def _me(s) -> UserAccount | None:
     """
     from app.core.session import current_name
 
-    who = (current_name() or "").strip()
+    who = current_name()  # 保留账号/旧标签类型；直接strip会丢掉新票的账号语义。
     if not who:
         return None
     return R.by_identity(s, who)
@@ -185,13 +185,13 @@ def api_do_login(account: str = Form(""), password: str = Form(""),
     try:
         with session_scope() as s:
             row = LG.sign_in(s, account=account, password=password)
-            name = row.name or row.account
+            account_identity = row.account
     except AppError as e:
         return HTMLResponse(login_html(error=e.message, next_url=target),
                             status_code=200)                 # ⚠️ 200：浏览器要正常渲染这一页
     resp = RedirectResponse(target, status_code=303)          # 303 = POST 之后换 GET（PRG）
     resp.set_cookie(
-        SESS.COOKIE_NAME, SESS.make(name),
+        SESS.COOKIE_NAME, SESS.make(account_identity),
         max_age=SESS.SESSION_HOURS * 3600,
         httponly=True,          # ⛔ JS 读不到（壳里不需要读它）
         samesite="lax",         # ⛔ 跨站请求不带它（CSRF 的第一道）

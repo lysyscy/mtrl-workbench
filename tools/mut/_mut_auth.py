@@ -48,11 +48,11 @@ def _locate(src: bytes, frag_lf: bytes):
 
 MUTS = [
     ("M1 ⭐ 把「回落到首个在用管理员」加回去（= 未登录的人自动变管理员）", API_PY,
-     _b("""    who = (current_name() or "").strip()
+     _b("""    who = current_name()  # 保留账号/旧标签类型；直接strip会丢掉新票的账号语义。
     if not who:
         return None
 """),
-     _b("""    who = (current_name() or "").strip()
+     _b("""    who = current_name()  # 保留账号/旧标签类型；直接strip会丢掉新票的账号语义。
     if not who:
         return D.active_admins(R.all_users(s))[0]
 """),

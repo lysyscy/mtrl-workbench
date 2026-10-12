@@ -15,7 +15,8 @@
    ⭐ 为什么是"写回 `.env`"而不是"每次启动随机生成"：后者一重启所有人的登录态就失效，
       而本系统是**每天要用的工具** ⇒ 那种"随机"只会让人想把它关掉（比配一次更糟）。
 
-⚠️ 会话**载荷**只有 `账号名 + 过期时间`，用 `|` 连接后签名 ⇒ 形态 `账号.过期戳.签名`。
+⚠️ 新会话载荷为 `v2.base64(账号).过期戳.签名`，版本也参与签名。
+   旧三段票统一拒绝，升级后重新登录一次；不换密钥、不改变账号或密码。
    ⛔ **不放角色**：角色可能会变（转让管理员）⇒ 放进 cookie 就有一份**过期的真相**；
       要用角色时**每次查库**（本系统 2 个账号，查一次的成本可以忽略）。
 """
@@ -39,9 +40,14 @@ COOKIE_NAME = "mw_session"
 #: 取一个"工作日够用、过夜失效"的值，并**登记为待裁定**（⛔ 不假装它来自口径）。
 SESSION_HOURS = 12
 
+
+class AccountIdentity(str):
+    """新会话的唯一账号；仍为字符串，便于既有调用者展示和比较。"""
+
+
 _SECRET_FILE_KEY = "SESSION_SECRET"
 
-#: 当前请求的操作人（由 `middleware` 从 cookie 解出后写入）——
+#: 当前请求的账号身份（由中间件从 cookie 解出后写入；姓名由账号行提供）——
 #: ⚠️ 用 `ContextVar` 而**不是全局变量**：`uvicorn` 是并发的，全局变量会**串号**
 #: （A 的请求读到 B 的名字 ⇒ 留痕写错人，而且**不报错**）。
 _current_name: contextvars.ContextVar[str] = contextvars.ContextVar("mw_current_name", default="")
@@ -102,7 +108,7 @@ def _sign(payload: str) -> str:
 
 
 def make(account: str, *, now: _dt.datetime | None = None) -> str:
-    """造一张会话票：`base64(账号).过期时间戳.签名`。
+    """造一张账号会话票：`v2.base64(账号).过期时间戳.签名`。
 
     ⚠️ 账号名**先 base64** 再拼 —— 否则账号名里若含 `.`（§1.5.1 明说**不限字符**）
        会把 `split(".")` 切错位置 ⇒ **验签永远失败**（那种 bug 只在"账号名带点"时出现，
@@ -111,12 +117,12 @@ def make(account: str, *, now: _dt.datetime | None = None) -> str:
     now = now or _dt.datetime.now()
     exp = int((now + _dt.timedelta(hours=SESSION_HOURS)).timestamp())
     acc = base64.urlsafe_b64encode(account.encode("utf-8")).decode("ascii").rstrip("=")
-    payload = f"{acc}.{exp}"
+    payload = f"v2.{acc}.{exp}"
     return f"{payload}.{_sign(payload)}"
 
 
 def read(value: str | None, *, now: _dt.datetime | None = None) -> str | None:
-    """验签 ＋ 查过期 ⇒ 账号名；任何不对都返回 `None`（⛔ 不抛 —— 调用方只需判"有没有登录"）。
+    """只接受签名和有效期均有效的v2账号会话，旧标签票统一拒绝。
 
     ⚠️ 验签用 `hmac.compare_digest`（**定长比较**）—— ⛔ 别用 `==`：
        后者会在第一个不同的字节就返回，理论上可从耗时推出签名（那是本仓少见的"顺手做对"）。
@@ -124,10 +130,10 @@ def read(value: str | None, *, now: _dt.datetime | None = None) -> str | None:
     if not value:
         return None
     parts = (value or "").split(".")
-    if len(parts) != 3:
+    if len(parts) != 4 or parts[0] != "v2":
         return None
-    acc_b64, exp_s, sig = parts
-    if not hmac.compare_digest(_sign(f"{acc_b64}.{exp_s}"), sig):
+    _, acc_b64, exp_s, sig = parts
+    if not hmac.compare_digest(_sign(".".join(parts[:-1])), sig):
         return None
     try:
         exp = int(exp_s)
@@ -137,7 +143,8 @@ def read(value: str | None, *, now: _dt.datetime | None = None) -> str | None:
         return None
     pad = "=" * (-len(acc_b64) % 4)
     try:
-        return base64.urlsafe_b64decode(acc_b64 + pad).decode("utf-8")
+        identity = base64.urlsafe_b64decode(acc_b64 + pad).decode("utf-8")
+        return AccountIdentity(identity) if identity.strip() else None
     except Exception:                                          # noqa: BLE001
         return None
 
@@ -146,16 +153,16 @@ def read(value: str | None, *, now: _dt.datetime | None = None) -> str | None:
 
 
 def set_current_name(name: str) -> None:
-    """由**中间件**调用：把本请求的登录用户名放进上下文。"""
+    """由中间件调用：保留本请求身份的格式类型，显示姓名另由账号行取得。"""
     _current_name.set(name or "")
 
 
 def current_name() -> str:
-    """本请求的登录用户名（**未登录 = 空串**）。"""
+    """本请求的账号身份（未登录为空串；名称沿用既有调用者）。"""
     return _current_name.get() or ""
 
 
 __all__ = [
-    "COOKIE_NAME", "SESSION_HOURS", "current_name", "make", "read",
+    "AccountIdentity", "COOKIE_NAME", "SESSION_HOURS", "current_name", "make", "read",
     "secret", "set_current_name",
 ]

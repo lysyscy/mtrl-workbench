@@ -44,7 +44,7 @@ def current_operator() -> str:
        `mod01` / `mod03` / `mod07` / `mod08` / `mod11` / `mod14` 那 13 处调用方**一行没动**。
 
     取值顺序（**第一个非空**为准）：
-    ① **登录态**（`core/session.py` 由中间件从会话 cookie 解出的用户名）—— 正常路径；
+    ① **登录态的账号行** → 姓名或账号（展示/留痕标签，⛔ 不写会话编码）—— 正常路径；
     ② `.env` 的 `OPERATOR_NAME` —— ⚠️ **过渡期的兜底**（未登录 / 定时任务 / 测试进程仍要能留痕）；
     ③ 中性占位 `科室用户` —— ⛔ **绝不是人名**（见常量注释）。
 
@@ -52,9 +52,17 @@ def current_operator() -> str:
        测试进程）—— 删了兜底，它们会把留痕写成占位。
     """
     from app.core.config import get_settings
-    from app.core.session import current_name
+    from app.core.session import AccountIdentity, current_name
 
-    name = (current_name() or "").strip()          # ① 登录态
+    who = current_name()
+    name = (who or "").strip()
+    if isinstance(who, AccountIdentity) and _BINDING_LOOKUP is not None:
+        from app.core.db import session_scope
+
+        with session_scope() as s:
+            row = _BINDING_LOOKUP(s, who)
+            if row is not None:
+                name = (row.name or row.account or "").strip()
     if not name:
         try:
             name = str(get_settings().operator_name or "").strip()    # ② .env 兜底
@@ -98,7 +106,7 @@ def current_i8_credentials() -> tuple[str, str]:
     from app.core.errors import MustReportError
     from app.core.session import current_name
 
-    who = (current_name() or "").strip()
+    who = current_name()  # 保留新账号 / 旧标签格式，消歧由绑定的唯一身份出口负责。
     if who:
         from app.core.db import session_scope
 

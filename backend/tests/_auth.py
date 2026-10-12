@@ -4,8 +4,8 @@
    打**写**端点的测试如果跑在"未登录"态，会被新闸**正当**拒掉（401）⇒ 那批红**不是**测试错了，
    而是它们**该以"已登录"的身份跑** —— 与真机自检 `_shell_smoke.py` **同一个做法**（先播会话票）。
 ⛔ 这不是"把闸绕过去"：闸还在、还生效；这里只是**如实扮演一个已登录的用户**。
-⭐ 票上的名字 = `current_operator()` 的**回落值**（= 没有会话时本会用的那个）⇒
-   留痕里的「操作人」一个字不变 ⇒ 断言"操作人是谁"的测试不受影响。
+⭐ 测试标签若能唯一对应账号，就签该账号；无账号的纯业务探针仍用自身假身份。
+   姓名仅用于留痕，不把显示标签当作新会话账号。
 """
 
 from __future__ import annotations
@@ -17,7 +17,13 @@ from app.core.identity import current_operator
 
 
 def _ticket() -> str:
-    return SESS.make(current_operator() or "科室用户")
+    from app.core.db import session_scope
+    from app.mod15_user import repository as R
+
+    label = current_operator() or "科室用户"
+    with session_scope() as s:
+        row = R.by_identity(s, label)
+        return SESS.make(row.account if row is not None else label)
 
 
 class TestClient(_TestClient):

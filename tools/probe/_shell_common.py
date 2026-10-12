@@ -108,7 +108,7 @@ def session_cookie() -> tuple[str, str]:
 
     with session_scope() as s:
         admin = D.active_admins(R.all_users(s))[0]
-        return SESS.COOKIE_NAME, SESS.make(admin.name or admin.account)
+        return SESS.COOKIE_NAME, SESS.make(admin.account)
 
 
 __all__ = ["goto", "session_cookie", "wait_db"]

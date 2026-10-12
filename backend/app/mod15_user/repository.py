@@ -165,32 +165,31 @@ def set_ui_scale(s: Session, uid: int, scale: str) -> UserAccount:
 
 
 def by_identity(s: Session, who: str) -> UserAccount | None:
-    """按「**姓名 或 账号**」找**未删除**的账号 —— **"当前登录用户是哪一个"的唯一判定出口**。
+    """会话只认唯一账号；非cookie内部标签合并姓名/账号候选后唯一取行。
 
-    ⚠️⚠️ 为什么必须两种都认：会话 cookie 里存的是**姓名**（`login` 那边写的是 `name or account`，
-       因为业务留痕要的是**人名**不是账号），而账号本身是 `account` ⇒ 两种写法都得落到同一行。
-       ⛔ **别只认一种** —— 认错时的形态极其难查：**登录成功、权限也对**，
-       但"按身份取的数据"（主题 / 我的账号…）**静默地取了默认值**。
-       ⭐ 这不是推理出来的，是 `ACC-UI-THEME-001/001-06` 的断言**当场抓出来的**：
-         预置账号 `admin` 的姓名是「管理员」⇒ 只按账号名找**永远找不到** ⇒ 主题永远不生效。
-
-    ⚠️ 先比**姓名**（更可能命中，且姓名是"业务上的人"）⇒ 再比账号。
-    ⚠️ **已删除的不参与**（§1.5.1：软删 = 账号名保留但不可用）。
+    内部标签仍供脚本/测试使用；会话认证不接受旧标签票。
+    标签碰撞检查包含软删行，不能把删除者的标签误认成另一个人。
+    同一行姓名与账号都命中只算一个候选；已有停用会话策略不在这里改变。
     """
-    who = (who or "").strip()
-    if not who:
+    from app.core.session import AccountIdentity
+
+    label = (who or "").strip()
+    if not label:
         return None
-    alive = [u for u in all_users(s) if not D.is_deleted(u)]
-    for u in alive:
-        if (u.name or "").strip() == who:
-            return u
-    return next((u for u in alive if (u.account or "").strip() == who), None)
+    users = all_users(s)
+    if isinstance(who, AccountIdentity):
+        row = next((u for u in users if D.normalize_account(u.account) == label), None)
+    else:
+        candidates = {u.id: u for u in users if
+                      (u.name or "").strip() == label or D.normalize_account(u.account) == label}
+        row = next(iter(candidates.values())) if len(candidates) == 1 else None
+    return row if row is not None and not D.is_deleted(row) else None
 
 
 def theme_by_account(s: Session, who: str) -> str:
     """取"这个**登录身份**该用哪套主题" —— 给 `/static/theme.css` 用。
 
-    ⚠️ 走 `by_identity`（姓名**或**账号）—— ⛔ 别在这里另写一套查找：
+    ⚠️ 走 `by_identity`（会话账号 / 无歧义内部标签）—— ⛔ 别在这里另写一套查找：
        那就会重演"两处判定各自漂"的老毛病（本 bug 正是这么来的）。
     ⚠️ 找不到 / 已删 ⇒ 回落默认套（⛔ 不给"已删除的人"留一个可被探测的偏好）。
     """

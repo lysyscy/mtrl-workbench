@@ -120,7 +120,7 @@ def _install_ip_allowlist(app: FastAPI) -> None:
 
 
 def _install_session(app: FastAPI) -> None:
-    """把**会话 cookie** 解成「当前登录用户」，放进 `core/session.py` 的 `ContextVar`。
+    """把会话 cookie 解成唯一账号身份，放进 `core/session.py` 的 `ContextVar`。
 
     ⚠️ 这是**登录态进业务字段的唯一通道**：`core/identity.current_operator()` 读那个
        `ContextVar`（⛔ 业务模块一处都不用改 —— `identity.py` 模块头的承诺）。
@@ -155,8 +155,8 @@ def _install_auth_gate(app: FastAPI) -> None:
        （且返 200 + `ok:false`）⇒ 其余所有模块（付款 / 集采 / 材料 / 项目…）的写端点**零判定**。
     ⚠️ **读一律放行**（口径原文 =「未登录**只能看**」）：⛔ 不要顺手改成"未登录只渲染登录页" ——
        那会把**不带会话的真机自检 / 探针**全打白屏（`_shell_smoke` 等 20 条），且比 §1.5.1 更严，须单独裁定。
-    ⚠️ 判定**只看会话票**（`SESS.read` ⇒ 验签 ＋ 查有效期）：与 `_install_session` **同一个出口**，
-       ⛔ 不在这里另查账号表（那就是第二套口径）。
+    ⚠️ 与 `_install_session` 共用 `SESS.read`：只接受v2账号票，旧标签票统一重登。
+       新票仍沿用会话票有效即放行的全局策略；角色与停用规则留在既有业务出口。
     """
     from app.core import session as SESS
 

@@ -30,6 +30,8 @@
 
 ## 隔离机械存储反例
 
+会话身份反例由 `tools/mut/_mut_session_identity.py` 在隔离后端副本执行，使用假账号和进程内假密钥；覆盖登录写姓名、新票误作内部标签、重新接纳旧三段票、中间件丢账号类型、写闸只看Cookie存在、留痕写账号及i8身份类型丢失。生产服务和真实凭据不参与；旧 `_mut_auth.py` 仅同步本轮已改锚点，不能在正式工作文件上执行。
+
 `tools/mut/_isolated.py::isolated_backend`供`tools/mut/_mut_proc_split.py`与`tools/mut/_mut_tail270.py`共用：复制后端到scratch，子进程传测试库与独立四态出口，结束清临时副本；不复制凭据。新增同类反例优先复用，测试库写入仍由用例事务回滚。
 一次性编辑脚本与可重复核验脚本分开；改过的锚不会作为下一次核验的前置动作。开工快照摘要与真机证据读取命令回 .codebuddy/memory/IDE-细节.md §十一。
 
