@@ -6,9 +6,7 @@
   ⚠️ **为什么需要这个脚本**：`.git/hooks/` **不被 git 跟踪** ⇒ 钩子本体必须先进仓（`ops/hooks/`），
      再由本脚本显式安装一次。⛔ 别用 `git config core.hooksPath` —— 那会改你的 git 配置（本仓规矩：不动 git config）。
 
-  装什么：`ops/hooks/pre-commit` ⇒ 提交前跑**便宜子集**（syntax_audit / doc_audit / audit_meta /
-  audit_work / mut_cover --check，秒级）。⚠️ 全套（pytest / 真机 / 盖章 / 产包干跑）仍在收工入口
-  `tools/oneoff/_run_rulers.py --all`。
+  装什么：语法/字节暂存检查与.env文件名拦截。文档和业务按影响入口执行，不在提交时重复跑。
 
   卸载：删掉 `.git/hooks/pre-commit` 即可。
   跳过一次：`git commit --no-verify`（⛔ 不推荐）。
@@ -33,13 +31,5 @@ Write-Host "✅ 已装：$dst"
 Write-Host "   （来源 = ops\hooks\pre-commit · 幂等 ⇒ 改了源文件重跑本脚本即可）"
 Write-Host "   卸载 = 删掉那个文件 · 跳过一次 = git commit --no-verify（⛔ 不推荐）"
 
-# ⚠️ **这里不做"试跑"** —— `git commit --dry-run` **不会**触发 `pre-commit`
-#    （假自证比没有自证更坏：它会让人以为"钩子验过了"）。要验就跑真的那五把尺子：
-Write-Host ''
-Write-Host '想先看它红不红 ⇒ 在仓库根手动跑这五把（钩子跑的就是它们）：'
-Write-Host '  backend\.venv\Scripts\python.exe -X utf8 tools\audit\syntax_audit.py'
-Write-Host '  backend\.venv\Scripts\python.exe -X utf8 tools\audit\doc_audit.py'
-Write-Host '  backend\.venv\Scripts\python.exe -X utf8 tools\audit\audit_meta.py'
-Write-Host '  backend\.venv\Scripts\python.exe -X utf8 tools\audit\audit_work.py'
-Write-Host '  backend\.venv\Scripts\python.exe -X utf8 tools\audit\mut_cover.py --check'
-Write-Host '真正的验证 = 下一次 `git commit`（它由 git 用 sh 调起）。'
+# git commit --dry-run不会调用钩子；真正验证以正常提交输出为准。
+Write-Host '真正的验证 = 下一次 git commit（由git调用sh）；不跳过适用检查。'

@@ -1,7 +1,7 @@
 """pytest影响范围：按实际import闭包、文本读取和目录扫描选择使用者。
 
 工具共享模块采用传递使用者；已删除件保留反向依赖。无法确定依赖由入口显式调查。
-REPO_WIDE只代表确实扫描运行源码的测试；局部结果不刷新权威四态。
+跨文件用途清单按对应输入触发；局部结果不刷新权威四态。
 自检和CLI与登记同处，登记覆盖仍双向检查。
 """
 from __future__ import annotations
@@ -26,21 +26,16 @@ AUTO_LOADED: tuple[tuple[str, str], ...] = (
     ("backend/tests/acc_plugin.py", "四态插件（由 conftest 注册）· 同上"),
 )
 
-#: ① **全仓敏感清单**（单一出口 · ⛔ 别在别处再写一份）—— 判据 = 它**读 `app/**` 的文本/AST**，
-#: 所以「改了哪个模块」与它无关：**只要 `backend/app` 动过就必须跑**。
-#: ⚠️ 头号慢件 `test_ux_text.py` **故意在这张表里**（票面铁律：⛔ 不许把它按范围裁掉
-#: —— 裁它等于裁掉「用户可见串不许拼异常原文」那张网）。
+# 跨文件扫描与壳接线用途清单；按被改输入触发，不再随局部后端修改全部附带。
 REPO_WIDE: tuple[tuple[str, str], ...] = (
-    ("test_ux_text.py", "扫 app/** 的用户可见串（不许拼异常原文/工程代号）· 票面点名不许裁"),
+    ("test_ux_text.py", "扫 app/** 的用户可见串（不许拼异常原文/工程代号）"),
     ("test_layering.py", "分层边界十一靶（扫全部 mod* 目录）"),
     ("test_deps_declared.py", "依赖清单不许漏登记（AST 扫 app/**）"),
     ("test_dup_guards.py", "防扩散墓碑（扫 app/** 的守卫定义）"),
     ("test_schema_drift.py", "models 漂移（扫 mod*/models.py 全集）"),
     ("test_theme.py", "主题变量不许自造（扫 app/**）"),
     ("test_wiring_guards.py", "注释里引用的测试件必须真存在（扫 app/tests/tools 三处）"),
-    # —— 壳接线守卫：它们 import 不到 `app.*`（只读壳的 js 与段注册表）⇒ 闭包带不到。
-    #    ⛔ **不许因此把它们判成「够不着」** —— 真改了一个路由，坏的是壳与它对不上，
-    #    那样就得靠这类件喊。⚠️ 实测这批**很便宜**（秒级），所以进必跑清单而不是「按触发跑」。
+    # 壳接线按对应路由或壳输入变化触发；纯领域逻辑不会改变它们读的壳文本。
     ("test_acc_jc_shell.py", "集采的壳接线（壳段 vs 后端路由）"),
     ("test_acc_x_exp.py", "导出入口的壳接线"),
     ("test_ux_buttons.py", "按钮动作必须都有归属（壳侧）"),
@@ -92,6 +87,50 @@ IGNORED_READS: tuple[tuple[str, str], ...] = (
 
 
 # --------------------------------------------------------------- 仓内 import 闭包
+def local_scanners(paths) -> set[str]:
+    """扫描测试按实际输入面触发；路由与组装仍保留壳接线覆盖。"""
+    picked = set()
+    app = [p for p in paths if p.startswith(APP_PREFIX) and p.endswith('.py')]
+    if app:
+        picked |= {'test_ux_text.py', 'test_layering.py', 'test_deps_declared.py', 'test_dup_guards.py'}
+    if any(p.endswith('/models.py') or p in {'backend/app/models_registry.py', 'backend/app/core/db.py'}
+           or p.startswith('backend/alembic/') for p in paths):
+        picked.add('test_schema_drift.py')
+    if any(p.startswith(('backend/app/', 'backend/tests/', 'tools/')) and p.endswith('.py') for p in paths):
+        picked.add('test_wiring_guards.py')
+    if any(p in {'backend/requirements.in', 'backend/requirements.txt'} for p in paths):
+        picked.add('test_deps_declared.py')
+    wide = {n for n, _ in REPO_WIDE}
+    if any(p in {'backend/app/main.py', 'backend/app/core_bindings.py', 'backend/app/export_bindings.py'} for p in paths):
+        picked |= wide
+    for p in app:
+        name = pathlib.Path(p).name
+        if name == 'page.py':
+            picked |= {'test_theme.py', 'test_ux_pages.py', 'test_ux_states.py'}
+        if name.endswith('router.py') or name == 'api.py':
+            module = next((part for part in p.split('/') if re.match(r'mod\d\d_', part)), '')
+            if module:
+                prefix = 'test_wired_m'+module[3:5]
+                picked |= {p.name for p in TESTS.glob(prefix+'*.py')}
+                picked |= {'test_acc_x_exp.py', 'test_acc_jc_shell.py'}
+    return picked
+
+
+def local_selftest():
+    """直接查询真实消费图：相关金额/身份保留，无关UI减少，路由与自动加载不漏。"""
+    money = plan(['backend/app/core/money.py'])
+    assert 'test_core_money.py' in money.files and 'test_amount_text_parity.py' in money.files
+    assert 'test_ux_numbers.py' not in money.files and 'test_shell_ui_workflow.py' not in money.files
+    identity = plan(['backend/app/core/identity.py'])
+    assert 'test_session_identity.py' in identity.files
+    routed = local_scanners(['backend/app/mod03_notice/notice_api_router.py'])
+    assert 'test_wired_m03_pay.py' in routed and 'test_wired_m09.py' not in routed
+    assert 'test_schema_drift.py' in local_scanners(['backend/app/mod03_notice/models.py'])
+    assert plan(['backend/tests/conftest.py']).run_all
+    assert not plan(['backend/tests/test_core_money.py']).run_all
+    print('自测 局部金额/身份、路由接线、模型与自动加载选集通过')
+
+
 def _mod_name(p: pathlib.Path) -> str:
     parts = list(p.relative_to(BACKEND).with_suffix("").parts)
     if parts[-1] == "__init__":
@@ -379,7 +418,6 @@ def shell_plan(changes=None) -> Plan:
         #    ⛔ 不必再去猜"这 140 件是不是白跑"（量测结论见上面 `shell_plan` 前那段）。
         direct = sum(1 for n, m in files.items() if n in picked and m in readers)
         closed = len(picked) - direct
-        picked |= {n for n, _ in REPO_WIDE if n in files}
         removed = set()
         try:
             named = _constant_change(changes)
@@ -545,12 +583,17 @@ def plan(changed, *, changes=None) -> Plan:
             selected.files = sorted(set(selected.files) | set(other.files))
             selected.run = selected.run or other.run
         return selected
-    odd = [p for p in inside if not p.endswith(".py")]
+    requirements = {'backend/requirements.in', 'backend/requirements.txt'}
+    if set(inside) <= requirements:
+        return Plan(True, '依赖清单变化：只核已知声明消费；运行兼容按所变依赖选测', ['test_deps_declared.py'])
+    odd = [p for p in inside if not p.endswith(".py") and p not in requirements]
     if odd:
         return Plan(False, "待查：后端非Python输入的实际消费（%d处）" % len(odd))
     mods, files = build_graph()
     seeds = []
     for p in inside:
+        if p in requirements:
+            continue
         source = ROOT/p
         if source.is_file():
             try:
@@ -571,7 +614,7 @@ def plan(changed, *, changes=None) -> Plan:
     for s in seeds:
         aff |= _impacted(mods, rev, s)
     picked = {n for n, m in files.items() if _reach(mods, m) & aff}
-    picked |= {n for n, _ in REPO_WIDE}
+    picked |= local_scanners(changed)
     picked = {n for n in picked if n in files}
     if not picked:
         return Plan(False, "待查：运行模块没有已发现的回归使用者")

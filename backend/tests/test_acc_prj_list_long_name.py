@@ -37,7 +37,6 @@ LONG_NAME = (
     "（二期）材料采购与结算全过程管理（含备品备件与专用工具）"
 )
 
-pytestmark = pytest.mark.timeout(180) if hasattr(pytest.mark, "timeout") else pytest.mark.usefixtures()
 
 
 

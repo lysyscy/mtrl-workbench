@@ -26,7 +26,7 @@
 | 工程侧底账（实测结论 / 起停 / 部署 / 架构） | `ops/README.md`（索引）—— **碰环境 / 部署 / 模块分工时** |
 | **文档体系本身怎么组织 / 某条口径住在哪 / 一件东西能不能删** | `ops/docs-governance.md`（⭐ **总图** · 只放总图与指针，⛔ 不重述条文）—— **建新文档 / 归档 / 动结构之前** |
 | "文档又多又乱 / 该并该删" | `.codebuddy/skills/docs-audit/SKILL.md` —— **这个疑问出现时** |
-| 改判据 / 尺子 | `tools/README.md` ＋ 同批给**反向灵敏度** `tools/mut/_mut_*.py` —— **动判据时（⛔ 判据与靶是一对）** |
+| 改判据 / 尺子 | `tools/README.md` ＋ `ops/agents/issue-tracker.md` §四 —— **改检查入口时定向自检，反例按实际风险选，不强制每条新增测试另配脚本** |
 
 ## Agent skills
 

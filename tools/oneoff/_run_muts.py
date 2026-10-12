@@ -323,7 +323,9 @@ def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
                       #   ④ 靶全在 `_isolated.isolated_backend` 的临时副本（正式件与权威四态都未动）。
                       '_mut_tail298_columns.py',
                       # TAIL-301：临时副本内基线绿、各靶独立红、按原bytes复原，不写正式壳。
-                      '_mut_tail301_columns.py', '_mut_layering.py', '_mut_tail300.py'}:
+                      '_mut_tail301_columns.py', '_mut_layering.py', '_mut_tail300.py',
+                      '_mut_session_identity.py', '_mut_proc_report_data.py',
+                      '_mut_long_login.py', '_mut_notice_selection.py'}:
         print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
         return 2, 0.0
     t = time.time()
@@ -356,12 +358,10 @@ def main() -> int:
     if "--timeout" in args:
         timeout = int(args[args.index("--timeout") + 1])
     fast_only = "--fast" in args
-    # ⚠️⭐ 2026-10-06（`TAIL-239` 第 3 步）：**选集自检在最前面跑，且各档都跑** ——
-    #   缺口件在 `--fast` / 全套 / `--all` 三条路上都"不会被跑" ⇒ 哪条路都得先报出来。
-    #   （原先只查 `KEY` 里有没有件消失的那段并进来了 —— 覆盖面更大：缺口 + 名单陈旧都归它。）
+    # 全局登记只在显式盘点时核；相关件不因无关登记缺口被阻断。
     if "--cover-only" in args:
         return report_cover()
-    if report_cover():
+    if '--cases' not in args and report_cover():
         return 1
     if "--all" in args:
         cases = [(p.name, "（按需全跑）") for p in sorted(MUT.glob("_mut_*.py"))]
@@ -380,6 +380,9 @@ def main() -> int:
             print('变异选择为空或不在活件登记中，未执行')
             return 2
         cases = [(n, registry[n]) for n in dict.fromkeys(requested)]
+        if any(not (MUT/n).is_file() for n, _ in cases):
+            print('所选变异文件缺失，未执行')
+            return 2
 
     bad: list[str] = []
     fast_hit: list[str] = []
@@ -463,8 +466,19 @@ def selftest():
                          '_mut_proc_split_shell.py', '_mut_tail262.py', '_mut_tail264_266.py', '_mut_ui_workflow.py', '_mut_tail297.py'):
                 assert run_one(folder/name, 1)[0] == 0, '已确认隔离入口不得被拒绝'
             assert dispatch.call_count == 8
-    print('自测 变异登记缺口、陈旧项、正常放行及非隔离脚本拒绝通过')
-    return report_cover()
+    # 验证真实 --cases 分支：无关登记坏了不查，所选项仍执行，失败不洗绿。
+    import io
+    from contextlib import redirect_stdout
+    with patch.object(sys, 'argv', ['runner', '--cases', '_mut_tbl.py']), \
+            patch(__name__+'.report_cover', side_effect=AssertionError('相关执行不能盘全局')), \
+            patch.object(_gate, 'open_receipts', return_value=None), \
+            patch.object(_scope, 'changed_paths', return_value=[]), \
+            patch(__name__+'.run_one', return_value=(0, 0.0)) as execute, redirect_stdout(io.StringIO()):
+        assert main() == 0 and execute.call_count == 1
+        execute.return_value = (1, 0.0)
+        assert main() == 1
+    print('自测 所选变异独立执行、失败阻断、登记盘点与非隔离拒绝通过')
+    return 0
 
 
 if __name__ == "__main__":

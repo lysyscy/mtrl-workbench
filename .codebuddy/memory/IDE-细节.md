@@ -232,9 +232,9 @@
 
 1. **开工基点（有已有dirty时）**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --start .codebuddy/work/00-scratch/tmp-YYYYMMDD-entry.json`。快照只界定新增差异，不是通过证明；凭据只记摘要。 查看快照用同入口 `--inspect <开工基点>`，只输出HEAD、文件数、摘要件数与新增路径。
 2. **查看选择**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --since <开工基点> --explain`。
-3. **按影响运行**：上一命令去掉 `--explain`；无基点时与HEAD比较。`--paths <实际差异路径...>` 可明确本轮范围，其余差异打印为未验。默认、`--related`和`--all`均采用此选择，不因提交扩大。
-4. **显式完整检查**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --full`；仅用于已经查明广泛影响或完整结果刷新，不能用作未知影响的自动兜底。完整检查不固定附带工具自测（仍按工具及依赖变化选中），不附带全部KEY；自证按受影响机制用对应隔离入口执行，不能对正式工作文件或仓外资料写靶。
-5. **改壳**：相关回归与 `tools/probe/_shell_smoke.py` 成功后运行 `tools/audit/shell_verify.py --snapshot`。 影响入口已跑过真机时，读取其打印的完整证据路径；源码、环境及现场数据未变可复用，变化状态另补验。**改运行后端**：`ops/server_ctl.ps1 -Action restart`；改工具Python无需重启服务。
+3. **按影响运行**：上一命令去掉 `--explain`；无基点时与HEAD比较。`--paths <实际差异路径...>` 可明确本轮范围，其余差异打印为未验。默认、`--related`和`--all`均采用此选择，不因提交扩大。文档分项由doc_audit合并执行一次，提交钩子不重复文档/台账/变异登记。
+4. **显式完整检查**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --full`；仅用于已经查明广泛影响或完整结果刷新，不能用作未知影响的自动兜底。完整检查不重复doc/drift/meta/work分项，不带壳快照门禁；工具自测仍按相关变化选中。完整pytest不代表现场39段通过，变异按实际风险选择隔离入口，不对正式文件写靶。
+5. **局部/bug**：相关节点先跑，修补后只复验触达项；**跨模块**：同一影响入口合并实际使用者一次执行。**改壳**：先用相关隔离浏览器回归，普通小改不触发真实39段或盖章。**发布前/现场问题**：准备好隔离环境后按需完整检查；真实服务验证显式运行 `tools/probe/_shell_smoke.py`，不把旧快照差异当业务失败。`shell_verify`仅保留为可选排障工具；未执行现场验证不得写已验收。运行后端需要现场复验时再按 `ops/server_ctl.ps1` 重启。
 
 Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；输出使用UTF-8。`ACC_RESULTS_PATH`不得全局导出，局部结果由选择器隔离。读取整行BAD与退出码；相关失败不能报通过。中断/失败只重验受影响项，临时脚本放00-scratch。
 
@@ -246,9 +246,9 @@ Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；�
 
 **Git推送遇代理中断（2026-10-11实测）**：HTTPS报`curl 52 Empty reply from server`且SSH也被重置时，先用`git -c http.proxy= push <HTTPS远端> <当前分支>`作单次直连尝试；不改全局代理。随后用同样的单次选项读取远端分支SHA，与本地HEAD比较；连接中断或输出`Everything up-to-date`本身不能证明推送成功。提交与推送决策回 ops/agents/issue-tracker.md §四「提交与推送」。
 
-**真机自检可复用**：按影响入口在**壳字节与探针都没变**时会打「复用 真机壳自检 …」并指出沿用哪份证据 —— 看到那行直接引用它，⛔ 不必再手动跑一遍（证明输入＝`backend/app/web/**` ＋ `tools/probe/**` ＋ 环境摘要）。
+**现场证据复用**：日常入口不自动调用真实39段。已有现场证据在源码、探针、环境和现场数据未变时可复用；变化的实际状态另补验，不靠快照盖章声称业务通过。
 
-**权威四态**：`acc_report` 读的 `artifacts/acc_results.json` 由**整套 pytest** 写；变异脚本各自跑的是隔离出口 ⇒ 有的脚本末尾会**再跑一趟全套**，那是**权威写回、不是重复检查**（⛔ 别当重叠删掉）；同一回合已另刷过就给它加 `--no-full-suite` 跳过，跳过即"本轮不刷新权威"。
+**权威四态**：只有完整pytest刷新 `artifacts/acc_results.json`。局部回归与变异使用独立结果出口，不顺带重跑全套；删除无效绑定时只使对应旧绿失效，保留其余历史结果并注明未全量刷新。
 
 ## 十二、`验收基线.json` 的实测格式（2026-09-29 从 `MEMORY.md` 下沉）
 

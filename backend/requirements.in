@@ -29,5 +29,4 @@ loguru
 
 # --- 测试与依赖审计 ---
 pytest
-pytest-asyncio
 pip-audit

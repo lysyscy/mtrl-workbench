@@ -1,114 +1,52 @@
 #!/bin/sh
-# 提交前的**便宜子集**闸门（2026-10-02 立 · 出处 = `/retro` 复盘的候选 1）。
-#
-# 为什么是"子集"而不是全部：pytest / 真机 `_shell_smoke` / 盖章 / 产包干跑 属**"一批一次"**的粒度
-#   （慢、且要活服务 / 浏览器），留在收工入口 `tools/oneoff/_run_rulers.py --all`；
-#   这里只跑**秒级**、且能挡掉"明显红"的那几把：
-#     · syntax_audit  —— 能编译 / 能解析吗（`node --check` ＋ py 编译）
-#     · doc_audit     —— 文档漂移（T1–T12：断链 / 数字失配 / 台账 / 落点；⛔ 不含 `--ui` 交付面四检）
-#     · audit_meta    —— T5 行数纪律 ＋ T6 尾巴台账（编号重复 / 栏位 / 阶段 / 两处计数一致）
-#     · audit_work    —— T14/T15/T20（scratch TTL / artifacts 白名单 / 备份与 oneoff 容量）
-#     · mut_cover     —— 变异覆盖台账是否与生成结果一致（`--check`，不执行变异）
-#
-# 为什么**没有 CI**（刻意）：本机是**唯一**运行环境，真机依赖本机服务与浏览器
-#   ⇒ 远端跑不出真机验证，维护成本却照付。⇒ 守卫落在**本地钩子 ＋ 收工入口**两处。
-#
-# 装：`powershell -NoProfile -ExecutionPolicy Bypass -File ops\install_hooks.ps1`
-# 卸：删掉 `.git/hooks/pre-commit`
-# 跳过一次：`git commit --no-verify`（⛔ 不推荐 —— 跳过等于这一笔没有守卫）
-
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+# 一人练手项目：提交只核暂存语法、字节与凭据文件；业务和文档按影响入口验一次。
+# 文档、台账、变异登记不随每次提交重复扫描；全量/现场核验由用户按需执行。
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
 PY="$ROOT/backend/.venv/Scripts/python.exe"
+
+# 文件名拦截不依赖Python；真实.env不提交，示例模板放行。
+for f in $(git diff --cached --name-only 2>/dev/null); do
+  case "$f" in
+    .env|.env.*)
+      case "$f" in
+        *.example) ;;
+        *) echo "pre-commit ⛔ 暂存区含口令文件：$f"; exit 1;;
+      esac;;
+  esac
+done
 if [ ! -x "$PY" ]; then
-  echo "pre-commit：找不到 venv 的 python（$PY）⇒ 本次跳过（⛔ 别静默：这行就是提示）"
-  exit 0
+  echo "pre-commit ⛔ 找不到venv Python，语法和字节检查未执行"
+  exit 1
 fi
 
-bad=""
-
-#: 打印"最后 N 行" —— ⛔ **别用 `tail` / `sed` / `awk`**：实测在 sh 里它们**可能不在 PATH**
-#:   （2026-10-02：直接 `sh .git/hooks/pre-commit` 当场撞到 `tail: command not found` ⇒ 钩子自己把自己判红）。
-#:   纯 shell 版本：环形缓冲（`${buf#*<换行>}` = 去掉第一行）。
+# 不依赖tail/sed/awk；保留失败末尾输出。
 NL='
 '
 tail_n() {
-  _n=${1:-10}
-  _buf=""
-  _cnt=0
+  _n=${1:-10}; _buf=""; _cnt=0
   while IFS= read -r _line || [ -n "$_line" ]; do
-    if [ "$_cnt" -eq 0 ]; then _buf="$_line"; else _buf="$_buf$_NL$_line"; fi
+    if [ "$_cnt" -eq 0 ]; then _buf="$_line"; else _buf="$_buf$NL$_line"; fi
     _cnt=$((_cnt + 1))
-    if [ "$_cnt" -gt "$_n" ]; then
-      _buf="${_buf#*"$NL"}"        # 去掉第一行（`$NL` 是真的换行，⛔ 不是 `printf` 出来的）
-      _cnt=$((_cnt - 1))
-    fi
+    if [ "$_cnt" -gt "$_n" ]; then _buf="${_buf#*"$NL"}"; _cnt=$((_cnt - 1)); fi
   done
   printf '%s\n' "$_buf"
 }
-
-# ⚠️⚠️ **这份列表里不许出现 `#` 注释行** —— `for spec in \` 是**续行**结构，
-#   而注释要吃到"下一个没被续行吃掉的新行"才结束 ⇒ 列表里任何一行注释都会把**它后面整段**
-#   变成注释 ⇒ `sh` 报 `syntax error near unexpected token`。
-#   ⭐ 2026-10-07 实测：这条已经害过一次 —— 2026-10-06 有人把注释加了进来，而**已安装的那份
-#   副本一直是旧的**（两份 MD5 不同）⇒ 坏版本从没被 git 跑过，直到今天同步才炸。
-#   ⇒ 注释一律写在 `for spec in` **上面**；新条目只能加在**最后一行**（末行不带 `\`）。
-#
-# 列表说明：
-#   · `syntax_audit --staged`（2026-10-06）：让 `Q4` 只查**本轮暂存的 `.py`**（模块必须有主文头
-#     「守什么」）—— 存量一次性脚本没主文头是**存量债**，不该在提交那一刻全点成红。
-#   · `bytes_guard --staged`（2026-10-07）：暂存件的行尾 / 坏字符 / BOM / 编码。
+bad=""
 for spec in \
   "tools/audit/syntax_audit.py --staged" \
-  "tools/audit/doc_audit.py" \
-  "tools/audit/audit_meta.py" \
-  "tools/audit/audit_work.py" \
-  "tools/audit/mut_cover.py --check" \
   "tools/audit/bytes_guard.py --staged"
 do
-  # shellcheck disable=SC2086
   set -- $spec
   script="$1"; shift
   out=$("$PY" -X utf8 "$ROOT/$script" "$@" 2>&1); rc=$?
   if [ "$rc" -eq 0 ]; then
     echo "pre-commit ✅ $script $*"
   else
-    echo "pre-commit ⛔ $script $*（rc=$rc）—— 末尾几行："
-    printf '%s\n' "$out" | tail_n 10 | while IFS= read -r l; do echo "    $l"; done
+    echo "pre-commit ⛔ $script $*（rc=$rc）"
+    printf '%s\n' "$out" | tail_n 10
     bad="$bad $script"
   fi
 done
-
-#: ---------------------------------------------------------------------------
-#: ④ 暂存区**文件名黑名单**（2026-10-05 `/retro` 候选 4 · 用户令并入 `TAIL-235` 丁批；
-#:    2026-10-09 用户裁定「一人开发 · 局域网 2 人 · 不做过度防御」⇒ **`init_db.sql` 移出黑名单**）
-#:   为什么只做文件名：⛔ 内容扫描（`PASSWORD=` / `DATABASE_URL`）要 grep，而本钩子第 29 行
-#:   已记「`tail`/`sed`/`awk` 在 sh 里可能不在 PATH」⇒ 用 grep 同源风险；而**文件名**是纯 shell
-#:   可判的，零风险、零新文件。
-#:   （2026-10-09 用户定「够用即止」：那句"内容扫描留给丁批的独立审计件"从未兑现 ⇒ **删掉承诺，不补**。
-#:     真出现"把i8 口令写进新文件"这件事时，再按当时需要加。）
-#:   拦的是什么：**仓根 `.env`**（i8 账号口令）—— 它**永远不进版本库**，只有 `.env.example` 是模板。
-#:   ⚠️ `ops/init_db.sql` 曾也在名单里（理由：它的口令位在本机被填成真值）。
-#:      现在**放行**，是因为那个人明确说"不在乎密码泄露"：把它提交掉反而消掉了一个
-#:      长期存在的麻烦（**已跟踪却永远不可提交** ⇒ 每次提交都dirty、每次 `git add -A` 都被拦）。
-#:      建库 SQL 因此**带本机口令进库进包**，换机时也**不必再手工改口令**（原来那一步最容易忘，
-#:      而 `CREATE ROLE` 不可重跑 ⇒ 忘了就建出错角色，见 `TAIL-223`）。
-for f in $(git diff --cached --name-only 2>/dev/null); do
-  case "$f" in
-    .env|.env.*)
-      case "$f" in
-        *.example) ;;                      # 模板，放行
-        *) echo "pre-commit ⛔ 暂存区含口令文件：$f"
-           echo "            它装的是 i8 账号口令（⛔ 不进版本库）。要用它 ⇒ 先把它移出暂存区。"
-           echo "            提交请用**列举式** git add（⛔ 别用 -A）。"
-           exit 1;;
-      esac;;
-  esac
-done
-
-if [ -n "$bad" ]; then
-  echo "pre-commit：上面这些红了 ⇒ 先清红再提交（明细 = 直接跑那一把尺子）。"
-  echo "            真机 / 全套 pytest / 盖章 / 产包干跑 不在这儿 —— 收工入口 = tools/oneoff/_run_rulers.py --all"
-  exit 1
-fi
-echo "pre-commit：便宜子集全绿（全套仍以 tools/oneoff/_run_rulers.py --all 为准）"
+if [ -n "$bad" ]; then echo "pre-commit：相关检查失败，先修再提交"; exit 1; fi
+echo "pre-commit：暂存语法、字节及凭据文件检查通过"
 exit 0

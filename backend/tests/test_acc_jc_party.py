@@ -216,6 +216,3 @@ def test_分类表拒绝非法类型():
 def SV_act_set(s, *, name, kind):
     from app.mod11_jc.service import act_set_party_kind
     return act_set_party_kind(s, name=name, kind=kind)
-
-
-pytestmark = pytest.mark.usefixtures()

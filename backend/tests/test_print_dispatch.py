@@ -45,15 +45,6 @@ def _settings(**kw) -> types.SimpleNamespace:
     return types.SimpleNamespace(**base)
 
 
-@pytest.fixture()
-def wired(monkeypatch):
-    """把"当前设置"换成桩（避免读真实 `.env`）。
-
-    ⚠️ 2026-09-21：原先这里还 `monkeypatch.setattr(D, "effective_of", …)` ——
-       打印机地址改成**只读 `.env`** 之后（单一存储），`dispatch` **不再 import `effective_of`**
-       ⇒ 那个桩会 `AttributeError`。桩值直接由 `_settings()` 提供（它带 `printer_ipp_url`）。
-    """
-    monkeypatch.setattr(D, "get_settings", lambda: _settings())
 
 
 # ------------------------------------------------------------------ 单通道：只走它

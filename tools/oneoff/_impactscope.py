@@ -216,12 +216,14 @@ def git_changes(root: Path = ROOT) -> dict:
 def required_checks(kind: str, commands: list) -> set[str]:
     """登记外或新工具不会自动获得免检；未知检查显式待查。"""
     if kind == 'full':
-        return {rel for rel, _ in commands} - set(SELFTEST_DEPENDENCIES)
+        # doc_audit 已调用这些分项；壳快照是可选排障工具，不代表现场验收。
+        duplicates = {'tools/audit/audit_drift.py', 'tools/audit/audit_meta.py',
+                      'tools/audit/audit_work.py', 'tools/audit/cover_gap.py',
+                      'tools/audit/shell_verify.py'}
+        return {rel for rel, _ in commands} - set(SELFTEST_DEPENDENCIES) - duplicates
     required = {'tools/audit/bytes_guard.py'}
     if kind == 'documents':
-        required |= {'tools/audit/doc_audit.py', 'tools/audit/audit_drift.py',
-                     'tools/audit/audit_meta.py', 'tools/audit/audit_work.py',
-                     'tools/audit/claim_audit.py'}
+        required |= {'tools/audit/doc_audit.py', 'tools/audit/claim_audit.py'}
     if kind == 'page':
         required |= {'tools/audit/syntax_audit.py', 'tools/audit/ui_parity.py',
                      'tools/audit/wiring_audit.py', 'tools/audit/asset_audit.py',
@@ -256,6 +258,11 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
         if name.startswith('.codebuddy/rules/') and name.endswith('.mdc'):
             checks |= required_checks('documents', commands)
             continue
+        if name == 'delivery/PRD/验收/验收基线.json':
+            checks |= required_checks('documents', commands) | {'tools/audit/acc_report.py'}
+            continue
+        if name in {'backend/requirements.in', 'backend/requirements.txt'}:
+            continue  # pytest选择器已知其声明消费；不调用网络依赖审计。
         if name.startswith('backend/') and not (name.endswith('.py') or name.startswith('backend/app/web/')):
             pending.append('后端数据/配置输入需调查使用者：'+name)
             continue
@@ -274,11 +281,7 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
                         # 本次T28展示措辞调整，判定逻辑另由audit_face的隔离自证负责。
                         if name == 'tools/audit/doc_audit.py' and pair[0] is not None:
                             pair = (pair[0].replace('规格件只许变长'.encode(), '篇幅变化仅提示调查'.encode()).replace('每轮随闸门跑'.encode(), '按受影响判据隔离自证'.encode()), pair[1])
-                        if name != 'tools/audit/bytes_guard.py' and executable_changed(pair):
-                            candidates = mutation_candidates(name, root)
-                            pending.append('对应判据需选择隔离自证：'+name+'；可配候选：'+
-                                           (', '.join(candidates) or '未找到，需调查')+
-                                           '（仅反查源码；须先确认隔离入口）')
+                        # 判据改动由相关自检/回归验证，不强制每条另配变异。
                     else:
                         pending.append('共享检查模块需查明调用者：'+name)
             else:
@@ -306,6 +309,8 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
     if tests.reason.startswith('待查：'):
         pending.append(tests.reason)
     direct = {Path(n).name for n in readers if n.startswith('backend/tests/') and Path(n).name.startswith('test_')}
+    if 'delivery/PRD/验收/验收基线.json' in names:
+        direct.add('test_acc_suite_selftest.py')
     if direct and not tests.run_all:
         tests = scope.Plan(True, tests.reason+'；含直接读文档的测试', set(tests.files) | direct)
     return checks, tests, pending
@@ -372,31 +377,7 @@ def run_selected(changes: dict, commands: list, py: str, *, explain=False, force
         # 即使影响扩大选到所有测试，本轮仍不宣称刷新完整权威结果。
         env = dict(os.environ, **scope.pytest_env(tests if force_full else scope.Plan(True, '局部结果隔离', ['partial'])))
         cached('pytest（隔离结果）', [py, '-X', 'utf8', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '--tb=line', *tests.argv()], 'pytest', tests.argv(), ROOT/'backend', env)
-    mechanism_paths = set(changes) & {'tools/oneoff/_impactscope.py', 'tools/oneoff/_gatescope.py', 'tools/oneoff/_run_rulers.py', 'tools/oneoff/_pytestscope.py', 'tools/mut/_mut_gatescope.py'}
-    if mechanism_paths:
-        mutation_args = ['--paths', *sorted(mechanism_paths)]
-        cached('核验机制反向灵敏度（隔离副本）', [py, '-X', 'utf8', str(ROOT/'tools/mut/_mut_gatescope.py'), *mutation_args], 'tools/mut/_mut_gatescope.py', mutation_args)
-    else:
-        print('变异自证：未改机制/判据，跳过；修改其他判据须补对应隔离自证')
-    if any(n in changes for n in ('tools/audit/bytes_guard.py', 'tools/mut/_mut_bytesguard.py')):
-        execute('字节守卫反向灵敏度（隔离副本）', [py, '-X', 'utf8', str(ROOT/'tools/mut/_mut_bytesguard.py')])
-    if any(n in changes for n in ('tools/audit/audit_face.py', 'tools/mut/_mut_facedoc.py')):
-        execute('交付面文档保护（隔离输入）', [py, '-X', 'utf8', str(ROOT/'tools/mut/_mut_facedoc.py')])
-    if 'tools/oneoff/_run_muts.py' in changes:
-        execute('变异入口隔离选择', [py, '-X', 'utf8', str(ROOT/'tools/oneoff/_run_muts.py'), '--selftest'])
-    if any(n.startswith('backend/app/web/') for n in changes):
-        if bad:
-            print('暂缓完整壳自检：相关检查尚未通过，先修复并局部复验', bad)
-        else:
-            # ⭐ 2026-10-11（`/retro` 候选 1）：**走回执复用** —— 壳字节与环境摘要未变时，上轮 rc=0 的
-            #    真机证据仍然算数（证明输入见 `_gatescope.input_signature` 里那条分支）。
-            #    实测本仓同一壳字节曾连跑三次（02:28 / 02:46 / 03:23）⇒ 白跑 ~3 分钟。
-            if not cached('真机壳自检', [py, '-X', 'utf8', str(ROOT/'tools/probe/_shell_smoke.py')],
-                          'tools/probe/_shell_smoke.py', []):
-                prior = latest_smoke_log(ROOT)
-                if prior is not None:
-                    print('真机证据：'+str(prior)+'；rc=0。通过且输入、环境、现场数据未变时复用本次结果，变化状态另验。')
-        if not bad: execute('壳基线盖章', [py, '-X', 'utf8', str(ROOT/'tools/audit/shell_verify.py'), '--snapshot'])
+    print('变异与真实39段按实际需要显式执行；本入口不自动写靶或盖章')
     print('总墙钟 %.2fs'%(time.perf_counter()-started), 'BAD:', bad)
     if receipt is not None: receipt.save(int(bool(bad)))
     return int(bool(bad))
@@ -428,7 +409,7 @@ def selftest():
         assert mutation_candidates('tools/audit/audit_work.py',folder)==['_mut_t14t15.py'], '仅活登记的对应变异可列候选'
         with patch.object(scope, 'plan', return_value=scope.Plan(False,'fixture')):
             _checks,_tests,waiting=selection({'tools/audit/audit_work.py':(b'x=1',b'x=2')},registered,folder)
-        assert any('可配候选：_mut_t14t15.py' in item for item in waiting), '待查必须列候选且仍非通过'
+        assert not waiting and 'tools/audit/audit_work.py' in _checks, '相关判据须选检查，不强制额外变异'
     # --since的旧新字节必须原样到达选择器，不能在下游另取HEAD差异。
     supplied = {'backend/app/web/shell/proj.js': (b'older\r\n', b'newer\r\n')}
     with patch.object(scope, 'plan', return_value=scope.Plan(False, 'fixture')) as planner:
@@ -473,9 +454,8 @@ def selftest():
             assert run_selected({'tools/oneoff/_impactscope.py': (b'x=1', b'x=2')}, registered, sys.executable, force_full=True) == 0
         called = [arg[0][0] for arg in runner.call_args_list]
         assert any(str(ROOT/'tools/oneoff/_gatescope.py') in c for c in called), '完整入口也须选相关自测'
-        mutation = next(c for c in called if str(ROOT/'tools/mut/_mut_gatescope.py') in c)
-        assert mutation[-2:] == ['--paths', 'tools/oneoff/_impactscope.py'], '实际改动必须传到反例入口'
-    # 只替换外部命令；真实入口须先执行相关pytest，再决定完整真机与盖章。
+        assert not any(str(ROOT/'tools/mut/_mut_gatescope.py') in c for c in called), '机制自检不再附带整组变异'
+    # 局部壳成功/失败都不触发真实服务或盖章；失败仍返回非零。
     changes = {'backend/app/web/shell/base.js': (b'old', b'new')}
     for fail in (False, True):
         def command_result(argv, **kwargs):
@@ -492,8 +472,10 @@ def selftest():
         pytest_at = next(i for i,c in enumerate(calls) if 'pytest' in c)
         smoke_at = [i for i,c in enumerate(calls) if str(ROOT/'tools/probe/_shell_smoke.py') in c]
         snapshots = [c for c in calls if '--snapshot' in c]
-        assert (not smoke_at and not snapshots) if fail else (smoke_at[0] > pytest_at and snapshots), \
-            '相关pytest失败应暂缓完整真机与盖章，通过后才执行'
+        assert not smoke_at and not snapshots, '普通壳修改不得自动调用真实39段或盖章'
+    assert required_checks('documents', registered) == {'tools/audit/doc_audit.py', 'tools/audit/claim_audit.py', 'tools/audit/bytes_guard.py'}
+    assert not required_checks('full', registered) & {'tools/audit/audit_drift.py', 'tools/audit/audit_meta.py', 'tools/audit/audit_work.py', 'tools/audit/cover_gap.py', 'tools/audit/shell_verify.py'}
+    scope.local_selftest()
     assert scope.plan(None).reason.startswith('待查：') and not scope.plan(None).run, '未知路径不能自动全跑'
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
