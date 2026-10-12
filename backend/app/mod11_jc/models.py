@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -91,6 +91,8 @@ class JcContract(Base):
     #    （与 `jc_payment.notice_id` 的多 `NULL` 同理）⇒ 去重在**落库时按值判**，⛔ 不靠数据库拦。
     contract_no: Mapped[str] = mapped_column(String(64), index=True, default="")         # 合同编号（i8）
     contract_date: Mapped[str] = mapped_column(String(10), index=True, default="")      # 合同日期（抓取）
+    # TAIL-313：仅本次已审核修正记录启用；其余日期仍按 i8 原策略同步。
+    contract_date_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     #: ⭐ **i8 单据名原文**（`BillName`，如 `四分晋江污泥项目/主材钢材/业祥/河南安装/27269.82元`）。
     #:   ⚠️⚠️ **2026-09-19 补**：原先**丢了它** —— `_map_record` 的注释写着"整条原样留在 `fields`
     #:   （不丢信息）"，但本表**没有那个列**、`FETCH_COLS` 也没带它 ⇒ **静默丢掉**。

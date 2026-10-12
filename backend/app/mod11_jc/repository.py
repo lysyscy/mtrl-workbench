@@ -189,7 +189,7 @@ def project_choices(s: Session) -> list[dict]:
 #: ⭐⭐ **2026-09-26 用户裁定收窄**（他的原话："实际集采台账上能被手改的很少"）：只留**界面上
 #:   真给了入口的列** = "Excel 的地盘"这 6 列（材料名 / 付款方式 / 备注 / 存档三列，与台账页那几格一一对应）。
 #:   ⛔ **i8 的事实列**（合同日期 / 供应商 / 甲方单位）不在其中：界面上本来**没有入口**，而放行它
-#:      = 任何一条接口调用都能改 i8 的事实、且**下次抓取会静默盖回**（"看着能改、改了没用"）。
+#:      = 任何一条接口调用都能改 i8 的事实。TAIL-313已审核日期通过专项事务保护，界面仍无手改入口。
 #:   ⛔ **合同金额 / 贸易公司两列**也不在其中：它们的写入口归**抓取**（按甲方类型分叉）与
 #:      **导入**（`fill_contract_amt_if_blank` · 只对贸易公司合同 · **空才填**）—— ⛔ 不是人手改。
 #:      ⚠️ 2026-09-19 曾把它放进来（"合同金额可能不对"）——现按 2026-09-26 的口径移出：
@@ -361,7 +361,7 @@ def count_contracts(s: Session) -> int:
 
 # ============================================================ 抓取落库（`M5-6`）
 
-#: 「**抓取会刷新**」的列 —— i8 的**事实**，人改它没意义 ⇒ 重抓一律以 i8 为准。
+#: 「**抓取会刷新**」的列 —— i8 的事实；已审核锁定的合同日期除外（TAIL-313）。
 #: ⛔ 人工字段（三态 / 存档三列 / 备注 / 付款方式）**不在其中**：那是人的地盘，重抓不许动
 #:   （判据 `ACC-JC-FETCH-001/001-09`「再次导入**不覆盖旁路字段**」）。
 #: ⭐ `bill_name`（i8 单据名原文）**在列里**：它是 i8 的原文、不是人的地盘 ⇒ 重抓要刷新它。
@@ -410,12 +410,16 @@ def existing_contract_nos(s: Session, nos: list[str]) -> set[str]:
     return {str(x) for x in s.execute(stmt).scalars() if x}
 
 
-def one_by_no(s: Session, contract_no: str) -> JcContract | None:
+def one_by_no(s: Session, contract_no: str, *, for_update: bool = False) -> JcContract | None:
     """按**合同编号**取一行（`M5-6` 的**幂等键**）。空编号 ⇒ `None`（不参与幂等）。"""
     no = str(contract_no or "").strip()
     if not no:
         return None
-    return s.execute(select(JcContract).where(JcContract.contract_no == no)).scalars().first()
+    stmt = select(JcContract).where(JcContract.contract_no == no)
+    if for_update:
+        # 与日期修正串行，并刷新当前 Session 已缓存的旧日期/保护状态。
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    return s.execute(stmt).scalars().first()
 
 
 def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -> dict:
@@ -426,6 +430,7 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
     - 没编号 ⇒ **跳过并计数**（⛔ 静默丢弃 —— 与 `API-04` 取数层同一口径）；
     - **不存在** ⇒ 新增，两态 = 「**纳入台账**」（`TAIL-97`：抓来即纳入，与手工新增**同一个默认值**）；
     - **已存在** ⇒ 只刷 `FETCH_COLS` ＋ 按 `domain.tag_after_fetch` 归一
+      ⇒ 已审核锁定的日期保留，其余日期含空值仍以 i8 为准；其他字段正常同步。
       ⇒ ⛔ **不碰**存档三列 / 备注 / 付款方式 / 贸易公司（人的地盘），
         ⛔ 也**不许**把人工标的「不纳入」改回来（判据 `001-10` 的铁律）。
     """
@@ -435,7 +440,7 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
         if not no:
             skipped += 1
             continue
-        cur = one_by_no(s, no)
+        cur = one_by_no(s, no, for_update=True)
         _amt = Decimal(str(row.get("contract_amt") or 0))
         _party = str(row.get("party_kind") or KIND_PARTY_UNKNOWN)
         _is_trade = _party == KIND_PARTY_TRADE
@@ -460,12 +465,14 @@ def upsert_fetched_contracts(s: Session, *, project_id: int, rows: list[dict]) -
             ))
             inserted += 1
         else:
-            # ① i8 的**事实列**：无脑刷新
+            # ① 已审核锁定的日期保留；其他事实列与未锁定日期沿用原刷新策略（含空值）。
             for key, val in (("contract_date", str(row.get("sign_date") or "")[:10]),
                              ("supplier", str(row.get("supplier_name") or "")[:128]),
                              ("bill_name", str(row.get("bill_name") or "")[:255]),
                              ("party_name", _party_name)):
                 if key in FETCH_COLS:
+                    if key == "contract_date" and cur.contract_date_locked:
+                        continue
                     setattr(cur, key, val)
             # ② **空才填**的列：有人工值就留住（用户手改过 i8 的错材料名）
             _mat = str(row.get("material_name") or "")[:128]
