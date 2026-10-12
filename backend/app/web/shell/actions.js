@@ -1766,7 +1766,7 @@ procPjToggle:()=>{ pjToggle('procPj'); render(); },
      try{
        const r=await API.m06MechSave(payload);
        if(!r || r.ok===false) throw errHuman((r&&r.message)||'机械费没能保存，请重试。','m06 save rejected');
-       await reloadMech(); await reloadProc(); await reloadM07();
+       await reloadMech(); await reloadProc();
        /* 不重建正在编辑的格子；下次渲染使用刚读回的矩阵。 */
        if(!document.activeElement?.matches('[data-act="procMechSave"]')) render();
        toast('机械费已保存');

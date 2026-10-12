@@ -156,7 +156,11 @@ def test_page_shape_document_differences_and_monthly_export_are_distinct(sources
     assert rows["2026-03"][11] == 0
     matrices = M6.build_matrices(None)
     assert set(matrices) == {"projects", "matrices"}
-    assert set(matrices["matrices"][MIX]) == {"raw", "adjusted", "cutoff_ym", "totals", "segments"}
+    assert set(matrices["matrices"][MIX]) == {"raw", "adjusted", "cutoff_ym", "totals", "segments", "diffs", "diff_totals"}
+    assert matrices["matrices"][MIX]["diffs"] == page["diffs"]
+    assert matrices["matrices"][MIX]["diff_totals"] == page["diff_totals"]
+    assert matrices["matrices"][MECH]["diffs"] == []
+    assert matrices["matrices"][MECH]["diff_totals"]["before"] is None
     assert EMPTY not in matrices["projects"] and EMPTY in M6.import_projects(None)
 
 
@@ -179,6 +183,53 @@ def test_mechanical_only_subtotals_explicitly_clear_template_formulas(sources):
     assert set(subtotal) == {P.TIME_COL, *(P.COL_OF_KEY[key] for key in M6.D.DATA_KEYS)}
     assert [subtotal[P.COL_OF_KEY[key]] for key in M6.D.DATA_KEYS[:10]] == [""] * 10
     assert subtotal["M"] == 7
+
+
+@acc()
+def test_bucketed_matrices_keep_precedence_null_zero_order_and_document_trace(monkeypatch):
+    inv = [
+        {"id": 9, "warehouse": "A", "ym": "2025-11", "direction": "入库",
+         "material_property": "主材", "amount": "10.01", "adj_amount": "0",
+         "doc_no": "单据", "seq": "2", "material": "材料", "adj_remark": "原因",
+         "adj_operator": "操作人", "adj_at": "2026-01-02 03:04"},
+        {"id": 8, "warehouse": "B", "ym": "2026-01", "direction": "出库",
+         "material_property": "主材", "amount": None},
+        {"id": 7, "warehouse": "A", "ym": "2025-11", "direction": "出库",
+         "material_property": "未知", "amount": None, "adj_amount": "2.01"},
+    ]
+    history = [{"warehouse": "A", "ym": "2025-11", "in_主辅材": "999"},
+               {"warehouse": "A", "ym": "2025-10", "in_主辅材": "0"}]
+    manual = [{"warehouse": "C", "ym": "2026-01", "mech_0": "0"}]
+    for name, value in (("load_inv_rows", inv), ("load_history", history), ("load_mech", manual)):
+        monkeypatch.setattr(R, name, lambda s, value=value: value)
+    monkeypatch.setattr(M6, "load_cutoffs", lambda s: {"A": "2025-11"})
+    original = M6.D.build_matrix
+    seen = []
+
+    def matrix(**kw):
+        assert all(str(row.get("warehouse") or "") == kw["warehouse"]
+                   for name in ("inv_rows", "history_rows", "manual_rows") for row in kw[name])
+        seen.append((kw["warehouse"], len(kw["inv_rows"])))
+        result = original(**kw)
+        legacy = original(**{**kw, "inv_rows": inv, "history_rows": history, "manual_rows": manual})
+        assert result == legacy
+        return result
+
+    monkeypatch.setattr(M6.D, "build_matrix", matrix)
+    data = M6.build_matrices(None, warehouses=["C", "A", "C", "不存在"])
+    assert data["projects"] == ["A", "B", "C"]
+    assert list(data["matrices"]) == ["C", "A"]
+    assert seen == [("C", 0), ("C", 0), ("A", 2), ("A", 2)]
+    a = data["matrices"]["A"]
+    assert [row["id"] for row in a["diffs"]] == [9, 7]
+    assert a["diffs"][0] == {"id": 9, "doc_no": "单据", "seq": "2", "material": "材料",
+                              "warehouse": "A", "before": Decimal("10.01"), "after": Decimal("0"),
+                              "delta": Decimal("-10.01"), "remark": "原因", "operator": "操作人",
+                              "at": "2026-01-02 03:04"}
+    assert a["diff_totals"]["delta"] == Decimal("-8.00")
+    assert a["raw"][0]["in_主辅材"] == 0 and a["raw"][1]["in_主辅材"] == Decimal("10.01")
+    assert a["adjusted"][1]["in_主辅材"] == 0
+    assert data["matrices"]["C"]["raw"][0]["in_主辅材"] is None
 
 
 @pytest.fixture

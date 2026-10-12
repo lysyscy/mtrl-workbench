@@ -1005,7 +1005,7 @@ V.m02=()=>`
 V.m06=()=>{
   const rows0=procRows(procPj,false), rows1=procRows(procPj,true);
   const a0=procAgg(procPj,false);                       /* ⚠️ 现只用来取「机械 6 列」的段长度（`a0.m.length`）—— 原「卡内 kv 区」那个用途**早已不在切片里**（2026-09-29 `A4` 核实）⇒ ⛔ 别再按「供 kv 用」找它。⚠️ 改它要同批动下面两处分段求和（`totMTax` / `totMNoTax`） */
-  const adjs=IVs.filter(iv=>iv.wh===procPj&&adjOf(iv));
+  const adjs=PROC_MATRIX[procPj]?.diffs||[], diffTotals=PROC_MATRIX[procPj]?.diff_totals||{};
   /* ⭐ 2026-09-13 用户口径：按「总求和（本表）」那**四段**，给整张表（表①/表②）做**视觉分隔** ——
      段首列加 `.vsep`（左侧 2px 竖线），**表头 / 数据行 / 合计行 / 总求和行四处一致**。
      段首列下标（0 = 核算月）：`1` 入库 · `6` 出库 · `11` 机械左 4 列 · `15` 不含税 2 列。
@@ -1069,15 +1069,15 @@ V.m06=()=>{
       <div class="tb2 ${procTab===2?'on':''}" data-act="procTab" data-i="2" tabindex="0" role="button">差异表<span class="n">${adjs.length}</span></div>
     </div>
     ${procTab===2?`<div class="tw">${TBL({head:DIFF_THEAD,
-      rows:adjs.length?[adjs.map(iv=>{const a=adjOf(iv);return `<tr><td class="fc">${iv.docNo}</td><td class="fc">${iv.seq}</td><td>${esc(iv.mat)}</td><td class="sm">${esc(iv.wh)}</td>
-        <td class="num">${M(iv.amt)}</td><td class="num ed">${M(a.newAmt)}</td><td class="num" title="差额 = 调整后 − i8 原值；方向看符号（正 = 上调 / 负 = 下调）">${SIG(a.newAmt-iv.amt)}</td>
-        <td class="sm">${esc(a.remark)}</td><td class="sm">${esc(a.op)}</td><td class="fc sm">${a.time}</td>
-        <td class="ctr"><span class="link" data-act="goInvAdj" data-wh="${esc(iv.wh)}" data-iv="${iv.id}" tabindex="0" role="button">查看原始行 →</span></td></tr>`}).join('')
+      rows:adjs.length?[adjs.map(a=>{return `<tr><td class="fc">${esc(a.doc_no)}</td><td class="fc">${esc(a.seq)}</td><td>${esc(a.material)}</td><td class="sm">${esc(a.warehouse)}</td>
+        <td class="num">${M(a.before)}</td><td class="num ed">${M(a.after)}</td><td class="num" title="差额 = 调整后 − i8 原值；方向看符号（正 = 上调 / 负 = 下调）">${SIG(a.delta)}</td>
+        <td class="sm">${esc(a.remark)}</td><td class="sm">${esc(a.operator)}</td><td class="fc sm">${esc(a.at)}</td>
+        <td class="ctr"><span class="link" data-act="goInvAdj" data-wh="${esc(a.warehouse)}" data-iv="${a.id}" tabindex="0" role="button">查看原始行 →</span></td></tr>`}).join('')
         /* ⭐ 差异表也在数据列下方加合计（用户口径：表①②③都加）—— 可求和的只有「原值 / 调整后 / 差额」3 列 */
         + `<tr class="sumrow" style="background:var(--sf2);font-weight:500"><td class="fl" colspan="4">合计</td>`
-          + `<td class="num">${M(N2(adjs.reduce((s,iv)=>s+iv.amt,0)))}</td>`
-          + `<td class="num">${M(N2(adjs.reduce((s,iv)=>s+adjOf(iv).newAmt,0)))}</td>`
-          + `<td class="num">${SIG(N2(adjs.reduce((s,iv)=>s+N2(adjOf(iv).newAmt-iv.amt),0)))}</td><td colspan="4"></td></tr>`]
+          + `<td class="num">${M(diffTotals.before)}</td>`
+          + `<td class="num">${M(diffTotals.after)}</td>`
+          + `<td class="num">${SIG(diffTotals.delta)}</td><td colspan="4"></td></tr>`]
       :[],
       empty:EMPTYROW(thCount(DIFF_THEAD), '该项目无调整，原始表与调整后表一致', '无需处理')})}</div>`:
     `<div class="tw">${TBL({head,rows:body,sum:sumRow+totRow})}</div>`}

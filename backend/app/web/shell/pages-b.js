@@ -14,7 +14,7 @@ const amtOf=iv=>{const a=ADs.find(x=>x.ivid===iv.id); return a?a.newAmt:iv.amt};
 const adjOf=iv=>ADs.find(x=>x.ivid===iv.id);
 let PROC_PJS=[];
 let PROC_MATRIX={};
-let procPj='', procTab=1;   /* 初值同理由 `reloadInv()` 落定（不能取加载时的 `PROC_PJS[0]`） */
+let procPj='', procTab=1;   /* 首次项目由 reloadProc() 按有效候选落定。 */
 /* 项目、核算月、明细与合计均取后端同一领域矩阵。 */
 const procMonths=proj=>(PROC_MATRIX[proj]?.raw||[]).map(r=>r.ym);
 function procAgg(proj,adjusted,ym){

@@ -162,21 +162,33 @@ def build_import_data(s: Session, *, warehouse: str = "") -> dict:
     }
 
 
+def _by_warehouse(rows: list[dict]) -> dict[str, list[dict]]:
+    """请求内分桶，保留原行序及仓库键的既有转换口径。"""
+    out: dict[str, list[dict]] = {}
+    for row in rows:
+        out.setdefault(str(row.get("warehouse") or ""), []).append(row)
+    return out
+
+
 def _load_report_data(s: Session) -> dict:
     """一次读取有效来源与材料截止月；导入候选和机械导入截止不参与报表资格。"""
     inv, manual, history = load_inv_rows(s), load_mech(s), load_history(s)
-    return {"inv": inv, "manual": manual, "history": history,
+    return {"inv": _by_warehouse(inv), "manual": _by_warehouse(manual), "history": _by_warehouse(history),
             "projects": projects_of(inv, history + manual), "cutoffs": load_cutoffs(s)}
 
 
 def _matrix_for(data: dict, warehouse: str) -> dict:
     """同一来源快照组装一个仓库的原始/调整矩阵与汇总，金额规则仍归domain。"""
     cutoff = data["cutoffs"].get(warehouse) or ""
-    tables = {name: D.build_matrix(inv_rows=data["inv"], manual_rows=data["manual"],
-                                   history_rows=data["history"], warehouse=warehouse,
+    inv = data["inv"].get(warehouse, [])
+    manual = data["manual"].get(warehouse, [])
+    history = data["history"].get(warehouse, [])
+    tables = {name: D.build_matrix(inv_rows=inv, manual_rows=manual,
+                                   history_rows=history, warehouse=warehouse,
                                    adjusted=adjusted, cutoff_ym=cutoff)
               for name, adjusted in (("raw", False), ("adjusted", True))}
-    return {**tables, "cutoff_ym": cutoff,
+    diffs = D.diff_rows(inv, warehouse=warehouse)
+    return {**tables, "cutoff_ym": cutoff, "diffs": diffs, "diff_totals": D.diff_totals(diffs),
             "totals": {name: D.column_totals(rows) for name, rows in tables.items()},
             "segments": {name: D.segment_totals(rows) for name, rows in tables.items()}}
 
@@ -188,7 +200,7 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     warehouse = st["warehouse"] if st["warehouse"] in projects else (projects[0] if projects else "")
     matrix = _matrix_for(data, warehouse)
     raw, adjusted = matrix["raw"], matrix["adjusted"]
-    diffs = D.diff_rows(data["inv"], warehouse=warehouse)
+    diffs = matrix["diffs"]
     rows = adjusted if st["tab"] == D.TAB_ADJUSTED else raw
     table_name = "adjusted" if st["tab"] == D.TAB_ADJUSTED else "raw"
     return {
@@ -202,12 +214,12 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
         "segments": matrix["segments"][table_name] if st["tab"] in (D.TAB_RAW, D.TAB_ADJUSTED) else (),
         "grand_total": D.grand_total(rows) if st["tab"] in (D.TAB_RAW, D.TAB_ADJUSTED) else None,
         "diffs": diffs,
-        "diff_totals": D.diff_totals(diffs),
+        "diff_totals": matrix["diff_totals"],
         # 分段（§5.2.5）：截止核算月 ＋ ⛔ 历史段**不提供行内编辑入口**（要改只能再导一次）
         "cutoff_ym": matrix["cutoff_ym"],
         "history_batches": load_batches(s),
         # 机械手录：**已手录的月份**（录入口要显示「录过哪几个月」，2026-09-17）
-        "mech_months": sorted(D.mech_by_month(data["manual"], warehouse=warehouse)),
+        "mech_months": sorted(D.mech_by_month(data["manual"].get(warehouse, []), warehouse=warehouse)),
         "can_edit_history": False,
         "export": _export_data(st, projects=projects, warehouse=warehouse,
                                displays=displays_by_key(s)),
