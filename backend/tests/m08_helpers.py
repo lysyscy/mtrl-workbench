@@ -11,6 +11,7 @@ from copy import deepcopy
 
 from datetime import datetime
 from decimal import Decimal
+from types import SimpleNamespace
 
 from app.mod08_inv.models import InvAdjustment, InvDetail
 
@@ -51,7 +52,14 @@ class FakeSession:
 
     def execute(self, stmt):  # noqa: ANN001
         entity = stmt.column_descriptions[0]["entity"]
-        return _Result(self.by_model.get(entity, []))
+        rows = self.by_model.get(entity, [])
+        if entity is InvDetail and stmt.column_descriptions[0]["expr"] is not InvDetail:
+            # 库存只读列投影的两个等值条件；完整 ORM 桩仍保持刷新用例的既有行为。
+            for condition in stmt._where_criteria:
+                rows = [r for r in rows if getattr(r, condition.left.key) == condition.right.value]
+            rows = [SimpleNamespace(**{col["name"]: getattr(r, col["name"])
+                                       for col in stmt.column_descriptions}) for r in rows]
+        return _Result(rows)
 
     def get(self, model, ident):  # noqa: ANN001
         for row in self.by_model.get(model, []):

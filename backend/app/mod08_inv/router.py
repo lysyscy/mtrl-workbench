@@ -89,8 +89,8 @@ def api_inventory() -> dict:
     from app.mod06_proc.domain import to_category          # 归集规则的**唯一出口**
 
     with session_scope() as s:
-        rows = load_rows(s)                                 # 已叠加调整单
         adjs = adjustments(s)
+        rows = load_rows(s, adjs=adjs)                       # 本请求复用调整单映射
         items = [
             {
                 **r,

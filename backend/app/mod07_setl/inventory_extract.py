@@ -3,14 +3,12 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from app.core.money import sum_money
 from app.mod07_setl import extract as X
-from app.mod08_inv.service import load_original_details as list_details
+from app.mod08_inv.service import load_original_inbound
 
 
 def load_amounts(s: Session) -> dict:
     """核算年月及原单入库金额；不读收发结存、价税合计或调整单。读取失败向上传递。"""
-    rows = [dict(resource_name=d.material_name, warehouse=d.warehouse_name, ym=d.ym, **{'in':d.amount})
-            for d in list_details(s) if d.direction == '入库']
-    return X.extract_amounts(rows)
+    return X.extract_amounts(load_original_inbound(s))
 
 
 def annual_grid(amounts, kind: str, *, warehouses, year: str, balances=None) -> dict:

@@ -9,15 +9,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.orm import Session
 
 from app.mod08_inv.domain import adjustment_problem
 from app.mod08_inv.models import InvAdjustment, InvDetail
 
 
-def to_row(detail: InvDetail, adj: InvAdjustment | None = None) -> dict:
-    """ORM → 域内规范行（`domain` 的纯函数一律吃这种 dict）。"""
+def to_row(detail: InvDetail | Row, adj: InvAdjustment | None = None) -> dict:
+    """明细或只读投影 → 域内规范行（`domain` 的纯函数一律吃这种 dict）。"""
     row = {
         "id": detail.id,
         "ym": detail.ym or "",
@@ -63,10 +63,33 @@ def adjustments(s: Session) -> dict[int, InvAdjustment]:
     return {a.row_id: a for a in s.execute(select(InvAdjustment)).scalars()}
 
 
-def load_rows(s: Session, *, ym: str | None = None) -> list[dict]:
+def load_rows(
+    s: Session, *, ym: str | None = None, adjs: dict[int, InvAdjustment] | None = None
+) -> list[dict]:
     """明细行（**已叠加调整单**的规范行）。"""
-    adjs = adjustments(s)
-    return [to_row(d, adjs.get(d.id)) for d in list_details(s, ym=(ym or None))]
+    if adjs is None:
+        adjs = adjustments(s)
+    # 规范行只消费这些列；ORM/raw 仍由 list_details 提供给原单与刷新调用者。
+    stmt = select(
+        InvDetail.id, InvDetail.ym, InvDetail.warehouse_name, InvDetail.bill_name_full,
+        InvDetail.doc_no, InvDetail.seq, InvDetail.direction, InvDetail.material_name,
+        InvDetail.material_property, InvDetail.spec, InvDetail.unit, InvDetail.qty,
+        InvDetail.price_excl, InvDetail.price_incl, InvDetail.amount, InvDetail.tax_total,
+        InvDetail.biz_type, InvDetail.vendor, InvDetail.doc_date, InvDetail.audit_date,
+        InvDetail.wbs_name, InvDetail.cbs_name,
+    )
+    if ym:
+        stmt = stmt.where(InvDetail.ym == ym)
+    return [to_row(d, adjs.get(d.id)) for d in s.execute(stmt.order_by(InvDetail.id))]
+
+
+def load_original_inbound(s: Session) -> list[dict]:
+    """原单入库的物料名、仓库、核算月及金额，供焊材/气体领域提取。"""
+    stmt = select(
+        InvDetail.material_name, InvDetail.warehouse_name, InvDetail.ym, InvDetail.amount
+    ).where(InvDetail.direction == "入库").order_by(InvDetail.id)
+    return [dict(resource_name=d.material_name, warehouse=d.warehouse_name, ym=d.ym,
+                 **{"in": d.amount}) for d in s.execute(stmt)]
 
 
 def save_adjustment(
@@ -169,5 +192,5 @@ def upsert_details(s: Session, *, ym: str, warehouse: str, rows: list[dict]) -> 
     return {"inserted": inserted, "updated": updated, "deleted": deleted, "kept_with_adjustment": kept}
 
 
-__all__ = ["to_row", "list_details", "adjustments", "load_rows",
+__all__ = ["to_row", "list_details", "adjustments", "load_rows", "load_original_inbound",
            "save_adjustment", "clear_adjustment", "upsert_details"]

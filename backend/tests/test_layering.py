@@ -524,6 +524,7 @@ _EXPORT_SMOKE: tuple[tuple[str, str, str], ...] = (
     ("app.mod01_projects.service", "set_keywords", "app.mod01_projects.repository"),
     # ⭐ `TAIL-218` 批 3：两个**同型出口**（C 组给 `mod08_inv` / `mod04_plan` 各补 1 个）。
     ("app.mod08_inv.service", "load_rows", "app.mod08_inv.repository"),
+    ("app.mod08_inv.service", "load_original_inbound", "app.mod08_inv.repository"),
     ("app.mod04_plan.service", "list_rows", "app.mod04_plan.repository"),
 )
 
