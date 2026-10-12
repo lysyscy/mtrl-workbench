@@ -377,6 +377,8 @@ const ACT={
    }catch(e){ toast('<b>没能改</b>：'+esc(String((e&&e.message)||e)), 8000); } },
 
  /* —— MOD-03 付款通知书 —— */
+ pickClear:()=>{ pickSet.clear(); render(); },
+ pickSearchClear:()=>{ fNt.q=''; render(); },
  pick:t=>{ const id=t.dataset.id; t.checked?pickSet.add(id):pickSet.delete(id); render(); },
  /* 全选：范围 = 【当前筛选结果里的可勾选行】，而不是全库（否则会选中看不见的行） */
  pickAll:t=>{ const ids=ntHit(fNt).filter(ntSelectable).map(n=>n.id);
@@ -429,11 +431,11 @@ const ACT={
       也**不清空勾选**（打印不改数据，属 R14 的"非消费型"动作，与"就地改值型"同侧）。
     ⭐ 2026-09-18 接线（`TAIL-46`）：原来只回一条「（模拟）→ 成功」（与 syncWh 同款）⇒ 现在**真调**
       `POST /api/m03/batch`，结果**逐条如实**（成功 N / 失败 M / **未产出单号显式列出**）—— 见 `m03RunBatch`。 */
- ntPrint:async ()=>{ const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+ ntPrint:async ()=>{ if(!ntBatchVisible()) return; const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    if(!rows.length) return toast('请先勾选要打印的付款通知书');   /* 防御：按钮在未勾选时已禁用 */
    return m03RunBatch(rows,'print'); },
  /* 只导出 PDF：与批量打印**同一次勾选**，只换 `mode`（后端 `MODE_PRINT` 分流）—— 入口由 `BIND.m03` 注入 */
- ntPdf:async ()=>{ const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+ ntPdf:async ()=>{ if(!ntBatchVisible()) return; const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    if(!rows.length) return toast('请先勾选要导出的付款通知书');
    return m03RunBatch(rows,'pdf'); },
  /* ⭐ `TAIL-46`：打印机设置的入口与保存（入口由 `BIND.m03` 注入到「批量打印」旁边） */
@@ -465,7 +467,7 @@ const ACT={
        + (r.printer_name ? ` · 打印机 <b>${esc(r.printer_name)}</b>` : '')
        + pidMsg + `（<b>即时生效</b>，无需重启）`, 9000); }
    catch (e) { return toast(`<b>没保存上</b>：${esc(String((e && e.message) || e))}`, 9500); } },
- batchPay:()=>{ const all=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+ batchPay:()=>{ reconcilePick(); const all=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    /* ⭐ 撤单行**不进付款批次**（走 `ntPayCand`，§4.2.7 方向）：正常路径下它们**根本勾不上**
       （勾选框对撤单行禁用、全选/按计划勾选也走同一出口）；这里再兜一道，
       防的是"勾上之后才被标撤单"这类**状态错位**把一张已作废的单送进付款。 */
@@ -504,6 +506,7 @@ const ACT={
        <div class="fld"><label>备注</label><input class="inp" id="bRemark" placeholder="选「其他」付款方式时必填"></div>
      </div>
      <div class="tip" style="margin:0">确认后每条生成一笔付款流水，并更新已付金额与付款状态。</div>`;
+   payBatchIds=rows.map(n=>n.id);  /* 本次窗口的行序，防删除 / 撤单后金额输入框串到剩余行。 */
    modal({wide:true,title:`批量付款 · 已勾选 ${rows.length} 条`,body,reopen:()=>ACT.batchPay(),
      footer:`<button class="btn" data-act="batchPayCancel">取消</button><button class="btn pri" data-act="batchPayOk"${bad.length?` disabled title="有 ${bad.length} 条不可付，请先删除这些行"`:''}>确认付款</button>`}); },
  /* 草稿记录：行内的付款方式 / 金额一改就存下，重建弹窗（删除行、排序）时不丢 */
@@ -515,9 +518,11 @@ const ACT={
    pickSet.delete(id); render();
    if(pickSet.size){ toast(`已把 <b>${n?n.code:id}</b> 移出本次付款（同时取消该行勾选）`); ACT.batchPay(); }
    else { closeModal(); toast('已移除全部记录，本次付款未提交'); } },
- batchPayOk:t=>{ if(busy) return;
+ batchPayOk:t=>{ if(busy) return; reconcilePick();
    /* ⭐ 与 `batchPay` 同一道闸：撤单行**不得产生付款流水**（窗口里已排除，这里兜底防状态错位） */
    const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean).filter(ntPayCand);
+   if(rows.length!==payBatchIds.length||rows.some((n,i)=>n.id!==payBatchIds[i])){
+     ACT.batchPay(); return toast('勾选记录已变化，请重新核对本次付款后再确认',5200); }
    if(!rows.length) return toast('没有可付款的记录');
    const dt=($('#bDate')&&$('#bDate').value)||SYS_TODAY;
    const rm=(($('#bRemark')&&$('#bRemark').value)||'').trim();
@@ -684,7 +689,7 @@ const ACT={
   /* 批量改分类（重做）：勾选 → 点一次「→ 辅材 / → 机械 / → 集采」即完成，不再走弹窗
      ⭐ 改为「集采」时顺带**自动匹配供应商**（§6.6.3 触发时机）；离开集采时清空待确认标记 */
   /* ⭐ 已接后端：判定与落库全在后端（`POST /api/m03/actions/category`），前端只发勾选集 + 显示回执 */
-  batchCatApply:async t=>{ const c=t.dataset.c; if(!c) return;
+  batchCatApply:async t=>{ const c=t.dataset.c; if(!c||!ntBatchVisible()) return;
     if(!pickSet.size) return toast('请先勾选要改分类的记录');
     try{
       const r=await API.setCategory([...pickSet],c);
@@ -711,7 +716,7 @@ const ACT={
     pjAct(()=>API.pjUpdate(p.id,{disp:v}),
       `展示名已改为 <b>${esc(v)}</b>（只影响显示，不影响项目归属；该字段不留痕）`); },
  /* ⭐ 已接后端：`POST /api/m03/actions/exclude`（标记来源 `manual` 由后端定） */
- batchEx:async ()=>{ if(!pickSet.size) return toast('请先勾选要剔除的记录');
+ batchEx:async ()=>{ if(!ntBatchVisible()) return; if(!pickSet.size) return toast('请先勾选要剔除的记录');
    try{
      const r=await API.exclude([...pickSet]);
      if(!r.ok) return toast(`⚠️ 剔除失败：${esc(r.message)}`);
@@ -727,7 +732,7 @@ const ACT={
       只报一个数会让用户以为"点了没反应"（勾了一堆规则剔除的行时，n 必然是 0）。 */
  /* ⭐ 已接后端：`POST /api/m03/actions/restore` —— 「只恢复人工剔除、规则命中不恢复」由后端保（§4.2.2），
     ⚠️ 三档分母（勾选 / 可恢复 / 规则命中）也已由后端的回执分开报，前端不再自己拼。 */
- batchUnEx:async ()=>{ if(!pickSet.size) return toast('请先勾选要恢复的剔除行 —— 「恢复剔除」<b>只对勾选行生效</b><br><span class="mut sm">（不能一键把所有被剔除的行都放回来）</span>',5200);
+ batchUnEx:async ()=>{ if(!ntBatchVisible()) return; if(!pickSet.size) return toast('请先勾选要恢复的剔除行 —— 「恢复剔除」<b>只对勾选行生效</b><br><span class="mut sm">（不能一键把所有被剔除的行都放回来）</span>',5200);
    try{
      const r=await API.restore([...pickSet]);
      if(!r.ok) return toast(`⚠️ 恢复失败：${esc(r.message)}`);
@@ -2439,7 +2444,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  },
  ntSearch:t=>{
    const start=t.selectionStart, end=t.selectionEnd;
-   fNt.q=t.value; prunePick(); render();
+   fNt.q=t.value; render();
    const input=document.querySelector('#ntSearch');
    if(input){ input.focus(); if(start!=null) input.setSelectionRange(start,end); }
  },

@@ -38,7 +38,7 @@ let VIEW='home';
    ⚠️ 后两者**必须分开**：不然取数失败会被写成"你没登录"（那是**假话**，而用户会照着去登录、白折腾）。
    ⚠️ 由 `core.js` 的 `applyWho` 赋值（那附近有注释）。 */
 let WHO_STATE='';
-function go(k){ if(VIEW==='m03') pickSet.clear(); VIEW=k;
+function go(k){ if(VIEW==='m03'&&k!=='m03') pickSet.clear(); VIEW=k;
   /* ⭐ 批次 6（页级四态）：**进页先宣告"这几路要拉"** ⇒ 第一帧就是「正在读取…」，
      而不是先画一张空表（那和"确实没有数据"长得一样，守则 §4.2 明禁）。 */
   markPending(PAGE_LOAD[k]||[]);
@@ -94,6 +94,7 @@ function render(){
     return;
   }
   /* 视图 HTML 先生成、再统一应用表头排序，最后写入页面（排序是纯字符串变换，见 applySorts） */
+  if(VIEW==='m03') reconcilePick();
   const html=applySorts((V[VIEW]||(()=>'<div class="tip">未实现</div>'))(),VIEW);
   /* ⭐⭐ 滚动位置保留（2026-09-21 报障 m03 勾选跳顶 · **2026-09-25 修对容器**）：
      `pick`（actions.js）这类**本页内刷新**走 `render()`，innerHTML 一换 ⇒ 承接滚动的那个元素

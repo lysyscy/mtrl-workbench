@@ -212,6 +212,7 @@ async function reloadNotices() {
      （已删除 / 被筛掉）一律作废，其余保留（供应商那四条路都经由这里，草稿才不会被冲掉）。
      ⚠️ 保留 / 作废的规则主人是 `base.js::payOvEntry`，这里只是它的批量出口。 */
   reconcilePayOv();
+  prunePick();   /* 按最新业务范围对账；搜索不参与裁剪。 */
   render();
 }
 
@@ -1290,7 +1291,8 @@ addBind('m03', function () {
   anchor.dataset.m03More = '1';
   const box = document.createElement('span');
   box.className = 'sp';
-  box.innerHTML = `<button class="btn" data-act="ntPdf" title="与批量打印同一次勾选，只换成「只产出 PDF」">只导出 PDF</button>
+  const hidden=ntHiddenPickCount();
+  box.innerHTML = `<button class="btn" data-act="ntPdf" ${hidden?'disabled':''} title="${hidden?'当前列表外还有已勾选记录，请先清空搜索核对':'与批量打印同一次勾选，只换成「只产出 PDF」'}">只导出 PDF</button>
     <button class="btn gost" data-act="m03PrinterOpen" title="打印机地址（保存后即时生效、无需重启）">打印机设置</button>`;
   anchor.insertAdjacentElement('afterend', box);
 });

@@ -14,7 +14,19 @@ addBind('m03', ()=>{ const box=$('#pickAllBox'); if(!box) return;
      却永远勾不上 ⇒ 全选框会永久卡在"半选"态（勾满了还是个半选框）。 */
   const vis=ntHit(fNt).filter(ntSelectable).map(n=>n.id), hit=vis.filter(i=>pickSet.has(i)).length;
   box.checked = vis.length>0 && hit===vis.length;
-  box.indeterminate = hit>0 && hit<vis.length; });
+  box.indeterminate = hit>0 && hit<vis.length;
+  const hidden=ntHiddenPickCount(), bar=$('#view .selbar');
+  if(!bar) return;
+  /* 新增核对入口随内容换行，窄屏不能把付款按钮挤出可见区域。 */
+  bar.style.flexWrap='wrap'; bar.style.rowGap='calc(6px * var(--fscale))';
+  bar.style.paddingTop=bar.style.paddingBottom='calc(6px * var(--fscale))';
+  const acts=$('.act',bar); acts.style.flexWrap='wrap'; acts.style.maxWidth='100%';
+  if(hidden) $('.m',bar).insertAdjacentHTML('beforeend',` <span class="tag t-wn">当前列表外 ${hidden} 条</span>`);
+  if(pickSet.size) $('.act',bar).insertAdjacentHTML('afterbegin',
+    `${hidden?`<span class="sm mut">付款窗口含全部已选行</span><button class="btn" data-act="pickSearchClear">清空搜索核对</button>`:''}<button class="btn" data-act="pickClear">清空勾选</button>`);
+  if(hidden) ['batchCatApply','batchEx','batchUnEx','ntPrint'].forEach(act=>{
+    $$(`[data-act="${act}"]`).forEach(t=>{t.disabled=true;t.title='当前列表外还有已勾选记录，请先清空搜索核对';});
+  }); });
 
 /* =====================================================================
    5. MOD-04 付款计划

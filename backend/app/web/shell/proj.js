@@ -56,8 +56,19 @@ const ntSearchMatch=(n,q)=>{
     supHas(n)?'自动匹配 待确认':'',j?'已关联 '+j.id:'关联集采合同',n.over?'超付':'']
     .some(v=>norm(v).includes(needle));
 };
-/* 筛选变化后清理「已勾选」里不可见的行，避免出现选不中/看不见却被计入的幽灵勾选 */
-const prunePick=()=>{ const vis=new Set(ntHit(fNt).map(n=>n.id)); [...pickSet].forEach(i=>{ if(!vis.has(i)) pickSet.delete(i); }); };
+/* 搜索只改变展示；项目 / 年月 / 分类等业务范围变化仍按原约定裁剪选择。 */
+const prunePick=()=>{ const scope=new Set(ntHit({...fNt,q:''}).filter(ntSelectable).map(n=>n.id));
+  [...pickSet].forEach(i=>{ if(!scope.has(i)) pickSet.delete(i); }); };
+/* 全量列表重拉 / 普通重绘只清实际删除或不可勾选项，不能按当前搜索结果清选择。 */
+const reconcilePick=()=>{ const valid=new Set(NO.filter(ntSelectable).map(n=>n.id));
+  [...pickSet].forEach(i=>{ if(!valid.has(i)) pickSet.delete(i); }); };
+const ntHiddenPickCount=()=>{ const vis=new Set(ntHit(fNt).map(n=>n.id));
+  return [...pickSet].filter(i=>!vis.has(i)).length; };
+/* 付款有逐行核对弹窗；直接批量动作须先看清搜索隐藏的选择，避免只看见一行却改整批。 */
+const ntBatchVisible=()=>{ reconcilePick(); const hidden=ntHiddenPickCount();
+  if(!hidden) return true;
+  toast(`已勾选中有 ${hidden} 条在当前列表外，请先清空搜索、核对勾选后再执行`,5200);
+  return false; };
 
 /* ---------- 手动新增 / 编辑付款通知书（2026-09-12 用户口径）----------
    场景：付「期初占位行」的款 —— 系统上线前那笔欠款**没有 i8 单据**，只能手工补一行通知书。
