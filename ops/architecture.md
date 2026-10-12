@@ -23,6 +23,10 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 
 以下为工程实现的约束与查阅入口；表内《说明书》节号指仓内 `delivery/`，完整清单见 ops/delivery-surface.md。
 
+### 查询文本读取
+
+共用纯读取落点为 `backend/app/core/query.py`；调用者及等价验证见 `backend/tests/test_report_query.py`。字段、默认值与合法性仍回各业务包及交付面主人；月份入口未改，调查与暂缓证据见TAIL-302票Comments。
+
 ### 金额
 
 | 要点 | 依据 |

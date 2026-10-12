@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
+from app.core.query import flatten_query
 from app.core.db import session_scope
 from app.mod11_jc import domain as D
 from app.mod11_jc import fetch_service as FS
@@ -22,15 +23,6 @@ from app.mod11_jc import repository as R
 from app.mod11_jc import service as SV
 
 router = APIRouter(tags=["mod11"])
-
-
-def query_params(request: Request) -> dict:
-    """查询参数 → 扁平 dict（同名单值给 `str`、多值给 `list`）—— 同 `mod09_fee/api.py` 的口径。"""
-    out: dict = {}
-    for key in request.query_params.keys():
-        vals = request.query_params.getlist(key)
-        out[key] = vals if len(vals) > 1 else (vals[0] if vals else "")
-    return out
 
 
 def _s(x) -> object:
@@ -61,7 +53,7 @@ def api_list(request: Request) -> dict:
     ⚠️ **不给任何筛选 = 全量**（判据「复位后回到全量」）；`project` 参数 = **仓库名**（§2.7.4）。
     """
     with session_scope() as s:
-        p = query_params(request)
+        p = flatten_query(request.query_params)
         data = SV.build_list(
             s,
             tags=_tags(p.get("tag")),

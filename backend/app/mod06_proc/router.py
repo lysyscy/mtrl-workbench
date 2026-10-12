@@ -25,14 +25,14 @@ from app.mod06_proc import mech_ui, repository as repo
 from app.mod06_proc.service import build_page_data, parse_state
 # ⚠️ 2026-09-18（`§19` 批 2）：`app.mod06_proc.view`（`render_proc_page`/`render_export_preview`）
 #    的导入已随"过程资料页半边"删除 —— ⛔ 别再加回来（那两个渲染件已整体删除）。
-from app.mod08_inv.router import query_params
+from app.core.query import flatten_query
 
 router = APIRouter(tags=["mod06"])
 
 MESSAGE_KINDS = ("ok", "wn", "err")
 
 
-# ⚠️ `MESSAGE_KINDS` 与 `_one` 现在只剩「历史导入」那几个 PRG 在用（过程资料页半边已删）。
+# 导出入口沿用旧的假值折叠规则；筛选状态的 query_one 保留 0，两者不混用。
 def _one(params: dict, name: str, default: str = "") -> str:
     value = params.get(name, default)
     if isinstance(value, (list, tuple)):
@@ -66,7 +66,7 @@ def api_proc_export(request: Request):
     from app import export_registry as EXP
     EX = EXP.get("service")
 
-    params = query_params(request)
+    params = flatten_query(request.query_params)
     keys = [k.strip() for k in str(_one(params, "projects") or "").split(",") if k.strip()]
     try:
         with session_scope() as s:

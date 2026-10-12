@@ -30,15 +30,6 @@ from app.mod08_inv.repository import (
 router = APIRouter(tags=["mod08"])
 
 
-def query_params(request: Request) -> dict:
-    """查询参数 → 扁平 dict（同名单值给 `str`、多值给 `list`；`service.parse_state` 两者都吃）。"""
-    out: dict = {}
-    for key in request.query_params.keys():
-        vals = request.query_params.getlist(key)
-        out[key] = vals if len(vals) > 1 else (vals[0] if vals else "")
-    return out
-
-
 # ⚠️ 2026-09-19（`TAIL-27` · `§19` **批 2**）：**本模块的「明细总表页」半边已删**（授权 `D18`）——
 #    `inv_page`（`GET /m08`）· `inv_fetch`（PRG `POST /m08/fetch`）· `fetch_dialog`（`GET /m08/fetch-dialog`）·
 #    `adjust_page` / `adjust_save`（`/m08/adjust/{row_id}`）＋ `_safe_back` ＋ `view.py`（327 行）。

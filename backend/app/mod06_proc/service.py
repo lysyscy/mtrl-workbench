@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.query import query_one
+
 from app.mod06_proc import domain as D
 from app.mod06_proc.repository import (
     load_batches,
@@ -51,7 +53,7 @@ def load_cutoff(session, **kw):
 
 
 def _many(p: dict, name: str) -> list[str]:
-    """同名多值参数 → 去空去重的 `list`（`query_params` 对多值给 `list`、单值给 `str`）。"""
+    """同名多值参数 → 去空去重的 `list`（`flatten_query` 对多值给 `list`、单值给 `str`）。"""
     v = p.get(name, [])
     vals = list(v) if isinstance(v, (list, tuple)) else [v]
     out: list[str] = []
@@ -70,24 +72,15 @@ def parse_state(params: dict | None = None) -> dict:
     """
     p = params or {}
 
-    def one(name: str, default: str = "") -> str:
-        v = p.get(name, default)
-        if isinstance(v, (list, tuple)):
-            v = v[0] if v else ""
-        if v is None:
-            v = ""
-        # ⚠️ 不能写 `v or ""` —— 会把 **0 / 整型的表签** 当成空串（`tab=0` 会静默变默认表）
-        return str(v).strip()
-
-    expset = one("expset")
+    expset = query_one(p, "expset")
     exp_pjs = _many(p, "exppj")
     return {
-        "warehouse": one("pj"),
-        "tab": D.tab_of(one("tab")),
-        "exp_open": one("expopen") != "",
+        "warehouse": query_one(p, "pj"),
+        "tab": D.tab_of(query_one(p, "tab")),
+        "exp_open": query_one(p, "expopen") != "",
         "exp_set": expset,
         "exp_selected": exp_pjs,
-        "exp_touched": one("expopen") != "" or expset != "" or bool(exp_pjs),
+        "exp_touched": query_one(p, "expopen") != "" or expset != "" or bool(exp_pjs),
     }
 
 

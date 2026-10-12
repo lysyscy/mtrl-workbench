@@ -18,6 +18,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from app.core.query import flatten_query
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
@@ -31,15 +32,6 @@ from app.mod07_setl.domain import AMOUNT_KEYS, ROWCOUNT_KEY, WAREHOUSE_KEY, defa
 from app.mod07_setl.repository import load_balances, load_rows
 
 router = APIRouter(tags=["mod07"])
-
-
-def query_params(request: Request) -> dict:
-    """查询参数 → 扁平 dict（同名单值给 `str`、多值给 `list`；`parse_state` 两者都吃）。"""
-    out: dict = {}
-    for key in request.query_params.keys():
-        vals = request.query_params.getlist(key)
-        out[key] = vals if len(vals) > 1 else (vals[0] if vals else "")
-    return out
 
 
 def _s(x) -> object:
@@ -81,7 +73,7 @@ def api_settlement(request: Request) -> dict:
       筛选 / 排序 / 合计逻辑**一行不改**（`D18`）。
     - `balance_ok` = 逐仓对平判定的汇总（口径 = §9.1 **容差 0**，判定在域内核，前端只显示）。
     """
-    st = S.parse_state(query_params(request))
+    st = S.parse_state(flatten_query(request.query_params))
     with session_scope() as s:
         data = S.build_page_data(s, st)
     rows = [
@@ -179,7 +171,7 @@ def api_big(request: Request) -> dict:
       ⭐ `A5`（2026-09-29 逐页）：这条此前是**死代码**（全仓没人调用），而壳那边 `rows` 为 0 时
       只 `return ''` ⇒ 用户看到的是一张**只剩三级表头的大空表**（且当天正值"空态"这条主线）。
     """
-    st = BS.parse_state(query_params(request))
+    st = BS.parse_state(flatten_query(request.query_params))
     with session_scope() as s:
         data = BS.build_big_data(s, st)
         manual = load_manual(s)
@@ -365,7 +357,7 @@ def api_export_extract(request: Request):
     from app import export_registry as EXP
     EX = EXP.get("service")
 
-    q = query_params(request)
+    q = flatten_query(request.query_params)
     period = q.get("period")
     if isinstance(period, list):
         period = period[0] if period else ""

@@ -10,20 +10,12 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.query import query_one
+
 from app.mod01_projects import domain as PJ, service as PS
 from app.mod01_projects.models import Project
 from app.mod09_fee import domain as D
 from app.mod09_fee import repository as R
-
-
-def _one(params: dict, name: str, default: str = "") -> str:
-    v = (params or {}).get(name, default)
-    if isinstance(v, (list, tuple)):
-        v = v[0] if v else ""
-    if v is None:
-        v = ""
-    # ⚠️ 不能写 `v or ""` —— 会把 0 / 整型标签当成空串（`mod06` / `mod08` 同族坑）
-    return str(v).strip()
 
 
 def parse_state(params: dict | None = None) -> dict:
@@ -32,7 +24,7 @@ def parse_state(params: dict | None = None) -> dict:
     ⚠️ 认不出 / 没给年月 ⇒ 回落**默认年月**（材料报表类 = 上月，§9.2）；**不猜、不报错**（只是默认值）。
     """
     p = params or {}
-    return {"ym": D.parse_ym(_one(p, "ym")) or D.default_ym(), "project": _one(p, "pj")}
+    return {"ym": D.parse_ym(query_one(p, "ym")) or D.default_ym(), "project": query_one(p, "pj")}
 
 
 def candidates(s: Session) -> list:

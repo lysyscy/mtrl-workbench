@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.query import query_one
+
 from app.core.period import default_period
 from app.mod08_inv import domain as D
 
@@ -35,15 +37,6 @@ def parse_state(params: dict | None = None) -> dict:
     """把扁平查询参数解析成**筛选状态**（视图与路由共用同一个出口，不在各处各解一遍）。"""
     p = params or {}
 
-    def one(name: str, default: str = "") -> str:
-        v = p.get(name, default)
-        if isinstance(v, (list, tuple)):
-            v = v[0] if v else ""
-        if v is None:
-            v = ""
-        # ⚠️ 不能写 `v or ""` —— 会把 **0** 当成空串（同族坑见 `mod06_proc/service.py`）
-        return str(v).strip()
-
     def many(name: str) -> tuple[str, ...]:
         v = p.get(name, ())
         if isinstance(v, str):
@@ -53,10 +46,10 @@ def parse_state(params: dict | None = None) -> dict:
     col_filters: dict[str, dict] = {}
     for key in D.filterable_keys():
         f: dict = {}
-        q = one(f"f_{key}")
+        q = query_one(p, f"f_{key}")
         if q:
             f["q"] = q
-        lo, hi = one(f"f_{key}_min"), one(f"f_{key}_max")
+        lo, hi = query_one(p, f"f_{key}_min"), query_one(p, f"f_{key}_max")
         if lo:
             f["min"] = lo
         if hi:
@@ -68,10 +61,10 @@ def parse_state(params: dict | None = None) -> dict:
             col_filters[key] = f
 
     return {
-        "period": one("period") or default_period(DEFAULT_TABLE),
+        "period": query_one(p, "period") or default_period(DEFAULT_TABLE),
         "projects": many("pj"),
-        "direction": one("dir") or D.DIRECTION_ALL,
-        "only_adjusted": one("only_adj") == "1",
+        "direction": query_one(p, "dir") or D.DIRECTION_ALL,
+        "only_adjusted": query_one(p, "only_adj") == "1",
         "col_filters": col_filters,
     }
 

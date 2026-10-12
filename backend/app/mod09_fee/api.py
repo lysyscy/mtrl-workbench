@@ -26,6 +26,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from app.core.query import flatten_query
 from app.core.db import session_scope
 from app.mod09_fee import domain as D
 from app.mod09_fee import service as SV
@@ -34,15 +35,6 @@ router = APIRouter(tags=["mod09"])
 
 
 # ============================================================ 读
-
-
-def query_params(request: Request) -> dict:
-    """查询参数 → 扁平 dict（同名单值给 `str`、多值给 `list`；`parse_state` 两者都吃）。"""
-    out: dict = {}
-    for key in request.query_params.keys():
-        vals = request.query_params.getlist(key)
-        out[key] = vals if len(vals) > 1 else (vals[0] if vals else "")
-    return out
 
 
 def _s(x) -> object:
@@ -97,7 +89,7 @@ def api_fee(request: Request) -> dict:
        ⇒ 接线后这一处与口径一致，**且是真数据**（原先壳里按单据日期算，属静默偏差）。
     """
     with session_scope() as s:
-        p = query_params(request)
+        p = flatten_query(request.query_params)
         return _payload(s, ym=str(p.get("ym") or ""), pj=str(p.get("pj") or ""))
 
 

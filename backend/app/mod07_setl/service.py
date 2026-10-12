@@ -11,20 +11,12 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.query import query_one
+
 from app.mod07_setl import domain as D
 from app.mod07_setl import extract as X
 from app.mod07_setl import inventory_extract as I
 from app.mod07_setl.repository import load_balances, load_rows, save_balance
-
-
-def _one(p: dict, name: str, default: str = "") -> str:
-    v = p.get(name, default)
-    if isinstance(v, (list, tuple)):
-        v = v[0] if v else ""
-    if v is None:
-        v = ""
-    # ⚠️ 不能写 `v or ""` —— 会把 0 当空串（同族坑见 `mod08_inv/service.py`）
-    return str(v).strip()
 
 
 def parse_state(params: dict | None = None) -> dict:
@@ -33,7 +25,7 @@ def parse_state(params: dict | None = None) -> dict:
     ⚠️ 不给月份时用**本表默认年月**（上月）；「重置」= 回到不带参数的 `/m07`。
     """
     p = params or {}
-    period = _one(p, "period")
+    period = query_one(p, "period")
     return {"period": period or D.default_month(), "explicit": bool(period)}
 
 
@@ -75,11 +67,11 @@ def parse_extract_state(params: dict | None = None) -> dict:
       原模板保留旧期间兼容，新增年度网格使用默认年。
     """
     p = params or {}
-    status = _one(p, "status") or X.STATUS_DEFAULT
+    status = query_one(p, "status") or X.STATUS_DEFAULT
     if status not in X.STATUS_OPTIONS:
         status = X.STATUS_DEFAULT                                   # 认不出的取值 ⇒ 回落默认，不臆造
-    period = _one(p, "ext_period") if "ext_period" in p else D.default_month()[:4]
-    return {"status": status, "period": period, "explicit": bool(_one(p, "status"))}
+    period = query_one(p, "ext_period") if "ext_period" in p else D.default_month()[:4]
+    return {"status": status, "period": period, "explicit": bool(query_one(p, "status"))}
 
 
 def _project_context(s: Session) -> tuple[dict[str, str], list[str]]:
