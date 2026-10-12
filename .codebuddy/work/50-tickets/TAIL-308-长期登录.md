@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** claimed
+**Status:** done
 
 - [x] 有效账号票跨12小时和长时间仍可验证。
 - [x] 篡改、换密钥、旧三段票与错误结构仍拒绝。
@@ -32,3 +32,15 @@
 **2026-10-12 · 提交检查与边界。** 使用项目自带ops/install_hooks.ps1在本clone安装原版pre-commit，不改Git配置。clone无backend/.venv，因此实际钩子会提示跳过，不能声称钩子全绿。另用源仓已有解释器逐项显式运行钩子6项：syntax_audit --staged、audit_work、mut_cover --check、bytes_guard --staged通过（rc=0）；doc_audit与audit_meta未通过（rc=1）。检查所需本clone基线路径以不含凭据的临时.env提供并在finally删除；变异台账由原生成器生成到忽略的artifacts，未暂存。
 
 doc_audit报告12条红：7条缺本机产物/venv配置/服务工具/历史截图的T3、2条缺忽略目录的T25、2条缺完整acc_results.json而无法复用四态的T4、1条本票按交接未入公共索引的T6；audit_meta仅此T6一条红。未伪造完整四态、复制源仓产物或修改禁止更动的公共索引；上述审计由集成环境完成。完整回执为artifacts/tail308-precommit-results.json及对应txt；现有26项业务隔离回归、9/9反向与浏览器验证仍有效，产品代码及测试未再变化。
+
+**2026-10-12 · 主目录本地整合与单次最终组合核验。** 用户已授权本地整合，不推送部署。源clone干净、分支codex/long-login、7文件提交f4365f63e8cad7276d28248f7e131b550e11ca3b及父f6e13b0已核验。先精确提交B1十件为a5be5d7（真实pre-commit六项全绿），再无冲突cherry-pick -x为551174a8f96c7c3a91b31f12db650ea8ad2b8bf6；源产品代码及六个非票文件逐项一致。旧长期登录四草稿已完整ZIP/哈希归档并精准移出，Git状态无草稿；临时恢复脚本会拒绝覆盖最终实现。归档和核验回执仍在scratch，未删除。
+
+最终命令：`backend/.venv/Scripts/python.exe -B -X utf8 .codebuddy/work/00-scratch/tmp-20261012-b1-308-combined.py`。原B1的110件完整包含，加登录/身份实际影响选集共130件；单次pytest **1032通过、0失败、0错误、0跳过**，pytest输出108.02s，含启动进程回执111.386s，rc=0。测试HEAD=551174a8f96c7c3a91b31f12db650ea8ad2b8bf6；正式app/tests与临时副本逐文件SHA256一致，运行前后两端未变，没有还原/替换登录源码。完整输出、JUnit、命令/选集/输入哈希及相对f6e13b0的diff在`artifacts/b1-tail308-combined/run2/pytest-output.txt`、`artifacts/b1-tail308-combined/run2/junit.xml`、`artifacts/b1-tail308-combined/run2/result.json`与同目录input-snapshot.json/input-diff.patch。
+
+首轮1027通过/5失败（146.89s）的日志与JUnit保留在`artifacts/b1-tail308-combined/`，5项分别为假i8测试缺假服务地址和副本缺.gitignore；仅补隔离环境后完整重跑130件，未改产品代码或削弱断言，不用补验算术累计充作最终通过。假密钥/账号/i8配置，临时.env只有假开发库地址；实际DB限定127.0.0.1:5432/mtrl_workbench_test，B1回滚用例外层事务/SAVEPOINT整体回滚。所有本任务DB回归串行，通知书线为独立假数据；无生产库、真实凭据、真实i8或运行中服务操作。
+
+最终输入反向：B1 8/8、会话唯一身份7/7、长期登录9/9均正常放行/明确断言造红/复原放行，正式源码字节未变。完整输出与耗时见`artifacts/b1-tail308-combined/integration-mutations.json`及两个txt；长期登录新跑回执为`artifacts/tail308-mutation-results.json`。浏览器`artifacts/tail308-browser-results.json`是保全的源clone既有回执（SHA256=7141d2d16c312c8d063d0cf9e3e4501efa777bb3fef8060acc4a4e65401dfc51），400天及退出清理已在源clone验证；整合对应代码完全一致，未冒称本轮重新跑浏览器。
+
+主目录初审doc_audit红3（两份源回执不存在及308未入公共索引）、audit_meta红1（索引）、mut_cover失配；逐项重跑/保全回执、用_tail_open隔离副本干跑/应用/T6核验后转入索引，保留源票历史，登记新反向脚本并重生成131件覆盖台账；主目录doc_audit已必须修0。源clone的12红属于其环境历史，本轮没有豁免或伪造四态。销号与文档回写后适用终检全输出见`artifacts/b1-tail308-combined/final-checks.json`；本地治理提交后最终SHA、代码输入不变与完整最终diff绑定见同目录final-commit-binding.json。
+
+本轮不部署、重启服务或推送；当前运行服务尚未应用这两项代码。只完成所选回归，不刷新完整权威四态；TAIL-284/287及D共享workbook机制未动。浏览器保存400天上限及主动清理仍可能要求重登，旧cookie原保存期限不变，需重新登录取得新cookie。历史原独立clone阶段的“不访问数据库/未提交”记录仅描述当时阶段，当前以本次组合记录与Git链为准。
