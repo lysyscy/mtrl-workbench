@@ -115,7 +115,7 @@ def matrix(adjusted: bool) -> list[dict]:
 
 @pytest.fixture(autouse=True)
 def _export_root(tmp_path, monkeypatch):
-    """把落盘根改到 `tmp_path`（⛔ 不往工程的 `artifacts/` 里写）＋ 桩掉 m06 的两处取数。"""
+    """把落盘根改到tmp_path，并替换m06来源与批量cutoff读取；成品断言不变。"""
     from app.mod06_proc import repository as R
     from app.mod06_proc import service as M6
 
@@ -124,6 +124,7 @@ def _export_root(tmp_path, monkeypatch):
     monkeypatch.setattr(R, "load_mech", lambda s: manual_rows())
     monkeypatch.setattr(R, "load_history", lambda s=None: [])
     monkeypatch.setattr(R, "load_cutoff", lambda s, warehouse="": "")
+    monkeypatch.setattr(R, "load_cutoffs", lambda s: {})
     monkeypatch.setattr(M6, "displays_by_key", lambda s: {WH: DISP})
 
 

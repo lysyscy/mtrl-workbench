@@ -112,7 +112,8 @@ def body_spec(rows: list[dict]) -> dict:
         data.append((i, cells))
 
     totals = D.column_totals(list(rows or ()))
-    sub = {COL_OF_KEY[k]: totals[k] for k in D.DATA_KEYS if totals.get(k) is not None}
+    # 尾块空列也须显式清掉模板公式；空串是现有引擎的留空约定，不能把None改成0。
+    sub = {COL_OF_KEY[k]: totals[k] if totals[k] is not None else "" for k in D.DATA_KEYS}
     segments = D.segment_totals(list(rows or ()))
     total = {anchor: seg["total"] for anchor, seg in zip(TOTAL_ANCHORS, segments)}
     # ⚠️ 尾块的**标签写在 B 列**（`小计` / `合计：`），⛔ **不是**引擎的 `label`（那会落到 A 列）——

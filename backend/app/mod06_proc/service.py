@@ -12,7 +12,6 @@ from app.core.query import query_one
 from app.mod06_proc import domain as D
 from app.mod06_proc.repository import (
     load_batches,
-    load_cutoffs,
     load_mechanical_cutoffs,
 )
 
@@ -52,6 +51,13 @@ def load_cutoff(session, **kw):
     return R.load_cutoff(session, **kw)
 
 
+def load_cutoffs(session):
+    """包间与页面共用：一次读取全部项目的材料截止月，保留repository可替换性。"""
+    from app.mod06_proc import repository as R
+
+    return R.load_cutoffs(session)
+
+
 def _many(p: dict, name: str) -> list[str]:
     """同名多值参数 → 去空去重的 `list`（`flatten_query` 对多值给 `list`、单值给 `str`）。"""
     v = p.get(name, [])
@@ -85,7 +91,7 @@ def parse_state(params: dict | None = None) -> dict:
 
 
 def projects_of(inv_rows: list[dict], history_rows: list[dict]) -> list[str]:
-    """**过程资料页**的候选项目 = 库存单据里出现过的仓库名 ∪ 只有历史段快照的仓库名
+    """报表候选 = 库存仓库名 ∪ 传入的有效历史材料或机械行的仓库名
     （**项目键 = 仓库名**，§2.7.4）。
 
     ⚠️ 与**导入页**的候选**刻意不同**（2026-09-27 用户裁定 · `TAIL-114`）：
@@ -156,23 +162,35 @@ def build_import_data(s: Session, *, warehouse: str = "") -> dict:
     }
 
 
+def _load_report_data(s: Session) -> dict:
+    """一次读取有效来源与材料截止月；导入候选和机械导入截止不参与报表资格。"""
+    inv, manual, history = load_inv_rows(s), load_mech(s), load_history(s)
+    return {"inv": inv, "manual": manual, "history": history,
+            "projects": projects_of(inv, history + manual), "cutoffs": load_cutoffs(s)}
+
+
+def _matrix_for(data: dict, warehouse: str) -> dict:
+    """同一来源快照组装一个仓库的原始/调整矩阵与汇总，金额规则仍归domain。"""
+    cutoff = data["cutoffs"].get(warehouse) or ""
+    tables = {name: D.build_matrix(inv_rows=data["inv"], manual_rows=data["manual"],
+                                   history_rows=data["history"], warehouse=warehouse,
+                                   adjusted=adjusted, cutoff_ym=cutoff)
+              for name, adjusted in (("raw", False), ("adjusted", True))}
+    return {**tables, "cutoff_ym": cutoff,
+            "totals": {name: D.column_totals(rows) for name, rows in tables.items()},
+            "segments": {name: D.segment_totals(rows) for name, rows in tables.items()}}
+
+
 def build_page_data(s: Session, state: dict | None = None) -> dict:
     st = dict(state or parse_state())
-    inv_rows = load_inv_rows(s)
-    mech_rows = load_mech(s)
-    history_rows = load_history(s)                     # 历史段快照（只取未回滚批次）
-
-    # 候选项目 = **库存单据里出现过的仓库名** ＋ **只有历史段的项目**（照原型；项目键 = 仓库名，§2.7.4）
-    projects = projects_of(inv_rows, history_rows + mech_rows)
+    data = _load_report_data(s)
+    projects = data["projects"]
     warehouse = st["warehouse"] if st["warehouse"] in projects else (projects[0] if projects else "")
-
-    cutoff = load_cutoff(s, warehouse=warehouse)       # 分界 = 截止核算月（§5.2.5 ①）
-    raw = D.build_matrix(inv_rows=inv_rows, manual_rows=mech_rows, history_rows=history_rows,
-                         warehouse=warehouse, adjusted=False, cutoff_ym=cutoff)
-    adjusted = D.build_matrix(inv_rows=inv_rows, manual_rows=mech_rows, history_rows=history_rows,
-                              warehouse=warehouse, adjusted=True, cutoff_ym=cutoff)
-    diffs = D.diff_rows(inv_rows, warehouse=warehouse)
+    matrix = _matrix_for(data, warehouse)
+    raw, adjusted = matrix["raw"], matrix["adjusted"]
+    diffs = D.diff_rows(data["inv"], warehouse=warehouse)
     rows = adjusted if st["tab"] == D.TAB_ADJUSTED else raw
+    table_name = "adjusted" if st["tab"] == D.TAB_ADJUSTED else "raw"
     return {
         "state": {**st, "warehouse": warehouse},
         "projects": projects,
@@ -180,36 +198,28 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
         "rows_raw": raw,
         "rows_adjusted": adjusted,
         "rows": raw if st["tab"] == D.TAB_RAW else (None if st["tab"] == D.TAB_DIFF else adjusted),
-        "totals": D.column_totals(rows) if st["tab"] in (D.TAB_RAW, D.TAB_ADJUSTED) else {},
-        "segments": D.segment_totals(rows) if st["tab"] in (D.TAB_RAW, D.TAB_ADJUSTED) else (),
+        "totals": matrix["totals"][table_name] if st["tab"] in (D.TAB_RAW, D.TAB_ADJUSTED) else {},
+        "segments": matrix["segments"][table_name] if st["tab"] in (D.TAB_RAW, D.TAB_ADJUSTED) else (),
         "grand_total": D.grand_total(rows) if st["tab"] in (D.TAB_RAW, D.TAB_ADJUSTED) else None,
         "diffs": diffs,
         "diff_totals": D.diff_totals(diffs),
         # 分段（§5.2.5）：截止核算月 ＋ ⛔ 历史段**不提供行内编辑入口**（要改只能再导一次）
-        "cutoff_ym": cutoff,
+        "cutoff_ym": matrix["cutoff_ym"],
         "history_batches": load_batches(s),
         # 机械手录：**已手录的月份**（录入口要显示「录过哪几个月」，2026-09-17）
-        "mech_months": sorted(D.mech_by_month(mech_rows, warehouse=warehouse)),
+        "mech_months": sorted(D.mech_by_month(data["manual"], warehouse=warehouse)),
         "can_edit_history": False,
         "export": _export_data(st, projects=projects, warehouse=warehouse,
                                displays=displays_by_key(s)),
     }
 
 
-def build_matrices(s: Session) -> dict:
-    """壳与成品导出共用领域矩阵：所有有库存或有效历史的项目。"""
-    inv, manual, history = load_inv_rows(s), load_mech(s), load_history(s)
-    projects = projects_of(inv, history + manual)
-    cutoffs = load_cutoffs(s)
-    matrices = {}
-    for warehouse in projects:
-        tables = {name: D.build_matrix(inv_rows=inv, manual_rows=manual, history_rows=history,
-                                       warehouse=warehouse, adjusted=adjusted,
-                                       cutoff_ym=cutoffs.get(warehouse) or "")
-                  for name, adjusted in (("raw", False), ("adjusted", True))}
-        matrices[warehouse] = {**tables, "cutoff_ym": cutoffs.get(warehouse) or "",
-                               "totals": {name: D.column_totals(rows) for name, rows in tables.items()},
-                               "segments": {name: D.segment_totals(rows) for name, rows in tables.items()}}
+def build_matrices(s: Session, *, warehouses=None) -> dict:
+    """壳与导出共用有效报表矩阵；可只组装所选仓库，候选仍为完整有数据项目。"""
+    data = _load_report_data(s)
+    projects = data["projects"]
+    selected = projects if warehouses is None else [key for key in dict.fromkeys(warehouses) if key in projects]
+    matrices = {warehouse: _matrix_for(data, warehouse) for warehouse in selected}
     return {"projects": projects, "matrices": matrices}
 
 
@@ -260,5 +270,5 @@ def save_mech_match_rule(session, **kwargs):
     return mech_matching.save_rule(session, **kwargs)
 
 
-__all__ = ["parse_state", "build_page_data", "build_import_data", "projects_of", "displays_by_key",
+__all__ = ["parse_state", "build_page_data", "build_matrices", "build_import_data", "projects_of", "displays_by_key",
            "mech_match_rules", "save_mech_match_rule"]

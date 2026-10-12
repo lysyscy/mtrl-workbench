@@ -172,7 +172,7 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
       —— 用户 **2026-09-18 裁定**：「差异表和汇总表的**形态完全相同**，就是数据不一样，
       最多是导出的文件名不一样」⇒ 三张表**共用同一张模板 / 同一套列映射与尾块**，
       只在**取数**（`domain.difference_rows`）与**文件名**上不同。
-    - 每个项目各自的**截止核算月**（分界 = 截止核算月，§5.2.5）—— ⛔ 不共用一个。
+    - 来源、候选和矩阵由MOD06组装；截止只保留现有展示分组，不遮挡已存金额（§5.2.5）。
     - ⭐ **标题与文件名一律用「展示名」**（用户 2026-09-18 裁）：取不到（该项目还没建档）⇒ **拒做**
       （⛔ 不拿仓库名冒充展示名）；页面清单预览同源（`mod06_proc.service.displays_by_key`）。
     - 文件名 / zip 名**唯一出口** = `mod06_proc.domain.export_file_name` / `export_manifest`
@@ -190,32 +190,27 @@ def export_proc(session: Session, projects, tab, ym: str = "") -> Path:
         raise MustReportError("导出过程资料：**一个项目都没选** —— 请先在展开区里勾选要导出的项目。")
     tab_no = D.tab_of(tab)
     report_ym = str(ym or "").strip() or ym_of(today_cn())
-    inv_rows = M6.load_inv_rows(session)
-    mech_rows = M6.load_mech(session)
-    history_rows = M6.load_history(session)
-    known = M6.projects_of(inv_rows, history_rows)      # ⭐ 候选**唯一出口**（⛔ 不各写一份）
+    assembled = M6.build_matrices(session, warehouses=keys)
+    known = assembled["projects"]
     displays = M6.displays_by_key(session)              # ⭐ 键→展示名（标题与文件名都用它）
     out_dir = EXPORT_ROOT / process_export.FILE_SUFFIX / period_label(report_ym)
     made: list[str] = []
     for key in keys:
         if key not in known:
             raise MustReportError(
-                f"导出过程资料：项目「{key}」**没有数据**（库存单据与历史段里都没有它）⇒ 拒做"
+                f"导出过程资料：项目「{key}」**没有数据**（库存、有效历史材料和机械费里都没有它）⇒ 拒做"
                 "（⛔ 不导出一份空表，免得被读成「这个项目本来就是空的」）。")
         display = displays.get(key) or ""
         if not display:
             raise MustReportError(
                 f"导出过程资料：项目「{key}」**不在档案里**（取不到展示名）⇒ 先建档再导"
                 "（⛔ 不拿仓库名冒充展示名）。")
-        cutoff = M6.load_cutoff(session, warehouse=key)
-        raw = D.build_matrix(inv_rows=inv_rows, manual_rows=mech_rows, history_rows=history_rows,
-                             warehouse=key, adjusted=False, cutoff_ym=cutoff)
+        tables = assembled["matrices"][key]
+        raw = tables["raw"]
         if tab_no == D.TAB_RAW:
             rows = raw
         else:
-            adjusted = D.build_matrix(inv_rows=inv_rows, manual_rows=mech_rows,
-                                      history_rows=history_rows, warehouse=key,
-                                      adjusted=True, cutoff_ym=cutoff)
+            adjusted = tables["adjusted"]
             # ⭐ **差异表**（用户 2026-09-18 裁）= 与另两张**同形态**，只有**取数**不同：
             #    逐格 = 调整后 − 原始 ⇒ 见 `domain.difference_rows`（⛔ 不在实现层再差一次）
             rows = adjusted if tab_no == D.TAB_ADJUSTED else D.difference_rows(raw, adjusted)
