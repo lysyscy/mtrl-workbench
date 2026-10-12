@@ -13,8 +13,11 @@ Starlette 的中间件是"**后 add 的先执行**"，所以实际 add 顺序必
 
 from __future__ import annotations
 
+import re
+import stat
 import uuid
 from contextlib import asynccontextmanager
+from email.utils import parsedate_to_datetime
 from ipaddress import ip_address, ip_network
 from pathlib import Path
 from typing import AsyncIterator
@@ -214,6 +217,42 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     get_logger().info("应用停止")
 
 
+def _static_file(request: Request, path: Path, media_type: str) -> Response:
+    """Revalidate on every request; stat is request-local, never a content cache."""
+    headers = {"Cache-Control": "no-cache", "Vary": "Accept-Encoding"}
+    try:
+        info = path.stat()
+    except OSError:
+        # Preserve FileResponse's existing missing-file failure path.
+        return FileResponse(path, media_type=media_type, headers=headers)
+    if not stat.S_ISREG(info.st_mode):
+        return FileResponse(path, media_type=media_type, headers=headers)
+    response = FileResponse(path, media_type=media_type, headers=headers, stat_result=info)
+    # One semantic validator for identity and gzip; their encoded bytes differ.
+    response.headers["etag"] = "W/" + response.headers["etag"]
+    not_modified = False
+    if "if-none-match" in request.headers:
+        value = request.headers["if-none-match"]
+        tag = r'(?:W/)?"[\x21\x23-\x7e\x80-\xff]*"'
+        if value.strip() == "*":
+            not_modified = True
+        elif re.fullmatch(r"[ \t]*" + tag + r"(?:[ \t]*,[ \t]*" + tag + r")*[ \t]*", value):
+            current = response.headers["etag"].removeprefix("W/")
+            not_modified = any(t.removeprefix("W/") == current for t in re.findall(tag, value))
+    elif "if-modified-since" in request.headers:
+        try:
+            since = parsedate_to_datetime(request.headers["if-modified-since"])
+            modified = parsedate_to_datetime(response.headers["last-modified"])
+            not_modified = since.tzinfo is not None and since >= modified
+        except (ValueError, TypeError, OverflowError):
+            pass
+    if not_modified:
+        return Response(status_code=304, headers={
+            k: response.headers[k] for k in ("etag", "last-modified", "cache-control", "vary")
+        })
+    return response
+
+
 def create_app() -> FastAPI:
     setup_logging()
     settings = get_settings()
@@ -315,8 +354,8 @@ def create_app() -> FastAPI:
     # ⭐ **新前端壳**（`app/web/index.html`）—— 走「原型直接接数据」（用户 2026-09-17 裁定）。
     #    ⚠️ 挂在 `/app`（**不抢 `/`**）：打样期间与旧服务端渲染页**并存** ⇒ 逐页切换、随时可停。
     @app.get("/app", include_in_schema=False)
-    def web_shell() -> FileResponse:
-        return FileResponse(_APP_DIR / "web" / "index.html", media_type="text/html")
+    def web_shell(request: Request) -> Response:
+        return _static_file(request, _APP_DIR / "web" / "index.html", "text/html")
 
     # ⭐ **壳的外链件**（`web/shell/*.js`）—— 壳的**接线层**都在这几件里（`P4`② 2026-09-19 起拆 · `P2-a` 2026-09-28 加件）。
     #    ⚠️ **件清单的唯一出口 = `index.html` 的 `<script src>`**（`tools/audit/shell_source.py` 按它现读）
@@ -326,16 +365,12 @@ def create_app() -> FastAPI:
     #    ⚠️ **逐条显式注册**（⛔ 不用通配 `{name}` 参数）：件数很少、零路径穿越风险；加一件要**同时**改这里
     #       与 `index.html` 的 `<script src>`（`syntax_audit` 会逐件 `node --check`，漏一件就红）。
     #        ⭐ 2026-09-21（`§19` 四个暂留件收口）新增第 **4** 件 `legacy.js`。
-    def _shell_js(name: str) -> FileResponse:
-        return FileResponse(
-            _APP_DIR / "web" / "shell" / name,
-            media_type="application/javascript",
-            headers={"Cache-Control": "no-cache"},
-        )
+    def _shell_js(request: Request, name: str) -> Response:
+        return _static_file(request, _APP_DIR / "web" / "shell" / name, "application/javascript")
 
     @app.get("/static/shell/actions.js", include_in_schema=False)
-    def shell_actions_js() -> FileResponse:
-        return _shell_js("actions.js")
+    def shell_actions_js(request: Request) -> Response:
+        return _shell_js(request, "actions.js")
 
     # ⭐ 2026-09-24 加件（`TAIL-48` §八.5 第 1 刀：`API` 切进 `api.js`）。
     #    ⚠️ **拆件要两处登记**：① `index.html` 的 `<script src>`（读壳的唯一出口认这个）
@@ -345,54 +380,54 @@ def create_app() -> FastAPI:
     # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/base.js`。
     #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
     @app.get("/static/shell/base.js", include_in_schema=False)
-    def shell_base_js_js() -> FileResponse:
-        return _shell_js("base.js")
+    def shell_base_js_js(request: Request) -> Response:
+        return _shell_js(request, "base.js")
 
     # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/view.js`。
     #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
     @app.get("/static/shell/view.js", include_in_schema=False)
-    def shell_view_js_js() -> FileResponse:
-        return _shell_js("view.js")
+    def shell_view_js_js(request: Request) -> Response:
+        return _shell_js(request, "view.js")
 
     # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/ui.js`。
     #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
     @app.get("/static/shell/ui.js", include_in_schema=False)
-    def shell_ui_js_js() -> FileResponse:
-        return _shell_js("ui.js")
+    def shell_ui_js_js(request: Request) -> Response:
+        return _shell_js(request, "ui.js")
 
     # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/proj.js`。
     #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
     @app.get("/static/shell/proj.js", include_in_schema=False)
-    def shell_proj_js_js() -> FileResponse:
-        return _shell_js("proj.js")
+    def shell_proj_js_js(request: Request) -> Response:
+        return _shell_js(request, "proj.js")
 
     # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/pages-a.js`。
     #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
     @app.get("/static/shell/pages-a.js", include_in_schema=False)
-    def shell_pages_a_js_js() -> FileResponse:
-        return _shell_js("pages-a.js")
+    def shell_pages_a_js_js(request: Request) -> Response:
+        return _shell_js(request, "pages-a.js")
 
     # ⭐ `P2-a` 拆件（2026-09-28 · `TAIL-164`）：`shell/pages-b.js`。
     #    ⚠️ **两处登记**：本路由 ＋ `index.html` 的 `<script src>`（缺一 ⇒ 浏览器 404 ⇒ 整支壳崩）。
     @app.get("/static/shell/pages-b.js", include_in_schema=False)
-    def shell_pages_b_js_js() -> FileResponse:
-        return _shell_js("pages-b.js")
+    def shell_pages_b_js_js(request: Request) -> Response:
+        return _shell_js(request, "pages-b.js")
     @app.get("/static/shell/api.js", include_in_schema=False)
-    def shell_api_js() -> FileResponse:
-        return _shell_js("api.js")
+    def shell_api_js(request: Request) -> Response:
+        return _shell_js(request, "api.js")
 
     @app.get("/static/shell/core.js", include_in_schema=False)
-    def shell_core_js() -> FileResponse:
-        return _shell_js("core.js")
+    def shell_core_js(request: Request) -> Response:
+        return _shell_js(request, "core.js")
 
     @app.get("/static/shell/print-export.js", include_in_schema=False)
-    def shell_print_export_js() -> FileResponse:
-        return _shell_js("print-export.js")
+    def shell_print_export_js(request: Request) -> Response:
+        return _shell_js(request, "print-export.js")
 
     # ⭐ `§19`「四个暂留件收口」（2026-09-21）：设置 ＋ 三个历史导入的**壳内实现**（接线层加件）。
     @app.get("/static/shell/legacy.js", include_in_schema=False)
-    def shell_legacy_js() -> FileResponse:
-        return _shell_js("legacy.js")
+    def shell_legacy_js(request: Request) -> Response:
+        return _shell_js(request, "legacy.js")
 
     # ⚠️ 2026-09-19（`§19` 批 4）：原先这里按 `_PAGES` 逐个托管**旧静态页**（切片 MVP）——
     #    最后一个（`m03`）已删 ⇒ **整段移除**（连同上面的 `_PAGES` 定义）。
