@@ -24,6 +24,10 @@
    Windows 路径**用正斜杠或 raw 字符串**（`D:\dev\...` 的 `\d` 是非法转义 ⇒ `syntax_audit` 判红）。
    ⚠️ 2026-10-06 两条都当场踩过：前者在 `audit_work.py`、后者在 `syntax_audit.py` 自己身上。
 
+## Excel读取反向证据
+
+`tools/mut/_mut_excel_reading.py` 在后端隔离副本运行 `backend/tests/test_excel_reading.py`，覆盖两条读表链的合并范围、类型差异与确认前不写入；不改正式源码或真实样表。真实样表证据与兼容缺口见TAIL-305。
+
 ## 隔离机械存储反例
 
 `tools/mut/_isolated.py::isolated_backend`供`tools/mut/_mut_proc_split.py`与`tools/mut/_mut_tail270.py`共用：复制后端到scratch，子进程传测试库与独立四态出口，结束清临时副本；不复制凭据。新增同类反例优先复用，测试库写入仍由用例事务回滚。

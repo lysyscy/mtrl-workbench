@@ -27,6 +27,11 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 
 共用纯读取落点为 `backend/app/core/query.py`；调用者及等价验证见 `backend/tests/test_report_query.py`。字段、默认值与合法性仍回各业务包及交付面主人；月份入口未改，调查与暂缓证据见TAIL-302票Comments。
 
+### Excel工作簿读取
+
+两条读表链共用 `backend/app/import_kit/workbook.py` 的开书、工作表枚举、网格遍历、合并坐标及资源释放；`backend/app/import_kit/readers.py` 与 `backend/app/mod11_jc/excel_parse.py` 保留各自格式识别、转换和失败出口。
+选表、表头、映射、行筛选及确认写入仍由原主人持有；D23 B4明确保留集采的表头差异。验证在 `backend/tests/test_excel_reading.py` 与 `tools/mut/_mut_excel_reading.py`，真实样表对照与未验边界回TAIL-305票Comments。
+
 ### 金额
 
 | 要点 | 依据 |

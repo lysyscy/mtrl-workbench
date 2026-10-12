@@ -212,11 +212,10 @@ MUTS += [
      "    for level in range(MAX_LEVEL, 0, -1):",
      "test_先长后短"),                                            # 一个文件里的多个用例按 -k 一起跑
     # ---- M5-8 Excel 解析层（2026-09-19 追加）
-    ("合并格**不铺满**（`供应商合同总价` 那一支整支丢掉，却不报错）",
-     "    out = [[str(v or \"\").strip() for v in row] for row in grid]\n"
-     "    for r1, r2, c1, c2 in merges:",
-     "    out = [[str(v or \"\").strip() for v in row] for row in grid]\n"
-     "    for r1, r2, c1, c2 in []:",
+    # 合并机械实现已收口；保留调用点靶。隔离执行证据见_mut_excel_reading.py。
+    ("集采未调用共享合并展开（供应商金额支丢失）",
+     "    return fill_merges(out, merges)",
+     "    return out",
      "test_合并格要按真实合并区铺满"),
     ("表头探测改回「数**单元格**个数」（被重复列名骗 ⇒ 认成第 3 行）",
      "        return len({h for v in row for h in HEADER_HINTS if h in str(v)})",

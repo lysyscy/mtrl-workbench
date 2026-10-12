@@ -25,7 +25,6 @@
 
 from __future__ import annotations
 
-import io
 import re
 from decimal import Decimal, InvalidOperation
 
@@ -33,6 +32,7 @@ from app.import_kit.mapping import Field as _Field
 from app.import_kit.mapping import guess as _guess
 from app.import_kit.mapping import profile as _profile
 from app.import_kit.mapping import type_conflict as _type_conflict
+from app.import_kit.workbook import fill_merges, open_workbook
 
 # ------------------------------------------------------------------ 读网格
 
@@ -49,61 +49,31 @@ def suffix_of(filename: str) -> str:
     return ""
 
 
-def sheet_names(data: bytes, filename: str) -> list[str]:
-    """该文件里有哪些工作表（**顺序保持原样** —— 用户按自己看到的顺序找）。"""
+def _kind_of(filename: str) -> str:
+    """集采保留按后缀选引擎与原有失败类型；不改成通用面的魔数识别。"""
     suf = suffix_of(filename)
     if suf in XLS_SUFFIXES:
-        import xlrd
-
-        book = xlrd.open_workbook(file_contents=data)
-        return [book.sheet_by_index(i).name for i in range(book.nsheets)]
+        return "xls"
     if suf in XLSX_SUFFIXES:
-        import openpyxl
-
-        book = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-        try:
-            return list(book.sheetnames)
-        finally:
-            book.close()
+        return "xlsx"
     raise ValueError(f"不认识的文件类型：{filename!r}（只支持 .xls / .xlsx）")
 
 
+def sheet_names(data: bytes, filename: str) -> list[str]:
+    """按原顺序列出工作表，加载失败保持引擎异常。"""
+    with open_workbook(data, _kind_of(filename), read_only=True) as book:
+        return book.names
+
+
 def read_grid(data: bytes, filename: str, sheet: str) -> list[list[str]]:
-    """读成**矩形网格**（行 × 列，值一律 `str`、两侧去空白；`None` ⇒ `''`）。
+    """集采文本网格；保留正常读取模式、格式各自的值转换与整表合并展开。
 
-    ⚠️ **合并单元格**按**真实的合并区**展开（见 `_fill_merges`）—— ⛔ **不是无脑向右填充**：
-       无脑右填会把表头行 `发票金额` 后面的**空列一路填满** ⇒ 表头行反而"命中最多"
-       ⇒ `detect_header` 会认错行（2026-09-19 实测踩到，报"第 1 级 = 第 3 行"）。
-
-    ⚠️ 日期单元格给 `YYYY-MM-DD`（`20240723` 那种 8 位数字是用户自己敲的**文本**，
-       而真正的日期单元格会被引擎给成序列号）⇒ 见 `_cell_text` / `to_date`。
+    xlsx日期时间原文保时刻；xls日期截日。此差异不能借重构改掉。
     """
-    suf = suffix_of(filename)
-    grid: list[list[str]] = []
-    merges: list[tuple[int, int, int, int]] = []      # (r1, r2, c1, c2) 都按 **0 基、闭区间**
-    if suf in XLS_SUFFIXES:
-        import xlrd
-
-        book = xlrd.open_workbook(file_contents=data)
-        sh = book.sheet_by_name(sheet)
-        for r in range(sh.nrows):
-            grid.append([_cell_text(sh.cell(r, c), book.datemode) for c in range(sh.ncols)])
-        merges = [(r1, r2 - 1, c1, c2 - 1) for r1, r2, c1, c2 in sh.merged_cells]   # xlrd 上界是**开的**
-    elif suf in XLSX_SUFFIXES:
-        import openpyxl
-
-        book = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
-        try:
-            sh = book[sheet]
-            for row in sh.iter_rows(values_only=True):
-                grid.append([("" if v is None else str(v).strip()) for v in row])
-            merges = [(r.min_row - 1, r.max_row - 1, r.min_col - 1, r.max_col - 1)
-                      for r in sh.merged_cells.ranges]                              # openpyxl 是 1 基、闭
-        finally:
-            book.close()
-    else:
-        raise ValueError(f"不认识的文件类型：{filename!r}（只支持 .xls / .xlsx）")
-    return _fill_merges(grid, merges)
+    with open_workbook(data, _kind_of(filename)) as book:
+        grid, merges, _ = book.grid(sheet, xls_cell=_cell_text,
+            xlsx_value=lambda v: "" if v is None else str(v).strip())
+        return _fill_merges(grid, merges)
 
 
 def _cell_text(cell, datemode: int) -> str:
@@ -130,16 +100,7 @@ def _fill_merges(grid: list[list[str]], merges: list[tuple[int, int, int, int]])
        ⇒ **只信 `merged_cells`**（引擎给的合并信息），⛔ 不猜。
     """
     out = [[str(v or "").strip() for v in row] for row in grid]
-    for r1, r2, c1, c2 in merges:
-        if r1 >= len(out) or c1 >= len(out[r1]):
-            continue
-        val = out[r1][c1]
-        if not val:
-            continue
-        for r in range(r1, min(r2, len(out) - 1) + 1):
-            for c in range(c1, min(c2, len(out[r]) - 1) + 1):
-                out[r][c] = val
-    return out
+    return fill_merges(out, merges)
 
 
 # ------------------------------------------------------------------ 表头探测

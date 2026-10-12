@@ -99,7 +99,7 @@ def test_老xls台账的读表件在依赖清单里():
     """
     assert "xlrd" in _declared(), (
         "⛔ `requirements.txt` 里没有 `xlrd` ⇒ **老 `.xls`（用户手里的集采台账就是这种）一律读不了**。\n"
-        "  ⇒ `import_kit/readers.py::_read_xls` 是按魔术字节认 `.xls` 后 `import xlrd` 的；\n"
+        "  ⇒ `import_kit/workbook.py::open_workbook` 是按魔术字节认 `.xls` 后 `import xlrd` 的；\n"
         "  ⇒ 缺它时报的是通用兜底「解析失败 —— 请重试」，⛔ 不告诉人「老格式读不了」。\n"
         "  ⇒ 修法：`pip install xlrd==2.0.1` ＋ 写进 `requirements.txt`（⚠️ `xlrd` 2.x **只读 .xls**，"
         "新格式仍归 `openpyxl` ⇒ ⛔ 别删 `openpyxl`）。")
