@@ -166,8 +166,8 @@ def test_登出入口与登出动作齐备():
 
 
 @acc("ACC-USR-MGMT-001", "001-03")
-def test_会话票可验签_篡改与过期一律不认(monkeypatch):
-    """自签 cookie 的三条底线：**往返认** · **篡改不认** · **过期不认**（＋换密钥不认）。
+def test_会话票可验签_长期有效且篡改不认(monkeypatch):
+    """自签 cookie 的三条底线：**往返认** · **长期有效** · **篡改不认**（＋换密钥不认）。
 
     ⚠️ 「换密钥不认」这条特别值得测：它保证 `SESSION_SECRET` **真的参与签名**
        —— 如果实现里忘了带密钥（或密钥是常量），前三条**照样全绿**，
@@ -184,13 +184,13 @@ def test_会话票可验签_篡改与过期一律不认(monkeypatch):
     version, head, exp, sig = tok.split(".")
     tampered = f"{version}.{base64_bump(head)}.{exp}.{sig}"
     assert SESS.read(tampered) is None, "改了账号名还能通过 ⇒ 签名没覆盖载荷"
-    # ② 篡改过期时间（把自己续期）⇒ 不认
-    assert SESS.read(f"{version}.{head}.{int(exp) + 99999}.{sig}") is None, "改了过期时间还能通过"
+    # ② 篡改签名覆盖的时间字段 ⇒ 不认
+    assert SESS.read(f"{version}.{head}.{int(exp) + 99999}.{sig}") is None, "改了时间字段还能通过"
     # ③ 篡改签名 ⇒ 不认
     assert SESS.read(f"{version}.{head}.{exp}.{'A' * len(sig)}") is None, "签名被改还能通过"
-    # ④ 过期 ⇒ 不认（拿"过去"的时间签一张）
-    old = SESS.make(u, now=dt.datetime.now() - dt.timedelta(hours=SESS.SESSION_HOURS + 1))
-    assert SESS.read(old) is None, "过期票还能用 —— 那「退出后回到登录页」就永远等不到"
+    # ④ 用户2026-10-12确认长期登录：不再按12小时或更久自动过期。
+    old = SESS.make(u, now=dt.datetime.now() - dt.timedelta(days=3650))
+    assert SESS.read(old) == u, "合法账号票被时间拒绝，长期登录未生效"
     # ⑤ 换密钥 ⇒ 不认（证明密钥**真的**参与了签名）
     import app.core.session as _S
 

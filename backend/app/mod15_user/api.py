@@ -192,7 +192,7 @@ def api_do_login(account: str = Form(""), password: str = Form(""),
     resp = RedirectResponse(target, status_code=303)          # 303 = POST 之后换 GET（PRG）
     resp.set_cookie(
         SESS.COOKIE_NAME, SESS.make(account_identity),
-        max_age=SESS.SESSION_HOURS * 3600,
+        max_age=SESS.COOKIE_MAX_AGE_SECONDS,
         httponly=True,          # ⛔ JS 读不到（壳里不需要读它）
         samesite="lax",         # ⛔ 跨站请求不带它（CSRF 的第一道）
         # ⚠️ `secure=False`：本系统是**局域网 http**（§技术栈：内网部署）——

@@ -15,7 +15,7 @@
    ⭐ 为什么是"写回 `.env`"而不是"每次启动随机生成"：后者一重启所有人的登录态就失效，
       而本系统是**每天要用的工具** ⇒ 那种"随机"只会让人想把它关掉（比配一次更糟）。
 
-⚠️ 新会话载荷为 `v2.base64(账号).过期戳.签名`，版本也参与签名。
+⚠️ 新会话载荷为 `v2.base64(账号).时间戳.签名`，版本也参与签名。
    旧三段票统一拒绝，升级后重新登录一次；不换密钥、不改变账号或密码。
    ⛔ **不放角色**：角色可能会变（转让管理员）⇒ 放进 cookie 就有一份**过期的真相**；
       要用角色时**每次查库**（本系统 2 个账号，查一次的成本可以忽略）。
@@ -36,9 +36,9 @@ from app.core.logging import get_logger
 logger = get_logger()
 
 COOKIE_NAME = "mw_session"
-#: 会话有效期（小时）。⚠️ **口径没写这个数**（§1.5.1 只说"退出后回到登录页"）⇒
-#: 取一个"工作日够用、过夜失效"的值，并**登记为待裁定**（⛔ 不假装它来自口径）。
-SESSION_HOURS = 12
+#: 浏览器持久cookie保存期限；Chrome将Max-Age/Expires上限限制为400天。
+#: 服务器不再按时间过期（用户2026-10-12确认）；浏览器仍可清理cookie。
+COOKIE_MAX_AGE_SECONDS = 400 * 24 * 3600
 
 
 class AccountIdentity(str):
@@ -108,21 +108,24 @@ def _sign(payload: str) -> str:
 
 
 def make(account: str, *, now: _dt.datetime | None = None) -> str:
-    """造一张账号会话票：`v2.base64(账号).过期时间戳.签名`。
+    """造一张账号会话票：`v2.base64(账号).签发时间戳.签名`。
 
     ⚠️ 账号名**先 base64** 再拼 —— 否则账号名里若含 `.`（§1.5.1 明说**不限字符**）
        会把 `split(".")` 切错位置 ⇒ **验签永远失败**（那种 bug 只在"账号名带点"时出现，
        而"不限制字符"意味着它**迟早会出现**）。
     """
     now = now or _dt.datetime.now()
-    exp = int((now + _dt.timedelta(hours=SESSION_HOURS)).timestamp())
+    stamp = int(now.timestamp())
     acc = base64.urlsafe_b64encode(account.encode("utf-8")).decode("ascii").rstrip("=")
-    payload = f"v2.{acc}.{exp}"
+    payload = f"v2.{acc}.{stamp}"
     return f"{payload}.{_sign(payload)}"
 
 
 def read(value: str | None, *, now: _dt.datetime | None = None) -> str | None:
-    """只接受签名和有效期均有效的v2账号会话，旧标签票统一拒绝。
+    """只接受签名有效的v2账号会话，旧标签票统一拒绝；不按时间自动过期。
+
+    时间字段仍须为整数且参与签名；已有v2票的原过期戳亦保留有效。
+    now保留给既有调用者，验签不再依赖时钟。
 
     ⚠️ 验签用 `hmac.compare_digest`（**定长比较**）—— ⛔ 别用 `==`：
        后者会在第一个不同的字节就返回，理论上可从耗时推出签名（那是本仓少见的"顺手做对"）。
@@ -136,10 +139,8 @@ def read(value: str | None, *, now: _dt.datetime | None = None) -> str | None:
     if not hmac.compare_digest(_sign(".".join(parts[:-1])), sig):
         return None
     try:
-        exp = int(exp_s)
+        int(exp_s)  # 保留原时间字段的整数校验，不再用它判断过期。
     except ValueError:
-        return None
-    if (now or _dt.datetime.now()).timestamp() > exp:
         return None
     pad = "=" * (-len(acc_b64) % 4)
     try:
@@ -163,6 +164,6 @@ def current_name() -> str:
 
 
 __all__ = [
-    "AccountIdentity", "COOKIE_NAME", "SESSION_HOURS", "current_name", "make", "read",
+    "AccountIdentity", "COOKIE_NAME", "COOKIE_MAX_AGE_SECONDS", "current_name", "make", "read",
     "secret", "set_current_name",
 ]
