@@ -9,12 +9,12 @@
  *    （`actions.js` / `core.js` 里有些表**加载期就求值**到本件的常量）。⛔ 别调顺序。
  * ⚠️ 本件的代码是**原样搬出**（逐字未改，含注释）；来历与搬法见计划 §15 `TAIL-164`。 */
 
-BIND.m03=()=>{ const box=$('#pickAllBox'); if(!box) return;
+addBind('m03', ()=>{ const box=$('#pickAllBox'); if(!box) return;
   /* ⚠️ 全选框的「可见候选」必须与 `pickAll` 走**同一个出口** —— 否则撤单行留在 `vis` 里、
      却永远勾不上 ⇒ 全选框会永久卡在"半选"态（勾满了还是个半选框）。 */
   const vis=ntHit(fNt).filter(ntSelectable).map(n=>n.id), hit=vis.filter(i=>pickSet.has(i)).length;
   box.checked = vis.length>0 && hit===vis.length;
-  box.indeterminate = hit>0 && hit<vis.length; };
+  box.indeterminate = hit>0 && hit<vis.length; });
 
 /* =====================================================================
    5. MOD-04 付款计划
@@ -132,19 +132,19 @@ const plDraftRow=()=>{ const d=plD, isNew=(plRowEditId===PL_NEW_ID);
     <td class="ctr"><span class="mut sm">—</span></td>
     <td class="ctr now"><button class="btn sm pri" data-act="plRowSave"${plSaving?' disabled':''} title="${plSaving?'正在保存 —— 请勿重复点击（连点会落两行相同的计划行）':'校验通过后写入（写入后与导入行同样参与审查）'}">${plSaving?'保存中…':'保存'}</button> <button class="btn sm" data-act="plRowCancel"${plSaving?' disabled':''} title="丢弃这一行草稿（不写入）">取消</button></td>
   </tr>`; };
-BIND.m04=()=>{ const box=$('#plAllBox'); if(!box) return;
+addBind('m04', ()=>{ const box=$('#plAllBox'); if(!box) return;
   const ids=plVisible().map(p=>p.id);
   const hit=ids.filter(i=>plPick.has(i)).length;
   box.checked = ids.length>0 && hit===ids.length;
-  box.indeterminate = hit>0 && hit<ids.length; };
+  box.indeterminate = hit>0 && hit<ids.length; });
 /* 全选框状态回显（与 MOD-03 / MOD-04 同款逻辑：全选 / 半选）—— `MOD-11` 集采台账
    ⚠️ 2026-09-13 P6 走查实测：这张表**一直没有 BIND** ⇒ 表头那个「全选」框**永远不反射状态**
       （全勾满了也还是空框、部分勾选也不显半选），而 `R10`② 明确要求"全选支持全选 / 半选回显"。 */
-BIND.m11=()=>{ const box=$('#jcAllBox'); if(!box) return;
+addBind('m11', ()=>{ const box=$('#jcAllBox'); if(!box) return;
   const vis=jcVisible();
   const hit=vis.filter(j=>jcPick.has(j.id)).length;
   box.checked = vis.length>0 && hit===vis.length;
-  box.indeterminate = hit>0 && hit<vis.length; };
+  box.indeterminate = hit>0 && hit<vis.length; });
 
 /* =====================================================================
    6. MOD-05 付款流水与欠款统计

@@ -985,8 +985,8 @@ async function reloadM15() {
       `USERS` 算（`reloadM15` 照旧灌**全部**账号）⇒ ⛔ **别**为了"主列表不显示"去过滤 `USERS` ——
       那会让标题里那句「已删除 N」变成 **0（假话）**，而回收站也就永远空了。
    ⚠️ 幂等：`render()` 每次重建 `#view` ⇒ 本函数每次重跑；先删上一块，⛔ 不叠加。
-   ⚠️ 挂点 `BIND[VIEW]`（`render()` 里 `innerHTML` 之后调用）—— 那是壳**本来就有、一直没人用**的
-      渲染后钩子；⛔ 别把这段塞进 `render()` 本体（那会让"渲染"与"某一页的整理"混在一处）。 */
+   ⚠️ 登记用 `addBind('m15', m15Trash)`，重建 `#view` 后由 `runBind(VIEW)` 按登记顺序运行。
+      ⛔ 别把这段塞进 `render()` 本体（那会让"渲染"与"某一页的整理"混在一处）。 */
 function m15Trash() {
   const view = document.querySelector('#view');
   if (!view) return;
@@ -1006,7 +1006,7 @@ function m15Trash() {
   if (listCard && listCard.parentNode) listCard.parentNode.insertBefore(card, listCard.nextSibling);
   else view.appendChild(card);
 }
-BIND.m15 = m15Trash;
+addBind('m15', m15Trash);
 
 /* ⭐ 主题（`ACC-UI-THEME-001/001-06`）：**可选清单 ＋ 我这个账号当前用哪套**。
    ⚠️⚠️ 它必须是**自己的一路**（`LOADERS['外观主题']`），⛔ 不能塞在 `reloadM15` 里 ——
@@ -1070,10 +1070,10 @@ async function reloadProc() {
 }
 
 /* 过程资料只保留可用的批量导出入口。 */
-BIND.m06 = function () {
+addBind('m06', function () {
   const naive = document.querySelector('#view [data-act="exp"][data-t="过程资料"]');
   if (naive) naive.remove();
-};
+});
 
 /* ⭐⭐ `TAIL-185`（`A` 案 · 2026-09-29 **用户裁定**）：**摘掉 `m08` 卡头那枚「点了必然空转」的朴素导出**。
    `m08` 卡头并排两枚导出：「导出 Excel」（朴素 · `data-act="exp"` · 走 `EXP_ROUTES` 兜底 ⇒ 点了只会
@@ -1087,12 +1087,12 @@ BIND.m06 = function () {
       改成「卡头**只留真入口**（朴素那枚渲染后摘除）」—— ⛔ 别只改壳不改 claim（那正是 §4.1 的"说了不做"）；
       守卫同批改在 `tests/test_tail04_export.py`（`001-12`）。
    ⚠️ **幂等**：`render()` 每次重画 `#view` ⇒ 本钩子每次都要重摘一遍（同 `BIND.m06` 那条口径）。 */
-BIND.m08 = function () {
+addBind('m08', function () {
   const host = document.querySelector('#view');
   if (!host) return;
   const naive = host.querySelector('[data-act="exp"][data-t="库存单据明细总表"]');
   if (naive) naive.remove();
-};
+});
 
 /* ⭐ `TAIL-156`：**月份位移的唯一出口**（`m09` 批量录入用：默认那几行 / 「＋ 加一行」都靠它）。
    ⚠️ 只在壳里做**加减月份**这种纯算术；⛔ 不在这里判任何业务（判定一律后端）。 */
@@ -1105,7 +1105,7 @@ const ymAdd = (m, n) => {
 /* ⭐⭐ `TAIL-156` `P2`：`m09` 特殊费用的**月度批量录入**入口 —— 与 `BIND.m06`「录机械费」**同款**：
    走原型自己的 `BIND` 钩子往页首注入一条工具栏，⛔ **不改 `V.m09` 切片一行**（`D18`）。
    判定与落库全在后端（`POST /api/m09/fee/batch`，语义见 `mod09_fee.service.act_batch`）。 */
-BIND.m09 = function () {
+addBind('m09', function () {
   const host = document.querySelector('#view');
   if (!host || document.getElementById('awfBatchEntry')) return;
   const bar = document.createElement('div');
@@ -1115,7 +1115,7 @@ BIND.m09 = function () {
     + '<span class="mut sm">一屏把<b>好几个月</b>填完（列 = 本页这一份的项名 · 行数<b>可加减</b> · <b>核算期每行都能改</b>）</span></div>'
     + '<button class="btn pri" data-act="awfBatch">批量录入（按月）…</button>';
   host.prepend(bar);
-};
+});
 
 /* ============================================================ ⭐⭐ 链路 B ·「待人工指认」（`TAIL-30`-③）
    **它是什么**：材料报表里出现**陌生仓库**，而它的全名在档案里命中 **≥2 条非壳行**时 ——
@@ -1203,12 +1203,12 @@ async function reloadArchPend() {
    ⭐ **为什么由钩子注入**：`V.m03` 切片里只有「批量打印」一个出口（那三件事原先全在旧页
    `mod03_notice/static/m03.html` 上）⇒ 给切片加按钮 = 登记漂移；而"渲染后注入"正是 `BIND` 的活。
    ⚠️ **幂等**（`render()` 会重画多次）：靠 `dataset.m03More` 打标，⛔ 不叠加。
-   ⚠️ 保留别的 `BIND.m03`（若有）：先调旧的，再注入（⛔ 不覆盖）。 */
+   ⚠️ 保留别的 `BIND.m03`（若有）：按登记顺序追加（不覆盖前面的步骤）。 */
 /* ============ MOD-11 · 集采台账的**页内工具条**（前端壳接线）============
    ⭐ **为什么由钩子注入**：切片里那排按钮（`jcFetch` / `jcAdd` / 批量标记…）生在"**不许搬**"的切片区
       ⇒ 给切片加按钮 = 登记漂移；"渲染后注入"正是 `BIND` 的活（同 `BIND.m03` 那两个入口）。
    ⚠️ **幂等**（`render()` 会重画多次）：靠 `dataset.m11Tools` 打标，⛔ 不叠加。
-   ⚠️ **保留别的 `BIND.m11`**（那个管"全选 / 半选回显"）：先调旧的，再注入。
+   ⚠️ **保留别的 `BIND.m11`**（那个管"全选 / 半选回显"）：按登记顺序追加，基础回显先运行。
    ⚠️ 2026-09-23（`TAIL-75` 余项 · **用户裁定**）：这里原先**还注入一个「⬆ Excel 导入台账」按钮**
       ⇒ 已**连件删除**（导入只在启用初期用一次 ⇒ 只留通用面）。本钩子现在只剩 `M5-9` 的
       「隐藏贸易公司三列」（`hidBtn` 挂在同一个锚点后面）。 */
@@ -1219,9 +1219,7 @@ async function reloadArchPend() {
 
 
 
-const _BIND_M11_OLD = BIND.m11;
-BIND.m11 = function () {
-  if (typeof _BIND_M11_OLD === 'function') _BIND_M11_OLD();
+addBind('m11', function () {
   const host = document.querySelector('#view');
   if (!host) return;
   const anchor = host.querySelector('[data-act="jcFetch"]');
@@ -1282,11 +1280,9 @@ BIND.m11 = function () {
     b.textContent = '⬇ 导出 Excel';
     hidBtn.insertAdjacentElement('afterend', b);
   }
-};
+});
 
-const _BIND_M03_OLD = BIND.m03;
-BIND.m03 = function () {
-  if (typeof _BIND_M03_OLD === 'function') _BIND_M03_OLD();
+addBind('m03', function () {
   const host = document.querySelector('#view');
   if (!host) return;
   const anchor = host.querySelector('[data-act="ntPrint"]');
@@ -1297,7 +1293,7 @@ BIND.m03 = function () {
   box.innerHTML = `<button class="btn" data-act="ntPdf" title="与批量打印同一次勾选，只换成「只产出 PDF」">只导出 PDF</button>
     <button class="btn gost" data-act="m03PrinterOpen" title="打印机地址（保存后即时生效、无需重启）">打印机设置</button>`;
   anchor.insertAdjacentElement('afterend', box);
-};
+});
 
 /* ⭐⭐ 2026-09-28（`TAIL-144`）**这里原来有一个 `BIND.m05`**（2026-09-20 起：用 DOM 注入把「选择项目 ＋
    导出总欠款」两个按钮插到卡头「导出…」旁边）。⭐ **本轮撤掉**，理由（用户截图报障）：
@@ -1308,7 +1304,7 @@ BIND.m03 = function () {
      而现在**改 `V.m05` 已经是常规操作**（`ui_parity` 的登记簿可增可减、逐条审过即可）。
    ⛔ **别再注入回卡头**（`test_wired_m05.py::test_台账卡头按钮分组与点开有反馈都钉住` 数着卡头只有这一个入口）。 */
 
-BIND.m02 = function () {
+addBind('m02', function () {
   const host = document.querySelector('#view');
   if (!host) return;
   const kv = host.querySelector('.kv');
@@ -1348,9 +1344,9 @@ BIND.m02 = function () {
       + '保存即时生效、改动留痕';
     h4.appendChild(b);
   }
-};
+});
 
-BIND.m01 = function () {
+addBind('m01', function () {
   /* ---- ⭐ `TAIL-42`：**类型列的人工覆盖入口**（三类判定的纠正）--------------------------------
      ⚠️ 为什么由钩子注入：`V.m01` 切片里那一格是 `${typeTag(p.type)}`（**只读**，没有动作），
         给它加 `data-act` = 改切片那一行 ⇒ 会登记一处偏离；而**注入属性**正好是「渲染后注入」的活。
@@ -1432,7 +1428,7 @@ BIND.m01 = function () {
       rows:[rows]})}
     </div>`;
   host.prepend(box);
-};
+});
 
 /* 打开「人工指认」弹窗 —— **两个入口共用**（页首清单 / 占位行的「扶正」按钮）。
    形态照原型那个 `promote` 弹窗（信息块 ＋ 一个下拉 ＋ 取消/确认两键），
@@ -2166,11 +2162,10 @@ async function refNotice(nid){try{
   });
 }catch(e){toast(esc(e.message));}}
 for(const view of ['m03','m11','m08']){
-  const previous=BIND[view];
-  BIND[view]=()=>{if(previous)previous();
+  addBind(view, ()=>{
     if(!refReturn||refReturn.to!==VIEW)return;
     const bar=document.createElement('div');bar.className='filter-status';
     bar.innerHTML='<span>当前为引用定位视图，筛选已临时调整。</span> <button class="btn sm" data-act="refBack">返回原页</button>';
     $('#view').prepend(bar);
-  };
+  });
 }

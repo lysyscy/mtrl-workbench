@@ -93,7 +93,7 @@ def test_台账导出一次点到位的按钮名要能看出先选项目():
 @acc()
 def test_m09月度批量录入_入口挂BIND且提交交给后端():
     """TAIL-265：项名取当前页；首月递增为列，提交唯一批量出口，失败不清空。"""
-    assert "BIND.m09 = function ()" in SHELL and 'data-act="awfBatch"' in SHELL
+    assert "addBind('m09', function ()" in SHELL and 'data-act="awfBatch"' in SHELL
     body = SHELL[SHELL.index("awfBatch:()=>"):SHELL.index("awfBatchOk:")]
     ok = SHELL[SHELL.index("awfBatchOk:async"):SHELL.index("awfRowAdd:()=>")]
     assert "awfList()" in body, "项名不是当前页数据"

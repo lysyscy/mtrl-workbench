@@ -85,7 +85,7 @@ function render(){
     const g0=scrollHost(); const keep0=g0?g0.scrollTop:0;
     $('#view').innerHTML=gate;
     const g1=scrollHost(); if(g1) g1.scrollTop=keep0;
-    /* ⚠️ **状态页不跑 `BIND[VIEW]`、也不调 `placePops()` / `applyPjFilters()`**：
+    /* ⚠️ **状态页不跑 `runBind(VIEW)`、也不调 `placePops()` / `applyPjFilters()`**：
        那些钩子假设"表 / 卡 / 浮层已经在 DOM 里"（注入按钮、反射全选框、定位面板…）——
        状态页里**一个都没有**，白跑一趟还容易碰出异常。
        ⭐ `placePops()` 只该在**两条真实渲染路径**里调（普通 + 虚拟滚动）—— 常驻判据
@@ -106,7 +106,7 @@ function render(){
      一次 innerHTML = 一次性 parse ＋ 布局，阻塞主线程几百毫秒）：
      HTML **仍然一次生成**（排序 / 合计行口径不变），但**分帧写入**：先写第一块，余下每帧追一块。
      ⛔ 切点必须落在行边界（`</tr>`，退而求其次 `>`）—— 半个标签会被浏览器静默吞掉；
-     ⛔ `BIND[VIEW]`（注入按钮 / 渲染后钩子）必须等**最后一块**写完再调；
+     ⛔ `runBind(VIEW)`（注入按钮 / 渲染后钩子）必须等**最后一块**写完再调；
      ⛔ 渲染途中用户切页 ⇒ **丢弃剩余块**（`#view` 已是别的页的内容，续写会串页）。 */
   /* ⛔ 虚拟滚动**设计红线**（两连败换来的，⛔ 别重蹈）：
      ① **每次都写"完整片段"**（pre ＋ 垫高行 ＋ 窗口行 ＋ post，**一次 innerHTML**）——
@@ -127,7 +127,7 @@ function render(){
   $('#view').innerHTML=html;
   /* ⚠️ 还原时**重新解析**滚动容器：`.tw` 已被上一行整体重建（旧元素连同它的 scrollTop 一起没了）。 */
   const host2=scrollHost(); if(host2) host2.scrollTop=keep;
-  if(BIND[VIEW]) BIND[VIEW]();
+  runBind(VIEW);
   placePops();          /* ⭐ 通用浮层逃出卡片裁剪（`TAIL-109`/`TAIL-110`）—— 见 `placePops` 的注释 */
   applyPjFilters();     /* ⭐ 项目面板的搜索词 / 归档折叠**重涂**（①② 2026-09-27）—— 见该函数注释 */
 }
@@ -289,7 +289,7 @@ function startVirtualTables(html, hits, keep){
   }
   if(!insts.length) return false;                          /* 一张都不够行数 ⇒ 交回 `render()` 直写 */
   $('#view').innerHTML=out;
-  if(BIND[VIEW]) BIND[VIEW]();
+  runBind(VIEW);
   const live=[];
   insts.forEach(inst=>{
     inst.tb=$('#view').querySelector('tbody[data-vs-i="'+inst.hit+'"]');

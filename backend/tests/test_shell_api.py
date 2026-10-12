@@ -268,21 +268,21 @@ def test_取_API_客户端条目_只取这一条():
 
 @acc()
 def test_取_BIND_块_三种写法都要收():
-    """⭐ 批 2b 新增口子：`BIND` 三种写法并存（箭头 / 函数表达式 / 直接赋值）⇒ 都要收，且**只收自己那一块**。"""
+    """加工登记三种参数形态（箭头 / 函数表达式 / 函数引用）都要收，且只收这一条登记。"""
     b6 = bind_block("m06")
-    assert b6.startswith("BIND.m06 = function () {"), f"函数表达式那种没取对：{b6[:60]!r}"
+    assert b6.startswith("addBind('m06', function () {"), f"函数表达式那种没取对：{b6[:60]!r}"
     b15 = bind_block("m15")
-    assert b15.startswith("BIND.m15 = m15Trash;"), f"直接赋值那种没取对：{b15[:60]!r}"
-    assert "BIND.m06" not in b15, "m15 那块吃进了下一个 BIND"
+    assert b15.startswith("addBind('m15', m15Trash);"), f"函数引用那种没取对：{b15[:60]!r}"
+    assert "addBind('m06'" not in b15, "m15 那块吃进了下一个 BIND"
     b3 = bind_blocks("m03")
     assert len(b3) == 2, f"`m03` 应当有两块 BIND，实得 {len(b3)}"
-    assert any(x.startswith("BIND.m03=") for x in b3), "箭头那种没取到"
-    assert any(x.startswith("BIND.m03 = function () {") for x in b3), "函数表达式那块没取到"
+    assert any(x.startswith("addBind('m03', ()=>") for x in b3), "箭头那种没取到"
+    assert any(x.startswith("addBind('m03', function () {") for x in b3), "函数表达式那块没取到"
 
 
 @acc()
 def test_取_BIND_块_多处命中必须抛():
-    """⚠️ 同一页有多块时**静默挑第一处 = 假绿**（实测 `m03`/`m11` 各两处，且第二块是**链式注入**）。"""
+    """⚠️ 同一页有多块时**静默挑第一处 = 假绿**（实测 `m03`/`m11` 各两处，且第二块是**追加登记**）。"""
     with pytest.raises(LookupError):
         bind_block("m03")
     assert len(bind_blocks("m03")) >= 2

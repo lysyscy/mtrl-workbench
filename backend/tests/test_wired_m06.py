@@ -319,7 +319,7 @@ def test_卡头不再出现那枚永不出结果的导出按钮():
     ⚠️ **兜底那句不许顺手删**（`EXP_ROUTES` 上面的分支）：`m08` 朴素那份 / 已取消的差异清单仍在用它。
     ⚠️ **能证伪**：把 `BIND.m06` 里那两行摘除代码删掉 ⇒ 本件必红。
     """
-    i = SHELL.find("BIND.m06 = function")
+    i = SHELL.find("addBind('m06', function")
     assert i >= 0, "找不到 `BIND.m06`"
     seg = SHELL[i:i + 3000]
     assert '[data-act="exp"][data-t="过程资料"]' in seg, \

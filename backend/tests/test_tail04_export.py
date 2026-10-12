@@ -346,9 +346,9 @@ def test_库存单据只留真导出且透视提示与模板形态一致():
     assert head.count('data-act="exp"') == 1, \
         "切片里那枚朴素导出不见了 —— ⛔ 不该动 `V.m08`（`U1` 逐行对位原件）"
     assert head.count('data-act="expPivot"') == 1, "含透视导出按钮缺 / 重复"
-    assert "BIND.m08" in SHELL, \
+    assert "addBind('m08'," in SHELL, \
         "壳里没有 `BIND.m08` ⇒ 那枚点了只会说「还没有导出功能」的朴素导出现在还留在屏幕上（用户会以为坏了）"
-    _hook = SHELL[SHELL.index("BIND.m08"):SHELL.index("BIND.m08") + 400]
+    _hook = SHELL[SHELL.index("addBind('m08',"):SHELL.index("addBind('m08',") + 400]
     assert '[data-act="exp"][data-t="库存单据明细总表"]' in _hook and ".remove()" in _hook, \
         "`BIND.m08` 没把朴素导出摘掉（选择器或 `.remove()` 变了）"
 

@@ -13,7 +13,7 @@
 `slices_of_lines(lines)`（逐页切片的**唯一算法** —— `ui_parity.slices()` 也走它）·
 `pages()` · `page_map()` / `page_slice(page)`（某页源码）·
 `func_body(name)`（函数整段声明）· `act_entry(name)`（`ACT` 里某一条 —— ⚠️ **两种形态**：对象字面量成员 / `ACT.<名>=` 赋值式）· `const_obj(name)`（`const X = {…}`）·
-⭐ 批 2b 添的四类具名之物：`api_entry(name)`（`const API` 客户端某一条）· `bind_block(page)`（`BIND.<页>` 块）·
+⭐ 批 2b 添的四类具名之物：`api_entry(name)`（`const API` 客户端某一条）· `bind_block(page)`（具名 `addBind` 登记）·
 `const_src(name)`（`const X = …;` 整句，含多段模板串拼接）· `const_items(name)`（数组 / `new Set([…])` 的项）。
 
 ## ⛔ 四条纪律（都是踩过的）
@@ -235,30 +235,10 @@ def api_entry(name: str, *, source: str | None = None) -> str:
 
 
 def bind_blocks(page: str, *, source: str | None = None) -> list[str]:
-    """壳里**所有** `BIND.<页> = …` 块（每块 = 该行起，到**下一个顶层声明行**止 —— 与 `page_slice` 同一套口径）。
-
-    ⚠️⚠️ **同一页可能有多块**（实测 `BIND.m03` / `BIND.m11` 各两处）—— 一块在 `pages-a.js` 管"全选框"、
-    另一块在 `core.js` **链式注入**（先存 `_BIND_M03_OLD` 再包一层）。⇒ 要挑哪一块是**调用方**的事。
-    ⚠️ `BIND` 三种写法**并存**：`BIND.m03=()=>{…}` · `BIND.m06 = function () {…}` · `BIND.m15 = m15Trash;`
-       ⇒ ⛔ 别按其中某一种形态去钉。
-    """
+    """取某页具名的加工登记；动态多页登记由行为核验覆盖。"""
     src, scan = _src(source)
-    lines, slines = src.split("\n"), scan.split("\n")
-    start = re.compile(rf"^BIND\.{re.escape(page)}\s*=")
-    blocks: list[list[str]] = []
-    cur: list[str] | None = None
-    for i, ln in enumerate(slines):
-        if start.match(ln):
-            cur = [lines[i]]
-            blocks.append(cur)
-            continue
-        if cur is None:
-            continue
-        if _END_RE.match(ln):
-            cur = None
-            continue
-        cur.append(lines[i])
-    return ["\n".join(b) for b in blocks]
+    start = re.compile(rf"^addBind\(['\"]{re.escape(page)}['\"],", re.M)
+    return [src[m.start():scan_stmt(scan, m.start())] for m in start.finditer(scan)]
 
 
 def bind_block(page: str, *, source: str | None = None) -> str:
@@ -266,8 +246,8 @@ def bind_block(page: str, *, source: str | None = None) -> str:
     bs = bind_blocks(page, source=source)
     if len(bs) != 1:
         raise LookupError(
-            f"`BIND.{page}` 命中 {len(bs)} 处（期望恰好 1）—— ⚠️ 同一页可能有多块"
-            "（实测 `m03`/`m11` 各两处）⇒ 请用 `bind_blocks()` 按**内容**挑，⛔ 别让它静默挑第一处"
+            f"`addBind({page})` 具名登记命中 {len(bs)} 处（期望恰好 1）—— 同一页可能有多块"
+            "（`m03`/`m11` 各两处具名登记，另有动态返回加工）⇒ 请用 `bind_blocks()` 按内容挑"
         )
     return bs[0]
 

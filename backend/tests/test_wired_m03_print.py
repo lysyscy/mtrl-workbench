@@ -28,14 +28,14 @@ def test_打印机设置入口在新壳里可发现且真读写后端():
     assert "m03PrinterOpen" in SHELL and "打印机设置" in SHELL
     assert "API.printerGet()" in SHELL, "要读当前值回填（⛔ 不许只弹个空框）"
     assert "API.printerSet(" in SHELL, "保存要真写后端（写配置 + 清缓存 ⇒ 即时生效）"
-    # ⚠️ 壳里 `BIND.m03` **有两块**（`pages-a.js` 管全选框 · `core.js` 链式注入打印机入口）
+    # ⚠️ 壳里 `BIND.m03` **有两块**（`pages-a.js` 管全选框 · `core.js` 追加注入打印机入口）
     #    ⇒ 按**内容**挑那一块（⛔ 别让它静默挑第一处 —— `bind_block()` 多处命中会抛）
     injects = [b for b in bind_blocks("m03") if "m03PrinterOpen" in b]
     assert len(injects) == 1, f"注入「打印机设置」入口的 `BIND.m03` 应当恰好一块，实得 {len(injects)}"
     inject = injects[0]
     assert "data-act=\"m03PrinterOpen\"" in inject, "入口要在渲染后注入（切片一行不动）"
     assert "dataset.m03More" in inject, "注入必须**幂等**（⛔ 多次 render 不叠加）"
-    assert "_BIND_M03_OLD" in inject, "⛔ 不许覆盖别的 `BIND.m03`"
+    assert inject.startswith("addBind('m03',"), "打印加工应追加，不覆盖已有加工"
 
 
 @acc()

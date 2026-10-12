@@ -176,9 +176,9 @@ def test_软删的账号仍带出到界面_且在回收站里单独可见可恢�
     # ⚠️ **先把注释剥掉**再查（本仓的既有教训：注释里会举反例、也会写选择器名 ⇒ 会喂饱/绊倒断言）
     code = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S)
     code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
-    assert re.search(r"BIND\.m15\s*=", SHELL), (
+    assert re.search(r"addBind\('m15',\s*m15Trash\)", SHELL), (
         "回收站没挂到渲染后钩子 `BIND.m15` 上 ⇒ **它根本不会被调用**"
-        "（`render()` 里只有 `if(BIND[VIEW]) BIND[VIEW]()` 这一处调用）")
+        "（`render()` 里只有 `runBind(VIEW)` 调用）")
     assert """querySelectorAll('[data-act="userRestore"]')""" in code, (
         "搬行没有按**已删除行的唯一特征**（操作列那个 `userRestore` 按钮）来选 —— "
         "它是切片 `V.m15` 里判「这一行已删」的**同一处依据**")

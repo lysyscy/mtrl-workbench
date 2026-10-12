@@ -85,7 +85,7 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "test_月份切换会重新取数"),
     # ---- `TAIL-38`（录机械费入口）----
     ("过程资料默认页没挂上 BIND 钩子",
-     "shell", "BIND.m06 = function ()", "BIND.m06x = function ()",
+     "shell", "addBind('m06', function ()", "addBind('m06x', function ()",
      "test_卡头不再出现那枚永不出结果的导出按钮"),
     ("录机械费不再走后端（本地改 MACH6）",
      "shell", "API.m06MechSave(", "MACH6[wh]= (",

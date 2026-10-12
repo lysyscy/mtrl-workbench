@@ -495,6 +495,10 @@ const bjMonth = (off=0)=>{ const [y,m]=SYS_YM.split('-').map(Number); const t=ne
    **仓库排序**（仓库名 = 唯一标识，§9.8-4）⇒ 不论某处列出的是**全名 / 仓库名 / 展示名**，
    只要能定位到同一条档案行，就按**同一条 ord** 排。追加在末尾，既有 9 元素的行 ord = undefined。 */
 const V={}, BIND={};
+/* 渲染后加工按登记顺序运行；每次重建 #view 后各跑一次。
+   不捕获旧钩子、不吞异常；局部返回只结束当前步骤。 */
+function addBind(view, step){ (BIND[view] ||= []).push(step); }
+function runBind(view){ for(const step of BIND[view] || []) step(); }
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
@@ -1520,7 +1524,10 @@ V.m15=()=>{
   <script src="/static/shell/core.js"></script>
   <script src="/static/shell/print-export.js"></script>
 
-  <!-- 启动点：三件都加载完之后再跑（⚠️ 顺序 = 上面三行的顺序） -->
+  <!-- 静态加载的必要前置：actions → legacy（追加 ACT）；view / legacy → core
+       （捕获 render / 求值 reloadSet、reloadImp）。pages-a 的加工先登记，core 再追加。
+       所有外链须在 boot 前到齐；API 是运行期依赖，不要求在 core 求值前出现。
+       不建动态加载器或运行守卫：当前没有动态扩展需求，正常启动由真机核验。 -->
   <script>boot();</script>
 </body>
 </html>

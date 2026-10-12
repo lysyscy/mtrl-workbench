@@ -96,7 +96,7 @@ def test_空态行跨列数派生且全选框回显三态():
     assert "TBL({head:jcThead(),key:'m11:jc'," in html, \
         "集采台账表没走统一出口 `TBL`（`TAIL-64` P3 余量），或表头没按列清单现生成（`TAIL-298`）"
 
-    bind = _fn(html, "BIND.m11=", "/* ====")
+    bind = _fn(html, "addBind('m11',", "/* ====")
     assert "box.checked" in bind and "hit===vis.length" in bind, (
         "全选框的 `checked` 不是「全中」才勾 —— 那会出现「勾着的其实没全选」")
     assert "box.indeterminate" in bind and "hit>0" in bind, (
