@@ -43,7 +43,7 @@ MEMORY.md为唯一注入档；细则.md与IDE-细节.md为按需分册。业务�
 
 ## 六、坐标与禁区
 
-仓：D:/dev/mtrl-workbench；现行产品资料：仓内`delivery/`；旧交付面根仅余未交付的本机`.workbuddy/`。仓外历史经归档索引定位。本轮只迁移产品资料并更新读取指针，业务含义保持。
+仓：D:/dev/mtrl-workbench；现行产品资料：仓内`delivery/`；旧交付面根仅余未交付的本机`.workbuddy/`。仓外历史经归档索引定位。现行产品资料随仓库版本管理；迁移过程按需查 Git 历史。
 需要逐日日志时只放 .codebuddy/memory/journal/YYYY-MM-DD.md；现行要求回主人，不把过程作为默认必读。
 
 ## 八、工程纪律

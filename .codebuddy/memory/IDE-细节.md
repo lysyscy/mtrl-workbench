@@ -109,7 +109,7 @@
 ## 七、交接载体
 
 当前交接只回主计划§13.6最新行；读取入口回 AGENTS.md，历史交接查 .codebuddy/plans/archive/归档-留痕索引-20261005.md 的TAIL-247整理登记。
-提示词仅在聊天回复提供，不写进票或规格；来源见 .codebuddy/memory/MEMORY.md §一。保存交接不附带提交或推送。
+提示词仅在聊天回复提供，不写进票或规格；来源见 .codebuddy/memory/MEMORY.md §一。提交与推送按 ops/agents/issue-tracker.md §四判断。
 
 ## 八、文件行数口径（曾误判一次 · 已订正）
 
@@ -201,7 +201,7 @@
 - ⭐ **核清一条**：**归档不挡任何业务**（§2.7「只改状态、不动数据」；§2.7.1「所有候选含归档」；代码侧只有"已归档的壳下不许新建小微"这条 §2.7.2 不变式）⇒「怕归档后处理不了历史付款」不成立，只有"那些页面的**默认筛选是「在建」**"这一处差别。
 - ✅ **过程资料（`m06`）的项目候选：两处口径【刻意不同】（`TAIL-114`）**：**导入页** `mod06_proc/service.py::import_projects` = 项目档案全部（含归档）∪ 有数据的；**过程资料页** `projects_of` = 仍只列**有数据的**（用户原话「过程资料**本身**可以只显示仓库有数据项目没问题」）。⛔ **别再合并成一处出口**（合并＝病根：自我锁死 —— 「导历史」才是造历史段的手段，候选只看"有数据的" ⇒ 没库存单据的项目**永远**进不了候选）。⚠️ m06 落库**不要求**档案行 ⇒ 并集里保留 i8-only 的仓库名是安全的。
 - ⚠️⚠️ **集采台账（`m11`）主表 5 个派生金额列一律读后端派生值** —— `j.inv_sum` · `j.trade_inv_sum` · `j.settle` · `j.pay_sum`（⛔ 不是 `pay`）· `j.debt`，唯一出口 = `mod11_jc.domain.contract_amounts`（`/api/m11/list` **故意不给子表明细**）。⛔ **别在壳里按子表数组现算**（恒 0 —— `TAIL-113` 就是这么炸的：用户报「**发票子表导入成功，但发票金额没跟着动**」）。⭐ 守它的是**真机**段 `tools/probe/_shell_m11.py`（㉓：页面 5 列**逐行 ＋ 合计** vs 后端派生值）。
-- ⭐ **经验（`TAIL-113`）**：「**前端自己算派生值**」这类 bug **离线判据看不见**（`node --check` 过、静态判据只钉"函数体读哪个字段"、页面也不报错）⇒ 判据必须有**一半是真机**、判法是「**页面显示的字 == 后端的数**」（⛔ 别写死金额）。
+- **派生值核验**（`TAIL-113`）：只查函数体读哪个字段不足以证明结果。用相关浏览器回归核对页面显示与后端返回值；真实接口或现场数据仍有缺口时再补对应实测，范围回 ops/agents/issue-tracker.md §四。
 - ⚠️⚠️ **壳里新增浮层（下拉/面板/弹层）必须挂两个钩子**：锚 `pjwrap` ＋ 盒 `pjpop`（`pj` 是历史遗留名，现已是**全站通用**机制）。机制**只有一处** = `index.html` 的 `placePops()`（渲染后把浮层提升为 `fixed` ⇒ 逃出 `.card{overflow:hidden}`；`render()` **两条路径都要调**）。⛔ 别按类型各写一套、⛔ 别新建第二种锚名；守卫 `test_shell_render::test_通用浮层要逃出卡片裁剪_机制只有一处` ＋ 真机 `_shell_pops.py`（㉑）。⚠️ `.card{overflow:hidden}` 是给表格圆角用的 ⇒ **不许全局放开**。
 - ⚠️⚠️ **同一个「行」在一页里只许一个口径 = Excel 行号**：③ 预览的**数据表**用通用面的 `_row`；域侧**必须把 `_row` 带进匹配层**（`m11.imp_spec._rows_of` 要带 `_row`、`match_and_apply` 用 `row_no = int(row.get("_row") or n)`）。⚠️ 漏带时匹配层只能自己数"第几条数据" ⇒ 块里写「行 1/2/5」而数据表写 Excel 行号「4/5/8」⇒ **用户在表里找不到**。判据 = `test_imp_m11_api`「块的『行』必须能在**数据表**里找到、且就是那一行」（**结构性**断言，⛔ 别写死行号）。⭐ 报"某处编号/行号对不上"时，先问**"这个数是哪儿来的"**（两个来源 ⇒ 必然对不上）。⚠️ **图例/说明类文案一律按需显示**（只写"表里真有的那一类"，守则 §2.1）。
 - ⚠️⚠️ **通用导入面 `/api/imp/{domain}/preview` 的回执是「白名单」放行**（`app/import_kit/api.py` 只透传 `problems`/`writable`/`kpis`/`blocks`/`skipped`）⇒ **域新加的键必须同批在这里放行**（漏了就是"域给了、界面永远收不到"，而两边测试都绿）。其中 `skipped = [{row: Excel 行号, why: 人话原因, kind}]` 是**行级**名单（域自报；`m04` **刻意不给** —— 它项目没配上照样入库）⇒ 壳据此把 `.skiprow`（浅底＋左竖条）＋ 行号旁「不写入」/「不导入」标在**那一行**上（守则 §2.7 §2.8）。契约 = `backend/tests/imp_contract.py`（4 域共用）＋ `test_imp_shell::test_不会落库的行要在行上直接标`；真机 = `_shell_legacy.py` ③″（⭐ 判词**拿"卡片说得出的数"比"行上真标出的条数"**）。⚠️ 该判据当场抓到过真 bug：数据表**题头 18 格 / 数据行 17 格**（行号格没画）⇒ 行号格**显式先画**。
@@ -228,15 +228,14 @@
 
 ## 十一、核验与运行命令
 
-> 何时读：选择或执行本轮检查时；范围与流程唯一主人为 ops/agents/issue-tracker.md §四。
+核验范围、证据复用、隔离保护与现场触发由 `ops/agents/issue-tracker.md` §四决定。本节提供调用方法；参数与执行登记以当前脚本的 `--help` 和 CMDS / SELFTESTS 为准。
 
-1. **开工基点（有已有dirty时）**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --start .codebuddy/work/00-scratch/tmp-YYYYMMDD-entry.json`。快照只界定新增差异，不是通过证明；凭据只记摘要。 查看快照用同入口 `--inspect <开工基点>`，只输出HEAD、文件数、摘要件数与新增路径。
-2. **查看选择**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --since <开工基点> --explain`。
-3. **按影响运行**：上一命令去掉 `--explain`；无基点时与HEAD比较。`--paths <实际差异路径...>` 可明确本轮范围，其余差异打印为未验。默认、`--related`和`--all`均采用此选择，不因提交扩大。文档分项由doc_audit合并执行一次，提交钩子不重复文档/台账/变异登记。
-4. **显式完整检查**：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --full`；仅用于已经查明广泛影响或完整结果刷新，不能用作未知影响的自动兜底。完整检查不重复doc/drift/meta/work分项，不带壳快照门禁；工具自测仍按相关变化选中。完整pytest不代表现场39段通过，变异按实际风险选择隔离入口，不对正式文件写靶。
-5. **局部/bug**：相关节点先跑，修补后只复验触达项；**跨模块**：同一影响入口合并实际使用者一次执行。**改壳**：先用相关隔离浏览器回归，普通小改不触发真实39段或盖章。**发布前/现场问题**：准备好隔离环境后按需完整检查；真实服务验证显式运行 `tools/probe/_shell_smoke.py`，不把旧快照差异当业务失败。`shell_verify`仅保留为可选排障工具；未执行现场验证不得写已验收。运行后端需要现场复验时再按 `ops/server_ctl.ps1` 重启。
+1. 有已有 dirty 且需区分新增差异时：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --start .codebuddy/work/00-scratch/tmp-YYYYMMDD-entry.json`。用 `--inspect <基点>` 查看摘要；干净仓直接与 HEAD 比较。
+2. 查看选集：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --explain`；有基点时加 `--since <基点>`，明确本轮路径时加 `--paths <实际差异路径...>`。完成条件：选中项对应已查明使用者，待查输入已说明。
+3. 执行同一选集：去掉 `--explain`；读取完整汇总与退出码。默认、`--related`、`--all` 都按影响选择；显式完整检查使用 `--full`。
+4. 需要真实服务验证时：按 `ops/deployment.md` 核对现场前提，运行 `tools/probe/_shell_smoke.py`；运行后端重启入口为 `ops/server_ctl.ps1`。`tools/audit/shell_verify.py` 是可选快照排障入口。
 
-Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；输出使用UTF-8。`ACC_RESULTS_PATH`不得全局导出，局部结果由选择器隔离。读取整行BAD与退出码；相关失败不能报通过。中断/失败只重验受影响项，临时脚本放00-scratch。
+Playwright 环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`，只传给执行子进程；输出用 UTF-8。`ACC_RESULTS_PATH` 局部出口由选择器隔离，勿全局导出。临时脚本与证据放 00-scratch。
 
 **命令卫生三条（2026-10-11 实测）**：① 每条 shell 命令前置 `$ProgressPreference='SilentlyContinue';` —— 否则每条都吐 1–3 KB 的 `#< CLIXML … 正在准备首次使用模块` 噪声；② 要看中文路径就 `git -c core.quotepath=false …`（否则是 `"\345\274\200…"` 转义）；③ ⛔ 别用 `… | Select-Object -First N` 截断后再看退出码 —— PowerShell 会把 rc 变成 1（假红），要 rc 就整条跑、或截断后单独读 `$LASTEXITCODE`。
 
@@ -246,9 +245,7 @@ Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；�
 
 **Git推送遇代理中断（2026-10-11实测）**：HTTPS报`curl 52 Empty reply from server`且SSH也被重置时，先用`git -c http.proxy= push <HTTPS远端> <当前分支>`作单次直连尝试；不改全局代理。随后用同样的单次选项读取远端分支SHA，与本地HEAD比较；连接中断或输出`Everything up-to-date`本身不能证明推送成功。提交与推送决策回 ops/agents/issue-tracker.md §四「提交与推送」。
 
-**现场证据复用**：日常入口不自动调用真实39段。已有现场证据在源码、探针、环境和现场数据未变时可复用；变化的实际状态另补验，不靠快照盖章声称业务通过。
-
-**权威四态**：只有完整pytest刷新 `artifacts/acc_results.json`。局部回归与变异使用独立结果出口，不顺带重跑全套；删除无效绑定时只使对应旧绿失效，保留其余历史结果并注明未全量刷新。
+现场证据复用与权威四态出口回 `ops/agents/issue-tracker.md` §四「按影响核验」。
 
 ## 十二、`验收基线.json` 的实测格式（2026-09-29 从 `MEMORY.md` 下沉）
 
@@ -323,7 +320,7 @@ Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；�
    而**滚动监听的挂载点**留在页级那一半里 ⇒ 表级那条一 `return` 就跳过它 ⇒
    **真机症状 = 滚动条能拖、内容一动不动，而 `pytest` / `node --check` / `U1` / 全部离线判据全绿**。
    ⇒ 做法：**共用的那几件事（挂监听 / 收尾 `placePops`+`applyPjFilters` / 注钩子 `BIND`）一律提成函数、
-   在分派之前调**；并补一条**结构性**判据（"挂载点在分派之前" ＋ "入口函数全壳只许 N 处"）。
+   在分派之前调**；核验每条实际路径的监听与收尾行为；覆盖选择回 ops/agents/issue-tracker.md §四。
 2. **共用件默认行为须保持**：新增参数不传时老调用者行为不变；改共享内核逐路核对真实调用者与相关消费者。原U5两边逐字同步规则已退场，当前壳基线/原型历史用途回 ops/architecture.md；不为壳小修自动改仓外原型。
 
 ## 十六、共享改动的必要约束（涉及共享调用、分层或原型时读）
