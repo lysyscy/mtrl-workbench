@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import MustReportError   # `TAIL-96` 补：`add_ignored` 空名要抛它（拆件漏 import ⇒ 运行时 NameError）
 from app.mod01_projects import service as PS
-from app.mod02_i8.models import RunRecord   # `TAIL-93`：认「最近一次集采抓取」的运行记录
 from app.mod11_jc import domain as D          # ⚠️ 只**调**它的出口（三态归一 / 判定），⛔ 不在本层复写逻辑
 from app.mod11_jc.models import (
     KIND_PARTY_TRADE,
@@ -127,23 +126,20 @@ def payments_of_many(s: Session, contract_ids: list[int]) -> dict[int, list[dict
     ids = [int(i) for i in contract_ids]
     if not ids:
         return {}
-    from app.mod03_notice.models import PaymentNotice
-    from app.mod05_flow.models import PaymentFlow, FLOW_EFFECTIVE
+    from app.mod03_notice import service as notices
+    from app.mod05_flow import service as flows
 
-    # 金额取通知书统计付款；日期只取最近生效流水。两者均批量读，旧关联金额不参与计算。
-    dates = select(
-        PaymentFlow.notice_id, func.max(PaymentFlow.pay_date).label("date")
-    ).where(
-        PaymentFlow.status == FLOW_EFFECTIVE,
-        PaymentFlow.notice_id.in_(select(JcPayment.notice_id).where(JcPayment.contract_id.in_(ids))),
-    ).group_by(PaymentFlow.notice_id).subquery()
-    stmt = select(JcPayment, PaymentNotice.stat_paid, dates.c.date).outerjoin(
-        PaymentNotice, PaymentNotice.id == JcPayment.notice_id
-    ).outerjoin(dates, dates.c.notice_id == JcPayment.notice_id).where(
+    rows = list(s.execute(select(JcPayment).where(
         JcPayment.contract_id.in_(ids)
-    ).order_by(JcPayment.contract_id, JcPayment.id)
+    ).order_by(JcPayment.contract_id, JcPayment.id)).scalars().all())
+    notice_ids = sorted({int(r.notice_id) for r in rows if r.notice_id is not None})
+    # 两个主人各批量读取一次，调用次数不随合同/通知书数量增长。
+    stats = notices.stat_paid_of_many(s, notice_ids)
+    dates = flows.latest_effective_dates(s, notice_ids)
     out: dict[int, list[dict]] = {i: [] for i in ids}
-    for r, stat_paid, actual_date in s.execute(stmt).all():
+    for r in rows:
+        stat_paid = stats.get(r.notice_id)
+        actual_date = dates.get(r.notice_id)
         linked = r.source == SRC_NOTICE
         out.setdefault(r.contract_id, []).append({
             "id": r.id, "date": (actual_date or "") if linked else r.pay_date,
@@ -590,12 +586,8 @@ def latest_unsettled(session: Session) -> list[dict]:
     ⚠️ 清单里存的是**当时的判定** ⇒ 调用方必须按**当前档案现算**（`mod03_notice.domain.still_unsettled`）。
     ⛔ 这里**不暂存任何合同数据**（口径同付款侧：补完词**再抓一次**，库里不留半成品）。
     """
-    recs = list(session.execute(
-        select(RunRecord)
-        .where(RunRecord.run_type == "fetch")
-        .order_by(RunRecord.id.desc())
-        .limit(LOOKBACK)
-    ).scalars().all())
+    from app.mod02_i8 import service as records
+    recs = records.recent_records(session, run_type="fetch", limit=LOOKBACK)
     # ⚠️ 离线桩不处理 `order_by` ⇒ 再显式按 id 倒序一次（真库本来有序 ⇒ 语义不变）
     for r in sorted(recs, key=lambda x: getattr(x, "id", 0) or 0, reverse=True):
         detail = getattr(r, "detail", None) or {}
@@ -663,3 +655,13 @@ def set_ignored_active(s: Session, *, ignore_id: int, active: bool) -> int:
     row.active = bool(active)
     s.flush()
     return 1
+
+
+def links_by_notice(session) -> dict[int, list[int]]:
+    """一次读取通知书到合同关联，与付款子表使用同一份事实。"""
+    grouped: dict[int, list[int]] = {}
+    stmt = select(JcPayment.notice_id, JcPayment.contract_id).where(JcPayment.notice_id.is_not(None))
+    for nid, cid in session.execute(stmt).all():
+        if nid is not None:
+            grouped.setdefault(int(nid), []).append(int(cid))
+    return grouped

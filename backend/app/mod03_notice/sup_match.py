@@ -87,16 +87,9 @@ def row_pool_rows(session) -> list[dict]:  # pragma: no cover - 薄查库层，�
 
     ⚠️ **一次查完**（⛔ 不逐行查项目名 = N+1）。
     """
-    from sqlalchemy import select
-
-    from app.mod01_projects import service as PS
-    from app.mod11_jc.models import JcContract
-
-    wh = {int(p.id): str(p.warehouse_name) for p in PS.warehouse_index(session).values()}
-    return [
-        {"project_key": wh.get(int(c.project_id or 0), ""), "supplier": str(c.supplier or "")}
-        for c in session.execute(select(JcContract)).scalars()
-    ]
+    from app.mod11_jc import service as contracts
+    return [{"project_key": c["project_key"], "supplier": str(c["supplier"] or "")}
+            for c in contracts.list_contracts(session)]
 
 
 __all__ = ["LVL_NAMES", "FRAG_LEN_OFFSET", "MAX_LEVEL",

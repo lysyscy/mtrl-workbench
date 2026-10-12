@@ -38,7 +38,6 @@ from app.mod01_projects import archive as ARCHIVE      # ⚠️ 只为 `MANUAL_S
 from app.mod01_projects.domain import DEFAULT_SMALL_KEYWORD, classify_name, norm_full_name
 from app.mod01_projects.models import Project
 from app.mod01_projects.repository import all_projects, create_project
-from app.mod02_i8.models import RunRecord
 
 #: 运行记录 `detail` 里放这份清单的键（**写侧唯一出口 = `record_detail`**：键名只此一处）
 RECORD_KEY = "archive_pending"
@@ -66,12 +65,8 @@ def latest_pending(session: Session) -> dict:
 
     ⚠️ 认不出 ⇒ `found=False` ＋ 空清单（**⛔ 不拿更早的记录凑**：那会让用户对着早已解决的事白干）。
     """
-    recs = list(session.execute(
-        select(RunRecord)
-        .where(RunRecord.run_type == "sync")
-        .order_by(RunRecord.id.desc())
-        .limit(LOOKBACK)
-    ).scalars().all())
+    from app.mod02_i8 import service as records
+    recs = records.recent_records(session, run_type="sync", limit=LOOKBACK)
     # ⚠️ 离线桩（`tests.m09_helpers.M09Session`）**不处理 `order_by`** ⇒ 再显式按 id 倒序一次
     #    （真库本来就有序 ⇒ 语义不变，只让断言与真机走同一条路）。
     for r in sorted(recs, key=lambda x: getattr(x, "id", 0) or 0, reverse=True):

@@ -152,7 +152,7 @@ def revoke(s: Session, flow: PaymentFlow, *, reason: str, changed_by: str = "", 
     from app.mod03_notice import domain as notices_domain, service as notices_repo
     if flow.status != FLOW_EFFECTIVE:
         raise MustReportError("该流水已撤销，请刷新页面")
-    notice = s.get(PaymentNotice, int(flow.notice_id)) if flow.notice_id is not None else None
+    notice = notices_repo.get_notice(s, int(flow.notice_id)) if flow.notice_id is not None else None
     traces = notices_repo.list_stat_traces(s, notice.id) if notice else []
     choice = notices_domain.revoke_stat_choice(stat_choice, manual=bool(notice and notices_domain.stat_paid_is_manual(traces, notice.id)))
     patch = revoke_flow(reason)
@@ -205,14 +205,14 @@ def sync_stat_paid(s: Session, notice_id: int) -> Decimal | None:
     from app.mod03_notice import service as notices_service    # 延迟导入，避免环；⭐ 包间出口（§2.3）
     from app.mod03_notice.domain import F_STAT_PAID, was_manually_edited
 
-    notice = s.get(PaymentNotice, int(notice_id), with_for_update={"key_share": True}, populate_existing=True)
+    notice = notices_service.get_notice(s, int(notice_id), with_for_update={"key_share": True}, populate_existing=True)
     if notice is None:
         return None
     traces = notices_service.list_stat_traces(s, int(notice_id))  # 留痕 = 「是否手改」的唯一事实来源
     if was_manually_edited(traces, int(notice_id), F_STAT_PAID):
         return to_money(notice.stat_paid)                 # 保护人工值（§4.2.5）
     total = effective_total_of(s, int(notice_id))
-    notice.stat_paid = total          # 对象来自 `s.get(...)` ⇒ 本就是 persistent，无需 add
+    notice.stat_paid = total          # 对象来自同会话通知书出口 ⇒ 本就是 persistent，无需 add
     s.flush()
     return total
 
@@ -408,13 +408,15 @@ def set_remark(s: Session, *, category: str, project_id: int, ym: str, remark: s
 
 def notice_rows(s: Session) -> list[PaymentNotice]:
     """付款通知书行 —— `NoticeDebtView` 的来源（欠款 / 台账 / 统计**共用同一批行**）。"""
-    return list(s.execute(select(PaymentNotice).order_by(PaymentNotice.id.asc())).scalars().all())
+    from app.mod03_notice import service as notices
+    return notices.all_notice_rows(s)
 
 
 __all__ = [
     "list_flows", "get_flow", "list_flows_of_notice", "next_flow_no", "has_request_id",
     "create_flow", "revoke", "revoke_info",
     "effective_total_of", "sync_stat_paid",
+    "latest_effective_dates",
     "flows_in_batch", "rollback_batch", "notices_without_flow", "notices_overpaid",
     "FLOW_SOURCE_MANUAL", "FLOW_SOURCE_IMPORTED", "FLOW_EFFECTIVE", "FLOW_REVOKED",
     "list_openings", "get_opening", "upsert_opening", "delete_opening",
@@ -426,10 +428,21 @@ def revoke_info(s: Session, flow: PaymentFlow) -> dict:
     """撤销窗口的当前模式和事实快照；提交时在行锁内重读比对。"""
     from hashlib import sha256
     from app.mod03_notice import domain as notices_domain, service as notices_repo
-    notice = s.get(PaymentNotice, int(flow.notice_id)) if flow.notice_id is not None else None
+    notice = notices_repo.get_notice(s, int(flow.notice_id)) if flow.notice_id is not None else None
     traces = notices_repo.list_stat_traces(s, notice.id) if notice else []
     facts = (flow.id, flow.notice_id, flow.project_id, str(flow.amount), flow.pay_date,
              flow.pay_method, flow.remark, flow.status, str(notice.stat_paid) if notice else None,
              [(t.field, str(t.before), str(t.after), t.changed_at.isoformat()) for t in traces])
     return {"manual": bool(notice and notices_domain.stat_paid_is_manual(traces, notice.id)),
             "notice_id": flow.notice_id, "expected": sha256(repr(facts).encode()).hexdigest()}
+
+
+def latest_effective_dates(s: Session, notice_ids: list[int]) -> dict[int, str]:
+    """一批通知书的最近生效流水日期；撤销流水不参与。"""
+    from sqlalchemy import func
+    if not notice_ids:
+        return {}
+    stmt = select(PaymentFlow.notice_id, func.max(PaymentFlow.pay_date)).where(
+        PaymentFlow.notice_id.in_(notice_ids), PaymentFlow.status == FLOW_EFFECTIVE
+    ).group_by(PaymentFlow.notice_id)
+    return {int(nid): str(at or "") for nid, at in s.execute(stmt).all()}

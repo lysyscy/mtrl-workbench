@@ -30,6 +30,7 @@ SLOW_BUDGET = 60.0
 #: 慢集（`--fast` 跳过它们；跑全套时照跑）
 SLOW_KEY: frozenset[str] = frozenset({
     "_mut_layering.py",  # 完整mod*隔离扫面多靶，实测超过快集预算；仍留KEY按需执行。
+    "_mut_tail300.py",  # 金额/批量/锁的隔离多进程靶实测超过快集预算；仍留KEY按需执行。
     "_mut_docaudit.py", "_mut_shellapi.py", "_mut_segments.py",
     # ⚠️ `_mut_syntax.py`（`TAIL-244` 定档）：靶＝`syntax_audit`（内建 `--selftest` ＋ 活树五靶），
     #   **每处靶都要 `node --check`、且有两处真去动壳件**（`print-export.js` / `index.html`）
@@ -55,6 +56,7 @@ KEEP_FAST: dict[str, str] = {
 #: ⭐ 关键集：靶是**尺子自身 / 结构守卫 / 文档面**的那几支（⇒ 它们烂掉 = 一整片守卫静默失效）
 KEY: tuple[tuple[str, str], ...] = (
     ("_mut_layering.py", "分层A/B/B2/C/D/C2：隔离直查红、正当引用绿、名单与扫面承重"),
+    ("_mut_tail300.py", "300：原单隔离、集采批量、日期事实及同会话锁参数"),
     # ⚠️ 说明里**不抄条数**（2026-10-05 `/code-review` 指出：那与本件 docstring 的"共 N 条"是
     #    同一件事两处写 —— 而 docstring 自己就写着"条数看本件输出、⛔ 别在别处抄"）。
     ("_mut_docaudit.py", "doc_audit 的 T1–T19 ＋ T24/T25 ＋ T4 计数锚点（条数看本件输出）"),
@@ -321,7 +323,7 @@ def run_one(p: pathlib.Path, timeout: int) -> tuple[int, float]:
                       #   ④ 靶全在 `_isolated.isolated_backend` 的临时副本（正式件与权威四态都未动）。
                       '_mut_tail298_columns.py',
                       # TAIL-301：临时副本内基线绿、各靶独立红、按原bytes复原，不写正式壳。
-                      '_mut_tail301_columns.py', '_mut_layering.py'}:
+                      '_mut_tail301_columns.py', '_mut_layering.py', '_mut_tail300.py'}:
         print('未执行：旧脚本尚未提供隔离入口，须先为本轮对应判据准备隔离输入：', p.name)
         return 2, 0.0
     t = time.time()

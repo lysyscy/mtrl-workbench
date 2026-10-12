@@ -270,15 +270,8 @@ def _links_by_notice(session):
 
     ⚠️ **一次查完**（⛔ 不逐行查 = N+1；列表页每行都要问一次）。
     """
-    from sqlalchemy import select
-
-    from app.mod11_jc.models import JcPayment
-
-    grouped: dict[int, list[int]] = {}
-    stmt = select(JcPayment.notice_id, JcPayment.contract_id).where(JcPayment.notice_id.is_not(None))
-    for nid, cid in session.execute(stmt).all():
-        if nid is not None:
-            grouped.setdefault(int(nid), []).append(int(cid))
+    from app.mod11_jc import service as contracts
+    grouped = contracts.links_by_notice(session)
     return lambda notice_id: grouped.get(int(notice_id), [])
 
 

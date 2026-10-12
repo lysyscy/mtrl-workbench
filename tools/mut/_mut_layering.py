@@ -40,6 +40,26 @@ ALIASES = (
     ("from ..mod01_projects.models import Project as X", "X"),
 )
 
+# TAIL-300逐处改回原查询目标；与实际16条身份一致，不依赖已清空的待清表。
+RESTORED = (
+    ('mod03_notice/sup_match.py', 'row_pool_rows', 'mod11_jc', 'JcContract'),
+    ('mod03_notice/list_view.py', '_links_by_notice', 'mod11_jc', 'JcPayment'),
+    ('mod04_plan/service.py', 'notice_amounts', 'mod03_notice', 'PaymentNotice'),
+    ('mod04_plan/service.py', 'notice_amounts', 'mod05_flow', 'PaymentFlow'),
+    ('mod05_flow/repository.py', 'notice_rows', 'mod03_notice', 'PaymentNotice'),
+    ('mod05_flow/repository.py', 'revoke', 'mod03_notice', 'PaymentNotice'),
+    ('mod05_flow/repository.py', 'revoke_info', 'mod03_notice', 'PaymentNotice'),
+    ('mod05_flow/repository.py', 'sync_stat_paid', 'mod03_notice', 'PaymentNotice'),
+    ('mod09_fee/repository.py', 'inv_rows', 'mod08_inv', 'InvDetail'),
+    ('mod11_jc/repository.py', 'payments_of_many', 'mod05_flow', 'PaymentFlow'),
+    ('mod11_jc/repository.py', 'payments_of_many', 'mod03_notice', 'PaymentNotice'),
+    ('mod11_jc/service.py', 'act_link_notice', 'mod03_notice', 'PaymentNotice'),
+    ('mod01_projects/pending.py', 'latest_pending', 'mod02_i8', 'RunRecord'),
+    ('mod01_projects/archive_pending.py', 'latest_pending', 'mod02_i8', 'RunRecord'),
+    ('mod03_notice/repository.py', 'latest_unresolved', 'mod02_i8', 'RunRecord'),
+    ('mod11_jc/repository.py', 'latest_unsettled', 'mod02_i8', 'RunRecord'),
+)
+
 
 def digest():
     return {str(p): hashlib.sha256(p.read_bytes()).digest()
@@ -95,6 +115,13 @@ def main():
                 injected('mod03_notice/sup_match.py', source, QUERY, '跨包查询目标必须走主人service')
         print('A/B/B2/C/D旧靶红；C2五形态＋get关键字×五种引用全红')
 
+        for path, fn, owner, model in RESTORED:
+            source = (f'\ndef {fn}(session):\n    from sqlalchemy import select\n'
+                      f'    from app.{owner}.models import {model}\n'
+                      f'    return session.execute(select({model})).scalars().all()\n')
+            injected(path, source, QUERY, '跨包查询目标必须走主人service')
+        print('TAIL-300全部16处改回跨包直查均红')
+
         # 与typing/domain/join条件混用，也不能误伤；本包查询正当。
         normal = '''
 from sqlalchemy import select
@@ -138,7 +165,7 @@ def alias_query(session):
             p.write_bytes(raw)
 
         # 名单漏扫、同处多一次查询、幽灵和增长分别验证。
-        key = next(iter(layer._ALLOW_C2_PENDING))
+        key = next(iter(layer._ALLOW_C2_PENDING or layer._ALLOW_C2_BY_DESIGN))
         path, fn, model = key
         injected(path, f'\nfrom {model.rsplit(".",1)[0]} import {model.rsplit(".",1)[1]} as Ghost\n'
                        f'def {fn}(session):\n    session.get(Ghost, 1)\n', QUERY,
@@ -149,11 +176,17 @@ def alias_query(session):
             check(TABLE, 'C2 名单未被扫出')
         finally:
             del layer._ALLOW_C2_BY_DESIGN[ghost]
-        layer._ALLOW_C2_PENDING[ghost] = '隔离增长'
+        saved_pending = dict(layer._ALLOW_C2_PENDING)
+        # 待清清零后仍须超过历史起点才能证明「不许增长」断言承重。
+        layer._ALLOW_C2_PENDING.update({
+            (ghost[0], f'ghost_{i}', ghost[2]): '隔离增长'
+            for i in range(layer._C2_PENDING_START + 1)
+        })
         try:
             check(TABLE, 'C2 待清名单不许变长')
         finally:
-            del layer._ALLOW_C2_PENDING[ghost]
+            layer._ALLOW_C2_PENDING.clear()
+            layer._ALLOW_C2_PENDING.update(saved_pending)
         original = layer._query_targets
         layer._query_targets = lambda *args: []
         try:

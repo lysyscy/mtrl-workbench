@@ -146,24 +146,7 @@ def _query_targets(source: str, own: str, package: str | None = None) -> list[tu
 
 # 按查询处登记（文件、函数、模型）；同处再多一次查询也必须报红。
 # 待清项逐条归TAIL-300；按设计锁不占待清名额。起点只许变短。
-_ALLOW_C2_PENDING: dict[tuple[str, str, str], str] = {
-    ("mod03_notice/sup_match.py", "row_pool_rows", "app.mod11_jc.models.JcContract"): "TAIL-300：供应商匹配池",
-    ("mod03_notice/list_view.py", "_links_by_notice", "app.mod11_jc.models.JcPayment"): "TAIL-300：批量通知书关联",
-    ("mod04_plan/service.py", "notice_amounts", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：审批金额",
-    ("mod04_plan/service.py", "notice_amounts", "app.mod05_flow.models.PaymentFlow"): "TAIL-300：生效已付",
-    ("mod05_flow/repository.py", "notice_rows", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：欠款/台账输入",
-    ("mod05_flow/repository.py", "revoke", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：撤销手改判断；实扫补入",
-    ("mod05_flow/repository.py", "revoke_info", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：撤销事实快照；实扫补入",
-    ("mod05_flow/repository.py", "sync_stat_paid", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：统计金额同步的锁定读；实扫补入，保持同事务",
-    ("mod09_fee/repository.py", "inv_rows", "app.mod08_inv.models.InvDetail"): "TAIL-300：只读原单，不叠加调整",
-    ("mod11_jc/repository.py", "payments_of_many", "app.mod05_flow.models.PaymentFlow"): "TAIL-300：批量生效日期",
-    ("mod11_jc/repository.py", "payments_of_many", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：批量统计付款",
-    ("mod11_jc/service.py", "act_link_notice", "app.mod03_notice.models.PaymentNotice"): "TAIL-300：存在校验",
-    ("mod01_projects/pending.py", "latest_pending", "app.mod02_i8.models.RunRecord"): "TAIL-300：待建档记录；实扫补入",
-    ("mod01_projects/archive_pending.py", "latest_pending", "app.mod02_i8.models.RunRecord"): "TAIL-300：归档待建档记录；实扫补入",
-    ("mod03_notice/repository.py", "latest_unresolved", "app.mod02_i8.models.RunRecord"): "TAIL-300：未归属抓取记录；实扫补入",
-    ("mod11_jc/repository.py", "latest_unsettled", "app.mod02_i8.models.RunRecord"): "TAIL-300：最近抓取记录",
-}
+_ALLOW_C2_PENDING: dict[tuple[str, str, str], str] = {}
 _ALLOW_C2_BY_DESIGN: dict[tuple[str, str, str], str] = {
     ("mod05_flow/router.py", "api_revoke", "app.mod03_notice.models.PaymentNotice"):
         "撤销付款必须在付款侧同一事务内锁通知书行，从事实重读/确认到撤销流水/重算都保持锁；转手另开事务会破坏临界区",

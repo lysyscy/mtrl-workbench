@@ -9,13 +9,11 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.money import to_money
 from app.core.projects import project_index, project_key, project_label
 from app.mod01_projects.models import Project
-from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.page import sort_rows
 from app.mod04_plan import repository as repo
 from app.mod04_plan.domain import (
@@ -32,7 +30,6 @@ from app.mod04_plan.plan_ui import (
     window_button,
 )
 from app.mod05_flow import domain as flow_domain
-from app.mod05_flow.models import PaymentFlow
 
 # 界面上的「已付款金额 / 剩余付款金额」两列（由命中的通知书派生，§4.3.3）
 DERIVED_COLUMNS: tuple[str, ...] = ("paid_amount", "unpaid_amount")
@@ -58,9 +55,11 @@ def notice_amounts(s: Session) -> dict[str, NoticeAmounts]:
     ⚠️ 已付金额只算**生效流水**（`flow_domain.effective_total`，同「已付金额」的唯一定义）。
     两次查询各一次（**不是 N+1**）。
     """
-    notices = list(s.execute(select(PaymentNotice)).scalars().all())
+    from app.mod03_notice import service as notices_service
+    from app.mod05_flow import service as flows_service
+    notices = notices_service.all_notice_rows(s)
     grouped: dict[int | None, list[dict]] = {}
-    for f in s.execute(select(PaymentFlow)).scalars().all():
+    for f in flows_service.list_flows(s):
         grouped.setdefault(f.notice_id, []).append({"amount": f.amount, "status": f.status})
 
     out: dict[str, NoticeAmounts] = {}

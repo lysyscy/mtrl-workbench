@@ -137,3 +137,11 @@ def save_run_record(
 
 __all__ = ["create_run_record", "finish_run_record", "recent_fetch_failures", "run_record_out",
            "save_run_record"]
+
+
+def recent_records(session: Session, *, run_type: str, limit: int) -> list[RunRecord]:
+    """按类型取最近执行记录；业务标记和待办解释仍由调用域决定。"""
+    from sqlalchemy import select
+    return list(session.execute(select(RunRecord).where(
+        RunRecord.run_type == run_type
+    ).order_by(RunRecord.id.desc()).limit(limit)).scalars().all())

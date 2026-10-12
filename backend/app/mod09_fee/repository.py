@@ -13,17 +13,17 @@ from sqlalchemy.orm import Session
 
 from app.mod01_projects.models import Project  # typing
 from app.mod01_projects import service as PS
-from app.mod08_inv.models import InvDetail
+from app.mod08_inv import service as inventory
 from app.mod09_fee.models import FeeManualItem
 
 
 def inv_rows(s: Session, *, ym: str) -> list[dict]:
     """自动项取数用的库存单据行 —— **只取该核算年月**（§9.2 一次一个月），别把整表搬进内存。"""
-    stmt = select(InvDetail).where(InvDetail.ym == ym).order_by(InvDetail.id)
     return [
         {"ym": r.ym, "warehouse": r.warehouse_name, "direction": r.direction,
          "cbs": r.cbs_name, "amount": r.amount}
-        for r in s.execute(stmt).scalars().all()
+        for r in inventory.load_original_details(s, ym=ym)
+        if r.ym == ym
     ]
 
 

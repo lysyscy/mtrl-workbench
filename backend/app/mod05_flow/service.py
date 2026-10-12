@@ -573,3 +573,8 @@ __all__ = [
     "build_flows", "build_debt", "build_debt_live", "build_ledger", "build_stats",
     "total_debt_rows", "export_total_debt", "order_project_ids",
 ]
+
+
+def latest_effective_dates(session, notice_ids):
+    from app.mod05_flow import repository
+    return repository.latest_effective_dates(session, notice_ids)

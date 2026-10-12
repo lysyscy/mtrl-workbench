@@ -27,8 +27,8 @@ def build_list(s: Session, *, tags: list[str] | None = None, arch: str = "",
     ⚠️ **筛选后的行数就是 `count`**；判据要求「筛选后行数 = **独立复算**、**复位后回到全量**」⇒
        本函数**不缓存、不带隐式默认筛选**（不给参数 = 全量）。
     """
-    sequences = D.project_sequences(R.list_contracts(s))
-    rows = R.list_contracts(s, tags=tags, arch=arch, supplier=supplier, project_key=project_key)
+    sequences = D.project_sequences(list_contracts(s))
+    rows = list_contracts(s, tags=tags, arch=arch, supplier=supplier, project_key=project_key)
     inv_map = R.invoices_of_many(s, [r["id"] for r in rows])
     pay_map = R.payments_of_many(s, [r["id"] for r in rows])
 
@@ -112,7 +112,7 @@ def build_detail(s: Session, contract_id: int) -> dict | None:
     amounts = D.contract_amounts(trade_co=c.trade_co, invoices=invoices, payments=payments)
     return {
         "id": c.id,
-        "project_seq": D.project_sequences(R.list_contracts(s)).get(c.id),
+        "project_seq": D.project_sequences(list_contracts(s)).get(c.id),
         "contract_no": c.contract_no,
         "date": c.contract_date,
         "material": c.material_name,
@@ -272,10 +272,10 @@ def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
        注意这与"子表**手工录入**金额必须 > 0"**不冲突** —— 那条管的是**录入**，这里是**引用既有付款事实**：
        关联只记录关系；读取时动态取通知书**统计付款金额**，零值保持零，不回退审批金额。
     """
-    from app.mod03_notice.models import PaymentNotice
+    from app.mod03_notice import service as notices
     from app.mod11_jc.models import JcContract
 
-    if s.get(PaymentNotice, int(notice_id)) is None:
+    if notices.get_notice(s, int(notice_id)) is None:
         return {"ok": False, "kind": "err", "message": f"找不到付款通知书 {notice_id}"}
     if s.get(JcContract, int(contract_id)) is None:
         return {"ok": False, "kind": "err", "message": f"找不到集采合同 {contract_id}"}
@@ -400,4 +400,15 @@ __all__ = [
     "act_add_payment", "act_del_payment",
     "act_link_notice", "act_unlink_notice",
     "party_kinds", "act_set_party_kind",
+    "list_contracts", "links_by_notice",
 ]
+
+
+def list_contracts(session, **kw):
+    from app.mod11_jc import repository
+    return repository.list_contracts(session, **kw)
+
+
+def links_by_notice(session):
+    from app.mod11_jc import repository
+    return repository.links_by_notice(session)

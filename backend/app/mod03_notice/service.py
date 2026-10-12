@@ -300,4 +300,21 @@ __all__ = [
     "run_batch",
     "list_stat_traces",        # ⭐ 包间出口（`TAIL-195` 批 2a）
     "restore_stat_paid_auto",
+    "get_notice", "all_notice_rows", "stat_paid_of_many",
 ]
+
+
+def get_notice(session, notice_id, **kw):
+    from app.mod03_notice import repository
+    return repository.get_notice(session, notice_id, **kw)
+
+
+def all_notice_rows(session):
+    from app.mod03_notice import repository
+    return repository.all_notice_rows(session)
+
+
+def stat_paid_of_many(session, ids):
+    """批量通知书统计付款事实，供集采装配金额。"""
+    from app.mod03_notice import repository
+    return repository.stat_paid_of_many(session, ids)

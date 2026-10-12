@@ -9,11 +9,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.mod02_i8.models import RunRecord
 from app.mod02_i8.repository import (  # noqa: F401  ← 运行记录仓储归 MOD-02，此处再导出
     create_run_record,
     finish_run_record,
@@ -22,8 +22,9 @@ from app.mod03_notice.domain import StatTrace, adjust_stat
 from app.mod03_notice.models import NoticeStatLog, PaymentNotice
 
 
-def get_notice(session: Session, notice_id: int) -> PaymentNotice | None:
-    return session.get(PaymentNotice, notice_id)
+def get_notice(session: Session, notice_id: int, **kw) -> PaymentNotice | None:
+    """当前会话取通知书；锁定重读参数原样交给ORM，保持付款事务。"""
+    return session.get(PaymentNotice, notice_id, **kw)
 
 
 #: 运行记录 `detail` 里的「**这是付款通知书抓取**」标记 —— 读侧靠它认"最近一次"（⛔ 不靠 `target` 猜）
@@ -54,12 +55,8 @@ def latest_unresolved(session: Session) -> list[dict]:
     ⚠️ 清单里存的是**当时的判定** ⇒ 调用方必须按**当前档案现算**（`domain.still_unsettled`）。
     ⛔ 这里**不涉及任何暂存**（用户裁定 `B`：补完词**再抓一次**，不在库里留半成品）。
     """
-    recs = list(session.execute(
-        select(RunRecord)
-        .where(RunRecord.run_type == "fetch")
-        .order_by(RunRecord.id.desc())
-        .limit(LOOKBACK)
-    ).scalars().all())
+    from app.mod02_i8 import service as records
+    recs = records.recent_records(session, run_type="fetch", limit=LOOKBACK)
     # ⚠️ 离线桩（`tests.m09_helpers.M09Session`）**不处理 `order_by`** ⇒ 再显式按 id 倒序一次
     #    （真库本来就有序 ⇒ 语义不变，只是让断言与真机走同一条路）。
     for r in sorted(recs, key=lambda x: getattr(x, "id", 0) or 0, reverse=True):
@@ -311,3 +308,16 @@ def restore_stat_paid_auto(session: Session, notice: PaymentNotice, *, changed_b
         changed_by=changed_by, changed_at=datetime.now(),
         note="撤销付款时恢复按有效流水自动算",
     ))
+
+
+def all_notice_rows(session: Session) -> list[PaymentNotice]:
+    """完整通知书事实输入，含剔除/撤单，按id升序，不受列表上限影响。"""
+    return list(session.execute(select(PaymentNotice).order_by(PaymentNotice.id.asc())).scalars().all())
+
+
+def stat_paid_of_many(session: Session, ids: list[int]) -> dict[int, Decimal | None]:
+    """批量统计付款事实，窄投影保持原SQL读值，不复用会话中的旧ORM属性。"""
+    if not ids:
+        return {}
+    stmt = select(PaymentNotice.id, PaymentNotice.stat_paid).where(PaymentNotice.id.in_(ids))
+    return {int(nid): amount for nid, amount in session.execute(stmt).all()}

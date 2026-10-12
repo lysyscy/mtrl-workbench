@@ -40,7 +40,6 @@ from app.mod01_projects.recovery import (
     unknown_warehouses,
 )
 from app.mod01_projects.repository import all_projects
-from app.mod02_i8.models import RunRecord
 
 #: 运行记录 `detail` 里放待人工清单的键（**写侧唯一出口 = `record_detail`**：键名只此一处）
 RECORD_KEY = "promote_pending"
@@ -75,12 +74,8 @@ def latest_pending(session: Session) -> dict:
     ⚠️ 认不出材料侧记录 ⇒ `found=False` ＋ 空清单（**不拿别的记录凑**：那会让用户对着一份
        跟材料域无关的清单去改档案）。
     """
-    recs = list(session.execute(
-        select(RunRecord)
-        .where(RunRecord.run_type == "fetch")
-        .order_by(RunRecord.id.desc())
-        .limit(LOOKBACK)
-    ).scalars().all())
+    from app.mod02_i8 import service as records
+    recs = records.recent_records(session, run_type="fetch", limit=LOOKBACK)
     # ⚠️ 离线桩（`tests.m09_helpers.M09Session`）**不处理 `order_by`** ⇒ 这里再显式排一次。
     #    真库本来就已按 id 倒序返回 ⇒ 不改变语义，只是让断言与真机走同一条路。
     for r in sorted(recs, key=lambda x: getattr(x, "id", 0) or 0, reverse=True):
