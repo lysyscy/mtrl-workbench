@@ -244,7 +244,7 @@ Playwright环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`；�
 
 **怀疑"这条红是先前就有的"（一行配方）**：`git -C <仓根> archive --format=zip -o .codebuddy/work/00-scratch/head-web.zip HEAD backend/app/web/` ⇒ 解到 `00-scratch/head-web/`；`$env:MTRL_UI_FIXTURE_WEB='<解出来的 web 目录>'` 跑**同一条**用例；跑完 `Remove-Item Env:MTRL_UI_FIXTURE_WEB`。判据：HEAD 版壳下**同样红 ⇒ 不是本轮引入**（2026-10-11 据此认定了 6 条既有腐化）。静态件（读 `SHELL` 的断言）同理先看 `git diff HEAD` 有没有碰到那一行。
 
-**Git推送遇代理中断（2026-10-11实测）**：HTTPS报`curl 52 Empty reply from server`且SSH也被重置时，先用`git -c http.proxy= push <HTTPS远端> <当前分支>`作单次直连尝试；不改全局代理。随后用同样的单次选项读取远端分支SHA，与本地HEAD比较；连接中断或输出`Everything up-to-date`本身不能证明推送成功。只在已有提交/推送授权下执行。
+**Git推送遇代理中断（2026-10-11实测）**：HTTPS报`curl 52 Empty reply from server`且SSH也被重置时，先用`git -c http.proxy= push <HTTPS远端> <当前分支>`作单次直连尝试；不改全局代理。随后用同样的单次选项读取远端分支SHA，与本地HEAD比较；连接中断或输出`Everything up-to-date`本身不能证明推送成功。提交与推送决策回 ops/agents/issue-tracker.md §四「提交与推送」。
 
 **真机自检可复用**：按影响入口在**壳字节与探针都没变**时会打「复用 真机壳自检 …」并指出沿用哪份证据 —— 看到那行直接引用它，⛔ 不必再手动跑一遍（证明输入＝`backend/app/web/**` ＋ `tools/probe/**` ＋ 环境摘要）。
 

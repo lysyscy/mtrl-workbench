@@ -45,4 +45,4 @@
 **单上下文**（single-context）：术语主人 = `delivery/材料科业务全流程说明书.md` / `delivery/PRD/`（＋ `D29` 用词统一表）；决定 = `.codebuddy/work/40-decisions/`。
 ⛔ **不单建 `GLOSSARY.md`**（那会长出第二套口径；真要建由 `/domain-modeling` 按需懒建）。见 `ops/agents/domain.md`。
 
-⛔ **权限边界**：提交须用户授权（`§四` 同款）；凭据（`.env`）不提交 —— `ops/hooks/pre-commit` 会拦。
+**提交与推送**：执行口径见 `ops/agents/issue-tracker.md` **§四「提交与推送」**；凭据（`.env`）不提交 —— `ops/hooks/pre-commit` 会拦。
