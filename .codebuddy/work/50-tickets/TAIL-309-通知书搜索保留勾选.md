@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-human
+**Status:** done
 
 - [x] 先用隔离假数据复现旧实现搜索取消勾选，再验证修复后搜索、改词、清空仍保留选择。
 - [x] 多轮加选、取消和全选只作用于当前可见候选；显示隐藏已选数量与全部已选金额。
@@ -36,3 +36,13 @@
 **2026-10-12 · 独立复核后授权本地提交。** 集成人反馈「TAIL309独立复核无阻断」，明确授权仅八文件本地提交；禁止推送、部署、改公共索引或复制真实 `.env`。据此进入提交收尾，票仍为 ready-for-human，等待主仓整合与目标 Python 3.13 复验；本 clone 不重复建环境。新 clone 未配置作者身份，沿用基点 `s-cy <s.cy@local>`，仅对提交进程提供身份环境变量，不修改 Git 配置。
 
 **2026-10-12 · pre-commit 实际结果与边界。** 通过 `ops/install_hooks.ps1` 安装仓库原钩子，真实 `git commit` 触发后未提交：`syntax_audit --staged`、`audit_work`、`bytes_guard --staged` 通过；`doc_audit` 与 `audit_meta` 各 rc=2（缺少 PRD_ACCEPTANCE_BASELINE 判据基线配置），`mut_cover --check` rc=1（生成台账不一致）。在完整 HEAD archive 内分别重跑，三项退出码及规范化报告均与当前一致，证据 `00-scratch/tail309-audits/precommit-baseline-comparison.json` 及对应日志；没有修补公共台账或借入环境配置。按本轮允许准确记录隔离跳过项及限定八文件的授权，仅本次采用临时钩子执行前三项适用检查，明确打印其余三项未完成 / 既有非绿原因；提交后恢复 `ops/hooks/pre-commit` 原字节。不使用 `--no-verify`，不声称完整原钩子全绿；190 项行为/界面回归、4 项反向检查及 wiring / asset 原有边界保持不变。实际提交 SHA 与父提交以 Git 和交付回复为准。
+
+**2026-10-12 · 主目录最终整合与收口。** 源clone干净、codex/notice-search-selection、8件提交41088fcfbe95cb9d2a0641ebdc07ff8467adbd6e/父f6e13b0已核对，从本地无冲突取入01e22581c85ae63c71b953b02b369978b30f3081，接在a5be5d7→551174a→a8ccd00之后。六件壳JS保持源实现；只补本票已有测试中的550行虚拟表/最大字号两个最小用例、仓内可重复四反例及治理登记，不追加优化。主原钩子SHA256=b31e6015c7ce2702b3294736259814c8ac3b859468841566dcf7ecf46461bd12，始终未替换或削减；clone临时钩子记录是源阶段历史，不能作为主仓绿证据。
+
+**单次真实最终代码结果。** 主仓Python3.13.14：`backend/.venv/Scripts/python.exe -B -X utf8 .codebuddy/work/00-scratch/tmp-20261012-tail309-combined.py`，原306–308组合130件完整包含，加共享壳实际消费者及源21件触达回归，共158文件；单次pytest1320通过、0失败/错误/跳过，240.99s，rc=0。测试HEAD=01e22581c85ae63c71b953b02b369978b30f3081，额外测试差异和全部输入SHA已保存；正式app/tests和临时副本逐字节一致，前后未变，没有还原登录逻辑。完整输出/JUnit/源码快照与diff：`artifacts/tail309-integration/pytest-output.txt`、`artifacts/tail309-integration/junit.xml`、`artifacts/tail309-integration/result.json`及input-snapshot.json/input-diff.patch。假i8、假会话/用户、实际测试库严格限定127.0.0.1:5432/mtrl_workbench_test；生产凭据不复制，真实付款接口不调用，浏览器全用假回包捕获写出口。
+
+**必要风险证据。** 搜索/改词/清空保留、当前可见全选、隐藏数量及全部已选金额、直接批量动作先核对、付款窗口全体与对应金额、删除/撤单行序变化须重核、陈旧ID清理、业务筛选与离页清空全部通过。正常13通过26.06s，四靶明确AssertionError（恢复旧含搜索裁剪、绕过隐藏核对、移除付款行序、防失效清理），复原13通过27.10s；正式壳字节未变，完整反向回执`artifacts/tail309-integration/mutations.json`。首次反例只恢复搜索调用却被新裁剪规则保护，不算命中；改为完整还原旧缺陷两处后重跑4/4。新增两个用例同时检验550行实际虚拟表、标准1440与最大字号1024，已看四张真实截图：隐藏范围/总额清楚，核对与付款按钮完整，弹窗包含两条不同选择。截图在`artifacts/tail309-integration/visual/`，未重设计既有付款弹窗。
+
+**原仓检查与真实边界。** 主素材审计实际rc=0（原全部规则和主路径，仅提供原.env中唯一所需非秘密PRD_ACCEPTANCE_BASELINE键，未打印凭据）；主装配审计及a8基线均rc=0，完整JSON完全一致，不能沿用clone的非绿结论。回执`artifacts/tail309-integration/boundary-audits.json`。索引由原_tail_open在隔离副本干跑/应用/T6核验后转入，原票Comments保留；四反例登记并生成132件覆盖台账。实际最终适用检查及shell_verify结果保留在final-checks.json；正常主仓最终提交的完整原钩子输出另存commit-hook-output.txt/commit-receipt.json，不能拿审计结果代替。
+
+**未验与交接。** shell_verify只读检查与旧壳基线差58行（本次有意13删/45增），rc=1；没有--snapshot盖章。全站39段_shell_smoke需要运行中服务，当前授权禁止真实服务/付款操作，因此未执行，不伪称现场全绿；隔离浏览器并不替代此边界。没有部署、重启、推送或刷新完整权威四态，运行服务仍旧版本。原284/287及其余B2/B3/B4/B5未动；用户明确本批之后停用dot开发、改为自行串行修改，完成本批即停，不另开工作。306–308既有8/7/9反向输入未改，可沿用已核验回执；本次组合已含相关行为。最终本地提交及源码绑定在final-commit-binding.json。

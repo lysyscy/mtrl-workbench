@@ -1,6 +1,9 @@
 """TAIL-309：真实壳 + 隔离回包，保护搜索选择、可见全选及付款批次。"""
 from tests.acc_plugin import acc
 from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+import os
+from pathlib import Path
+import pytest
 
 
 def _setup(p):
@@ -252,3 +255,47 @@ def test_批量出口清理未重绘的删除项不把陈旧ID提交(ui_page):
     }""")
     assert _ids(p) == ['102']
     assert [r['ids'] for r in p.evaluate('requests')] == [['102']] * 5
+
+
+@acc()
+@pytest.mark.parametrize('width,scale', [(1440, 'standard'), (1024, 'largest')])
+def test_虚拟长表搜索保留选择且放大核对条可操作(ui_page, width, scale):
+    """550行真实虚拟表与最大字号，核对隐藏范围、金额和窄屏操作位置。"""
+    from app.mod03_notice.page import render_theme
+    from app.mod15_user.domain import UI_SCALES
+
+    p = ui_page
+    p.set_viewport_size({'width': width, 'height': 1000})
+    p.add_style_tag(content=render_theme('默认'))
+    factor = '1' if scale == 'standard' else str(max(float(css) for _, _, css in UI_SCALES))
+    p.evaluate('(value)=>document.documentElement.style.setProperty("--fscale",value)', factor)
+    _setup(p)
+    p.evaluate("""async () => {
+      SRV=Array.from({length:550},(_,i)=>({...SRV[0],notice_id:1000+i,bill_no:'LONG-'+i}));
+      await reloadNotices();
+    }""")
+    assert p.evaluate('VS_TS.length>0 && ntHit(fNt).length===550')
+    _pick(p, '1000').check()
+    p.fill('#ntSearch', 'LONG-549')
+    p.locator('#pickAllBox').check()
+    assert _ids(p) == ['1000', '1549']
+    assert '当前列表外 1 条' in p.inner_text('.selbar')
+    assert '2,000.00' in p.inner_text('.selbar')
+    metrics = p.locator('.selbar').evaluate("""e=>({width:e.clientWidth,scroll:e.scrollWidth,
+      right:e.getBoundingClientRect().right})""")
+    assert metrics['scroll'] <= metrics['width'] + 1
+    assert metrics['right'] <= width + 1
+    pay = p.locator('[data-act="batchPay"]')
+    assert pay.is_visible() and pay.is_enabled()
+    box = pay.bounding_box()
+    assert box and 0 <= box['x'] and box['x'] + box['width'] <= width
+    output = os.environ.get('TAIL309_EVIDENCE_PATH')
+    if output:
+        folder = Path(output)
+        folder.mkdir(parents=True, exist_ok=True)
+        p.screenshot(path=str(folder / f'hidden-{width}-{scale}.png'))
+    pay.click()
+    assert p.locator('#modalRoot [data-act="batchPayDel"]').count() == 2
+    assert 'LONG-0' in p.inner_text('#modalRoot') and 'LONG-549' in p.inner_text('#modalRoot')
+    if output:
+        p.screenshot(path=str(folder / f'payment-{width}-{scale}.png'))
