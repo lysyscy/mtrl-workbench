@@ -354,7 +354,7 @@ const jcNPjPanel=()=>projPanel({list:()=>pjKeysOfRows(ntPjList()),selected:()=>[
 const jcNewStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><span class="pill" style="margin:0" title="建一张集采合同主表行（两态默认「纳入台账」，与抓取行一致）">手工新增合同</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
-        ${PJB({act:'jcNPjToggle',w:150,label:`${esc(pjLabel(jcND.pj)||'请选择项目')}${pjArcMark(pjRowOf(jcND.pj))}`})}
+        ${PJB({act:'jcNPjToggle',panel:jcNPjPanel,w:150,label:`${esc(pjLabel(jcND.pj)||'请选择项目')}${pjArcMark(pjRowOf(jcND.pj))}`})}
         ${pjIsOpen('jcNPj')?jcNPjPanel():''}</div>
       <label class="fi"><span>历史汇总</span><input type="checkbox" data-act="jcNHistory" ${jcND.history?'checked':''}></label>
       ${jcND.history?`<div class="fi"><label for="jcNCutoff">核对截至日</label><input class="inp" type="date" id="jcNCutoff" data-act="jcNSet" data-k="cutoff" value="${esc(jcND.cutoff)}"></div>`:''}

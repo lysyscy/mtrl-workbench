@@ -172,8 +172,10 @@ def test_项目面板的搜索与归档折叠():
     assert 'data-act="pjArcToggle"' in code, "归档段没有折叠行（② 没落地）"
     assert "已归档（${arc.length}${arcSel?` · 已选 ${arcSel}`:''}）" in code, \
         "折叠行**没报已选数** —— 多选面板「全选」含归档 ⇒ 会出现看不见的已选（状态不真实可见）"
-    assert "pjToggle(String(t.dataset.pk||'')+'Arc')" in code, \
-        "折叠态没走 `PJ_OPEN`（另开一份 `xxxArcOpen` 会破坏「展开态唯一主人」）"
+    arc=code[code.index('pjArcToggle:t=>{'):code.index('procPjToggle:',code.index('pjArcToggle:t=>{'))]
+    assert "const key=String(t.dataset.pk||'')+'Arc'; PJ_OPEN[key]=!PJ_OPEN[key];" in arc, \
+        "归档折叠必须继续使用统一的PJ_OPEN状态"
+    assert 'replaceFilterPop(w,make())' in arc, "归档折叠缺少浮层局部更新"
     assert "data-pj-none" in code and "没有匹配「" in code, \
         "搜不到时没有空态提示 —— ⛔ 不许只留一片空白（用户会以为面板坏了）"
     assert "arcBlock.hidden = q ? false : !pjIsOpen(" in code, \

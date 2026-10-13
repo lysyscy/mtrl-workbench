@@ -26,7 +26,7 @@ let mp={open:null,year:2026,mode:'',a:'',b:'',wq:''};
    ⚠️ 抓取 / 付款计划导入 / 期初截止年月 **有意只声明「月」**（业务上就是"一次一个月"）——
       写进配置防"顺手统一"。 */
 const tmBtn=(id,cfg)=>`<div class="mpwrap pjwrap" style="position:relative;display:inline-block">
-  <button class="btn" data-act="mpToggle" data-id="${id}" data-scope="${cfg.scope}" data-val="${esc(cfg.val)}" style="min-width:118px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"><span class="fc">${esc(cfg.label==null?cfg.val:cfg.label)}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
+  <button class="btn" data-act="mpToggle" data-id="${id}" data-scope="${cfg.scope}" data-val="${esc(cfg.val)}" data-modes="${esc(JSON.stringify(cfg.modes||['月']))}" aria-expanded="${mp.open===id}" style="min-width:118px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"><span class="fc">${esc(cfg.label==null?cfg.val:cfg.label)}</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>
   ${mp.open===id?tmPanel(id,cfg):''}</div>`;
 /* ⚠️ 上面那个 `pjwrap` 是**浮层锚**（与 `.mpwrap` 并存：`.mpwrap` 是"点外面收起"的历史判据，
    `pjwrap` 才是**逃出卡片裁剪**那套机制认的锚）—— 见 `placePops()` 的注释。
@@ -114,7 +114,7 @@ const tmPanel=(id,cfg)=>{
       ${md==='季度'?D('mpPick',{id:id,scope:sc,val:tmQNow(),m:'季度'},'','本季'):''}
       ${md==='周'?D('mpPick',{id:id,scope:sc,val:wkMon(SYS_TODAY),m:'周'},'','本周'):''}
       ${D('mpClose',{scope:sc},'','关闭')}</div>`;
-  return `<div class="pjpop" style="position:absolute;z-index:80;top:calc(100% + 4px);left:0;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:calc(9px * var(--fscale));width:238px">
+  return `<div class="pjpop" data-time-panel="${esc(id)}" style="position:absolute;z-index:80;top:calc(100% + 4px);left:0;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:calc(9px * var(--fscale));width:238px">
     ${head}${body}${quick}</div>`;
 };
 
@@ -283,6 +283,7 @@ const PROJ_META_FULL=v=>{ const m=projMatches(v);
    ⚠️ 2026-09-26 两次现场都出在"名单/自觉"上：漏登记 `IMP.pjIsOpen('pj')` ⇒ 用户报障「展开后关不掉」；
       单选点完要不要自收**根本没有规则**（6 处各写）。 */
 const PJ_OPEN = {};
+const PJ_PANELS = new Map();  /* 调用点提供当前面板工厂，不缓存候选或业务数据。 */
 /* ⭐⭐ 项目面板的**过滤词**（去 ①② · 2026-09-27 用户裁定）：`{面板 key: 关键词}`。
    ⚠️ 为什么要单独存一份、而不是"让输入框自己拿着"：过滤**只切 DOM 显示、不重绘**
       （⛔ 重绘会把焦点与光标一起丢掉 —— 壳里踩过，见 `jcSubSet` 那行注释），
@@ -290,7 +291,13 @@ const PJ_OPEN = {};
       ⛔ 否则"勾一个候选就把搜索词清零"（多选场景等于没法用）。 */
 const PJ_TXT = {};
 const pjIsOpen = k => !!PJ_OPEN[String(k)];
-const pjToggle = k => { const s = String(k); PJ_OPEN[s] = !PJ_OPEN[s]; render(); };
+const pjToggle = (k,t) => {
+  const s=String(k); PJ_OPEN[s]=!PJ_OPEN[s];
+  const w=t&&t.closest?t.closest('.pjwrap'):null;
+  const make=t&&PJ_PANELS.get(t.dataset.act);
+  if(w&&make) replaceFilterPop(w,PJ_OPEN[s]?make():'');
+  else render();   /* 无DOM锚的旧调用仍沿用重画。 */
+};
 const pjClose = k => { const s = String(k); if (PJ_OPEN[s]) { PJ_OPEN[s] = false; return true; } return false; };
 const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
   /* ⭐ key **由 `pickAct` 派生**（`ledPjPick` ⇒ `ledPj`）⇒ ⛔ 调用点不用传、也不会漏传。 */
@@ -313,7 +320,7 @@ const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
     return `<label data-pj-row data-pj-match="${esc((mt.nm+' '+v).toLowerCase())}" title="${esc(mt.title)}" style="display:flex;gap:calc(7px * var(--fscale));align-items:center;padding:calc(5px * var(--fscale)) calc(6px * var(--fscale));border-radius:5px;cursor:pointer;font-size:calc(12px * var(--fscale));white-space:nowrap">
       <input type="${single?'radio':'checkbox'}"${single?' name="projPanelSingle"':''} class="chk" style="flex:0 0 auto" data-act="${c.pickAct}" data-pj="${esc(v)}" data-pj-key="${pk}" ${on?'checked':''}>
       <span${mt.warn?' style="color:var(--wn-d)"':''}>${esc(mt.nm)}</span>${mt.arc?' '+arcTag():''}</label>`;};
-  return `<div class="pjpop" style="position:absolute;z-index:80;top:calc(100% + 5px);left:0;width:max-content;min-width:178px;max-width:340px;max-height:264px;overflow-y:auto;overflow-x:hidden;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:calc(5px * var(--fscale))">
+  return `<div class="pjpop" data-pj-panel="${pk}" style="position:absolute;z-index:80;top:calc(100% + 5px);left:0;width:max-content;min-width:178px;max-width:340px;max-height:264px;overflow-y:auto;overflow-x:hidden;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px var(--shadow-pop);padding:calc(5px * var(--fscale))">
   <div style="display:flex;gap:calc(6px * var(--fscale));align-items:center;padding:calc(2px * var(--fscale)) calc(4px * var(--fscale)) calc(6px * var(--fscale))">
     ${single?'':`<button class="btn sm" data-act="${c.allAct}">全选</button><button class="btn sm" data-act="${c.noneAct}">清空</button>`}
     <span class="mut" style="font-size:calc(11px * var(--fscale));margin-left:calc(4px * var(--fscale));white-space:nowrap">${single?'单选 · ':''}已选 ${sel.length}/${all.length}</span>
@@ -336,6 +343,7 @@ const projPanel=c=>{ const meta=c.meta||PROJ_META_FULL, single=!!c.single;
 function applyPjFilters(){
   document.querySelectorAll('.pjpop').forEach(p=>{
     const box=p.querySelector('[data-act="pjSearch"]'); if(!box) return;
+    p.parentElement.querySelector(':scope > button')?.setAttribute('aria-expanded','true');
     const q=String(box.value||'').trim().toLowerCase();
     let hit=0;
     p.querySelectorAll('[data-pj-row]').forEach(r=>{
@@ -368,6 +376,30 @@ function applyPjFilters(){
    ⚠️ 触发按钮取 **`:scope > button`（锚的**直接**子按钮）**：浮层里的「全选 / 清空 / 31 个日期格」也是
       `<button>`，按 DOM 序拿"第一个 button"会拿成浮层内那个（位置就全错了）。
    ⚠️ 两条渲染路径都要调（`render()` 正常那条 ＋ **虚拟滚动提前 return 那条**）—— 见 `render()` 里的调用。 */
+/* 展开只替换锚内浮层，业务表、虚拟实例、输入焦点与滚动容器保持原位。 */
+function replaceFilterPop(w,html){
+  w.querySelector(':scope > .pjpop')?.remove();
+  if(html){ const tpl=document.createElement('template'); tpl.innerHTML=html; w.append(tpl.content); }
+  w.querySelector(':scope > button')?.setAttribute('aria-expanded',String(!!html));
+  placePops(); applyPjFilters();
+}
+function refreshTimePop(t){
+  const w=t&&t.closest?t.closest('.mpwrap'):null;
+  const b=w&&w.querySelector(':scope > button[data-act="mpToggle"]');
+  if(!b) return false;
+  document.querySelectorAll('.pjpop[data-time-panel]').forEach(p=>{
+    if(p.parentElement!==w){ p.parentElement.querySelector(':scope > button')?.setAttribute('aria-expanded','false'); p.remove(); }
+  });
+  const cfg={scope:b.dataset.scope,val:b.dataset.val,modes:JSON.parse(b.dataset.modes)};
+  replaceFilterPop(w,mp.open===b.dataset.id?tmPanel(b.dataset.id,cfg):'');
+  return true;
+}
+function closeFilterPops(){
+  Object.keys(PJ_OPEN).forEach(k=>{PJ_OPEN[k]=false;}); mp.open=null;
+  document.querySelectorAll('.pjpop[data-pj-panel],.pjpop[data-time-panel]').forEach(p=>{
+    p.parentElement.querySelector(':scope > button')?.setAttribute('aria-expanded','false'); p.remove();
+  });
+}
 function placePops(){
   document.querySelectorAll('.pjwrap').forEach(w=>{
     const p=w.querySelector(':scope > .pjpop'); if(!p) return;

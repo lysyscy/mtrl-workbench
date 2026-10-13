@@ -177,7 +177,7 @@ const TBL=({head='',rows=[],cols=null,list=[],empty='',sum='',key='',cls='',sort
 const FBAR=({cls='',sty='',body=''})=>'<div class="fbar'+(cls?' '+cls:'')+'"'+(sty?' style="'+sty+'"':'')+'>'+body+'</div>';
 
 /* ⭐ **项目选择按钮件**（`TAIL-64` P4-d · 2026-09-30）—— 共用面板 `projPanel` 的**那枚 ▾ 按钮**
- * 统一由它渲染（`pjwrap` 里那一层）。契约：`PJB({act, w, label, title})` ⇒ 返回完整 `<button…>…</button>`。
+ * 统一由它渲染（`pjwrap` 里那一层）。契约：`PJB({act, panel, w, label, title})` ⇒ 返回按钮并登记当前面板工厂；不传panel保留旧行为。
  * ⚠️ 为什么把**按钮**也收了（`P4-d` 的第 ② 档）：那串
  *    `style="min-width:Npx;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"`
  *    与收尾那枚 `▼` 原本**逐处手写**（12 处），而 `min-width` 实测有 **6 种值** ⇒ §5.9「同类形态只留一处出口」。
@@ -195,9 +195,12 @@ const FBAR=({cls='',sty='',body=''})=>'<div class="fbar'+(cls?' '+cls:'')+'"'+(s
  * ⚠️ **本件只在壳侧**（⛔ 不进 `U5_GROUPS`）：原型那侧的按钮还是**旧形态**（`gap:8px`、无 `--fscale`），
  *    硬同步会让它的按钮退化成"没有 gap"（`var()` 未定义）⇒ 见 `tools/oneoff/_p4d_pjb_pilot.py` 的文件头。
  * 自证 = 变异脚本（去掉委托 / 掏空内核 ⇒ 对应判据必须红）。 */
-const PJB=({act='',w=126,label='',title='',cls='btn',attrs=''})=>'<button class="'+cls+'" data-act="'+act+'"'+attrs
+const PJB=({act='',panel,w=126,label='',title='',cls='btn',attrs=''})=>{
+  if(panel) PJ_PANELS.set(act,panel);
+  return '<button class="'+cls+'" data-act="'+act+'"'+attrs
   +' style="min-width:'+w+'px;display:inline-flex;align-items:center;justify-content:space-between;gap:calc(8px * var(--fscale))"'
   +(title?' title="'+title+'"':'')+'><span>'+label+'</span><span class="mut" style="font-size:calc(9px * var(--fscale))">▼</span></button>';
+};
 
 /* ⚠️⚠️ **2026-10-01（`TAIL-213` 甲）：这里的「口径说明块件」`CALIB` 已整件退场。**
  * 用户拍板（原话）：「**每页折叠的口径说明里的也简化或者删除吧？说实话我一次也没进去看过**」

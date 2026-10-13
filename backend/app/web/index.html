@@ -659,7 +659,7 @@ V.m03=()=>{
       <div class="fi"><label>单据年月</label>${tmBtn('ntMonth',{scope:'nt',val:fNt.month,label:tmLabel(fNt.month),modes:['月','跨月','年','全部']})}</div>
       <div class="fi"><label>对应单据日期（闭区间）</label><input class="inp" readonly style="width:198px" value="${esc(tmRange(fNt.month))}" title="按单据日期起止筛选，闭区间；抓取按时间全量、不选项目、不分页（§4.2.1）"></div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
-        ${PJB({act:'pjToggle',w:126,label:`${fNt.projs.length?`已选 ${fNt.projs.length} 个`:'全部项目'}`})}
+        ${PJB({act:'pjToggle',panel:pjPanel,w:126,label:`${fNt.projs.length?`已选 ${fNt.projs.length} 个`:'全部项目'}`})}
         ${pjIsOpen('pj')?pjPanel():''}</div>
       <div class="fi"><label>分类</label><select class="inp" id="fCat" data-act="filterNt">${optsOf(['全部'].concat(enumVals('cat'),['剔除']),fNt.cat)}</select></div>
       <div class="fi"><label>审批状态</label><select class="inp" id="fAstat" data-act="filterNt">${enumOpts('astat',fNt.astat,1)}</select></div>
@@ -700,7 +700,7 @@ V.m04=()=>{
     ${FBAR({body:`
       <div class="fi"><label>单据年月</label>${tmBtn('plMonth',{scope:'pl',val:plf.ym,label:tmLabel(plf.ym),modes:['月','跨月','年','全部']})}</div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
-        ${PJB({act:'plPjToggle',w:126,label:`${plf.projs.length?`已选 ${plf.projs.length} 个`:'全部项目'}`})}
+        ${PJB({act:'plPjToggle',panel:plPjPanel,w:126,label:`${plf.projs.length?`已选 ${plf.projs.length} 个`:'全部项目'}`})}
         ${pjIsOpen('plPj')?plPjPanel():''}</div>
       <div class="fi"><label>审查结果</label><select class="inp" id="plReview" data-act="plFilter">${optsOf(enumVals('plRevF'),plf.review)}</select></div>
       <button class="btn" data-act="plFilterReset">重置</button>
@@ -852,7 +852,7 @@ V.m05=()=>{
            ⚠️ 本注释写在模板字面量的文本区里 ⇒ ⛔ 里面不许出现反引号（会把模板串截断，见 TAIL-142 那次的教训）。 -->
       <div style="display:flex;align-items:center;gap:calc(6px * var(--fscale));flex-wrap:wrap;margin:0 0 calc(8px * var(--fscale))">
         <span class="mut sm">看哪个项目（两侧共用）</span>
-        <span class="pjwrap" style="position:relative;display:inline-block">${PJB({act:'ledPjToggle',w:150,label:`${esc(pjLabel(lp))}${pjArcMark(pjRowOf(lp))}`,cls:`btn${pjIsOpen('ledPj')?' on':''}`,attrs:' title="台账左右两栏「共用」这一个项目（切一次两边都换）；⛔ 它只管屏幕上看哪一行 —— 导出要包含哪些项目在「导出…」那条面板里"'})}${pjIsOpen('ledPj')?ledPjPanel():''}</span>
+        <span class="pjwrap" style="position:relative;display:inline-block">${PJB({act:'ledPjToggle',panel:ledPjPanel,w:150,label:`${esc(pjLabel(lp))}${pjArcMark(pjRowOf(lp))}`,cls:`btn${pjIsOpen('ledPj')?' on':''}`,attrs:' title="台账左右两栏「共用」这一个项目（切一次两边都换）；⛔ 它只管屏幕上看哪一行 —— 导出要包含哪些项目在「导出…」那条面板里"'})}${pjIsOpen('ledPj')?ledPjPanel():''}</span>
       </div>
       <div class="mut sm">台账按单据日期归月，为了监控拖了很久的付款：单据日期越早，拖延越久。</div>
       <div class="grid2">${ledHalf('辅材')}${ledHalf('机械')}</div></div>
@@ -891,7 +891,7 @@ V.m05=()=>{
     ${FBAR({body:`
       <div class="fi"><label>付款年月</label>${tmBtn('flMonth',{scope:'fl',val:flf.ym,label:tmLabel(flf.ym),modes:['月','跨月','年','全部']})}</div>
       <div class="fi pjwrap" style="position:relative"><label>付款项目（可多选）</label>
-        ${PJB({act:'flPjToggle',w:128,label:`${flf.projs.length?`已选 ${flf.projs.length} 个`:'全部项目'}`})}
+        ${PJB({act:'flPjToggle',panel:flPjPanel,w:128,label:`${flf.projs.length?`已选 ${flf.projs.length} 个`:'全部项目'}`})}
         ${pjIsOpen('flPj')?flPjPanel():''}</div>
       <div class="fi"><label>实际付款方式</label><select class="inp" id="flMethod" data-act="flFilter">${['全部',...enumVals('payMethod')].map(v=>`<option${flf.method===v?' selected':''}>${v}</option>`).join('')}</select></div>
       <div class="fi"><label>状态</label><select class="inp" id="flState" data-act="flFilter">${enumOpts('flowState',flf.state,1)}</select></div>
@@ -1065,7 +1065,7 @@ V.m06=()=>{
     </span></h4>
     ${FBAR({body:`
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
-        ${PJB({act:'procPjToggle',w:210,label:`${esc(PROJ_META_KEY(procPj).nm)}`})}
+        ${PJB({act:'procPjToggle',panel:procPjPanel,w:210,label:`${esc(PROJ_META_KEY(procPj).nm)}`})}
         ${pjIsOpen('procPj')?procPjPanel():''}</div>
     `})}
     <div class="tabs">
@@ -1216,7 +1216,7 @@ V.m08=()=>{
     ${FBAR({body:`
       <div class="fi"><label>核算年月</label>${tmBtn('ivMonth',{scope:'iv',val:fIvYm,label:tmLabel(fIvYm),modes:['月','跨月','年','全部']})}</div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
-        ${PJB({act:'invWhToggle',w:150,label:`${invWhs.length?(invWhs.length===1?esc((pjRowOf(invWhs[0])&&pjDisp(pjRowOf(invWhs[0])))||invWhs[0]):`已选 ${invWhs.length} 个`):'全部项目'}`})}
+        ${PJB({act:'invWhToggle',panel:invWhPanel,w:150,label:`${invWhs.length?(invWhs.length===1?esc((pjRowOf(invWhs[0])&&pjDisp(pjRowOf(invWhs[0])))||invWhs[0]):`已选 ${invWhs.length} 个`):'全部项目'}`})}
         ${pjIsOpen('invWh')?invWhPanel():''}</div>
       <div class="fi"><label>出入库方向</label><select class="inp" id="fIvDir" data-act="fIvDir">${enumOpts('ivDir',fIvDir,1)}</select></div>
       <div class="fi"><label>只看被调整行</label><select class="inp" data-act="invOnlyAdj"><option value="0">否</option><option value="1" ${invOnlyAdj?'selected':''}>是</option></select></div>
@@ -1264,7 +1264,7 @@ V.m09=()=>{
     </span></h4>
     ${FBAR({body:`
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
-        ${PJB({act:'awfPjToggle',w:150,label:`${esc(PROJ_META_KEY(awfPj).nm)}`})}
+        ${PJB({act:'awfPjToggle',panel:awfPjPanel,w:150,label:`${esc(PROJ_META_KEY(awfPj).nm)}`})}
         ${pjIsOpen('awfPj')?awfPjPanel():''}</div>
       <div class="fi"><label>核算年月</label>${tmBtn('awfMonth',{scope:'awf',val:awfYm,label:tmLabel(awfYm),modes:['月']})}</div>
       <button class="btn" data-act="awfReset">重置</button>
@@ -1385,7 +1385,7 @@ V.m11=()=>{
       <button class="btn pri" data-act="exp" data-t="集采台账" title="导出当前屏幕上这些行（含筛选）为 Excel —— 列是全列（隐藏列也会导出）">导出 Excel</button></span></h4>
     ${FBAR({body:`
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
-        ${PJB({act:'jcPjToggle',w:126,label:`${fJc.projs.length?`已选 ${fJc.projs.length} 个`:'全部项目'}`})}
+        ${PJB({act:'jcPjToggle',panel:jcPjPanel,w:126,label:`${fJc.projs.length?`已选 ${fJc.projs.length} 个`:'全部项目'}`})}
         ${pjIsOpen('jcPj')?jcPjPanel():''}</div>
       <div class="fi"><label>两态标记</label><select class="inp" id="fTag" data-act="jcFilter">${enumOpts('jcTag',fJc.tag,1)}</select></div>
       <div class="fi"><label>合同存档情况</label><select class="inp" id="fArch" data-act="jcFilter">${enumOpts('jcArch',fJc.arch,1)}</select></div>

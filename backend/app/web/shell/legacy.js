@@ -380,7 +380,7 @@ V.imp = () => {
     ? `${FBAR({cls:'pane',body:`
       ${IMP.hasPj ? (IMP.org.length ? `<div class="fi pjwrap" style="position:relative">
         <label>${IMP_PJ_LABEL}</label>
-        ${PJB({act:'impPjToggle',w:186,label:`${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}`,title:`${IMP.wrap ? esc('仓库名：' + IMP.wrap) : ''}`})}
+        ${PJB({act:'impPjToggle',panel:impPjPanel,w:186,label:`${esc(IMP.wrap ? impPjLabel(IMP.wrap) : '请选择项目')}`,title:`${IMP.wrap ? esc('仓库名：' + IMP.wrap) : ''}`})}
         ${pjIsOpen('impPj') ? impPjPanel() : ''}</div>`
       /* ⛔ **候选为空 ≠ 这个域不要项目**（2026-09-29 修）：仍要把这一格画出来 —— ① 让人看见
          "这一步有项目这一环"（⛔ 不静默少一格，否则用户以为不用选）；② 给**真出路**
@@ -720,7 +720,7 @@ ACT.impMap = (t) => { if(IMP.working||IMP.busy) return; IMP.mapping[t.dataset.sr
 /* 「项目」共用面板（**单选**）—— 第 11 个 `projPanel` 调用点。
    ⚠️ 展开是 `<button>`、选择是面板内的 `radio` ⇒ 都走 **click 委托**
       （`change` 委托只管 `<select>` / `<input type=file>` 那种表单元素；⭐ `#2` 起它也不需要登记）。 */
-ACT.impPjToggle = () => { pjToggle('impPj'); render(); };
+ACT.impPjToggle = t => { pjToggle('impPj',t); };
 ACT.impPjPick = t => { const v = (t && t.dataset && t.dataset.pj) || ''; if (!v) return;
   IMP.wrap = v; IMP.preview=null; IMP.problems=[];
   /* ⭐ **截止核算月跟着所选项目换**（2026-09-26 修真缺陷）：它按项目存、且落库会写进所选项目 ⇒

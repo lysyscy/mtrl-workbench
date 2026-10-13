@@ -269,7 +269,7 @@ const ledExpPjPanel=()=>projPanel({list:ledProjs,selected:()=>ledExpPjs,allAct:'
 const ledExpStrip=()=>`${FBAR({cls:'strip',body:`
       <div class="fi"><span class="pill" style="margin:0" title="导出 = 每个项目一个工作簿，工作簿里 3 个工作表：辅材欠款 / 机械欠款 / 特殊费用月报表">① 逐月台账</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
-        ${PJB({act:'ledExpPjToggle',w:186,label:`${ledExpPjs.length?`已选 ${ledExpPjs.length} 个项目`:'请选择项目'}`})}
+        ${PJB({act:'ledExpPjToggle',panel:ledExpPjPanel,w:186,label:`${ledExpPjs.length?`已选 ${ledExpPjs.length} 个项目`:'请选择项目'}`})}
         ${pjIsOpen('ledExpPj')?ledExpPjPanel():''}</div>
       <div class="fi" style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale))">
         <button class="btn sm pri" data-act="ledExpOk" ${ledExpPjs.length?'':'disabled'} title="${ledExpPjs.length?'按所选项目导出（每项目一个工作簿 · 3 个工作表）':'请先选项目'}">导出台账</button>
@@ -298,7 +298,7 @@ const lgPjPanel=()=>projPanel({list:()=>pjKeysOfRows(lgPjList()),selected:()=>[l
 const lgStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><span class="pill" style="margin:0" title="只保存手动结算和付款，自动付款独立更新">手动期初</span></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
-        ${PJB({act:'lgPjToggle',w:150,label:`${esc(pjLabel(lgPjName))}${pjArcMark(pjRowOf(lgPjName))}`})}
+        ${PJB({act:'lgPjToggle',panel:lgPjPanel,w:150,label:`${esc(pjLabel(lgPjName))}${pjArcMark(pjRowOf(lgPjName))}`})}
         ${pjIsOpen('lgPj')?lgPjPanel():''}</div>
       <div class="fi"><label>分类</label><select class="inp" style="width:auto" id="lgCat" data-act="lgCat">${['辅材','机械'].map(c=>`<option ${lgCat===c?'selected':''}>${c}</option>`).join('')}</select></div>
       <div class="fi"><label>截止年月</label>${tmBtn('lgCutoff',{scope:'lg',val:lgCut,modes:['月']})}</div>

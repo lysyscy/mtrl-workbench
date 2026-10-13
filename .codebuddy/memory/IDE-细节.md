@@ -130,6 +130,8 @@
 
 > ⭐ 这些是**壳侧稳定约定**（都在 `backend/app/web/`）。`MEMORY.md` 只留一句指针。
 
+- 项目与时间浮层展开/收起及面板内探索只更新浮层，确认筛选值后才更新业务表。项目按钮用PJB的panel参数提供当前面板工厂，动作把真实DOM按钮传给pjToggle；时间按钮声明modes供refreshTimePop读取。定位/搜索收尾走replaceFilterPop，外部点击按composedPath判断，避免局部换面板误收起；无锚旧调用保留重画回退。行为保护见backend/tests/test_tail323_filter_panels.py，结构保护见backend/tests/test_shell_render.py。
+
 - **颜色判法**回 ops/前端设计守则-以使用用户为中心.md §4.5/§5.8；实现消费者为 backend/tests/test_ux_colors.py，通用导入面仍需核对域给文本与壳选色的实际配合。
 - 壳改动按 `ops/agents/issue-tracker.md` §四核验相关行为；快照只在需要现场比对时显式使用。旧快照只证明对应输入，未验差异须保留。
 - ⭐⭐ **`P2-a` 拆件（2026-09-28 · `TAIL-164`）—— 壳已从 6 件变 12 件**：`index.html` **3967 → 1626 行**（只留 CSS ＋ HTML ＋ **`V.*` 原型切片** ＋ `boot()`）。新 6 件按**责任**分：`base.js` 公共常量 / 纯函数 / 表头排序内核 · `view.js` 导航·路由·渲染内核·虚拟滚动 · `ui.js` 共用 UI 件与浮层（时间面板 / 项目工具 / 项目面板 / 浮层定位）· `proj.js` 通知书草稿 / 表格件 `TBL` / 各页表头常量 / 集采与供应商口径 · `pages-a.js` 付款域三页辅助 ＋ `BIND` · `pages-b.js` 其余各页辅助。⚠️ **`<script src>` 顺序 = 真源**（新件都排在 `actions.js` **之前**）⇒ ⛔ 别调顺序。⭐ 三条**只有真机看得见**的坑（离线全绿也没用）：① 加件**必须同批**改 `main.py` 路由**并重启后端**（缺 ⇒ 浏览器 404 ⇒ `ReferenceError` 整支崩）；

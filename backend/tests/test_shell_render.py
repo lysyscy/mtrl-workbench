@@ -195,10 +195,11 @@ def test_通用浮层要逃出卡片裁剪_机制只有一处():
         assert 'class="pjpop"' in tag, (
             f"有浮层**没挂 `pjpop`** ⇒ 它的后半截会被卡片裁掉（`TAIL-109`/`TAIL-110`）：{tag}")
 
-    # ③ 两条渲染路径都调（`placePops()` 全壳出现 3 次 = 1 处定义 ＋ 2 处调用）
-    assert src.count("placePops()") == 3, (
-        f"`placePops()` 的调用点不是两处（全壳 {src.count('placePops()')} 次）—— "
-        "虚拟滚动那条提前 `return`，漏了它大表页上照旧被裁")
+    # 普通/虚拟整页首画与浮层局部更新均走同一个定位出口。
+    assert _render_body().count("placePops()") == 2
+    pop = src[src.index('function replaceFilterPop('):src.index('function refreshTimePop(')]
+    assert 'placePops();' in pop
+    assert src.count("placePops()") == 4, "应为一处定义、两处整页收尾、一处浮层更新"
 
     # ④ 滚 / 缩窗口要重新定位
     assert "document.addEventListener('scroll', placePops, true)" in src, (
@@ -207,7 +208,7 @@ def test_通用浮层要逃出卡片裁剪_机制只有一处():
 
 
 @acc()
-def test_项目面板的过滤与折叠_两条渲染路径都要重涂():
+def test_项目面板的过滤与折叠_整页与浮层更新都要重涂():
     """⭐⭐ 2026-09-27（用户裁定 ①②）：项目面板的**搜索词与归档折叠**是"渲染后重涂"的。
 
     ⚠️ 为什么必须重涂：过滤是**纯 DOM** 的（打字**不重绘** —— 重绘重建输入框会把焦点与光标一起丢掉，
@@ -221,9 +222,9 @@ def test_项目面板的过滤与折叠_两条渲染路径都要重涂():
     """
     src = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", read_shell(), flags=re.S))
     assert "function applyPjFilters(){" in src, "没有过滤/折叠重涂的唯一出口"
-    # ⚠️ 数**带分号的调用**（定义那行没有分号）⇒ 算术干净：**2 处渲染收尾 ＋ 1 处输入委托**。
+    # 两处整页首画、输入委托及浮层局部更新各自保留收尾。
+    assert _render_body().count('applyPjFilters();') == 2
+    pop = src[src.index('function replaceFilterPop('):src.index('function refreshTimePop(')]
+    assert 'applyPjFilters();' in pop
     calls = src.count("applyPjFilters();")
-    assert calls == 3, (
-        f"`applyPjFilters();` 全壳调用 {calls} 次 —— 应为 **3**"
-        "（`render()` 的**两条**路径各一处〔虚拟滚动那条提前 `return`，漏了它大表页上照样出问题〕"
-        " ＋ `input` 委托一处〔打字时只切 DOM、不重绘〕）")
+    assert calls == 4, "应为两处整页首画、输入委托和浮层局部更新"
