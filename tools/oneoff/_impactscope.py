@@ -178,10 +178,6 @@ SELFTEST_DEPENDENCIES = {
     'tools/oneoff/_doc_downgrade.py': {
         'tools/oneoff/_doc_downgrade.py', 'tools/audit/audit_common.py',
         'tools/audit/audit_meta.py', 'tools/audit/audit_work.py', 'tools/audit/refs_query.py',
-        'ops/hooks/pre-commit', 'tools/audit/doc_audit.py', 'tools/audit/audit_drift.py',
-        'tools/audit/audit_face.py', 'tools/audit/syntax_audit.py', 'tools/audit/shell_source.py',
-        'tools/audit/bytes_guard.py',
-        'tools/audit/mut_cover.py', 'tools/oneoff/_gatescope.py', 'tools/oneoff/_run_rulers.py',
         '.codebuddy/work/README.md',
     },
     'tools/oneoff/_gatescope.py': {
@@ -300,7 +296,7 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
                 pending.append('机器输入未找到使用者：'+name)
             continue
         if name == 'ops/hooks/pre-commit':
-            continue  # 降档自测实际解析此入口，相关自测在下方选择。
+            continue  # 提交阶段由真实钩子核验；归档自测已独立验证隔离行为。
         pending.append('需要调查实际依赖：'+name)
     if any(n.startswith('tools/mut/') for n in names): checks.add('tools/audit/mut_cover.py')
     checks |= {rel for rel, deps in SELFTEST_DEPENDENCIES.items() if names & deps}
@@ -423,16 +419,20 @@ def selftest():
             ('tools/audit/audit_meta.py', {'tools/audit/refs_query.py', 'tools/oneoff/_doc_downgrade.py'}),
             ('tools/audit/audit_work.py', {'tools/oneoff/_doc_downgrade.py'}),
             ('tools/oneoff/_doc_downgrade.py', {'tools/oneoff/_doc_downgrade.py'}),
-            ('ops/hooks/pre-commit', {'tools/oneoff/_doc_downgrade.py'}),
-            ('tools/oneoff/_gatescope.py', {'tools/oneoff/_gatescope.py', 'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/oneoff/_gatescope.py', {'tools/oneoff/_gatescope.py'}),
             ('tools/oneoff/_impactscope.py', {'tools/oneoff/_gatescope.py'}),
             ('tools/oneoff/_pytestscope.py', {'tools/oneoff/_gatescope.py'}),
-            ('tools/oneoff/_run_rulers.py', {'tools/oneoff/_gatescope.py', 'tools/oneoff/_doc_downgrade.py'}),
+            ('tools/oneoff/_run_rulers.py', {'tools/oneoff/_gatescope.py'}),
             ('tools/oneoff/_run_muts.py', {'tools/oneoff/_gatescope.py'}),
             ('tools/mut/_mut_gatescope.py', {'tools/oneoff/_gatescope.py'}),
         ):
             chosen, _, _ = selection({dep: (b'VALUE = 1', b'VALUE = 2')}, registered)
             assert expected <= chosen, '工具或依赖变化漏自测：'+dep
+        for dep in ('ops/hooks/pre-commit', 'tools/audit/syntax_audit.py',
+                    'tools/audit/bytes_guard.py', 'tools/oneoff/_gatescope.py',
+                    'tools/oneoff/_run_rulers.py'):
+            chosen, _, _ = selection({dep: (b'VALUE = 1', b'VALUE = 2')}, registered)
+            assert 'tools/oneoff/_doc_downgrade.py' not in chosen, '归档自测仍依赖已退出的钩子检查：'+dep
         _, _, shared_pending = selection({'tools/audit/audit_common.py': (b'VALUE=1', b'VALUE=2')}, registered)
         assert any('共享检查模块' in p for p in shared_pending), '自测依赖不等于所有消费者已证'
     chosen, _, _ = selection({'README.md': (b'old', b'new')}, registered)

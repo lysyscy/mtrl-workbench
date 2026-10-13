@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import re
 import shutil
 import subprocess
@@ -32,7 +31,6 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 sys.path.insert(0, str(ROOT / "tools" / "audit"))
 #: ⛔ 下面 import 的是**口径**（仓外根 · 五区名单 · 降档两档 ＋ 判据本体 ＋ 文头窗口），本件一个字都不另抄。
 from audit_common import OUTSIDE_ROOTS                              # noqa: E402
@@ -66,15 +64,8 @@ INDEX_REL = ".codebuddy/plans/archive/归档-留痕索引-20261005.md"
 #: 登记表头 —— 与索引件里那句是**一对契约**（同 `T15` 文头四词 vs `work/README.md` §四 模板那对：
 #:   ⛔ 两边必须同一个词；命令找不到它就**拒绝**，绝不静默写到别处）。
 INDEX_TABLE_HEAD = "| 降档日期 | 件（仓内原名） | 仓外落点（会被 `T3` 真核） | 备注 |"
-#: 自测用的样本件（**脚本自己创建**，用完即删 —— ⛔ 不拿真件做实验）
-#: ⚠️⚠️ **名字必须与别的自测样本不同**（2026-10-06 当场撞过）：`tools/mut/_mut_downgrade.py` 里有一件
-#:    `设计-_mut降档样本-…`，而 `tools/mut/**` **属活机器那一路** ⇒ 同名样本会被它"引用" ⇒
-#:    本件的**引用守卫**据此判定"这件还有人用" ⇒ **自测的搬运一步都走不下去**（拦得对，但卡死了自测）。
-#:    ⇒ 教训：自测样本的名字也是**接口**的一部分，两个自测撞名就互相污染。
+#: 自测样本仅存在于临时仓库，引用查询和T26读取同一隔离现场。
 SAMPLE_REL = ".codebuddy/work/10-designs/设计-_mut降档自测件-20990101.md"
-RULE_COUNT_MIN = 5          #: 从钩子件里解析出的尺子名单少于这个数 ⇒ 本件需重定靶
-#: 闸门侧那份秒级尺子名单的**真源**（⛔ 本件只读它，不另抄）
-HOOK_REL = "ops/hooks/pre-commit"
 
 
 # --------------------------------------------------------------- 小工具（指纹 / git）
@@ -99,47 +90,12 @@ def _git(*args: str) -> tuple[int, str]:
     #   （`tools/oneoff/_oneoff_measure.py` 早为同一件事栽过）⇒ 任何"按 `.md` 结尾筛中文路径"的
     #   写法都**一个都选不出来**（首版自测第 ⑧ 项就这样空跑成"取回 0 字符"）。
     r = subprocess.run(["git", "-c", "core.quotepath=false", "--no-pager", *args], cwd=str(ROOT),
-                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
 
 def _worktree_state() -> str:
     return _git("status", "--porcelain")[1]
-
-
-# --------------------------------------------------------------- 闸门侧（跑前 / 跑后比）
-def _hook_rulers() -> list[list[str]]:
-    """闸门里**秒级那几把** = `ops/hooks/pre-commit` 里那份名单 —— ⚠️ **现读**，⛔ 不另抄。
-
-    ⭐ 为什么借那份名单：降档动作只可能影响**文档面**的尺子，而"哪几把是秒级必跑"已经在钩子
-    里声明过一次 ⇒ 抄一份进本件就是第二套口径。
-    ⛔ **本件不断言"整套收工闸门 rc 相同"**（那套含 pytest / 真机 / 交付面，分钟级且要活服务）
-    ⇒ 那一层由**人**在本批开发期手跑一次 `_run_rulers.py --all` 前后对照，结果写在
-    **票面第 4 批的「✅ 已办」块**里（⛔ 别把"自测 11/11"读成"整套闸门也验过了"）。
-    ⚠️ 解析**失败要报错**，⛔ 不许 `IndexError` 崩在半路（那是"钩子改版式了"的信号）。
-    """
-    txt = (ROOT / HOOK_REL).read_text(encoding="utf-8")
-    # 只认实际循环行；注释中的同名字面和引号不能成为执行清单。
-    match = re.search(r"(?ms)^for spec in \\\n(.*?)^do\s*$", txt)
-    if match is None:
-        raise SystemExit("⛔ 解析 %s 的尺子名单失败：实际循环不在位" % HOOK_REL)
-    specs = [s.split() for s in re.findall(r'"([^"\n]+)"', match.group(1))]
-    assert len(specs) >= RULE_COUNT_MIN, \
-        f"从 {HOOK_REL} 只解析出 {len(specs)} 条尺子（期望 ≥{RULE_COUNT_MIN}）⇒ 本件需重定靶"
-    return specs
-
-
-def _ruler_state() -> list[tuple[str, int, int, str]]:
-    """→ `[(件名, rc, 红数, 关键行)]`；红数 = `必须修 N` 的 N（-1 = 那把没有这一行）。"""
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    out = []
-    for spec in _hook_rulers():
-        r = subprocess.run([str(PY), "-X", "utf8", str(ROOT / spec[0]), *spec[1:]], cwd=str(ROOT),
-                           capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
-        key = next((x.strip() for x in (r.stdout or "").splitlines() if x.startswith("必须修")), "")
-        n = re.search(r"必须修 (\d+)", key)
-        out.append((spec[0], r.returncode, int(n.group(1)) if n else -1, key))
-    return out
 
 
 # --------------------------------------------------------------- 解析件名 → (区, 仓内路径)
@@ -213,10 +169,17 @@ def _refs_of(rel: str) -> list[tuple[str, str, int]]:
 
 
 def _index_line(zone: str, name: str, out_abs: Path) -> str:
-    """仓内索引那一行。⚠️ **取回指令故意不加反引号** —— 加了 `T3` 会把已搬走的仓内路径当幽灵报红。"""
+    """固定源提交，归档删除提交后仍可取回；未入Git的件从仓外原文恢复。"""
     rel_in = f".codebuddy/work/{zone}/{name}"
+    rc, revision = _git("rev-parse", "HEAD")
+    revision = revision.strip()
+    recorded = (rc == 0 and _git("cat-file", "-e", f"{revision}:{rel_in}")[0] == 0
+                and _git("diff", "--quiet", revision, "--", rel_in)[0] == 0)
+    # 取回指令不加反引号，避免T3把已搬走的原路径当成现行引用。
+    recovery = (f"取回 git show {revision}:{rel_in}" if recorded
+                else "Git未保存当前原文，原文从仓外落点取回")
     return (f"| {date.today().isoformat()} | `{name}` | `{out_abs}` |"
-            f" 原区 `.codebuddy/work/{zone}/` · 取回 git show HEAD:{rel_in} |")
+            f" 原区 `.codebuddy/work/{zone}/` · {recovery} |")
 
 
 def _index_row_no(text: str) -> int:
@@ -328,10 +291,16 @@ def do_downgrade(name: str, apply: bool) -> int:
               "复查：`tools/audit/refs_query.py %s`" % fname)
         return 1
 
+    if out_abs.exists():
+        print("⛔ 仓外已有同名件：%s ⇒ 拒绝覆盖，原件和索引未动" % out_abs)
+        return 1
+
     if not out_abs.parent.is_dir():
         out_abs.parent.mkdir(parents=True, exist_ok=True)
         print("  仓外   （新建落点目录 %s）" % out_abs.parent)
     # ⭐ 顺序：**先搬、后写索引** —— 反过来的话，`move` 失败就留下"指针指向不存在的仓外件"半状态。
+    idx = ROOT / INDEX_REL
+    idx_before = idx.read_bytes()
     shutil.move(str(path), str(out_abs))
     try:
         if st == "already":
@@ -339,8 +308,11 @@ def do_downgrade(name: str, apply: bool) -> int:
         else:
             _index_insert(line, out_abs)
     except Exception:                                              # noqa: BLE001
-        shutil.move(str(out_abs), str(path))                        # 回滚：搬回去，不留半状态
-        print("⛔ 索引写入失败 ⇒ **已把件搬回原处**（不留半状态）")
+        try:
+            idx.write_bytes(idx_before)
+        finally:
+            shutil.move(str(out_abs), str(path))
+        print("⛔ 索引写入失败 ⇒ **原件与索引均已恢复**（不留半状态）")
         raise
     print("✅ 已搬：仓内原件已移出 · 仓外留原文 · 索引%s"
           % ("原有一行（未重复写）" if st == "already" else "已留行"))
@@ -357,6 +329,28 @@ def _sample_text() -> str:
 
 
 def _selftest() -> int:
+    """在临时仓与临时仓外目录验证真实动作；只替换路径，不替换判据或引用查询。"""
+    import tempfile
+    from contextlib import ExitStack
+    from unittest.mock import patch
+
+    import audit_meta
+    import audit_work
+    import refs_query
+
+    with tempfile.TemporaryDirectory(prefix="tmp-doc-downgrade-") as folder, ExitStack() as stack:
+        fixture = Path(folder) / "repo"
+        fixture.mkdir()
+        stack.enter_context(patch.multiple(sys.modules[__name__], ROOT=fixture,
+                                           OUT_ROOT=Path(folder) / "archive"))
+        for module in (audit_meta, audit_work, refs_query):
+            stack.enter_context(patch.object(module, "REPO_ROOT", fixture))
+        return _selftest_fixture()
+
+
+def _selftest_fixture() -> int:
+    from unittest.mock import patch
+
     res: list[tuple[str, bool]] = []
 
     def chk(label: str, ok: bool) -> None:
@@ -364,155 +358,149 @@ def _selftest() -> int:
         print("  %s %s" % ("✅" if ok else "⛔", label))
 
     sample, idx = ROOT / SAMPLE_REL, ROOT / INDEX_REL
-    zone = sample.parent
-    out_abs = _out_path(zone.name, sample.name)
-    line = _index_line(zone.name, sample.name, out_abs)
-    in_zone = sorted(zone.glob("*.md"))
+    for parent in (sample.parent, idx.parent, ROOT / "ops", ROOT / "tools/probe",
+                   ROOT / ".codebuddy/work/50-tickets"):
+        parent.mkdir(parents=True, exist_ok=True)
+    (ROOT / "ops/阈值表.md").write_text("# 隔离落地样本\n", encoding="utf-8")
+    closed = ROOT / ".codebuddy/work/50-tickets/TAIL-225-样本.md"
+    closed.write_text("**Status:** done\n", encoding="utf-8")
+    idx_bytes0 = ("# 隔离索引\r\n\r\n" + INDEX_TABLE_HEAD
+                  + "\r\n|---|---|---|---|\r\n\r\n## 表后内容\r\n").encode("utf-8")
+    idx.write_bytes(idx_bytes0)
+    sample_bytes = _sample_text().encode("utf-8")
+    sample.write_bytes(sample_bytes)
+    commit_args = ("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                   "-c", "core.hooksPath=" + str(ROOT / "no-hooks"), "commit", "-qm")
+    for args in (("init", "-q"), ("add", SAMPLE_REL, INDEX_REL, "ops/阈值表.md",
+                 closed.relative_to(ROOT).as_posix()),
+                 (*commit_args, "fixture")):
+        rc, output = _git(*args)
+        if rc != 0:
+            raise RuntimeError("隔离Git准备失败：" + output)
+    git0 = _worktree_state()
+    out_abs = _out_path(sample.parent.name, sample.name)
 
-    def _strip_row() -> None:
-        """中断自愈：把残留的那一行去掉 —— ⚠️ **必须认原行尾**。
+    chk("不给件名拒绝且工作区未变", main([]) == 2 and _worktree_state() == git0)
+    chk("真实T26能报告已落地样本", any(h["rel"] == SAMPLE_REL
+                                       for h in check_downgrade_candidates()))
+    dirty_bytes = sample_bytes + "未提交的新内容\n".encode("utf-8")
+    sample.write_bytes(dirty_bytes)
+    rc = do_downgrade(sample.name, True)
+    dirty_row = idx.read_text(encoding="utf-8")
+    chk("未提交修改从仓外恢复当前原文", rc == 0 and not sample.exists()
+        and out_abs.read_bytes() == dirty_bytes and "原文从仓外落点取回" in dirty_row
+        and "git show" not in dirty_row)
+    shutil.move(str(out_abs), str(sample))
+    sample.write_bytes(sample_bytes)
+    idx.write_bytes(idx_bytes0)
+    idx.unlink()
+    chk("缺索引拒绝且原文未动", do_downgrade(sample.name, True) != 0
+        and sample.read_bytes() == sample_bytes and not out_abs.exists())
+    idx.write_bytes(b"# invalid index\r\n")
+    chk("缺表头拒绝且原文未动", do_downgrade(sample.name, True) != 0
+        and sample.read_bytes() == sample_bytes and not out_abs.exists())
+    idx.write_bytes(idx_bytes0)
+    before = _fp([sample, idx])
+    chk("默认干跑不改字节或mtime", main([sample.name]) == 0
+        and _fp([sample, idx]) == before and not out_abs.exists())
 
-        ⛔ 首版用 `("\\n".join(keep) + "\\n")` 重建 ⇒ 那是 **CRLF** 的索引件被整篇改成 **LF**
-        ⇒ 收尾的「索引字节一致」当场变红（**自测抓到的真 bug**，不是判据太严）。
-        """
-        if not idx.is_file():
-            return
-        raw = idx.read_bytes()
-        nl = "\r\n" if b"\r\n" in raw else "\n"
-        lines = raw.decode("utf-8").splitlines()
-        keep = [x for x in lines if str(out_abs) not in x]
-        if len(keep) != len(lines):
-            idx.write_bytes((nl.join(keep).rstrip("\r\n") + nl).encode("utf-8"))
-
-    def cleanup(heal: bool = False) -> None:
-        """自愈 / 收尾：**把样本搬回仓内** ＋ 清仓外残留 ＋ 索引复原。
-
-        ⚠️ 收尾走**按字节回写快照**，⛔ 不"逐行删回去"重建（重建会重排行尾 ⇒ 复原断言必红）。
-        """
-        if out_abs.is_file() and not sample.is_file():
-            out_abs.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(out_abs), str(sample))
-        for p in (sample, out_abs):
-            if p.is_file():
-                p.unlink()
-        if not heal and idx.is_file() and idx.read_bytes() != idx_bytes0:
-            idx.write_bytes(idx_bytes0)
-        _strip_row()
-
-    cleanup(heal=True)                          # ⭐ 中断自愈：跑本件之前它们不该存在
-    idx_bytes0 = idx.read_bytes()               # 复原基准 = **自愈之后**的样子
-    fp_zone0, git0 = _fp(in_zone), _worktree_state()
-
-    print("  ① 不给件名 ⇒ 拒绝（**入口**就拒，⛔ 不是「进了函数再拒」）")
-    rc = main([])
-    chk("不给件名 rc=%d（非 0）且工作区未变" % rc, rc != 0 and _worktree_state() == git0)
-
-    print("  ② 跑前闸门基线（名单现读自 `%s`）" % HOOK_REL)
-    before = _ruler_state()
-    for nm, r, n, k in before:
-        # ⚠️ **只在有红时打关键行** —— 全绿那行含「必须修 0」⇒ 会被收工闸门的摘要过滤选中，
-        #   把真正的结论行「自测 N/N」挤出前三行（`refs_query` 那行会被挡住；实测才发现）。
-        print("     %-34s rc=%d 红=%s%s" % (nm, r, n, ("  " + k[:46]) if n != 0 else ""))
-    chk("跑前各项退出0且无红", all(r == 0 and n <= 0 for _nm, r, n, _k in before))
-    y_base = next((int(re.search(r"疑似 (\d+)", k).group(1)) for nm, _r, _n, k in before
-                   if nm.endswith("doc_audit.py") and "疑似" in k), -1)
-
-    sample.write_text(_sample_text(), encoding="utf-8", newline="")
-    out_abs.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        print("  ③ 造好样本 ⇒ **`T26` 此刻应该报它**（正向断言：没有这一条，`T26` 整体死掉也能满分）")
-        chk("T26 报了样本", any(h["rel"] == SAMPLE_REL for h in check_downgrade_candidates()))
-
-        print("  ④ 默认干跑 ⇒ 不动手")
-        rc = do_downgrade(sample.name, apply=False)
-        no_move = sample.is_file() and not out_abs.is_file() and str(out_abs) not in idx.read_text(encoding="utf-8")
-        chk("干跑 rc=%d · 原件仍在原处、索引未动" % rc, rc == 0 and no_move)
-
-        print("  ④ 之二 **它还有活引用 ⇒ 拒绝搬**（`T3` 只扫文档面、照不到 `.py` 里的指针）")
-        # 造一个"引用方"：真机探针目录下的临时 .py（属活机器那一路）⇒ 点名样本件。
-        # ⚠️ 必须在**跑前基线之后**造、**跑后基线之前**删 —— 否则两遍尺子的输入不一样，⑨ 的对照就不成立。
-        referrer = ROOT / "tools" / "probe" / "_mut_refers_sample.py"
-        referrer.write_text('"""自测临时件（`_doc_downgrade.py --selftest` 用后即删）：造一处活引用。"""\n'
-                            '#: 指向 %s\nX = 1\n' % SAMPLE_REL, encoding="utf-8", newline="")
+    for lane, rel in (("机器", "tools/probe/refers_sample.py"),
+                      ("文档", "ops/活引用.md"),
+                      ("票", ".codebuddy/work/50-tickets/TAIL-226-引用.md")):
+        referrer = ROOT / rel
+        referrer.write_text("**Status:** ready-for-agent\n# 指向 " + SAMPLE_REL + "\n",
+                            encoding="utf-8")
         try:
-            rc = do_downgrade(sample.name, apply=True)
-            refused = rc != 0 and sample.is_file() and not out_abs.is_file()
+            refs = _refs_of(SAMPLE_REL)
+            chk(lane + "活引用拒绝且原文未动", any(r[0] == lane for r in refs)
+                and do_downgrade(sample.name, True) != 0
+                and sample.read_bytes() == sample_bytes and idx.read_bytes() == idx_bytes0
+                and not out_abs.exists())
         finally:
-            referrer.unlink(missing_ok=True)
-        chk("有引用时 rc=%d（非 0）· 件仍在原处=%s" % (rc, sample.is_file()),
-            rc != 0 and refused)
+            referrer.unlink()
 
-        print("  ⑤ 真搬（--apply）⇒ 三件事：仓外留原文 ＋ 仓内已移出 ＋ 索引留行")
-        rc = do_downgrade(sample.name, apply=True)
-        txt = idx.read_text(encoding="utf-8")
-        chk("真搬 rc=%d · 仓外在位=%s 仓内已移出=%s 索引有行=%s"
-            % (rc, out_abs.is_file(), not sample.is_file(), str(out_abs) in txt),
-            rc == 0 and out_abs.is_file() and not sample.is_file() and str(out_abs) in txt)
+    for zone in ("30-troubleshooting", "40-decisions"):
+        refused = ROOT / ".codebuddy/work" / zone / "拒绝样本.md"
+        refused.parent.mkdir(parents=True, exist_ok=True)
+        refused.write_bytes(sample_bytes)
+        chk(zone + "拒绝且原件未动", do_downgrade(refused.name, True) != 0
+            and refused.read_bytes() == sample_bytes and idx.read_bytes() == idx_bytes0)
+        refused.unlink()
 
-        print("  ⑥ 可逆：索引里那一行的仓外落点 **== 仓外真路径**（`T3` 核的就是它）＋ 取回指令在行内")
-        # ⚠️⚠️ 只能在**我那一行里**找 token ——⛔ 不能对整篇找：这份索引头部就有别的仓外路径
-        #    （`plans-archive\`），取第一个 ⇒ 拿到的是**别人那行**（首版就这么错，判据自己报了）。
-        my_row = next((x for x in txt.splitlines() if str(out_abs) in x), "")
-        tok = re.search(r"`([A-Za-z]:[\\/][^`]+?)`", my_row)
-        chk("我那一行里的 token=%s · 取回指令在行内=%s"
-            % (tok.group(1) if tok else "（没找到）", f"git show HEAD:{SAMPLE_REL}" in my_row),
-            bool(tok) and tok.group(1) == str(out_abs) and f"git show HEAD:{SAMPLE_REL}" in my_row)
+    out_abs.parent.mkdir(parents=True, exist_ok=True)
+    out_abs.write_bytes(b"existing archive")
+    rc = do_downgrade(sample.name, True)
+    chk("仓外同名件拒绝覆盖", rc != 0 and sample.is_file()
+        and out_abs.read_bytes() == b"existing archive" and idx.read_bytes() == idx_bytes0)
+    # 此处只恢复隔离样本，使失败也能继续检查其余行为。
+    sample.write_bytes(sample_bytes)
+    out_abs.unlink()
+    idx.write_bytes(idx_bytes0)
 
-        print("  ⑦ 索引已有那一行 ＋ 原件回到仓内 ⇒ **不重复写行**、仍能搬（`already` 分支）")
-        out_abs.replace(sample)                    # 人把文件搬回来了、忘了删索引行
-        n_row0 = idx.read_text(encoding="utf-8").count(str(out_abs))
-        rc = do_downgrade(sample.name, apply=True)
-        n_row1 = idx.read_text(encoding="utf-8").count(str(out_abs))
-        chk("rc=%d · 索引里那一行仍是 %d 行（没写重）· 件又搬出去了=%s"
-            % (rc, n_row1, out_abs.is_file()),
-            rc == 0 and n_row0 == 1 and n_row1 == 1 and out_abs.is_file() and not sample.is_file())
+    def broken_index(*_args) -> None:
+        idx.write_bytes(b"partial index write")
+        raise OSError("隔离注入：索引写入中断")
 
-        print("  ⑧ 再跑一遍（件已在仓外）⇒ 字节级 no-op")
-        fp_a = (_fp(in_zone), idx.read_bytes(), _worktree_state())
-        rc = do_downgrade(sample.name, apply=True)
-        fp_b = (_fp(in_zone), idx.read_bytes(), _worktree_state())
-        chk("rc=%d · 过程区指纹一致=%s 索引字节一致=%s git 状态一致=%s"
-            % (rc, fp_a[0] == fp_b[0], fp_a[1] == fp_b[1], fp_a[2] == fp_b[2]),
-            rc == 0 and fp_a == fp_b)
+    try:
+        with patch.object(sys.modules[__name__], "_index_insert", side_effect=broken_index):
+            do_downgrade(sample.name, True)
+    except OSError:
+        chk("索引写入失败同时恢复原文和索引", sample.is_file()
+            and sample.read_bytes() == sample_bytes and not out_abs.exists()
+            and idx.read_bytes() == idx_bytes0)
+    else:
+        chk("索引写入失败必须暴露", False)
+    idx.write_bytes(idx_bytes0)
 
-        print("  ⑨ 跑后闸门：逐把 rc 一致 ＋ 仍无红 ＋ 疑似数回到跑前 ＋ `T26` 不再报它")
-        after = _ruler_state()
-        amap = {x[0]: x for x in after}
-        same_rc = [x[0] for x in before if amap[x[0]][1] != x[1]]
-        reds = [x[0] for x in after if x[1] != 0 or x[2] > 0]
-        y_now = next((int(re.search(r"疑似 (\d+)", k).group(1)) for nm, _r, _n, k in after
-                      if nm.endswith("doc_audit.py") and "疑似" in k), -2)
-        t26_gone = not any(h["rel"] == SAMPLE_REL for h in check_downgrade_candidates())
-        chk("rc 有变=%s · 跑后红=%d · doc_audit 疑似 %d→%d（期望回到跑前）· T26 不再报=%s"
-            % (same_rc or "无", len(reds), y_base, y_now, t26_gone),
-            not same_rc and not reds and y_now == y_base and t26_gone)
-
-        print("  ⑩ git 取回那条路：对**已提交的真件**可用（样本来不及进 HEAD ⇒ 那一步只能这样证）")
-        _rc, tracked = _git("ls-files", ".codebuddy/work/10-designs")
-        first = next((x for x in tracked.splitlines() if x.endswith(".md")), "")
-        rc2, body = _git("show", f"HEAD:{first}") if first else (1, "")
-        chk("git show HEAD:%s 取回 %d 字符" % (first or "（没找到已跟踪件）", len(body)),
-            bool(first) and rc2 == 0 and len(body.strip()) > 0)
-    finally:
-        cleanup()
-
-    print("  ⑪ 复原：git 状态 ＋ 过程区指纹 ＋ 索引字节 ＋ 仓外残留，四样都回到跑前")
-    chk("git 状态一致=%s 过程区指纹一致=%s 索引字节一致=%s 仓外无残留=%s"
-        % (_worktree_state() == git0, _fp(in_zone) == fp_zone0,
-           idx.read_bytes() == idx_bytes0, not out_abs.is_file()),
-        _worktree_state() == git0 and _fp(in_zone) == fp_zone0
-        and idx.read_bytes() == idx_bytes0 and not out_abs.is_file())
-    bad = [x for x in res if not x[1]]
+    rc = do_downgrade(sample.name, True)
+    text = idx.read_text(encoding="utf-8")
+    chk("真搬保留原文字节且索引入表", rc == 0 and not sample.exists()
+        and out_abs.read_bytes() == sample_bytes and text.count(str(out_abs)) == 1
+        and any(str(out_abs) in row for row in text.splitlines()[:_index_row_no(text) + 1])
+        and b"\r\n" in idx.read_bytes() and b"\n" not in idx.read_bytes().replace(b"\r\n", b""))
+    row = next(line for line in text.splitlines() if str(out_abs) in line)
+    match = re.search(r"git show ([0-9a-f]+):" + re.escape(SAMPLE_REL), row)
+    for args in (("add", "-u", SAMPLE_REL, INDEX_REL), (*commit_args, "archive")):
+        rc, output = _git(*args)
+        if rc != 0:
+            raise RuntimeError("隔离归档提交失败：" + output)
+    rc, recovered = _git("show", match.group(1) + ":" + SAMPLE_REL) if match else (1, "")
+    chk("归档删除提交后固定SHA仍可恢复同一件", str(out_abs) in row
+        and _git("show", "HEAD:" + SAMPLE_REL)[0] != 0 and rc == 0
+        and recovered.encode("utf-8") == sample_bytes)
+    before = (idx.read_bytes(), idx.stat().st_mtime_ns,
+              out_abs.read_bytes(), out_abs.stat().st_mtime_ns, _worktree_state())
+    rc = do_downgrade(sample.name, True)
+    chk("重复执行不改字节、mtime或Git状态", rc == 0 and before
+        == (idx.read_bytes(), idx.stat().st_mtime_ns, out_abs.read_bytes(),
+            out_abs.stat().st_mtime_ns, _worktree_state()))
+    chk("搬后T26不再报告样本", not any(h["rel"] == SAMPLE_REL
+                                       for h in check_downgrade_candidates()))
+    shutil.move(str(out_abs), str(sample))
+    rc = do_downgrade(sample.name, True)
+    chk("原件恢复后再搬不重复索引", rc == 0 and not sample.exists()
+        and out_abs.read_bytes() == sample_bytes
+        and idx.read_text(encoding="utf-8").count(str(out_abs)) == 1)
+    shutil.move(str(out_abs), str(sample))
+    idx.write_bytes(idx_bytes0)
+    for args in (("add", SAMPLE_REL, INDEX_REL), (*commit_args, "restore")):
+        rc, output = _git(*args)
+        if rc != 0:
+            raise RuntimeError("隔离恢复提交失败：" + output)
+    chk("恢复后原文、索引和Git状态一致且仓外无残留", sample.read_bytes() == sample_bytes
+        and idx.read_bytes() == idx_bytes0 and _worktree_state() == git0
+        and not out_abs.exists())
+    bad = [label for label, ok in res if not ok]
     print("  自测 %d/%d%s" % (len(res) - len(bad), len(res),
-                             ("　⛔ 未过：" + "、".join(b[0] for b in bad)) if bad else ""))
-    return 0 if not bad else 1
+                              "　⛔ 未过：" + "、".join(bad) if bad else ""))
+    return 1 if bad else 0
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="降档动作（可逆搬运 ＋ 仓内索引留行）· 默认干跑")
     ap.add_argument("name", nargs="?", help="件名 / 相对路径（⛔ 不给 ⇒ 拒绝）")
     ap.add_argument("--apply", action="store_true", help="真搬（不给就是干跑）")
-    ap.add_argument("--selftest", action="store_true", help="自测（造样本 → 跑 → 复原）")
+    ap.add_argument("--selftest", action="store_true", help="隔离自测（临时仓内验证搬运与恢复）")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     if a.selftest:
