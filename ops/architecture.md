@@ -15,7 +15,7 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 | mod* | 一模块一包；包间只经对方service调用，不跨包直查表或import repository。service可以再导出repository函数；出口必须能够打桩替换。现有按设计的例外以 backend/tests/test_layering.py 与实现文件头为准。 |
 | web | 判定与写入走后端；不照抄原型存储结构。文件清单/加载顺序见 backend/app/web/index.html；读取壳字节走 tools/audit/shell_source.py，读取语义走 tools/audit/shell_api.py。 |
 | tools | 检查与操作工具的用途、读写边界见 tools/README.md；不以检查结果替代业务口径。 |
-| ops | 服务、部署、备份与恢复；凭据仅从.env读取，不硬编码。 |
+| ops | 服务、部署、备份与恢复；运行凭据从.env读取。初始化SQL的既有公开口令风险与处置边界见 ops/deployment.md §二。 |
 
 分层守卫见 backend/tests/test_layering.py；由C2判据守「不得跨包把对方模型当查询目标」，typing/domain/join条件的正当引用不受限。活的隔离自证在 tools/mut/_mut_layering.py；core业务注入不另抄取数实现。
 
@@ -126,7 +126,9 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 主题真源与派生见 backend/app/mod03_notice/page.py；全站同源、不在壳内另定义:root、CSS色值扫描和打印件隔离见 backend/tests/test_theme.py。服务端BASE_CSS和/static/theme.css使用同一真源。
 
 **⛔ 三条不许动的红线**（`P3` 起就钉着 · 长期有效）：① 逐路 `soft()` 容错 ＋ **失败点名**（`test_wired_boot.py` 钉着）；
-② `m07`/`m05` 对 `reloadMech`/`reloadInv` 的**依赖屏障**；③ 写动作后**必须**回后端真实状态（不许靠"本地改＋不重拉"省请求）。
+② `m07`/`m05` 对 `reloadMech` 的**依赖屏障**（现行 `LOAD_DEP`）；③ 写动作后**必须**回后端真实状态（不许靠"本地改＋不重拉"省请求）。
+
+库存列表、过程资料与大表按各自入口取数；m06读矩阵与机械，m07读报表与机械，两页均不预拉库存全量。依赖清单直接读 `backend/app/web/shell/core.js` 的 `PAGE_LOAD` / `LOADERS` / `LOAD_DEP`，写后标脏保持全页新鲜度；变更前核对实际消费者，避免按旧依赖补回无用请求。
 
 ⚠️ **两条口径**：① **原型切片不许搬出 `index.html`**（旧U1逐行比对已退场；初始化期加载约束仍需遵守，变更前核对当前加载顺序和判据）；
 ② 改多文件加载须验证通过服务的真实脚本加载及顺序；按实际范围核验，执行入口见 .codebuddy/memory/IDE-细节.md §十一。
@@ -149,7 +151,7 @@ TAIL-301补齐行与合计：`V.m11` 单元格按id绑定、由同份列清单�
 | 2 | ✅ **旧静态页 `m03.html` 已删（2026-09-19 · 批 4.5）** —— 此前**不在此列**（**订正**：按 `D18` 它在删除范围内）；其前置「批量打印 / 只导出 PDF / 打印机设置接进新壳」已于 2026-09-18 补齐（`TAIL-46`），`test_acc_pay_setup.py` 的断言同期改指新壳 ⇒ 该文件与其托管机制（`main.py` 的 `_PAGES`）一并删除 ✓ | `main.py`（`_PAGES` 已删）· `test_acc_pay_setup.py`（断言已指新壳） |
 | 3 | `mod03_notice/page.py`（＋其拆出的 `list_page.py`） | 是**全站共用件**（`THEME_CSS`/`BASE_CSS`/`esc`/`sort_rows`/`nav_html`），`main.py`＋`mod04_plan/service.py` 等处都在用。⚠️ 2026-09-21 起 **`home/view.py` 不再在列**（该文件已删 —— 看板进了壳）；⭐ **2026-09-21 拆出 `list_page.py`**；⚠️ **本件仍是老调用方的入口**（`page.X` 一律再导出，⛔ 拆件不改调用方） | `backend/app/main.py`主题路由与实际调用方 |
 | 4 | `/static/theme.css` 路由 | 主题**唯一真源**（改主题只改一处）；`test_theme.py` 有同源断言 | `backend/app/main.py`主题路由 · `backend/tests/test_theme.py` |
-| 5 | `core/nav.py` | 导航唯一数据源（服务端那套 `nav_html` 靠它）。⚠️ **2026-09-21：四条指向"暂留件"的入口已随四页搬进壳而删除** —— 它此后只服务**仍在的服务端渲染页**（现只剩登录页）；**新壳的侧栏另有自己的一份**（`web/index.html` 的 `NAV`） | `mod03_notice/page.py::nav_html` · `web/index.html` 的 `NAV` |
+| 5 | `core/nav.py` | 服务端导航数据源（`nav_html` 使用）。⚠️ **2026-09-21：四条指向"暂留件"的入口已随四页搬进壳而删除** —— 它此后只服务**仍在的服务端渲染页**（现只剩登录页）；**新壳的侧栏另有自己的一份**（`backend/app/web/shell/view.js` 的 `NAV`） | `mod03_notice/page.py::nav_html` · `backend/app/web/shell/view.js` 的 `NAV` |
 | 6 | **`POST /m05/opening` · `/m05/opening/delete` · `/m05/ledger/remark`** | ⚠️ **新壳正在用**（另有 `_e2e_m05_wired.py` 真机） | `web/index.html` 各 `API.*` |
 | 7 | `GET /api/m03/notice-list` ＋ `list_data.py`（`build_page_data`/`columns`/`summary_row`/`_row_dict`）＋ `list_view.py` | **新壳 m03 的数据源**（数据侧已归位到 `list_data.py`，与 API 共用同一份） | `notice_api_router.py::get_notice_list` |
 | 8 | 全部 `/api/m01…m14/*` JSON 端点 ＋ `/api/m03/settings/printer` | 新壳 `boot()`/`reload*()` 的唯一取数口 | `web/index.html` 各 `API.*` |

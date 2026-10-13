@@ -1,6 +1,6 @@
 # 材料报表自动化工作台 · Agent 读取入口
 
-接手先读 `README.md` §〇、`.codebuddy/plans/开发计划-主文档.md` §13.6 最新行与 §15 相关票，以及 `.codebuddy/memory/MEMORY.md`（宿主未注入时手动读）。然后按下表取当前动作需要的章节。
+接手先读 `README.md` §〇、`.codebuddy/plans/开发计划-主文档.md` §0、§13.6 当前交接与 §15 相关票，以及 `.codebuddy/memory/MEMORY.md`（宿主未注入时手动读）。然后按下表取当前动作需要的章节。
 
 目录职责、分层和命名由 `README.md` 持有；本件只维护读取指针。
 

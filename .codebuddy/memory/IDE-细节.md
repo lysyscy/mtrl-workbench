@@ -57,12 +57,15 @@
 
 | 列 | i8 抓取 | 手工 Excel 导入 | 页面手改 |
 |---|---|---|---|
-| `contract_date` / `supplier` / `bill_name` / `party_name` | **无脑刷新**（`repository.py:316`、`:408-415`） | ⛔ 不碰 | ⛔ **不能改** |
+| `contract_date` 合同日期 | 未锁定时随i8刷新；`contract_date_locked` 为真时保留确认日期 | 不碰 | 无通用手改入口；审核修正走专项事务 |
+| `supplier` / `bill_name` / `party_name` | 随i8刷新（`backend/app/mod11_jc/repository.py::upsert_fetched_contracts`） | 不碰 | 不能改 |
 | `material_name` 材料名 | **空才填**（`FETCH_ONLY_WHEN_BLANK` `:321`,`:416-419`） | ✅ 覆盖 | ✅ 能改（白名单 6 列之一） |
 | `tag` 三态 | 只做归一：人工「不纳入」**保留**（`:436-438`） | ⛔ 不碰 | 专门出口 `set_tag` |
 | `contract_amt` 合同金额（供应商价） | 正常甲方刷新；**贸易公司甲方时绝不自动动**（`:420-435`） | ⭐ 两类行为不同（见下） | ⛔ **不能改**（界面无入口） |
 | `trade_co` / `trade_contract_amt` | 贸易公司合同**首次写**（甲方名 / i8 那个价） | ⛔ 不碰 | ⛔ 不能改 |
 | 6 列 `method/remark/arch/arch_no/ret_date` ＋ 材料名 | ⛔ 不碰（人的地盘） | ✅ 覆盖（`import_service.EXCEL_COLS`） | ✅ 能改（`EDITABLE_COLS` = 这 6 列） |
+
+合同日期保护由 `backend/app/mod11_jc/repository.py` 执行，判据为 `backend/tests/test_jc_contract_date_lock.py` 与 `backend/tests/test_jc_contract_date_transaction.py`；TAIL-313的90条审核修正及恢复证据回原票。锁定日期是已批准的专项修正范围，不扩大为全部i8事实字段可手改。
 
 - ⭐⭐ **2026-09-26 用户裁定「方案②」（贸易公司合同的导入对号）**：**正常合同** ⇒「合同金额」只用来**对号**、数字一个不改；**贸易公司合同**（那格按设计是空的 —— i8 里没这个数）⇒ 改用「**贸易公司合同金额**」当钥匙（对号 Excel「贸易公司合同总价」），对上后把 Excel「**供应商合同总价**」写进「合同金额」、**空才填**；出口 = `repository.fill_contract_amt_if_blank`，⛔ 不走 `update_contract`。
 - ⚠️ **历史坑**：抓取时甲方还没分类 ⇒ 价落进「合同金额」；**改分类不回头重算**（`service.py:335-337`），而重抓**只补 trade 两列、绝不碰合同金额** ⇒ 那批行（实测 27 条）必须**先清空**才对得上；已清（备份 `.codebuddy/backups/jc_trade_amt_clean_2026-09-26.json`）。
@@ -108,7 +111,7 @@
 
 ## 七、交接载体
 
-当前交接只回主计划§13.6最新行；读取入口回 AGENTS.md，历史交接查 .codebuddy/plans/archive/归档-留痕索引-20261005.md 的TAIL-247整理登记。
+当前交接回主计划§13.6，运行状态与未验项回§0；读取入口回 AGENTS.md。旧交接查该文件Git历史，逐票证据经已销号索引定位，仓外旧资料再按归档索引读取。
 提示词仅在聊天回复提供，不写进票或规格；来源见 .codebuddy/memory/MEMORY.md §一。提交与推送按 ops/agents/issue-tracker.md §四判断。
 
 ## 八、文件行数口径（曾误判一次 · 已订正）
@@ -128,7 +131,7 @@
 > ⭐ 这些是**壳侧稳定约定**（都在 `backend/app/web/`）。`MEMORY.md` 只留一句指针。
 
 - **颜色判法**回 ops/前端设计守则-以使用用户为中心.md §4.5/§5.8；实现消费者为 backend/tests/test_ux_colors.py，通用导入面仍需核对域给文本与壳选色的实际配合。
-- ⚠️ **任何壳改动之后都要重新盖章**（`tools/audit/shell_verify.py --snapshot`），**哪怕只改一句文案** —— 旧章对新壳无意义（2026-09-27 改 `m15` 文案时就漏了一次，已补盖）。
+- 壳改动按 `ops/agents/issue-tracker.md` §四核验相关行为；快照只在需要现场比对时显式使用。旧快照只证明对应输入，未验差异须保留。
 - ⭐⭐ **`P2-a` 拆件（2026-09-28 · `TAIL-164`）—— 壳已从 6 件变 12 件**：`index.html` **3967 → 1626 行**（只留 CSS ＋ HTML ＋ **`V.*` 原型切片** ＋ `boot()`）。新 6 件按**责任**分：`base.js` 公共常量 / 纯函数 / 表头排序内核 · `view.js` 导航·路由·渲染内核·虚拟滚动 · `ui.js` 共用 UI 件与浮层（时间面板 / 项目工具 / 项目面板 / 浮层定位）· `proj.js` 通知书草稿 / 表格件 `TBL` / 各页表头常量 / 集采与供应商口径 · `pages-a.js` 付款域三页辅助 ＋ `BIND` · `pages-b.js` 其余各页辅助。⚠️ **`<script src>` 顺序 = 真源**（新件都排在 `actions.js` **之前**）⇒ ⛔ 别调顺序。⭐ 三条**只有真机看得见**的坑（离线全绿也没用）：① 加件**必须同批**改 `main.py` 路由**并重启后端**（缺 ⇒ 浏览器 404 ⇒ `ReferenceError` 整支崩）；
 ② ⚠️⚠️ **`index.html` 里"加载期就求值"的顶层声明⛔ 不许引到"晚加载的件"里的名字**（本仓真例：7 处筛初值 `let fX={ym:bjMonth()}` ⇒ **时钟簇必须留在 `index.html`**；搬走 ⇒ 内联脚本当场中断、其后所有 `const` 停在 TDZ ⇒ **页面空白**，而 pytest / `node --check` 全绿）；③ 拆件会让"按锚点直读 `index.html`"的判据假红 ⇒ 按本仓惯例**改指合并后的壳**（`tests.shell_src.SHELL`），⛔ 不是不许拆件。⚠️ 文书尾巴：`ui_parity` 的 `U1` 新增登记 **35 行**（`V.m15` 切片的尾巴会吸进文件尾部与新件头 —— 逐条审过，全是基建行）。⭐ 一次性脚本：`tools/oneoff/_p2a_measure.py`（量测）· `_p2a_split.py`（拆件，带 `--check`/`--undo` 与**加载期依赖预检**）· `_p2a_docfix.py` / `_p2a_close.py`（文书与销号）。
 - **删改保护**：查真实调用、运行数据与规格留痕，当前清单回 ops/architecture.md；历史原型/取消模块不能凭零引用删除，也不按退场U1自动恢复。消费者为 backend/tests/test_ux_deadcode.py 与现行ui_parity检查。
