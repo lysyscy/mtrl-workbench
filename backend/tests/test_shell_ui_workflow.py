@@ -646,3 +646,76 @@ def test_启动身份错误晚于页面加载且恢复保留其它错误(ui_page
     }""")
     assert banner.count() == 0
     assert p.evaluate('[BOOT_ERROR,fails.length,failsTech.length]') == ['', 0, 0]
+
+
+@acc()
+@pytest.mark.parametrize('count', [8, 450])
+def test_集采推进后保留横向位置_普通表与虚拟表(ui_page, count):
+    from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
+
+    p = ui_page
+    p.evaluate('''async ({count,columns,sumKeys}) => {
+      window.jcRowsFixture=Array.from({length:count},(_,i)=>({
+        id:i+1,project_seq:i+1,project_key:'测试仓库',date:'2026-01-01',
+        material:'钢材',supplier:'供应商',contract_amt:'100',tag:'纳入台账',arch:'未存档'
+      }));
+      API.m11List=async()=>({rows:jcRowsFixture,columns,sum_keys:sumKeys});
+      API.m11Fields=async b=>{Object.assign(jcRowsFixture.find(r=>r.id===Number(b.id)),b.fields);return {ok:true};};
+      VIEW='m11';await reloadM11();
+    }''', {'count': count, 'columns': list(JC_COLUMNS), 'sumKeys': list(SUM_KEYS)})
+    button = p.locator('[data-act="jcArch"][data-id="1"]')
+    button.scroll_into_view_if_needed()
+    before = p.evaluate('''() => {
+      const tw=document.querySelector('table[data-sort-key="m11:jc"]').closest('.tw');
+      return tw.scrollLeft;
+    }''')
+    assert before > 100, '夹具没有产生横向滚动'
+    button.click()
+    p.wait_for_function("JCs.find(j=>j.id==='1').arch==='资产处'")
+    p.wait_for_timeout(100)
+    after = p.evaluate("document.querySelector('table[data-sort-key=\"m11:jc\"]').closest('.tw').scrollLeft")
+    assert abs(after - before) < 2
+
+
+@acc()
+def test_集采默认合同日期升序且表头仍可倒序(ui_page):
+    from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
+
+    p = ui_page
+    p.evaluate('''async ({columns,sumKeys}) => {
+      API.m11List=async()=>({columns,sum_keys:sumKeys,rows:[
+        {id:9,date:'2026-09-01',tag:'纳入台账',material:'新合同'},
+        {id:2,date:'2024-01-01',tag:'纳入台账',material:'旧合同'},
+        {id:3,date:'2024-01-01',tag:'纳入台账',material:'同日合同'}]});
+      VIEW='m11';await reloadM11();
+    }''', {'columns': list(JC_COLUMNS), 'sumKeys': list(SUM_KEYS)})
+    ids = lambda: p.locator('tr[data-jc-id]').evaluate_all('rows=>rows.map(r=>r.dataset.jcId)')
+    assert ids() == ['2', '3', '9']
+    p.evaluate("() => {API.m11Export=async b=>{window.exportedIds=b.ids;return {ok:false,message:'隔离导出捕获'};};}")
+    p.evaluate('ACT.jcExport()')
+    assert p.evaluate('exportedIds') == [2, 3, 9]
+    assert p.evaluate('JCs.map(j=>j.id)') == ['9', '2', '3'], '默认排序不应修改共享数组'
+    header = p.locator('th[data-act="headSort"]').filter(has_text='合同日期')
+    header.click()
+    header.click()
+    assert ids()[0] == '9'
+    p.evaluate('ACT.jcExport()')
+    assert str(p.evaluate('exportedIds[0]')) == ids()[0]
+
+
+@acc()
+def test_付款流水备注显示与编码链接键盘入口(ui_page):
+    p = ui_page
+    p.evaluate('''row => {
+      FLs.push(adaptFlow({...row,remark:'本批付款备注'}));
+      VIEW='m05';flf.ym='全部';render();
+      window.openedNotice='';ACT.flNotice=t=>{window.openedNotice=t.dataset.fid;};
+    }''', FL0)
+    assert '本批付款备注' in p.locator('tr[data-flow-id="71"]').inner_text()
+    link = p.locator('button[data-act="flNotice"]')
+    assert link.get_attribute('class') == 'doc-link'
+    assert link.inner_text() == 'DOC-101'
+    assert link.evaluate('e=>getComputedStyle(e).backgroundColor') == 'rgba(0, 0, 0, 0)'
+    link.focus()
+    link.press('Enter')
+    assert p.evaluate('openedNotice') == '71'

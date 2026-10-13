@@ -377,7 +377,8 @@ const jcVisible=()=>JCs.filter(j=>(fJc.tag==='全部'||j.tag===fJc.tag)
   /* ⭐ 「待补供应商价」= `contract_amt` 为 0/空 —— 主要是**贸易公司合同**（i8 那个价落进
      `trade_contract_amt` 了，真供应商价要人工从 Excel 供应商线补）。`0` 即"没填"（前端已显示「— 待补」）。 */
   &&(fJc.amt===''||(fJc.amt==='blank'?!j.contractAmt:!!j.contractAmt))
-  &&(!fJc.sup.trim()||(j.supplier||'').includes(fJc.sup.trim())));
+  &&(!fJc.sup.trim()||(j.supplier||'').includes(fJc.sup.trim())))
+  .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')) || Number(a.id)-Number(b.id));
 const pruneJcPick=()=>{ const vis=new Set(jcVisible().map(j=>j.id)); [...jcPick].forEach(id=>{ if(!vis.has(id)) jcPick.delete(id); }); };
 let busy=false;
 const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;gap:calc(6px * var(--fscale)) calc(12px * var(--fscale));font-size:calc(12px * var(--fscale));margin-bottom:calc(13px * var(--fscale))">${pairs.map(([k,v])=>`<div class="mut">${k}</div><div>${v}</div>`).join('')}</div>`;

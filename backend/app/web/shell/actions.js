@@ -503,7 +503,7 @@ const ACT={
      sum:rows.length?sumRowOf(BP_THEAD,rows,{5:rs=>N2(rs.reduce((a,n)=>a+payEff(n),0)),7:rs=>N2(rs.reduce((a,n)=>a+Number((payDraft[n.id]&&payDraft[n.id].a)||payEff(n)),0))},{tip:'本次应付 / 本次付款金额 合计；「本次付款金额」按当前已填值合计（改金额后重绘刷新）'}):''})}</div>
      <div class="f2" style="margin-top:calc(11px * var(--fscale))">
        <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" value="${SYS_TODAY}"></div>
-       <div class="fld"><label>备注</label><input class="inp" id="bRemark" placeholder="选「其他」付款方式时必填"></div>
+       <div class="fld"><label>本批付款备注</label><input class="inp" id="bRemark" placeholder="写入本批每条付款流水；选「其他」时必填"></div>
      </div>
      <div class="tip" style="margin:0">确认后每条生成一笔付款流水，并更新已付金额与付款状态。</div>`;
    payBatchIds=rows.map(n=>n.id);  /* 本次窗口的行序，防删除 / 撤单后金额输入框串到剩余行。 */

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from app.mod01_projects.models import Project
 from app.mod03_notice.list_data import build_page_data
 from app.mod03_notice.list_view import NoticeFilters
@@ -415,3 +417,19 @@ def test_批量付款的API只许走唯一出口():
     assert "apply_batch_pay(" in api, "批量付款的 API 没走唯一出口"
     assert "flow_repo.create_flow(" not in api, "API 内联了落流水（应共用唯一出口）"
     assert "confirm_batch(" not in api, "API 内联了判定（应共用唯一出口）"
+
+
+@acc()
+@pytest.mark.parametrize('remark', ['本批付款备注：补材料款', ''])
+def test_批量付款备注保存到每条流水(remark):
+    from app.mod05_flow.models import PaymentFlow
+
+    client, fake = _client([_notice(1, bill_no='D1'), _notice(2, bill_no='D2')])
+    result = client.post('/api/m03/actions/batch-pay', json={
+        'ids': [1, 2], 'drafts': {'1': {'amount': '10'}, '2': {'amount': '20'}},
+        'pay_date': '2026-10-13', 'remark': remark, 'request_id': 'R-remark',
+    }).json()
+    assert result['ok'] is True and result['count'] == 2
+    flows = [f for f in fake.added if isinstance(f, PaymentFlow)]
+    assert len(flows) == 2
+    assert [f.remark for f in flows] == [remark, remark]

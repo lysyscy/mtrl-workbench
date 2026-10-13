@@ -261,17 +261,12 @@ def test_壳里空态行跨列数由表头派生且指出剔除行去哪看():
 
 
 @acc()
-def test_壳里默认月由后端给且付款域默认当月():
-    """§9.2：付款域类表默认 = **当月**（材料报表类才是上月）。
-
-    ① 新壳：默认月取后端给的 `fNt.month` —— ⛔ 前端**不自己算**「上月 / 当月」；
-    ② 后端口径（归位前的**实质**）：`default_period("notice")` = 当月 且 ≠ `default_period("process")`。
-    ⚠️ 这条是**回归断言** —— 此前把「统一时间控件的调用点标识」（`nt`）当口径键传进
-    `default_period()`，于是落到"材料报表类 = 上月"分支 ⇒ 打开页面看到上月。
-    """
+def test_通知书默认全部时间且其他付款域默认月不变():
+    """用户2026-10-13修订§9.2：通知书列表默认全部，抓取和其他付款域仍当月。"""
     from app.core.period import default_period
 
-    assert "tmBtn('ntMonth',{scope:'nt',val:fNt.month," in SHELL, "默认月不是由后端给的"
+    assert "let fNt={month:'全部'," in SHELL
+    assert "tmBtn('ntMonth',{scope:'nt',val:fNt.month," in SHELL
     assert default_period("notice") == date.today().strftime("%Y-%m"), "付款域默认月不是当月"
     assert default_period("notice") != default_period("process"), "付款域与材料报表类的默认月应当不同"
 

@@ -323,6 +323,11 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .flowline{font-family:var(--fm);font-size:calc(11.5px * var(--fscale));line-height:1.85;background:var(--sf2);border:1px solid var(--bd2);border-radius:6px;padding:calc(10px * var(--fscale)) calc(13px * var(--fscale));white-space:pre;overflow-x:auto;color:var(--tx2)}
 .link{color:var(--pri);cursor:pointer;text-decoration:none;border-bottom:1px dashed var(--pri-hl)}
 .link:hover{color:var(--pri-d);border-bottom-style:solid}
+.doc-link{display:inline-flex;align-items:center;gap:calc(5px * var(--fscale));padding:calc(3px * var(--fscale)) calc(5px * var(--fscale));margin:calc(-3px * var(--fscale)) calc(-5px * var(--fscale));border:0;border-radius:calc(4px * var(--fscale));background:transparent;color:var(--pri);font:inherit;cursor:pointer;white-space:nowrap}
+.doc-link:hover{background:var(--pri-hl);color:var(--pri-d)}
+.doc-link:hover .doc-link-code{text-decoration:underline;text-underline-offset:3px}
+.doc-link:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+.doc-link svg{width:calc(12px * var(--fscale));height:calc(12px * var(--fscale));flex:none;opacity:.7}
 
 
 /* 待办工作区与导入向导：宽度随内容，沿用主题与用户字号。 */
@@ -902,7 +907,7 @@ V.m05=()=>{
          `data-flow-id` = 屏幕行序的证据（导出按它取序，见 `pages-a.js::flDomIds`）。 */
       return `<tr class="${f.voided?'ex':''}" data-flow-id="${f.id}">
       <td class="fc">${esc(f.flowNo)||'<span class="mut">—</span>'}</td>
-      <td class="fc">${f.nid?`<button class="link fc" data-act="flNotice" data-fid="${f.id}" title="查看付款通知书">${esc(f.doc)||'—'}</button>`:`<span title="找不到对应通知书">${esc(f.doc)||'—'}</span>`}</td>
+      <td class="fc">${f.nid?`<button class="doc-link" data-act="flNotice" data-fid="${f.id}" title="查看付款通知书"><span class="doc-link-code">${esc(f.doc)||'—'}</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>`:`<span title="找不到对应通知书">${esc(f.doc)||'—'}</span>`}</td>
       <td class="now">${esc(f.docDate)||'<span class="mut">—</span>'}</td>
       <td class="sm" title="${esc(f.billName)}"><div style="max-width:240px">${esc(f.billName)||'<span class="mut">—</span>'}</div></td>
       <td title="付款项目全名：${n?esc(n.proj):''}"><div style="max-width:260px">${n?dispCell(n.proj,n):'<span class="mut">—</span>'}</div></td>

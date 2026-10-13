@@ -11,7 +11,7 @@
 
 let ntFocusId='';
 let refFocus={view:'',attr:'',id:''}, refReturn=null;
-let fNt={month:bjMonth(),cat:'全部',astat:'全部',stat:'未付清',projs:[],q:''};   /* 年月默认「北京时间当月」；付款状态默认「未付清」 */
+let fNt={month:'全部',cat:'全部',astat:'全部',stat:'未付清',projs:[],q:''};   /* 年月默认「全部时间」；付款状态默认「未付清」 */
 /* —— 「手动新增 / 编辑付款通知书」弹窗（2026-09-12 用户口径）——
    用途：付「期初占位行」的款 —— 那笔钱没有 i8 单据，只能手工补一行通知书。
    `naD` 是弹窗的**草稿层**：弹窗里的年月组件一改动就要重建弹窗，

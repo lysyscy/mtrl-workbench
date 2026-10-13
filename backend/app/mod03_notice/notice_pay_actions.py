@@ -152,6 +152,7 @@ def apply_batch_pay(
             amount=item["amount"],
             pay_date=item["pay_date"],
             pay_method=item["pay_method"],
+            remark=str(remark or ""),
             request_id=rid,
         )
         total += to_money(item["amount"])
