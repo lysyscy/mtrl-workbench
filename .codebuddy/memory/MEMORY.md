@@ -4,7 +4,7 @@
 
 ## 〇、入口与核验
 
-- `[用户·2026-10-08]` 按任务阅读、按实际影响核验的唯一流程 = ops/agents/issue-tracker.md §四；命令 = .codebuddy/memory/IDE-细节.md §十一。新删件、提交和旧dirty不自动全验；基点不是通过证明。相关失败不能报通过，自证用隔离输入。review按当前用户授权和实际需要使用。
+- `[用户·2026-10-08]` 本仓执行与核验绑定 = ops/agents/issue-tracker.md §四；个人方法条件入口 = AGENTS.md；命令 = .codebuddy/memory/IDE-细节.md §十一。新删件、提交和旧dirty不自动全验；基点不是通过证明。相关失败不能报通过，自证用隔离输入。review按当前用户授权和实际需要使用。
 - 状态只信 tools/audit/acc_report.py、主计划§0和§15；阅读分派只回 AGENTS.md，历史不默认读取。
 
 ## 一、用户偏好
