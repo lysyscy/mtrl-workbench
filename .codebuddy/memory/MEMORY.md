@@ -22,7 +22,7 @@ MEMORY.md为唯一注入档；细则.md与IDE-细节.md为按需分册。业务�
 ## 三、本机事实（碰环境时使用）
 
 - Python使用 backend/.venv/Scripts/python.exe（3.13）；模块用 `-m`，不依赖exe shim或系统PATH。
-- 后端服务 mtrl-workbench-server；改运行后端Python后用 ops/server_ctl.ps1 重启，无reload；改壳或工具无需重启。
+- 后端服务 mtrl-workbench-server，无reload；运行后端Python的改动需另按当前明确授权加载，启停/重启权限回 ops/agents/issue-tracker.md §四，操作回 ops/deployment.md。改壳或工具无需重启。
 - Playwright目录 C:/ProgramData/ms-playwright；只给执行子进程传环境，ACC_RESULTS_PATH不全局导出。
 - PostgreSQL在 D:/pgsql/pgsql/bin；桌面为 D:/UserData/Desktop。环境变化时复核当前配置，勿沿用历史位置。
 

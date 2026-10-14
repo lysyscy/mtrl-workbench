@@ -103,7 +103,7 @@
 
 新effort沿用Matt的澄清、规格和拆票方法，具体输入读个人“输入与分批接续”；规格和票记录累计评审起点及授权批次。批次交付与整个effort完成按各自验收判断；普通改动仅引用对应章节，不自动进入effort循环或最终双轴。
 
-**技能定位**：先查仓内准确技能名，缺目录时查Skills Manager中央库 `C:/Users/Administrator/.skills-manager/skills/`，实际读取SKILL.md及相关引用，不在本仓复制正文。本机个人维护源为 `D:/dev/My-Skills`，包策略及管理工具在完整维护仓根；核Git origin与Skills Manager登记来源一致。Skills Manager负责中央库及Codex、CodeBuddy、WorkBuddy的部署；个人包负责独立运行、验证、合并和自动发布，发布后按包操作sync-manager核同步。Matt原版、票字段、业务口径和本仓目录继续由既有主人维护。
+**技能定位**：先按用途核来源、实际路径与版本指纹；同名 skill-creator 的系统结构验证器与中央库创作评估技能分别按个人包操作定位，不能互代。先查仓内准确技能名，缺目录时查Skills Manager中央库 `C:/Users/Administrator/.skills-manager/skills/`，实际读取SKILL.md及相关引用，不在本仓复制正文。本机个人维护源为 `D:/dev/My-Skills`，包策略及管理工具在完整维护仓根；核Git origin与Skills Manager登记来源一致。Skills Manager负责中央库及Codex、CodeBuddy、WorkBuddy的部署；个人包负责独立运行、验证、合并和自动发布，已采用的维护 effort 由 implement-solo-spec 负责唯一总调度与累计审查，improve-workflow 负责包冻结、隔离、核验、发布与同步；共用选择方法及外部消费边界按其条件入口读取。本机发布后按包操作sync-manager核同步；只读不更新或部署。Matt原版、票字段、业务口径和本仓目录继续由既有主人维护。
 
 ## 五、别开票的情况（免得长出第二份清单）
 
