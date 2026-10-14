@@ -15,7 +15,7 @@
 | 报错排查、事故复盘、用户报障闭环 | artifacts、ops/README 备注 | `.codebuddy/work/30-troubleshooting/排查-现象-YYYYMMDD.md` |
 | 用户拍板的决定（口径/技术/工作方式） | 只写进 MEMORY 或对话 | `.codebuddy/work/40-decisions/D<编号>-主题.md`（D21 起；MEMORY 留指针） |
 | 待办、尾巴、"以后再说" | 自建 TODO.md、报告结尾 | ⭐ **票仓 = `.codebuddy/work/50-tickets/TAIL-<编号>-<短名>.md`**（2026-10-04 `TAIL-225` 起：**一张票一个文件**；用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄）＋ **索引 = 计划 §15 台账（一行一票 · 唯一）** —— 本区禁止第二份待办清单 |
-| 需要保留的当天过程证据 | 活文档正文 | `.codebuddy/memory/journal/YYYY-MM-DD.md`（append-only）；何时记录回 ops/agents/issue-tracker.md §四 |
+| 需要保留的当天过程证据 | 活文档正文 | `.codebuddy/memory/journal/YYYY-MM-DD.md`（append-only）；何时记录回 docs/agents/workflow.md |
 | 已完工单元的大段过程 | 继续占着计划正文 | 退出默认阅读；是否保留独立归档按用途判断，Git已有过程不复制全文。现有仓外归档经 `.codebuddy/plans/archive/归档-留痕索引-20261005.md` 追溯 |
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
 | 提交信息草稿 | artifacts/commit_msgN.txt | `.codebuddy/work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |

@@ -4,7 +4,7 @@
 
 ## 〇、现行文档用途
 
-目录按职责保持浅层：根目录持有工程主文档、运行脚本与实测结论；agents为本仓Agent协议；development为项目实现和开发核验；hooks为提交保护源。个人通用方法由My-Skills持有，工程正文不再放进.codebuddy/memory；下表为唯一工程资料索引，不再为每个子目录复制一套地图。
+现行Agent协议和执行绑定已实际迁入docs/agents，旧agents只为历史引用保留过渡入口。ops根目录仍持有未迁的工程主文档、运行脚本与实测结论；development为项目实现和开发核验；hooks为提交保护源。个人通用方法由My-Skills持有，下表按当前实际位置定位资料。
 
 | 现行文档 | 用途与何时读 |
 |---|---|
@@ -21,9 +21,10 @@
 | ops/i8-接口契约-旁证摘要.md | i8接口旁证与实测纠正；改抓取解析前核对。 |
 | ops/M3-合计行置底实测结论.md | 合计行置底的实测方法与成立前提；改滚动容器时复核。 |
 | ops/模板法导出-实测结论.md | 透视表模板生成方法与前提；改模板导出时核对。 |
-| ops/agents/issue-tracker.md | 票协议与§四日常改动流程；开始改动与收尾时读。 |
-| ops/agents/triage-labels.md | 票分诊用词；设置票状态时读。 |
-| ops/agents/domain.md | 业务术语及决定的消费方式；记录领域决定时读。 |
+| docs/agents/workflow.md | 个人方法来源、本仓输入、验证、隔离和保存授权；实施与收尾时读。 |
+| docs/agents/issue-tracker.md | 票协议与§四领取销号操作；开票、领票、写状态和销号时读。 |
+| docs/agents/triage-labels.md | 票分诊用词；设置票状态时读。 |
+| docs/agents/domain.md | 业务术语及决定的消费方式；记录领域决定时读。 |
 | ops/development/实现约束.md | 打印、配置、页面/API分界与本仓技术案例；按AGENTS命中的章节读取。 |
 | ops/development/开发与核验.md | 本机运行命令、壳适配、共享监听和工具反馈；日常开发或排障按需读取。 |
 
@@ -58,7 +59,7 @@
 | `nssm_install.ps1` | **幂等**把后端注册成 NSSM 服务（服务名 `mtrl-workbench-server` · 单 worker · `0.0.0.0:8000` · 开机自启 · 崩溃自重启 · 日志分流 `../logs/server.out.log` / `server.err.log` 带 10 MB 轮转 · 依赖 `postgresql-x64-16`）。**先停并删除同名计划任务**（⛔ 不允许两个实例抢 8000） | ⚠️ **必须管理员** PowerShell；需要 `nssm.exe`（放 `ops/nssm/`，**已 gitignore**；获取渠道见脚本提示）。⭐ **换机 / 改启动参数（host、port、worker 数）/ 改 venv 路径 ⇒ 必复做** |
 | `nssm_uninstall.ps1` | 撤销服务注册（⛔ 不动数据、不动 `backend/`、不动 `.env`）；`-RestoreScheduledTask` 可恢复迁移前的计划任务形态 | 同上 |
 | `server_ctl.ps1` | 日常遥控：`status` / `start` / `stop` / `restart` / `log` / `port` / `pg`；⭐ `port` 那条会打印占用 8000 的**进程命令行与启动时间**（诊断"是不是旧进程"） | 只读查询普通窗口即可；启停/重启须当前明确授权及管理员权限。服务无 `--reload`，后端Python变化的加载要求不构成重启授权；操作边界见 ops/deployment.md §〇 |
-| `install_hooks.ps1` ＋ `hooks/pre-commit` | 安装仓内提交钩子；当前仅核暂存语法、字节和凭据文件名，实际清单读 `ops/hooks/pre-commit`。业务与文档核验按 `ops/agents/issue-tracker.md` §四执行 | 新环境/克隆后安装；保留真实钩子输出。安装脚本幂等，不改git config；钩子不依赖tail/sed等外部工具 |
+| `install_hooks.ps1` ＋ `hooks/pre-commit` | 安装仓内提交钩子；当前仅核暂存语法、字节和凭据文件名，实际清单读 `ops/hooks/pre-commit`。业务与文档核验按 `docs/agents/workflow.md`执行 | 新环境/克隆后安装；保留真实钩子输出。安装脚本幂等，不改git config；钩子不依赖tail/sed等外部工具 |
 | `_ps_bom.py`（⚠️ 在 **`tools/oneoff/`** —— 2026-09-29 订正：原写"在 `tools/`"**已过期**，照它找会**找不到文件** ✗） | 给 `.ps1` 补 **UTF-8 BOM** | ⚠️ **PS 5.1 按 GBK 读无 BOM 的 .ps1** ⇒ 中文字节会**吞掉紧跟的 ASCII 引号** ⇒ 满屏 `ParserError`（文件本身没错）。**每次改完 ops 下的 .ps1 就跑一次** |
 | `_ps_parse_check.ps1`（在 **`tools/oneoff/`** · ⭐ 2026-09-29 立） | ⭐ **`ops/*.ps1` 的闸（两段）**：① **语法**（PS parser 逐份解析）② ⭐ **仓内路径字面量必须真的存在**（`Join-Path $RepoRoot '…'` 形态；⚠️ **先剥注释再扫** —— 不剥会把"解释缺陷的注释"当成缺陷）⇒ 任一段不过就 `rc=1` | ⚠️ 仓里**此前没有任何 PS 尺子**（Python 有 `syntax_audit.py`、前端有 `node --check` 那一路，PowerShell 没有）⇒ 改完只能等**真跑那一刻**才炸 —— 而那通常正是"要在目标机安装"的时候 ✗。⚠️ 它**不管语义/参数**，那半靠 `-DryRun` 真跑（两者互补：它查"写死的路径在不在"，`-DryRun` 查"流程对不对"） |
 
@@ -79,7 +80,7 @@
 
 ## 一之三、本宿主的 **hooks 能力**（⭐ **已独立成件** · 2026-09-28）
 
-旧宿主hooks调查仅在明确复核宿主时经归档索引追溯；日常读取与记录不由它决定，回 ops/agents/issue-tracker.md §四。
+旧宿主hooks调查仅在明确复核宿主时经归档索引追溯；日常读取与记录不由它决定，回 docs/agents/workflow.md。
 
 
 ## 一之四、GitHub 克隆与首次空库部署
@@ -108,7 +109,7 @@
 
 1. **先对前提**：文件头部写了「本机 / 方法 / 脚本 / 日期」。**换机后先把前提重核一遍**
    （本仓已有一次换机：2026-09-14 盘符变过 ⇒ 旧路径类结论一律作废）。
-2. **按变化补验**：日期、输入、代码与环境未变且已有有效结果时复用；变化或无证的相关输入才重验，范围回 ops/agents/issue-tracker.md §四。先读脚本的读写与登录边界，实测引用不构成部署、登录或业务写入授权；历史脚本依赖缺失时明确记为未复现。
+2. **按变化补验**：日期、输入、代码与环境未变且已有有效结果时复用；变化或无证的相关输入才重验，范围回 docs/agents/workflow.md。先读脚本的读写与登录边界，实测引用不构成部署、登录或业务写入授权；历史脚本依赖缺失时明确记为未复现。
 3. **钉住它的测试 = 结论的保鲜剂**：本表最后一栏若写着「断言测不了」，那句话本身就是要害
    —— 说明**只有人能保证它**，别把它当"已自动化"。
 

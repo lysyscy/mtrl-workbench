@@ -58,7 +58,7 @@ def _slug(s: str) -> str:
 
 
 def ticket_text(tag: str, a, state: str) -> str:
-    """按 `ops/agents/issue-tracker.md` §二 的模板生成票文件（⭐ 照第二个项目的票面）。"""
+    """按 `docs/agents/issue-tracker.md` §二 的模板生成票文件（⭐ 照第二个项目的票面）。"""
     # ⭐⭐ 2026-10-06（`TAIL-237` 收工时顺手修）：首行原先是 `a.what[:40]` —— **中文按字符算**，
     #   于是标题常在半句处折断（实测三张新票全中：`TAIL-237` 停在「…每轮只跑快集实测」、
     #   `TAIL-238` 停在「…时引用的」）。而**下一行 `What to build:` 本来就是完整的**
@@ -148,7 +148,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--closed-index", default=str(REPO / audit_common.CLOSED_INDEX_REL))
     ap.add_argument("--short", default="", help="票文件短名（默认由 --what 自动截）")
     ap.add_argument("--state", default="ready-for-agent",
-                    help="票状态（受控词，见 ops/agents/issue-tracker.md §三）")
+                    help="票状态（受控词，见 docs/agents/issue-tracker.md §三）")
     ap.add_argument("--tickets", default=str(TICKETS), help="票仓目录（自测可指副本）")
     a = ap.parse_args(argv)
     a.id = str(a.id).lstrip("TILA-")

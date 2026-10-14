@@ -1,6 +1,6 @@
 # tools/ · 工具用途与触发入口
 
-> 读者：选择工具或维护检查的人。回答：工具职责与何时运行。流程回 ops/agents/issue-tracker.md §四；命令回 ops/development/开发与核验.md §十一。
+> 读者：选择工具或维护检查的人。回答：工具职责与何时运行。流程回 docs/agents/workflow.md；命令回 ops/development/开发与核验.md §十一。
 
 | 目录 | 用途与读取条件 |
 |---|---|

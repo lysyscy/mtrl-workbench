@@ -351,7 +351,7 @@ PLANS_LIVE: tuple[str, ...] = ("开发计划-主文档.md", "票索引-已销号
 #: ⭐ **2026-10-04 扩一员**：`AGENTS.md` —— ⚠️ 原先这里只许 `README.md`，而那条**是 AGENT 自定的**
 #:   （用户 2026-10-04 订正：「我没说过只需建立 README.md，这估计又是 AGENT 擅自曲解我的意思」）⇒
 #:   根 `AGENTS.md` = **给 agent 的唯一入口**（只放指针、不放内容；地图仍归 `README.md`），见本件同批的
-#:   `ops/agents/*` 三页 ＋ 根 `README.md` §三/§四 的分层表述。⛔ 它**不复述任何口径**。
+#:   `docs/agents/*` 三页 ＋ 根 `README.md` §三/§四 的分层表述。⛔ 它**不复述任何口径**。
 ROOT_MD_ALLOW: tuple[str, ...] = ("README.md", "AGENTS.md")
 #: `memory/` 下允许的 `.md` 与子目录（日志必须进 `journal/`）
 MEMORY_MD_ALLOW: tuple[str, ...] = ("MEMORY.md", "细则.md", "IDE-细节.md")
@@ -367,7 +367,7 @@ WORK_DIR_ALLOW: tuple[str, ...] = ("00-scratch", "10-designs",
 #: ⭐ 2026-10-01：`30-troubleshooting` 收**两种**前缀 —— `排查-`（报障/事故复盘）与 `实验-`（探针/实测/对比试验，
 #:   即原 `20-experiments` 那一类）。⛔ 别顺手把 `实验-` 也删掉：那一类**是存在的**，只是不再单开一个区。
 #: ⭐ 2026-10-04（`TAIL-225` 票体系）：**加第五区 `50-tickets`** —— 一张票一个文件（`TAIL-<编号>-<短名>.md`），
-#:   索引 = 计划 `§15` 一行一票；协议 = `ops/agents/issue-tracker.md`。⚠️ 它不是"新的分类学"，
+#:   索引 = 计划 `§15` 一行一票；协议 = `docs/agents/issue-tracker.md`。⚠️ 它不是"新的分类学"，
 #:   而是**尾巴的载体**（原来尾巴只活在 `§15` 表里一格）。
 WORK_NAME_PREFIX: dict[str, tuple[str, ...]] = {
     "10-designs": ("设计-",),
@@ -534,7 +534,7 @@ def _t6(rel: str, lineno: int, what: str, why: str, fix: str, text: str = "") ->
 
 
 #: ⭐⭐ 2026-10-04（`TAIL-225` 票体系）：**票仓** —— 一张票一个文件，索引 = 本台账**一行一票**。
-#:   票长什么样 / 状态怎么记 / 怎么开工收尾的**主人** = `ops/agents/issue-tracker.md`（⛔ 本段不复述口径，
+#:   票长什么样 / 状态怎么记 / 怎么开工收尾的**主人** = `docs/agents/issue-tracker.md`（⛔ 本段不复述口径，
 #:   只写"机器怎么判"）。⚠️ 为什么要有这一层：尾巴原先**只活在 `§15` 表里一格**，那一格普遍 1000–2400 字
 #:   ⇒ 谁读都得在一行里穿过上万字（**字墙的根**，见 `T21` 与方案 §十一）。
 TICKET_DIR_REL = ".codebuddy/work/50-tickets"
@@ -543,7 +543,7 @@ TICKET_DIR_REL = ".codebuddy/work/50-tickets"
 TICKET_FIELDS: tuple[str, ...] = ("What to build", "Blocked by", "Status")
 #: ⭐ **验收 = `- [ ]` 复选框列表**（照参考项目：验收是**票面主体**，不是末尾一栏）
 TICKET_CHECKBOX_RE = re.compile(r"^\s*-\s*\[[ xX]\]", re.M)
-#: 票的合法**状态**（受控词；出处 = `ops/agents/issue-tracker.md` §三）
+#: 票的合法**状态**（受控词；出处 = `docs/agents/issue-tracker.md` §三）
 TICKET_STATES: tuple[str, ...] = ("ready-for-agent", "claimed", "ready-for-human",
                                   "needs-info", "needs-triage", "wontfix", "done")
 #: ⭐ **"销号"＝哪个状态词**（`TICKET_STATES` 里的一个）—— 2026-10-05 立（`TAIL-236` 批 2）。
@@ -867,7 +867,7 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
             hits.append(_t6(LEDGER_REL, 1, f"{tag} 没有票文件",
                             "尾巴只活在索引表一格 ⇒ 过程与证据没处放（**字墙的根**）",
                             f"建 `{TICKET_DIR_REL}/{tag}-<短名>.md` —— ⭐ 用 `tools/oneoff/_tail_open.py`"
-                            "（⛔ 别手抄；模板见 `ops/agents/issue-tracker.md` §二）"))
+                            "（⛔ 别手抄；模板见 `docs/agents/issue-tracker.md` §二）"))
     for tag, f in sorted(tickets.items(), key=lambda kv: int(kv[0].lstrip("TAIL-"))):
         n = tag.lstrip("TAIL-")
         if n not in ids:
@@ -880,7 +880,7 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
         if miss:
             hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1, f"票里缺栏：{' / '.join(miss)}",
                             "没写清「要什么 / 为什么不做 / 落点 / 什么时候做」⇒ 领票的人一头雾水",
-                            "按 `ops/agents/issue-tracker.md` §二 的模板补齐"))
+                            "按 `docs/agents/issue-tracker.md` §二 的模板补齐"))
         if not TICKET_CHECKBOX_RE.search(body):
             hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1, "票里没有**验收复选框**",
                             "`- [ ]` 那串就是「怎么算做完」（照参考项目：验收是**票面主体**）",
@@ -889,11 +889,11 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
         if not m_st:
             hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1, "找不到 `**Status:**` 行",
                             "状态是票体系唯一的进度信号",
-                            "写一行：`**Status:** ready-for-agent`（词表见 `ops/agents/issue-tracker.md` §三）"))
+                            "写一行：`**Status:** ready-for-agent`（词表见 `docs/agents/issue-tracker.md` §三）"))
         elif m_st.group(1) not in TICKET_STATES:
             hits.append(_t6(f"{TICKET_DIR_REL}/{f.name}", 1,
                             f"「状态」不是受控词：{m_st.group(1)}",
-                            "状态词表是机器与人对表的唯一抓手（出处 = `ops/agents/issue-tracker.md` §三）",
+                            "状态词表是机器与人对表的唯一抓手（出处 = `docs/agents/issue-tracker.md` §三）",
                             f"改成：{' / '.join(TICKET_STATES)}"))
     return hits
 

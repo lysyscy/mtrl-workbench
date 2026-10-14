@@ -4,7 +4,7 @@
 --explain 显示选择，--paths <实际差异...> 明确本轮范围并打印未验差异。
 默认/--related/--all均按使用者选择；--full合并文档分项并完整pytest。
 日常不自动执行真实39段、盖章或变异；反例只在实际需要时显式选隔离入口。
-范围与流程主人为 ops/agents/issue-tracker.md §四，CMDS是检查登记的唯一出口。
+范围与流程主人为 docs/agents/workflow.md，CMDS是检查登记的唯一出口。
 """
 from __future__ import annotations
 

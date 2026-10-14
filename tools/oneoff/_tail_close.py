@@ -171,7 +171,7 @@ def main(argv: list[str]) -> int:
     if len(hits) != 1:
         print(f"⛔ 票文件里 `**Status:**` 行命中 {len(hits)} 处（期望 1）⇒ **未写盘**"
               f"（锚点主人 = `tools/audit/audit_meta.py::TICKET_STATE_RE`"
-              f"；票格式见 `ops/agents/issue-tracker.md` §二）")
+              f"；票格式见 `docs/agents/issue-tracker.md` §二）")
         return 1
     m_st = hits[0]
     t_new = t_text[:m_st.start(1)] + "done" + t_text[m_st.end(1):]

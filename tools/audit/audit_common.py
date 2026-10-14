@@ -259,7 +259,7 @@ KNOWN_ABSENT: frozenset[str] = frozenset({"ACC-X-ATT-001", "ACC-X-ATT-002"})
 
 #: `T3` 只检查这些顶级目录开头的路径（`C:\…`、URL、SSH 一律不管）
 TOP_DIRS: tuple[str, ...] = (
-    "backend/", "tools/", "ops/", "delivery/", "demo/", "PRD/", "app/", "tests/",
+    "backend/", "tools/", "ops/", "docs/", "delivery/", "demo/", "PRD/", "app/", "tests/",
     "alembic/", "artifacts/", "frontend/", "static/", "scripts/", "input/",
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**治理区进 `T3` 的眼**。
     #    ⚠️ 此前**整个 `.codebuddy/` 不在表内** ⇒ 票仓 / 记忆档 / 规则档 / 决策档里写下的
@@ -296,7 +296,7 @@ TOP_DIRS: tuple[str, ...] = (
 #:   ⇒ 列进来就是**同一件事两处写**（本仓最贵的病，必漂）。
 #: ⚠️ 目录带尾斜杠、文件不带（判据按**名字**比，斜杠只是可读性）。
 ROOT_ALLOW: tuple[str, ...] = (
-    ".codebuddy/", ".git/", "artifacts/", "backend/", "delivery/", "logs/", "ops/", "tools/",
+    ".codebuddy/", ".git/", "artifacts/", "backend/", "docs/", "delivery/", "logs/", "ops/", "tools/",
     ".env", ".env.example", ".gitignore",
 )
 
@@ -460,10 +460,8 @@ SCAN_GLOBS: tuple[str, ...] = (
     #   ⇒ 索引件里写的**仓外绝对路径**（`OUTSIDE_ROOTS` 那套「真核存在」）**从来没被核过** ——
     #   仓外那份被清掉 ⇒ 指针变死，而**没有任何尺子会喊**（墓碑 ≠ 守卫）。
     ".codebuddy/plans/archive/*.md",
-    # ⭐ 2026-10-04：新增 `ops/agents/*.md`（给 agent 的制度页：票仓 / 分诊标签 / 领域文档）——
-    #   ⚠️ `ops/*.md` **不递归** ⇒ 不加这一条，那三页会**落在所有尺子之外**（本仓最贵的一族病：
-    #   "判据存在 ≠ 它看得见"）。⛔ `T18` 会盯着它：一条都不命中就判红。
-    "ops/agents/*.md",
+    # 2026-10-15专项迁移：Agent协议、绑定与新ADR实际进入扫描；T18仍核每条glob命中。
+    "docs/agents/*.md", "docs/adr/*.md",
     "ops/development/*.md",  # 项目开发分册的现行正文；旧memory位置只留兼容指针。
     ".codebuddy/memory/MEMORY.md",
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**治理区整片进扫描面** —— 此前只有上面那份

@@ -1,8 +1,5 @@
-# 分诊标签（票的 `状态` 行用词）
+# 历史引用过渡入口
 
-> **读者**：开票 / 领票的 agent｜**回答**：票的 `状态` 行能用哪些词、每个词什么意思
-> **何时读**：写票的 `状态` 行时｜⛔ 本页不新增口径（票的纪律见 `issue-tracker.md`）
+本件仅服务迁移前的历史引用，现行正文已实际迁入 `docs/agents/triage-labels.md`。现行任务直接读取新位置；旧任务继续其固定规则与授权基线。迁移前原文从 Git 基线 `4ae861e2dec0d865ae6587a14963358e85ce0dc9` 的原路径恢复。
 
-票状态的定义与适用条件唯一主人为 `ops/agents/issue-tracker.md` §三；写Status时按该节选择。
-五个分诊角色沿用 `needs-triage` / `needs-info` / `ready-for-agent` / `ready-for-human` / `wontfix`，本仓另用 `claimed` / `done` 表示在办与销号。机器受控词由 tools/audit/audit_meta.py 的TICKET_STATES消费。
-阶段／时机由主计划§14.3与§15索引维护，与票状态分开。
+个人方法、核验与保存绑定已独立迁入 `docs/agents/workflow.md`。历史引用批次完成、原来源可恢复且现行消费者无旧依赖后删除本入口；退出条件与迁移范围见 `docs/adr/0033-document-layout.md`。
