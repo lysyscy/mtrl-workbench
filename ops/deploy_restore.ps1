@@ -6,7 +6,8 @@
 [CmdletBinding()]
 param(
     [string] $RepoRoot = '',
-    [string] $PgBin = 'C:\Program Files\PostgreSQL\16\bin',
+    [string] $PgBin = 'C:\Program Files\PostgreSQL\18\bin',
+    [string] $UvPath = 'uv',
     [switch] $DryRun
 )
 
@@ -36,7 +37,7 @@ function Run($exe, [string[]] $argv, $cwd) {
 Say '=== 首次空库安装 ==='
 if (-not (Test-Path -LiteralPath $RepoRoot -PathType Container)) { throw '仓库目录不存在；请先 clone。' }
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
-foreach ($rel in @('.git', 'ops\init_db.sql', 'ops\pip.ini', 'ops\nssm_install.ps1', 'ops\selfcheck.ps1', 'backend\requirements.txt', 'backend\alembic.ini', '.env')) {
+foreach ($rel in @('.git', 'ops\init_db.sql', 'ops\pip.ini', 'ops\nssm_install.ps1', 'ops\selfcheck.ps1', 'backend\requirements.txt', 'backend\requirements.lock', 'backend\alembic.ini', '.env')) {
     if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot $rel))) { throw ('缺少 ' + $rel + '；请先补齐，未执行安装。') }
 }
 # 配置只读且不回显；两条 URL 必须指向本 SQL 的同机两库，避免建库和迁移落到不同目标。
@@ -77,7 +78,13 @@ Run $psql ($pgArgs + @('-c', $emptyCheck)) $RepoRoot
 Step '2) venv 与依赖'
 $venv = Join-Path $RepoRoot 'backend\.venv'
 $python = Join-Path $venv 'Scripts\python.exe'
-if (-not (Test-Path -LiteralPath $python)) { Run 'python' @('-m', 'venv', $venv) $RepoRoot }
+if (-not (Test-Path -LiteralPath $python)) { Run $UvPath @('venv', '--python', '3.15', '--no-python-downloads', $venv) $RepoRoot }
+if (-not $DryRun) {
+    $pythonVersion = & $python --version
+    if ($LASTEXITCODE -ne 0 -or $pythonVersion -notmatch '^Python 3\.15\.') {
+        throw '现有venv不是Python3.15；保留原环境，请先用uv准备正确版本。'
+    }
+}
 $pipSrc = Join-Path $RepoRoot 'ops\pip.ini'
 $pipDst = Join-Path $venv 'pip.ini'
 if (-not (Test-Path -LiteralPath $pipDst)) {
@@ -86,8 +93,10 @@ if (-not (Test-Path -LiteralPath $pipDst)) {
 } elseif ([Convert]::ToBase64String([IO.File]::ReadAllBytes($pipSrc)) -ne [Convert]::ToBase64String([IO.File]::ReadAllBytes($pipDst))) {
     Say '   注意：venv/pip.ini 与 ops/pip.ini 不同，保留现有文件；请核对镜像配置。'
 }
-$req = Join-Path $RepoRoot 'backend\requirements.txt'
-Run $python @('-m', 'pip', 'install', '-r', $req) (Join-Path $RepoRoot 'backend')
+$req = Join-Path $RepoRoot 'backend\requirements.lock'
+$indexUrl = [regex]::Match([IO.File]::ReadAllText($pipSrc), '(?m)^index-url\s*=\s*(\S+)').Groups[1].Value
+if (-not $indexUrl) { throw 'ops/pip.ini缺少安装源，未安装依赖。' }
+Run $UvPath @('pip', 'sync', '--python', $python, '--default-index', $indexUrl, '--require-hashes', $req) (Join-Path $RepoRoot 'backend')
 
 Step '3) 一次性建角色、两库与迁移'
 Run $psql ($pgArgs + @('-f', (Join-Path $RepoRoot 'ops\init_db.sql'))) $RepoRoot

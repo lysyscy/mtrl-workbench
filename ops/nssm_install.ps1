@@ -151,7 +151,7 @@ if ($LASTEXITCODE -ne 0) { Die "nssm install 失败（exit=$LASTEXITCODE）" }
 & $nssm set $ServiceName AppStopMethodConsole 15000         # 给 uvicorn 15 秒优雅退出
 & $nssm set $ServiceName Start                SERVICE_AUTO_START
 & $nssm set $ServiceName ObjectName           LocalSystem
-& $nssm set $ServiceName DependOnService      postgresql-x64-16
+& $nssm set $ServiceName DependOnService      postgresql-x64-18
 
 # ⭐⭐ Playwright 浏览器路径（2026-09-21 实测补的 —— ⛔ 别删）
 #   服务以 **LocalSystem** 跑，而 Playwright 的浏览器默认装在**用户目录**

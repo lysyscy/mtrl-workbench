@@ -114,8 +114,8 @@ function Show-Log {
 }
 
 function Show-Pg {
-    $pg = Get-Service -Name 'postgresql-x64-16' -ErrorAction SilentlyContinue
-    if ($pg) { Line ("PG：{0} / {1}" -f $pg.Status, $pg.StartType) } else { Line 'PG：找不到 postgresql-x64-16' }
+    $pg = Get-Service -Name 'postgresql-x64-18' -ErrorAction SilentlyContinue
+    if ($pg) { Line ("PG：{0} / {1}" -f $pg.Status, $pg.StartType) } else { Line 'PG：找不到 postgresql-x64-18' }
 }
 
 switch ($Action) {

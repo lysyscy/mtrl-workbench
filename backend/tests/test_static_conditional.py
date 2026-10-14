@@ -45,7 +45,10 @@ def test_conditional_get_precedence_and_headers(static_client, path, encoding):
         assert result.status_code == 304 and result.content == b""
         for key in ("etag", "last-modified", "cache-control"):
             assert result.headers[key] == first.headers[key]
-        assert result.headers["vary"] == "Accept-Encoding"
+        # CORS may merge Origin; 304 must preserve the same cache variation as 200.
+        assert {token.strip().lower() for token in result.headers["vary"].split(",")} == {
+            token.strip().lower() for token in first.headers["vary"].split(",")
+        }
         assert "content-length" not in result.headers
         assert "content-encoding" not in result.headers
     for condition in [

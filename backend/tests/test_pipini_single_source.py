@@ -1,19 +1,14 @@
-"""`ops/pip.ini` = **依赖镜像的唯一主人**（2026-10-02 立 · 出处 = `TAIL-188` 只读清点）。
+"""安装源由ops/pip.ini持有，venv副本须逐字节一致。
 
-⭐ **为什么要有本件**：镜像 URL 原先**只**活在 `backend/.venv/pip.ini` 里，而 **`.venv` 是 `.gitignore` 挡掉的**
-（实测 `.gitignore:14`）⇒ **不进 bundle** ⇒ 目标机**重建 venv** 之后那份加固**当场失效**
-（悄悄走默认 PyPI 官方源 —— 国内可能极慢／超时），而 `deploy_restore.ps1` **一个字都不报**。
-⇒ 修法（用户 2026-10-02 选「乙」）= **真源搬进仓**（`ops/pip.ini`，随包走）＋ `deploy_restore.ps1` 第 3b 步
-  把它**复制成 venv 级**。
-
-⇒ 本件守的就是**「一处定义」**：venv 那份是**副本**、必须与真源**逐字节相同**（⛔ 它不是第二个主人）。
-⚠️ **能证伪**：改任一份 / 删掉真源 ⇒ 本件必红（自证 = `tools/mut/_归档-20261009/_mut_pipini.py`）。
-⚠️ **不判**"哪家镜像更好" —— 那是 `D10` 的裁定（🟡 · 用户采纳），本件只判"**只有一处**"。
+2026-10-14用户要求全部最新稳定包，镜像滞后后改用官方源。
+保留显式单一HTTPS源和副本保障；缺失、HTTP、多源或副本漂移须失败。
 """
 
 from __future__ import annotations
 
 import pathlib
+
+import pytest
 
 from tests.acc_plugin import acc
 
@@ -24,12 +19,8 @@ DST = BACKEND / ".venv" / "pip.ini"             # 副本（`.venv` 不进包 ⇒
 
 
 @acc()
-def test_依赖镜像的真源在仓里_且不是官方源():
-    """⭐ `ops/pip.ini` 必须存在、**真的**设了镜像 —— 否则"加固"只剩个空壳。
-
-    ⚠️ 判"不是官方源"而不是"必须是阿里云"：**选哪家镜像属 `D10` 的裁定**（⛔ 别把本件变成换镜像的拦路石）；
-    本件只挡**退化成官方源**这一种（那等于加固失效）。
-    """
+def test_依赖安装源在仓里_且单一明确():
+    """2026-10-14镜像滞后，最新版本改用官方源；保留显式单源与副本保障。"""
     assert SRC.exists(), (
         f"⛔ 依赖镜像的**真源**不见了：{SRC}\n"
         "  ⇒ 它是 D10 加固① 的唯一主人（`deploy_restore.ps1` 第 3b 步从它复制到 venv 级）。\n"
@@ -37,11 +28,20 @@ def test_依赖镜像的真源在仓里_且不是官方源():
     text = SRC.read_text(encoding="utf-8")
     assert "[global]" in text, f"{SRC} 里没有 `[global]` 段 —— pip 不认这份配置"
     idx = [ln for ln in text.splitlines() if ln.strip().startswith("index-url")]
-    assert idx, f"{SRC} 里没有 `index-url` ⇒ 没钉镜像（D10 加固① 落空）"
+    assert len(idx) == 1, f"{SRC} 必须明确指定一个 `index-url`"
     url = idx[0].split("=", 1)[1].strip()
-    assert url.startswith("http"), f"`index-url` 看着不像 URL：{url!r}"
-    assert "pypi.org" not in url, (
-        f"⛔ 真源指回了**官方源**（{url}）⇒ D10 加固① 等于没做（走官方源在国内会很慢）。")
+    assert url.startswith("https://"), f"`index-url` 必须使用 HTTPS：{url!r}"
+    assert not any(ln.strip().startswith("extra-index-url") for ln in text.splitlines()), "不允许多源回退"
+
+
+@acc()
+def test_安装源缺失或多源必须拒绝(tmp_path, monkeypatch):
+    source = tmp_path / "pip.ini"
+    monkeypatch.setattr(f"{__name__}.SRC", source)
+    for text in ("[global]\n", "[global]\nindex-url=http://pypi.org/simple\n", "[global]\nindex-url=https://pypi.org/simple\nextra-index-url=https://mirrors.aliyun.com/pypi/simple/\n"):
+        source.write_text(text, encoding="utf-8")
+        with pytest.raises(AssertionError):
+            test_依赖安装源在仓里_且单一明确()
 
 
 @acc()
