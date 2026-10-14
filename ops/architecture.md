@@ -91,6 +91,8 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 | 出纸：**IPP 直投**（不依赖打印驱动与桌面会话） | 技术栈 §2.4 / §3.1 |
 | 每次打印**须留执行记录**，供看板提示「打印投递失败」 | §4.6 |
 
+IPP回执按协议成功类别判定接收；属性替换或冲突提示核对出纸效果，不报“单据未投递”。已接收仍不代表已经出纸，现场完成状态须实际核实。
+
 渲染器当前使用headless Chromium；不调用browser.close的防挂死处理仍在 backend/app/mod03_notice/print/render.py，退出与驱动回收由宿主负责。不得误删该处理；改生命周期时按真实服务身份复做。机器级浏览器路径见 .codebuddy/memory/MEMORY.md §三与 ops/README.md。
 
 ### Excel

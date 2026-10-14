@@ -105,7 +105,7 @@ def apply_batch_pay(
         flows.setdefault(int(f.notice_id), []).append({"amount": f.amount, "status": f.status})
     links = contracts.links_by_notice(session, notice_ids=selected_ids)
     targets = [
-        by_id[i] for i in ids
+        by_id[i] for i in selected_ids
         if i in by_id and not by_id[i].i8_revoked and not by_id[i].excluded
     ]
     if not targets:

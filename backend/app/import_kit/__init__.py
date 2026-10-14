@@ -5,7 +5,7 @@
 
 ⭐ **当前分工（Phase 2 后 · 2026-09-22）**：
 - **底座**：读表（`readers.read_grid`，含各域行数上限）· 统一解析出口（`parse`）·
-  问题清单（`validators.Problems`）· 暂存门面（`staging` → `preview_store` 唯一载具）。
+  问题清单（`validators.Problems`）· 暂存直接使用 `core.preview_store` 唯一载具。
 - **域内保留**：表头识别（各域是**领域知识**：m04 的 `_HINTS` / m06 的 `YM_HEADERS` /
   m11 的双行表头引擎）· 金额/日期的**硬判定**（m05「必须>0」/ m06 核算月归一 —— ⛔
   那是口径不是重复）· 落库（幂等键 / 手动行 / 批次各不相同）。

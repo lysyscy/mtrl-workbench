@@ -57,6 +57,11 @@ def _rows_of(records, year_month: str) -> list[dict]:
     key_of = {f.label: f.key for f in FIELDS}
     out: list[dict] = []
     for rec in records or []:
+        for f in FIELDS:
+            # 空金额是空串；显式 None 表示通用解析失败，不能按零写入。
+            if f.type == "amount" and f.label in rec and rec[f.label] is None:
+                raise MustReportError(
+                    f"第 {rec.get('_row')} 行「{f.label}」不是有效金额，请修正后重新导入（本批未写入）")
         vals = {key_of[lb]: rec.get(lb) for lb in key_of if rec.get(lb) not in (None, "")}
         raw = dict(rec.get("raw") or {})            # ⭐ 未映射列**原样保留**（域里就是这么存的）
         raw["_row_no"] = rec.get("_row")

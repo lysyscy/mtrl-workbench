@@ -30,6 +30,7 @@ import hashlib
 import hmac
 import pathlib
 import secrets
+from threading import Lock
 
 from app.core.logging import get_logger
 
@@ -46,6 +47,8 @@ class AccountIdentity(str):
 
 
 _SECRET_FILE_KEY = "SESSION_SECRET"
+_secret_lock = Lock()
+_temporary_secret: bytes | None = None
 
 #: 当前请求的账号身份（由中间件从 cookie 解出后写入；姓名由账号行提供）——
 #: ⚠️ 用 `ContextVar` 而**不是全局变量**：`uvicorn` 是并发的，全局变量会**串号**
@@ -86,17 +89,22 @@ def secret() -> bytes:
     """会话签名密钥（**唯一出口**）。为空 ⇒ 生成一个、写回 `.env`、并用它。"""
     from app.core.config import get_settings
 
-    got = (get_settings().session_secret or "").strip() or _read_secret_from_env_file()
-    if got:
-        return got.encode("utf-8")
-    made = secrets.token_urlsafe(48)
-    try:
-        _append_secret_to_env_file(made)
-        logger.warning("已生成 `SESSION_SECRET` 并写入 .env（首次启动）—— 换掉它会让所有人需重新登录")
-    except OSError as e:                                       # noqa: BLE001
-        # ⚠️ 写不进去也不能崩：本次进程内**临时**用一个随机密钥（重启后失效 ⇒ 需重新登录）
-        logger.warning("写 .env 失败（{}）⇒ 本次进程使用临时密钥（重启后需重新登录）", e)
-    return made.encode("utf-8")
+    global _temporary_secret
+    # 两人首次同时登录也必须用同一个密钥；配置和文件中的密钥仍优先。
+    with _secret_lock:
+        got = (get_settings().session_secret or "").strip() or _read_secret_from_env_file()
+        if got:
+            return got.encode("utf-8")
+        if _temporary_secret is not None:
+            return _temporary_secret
+        made = secrets.token_urlsafe(48)
+        try:
+            _append_secret_to_env_file(made)
+            logger.warning("已生成 `SESSION_SECRET` 并写入 .env（首次启动）—— 换掉它会让所有人需重新登录")
+        except OSError as e:                                   # noqa: BLE001
+            logger.warning("写 .env 失败（{}）⇒ 本次进程使用临时密钥（重启后需重新登录）", e)
+        _temporary_secret = made.encode("utf-8")
+        return _temporary_secret
 
 
 # ------------------------------------------------------------------ 签名 / 验签

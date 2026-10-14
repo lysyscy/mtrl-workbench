@@ -34,24 +34,27 @@ class _Resp:
         self.status_code = status_code
 
 
-def _ok_ipp_response() -> bytes:
-    """最小 IPP 响应：版本 2 字节 + 状态 `0x0000`（successful-ok）。"""
-    return b"\x02\x00\x00\x00" + b"\x03"      # end-of-attributes
+def _ok_ipp_response(status: int = 0) -> bytes:
+    """隔离打印机响应，成功码取自IPP规范。"""
+    return b"\x02\x00" + status.to_bytes(2, "big") + b"\x03"
 
 
 # ------------------------------------------------------------------ 投递实现（ipp）
 
 
 @acc()
-def test_成功接收的作业算已投递未核实而不是已完成也不失败(monkeypatch):
+@pytest.mark.parametrize("status", [0x0000, 0x0001, 0x0002])
+def test_成功接收的作业算已投递未核实而不是已完成也不失败(monkeypatch, status):
     """⭐ IPP 的 `successful-ok` = **作业被接收**；本实现不轮询作业状态 ⇒ **说不清"打完没有"**
     ⇒ 返回一句说明（⛔ 不许说成"已完成"＝假成功，⛔ 更不许说成"失败"＝假失败）。"""
-    monkeypatch.setattr(ipp.httpx, "post", lambda *a, **k: _Resp(_ok_ipp_response()))
+    monkeypatch.setattr(ipp.httpx, "post", lambda *a, **k: _Resp(_ok_ipp_response(status)))
     note = ipp.send_pdf(b"%PDF-1.4 x", "ipp://10.0.0.1")
     assert isinstance(note, str) and note, "成功的作业也要回一句『已投递但未核实』的说明"
     assert "已投递" in note and "未核实" in note
     assert "失败" not in note.replace("假失败", ""), "⛔ 不许把『说不清』写成失败"
     assert "别重打" in note, "要明确叫人**别重复打印**"
+    if status:
+        assert "属性" in note, "属性调整应提示核对出纸效果"
 
 
 @acc()

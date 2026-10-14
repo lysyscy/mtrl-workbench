@@ -6,7 +6,7 @@
    ② **幂等**（同源重跑 = 更新不重复，§9.5）；
 3. **年月必填**：不选年月 ⇒ **显式拒绝**（⛔ 不许落到"没有月份"的桶里）。
 
-⚠️ 会**真写库** ⇒ 仓库名/年月都取随机值（持久测试库），避免撞既有两个月的唯一约束。
+⚠️ HTTP 与测试数据共用测试库外层回滚事务，预览和映射记忆均在临时目录。
 """
 
 from __future__ import annotations
@@ -15,16 +15,12 @@ import io
 import uuid
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from openpyxl import Workbook
 
-from app.import_kit import api as imp_api
-from app.import_kit.profile_store import ProfileStore
 # ⚠️ 先注册 `project` 等表（独立 app ⇒ 不导入就有 FK 解析不到的风险，m06 那件踩过）
 from app.mod01_projects import models as _pj_models  # noqa: F401
-from app.mod04_plan import imp_spec
 from tests.acc_plugin import acc
+from tests.test_audit_plan_import import isolated_plan  # noqa: F401 共享隔离夹具
 
 HEADER = ["项目", "该流程金额", "本月预付款金额", "付款时间", "付款方式", "备注", "审批状态",
           "材料：其他支出付资产处/贸易公司（编号）"]
@@ -52,12 +48,8 @@ def _rows(wh: str, ym_cn: str = "9月11号"):
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(imp_api, "current_operator", lambda: "导入自检")
-    app = FastAPI()
-    app.include_router(imp_api.build_router(imp_spec.SPEC, imp_spec.HOOKS,
-                                            store=ProfileStore(tmp_path / "p.json")))
-    return TestClient(app)
+def client(isolated_plan):
+    return isolated_plan[0]
 
 
 def _parse(client, wh: str):

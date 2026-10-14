@@ -95,10 +95,10 @@ def test_order_duplicates_missing_and_archived_rows(sample, monkeypatch):
     missing = -310
     created, _ = pay(s, [b.id, missing, a.id, b.id], drafts={
         a.id: {'amount': Decimal('10')}, b.id: {'amount': Decimal('20')}})
-    assert created == [b.id, a.id, b.id]
+    assert created == [b.id, a.id]
     assert selected == [[b.id, missing, a.id]]
     assert [(f.notice_id, f.amount) for f in paid(s, [a.id, b.id])] == [
-        (b.id, Decimal('20.00')), (a.id, Decimal('10.00')), (b.id, Decimal('20.00'))]
+        (b.id, Decimal('20.00')), (a.id, Decimal('10.00'))]
     a.excluded = True; b.i8_revoked = True; s.flush()
     with pytest.raises(MustReportError, match='没有可付款的行'):
         pay(s, [b.id, missing, a.id])

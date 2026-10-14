@@ -10,11 +10,18 @@ import io
 import json
 from decimal import Decimal
 
-from app.import_kit import staging
+import pytest
+
+from app.core import preview_store
 from app.import_kit.parse import amount, date_text, text
 from app.import_kit.readers import find_header, read_grid
 from app.import_kit.validators import Problems
 from tests.acc_plugin import acc
+
+
+@pytest.fixture(autouse=True)
+def isolated_previews(tmp_path, monkeypatch):
+    monkeypatch.setattr(preview_store, "PREVIEW_DIR", tmp_path / "previews")
 
 
 def _grid(*rows: tuple) -> bytes:
@@ -91,28 +98,26 @@ def test_读表的格子都装得进载具_但数字仍是数字():
     assert grid[1][2] == 174.0 and grid[1][4] == 45444, \
         "⛔ 数字**原样**（序列号/金额的换算按类型判：文本化会让「核算月」静默认不出）"
     json.dumps(grid, ensure_ascii=False)
-    token = staging.save_preview({"grid_rows": grid})         # ← 报障时**炸的就是这一句**
-    assert staging.load_preview(token)["grid_rows"] == grid, "所见即所落（重启后预览还在）"
+    token = preview_store.save({"grid_rows": grid})         # ← 报障时**炸的就是这一句**
+    assert preview_store.load(token)["grid_rows"] == grid, "所见即所落（重启后预览还在）"
 
 
-# ------------------------------------------------------------ staging（唯一载具）
+# ------------------------------------------------------------ preview_store（唯一载具）
 
 
 @acc()
 def test_暂存往返_所见即所落():
-    token = staging.save_preview({"year_month": "2026-09", "rows": [{"a": "1"}]})
+    token = preview_store.save({"year_month": "2026-09", "rows": [{"a": "1"}]})
     assert token and len(token) >= 16
-    assert staging.load_preview(token) == {"year_month": "2026-09", "rows": [{"a": "1"}]}
+    assert preview_store.load(token) == {"year_month": "2026-09", "rows": [{"a": "1"}]}
 
 
 @acc()
 def test_暂存_坏token显式报错():
-    import pytest
-
     from app.core.errors import MustReportError
 
     with pytest.raises(MustReportError):
-        staging.load_preview("not-hex-token!!")               # 防路径穿越 ＋ 显式报错
+        preview_store.load("not-hex-token!!")               # 防路径穿越 ＋ 显式报错
 
 
 # ------------------------------------------------------------ validators（问题清单）

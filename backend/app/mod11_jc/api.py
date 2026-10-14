@@ -233,7 +233,7 @@ def api_add(payload: AddIn) -> dict:
         if not pid:
             return {"ok": False, "kind": "err",
                     "message": f"找不到项目（仓库名）：{payload.project_key or '（空）'}"}
-        return SV.act_add_contract(s, **payload.model_dump(exclude={"project_key"}))
+        return SV.act_add_contract(s, project_id=pid, **payload.model_dump(exclude={"project_key"}))
 
 
 @router.post("/api/m11/tag")
