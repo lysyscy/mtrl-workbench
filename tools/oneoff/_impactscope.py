@@ -178,7 +178,7 @@ SELFTEST_DEPENDENCIES = {
     'tools/oneoff/_doc_downgrade.py': {
         'tools/oneoff/_doc_downgrade.py', 'tools/audit/audit_common.py',
         'tools/audit/audit_meta.py', 'tools/audit/audit_work.py', 'tools/audit/refs_query.py',
-        '.codebuddy/work/README.md',
+        'docs/guides/work-records.md',
     },
     'tools/oneoff/_gatescope.py': {
         'tools/oneoff/_gatescope.py', 'tools/oneoff/_impactscope.py',
@@ -254,7 +254,7 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
         if name.startswith('.codebuddy/rules/') and name.endswith('.mdc'):
             checks |= required_checks('documents', commands)
             continue
-        if name == 'delivery/PRD/验收/验收基线.json':
+        if name == 'docs/requirements/PRD/验收/验收基线.json':
             checks |= required_checks('documents', commands) | {'tools/audit/acc_report.py'}
             continue
         if name in {'backend/requirements.in', 'backend/requirements.txt'}:
@@ -305,7 +305,7 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
     if tests.reason.startswith('待查：'):
         pending.append(tests.reason)
     direct = {Path(n).name for n in readers if n.startswith('backend/tests/') and Path(n).name.startswith('test_')}
-    if 'delivery/PRD/验收/验收基线.json' in names:
+    if 'docs/requirements/PRD/验收/验收基线.json' in names:
         direct.add('test_acc_suite_selftest.py')
     if direct and not tests.run_all:
         tests = scope.Plan(True, tests.reason+'；含直接读文档的测试', set(tests.files) | direct)

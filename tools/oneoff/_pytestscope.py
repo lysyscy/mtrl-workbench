@@ -62,7 +62,7 @@ REPO_WIDE: tuple[tuple[str, str], ...] = (
 #: ② **pytest 在 `backend/` 之外会读的落点**（目录级前缀 · 单一出口）—— 动了它们，pytest 照样会红
 #: ⇒ **判据不能只看 `backend/`**（本票第 0 批若照抄「backend 没动就跳过」，就会在这些件上漏跑）。
 #: ⭐ **为什么是目录级、而不是逐个文件**（`/code-review` 2026-10-06 抓出）：首版逐个登记了
-#: 八个具体文件，**下一个**被读到的新文件就会漏（实测当场漏掉三处：`ops/README.md` ·
+#: 八个具体文件，**下一个**被读到的新文件就会漏（实测当场漏掉三处：`docs/guides/operations.md` ·
 #: 一个 `tools/probe/` 下的件 · 一处 `tools/**/*.py` 的通配扫描）⇒ 改成「目录级触发 ＋
 #: **跑哪些由扫描器现算**」（`outside_readers()`）⇒ **要登记的东西变成 0**。
 OUTSIDE_PREFIXES: tuple[tuple[str, str], ...] = (
@@ -634,7 +634,7 @@ def _outside_prefix_of(text: str) -> str:
     """一个字面量落在仓外哪个前缀下（`tools/…` / `ops/…` / `.env…`）⇒ 前缀；不属于 ⇒ `""`。
 
     ⭐ **为什么扫「字符串字面量」而不是重拼路径**（`/code-review` 2026-10-06 抓出）：
-    首版重拼 `Path(...) / "ops" / "README.md"`，遇到 `Path(__file__).resolve().parents[2]` 就断了
+    首版重拼 `Path(...) / "docs" / "guides" / "operations.md"`，遇到 `Path(__file__).resolve().parents[2]` 就断了
     ⇒ **当场漏掉三处真实落点**。字面量扫法对「拼出来的」「通配的」「直接写的」一视同仁。
     """
     t = text.strip().replace("\\", "/")

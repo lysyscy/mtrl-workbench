@@ -47,7 +47,7 @@ from refs_query import (                                            # noqa: E402
 OUT_ROOT = Path(OUTSIDE_ROOTS[0])
 #: 仓内过程区 → 仓外子目录。⚠️ 沿用 2026-10-05（`TAIL-235` 甲2）**已建**的落点名，⛔ 不另起名。
 ZONE_OUT_SUBDIR: dict[str, str] = {"10-designs": "work-10-designs"}
-#: ⛔ **不搬的区 ＋ 一句话理由**（⚠️ **不复述各区去向** —— 那是 `.codebuddy/work/README.md` §二
+#: ⛔ **不搬的区 ＋ 一句话理由**（⚠️ **不复述各区去向** —— 那是 `docs/guides/work-records.md` §二
 #:   的事；本件只负责"拒绝并指路"。重述一遍就是第二套口径，`/code-review` 2026-10-06 当场点出）。
 ZONE_REFUSE: dict[str, str] = {
     "30-troubleshooting": "该区**不是搬走**",
@@ -60,7 +60,7 @@ ZONE_REFUSE: dict[str, str] = {
 assert set(ZONE_OUT_SUBDIR) | set(ZONE_REFUSE) <= set(WORK_DIR_ALLOW), \
     "本件认的区名不在 `WORK_DIR_ALLOW` 里 ⇒ 尺子那边改了区名，本件要跟改"
 #: 仓内留痕索引 = **唯一那一份**（⚠️ 文件名里的日期是**首建**日，⛔ 别按它猜"只记 10-05 那天"）
-INDEX_REL = ".codebuddy/plans/archive/归档-留痕索引-20261005.md"
+INDEX_REL = "docs/archive/legacy-plans/归档-留痕索引-20261005.md"
 #: 登记表头 —— 与索引件里那句是**一对契约**（同 `T15` 文头四词 vs `work/README.md` §四 模板那对：
 #:   ⛔ 两边必须同一个词；命令找不到它就**拒绝**，绝不静默写到别处）。
 INDEX_TABLE_HEAD = "| 降档日期 | 件（仓内原名） | 仓外落点（会被 `T3` 真核） | 备注 |"
@@ -251,7 +251,7 @@ def do_downgrade(name: str, apply: bool) -> int:
         for z, why in ZONE_REFUSE.items():
             if (ROOT / ".codebuddy" / "work" / z / fname).is_file():
                 print("⛔ `%s/` 的件不走降档：%s" % (z, why))
-                print("   （去向口径 = `.codebuddy/work/README.md` §二 本区那一行）")
+                print("   （去向口径 = `docs/guides/work-records.md` §二 本区那一行）")
                 return 1
         print("⛔ 找不到这件：%s" % name)
         print("   只降档 `%s` 里的设计件" % "/".join(sorted(ZONE_OUT_SUBDIR)))
@@ -263,7 +263,7 @@ def do_downgrade(name: str, apply: bool) -> int:
     st = _index_check(out_abs)
     refs = _refs_of(rel)
     print("降档 · %s" % fname)
-    print("  区     %s（依据 `.codebuddy/work/README.md` §二：本区定稿实施完 ⇒ 归档仓外）" % zone)
+    print("  区     %s（依据 `docs/guides/work-records.md` §二：本区定稿实施完 ⇒ 归档仓外）" % zone)
     print("  仓内   %s" % rel)
     print("  仓外   %s" % out_abs)
     print("  索引   %s" % INDEX_REL)

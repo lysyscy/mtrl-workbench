@@ -195,7 +195,7 @@ GITIGNORE = ROOT / ".gitignore"
 #:   往里追加一行含「核不到的**仓外**路径」⇒ `T3` 的仓外白名单分支必须报（黄：该件在 `LENIENT_GLOBS`）。
 #:   ⚠️ 它 2026-10-06 之前**不在** `SCAN_GLOBS` 里（只有非递归的 `.codebuddy/plans/*.md`）⇒ 本条
 #:   **同时**钉住"那一格真在扫描面内"（同 `M23` 钉 `_PATH_RE` 那个配对：判据与靶必须成对）。
-INDEX_LEDGER = ROOT / ".codebuddy" / "plans" / "archive" / "归档-留痕索引-20261005.md"
+INDEX_LEDGER = ROOT / "docs" / "archive" / "legacy-plans" / "归档-留痕索引-20261005.md"
 #: ⭐ `T24`（2026-10-05 立）靶：在**仓库根**造一个白名单外的目录（用完 `rmdir`）——
 #:   复现的就是当天那场事故的形状（"根上多出一块没人看的地方"）。
 ROOT_ZONE = ROOT / "_mut_root_zone"
@@ -337,7 +337,7 @@ MUTS_RED2: list[dict] = [
     #    （本守卫只认「`X.md` 与 `§N` 相距 ≤8 字符」—— 松散写法是刻意排除的，见其注释）。
     {"desc": "M14 `T19` 文档指针**指到不存在的节**（.codebuddy 姊妹件里没有 §九九）", "mode": "red",
      "also": ("[T19]", "§九九"), "path": THRESHOLD,
-     "frag": lambda src: _fit(_b("\n\n\n另见 `.codebuddy/plans/票索引-已销号.md` §九九。\n\n\n"), src)},
+     "frag": lambda src: _fit(_b("\n\n\n另见 `docs/archive/tickets/index.md` §九九。\n\n\n"), src)},
     # ⭐⭐ `T9`②（2026-09-29 立 · `TAIL-59` 量测）：在**注入档**里复述一个守卫的阈值 ⇒ 必须报（**黄**）。
     #    ⚠️ 为什么只盯这一个形态：量测证明"数字级"扫描**噪音压倒信号**（阈值表 27 行里 26 行"命中"，
     #      绝大多数是巧合 —— `6`/`300`/`1000` 在任何文档里都会自然出现）⇒ 只有"**指名复述**"
@@ -620,11 +620,11 @@ def tail293_selftest() -> int:
             assert all(md5(p) == h for p, h in hashes.items())
             run("_tail_close.py", close_args + ["--apply"])
             after = plan.read_bytes()
-            assert after.count(moving) == 1
-            assert after.index(moving) > after.index("### 14.4 已办排期（历史）".encode())
+            assert moving not in after
+            assert closed.read_bytes().count(b"> " + moving) == 1
             assert not audit_meta.check_tail_ledger(set())
             assert audit_meta.ledger_counts() == {"活跃": initial_counts["活跃"], "四": initial_counts["四"] + 1}
-            print("开票/销号副本真跑：原行逐字节搬入历史，活动数恢复、已销号+1；T6绿")
+            print("开票/销号副本真跑：原排期引用行归入已销号索引，活动数恢复、已销号+1；T6绿")
         finally:
             audit_meta.REPO_ROOT = saved_root
     print("TAIL-293隔离自证通过；正式文档未作变异靶")
@@ -639,7 +639,7 @@ def main() -> int:
         {"desc": "M1 简略版的四态数字改错（原 T4 看不见这一处 —— 扩面后才抓得到）", "mode": "red",
          "needle": "", "path": HAND, "old_new": _dyn(_四态PAT, HAND.read_text(encoding="utf-8")), "all": False},
         {"desc": "M2 简略版里不再指向计划文档（台账就没人看得见）", "mode": "red", "needle": "",
-         "path": HAND, "old_new": (_b("开发计划-主文档"), _b("某份计划文档")), "all": True},
+         "path": HAND, "old_new": (_b("docs/status.md"), _b("docs/not-status.md")), "all": True},
         {"desc": "M3 台账顶部计数与实际不符（人按错的数判断尾巴有多少）", "mode": "red", "needle": "",
          "path": PLAN, "old_new": _dyn_tail(PLAN.read_text(encoding="utf-8")), "all": False},
         *MUTS_APPEND,

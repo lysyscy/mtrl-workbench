@@ -33,7 +33,7 @@ from audit_common import CLOSED_INDEX_REL
 
 ROOT = Path(__file__).resolve().parents[2]
 INDEX = ROOT / "docs" / "reference" / "legacy-materials.md"
-PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
+PLAN = ROOT / "docs" / "status.md"
 ENV = ROOT / ".env"
 
 # 表格 row 里以反引号包住、且像"本仓路径"的 token

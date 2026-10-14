@@ -120,7 +120,7 @@ def test_计划总额在无明细时退回单据头():
 
 
 #: ⭐⭐ **真机形态**（2026-09-21 全量取证 · `artifacts/_probe_acct_scan.json` ＋ 诊断
-#: `.codebuddy/work/30-troubleshooting/排查-收款账号印错-20260921.md`）：标准字段（`RecAccNo`/`PhidBank_EXName`）与
+#: `docs/archive/troubleshooting/排查-收款账号印错-20260921.md`）：标准字段（`RecAccNo`/`PhidBank_EXName`）与
 #: 自定义字段（`user_yhzh`/`user_bank_EXName`）**不是一回事** —— 74/353 张不一致，
 #: 其中 **11 张两套都有值且不同**（i8 原生印自定义 = **本单实际收款账号**）。
 #: ⛔ **别拿"单行标准形态"当 fixture** —— 那正是这个 bug 被掩盖多年的原因。

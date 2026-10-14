@@ -14,14 +14,14 @@
 | `T3` | **幽灵路径** —— 反引号里的仓库内路径两侧都找不到（⭐ 2026-10-05 `TAIL-235` 丁-1 扩半：① 扫描面进 `.codebuddy/`（**治理区此前整片无人管**）② **仓外绝对路径**落在 `OUTSIDE_ROOTS` 白名单内 ⇒ 到那个根下**真核存在** ③ 带 `〔已归档〕` 标记的引用**剥掉标记照核** ⇒ ⛔ **标记不是豁免**，加前缀不再能把坏路径洗掉） | 文件系统 |
 | `T4` | **状态数字失配** —— 执行情况「当前版本」行的四态 ≠ 实际 | `artifacts/acc_results.json` |
 | `T5` | **行数超限** —— 单文件 >400（黄 · 须登记拆分计划）/ >600（黄 · 须登记"为什么不拆"）<br>⚠️ 2026-09-21 **用户裁定：>600 从红降黄**（行数是代理指标，不作禁合入闸门） | 源文件行数（**输出即登记清单**）＋ `docs/reference/thresholds.md` |
-| `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `.codebuddy/plans/开发计划-主文档.md` |
+| `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `docs/status.md` |
 | `T7a`/`T7b` | **判据覆盖** —— 有登记的能力却没判据兜住（**登记档，不判红**） | `cover_gap.py` |
 | `T8` | ⭐ **已撤项复活** —— 用户裁定取消的东西**不得在代码里长回来** | `audit_common.CANCELLED` |
 | `T9` | ⭐ **纪律册卫生（两半）** —— ① **口径出处标记**：`MEMORY.md` §八 每条必须带 `[用户]`/`[交付面]`/`[助手自定]`；② ⭐ **注入档里别复述守卫的阈值**（`T13`（行数预算 1700）那种 ⇒ **规则留、数字去**） | `.codebuddy/memory/MEMORY.md` |
 | `T10` | ⭐ **文档读预算** —— 每会话**注入/必读**档超预算（黄 + 登记；治「太长读不完 ⇒ 只 grep ⇒ 没搜到的就丢了」） | `docs/reference/thresholds.md` ＋ `audit_meta.DOC_BUDGETS` |
 | `T11` | ⭐ **建议类报告必须带「待办登记回执」** —— `artifacts/` 里的审计/提案/建议**不许只活在报告里** | `artifacts/*.md` ↔ 计划 §15 |
 | `T12` | ⭐ **文档分层与命名约定** —— `plans/` 只许两份活文档（其余 `归档-` 打头）· `memory/` 日志必须进 `journal/` · 根上的 md 只许 `ROOT_MD_ALLOW` 那两件（⚠️ 根上的**目录与非 md 文件**归 `T24`） | 根 `README.md` 的四层表 ＋ 本件三张白名单 |
-| `T13` | ⭐ **主文档过程回潮** —— 计划主文档行数超预算（1700）· 标题出现过程词（逐批/逐次/收官记录）⇒ 黄：该块**该下沉归档了**（`§13.1`「完成的就扔出去」的机器守） | `.codebuddy/plans/开发计划-主文档.md` |
+| `T13` | ⭐ **主文档过程回潮** —— 计划主文档行数超预算（1700）· 标题出现过程词（逐批/逐次/收官记录）⇒ 黄：该块**该下沉归档了**（`§13.1`「完成的就扔出去」的机器守） | `docs/status.md` |
 | `T14` | ⭐ **scratch 超期 / 落点合规** —— `work/00-scratch/` 超 14 天未升档未删 · `tools/` 根与 `logs/` 再现散件 ⇒ 黄（`audit_work.py`） | 文件系统 mtime |
 | `T15` | ⭐ **产物白名单 ＋ 工作记录元信息** —— `artifacts/` 只许工具生成物 md · `work/` 的 **`10-designs` / `30-troubleshooting` / `40-decisions` 三区**文档必须带文头四行（读者/回答什么/何时读/状态；⚠️ **票仓不在扫描面里**，票按票面协议走）⭐ **2026-10-11 加一条**（`TAIL-296`）：**决策区**的件**状态词必须 ∈ 五档**，且「已定稿 / 已实施」**必须有「落地位置」行** ⇒ 黄 | `audit_work.py`（`STATE_WORDS` / `HEADER_ZONES` / `DECISION_ZONES` / `WORK_HEADER_KEYS` / `DECL_RE`） |
 | `T16` | ⭐ **`T7a` 登记册必须在位** —— 登记册**读不到 / 解析不出条目** ⇒ **红**（治「静默降级成全部未清」） | `cover_gap.CLEARED_REGISTRY` |
@@ -35,7 +35,7 @@
 
 | `T24` | ⭐ **仓库根白名单**（2026-10-05 `TAIL-236` 同批修 ①b）—— 根上的**目录与非 md 文件**必须落在「常驻骨架（`ROOT_ALLOW`）∪ `.gitignore` 声明过的暂存件」里，多出来的 ⇒ **红**。⭐ 起因：根 `work/` 建起来后 `T3`/`T12`/`T14` **四层守卫没一层拦**（那片地方**不在任何扫描面内**）。⚠️ 根上的 md 归 `T12`（本行**不**重复管） | `audit_common.ROOT_ALLOW` ＋ 仓根 `.gitignore` |
 | `T25` | ⭐ **`.gitignore` 里的落点路径必须真存在**（2026-10-05 `TAIL-236` 同批修 ①b/③）—— `.gitignore` 反引号里的**仓库内目录落点**（含 `/` · 以 `TOP_DIRS` 前缀开头 · 不含模式字符）盘上核不到 ⇒ **红**。⭐ 治的是"照一份**没被核过**的落点找路 ⇒ 找到不存在的目录"（当天真实事故）；⚠️ `T3` 拦不住这一类（它只认**带后缀**的引用，而落点多是**目录**） | 仓根 `.gitignore` ＋ `audit_drift.check_gitignore_drops`（豁免沿用 `T3_OLD_PATH_HINTS`） |
-| `T26` | ⭐ **「结论已落地」⇒ 该降档**（2026-10-05 `TAIL-236` 第 3 批 · **黄 · 只报不动**）—— `work/10-designs/` · `work/30-troubleshooting/` 里处在「**已定稿 / 已实施**」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在** ⇒ 报黄「该降档」＋ 落地位置（＝**口径主人**）＋ 同批改那串（**去向**看 `.codebuddy/work/README.md` §二 本区那一行）。⛔「零机器引用」**不是判据**（只是信号）。⭐ 治的是 `work/README.md` §二「用完就丢」**只有规矩、没有机器眼** | `audit_work.check_downgrade_candidates` ＋ `work/README.md` §四（**声明行写法**的唯一主人）＋ `audit_meta.TICKET_CLOSED`（销号定义）＋ `docs/reference/thresholds.md` |
+| `T26` | ⭐ **「结论已落地」⇒ 该降档**（2026-10-05 `TAIL-236` 第 3 批 · **黄 · 只报不动**）—— `work/10-designs/` · `work/30-troubleshooting/` 里处在「**已定稿 / 已实施**」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在** ⇒ 报黄「该降档」＋ 落地位置（＝**口径主人**）＋ 同批改那串（**去向**看 `docs/guides/work-records.md` §二 本区那一行）。⛔「零机器引用」**不是判据**（只是信号）。⭐ 治的是 `work/README.md` §二「用完就丢」**只有规矩、没有机器眼** | `audit_work.check_downgrade_candidates` ＋ `work/README.md` §四（**声明行写法**的唯一主人）＋ `audit_meta.TICKET_CLOSED`（销号定义）＋ `docs/reference/thresholds.md` |
 | `T27` | ⭐ **交付面「页脚之后不许有内容」**（2026-10-06 `TAIL-234`）—— ⛔ `T1`–`T26` 没一层能看见"内容掉到落款后面"（当天实测：`MOD-14.md` 两条 `ACC-*` 验收条目就在页脚**下面**，而用例号 / 路径都是真的 ⇒ 只是**位置错了**）。⚠️ **归档目录按实测排除**（6 处全在 `.workbuddy/归档-audit/` 下 ⇒ 那是留痕、不是缺陷） | `audit_face.check_footer_tail` ＋ `audit_common.FOOTER_MARKER` / `FOOTER_SCAN_GLOB` / `FOOTER_EXCLUDE_PARTS` |
 | `T28` | 交付面篇幅变短提示调查；能力编号损失或缺件仍报红。篇幅不能证明业务丢失，不阻挡已授权精简 | audit_face.check_prd_baseline ＋ audit_face.PRD_DOC_BASELINE |
 
@@ -140,9 +140,9 @@ def run_ui_checks() -> tuple[list[str], list[str]]:
         return ["  （跳过：找不到 node —— 试过三处：环境变量 `MTRL_NODE` / PATH / 旧默认路径。"
                 "⚠️ 装 node 或设 `MTRL_NODE=<node.exe 全路径>`；详见 `docs/guides/deployment.md`）"], []
     if not root:
-        return ["  （跳过：拿不到产品资料根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=delivery/PRD/验收/验收基线.json`；"
+        return ["  （跳过：拿不到产品资料根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=docs/requirements/PRD/验收/验收基线.json`；"
                 "从仓库根目录运行，详见 `docs/guides/deployment.md`）"], []
-    demo = root / "demo"
+    demo = REPO_ROOT / "delivery" / "demo"
     if not (demo / "_smoke.js").exists():
         return ["  （跳过：交付面 demo/ 里没有四检脚本）"], []
     out: list[str] = []
@@ -309,7 +309,7 @@ def main() -> int:
     #   ⭐ 治的是 `work/README.md` §二 那条「用完就丢」**只有规矩、没有机器眼**
     #   （`docs/guides/document-governance.md` §三 那两行自己写着「应有判据、现无」）—— 那是用户"不安"的根因。
     #   ⛔ 两个客观信号**别改轴**（`TAIL-236` 决定 3）；⛔「零机器引用」不是判据，只是信号。
-    #   ⚠️ **声明行写法**的唯一主人 = `.codebuddy/work/README.md` §四；销号定义 = `audit_meta.TICKET_CLOSED`。
+    #   ⚠️ **声明行写法**的唯一主人 = `docs/guides/work-records.md` §四；销号定义 = `audit_meta.TICKET_CLOSED`。
     raw += check_downgrade_candidates()
     # `T20`（2026-09-28 立 · 文档审计）：**保留期与容量** —— `backups/` 顶层条目 > 5（口径「留 5 份」）
     #   ＋ `tools/oneoff/` 件数 / 容量超线 ⇒ **黄**。

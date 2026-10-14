@@ -206,7 +206,7 @@ DOC_BUDGETS: tuple[tuple[str, int, str, int | None], ...] = (
     #:   用户裁定「只留待办」⇒ 待办并入**根 `README.md` §〇**（本表第 1 行就是它，预算 240）
     #:   ⇒ ⛔ **别为它再列一行**：那会变成"同一件事两处预算"（本仓最贵的病，必漂）。
     ("docs/guides/implementation-constraints.md", 620, "must", None),       # 预算沿用迁移前细则分册，不新增或改变阈值。
-    (".codebuddy/plans/开发计划-主文档.md", 300, "must", None),  # TAIL-295：主计划瘦身完成，预算300行
+    ("docs/status.md", 300, "must", None),  # TAIL-295：主计划瘦身完成，预算300行
 )
 #: ⭐⭐ **注入档字节「逼近线」**（2026-10-06 · `/retro` ③）＝ 硬顶 − 900 B。
 #: ⭐ **为什么要有它**（实测同日）：硬顶是 **14,400 B**，而那天余量只剩 **~0.5 KB** ⇒
@@ -354,11 +354,11 @@ PLANS_LIVE: tuple[str, ...] = ("开发计划-主文档.md", "票索引-已销号
 #:   `docs/agents/*` 三页 ＋ 根 `README.md` §三/§四 的分层表述。⛔ 它**不复述任何口径**。
 ROOT_MD_ALLOW: tuple[str, ...] = ("README.md", "AGENTS.md")
 #: `memory/` 下允许的 `.md` 与子目录（日志必须进 `journal/`）
-MEMORY_MD_ALLOW: tuple[str, ...] = ("MEMORY.md", "细则.md", "IDE-细节.md")
+MEMORY_MD_ALLOW: tuple[str, ...] = ("MEMORY.md", "细则.md", "docs/guides/development-and-verification.md")
 MEMORY_DIR_ALLOW: tuple[str, ...] = ("journal",)
 #: ⭐ `work/` **四区**（Agent 工作记录 · 文档架构审计 2026-09-22 P2：五类缺三类是乱建文件的根因）。
 #:   ⚠️ 2026-10-01（`TAIL-204` 第 7 步）**由五区收成四区**：`20-experiments` 从建区起**一件都没进过**
-#:   （用户 2026-10-01「以最精简为目的」· 出处 = `.codebuddy/memory/journal/2026-10-01.md` §14）⇒ 撤区；
+#:   （用户 2026-10-01「以最精简为目的」· 出处 = `docs/archive/journal/2026-10-01.md` §14）⇒ 撤区；
 #:   ⭐「实验/实测/对比试验」这一类**不取消** —— 改由 `30-troubleshooting` 收
 #:   （那边同时认 `排查-` 与 `实验-` 两种前缀，见 `WORK_NAME_PREFIX`）。
 WORK_DIR_ALLOW: tuple[str, ...] = ("00-scratch", "10-designs",
@@ -907,7 +907,7 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
 #: 本条守卫盯两件事：
 #:   (a) 主文档**行数预算** —— 超了 = 过程又塞回来了（黄 ⇒ 下沉）；
 #:   (b) 标题里出现**过程词**（逐批记录 / 逐次记录 / 收官记录）⇒ 该块该下沉了（黄）。
-PLAN_DOC_REL = ".codebuddy/plans/开发计划-主文档.md"
+PLAN_DOC_REL = "docs/status.md"
 PLAN_LINE_BUDGET = 300          #: 与 T10 同值；下调理由见 docs/reference/thresholds.md
 #:   `docs/reference/thresholds.md:31` 写着「一个数、两处用」⇒ 改一处必须改另一处）
 PROCESS_TITLE_RE = re.compile(r"^#{2,4}.*(逐批记录|逐次记录|收官记录)")
@@ -971,8 +971,8 @@ LINE_WALL_CHARS = 800
 #:   ＋ §0.2 判据涨数流水 ＋ §14.3 已办长行 ＋ §20.2 ＋ §23」全部下沉仓外、
 #:   原处留短索引/指针（尺子量测件 = `.codebuddy/work/00-scratch/tmp-trim-plan-250.py` 干跑时打印）。
 LINE_WALL_BASELINE: tuple[tuple[str, int], ...] = (
-    (".codebuddy/plans/开发计划-主文档.md", 0),
-    (".codebuddy/plans/票索引-已销号.md", 7),
+    ("docs/status.md", 0),
+    ("docs/archive/tickets/index.md", 7),
     ("docs/guides/frontend-design.md", 0),
     ("docs/reference/thresholds.md", 1),
 )

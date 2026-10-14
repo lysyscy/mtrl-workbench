@@ -6,7 +6,7 @@
 > **审查分支 / HEAD：** `master` / `58766573079b6c2e0eb986b39fde904643626fd5`  
 > **操作声明：** 审查阶段只读使用已连接 GitHub 工具，未修改仓库、数据库、PR、Issue；**未执行** pytest、浏览器 E2E 或生产库查询。以下“已证实”表示**静态源码/文档证实**，不冒充动态复现或测试通过。  
 > **用户实施组织：** ChatGPT 负责前期业务分析、代码探索、风险排查和方案收敛；本地 Codex 负责后续编码、验证及按仓库要求维护文档。希望尽量避免 Codex 再消耗上下文进行大范围探索。
-> **⚙️ 状态（2026-10-11 更新）：** 原六项里的 **R1（焊材气体「2025-11及之前」按年份显隐）· R2（付款流水默认只看生效）· R5（发票子表草稿默认北京时间当日）已实施并提交**（`4ddcfd5`；口径回写见《说明书》§5.3.3 / §6.4.2 与 `delivery/PRD/验收/验收基线.json` 三条 claim）⇒ 本件**已删去那三章**，只留下面三项。
+> **⚙️ 状态（2026-10-11 更新）：** 原六项里的 **R1（焊材气体「2025-11及之前」按年份显隐）· R2（付款流水默认只看生效）· R5（发票子表草稿默认北京时间当日）已实施并提交**（`4ddcfd5`；口径回写见《说明书》§5.3.3 / §6.4.2 与 `docs/requirements/PRD/验收/验收基线.json` 三条 claim）⇒ 本件**已删去那三章**，只留下面三项。
 > **剩下的三项已立票**（票为主，本件只作证据入口）：R3 → `TAIL-282` · R6 → `TAIL-283` · R4 → `TAIL-284`。
 
 ---
@@ -53,7 +53,7 @@
 - 项目档案：`backend/app/mod01_projects/`。
 - 集采合同、发票及付款子表：`backend/app/mod11_jc/`。
 - 导出：`backend/app/report_export/`，包括 `fl_export.py`。
-- 产品口径主人：`delivery/材料科业务全流程说明书.md`；规格：`delivery/PRD/02-功能规格/MOD-01.md`、`MOD-03.md`、`MOD-05.md`；验收：`delivery/PRD/验收/`。
+- 产品口径主人：`docs/requirements/材料科业务全流程说明书.md`；规格：`docs/requirements/PRD/02-功能规格/MOD-01.md`、`MOD-03.md`、`MOD-05.md`；验收：`delivery/PRD/验收/`。
 
 ### 1.2 精确文件/符号索引（后续 Agent 直接按这里打开）
 
@@ -67,7 +67,7 @@
 | R4 | `web/shell/actions.js:1456-1490` `delPj/delPjOk` | 前端阻断删除，三个影响项待接通 |
 | R4 | `mod01_projects/router.py` 项目路由 | 有创建/修改/归档/类型/排序，没有项目删除动作 |
 | R4 | `mod01_projects/models.py`、`mod03_notice/models.py` 等 | 项目主键及各表外键策略 |
-| R4 | `delivery/材料科业务全流程说明书.md` §7.2、§9.4 | 删除前影响范围与硬删/软删原则 |
+| R4 | `docs/requirements/材料科业务全流程说明书.md` §7.2、§9.4 | 删除前影响范围与硬删/软删原则 |
 | R6 | `mod05_flow/service.py:108-135` `_flow_dict` | 已关联通知书与项目、可直接附加通知书字段 |
 | R6 | `mod05_flow/service.py:137-189` `build_flows` | 批量取通知书/项目、返回流水行 |
 | R6 | `mod03_notice/list_view.py:60-85,190+` | `bill_name=fields['BillName']` 的现成官方取值 |
@@ -184,7 +184,7 @@ NO = items.map(adaptNotice);
 
 ### 3.2 删除政策【源码确定】
 
-`delivery/材料科业务全流程说明书.md`：
+`docs/requirements/材料科业务全流程说明书.md`：
 
 - §7.2：删除前必须列出**关联数据、统计影响**；确认后再执行删除并刷新。
 - §9.4：按可复原性区分删除方式；可复原或用户自行录入的记录可硬删；无法复原且历史需要识别的主体如账号软删；本条是**全局原则**，不等于任意项目均可无条件硬删。
@@ -357,7 +357,7 @@ op: x.created_at || ''
 
 ### 5.2 优先级与验收方式
 
-- **A（已完成 · 2026-10-10）：** 焊材气体历史列按年份显隐 · 付款流水默认只看生效 · 发票子表草稿默认北京时间当日。提交 `4ddcfd5`；口径回写 =《说明书》§5.3.3 / §6.4.2 ＋ `delivery/PRD/验收/验收基线.json` 三条 claim。本件不再复述那三章的实现细节。
+- **A（已完成 · 2026-10-10）：** 焊材气体历史列按年份显隐 · 付款流水默认只看生效 · 发票子表草稿默认北京时间当日。提交 `4ddcfd5`；口径回写 =《说明书》§5.3.3 / §6.4.2 ＋ `docs/requirements/PRD/验收/验收基线.json` 三条 claim。本件不再复述那三章的实现细节。
 - **B（第二批）：** R3 拟付临时覆盖在匹配供应商刷新后保留、状态失效边界。强调真机交互复现，不新建数据库字段。
 - **C（第三批）：** R6 五列信息+“操作人/流水号”已证实列义修正+Excel 一致性。变更路径较多但业务口径保持。
 - **D（单独安排）：** R4 项目安全删除第一阶段，必须真实事务级反向测试，不能仅靠静态 HTML 检查。
@@ -378,7 +378,7 @@ op: x.created_at || ''
 
 ## 7. 可直接复制给 Codex 的三批详细执行指令
 
-> 以下任务已包含本次调查发现，Codex 的目标是**最小实现并验证**。开发前仍应读取仓库 `AGENTS.md` 及必要工程规则；不需要对三项重新做全面只读审查。⚠️ 三张票都要走仓库自己的票协议（`ops/agents/issue-tracker.md`）。
+> 以下任务已包含本次调查发现，Codex 的目标是**最小实现并验证**。开发前仍应读取仓库 `AGENTS.md` 及必要工程规则；不需要对三项重新做全面只读审查。⚠️ 三张票都要走仓库自己的票协议（`docs/agents/issue-tracker.md`）。
 
 ### 批次 B：拟付金额会话态丢失——R3（`TAIL-282`）
 
@@ -407,7 +407,7 @@ op: x.created_at || ''
 ### 批次 D：项目安全删除第一阶段——R4（`TAIL-284`）
 
 ```text
-项目：lysyscy/mtrl-workbench。严格以交接书第3章（R4）的静态引用矩阵和已确认未实现现状为起点，遵守 delivery/材料科业务全流程说明书.md §7.2/§9.4 与项目层级规则。不要把“按钮启用”当项目删除完成。
+项目：lysyscy/mtrl-workbench。严格以交接书第3章（R4）的静态引用矩阵和已确认未实现现状为起点，遵守 docs/requirements/材料科业务全流程说明书.md §7.2/§9.4 与项目层级规则。不要把“按钮启用”当项目删除完成。
 
 当前 web/shell/actions.js::delPj 仅显示弹窗，三项影响待接通，按钮 disabled，delPjOk 只 toast，后端没有项目删除路由。已有引用包括：payment_notice/payment_flow/opening_balance/plan_row/inv_detail/部分过程/大表为SET NULL；jc_contract为RESTRICT；special fee、ledger_remark、project_field_log为CASCADE；project.parent_shell_id为SET NULL；焊材历史、收发结存和过程资料还有 warehouse_name 文本键。直接删除存在业务脱钩/级联丢数/壳失去小微风险。
 
@@ -462,10 +462,10 @@ python -m pytest backend/tests/test_acc_prj_arch.py backend/tests/test_acc_prj_o
 
 - 仓库入口：<https://github.com/lysyscy/mtrl-workbench>
 - 本次审查版本：<https://github.com/lysyscy/mtrl-workbench/commit/58766573079b6c2e0eb986b39fde904643626fd5>
-- 项目说明书：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/delivery/材料科业务全流程说明书.md>
-- MOD-01 项目档案：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/delivery/PRD/02-功能规格/MOD-01.md>
-- MOD-03 付款通知书：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/delivery/PRD/02-功能规格/MOD-03.md>
-- MOD-05 付款流水：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/delivery/PRD/02-功能规格/MOD-05.md>
+- 项目说明书：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/docs/requirements/材料科业务全流程说明书.md>
+- MOD-01 项目档案：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/docs/requirements/PRD/02-功能规格/MOD-01.md>
+- MOD-03 付款通知书：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/docs/requirements/PRD/02-功能规格/MOD-03.md>
+- MOD-05 付款流水：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/docs/requirements/PRD/02-功能规格/MOD-05.md>
 - `base.js`：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/backend/app/web/shell/base.js>
 - `proj.js`：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/backend/app/web/shell/proj.js>
 - `core.js`：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/backend/app/web/shell/core.js>

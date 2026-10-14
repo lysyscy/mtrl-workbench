@@ -232,7 +232,7 @@ LENIENT_GLOBS: tuple[str, ...] = (
     #    这正是"计划文档悄悄过期却查不出来"的老路。
     #    ℹ️ `handoff/` 已于同日并入 `plans/`（history 条目 = `plans/archive/归档-历史单元条目.md`）。
     #    ⭐ 2026-10-01（`TAIL-204` 第 6 步）：`plans/` 根的活文档由**两份收成一份**（见 `HANDBOOK_REL`）。
-    ".codebuddy/plans/archive/归档-*.md",
+    # 已迁历史归档按明确追溯读取，退出常规扫描。
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：`work/` 的**过程区**按留痕口径降黄。
     #    **为什么这两区降黄、三区不降**（分档是量出来的，不是拍的）：
     #    · `40-decisions/` = **裁定留痕**（"当初撤了什么、为什么"）⇒ 同理降黄。
@@ -251,7 +251,7 @@ LENIENT_GLOBS: tuple[str, ...] = (
     #      降黄等于把那道保护关掉。
     ".codebuddy/work/40-decisions/*.md",
     ".codebuddy/work/10-designs/*.md",
-    ".codebuddy/work/30-troubleshooting/*.md",
+    # 排障历史已在docs/archive/troubleshooting，退出常规扫描。
 )
 
 #: 合法的「幽灵用例号」—— 文档里明写「不建用例」的编号
@@ -259,7 +259,7 @@ KNOWN_ABSENT: frozenset[str] = frozenset({"ACC-X-ATT-001", "ACC-X-ATT-002"})
 
 #: `T3` 只检查这些顶级目录开头的路径（`C:\…`、URL、SSH 一律不管）
 TOP_DIRS: tuple[str, ...] = (
-    "backend/", "tools/", "ops/", "docs/", "delivery/", "demo/", "PRD/", "app/", "tests/",
+    "backend/", "tools/", "ops/", "docs/", ".scratch/", "delivery/", "demo/", "PRD/", "app/", "tests/",
     "alembic/", "artifacts/", "frontend/", "static/", "scripts/", "input/",
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**治理区进 `T3` 的眼**。
     #    ⚠️ 此前**整个 `.codebuddy/` 不在表内** ⇒ 票仓 / 记忆档 / 规则档 / 决策档里写下的
@@ -296,7 +296,7 @@ TOP_DIRS: tuple[str, ...] = (
 #:   ⇒ 列进来就是**同一件事两处写**（本仓最贵的病，必漂）。
 #: ⚠️ 目录带尾斜杠、文件不带（判据按**名字**比，斜杠只是可读性）。
 ROOT_ALLOW: tuple[str, ...] = (
-    ".codebuddy/", ".git/", "artifacts/", "backend/", "docs/", "delivery/", "logs/", "ops/", "tools/",
+    ".codebuddy/", ".scratch/", ".git/", "artifacts/", "backend/", "docs/", "delivery/", "logs/", "ops/", "tools/",
     ".env", ".env.example", ".gitignore",
 )
 
@@ -327,10 +327,10 @@ OUTSIDE_MARKERS: tuple[str, ...] = ("〔已归档〕",)
 #:    这里要赦的是**"陈旧路径的告警"**这一件事 ⇒ 只给 `T3` 用，⛔ 不外溢。
 #: ⚠️ 收词纪律：只收**明确指向"那个地址已作数/已搬走"**的整块说法，
 #:    ⛔ 不收「原」「曾」这类泛指（`SOFT_EXEMPT` 已有，且只降黄不赦）。
-#:    ⭐ 实证（`TAIL-235` 丁-1 量测）：`.codebuddy/memory/IDE-细节.md:226` 写着
+#:    ⭐ 实证（`TAIL-235` 丁-1 量测）：`.codebuddy/memory/docs/guides/development-and-verification.md:226` 写着
 #:    「⛔ 旧路径 `app/core/models_registry.py` 不存在了」—— 那是**故意留着的警示**，
 #:    判它红等于**逼人把警告删掉**（本仓老路：为了让判据变绿而改坏东西）。
-#:    ⚠️ 同批第二例：`IDE-细节.md:205` 补注「该登记簿**已退场**」——「已退场」也是同一类说法。
+#:    ⚠️ 同批第二例：`docs/guides/development-and-verification.md:205` 补注「该登记簿**已退场**」——「已退场」也是同一类说法。
 T3_OLD_PATH_HINTS: tuple[str, ...] = (
     "旧路径", "已不存在", "已退场", "已搬走", "已移出", "不在仓内",
     # ⭐⭐ 2026-10-06（`TAIL-238`）**第二类叙述豁免**：从「那个地址**已作数**」扩到
@@ -399,9 +399,9 @@ DOC_SUFFIXES: tuple[str, ...] = (".md", ".mdc")
 HANDBOOK_REL: str = "README.md"
 
 #: `T6` 尾巴台账（**唯一清点处** = 计划主文档 §15）—— 尾巴的单一清点处
-LEDGER_REL: str = ".codebuddy/plans/开发计划-主文档.md"
-LEDGER_NAME: str = "开发计划-主文档"
-CLOSED_INDEX_REL: str = ".codebuddy/plans/票索引-已销号.md"
+LEDGER_REL: str = "docs/status.md"
+LEDGER_NAME: str = "docs/status.md"
+CLOSED_INDEX_REL: str = "docs/archive/tickets/index.md"
 TAIL_MIN_CELLS: int = 6          # 表格行去掉首尾竖线后的最少格数（栏位齐全 = 含**落点** ＋ **阶段**）
 
 #: `T6` 尾巴的**阶段受控词** —— 尾巴一登记就必须回答"在哪个阶段处理"（2026-09-17 用户裁定：
@@ -452,13 +452,13 @@ SCAN_GLOBS: tuple[str, ...] = (
     # ⚠️ **`CLAUDE.md` 已删除**（2026-09-21 用户裁定：换工具后**无人读取**）—— 它的必用内容已并入
     #    `MEMORY.md`（注入档）与 `细则.md`，过程叙事下沉到 `plans/archive/归档-历史单元条目.md`。
     # 2026-10-15工程正文迁入docs；旧ops薄入口退出普通扫描，仍在用的索引显式保留。
-    "README.md", "AGENTS.md", "ops/README.md", "ops/delivery-surface.md", "docs/architecture.md", ".codebuddy/plans/*.md",
+    "README.md", "AGENTS.md", "docs/guides/operations.md", "docs/requirements.md", "docs/architecture.md", "docs/status.md",
     # ⭐⭐ 2026-10-06（`TAIL-236` 第 4 批 · **实验**）：**仓内归档索引**进扫描面 ——
     #   `plans/archive/归档-*.md` 早就在 `LENIENT_GLOBS`（降黄那侧），而 `SCAN_GLOBS` 只有**非递归**的
     #   `.codebuddy/plans/*.md` ⇒ **那一片根本没被扫**（实测：扫描面里带 `archive` 的件 = 0）。
     #   ⇒ 索引件里写的**仓外绝对路径**（`OUTSIDE_ROOTS` 那套「真核存在」）**从来没被核过** ——
     #   仓外那份被清掉 ⇒ 指针变死，而**没有任何尺子会喊**（墓碑 ≠ 守卫）。
-    ".codebuddy/plans/archive/*.md",
+    # 历史原文不进入默认文档扫描；票与归档索引由各自专门检查读取。
     # 2026-10-15专项迁移：Agent协议、绑定与新ADR实际进入扫描；T18仍核每条glob命中。
     "docs/agents/*.md", "docs/adr/*.md",
     "docs/architecture/*.md", "docs/guides/*.md", "docs/reference/*.md",  # 项目开发分册的现行正文；旧memory位置只留兼容指针。
@@ -473,11 +473,11 @@ SCAN_GLOBS: tuple[str, ...] = (
     #    里面的旧路径与旧数字**是对的**（同 `plans/archive/` 的口径）⇒ 别把它扫进来制造噪音。
     ".codebuddy/memory/*.md",
     ".codebuddy/rules/**/*.mdc",
-    ".codebuddy/work/README.md",
+    "docs/guides/work-records.md",
     ".codebuddy/work/40-decisions/*.md",
     ".codebuddy/work/50-tickets/*.md",
     ".codebuddy/work/10-designs/*.md",
-    ".codebuddy/work/30-troubleshooting/*.md",
+    # 排障历史已在docs/archive/troubleshooting，退出常规扫描。
     # ⚠️ 2026-09-24 **摘掉 `.codebuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
     #    它是**搬迁前的旧地址**，该件现址 = `docs/reference/changelog.md`（`README.md`「工程基准档」那行）⇒
     #    这条 glob **一条都不命中** = 那一片**从没被扫过**（`docs/*.md` 已把它盖住 ⇒ 摘掉 = 零损失）。
@@ -597,7 +597,7 @@ def read_env(key: str) -> str:
 
 
 def delivery_root() -> Path | None:
-    """产品资料根 = `.env` 的 `PRD_ACCEPTANCE_BASELINE`（delivery/PRD/验收/验收基线.json）上溯两级。"""
+    """产品资料根 = `.env` 的 `PRD_ACCEPTANCE_BASELINE`（docs/requirements/PRD/验收/验收基线.json）上溯两级。"""
     p = read_env("PRD_ACCEPTANCE_BASELINE")
     if not p:
         return None
@@ -623,6 +623,10 @@ def iter_docs() -> list[tuple[str, str, Path, list[str], list[str]]]:
             #    `.codebuddy/rules/**/RULE.mdc` 是 `alwaysApply` 的**每轮自动注入**件，
             #    此前它对所有尺子**完全隐形**（而它里面就出过一次错话，见该目录 `RULE.mdc:20`）。
             if p.is_file() and p.suffix in DOC_SUFFIXES and p not in seen:
+                if p.parent == REPO_ROOT / ".codebuddy/work/50-tickets":
+                    state = re.search(r"\*\*Status:\*\*\s*`?([a-z-]+)", p.read_text(encoding="utf-8"))
+                    if state and state.group(1) in {"done", "wontfix"}:
+                        continue  # 关闭票保留原文；T6仍核全票仓，常规内容检查只读在途票。
                 seen.add(p)
                 plan.append(("仓", p, str(p.relative_to(REPO_ROOT))))
     root = delivery_root()

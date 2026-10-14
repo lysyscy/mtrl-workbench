@@ -44,11 +44,11 @@ WORK_HEAD_LINES = 15
 #: `work/` 里**带文头四行**的区（`T15` 判）—— ⛔ **区名只此一处列**，别处一律从它推。
 HEADER_ZONES: tuple[str, ...] = ("10-designs", "30-troubleshooting", "40-decisions")
 
-#: ⛔⛔ **五档状态词一个字不动**（主人 = `.codebuddy/work/README.md` §四）—— `T15` 新条按它判「状态出档」。
+#: ⛔⛔ **五档状态词一个字不动**（主人 = `docs/guides/work-records.md` §四）—— `T15` 新条按它判「状态出档」。
 #: ⚠️ `DOWNGRADE_STATES`（下面 T26 那两档）是它的**子集**：改词表时两处一起看（⛔ 别处不另抄字面）。
 STATE_WORDS: tuple[str, ...] = ("草稿", "在研", "已定稿", "已实施", "已归档")
 #: `T15` 新条（2026-10-11 `TAIL-296`）的扫描面 = **决策区**。⚠️ **为什么只有这一区**（⛔ 别顺手扩到另两区）：
-#:   · 决策件**永不出档**（`.codebuddy/work/README.md` §二：只加不改、被推翻只补一行）⇒
+#:   · 决策件**永不出档**（`docs/guides/work-records.md` §二：只加不改、被推翻只补一行）⇒
 #:     它必须自己说清「结论落到哪、谁改它」，否则下一个人只能把全部正文再读一遍；
 #:   · 另两区（过程件）的存量件**故意不补声明行** —— `T26` 的 docstring 已写明那是**另一件事**
 #:     （给存量件补声明行 = 改内容）⇒ 把它们扫进来只会当场多出十余条**本票不拥有的**黄；
@@ -67,13 +67,13 @@ STATE_VALUE_RE = re.compile(rf"{STATE_KEY}\s*[:：]?\s*\**([^｜|（(\n]*)")
 #    本仓口径是**该降档**，而此前**没有任何机器看得见**
 #    （`docs/guides/document-governance.md` §三 那两行自己写着「应有判据、现无」）⇒
 #    `work/README.md` §二 那条"用完就丢"**执行不了** ⇒ 只进不出（= 用户不安的根因）。
-# ⛔⛔ **五档状态词一个字不动**（主人 = `.codebuddy/work/README.md` §四 · `T15` 机核那四行文头）：
+# ⛔⛔ **五档状态词一个字不动**（主人 = `docs/guides/work-records.md` §四 · `T15` 机核那四行文头）：
 #    本判据只在两档上**加**机器眼，⛔ 不新增档位、不改词、不换轴（`TAIL-236` 决定 2）。
 DOWNGRADE_STATES: tuple[str, ...] = ("已定稿", "已实施")
 #: `T26` 的扫描面 = 上面那张区表里的**过程件两区** —— ⛔ **不含**决策区 `40-decisions/`：
 #: 决策件的协议是「只加不改 ＋ 被推翻只补一行」（`docs/guides/document-governance.md` §三）⇒ 降档语义不同。
 DOWNGRADE_ZONES: tuple[str, ...] = tuple(z for z in HEADER_ZONES if z != "40-decisions")
-#: ⭐ **「落地位置」声明行**的形态 —— **唯一主人 = `.codebuddy/work/README.md` §四**
+#: ⭐ **「落地位置」声明行**的形态 —— **唯一主人 = `docs/guides/work-records.md` §四**
 #:   （⛔ 别处只指路，别重述形态）。两种冒号位置都收（写作习惯差异，不是两种格式）：
 #:   `**落地位置**：`…` 与 `**落地位置：**`…`。
 DECL_RE = re.compile(r"\*\*落地位置[：:]?\*\*[：:]?\s*(\S.*)")
@@ -90,7 +90,7 @@ def check_downgrade_candidates() -> list[dict]:
       ② 件内**声明的「落地位置」真存在**（形态 = `work/README.md` §四；路径写反引号 ⇒ `T3` 也核）。
     两条都成立 ⇒ 报黄：「本件结论已落地、却还在过程区 ⇒ **该降档**」＋ **落地位置**
     （它同时就是「口径主人」）＋ 声明行里 `· 同批改：` 那串（验收 3 要的"读得到"）。
-    ⚠️ **走哪一步（归档仓外 / 沉进 `ops/` / 就地标收口）看 `.codebuddy/work/README.md` §二 里
+    ⚠️ **走哪一步（归档仓外 / 沉进 `ops/` / 就地标收口）看 `docs/guides/work-records.md` §二 里
     本区那一行** —— 设计件与排查件的去向不同 ⇒ ⛔ 本判据**不替它规定去向**（别处重述 = 第二套口径）。
     ⛔ **「零机器引用」不是判据** —— 它只是一个**信号**（2026-10-05 实测：一份机器引用 0 的母本
        被四张票当唯一依据；`document-governance.md` §三 第 2 问）⇒ 报告里给的是**指路**：
@@ -152,7 +152,7 @@ def check_downgrade_candidates() -> list[dict]:
                 f"自己写着「应有判据、现无」）{also_txt2}",
                 "① 引用面**只是参考、⛔ 不是判据**：敲 `tools/audit/refs_query.py` 看三路计数；"
                 "② 落地位置即**口径主人** ⇒ 改它之前按 `docs/guides/document-governance.md` §二 核"
-                "「变了要同批改哪几处」；③ **去向**看 `.codebuddy/work/README.md` §二 里本区那一行"
+                "「变了要同批改哪几处」；③ **去向**看 `docs/guides/work-records.md` §二 里本区那一行"
                 "（⛔ 别照抄别的区）；④ 要搬 ⇒ `tools/oneoff/_doc_downgrade.py <件名> --apply`"
                 "（**唯一入口** · 默认干跑 · 可逆）—— 本判据**只报不动**",
                 line=decl_no))
@@ -252,7 +252,7 @@ def _decision_state_hits(rel: str, lines: list[str]) -> list[dict]:
     ⚠️ **与 `T26` 的分工**（⛔ 别混、也别合并）：
       · `T26` 判**过程件**：「已声明落地 ＋ 件内票全销号 ⇒ **该降档**（只报不动）」；
       · 本条判**决策件**：「状态词必须在五档里 ＋ 后两档**必须**有落地位置行」—— 决策件**永不降档**
-        （协议见 `.codebuddy/work/README.md` §二）⇒ 两件事语义不同，⛔ 合起来写会让两边都读不懂。
+        （协议见 `docs/guides/work-records.md` §二）⇒ 两件事语义不同，⛔ 合起来写会让两边都读不懂。
     ⚠️ **落地位置真不真存在，不归本条**：仓内路径由 `T3` 核（反引号）、"声明了但核不到"由 `T26`/`T3`
       按各自分工报 —— ⛔ 本条只判那一行「在不在」（同 `T26` docstring：「路径必须存在」的主人只有一处）。
     ⚠️ **黄**（同本件其余四条）：形式问题该被看见、但不挡合入。
@@ -270,7 +270,7 @@ def _decision_state_hits(rel: str, lines: list[str]) -> list[dict]:
             "「已办结 / 已拍板 / 已定案 / 待实施」这类**自造档** ⇒ 机器判不了、下一个人也要重猜一遍"
             "（2026-10-11 `TAIL-296` 实测：决策区 12 件里 6 件出档）",
             f"改成五档之一：{' / '.join(STATE_WORDS)}"
-            "（词表主人 = `.codebuddy/work/README.md` §四；原文别动，把原说法括在「原记…」里）")]
+            "（词表主人 = `docs/guides/work-records.md` §四；原文别动，把原说法括在「原记…」里）")]
     if any(w in DOWNGRADE_STATES for w in words) and not any(DECL_RE.search(l) for l in lines):
         return [_hit(
             "T15", rel,
@@ -278,7 +278,7 @@ def _decision_state_hits(rel: str, lines: list[str]) -> list[dict]:
             "这两档的含义就是**结论已冻结 / 已进代码** ⇒ 必须有一行说清「结论真正落到哪个文件」；"
             "没有它，接手的人只能再把全部正文读一遍（`T26` 对过程件读的是同一行 —— ⛔ 写法全仓只一处）",
             "补一行：`**落地位置**：`<结论真正落到的文件>`、<另一处> · 同批改：`<它变了要一起改的文件>`"
-            "（写法主人 = `.codebuddy/work/README.md` §四）")]
+            "（写法主人 = `docs/guides/work-records.md` §四）")]
     return []
 
 
@@ -317,7 +317,7 @@ def check_artifacts_and_headers() -> list[dict]:
                     "T15", rel,
                     f"文头缺元信息：{' / '.join(missing)}",
                     "没有『读者/回答什么/何时读/状态』⇒ 下个 Agent 不知它是否还在研、该不该读（审计 §5.3-1）",
-                    "补文头四行（模板见 `.codebuddy/work/README.md` §四）"))
+                    "补文头四行（模板见 `docs/guides/work-records.md` §四）"))
             if zone in DECISION_ZONES:
                 hits += _decision_state_hits(rel, lines)   # ⭐ `TAIL-296` 新条（状态 ∈ 五档 · 落地位置在位）
     return hits

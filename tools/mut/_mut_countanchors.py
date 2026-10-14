@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "tools" / "audit"))
 import audit_common  # noqa: E402
 from audit_drift import check_count_anchors  # noqa: E402
 
-PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
+PLAN = ROOT / "docs" / "status.md"
 THRESHOLDS = ROOT / "docs" / "reference" / "thresholds.md"
 RUNNER = ROOT / "tools" / "oneoff" / "_run_rulers.py"
 

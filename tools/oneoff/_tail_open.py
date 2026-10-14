@@ -42,7 +42,7 @@ import audit_common  # noqa: E402  ← ⭐ 计数行**形态**的唯一出处（
 import audit_meta  # noqa: E402  ← ⭐ 计数的**真源**（`ledger_counts`）
 import acc_report  # noqa: E402  ← 用例号真源与正式T6一致
 
-PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
+PLAN = REPO / "docs" / "status.md"
 PY = REPO / "backend" / ".venv" / "Scripts" / "python.exe"
 #: ⭐ 2026-10-04（`TAIL-225` 票体系）：票仓 —— 立台账多一件事：**建票文件**（票 = 一个文件）
 TICKETS = REPO / ".codebuddy" / "work" / "50-tickets"

@@ -30,7 +30,7 @@ from audit_common import delivery_root                          # noqa: E402
 
 FACE = delivery_root()
 if FACE is None:
-    print("⛔ 拿不到产品资料根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=delivery/PRD/验收/验收基线.json`。")
+    print("⛔ 拿不到产品资料根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=docs/requirements/PRD/验收/验收基线.json`。")
     print("   目标机若不装交付面，本条尺子本就跑不了（已知代价）⇒ 详见 `docs/guides/deployment.md`。")
     raise SystemExit(2)
 MOD_DIR = FACE / "PRD" / "02-功能规格"

@@ -39,9 +39,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 META = ROOT / "tools" / "audit" / "audit_meta.py"
-PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
-#: 靶件①：一件**当前没有字墙**的活文档（`ops/README.md` ∈ `SCAN_GLOBS` 且不在基线里）
-CLEAN_DOC = ROOT / "ops" / "README.md"
+PLAN = ROOT / "docs" / "status.md"
+#: 靶件①：一件**当前没有字墙**的活文档（`docs/guides/operations.md` ∈ `SCAN_GLOBS` 且不在基线里）
+CLEAN_DOC = ROOT / "docs" / "guides" / "operations.md"
 
 sys.path.insert(0, str(ROOT / "tools" / "audit"))
 from audit_meta import LINE_WALL_BASELINE, LINE_WALL_CHARS   # noqa: E402
@@ -104,7 +104,7 @@ def _make_cases() -> list[dict]:
     return [
         # ① 一件**没在基线里**的活文档长出字墙 ⇒ 必须报「新出现的「字墙」件」
         {"desc": f"新出现的字墙件（往 `{CLEAN_DOC.name}` 塞一行 {len(LONG)} 字）", "mode": "needle",
-         "needle": ("[T21]", "ops/README.md", "新出现的「字墙」件"),
+         "needle": ("[T21]", "docs/guides/operations.md", "新出现的「字墙」件"),
          "path": CLEAN_DOC, "frag": _append_long},
         # ② 基线件**又长回来了**（超基线）⇒ 必须报「又长回来了」⭐ **相对判据**（见文件头 2026-10-06）
         {"desc": f"字墙又长回来（往基线件 `{Path(rel0).name}` 塞一行 {len(LONG)} 字）", "mode": "count",
@@ -185,8 +185,8 @@ def main() -> int:
                 shutil.copyfile(source, target)
         ROOT = fixture
         META = fixture/'tools/audit/audit_meta.py'
-        PLAN = fixture/'.codebuddy/plans/开发计划-主文档.md'
-        CLEAN_DOC = fixture/'ops/README.md'
+        PLAN = fixture/'docs/status.md'
+        CLEAN_DOC = fixture/'docs/guides/operations.md'
         try:
             return _run_cases()
         finally:

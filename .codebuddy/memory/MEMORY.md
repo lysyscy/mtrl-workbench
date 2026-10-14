@@ -17,19 +17,16 @@
 
 ## 二、真源指针
 
-MEMORY.md为会话入口；项目开发正文在docs/guides/，旧细则.md与IDE-细节.md只留兼容指针。业务取值回delivery说明书/PRD，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
+MEMORY.md为会话入口；项目开发正文在docs/guides/，实现约束和核验方法分别回docs/guides/implementation-constraints.md与development-and-verification.md。业务取值回docs/requirements.md及其分册，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
 
-## 三、本机事实（碰环境时使用）
+## 三、环境操作入口
 
-- Python使用 backend/.venv/Scripts/python.exe（3.15，uv管理）；模块用 `-m`，不依赖exe shim或系统PATH。
-- 后端服务 mtrl-workbench-server，无reload；运行后端Python的改动需另按当前明确授权加载，启停/重启权限回 docs/agents/workflow.md，操作回 docs/guides/deployment.md。改壳或工具无需重启。
-- Playwright目录 C:/ProgramData/ms-playwright；只给执行子进程传环境，ACC_RESULTS_PATH不全局导出。
-- PostgreSQL在 D:/pgsql/18.6/pgsql/bin；桌面为 D:/UserData/Desktop。环境变化时复核当前配置，勿沿用历史位置。
+碰环境、服务身份或运行资源时，先读docs/guides/operations.md的“本机环境记录”，再核实际配置与当前授权；常载入口不保存动态版本和机器路径。
 
 ## 四、文件与工具
 
 - `[助手自定]` JSON用结构操作；改已有文件保留其行尾，新文本UTF-8无BOM，ps1例外带BOM。字节保护由 tools/audit/bytes_guard.py 执行。
-- `[助手自定]` 长脚本及临时证据进00-scratch；输出完整落盘或取末尾，不能掐断正在写靶的进程。相关配方按需读IDE-细节.md §十七。
+- `[助手自定]` 长脚本及临时证据进00-scratch；输出完整落盘或取末尾，不能掐断正在写靶的进程。相关配方按需读docs/guides/development-and-verification.md §十七。
 - `[助手自定]` 修改共享文件前重新读取；同一文件写入串行；变异用隔离夹具，不临时改正式工作文件。
 
 ## 五、协作边界
@@ -43,17 +40,17 @@ MEMORY.md为会话入口；项目开发正文在docs/guides/，旧细则.md与ID
 
 ## 六、坐标与禁区
 
-仓：D:/dev/mtrl-workbench；现行产品资料：仓内`delivery/`；旧交付面根仅余未交付的本机`.workbuddy/`。仓外历史经归档索引定位。现行产品资料随仓库版本管理；迁移过程按需查 Git 历史。
-需要逐日日志时只放 .codebuddy/memory/journal/YYYY-MM-DD.md；现行要求回主人，不把过程作为默认必读。
+仓：D:/dev/mtrl-workbench；现行产品资料：仓内`docs/requirements/`；旧交付面根仅余未交付的本机`.workbuddy/`。仓外历史经归档索引定位。现行产品资料随仓库版本管理；迁移过程按需查 Git 历史。
+新任务证据只在 .scratch/<effort>/evidence.md 或原票Comments保存；旧日志按docs/archive/journal/明确追溯。现行要求回主人，不把过程作为默认必读。
 
 ## 八、工程纪律
 
 - `[用户·2026-10-05]` 本机自用不设冻结前置；迁移升级两库、业务取舍和前端规则仍按对应主人。
-- `[助手自定]` 架构约束回 docs/architecture.md、模块约束回 docs/architecture/modules.md；界面工程机制按任务读IDE-细节.md §十。
+- `[助手自定]` 架构约束回 docs/architecture.md、模块约束回 docs/architecture/modules.md；界面工程机制按任务读docs/guides/development-and-verification.md §十。
 - `[用户·2026-10-12]` 一人开发练手，优先速度和token；不为假设情况扩测试，不强制每条新增测试配独立变异。选集/入口改动做定向自检；金额、权限、写入、回滚与已修复bug覆盖和隔离保护保留。流程回docs/agents/workflow.md。
 - `[用户·2026-10-01]` 上屏文字以熟手为读者，具体规则回D29，不在注入档复述。
 - `[用户·2026-10-09]` **够用即止**：一人开发·局域网2人；建任何检查前先过两问（在本项目会不会真发生？真发生是否真难受？）⇒ 取舍细则与手法回 docs/agents/workflow.md「取舍」。
 
 ## 附录 · 方法触发
 
-只有改检查选择或排查假绿时读IDE-细节.md §十八/十九；只有追溯决定或复发事故时读指定历史。硬数字只回docs/reference/thresholds.md，不抄副本。
+只有改检查选择或排查假绿时读docs/guides/development-and-verification.md §十八/十九；只有追溯决定或复发事故时读指定历史。硬数字只回docs/reference/thresholds.md，不抄副本。

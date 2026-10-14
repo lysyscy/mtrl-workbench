@@ -1996,7 +1996,7 @@ function syncBootErrors() {
 const ALWAYS_FRESH = new Set(['i8 执行记录']);
 
 /* ⭐⭐ 2026-09-24（`TAIL-48` 余项 `P3`②）：**跨页写 ⇒ 全标脏** —— 壳里**唯一**的那个出口。
-   证据（写/读两侧到表级）= `.codebuddy/work/10-designs/设计-写动作标脏数据流图-20260924.md`：
+   证据（写/读两侧到表级）= `docs/architecture/write-refresh.md`：
    壳按 `PAGE_LOAD` **进哪页拉哪页**、`LOADED` 记"这路拉过了"，而写动作**只 reload 自己那页**
    ⇒ ⛔ **别的页拿着旧数**（`payment_notice`/`payment_flow`/`jc_*`/`proc_mech_manual` 都是**多处读、一处写**）。
    ⚠️ 与 `TAIL-78`（导入落库 / 回滚：`legacy.js` 那两处 `LOADED.clear()`）**同一口径**，本件把它推广到写出口。

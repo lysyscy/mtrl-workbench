@@ -8,7 +8,7 @@
   ① **§一/§二/§三 删活动行** —— 先由人把事项 / 依据 / 日期追加到已销号姊妹件；
   ② **顶部两处计数按真源重算后写对** —— ⛔ 不再手抄；
   ③ **断言三件事**：姊妹件里已有该编号 · 活动区里**恰好 1 行** · 两处计数行都认得出来。
-  ④ §14.3 的活动排期原行迁入同份计划的「已办排期（历史）」区；票文件标 done。
+  ④ §14.3 的活动排期原行归入已销号历史索引；票文件标 done；写入失败恢复状态页和票面。
 
 ⚠️⚠️ **计数一律问真源**：本件**不自己写第二套计数算法** —— 直接调
    `tools/audit/audit_meta.py::ledger_counts()`（`T6` 与 `T4` 的计数锚点**共用**的那一份），
@@ -37,7 +37,7 @@ sys.path.insert(0, str(REPO / "tools" / "audit"))
 import audit_common  # noqa: E402  ← ⭐ 计数行**形态**的唯一出处（`write_counts`）
 import audit_meta  # noqa: E402  ← ⭐ 计数的**真源**（`ledger_counts()`）
 
-PLAN = REPO / ".codebuddy" / "plans" / "开发计划-主文档.md"
+PLAN = REPO / "docs" / "status.md"
 CLOSED_INDEX = REPO / audit_common.CLOSED_INDEX_REL
 
 #: 段标题（`### 一、…` 至 `### 三、…`）
@@ -87,7 +87,8 @@ def main(argv: list[str]) -> int:
     if not archive_path.exists():
         print(f"⛔ 已销号姊妹件不存在：{archive_path} ⇒ 未写盘")
         return 1
-    archive_text = archive_path.read_text(encoding="utf-8")
+    archive_old = archive_path.read_bytes()
+    archive_text = archive_old.decode("utf-8")
 
     # ① 断言：姊妹件里**已经有**人写好的留痕行
     done = [line for line in archive_text.splitlines()
@@ -144,13 +145,13 @@ def main(argv: list[str]) -> int:
     if len(sched) != 1:
         print(f"⛔ 活动排期 {tag} 命中 {len(sched)} 行（期望 1）⇒ 未写盘")
         return 1
-    end = next((i for i in range(history + 1, len(schedule_lines))
-                if schedule_lines[i].startswith("## ")), len(schedule_lines))
-    anchor = max(i for i in range(history + 1, end) if schedule_lines[i].startswith("|"))
-    schedule_lines.insert(anchor + 1, schedule_lines[sched[0]])
-    del schedule_lines[sched[0]]
+    original_schedule = schedule_lines.pop(sched[0]).rstrip("\r\n")
     text_new = "".join(schedule_lines)
-    print(f"④ {tag} 活动排期原行迁入已办排期（历史）区")
+    newline = "\r\n" if b"\r\n" in archive_old else "\n"
+    # 引用行不进入四列表格计数，原四问随已关闭票保留，状态页不积累历史。
+    archive_new = archive_old + (newline + f"> 原排期 {tag}（关闭时从状态页迁入）" + newline
+                                 + "> " + original_schedule + newline).encode("utf-8")
+    print(f"④ {tag} 活动排期原行迁入已销号历史索引")
 
     # ⑤ ⭐ 2026-10-04（`TAIL-225` 票体系）：**票文件标 `done`** —— 状态是票体系唯一的进度信号
     #    （销了号票文件还写 `ready-for-agent` ⇒ 下一个人会再领一遍这张票）。
@@ -185,10 +186,20 @@ def main(argv: list[str]) -> int:
         fh.write(text_new)
         tmp_out = pathlib.Path(fh.name)
     tmp_out.replace(path)                       # 原子替换（同目录 ⇒ 不会跨盘）
+    archive_tmp = None
     try:
         tk.write_text(t_new, encoding="utf-8", newline="")
+        with tempfile.NamedTemporaryFile("wb", delete=False, dir=archive_path.parent,
+                                         prefix="~tailhistory-", suffix=".tmp") as fh:
+            archive_tmp = pathlib.Path(fh.name)
+            fh.write(archive_new)
+        archive_tmp.replace(archive_path)
     except OSError:
-        path.write_bytes(p_old)     # 票文件写不动 ⇒ 主文档逐字节回滚（不留半成品）
+        path.write_bytes(p_old)
+        if tk.read_bytes() != t_old:
+            tk.write_bytes(t_old)
+        if archive_tmp is not None:
+            archive_tmp.unlink(missing_ok=True)
         raise
     print(f"\n✅ 已写盘：{path.relative_to(REPO).as_posix() if path.is_relative_to(REPO) else path}"
           f" ＋ 票文件标 `done`（{tk.name}）"

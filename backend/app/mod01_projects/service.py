@@ -3,7 +3,7 @@
 ⭐ **为什么有这件**（`TAIL-218` 批 2）：本包原先**没有 `service.py`** ⇒ 别的包（`mod03_notice` /
    `mod07_setl` / `mod08_inv` / `mod11_jc`）想拿项目数据时**没有窗口可走**，只能
    `import app.mod01_projects.repository` **伸手翻账本** —— 实测 **11 处**（施工图 =
-   `.codebuddy/work/10-designs/设计-分层门禁一般式-20261002.md` §三 A 组）。
+   `docs/archive/designs/设计-分层门禁一般式-20261002.md` §三 A 组）。
    计划 `§2.3`：「包间只经 `service` 调用，**不得跨包直查对方表**」⇒ 本件把那几件事收成口。
    守卫 = `backend/tests/test_layering.py` **规则 C**（一般式）。
 

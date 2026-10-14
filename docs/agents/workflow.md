@@ -17,10 +17,10 @@
 
 | 需要绑定的内容 | 本仓主人与落点 |
 |---|---|
-| 现行需求与字段口径 | `delivery/材料科业务全流程说明书.md` / `delivery/PRD/`；按AGENTS.md定位对应MOD与原句 |
+| 现行需求与字段口径 | `docs/requirements/材料科业务全流程说明书.md` / `docs/requirements/PRD/`；按AGENTS.md定位对应MOD与原句 |
 | effort规格、采用记录及累计范围 | 已有设计件或所属票；独立方案放 `.codebuddy/work/10-designs/`，单票目标与验收放票面。明确采用时记录用户确认、固定起点、累计范围与当次授权；不为接入新建空规格或第二份状态表 |
 | 票源与阶段 | `docs/agents/issue-tracker.md` §一～§四；主计划§15是活跃索引，§14.3为排期，已销号姊妹件是历史短索引；开销票使用 `_tail_open.py` / `_tail_close.py` |
-| 资料目录与历史 | README.md §二/三/四/七、docs/guides/document-governance.md、.codebuddy/work/README.md；术语及D件消费回 docs/agents/domain.md |
+| 资料目录与历史 | README.md §二/三/四/七、docs/guides/document-governance.md、docs/guides/work-records.md；术语及D件消费回 docs/agents/domain.md |
 | 验证程序与选择 | `tools/oneoff/_run_rulers.py` 的CMDS/SELFTESTS及 `tools/oneoff/_impactscope.py`；实际命令、环境及浏览器工具分工回 `docs/guides/development-and-verification.md` §十一 |
 | 结果与接续 | 当前票Comments留命令、退出码、关键数、未验边界与必要复现；跨会话且无合适票时才用当日日志；当前交接回主计划§13.6 |
 | 运行与数据权限 | MEMORY.md的凭据边界；服务与恢复操作回 docs/guides/deployment.md。测试使用隔离数据；生产服务重启、迁移及真实业务写入按当前明确授权执行 |
@@ -57,13 +57,15 @@
 
 ## 六、专项迁移与项目例外
 
-[用户·2026-10-15] 整体迁移清单已确认，首批已迁 Agent 协议与执行绑定，第二批已迁13份工程正文；产品、状态和其余过程资料仍需按批准清单实际统一。目录决定见 docs/adr/0033-document-layout.md。旧 ops/agents 及本批13个工程入口仅供尚未迁移的历史引用查阅；现行调用直接使用 docs/agents、docs/architecture.md及同名目录、docs/guides与docs/reference。历史引用批次完成并核恢复来源后退役薄入口，不保留永久映射。
+[用户·2026-10-15] 整体清单确认后要求推进至完成；现行协议、工程正文、产品需求与状态已实际迁入标准位置，旧薄入口退役。目录决定与来源清单见docs/adr/0033-document-layout.md；历史原文与SHA从docs/archive/index.md追溯。
 
-| 范围 | 原因、权威与读取方式 | 退出条件 |
+| 保留范围 | 实际契约与读取方式 | 退出条件 |
 |---|---|---|
-| 活动票及固定任务资料 | 既有 tracker 与原授权继续生效；主计划 §15、原票及必要评论定义范围 | 经受控批次切换消费者后再迁；暂缓不变成实施授权 |
-| 已有 D 件、历史原文与仓外档案 | 稳定决策来源按原索引追溯，原文与编号保持；现行含义按对应主人读取 | 决策来源保留；历史不成为日常规则正文 |
-| 宿主 RULE、memory 与项目技能入口 | 保留真实加载契约，专题正文逐批迁往标准位置 | 宿主和消费者实际完成切换后退役不再需要的入口 |
-| artifacts、logs、backups 与运行资源 | 使用项目真实配置与恢复位置；运行模板由资源模块消费，忽略材料不由 Git 兜底 | 消费者和恢复依据核实后按获准清单处置 |
+| 现有TAIL票仓 | 已采用的本地tracker权威；原票状态与Comments保持，索引在docs/status.md §15，历史短索引在docs/archive/tickets/index.md | 只有明确切换tracker时受控迁移；新任务规格使用.scratch，不另造票状态 |
+| 三份活动或未决旧设计 | TAIL-284六项审查来源、TAIL-287暂缓依据及界面整改未决项；路径与消费者受控修复，范围与原裁定保持 | 对应任务结束或未决项明确后归档；原文可从固定SHA和本机快照恢复 |
+| 已有D件 | 长期来源与编号原地保持；现行消费指针在既有索引更新，新决定使用docs/adr | 来源继续保存，按具体冲突读取，不默认加载全部旧裁定 |
+| 宿主MEMORY与RULE、仓内技能入口 | 真实加载契约保留；专题现行正文已经迁出 | 实际宿主配置退出后才退役；本次不更新已安装技能 |
+| delivery原型/模板/第三方原件与实际运行资源 | 检查、历史对账和运行模块的真实输入；现行产品Markdown在docs/requirements | 真实程序或来源契约完成切换后再单独处置，不因文档统一搬动正在运行服务的资源 |
+| artifacts、logs、backups和旧00-scratch | 真实工具配置、忽略原件、活动证据与恢复现场，Git不能代替本机原件 | 逐项证明活动与恢复用途结束后再清理；本次不按日期批量清空 |
 
-每批先保护 Git 工作区、索引、未跟踪及忽略原件，核实际引用、扫描范围和运行消费者；只回滚本批拥有的改动。当前目录与命名接线回 README.md、docs/guides/document-governance.md 和 .codebuddy/work/README.md，未迁部分明确保持迁移中。
+普通任务只搜索现行资料、当前effort和直接依赖；历史只有明确追溯才读。恢复仅还原本批拥有的路径，遇到后续新内容保护双方。当前目录与命名回README.md，资料生命周期回docs/guides/work-records.md。

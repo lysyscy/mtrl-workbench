@@ -11,7 +11,7 @@ description: 整理或审查本仓文档的用途、重复口径、过期指针�
 
 1. 按当前授权和现行入口定位本仓受影响资料；仅需完整分布时运行 scripts/doc_inventory.py，不把目录盘点当日常闸门。
 2. 按用途分类，参考 references/taxonomy.md。区分现行要求、机器输入、索引、过程和恢复证据；日期、体量及零引用都不能单独证明无用。
-3. 用 docs/guides/document-governance.md、README.md 和项目检查定位主人与使用者；整理、同步活引用和历史保留按个人文档维护约定执行。归档例外回 .codebuddy/work/README.md，业务裁定回delivery，保存授权回docs/agents/workflow.md。
+3. 用 docs/guides/document-governance.md、README.md 和项目检查定位主人与使用者；整理、同步活引用和历史保留按个人文档维护约定执行。归档例外回 docs/guides/work-records.md，业务裁定回delivery，保存授权回docs/agents/workflow.md。
 4. 选择本仓现有相关检查；颜色和机器范围读法见 references/rulers.md。结果在原票或改动说明承载，不生成第二份状态或阅读日志；未知耗时不补估算。
 
 ## 完成标准

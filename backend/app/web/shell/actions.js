@@ -225,7 +225,7 @@ function applyThemeLive() {
 
    ⛔ **本段只动动作体，不动任何 `V.` 切片、⛔ 不改按钮的 `data-act`**：
       `ACT` / 本表都是**顶层 const**、不在 `V.<页>` 切片内 ⇒ `ui_parity` 的 `U1` 看不见它们
-      （口径见 `.codebuddy/plans/开发计划-主文档.md` §2 与 §6.2；`BIND.m11` 那次改了 `data-act` 才惹出"两个导出按钮"）。
+      （口径见 `docs/status.md` §2 与 §6.2；`BIND.m11` 那次改了 `data-act` 才惹出"两个导出按钮"）。
 
    ⭐ **行 = 屏幕上当前看到的那些** —— 取数一律走**该页自己的可见行出口**
       （`pjVisible` / `flVisible` / `ntHit(fNt)` / `plVisible`），⛔ **不在这里另写筛选**：

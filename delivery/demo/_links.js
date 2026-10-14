@@ -33,7 +33,7 @@
    新增豁免：往 IGNORE（彻底忽略）/ KNOWN（报为 WARN）里加一条，**并写明依据**。 */
 
 const fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.resolve(__dirname, '../../docs/requirements');
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.workbuddy', '__pycache__', '.venv']);
 const EXTS = ['.md', '.js', '.py', '.json', '.html', '.xlsx', '.txt', '.csv', '.yml', '.yaml', '.ps1', '.bat'];
 
@@ -100,7 +100,7 @@ const LEGACY_LAYER = t =>
   t === '沿革' || t.indexOf('沿革/') === 0 || t === '过程资料' || t.indexOf('过程资料/') === 0;
 
 const relSet = new Set(), relDirs = new Set(), fileBases = new Set(), dirBases = new Set(), mdFiles = [];
-(function walk(dir) {
+function walk(dir, scan = true) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
@@ -109,14 +109,16 @@ const relSet = new Set(), relDirs = new Set(), fileBases = new Set(), dirBases =
       const rd = path.relative(ROOT, full).split(path.sep).join('/');
       relDirs.add(rd + '/');
       let p = rd; while (p && p !== '.') { relDirs.add(p + '/'); p = path.posix.dirname(p); }
-      walk(full);
+      walk(full, scan);
     } else {
       const r = path.relative(ROOT, full).split(path.sep).join('/');
       relSet.add(r); fileBases.add(e.name);
-      { const __ext = path.extname(e.name).toLowerCase(); if (__ext === '.md' || __ext === '.html') mdFiles.push(full); }
+      { const __ext = path.extname(e.name).toLowerCase(); if (scan && (__ext === '.md' || __ext === '.html')) mdFiles.push(full); }
     }
   }
-})(ROOT);
+}
+walk(ROOT);
+walk(path.resolve(__dirname, '..'), false); // 索引仍在原位的原型、模板和第三方原件；不当作现行正文扫描。
 
 /* ── 2. 判定 ── */
 const WORDY = /^[A-Za-z][A-Za-z0-9-]{0,15}$/;   // 编号 / 术语（MOD-01、SNAP、i8、CHG-E）
@@ -127,6 +129,9 @@ function check(t, fileDirRel) {
   if (/[*…{}<>|"',=\s]/.test(t)) return 'notref';
   if (t.includes('§')) return 'notref';
   const raw = t.replace(/\/+$/, '');
+  if (/^(?:docs|delivery|backend|tools|ops)\//.test(raw)) {
+    return fs.existsSync(path.resolve(__dirname, '../..', raw)) ? 'ok' : 'miss';
+  }
   const hasExt = EXTS.includes(path.extname(raw).toLowerCase());
   const isDirLike = t.endsWith('/');
   if (!hasExt && !t.includes('/')) return 'notref';

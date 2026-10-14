@@ -100,7 +100,7 @@ def main() -> int:
 
     budgets, budget_note = load_budgets(root)
     all_budgets, over = [], []
-    for rel, budget, tier in budgets:
+    for rel, budget, tier, _byte_budget in budgets:
         p = root / rel
         if not p.exists():
             row = {"rel": rel, "budget": budget, "tier": tier, "lines": None, "over": None}

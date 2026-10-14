@@ -35,15 +35,15 @@
    ⚠️ 每条事实**必须有一个主人**（唯一出处）；主人处允许复述，别处只应写指针。 */
 
 const fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.resolve(__dirname, '../../docs/requirements');
 
 /* ── 现行文档（= 需要被校验的范围；沿革层**有意排除**，否则对旧表述必然误报）── */
 const MANUAL   = '材料科业务全流程说明书.md';
 const PLAN     = '全自动建档-实施计划.md';
 const TECH     = '技术栈选型分析.md';
 const DESIGN   = 'demo/设计规则-提炼自付款通知书页.md';
-const PACK     = 'PRD素材包-20260911';
-const PACKLIST = 'PRD素材包-20260911/清单.md';
+const PACK     = '../../delivery/PRD素材包-20260911';
+const PACKLIST = PACK + '/清单.md';
 const TMLIST    = 'demo/模板/模板清单.md';
 const PRDDIR    = 'PRD';                        /* 交付面第 6 项（2026-09-14） */
 const DELIVDOC  = '交付说明书.md';               /* 交付面第 7 项（2026-09-15）：交付包总说明 */
@@ -55,7 +55,7 @@ const FILES = [MANUAL, PLAN, TECH, DESIGN, PACKLIST, TMLIST, PRDIDX, PRDNONG, GU
 /* ⚠️ 原型 HTML **不进 `FILES`** —— 它含大量 `|`（`||` 运算符、文本表格…），会被"表格列数"检查误判。
    但它必须被**读入**：导读里那几个规模数字（视图 / 代码分区 / 表头常量）**由它实时算出来**。
    ⚠️ 计数一律**先剥块注释** —— 注释里出现过 `data-act="名"` 这种**举例文字**（实测：不剥会多算 1–2 个）。 */
-const PROTO = path.join(ROOT, 'demo', '材料报表自动化工作台-交互原型.html');
+const PROTO = path.join(__dirname, '材料报表自动化工作台-交互原型.html');
 const protoRaw = fs.existsSync(PROTO) ? fs.readFileSync(PROTO, 'utf8') : '';
 const protoCode = protoRaw.replace(/\/\*[\s\S]*?\*\//g, '');
 const nViews   = () => new Set([...protoCode.matchAll(/^\s*V\.([A-Za-z_]\w*)\s*=/gm)].map(m => m[1])).size;
@@ -183,13 +183,13 @@ const REG = [
   { kind: 'must', key: '§4.4.4 批量付款', in: MANUAL, re: /#### 4\.4\.4 批量付款/, ref: '`CHG-2026-09-12-E`' },
   { kind: 'must', key: '§4.4.5 撤销付款流水', in: MANUAL, re: /#### 4\.4\.5 撤销付款流水/, ref: '`CHG-2026-09-12-E`' },
   { kind: 'must', key: '§9.3 留痕清单', in: MANUAL, re: /留痕范围（勿扩大、勿缩小）/, ref: '§9.3' },
-  { kind: 'must', key: '附录 E 标注字段数', in: MANUAL, re: () => new RegExp('\\*\\*' + VAL.get('集采合同主表字段数') + ' 字段\\*\\*'), ref: '§6.4.1' },
+  { kind: 'must', key: '附录 E 合同主表指向唯一字段清单', in: MANUAL, re: /^\|\s*`ENT-06`.*字段清单见 §6\.4\.1.*\| §6\.4\.1 \|$/m, ref: '附录E.2 ENT-06 → §6.4.1' },
   { kind: 'must', key: '§4.2.2「剔除视图不受状态筛选」', in: MANUAL, re: /切到它时\*\*不再受「审批状态 \/ 付款状态」筛选约束\*\*|不受审批状态 \/ 付款状态筛选影响/, ref: '§4.2.2' },
   { kind: 'must', key: '§6.4.2 贸易公司发票子表', in: MANUAL, re: /贸易公司发票子表/, ref: '`CHG-2026-09-12-F`' },
   { kind: 'must', key: '§4.2.5 统计字段上限口径', in: MANUAL, re: /上限 = 审批金额|≤ 审批金额/, ref: '§4.2.5' },
   { kind: 'must', key: '§6.5.2 集采定时抓取', in: MANUAL, re: /定时自动/, ref: '`OPEN-T9`' },
   { kind: 'must', key: '设计规则 §六（仅属交互层的约定 · 现行出处）', in: DESIGN, re: /## 六、仅属交互层的约定/, ref: 'demo/设计规则 §六（原 PRD输入信息汇总 §3.4 已并入，2026-09-12）' },
-  { kind: 'must', key: '§0.7.3 自查表含 _ids.js', in: MANUAL, re: /node demo\/_ids\.js/, ref: '§0.7.3' },
+  { kind: 'must', key: '§0.7.3 自查表含 _ids.js', in: MANUAL, re: /node delivery\/demo\/_ids\.js/, ref: '§0.7.3' },
 
   /* ── ④ 字段级事实的「必备要素」（2026-09-13 补 · D-9）：附录 E 与正文成对存在的事实，至少钉住"必须存在"的形态 ── */
   { kind: 'must', key: '附录 E `ENT-02` 付款状态两态', in: MANUAL, re: /已付清 \/ 未付清/, ref: '§4.4.2 · 附录 E `ENT-02`' },
@@ -283,12 +283,12 @@ for (const r of REG) {
    ⚠️ 纯目录列举、零措辞依赖 ⇒ 不会误报。
    ⚠️ **放宽白名单必须配反向灵敏度**（本文件只放行"交付面"本身，不放行任何临时件：
    加一个白名单外的临时文件应**立刻 FAIL 并点名**）。 */
-const ROOT_ALLOW = new Set([MANUAL, DELIVDOC, PLAN, TECH, PACK, PRDDIR, 'demo']);
+const ROOT_ALLOW = new Set([MANUAL, DELIVDOC, PLAN, TECH, PRDDIR, 'demo']);
 {
   const unexpected = fs.readdirSync(ROOT).filter(n => !ROOT_ALLOW.has(n));
   if (unexpected.length) {
     F.push(`根目录出现「交付面之外」的条目：${unexpected.join(' · ')}`
-      + `\n        > delivery/ 只应有产品资料 7 项——临时件请落系统 temp（§0.3）`);
+      + `\n        > docs/requirements/ 只放现行产品正文及分册——临时件请落 .scratch/<effort>/`);
     fail++;
   } else pass++;
 }

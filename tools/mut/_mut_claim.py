@@ -23,7 +23,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 TOOL = str(ROOT / "tools" / "audit" / "claim_audit.py")
-DOC = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
+DOC = ROOT / "docs" / "status.md"
 
 #: 与 `claim_audit.py` **同源**的四条正则（⛔ 别另写一套：口径只许一份）
 CLAIM_RE = re.compile(r"用户(裁定|拍板)|裁定\s*[ABC]\b|已裁定|裁定过")
@@ -68,7 +68,7 @@ def main() -> int:
         return 1
 
     # ⚠️⚠️ 2026-10-01（`TAIL-205` 收口 · 新闸门 `_run_muts.py` 一跑就抓到）：**原来只删第一处日期** ——
-    #    而锚行（计划第 6 行）里**还含一个带日期的文件名**（`.codebuddy/memory/journal/2026-10-01.md`）
+    #    而锚行（计划第 6 行）里**还含一个带日期的文件名**（`docs/archive/journal/2026-10-01.md`）
     #    ⇒ 删完**仍有日期** ⇒ `C1` 不亮 ⇒ 本件报 `0/1 命中`（它报"没抓到"是对的，**错的是一开始的判法太窄**）。
     #    ⇒ 改成把该行**所有日期样式**删掉（这才是"删掉它的日期"的本意）。
     mutated = DATE_RE.sub("", line)

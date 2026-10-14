@@ -21,7 +21,7 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 
 ## 二、共用实现约束
 
-以下为工程实现的约束与查阅入口；表内《说明书》节号指仓内 `delivery/`，完整清单见 ops/delivery-surface.md。
+以下为工程实现的约束与查阅入口；表内《说明书》节号指仓内 `delivery/`，完整清单见 docs/requirements.md。
 
 ### 查询文本读取
 
@@ -93,7 +93,7 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 
 IPP回执按协议成功类别判定接收；属性替换或冲突提示核对出纸效果，不报“单据未投递”。已接收仍不代表已经出纸，现场完成状态须实际核实。
 
-渲染器当前使用headless Chromium；不调用browser.close的防挂死处理仍在 backend/app/mod03_notice/print/render.py，退出与驱动回收由宿主负责。不得误删该处理；改生命周期时按真实服务身份复做。机器级浏览器路径见 .codebuddy/memory/MEMORY.md §三与 ops/README.md。
+渲染器当前使用headless Chromium；不调用browser.close的防挂死处理仍在 backend/app/mod03_notice/print/render.py，退出与驱动回收由宿主负责。不得误删该处理；改生命周期时按真实服务身份复做。机器级浏览器路径见 docs/guides/operations.md §三与 docs/guides/operations.md。
 
 ### Excel
 
@@ -109,7 +109,7 @@ IPP回执按协议成功类别判定接收；属性替换或冲突提示核对�
 - schema变更走Alembic；两库迁移一致。测试固定PostgreSQL，不可用时显式失败，不回退SQLite；外层事务/SAVEPOINT隔离，写路径API测试复用隔离会话，连接到开发库即熔断。
 - 中间件顺序：IP白名单在内、request_id居中、CORS最外。N+1禁止；批量查询用JOIN/IN，统计SQL包含未删除条件；金额统计上线前用EXPLAIN ANALYZE核查全表扫描。
 - deleted时间戳与业务撤销voided语义不同；快照保留金额原始精度。依赖规则见 docs/guides/deployment.md §六，行数与读取预算只回 docs/reference/thresholds.md，原计划的“超线禁合入”旧文字已退场。
-- 本机事实与写文件/运行命令的坑回 .codebuddy/memory/MEMORY.md §三/§四；方法回 docs/guides/development-and-verification.md。服务调用外部程序时，必须按服务账户身份复核路径可达。
+- 本机事实与写文件/运行命令的坑回 docs/guides/operations.md §三/§四；方法回 docs/guides/development-and-verification.md。服务调用外部程序时，必须按服务账户身份复核路径可达。
 
 ## 三、主题与壳加载
 

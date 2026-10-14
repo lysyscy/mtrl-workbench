@@ -379,7 +379,7 @@ def test_用户可见串里不许出现工程侧文件名():
     而整句是**写给排障者的** ⇒ 用户拿到它**不知道该干什么**（守则 §3.7 要求"人话 ＋ 下一步"，它两条都不满足）。
     ⚠️ 靶是**几个只可能属于我们自己的名字**（`ops/` · `.codebuddy` · `artifacts/` · `tools/` · `.md`）⇒
        剥注释后**实测 0 假阳性**（壳里它们只活在注释里）。
-    ⚠️ **能证伪**：往任一壳件的字符串里写 `见 ops/README.md` ⇒ 本件必红。
+    ⚠️ **能证伪**：往任一壳件的字符串里写 `见 docs/guides/operations.md` ⇒ 本件必红。
     """
     from tools.audit.shell_source import parts_text, strip_comments
 

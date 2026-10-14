@@ -70,7 +70,7 @@ EXCLUDE_PREFIXES: tuple[tuple[str, str], ...] = (
 
 #: 名字边界的"不可接字符" —— 防止 `设计-x.md` 被 `设计-x-补充.md` 顺手命中。
 #: ⚠️ 范围**只收会粘住名字的字符**：ASCII 字母数字 / 中文 / 下划线 / 连字符。
-#:    句点与斜杠**不在内**（`ops/README.md` 这种带前缀的写法要能命中）。
+#:    句点与斜杠**不在内**（`docs/guides/operations.md` 这种带前缀的写法要能命中）。
 #: ⚠️⛔ **别写成 `frozenset("0-9A-Za-z…")`** —— 字符串里那是**十个单字符**（`0` `-` `9` `A`…），
 #:    `1`~`8`/`B`~`Y` 全部缺席 ⇒ 边界检查对半边字母形同虚设（`a1.md` 会被 `a.md` 命中）。
 _BOUND_CHARS = (frozenset("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"

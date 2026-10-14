@@ -273,7 +273,7 @@
 
 ### §廿二之二 文档分层与命名
 
-唯一正文在 README.md §二/§四/§七；归档前查引用与索引衔接见 docs/guides/document-governance.md §三/§五。本节旧副本已归档，追溯见 .codebuddy/plans/archive/归档-留痕索引-20261005.md 的TAIL-247整理登记。
+唯一正文在 README.md §二/§四/§七；归档前查引用与索引衔接见 docs/guides/document-governance.md §三/§五。本节旧副本已归档，追溯见 docs/archive/legacy-plans/归档-留痕索引-20261005.md 的TAIL-247整理登记。
 
 ## §廿三 本机 PowerShell / 工具坑（**2026-09-24 收口** —— 原先 `MEMORY §十七` 的"其余"指针写着 `docs/runbook.md` §七，而 runbook 止于 §六 ⇒ 收到这里）
 
@@ -299,4 +299,4 @@
 
 ## 附：历史原文追溯
 
-旧项目侧MEMORY全文已经退出本分册，经 .codebuddy/plans/archive/归档-留痕索引-20261005.md 的TAIL-247整理登记读取；现行注入档为 .codebuddy/memory/MEMORY.md，日常流程为 docs/agents/workflow.md。
+旧项目侧MEMORY全文已经退出本分册，经 docs/archive/legacy-plans/归档-留痕索引-20261005.md 的TAIL-247整理登记读取；现行注入档为 .codebuddy/memory/MEMORY.md，日常流程为 docs/agents/workflow.md。

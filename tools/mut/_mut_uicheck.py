@@ -60,10 +60,10 @@ PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 sys.path.insert(0, str(ROOT / "tools" / "audit"))
 from audit_common import delivery_root  # noqa: E402
 
-DEMO = delivery_root() / "demo"
+DEMO = ROOT / "delivery" / "demo"
 PROTO = DEMO / "材料报表自动化工作台-交互原型.html"     #: 原型本体（⚠️ 已**不是**任何一靶，见下）
 SMOKE = DEMO / "_smoke.js"                              #: `M1` 的靶：`N6` 判词里的**覆盖面自检**那一行（见文件头「换靶理由」）
-DOC = DEMO / "原型导读.md"                              #: `_doccheck`/`_links`/`_ids` 的靶（在它们的 FILES/扫描面内）
+DOC = delivery_root() / "demo" / "原型导读.md"                              #: `_doccheck`/`_links`/`_ids` 的靶（在它们的 FILES/扫描面内）
 #: ⚠️ 四检里 `_smoke` 只吃原型；另三件扫整个交付面 ⇒ 往**同一份 md** 追加一行即可分别打中后两件
 
 NODE_FALLBACK = r"C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-3\node.exe"

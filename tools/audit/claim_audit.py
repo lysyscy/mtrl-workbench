@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parents[2]
 #:   ⚠️ **换件、不是减件**：`README.md` 正是"给人看、会把裁定复述给人"的那一份
 #:   ⇒ ⛔ 不能因为它从 `plans/` 搬到根上就把它漏出扫描面（那正好丢掉本哨存在的理由）。
 DOCS = [
-    ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md",
+    ROOT / "docs" / "status.md",
     ROOT / "README.md",
 ]
 

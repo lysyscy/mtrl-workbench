@@ -32,7 +32,7 @@
       **定义侧仍只在 `.md` 里找**（HTML 不是编号的定义处）。 */
 
 const fs = require('fs'), path = require('path');
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.resolve(__dirname, '../../docs/requirements');
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.workbuddy', '__pycache__', '.venv']);
 const LEGACY_DIR = '沿革';            // 引用侧排除（定义侧仍扫，允许定义落在沿革之外任意处）
 
