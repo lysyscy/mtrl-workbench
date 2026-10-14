@@ -2226,6 +2226,9 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  /* 合同收发登记（§6.7）**改为可手改**（2026-09-13 用户口径）：存档号 / 寄回日期 / 备注三列。
     ⚠️ 按 §9.3 的留痕清单（只给 统计两金额 / 调整单 / 项目全名与状态）⇒ 这三列**不留痕**（照既有口径、不新增）。
     ⚠️ 寄回日期用 `type="date"`（要的是**完整日期**；R6 只管"选年月"那种滚轮控件）。 */
+ jcArchNoEnter:t=>{
+   if(!String(t.value||'').trim()){ t.value=t.placeholder; return; }
+   return ACT.jcArchNo(t); },
  jcArchNo:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
    const v=String(t.value==null?'':t.value).trim();
    await jcAct(()=>API.m11Fields({id:j.id, fields:{arch_no:v}}),

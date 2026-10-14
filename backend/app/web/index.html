@@ -1422,7 +1422,7 @@ V.m11=()=>{
         remark: `<td><input class="inp" style="min-width:104px" data-act="jcRemark" data-id="${j.id}" value="${esc(j.remark)}" placeholder="可填"></td>`,
         tag: `<td class="ctr">${tagChip(j.tag)}</td>`,
         arch: `<td class="ctr">${archChip(j.arch)}</td>`,
-        arch_no: `<td><input class="inp plain" style="min-width:104px" data-act="jcArchNo" data-id="${j.id}" value="${esc(j.archNo)}" placeholder="${nextArchive}" title="本项目下一个存档号：${nextArchive}（已填最大号 + 1），仅供手填参考"></td>`,
+        arch_no: `<td><input class="inp plain" style="min-width:104px" data-act="jcArchNo" data-submit-act="jcArchNoEnter" data-id="${j.id}" value="${esc(j.archNo)}" placeholder="${nextArchive}" title="本项目下一个存档号：${nextArchive}（已填最大号 + 1）；空框按两次回车填入并保存"></td>`,
         ret_date: `<td><input class="inp plain" type="date" style="min-width:134px" data-act="jcRetDate" data-id="${j.id}" value="${esc(j.retDate)}"></td>`,
         ops: `<td class="ctr now">
         ${j.tag==='不纳入'?`<button class="btn sm pri" data-act="jcTag" data-id="${j.id}" data-v="纳入台账">纳入台账</button>`

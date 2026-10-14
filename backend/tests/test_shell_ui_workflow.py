@@ -773,6 +773,7 @@ def test_集采存档号提示按项目最大值且不受筛选影响(ui_page):
       API.m11List=async()=>({rows:jcRowsFixture,columns,sum_keys:sumKeys});
       API.m11Fields=async b=>{
         window.archiveSaved=b;
+        window.archiveWrites=(window.archiveWrites||0)+1;
         Object.assign(jcRowsFixture.find(r=>r.id===Number(b.id)),b.fields);return {ok:true};
       };
       fJc.tag='纳入台账';VIEW='m11';await reloadM11();
@@ -784,11 +785,15 @@ def test_集采存档号提示按项目最大值且不受筛选影响(ui_page):
     assert p.locator('[data-act="jcArchNo"][data-id="1"]').input_value() == '2'
     assert p.locator('[data-act="jcArchNo"][data-id="5"]').get_attribute('placeholder') == '1'
     assert p.evaluate('window.archiveSaved === undefined')
-    field.fill('6')
-    field.press('Tab')
+    field.click()
+    field.press('Enter')
+    assert field.input_value() == '6'
+    assert p.evaluate('window.archiveSaved === undefined')
+    field.press('Enter')
     p.wait_for_function("JCs.find(j=>j.id==='3').archNo==='6'")
     assert p.locator('[data-act="jcArchNo"][data-id="4"]').get_attribute('placeholder') == '7'
     assert p.locator('[data-act="jcArchNo"][data-id="5"]').get_attribute('placeholder') == '1'
+    assert p.evaluate('window.archiveWrites') == 1
     p.screenshot(path=str(Path(__file__).resolve().parents[2] / 'artifacts/jc-archive-hint-20261014.png'))
 
 
