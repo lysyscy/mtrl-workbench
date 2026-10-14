@@ -58,7 +58,7 @@ def main() -> int:
             return 1
     if rc0 != 0:
         print("  ⛔ 基线就红 ⇒ 先确认是不是浏览器行为变了（那是**真信息**，"
-              "见 `ops/M3-合计行置底实测结论.md`）")
+              "见 `docs/reference/sticky-total-row.md`）")
         return 1
 
     hit = 0

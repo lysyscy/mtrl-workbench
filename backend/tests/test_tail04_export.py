@@ -101,7 +101,7 @@ def test_成品名只有一处主人且与实际产出逐字一致():
 
 @acc()
 def test_模板闸门缺失或损坏时显式报错():
-    """⭐ `ops/模板法导出-实测结论.md` §五 点名的实现侧硬性：模板缺失 ⇒ **必须显式报错**。"""
+    """⭐ `docs/reference/template-export.md` §五 点名的实现侧硬性：模板缺失 ⇒ **必须显式报错**。"""
     with pytest.raises(MustReportError) as e1:
         R.require_template(R.TEMPLATE_DIR / "__不存在的模板__.xlsx")
     assert "模板缺失" in str(e1.value)

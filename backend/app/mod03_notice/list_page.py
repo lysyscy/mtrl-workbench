@@ -7,7 +7,7 @@
 依据：`demo/设计规则-提炼自付款通知书页.md`：**R1**（口径说明只给一个折叠块）· **R2**（`.kpis` 只在域级
 总览页）· **R4**（筛选栏）· **R10①**（空态给提示行、跨列数由表头派生）· **R13**（表头点击排序 ·
 **钉住行**含「合计 / 总计 / 小计」的行恒在最底、不参与排序 · **分段表**按「总求和」四段加竖线分隔）；
-合计行**视口吸附置底**的实测结论 → `ops/M3-合计行置底实测结论.md`（含"为什么原型那套 CSS 不生效"）。
+合计行**视口吸附置底**的实测结论 → `docs/reference/sticky-total-row.md`（含"为什么原型那套 CSS 不生效"）。
 
 ⚠️ **与 `page.py` 的关系**：`page.py` **再导出**本件的全部公开名 ⇒ 老调用方
    （`mod04_plan/service.py` 的 `sort_rows` · `notice_api_router` 的 `SORT_NONE` ·
@@ -39,7 +39,7 @@ DEFAULT_EMPTY_TEXT = "当前筛选没有数据"
 # ⚠️ 「置底」是**两条独立要求**（别当成一条）：
 #   ① **数据序置底** —— 合计行/空态行排在最后、不参与排序（`data-pin="1"` + `sort_rows(pinned=…)`）；
 #   ② **视口吸附置底** —— 长表滚动时合计行仍可见，**只能靠 CSS**。
-# 实测（`ops/M3-合计行置底实测结论.md`）：② 的 sticky **必须作用在 `<tr>` 上**；
+# 实测（`docs/reference/sticky-total-row.md`）：② 的 sticky **必须作用在 `<tr>` 上**；
 #   写成 `.sumrow>td{position:sticky}`（原型现写法）**永不生效**（td 的包含块是表格行，没有位移空间）。
 _SEG_RE = re.compile(r'data-seg="([a-z]+)"')
 _TIP_RE = re.compile(r'<details[^>]*class="tip"')
@@ -169,7 +169,7 @@ def _render_data(
        · **数据序置底** = 合计行排在最后、且不参与排序（`data-pin="1"`，由 `sort_rows` 的 `pinned` 保证）；
        · **视口吸附置底** = 长表滚动时合计行仍可见 —— 由页面 CSS
          `.dt tbody tr.sumrow{position:sticky;bottom:0;z-index:2}` 提供。
-       ⚠️ **实测（`ops/M3-合计行置底实测结论.md`）**：该 sticky **必须作用在 `<tr>` 上**；
+       ⚠️ **实测（`docs/reference/sticky-total-row.md`）**：该 sticky **必须作用在 `<tr>` 上**；
           写成 `.sumrow>td{position:sticky}`（原型现写法）**永不生效** —— `td` 的包含块是表格行、
           行高 = 单元格高 ⇒ 没有可位移空间。
        ⚠️ **分段表 / 分组表**（分组合计要紧贴本组、或要加粗竖线分段）传 `summary_sticky=False`

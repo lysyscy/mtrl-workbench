@@ -67,7 +67,8 @@ REPO_WIDE: tuple[tuple[str, str], ...] = (
 #: **跑哪些由扫描器现算**」（`outside_readers()`）⇒ **要登记的东西变成 0**。
 OUTSIDE_PREFIXES: tuple[tuple[str, str], ...] = (
     ("tools/", "尺子与探针：好几件测试 import 它、还有一件**通配扫** `tools/**/*.py`"),
-    ("ops/", "工程侧底账：设计守则 / 架构 / pip 镜像 / 配置主人表"),
+    ("docs/", "现行工程文档：设计守则、架构、核验与参考正文"),
+    ("ops/", "运维脚本与配置：pip 镜像 / 配置主人表"),
     (".env", "配置"),
     (".env.example", "配置样例（逐行对账）"),
 )

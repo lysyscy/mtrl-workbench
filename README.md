@@ -37,7 +37,7 @@ TAIL-337运行环境已升级并加载；本次两库备份向隔离PG18恢复�
 |---|---|---|
 | 1 | ⭐ **调试期** —— 你报障 / 提改动，我修：按 `docs/agents/workflow.md`复现、修补和核验，**交结果供你复验** | ⏳ **进行中，位置一直留着**（长短由你报的东西决定，我不设截止） |
 | 2 | **部署与数据安全** | 本机原地部署已完成；本轮两库逻辑备份恢复已核实（TAIL-337）；每日备份、异盘校验及日志/访问限制实际配置仍未核实。用户已决定撤出对应核验票；撤票不代表这些事项已核实 |
-| 3 | **业务欠缺与初始化** | 过程资料导入现已整批拒绝异常行；其他域整批拒写要求与逐行跳过行为仍有差距；集采回执行数已修，新增回归保护未补。用户决定不再执行这两张核验票，底层行为与保护缺口没有因此改变。历史付款导入仍缺真样表；补抓/期初进度按 ops/deployment.md §三核对，扩大数据使用前先确认备份恢复 |
+| 3 | **业务欠缺与初始化** | 过程资料导入现已整批拒绝异常行；其他域整批拒写要求与逐行跳过行为仍有差距；集采回执行数已修，新增回归保护未补。用户决定不再执行这两张核验票，底层行为与保护缺口没有因此改变。历史付款导入仍缺真样表；补抓/期初进度按 docs/guides/deployment.md §三核对，扩大数据使用前先确认备份恢复 |
 | 4 | ⭐ **报错里还夹着"英文技术串"的地方** —— 有几处失败提示会把 `RuntimeError: …` 这种原文、或文件路径直接显示出来 | ✅ **2026-10-01 已办**（实测 **23 处** 清了 **19 处**；另**两处是刻意保留的例外** —— **执行记录**是排障面、**打印机地址**是你核对现场要看的）：最常撞见的几处（抓取失败 / 导出模板缺失或损坏 / 连不上）改成 **人话 ＋ 下一步**、技术细节只写进运行日志；其余**逐个判**「这句是给用户看的、还是给排障看的」再做 |
 
 ### ①之补 开发入口
@@ -46,7 +46,7 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 
 个人工作流已通过AGENTS.md接入：普通改动、按票接续、子代理配置和资料维护按条件读取个人技能，本仓继续持有业务、票源、目录、测试与授权绑定。现由Skills Manager统一部署到Codex、CodeBuddy、WorkBuddy，完整维护源与部署绑定回docs/agents/workflow.md；安装衔接和真实发布同步证据回TAIL-324，首次接入证据回TAIL-320。既有业务待办和运行版本分别按本页与主计划判断。
 
-开发与核验按 `docs/agents/workflow.md`，命令见 `ops/development/开发与核验.md` §十一。当前能力见主计划 §0.3；运行服务和本地代码的差别见本节开头。资料迁移与历史治理演练的证据从已销号票索引按需追溯。
+开发与核验按 `docs/agents/workflow.md`，命令见 `docs/guides/development-and-verification.md` §十一。当前能力见主计划 §0.3；运行服务和本地代码的差别见本节开头。资料迁移与历史治理演练的证据从已销号票索引按需追溯。
 
 ### ② 要你验的清单（**唯一一张**）
 
@@ -76,7 +76,7 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 |---|---|---|
 | **仓**（本仓库） | `D:\dev\mtrl-workbench` | 后端 `backend/app/` ＋ **唯一前端壳** `backend/app/web/` |
 | **面**（现行产品资料） | `delivery/` | 原型 `delivery/demo/` ＋ `delivery/PRD/` ＋《说明书》—— **完成度的定义权**；随仓库版本管理 |
-| **底账** | `ops/`（工程侧） | 实测结论 / 阈值表 —— ⛔ **不属交付面** |
+| **底账** | `docs/reference/`（工程侧） | 实测结论 / 阈值表 —— ⛔ **不属交付面** |
 | **治理** | `.codebuddy/`（本仓库内） | 本文件描述的那套文档体系 ⛔ **不交付**（打包时必须排除） |
 
 ## 二、⭐ 文档四层（**按"谁读、什么时候读"分，⛔ 不按主题分**）
@@ -84,7 +84,7 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | 层 | 位置 | 谁读 | 职责 | 行数预算 | 机器扫 |
 |---|---|---|---|---|---|
 | **① 注入档** | `.codebuddy/memory/MEMORY.md` | ⭐ **每个新会话**（注入或按宿主读取） | 只放每轮必要偏好、边界和触发指针；按任务读取对应主人章节 | 以 `T10` 输出为准（⛔ **别手抄** —— 抄了就漂） | ✅ `T9` |
-| **② 按需档** | README及AGENTS条件入口 · 主计划 · ops工程主文档、agents项目协议与development开发分册 · .codebuddy/work/README.md | 人 / Agent按当前动作查 | 项目约束、现状与导航；个人通用方法回外部维护源 | 各见机器输出 | ✅ `T1`–`T6` · `T10` · `T12` |
+| **② 按需档** | README及AGENTS条件入口 · 主计划 · docs/agents项目协议、架构、guides开发指南与reference工程参考 · .codebuddy/work/README.md | 人 / Agent按当前动作查 | 项目约束、现状与导航；个人通用方法回外部维护源 | 各见机器输出 | ✅ `T1`–`T6` · `T10` · `T12` |
 | **③ 留痕档**（**两个标签，别混**） | **【只追加】** `.codebuddy/memory/journal/YYYY-MM-DD.md`（**现役**逐日日志 —— 2026-10-01 `TAIL-204` 第 2 步起在此，**随仓走**；`.codebuddy/work/README.md` §五「**唯一**落点，⛔ 别在别处再开一份」） · **【已归档】** `D:\dev\.归档-mtrl\`（**仓外** · 2026-10-05 `TAIL-235` 甲1 移出）—— 仓内只留索引 `.codebuddy/plans/archive/归档-留痕索引-20261005.md` | 只在追溯或复发排障时读 | 过程 / 事故 / 逐次定案 / 被删内容的原文 | 不限 | ❌ **故意不扫** |
 | **④ 产物档** | `artifacts/` | 需要证据时 | 四态 `acc_results.json` · 截图 · **工具生成物白名单**（`变异覆盖台账.md`）—— ⛔ **过程类 md 不许进**（去 `work/`） | 不限 | `T11` 管**回执** · `T15` 管**白名单** |
 
@@ -98,12 +98,11 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | README.md | 用户现状§〇、目录及资料用途本节、组织规则§二/§四/§七；找资料时看。 |
 | backend/app/ | 后端业务模块；backend/app/web/为唯一前端壳；实现与排障时看。 |
 | backend/tests/、backend/alembic/ | 判据与测试、数据库迁移；核验或改结构时看。 |
-| ops/ | 工程资料与运维脚本；逐件用途在 ops/README.md；改工程行为时查。 |
-| docs/agents/、docs/adr/ | 已实际统一的Agent协议、执行绑定与新目录决定；按AGENTS读取。其他现行正文仍待获准批次迁移。 |
-| ops/development/、ops/hooks/ | 未迁的项目开发分册、提交保护源；具体读取条件由AGENTS和ops/README持有。 |
+| docs/ | 已实际统一的Agent协议、架构、开发与操作指南、工程参考及新ADR；逐件用途见ops/README.md的现行索引。 |
+| ops/ | 运维脚本、配置、提交保护源与脚本索引；旧工程文档仅保留历史章节过渡入口，不再持有现行正文。 |
 | tools/ | audit检查、mut反向见证、probe实测、oneoff操作工具；用途见 tools/README.md。 |
 | .codebuddy/rules/入场指针/RULE.mdc | 宿主接手指针，转到AGENTS.md与现行核验主人；接手时触发。 |
-| .codebuddy/rules/前端设计守则/RULE.mdc | 前端规则指针；改壳前转到ops前端守则。 |
+| .codebuddy/rules/前端设计守则/RULE.mdc | 前端规则指针；改壳前转到docs/guides/frontend-design.md。 |
 | .codebuddy/skills/docs-audit/SKILL.md | 本仓文档整理适配；只维护分类与检查绑定，通用方法读个人技能，scripts为只读盘点器。 |
 | .codebuddy/skills/docs-audit/references/taxonomy.md | 技能的资料用途分类与病因判读；整理资料时按SKILL触发。 |
 | .codebuddy/skills/docs-audit/references/rulers.md | 技能的文档检查结果读法；整理资料时按SKILL触发。 |
@@ -131,7 +130,7 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | 已销号索引 | `票索引-已销号.md` | `.codebuddy/plans/`（只追加的历史短索引；不是第二份当前状态页） |
 | 留痕 | `归档-<类型>-<主题>-<日期>.md`（⭐ 必须 `归档-` 打头） | ⛔ **仓内** `.codebuddy/plans/archive/`（**只留索引**）· **归档正文** = 仓外 `D:\dev\.归档-mtrl\`（2026-10-05 起） |
 | 日志 | `YYYY-MM-DD.md` | `.codebuddy/memory/journal/` |
-| 实测结论 | `<主题>-实测结论.md` | `ops/` |
+| 实测结论与工程参考 | 按主题命名，如sticky-total-row、template-export、thresholds | `docs/reference/`；成立前提与来源随正文保留 |
 | 索引 / 地图 | `README.md` | 该层根的目录 |
 | **agent 入口 / 制度页** | 入口 = 固定名 `AGENTS.md` · 制度页 = 固定小写英文名 | 仓根 · `docs/agents/`（2026-10-15专项迁移首批；workflow为执行绑定，issue-tracker为票协议） |
 | 方案设计 | `设计-<主题>-YYYYMMDD.md` | `.codebuddy/work/10-designs/` |
@@ -140,8 +139,8 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | 决策记录 | 已有 `D<编号>-<主题>.md` 保持原名；新ADR按编号与主题命名 | 已有件保留 `.codebuddy/work/40-decisions/`；新目录决定为 `docs/adr/0033-document-layout.md` |
 | **尾巴票** | `TAIL-<编号>-<短名>.md` | `.codebuddy/work/50-tickets/`（⭐ 2026-10-04 `TAIL-225` 起 —— 一张票一个文件；**索引 = 计划 §15 一行一票**；⭐ 用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄） |
 | 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.codebuddy/work/00-scratch/`（TTL 14 天） |
-| 工程基准档 | 固定小写英文名（architecture / modules / deployment / changelog / delivery-surface / **docs-governance**） | ops根目录；项目Agent协议在docs/agents/；开发实现与核验分册在ops/development/，不混入会话记忆 |
-| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.codebuddy/backups/`（**备份唯一落点**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**）⭐ **何时清** = **备份数量超线时**复核一次（超线就移/清；上限数字见 `ops/阈值表.md`，⛔ 不在此处抄） |
+| 工程基准档 | 固定职责及主题名 | 架构为docs/architecture.md及同名目录；操作与开发在docs/guides/；工程参考在docs/reference/；Agent协议在docs/agents/。产品资料与状态尚待后续批次迁移 |
+| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.codebuddy/backups/`（**备份唯一落点**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**）⭐ **何时清** = **备份数量超线时**复核一次（超线就移/清；上限数字见 `docs/reference/thresholds.md`，⛔ 不在此处抄） |
 | **产品资料改前备份** | `delivery/` 内原型与说明书的改前快照 | `.codebuddy/backups/`；文件本身由 Git 版本管理，手工快照只用于需要快速恢复的批量编辑 |
 | 产物 md | 仅工具生成物白名单（当前：`变异覆盖台账.md`） | `artifacts/` |
 
@@ -157,16 +156,16 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | 现在做到哪了 | **本文件 `§〇`**（待办一页）＋ 计划 `§0` 现状快照 | `journal/` 里的当天叙述 |
 | 还欠什么（尾巴） | 计划 **`§15` 台账**（＋ `§14.3` 排期） | ⛔ 对话、报告、任何"临时清单"（`T6`/`T11` 守） |
 | 全站链路通没通 | `tools/chain_expected.txt` | ⛔ 判据全绿 ≠ 链路对（`§十二` 顺序纪律） |
-| 某个硬数字为什么是这个值 | `ops/阈值表.md` | 代码里的常量注释 |
-| 某个能力/字段的业务含义 | `delivery/`《说明书》/ `delivery/PRD/` | ⛔ 代码注释、`ops/`（那是工程侧） |
+| 某个硬数字为什么是这个值 | `docs/reference/thresholds.md` | 代码里的常量注释 |
+| 某个能力/字段的业务含义 | `delivery/`《说明书》/ `delivery/PRD/` | ⛔ 代码注释、`docs/`工程正文（业务资料仍在delivery） |
 | 怎么装 / 怎么起停 / 配置项有哪些 | `ops/README.md`（索引）＋ `ops/` 下的脚本与 SQL | ⛔ `MEMORY.md`（那里只留指针） |
 
-**改一处要顺手同步**（漏了**静默失效、不报错**）：`WIRED` · `PAGE_LOAD` ·（change现直接调用ACT，见 ops/development/开发与核验.md §十）·
+**改一处要顺手同步**（漏了**静默失效、不报错**）：`WIRED` · `PAGE_LOAD` ·（change现直接调用ACT，见 docs/guides/development-and-verification.md §十）·
 两张登记表（`tools/*_expected.txt`）· ⭐ **界面上有「操作人/录入人」列 ⇒ 后端必须有字段**。
 
 ## 六、核验入口
 
-本仓核验绑定与授权回 docs/agents/workflow.md，命令回 ops/development/开发与核验.md §十一；通用方法按AGENTS读个人技能。文档检查按受影响引用、结构与真实使用者选择；提交不自动扩大，普通改动不默认验仓外整套原型。
+本仓核验绑定与授权回 docs/agents/workflow.md，命令回 docs/guides/development-and-verification.md §十一；通用方法按AGENTS读个人技能。文档检查按受影响引用、结构与真实使用者选择；提交不自动扩大，普通改动不默认验仓外整套原型。
 检查登记与保护后果分别见 tools/oneoff/_run_rulers.py、tools/README.md及tools/audit/doc_audit.py头部。整理资料可用 .codebuddy/skills/docs-audit/SKILL.md 的分类方法，依现行影响流程选择工具。
 
 ## 七、⭐ 怎么加一份新文档（决策树 —— 先走这里，⛔ 别直接建文件）
@@ -178,11 +177,11 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
    - 构思/草稿 → `.codebuddy/work/00-scratch/`（TTL 14 天）；
    - 方案设计 → `.codebuddy/work/10-designs/`；实验/实测 → `.codebuddy/work/30-troubleshooting/`（`实验-` 前缀；＋脚本 `tools/probe/`）；
    - 排查/事故 → `.codebuddy/work/30-troubleshooting/`；拍板的决策 → `.codebuddy/work/40-decisions/D<编号>`；
-5. 是"实测出来的结论"吗？ ⇒ **`ops/<主题>-实测结论.md`** ＋ **在 `ops/README.md` 加一行索引**。
+5. 是"实测出来的结论"吗？ ⇒ **`docs/reference/<topic>.md`** ＋ **在 `ops/README.md` 加一行索引**。
 6. 是"一次性的报告/建议"吗？ ⇒ **`.codebuddy/work/` 相应记录区**（证据数据另放artifacts，临时报告进00-scratch） ＋ ⭐ **必须带「待办登记回执」**（每条写"已登记为
    `TAIL-xx`"或"不登记的理由"）—— `T11` 守。
-7. 是"环境/部署/配置/架构知识"吗？ ⇒ **`ops/architecture.md`** ＋ **`ops/README.md`**（随变更同批改）。
-8. 以上都不是 ⇒ ⚠️ **先停下来问用户**（可能是新层级，要同时改本文件与 `T12` 白名单）—— ⛔ 问之前先查 **`ops/docs-governance.md`**（文档治理总纲 · 本体系的唯一总图）：它若已给了落点，照它办；它也答不上 ⇒ 才是真需要用户拍。
+7. 是"环境/部署/配置/架构知识"吗？ ⇒ **`docs/architecture.md`** ＋ **`ops/README.md`**（随变更同批改）。
+8. 以上都不是 ⇒ ⚠️ **先停下来问用户**（可能是新层级，要同时改本文件与 `T12` 白名单）—— ⛔ 问之前先查 **`docs/guides/document-governance.md`**（文档治理总纲 · 本体系的唯一总图）：它若已给了落点，照它办；它也答不上 ⇒ 才是真需要用户拍。
 
 ## 八、三条常见坑（都踩过）
 

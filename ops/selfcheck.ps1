@@ -1,6 +1,6 @@
 ﻿# ops/selfcheck.ps1 —— 目标机自检（M8 ④「交接口径与自检命令」的正文 · TAIL-188）
 #
-# 设计要点：本自检不依赖交付面。完整现行交付面可另行复制/配置，见 ops/deployment.md §四；
+# 设计要点：本自检不依赖交付面。完整现行交付面可另行复制/配置，见 docs/guides/deployment.md §四；
 #   相关验收按所需输入/工具判断。ui_parity只查壳自身，不因交付面缺失自动不可运行。
 #   ⚠️ 这里**刻意不写条数**（原写「641 那个数」—— 判据点一涨它就过期，属"留痕被后续甩下"那族）。
 #   这里做的是「这系统自己能不能转」的五项，⛔ 不是验收：
@@ -130,7 +130,7 @@ try {
         if ($hit.Count -gt 0) { Ok ('导入域 ' + $d + ' 在（' + $hit.Count + ' 个端点）') } else { Bad ('导入域 ' + $d + ' 不在 openapi 里') }
     }
     if (@($paths | Where-Object { $_ -like '/api/m08*' }).Count -gt 0) { Ok '库存单据 /api/m08* 在（补抓入口）' } else { Bad '库存单据 /api/m08* 不在' }
-    Skip '「点进去真能导」只能人工走一小段真数据（openapi 只证明端点存在）⇒ 见 ops\deployment.md §三'
+    Skip '「点进去真能导」只能人工走一小段真数据（openapi 只证明端点存在）⇒ 见 docs\guides\deployment.md §三'
 } catch { Skip ('拿不到 /openapi.json：' + $_.Exception.Message) }
 
 Write-Host ''

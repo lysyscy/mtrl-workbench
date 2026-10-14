@@ -1,6 +1,6 @@
 """合计行「视口吸附置底」实测脚本（可复现）—— ⭐ 2026-09-24 起是**真判据**（会红）。
 
-结论与解读见 `ops/M3-合计行置底实测结论.md`。
+结论与解读见 `docs/reference/sticky-total-row.md`。
 
 用法（本机）：
   $env:PLAYWRIGHT_BROWSERS_PATH = "C:\\ProgramData\\ms-playwright"
@@ -123,7 +123,7 @@ def main() -> int:
         if bad:
             print(f"\n⛔ 判据未过：`{'`、`'.join(bad)}` 的吸附**不再生效** ⇒ 「合计行贴底」的实测结论已不成立。"
                   "\n   ⚠️ 常见原因：换了浏览器大版本（现代 Chromium 的 sticky 语义变了）。"
-                  "\n   ⇒ 先复核 `ops/M3-合计行置底实测结论.md`，再决定「改写法」还是「改结论」。")
+                  "\n   ⇒ 先复核 `docs/reference/sticky-total-row.md`，再决定「改写法」还是「改结论」。")
             sys.stdout.flush()
             os._exit(1)          # ⚠️ 收尾不调 close()/stop()（技术栈 §2.4 记其会挂死）⇒ 用 os._exit 带码退出
         print(f"\n✅ 判据通过：`{'`、`'.join(ASSERT_OK)}` 三条都有效（本工程采用 `E` —— 末行 `tr` 自身 sticky）")

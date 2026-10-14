@@ -244,9 +244,9 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
     relevant = set(names - docs)
     readers = document_readers(docs, root)
     relevant |= {n for n in readers if n.startswith('backend/app/')}
-    # ops资料存在拼接路径读取；采用已登记的保守使用者范围。
-    if any(n.startswith('ops/') for n in docs):
-        relevant |= {n for n in docs if n.startswith('ops/')}
+    # ops与docs资料存在拼接路径读取；采用已登记的保守使用者范围。
+    if any(n.startswith(('ops/', 'docs/')) for n in docs):
+        relevant |= {n for n in docs if n.startswith(('ops/', 'docs/'))}
     pending = []
     if unclassified(commands):
         pending.append('新登记检查未声明保护后果：'+str(sorted(unclassified(commands))))

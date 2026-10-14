@@ -324,7 +324,7 @@ def do_downgrade(name: str, apply: bool) -> int:
 def _sample_text() -> str:
     return ("# 设计降档样本（自测临时件 · 用完即删）\n\n读者：`_doc_downgrade.py --selftest`\n"
             "回答：本件能不能被可逆地搬走\n何时读：从不（自测注入）\n"
-            "状态：已实施（自测样本）· 关联 `TAIL-225`\n\n⭐ **落地位置**：`ops/阈值表.md`\n"
+            "状态：已实施（自测样本）· 关联 `TAIL-225`\n\n⭐ **落地位置**：`docs/reference/thresholds.md`\n"
             "自测注入，⛔ 不是真文档。\n")
 
 
@@ -358,10 +358,10 @@ def _selftest_fixture() -> int:
         print("  %s %s" % ("✅" if ok else "⛔", label))
 
     sample, idx = ROOT / SAMPLE_REL, ROOT / INDEX_REL
-    for parent in (sample.parent, idx.parent, ROOT / "ops", ROOT / "tools/probe",
+    for parent in (sample.parent, idx.parent, ROOT / "docs/reference", ROOT / "tools/probe",
                    ROOT / ".codebuddy/work/50-tickets"):
         parent.mkdir(parents=True, exist_ok=True)
-    (ROOT / "ops/阈值表.md").write_text("# 隔离落地样本\n", encoding="utf-8")
+    (ROOT / "docs/reference/thresholds.md").write_text("# 隔离落地样本\n", encoding="utf-8")
     closed = ROOT / ".codebuddy/work/50-tickets/TAIL-225-样本.md"
     closed.write_text("**Status:** done\n", encoding="utf-8")
     idx_bytes0 = ("# 隔离索引\r\n\r\n" + INDEX_TABLE_HEAD
@@ -371,7 +371,7 @@ def _selftest_fixture() -> int:
     sample.write_bytes(sample_bytes)
     commit_args = ("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
                    "-c", "core.hooksPath=" + str(ROOT / "no-hooks"), "commit", "-qm")
-    for args in (("init", "-q"), ("add", SAMPLE_REL, INDEX_REL, "ops/阈值表.md",
+    for args in (("init", "-q"), ("add", SAMPLE_REL, INDEX_REL, "docs/reference/thresholds.md",
                  closed.relative_to(ROOT).as_posix()),
                  (*commit_args, "fixture")):
         rc, output = _git(*args)
@@ -405,7 +405,7 @@ def _selftest_fixture() -> int:
         and _fp([sample, idx]) == before and not out_abs.exists())
 
     for lane, rel in (("机器", "tools/probe/refers_sample.py"),
-                      ("文档", "ops/活引用.md"),
+                      ("文档", "docs/reference/活引用.md"),
                       ("票", ".codebuddy/work/50-tickets/TAIL-226-引用.md")):
         referrer = ROOT / rel
         referrer.write_text("**Status:** ready-for-agent\n# 指向 " + SAMPLE_REL + "\n",

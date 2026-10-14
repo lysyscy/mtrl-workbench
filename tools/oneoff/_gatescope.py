@@ -113,7 +113,7 @@ def input_signature(rel: str, args: list[str], files: dict, context: str) -> str
     """已证输入包含整个代码/配置/交付面；未证输入返回 None，必须运行。"""
     if rel in CODE_ONLY:
         selected = {n: h for n, h in files.items() if n.startswith((
-            'repo/tools/', 'repo/backend/', 'repo/ops/', 'face')) or
+            'repo/tools/', 'repo/backend/', 'repo/ops/', 'repo/docs/', 'face')) or
             n in {'repo/.env', 'repo/.env.example', 'repo/.gitignore', 'repo/.gitattributes'}}
     elif rel == 'tools/audit/shell_verify.py':
         selected = {n: h for n, h in files.items() if n.startswith((

@@ -53,4 +53,4 @@ x MOD-12.md L33 对账目标（三账一致）                                  
 x MOD-13.md L34 系统上线前的历史数据初始化                               → ACC-INIT-001
 x MOD-13.md L35 幂等与可中断（导入类动作的全局要求）                      → ACC-PLAN-MANUAL-001 · ACC-PRJ-SYNC-001 · ACC-INV-FETCH-001 · ACC-SETL-FETCH-001（已有覆盖，只补登记）
 x MOD-13.md L36 不标准值处理                                            → ACC-ODDVAL-001
-# MOD-14.md L31 全局一致性清单的展示 → 2026-09-24 **转 `T7_EXEMPT`**（2026-09-22 `D22` 裁定：不建界面卡片，口径清单落 `ops/architecture.md`）
+# MOD-14.md L31 全局一致性清单的展示 → 2026-09-24 **转 `T7_EXEMPT`**（2026-09-22 `D22` 裁定：不建界面卡片，口径清单落 `docs/architecture.md`）

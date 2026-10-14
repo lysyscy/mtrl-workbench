@@ -60,7 +60,7 @@ def test_路由与外链件一一对应_没有孤儿():
 #:    （件数别写死 / 数据出口别被遮蔽 / 头注别指错路），不对应任何"用户看得见的行为" ⇒ 不硬绑涨绿数
 #:    （口径见 `TAIL-167` 的裁定：只登记"用户看得见"的）。
 #: 扫描面 = **活的**文档与代码（⛔ 不含计划 / `归档-*` / `.codebuddy/memory/*` —— 那些是留痕，记的当时那个数是对的）
-_CANNOT_PIN_SHELL_COUNT = (ROOT / "ops" / "architecture.md", MAIN)   # ⚠️ 2026-10-01 起文档落 `ops/`（`docs/` 已并入）
+_CANNOT_PIN_SHELL_COUNT = (ROOT / "docs" / "architecture.md", MAIN)   # ⚠️ 2026-10-01 起文档落 `ops/`（`docs/` 已并入）
 
 
 @acc()

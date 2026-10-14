@@ -5,7 +5,7 @@
    这里只钉**资产前提**：模板必须在仓、必须登记 SHA256、必须**读得开**（读不开 = 路径①无从谈起）。
 
 ⚠️ 与路径② 的一条重要差异（实测）：`模板_库存单据明细表.xlsx` **`openpyxl` 打不开**
-   （`TypeError: Nested.from_tree() … 'node'`，见 `ops/模板法导出-实测结论.md` §六）；
+   （`TypeError: Nested.from_tree() … 'node'`，见 `docs/reference/template-export.md` §六）；
    而**路径① 这 4 份必须读得开** —— 因为路径① 的做法就是 `openpyxl` 读模板再填数。
 """
 

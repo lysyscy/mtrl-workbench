@@ -7,7 +7,7 @@
 用法（在工程根）：
     backend/.venv/Scripts/python.exe tools/i8_contract_probe.py [YYYY-MM]
 
-结论回写处：`ops/i8-接口契约-旁证摘要.md`（真机核验后把"旁证"升级为"实测"）。
+结论回写处：`docs/reference/i8-contract.md`（真机核验后把"旁证"升级为"实测"）。
 """
 
 from __future__ import annotations

@@ -164,7 +164,7 @@ def test_合计行与分段竖线用到的变量都已定义():
     for css in (page.STICKY_BOTTOM_CSS, page.VSEP_CSS):
         for name in _VAR_USE_RE.findall(css):
             assert name in defined, f"{name} 未定义（这条规则会整条失效）"
-    # sticky 必须写在 <tr> 上（写在 td 上永不生效，见 ops/M3-合计行置底实测结论.md）
+    # sticky 必须写在 <tr> 上（写在 td 上永不生效，见 docs/reference/sticky-total-row.md）
     flat = page.STICKY_BOTTOM_CSS.replace(" ", "")
     assert "tr.sumrow{position:sticky" in flat
     assert ">td{position:sticky" not in flat

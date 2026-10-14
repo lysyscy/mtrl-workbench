@@ -13,12 +13,12 @@
 | `T2` | **已废除术语** —— 命中 `RETIRED_TERMS` | `audit_common.py` |
 | `T3` | **幽灵路径** —— 反引号里的仓库内路径两侧都找不到（⭐ 2026-10-05 `TAIL-235` 丁-1 扩半：① 扫描面进 `.codebuddy/`（**治理区此前整片无人管**）② **仓外绝对路径**落在 `OUTSIDE_ROOTS` 白名单内 ⇒ 到那个根下**真核存在** ③ 带 `〔已归档〕` 标记的引用**剥掉标记照核** ⇒ ⛔ **标记不是豁免**，加前缀不再能把坏路径洗掉） | 文件系统 |
 | `T4` | **状态数字失配** —— 执行情况「当前版本」行的四态 ≠ 实际 | `artifacts/acc_results.json` |
-| `T5` | **行数超限** —— 单文件 >400（黄 · 须登记拆分计划）/ >600（黄 · 须登记"为什么不拆"）<br>⚠️ 2026-09-21 **用户裁定：>600 从红降黄**（行数是代理指标，不作禁合入闸门） | 源文件行数（**输出即登记清单**）＋ `ops/阈值表.md` |
+| `T5` | **行数超限** —— 单文件 >400（黄 · 须登记拆分计划）/ >600（黄 · 须登记"为什么不拆"）<br>⚠️ 2026-09-21 **用户裁定：>600 从红降黄**（行数是代理指标，不作禁合入闸门） | 源文件行数（**输出即登记清单**）＋ `docs/reference/thresholds.md` |
 | `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `.codebuddy/plans/开发计划-主文档.md` |
 | `T7a`/`T7b` | **判据覆盖** —— 有登记的能力却没判据兜住（**登记档，不判红**） | `cover_gap.py` |
 | `T8` | ⭐ **已撤项复活** —— 用户裁定取消的东西**不得在代码里长回来** | `audit_common.CANCELLED` |
 | `T9` | ⭐ **纪律册卫生（两半）** —— ① **口径出处标记**：`MEMORY.md` §八 每条必须带 `[用户]`/`[交付面]`/`[助手自定]`；② ⭐ **注入档里别复述守卫的阈值**（`T13`（行数预算 1700）那种 ⇒ **规则留、数字去**） | `.codebuddy/memory/MEMORY.md` |
-| `T10` | ⭐ **文档读预算** —— 每会话**注入/必读**档超预算（黄 + 登记；治「太长读不完 ⇒ 只 grep ⇒ 没搜到的就丢了」） | `ops/阈值表.md` ＋ `audit_meta.DOC_BUDGETS` |
+| `T10` | ⭐ **文档读预算** —— 每会话**注入/必读**档超预算（黄 + 登记；治「太长读不完 ⇒ 只 grep ⇒ 没搜到的就丢了」） | `docs/reference/thresholds.md` ＋ `audit_meta.DOC_BUDGETS` |
 | `T11` | ⭐ **建议类报告必须带「待办登记回执」** —— `artifacts/` 里的审计/提案/建议**不许只活在报告里** | `artifacts/*.md` ↔ 计划 §15 |
 | `T12` | ⭐ **文档分层与命名约定** —— `plans/` 只许两份活文档（其余 `归档-` 打头）· `memory/` 日志必须进 `journal/` · 根上的 md 只许 `ROOT_MD_ALLOW` 那两件（⚠️ 根上的**目录与非 md 文件**归 `T24`） | 根 `README.md` 的四层表 ＋ 本件三张白名单 |
 | `T13` | ⭐ **主文档过程回潮** —— 计划主文档行数超预算（1700）· 标题出现过程词（逐批/逐次/收官记录）⇒ 黄：该块**该下沉归档了**（`§13.1`「完成的就扔出去」的机器守） | `.codebuddy/plans/开发计划-主文档.md` |
@@ -28,14 +28,14 @@
 | `T17` | ⭐ **闸门清单里每一把尺子都必须真有入口** —— 在跑却**0 行输出**（僵尸闸门）⇒ 红 | 计划 `§22.1` 的 `foreach` |
 | `T18` | ⭐ **登记在册的路径 / glob 常量必须解析得到真东西** —— 空命中 = 那一片**从没被扫过** ⇒ 红 | `audit_meta.GUARDED` |
 | `T19` | ⭐ **文档指针（节号）守卫** —— 「`X.md` §N」必须真有那一节（`T3` 只管文件在不在）⇒ 红 | `audit_drift` |
-| `T20` | ⭐ **保留期与容量** —— `.codebuddy/backups/` 顶层条目 > 5（口径「留 5 份 · 月度清」）⭐ **`tools/oneoff/` 件数 / 容量超线**（⚠️ 原第三条「`.workbuddy/scratch/` 活区规模」**2026-10-01 已撤** —— 它守的是**搬家遗留的旧落点**（盘上一直在、被 `.gitignore` 藏着 ⇒ `git status` 看不见），第 7 步已把旧落点**整棵清掉** ⇒ 判据**失去对象**；临时件现由 `T14` 管）（`TAIL-194`；处置口径 = `tools/README.md`）⇒ 黄 | `README.md` §三/§四 ＋ `tools/README.md` ＋ `ops/阈值表.md` ＋ `audit_work.py` |
-| `T22` | ⭐ **注入档「两行粘成一行」** —— 注入档三件里「**行尾标点后紧跟列表符/引用符**」⇒ 黄（治 `replace_in_file` 锚点末尾多写一个换行 ⇒ 下一行的列表符被吞进上一行；当天实测 `MEMORY.md` 93 → 92 行，而**闸门 rc=0 · pytest 全绿 · 无尺子看得见**）。⚠️ 固定语法模式 ⇒ **该做检查、不该写规则**（写进纪律没人执行） | `audit_meta.INJECT_DOCS` / `SPLICE_RE` ＋ `ops/阈值表.md` |
-| `T21` | ⭐ **文档「字墙」**（单行 >800 字）—— 治"行数在预算内、**单行上万字**"那一类：`T10`/`T13` 只看得见总行数。⚠️ 带**只许变短**的老账基线（`LINE_WALL_BASELINE`）：超基线 ⇒ 黄「又长回来了」· 低于基线 ⇒ 黄「基线该下调」⇒ 黄 | `ops/阈值表.md` ＋ `audit_meta.LINE_WALL_CHARS` / `LINE_WALL_BASELINE` |
-| `T23` | ⭐ **活机器口径六路齐全（变异仅现行顶层，归档不作活机器引用）**（`TAIL-236` 第 2 批）—— 判「某件还有谁在引用」时**该扫的那几处**（含运维脚本 · 规则档 · 壳的脚本与页面）**少一路 ⇒ 红**；某条 glob **空命中 ⇒ 红**；查询命令的**代码**里又抄一份口径 ⇒ 黄。⭐ 治的是当天真发生的翻车：第一版口径漏两路 ⇒ 差点搬走**被引用**的设计件 | `audit_common.LIVE_MACHINE_GLOBS` ＋ `audit_meta.LIVE_MACHINE_REQUIRED` ＋ `ops/阈值表.md` |
+| `T20` | ⭐ **保留期与容量** —— `.codebuddy/backups/` 顶层条目 > 5（口径「留 5 份 · 月度清」）⭐ **`tools/oneoff/` 件数 / 容量超线**（⚠️ 原第三条「`.workbuddy/scratch/` 活区规模」**2026-10-01 已撤** —— 它守的是**搬家遗留的旧落点**（盘上一直在、被 `.gitignore` 藏着 ⇒ `git status` 看不见），第 7 步已把旧落点**整棵清掉** ⇒ 判据**失去对象**；临时件现由 `T14` 管）（`TAIL-194`；处置口径 = `tools/README.md`）⇒ 黄 | `README.md` §三/§四 ＋ `tools/README.md` ＋ `docs/reference/thresholds.md` ＋ `audit_work.py` |
+| `T22` | ⭐ **注入档「两行粘成一行」** —— 注入档三件里「**行尾标点后紧跟列表符/引用符**」⇒ 黄（治 `replace_in_file` 锚点末尾多写一个换行 ⇒ 下一行的列表符被吞进上一行；当天实测 `MEMORY.md` 93 → 92 行，而**闸门 rc=0 · pytest 全绿 · 无尺子看得见**）。⚠️ 固定语法模式 ⇒ **该做检查、不该写规则**（写进纪律没人执行） | `audit_meta.INJECT_DOCS` / `SPLICE_RE` ＋ `docs/reference/thresholds.md` |
+| `T21` | ⭐ **文档「字墙」**（单行 >800 字）—— 治"行数在预算内、**单行上万字**"那一类：`T10`/`T13` 只看得见总行数。⚠️ 带**只许变短**的老账基线（`LINE_WALL_BASELINE`）：超基线 ⇒ 黄「又长回来了」· 低于基线 ⇒ 黄「基线该下调」⇒ 黄 | `docs/reference/thresholds.md` ＋ `audit_meta.LINE_WALL_CHARS` / `LINE_WALL_BASELINE` |
+| `T23` | ⭐ **活机器口径六路齐全（变异仅现行顶层，归档不作活机器引用）**（`TAIL-236` 第 2 批）—— 判「某件还有谁在引用」时**该扫的那几处**（含运维脚本 · 规则档 · 壳的脚本与页面）**少一路 ⇒ 红**；某条 glob **空命中 ⇒ 红**；查询命令的**代码**里又抄一份口径 ⇒ 黄。⭐ 治的是当天真发生的翻车：第一版口径漏两路 ⇒ 差点搬走**被引用**的设计件 | `audit_common.LIVE_MACHINE_GLOBS` ＋ `audit_meta.LIVE_MACHINE_REQUIRED` ＋ `docs/reference/thresholds.md` |
 
 | `T24` | ⭐ **仓库根白名单**（2026-10-05 `TAIL-236` 同批修 ①b）—— 根上的**目录与非 md 文件**必须落在「常驻骨架（`ROOT_ALLOW`）∪ `.gitignore` 声明过的暂存件」里，多出来的 ⇒ **红**。⭐ 起因：根 `work/` 建起来后 `T3`/`T12`/`T14` **四层守卫没一层拦**（那片地方**不在任何扫描面内**）。⚠️ 根上的 md 归 `T12`（本行**不**重复管） | `audit_common.ROOT_ALLOW` ＋ 仓根 `.gitignore` |
 | `T25` | ⭐ **`.gitignore` 里的落点路径必须真存在**（2026-10-05 `TAIL-236` 同批修 ①b/③）—— `.gitignore` 反引号里的**仓库内目录落点**（含 `/` · 以 `TOP_DIRS` 前缀开头 · 不含模式字符）盘上核不到 ⇒ **红**。⭐ 治的是"照一份**没被核过**的落点找路 ⇒ 找到不存在的目录"（当天真实事故）；⚠️ `T3` 拦不住这一类（它只认**带后缀**的引用，而落点多是**目录**） | 仓根 `.gitignore` ＋ `audit_drift.check_gitignore_drops`（豁免沿用 `T3_OLD_PATH_HINTS`） |
-| `T26` | ⭐ **「结论已落地」⇒ 该降档**（2026-10-05 `TAIL-236` 第 3 批 · **黄 · 只报不动**）—— `work/10-designs/` · `work/30-troubleshooting/` 里处在「**已定稿 / 已实施**」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在** ⇒ 报黄「该降档」＋ 落地位置（＝**口径主人**）＋ 同批改那串（**去向**看 `.codebuddy/work/README.md` §二 本区那一行）。⛔「零机器引用」**不是判据**（只是信号）。⭐ 治的是 `work/README.md` §二「用完就丢」**只有规矩、没有机器眼** | `audit_work.check_downgrade_candidates` ＋ `work/README.md` §四（**声明行写法**的唯一主人）＋ `audit_meta.TICKET_CLOSED`（销号定义）＋ `ops/阈值表.md` |
+| `T26` | ⭐ **「结论已落地」⇒ 该降档**（2026-10-05 `TAIL-236` 第 3 批 · **黄 · 只报不动**）—— `work/10-designs/` · `work/30-troubleshooting/` 里处在「**已定稿 / 已实施**」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在** ⇒ 报黄「该降档」＋ 落地位置（＝**口径主人**）＋ 同批改那串（**去向**看 `.codebuddy/work/README.md` §二 本区那一行）。⛔「零机器引用」**不是判据**（只是信号）。⭐ 治的是 `work/README.md` §二「用完就丢」**只有规矩、没有机器眼** | `audit_work.check_downgrade_candidates` ＋ `work/README.md` §四（**声明行写法**的唯一主人）＋ `audit_meta.TICKET_CLOSED`（销号定义）＋ `docs/reference/thresholds.md` |
 | `T27` | ⭐ **交付面「页脚之后不许有内容」**（2026-10-06 `TAIL-234`）—— ⛔ `T1`–`T26` 没一层能看见"内容掉到落款后面"（当天实测：`MOD-14.md` 两条 `ACC-*` 验收条目就在页脚**下面**，而用例号 / 路径都是真的 ⇒ 只是**位置错了**）。⚠️ **归档目录按实测排除**（6 处全在 `.workbuddy/归档-audit/` 下 ⇒ 那是留痕、不是缺陷） | `audit_face.check_footer_tail` ＋ `audit_common.FOOTER_MARKER` / `FOOTER_SCAN_GLOB` / `FOOTER_EXCLUDE_PARTS` |
 | `T28` | 交付面篇幅变短提示调查；能力编号损失或缺件仍报红。篇幅不能证明业务丢失，不阻挡已授权精简 | audit_face.check_prd_baseline ＋ audit_face.PRD_DOC_BASELINE |
 
@@ -131,17 +131,17 @@ def run_ui_checks() -> tuple[list[str], list[str]]:
        仍 `rc=0`、`BAD: []`、四态全绿）—— 同族 = 「**打印了红 ≠ 拦住了**」。
        ⇒ 现在把非零的**件名回传**，由 `main()` 并进自己的 rc（`_run_rulers` 里那把尺子当场红）。
     ⚠️ **三种「跳过」不算失败**（找不到 node ／ 拿不到交付面根 ／ 交付面 demo 里没有四检脚本）——
-       那是 `ops/deployment.md` 写明的**目标机已知代价**：目标机不装交付面时本件**照样要能当闸门用**。
+       那是 `docs/guides/deployment.md` 写明的**目标机已知代价**：目标机不装交付面时本件**照样要能当闸门用**。
        ⛔ 别把「跳过」也并进 rc：那会让目标机上**每一轮闸门都红**，人就开始忽略它（**比不判还坏**）。
     """
     node = _resolve_node()
     root = delivery_root()
     if not node:
         return ["  （跳过：找不到 node —— 试过三处：环境变量 `MTRL_NODE` / PATH / 旧默认路径。"
-                "⚠️ 装 node 或设 `MTRL_NODE=<node.exe 全路径>`；详见 `ops/deployment.md`）"], []
+                "⚠️ 装 node 或设 `MTRL_NODE=<node.exe 全路径>`；详见 `docs/guides/deployment.md`）"], []
     if not root:
         return ["  （跳过：拿不到产品资料根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=delivery/PRD/验收/验收基线.json`；"
-                "从仓库根目录运行，详见 `ops/deployment.md`）"], []
+                "从仓库根目录运行，详见 `docs/guides/deployment.md`）"], []
     demo = root / "demo"
     if not (demo / "_smoke.js").exists():
         return ["  （跳过：交付面 demo/ 里没有四检脚本）"], []
@@ -307,7 +307,7 @@ def main() -> int:
     #   件在「已定稿 / 已实施」档，且 ① 件内 `TAIL-` 票**全销号** ＋ ② 件内**声明的「落地位置」真存在**
     #   ⇒ 报黄「该降档（下沉 / 归档）」。
     #   ⭐ 治的是 `work/README.md` §二 那条「用完就丢」**只有规矩、没有机器眼**
-    #   （`ops/docs-governance.md` §三 那两行自己写着「应有判据、现无」）—— 那是用户"不安"的根因。
+    #   （`docs/guides/document-governance.md` §三 那两行自己写着「应有判据、现无」）—— 那是用户"不安"的根因。
     #   ⛔ 两个客观信号**别改轴**（`TAIL-236` 决定 3）；⛔「零机器引用」不是判据，只是信号。
     #   ⚠️ **声明行写法**的唯一主人 = `.codebuddy/work/README.md` §四；销号定义 = `audit_meta.TICKET_CLOSED`。
     raw += check_downgrade_candidates()

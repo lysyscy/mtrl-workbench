@@ -1,6 +1,6 @@
 # D33 · 专项文档目录迁移
 
-> 读者：迁移实施者与接手 Agent。回答：目录标准、授权范围、首批及恢复条件。何时读：继续本次专项迁移或判断旧入口是否可退役时。状态：已实施（仅首批，整体仍迁移中）· 2026-10-15。
+> 读者：迁移实施者与接手 Agent。回答：目录标准、授权范围、首批及恢复条件。何时读：继续本次专项迁移或判断旧入口是否可退役时。状态：已实施（Agent协议与工程正文两批，整体仍迁移中）· 2026-10-15。
 
 ## 决定与来源
 
@@ -42,3 +42,31 @@
 新资料实际进入文档检查与引用查询；缺失新路径的隔离反例报红。文档、字节、语法、资料结构与链路检查通过；引用查询、中文路径与归档恢复自测通过，定向静态 pytest 11 项通过。原票、历史正文与受保护本机材料核对通过；D30仅追加替代关系，索引仅修当前指针并追加D33。扩大路径检查时发现MOD-14旧架构指针失效，已指回实际主人，除此之外业务正文及验收基线保持。
 
 收工回执核心自测通过；其依赖的pytest选择器既有排除断言失败，已在迁移前992份Python原件组成的隔离现场复现，未改选择器或放宽断言。自动影响入口保守建议105份测试并要求调查共享模块；本轮核实实际消费者后执行文档与工具检查及相关静态测试，未运行无关应用全套或刷新权威四态。详情与复现见本机恢复现场的scope-and-failures.json及各原始日志。
+
+## 第二批：工程正文（2026-10-15）
+
+用户确认继续，沿用整体清单和提交推送授权。本批将下列13份现行正文实际迁入统一位置；只修路径、现行目录说明及消费者，不改业务含义、章节判据或阈值。
+
+| 旧位置 | 现行位置 |
+|---|---|
+| 旧路径 `ops/architecture.md` | `docs/architecture.md` |
+| 旧路径 `ops/modules.md` | `docs/architecture/modules.md` |
+| 旧路径 `ops/deployment.md` | `docs/guides/deployment.md` |
+| 旧路径 `ops/docs-governance.md` | `docs/guides/document-governance.md` |
+| 旧路径 `ops/development/实现约束.md` | `docs/guides/implementation-constraints.md` |
+| 旧路径 `ops/development/开发与核验.md` | `docs/guides/development-and-verification.md` |
+| 旧路径 `ops/前端设计守则-以使用用户为中心.md` | `docs/guides/frontend-design.md` |
+| 旧路径 `ops/阈值表.md` | `docs/reference/thresholds.md` |
+| 旧路径 `ops/i8-接口契约-旁证摘要.md` | `docs/reference/i8-contract.md` |
+| 旧路径 `ops/M3-合计行置底实测结论.md` | `docs/reference/sticky-total-row.md` |
+| 旧路径 `ops/模板法导出-实测结论.md` | `docs/reference/template-export.md` |
+| 旧路径 `ops/素材包-索引.md` | `docs/reference/legacy-materials.md` |
+| 旧路径 `ops/changelog.md` | `docs/reference/changelog.md` |
+
+原位置仅保留带Git恢复基线、旧章节定位和退出条件的薄入口；历史原文可从固定基线恢复，未改写票、历史设计、日志或归档索引。README与Agent入口、宿主规则、项目memory指针、仓内docs-audit配置、文档检查的扫描/预算/阈值、素材索引读取、三个直接读文档的测试、引用查询、归档自测、选测和核验回执同时切换。新docs变化可使核验回执失效；缺失的新引用仍报红。
+
+`ops/README.md`的运维正文与配置主人表、产品资料、活动状态及过程区尚待后续受控迁移；ops脚本、SQL、真实运行资源、活动票、历史原文及本机恢复材料保持。旧入口不算完成其历史批次，不因此改成永久映射。未删除候选件，未更新已安装技能。
+
+第二批基线为 `996cde1493b34a124fe4f7c36448c583cf6f8433`，开始时工作区和索引干净。原件、1400份跟踪文件摘要、4431份受保护本机材料元数据、索引快照与日志存于 `.codebuddy/work/00-scratch/tmp-20261015-engineering-docs-migration/`；此现场继续保留。恢复时仅还原本批拥有的改动，保护随后出现的内容，忽略材料仍原地保留。
+
+第二批核验：定向pytest 18项通过；文档、字节、语法、交付面结构、链路、素材与变异登记检查通过；引用查询、中文路径、归档恢复19项与收工回执核心自测通过；两个PowerShell消费者解析通过。13份正文经路径及目录说明归一后与原件逐件核对；原活动段、票、历史原文、delivery及受保护本机材料核对通过，应用运行AST未变。既有pytest选择器全自测失败及其基线复现沿用首批结论；本批另验证实际新文档读取者、docs输入识别与回执失效，不将核心通过写成全自测通过。未运行应用全套、真实业务写入、服务重启或新机部署。

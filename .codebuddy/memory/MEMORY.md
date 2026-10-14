@@ -4,7 +4,7 @@
 
 ## 〇、入口与核验
 
-- `[用户·2026-10-08]` 本仓执行与核验绑定 = docs/agents/workflow.md；个人方法条件入口 = AGENTS.md；命令 = ops/development/开发与核验.md §十一。新删件、提交和旧dirty不自动全验；基点不是通过证明。相关失败不能报通过，自证用隔离输入。review按当前用户授权和实际需要使用。
+- `[用户·2026-10-08]` 本仓执行与核验绑定 = docs/agents/workflow.md；个人方法条件入口 = AGENTS.md；命令 = docs/guides/development-and-verification.md §十一。新删件、提交和旧dirty不自动全验；基点不是通过证明。相关失败不能报通过，自证用隔离输入。review按当前用户授权和实际需要使用。
 - 状态只信 tools/audit/acc_report.py、主计划§0和§15；阅读分派只回 AGENTS.md，历史不默认读取。
 
 ## 一、用户偏好
@@ -17,12 +17,12 @@
 
 ## 二、真源指针
 
-MEMORY.md为会话入口；项目开发正文在ops/development/，旧细则.md与IDE-细节.md只留兼容指针。业务取值回delivery说明书/PRD，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
+MEMORY.md为会话入口；项目开发正文在docs/guides/，旧细则.md与IDE-细节.md只留兼容指针。业务取值回delivery说明书/PRD，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
 
 ## 三、本机事实（碰环境时使用）
 
 - Python使用 backend/.venv/Scripts/python.exe（3.15，uv管理）；模块用 `-m`，不依赖exe shim或系统PATH。
-- 后端服务 mtrl-workbench-server，无reload；运行后端Python的改动需另按当前明确授权加载，启停/重启权限回 docs/agents/workflow.md，操作回 ops/deployment.md。改壳或工具无需重启。
+- 后端服务 mtrl-workbench-server，无reload；运行后端Python的改动需另按当前明确授权加载，启停/重启权限回 docs/agents/workflow.md，操作回 docs/guides/deployment.md。改壳或工具无需重启。
 - Playwright目录 C:/ProgramData/ms-playwright；只给执行子进程传环境，ACC_RESULTS_PATH不全局导出。
 - PostgreSQL在 D:/pgsql/18.6/pgsql/bin；桌面为 D:/UserData/Desktop。环境变化时复核当前配置，勿沿用历史位置。
 
@@ -39,7 +39,7 @@ MEMORY.md为会话入口；项目开发正文在ops/development/，旧细则.md�
 - `[用户·2026-10-08]` 本轮保留全部已有修改，只计新增影响；不修改/提交凭据。
 - `[用户·2026-10-12]` 提交与推送的自主决策口径 = docs/agents/workflow.md「提交与推送」。
 - `[助手自定]` 提交列举git add，禁止add -A、--no-verify和改git config；仓根`.env`实值不提交（i8账号），`ops/init_db.sql`已随库提交（2026-10-09用户裁定，理由见该文件与pre-commit注释）。
-- `[助手自定]` 删除涉及手工数据先查牵连和备份；文档结构与归档按 ops/docs-governance.md 的主人指针办理。
+- `[助手自定]` 删除涉及手工数据先查牵连和备份；文档结构与归档按 docs/guides/document-governance.md 的主人指针办理。
 
 ## 六、坐标与禁区
 
@@ -49,11 +49,11 @@ MEMORY.md为会话入口；项目开发正文在ops/development/，旧细则.md�
 ## 八、工程纪律
 
 - `[用户·2026-10-05]` 本机自用不设冻结前置；迁移升级两库、业务取舍和前端规则仍按对应主人。
-- `[助手自定]` 架构约束回 ops/architecture.md、模块约束回 ops/modules.md；界面工程机制按任务读IDE-细节.md §十。
+- `[助手自定]` 架构约束回 docs/architecture.md、模块约束回 docs/architecture/modules.md；界面工程机制按任务读IDE-细节.md §十。
 - `[用户·2026-10-12]` 一人开发练手，优先速度和token；不为假设情况扩测试，不强制每条新增测试配独立变异。选集/入口改动做定向自检；金额、权限、写入、回滚与已修复bug覆盖和隔离保护保留。流程回docs/agents/workflow.md。
 - `[用户·2026-10-01]` 上屏文字以熟手为读者，具体规则回D29，不在注入档复述。
 - `[用户·2026-10-09]` **够用即止**：一人开发·局域网2人；建任何检查前先过两问（在本项目会不会真发生？真发生是否真难受？）⇒ 取舍细则与手法回 docs/agents/workflow.md「取舍」。
 
 ## 附录 · 方法触发
 
-只有改检查选择或排查假绿时读IDE-细节.md §十八/十九；只有追溯决定或复发事故时读指定历史。硬数字只回ops/阈值表.md，不抄副本。
+只有改检查选择或排查假绿时读IDE-细节.md §十八/十九；只有追溯决定或复发事故时读指定历史。硬数字只回docs/reference/thresholds.md，不抄副本。

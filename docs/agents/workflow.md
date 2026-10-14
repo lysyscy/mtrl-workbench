@@ -20,10 +20,10 @@
 | 现行需求与字段口径 | `delivery/材料科业务全流程说明书.md` / `delivery/PRD/`；按AGENTS.md定位对应MOD与原句 |
 | effort规格、采用记录及累计范围 | 已有设计件或所属票；独立方案放 `.codebuddy/work/10-designs/`，单票目标与验收放票面。明确采用时记录用户确认、固定起点、累计范围与当次授权；不为接入新建空规格或第二份状态表 |
 | 票源与阶段 | `docs/agents/issue-tracker.md` §一～§四；主计划§15是活跃索引，§14.3为排期，已销号姊妹件是历史短索引；开销票使用 `_tail_open.py` / `_tail_close.py` |
-| 资料目录与历史 | README.md §二/三/四/七、ops/docs-governance.md、.codebuddy/work/README.md；术语及D件消费回 docs/agents/domain.md |
-| 验证程序与选择 | `tools/oneoff/_run_rulers.py` 的CMDS/SELFTESTS及 `tools/oneoff/_impactscope.py`；实际命令、环境及浏览器工具分工回 `ops/development/开发与核验.md` §十一 |
+| 资料目录与历史 | README.md §二/三/四/七、docs/guides/document-governance.md、.codebuddy/work/README.md；术语及D件消费回 docs/agents/domain.md |
+| 验证程序与选择 | `tools/oneoff/_run_rulers.py` 的CMDS/SELFTESTS及 `tools/oneoff/_impactscope.py`；实际命令、环境及浏览器工具分工回 `docs/guides/development-and-verification.md` §十一 |
 | 结果与接续 | 当前票Comments留命令、退出码、关键数、未验边界与必要复现；跨会话且无合适票时才用当日日志；当前交接回主计划§13.6 |
-| 运行与数据权限 | MEMORY.md的凭据边界；服务与恢复操作回 ops/deployment.md。测试使用隔离数据；生产服务重启、迁移及真实业务写入按当前明确授权执行 |
+| 运行与数据权限 | MEMORY.md的凭据边界；服务与恢复操作回 docs/guides/deployment.md。测试使用隔离数据；生产服务重启、迁移及真实业务写入按当前明确授权执行 |
 
 金额或日期出口变化仍先按业务样例核对字段目的、实际事实与统计调整；已确认规格沿用，不重新访谈。未知使用者继续调查并留下缺口；验收、证据和票状态须一致。资料同步及最终输入核验按AGENTS.md指向的个人方法执行。
 
@@ -57,7 +57,7 @@
 
 ## 六、专项迁移与项目例外
 
-[用户·2026-10-15] 整体迁移清单已确认，首批只迁 Agent 协议与执行绑定；后续现行正文仍需实际统一。目录决定见 docs/adr/0033-document-layout.md。旧 ops/agents 三个入口仅供尚未迁移的历史引用查阅；现行调用直接使用 docs/agents。历史引用批次完成并核恢复来源后退役薄入口，不保留永久映射。
+[用户·2026-10-15] 整体迁移清单已确认，首批已迁 Agent 协议与执行绑定，第二批已迁13份工程正文；产品、状态和其余过程资料仍需按批准清单实际统一。目录决定见 docs/adr/0033-document-layout.md。旧 ops/agents 及本批13个工程入口仅供尚未迁移的历史引用查阅；现行调用直接使用 docs/agents、docs/architecture.md及同名目录、docs/guides与docs/reference。历史引用批次完成并核恢复来源后退役薄入口，不保留永久映射。
 
 | 范围 | 原因、权威与读取方式 | 退出条件 |
 |---|---|---|
@@ -66,4 +66,4 @@
 | 宿主 RULE、memory 与项目技能入口 | 保留真实加载契约，专题正文逐批迁往标准位置 | 宿主和消费者实际完成切换后退役不再需要的入口 |
 | artifacts、logs、backups 与运行资源 | 使用项目真实配置与恢复位置；运行模板由资源模块消费，忽略材料不由 Git 兜底 | 消费者和恢复依据核实后按获准清单处置 |
 
-每批先保护 Git 工作区、索引、未跟踪及忽略原件，核实际引用、扫描范围和运行消费者；只回滚本批拥有的改动。当前目录与命名接线回 README.md、ops/docs-governance.md 和 .codebuddy/work/README.md，未迁部分明确保持迁移中。
+每批先保护 Git 工作区、索引、未跟踪及忽略原件，核实际引用、扫描范围和运行消费者；只回滚本批拥有的改动。当前目录与命名接线回 README.md、docs/guides/document-governance.md 和 .codebuddy/work/README.md，未迁部分明确保持迁移中。

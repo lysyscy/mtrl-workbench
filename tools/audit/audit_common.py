@@ -451,9 +451,8 @@ SCAN_GLOBS: tuple[str, ...] = (
     #       与 ④ 产物档（`artifacts/` —— 由 `T11` 管"回执"，不管措辞）。
     # ⚠️ **`CLAUDE.md` 已删除**（2026-09-21 用户裁定：换工具后**无人读取**）—— 它的必用内容已并入
     #    `MEMORY.md`（注入档）与 `细则.md`，过程叙事下沉到 `plans/archive/归档-历史单元条目.md`。
-    # ⭐ 2026-10-01（`TAIL-204` 第 3 步）：`docs/*.md` **摘掉** —— `docs/` 已整目录并进 `ops/`（一类一夹），
-    #    留着它就是**一条都不命中的 glob**（`T18` 会当场报「那一片从没被扫过」）。
-    "README.md", "AGENTS.md", "ops/*.md", ".codebuddy/plans/*.md",
+    # 2026-10-15工程正文迁入docs；旧ops薄入口退出普通扫描，仍在用的索引显式保留。
+    "README.md", "AGENTS.md", "ops/README.md", "ops/delivery-surface.md", "docs/architecture.md", ".codebuddy/plans/*.md",
     # ⭐⭐ 2026-10-06（`TAIL-236` 第 4 批 · **实验**）：**仓内归档索引**进扫描面 ——
     #   `plans/archive/归档-*.md` 早就在 `LENIENT_GLOBS`（降黄那侧），而 `SCAN_GLOBS` 只有**非递归**的
     #   `.codebuddy/plans/*.md` ⇒ **那一片根本没被扫**（实测：扫描面里带 `archive` 的件 = 0）。
@@ -462,7 +461,7 @@ SCAN_GLOBS: tuple[str, ...] = (
     ".codebuddy/plans/archive/*.md",
     # 2026-10-15专项迁移：Agent协议、绑定与新ADR实际进入扫描；T18仍核每条glob命中。
     "docs/agents/*.md", "docs/adr/*.md",
-    "ops/development/*.md",  # 项目开发分册的现行正文；旧memory位置只留兼容指针。
+    "docs/architecture/*.md", "docs/guides/*.md", "docs/reference/*.md",  # 项目开发分册的现行正文；旧memory位置只留兼容指针。
     ".codebuddy/memory/MEMORY.md",
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**治理区整片进扫描面** —— 此前只有上面那份
     # `MEMORY.md` 一个治理区文件在被扫 ⇒ 票仓 / 规则档 / 决策档 / 过程区**没有任何尺子看得见**。
@@ -480,7 +479,7 @@ SCAN_GLOBS: tuple[str, ...] = (
     ".codebuddy/work/10-designs/*.md",
     ".codebuddy/work/30-troubleshooting/*.md",
     # ⚠️ 2026-09-24 **摘掉 `.codebuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
-    #    它是**搬迁前的旧地址**，该件现址 = `ops/changelog.md`（`README.md`「工程基准档」那行）⇒
+    #    它是**搬迁前的旧地址**，该件现址 = `docs/reference/changelog.md`（`README.md`「工程基准档」那行）⇒
     #    这条 glob **一条都不命中** = 那一片**从没被扫过**（`docs/*.md` 已把它盖住 ⇒ 摘掉 = 零损失）。
 )
 DELIVERY_GLOBS: tuple[str, ...] = (
@@ -538,7 +537,7 @@ LIVE_MACHINE_GLOBS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 #: ⭐⭐ 2026-09-24（用户裁定 **A**）：`T8` **从「只扫代码」扩到「也扫活文档」**。
 #:   **为什么要扩**：文档面原来交给 `T2`（`RETIRED_TERMS`），但那张词表**不含**已撤的
-#:   页 / 端点名 ⇒ 「用**现在时**描述已撤功能」这类（实测：`ops/modules.md` 把 `m05imp`、
+#:   页 / 端点名 ⇒ 「用**现在时**描述已撤功能」这类（实测：`docs/architecture/modules.md` 把 `m05imp`、
 #:   `m06imp`、`m04` 两步导入写成**现存功能**）**没有任何尺子看得见** ——
 #:   ⚠️ 实证：把 `docs/*.md` 加进漂移扫描面（`SCAN_GLOBS`）之后，`doc_audit` **仍然必须修 0**。
 #:   **怎么扩**：文档面**直接复用 `SCAN_GLOBS`**（它已是「会被当口径读的那几层」的**唯一定义**）

@@ -99,6 +99,6 @@ def test_判法本身写进了守则():
     import pathlib
 
     rule = (pathlib.Path(__file__).resolve().parents[2]
-            / "ops" / "前端设计守则-以使用用户为中心.md").read_text(encoding="utf-8")
+            / "docs" / "guides" / "frontend-design.md").read_text(encoding="utf-8")
     assert "只用于" in rule and "已经做完" in rule, "守则 §4.5 里没写「绿只用于已经做完」这条判法"
     assert "禁止项" in rule, "守则 §4.5 里没写「黄只用于风险 / 禁止项」这条判法"

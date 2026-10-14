@@ -26,7 +26,7 @@ from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 #: 守则正文（`ops/` 在**仓根**下 —— 与 `shell_src` 取 `index.html` 同一个根）
-DOC = Path(__file__).resolve().parents[2] / "ops" / "前端设计守则-以使用用户为中心.md"
+DOC = Path(__file__).resolve().parents[2] / "docs" / "guides" / "frontend-design.md"
 
 
 def _doc() -> str:

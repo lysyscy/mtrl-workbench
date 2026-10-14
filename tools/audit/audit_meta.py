@@ -19,15 +19,15 @@ from audit_common import (
 
 # ------------------------------------------------- T5 单文件 >400 行是否已登记
 
-#: 阈值出处 = `ops/阈值表.md`（**唯一一处集中登记**）。
+#: 阈值出处 = `docs/reference/thresholds.md`（**唯一一处集中登记**）。
 #: ⭐ 2026-09-21 **用户裁定：`>600` 从「红 · 禁合入」降为「黄」** ——
 #:    理由：行数是**代理指标**（700 行的扁平查表好过 300 行的三层回调）；它对「我整份读文件」
 #:    这件事有护栏价值，但作为**禁合入的闸门过度**。⚠️ 保留为**黄** ≠ 不用管：>600 仍要
-#:    **登记「为什么不拆」的理由**（在 `ops/阈值表.md` 那张表里给一行）。
+#:    **登记「为什么不拆」的理由**（在 `docs/reference/thresholds.md` 那张表里给一行）。
 LINE_LIMIT, HARD_LIMIT = 400, 600
 CODE_DIRS: tuple[str, ...] = ("backend/app", "backend/tests", "tools")
 #: `T5` 的"登记处"（>600 时说明"为什么不拆"）
-THRESHOLD_DOC = "ops/阈值表.md"
+THRESHOLD_DOC = "docs/reference/thresholds.md"
 
 
 def check_file_sizes() -> list[dict]:
@@ -36,7 +36,7 @@ def check_file_sizes() -> list[dict]:
     ⚠️ **清单不抄进 `MEMORY.md`** —— 抄一份必然过期（实测：§八 手抄了 4 个，实际有 9 个）。
     ⇒ **本函数的输出就是那份清单**；文档只留纪律，不留名单（这正是「状态由机器生成」）。
     ⚠️ **`>600` 不再是红**（2026-09-21 用户裁定降级）：它**不挡合入**，但仍要求一条登记。
-    ⛔ 别把这条悄悄改回红 —— 要改先改 `ops/阈值表.md` 里那一行（那里写着出处与理由）。
+    ⛔ 别把这条悄悄改回红 —— 要改先改 `docs/reference/thresholds.md` 里那一行（那里写着出处与理由）。
 
     ⭐⭐ 2026-09-29 **补第二半**（`TAIL-06` 的量测逼出来的）：**`>600` 的件必须在阈值表里被"点名"**。
       原先只报「超线 ⇒ 须登记」，⚠️ **却不核"那张表里到底有没有这一件"** ⇒ 实测当场对不上：
@@ -181,7 +181,7 @@ def check_rule_restatements() -> list[dict]:
 #:   ⚠️ 预算 = **谁必须整份读它**，跟"文档写得好不好"无关：
 #:   · `inject` 档 = **每个新会话都会进上下文**（最贵 —— 它天天吃 token 且**没有任何检索能绕开**）；
 #:   · `must` 档 = 接手/收尾必读（次之）。
-#: ⚠️ 超预算 ⇒ **黄 ＋ 登记**（⛔ 不是禁写）⇒ 去 `ops/阈值表.md` 登记"为什么该长 / 什么时候拆"。
+#: ⚠️ 超预算 ⇒ **黄 ＋ 登记**（⛔ 不是禁写）⇒ 去 `docs/reference/thresholds.md` 登记"为什么该长 / 什么时候拆"。
 #: ⛔ 别为了让这条变绿而**删真东西** —— 正确的动作是**把历史叙事挪出状态文档**（见 `MEMORY.md §八`）。
 #: ⚠️ **预算按真值定 ＋ 留小余量**（2026-09-21 实测：我第一版按 PowerShell 量的数**偏小** ⇒ 4 份文档当场"超预算"）。
 #:    ⭐ 真因（2026-09-24 实测订正）：主因**不是**"不数空行"，而是 `Get-Content` **默认不按 UTF-8 解码**（PS 5.1 = ANSI）
@@ -198,14 +198,14 @@ def check_rule_restatements() -> list[dict]:
 #:   ⇒ **字节超了没有任何尺子拦**（当天是靠人肉量才发现）。⇒ 行数是代理指标，**字节才是宿主真正按的那个数**。
 #: ⚠️ `None` = 该档**不设字节上限**（只认行预算）—— ⛔ 别为了"整齐"给每行都编一个数：
 #:   编出来的数没有出处（本仓规矩：硬数字要么实测、要么不写）。
-#: ⚠️ **一条数只定义一次**：字节档只写在本表（`ops/阈值表.md` 那行只记出处与理由，⛔ 不复述件名清单）。
+#: ⚠️ **一条数只定义一次**：字节档只写在本表（`docs/reference/thresholds.md` 那行只记出处与理由，⛔ 不复述件名清单）。
 DOC_BUDGETS: tuple[tuple[str, int, str, int | None], ...] = (
     ("README.md", 240, "inject", None),                        #: ⛔ 现值**别手抄** ⇒ 要现值跑 `doc_audit`（`T10` 会报）；字节档 = `None`（它不是宿主自动注入的那一件）
     (".codebuddy/memory/MEMORY.md", 200, "inject", 14400),      #: ⛔ 行现值由 `T10` 报；⭐ **字节档 14400** = 宿主注入的硬顶（超了**静默截断**，见上）
     #: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：原 `.codebuddy/plans/执行情况-主文档.md`（预算 **200**）**已取消** ——
     #:   用户裁定「只留待办」⇒ 待办并入**根 `README.md` §〇**（本表第 1 行就是它，预算 240）
     #:   ⇒ ⛔ **别为它再列一行**：那会变成"同一件事两处预算"（本仓最贵的病，必漂）。
-    ("ops/development/实现约束.md", 620, "must", None),       # 预算沿用迁移前细则分册，不新增或改变阈值。
+    ("docs/guides/implementation-constraints.md", 620, "must", None),       # 预算沿用迁移前细则分册，不新增或改变阈值。
     (".codebuddy/plans/开发计划-主文档.md", 300, "must", None),  # TAIL-295：主计划瘦身完成，预算300行
 )
 #: ⭐⭐ **注入档字节「逼近线」**（2026-10-06 · `/retro` ③）＝ 硬顶 − 900 B。
@@ -214,7 +214,7 @@ DOC_BUDGETS: tuple[tuple[str, int, str, int | None], ...] = (
 #:   而超顶的后果不是报错，是**静默截断**（丢**文件尾部** ＝ `§七`/`§八` 工程纪律那两节）。
 #:   ⇒ 光有"超顶报黄"太晚：得**提前一条线**，逼出"先蒸馏再写"这个动作。
 #: ⚠️ 900 B 的取法 = **够写两三条纪律的量**（实测一条纪律约 250–400 B）⇒ 到线时至少还能记两条。
-#:   阈值出处 = `ops/阈值表.md`（那一行只记这个数与理由，⛔ 不复述件名）。
+#:   阈值出处 = `docs/reference/thresholds.md`（那一行只记这个数与理由，⛔ 不复述件名）。
 BYTES_WARN = 13500
 
 
@@ -232,7 +232,7 @@ def check_doc_budgets() -> list[dict]:
             hits.append({"code": "T10", "side": "仓", "rel": rel, "line": 1,
                          "what": f"文档不存在（预算 {budget} 行 · {tier} 档）",
                          "why": "被登记为必读的文档不见了 ⇒ 接手的人读不到",
-                         "fix": "恢复它，或从 `DOC_BUDGETS` 里撤下（撤下要同步改 `ops/阈值表.md`）",
+                         "fix": "恢复它，或从 `DOC_BUDGETS` 里撤下（撤下要同步改 `docs/reference/thresholds.md`）",
                          "level": YELLOW, "text": ""})
             continue
         n = len(p.read_text(encoding="utf-8", errors="replace").splitlines())
@@ -243,7 +243,7 @@ def check_doc_budgets() -> list[dict]:
                                  if tier == "inject" else
                                  "**必读档**超预算 ⇒ 它会退化成\"读不完 ⇒ 只 grep ⇒ 没搜到的就丢了\""),
                          "fix": "把**历史叙事**挪到 `artifacts/` 或 memory 日志（⛔ 别删真东西）；"
-                                "或在 `ops/阈值表.md` 登记维持理由",
+                                "或在 `docs/reference/thresholds.md` 登记维持理由",
                          "level": YELLOW, "text": ""})
         # ⭐⭐ 2026-10-05（`TAIL-236` 同批修 ③）：**字节档** —— 见 `DOC_BUDGETS` 上方那段
         #   （宿主按**字节**截断注入档，而行数看不见它 ⇒ 2026-10-05 实测 14,859 B 超顶却全绿）。
@@ -260,8 +260,8 @@ def check_doc_budgets() -> list[dict]:
                              "why": "**离硬顶只剩不到 1 KB** ⇒ 再加两条就超顶，而超顶 ＝ **静默截断**"
                                     "（丢的是文件尾部 ＝ 工程纪律那两节）；"
                                     "⚠️ 到了这条线就**先蒸馏再写**（细节下沉到不注入的分册，只留指针）",
-                             "fix": f"蒸馏：项目开发细节回 `ops/development/`，个人通用方法回个人技能，{rel} 只留指针；"
-                                    f"⭐ **不许靠删真东西腾地方**（阈值出处 = `ops/阈值表.md`）",
+                             "fix": f"蒸馏：项目开发细节回 `docs/guides/`，个人通用方法回个人技能，{rel} 只留指针；"
+                                    f"⭐ **不许靠删真东西腾地方**（阈值出处 = `docs/reference/thresholds.md`）",
                              "level": YELLOW, "text": ""})
             if nb > byte_budget:
                 hits.append({"code": "T10", "side": "仓", "rel": rel, "line": 1,
@@ -270,7 +270,7 @@ def check_doc_budgets() -> list[dict]:
                                     "（被截掉的是**文件尾部**，而那是该档最要紧的部分）；"
                                     "⚠️ 行数可能还在预算内 ⇒ 只查行数的判据**看不见它**",
                              "fix": "压缩该档（细节下沉到不注入的分册 ＋ 只留指针）；"
-                                    "或在 `ops/阈值表.md` 登记维持理由",
+                                    "或在 `docs/reference/thresholds.md` 登记维持理由",
                              "level": YELLOW, "text": ""})
     return hits
 
@@ -446,7 +446,7 @@ def check_doc_layout() -> list[dict]:
         if f.name not in ROOT_MD_ALLOW:
             hits.append(_t12(f.name, "仓库根出现了白名单外的 md",
                              "根目录只放 `README.md`（文档地图）—— 根上散落的 md 没人维护、必然过期",
-                             "并进 `README.md`，或按四层放到 `ops/` / `.codebuddy/` / `artifacts/`"))
+                             "并进 `README.md`，或按现行职责放到 `docs/` / `.codebuddy/` / `artifacts/`"))
     return hits
 
 
@@ -908,8 +908,8 @@ def check_tail_ledger(cases: set[str]) -> list[dict]:
 #:   (a) 主文档**行数预算** —— 超了 = 过程又塞回来了（黄 ⇒ 下沉）；
 #:   (b) 标题里出现**过程词**（逐批记录 / 逐次记录 / 收官记录）⇒ 该块该下沉了（黄）。
 PLAN_DOC_REL = ".codebuddy/plans/开发计划-主文档.md"
-PLAN_LINE_BUDGET = 300          #: 与 T10 同值；下调理由见 ops/阈值表.md
-#:   `ops/阈值表.md:31` 写着「一个数、两处用」⇒ 改一处必须改另一处）
+PLAN_LINE_BUDGET = 300          #: 与 T10 同值；下调理由见 docs/reference/thresholds.md
+#:   `docs/reference/thresholds.md:31` 写着「一个数、两处用」⇒ 改一处必须改另一处）
 PROCESS_TITLE_RE = re.compile(r"^#{2,4}.*(逐批记录|逐次记录|收官记录)")
 #: 标题里写着「下沉/归档/索引」的 = **指针节**，不是过程本体 ⇒ 豁免
 PROCESS_EXEMPT_RE = re.compile(r"下沉|归档|索引")
@@ -945,7 +945,7 @@ def check_plan_process() -> list[dict]:
 
 # ------------------------------------------------- T21 文档「字墙」（单行过长）守卫
 #
-#: 阈值出处 = `ops/阈值表.md`（**唯一一处集中登记**）。
+#: 阈值出处 = `docs/reference/thresholds.md`（**唯一一处集中登记**）。
 #: ⭐⭐ 2026-10-04 立（`TAIL-224` · 用户裁定「④按推荐」＝ 文档重构方案 §六-4 甲案）：
 #:   「字墙」= **单行 >800 字** —— 它是"文档很乱"的**真身**：主文档 **88 行**超 800 字
 #:   （存量最多的一行 **4563 字**：一整天的交接工作塞进一行）。⚠️ `T10`（读预算）与 `T13`
@@ -973,8 +973,8 @@ LINE_WALL_CHARS = 800
 LINE_WALL_BASELINE: tuple[tuple[str, int], ...] = (
     (".codebuddy/plans/开发计划-主文档.md", 0),
     (".codebuddy/plans/票索引-已销号.md", 7),
-    ("ops/前端设计守则-以使用用户为中心.md", 0),
-    ("ops/阈值表.md", 1),
+    ("docs/guides/frontend-design.md", 0),
+    ("docs/reference/thresholds.md", 1),
 )
 
 
@@ -1024,7 +1024,7 @@ def check_line_walls() -> list[dict]:
                                  "一行塞一整天的工作 ⇒ 接手的人得穿过上万字才找得到「下一步是哪一步」；"
                                  "（`T10`/`T13` 只管总行数，看不见「一行有多长」）",
                                  "把这几行拆成「一行一事」，或把过程叙述逐字下沉归档件；"
-                                 "确需保留则在 `ops/阈值表.md` 的基线里登记本件"))
+                                 "确需保留则在 `docs/reference/thresholds.md` 的基线里登记本件"))
             continue
         if cur > b:
             w = sorted(over, key=lambda t: -t[1])[:2]
@@ -1040,13 +1040,13 @@ def check_line_walls() -> list[dict]:
             hits.append(_t21(rel, 1,
                              f"字墙基线**过期**：本件实为 {cur} 行 ≤ 基线 {b} ⇒ 请下调",
                              "基线只许变短；不跟改 ⇒ 那道闸会越来越松、最后形同虚设",
-                             f"把 `ops/阈值表.md` 与 `audit_meta.LINE_WALL_BASELINE` 里本件改成 {cur}"))
+                             f"把 `docs/reference/thresholds.md` 与 `audit_meta.LINE_WALL_BASELINE` 里本件改成 {cur}"))
     for rel, b in LINE_WALL_BASELINE:
         if rel not in seen:
             hits.append(_t21(rel, 1,
                              f"基线里的件已**不在活文档扫描面内**（基线写着 {b} 行）",
                              "件被删 / 改名 / 归档进留痕 ⇒ 这条基线成了幽灵（只增不减是它的常见烂法）",
-                             "从 `LINE_WALL_BASELINE` 撤下本行（`ops/阈值表.md` 同改）"))
+                             "从 `LINE_WALL_BASELINE` 撤下本行（`docs/reference/thresholds.md` 同改）"))
     return hits
 
 
@@ -1065,13 +1065,13 @@ def check_line_walls() -> list[dict]:
 #
 #: T22保护会话入口及按需项目开发分册；集合名保留以兼容现有使用者。
 #: 文件被扫描不代表每会话必读，也不证明宿主自动注入。
-#:   ⚠️ 口径**只在这里定义一次**（`ops/阈值表.md` 那行只写"真源 = 本常量"，⛔ 不复述件名清单）。
+#:   ⚠️ 口径**只在这里定义一次**（`docs/reference/thresholds.md` 那行只写"真源 = 本常量"，⛔ 不复述件名清单）。
 #:   ⚠️ `journal/`（逐日日志）与 `plans/` **不在内** —— 那是**只追加留痕**，
 #:     里面的粘连是**历史事实**，改了才是篡改（同 `LENIENT_GLOBS` 的哲学）。
 ALWAYS_READ_DOCS: tuple[str, ...] = (
     ".codebuddy/memory/MEMORY.md",
-    "ops/development/实现约束.md",
-    "ops/development/开发与核验.md",
+    "docs/guides/implementation-constraints.md",
+    "docs/guides/development-and-verification.md",
 )
 #: 粘连特征 = **行尾标点**后面紧跟「列表符 / 引用符 + 空白」——
 #:   即"本该是下一行行首的符号，被拼到了上一行的句号后面"。
@@ -1099,7 +1099,7 @@ def check_line_splices() -> list[dict]:
         if not p.exists():
             hits.append(_t22(rel, 1, "（文件不存在）",
                              "会话入口或项目开发分册缺失，当前读取指针可能失效",
-                             "核资料主人及 `ALWAYS_READ_DOCS`，同步入口和 `ops/阈值表.md`"))
+                             "核资料主人及 `ALWAYS_READ_DOCS`，同步入口和 `docs/reference/thresholds.md`"))
             continue
         for i, line in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
             m = SPLICE_RE.search(line)
@@ -1202,7 +1202,7 @@ def check_live_machine() -> list[dict]:
                         "（2026-10-05 实测：漏了运维脚本与规则档两路，差点搬走被引用的设计件）；"
                         "**后缀对不上**同族 —— 那条路会扫到别的后缀上去，等于没扫对它",
                         f"把 `{g}` ＋ 后缀 {sufs} 加回 `audit_common.LIVE_MACHINE_GLOBS`"
-                        "（改口径要同批改 `ops/阈值表.md` 与 `LIVE_MACHINE_REQUIRED`）", RED))
+                        "（改口径要同批改 `docs/reference/thresholds.md` 与 `LIVE_MACHINE_REQUIRED`）", RED))
     for glob, label, sufs in LIVE_MACHINE_GLOBS:
         if any(p.is_file() and p.suffix in sufs for p in REPO_ROOT.glob(glob)):
             continue
@@ -1285,7 +1285,7 @@ def check_gate_liveness() -> list[dict]:
 #   （`doc_audit` 曾写 `tools/doc_audit.py` · `cover_gap` 曾写 `tools/cover_gap.py` ·
 #    `_mut_prg_form` 曾写 `tools/prg_form_audit.py`）⇒ 症状**全是假绿**：「检查在跑，其实扫的是空集」。
 #   ⚠️ **立本条当天就抓出第 4 例**：`SCAN_GLOBS` 里的 `.codebuddy/memory/CHANGELOG.md` 是**搬迁前的旧地址**
-#      （该件现址 = `ops/changelog.md`，见 `README.md`「工程基准档」那行）⇒ 那条 glob **一条都不命中**。
+#      （该件现址 = `docs/reference/changelog.md`，见 `README.md`「工程基准档」那行）⇒ 那条 glob **一条都不命中**。
 #
 # ⭐ 判据（**静态、秒级** ⇒ 进 `doc_audit`，每轮自动跑）：
 #   · `path`：常量指向的件 / 目录**必须存在**；
@@ -1385,7 +1385,7 @@ def check_guard_constants() -> list[dict]:
                 if not rp.exists():
                     out.append(hit(f"`{key}` 里的仓外根 `{raw}` **在盘上不存在**",
                                    "`T3` 的仓外白名单分支会恒报「找不到」⇒ 那一片等于没登记",
-                                   f"改 `audit_common.OUTSIDE_ROOTS`（换机必改；`ops/阈值表.md` 同步）"))
+                                   f"改 `audit_common.OUTSIDE_ROOTS`（换机必改；`docs/reference/thresholds.md` 同步）"))
                 elif inside:
                     out.append(hit(f"`{key}` 里的 `{raw}` **其实在仓内**",
                                    "它在仓内就该走仓内分支（红）⇒ 登记成仓外 = 给幽灵开了后门",

@@ -8,7 +8,7 @@
    要判的是"**报告里出现了那条**"（本件直接调检查函数取命中列表，最精确）。
 
 靶：① 尾巴活跃计数 ② 尾巴已销号计数 ③ CMDS 定义锚（实际执行清单；TAIL-245 同批改靶）
-⑤ `ops/阈值表.md` 自己（数字 vs 它自称的真源）。⚠️ ④（`U5` 登记数）没配靶：它的真值来自
+⑤ `docs/reference/thresholds.md` 自己（数字 vs 它自称的真源）。⚠️ ④（`U5` 登记数）没配靶：它的真值来自
    ~~`ui_parity.U5_COUNT`~~（⛔ 2026-09-30 `TAIL-201`：`U5` 退场 ⇒ 那条锚点**已撤**），改文档里的数同样会报 —— 不为凑数硬加。
 
 用法：python tools/mut/_mut_countanchors.py
@@ -27,7 +27,7 @@ import audit_common  # noqa: E402
 from audit_drift import check_count_anchors  # noqa: E402
 
 PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
-THRESHOLDS = ROOT / "ops" / "阈值表.md"
+THRESHOLDS = ROOT / "docs" / "reference" / "thresholds.md"
 RUNNER = ROOT / "tools" / "oneoff" / "_run_rulers.py"
 
 #: `(名称, 靶件, 旧串, 改成的错值, 期望命中的 what 关键词)`
@@ -57,7 +57,7 @@ def _ruler_case(text: str) -> tuple[str, str, str]:
 
 
 def _threshold_case(text: str) -> tuple[str, str, str]:
-    """④ `ops/阈值表.md` 的 `README.md` 行数预算 —— 现取并把数字加 1。"""
+    """④ `docs/reference/thresholds.md` 的 `README.md` 行数预算 —— 现取并把数字加 1。"""
     m = re.search(r"\| \*\*(\d+)\*\* \| `README\.md` 行数预算", text)
     if not m:
         raise SystemExit("  ⛔ 找不到『`README.md` 行数预算』那一行 ⇒ 本件需重定靶")
@@ -73,7 +73,7 @@ def build_cases(texts: dict) -> list[tuple[str, pathlib.Path, str, str, str]]:
         ("① 尾巴活跃计数", PLAN, o1, n1, k1),
         ("② 尾巴已销号计数", PLAN, o2, n2, k2),
         ("③ CMDS 清单缺失必须报黄", RUNNER, o3, n3, k3),
-        ("⑤ `ops/阈值表.md`（数字 vs 自称真源）", THRESHOLDS, o5, n5, k5),
+        ("⑤ `docs/reference/thresholds.md`（数字 vs 自称真源）", THRESHOLDS, o5, n5, k5),
     ]
 
 

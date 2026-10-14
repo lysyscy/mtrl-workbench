@@ -1,6 +1,6 @@
 """模板本体（**运行期交付物**）的**唯一路径出口** ＋ 完整性闸门。
 
-依据 = 工程侧实测结论 `ops/模板法导出-实测结论.md` §五：
+依据 = 工程侧实测结论 `docs/reference/template-export.md` §五：
 - 模板本体**随系统走**（已入库 `backend/app/resources/templates/`，**与代码同行、进 git**）；
 - 该文档里**仍待做的一条实现侧硬性**：「模板缺失 ⇒ **必须显式报错**（不许静默产出空文件）」；
 - 同一节登记的 **SHA256** 就是「防回退 / 损坏判据」（交付面那两份被 WPS 同步回退过两次）
@@ -46,7 +46,7 @@ JC_PRINT_TEMPLATE: Path = TEMPLATE_DIR / "模板-集采打印台账.xlsx"
 
 PATH1_TEMPLATES: tuple[Path, ...] = (LEDGER_TEMPLATE, PROC_TEMPLATE, WELD_TEMPLATE, BIG_TEMPLATE, JC_PRINT_TEMPLATE)
 
-#: 登记的 SHA256（**唯一登记处** = `ops/模板法导出-实测结论.md` §五 那张表；改模板必须同时改这里）
+#: 登记的 SHA256（**唯一登记处** = `docs/reference/template-export.md` §五 那张表；改模板必须同时改这里）
 EXPECTED_SHA256: dict[str, str] = {
     "模板-集采打印台账.xlsx": "a9654f0530479929cdb5bd687d8f1fa2fa61ed0979a79af969bd56e0a03f8e6d",
     "模板_收发结存表.xlsx":
@@ -65,7 +65,7 @@ EXPECTED_SHA256: dict[str, str] = {
 }
 
 #: ⚠️ `_RETRY` 是**给用户看的**（模板缺失 / 损坏 ⇒ 导出被拦时上屏）⇒ ⛔ 不许写工程侧路径 / 内部文件名。
-#:   2026-10-01（`TAIL-211`）：原先写着「见 ops/模板法导出-实测结论.md §五」＋ 交付面与仓内两条路径
+#:   2026-10-01（`TAIL-211`）：原先写着「见 docs/reference/template-export.md §五」＋ 交付面与仓内两条路径
 #:   —— 那是**写给维护者**的（守则 §3.1）；维护口径改走 `ops/` 那份文档，⛔ 别写回这里。
 _RETRY = "请让维护人重新部署导出模板（模板是成品文件的**基底**，缺失或损坏时无法导出）。"
 

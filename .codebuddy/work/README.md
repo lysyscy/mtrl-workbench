@@ -20,8 +20,8 @@
 | 实验证据数据（json/xlsx/截图） | work 区、docs | `artifacts/` 既定子目录（md 在 work、证据在 artifacts，互给路径） |
 | 提交信息草稿 | artifacts/commit_msgN.txt | `.codebuddy/work/00-scratch/CB_MSG.txt`（`git commit -F` 后可删） |
 | `delivery/` 产品资料的手工备份 | artifacts 根、.codebuddy 根 | `.codebuddy/backups/`；类型、保留及清理唯一规则回 README.md §四 |
-| 环境/部署/配置/架构知识 | MEMORY 注入档 | `ops/architecture.md` ＋ `ops/README.md`（随变更同批改） |
-| 使用者可感知的变化 | 活文档正文 | `ops/changelog.md`（部署节点登记） |
+| 环境/部署/配置/架构知识 | MEMORY 注入档 | `docs/architecture.md` ＋ `ops/README.md`（随变更同批改） |
+| 使用者可感知的变化 | 活文档正文 | `docs/reference/changelog.md`（部署节点登记） |
 
 ## 二、升档 / 降档生命周期（防新区变新垃圾场）
 
@@ -110,8 +110,8 @@
 | .codebuddy/work/10-designs/设计-表格筛选配置化-20260924.md | 表格重构历史与遗留依据；状态回§15，不按旧批次自行开工。 |
 | .codebuddy/work/10-designs/设计-前端系统性重构审计-20260928.md | 已完工审计留痕；测试仍引用，查旧重构原因时读。 |
 | .codebuddy/work/10-designs/设计-口径说明折叠块-20261001.md | 已撤折叠块的处置证据；追查文案删留原因时读。 |
-| .codebuddy/work/10-designs/设计-交付包与迁移-20260929.md | 旧迁移取舍与脚本旁证；当前部署回ops/deployment.md，不重问旧六问。 |
-| .codebuddy/work/10-designs/设计-分层门禁一般式-20261002.md | 已实施分层门禁的推导依据；当前模块规则回ops/architecture.md与测试。 |
+| .codebuddy/work/10-designs/设计-交付包与迁移-20260929.md | 旧迁移取舍与脚本旁证；当前部署回docs/guides/deployment.md，不重问旧六问。 |
+| .codebuddy/work/10-designs/设计-分层门禁一般式-20261002.md | 已实施分层门禁的推导依据；当前模块规则回docs/architecture.md与测试。 |
 | .codebuddy/work/10-designs/设计-架构候选3-异常原文-20261002.md | 已收口异常文案分类证据；当前上屏文字回D29与前端守则。 |
 | .codebuddy/work/10-designs/设计-主文档与D件二期治理-20261011.md | TAIL-294～297已实施的整理依据；追溯这轮治理或改对应判据时读，日常接手回AGENTS.md。 |
 

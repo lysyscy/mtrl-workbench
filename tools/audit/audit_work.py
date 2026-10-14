@@ -10,7 +10,7 @@
   **在决策区没有任何尺子看得见**（6 件状态写成"已办结/已拍板/已定案"、5 件缺落地位置，全是手查出来的）。
 - `T26`（2026-10-05 `TAIL-236` 第 3 批）：**「结论已落地」⇒ 该降档**（只报不动）——
   「已定稿 / 已实施」两档的件，若 ① 件内 `TAIL-` 票**全部销号** ＋ ② 件内**声明的「落地位置」真存在**
-  ⇒ 报黄。⭐ 治的是 `work/README.md` §二 那条「用完就丢」**只有规矩、没有机器眼**（`docs-governance.md`
+  ⇒ 报黄。⭐ 治的是 `work/README.md` §二 那条「用完就丢」**只有规矩、没有机器眼**（`document-governance.md`
   §三 那两行自己写着「应有判据、现无」）。
 
 ⚠️ 与 `T12` 的分工：`T12` 管**目录与命名**（层级/前缀）；本件管**时间与元信息**（过期没、写没写头）。
@@ -65,13 +65,13 @@ STATE_VALUE_RE = re.compile(rf"{STATE_KEY}\s*[:：]?\s*\**([^｜|（(\n]*)")
 # ⭐⭐ 2026-10-05（`TAIL-236` 第 3 批）：**只给缺判据的「已定稿 / 已实施」两档补判据** ——
 #    这两档的含义就是「内容已冻结 / 结论已进代码」（`work/README.md` §四 的词表），
 #    本仓口径是**该降档**，而此前**没有任何机器看得见**
-#    （`ops/docs-governance.md` §三 那两行自己写着「应有判据、现无」）⇒
+#    （`docs/guides/document-governance.md` §三 那两行自己写着「应有判据、现无」）⇒
 #    `work/README.md` §二 那条"用完就丢"**执行不了** ⇒ 只进不出（= 用户不安的根因）。
 # ⛔⛔ **五档状态词一个字不动**（主人 = `.codebuddy/work/README.md` §四 · `T15` 机核那四行文头）：
 #    本判据只在两档上**加**机器眼，⛔ 不新增档位、不改词、不换轴（`TAIL-236` 决定 2）。
 DOWNGRADE_STATES: tuple[str, ...] = ("已定稿", "已实施")
 #: `T26` 的扫描面 = 上面那张区表里的**过程件两区** —— ⛔ **不含**决策区 `40-decisions/`：
-#: 决策件的协议是「只加不改 ＋ 被推翻只补一行」（`ops/docs-governance.md` §三）⇒ 降档语义不同。
+#: 决策件的协议是「只加不改 ＋ 被推翻只补一行」（`docs/guides/document-governance.md` §三）⇒ 降档语义不同。
 DOWNGRADE_ZONES: tuple[str, ...] = tuple(z for z in HEADER_ZONES if z != "40-decisions")
 #: ⭐ **「落地位置」声明行**的形态 —— **唯一主人 = `.codebuddy/work/README.md` §四**
 #:   （⛔ 别处只指路，别重述形态）。两种冒号位置都收（写作习惯差异，不是两种格式）：
@@ -93,7 +93,7 @@ def check_downgrade_candidates() -> list[dict]:
     ⚠️ **走哪一步（归档仓外 / 沉进 `ops/` / 就地标收口）看 `.codebuddy/work/README.md` §二 里
     本区那一行** —— 设计件与排查件的去向不同 ⇒ ⛔ 本判据**不替它规定去向**（别处重述 = 第二套口径）。
     ⛔ **「零机器引用」不是判据** —— 它只是一个**信号**（2026-10-05 实测：一份机器引用 0 的母本
-       被四张票当唯一依据；`docs-governance.md` §三 第 2 问）⇒ 报告里给的是**指路**：
+       被四张票当唯一依据；`document-governance.md` §三 第 2 问）⇒ 报告里给的是**指路**：
        引用数去敲 `tools/audit/refs_query.py`（它自己的报告末尾本来就有「三路全 0 的件」那一行）。
 
     **如实记账：这条判据的边界**（⛔ 别当它覆盖了全部）
@@ -148,10 +148,10 @@ def check_downgrade_candidates() -> list[dict]:
                 f"「{state}」档 · **结论已落地** ⇒ 该降档",
                 f"{tag_txt} ＋ 声明的落地位置真存在（{'、'.join('`%s`' % p for p in land)}）⇒ "
                 f"本件是**已完成的过程件**，却还留在过程区（`work/{zone}/`）——"
-                f"「用完就丢」缺的正是这一条机器眼（`ops/docs-governance.md` §三 那两行"
+                f"「用完就丢」缺的正是这一条机器眼（`docs/guides/document-governance.md` §三 那两行"
                 f"自己写着「应有判据、现无」）{also_txt2}",
                 "① 引用面**只是参考、⛔ 不是判据**：敲 `tools/audit/refs_query.py` 看三路计数；"
-                "② 落地位置即**口径主人** ⇒ 改它之前按 `ops/docs-governance.md` §二 核"
+                "② 落地位置即**口径主人** ⇒ 改它之前按 `docs/guides/document-governance.md` §二 核"
                 "「变了要同批改哪几处」；③ **去向**看 `.codebuddy/work/README.md` §二 里本区那一行"
                 "（⛔ 别照抄别的区）；④ 要搬 ⇒ `tools/oneoff/_doc_downgrade.py <件名> --apply`"
                 "（**唯一入口** · 默认干跑 · 可逆）—— 本判据**只报不动**",
@@ -192,7 +192,7 @@ ARCHIVE_KEEP, ARCHIVE_MAX_MB = 60, 12.0
 #:   ⭐ 为什么管它（`TAIL-194` · 2026-09-29 结构审计 §三 `P1-8`）：它曾是**全仓唯一"没有保留期、也没有机器眼"
 #:   的目录**（对照当时还在的仓级活区 `.workbuddy/scratch`：明写「保留期 14 天 ＋ 索引 README ＋ `T20`」）⇒ 只会一直堆。
 #:   ⚠️ **件数**才是它的病（"翻不翻得动"的代理指标）；**容量不是瓶颈**（实测 1.2 MB）⇒ 容量线只是挡住
-#:   "往里扔大文件"。⚠️ 阈值出处 = `ops/阈值表.md`（改数先改表）。
+#:   "往里扔大文件"。⚠️ 阈值出处 = `docs/reference/thresholds.md`（改数先改表）。
 ONEOFF_MAX_FILES, ONEOFF_MAX_MB = 200, 5.0
 
 

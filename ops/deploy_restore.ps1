@@ -1,5 +1,5 @@
 ﻿<#
-  已 clone 仓库的首次空库安装；用法与依赖见 ops/deployment.md。
+  已 clone 仓库的首次空库安装；用法与依赖见 docs/guides/deployment.md。
   只用于尚无应用角色及两库的目标；不用于已有系统升级或数据恢复。
   -DryRun 仅检查文件/配置并打印计划，不执行子进程或写入。
 #>
@@ -110,4 +110,4 @@ $check = Join-Path $RepoRoot 'ops\selfcheck.ps1'
 Run 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $check, '-RepoRoot', $RepoRoot) $RepoRoot
 if ($DryRun) { Say '=== 干跑结束：未执行命令或写入；数据库空库前提与实际安装尚未验证。 ===' }
 else { Say '=== 安装命令与自检已完成；自检 Skip 项仍未验证，请核对明细。 ===' }
-Say '真实备份恢复仍未证明；完成标准与诊断入口见 ops/deployment.md。'
+Say '真实备份恢复仍未证明；完成标准与诊断入口见 docs/guides/deployment.md。'

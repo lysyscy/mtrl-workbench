@@ -11,7 +11,7 @@
 | **业务规则 / 字段含义 / 界面措辞** | `delivery/材料科业务全流程说明书.md` / `delivery/PRD/` / `MOD-*` | 动业务行为（钱 / 状态 / 用词）之前 —— ⛔ **别从记忆复述，回原文读** |
 | **术语与用词** | 交付面《说明书》的用词 ＋ `.codebuddy/work/40-decisions/D29-文案审计口径-以熟手为准.md`（含**用词统一表**） | 写任何"上屏文字"之前 |
 | **决策（＝ADR 那一类）** | `.codebuddy/work/40-decisions/D*.md` | 需要核对某决定的理由或准备推翻它时；与决定冲突先说明，按当前授权判断 |
-| **工程侧底账** | `ops/README.md`（索引）＋ `ops/architecture.md` / `modules.md` | 摸架构 / 模块分工 / 起停之前 |
+| **工程侧底账** | `ops/README.md`（索引）＋ `docs/architecture.md` / `modules.md` | 摸架构 / 模块分工 / 起停之前 |
 
 ## 二、术语表：**本仓不单建 `GLOSSARY.md`**
 

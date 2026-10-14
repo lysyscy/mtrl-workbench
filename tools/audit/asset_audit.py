@@ -4,7 +4,7 @@
 **为什么存在**（用户 2026-09-17 原话）：
     「**之前明明素材包里有实现，你也非要自己试半天** —— 我的积分和时间都耗在这上面了」。
     ⇒ 根因不是"态度"，是**没把「一手权威」变成必查项**。本尺子就是那个必查项：
-    它盯着 `ops/素材包-索引.md` —— **每条素材必须说清"谁在用 / 什么时候接 / 为什么不用"**，
+    它盯着 `docs/reference/legacy-materials.md` —— **每条素材必须说清"谁在用 / 什么时候接 / 为什么不用"**，
     且**说的必须是真的**（落点真存在 · 台账真存在 · 用例号真存在）。
 
 ### 四把尺子（都**零人工登记** —— 信息全在索引表自己的栏位里）
@@ -32,13 +32,13 @@ from pathlib import Path
 from audit_common import CLOSED_INDEX_REL
 
 ROOT = Path(__file__).resolve().parents[2]
-INDEX = ROOT / "ops" / "素材包-索引.md"
+INDEX = ROOT / "docs" / "reference" / "legacy-materials.md"
 PLAN = ROOT / ".codebuddy" / "plans" / "开发计划-主文档.md"
 ENV = ROOT / ".env"
 
 # 表格 row 里以反引号包住、且像"本仓路径"的 token
 PATH_RE = re.compile(r"`([A-Za-z0-9_./\\-]+)`")
-REPO_PREFIX = ("backend/", "tools/", "ops/", "frontend/", ".codebuddy/", "logs/", "artifacts/")
+REPO_PREFIX = ("backend/", "tools/", "ops/", "docs/", "frontend/", ".codebuddy/", "logs/", "artifacts/")
 TAIL_RE = re.compile(r"TAIL-\d{2}")
 ACC_RE = re.compile(r"ACC-[A-Z0-9]+(?:-[A-Z0-9]+)*-\d{3}")
 DEP_MARKERS = ("运行时依赖", "须随代码走")

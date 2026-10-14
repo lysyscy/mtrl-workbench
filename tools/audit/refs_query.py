@@ -17,7 +17,7 @@
 三条理由：① 拆成"扫描基础设施 ＋ 报告"两件 ⇒ **「口径住在哪」多一处**，
 而 `T23` 半边③ 只扫本件（拆了就得扫两件 ⇒ 判据跟着变复杂）；② 拆完逻辑件仍三百多行，
 **没解决"长"的病，只多一次跨件跳转**；③ `T5` 在 400~600 只提醒，**>600 才要求**在
-`ops/阈值表.md` 点名"为什么不拆" ⇒ 真长过 600 时再登记。
+`docs/reference/thresholds.md` 点名"为什么不拆" ⇒ 真长过 600 时再登记。
 
 用法（⚠️ 路径含中文时**别靠 argv 传**，`python -c` 与 PowerShell 都吃过字）：
 
@@ -349,7 +349,7 @@ def _one_report(rel: str, name: str, note: str, lb: Blob, db: Blob, tb: Blob,
     L.append("")
     if not (live_hits or doc_hits or tick_hits):
         L.append("三路全 0 —— ⚠️ **这只是信号，不是「可以删」的结论**（下面那三问仍然要答）")
-    L.append("⚠️ 删 / 搬任何一件之前必答三问（口径 = `ops/docs-governance.md` §三）："
+    L.append("⚠️ 删 / 搬任何一件之前必答三问（口径 = `docs/guides/document-governance.md` §三）："
              "① 结论落到哪里去了（说出文件名）② 还有谁引用它（三路都要报）"
              "③ 仓外归档索引登记了吗")
     return L

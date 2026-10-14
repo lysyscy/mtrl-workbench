@@ -16,7 +16,7 @@
   ⑤ 拒做：**一个项目都没选** · 项目**没有数据** · 项目**不在档案里**（取不到展示名）；⑥ ≥2 个项目 ⇒ 一个 zip。
 
 ⚠️ 本片最危险的是**尾块 4 行整体下移 ＋ 合并区跟着搬**（引擎的合并区平移在本片**第一次真用上**）——
-   实测它当场抓出两处引擎真 bug（见 `ops/模板法导出-实测结论.md` §9.7）⇒ 这条 E2E 必须能复跑。
+   实测它当场抓出两处引擎真 bug（见 `docs/reference/template-export.md` §9.7）⇒ 这条 E2E 必须能复跑。
 用法： backend/.venv/Scripts/python.exe tools/_e2e_m06_proc.py
 """
 from __future__ import annotations

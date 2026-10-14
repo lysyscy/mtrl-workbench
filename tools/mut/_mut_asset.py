@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TARGET = ROOT / "ops" / "素材包-索引.md"
+TARGET = ROOT / "docs" / "reference" / "legacy-materials.md"
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 # ⚠️ 2026-09-23：`asset_audit.py` 已搬进 `tools/audit/` —— 旧路径下子进程 rc=2（读不到审计件），
 #    而脚本把"rc != 1"记成**未变红** ⇒ 假绿（实测：`0/3 如期变红`）。

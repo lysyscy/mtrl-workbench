@@ -92,7 +92,7 @@ MEM = ROOT / ".codebuddy" / "memory" / "MEMORY.md"
 REGISTRY = ROOT / "tools" / "t7_expected.txt"
 GUARD_SRC = ROOT / "tools" / "audit" / "audit_meta.py"      #: `T18` 的靶（常量定义处）
 COMMON_SRC = ROOT / "tools" / "audit" / "audit_common.py"    #: `M25`/`M26` 的靶（`OUTSIDE_ROOTS` 所在件）
-IDE = ROOT / "ops" / "development" / "开发与核验.md"       # M24保留原承重段；旧memory位置现为兼容指针。
+IDE = ROOT / "docs" / "guides" / "development-and-verification.md"       # M24保留原承重段；旧memory位置现为兼容指针。
 RUNNER = ROOT / "tools" / "oneoff" / "_run_rulers.py"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 
@@ -186,8 +186,8 @@ def _pad_bytes(src: bytes, target: int) -> bytes:
 
 # --------------------------------------------------- 追加式变异（M4–M8 · 2026-09-24 扩面之一）
 #
-#: `ops/*.md` ∈ `SCAN_GLOBS` ⇒ `ops/阈值表.md` 在 `T1/T2/T3` 的扫描面内（且它不是留痕档 ⇒ 命中即红）
-THRESHOLD = ROOT / "ops" / "阈值表.md"
+#: `docs/reference/*.md` ∈ `SCAN_GLOBS` ⇒ `docs/reference/thresholds.md` 在 `T1/T2/T3` 的扫描面内（且它不是留痕档 ⇒ 命中即红）
+THRESHOLD = ROOT / "docs" / "reference" / "thresholds.md"
 #: ⭐ `T25`（2026-10-05 立）靶：**仓根 `.gitignore`** —— 往里追加一条含「核不到的落点」的注释
 #:   （用完**按 bytes 复原**）。⚠️ 它不在 `doc_audit` 的扫描面里 ⇒ 只有 `T25` 看得见它。
 GITIGNORE = ROOT / ".gitignore"
@@ -332,7 +332,7 @@ MUTS_RED2: list[dict] = [
      "also": ("[T18]", "RECEIPT_DIR"), "path": GUARD_SRC,
      "old_new": (_b('RECEIPT_DIR = "artifacts"'), _b('RECEIPT_DIR = "artifacts_typo"')), "all": False},
     # ⭐⭐ `T19`（2026-09-24 立 · `TAIL-84`）：造一处**指到不存在的节**的引用 ⇒ 必须报（红）。
-    #    ⚠️ 靶选 `ops/阈值表.md`（`ops/*.md` ∈ 扫描面 ⇒ 命中即红）；同时验证以点开头的治理路径可解析。
+    #    ⚠️ 靶选 `docs/reference/thresholds.md`（`docs/reference/*.md` ∈ 扫描面 ⇒ 命中即红）；同时验证以点开头的治理路径可解析。
     #    ⚠️ 引用必须**紧贴**
     #    （本守卫只认「`X.md` 与 `§N` 相距 ≤8 字符」—— 松散写法是刻意排除的，见其注释）。
     {"desc": "M14 `T19` 文档指针**指到不存在的节**（.codebuddy 姊妹件里没有 §九九）", "mode": "red",

@@ -1,7 +1,7 @@
 # 文档检查结果的读法
 
 > 读者：正在整理资料的agent。回答：如何理解已选择检查的结果。何时读：对检查结果有疑问时。
-> 选择与执行范围只回 docs/agents/workflow.md；清单为 tools/oneoff/_run_rulers.py 的CMDS，定义回各脚本头部，阈值回ops/阈值表.md。
+> 选择与执行范围只回 docs/agents/workflow.md；清单为 tools/oneoff/_run_rulers.py 的CMDS，定义回各脚本头部，阈值回docs/reference/thresholds.md。
 
 | 结果 | 处置 |
 |---|---|

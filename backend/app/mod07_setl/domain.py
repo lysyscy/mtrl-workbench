@@ -206,7 +206,7 @@ def period_label(ym: str) -> str:
 
     ⚠️ 它与 `core.period.export_filename`（`表名-YYYY-MM` 那**另一族**命名）**不是一回事**：
        收发结存的成品名照**用户手作成品**的写法 —— 2026-09-17 真机跑通的那次产出就是
-       `第四工程公司2026年9月收发结存表.zip`（`ops/模板法导出-实测结论.md` §二）。
+       `第四工程公司2026年9月收发结存表.zip`（`docs/reference/template-export.md` §二）。
     ⚠️ 传进来的若不是干净的 `YYYY-MM` ⇒ **原样返回**（⛔ 不抛、也不臆造一个月份）。
     """
     s = str(ym or "").strip()

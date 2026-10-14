@@ -310,7 +310,7 @@ def api_export_settlement(request: Request):
     """导出收发结存**成品 zip**（分仓库 xlsx ＋ 总表）—— 浏览器直接下载（`TAIL-04`）。
 
     口径 = **模板法**：以「用户手作成品 xlsx」为基底做 `zip` 字节替换
-    （`ops/模板法导出-实测结论.md`）；金额按 2 位小数对平、**容差 0**。
+    （`docs/reference/template-export.md`）；金额按 2 位小数对平、**容差 0**。
 
     ⚠️ 三种失败（模板缺失/损坏 · 该月没有明细 · **缓存级对账不过**）⇒ **不产出文件**，
        改成 **JSON 200 ＋ `ok:false` ＋ 中文原因** ——
