@@ -71,7 +71,7 @@
 | effort规格、采用记录及累计范围 | 已有设计件或所属票；独立方案放 `.codebuddy/work/10-designs/`，单票目标与验收放票面。明确采用时记录用户确认、固定起点、累计范围与当次授权；不为接入新建空规格或第二份状态表 |
 | 票源与阶段 | 本页§一～§三；主计划§15是活跃索引，§14.3为排期，已销号姊妹件是历史短索引；开销票使用 `_tail_open.py` / `_tail_close.py` |
 | 资料目录与历史 | README.md §二/三/四/七、ops/docs-governance.md、.codebuddy/work/README.md；术语及D件消费回 ops/agents/domain.md |
-| 验证程序与选择 | `tools/oneoff/_run_rulers.py` 的CMDS/SELFTESTS及 `tools/oneoff/_impactscope.py`；实际命令与环境回 `.codebuddy/memory/IDE-细节.md` §十一 |
+| 验证程序与选择 | `tools/oneoff/_run_rulers.py` 的CMDS/SELFTESTS及 `tools/oneoff/_impactscope.py`；实际命令、环境及浏览器工具分工回 `.codebuddy/memory/IDE-细节.md` §十一 |
 | 结果与接续 | 当前票Comments留命令、退出码、关键数、未验边界与必要复现；跨会话且无合适票时才用当日日志；当前交接回主计划§13.6 |
 | 运行与数据权限 | MEMORY.md的凭据边界；服务与恢复操作回 ops/deployment.md。测试使用隔离数据；生产服务重启、迁移及真实业务写入按当前明确授权执行 |
 

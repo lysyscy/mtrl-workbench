@@ -240,7 +240,14 @@
 3. 执行同一选集：去掉 `--explain`；读取完整汇总与退出码。默认、`--related`、`--all` 都按影响选择；显式完整检查使用 `--full`。
 4. 需要真实服务验证时：按 `ops/deployment.md` 核对现场前提，运行 `tools/probe/_shell_smoke.py`；运行后端重启入口为 `ops/server_ctl.ps1`。`tools/audit/shell_verify.py` 是可选快照排障入口。
 
-Playwright 环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`，只传给执行子进程；输出用 UTF-8。`ACC_RESULTS_PATH` 局部出口由选择器隔离，勿全局导出。临时脚本与证据放 00-scratch。
+现有 Python Playwright 回归环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`，只传给执行子进程；输出用 UTF-8。`ACC_RESULTS_PATH` 局部出口由选择器隔离，勿全局导出。临时脚本与证据放 00-scratch。
+
+### 浏览器工具的本仓分工
+
+- 临时页面探索、交互调试、截图和问题复现优先考虑已安装的 Playwright CLI；操作说明读取 Skills Manager 管理的官方 `playwright-cli` 技能及本机 `playwright-cli --help`。按需要取快照和截图，简单操作直接复用 CLI，不默认新增永久脚本。
+- 已有针对性回归、确定性断言及长期业务保护继续走本仓 Python Playwright 与原运行入口；选集回本节上方及票协议§四。不因安装 CLI 迁移测试、引入 Playwright Test/MCP 或扩大为全站检查；实际缺陷有长期保护价值时才按原方法调整回归。
+- CLI 测试使用本任务独立命名的会话与浏览器状态；公开演练可用系统 Edge，需下载浏览器时缓存路径只传给 CLI 子进程并与现有 Python 缓存分开。业务数据、写入和服务操作的授权仍回 `ops/agents/issue-tracker.md` §四，不因浏览器隔离扩大权限。
+- 完成后关闭本任务会话、保留必要证据，清理本任务临时产物；已有脚本的保留与归档回 `tools/README.md`，不按目录名或安装新工具判定旧件无用。
 
 **命令卫生三条（2026-10-11 实测）**：① 每条 shell 命令前置 `$ProgressPreference='SilentlyContinue';` —— 否则每条都吐 1–3 KB 的 `#< CLIXML … 正在准备首次使用模块` 噪声；② 要看中文路径就 `git -c core.quotepath=false …`（否则是 `"\345\274\200…"` 转义）；③ ⛔ 别用 `… | Select-Object -First N` 截断后再看退出码 —— PowerShell 会把 rc 变成 1（假红），要 rc 就整条跑、或截断后单独读 `$LASTEXITCODE`。
 
