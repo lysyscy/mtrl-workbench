@@ -4,7 +4,7 @@
 
 ## 〇、入口与核验
 
-- `[用户·2026-10-08]` 本仓执行与核验绑定 = ops/agents/issue-tracker.md §四；个人方法条件入口 = AGENTS.md；命令 = .codebuddy/memory/IDE-细节.md §十一。新删件、提交和旧dirty不自动全验；基点不是通过证明。相关失败不能报通过，自证用隔离输入。review按当前用户授权和实际需要使用。
+- `[用户·2026-10-08]` 本仓执行与核验绑定 = ops/agents/issue-tracker.md §四；个人方法条件入口 = AGENTS.md；命令 = ops/development/开发与核验.md §十一。新删件、提交和旧dirty不自动全验；基点不是通过证明。相关失败不能报通过，自证用隔离输入。review按当前用户授权和实际需要使用。
 - 状态只信 tools/audit/acc_report.py、主计划§0和§15；阅读分派只回 AGENTS.md，历史不默认读取。
 
 ## 一、用户偏好
@@ -17,7 +17,7 @@
 
 ## 二、真源指针
 
-MEMORY.md为唯一注入档；细则.md与IDE-细节.md为按需分册。业务取值回`delivery/`说明书/PRD，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
+MEMORY.md为会话入口；项目开发正文在ops/development/，旧细则.md与IDE-细节.md只留兼容指针。业务取值回delivery说明书/PRD，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
 
 ## 三、本机事实（碰环境时使用）
 

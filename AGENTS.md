@@ -13,14 +13,14 @@
 
 | 当前动作 / 要判断的事 | 读取位置 |
 |---|---|
-| 查本仓输入、核验绑定、拆批记录、提交推送 | `ops/agents/issue-tracker.md` §四；运行命令见 `.codebuddy/memory/IDE-细节.md` §十一 |
+| 查本仓输入、核验绑定、拆批记录、提交推送 | `ops/agents/issue-tracker.md` §四；运行命令见 `ops/development/开发与核验.md` §十一 |
 | 开票、领票、销号、判断依赖或状态 | `ops/agents/issue-tracker.md`；活跃索引见主计划 §15；标签见 `ops/agents/triage-labels.md` |
 | 改业务行为、字段含义 | `delivery/材料科业务全流程说明书.md`、`delivery/PRD/` 对应 `MOD-*`；领域资料用法见 `ops/agents/domain.md` |
 | 改界面或处理显示、交互报障 | `ops/前端设计守则-以使用用户为中心.md` §0 → §9 |
 | 写上屏文字 | `.codebuddy/work/40-decisions/D29-文案审计口径-以熟手为准.md` |
-| 改壳适配、监听、重画或共享调用 | `.codebuddy/memory/IDE-细节.md` §十 / §十五 / §十六 |
-| 涉及打印、主题、历史数据、配置出口、模块搬运或判据 | 先取 `.codebuddy/memory/细则.md` 标题，再读命中小节；业务含义回 `delivery/` |
-| 改工具脚本、处理编码或文件操作 | `.codebuddy/memory/细则.md` §廿三、`tools/README.md` 对应项 |
+| 改壳适配、监听、重画或共享调用 | `ops/development/开发与核验.md` §十 / §十五 / §十六 |
+| 涉及打印、主题、历史数据、配置出口、模块搬运或判据 | 先取 `ops/development/实现约束.md` 标题，再读命中小节；业务含义回 `delivery/` |
+| 改工具脚本、处理编码或文件操作 | `ops/development/实现约束.md` §廿三、`tools/README.md` 对应项 |
 | 碰环境、起停、部署、架构或模块分工 | `ops/README.md` 索引 |
 | 查硬数字的依据 | `ops/阈值表.md` |
 | 推翻既有决定、追溯当初原因 | `.codebuddy/work/40-decisions/` 对应 D 件 |

@@ -92,7 +92,7 @@
 | 家 | 是什么 | 现状 |
 |---|---|---|
 | `.codebuddy/memory/journal/YYYY-MM-DD.md` | **唯一**的逐日日志（append-only） | ⭐ **要写日志就写这里**；⭐ 2026-10-01 起**随仓走（进 git）**；⛔ 别在别处再开一份 |
-| `.codebuddy/memory/MEMORY.md` ＋ `细则.md` | 会话**注入档** ＋ 细则分册（同目录） | 每轮必要项与专题参考；执行流程回 ops/agents/issue-tracker.md §四，业务含义回 `delivery/` |
+| `.codebuddy/memory/MEMORY.md` | 会话边界与条件入口 | 项目专题正文回ops/development/；旧分册只作兼容，执行方法按AGENTS读个人技能，业务含义回delivery |
 | `.codebuddy/plans/开发计划-主文档.md` | **唯一**活文档（状态源 ＋ §15 台账） | ⭐「给用户看的那一页」= **根 `README.md` §〇**（原 `执行情况-主文档.md` 已取消） |
 
 ## 六、资料用途与默认读取边界（TAIL-247）

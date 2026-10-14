@@ -4,6 +4,8 @@
 
 ## 〇、现行文档用途
 
+目录按职责保持浅层：根目录持有工程主文档、运行脚本与实测结论；agents为本仓Agent协议；development为项目实现和开发核验；hooks为提交保护源。个人通用方法由My-Skills持有，工程正文不再放进.codebuddy/memory；下表为唯一工程资料索引，不再为每个子目录复制一套地图。
+
 | 现行文档 | 用途与何时读 |
 |---|---|
 | ops/README.md | 工程资料与脚本索引；找工程依据时先读本页。 |
@@ -22,6 +24,8 @@
 | ops/agents/issue-tracker.md | 票协议与§四日常改动流程；开始改动与收尾时读。 |
 | ops/agents/triage-labels.md | 票分诊用词；设置票状态时读。 |
 | ops/agents/domain.md | 业务术语及决定的消费方式；记录领域决定时读。 |
+| ops/development/实现约束.md | 打印、配置、页面/API分界与本仓技术案例；按AGENTS命中的章节读取。 |
+| ops/development/开发与核验.md | 本机运行命令、壳适配、共享监听和工具反馈；日常开发或排障按需读取。 |
 
 历史实测与原始分组只作旁证，引用前核对成立前提；已经归档的正文经 .codebuddy/plans/archive/归档-留痕索引-20261005.md 读取。脚本用途见本页§一之二及 ops/deployment.md，不逐个解释历史脚本。
 
@@ -53,7 +57,7 @@
 |---|---|---|
 | `nssm_install.ps1` | **幂等**把后端注册成 NSSM 服务（服务名 `mtrl-workbench-server` · 单 worker · `0.0.0.0:8000` · 开机自启 · 崩溃自重启 · 日志分流 `../logs/server.out.log` / `server.err.log` 带 10 MB 轮转 · 依赖 `postgresql-x64-16`）。**先停并删除同名计划任务**（⛔ 不允许两个实例抢 8000） | ⚠️ **必须管理员** PowerShell；需要 `nssm.exe`（放 `ops/nssm/`，**已 gitignore**；获取渠道见脚本提示）。⭐ **换机 / 改启动参数（host、port、worker 数）/ 改 venv 路径 ⇒ 必复做** |
 | `nssm_uninstall.ps1` | 撤销服务注册（⛔ 不动数据、不动 `backend/`、不动 `.env`）；`-RestoreScheduledTask` 可恢复迁移前的计划任务形态 | 同上 |
-| `server_ctl.ps1` | 日常遥控：`status` / `start` / `stop` / `restart` / `log` / `port` / `pg`；⭐ `port` 那条会打印占用 8000 的**进程命令行与启动时间**（诊断"是不是旧进程"） | 普通窗口即可（`start`/`stop`/`restart` 需管理员）。⛔ **改完 Python 必须 `restart`**（无 `--reload`） |
+| `server_ctl.ps1` | 日常遥控：`status` / `start` / `stop` / `restart` / `log` / `port` / `pg`；⭐ `port` 那条会打印占用 8000 的**进程命令行与启动时间**（诊断"是不是旧进程"） | 只读查询普通窗口即可；启停/重启须当前明确授权及管理员权限。服务无 `--reload`，后端Python变化的加载要求不构成重启授权；操作边界见 ops/deployment.md §〇 |
 | `install_hooks.ps1` ＋ `hooks/pre-commit` | 安装仓内提交钩子；当前仅核暂存语法、字节和凭据文件名，实际清单读 `ops/hooks/pre-commit`。业务与文档核验按 `ops/agents/issue-tracker.md` §四执行 | 新环境/克隆后安装；保留真实钩子输出。安装脚本幂等，不改git config；钩子不依赖tail/sed等外部工具 |
 | `_ps_bom.py`（⚠️ 在 **`tools/oneoff/`** —— 2026-09-29 订正：原写"在 `tools/`"**已过期**，照它找会**找不到文件** ✗） | 给 `.ps1` 补 **UTF-8 BOM** | ⚠️ **PS 5.1 按 GBK 读无 BOM 的 .ps1** ⇒ 中文字节会**吞掉紧跟的 ASCII 引号** ⇒ 满屏 `ParserError`（文件本身没错）。**每次改完 ops 下的 .ps1 就跑一次** |
 | `_ps_parse_check.ps1`（在 **`tools/oneoff/`** · ⭐ 2026-09-29 立） | ⭐ **`ops/*.ps1` 的闸（两段）**：① **语法**（PS parser 逐份解析）② ⭐ **仓内路径字面量必须真的存在**（`Join-Path $RepoRoot '…'` 形态；⚠️ **先剥注释再扫** —— 不剥会把"解释缺陷的注释"当成缺陷）⇒ 任一段不过就 `rc=1` | ⚠️ 仓里**此前没有任何 PS 尺子**（Python 有 `syntax_audit.py`、前端有 `node --check` 那一路，PowerShell 没有）⇒ 改完只能等**真跑那一刻**才炸 —— 而那通常正是"要在目标机安装"的时候 ✗。⚠️ 它**不管语义/参数**，那半靠 `-DryRun` 真跑（两者互补：它查"写死的路径在不在"，`-DryRun` 查"流程对不对"） |

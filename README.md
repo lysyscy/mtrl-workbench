@@ -42,7 +42,7 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 
 个人工作流已通过AGENTS.md接入：普通改动、按票接续、子代理配置和资料维护按条件读取个人技能，本仓继续持有业务、票源、目录、测试与授权绑定。现由Skills Manager统一部署到Codex、CodeBuddy、WorkBuddy，完整维护源与部署绑定回票协议§四；安装衔接和真实发布同步证据回TAIL-324，首次接入证据回TAIL-320。既有业务待办和运行版本分别按本页与主计划判断。
 
-开发与核验按 `ops/agents/issue-tracker.md` §四，命令见 `.codebuddy/memory/IDE-细节.md` §十一。当前能力见主计划 §0.3；运行服务和本地代码的差别见本节开头。资料迁移与历史治理演练的证据从已销号票索引按需追溯。
+开发与核验按 `ops/agents/issue-tracker.md` §四，命令见 `ops/development/开发与核验.md` §十一。当前能力见主计划 §0.3；运行服务和本地代码的差别见本节开头。资料迁移与历史治理演练的证据从已销号票索引按需追溯。
 
 ### ② 要你验的清单（**唯一一张**）
 
@@ -80,7 +80,7 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | 层 | 位置 | 谁读 | 职责 | 行数预算 | 机器扫 |
 |---|---|---|---|---|---|
 | **① 注入档** | `.codebuddy/memory/MEMORY.md` | ⭐ **每个新会话**（注入或按宿主读取） | 只放每轮必要偏好、边界和触发指针；按任务读取对应主人章节 | 以 `T10` 输出为准（⛔ **别手抄** —— 抄了就漂） | ✅ `T9` |
-| **② 按需档** | `README.md`(本文件) · `细则.md` · `plans/开发计划-主文档.md`（⭐ 给用户看的现状见**本文件 §〇**，主计划维护工程状态与票索引）· `ops/*.md`（⭐ **含工程基准档** —— 2026-10-01 起 `docs/` 已并入）· **`.codebuddy/work/README.md`** | 人 / AI **按需查** | 口径 · 台账 · 排期 · 细则 · 实测结论 · **架构/部署/changelog** · **工作记录分区宪法** | 各见表 | ✅ `T1`–`T6` · `T10` · `T12` |
+| **② 按需档** | README及AGENTS条件入口 · 主计划 · ops工程主文档、agents项目协议与development开发分册 · .codebuddy/work/README.md | 人 / Agent按当前动作查 | 项目约束、现状与导航；个人通用方法回外部维护源 | 各见机器输出 | ✅ `T1`–`T6` · `T10` · `T12` |
 | **③ 留痕档**（**两个标签，别混**） | **【只追加】** `.codebuddy/memory/journal/YYYY-MM-DD.md`（**现役**逐日日志 —— 2026-10-01 `TAIL-204` 第 2 步起在此，**随仓走**；`.codebuddy/work/README.md` §五「**唯一**落点，⛔ 别在别处再开一份」） · **【已归档】** `D:\dev\.归档-mtrl\`（**仓外** · 2026-10-05 `TAIL-235` 甲1 移出）—— 仓内只留索引 `.codebuddy/plans/archive/归档-留痕索引-20261005.md` | 只在追溯或复发排障时读 | 过程 / 事故 / 逐次定案 / 被删内容的原文 | 不限 | ❌ **故意不扫** |
 | **④ 产物档** | `artifacts/` | 需要证据时 | 四态 `acc_results.json` · 截图 · **工具生成物白名单**（`变异覆盖台账.md`）—— ⛔ **过程类 md 不许进**（去 `work/`） | 不限 | `T11` 管**回执** · `T15` 管**白名单** |
 
@@ -95,13 +95,14 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | backend/app/ | 后端业务模块；backend/app/web/为唯一前端壳；实现与排障时看。 |
 | backend/tests/、backend/alembic/ | 判据与测试、数据库迁移；核验或改结构时看。 |
 | ops/ | 工程资料与运维脚本；逐件用途在 ops/README.md；改工程行为时查。 |
+| ops/agents/、ops/development/、ops/hooks/ | 项目Agent协议、项目开发分册、提交保护源；具体读取条件由AGENTS和ops/README持有。 |
 | tools/ | audit检查、mut反向见证、probe实测、oneoff操作工具；用途见 tools/README.md。 |
 | .codebuddy/rules/入场指针/RULE.mdc | 宿主接手指针，转到AGENTS.md与现行核验主人；接手时触发。 |
 | .codebuddy/rules/前端设计守则/RULE.mdc | 前端规则指针；改壳前转到ops前端守则。 |
-| .codebuddy/skills/docs-audit/SKILL.md | 文档整理工作流；判断该并该归档时读，scripts为只读盘点器。 |
+| .codebuddy/skills/docs-audit/SKILL.md | 本仓文档整理适配；只维护分类与检查绑定，通用方法读个人技能，scripts为只读盘点器。 |
 | .codebuddy/skills/docs-audit/references/taxonomy.md | 技能的资料用途分类与病因判读；整理资料时按SKILL触发。 |
 | .codebuddy/skills/docs-audit/references/rulers.md | 技能的文档检查结果读法；整理资料时按SKILL触发。 |
-| .codebuddy/memory/ | MEMORY.md是每会话纪律与偏好；细则.md是按需方法；IDE-细节.md是IDE方法与§十一运行命令。 |
+| .codebuddy/memory/ | MEMORY.md为会话边界与条件入口；journal为历史。旧细则与IDE分册只留兼容指针，不持有现行开发正文。 |
 | .codebuddy/memory/journal/ | 按日追加的过程证据；查当时发生什么才读，默认接手不通读。 |
 | .codebuddy/plans/ | 开发计划-主文档.md是状态、排期及§15活跃票索引；票索引-已销号.md是已销号短索引；接手读主计划§0、§13.6当前交接与§15相关票。 |
 | .codebuddy/plans/archive/ | 归档-留痕索引-20261005.md是仓外历史正文入口；不放现行规则。 |
@@ -134,7 +135,7 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | 决策记录 | `D<编号>-<主题>.md`（D21 起） | `.codebuddy/work/40-decisions/` |
 | **尾巴票** | `TAIL-<编号>-<短名>.md` | `.codebuddy/work/50-tickets/`（⭐ 2026-10-04 `TAIL-225` 起 —— 一张票一个文件；**索引 = 计划 §15 一行一票**；⭐ 用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄） |
 | 临时件 | `tmp-YYYYMMDD-<主题>.*` / `CB_MSG.txt` | `.codebuddy/work/00-scratch/`（TTL 14 天） |
-| 工程基准档 | 固定小写英文名（architecture / modules / deployment / changelog / delivery-surface / **docs-governance**） | `ops/`（⚠️ 2026-10-01 起 —— 原 `docs/` 已并入） |
+| 工程基准档 | 固定小写英文名（architecture / modules / deployment / changelog / delivery-surface / **docs-governance**） | ops根目录；项目Agent协议在ops/agents/；开发实现与核验分册在ops/development/，不混入会话记忆 |
 | 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.codebuddy/backups/`（**备份唯一落点**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**）⭐ **何时清** = **备份数量超线时**复核一次（超线就移/清；上限数字见 `ops/阈值表.md`，⛔ 不在此处抄） |
 | **产品资料改前备份** | `delivery/` 内原型与说明书的改前快照 | `.codebuddy/backups/`；文件本身由 Git 版本管理，手工快照只用于需要快速恢复的批量编辑 |
 | 产物 md | 仅工具生成物白名单（当前：`变异覆盖台账.md`） | `artifacts/` |
@@ -155,12 +156,12 @@ TAIL-330–334已完成内部方法消费、按需能力选择、只读分流、
 | 某个能力/字段的业务含义 | `delivery/`《说明书》/ `delivery/PRD/` | ⛔ 代码注释、`ops/`（那是工程侧） |
 | 怎么装 / 怎么起停 / 配置项有哪些 | `ops/README.md`（索引）＋ `ops/` 下的脚本与 SQL | ⛔ `MEMORY.md`（那里只留指针） |
 
-**改一处要顺手同步**（漏了**静默失效、不报错**）：`WIRED` · `PAGE_LOAD` ·（change现直接调用ACT，见 .codebuddy/memory/IDE-细节.md §十）·
+**改一处要顺手同步**（漏了**静默失效、不报错**）：`WIRED` · `PAGE_LOAD` ·（change现直接调用ACT，见 ops/development/开发与核验.md §十）·
 两张登记表（`tools/*_expected.txt`）· ⭐ **界面上有「操作人/录入人」列 ⇒ 后端必须有字段**。
 
 ## 六、核验入口
 
-核验流程唯一主人为 ops/agents/issue-tracker.md §四，命令回 .codebuddy/memory/IDE-细节.md §十一。文档检查按受影响引用、结构与真实使用者选择；提交不自动扩大，普通改动不默认验仓外整套原型。
+本仓核验绑定与授权回 ops/agents/issue-tracker.md §四，命令回 ops/development/开发与核验.md §十一；通用方法按AGENTS读个人技能。文档检查按受影响引用、结构与真实使用者选择；提交不自动扩大，普通改动不默认验仓外整套原型。
 检查登记与保护后果分别见 tools/oneoff/_run_rulers.py、tools/README.md及tools/audit/doc_audit.py头部。整理资料可用 .codebuddy/skills/docs-audit/SKILL.md 的分类方法，依现行影响流程选择工具。
 
 ## 七、⭐ 怎么加一份新文档（决策树 —— 先走这里，⛔ 别直接建文件）

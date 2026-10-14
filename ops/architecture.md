@@ -109,7 +109,7 @@ IPP回执按协议成功类别判定接收；属性替换或冲突提示核对�
 - schema变更走Alembic；两库迁移一致。测试固定PostgreSQL，不可用时显式失败，不回退SQLite；外层事务/SAVEPOINT隔离，写路径API测试复用隔离会话，连接到开发库即熔断。
 - 中间件顺序：IP白名单在内、request_id居中、CORS最外。N+1禁止；批量查询用JOIN/IN，统计SQL包含未删除条件；金额统计上线前用EXPLAIN ANALYZE核查全表扫描。
 - deleted时间戳与业务撤销voided语义不同；快照保留金额原始精度。依赖规则见 ops/deployment.md §六，行数与读取预算只回 ops/阈值表.md，原计划的“超线禁合入”旧文字已退场。
-- 本机事实与写文件/运行命令的坑回 .codebuddy/memory/MEMORY.md §三/§四；方法回 .codebuddy/memory/IDE-细节.md。服务调用外部程序时，必须按服务账户身份复核路径可达。
+- 本机事实与写文件/运行命令的坑回 .codebuddy/memory/MEMORY.md §三/§四；方法回 ops/development/开发与核验.md。服务调用外部程序时，必须按服务账户身份复核路径可达。
 
 ## 三、主题与壳加载
 
@@ -133,7 +133,7 @@ IPP回执按协议成功类别判定接收；属性替换或冲突提示核对�
 库存列表、过程资料与大表按各自入口取数；m06读矩阵与机械，m07读报表与机械，两页均不预拉库存全量。依赖清单直接读 `backend/app/web/shell/core.js` 的 `PAGE_LOAD` / `LOADERS` / `LOAD_DEP`，写后标脏保持全页新鲜度；变更前核对实际消费者，避免按旧依赖补回无用请求。
 
 ⚠️ **两条口径**：① **原型切片不许搬出 `index.html`**（旧U1逐行比对已退场；初始化期加载约束仍需遵守，变更前核对当前加载顺序和判据）；
-② 改多文件加载须验证通过服务的真实脚本加载及顺序；按实际范围核验，执行入口见 .codebuddy/memory/IDE-细节.md §十一。
+② 改多文件加载须验证通过服务的真实脚本加载及顺序；按实际范围核验，执行入口见 ops/development/开发与核验.md §十一。
 
 壳的语义读取入口是 tools/audit/shell_api.py，测试侧只转发的入口是 backend/tests/shell_src.py；剪刀清单由 backend/tests/shell_scissors.py 守护。
 

@@ -205,7 +205,7 @@ DOC_BUDGETS: tuple[tuple[str, int, str, int | None], ...] = (
     #: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：原 `.codebuddy/plans/执行情况-主文档.md`（预算 **200**）**已取消** ——
     #:   用户裁定「只留待办」⇒ 待办并入**根 `README.md` §〇**（本表第 1 行就是它，预算 240）
     #:   ⇒ ⛔ **别为它再列一行**：那会变成"同一件事两处预算"（本仓最贵的病，必漂）。
-    (".codebuddy/memory/细则.md", 620, "must", None),          #: ⛔ 同上；⭐ **2026-10-01（`TAIL-204` 第 2 步）420 → 620**：并入原项目侧 `MEMORY.md` 全文（173 行归档为附录）
+    ("ops/development/实现约束.md", 620, "must", None),       # 预算沿用迁移前细则分册，不新增或改变阈值。
     (".codebuddy/plans/开发计划-主文档.md", 300, "must", None),  # TAIL-295：主计划瘦身完成，预算300行
 )
 #: ⭐⭐ **注入档字节「逼近线」**（2026-10-06 · `/retro` ③）＝ 硬顶 − 900 B。
@@ -260,7 +260,7 @@ def check_doc_budgets() -> list[dict]:
                              "why": "**离硬顶只剩不到 1 KB** ⇒ 再加两条就超顶，而超顶 ＝ **静默截断**"
                                     "（丢的是文件尾部 ＝ 工程纪律那两节）；"
                                     "⚠️ 到了这条线就**先蒸馏再写**（细节下沉到不注入的分册，只留指针）",
-                             "fix": f"蒸馏：把细节挪进 `细则.md` / `IDE-细节.md`，{rel} 只留指针；"
+                             "fix": f"蒸馏：项目开发细节回 `ops/development/`，个人通用方法回个人技能，{rel} 只留指针；"
                                     f"⭐ **不许靠删真东西腾地方**（阈值出处 = `ops/阈值表.md`）",
                              "level": YELLOW, "text": ""})
             if nb > byte_budget:
@@ -1063,18 +1063,15 @@ def check_line_walls() -> list[dict]:
 # ⚠️ **为什么该做检查、不该写规则**：这是**固定语法模式**（不是判断题）⇒ 能机器判。
 #    写进 `MEMORY.md` 当纪律，**没有任何尺子会执行它** ⇒ 写了没牙。
 #
-#: `T22` 的目标集 = **常读三件**（每会话自动注入 / 接手必读的那三件）。
-#: ⛔ **刻意不叫"注入档三件"**（`/code-review` 指出的一处口径打架）：本仓的"注入档"**有精确含义** =
-#:    **唯一** `MEMORY.md`（`细则.md §394/436/584` ＋ `MEMORY.md §二` 都这么写，`DOC_BUDGETS` 的
-#:    `tier` 也是这么分的：`MEMORY.md`＝inject · `细则.md`＝must · `IDE-细节.md`＝不注入）。
-#:    票面那句"注入档三件"是**口语**；本表若照抄就等于**给同一个词第二套定义**（本仓最贵的病）。
+#: T22保护会话入口及按需项目开发分册；集合名保留以兼容现有使用者。
+#: 文件被扫描不代表每会话必读，也不证明宿主自动注入。
 #:   ⚠️ 口径**只在这里定义一次**（`ops/阈值表.md` 那行只写"真源 = 本常量"，⛔ 不复述件名清单）。
 #:   ⚠️ `journal/`（逐日日志）与 `plans/` **不在内** —— 那是**只追加留痕**，
 #:     里面的粘连是**历史事实**，改了才是篡改（同 `LENIENT_GLOBS` 的哲学）。
 ALWAYS_READ_DOCS: tuple[str, ...] = (
     ".codebuddy/memory/MEMORY.md",
-    ".codebuddy/memory/细则.md",
-    ".codebuddy/memory/IDE-细节.md",
+    "ops/development/实现约束.md",
+    "ops/development/开发与核验.md",
 )
 #: 粘连特征 = **行尾标点**后面紧跟「列表符 / 引用符 + 空白」——
 #:   即"本该是下一行行首的符号，被拼到了上一行的句号后面"。
@@ -1091,7 +1088,7 @@ def _t22(rel: str, lineno: int, what: str, why: str, fix: str, text: str = "") -
 
 
 def check_line_splices() -> list[dict]:
-    """`T22` · **注入档三件里出现「标点后紧跟列表符/引用符」的粘连 ⇒ 黄**。
+    """`T22` · 会话入口及项目开发分册出现行首粘连时提示；不声明宿主注入。
 
     ⚠️ **只报黄、不报红**：粘连是**编辑事故**（工具用错），不是口径写错 ⇒
        它的正确处置是"当场把那两行拆回去"，不该挡住别人的合入（同 `T5`/`T10` 哲学）。
@@ -1101,8 +1098,8 @@ def check_line_splices() -> list[dict]:
         p = REPO_ROOT / rel
         if not p.exists():
             hits.append(_t22(rel, 1, "（文件不存在）",
-                             "注入档三件少了一件 ⇒ 接手的人读不到，而**没有任何尺子会提它**",
-                             "恢复该件，或从 `INJECT_DOCS` 撤下（撤下要同步改 `ops/阈值表.md`）"))
+                             "会话入口或项目开发分册缺失，当前读取指针可能失效",
+                             "核资料主人及 `ALWAYS_READ_DOCS`，同步入口和 `ops/阈值表.md`"))
             continue
         for i, line in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
             m = SPLICE_RE.search(line)

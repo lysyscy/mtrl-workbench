@@ -15,8 +15,8 @@
 
 | 块 | 位置 | 谁读 | 放什么 | 机器眼 |
 |---|---|---|---|---|
-| **① 注入档** | `.codebuddy/memory/MEMORY.md` | ⭐ **每个新会话自动** | 每轮必要偏好与边界、专题触发；正文按AGENTS回对应主人 | `T9` · `T22` |
-| **② 按需档（活口径）** | 根 `README.md` · `.codebuddy/memory/细则.md` · `.codebuddy/plans/开发计划-主文档.md` · `ops/*.md`（含工程基准档）· `.codebuddy/work/README.md` | 人 / Agent **按需查** | 分层与命名 · 状态与台账 · 排期 · 细则 · 实测结论 · 工程基准档 · 工作记录落点 | `T1`–`T6` · `T10` · `T12` |
+| **① 注入档** | `.codebuddy/memory/MEMORY.md` | 新会话按宿主注入；未注入时按AGENTS手动读 | 每轮必要偏好与边界、专题触发；文件在场或RULE启用不等于已核实际注入 | `T9` · `T22` |
+| **② 按需档（活口径）** | 根 `README.md` · `ops/development/实现约束.md` · `.codebuddy/plans/开发计划-主文档.md` · `ops/*.md`（含工程基准档）· `.codebuddy/work/README.md` | 人 / Agent **按需查** | 分层与命名 · 状态与台账 · 排期 · 细则 · 实测结论 · 工程基准档 · 工作记录落点 | `T1`–`T6` · `T10` · `T12` |
 | **③ 只追加留痕** | `.codebuddy/memory/journal/YYYY-MM-DD.md` | 按追溯或复发触发 | 当天过程叙事 · 事故 · 逐次定案 | `T12`（**故意不扫内容**） |
 | **④ 已归档（仓外）** | `D:\dev\.归档-mtrl\` | 只在考古时 | 定稿落地的原文（正文**不在仓内**） | `T3` / `T18` 按**显式白名单**核 |
 | **⑤ 产物** | `artifacts/` | 要证据时 | 四态 `acc_results.json` · 截图 · **工具生成物白名单**（`变异覆盖台账.md`） | `T11`（回执）· `T15`（白名单） |

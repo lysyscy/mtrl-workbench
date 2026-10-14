@@ -82,7 +82,7 @@ Git 提供受跟踪代码和 `delivery/`，不提供本机 `.env`、数据库、
 1. `ops\server_ctl.ps1 status`（服务在不在）→ `log`（日志尾 200 行）→ `port`（**8000 被谁占** —— 会打印进程命令行与启动时间，诊断"是不是旧进程"）
 2. `ops\server_ctl.ps1 pg`（PG 服务在不在）· `logs\server.err.log`（后端异常）
 3. 页面报"没能取到" ⇒ ⭐ 点**重试**（只重拉本页那几路）；报错文案一律是"人话 + 下一步"
-4. ⚠️ **改了 Python 代码必须 `ops\server_ctl.ps1 restart`**（服务**没有** `--reload`）
+4. 服务没有 `--reload`；运行后端Python变化须在当前明确授权后按§〇加载，未加载时据实报告源码与运行版本的差别。改壳、工具或文档不因此重启服务。
 5. **产品资料真源**位于仓内 `delivery/`，清单与读取边界见 ops/delivery-surface.md §一/§三。
    `.env` 的 `PRD_ACCEPTANCE_BASELINE` 指向 `delivery/PRD/验收/验收基线.json`；换机时克隆仓库即可取得完整资料。
    `ui_parity` 只查壳自身；配置方法统一见下节。
@@ -105,7 +105,7 @@ Git 提供受跟踪代码和 `delivery/`，不提供本机 `.env`、数据库、
 - **交付面配置**见§四第5条；不再沿用云同步迁移安排。
 - ✅ **换机会踩的三处路径**（交付面定位 · node · Playwright 浏览器）**已做成可配** —— 怎么配、⛔ 不配会怎样：见上面 **§四之补**（⭐ **唯一主人**；⛔ 别在这里再抄一份 —— 2026-09-29 订正：本行原写着"**改完之前**，用到它们的尺子会报错"，而 §四之补 已写"✅ 已做成可配" ⇒ 同一份文件两处口径打架，删旧留新）。
 - 开工、核验与提交按 `ops/agents/issue-tracker.md` §四；前端改动先读 `ops/前端设计守则-以使用用户为中心.md`。
-- 本机自用、边用边改，结构冻结已按用户决定取消。结构变化仍走Alembic并保持两库一致，判据为 `backend/tests/test_schema_drift.py`；业务口径与部署动作按当前授权执行。决定追溯回 `.codebuddy/work/40-decisions/D索引-D1-D32.md`，不再从旧主计划§9.5取已搬走的正文。
+- 本机自用、边用边改，结构冻结已按用户决定取消。数据库schema变化才走Alembic并核两库结构一致，判据为 `backend/tests/test_schema_drift.py`；迁移执行、业务口径变更与部署动作按当前授权，普通模块或文档结构调整不触发两库upgrade。决定追溯回 `.codebuddy/work/40-decisions/D索引-D1-D32.md`，不再从旧主计划§9.5取已搬走的正文。
 
 ## §六 依赖来源与加固
 

@@ -92,7 +92,7 @@ MEM = ROOT / ".codebuddy" / "memory" / "MEMORY.md"
 REGISTRY = ROOT / "tools" / "t7_expected.txt"
 GUARD_SRC = ROOT / "tools" / "audit" / "audit_meta.py"      #: `T18` 的靶（常量定义处）
 COMMON_SRC = ROOT / "tools" / "audit" / "audit_common.py"    #: `M25`/`M26` 的靶（`OUTSIDE_ROOTS` 所在件）
-IDE = ROOT / ".codebuddy" / "memory" / "IDE-细节.md"        #: `M24` 的靶（豁免词表的**实测承重件**）
+IDE = ROOT / "ops" / "development" / "开发与核验.md"       # M24保留原承重段；旧memory位置现为兼容指针。
 RUNNER = ROOT / "tools" / "oneoff" / "_run_rulers.py"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 
