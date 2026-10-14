@@ -254,31 +254,13 @@ def test_金额空是None不是0_日期归一():
 
 
 @acc()
-def test_Excel能覆盖的列必须都在白名单里且含付款方式():
-    """⚠️⚠️ **2026-09-20 真机实测踩到**（用户报的「还是没有详细付款方式这一列」）。
-
-    用户表里那列的表头叫「**详细付款方式**」；预览页**认出来了**、白名单 `EDITABLE_COLS` 里
-    **也有** `method` —— 但 `commit` 拼 `cols` 时**只拼了 `material_name` / `remark` / 三存档列**
-    ⇒ **认得出、白名单放行、就是不写**，而且**全程不报错**。
-
-    ⚠️ 这类漏法可怕在：**三个环节各自都"对"**，坏在**它们之间的衔接**上 ——
-       预览页明说「已认成 付款方式 ✅」，人会以为成了，导完才发现台账里一个都没有。
-
-    ⇒ 两条一起钉：
-      ① 能覆盖的列里**必须有** `method`；
-      ② **每一个** `EXCEL_COLS` 都必须在 `R.EDITABLE_COLS` 里 ——
-         ⛔ 否则 `update_contract` 会**静默忽略**它（白写，同样不报错）。
-    """
+def test_Excel覆盖列与编辑白名单一致且不包含已取消的付款方式():
     from app.mod11_jc import import_service as IE
     from app.mod11_jc import repository as R
-
-    assert "method" in IE.EXCEL_COLS, (
-        "「付款方式」必须能被 Excel 覆盖 —— 用户表里那列的表头叫「详细付款方式」")
-    missing = [k for k in IE.EXCEL_COLS if k not in R.EDITABLE_COLS]
-    assert not missing, f"这些列会被 `update_contract` **静默忽略**（白名单里没有）：{missing}"
-    # ⛔ i8 的事实列**不许**进这张表（"两边互不覆盖"是硬口径）
-    for k in ("contract_amt", "supplier", "contract_date", "party_name"):
-        assert k not in IE.EXCEL_COLS, f"「{k}」是 i8 的事实列 ⇒ Excel ⛔ 不许覆盖它"
+    assert "method" not in IE.EXCEL_COLS
+    assert set(IE.EXCEL_COLS) <= set(R.EDITABLE_COLS)
+    for key in ("contract_amt", "supplier", "contract_date", "party_name"):
+        assert key not in IE.EXCEL_COLS, "i8事实列不许由Excel覆盖"
 
 
 @acc()

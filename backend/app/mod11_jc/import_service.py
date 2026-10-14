@@ -75,7 +75,6 @@ DOMAIN = "m11_jc"
 #: | 列 | 用户当时的说法 |
 #: |---|---|
 #: | `material_name` | 材料名 |
-#: | `method` | **付款方式** —— ⚠️ 他表里那列的表头叫「**详细付款方式**」（2026-09-20 晚补加） |
 #: | `remark` | 备注 |
 #: | `arch` / `arch_no` / `ret_date` | 存档 / 存档序号 / 寄回情况 |
 #:
@@ -84,10 +83,10 @@ DOMAIN = "m11_jc"
 #:
 #: ⚠️⚠️ 为什么要抽成一个常量（而不是像原先那样在循环里写死 `("material_name", "remark")`）：
 #:    **漏一列 = 那一列"认得出、白名单也放行、就是不写"，且全程不报错**。
-#:    2026-09-20 真机就踩了：`method` 没在里面 ⇒ 用户导完发现"付款方式一个都没进来"。
+#:    2026-10-14付款方式列取消后，不再映射或覆盖该字段。
 #:    ⇒ 列的**唯一主人**在这儿；⚠️ 它与 `R.EDITABLE_COLS` 必须**是子集关系**（否则会被静默忽略），
 #:    已由 `tests/test_acc_jc_import.py` 的一条断言钉住。
-EXCEL_COLS: tuple[str, ...] = ("material_name", "method", "remark", "arch", "arch_no", "ret_date")
+EXCEL_COLS: tuple[str, ...] = ("material_name", "remark", "arch", "arch_no", "ret_date")
 
 
 # ============================================================ 预览

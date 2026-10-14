@@ -133,7 +133,6 @@ def build_detail(s: Session, contract_id: int) -> dict | None:
         "contract_amt": c.contract_amt,
         "trade_co": c.trade_co,
         "trade_contract_amt": c.trade_contract_amt,
-        "method": c.method,
         "remark": c.remark,
         "tag": c.tag,
         "arch": c.arch,
@@ -216,10 +215,12 @@ def act_batch_tag(s: Session, *, contract_ids, tag) -> dict:
 
 
 def act_update_contract(s: Session, *, contract_id: int, **cols) -> dict:
-    """主表可改列（备注 / 付款方式 / 收发登记三列 / 金额…）—— 判据 `001-12`「可手改并落值」。
+    """主表可改列（备注 / 收发登记三列 / 金额…）—— 判据 `001-12`「可手改并落值」。
 
     ⚠️ 白名单在 `repository.EDITABLE_COLS`（三态**不在其中** ⇒ 它走 `act_set_tag`）。
     """
+    if "method" in cols:
+        return {"ok": False, "kind": "err", "message": "付款方式列已取消，请填写备注"}
     if not R.update_contract(s, contract_id, **cols):
         return {"ok": False, "kind": "err", "message": f"找不到合同 {contract_id}"}
     return {"ok": True, "kind": "ok", "id": int(contract_id), "message": "已保存"}
@@ -332,6 +333,30 @@ def act_unlink_notice(s: Session, *, notice_id: int) -> dict:
 
 # ---------------------------------------------------------------- 导出（`M5-9`）
 
+def export_print_xlsx(s: Session, *, projects: list[str]) -> bytes:
+    """独立打印版：项目全部纳入合同，判版依据项目所有合同。"""
+    from app import export_registry as EXP
+    from app.core.errors import MustReportError
+
+    selected = list(dict.fromkeys(str(key).strip() for key in projects if str(key).strip()))
+    if not selected:
+        raise MustReportError("请先选择要导出的项目")
+    data = build_list(s)
+    displays = {p["key"]: p["display"] for p in data["projects"] if p["key"]}
+    if any(key not in displays for key in selected):
+        raise MustReportError("所选项目已不存在，请刷新后重新选择")
+    sections = []
+    for key in selected:
+        project_rows = [r for r in data["rows"] if r["project_key"] == key]
+        included = sorted((r for r in project_rows if r["tag"] == TAG_IN),
+                          key=lambda r: r["project_seq"])
+        if not included:
+            raise MustReportError(f"项目「{displays[key]}」没有纳入台账的合同")
+        sections.append({"display": displays[key], "rows": included,
+                         "trade": any(str(r.get("trade_co") or "").strip() for r in project_rows)})
+    return EXP.get("jc_print").build_xlsx(sections)
+
+
 def export_xlsx(s: Session, *, ids: list[int]) -> bytes:
     """把**页面上当前看到的那些行**导出成一本 xlsx ⇒ 字节。
 
@@ -407,6 +432,7 @@ def act_set_party_kind(s: Session, *, name: str, kind: str) -> dict:
 
 
 __all__ = [
+    "export_xlsx", "export_print_xlsx",
     "build_list", "build_detail", "debt_of_ledger", "settlement_totals_by_project",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
     "act_update_contract", "act_add_invoice", "act_del_invoice",

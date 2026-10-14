@@ -56,7 +56,7 @@ def unique_batch(s: Session, *, at: datetime | None = None) -> str:
     raise MustReportError("批次号连试 600 次都撞 —— 库里 `JC-*` 的号段异常，请人工看一下")
 
 
-#: 回滚点 / 快照要记的列 = 「Excel 的地盘」6 列 ＋ **合同金额**。
+#: 回滚点 / 快照要记的列 = 「Excel 的地盘」5 列 ＋ **合同金额**。
 #: ⭐ 2026-09-26（方案② 用户裁定）：贸易公司合同的「合同金额」现在**由导入填**（空才填）
 #:   ⇒ 必须能一起回滚；⛔ 不加它 = "回滚了但金额没回"（最像"回滚成功"的那种假绿）。
 UNDO_COLS: tuple[str, ...] = IS.EXCEL_COLS + ("contract_amt",)
@@ -126,7 +126,7 @@ def apply_batch(s: Session, rows: list[dict], *, project_id: int, project_key: s
 
 
 def rollback(s: Session, batch_no: str, operator: str = "") -> dict:  # noqa: ARG001 —— 留签名（通用面传它）
-    """**整批回滚**：那 6 列逐列还原 ＋ 摘掉本批**新加**的发票行；批次置 `rolled_back`（⛔ 不物理删）。
+    """**整批回滚**：那 5 列逐列还原 ＋ 摘掉本批**新加**的发票行；批次置 `rolled_back`（⛔ 不物理删）。
 
     ⚠️ 一条批次只许回滚一次（第二遍会把"回滚后的值"再改一次 ⇒ 数据被搅乱）。
     """
@@ -156,6 +156,8 @@ def rollback(s: Session, batch_no: str, operator: str = "") -> dict:  # noqa: AR
             # ⚠️ 导入之后又被人工改过 ⇒ **照还原，但必须说清**（禁静默抹掉人工的改动）
             drifted.append({"id": int(c.id), "fields": changed})
         for k, v in (json.loads(u.before_json or "{}")).items():
+            if k not in UNDO_COLS:  # 旧批次保留快照，但已取消的字段不再恢复。
+                continue
             if k in _MONEY_COLS:                     # ⚠️ 金额列的快照是**文本** ⇒ 还原要回 `Decimal`
                 from decimal import Decimal          #    （直接塞字符串会被数据库当类型错）
                 setattr(c, k, Decimal(str(v or 0)))
@@ -173,7 +175,7 @@ def rollback(s: Session, batch_no: str, operator: str = "") -> dict:  # noqa: AR
     return {
         "batch": bno, "restored": restored, "undo_rows": len(rows),
         "removed_invoices": removed_invoices, "missing_contracts": missing, "drifted": drifted,
-        "message": (f"批次 {bno} 已回滚：**还原 {restored} 条**（那 6 列 ＋ 合同金额）· "
+        "message": (f"批次 {bno} 已回滚：**还原 {restored} 条**（那 5 列 ＋ 合同金额）· "
                     f"摘掉本批新加的发票行 {removed_invoices} 条"
                     + (f" · ⚠️ 其中 **{len(drifted)} 条在导入之后又被人工改过**（已一并还原，见清单）"
                        if drifted else "")

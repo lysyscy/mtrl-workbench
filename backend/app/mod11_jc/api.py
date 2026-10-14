@@ -110,7 +110,6 @@ class AddIn(BaseModel):
     trade_co: str | None = None
     trade_contract_amt: str | None = None
     tag: str = ""                     # 留空 ⇒ 服务层按「手工新增 = 纳入台账」填（判据 `001-07`）
-    method: str = ""
     remark: str = ""
 
 
@@ -200,6 +199,21 @@ def api_export(payload: ExportIn) -> dict:
             "content_b64": base64.b64encode(blob).decode("ascii")}
 
 
+class PrintExportIn(BaseModel):
+    projects: list[str] = Field(default_factory=list)
+
+
+@router.post("/api/m11/print-export")
+def api_print_export(payload: PrintExportIn) -> dict:
+    import base64
+    from app.core.timing import now_cn
+
+    with session_scope() as s:
+        blob = SV.export_print_xlsx(s, projects=payload.projects)
+    return {"ok": True, "filename": f"集采打印台账_{now_cn():%Y%m%d}.xlsx",
+            "content_b64": base64.b64encode(blob).decode("ascii")}
+
+
 class PartyKindIn(BaseModel):
     """「甲方单位分类」入参（`M5-6b`）。"""
 
@@ -249,7 +263,7 @@ def api_tag(payload: TagIn) -> dict:
 
 @router.post("/api/m11/fields")
 def api_fields(payload: FieldsIn) -> dict:
-    """主表可改列（备注 / 付款方式 / 收发登记三列 / 金额）—— 判据 `001-12`。"""
+    """主表可改列（备注 / 收发登记三列 / 金额）—— 判据 `001-12`。"""
     with session_scope() as s:
         return SV.act_update_contract(s, contract_id=int(payload.id), **(payload.fields or {}))
 

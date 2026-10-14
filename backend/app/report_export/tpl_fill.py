@@ -32,6 +32,7 @@
 from __future__ import annotations
 
 import re
+from io import BytesIO
 from copy import copy
 from decimal import Decimal
 from pathlib import Path
@@ -352,9 +353,10 @@ def verify_filled(path, plan) -> list[str]:
     ⚠️ 必须**读两遍**：`data_only=True` 只给值（公式格读成 `None`）、`data_only=False` 才看得到公式
        —— 实测踩到：只用前者时 ③④ 两条**永远不会报**（死代码，比没有还坏）。
     """
+    # 文件路径和内存成品共用同一套对账，两个解析器各自持有输入流。
     problems: list[str] = []
-    wb = openpyxl.load_workbook(str(path), data_only=True)
-    wf = openpyxl.load_workbook(str(path), data_only=False)
+    wb = openpyxl.load_workbook(BytesIO(path) if isinstance(path, bytes) else str(path), data_only=True)
+    wf = openpyxl.load_workbook(BytesIO(path) if isinstance(path, bytes) else str(path), data_only=False)
     try:
         for sp in plan["sheets"]:
             ws, raw = wb[sp["sheet"]], wf[sp["sheet"]]
@@ -400,8 +402,7 @@ def verify_filled(path, plan) -> list[str]:
                                 % (sp["sheet"], raw.max_row, last))
             for r in range(ds, last + 1):                       # ④ 值覆盖不彻底
                 for c in range(1, max_col + 1):
-                    v = raw.cell(row=r, column=c).value
-                    if isinstance(v, str) and v.startswith("="):
+                    if raw.cell(row=r, column=c).data_type == "f":
                         problems.append("%s!%s%d 还是公式 ⇒ 值覆盖不彻底"
                                         % (sp["sheet"], get_column_letter(c), r))
     finally:

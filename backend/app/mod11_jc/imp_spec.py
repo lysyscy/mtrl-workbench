@@ -52,12 +52,12 @@ SPEC = DomainSpec(
     fields=FIELDS,
     source_label="项目集采台账（逐项目一份）",
     batch=True,              # ⭐ `TAIL-98`：有**整批回滚**（批次号形如 `JC-…`，回执带出、壳侧按钮据此出现）
-    note='覆盖语义：只动这 6 列——材料名、付款方式、备注、存档情况、存档号、寄回日期；留空不清空。合同价 / 供应商 / 合同日期 / 甲方单位不会被覆盖。支持整批回滚。',
+    note='覆盖语义：只动这 5 列——材料名、备注、存档情况、存档号、寄回日期；留空不清空。合同价 / 供应商 / 合同日期 / 甲方单位不会被覆盖。支持整批回滚。',
     keep_note='结算、付款、欠款由系统计算；序号、重量、开票号、单价不导入。',
     ignored=tuple((lb, why) for lb, why in P.IGNORED_LABELS.items()),
     #: ⭐ **这一批怎么入库**（页头一句话 · 大白话 · 用户 2026-09-26 拷问后要的）——
     #: 措辞**照代码真值**：对号键 = `EXCEL_COLS` 之外的 `contract_amt`（`import_service._amount_key`）；
-    #: 只更 `EXCEL_COLS` 6 列；i8 事实列不碰（`import_service.py:353-365`）；有批次可整批回滚。
+    #: 只更 `EXCEL_COLS` 5 列；i8 事实列不碰（`import_service.py:353-365`）；有批次可整批回滚。
     rule_note="用含税合同价在所选项目内对号；同价多条或未匹配的行不写入。贸易公司合同用贸易公司合同金额对号，供应商合同金额仅在台账为空时填写。",
     #: ⭐ **逐列后果**（键 = **目标字段名** ⇒ 随用户改下拉实时跟着变）。
     #: ⚠️ 字段名用 `FIELD_LABELS` **反查**（⛔ 不手抄第二份列名 —— 改一处漏一处）。
@@ -68,9 +68,8 @@ SPEC = DomainSpec(
     impacts=tuple(
         (dict((f.key, f.label) for f in FIELDS)[key], what, kind)
         for key, what, kind in (
-            # ① 写台账：那 6 列会被覆盖（`import_service.EXCEL_COLS`）
+            # ① 写台账：那 5 列会被覆盖（`import_service.EXCEL_COLS`）
             ("material_name", "会盖掉台账「材料名称」里的原值", "写台账"),
-            ("method", "会盖掉台账「付款方式」里的原值", "写台账"),
             ("remark", "会盖掉台账「备注」里的原值", "写台账"),
             ("arch", "会盖掉台账「存档」里的原值", "写台账"),
             ("arch_no", "会盖掉台账「存档序号」里的原值", "写台账"),
@@ -159,7 +158,7 @@ def commit(s, records, mapping_, operator, options):  # noqa: ARG001 —— `map
 
 
 def rollback(s, batch, operator):
-    """**整批回滚**（`TAIL-98`）—— 那 6 列逐列还原 ＋ 摘掉本批新加的发票行（批次置 `rolled_back`）。"""
+    """**整批回滚**（`TAIL-98`）—— 那 5 列逐列还原 ＋ 摘掉本批新加的发票行（批次置 `rolled_back`）。"""
     return B.rollback(s, batch, operator)
 
 

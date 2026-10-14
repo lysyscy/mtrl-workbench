@@ -177,7 +177,8 @@ def test_real_router_preview_does_not_write_and_confirm_preserves_i8(tmp_path, m
             assert list(session.scalars(select(JcInvoice).where(JcInvoice.contract_id == contract.id))) == []
             confirmed = client.post(base + "/commit", json=body).json()
             assert confirmed["ok"] and confirmed["report"]["updated"] == 1
-            assert contract.material_name == "Excel材料" and contract.method == "电汇"
+            assert contract.material_name == "Excel材料" and contract.method == ""
+            assert any(c["src"] == "详细付款方式" and c["ignored"] for c in parsed["cols"])
             assert contract.supplier == "i8供应商" and contract.contract_date == "2026-01-01"
             assert contract.contract_amt == Decimal("100")
             assert len(list(session.scalars(select(JcInvoice).where(JcInvoice.contract_id == contract.id)))) == 1

@@ -1418,7 +1418,6 @@ V.m11=()=>{
         settle: `<td class="num" title="结算金额 = 本合同发票子表金额合计；有贸易公司取贸易公司发票，无贸易公司取供应商发票，两侧不相加，不按发票日期截断"><b>${M(jcSettle(j))}</b></td>`,
         pay_sum: `<td class="num" style="white-space:nowrap" title="付款金额 = 本合同付款子表金额合计；手工和付款域引用都计入，不跨合同、不按付款日期截断"><b>${M(jcPay(j))}</b> <button class="btn sm" data-act="jcPayDlg" data-id="${j.id}" title="打开「付款子表」（手工录入 / 从付款域引用）">子表</button></td>`,
         debt: `<td class="num" style="color:${jcDebt(j)>0?'var(--dg)':'var(--ok)'}" title="欠款金额 = 本合同结算金额 − 付款子表金额合计；结算按有无贸易公司取对应发票子表，付款含手工及付款域引用，不按日期截断"><b>${M(jcDebt(j))}</b></td>`,
-        method: `<td><input class="inp plain" style="min-width:110px" data-act="jcMethod" data-id="${j.id}" value="${esc(j.method)}" title="${esc(j.method)}" placeholder="自由文本"></td>`,
         remark: `<td><input class="inp" style="min-width:104px" data-act="jcRemark" data-id="${j.id}" value="${esc(j.remark)}" placeholder="可填"></td>`,
         tag: `<td class="ctr">${tagChip(j.tag)}</td>`,
         arch: `<td class="ctr">${archChip(j.arch)}</td>`,

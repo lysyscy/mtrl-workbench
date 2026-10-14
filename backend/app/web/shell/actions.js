@@ -1075,7 +1075,7 @@ const ACT={
        ['项目内序号',j.projectSeq == null ? '—' : String(j.projectSeq)],['合同编号',esc(j.contractNo||'—')],
        ['合同日期',esc(j.date||'—')],['材料名',esc(j.material||'—')],['供应商',esc(j.supplier||'—')],
        ['项目',esc(pjLabel(j.proj))],['合同金额',M(j.contractAmt)],['结算金额',M(jcSettle(j))],
-       ['付款金额',M(jcPay(j))],['欠款金额',M(jcDebt(j))],['付款方式',esc(j.method||'—')],
+       ['付款金额',M(jcPay(j))],['欠款金额',M(jcDebt(j))],
        ['存档情况',esc(j.arch)+(j.archNo?' · '+esc(j.archNo):'')],['备注',esc(j.remark||'—')]
      ]):'<div class="tip">未关联集采合同。</div>';
      modal({title:`查看关联 · ${esc(n.code||n.id)}`,body:
@@ -2096,6 +2096,29 @@ procPjToggle:t=>{ pjToggle('procPj',t); },
 /* ⭐ `M5-9` 导出：**行** = 屏幕上看到的（复用 `jcVisible()` ⇒ ⛔ 不另写一套筛选 —— 两套必打架）；
    **列** = 全列（后端给，含贸易公司 3 列 —— 用户选的口径 (B)）。
    ⚠️ 空行集 ⇒ **明确拦**：⛔ 不导一本空表让人以为坏了，也⛔ 不悄悄改成"导全量"。 */
+jcPrintOpen:()=>{
+  const candidates=jcPrintCandidates();
+  if(!candidates.length) return toast('暂无纳入台账的合同可导出');
+  jcPrintProjects=fJc.projs.filter(p=>candidates.includes(p));
+  modal({title:'导出打印版 · 选择项目',body:`<div class="tip">导出所选项目的全部纳入合同，不受页面其他筛选影响；每项目一张工作表。</div>
+    <div style="max-height:52vh;overflow:auto">${TBL({cls:'cond',key:'modal:jcPrint',sort:false,
+      head:'<th style="width:40px">选</th><th>项目</th>',rows:candidates.map(p=>`<tr><td class="ctr"><input type="checkbox" data-act="jcPrintPick" data-pj="${esc(p)}" aria-label="${esc(pjLabel(p)||p)}" ${jcPrintProjects.includes(p)?'checked':''}></td><td>${esc(pjLabel(p)||p)}</td></tr>`)})}</div>`,
+    footer:'<button class="btn" data-act="closeModal">取消</button><button class="btn" data-act="jcPrintAll" data-v="0">全清空</button><button class="btn" data-act="jcPrintAll" data-v="1">全选</button><button class="btn pri" data-act="jcPrintSave">导出 Excel</button>'}); },
+jcPrintPick:t=>{ const p=t.dataset.pj;
+  jcPrintProjects=t.checked?[...new Set([...jcPrintProjects,p])]:jcPrintProjects.filter(x=>x!==p); },
+jcPrintAll:t=>{ const on=t.dataset.v==='1'; jcPrintProjects=on?jcPrintCandidates():[];
+  document.querySelectorAll('[data-act="jcPrintPick"]').forEach(el=>{el.checked=on;}); },
+jcPrintSave:async t=>{
+  if(!jcPrintProjects.length) return toast('请先选择要导出的项目');
+  t.disabled=true;
+  try{
+    const d=await API.m11PrintExport({projects:jcPrintProjects.slice()});
+    if(!d||d.ok===false) return toast(`<b>导出失败</b>：${esc((d&&d.message)||'请重试')}`,7000);
+    jcDownload(d.filename,d.content_b64); closeModal();
+    toast(`已导出 <b>${esc(d.filename)}</b>，每项目一张工作表`);
+  }catch(e){ toast(`<b>导出失败</b>：${esc(e.message||'请重试')}`,7000); }
+  finally{t.disabled=false;}
+},
 jcExport:async()=>{ const rows=jcVisible();
   if(!rows.length) return toast('当前筛选下<b>一行都没有</b> —— 没什么可导的（先点「重置」看全部）');
   let d=null;
@@ -2220,9 +2243,6 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    if(!r||r.ok===false){field.dataset.busy='';const err=document.querySelector('#jcMaterialError');err.textContent=(r&&r.message)||'保存失败，请重试';err.style.color='var(--dg-d)';return;}
    closeModal();await reloadM11();render();toast('材料名已保存');
  },
- jcMethod:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
-  await jcAct(()=>API.m11Fields({id:j.id, fields:{method:t.value}}),
-    '付款方式为<b>自由文本、不限值</b>，不做枚举约束'); },
  /* 合同收发登记（§6.7）**改为可手改**（2026-09-13 用户口径）：存档号 / 寄回日期 / 备注三列。
     ⚠️ 按 §9.3 的留痕清单（只给 统计两金额 / 调整单 / 项目全名与状态）⇒ 这三列**不留痕**（照既有口径、不新增）。
     ⚠️ 寄回日期用 `type="date"`（要的是**完整日期**；R6 只管"选年月"那种滚轮控件）。 */
@@ -2403,7 +2423,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
     ⚠️ 原来这个动作只开弹窗，而弹窗的「保存」挂的是 `data-act="silent"`（**根本没有落库动作**）
        ⇒ 本次改制时**补上真正的建档动作 `jcRowSave`**（草稿层 `jcND`，与既有 `naD` / `lgD` 同源）。 */
  jcAdd:()=>{ const cands=pjKeysOfRows(ntPjList());
-   jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',
+   jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',remark:'',
      pj:(fJc.projs.length===1?fJc.projs[0]:(cands[0]||'')),history:false,cutoff:''};   /* 项目默认 = 当前筛选唯一项，否则候选第一个 */
    jcNewOn=true; pjClose('jcNPj'); render();
    toast('已在表格上方展开「手工新增合同」录入区 —— 填完点「保存」建档、点「取消」丢弃（<b>草稿不入库</b>）<br><span class="mut sm">发票金额 / 贸易公司发票金额 / 付款金额 = 各自子表合计（建档后在各列右侧「子表」里录）</span>',6000); },
@@ -2435,7 +2455,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
        material_name:String(jcND.material||'').trim(), supplier:String(jcND.supplier||'').trim(),
        contract_amt:String(amt), trade_co:String(jcND.tradeCo||'').trim()||null,
        trade_contract_amt:(tAmt===''?null:String(tAmt)),
-       method:String(jcND.method||'').trim(), remark:(jcND.history?JC_HISTORY_PREFIX+jcND.cutoff+'；':'')+String(jcND.remark||'').trim()}),
+       remark:(jcND.history?JC_HISTORY_PREFIX+jcND.cutoff+'；':'')+String(jcND.remark||'').trim()}),
      x=>`已新增集采合同 <b>#${x.id}</b>（${esc(pjLabel(jcND.pj))} · ${esc(String(jcND.material||'').trim()||'（未填材料名）')}）—— 三态默认 <b>${esc(x.tag||'纳入台账')}</b><br><span class="mut sm">发票 / 付款金额请在该行「子表」里录入</span>`);
    if(r){
      /* 新增后**保证看得见**（同 MOD-03 / MOD-04 的做法）：放宽三档筛选；

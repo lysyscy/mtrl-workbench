@@ -1281,6 +1281,12 @@ addBind('m11', function () {
     b.textContent = '⬇ 导出 Excel';
     hidBtn.insertAdjacentElement('afterend', b);
   }
+  const printExport = document.createElement('button');
+  printExport.className = 'btn';
+  printExport.dataset.act = 'jcPrintOpen';
+  printExport.textContent = '导出打印版';
+  printExport.title = '按项目导出全部纳入合同，每项目一张表，预设打印格式';
+  host.querySelector('[data-act="jcExport"]').insertAdjacentElement('afterend', printExport);
 });
 
 addBind('m03', function () {
@@ -1735,7 +1741,7 @@ function adaptJc(x) {
     tradeCo: x.trade_co || '',
     tradeContractAmt: (x.trade_contract_amt == null ? '' : N0(x.trade_contract_amt)),
     arch: x.arch || JC_ARCH_DEFAULT, archNo: x.arch_no || '', retDate: x.ret_date || '',
-    method: x.method || '', remark: x.remark || '', tag: x.tag,
+    remark: x.remark || '', tag: x.tag,
     /* ⚠️ 列表**不给子表明细**（那是 `/api/m11/detail` 的活）⇒ 这里留空数组；
        列表的金额列一律读下面的 `settle`/`pay`（后端派生），⛔ 不靠这两个数组现算。 */
     invoices: [], tradeInvoices: [], payments: [],

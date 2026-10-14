@@ -78,7 +78,6 @@ def list_contracts(
             "contract_amt": row.contract_amt,
             "trade_co": row.trade_co,
             "trade_contract_amt": row.trade_contract_amt,
-            "method": row.method,
             "remark": row.remark,
             "tag": row.tag,
             "arch": row.arch,
@@ -198,14 +197,14 @@ def project_choices(s: Session) -> list[dict]:
 #: ⚠️ 与 `import_service.EXCEL_COLS` 是**同一份口径**（`tests/test_acc_jc_import.py` 钉着包含关系）
 #:    ⇒ 改一边必须改另一边，⛔ 别只改这里。
 EDITABLE_COLS: tuple[str, ...] = (
-    "material_name", "method", "remark", "arch", "arch_no", "ret_date",
+    "material_name", "remark", "arch", "arch_no", "ret_date",
 )
 
 
 def insert_contract(s: Session, *, project_id: int, contract_date: str = "",
                     material_name: str = "", supplier: str = "", contract_amt=0,
                     trade_co=None, trade_contract_amt=None, tag: str = TAG_IN,
-                    method: str = "", remark: str = "") -> JcContract:
+                    remark: str = "") -> JcContract:
     """手工新增合同 ⇒ **真的建档**（判据 `ACC-JC-UI-001/001-13`）。
 
     ⚠️ 三态由**调用方**给（`service.act_add_contract` 按"手工新增 ⇒ 纳入台账"填，见判据 `001-07`）
@@ -221,7 +220,6 @@ def insert_contract(s: Session, *, project_id: int, contract_date: str = "",
         trade_contract_amt=(Decimal(str(trade_contract_amt))
                             if trade_contract_amt not in (None, "") else None),
         tag=str(tag or TAG_IN),
-        method=str(method or "")[:64],
         remark=str(remark or "")[:255],
     )
     s.add(row)

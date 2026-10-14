@@ -339,12 +339,14 @@ let jcPick=new Set();
 const jcPjPanel=()=>projPanel({list:JC_PROJ_LIST,selected:()=>fJc.projs,allAct:'jcPjAll',noneAct:'jcPjNone',pickAct:'jcPjPick',meta:PROJ_META_KEY});
 /* —— 「手工新增集采合同」的**增行展开区**（2026-09-13 增行模式，用户拍板 C-1 / C-6 / C-7）——
    ⚠️ 弹窗已取消 ⇒ 改为**表格上方的独立条带**，且渲染在 `.tw` **之外**（浮层面板才不会被裁）。
-   ⚠️ 主表 **20 字段放不进 21 列**，且表内**刻意不设「项目」列** ⇒ 真正的"建档录入项"全部放这里；
+   ⚠️ 主表字段较多，且表内**刻意不设「项目」列** ⇒ 真正的"建档录入项"全部放这里；
       「发票金额 / 贸易公司发票金额 / 付款金额」= **各自子表合计**、「结算 / 欠款」= 自动算
       ⇒ **一律不出现在新增区**（建档后走各列右侧的「子表」）。 */
+let jcPrintProjects=[];
+const jcPrintCandidates=()=>[...new Set(JCs.filter(j=>j.tag==='纳入台账').map(j=>j.proj).filter(Boolean))];
 let jcNewOn=false;                 /* 增行态开关（取代原弹窗的"是否开着"） */
 /* 展开态在 `PJ_OPEN`（key='jcNPj'） */               /* 「项目」共用面板（**单选** —— 第 10 个 `projPanel` 调用点）是否展开 */
-let jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',method:'',remark:'',pj:'',history:false,cutoff:''};
+let jcND={date:SYS_TODAY,material:'',supplier:'',contractAmt:'0.00',tradeCo:'',tradeContractAmt:'',remark:'',pj:'',history:false,cutoff:''};
 const JC_HISTORY_PREFIX='历史未结金额；核对截至日：';
 const jcHistoryDate=j=>String(j.remark||'').startsWith(JC_HISTORY_PREFIX)?String(j.remark).slice(JC_HISTORY_PREFIX.length,JC_HISTORY_PREFIX.length+10):'';
 const jcHistoryDefaults=()=>{ const p=pjRowOf(jcND.pj); if(!p) jcND.history=false;
@@ -364,7 +366,6 @@ const jcNewStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><label>合同金额</label><input class="inp num" style="width:118px" id="jcNAmt" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="contractAmt" value="${esc(jcND.contractAmt)}"></div>
       <div class="fi"><label>贸易公司名</label><input class="inp" style="min-width:130px" id="jcNTradeCo" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="tradeCo" value="${esc(jcND.tradeCo)}" placeholder="留空 = 无贸易公司"></div>
       <div class="fi"><label>贸易公司合同金额</label><input class="inp num" style="width:118px" id="jcNTradeAmt" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="tradeContractAmt" value="${esc(jcND.tradeContractAmt)}" placeholder="—"></div>
-      <div class="fi"><label>付款方式</label><input class="inp" style="min-width:130px" id="jcNMethod" data-act="jcNSet" data-k="method" value="${esc(jcND.method)}" placeholder="自由文本 · 例 60±7天承兑"></div>
       <div class="fi"><label>备注</label><input class="inp" style="min-width:130px" id="jcNRemark" data-act="jcNSet" data-k="remark" value="${esc(jcND.remark)}"></div>
       <button class="btn pri" data-act="jcRowSave" title="建档（两态默认「纳入台账」，与抓取行一致）">保存</button>
       <button class="btn" data-act="jcRowCancel" title="丢弃这条录入（不入库）">取消</button>

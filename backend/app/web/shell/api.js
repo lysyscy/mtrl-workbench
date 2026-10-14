@@ -363,6 +363,7 @@ const API = {
      **列** = **全列**（含「贸易公司」3 列）—— 用户选 **(B)**：屏幕上的"隐藏列"**只是屏幕的事**。
      ⚠️ 走 POST 回来的是 **base64**（id 可能几百个 ⇒ GET 的 URL 会超长）⇒ 前端造 Blob 下载。 */
   m11Export: body => API.post('/api/m11/export', body),
+  m11PrintExport: body => API.post('/api/m11/print-export', body),
   /* ⛔ `m11ImportParse` / `m11ImportCommit`（`/api/m11/import/*`）**已连件删除**
      （`TAIL-75` 余项 · 2026-09-23 **用户裁定**：「导入只在启用初期用一次」⇒ **只留通用面**）。
      ⭐ 集采台账导入改走 `impParse/impPreview/impCommit` 的 `m11_jc` 域（见下方 `API.imp*`）。 */

@@ -87,12 +87,14 @@ def test_未认出的列给引擎建议_但一律需你确认_且不改判定():
 
 @acc("ACC-JC-IMPORT-001", "001-02")
 def test_值画像交叉校验_名字认对但值不像就提示_且不改判定():
-    """⭐ 防"**名字认对、列拿错**"：`付款方式` 那列里全装着日期 ⇒ 报 `suspect`（⛔ 系统不替你改列）。"""
-    sh = _sheet(_book(rows=_rows(pay=("20260701", "20260702"))))
+    """⭐ 防"**名字认对、列拿错**"：`存档` 那列里全装着日期 ⇒ 报 `suspect`（⛔ 系统不替你改列）。"""
+    r2 = list(R2)
+    r2[6] = "存档"
+    sh = _sheet(_book(r2=r2, rows=_rows(pay=("20260701", "20260702"))))
     suspect = sh["mapping"]["suspect"]
-    assert [x["field"] for x in suspect] == ["method"], suspect
+    assert [x["field"] for x in suspect] == ["arch"], suspect
     assert suspect[0]["prof"] == "日期" and "不符" in suspect[0]["why"]
-    assert sh["mapping"]["fields"].get("method") is not None, "⛔ 只提示，不许改判定"
+    assert sh["mapping"]["fields"].get("arch") is not None, "⛔ 只提示，不许改判定"
     # 正常值（电汇/承兑）⇒ 不瞎报
     assert _sheet(_book())["mapping"]["suspect"] == []
 

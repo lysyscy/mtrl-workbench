@@ -8,8 +8,8 @@
 
 ⛔ 路径只在本模块写一次（`mod07`/`mod08` 两条导出链路共用）—— 各写一份必然走形。
 
-⭐ **本模块管的是「全部 6 份模板」**：路径②（模板法 · `zip` 字节替换）= 收发结存 · 库存单据明细表；
-路径①（模板填充 · `openpyxl` 读） = 逐月欠款台账 · 过程资料 · 焊材气体 · 开会大表 ——
+⭐ **本模块管全部运行模板**：路径②（模板法 · `zip` 字节替换）= 收发结存 · 库存单据明细表；
+路径①（模板填充 · `openpyxl` 读） = 逐月欠款台账 · 过程资料 · 焊材气体 · 开会大表 · 集采打印版 ——
 **两类都要「缺失 / 损坏 ⇒ 显式拒做」**（它们都是产物生成的基底本体，不是"形态样例"）。
 """
 
@@ -31,7 +31,7 @@ SETL_TEMPLATE: Path = TEMPLATE_DIR / "模板_收发结存表.xlsx"
 #: 库存单据明细表模板（`API-03` 的成品基底）
 KCDJ_TEMPLATE: Path = TEMPLATE_DIR / "模板_库存单据明细表.xlsx"
 
-#: ⭐ **路径①（模板填充）的 4 个模板** —— 名字与交付面 `demo/模板/` 逐字一致。
+#: 路径①（模板填充）模板；登记与映射回交付面模板清单。
 #: 来源 = 交付面 `demo/模板/`（那份 `模板清单.md` §二 是它们的**唯一登记处**）；
 #: ⚠️ 它们与上面两份同理：**要被 `openpyxl` 读**，所以是**运行时依赖**（必须随代码走、进 git）。
 #: 明细（每个模板含哪些 sheet / `DATA_START` 在哪 / 列映射）**一律回 `demo/模板/模板清单.md`**，
@@ -41,11 +41,14 @@ PROC_TEMPLATE: Path = TEMPLATE_DIR / "模板-过程资料.xlsx"            # she
 WELD_TEMPLATE: Path = TEMPLATE_DIR / "模板-焊材气体.xlsx"            # sheet: 焊材 / 气
 BIG_TEMPLATE: Path = TEMPLATE_DIR / "模板-开会大表.xlsx"             # sheet: Sheet1
 
-#: 路径① 的 4 份（供"登记齐全性"断言与批量闸门用；顺序 = 由外到内阅读顺序）
-PATH1_TEMPLATES: tuple[Path, ...] = (LEDGER_TEMPLATE, PROC_TEMPLATE, WELD_TEMPLATE, BIG_TEMPLATE)
+#: 路径① 的集采打印模板与登记清单（供完整性检查使用）。
+JC_PRINT_TEMPLATE: Path = TEMPLATE_DIR / "模板-集采打印台账.xlsx"
+
+PATH1_TEMPLATES: tuple[Path, ...] = (LEDGER_TEMPLATE, PROC_TEMPLATE, WELD_TEMPLATE, BIG_TEMPLATE, JC_PRINT_TEMPLATE)
 
 #: 登记的 SHA256（**唯一登记处** = `ops/模板法导出-实测结论.md` §五 那张表；改模板必须同时改这里）
 EXPECTED_SHA256: dict[str, str] = {
+    "模板-集采打印台账.xlsx": "a9654f0530479929cdb5bd687d8f1fa2fa61ed0979a79af969bd56e0a03f8e6d",
     "模板_收发结存表.xlsx":
         "eab1c626dce769ac979408564cbffa52a8ca3bc42d80c76c40e0335f8c46d323",
     "模板_库存单据明细表.xlsx":
@@ -96,5 +99,5 @@ def require_template(path: Path) -> Path:
 
 
 __all__ = ["TEMPLATE_DIR", "SETL_TEMPLATE", "KCDJ_TEMPLATE", "LEDGER_TEMPLATE", "PROC_TEMPLATE",
-           "WELD_TEMPLATE", "BIG_TEMPLATE", "PATH1_TEMPLATES", "EXPECTED_SHA256",
+           "WELD_TEMPLATE", "BIG_TEMPLATE", "JC_PRINT_TEMPLATE", "PATH1_TEMPLATES", "EXPECTED_SHA256",
            "sha256_of", "require_template"]

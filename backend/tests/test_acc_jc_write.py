@@ -168,9 +168,9 @@ def test_收发登记三列与备注可手改并落值():
         assert s.get(JcContract, int(cid)).tag == TAG_IN, \
             "三态必须走 act_set_tag，⛔ 不从这个口子（值应**保持原样** = 手工新增的默认「纳入台账」）"
 
-        # ⚠️ 付款方式 = **自由文本**（§6.4.1 注 / `DEV-J-03`）⇒ 生僻写法照样落
-        SV.act_update_contract(s, contract_id=cid, method="60±7天承兑")
-        assert s.get(JcContract, int(cid)).method == "60±7天承兑"
+        # 已取消的付款方式不再通过主表写入口修改。
+        assert not SV.act_update_contract(s, contract_id=cid, method="60±7天承兑")["ok"]
+        assert s.get(JcContract, int(cid)).method == ""
         s.rollback()
 
 

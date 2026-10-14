@@ -151,7 +151,6 @@ FIELD_LABELS: dict[str, str] = {
     "inv_sum": "供应商发票金额",
     "trade_contract_amt": "贸易公司合同总价",
     "trade_inv_sum": "贸易公司发票金额",
-    "method": "付款方式",
     "remark": "备注",
     "arch": "存档",
     "arch_no": "存档序号",
@@ -169,9 +168,6 @@ ALIASES: dict[str, str] = {
     "供应商发票金额": "inv_sum", "发票金额": "inv_sum",
     "贸易公司合同总价": "trade_contract_amt", "贸易合同总价": "trade_contract_amt",
     "贸易公司发票金额": "trade_inv_sum", "贸易发票金额": "trade_inv_sum",
-    # ⚠️ 2026-09-20 用户实测：他给那一列加的表头是「**详细付款方式**」（不是"付款方式"）——
-    #    只认「付款方式」⇒ 它落进"不认识"，**一条都导不进来**。⇒ 几种常见写法一起收。
-    "付款方式": "method", "付款方式说明": "method", "详细付款方式": "method", "付款说明": "method",
     "备注": "remark",
     "存档": "arch", "存档情况": "arch",
     # ⚠️⚠️ 2026-09-20 补（**拿用户 10 份真台账跑出来的**）：乌兰察布储能 / 周口太康那两份用的
@@ -184,6 +180,7 @@ ALIASES: dict[str, str] = {
 #: **不导入**的列（系统里是**派生**或不属于台账）—— 认出来是为了**说清楚"为什么没导"**，
 #: ⛔ 不是为了"顺手也导进去"。「结算/付款/欠款」尤其：系统里欠款 = 结算 − 付款（**算出来、不落库**）。
 IGNORED_LABELS: dict[str, str] = {
+    **dict.fromkeys(("付款方式", "付款方式说明", "详细付款方式", "付款说明"), "付款方式列已取消，不导入；请在备注填写"),
     "序号": "行号，系统自己编",
     "结算": "由子表算出来（不写入）",
     "付款": "由付款子表算出来（不写入）",
@@ -302,7 +299,7 @@ def map_columns(labels: list[str], *, mapping: dict[str, str] | None = None,
 FIELD_TYPES: dict[str, str] = {
     "contract_date": "date", "material_name": "text", "supplier": "text", "trade_co": "text",
     "contract_amt": "amount", "inv_sum": "amount", "trade_contract_amt": "amount",
-    "trade_inv_sum": "amount", "method": "enum", "remark": "text", "arch": "enum",
+    "trade_inv_sum": "amount", "remark": "text", "arch": "enum",
     "arch_no": "code", "ret_date": "date",
 }
 

@@ -169,7 +169,7 @@ def test_导出列就是页面表头去掉勾选与操作():
     jc_rows = [c for c in JC_D.JC_COLUMNS if c["key"] not in JC_D.PAGE_ONLY_KEYS]
     assert _export_labels(jc_export.COLUMNS) == [c.get("export_label") or c["label"] for c in jc_rows], (
         "`jc_export.COLUMNS` 与「屏幕表头（域内核列清单）去掉操作列」不一致 —— 表与屏幕对不上号了")
-    assert len(jc_rows) == len(jc_export.COLUMNS) == 19, "m11 屏幕 20 列（含操作）/ 导出 19 列"
+    assert len(jc_rows) == len(jc_export.COLUMNS) == 18, "m11 屏幕 19 列（含操作）/ 导出 18 列"
     # ⛔ 壳里不许再长回那张 20 列字面量（有 ⇒ 又是两份列清单，`TAIL-298` 治的就是它）。
     #   ⚠️ 判"字面量退场"要认**声明**与**表头串**，⛔ 别拿标识符当判据 —— 注释里提 `JC_THEAD`
     #      （说"那个字面量已删"）是正常的，按标识符判会当场假红。

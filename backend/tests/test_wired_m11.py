@@ -136,7 +136,6 @@ def test_写动作接上了_api_且抓取要二次确认():
     assert "async function jcAct" in s, "写动作要有统一外壳（照 `awfAct`：成败都回后端真实状态）"
     for frag in ("API.m11Tag({id:j.id, tag:t.dataset.v})",     # 单条标记
                  "API.m11Tag({ids, tag:v})",                    # 批量标记
-                 "API.m11Fields({id:j.id, fields:{method:t.value}})",   # 付款方式（自由文本）
                  "fields:{arch:next}",                          # 存档推进
                  "API.m11Add({"):                               # 手工新增
         assert frag in s, f"动作没接上 API：{frag}"

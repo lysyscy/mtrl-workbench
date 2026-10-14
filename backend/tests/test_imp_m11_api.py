@@ -83,8 +83,8 @@ def test_集采台账在通用面端到端_两级拼名认列_锚点匹配_且�
     cols = {c["src"]: c for c in got["cols"]}
     assert cols["供应商合同总价"]["field"] == "供应商合同总价", "两级拼名要认得出（合并格只铺表头行）"
     assert cols["贸易公司发票金额"]["field"] == "贸易公司发票金额"
-    assert cols["详细付款方式"]["field"] == "付款方式"
-    assert {c["src"] for c in got["cols"] if c["ignored"]} == {"序号"}, "「序号」要显式说明不采"
+    assert "不导入" in cols["详细付款方式"]["ignored"]
+    assert {c["src"] for c in got["cols"] if c["ignored"]} == {"序号", "详细付款方式"}, "「序号」要显式说明不采"
 
     wh = "__自检仓_IMP_M11_" + uuid.uuid4().hex[:8] + "__"
     with session_scope() as s:
@@ -95,7 +95,7 @@ def test_集采台账在通用面端到端_两级拼名认列_锚点匹配_且�
                          supplier="i8给的供应商", contract_amt=Decimal(AMT)))
     mapping = {"合同日期": "合同日期", "材料名称": "材料名称", "供应商合同总价": "供应商合同总价",
                "供应商发票金额": "供应商发票金额", "贸易公司合同总价": "贸易公司合同总价",
-               "贸易公司发票金额": "贸易公司发票金额", "详细付款方式": "付款方式", "备注": "备注"}
+               "贸易公司发票金额": "贸易公司发票金额", "备注": "备注"}
     body = {"token": got["token"], "mapping": mapping, "options": {"project_key": wh}}
     pre = client.post("/api/imp/m11_jc/preview", json=body).json()
     assert pre["ok"] and pre["total"] == 1, pre
@@ -129,7 +129,7 @@ def test_预览就能看到配上几条_且一个字节都不写库(client):
       ① **数对不对**：库里有一条同价合同 ⇒ 那一行配上；另给一行**对不上的价** ⇒ 列进"没配上"；
       ② ⭐ **零写库**：预览走 `match_and_apply(dry_run=True)` —— 它**只分类、不写**
          （`update_contract` / `fill_contract_amt_if_blank` / `_add_invoice` 三处全跳过）。
-         实测办法：**预览前后**把那张合同的那 6 列 ＋ **发票行数**各比一遍，必须一模一样。
+         实测办法：**预览前后**把那张合同的那 5 列 ＋ **发票行数**各比一遍，必须一模一样。
     """
     from app.core.db import session_scope
     from app.mod01_projects import repository as pj_repo
@@ -157,7 +157,7 @@ def test_预览就能看到配上几条_且一个字节都不写库(client):
 
     before = _snap()
     mapping = {"合同日期": "合同日期", "材料名称": "材料名称", "供应商合同总价": "供应商合同总价",
-               "供应商发票金额": "供应商发票金额", "详细付款方式": "付款方式", "备注": "备注"}
+               "供应商发票金额": "供应商发票金额", "备注": "备注"}
     # 第二行：合同价与库里那条**不同** ⇒ 必须落进"配不上"（⛔ 不静默新增、⛔ 不猜）
     # ⭐⭐ 2026-09-27（用户报障 · 原话「**678 行明明有合同总价，但是却显示合同价为空**」）：
     #    再补两种**本来就不该导**的行（**照他真文件的形态造** —— 那份台账里 Excel r9~r15 只填了
@@ -299,7 +299,7 @@ def test_贸易公司合同凭贸易公司金额对号_供应商价空才填_且
 
     ⚠️ **能证伪**：把 `match_and_apply` 的锚点索引改回"只有 `by_amt` 一张表" ⇒ 本条必红（配不上）。
     ⚠️ 一并钉三半：① 空 ⇒ 填；② **已有值 ⇒ ⛔ 不覆盖**（§9.3「人工改过的不被覆盖」）；
-       ③ **整批回滚要把它也还原**（回滚点原先只记那 6 列 ⇒ 会"回滚了但金额没回"）。
+       ③ **整批回滚要把它也还原**（回滚点原先只记那 5 列 ⇒ 会"回滚了但金额没回"）。
     """
     from sqlalchemy import select
 
@@ -316,7 +316,7 @@ def test_贸易公司合同凭贸易公司金额对号_供应商价空才填_且
     no = "__自检_B5b_T1_" + uuid.uuid4().hex[:8] + "__"
     mapping = {"合同日期": "合同日期", "材料名称": "材料名称", "供应商合同总价": "供应商合同总价",
                "供应商发票金额": "供应商发票金额", "贸易公司合同总价": "贸易公司合同总价",
-               "贸易公司发票金额": "贸易公司发票金额", "详细付款方式": "付款方式", "备注": "备注"}
+               "贸易公司发票金额": "贸易公司发票金额", "备注": "备注"}
     wh = "__自检仓_IMP_M11T_" + uuid.uuid4().hex[:8] + "__"
     with session_scope() as s:
         p = pj_repo.create_project(s, project_type=TYPE_NORMAL, name_full="__自检_贸易公司合同__",
@@ -361,7 +361,7 @@ def test_贸易公司合同凭贸易公司金额对号_供应商价空才填_且
     with session_scope() as s:
         c = s.execute(select(JcContract).where(JcContract.contract_no == no)).scalars().first()
         assert Decimal(str(c.contract_amt)) == Decimal(sup), "⛔ 已有值被覆盖了"
-        assert c.material_name == "电缆桥架（改）", "那 6 列照旧能覆盖（口径未变）"
+        assert c.material_name == "电缆桥架（改）", "那 5 列照旧能覆盖（口径未变）"
 
     rb = client.post("/api/imp/m11_jc/rollback",
                      json={"batch": out2["report"]["batch"]}).json()
@@ -369,4 +369,4 @@ def test_贸易公司合同凭贸易公司金额对号_供应商价空才填_且
     with session_scope() as s:
         c = s.execute(select(JcContract).where(JcContract.contract_no == no)).scalars().first()
         assert Decimal(str(c.contract_amt)) == Decimal(sup), "回滚第二遍：金额回到第一遍之后的值"
-        assert c.material_name == "电缆桥架", "那 6 列已还原（原有行为不变）"
+        assert c.material_name == "电缆桥架", "那 5 列已还原（原有行为不变）"

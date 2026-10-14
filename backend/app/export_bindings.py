@@ -14,6 +14,7 @@ from app import export_registry as REG
 from app.report_export import (
     fl_export,
     jc_export,
+    jc_print_export,
     nt_export,
     pj_export,
     pl_export,
@@ -29,6 +30,7 @@ BINDINGS = {
     "nt": nt_export,        # 付款通知书导出（`mod03`）
     "pl": pl_export,        # 付款计划导出（`mod04`）
     "fl": fl_export,        # 付款流水导出（`mod05`）
+    "jc_print": jc_print_export,
     "jc": jc_export,        # 集采台账导出（`mod11`）
     "service": service,     # 中立编排：`export_big` / `export_ledger` / `export_proc` / …（`mod05/06/07/08`）
     "save": save,           # `save_workbook`（`mod05` 的「总欠款表」用它落盘）

@@ -125,18 +125,13 @@ def test_合计行各金额列独立复算():
 
 
 @acc("ACC-JC-UI-001", "001-15")
-def test_付款方式自由文本_不得引入枚举校验():
-    """`DEV-J-03`：集采侧的付款方式**不做枚举约束**（与付款域的实际付款方式枚举是两回事）。"""
-    assert any(c["key"] == "method" for c in D.JC_COLUMNS), "表头里必须有「付款方式」列"
-    # ⭐ 机器化落点 = **域内核里没有任何 method 的解析 / 校验出口**（加了就会把真实值挡在门外）
-    suspicious = [n for n in dir(D) if "method" in n.lower()]
-    assert not suspicious, f"域内核里不许有付款方式的校验出口（会变成隐式枚举约束）：{suspicious}"
-    # 并且真实世界里那种"自由格式"必须原样存得住（不经过任何校验函数）
-    for real in ("60±7天承兑", "货到付款", "月结 30 天", "见票 45 天"):
-        assert isinstance(real, str) and real, "自由文本原样入库"
-
-
-# ---------------------------------------------------------------- 三态（§6.5.3）
+def test_集采付款方式独立列已取消():
+    """用户2026-10-14改为统一填写备注。"""
+    from app.mod11_jc import excel_parse, import_service, repository
+    assert "method" not in {c["key"] for c in D.JC_COLUMNS}
+    assert "method" not in excel_parse.FIELD_LABELS
+    assert "method" not in import_service.EXCEL_COLS
+    assert "method" not in repository.EDITABLE_COLS
 
 
 @acc("ACC-JC-FETCH-001", "001-10")
