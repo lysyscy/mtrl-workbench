@@ -380,6 +380,16 @@ const jcVisible=()=>JCs.filter(j=>(fJc.tag==='全部'||j.tag===fJc.tag)
   &&(!fJc.sup.trim()||(j.supplier||'').includes(fJc.sup.trim())))
   .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')) || Number(a.id)-Number(b.id));
 const pruneJcPick=()=>{ const vis=new Set(jcVisible().map(j=>j.id)); [...jcPick].forEach(id=>{ if(!vis.has(id)) jcPick.delete(id); }); };
+function jcNextArchiveNumbers(){
+  const max=new Map();
+  for(const j of JCs){
+    const no=String(j.archNo||'').trim();
+    if(!/^\d+$/.test(no)) continue;
+    const n=BigInt(no);
+    if(n>(max.get(j.proj)||0n)) max.set(j.proj,n);
+  }
+  return new Map([...max].map(([proj,n])=>[proj,String(n+1n)]));
+}
 let busy=false;
 const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;gap:calc(6px * var(--fscale)) calc(12px * var(--fscale));font-size:calc(12px * var(--fscale));margin-bottom:calc(13px * var(--fscale))">${pairs.map(([k,v])=>`<div class="mut">${k}</div><div>${v}</div>`).join('')}</div>`;
 

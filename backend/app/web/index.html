@@ -1368,6 +1368,7 @@ V.m12=()=>{
 V.m11=()=>{
   const tagChip=t=>enumTag('jcTag',t);
   const archChip=a=>enumTag('jcArch',a);
+  const archiveNumbers=jcNextArchiveNumbers();
   const inc=JCs.filter(j=>j.tag==='纳入台账');
   const jcRows=jcVisible();
   const d=N2(inc.reduce((a,j)=>a+jcDebt(j),0));
@@ -1402,6 +1403,7 @@ V.m11=()=>{
     ${jcNewOn?jcNewStrip():''}
     <div class="tw">${TBL({head:jcThead(),key:'m11:jc',
     rows:jcRows.map(j=>{
+      const nextArchive=archiveNumbers.get(j.proj)||'1';
       const cells = {
         project_seq: `<td class="fc" title="项目内动态序号，筛选不变">${j.projectSeq == null ? '—' : j.projectSeq}</td>`,
         date: `<td class="now">${j.date}</td>`,
@@ -1420,7 +1422,7 @@ V.m11=()=>{
         remark: `<td><input class="inp" style="min-width:104px" data-act="jcRemark" data-id="${j.id}" value="${esc(j.remark)}" placeholder="可填"></td>`,
         tag: `<td class="ctr">${tagChip(j.tag)}</td>`,
         arch: `<td class="ctr">${archChip(j.arch)}</td>`,
-        arch_no: `<td><input class="inp plain" style="min-width:104px" data-act="jcArchNo" data-id="${j.id}" value="${esc(j.archNo)}" placeholder="存档号"></td>`,
+        arch_no: `<td><input class="inp plain" style="min-width:104px" data-act="jcArchNo" data-id="${j.id}" value="${esc(j.archNo)}" placeholder="${nextArchive}" title="本项目下一个存档号：${nextArchive}（已填最大号 + 1），仅供手填参考"></td>`,
         ret_date: `<td><input class="inp plain" type="date" style="min-width:134px" data-act="jcRetDate" data-id="${j.id}" value="${esc(j.retDate)}"></td>`,
         ops: `<td class="ctr now">
         ${j.tag==='不纳入'?`<button class="btn sm pri" data-act="jcTag" data-id="${j.id}" data-v="纳入台账">纳入台账</button>`

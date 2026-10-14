@@ -678,6 +678,121 @@ def test_集采推进后保留横向位置_普通表与虚拟表(ui_page, count)
 
 
 @acc()
+@pytest.mark.parametrize('count', [8, 450])
+@pytest.mark.parametrize('width', [1440, 6000])
+def test_集采推进后保留纵向位置_有无横向溢出(ui_page, count, width):
+    from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
+
+    p = ui_page
+    p.set_viewport_size({'width': width, 'height': 270})
+    p.evaluate('''async ({count,columns,sumKeys}) => {
+      window.jcRowsFixture=Array.from({length:count},(_,i)=>({
+        id:i+1,project_seq:i+1,project_key:'测试仓库',date:'2026-01-01',
+        material:'钢材',supplier:'供应商',contract_amt:'100',tag:'纳入台账',arch:'未存档'
+      }));
+      API.m11List=async()=>({rows:jcRowsFixture,columns,sum_keys:sumKeys});
+      API.m11Fields=async b=>{Object.assign(jcRowsFixture.find(r=>r.id===Number(b.id)),b.fields);return {ok:true};};
+      VIEW='m11';await reloadM11();
+    }''', {'count': count, 'columns': list(JC_COLUMNS), 'sumKeys': list(SUM_KEYS)})
+    button = p.locator('[data-act="jcArch"][data-id="6"]')
+    button.scroll_into_view_if_needed()
+    snapshot = '''() => {
+      const v=document.querySelector('#view');
+      const tw=v.querySelector('table[data-sort-key="m11:jc"]').closest('.tw');
+      return {viewTop:v.scrollTop,tableTop:tw.scrollTop,viewHeight:v.clientHeight,
+        viewContent:v.scrollHeight,wide:tw.scrollWidth>tw.clientWidth+1};
+    }'''
+    before = p.evaluate(snapshot)
+    assert before['wide'] == (width == 1440), before
+    assert before['viewTop'] > 20, before
+    button.click()
+    p.wait_for_function("JCs.find(j=>j.id==='6').arch==='资产处'")
+    p.evaluate('() => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+    after = p.evaluate(snapshot)
+    assert abs(after['viewTop'] - before['viewTop']) < 2, (before, after)
+    assert abs(after['tableTop'] - before['tableTop']) < 2, (before, after)
+
+
+@acc()
+@pytest.mark.parametrize('action', ['jcArch', 'jcArchNo'])
+@pytest.mark.parametrize('count', [30, 450])
+def test_集采保存后不被重画锚定向上拉动(ui_page, action, count):
+    from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
+
+    p = ui_page
+    p.set_viewport_size({'width': 1920, 'height': 900})
+    p.evaluate('''async ({count,columns,sumKeys}) => {
+      window.jcRowsFixture=Array.from({length:count},(_,i)=>({
+        id:i+1,project_seq:i+1,project_key:'测试仓库',date:'2026-01-01',
+        material:'材料材料',supplier:'供应商名称供应商名称',trade_co:'贸易公司贸易公司贸易公司',
+        contract_no:'合'.repeat(16),contract_amt:'100',tag:'纳入台账',arch:'未存档'
+      }));
+      API.m11List=async()=>({rows:jcRowsFixture,columns,sum_keys:sumKeys});
+      API.m11Fields=async b=>{Object.assign(jcRowsFixture.find(r=>r.id===Number(b.id)),b.fields);return {ok:true};};
+      VIEW='m11';await reloadM11();
+    }''', {'count': count, 'columns': list(JC_COLUMNS), 'sumKeys': list(SUM_KEYS)})
+    p.locator('[data-act="jcArch"][data-id="16"]').scroll_into_view_if_needed()
+    p.set_viewport_size({'width': 2560, 'height': 900})
+    p.evaluate('async()=>await reloadM11()')
+    target = p.locator(f'[data-act="{action}"][data-id="16"]')
+    target.scroll_into_view_if_needed()
+    p.evaluate('() => new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
+    metrics = '''() => {
+      const t=document.querySelector('table[data-sort-key="m11:jc"]').closest('.tw');
+      return {top:t.scrollTop,wide:t.scrollWidth>t.clientWidth+1};
+    }'''
+    before = p.evaluate(metrics)
+    assert not before['wide'] and before['top'] > 100, before
+    if action == 'jcArch':
+        target.click()
+        p.wait_for_function("JCs.find(j=>j.id==='16').arch==='资产处'")
+    else:
+        target.fill('7')
+        target.press('Tab')
+        p.wait_for_function("JCs.find(j=>j.id==='16').archNo==='7'")
+    p.evaluate('() => new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
+    after = p.evaluate(metrics)
+    assert abs(after['top'] - before['top']) < 2, (before, after)
+
+
+@acc()
+def test_集采存档号提示按项目最大值且不受筛选影响(ui_page):
+    from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
+    from app.mod03_notice.page import render_theme
+
+    p = ui_page
+    p.add_style_tag(content=render_theme('默认'))
+    p.evaluate('''async ({columns,sumKeys}) => {
+      window.jcRowsFixture=[
+        {id:1,project_key:'测试仓库',arch_no:'2',tag:'纳入台账'},
+        {id:2,project_key:'测试仓库',arch_no:'5',tag:'不纳入'},
+        {id:3,project_key:'测试仓库',arch_no:'',tag:'纳入台账'},
+        {id:4,project_key:'测试仓库',arch_no:'',tag:'纳入台账'},
+        {id:5,project_key:'另一个项目',arch_no:'',tag:'纳入台账'}
+      ].map(r=>({...r,date:'2026-01-01',material:'钢材',supplier:'供应商',arch:'未存档'}));
+      API.m11List=async()=>({rows:jcRowsFixture,columns,sum_keys:sumKeys});
+      API.m11Fields=async b=>{
+        window.archiveSaved=b;
+        Object.assign(jcRowsFixture.find(r=>r.id===Number(b.id)),b.fields);return {ok:true};
+      };
+      fJc.tag='纳入台账';VIEW='m11';await reloadM11();
+    }''', {'columns': list(JC_COLUMNS), 'sumKeys': list(SUM_KEYS)})
+    field = p.locator('[data-act="jcArchNo"][data-id="3"]')
+    assert field.input_value() == ''
+    assert field.get_attribute('placeholder') == '6'
+    assert '已填最大号 + 1' in field.get_attribute('title')
+    assert p.locator('[data-act="jcArchNo"][data-id="1"]').input_value() == '2'
+    assert p.locator('[data-act="jcArchNo"][data-id="5"]').get_attribute('placeholder') == '1'
+    assert p.evaluate('window.archiveSaved === undefined')
+    field.fill('6')
+    field.press('Tab')
+    p.wait_for_function("JCs.find(j=>j.id==='3').archNo==='6'")
+    assert p.locator('[data-act="jcArchNo"][data-id="4"]').get_attribute('placeholder') == '7'
+    assert p.locator('[data-act="jcArchNo"][data-id="5"]').get_attribute('placeholder') == '1'
+    p.screenshot(path=str(Path(__file__).resolve().parents[2] / 'artifacts/jc-archive-hint-20261014.png'))
+
+
+@acc()
 def test_集采默认合同日期升序且表头仍可倒序(ui_page):
     from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
 

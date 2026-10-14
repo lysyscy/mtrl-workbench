@@ -44,13 +44,14 @@ function go(k){ if(VIEW==='m03'&&k!=='m03') pickSet.clear(); VIEW=k;
   markPending(PAGE_LOAD[k]||[]);
   render(); $('.view').scrollTop=0; loadPaths(PAGE_LOAD[k]||[]); }   /* ⭐ `P3` 主体：进了哪页就（首次）拉哪页 —— ⛔ 不成环：`loadPaths` 只 render，不再调 `go` */
 function render(){
-  /* 集采同页重画保留横向位置；按表身份找容器，普通表与虚拟表共用。 */
+  /* 集采布局收尾后还原两轴位置，防止隐藏列/钉列触发浏览器锚定再次拉动。 */
   const jcScroll=VIEW==='m11'?$('#view table[data-sort-key="m11:jc"]')?.closest('.tw'):null;
   const jcLeft=jcScroll?jcScroll.scrollLeft:0;
-  const restoreJcLeft=()=>{
+  const jcTop=jcScroll?jcScroll.scrollTop:0;
+  const restoreJcScroll=()=>{
     if(!jcScroll||VIEW!=='m11') return;
     const tw=$('#view table[data-sort-key="m11:jc"]')?.closest('.tw');
-    if(tw) tw.scrollLeft=jcLeft;
+    if(tw){ tw.scrollLeft=jcLeft; tw.scrollTop=jcTop; }
   };
   /* ⭐ 2026-09-28（用户裁定 `B` · 见审计清单 §六 "裁定 5"）：侧栏每项左侧那一列 = **模块编号**
      （`NAV` 表第三列，如 `MOD-14`）—— 它是**给人看的编号**（文档 / 《说明书》/ 判据件都按这套编号对齐），
@@ -132,12 +133,12 @@ function render(){
      ⭐ **P5-c**（2026-09-30）：**页级那条路已删** ⇒ 虚拟滚动只剩**表级**这一条。
      ⚠️ `scroller` 这个参数**同批删掉**：它原本只给页级那半用，而页级那半其实一直**没用它**
         （自己 `scrollHost()` 重取一个）⇒ 留着会让人以为"传进去就有用"。 */
-  if(startVirtual(html, keep)){ restoreJcLeft(); placePops(); applyPjFilters(); return; }
+  if(startVirtual(html, keep)){ restoreJcScroll(); placePops(); applyPjFilters(); return; }
   $('#view').innerHTML=html;
   /* ⚠️ 还原时**重新解析**滚动容器：`.tw` 已被上一行整体重建（旧元素连同它的 scrollTop 一起没了）。 */
   const host2=scrollHost(); if(host2) host2.scrollTop=keep;
   runBind(VIEW);
-  restoreJcLeft();
+  restoreJcScroll();
   placePops();          /* ⭐ 通用浮层逃出卡片裁剪（`TAIL-109`/`TAIL-110`）—— 见 `placePops` 的注释 */
   applyPjFilters();     /* ⭐ 项目面板的搜索词 / 归档折叠**重涂**（①② 2026-09-27）—— 见该函数注释 */
 }
