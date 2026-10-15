@@ -53,7 +53,7 @@ def test_export_same_modal_cancel_and_long_list_footer(page):
     assert box and box['y'] + box['height'] <= 900
     page.locator('#procExportProjects').evaluate('(el)=>{el.scrollTop=el.scrollHeight;}')
     assert button.is_visible()
-    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch/tmp-20261009-proc-export.png'))
+    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261009-proc-export.png'))
     page.locator('[data-act="procExpCancel"]').click()
     assert not page.locator('#procExportProjects').is_visible()
     assert page.evaluate('saved.length') == 0
@@ -123,6 +123,6 @@ def test_batch_max_scale_many_items_months_and_visible_footer(page):
     box = button.bounding_box()
     assert box and 0 <= box['y'] and box['y'] + box['height'] <= 720
     assert page.locator('#modalRoot [data-act="closeModal"]').last.is_visible()
-    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch/tmp-20261009-month-entry.png'))
+    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261009-month-entry.png'))
     page.locator('#modalRoot [data-act="closeModal"]').last.click()
     assert page.evaluate('saved.length') == 0

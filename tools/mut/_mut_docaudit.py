@@ -34,9 +34,7 @@
      `T3` / `T12` / `T14` **四层守卫没一层拦**（那片地方**不在任何扫描面内**）。
    · `M28` = `T25`（**`.gitignore` 里的落点必须真存在**）：往 `.gitignore` 追加一条含
      核不到落点的注释 ⇒ 必须报。⚠️ `T3` **拦不住**这一类（它只认**带后缀**的引用，而落点多是**目录**）。
-   · `M29` = `T10` 的**字节档**：把注入档补到 > 14,400 B ⇒ 必须报。
-     ⚠️ 它同时钉住 **`_pad_bytes` 的两条约束**（填充行必须短、且不带标点 —— 否则惊动 `T21`/`T22`，
-     报的就不是 `T10` 了）。
+   · `M29` = `T10` 的条件约束页行预算：项目退出宿主字节上限，仍核201 > 200行。
    · `M30` = **承重自证**：`work/xxx.md` 这类引用**必须被逼出来** ⇒ 证明"把 `work/` 加进
      `TOP_DIRS`"这半边不是装饰（同 `M23`：**判据与靶必须配对**，常量加了而扫描面没跟 = 等于没加）。
 
@@ -45,7 +43,7 @@
   那套「仓外白名单**真核存在**」本该为它服务，可 `SCAN_GLOBS` 只有**非递归**的
   `.codebuddy/plans/*.md` ⇒ **索引件压根没被扫**（实测：扫描面里带 `archive` 的件 = 0）
   ⇒ 仓外那份被清掉 ⇒ **指针变死而无人喊**（墓碑 ≠ 守卫）。
-  `M31` 钉的就是"那一格真在扫描面里"：往索引里塞一个**核不到的仓外路径** ⇒ 必须报（黄）。
+  2026-10-15索引归档退出默认扫描，M31改在当前参考页验证仓外幽灵路径；历史上本条钉的是"那一格真在扫描面里"：往索引里塞一个**核不到的仓外路径** ⇒ 必须报（黄）。
   ⚠️ 判据是**三元组**（`[T3]` ＋ `仓外白名单根下找不到` ＋ 注入的那个路径名）——
   那份索引头部本来就写着别的真仓外路径，判据太宽会在基线里就命中（⇒ 本件开头当场拒跑整支）。
 
@@ -83,12 +81,11 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PLANS = ROOT / ".codebuddy" / "plans"
 #: 「给人看的那一页」= **根 `README.md`**（⭐ 2026-10-01 `TAIL-204` 第 6 步换件：原 `plans/执行情况-主文档.md`
 #:   已"只留待办"并进 `README.md` §〇 ⇒ ⛔ 旧路径不存在；见 `audit_common.HANDBOOK_REL` 的说明）。
 HAND = ROOT / "README.md"
-PLAN = PLANS / "开发计划-主文档.md"
-MEM = ROOT / ".codebuddy" / "memory" / "MEMORY.md"
+PLAN = ROOT / "docs/status.md"
+MEM = ROOT / "docs" / "agents" / "project-rules.md"
 REGISTRY = ROOT / "tools" / "t7_expected.txt"
 GUARD_SRC = ROOT / "tools" / "audit" / "audit_meta.py"      #: `T18` 的靶（常量定义处）
 COMMON_SRC = ROOT / "tools" / "audit" / "audit_common.py"    #: `M25`/`M26` 的靶（`OUTSIDE_ROOTS` 所在件）
@@ -111,7 +108,7 @@ def _fit(frag: bytes, sample: bytes) -> bytes:
 #:    （`**528 = 绿 454…**` / `A 类 **10** 条 … 已销号 **41** 条`）⇒ **每批一改文档就 SKIP＝静默失效**：
 #:    脚本一个"未验证"打出来、退出码却是 1，看起来跟"变异没命中"**长得一模一样**。
 #:    ⇒ 改成**动态锚点**：从**当前文档**正则取那处数字，再把捕获到的那个数改小 1（⛔ 别再写死）。
-_四态PAT = r"绿 (\d+) · 红 (\d+) · 待建 (\d+) · 未绑定 (\d+)"
+_四态PAT = r"绿\s*(\d+)\s*·\s*红\s*(\d+)\s*·\s*待建\s*(\d+)\s*·\s*未绑定\s*(\d+)"
 def _dyn_tail(text: str) -> tuple[bytes, bytes]:
     """用唯一计数形态源取活跃数靶，改错后应由 T6/T4 看见。"""
     match = audit_common.COUNT_FULL_RE.search(text)
@@ -170,20 +167,6 @@ def _pad_lines(src: bytes, target: int) -> bytes:
     return src + (b"\n" * need if src.endswith(b"\n") else b"\n" * (need + 1))
 
 
-def _pad_bytes(src: bytes, target: int) -> bytes:
-    """追加**刚好越过** `target` 字节的填充行 —— `M29`（`T10` 的**字节档**）用。
-
-    ⚠️ 填充**只能是短行、且不带标点**（本次实测的两条约束）：
-      · 单行 > 800 字会惊动 `T21`（字墙）⇒ 那报的就不是 `T10` 了；
-      · 行尾标点紧跟列表符会惊动 `T22`（注入档粘连）⇒ 同上。
-    ⚠️ 追加的**行数**必须仍在该档的行预算内（`MEMORY.md` 预算 200 行 ⇒ 这里只加几十行）。
-    """
-    need = target - len(src)
-    assert need > 0, f"目标 {target} 字节 ≤ 现值 {len(src)} 字节 ⇒ 本件需重定靶"
-    filler = b"mut-byte-pad\n"
-    return src + filler * (need // len(filler) + 1)
-
-
 # --------------------------------------------------- 追加式变异（M4–M8 · 2026-09-24 扩面之一）
 #
 #: `docs/reference/*.md` ∈ `SCAN_GLOBS` ⇒ `docs/reference/thresholds.md` 在 `T1/T2/T3` 的扫描面内（且它不是留痕档 ⇒ 命中即红）
@@ -195,7 +178,6 @@ GITIGNORE = ROOT / ".gitignore"
 #:   往里追加一行含「核不到的**仓外**路径」⇒ `T3` 的仓外白名单分支必须报（黄：该件在 `LENIENT_GLOBS`）。
 #:   ⚠️ 它 2026-10-06 之前**不在** `SCAN_GLOBS` 里（只有非递归的 `.codebuddy/plans/*.md`）⇒ 本条
 #:   **同时**钉住"那一格真在扫描面内"（同 `M23` 钉 `_PATH_RE` 那个配对：判据与靶必须成对）。
-INDEX_LEDGER = ROOT / "docs" / "archive" / "legacy-plans" / "归档-留痕索引-20261005.md"
 #: ⭐ `T24`（2026-10-05 立）靶：在**仓库根**造一个白名单外的目录（用完 `rmdir`）——
 #:   复现的就是当天那场事故的形状（"根上多出一块没人看的地方"）。
 ROOT_ZONE = ROOT / "_mut_root_zone"
@@ -223,12 +205,12 @@ import audit_common                  # noqa: E402
 import audit_meta                    # noqa: E402
 
 
-GHOST_TICKET = ROOT / ".codebuddy" / "work" / "50-tickets" / "TAIL-9999-幽灵票.md"
+GHOST_TICKET = ROOT / ".scratch" / "tails" / "issues" / "TAIL-9999-幽灵票.md"
 
 
 def _run_t6_fixture(closed_rows=(), state="claimed", remove_ticket=False):
     """用最小隔离仓运行同一 T6；可注入缺号、已销号仍在活动区或缺票。"""
-    scratch = ROOT / ".codebuddy" / "work" / "00-scratch"
+    scratch = ROOT / ".scratch" / "local"
     with tempfile.TemporaryDirectory(prefix="tmp-docaudit-ticket-", dir=scratch) as name:
         fixture = Path(name)
         ledger = fixture / audit_meta.LEDGER_REL
@@ -395,7 +377,7 @@ MUTS_RED2: list[dict] = [
     #   ⇒ 这条就是**专门钉那个正则与那个常量配得上对**（判据与靶是一对，本仓老话）。
     {"desc": "M23 `T3` 治理区纳入扫描面（`.codebuddy/…` 的幽灵路径必须报红）", "mode": "red",
      "also": ("[T3]", "nope_ghost"), "path": THRESHOLD,
-     "frag": lambda src: _fit(_b("\n\n\n另见 `.codebuddy/work/50-tickets/nope_ghost.md`。\n\n\n"), src)},
+     "frag": lambda src: _fit(_b("\n\n\n另见 `.scratch/tails/issues/nope_ghost.md`。\n\n\n"), src)},
     # ⚠️ `M24`–`M26` 是 `/code-review`（2026-10-05）补的：审查指出三处「判据装了但没人证伪」
     #   —— 豁免词表没有靶、仓外白名单登记没有靶、`T18` 新增的两档没有靶。
     # ⚠️ `M24` 钉的是**距离闸**：提示词挪到**行尾远处** ⇒ 那个路径**必须仍报红**
@@ -426,9 +408,9 @@ MUTS_RED2: list[dict] = [
     {"desc": "M28 `T25` `.gitignore` 里写着**核不到的落点路径**", "mode": "red",
      "also": ("[T25]", "nope_zone"), "path": GITIGNORE,
      "frag": lambda src: _fit(_b("\n# 落点：`.codebuddy/work/nope_zone/`（变异注入 · 用完即复原）\n"), src)},
-    {"desc": "M29 `T10` **字节档**（注入档补到 > 14400 B ⇒ 必须报）", "mode": "needle",
-     "needle": ("MEMORY.md", "字节（预算 14400）"), "path": MEM,
-     "frag": lambda src: _pad_bytes(src, 14401)},
+    {"desc": "M29 `T10` 条件约束页行预算（201 > 200）", "mode": "needle",
+     "needle": ("project-rules.md", "201 行（预算 200"), "path": MEM, "lines": 201,
+     "frag": lambda src: _pad_lines(src, 201)},
     {"desc": "M30 `T3` 的 `work/` 前缀**承重**（`work/xxx.md` 这类引用必须被逼出来）", "mode": "red",
      "also": ("[T3]", "work/nope_ghost.md"), "path": THRESHOLD,
      "frag": lambda src: _fit(_b("\n\n\n另见 `work/nope_ghost.md`。\n\n\n"), src)},
@@ -438,8 +420,8 @@ MUTS_RED2: list[dict] = [
     #   ⚠️ 但 `SCAN_GLOBS` 只有**非递归**的 `.codebuddy/plans/*.md` ⇒ **索引件根本没被扫**
     #   （实测：扫描面里带 `archive` 的件 = 0）⇒ 仓外那份被清掉 ⇒ **指针变死，没任何人喊**。
     #   ⇒ 本条钉的就是「那一格真在扫描面里」：**造一个核不到的仓外路径进索引 ⇒ 必须报**。
-    {"desc": "M31 `T3` 仓外白名单真核**扫得到仓内索引**（索引里写个不存在的仓外路径）", "mode": "needle",
-     "needle": ("[T3]", "仓外白名单根下找不到", "nope_outside"), "path": INDEX_LEDGER,
+    {"desc": "M31 `T3` 当前参考页的仓外幽灵路径必须报告", "mode": "needle",
+     "needle": ("[T3]", "仓外白名单根下找不到", "nope_outside"), "path": THRESHOLD,
      "frag": lambda src: _fit(_b("\n\n\n留档指针见 `D:\\dev\\.归档-mtrl\\nope_outside_幽灵件.md`。\n\n\n"), src)},
 ]
 
@@ -530,7 +512,7 @@ def _restore(c: dict, src: bytes) -> None:
 
 def tail293_selftest() -> int:
     """隔离副本证明 T6 活动/已办/幽灵判红、MD5复原与开销票实际搬行。"""
-    scratch = ROOT / ".codebuddy/work/00-scratch"
+    scratch = ROOT / ".scratch/local"
     with tempfile.TemporaryDirectory(prefix="tmp-20261011-tail293-", dir=scratch) as name:
         fixture = Path(name)
         print(f"隔离副本：{fixture}")
@@ -637,7 +619,7 @@ def main() -> int:
     # ⭐ M1 / M3 的锚点**现取**（见 `_四态PAT` / `_尾巴PAT` 上方注释）
     cases: list[dict] = [
         {"desc": "M1 简略版的四态数字改错（原 T4 看不见这一处 —— 扩面后才抓得到）", "mode": "red",
-         "needle": "", "path": HAND, "old_new": _dyn(_四态PAT, HAND.read_text(encoding="utf-8")), "all": False},
+         "needle": "", "path": PLAN, "old_new": _dyn(_四态PAT, PLAN.read_text(encoding="utf-8")), "all": False},
         {"desc": "M2 简略版里不再指向计划文档（台账就没人看得见）", "mode": "red", "needle": "",
          "path": HAND, "old_new": (_b("docs/status.md"), _b("docs/not-status.md")), "all": True},
         {"desc": "M3 台账顶部计数与实际不符（人按错的数判断尾巴有多少）", "mode": "red", "needle": "",

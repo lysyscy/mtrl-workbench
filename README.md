@@ -24,13 +24,13 @@
 | docs/status.md | 当前部署、未验边界、交接与§15活动票索引 |
 | docs/architecture.md及同名目录 | 当前结构、模块与刷新关系；改结构时读 |
 | docs/guides/、docs/reference/ | 长期指南和按需工程参考；按主题读，逐件工程索引见docs/guides/operations.md |
-| docs/adr/ | 新重要决定；旧D件在.codebuddy/work/40-decisions保留来源和编号 |
+| docs/adr/ | 新重要决定；旧D件在docs/adr保留来源和编号 |
 | docs/archive/index.md | 历史原文、旧路径及固定SHA；只在明确追溯时读 |
 | .scratch/<effort>/ | 新活动任务的必要规格、调查与证据；有实质内容时创建 |
-| .codebuddy/work/50-tickets/ | 已采用的真实TAIL票仓；开销票使用既有工具 |
-| .codebuddy/work/10-designs/ | 三份仍涉及活动或未决范围的原件；按原票读取，任务结束后再归档 |
-| .codebuddy/memory/MEMORY.md与rules/ | 宿主实际加载入口；专题正文回docs，规则在场不等于已核宿主注入 |
-| .codebuddy/work/00-scratch/、.codebuddy/backups/ | 既有临时证据、恢复现场及快照；本次原地保护 |
+| .scratch/tails/issues/ | 已采用的真实TAIL票仓；开销票使用既有工具 |
+| .scratch/legacy-active/ | 三份仍涉及活动或未决范围的原件；按原票读取，任务结束后再归档 |
+| docs/agents/project-rules.md | 文件、保存、环境与真实写入的条件约束；由AGENTS按操作触发 |
+| .scratch/local/、.artifacts/recovery/backups/ | 既有临时证据、恢复现场及快照；已整体迁入新位置，原文字节与恢复用途保留 |
 | backend/app/、backend/tests/、backend/alembic/ | 运行代码、测试与数据库迁移 |
 | backend/app/resources/ | 程序实际消费的模板；由资源模块定义位置 |
 | delivery/ | 原型HTML、检查JS、模板及第三方原件；现行产品Markdown已迁入docs |
@@ -50,15 +50,15 @@
 | 实测结论与工程参考 | 按主题命名，如sticky-total-row、template-export、thresholds | `docs/reference/`；成立前提与来源随正文保留 |
 | 索引 / 地图 | `README.md` | 该层根的目录 |
 | **agent 入口 / 制度页** | 入口 = 固定名 `AGENTS.md` · 制度页 = 固定小写英文名 | 仓根 · `docs/agents/`（2026-10-15专项迁移首批；workflow为执行绑定，issue-tracker为票协议） |
-| 新任务规格与调查 | spec.md或必要主题件 | `.scratch/<effort>/`；当前三个旧任务保留原位 |
+| 新任务规格与调查 | spec.md或必要主题件 | `.scratch/<effort>/`；三个旧任务原文放.scratch/legacy-active |
 | 实验记录 | 必要持久证据 | 所属任务evidence.md；运行产物仍按实际配置 |
 | 问题排查 | 依用途保存 | 活动任务中保存；结束且有独有价值再归档 |
-| 决策记录 | 已有 `D<编号>-<主题>.md` 保持原名；新ADR按编号与主题命名 | 已有件保留 `.codebuddy/work/40-decisions/`；新目录决定为 `docs/adr/0033-document-layout.md` |
-| **尾巴票** | `TAIL-<编号>-<短名>.md` | `.codebuddy/work/50-tickets/`（⭐ 2026-10-04 `TAIL-225` 起 —— 一张票一个文件；**索引 = 计划 §15 一行一票**；⭐ 用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄） |
+| 决策记录 | 已有 `D<编号>-<主题>.md` 保持原名；新ADR按编号与主题命名 | 已有件保留 `docs/adr/`；新目录决定为 `docs/adr/0033-document-layout.md` |
+| **尾巴票** | `TAIL-<编号>-<短名>.md` | `.scratch/tails/issues/`（⭐ 2026-10-04 `TAIL-225` 起 —— 一张票一个文件；**索引 = 计划 §15 一行一票**；⭐ 用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄） |
 | 临时件 | 任务内必要临时文件 | 新任务.scratch/<effort>；旧00-scratch的恢复和活动材料继续保留，日期只产生复核候选 |
 | 现行权威 | 固定职责及主题名 | 需求docs/requirements.md及分册；状态docs/status.md；架构docs/architecture.md；指南、参考、协议各在docs对应目录 |
-| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.codebuddy/backups/`（**备份唯一落点**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**）⭐ **何时清** = **备份数量超线时**复核一次（超线就移/清；上限数字见 `docs/reference/thresholds.md`，⛔ 不在此处抄） |
-| **产品资料改前备份** | `docs/requirements/` 正文及delivery原型与说明书的改前快照 | `.codebuddy/backups/`；文件本身由 Git 版本管理，手工快照只用于需要快速恢复的批量编辑 |
+| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.artifacts/recovery/backups/`（**备份唯一落点**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**）⭐ **何时清** = **备份数量超线时**复核一次（超线就移/清；上限数字见 `docs/reference/thresholds.md`，⛔ 不在此处抄） |
+| **产品资料改前备份** | `docs/requirements/` 正文及delivery原型与说明书的改前快照 | `.artifacts/recovery/backups/`；文件本身由 Git 版本管理，手工快照只用于需要快速恢复的批量编辑 |
 | 产物 md | 仅工具生成物白名单（当前：`变异覆盖台账.md`） | `artifacts/` |
 
 **格式三条**：① 每份文档**开头必须写**"读者是谁 / 回答什么问题 / 什么时候读"（work 区另加"状态 ＋ 关联 ID"）；② **跨文档引用写全路径**
@@ -76,7 +76,7 @@
 
 ## 七、新建与维护资料
 
-先找现行主人；有实质新内容时按固定职责创建。新任务用.scratch/effort，重要决定用docs/adr，历史用docs/archive。现有tracker、旧D件、宿主入口和恢复材料遵守项目真实契约；日常维护方法按AGENTS指向个人来源。
+先找现行主人；有实质新内容时按固定职责创建。新任务用.scratch/effort，重要决定用docs/adr，历史用docs/archive。现有tracker、旧D件和恢复材料遵守项目真实契约；日常维护方法按AGENTS指向个人来源。
 
 ## 八、常见定位问题
 

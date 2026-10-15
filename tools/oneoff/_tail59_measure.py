@@ -6,7 +6,7 @@
 
 三个面：
   A. 各「规则面」的条数与体量（注入档 / 阈值表 / 尺子常量 / 前端守则 / 运维索引）；
-  B. `ops/阈值表.md` 每行的**复述清单** —— 该行的数字在哪些**复述面**里又出现了一次
+  B. `docs/reference/thresholds.md` 每行的**复述清单** —— 该行的数字在哪些**复述面**里又出现了一次
      （⭐ 复述面 = 每会话**必读/注入**的那些档 ⇒ 它漂了最贵：读它的人最多、而 `T4④` 只校"表 vs 真源"、**不校别处复述**）；
   C. 结论行：有几处复述**没有机器眼**。
 
@@ -19,19 +19,19 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-TABLE = ROOT / "ops" / "阈值表.md"
+TABLE = ROOT / "docs/reference/thresholds.md"
 
 #: 「复述面」= 每会话**注入 / 必读**的档（⭐ 定义见根 `README.md` §二 的四层：①②层）
 FACES: tuple[str, ...] = (
-    ".codebuddy/memory/MEMORY.md",
-    ".codebuddy/memory/细则.md",
+    "docs/agents/project-rules.md",
+    "docs/guides/implementation-constraints.md",
     "README.md",
-    ".codebuddy/plans/开发计划-主文档.md",
-    "ops/README.md",
+    "docs/status.md",
+    "docs/guides/operations.md",
 )
 #: 「真源面」——数字出现**在这里是对的**（那是它的主人）
 SOURCES: tuple[str, ...] = (
-    "ops/阈值表.md",
+    "docs/reference/thresholds.md",
     "tools/audit/audit_meta.py",
     "tools/audit/audit_common.py",
     "tools/audit/audit_work.py",
@@ -42,7 +42,7 @@ SOURCES: tuple[str, ...] = (
     "backend/tests/test_wiring_guards.py",
     "backend/app/core/session.py",
 )
-_PLAN = ".codebuddy/plans/开发计划-主文档.md"
+_PLAN = "docs/status.md"
 
 #: 阈值表第一格里的数字（`| **400** |` / `| **±2 行** |` / `| **200px / 30 行** |`）
 _CELL_RE = re.compile(r"^\|\s*\*{0,2}([^|]+?)\*{0,2}\s*\|")
@@ -104,7 +104,7 @@ def main() -> int:
     print("\n【面 A】各「规则面」体量（行数 / `- ` 条目数）")
     for rel, n, bullets in face_inventory():
         print(f"  {n:>5} 行 / {bullets:>3} 条目   {rel}")
-    print(f"  {len(rows):>5} 行 /   数据行   ops/阈值表.md（⚠️ 只数表格数据行）")
+    print(f"  {len(rows):>5} 行 /   数据行   docs/reference/thresholds.md（⚠️ 只数表格数据行）")
 
     print("\n【面 B】阈值表每个数字在「复述面」里的出现（⭐ 每次出现 = 一个**候选副本**）")
     dup_rows = 0

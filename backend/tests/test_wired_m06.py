@@ -26,7 +26,7 @@ ROUTER = (ROOT / "backend" / "app" / "mod06_proc" / "router.py").read_text(encod
 #   · `page_slice("m06")` ⇒ `page_slice("m06")`：**页切片的唯一算法**（原先本件自写"花括号配平"，
 #     与 `ui_parity`/`shell_src` 那套**并存** = 同一件事两套算法 —— 正是本要治的病）。
 #     实测：`page_slice("m06")` 比旧切片**多**页尾那段横幅注释，而本件三条断言（无 `API.` / 无 `mechOpen` /
-#     有 `TBL({head:DIFF_THEAD,`）**换后仍成立** ⇒ 换得了（量测件 `.codebuddy/work/00-scratch/_tail219_batch2b_rest.py`）。
+#     有 `TBL({head:DIFF_THEAD,`）**换后仍成立** ⇒ 换得了（量测件 `.scratch/local/_tail219_batch2b_rest.py`）。
 #   · `_act_body(name)` ⇒ `act_entry(name)`：⭐ 逐字节一致（`procExpToggle` 789 / `mechOpen` 2577 都对上）。
 
 

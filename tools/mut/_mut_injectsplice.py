@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-MEM = ROOT / ".codebuddy" / "memory" / "MEMORY.md"
+MEM = ROOT / "docs" / "agents" / "project-rules.md"
 META = ROOT / "tools" / "audit" / "audit_meta.py"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 AUDIT = ROOT / "tools" / "audit" / "doc_audit.py"

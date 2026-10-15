@@ -24,7 +24,7 @@ def snapshot(path: Path, root: Path = ROOT) -> None:
     files = {}
     for name in sorted(set(filter(None, names))):
         target = root/name
-        if not target.is_file() or name.startswith('.codebuddy/work/00-scratch/'):
+        if not target.is_file() or name.startswith('.scratch/local/'):
             continue
         raw = target.read_bytes()
         secret = name == 'ops/init_db.sql' or (name.startswith('.env') and name != '.env.example')
@@ -46,7 +46,7 @@ def since_snapshot(path: Path, root: Path = ROOT) -> dict:
     names = set(now) | set(data['files'])
     result = {}
     for name in names:
-        if name.startswith('.codebuddy/work/00-scratch/'):
+        if name.startswith('.scratch/local/'):
             continue
         p = root/name
         after = p.read_bytes() if p.is_file() else None
@@ -73,7 +73,7 @@ def snapshot_summary(path: Path, root: Path = ROOT) -> dict:
 
 def latest_smoke_log(root: Path = ROOT) -> Path | None:
     """最近一份真机自检证据 —— 复用那一路要能指出"复用的是哪一份"（日志名带时间戳，按名排序即按时间）。"""
-    logs = sorted((root/'.codebuddy/work/00-scratch').glob('tmp-*-shell-smoke.log'))
+    logs = sorted((root/'.scratch/local').glob('tmp-*-shell-smoke.log'))
     return logs[-1] if logs else None
 
 
@@ -84,7 +84,7 @@ def smoke_evidence(result, root: Path = ROOT) -> Path:
              for p in sorted((root/'backend/app/web').rglob('*')) if p.is_file()]
     header = {'rc': result.returncode, 'shell_sha256': hashlib.sha256(json.dumps(shell).encode()).hexdigest(),
               'environment_sha256': hashlib.sha256(json.dumps(dict(os.environ), sort_keys=True).encode()).hexdigest()}
-    path = root/'.codebuddy/work/00-scratch'/('tmp-'+time.strftime('%Y%m%d-%H%M%S')+'-shell-smoke.log')
+    path = root/'.scratch/local'/('tmp-'+time.strftime('%Y%m%d-%H%M%S')+'-shell-smoke.log')
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(header)+'\n'+result.stdout+'\n'+result.stderr, encoding='utf-8')
     return path
@@ -100,7 +100,7 @@ def retro_selftest():
         (root/'README.md').write_text('baseline-private-content', encoding='utf-8')
         subprocess.run(['git', 'add', 'README.md'], cwd=root, check=True)
         subprocess.run(['git', '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture'], cwd=root, check=True)
-        basis=root/'.codebuddy/work/00-scratch/basis.json'; snapshot(basis, root)
+        basis=root/'.scratch/local/basis.json'; snapshot(basis, root)
         (root/'README.md').write_text('changed-private-content', encoding='utf-8')
         summary=snapshot_summary(basis, root)
         assert summary['files'] == 1
@@ -500,7 +500,7 @@ def selftest():
         basis = root/'entry.json'; snapshot(basis, root)
         basis.unlink()  # 保存到隔离外，避免把基点本身当输入。
         # 使用相同实现重新写到scratch落点。
-        basis = root/'.codebuddy/work/00-scratch/tmp-entry.json'; snapshot(basis, root)
+        basis = root/'.scratch/local/tmp-entry.json'; snapshot(basis, root)
         assert not since_snapshot(basis, root), '旧dirty未变化不能重复成为新增影响'
         old.write_bytes(b'changed')
         assert set(since_snapshot(basis, root)) == {'README.md'}

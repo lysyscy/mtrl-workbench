@@ -475,6 +475,6 @@ python -m pytest backend/tests/test_acc_prj_arch.py backend/tests/test_acc_prj_o
 - `mod05_flow/router.py`：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/backend/app/mod05_flow/router.py>
 - `mod03_notice/list_view.py`：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/backend/app/mod03_notice/list_view.py>
 - `mod11_jc/models.py`：<https://github.com/lysyscy/mtrl-workbench/blob/58766573079b6c2e0eb986b39fde904643626fd5/backend/app/mod11_jc/models.py>
-- 三张票（本地）：`.codebuddy/work/50-tickets/TAIL-282-匹配供应商后拟付金额被回退.md`、`TAIL-283-付款流水补通知书信息与列义修正.md`、`TAIL-284-项目安全删除第一阶段.md`
+- 三张票（本地）：`.scratch/tails/issues/TAIL-282-匹配供应商后拟付金额被回退.md`、`TAIL-283-付款流水补通知书信息与列义修正.md`、`TAIL-284-项目安全删除第一阶段.md`
 
 **文档结束。** 后续 Codex 应以本件为预先完成的调查成果，集中额度在必要差异核查、实现、正反测试与真实交付证据上。

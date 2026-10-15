@@ -15,7 +15,7 @@ def isolated_backend(prefix):
     sys.path.insert(0, str(ROOT / 'backend'))
     from app.core.config import get_settings
     test_url = get_settings().test_database_url
-    with tempfile.TemporaryDirectory(prefix=prefix, dir=ROOT / '.codebuddy/work/00-scratch') as folder:
+    with tempfile.TemporaryDirectory(prefix=prefix, dir=ROOT / '.scratch/local') as folder:
         base = Path(folder) / 'backend'
         base.mkdir()
         for name in ('app', 'tests'):

@@ -15,7 +15,7 @@
 ## 量法（⛔ 与只读量测件的分工）
 
 - **本件（判据用）**：AST 认**代码** —— 注释 / docstring 里写着 `SHELL.find(` 这类字样**不算**。
-- `.codebuddy/work/00-scratch/_tail219_scissors.py`（人看一眼的只读量测件）：正则认**文本** ⇒ 会被
+- `.scratch/local/_tail219_scissors.py`（人看一眼的只读量测件）：正则认**文本** ⇒ 会被
   注释字样骗（实测把 `test_wired_m03_list._nt_region` 的 docstring 误报成一把）。本件是**唯一真源**。
 """
 
@@ -103,7 +103,7 @@ def scan() -> list[tuple[str, str]]:
         if any(x in p.parts for x in SKIP_DIRS):
             continue
         rel = p.relative_to(ROOT).as_posix()
-        if ".codebuddy/" in rel or "/_归档-" in rel or rel in OWNERS:
+        if rel.startswith((".scratch/", ".artifacts/")) or "/_归档-" in rel or rel in OWNERS:
             continue
         try:
             tree = ast.parse(p.read_text(encoding="utf-8"))

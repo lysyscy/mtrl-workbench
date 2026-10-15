@@ -26,7 +26,7 @@ BACKEND = ROOT / "backend"
 #: ⚠️ 2026-10-01（`TAIL-204` 第 7 步）**换落点**：原 `.workbuddy/scratch` 是**搬家遗留的旧落点** ——
 #:   它盘上一直在（被 `.gitignore` 藏着，`git status` 看不见），第 7 步才整棵清掉 ⇒ 本件换到**唯一的临时区**
 #:   `work/00-scratch/`（`T14` 管 TTL）。⚠️ 同族：`_mut_naive` / `_mut_save` / `_mut_vs` / `_mut_t20` 一起换。
-BAK = ROOT / ".codebuddy" / "work" / "00-scratch"
+BAK = ROOT / ".scratch" / "local"
 BAK.mkdir(parents=True, exist_ok=True)
 PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 TEST = "tests/test_amount_text_parity.py"

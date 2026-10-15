@@ -38,7 +38,7 @@ ENV = ROOT / ".env"
 
 # 表格 row 里以反引号包住、且像"本仓路径"的 token
 PATH_RE = re.compile(r"`([A-Za-z0-9_./\\-]+)`")
-REPO_PREFIX = ("backend/", "tools/", "ops/", "docs/", "frontend/", ".codebuddy/", "logs/", "artifacts/")
+REPO_PREFIX = ("backend/", "tools/", "ops/", "docs/", "frontend/", ".scratch/", ".artifacts/", ".codebuddy/", "logs/", "artifacts/")
 TAIL_RE = re.compile(r"TAIL-\d{2}")
 ACC_RE = re.compile(r"ACC-[A-Z0-9]+(?:-[A-Z0-9]+)*-\d{3}")
 DEP_MARKERS = ("运行时依赖", "须随代码走")

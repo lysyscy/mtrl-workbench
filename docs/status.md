@@ -109,11 +109,11 @@ TAIL-337运行环境已升级并加载；本次两库备份向隔离PG18恢复�
 | §3 | docs/architecture/modules.md：模块、工程包、壳视图与切片归属。 |
 | §4 | docs/agents/workflow.md：日常流程、开工条件与核验范围。 |
 | §5 | docs/guides/deployment.md：阶段、部署及初始化的已办与未核实边界。 |
-| §6 | docs/architecture.md：金额、时间、幂等、抓取、打印、Excel及主题工程约束；环境坑回 .codebuddy/memory/MEMORY.md。 |
+| §6 | docs/architecture.md：金额、时间、幂等、抓取、打印、Excel及主题工程约束；环境坑回 docs/agents/project-rules.md。 |
 | §7 | docs/requirements/PRD/验收/README.md：验收绑定；命令回 .codebuddy/memory/docs/guides/development-and-verification.md §十一。 |
 | §8 | README.md：§〇当前风险；复现与安全前提回 docs/guides/deployment.md。 |
-| §9 | .codebuddy/work/40-decisions/D索引-D1-D32.md：§二现行含义、§三同号两组；源正文已摘出。 |
-| §10 | docs/requirements/PRD/：业务不做项；坐标与禁区回 .codebuddy/memory/MEMORY.md。 |
+| §9 | docs/adr/D索引-D1-D32.md：§二现行含义、§三同号两组；源正文已摘出。 |
+| §10 | docs/requirements/PRD/：业务不做项；坐标与禁区回 docs/agents/project-rules.md。 |
 | §11 | docs/archive/legacy-plans/归档-留痕索引-20261005.md：原切片步骤留痕。 |
 | §12 | docs/archive/legacy-plans/归档-留痕索引-20261005.md：已回写契约缺口留痕。 |
 | §13 | 本件§13.6：最近交接；流程回 docs/agents/workflow.md。 |
@@ -233,7 +233,7 @@ TAIL-337运行环境已升级并加载；本次两库备份向隔离PG18恢复�
 
 ### 13.3 提示词入口
 
-提示词仅在回复提供，按 .codebuddy/memory/MEMORY.md §一；引用唯一规格、当前票与AGENTS.md，范围及完成定义由票面承载，不复制整套旧必读清单。
+提示词仅在回复提供，按 docs/agents/project-rules.md §一；引用唯一规格、当前票与AGENTS.md，范围及完成定义由票面承载，不复制整套旧必读清单。
 
 ### 13.4 使用方式
 
@@ -249,10 +249,10 @@ TAIL-337运行环境已升级并加载；本次两库备份向隔离PG18恢复�
 
 | 项 | 内容 |
 |---|---|
-| **2026-10-14 · 集采打印版完成** | TAIL-336源码及隔离统一检查通过，原导出保留；真实两项目Excel与6页预览核对完成。已按用户授权重启，真实页面下载与实样逐格核对通过，未做实体打印；证据见 `.codebuddy/work/50-tickets/TAIL-336-集采打印版导出与付款方式移除.md` Comments。 |
-| **2026-10-14 · 集采提示与滚动修复** | TAIL-335完成，当前服务已提供本次前端文件，刷新即可。规则、隔离验收及既有无关失败归因见 `.codebuddy/work/50-tickets/TAIL-335-集采存档号提示与滚动修复.md` Comments；未做生产业务写入。 |
-| **2026-10-14 · 审计修复与个人技能实跑** | TAIL-325–329已完成并行实施、隔离验收与累计审查；固定起点、技能实跑结论及本轮未验边界见 `.codebuddy/work/50-tickets/TAIL-325-付款批次按唯一通知书登记.md` Comments。第一项按用户裁定不改；代码完成与运行加载分别记录。 |
-| **2026-10-14 · 工作流维护完成** | TAIL-330–334已全部完成，implement-solo-spec唯一统筹、improve-workflow包生命周期；个人包1bc23a4已发布并synced，累计门与一次双轴、三端实际资源核实。固定基点、旧非零夹具修正、现场清理和未验边界回 `.codebuddy/work/50-tickets/TAIL-334-累计验收发布与部署.md` Comments。 |
+| **2026-10-14 · 集采打印版完成** | TAIL-336源码及隔离统一检查通过，原导出保留；真实两项目Excel与6页预览核对完成。已按用户授权重启，真实页面下载与实样逐格核对通过，未做实体打印；证据见 `.scratch/tails/issues/TAIL-336-集采打印版导出与付款方式移除.md` Comments。 |
+| **2026-10-14 · 集采提示与滚动修复** | TAIL-335完成，当前服务已提供本次前端文件，刷新即可。规则、隔离验收及既有无关失败归因见 `.scratch/tails/issues/TAIL-335-集采存档号提示与滚动修复.md` Comments；未做生产业务写入。 |
+| **2026-10-14 · 审计修复与个人技能实跑** | TAIL-325–329已完成并行实施、隔离验收与累计审查；固定起点、技能实跑结论及本轮未验边界见 `.scratch/tails/issues/TAIL-325-付款批次按唯一通知书登记.md` Comments。第一项按用户裁定不改；代码完成与运行加载分别记录。 |
+| **2026-10-14 · 工作流维护完成** | TAIL-330–334已全部完成，implement-solo-spec唯一统筹、improve-workflow包生命周期；个人包1bc23a4已发布并synced，累计门与一次双轴、三端实际资源核实。固定基点、旧非零夹具修正、现场清理和未验边界回 `.scratch/tails/issues/TAIL-334-累计验收发布与部署.md` Comments。 |
 
 ## 14. 尾巴排期
 
@@ -290,7 +290,7 @@ TAIL-337运行环境已升级并加载；本次两库备份向隔离PG18恢复�
 | # | 事项 | 来源 | 不做会怎样 | 落点 | 阶段 / 时机 | 状态 |
 |---|---|---|---|---|---|---|
 | `TAIL-284` | 项目删除第一阶段：后端只读影响预览（含仓库名文本键）＋ 同事务重检，只放行无业务引用的空项目 | 用户提供的六项审查件 R4 ＋《说明书》§7.2/§9.4 | 删除按钮是假的（三项「待接通」）；谁顺手放开就可能业务脱钩或级联丢数 | `mod01_projects`（只读预览 ＋ 事务删除出口）· `shell/actions.js` 的 `delPj/delPjOk` | 随时 | 待做 |
-| `TAIL-287` | 历史导入口补三道闸（集采已关联/审批撤单剔除/内容级防重）＋项目归属——用户 2026-10-11 暂缓：补录完大概率不再用它，先记一笔、不实施 | 用户 2026-10-11 会话（问「历史导入口改了有啥用」后的裁决）；四条缺口与价值分析见设计稿 .codebuddy/work/10-designs/设计-历史付款补录与集采关联-20261011.md 第 5.6 节 | 不改的后果：将来若真有人拿五列表导入，未关联集采/未批/撤单的流水照样能进库 —— 正是本轮要防的『绕过付款闸』 | backend/app/mod05_flow/importer.py · imp_spec.py（mod05 域）＋ 回归 | 随时（暂缓：用户 2026-10-11 定，先不做） | 待做 |
+| `TAIL-287` | 历史导入口补三道闸（集采已关联/审批撤单剔除/内容级防重）＋项目归属——用户 2026-10-11 暂缓：补录完大概率不再用它，先记一笔、不实施 | 用户 2026-10-11 会话（问「历史导入口改了有啥用」后的裁决）；四条缺口与价值分析见设计稿 .scratch/legacy-active/设计-历史付款补录与集采关联-20261011.md 第 5.6 节 | 不改的后果：将来若真有人拿五列表导入，未关联集采/未批/撤单的流水照样能进库 —— 正是本轮要防的『绕过付款闸』 | backend/app/mod05_flow/importer.py · imp_spec.py（mod05 域）＋ 回归 | 随时（暂缓：用户 2026-10-11 定，先不做） | 待做 |
 
 ### 二、B 类 · 只能你 / 真机（我做不到）
 

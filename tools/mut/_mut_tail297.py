@@ -13,7 +13,7 @@ CASES=[
     ('tools/oneoff/_run_muts.py','未登记假绿','return 1 if (gap or stale or orphan_slow) else 0','return 0'),
     ('tools/oneoff/_run_muts.py','实件自测漏对账','    return report_cover()\n\n\nif __name__','    return 0\n\n\nif __name__'),
     ('tools/oneoff/_list_tails.py','历史索引空扫','return a, c, d','return a, c, []'),
-    ('tools/oneoff/_prepush_sensitive.py','旧目录假绿','".codebuddy/backups/",','".workbuddy/backups/",'),
+    ('tools/oneoff/_prepush_sensitive.py','旧目录假绿','".artifacts/recovery/backups/",','".workbuddy/backups/",'),
     ('tools/oneoff/_prepush_sensitive.py','git失败吞掉', 'return subprocess.run(["git",', 'return ""\n    return subprocess.run(["git",'),
     ('tools/probe/_cn_path_probe.py','中文缺失漏候选','missing.append((i,raw))','pass'),
 ]

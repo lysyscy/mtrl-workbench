@@ -55,7 +55,7 @@ def test_annual_columns_balance_and_unread_state(page):
     head_boxes = [head.nth(i).bounding_box() for i in range(2)]
     assert abs(head_boxes[0]['x'] - first_box['x']) <= 2
     assert abs(head_boxes[1]['x'] - second_box['x']) <= 2
-    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch/tmp-20261009-annual.png'))
+    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261009-annual.png'))
     page.evaluate('''async () => {
       API.m07Extract=async()=>{throw new Error('库存读取失败');};
       try{await reloadExtract();}catch(e){}

@@ -45,7 +45,7 @@ def test_independent_reads_pending_failure_retry_difference_and_empty(ui_page):
     assert p.evaluate('calls') == ['matrix', 'mech']
     assert p.evaluate("pageState().kind") == 'ready'
     assert p.evaluate('IVs.length===0 && MECH_LABELS[0]') == '标签保留'
-    scratch = Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch'
+    scratch = Path(__file__).resolve().parents[2] / '.scratch/local'
     p.screenshot(path=str(scratch / 'tmp-20261012-tail315-fixture-default.png'))
     p.click('[data-act="procTab"][data-i="2"]')
     assert '测试材料' in p.inner_text('#view') and '-10.01' in p.inner_text('#view')

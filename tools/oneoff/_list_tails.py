@@ -11,8 +11,9 @@ import pathlib
 import re
 import sys
 
-PLAN = pathlib.Path(__file__).resolve().parents[2] / ".codebuddy" / "plans" / "开发计划-主文档.md"
-CLOSED = PLAN.with_name("票索引-已销号.md")
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+PLAN = ROOT / "docs/status.md"
+CLOSED = ROOT / "docs/archive/tickets/index.md"
 
 
 def _cells(line: str) -> list[str]:

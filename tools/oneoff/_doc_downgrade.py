@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """**降档动作**（可逆搬运 ＋ 仓内索引留行）—— `TAIL-236` 第 4 批 · 2026-10-06 立。
 
-把**一件设计件**从 `.codebuddy/work/10-designs/` 搬到**仓外**（落点 = `audit_common.OUTSIDE_ROOTS[0]`
+把**一件设计件**从 `.scratch/legacy-active/` 搬到**仓外**（落点 = `audit_common.OUTSIDE_ROOTS[0]`
 下的 `work-10-designs/` —— ⚠️ **本件一个字都不写死那个根**），并在**仓内留痕索引**里追加一行；
 那一行写着**仓外绝对路径** ⇒ `T3` 的「仓外白名单**真核存在**」会真的去核那份在不在。
 **可逆** = 仓外留原文 ＋ 仓内留指针 ＋ git 历史里还有一份。
@@ -46,14 +46,13 @@ from refs_query import (                                            # noqa: E402
 #: 仓外归档根 = `OUTSIDE_ROOTS[0]`（`T18` 守着它在盘上真存在 ⇒ ⛔ 不在此写死第二份）
 OUT_ROOT = Path(OUTSIDE_ROOTS[0])
 #: 仓内过程区 → 仓外子目录。⚠️ 沿用 2026-10-05（`TAIL-235` 甲2）**已建**的落点名，⛔ 不另起名。
-ZONE_OUT_SUBDIR: dict[str, str] = {"10-designs": "work-10-designs"}
+ZONE_OUT_SUBDIR: dict[str, str] = {".scratch/legacy-active": "work-10-designs"}
 #: ⛔ **不搬的区 ＋ 一句话理由**（⚠️ **不复述各区去向** —— 那是 `docs/guides/work-records.md` §二
 #:   的事；本件只负责"拒绝并指路"。重述一遍就是第二套口径，`/code-review` 2026-10-06 当场点出）。
 ZONE_REFUSE: dict[str, str] = {
-    "30-troubleshooting": "该区**不是搬走**",
-    "40-decisions": "决策件只加不改",
-    "00-scratch": "临时件按 TTL 清（`T14`）",
-    "50-tickets": "票靠 `_tail_close.py` 销号（`T6` 守）",
+    "docs/adr": "决策原文保留",
+    ".scratch/local": "本机活动及恢复材料先核用途",
+    ".scratch/tails/issues": "票靠 `_tail_close.py` 销号（T6守）",
 }
 #: ⭐ 区名的**唯一主人** = `audit_meta.WORK_DIR_ALLOW`（`T12` 守它）⇒ 本件只**断言覆盖得到**，
 #:   ⛔ 不另抄一份五区清单（抄了 = 改一处漏一处，本仓最贵的病）。
@@ -65,7 +64,7 @@ INDEX_REL = "docs/archive/legacy-plans/归档-留痕索引-20261005.md"
 #:   ⛔ 两边必须同一个词；命令找不到它就**拒绝**，绝不静默写到别处）。
 INDEX_TABLE_HEAD = "| 降档日期 | 件（仓内原名） | 仓外落点（会被 `T3` 真核） | 备注 |"
 #: 自测样本仅存在于临时仓库，引用查询和T26读取同一隔离现场。
-SAMPLE_REL = ".codebuddy/work/10-designs/设计-_mut降档自测件-20990101.md"
+SAMPLE_REL = ".scratch/legacy-active/设计-_mut降档自测件-20990101.md"
 
 
 # --------------------------------------------------------------- 小工具（指纹 / git）
@@ -100,14 +99,14 @@ def _worktree_state() -> str:
 
 # --------------------------------------------------------------- 解析件名 → (区, 仓内路径)
 def _in_zone_dirs() -> list[Path]:
-    work = ROOT / ".codebuddy" / "work"
+    work = ROOT
     return [work / z for z in sorted(ZONE_OUT_SUBDIR) if (work / z).is_dir()]
 
 
 def _resolve(name: str) -> tuple[str, Path | None, str]:
     """→ `(区名, 仓内路径, 拒绝理由)`；成功时拒绝理由为空串。
 
-    接受**件名**（`设计-x.md`）、**相对路径**（`10-designs/设计-x.md`）与**仓内绝对路径**。
+    接受**件名**（`设计-x.md`）、**相对路径**（`.scratch/legacy-active/设计-x.md`）与**仓内绝对路径**。
     ⛔ **同名两处 ⇒ 拒绝**（让人写全相对路径）—— 猜错一件就搬错一件，这是本命令唯一不可逆的风险。
     """
     hits: list[tuple[str, Path]] = []
@@ -115,7 +114,7 @@ def _resolve(name: str) -> tuple[str, Path | None, str]:
         for f in sorted(zdir.glob("*.md")):
             rel = f.relative_to(ROOT).as_posix()
             if name in (f.name, rel, str(f)) or rel.endswith("/" + name.lstrip("/")):
-                hits.append((zdir.name, f))
+                hits.append((zdir.relative_to(ROOT).as_posix(), f))
     if len(hits) > 1:
         return "", None, ("两个区各有一件叫这名 ⇒ 写全相对路径（%s）"
                           % " / ".join(h[1].relative_to(ROOT).as_posix() for h in hits))
@@ -170,7 +169,7 @@ def _refs_of(rel: str) -> list[tuple[str, str, int]]:
 
 def _index_line(zone: str, name: str, out_abs: Path) -> str:
     """固定源提交，归档删除提交后仍可取回；未入Git的件从仓外原文恢复。"""
-    rel_in = f".codebuddy/work/{zone}/{name}"
+    rel_in = f"{zone}/{name}"
     rc, revision = _git("rev-parse", "HEAD")
     revision = revision.strip()
     recorded = (rc == 0 and _git("cat-file", "-e", f"{revision}:{rel_in}")[0] == 0
@@ -179,7 +178,7 @@ def _index_line(zone: str, name: str, out_abs: Path) -> str:
     recovery = (f"取回 git show {revision}:{rel_in}" if recorded
                 else "Git未保存当前原文，原文从仓外落点取回")
     return (f"| {date.today().isoformat()} | `{name}` | `{out_abs}` |"
-            f" 原区 `.codebuddy/work/{zone}/` · {recovery} |")
+            f" 原区 `{zone}/` · {recovery} |")
 
 
 def _index_row_no(text: str) -> int:
@@ -249,7 +248,7 @@ def do_downgrade(name: str, apply: bool) -> int:
                       % (fname, out_abs))
                 return 0
         for z, why in ZONE_REFUSE.items():
-            if (ROOT / ".codebuddy" / "work" / z / fname).is_file():
+            if (ROOT / z / fname).is_file():
                 print("⛔ `%s/` 的件不走降档：%s" % (z, why))
                 print("   （去向口径 = `docs/guides/work-records.md` §二 本区那一行）")
                 return 1
@@ -359,10 +358,10 @@ def _selftest_fixture() -> int:
 
     sample, idx = ROOT / SAMPLE_REL, ROOT / INDEX_REL
     for parent in (sample.parent, idx.parent, ROOT / "docs/reference", ROOT / "tools/probe",
-                   ROOT / ".codebuddy/work/50-tickets"):
+                   ROOT / ".scratch/tails/issues"):
         parent.mkdir(parents=True, exist_ok=True)
     (ROOT / "docs/reference/thresholds.md").write_text("# 隔离落地样本\n", encoding="utf-8")
-    closed = ROOT / ".codebuddy/work/50-tickets/TAIL-225-样本.md"
+    closed = ROOT / ".scratch/tails/issues/TAIL-225-样本.md"
     closed.write_text("**Status:** done\n", encoding="utf-8")
     idx_bytes0 = ("# 隔离索引\r\n\r\n" + INDEX_TABLE_HEAD
                   + "\r\n|---|---|---|---|\r\n\r\n## 表后内容\r\n").encode("utf-8")
@@ -378,7 +377,7 @@ def _selftest_fixture() -> int:
         if rc != 0:
             raise RuntimeError("隔离Git准备失败：" + output)
     git0 = _worktree_state()
-    out_abs = _out_path(sample.parent.name, sample.name)
+    out_abs = _out_path(sample.parent.relative_to(ROOT).as_posix(), sample.name)
 
     chk("不给件名拒绝且工作区未变", main([]) == 2 and _worktree_state() == git0)
     chk("真实T26能报告已落地样本", any(h["rel"] == SAMPLE_REL
@@ -406,7 +405,7 @@ def _selftest_fixture() -> int:
 
     for lane, rel in (("机器", "tools/probe/refers_sample.py"),
                       ("文档", "docs/reference/活引用.md"),
-                      ("票", ".codebuddy/work/50-tickets/TAIL-226-引用.md")):
+                      ("票", ".scratch/tails/issues/TAIL-226-引用.md")):
         referrer = ROOT / rel
         referrer.write_text("**Status:** ready-for-agent\n# 指向 " + SAMPLE_REL + "\n",
                             encoding="utf-8")
@@ -419,8 +418,8 @@ def _selftest_fixture() -> int:
         finally:
             referrer.unlink()
 
-    for zone in ("30-troubleshooting", "40-decisions"):
-        refused = ROOT / ".codebuddy/work" / zone / "拒绝样本.md"
+    for zone in ("docs/adr", ".scratch/tails/issues"):
+        refused = ROOT / zone / "拒绝样本.md"
         refused.parent.mkdir(parents=True, exist_ok=True)
         refused.write_bytes(sample_bytes)
         chk(zone + "拒绝且原件未动", do_downgrade(refused.name, True) != 0

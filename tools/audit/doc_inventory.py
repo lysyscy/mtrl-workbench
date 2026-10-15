@@ -2,9 +2,9 @@
 """文档盘点器（**只读**）—— 分布 / 超预算 / 重复 / 过短。
 
 用法：
-    python .codebuddy/skills/docs-audit/scripts/doc_inventory.py            # 人读报告
-    python .codebuddy/skills/docs-audit/scripts/doc_inventory.py --json     # 机器可读
-    python .codebuddy/skills/docs-audit/scripts/doc_inventory.py --top 20   # 最大件列表长度
+    python tools/audit/doc_inventory.py            # 人读报告
+    python tools/audit/doc_inventory.py --json     # 机器可读
+    python tools/audit/doc_inventory.py --top 20   # 最大件列表长度
 
 口径（⛔ 别改这几条）：
   · 行数**真值** = `len(text.splitlines())` —— ⛔ 别用 PowerShell `Get-Content`（默认不按 UTF-8 解码，
@@ -32,9 +32,9 @@ DUP_MIN_LINES = 5        # 重复检测的最小体量（太短的文件撞 hash
 def repo_root() -> Path:
     here = Path(__file__).resolve()
     for cand in (here, *here.parents):
-        if (cand / "tools" / "audit" / "doc_audit.py").exists() and (cand / ".codebuddy").is_dir():
+        if (cand / "tools" / "audit" / "doc_audit.py").exists() and (cand / "AGENTS.md").is_file():
             return cand
-    raise SystemExit("找不到仓库根（期望含 tools/audit/doc_audit.py 与 .codebuddy/）")
+    raise SystemExit("找不到仓库根（期望含 tools/audit/doc_audit.py 与 AGENTS.md）")
 
 
 def iter_md(root: Path):
@@ -46,9 +46,9 @@ def iter_md(root: Path):
 
 
 def group_key(rel: str) -> str:
-    """分组键：`.codebuddy/<二级>` 单独成组（backups / memory / plans / work 各算一层），其余取顶层目录。"""
+    """分组键：`docs/`、`.scratch/`、`.artifacts/` 的二级 单独成组（backups / memory / plans / work 各算一层），其余取顶层目录。"""
     parts = rel.split("/")
-    if len(parts) >= 2 and parts[0] in (".codebuddy", ".codebuddy"):
+    if len(parts) >= 2 and parts[0] in (".scratch", ".artifacts", "docs"):
         return "/".join(parts[:2])
     return parts[0] if len(parts) > 1 else "(根)"
 

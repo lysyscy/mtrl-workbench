@@ -87,7 +87,7 @@ def check_file_sizes() -> list[dict]:
 
 #: `T9` 认的三种标记（写在条目行内，可带后缀如 `[用户·2026-09-21]`）
 RULE_ORIGINS: tuple[str, ...] = ("[用户", "[交付面", "[助手自定")
-RULE_DOC_REL = ".codebuddy/memory/MEMORY.md"
+RULE_DOC_REL = "docs/agents/project-rules.md"
 RULE_SECTION_RE = re.compile(r"^##\s*八[、.]\s*工程纪律")
 
 
@@ -200,8 +200,8 @@ def check_rule_restatements() -> list[dict]:
 #:   编出来的数没有出处（本仓规矩：硬数字要么实测、要么不写）。
 #: ⚠️ **一条数只定义一次**：字节档只写在本表（`docs/reference/thresholds.md` 那行只记出处与理由，⛔ 不复述件名清单）。
 DOC_BUDGETS: tuple[tuple[str, int, str, int | None], ...] = (
-    ("README.md", 240, "inject", None),                        #: ⛔ 现值**别手抄** ⇒ 要现值跑 `doc_audit`（`T10` 会报）；字节档 = `None`（它不是宿主自动注入的那一件）
-    (".codebuddy/memory/MEMORY.md", 200, "inject", 14400),      #: ⛔ 行现值由 `T10` 报；⭐ **字节档 14400** = 宿主注入的硬顶（超了**静默截断**，见上）
+    ("README.md", 240, "must", None),                        #: ⛔ 现值**别手抄** ⇒ 要现值跑 `doc_audit`（`T10` 会报）；字节档 = `None`（它不是宿主自动注入的那一件）
+    ("docs/agents/project-rules.md", 200, "must", None),      #: 条件读取页，沿用行预算；项目宿主接入已退出，不套用旧宿主字节上限。
     #: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：原 `.codebuddy/plans/执行情况-主文档.md`（预算 **200**）**已取消** ——
     #:   用户裁定「只留待办」⇒ 待办并入**根 `README.md` §〇**（本表第 1 行就是它，预算 240）
     #:   ⇒ ⛔ **别为它再列一行**：那会变成"同一件事两处预算"（本仓最贵的病，必漂）。
@@ -346,35 +346,14 @@ def check_report_receipts() -> list[dict]:
 #: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：`执行情况-主文档.md` **已取消**（用户裁定「只留待办」⇒ 并进 `README.md` §〇）
 #:   ⇒ 从"两份"收成"一份"。⚠️ 收的是当前状态页件数，⛔ 不是把"给人看的那一页"一起砍掉 —— 它现在住在根 `README.md`。
 #: ⭐ 2026-10-11（`TAIL-294`）：新增只追加的「已销号短索引」作为编号与依据的机器输入，不承载当前状态或排期。
-PLANS_LIVE: tuple[str, ...] = ("开发计划-主文档.md", "票索引-已销号.md")
-#: 根目录**允许**出现的 `.md`（文档地图；⛔ 别在根上散落别的 md）
-#: ⭐ **2026-10-04 扩一员**：`AGENTS.md` —— ⚠️ 原先这里只许 `README.md`，而那条**是 AGENT 自定的**
-#:   （用户 2026-10-04 订正：「我没说过只需建立 README.md，这估计又是 AGENT 擅自曲解我的意思」）⇒
-#:   根 `AGENTS.md` = **给 agent 的唯一入口**（只放指针、不放内容；地图仍归 `README.md`），见本件同批的
-#:   `docs/agents/*` 三页 ＋ 根 `README.md` §三/§四 的分层表述。⛔ 它**不复述任何口径**。
 ROOT_MD_ALLOW: tuple[str, ...] = ("README.md", "AGENTS.md")
-#: `memory/` 下允许的 `.md` 与子目录（日志必须进 `journal/`）
-MEMORY_MD_ALLOW: tuple[str, ...] = ("MEMORY.md", "细则.md", "docs/guides/development-and-verification.md")
-MEMORY_DIR_ALLOW: tuple[str, ...] = ("journal",)
-#: ⭐ `work/` **四区**（Agent 工作记录 · 文档架构审计 2026-09-22 P2：五类缺三类是乱建文件的根因）。
-#:   ⚠️ 2026-10-01（`TAIL-204` 第 7 步）**由五区收成四区**：`20-experiments` 从建区起**一件都没进过**
-#:   （用户 2026-10-01「以最精简为目的」· 出处 = `docs/archive/journal/2026-10-01.md` §14）⇒ 撤区；
-#:   ⭐「实验/实测/对比试验」这一类**不取消** —— 改由 `30-troubleshooting` 收
-#:   （那边同时认 `排查-` 与 `实验-` 两种前缀，见 `WORK_NAME_PREFIX`）。
-WORK_DIR_ALLOW: tuple[str, ...] = ("00-scratch", "10-designs",
-                                   "30-troubleshooting", "40-decisions", "50-tickets")
-#: 各区 md 的命名前缀（`00-scratch` 不查 —— 临时件形态自由；`40-decisions` 只查 D 开头）。
-#: ⭐ 2026-10-01：`30-troubleshooting` 收**两种**前缀 —— `排查-`（报障/事故复盘）与 `实验-`（探针/实测/对比试验，
-#:   即原 `20-experiments` 那一类）。⛔ 别顺手把 `实验-` 也删掉：那一类**是存在的**，只是不再单开一个区。
-#: ⭐ 2026-10-04（`TAIL-225` 票体系）：**加第五区 `50-tickets`** —— 一张票一个文件（`TAIL-<编号>-<短名>.md`），
-#:   索引 = 计划 `§15` 一行一票；协议 = `docs/agents/issue-tracker.md`。⚠️ 它不是"新的分类学"，
-#:   而是**尾巴的载体**（原来尾巴只活在 `§15` 表里一格）。
+# Legacy filenames and IDs remain stable after relocation; new ADRs use numeric names.
 WORK_NAME_PREFIX: dict[str, tuple[str, ...]] = {
-    "10-designs": ("设计-",),
-    "30-troubleshooting": ("排查-", "实验-"),
-    "40-decisions": ("D",),
-    "50-tickets": ("TAIL-",),
+    ".scratch/legacy-active": ("设计-", "mtrl-workbench_"),
+    "docs/adr": ("D",),
+    ".scratch/tails/issues": ("TAIL-",),
 }
+WORK_DIR_ALLOW: tuple[str, ...] = (".scratch/local", *WORK_NAME_PREFIX)
 
 
 def _t12(rel: str, what: str, why: str, fix: str) -> dict:
@@ -383,70 +362,21 @@ def _t12(rel: str, what: str, why: str, fix: str) -> dict:
 
 
 def check_doc_layout() -> list[dict]:
-    """`T12` · **文档分层与命名约定**（2026-09-21 立 · 文档体系重构的落地闸门）。
-
-    ⭐ 依据 = `README.md` 的**四层**（① 注入 ② 按需 ③ 留痕 ④ 产物）：
-      · `plans/` 下**只许当前状态主文档与指定的已销号短索引**，其余**必须 `归档-` 打头**（⚠️ 这条纪律早就写在
-        `细则.md §五`「⛔ 不许私自新建文档」里，但**此前没有任何尺子看着它** ⇒ 本次立 T12）；
-      · `memory/` 下**日志必须进 `journal/`**（⭐ `journal/` = 只追加不回读层 —— 混在 `memory/` 根下时，
-        没人分得清"这是纪律还是流水账"，这正是用户报「文档乱」的机制之一）；
-      · 仓库根**只许 `README.md`** 一份 md。
-
-    ⚠️ 为什么是**黄**而不是红：布局是**组织形式**问题（不是对错），而且"新加一份文档"有时是正当的
-       ⇒ ⭐ 与 `T5`/`T10` 同款哲学：**可能定错的不该挡合入，但必须被看见**；
-       要新增层级 ⇒ 先改 `README.md` 的四层表与这里的三张白名单（⛔ 别绕过）。
-    """
+    """T12: current task and ADR filename conventions; retired host roots are covered by T24."""
     hits: list[dict] = []
-    plans = REPO_ROOT / ".codebuddy" / "plans"
-    if plans.is_dir():
-        for f in sorted(plans.glob("*.md")):
-            if f.name not in PLANS_LIVE and not f.name.startswith("归档-"):
-                hits.append(_t12(f".codebuddy/plans/{f.name}",
-                                 "`plans/` 下出现了「第三份文档」",
-                                 "`plans/` 只允许当前状态计划与指定的已销号短索引，其余是**留痕** ⇒ "
-                                 "多出来的文档没人知道它是活文档还是留痕（`T6` 也只看计划与指定短索引）",
-                                 "改名 `归档-<主题>-<日期>.md`（留痕），或并进已登记的现行文档"))
-    mem = REPO_ROOT / ".codebuddy" / "memory"
-    if mem.is_dir():
-        for f in sorted(mem.glob("*.md")):
-            if f.name not in MEMORY_MD_ALLOW:
-                hits.append(_t12(f".codebuddy/memory/{f.name}",
-                                 "`memory/` 根下出现了非白名单的 md",
-                                 "`memory/` 根只放**注入档与分册**；日志混在这里 ⇒ "
-                                 "分不清「这是规则还是流水账」（用户报「文档乱」的机制之一）",
-                                 "日志移到 `memory/journal/`（`YYYY-MM-DD.md`，⛔ 不改文件名）"))
-        for d in sorted(x for x in mem.iterdir() if x.is_dir()):
-            if d.name not in MEMORY_DIR_ALLOW:
-                hits.append(_t12(f".codebuddy/memory/{d.name}/",
-                                 "`memory/` 下出现了非白名单子目录",
-                                 "`memory/` 只认 `journal/` 一个子目录",
-                                 "并进 `journal/`，或改到别处（见 `README.md` 四层表）"))
-    # ⭐ `work/` **五区**（2026-09-22 审计 P2 的机器化落地；⭐ 2026-10-01 由五区收成四区；⭐ 2026-10-04 `TAIL-225` 加回第五区 `50-tickets`）
-    work = REPO_ROOT / ".codebuddy" / "work"
-    if work.is_dir():
-        for d in sorted(x for x in work.iterdir() if x.is_dir()):
-            if d.name not in WORK_DIR_ALLOW:
-                hits.append(_t12(f".codebuddy/work/{d.name}/",
-                                 "`work/` 下出现了五区之外的子目录",
-                                 "工作记录只认五区（见 `work/README.md`）—— 多出来的区 = 第二套分类学，必漂",
-                                 "并入五区之一，或先改 `work/README.md` ＋ 本文件 `WORK_DIR_ALLOW`"))
-        for zone, prefixes in WORK_NAME_PREFIX.items():
-            zdir = work / zone
-            if not zdir.is_dir():
+    for zone, prefixes in WORK_NAME_PREFIX.items():
+        for f in sorted((REPO_ROOT / zone).glob("*.md")):
+            if zone == "docs/adr" and re.fullmatch(r"\d{4}-[a-z0-9]+(?:-[a-z0-9]+)*\.md", f.name):
                 continue
-            for f in sorted(zdir.glob("*.md")):
-                if f.name == "README.md":
-                    continue
-                if not f.name.startswith(tuple(prefixes)):
-                    hits.append(_t12(f".codebuddy/work/{zone}/{f.name}",
-                                     "work 区文档命名不符（缺类型前缀）",
-                                     "命名表是检索的抓手（审计 P2）—— 前缀错了 = 决策树对不上号",
-                                     f"改名打头：{' / '.join(prefixes)}（如 `设计-主题-YYYYMMDD.md`）"))
+            if f.name != "README.md" and not f.name.startswith(prefixes):
+                hits.append(_t12(f"{zone}/{f.name}", "文档命名不符",
+                                 "保留来源编号并遵循现行目录职责",
+                                 f"使用前缀：{' / '.join(prefixes)}；新ADR按README编号"))
     for f in sorted(REPO_ROOT.glob("*.md")):
         if f.name not in ROOT_MD_ALLOW:
             hits.append(_t12(f.name, "仓库根出现了白名单外的 md",
                              "根目录只放 `README.md`（文档地图）—— 根上散落的 md 没人维护、必然过期",
-                             "并进 `README.md`，或按现行职责放到 `docs/` / `.codebuddy/` / `artifacts/`"))
+                             "并进 `README.md`，或按现行职责放到 `docs/` / `.scratch/` / `.artifacts/`"))
     return hits
 
 
@@ -518,7 +448,7 @@ def check_drop_zones() -> list[dict]:
                      "why": "根目录是**仓库骨架**（`ROOT_ALLOW` ＋ `.gitignore` 两种身份）——"
                             "白名单外的条目**不在任何尺子眼里**：2026-10-05 实测，根 `work/` 建起来后"
                             "`T3`/`T12`/`T14` 四层守卫没一层拦，而那片地方从此无人看守",
-                     "fix": "移到它该在的地方（工作记录类 ⇒ `.codebuddy/work/`）；"
+                     "fix": "移到它该在的地方（工作记录类 ⇒ `.scratch/`）；"
                             "确实是新的**常驻**条目 ⇒ 同批登进 `audit_common.ROOT_ALLOW`；"
                             "只是**本机暂存/缓存** ⇒ 在 `.gitignore` 里登记它",
                      "level": RED, "text": ""})
@@ -537,7 +467,7 @@ def _t6(rel: str, lineno: int, what: str, why: str, fix: str, text: str = "") ->
 #:   票长什么样 / 状态怎么记 / 怎么开工收尾的**主人** = `docs/agents/issue-tracker.md`（⛔ 本段不复述口径，
 #:   只写"机器怎么判"）。⚠️ 为什么要有这一层：尾巴原先**只活在 `§15` 表里一格**，那一格普遍 1000–2400 字
 #:   ⇒ 谁读都得在一行里穿过上万字（**字墙的根**，见 `T21` 与方案 §十一）。
-TICKET_DIR_REL = ".codebuddy/work/50-tickets"
+TICKET_DIR_REL = ".scratch/tails/issues"
 #: 票文件里**必须出现**的栏（⭐ **三个英文栏名来自 `/to-tickets`** —— 2026-10-04 用户指出
 #:   "票结构跟第二个项目不一样"后对齐；⛔ 票**不带**"读者/何时读"那类文档文头 —— 票是**工单**）
 TICKET_FIELDS: tuple[str, ...] = ("What to build", "Blocked by", "Status")
@@ -963,13 +893,13 @@ LINE_WALL_CHARS = 800
 #: ⭐ **老账基线**（**只许变短**）：件 → 存量字墙条数。
 #:   ⚠️ 量法 = **活文档**（`SCAN_GLOBS` 命中、**减** `LENIENT_GLOBS` 的留痕/归档件）里
 #:      `len(line) > 800` 的行数；下面三个数 = 2026-10-04 立 `T21` 当场的实测值
-#:      （量测件 = `.codebuddy/work/00-scratch/tmp-20261004-linewalls.py` · 只读可复跑）。
+#:      （量测件 = `.scratch/local/tmp-20261004-linewalls.py` · 只读可复跑）。
 #:   ⇒ 把某件**下沉 / 拆行**之后**必须同批下调**这里的数（否则本检查报「基线过期」）；
 #:      ⛔ **不许上调**（上调 = 把闸放松 = 这条判据失去意义）。
 #: ⭐ **2026-10-07 下调一次**（`TAIL-250` 主文档瘦身）：主文档 **84 → 7**
 #:   —— 一次把「§15 §四 已销号 252 行长流水 ＋ §15 顶部同日流水 ＋ §0.4 旧当前位置
 #:   ＋ §0.2 判据涨数流水 ＋ §14.3 已办长行 ＋ §20.2 ＋ §23」全部下沉仓外、
-#:   原处留短索引/指针（尺子量测件 = `.codebuddy/work/00-scratch/tmp-trim-plan-250.py` 干跑时打印）。
+#:   原处留短索引/指针（尺子量测件 = `.scratch/local/tmp-trim-plan-250.py` 干跑时打印）。
 LINE_WALL_BASELINE: tuple[tuple[str, int], ...] = (
     ("docs/status.md", 0),
     ("docs/archive/tickets/index.md", 7),
@@ -1069,7 +999,7 @@ def check_line_walls() -> list[dict]:
 #:   ⚠️ `journal/`（逐日日志）与 `plans/` **不在内** —— 那是**只追加留痕**，
 #:     里面的粘连是**历史事实**，改了才是篡改（同 `LENIENT_GLOBS` 的哲学）。
 ALWAYS_READ_DOCS: tuple[str, ...] = (
-    ".codebuddy/memory/MEMORY.md",
+    "docs/agents/project-rules.md",
     "docs/guides/implementation-constraints.md",
     "docs/guides/development-and-verification.md",
 )
@@ -1140,7 +1070,7 @@ LIVE_MACHINE_REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("tools/mut/_mut_*.py", (".py",)),
     ("tools/probe/**/*.py", (".py",)),
     ("ops/*.ps1", (".ps1",)),
-    (".codebuddy/rules/**/*.mdc", (".mdc",)),
+    ("AGENTS.md", (".md",)),
     ("backend/app/web/**/*.js", (".js",)),
     ("backend/app/web/**/*.html", (".html",)),
 )

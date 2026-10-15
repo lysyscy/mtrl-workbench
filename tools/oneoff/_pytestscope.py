@@ -66,6 +66,7 @@ REPO_WIDE: tuple[tuple[str, str], ...] = (
 #: 一个 `tools/probe/` 下的件 · 一处 `tools/**/*.py` 的通配扫描）⇒ 改成「目录级触发 ＋
 #: **跑哪些由扫描器现算**」（`outside_readers()`）⇒ **要登记的东西变成 0**。
 OUTSIDE_PREFIXES: tuple[tuple[str, str], ...] = (
+    (".scratch/", "活动任务与票仓的真实读取者"),
     ("tools/", "尺子与探针：好几件测试 import 它、还有一件**通配扫** `tools/**/*.py`"),
     ("docs/", "现行工程文档：设计守则、架构、核验与参考正文"),
     ("ops/", "运维脚本与配置：pip 镜像 / 配置主人表"),

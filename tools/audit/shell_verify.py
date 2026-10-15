@@ -12,7 +12,7 @@
 ## 跑法
 
 ```powershell
-python tools/audit/shell_verify.py --snapshot        # ⭐ 先把**当前**并集存成基线（存 .codebuddy/backups/，留最近 5 份）
+python tools/audit/shell_verify.py --snapshot        # ⭐ 先把**当前**并集存成基线（存 .artifacts/recovery/backups/，留最近 5 份）
 python tools/audit/shell_verify.py                   # 与**最新那份基线**比（没有基线才回落 git）
 python tools/audit/shell_verify.py <某一版单文件壳的路径>   # 指定基准
 ```
@@ -21,7 +21,7 @@ python tools/audit/shell_verify.py <某一版单文件壳的路径>   # 指定�
 `7928c01`（09-22）那次提交里的 `index.html` **已经是拆件后**的版本 ⇒ 于是出现
 「旧版非空行 3519 · 现并集 8252 · 只在现在 **4744 行**」这种满屏噪音，
 **而它不判红、不 exit ⇒ 从 09-22 起就没人会喊**（典型的静默失效）。
-⇒ 现在改成：**默认基准 = `.codebuddy/backups/` 里最新那份「壳单文件基线」**（没有基线 ⇒ **判红、要你建基线**）。
+⇒ 现在改成：**默认基准 = `.artifacts/recovery/backups/` 里最新那份「壳单文件基线」**（没有基线 ⇒ **判红、要你建基线**）。
 ⭐ 规则：**壳动过（合法的改动）且复核通过后，就 `--snapshot` 刷一份新基线** —— 基线的含义 = "我上次确认过的样子"。
 
 ## ⭐⭐ 判定（2026-09-24 晚 · 给"僵尸闸门"接上真出口）
@@ -68,13 +68,13 @@ def _lines(text: str) -> list[str]:
     return [l for l in text.replace("\r\n", "\n").split("\n") if l.strip()]
 
 
-BACKUPS = REPO / ".codebuddy" / "backups"
+BACKUPS = REPO / ".artifacts" / "recovery" / "backups"
 SNAP_GLOB = "*_壳单文件基线.html"
 
 
 def _newest_snapshot() -> Path | None:     # ⭐ 2026-09-30 `TAIL-201`：收回**私有**
     #   （`ui_parity` 的 `U1`/`U5` 已退场 ⇒ 本件是唯一用它的；⛔ 当年「提为公开」那个理由没了）
-    """最新那份「壳单文件基线」（`.codebuddy/backups/` · 文件名 `YYYYMMDD-HHMM_壳单文件基线.html`）。"""
+    """最新那份「壳单文件基线」（`.artifacts/recovery/backups/` · 文件名 `YYYYMMDD-HHMM_壳单文件基线.html`）。"""
     if not BACKUPS.exists():
         return None
     hits = sorted(BACKUPS.glob(SNAP_GLOB))

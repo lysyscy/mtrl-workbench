@@ -174,7 +174,7 @@ def main() -> int:
     global ROOT, META, PLAN, CLEAN_DOC
     original = ROOT
     from audit_common import iter_docs
-    with tempfile.TemporaryDirectory(prefix='tmp-linewalls-', dir=original/'.codebuddy/work/00-scratch') as name:
+    with tempfile.TemporaryDirectory(prefix='tmp-linewalls-', dir=original/'.scratch/local') as name:
         fixture = Path(name)
         sources = {doc[2] for doc in iter_docs()}
         sources.update((original/'tools/audit').glob('*.py'))

@@ -27,8 +27,8 @@ import time
 os.environ.setdefault("ACC_RESULTS_PATH", "../artifacts/_mut_acc_results.json")
 
 sys.stdout.reconfigure(encoding="utf-8")
-R = pathlib.Path(r"D:\dev\mtrl-workbench")
-SCRATCH = R / ".codebuddy" / "work" / "00-scratch" / "_t14_probe_tmp.txt"
+R = pathlib.Path(__file__).resolve().parents[2]
+SCRATCH = R / ".scratch" / "local" / "_t14_probe_tmp.txt"
 ART = R / "artifacts" / "_t15_probe_tmp.md"
 TOOLS = R / "tools" / "_t14_probe_tmp.py"
 #: ④⑤⑥ 的靶 = **决策区**（`T15` 新条的扫描面 = `audit_work.DECISION_ZONES`）。
@@ -37,7 +37,7 @@ TOOLS = R / "tools" / "_t14_probe_tmp.py"
 #:      脚本被硬杀留下残件时，不这么起名会让 `T12` 报红（假红比不跑更坏）；
 #:   ② ⛔ **不能叫 `D索引-*`** —— 那是 `T15` 的文头豁免前缀，新条就看不见它了（靶当场失效）；
 #:   ③ 件内文头四词齐全（见 `PROBE_HEAD`）⇒ 只有新条会命中，变异前后的差才归因得清。
-DEC = R / ".codebuddy" / "work" / "40-decisions" / "D_t15_probe_tmp.md"
+DEC = R / "docs" / "adr" / "D9999-t15-probe-tmp.md"
 #: 探针件的三种形态（都带齐文头四词，好让**只有**新条命中 —— 变异前后的差才归因得清）
 PROBE_HEAD = ("# T15 探针（临时件 · 跑完即删）\n\n"
               "> 读者：变异脚本｜回答：这条尺子还有没有牙｜何时读：跑 `tools/mut/_mut_t14t15.py` 时\n")

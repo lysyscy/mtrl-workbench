@@ -337,7 +337,7 @@ def check_gitignore_drops() -> list[dict]:
 #       （"叙述某指针已废 / 已订正"的行**必须**能引用那个坏节号，否则没法写清历史）。
 SEC_REF_EXEMPT: tuple[str, ...] = ("不存在", "已废", "订正", "死指针", "原指针", "已删", "假陈述")
 #: 解析目标 md 时依次尝试的前缀（文档常省略 `backend/` 与 `.codebuddy/`）
-SEC_REF_PREFIXES: tuple[str, ...] = ("", "backend/", "backend/app/", ".codebuddy/")
+SEC_REF_PREFIXES: tuple[str, ...] = ("", "backend/", "backend/app/", "docs/", "docs/agents/", "docs/guides/", "docs/reference/", "docs/adr/")
 
 #: 节号本体（中文数字 / 阿拉伯 · 都允许 `之N` 与 `.N` 后缀）
 _SEC_NUM = (r"\d+(?:\.\d+)*"
@@ -450,7 +450,7 @@ def check_status_line() -> list[dict]:
                  "why": "拿不到真源：先跑全套 pytest 生成 artifacts/acc_results.json",
                  "fix": "跑 pytest 后再跑本工具", "level": YELLOW, "text": ""}]
     want = (actual["绿"], actual["红"], actual["待建"], actual["未绑定"])
-    for rel, must_have in ((HANDBOOK_REL, True), (LEDGER_REL, False)):
+    for rel, must_have in ((LEDGER_REL, True),):
         f = REPO_ROOT / rel
         if not f.exists():
             out.append({"code": "T4", "side": "仓", "rel": rel, "line": 1, "what": "（文件不存在）",
@@ -474,8 +474,8 @@ def check_status_line() -> list[dict]:
                             "level": RED, "text": line.strip()})
         if must_have and not hits:
             out.append({"code": "T4", "side": "仓", "rel": rel, "line": 1,
-                        "what": "（简略版里认不出四态）",
-                        "why": "给用户看的那一页必须以真实数字开头（否则人只能靠猜）",
+                        "what": "（当前状态页里认不出四态）",
+                        "why": "当前状态页必须保存可对照的检查账与未验边界",
                         "fix": "在顶部写一行「绿 N · 红 N · 待建 N · 未绑定 N」",
                         "level": YELLOW, "text": ""})
     return out

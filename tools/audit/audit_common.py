@@ -249,8 +249,8 @@ LENIENT_GLOBS: tuple[str, ...] = (
     #      票是**在办工单**，它指向的文件**必须真存在** ——
     #      "票里别写死将来才建的文件名"这条规矩本仓**栽过两次**（当日 `T3` 立刻报红），
     #      降黄等于把那道保护关掉。
-    ".codebuddy/work/40-decisions/*.md",
-    ".codebuddy/work/10-designs/*.md",
+    "docs/adr/D*.md",
+    ".scratch/legacy-active/*.md",
     # 排障历史已在docs/archive/troubleshooting，退出常规扫描。
 )
 
@@ -259,7 +259,7 @@ KNOWN_ABSENT: frozenset[str] = frozenset({"ACC-X-ATT-001", "ACC-X-ATT-002"})
 
 #: `T3` 只检查这些顶级目录开头的路径（`C:\…`、URL、SSH 一律不管）
 TOP_DIRS: tuple[str, ...] = (
-    "backend/", "tools/", "ops/", "docs/", ".scratch/", "delivery/", "demo/", "PRD/", "app/", "tests/",
+    "backend/", "tools/", "ops/", "docs/", ".scratch/", ".artifacts/", "delivery/", "demo/", "PRD/", "app/", "tests/",
     "alembic/", "artifacts/", "frontend/", "static/", "scripts/", "input/",
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**治理区进 `T3` 的眼**。
     #    ⚠️ 此前**整个 `.codebuddy/` 不在表内** ⇒ 票仓 / 记忆档 / 规则档 / 决策档里写下的
@@ -296,7 +296,7 @@ TOP_DIRS: tuple[str, ...] = (
 #:   ⇒ 列进来就是**同一件事两处写**（本仓最贵的病，必漂）。
 #: ⚠️ 目录带尾斜杠、文件不带（判据按**名字**比，斜杠只是可读性）。
 ROOT_ALLOW: tuple[str, ...] = (
-    ".codebuddy/", ".scratch/", ".git/", "artifacts/", "backend/", "docs/", "delivery/", "logs/", "ops/", "tools/",
+    ".artifacts/", ".scratch/", ".git/", "artifacts/", "backend/", "docs/", "delivery/", "logs/", "ops/", "tools/",
     ".env", ".env.example", ".gitignore",
 )
 
@@ -369,20 +369,20 @@ T3_OLD_PATH_HINTS: tuple[str, ...] = (
 T3_HINT_WINDOW = 16
 
 #: ⭐ `T3` **整段放行**的前缀（相对仓根）—— ⛔ 只放"那一段的件**按制度会消失**"的目录。
-#:    唯一的登记项 `.codebuddy/backups/` = **保留期目录**（`T20` 判据管着它：顶层留 5 份 · 月度清）
+#:    唯一的登记项 `.artifacts/recovery/backups/` = **保留期目录**（`T20` 判据管着它：顶层留 5 份 · 月度清）
 #:    ⇒ 文档里点名其中**某一件**，被清掉那天就变成幽灵，而**没人该为它回头改文档**
 #:    （该做的是把"那份备份已清"这句话留着，而不是把备份从历史叙述里抠掉）。
 #:    ⚠️ **这是结构性放行、不是逐条赦免** —— 段内的路径**根本不看**。
 #: ⛔ 别拿它放行"代码还没建"的目录（那类是真问题，见 `tools/mut/`）。
 T3_SKIP_PREFIXES: tuple[str, ...] = (
-    ".codebuddy/backups/",
-    # ⭐ 2026-10-05（`TAIL-236` 同批修 ①b）：`.codebuddy/work/00-scratch/` **同族放行** ——
+    ".artifacts/recovery/backups/",
+    # ⭐ 2026-10-05（`TAIL-236` 同批修 ①b）：`.scratch/local/` **同族放行** ——
     #   它是 **TTL 14 天**的临时区（`T14` 管着，到期即清）⇒ 文档里点名其中某一支探针脚本，
     #   被清掉那天就变成幽灵，而**没人该为它回头改文档**（理由与上面那条逐字相同）。
     #   ⚠️ 起因：把 `work/` 加进 `TOP_DIRS` 后，这类引用第一次被照出来（`work/00-scratch/x.py`
     #   这种写法过去根本不匹配任何前缀 ⇒ 又一次"落在所有尺子之外"）。
     #   ⛔ 仍**只放行"按制度会消失"的目录** —— 别往里加"代码还没建"的那种（那是真问题）。
-    ".codebuddy/work/00-scratch/",
+    ".scratch/local/",
 )
 
 #: 文档扫描面认的后缀（`.mdc` = **IDE 项目规则**，2026-10-05 `TAIL-235` 丁-1 起一并收）
@@ -446,7 +446,7 @@ def write_counts(text: str, counts: dict[str, int]) -> tuple[str, int, int]:
 
 SCAN_GLOBS: tuple[str, ...] = (
     # ⭐⭐ 2026-09-21 文档体系重构后，扫描面 = **会被当口径读的那几层**（按 `README.md` 的四层）：
-    #    ① 注入档 `.codebuddy/memory/MEMORY.md` ② 按需档（根 `README.md` · `ops/*.md` · 计划与服务承诺）
+    #    ① 注入档 `docs/agents/project-rules.md` ② 按需档（根 `README.md` · `ops/*.md` · 计划与服务承诺）
     #    ⛔ **不含** ③ 留痕档（`memory/journal/` · `plans/archive/归档-*.md` —— 旧术语/旧数字在那儿是**对的**）
     #       与 ④ 产物档（`artifacts/` —— 由 `T11` 管"回执"，不管措辞）。
     # ⚠️ **`CLAUDE.md` 已删除**（2026-09-21 用户裁定：换工具后**无人读取**）—— 它的必用内容已并入
@@ -462,21 +462,19 @@ SCAN_GLOBS: tuple[str, ...] = (
     # 2026-10-15专项迁移：Agent协议、绑定与新ADR实际进入扫描；T18仍核每条glob命中。
     "docs/agents/*.md", "docs/adr/*.md",
     "docs/architecture/*.md", "docs/guides/*.md", "docs/reference/*.md",  # 项目开发分册的现行正文；旧memory位置只留兼容指针。
-    ".codebuddy/memory/MEMORY.md",
+    "docs/agents/project-rules.md",
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**治理区整片进扫描面** —— 此前只有上面那份
     # `MEMORY.md` 一个治理区文件在被扫 ⇒ 票仓 / 规则档 / 决策档 / 过程区**没有任何尺子看得见**。
-    # ⚠️ **档位是量出来的**（`TAIL-235` 丁-1 只读探针，`.codebuddy/work/00-scratch/`）：
+    # ⚠️ **档位是量出来的**（`TAIL-235` 丁-1 只读探针，`.scratch/local/`）：
     #   · `memory/*.md`（注入档三件）· `rules/**`（**每轮自动注入给用户看**）· `40-decisions/`（用户裁定）
     #     · `50-tickets/`（**在办工单**）· `work/README.md` ⇒ **严判**（命中即红）；
     #   · `10-designs/` · `30-troubleshooting/`（过程留痕）⇒ 由 `LENIENT_GLOBS` **降黄**。
     # ⚠️ `journal/`（逐日日志）**故意不在内** —— 它是**只追加留痕**（`README.md` §二③），
     #    里面的旧路径与旧数字**是对的**（同 `plans/archive/` 的口径）⇒ 别把它扫进来制造噪音。
-    ".codebuddy/memory/*.md",
-    ".codebuddy/rules/**/*.mdc",
     "docs/guides/work-records.md",
-    ".codebuddy/work/40-decisions/*.md",
-    ".codebuddy/work/50-tickets/*.md",
-    ".codebuddy/work/10-designs/*.md",
+    "docs/adr/*.md",
+    ".scratch/tails/issues/*.md",
+    ".scratch/legacy-active/*.md",
     # 排障历史已在docs/archive/troubleshooting，退出常规扫描。
     # ⚠️ 2026-09-24 **摘掉 `.codebuddy/memory/CHANGELOG.md`**（`T18` 立起来当天抓的第一例）：
     #    它是**搬迁前的旧地址**，该件现址 = `docs/reference/changelog.md`（`README.md`「工程基准档」那行）⇒
@@ -530,7 +528,7 @@ LIVE_MACHINE_GLOBS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("tools/mut/_mut_*.py", "③ 反向灵敏度", (".py",)),
     ("tools/probe/**/*.py", "③ 真机探针", (".py",)),
     ("ops/*.ps1", "④ 运维脚本", (".ps1",)),
-    (".codebuddy/rules/**/*.mdc", "⑤ 规则档（每轮自动注入给用户看）", (".mdc",)),
+    ("AGENTS.md", "⑤ 宿主入口", (".md",)),
     ("backend/app/web/**/*.js", "⑥ 前端壳 · 脚本", (".js",)),
     ("backend/app/web/**/*.html", "⑥ 前端壳 · 页面", (".html",)),
 )
@@ -623,7 +621,7 @@ def iter_docs() -> list[tuple[str, str, Path, list[str], list[str]]]:
             #    `.codebuddy/rules/**/RULE.mdc` 是 `alwaysApply` 的**每轮自动注入**件，
             #    此前它对所有尺子**完全隐形**（而它里面就出过一次错话，见该目录 `RULE.mdc:20`）。
             if p.is_file() and p.suffix in DOC_SUFFIXES and p not in seen:
-                if p.parent == REPO_ROOT / ".codebuddy/work/50-tickets":
+                if p.parent == REPO_ROOT / ".scratch/tails/issues":
                     state = re.search(r"\*\*Status:\*\*\s*`?([a-z-]+)", p.read_text(encoding="utf-8"))
                     if state and state.group(1) in {"done", "wontfix"}:
                         continue  # 关闭票保留原文；T6仍核全票仓，常规内容检查只读在途票。

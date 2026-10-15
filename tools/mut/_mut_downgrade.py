@@ -35,18 +35,18 @@ PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 #:   ⚠️ 为什么这里值得把尺子拖进来（`_mut_docaudit` 为一处段界**没有**这么做）：
 #:   本件要**构造合法输入**（一张已销号票 ＋ 一张在办票）⇒ 用判据自己那份口径构造，才不会再分裂。
 sys.path.insert(0, str(ROOT / "tools" / "audit"))
-from audit_meta import TICKET_CLOSED, ticket_states      # noqa: E402
+from audit_meta import TICKET_CLOSED, ticket_states
+from audit_work import DOWNGRADE_ZONES      # noqa: E402
 
 #: 样本件（**变异临时件** · 用完即删）—— 落在过程区、名字合规（`设计-` 前缀 · `T12` 认它）。
-SAMPLE = ROOT / ".codebuddy" / "work" / "10-designs" / "设计-_mut降档样本-20990101.md"
+SAMPLE = ROOT / ".scratch" / "legacy-active" / "设计-_mut降档样本-20990101.md"
 #: 「落地位置」探针（**脚本自己创建** ⇒ "把落地文件挪走"那一例可以安全地"删掉它"，
 #: ⛔ 不去动仓库里任何真文件）。它落在 `ops/`（`SCAN_GLOBS` 内）⇒ 内容必须**中性**：
 #: 不写 `ACC-*` / 不写被撤项名 / 不写任何反引号路径（否则会惊动别的尺子，报的就不是 `T26` 了）。
 LANDING_PROBE = ROOT / "ops" / "_mut_landing_probe.md"
 PROBE_TEXT = "# 变异临时件（`_mut_downgrade.py` 用后即删）\n\n本件由反向灵敏度脚本临时创建，不是真文档。\n"
 #: 过程区（`T26` 的扫描面 —— 口径 = `audit_work.DOWNGRADE_ZONES`；⛔ 这里只当"指纹范围"用）。
-ZONES = (ROOT / ".codebuddy" / "work" / "10-designs",
-         ROOT / ".codebuddy" / "work" / "30-troubleshooting")
+ZONES = tuple(ROOT / zone for zone in DOWNGRADE_ZONES)
 
 
 def _num(tag: str) -> int:

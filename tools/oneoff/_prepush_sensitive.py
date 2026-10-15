@@ -8,7 +8,7 @@
    —— ⚠️ 命中**不等于**有问题（本仓有 `.env.example` / `cookie_store.py` / `ops/nssm_*.ps1` 这类**本来就该跟踪**的），
    所以要**逐条人看**；
 2. **这些"本该不进版本库"的东西确实没被跟踪**（`.env` / `.venv` / `logs/` / `artifacts/` 里的运行产物 /
-   `.codebuddy/backups/` / `00-scratch/`）；
+   `.artifacts/recovery/backups/` / `00-scratch/`）；
 3. **待推送的 diff 里有没有真凭据**（私钥块 / cookie 串 / 带非空值的 `password=` / `secret=`）。
 
 跑法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_prepush_sensitive.py`
@@ -56,8 +56,8 @@ def _git(*args: str) -> str:
                           encoding="utf-8", errors="replace").stdout
 
 
-EXCLUDED_DIRS = ("backend/.venv/", ".venv/", "logs/", ".codebuddy/backups/",
-                 ".codebuddy/work/00-scratch/", ".git/")
+EXCLUDED_DIRS = ("backend/.venv/", ".venv/", "logs/", ".artifacts/",
+                 ".scratch/local/", ".git/")
 
 
 def tracked_hits(files, directory):
@@ -66,7 +66,7 @@ def tracked_hits(files, directory):
 
 def selftest():
     from unittest.mock import patch
-    files = ['.codebuddy/backups/private.txt', '.codebuddy/work/00-scratch/private.txt',
+    files = ['.artifacts/recovery/backups/private.txt', '.scratch/local/private.txt',
              'backend/.venv/private.txt', 'logs/.gitkeep', 'tools/audit/bytes_guard.py']
     hits = [f for d in EXCLUDED_DIRS for f in tracked_hits(files,d)]
     assert set(hits) == set(files[:3]), '现行敏感目录必须命中且占位件不误伤'

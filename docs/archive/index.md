@@ -47,3 +47,5 @@
 | 旧路径 `.codebuddy/work/10-designs/设计-交付包与迁移-20260929.md` | `docs/archive/designs/设计-交付包与迁移-20260929.md` | 已结束调查、过程证据或既有历史索引；原文字节保留，按需追溯 |
 
 旧计划§14.4已办排期另见docs/archive/plans/completed-schedule.md，原文可从同一基线恢复。已关闭票在原真实票仓保留，历史索引只做来源查找，不把关闭票加载为日常资料。活动或未决的三份旧设计、现有D件及本机恢复材料不在删除范围，边界见docs/agents/workflow.md §六。
+
+本项目CodeBuddy退出来源与恢复：`docs/archive/codebuddy-retirement-20261015.md`。

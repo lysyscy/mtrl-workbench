@@ -3,7 +3,7 @@
 > 读者：维护本仓实现的开发者与Agent。回答：本机开发命令、壳适配、共享调用及工具反馈。何时读：开发核验或排查对应链路时。
 > 通用执行和资料维护按AGENTS条件读取个人技能；本件只维护项目约束、具体入口及明确标注的历史案例。2026-10-14从旧memory分册迁入，原章节编号保留。
 
-> 会话入口回 .codebuddy/memory/MEMORY.md，业务权威回delivery。2026-09-26旧宿主曾截断长记忆；当前专题按需读本件，不声称已核宿主自动注入。
+> 会话入口回AGENTS.md，文件、保存和环境约束按操作回docs/agents/project-rules.md，业务权威回docs/requirements.md。2026-09-26旧宿主曾截断长记忆；当前专题按需读本件，不声称已核宿主自动注入。
 
 ---
 
@@ -69,8 +69,8 @@
 合同日期保护由 `backend/app/mod11_jc/repository.py` 执行，判据为 `backend/tests/test_jc_contract_date_lock.py` 与 `backend/tests/test_jc_contract_date_transaction.py`；TAIL-313的90条审核修正及恢复证据回原票。锁定日期是已批准的专项修正范围，不扩大为全部i8事实字段可手改。
 
 - ⭐⭐ **2026-09-26 用户裁定「方案②」（贸易公司合同的导入对号）**：**正常合同** ⇒「合同金额」只用来**对号**、数字一个不改；**贸易公司合同**（那格按设计是空的 —— i8 里没这个数）⇒ 改用「**贸易公司合同金额**」当钥匙（对号 Excel「贸易公司合同总价」），对上后把 Excel「**供应商合同总价**」写进「合同金额」、**空才填**；出口 = `repository.fill_contract_amt_if_blank`，⛔ 不走 `update_contract`。
-- ⚠️ **历史坑**：抓取时甲方还没分类 ⇒ 价落进「合同金额」；**改分类不回头重算**（`service.py:335-337`），而重抓**只补 trade 两列、绝不碰合同金额** ⇒ 那批行（实测 27 条）必须**先清空**才对得上；已清（备份 `.codebuddy/backups/jc_trade_amt_clean_2026-09-26.json`）。
-- ⚠️ 《说明书》§6.4.1 原写「贸易公司名 / 贸易公司合同金额 = 手工」—— **2026-09-26 用户裁定废掉**（以抓取自动落为准），已改 3 处（备份 `.codebuddy/backups/说明书-before-贸易公司手工口径-2026-09-26.md`）。
+- ⚠️ **历史坑**：抓取时甲方还没分类 ⇒ 价落进「合同金额」；**改分类不回头重算**（`service.py:335-337`），而重抓**只补 trade 两列、绝不碰合同金额** ⇒ 那批行（实测 27 条）必须**先清空**才对得上；已清（备份 `.artifacts/recovery/backups/jc_trade_amt_clean_2026-09-26.json`）。
+- ⚠️ 《说明书》§6.4.1 原写「贸易公司名 / 贸易公司合同金额 = 手工」—— **2026-09-26 用户裁定废掉**（以抓取自动落为准），已改 3 处（备份 `.artifacts/recovery/backups/说明书-before-贸易公司手工口径-2026-09-26.md`）。
 - ⚠️ **收款端**：`EDITABLE_COLS` 只许放**界面上真有入口的列** —— "白名单允许" ≠ "界面能改"（2026-09-26 我混为一谈，被用户当场纠正）。
 
 ## 三、虚拟滚动那一层：**四条铁律**（2026-09-25 `TAIL-94` 重写后 · 每条都踩过）
@@ -86,7 +86,7 @@
 - ⭐ `tools/probe/_shell_smoke.py` = **编排者**；各页段为 `_shell_*.py`；实际件名与调用顺序查询主件import及main，不缓存件数，入口签名按对应定义核对。外移件两条铁律：① 正文**从原文切片生成**（⛔ 不手抄）② 原内联在 `main()` 的段落**不写 `try/except`**（异常语义逐字保持）。
 - ⭐ 零行为变化的证据法：拆前后各跑真机、`Compare-Object` 比 stdout，只断言"被移动的段差异 = 0"。
 - ⚠️ **写锚点前先打出真身**（一天内凭记忆写错 6 次）：§15 §四表**没有 `|---`**；中文一律「」（⛔ 别用 ASCII `"` 套在 Python 双引号串里）；被前几轮改过的行**先 grep 再替换**。
-- ⚠️ 临时证据用 `.codebuddy/work/00-scratch/`；稳定判据按tools/README.md登记，独立设计按work README落点。⚠️ `jc-ignore` **没有删除口** ⇒ 涉它的真机判据走"**空名早退**"（全链真点、零落库）。
+- ⚠️ 临时证据用 `.scratch/local/`；稳定判据按tools/README.md登记，独立设计按work README落点。⚠️ `jc-ignore` **没有删除口** ⇒ 涉它的真机判据走"**空名早退**"（全链真点、零落库）。
 - ⚠️ **`_shell_legacy.py` 的 ③′ 判词钉着"项目面板画在 ③ 预览卡"**（`want = {"m06_proc": (True, False, True), "m04_plan": (False, True, False)}`）⇒ 谁挪那个面板**必须同批改这条判词**。
 
 ## 五、交付面「四检」——**2026-09-26 已修到全 0**（改前是 3/4 非 0）
@@ -112,7 +112,7 @@
 ## 七、交接载体
 
 当前交接回主计划§13.6，运行状态与未验项回§0；读取入口回 AGENTS.md。旧交接查该文件Git历史，逐票证据经已销号索引定位，仓外旧资料再按归档索引读取。
-提示词仅在聊天回复提供，不写进票或规格；来源见 .codebuddy/memory/MEMORY.md §一。提交与推送按 docs/agents/workflow.md判断。
+提示词仅在聊天回复提供，不写进票或规格；来源见 docs/agents/project-rules.md §一。提交与推送按 docs/agents/workflow.md判断。
 
 ## 八、文件行数口径（曾误判一次 · 已订正）
 
@@ -122,7 +122,7 @@
 ## 九、已核实的记忆纠错（别重犯）
 
 - ⚠️ 虚拟滚动那一层**原先**在 `backend/app/web/index.html`（那时是单文件壳）；⭐ **2026-09-28 `P2-a` 拆件后它在 `backend/app/web/shell/view.js`**（`splitRows` / `startVirtual` / `drawVirtual` / `VS_*` 全在那件里 —— 该件 = §2 导航与路由 ＋ 渲染内核 ＋ 虚拟滚动）。⚠️ **找壳里的东西一律先看件清单**（`backend\.venv\Scripts\python.exe -X utf8 tools\audit\shell_source.py` 一行列出 12 件），⛔ 别假定它还在 `index.html`。
-- ⚠️ **设计件在 `.codebuddy/work/10-designs/`**（⛔ 不是仓根 `work/`）。
+- ⚠️ **设计件在 `.scratch/legacy-active/`**（⛔ 不是仓根 `work/`）。
 - ⚠️⚠️ **用户说「行 / 列」＝ 版式，不是文字**：他说「列映射要**列的样子**」= **每个源列保持是"表里的一列"**（表头横排，像 Excel）—— ⛔ **不是**"一行文字"、⛔ **也不是**卡片网格（2026-09-26 我**连错两版**）。
 - ⚠️ **UI 文案：技术细节 / 内部黑话 / 裸数字不上屏**（守则 §3/§7）—— 例：映射算法名（`归一化相等`/`token 交集`）与置信度 `0.86` 都是**内部信息** ⇒ 折进 `title` 或改成人话。
 
@@ -209,9 +209,9 @@
 - ⚠️⚠️ **壳里新增浮层（下拉/面板/弹层）必须挂两个钩子**：锚 `pjwrap` ＋ 盒 `pjpop`（`pj` 是历史遗留名，现已是**全站通用**机制）。现行机制入口 = backend/app/web/shell/ui.js的 `placePops()`（渲染后把浮层提升为 `fixed` ⇒ 逃出 `.card{overflow:hidden}`；`render()` **两条路径都要调**）。⛔ 别按类型各写一套、⛔ 别新建第二种锚名；守卫 `test_shell_render::test_通用浮层要逃出卡片裁剪_机制只有一处` ＋ 真机 `_shell_pops.py`（㉑）。⚠️ `.card{overflow:hidden}` 是给表格圆角用的 ⇒ **不许全局放开**。
 - ⚠️⚠️ **同一个「行」在一页里只许一个口径 = Excel 行号**：③ 预览的**数据表**用通用面的 `_row`；域侧**必须把 `_row` 带进匹配层**（`m11.imp_spec._rows_of` 要带 `_row`、`match_and_apply` 用 `row_no = int(row.get("_row") or n)`）。⚠️ 漏带时匹配层只能自己数"第几条数据" ⇒ 块里写「行 1/2/5」而数据表写 Excel 行号「4/5/8」⇒ **用户在表里找不到**。判据 = `test_imp_m11_api`「块的『行』必须能在**数据表**里找到、且就是那一行」（**结构性**断言，⛔ 别写死行号）。⭐ 报"某处编号/行号对不上"时，先问**"这个数是哪儿来的"**（两个来源 ⇒ 必然对不上）。⚠️ **图例/说明类文案一律按需显示**（只写"表里真有的那一类"，守则 §2.1）。
 - ⚠️⚠️ **通用导入面 `/api/imp/{domain}/preview` 的回执是「白名单」放行**（`app/import_kit/api.py` 只透传 `problems`/`writable`/`kpis`/`blocks`/`skipped`）⇒ **域新加的键必须同批在这里放行**（漏了就是"域给了、界面永远收不到"，而两边测试都绿）。其中 `skipped = [{row: Excel 行号, why: 人话原因, kind}]` 是**行级**名单（域自报；`m04` **刻意不给** —— 它项目没配上照样入库）⇒ 壳据此把 `.skiprow`（浅底＋左竖条）＋ 行号旁「不写入」/「不导入」标在**那一行**上（守则 §2.7 §2.8）。契约 = `backend/tests/imp_contract.py`（4 域共用）＋ `test_imp_shell::test_不会落库的行要在行上直接标`；真机 = `_shell_legacy.py` ③″（⭐ 判词**拿"卡片说得出的数"比"行上真标出的条数"**）。⚠️ 该判据当场抓到过真 bug：数据表**题头 18 格 / 数据行 17 格**（行号格没画）⇒ 行号格**显式先画**。
-- **前端规则与文案**：交互取向、步骤与视觉完成条件回 docs/guides/frontend-design.md §0/§6/§9；上屏文字回D29。宿主前端RULE只指主人，实际注入时机依当前宿主；结构消费者为 backend/tests/test_design_rules.py，不在本分册缓存版本/条数/旧§10。
+- **前端规则与文案**：交互取向、步骤与视觉完成条件回 docs/guides/frontend-design.md §0/§6/§9；上屏文字回D29。前端操作由AGENTS按动作指向该指南；CodeBuddy项目RULE已退出。结构消费者为 backend/tests/test_design_rules.py，不在本分册缓存版本/条数/旧§10。
 - ⚠️⚠️ **新增 ORM 模型必须同批登记进 `app/models_registry.py`**（⭐ 2026-09-30 `TAIL-195` 批 1：**已从 `core/` 挪到装配层** ⇒ ⛔ 旧路径 `app/core/models_registry.py` 不存在了）（漏 ⇒ `alembic autogenerate` 判成"**要删这张表**"⇒ 下一个人生成**破坏性迁移**；`TAIL-102` 就是这么炸的）。⭐ 现由 `backend/tests/test_schema_drift.py` 每轮守；反向：**模型漏声明库里已有的默认值/约束**也会报 `modify_default`/`remove_constraint` ⇒ **补模型**（零 DDL），⛔ 别写迁移去动线上库。
-- ⚠️⚠️ **自检 / 调试脚本对「开发库」的写入必须自清**（前缀 `__自检仓_<标记>_<随机>__`）：残留会**混进项目候选**（用户 2026-09-26 报障「底下有两个自检仓」）。⭐ 真机 **㉒ 卫生检查**每次扫 `project.warehouse_name like '__自检仓%'`；清残留**先备份**到 `.codebuddy/backups/` 再删。⛔ 别用"列表里把它滤掉"来糊。
+- ⚠️⚠️ **自检 / 调试脚本对「开发库」的写入必须自清**（前缀 `__自检仓_<标记>_<随机>__`）：残留会**混进项目候选**（用户 2026-09-26 报障「底下有两个自检仓」）。⭐ 真机 **㉒ 卫生检查**每次扫 `project.warehouse_name like '__自检仓%'`；清残留**先备份**到 `.artifacts/recovery/backups/` 再删。⛔ 别用"列表里把它滤掉"来糊。
 - ⚠️⚠️ **切/删文档块前先"量边界"**：2026-09-25 按"下一个 `####`"找块尾，把 **§14.3 排期表一起吃掉了** ⇒ 块尾用**唯一整串**定位，⛔ 别用"下一个某级标题"。
 - ⭐⭐ **JS 的模板字面量会把源码里的 `CRLF` 折成 `LF`**（2026-09-30 `TAIL-64` `P4-c-a` 实测）：壳各件**全是 `CRLF`**，
   但**活在模板字面量里的那几行，渲染出来是 `LF`** ⇒ 凡要"拼出与原文**逐字节相同**的字符串"的出口，换行必须写
@@ -219,8 +219,8 @@
   就是**两种写法各渲一遍、谁逐字节相同用谁**），⛔ 别按"文件行尾"推断（我第一版就是这么错的）。
   同族：`TBL` / `FBAR` / `PJB` 一律**不往字符串里塞隐式换行**（单行拼接）。
 - ⭐ **"仓内简写路径" ≠ 真实路径**（2026-09-30 一天踩两次，都是"不报错、只是找不到/多出来"那族）：
-  文档里写的 `work/10-designs/` 真身 = **`.codebuddy/work/10-designs/`**（按仓根拼 ⇒ **404**）；
-  `work/00-scratch/` 真身 = **`.codebuddy/work/00-scratch/`**（`T14` 的 14 天 TTL 管它、`.gitignore` 忽略它）
+  文档里写的 `work/10-designs/` 真身 = **`.scratch/legacy-active/`**（按仓根拼 ⇒ **404**）；
+  `work/00-scratch/` 真身 = **`.scratch/local/`**（`T14` 的 14 天 TTL 管它、`.gitignore` 忽略它）
   ⇒ 按仓根拼会在**仓根造出一个未被忽略的 `work/`**。⇒ 写新脚本前把路径 `Test-Path` / `git check-ignore` 核一遍。
 - ⭐ **折叠着的 `<details>` 里 `innerText` 恒为空**（2026-09-30 真机抽检当场踩到）：探针要读折叠区内容，
   用 **`textContent`**（或先 `d.open=true`）—— 用 `innerText` 会报「屏幕上找不到那几条」的**假红**（块其实好好的）。
@@ -232,7 +232,7 @@
 
 核验范围、证据复用、隔离保护与现场触发由 `docs/agents/workflow.md`决定。本节提供调用方法；参数与执行登记以当前脚本的 `--help` 和 CMDS / SELFTESTS 为准。
 
-1. 有已有 dirty 且需区分新增差异时：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --start .codebuddy/work/00-scratch/tmp-YYYYMMDD-entry.json`。用 `--inspect <基点>` 查看摘要；干净仓直接与 HEAD 比较。
+1. 有已有 dirty 且需区分新增差异时：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --start .scratch/local/tmp-YYYYMMDD-entry.json`。用 `--inspect <基点>` 查看摘要；干净仓直接与 HEAD 比较。
 2. 查看选集：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --explain`；有基点时加 `--since <基点>`，明确本轮路径时加 `--paths <实际差异路径...>`。完成条件：选中项对应已查明使用者，待查输入已说明。
 3. 执行同一选集：去掉 `--explain`；读取完整汇总与退出码。默认、`--related`、`--all` 都按影响选择；显式完整检查使用 `--full`。
 4. 需要真实服务验证时：按 `docs/guides/deployment.md` 核对现场前提，运行 `tools/probe/_shell_smoke.py`；运行后端重启入口为 `ops/server_ctl.ps1`。`tools/audit/shell_verify.py` 是可选快照排障入口。
@@ -250,7 +250,7 @@
 
 **命令卫生两条（2026-10-11 晚补 · `TAIL-296` 实测）**：④ ⛔ **每条命令只做一件事** —— `cmd /c "… & … && …"` 长链在两壳混用下出现过三次「空输出 + rc=1」；中途取消还会把整条链留在半状态（当场吃了两次）。要串就落成脚本文件再跑。⑤ **要按中文过滤就用 `python -X utf8` 读盘**，⛔ 别用 cmd 的 `findstr /c:中文…` —— 控制台编码不合时它**静默 0 命中**，看起来像"查过了、没有"。
 
-**怀疑"这条红是先前就有的"（一行配方）**：`git -C <仓根> archive --format=zip -o .codebuddy/work/00-scratch/head-web.zip HEAD backend/app/web/` ⇒ 解到 `00-scratch/head-web/`；`$env:MTRL_UI_FIXTURE_WEB='<解出来的 web 目录>'` 跑**同一条**用例；跑完 `Remove-Item Env:MTRL_UI_FIXTURE_WEB`。判据：HEAD 版壳下**同样红 ⇒ 不是本轮引入**（2026-10-11 据此认定了 6 条既有腐化）。静态件（读 `SHELL` 的断言）同理先看 `git diff HEAD` 有没有碰到那一行。
+**怀疑"这条红是先前就有的"（一行配方）**：`git -C <仓根> archive --format=zip -o .scratch/local/head-web.zip HEAD backend/app/web/` ⇒ 解到 `00-scratch/head-web/`；`$env:MTRL_UI_FIXTURE_WEB='<解出来的 web 目录>'` 跑**同一条**用例；跑完 `Remove-Item Env:MTRL_UI_FIXTURE_WEB`。判据：HEAD 版壳下**同样红 ⇒ 不是本轮引入**（2026-10-11 据此认定了 6 条既有腐化）。静态件（读 `SHELL` 的断言）同理先看 `git diff HEAD` 有没有碰到那一行。
 
 **Git推送遇代理中断（2026-10-11实测）**：HTTPS报`curl 52 Empty reply from server`且SSH也被重置时，先用`git -c http.proxy= push <HTTPS远端> <当前分支>`作单次直连尝试；不改全局代理。随后用同样的单次选项读取远端分支SHA，与本地HEAD比较；连接中断或输出`Everything up-to-date`本身不能证明推送成功。提交与推送决策回 docs/agents/workflow.md「提交与推送」。
 
@@ -391,13 +391,13 @@
 - **桌面真路径的取法**（`MEMORY.md §三`）：注册表 `HKCU\…\User Shell Folders\Desktop`。
 - **「结构冻结」前置的原始裁定**（`MEMORY.md §八`）：`[用户·2026-10-05]` 原话「不需要冻结也能正常使用」
   「边用边改」⇒ 该前置**已取消**；⚠️ 但**不冻结 ≠ 免纪律**（三条见本节第 4 小节）。
-- **D29的消费者**回 .codebuddy/work/40-decisions/D29-文案审计口径-以熟手为准.md §六；写提示或用户报错时按其真实前后端检查与插值盲区核验。
+- **D29的消费者**回 docs/adr/D29-文案审计口径-以熟手为准.md §六；写提示或用户报错时按其真实前后端检查与插值盲区核验。
 - **上屏文字两条的用户原话**（`MEMORY.md §一`，规则都还在、只是原话搬下来了）：
   「规矩应该是绝大多数时候都通用的，有益的」·「要敢于质疑口径，以最终效果为目标」
   ·「我不是计算机专业，技术性用语不要用太多」。
 - **2026-10-06 新加的两条纪律**（`tools/README.md` 纪律 5/6，注入档只留一句）：
   ① ⛔ 提交**不加 `--no-verify`**，**判据 ＝ 提交输出里必须出现 `pre-commit` 行**（没出现 ＝ 钩子没跑
-  ＝当时提交保护未执行）；当前真实`.env`不提交，ops/init_db.sql已按2026-10-09用户裁定随仓保留；现行边界回 .codebuddy/memory/MEMORY.md §四及ops/hooks/pre-commit，旧SQL禁提措辞不再执行。
+  ＝当时提交保护未执行）；当前真实`.env`不提交，ops/init_db.sql已按2026-10-09用户裁定随仓保留；现行边界回 docs/agents/project-rules.md §四及ops/hooks/pre-commit，旧SQL禁提措辞不再执行。
   ② docstring **第一句就得是它**（⛔ 别把注释放它前面 —— `__doc__` 会静默变 `None`）＋
   docstring 里的 Windows 路径用**正斜杠或 raw 字符串**。
 - ⭐ **顺带记一条结构事实**：**收工闸门的清单不要再抄进注入档** —— 权威是

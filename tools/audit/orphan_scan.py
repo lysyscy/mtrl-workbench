@@ -2,8 +2,8 @@
 """孤儿扫描（**只读**）—— 哪份文档"没人指它"。
 
 用法：
-    python .codebuddy/skills/docs-audit/scripts/orphan_scan.py
-    python .codebuddy/skills/docs-audit/scripts/orphan_scan.py --min 3   # 只列引用数 < 3 的
+    python tools/audit/orphan_scan.py
+    python tools/audit/orphan_scan.py --min 3   # 只列引用数 < 3 的
 
 口径（⛔ 别改）：
   · 引用判法 = 另一份文件的正文里出现**这份文件的文件名**或**仓内相对路径**。
@@ -23,22 +23,21 @@ SKIP_PARTS = {"node_modules", ".venv", ".git", "__pycache__", ".pytest_cache"}
 #: ② 层（按需档）里"必须有人指它"的落点前缀；① 层单列
 CORE_PREFIXES = ("README.md", "ops/", "docs/architecture.md", "docs/architecture/",
                  "docs/agents/", "docs/guides/", "docs/reference/", "docs/adr/", "docs/status.md", "docs/requirements.md", "docs/requirements/", "tools/README.md",
-                 ".codebuddy/memory/MEMORY.md", ".codebuddy/memory/细则.md",
+                 "docs/agents/project-rules.md", "docs/guides/implementation-constraints.md",
                  #: ⭐ 2026-10-01（`TAIL-204` 第 6 步）：「给用户看的一页」= 根 `README.md`（已在上一行）
                  #:   —— 原 `.codebuddy/plans/执行情况-主文档.md` 已"只留待办"并进 `README.md` §〇，⛔ 旧路径不存在。
                  "docs/status.md",
                  "docs/guides/work-records.md")
 #: 留痕档：只追加、不回读 ⇒ ⛔ 它们"没人引用"不是病
-HISTORY_PREFIXES = ("docs/archive/", ".codebuddy/memory/journal/", ".codebuddy/plans/archive/归档-",
-                    ".codebuddy/plans/archive/", ".codebuddy/memory/")
+HISTORY_PREFIXES = ("docs/archive/", "docs/adr/D", ".scratch/local/", ".artifacts/")
 
 
 def repo_root() -> Path:
     here = Path(__file__).resolve()
     for cand in (here, *here.parents):
-        if (cand / "tools" / "audit" / "doc_audit.py").exists() and (cand / ".codebuddy").is_dir():
+        if (cand / "tools" / "audit" / "doc_audit.py").exists() and (cand / "AGENTS.md").is_file():
             return cand
-    raise SystemExit("找不到仓库根（期望含 tools/audit/doc_audit.py 与 .codebuddy/）")
+    raise SystemExit("找不到仓库根（期望含 tools/audit/doc_audit.py 与 AGENTS.md）")
 
 
 def main() -> int:
@@ -64,13 +63,13 @@ def main() -> int:
         rows.append((rel, refs))
 
     def is_core(rel: str) -> bool:
-        return any(rel == p or rel.startswith(p) for p in CORE_PREFIXES)
+        return not rel.startswith(HISTORY_PREFIXES) and any(rel == p or rel.startswith(p) for p in CORE_PREFIXES)
 
     core_orphans = [(r, f) for r, f in rows if is_core(r) and len(f) < args.min]
     hist_orphans = [(r, f) for r, f in rows if r.startswith(HISTORY_PREFIXES) and len(f) < args.min]
     other_weak = [(r, f) for r, f in rows
                   if not is_core(r) and not r.startswith(HISTORY_PREFIXES)
-                  and len(f) < max(args.min, 1) and not r.startswith(".codebuddy/backups/")]
+                  and len(f) < max(args.min, 1) and not r.startswith(".artifacts/recovery/backups/")]
 
     print(f"扫描 {len(rows)} 份 md（跳过 node_modules/.venv/.git）")
     print(f"\n=== ⭐ ①② 层孤儿（**这才是病**，要修）{len(core_orphans)} 份 ===")

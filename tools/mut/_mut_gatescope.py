@@ -29,7 +29,7 @@ CASES = {'gate': ('tools/oneoff/_gatescope.py',
              ('旧dirty当新增',
               '    result = {}\n    for name in names:',
               '    result = {name: (None, (root/name).read_bytes()) for name in names if '
-              "(root/name).is_file() and not name.startswith('.codebuddy/work/00-scratch/')}\n"
+              "(root/name).is_file() and not name.startswith('.scratch/local/')}\n"
               '    for name in names:'),
              ('必要语法检查漏选',
               "'tools/audit/syntax_audit.py', 'tools/audit/ui_parity.py',",

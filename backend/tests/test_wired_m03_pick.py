@@ -26,7 +26,7 @@ from tests.shell_src import SHELL, act_entry  # noqa: F401  ← `P4`① 读取�
 
 # ⭐ 2026-10-04（`TAIL-219` 批 2b 余下 ②）：本件那把自造剪刀 `_plan_pick()` 已换成语义窗口子
 #   `act_entry("planPick")`（`planPick` 是 `const ACT={…}` 里的一条 —— 两处取到的正文一致，
-#   仅首尾空白之差；量测件 `.codebuddy/work/00-scratch/_tail219_batch2b_rest.py`）。
+#   仅首尾空白之差；量测件 `.scratch/local/_tail219_batch2b_rest.py`）。
 
 
 # ⚠️ 「只放宽视图参数」那一行：四个视图参数可以放宽，`fNt.projs`（项目筛选）**一个字都不许动**

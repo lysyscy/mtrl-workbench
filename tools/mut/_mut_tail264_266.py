@@ -17,7 +17,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 PYTHON = BACKEND / ".venv/Scripts/python.exe"
-SCRATCH = ROOT / ".codebuddy/work/00-scratch"
+SCRATCH = ROOT / ".scratch/local"
 PREFIX = "tmp-20261009-tail264-266-mut"
 ACTIONS = ROOT / "backend/app/web/shell/actions.js"
 INVENTORY = ROOT / "backend/app/mod07_setl/inventory_extract.py"

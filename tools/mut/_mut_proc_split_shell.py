@@ -27,7 +27,7 @@ CASES = [
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix="tmp-proc-split-shell-", dir=ROOT / ".codebuddy/work/00-scratch") as folder:
+    with tempfile.TemporaryDirectory(prefix="tmp-proc-split-shell-", dir=ROOT / ".scratch/local") as folder:
         isolated = Path(folder)
         for part in ("backend/app", "backend/tests", "tools/audit"):
             shutil.copytree(ROOT / part, isolated / part, ignore=shutil.ignore_patterns("__pycache__"))

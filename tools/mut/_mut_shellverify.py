@@ -22,7 +22,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = str(ROOT / "backend" / ".venv" / "Scripts" / "python.exe")
 TOOL = str(ROOT / "tools" / "audit" / "shell_verify.py")
 TARGET = ROOT / "backend" / "app" / "web" / "shell" / "core.js"
-BACKUPS = ROOT / ".codebuddy" / "backups"
+BACKUPS = ROOT / ".artifacts" / "recovery" / "backups"
 
 #: 变异标记（写进去的那一行必须**明显不是真代码**，便于人肉辨认）
 MARK = "  /* ⚠️ 变异残留：MUT */"

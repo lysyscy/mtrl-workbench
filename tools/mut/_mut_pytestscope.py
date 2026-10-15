@@ -142,7 +142,7 @@ def main() -> int:
     cases.append(("靶件逐字节复原（MD5）", ok_md5, "一致" if ok_md5 else "⛔ 不一致"))
 
     # ---- ② 跳过方向：只动 `.codebuddy/` ⇒ 必须说跳过（缺这一向 ⇒ 判据恒真）----
-    run_skip, f2, out2 = _plan([".codebuddy/memory/MEMORY.md", ".codebuddy/plans/x.md"])
+    run_skip, f2, out2 = _plan(["docs/agents/project-rules.md", ".codebuddy/plans/x.md"])
     cases.append(("只动 `.codebuddy/` ⇒ 判据**必须**说跳过（第 0 批的省时就在这一向）",
                   not run_skip, "判据说跑=%s" % ("是（⛔ 白跑一轮）" if run_skip else "否")))
     run_out, _, _ = _plan(["tools/audit/shell_api.py"])

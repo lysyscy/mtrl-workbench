@@ -64,8 +64,8 @@ EXCLUDE_PREFIXES: tuple[tuple[str, str], ...] = (
     ("backend/.venv/", "虚拟环境（非本仓产物）"),
     ("artifacts/", "工具生成物（`T11` 管回执，不管措辞）"),
     ("logs/", "运行日志"),
-    (".codebuddy/backups/", "保留期目录（按制度会清，`T20` 管）"),
-    (".codebuddy/work/00-scratch/", "临时件（`T14` TTL 14 天）"),
+    (".artifacts/", "本机恢复与验证产物，不作为现行文档引用"),
+    (".scratch/local/", "临时件（`T14` TTL 14 天）"),
 )
 
 #: 名字边界的"不可接字符" —— 防止 `设计-x.md` 被 `设计-x-补充.md` 顺手命中。
@@ -249,7 +249,7 @@ def iter_doc_files() -> list[str]:
     """仓内**文档件全集**（盘点对象）—— 根散件 ＋ `TOP_DIRS` 递归 **剪枝**
     （⛔ 不 `rglob`：那会走进虚拟环境，上万文件白扫一遍）。
 
-    ⚠️ **根目录那两件也要收**（`README.md` · `AGENTS.md`）：`TOP_DIRS` 只管子目录，
+    ⚠️ **根目录那两件也要收**（地图与Agent入口）：`TOP_DIRS` 只管子目录，
     漏掉它们 ⇒ 最该被看见的两份入口件不在盘点表里。
     """
     out: list[str] = [p.name for p in sorted(REPO_ROOT.glob("*"))
@@ -492,7 +492,7 @@ def selftest() -> int:
     # ⭐⭐ 2026-10-05 当场抓到：**首版自测只跑全量分支** ⇒ 单件分支里一个解包 bug
     #   （三元组当二元组解）**全绿通过**。教训：**自测没覆盖到的分支 = 没有守卫的分支**。
     #   ⛔ 探针用英文件名 —— 中文件名当 argv 传会被 PowerShell 吃掉（当天栽过）。
-    probe = "AGENTS.md"
+    probe = "README.md"
     one = collect(probe)
     one_ok = all(s in one for s in ("目标件：", "① 机器引用", "② 活文档口径引用", "③ 未销号票引用"))
     print("  %s 单件分支也跑得通（探针 `%s` · 三路小标题齐全）" % ("✅" if one_ok else "⛔", probe))

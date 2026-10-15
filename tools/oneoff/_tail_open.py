@@ -45,7 +45,7 @@ import acc_report  # noqa: E402  ← 用例号真源与正式T6一致
 PLAN = REPO / "docs" / "status.md"
 PY = REPO / "backend" / ".venv" / "Scripts" / "python.exe"
 #: ⭐ 2026-10-04（`TAIL-225` 票体系）：票仓 —— 立台账多一件事：**建票文件**（票 = 一个文件）
-TICKETS = REPO / ".codebuddy" / "work" / "50-tickets"
+TICKETS = REPO / ".scratch" / "tails" / "issues"
 
 ROW_RE = re.compile(r"^\|\s*`?(TAIL-\d+)`?\s*\|")
 SEC1_RE = re.compile(r"^#{2,3}\s*一、")

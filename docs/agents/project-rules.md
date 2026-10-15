@@ -1,6 +1,6 @@
-# 长期记忆 · 材料报表自动化工作台（唯一注入档）
+# 项目约束与条件入口
 
-> 读者：每次接手的agent。回答：每轮必要偏好、边界与触发指针。何时读：接手；分册只按任务取章节。
+> 读者：处理文件、保存、环境或真实写入的Agent。回答：项目约束与已确认边界。何时读：对应操作前按章节读取；本件不声明宿主自动注入。
 
 ## 〇、入口与核验
 
@@ -17,7 +17,7 @@
 
 ## 二、真源指针
 
-MEMORY.md为会话入口；项目开发正文在docs/guides/，实现约束和核验方法分别回docs/guides/implementation-constraints.md与development-and-verification.md。业务取值回docs/requirements.md及其分册，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
+AGENTS.md为会话入口；项目开发正文在docs/guides/，实现约束和核验方法分别回docs/guides/implementation-constraints.md与development-and-verification.md。业务取值回docs/requirements.md及其分册，术语及界面文字按AGENTS触发读取D29；目录职责回README.md §三。
 
 ## 三、环境操作入口
 
@@ -26,7 +26,7 @@ MEMORY.md为会话入口；项目开发正文在docs/guides/，实现约束和�
 ## 四、文件与工具
 
 - `[助手自定]` JSON用结构操作；改已有文件保留其行尾，新文本UTF-8无BOM，ps1例外带BOM。字节保护由 tools/audit/bytes_guard.py 执行。
-- `[助手自定]` 长脚本及临时证据进00-scratch；输出完整落盘或取末尾，不能掐断正在写靶的进程。相关配方按需读docs/guides/development-and-verification.md §十七。
+- `[助手自定]` 长脚本及临时证据进所属任务.scratch或.scratch/local；输出完整落盘或取末尾，不能掐断正在写靶的进程。相关配方按需读docs/guides/development-and-verification.md §十七。
 - `[助手自定]` 修改共享文件前重新读取；同一文件写入串行；变异用隔离夹具，不临时改正式工作文件。
 
 ## 五、协作边界
@@ -48,7 +48,7 @@ MEMORY.md为会话入口；项目开发正文在docs/guides/，实现约束和�
 - `[用户·2026-10-05]` 本机自用不设冻结前置；迁移升级两库、业务取舍和前端规则仍按对应主人。
 - `[助手自定]` 架构约束回 docs/architecture.md、模块约束回 docs/architecture/modules.md；界面工程机制按任务读docs/guides/development-and-verification.md §十。
 - `[用户·2026-10-12]` 一人开发练手，优先速度和token；不为假设情况扩测试，不强制每条新增测试配独立变异。选集/入口改动做定向自检；金额、权限、写入、回滚与已修复bug覆盖和隔离保护保留。流程回docs/agents/workflow.md。
-- `[用户·2026-10-01]` 上屏文字以熟手为读者，具体规则回D29，不在注入档复述。
+- `[用户·2026-10-01]` 上屏文字以熟手为读者，具体规则回D29，按需读取本页不复述。
 - `[用户·2026-10-09]` **够用即止**：一人开发·局域网2人；建任何检查前先过两问（在本项目会不会真发生？真发生是否真难受？）⇒ 取舍细则与手法回 docs/agents/workflow.md「取舍」。
 
 ## 附录 · 方法触发

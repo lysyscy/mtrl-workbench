@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='tmp-retro-', dir=ROOT/'.codebuddy/work/00-scratch') as folder:
+    with tempfile.TemporaryDirectory(prefix='tmp-retro-', dir=ROOT/'.scratch/local') as folder:
         base=Path(folder)
         shutil.copytree(ROOT/'tools/oneoff', base/'tools/oneoff', ignore=shutil.ignore_patterns('__pycache__', '_归档*'))
         runner=base/'proof.py'

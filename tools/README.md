@@ -60,7 +60,7 @@
 
 **归档工具（TAIL-321修复）**：`tools/oneoff/_doc_downgrade.py --selftest` 在临时Git仓库与临时仓外目录中验证真实搬运、三路活引用拦截、索引幂等、写入失败回滚及原文恢复，不写正式索引或仓外归档。自测已解除旧提交钩子项数假设；提交钩子仍负责暂存语法、字节及凭据文件检查。动作拒绝覆盖仓外同名件，索引写入失败恢复原件与索引字节；Git恢复记录固定源提交，源件未提交时指向仓外当前原文。实际搬运仍须明确指定件名，先干跑再按授权加`--apply`。历史故障见TAIL-319，修复及验证证据见TAIL-321 Comments；隔离通过不代表真实文档已归档。
 
-TAIL-297 清点的历史一次性脚本原文移入 `tools/oneoff/_归档-20261011/`，逐件用途、引用与两问理由见 `.codebuddy/work/50-tickets/TAIL-297-尺子体检.md` Comments；归档源字节未改，旧地址是当时操作的证据。恢复重放须从 Git 取对应原树和环境，不能在归档目录直接运行。现役 `_list_tails.py` 读取主计划与已销号姊妹件；`_prepush_sensitive.py` 核现行治理目录且 git 失败不当空结果；`_tail59_measure.py` 使用现行资料面。
+TAIL-297 清点的历史一次性脚本原文移入 `tools/oneoff/_归档-20261011/`，逐件用途、引用与两问理由见 `.scratch/tails/issues/TAIL-297-尺子体检.md` Comments；归档源字节未改，旧地址是当时操作的证据。恢复重放须从 Git 取对应原树和环境，不能在归档目录直接运行。现役 `_list_tails.py` 读取主计划与已销号姊妹件；`_prepush_sensitive.py` 核现行治理目录且 git 失败不当空结果；`_tail59_measure.py` 使用现行资料面。
 
 `tools/probe/_cn_path_probe.py` 默认只量 D 件中文相对引用，`--documents` 量既有文档扫描面；有缺失候选返回非零，候选须区分历史、简称及未持久化产物，不表示 T3 已扩面。绝对仓外路径仍由 T3 原分支核存在。自测登记回 `_run_rulers.SELFTESTS`，反向见证为 `tools/mut/_mut_tail297.py`；待查判据的可配变异由 `_impactscope.mutation_candidates` 从活件登记与源码反查，只列候选，不当隔离或通过证明。
 

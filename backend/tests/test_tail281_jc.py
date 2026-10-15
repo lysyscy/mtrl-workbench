@@ -89,7 +89,7 @@ def test_browser_flow_dialogs_and_virtual_jump(ui_page):
     p.click('[data-act="ntFlows"]')
     p.wait_for_selector('.mask')
     assert '误付' in p.inner_text('.mask') and '集采合同' not in p.inner_text('.mask')
-    p.screenshot(path=str(Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch/tmp-20261011-281-flows.png'))
+    p.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261011-281-flows.png'))
     table = p.locator('.mask table').inner_html()
     p.click('[data-act="closeModal"]')
     p.evaluate("ACT.ntTrace({dataset:{id:'101'}})")
@@ -97,7 +97,7 @@ def test_browser_flow_dialogs_and_virtual_jump(ui_page):
     assert '合同备注' in p.inner_text('.mask') and '450.00' in p.inner_text('.mask')
     assert p.locator('.mask table.dt').last.inner_html() == table
     p.evaluate("document.documentElement.style.setProperty('--fscale','1.25')")
-    p.screenshot(path=str(Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch/tmp-20261011-281-contract.png'))
+    p.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261011-281-contract.png'))
     p.evaluate("document.documentElement.style.setProperty('--fscale','1')")
     p.click('[data-act="closeModal"]')
     p.evaluate('''() => {
@@ -133,7 +133,7 @@ def test_browser_flow_dialogs_and_virtual_jump(ui_page):
     assert p.evaluate('ntHit(fNt).length') == 1
     box = p.locator('tr.nt-focus').bounding_box()
     assert box and 0 <= box['y'] <= 1000
-    p.screenshot(path=str(Path(__file__).resolve().parents[2] / '.codebuddy/work/00-scratch/tmp-20261011-281-jump.png'))
+    p.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261011-281-jump.png'))
     p.evaluate('''() => {
       FLs=[{id:'31',nid:'1520',date:'2026-10-02',amt:300,method:'现汇',voided:false}];
       reloadM05=async()=>{throw {message:'付款域刷新失败'};};

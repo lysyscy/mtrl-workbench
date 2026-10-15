@@ -7,19 +7,19 @@
 | 内容 | 落点与主人 |
 |---|---|
 | 新任务的实质规格、调查和持久证据 | `.scratch/<effort>/`；按实质需要建立spec.md、evidence.md，不复制现行业务正文 |
-| 现有TAIL工单与状态 | `.codebuddy/work/50-tickets/`，沿既有真实票仓契约；索引为docs/status.md §15，开销票工具及协议回docs/agents/issue-tracker.md |
+| 现有TAIL工单与状态 | `.scratch/tails/issues/`，沿既有真实票仓契约；索引为docs/status.md §15，开销票工具及协议回docs/agents/issue-tracker.md |
 | 稳定工程结论或操作方法 | docs/architecture.md、docs/guides或docs/reference对应唯一主人 |
-| 重要取舍 | 新ADR放docs/adr；旧D件编号、原文及位置保留 |
+| 重要取舍 | 新ADR放docs/adr；旧D件在docs/adr保留编号和原文 |
 | 已结束且有独有价值的过程 | docs/archive，保留原路径、固定SHA和必要证据；已有仓外原件按归档索引追溯 |
 | 实验输出、截图、导出和运行日志 | artifacts与logs的真实配置；必要证明在所属任务引用，避免另造权威 |
-| 临时命令、提交草稿与本机恢复现场 | 既有.codebuddy/work/00-scratch；当前仍服务接续、恢复或未决验证的材料原地保留 |
-| 现行产品资料手工快照 | .codebuddy/backups，具体保留规则回README.md §四；本次未清理 |
+| 临时命令、提交草稿与本机恢复现场 | 既有.scratch/local；当前仍服务接续、恢复或未决验证的材料原地保留 |
+| 现行产品资料手工快照 | .artifacts/recovery/backups，具体保留规则回README.md §四；本次未清理 |
 
 ## 二、生命周期与决策原文
 
 活动资料沿其固定规则、授权和范围继续；迁移目录不重解释任务。任务结束后把有效规则归现行主人，过程按独有价值选择归档；普通检索限定当前资料、活动任务和直接依赖，历史只有明确追溯才展开。
 
-旧D件只追加替代关系，原文、编号和位置保持；被取代时文头标Superseded by并更新既有索引，不进入旧_doc_downgrade工具。该工具只适用于其已登记旧分区并使用仓外归档契约，不用于新的docs/archive批量迁移。
+旧D件只追加替代关系，原文与编号保持，实际位置统一为docs/adr；被取代时文头标Superseded by并更新既有索引，不进入旧_doc_downgrade工具。该工具只适用于其已登记旧分区并使用仓外归档契约，不用于新的docs/archive批量迁移。
 
 历史源文件保持当时含义，原路径引用按固定SHA解释；来源索引为docs/archive/index.md。销号时原排期作为引用行追加到已销号历史索引，状态页只保留活动排期及历史入口；工具用原子替换写历史，失败时恢复状态页与票面。已关闭票保留原票面；默认内容扫描排除done/wontfix，但T6仍校验全票仓的编号、字段、状态及索引一致性。没有状态或状态未知的票保持严格检查，不能当历史略过。
 
@@ -27,7 +27,7 @@
 
 删除先核独有信息、活动引用、机器消费者和可恢复来源。本批仅退役已被新正文完全替代的薄入口；独有历史归档，未知或仍有任务用途的材料保留。日期、目录名或零引用不能证明可以删除。
 
-本机备份、凭据、原始业务文件和忽略材料不靠Git恢复；本次原地保护。恢复只还原本批拥有的路径，出现后续新内容时保护双方，不用全仓重置或清空。
+本机备份、凭据、原始业务文件和忽略材料不靠Git恢复；本次整体迁入新位置并保留字节与元数据。恢复只还原本批拥有的路径，出现后续新内容时保护双方，不用全仓重置或清空。
 
 ## 四、文头与落地位置
 
@@ -43,7 +43,7 @@
 
 ## 五、保留的项目例外
 
-现有票仓是已采用的真实本地tracker；旧D件是长期决定来源。宿主MEMORY和RULE保留真实加载位置；专题正文已在docs。artifacts、logs、backups、运行模板和delivery中的原型/第三方原件由现有程序或恢复契约消费。这些例外不持有另一份现行产品Markdown或工程正文，退出条件见workflow §六。
+现有票仓是已采用的真实本地tracker；旧D件是长期决定来源。本项目CodeBuddy的MEMORY、RULE和仓内技能接入已退出；项目约束由AGENTS按操作指向docs/agents/project-rules.md，文档审计由普通指南和tools/audit工具承接。artifacts、logs、backups、运行模板和delivery中的原型/第三方原件由现有程序或恢复契约消费。这些例外不持有另一份现行产品Markdown或工程正文，退出条件见workflow §六。
 
 历史00-scratch现场继续保护，不按TTL清空；未来删除须逐项确认其活动与恢复用途已结束。旧逐日日志已在docs/archive/journal，不再作为常载入口。
 

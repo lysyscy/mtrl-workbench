@@ -35,9 +35,9 @@ ROOT = Path(__file__).resolve().parents[2]
 #: 活文档靶（`docs/reference/*.md` ∈ `SCAN_GLOBS`，且**不在** `LENIENT_GLOBS` ⇒ `T3` 命中即红）。
 #: 照 `M6`/`M30` 同款选它：本仓最常见的"引用一个不存在的仓内相对路径"。
 THRESHOLD = ROOT / "docs" / "reference" / "thresholds.md"
-#: ⭐ `N3` 的靶：**票面**（`.codebuddy/work/50-tickets/*.md`，同样严判 ⇒ 命中即红）。
+#: ⭐ `N3` 的靶：**票面**（`.scratch/tails/issues/*.md`，同样严判 ⇒ 命中即红）。
 #: ⚠️ 为什么不用「临时造一张票」：`T6` 会先报「幽灵票文件」⇒ 报的就不是 `T3` 了（同 `M20` 的坑）。
-TICKET = ROOT / ".codebuddy" / "work" / "50-tickets" / "TAIL-238-T3幽灵路径收窄只对真在指路的句.md"
+TICKET = ROOT / ".scratch" / "tails" / "issues" / "TAIL-238-T3幽灵路径收窄只对真在指路的句.md"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 
 

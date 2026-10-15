@@ -67,13 +67,12 @@ def inventory(root: Path, faces: tuple[Path, ...] = ()) -> dict[str, str]:
         for folder, dirs, names in os.walk(base):
             dirs[:] = sorted(d for d in dirs if d not in EXCLUDED)
             parent = Path(folder)
-            if any((parent/d).is_symlink() for d in dirs):
-                raise OSError('符号链接目录输入范围无法证明')
             relative = parent.relative_to(base).as_posix()
-            if label == 'repo' and (relative == '.codebuddy/work/00-scratch' or
-                                    relative.startswith('.codebuddy/backups/')):
+            if label == 'repo' and (relative in {'.scratch/local', '.artifacts'}):
                 dirs[:] = []
                 continue
+            if any((parent/d).is_symlink() for d in dirs):
+                raise OSError('符号链接目录输入范围无法证明')
             for name in sorted(names):
                 path = parent/name
                 rel = path.relative_to(base).as_posix()
@@ -84,7 +83,7 @@ def inventory(root: Path, faces: tuple[Path, ...] = ()) -> dict[str, str]:
                     raise OSError('符号链接输入范围无法证明')
                 files[label+'/'+rel] = digest(path.read_bytes())
     # 壳章在备份目录，其他备份由常驻 T20 读取，不能用回执跳过。
-    for path in sorted((root/'.codebuddy/backups').glob('*_壳单文件基线.html')):
+    for path in sorted((root/'.artifacts/recovery/backups').glob('*_壳单文件基线.html')):
         files['repo/'+path.relative_to(root).as_posix()] = digest(path.read_bytes())
     return files
 
@@ -113,11 +112,11 @@ def input_signature(rel: str, args: list[str], files: dict, context: str) -> str
     """已证输入包含整个代码/配置/交付面；未证输入返回 None，必须运行。"""
     if rel in CODE_ONLY:
         selected = {n: h for n, h in files.items() if n.startswith((
-            'repo/tools/', 'repo/backend/', 'repo/ops/', 'repo/docs/', 'face')) or
-            n in {'repo/.env', 'repo/.env.example', 'repo/.gitignore', 'repo/.gitattributes'}}
+            'repo/tools/', 'repo/backend/', 'repo/ops/', 'repo/docs/', 'repo/.scratch/tails/', 'repo/.scratch/legacy-active/', 'face')) or
+            n in {'repo/.env', 'repo/.env.example', 'repo/.gitignore', 'repo/.gitattributes', 'repo/AGENTS.md'}}
     elif rel == 'tools/audit/shell_verify.py':
         selected = {n: h for n, h in files.items() if n.startswith((
-            'repo/tools/', 'repo/backend/', 'repo/.codebuddy/backups/'))}
+            'repo/tools/', 'repo/backend/', 'repo/.artifacts/recovery/backups/'))}
     elif rel == 'tools/audit/mut_cover.py':
         selected = {n: h for n, h in files.items() if n.startswith('repo/tools/') or
                     n == 'repo/artifacts/变异覆盖台账.md'}
@@ -362,12 +361,12 @@ def selftest(*, dependencies=True) -> None:
         assert not session().required('pytest', pytest_args), 'pytest 同输入可复用'
         for name in ('artifacts/acc_results.json',
                      'backend/.codebuddy/results.json',
-                     '.codebuddy/work/00-scratch/result.json'):
+                     '.scratch/local/result.json'):
             product = root/name
             product.parent.mkdir(parents=True, exist_ok=True)
             product.write_text('product changed', encoding='utf-8')
             assert not session().required('pytest', pytest_args), '产物变化不能让 pytest 重跑'
-        assert not any(n.startswith('repo/.codebuddy/work/00-scratch/')
+        assert not any(n.startswith('repo/.scratch/local/')
                        for n in inventory(root)), 'scratch 已由 inventory 排除'
         for name in ('backend/app/web/index.html', 'backend/tests/test_theme.py',
                      'tools/audit/syntax_audit.py'):

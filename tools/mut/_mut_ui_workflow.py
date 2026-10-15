@@ -66,7 +66,7 @@ def static_checks():
         shell_api._scan_src.cache_clear()
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='tmp-ui-mut-',dir=ROOT/'.codebuddy/work/00-scratch') as folder:
+    with tempfile.TemporaryDirectory(prefix='tmp-ui-mut-',dir=ROOT/'.scratch/local') as folder:
         web=Path(folder)/'web';shutil.copytree(WEB,web)
         normal=run(web)
         if normal.returncode:print(normal.stdout+normal.stderr);return 1

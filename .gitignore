@@ -1,11 +1,7 @@
-# ===== 凭据（必须进 .gitignore）=====
+# 凭据、依赖、缓存和运行产物；规则保持真实配置，项目资料随仓保存。
 .env
 *.env
 !.env.example
-# ⭐ i8 Cookie 磁盘缓存同样是**凭证** —— 其忽略规则见下方「产物体与日志」段
-#   （那儿排在 `artifacts/*` 之后 ⇒ 是**真正定夺**的那条，`git check-ignore` 会点到它）。
-
-# ===== Python =====
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,88 +15,27 @@ build/
 .ruff_cache/
 htmlcov/
 .coverage
-
-# ===== 产物体与日志（可再生成，不单独备份）=====
 artifacts/*
 !artifacts/.gitkeep
-# ⭐ i8 Cookie 磁盘缓存是**凭证** —— 随 `artifacts/*` 忽略；再显式钉一次（排在其后 ⇒ 由它定夺）
 artifacts/i8_cookie/
 logs/*
 !logs/.gitkeep
-
-# ===== 打印/渲染临时件 =====
 .edge_profile/
 .sigcache/
 .cache/
 output/
-
-# ===== 自检 / 一次性脚本的**暂存区**（⚠️ 见 .codebuddy/plans 里的「临时脚本放哪」）=====
-# ⚠️⚠️ 存在的唯一理由：**`%TEMP%` 在工作区之外** ⇒ 凡读写它的命令每条都要**走审批**，
-#   而审批弹窗常常没弹出来就超时 ⇒ 命令被取消、还留下垃圾文件（2026-09-20 实测踩过）。
-#   ⇒ 一律把一次性脚本写进 `.codebuddy/work/00-scratch/`（**工作区内** ⇒ 免审批），清理用编辑器 Delete（不走 shell）。
-# ⛔ 别改成 `%TEMP%`；⛔ 也别把一次性脚本提交进来（**忽略规则在本文件末尾那一段**）。
-# ⚠️ 2026-10-01（`TAIL-204` 第 7 步）**删掉**原来这儿的 `.workbuddy/scratch/` —— 那条规则**一直在藏东西**：
-#   它把**搬家遗留的旧活区**整棵藏住了 ⇒ `git status` 干净、盘上却还有 13 件（含 6 件留痕 + 3 张探针 xlsx）。
-#   ⇒ 第 7 步已把 `.workbuddy/` **整棵清掉**：留痕件归位到 `.codebuddy/backups/_归档-旧临时区-20261001/`（**已不在仓内**；此处保留当时的处置记录）、
-#   探针垃圾删掉；替代者 `.codebuddy/work/00-scratch/` 另有规则管（见文末）。
-# ⭐ 教训：**忽略规则会让"盘上有、git 看不见"** —— 删一条 ignore 之前，先 `ls` 一眼那个路径。
-
-# ===== 产品资料里的**非源码大件**（盘上保留 · ⛔ 不进版本库）=====
-# `delivery/PRD素材包-20260911/i8一键打印/` = 旧实现时代的 **PyInstaller 打包件**（1049 件 / ≈21.8 MB，
-#   `.exe` ＋ `_internal/` 运行库 ＋ `反解件/`）。⛔ 不提交二进制 —— 与 `ops/nssm/` 同一条理由。
-#   ⚠️ **盘上必须留着**：《PRD素材包 清单.md》§2.4/§2.6 与 `docs/requirements/PRD/00-总览.md` 都把它列为
-#      「打印模块的可运行参考」⇒ 移走会让那两处指针断链（属改产品资料，本仓不擅自做）。
-#   ⇒ 新机需要时**从本机工作区整目录拷入**；用途与坑回 `docs/reference/legacy-materials.md`。
 delivery/PRD素材包-20260911/i8一键打印/
-
-# ===== 运维二进制（NSSM · 只在本机用，⛔ 不进版本库）=====
-# 下面这一层目录是 `ops/nssm_install.ps1` 的**默认查找位**（M7-A 服务化用）—— 二进制本体不随仓走
-# （⚠️ 所以这里**不点名具体文件名**：新机上它压根还没被下载下来，点名就是一个"将来才存在"的死指针）。
-# ⛔ 不提交二进制：新机重建时照 `docs/guides/operations.md` 的「NSSM 获取」下载一次即可。
 ops/nssm/
-
-# ===== 前端 =====
 node_modules/
 .vite/
 *.local
-
-# ===== 编辑器 / 系统 =====
 .idea/
 .vscode/
-# ⭐ IDE 侧跨会话工作记忆（`memory/`）—— 属于本机上下文，⛔ 不进版本库
-# ⭐⭐ **例外**（2026-09-27）：`.codebuddy/rules/` = **项目规则**（《前端设计守则》的入口）——
-#    它是**共享资产**（团队与接手的人必须同一套规矩）⇒ 随仓走。
-# ⭐⭐ **例外2**（2026-09-28）：`.codebuddy/skills/` = **项目技能**（如 `docs-audit` 文档审计工作流）——
-#    同理是**共享资产**（接手的人该有同一套审计流程）⇒ 随仓走。
-#    ⚠️ 必须写成 `.codebuddy/*`（而不是 `.codebuddy/`）—— 否则 git **根本不下钻这个目录**，
-#    下面的 `!` 例外永远不生效（忽略规则的老坑，实测踩过）。
-# ⭐⭐ **例外3**（2026-10-01 · `TAIL-204` 第 1 步）：`.codebuddy/plans/` ＋ `.codebuddy/work/` = **治理层**
-#    （计划/台账/交接 ＋ 五区设计件）—— 它们是本仓的**唯一状态源** ⇒ 随仓走。
-#    ⚠️ 同批把 `.workbuddy/` 的那三个子夹搬了过来（`memory/` 的搬运在第 2 步，见 §四 的 ① 决定）。
-#    ⚠️ 子夹内的例外**照旧**：`.codebuddy/work/00-scratch/` 与 `.codebuddy/backups/` 仍被忽略（见本文件末尾）。
-.codebuddy/*
-!.codebuddy/rules/
-!.codebuddy/skills/
-!.codebuddy/plans/
-!.codebuddy/work/
-# ⭐⭐ **例外4**（2026-10-01 · `TAIL-204` 第 2 步）：`.codebuddy/memory/` = **工作记忆随仓走**（用户裁定 ①）——
-#    注入档 `MEMORY.md` ＋ 分册 `细则.md` ＋ 逐日日志 `journal/`。⚠️ 它们此前在 `.workbuddy/memory/` 且**不进库**；
-#    第 2 步整体并过来后**进 git**（有版本保护 —— 也是"宿主侧目录可能被顺手清理"的缓解）。
-!.codebuddy/memory/
 *.swp
 *~
 Thumbs.db
 desktop.ini
 
-# ⚠️ 刻意不排除的：
-#   .codebuddy/   —— 工作区治理目录（计划 / memory / 交接提示词），随仓走
-#   frontend/dist/ —— D7 已定案：构建产物入仓（部署机免 Node）
-
-# ===== 2026-09-22 文档架构审计新增 =====
-# ⚠️⚠️ 2026-09-24 修：这两行原先把注释写在**同一行**（`路径   # 说明`）—— `.gitignore`
-#   **不支持行内注释** ⇒ 整行成了"匹配不到任何东西的模式" ⇒ scratch 与 backups **一直没被忽略**
-#   （实测 `git check-ignore -v` 返回 rc=1；而 `artifacts/*` 那行 rc=0 ⇒ 差别就在注释位置）。
-#   后果：`git add -A` 会把 **83 件 scratch 临时件 ＋ 壳基线备份**一起提交进版本库。
-#   ⇒ 本文件里 ⛔ **注释一律独立成行**（`#` 必须在行首）。
-.codebuddy/work/00-scratch/
-.codebuddy/backups/
+# 本机恢复现场与临时输出；活动票及规格不整体忽略。
+/.artifacts/
+/.scratch/local/
