@@ -118,39 +118,6 @@ def test_独立接口按全部纳入合同导出_判版不受不纳入行影响(
             s.rollback()
 
 
-@acc("ACC-JC-IMPORT-001", "001-05")
-def test_旧付款列明确不导入_历史快照不能恢复已取消字段():
-    import json
-    from app.core.db import session_scope
-    from app.mod01_projects.repository import create_project
-    from app.mod11_jc import excel_parse, imp_batch, service
-    from app.mod11_jc.models import JcContract, JcImportBatch, JcImportUndo
-
-    mapping = excel_parse.map_columns(["供应商合同总价", "详细付款方式", "备注"])
-    assert mapping["fields"] == {"contract_amt": 0, "remark": 2}
-    assert mapping["ignored"][0]["label"] == "详细付款方式"
-    with session_scope() as s:
-        try:
-            p = create_project(s, project_type="normal", name_full="__336回滚__", warehouse_name="__336回滚__", phid="")
-            s.flush()
-            row = JcContract(project_id=p.id, material_name="新材料", method="", remark="新备注", contract_amt=100)
-            s.add(row)
-            s.flush()
-            before = {k: str(getattr(row, k) or "") for k in imp_batch.UNDO_COLS}
-            before.update(material_name="原材料", remark="原备注", method="旧付款方式")
-            after = {**before, "material_name": "新材料", "remark": "新备注", "method": "另一旧值"}
-            s.add(JcImportBatch(batch_no="JC-336-LEGACY", project_id=p.id, project_key="__336回滚__", status="active"))
-            s.add(JcImportUndo(batch_no="JC-336-LEGACY", contract_id=row.id,
-                               before_json=json.dumps(before), after_json=json.dumps(after), invoice_ids="[]"))
-            s.flush()
-            out = imp_batch.rollback(s, "JC-336-LEGACY")
-            assert out["restored"] == 1 and out["drifted"] == []
-            assert row.material_name == "原材料" and row.remark == "原备注" and row.method == ""
-            assert "method" not in service.build_detail(s, row.id)
-            assert not service.act_update_contract(s, contract_id=row.id, method="不应写入")["ok"]
-            assert row.method == ""
-        finally:
-            s.rollback()
 
 
 @acc("ACC-JC-UI-001", "001-16")

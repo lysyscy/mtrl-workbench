@@ -59,10 +59,8 @@ DUP_FAMILIES: tuple[DupFamily, ...] = (
         owner_files=("backend/app/core/money.py",),
         copies=(
             ("backend/app/mod03_notice/notice_pay_actions.py", "parse_amount"),
-            ("backend/app/mod05_flow/importer.py", "parse_amount"),
             ("backend/app/mod09_fee/domain.py", "parse_amount"),
             ("backend/app/mod11_jc/domain.py", "parse_amount"),
-            ("backend/app/mod11_jc/import_service.py", "_amount_key"),
         ),
     ),
     DupFamily(

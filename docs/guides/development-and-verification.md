@@ -7,68 +7,30 @@
 
 ---
 
-## 一、⭐ 导入四域：**范围与匹配**（`TAIL-106` 查清于 2026-09-26 · **同当日落地**）
+## 一、现行导入：范围与匹配
 
-> ⚠️ **本节已按落地后的现状更新**（同日）：原来记的"选项目在 ③""对号没有只读出口""默认预选（未修）"
-> 都**已过时** —— ⛔ 别再按旧版接续。落地明细见项目侧 `docs/status.md` §15 §四 的 `TAIL-106` 行。
+现行导入保留付款计划（m04_plan）、过程资料（m06_proc）及其既有机械费报表（m06_mech_report）。历史付款流水与集采Excel导入已退出运行注册，专属源码、旧测试与原说明见 docs/archive/retired-imports-20261015/README.md。
 
-- ⭐⭐ **落地后的现状（2026-09-26）**：**范围栏（项目／归属年月／截止核算月）画在 ①「选域与文件」**，
-  ③ 只留**只读回显**「本批数据将写入：…」；**不预选项目**（`m06`/`m11` 没选 ⇒ ④ 置灰 ＋ `ACT.impCommit` 兜底）；
-  **`m11` ③ 就报「配上/配不上」**（`match_and_apply(dry_run=True)` ＋ `preview` 钩子）；**`m04` ③ 报项目匹配盘点**
-  （接上现成的 `match_summary`）；**`m06` 的截止核算月跟着所选项目换**（新增 `repository.load_cutoffs`）。
-  ⚠️ 通用面 `Hooks.preview` 也收 `options`（与 `commit` 同规矩、按签名判）；壳 `impOptions()` 预览与落库共用一份。
-
-- ⭐ 四步：① 选域与文件 → ② 列映射 → ③ 预览校验 → ④ 确认写入（`IMP_STEPS`，`backend/app/web/shell/legacy.js:217`）。
-- ⭐⭐ **范围 = 两"逐项目"、两"可全项目"**
-
-  | 域 | 范围 | 依据 |
-  |---|---|---|
-  | 付款计划·材机费 `m04_plan` | ✅ **可全项目一起**（每行自带「项目」列，逐行按名字对档案；批次单位 = **年月**） | `mod04_plan/imp_spec.py:101` `attach_projects` |
-  | 历史付款流水 `m05_flow` | ✅ **可全项目一起**（按「单据号」对通知书，**不选项目**） | `mod05_flow/imp_spec.py:211`（无 `options`） |
-  | 过程资料 `m06_proc` | ⛔ **必须逐项目**（必填 `warehouse`，写该项目**历史段**） | `mod06_proc/imp_spec.py:71-73` |
-  | 集采台账 `m11_jc` | ⛔ **必须逐项目**（必填 `project_key`，对号范围 = 该项目内） | `mod11_jc/imp_spec.py:134-136` |
-
-- ⭐⭐ **"匹配时机"三件事（易被混为一谈）** —— **2026-09-26 落地后的现状**：
-  **选项目在 ①**（范围栏整条挪进 `head`）· **对号仍在 ④ 落库**时做（口径没动）· **"配上多少"在 ③ 就有**
-  （`m11` 靠 `match_and_apply(dry_run=True)` 只查不写）。
-- ⭐ **对号"只读出口"的真身 = `dry_run`**（不是另写一份匹配）：`import_service.match_and_apply` 是**同一个函数**
-  （一边分类、一边真写 `update_contract` / `fill_contract_amt_if_blank` / 加发票行）⇒ 只给它加开关；
-  ⚠️ 判据钉着「**预览前后那 6 列 ＋ 发票行数逐字节相同**」（`test_imp_m11_api.py`）。
-  判据的"**空才填**"也只留一处：`repository.contract_amt_is_fillable`（读写两侧共用）。
-- ⭐ **`m11` 已有 preview 钩子**（KPI ＋ "没配上的行"明细）；`m05` 早有（「未匹配清单」）；
-  **`m04` 新接上** `importer.match_summary`（当初就是为预览写的、下架后零调用）—— 且**刻意不给 `writable`**：
-  本域**全行都写**（`merge_month` 整批重写），说成"匹配上的行数"是**假话**。
-- ⭐ **"选项目提前"确实便宜**（本次验证）：候选项目在**切域那一刻**就到手（`impSetDomain → impLoadCtx`）
-  ⇒ 只是**换渲染位置**、后端不用动；⚠️ 代价是**真机判词必须同批挪**（`_shell_legacy.py` 的 ①″/③″）。
-- ✅ **默认值诱导已修**：`IMP.wrap` 不再 `|| IMP.org[0]`（**不预选**）；`m06`/`m11` 没选 ⇒ ④ 置灰 ＋ 说明 ＋
-  `ACT.impCommit` 本地兜底。
-- ⚠️ **界面对"范围"交代**：`m06`/`m11` 的 `note` 说清了"要选项目"；**`m04` 只说"要选年月"**（没说**可多项目混一份表**）；
-  **`m05` 没提范围** ⇒ 这两句仍**没补**（属文案项）。
-- ⚠️ **`m06` 截止月错位已修**：改为**每个项目一张表**（`repository.load_cutoffs` ＋ `imp_spec.options` 的 `cutoffs`
-  ＋ 壳按当前选中项取），⛔ 没走"通用面加 query 参数"那条（不动通用面签名）。
-- ⚠️ **改动后要记住的两条**：① 通用面 `Hooks.preview` 也收 `options`（按**签名**判 ⇒ `_takes_options(钩子, base)`，
-  base = 4/3）；② 壳 `impOptions()` = **预览与落库共用的一份上下文包**（⛔ 两处各拼一遍必漂）。
+范围栏在①选域与文件；付款计划按本批归属年月导入，过程资料按项目及截止核算月导入。③显示只读预览，④确认前不写库；过程资料的项目不预选，截止月随所选项目更新。契约由各域imp_spec声明，共享载具由import_kit使用preview_store提供。
 
 ## 二、抓取 / 建档归属 ＋ 集采「谁覆盖谁」矩阵
 
 - ⭐ **付款抓取 = 整批 gate**（`ensure_batch_settled`：一行没走完 ⇒ 整批不入库）；**集采抓取 = 逐行**（未落库全是 `not_archived`）⇒ 别把两域说成一回事。
 - ⭐ i8 常用项目列表**不落本地表** · `plan_archive` **只新建不归档** · 抓取匹配**只看本地档案**（不看名单、不筛 `status`）⇒「在 i8 删项目」**不影响已建档项目入库** ⇒ 要控制入库只能**本地**动手。
 - **建档唯一落库出口** = `repository.create_project`（人工 4 入口 ＋ 自动 2 链 `sync_and_archive` / `recover_unknown_warehouses`）。
-- **集采导入**：锚点 = **合同价**（非合同号）· 只更新不新建 · 只覆盖 6 列 · i8 事实列不碰 · 留空不清空 · ✅ **有整批回滚**（批次号 `JC-…`，回执带出）；⚠️ 仍**无"逐格留痕"**（回滚点只存那 6 列 ＋ 新增发票 id）。
 
-| 列 | i8 抓取 | 手工 Excel 导入 | 页面手改 |
-|---|---|---|---|
-| `contract_date` 合同日期 | 未锁定时随i8刷新；`contract_date_locked` 为真时保留确认日期 | 不碰 | 无通用手改入口；审核修正走专项事务 |
-| `supplier` / `bill_name` / `party_name` | 随i8刷新（`backend/app/mod11_jc/repository.py::upsert_fetched_contracts`） | 不碰 | 不能改 |
-| `material_name` 材料名 | **空才填**（`FETCH_ONLY_WHEN_BLANK` `:321`,`:416-419`） | ✅ 覆盖 | ✅ 能改（白名单 6 列之一） |
-| `tag` 三态 | 只做归一：人工「不纳入」**保留**（`:436-438`） | ⛔ 不碰 | 专门出口 `set_tag` |
-| `contract_amt` 合同金额（供应商价） | 正常甲方刷新；**贸易公司甲方时绝不自动动**（`:420-435`） | ⭐ 两类行为不同（见下） | ⛔ **不能改**（界面无入口） |
-| `trade_co` / `trade_contract_amt` | 贸易公司合同**首次写**（甲方名 / i8 那个价） | ⛔ 不碰 | ⛔ 不能改 |
-| 6 列 `method/remark/arch/arch_no/ret_date` ＋ 材料名 | ⛔ 不碰（人的地盘） | ✅ 覆盖（`import_service.EXCEL_COLS`） | ✅ 能改（`EDITABLE_COLS` = 这 6 列） |
+| 列 | i8 抓取 | 页面手改 |
+|---|---|---|
+| `contract_date` 合同日期 | 未锁定时随i8刷新；`contract_date_locked` 为真时保留确认日期 | 无通用手改入口；审核修正走专项事务 |
+| `supplier` / `bill_name` / `party_name` | 随i8刷新（`backend/app/mod11_jc/repository.py::upsert_fetched_contracts`） | 不能改 |
+| `material_name` 材料名 | **空才填**（`FETCH_ONLY_WHEN_BLANK` `:321`,`:416-419`） | ✅ 能改（白名单字段之一） |
+| `tag` 三态 | 只做归一：人工「不纳入」**保留**（`:436-438`） | 专门出口 `set_tag` |
+| `contract_amt` 合同金额（供应商价） | 正常甲方刷新；**贸易公司甲方时绝不自动动**（`:420-435`） | ⛔ **不能改**（界面无入口） |
+| `trade_co` / `trade_contract_amt` | 贸易公司合同**首次写**（甲方名 / i8 那个价） | ⛔ 不能改 |
+| 5列 `remark/arch/arch_no/ret_date` ＋ 材料名 | ⛔ 不碰（人的地盘） | ✅ 能改（`EDITABLE_COLS` = 上述可编辑列） |
 
 合同日期保护由 `backend/app/mod11_jc/repository.py` 执行，判据为 `backend/tests/test_jc_contract_date_lock.py` 与 `backend/tests/test_jc_contract_date_transaction.py`；TAIL-313的90条审核修正及恢复证据回原票。锁定日期是已批准的专项修正范围，不扩大为全部i8事实字段可手改。
 
-- ⭐⭐ **2026-09-26 用户裁定「方案②」（贸易公司合同的导入对号）**：**正常合同** ⇒「合同金额」只用来**对号**、数字一个不改；**贸易公司合同**（那格按设计是空的 —— i8 里没这个数）⇒ 改用「**贸易公司合同金额**」当钥匙（对号 Excel「贸易公司合同总价」），对上后把 Excel「**供应商合同总价**」写进「合同金额」、**空才填**；出口 = `repository.fill_contract_amt_if_blank`，⛔ 不走 `update_contract`。
 - ⚠️ **历史坑**：抓取时甲方还没分类 ⇒ 价落进「合同金额」；**改分类不回头重算**（`service.py:335-337`），而重抓**只补 trade 两列、绝不碰合同金额** ⇒ 那批行（实测 27 条）必须**先清空**才对得上；已清（备份 `.artifacts/recovery/backups/jc_trade_amt_clean_2026-09-26.json`）。
 - ⚠️ 《说明书》§6.4.1 原写「贸易公司名 / 贸易公司合同金额 = 手工」—— **2026-09-26 用户裁定废掉**（以抓取自动落为准），已改 3 处（备份 `.artifacts/recovery/backups/说明书-before-贸易公司手工口径-2026-09-26.md`）。
 - ⚠️ **收款端**：`EDITABLE_COLS` 只许放**界面上真有入口的列** —— "白名单允许" ≠ "界面能改"（2026-09-26 我混为一谈，被用户当场纠正）。

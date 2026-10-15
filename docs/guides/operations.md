@@ -12,6 +12,7 @@ Agent协议、工程正文、产品需求和状态已在docs固定职责位置�
 | docs/architecture.md | 运行结构、分层边界、共用工程约束（含查询文本与Excel机械读取）与删改保护；改模块边界或共用内核时读。 |
 | docs/architecture/modules.md | 模块映射及剔除规则/人工指认/模板填充的实现约束；定位模块或改这些能力时读。 |
 | docs/guides/deployment.md | 本机部署与初始化入口；查部署步骤或恢复边界时读。 |
+| docs/guides/database-backup.md | 本机每日两库备份任务、成功/失败回执、校验与恢复边界；检查或调整备份时读。 |
 | docs/reference/changelog.md | 部署节点的版本变化；核对版本行为时读。 |
 | docs/requirements.md | 仓内 `delivery/` 产品资料清单；找业务规则时先定位这里。 |
 | docs/guides/document-governance.md | 治理口径主人、引用与归档衔接；动文档结构时读。 |

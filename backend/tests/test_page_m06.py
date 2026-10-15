@@ -206,7 +206,7 @@ def test_核对报告列出不回落i8的月份():
 
 
 @acc()
-def test_预览暂存不落库且两个导入页共用同一载具():
+def test_预览暂存不落库且过程资料使用通用载具():
     token = preview_store.save({"rows": [{"ym": "2026-03"}]})
     assert preview_store.load(token)["rows"] == [{"ym": "2026-03"}]
     # ⚠️ 「取不到」这条分支要用**形态合法但不存在**的 token 才测得到 ——
@@ -215,27 +215,10 @@ def test_预览暂存不落库且两个导入页共用同一载具():
         preview_store.load("deadbeefdeadbeef")
     with pytest.raises(MustReportError):
         preview_store.load("../etc/passwd")            # 路径穿越 ⇒ 直接拒
-    # `MOD-05` 的付款导入走**同一个**载具（此前是它自己的一份 `_dump/_load`）
-    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：编排函数搬进 `import_api.py`；
-    # ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · **用户裁定 `B`**）：`import_api.py` **连件删除**、
-    #    壳 `V.m05imp` **已下架** ⇒ 付款导入改由**通用面**承接 ⇒ **判词不变**（"付款导入走同一个载具、
-    #    ⛔ 不自带一份暂存"），只把落点换成通用面那一份 —— 后端这半钉两件：
-    #    ① 域钩子确实挂在通用面上（有 `preview` ⇒ 预览也走通用面）；
-    #    ② 域内判定仍是**纯函数**、不依赖会话写（`_plan_of` 可离线跑；`known_notices` 是只读出口）。
-    from tests.shell_src import SHELL                     # noqa: PLC0415
-
-    from app.mod05_flow import imp_spec
-    from app.mod05_flow import importer as m05
-
-    assert imp_spec.HOOKS.preview is not None and imp_spec.HOOKS.commit is not None, \
-        "付款域必须挂在通用面上（否则它就没有导入入口了）"
-    assert "/api/imp/" in SHELL and "impDomain" in SHELL, "壳的付款导入口没接上通用面"
-
-    plan = imp_spec._plan_of([{"_row": 2, "单据号": "FKTZS2026090466", "付款金额": "3000.00",
-                              "付款时间": "2026-08-05", "付款方式": "现汇", "备注": ""}])
-    assert plan.rows[0].amount == Decimal("3000.00")
-    assert plan.rows[0].bill_no == "FKTZS2026090466"
-    assert m05.known_notices(FakeSession({})) == {}
+    from app.mod06_proc import imp_spec
+    from tests.shell_src import SHELL
+    assert imp_spec.HOOKS.preview is not None and imp_spec.HOOKS.commit is not None
+    assert "/api/imp/" in SHELL and "impDomain" in SHELL
 
 
 # ============================================================ 导入页（三步）

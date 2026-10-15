@@ -32,7 +32,6 @@ TEST_FETCH = "tests/test_acc_jc_fetch.py"          # ⭐ M5-6 抓取落库（202
 TEST_ORCH = "tests/test_acc_jc_fetch_orch.py"      # ⭐ M5-6 抓取编排（2026-09-19 追加）
 TEST_PAYLINK = "tests/test_acc_jc_pay_link.py"     # ⭐ M5-5 双向引用（2026-09-19 追加）
 TEST_SUP = "tests/test_acc_sup_match.py"           # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
-TEST_IMPORT = "tests/test_acc_jc_import.py"        # ⭐ M5-8 Excel 解析层（2026-09-19 追加）
 TEST_API04 = "tests/test_i8_contract_api04.py"     # ⭐ API-04 取数层（2026-09-19 追加）
 
 #: 允许被变异的目标文件（判据散在域内核 / 仓储 / 装配 / 模型四件里）
@@ -42,8 +41,6 @@ TARGETS: list[Path] = [
     BE / "app" / "mod11_jc" / "fetch_service.py",      # ⭐ M5-6 抓取编排（2026-09-19 追加）
     BE / "app" / "mod03_notice" / "list_view.py",      # ⭐ M5-5 关联态的**唯一接入点**（2026-09-19 追加）
     BE / "app" / "mod03_notice" / "sup_match.py",      # ⭐ M5-5 供应商自动匹配（2026-09-19 追加）
-    BE / "app" / "mod11_jc" / "excel_parse.py",        # ⭐ M5-8 Excel 解析层（2026-09-19 追加）
-    BE / "app" / "mod11_jc" / "import_service.py",     # ⭐ M5-8 导入服务（2026-09-19 追加）
     BE / "app" / "mod02_i8" / "contract_source.py",    # ⭐ API-04 取数层（2026-09-19 追加）
     BE / "app" / "mod11_jc" / "service.py",
     BE / "app" / "mod11_jc" / "models.py",
@@ -213,14 +210,6 @@ MUTS += [
      "test_先长后短"),                                            # 一个文件里的多个用例按 -k 一起跑
     # ---- M5-8 Excel 解析层（2026-09-19 追加）
     # 合并机械实现已收口；保留调用点靶。隔离执行证据见_mut_excel_reading.py。
-    ("集采未调用共享合并展开（供应商金额支丢失）",
-     "    return fill_merges(out, merges)",
-     "    return out",
-     "test_合并格要按真实合并区铺满"),
-    ("表头探测改回「数**单元格**个数」（被重复列名骗 ⇒ 认成第 3 行）",
-     "        return len({h for v in row for h in HEADER_HINTS if h in str(v)})",
-     "        return sum(1 for v in row for h in HEADER_HINTS if h in str(v))",
-     "test_表头探测按不同词计数"),
     ("幂等键**恒不相等**（重传同一个文件 ⇒ 合同翻倍）",
      "    return (\n        str(row.get(\"contract_date\") or \"\").strip(),",
      "    return (\n        str(id(row)),  # 故意的：每次都不一样",
@@ -261,7 +250,7 @@ def run_one(case: str) -> bool:
         env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
             [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH, TEST_ORCH,
-             TEST_PAYLINK, TEST_SUP, TEST_IMPORT, TEST_API04],
+             TEST_PAYLINK, TEST_SUP, TEST_API04],
             cwd=str(BE), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         )
     return r.returncode == 0

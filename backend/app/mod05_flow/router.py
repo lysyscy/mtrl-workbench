@@ -19,31 +19,13 @@ from pydantic import BaseModel, Field
 
 from app.core.db import session_scope
 from app.core.errors import MustReportError
-from app.import_kit.api import build_router as build_imp_router
-from app.mod05_flow import imp_spec
 from app.mod05_flow import repository as repo
 from app.mod05_flow import service as svc
 from app.mod05_flow.domain import default_flow_period
 # ⭐ `TAIL-283`：导出合计的基数判「生效 / 已撤销」用**域里的常量**（⛔ 别在本文件写 'effective' 字面）
 from app.mod05_flow.models import FLOW_EFFECTIVE
-# ⛔ 历史付款流水导入的**沿革**（别再往回搬）：`import_router.py`（三条 PRG）＋ `import_view.py`（服务端渲染页）
-#    2026-09-21 随「四个暂留件收口」**已删除**；能力搬成 JSON API `import_api.py` ＋ 壳 `V.m05imp`；
-#    ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · **用户裁定 `B`**）：`import_api.py` **连件删除**、
-#    壳 `V.m05imp` 同批下架 ⇒ **本域的导入只剩通用面一条路**（下面那行）。
-# ⚠️ 2026-09-19（`§19` 批 3）：`app.mod05_flow.view`（四个 `render_m05*`）已随四个旧页整体删除（授权 `D18`）
-#    —— ⛔ 别再加回来（共用件已搬进 `import_view.py`，而那个文件 2026-09-21 也已随导入页收口删除 ⇒
-#    要加共用件请放 `mod03_notice/page.py` 或本模块的纯函数件）。
-
 router = APIRouter(tags=["mod05"])
-# ⭐ `TAIL-75` `B5b` 第三步（2026-09-23）：**历史付款流水挂上通用导入面** ——
-#    `/api/imp/m05_flow/{schema,parse,preview,commit,rollback}`（壳的「数据导入」页据此列出本域）。
-#    ⚠️ **落库口径仍是既有出口**：域钩子 `imp_spec.commit` 调的还是 `importer.commit`
-#       （→ `repository.create_flow` → `sync_stat_paid`）⇒ ⛔ 绝不是"两套落库"；
-#       域预览补丁（`imp_spec.preview`）补的也是域内既有判定（`importer` 的单值函数 ＋ `known_notices`）。
-#    ⚠️ 撤旧页**唯一丢掉的**是"按**源表列位置**读"（无表头也能读）这条入口 —— 用户已裁定接受
-#       （判据 `ACC-FLOW-IMPORT-001/001-01` 同批改写）；域内的 `importer.parse_rows`（五列批解析）
-#       **保留**（与 `m06` 撤页时留 `parse_sheet` 同款）：它是域内口径出口、测试仍钉着它。
-router.include_router(build_imp_router(imp_spec.SPEC, imp_spec.HOOKS))
+# 历史付款导入已归档：docs/archive/retired-imports-20261015/README.md。
 
 PageData = Callable[..., dict]
 
@@ -291,8 +273,7 @@ def api_revoke(
 #    ⛔ 别再往本文件加页面路由（`D18` 的口径：新页面 = 新壳 + API）。
 # ⚠️ **唯一例外（⛔ 不许删）**：**三个 PRG**
 #    （`POST /m05/opening` · `/m05/opening/delete` · `/m05/ledger/remark`）**新壳正在用**（另有真机 `_e2e_m05_wired.py`）。
-# ⛔ 「历史付款导入」**已不在这里了**（2026-09-23 用户裁定 `B`：`import_api.py` **已删除**、`V.m05imp` **已下架**
-#    ⇒ 导入走**通用面**，见本文件上方 `build_imp_router` 那段）。
+# 历史付款导入已退出系统，源码与说明在docs/archive/retired-imports-20261015。
 
 
 

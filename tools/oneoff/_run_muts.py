@@ -178,7 +178,6 @@ KEEP_OUT: dict[str, str] = {
     "_mut_archive_chain.py": "靶＝`TAIL-29`-③ 抓取链路接自动建档 · 业务面",
     "_mut_archpick.py": "靶＝`ACC-PRJ-SYNC-001`（档案取数口径）· 业务面",
     "_mut_auth.py": "靶＝`ACC-USR-MGMT-001/001-01`（未登录 ⇒ 无身份）· 业务面",
-    "_mut_b4.py": "靶＝m11 接入建议/校验/记忆三条边界（纪律）· 业务面",
     "_mut_big.py": "靶＝`ACC-RPT-BIG-001`（活动大表）· 业务面",
     "_mut_core_bindings.py": "靶＝`tests/test_core_bindings.py`（core 取数口 ＋ 装配层接线）· 接线断言 pytest",
     "_mut_core_projects.py": "靶＝`TAIL-36` 项目三小件唯一实现 · 业务面",

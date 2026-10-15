@@ -122,7 +122,9 @@ def local_selftest():
     """直接查询真实消费图：相关金额/身份保留，无关UI减少，路由与自动加载不漏。"""
     money = plan(['backend/app/core/money.py'])
     assert 'test_core_money.py' in money.files and 'test_amount_text_parity.py' in money.files
-    assert 'test_ux_numbers.py' not in money.files and 'test_shell_ui_workflow.py' not in money.files
+    assert 'test_ux_numbers.py' not in money.files
+    # 集采浏览器用例经mod11_jc.domain实际依赖金额模块，必须保留。
+    assert 'test_shell_ui_workflow.py' in money.files
     identity = plan(['backend/app/core/identity.py'])
     assert 'test_session_identity.py' in identity.files
     routed = local_scanners(['backend/app/mod03_notice/notice_api_router.py'])

@@ -1,0 +1,229 @@
+# 链路对账 · 认领表（chain_expected.txt）
+#
+# **真源** = `tools/chain_sources.txt` 注册的**每条链路各一节**（不是单一文档的一节）。
+# 契约原文（`PRD/05-任务分解.md` §二）：**「垂直切片（每片 = 一条需求能端到端跑通）」** ——
+#   **切片本来就是"链路"**；执行时被降解成「该切片名下 `ACC-*` 全绿」，而那些判据**全钉在模块内纯函数**上
+#   ⇒ **链路的中间环节没有人守**。本表 = 把"端到端"落成可机读的**认领**。
+#
+# ⭐ **本表覆盖全站 11 条链路**（2026-09-17 补齐剩余 6 条：P2/P3/P4/R/J/X）。
+#   读法：先看 `chain_audit` 的**全站总览**，再看要动的那条链路的逐分支明细。
+#   ⚠️ **零认领 = "没人查过"，不等于"已接通"**。
+#
+# 状态（**只准变短** —— 分支落地了就把状态改成「已接」）：
+#   已接     = 绿：落点存在，**且已核过生产调用方就在这条链路内**（`wiring_audit` 另兜"零调用方"）
+#   接线缺   = **红**：零件写好了，但链路上没人调用它
+#   缺       = **红**：这一步**根本没有落点**
+#   形态不同 = 黄：实现了，但与文档写的那一步**形态不一样** ⇒ **待用户追认**（⛔ 不静默放过）
+#
+# 格式：`<链路>|<分支>|<文档锚（真源里的一段原文，归一化后匹配）>|<落点 path 或 path::名字 或 —>|<判据>|<状态>`
+#   ⚠️ 判据写 `缺：…` ⇒ 该行本身就是一条**待补判据**的缺口（红）；写 `不可断言:…` ⇒ 黄。
+#   ⚠️ 文档锚写**短而独特的原句**（归一化后是子串即可）；写错 ⇒ `C2` 报红，**这正是"文档改了"的哨**。
+# ============================================================
+# ① 建档 / 归属（A/B/C · 真源 = 全自动建档-实施计划 §三）
+A|① 全名已在档案 ⇒ 归集、结束|全名是否已在档案中|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
+A|② 全名命中壳 ⇒ 走链路 C（小微拆解）|全名是否命中某个「壳」|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
+A|③ 启动建档（抓 phid → 抓仓库 → 建档 / 占位）|③ 启动建档|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
+A|③-a 抓不到 phid ⇒ 提示「请加入 i8 常用项目列表」|请将该未建档项目加入 i8 常用项目列表|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
+A|③-b 仓库命中 1 个 ⇒ 建档完成（真实仓库名）|抓到 1 个|backend/app/mod01_projects/archive.py::plan_archive|ACC-PRJ-SYNC-001|已接
+A|③-b 仓库命中多个 ⇒ 列出让用户选，只建选中的那个|列出让用户选，只建选中的那个|backend/app/mod01_projects/archive_pending.py::pick_row|ACC-PRJ-SYNC-001|已接
+A|③-b 仓库一个都没命中 ⇒ 占位名「未建仓-序号」|未建仓-序号|backend/app/mod01_projects/repository.py::next_placeholder|ACC-PRJ-SYNC-001|已接
+A|⭐ **整条链路的触发方**：抓付款通知书时自动走链路 A|付款侧自动建档|backend/app/mod03_notice/router.py::get_fetch_executor|ACC-PRJ-SYNC-001|已接
+A|③-a 子步：抓 phid（常用项目列表）|抓 phid（常用项目列表）|backend/app/mod02_i8/router.py::get_common_project_rows|ACC-PRJ-SYNC-001|已接
+A|③-b 子步：抓仓库信息（仓库列表按全名反查）|抓仓库信息（仓库列表按全名反查）|backend/app/mod02_i8/router.py::get_warehouse_rows|ACC-PRJ-SYNC-001|已接
+# ⚠️ 2026-09-21：落点原写 `backend/app/home/service.py::placeholder` ⇒ **`C3` 报"落点名字在文件里找不到"**。
+#    真因：**看板接真数据（`§19` 批 5）** 把 `home/service.gather` 那六项**删掉了**（看板进壳后
+#    那六项由壳 `V.home` 按已加载行算）⇒ `placeholder()` 这个函数**不存在了**，而本表没跟着改。
+#    ⭐ 这类滞后**不报错、只静默失效**（"以为接在别处"）—— 正是 `C3` 存在的理由；本次就是它抓到的。
+B|① 「陌生仓库」事实留痕（看板瓦片「占位行待扶正」＋ 抓取回执列出）|看板瓦片「占位行待扶正」|backend/app/web/index.html::const ph=PJs.filter(p=>p.name.startsWith('未建仓-'))|ACC-PRJ-AUTO-001|已接
+B|② 自动跑一次「抓仓库名单」同步|自动跑一次「抓仓库名单」同步|backend/app/mod02_i8/sources.py::load_warehouse_rows|ACC-PRJ-AUTO-001|已接
+B|③ 用全名回查占位行：命中 1 条 ⇒ 扶正改名|用**全名**回查占位行|backend/app/mod01_projects/repository.py::promote_placeholder|ACC-PRJ-AUTO-001|已接
+# ⚠️ 2026-09-20：落点原写 `index.html::openPendDialog` ⇒ **C3 报"落点名字在文件里找不到"**。
+#    真因：壳拆分（`P4②` 三刀真拆）时该函数**搬到了 `shell/core.js`**，而本表没跟着改。
+#    ⇒ 凡落点是**壳里的函数名**的，拆分后都要重指一次（⛔ 这类滞后不报错、只静默失效）。
+B|③ 命中多条 ⇒ 弹窗让用户指认|弹窗让用户指认|backend/app/web/shell/core.js::openPendDialog|ACC-PRJ-AUTO-001|已接
+B|③ 未命中 ⇒ 新建行（真实仓库名）|新建行（真实仓库名）|backend/app/mod01_projects/recovery.py::plan_recovery|ACC-PRJ-AUTO-001|已接
+B|④ **无需「重跑」步骤**（导入过程中即同步扶正 ⇒ 不存在"先落库再回头改"）|导入过程中即同步扶正|backend/app/mod01_projects/recovery.py::recover_unknown_warehouses|ACC-PRJ-AUTO-001|已接
+C|壳已建档 · 命中 1 个小微 ⇒ 归集到它 ＋ 关键词去重追加|关键词去重追加|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
+C|壳已建档 · 命中多个 ⇒ 弹窗让用户选（选中后关键词追加）|弹窗让用户选（选中后关键词追加）|backend/app/mod03_notice/router.py::unresolved_notices|ACC-PRJ-OWN-001|已接
+C|壳已建档 · 未命中 ⇒ **弹窗列表**（在建小微 ＋ 每个右侧必填词 ／ 末行「新小微」）|弹窗列表|backend/app/mod03_notice/router.py::unresolved_notices|ACC-PRJ-OWN-001|已接
+C|壳已建档 · 选「新小微」⇒ 抓仓库信息 → 建小微行 ＋ 录关键词|抓仓库信息 → 建小微行 + 录关键词|backend/app/mod03_notice/router.py::assign_ownership|ACC-PRJ-OWN-001|已接
+C|壳未建档 ⇒ 先建壳（走链路 A ③）→ 抓仓库 → 录关键词 → 建具体小微行|先建壳（走链路 A 的 ③）|backend/app/mod03_notice/router.py::get_fetch_executor|ACC-PRJ-SYNC-001|已接
+C|未命中弹窗的**内容①**：在建的具体小微（每个右侧必填框，内容须出现在单据名中）|目前在建的具体小微（每个右侧必填框，内容必须出现在单据名中）|backend/app/mod01_projects/domain.py::candidates_of|ACC-PRJ-OWN-001|已接
+C|未命中弹窗的**内容②**：末行「该项目属于新小微」|最后一行「该项目属于新小微」|backend/app/web/shell/core.js::openOwnDialog|ACC-PRJ-OWN-001|已接
+# ============================================================
+# ② P1 付款通知书：抓 → 剔除 → 分类 → 归属 → 落库 → 列表可见（真源 = 说明书 §4.7）
+P1|① 触发抓取（手动点击 ⇒ 调 i8 拉通知书 · 不走定时）|① 触发抓取|backend/app/mod03_notice/router.py::notices/fetch|ACC-I8-FETCH-001|已接
+P1|② 自动处理 · 剔除（4 类规则 · 命中即不入统计）|② 自动处理|backend/app/mod03_notice/classify.py::is_excluded|ACC-PAY-EXCL-001|已接
+P1|② 自动处理 · 分类（机械 / 集采 / 辅材）|② 自动处理|backend/app/mod03_notice/classify.py::decide_placement|ACC-PAY-CAT-001|已接
+P1|② 自动处理 · 落库（新行 / 已有行走再次导入合并）|再次导入的合并规则|backend/app/mod03_notice/router.py::apply_fetched_row|ACC-PAY-MERGE-001|已接
+P1|③ 人工修正 · 批量改分类（**保护不被覆盖**）|③ 人工修正 ── 批量改分类（保护不被覆盖）|backend/app/mod03_notice/notice_api_router.py::api_category|ACC-PAY-ACTION-001|已接
+P1|归属：项目全名 → 壳 / 具体小微（走链路 A/B/C）|付款项目命中某个壳|backend/app/mod01_projects/domain.py::resolve_ownership|ACC-PRJ-OWN-001|已接
+P1|整批前哨：归属未走完 ⇒ **整批不入库**（§2.7.4）|归属未走完|backend/app/mod01_projects/domain.py::ensure_batch_settled|ACC-PRJ-OWN-001|已接
+P1|⭐ 整批校验**前**先剔掉规则剔除行（§4.2.2「指定项目不在统计范围」⇒ 剔除行不参与整批校验）|指定项目不在统计范围|backend/app/mod03_notice/classify.py::rows_needing_ownership|ACC-PRJ-OWN-001|已接
+P1|列表可见（未归属的行只在「全部项目」下可见）|只在「全部项目」下可见|backend/app/mod03_notice/notice_api_router.py::@api_router.get("/api/m03/notice-list")|ACC-PAY-LIST-001|已接
+# ============================================================
+# ③ P5 批量打印与只导出 PDF：勾选 → 取版式 → 渲染 PDF → IPP 出纸（真源 = 说明书 §4.6 / §4.7 ⑧）
+P5|勾选通知书 → 点「批量打印」（与只导出 PDF **共用同一次勾选**）|勾选通知书 → 点「批量打印」|backend/app/mod03_notice/router.py::get_batch_executor|ACC-PAY-PRINT-001|已接
+P5|取 i8 版式（**两类 `printId` 分流** · 不自绘版式）|取 i8 版式渲染 PDF 并推送打印机|backend/app/core/config.py::print_id_for_bill_type|ACC-PAY-PRINT-001|已接
+P5|版式里「不支持的件」被用到 ⇒ **显式报出**（不静默印错）|取 i8 版式渲染 PDF 并推送打印机|backend/app/mod03_notice/print/template.py::unsupported_in_use|ACC-PAY-PRINT-001|已接
+P5|渲染 HTML → PDF（**全工程唯一渲染入口**）|取 i8 版式渲染 PDF 并推送打印机|backend/app/mod03_notice/service.py::render_notice_html|ACC-PAY-PRINT-001|已接
+P5|签名槽位按审批节点绑定（有槽无数据留空 · 有数据零命中 ⇒ **停单报错**）|取 i8 版式渲染 PDF 并推送打印机|backend/app/mod03_notice/print/signatures.py::check_signature_coverage|ACC-PAY-PRINT-001|已接
+P5|出纸：PDF → **IPP 直投**打印机（失败显式报出）|推送打印机|backend/app/mod03_notice/print/ipp.py::send_pdf|ACC-PAY-PRINT-001|已接
+P5|**只导出 PDF**（与打印共用勾选 · 只落盘、**不投递**）|取 i8 版式渲染 PDF 并推送打印机|backend/app/mod03_notice/service.py::run_batch|ACC-PAY-PDF-001|已接
+P5|打印机地址设置（改完**即时生效·无需重启**）|推送打印机|backend/app/mod03_notice/router.py::set_printer_setting|ACC-PAY-SETUP-001|已接
+# ============================================================
+# ④ P2 付款计划：导入 → 审查 → 手动行 → 勾选（真源 = 说明书 §4.3）
+P2|手动导入 Excel（**导入前先选「年月」** ⇒ 本批归入所选月）|用户手动导入 Excel|backend/app/mod04_plan/importer.py::parse_workbook|ACC-PLAN-IMPORT-001|已接
+P2|项目列**唯一匹配**档案（命中 0 ⇒ 标「未匹配」／多条 ⇒ 标「重名 N 条」）|命中 0 条 → 标「未匹配」|backend/app/mod04_plan/domain.py::match_project|ACC-PLAN-IMPORT-001|已接
+P2|**6 种审查判定**（完全匹配 / 金额不符 / 号查不到 / 无号 / 重复上报 / 超过未付）|比对结果共 6 种|backend/app/mod04_plan/domain.py::audit_rows|ACC-PLAN-AUDIT-001|已接
+P2|判重：同月同单据号（**空单据号不参与判重**）|同一月份内、同一单据号出现 ≥2 次|backend/app/mod04_plan/domain.py::duplicate_keys|ACC-PLAN-NODOC-001|已接
+P2|⭐ **强制通过**（确认无误后放行 · **必须写备注**留痕）|用户确认无误后可强制通过|backend/app/mod04_plan/router.py::act_force|ACC-PLAN-AUDIT-001|已接
+P2|可手改列（付款时间 / 付款方式 / 备注；**单据号只对未匹配行开放**）|单据号只对「未匹配」行开放修改|backend/app/mod04_plan/plan_ui.py::inline_edit|ACC-PLAN-UI-001|已接
+P2|「**再次匹配**」（改完单据号后重判该行）|改完点「再次匹配」重新比对|backend/app/mod04_plan/plan_ui.py::re_match|ACC-PLAN-UI-001|已接
+P2|**手动行**（本地补录 · ⭐ **一样要被审查**）|付款计划要手动行，而且手动行一样要被审查|backend/app/mod04_plan/plan_manual.py::manual_row_payload|ACC-PLAN-MANUAL-001|已接
+P2|按月归档（不同月可重复 · 不去重不覆盖）|按月归档|backend/app/mod04_plan/importer.py::parse_workbook|ACC-PLAN-IMPORT-001|已接
+P2|列表内删除（**先列出影响范围**再确认才执行）|删除前**列出影响范围**|backend/app/mod04_plan/plan_ui.py::delete_impact|ACC-PLAN-UI-001|已接
+P2|「按付款计划勾选」（只按**当月**· 跨月单据一并勾上 · **项目筛选一律不动**）|一键勾选「当月计划」命中的记录|backend/app/mod04_plan/plan_ui.py::window_button|ACC-PAY-PICK-001|已接
+P2|可点窗口 = 每月 10 号→月底（按钮可用性，**不是付款拦截**）|系统不做任何拦截或标记|backend/app/mod04_plan/plan_ui.py::window_button|ACC-PLAN-UI-001|已接
+# ============================================================
+# ⑤ P3 付款执行与欠款：核验 → 批量付款 → 流水 → 状态 → 欠款回算（真源 = 说明书 §4.4 / §4.5）
+P3|核验：**唯一核验项 = 审批状态「已批」**（发票核验 / 先付款特例均不做）|审批状态 = 已批|backend/app/mod03_notice/domain.py::class PayRow|ACC-PAY-VERIFY-001|已接
+P3|批量付款（**勾选若干条 → 一次动作** · 不做逐行付款按钮）|勾选若干条 → 一次动作|backend/app/mod03_notice/domain.py::check_batch|ACC-PAY-BATCH-001|已接
+P3|批次内「移出本次付款」（**已填的付款方式 / 金额不得丢失**）|每行可"移出本次付款"|backend/app/mod03_notice/domain.py::remove_from_batch|ACC-PAY-BATCH-001|已接
+P3|**不可付五类**前置禁用（含 ⭐ 已剔除行 · i8 撤单行 · ⭐ **集采未关联** ⇒ **不得静默少几行**）|「不可付」共五类|backend/app/mod03_notice/domain.py::check_batch|ACC-PAY-BATCH-001|已接
+P3|兜底校验：提交时整批重算，**任一不过 ⇒ 整批不产生任何流水**|任一校验不过 → 整批不产生任何流水|backend/app/mod03_notice/domain.py::confirm_batch|ACC-PAY-BATCH-001|已接
+P3|付款登记：**一次付款 = 一条独立流水**（多次付款允许）|每次付款记一条独立流水|backend/app/mod05_flow/repository.py::create_flow|ACC-FLOW-LED-001|已接
+P3|实际付款方式：默认取**付款计划**、取不到兜底「现汇」|默认取自付款计划的付款方式|backend/app/mod05_flow/repository.py::_method_of|ACC-FLOW-LED-001|已接
+P3|付款状态判定：**已付金额（流水汇总）≥ 审批金额 ⇒ 已付清**（只有两态）|已付金额（流水汇总） >= 审批金额？|backend/app/mod05_flow/domain.py::payment_status|ACC-FLOW-LED-001|已接
+P3|撤销付款流水（**必须填撤销原因** · 只影响该条）|必须填撤销原因|backend/app/mod05_flow/domain.py::revoke_flow|ACC-FLOW-PST-001|已接
+P3|⭐ **「统计付款金额」重算唯一出口**（付款 / 撤销 / 历史导入三处统一调用）|重算逻辑只写一处|backend/app/mod05_flow/repository.py::sync_stat_paid|ACC-PAY-STAT-002|已接
+P3|**欠款回算**（辅材欠款 / 机械欠款 实时重算）|欠款回算 ── 辅材欠款 / 机械欠款 实时重算|backend/app/mod05_flow/domain.py::debt_by_category|ACC-PAY-STAT-001|已接
+P3|逐月欠款台账（**按项目 · 按月一行**）|逐月欠款台账（按项目 · 按月一行）|backend/app/mod05_flow/domain.py::build_ledger|ACC-FLOW-DEBT-001|已接
+P3|集采实际供应商（§6.6.3 **受限子串匹配**自动预填 + 人工可改）|由 §6.6.3 的受限子串匹配自动预填|backend/app/mod03_notice/sup_match.py|ACC-JC-PAY-001|已接
+# ============================================================
+# ⑥ P4 历史付款流水导入：列契约 → 匹配 → 预览 → 幂等 → 核对报告（真源 = 说明书 §4.4.6 / §4.4.7）
+P4|列契约 A–E（导入界面**必须逐列提示**填什么）|A 单据号 · B 付款金额 · C 付款时间 · D 付款方式（可空）· E 备注|backend/app/mod05_flow/importer.py::parse_rows|ACC-FLOW-IMPORT-001|已接
+P4|按单据号匹配；**匹配不到 ⇒ 必须列入「未匹配清单」**（绝不静默丢弃）|匹配不到 ⇒ 必须列入「未匹配清单」|backend/app/mod05_flow/importer.py::split_by_match|ACC-FLOW-IMPORT-001|已接
+P4|逐行校验（号非空 · 金额 >0 · 时间可解析）⇒ 否则进**异常清单**（不入库、只报告）|否则进**异常清单**（不入库、只报告）|backend/app/mod05_flow/importer.py::parse_rows|ACC-FLOW-IMPORT-002|已接
+P4|付款方式归一四类，归不进 ⇒ 记「其他」＋ 原文留备注；**空 ⇒ 存空**（⛔ 不得编造）|未识别的取值要在预览里**列出来给人过目**|backend/app/mod05_flow/importer.py::normalize_method|ACC-FLOW-IMPORT-002|已接
+# ⚠️ 2026-09-21（`§19` 四个暂留件收口）：导入页的服务端渲染件已删 ⇒ 落点改指**预览四块的产出函数**
+#    （`preview_of` 是纯函数、壳 `V.m05imp` 逐块渲染）—— 口径一字未变（还是"将写入 / 未匹配 / 异常 / 未识别"）。
+# ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · **用户裁定 `B`**）：旧页 ＋ `import_api.py` **连件删除**
+#    ⇒ 落点再换一次到**通用面的域预览补丁**（`imp_spec.preview`，它产 `writable` ＋ `kpis` ＋
+#    未匹配/异常/未识别三张表；壳由 `lgBlocks()` 通用渲染）—— **判词一字未改**，还是那四项。
+#    ⚠️ 上面两行的 `importer.parse_rows` **保留**（五列批解析仍在、测试仍钉着它），与 `m06` 撤页时留 `parse_sheet` 同款。
+P4|⭐ **落库前必须预览**（将写入 N 条 / 未匹配 / 异常 / 未识别方式 四项）|显示四项|backend/app/mod05_flow/imp_spec.py::preview|ACC-FLOW-IMPORT-002|已接
+P4|⭐ **幂等**：每次记批次号；**同批重导 ⇒ 先整批回滚**再写新批|同批重导 ⇒ 先整批回滚|backend/app/mod05_flow/importer.py::next_batch|ACC-FLOW-IMPORT-003|已接
+P4|整批回滚（该批流水**置撤销 ＋ 原因**，**留痕、不物理删**）|整批回滚|backend/app/mod05_flow/repository.py::rollback_batch|ACC-FLOW-IMPORT-003|已接
+P4|留痕：记**导入人**与**批次号**（来源标记 `imported`，与 `manual` 区分）|记录**导入人**与**批次号**|backend/app/mod05_flow/importer.py::commit|ACC-FLOW-IMPORT-003|已接
+P4|⭐ **核对报告**：该批涉及月份里、**一条流水都没有的通知书**（供发现 Excel 漏记）|一条流水都没有的通知书|backend/app/mod05_flow/repository.py::notices_without_flow|ACC-FLOW-IMPORT-002|已接
+# ⭐⭐ 2026-09-20 逐条核过（本条**保持红**，但**从"待核"变成了精确工作项**）：
+#    真源 §4.4.6 要**三半**：① **流水照记** ② **挂提醒** ③ **报告单列**。
+#    ① ✅ 有落点：`mod05_flow/repository.py:169` 明写「流水驱动写入**不受"手改拦截"约束、也不封顶** ——
+#       实付 > 审批金额是既成事实，照实写入**并由调用侧挂提醒**（§4.4.6）」
+#    ② ⚠️ **缺**：全仓**找不到"超付提醒"**（`mod03_notice/merge.py` 那套 alerts 是「再次导入越界提醒」，
+#       ⛔ 不是超付提醒 —— 两者形似易混，别当成同一个）
+#    ③ ⚠️ **缺**：`report_export/` 里**零**「超付」字样 ⇒ 报告单上没有这一列
+#    ⇒ ⛔ 所以我**没把它改绿**：三半只落实了 1 半。⭐ 但这条现在**可执行**了 ——
+#      要做的事很明确：给「流水驱动写入」那条路补 ②，并给报告单补 ③。
+#    ⚠️⚠️ **落点列只能写「真实存在的路径」或 `—`**（`chain_audit` 的 C3 会去 `check_target`）——
+#    我一开始把括号说明写进了落点列 ⇒ 被判「落点不存在」，凭空多出 2 条红。
+#    ⇒ 散文一律放 `#` 注释里，⛔ 别塞进字段。
+# ⭐ 2026-09-21：真源那一句要**三半**（① 流水照记 ② 该单挂提醒 ③ 核对报告单列），逐半对账如下 ——
+#   ① 流水照记 ✅ 早已有落点（`repository.sync_stat_paid` 明确"照实、不封顶"）。
+#   ② 该单挂提醒 ✅ **本次补上**：判定 `NoticeRow.is_overpaid`（派生、不落库）→ API `is_overpaid`
+#      → 壳 `adaptNotice.over` → `V.m03` 的「已付金额」那格渲「超付」标记。
+#      ⚠️ 补之前它是**假绿**：判据 `ACC-PAY-STAT-002/002-06` 的判词含「＋ 该单挂提醒」，
+#         而绑它的测试只断言了"照实写入"（那条测试自己的 docstring 都写着"只保证不被封顶"）
+#         ⇒ 判据绿着、功能缺着。本次已把测试补成**两半都断言**（反向灵敏度 13/13 变红）。
+#   ③ 核对报告单列 ✅ **本次补上**（`§19` 四个暂留件收口那一轮 —— 原先排期在 M6，因为核对报告住在
+#      【历史付款流水导入】暂留页上，"现在做等于做完就搬"）：新增 `repository.notices_overpaid`
+#      （该批月份里 **实付合计 > 审批金额** 的通知书，`>` 不是 `>=` —— 与 `NoticeRow.is_overpaid` 同判据）
+#      → 挂进 `importer.check_report` 的 `overpaid` / `overpaid_count` → 核对报告里
+#      **单列一张「超付清单」**（金额 / 实付 / 超出三列都摆出来）。
+#      ⭐ 2026-09-23（`B5b` 第三步 · 用户裁定 `B`）：渲染落点从壳 `V.m05imp`（已下架）换成
+#      **通用面的域补充区块**（`imp_spec._report_blocks` → 壳 `lgBlocks()` 通用渲染）—— 口径未变。
+#   ⇒ 状态 `已接`（三半齐）；⚠️ 落点列只写**真实存在的路径**（C3 会去 `check_target`），散文留在注释里。
+#   ⚠️ 判据 = `ACC-PAY-STAT-002`（002-06 判词本来就写着「＋ 该单挂提醒」）；报告单列那一半的
+#      机械落点在 `tests/test_acc_flow_import.py::test_导入后给出核对报告...` 与 `preview_of` 的断言里。
+P4|**超付处置**：实付 > 审批金额 ⇒ **流水照记**（事实不得篡改）＋ 挂提醒 ＋ 报告单列|流水照记|backend/app/mod05_flow/repository.py::sync_stat_paid|ACC-PAY-STAT-002|已接
+# ============================================================
+# ⑦ R 报表域：抓 → 解析 → 落库 → 过程表 / 大表 → 导出成品（真源 = 说明书 §5.9）
+R|① 触发导出（**手动点击** ⇒ 系统抓 i8 · 不走定时）|① 触发导出|backend/app/mod07_setl/fetch_service.py::run_fetch|ACC-SETL-FETCH-001|已接
+R|① 库存单据明细抓取（另一条数据源 · `API-03`）|③ 库存单据明细|backend/app/mod08_inv/fetch_service.py::run_fetch|ACC-INV-FETCH-001|已接
+R|② 收发结存月报 · **分仓库表**（按仓库聚合）|② 收发结存月报|backend/app/mod07_setl/domain.py::warehouse_rows|ACC-SETL-001|已接
+R|② 收发结存 · ⛔ **打包 zip 交资产处**（成品文件写出）|② 收发结存月报|backend/app/report_export/setl_export.py::build_zip|ACC-X-EXP-001|已接
+R|② **焊材 / 气体提取** ⇒ 活动大表|焊材/气体提取|backend/app/mod07_setl/extract.py::extract_amounts|ACC-RPT-BIG-001|已接
+R|③ 库存单据明细总表（含**与项目交来的 Excel 对账 → 差异 → 打调整单**留痕）|与项目交来的 Excel 对账|backend/app/mod08_inv/domain.py::filter_rows|ACC-INV-001|已接
+R|③ **特殊费用月报表**（实际是一张独立新报表）|特殊费用月报表|backend/app/mod09_fee/domain.py::total_amount|ACC-FEE-MON-001|已接
+R|④ **生成过程资料（每项目一份）** ⇒ 每月 5–10 号报分公司工程科|④ 生成过程资料（每项目一份）|backend/app/mod06_proc/domain.py::material_by_month|ACC-RPT-PROC-001|已接
+R|经济活动分析大表（焊材/气体**自动填** ＋ 其余**手填**）|经济活动分析大表|backend/app/mod07_setl/big_domain.py::manual_cell|ACC-RPT-BIG-001|已接
+R|经济活动分析大表 · ⛔ **按模板导出**（会上用）|按模板导出|backend/app/report_export/service.py::export_big|ACC-RPT-BIG-001|已接
+R|每半年 **三账比对** ⇒ 能修的修（**在库存单据打调整单**）→ 差异由**系统产出**（表①原始 / 表②调整后 / 差异表）|三账比对|backend/app/mod08_inv/domain.py::make_adjustment|ACC-DIF-REG-001|已接
+# ============================================================
+# ⑧ J 集采域：抓合同 → 两态 → 发票/付款子表 → 结算欠款 → 台账（真源 = 说明书 §6.2）
+# ⭐⭐ 2026-09-20 **专项核对**（这一节曾整节标「缺」，现逐条核过 ⇒ 全部改「已接」）。
+#    ⚠️ 本行原来写的是「`app/mod11_jc/` 只有 `__init__.py`（空模块）⇒ 下列分支全部没有落点」——
+#    **该前提早已不成立**（现有 10 件 ≈ 170 KB：api / domain / excel_parse / fetch_service /
+#    import_service / models / repository / router / service）⇒ 下面 6 条**逐条**核了
+#    「落点存在」＋「生产调用方就在这条链路内」（本表规则要求的那两半），全部成立 ✓
+#    ⇒ 原「缺：需补判据（链路级）」亦过时：三条链路级判据**都在且全绿**
+#      （`ACC-JC-FETCH-001` 10/10 · `ACC-JC-PAY-001` 7/7 · `ACC-JC-UI-001` 15/15）。
+#    ⚠️⚠️ **教训（我差点判错）**：核对 L127「纸质合同收发」时，我拿**文档的措辞**
+#      （「收发 / 寄回 / 盖章 / 存档 / 纸质」）去搜代码 ⇒ **一处都没搜到**，差点判定「真缺」。
+#      而实现的命名是 `arch` / `arch_no` / `ret_date` ⇒ **搜代码要用实现的命名，⛔ 不是文档的用词**。
+J|集采域**整条链路**（抓合同 → 两态 → 发票/付款子表 → 结算欠款 → 台账）|本系统只覆盖「合同签订后」的台账管理环节|backend/app/mod11_jc/router.py|ACC-JC-UI-001|已接
+J|抓采购合同（`API-04` · **仅人工点击**）|两态标记|backend/app/mod11_jc/fetch_service.py::run_fetch|ACC-JC-FETCH-001|已接
+J|集采台账**两态标记**（信息化抓取）|集采台账|backend/app/mod11_jc/domain.py::tag_after_fetch|ACC-JC-FETCH-001|已接
+J|发票登记（供应商开票 → 项目走流程 → **科室见票登记台账**）|见票登记集采台账|backend/app/mod11_jc/service.py::act_add_invoice|ACC-JC-UI-001|已接
+J|合同收发登记（**纸质合同**：供应商寄来 → 送资产处盖章 → 存档 ＋ 寄回）|纸质合同|backend/app/mod11_jc/service.py::act_update_contract|ACC-JC-UI-001|已接
+J|付款引用与实际供应商（§6.6.3 受限子串匹配 · 反向入口在 `m03`）|受限子串匹配|backend/app/mod11_jc/service.py::act_add_payment|ACC-JC-PAY-001|已接
+J|集采**结算欠款**（⛔ 不在付款域计算，**由集采台账负责**）|集采的欠款**不在付款域计算**，由**集采台账**负责|backend/app/mod11_jc/domain.py::contract_amounts|ACC-JC-UI-001|已接
+# ============================================================
+# ⑨ X 跨域：导出 / 删除 / 用户 / 主题 / 设置 / 历史初始化（真源 = 说明书 §7）
+# ⭐⭐ 2026-09-20 逐页核过 —— 原写「接线缺」（零件写好了、链路上没人调用它）⇒ ⚠️ **这个判断不准确**：
+#    真实情况是 **8/14 页已经有真导出**（且那 8 个端点**壳全都在调**），
+#    ⚠️ 缺的不是"接线"，而是 **6 个列表页后端压根没有导出端点**。
+#    ⇒ 唯一完成度口径 = **一页一页数**。现状（§7.1「**所有列表页都要**」）：
+#      ✅ 有真导出（8）：逐月欠款台账 · 总欠款 · 过程资料 · 经济活动分析大表 ·
+#                       结算 · 提取（项目×月份）· 库存单据明细总表 · 集采台账
+#      ⚠️ 没有（5）：**MOD-01 项目档案** · **MOD-03 付款通知书台账** ·
+#                    **MOD-04 付款计划审查结果** · **MOD-05 付款流水** · ~~MOD-12 差异清单~~（整页已取消）
+#    ⭐ 2026-09-20 进度：**MOD-01 后端已落地**（`report_export/pj_export.py` ＋ `POST /api/m01/projects/export`）
+#    ⭐ 2026-09-20 进度：**MOD-05 付款流水后端已落地**（`report_export/fl_export.py` ＋
+#       `POST /api/m05/flows/export`；⚠️ 本条是**付款流水**那张表，⛔ 不是 `/api/m05/ledger/export`
+#       那张**逐月欠款台账**（它早就有了））⇒ 剩 **3 页**：MOD-03 · MOD-04 ·（＋ MOD-05 已做）
+#    ⭐ 2026-09-20 用户裁定：**`MOD-02` i8 接口清单**「**不算列表页**」⇒
+#       ⛔ **从本行范围里排除**（`V.m02` 整个切片只有 2 行、渲染的是一张 **i8 接口说明表**，
+#       **没有任何后端数据源** ⇒ 它不是"数据列表页" ⇒ §7.1 那句"所有列表页"不适用于它）✓
+#    ⚠️ 那 6 页现在走 `actions.js` 的 ⏳ 兜底 —— ⭐ 而那句兜底**是对的做法**（诚实告知），
+#       因为原型在这里报「已导出 x.xlsx」但**没有任何文件产生**（对用户是**假成功**）。
+# ⭐ 2026-09-20（`TAIL-04` 收尾）：**14 页全部落地**，本行由「缺」改「已接」。
+#   落点 = **朴素导出那一档的共用件**（`naive_export.build_xlsx`）——
+#   它的生产调用方就是这条链路本身：`nt_export` / `pl_export` → 各自路由件 → 壳的
+#   `ACT.exp`（按按钮 `data-t` 查 `EXP_ROUTES` 分发）。逐页落点：
+#     · `MOD-03` 付款通知书台账 → `report_export/nt_export.py` ＋ `POST /api/m03/notices/export`
+#     · `MOD-04` 付款计划审查结果 → `report_export/pl_export.py` ＋ `POST /api/m04/plans/export`
+#     · `MOD-01` 项目档案 → `report_export/pj_export.py` ＋ `POST /api/m01/projects/export`
+#     · `MOD-05` 付款流水 → `report_export/fl_export.py` ＋ `POST /api/m05/flows/export`
+#   ⚠️ **另 6 页为什么不在本链路的范围**（⛔ 别当成"还缺 6 页"）：
+#     · `MOD-11` 集采台账 —— 走自己的按钮（`EXP_ROUTES` 里**故意没有**它，见 `BIND.m11`）；
+#     · `MOD-06` 过程资料 / `MOD-07` 收发结存与大表 / `MOD-08` 库存单据 —— 走**路径①/②**
+#       （模板法，那条链路就在下面两行，已接）；
+#     · `MOD-02` i8 接口清单 —— 用户 2026-09-20 裁定**不算列表页**（接口说明表、无后端数据源）；
+#     · `MOD-12` 差异登记 —— 用户 2026-09-20 裁定**整页取消**（差异载体 = 库存单据的调整单）；
+#     · `m13` 跨域能力页 —— **非数据页**（`ACC-X-EXP-001/001-01` 的三段口径）。
+#   ⚠️ **判据栏只写「用例号」**（`C4` 认的是 `ACC-X-EXP-001` 这种、⛔ 不是 `…/001-01` 点号形式）。
+#      本行实绑的两个点：`001-01`（逐页都有导出入口）＋ `001-08`（导出内容须与当前筛选一致）
+#      —— 落点见 `backend/tests/test_tail04_pages.py`（两个测试都 `@acc` 绑了这两个点）。
+X|全局导出 Excel（**所有列表页都要** · 行集合/合计/取值与当前筛选**一致**）|所有列表页都要「导出 Excel」按钮|backend/app/report_export/naive_export.py::build_xlsx|ACC-X-EXP-001|已接
+X|导出**按模板**（模板只定长相 · 数据仍来自页面筛选）|模板只管「长什么样」|backend/app/report_export/tpl_fill.py::fill_workbook|ACC-X-EXP-001|已接
+X|模板**数据区起点**识别（读 `DATA_START` 标记文字 · ⛔ 不用「定义名称」）|数据区首行那格的标记文字 DATA_START|backend/app/report_export/tpl_fill.py::locate_data_area|ACC-X-EXP-001|已接
+X|模板**尾部行块随行数派生**（合计/小计/脚注按实际行数位移 · ⛔ 不写死行号）|其位置**一律按实际数据行数派生**|backend/app/report_export/tpl_fill.py::tail_end_row|ACC-X-EXP-001|已接
+X|全局删除（确认框 **必须列出删除影响范围**：关联数据 / 统计影响）|必须列出删除影响范围|backend/app/mod04_plan/plan_ui.py::delete_impact|ACC-X-DEL-001|已接
+X|账号与权限（系统内 2 账号 · **用户本人为管理员**可管理其他账号）|用户本人为管理员可管理其他账号|backend/app/mod15_user/api.py::api_create|ACC-USR-MGMT-001|已接
+X|上线前历史数据初始化（**历史数据不重走**总原则）|历史数据不重走|backend/app/mod05_flow/domain.py::OpeningView|ACC-INIT-001|已接
+X|外观主题（地基：唯一真源 `THEME_CSS` 32 变量 · 换主题 = 换取值零 CSS 改动）|外观主题（界面配色）|backend/app/mod03_notice/page.py::THEME_CSS|ACC-UI-THEME-001|已接
+# ⚠️ 2026-09-21（`§19` 四个暂留件收口）：设置页的服务端渲染件（`view.py` ＋ PRG）已删 ⇒
+#    落点改指 **JSON API 的读出口**（壳 `V.set` 渲染它）—— 取值出口仍是 `app_settings.effective` ✓。
+X|系统设置（取值出口唯一 = `app_settings.effective`）|系统设置|backend/app/mod14_config/settings_api.py::api_settings_get|ACC-CFG-SETUP-001|已接

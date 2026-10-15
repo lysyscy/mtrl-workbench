@@ -24,7 +24,6 @@ from app.core.errors import MustReportError
 from app.core.nav import NAV
 from app.main import create_app
 from app.mod02_i8 import report_export
-from app.mod05_flow import importer
 from app.mod05_flow.domain import (
     CATEGORY_JC, CATEGORY_MATERIAL, CATEGORY_MECH,
     OpeningView, build_ledger, debt_by_category, total_debt,
@@ -85,22 +84,6 @@ def test_期初与i8期间流水不重叠且台账自截止月起排行():
 # ============================================================ 付款域 · i8 期间的两条入口
 
 
-@acc("ACC-INIT-001", "001-03")
-def test_i8期间两条入口都在_抓通知书与Excel导入历史流水():
-    """§9.7 第 2 行：i8 侧**没有付款记录** ⇒ **Excel 是付款的唯一来源**；通知书走抓取。
-
-    ⚠️ 2026-09-21（`§19` 四个暂留件收口）：导入页搬进新壳 ⇒ 三步与纠错通道改由**JSON 端点**承接
-       （`import_api.py`）—— **判词一字未变**（"Excel 导入的历史流水这条路真的存在"）。
-    ⭐ 2026-09-23（`TAIL-75` `B5b` 第三步 · 用户裁定 `B`）：旧页与 `import_api.py` **连件删除**
-       ⇒ 落点换到**通用导入面**（`/api/imp/m05_flow/*`）—— **判词一字未改**
-       （"Excel 导入的历史流水这条路真的存在" ＋ 有**纠错通道**），只是三步按通用面叫
-       `parse / commit / rollback`、列契约改由 `schema` 给。
-    """
-    paths = _paths()
-    assert "/api/m02/fetch/run" in paths                                  # 抓通知书
-    assert {"/api/imp/m05_flow/parse", "/api/imp/m05_flow/commit",
-            "/api/imp/m05_flow/schema"} <= paths                          # Excel 导入三步（＋列契约）
-    assert "/api/imp/m05_flow/rollback" in paths                          # 同批整批回滚（初始化的纠错通道）
 
 
 @acc("ACC-INIT-001", "001-05")
@@ -163,31 +146,8 @@ def test_库存单据可补抓历史月份():
 # ============================================================ 原则 · 不重走审批
 
 
-@acc("ACC-INIT-001", "001-07")
-def test_历史数据不重走审批_匹配不看审批状态():
-    """§9.7 末行：**历史数据不重走**（不重走审批）—— 初始值入口**不因缺审批而拒收**。
-
-    可观测出口：流水匹配**只认单据号**，完全不看通知书处于什么审批状态。
-    """
-    plan = importer.parse_rows([["FKTZS2026090466", "100", "2025-12-05", "现汇", ""]])
-    out = importer.split_by_match(plan, {"FKTZS2026090466": 7})
-    assert [r.bill_no for r in out.rows] == ["FKTZS2026090466"]
-    assert out.rows[0].notice_id == 7 and out.unmatched == []
 
 
-@acc("ACC-INIT-001", "001-08")
-def test_不重走审批不等于不补录_付款事实落库且审批状态不改写():
-    """§9.7 末行：⭐ 精确含义 —— **审批流程不重走**，但**已发生的付款事实要补录**（§4.4.6）。"""
-    notice = _notice(1, bill_no="FKTZS2026090466", approve_status="已批")
-    fake = FakeWriteSession({type(notice): [notice]})
-
-    plan = importer.parse_rows([["FKTZS2026090466", "3000.00", "2025-12-05", "现汇", ""]])
-    plan = importer.split_by_match(plan, {"FKTZS2026090466": 1})
-    res = importer.commit(fake, plan, batch="20251205-1")
-
-    assert res["written"] == 1
-    assert len([x for x in fake.added if type(x).__name__ == "PaymentFlow"]) == 1   # 事实确实落库
-    assert notice.approve_status == "已批"                                          # 审批状态一字未改
 
 
 @acc("ACC-INIT-001", "001-06")

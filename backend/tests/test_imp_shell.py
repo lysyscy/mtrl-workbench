@@ -436,42 +436,6 @@ def test_本页的项目面板走注册表收起():
         "本页「项目」面板的收起没走注册表 `PJ_OPEN`（key 由 `pickAct` 派生：`impPjPick` ⇒ `impPj`）"
 
 
-@acc("ACC-UI-SHELL-001", "001-47")
-def test_列映射的去向只许三个词_不许再说认行_且字段清单要列全():
-    """⭐⭐ 2026-09-26（用户三点要求）：去向**只许三个词** · ⛔ 不许再说「只用来认行」 ·
-    字段清单必须**列全域契约的全部字段**（用户报「缺贸易公司发票金额」的真因就在这）。
-
-    用户原话：「**写台账和进子表为一个意思，合并为写台账**」·「贸易公司名 / 合同日期
-    **不写库、也不用来认行**」·「**导入后会怎样**这一行**可读性太差**」。
-
-    ⚠️ **能证伪**：把去向换成别的词 / 把"认行"写回去 / 字段清单漏列 ⇒ 本件必红。
-    """
-    from app.mod11_jc import excel_parse as P
-    from app.mod11_jc import imp_spec
-
-    kinds = {x[2] if len(x) > 2 else "" for x in imp_spec.SPEC.impacts}
-    bad = sorted(kinds - {"写台账", "当钥匙", "不参与"})
-    assert not bad, f"去向**只许三个词**（写台账 / 当钥匙 / 不参与），出现了：{bad}"
-    assert imp_spec.SPEC.impact_kind_of("贸易公司发票金额") == "写台账", (
-        "「贸易公司发票金额」的去向必须「写台账」—— 它往发票子表加一张票（用户本次报的就是它）")
-    for fld in ("贸易公司", "合同日期", "供应商"):
-        assert imp_spec.SPEC.impact_kind_of(fld) == "不参与", (
-            f"「{fld}」导入**不用它** ⇒ 去向必须「不参与」（用户 2026-09-26 当场纠正）")
-    assert "认行" not in (SHELL + str(imp_spec.SPEC.impacts)), (
-        "还留着「只用来认行」—— 导入**不对号用它**（对号只用合同价 / 贸易公司合同价），这话是错的、会误导")
-    assert {f.label for f in imp_spec.SPEC.fields} == set(P.FIELD_LABELS.values()), (
-        "域字段契约与 `FIELD_LABELS` 不一致 ⇒「本系统要哪些列」那块会漏列（用户报的「缺列」就从这来）")
-    for must in ("本系统要哪些列", "写台账", "当钥匙", "不参与", "field_list_hint"):
-        assert must in SHELL, f"壳里缺 `{must}` —— 列映射的「去向 / 本系统要哪些列」没渲染出来"
-    # ⭐⭐ 用户 2026-09-26：「**不参与的就不要给下拉选项了**」—— 那一格默认只给标签
-    assert "k === '不参与'" in SHELL, (
-        "「不参与」那一列没有特殊处理 ⇒ 它还会给一个「能点但点了没用」的下拉"
-        "（用户明确要求去掉；守则 §5.5「不能点的要置灰或隐藏」）")
-    # ⭐ 同轮补的退路（用户选 **B** 案）：标签旁挂一个「改」，**点开才展开**下拉
-    #    ⇒ 既"平时不误导"，又"认错了还能纠"（本仓最忌"认错了却没法纠"）
-    assert "<details" in SHELL and ">改</span></summary>" in SHELL.replace(" ", ""), (
-        "「不参与」的列没有给「改」的退路 —— 认错成合同日期/供应商/贸易公司后就再也改不回去了")
-    assert 'data-act="impMap"' in SHELL, "映射下拉不见了（`details` 里的那个也必须在）"
 
 
 @acc("ACC-UI-SHELL-001", "001-48")
@@ -510,3 +474,13 @@ def test_截止核算月要说清它是什么_不是只给一个名字():
         assert must in code, f"导入范围缺少 {must}"
     assert '历史段 / 正式段的分界月' not in code
     assert '之后走 i8' not in code
+
+
+@acc("ACC-UI-SHELL-001", "001-47")
+def test_当前导入域字段说明沿声明完整渲染():
+    from app.mod06_proc import imp_spec
+    assert {f.label for f in imp_spec.SPEC.fields}
+    assert {x[2] for x in imp_spec.SPEC.impacts} <= {"写台账", "当钥匙", "不参与"}
+    for word in ("本系统要哪些列", "field_list_hint", "写台账", "当钥匙", "不参与"):
+        assert word in SHELL
+    assert "认行" not in str(imp_spec.SPEC.impacts)

@@ -29,8 +29,8 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 
 ### Excel工作簿读取
 
-两条读表链共用 `backend/app/import_kit/workbook.py` 的开书、工作表枚举、网格遍历、合并坐标及资源释放；`backend/app/import_kit/readers.py` 与 `backend/app/mod11_jc/excel_parse.py` 保留各自格式识别、转换和失败出口。
-选表、表头、映射、行筛选及确认写入仍由原主人持有；D23 B4明确保留集采的表头差异。验证在 `backend/tests/test_excel_reading.py` 与 `tools/mut/_mut_excel_reading.py`，真实样表对照与未验边界回TAIL-305票Comments。
+现行付款计划及过程资料导入使用 `backend/app/import_kit/workbook.py` 的开书、工作表枚举、网格遍历、合并坐标及资源释放，格式转换由 `backend/app/import_kit/readers.py` 持有。
+选表、表头、映射、行筛选及确认写入由现行域声明和共享引擎承接。原集采专属读取链已随导入归档，来源及接回条件见 docs/archive/retired-imports-20261015/README.md。现行验证在 `backend/tests/test_excel_reading.py` 与 `tools/mut/_mut_excel_reading.py`；真实样表边界回TAIL-346及原TAIL-305 Comments。
 
 ### 金额
 

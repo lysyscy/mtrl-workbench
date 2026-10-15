@@ -12,10 +12,7 @@
 
 /* ============================================================ 状态（暂留件各一份） */
 
-/* ⚠️ 一律 `const 对象 + 原地改字段`（⛔ 不整对象重新赋值）：外部（自检 / 动作）持有的是对象引用
-   —— 这条教训本仓记过（见 `actions.js` 里 `fJc` 那句）。
-   ⛔ `IMP05`（历史付款导入旧页的状态）**已随该页下架删除**（`TAIL-75` `B5b` 第三步 · 2026-09-23
-      用户裁定 `B`：同一件事只留一个入口 ⇒ 走通用面 `/api/imp/m05_flow/*`，见 `V.imp`）。 */
+/* 历史付款与集采导入已归档；现行数据导入只列运行注册的域。 */
 /* ---------- 共用文案（**一处在说、多处引用** ⇒ ⛔ 别在两处各写一遍）----------
    ⭐ 2026-10-01（`TAIL-210` 批 3b）：这个 label 在 `ctxBar` 的两个分支各写了一遍。 */
 const IMP_PJ_LABEL = '这批数据进哪个项目';
@@ -242,10 +239,12 @@ const IMP_STEPS = ['① 选域与文件', '② 列映射', '③ 预览校验', '
    而抄一份哨兵字面量到壳里，一旦后端改了字面量，就会变成"把一个不存在的字段名当目标"（静默写脏）。 */
 const IMP_IGNORE = '（不导入 · 原样保留）';
 
+// 域退出注册后，重载时清理旧选择及其上下文。
 async function reloadImp() {
   const d = await API.impDomains();
   IMP.domains = (d && d.domains) || [];
-  if (!IMP.domain && IMP.domains.length) await impSetDomain(IMP.domains[0].domain);
+  const selected = IMP.domains.some(d => d.domain === IMP.domain) ? IMP.domain : (IMP.domains[0]?.domain || '');
+  if (selected !== IMP.domain) await impSetDomain(selected);
 }
 
 /* 切域 ⇒ 重取该域的**字段契约**，并把上一次的进度清干净（⛔ 不许残留上一域的文件/映射）。 */

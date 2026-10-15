@@ -239,7 +239,7 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
     """返回检查、pytest、待查项；广泛影响由使用者决定，不由提交状态决定。"""
     import _pytestscope as scope
     names = set(changes)
-    docs = {n for n in names if n.endswith('.md')}
+    docs = {n for n in names if n.endswith('.md') or n.startswith('docs/archive/')}
     checks = required_checks('documents', commands) if docs else {'tools/audit/bytes_guard.py'}
     relevant = set(names - docs)
     readers = document_readers(docs, root)
@@ -278,6 +278,12 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
                         if name == 'tools/audit/doc_audit.py' and pair[0] is not None:
                             pair = (pair[0].replace('规格件只许变长'.encode(), '篇幅变化仅提示调查'.encode()).replace('每轮随闸门跑'.encode(), '按受影响判据隔离自证'.encode()), pair[1])
                         # 判据改动由相关自检/回归验证，不强制每条另配变异。
+                    elif name == 'tools/audit/audit_common.py':
+                        # 当前直接读取common的检查，以及audit_face的真实入口。
+                        checks |= {'tools/audit/doc_audit.py', 'tools/audit/audit_drift.py',
+                                   'tools/audit/audit_meta.py', 'tools/audit/audit_work.py',
+                                   'tools/audit/asset_audit.py', 'tools/audit/cover_gap.py',
+                                   'tools/probe/_audit_face.py'}
                     else:
                         pending.append('共享检查模块需查明调用者：'+name)
             else:
@@ -297,6 +303,13 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
             continue
         if name == 'ops/hooks/pre-commit':
             continue  # 提交阶段由真实钩子核验；归档自测已独立验证隔离行为。
+        if name.startswith('ops/') and name.endswith('.py'):
+            consumers = document_readers({name}, root)
+            readers |= consumers
+            if not consumers:
+                pending.append('运维脚本未找到测试或运行使用者：'+name)
+            checks.add('tools/audit/syntax_audit.py')
+            continue
         pending.append('需要调查实际依赖：'+name)
     if any(n.startswith('tools/mut/') for n in names): checks.add('tools/audit/mut_cover.py')
     checks |= {rel for rel, deps in SELFTEST_DEPENDENCIES.items() if names & deps}
@@ -433,7 +446,7 @@ def selftest():
                     'tools/oneoff/_run_rulers.py'):
             chosen, _, _ = selection({dep: (b'VALUE = 1', b'VALUE = 2')}, registered)
             assert 'tools/oneoff/_doc_downgrade.py' not in chosen, '归档自测仍依赖已退出的钩子检查：'+dep
-        _, _, shared_pending = selection({'tools/audit/audit_common.py': (b'VALUE=1', b'VALUE=2')}, registered)
+        _, _, shared_pending = selection({'tools/audit/new_shared.py': (b'VALUE=1', b'VALUE=2')}, registered)
         assert any('共享检查模块' in p for p in shared_pending), '自测依赖不等于所有消费者已证'
     chosen, _, _ = selection({'README.md': (b'old', b'new')}, registered)
     assert not chosen & set(SELFTEST_DEPENDENCIES), '无关说明不得重复工具自测'
@@ -474,6 +487,23 @@ def selftest():
         snapshots = [c for c in calls if '--snapshot' in c]
         assert not smoke_at and not snapshots, '普通壳修改不得自动调用真实39段或盖章'
     assert required_checks('documents', registered) == {'tools/audit/doc_audit.py', 'tools/audit/claim_audit.py', 'tools/audit/bytes_guard.py'}
+    with tempfile.TemporaryDirectory() as temp:
+        folder = Path(temp)
+        (folder/'backend/tests').mkdir(parents=True)
+        # 隔离夹具，仓内不存在这个测试文件；只用于证明消费者发现。
+        (folder/'backend/tests/test_backup.py').write_text("source = 'ops/backup.py'", encoding='utf-8')
+        with patch.object(scope, 'plan', return_value=scope.Plan(False, 'fixture')):
+            checks, _tests, pending = selection({'docs/archive/retired/source/old.py': (None, b'x=1')}, registered, folder)
+            assert not pending and 'tools/audit/doc_audit.py' in checks
+            _checks, tests, pending = selection({'ops/backup.py': (None, b'x=1')}, registered, folder)
+            # 隔离夹具，仓内不存在这个测试文件。
+            assert not pending and tests.files == ['test_backup.py'], '运维脚本必须选中实际读取测试'
+            _checks, _tests, pending = selection({'ops/unknown.py': (None, b'x=1')}, registered, folder)
+            assert pending, '没有已知消费者的运维脚本仍须待查'
+            checks, _tests, pending = selection({'tools/audit/audit_common.py': (b'x=1', b'x=2')}, registered, folder)
+            assert not pending and {'tools/audit/doc_audit.py', 'tools/audit/cover_gap.py'} <= checks
+            _checks, _tests, pending = selection({'tools/audit/new_shared.py': (None, b'x=1')}, registered, folder)
+            assert pending, '未知共享检查仍须调查消费者'
     assert not required_checks('full', registered) & {'tools/audit/audit_drift.py', 'tools/audit/audit_meta.py', 'tools/audit/audit_work.py', 'tools/audit/cover_gap.py', 'tools/audit/shell_verify.py'}
     scope.local_selftest()
     assert scope.plan(None).reason.startswith('待查：') and not scope.plan(None).run, '未知路径不能自动全跑'

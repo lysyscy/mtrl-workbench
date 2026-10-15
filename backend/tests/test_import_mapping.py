@@ -121,6 +121,7 @@ def test_建议_拼名写法也能命中():
 
 
 @acc()
+@acc("ACC-ODDVAL-001", "001-05")
 def test_建议_认不出就留空_不猜():
     got = guess(["审批状态", "制单人", "（首列无名）"], M06_FIELDS)
     assert all(s.field is None and s.level == "blank" for s in got), got

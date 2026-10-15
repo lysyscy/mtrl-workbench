@@ -200,7 +200,7 @@ def sync_stat_paid(s: Session, notice_id: int) -> Decimal | None:
       照实写入并由调用侧挂提醒（§4.4.6；与 §4.4.4「付款动作禁止超付」不冲突）。
 
     ⚠️ 由 **付款**（`create_flow`）· **撤销**（`revoke`）· **历史导入**（`commit_plan`）·
-       **整批回滚**（`rollback_batch`）**四处统一调用** —— ⛔ 不得在别处再算一遍。
+       **撤销付款**后统一调用 —— ⛔ 不得在别处再算一遍。
     """
     from app.mod03_notice import service as notices_service    # 延迟导入，避免环；⭐ 包间出口（§2.3）
     from app.mod03_notice.domain import F_STAT_PAID, was_manually_edited
@@ -218,96 +218,6 @@ def sync_stat_paid(s: Session, notice_id: int) -> Decimal | None:
 
 
 # ---------------------------------------------------------------- §4.4.6 导入批次
-
-
-def flows_in_batch(s: Session, batch: str) -> list[PaymentFlow]:
-    """某一导入批次下的全部流水（含已撤销的 —— 回滚与审计要看得见）。
-
-    ⚠️ 批次隔离**双保险**：SQL 已按 `import_batch` 过滤，这里再按字段过一遍 ⇒
-       「回滚一批不动别批」在任何会话实现（含离线桩）下都成立。
-    """
-    rows = s.execute(
-        select(PaymentFlow)
-        .where(PaymentFlow.import_batch == str(batch))
-        .order_by(PaymentFlow.id)
-    ).scalars().all()
-    return [f for f in rows if str(f.import_batch or "") == str(batch)]
-
-
-def rollback_batch(s: Session, batch: str, *, changed_by: str = "") -> dict:
-    """**整批回滚**（§4.4.6）：把该批**生效中**的流水置撤销 ＋ 留痕，**不物理删**。
-
-    返回 `{"batch", "revoked", "kept"}`；`kept` = 该批里**本就已撤销**的条数（不重复处理）。
-    ⚠️ **不同批次互不影响** —— 只碰 `import_batch == batch` 的行。
-    """
-    rows = flows_in_batch(s, batch)
-    revoked, kept = 0, 0
-    touched: set[int] = set()
-    for f in rows:
-        if str(f.status) != FLOW_EFFECTIVE:
-            kept += 1
-            continue
-        patch_row = revoke_flow("整批回滚后重导")
-        f.status = str(patch_row["status"])
-        f.revoke_reason = str(patch_row["revoke_reason"])
-        f.revoked_at = patch_row["revoked_at"]
-        s.add(FlowRevokeLog(flow_id=f.id, reason=f.revoke_reason, changed_by=str(changed_by or "")))
-        revoked += 1
-        if f.notice_id is not None:
-            touched.add(int(f.notice_id))
-    for nid in touched:                                   # 回滚后逐个重算（§4.4.7）
-        sync_stat_paid(s, nid)
-    return {"batch": str(batch), "revoked": revoked, "kept": kept}
-
-
-def notices_without_flow(s: Session, months: list[str]) -> list[dict]:
-    """⭐ **核对报告**（§4.4.6）：这些月份里、**一条生效流水都没有**的通知书清单。
-
-    供人工发现 Excel 漏记（历史欠款能否对平就看它）。月份按**单据日期**归月（§9.2）。
-    """
-    wanted = {str(m)[:7] for m in months if str(m or "").strip()}
-    if not wanted:
-        return []
-    out: list[dict] = []
-    for n in notice_rows(s):
-        ym = str(n.doc_date or "")[:7]
-        if ym not in wanted:
-            continue
-        if effective_total_of(s, int(n.id)) > 0:
-            continue
-        out.append({"notice_id": int(n.id), "bill_no": str(n.bill_no or ""),
-                    "doc_date": str(n.doc_date or ""), "project_name": str(n.project_name or ""),
-                    "amount_approved": to_money(n.amount_approved)})
-    return out
-
-
-def notices_overpaid(s: Session, months: list[str]) -> list[dict]:
-    """⭐ **超付清单**（§4.4.6 第一句的第三半「**核对报告单列**」）：这些月份里
-    **实付合计 > 审批金额** 的通知书。
-
-    ⚠️ 口径三半（《说明书》§4.4.6「超付的处置」）：**流水照记**（事实不得篡改）＋
-      `统计付款金额` 照实、不封顶（§4.4.7）＋ **该单挂提醒** ＋ **核对报告单列** —— 本函数是第四半。
-    ⚠️ 判定基准 = **`>` 不是 `>=`**：实付 == 审批金额 = 付清（§4.4.2 只有两态），**不是超付**。
-      与 `mod03_notice/list_view.NoticeRow.is_overpaid`（界面提醒那一半）**同一判据** ——
-      ⛔ 两处必须同口径，改一处要改另一处（有断言钉着：`ACC-PAY-STAT-002/002-06`）。
-    ⚠️ 月份按**单据日期**归月（§9.2），与「一条流水都没有」那张表同款。
-    """
-    wanted = {str(m)[:7] for m in months if str(m or "").strip()}
-    if not wanted:
-        return []
-    out: list[dict] = []
-    for n in notice_rows(s):
-        if str(n.doc_date or "")[:7] not in wanted:
-            continue
-        approved = to_money(n.amount_approved)
-        paid = to_money(effective_total_of(s, int(n.id)))
-        if paid <= approved:                      # ⚠️ `>` 才是超付（== 是「付清」）
-            continue
-        out.append({"notice_id": int(n.id), "bill_no": str(n.bill_no or ""),
-                    "doc_date": str(n.doc_date or ""), "project_name": str(n.project_name or ""),
-                    "amount_approved": approved, "amount_paid": paid,
-                    "over_amount": paid - approved})
-    return out
 
 
 # ---------------------------------------------------------------- 期初占位行
@@ -417,7 +327,7 @@ __all__ = [
     "create_flow", "revoke", "revoke_info",
     "effective_total_of", "sync_stat_paid",
     "latest_effective_dates",
-    "flows_in_batch", "rollback_batch", "notices_without_flow", "notices_overpaid",
+
     "FLOW_SOURCE_MANUAL", "FLOW_SOURCE_IMPORTED", "FLOW_EFFECTIVE", "FLOW_REVOKED",
     "list_openings", "get_opening", "upsert_opening", "delete_opening",
     "remarks_map", "set_remark", "notice_rows",

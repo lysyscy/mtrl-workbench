@@ -124,6 +124,7 @@ def test_解析_指定不存在的工作表_要显式报错(client):
 
 
 @acc("ACC-IMP-MAP-001", "001-05")
+@acc("ACC-ODDVAL-001", "001-02")
 def test_预览_不写库_并把坏值与必填为空列成问题(client):
     parsed = _upload(client).json()
     body = {"token": parsed["token"], "mapping": {"项目": "项目", "该流程金额": "该流程金额",
@@ -148,6 +149,7 @@ def test_确认前一个字节都不写库(client):
 
 
 @acc("ACC-IMP-MAP-001", "001-04")
+@acc("ACC-ODDVAL-001", "001-01")
 def test_未映射列原样保留_不丢也不报错(client):
     parsed = _upload(client).json()
     body = {"token": parsed["token"], "mapping": {"项目": "项目", "该流程金额": "该流程金额"}}

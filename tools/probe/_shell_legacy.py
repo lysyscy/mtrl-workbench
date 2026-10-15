@@ -3,7 +3,7 @@
 覆盖：`set`（系统设置）· **`imp`（数据导入 · 通用导入面）**。
 ⚠️ `m08imp`（库存单据导入）已按用户 2026-09-22 裁定**整体删除**（`T8` 守卫）⇒ 不再覆盖。
 ⚠️ `m06imp`（过程资料历史导入）已随 `B5c` **下架**、⭐ `m05imp`（历史付款导入）已随 `B5b` 第三步
-（2026-09-23 用户裁定 `B`）**下架** ⇒ 这两页改验 `imp`（同一页里选 `m06_proc` / `m05_flow` 域）。
+（2026-09-23 用户裁定 `B`）**下架** ⇒ 这两页改验 `imp`（现行域为 `m06_proc` / `m04_plan`）。
 
 **为什么单独立一个文件**：`tools/probe/_shell_smoke.py` 有 **400 行即黄**（`doc_audit` 的 `T5`）；⚠️ 连 `>600` 也只是**黄** —— `[用户·2026-09-21]` 把"红·禁合入"**降级**，只须在 `docs/reference/thresholds.md` 登记"为什么不拆"
 ⇒ 与 `_shell_home.py` / `_shell_pend.py` 同款，由主自检**调一段**（`check(page, errors)`）。
@@ -75,8 +75,7 @@ def _probe(page, key: str, marks: tuple[str, ...] = ()) -> dict:
 
 #: 真上传要造的域（范围栏那条判词要**几个域互为对照** —— 这就是"按键渲染"的真机证明）：
 #:   `m06_proc` 声明了 `cutoff_ym`（截止核算月）· `m04_plan` 声明了 `year_month`（本批归属年月）
-#:   · `m11_jc` 只给 `projects`（**逐项目**，且 ③ 会给出"配上几条"）。
-IMP_DOMAINS = ("m06_proc", "m04_plan", "m11_jc")
+IMP_DOMAINS = ("m06_proc", "m04_plan")
 
 
 def _mk_xlsx(path, domain: str) -> int:
@@ -92,8 +91,7 @@ def _mk_xlsx(path, domain: str) -> int:
 
     from openpyxl import Workbook
 
-    mod = {"m06_proc": "app.mod06_proc.imp_spec", "m04_plan": "app.mod04_plan.imp_spec",
-           "m11_jc": "app.mod11_jc.imp_spec"}[domain]
+    mod = {"m06_proc": "app.mod06_proc.imp_spec", "m04_plan": "app.mod04_plan.imp_spec"}[domain]
     fields = list(importlib.import_module(mod).FIELDS)        # ⛔ 契约的主人还是那个模块
     wb = Workbook()
     ws = wb.active
@@ -126,13 +124,9 @@ def _mk_xlsx(path, domain: str) -> int:
 #:   · ⛔ 别用"页面文本变了"当条件：**同一个域再选一次**时文本可能一模一样（实测 `m04_plan` 就白等到超时）；
 #:   · ⛔ 也别用"下拉的 value 变成目标"：`select_option` 是**同步**改 DOM 值的 ⇒ 会在异步取域上下文
 #:     之前就返回（实测：切到 `m04_plan` 却读到 `m06_proc` 的范围栏，三条判词全**假红**）；
-#:   · ⚠️ 每个判据必须**只对本域成立**：`m11_jc` 的项目面板与 `m06_proc` 那个长得一样
-#:     ⇒ 得再加上"**没有** `#impCut` / `#impYm`"才算认到 m11 那一屏。
 _CTX_READY = {
     "m06_proc": "!!document.querySelector('#impCut')",
     "m04_plan": "!!document.querySelector('#impYm')",
-    "m11_jc": "!!document.querySelector('[data-act=\"impPjToggle\"]')"
-              " && !document.querySelector('#impCut') && !document.querySelector('#impYm')",
 }
 
 
@@ -300,8 +294,7 @@ def check(page, errors: list[str]) -> None:
         # ⚠️ 面板**不是每个域都有**：`m04_plan` 的 `options` 只给 `year_month`（付款计划不按项目导）
         #    ⇒ 它**本来就没有**项目面板。⭐ 实测当场打脸第一版判词（"两域都要有面板" ⇒ `m04` 报 `pj=False`）——
         #    那不是壳的错，是**判词把自己以为的设计当成了契约**（⛔ 判据只许照域自己说的写）。
-        want = {"m06_proc": (True, False, True), "m04_plan": (False, True, False),
-                "m11_jc": (False, False, True)}
+        want = {"m06_proc": (True, False, True), "m04_plan": (False, True, False)}
         for dm in IMP_DOMAINS:
             want_cut, want_ym, want_pj = want[dm]
             # ⚠️ **必须给就绪判据**（`_CTX_READY`）：`select_option` 是**同步**改 DOM 值的，若只等
@@ -590,27 +583,6 @@ def check(page, errors: list[str]) -> None:
                                  f"`m06_proc` 换项目 ⇒ 「截止核算月」**跟着换**（选 `{exp['p']}` ⇒ "
                                  f"框里 `{got4['cut']}` · 域给的 `cutoffs` 是 `{exp['cut']}`）"
                                  " —— 此前它只在进域那一刻取一次 ⇒ 会把 A 项目的分界写给 B（真缺陷）"))
-                # ⭐⭐ `m11_jc`：**选完项目再预览一次** ⇒ ③ 必须报出「配上几条 / 配不上几条」
-                #    （`TAIL-106` 用户原话：「能否在选文件时就选定项目、并**立刻显示"匹配上多少"**」）。
-                #    ⚠️ 必须先重跑一次预览：上一屏那个数是在**没选项目**时算的（域钩子当时只能回一句提示）。
-                if dm == "m11_jc":
-                    page.click('[data-act="impStep"][data-step="1"]')
-                    page.click('[data-act="impPreview"]')
-                    try:
-                        page.wait_for_function(
-                            "() => (document.querySelector('#view').innerText || '')"
-                            ".includes('没配上的行')", timeout=20000)
-                        ok_pre = True
-                    except Exception:                              # noqa: BLE001
-                        ok_pre = False
-                    page.locator('.imp-block').filter(has=page.locator('summary', has_text='分类统计')).locator('summary').click()
-                    txt = page.evaluate("() => document.querySelector('#view').innerText || ''")
-                    print(f"③‴ m11_jc 对号预览 = {txt[txt.find('将写入'):][:120]!r}")
-                    oks3.append((ok_pre and "配上" in txt and "配不上" in txt,
-                                 "`m11_jc` ③ 报出「**配上 / 配不上**」两个数"
-                                 "（改动前 ③ 一条对号信息都没有，得等到 ④ 落库才知道）"))
-                    oks3.append(("没配上的行" in txt,
-                                 "`m11_jc` ③ 把没配上的行**逐条列出来**（含原因）—— ⛔ 不是只丢一个总数"))
             for ok3, what3 in oks3:
                 print(("  ✅ " if ok3 else "  ⛔ ") + "⑳′ " + what3)
                 if not ok3:
@@ -625,7 +597,6 @@ def check(page, errors: list[str]) -> None:
         got = page.evaluate("""async () => {
             const j = async u => await (await fetch(u)).json();
             const r = {spec: (await j('/api/m14/settings')).items.length,
-                       m05: (await j('/api/imp/m05_flow/schema')).fields.length,
                        m06: (await j('/api/imp/m06_proc/schema')).fields.length,
                        m06d: (await j('/api/imp/m06_proc/options')).projects.length};
             /* ⭐⭐ `TAIL-114`（2026-09-27 用户裁定）：**导入页的候选**必须覆盖
@@ -671,7 +642,6 @@ def check(page, errors: list[str]) -> None:
             (got["spec"] == len(SPECS), f"设置项条数与 `SPECS` 一致（{got['spec']} = {len(SPECS)}）"),
             # ⚠️ 2026-09-23（`B5b` 第三步 · 用户裁定 `B`）：`/api/m05/import/meta` 已随旧页删除
             #    ⇒ 列契约改从**通用面的域声明**读（判词不变：五列契约就是 A–E，只是出口换成域声明）。
-            (got["m05"] == 5, f"付款导入的列契约是 A–E 五列（{got['m05']}）"),
             (got["m06"] >= 1, f"过程资料导入的材料列清单非空（{got['m06']} 列）"),
             (got["m06d"] >= 0, f"过程资料导入的项目候选可读（{got['m06d']} 个）"),
         ]

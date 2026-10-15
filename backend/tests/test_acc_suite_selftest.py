@@ -30,6 +30,18 @@ def _load_acc_report():
 
 
 @acc()
+def test_配置的相对基线始终以仓根解释_显式CLI路径保持原语义(tmp_path, monkeypatch):
+    mod = _load_acc_report()
+    monkeypatch.setattr(mod, 'REPO_ROOT', tmp_path)
+    (tmp_path / '.env').write_text('PRD_ACCEPTANCE_BASELINE=docs/requirements/baseline.json\n', encoding='utf8')
+    elsewhere = tmp_path / 'backend'
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    assert mod.resolve_baseline(None) == tmp_path / 'docs/requirements/baseline.json'
+    assert mod.resolve_baseline('explicit.json') == Path('explicit.json')
+
+
+@acc()
 def test_四态报表可运行且能读出判据总数():
     result = subprocess.run(
         [sys.executable, str(ACC_REPORT), "--json"],

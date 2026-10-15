@@ -839,3 +839,23 @@ def test_付款流水备注显示与编码链接键盘入口(ui_page):
     link.focus()
     link.press('Enter')
     assert p.evaluate('openedNotice') == '71'
+
+
+@acc()
+def test_历史初始化从导入类型隐藏且旧选中项恢复到可用域(ui_page):
+    p = ui_page
+    p.evaluate('''async () => {
+      API.impDomains=async()=>({domains:[
+        {domain:'m04_plan',title:'付款计划',batch:false},
+        {domain:'m06_proc',title:'过程资料',batch:true},
+        {domain:'m06_mech_report',title:'机械费报表',batch:false}]});
+      API.impSchema=async domain=>({domain,title:domain,fields:[],required:[]});
+      API.impOptions=async()=>({ok:true});
+      IMP.domain='m05_flow'; IMP.working=''; IMP.busy=false;
+      await reloadImp(); VIEW='imp'; render();
+    }''')
+    select = p.locator('select[data-act="impDomain"]')
+    assert select.locator('option').evaluate_all('(items)=>items.map(x=>x.value)') == ['m04_plan', 'm06_proc', 'm06_mech_report']
+    assert select.input_value() == 'm04_plan'
+    assert p.evaluate('IMP.schema.domain') == 'm04_plan'
+    assert '历史付款流水' not in select.inner_text() and '集采台账' not in select.inner_text()

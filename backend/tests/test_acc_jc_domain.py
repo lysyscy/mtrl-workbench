@@ -127,10 +127,8 @@ def test_合计行各金额列独立复算():
 @acc("ACC-JC-UI-001", "001-15")
 def test_集采付款方式独立列已取消():
     """用户2026-10-14改为统一填写备注。"""
-    from app.mod11_jc import excel_parse, import_service, repository
+    from app.mod11_jc import repository
     assert "method" not in {c["key"] for c in D.JC_COLUMNS}
-    assert "method" not in excel_parse.FIELD_LABELS
-    assert "method" not in import_service.EXCEL_COLS
     assert "method" not in repository.EDITABLE_COLS
 
 
@@ -197,3 +195,29 @@ def test_候选为空时给提示且不允许提交():
     assert D.pick_candidates(contracts=contracts, project_key="甲仓", supplier="不存在的供应商") == [], \
         "供应商匹配不到 ⇒ 候选为空（调用方必须给提示并禁止提交）"
     assert D.pick_candidates(contracts=contracts, project_key="丙仓", supplier="业祥") == []
+
+
+@acc()
+def test_付款方式列宽够装真实条款():
+    """⚠️⚠️ **2026-09-20 实测踩到（第二层）**：`method` 原先只有 `varchar(64)`，
+    而用户台账里「详细付款方式」那种**整段付款条款**最长 **95 字**
+    （"货到验收合格后，银行承兑付款，货到现场验收合格并开具全额发票后支付 50% 货款…"）
+    ⇒ Postgres 直接 `value too long for type character varying(64)` ⇒ **落值失败**。
+
+    ⚠️ 讽刺的是：这条列在**模型头上本来就写着**「自由文本 ⇒ **列宽给足**」—— 只是当时没给足。
+
+    ⚠️ 为什么值得一条断言：这类错**长得不像列宽问题** —— 症状是"导入了但那一列空的"，
+       人会去查导入逻辑、查列名映射，唯独想不到是**数据库列太窄**。
+    ⇒ 钉一个**下限**（`>= 512`）：512 是实测 95 字的 5 倍余量 —— 将来**加宽是允许的**，
+      ⛔ **缩回去不行**（付款条款只会更长）。
+    """
+    from sqlalchemy import String
+
+    from app.mod11_jc.models import JcContract
+
+    col = JcContract.__table__.columns["method"]
+    assert isinstance(col.type, String) and col.type.length, \
+        "付款方式是自由文本 ⇒ 不许变成无长度 / 枚举类型（`DEV-J-03`）"
+    assert col.type.length >= 512, (
+        f"付款方式列宽只有 {col.type.length} —— 实测用户那条整段条款就有 **95 字**，"
+        "64 装不下（会被数据库拒；而且错在导入那一步，很难一眼看出是列宽问题）")

@@ -62,7 +62,7 @@
 | 保留范围 | 实际契约与读取方式 | 退出条件 |
 |---|---|---|
 | 现有TAIL票仓 | 已采用的本地tracker权威；原票状态与Comments保持，索引在docs/status.md §15，历史短索引在docs/archive/tickets/index.md | 保持tracker协议，实际票仓已迁至.scratch/tails/issues；切换tracker另行处理；新任务规格使用.scratch，不另造票状态 |
-| 三份活动或未决旧设计 | TAIL-284六项审查来源、TAIL-287暂缓依据及界面整改未决项；路径与消费者受控修复，范围与原裁定保持 | 对应任务结束或未决项明确后归档；原文可从固定SHA和本机快照恢复 |
+| 两份活动或未决旧设计 | TAIL-284六项审查来源及界面整改未决项；TAIL-287已撤回，来源随历史导入归档；路径与消费者受控修复，范围与原裁定保持 | 对应任务结束或未决项明确后归档；原文可从固定SHA和本机快照恢复 |
 | 已有D件 | 长期来源与编号在docs/adr保持；现行消费指针在既有索引更新，新决定使用docs/adr | 来源继续保存，按具体冲突读取，不默认加载全部旧裁定 |
 | 项目约束与文档审计 | 用户已确认退出CodeBuddy项目接入；约束在docs/agents/project-rules.md，审计在docs/guides/document-audit.md与tools/audit | 已撤销两份宿主指针；本次不更新已安装技能 |
 | delivery原型/模板/第三方原件与实际运行资源 | 检查、历史对账和运行模块的真实输入；现行产品Markdown在docs/requirements | 真实程序或来源契约完成切换后再单独处置，不因文档统一搬动正在运行服务的资源 |

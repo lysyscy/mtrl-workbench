@@ -186,8 +186,8 @@ ROOT_ZONE = ROOT / "_mut_root_zone"
 #:      ⇒ 它的「401 行」那条黄**基线里就有** ⇒ 本件开头那句"基线已含该判据 ⇒ 判据无效，先重定靶"
 #:      **当场拒跑**。这正是本仓点名过的**变异件静默烂掉** —— 而它**不在任何闸门清单里**（`_run_rulers`
 #:      不含 `tools/mut/**`）⇒ 烂了多久没人会知道，直到有人（本轮）真去跑它。
-#:   ⇒ 换到 `mod05_flow/importer.py`（现值 **299** 行，留 ~100 行余量 ⇒ 不随日常改动再烂）。
-T5_TARGET = ROOT / "backend" / "app" / "mod05_flow" / "importer.py"
+#:   ⇒ 换到仍在用的 `core/preview_store.py`（历史付款导入已归档）。
+T5_TARGET = ROOT / "backend" / "app" / "core" / "preview_store.py"
 #: `T17` 靶：随便挑**一把在闸门清单里的尺子** —— 把它的 `__main__` 段整段截掉
 T17_TARGET = ROOT / "tools" / "audit" / "cover_gap.py"
 #: ⭐ `T17` **第二半**的靶（2026-10-01 立）：「入门口令」里逐行列着的那件 —— 同款改坏（截掉入口）。
@@ -280,7 +280,7 @@ MUTS_APPEND: list[dict] = [
     {"desc": "M6 `T3` 幽灵路径（仓里没有 `core/nope_ghost.py`）", "mode": "red", "needle": "",
      "path": THRESHOLD, "frag": lambda src: _fit(_b("\n\n\n参见 `backend/app/core/nope_ghost.py`。\n\n\n"), src)},
     {"desc": "M7 `T5` 代码行数越线（补到 401 ⇒ 须登记拆分计划）", "mode": "needle",
-     "needle": ("backend/app/mod05_flow/importer.py", "401 行"),
+     "needle": ("backend/app/core/preview_store.py", "401 行"),
      "path": T5_TARGET, "lines": 401, "frag": lambda src: _pad_lines(src, 401)},
     # ⚠️ 2026-10-01（`TAIL-204` 第 6 步）**换靶**：原靶 = `plans/执行情况-主文档.md`（预算 200），
     #    该件已取消（用户裁定「只留待办」⇒ 并进根 `README.md` §〇）⇒ 靶改成 **`README.md`（预算 240）**。

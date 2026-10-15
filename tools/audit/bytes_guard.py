@@ -45,6 +45,11 @@ ROOT = Path(__file__).resolve().parents[2]
 #: 只管**文本件**（二进制件的行尾/编码规则无意义 ⇒ 进来就是噪音）
 TEXT_SUFFIXES = {".py", ".md", ".mdc", ".js", ".html", ".css", ".json", ".sql", ".yml", ".yaml",
                  ".ps1", ".sh", ".txt", ".cfg", ".ini", ".toml", ".mjs", ".cjs"}
+TEXT_NAMES = {".gitattributes"}
+
+
+def is_text(path: Path) -> bool:
+    return path.name in TEXT_NAMES or path.suffix.lower() in TEXT_SUFFIXES
 
 #: 不是本仓手写的源码（虚拟环境 / 缓存 / 产物 / 备份）
 SKIP_DIRS = {".venv", "__pycache__", "node_modules", "artifacts", ".git", ".pytest_cache", "logs"}
@@ -65,7 +70,7 @@ FFFD = b"\xef\xbf\xbd"
 def iter_text() -> list[Path]:
     out: list[Path] = []
     for p in sorted(ROOT.rglob("*")):
-        if not p.is_file() or p.suffix.lower() not in TEXT_SUFFIXES:
+        if not p.is_file() or not is_text(p):
             continue
         if any(part in SKIP_DIRS for part in p.parts):
             continue
@@ -92,7 +97,7 @@ def staged_text() -> list[Path]:
         if not name:
             continue
         p = ROOT / name
-        if p.is_file() and p.suffix.lower() in TEXT_SUFFIXES:
+        if p.is_file() and is_text(p):
             out.append(p)
     return out
 
@@ -200,7 +205,7 @@ def main(argv: list[str]) -> int:
         files = []
         for name in names:
             p = (ROOT/name).resolve()
-            if not p.is_relative_to(ROOT) or not p.is_file() or p.suffix.lower() not in TEXT_SUFFIXES:
+            if not p.is_relative_to(ROOT) or not p.is_file() or not is_text(p):
                 print('字节哨输入无法证明：', name)
                 return 1
             files.append(p)

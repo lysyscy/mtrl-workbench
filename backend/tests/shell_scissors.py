@@ -103,7 +103,7 @@ def scan() -> list[tuple[str, str]]:
         if any(x in p.parts for x in SKIP_DIRS):
             continue
         rel = p.relative_to(ROOT).as_posix()
-        if rel.startswith((".scratch/", ".artifacts/")) or "/_归档-" in rel or rel in OWNERS:
+        if rel.startswith((".scratch/", ".artifacts/", "docs/archive/")) or "/_归档-" in rel or rel in OWNERS:
             continue
         try:
             tree = ast.parse(p.read_text(encoding="utf-8"))

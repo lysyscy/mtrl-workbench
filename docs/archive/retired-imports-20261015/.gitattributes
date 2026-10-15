@@ -1,0 +1,2 @@
+# Immutable originals are checked by SHA256; preserve their historical line endings and whitespace.
+source/** -text -whitespace

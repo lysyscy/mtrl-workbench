@@ -49,3 +49,7 @@
 旧计划§14.4已办排期另见docs/archive/plans/completed-schedule.md，原文可从同一基线恢复。已关闭票在原真实票仓保留，历史索引只做来源查找，不把关闭票加载为日常资料。活动或未决的三份旧设计、现有D件及本机恢复材料不在删除范围，边界见docs/agents/workflow.md §六。
 
 本项目CodeBuddy退出来源与恢复：`docs/archive/codebuddy-retirement-20261015.md`。
+
+## 2026-10-15一次性导入退出系统
+
+历史付款与集采导入的专属实现、测试、旧说明和逐件来源见docs/archive/retired-imports-20261015/README.md及manifest.json；当前系统只保留付款计划和过程资料导入。

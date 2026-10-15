@@ -268,13 +268,7 @@ def api_fields(payload: FieldsIn) -> dict:
         return SV.act_update_contract(s, contract_id=int(payload.id), **(payload.fields or {}))
 
 
-# ⛔ `POST /api/m11/import/parse` 与 `/api/m11/import/commit`（`M5-8` 的**页内导入面**）已**连件删除**
-#    （`TAIL-75` 余项 · 2026-09-23 **用户裁定**：「导入基本上只在刚开始用系统时导一次，之后就实时更新了」
-#    ⇒ **只留通用面**）。⭐ 集采台账的导入现在是通用面的 `m11_jc` 域
-#    （`/api/imp/m11_jc/{schema,parse,preview,commit}`，域声明见 `mod11_jc/imp_spec.py`）。
-#    ⚠️ **匹配口径仍只有一份**：`import_service.match_and_apply`（通用面的域钩子也调它）
-#    ⇒ ⛔ 别把它连同这两个端点一起删；也⛔ 别再把这套页内端点加回来。
-#    ⚠️ 那两个 class（`ImportParseIn`/`ImportCommitIn`）与模块内的 `_b64()` 只服务这两个端点 ⇒ 同批删除。
+# 历史Excel导入实现与说明已归档到docs/archive/retired-imports-20261015。
 
 
 class LinkIn(BaseModel):

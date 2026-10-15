@@ -95,11 +95,11 @@ CANCELLED: dict[str, tuple[str, str, bool]] = {
     #    ＋ 后端 `/api/m05/import/*` 四条 ＋ `mod05_flow/import_api.py` 整件。
     #    ⛔ 别再建"第二条导入付款流水的路" —— 入口 = 通用面 `/api/imp/m05_flow/*`。
     "m05imp": ("已撤（2026-09-23 用户裁定 `B`：历史付款导入整体搬进「数据导入」页）",
-               "历史付款导入 = **通用导入面** `/api/imp/m05_flow/*`（壳「全局 → 数据导入」选 `历史付款流水`）", True),
+               "2026-10-15整个历史付款导入退出系统；实现与说明见docs/archive/retired-imports-20261015/README.md", True),
     "imp05": ("同上 —— 壳侧四个动作（`imp05Pick/Parse/Ok/Rollback`）已删",
               "同上（通用面四步：选域与文件 → 列映射 → 预览 → 确认）", True),
     "m05ImpMeta": ("同上 —— `API.m05ImpMeta` 已删（列契约改由域声明 `imp_spec.SPEC` 给）",
-                   "`GET /api/imp/m05_flow/schema`", True),
+                   "历史域已退出运行注册；原列契约保存在归档", True),
     # ⚠️ 2026-09-23（`TAIL-75` 余项 · **用户裁定**）：「集采台账」页里那个**页内导入向导**撤掉 ——
     #    用户原话：「**导入基本上只会在我刚开始使用系统时导入一次，之后就实时更新了**，所以只留通用面就好」
     #    ⇒ 与 `m05imp`/`m06imp` 同款处置（同一件事不留两个入口）。同批清掉 `m04` 的旧端点。
@@ -109,9 +109,9 @@ CANCELLED: dict[str, tuple[str, str, bool]] = {
     #    ＋ 后端 `/api/m11/import/parse|commit` 两条 ＋ 它们的入参 class 与 `_b64()`。
     #    ⛔ 别再建"第二条集采台账导入路" —— 入口 = 通用面 `/api/imp/m11_jc/*`。
     "jcImport": ("已撤（2026-09-23 用户裁定：集采台账页内导入向导整体搬进「数据导入」页）",
-                 "集采台账导入 = **通用导入面** `/api/imp/m11_jc/*`（壳「全局 → 数据导入」选 `集采台账`）", True),
+                 "2026-10-15整个集采Excel导入退出系统；实现与说明见docs/archive/retired-imports-20261015/README.md", True),
     "m11Import": ("同上 —— `API.m11ImportParse/m11ImportCommit` 与 `/api/m11/import/*` 两条端点已删",
-                  "同上（列映射与匹配口径仍只有一份：`import_service.match_and_apply`）", True),
+                  "同上；旧匹配实现在归档中，不是运行入口", True),
     # ⚠️ 2026-09-23（**同一条裁定**）：`m04` 付款计划的**页内导入面**同批连件删除 ——
     #    已删：`POST /api/m04/import/parse`（`TAIL-69` 第①步）· `/api/m04/import/confirm`（第②步）·
     #    `/api/m04/import`（一步式，2026-09-22 起**已软退役**的路由）· 入参 class `TokenRequest`。
@@ -121,8 +121,7 @@ CANCELLED: dict[str, tuple[str, str, bool]] = {
     "m04/import": ("已撤（2026-09-23 用户裁定：付款计划页内导入面整体搬进「数据导入」页）",
                    "付款计划导入 = **通用导入面** `/api/imp/m04_plan/*`（壳「全局 → 数据导入」选 `付款计划`）", True),
     "mod05_flow.import_api": ("同上 —— 编排与四条端点已删",
-                              "落库仍走 `importer.commit`（域钩子 `imp_spec.commit` 调的就是它）；"
-                              "`importer.parse_rows`（五列批解析）**保留**，与 `m06` 留 `parse_sheet` 同款", True),
+                              "历史付款专属实现已归档，正常付款及过程资料导入保留", True),
 }
 
 #: `T8` 扫描面 —— **只扫代码**（文档面由 `T2`/`RETIRED_TERMS` 管）。

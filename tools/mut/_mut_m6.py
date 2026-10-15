@@ -29,29 +29,6 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     ("backend/app/mod05_flow/domain.py", "台账自截止月（而非次月）起排行 ⇒ 期初被重复计入",
      "start_ym = next_month(opening.cutoff_ym) if opening.cutoff_ym else None",
      "start_ym = opening.cutoff_ym or None"),
-    ("backend/app/mod05_flow/importer.py", "认不出的取值不留原文（原文不进备注）",
-     "        if not recognized:", "        if False:"),
-    ("backend/app/mod05_flow/importer.py", "异常行不再带源行号（报错定位失效）",
-     'plan.anomalies.append({"line": line, "bill_no": bill_no, "reason": str(exc)})\n'
-     "            continue\n"
-     "        try:\n"
-     "            pay_date = parse_date(date_raw)",
-     'plan.anomalies.append({"line": 0, "bill_no": bill_no, "reason": str(exc)})\n'
-     "            continue\n"
-     "        try:\n"
-     "            pay_date = parse_date(date_raw)"),
-    ("backend/app/mod05_flow/importer.py", "未匹配的行也当匹配放进可写集（模糊匹配）",
-     "            out.unmatched.append(",
-     "            out.rows.append(r) or True or out.unmatched.append("),
-    ("backend/app/mod05_flow/importer.py", "对认不出的写法**猜**一个四类（替用户做判断）",
-     '    return "其他", False',
-     '    return "现汇", True'),
-    ("backend/app/mod05_flow/importer.py", "单据号精确匹配失效（命中 0 也不报未匹配）",
-     "        if str(r.bill_no) in known:",
-     "        if False:"),
-    ("backend/app/mod05_flow/importer.py", "导入不落库（付款事实补录失效）",
-     "        repo.create_flow(\n            s, notice_id=int(r.notice_id), project_id=None, amount=r.amount,",
-     "        (lambda *a, **k: None)(\n            s, notice_id=int(r.notice_id), project_id=None, amount=r.amount,"),
     ("backend/app/mod02_i8/report_export.py", "补抓历史月份时年份取当前年（而不是该月所属年）",
      "    return ym[:4], str(month), ym[:4], str(month)",
      "    return str(__import__('datetime').date.today().year), str(month), ym[:4], str(month)"),

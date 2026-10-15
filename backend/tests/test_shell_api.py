@@ -344,3 +344,17 @@ def test_壳的语义剪刀清单只许变短():
     )
     stale = sorted(set(ALLOW) - found)
     assert not stale, f"白名单里有条目已经不是剪刀了（换掉了就销号）：{stale}"
+
+
+@acc()
+def test_剪刀扫描排除归档原文但仍发现现行代码(tmp_path, monkeypatch):
+    from tests import shell_scissors
+    source = 'def split_shell():\n    return SHELL[SHELL.index("start"):]\n'
+    archive = tmp_path / 'docs/archive/retired/source'
+    archive.mkdir(parents=True)
+    (archive / 'old.py').write_text(source, encoding='utf8')
+    live = tmp_path / 'backend/app'
+    live.mkdir(parents=True)
+    (live / 'consumer.py').write_text(source, encoding='utf8')
+    monkeypatch.setattr(shell_scissors, 'ROOT', tmp_path)
+    assert shell_scissors.scan() == [('backend/app/consumer.py', 'split_shell')]

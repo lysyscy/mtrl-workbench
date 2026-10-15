@@ -63,7 +63,8 @@ def resolve_baseline(cli_value: str | None) -> Path:
             file=sys.stderr,
         )
         raise SystemExit(2)
-    return Path(from_env)
+    configured = Path(from_env)
+    return configured if configured.is_absolute() else REPO_ROOT / configured
 
 
 def load_json(path: Path) -> Any:

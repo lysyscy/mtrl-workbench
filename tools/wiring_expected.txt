@@ -56,7 +56,6 @@ W2 backend/app/mod04_plan/domain.py:outstanding
 W2 backend/app/mod04_plan/domain.py:column_order_ok
 W2 backend/app/mod04_plan/plan_ui.py:period_filter_modes
 W2 backend/app/mod04_plan/plan_ui.py:period_filter_is_shared_control
-W2 backend/app/mod05_flow/importer.py:months_of
 W2 backend/app/mod05_flow/repository.py:get_opening
 W2 backend/app/mod06_proc/domain.py:column_editable
 W2 backend/app/mod06_proc/domain.py:boundary_violations
@@ -84,7 +83,6 @@ W2 backend/app/mod04_plan/importer.py:stage_payload
 W2 backend/app/mod04_plan/importer.py:restore_rows
 W2 backend/app/mod04_plan/plan_manual.py:draft_row_html
 W2 backend/app/mod04_plan/service.py:default_filters
-W2 backend/app/mod05_flow/importer.py:read_workbook
 W2 backend/app/mod06_proc/importer.py:mech_labels
 W2 backend/app/mod07_setl/big_domain.py:rate_text
 W2 backend/app/mod07_setl/domain.py:check_level
