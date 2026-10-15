@@ -21,15 +21,9 @@ from typing import Callable
 
 from app.core.config import get_settings
 from app.core.db import session_scope
-# ⚠️⚠️ 2026-09-20 补：`get_fetch_executor` 里 `ensure_batch_settled(...)` 抛的就是它，
-#    而拆件时**同样漏了 import** ⇒ 抓取遇到"归属未结清"时不是给中文原因、而是
-#    `NameError: name 'MustReportError' is not defined`（**把一句能指路的话，换成一句废话**）。
-#    ⇒ 与 `get_notices_by_ids` 是同一次拆件留下的同一种病（见 `repository` 那段 import 的注释）。
-from app.core.errors import MustReportError
 from app.core.logging import get_logger
 from app.mod01_projects.domain import (
     OwnershipDecision,
-    ensure_batch_settled,
     needs_archive,
     resolve_ownership,
 )
@@ -127,7 +121,7 @@ def apply_fetched_row(session, row: dict, *,
       **分类 / 剔除 / 撤单 / 归属一律不被覆盖**（见 `merge.PROTECTED`）。
 
     ⚠️ `ownership_id` **只对新行生效**（已有行的归属由人指定过，不被再次导入冲掉）；
-       它由调用方在**整批校验通过后**传入 —— 见 `get_fetch_executor`。
+       它由调用方在该行归属校验通过后传入 —— 见 `get_fetch_executor`。
     ⚠️ `rules` = 本次抓取用的**生效规则集**（`rules_repository.effective_rules` 的唯一出口）；
        由调用方**读一次传进来**（⛔ 不在这里每次现读 —— 同一批要保证判据一致）。
     """
@@ -152,10 +146,10 @@ def apply_fetched_row(session, row: dict, *,
     return False, plan.changed
 
 
-def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
+def get_fetch_executor() -> Callable[[str, bool], tuple[int, int, list[dict]]]:
     """抓取执行器（D4 最小取数）。测试可覆盖。"""
 
-    def _exec(year_month: str, allow_kick: bool) -> tuple[int, int]:
+    def _exec(year_month: str, allow_kick: bool) -> tuple[int, int, list[dict]]:
         # ⚠️ 耗时的**起点**：必须在 `I8Client` 登录 i8 **之前**（见 `create_run_record` 那段）
         t0 = datetime.now()
         client = I8Client(allow_kick=allow_kick)
@@ -175,20 +169,8 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
         finally:
             client.close()
 
-        # ⭐⭐ **落库前整批校验归属**（§2.7.4 · §2.5.1 链路 C · `ACC-PRJ-OWN-001`）：
-        #     **归属未走完 ⇒ 整批不入库**（一行都不落），并**显式留痕 + 报出**。
-        #     ⚠️ 这一步**必须在写库之前** —— 否则库里就会躺着「待指定 / 未建档」的行，
-        #        那正是本条口径要杜绝的，也正是"事后还得给旧单据补归属"那套补救逻辑的根源。
-        #     ⚠️ 判定输入只有两样：**项目全名**（i8 的 `PhidPc_EXName`）＋ **单据名**（`fields.BillName`）
-        #        —— 全名撞上壳 ⇒ 再看单据名命中了壳下哪个小微的关键词。
-        # ⭐ **（`TAIL-29`-①）先剔掉「规则剔除行」，再校验归属** ——
-        #    §4.2.2「指定项目不在统计范围」的行不要求归属确定；
-        #    让它们参与「整批校验」会把**整批误拦**。实测：2026-09 的 61 行里，
-        #    「集团公司第四分公司机关工程」×2 行就把 61 行**全拦下** ⇒ 该月一条都进不来。
-        #    ⛔ **判定必须用同一份规则源**（`classify.is_excluded` → `match_exclude_rule` → `DEFAULT_RULES`）
-        #       —— **不许在编排层另写一份剔除判定**（「同一件事被实现两遍」是本项目反复踩的坑）。
-        #    ⇒ 剔除行**照旧落库**（落库时 `decide_placement` 会给它打 `exclude_source=rule`），
-        #      只是**不参与阻断归属校验**；写入后尝试现有档案归属，判不出的留空。
+        # ACC-PRJ-OWN-001：归属未确定的行本次不写，下次抓取重新判断。
+        # 规则剔除行照常保留，不要求归属确定；两处判定使用同一份规则。
         # ⭐ **（`TAIL-40`）规则来源改为「库 → 出厂默认」**：本批**读一次**生效规则集，随后
         #    **同时**喂给「挑需校验的行」与「落库时的剔除判定」—— 一处读取、两处同一份
         #    （⛔ 不许在编排层另写一份剔除判定，也不许两处各读一次）。
@@ -240,43 +222,19 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
             if not archive_out.get("degraded"):
                 judged = _judge()
 
-        try:
-            ensure_batch_settled([d for _, _, d in judged])
-        except MustReportError as exc:
-            # ⚠️ 报错**必须说清是哪几行** —— 只报数量等于没报：用户正是要据此去
-            #    「建档 / 补小微关键词」，不给名字他就无从下手（§2.5.1 链路 C 的出路）。
-            unsettled = [(r, d) for _, r, d in judged if not d.settled]
-            detail = "；".join(
-                f"{r.get('project_name') or '(项目名为空)'}（{d.kind}）" for r, d in unsettled[:10]
-            )
-            more = f"…等共 {len(unsettled)} 行" if len(unsettled) > 10 else ""
-            message = f"{exc}｜未走完的项目：{detail}{more}"
-            with session_scope() as session:          # 另开一个 session 记失败（与上面抓取失败同款）
-                rec = create_run_record(session, run_type="fetch", target=year_month,
-                                        total=len(rows), started_at=t0)
-                finish_run_record(
-                    session, rec, status="failed", success=0, fail=len(rows),
-                    detail=fetch_detail(
-                        reason="ownership_unsettled",
-                        unsettled=len(unsettled),
-                        excluded=n_excluded,
-                        projects=[str(r.get("project_name") or "") for r, _ in unsettled],
-                        # ⭐ **结构化「未命中清单」**（`TAIL-29`-② 弹窗的**唯一数据源**）：
-                        #    只记「判定与显示需要的字段」—— ⛔ **不暂存整批数据**
-                        #    （用户裁定 `B`：补完关键词**再抓一次**，那时自动命中并落库）。
-                        unresolved=[
-                            {
-                                "project_name": str(r.get("project_name") or ""),
-                                "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
-                                "bill_no": str(r.get("bill_no") or ""),
-                                "kind": d.kind,
-                                "shell_id": d.shell_id,
-                            }
-                            for r, d in unsettled
-                        ]),
-                    error_message=message,
-                )
-            raise MustReportError(message) from exc
+        ignored_indices = {i for i, _, d in judged if not d.settled}
+        ignored = [
+            {
+                "project_name": str(r.get("project_name") or ""),
+                "doc_name": str((r.get("fields") or {}).get("BillName") or ""),
+                "bill_no": str(r.get("bill_no") or ""),
+                "kind": d.kind,
+                "shell_id": d.shell_id,
+                "reason": d.reason,
+            }
+            for _, r, d in judged if not d.settled
+        ]
+        accepted = [(i, row) for i, row in enumerate(rows) if i not in ignored_indices]
 
         # 行序号 → 有效行归属；剔除行写入后尝试非阻断回填，不参与整批校验。
         ownership_of: dict[int, int | None] = {i: d.target_id for i, _, d in judged}
@@ -285,7 +243,7 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
             rec = create_run_record(session, run_type="fetch", target=year_month, total=len(rows),
                                     started_at=t0)
             created = updated = 0
-            for i, row in enumerate(rows):
+            for i, row in accepted:
                 is_new, changed = apply_fetched_row(session, row,
                                                     ownership_id=ownership_of.get(i),
                                                     rules=rules)
@@ -299,18 +257,20 @@ def get_fetch_executor() -> Callable[[str, bool], tuple[int, int]]:
             from sqlalchemy import select
             from app.mod03_notice.notice_actions import refill_ownership
             excluded_ids = list(session.scalars(select(PaymentNotice.id).where(
-                PaymentNotice.ph_id.in_([row["ph_id"] for row in rows]),
+                PaymentNotice.ph_id.in_([row["ph_id"] for _, row in accepted]),
                 PaymentNotice.excluded.is_(True), PaymentNotice.ownership_id.is_(None),
             )))
             refill = refill_ownership(session, excluded_ids)
             finish_run_record(
-                session, rec, status="success", success=upserted, fail=0,
-                # ⭐ **成功也要写标记**（`TAIL-41` 的关键一条）：它就是"最近一次"—— 没有 `reason`
-                #    ⇒ 读侧据此判定"本次已走完 ⇒ 没有未命中清单"（⛔ 不再回溯更早那条）。
+                session, rec, status="partial" if ignored else "success",
+                success=len(accepted), fail=len(ignored),
                 detail=fetch_detail(created=created, updated=updated, total=len(rows),
-                                    excluded=n_excluded, ownership_filled=len(refill.filled)),
+                                    excluded=n_excluded, ownership_filled=len(refill.filled),
+                                    reason="ownership_unsettled" if ignored else "",
+                                    unresolved=ignored),
+                error_message=f"已忽略 {len(ignored)} 条归属未确定的单据，本月数据尚未导齐" if ignored else "",
             )
-        return len(rows), upserted
+        return len(rows), upserted, ignored
 
     return _exec
 

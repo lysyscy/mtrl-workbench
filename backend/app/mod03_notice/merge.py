@@ -150,8 +150,7 @@ def apply_placement_to_new(placement, incoming: dict, *, paid_total=0,
         "excluded": placement.excluded,
         "exclude_source": placement.exclude_source,
         # ⭐ **归属**（§2.5.1 链路 C）—— 落在 `**incoming` **之后**，确保它说了算。
-        #    抓取链路已在**入库前**整批校验「归属未走完 ⇒ 整批不入库」（§2.7.4 / `ACC-PRJ-OWN-001`），
-        #    所以走到这里的一定是**已判定**的 id（小微或普通项目）——⛔ 不会是 None。
+        #    抓取链路跳过归属未确定的非剔除行；规则剔除行允许归属为空。
         "ownership_id": ownership_id,
         "stat_settle": default_stat_value(F_STAT_SETTLE, approved=approved, paid_total=paid_total),
         "stat_paid": default_stat_value(F_STAT_PAID, approved=approved, paid_total=paid_total),

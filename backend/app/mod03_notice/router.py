@@ -84,15 +84,15 @@ router = APIRouter(prefix="/api/m03", tags=["mod03"])
 @router.post("/notices/fetch", response_model=FetchResponse)
 def fetch_notices(
     req: FetchRequest,
-    executor: Callable[[str, bool], tuple[int, int]] = Depends(get_fetch_executor),
+    executor: Callable[[str, bool], tuple[int, int, list[dict]]] = Depends(get_fetch_executor),
 ) -> FetchResponse:
     """按核算年月抓取（D4 最小取数）。
 
     ⚠️ 登录含强踢（KillOnlineUser）：`allow_kick=False` 时若检测到在线冲突 ⇒ 直接失败、不踢人。
     ⚠️ 抓取失败**不自动重试登录**（D9）。
     """
-    fetched, upserted = executor(req.year_month, req.allow_kick)
-    return FetchResponse(year_month=req.year_month, fetched=fetched, upserted=upserted)
+    fetched, upserted, ignored = executor(req.year_month, req.allow_kick)
+    return FetchResponse(year_month=req.year_month, fetched=fetched, upserted=upserted, ignored=ignored)
 
 
 @router.get("/notices/unresolved", response_model=UnresolvedResponse)
@@ -102,7 +102,7 @@ def unresolved_notices() -> UnresolvedResponse:
     ⭐ **弹窗的唯一数据源** —— ⛔ 不暂存整批抓取数据（用户 2026-09-18 裁定 `B`：
        补完关键词**再抓一次**，那时 `resolve_ownership` 会自动命中并落库，库里不留半成品）。
     ⚠️⚠️ **两层"新鲜度"**（`TAIL-41` 修复，2026-09-18）：
-       ① **只认最近一次抓取**（`repository.latest_unresolved`）：抓取**成功之后**就不该再有清单；
+        ① **只认最近一次抓取**（`repository.latest_unresolved`）：本次没有忽略行时清单为空；
        ② 清单里每一条还要**按当前档案现算**（`domain.still_unsettled`）—— 用户可能**刚补过词 /
           刚建过小微**，那些行**已经能归属了** ⇒ **当场不再出现**（否则对着已解决的清单白干）。
     """
@@ -130,7 +130,7 @@ def assign_ownership(req: AssignRequest) -> AssignResponse:
     - **选已有小微** ⇒ `append_keyword_dedup` 追加（**只动 `match_keywords`**，别的字段一律不碰）
     - **属于新小微** ⇒ 壳 ＋ 仓库名 ＋ 关键词；⚠️ **已归档的壳下不许新建**
       （新小微必然「在建」⇒ 会当场破坏「壳归档 ⇔ 小微全归档」；该判定由 `create_project` 内部出口负责，此处只把它翻译成中文回执）
-    - ⛔ 本端点**不写任何通知书数据** —— 本批已被拒、库里没有它的行（§2.7.4）
+    - 本端点不写通知书数据；本次忽略的行须补完档案后重新抓取。
 
     ⚠️ 本动作**只补档案**，补完必须**再抓一次**（回执里讲清这一点，别让用户以为已经落库）。
     """

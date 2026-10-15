@@ -7,7 +7,6 @@ import pytest
 from app.core.errors import MustReportError
 from app.mod01_projects.domain import (
     append_keyword_dedup,
-    ensure_batch_settled,
     resolve_ownership,
     validate_keyword_in_doc,
 )
@@ -105,27 +104,6 @@ def test_匹配范围含已归档小微():
     assert d.kind == "small" and d.target_id == 11   # 壳归档后仍可有新单据 ⇒ 只匹配在建会阻塞导入
 
 
-@acc("ACC-PRJ-OWN-001", "001-08")
-def test_归属未走完则整批不入库():
-    shell = make_project(1, name_full=_SHELL_A, ptype=TYPE_SHELL)
-    small = make_project(11, name_full=_SHELL_A, warehouse="甲仓库", ptype=TYPE_SMALL,
-                         parent_shell_id=1, keywords=["大唐雷州"])
-    rows = [
-        {"name_full": _SHELL_A, "doc_name": "大唐雷州项目款"},  # 已走完
-        {"name_full": _SHELL_A, "doc_name": "未知项目款"},      # 未走完
-    ]
-    decisions = [
-        resolve_ownership(name_full=r["name_full"], doc_name=r["doc_name"], projects=[shell, small])
-        for r in rows
-    ]
-    assert any(not d.settled for d in decisions)
-    # 只要有一行未走完 ⇒ **整批拒绝**（库里不得出现「待指定」的行）
-    with pytest.raises(MustReportError):
-        ensure_batch_settled(decisions)
-    # 全部走完 ⇒ 放行
-    ensure_batch_settled([decisions[0]])
-
-
 # ============================================================ 001-09（2026-09-17 新增 · `TAIL-29`-①）
 
 
@@ -182,5 +160,4 @@ def test_整批全是剔除行时校验直接放行():
     """边界：全是被剔除的行 ⇒ **没有需要归属的行** ⇒ 不报错、整批可落库。"""
     rows = [_rule_hit_row(), _rule_hit_row()]
     assert rows_needing_ownership(rows) == []
-    ensure_batch_settled([])          # 不抛 ⇒ 放行
     assert all(decide_placement(r).excluded for r in rows)

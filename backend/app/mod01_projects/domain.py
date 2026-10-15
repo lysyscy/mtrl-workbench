@@ -101,7 +101,7 @@ class OwnershipDecision:
 
     @property
     def settled(self) -> bool:
-        """归属是否"走完"（可入库）。⚠️ 未走完 ⇒ **整批不入库**（001-08）。"""
+        """该行归属是否确定；未确定的行本次忽略（001-08）。"""
         return self.kind in ("normal", "small")
 
 
@@ -187,16 +187,6 @@ def append_keyword_dedup(existing: list[str] | None, keyword: str) -> list[str]:
     if kw and kw not in out:
         out.append(kw)
     return out
-
-
-def ensure_batch_settled(decisions: list[OwnershipDecision]) -> None:
-    """归属**未走完 ⇒ 整批不入库**（001-08）—— 库里不得出现「待指定」的行。"""
-    unsettled = [d for d in decisions if not d.settled]
-    if unsettled:
-        raise MustReportError(
-            f"归属未走完（{len(unsettled)} 行）⇒ 整批不入库；"
-            "请先把每一行的归属指定完（不得留下「待指定」的行）。"
-        )
 
 
 def needs_archive(decisions: list[OwnershipDecision]) -> bool:
@@ -509,7 +499,7 @@ __all__ = [
     "PLACEHOLDER_PREFIX", "TYPE_NORMAL", "TYPE_SHELL", "TYPE_SMALL",
     "strip_trailing_code", "norm_full_name", "classify_name", "derive_type_from_warehouse",
     "OwnershipDecision", "resolve_ownership", "hit_keyword", "first_hit_keyword",
-    "validate_keyword_in_doc", "append_keyword_dedup", "ensure_batch_settled",
+    "validate_keyword_in_doc", "append_keyword_dedup",
     "StatusChange", "apply_status_change", "can_create_small",
     "ordered", "reorder", "Candidate", "build_candidates",
     "multi_select_keys", "combine_filters", "resolve_display",

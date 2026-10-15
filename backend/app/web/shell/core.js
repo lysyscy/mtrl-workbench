@@ -463,8 +463,13 @@ async function ntFetchBackend(m) {
   if (r.ok) {
     await reloadNotices();
     await reloadM02IfOn();     /* ⭐ 刚写的那条记录要**立刻**在记录卡上看到（见 `reloadM02IfOn`） */
+    const ignored = r.ignored || [];
+    const skipped = ignored.length ? `<div class="tip wn" style="margin-top:calc(10px * var(--fscale))">本次忽略 <b>${ignored.length}</b> 条，本月数据尚未导齐。更正后重新抓取，每次都会重新校验。</div>
+      <div class="tw" style="min-height:0;margin-bottom:calc(10px * var(--fscale))"><table class="dt"><thead><tr><th>单据编码</th><th>付款项目</th><th>单据名称</th><th>忽略原因</th></tr></thead><tbody>${ignored.map(it =>
+        `<tr><td>${esc(it.bill_no || '—')}</td><td>${esc(it.project_name || '—')}</td><td>${esc(it.doc_name || '—')}</td><td>${esc(it.reason)}</td></tr>`).join('')}</tbody></table></div>
+      <button class="btn" data-act="ownNtOpen">处理项目归属</button>` : '';
     return fetchResultModal(`抓取结果 · 付款通知书`,
-      `已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，写入 <b>${r.upserted}</b> 条。`);
+      `已抓取 <b>${esc(m)}</b>：i8 返回 <b>${r.fetched}</b> 条，新增或更新 <b>${r.upserted}</b> 条。${skipped}`);
   }
   /* 失败：把后端原因**原样**给用户（后端已写成中文）；属「归属未走完」⇒ 直接开补词弹窗 */
   await reloadM02IfOn();       /* ⚠️ 「抓取被拒」同样是**一条真记录**（`failed`）⇒ 卡上要能看到 */

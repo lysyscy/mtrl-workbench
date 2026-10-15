@@ -54,12 +54,6 @@ class FetchRequest(BaseModel):
     )
 
 
-class FetchResponse(BaseModel):
-    year_month: str
-    fetched: int
-    upserted: int
-
-
 # --------------------------------------------------------------- 链路 C 弹窗（`TAIL-29`-② ④）
 
 
@@ -81,7 +75,15 @@ class UnresolvedItemOut(BaseModel):
     bill_no: str = ""
     kind: str = ""
     shell_id: int | None = None
+    reason: str = ""
     candidates: list[SmallCandidateOut] = []
+
+
+class FetchResponse(BaseModel):
+    year_month: str
+    fetched: int
+    upserted: int
+    ignored: list[UnresolvedItemOut] = Field(default_factory=list)
 
 
 class UnresolvedResponse(BaseModel):

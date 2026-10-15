@@ -175,8 +175,7 @@ const API = {
   homeRunCounts: () => API.get('/api/home/run-counts'),
 
   /* ---- MOD-03 · 抓取 ＋ 链路 C 弹窗（`TAIL-29`-② ④） ---- */
-  /* ⭐ 抓取：**失败也要看回执** —— 「归属未走完」是**可预期的失败**（要拿它开弹窗）
-     ⇒ 这里**不 throw**，把 body 原样返回，由调用方判 `ok`。 */
+  /* 抓取结果包含本次忽略清单；失败也保留回执，由调用方显示原因。 */
   fetchNotices: async year_month => {
     const r = await rawFetch('/api/m03/notices/fetch', {
       method: 'POST',
@@ -185,7 +184,7 @@ const API = {
     }, 'POST /api/m03/notices/fetch');
     const body = await r.json().catch(() => ({}));
     markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：抓取是**跨页写**（`payment_notice`/`run_record`；
-                                     ⚠️ 「归属未走完」也是**已落库**的可预期失败 ⇒ 成败都要标脏） */
+                                     成败都可能写执行记录，因此都要标脏） */
     return r.ok ? { ok: true, ...body } : { ok: false, ...body };
   },
   unresolved: () => API.get('/api/m03/notices/unresolved'),

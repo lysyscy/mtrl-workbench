@@ -122,7 +122,8 @@ def test_三条结局都要写标记():
     from app.mod03_notice import router as RO
 
     src = inspect.getsource(RO.get_fetch_executor)
-    assert src.count("detail=fetch_detail(") == 3, f"三种结局都要走写侧唯一出口（实得 {src.count('detail=fetch_detail(')} 处）"
+    # 忽略清单与正常行同事务写入；三种结果的运行行为见 test_notice_fetch_skip.py。
+    assert src.count("detail=fetch_detail(") == 2, "取数失败与处理结果都须走写侧唯一出口"
     assert "detail={" not in src, "⛔ 不许有绕过出口的裸 detail 字面量"
     assert R.fetch_detail(reason="x") == {R.FETCH_MARK: True, "reason": "x"}
     assert R.fetch_detail() == {R.FETCH_MARK: True}
