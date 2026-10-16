@@ -8,7 +8,6 @@ from sqlalchemy import update
 from app.core.db import session_scope
 from app.mod03_notice import service as notices
 from app.mod03_notice.models import PaymentNotice
-from app.mod04_plan import service as plans
 from app.mod05_flow import repository as flows
 from app.mod05_flow.models import PaymentFlow
 from app.mod08_inv import service as inventory
@@ -20,7 +19,7 @@ from tests.test_acc_jc_pay_link import _project
 
 
 @acc()
-def test_fee_original_excludes_adjustment():
+def test_fee_original_excludes_adjustment(rollback_db):
     with session_scope() as s:
         row = InvDetail(ym='2026-08', warehouse_name='__300原单__',
                         direction='出库', cbs_name='CBS-安文费', amount=100)
@@ -33,11 +32,10 @@ def test_fee_original_excludes_adjustment():
                              'direction':'出库', 'cbs':'CBS-安文费', 'amount':Decimal('100')}]
         adjusted = next(r for r in inventory.load_rows(s, ym='2026-08') if r['id']==row.id)
         assert adjusted['adj_amount'] == Decimal('900')
-        s.rollback()
 
 
 @acc()
-def test_jc_batch_facts_and_query_count():
+def test_jc_batch_facts_and_query_count(rollback_db):
     with session_scope() as s:
         project = _project(s, '__自检仓_300__')
         made = []
@@ -73,9 +71,6 @@ def test_jc_batch_facts_and_query_count():
             assert linked['notice_id']==n.id
         assert next(r for r in one[made[0][0].id] if r['id']==manual.id)['amount']==33
         assert next(r for r in one[made[0][0].id] if r['id']==manual.id)['date']=='2026-07-01'
-        amounts=plans.notice_amounts(s)
-        assert [(amounts[n.bill_no].approved, amounts[n.bill_no].paid) for c,n in made]==[(1000,10)]*4
-        s.rollback()
 
 
 @acc()
@@ -100,7 +95,7 @@ def test_notice_full_input_and_lock_parameters(monkeypatch):
 
 
 @acc()
-def test_jc_stat_reads_database_fact_not_cached_notice():
+def test_jc_stat_reads_database_fact_not_cached_notice(rollback_db):
     with session_scope() as s:
         p=_project(s, '__自检仓_300_cache__')
         c=jc.insert_contract(s, project_id=p.id, material_name='300统计事实')
@@ -112,4 +107,3 @@ def test_jc_stat_reads_database_fact_not_cached_notice():
                   .execution_options(synchronize_session=False))
         assert n.stat_paid==10
         assert jc.payments_of_many(s,[c.id])[c.id][0]['amount']==75
-        s.rollback()

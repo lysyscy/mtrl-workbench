@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 ARTIFACTS_DIR: Path = REPO_ROOT / "artifacts"
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -118,3 +120,28 @@ _register_exporters()
 from app import core_bindings as _core_bindings  # noqa: E402
 
 _core_bindings.register_all()
+
+
+@pytest.fixture
+def rollback_db(monkeypatch):
+    """按需接管 session_scope；会话提交仅释放保存点，结束总是回滚外层事务。"""
+    from sqlalchemy.engine import make_url
+    from sqlalchemy.orm import sessionmaker
+    from app.core import db
+    from app.core.config import get_settings
+
+    engine = db.get_engine()
+    test_url = get_settings().test_database_url
+    assert test_url and engine.url == make_url(test_url), '回滚夹具只能连接已配置的测试库'
+    with engine.connect() as connection, monkeypatch.context() as scoped:
+        outer = connection.begin()
+        factory = sessionmaker(bind=connection, autoflush=False, expire_on_commit=False,
+                               join_transaction_mode='create_savepoint')
+        scoped.setattr(db, '_session_factory', factory)
+        try:
+            yield connection
+        finally:
+            try:
+                assert outer.is_active, '测试不得提交外层事务'
+            finally:
+                outer.rollback()

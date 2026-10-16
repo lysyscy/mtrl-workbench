@@ -201,6 +201,12 @@
 
 现有 Python Playwright 回归环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`，只传给执行子进程；输出用 UTF-8。`ACC_RESULTS_PATH` 局部出口由选择器隔离，勿全局导出。临时脚本与证据放 00-scratch。
 
+### 写库测试隔离与选集CLI
+
+普通写库测试可声明 `rollback_db` 夹具：接管 `app.core.db.session_scope()` 的会话工厂，提交只释放保存点，测试结束统一回滚外层事务；正常返回和断言失败均清理。不再靠用例末尾的一句 `rollback()` 防止残留。仅限已配置的测试库，不接管自建引擎/会话、原始连接或其他进程；验证真实提交的测试仍沿用独立数据及清理，不使用该夹具。
+
+`_pytestscope.py` 支持无参数、`--cover-only`、`--explain`、`--explain -- PATH...` 和 `--help`；未知、缩写和冲突参数退出2，不执行选集计算。工具自检按登记入口调用，不假设支持 `--selftest`。
+
 ### 浏览器工具的本仓分工
 
 - 临时页面探索、交互调试、截图和问题复现优先考虑已安装的 Playwright CLI；操作说明读取 Skills Manager 管理的官方 `playwright-cli` 技能及本机 `playwright-cli --help`。按需要取快照和截图，简单操作直接复用 CLI，不默认新增永久脚本。

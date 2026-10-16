@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import argparse
 import ast
 import pathlib
 import re
@@ -30,7 +31,7 @@ AUTO_LOADED: tuple[tuple[str, str], ...] = (
 REPO_WIDE: tuple[tuple[str, str], ...] = (
     ("test_ux_text.py", "扫 app/** 的用户可见串（不许拼异常原文/工程代号）"),
     ("test_layering.py", "分层边界十一靶（扫全部 mod* 目录）"),
-    ("test_deps_declared.py", "依赖清单不许漏登记（AST 扫 app/**）"),
+    ("test_deps_declared.py", "pyproject 运行依赖不许漏登记（AST 扫 app/**）"),
     ("test_dup_guards.py", "防扩散墓碑（扫 app/** 的守卫定义）"),
     ("test_schema_drift.py", "models 漂移（扫 mod*/models.py 全集）"),
     ("test_theme.py", "主题变量不许自造（扫 app/**）"),
@@ -50,9 +51,7 @@ REPO_WIDE: tuple[tuple[str, str], ...] = (
     ("test_wired_m02.py", "m02 台账的壳接线"),
     ("test_wired_m03_action.py", "m03 动作的壳接线"),
     ("test_wired_m03_own.py", "m03 归属弹窗的壳接线"),
-    ("test_wired_m03_pick.py", "m03 选择器的壳接线"),
     ("test_wired_m03_print.py", "m03 打印的壳接线"),
-    ("test_wired_m04.py", "m04 流程的壳接线"),
     ("test_wired_m05.py", "m05 额度的壳接线"),
     ("test_wired_m06.py", "m06 机械源的壳接线"),
     ("test_wired_m11.py", "m11 集采的壳接线"),
@@ -100,8 +99,9 @@ def local_scanners(paths) -> set[str]:
         picked.add('test_schema_drift.py')
     if any(p.startswith(('backend/app/', 'backend/tests/', 'tools/')) and p.endswith('.py') for p in paths):
         picked.add('test_wiring_guards.py')
-    if any(p in {'backend/requirements.in', 'backend/requirements.txt'} for p in paths):
-        picked.add('test_deps_declared.py')
+    dependency_files = {'backend/pyproject.toml', 'backend/uv.lock'}
+    if any(p in dependency_files for p in paths):
+        picked |= {'test_deps_declared.py', 'test_pipini_single_source.py'}
     wide = {n for n, _ in REPO_WIDE}
     if any(p in {'backend/app/main.py', 'backend/app/core_bindings.py', 'backend/app/export_bindings.py'} for p in paths):
         picked |= wide
@@ -587,16 +587,17 @@ def plan(changed, *, changes=None) -> Plan:
             selected.files = sorted(set(selected.files) | set(other.files))
             selected.run = selected.run or other.run
         return selected
-    requirements = {'backend/requirements.in', 'backend/requirements.txt'}
-    if set(inside) <= requirements:
-        return Plan(True, '依赖清单变化：只核已知声明消费；运行兼容按所变依赖选测', ['test_deps_declared.py'])
-    odd = [p for p in inside if not p.endswith(".py") and p not in requirements]
+    dependency_files = {'backend/pyproject.toml', 'backend/uv.lock'}
+    if set(inside) <= dependency_files:
+        return Plan(True, 'uv依赖配置变化：核依赖声明与索引配置；运行兼容按所变依赖选测',
+                    ['test_deps_declared.py', 'test_pipini_single_source.py'])
+    odd = [p for p in inside if not p.endswith(".py") and p not in dependency_files]
     if odd:
         return Plan(False, "待查：后端非Python输入的实际消费（%d处）" % len(odd))
     mods, files = build_graph()
     seeds = []
     for p in inside:
-        if p in requirements:
+        if p in dependency_files:
             continue
         source = ROOT/p
         if source.is_file():
@@ -822,12 +823,19 @@ def changed_paths():
 
 
 def main() -> int:
-    args = sys.argv[1:]
-    if "--cover-only" in args:
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--cover-only', action='store_true', help='检查选集登记覆盖')
+    modes.add_argument('--explain', action='store_true', help='说明选集；指定路径用 --explain -- PATH...')
+    parser.add_argument('paths', nargs='*', metavar='PATH')
+    args = parser.parse_args()
+    explicit_paths = '--' in sys.argv[1:]
+    if (args.paths or explicit_paths) and not (args.explain and explicit_paths):
+        parser.error('指定路径请使用 --explain -- PATH...')
+    if args.cover_only:
         return report_cover()[0]
-    if "--explain" in args:
-        rest = [a for a in args if a != "--explain"]
-        pl = plan(rest[1:] if rest and rest[0] == "--" else changed_paths())
+    if args.explain:
+        pl = plan(args.paths if explicit_paths else changed_paths())
         print("跑 pytest：%s" % ("是" if pl.run else "否"))
         print("理由：%s" % pl.reason)
         print("件名（%d）：%s" % (len(pl.files), " ".join(sorted(pl.files)) or "（全套）"))

@@ -16,7 +16,7 @@ from tests.acc_plugin import acc
 
 
 @acc()
-def test_display_and_revoke_receipt(monkeypatch):
+def test_display_and_revoke_receipt(monkeypatch, rollback_db):
     with session_scope() as s:
         @contextmanager
         def borrowed():
@@ -61,7 +61,6 @@ def test_display_and_revoke_receipt(monkeypatch):
         assert S.act_link_notice(s, notice_id=n.id, contract_id=c2.id)['ok']
         assert S.act_unlink_notice(s, notice_id=n.id)['ok']
         assert len(flows.list_flows_of_notice(s, n.id)) == 3
-        s.rollback()
 
 
 @acc()
