@@ -42,7 +42,7 @@ uv不在PATH时传`-UvPath <uv.exe路径>`；脚本不会额外下载Python。PG
 
 Git 提供受跟踪代码和 `delivery/`，不提供本机 `.env`、数据库、NSSM、浏览器或忽略的壳备份。clone 完成不代表旧数据已恢复；已有数据迁移须另定恢复方案和隔离验证。
 
-本机2026-10-14：uv管理的Python3.15.0、PostgreSQL18.6（D:/pgsql/18.6/pgsql/bin）、Node.js24.21.0、Git2.56.0.windows.2；Python包版本回backend/requirements.txt，安装哈希回backend/requirements.lock。服务依赖为postgresql-x64-18。
+本机2026-10-14：uv管理的Python3.15.0、PostgreSQL18.6（D:/pgsql/18.6/pgsql/bin）、Node.js24.21.0、Git2.56.0.windows.2；后端依赖声明在`backend/pyproject.toml`，解析锁在`backend/uv.lock`。服务依赖为postgresql-x64-18。
 
 ## §二 落地前后**要改的几项**
 
@@ -55,7 +55,7 @@ Git 提供受跟踪代码和 `delivery/`，不提供本机 `.env`、数据库、
 | **`ALLOWED_IP_CIDRS`** | **仓根 `.env`**（键名见**仓根 `.env.example`**） | 办公室**局域网段**（i8 在**外网** ⇒ 目标机要能上外网） |
 | **打印机** | 付款通知书页「打印机设置」弹窗；配置主人见docs/guides/operations.md §一之五 | 按目标机打印机、驱动与地址实际核对；本机旧确认不能覆盖新目标，相关打印需实际验证 |
 | **Python / PG / node / nssm** | 目标机环境 | 按目标用途逐项核安装、版本、路径、服务权限及运行依赖；2026-09-29的旧机确认不证明新目标已齐备 |
-| ⭐ **依赖镜像**（`ops\pip.ini`） | 仓内 **`ops\pip.ini`**（= **唯一主人**，随 Git 走）⇒ 落地时由 `deploy_restore.ps1` 的依赖准备步骤复制成 **venv 级** `backend\.venv\pip.ini` | 缺副本时复制；已有不同副本只提示并保留，请核对镜像后再使用。`.venv` 不入 Git，重建时仍从仓内真源取得配置。判据 = `backend\tests\test_pipini_single_source.py`（两份**逐字节相同**） |
+| ⭐ **依赖来源与索引** | `backend/pyproject.toml` 声明依赖并固定官方 PyPI 索引，`backend/uv.lock` 锁定可复现版本；部署入口执行 `uv sync --locked --no-dev` | 命令在 `backend/` 执行，或从仓根加 `--project backend`。开发用 `uv sync --locked`；目标机重建 venv 用 `uv sync --locked --no-dev`。不要维护 requirements 或 venv 级 pip.ini 副本。 |
 
 ⚠️ **改了 `.env` 却不生效？** 见 `docs/guides/operations.md` **§一之五 配置主人表**（库 vs `.env` 谁优先 · 改完要不要重启）—— ⛔ 别在这里再抄一份。
 
@@ -111,6 +111,5 @@ Git 提供受跟踪代码和 `delivery/`，不提供本机 `.env`、数据库、
 
 ## §六 依赖来源与加固
 
-D10决定从 `docs/adr/D索引-D1-D32.md` §二追溯；镜像实值的唯一主人为 ops/pip.ini，不在文档另选一次源。
-安装源由ops/pip.ini唯一指定并复制到venv，不设多源回退；2026-10-14为取得用户要求的最新稳定版本改用官方PyPI；requirements.txt全部精确锁版本，requirements.lock含哈希（由uv生成并用于同步安装）；新增依赖前运行pip-audit，保存审计报告。GitHub直装、私有源、预发布及不满足工程底线下载量要求的小众库仍禁止；阈值回交付面《技术栈选型分析》与工程底线。
+D10原镜像设置的历史裁定见`docs/adr/D索引-D1-D32.md` §二；当前依赖索引固定为官方 PyPI，唯一配置在`backend/pyproject.toml`。运行依赖与测试/审计工具分组记录；`uv.lock` 是解析锁，部署以`uv sync --locked --no-dev`安装，不再维护requirements锁或venv级pip.ini副本。运行依赖用 `uv add/remove` 维护，开发工具用 `uv add --dev`；提交声明与锁文件，日常用 `uv run --locked` 调用项目命令。Uvicorn 使用基础包加 `httptools`，保留 HTTP 加速；当前不启用 WebSocket、热重载及 YAML 日志配置。`pycryptodomex` 由 `gmssl` 间接安装；`requests` 仅在开发组保留旧工具用途，测试直接使用的 `starlette` 同时登记在开发组。新增依赖后仍运行pip-audit并保存审计报告；GitHub直装、私有源、预发布及不满足工程底线下载量要求的小众库仍禁止；阈值回交付面《技术栈选型分析》与工程底线。
 上述是要求，不代表每项已完成；实际安装/落地状态按本页其他节和主计划§0核对。

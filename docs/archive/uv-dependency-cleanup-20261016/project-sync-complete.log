@@ -1,0 +1,5 @@
+Resolved 75 packages in 1ms
+Uninstalled 3 packages in 34ms
+ - pyyaml==6.0.3
+ - watchfiles==1.3.0
+ - websockets==17.2

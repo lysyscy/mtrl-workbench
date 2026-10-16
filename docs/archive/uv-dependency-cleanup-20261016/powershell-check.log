@@ -1,0 +1,22 @@
+✅ deploy_restore.ps1 语法 ✓
+✅ install_hooks.ps1 语法 ✓
+✅ nssm_install.ps1 语法 ✓
+✅ nssm_uninstall.ps1 语法 ✓
+✅ selfcheck.ps1 语法 ✓
+✅ server_ctl.ps1 语法 ✓
+
+② 仓内路径字面量（`Join-Path $RepoRoot '…'` ⇒ 必须真的存在）
+   ✅ deploy_restore.ps1  .env
+   ✅ deploy_restore.ps1  ops\init_db.sql
+   ✅ deploy_restore.ps1  backend
+   ✅ deploy_restore.ps1  backend
+   ✅ deploy_restore.ps1  ops\init_db.sql
+   ✅ deploy_restore.ps1  backend
+   ✅ deploy_restore.ps1  ops\nssm_install.ps1
+   ✅ deploy_restore.ps1  ops\selfcheck.ps1
+   ✅ nssm_install.ps1  backend
+   ✅ nssm_uninstall.ps1  backend
+   ✅ selfcheck.ps1  backend
+   ✅ selfcheck.ps1  backend\app\resources\templates
+
+=== 全部语法 ✓ · 仓内路径字面量全在 ✓ ===

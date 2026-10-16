@@ -1,0 +1,151 @@
+{
+  "status": "closed",
+  "archived_on": "2026-10-16",
+  "repository_head": "26b61b639eee961ad008f26fc8d4ce5eb3eac7d1",
+  "uncommitted_changes_present": true,
+  "files": [
+    {
+      "source": ".scratch/uv-dependency-cleanup/candidate-production-sync.log",
+      "archive": "candidate-production-sync.log",
+      "sha256": "d848e835532a41c8f27a5ea32cffb5636bbbc404b69d8db22cdef622f0e05318"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/candidate-sync.log",
+      "archive": "candidate-sync.log",
+      "sha256": "c1db2dfdf0acfb5d06df0d82e673fa0eeb49d3d523e578a074bdee409b4e342a"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/cleanup.log",
+      "archive": "cleanup.log",
+      "sha256": "9d5aedf425b1bb90ba048101ce343408af5b5612337d33538717a195fc08bc37"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/cleanup.ps1",
+      "archive": "cleanup.ps1",
+      "sha256": "fd413197f3a9e346a7c86c09fb13eb0c2ae90c5e1225e312bdd5fab95b70c042",
+      "source_sha256": "41fd4b5ada8d28d75a2aedaa9d9c205cdf6eec5a8327a08318ebf27027050732",
+      "archive_bytes_transform": "prepended UTF-8 BOM; remove EF BB BF to reconstruct source bytes"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/evidence.md",
+      "archive": "evidence.md",
+      "sha256": "f476e9b4c6da81508bc3b1e25e960015113d09adbe0f86bca1e19de59832f145"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/find_module_owner.ps1",
+      "archive": "find_module_owner.ps1",
+      "sha256": "94b46cc290f4f08c72e4d40c29b53e05bacdb497063bceff2205c79ee28a76d4",
+      "source_sha256": "225a61dd7f2716318958aa3294e97fe446edebe07aa8c32b9eee302764b004e7",
+      "archive_bytes_transform": "prepended UTF-8 BOM; remove EF BB BF to reconstruct source bytes"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/powershell-check.log",
+      "archive": "powershell-check.log",
+      "sha256": "329ab11f2dfffda8c36b77d483370b3610798017d461252f96b8ec9357b7ff46"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/project-check-0.log",
+      "archive": "project-check-0.log",
+      "sha256": "0c573c6699296e6bfed9ff6560816b5338e7ecf50c0f293f4c1e31f1bba735fc"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/project-pip-check-final.log",
+      "archive": "project-pip-check-final.log",
+      "sha256": "c3996c99065e8debb3373695f4993442dd3ed0b015ebf27c81768c9f8a6af093"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/project-restored-check.log",
+      "archive": "project-restored-check.log",
+      "sha256": "4e3005990b4972ca920b7fa818b55ffc9f87a98fb3a6917227e1a05fe5102cae"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/project-sync-complete.log",
+      "archive": "project-sync-complete.log",
+      "sha256": "968f84f6460f0b48b30d4954bad6d58ec4c6ab653b92c3902dcfa28ede1124ac"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/project-sync-dry-run-final.log",
+      "archive": "project-sync-dry-run-final.log",
+      "sha256": "dd6273ace0ab3bd6abccb23d15426866c6e3b60ccc7166c423eddca4bfa510c1"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/project-sync-final.log",
+      "archive": "project-sync-final.log",
+      "sha256": "615127211262c93765219f76d9c3639ef0d8a99a3cef452d298db03b9519ee4c"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/pytest-final.log",
+      "archive": "pytest-final.log",
+      "sha256": "0f92049207f024dfd3bccb130b6ebe2022b56ca1df294b3d93f4e7edb0c231b1"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/pytest-results.json",
+      "archive": "pytest-results.json",
+      "sha256": "ab722275d471effde60503b8a34c1e909239d94cba82a13635769117b4e6b142"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/pytest.log",
+      "archive": "pytest.log",
+      "sha256": "94015bf7344ee44833a2deff709cac58e92f0b4da35d064e0b7ba9e496a02eb8"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/restore_incomplete.py",
+      "archive": "restore_incomplete.py",
+      "sha256": "35e3039530ea8d9c4b2889eb4282159afce9b7332a1751825b115200e3c801d4"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/runtime-smoke.log",
+      "archive": "runtime-smoke.log",
+      "sha256": "9702e3273061cf4860d2806b78c8eb283de39bce509b90738911516c92785037"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/runtime_smoke.py",
+      "archive": "runtime_smoke.py",
+      "sha256": "50535a03a76057011432ba708f0e1539fc42ecac61d621f336af579e7def4dc1"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/service-start.log",
+      "archive": "service-start.log",
+      "sha256": "1b341c43349931163b5775f5aae8489f179b6d597606b3f89d4a5f888c3ff50b"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/service-status-final.log",
+      "archive": "service-status-final.log",
+      "sha256": "082fb1f10c8640d5576273fd3f04453615c323ac90a74ef4ba333d79ba23deaa"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/service-stop.log",
+      "archive": "service-stop.log",
+      "sha256": "5aceae87e82cd612285f4f16a692a70dc81314ebcc32bf769ba8ab8d9f2f0324"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/service-stopped-check.log",
+      "archive": "service-stopped-check.log",
+      "sha256": "d8afe583c074414dce5fd40ad0019d476d9239c40e5de3303655a99c74c1af34"
+    },
+    {
+      "source": ".scratch/uv-dependency-cleanup/sync_service.py",
+      "archive": "sync_service.py",
+      "sha256": "85ce9b4edfe2bfa1f7e64b58215943d78e904c380959795a5c4b876381ba2407"
+    },
+    {
+      "source": ".scratch/local/audit_dependencies_20261016.py",
+      "archive": "initial-audit/audit_dependencies_20261016.py",
+      "sha256": "ef641212be5ae825a5d4d5fe081689feaa44e424d93083599da602a67e38fe23",
+      "source_sha256": "90b0c1d48103525ae63bba1cdc239252fad366aae9ca6e0b46a21640cc20319d",
+      "archive_bytes_transform": "prepended one module docstring line; remove first line to reconstruct source bytes"
+    },
+    {
+      "source": ".scratch/local/dependency-audit-20261016.txt",
+      "archive": "initial-audit/dependency-audit-20261016.txt",
+      "sha256": "aa5b5a928905f10bd586353aaf867988750278a265a4db21ed8a79906f61cb29"
+    },
+    {
+      "source": ".scratch/local/finish_uv_20261016.py",
+      "archive": "initial-audit/finish_uv_20261016.py",
+      "sha256": "9d8ba600e4f541995ab643645d2b9388f42b691f8fe0c68441dcd9ef5b428dba",
+      "source_sha256": "31f527d90d266890f7367078bb86474aa5b9b4e50622085cc0fe7bd09a31d94c",
+      "archive_bytes_transform": "prepended one module docstring line; remove first line to reconstruct source bytes"
+    }
+  ]
+}

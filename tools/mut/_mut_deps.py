@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-"""反向灵敏度：依赖清单不许漏登记（守 backend/tests/test_deps_declared.py）。
+"""反向灵敏度：运行依赖不许漏登记（守 backend/tests/test_deps_declared.py）。
 
 守什么（2026-10-05 立 · 出处 = `M8 ①` 落地第一天）：`app/import_kit/readers.py` 按魔术字节认老
-`.xls` 并 `import xlrd`，而 `backend/requirements.txt` **从来没登记过它** ⇒ 换机落地后 venv 里没有
+`.xls` 并 `import xlrd`，而项目运行依赖**从来没登记过它** ⇒ 换机落地后 venv 里没有
 ⇒ 用户的集采台账（三份全是 `.xls`）一导就「解析失败 —— 请重试」，而**开发机 venv 什么都有 ⇒ 本机测不出来**。
 
 跑法（仓根）：backend/.venv/Scripts/python.exe -X utf8 tools/mut/_mut_deps.py
@@ -20,7 +20,7 @@ import sys
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
-REQS = ROOT / "backend" / "requirements.txt"          # ← 靶：依赖清单（唯一主人）
+PROJECT = ROOT / "backend" / "pyproject.toml"        # ← 靶：运行依赖（唯一主人）
 TEST = "tests/test_deps_declared.py"
 T1 = "test_代码里用到的第三方库都在依赖清单里"
 T2 = "test_老xls台账的读表件在依赖清单里"
@@ -40,21 +40,21 @@ def run_test() -> tuple[int, str]:
 
 
 def drop_line(raw: bytes, prefix: bytes) -> bytes:
-    """从清单原始字节里删掉以 `prefix` 开头的那一行（**含换行**）—— 逐字节操作，不重排任何东西。"""
+    """从 TOML 依赖数组里删掉以 `prefix` 开头的那行（**含换行**），其余字节不动。"""
     lines = raw.splitlines(keepends=True)
-    kept = [ln for ln in lines if not ln.lstrip().startswith(prefix)]
+    kept = [ln for ln in lines if not (ln.lstrip().startswith(b'"') and ln.lstrip().startswith(prefix))]
     assert len(kept) == len(lines) - 1, (
-        f"⚠️ 锚点没命中 —— 清单里没有 `{prefix.decode()}` 这一行？先核 requirements.txt 再改本件")
+        f"⚠️ 锚点没命中 —— pyproject.toml 里没有 `{prefix.decode()}` 依赖行？先核配置再改本件")
     return b"".join(kept)
 
 
 def main() -> int:
     fail: list[str] = []
     rc1 = rc2 = -1
-    if not REQS.exists():
-        print(f"⛔ 依赖清单不在（{REQS}）⇒ 没东西可验")
+    if not PROJECT.exists():
+        print(f"⛔ 项目配置不在（{PROJECT}）⇒ 没东西可验")
         return 1
-    orig = REQS.read_bytes()
+    orig = PROJECT.read_bytes()
 
     rc0, out0 = run_test()
     print(f"基线：{TEST} ⇒ rc={rc0}")
@@ -64,25 +64,25 @@ def main() -> int:
         return 1
 
     try:
-        print("变异①：删掉清单里的 `xlrd==2.0.1` ⇒ 两条判据都必须红…")
-        REQS.write_bytes(drop_line(orig, b"xlrd=="))
+        print("变异①：删掉项目运行依赖里的 `xlrd` ⇒ 两条判据都必须红…")
+        PROJECT.write_bytes(drop_line(orig, b'"xlrd"'))
         rc1, out1 = run_test()
         if rc1 == 0 or T1 not in out1 or T2 not in out1:
             fail.append(f"① 删了 xlrd 但没红（rc={rc1}）—— 判据没牙")
-        REQS.write_bytes(orig)
-        if orig != REQS.read_bytes():
-            fail.append("① 清单没复原")
+        PROJECT.write_bytes(orig)
+        if orig != PROJECT.read_bytes():
+            fail.append("① 项目配置没复原")
 
-        print("变异②：删掉清单里的 `openpyxl==…` ⇒ 「全量扫」那条必须红（证明不是只对 xlrd 特判）…")
-        REQS.write_bytes(drop_line(orig, b"openpyxl=="))
+        print("变异②：删掉项目运行依赖里的 `openpyxl` ⇒ 「全量扫」那条必须红（证明不是只对 xlrd 特判）…")
+        PROJECT.write_bytes(drop_line(orig, b'"openpyxl"'))
         rc2, out2 = run_test()
         if rc2 == 0 or T1 not in out2:
             fail.append(f"② 删了 openpyxl 但没红（rc={rc2}）—— 全量扫那条没牙")
     finally:
-        REQS.write_bytes(orig)
+        PROJECT.write_bytes(orig)
 
-    if REQS.read_bytes() != orig:
-        fail.append("复原不完整（清单要逐字节回到原样）")
+    if PROJECT.read_bytes() != orig:
+        fail.append("复原不完整（项目配置要逐字节回到原样）")
     else:
         print(f"复原 ✅ 清单 MD5 {md5(orig)}")
     rcN, outN = run_test()

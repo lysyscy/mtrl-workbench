@@ -5,7 +5,7 @@
 
 ⚠️⚠️ **为什么自己签、不引中间件**：
    Starlette 有 `SessionMiddleware`，但它依赖 `itsdangerous`，而本工程的
-   `requirements.txt` **没有**它 ⇒ 引中间件 = **加一个依赖**。
+   `backend/pyproject.toml` **没有**它 ⇒ 引中间件 = **加一个依赖**。
    ⭐ 本仓在别处（`sm2_crypto`）也有"够用就自己写"的先例 ⇒ 这里用 stdlib 的
    `hmac` ＋ `hashlib` ＋ `secrets` 自签，**零新依赖**、行为完全看得见。
 

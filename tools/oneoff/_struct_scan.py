@@ -71,8 +71,8 @@ def scan_deps() -> None:
 def scan_configs() -> None:
     print("\n③ 配置 / 入口件（存在 ＋ 大小）")
     cands = [REPO / ".env.example", REPO / ".env", REPO / ".gitignore", REPO / "README.md",
-             REPO / "backend" / "alembic.ini", REPO / "backend" / "requirements.txt",
-             REPO / "backend" / "requirements-dev.txt", REPO / "backend" / "pyproject.toml",
+             REPO / "backend" / "alembic.ini", REPO / "backend" / "uv.lock",
+             REPO / "backend" / "pyproject.toml",
              REPO / "backend" / "pytest.ini", REPO / "backend" / "tests" / "conftest.py",
              REPO / "backend" / "app" / "main.py", REPO / "backend" / "app" / "core" / "config.py"]
     for c in cands:

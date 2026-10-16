@@ -1,0 +1,40 @@
+[project]
+name = "mtrl-workbench-backend"
+version = "0.1.0"
+requires-python = ">=3.15"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "httptools",
+    "pydantic",
+    "pydantic-settings",
+    "python-multipart",
+    "sqlalchemy",
+    "alembic",
+    "psycopg[binary]",
+    "httpx",
+    "gmssl",
+    "openpyxl",
+    "pandas",
+    "xlsxwriter",
+    "xlrd",
+    "playwright",
+    "loguru",
+    "pywin32",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pip-audit",
+    "requests",
+    "starlette",
+]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
+[tool.uv]
+package = false

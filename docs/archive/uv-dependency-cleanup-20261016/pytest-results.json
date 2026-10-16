@@ -1,0 +1,180 @@
+{
+  "generated_at": "2026-10-16T10:01:12",
+  "pytest_exitstatus": 0,
+  "bindings": {
+    "tests/test_deps_declared.py::test_代码里用到的第三方库都在依赖清单里": [],
+    "tests/test_deps_declared.py::test_老xls台账的读表件在依赖清单里": [],
+    "tests/test_pipini_single_source.py::test_依赖安装源由项目配置唯一管理": [],
+    "tests/test_excel_reading.py::test_xlsx_values_and_shape_keep_each_callers_policy": [],
+    "tests/test_excel_reading.py::test_merge_range_is_real_and_each_caller_keeps_its_extent": [],
+    "tests/test_excel_reading.py::test_xls_grid_keeps_coordinates_dates_bool_and_release": [],
+    "tests/test_excel_reading.py::test_sheet_format_and_failure_contracts_stay_distinct": [],
+    "tests/test_print_dispatch.py::test_ipp_通道只走_ipp": [],
+    "tests/test_print_dispatch.py::test_单通道失败只报那一档": [],
+    "tests/test_print_dispatch.py::test_系统驱动不给打印机名_当场拒": [],
+    "tests/test_print_dispatch.py::test_auto_试法顺序是_ipp_驱动_raw": [],
+    "tests/test_print_dispatch.py::test_auto_前一档报错就试下一档": [],
+    "tests/test_print_dispatch.py::test_auto_前一档说已投递就停住_绝不重复出纸": [],
+    "tests/test_print_dispatch.py::test_auto_全失败要把三档理由都带上": [],
+    "tests/test_print_dispatch.py::test_raw_端口固定9100_地址里的端口不照抄": [],
+    "tests/test_print_dispatch.py::test_通道按当前设置走_不用重启": [],
+    "tests/test_print_dispatch.py::test_接线点用的是分流器_不是裸_send_pdf": [],
+    "tests/test_print_dispatch.py::test_壳侧有本机打印机名可选": [],
+    "tests/test_print_template.py::test_真实样本能解析出模板且几何参数齐全": [],
+    "tests/test_print_template.py::test_真实样本里存在明细数据集之外的主表字段格": [],
+    "tests/test_print_template.py::test_取不到模板必须显式报错": [],
+    "tests/test_print_template.py::test_空壳的headerFooter与paging放行而带内容的才拦": [],
+    "tests/test_print_template.py::test_外层Data与裸Data两种形态都能取出": [],
+    "tests/test_print_template.py::test_字号按scale缩放且对齐与粗体来自className": [],
+    "tests/test_print_template.py::test_框线缺省不画_hide也不画": [],
+    "tests/test_print_template.py::test_图片格两种筛选写法都认_无筛选就不渲染": [],
+    "tests/test_print_template.py::test_渲染出表结构且列宽行高取自模板": [],
+    "tests/test_print_template.py::test_明细行按数据条数重复渲染": [],
+    "tests/test_print_template.py::test_字段格取values的dataSetId点fieldId": [],
+    "tests/test_print_template.py::test_静态文本会转义不注入HTML": [],
+    "tests/test_print_template.py::test_签名图取到才出img": [],
+    "tests/test_export_save.py::test_落盘到不存在的多级目录也要成功": [],
+    "tests/test_export_save.py::test_接受字符串路径": [],
+    "tests/test_export_save.py::test_落盘出口只剩一个": [],
+    "tests/test_export_save.py::test_总欠款导出走落盘件_且文件名按口径": [],
+    "tests/test_tail43_display.py::test_模板自身可标定_缓存复算逐格等于模板显示区": [],
+    "tests/test_tail43_display.py::test_显示区无僵尸行且行区间随仓库数收缩": [
+      [
+        "ACC-INV-001",
+        "001-14"
+      ]
+    ],
+    "tests/test_tail43_display.py::test_该月无该费用时透视如实为空且不留模板旧值": [
+      [
+        "ACC-INV-001",
+        "001-14"
+      ]
+    ],
+    "tests/test_tail43_display.py::test_有该费用时逐仓与总计都写出来": [
+      [
+        "ACC-INV-001",
+        "001-14"
+      ]
+    ],
+    "tests/test_tail43_display.py::test_页筛选保持模板形态不得改写成pageField_item": [],
+    "tests/test_tail43_display.py::test_三路一致_报表1与缓存与显示区逐格相同": [
+      [
+        "ACC-INV-001",
+        "001-14"
+      ]
+    ],
+    "tests/test_tail43_display.py::test_反向_把显示区换回模板旧值守卫必须报红": [],
+    "tests/test_tail43_display.py::test_安全费那张按规定自己的列聚合不许挪用过程资料的列": [
+      [
+        "ACC-INV-001",
+        "001-14"
+      ]
+    ],
+    "tests/test_tail43_display.py::test_收发结存的显示区也不许留旧行": [
+      [
+        "ACC-SETL-001",
+        "001-10"
+      ]
+    ],
+    "tests/test_tail43_display.py::test_新仓库行顺序确定且不随哈希种子变": [
+      [
+        "ACC-INV-001",
+        "001-14"
+      ]
+    ]
+  },
+  "declared": {
+    "tests/test_deps_declared.py::test_代码里用到的第三方库都在依赖清单里": true,
+    "tests/test_deps_declared.py::test_老xls台账的读表件在依赖清单里": true,
+    "tests/test_pipini_single_source.py::test_依赖安装源由项目配置唯一管理": true,
+    "tests/test_excel_reading.py::test_xlsx_values_and_shape_keep_each_callers_policy": true,
+    "tests/test_excel_reading.py::test_merge_range_is_real_and_each_caller_keeps_its_extent": true,
+    "tests/test_excel_reading.py::test_xls_grid_keeps_coordinates_dates_bool_and_release": true,
+    "tests/test_excel_reading.py::test_sheet_format_and_failure_contracts_stay_distinct": true,
+    "tests/test_print_dispatch.py::test_ipp_通道只走_ipp": true,
+    "tests/test_print_dispatch.py::test_单通道失败只报那一档": true,
+    "tests/test_print_dispatch.py::test_系统驱动不给打印机名_当场拒": true,
+    "tests/test_print_dispatch.py::test_auto_试法顺序是_ipp_驱动_raw": true,
+    "tests/test_print_dispatch.py::test_auto_前一档报错就试下一档": true,
+    "tests/test_print_dispatch.py::test_auto_前一档说已投递就停住_绝不重复出纸": true,
+    "tests/test_print_dispatch.py::test_auto_全失败要把三档理由都带上": true,
+    "tests/test_print_dispatch.py::test_raw_端口固定9100_地址里的端口不照抄": true,
+    "tests/test_print_dispatch.py::test_通道按当前设置走_不用重启": true,
+    "tests/test_print_dispatch.py::test_接线点用的是分流器_不是裸_send_pdf": true,
+    "tests/test_print_dispatch.py::test_壳侧有本机打印机名可选": true,
+    "tests/test_print_template.py::test_真实样本能解析出模板且几何参数齐全": true,
+    "tests/test_print_template.py::test_真实样本里存在明细数据集之外的主表字段格": true,
+    "tests/test_print_template.py::test_取不到模板必须显式报错": true,
+    "tests/test_print_template.py::test_空壳的headerFooter与paging放行而带内容的才拦": true,
+    "tests/test_print_template.py::test_外层Data与裸Data两种形态都能取出": true,
+    "tests/test_print_template.py::test_字号按scale缩放且对齐与粗体来自className": true,
+    "tests/test_print_template.py::test_框线缺省不画_hide也不画": true,
+    "tests/test_print_template.py::test_图片格两种筛选写法都认_无筛选就不渲染": true,
+    "tests/test_print_template.py::test_渲染出表结构且列宽行高取自模板": true,
+    "tests/test_print_template.py::test_明细行按数据条数重复渲染": true,
+    "tests/test_print_template.py::test_字段格取values的dataSetId点fieldId": true,
+    "tests/test_print_template.py::test_静态文本会转义不注入HTML": true,
+    "tests/test_print_template.py::test_签名图取到才出img": true,
+    "tests/test_export_save.py::test_落盘到不存在的多级目录也要成功": true,
+    "tests/test_export_save.py::test_接受字符串路径": true,
+    "tests/test_export_save.py::test_落盘出口只剩一个": true,
+    "tests/test_export_save.py::test_总欠款导出走落盘件_且文件名按口径": true,
+    "tests/test_tail43_display.py::test_模板自身可标定_缓存复算逐格等于模板显示区": true,
+    "tests/test_tail43_display.py::test_显示区无僵尸行且行区间随仓库数收缩": true,
+    "tests/test_tail43_display.py::test_该月无该费用时透视如实为空且不留模板旧值": true,
+    "tests/test_tail43_display.py::test_有该费用时逐仓与总计都写出来": true,
+    "tests/test_tail43_display.py::test_页筛选保持模板形态不得改写成pageField_item": true,
+    "tests/test_tail43_display.py::test_三路一致_报表1与缓存与显示区逐格相同": true,
+    "tests/test_tail43_display.py::test_反向_把显示区换回模板旧值守卫必须报红": true,
+    "tests/test_tail43_display.py::test_安全费那张按规定自己的列聚合不许挪用过程资料的列": true,
+    "tests/test_tail43_display.py::test_收发结存的显示区也不许留旧行": true,
+    "tests/test_tail43_display.py::test_新仓库行顺序确定且不随哈希种子变": true
+  },
+  "results": {
+    "tests/test_deps_declared.py::test_代码里用到的第三方库都在依赖清单里": "passed",
+    "tests/test_deps_declared.py::test_老xls台账的读表件在依赖清单里": "passed",
+    "tests/test_pipini_single_source.py::test_依赖安装源由项目配置唯一管理": "passed",
+    "tests/test_excel_reading.py::test_xlsx_values_and_shape_keep_each_callers_policy": "passed",
+    "tests/test_excel_reading.py::test_merge_range_is_real_and_each_caller_keeps_its_extent": "passed",
+    "tests/test_excel_reading.py::test_xls_grid_keeps_coordinates_dates_bool_and_release": "passed",
+    "tests/test_excel_reading.py::test_sheet_format_and_failure_contracts_stay_distinct": "passed",
+    "tests/test_print_dispatch.py::test_ipp_通道只走_ipp": "passed",
+    "tests/test_print_dispatch.py::test_单通道失败只报那一档": "passed",
+    "tests/test_print_dispatch.py::test_系统驱动不给打印机名_当场拒": "passed",
+    "tests/test_print_dispatch.py::test_auto_试法顺序是_ipp_驱动_raw": "passed",
+    "tests/test_print_dispatch.py::test_auto_前一档报错就试下一档": "passed",
+    "tests/test_print_dispatch.py::test_auto_前一档说已投递就停住_绝不重复出纸": "passed",
+    "tests/test_print_dispatch.py::test_auto_全失败要把三档理由都带上": "passed",
+    "tests/test_print_dispatch.py::test_raw_端口固定9100_地址里的端口不照抄": "passed",
+    "tests/test_print_dispatch.py::test_通道按当前设置走_不用重启": "passed",
+    "tests/test_print_dispatch.py::test_接线点用的是分流器_不是裸_send_pdf": "passed",
+    "tests/test_print_dispatch.py::test_壳侧有本机打印机名可选": "passed",
+    "tests/test_print_template.py::test_真实样本能解析出模板且几何参数齐全": "passed",
+    "tests/test_print_template.py::test_真实样本里存在明细数据集之外的主表字段格": "passed",
+    "tests/test_print_template.py::test_取不到模板必须显式报错": "passed",
+    "tests/test_print_template.py::test_空壳的headerFooter与paging放行而带内容的才拦": "passed",
+    "tests/test_print_template.py::test_外层Data与裸Data两种形态都能取出": "passed",
+    "tests/test_print_template.py::test_字号按scale缩放且对齐与粗体来自className": "passed",
+    "tests/test_print_template.py::test_框线缺省不画_hide也不画": "passed",
+    "tests/test_print_template.py::test_图片格两种筛选写法都认_无筛选就不渲染": "passed",
+    "tests/test_print_template.py::test_渲染出表结构且列宽行高取自模板": "passed",
+    "tests/test_print_template.py::test_明细行按数据条数重复渲染": "passed",
+    "tests/test_print_template.py::test_字段格取values的dataSetId点fieldId": "passed",
+    "tests/test_print_template.py::test_静态文本会转义不注入HTML": "passed",
+    "tests/test_print_template.py::test_签名图取到才出img": "passed",
+    "tests/test_export_save.py::test_落盘到不存在的多级目录也要成功": "passed",
+    "tests/test_export_save.py::test_接受字符串路径": "passed",
+    "tests/test_export_save.py::test_落盘出口只剩一个": "passed",
+    "tests/test_export_save.py::test_总欠款导出走落盘件_且文件名按口径": "passed",
+    "tests/test_tail43_display.py::test_模板自身可标定_缓存复算逐格等于模板显示区": "passed",
+    "tests/test_tail43_display.py::test_显示区无僵尸行且行区间随仓库数收缩": "passed",
+    "tests/test_tail43_display.py::test_该月无该费用时透视如实为空且不留模板旧值": "passed",
+    "tests/test_tail43_display.py::test_有该费用时逐仓与总计都写出来": "passed",
+    "tests/test_tail43_display.py::test_页筛选保持模板形态不得改写成pageField_item": "passed",
+    "tests/test_tail43_display.py::test_三路一致_报表1与缓存与显示区逐格相同": "passed",
+    "tests/test_tail43_display.py::test_反向_把显示区换回模板旧值守卫必须报红": "passed",
+    "tests/test_tail43_display.py::test_安全费那张按规定自己的列聚合不许挪用过程资料的列": "passed",
+    "tests/test_tail43_display.py::test_收发结存的显示区也不许留旧行": "passed",
+    "tests/test_tail43_display.py::test_新仓库行顺序确定且不随哈希种子变": "passed"
+  }
+}
