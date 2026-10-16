@@ -92,6 +92,8 @@ const countFilesOnDisk = dir => (function walk(d) {
        （1103 → 1104 ⇒ 报一条修不掉的 FAIL，且**只要跑一次打印测试就复发**）。
        ⇒ 计数只认"素材"：缓存目录一律不计。 */
     if (e.isDirectory() && e.name === '__pycache__') continue;
+    // 独立打印工具首跑生成的私有配置不是素材；不读取其内容。
+    if (path.relative(path.join(ROOT, PACK), path.join(d, e.name)) === path.join('i8一键打印', 'config.ini')) continue;
     if (e.isDirectory()) n += walk(path.join(d, e.name)); else n++;
   }
   return n;

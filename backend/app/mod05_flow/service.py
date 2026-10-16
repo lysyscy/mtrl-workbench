@@ -566,7 +566,7 @@ def payment_stat_views(notices: list[NoticeDebtView], flows: list[PaymentFlow]) 
     return rows
 
 
-__all__ = [
+__all__ = ["project_references",
     "CATEGORY_LABELS", "MECH_SETTLE_SOURCE_READY",
     "notice_debt_views", "opening_views", "project_index", "project_label", "project_options",
     "build_flows", "build_debt", "build_debt_live", "build_ledger", "build_stats",
@@ -577,3 +577,11 @@ __all__ = [
 def latest_effective_dates(session, notice_ids):
     from app.mod05_flow import repository
     return repository.latest_effective_dates(session, notice_ids)
+
+
+def project_references(session, project_id, warehouse, *, lock=False):
+    """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
+    from app.core.references import project_references as read
+    from .models import PaymentFlow, OpeningBalance, LedgerRemark
+
+    return read(session, ((PaymentFlow, '付款流水'), (OpeningBalance, '期初余额'), (LedgerRemark, '台账备注'),), project_id, warehouse, lock=lock)

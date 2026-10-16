@@ -431,7 +431,7 @@ def act_set_party_kind(s: Session, *, name: str, kind: str) -> dict:
             "message": f"已把「{nm}」标为「{PARTY_KIND_NAMES.get(kind, kind)}」"}
 
 
-__all__ = [
+__all__ = ["project_references",
     "export_xlsx", "export_print_xlsx",
     "build_list", "build_detail", "debt_of_ledger", "settlement_totals_by_project",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
@@ -451,3 +451,11 @@ def list_contracts(session, **kw):
 def links_by_notice(session, notice_ids: list[int] | None = None):
     from app.mod11_jc import repository
     return repository.links_by_notice(session, notice_ids=notice_ids)
+
+
+def project_references(session, project_id, warehouse, *, lock=False):
+    """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
+    from app.core.references import project_references as read
+    from .models import JcContract, JcImportBatch
+
+    return read(session, ((JcContract, '集采合同'), (JcImportBatch, '集采导入历史批次'),), project_id, warehouse, lock=lock)

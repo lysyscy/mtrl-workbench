@@ -26,6 +26,7 @@ import sys
 #   （`audit_common.delivery_root()` = 读仓根 `.env` 的 `PRD_ACCEPTANCE_BASELINE` 上溯两级）。
 #   ⚠️ 换机时交付面路径必然不同；拿不到 ⇒ 打印原因并退出 2（⛔ 不抛栈）。
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "audit"))
+from audit_face import PRD_DOC_BASELINE
 from audit_common import delivery_root                          # noqa: E402
 
 FACE = delivery_root()
@@ -90,6 +91,12 @@ def main() -> int:
 
     for path in mod_files():
         text = path.read_text(encoding="utf-8")
+        rel = path.relative_to(FACE).as_posix()
+        if PRD_DOC_BASELINE.get(rel) == (0, 0):
+            continue
+        if "## 二、能力清单" not in text:
+            problems.append(f"[A] {path.name} 缺少能力清单")
+            continue
         rows = capability_rows(text)
         nums = [n for n, _ in rows]
         # A 编号连续

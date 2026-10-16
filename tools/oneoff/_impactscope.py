@@ -257,6 +257,12 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
         if name == 'docs/requirements/PRD/验收/验收基线.json':
             checks |= required_checks('documents', commands) | {'tools/audit/acc_report.py'}
             continue
+        if name == '.env.example':
+            relevant.add('backend/app/core/config.py')
+            continue  # 样例逐行对账及Settings的传递使用者由pytest选择器核验。
+        if name.startswith('delivery/demo/') and name.endswith('.js'):
+            checks.add('tools/audit/doc_audit.py')
+            continue  # doc_audit调用原型四检；交付面读取者由pytest选择器核验。
         if name in {'backend/pyproject.toml', 'backend/uv.lock'}:
             continue  # pytest选择器已知依赖声明的消费者；不调用网络依赖审计。
         if name.startswith('backend/') and not (name.endswith('.py') or name.startswith('backend/app/web/')):

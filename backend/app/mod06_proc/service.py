@@ -283,5 +283,13 @@ def save_mech_match_rule(session, **kwargs):
     return mech_matching.save_rule(session, **kwargs)
 
 
-__all__ = ["parse_state", "build_page_data", "build_matrices", "build_import_data", "projects_of", "displays_by_key",
+__all__ = ["project_references", "parse_state", "build_page_data", "build_matrices", "build_import_data", "projects_of", "displays_by_key",
            "mech_match_rules", "save_mech_match_rule"]
+
+
+def project_references(session, project_id, warehouse, *, lock=False):
+    """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
+    from app.core.references import project_references as read
+    from .models import ProcMechMatchRule, ProcMechManual, ProcHistoryBatch, ProcHistorySnapshot, ProcCutoff, ProcMechImportChange
+
+    return read(session, ((ProcMechMatchRule, '机械匹配规则'), (ProcMechManual, '机械手录'), (ProcHistoryBatch, '过程资料历史批次'), (ProcHistorySnapshot, '过程资料历史快照'), (ProcCutoff, '过程资料截止月'), (ProcMechImportChange, '机械导入恢复记录'),), project_id, warehouse, lock=lock)

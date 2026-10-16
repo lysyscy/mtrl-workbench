@@ -17,7 +17,7 @@ import re
 
 from tests.acc_plugin import acc
 from tests.shell_src import (  # noqa: F401  ← `P4`① 读取点收敛
-    SHELL, const_items, fbar_kernel, page_slice, pjb_kernel, read_shell, tbl_kernel, with_fbar,
+    SHELL, act_entry, const_items, fbar_kernel, page_slice, pjb_kernel, read_shell, tbl_kernel, with_fbar,
 )
 
 #: ⭐ `P1-a`（2026-09-28 · 用户选 `A`）：**展开区的外框/间距只走变体类**，这四条内联整串不许回来。
@@ -399,10 +399,10 @@ def test_删除确认里不许把要求句甩给用户():
     clean = _strip_block_comments(SHELL)
     assert "必须列出" not in clean, \
         "界面上又出现**写给实现的要求句**（『必须列出…』）—— 用户要知道的是「删了会怎样」，不是我们的待办"
-    project = clean[clean.index("delPj:t=>"):clean.index("delPjOk:")]
+    project = act_entry('delPj')
     notice = clean[clean.index("ntDel:t=>"):clean.index("ntDelOk:")]
     opening = clean[clean.index("delLg:t=>"):clean.index("delLgOk:")]
-    assert "删除不可撤销" in project, "项目删除没有不可撤销后果"
+    assert '${esc(r.message)}' in project, "项目删除没展示后端真实影响与不可撤销后果"
     assert "${imp.message}" in notice and "imp.effects.map(" in notice, "通知书删除没展示真实影响回执"
     assert "欠款合计" in opening and "重新录入" in opening, "期初删除没有金额后果及重录说明"
 
@@ -415,20 +415,18 @@ def test_点不通的按钮必须置灰而且理由要看得见():
     ⚠️ `TAIL-177`（2026-09-29 · `A6` 顺手查出 · 用户裁定 `A`）实测：`m01` 的「删除」原本**点得动** ——
        弹确认框（里面还替用户把影响范围列了一半）→ 点「确认删除」→ 才被告知「删除尚未接通后端」
        ⇒ **一整套流程走完、什么都没发生**（§5.5），而且「确认删除」那枚按钮红着、看着完全能点。
-       ⇒ 现在「确认删除」**置灰**，理由**写在弹窗里看得见的地方**。
+       ⇒ 当时先把「确认删除」置灰，理由写在弹窗里。TAIL-284接通后按后端结论动态启用，仍保护拒删禁用与可见原因。
     ⭐ 为什么"理由**必须上屏**"（`title` 只当补充）：**真机实测**（`tools/oneoff/_a6b_check.py`）——
        置灰按钮的 `matches(':hover')` **仍然成立**（Chrome 允许悬停态，`pointer-events: auto`）
        ⇒ `title` **有**机会弹；⚠️ 但它只对"**鼠标停在按钮上**"的人有效（键盘 Tab / 触屏根本没有悬停）
        ⇒ 所以置灰的理由要**写在屏幕上看得见的地方**（本件钉的就是这一句）。
        ⚠️ 全站那批「置灰写理由」（约 27 处字面 `disabled`）**是否也只挂在 `title` 上**，另立 `TAIL-178` 复核。
-    ⚠️ 能证伪：按钮退回可点、或把那句可见说明删掉 ⇒ 本件必红。
+    ⚠️ 能证伪：拒删时按钮仍可点、或把可见原因删掉 ⇒ 本件必红。
     """
-    clean = _strip_block_comments(SHELL)
-    tail = clean.split('data-act="delPjOk"', 1)[1][:140] if 'data-act="delPjOk"' in clean else ""
-    assert "disabled" in tail, \
-        "`m01` 的「确认删除」不再置灰了（用户又会走完整套流程才发现「这一项还没接通」）"
-    assert "删除这一项还没打通" in clean, \
-        "置灰的那枚按钮**没有可见的理由**（`disabled` 的 `title` 浏览器多半不弹 ⇒ 理由必须上屏）"
+    project = act_entry('delPj')
+    assert "API.pjDeleteImpact(p.id)" in project, "删除必须先读取真实影响"
+    assert "r.can_delete?'':'disabled'" in project, "后端不允许删除时必须禁用确认"
+    assert '${esc(r.message)}</div>' in project, "拒删原因必须在弹窗正文可见，不能只放title"
 
 
 @acc("ACC-UI-SHELL-001", "001-60")

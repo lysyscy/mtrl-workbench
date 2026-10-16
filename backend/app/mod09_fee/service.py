@@ -186,7 +186,7 @@ def act_batch(s: Session, *, project_key: str, items: list, months: list) -> dic
                         f"（{yms[0]} ~ {yms[-1]}）；同一「月 + 项名」已有 ⇒ 改值，没有 ⇒ 新建；空格子一律不写")
 
 
-__all__ = [
+__all__ = ["project_references",
     "parse_state", "candidates", "build_page_data",
     "act_add", "act_rename", "act_set_amount", "act_delete", "act_batch",
     "project_by_key",        # ⭐ 包间出口（`TAIL-195` 批 2c）
@@ -202,3 +202,11 @@ __all__ = [
 def project_by_key(session, key):
     """⭐ 包间出口：按 key 取项目档案行（取不到 ⇒ `None`）。"""
     return R.project_by_key(session, key)
+
+
+def project_references(session, project_id, warehouse, *, lock=False):
+    """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
+    from app.core.references import project_references as read
+    from .models import FeeManualItem
+
+    return read(session, ((FeeManualItem, '特殊费用'),), project_id, warehouse, lock=lock)

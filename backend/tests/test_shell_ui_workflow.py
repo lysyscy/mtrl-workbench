@@ -48,6 +48,51 @@ def ui_page():
 
 
 @acc()
+def test_项目删除按真实预览启用并重拉列表(ui_page):
+    p = ui_page
+    from app.mod03_notice.page import DEFAULT_THEME, render_theme
+    p.add_style_tag(content=render_theme(DEFAULT_THEME))
+    p.evaluate('''() => {
+      window.impact={project:{id:1,name_full:'测试项目全名',warehouse_name:'测试仓库',project_type:'normal',status:'active'},
+        can_delete:false,message:'不能删除：特殊费用 1 条。请保留档案，需要停用时使用归档。',
+        groups:[{label:'特殊费用',count:1,rows:[{id:91,item_name:'试验费',ym:'2026-10'}]}]};
+      API.pjDeleteImpact=async()=>window.impact;
+      API.pjDelete=async id=>{window.deletedProject=id;return {ok:true,message:'项目档案已删除。'};};
+      reloadProjects=async()=>{window.reloadedProjects=true;PJs=[];};
+      reloadNotices=async()=>{window.reloadedNotices=true;};
+    }''')
+    p.evaluate("ACT.delPj({dataset:{id:'1'}})")
+    assert p.is_disabled('[data-act="delPjOk"]')
+    p.click('#modalRoot details summary')
+    assert '试验费' in p.inner_text('#modalRoot')
+    p.evaluate('''() => {
+      closeModal();impact.can_delete=true;impact.message='无业务引用，确认后只删除这一条档案，不能撤销。';
+      impact.groups=[{label:'特殊费用',count:0,rows:[]}];
+      return ACT.delPj({dataset:{id:'1'}});
+    }''')
+    assert p.is_enabled('[data-act="delPjOk"]')
+    p.screenshot(path=str(Path(__file__).resolve().parents[2]/'.scratch/local/pending-project-delete.png'))
+    p.click('[data-act="delPjOk"]')
+    p.wait_for_function('window.reloadedProjects && window.reloadedNotices')
+    assert p.evaluate('deletedProject') == '1'
+    assert p.evaluate('PJs.length') == 0
+
+
+@acc()
+def test_欠款标题显示账内截止月而非系统当月(ui_page):
+    p = ui_page
+    from app.mod03_notice.page import DEFAULT_THEME, render_theme
+    p.add_style_tag(content=render_theme(DEFAULT_THEME))
+    p.evaluate('''() => {
+      M05.ledger={sides:[{label:'辅材',rows:[{month:'2024-03',other_expense:150,payment:20,is_opening:false}]}]};
+      VIEW='m05';ledProj='测试仓库';render();
+    }''')
+    assert '截至 2024-03' in p.inner_text('#view')
+    assert '130.00元' in p.inner_text('#view').replace(' ', '')
+    p.screenshot(path=str(Path(__file__).resolve().parents[2]/'.scratch/local/pending-debt-cutoff.png'))
+
+
+@acc()
 def test_供应商首项直接确定与人工回车(ui_page):
     p=ui_page
     p.evaluate('''async () => {

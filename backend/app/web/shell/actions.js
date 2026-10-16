@@ -1345,33 +1345,27 @@ uiScaleSet:async t=>{
     toast(`界面大小已改为「<b>${esc(label)}</b>」—— 即时生效，<b>不刷新页面</b>`
       + `<br>（只管屏幕：打印件与导出的 Excel 不受影响）`, 7000);
   }catch(e){ toast(`<b>没能改界面大小</b>：${esc(String((e&&e.message)||e))}`, 9000); } },
- delPj:t=>{ const p=PJs.find(x=>x.id===t.dataset.id);
-   /* ⭐ 2026-09-29（`A6` 逐页 · `m01`）：这句原是从《说明书》§7.2 **原样搬过来**的**要求句**
-      （「必须**列出删除影响范围**」＝ 写给实现的要求，不是给用户看的话；⛔ 这里刻意拆开写，
-      免得墓碑判据扫全文时命中**本注释**）⇒ 守则 §1.1「这个元素是使用用户需要感知的吗」＋
-      §2.5「用业务术语，不用内部话术」 ⇒ 改成人话：用户在删除前要知道的是
-      **这条删除不可撤销、先看清它会影响到哪些地方**；⚠️ `（§7.2）` 这个出处标记**保留**
-      （用户 2026-09-27 裁定 `B`：`§节号` 上屏保留 —— 见 `tools/probe/_shell_text.py` 文件头）。 */
-   modal({title:'删除确认',body:`<div class="tip dg"><b>删除不可撤销。</b></div>
-     ${kvBlock([['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(p.full)}</span>`],
-       ['关联付款通知书',`<span class="fc">${NO.filter(n=>n.proj===p.full).length} 条</span>`],
-       /* ⚠️ 下面三项要**跨模块数**（付款流水 / 库存单据 / 集采合同）⇒ 属 `MOD-13`，尚未落地。
-          ⛔ 不显示 `0` —— 那是**假话**（会让人以为"没有关联"）⇒ 如实标"待接通"。
-          ⭐ 2026-09-28（`TAIL-131`）：括号里原写「跨域能力」= **内部叫法**（守则 §2.5/§3.3：
-          界面用业务术语）⇒ 改成人话；⛔ 别把那个词写回界面。 */
-       ['关联付款流水',`<span class="mut">待接通（这一项还没做）</span>`],
-       ['关联库存单据行',`<span class="mut">待接通（这一项还没做）</span>`],
-       ['关联集采合同',`<span class="mut">待接通（这一项还没做）</span>`]]
-       .concat(PJs.filter(x=>x.parent===p.id).length?[['所属小微（仓库名）',`<span class="wn">${PJs.filter(x=>x.parent===p.id).map(x=>esc(x.name)).join(' / ')}</span>`]]:[]))}
-     <div class="tip" style="margin:0">删除项目档案后，通知书、流水、库存单据与集采合同仍保留，页面显示为未建档。</div>
-     <div class="tip" style="margin:0">关联影响尚未全部读到，当前不能删除。</div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delPjOk" data-id="${p.id}" disabled title="这一项还没打通：删除前得先把「影响范围」列全，而现还有 3 项数不出来 —— 等它们能列全就开放">确认删除</button>`}); },
- /* ⏳ **尚未接通后端（诚实提示，⛔ 不做假成功）** —— 删除本身（配置类硬删 §9.4）不难，
-    难的是**先列影响范围**（§7.2）：要数关联的付款通知书 / 流水 / 库存单据 / 集采合同 = **跨模块统计**，
-    属 `MOD-13` 跨域能力。⇒ 在"列得出影响范围"之前**不接删除**，否则 §7.2 就成了一句空话。 */
- delPjOk:t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
-    closeModal();
-    toast(`⏳ <b>删除这一项还没打通</b>：「${esc(p.disp||p.name)}」—— 先把「影响范围」列全才开放（见弹窗里那几项）`,7000); },
+ delPj:async t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+   try{
+   const r=await API.pjDeleteImpact(p.id);
+   if(!r || r.ok===false) return toast(esc((r&&r.message)||'没能读取关联影响，请重试。'));
+   modal({title:'删除项目档案',body:`${kvBlock([
+     ['项目',esc(r.project.name_full)],['仓库',esc(r.project.warehouse_name||'无仓库')],
+     ['类型',esc(enumText('pjType',r.project.project_type))],['状态',esc(r.project.status==='archived'?'归档':'在建')]
+   ])}<div class="tip${r.can_delete?' dg':''}">${esc(r.message)}</div>
+   ${r.groups.map(g=>`<details><summary>${esc(g.label)}：${g.count} 条（保留）</summary>
+     ${g.rows.map(row=>`<div class="mut sm">记录 ${esc(row.id||row.warehouse_name||row.project_key||'')}：${esc([row.bill_no,row.contract_no,row.batch_no,row.ym,row.year_month,row.doc_date,row.contract_date,row.supplier,row.item_name,row.name_full].filter(v=>v).join(' · '))}</div>`).join('')}</details>`).join('')}`,
+   footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delPjOk" data-id="${p.id}" ${r.can_delete?'':'disabled'} title="${r.can_delete?'只删除这一条空档案，不可撤销':esc(r.message)}">确认删除</button>`});
+   }catch(e){ toast(esc(e.message)); } },
+ delPjOk:async t=>{ const p=PJs.find(x=>x.id===t.dataset.id); if(!p) return;
+   t.disabled=true;
+   try{
+     const r=await API.pjDelete(p.id);
+     if(!r || r.ok===false) return toast(esc((r&&r.message)||'没能删除，请刷新后重试。'));
+     closeModal(); await Promise.all([reloadProjects(),reloadNotices()]); render();
+     toast(esc(r.message));
+   }catch(e){ toast(esc(e.message));
+   }finally{ t.disabled=false; } },
  /* ⭐ 2026-09-18 接通（`TAIL-27`）：两个同步都是**登录 i8**（会**强踢**该账号在线用户，D9）
     ⇒ 统一走 `m02Sync()` —— 它先弹**二次确认**（这是 D9 那道闸），确认后才发请求。
     ⚠️ 与 `m02` 表里 API-05/06 两行的「触发」**共用同一个入口**（一份能力只许一个主人）。 */

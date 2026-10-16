@@ -192,7 +192,7 @@ def save_balance_cell(s: Session, *, kind: str, warehouse: str, raw) -> dict:
             "value": parsed["value"]}
 
 
-__all__ = ["parse_state", "state_to_query", "build_page_data",
+__all__ = ["project_references", "parse_state", "state_to_query", "build_page_data",
            "parse_extract_state", "build_extract_data",
            "export_report_ym", "build_extract_export", "save_balance_cell"]
 
@@ -205,3 +205,11 @@ def extract_year_totals(amounts: dict, balances: dict) -> dict:
             warehouses=set(amounts.get(kind, {})) | set(balances.get(kind, {})),
             year=year, balances=balances)['rows']} for kind in X.KINDS}
         for year in years}
+
+
+def project_references(session, project_id, warehouse, *, lock=False):
+    """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
+    from app.core.references import project_references as read
+    from .models import SetlDetail, WeldGasBalance, AnalysisBigProject, AnalysisBigManual
+
+    return read(session, ((SetlDetail, '收发结存'), (WeldGasBalance, '焊材气体结余'), (AnalysisBigProject, '大表项目排序'), (AnalysisBigManual, '大表手录'),), project_id, warehouse, lock=lock)

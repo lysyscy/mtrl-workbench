@@ -54,7 +54,7 @@ def _row_max(lines: list[str]) -> int:
 PRD_DOC_BASELINE: dict[str, tuple[int, int]] = {
     "PRD/00-总览.md": (59, 0),
     "PRD/01-需求索引.md": (83, 0),
-    "PRD/02-功能规格/MOD-01.md": (70, 12),
+    "PRD/02-功能规格/MOD-01.md": (71, 13),
     "PRD/02-功能规格/MOD-02.md": (62, 8),
     "PRD/02-功能规格/MOD-03.md": (92, 17),
     "PRD/02-功能规格/MOD-04.md": (0, 0),  # 原系统计划退出，原规格按manifest归档

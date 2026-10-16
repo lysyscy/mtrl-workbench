@@ -95,19 +95,27 @@ def test_close_ticket_archives_schedule_and_rolls_back_on_history_failure(tmp_pa
     closed = tmp_path / 'closed.md'
     tickets = tmp_path / 'tickets'
     tickets.mkdir()
-    plan.write_bytes((ROOT / 'docs/status.md').read_bytes())
-    closed_rows = (ROOT / 'docs/archive/tickets/index.md').read_bytes().splitlines(keepends=True)
-    anchor = max(i for i, row in enumerate(closed_rows) if row.startswith(b'|'))
-    closed_rows.insert(anchor + 1, '| `TAIL-284` | fixture | fixture evidence | 2099-01-01 |\r\n'.encode())
-    closed.write_bytes(b''.join(closed_rows))
-    original_ticket = next((ROOT / '.scratch/tails/issues').glob('TAIL-284-*.md'))
-    ticket = tickets / original_ticket.name
-    ticket.write_bytes(original_ticket.read_bytes())
+    plan.write_text('''活跃 1 · 已销号 0
+## 14. 尾巴排期
+### 14.3 逐条排期
+| `TAIL-999` fixture | 随时 | fixture | None |
+### 14.4 已办排期（历史）
+## 15. 尾巴台账
+活跃 **1** 条 · 已销号 **0** 条
+### 一、A 类
+| `TAIL-999` | fixture |
+### 二、B 类
+### 三、C 类
+''', encoding='utf-8')
+    closed.write_text('| # | 事项 | 销号依据 | 日期 |\n|---|---|---|---|\n'
+                      '| `TAIL-999` | fixture | fixture evidence | 2099-01-01 |\n', encoding='utf-8')
+    ticket = tickets / 'TAIL-999-fixture.md'
+    ticket.write_text('**Status:** ready-for-agent\n', encoding='utf-8')
     paths = (plan, closed, ticket)
     before = {p: p.read_bytes() for p in paths}
     original_schedule = next(row for row in before[plan].splitlines(keepends=True)
-                             if row.startswith('| `TAIL-284` 项目'.encode()))
-    args = ['--id', '284', '--plan', str(plan), '--closed-index', str(closed), '--tickets', str(tickets)]
+                             if row.startswith(b'| `TAIL-999` fixture'))
+    args = ['--id', '999', '--plan', str(plan), '--closed-index', str(closed), '--tickets', str(tickets)]
     assert _tail_close.main(args) == 0
     assert all(p.read_bytes() == before[p] for p in paths)
     original_replace = Path.replace
@@ -141,7 +149,10 @@ def test_retired_host_inputs_have_real_consumers_and_missing_references_fail():
     assert ('AGENTS.md', ('.md',)) in audit_meta.LIVE_MACHINE_REQUIRED
     scanned = {rel.replace('\\', '/') for _, rel, *_ in audit_common.iter_docs()}
     assert 'docs/agents/project-rules.md' in scanned
-    assert any(rel.startswith('.scratch/tails/issues/TAIL-284-') for rel in scanned)
+    for ticket in (ROOT / '.scratch/tails/issues').glob('TAIL-*.md'):
+        state = audit_meta.TICKET_STATE_RE.search(ticket.read_text(encoding='utf-8')).group(1)
+        rel = ticket.relative_to(ROOT).as_posix()
+        assert (rel in scanned) == (state not in ('done', 'wontfix'))
     assert any(rel.startswith('.scratch/legacy-active/') for rel in scanned)
     for path in ('docs/adr/D999-missing.md', '.scratch/tails/issues/TAIL-999-missing.md'):
         doc = [('仓', 'AGENTS.md', ROOT / 'AGENTS.md', [f'现行入口：`{path}`'], ['current'])]

@@ -134,5 +134,13 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     }
 
 
-__all__ = ["DEFAULT_TABLE", "load_rows", "load_original_details", "load_original_inbound",
+__all__ = ["project_references", "DEFAULT_TABLE", "load_rows", "load_original_details", "load_original_inbound",
            "parse_state", "state_to_query", "build_page_data"]
+
+
+def project_references(session, project_id, warehouse, *, lock=False):
+    """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
+    from app.core.references import project_references as read
+    from .models import InvDetail
+
+    return read(session, ((InvDetail, '库存单据'),), project_id, warehouse, lock=lock)

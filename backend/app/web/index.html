@@ -724,7 +724,7 @@ V.m05=()=>{
     return `<div>
       <div style="display:flex;align-items:baseline;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-bottom:calc(6px * var(--fscale))">
         <b>${sc}欠款台账</b>
-        <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 自期初起累计（各月 结算 − 付款，含期初占位行）—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含期初）</span><b class="fc">${MONEY(cur)}</b>
+        <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 自期初起累计（各月 结算 − 付款，含期初占位行）—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含期初）</span><b class="fc">${MONEY(cur)}</b><span class="mut sm">截至 ${esc(upto)}</span>
         ${mLast?`<span class="mut sm" title="最近一月（${esc(mLast.ym)}）：其他支出金额 − 付款 —— 当月新增，不是累计">· ${esc(mLast.ym)} 新增</span><b class="fc" style="color:var(--${N2(add)>0?'dg':'mut'})">${MONEY(add)}</b>`:''}
         <span style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale));flex-wrap:wrap">
           <button class="btn sm" data-act="addLg" data-sc="${sc}" title="展开手动期初录入区；手动与自动付款独立，保存后按分类计入欠款">＋ 录入${sc}期初</button>

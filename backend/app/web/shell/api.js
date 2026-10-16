@@ -137,6 +137,8 @@ const API = {
         落库一律走上面的 `jcSupplier`。⛔ 壳里**不再自带**一套片段/等级算法（两份 = 迟早漂移）。 */
   m03SupMatch: body => API.post('/api/m03/actions/sup-match', body),
   /* ---- MOD-01 写动作（⛔ 判定与落库一律后端：状态不变式 / 排序重编号 / 全名留痕） ---- */
+  pjDeleteImpact: id => API.get(`/api/m01/projects/${id}/delete-impact`),
+  pjDelete: id => API.send('DELETE', `/api/m01/projects/${id}?confirmed=true`),
   pjCreate: body => API.post('/api/m01/projects', body),
   pjUpdate: (id, body) => API.send('PUT', `/api/m01/projects/${id}`, body),
   pjStatus: (id, status) => API.send('PUT', `/api/m01/projects/${id}/status`, { status }),

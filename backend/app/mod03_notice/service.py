@@ -292,7 +292,7 @@ list_stat_traces = _repo.list_stat_traces             # 统计手改留痕（=�
 restore_stat_paid_auto = _repo.restore_stat_paid_auto  # 恢复模式与留痕，同事务包间出口
 
 
-__all__ = [
+__all__ = ["project_references",
     "MODE_PRINT", "MODE_PDF",
     "DesignLike", "DetailLike", "SignatureStoreLike",
     "ItemOutcome", "BatchResult",
@@ -318,3 +318,11 @@ def stat_paid_of_many(session, ids):
     """批量通知书统计付款事实，供集采装配金额。"""
     from app.mod03_notice import repository
     return repository.stat_paid_of_many(session, ids)
+
+
+def project_references(session, project_id, warehouse, *, lock=False):
+    """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
+    from app.core.references import project_references as read
+    from .models import PaymentNotice
+
+    return read(session, ((PaymentNotice, '付款通知书'),), project_id, warehouse, lock=lock)

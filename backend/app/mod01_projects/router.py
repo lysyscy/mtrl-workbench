@@ -149,6 +149,24 @@ def get_project(project_id: int) -> ProjectOut:
         return _out(p)
 
 
+@router.get("/projects/{project_id}/delete-impact")
+def project_delete_impact(project_id: int):
+    from .deletion import impact
+
+    with session_scope() as s:
+        return impact(s, project_id)
+
+
+@router.delete("/projects/{project_id}")
+def delete_project(project_id: int, confirmed: bool = Query(False)):
+    from .deletion import delete_project as apply_delete
+
+    if not confirmed:
+        raise MustReportError('请先查看关联影响并确认删除。')
+    with session_scope() as s:
+        return apply_delete(s, project_id)
+
+
 @router.post("/projects", response_model=ProjectOut)
 def create_project(req: CreateProjectRequest) -> ProjectOut:
     """建档（链路 A）。⚠️ 壳不写仓库；普通项目/小微不传仓库名则取**占位名**。"""

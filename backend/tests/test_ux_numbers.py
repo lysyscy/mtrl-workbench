@@ -71,6 +71,15 @@ def test_不可得的金额不许冒充_0():
         f"`MONEY` 没先判 `null`（会显示「— 元」= 把『没取到』说成 0）：{seg[:120]}"
 
 
+@acc("ACC-UI-SHELL-001", "001-31")
+def test_欠款大数显示实际累计截止月份():
+    from tests.shell_src import page_seg
+
+    page = page_seg('m05')
+    assert 'const upto=(mLast?mLast.ym:' in page
+    assert '${MONEY(cur)}</b><span class="mut sm">截至 ${esc(upto)}</span>' in page
+
+
 @acc("ACC-UI-SHELL-001", "001-32")
 def test_验收术语不许留在界面上():
     """⭐ 「容差 0」是**验收/开发术语**，界面上不许有（守则 §3.1/§3.3）⇒ 换成人话。
