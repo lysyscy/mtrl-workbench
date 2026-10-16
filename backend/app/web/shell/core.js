@@ -135,6 +135,7 @@ function adaptNotice(x) {
     excl: !!x.is_excluded,
     exrule: x.exclude_source === 'manual' ? '人工批量剔除' : '规则命中',
     sup: x.jc_supplier || '', trail: x.edited_fields || [], planId: null,
+    plannedPayMethod: x.planned_pay_method || '',
     manual: !!x.is_manual,
     /* 后端算好的三个状态值**直接带上**（前端不重算）：已付 / 是否撤单 / 有无生效流水 */
     paidApi: numOr0(x.amount_paid), revoked: !!x.is_revoked,
@@ -381,58 +382,6 @@ async function m05Act(fn, okMsg, ms) {
 }
 /* 台账当前项目在**后端**的那一侧（按中文分类名找） */
 const m05Side = sc => { const lg = M05.ledger; return lg ? ((lg.sides || []).find(x => x.label === sc) || null) : null; };
-/* ---------- MOD-04 付款计划：后端语义字段 → 原型字段名（`PL_COLS`） ----------
-   ⚠️ 行内可改列的**列名映射**（原型的 `data-f` → 后端列名）—— 只在适配层转一次 */
-const PL_COL_API = { docNo: 'doc_no', date: 'pay_date', method: 'pay_method', remark: 'remark' };
-
-function adaptPlan(x) {
-  return {
-    id: String(x.id),
-    ym: x.year_month,
-    /* ⚠️ `proj` 保留**用户填报原值**（展示名 / 仓库名）—— 原型据此做匹配显示（`plProjCell`），
-       换成后端解析好的展示名会把「未匹配」这一档抹掉（那是显示逻辑，不是判定）。 */
-    proj: x.project_input || '',
-    docNo: x.doc_no || '',
-    flowAmt: numOr0(x.flow_amount),
-    monthAmt: numOr0(x.planned_amount),
-    date: x.pay_date || '',
-    method: x.pay_method || '',
-    remark: x.remark || '',
-    forced: !!x.forced_through,
-    forceRemark: x.forced_remark || '',
-    manual: !!x.is_manual,
-    /* ⭐ **审查结果 = 后端判定**（`domain.audit_rows`），前端不再自算（见 `plRev`） */
-    result: x.audit_result || '',
-    bucket: x.audit_bucket || '',
-    /* 派生两列（按单据号命中 i8 通知书）；`null` = 未命中 ⇒ 界面显示「—」 */
-    paid: (x.paid_amount === '' || x.paid_amount == null) ? null : numOr0(x.paid_amount),
-    left: (x.unpaid_amount === '' || x.unpaid_amount == null) ? null : numOr0(x.unpaid_amount),
-  };
-}
-
-/* 待删行的 id 暂存（`plConfirm` 弹窗 → `plDelOk` 确认，两步之间传递） */
-let plDelIds=[];
-async function reloadPlans() {
-  const d = await API.plans();
-  PLs = (d.rows || []).map(adaptPlan);
-  prunePlPick();          /* 勾选集合裁剪到当前可见范围（筛选/重拉后必做） */
-  render();
-}
-
-/* 付款计划的写动作外壳（与 `pjAct` 同款：失败**原样显示后端原因**并回滚到后端真实状态） */
-async function plAct(fn, okMsg, ms) {
-  try {
-    const r = await fn();
-    await reloadPlans();
-    toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, ms);
-    return r;
-  } catch (e) {
-    try { await reloadPlans(); } catch (_) { /* 取数也失败 ⇒ 交给常驻提示 */ }
-    toast(`<b>没能改成</b>：${esc(String((e && e.message) || e))}`, 7000);
-    return null;
-  }
-}
-
 /* ---------- 启动：拉真数据 → 渲染；失败**降级成可读提示**（⛔ 不白屏、不静默） ---------- */
 let BOOT_ERROR = '';
 /* =====================================================================
@@ -1879,14 +1828,13 @@ function jcFetchPreview(d) {
 const PAGE_LOAD = {
   /* ⭐ `home`（看板）：前三路供 ①–⑥ 与欠款卡；⭐ **第四路 `看板计数`** = ⑦⑬⑭ —— 它**只能问后端**
      （跨全表执行记录，见 `reloadHome` 上方那段为什么不能用记录窗口）。 */
-  home: ['付款通知书', '项目档案', '付款计划', '看板计数'],
+  home: ['付款通知书', '项目档案', '看板计数'],
   m01: ['项目档案', '待人工指认', '待人工建档', '修改留痕'],
   m02: ['i8 执行记录', '库存单据'],      /* `V.m02` 的回显卡读 `IVs`/`ADs` */
   /* ⭐ `M5-5`：m03 页**也要读 `JCs`** —— 「集采实际供应商」那一格的关联区（`jcRefOf` 反查"被哪张合同引用了"、
      `jcLinkCands` 出候选）全靠它。⛔ **不后置**到写动作时再拉：
      首屏就得判"这行有没有被关联 / 有哪些候选"，否则按钮会先显示错的态再跳一下。 */
-  m03: ['付款通知书', '付款计划', '项目档案', '集采台账'],
-  m04: ['付款计划', '付款通知书', '付款域', '机械 6 列'],
+  m03: ['付款通知书', '项目档案', '集采台账'],
   /* ⭐ 2026-09-28（用户口径 ①）：`m05` 新增「**按项目看集采欠款**」柱 ⇒ 本页**必须**带上「集采台账」
      这一路（它填 `JCs`）。⛔ 不加的话那条柱子会恒 0 —— 那是**假数**（比不显示更坏）。
      ⚠️ `JCs` 是跨页共享的（看板 / 大表主材累计 / m03 集采关联也读它）⇒ 多这一路不会重复取。 */
@@ -1929,9 +1877,6 @@ const LOADERS = {
   '修改留痕': async () => {
     const tr = await API.trails();
     PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));
-  },
-  '付款计划': async () => {
-    const pl = await API.plans(); PLs = (pl.rows || []).map(adaptPlan);
   },
   '机械 6 列': reloadMech,
   '过程资料': reloadProc,

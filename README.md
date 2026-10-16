@@ -32,6 +32,7 @@
 | docs/agents/project-rules.md | 文件、保存、环境与真实写入的条件约束；由AGENTS按操作触发 |
 | .scratch/local/、.artifacts/recovery/backups/ | 既有临时证据、恢复现场及快照；已整体迁入新位置，原文字节与恢复用途保留 |
 | backend/app/、backend/tests/、backend/alembic/ | 运行代码、测试与数据库迁移 |
+| skills/ | 本项目业务技能源；付款原表核对入口见 skills/payment-plan-audit/SKILL.md |
 | backend/app/resources/ | 程序实际消费的模板；由资源模块定义位置 |
 | delivery/ | 原型HTML、检查JS、模板及第三方原件；现行产品Markdown已迁入docs |
 | tools/、ops/ | 实际工具与运维脚本；说明分别从tools/README.md与ops/README.md读取 |

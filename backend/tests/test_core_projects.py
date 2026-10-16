@@ -17,7 +17,6 @@ from tests.acc_plugin import acc
 
 from app.core import projects as C
 from app.mod01_projects.models import Project
-from app.mod04_plan import service as S4
 from app.mod05_flow import service as S5
 
 THREE = ("project_key", "project_label", "project_index")
@@ -34,7 +33,6 @@ def test_三件是同一个函数对象而不是各自包一层():
        （`def project_key(p): return core.project_key(p)`）照样能过，而**改动仍会分叉**。
     """
     for n in THREE:
-        assert getattr(S4, n) is getattr(C, n), f"mod04_plan 的 {n} 不是 core 的那一份"
         assert getattr(S5, n) is getattr(C, n), f"mod05_flow 的 {n} 不是 core 的那一份"
 
 
@@ -43,7 +41,7 @@ def test_业务模块源码里不得再出现这三件的定义():
     """反向守卫：谁再抄一份 `def project_key` 回业务模块 ⇒ **红**（不靠自觉）。"""
     import inspect
 
-    for mod in (S4, S5):
+    for mod in (S5,):
         src = inspect.getsource(mod)
         for n in THREE:
             assert f"def {n}(" not in src, f"{mod.__name__} 里又出现 `def {n}(` —— 口径要分叉了"

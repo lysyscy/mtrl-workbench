@@ -94,7 +94,6 @@ DUP_FAMILIES: tuple[DupFamily, ...] = (
                 r"|default_ym_payment|default_ym_report|norm_pay_date|normalize_ym)\s*\(",
         owner_files=("backend/app/core/timing.py",),
         copies=(
-            ("backend/app/mod04_plan/importer.py", "norm_pay_date"),
             ("backend/app/mod06_proc/domain.py", "normalize_ym"),
             ("backend/app/mod06_proc/importer.py", "ym_of"),
             ("backend/app/mod09_fee/domain.py", "parse_ym"),

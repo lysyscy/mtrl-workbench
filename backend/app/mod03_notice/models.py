@@ -97,6 +97,8 @@ class PaymentNotice(Base):
     #:   ⚠️ **不受再次导入覆盖**（i8 源数据里没有它 ⇒ 被覆盖就等于抹掉人工劳动）⇒ 已并入 `merge.PROTECTED`。
     #: ⚠️ `server_default` 是**给存量行**的（迁移要带它，否则已有数据的库加 `NOT NULL` 列会 NotNullViolation）。
     jc_supplier: Mapped[str] = mapped_column(String(128), default="", server_default="")
+    # 拟付款方式由核对后确认写入；空值沿用付款计划，重抓不覆盖。
+    planned_pay_method: Mapped[str] = mapped_column(String(32), default="", server_default="")
 
 
 class NoticeStatLog(Base):

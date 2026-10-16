@@ -19,7 +19,6 @@ import re
 
 SCOPE_INCLUDED: tuple[str, ...] = (
     "付款通知书抓取、剔除、分类",
-    "付款计划导入与审查",
     "付款登记（流水）",
     "欠款统计与付款统计",
     "付款通知书标记与打印",
@@ -39,7 +38,7 @@ EXCLUDED_KEYWORDS: tuple[str, ...] = (
     "会计记账", "借贷", "集采欠款", "领导驾驶舱", "驾驶舱", "大屏",
 )
 
-PAY_DOMAIN_IDS: tuple[str, ...] = ("m03", "m04", "m05")
+PAY_DOMAIN_IDS: tuple[str, ...] = ("m03", "m05")
 
 # 付款域导航（**页面划分**）：一页一项主职责，`covers` = 它承载「包含」里的哪几项
 PAY_DOMAIN_PAGES: tuple[dict, ...] = (
@@ -47,11 +46,6 @@ PAY_DOMAIN_PAGES: tuple[dict, ...] = (
         "id": "m03",
         "title": "付款通知书",
         "covers": ("付款通知书抓取、剔除、分类", "付款通知书标记与打印"),
-    },
-    {
-        "id": "m04",
-        "title": "付款计划",
-        "covers": ("付款计划导入与审查",),
     },
     {
         "id": "m05",
@@ -62,14 +56,14 @@ PAY_DOMAIN_PAGES: tuple[dict, ...] = (
 
 
 def pay_domain_nav() -> tuple[dict, ...]:
-    """付款域导航条目（`m03` / `m04` / `m05`）。"""
+    """付款域导航条目（`m03` / `m05`）。"""
     return PAY_DOMAIN_PAGES
 
 
 def nav_violations() -> list[str]:
     """导航与 §4.1.2 范围定义的**偏差清单**（空 = 合规）。
 
-    三条：① 页面集合必须恰好是 `m03`/`m04`/`m05`；② 每页声明的覆盖项必须落在「包含」里；
+    三条：① 页面集合必须恰好是 `m03`/`m05`；② 每页声明的覆盖项必须落在「包含」里；
          ③ **「包含」的每一项都要有页面承载**、且任何页面标题**不得**出现「不包含」的项。
     """
     bad: list[str] = []

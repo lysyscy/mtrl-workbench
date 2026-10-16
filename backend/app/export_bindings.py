@@ -17,18 +17,16 @@ from app.report_export import (
     jc_print_export,
     nt_export,
     pj_export,
-    pl_export,
     save,
     service,
 )
 
 #: 名字 → 件（⭐ **唯一一处**；业务包只认这些名字：
-#:   `EXP.get("pj")` / `EXP.get("nt")` / `EXP.get("pl")` / `EXP.get("fl")` /
+#:   `EXP.get("pj")` / `EXP.get("nt")` / `EXP.get("fl")` /
 #:   `EXP.get("jc")` / `EXP.get("service")` / `EXP.get("save")`）
 BINDINGS = {
     "pj": pj_export,        # 项目档案导出（`mod01`）
     "nt": nt_export,        # 付款通知书导出（`mod03`）
-    "pl": pl_export,        # 付款计划导出（`mod04`）
     "fl": fl_export,        # 付款流水导出（`mod05`）
     "jc_print": jc_print_export,
     "jc": jc_export,        # 集采台账导出（`mod11`）

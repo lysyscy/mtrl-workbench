@@ -88,9 +88,6 @@ SEGMENTS: tuple[Seg, ...] = (
     # ---- phase=body：主流程（**次序 = 本表次序**）
     Seg("④", "m03 结构件（对照 `ui_parity` 口径）", "body", "_shell_m03:check", "m03"),
     Seg("⑤", "m01 渲染真数据（⛔ 不是「页面空着但不报错」）", "body", "_shell_m01:check", "m01"),
-    Seg("⑥", "m04 付款计划：结构件在线 ＋ 筛选条条数 == 数据源", "body", "_shell_m04:check", "m04"),
-    Seg("⑥b", "m04 手动行：点得出草稿行（**不落库**，验完收起）", "body", "_shell_m04draft:check", "m04",
-        after=("⑥",), why="接着 ⑥ 那一屏真点（同一页的下一步）⇒ 两段**必须相邻且保序**"),
     Seg("⑦", "m05 付款流水与欠款：KPI 已撤成墓碑 ＋ 表在线 ＋ 后端欠款可取", "body", "_shell_m05:check", "m05"),
     Seg("⑦′", "台账「项目」面板展开/收起 round-trip", "body", "_shell_panel:check", "m05",
         after=("⑦",), why="同上：接着 ⑦ 那一屏真点 ⇒ 相邻且保序"),
@@ -121,7 +118,7 @@ SEGMENTS: tuple[Seg, ...] = (
         "m09/m08", net=True,
         why="⚠️ 自己拦网络（两处），都 `unroute` 放开 ⇒ 不会把后面的段拦死（已核）"),
     Seg("㉚", "台账卡头那排按钮（`on` 态 ＋ 收起复原 ＋ 不许同名/溢出）", "body", "_shell_m05head:check", "m05"),
-    Seg("㉛", "空态（筛到没有数据的月 ⇒ 必须有空态，⛔ 不是只剩表头）", "body", "_shell_empty:check", "m04"),
+    Seg("㉛", "通知书空态与正常路往返", "body", "_shell_empty:check", "m03"),
     Seg("㉜", "大表「首列区固定」（吸附几何严丝合缝）", "body", "_shell_bigpin:check", "m07"),
     Seg("㉝", "m11 合同主表「行身份区固定」", "body", "_shell_jcpin:check", "m11"),
     Seg("㊲", "m11 重绘代价：**几何读次数与行数无关**", "body", "_shell_m11cost:check", "m11",

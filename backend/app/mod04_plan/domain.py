@@ -258,26 +258,10 @@ def audit_rows(rows: list[dict], notices_by_doc: dict[str, NoticeAmounts]) -> li
     return [audit_row(r, notices_by_doc, dup) for r in rows]
 
 
-def re_audit(row: dict, notices_by_doc: dict[str, NoticeAmounts], rows_for_dup: list[dict] | None = None) -> str:
-    """「再次匹配」= 用同一引擎重判该行（改完单据号后调用，001-03）。"""
-    dup = duplicate_keys(rows_for_dup if rows_for_dup is not None else [row])
-    return audit_row(row, notices_by_doc, dup)
 
 
-def can_edit_doc(result: str) -> bool:
-    """单据号**只对「未匹配」行开放编辑**；「完全匹配」行只读（NODOC-001-02）。"""
-    return result != R_MATCHED
 
 
-def derived_columns(notice: NoticeAmounts | None) -> tuple[str, str]:
-    """界面上的「已付款金额 / 剩余付款金额」两列（**由命中通知书派生**）。
-
-    - 命中 ⇒ `(已付金额, 未付金额)`
-    - **命不中 ⇒ 留空**（`("", "")`）—— 不猜、不留假数据（NODOC-001-04）
-    """
-    if notice is None:
-        return "", ""
-    return f"{notice.paid:.2f}", f"{notice.unpaid:.2f}"
 
 
 # 列序（NODOC-001-05）：派生两列夹在「i8 流程金额」与「本月预付款金额」之间
@@ -288,53 +272,27 @@ COLUMN_ORDER: tuple[str, ...] = (
 )
 
 
-def column_order_ok() -> bool:
-    i_flow = COLUMN_ORDER.index("flow_amount")
-    i_planned = COLUMN_ORDER.index("planned_amount")
-    return COLUMN_ORDER[i_flow + 1:i_planned] == ("paid_amount", "unpaid_amount")
 
 
 # ---------------------------------------------------------------- 强制通过（001-09）
 
 
-def force_through(remark: str) -> dict:
-    """强制通过：**必须写备注**（留痕）；空备注 ⇒ 拒绝（001-09）。"""
-    text = (remark or "").strip()
-    if not text:
-        raise MustReportError("强制通过必须填写备注（说明为什么放行）—— 空备注不被接受")
-    return {"forced_through": True, "forced_remark": text}
 
 
-def cancel_force() -> dict:
-    """取消强制通过：回到**原判定**且**备注清空**（不留残余；取消不留痕）（001-09）。"""
-    return {"forced_through": False, "forced_remark": ""}
 
 
 # ---------------------------------------------------------------- 默认筛选（IMPORT-001-07）
 
 
-def default_plan_filters(now=None) -> dict:
-    """默认筛选：**年月 = 北京时间当月**；**审查结果 = 全部**（IMPORT-001-07）。"""
-    from app.core.period import default_period
-
-    return {"year_month": default_period("plan", now), "audit_bucket": BUCKET_ALL}
-
-
-# ---------------------------------------------------------------- 页面交互内核 → 已拆出
-#
-# ⚠️ **2026-09-15 拆分**（工程纪律：单文件 >400 行须拆）：
-#    页面交互内核（筛选栏 / 行内改列 / 再次匹配 / 列表内删除 / 生效窗口按钮态）
-#    已移到 **`app.mod04_plan.plan_ui`**；本文件只保留**审查引擎与口径基础件**。
-#    ⇒ 两边**不得各留一份定义**：判定一律 `audit_rows` / `re_audit`，可改列一律 `can_edit_doc`。
 
 
 __all__ = [
     "R_MATCHED", "R_AMOUNT_MISMATCH", "R_DOC_NOT_FOUND", "R_NO_DOC", "R_DUPLICATE", "R_OVER_UNPAID",
     "ALL_RESULTS", "BUCKET_MATCHED", "BUCKET_UNMATCHED", "BUCKET_ALL", "FILTER_BUCKETS", "bucket",
     "NoticeAmounts", "outstanding", "ProjectBrief", "MatchResult", "match_project", "norm_name",
-    "PROJECT_COLUMN_HEADER", "duplicate_keys", "audit_row", "audit_rows", "re_audit",
-    "can_edit_doc", "derived_columns", "COLUMN_ORDER", "column_order_ok",
-    "force_through", "cancel_force",
-    "default_plan_filters",
+    "PROJECT_COLUMN_HEADER", "duplicate_keys", "audit_row", "audit_rows",
+      "COLUMN_ORDER",
+
+
     "EDITABLE_COLUMNS", "MATCH_MATCHED", "MATCH_UNMATCHED", "MATCH_AMBIGUOUS",
 ]

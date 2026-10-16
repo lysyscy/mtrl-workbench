@@ -1,0 +1,571 @@
+{
+  "source_head": "26b61b639eee961ad008f26fc8d4ce5eb3eac7d1",
+  "source_kind": "working tree originals, including pre-existing edits",
+  "files": {
+    "backend/app/mod04_plan/importer.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/importer.py",
+      "sha256": "11816a4f3f6ae16c109d0a9e81c6c1a0356e4a108d91e15953775dfaa63c8d42",
+      "action": "retired; no runtime alias"
+    },
+    "backend/app/mod04_plan/imp_spec.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/imp_spec.py",
+      "sha256": "ecc765c6b285f01b4a66e0cec06066abe93f92af85831d2fc1793f47ab301fcb",
+      "action": "retired; no runtime alias"
+    },
+    "backend/app/mod04_plan/plan_api_router.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/plan_api_router.py",
+      "sha256": "ec32d72912f9a26a7907b5cb64bdc625cfec965b487bc5a6241e8176dfc8a0d2",
+      "action": "retired; no runtime alias"
+    },
+    "backend/app/mod04_plan/plan_manual.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/plan_manual.py",
+      "sha256": "6ccfbc328261d7b893adeee9bd1da6cf34781cb289f1105583b1519096490d04",
+      "action": "retired; no runtime alias"
+    },
+    "backend/app/mod04_plan/plan_ui.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/plan_ui.py",
+      "sha256": "81974f5beb70db5a7d45b05d3dfa916eda4dc7a8a2f750336c6fba5290f804d8",
+      "action": "retired; no runtime alias"
+    },
+    "backend/app/mod04_plan/project_views.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/project_views.py",
+      "sha256": "d9279517befa483449cff27f1e6e69ac7ced45643ea305434c46cee02b74c8d9",
+      "action": "retired; no runtime alias"
+    },
+    "backend/app/mod04_plan/repository.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/repository.py",
+      "sha256": "a619ccf0390f3a89e697d8597db5381dc85eeb66e05d266913dfcbeac2f125aa",
+      "action": "retired; no runtime alias"
+    },
+    "backend/app/mod04_plan/router.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/router.py",
+      "sha256": "564b06998659cd22c2cae0788542822ea5bbc6ae8e996554e7e78dff02d3fb70",
+      "action": "retired; no runtime alias"
+    },
+    "backend/app/mod04_plan/service.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/service.py",
+      "sha256": "4395a1bde607a09e43ece0373e3af87f57c7a60a047f49c9e14be8784e9eb624",
+      "action": "retired; no runtime alias"
+    },
+    "backend/tests/test_acc_plan_import.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_acc_plan_import.py",
+      "sha256": "765bf327bc2a6284052d5a0eb43bfe0f580b0cdde761e7fb192080377e892d74",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_acc_plan_nodoc.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_acc_plan_nodoc.py",
+      "sha256": "517d625f75ca0b225873adcad492acab90a282505f931df1dacbe88d5005ed2d",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_acc_plan_ui.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_acc_plan_ui.py",
+      "sha256": "83d1a7189966de2d2cf784661218a1b59bb8f6c2f9d244e46eb5a6888c7837e4",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_api_m04_force.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_api_m04_force.py",
+      "sha256": "85c44a0daa4c97d0fe8ed55f8f5aa48b8fda1e2db6bb6db23559e034b74fd6f8",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_api_m04_manual.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_api_m04_manual.py",
+      "sha256": "34cff74d9a0b2e494fea5edacf32d69f62fe584a3bf202c1f237d2359379045b",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_audit_plan_import.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_audit_plan_import.py",
+      "sha256": "d384a589f94bb35eb01be88cc1e5af88eadd91e4ebf37da2690276611fbee4eb",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_imp_m04_api.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_imp_m04_api.py",
+      "sha256": "4066acead9f56a4077acb2bfe27d6cc2aa1c66d8489445cce17770bc650fcdc8",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_plan_import.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_plan_import.py",
+      "sha256": "01bd451110655b246350bd7679aac68a242366f7ca95551ecb5c6ccdc31a9013",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_plan_import_realfile.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_plan_import_realfile.py",
+      "sha256": "71137b76df690b22d21328a19ba7b08e64619f9d31415ef5f190b52195d0f8a4",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_plan_manual.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_plan_manual.py",
+      "sha256": "993ba3cfc14386cd7e4b6799c456bdbd0bc69b802ff47371cab2541dd0a9dd04",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_wired_m04.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_wired_m04.py",
+      "sha256": "bdd5d56c914cb085cdc8436eaab075428addeab4d95017b91035162cb5a32b7a",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/tests/test_wired_m03_pick.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_wired_m03_pick.py",
+      "sha256": "0ecbc0f42bf94c73a513e5e06fd6a053c3fefbe4f0658717d53eba50e4bfc31d",
+      "action": "retired interface tests; original assertions preserved"
+    },
+    "backend/app/main.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/main.py",
+      "sha256": "e6394d8d3fc7b83ceda785f098f627d6144ac72fd809872e7004623e120e61db",
+      "action": "shared source before selective retirement"
+    },
+    "backend/app/mod03_notice/notice_pay_actions.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod03_notice/notice_pay_actions.py",
+      "sha256": "53fe1cf4e2a315dc6a8a0189d188ac2a2208126a9cddeb9b5427ae4ecd57d10f",
+      "action": "shared source before selective retirement"
+    },
+    "backend/app/mod03_notice/notice_api_router.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod03_notice/notice_api_router.py",
+      "sha256": "c22528c738dca5b3c78936d3a4f80e28a085163201a818e32e747a8207a8ff78",
+      "action": "shared source before selective retirement"
+    },
+    "backend/tests/test_acc_plan_audit.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_acc_plan_audit.py",
+      "sha256": "0f26d6bd43e840d5c7c7998616c613d2830d988dd2324475e747842051e44eed",
+      "action": "shared source before selective retirement"
+    },
+    "backend/tests/test_tail309_notice_selection.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_tail309_notice_selection.py",
+      "sha256": "a8ecf25a25c40fcecbb7058a7b273f575edeabbed34a2c1c8ce82e4243798ae0",
+      "action": "shared source before selective retirement"
+    },
+    "backend/tests/test_retired_imports.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_retired_imports.py",
+      "sha256": "284be2d888d10fb4070a13ee43d3c6db6639d5afe45f0044aece1144a45359d9",
+      "action": "shared source before selective retirement"
+    },
+    "backend/tests/test_router_refs.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_router_refs.py",
+      "sha256": "9c2bfde632e5cdab04dab4823f9a4ff59667c263fea4545cc152ee25655ca579",
+      "action": "shared source before selective retirement"
+    },
+    "backend/tests/test_core_projects.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_core_projects.py",
+      "sha256": "eb5e5f95b4c2bfe3b2c33e1285036583d98f7cee1630bbe55a5b338a1015ae57",
+      "action": "shared source before selective retirement"
+    },
+    "backend/tests/test_wired_m03_pay.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_wired_m03_pay.py",
+      "sha256": "a364743d5f26e8d9bf9fb779f28201295f72af7412ced337e87f27ea3bd7e8fe",
+      "action": "shared source before selective retirement"
+    },
+    "backend/tests/test_tail310_selected_pay.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_tail310_selected_pay.py",
+      "sha256": "5c257cc06817433efe9f08c6afa9383edd769fa81e9729b2a9a61937b7d5227f",
+      "action": "shared source before selective retirement"
+    },
+    "docs/requirements/PRD/验收/验收基线.json": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/PRD/验收/验收基线.json",
+      "sha256": "97e046379063931a9da174edc71e47e479a73b5484c693ebfebe9bd240b60a1c",
+      "action": "shared source before selective retirement"
+    },
+    "backend/tests/test_notice_planned_pay_method.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_notice_planned_pay_method.py",
+      "sha256": "5c68f52e1b208a9c5c499fdd9832fdd25f27c9895f266bfe50e823581becffe6",
+      "action": "shared original before consumer updates"
+    },
+    "backend/tests/test_acc_x_del.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_acc_x_del.py",
+      "sha256": "34f106b4d5df9e4768d46f5e5707154d9d222e3865ec276f6147884d0519f23e",
+      "action": "shared original before consumer updates"
+    },
+    "backend/tests/test_tail300_sources.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_tail300_sources.py",
+      "sha256": "725778f6a568a1ccba08e8420be060c49eda52d3b8b1362fc0d4fbb8db668959",
+      "action": "shared original before consumer updates"
+    },
+    "backend/tests/test_shell_ui_workflow.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_shell_ui_workflow.py",
+      "sha256": "943775ce45e008f44299ce105581bcbbfeff9cdb4228c70736bdfa304e40cbfc",
+      "action": "shared original before consumer updates"
+    },
+    "backend/tests/test_tail292_nav.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_tail292_nav.py",
+      "sha256": "8b7e5bf692a39308fdc59ea4eb3c8897a5e2258620027ca34c3204d32511704e",
+      "action": "shared original before consumer updates"
+    },
+    "backend/tests/test_dup_guards.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_dup_guards.py",
+      "sha256": "21ab8581fde8a5a09409d7b5bf69dfb99d14f9bedadd4405c288c2c516d03df6",
+      "action": "shared original before consumer updates"
+    },
+    "backend/tests/test_acc_home_todo.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_acc_home_todo.py",
+      "sha256": "5174c562ef41729fedfbed4bbabf99d5394662b2e42cc744b93dfcfa84d7f7b4",
+      "action": "original before retirement consumer update"
+    },
+    "backend/tests/test_tail04_pages.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_tail04_pages.py",
+      "sha256": "54b9999c0a569227a3a9c405f6ed40510bfebe3d64f3f4aacf27cd30539900d4",
+      "action": "original before retirement consumer update"
+    },
+    "backend/tests/test_layering.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_layering.py",
+      "sha256": "6aef3f223b7c8e800dae8eaa490c9afcce5fd38afcada648225ffe3e577b35d4",
+      "action": "original before retirement consumer update"
+    },
+    "tools/probe/_shell_m04.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_shell_m04.py",
+      "sha256": "fc9e7b0c7d77f0bad0c5954731b31367e93818e20010db4231a0ae197c37ae4f",
+      "action": "original before retirement consumer update"
+    },
+    "tools/probe/_shell_m04draft.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_shell_m04draft.py",
+      "sha256": "f861d9dff7ab749d0774648bfe19c17979aebf9c524c9e2031f0691e171821f3",
+      "action": "original before retirement consumer update"
+    },
+    "tools/probe/_shell_empty.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_shell_empty.py",
+      "sha256": "cbcc78909ca84feb2d39189eebcfc2a9ea41bfd6199bc7907f3a1a193babb189",
+      "action": "shared empty-state probe retargeted to active notice page"
+    },
+    "tools/probe/_e2e_plan_force.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_e2e_plan_force.py",
+      "sha256": "4e663f395b02cc1537004806ed1684716f85871ca4dc7ecd39fb10e0f87297b3",
+      "action": "original before retirement consumer update"
+    },
+    "tools/probe/_e2e_m04_wired.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_e2e_m04_wired.py",
+      "sha256": "ced10f5c0d87ac969b5fd21f0f65ecbbd8334aa1663df026eedc3e2ef32c1c41",
+      "action": "original before retirement consumer update"
+    },
+    "tools/mut/_mut_m04forms.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_m04forms.py",
+      "sha256": "265e57754fb9f208f96f01fba2e98eb32a3581806a9884c3d91e391fe28fb495",
+      "action": "original before retirement consumer update"
+    },
+    "tools/mut/_mut_m04wired.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_m04wired.py",
+      "sha256": "0f6de63b3b972ee819c2775ef59714717745e400a1c4b76b99da9e111f42708a",
+      "action": "original before retirement consumer update"
+    },
+    "tools/mut/_mut_m03pick.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_m03pick.py",
+      "sha256": "596ce90a768502bda8bdf1fb9b95cbff804c0503b6b6a265d8478b700bebf9d2",
+      "action": "original before retirement consumer update"
+    },
+    "backend/app/report_export/pl_export.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/report_export/pl_export.py",
+      "sha256": "8df15a8ba2e02a0b251f7374a4471aeb3c857ee253aa545e97bd666903e76162",
+      "action": "original before retirement consumer update"
+    },
+    "backend/tests/m04_helpers.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/m04_helpers.py",
+      "sha256": "e6149fcd078ec6b1c8b45d623e7a1a3228e002e91415a7a801143191db9ce3de",
+      "action": "retained shared fake-session/project helpers; historical filename"
+    },
+    "tools/probe/_shell_segments.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_shell_segments.py",
+      "sha256": "1430b8396b538cf8a9eda3c81cc75c26c288a8ce1114006303ee84660b8b7eb0",
+      "action": "original before retirement consumer update"
+    },
+    "tools/oneoff/_pytestscope.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/oneoff/_pytestscope.py",
+      "sha256": "93ce918759a47180356b6b4eb82fafe2fccf33a7ae0f81b2846344d95b8b94cd",
+      "action": "original before retirement consumer update"
+    },
+    "tools/oneoff/_run_muts.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/oneoff/_run_muts.py",
+      "sha256": "e6f36d9eee45a9fe6278fa36e1f8904c4a5ea334ae4d723104c644afd9714e2b",
+      "action": "original before retirement consumer update"
+    },
+    "tools/wiring_expected.txt": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/wiring_expected.txt",
+      "sha256": "29f666ec9c9be91a06841957ad72ac3df6214142851143207dd2b8362512c607",
+      "action": "original before retirement consumer update"
+    },
+    "tools/t7_expected.txt": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/t7_expected.txt",
+      "sha256": "3a56e9b2eb2d2d46a4ae0a2a3af43820292267816e5dbcd1c25373c23a8f15d3",
+      "action": "original before retirement consumer update"
+    },
+    "tools/mut/_mut_layering.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_layering.py",
+      "sha256": "541ecd1413d58a0c7243edda4df461e32036009bec9aadefe667c2571b9cca8a",
+      "action": "original before retirement consumer update"
+    },
+    "docs/requirements/材料科业务全流程说明书.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/材料科业务全流程说明书.md",
+      "sha256": "0bd5a54d8f6774c748bd08d0978a36a1b1e9b667170bf15ccfdfaef69a23933a",
+      "action": "original before retirement consumer update"
+    },
+    "docs/requirements/PRD/02-功能规格/MOD-04.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/PRD/02-功能规格/MOD-04.md",
+      "sha256": "c80422d2e732c0555356f1d33df2a4f99b8e5514b162ef114761f9dfbbb7b593",
+      "action": "original before retirement consumer update"
+    },
+    "docs/requirements/PRD/02-功能规格/MOD-03.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/PRD/02-功能规格/MOD-03.md",
+      "sha256": "b2643837253319559024fb9eb1e0dd3e7fd97465afb3a9c440bf86e00d0dfae8",
+      "action": "original before retirement consumer update"
+    },
+    "docs/requirements/PRD/验收/用例索引.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/PRD/验收/用例索引.md",
+      "sha256": "804cb98e54030059d23c5ea939f56aec82e2075dc9a4cc7ce651a92e7077e215",
+      "action": "original before retirement consumer update"
+    },
+    "docs/requirements/PRD/05-任务分解.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/PRD/05-任务分解.md",
+      "sha256": "b5ddd24792ed1a2607d514f5b2cf7e923ff339a7b16d0eaaf49eef5589a2e010",
+      "action": "original before retirement consumer update"
+    },
+    "docs/architecture/modules.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/architecture/modules.md",
+      "sha256": "eb5994dc6373ee7fa486501207c0db13ca1762aea343b696f8408d40d8556c3c",
+      "action": "original before retirement consumer update"
+    },
+    "tools/chain_expected.txt": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/chain_expected.txt",
+      "sha256": "cbf02eaa4bd374058de65cb1cee28575c6eeca152a85fc67276da5e5aa7679b2",
+      "action": "original before retirement consumer update"
+    },
+    "tools/chain_sources.txt": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/chain_sources.txt",
+      "sha256": "d7f9127becb8023515c013599755d9c13480ea901a523a959cdacf253a726116",
+      "action": "original before retirement consumer update"
+    },
+    "skills/payment-plan-audit/SKILL.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/skills/payment-plan-audit/SKILL.md",
+      "sha256": "d9c36cc18e98d9571dd80a88e7d2c5b1cbd5ca847219af0a0fb01920d6fb77de",
+      "action": "original before retirement consumer update"
+    },
+    "backend/app/export_bindings.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/export_bindings.py",
+      "sha256": "9680c820ad20564f337e5394257f082da2e50b16ecc305049bd60992ab69afe7",
+      "action": "shared consumer before retirement update"
+    },
+    "tools/mut/_mut_tail04_pages.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_tail04_pages.py",
+      "sha256": "c68fe6641fccd54e650d6b585af922f14d488d688032707b467abb846f41d892",
+      "action": "shared consumer before retirement update"
+    },
+    "tools/mut/_mut_tail35.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_tail35.py",
+      "sha256": "001c97ed6e663ae2739b940471dd208dcb58f9b0f03bf684da82ced4e5acf0bd",
+      "action": "shared consumer before retirement update"
+    },
+    "tools/probe/_shell_legacy.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_shell_legacy.py",
+      "sha256": "90aa7cc9d5d1a91970e81f006e56d7a139f944aefe80cbaaa7ba39c58858ff31",
+      "action": "shared consumer before retirement update"
+    },
+    "tools/oneoff/_front4_words.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/oneoff/_front4_words.py",
+      "sha256": "d32687b7c6f03a07954de4e3b37bbe37c0656918cd385394fe5b9d0cfceb342a",
+      "action": "shared consumer before retirement update"
+    },
+    "docs/archive/index.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/archive/index.md",
+      "sha256": "6a1e9c77e4f7c85ee0d6e6abb983427d94278d4ecc9c2bf2b3f3842a0b507f67",
+      "action": "shared consumer before retirement update"
+    },
+    "backend/app/mod04_plan/domain.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod04_plan/domain.py",
+      "sha256": "2499333aea437c103f603a76c0b36227c0710f1320f206164a2d9284be6c07a3",
+      "action": "pure audit retained; unused plan UI helpers retired"
+    },
+    "backend/app/mod03_notice/page.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/mod03_notice/page.py",
+      "sha256": "2869c32f3fdecdbe47f3f49977264764e7bfc69235f40ec7cf523961358f2476",
+      "action": "shared contract before retirement update"
+    },
+    "backend/tests/test_acc_pay_ia.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_acc_pay_ia.py",
+      "sha256": "62e3c4d6a5259455caea5e649c14a1be490665beb7fe4f3d3fcd5f9f2f7f4579",
+      "action": "shared contract before retirement update"
+    },
+    "backend/tests/test_ux_pages.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_ux_pages.py",
+      "sha256": "75f058faf9a1f0b0284e76566db22d1e2632c4416454dd145975ecdbe7780202",
+      "action": "shared contract before retirement update"
+    },
+    "tools/probe/_shell_home.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_shell_home.py",
+      "sha256": "5aa4c654304f1e3527716c96fdfd07053eb12e34ddff1265ec1d432beb049be6",
+      "action": "shared contract before retirement update"
+    },
+    "backend/tests/test_ux_states.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_ux_states.py",
+      "sha256": "0ced466f7f812489bf140ebd41aa3e5a9d871f71ba06d2fd59623dd3db0d8564",
+      "action": "shared contract before retirement update"
+    },
+    "tools/mut/_mut_tbl.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_tbl.py",
+      "sha256": "2c89d3fee938ae1c79706722d28fb9932f12da23a1e440dbe276cca2b8597535",
+      "action": "shared contract before retirement update"
+    },
+    "tools/audit/audit_face.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/audit/audit_face.py",
+      "sha256": "ac054f1f889b480c08d4b12376d28678036362972e9d0ec21344625340f0991e",
+      "action": "shared contract before retirement update"
+    },
+    "docs/requirements/PRD/01-需求索引.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/PRD/01-需求索引.md",
+      "sha256": "55d0412eafe29edf8bd9ded3614571977b64e76ef17b748e12981c5b1cb638da",
+      "action": "shared contract before retirement update"
+    },
+    "docs/requirements/PRD/02-功能规格/MOD-13.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/PRD/02-功能规格/MOD-13.md",
+      "sha256": "49b40895cc83a471065d4ba08dceb7cd59fdee386896b8db38309b42e8a53977",
+      "action": "shared contract before retirement update"
+    },
+    "docs/requirements/demo/原型导读.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/requirements/demo/原型导读.md",
+      "sha256": "a42340fc48d4dc82478dadc473a98cc7a4f2e731942245b435f9b623f371859f",
+      "action": "shared contract before retirement update"
+    },
+    "docs/status.md": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/docs/status.md",
+      "sha256": "d3e35eb00d9dd8023cec3438333b978f3b2845adee16d5d7d267d8614fe7f711",
+      "action": "shared contract before retirement update"
+    },
+    "backend/tests/test_acc_x_exp.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_acc_x_exp.py",
+      "sha256": "be16d580983f5be5135323199d896ff65f96991c271d8968df107204f7d05b6e",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/shell_load_helpers.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/shell_load_helpers.py",
+      "sha256": "aa928feabf31ee62f88aab174920e6fae93fa624277199de2b97495aacbe474a",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_shell_bind.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_shell_bind.py",
+      "sha256": "ec52a8d3c6db0e72473546c25286739cbc7c15aa6c7cbcff7c6b2ca39b42acec",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_tail323_filter_panels.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_tail323_filter_panels.py",
+      "sha256": "40bf0460318a86534af5be990db384a367b011e9dae2c97c8bb19473b869fc15",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_ux_brief.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_ux_brief.py",
+      "sha256": "8fbccdb5b16385f72ac950be44bfa7084ad48db29d3aea00473a804d4e95ab96",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_wired_m06.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_wired_m06.py",
+      "sha256": "d313b9eceec0b6eb93affc03cf95bd41e6addde2668135081b4765594564614a",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_wired_m08.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_wired_m08.py",
+      "sha256": "218adcd6d4f7f3fe10c9acecfaafa39dbb779d845a7f01c6ae5fe058625473ce",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_run_record_timing.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_run_record_timing.py",
+      "sha256": "0dc1c23ef4f8d8668bf9fc62f8adfec51be63886856caa175672c0505f4c08f1",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_retired_payment_plan.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_retired_payment_plan.py",
+      "sha256": "06bc5c92e713a22c34068e78317adcb02febcea87f7d173fdbd2bcc58469ce08",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_notice_paste_selection.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_notice_paste_selection.py",
+      "sha256": "72a628d7095bfdb5d19f856f2e8c449d60d84ad0994f7d1e3848e2eb03c31459",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_wiring_guards.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_wiring_guards.py",
+      "sha256": "5c1614b7f3836f7c260d0930dad23e5a9dc98e976179fe0a4d01328f780a9f35",
+      "action": "shared checks updated for page retirement"
+    },
+    "tools/mut/_归档-20261009/_mut_tbl_legacy.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_归档-20261009/_mut_tbl_legacy.py",
+      "sha256": "e2e2ddd2478547ac204203201ebf5fc18409cca365089b69383fe9033eae6e19",
+      "action": "shared checks updated for page retirement"
+    },
+    "tools/oneoff/_归档-20260930/_doc_handoff35.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/oneoff/_归档-20260930/_doc_handoff35.py",
+      "sha256": "f685786a510f0ba1c3396b1abec2faf668a6d5750c16ede926e9c112b48e7281",
+      "action": "shared checks updated for page retirement"
+    },
+    "backend/tests/test_plan_audit_api.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_plan_audit_api.py",
+      "sha256": "ae585cda586b47160c476754f3c1a45ea20ade0209433a8f8d3122271983041b",
+      "action": "shared checks updated for page retirement"
+    },
+    "tools/probe/_shell_text.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_shell_text.py",
+      "sha256": "9cac329d99673895f9b84aec62b27167e17c4ff053c4aadaaaf416b228f4d282",
+      "action": "current owner updated for retirement"
+    },
+    "tools/probe/_shell_pops.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/probe/_shell_pops.py",
+      "sha256": "250baa04850f9784afb39a589b3dd032bd6a59d535231a6ae99e994e9215ff37",
+      "action": "current owner updated for retirement"
+    },
+    "backend/tests/test_imp_m06_api.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_imp_m06_api.py",
+      "sha256": "661beee524d6c709598d74a65ac244dd212b5ba6244c81a0041a70d6e924e22c",
+      "action": "HEAD original; generic preview/write-boundary coverage retained in MOD-06"
+    },
+    "tools/mut/_mut_impkit.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_impkit.py",
+      "sha256": "f993f7b413a490fc9a9a6ffcafd90606d49c8e0f248259577e933054892f7c19",
+      "action": "HEAD original; generic preview/write-boundary coverage retained in MOD-06"
+    },
+    "backend/app/web/shell/pages-a.js": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/web/shell/pages-a.js",
+      "sha256": "0ef4045882a9d259044c73b2f1ef23fd45b4bdfe72f04728c0f5e1211410a9c2",
+      "action": "frontend working tree before plan retirement and paste selection"
+    },
+    "backend/app/web/shell/actions.js": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/web/shell/actions.js",
+      "sha256": "d25a3788cd74f6aa8106655801d75d6de7c8c8f55b101acb4419f28fbaa1f31b",
+      "action": "frontend working tree before plan retirement and paste selection"
+    },
+    "backend/app/web/index.html": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/web/index.html",
+      "sha256": "39de2078cba00cfd8fe377a2b291c47d9f7683e44fd7e6fb40700fd6ac85e3cb",
+      "action": "frontend working tree before plan retirement and paste selection"
+    },
+    "backend/app/web/shell/base.js": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/web/shell/base.js",
+      "sha256": "42573e256cafced8d5e999c98be433b13e303014cafe81bc8b216a796f6a12c8",
+      "action": "frontend working tree before plan retirement and paste selection"
+    },
+    "backend/app/web/shell/core.js": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/web/shell/core.js",
+      "sha256": "3dc37c944103014d3bfebfe6e919f9ef5df00e3a5bbc28da9993f61b96e171c9",
+      "action": "frontend working tree before plan retirement and paste selection"
+    },
+    "backend/app/web/shell/view.js": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/web/shell/view.js",
+      "sha256": "f4dcb72b796b5e9f80bbac7d8ef5dae6f6d3b41cadb0fea755aaf1a5cf697d5a",
+      "action": "frontend working tree before plan retirement and paste selection"
+    },
+    "backend/app/web/shell/api.js": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/web/shell/api.js",
+      "sha256": "aa69aec14f26ffc4beb7ea91c903e6e908aeffc542ff7d83abefb54d0e17fdb8",
+      "action": "frontend working tree before plan retirement and paste selection"
+    },
+    "backend/app/web/shell/proj.js": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/app/web/shell/proj.js",
+      "sha256": "1034c312ecf203ec6c6c74ffdbc416bd0817cc3017de6a6b644d32ce42f00a03",
+      "action": "frontend working tree before plan retirement and paste selection"
+    },
+    "backend/tests/test_import_api.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_import_api.py",
+      "sha256": "f7d719b3aaa067954d9652d02a0071926f3414c51cdc479617d37e6f0a8a10ac",
+      "action": "HEAD before shared registry/segment guard update"
+    },
+    "backend/tests/test_shell_segments.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/backend/tests/test_shell_segments.py",
+      "sha256": "c96c7094dc33796b93bcd4230ca22fd64edbc912e525cf4fc522169e8575847a",
+      "action": "HEAD before shared registry/segment guard update"
+    },
+    "tools/mut/_mut_segments.py": {
+      "archive": "docs/archive/retired-payment-plan-20261015/source/tools/mut/_mut_segments.py",
+      "sha256": "de3af0959cfb55de4d1025dc8b2594cd9860a338cdbf5e33c2ad0fbd05e65af7",
+      "action": "HEAD before shared registry/segment guard update"
+    }
+  }
+}

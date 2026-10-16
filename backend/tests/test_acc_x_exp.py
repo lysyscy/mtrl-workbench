@@ -69,7 +69,7 @@ def test_有数据的页面都有导出入口():
     # ⚠️ 2026-09-28（`TAIL-164` · `P2-a` 拆件）：`NAV` 已随拆件搬进 `web/shell/*.js` ⇒ 导航要从
     #    **合并后的壳**（`SHELL`）解析；而**视图切片 `V.*` 按计划 §23 留在 `index.html`** ⇒ 切片仍读单件。
     views = dict(sorted(set(re.findall(r"\['(m\d+)','([^']+)','[^']+'\]", SHELL))))
-    assert len(views) >= 13, f"导航只解析出 {len(views)} 个视图 —— 解析大概失效了"
+    assert len(views) >= 12, f"导航只解析出 {len(views)} 个视图 —— 解析大概失效了"
     slices = _view_slices(_index())
 
     no_entry, missing_note, exempt_ok, wrongly_listed = [], [], [], []

@@ -8,7 +8,7 @@ from tests.shell_src import bind_blocks
 def test_登记按原顺序且每次重画只跑一次(ui_page):
     p = ui_page
     sizes = p.evaluate('Object.fromEntries(Object.entries(BIND).map(([k,v])=>[k,v.length]))')
-    assert sizes == dict(m03=3, m04=1, m11=3, m15=1, m06=1, m08=2, m09=1, m02=1, m01=1)
+    assert sizes == dict(m03=3, m11=3, m15=1, m06=1, m08=2, m09=1, m02=1, m01=1)
     for view, markers in dict(m03=['pickAllBox','m03More','refReturn'],
                               m11=['jcAllBox','m11Tools','refReturn'],
                               m08=['naive','refReturn']).items():

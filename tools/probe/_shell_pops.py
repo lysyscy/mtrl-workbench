@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 #: 有「时间选择器」的页（`tmBtn` 的调用点分布）
-PAGES: tuple[str, ...] = ("m03", "m04", "m05", "m07", "m08", "m09")
+PAGES: tuple[str, ...] = ("m03", "m05", "m07", "m08", "m09")
 
 MEASURE = """
 () => {

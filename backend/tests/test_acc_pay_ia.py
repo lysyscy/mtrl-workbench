@@ -60,7 +60,7 @@ def _render(rows):
 @acc("ACC-PAY-IA-001", "001-01")
 def test_付款域页面划分与导航符合范围定义():
     ids = tuple(p["id"] for p in PAY_DOMAIN_PAGES)
-    assert ids == ("m03", "m04", "m05")                     # 付款域恰好三页（§4.1.2）
+    assert ids == ("m03", "m05")                     # 付款域两页，原表核对在skill（§4.1.2）
     covered = set()
     for page in PAY_DOMAIN_PAGES:
         assert page["covers"], f"{page['id']} 必须回答它覆盖「包含」里的哪几项"

@@ -464,3 +464,30 @@ def test_导入候选要能选到只有档案行的项目_页面口径不许跟�
             row = s.execute(select(Project).where(Project.warehouse_name == wh)).scalar_one_or_none()
             if row is not None:
                 s.delete(row)
+
+
+@acc()
+def test_通用面预览阶段不写库_且坏token显式报错(client, monkeypatch):
+    """通用预览不调用写钩子且真实快照不变；坏token明确失败。"""
+    from app.core.db import session_scope
+    from app.mod06_proc.models import ProcHistoryBatch, ProcHistorySnapshot
+    from sqlalchemy import func, select
+
+    def counts():
+        with session_scope() as session:
+            return tuple(session.scalar(select(func.count()).select_from(model))
+                         for model in (ProcHistoryBatch, ProcHistorySnapshot))
+
+    called=[]
+    monkeypatch.setattr(imp_spec.HOOKS, 'commit', lambda *a, **kw: called.append(True) or {})
+    before=counts()
+    got=_parse(client).json()
+    assert got['ok'] and got['token']
+    body={'token':got['token'], 'mapping':{'时间':'核算月','线上入库（不含税）主辅材':'入库主辅材'},
+          'options':{'warehouse':'__隔离预览__'}}
+    pre=client.post('/api/imp/m06_proc/preview',json=body).json()
+    assert pre['ok'] and pre['total']==3
+    assert not called and counts()==before
+    bad=client.post('/api/imp/m06_proc/commit',json={**body,'token':'deadbeefdeadbeefdeadbeefdeadbeef'}).json()
+    assert bad['ok'] is False and str(bad.get('message') or '').strip()
+    assert not called and counts()==before

@@ -87,6 +87,7 @@ def _row_dict(row) -> dict:
         # ⚠️ **直取、不得 `getattr(..., "")` 兜空**：兜空会把「`NoticeRow` 漏装该字段」变成**静默空串** ——
         #    症状是页面上供应商恒空、点「采用」反而把已匹配上的值清空（漏了也不报错，最难查）。
         "jc_supplier": str(row.jc_supplier or ""),
+        "planned_pay_method": row.planned_pay_method,
         "input_by": row.input_by,
         "amount_approved_text": _amt(row.amount_approved),
         "pay_amount_text": _amt(row.pay_amount),

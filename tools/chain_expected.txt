@@ -73,18 +73,6 @@ P5|**只导出 PDF**（与打印共用勾选 · 只落盘、**不投递**）|取
 P5|打印机地址设置（改完**即时生效·无需重启**）|推送打印机|backend/app/mod03_notice/router.py::set_printer_setting|ACC-PAY-SETUP-001|已接
 # ============================================================
 # ④ P2 付款计划：导入 → 审查 → 手动行 → 勾选（真源 = 说明书 §4.3）
-P2|手动导入 Excel（**导入前先选「年月」** ⇒ 本批归入所选月）|用户手动导入 Excel|backend/app/mod04_plan/importer.py::parse_workbook|ACC-PLAN-IMPORT-001|已接
-P2|项目列**唯一匹配**档案（命中 0 ⇒ 标「未匹配」／多条 ⇒ 标「重名 N 条」）|命中 0 条 → 标「未匹配」|backend/app/mod04_plan/domain.py::match_project|ACC-PLAN-IMPORT-001|已接
-P2|**6 种审查判定**（完全匹配 / 金额不符 / 号查不到 / 无号 / 重复上报 / 超过未付）|比对结果共 6 种|backend/app/mod04_plan/domain.py::audit_rows|ACC-PLAN-AUDIT-001|已接
-P2|判重：同月同单据号（**空单据号不参与判重**）|同一月份内、同一单据号出现 ≥2 次|backend/app/mod04_plan/domain.py::duplicate_keys|ACC-PLAN-NODOC-001|已接
-P2|⭐ **强制通过**（确认无误后放行 · **必须写备注**留痕）|用户确认无误后可强制通过|backend/app/mod04_plan/router.py::act_force|ACC-PLAN-AUDIT-001|已接
-P2|可手改列（付款时间 / 付款方式 / 备注；**单据号只对未匹配行开放**）|单据号只对「未匹配」行开放修改|backend/app/mod04_plan/plan_ui.py::inline_edit|ACC-PLAN-UI-001|已接
-P2|「**再次匹配**」（改完单据号后重判该行）|改完点「再次匹配」重新比对|backend/app/mod04_plan/plan_ui.py::re_match|ACC-PLAN-UI-001|已接
-P2|**手动行**（本地补录 · ⭐ **一样要被审查**）|付款计划要手动行，而且手动行一样要被审查|backend/app/mod04_plan/plan_manual.py::manual_row_payload|ACC-PLAN-MANUAL-001|已接
-P2|按月归档（不同月可重复 · 不去重不覆盖）|按月归档|backend/app/mod04_plan/importer.py::parse_workbook|ACC-PLAN-IMPORT-001|已接
-P2|列表内删除（**先列出影响范围**再确认才执行）|删除前**列出影响范围**|backend/app/mod04_plan/plan_ui.py::delete_impact|ACC-PLAN-UI-001|已接
-P2|「按付款计划勾选」（只按**当月**· 跨月单据一并勾上 · **项目筛选一律不动**）|一键勾选「当月计划」命中的记录|backend/app/mod04_plan/plan_ui.py::window_button|ACC-PAY-PICK-001|已接
-P2|可点窗口 = 每月 10 号→月底（按钮可用性，**不是付款拦截**）|系统不做任何拦截或标记|backend/app/mod04_plan/plan_ui.py::window_button|ACC-PLAN-UI-001|已接
 # ============================================================
 # ⑤ P3 付款执行与欠款：核验 → 批量付款 → 流水 → 状态 → 欠款回算（真源 = 说明书 §4.4 / §4.5）
 P3|核验：**唯一核验项 = 审批状态「已批」**（发票核验 / 先付款特例均不做）|审批状态 = 已批|backend/app/mod03_notice/domain.py::class PayRow|ACC-PAY-VERIFY-001|已接
@@ -93,7 +81,7 @@ P3|批次内「移出本次付款」（**已填的付款方式 / 金额不得丢
 P3|**不可付五类**前置禁用（含 ⭐ 已剔除行 · i8 撤单行 · ⭐ **集采未关联** ⇒ **不得静默少几行**）|「不可付」共五类|backend/app/mod03_notice/domain.py::check_batch|ACC-PAY-BATCH-001|已接
 P3|兜底校验：提交时整批重算，**任一不过 ⇒ 整批不产生任何流水**|任一校验不过 → 整批不产生任何流水|backend/app/mod03_notice/domain.py::confirm_batch|ACC-PAY-BATCH-001|已接
 P3|付款登记：**一次付款 = 一条独立流水**（多次付款允许）|每次付款记一条独立流水|backend/app/mod05_flow/repository.py::create_flow|ACC-FLOW-LED-001|已接
-P3|实际付款方式：默认取**付款计划**、取不到兜底「现汇」|默认取自付款计划的付款方式|backend/app/mod05_flow/repository.py::_method_of|ACC-FLOW-LED-001|已接
+P3|实际付款方式：本次手改、通知书拟方式、现汇依次取值|默认顺序：本次手改 → 通知书拟付款方式|backend/app/mod03_notice/notice_pay_actions.py::default_pay_method|ACC-PAY-BATCH-001|已接
 P3|付款状态判定：**已付金额（流水汇总）≥ 审批金额 ⇒ 已付清**（只有两态）|已付金额（流水汇总） >= 审批金额？|backend/app/mod05_flow/domain.py::payment_status|ACC-FLOW-LED-001|已接
 P3|撤销付款流水（**必须填撤销原因** · 只影响该条）|必须填撤销原因|backend/app/mod05_flow/domain.py::revoke_flow|ACC-FLOW-PST-001|已接
 P3|⭐ **「统计付款金额」重算唯一出口**（付款 / 撤销 / 历史导入三处统一调用）|重算逻辑只写一处|backend/app/mod05_flow/repository.py::sync_stat_paid|ACC-PAY-STAT-002|已接
@@ -176,10 +164,12 @@ X|全局导出 Excel（**所有列表页都要** · 行集合/合计/取值与�
 X|导出**按模板**（模板只定长相 · 数据仍来自页面筛选）|模板只管「长什么样」|backend/app/report_export/tpl_fill.py::fill_workbook|ACC-X-EXP-001|已接
 X|模板**数据区起点**识别（读 `DATA_START` 标记文字 · ⛔ 不用「定义名称」）|数据区首行那格的标记文字 DATA_START|backend/app/report_export/tpl_fill.py::locate_data_area|ACC-X-EXP-001|已接
 X|模板**尾部行块随行数派生**（合计/小计/脚注按实际行数位移 · ⛔ 不写死行号）|其位置**一律按实际数据行数派生**|backend/app/report_export/tpl_fill.py::tail_end_row|ACC-X-EXP-001|已接
-X|全局删除（确认框 **必须列出删除影响范围**：关联数据 / 统计影响）|必须列出删除影响范围|backend/app/mod04_plan/plan_ui.py::delete_impact|ACC-X-DEL-001|已接
+X|全局删除（确认框 **必须列出删除影响范围**：关联数据 / 统计影响）|必须列出删除影响范围|backend/app/mod03_notice/notice_manual_actions.py::manual_delete_impact|ACC-X-DEL-001|已接
 X|账号与权限（系统内 2 账号 · **用户本人为管理员**可管理其他账号）|用户本人为管理员可管理其他账号|backend/app/mod15_user/api.py::api_create|ACC-USR-MGMT-001|已接
 X|上线前历史数据初始化（**历史数据不重走**总原则）|历史数据不重走|backend/app/mod05_flow/domain.py::OpeningView|ACC-INIT-001|已接
 X|外观主题（地基：唯一真源 `THEME_CSS` 32 变量 · 换主题 = 换取值零 CSS 改动）|外观主题（界面配色）|backend/app/mod03_notice/page.py::THEME_CSS|ACC-UI-THEME-001|已接
 # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：设置页的服务端渲染件（`view.py` ＋ PRG）已删 ⇒
 #    落点改指 **JSON API 的读出口**（壳 `V.set` 渲染它）—— 取值出口仍是 `app_settings.effective` ✓。
 X|系统设置（取值出口唯一 = `app_settings.effective`）|系统设置|backend/app/mod14_config/settings_api.py::api_settings_get|ACC-CFG-SETUP-001|已接
+
+P2|复制单据号自动勾选|按完整单据号精确匹配|backend/app/web/shell/pages-a.js::ntPasteMatch|ACC-NOTICE-PASTE-001|已接

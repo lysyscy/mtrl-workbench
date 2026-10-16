@@ -247,7 +247,6 @@ const EXP_ROUTES = {
   '项目档案':        { rows: () => pjVisible(), url: '/api/m01/projects/export' },
   '付款流水':        { rows: () => flVisible(), ids: () => flDomIds(), url: '/api/m05/flows/export' },
   '付款通知书台账':   { rows: () => ntHit(fNt),  url: '/api/m03/notices/export' },
-  '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },
 };
 
 const ACT={
@@ -488,7 +487,7 @@ const ACT={
      ${bad.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>${badWhy?`（${badWhy}）`:''}请移出不可付记录，或关闭后调整勾选；移出会取消该行勾选，其他行已填方式与金额保留。${bad.some(ntJcUnlinked)?'<br>集采未关联合同的记录须先在付款通知书页关联合同。':''}</div>`:''}
      <div class="tw" style="max-height:44vh">${TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD,
      rows:rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
-       const plan=PLs.find(pl=>pl.docNo===n.code), dm=plan?plan.method:'现汇';
+       const dm=n.plannedPayMethod||'现汇';
        const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);
        return `<tr class="${ok?'':'hl'}"><td class="fc">${n.code}</td>
        <td class="now" title="付款项目全名：${esc(n.proj)}">${dispCell(n.proj,n)}</td>
@@ -739,195 +738,35 @@ const ACT={
      toast(`${esc(r.message)}<br><span class="mut sm">恢复后需把「分类」切回对应分类（或「全部」）才看得到</span>`,6000);
    }catch(e){ toast(`⚠️ 恢复失败：${esc(String((e&&e.message)||e))}`); } },
 
- /* —— MOD-04 付款计划：筛选 + 行多选 + 多选删除 + 选月份导入（2026-09-12 新增）—— */
- plFilter:()=>{ const el=$('#plReview'); plf.review=(el&&el.value)||'全部'; prunePlPick(); render(); },
- plFilterReset:()=>{ plf.ym=bjMonth(); plf.projs=[]; plf.review='全部'; pjClose('plPj'); prunePlPick(); render();
-   toast('付款计划筛选已重置（年月回到「北京时间当月」，审查结果回到「全部」）'); },
- plPjToggle:t=>{ pjToggle('plPj',t); },
- plPjPick:t=>{ const f=t.dataset.pj; const i=plf.projs.indexOf(f); if(i>=0) plf.projs.splice(i,1); else plf.projs.push(f); prunePlPick(); render(); },
- plPjAll:()=>{ plf.projs=PL_PROJ_LIST(); prunePlPick(); render(); },
- plPjNone:()=>{ plf.projs=[]; prunePlPick(); render(); },
- /* 行多选：范围 = 当前筛选结果（与付款通知书页同款语义） */
- plPick:t=>{ const id=t.dataset.id; if(!id) return; if(plPick.has(id)) plPick.delete(id); else plPick.add(id); render(); },
- plPickAll:()=>{ const cur=plVisible(); const hit=cur.filter(p=>plPick.has(p.id)).length;
-   if(hit===0){ cur.forEach(p=>plPick.add(p.id)); } else { cur.forEach(p=>plPick.delete(p.id)); } render(); },
- /* ⭐ 删除（逐行 / 批量**共用**）—— §4.3.6 的**两步**：先取**后端影响范围**，用户确认后再删。
-    ⚠️ 影响范围**必须来自后端**（`/api/m04/delete-impact`）：它是硬要求、不是装饰；
-       取不到就**不删**（宁可不动，也不做「看不见影响范围的删除」）。 */
- plConfirm:async ids=>{ if(!ids.length) return;
-    let imp=null;
-    try { imp=await API.plDeleteImpact(ids); }
-    catch(e){ toast(`⚠️ 取不到「删除影响范围」：${esc(String((e&&e.message)||e))}<br><b>未删除任何数据</b>`,6400); return; }
-    plDelIds=ids.slice();
-    const impList=(imp.impacts||[]);
-    const rows=impList.slice(0,15).map(r=>`<tr><td class="fc">${esc(String(r.row_id))}</td>`
-      +`<td class="fc">${esc(String(r.year_month||''))}</td>`
-      +`<td>${esc(String(r.result||''))}</td></tr>`).join('');
-    modal({title:'删除付款计划行确认',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 将删除 <span class="fc">${ids.length}</span> 行付款计划数据</b>。删除后需重新导入才能恢复。</div>
-      ${kvBlock([['删除行数',`<span class="fc">${ids.length} 行</span>`],['影响范围','只影响付款计划表；<b>不影响付款通知书与欠款统计</b>']])}
-      <div class="tw" style="max-height:220px">${TBL({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',rows:[rows]})}</div>
-      <div class="mut sm" style="margin-top:calc(6px * var(--fscale))">受影响 ${impList.length} 行 · 涉及表：${esc(String((imp.affected_tables||['plan_row']).join('、')))}</div>`,
-      footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="plDelOk">确认删除</button>`}); },
- /* ⭐ 逐行删除：与批量删除**走同一套**（先取后端影响范围 → 确认 → 删） */
- plDelRow:t=>{ const id=t.dataset.id; if(!id) return; ACT.plConfirm([id]); },
- plDel:()=>{ const ids=[...plPick]; if(!ids.length){ toast('请先勾选要删除的行'); return; } ACT.plConfirm(ids); },
- plDelOk:()=>{ const ids=plDelIds.slice(); plDelIds=[]; closeModal();
-    if(!ids.length) return;
-    plAct(()=>API.plDelete(ids), `已删除 <b>${ids.length}</b> 行付款计划（只影响付款计划表）`); },
- /* ⭐ `TAIL-69`（2026-09-22）：导入升级为「**选文件 → 解析预览（不写库）→ 确认落库**」——
-    预览里先看见**行数 / 项目匹配盘点（未匹配 / 重名）/ 解析提示**，再决定写不写（⛔ 永不静默猜）。
-    ⚠️ `plImportPrev` 的 `let` 声明在本文件**顶层**（对象字面量里 ⛔ 不能放 `let` ——
-       实测：放里面 = `Unexpected identifier` ⇒ **整支 actions.js 失效**、壳白得只剩 home，
-       而离线文本断言全绿（只有真机 / `node --check` 看得见）。 */
- /* ⭐⭐ 2026-09-22（`TAIL-75` `B5c`）：**付款计划的导入收进「数据导入」向导**（通用导入面）——
-    原页内弹窗（选月 → 解析预览 → 确认）**已删**，此处只做"跳到向导并预选本域"。
-    ⚠️ 切片里的按钮文案（`data-act="plImport"` 那一行）**一个字没动** ⇒ `U1` 零漂移；
-       三步纪律（**预览不写库 → 确认才落库**）由向导承接：`impParse → impPreview → impCommit`。
-    ⭐ 2026-09-23（`TAIL-75` 余项 · **用户裁定**「只留通用面」）：后端那两条**页内端点**
-       （`/api/m04/import/parse|confirm`，以及 2026-09-22 起已软退役的一步式 `/api/m04/import`）
-       **同批连件删除**（**都已删**：连同只服务它们的 `TokenRequest`）⇒ 付款计划导入
-       **只剩通用面这一条路**（`/api/imp/m04_plan/*`）。
-       判据**判词一字未改、只换落点**：`test_plan_import.py` 里那几条搬进 `test_imp_m04_api.py`
-       （其中「预览不写库」改由**直接查库**证明）。 */
- plImport:async ()=>{ await impSetDomain('m04_plan'); go('imp'); IMP.step=0; render();
-   toast('已打开「<b>数据导入</b>」并选好 <b>付款计划</b>：选文件 → 看列映射 → 预览（不写入）→ 确认写入',8000); },
- /* ⭐ 2026-09-18：**已接通**（`TAIL-35` ＋ `TAIL-27` 批 2）—— 手动行走 JSON 端点 `POST /api/m04/plans`
-    （`plan_api_router.py`；与旧 PRG 端点**同一份判定** `plan_manual.manual_row_payload`）。
-    ⚠️ 旧服务端页（`POST /m04/row/save` ＋ `render_m04`）已随 `§19` 批 2 删除 ⇒ **壳是唯一入口**；
-    判据点 `ACC-PLAN-MANUAL-001` 已搬到 `tests/test_api_m04_manual.py`（端点）与 `test_wired_m04.py`（壳）。 */
- plRowAdd:()=>{ plRowEditId=PL_NEW_ID; plD=plBlank(); render();   toast('已在<b>表尾生成一行草稿</b>${DRAFT_HINT}<br>它写入后<b>与导入行同住一表、同样要被审查</b>，且<b>导入不会清理它</b>（§9.5）',5600); },
- plRowEdit:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
-   if(!p.manual){ toast('<b>编辑只对「手动行」开放</b> —— 导入行是项目端报来的<b>源数据</b>：要改请<b>重新导入</b>（它在 §4.3.3 唯一的例外口 = 该行「再次匹配」）',6400); return; }
-   plRowEditId=p.id;
-   plD={ym:p.ym, proj:plProjKey(p.proj), docNo:p.docNo||'', flowAmt:String(p.flowAmt), monthAmt:String(p.monthAmt),
-        date:p.date||'', method:p.method||'现汇', remark:p.remark||''};
-   render();
-   toast(`正在<b>原地编辑</b>手动行 <b>${esc(p.id)}</b> —— 点「保存」写入、点「取消」保持原样`,5200); },
- plRowSave:async ()=>{ const d=plD;
-  /* ⭐ **挡重入**（守则 §5.5）：连点两次「保存」= 两次 `POST /api/m04/plans` ⇒ 落两行完全相同的计划行；
-     ⚠️ 后端**不会挡** —— 同月完全相同的行是**本业务的合法状态**（§4.3.3：重复由「重复上报」提示、
-     不靠自动去重掩盖）⇒ 这一道只能由界面挡（与 `IMP.busy` 同款）。 */
-  if(plSaving) return;
-  plSaving=true; render();
-   /* ⭐ 接线：**判定与落库一律后端**（`plan_manual.manual_row_payload` → `/api/m04/plans`）——
-      ⛔ 前端不再复写「年月必填 / 项目必选 / 金额非负」那三道校验（那是**第二份口径**）。
-      ⚠️ 校验不过 ⇒ 后端 400 ＋ 原样原因；**草稿与已填内容一律保留**（§4.3.3.1：显式报错、不清空重填）。 */
-   const isNew=(plRowEditId===PL_NEW_ID);
+ /* Pasting replaces selection; manual checkbox actions keep the row order. */
+ ntPasteOpen:()=>{
+   modal({title:'粘贴单据号勾选',body:`<div class="fld"><label for="ntPasteInput">单据号</label><textarea class="inp" id="ntPasteInput" rows="7" style="width:100%;resize:vertical" placeholder="从 Excel 复制单据号列，粘贴到这里">${esc(ntPasteRaw)}</textarea></div><p class="sm mut">按完整单据号匹配，支持换行、空格或逗号分隔。勾选将替换当前勾选并清空筛选，本次命中单据集中置顶。</p><div id="ntPasteError" class="dg" role="status"></div>`,
+     footer:'<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="ntPasteApply">匹配并勾选</button>'});
+   $('#ntPasteInput')?.focus();
+ },
+ ntPasteApply:async()=>{
+   const input=$('#ntPasteInput');if(!input||ntPasteBusy)return;
+   ntPasteRaw=input.value;
+   if(!ntPasteRaw.trim()){$('#ntPasteError').textContent='请先粘贴单据号。';return;}
+   ntPasteBusy=true;
+   const button=$('[data-act="ntPasteApply"]');button.disabled=true;button.textContent='正在匹配…';
    try{
-     const r=await API.m04PlanSave({
-       row_id: isNew ? '' : String(plRowEditId||''),
-       row_ym: String(d.ym||''), project_id: String(d.proj==null?'':d.proj),
-       doc_no: String(d.docNo||''),
-       flow_amount: String(d.flowAmt==null?'':d.flowAmt),
-       planned_amount: String(d.monthAmt==null?'':d.monthAmt),
-       pay_date: String(d.date||''), pay_method: String(d.method||''), remark: String(d.remark||''),
-     });
-     plf.ym=String(d.ym||plf.ym);     /* 保存后保证看得见（切到该行年月）；⚠️「项目」筛选一律不动 */
-     plRowEditId=''; plD={}; plSaving=false;
-     await reloadPlans();
-     toast(`${esc(r.message||'已保存')} —— 已切到 <b>${esc(plf.ym)}</b>；它<b>与导入行同样参与审查</b>（§4.3.4），合计与 KPI 随之重算`,7600);
-   }catch(e){
-     plSaving=false;                /* 解除挡重入（草稿还在 ⇒ 改完可以再存） */
-     await reloadPlans();          /* 回后端真实状态；⚠️ **`plD` 不动** ⇒ 草稿行与已填内容仍在（§4.3.3.1） */
-     toast(`<b>没能保存</b>：${esc(String((e&&e.message)||e))}<br><span class="mut sm">已填内容保留，改完再存（§4.3.3.1）</span>`,9000);
-   } },
- /* （旧「导入付款计划 Excel」弹窗 ＋ `plImportOk`（造演示行）已撤 —— 见上方 `plImport` 的诚实提示） */
- /* —— MOD-04 · 手动行 = **表内增行模式**（§4.3.3.1 · 2026-09-16 用户口述新增 + 同日追认细节 6 项）——
-    用途：项目端报来的计划**漏项 / 临时补报**时提供**不依赖 Excel 的补录入口**。
-    ⚠️ 落库后**与导入行同住一表、走同一条审查链路**（判定一律 `plRev()` 实时派生、不看来源）；
-       **导入只清并重写自动行 ⇒ 手动行不被触碰**（§9.5）。 */
- /* 草稿层写入口（表单元素走 `change` ⇒ 委托层直呼 `ACT[a]`，⛔ 没有名单）
-    ⚠️ 本动作**不重绘** —— 免得每改一格就把焦点丢掉（与 `ntRowSet` 同款，只有需要联动时才重绘） */
- plRowSet:t=>{ const k=t.dataset.k; if(!k) return; plD[k]=String(t.value==null?'':t.value); },
- plRowCancel:()=>{ const was=(plRowEditId&&plRowEditId!==PL_NEW_ID)?plRowEditId:'';
-   plRowEditId=''; plD={}; render();
-   toast(DRAFT_CANCEL_MSG(was)); },
- /* 「编辑」= 该行**原地变草稿行**（不新增行；文案与校验与新增共用 `plRowSave`）。
-    ⚠️ **只有手动行可编辑**：对导入行请求编辑时**显式说明原因**（不静默忽略、不当作新增 —— §4.3.3.1） */
- /* 保存（新增 / 编辑**共用**）：年月必填且月度形态 → 项目必选 → 金额校验（非法 / 负数）
-    ⚠️ 校验不过 ⇒ **保留草稿行与已填内容**（§4.3.3.1：显式报错 + 不清空重填） */
- force:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); const rv=plRev(p,PLs);
-   modal({title:`强制通过 · ${rv}`,body:`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))">审查结果 = <b>${rv}</b>。强制通过须填备注，之后可在该行取消强制通过。</div>
-     ${kvBlock([['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${dispCell(p.proj)}</span>`],['单据号',p.docNo||'<span class="tag t-dg">未填</span>'],['i8 流程金额',M(p.flowAmt)],['本月预付款金额',M(p.monthAmt)]])}
-     <div class="fld"><label>强制通过备注 <b>*</b></label><input class="inp" id="fRemark" placeholder="例：已向项目核实，金额无误"></div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="forceOk" data-id="${p.id}">强制通过</button>`}); },
- /* ⭐ 已接后端：`POST /api/m04/plans/{id}/force` —— **空备注由后端拒**（§4.3.4）。
-    ⚠️ 前端那一道只为**即时反馈**；真正把关在后端（口径只许一个出口）。 */
- forceOk:t=>{ const rs=$('#fRemark').value.trim(); if(!rs) return toast('<b>强制通过必须写备注</b>（§4.3.4）');
-    const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
-    closeModal();
-    plAct(()=>API.plForce(p.id, rs), `已强制通过 <b>${p.id}</b> 并留痕（备注：${esc(rs)}）`); },
- /* 取消强制通过：回到「未处理」态。**不弹确认、不产生留痕**（取消 = 撤回一次人工放行，不产生新事实） */
- /* ⭐ 已接后端：`POST /api/m04/plans/{id}/force-cancel` —— 回到原判定、备注清空（§4.3.4） */
- unforce:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p||!p.forced) return;
-    plAct(()=>API.plForceCancel(p.id), ()=>{
-      const np=PLs.find(x=>x.id===p.id)||p;
-      return `已取消 <b>${p.id}</b> 的强制通过 —— 回到「未处理」，审查结果仍为 <b>${plRev(np)}</b>，可重新处理`;
-    }); },
- /* 行内可改列：付款时间 / 付款方式 / 备注 / （仅未匹配行的）单据号
-    ⚠️ 改动**立刻写回数据**（不是草稿层）—— 全量重渲染后 value 仍由数据生成，所以不会冲掉；
-       持久性口径：**落库 + 不被导入覆盖 + 不留痕**（与「统计两金额」那类旁路字段同族，但**不留痕**）。 */
- /* ⭐ 已接后端：`POST /api/m04/plans/{id}/cell` —— §4.3.3 **立刻落库 · 不被导入覆盖 · 不留痕**。
-    ⚠️ 可改范围**由后端判**（单据号只对「未匹配」行开放）⇒ 前端不再自己把关。 */
- plCell:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
-    const f=t.dataset.f, F={docNo:'单据号',date:'付款时间',method:'付款方式',remark:'备注'};
-    if(!F[f]) return;
-    const v=String(t.value==null?'':t.value).trim();
-    plAct(()=>API.plCell(p.id, PL_COL_API[f], v),
-      `<b>${p.id}</b> 的${F[f]}已改为 <b>${esc(v)||'（空）'}</b>${f==='docNo'?' —— 点该行「再次匹配」重新比对 i8 通知书':''}`); },
- /* 再次匹配：审查结果是实时派生的，按当前单据号重跑一次即可（并给出新的审查结果） */
- /* ⭐ 已接后端：`POST /api/m04/plans/{id}/re-match` —— 重跑**同一个审查引擎**（§4.3.3） */
- plRematch:t=>{ const p=PLs.find(x=>x.id===t.dataset.id); if(!p) return;
-    const code=esc(String(p.docNo||'').trim())||'（空）';
-    plAct(()=>API.plRematch(p.id), ()=>{
-      const rv=plRev(PLs.find(x=>x.id===p.id)||p);
-      return `<b>${p.id}</b> 已按单据号 <b>${code}</b> 重新比对 → 审查结果：<b>${rv}</b>${rv==='完全匹配'?'（该行转入「无需处理」）':''}`;
-    }); },
- /* 逐行删除：与批量删除同款确认（删除前列影响范围）；删掉的 id 同时从勾选集合里移除 */
- /* 按付款计划勾选：入口在付款通知书页（勾选与付款在同一处）。⭐ **2026-10-08 用户裁定**：
-    · **任何时候都能点**（原"只在每月 10 号 → 月底窗口内可点"已取消 —— 那只是制度上的习惯，
-      制度本身也只约束人、不拦系统，§4.3.7；做成按钮置灰反而挡住正常补勾）
-    · **月份可选**（原定死"北京时间当月"）：点开先选月份，候选 = **库里真有的计划月份 ＋ 当月**
-    · 计划行指向的通知书**可能落在别的月份**（当月计划里混着上月/更早的通知书）
-      ⇒ 做法：把**视图参数**（单据年月 / 分类 / 审批状态 / 付款状态）放宽到「全部月份 + 未付清」，
-        使所选月份计划命中的通知书**全部落在当前筛选结果内**，再一次性勾选 ——
-        这样「只勾当前筛选结果内的行」（§4.3.5）**依然成立**，且勾中的行都能在页面上看到、逐步核对。
-    · ⚠️ **「项目」筛选一律不动**（用户口径 2026-09-12）—— 它是用户表达的业务范围，
-      勾选范围**尊重已选项目**；因此被项目筛选挡掉的行会跳过并在提示里报数。
-    · 剔除行 / **撤单行一律不勾**（判据 = 付款候选 `ntPayCand`；撤单的单据 i8 已删，不许再产生付款）；未命中的计划行在提示里说明。 */
- planPick:()=>{ const yms=[...new Set(PLs.map(p=>String(p.ym||'')).filter(Boolean))].sort().reverse();
-   const cands=[...new Set([bjMonth(),...yms])].sort().reverse();
-   if(!cands.length){ return toast(`<b>还没有付款计划数据</b> —— 请先到「付款计划」页导入该月的计划表`,5200); }
-   if(cands.length===1){ planYm=cands[0]; return ACT.planPickRun(); }
-   planSel=(cands.includes(planYm)?planYm:cands[0]);
-   modal({title:'按付款计划勾选 · 选月份',reopen:()=>ACT.planPick(),body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">勾选会放宽单据年月、分类和审批筛选，并切到未付清；付款金额仍可修改。</div>
-       <div class="fld"><label>选择月份</label><select class="inp" id="planYmId" data-act="planPickSet">${optsOf(cands,planSel)}</select></div>
-       <div class="sm mut">候选 = 库里已导入计划的月份（${yms.length?yms.join(' · '):'暂无'}）${cands.length>yms.length?' ＋ 当月':''}<br>某月没有计划行时勾不到东西 —— 勾选结果里会写明。</div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="planPickOk">按所选月份勾选</button>`}); },
- planPickSet:t=>{ planSel=t.value; },
- planPickOk:()=>{ const v=String(planSel||'').trim(); closeModal(); if(!v) return;
-   planYm=v; ACT.planPickRun(); },
- planPickRun:()=>{ const ym=planYm||bjMonth();
-   /* ⚠️ 只放宽「视图参数」；**不碰 fNt.projs**（项目筛选是用户选定的业务范围） */
-   fNt.month='全部'; fNt.cat='全部'; fNt.astat='全部'; fNt.stat='未付清'; pjClose('pj'); mp.open=null;
-     const plan=PLs.filter(p=>p.ym===ym);
-     /* ⚠️ **早退必须在 `pickSet.clear()` 之前**：该月没有计划行时，用户原来勾好的行**一律不动**
-        （否则"勾了别的月份的行 → 顺手点一下这个没计划的月份"就把他的勾选清空了）。 */
-     if(!plan.length) return toast(`<b>${esc(ym)} 没有付款计划行</b> —— 请先到「付款计划」页导入该月计划表`,5200);
-     pickSet.clear();
-     let hit=0, miss=0;
-   plan.forEach(p=>{ const c=String(p.docNo||'').trim();
-     const n=c?NO.find(x=>x.code===c&&ntPayCand(x)):null;
-     if(!n){ miss++; return; }
-     hit++; pickSet.add(n.id); });
-   const before=pickSet.size;
-   VIEW='m03'; prunePick(); render();
-   const cut=before-pickSet.size;                 /* 被「项目」筛选等挡掉、未能勾上的条数 */
-   const months={}; [...pickSet].forEach(i=>{ const m=NO.find(n=>n.id===i).date.slice(0,7); months[m]=(months[m]||0)+1; });
-   const other=Object.keys(months).filter(m=>m!==ym).sort();
-   const cx=other.reduce((a,m)=>a+months[m],0);
-   toast(`已按 <b>${esc(ym)}</b> 付款计划勾选 <b>${pickSet.size}</b> 条（计划命中 <b>${hit}</b> 条${miss?`，另 <b>${miss}</b> 行无单据号 / 编号查不到`:''}${cut?`；<b>${cut}</b> 条不在你选定的「项目」范围内，已跳过`:''}${cx?`；含<b>跨月 ${cx}</b> 条（${other.map(m=>`${m} ×${months[m]}`).join('、')}）`:''}）<br><b>「项目」筛选未被改动</b>；已放宽「单据年月 / 分类 / 审批状态」并把付款状态置为「未付清」，便于逐条核对 —— <b>实际付什么、付多少由用户自行修改</b>`,7000); },
+     await reloadNotices();
+     if($('#ntPasteInput')!==input||VIEW!=='m03')return;
+     const result=ntPasteMatch(ntPasteRaw,NO);ntPasteReport=result;
+     if(result.ids.length){
+       fNt={month:'全部',cat:'全部',astat:'全部',stat:'全部',projs:[],q:''};
+       pickSet.clear();result.ids.forEach(id=>pickSet.add(id));ntPasteTop=new Set(result.ids);
+       pjClose('pj');mp.open=null;render();
+       requestAnimationFrame(()=>{if(VIEW==='m03'){const h=scrollHost();if(h)h.scrollTop=0;}});
+     }
+     ACT.ntPasteResult();
+   }catch(e){if($('#ntPasteInput')===input)$('#ntPasteError').textContent=e.message||'通知书没能取到，请稍后再试。';}
+   finally{ntPasteBusy=false;if(document.contains(button)){button.disabled=false;button.textContent='匹配并勾选';}}
+ },
+ ntPasteResult:()=>{if(!ntPasteReport)return;
+   modal({title:'单据号勾选结果',body:ntPasteReportHTML(ntPasteReport),
+     footer:'<button class="btn" data-act="ntPasteOpen">修改清单</button><button class="btn pri" data-act="closeModal">完成</button>'});},
 
  /* —— MOD-03 · 手动新增 / 编辑付款通知书 = **表内增行模式**（2026-09-13 用户口径）——
     用途不变：付「期初占位行」的款 —— 那笔钱没有 i8 单据，只能手工补一行。
@@ -2339,12 +2178,6 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    await jcLoadSub(j2); ACT.jcTInvDlg({dataset:{id:j2.id}}); render(); },
  jcPayNotice:async t=>{await refNotice(String(t.dataset.nid));},
  flNotice:async t=>{const f=FLs.find(x=>x.id===t.dataset.fid);if(!f||!f.nid)return toast('找不到对应通知书。');await refNotice(String(f.nid));},
- plNotice:async t=>{try{
-   const p=PLs.find(x=>x.id===t.dataset.id);if(!p)return toast('找不到这条付款计划。');
-   await reloadNotices();const hits=plNoticeHits(p);
-   if(hits.length!==1)return toast(hits.length?'单据号有多条通知书，无法唯一定位。':'找不到对应通知书。');
-   await refNotice(String(hits[0].id));
- }catch(e){toast(esc(e.message));}},
  jcContract:async t=>{try{
    await reloadM11();const j=JCs.find(x=>x.id===String(t.dataset.id));
    if(!j)return toast('找不到这份集采合同，请刷新后核对。');
@@ -2502,7 +2335,6 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
      v=mp.a+'~'+v; }
    mp.a=''; mp.b=''; mp.mode='';
    if(sc==='fetch'){ fetchM=v; mp.open=null; render(); ACT.fetchDlg(); return; }   /* 抓取弹窗内选月 → 重建弹窗回显（三个抓取入口共用） */
-   if(sc==='pl'){ plf.ym=v; mp.open=null; prunePlPick(); render(); toast(`付款计划已切到 <b>${tmLabel(v)}</b>`); return; }
    /* ⛔ `plimp`（导入弹窗内选月）已随弹窗删除（`TAIL-75` `B5c`）—— 年月现在在「数据导入」页里选。 */
    if(sc==='lg'){ lgCut=v; mp.open=null; render(); return; }                        /* 期初展开区内选「截止年月」→ **只重绘**（不重算默认值） */
    if(sc==='fl'){ flf.ym=v; mp.open=null; render(); toast(`付款流水已切到 <b>${tmLabel(v)}</b>`); return; }

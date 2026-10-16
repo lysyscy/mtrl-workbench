@@ -28,7 +28,7 @@ from tests._auth import TestClient          # ⭐ 带会话票（见该件注释
 from app.main import create_app
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.notice_api_router import get_session
-from app.report_export import fl_export, nt_export, pl_export
+from app.report_export import fl_export, nt_export
 from tests.acc_plugin import acc
 from tests.m03_action_helpers import FakeWriteSession, _notice
 from tests.shell_load_helpers import exp_routes
@@ -39,7 +39,7 @@ from tests.shell_src import SHELL, const_src  # noqa: F401  ← `P4`① 读取�
 #: ⚠️ 2026-09-28（`TAIL-124`）：`全量台账` 摘除 —— 那是 `m13` 「演示导出」枚假按钮的落点，
 #:    本批把整页改成用户视角时把它删了（`m13` 无自有数据源 ⇒ 不设导出入口）。
 BUTTON_T = (
-    "付款通知书台账", "付款计划审查结果", "付款流水", "项目档案",
+    "付款通知书台账", "付款流水", "项目档案",
     "过程资料", "库存单据明细总表", "差异清单", "集采台账",
 )
 
@@ -99,7 +99,6 @@ def test_四个列表页的导出按钮都已真分发():
         "项目档案": "/api/m01/projects/export",
         "付款流水": "/api/m05/flows/export",
         "付款通知书台账": "/api/m03/notices/export",
-        "付款计划审查结果": "/api/m04/plans/export",
     }
     assert routes == want, (
         "`EXP_ROUTES` 与登记不符：\n"
@@ -126,7 +125,7 @@ def test_两个新端点都挂上了():
        ⇒ 一律查 OpenAPI 表（`app.routes` 那条路本轮实测走不通）。
     """
     paths = set(create_app().openapi()["paths"])
-    for p in ("/api/m03/notices/export", "/api/m04/plans/export"):
+    for p in ("/api/m03/notices/export",):
         assert p in paths, f"{p} 没挂上 —— 按钮按下去只会 404"
         assert "post" in create_app().openapi()["paths"][p], f"{p} 不是 POST（壳侧发的是 POST）"
 
@@ -148,11 +147,6 @@ def test_导出列就是页面表头去掉勾选与操作():
     assert nt_page[0] == "" and nt_page[-1] == "操作", f"`NT_THEAD` 首/末列不是预期：{nt_page}"
     assert _export_labels(nt_export.COLUMNS) == nt_page[1:-1], (
         "`nt_export.COLUMNS` 与 `NT_THEAD`（去掉勾选 / 操作）不一致 —— 表与屏幕对不上号了")
-
-    pl_page = _th_labels("PL_THEAD")
-    assert pl_page[0] == "" and pl_page[-1] == "操作", f"`PL_THEAD` 首/末列不是预期：{pl_page}"
-    assert _export_labels(pl_export.COLUMNS) == pl_page[1:-1], (
-        "`pl_export.COLUMNS` 与 `PL_THEAD`（去掉勾选 / 操作）不一致")
 
     # ⭐ 2026-10-11（`TAIL-283`）：付款流水那张表**没有勾选列**（首列就是流水号）
     #   ⇒ 导出 = 表头去掉「操作」那**最后一列**。
@@ -198,7 +192,6 @@ def test_朴素导出其余四页的列键都在该页行字典里(monkeypatch):
     from types import SimpleNamespace  # noqa: PLC0415
 
     from app.mod03_notice import notice_api_router as NTR  # noqa: PLC0415
-    from app.mod04_plan import router as PLR  # noqa: PLC0415
     from app.mod05_flow import router as FLR  # noqa: PLC0415
     from app.mod01_projects import router as PJR  # noqa: PLC0415
     from app.report_export import pj_export  # noqa: PLC0415
@@ -215,7 +208,6 @@ def test_朴素导出其余四页的列键都在该页行字典里(monkeypatch):
 
     # ① nt / pl：行字典由 `_export_row` 产（空记录也走得通 —— 那几格留空本来就是本页口径）
     assert _keys(nt_export) <= set(NTR._export_row({})), "付款通知书导出有列在这页的行字典里不存在"
-    assert _keys(pl_export) <= set(PLR._export_row({})), "付款计划导出有列在这页的行字典里不存在"
 
     # ② fl：行字典在端点里现拼 ⇒ 打桩内核截行（取数走注入的 `load`，一行够 —— 键才是判据）
     got: dict = {}
@@ -318,74 +310,8 @@ def test_is_live两条口径方向相反且都成立():
 # ============================================================== 001-08 · 行集与顺序
 
 
-@acc("ACC-X-EXP-001", "001-08")
-def test_付款计划导出的合计只合两列且未命中留空():
-    """`MOD-04` 的合计口径与 `MOD-03` **不一样**，照抄就会错：
-
-    · 页面 `sumRowOf(PL_THEAD, list, {5:…, 8:…})` ⇒ **只合「i8 流程金额」与「本月预付款金额」**；
-    · 「已付款金额 / 剩余付款金额」是**金额**（要写数字，Excel 里能求和）但**页面不合计它们**
-      —— `naive_export` 把"写数字"（`MONEY_KEYS`）与"要合计"（`TOTAL_KEYS`）拆成两个集合正是为此。
-    · 单据号**没命中** i8 通知书 ⇒ 那两列在页面上是「—」⇒ 导出**留空**（⛔ 不写 0 ——
-      "没这个数"与"是 0"是两件事）。
-    """
-    rows = [{
-        "id_text": "7", "year_month": "2026-09", "project_text": "甲仓", "doc_no": "D1",
-        "flow_amount": "1000.00", "paid_amount": "400.00", "unpaid_amount": "600.00",
-        "planned_amount": "300.00", "pay_date": "2026-09-10", "pay_method": "现汇",
-        "remark": "", "audit_text": "完全匹配", "handle_text": "无需处理",
-    }, {
-        "id_text": "8", "year_month": "2026-09", "project_text": "乙仓库（未匹配）", "doc_no": "",
-        "flow_amount": "2000.00", "paid_amount": "", "unpaid_amount": "",
-        "planned_amount": "100.00", "pay_date": "", "pay_method": "", "remark": "",
-        "audit_text": "单据号查不到", "handle_text": "未处理",
-    }]
-    _, got = _read(pl_export.build_xlsx(rows))
-    labels = _export_labels(pl_export.COLUMNS)
-    total = _row_by_first(got, "合计")
-    assert total[labels.index("i8 流程金额")] == pytest.approx(3000.00)
-    assert total[labels.index("本月预付款金额")] == pytest.approx(400.00)
-    # ⚠️ openpyxl 把**空格子**读成 `None`（⛔ 不是 `""`）—— 判"留空"要认这两种
-    for col in ("已付款金额", "剩余付款金额"):
-        assert total[labels.index(col)] in ("", None), \
-            f"「{col}」被合计了 —— 页面**不合计**这两列（凭空多出两个数）"
-    # 未命中那行：留空，⛔ 不写 0；且金额列**是数字**（Excel 里能求和/排序）
-    r2 = _row_by_first(got, "8")
-    assert r2[labels.index("已付款金额")] in ("", None) and r2[labels.index("剩余付款金额")] in ("", None)
-    assert isinstance(r2[labels.index("i8 流程金额")], (int, float)), "金额列写成了字符串（Excel 里没法求和）"
 
 
-@acc()
-def test_付款计划导出的项目列与处理列按页面口径():
-    """「项目」与「处理」两列在页面上**不是**一个字段，而是"并进一格"的产物 —— 逐条照抄。
-
-    · 项目：**唯一命中 ⇒ 展示名**；0 命中 ⇒ 填报原值 ＋「未匹配」；多命中 ⇒ 填报原值 ＋「重名 N 条」；
-    · 处理：完全匹配 ⇒ 「无需处理」；已强制 ⇒ **强制备注**（页面那格显示的就是它）；否则 ⇒ 「未处理」。
-      ⚠️「未处理」**不是新造的词** —— 页面口径说明与「取消强制通过」按钮的提示语都写「回到「未处理」态」。
-    """
-    from app.mod04_plan.router import _export_row
-
-    matched = _export_row(dict(id=1, audit_result="完全匹配", match_status="matched",
-                               project_input="甲仓", project_display="甲公司仓库",
-                               forced_through=False, forced_remark="", is_manual=False))
-    assert matched["project_text"] == "甲公司仓库", "唯一命中必须显示**展示名**（不是填报原值）"
-    assert matched["handle_text"] == "无需处理"
-    assert matched["audit_text"] == "完全匹配"
-
-    unmatched = _export_row(dict(id=2, audit_result="单据号查不到", match_status="unmatched",
-                                 project_input="查无此仓", match_candidates=0, is_manual=True))
-    assert unmatched["project_text"] == "查无此仓（未匹配）"
-    assert unmatched["handle_text"] == "未处理", "没强制过 ⇒ 未处理（页面上那格是个按钮，不是数据）"
-    assert unmatched["id_text"] == "2（手动）", "手动徽标要并进同一格（另开一列就跟屏幕对不上号）"
-
-    amb = _export_row(dict(id=3, audit_result="金额不符", match_status="ambiguous",
-                           project_input="重名仓", match_candidates=3))
-    assert amb["project_text"] == "重名仓（重名 3 条）"
-
-    forced = _export_row(dict(id=4, audit_result="金额不符", match_status="matched",
-                              project_input="甲仓", project_display="甲公司仓库",
-                              forced_through=True, forced_remark="项目已确认"))
-    assert forced["audit_text"] == "金额不符（已强制通过）", "强制标记要并进审查结果那格（页面就是并进去的）"
-    assert forced["handle_text"] == "项目已确认", "已强制 ⇒ 那格显示的是**强制备注**"
 
 
 @acc("ACC-X-EXP-001", "001-08")
@@ -433,34 +359,6 @@ def test_付款通知书端点按传入id顺序出行且合计只算有效行():
     assert body["filename"].startswith("付款通知书台账_") and body["filename"].endswith(".xlsx")
 
 
-@acc("ACC-X-EXP-001", "001-08")
-def test_付款计划端点按传入id顺序出行且未命中留空():
-    """同上，`MOD-04` 那侧 —— 取数走 `Depends(get_page_data)`（可注入 ⇒ 离线）。
-
-    ⚠️ 同样**必须打端点**：`paid_amount` / `unpaid_amount` 那两个「未命中 ⇒ 留空」是由
-       `router._export_row` 决定的 —— 直喂 `pl_export.build_xlsx` 就把它绕过去了
-       （反向灵敏度第 11 条实测：改成写 `0` 仍全绿）。
-    """
-    import app.mod04_plan.router as m04_router
-
-    rows = [{"id": i, "year_month": "2026-09", "project_input": f"仓{i}", "match_status": "unmatched",
-             "match_candidates": 0, "doc_no": f"D{i}", "flow_amount": "1.00", "paid_amount": "",
-             "unpaid_amount": "", "planned_amount": "1.00", "pay_date": "", "pay_method": "",
-             "remark": "", "audit_result": "完全匹配", "forced_through": False,
-             "forced_remark": "", "is_manual": False} for i in (1, 2, 3)]
-    app = create_app()
-    app.dependency_overrides[m04_router.get_page_data] = lambda: (lambda **kw: {"rows": rows})
-    client = TestClient(app)
-    r = client.post("/api/m04/plans/export", json={"ids": [3, 2]})
-    assert r.status_code == 200 and r.json()["ok"] is True, r.text
-    body = r.json()
-    assert body["rows"] == 2
-    labels, got = _read(base64.b64decode(body["content_b64"]))
-    assert [row[0] for row in got[:2]] == ["3", "2"], f"行序没跟传入 id 走：{[row[0] for row in got]}"
-    # 未命中的派生两列 **留空**（⛔ 不写 0：「没这个数」与「是 0」是两件事 —— 铁律四）
-    assert got[0][labels.index("已付款金额")] in ("", None), \
-        "未命中却写了 0 —— 「没这个数」被装成了「是 0」"
-    assert got[0][labels.index("剩余付款金额")] in ("", None)
 
 
 # ============================================================== 壳侧：pjVisible ⇄ V.m01

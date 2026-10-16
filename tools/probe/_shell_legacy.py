@@ -75,7 +75,7 @@ def _probe(page, key: str, marks: tuple[str, ...] = ()) -> dict:
 
 #: 真上传要造的域（范围栏那条判词要**几个域互为对照** —— 这就是"按键渲染"的真机证明）：
 #:   `m06_proc` 声明了 `cutoff_ym`（截止核算月）· `m04_plan` 声明了 `year_month`（本批归属年月）
-IMP_DOMAINS = ("m06_proc", "m04_plan")
+IMP_DOMAINS = ("m06_proc",)
 
 
 def _mk_xlsx(path, domain: str) -> int:
@@ -91,7 +91,7 @@ def _mk_xlsx(path, domain: str) -> int:
 
     from openpyxl import Workbook
 
-    mod = {"m06_proc": "app.mod06_proc.imp_spec", "m04_plan": "app.mod04_plan.imp_spec"}[domain]
+    mod = {"m06_proc": "app.mod06_proc.imp_spec"}[domain]
     fields = list(importlib.import_module(mod).FIELDS)        # ⛔ 契约的主人还是那个模块
     wb = Workbook()
     ws = wb.active
@@ -126,7 +126,6 @@ def _mk_xlsx(path, domain: str) -> int:
 #:     之前就返回（实测：切到 `m04_plan` 却读到 `m06_proc` 的范围栏，三条判词全**假红**）；
 _CTX_READY = {
     "m06_proc": "!!document.querySelector('#impCut')",
-    "m04_plan": "!!document.querySelector('#impYm')",
 }
 
 
@@ -294,7 +293,7 @@ def check(page, errors: list[str]) -> None:
         # ⚠️ 面板**不是每个域都有**：`m04_plan` 的 `options` 只给 `year_month`（付款计划不按项目导）
         #    ⇒ 它**本来就没有**项目面板。⭐ 实测当场打脸第一版判词（"两域都要有面板" ⇒ `m04` 报 `pj=False`）——
         #    那不是壳的错，是**判词把自己以为的设计当成了契约**（⛔ 判据只许照域自己说的写）。
-        want = {"m06_proc": (True, False, True), "m04_plan": (False, True, False)}
+        want = {"m06_proc": (True, False, True)}
         for dm in IMP_DOMAINS:
             want_cut, want_ym, want_pj = want[dm]
             # ⚠️ **必须给就绪判据**（`_CTX_READY`）：`select_option` 是**同步**改 DOM 值的，若只等

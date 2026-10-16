@@ -73,7 +73,6 @@ let flf={ym:bjMonth(),projs:[],method:'全部',state:'生效',q:''};
 let pst={gran:'周',ym:'',year:0,q:''};   /* ⭐ 2026-09-13 用户口径：付款统计**默认粒度 = 「按周」**（原为「按月」） */
 
 /* ---------- 付款计划（ENT-03） MOD-04 ---------- */
-const PL_COLS = ['id','ym','proj','docNo','flowAmt','monthAmt','date','method','remark','forced','forceRemark','manual'];
 /* ym = 「导入时选定的年月」：导入前先选月份，本批数据的年月 = 所选月。
    **跨月允许完全相同、不去重不覆盖**；**同月同一单据号不得两行**（空单据号不参与判重）。
    ⚠️ 审查结果**不再存字段** —— 一律由 `plRev()` 按 §4.3.4 取数口径**实时比对**得出（2026-09-12）。
@@ -236,7 +235,6 @@ const awfTotal = () => AWF_TOTAL;
    1. 工具层
    ===================================================================== */
 const O=(r,c)=>{const o={};c.forEach((k,i)=>o[k]=r[i]);return o};
-let PLs=[];   /* ⭐ 已接后端：由 `reloadPlans()` 从 `/api/m04/plans` 填充（原先由演示数组 `PL` 生成 —— 已删） */
 const USERS=[];   /* ⭐ 已接后端：由 `reloadM15()` 从 `/api/m15/users` **原地填充**（演示数组 `U_RAW` 已删） */
 /* ⭐⭐ 以下三张表**已接后端**（前端壳）：空数组起手，由 `boot()` 用 API 填 —— ⛔ 不用原型模拟数据。
      · `NO` 付款通知书 ← `GET /api/m03/notice-list?period=`（**全量**，筛选用前端 `ntHit` 原样做）
@@ -599,6 +597,11 @@ function applySorts(html,scope){
       const vals=data.map(r=>_cellRaw((r.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi)||[])[st.i]));
       const tp=_colType(vals);
       out=data.map((r,k)=>({r,v:vals[k]})).sort((a,b)=>_cmp(a.v,b.v,tp,st.d)).map(o=>o.r);
+    }
+    // Only the last pasted batch is grouped; checkbox changes never move rows.
+    if(key==='m03:notices'){
+      const pasted=r=>/^<tr\b[^>]*\bdata-paste-top="1"/.test(r);
+      out=out.filter(pasted).concat(out.filter(r=>!pasted(r)));
     }
     /* 表头：注入 class / 点击动作 / 排序指示器 */
     const newTh=ths.map((th,k)=>{

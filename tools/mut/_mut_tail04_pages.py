@@ -28,11 +28,9 @@ FILES = {
     "core": APP / "web" / "shell" / "core.js",
     "actions": APP / "web" / "shell" / "actions.js",
     "nt": APP / "report_export" / "nt_export.py",
-    "pl": APP / "report_export" / "pl_export.py",
     "naive": APP / "report_export" / "naive_export.py",
     "live": APP / "mod03_notice" / "list_view.py",
     "nt_api": APP / "mod03_notice" / "notice_api_router.py",
-    "m04": APP / "mod04_plan" / "router.py",
 }
 
 T_COLS = "test_导出列就是页面表头去掉勾选与操作"
@@ -42,9 +40,6 @@ T_NT_TOTAL = "test_付款通知书端点按传入id顺序出行且合计只算�
 #:    （端点上凑不出"一行有效行都没有"还要有传入 id 的场景）⇒ 变异要指向它，⛔ 别指错。
 T_NT_EMPTY = "test_付款通知书导出的合计只算有效行"
 T_LIVE = "test_is_live两条口径方向相反且都成立"
-T_PL_TOTAL = "test_付款计划导出的合计只合两列且未命中留空"
-T_PL_CELL = "test_付款计划导出的项目列与处理列按页面口径"
-T_ORDER = "test_付款计划端点按传入id顺序出行且未命中留空"
 T_MIRROR = "test_项目档案的可见行出口与V_m01的筛选逐字一致"
 
 # ⚠️ 端点点名一律用**全名**：`-k` 是**子串**匹配，写成 `test_两个端点按传入id顺序出行`
@@ -56,8 +51,6 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "nt", '    ("审批状态", "approve_status"),\n', "", T_COLS),
     ("导出把表头的 `✎` 洗掉了（表头不再逐字等于屏幕）",
      "nt", '("付款金额 ✎", "pay_amount")', '("付款金额", "pay_amount")', T_COLS),
-    ("付款计划导出漏了「处理」列",
-     "pl", '    ("处理", "handle_text"),\n', "", T_COLS),
     # ---- `exp` 真分发
     ("某页被接到**别的**端点（页面上看不出来）",
      # ⚠️ 2026-10-11（`TAIL-283`）：这条路由多了 `ids`（屏幕行序）⇒ 锚点随实现同批更新；
@@ -65,14 +58,14 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "actions", "'付款流水':        { rows: () => flVisible(), ids: () => flDomIds(), url: '/api/m05/flows/export' }",
      "'付款流水':        { rows: () => flVisible(), ids: () => flDomIds(), url: '/api/m03/notices/export' }", T_DISPATCH),
     ("把「库存单据明细总表」也接进分发表（毁掉「朴素/透视两份并存」）",
-     "actions", "  '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },",
-     "  '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },\n"
+     "actions", "  '付款通知书台账':   { rows: () => ntHit(fNt),  url: '/api/m03/notices/export' },",
+     "  '付款通知书台账':   { rows: () => ntHit(fNt),  url: '/api/m03/notices/export' },\n"
      "  '库存单据明细总表': { rows: () => [], url: '/api/m08/inventory/export' },", T_DISPATCH),
     # ⚠️ 同一处改动、**另一个测试**：`ACC-INV-001/001-12` 那条（原先靠"`exp` 动作体里没有
     #    `/api/m08/...`"守，`exp` 改真分发后它只能看**分发表** ⇒ 必须单独证它还有区分力）。
     ("同上，但看 `ACC-INV-001/001-12` 那条断言（已按形态变化重指）",
-     "actions", "  '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },",
-     "  '付款计划审查结果': { rows: () => plVisible(), url: '/api/m04/plans/export' },\n"
+     "actions", "  '付款通知书台账':   { rows: () => ntHit(fNt),  url: '/api/m03/notices/export' },",
+     "  '付款通知书台账':   { rows: () => ntHit(fNt),  url: '/api/m03/notices/export' },\n"
      "  '库存单据明细总表': { rows: () => [], url: '/api/m08/inventory/export' },",
      "test_库存单据两种导出并存互不影响且透视提示与模板形态一致"),
     # ---- 合计行口径（MOD-03）
@@ -88,24 +81,8 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      #    **变异意图一字未改**（无视"基数为空就不写"）。
      "naive", "        if base or total_always:", "        if True:", T_NT_EMPTY),
     # ---- 合计行口径（MOD-04：只合两列）
-    ("付款计划的合计把「已付款金额」也并进去（页面不合计它）",
-     "pl", 'TOTAL_KEYS: frozenset[str] = frozenset({"flow_amount", "planned_amount"})',
-     'TOTAL_KEYS: frozenset[str] = frozenset({"flow_amount", "planned_amount", "paid_amount"})',
-     T_PL_TOTAL),
-    ("未命中的派生两列写 0（把「没这个数」装成「是 0」）",
-     "m04", '"paid_amount": r.get("paid_amount") or "",',
-     '"paid_amount": r.get("paid_amount") or 0,', T_ORDER),
     # ---- MOD-04 显示值口径
-    ("项目列对「多命中」不再标注（重名被吞掉）",
-     "m04", '        project_text = f"{raw}（重名 {r.get(\'match_candidates\') or 0} 条）"',
-     '        project_text = str(r.get("project_input") or "")', T_PL_CELL),
-    ("「处理」列对已强制行不再给强制备注（那格在页面上就是它）",
-     "m04", 'else (str(r.get("forced_remark") or "") if forced else "未处理")',
-     'else "未处理"', T_PL_CELL),
     # ---- 行序跟传入 id（两侧各一条）
-    ("付款计划导出按**库里顺序**出行（不跟传入 id）",
-     "m04", "    picked = [by_id[i] for i in ids if i in by_id]",
-     "    picked = [r for r in all_rows if r.get('id') in set(ids)]", T_ORDER),
     ("付款通知书导出按**库里顺序**出行（不跟传入 id）",
      "nt_api", "    pairs = [(_rec, _export_row(_rec)) for _rec in (by_id[i] for i in ids if i in by_id)]",
      "    pairs = [(_rec, _export_row(_rec)) for _k, _rec in sorted(by_id.items()) if _k in set(ids)]",

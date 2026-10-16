@@ -352,9 +352,7 @@ const BIG_THEAD=`<tr><th rowspan="2" class="fl">序号</th><th rowspan="2" class
   +`<th>产值完成率</th><th>合同（预估）价</th><th>产值累计<b class="mut">（含税）</b></th></tr>`;
 /* —— 2026-09-13 新抽的 3 张表头常量（为「表内合计行」提供列数出口 —— `sumRowOf` 按表头派生列数）——
    ⚠️ 一律**逐字搬**（含换行与缩进），不要顺手改标记/空格 —— `applySorts` 靠表头判列类型与可排性。 */
-const PL_THEAD=`
-      <th class="ctr fl" style="width:34px"><input type="checkbox" class="chk" id="plAllBox" data-act="plPickAll" title="全选 / 取消全选（仅当前筛选结果）"></th>
-      <th>#</th><th>年月</th><th>项目（填报：展示名 / 仓库名）</th><th>单据号（计划填报）</th><th>i8 流程金额</th><th>已付款金额</th><th>剩余付款金额</th><th>本月预付款金额</th><th>付款时间</th><th>付款方式</th><th>备注</th><th>审查结果</th><th>处理</th><th>操作</th>`;
+
 const DF_THEAD=`<th>编号</th><th>核算月</th><th>归属</th><th>项目</th><th>差异内容</th><th>差异金额<b class="mut">（带符号 · + 上调 / − 下调）</b></th><th>状态</th><th>备注</th><th>操作</th>`;
 const BP_THEAD=`<th>单据编码</th><th>付款项目</th><th>审批状态</th><th>审批金额</th><th>已付金额</th><th>本次应付</th><th>实际付款方式</th><th>本次付款金额</th><th>操作</th>`;
 

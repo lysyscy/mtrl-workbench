@@ -39,7 +39,7 @@ def ui_page():
           FAILED.clear(); PENDING.clear(); Object.keys(LOADERS).forEach(x=>LOADED.add(x));
           PJs=[{id:'1',type:'normal',name:'测试仓库',disp:'测试项目',full:'测试项目全名',status:'在建',phid:'1',kw:''}];
           NO=[{id:'101',date:bjMonth()+'-02',code:'DOC-101',proj:'测试项目全名',cat:'集采',astat:'已审批',doc:'甲乙材料',biz:'业务列唯一词',recv:'收款列唯一词',sup:'',entry:'录入列唯一词',approve:12345.67,pay:12345.67,ss:12345.67,sp:12345.67,excl:false,manual:false}];
-          PLs.splice(0); JCs.splice(0); FLs.splice(0); VIEW='m03'; fNt.month='全部';fNt.stat='全部';
+          JCs.splice(0); FLs.splice(0); VIEW='m03'; fNt.month='全部';fNt.stat='全部';
           API.jcSupplier=async b=>{window.savedSupplier=b;return {ok:false,message:'隔离写出口已捕获'};};
           render();
         }''')
@@ -195,20 +195,9 @@ def test_审查颜色与看板删减(ui_page):
     text=p.inner_text('#view')
     for removed in ['怎么看这一页','只列「需要你处理的事」','状态一览']:
         assert removed not in text
-    assert p.locator('[data-todo]').count() == 6
+    assert p.locator('[data-todo]').count() == 5
 
 
-@acc()
-def test_空库也能验证空态和正常合计且样本恢复(ui_page, monkeypatch):
-    sys.path.insert(0, str(SHELL_PATH.parents[3] / 'tools' / 'probe'))
-    import _shell_common
-    import _shell_empty
-    monkeypatch.setattr(_shell_common, 'goto', lambda p, key: p.evaluate("VIEW='m04';render();"))
-    before=ui_page.evaluate('JSON.stringify(PLs)')
-    errors=[]
-    _shell_empty.check(ui_page,errors)
-    assert not errors, errors
-    assert ui_page.evaluate('JSON.stringify(PLs)') == before
 
 @acc()
 def test_系统设置精简主题无障碍与尺寸切换(ui_page):
@@ -246,15 +235,12 @@ def test_系统设置精简主题无障碍与尺寸切换(ui_page):
 def test_默认页删说明保留操作与反馈(ui_page):
     p=ui_page
     assert p.evaluate("!NAV.some(g=>g.items.some(x=>x[0]==='m13')) && !TITLE.m13 && !V.m13")
-    for key in ['m04','m05','m06','m07','m08','m09','m11','m15']:
+    for key in ['m05','m06','m07','m08','m09','m11','m15']:
         p.evaluate('(key)=>{VIEW=key;render();}',key)
         assert p.locator('#view .tip').count() == 0, key
         assert p.locator('#view button').count() > 0, key
         assert p.locator('#view table').count() > 0, key
         assert not p.evaluate("[...document.querySelectorAll('#view .bd,#view .grid2,#view .grid3')].some(e=>!e.textContent.trim()&&!e.querySelector('input,button,table'))"), key
-    p.evaluate("VIEW='m04';render();")
-    assert '当前筛选条件下没有付款计划' in p.inner_text('#view')
-    assert p.locator('[data-act="plImport"]').count() == 1
     p.evaluate("VIEW='m07';render();")
     assert '输出产物' not in p.inner_text('#view')
     assert p.locator('[data-act="bigExport"]').count() == 1
@@ -423,6 +409,38 @@ FL0 = dict(id=71, notice_id=101, flow_no='FL-X9', pay_date='2026-09-05', amount=
 
 
 @acc()
+def test_付款流水搜索各数据列并保持筛选范围(ui_page):
+    p = ui_page
+    p.evaluate('''f0 => {
+      FLs.splice(0);
+      for(let i=0;i<450;i++) FLs.push(adaptFlow({...f0,id:1000+i,notice_id:null,
+        flow_no:'OTHER-'+i,doc_no:'OTHER',bill_name:'其他',payee:'其他',remark:''}));
+      FLs.push(adaptFlow({...f0,remark:'尾款核对',amount:'2345.67',
+        status:'revoked',revoke_reason:'重复登记'}));
+      flf.ym='全部';flf.projs=[];flf.method='全部';flf.state='全部';flf.q='';
+      VIEW='m05';render();
+    }''', FL0)
+    for q in [' fl-X9 ', 'doc-101', '2026-09-01', '钢材付款', '测试项目',
+              '甲公司', '集采', '1，000.00', '2026-09-05', '2,345.67',
+              '现汇', '尾款 核对', '乙', '已撤销', '重复登记']:
+        p.fill('#flQ', q)
+        p.click('[data-act="flSearch"]')
+        assert '71' in p.evaluate('flVisible().map(f=>f.id)'), q
+    assert p.evaluate('flVisible().map(f=>f.id)') == ['71']
+    assert p.evaluate("flf.state='生效';flVisible().length") == 0
+    assert p.evaluate("flf.state='全部';flf.method='承兑';flVisible().length") == 0
+    assert p.evaluate("flf.method='全部';flf.ym='2025-01';flVisible().length") == 0
+    assert p.evaluate("flf.ym='全部';flf.projs=['其他仓'];flVisible().length") == 0
+    assert p.evaluate("flf.projs=[];flf.q='';flVisible().length") == 451
+    assert p.evaluate("flSearchMatch({amountApproved:null},'null')") is False
+    assert p.evaluate("flSearchMatch({amountApproved:null},'0.00')") is False
+    assert p.evaluate("flSearchMatch({amountApproved:0},'0.00')") is True
+    assert p.evaluate("flSearchMatch({id:'987654',nid:'987654'},'987654')") is False
+    assert p.evaluate("flSearchMatch({},'撤销')") is False
+    assert p.evaluate("flSearchMatch({},' ， ')") is True
+
+
+@acc()
 def test_付款流水补通知书五列并改对操作人与流水号(ui_page):
     """票面验收：五项通知书信息上身；「操作人」= `created_by`（⛔ 不是创建时间）；
     「流水号」= 真 `flow_no`（⛔ 不是数据库行号）；**失联流水照样整条可查**、审批金额未知画「—」
@@ -466,7 +484,7 @@ def test_付款流水补通知书五列并改对操作人与流水号(ui_page):
         '#view table[data-sort-key="m05:flows"] tbody tr[data-flow-id] td:nth-child(8)')]
         .map(td => td.dataset.v).join('|')''') == '1000||', \
         "审批金额未知时被写成了 0（拿 0 冒充「没有这个数」）"
-    # ⭐ 票面 #3 的**第三处**口径：关键词搜的就是**流水号 / 单据编码**（页面列 · 搜索 · Excel 三处同一个东西）。
+    # ⭐ 票面 #3 的**第三处**口径：关键词仍能搜**流水号 / 单据编码**（现在也覆盖其它数据列）（页面列 · 搜索 · Excel 三处同一个东西）。
     #   ⚠️ 这个 fixture 里 `NO` 是空的 ⇒ 只有**不依赖 NO 缓存**才可能搜到；
     #   反过来，拿**数据库行号** `71` 必须**搜不到**（它从来不是流水号 —— 那是"说错话"的那一版）。
     assert p.evaluate("flf.q='fl-x9';flVisible().map(f=>f.id)") == ['71'], \
@@ -846,7 +864,6 @@ def test_历史初始化从导入类型隐藏且旧选中项恢复到可用域(u
     p = ui_page
     p.evaluate('''async () => {
       API.impDomains=async()=>({domains:[
-        {domain:'m04_plan',title:'付款计划',batch:false},
         {domain:'m06_proc',title:'过程资料',batch:true},
         {domain:'m06_mech_report',title:'机械费报表',batch:false}]});
       API.impSchema=async domain=>({domain,title:domain,fields:[],required:[]});
@@ -855,7 +872,7 @@ def test_历史初始化从导入类型隐藏且旧选中项恢复到可用域(u
       await reloadImp(); VIEW='imp'; render();
     }''')
     select = p.locator('select[data-act="impDomain"]')
-    assert select.locator('option').evaluate_all('(items)=>items.map(x=>x.value)') == ['m04_plan', 'm06_proc', 'm06_mech_report']
-    assert select.input_value() == 'm04_plan'
-    assert p.evaluate('IMP.schema.domain') == 'm04_plan'
+    assert select.locator('option').evaluate_all('(items)=>items.map(x=>x.value)') == ['m06_proc', 'm06_mech_report']
+    assert select.input_value() == 'm06_proc'
+    assert p.evaluate('IMP.schema.domain') == 'm06_proc'
     assert '历史付款流水' not in select.inner_text() and '集采台账' not in select.inner_text()

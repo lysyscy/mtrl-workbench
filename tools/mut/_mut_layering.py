@@ -44,8 +44,6 @@ ALIASES = (
 RESTORED = (
     ('mod03_notice/sup_match.py', 'row_pool_rows', 'mod11_jc', 'JcContract'),
     ('mod03_notice/list_view.py', '_links_by_notice', 'mod11_jc', 'JcPayment'),
-    ('mod04_plan/service.py', 'notice_amounts', 'mod03_notice', 'PaymentNotice'),
-    ('mod04_plan/service.py', 'notice_amounts', 'mod05_flow', 'PaymentFlow'),
     ('mod05_flow/repository.py', 'notice_rows', 'mod03_notice', 'PaymentNotice'),
     ('mod05_flow/repository.py', 'revoke', 'mod03_notice', 'PaymentNotice'),
     ('mod05_flow/repository.py', 'revoke_info', 'mod03_notice', 'PaymentNotice'),
@@ -151,18 +149,6 @@ def alias_query(session):
     db = session
     return db.query(Project)
 ''', QUERY, '跨包查询目标必须走主人service')
-
-        # 真的把已收口的一处改回原来直查，规则必须红（不只喂合成查询）。
-        p = layer.APP / 'mod04_plan/project_views.py'
-        raw = p.read_bytes()
-        old = b'for p in PS.all_projects(session)'
-        assert raw.count(old) == 2
-        try:
-            p.write_bytes(raw.replace(old, b'for p in session.execute(select(Project)).scalars().all()', 1)
-                          + b'\nfrom sqlalchemy import select\nfrom app.mod01_projects.models import Project\n')
-            check(QUERY, '跨包查询目标必须走主人service')
-        finally:
-            p.write_bytes(raw)
 
         # 名单漏扫、同处多一次查询、幽灵和增长分别验证。
         key = next(iter(layer._ALLOW_C2_PENDING or layer._ALLOW_C2_BY_DESIGN))

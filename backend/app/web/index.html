@@ -534,14 +534,13 @@ V.home=()=>{
   const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;
   /* ② 是**兜底项** —— 按 §2.5.1「归属未走完 ⇒ 整批不入库」⇒ 口径上**常态为 0**（演示数据里也是 0，
      与项目档案 P12 的注释一致）；留着是为了「万一有行因数据问题没归属上，看板能亮」。 */
-  const nPl =PLs.filter(p=>plRev(p,PLs)!=='完全匹配').length;   /* ③ §4.3.4 的 6 种判定，除「完全匹配」外全算未匹配 */
   const nAdj=IVs.filter(iv=>adjOf(iv)).length;                  /* ⑤ §5.8.3 差异的**载体 = 调整单** */
   /* ⑦⑬⑭ 取自**执行记录**（§3.1.3 / §4.6）—— 数一律从 `homeCounts()` 来：见它的定义处。 */
   const H=homeCounts(), hErr=!!H.err, HC=H.counts, HL=H.latest;
   const fDone=!hErr&&HC.fetchDue===0;                                       /* 本月有没有**成功**的抓取 */
   const fFail=hErr?null:HL.fetchFail;                                       /* 最近一次抓取失败 */
   const pFail=hErr?null:HL.printFail;                                       /* 打印投递失败 */
-  const tN=nOwn+nPl+ph.length+nNoLink+nVoidJ+(fDone?0:1);
+  const tN=nOwn+ph.length+nNoLink+nVoidJ+(fDone?0:1);
   /* 瓦片出口：`k` 把手 · `n` 待办数 · `cls` 语义色 · `v` 显示值 · `s` 说明（自带尾分隔）· `pg` 落点页 · `tx` 链接文字 */
   const tile=(k,n,cls,t,v,s,pg,tx)=>'<div class="kpi '+(n?cls:'todo-clear')+'" data-todo="'+k+'" data-n="'+n+'"><div class="k">'+t
     +'</div><div class="v">'+v+'</div><div class="s"><span>'+s+'</span><span class="link" data-act="go" data-k="'+pg+'" tabindex="0" role="button">'+tx+' →</span></div></div>';
@@ -557,7 +556,6 @@ V.home=()=>{
      删了会让"口径只许有一个出口"这条判据失去靶子（判据改指见 test_acc_home_todo.py）。 */
   const todoTiles=[
     tile('ownership',nOwn,'wn','归属待指定',nOwn,'尚未确定所属项目的通知书','m03','去指定归属'),
-    tile('planUnmatched',nPl,'wn','付款计划未匹配',nPl,'需要核对单据号或金额的计划行','m04','去付款计划'),
     tile('placeholder',ph.length,'wn','占位行待扶正',ph.length,ph.length?('陌生仓库占位行：「'+esc(ph.map(p=>p.name).join('、'))+'」 · '):'— · ','m01','去项目档案'),
     tile('jcUnlinked',nNoLink,'wn','集采未关联合同',nNoLink,'未挂合同的集采通知书<b>付不了款</b>（已付清的不计） · ','m03','去关联合同'),
     tile('voidJoint',nVoidJ,'dg','撤单但有牵涉',nVoidJ,'i8 已撤单却仍挂着付款 / 关联 —— 仍参与统计，要先撤销付款 / 解绑 · ','m03','去处理'),
@@ -592,7 +590,7 @@ V.m03=()=>{
   const tb=list.map(n=>{
     if(n.id===naEditId) return ntDraftRow();   /* 编辑中：该行**原地变草稿行**（不新增行）；草稿层 `naD` */
     const p=paidOf(n.id), st=statOf(n);
-    return `<tr data-notice-id="${n.id}" class="${ntArchCls(n)} ${pickSet.has(n.id)?'pick':''} ${ntFocusId===n.id?'nt-focus':''}">
+    return `<tr data-notice-id="${n.id}" data-paste-top="${ntPasteTop.has(n.id)?1:0}" class="${ntArchCls(n)} ${pickSet.has(n.id)?'pick':''} ${ntFocusId===n.id?'nt-focus':''}">
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="pick" data-id="${n.id}" ${pickSet.has(n.id)?'checked':''} ${ntSelectable(n)?'':'disabled'}></td>
       <td class="now">${n.date}</td>
       <td class="fc">${n.code}</td>
@@ -636,8 +634,8 @@ V.m03=()=>{
     <div class="dv"></div>
     <div class="m"><span class="k">已勾选本次应付</span><span class="v">${MONEY(pkP)}</span></div>
     <div class="act">
-      ${pk.length?'':`<span class="sm mut">可先「按付款计划勾选」</span>`}
-      <button class="btn" data-act="planPick" title="按<b>你选定月份</b>的付款计划，把命中的通知书一次勾上（含跨月单据），之后再逐条核对、改金额<br>⭐ ${esc(planYm)} · 月份可在点开后的选择里改；<b>任何时候都能点</b>（不再限「10 号 → 月底」，2026-10-08 口径）">按付款计划勾选${planYm?` · ${esc(planYm)}`:''}</button>
+      ${ntPasteReport?`<button class="btn" data-act="ntPasteResult">清单结果</button>`:''}
+      <button class="btn" data-act="ntPasteOpen">粘贴单据号勾选</button>
       <button class="btn" data-act="ntPrint" ${pk.length?'':'disabled'} title="把已勾选的付款通知书交给 i8 打印｜⚠️ 本系统不自建打印模板 —— 该功能不可用时会取消，不做兜底">批量打印${pk.length?` · ${pk.length} 条`:''}</button>
       <button class="btn pri" data-act="batchPay" ${pk.length?'':'disabled'} title="${pk.length?'把已勾选的付款通知书提交付款（剔除行 / i8 撤单行不进批次）':'未勾选时置灰 —— 先勾选要付的行'}">付款${pk.length?` · ${pk.length} 条`:''}</button>
     </div>
@@ -673,64 +671,6 @@ V.m03=()=>{
 };
 
 /* 全选框状态回显：全选中 → 勾选；部分选中 → 半选（indeterminate） */
-V.m04=()=>{
-  const order=['完全匹配','金额不符','单据号查不到','无单据号','重复上报','超过未付'];
-  /* 同款筛选（2026-09-12）：①单据年月（**不要**「对应单据日期」）②项目（可多选）③审查结果（默认全部）
-     ⭐ 审查结果**筛选**只给「完全匹配 / 未匹配」两档；**判定**仍是 §4.3.4 的 6 种（见表格列与上方卡片）。 */
-  const scoped=PLs.filter(p=>tmIn(plf.ym,p.ym));
-  const list=plVisible();
-  const cnt6={}; list.forEach(p=>{ const r=plRev(p,PLs); cnt6[r]=(cnt6[r]||0)+1; });
-  const picked=list.filter(p=>plPick.has(p.id)).length;
-  return `
-    
-  <div class="kpis">
-    ${order.map(r=>`<div class="kpi"><div class="k">${r}</div><div class="v" style="font-size:calc(17px * var(--fscale));color:var(--${revTag(r)==='ok'?'ok':revTag(r)==='wn'?'wn':'dg'})">${cnt6[r]||0}</div><div class="s">笔 · 当前筛选</div></div>`).join('')}
-  </div>
-  <div class="card" style="margin-bottom:calc(12px * var(--fscale))"><h4>导入付款计划 Excel</h4><div class="bd">
-    
-    
-    <div style="margin-top:calc(10px * var(--fscale))"><button class="btn pri" data-act="plImport">导入付款计划 Excel（先选月份）</button> <button class="btn" data-act="plRowAdd" title="不依赖 Excel 的补录入口（§4.3.3.1）：在表尾生成一行草稿 —— 它与导入行同住一表、同样要被审查，且导入不会清理它（§9.5）">＋ 手动新增计划行</button></div>
-  </div></div>
-  <div class="card" style="margin-bottom:0">
-    <h4>审查结果<span class="sp">
-      <button class="btn dg" data-act="plDel" ${picked?'':'disabled'} title="删除已勾选的行；删除前会确认并说明影响范围（未勾选时置灰 —— 先勾选行再用）">删除选中${picked?` · ${picked} 行`:''}</button>
-      
-      <button class="btn pri" data-act="exp" data-t="付款计划审查结果" title="导出当前筛选下看到的这些行">导出 Excel</button>
-    </span></h4>
-    ${FBAR({body:`
-      <div class="fi"><label>单据年月</label>${tmBtn('plMonth',{scope:'pl',val:plf.ym,label:tmLabel(plf.ym),modes:['月','跨月','年','全部']})}</div>
-      <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
-        ${PJB({act:'plPjToggle',panel:plPjPanel,w:126,label:`${plf.projs.length?`已选 ${plf.projs.length} 个`:'全部项目'}`})}
-        ${pjIsOpen('plPj')?plPjPanel():''}</div>
-      <div class="fi"><label>审查结果</label><select class="inp" id="plReview" data-act="plFilter">${optsOf(enumVals('plRevF'),plf.review)}</select></div>
-      <button class="btn" data-act="plFilterReset">重置</button>
-      <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(plf.ym)} 共 <b>${scoped.length}</b> 条</span>
-    `})}
-    <div class="tw">${TBL({head:PL_THEAD,key:'m04:plans',
-    rows:list.map(p=>{const rv=plRev(p,PLs), hit=plHit(p), matched=rv==='完全匹配', edit=!matched;
-      if(p.id===plRowEditId) return plDraftRow();   /* 编辑中：该行**原地变草稿行**（不新增行；草稿层 `plD`） */
-      return `<tr class="${matched?'':'hl'}">
-      <td class="ctr fl"><input type="checkbox" class="chk" data-act="plPick" data-id="${p.id}" ${plPick.has(p.id)?'checked':''}></td>
-      <td class="fc">${p.id}${p.manual?' <span class="tag t-in" title="手动行（§4.3.3.1）：用户在页内补录的 —— 与导入行同住一表、走同一条审查链路；导入不会清理它（§9.5）">手动</span>':''}</td>
-      <td class="fc now">${p.ym}</td>
-      <td><div style="max-width:230px">${plProjCell(p.proj)}</div></td>
-      <td>${edit?`<input class="inp plain" style="min-width:134px" data-act="plCell" data-id="${p.id}" data-f="docNo" value="${esc(p.docNo||'')}" placeholder="填单据号 → 再次匹配">${hit?`<button class="link" data-act="plNotice" data-id="${p.id}" title="查看付款通知书">查看 →</button>`:''}`:(p.docNo?(hit?`<button class="link fc" data-act="plNotice" data-id="${p.id}" title="查看付款通知书">${esc(p.docNo)}</button>`:`<span class="fc" title="${plNoticeHits(p).length>1?'单据号有多条通知书，无法唯一定位':'找不到对应通知书'}">${esc(p.docNo)}</span>`):'<span class="tag t-dg">未填</span>')}</td>
-      <td class="num">${M(p.flowAmt)}</td>
-      <td class="num" title="已付款金额 = 付款流水中同一通知书的生效付款金额之和；按单据号匹配通知书，不含已撤销流水；未匹配显示—">${hit?M(paidOf(hit.id)):'<span class="mut">—</span>'}</td>
-      <td class="num" title="剩余付款金额 = 单据号匹配的付款通知书审批金额 − 同单据生效流水付款合计；不含已撤销流水，未匹配显示—">${hit?M(N2(hit.approve-paidOf(hit.id))):'<span class="mut">—</span>'}</td>
-      <td class="num">${M(p.monthAmt)}</td>
-      <td><input class="inp now" type="date" style="min-width:112px" data-act="plCell" data-id="${p.id}" data-f="date" value="${esc(p.date||'')}" title="行内可改、立刻写入（不留痕）；完整日期一律用原生日期选择器（与「单据日期 / 合同日期」同款，§六 第 30 条）"></td>
-      <td data-v="${esc(p.method||'')}"><select class="inp" data-act="plCell" data-id="${p.id}" data-f="method">${optsOf(enumVals('payMethod'),p.method)}</select></td>
-      <td><input class="inp" style="min-width:128px" data-act="plCell" data-id="${p.id}" data-f="remark" value="${esc(p.remark||'')}" placeholder="—"></td>
-      <td>${tag(rv,revTag(rv))}${p.forced?' <span class="tag t-in">已强制通过</span>':''}</td>
-      <td class="ctr">${matched?'<span class="mut sm">无需处理</span>':p.forced?`<span style="display:inline-flex;gap:calc(5px * var(--fscale));align-items:center"><span class="mut sm" style="max-width:190px" title="${esc(p.forceRemark)}">${esc(p.forceRemark)}</span><button class="btn sm" data-act="unforce" data-id="${p.id}" title="取消强制通过 → 回到「未处理」态（不产生留痕）">取消强制通过</button></span>`:`<button class="btn sm" data-act="force" data-id="${p.id}">强制通过</button>`}</td>
-      <td class="ctr"><span style="display:inline-flex;gap:calc(5px * var(--fscale));align-items:center">${p.manual?`<button class="btn sm" data-act="plRowEdit" data-id="${p.id}" title="编辑本行 —— 只有手动行可编辑（导入行是项目端报来的源数据，要改请重新导入；其在 §4.3.3 的唯一例外口 = 「再次匹配」）">编辑</button>`:''}${edit?`<button class="btn sm" data-act="plRematch" data-id="${p.id}" title="按当前单据号重新比对 i8 通知书，刷新审查结果">再次匹配</button>`:''}<button class="btn sm dg" data-act="plDelRow" data-id="${p.id}" title="删除本行（删除前确认并说明影响范围）—— 手动行与导入行都可删（§4.3.6；与付款通知书「i8 抓取行永不删」不同）">删除</button></span></td>
-    </tr>`;}).concat(plRowEditId===PL_NEW_ID?[plDraftRow()]:[]),
-    sum:list.length?sumRowOf(PL_THEAD,list,{5:rs=>N2(rs.reduce((a,p)=>a+p.flowAmt,0)),8:rs=>N2(rs.reduce((a,p)=>a+p.monthAmt,0))},{leadCls:'fl',tip:'当前年月、项目及审查结果筛选后的已保存计划行合计；含导入和手动行，不含未保存草稿，只求流程金额和本月预付款'}):EMPTYROW(thCount(PL_THEAD),'当前筛选条件下没有付款计划','')})}</div>
-    
-  </div>`;
-};
-/* 全选框状态回显（与 MOD-03 同款逻辑：全选 / 半选） */
 V.m05=()=>{
   /* 「按项目看欠款」= **三张柱卡**（集采 / 辅材 / 机械），口径与后端 `/api/m05/debt` **严格同源**：
      ⛔ 原来这里还剩一句**取三类合计的调用**（`const d=…` 那句）—— 4 条 KPI 已于 2026-09-28 全删 ⇒ 没人读的死变量，2026-09-29 删（守则 §5.1；⚠️ 本句**刻意不写那句代码的字面**，否则会被 `test_wired_m05` 的墓碑判据当场命中）。
@@ -812,7 +752,7 @@ V.m05=()=>{
       empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；期初底数用本栏右上角「＋ 录入${sc}期初」补`)})}</div></div>`; };
   /* —— 付款流水（**实际付款记录**）——
      ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 —— 默认按「当前核算月」核算**（一个月内流水有限）
-        ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 / 关键词（流水号 · 单据编码）
+        ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 / 关键词（各数据列）
         + 重置 + 命中计数；列表限高内滚（`.tw`，R7①）+ 合计行钉底（R13）。
      口径：合计只算**生效**流水（已撤销不计入 —— 与「已付金额 = 流水汇总」§4.4.5 同源）。 */
   const flList=flVisible();
@@ -895,7 +835,7 @@ V.m05=()=>{
         ${pjIsOpen('flPj')?flPjPanel():''}</div>
       <div class="fi"><label>实际付款方式</label><select class="inp" id="flMethod" data-act="flFilter">${['全部',...enumVals('payMethod')].map(v=>`<option${flf.method===v?' selected':''}>${v}</option>`).join('')}</select></div>
       <div class="fi"><label>状态</label><select class="inp" id="flState" data-act="flFilter">${enumOpts('flowState',flf.state,1)}</select></div>
-      <div class="fi"><label>关键词</label><span style="display:inline-flex;gap:calc(6px * var(--fscale))"><input class="inp" id="flQ" value="${esc(flf.q)}" placeholder="流水号 / 单据编码" style="width:150px"><button class="btn" data-act="flSearch" title="点它才搜索 —— 输入不会自动触发（避免打字即筛）">搜索</button></span></div>
+      <div class="fi"><label>关键词</label><span style="display:inline-flex;gap:calc(6px * var(--fscale))"><input class="inp" id="flQ" value="${esc(flf.q)}" placeholder="搜索各列内容" style="width:150px"><button class="btn" data-act="flSearch" title="点它才搜索 —— 输入不会自动触发（避免打字即筛）">搜索</button></span></div>
       <button class="btn" data-act="flReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${flList.length}</b> 条 ｜ ${tmLabel(flf.ym)} 共 <b>${flScope.length}</b> 条</span>
     `})}

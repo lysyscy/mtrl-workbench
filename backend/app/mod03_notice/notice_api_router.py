@@ -35,8 +35,11 @@ from app.mod03_notice.notice_actions import (
     restore_excluded,
 )
 from app.mod03_notice.page import SORT_NONE
+from app.mod03_notice.plan_audit_api import router as plan_audit_router
 
 api_router = APIRouter(tags=["mod03-json"])
+
+api_router.include_router(plan_audit_router)
 
 # ⚠️ **只在页面上成立**的列（值是按钮 / 表单 HTML）—— API 必须剔除，否则就"吐 HTML"了
 PAGE_ONLY_KEYS: tuple[str, ...] = ("actions", "_picked")
@@ -297,12 +300,11 @@ def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
     ⚠️ 出口 = `notice_pay_actions.apply_batch_pay`（§4.4.4 的判定 / 落库 / 文案**只此一份**）——
        本文件只做「取数 → 判定 → 落库 → 回 JSON」，⛔ 不重复、不另写任何判定或文案。
        （⚠️ 旧页 PRG `POST /m03/pay` 已随 `§19` 删除 ⇒ 观测面就是本端点。）
-    ⚠️ `parse_amount` / `plan_methods_for_pay` 与它**同住** `notice_pay_actions` ✓（§4.4.2 的同一份口径）。
+    ⚠️ `parse_amount` / `default_pay_method` 与它**同住** `notice_pay_actions` ✓（§4.4.2 的同一份口径）。
     """
     from app.mod03_notice.notice_pay_actions import (
         apply_batch_pay,
         parse_amount,
-        plan_methods_for_pay,
     )
 
     drafts = {
@@ -314,7 +316,6 @@ def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
         created, message = apply_batch_pay(
             session, ids=list(req.ids), drafts=drafts,
             pay_date=req.pay_date, remark=req.remark, request_id=req.request_id,
-            plan_methods=plan_methods_for_pay(session),
         )
     except MustReportError as exc:
         return {"ok": False, "created": [], "message": exc.message}

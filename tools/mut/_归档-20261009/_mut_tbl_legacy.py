@@ -60,7 +60,7 @@ TARGETS: tuple[str, ...] = ("tests/test_acc_usr_mgmt.py",   #: `m15`（P1b）那
                             "tests/test_wired_m05.py",      #: ⭐ `m05`（P2④）欠款台账 + 付款流水
                             "tests/test_wired_m08.py",      #: ⭐ `m08`（P2⑤）库存单据明细
                             "tests/test_wired_m03_list.py",  #: ⭐ `m03`（P3）
-                            "tests/test_wired_m04.py",      #: ⭐ `m04`（P3）
+                            "tests/test_wired_m04.py（已归档，付款计划页面已退出）（已归档，付款计划页面已退出）",      #: ⭐ `m04`（P3）
                             "tests/test_acc_home_todo.py",  #: ⭐ `home`（P3）状态一览表
                             "tests/test_acc_jc_shell.py",   #: ⭐ `m11`（P3 余量）集采台账表
                             "tests/test_acc_x_exp.py",      #: ⭐ A′（modal）导出清单表

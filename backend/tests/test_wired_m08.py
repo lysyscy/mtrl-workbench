@@ -259,7 +259,7 @@ def test_boot逐路容错():
     from tests.shell_load_helpers import loaders as _loaders   # noqa: PLC0415
     assert "const soft = async (label, fn) =>" in SHELL, "壳里没有逐路容错出口 `soft()`"
     ls = _loaders()
-    for label in ("付款通知书", "项目档案", "修改留痕", "付款计划", "机械 6 列", "库存单据", "付款域"):
+    for label in ("付款通知书", "项目档案", "修改留痕", "机械 6 列", "库存单据", "付款域"):
         assert label in ls, f"「{label}」这一路取数不见了"
     assert len(ls) >= 13, f"取数路只剩 {len(ls)} 条 —— 逐路覆盖不全"
 

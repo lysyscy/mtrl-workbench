@@ -21,7 +21,6 @@ PROJ = ROOT/'backend/app/web/shell/proj.js'
 PARTIAL_ACC = ROOT/'artifacts/_mut_acc_results.json'
 TARGETS = (
     'tests/test_wired_m06.py::test_合计行格数由表头派生',
-    'tests/test_wired_m04.py::test_筛不到行时必须给空态而不是一片空白',
     'tests/test_acc_jc_shell.py::test_空态行跨列数派生且全选框回显三态',
     'tests/test_ux_pages.py::test_表格件支持列定义式_试点已接上',
 )
@@ -36,8 +35,6 @@ CASES = [
      _b("TBLBROKEN({head:DIFF_THEAD,"), "差异表的表外壳没走统一出口"),
     (SHELL, "M4 去掉委托（`m06` 主表 表①·表② 不再走 `TBL`）", _b("TBL({head,rows:body,sum:sumRow+totRow})"),
      _b("TBLBROKEN({head,rows:body,sum:sumRow+totRow})"), "主表（表①/表②）的表外壳没走统一出口"),
-    (SHELL, "M13 去掉委托（`m04` 付款计划表 不再走 `TBL`）", _b("TBL({head:PL_THEAD,key:'m04:plans',"),
-     _b("TBLBROKEN({head:PL_THEAD,key:'m04:plans',"), "付款计划表没走统一出口"),
     # ⚠️ 2026-10-11（`TAIL-298`）：`m11` 的表头由 `JC_THEAD` 字面量改成 `jcThead()`（按后端列清单现生成）
     #    ⇒ 本锚点同批跟上（⛔ 不改 = 靶串命中 0 次 ⇒ 这一支静默失效，本件自己会打「未验证」）。
     (SHELL, "M15 去掉委托（`m11` 集采台账表 不再走 `TBL`）", _b("TBL({head:jcThead(),key:'m11:jc',"),

@@ -40,7 +40,7 @@ def test_实现话术墓碑():
 def test_默认页说明按最新用户取舍精简():
     """TAIL-263覆盖旧数量下限；错误/结果与弹窗反馈仍保留。"""
     from tests.shell_src import page_slice
-    for key in ['m04','m05','m06','m07','m08','m09','m11','m15']:
+    for key in ['m05','m06','m07','m08','m09','m11','m15']:
         assert '<div class="tip"' not in page_slice(key), key
     assert '待建档清单没取到' in SHELL
     assert '没有保存成功' in SHELL or '保存失败' in SHELL

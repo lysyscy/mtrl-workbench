@@ -259,7 +259,7 @@ def test_每个导出按钮都写清了导的是什么():
     #    ② 只认**含 `<button`** 的行 —— 否则会撞上 `querySelectorAll('[data-act="exp"]')` 那行。
     exps = [ln for ln in _strip_block_comments(SHELL).split("\n")
             if "<button" in ln and 'data-act="exp"' in ln]
-    assert len(exps) >= 8, f"导出按钮只剩 {len(exps)} 处？"
+    assert len(exps) >= 7, f"导出按钮只剩 {len(exps)} 处？"
     bad = [ln for ln in exps if "title=" not in ln]
     assert not bad, "这些导出按钮没写清导的是什么：\n      " + "\n      ".join(x.strip()[:130] for x in bad)
     assert "导出当前筛选下看到的这些行" in SHELL, "真导出那几处的范围说明没了"
@@ -295,15 +295,12 @@ def test_勾选表的固定列_表头与数据行同进同退():
     for head, row in (
         ('<th class="ctr fl" style="width:34px"><input type="checkbox" class="chk" id="pickAllBox"',
          '<td class="ctr fl"><input type="checkbox" class="chk" data-act="pick"'),
-        ('<th class="ctr fl" style="width:34px"><input type="checkbox" class="chk" id="plAllBox"',
-         '<td class="ctr fl"><input type="checkbox" class="chk" data-act="plPick"'),
         ('<th class="ctr fl" style="width:34px"><input type="checkbox" class="chk" id="jcAllBox"',
          '<td class="ctr fl"><input type="checkbox" class="chk" data-act="jcPick"'),
     ):
         assert head in SHELL, f"表头首格的 `fl` 没了（它本来就钉着）：{head[:60]}"
         assert row in SHELL, f"数据行首格没跟表头一起钉（横滚会错位）：{row[:60]}"
     # ⚠️ 草稿行 / 合计行也要跟上：否则"新增中"或"合计"那一行横滚时照样错位
-    assert '<tr class="draftrow">\n    <td class="ctr fl"></td>' in SHELL, "`m04` 草稿行首格没钉"
     assert "leadCls:'fl'" in SHELL, "合计行首格没钉（`sumRowOf` 的 `leadCls`）"
 
 
@@ -642,8 +639,6 @@ def test_弹窗里的选择表与影响行表也走统一出口_TBL():
     """
     assert "TBL({cls:'cond',key:'modal:bigPick',sort:false,head:'<th style=\"width:34px\">选</th>" in SHELL, \
         "「选项目上大表」那张选择表没走统一出口 `TBL`，或没声明「刻意不可排」（`sort:false`）—— `TAIL-64` A′"
-    assert "TBL({cls:'cond',head:'<th>行号</th><th>年月</th><th>审查结果</th>',rows:[rows]})" in SHELL, \
-        "「删除付款计划行确认」里那张影响行表没走统一出口 `TBL`（`TAIL-64` A′）"
 
 
 @acc()

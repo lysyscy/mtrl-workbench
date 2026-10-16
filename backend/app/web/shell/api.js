@@ -224,22 +224,6 @@ const API = {
     return r.ok ? { ok: true, ...body } : { ok: false, ...body };
   },
 
-  /* ---- MOD-04 付款计划（⚠️ 后端这几个端点收 **query 参数**，不是 JSON body ⇒ 照它调用） ---- */
-  plans: () => API.get('/api/m04/plans?year_month='),
-  plDeleteImpact: ids =>
-    API.get(`/api/m04/delete-impact?ids=${encodeURIComponent(ids.join(','))}`),
-  plCell: (id, column, value) =>
-    API.send('POST', `/api/m04/plans/${id}/cell`
-      + `?column=${encodeURIComponent(column)}&value=${encodeURIComponent(value == null ? '' : value)}`, null),
-  plRematch: id => API.send('POST', `/api/m04/plans/${id}/re-match`, null),
-  /* ---- MOD-04 · 手动行 ＋ 导入（`TAIL-35`） ---- */
-  /* 手动行新增 / 编辑 —— 判定与落库全在后端（`plan_manual.manual_row_payload`）。 */
-  m04PlanSave: body => API.post('/api/m04/plans', body),
-  /* ⛔ `m04ImportParse` / `m04ImportConfirm` 已撤（`TAIL-75` `B5c` · 2026-09-22）：
-     付款计划的导入改走**通用导入面**（`impParse/impPreview/impCommit`，见下方 `API.imp*`）——
-     壳里不许再留第二条导入路（`plImport` 现在只是"跳到向导并预选本域"）。 */
-  plForce: (id, remark) =>
-    API.send('POST', `/api/m04/plans/${id}/force?remark=${encodeURIComponent(remark || '')}`, null),
   /* ---- MOD-05 付款流水与欠款（读 4 个端点；写：撤销走 JSON、期初/备注走 PRG 表单端点） ---- */
   flows: () => API.get('/api/m05/flows?year_month='),
   debt: () => API.get('/api/m05/debt'),
@@ -263,12 +247,6 @@ const API = {
     markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：PRG 表单写出口（期初录入 / 台账备注） */
     return true;
   },
-  plForceCancel: id => API.send('POST', `/api/m04/plans/${id}/force-cancel`, null),
-  /* ⚠️ `confirmed=true` 只在**用户已在确认弹窗里看过影响范围**之后才传（§4.3.6 的两步） */
-  plDelete: ids =>
-    API.send('POST', `/api/m04/plans/delete`
-      + `?ids=${encodeURIComponent(ids.join(','))}&confirmed=true`, null),
-
   /* ---- MOD-08 库存单据与调整单（读全量 + 调整单；写走 JSON） ---- */
   m08Inventory: () => API.get('/api/m08/inventory'),
   m08Adjust: (rowId, body) => API.send('POST', '/api/m08/adjust', { row_id: Number(rowId), ...body }),

@@ -203,19 +203,6 @@ def test_直接批量动作须看清隐藏选择且只读取有效选择(ui_page
     assert _ids(p) == []
 
 
-@acc()
-def test_按计划仍尊重项目范围不受搜索裁剪(ui_page):
-    p = ui_page
-    _setup(p)
-    p.fill('#ntSearch', 'DOC-B')
-    p.evaluate("""() => {
-      fNt.projs=['测试仓库'];planYm='2026-10';
-      PLs.push({ym:planYm,docNo:'DOC-A'},{ym:planYm,docNo:'DOC-C'});
-      ACT.planPickRun();
-    }""")
-    assert _ids(p) == ['101']
-    assert p.input_value('#ntSearch') == 'DOC-B'
-    assert '当前列表外 1 条' in p.inner_text('.selbar')
 
 
 @acc()

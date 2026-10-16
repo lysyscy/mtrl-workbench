@@ -257,8 +257,8 @@ def selection(changes: dict, commands: list, root: Path = ROOT):
         if name == 'docs/requirements/PRD/验收/验收基线.json':
             checks |= required_checks('documents', commands) | {'tools/audit/acc_report.py'}
             continue
-        if name in {'backend/requirements.in', 'backend/requirements.txt'}:
-            continue  # pytest选择器已知其声明消费；不调用网络依赖审计。
+        if name in {'backend/pyproject.toml', 'backend/uv.lock'}:
+            continue  # pytest选择器已知依赖声明的消费者；不调用网络依赖审计。
         if name.startswith('backend/') and not (name.endswith('.py') or name.startswith('backend/app/web/')):
             pending.append('后端数据/配置输入需调查使用者：'+name)
             continue

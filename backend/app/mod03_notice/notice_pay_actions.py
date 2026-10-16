@@ -1,7 +1,7 @@
 """`MOD-03` **批量付款**（§4.4.2 / §4.4.4）的入参归一 ＋ 「唯一出口」。
 
 依据：
-- 《说明书》§4.4.2（付款方式默认值：先取付款计划、取不到兜底「现汇」—— **窗口渲染与提交同一个出口**）
+- 付款方式默认值：通知书拟方式 →「现汇」（用户2026-10-15）；窗口与提交同口径。
 - §4.4.4（批量付款：整批判定 ⇒ **不落半批** · `request_id` **幂等** · 一次付款一条独立流水）
 - §4.4.3（集采付款：**未关联集采合同 ⇒ 不可付**——用户 2026-09-24 口述，**无例外**）
 - §4.2.7（撤单 / 剔除行一律排除）
@@ -26,33 +26,9 @@ from app.core.money import amount_text, to_money
 # ======================================================== 批量付款（§4.4.2 / §4.4.4）
 
 
-def default_pay_method(bill_no: str, plan_methods: dict) -> str:
-    """**实际付款方式的默认值**（§4.4.2，**唯一出口**）：先取付款计划的值、取不到兜底「现汇」。
-
-    ⚠️ 窗口渲染与提交重算**必须走同一个出口** —— 否则会出现"页面上显示承兑、提交时说付款方式为空"。
-    ⚠️ 2026-09-19（`§19` 批 4 · S3a）：**从 `notice_pay.py` 搬到这里**（那是**会被删**的页面件，本件是存活件 ✓）
-    —— `notice_pay.py` 现在反向 import 它（临时，随删页一起消失 ✓）。⛔ 别在两边各留一份实现。
-    """
-    return str((plan_methods or {}).get(str(bill_no or "").strip()) or "") or "现汇"
-
-
-def plan_methods_for_pay(session) -> dict[str, str]:
-    """`单据号 -> 付款计划的付款方式` —— §4.4.2 默认值的**取数出口**（`default_pay_method` 的输入）。
-
-    ⚠️ 2026-09-19（`§19` 批 4 · **S4②**）：**从 `notice_pay.py` 搬到这里**（那是**会被删**的页面件）
-       —— 批量付款的**两个出口**（PRG 与 JSON API）都从本件取它。⛔ 别在别处再写一份同样的查询。
-    ⚠️ 付款计划没导入 / 表还没建时**不该让付款窗口打不开** ⇒ 兜底空表（由 `default_pay_method` 兜「现汇」）。
-    """
-    try:
-        from app.mod04_plan import service as P4S       # ⭐ 包间出口（`TAIL-218` 批 3）
-
-        return {
-            str(r.doc_no or "").strip(): str(r.pay_method or "")
-            for r in P4S.list_rows(session)
-            if str(r.doc_no or "").strip() and str(r.pay_method or "").strip()
-        }
-    except Exception:  # noqa: BLE001
-        return {}
+def default_pay_method(planned_pay_method: str = "") -> str:
+    """通知书拟付款方式未设置时默认现汇。"""
+    return str(planned_pay_method or "现汇")
 
 
 def parse_amount(text):
@@ -73,7 +49,6 @@ def apply_batch_pay(
     pay_date: str = "",
     remark: str = "",
     request_id: str = "",
-    plan_methods: dict | None = None,
 ) -> tuple[list, str]:
     """提交**批量付款**（§4.4.4）的**唯一出口** —— PRG（`POST /m03/pay`）与 JSON API
     （`POST /api/m03/actions/batch-pay`）**共用这一份**：⛔ 不许两份判定、不许两份文案。
@@ -86,8 +61,7 @@ def apply_batch_pay(
 
     `drafts = {notice_id: {"pay_method": str, "amount": Decimal | None}}` —— 表单/JSON 给的值；
     ⚠️ 金额**已由调用方解析**成 `Decimal`（解析器 = 本模块的 `parse_amount` ✓）。
-    `plan_methods` —— `单据号 -> 计划里的付款方式`（§4.4.2 的默认值来源；⛔ 本层不自己去查，
-    免得与页面件耦合）。`cancel` / `move` 属**交互层**，留在调用方。
+    `cancel` / `move` 属交互层，留在调用方。
 
     返回 `(created, message)`：`created` = 落了流水的 `notice_id` 列表。
     """
@@ -122,13 +96,12 @@ def apply_batch_pay(
         )
         for r in targets
     ]
-    plan = plan_methods or {}
     submitted = {}
     for r in targets:
         d = (drafts or {}).get(int(r.id)) or {}
         submitted[int(r.id)] = PayDraft(
             # ⚠️ 表单没给 ⇒ 用**与窗口渲染同一个出口**的默认值（§4.4.2）
-            pay_method=str(d.get("pay_method") or default_pay_method(r.bill_no, plan)),
+            pay_method=str(d.get("pay_method") or default_pay_method(r.planned_pay_method)),
             amount=d.get("amount"),
         )
 
@@ -165,5 +138,5 @@ def apply_batch_pay(
 
 
 __all__ = [
-    "default_pay_method", "plan_methods_for_pay", "parse_amount", "apply_batch_pay",
+    "default_pay_method", "parse_amount", "apply_batch_pay",
 ]

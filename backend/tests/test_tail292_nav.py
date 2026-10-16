@@ -73,21 +73,6 @@ def test_notice_exact_id_in_550_virtual_rows(ui_page,entry):
 @acc()
 def test_plan_unique_ambiguous_and_orphan_flow(ui_page):
     p=ui_page;setup(p)
-    p.evaluate("() => {SRV[540].bill_no='UNIQUE';PLs=['UNIQUE','DOC-SAME','NONE'].map((doc_no,i)=>adaptPlan({id:'P'+(i+1),doc_no,year_month:'2026-10',audit_result:'完全匹配'}));plf.ym='全部';plf.review='全部';VIEW='m04';}")
-    p.evaluate('reloadNotices()')
-    p.evaluate('render()')
-    assert p.evaluate('plHit(PLs[0]).id')=='1540'
-    assert p.evaluate('plHit(PLs[1])===null && plHit(PLs[2])===null')
-    assert p.locator('[data-act="plNotice"]').count()==1
-    assert p.locator('span[title="单据号有多条通知书，无法唯一定位"]').count()==1
-    assert p.locator('span[title="找不到对应通知书"]').count()==1
-    p.click('[data-act="plNotice"]')
-    p.wait_for_selector('tr.nt-focus[data-notice-id="1540"]')
-    p.click('[data-act="refBack"]')
-    for pid in ['P2','P3']:
-        p.evaluate('(id)=>ACT.plNotice({dataset:{id}})',pid)
-        p.wait_for_timeout(100)
-        assert p.evaluate('VIEW')=='m04'
     p.evaluate("() => {VIEW='m05';FLs[0].nid='';render();}")
     assert p.locator('[data-act="flNotice"]').count()==0
     assert p.locator('span[title="找不到对应通知书"]').count()==1

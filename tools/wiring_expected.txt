@@ -54,8 +54,6 @@ W2 backend/app/mod03_notice/page.py:nav_violations
 W2 backend/app/mod03_notice/print/fields.py:uncovered_field_ids
 W2 backend/app/mod04_plan/domain.py:outstanding
 W2 backend/app/mod04_plan/domain.py:column_order_ok
-W2 backend/app/mod04_plan/plan_ui.py:period_filter_modes
-W2 backend/app/mod04_plan/plan_ui.py:period_filter_is_shared_control
 W2 backend/app/mod05_flow/repository.py:get_opening
 W2 backend/app/mod06_proc/domain.py:column_editable
 W2 backend/app/mod06_proc/domain.py:boundary_violations
@@ -79,10 +77,6 @@ W2 backend/app/mod14_config/repository.py:read_values
 # ① 模块 `__all__`（或模块头 docstring）里**有意公开的出口** —— "没有内部调用方"是正常的
 W2 backend/app/import_kit/spec.py:Registry
 W2 backend/app/import_kit/spec.py:domains
-W2 backend/app/mod04_plan/importer.py:stage_payload
-W2 backend/app/mod04_plan/importer.py:restore_rows
-W2 backend/app/mod04_plan/plan_manual.py:draft_row_html
-W2 backend/app/mod04_plan/service.py:default_filters
 W2 backend/app/mod06_proc/importer.py:mech_labels
 W2 backend/app/mod07_setl/big_domain.py:rate_text
 W2 backend/app/mod07_setl/domain.py:check_level
@@ -94,7 +88,6 @@ W2 backend/app/report_export/service.py:setl_count
 #      「域内解析出口**保留**（与 `m05` 留 `parse_rows`、`m06` 留 `parse_sheet` 同款）」。
 
 # ② 代码注释点名「**留着**」的（`depends` 注入面，测试在覆盖）
-W2 backend/app/mod04_plan/router.py:get_db
 #    · `get_db` docstring 原话：「2026-09-18（`§19` 批 2）… `get_db` 本身**留着**
 #      （`tests/test_plan_import.py`·`test_plan_manual.py` 在覆盖它）」。
 
@@ -115,7 +108,6 @@ W2 backend/app/mod03_notice/list_page.py:render_list_page
 W2 backend/app/mod03_notice/list_page.py:next_sort_direction
 W2 backend/app/mod03_notice/notice_executors.py:get_notice_lister
 W2 backend/app/mod03_notice/page.py:theme_coverage_gaps
-W2 backend/app/mod04_plan/importer.py:parse_workbook
 W2 backend/app/mod06_proc/importer.py:find_header
 W2 backend/app/mod06_proc/importer.py:parse_sheet
 W2 backend/app/mod07_setl/service.py:build_extract_data
@@ -142,7 +134,7 @@ W1b backend/app/core/period.py:export_filename
 W1b backend/app/mod01_projects/domain.py:multi_select_keys
 W1b backend/app/mod01_projects/domain.py:combine_filters
 W1b backend/app/mod01_projects/domain.py:resolve_display
-W1b backend/app/mod04_plan/domain.py:derived_columns
+W1b backend/app/mod04_plan/domain.py:audit_rows
 W1b backend/app/mod05_flow/domain.py:empty_state_colspan
 W1b backend/app/mod05_flow/domain.py:project_labels
 W1b backend/app/mod05_flow/domain.py:is_date_like
@@ -154,3 +146,6 @@ W1b backend/app/mod05_flow/domain.py:toggle_project_filter
 #    ⛔ **接线后必须删掉对应行**（本文件"只准变短"），别让它们在这儿长住。
 W1b backend/app/mod11_jc/domain.py:link_hint
 W1b backend/app/mod11_jc/domain.py:pick_candidates
+
+# 核对规则被独立skill的scripts/audit.py调用；扫描器仅扫描backend，实际客户端调用由skill测试验证。
+W1 backend/app/mod04_plan/domain.py:match_project

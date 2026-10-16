@@ -59,6 +59,7 @@ def make_book() -> bytes:
 def client(tmp_path, monkeypatch):
     """假钩子 ＋ 隔离的记忆件 ＋ 不连库的 `session_scope`。"""
     calls: dict = {"commit": [], "rollback": []}
+    monkeypatch.setattr(imp_api, "REGISTRY", dict(imp_api.REGISTRY))
 
     def commit(session, records, mapping_, operator):
         calls["commit"].append({"records": records, "mapping": mapping_, "operator": operator})

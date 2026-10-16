@@ -1,6 +1,6 @@
-/* shell/pages-a.js —— 壳的**独立件**（`P2-a` 拆件 · 2026-09-28 · 台账 `TAIL-164`）：`MOD-03` / `MOD-04` / `MOD-05` 的页辅助 ＋ `BIND` 注入。
+/* shell/pages-a.js —— 壳的**独立件**（`P2-a` 拆件 · 2026-09-28 · 台账 `TAIL-164`）：`MOD-03` / `MOD-05` 的页辅助 ＋ `BIND` 注入。
  *
- * ⭐ **为什么单开一件**：付款域三页的筛选、草稿行、台账取数是**同一批人对同一批数据**的活 ⇒ 单开一件。
+ * ⭐ **为什么单开一件**：付款域页面的筛选、草稿行、台账取数是**同一批人对同一批数据**的活 ⇒ 单开一件。
  *    `index.html` 原来一件套 4000 行（CSS ＋ HTML ＋ 内联脚本混装）⇒ 改一处要翻三个区
  *    （本会话两次白屏的同一个根）。本件是「**只拆非切片**」那一批里的一件。
  * ⛔ **本件不许碰**：任何 `V.<原型页>` 切片（它们**留在 `index.html`** —— 计划 §23 的口径，
@@ -28,127 +28,34 @@ addBind('m03', ()=>{ const box=$('#pickAllBox'); if(!box) return;
     $$(`[data-act="${act}"]`).forEach(t=>{t.disabled=true;t.title='当前列表外还有已勾选记录，请先清空搜索核对';});
   }); });
 
-/* =====================================================================
-   5. MOD-04 付款计划
-   ===================================================================== */
-/* 筛选 / 多选状态（2026-09-12 新增）。
-   ⚠️ 复位一律【原地改字段 / 清空】，不要整体重新赋值 —— 外部（自检）持有的是对象引用。 */
-let plf={ym:bjMonth(),projs:[],review:'全部'};
-let plPick=new Set();
-/* 展开态在 `PJ_OPEN`（key='plPj'） */
-let plImportM=bjMonth();          /* 「导入付款计划」弹窗里选定的年月（导入后本批数据全归该月） */
-/* ---------- 「按付款计划勾选」的月份（⭐ 2026-10-08 用户裁定：月份可选、不限点击时间） ----------
-   原口径是"每月 10 号生效 → 月末才可点、月份定死当月"（2026-09-12 定案）。现在**两点都取消**：
-     · **不再按日期禁用** —— 那条窗口只是制度上的习惯（制度本身也只约束人、不拦系统，§4.3.7
-       「系统不做任何拦截或标记」），做成**按钮置灰**反而挡住正常补勾（用户 2026-10-08 报障）。
-     · **月份改为可选** —— `planYm` 是这一个出口，勾哪个月由人挑（候选 = 库里真有的计划月份 ＋ 当月）。
-   ⚠️ 判据同源：按钮可用性 = `mod04_plan/plan_ui.window_button`（后端唯一出口，**恒 True**）。
-      ⛔ 壳里**不再写第二份**"今天几号够不够 10 号"的判定（原先的 `plWin()` 已删）。 */
-let planYm=bjMonth();     /* 「按付款计划勾选」要勾的月份（用户挑的那个月） */
-let planSel='';           /* 选月份弹窗里的**草稿**选择（同 `supSel` / `jcLinkSel` 的约定：改选择不重绘，提交时读） */
-/* ---------- 付款计划「审查引擎」：拿计划表与 i8 付款通知书**逐笔比对**（取数口径见 §4.3.4） ----------
-   ① 比对键 = 单据号；② 「该流程金额」↔ 通知书「审批金额」；③ 「本月预付款金额」↔ 未付金额（审批 − 已付）；
-   ④ 同月同一单据号出现 ≥2 次 ⇒ 重复上报（**跨月不算**；**空单据号不参与判重**）。 */
-/* ⭐⭐ **审查结果的唯一出口 = 后端**（D18：判定与落库一律后端）。
-   原型原先在**前端实时派生**（查 `NO` + 重复检测）；接线后改为**读后端算好的 `result`**
-   （`mod04_plan/domain.py::audit_rows` —— 与判据同一份纯函数）⇒ 前端**不再有第二份判定**。
-   ⚠️ 保留签名 `(p, all)`：`V.m04` 里各处调用**一行都不用改**（第 2 个参数留着不读）。 */
-const plRev=(p)=>String((p&&p.result)||'').trim()||'—';
-/* 按单据号命中的 i8 通知书（供「已付款金额 / 剩余付款金额」两列取数）；查不到 → null */
-const plNoticeHits=p=>{const c=String(p.docNo||'').trim();return c?NO.filter(n=>String(n.code||'').trim()===c):[];};
-const plHit=p=>{const hits=plNoticeHits(p);return hits.length===1?hits[0]:null;};
-/* 审查结果的**筛选归并**（2026-09-12）：判定仍是 §4.3.4 的 6 种，筛选下拉只给
-   「完全匹配 / 未匹配」两档 —— 「未匹配」= 除「完全匹配」以外的全部判定。 */
-const revIs=(rv,f)=> f==='全部' || (f==='未匹配' ? rv!=='完全匹配' : rv===f);
-/* ---------- 付款计划的「项目」列 = 用户导入前手工填的**展示名或仓库名**（2026-09-12 用户口径） ----------
-   ⚠️ **不是全名** —— 用户不会填全名：太长，而且全名里可能带「小微」字样（壳与具体小微共用全名）。
-   ⇒ 系统按 `disp`（展示名）或 `name`（仓库名）**唯一匹配**项目档案：
-       命中 1 条 → 正常；命中 0 条 → 「未匹配」（提示核对项目名或先建档）；命中多条 → 「重名」（需人工核对）。
-   ⇒ 壳没有展示名也没有仓库名，所以**不会**再出现「壳下 N 个小微 · 待指定」这种提示（那是全名反查的产物）。 */
-const plProjHit=v=>{ const s=String(v==null?'':v).trim(); if(!s) return [];
-  return PJs.filter(p=>p.type!=='shell'&&(p.name===s||p.disp===s)); };
-const plProjOne=v=>{ const h=plProjHit(v); return h.length===1?h[0]:null; };
-/* 「项目」筛选的归并键 = 匹配到的项目**展示名** —— 同项目无论填展示名还是仓库名都归到一处；
-   匹配不到的填法不产生归并键（只在「全部项目」下可见）。 */
-const plProjKey=v=>{ const p=plProjOne(v); return pjKey(p); };   /* 筛选键 = **仓库名**（§2.7.4） */
-/* 候选项目 = 计划行里**能匹配到**的项目（**键 = 仓库名**，去重）；**含归档**，归档靠后并标注
-   （2026-09-13 用户口径：所有项目候选都含归档；原「只列在建」已作废。与付款通知书页同口径） */
-const PL_PROJ_LIST=()=>pjKeysOfRows(uniqBy(PLs,p=>plProjOne(p.proj)));
-/* 「项目」列的展示：匹配到 → 显示规范展示名（悬停只给状态）；未匹配 / 重名 → 明示 */
-const plProjCell=v=>{ const h=plProjHit(v), raw=esc(String(v==null?'':v))||'—';
-  if(h.length===1){ const p=h[0];
-    return `<span class="fc" title="${esc(p.status)}">${esc(pjDisp(p))}</span>`; }
-  if(!h.length) return `<span class="fc">${raw}</span> <span class="tag t-dg" title="档案里没有这个展示名 / 仓库名 —— 请核对项目名，或先到「项目档案」建档">未匹配</span>`;
-  return `<span class="fc">${raw}</span> <span class="tag t-wn" title="有 ${h.length} 条档案的展示名 / 仓库名相同，需人工核对">重名 ${h.length} 条</span>`; };
-/* 当前筛选结果 —— 页面、全选框回显、多选删除共用同一份口径（审查结果按**实时派生值**筛） */
-const plVisible=()=>PLs.filter(p=>tmIn(plf.ym,p.ym)&&(!plf.projs.length||plf.projs.includes(plProjKey(p.proj)))&&revIs(plRev(p,PLs),plf.review));
-/* 勾选集合裁剪到当前可见范围（筛选变化后调用，避免删掉看不见的行） */
-const prunePlPick=()=>{ const vis=new Set(plVisible().map(p=>p.id)); [...plPick].forEach(id=>{ if(!vis.has(id)) plPick.delete(id); }); };
-/* 与 MOD-03 / MOD-06 共用同一个 projPanel 实现（同一份实现、多个 cfg）——
-   候选键一律是**仓库名**（§2.7.4），meta 一律 `PROJ_META_KEY`（仓库名 → 展示名） */
-const plPjPanel=()=>projPanel({list:PL_PROJ_LIST,selected:()=>plf.projs,allAct:'plPjAll',noneAct:'plPjNone',pickAct:'plPjPick',meta:PROJ_META_KEY});
-/* ---------- 付款计划「手动行」= **表内增行模式**（§4.3.3.1 · 2026-09-16 用户口述新增 · 用户同日追认细节 6 项）----------
-   形态**照抄 MOD-03 的既有约定**（`ntRowAdd` / `ntRowSet` / `ntRowSave` / `ntRowCancel`）：
-   **不用弹窗**，草稿行插在**表尾**；「编辑」= 该行**原地变草稿行**（不新增行）。
-   ⭐ 手动行与导入行**同住一表、走同一条审查链路** —— 判定一律 `plRev()` 按行**实时派生、不看来源**
-      （6 种判定 / 同月同单据号判重 / 两档筛选 / KPI 计数 / 表内合计，全都不因"来源是手动"被跳过）。
-   ⚠️ **导入不清理它**（§9.5：导入只清并重写自动行）；**只有手动行可编辑**；**删除所有行都有**（§4.3.6 —— 与
-      付款通知书「i8 抓取行永不删」**不同，不得照抄**）。 */
-const PL_NEW_ID='@new';                    /* 哨兵 id：新增中的草稿行（**不是** `PLs` 里的行）
-                                              渲染时插在**表尾**（`applySorts` 会把它钉住、不参与排序；不进合计 / 不进勾选）
-                                              ⚠️ 这句注释必须留在**模板字面量之外** —— 写在 `${}` 里会连同注释一起渲染出去 */
-let plRowEditId='';                        /* ''=未在编辑；'@new'=新增中；<id>=**原地编辑**该手动行 */
-/* ⭐ 落库中（**挡重入** · 守则 §5.5）：连点两次「保存」= 两次 `POST /api/m04/plans`
-   ⇒ **落两行完全相同的计划行**；⚠️ 后端**不会挡** —— 同月完全相同的行是**本业务的合法状态**
-   （§4.3.3：重复由「重复上报」提示，不靠自动去重掩盖）⇒ 这一道只能由界面挡。
-   与 `IMP.busy`（`TAIL-108`）同款。 */
-let plSaving=false;
-let plD={};                                /* 草稿层（键与 `PL_COLS` 同名 —— "改一格不冲掉别的格"） */
-const plRowOn=()=>plRowEditId!=='';        /* 是否处于增行态（渲染草稿行的唯一判据） */
-const plBlank=()=>({ym:plf.ym, proj:'', docNo:'', flowAmt:'', monthAmt:'', date:'', method:'现汇', remark:''});
-/* 生成 k 个**连续可用**的编号（**从「当前最大编号 + 1」起算**，**不看数组长度**）。
-   ⚠️ **为什么不能数长度**：原实现用 `PLs.length+1` ⇒ **删过行之后再导入就会与既有 id 撞号**
-      ⇒ `PLs.find(id)` 会**命中错行**（删除 / 编辑 / 勾选 / 再次匹配 / 点选**全按 id 定位**）。2026-09-16 修。
-   ⚠️ **导入与手动新增共用这一个出口**（两个入口都别自己拼编号）。 */
-const plNextIds=(pfx,k=1)=>{ let mx=0;
-  PLs.forEach(p=>{ const s=String(p.id||''); if(!s.startsWith(pfx)) return;
-    const n=Number(s.slice(pfx.length)); if(Number.isFinite(n)) mx=Math.max(mx,n); });
-  return Array.from({length:k},(_,i)=>pfx+String(mx+1+i).padStart(2,'0')); };
-/* 草稿行的「项目」下拉：候选 = **全部已建档项目（含归档、不含壳）**，键 = 仓库名（§2.7.4），
-   落库记**项目 id**（§9.8-5 按 id 不按名）；归档标注走共性出口 `pjArcMark(p,true)`（纯文本档）。
-   ⚠️ 这里**有意不用共用面板 `projPanel`** —— 草稿行在 `.tw`（滚动容器）**内部**，浮层面板会被裁掉
-      （与「弹窗内 3 个项目下拉」同族的既有例外，已在设计规则里登记）。 */
-const plProjOptions=cur=>{ const list=PL_PROJ_LIST();
-  const opts=list.map(k=>{ const p=pjRowOf(k), arc=pjArcMark(p,true);
-    return `<option value="${esc(k)}"${String(cur||'')===String(k)?' selected':''}>${esc(pjDisp(p))}${arc?`（${esc(arc)}）`:''}</option>`; }).join('');
-  return `<option value=""${cur?'':' selected'}>（请选择项目）</option>${opts}`; };
-/* 草稿行（**列对齐 15 格** —— 逐列与 `PL_THEAD` 对齐；值取草稿层，不是 `PLs` 的行）
-   ⚠️ 草稿行**不带 `data-id``：合计行的断言按 `data-id` 收集行做独立复算 ⇒ 带了会污染。 */
-const plDraftRow=()=>{ const d=plD, isNew=(plRowEditId===PL_NEW_ID);
-  return `<tr class="draftrow">
-    <td class="ctr fl"></td>
-    <td class="fc">${isNew
-      ? '<span class="tag t-in" title="尚未保存 —— 填完点本行右侧「保存」写入；「取消」丢弃（草稿不写入）">手动 · 新增</span>'
-      : '<span class="tag t-in" title="正在原地编辑这条手动行 —— 点「保存」写入、点「取消」保持原样（不新增行）">手动 · 编辑</span>'}</td>
-    <td><input class="inp now" type="month" style="min-width:104px" data-act="plRowSet" data-k="ym" value="${esc(d.ym||'')}" title="年月 = 归月依据（必填 · 月度形态）；保存后按它归月归档"></td>
-    <td><select class="inp" style="min-width:180px" data-act="plRowSet" data-k="proj" title="归属项目（已建档项目 · 含归档、不含壳）—— 写入记项目 id">${plProjOptions(d.proj)}</select></td>
-    <td><input class="inp plain" style="min-width:134px" data-act="plRowSet" data-k="docNo" value="${esc(d.docNo||'')}" placeholder="可空" title="单据号允许为空（与导入行同）；保存后按 §4.3.4 实时出审查结果"></td>
-    <td class="num"><input class="inp num" style="width:96px" data-act="plRowSet" data-k="flowAmt" value="${esc(d.flowAmt||'0.00')}" title="该流程金额（比对 i8 通知书的审批金额）"></td>
-    <td class="num"><span class="mut" title="保存后按命中的 i8 通知书派生（= 该单据已付金额）；单据号未命中 → 显示「—」">—</span></td>
-    <td class="num"><span class="mut" title="同上（= 审批金额 − 已付金额 = 未付金额）">—</span></td>
-    <td class="num"><input class="inp num" style="width:96px" data-act="plRowSet" data-k="monthAmt" value="${esc(d.monthAmt||'0.00')}" title="本月预付款金额（比对未付金额：超过则判「超过未付」）"></td>
-    <td><input class="inp now" type="date" style="min-width:112px" data-act="plRowSet" data-k="date" value="${esc(d.date||'')}"></td>
-    <td><select class="inp" data-act="plRowSet" data-k="method">${optsOf(enumVals('payMethod'),d.method||'现汇')}</select></td>
-    <td><input class="inp" style="min-width:128px" data-act="plRowSet" data-k="remark" value="${esc(d.remark||'')}" placeholder="—"></td>
-    <td><span class="mut sm" title="保存后按 §4.3.4 实时判定 —— 手动行与导入行走同一条链路，不因来源被跳过">保存后判定</span></td>
-    <td class="ctr"><span class="mut sm">—</span></td>
-    <td class="ctr now"><button class="btn sm pri" data-act="plRowSave"${plSaving?' disabled':''} title="${plSaving?'正在保存 —— 请勿重复点击（连点会落两行相同的计划行）':'校验通过后写入（写入后与导入行同样参与审查）'}">${plSaving?'保存中…':'保存'}</button> <button class="btn sm" data-act="plRowCancel"${plSaving?' disabled':''} title="丢弃这一行草稿（不写入）">取消</button></td>
-  </tr>`; };
-addBind('m04', ()=>{ const box=$('#plAllBox'); if(!box) return;
-  const ids=plVisible().map(p=>p.id);
-  const hit=ids.filter(i=>plPick.has(i)).length;
-  box.checked = ids.length>0 && hit===ids.length;
-  box.indeterminate = hit>0 && hit<ids.length; });
+/* Paste selection uses full bill numbers; only this batch moves to the top. */
+let ntPasteTop=new Set(), ntPasteRaw='', ntPasteReport=null, ntPasteBusy=false;
+const ntPasteMatch=(raw,notices)=>{
+  const key=v=>String(v==null?'':v).trim().toUpperCase();
+  const tokens=String(raw||'').split(/[\s,，;；、]+/).map(v=>v.replace(/^["“”]+|["“”]+$/g,'')).filter(Boolean);
+  const counts=new Map(), byCode=new Map();
+  tokens.forEach(v=>{const k=key(v);counts.set(k,(counts.get(k)||0)+1);});
+  notices.forEach(n=>{const k=key(n.code);if(!k)return;if(!byCode.has(k))byCode.set(k,[]);byCode.get(k).push(n);});
+  const result={total:tokens.length,unique:counts.size,ids:[],missing:[],ambiguous:[],blocked:[],duplicates:[],paid:[]};
+  for(const [code,count] of counts){
+    if(count>1)result.duplicates.push(`${code}（${count}次）`);
+    const hits=byCode.get(code)||[];
+    if(!hits.length){result.missing.push(code);continue;}
+    if(hits.length!==1){result.ambiguous.push(`${code}（系统${hits.length}条）`);continue;}
+    const n=hits[0];
+    if(!ntPayCand(n)){result.blocked.push(`${code}（${ntVoid(n)?'已撤单':'已剔除'}）`);continue;}
+    result.ids.push(n.id);
+    if(statOf(n)==='已付清')result.paid.push(code);
+  }
+  return result;
+};
+const ntPasteReportHTML=r=>{
+  const groups=[['未找到',r.missing,'dg'],['系统重号，未勾选',r.ambiguous,'wn'],
+    ['剔除或撤单，未勾选',r.blocked,'wn'],['重复输入，已合并',r.duplicates,'in'],['已付清，仍可打印',r.paid,'in']];
+  return `<p>输入 ${r.total} 个单据号，去重后 ${r.unique} 个。${r.ids.length?`已勾选 <b>${r.ids.length}</b> 条，集中在表格顶部。`:'没有可勾选的单据，原勾选保持不变。'}</p>`+
+    groups.filter(g=>g[1].length).map(([label,list,color])=>`<div style="margin-top:calc(12px * var(--fscale))"><b class="${color==='dg'?'dg':'mut'}">${label} · ${list.length}</b><div class="sm" style="margin-top:calc(4px * var(--fscale));max-height:calc(160px * var(--fscale));overflow:auto;overflow-wrap:anywhere">${list.map(esc).join('、')}</div></div>`).join('');
+};
+
 /* 全选框状态回显（与 MOD-03 / MOD-04 同款逻辑：全选 / 半选）—— `MOD-11` 集采台账
    ⚠️ 2026-09-13 P6 走查实测：这张表**一直没有 BIND** ⇒ 表头那个「全选」框**永远不反射状态**
       （全勾满了也还是空框、部分勾选也不显半选），而 `R10`② 明确要求"全选支持全选 / 半选回显"。 */
@@ -332,10 +239,19 @@ const flProjs=()=>pjSort(uniqBy(FLs,f=>flProjOf(f)).filter(Boolean));
 const flHit=f=>(!flf.projs.length||flf.projs.indexOf(flProjOf(f))>=0)
   &&(flf.method==='全部'||f.method===flf.method)
   &&(flf.state==='全部'||(flf.state==='已撤销'?f.voided:!f.voided));
-/* ⭐ `TAIL-283`：关键词 = **流水号 / 单据编码**（与搜索框 placeholder 同口径）——
-   ⛔ 不再拿**数据库行号** `f.id` 顶流水号（那是"说错话"：拿它搜会命中一个屏幕上看不见的数）。 */
+/* 与通知书同口径：搜索数据列，忽略大小写、空白及千分位逗号；不搜内部行号或操作。 */
+const flSearchMatch=(f,q)=>{
+  const norm=v=>String(v==null?'':v).toLocaleLowerCase().replace(/[,，\s]/g,'');
+  const needle=norm(q); if(!needle) return true;
+  const n=ntOf(f), p=n&&ownOf(n);
+  return [f.flowNo,flDocNo(f),f.docDate,f.billName,n&&n.proj,p&&pjDisp(p),
+    f.payee,f.categoryLabel,f.amountApproved,f.amountApproved==null?'':M(f.amountApproved),
+    f.date,f.amt,f.amt==null?'':M(f.amt),f.method,f.remark,f.op,
+    f.voided?'已撤销':'生效',f.voided?f.reason:'']
+    .some(v=>norm(v).includes(needle));
+};
 const flVisible=()=>FLs.filter(f=>tmIn(flf.ym,f.date)&&flHit(f)
-  &&(!flf.q||(String(f.flowNo||'')+' '+flDocNo(f)).toLowerCase().includes(flf.q.toLowerCase())));
+  &&flSearchMatch(f,flf.q));
 /* ⭐ `TAIL-283`：**屏幕行序**只在 DOM 里 —— 表头点击排序（`applySorts`）是"HTML 字符串 → HTML 字符串"
    的纯函数，`flVisible()` 出来的仍是**数组原序** ⇒ 导出要跟屏幕一致，只能按渲染后的数据行取序
    （数据行挂 `data-flow-id`；合计行 / 空态行没有该属性，天然不入）。

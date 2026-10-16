@@ -52,4 +52,12 @@
 
 ## 2026-10-15一次性导入退出系统
 
-历史付款与集采导入的专属实现、测试、旧说明和逐件来源见docs/archive/retired-imports-20261015/README.md及manifest.json；当前系统只保留付款计划和过程资料导入。
+历史付款与集采导入的专属实现、测试、旧说明和逐件来源见docs/archive/retired-imports-20261015/README.md及manifest.json；当前系统只保留过程资料导入。
+
+## 原系统付款计划退出（2026-10-15）
+
+付款计划页面、导入、编辑、强制通过和导出退出；原表核对由skill承接，复制单据号勾选归付款通知书页。原件与SHA见 [退役说明](retired-payment-plan-20261015/README.md)。旧数据库计划行本次保留，未物理删除。
+
+## uv依赖审计与迁移收尾（2026-10-16）
+
+已结项。原 .scratch/uv-dependency-cleanup/ 及本次 .scratch/local/ 初次审计资料共27份原件，来源、固定Git基线及逐件SHA-256见 [归档说明](uv-dependency-cleanup-20261016/README.md) 与同目录 manifest.json；原文字节保持（两份PS1仅补BOM、两份Python仅补模块说明，均可逆且原SHA仍保留），已移出当前工作区。现行声明与锁文件回 backend/pyproject.toml、backend/uv.lock，操作方法回 docs/guides/deployment.md §六。

@@ -74,7 +74,8 @@ def test_selected_beyond_display_cap_uses_actual_money(sample, monkeypatch):
             seen.append(name)
             return original(session, chosen)
         monkeypatch.setattr(module, name, spy)
-    created, message = pay(s, [a.id], plan_methods={a.bill_no: '承兑'})
+    a.planned_pay_method = '承兑'
+    created, message = pay(s, [a.id])
     assert created == [a.id] and '700.00' in message
     assert len(seen) == 3
     row = paid(s, [a.id])[-1]

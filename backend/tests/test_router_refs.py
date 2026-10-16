@@ -49,7 +49,6 @@ def test_导入类页面引用的暂存载具是同一份():
     from app.import_kit import api as impkit
     # ⚠️ 别名**别叫 `imp05` / `imp06`** —— 那两个名字是**已撤项**（旧页的壳侧动作，
     #   见 `audit_common.CANCELLED`）⇒ `T8` 会把这条测试当成"复活"报红（自测踩到）。
-    from app.mod04_plan import imp_spec as spec04
     from app.mod06_proc import imp_spec as spec06
 
     src = pathlib.Path(impkit.__file__).read_text(encoding="utf-8")
@@ -57,7 +56,7 @@ def test_导入类页面引用的暂存载具是同一份():
     # ⭐ 各域只许**声明 ＋ 钩子**：⛔ 谁在域里**另起一份暂存**，这条就红（"预览不写库"会裂成两处真源）。
     # ⚠️ 只认**真用法**（`import preview_store` / `preview_store.xxx`）—— 文件里**提到这个名字**很正常
     #   （注释在解释"载具只有这一份"），按字符串匹配会把好注释判红（自测踩到）。
-    for spec in (spec04, spec06):
+    for spec in (spec06,):
         text = pathlib.Path(spec.__file__).read_text(encoding="utf-8")
         assert "import preview_store" not in text and "preview_store." not in text, \
             f"{spec.__name__} 自带了暂存 —— ⛔ 载具只许一份"

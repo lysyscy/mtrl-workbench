@@ -3,7 +3,7 @@
 ## ⚠️ 这一片的性质：**不是"写新功能"，是"给已有的删除出口补判据"**
 
 取证（2026-09-20）发现：这条用例 8 个点原本 **0/8 全未绑定**，但**落点早就都在了** ——
-`mod04_plan.plan_ui.delete_impact` / `delete_rows` · `mod03_notice.notice_manual_actions.apply_manual_delete` ·
+`mod03_notice.notice_manual_actions.apply_manual_delete` ·
 `mod03_notice.rules_repository.delete_row` · `mod08_inv.domain.boundary_violations` …
 ⇒ 缺的只是**断言**（`§9.4` 那套分档从没被机器钉过）。
 
@@ -42,7 +42,6 @@ from app.core.errors import MustReportError
 from app.core.errors import MustReportError as _MRE       # noqa: F401  （显式见于断言）
 from app.mod03_notice import notice_manual_actions as NA
 from app.mod03_notice import rules_repository as RR
-from app.mod04_plan import plan_ui as U
 from app.mod08_inv import domain as I
 from tests.acc_plugin import acc
 
@@ -68,23 +67,15 @@ def _results() -> dict:
 
 @acc("ACC-X-DEL-001", "001-01")
 def test_删除前列出真实影响范围而不是占位():
-    """§7.2 / §9.4「删除前必须二次确认，且确认框里**列出影响范围**」。
+    from tests.m03_action_helpers import _client, _notice
+    client, fake = _client([_notice(11, is_manual=True, ph_id="MANUAL-11", bill_no="M11",
+                                  project_name="项目甲", stat_paid=Decimal("70")), _notice(12)])
+    impact = NA.manual_delete_impact(fake, 11)
+    assert impact['notice_id'] == 11 and impact['label'] == 'M11'
+    assert impact['project_name'] == '项目甲' and impact['stat_paid'] == '70.00'
+    assert '70.00' in impact['message'] and not fake.deleted
+    assert 'API.manualDeleteImpact(' in act_entry('ntDel')
 
-    ⚠️ 判据特别加的那半句是「**真实计数，不是占位**」——
-       因为"共 3 条"这种话**写起来最省事**，但它让确认框变成**走过场**：
-       人看不到"删的是哪几行、属于哪个月、审查结论是什么"，就没法真正判断该不该删。
-    ⇒ 所以这里逐字段核对，⛔ 不是只数条数。
-    """
-    rows, res = _rows(), _results()
-    impact = U.delete_impact(rows, [11, 13], res)
-
-    assert [i.row_id for i in impact] == [11, 13], "影响范围没逐行列出（或顺序不是表内顺序）"
-    assert [i.seq for i in impact] == [1, 3], "**行号**要按表内序号给（人靠它认行）"
-    assert [i.year_month for i in impact] == ["2026-08", "2026-09"], "所属年月要如实给"
-    assert [i.result for i in impact] == ["完全匹配", "完全匹配"], "审查结果要如实给（⛔ 不留空）"
-
-    # ⛔ 反面：没被选中的行**一条都不许**出现在影响范围里（那会吓到用户、也让人不敢删）
-    assert 12 not in [i.row_id for i in impact], "没选中的行混进了影响范围"
 
 
 # ---------------------------------------------------------- `001-04` 无删除入口
@@ -191,31 +182,16 @@ def test_手动行删除只删该行且清归属与勾选():
 
 @acc("ACC-X-DEL-001", "001-06")
 def test_只删选中行且未确认就拒():
-    """§4.3.6：「**必须先列出影响范围并确认**」＋「只删该行，其余行不受影响」。
+    from tests.m03_action_helpers import _client, _notice
+    from app.mod03_notice.models import PaymentNotice
+    a, b = _notice(11, is_manual=True, ph_id="MANUAL-11"), _notice(12)
+    client, fake = _client([a, b])
+    assert 'API.manualDelete(' not in act_entry('ntDel')
+    assert 'API.manualDelete(' in act_entry('ntDelOk')
+    row, message = NA.apply_manual_delete(fake, 11)
+    assert row is a and fake.deleted == [a]
+    assert fake.by_model[PaymentNotice] == [b] and b.bill_no == 'B12'
 
-    ⚠️ 两条缺一不可：只钉"删对了" ⇒ 不确认也能删；只钉"要确认" ⇒ 确认后可能删多了。
-    """
-    rows = _rows()
-
-    # ① **没确认 ⇒ 拒绝**（⛔ 不"默认确认"、也不"悄悄放行"）
-    with pytest.raises(MustReportError):
-        U.delete_rows(rows, [12], set(), confirmed=False)
-
-    # ② 多选删除：只删选中的那两行，剩下一行**一字不动**
-    kept, picked = U.delete_rows(rows, [11, 13], {11, 12, 13}, confirmed=True)
-    assert [r["id"] for r in kept] == [12], "删多了 / 删少了"
-    assert kept[0] == rows[1], "留下的那一行被改动了（删除不该碰其它行）"
-    assert rows[1] == {"id": 12, "year_month": "2026-08", "doc_no": "P002"}, "原数组被就地改了"
-
-    # ③ **勾选集同步收敛**：删掉的行不许还留在勾选里（否则汇总条会算上不存在的行）
-    assert picked == {12}, f"勾选没收敛：{picked}"
-
-    # ④ 逐行删除 = 单选，走的是**同一个出口**（⛔ 不许另写一条路）
-    kept1, _ = U.delete_rows(rows, [12], set(), confirmed=True)
-    assert [r["id"] for r in kept1] == [11, 13]
-
-    # ⑤ ⚠️ 本动作**只影响付款计划表**（§4.3.6）—— 碰了别的表就是越界
-    assert U.AFFECTED_TABLES == ("plan_row",), f"删除的影响面被放大了：{U.AFFECTED_TABLES}"
 
 
 # ---------------------------------------------------------- `001-03` 账号软删（等 m15 的那条）

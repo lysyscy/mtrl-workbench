@@ -2,7 +2,7 @@
 """`TAIL-69` 反向灵敏度 —— 证明「**预览不写库**」判据真的有牙。
 
 变异：往**通用面**的 `POST /api/imp/{域}/preview` 里塞一次 `hooks.commit(...)`
-（= 预览阶段就落库）⇒ `test_imp_m04_api.py::test_通用面预览阶段不写库_且坏token显式报错` 必须红；
+（= 预览阶段就落库）⇒ `test_imp_m06_api.py::test_通用面预览阶段不写库_且坏token显式报错` 必须红；
 跑完**逐字节复原**。
 ⛔ 不变异 `commit` 端点（它本来就该写库 —— 变异错了对象只会得到假绿）。
 
@@ -25,7 +25,7 @@ os.environ.setdefault("ACC_RESULTS_PATH", "../artifacts/_mut_acc_results.json")
 sys.stdout.reconfigure(encoding="utf-8")
 REPO = pathlib.Path(r"D:\dev\mtrl-workbench")
 TARGET = REPO / "backend" / "app" / "import_kit" / "api.py"
-CASE = "tests/test_imp_m04_api.py::test_通用面预览阶段不写库_且坏token显式报错"
+CASE = "tests/test_imp_m06_api.py::test_通用面预览阶段不写库_且坏token显式报错"
 orig = TARGET.read_bytes()
 
 # ⭐ 变异锚 = 预览端点收尾那两行之前（在此塞一次真正的落库 ⇒ 预览阶段真的写了一笔）

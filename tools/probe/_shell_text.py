@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 #: 逐页走一遍（与侧栏 `NAV` 一一对应；⚠️ `m12` 已撤页、不在侧栏）
-PAGES: tuple[str, ...] = ("home", "m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08",
+PAGES: tuple[str, ...] = ("home", "m01", "m02", "m03", "m05", "m06", "m07", "m08",
                           "m09", "m10", "m11", "m14", "m15", "set", "imp")
 
 SCAN = r"""

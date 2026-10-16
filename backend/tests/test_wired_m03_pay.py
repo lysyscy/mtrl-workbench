@@ -6,7 +6,7 @@
 
   · `ACC-PAY-BATCH-001/001-01` 存在不可付行 ⇒ 「确认付款」**直接禁用** ＋ 原因 ＋ 解决路径
   · `ACC-PAY-BATCH-001/001-02` **本次应付为 0** 也不可付（不是"点了才拦"）
-  · `ACC-PAY-BATCH-001/001-03` 付款方式**默认取付款计划**、取不到兜底「现汇」
+  · `ACC-PAY-BATCH-001/001-03` 付款方式**默认取通知书拟付款方式**、取不到兜底「现汇」
   · `ACC-PAY-BATCH-001/001-04` **撤单行与剔除行**不得进入付款（准入判据唯一出口 `ntPayCand`）
   · `ACC-PAY-BATCH-001/001-05` 「移出本次付款」**只去掉该行**（并同时取消它的勾选）
   · `ACC-PAY-BATCH-001/001-06` 移出后**其它行已填的方式 / 金额仍在**（R14③）
@@ -135,8 +135,8 @@ def test_壳里本次应付为0也不可付():
 
 
 @acc("ACC-PAY-BATCH-001", "001-03")
-def test_付款方式默认取付款计划取不到兜底现汇():
-    """§4.4.2 的**唯一出口** `notice_pay_actions.default_pay_method`：先取付款计划的值、取不到兜底「现汇」。
+def test_付款方式默认通知书拟方式未填时现汇():
+    """默认取通知书拟方式，未设置时兜底「现汇」。
 
     ⚠️ 「取计划」那半边原先只在旧页的 `test_notice_pay.py` 里；那件随页删除 ⇒ 这里守住纯函数本身
        （API 那半边＝"缺省时兜底现汇"由 `test_notice_action_api.py` 的用例守着）。
@@ -144,12 +144,10 @@ def test_付款方式默认取付款计划取不到兜底现汇():
     # ⚠️ 2026-09-21（`T5` 拆分）：自 `notice_actions` 挪进 `notice_pay_actions` —— **判定一行未变**。
     from app.mod03_notice.notice_pay_actions import default_pay_method
 
-    assert default_pay_method("D1", {"D1": "承兑"}) == "承兑", "取不到计划值"
-    assert default_pay_method("D2", {"D1": "承兑"}) == "现汇", "计划里没有该单据号时没兜底「现汇」"
-    assert default_pay_method("", {}) == "现汇" and default_pay_method("D3", None) == "现汇"
-    # 壳侧：默认值同样是从计划取、取不到「现汇」（与上面同一口径）
-    assert "const plan=PLs.find(pl=>pl.docNo===n.code), dm=plan?plan.method:'现汇';" in _batch_pay(), \
-        "壳里没按「先取计划、兜底现汇」定默认付款方式"
+    assert default_pay_method("供应链") == "供应链"
+    assert default_pay_method("承兑") == "承兑"
+    assert default_pay_method("") == "现汇"
+
 
 
 # ---------------------------------------------------------------- 不进付款的行（§4.2.7 / §4.2.2）

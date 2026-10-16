@@ -32,7 +32,7 @@ def test_首次展开筛选不重画业务表(ui_page, count, action):
 
 
 @acc()
-@pytest.mark.parametrize('view,action', [('m04','plPjToggle'),('m05','flPjToggle'),('m08','invWhToggle'),('m11','jcPjToggle')])
+@pytest.mark.parametrize('view,action', [('m05','flPjToggle'),('m08','invWhToggle'),('m11','jcPjToggle')])
 def test_各页项目筛选复用局部更新(ui_page, view, action):
     p = ui_page
     p.evaluate('''view=>{

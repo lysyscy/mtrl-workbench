@@ -141,8 +141,6 @@ RULES: list[tuple[str, int, str, str, int]] = [
     ("backend/app/web/shell/print-export.js", 13, "这些行缺少后端 id ⇒ 请先刷新页面再试", "这些行还没载全 ⇒ 请先刷新页面再试", 1),
     ("backend/app/web/shell/print-export.js", 64, "<b>下载没能开始</b>：后端没给下载地址", "<b>下载没能开始</b>：系统没有给出下载地址", 1),
     # ── ⑧ 后端 · 导入域自报 / 报错（会直接上屏）────────────────────────────
-    ("backend/app/mod04_plan/imp_spec.py", 90,
-     "没有一行可落库的数据 —— 该月未被改动（不写库）", "没有一行能写入的数据 —— 该月未被改动（没有写入）", 1),
     ("backend/app/mod05_flow/imp_spec.py", 53, "、**不落库**）", "、**不写入**）", 1),
     ("backend/app/mod05_flow/imp_spec.py", 198,
      "没有一行可落库的数据 —— 流水未被改动（不写库）。", "没有一行能写入的数据 —— 流水未被改动（没有写入）。", 1),

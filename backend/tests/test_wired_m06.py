@@ -48,7 +48,7 @@ def test_机械值来自后端且boot会拉():
         DEP_BEFORE as _DEP, loaders as _loaders, page_load as _pl,
     )
     assert "机械 6 列" in _loaders(), "机械值没有取数出口"
-    for page in ("m04", "m05", "m06", "m07"):
+    for page in ("m05", "m06", "m07"):
         assert "机械 6 列" in _pl()[page], f"`PAGE_LOAD['{page}']` 没拉机械值"
     assert "机械 6 列" in _DEP["付款域"], "`付款域` 不再等机械值（m05 的机械欠款会取到空）"
 

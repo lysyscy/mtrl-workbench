@@ -23,19 +23,11 @@ x MOD-03.md L27 批量改分类（含手改分类的保护规则）             
 x MOD-03.md L28 恢复剔除（须勾选）                                            → ACC-PAY-CAT-001
 x MOD-03.md L29 手动新增通知书行（只对手动行可编辑 / 删除）                    → ACC-PAY-MANUAL-001
 x MOD-03.md L30 再次导入的合并 · 越界提醒 · i8 撤单退出统计                    → ACC-PAY-MERGE-001
-x MOD-03.md L31 「按本月计划勾选」（按钮在本页；计划本身属 MOD-04）            → ACC-PAY-PICK-001
 x MOD-03.md L33 批量付款（操作方式）                                          → ACC-PAY-BATCH-001
 x MOD-03.md L34 操作列：撤销付款 · 查看关联（只读反查）                        → ACC-PAY-ACTION-001
 x MOD-03.md L39 集采付款的特殊处理（DEV-P-05：集采付款走付款计划；本页是执行侧）← 用户 2026-09-16 裁定「本页也不做，先回问业务方」；末列已认领 `ACC-JC-PAY-001` ⇒ 记已清
-x MOD-04.md L26 计划 Excel 导入（导入弹窗内先选月份）                          → ACC-PLAN-IMPORT-001
-x MOD-04.md L27 「项目」列按展示名 / 仓库名唯一匹配项目档案                    → ACC-PLAN-IMPORT-001
-x MOD-04.md L28 列表内可手改列（付款时间 / 付款方式 / 备注）                   → ACC-PLAN-NODOC-001 · ACC-PLAN-UI-001
-x MOD-04.md L31 审查结果筛选：判定为多种，界面筛选按两档归并                   → ACC-PLAN-UI-001
 # MOD-04.md L32 审查后的产出 —— 「按计划勾选」的按钮落在 MOD-03 页；本页只留指路 → 2026-09-24 **转 `T7_EXEMPT`**（末列无 `ACC-`；主人是 `MOD-03` 执行侧判据，本行不含新判据）
 # MOD-04.md L33 历史保留 → 2026-09-24 **转 `T7_EXEMPT`**（标注「历史保留」⇒ 无系统能力可断言）
-x MOD-04.md L34 列表内逐行删除 + 行多选批量删除                               → ACC-PLAN-UI-001
-x MOD-04.md L35 生效窗口规则（窗口外先禁用，不是点了才拦）                     → ACC-PLAN-UI-001
-x MOD-04.md L36 实际执行偏离的处理                                            → ACC-PLAN-UI-001
 x MOD-05.md L26 付款流水列表（一次付款一条流水；多次付款各记一条）             → ACC-FLOW-LIST-001
 x MOD-05.md L27 撤销付款流水（按流水号 · 必填原因；撤销后该笔退出统计）        → ACC-FLOW-LIST-001
 x MOD-05.md L28 「按项目看欠款」（左辅材 / 右机械左右并列）                    → ACC-FLOW-DEBT-001

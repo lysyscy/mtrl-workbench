@@ -20,7 +20,7 @@ from app.mod02_i8.fetch_task import (
 from app.mod02_i8.models import RunRecord
 from tests.acc_plugin import acc
 
-_REQS = Path(__file__).resolve().parents[1] / "requirements.txt"
+_PROJECT = Path(__file__).resolve().parents[1] / "pyproject.toml"
 
 
 @acc("ACC-I8-FETCH-001", "001-01")
@@ -68,7 +68,7 @@ def test_抓取手动触发确认后关闭弹窗():
     assert MANUAL_ONLY is True
     assert CONFIRM_CLOSES_DIALOG is True
     # 防回归：本工程**无任何定时任务** ⇒ 依赖里不得出现调度器
-    assert "apscheduler" not in _REQS.read_text(encoding="utf-8").lower()
+    assert "apscheduler" not in _PROJECT.read_text(encoding="utf-8").lower()
 
 
 @acc("ACC-I8-FETCH-001", "001-06")

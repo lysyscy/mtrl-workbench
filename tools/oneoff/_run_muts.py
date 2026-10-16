@@ -193,9 +193,6 @@ KEEP_OUT: dict[str, str] = {
     "_mut_m03act.py": "靶＝`tests/test_wired_m03_action.py` · 业务面",
     "_mut_m03list.py": "靶＝`tests/test_wired_m03_list.py` · 业务面",
     "_mut_m03pay.py": "靶＝`tests/test_wired_m03_pay.py` · 业务面",
-    "_mut_m03pick.py": "靶＝`tests/test_wired_m03_pick.py` · 业务面",
-    "_mut_m04forms.py": "靶＝m04 强制通过 · 业务面",
-    "_mut_m04wired.py": "靶＝`tests/test_wired_m04.py` · 业务面",
     "_mut_m05wired.py": "靶＝`tests/test_wired_m05.py` · 业务面",
     "_mut_m06wired.py": "靶＝`tests/test_wired_m06.py`（`MOD-06` 机械源接线）· 业务面",
     "_mut_m07bal.py": "靶＝结余录入片 · 业务面",
@@ -227,7 +224,6 @@ KEEP_OUT: dict[str, str] = {
     "_mut_stale.py": "靶＝`tests/test_wired_boot.py::跨页写动作后全标脏` · 业务面",
     "_mut_tail04.py": "靶＝`TAIL-04` 导出切片 · 业务面",
     "_mut_tail04_pages.py": "靶＝`TAIL-04` 最后两页 ＋ `exp` 真分发 · 业务面",
-    "_mut_tail35.py": "靶＝`TAIL-35`（m04 导入 ＋ 手动行）· 业务面",
     "_mut_tail43.py": "靶＝`TAIL-43` 六处断言 · 业务面",
     # ⚠️ 2026-10-10（迁移复核轮）：这四支同批由外部 agent 新写（2026-10-09/10）且**漏登记**，
     #   按 `TAIL-237` 的按需口径归此处 —— 靶都是 `TAIL-269～273` 的**业务面判据**，且每处变异

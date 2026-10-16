@@ -29,7 +29,7 @@ import app.models_registry  # noqa: E402, F401
 #    与 `voidJoint`（i8 已撤单但仍有牵涉 ⇒ 账不准）；两者都去付款通知书页（`m03`）。
 # ⚠️ 这张表**必须与壳里的瓦片顺序逐字一致**（顺序即契约）—— 当初就因为它写死 4 项、而壳里加了 2 项，
 #    这句"等 4 张"的等待条件直接把真机自检**挂到超时**（本次实测踩到）。
-KEYS = ["ownership", "planUnmatched", "placeholder", "jcUnlinked", "voidJoint", "fetchDue"]
+KEYS = ["ownership", "placeholder", "jcUnlinked", "voidJoint", "fetchDue"]
 
 
 def check(page, errors: list[str]) -> None:

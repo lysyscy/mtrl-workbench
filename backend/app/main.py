@@ -36,7 +36,6 @@ from app.mod02_i8.router import router as mod02_router
 from app.mod03_notice.page import DEFAULT_THEME as _DEFAULT_THEME
 from app.mod03_notice.notice_api_router import api_router as mod03_api_router
 from app.mod03_notice.router import router as mod03_router
-from app.mod04_plan.router import router as mod04_router
 from app.mod05_flow.router import router as mod05_router
 from app.mod06_proc.router import router as mod06_router
 from app.mod07_setl.router import router as mod07_router
@@ -294,8 +293,7 @@ def create_app() -> FastAPI:
     #    ⛔ 此前的「本文件永远保留 / 用户裁定 A」是**张冠李戴**（裁定的对象是**前端形态**：
     #    保留后端托管单页 MVP · 不启用 Vue3 工程），2026-09-18 已当场更正 ⇒ 归入删除范围。
     app.include_router(mod03_api_router)
-    # MOD-04 起：页面也由模块路由**服务端渲染**（`/m04` 在本 router 内，不走 _PAGES 静态托管）
-    app.include_router(mod04_router)
+    # 系统付款计划已退出；原表核对由skill承接。
     # MOD-05 同款：`/m05` · `/m05/debt` · `/m05/ledger` · `/m05/stats` 都在本 router 内
     app.include_router(mod05_router)
     # MOD-08 起：报表域页面同样服务端渲染（`/m06` 过程资料 · `/m07` 收发结存 · `/m08` 库存单据）

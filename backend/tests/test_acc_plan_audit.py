@@ -1,4 +1,4 @@
-"""`ACC-PLAN-AUDIT-001`（付款计划审查引擎）10 个判据点的验收断言。"""
+"""`ACC-PLAN-AUDIT-001`（付款计划审查引擎）5 个纯规则判据点的验收断言。"""
 
 from __future__ import annotations
 
@@ -20,8 +20,6 @@ from app.mod04_plan.domain import (
     NoticeAmounts,
     audit_rows,
     bucket,
-    cancel_force,
-    force_through,
 )
 from app.mod04_plan.models import EDITABLE_COLUMNS, PlanRow
 from tests.acc_plugin import acc
@@ -103,58 +101,3 @@ def test_同月同单据号两行都判重():
         row(year_month="2026-09", doc_no="DOC-2", flow_amount="500", planned_amount="0"),
     ]
     assert R_DUPLICATE not in audit_rows(cross, n)
-
-
-@acc("ACC-PLAN-AUDIT-001", "001-06")
-def test_筛选只归并两档():
-    assert FILTER_BUCKETS == ("全部", BUCKET_MATCHED, BUCKET_UNMATCHED)
-    assert bucket(R_MATCHED) == BUCKET_MATCHED
-    # 不逐种列出：只有两档（+全部）
-    assert len([b for b in FILTER_BUCKETS if b != "全部"]) == 2
-
-
-@acc("ACC-PLAN-AUDIT-001", "001-07")
-def test_未匹配等于除完全匹配外全部():
-    for r in (R_AMOUNT_MISMATCH, R_DOC_NOT_FOUND, R_NO_DOC, R_DUPLICATE, R_OVER_UNPAID):
-        assert bucket(r) == BUCKET_UNMATCHED
-
-
-@acc("ACC-PLAN-AUDIT-001", "001-08")
-def test_审查结果筛选生效可见行数等于独立复算():
-    from app.mod04_plan.domain import audit_row, duplicate_keys
-
-    n = _notices()
-    rows = [
-        row(year_month="2026-07", doc_no="DOC-1", flow_amount="1000", planned_amount="800"),  # 完全匹配
-        row(year_month="2026-08", doc_no="DOC-1", flow_amount="999", planned_amount="1"),     # 金额不符
-        row(year_month="2026-08", doc_no="", flow_amount="1", planned_amount="1"),            # 无单据号
-    ]
-    results = audit_rows(rows, n)
-    # **独立复算**（不借 audit_rows 自证）：逐行调用 + 单独算判重键
-    dup = duplicate_keys(rows)
-    independent = [audit_row(r, n, dup) for r in rows]
-    assert results == independent
-    for target in (BUCKET_MATCHED, BUCKET_UNMATCHED):
-        visible = [r for r, res in zip(rows, results) if bucket(res) == target]
-        recount = [r for r, res in zip(rows, independent) if bucket(res) == target]
-        assert len(visible) == len(recount)
-
-
-@acc("ACC-PLAN-AUDIT-001", "001-09")
-def test_强制通过必须留备注且取消后清空():
-    with pytest.raises(MustReportError):
-        force_through("")
-    f = force_through("项目已口头确认，允许放行")
-    assert f["forced_through"] is True and f["forced_remark"] == "项目已口头确认，允许放行"
-    # 取消 ⇒ 回到原判定（判定本身由 audit 现算，不受影响）且**备注清空**（不留残余）
-    c = cancel_force()
-    assert c["forced_through"] is False and c["forced_remark"] == ""
-
-
-@acc("ACC-PLAN-AUDIT-001", "001-10")
-def test_行内可改列立刻落库且不留痕():
-    assert EDITABLE_COLUMNS == ("pay_date", "pay_method", "remark")
-    import app.mod04_plan.models as m
-
-    # 该模块**不存在**付款计划的行级留痕表（这几处改动不属 §9.3 留痕范围）
-    assert not any("Log" in name for name in dir(m))

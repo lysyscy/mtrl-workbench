@@ -46,11 +46,11 @@ CASE = "ACC-HOME-TODO-001"
 #:    每一项都必须**有本域出口 · 能点去对应页 · 不许写死数字**。
 #: ⚠️ 顺序即契约（= 页面渲染顺序）：两个新把手**插在 `fetchDue` 之前** —— 前面几项都是「有具体东西要办」，
 #:    而「本月抓取」更像**例行状态**（已抓就绿）。⛔ 改顺序要**同批改壳里的瓦片顺序**，否则本件必红。
-KEYS = ("ownership", "planUnmatched",
+KEYS = ("ownership",
         "placeholder", "jcUnlinked", "voidJoint", "fetchDue")
 
 #: 每项的去向页（`data-k`）—— 新加两项都去 `m03`（付款通知书页：关联合同 / 撤销付款 / 解绑都在那）
-DEST = {"ownership": "m03", "planUnmatched": "m04",
+DEST = {"ownership": "m03",
         "placeholder": "m01", "fetchDue": "m02",
         "jcUnlinked": "m03", "voidJoint": "m03"}
 # ⚠️ 上面这张表里若还留着已删瓦片的条目（如 `ntUnapproved`），那是**惰性残留** —— 001-03 只按
@@ -114,7 +114,7 @@ def test_每项数字都来自数据源不得写死():
     # ⚠️ 2026-09-28（看板清账）：`ntUnapproved` / `dfPending` 两个瓦片已删 ⇒ 从本表去掉；
     #    claim 不变：**留下的每一项**都取自本域出口（⛔ 不许本页另算中间量）。
     want_expr = {
-        "ownership": "nOwn", "planUnmatched": "nPl",
+        "ownership": "nOwn",
         "placeholder": "ph.length",
         "jcUnlinked": "nNoLink", "voidJoint": "nVoidJ",
     }
@@ -128,7 +128,6 @@ def test_每项数字都来自数据源不得写死():
     for line in (
         "nUn=NO.filter(n=>ntLive(n)&&n.astat==='未批').length;",
         "const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;",
-        "const nPl =PLs.filter(p=>plRev(p,PLs)!=='完全匹配').length;",
         "const nAdj=IVs.filter(iv=>adjOf(iv)).length;",
         "const ph=PJs.filter(p=>p.name.startsWith('未建仓-'));",
         # ⭐ 2026-09-28 新增两项：口径**必须**走本域唯一出口（`ntJcUnlinked` / `ntVoidJoint`），
@@ -174,13 +173,6 @@ def test_归属待判定计壳且未定具体小微():
 
 
 # ----------------------------------------------------------------- 001-08
-@acc(CASE, "001-08")
-def test_计划未匹配走本域审查出口():
-    """⭐ 「计划未匹配」的判定**回 `MOD-04`**（`plRev`），⛔ 本页不另算一套。"""
-    block = _home()
-    assert "const nPl =PLs.filter(p=>plRev(p,PLs)!=='完全匹配').length;" in block
-    # 反向：不许在本页重写审查判定（出现 `audit`/`完全匹配` 的另起写法即红）
-    assert "audit_rows" not in block, "本页自己实现了审查判定 —— 应回 MOD-04 的出口"
 
 
 # ----------------------------------------------------------------- 001-09
@@ -281,7 +273,7 @@ def test_抓取到期与失败取自执行记录(monkeypatch):
                  "function runFailInfo(rec) {"):
         assert line in SHELL, f"壳里少了这条代码（⛔ 注释里写着不算）：{line}"
     assert "RUNLOG" not in _home(), "`V.home` 又读起了写死的演示记录数组"
-    assert "home: ['付款通知书', '项目档案', '付款计划', '看板计数']," in SHELL, \
+    assert "home: ['付款通知书', '项目档案', '看板计数']," in SHELL, \
         "看板没把记账这一路加进取数表"
     # ⚠️ **补盲区**：上面两条用的是 `_Sess` 桩件，而桩件的 `execute()` **直接返一个数**
     #    ⇒ 那句 SQL（按 run_type / status / **本月**筛）在桩件下**永远是对的**。
