@@ -71,8 +71,7 @@ DUP_FAMILIES: tuple[DupFamily, ...] = (
             ("backend/app/mod06_proc/importer.py", "_money_or_none"),
             ("backend/app/mod08_inv/router.py", "_money"),
             ("backend/app/mod09_fee/domain.py", "money_text"),
-            ("backend/app/report_export/fl_export.py", "_money"),
-            ("backend/app/report_export/jc_export.py", "_money"),
+            # fl/jc 的闲置副本已删除，实际导出沿用 naive_export.money。
             ("backend/app/report_export/setl_export.py", "fmt_num"),
             ("backend/app/report_export/xl_common.py", "fmt_num"),
             ("backend/app/report_export/xl_common.py", "norm_num"),

@@ -36,9 +36,6 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
-from io import BytesIO
-
 #: 导出的列（**顺序 = 页面表头 `FL_THEAD` 顺序**去掉「操作」）⇒ 14 列，导出的表与屏幕**并排看能对上**。
 COLUMNS: tuple[tuple[str, str], ...] = (
     ("流水号", "flow_no"),
@@ -66,16 +63,6 @@ MONEY_KEYS: frozenset[str] = frozenset({"amount", "amount_approved"})
 TOTAL_KEYS: frozenset[str] = frozenset({"amount"})
 
 SHEET_NAME = "付款流水"
-
-
-def _money(v) -> float | None:
-    """金额 ⇒ `float`（⛔ 空的**留空**，不写 0 —— "没这个数"与"是 0"是两件事）。"""
-    if v in (None, ""):
-        return None
-    try:
-        return float(Decimal(str(v)))
-    except Exception:                       # noqa: BLE001 —— 认不出就当空（⛔ 不抛，别为一行毁整表）
-        return None
 
 
 def build_xlsx(rows: list[dict], total_rows: list[dict] | None = None,

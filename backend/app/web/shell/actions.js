@@ -640,48 +640,13 @@ const ACT={
       <div class="tip" style="margin:0">刷新各项目该月源数据，手工值与调整单不被覆盖。</div>`,
      footer:foot}); },
  fetchNtOk:()=>{ const k=fetchKind, m=fetchM, from=m+'-01', to=monthEnd(m);
-   /* ⭐ **接线（`TAIL-29`-② ④）**：付款通知书走**真抓**（后端 `/api/m03/notices/fetch`）；
-      `wh` / `iv` 两条（材料域）仍走原型演示逻辑 —— 它们还没接线，别在这里假装成功。 */
+    /* 三类抓取均交给对应后端动作。 */
    if(k==='nt') return ntFetchBackend(m);
    if(k==='iv') return ivFetchBackend(m);
    if(k==='wh') return whFetchBackend(m);   /* ⭐ 收发结存已接后端；`nt` 走 `/api/m03/notices/fetch`（见 fetchNtOk） */
    const NM={nt:'付款通知书',wh:'收发结存表',iv:'库存单据明细表'}[k]||'付款通知书';
    const apiCode={nt:'API-01',wh:'API-02',iv:'API-03'}[k]||'API-01';
    closeModal();
-   if(k==='nt'){ const hit=NO.filter(n=>n.date>=from&&n.date<=to);
-     /* ⭐ 再次导入的合并（§4.2.7 · 方案乙）：**模拟 i8 那边"这一批的单据有改动"** ——
-        演示数据里 N05 的 i8 审批金额被调小（用来触发"越界提醒"），N08 未被手改（用来触发"跟随"）。
-        ⚠️ 演示数据是**自造**的：`IMP_DEMO` 模拟"本次 i8 返回的源值"，只对**已存在的抓取范围**生效。 */
-     const changed=[], warned=[], followed=[];
-     hit.forEach(n=>{
-       const newAp=impDemoAp(n);                    /* 模拟 i8 本次返回的审批金额（见下） */
-       if(newAp==null||N2(newAp)===N2(n.approve)) return;
-       const wasMan=impManSS(n)||impManSP(n);
-       const msgs=impMerge(n,{approve:newAp,pay:n.pay});
-       if(msgs.length) warned.push(n.code||n.id);
-       else if(wasMan) changed.push(n.code||n.id);
-       else followed.push(n.code||n.id);
-     });
-     /* ⭐ i8 撤单：演示里把**两行**当作 i8 本轮不再返回（标 IMP_GONE、不硬删），覆盖两个分叉：
-        · `N19` —— **有牵涉**（已挂付款流水 F9）⇒ 硬拦、仍参与统计、带警示
-        · `N24` —— **无牵涉**（无流水无关联）⇒ 正常退出统计
-        口径（§4.2.7 定案 2026-09-14）：i8 侧**真删**了该单据 ⇒ 标「i8 已撤单」保留可查，
-        但**退出全部统计**；单据号必变 ⇒ 撤单标记 = **终态**（不做"下次抓回来自动复原"）。
-        ⚠️ 有牵涉（已挂付款流水 / 集采关联）⇒ **硬拦**：不许静默退出统计，提示"请先撤销付款 / 解绑关联"。 */
-     const GONE_DEMO=['N19','N24'];
-     GONE_DEMO.forEach(gid=>{ const gn=NO.find(n=>n.id===gid);
-       if(gn&&!gn.manual&&!impHasGone(gn)) IMP_GONE[gn.id]={date:gn.date,code:gn.code,doc:gn.doc}; });
-     render();
-     const gw=Object.keys(IMP_WARN).length, gg=Object.keys(IMP_GONE).length;
-     const gv=NO.filter(ntVoid), gBlocked=gv.filter(ntVoidJoint), gFree=gv.filter(n=>!ntVoidJoint(n));
-     return toast(`已按 <b>${m}</b> 抓取付款通知书：传入 i8 的入参 = <span class="fc">单据日期 ${from} ~ ${to}</span>（闭区间）→ <b>${hit.length}</b> 条<br>`
-       + `<b>再次导入的合并（方案乙）</b>：未手改的统计金额<b>跟随</b>新审批金额 <b>${followed.length}</b> 条`
-       + `${changed.length?` · 已手改<b>保留人工值</b> ${changed.length} 条`:''}`
-       + `${warned.length?`<br><span style="color:var(--wn)">⚠️ <b>${warned.length}</b> 条人工值越界（已保留原值、挂提醒）：${warned.slice(0,3).map(esc).join(' · ')}${warned.length>3?' …':''}</span>`:''}`
-       + `${gg?`<br>⚠️ <b>i8 已撤单 ${gg} 条</b> —— 其中 <b>${gFree.length}</b> 条<b>已退出全部统计</b>（保留可查、终态不可复原，切「分类 = 剔除」可见）`
-            + `${gBlocked.length?`；<b>${gBlocked.length}</b> 条<b>有牵涉 · 已硬拦</b>（仍参与统计）：请先<b>撤销付款 / 解绑关联</b>，处理完它才退出统计`  :''}`
-            + `<br><span class="mut sm">i8 行是源数据、永不删除 —— 排除撤单靠的是「退出统计」（§4.2.7）</span>`:''}`
-       + `<br><span class="mut sm">旁路值（分类 / 集采实际供应商 / 调整单）不被覆盖</span>`,7200); }
    toast(`已按 <b>${m}</b> 抓取 ${NM}（${apiCode}）：入参 = <span class="fc">核算年月 ${m}</span> → 单据日期 ${from} ~ ${to}（闭区间）＋ <b>项目（按信息化编号筛）</b><br>该月源数据已全量刷新；<b>调整单 / 手工值不被覆盖</b>`,5600); },
   /* 批量改分类（重做）：勾选 → 点一次「→ 辅材 / → 机械 / → 集采」即完成，不再走弹窗
      ⭐ 改为「集采」时顺带**自动匹配供应商**（§6.6.3 触发时机）；离开集采时清空待确认标记 */

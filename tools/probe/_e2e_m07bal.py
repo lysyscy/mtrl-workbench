@@ -6,12 +6,12 @@
   ② `POST /api/m07/extract/balance` 录一个结余 ⇒ 回执 `ok=True`；
   ③ 非法输入（`abc` / 负数）⇒ **被拒且原值不变**；
   ④ 导出成品 → 用 `openpyxl` 读回该格 = 刚录的数（**成品里真的带上了**）；
-  ⑤ 清空（`raw=""`）⇒ 再导出 ⇒ 该格**如实留空**（⛔ 不是 0）；
-  ⑥ **直查库**：`weldgas_balance` 归零（跑完不留痕迹）。
+  ⑤ 锁行清理本次结余 ⇒ 再导出 ⇒ 该格**如实留空**（⛔ 不是 0）；
+  ⑥ **直查库**：目标结余键回到基线（跑完不留痕迹）。
 
-⚠️ 本脚本**会写库**，但**跑完必复原**；`PASS/FAIL` 逐条打印，末尾给 rc（有 FAIL ⇒ 1）。
+⚠️ 本脚本**会写库**，只能在独占维护窗口运行；异常时尝试恢复，恢复失败必须报红；`PASS/FAIL` 逐条打印，末尾给 rc（有 FAIL ⇒ 1）。
 
-用法： backend/.venv/Scripts/python.exe tools/_e2e_m07bal.py
+用法： backend/.venv/Scripts/python.exe tools/probe/_e2e_m07bal.py
 """
 from __future__ import annotations
 
@@ -91,15 +91,42 @@ def balance_of(content: bytes, sheet: str, warehouse: str):
     raise AssertionError(f"成品 [{sheet}] 里找不到仓库 `{warehouse}`")
 
 
-def db_count() -> int:
-    """直查库（只读）：`weldgas_balance` 行数。"""
-    from sqlalchemy import func, select
+_MISSING = object()
+
+
+def balance_value(kind: str, warehouse: str):
+    """读取一个精确的「类别 × 仓库」结余键；不存在与 0 分开。"""
+    from sqlalchemy import select
 
     from app.core.db import session_scope
     from app.mod07_setl.models import WeldGasBalance
 
     with session_scope() as s:
-        return int(s.execute(select(func.count()).select_from(WeldGasBalance)).scalar() or 0)
+        row = s.execute(
+            select(WeldGasBalance).where(
+                WeldGasBalance.kind == str(kind),
+                WeldGasBalance.warehouse_name == str(warehouse),
+            )
+        ).scalars().first()
+        return _MISSING if row is None else Decimal(str(row.amount))
+
+
+def restore_balance_if_owned(*, kind: str, warehouse: str, expected) -> bool:
+    """锁行比较后只删除本次新建结余，不覆盖并发值。"""
+    from sqlalchemy import select
+    from app.core.db import session_scope
+    from app.mod07_setl.models import WeldGasBalance
+
+    with session_scope() as s:
+        row = s.execute(select(WeldGasBalance).where(
+            WeldGasBalance.kind == kind, WeldGasBalance.warehouse_name == warehouse,
+        ).with_for_update()).scalars().first()
+        if row is None:
+            return False
+        if Decimal(str(row.amount)) != expected:
+            raise RuntimeError(f"结余键 {kind}/{warehouse} 已被其他值改动，停止恢复以免覆盖")
+        s.delete(row)
+    return True
 
 
 def main() -> int:
@@ -110,38 +137,57 @@ def main() -> int:
     url = "/api/m07/extract/export?" + urllib.parse.urlencode({"status": "全部", "period": ym})
     print(f"样本（现读现取）：核算月 {ym} · 仓库 {wh} · 工作表 {sheet}\n")
 
-    ck("起点：库里没有结余记录（干净）", db_count(), 0)
+    baseline = balance_value("焊材", wh)
+    ck("起点：目标结余键没有记录（干净）", baseline is _MISSING, True)
+    if baseline is not _MISSING:
+        print("  ⛔ 目标键已有真实结余，立即停止，不覆盖")
+        return 1
+    if balance_value("焊材", wh) != baseline:
+        ck("写入前目标结余键仍保持基线", False)
+        return 1
 
-    # ① 录一个
-    r = post_json("/api/m07/extract/balance", {"kind": "焊材", "warehouse": wh, "raw": "1234.56"})
-    ck("录入回执 ok", r.get("ok"), True)
-    ck("录入回执 value", str(r.get("value")), "1234.56")
-    ck("库里长出一行", db_count(), 1)
+    try:
+        # ① 录一个
+        r = post_json("/api/m07/extract/balance", {"kind": "焊材", "warehouse": wh, "raw": "1234.56"})
+        ck("录入回执 ok", r.get("ok"), True)
+        ck("录入回执 value", str(r.get("value")), "1234.56")
+        ck("目标键写入", balance_value("焊材", wh), Decimal("1234.56"))
 
-    # ② 读端点带上它
-    ex = get_json("/api/m07/extract")
-    ck("读端点带上该值", (ex.get("balances") or {}).get("焊材", {}).get(wh), "1234.56")
+        # ② 读端点带上它
+        ex = get_json("/api/m07/extract")
+        ck("读端点带上该值", (ex.get("balances") or {}).get("焊材", {}).get(wh), "1234.56")
 
-    # ③ 非法输入被拒、原值不变
-    for bad in ("abc", "-1"):
-        rb = post_json("/api/m07/extract/balance", {"kind": "焊材", "warehouse": wh, "raw": bad})
-        ck(f"非法输入 {bad!r} 被拒", rb.get("ok"), False)
-        ck(f"非法输入 {bad!r} 带中文原因", bool(rb.get("message")), True)
-    ex = get_json("/api/m07/extract")
-    ck("非法输入后原值不变", (ex.get("balances") or {}).get("焊材", {}).get(wh), "1234.56")
+        # ③ 非法输入被拒、原值不变
+        for bad in ("abc", "-1"):
+            rb = post_json("/api/m07/extract/balance", {"kind": "焊材", "warehouse": wh, "raw": bad})
+            ck(f"非法输入 {bad!r} 被拒", rb.get("ok"), False)
+            ck(f"非法输入 {bad!r} 带中文原因", bool(rb.get("message")), True)
+        ex = get_json("/api/m07/extract")
+        ck("非法输入后原值不变", (ex.get("balances") or {}).get("焊材", {}).get(wh), "1234.56")
 
-    # ④ 导出 → 成品里真的带上了
-    content, ctype = get_bytes(url)
-    ck("导出回的是 xlsx", "spreadsheetml" in ctype, True)
-    got = balance_of(content, sheet, wh)
-    ck("成品「结余」格 = 刚录的数", got is not None and abs(Decimal(str(got)) - Decimal("1234.56")) < Decimal("0.005"), True)
+        # ④ 导出 → 成品里真的带上了
+        content, ctype = get_bytes(url)
+        ck("导出回的是 xlsx", "spreadsheetml" in ctype, True)
+        got = balance_of(content, sheet, wh)
+        ck("成品「结余」格 = 刚录的数", got is not None and abs(Decimal(str(got)) - Decimal("1234.56")) < Decimal("0.005"), True)
 
-    # ⑤ 清空 → 再导 ⇒ 如实留空
-    rc = post_json("/api/m07/extract/balance", {"kind": "焊材", "warehouse": wh, "raw": ""})
-    ck("清空回执 ok", rc.get("ok"), True)
-    ck("清空后库里 0 行", db_count(), 0)
-    content2, _ = get_bytes(url)
-    ck("清空后成品该格如实留空（⛔ 不是 0）", balance_of(content2, sheet, wh) in (None, ""), True)
+        # ⑤ 清空 → 再导 ⇒ 如实留空
+        restored = restore_balance_if_owned(
+            kind="焊材", warehouse=wh, expected=Decimal("1234.56")
+        )
+        ck("清理本次结余成功", restored, True)
+        ck("清空后目标键不存在", balance_value("焊材", wh) is _MISSING, True)
+        content2, _ = get_bytes(url)
+        ck("清空后成品该格如实留空（⛔ 不是 0）", balance_of(content2, sheet, wh) in (None, ""), True)
+    finally:
+        try:
+            restored = restore_balance_if_owned(
+                kind="焊材", warehouse=wh, expected=Decimal("1234.56")
+            )
+            if restored:
+                print("  ✅ 异常/中断清理：目标结余键已回到基线")
+        except Exception as exc:  # noqa: BLE001
+            ck("异常/中断清理成功", False, str(exc))
 
     print(f"\n===== {_ok} 通过 / {_bad} 失败 =====")
     return 1 if _bad else 0

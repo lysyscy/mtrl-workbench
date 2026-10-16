@@ -70,10 +70,16 @@ def test_守则的引用都落得住():
     text = _doc()
     have = _rule_ids(text)
     assert {"0", "3", "4", "5"} <= have, f"守则的节结构变了（只数到 {sorted(have)[:12]}）—— 形态变了就同批改本件"
-    root = DOC.parents[1]
+    root = DOC.parents[2]
     sources = [("壳", SHELL)]
-    for pat in ("tools/**/*.py", "backend/tests/*.py"):
-        for p in root.glob(pat):
+    source_paths = {
+        "tools": list(root.glob("tools/**/*.py")),
+        "tests": list(root.glob("backend/tests/*.py")),
+    }
+    assert source_paths["tools"], f"找不到 tools/ 下的 Python 源文件：{root}"
+    assert source_paths["tests"], f"找不到 backend/tests/ 下的 Python 源文件：{root}"
+    for paths in source_paths.values():
+        for p in paths:
             sources.append((str(p.relative_to(root)).replace("\\", "/"),
                             p.read_text(encoding="utf-8", errors="ignore")))
     bad: list[str] = []

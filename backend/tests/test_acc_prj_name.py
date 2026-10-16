@@ -14,14 +14,20 @@ phid 由 i8 带出不可改）＋ **§2.3.2 尾码剥离统一** 各自的可观
 
 from __future__ import annotations
 
+from app.core.db import session_scope
+from app.mod01_projects import repository as repo
 from app.mod01_projects.domain import (
-    apply_status_change,
     build_candidates,
     norm_full_name,
     resolve_ownership,
     strip_trailing_code,
 )
-from app.mod01_projects.models import PLACEHOLDER_PREFIX, STATUS_ARCHIVED, TYPE_SHELL, TYPE_SMALL
+from app.mod01_projects.models import (
+    PLACEHOLDER_PREFIX,
+    TYPE_NORMAL,
+    TYPE_SHELL,
+    TYPE_SMALL,
+)
 from tests.acc_plugin import acc
 from tests.m01_helpers import make_project
 
@@ -175,16 +181,21 @@ def test_phid不可人工改且缺phid显式拒绝():
 
 
 @acc(CASE, "001-10")
-def test_改全名必须留给痕而不是静默写():
+def test_改全名必须留给痕而不是静默写(rollback_db):
     """`§2.3.1` —— 全名可改 ⇒ **需留痕**（不是静默 UPDATE）。
 
-    可观测出口：域内核的写操作**产出 `writes` 清单**（哪一行、哪个字段、改成什么）
-    ⇒ 留痕由调用方按清单记；**只改 `status` 的那类写**已由归档不变式钉住（001-06）。
+    可观测出口：真实改名路径把旧值、新值写入 `name_full` 字段日志。
     """
-    p = make_project(1, name_full=_FULL, warehouse="甲仓")
-    ch = apply_status_change(p, STATUS_ARCHIVED, [p])
-    assert ch.allowed is True
-    # 写清单必须是**结构化**的（有 id / field / value 三件）⇒ 调用方才有东西可记留痕
-    assert ch.writes and all({"id", "field", "value"} <= set(w) for w in ch.writes)
-    assert ch.writes[0]["field"] == "status"
-    assert ch.writes[0]["id"] == 1
+    with session_scope() as s:
+        p = repo.create_project(
+            s, project_type=TYPE_NORMAL, name_full=_FULL, warehouse_name="__自检仓_项目改名__"
+        )
+        old = p.name_full
+        new = f"{_FULL}（改名后）"
+        repo.rename_full(s, p, new, changed_by="自检")
+
+        assert p.name_full == new
+        logs = [x for x in repo.list_logs(s, p.id) if x.field == "name_full"]
+        assert len(logs) == 1
+        assert logs[0].old_value == old and logs[0].new_value == new
+        s.rollback()

@@ -4,14 +4,15 @@
 → ⑥ **负数允许**（§5.5 最宽松一档）→ ⑦ 删除复原 → ⑧ 直查库核实**无残留**。
 
 ⛔ 本页**不写 i8、不抓取**（自动项只读 `inv_detail`），所以跑它**不会顶号**。
-⚠️ 全程**净零**：一增一删，跑完库里应回到原样（脚本自己核对，不靠人记）。
+⚠️ 仅限独占维护窗口；清理由同库连接按已知 ID 锁行删除。未取得 ID 时失败并报告可能残留，不猜删。
 
-用法：服务在跑（`127.0.0.1:8000`）⇒ `python tools/_e2e_m09_wired.py`
+用法：服务在跑（`127.0.0.1:8000`）⇒ `python tools/probe/_e2e_m09_wired.py`
 """
 
 from __future__ import annotations
 
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import httpx
@@ -27,6 +28,89 @@ def check(ok: bool, what: str, extra: str = "") -> None:
     print(("  ✅ " if ok else "  ⛔ ") + what + (f" —— {extra}" if extra else ""))
     if not ok:
         fails.append(what)
+
+
+def _manual_state(row: dict) -> dict[str, str]:
+    """手填行的可比较基线字段（忽略随列表位置变化的 index）。"""
+    amount = row.get("amount")
+    return {"item": str(row.get("item") or ""), "amount": format(Decimal(str(amount)), ".2f") if amount is not None else ""}
+
+
+def _db_manual_state(row) -> dict[str, str]:
+    """ORM 手填行转成基线值；Decimal 0.00 不能被当成空值。"""
+    return _manual_state({"item": row.item_name, "amount": row.amount})
+
+
+def manual_snapshot(manuals) -> dict[int, dict[str, str]]:
+    """按手填记录 id 保存当前作用域基线。"""
+    out: dict[int, dict[str, str]] = {}
+    for row in manuals or ():
+        if row.get("id") is None:
+            raise RuntimeError("手填项缺少记录 id，无法安全清理")
+        rid = int(row["id"])
+        if rid in out:
+            raise RuntimeError(f"手填项 id 重复：{rid}")
+        out[rid] = _manual_state(row)
+    return out
+
+
+def cleanup_manual(*, ym: str, project: str, baseline: dict[int, dict[str, str]],
+                   owned_id: int | None, expected: dict[str, str]) -> bool:
+    """已知 ID 才锁行比较并删除；绝不把变化中的列表下标用于异常清理。"""
+    from sqlalchemy import select
+    from app.core.db import session_scope
+    from app.mod09_fee.models import FeeManualItem
+    from app.mod09_fee.repository import project_by_key
+
+    if owned_id is None:
+        raise RuntimeError("新增后未取得稳定记录 id，无法证明归属；可能有残留，须核对后处理")
+    if owned_id in baseline:
+        raise RuntimeError("拒绝清理基线中已有的手填项")
+    with session_scope() as s:
+        owner = project_by_key(s, project)
+        row = s.execute(select(FeeManualItem).where(
+            FeeManualItem.id == owned_id,
+        ).with_for_update()).scalars().first()
+        if row is None:
+            return False
+        if (owner is None or row.project_id != owner.id or row.ym != ym or
+                _db_manual_state(row) != _manual_state(expected)):
+            raise RuntimeError(f"本次手填项 {owned_id} 已被其他值改动，停止清理以免覆盖")
+        s.delete(row)
+    return True
+
+
+def db_manual_snapshot(ym: str, project: str) -> dict[int, dict[str, str]]:
+    """直查本次月 / 项目作用域的手填记录，避免把全表为空当作净零。"""
+    from sqlalchemy import select
+
+    from app.core.db import session_scope
+    from app.mod09_fee.models import FeeManualItem
+    from app.mod09_fee.repository import project_by_key
+
+    with session_scope() as s:
+        owner = project_by_key(s, project)
+        if owner is None:
+            raise RuntimeError(f"项目档案不存在：{project}")
+        rows = s.execute(
+            select(FeeManualItem).where(
+                FeeManualItem.ym == ym,
+                FeeManualItem.project_id == owner.id,
+            )
+        ).scalars().all()
+        return {
+            int(row.id): _db_manual_state(row)
+            for row in rows
+        }
+
+
+def verify_db_baseline(ym: str, project: str, baseline: dict[int, dict[str, str]]) -> tuple[bool, str]:
+    """返回直查库结果；查库异常必须是失败而不是跳过。"""
+    try:
+        current = db_manual_snapshot(ym, project)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"查库失败：{exc.__class__.__name__}: {exc}"
+    return current == baseline, f"当前 {current!r} · 基线 {baseline!r}"
 
 
 def main() -> int:
@@ -48,30 +132,56 @@ def main() -> int:
         return 1 if fails else 0
 
     before = len(fee["manuals"])
+    baseline = manual_snapshot(fee["manuals"])
     print(f"   起始手填项 {before} 条 · 合计 {fee['total']}")
 
-    # ---- ② 新增
-    print("② 新增手填项（`POST /api/m09/fee/add`）")
-    r = c.post("/api/m09/fee/add", json={"ym": ym, "project": pj}).json()
-    check(r.get("ok") is True, "新增成功", r.get("message", "")[:70])
-    after = c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()
-    check(len(after["manuals"]) == before + 1, "回读多了一行（真的落库了）",
-          f"{before} → {len(after['manuals'])}")
-    idx = len(after["manuals"]) - 1
+    # 写前复核保存的作用域基线；已有并发改动就立即停止。
+    current = c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()
+    if manual_snapshot(current.get("manuals")) != baseline:
+        check(False, "写入前手填项仍保持基线")
+        return 1
 
+    owned_id: int | None = None
+    expected: dict[str, str] = {}
     try:
+        # ---- ② 新增
+        print("② 新增手填项（`POST /api/m09/fee/add`）")
+        response = c.post("/api/m09/fee/add", json={"ym": ym, "project": pj})
+        r = response.json()
+        check(r.get("ok") is True, "新增成功", r.get("message", "")[:70])
+        if response.status_code != 200 or r.get("ok") is not True:
+            return 1
+
+        # 这次新增后的回读和下标定位都必须在 try 内，后续异常才能进入清理。
+        after = c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()
+        after_rows = after.get("manuals") or []
+        after_snapshot = manual_snapshot(after_rows)
+        new_ids = set(after_snapshot) - set(baseline)
+        check(len(after_rows) == before + 1, "回读多了一行（真的落库了）",
+              f"{before} → {len(after_rows)}")
+        if len(new_ids) != 1:
+            check(False, "新增记录可唯一归属", f"新增 id={sorted(new_ids)}")
+            return 1
+        owned_id = next(iter(new_ids))
+        idx = next(i for i, row in enumerate(after_rows) if int(row["id"]) == owned_id)
+        expected = after_snapshot[owned_id]
+
         # ---- ③ 改名
         print("③ 改名（`/fee/name`）")
         r = c.post("/api/m09/fee/name", json={"ym": ym, "project": pj, "index": idx, "value": "油卡使用"}).json()
         check(r.get("ok") is True, "改名成功", r.get("message", "")[:70])
-        check(c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()["manuals"][idx]["item"] == "油卡使用",
-              "回读项名确为「油卡使用」")
+        if r.get("ok") is True:
+            expected["item"] = "油卡使用"
+        got = c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()
+        check(got["manuals"][idx]["item"] == "油卡使用", "回读项名确为「油卡使用」")
 
         # ---- ④ 改金额（合法）
         print("④ 改金额（合法 12345.67）")
         r = c.post("/api/m09/fee/amount",
                    json={"ym": ym, "project": pj, "index": idx, "value": "12345.67"}).json()
         check(r.get("ok") is True, "合法金额被接受", r.get("message", "")[:70])
+        if r.get("ok") is True:
+            expected["amount"] = "12345.67"
         got = c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()
         check(got["manuals"][idx]["amount"] == "12345.67", "回读金额 = 12,345.67",
               f"实际 {got['manuals'][idx]['amount']}")
@@ -90,6 +200,8 @@ def main() -> int:
         r = c.post("/api/m09/fee/amount",
                    json={"ym": ym, "project": pj, "index": idx, "value": "-88.5"}).json()
         check(r.get("ok") is True, "负数被接受", r.get("message", "")[:70])
+        if r.get("ok") is True:
+            expected["amount"] = "-88.50"
         got = c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()
         check(got["manuals"][idx]["amount"] == "-88.50", "回读金额 = -88.50",
               f"实际 {got['manuals'][idx]['amount']}")
@@ -97,25 +209,23 @@ def main() -> int:
               "合计 ≤ 0 ⇒ 「占合计」给「—」而不是 `NaN%`", f"实际 {got['auto']['share']!r}")
     finally:
         # ---- ⑦ 复原（无论上面成没成，都要删掉那一行）
-        print("⑦ 复原（`/fee/delete`）")
-        r = c.post("/api/m09/fee/delete", json={"ym": ym, "project": pj, "index": idx}).json()
-        check(r.get("ok") is True, "删除成功（回执带重算后的合计）", r.get("message", "")[:80])
+        print("⑦ 锁行清理本次手填项")
+        try:
+            ok = cleanup_manual(
+                ym=ym, project=pj, baseline=baseline,
+                owned_id=owned_id, expected=expected,
+            )
+            check(ok, "本次手填项已删除")
+        except Exception as exc:  # noqa: BLE001
+            check(False, "本次手填项已删除", str(exc))
 
     got = c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()
-    check(len(got["manuals"]) == before, "手填项回到起始条数", f"{len(got['manuals'])} vs {before}")
+    check(manual_snapshot(got.get("manuals")) == baseline, "手填项回到保存的基线")
 
-    # ---- ⑧ 直查库（唯一权威）
-    print("⑧ 直查库核实无残留")
-    try:
-        from sqlalchemy import text
-
-        from app.core.db import session_scope
-
-        with session_scope() as s:
-            n = s.execute(text("SELECT count(*) FROM fee_manual_item")).scalar()
-        check(n == 0, "`fee_manual_item` 表为空（净零）", f"实际 {n} 行")
-    except Exception as exc:  # noqa: BLE001
-        print(f"    ℹ️ 直查库跳过（{exc.__class__.__name__}: {exc}）")
+    # ---- ⑧ 直查库（只核本次作用域；查库异常必须失败）
+    print("⑧ 直查库核实本次作用域回到基线")
+    db_ok, db_detail = verify_db_baseline(ym, pj, baseline)
+    check(db_ok, "直查库成功且本次作用域无残留", db_detail)
 
     print("\n结论：" + ("全通 ✅" if not fails else f"⛔ {len(fails)} 条未过"))
     for f in fails:

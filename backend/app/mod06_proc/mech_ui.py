@@ -16,7 +16,6 @@ from decimal import Decimal
 
 from app.core.money import MoneyError, to_money
 from app.mod06_proc import domain as D
-from app.mod03_notice.page import esc
 
 PLACEHOLDER_YM = "YYYY-MM"
 
@@ -47,4 +46,4 @@ def parse_mech_values(raw) -> dict[str, Decimal]:
 #    ⚠️ 剩下的 `parse_mech_values` 才是**口径所在**（空按 0 / 负数与非数字报错 ✓ 壳与 `/api/m06/mech` 共用）；
 
 
-__all__ = ["PLACEHOLDER_YM", "parse_mech_values", "block_html", "notice_html"]
+__all__ = ["PLACEHOLDER_YM", "parse_mech_values"]

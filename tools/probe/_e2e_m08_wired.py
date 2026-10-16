@@ -1,22 +1,27 @@
 """`MOD-08` 库存单据 / 调整单 —— **真机端到端**（连真服务 + 真库）。
 
+仅限独占维护窗口；异常清理由同库连接锁行删除本次标记，不验证 HTTP 撤销接口。
+
 覆盖：读全量 → 打调整单 → **回读**（调整后金额真的生效）→ 判据拒绝路径 → 撤销 → 清理复原。
 
 ⛔ **不触发真抓取**：抓取会登录 i8 并**强踢在线用户**（D9）⇒ 只验它的**拒绝路径**
    （未确认 / 非单月格式），真抓由用户在确认的时段自己点。
 
-用法：服务在跑（`127.0.0.1:8000`）⇒ `python tools/_e2e_m08_wired.py`
+用法：服务在跑（`127.0.0.1:8000`）⇒ `python tools/probe/_e2e_m08_wired.py`
 """
 
 from __future__ import annotations
 
 import sys
+import uuid
 from pathlib import Path
 
 import httpx
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+
 BASE = "http://127.0.0.1:8000"
-REMARK = "m08自检（端到端）"
+REMARK = f"m08自检-{uuid.uuid4().hex}"
 fails: list[str] = []
 
 
@@ -24,6 +29,34 @@ def check(ok: bool, what: str, extra: str = "") -> None:
     print(("  ✅ " if ok else "  ⛔ ") + what + (f" —— {extra}" if extra else ""))
     if not ok:
         fails.append(what)
+
+
+def _adjustment(payload: dict, row_id: int) -> dict | None:
+    """从库存回读中取一行调整单；没有就是基线的「未调整」。"""
+    return next(
+        (a for a in (payload.get("adjustments") or ()) if int(a.get("row_id")) == int(row_id)),
+        None,
+    )
+
+
+def cleanup_adjustment(*, row_id: int, before_amount: float, expected_amount: float) -> bool:
+    """锁行比较后只删除本次标记的调整单，避免 HTTP clear 的检查/删除竞态。"""
+    from decimal import Decimal
+    from sqlalchemy import select
+    from app.core.db import session_scope
+    from app.mod08_inv.models import InvAdjustment
+
+    with session_scope() as s:
+        row = s.execute(select(InvAdjustment).where(
+            InvAdjustment.row_id == row_id,
+        ).with_for_update()).scalars().first()
+        if row is None:
+            return False
+        if (row.amount != Decimal(str(expected_amount)) or
+                row.before_amount != Decimal(str(before_amount)) or row.remark != REMARK):
+            raise RuntimeError(f"调整单 row_id={row_id} 已被其他值改动，停止恢复以免覆盖")
+        s.delete(row)
+    return True
 
 
 def main() -> int:
@@ -60,37 +93,50 @@ def main() -> int:
     new_amt = round(old_amt + 1.23, 2)
     print(f"（用行 id={rid} · {target['doc_no']} #{target['seq']} · i8 原值 {old_amt}）")
 
+    # 写前再核一次基线：期间已有调整单或原始金额变化就立即停，不覆盖。
+    current = c.get("/api/m08/inventory").json()
+    current_row = next((x for x in current.get("rows", []) if int(x["id"]) == rid), None)
+    if current_row is None or _adjustment(current, rid) is not None or \
+            abs(float(current_row.get("amount", -1)) - old_amt) >= 0.005:
+        check(False, "写入前目标行仍保持未调整基线")
+        return 1
+
     print("② 打调整单（`POST /api/m08/adjust`）")
-    r = c.post("/api/m08/adjust", json={"row_id": rid, "amount": f"{new_amt:.2f}", "remark": REMARK})
-    check(r.status_code == 200, "打单成功", f"HTTP {r.status_code} {str(r.text)[:90]}")
-    body = r.json() if r.status_code == 200 else {}
-    check(abs(float(body.get("before_amount", -1)) - old_amt) < 0.005,
-          "**改前值 = i8 原值**（留痕的 before 由后端出）", f"before={body.get('before_amount')}")
-    check(abs(float(body.get("amount", -1)) - new_amt) < 0.005, "改后值 = 提交值")
-    check(bool(body.get("operator")), "记了操作人（唯一出口 = identity）", f"operator={body.get('operator')}")
+    try:
+        r = c.post("/api/m08/adjust", json={"row_id": rid, "amount": f"{new_amt:.2f}", "remark": REMARK})
+        check(r.status_code == 200, "打单成功", f"HTTP {r.status_code} {str(r.text)[:90]}")
+        body = r.json() if r.status_code == 200 else {}
+        check(abs(float(body.get("before_amount", -1)) - old_amt) < 0.005,
+              "**改前值 = i8 原值**（留痕的 before 由后端出）", f"before={body.get('before_amount')}")
+        check(abs(float(body.get("amount", -1)) - new_amt) < 0.005, "改后值 = 提交值")
+        check(bool(body.get("operator")), "记了操作人（唯一出口 = identity）", f"operator={body.get('operator')}")
 
-    print("③ 回读（**真落库了吗**，不是「看着对」）")
-    again = c.get("/api/m08/inventory").json()
-    row2 = next((x for x in again["rows"] if int(x["id"]) == rid), {})
-    check(row2.get("adjusted") is True, "该行 `adjusted` 变 true")
-    check(abs(float(row2.get("adj_amount") or -1) - new_amt) < 0.005,
-          "行上的「调整后金额」= 调整单值", f"adj_amount={row2.get('adj_amount')}")
-    adj = next((a for a in again["adjustments"] if int(a["row_id"]) == rid), None)
-    check(adj is not None and adj.get("remark") == REMARK, "调整单在清单里且备注正确")
-    check(bool(adj and adj.get("changed_at")), "带时间戳", f"at={(adj or {}).get('changed_at')}")
+        print("③ 回读（**真落库了吗**，不是「看着对」）")
+        again = c.get("/api/m08/inventory").json()
+        row2 = next((x for x in again["rows"] if int(x["id"]) == rid), {})
+        check(row2.get("adjusted") is True, "该行 `adjusted` 变 true")
+        check(abs(float(row2.get("adj_amount") or -1) - new_amt) < 0.005,
+              "行上的「调整后金额」= 调整单值", f"adj_amount={row2.get('adj_amount')}")
+        adj = _adjustment(again, rid)
+        check(adj is not None and adj.get("remark") == REMARK, "调整单在清单里且备注正确")
+        check(bool(adj and adj.get("changed_at")), "带时间戳", f"at={(adj or {}).get('changed_at')}")
 
-    print("④ 判据的拒绝路径（**都不许落库**）")
-    r1 = c.post("/api/m08/adjust", json={"row_id": rid, "amount": f"{new_amt:.2f}", "remark": ""})
-    check(r1.status_code == 400, "空备注 ⇒ 400", str(r1.text)[:80])
-    r2 = c.post("/api/m08/adjust", json={"row_id": rid, "amount": "-1", "remark": "x"})
-    check(r2.status_code == 400, "负金额 ⇒ 400", str(r2.text)[:80])
-    after_reject = c.get("/api/m08/inventory").json()
-    same = next((a for a in after_reject["adjustments"] if int(a["row_id"]) == rid), {})
-    check(same.get("remark") == REMARK, "**被拒之后调整单没被动**（原备注还在）")
+        print("④ 判据的拒绝路径（**都不许落库**）")
+        r1 = c.post("/api/m08/adjust", json={"row_id": rid, "amount": f"{new_amt:.2f}", "remark": ""})
+        check(r1.status_code == 400, "空备注 ⇒ 400", str(r1.text)[:80])
+        r2 = c.post("/api/m08/adjust", json={"row_id": rid, "amount": "-1", "remark": "x"})
+        check(r2.status_code == 400, "负金额 ⇒ 400", str(r2.text)[:80])
+        after_reject = c.get("/api/m08/inventory").json()
+        same = _adjustment(after_reject, rid) or {}
+        check(same.get("remark") == REMARK, "**被拒之后调整单没被动**（原备注还在）")
+    finally:
+        print("⑤ 锁行清理本次调整单")
+        try:
+            ok = cleanup_adjustment(row_id=rid, before_amount=old_amt, expected_amount=new_amt)
+            check(ok, "撤销成功")
+        except Exception as exc:  # noqa: BLE001
+            check(False, "撤销成功", str(exc))
 
-    print("⑤ 撤销调整单（`POST /api/m08/adjust/clear`）")
-    r3 = c.post("/api/m08/adjust/clear", json={"row_id": rid})
-    check(r3.status_code == 200, "撤销成功", f"HTTP {r3.status_code}")
     final = c.get("/api/m08/inventory").json()
     row3 = next((x for x in final["rows"] if int(x["id"]) == rid), {})
     check(row3.get("adjusted") is False, "该行回到「未调整」")

@@ -9,7 +9,10 @@
 
 from __future__ import annotations
 
-from app.core.config import get_settings
+import pytest
+
+from app.core import app_settings
+from app.core.config import Settings, get_settings
 from app.mod02_i8.notice_source import (
     APPROVE_STATUS_DONE,
     APPROVE_STATUS_OTHER,
@@ -62,9 +65,14 @@ class _FakeClient:
         return self._next()
 
 
-def _with_env(monkeypatch, **env):  # noqa: ANN001
-    for k, v in env.items():
-        monkeypatch.setenv(k, v)
+@pytest.fixture(autouse=True)
+def _isolated_settings(monkeypatch):
+    # 离线契约不读本机配置，并清除测试环境值留下的缓存。
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    monkeypatch.setattr(app_settings, "_VALUES_LOADER", lambda: {})
+    monkeypatch.setattr(app_settings, "_CACHE", {})
+    get_settings.cache_clear()
+    yield
     get_settings.cache_clear()
 
 
@@ -132,7 +140,7 @@ def test_旧别名仍然兼容_回归保护():
 
 @acc()
 def test_API05仓库列表按真字段解析并跳作废(monkeypatch):
-    _with_env(monkeypatch, I8_WAREHOUSE_LIST_URL="http://i8/x")
+    monkeypatch.setenv("I8_BASE_URL", "http://i8/x")
     payload = {
         "Record": [
             {"PhId": "1", "Whname": "甲仓库", "PhidPc_EXName": "某某项目(XMCB2025080001)", "Nullify": "0"},
@@ -149,7 +157,7 @@ def test_API05仓库列表按真字段解析并跳作废(monkeypatch):
 
 @acc()
 def test_API06常用项目按真字段解析(monkeypatch):
-    _with_env(monkeypatch, I8_COMMON_PROJECT_URL="http://i8/y")
+    monkeypatch.setenv("I8_BASE_URL", "http://i8/y")
     payload = {"Record": [{"PhId": "P1", "BillNo": "XMCB2025080001", "BillName": "某某项目", "Ab": "某某"}]}
     rows = CommonProjectSource(_FakeClient(payload)).fetch()
     assert rows == [{"name_full": "某某项目", "phid": "P1", "code": "XMCB2025080001", "ab": "某某"}]
@@ -178,7 +186,7 @@ def test_API01抓取用POST且空结果会再确认一次(monkeypatch):
     from app.mod02_i8 import notice_source as ns
 
     monkeypatch.setattr(ns.time, "sleep", lambda *_: None)          # 别真等 1.2s
-    _with_env(monkeypatch, I8_PAYMENT_NOTICE_URL="http://i8/list")
+    monkeypatch.setenv("I8_BASE_URL", "http://i8/list")
     client = _FakeClient(payloads=[{"Record": []}, {"Record": [REC]}])
     rows = ns.NoticeFetcher(client).fetch_month("2026-08")          # type: ignore[arg-type]
     assert len(rows) == 1

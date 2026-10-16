@@ -89,7 +89,7 @@ def pytest_runtest_logreport(report) -> None:
     elif report.when == "setup" and report.outcome in ("failed", "skipped"):
         _results.setdefault(report.nodeid, report.outcome)
     elif report.when == "teardown" and report.outcome == "failed":
-        _results.setdefault(report.nodeid, "failed")
+        _results[report.nodeid] = "failed"
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001

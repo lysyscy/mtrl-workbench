@@ -20,7 +20,6 @@
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 # ⚠️ 2026-09-20：`run_fetch` 要取"动作开始前"的时刻给 `save_run_record`（见它的 `started_at` 那段
 #    —— 不传 ⇒ 耗时恒 0，用户实测报过）
 from datetime import datetime
@@ -185,55 +184,54 @@ def run_fetch(
         #    ⚠️ 实测（2026-09-19）：症状是**等满 600 秒**后降级成「i8 接口不可用…已降级为手动 Excel 导入」——
         #    那句话**极具误导性**（看着像 i8 挂了 / 账号有问题，其实是我们自己锁死的）。
         #    ⇒ 同表串行的**唯一**落点 = `ContractFetcher.fetch_all`（`TABLE` 常量两边**是同一个值**，靠它对齐）。
-        with nullcontext():
-            client = client_factory()
+        client = client_factory()
+        try:
+            fetcher = ContractFetcher(client)
+            if fetch is None:
+                rows = fetcher.fetch_all(since=since)
+            else:
+                rows = fetch(client)
+            dropped = int(getattr(fetcher, "last_unapproved", 0) or 0)
+            # ⭐⭐ `TAIL-96` **集采剔除名单**：不要的**项目** ⇒ 抓取时先剔除
+            #    （用户 2026-09-25 裁定；付款与集采**各一份名单**，⛔ 不共用）
+            #    ⛔ 禁静默：剔除多少条、都是谁 ⇒ 回执 `ignored` ＋ 执行记录 `jc_ignored`。
+            rows, ignored_rows = split_ignored(s, rows)
+            # ⭐⭐ **补材料名**（`M5-6`）：i8 **列表接口没有材料字段**（88 个字段全查过）
+            #    ⇒ 只能**逐条问详情**（`GetCntMInfoFirst` → `Data.Grid.results[0].ItemName`）。
+            #    ⚠️⚠️ **只补「库里还没有的」** —— 这是这件事能用的前提：
+            #       全量首次约 347 次请求（几分钟，**就这一次**）；之后增量新增只有几条 ⇒ **秒级**。
+            #       若每次都对全量补，日常抓取就永远是几分钟（而"刷新已有行的材料名"毫无意义）。
+            #    ⚠️ 必须**在 `client` 关闭之前**做（下面 `finally` 会 close）。
+            #    ⚠️ 单条失败 ⇒ 该条留空并**计数报出**（禁静默，见回执 `material_blank`）。
+            if fetch is None and rows:
+                known = R.existing_contract_nos(
+                    s, [str(r.get("contract_no") or "") for r in rows])
+                for r in rows:
+                    no = str(r.get("contract_no") or "").strip()
+                    if not no or no in known:
+                        continue
+                    name = fetcher.fetch_item_name(
+                        str((r.get("fields") or {}).get("PhId") or ""))
+                    if name:
+                        r["material_name"] = name
+                        material_filled += 1
+                    else:
+                        material_blank += 1
+            # ⭐ **先同步常用项目列表**（复用同一会话）—— 失败**不拖垮**抓取，只降级
+            load_common, load_wh = loaders if loaders_given else default_loaders(client)
+            do_sync = sync or sync_and_archive       # ⚠️ 可注入（测试不连 i8）
             try:
-                fetcher = ContractFetcher(client)
-                if fetch is None:
-                    rows = fetcher.fetch_all(since=since)
-                else:
-                    rows = fetch(client)
-                dropped = int(getattr(fetcher, "last_unapproved", 0) or 0)
-                # ⭐⭐ `TAIL-96` **集采剔除名单**：不要的**项目** ⇒ 抓取时先剔除
-                #    （用户 2026-09-25 裁定；付款与集采**各一份名单**，⛔ 不共用）
-                #    ⛔ 禁静默：剔除多少条、都是谁 ⇒ 回执 `ignored` ＋ 执行记录 `jc_ignored`。
-                rows, ignored_rows = split_ignored(s, rows)
-                # ⭐⭐ **补材料名**（`M5-6`）：i8 **列表接口没有材料字段**（88 个字段全查过）
-                #    ⇒ 只能**逐条问详情**（`GetCntMInfoFirst` → `Data.Grid.results[0].ItemName`）。
-                #    ⚠️⚠️ **只补「库里还没有的」** —— 这是这件事能用的前提：
-                #       全量首次约 347 次请求（几分钟，**就这一次**）；之后增量新增只有几条 ⇒ **秒级**。
-                #       若每次都对全量补，日常抓取就永远是几分钟（而"刷新已有行的材料名"毫无意义）。
-                #    ⚠️ 必须**在 `client` 关闭之前**做（下面 `finally` 会 close）。
-                #    ⚠️ 单条失败 ⇒ 该条留空并**计数报出**（禁静默，见回执 `material_blank`）。
-                if fetch is None and rows:
-                    known = R.existing_contract_nos(
-                        s, [str(r.get("contract_no") or "") for r in rows])
-                    for r in rows:
-                        no = str(r.get("contract_no") or "").strip()
-                        if not no or no in known:
-                            continue
-                        name = fetcher.fetch_item_name(
-                            str((r.get("fields") or {}).get("PhId") or ""))
-                        if name:
-                            r["material_name"] = name
-                            material_filled += 1
-                        else:
-                            material_blank += 1
-                # ⭐ **先同步常用项目列表**（复用同一会话）—— 失败**不拖垮**抓取，只降级
-                load_common, load_wh = loaders if loaders_given else default_loaders(client)
-                do_sync = sync or sync_and_archive       # ⚠️ 可注入（测试不连 i8）
-                try:
-                    sync_result = do_sync(s, load_common=load_common, load_warehouses=load_wh)
-                except Exception as exc:                        # noqa: BLE001 —— 降级，不抛
-                    sync_result = {"degraded": True,
-                                   "message": human_reason(
-                                       "常用项目同步失败", exc,
-                                       next_step="本次仍按**现有档案**匹配；可稍后重抓一次")}
-                    s.rollback()
-            finally:
-                close = getattr(client, "close", None)
-                if callable(close):
-                    close()
+                sync_result = do_sync(s, load_common=load_common, load_warehouses=load_wh)
+            except Exception as exc:                        # noqa: BLE001 —— 降级，不抛
+                sync_result = {"degraded": True,
+                               "message": human_reason(
+                                   "常用项目同步失败", exc,
+                                   next_step="本次仍按**现有档案**匹配；可稍后重抓一次")}
+                s.rollback()
+        finally:
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
     except Exception as exc:                                    # noqa: BLE001 —— 一律降级，不抛
         notice = fetch_task.degrade_to_excel(exc)
         run = save_run_record(s, **fetch_task.fetch_record_payload(

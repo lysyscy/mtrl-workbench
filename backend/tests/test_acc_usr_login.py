@@ -123,6 +123,10 @@ def test_登出入口与登出动作齐备():
     # ① 登出必须**由后端清 cookie**（⛔ 不靠壳）
     import inspect
 
+    import json
+
+    from fastapi import Request
+
     from app.mod15_user import api as API
     src = inspect.getsource(API.api_logout)
     assert "delete_cookie" in src, (
@@ -151,7 +155,14 @@ def test_登出入口与登出动作齐备():
     with session_scope() as s:
         R.ensure_seeded(s)
         before = snapshot(s)
-        LG.sign_out(s)
+        response = API.api_logout(Request({
+            "type": "http",
+            "method": "POST",
+            "path": "/api/m15/logout",
+            "headers": [],
+        }))
+        assert response.status_code == 200
+        assert json.loads(response.body)["ok"] is True
         assert snapshot(s) == before, (
             "登出动了业务数据 —— §1.5.1 明写「退出后…**业务数据不受影响**」")
         s.rollback()

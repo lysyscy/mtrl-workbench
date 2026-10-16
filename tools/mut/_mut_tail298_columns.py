@@ -5,7 +5,7 @@
 
 | 变异 | 靶 | 该红的那条 |
 |---|---|---|
-| `M1` 列清单**删一列**（`settle` 从 `JC_COLUMNS` 去掉） | `backend/app/mod11_jc/domain.py` | `tests/test_tail298_columns.py::test_导出列逐列等于域内核那张清单`（**列数覆盖**：20/19 的计数） |
+| `M1` 列清单**删一列**（`settle` 从 `JC_COLUMNS` 去掉） | `backend/app/mod11_jc/domain.py` | `tests/test_tail298_columns.py::test_导出列逐列等于域内核那张清单`（**列数覆盖**：19/18 的计数） |
 | `M2` **键名漂**（`pay_sum` ⇒ `paid_sum`） | 同上 | 同上那件里的 `…test_导出列每个键都出现在真实行字典里`（⭐ **值级**那条得**自己**红） |
 | `M3` 行为表**写错 id**（`material` ⇒ `materail`） | `backend/app/web/shell/pages-b.js` | `tests/test_ux_pages.py::test_集采台账行身份区钉列与隐藏列都按id定位_偏移必须量出来` |
 | `M4` 钉列**不再连续**（去掉中间的 `date`） | 同上 | 同上（连续前缀那条） |
@@ -45,9 +45,9 @@ PIN_LINE = "const JC_PIN_IDS = ['project_seq', 'date', 'material'];"
 #: `(相对 backend/ 的路径, 说明, 旧串, 新串, 该红的节点, 断言里必须出现的那句)`
 CASES: list[tuple[str, str, str, str, str, str]] = [
     # ⚠️ `M1` 打的**不是**"派生不一致"那条（派生是**按构造**一致的：域清单删一列，导出跟着少一列）
-    #    ⇒ 真正拦住它的是**列数覆盖**那条（`20 列 / 19 列` 的计数 —— 与 `§6.4.1`／判据 `001-01` 对账）。
+    #    ⇒ 真正拦住它的是**列数覆盖**那条（`19 列 / 18 列` 的计数 —— 与 `§6.4.1`／判据 `001-01` 对账）。
     (DOMAIN, "M1 列清单删一列（`settle`）⇒ **列数覆盖**那条必红", SETTLE_ITEM, "", T_DERIVED,
-     "主表 20 列"),
+     "主表 19 列"),
     (DOMAIN, "M2 键名漂（`pay_sum` ⇒ `paid_sum`）⇒ **值级**那条必须自己红",
      '{"key": "pay_sum", "label": "付款金额", "type": "num"}',
      '{"key": "paid_sum", "label": "付款金额", "type": "num"}', T_VALUES, "根本不存在"),

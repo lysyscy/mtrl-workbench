@@ -87,5 +87,5 @@ def test_mod11_空报错且必须大于0_与mod09刻意不同():
 @acc()
 def test_非数字一律报错_不静默取0():
     for mod in (M03, M09, M11):
-        with pytest.raises((ValueError, Exception)):
+        with pytest.raises(ValueError):
             mod.parse_amount("abc")

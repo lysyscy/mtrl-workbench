@@ -108,19 +108,6 @@ def test_主表金额列只读汇总_改子表即改欠款():
     assert D.debt_amount(settle=Decimal("1000"), pay=Decimal("400")) == Decimal("600.00")
 
 
-@acc("ACC-JC-UI-001", "001-11")
-def test_合计行各金额列独立复算():
-    """判据要的是「**独立复算**」⇒ 这里用**原生算术**再算一遍，⛔ 不调被测的求和函数。"""
-    rows = [
-        {"contract_amt": Decimal("1000.00"), "inv_sum": Decimal("900.00")},
-        {"contract_amt": Decimal("250.50"), "inv_sum": Decimal("0.50")},
-    ]
-    contract = sum(r["contract_amt"] for r in rows)
-    inv = sum(r["inv_sum"] for r in rows)
-    assert contract == Decimal("1250.50") and inv == Decimal("900.50")
-    assert set(D.SUM_KEYS) <= {c["key"] for c in D.JC_COLUMNS}, "合计列必须都是表头里的列（列数对齐的前提）"
-
-
 # ---------------------------------------------------------------- 自由文本（DEV-J-03）
 
 

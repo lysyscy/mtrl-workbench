@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -121,19 +122,23 @@ def test_基线待建区登记过的判据点计为待建而非未绑定():
 
 
 @acc()
-def test_有红时报表以非零码退出():
-    """有红即非零退出（供流水线判停）。"""
-    # 直接测 render 的退出码语义：构造"有红"的最小状态
+@pytest.mark.parametrize("outcome, exit_code, color", [("failed", 1, "RED"), ("passed", 0, "GREEN")])
+def test_报表退出码跟随实际判据状态(tmp_path, outcome, exit_code, color):
     mod = _load_acc_report()
-    points = {"ACC-DEMO-004": {"001-01": {"id": "001-01", "claim": "a"}}}
-    payload = {
+    baseline_path, results_path = tmp_path / "baseline.json", tmp_path / "results.json"
+    baseline_path.write_text(json.dumps({"asof": "selftest", "cases": {
+        "ACC-DEMO-004": {"points": [{"id": "001-01", "claim": "a"}]},
+    }}), encoding="utf-8")
+    results_path.write_text(json.dumps({
         "bindings": {"tests/test_x.py::test_a": [["ACC-DEMO-004", "001-01"]]},
-        "results": {"tests/test_x.py::test_a": "failed"},
-    }
-    states = mod.build_states(points, {}, payload)
-    assert states["ACC-DEMO-004"]["001-01"] == mod.RED
-    # 语义核对：报表的退出码 = 1 当且仅当存在红
-    assert (1 if states["ACC-DEMO-004"]["001-01"] == mod.RED else 0) == 1
+        "results": {"tests/test_x.py::test_a": outcome},
+    }), encoding="utf-8")
+    actual_code, meta = mod.render(SimpleNamespace(
+        baseline=str(baseline_path), results=str(results_path),
+        verbose=False, by_stage=False, json=False, json_out=None,
+    ))
+    assert actual_code == exit_code
+    assert meta["tally"][getattr(mod, color)] == 1
 
 
 @acc()

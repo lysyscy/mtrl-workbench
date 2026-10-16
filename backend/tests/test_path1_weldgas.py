@@ -311,7 +311,7 @@ def _put_formula(ws) -> None:
 def _corrupt(tmp_path, mutate) -> list[str]:
     """造一份产物 → 按 `mutate` 故意弄坏 → 返回守卫报出的问题（⛔ 不能是"看着对"）。"""
     plan = _plan()
-    out = Path(_build(tmp_path, plan))
+    out = Path(tmp_path) / W.FILE_PREFIX / W.period_label(plan["report_ym"]) / W.file_name(plan["report_ym"])
     good = tpl_fill.fill_workbook(R.WELD_TEMPLATE, out, W.build_specs(plan["grids"]))
     assert tpl_fill.verify_filled(out, good) == [], "干净的产物应当对账通过"
     wb = openpyxl.load_workbook(out)
@@ -364,23 +364,6 @@ def test_壳侧提取导出真下载且提示与模板形态一致(tmp_path):
     for token in ("年度汇总", "当前筛选", "2025-11及之前", "合计"):
         assert token in dialog, f"提示缺导出范围和原模板含义：{token}"
     assert "extBlock('焊材')" in dialog and "extBlock('气体')" in dialog
-
-
-@acc(CASE, "001-05")
-def test_导出端点带上当前筛选(tmp_path):
-    """绑 `001-05`：导出**必须带上当前筛选**（不然会导出成别的集合）＋ 报告月口径。
-
-    ⚠️ 2026-09-19（`TAIL-27` · `§19` 批 2）：原先这条查的是**旧服务端页**渲染出来的导出弹窗
-    （`render_extract_page`：URL 里有没有端点、带没带 `status/period`、`esc()` 有没有生效、
-    保存按钮有没有绑下载函数、提示文案齐不齐）；旧页删除（授权 `D18`）后：
-    · 「真下载 ＋ 带上当前筛选」的**壳侧**半边由本文件上面那条
-      `test_壳侧提取导出真下载且提示与模板形态一致`（同一个 `001-05` 判据点 ✓）＋ `test_wired_m07.py`
-      守着（壳的 `saveExt` 把 `fExt.status`/`fExt.ym` 拼进 `…/extract/export?status=…&period=…`）；
-    · `esc()` 与"渲染时有没有拼进去"是**旧页拼串**特有的一层 —— 壳没有这一层，随页消失。
-    这里只留**报告月口径**这条实质（判据没丢）。
-    """
-    plan = _plan()
-    assert plan["report_ym"] == "2026-08"
 
 
 # ⚠️ 2026-09-19（`§19` 批 2）：原先这里有一条「**旧服务端页**的收发结存 zip 弹窗也补了真保存」

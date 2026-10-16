@@ -3,7 +3,7 @@
 ⚠️ 库级断言**一律非破坏**：本机测试连的是**同一个测试库** ⇒ 每个用例末尾 `s.rollback()`（⛔ 一行不留）。
 
 逐条对应（`claim` 原文见验收基线）：
-- `ACC-JC-UI-001/001-13` 手工新增合同 = **保存真的建档**；取消不入库
+- `ACC-JC-UI-001/001-13` 手工新增合同 = **保存真的建档**
 - `ACC-JC-FETCH-001/001-07` **三态默认值 = 纳入台账**
 - `ACC-JC-FETCH-001/001-03` 三态标记**可逐条也可批量**
 - `ACC-JC-FETCH-001/001-05` 批量**只作用于勾选行**、**动作后清空勾选**、**不改行数**
@@ -47,7 +47,7 @@ def _n_contracts(s, project_id: int) -> int:
 
 
 @acc("ACC-JC-UI-001", "001-13")
-def test_手工新增保存真的建档_没调接口就不入库():
+def test_手工新增保存真的建档():
     """⭐ 判据「**保存真的建档**」—— 建档前后**独立复算**该仓下的行数。"""
     with session_scope() as s:
         p = _project(s)
@@ -59,9 +59,6 @@ def test_手工新增保存真的建档_没调接口就不入库():
 
         row = s.get(JcContract, int(r["id"]))
         assert row is not None and row.supplier == "业祥" and row.contract_amt == Decimal("27269.82")
-
-        # 「取消不入库」= 前端**不调本接口** ⇒ 这里只能钉"没调用就没有新行"这一面
-        assert _n_contracts(s, p.id) == before + 1, "（不调接口 ⇒ 不产生任何行）"
         s.rollback()
 
 
@@ -127,7 +124,7 @@ def test_批量标记只作用勾选行_不改行数_并回受影响id():
     with session_scope() as s:
         p = _project(s)
         ids = [int(SV.act_add_contract(s, project_id=p.id, contract_date="2026-09-19",
-                                       supplier=f"商{i}")["id"]) for i in range(4)]
+                                       supplier=f"商{i}", tag=TAG_OUT)["id"]) for i in range(4)]
         picked = ids[:2]                                   # 勾选前两行
         total_before = s.execute(select(func.count()).select_from(JcContract)).scalar_one()
 
@@ -136,9 +133,7 @@ def test_批量标记只作用勾选行_不改行数_并回受影响id():
         # ① 只作用勾选行（没勾的原样）
         assert r["affected_ids"] and set(r["affected_ids"]) == set(picked)
         assert all(s.get(JcContract, i).tag == TAG_IN for i in picked), "勾选的都改了"
-        # ⚠️ 没勾的保持**原值** —— 本题里它们是手工新增的，默认就是「纳入台账」
-        #    （⛔ 断言里不能写死 TAG_PENDING：那会把"手工新增默认纳入台账"这条口径写反）
-        assert all(s.get(JcContract, i).tag == TAG_IN for i in ids[2:]), "没勾的一行都不许动"
+        assert all(s.get(JcContract, i).tag == TAG_OUT for i in ids[2:]), "没勾的一行都不许动"
         # ② 不改行数（独立复算，⛔ 不看接口自报）
         assert s.execute(select(func.count()).select_from(JcContract)).scalar_one() == total_before
         assert r["row_count_before"] == r["row_count_after"] == int(total_before)

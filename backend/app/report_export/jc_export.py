@@ -20,9 +20,6 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
-from io import BytesIO
-
 from app.mod11_jc import domain as D          # ⭐ 分层规则 D 允许：导出层可用业务包的 `domain`
 
 #: 行字典里**项目内动态号**（`TAIL-290`）的键 —— 与 `domain.JC_COLUMNS` 首列、`service.build_list` 三者**同名**。
@@ -44,16 +41,6 @@ COLUMNS: tuple[tuple[str, str], ...] = tuple(
 MONEY_KEYS: frozenset[str] = frozenset(D.SUM_KEYS)
 
 SHEET_NAME = "集采台账"
-
-
-def _money(v) -> float | None:
-    """金额 ⇒ `float`（⛔ 空的**留空**，不写 0 —— "没这个数"与"是 0"是两件事）。"""
-    if v in (None, ""):
-        return None
-    try:
-        return float(Decimal(str(v)))
-    except Exception:                       # noqa: BLE001 —— 认不出就当空（⛔ 不抛，别为一行毁整表）
-        return None
 
 
 def build_xlsx(rows: list[dict]) -> bytes:

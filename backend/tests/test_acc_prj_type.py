@@ -122,13 +122,16 @@ def test_粘住只认壳不认普通项目():
     }
     assert [c["project_type"] for c in plan_archive(**rows)["create"]] == [TYPE_SHELL], \
         "含「小微」的全名本来就判壳（与人工覆盖无关）—— 这条不变量不许被这次改动带歪"
+    build_rows = {
+        "common_rows": [{"name_full": _SHELL_NO_KEYWORD, "phid": "P3"}],
+        "warehouse_rows": [{"owner_full_name": _SHELL_NO_KEYWORD, "warehouse_name": "手动覆盖仓A"}],
+    }
     from app.mod01_projects.sync_service import build_plan
-    out = build_plan(load_common=lambda: rows["common_rows"],
-                     load_warehouses=lambda: rows["warehouse_rows"],
+    out = build_plan(load_common=lambda: build_rows["common_rows"],
+                     load_warehouses=lambda: build_rows["warehouse_rows"],
                      shells={_SHELL_NO_KEYWORD})
     assert [c["project_type"] for c in out["plan"]["create"]] == [TYPE_SHELL], \
         "`build_plan` 要把 `shells` 透传给计划（这一路断了 ⇒ 人工覆盖就粘不住）"
-    assert "shells" not in out or True                          # （参数名改动时上面那条会红）
 
 
 

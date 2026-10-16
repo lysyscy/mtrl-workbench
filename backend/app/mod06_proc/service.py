@@ -147,6 +147,7 @@ def build_import_data(s: Session, *, warehouse: str = "") -> dict:
     #   ⚠️ **过程资料页**仍走 `projects_of`（用户确认：那里只显示有数据的项目没问题）。
     projects = import_projects(s)
     current = warehouse if warehouse in projects else (projects[0] if projects else "")
+    mechanical_cutoffs = load_mechanical_cutoffs(s)
     return {
         "projects": projects,
         "warehouse": current,
@@ -156,8 +157,8 @@ def build_import_data(s: Session, *, warehouse: str = "") -> dict:
         #   而用户会换项目 ⇒ 只给一格就会把 A 项目的分界写给 B（真缺陷，见 `load_cutoffs`）。
         #   ⚠️ 口径仍只有一处：本键由 `load_cutoffs` 给，与 `cutoff_ym` 同一张表。
         "cutoffs": load_cutoffs(s),
-        "mechanical_cutoff_ym": load_mechanical_cutoffs(s).get(current, ""),
-        "mechanical_cutoffs": load_mechanical_cutoffs(s),
+        "mechanical_cutoff_ym": mechanical_cutoffs.get(current, ""),
+        "mechanical_cutoffs": mechanical_cutoffs,
         "batches": [b for b in load_batches(s) if not current or b.warehouse_name == current],
     }
 

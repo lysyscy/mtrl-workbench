@@ -248,7 +248,7 @@ def build_debt(s: Session, *, jc_debt=None) -> dict:
                 "settle": f"{o.settle_amount:.2f}",
                 "paid": f"{o.paid_amount:.2f}",
             }
-            for o in opening_views(s)
+            for o in openings
         ],
     }
 
@@ -393,6 +393,7 @@ def build_ledger(
     - 机械侧「其他支出金额」= **派生只读**，**无手填入口**（`MECH_HAS_MANUAL_INPUT=False`）
     """
     rows = notice_debt_views(s)
+    openings = opening_views(s, project_id=project_id)
     today = today or date.today()
     sides = []
     # 同一有效机械值供导入、手录、过程资料和台账读取；只接外租含税两列。
@@ -403,7 +404,6 @@ def build_ledger(
     mech_settle = {str(r['ym']): sum_money([r.get('mech_2'), r.get('mech_3')])
                    for r in P6S.load_mech(s) if wh and r.get('warehouse') == wh and r.get('ym')}
     for cat in dom.LEDGER_SIDES:
-        openings = opening_views(s, project_id=project_id)
         mine = [o for o in openings if o.category == cat]
         opening = mine[0] if mine else None
         monthly = dom.monthly_aggregate(rows, cat, int(project_id))
@@ -421,11 +421,10 @@ def build_ledger(
             remarks=repo.remarks_map(s, category=cat, project_id=int(project_id)),
             opening_auto=automatic if history_segment else None,
         )
-        opening_row = repo.list_openings(s, project_id=int(project_id), category=cat)
         sides.append({
             "category": cat,
             "label": CATEGORY_LABELS[cat],
-            "opening_id": opening_row[0].id if opening_row else None,
+            "opening_id": opening.opening_id if opening else None,
             "opening_default": ({"cutoff_ym": "2025-11", "fallback": False}
                                 if history_segment else dom.opening_defaults(rows, cat, today)),
             "has_manual_input": not (cat == CATEGORY_MECH and not dom.MECH_HAS_MANUAL_INPUT),

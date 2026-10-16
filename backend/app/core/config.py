@@ -92,9 +92,6 @@ class Settings(BaseSettings):
 
     # --- 应用 ---
     app_env: str = "dev"
-    app_host: str = "0.0.0.0"  # D1=A：绑 0.0.0.0 + 应用层 IP 白名单中间件
-    app_port: int = 8000
-
     # --- 访问控制（D1=A：不用反向代理，靠应用层白名单 + 防火墙）---
     # 逗号分隔的 CIDR；**为空时 dev 放行并告警、非 dev 拒绝启动**
     allowed_ip_cidrs: str = ""
@@ -115,20 +112,13 @@ class Settings(BaseSettings):
     # i8 登录页前端 JS 里的 SM2 私钥（**公开资产**，非本系统凭据）；留空则用内置默认值
     i8_sm2_private_key: str = ""
 
-    # --- i8 业务接口（**契约待确认**：PRD 仅给接口名 getPrintDesign/API-01，未给 URL 与参数口径）---
-    # 端点 URL 一律走配置，不硬编码；以下为空 ⇒ 由 NotConfiguredError 显式报错（不得静默）
-    i8_payment_notice_url: str = ""  # API-01：付款通知书取数（D4 最小取数）
+    # --- i8 业务接口（API-04 仍保留独立完整 URL；其余端点由 base ＋固定路径推导）---
     # API-04：采购合同列表（集采抓取）—— ⚠️ 2026-09-19 **实测确认 = POST**（GET 会 500「method 'GET' is not supported」；
     #   无会话会 401「No SessionInfo found」）⇒ 必须走登录后的 client，⛔ 不能当普通 GET 打。
     i8_contract_list_url: str = ""
-    i8_print_design_url: str = ""  # API-07：取版式 getPrintDesign
     # 两类分流（机械类 / 辅材·集采类）的 printId（**取值待确认**，从配置读、不写死）
     i8_print_id_mechanical: str = ""
     i8_print_id_material: str = ""
-
-    # --- i8 基础数据源（**契约待确认**：PRD 只给接口名 API-05 / API-06）---
-    i8_warehouse_list_url: str = ""   # API-05：仓库列表 GetWareHouseList（仓库名 ↔ 所属项目全名）
-    i8_common_project_url: str = ""   # API-06：常用项目列表 GetCommonUseList（phid 权威来源）
 
     # --- 打印机（IPP 直投）---
     printer_ipp_url: str = ""
