@@ -25,7 +25,7 @@ m10不建包；m12整页取消，差异用库存调整单承载；m13独立页�
 
 ### 0.4 当前工作
 
-- 全库审计确认的20项清理已完成源码整合和隔离核验；真实断言修复、闲置实现移除、请求内读取复用及探针异常清理见.scratch/slop-cleanup/evidence.md。本轮源码与其他已有改动按主题分组保存，提交推送回执以Git历史为准；未部署或重启，真实探针和i8未运行。
+- 全库审计确认的20项清理已完成源码整合和隔离核验；真实断言修复、闲置实现移除、请求内读取复用及探针异常清理见.scratch/slop-cleanup/evidence.md。本轮源码与其他已有改动已按主题提交推送；2026-10-16按用户授权重启加载e47d6a2，服务Running、/app和/healthz均200。真实探针和i8未运行；回执见.scratch/local/slop-publish-20261016/restart-result.json。
 
 
 - 用户明确付款计划effort暂不结项；对外交付物收拢为 artifacts/payment-plan-audit.skill，34项技能测试及解包真实表副本核对通过。273份旧中间物已校验恢复归档后普通删除，另清15份缓存；原表、关键证据、外部安装副本和用户备份保留。范围和后续见.scratch/payment-plan-workflow/spec.md及cleanup-manifest.json。
