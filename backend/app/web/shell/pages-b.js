@@ -41,7 +41,7 @@ let procMechWrites=Promise.resolve();
 function procMechCell(warehouse,ym,index,value,label){
   const source=MECH_SOURCES[warehouse]?.[ym]?.['mech_'+index];
   const attrs=`data-wh="${esc(warehouse)}" data-ym="${esc(ym)}" data-i="${index}"`;
-  if(source?.mode==='detail') return `<span>${M(value)}</span><div class="mut sm">明细确认 · <button class="link" data-act="procMechManual" ${attrs} aria-label="${esc(ym+' '+label+'切为手填')}">切为手填</button></div>`;
+  if(source?.mode==='detail') return `<span>${M(value)}</span><div class="mut sm">明细确认 · <button class="text-link" data-act="procMechManual" ${attrs} aria-label="${esc(ym+' '+label+'切为手填')}"><span class="text-link-label">切为手填</span></button></div>`;
   return `<input class="inp num" style="width:100%;min-width:calc(88px * var(--fscale))" data-act="procMechSave" data-submit-act="procMechSave" ${attrs} value="${esc(value==null?'':String(value))}" aria-label="${esc(ym+' '+label)}">`;
 }
 const procExpDlg=()=>{

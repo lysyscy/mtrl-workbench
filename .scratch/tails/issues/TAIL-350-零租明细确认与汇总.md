@@ -28,3 +28,5 @@
 **2026-10-19 · 保存与部署边界。** 本票、源码及共同证据同一Git提交保存，实际SHA和推送核对由Git日志及本轮最终回执定位；生产迁移、正式历史采纳和服务重启未执行，微软Excel及实体纸面打印未验。
 
 **2026-10-19 · 后续重启。** 用户授权后已备份、迁移两张生产空表并加载76ad5db；原34张业务表及序列不变，新接口/静态资源200，未登录写入401。真实历史未采纳；共同证据见.scratch/machinery-fee-workflow/evidence.md。
+
+**2026-10-19 · 用户五项反馈修复。** 公司汇总与核对表的列组分线贯穿多层表头、表体及合计；机械费文字／金额入口与现付款流水共用text-link/doc-link声明，无右箭头。旧link未重置原生按钮，且规范未指定构件主人，是样式重复的原因；frontend-design §4.8已指定统一入口。机械费与付款流水4项定向浏览器检查通过，默认／悬停／焦点／125%画面已核。 共同回执：本机`.artifacts/machinery-fee-workbench-fixes/20261019/`的checks-summary.json、empty-month-targeted.xml、ui-acc-final.json、production-removal-verification.json及live-loaded-verification.json；源码保存SHA和推送核对见Git。未重跑完整pytest、新备份完整恢复、全主题或实体打印。

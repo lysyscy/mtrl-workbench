@@ -29,3 +29,5 @@
 **2026-10-19 · 后续重启。** 用户授权后已备份、迁移两张生产空表并加载76ad5db；原34张业务表及序列不变，新接口/静态资源200，未登录写入401。真实历史未采纳；共同证据见.scratch/machinery-fee-workflow/evidence.md。
 
 **2026-10-19 · 真实采用及来源保护追加验收。** 用户最终授权后，备份两库并通过正式登录及history-preview/confirm采用11项目141月565个来源格，169格变化，0设备明细。乌兰净额、7老项目及全空兰考排除，空白保留系统值；累计按最终月值建基准，原件SHA及无关业务表不变。 共同证据与源码保存指针见docs/archive/machinery-fee-workflow-20261019/evidence.md末节，真实回执在本机adoption-plan-20261019/production-final-result.json。
+
+**2026-10-19 · 用户五项反馈修复。** 用户明确要求删除慧能顶部行；fresh事实为2025-01有效六列全0。隔离复现直接删除会使当前累计反增253000；新增受限empty-month-remove动作锁行／版本校验、材料库存及明细保护、关联基准调整、原值和操作者审计。69项后端定向测试通过（含隔离PG）。新两库备份20261019-192044-1ea26d1a后正式删除1条有效机械行及1条零材料活动快照，原批次12→11、其余11条快照逐项不变；当前累计3082993.94及全部分类累计不变，9月包月227700和其他月份不变，6条原导入change与原报事实保留。 共同回执：本机`.artifacts/machinery-fee-workbench-fixes/20261019/`的checks-summary.json、empty-month-targeted.xml、ui-acc-final.json、production-removal-verification.json及live-loaded-verification.json；源码保存SHA和推送核对见Git。未重跑完整pytest、新备份完整恢复、全主题或实体打印。

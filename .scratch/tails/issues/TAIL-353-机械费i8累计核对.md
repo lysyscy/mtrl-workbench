@@ -30,3 +30,5 @@
 **2026-10-19 · 后续重启。** 用户授权后已备份、迁移两张生产空表并加载76ad5db；原34张业务表及序列不变，新接口/静态资源200，未登录写入401。真实历史未采纳；共同证据见.scratch/machinery-fee-workflow/evidence.md。
 
 **2026-10-19 · 真实采用及来源保护追加验收。** SCY980803三类全量读取309/70/130条并独立复算，11项目真实快照已采用。大唐共享编号仅凭本轮11张原始单据标题逐一核定，保存抓取SHA/ID/来源，不改主档案或设全局自动归属。普康两差额350/3950保留，用户自行跟进。 共同证据与源码保存指针见docs/archive/machinery-fee-workflow-20261019/evidence.md末节，真实回执在本机adoption-plan-20261019/production-final-result.json。
+
+**2026-10-19 · 用户五项反馈修复。** 国风和龙源被首次发现状态误收待处理，纯空兰考被未知差额误收；现按真实金额差额／未忽略单据差异／未完成跟进及已有数据但缺对比来源筛选，首次或变化独立置于取数变化。真实只读快照三项目before/after均true→false，金额不变；纯空项目仅全部显示且标尚未录入。重启后healthz/app/workbench=200，三份静态资源字节相等；无登录删除=401。此次无i8抓取或单据写入。 共同回执：本机`.artifacts/machinery-fee-workbench-fixes/20261019/`的checks-summary.json、empty-month-targeted.xml、ui-acc-final.json、production-removal-verification.json及live-loaded-verification.json；源码保存SHA和推送核对见Git。未重跑完整pytest、新备份完整恢复、全主题或实体打印。

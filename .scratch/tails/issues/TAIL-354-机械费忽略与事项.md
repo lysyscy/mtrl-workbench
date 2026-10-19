@@ -27,3 +27,5 @@
 **2026-10-19 · 保存与部署边界。** 本票、源码及共同证据同一Git提交保存，实际SHA和推送核对由Git日志及本轮最终回执定位；生产迁移、正式历史采纳和服务重启未执行，微软Excel及实体纸面打印未验。
 
 **2026-10-19 · 后续重启。** 用户授权后已备份、迁移两张生产空表并加载76ad5db；原34张业务表及序列不变，新接口/静态资源200，未登录写入401。真实历史未采纳；共同证据见.scratch/machinery-fee-workflow/evidence.md。
+
+**2026-10-19 · 用户五项反馈修复。** 项目核查进度与重复跟进入口合并为跟进事项：显示未完成数量和首条摘要，点击同一事项窗口；页首为全部跟进。取数变化核实与事项完成分开。离线浏览器核跟进窗口查看不写入、已有事项仍进入待处理、首次发现不再制造金额待办，原忽略及事项事实未改。 共同回执：本机`.artifacts/machinery-fee-workbench-fixes/20261019/`的checks-summary.json、empty-month-targeted.xml、ui-acc-final.json、production-removal-verification.json及live-loaded-verification.json；源码保存SHA和推送核对见Git。未重跑完整pytest、新备份完整恢复、全主题或实体打印。

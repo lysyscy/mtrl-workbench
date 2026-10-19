@@ -40,6 +40,7 @@
 .mw-details tr:hover .mw-row-actions{background:var(--row-hover)}
 .mw-root .mw-dirty{background:var(--edit-l)!important;border-color:var(--edit-bd)!important}
 .mw-root .mw-danger,.mw-danger{color:var(--dg-d)}
+.mw-root .text-link.mw-danger:hover{color:var(--dg-d);background:var(--dg-l)}
 .mw-exempt{font-size:calc(11px * var(--fscale));white-space:nowrap}
 .mw-net{white-space:nowrap}
 .mw-footer,.mw-status{padding:calc(7px * var(--fscale)) calc(12px * var(--fscale));font-size:calc(11.5px * var(--fscale))}
@@ -49,6 +50,7 @@
 .mw-work .mw-project b{display:block;line-height:1.6}
 .mw-work th{min-width:calc(112px * var(--fscale))}
 .mw-work .mw-work-actions{min-width:calc(145px * var(--fscale));width:calc(145px * var(--fscale))}
+.mw-work .mw-followup{min-width:calc(168px * var(--fscale));max-width:calc(240px * var(--fscale));white-space:normal}
 .mw-work-actions .btn{font-size:calc(11px * var(--fscale));padding:calc(3px * var(--fscale)) calc(6px * var(--fscale));margin:calc(2px * var(--fscale))}
 .mw-sub{display:block;color:var(--tx2);font-size:calc(11px * var(--fscale));line-height:1.6;overflow-wrap:anywhere;white-space:normal}
 .mw-document{min-width:calc(155px * var(--fscale));line-height:1.7;padding:calc(4px * var(--fscale)) 0}

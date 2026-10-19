@@ -273,6 +273,116 @@ def source_manual(s, data, operator=''):
     return effective(s, wh, ym)
 
 
+def rebase_empty_month(s, wh, ym, row, history):
+    """Move only this cleared month's existing delta into the active reference bases."""
+    if not history:
+        return history
+    history_key = key('history', wh)
+    adopted, _ = read(s, key('adoption', wh, ym))
+    records = {history_key: Record(key=history_key, payload=history, revision=0),
+               key('adoption', wh, ym): Record(payload=adopted, revision=0)}
+    present, absent = {wh: [row]}, {wh: []}
+    rebased = deepcopy(history)
+    if history.get('report_total') is not None:
+        contribution = (Decimal(report_total(s, wh, records=records, manual_rows=present)) -
+                        Decimal(report_total(s, wh, records=records, manual_rows=absent)))
+        rebased['report_total'] = format(Decimal(str(history['report_total'])) + contribution, 'f')
+
+    def adjust(base, period):
+        with_month = cumulative(s, wh, period, records=records, manual_rows=present)
+        without_month = cumulative(s, wh, period, records=records, manual_rows=absent)
+        return {category: (format(Decimal(str(amount)) + Decimal(with_month[category]) -
+                                  Decimal(without_month[category]), 'f')
+                           if amount is not None and with_month.get(category) is not None else amount)
+                for category, amount in base.items()}
+
+    for period, base in history.get('cumulative_at', {}).items():
+        rebased['cumulative_at'][period] = adjust(base, period)
+    # Later months use category_totals and reference_months, rather than a dated reference_at.
+    fallback = {**history, 'cumulative_at': {}, 'reference_at': {}}
+    records[history_key].payload = fallback
+    if history.get('category_totals'):
+        rebased['category_totals'] = adjust(history['category_totals'], max(ym, history.get('base_month') or ym))
+    rebased.setdefault('reference_months', {})[ym] = dict.fromkeys(repo.MECH_KEYS, '0.00')
+    for period, references in rebased.get('reference_at', {}).items():
+        if period >= ym:
+            references[ym] = dict.fromkeys(repo.MECH_KEYS, '0.00')
+    rebased.get('effective_base', {}).pop(ym, None)
+    return rebased
+
+
+def empty_month_remove(s, data, operator=''):
+    from sqlalchemy import func
+    from app.mod06_proc.models import (BATCH_ACTIVE, ProcHistoryBatch, ProcHistorySnapshot,
+                                       ProcMechImportChange)
+
+    wh = warehouse(s, data.get('warehouse'))
+    ym = normalize_ym(data.get('ym'))
+    if not ym:
+        raise MustReportError('请选择有效月份')
+    if data.get('confirmed') is not True:
+        raise MustReportError('请明确确认删除空月份')
+    current = check_effective(s, wh, ym, data.get('effective_signature'))
+    row = repo.mech_row(s, wh, ym)
+    if row is None:
+        raise MustReportError('该月没有可删除的机械记录')
+    if any(Decimal(value or '0') != 0 for value in current['values'].values()):
+        raise MustReportError('该月机械费尚有金额，不能删除')
+    if any(source.get('mode') == 'detail' for source in current['sources'].values()):
+        raise MustReportError('该月仍有明细确认金额，不能删除')
+    details = list(s.scalars(select(Record).where(Record.key.in_(
+        [key('details', wh, ym, category) for category in CATEGORY_COLUMNS])).with_for_update()))
+    if any(record.payload.get('rows') for record in details):
+        raise MustReportError('该月仍有设备明细，不能删除')
+    if any(item.get('warehouse') == wh and item.get('ym') == ym for item in repo.load_inv_rows(s)):
+        raise MustReportError('该月仍有库存单据，不能删除')
+    batches = list(s.scalars(select(ProcHistoryBatch).where(
+        ProcHistoryBatch.warehouse_name == wh, ProcHistoryBatch.status == BATCH_ACTIVE).with_for_update()))
+    snapshots = list(s.scalars(select(ProcHistorySnapshot).where(
+        ProcHistorySnapshot.warehouse_name == wh, ProcHistorySnapshot.ym == ym,
+        ProcHistorySnapshot.batch_no.in_([batch.batch_no for batch in batches])).with_for_update()))
+    material_columns = [f'{direction}_{i}' for direction in ('in', 'out') for i in range(5)]
+    if any(Decimal(str(getattr(snapshot, column) or 0)) != 0
+           for snapshot in snapshots for column in material_columns):
+        raise MustReportError('该月仍有材料金额，不能删除')
+    history_key = key('history', wh)
+    history_record = s.scalar(select(Record).where(Record.key == history_key).with_for_update()
+                              .execution_options(populate_existing=True))
+    history = deepcopy(history_record.payload) if history_record else {}
+    revision = history_record.revision if history_record else 0
+    rebased = rebase_empty_month(s, wh, ym, row, history)
+    changes = list(s.scalars(select(ProcMechImportChange).where(
+        ProcMechImportChange.warehouse_name == wh, ProcMechImportChange.ym == ym).with_for_update()))
+    affected = {snapshot.batch_no for snapshot in snapshots}
+    batch_counts = {batch.batch_no: s.scalar(select(func.count()).select_from(ProcHistorySnapshot).where(
+        ProcHistorySnapshot.batch_no == batch.batch_no)) - sum(snapshot.batch_no == batch.batch_no for snapshot in snapshots)
+        for batch in batches if batch.batch_no in affected}
+
+    def saved_row(item):
+        return json.loads(json.dumps({column.key: getattr(item, column.key)
+                                      for column in item.__table__.columns}, default=str))
+
+    audit_key = key('empty-month-removal', wh, ym, str(uuid4()))
+    audit = {'warehouse': wh, 'ym': ym, 'operator': operator, 'at': datetime.now().isoformat(),
+             'effective_before': current, 'mechanical_row': saved_row(row), 'history_before': history,
+             'snapshots': [saved_row(snapshot) for snapshot in snapshots],
+             'batches_before': [saved_row(batch) for batch in batches if batch.batch_no in affected],
+             'import_changes': [saved_row(change) for change in changes]}
+    with s.begin_nested():
+        write(s, audit_key, audit, 0)
+        if history:
+            write(s, history_key, rebased, revision)
+        for snapshot in snapshots:
+            s.delete(snapshot)
+        for batch in batches:
+            if batch.batch_no in batch_counts:
+                batch.row_count = batch_counts[batch.batch_no]
+        s.delete(row)
+        s.flush()
+    return {'removed': True, 'warehouse': wh, 'ym': ym, 'audit_key': audit_key,
+            'removed_snapshots': len(snapshots), 'report_total': report_total(s, wh)}
+
+
 def internal_save(s, data):
     wh = warehouse(s, data.get('warehouse'))
     ym = normalize_ym(data.get('ym'))
@@ -837,6 +947,7 @@ def action(s, name, payload, operator=''):
         revision = write(s, 'settings', value, payload.get('revision', -1))
         return {'ok': True, **value, 'revision': revision}
     handlers = {'details-save': save_details, 'amounts-confirm': confirm_amounts, 'source-manual': source_manual,
+                'empty-month-remove': empty_month_remove,
                 'internal-save': internal_save, 'import-preview': import_preview,
                 'import-confirm': import_confirm, 'i8-preview': i8_preview,
                 'i8-confirm': i8_confirm, 'ignore': ignore, 'document-ignore': document_ignore,
@@ -844,5 +955,5 @@ def action(s, name, payload, operator=''):
                 'history-preview': history_preview, 'history-confirm': history_confirm}
     if name not in handlers:
         raise MustReportError('不支持的机械费操作')
-    args = {'operator': operator} if name in ('amounts-confirm', 'source-manual', 'import-confirm') else {}
+    args = {'operator': operator} if name in ('amounts-confirm', 'source-manual', 'import-confirm', 'empty-month-remove') else {}
     return {'ok': True, **handlers[name](s, payload, **args)}

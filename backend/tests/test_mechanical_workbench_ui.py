@@ -53,6 +53,23 @@ vm.runInContext(`(async()=>{
  MW.data.discoveries=[{id:'unmapped',warehouse:'',projectId:'shared',projectName:'待核实的小微壳',kind:'unmapped',status:'pending',totals:{usage:'125.00',project:'25.00',team:null}}];
  MW.filter='findings';const unmappedHTML=mwWork();assert.ok(unmappedHTML.includes('待核实的小微壳'));assert.ok(unmappedHTML.includes('125.00'));assert.ok(unmappedHTML.includes('data-id="unmapped"'));assert.ok(unmappedHTML.includes('核实发现'));assert.ok(!unmappedHTML.includes('data-pj="shared"'),'未明确映射不能把i8项目键当仓库采用');
  MW.filter='pending';MW.data.discoveries=[];
+ const workflowData=MW.data;
+ MW.data={projects:['国风','龙源','兰考','缺侧'],settings:{shown_projects:['国风','龙源','兰考','缺侧']},details:[],effective:[],matters:[],billDifferences:[],
+   reconciliations:['国风','龙源','兰考','缺侧'].flatMap(warehouse=>['report','internal'].map(relation=>({warehouse,relation,left:warehouse==='兰考'?null:'0.00',right:['兰考','缺侧'].includes(warehouse)?null:'0.00',pending:['兰考','缺侧'].includes(warehouse)?null:'0.00'}))),
+   discoveries:[{warehouse:'国风',id:'first',kind:'first',status:'pending'},{warehouse:'龙源',id:'changed',kind:'changed',status:'pending'}]};
+ const workRecords=mwReconciliations();
+ assert.equal(mwPending(workRecords[0]),false,'国风累计对平，首次取数不冒充差额');
+ assert.equal(mwPending(workRecords[1]),false,'龙源累计对平，来源变化不冒充差额');
+ assert.equal(mwPending(workRecords[2]),false,'兰考全空不能因null差额进入待处理');
+ assert.equal(mwPending(workRecords[3]),true,'有报表数据缺核对侧仍须处理');
+ assert.ok(mwWorkTable([workRecords[2]]).includes('尚未录入'));
+ assert.ok(mwWorkTable([workRecords[3]]).includes('待取数'));
+ MW.filter='pending';assert.ok(!mwWork().includes('data-id="first"'));
+ MW.filter='findings';assert.ok(mwWork().includes('data-id="first"'));assert.ok(mwWork().includes('data-id="changed"'));assert.ok(!mwWork().includes('项目核查进度'));
+ MW.data.matters=[{warehouse:'国风',text:'待确认税率 <script>',completed:false},{warehouse:'国风',text:'已完成',completed:true}];
+ const followup=mwWorkTable([workRecords[0]]);assert.ok(followup.includes('1项未完成'));assert.ok(followup.includes('待确认税率 &lt;script&gt;'));assert.equal((followup.match(/data-act="mwMatters"/g)||[]).length,1,'跟进入口不重复');
+ assert.ok(mwPending(workRecords[0]),'真实未完成跟进保留待处理');
+ MW.data=workflowData;MW.filter='pending';
  MW.tab='zero';MW.data.effective[0].sources={mech_2:{mode:'detail'},mech_4:{mode:'manual'}};MW.data.effective[0].values.mech_4='91.00';
  MW.data.details[0].blocked_columns={mech_2:[],mech_4:[{id:'one',fields:['票种／税率']}]};mwConfirmDialog();
  assert.match(latestModal.body,/data-column="mech_2" checked/);assert.match(latestModal.body,/data-column="mech_4" disabled/,'净额待补不能禁用已齐备的含税列');
@@ -124,7 +141,8 @@ def test_detail_sources_require_explicit_switch_and_confirmation_columns_are_ind
     assert p.locator('[data-act="procMechSave"][data-i="2"]').count() == 0
     assert p.locator('[data-act="procMechSave"][data-i="4"]').count() == 1
     assert '明细确认' in p.inner_text('#view')
-    scratch = Path(__file__).resolve().parents[2] / '.scratch/local'
+    scratch = Path(__file__).resolve().parents[2] / '.artifacts/machinery-fee-workbench-fixes/20261019'
+    scratch.mkdir(parents=True, exist_ok=True)
     p.locator('[data-act="procMechManual"]').evaluate("el=>{const table=el.closest('.tw');table.scrollLeft=table.scrollWidth;}")
     p.screenshot(path=str(scratch / 'mechanical-source-process-readonly.png'))
     before = p.evaluate('calls.length')
@@ -155,3 +173,71 @@ def test_detail_sources_require_explicit_switch_and_confirmation_columns_are_ind
     assert p.evaluate("calls.find(c=>c.url.endsWith('/amounts-confirm')).body") == {
         'warehouse': '测试仓库', 'ym': '2026-01', 'category': 'zero', 'columns': ['mech_4'],
         'revision': 4, 'effective_signature': 'month-signature'}
+
+
+@acc()
+def test_workbench_pending_followups_shared_links_and_column_groups(ui_page):
+    from app.mod03_notice.page import render_theme
+
+    p = ui_page
+    p.add_style_tag(content=render_theme('默认'))
+    web = Path(__file__).resolve().parents[1] / 'app/web'
+    p.add_style_tag(content=(web / 'shell/mechanical-workbench.css').read_text(encoding='utf-8'))
+    p.evaluate("""() => {
+      BOOTING=false;VIEW='m10';MW.tab='work';MW.month='2026-09';MW.filter='pending';
+      const projects=['国风','龙源','兰考','有差额','待取数','待核对','有跟进'];
+      const relation=(warehouse,kind)=>({warehouse,relation:kind,left:warehouse==='兰考'?null:'100.00',
+        right:['兰考','待取数','待核对'].includes(warehouse)?null:'100.00',
+        pending:['兰考','待取数','待核对'].includes(warehouse)?null:warehouse==='有差额'?'10.00':'0.00',
+        ignored:'0.00',fetched_at:warehouse==='待核对'?'2026-10-19 10:00':null});
+      MW.data={ok:true,projects:projects.map(warehouse=>({warehouse,name:warehouse})),settings:{shown_projects:projects},
+        details:[],effective:projects.map(warehouse=>({warehouse,ym:MW.month,values:warehouse==='兰考'?{}:{mech_2:'100.00',mech_3:'200.00'}})),
+        reconciliations:projects.flatMap(warehouse=>['report','internal'].map(kind=>relation(warehouse,kind))),billDifferences:[],
+        histories:[],summary:[],i8:[],matters:[{id:'one',warehouse:'有跟进',text:'请核实十月租赁税率与凭据',completed:false},{id:'done',warehouse:'有跟进',text:'已办结事项',completed:true}],
+        discoveries:[{id:'first',warehouse:'国风',kind:'first',status:'pending'},{id:'changed',warehouse:'龙源',kind:'changed',status:'pending'}]};
+      window.writeCalls=[];API.post=async(url,body)=>{writeCalls.push({url,body});return {ok:true};};render();
+    }""")
+    main = p.locator('.mw-work').first
+    assert main.locator('tbody tr').count() == 4
+    assert '国风' not in main.inner_text() and '兰考' not in main.inner_text()
+    assert '待取数' in main.inner_text() and '待核对' in main.inner_text()
+    assert '项目核查进度' not in p.inner_text('#view')
+    assert main.locator('[data-act="mwMatters"][data-pj="有跟进"]').inner_text() == '1项未完成'
+    assert '请核实十月租赁税率与凭据' in main.inner_text()
+    assert main.locator('tbody tr').first.locator('.vsep').count() == 5
+    assert main.locator('thead tr').first.locator('.vsep').count() == 5
+    assert main.locator('thead tr').nth(1).locator('.vsep').count() == 2
+    p.click('[data-act="mwMatters"][data-pj="有跟进"]')
+    assert '跟进事项 · 有跟进' in p.inner_text('#modalRoot')
+    assert '已办结事项' in p.inner_text('#modalRoot')
+    p.click('[data-act="closeModal"]')
+    p.click('.mw-actions [data-act="mwMatters"]')
+    assert '跟进事项' in p.inner_text('#modalRoot')
+    p.click('[data-act="closeModal"]')
+    p.click('[data-act="mwFilter"][data-filter="all"]')
+    assert '尚未录入' in p.locator('.mw-work tbody tr').filter(has_text='兰考').inner_text()
+    p.click('[data-act="mwFilter"][data-filter="findings"]')
+    assert p.locator('[data-act="mwDiscovery"]').count() == 2
+    p.click('[data-act="mwDiscovery"][data-id="first"]')
+    assert p.locator('[data-act="mwDiscoveryResolve"]').count() == 1
+    p.click('[data-act="closeModal"]')
+    assert p.evaluate('writeCalls.length') == 0, '查看跟进和取数变化不能自动完成任何记录'
+    p.click('[data-act="mwTab"][data-tab="summary"]')
+    link = p.locator('[data-act="mwOpenDetail"][data-pj="国风"]').first
+    assert link.get_attribute('class') == 'text-link'
+    assert link.locator('svg').count() == 0
+    assert link.evaluate('el=>getComputedStyle(el).borderTopWidth') == '0px'
+    assert link.evaluate('el=>getComputedStyle(el).backgroundColor') == 'rgba(0, 0, 0, 0)'
+    link.hover()
+    assert link.evaluate('el=>getComputedStyle(el).backgroundColor') != 'rgba(0, 0, 0, 0)'
+    assert link.locator('.text-link-label').evaluate('el=>getComputedStyle(el).textDecorationLine') == 'underline'
+    link.focus()
+    p.keyboard.press('Tab')
+    p.keyboard.press('Shift+Tab')
+    assert link.evaluate('el=>getComputedStyle(el).outlineStyle') == 'solid'
+    assert p.locator('.mw-company thead tr').first.locator('.vsep').count() == 4
+    assert p.locator('.mw-company thead tr').nth(1).locator('.vsep').count() == 3
+    assert p.locator('.mw-company tbody tr').first.locator('.vsep').count() == 4
+    assert p.locator('.mw-company .sumrow .vsep').count() == 3
+    p.keyboard.press('Enter')
+    assert p.evaluate('MW.tab') == 'zero'
