@@ -247,7 +247,7 @@ def test_i8_network_fetch_happens_outside_database_session(api, monkeypatch):
 
 @acc("ACC-RPT-MECH-001", "001-07")
 def test_i8_network_failure_does_not_open_write_session(api, monkeypatch):
-    def fail_read(projects):
+    def fail_read(projects, previous):
         assert api.tracker['active'] == 0
         raise MustReportError('读取失败，旧值保持')
 
@@ -265,12 +265,49 @@ def test_i8_network_failure_does_not_open_write_session(api, monkeypatch):
         assert record.error_message == '读取失败，旧值保持'
 
 
+@acc('ACC-RPT-MECH-001', '001-07')
+def test_fetch_passes_shell_archive_and_keywords_without_holding_session(api, monkeypatch):
+    from app.mod01_projects import service as projects_service
+    from app.mod06_proc.workbench_i8 import normalize
+    with api.factory.begin() as s:
+        shell = Project(project_type='shell', name_full='小微壳', phid='shared-key')
+        s.add(shell)
+        s.flush()
+        shell_id = shell.id
+        for wh, keyword in [('甲', '大唐'), ('乙', '百利')]:
+            row = s.scalar(select(Project).where(Project.warehouse_name == wh))
+            row.phid, row.project_type, row.parent_shell_id, row.match_keywords = 'shared-key', 'small', shell_id, [keyword]
+    original_all = projects_service.all_projects
+    monkeypatch.setattr(projects_service, 'all_projects', lambda s: [*original_all(s), s.get(Project, shell_id)])
+
+    class Client:
+        def __init__(self, **kw):
+            assert api.tracker['active'] == 0
+            assert kw == {'allow_kick': False}
+        def close(self):
+            pass
+
+    monkeypatch.setattr(workbench_i8, 'I8Client', Client)
+    lists = {kind: {'total': 2, 'rows': [normalize({'phid': keyword + kind, 'phid_pc': 'shared-key',
+              'bill_name': keyword, 'u_fyze': '10', 'u_bqjse': '10', 'u_bqspe': '10'}, kind)
+              for keyword in ('大唐', '百利')]} for kind in ('usage', 'project', 'team')}
+    monkeypatch.setattr(workbench_i8, 'fetch_lists', lambda client: deepcopy(lists))
+    response = api.client.post('/api/m06/workbench/i8-fetch', json={'request_id': 'keywords'})
+    assert response.status_code == 200
+    preview = response.json()
+    assert preview['unmapped_projects'] == []
+    assert {p['warehouse'] for p in preview['projects']} == {'甲', '乙'}
+    assert all(len(rows) == 1 for p in preview['projects'] for rows in p['sources'].values())
+    assert api.client.post('/api/m06/workbench/i8-confirm', json={
+        'preview_id': preview['preview_id'], 'warehouses': ['甲', '乙']}).status_code == 200
+
+
 @acc("ACC-RPT-MECH-001", "001-07")
 def test_i8_preview_failure_rolls_back_business_but_keeps_execution_record(api, monkeypatch):
     incoming = {'projects': [{'warehouse': '甲', 'projectId': 'i8-a',
         'sources': {'usage': [{'id': 'u', 'projectId': 'i8-a', 'amount': '1.00'}], 'project': [], 'team': []},
         'complete': {'usage': True, 'project': True, 'team': True}}], 'counts': {'usage': 1, 'project': 0, 'team': 0}}
-    monkeypatch.setattr(workbench_i8, 'read_preview', lambda projects: deepcopy(incoming))
+    monkeypatch.setattr(workbench_i8, 'read_preview', lambda projects, previous: deepcopy(incoming))
     action = workbench.action
 
     def fail_after_preview(session, name, payload, operator=''):

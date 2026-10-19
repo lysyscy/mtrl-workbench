@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from app.core.errors import MustReportError
+from app.mod01_projects.domain import resolve_ownership
+from app.mod01_projects.models import TYPE_NORMAL, TYPE_SHELL
 from app.mod02_i8.client import I8Client, serialize_fetch
 
 # Observed on all three Fourth Engineering Company list pages on 2026-10-19.
@@ -76,33 +78,58 @@ def fetch_lists(client, *, page_size=410):
     return result
 
 
-def preview_payload(lists, projects):
-    candidates = {}
+def preview_payload(lists, projects, previous=None):
+    by_id, candidates = {}, {}
     for project in projects:
-        if project.get('phid') and project.get('warehouse'):
-            candidates.setdefault(str(project['phid']), set()).add(project['warehouse'])
-    mapping = {project_id: next(iter(warehouses)) for project_id, warehouses in candidates.items()
-               if len(warehouses) == 1}
-    groups = {}
+        if project.phid:
+            by_id.setdefault(str(project.phid), []).append(project)
+            if project.warehouse_name:
+                candidates.setdefault(str(project.phid), set()).add(project.warehouse_name)
+    groups, unresolved = {}, {}
+
+    def new_group(project_id, project_name):
+        return {'projectId': project_id, 'projectName': project_name, 'sources': {k: [] for k in SOURCES}}
+
     for kind, source in lists.items():
         for row in source['rows']:
-            item = groups.setdefault(row['projectId'], {'projectId': row['projectId'],
-                                     'projectName': row['projectName'], 'sources': {k: [] for k in SOURCES}})
+            project_id = row['projectId']
+            archives = by_id.get(project_id, [])
+            shells = [p for p in archives if p.project_type == TYPE_SHELL]
+            owner = None
+            if len(shells) == 1:
+                shell = shells[0]
+                family = [shell, *(p for p in projects if p.parent_shell_id == shell.id)]
+                decision = resolve_ownership(name_full=shell.name_full,
+                                             doc_name=row.get('title', ''), projects=family)
+                if decision.settled:
+                    owner = next((p for p in family if p.id == decision.target_id), None)
+            elif not shells:
+                normals = [p for p in archives if p.project_type == TYPE_NORMAL and p.warehouse_name]
+                if len(normals) == 1 and len(archives) == 1:
+                    owner = normals[0]
+            if owner and owner.warehouse_name:
+                item = groups.setdefault((project_id, owner.warehouse_name), new_group(project_id, row['projectName']))
+                item['warehouse'] = owner.warehouse_name
+            else:
+                item = unresolved.setdefault(project_id, new_group(project_id, row['projectName']))
             item['sources'][kind].append(row)
     # Complete permission-scoped lists can propose a missing old project as a
     # reduction; confirmation still requires explicit evidence before zeroing.
     if all(kind in lists and lists[kind]['total'] == len(lists[kind]['rows']) for kind in SOURCES):
         for project in projects:
-            if project.get('has_i8_snapshot') and project.get('phid'):
-                groups.setdefault(str(project['phid']), {'projectId': str(project['phid']),
-                    'projectName': project.get('name', project['warehouse']), 'sources': {k: [] for k in SOURCES}})
+            project_id = str(project.phid or '')
+            if project.warehouse_name and project_id and (previous or {}).get(project.warehouse_name) == {project_id}:
+                item = groups.setdefault((project_id, project.warehouse_name), new_group(project_id, project.name_full))
+                item['warehouse'] = project.warehouse_name
     now = datetime.now(timezone.utc).isoformat()
     known, unmapped = [], []
-    for project_id, item in groups.items():
-        item.update(complete={k: True for k in SOURCES}, fetched_at=now,
+    for item in [*groups.values(), *unresolved.values()]:
+        project_id = item['projectId']
+        item.update(complete={k: k in lists and lists[k]['total'] == len(lists[k]['rows'])
+                              and (not item.get('warehouse') or project_id not in unresolved) for k in SOURCES}, fetched_at=now,
                     scope='第四工程公司权限内全部项目；不按报表显示名单或月份筛选')
-        if project_id in mapping:
-            known.append({**item, 'warehouse': mapping[project_id]})
+        if item.get('warehouse'):
+            known.append(item)
         else:
             item['candidate_warehouses'] = sorted(candidates.get(project_id, set()))
             unmapped.append(item)
@@ -110,9 +137,9 @@ def preview_payload(lists, projects):
             'scope': '第四工程公司权限内全部项目', 'counts': {k: v['total'] for k, v in lists.items()}}
 
 
-def read_preview(projects):
+def read_preview(projects, previous=None):
     client = I8Client(allow_kick=False)
     try:
-        return preview_payload(fetch_lists(client), projects)
+        return preview_payload(fetch_lists(client), projects, previous)
     finally:
         client.close()

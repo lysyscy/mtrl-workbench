@@ -731,9 +731,29 @@ def i8_confirm(s, data):
         payload = {k: deepcopy(v) for k, v in item.items() if k not in ('before', 'revision')}
         payload['reduction_reason'] = data.get('reduction_reason', '')
         write(s, key('i8', item['warehouse']), payload, item['revision'])
+    resolve_adopted_discoveries(s)
     preview.result = {'ok': True, 'warehouses': sorted(selected | adopted)}
     s.flush()
     return deepcopy(preview.result)
+
+
+def resolve_adopted_discoveries(s):
+    """Retire an old ownership warning only after every exact source fact has one adopted owner."""
+    adopted = {}
+    for record in s.scalars(select(Record).where(Record.key.like('i8:%'))):
+        for kind, rows in record.payload.get('sources', {}).items():
+            for row in rows:
+                adopted.setdefault(digest([kind, row]), set()).add(record.payload['warehouse'])
+    for record in s.scalars(select(Record).where(Record.key.like('discovery:%'))):
+        item = record.payload
+        if item.get('kind') != 'unmapped' or item.get('status') != 'pending':
+            continue
+        facts = [digest([kind, row]) for kind, rows in item.get('sources', {}).items() for row in rows]
+        if facts and all(len(adopted.get(fact, set())) == 1 for fact in facts):
+            owners = sorted({next(iter(adopted[fact])) for fact in facts})
+            write(s, record.key, {**item, 'status': 'resolved', 'mapped_warehouses': owners,
+                  'note': '原单据已逐单确定归属并采用；' + '、'.join(owners),
+                  'resolved_at': datetime.now().isoformat()}, record.revision)
 
 
 def report_total(s, wh, *, records=None, manual_rows=None):

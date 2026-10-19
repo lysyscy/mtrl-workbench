@@ -14,6 +14,7 @@ from app.core.identity import current_operator
 from app.mod06_proc import workbench
 from app.mod06_proc.domain import normalize_ym
 from app.mod02_i8 import service as i8_service
+from app.mod01_projects import service as project_service
 
 router = APIRouter(tags=['mechanical-workbench'])
 
@@ -77,9 +78,8 @@ def perform_action(name: str, payload: dict, request: Request):
                         row['projectId'] for rows in snapshot.get('sources', {}).values()
                         for row in rows if row.get('projectId')})
                     previous[snapshot['warehouse']] = ids
-                projects = [{**p, 'has_i8_snapshot': previous.get(p['warehouse']) == {p['phid']}}
-                            for p in current['projects']]
-            incoming = read_preview(projects)
+                projects = project_service.all_projects(session)
+            incoming = read_preview(projects, previous)
             incoming['request_id'] = payload.get('request_id', '')
             with session_scope() as session:
                 result = workbench.action(session, 'i8-preview', incoming, operator)

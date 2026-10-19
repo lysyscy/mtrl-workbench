@@ -340,6 +340,34 @@ def test_unmapped_i8_project_persists_fact_without_creating_archive_or_amount(se
     assert not W.state(session)['effective']
 
 
+@pytest.mark.parametrize('case', ['exact', 'changed', 'missing', 'duplicate-owner'])
+@acc('ACC-RPT-MECH-001', '001-07')
+def test_adoption_retires_only_fully_covered_unique_original_ownership_warning(session, case):
+    from copy import deepcopy
+    incoming = i8_project()
+    for rows in incoming['sources'].values():
+        for row in rows:
+            row.update(projectId='shell-id', title='大唐雷州')
+    unknown = {'projectId': 'shell-id', 'sources': deepcopy(incoming['sources'])}
+    W.i8_preview(session, {'request_id': 'unmapped', 'unmapped_projects': [unknown]})
+    if case == 'changed':
+        incoming['sources']['usage'][0]['amount'] = '200.00'
+    elif case == 'missing':
+        incoming['sources']['team'] = []
+    projects = [incoming]
+    if case == 'duplicate-owner':
+        projects.append({**deepcopy(incoming), 'warehouse': '乙'})
+    preview = W.i8_preview(session, {'request_id': 'mapped', 'projects': projects})
+    warning = lambda: next(d for d in W.state(session)['discoveries'] if d['kind'] == 'unmapped')
+    assert warning()['status'] == 'pending'
+    W.i8_confirm(session, {'preview_id': preview['preview_id'], 'warehouses': [p['warehouse'] for p in projects]})
+    assert warning()['status'] == ('resolved' if case == 'exact' else 'pending')
+    assert warning()['sources'] == W.normalize_sources(unknown['sources'])
+    if case == 'exact':
+        assert warning()['mapped_warehouses'] == ['甲']
+    assert not W.state(session)['effective']
+
+
 @acc()
 def test_state_batches_reads_and_returns_independent_history_values(session):
     from copy import deepcopy
