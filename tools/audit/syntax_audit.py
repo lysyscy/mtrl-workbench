@@ -157,7 +157,7 @@ def _extract_script(html: str) -> str:
 
 
 def rule_q2(shell: Path | None = None) -> tuple[list[str], str]:
-    """`Q2` —— 壳的**每一件**都必须过 `node --check`。
+    """`Q2` —— 壳的 HTML 内联脚本与 JS 件必须过 `node --check`。
 
     ⚠️ 2026-09-19（`P4`① 读取点收敛）：壳已按 `web/shell/*.js` 拆件 ⇒ **只查 `index.html` 会静默漏掉接线层**
     （而那正是最容易写错、又最贵的一段）。⇒ 默认逐件查：`index.html` 取它的内联 `<script>`，
@@ -173,6 +173,8 @@ def rule_q2(shell: Path | None = None) -> tuple[list[str], str]:
     bad: list[str] = []
     try:
         for target in parts:
+            if target.suffix.lower() not in {".html", ".js"}:
+                continue  # CSS belongs to the shell inventory, not the JavaScript parser.
             if not target.exists():
                 bad.append(f"找不到壳的某一件：{target}")
                 continue
@@ -330,11 +332,20 @@ def _selftest() -> int:
                 print("        ", q2[0][:130])
             ok &= bool(q2) and not q2_ok
 
+        css = base / "shell.css"
+        css.write_text(".shell { color: red; }", encoding="utf-8")
+        bad_js = base / "bad.js"
+        bad_js.write_text("const broken = ;", encoding="utf-8")
+        css_bad, _ = rule_q2(css)
+        js_bad, _ = rule_q2(bad_js)
+        print("自检 Q2②：CSS不当脚本 = ", not css_bad, "· 外链JS坏样本判红 = ", bool(js_bad))
+        ok &= not css_bad and bool(js_bad)
+
         # Q3：临时目录里造一个"备份散件" ⇒ 必须判红；把它当作"壳件"传进去 ⇒ 必须放行
         stray = base / "stray.js.bak-sync"
         stray.write_text("// 09-21 的旧备份\n", encoding="utf-8")
         q3_bad = rule_q3(web=base, parts=[])
-        q3_ok = rule_q3(web=base, parts=[bad_html, good_html, stray])
+        q3_ok = rule_q3(web=base, parts=[bad_html, good_html, css, bad_js, stray])
         print("自检 Q3：散件判红 =", bool(q3_bad), "· 壳件放行 =", not q3_ok)
         if q3_bad:
             print("        ", q3_bad[0][:110])

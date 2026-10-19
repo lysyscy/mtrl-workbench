@@ -25,6 +25,7 @@ logger = get_logger()
 
 #: 模板目录（`app/resources/templates/`）
 TEMPLATE_DIR: Path = Path(__file__).resolve().parents[1] / "resources" / "templates"
+MECHANICAL_TEMPLATE: Path = TEMPLATE_DIR / "模板-机械费四页.xlsx"
 
 #: 收发结存表模板（`API-02` 的成品基底）
 SETL_TEMPLATE: Path = TEMPLATE_DIR / "模板_收发结存表.xlsx"
@@ -44,10 +45,11 @@ BIG_TEMPLATE: Path = TEMPLATE_DIR / "模板-开会大表.xlsx"             # she
 #: 路径① 的集采打印模板与登记清单（供完整性检查使用）。
 JC_PRINT_TEMPLATE: Path = TEMPLATE_DIR / "模板-集采打印台账.xlsx"
 
-PATH1_TEMPLATES: tuple[Path, ...] = (LEDGER_TEMPLATE, PROC_TEMPLATE, WELD_TEMPLATE, BIG_TEMPLATE, JC_PRINT_TEMPLATE)
+PATH1_TEMPLATES: tuple[Path, ...] = (LEDGER_TEMPLATE, PROC_TEMPLATE, WELD_TEMPLATE, BIG_TEMPLATE, JC_PRINT_TEMPLATE, MECHANICAL_TEMPLATE)
 
 #: 登记的 SHA256（**唯一登记处** = `docs/reference/template-export.md` §五 那张表；改模板必须同时改这里）
 EXPECTED_SHA256: dict[str, str] = {
+    "模板-机械费四页.xlsx": "83a5a4e5eb5d04f3dedbbf018d08ba8aa5205d463f6654dece8da3ff1ad26fdd",
     "模板-集采打印台账.xlsx": "a9654f0530479929cdb5bd687d8f1fa2fa61ed0979a79af969bd56e0a03f8e6d",
     "模板_收发结存表.xlsx":
         "eab1c626dce769ac979408564cbffa52a8ca3bc42d80c76c40e0335f8c46d323",
@@ -99,5 +101,5 @@ def require_template(path: Path) -> Path:
 
 
 __all__ = ["TEMPLATE_DIR", "SETL_TEMPLATE", "KCDJ_TEMPLATE", "LEDGER_TEMPLATE", "PROC_TEMPLATE",
-           "WELD_TEMPLATE", "BIG_TEMPLATE", "JC_PRINT_TEMPLATE", "PATH1_TEMPLATES", "EXPECTED_SHA256",
+           "WELD_TEMPLATE", "BIG_TEMPLATE", "JC_PRINT_TEMPLATE", "MECHANICAL_TEMPLATE", "PATH1_TEMPLATES", "EXPECTED_SHA256",
            "sha256_of", "require_template"]

@@ -14,8 +14,8 @@
 ⚠️ 本件**不判** `§节号`：用户 2026-09-27 裁定 `B` —— 口径说明里**保留**《说明书》节号（"要查才看"的指路牌）。
 
 ⭐ **唯一的例外**（2026-10-01 `TAIL-209` 余项 ②）＝ `test_壳源码里不许有双层星号_加粗标记`：
-它**是**一次源码扫查，但靶是**一个字面标记**（`**`）而不是"要判语义的内部编号"⇒ 没有判断成分
-（为什么它不算"通用词法扫查"、以及为什么不会假阳性，写在**那条自己的 docstring** 里）。
+它只查字符串字面量和静态 HTML 中的 `**`，用既有 JS 扫描器跳过表达式、注释和正则；
+模板插值里的嵌套字符串仍检查。
 """
 
 from __future__ import annotations
@@ -174,6 +174,68 @@ def test_说明块都不超长_弹窗也在内():
         + "\n  ".join(over))
 
 
+def _literal_double_stars(text: str, *, html: bool = False) -> list[int]:
+    """返回可显示字面量中的标记位置；模板插值递归检查字符串，指数运算不算文字。"""
+    from tools.audit.jslex import _skip_trivia, match, skip_string
+
+    found: list[int] = []
+
+    def collect(start: int, end: int) -> None:
+        found.extend(m.start() + start for m in re.finditer(r"\*\*", text[start:end]))
+
+    def scan(start: int, end: int) -> None:
+        i = start
+        while i < end:
+            if text[i] not in "'\"`":
+                i = max(i + 1, _skip_trivia(text, i))
+                continue
+            stop = skip_string(text, i)
+            if text[i] != "`":
+                collect(i + 1, stop - 1)
+                i = stop
+                continue
+            i += 1
+            chunk = i
+            while i < stop - 1:
+                if text[i] == "\\":
+                    i += 2
+                elif text.startswith("${", i):
+                    collect(chunk, i)
+                    close = match(text, i + 1, "{", "}")
+                    scan(i + 2, close - 1)
+                    i = chunk = close
+                else:
+                    i += 1
+            collect(chunk, stop - 1)
+            i = stop
+
+    if html:
+        markup = re.sub(r"<!--[\s\S]*?-->", lambda m: ' ' * len(m.group()), text)
+        outside = list(markup)
+        for script in re.finditer(r"<(script|style)\b[^>]*>([\s\S]*?)</\1\s*>", markup, re.I):
+            scan(script.start(2), script.end(2))
+            outside[script.start():script.end()] = ' ' * (script.end() - script.start())
+        found.extend(m.start() for m in re.finditer(r"\*\*", ''.join(outside)))
+    else:
+        scan(0, len(text))
+    return found
+
+
+@acc()
+def test_加粗守卫只判字面量且保留模板嵌套():
+    assert not _literal_double_stars("const n=10n ** 2n; const r=/\\*\\*/; /* '**x**' */")
+    assert _literal_double_stars("toast('**x**');")
+    assert _literal_double_stars('const t=`<p>**x**</p>`;')
+    nested = "const t=`${ok ? '**x**' : `inner ${10n ** 2n} **y**`}`;"
+    assert len(_literal_double_stars(nested)) == 4
+    assert not _literal_double_stars('const t=`${10n ** 2n}`;')
+    assert _literal_double_stars('<p>**x**</p><script>const n=10n ** 2n;</script>', html=True)
+    assert not _literal_double_stars('<!-- **x** --><script>const n=10n ** 2n;</script>', html=True)
+    assert not _literal_double_stars('<!-- <script>const s="**x**";</script> -->', html=True)
+    assert not _literal_double_stars('<style>/* **x** */ p{color:red}</style>', html=True)
+    assert _literal_double_stars('<style>p::after{content:"**x**"}</style>', html=True)
+
+
 @acc()
 def test_壳源码里不许有双层星号_加粗标记():
     """⭐ `TAIL-209`（2026-10-01 · 余项 ②）：**壳自己拼的 HTML 里不许出现 `**`**（守则 §3.1）。
@@ -186,20 +248,17 @@ def test_壳源码里不许有双层星号_加粗标记():
 
     ⚠️ **为什么这条敢做"源码扫查"**（本件头部刚说过"别再写通用词法扫查"，这不是自相矛盾）：
       ① 靶是**一个字面标记**（`**`），不是"内部编号 / 黑话"那种**要判语义**的东西 ⇒ 没有判断成分；
-      ② 剥注释用**共用件** `tools/audit/shell_source.py::strip_comments`（**保留换行** ⇒ 行号不错位 ·
-         避开 `https://` · 连 HTML 注释一起剥）—— 它的实际输出验证过：改之前报出的就是那 **49 处真位置**、
-         **0 条注释假阳性**（注释里 Markdown 加粗极多，是第一版手写词法机栽跟头的地方）；
-      ③ 实测壳里**没有** `a ** b` 这类幂运算（全仓 0 处）⇒ 不必留白名单。
+      ② 字符串、插值配平、注释与正则复用 `tools/audit/jslex.py`，位置回原源码取行号；
+      ③ 只检查字面量，BigInt 等合法指数运算放行；插值中的嵌套字符串仍不能夹带标记。
     ⚠️ **能证伪**：往任一壳件里写一个 `**x**`（哪怕只在 `title` 属性里）⇒ 本件必红。
     ⚠️ **真机那一半（㉙）兜不住这些**：它的靶是 `#view` 正文 ⇒ 弹窗、`title` 属性、`toast` 全在它视野外。
     """
-    from tools.audit.shell_source import parts_text, strip_comments
+    from tools.audit.shell_source import parts_text
 
     bad = [
-        f"{name}:{i}  {line.strip()[:110]}"
+        f"{name}:{text.count(chr(10), 0, offset) + 1}  {text.splitlines()[text.count(chr(10), 0, offset)].strip()[:110]}"
         for name, text in parts_text()
-        for i, line in enumerate(strip_comments(text, html=name.endswith(".html")).splitlines(), 1)
-        if "**" in line
+        for offset in _literal_double_stars(text, html=name.endswith(".html"))
     ]
     assert not bad, (
         "壳源码里出现了 `**`（加粗标记）—— 壳自己拼的 HTML 是**直插上屏**的"

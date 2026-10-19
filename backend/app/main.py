@@ -418,6 +418,18 @@ def create_app() -> FastAPI:
     def shell_core_js(request: Request) -> Response:
         return _shell_js(request, "core.js")
 
+    @app.get("/static/shell/mechanical-workbench.js", include_in_schema=False)
+    def mechanical_workbench_js(request: Request) -> Response:
+        return _shell_js(request, "mechanical-workbench.js")
+
+    @app.get("/static/shell/mechanical-integration.js", include_in_schema=False)
+    def mechanical_integration_js(request: Request) -> Response:
+        return _shell_js(request, "mechanical-integration.js")
+
+    @app.get("/static/shell/mechanical-workbench.css", include_in_schema=False)
+    def mechanical_workbench_css(request: Request) -> Response:
+        return _static_file(request, _APP_DIR / "web" / "shell" / "mechanical-workbench.css", "text/css")
+
     @app.get("/static/shell/print-export.js", include_in_schema=False)
     def shell_print_export_js(request: Request) -> Response:
         return _shell_js(request, "print-export.js")

@@ -1223,37 +1223,6 @@ V.m09=()=>{
 };
 
 /* =====================================================================
-   13. MOD-10 机械费（暂缓）
-   ===================================================================== */
-V.m10=()=>`
-  <div class="tip wn"><b>本模块【近期不做】</b>。用户原话：「机械费<b>上报</b>，但<b>做起来麻烦且无法减少太多工作量</b>，系统中和机械费有关的数据<b>现在都先手填</b>。」</div>
-  <div class="grid2">
-    <div class="card"><h4>范围</h4><div class="bd"><div class="kv">
-      <dt>机械费是否仍上报</dt><dd style="font-family:var(--fs)">✅ 仍上报（与材料月报不同）</dd>
-      <dt>系统是否做核对</dt><dd style="font-family:var(--fs)">❌ 近期不做</dd>
-      <dt>相关数据怎么办</dt><dd style="font-family:var(--fs)">过程资料机械列、月度会大表机械费 —— <b>全部先手填</b></dd>
-      <dt>原设计 diff / 下钻</dt><dd style="font-family:var(--fs)">暂缓，结论保留备查</dd>
-    </div></div></div>
-    <div class="card"><h4>原设计要点（保留备查，暂不实现）</h4><div class="bd np">${TBL({cls:'cond',rows:[`
-      <tr><td class="mut" style="width:110px">账期</td><td>上月 <b>21 日</b> → 本月 <b>20 日</b></td></tr>
-      <tr><td class="mut">催收节奏</td><td>每月 <b>25-27 号</b>催收项目机械费报表</td></tr>
-      <tr><td class="mut">核对方式</td><td>项目上报金额 vs i8 结算金额，diff 视图 + 差异行下钻</td></tr>
-      <tr><td class="mut">差额处理</td><td><b>差额大</b> → 让项目当月补；<b>差额小</b> → 保留并向审计说明</td></tr>
-      <tr><td class="mut">天然口径差</td><td>项目上报与 i8 的分类不一致（零租 / 包月 / 内租）</td></tr>
-      <tr><td class="mut">两侧来源</td><td>项目上报侧 = 项目发来的 Excel；i8 侧 = <b>班组设备使用</b>报表（能否自动抓取 <b>待确认</b>）</td></tr>
-    `]})}</div></div>
-  </div>
-  <div class="card"><h4>机械费结算：由过程资料机械列<b>派生（只读）</b><span class="sp"><span class="mut sm">源头与录入都在 <b>过程资料（MOD-06）机械 6 列</b>，本页只做说明</span></span></h4><div class="bd">
-    <div class="kv">
-      <dt>结算金额从哪来</dt><dd style="font-family:var(--fs)">✅ <b>派生、只读</b> = Σ「<b>外租零租含税 ＋ 外租包月含税</b>」；「内租设备 / 租分公司设备」及外租不含税两列<b>不参与</b>付款欠款统计</dd>
-      <dt>在哪里手填</dt><dd style="font-family:var(--fs)"><b>过程资料（MOD-06）的「机械」6 列</b>才是<b>手填的源头</b>（每项目每月一行）；台账里的机械金额是<b>只读派生值</b>，不能手改</dd>
-      <dt>机械欠款在哪看</dt><dd style="font-family:var(--fs)">同一页：顶部 KPI「机械（含期初）」＋「按项目看<b>机械</b>欠款」卡（与辅材<b>左右并列</b>）</dd>
-      
-    </div>
-    <div class="tip wn" style="margin-bottom:0"><b>暂缓：</b>差额「大 / 小」的分界值—— <b>留待机械费功能重启时再定</b>。</div>
-  </div></div>`;
-
-/* =====================================================================
    14. MOD-12 差异登记
    ===================================================================== */
 /* MOD-12 的**手工登记**状态（2026-09-13 用户口径「都改」）：
@@ -1469,6 +1438,9 @@ V.m15=()=>{
   <script src="/static/shell/api.js"></script>
   <script src="/static/shell/core.js"></script>
   <script src="/static/shell/print-export.js"></script>
+  <link rel="stylesheet" href="/static/shell/mechanical-workbench.css">
+  <script src="/static/shell/mechanical-workbench.js"></script>
+  <script src="/static/shell/mechanical-integration.js"></script>
 
   <!-- 静态加载的必要前置：actions → legacy（追加 ACT）；view / legacy → core
        （捕获 render / 求值 reloadSet、reloadImp）。pages-a 的加工先登记，core 再追加。

@@ -21,7 +21,7 @@
 | `U2` | **演示数据与「假话」不得残留**（`D18` 产品化红线①） | ① 壳里出现原型的三张演示数组（`PJ` / `NT` / `FL`）⇒ **红**；② 壳里必须有「本页数据尚未接通」这句，且必须**按页**判（`WIRED.has(VIEW) ? '' : …`）⇒ **红** |
 | `U2b` | ⭐ **已接线的页，它的演示数组必须已删**（"接线即清"，机器看管） | `WIRED` 里的页**逐页登记**了演示容器名 ⇒ 壳里还在、**且带内容** ⇒ **红** |
 | `U3` | **`WIRED` 自洽** | 壳里必须有 `WIRED` 集合，且**它的每个成员都真实存在于 `V`**（防"标了个不存在的页"）⇒ **红** |
-| `U4` | ⭐ **`WIRED` 的页必须真的指向后端**（2026-09-17 补） | `WIRED` 里的每页 `mNN` ⇒ 壳里必须出现 `/api/mNN`。**这只是"接线点存在"，不是"调通了"** —— 但能挡住最廉价的一种假绿：把页标成"已接后端"而壳里**一个该模块的接口都没调** ⇒ **红** |
+| `U4` | ⭐ **`WIRED` 的页必须真的指向后端**（2026-09-17 补） | 每页 `mNN` 默认检查 `/api/mNN`，复用其他领域的页按 `API_BY_PAGE` 指定入口。**这只是"接线点存在"，不是"调通了"** —— 标了已接线却没有对应入口仍报红。 |
 
 ⚠️ **本工具测不了什么（别误当已覆盖）**：**「标了已接后端，其实没接」** ——
    "某一页的数据由谁喂"无法从源码机械判定 ⇒ 那一条靠**真机自检**（`tools/probe/_shell_smoke.py` /
@@ -65,6 +65,22 @@ DEMO_RE = re.compile(r"const\s+(PJ|NT|FL)\s*=")
 #    ⚠️ 「已接后端真实数据」这个常量**已随本轮删除**：它不再需要出现在壳里。
 #    ⛔ **别退回"一律挂一句"**（无论说真话还是假话）—— 没标 = 正常可用，就是最诚实的状态。
 PROTO_TEXT = "本页数据尚未接通"
+# 机械费页复用过程资料的有效月值领域，接线必须命中其正式工作区入口。
+API_BY_PAGE = {"m10": "/api/m06/workbench"}
+
+
+def wired_api_issues(wired: list[str], source: str) -> list[str]:
+    issues: list[str] = []
+    for page in wired:
+        if not re.fullmatch(r"m\d{2}", page):
+            continue
+        endpoint = API_BY_PAGE.get(page, f"/api/{page}")
+        if endpoint not in source:
+            issues.append(
+                f"`WIRED` 标了 `{page}` 是「已接后端真实数据」，但壳里找不到 `{endpoint}` "
+                "⇒ 这页其实没接（顶栏在对真数据说假话）"
+            )
+    return issues
 
 
 def read_lines(p: pathlib.Path) -> list[str]:
@@ -154,18 +170,9 @@ def main() -> int:
                 u3.append(f"`WIRED` 里的 `{k}` 在壳里没有对应的 `V.{k}` 切片")
 
     # ── U4 · `WIRED` 的页必须真的指向后端（接线点存在）
-    #     ⚠️ 判的是 `/api/mNN` 出现在壳里 —— **弱**：它证不了"运行时调通"。
+    #     默认查 `/api/mNN`，跨领域复用按 API_BY_PAGE；仍只证接线存在，不证运行调通。
     #     但强于只看 `WIRED`：标了"已接后端"却一个接口都没调，是**最廉价的一种假绿**。
-    u4: list[str] = []
-    for k in wired:
-        m = re.match(r"^m(\d{2})$", k)
-        if not m:
-            continue                       # `home` 之类没有模块号：本检查不覆盖（记在报告里）
-        if f"/api/m{m.group(1)}" not in shell_text:
-            u4.append(
-                f"`WIRED` 标了 `{k}` 是「已接后端真实数据」，但壳里找不到 `/api/m{m.group(1)}` "
-                f"⇒ 这页其实没接（顶栏在对真数据说假话）"
-            )
+    u4 = wired_api_issues(wired, shell_text)
 
     red = len(u2) + len(u3) + len(u4)
 

@@ -55,6 +55,17 @@ def test_页切片与壳自检的切片算法一致():
 
 
 @acc()
+def test_接线守卫允许机械费复用正式过程资料工作区():
+    from tools.audit.ui_parity import wired_api_issues
+
+    assert not wired_api_issues(['m10'], "API.get('/api/m06/workbench?ym=2026-09')")
+    assert wired_api_issues(['m10'], "API.get('/api/m06/mech')")
+    assert wired_api_issues(['m10'], "API.get('/api/m10')")
+    assert not wired_api_issues(['m09'], "API.get('/api/m09/fee')")
+    assert wired_api_issues(['m09'], "API.get('/api/m06/workbench')")
+
+
+@acc()
 def test_页切片与_page_seg_一致():
     """`tests.shell_src.page_seg()` 只是转发 ⇒ 与 `page_slice` 结果必须一字不差。"""
     from tests.shell_src import page_seg

@@ -1826,6 +1826,7 @@ function jcFetchPreview(d) {
    ⚠️ 缓存口径：`LOADED` 记"这路拉过了" ⇒ **同一页反复进出不重复拉**（与改前一致：改前是 boot 拉一次）。
       跨页写操作的陈旧性与改前**同级**（改前写 m03 也不会自动刷新 m05）；真要更强 = 写动作标脏，另立件。 */
 const PAGE_LOAD = {
+  m10: ['机械费工作区'],
   /* ⭐ `home`（看板）：前三路供 ①–⑥ 与欠款卡；⭐ **第四路 `看板计数`** = ⑦⑬⑭ —— 它**只能问后端**
      （跨全表执行记录，见 `reloadHome` 上方那段为什么不能用记录窗口）。 */
   home: ['付款通知书', '项目档案', '看板计数'],
@@ -1866,6 +1867,7 @@ const PAGE_LOAD = {
   };
 /* 标签 → 取数函数（标签进顶部横幅的**失败点名** —— ⛔ 一字不许改，它们是给用户看的） */
 const LOADERS = {
+  '机械费工作区': () => reloadMechanicalWorkbench(),
   '付款通知书': reloadNotices,      /* ⚠️ 走同一个出口：它还会重建「归属」缓存 `OWN` */
   '项目档案': async () => {
     const pj = await API.projects(); PJs = (pj || []).map(adaptProject);

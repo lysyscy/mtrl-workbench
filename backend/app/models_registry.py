@@ -14,6 +14,7 @@ from app.mod03_notice import models as _m03  # noqa: F401  ← M1 切片 1 启�
 from app.mod04_plan import models as _m04  # noqa: F401  ← M3 切片 3 启用
 from app.mod05_flow import models as _m05  # noqa: F401  ← M3 切片 3 启用
 from app.mod06_proc import models as _m06  # noqa: F401  ← M4 报表域 2026-09-16 启用
+from app.mod06_proc import workbench_models as _mechanical_workbench  # noqa: F401
 from app.mod07_setl import models as _m07  # noqa: F401  ← M4 报表域 2026-09-16 启用
 from app.mod08_inv import models as _m08  # noqa: F401  ← M4 报表域 2026-09-16 启用
 from app.mod09_fee import models as _m09  # noqa: F401  ← M4 报表域 2026-09-17 启用

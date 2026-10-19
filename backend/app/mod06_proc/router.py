@@ -29,6 +29,10 @@ from app.core.query import flatten_query
 
 router = APIRouter(tags=["mod06"])
 
+from app.mod06_proc.workbench_api import router as mechanical_router
+
+router.include_router(mechanical_router)
+
 MESSAGE_KINDS = ("ok", "wn", "err")
 
 

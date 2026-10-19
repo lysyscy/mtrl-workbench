@@ -159,7 +159,7 @@ class I8Client:
             return False
         if str(body.get("Code")) == "401":
             return True
-        return "no sessioninfo" in str(body.get("Msg") or "").lower()
+        return "no sessioninfo" in str(body.get("Msg") or body.get("msg") or "").lower()
 
     # --- 公共请求 ---
     def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
