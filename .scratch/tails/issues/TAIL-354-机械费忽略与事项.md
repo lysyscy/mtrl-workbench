@@ -29,3 +29,5 @@
 **2026-10-19 · 后续重启。** 用户授权后已备份、迁移两张生产空表并加载76ad5db；原34张业务表及序列不变，新接口/静态资源200，未登录写入401。真实历史未采纳；共同证据见.scratch/machinery-fee-workflow/evidence.md。
 
 **2026-10-19 · 用户五项反馈修复。** 项目核查进度与重复跟进入口合并为跟进事项：显示未完成数量和首条摘要，点击同一事项窗口；页首为全部跟进。取数变化核实与事项完成分开。离线浏览器核跟进窗口查看不写入、已有事项仍进入待处理、首次发现不再制造金额待办，原忽略及事项事实未改。 共同回执：本机`.artifacts/machinery-fee-workbench-fixes/20261019/`的checks-summary.json、empty-month-targeted.xml、ui-acc-final.json、production-removal-verification.json及live-loaded-verification.json；源码保存SHA和推送核对见Git。未重跑完整pytest、新备份完整恢复、全主题或实体打印。
+
+- [2026-10-19 · 用户使用方式收敛] 按用户逐项目核查习惯移除页头“全部跟进”，保留每行跟进及全部历史事项；“历史接续”改“i6历史数据”，“全量取数”改“抓取i8”，查看月份移至页首左侧。录入预览仍为Agent整理JSON后的确认入口，不是目录或Excel识别器；现有归集skill主要输出四页Excel，系统录入产物尚未接通，本次未改技能。UI/文案14项通过，默认和1.25档布局已查看；真实i8未抓取、无新增跨期机制。

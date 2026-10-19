@@ -211,9 +211,22 @@ def test_workbench_pending_followups_shared_links_and_column_groups(ui_page):
     assert '跟进事项 · 有跟进' in p.inner_text('#modalRoot')
     assert '已办结事项' in p.inner_text('#modalRoot')
     p.click('[data-act="closeModal"]')
-    p.click('.mw-actions [data-act="mwMatters"]')
-    assert '跟进事项' in p.inner_text('#modalRoot')
+    assert p.locator('.mw-actions [data-act="mwMatters"]').count() == 0
+    assert p.locator('.mw-actions [data-act="mwHistory"]').inner_text() == 'i6历史数据'
+    assert p.locator('.mw-actions [data-act="mwI8"]').inner_text() == '抓取i8'
+    p.click('[data-act="mwHistory"]')
+    assert 'i6历史数据' in p.inner_text('#modalRoot')
     p.click('[data-act="closeModal"]')
+    scratch = Path(__file__).resolve().parents[2] / '.artifacts/mw-controls/20261019'
+    scratch.mkdir(parents=True, exist_ok=True)
+    for scale in ('1', '1.25'):
+        p.evaluate("scale=>document.documentElement.style.setProperty('--fscale',scale)", scale)
+        month = p.locator('.mw-month').bounding_box()
+        tabs = p.locator('.mw-tabs').bounding_box()
+        assert month['x'] < tabs['x']
+        assert month['x'] + month['width'] <= tabs['x'] or month['y'] + month['height'] <= tabs['y']
+        p.screenshot(path=str(scratch / ('workbench-' + scale + '.png')))
+    p.evaluate("document.documentElement.style.setProperty('--fscale','1')")
     p.click('[data-act="mwFilter"][data-filter="all"]')
     assert '尚未录入' in p.locator('.mw-work tbody tr').filter(has_text='兰考').inner_text()
     p.click('[data-act="mwFilter"][data-filter="findings"]')
