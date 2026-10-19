@@ -23,7 +23,7 @@
 
 ## 付款计划核对规则分发
 
-`tools/oneoff/_build_plan_audit_runtime.py` 从工作台真源生成 `skills/payment-plan-audit/resources/audit-runtime.zip`，携带纯金额/审查规则与必要枚举，不包含数据库、配置或凭据。同一命令同时生成唯一对外交付包 `artifacts/payment-plan-audit.skill`，仅含入口、回写参考和运行脚本/规则，排除开发测试、缓存、会话和业务文件。维护相关规则后重新生成，运行skill测试核manifest和解包独立运行，再通过Skills Manager更新；不手改zip内的规则副本。
+`tools/oneoff/_build_plan_audit_runtime.py` 从工作台真源生成 `skills/payment-plan-audit/resources/audit-runtime.zip`，携带纯金额/审查规则与必要枚举，不包含数据库、配置或凭据。同一命令同时生成唯一对外交付包 `dist/payment-plan-audit.skill`，仅含入口、回写参考和运行脚本/规则，排除开发测试、缓存、会话和业务文件。维护相关规则后重新生成，运行skill测试核manifest和解包独立运行，再通过Skills Manager更新；不手改zip内的规则副本。
 
 ## Excel读取反向证据
 
