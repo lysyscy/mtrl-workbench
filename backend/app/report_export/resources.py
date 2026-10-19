@@ -33,9 +33,9 @@ SETL_TEMPLATE: Path = TEMPLATE_DIR / "模板_收发结存表.xlsx"
 KCDJ_TEMPLATE: Path = TEMPLATE_DIR / "模板_库存单据明细表.xlsx"
 
 #: 路径①（模板填充）模板；登记与映射回交付面模板清单。
-#: 来源 = 交付面 `demo/模板/`（那份 `模板清单.md` §二 是它们的**唯一登记处**）；
+#: 来源 = 2026-09-18已入库的原始模板（那份 `模板清单.md` §二 是它们的**唯一登记处**）；
 #: ⚠️ 它们与上面两份同理：**要被 `openpyxl` 读**，所以是**运行时依赖**（必须随代码走、进 git）。
-#: 明细（每个模板含哪些 sheet / `DATA_START` 在哪 / 列映射）**一律回 `demo/模板/模板清单.md`**，
+#: 明细（每个模板含哪些 sheet / `DATA_START` 在哪 / 列映射）**一律回 `docs/requirements/report-templates.md`**，
 #: ⛔ 本文件不复述（复述必漂）。
 LEDGER_TEMPLATE: Path = TEMPLATE_DIR / "模板-逐月欠款台账.xlsx"      # sheet: 辅材 / 机械 / 特殊费用月报表
 PROC_TEMPLATE: Path = TEMPLATE_DIR / "模板-过程资料.xlsx"            # sheet: 汇总表
@@ -55,7 +55,7 @@ EXPECTED_SHA256: dict[str, str] = {
         "eab1c626dce769ac979408564cbffa52a8ca3bc42d80c76c40e0335f8c46d323",
     "模板_库存单据明细表.xlsx":
         "6803d01b1b0793f02543b281e737f9de42c9b955b7f45da0d55547e15b5e6bd2",
-    # --- 路径①（2026-09-18 从交付面 `demo/模板/` 入库）---
+    # --- 路径①（2026-09-18 从旧demo入库，当前只读取运行资源目录）---
     "模板-逐月欠款台账.xlsx":
         "6b8568d48a7e5e254dd258c5f3c7b91b6ba0ebd18d77e6b546a24e7e9bc14d74",
     "模板-过程资料.xlsx":

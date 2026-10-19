@@ -75,7 +75,7 @@
 
 - ⭐ **病根不是「文档太多」，是「状态描述没被机器看管」** —— 规则型文档很少变、越多越稳；**状态描述**
   （数字 / 术语 / 用例号 / 路径 / 待办）**必然过期且不报错**。⇒ 对策 = **状态由机器查**，不是少写文档。
-- **执行入口**：日常核验回 docs/guides/development-and-verification.md §十一；直接调查文档漂移时用 `backend/.venv/Scripts/python.exe -X utf8 tools/audit/doc_audit.py --help` 确认选项。`--ui` 会跑产品资料 `delivery/demo/` 的四检（node），按实际影响触发。
+- **执行入口**：日常核验回 docs/guides/development-and-verification.md §十一；直接调查文档漂移时用 `backend/.venv/Scripts/python.exe -X utf8 tools/audit/doc_audit.py --help` 确认选项。旧demo四检及`--ui`已退役；正式壳与业务判据按真实影响选择。
 - ⚠️ **留痕不算漂移**：① 留痕段载体 = **文件级白名单优先**（日志 / 归档 / 已执行方案），文件内混段才用
   `<!-- doc_audit:history -->`/`current` 包住；② `LENIENT_GLOBS` 只报黄，glob 要写**完整相对路径**；
   ③ 强豁免词（行文在说「它废了」）直接忽略 ＋ **豁免窗口 ±2 行**。

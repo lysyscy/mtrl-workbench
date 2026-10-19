@@ -248,7 +248,7 @@ def test_两种导出并存且透视提示与模板形态一致():
     # 形态搬到壳 —— `test_wired_m08.py::test_两种导出并存且透视那份写明独立通道` ✓。下面是**清单与文案**的实质。
     kinds = {k["id"]: k for k in D.export_kinds()}
     assert set(kinds) == {D.EXPORT_PLAIN, D.EXPORT_PIVOT}
-    # 后者提示必须逐项写明工作簿形态（主人 = demo/模板/模板清单.md §二 第 10–12 行）
+    # 后者提示必须逐项写明工作簿形态（主人 = docs/requirements/report-templates.md §二 第 10–12 行）
     hint = kinds[D.EXPORT_PIVOT]["hint"]
     for sheet in D.PIVOT_SHEETS:
         assert sheet in hint, f"透视导出的提示缺工作表：{sheet}"

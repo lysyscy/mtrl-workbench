@@ -343,7 +343,7 @@ def api_export_settlement(request: Request):
 def api_export_extract(request: Request):
     """导出**焊材 / 气体提取**成品 xlsx（`TAIL-04` **路径① = 模板填充**）—— 浏览器直接下载。
 
-    口径 = **模板填充**：以交付面 `demo/模板/模板清单.md` 登记的 `模板-焊材气体.xlsx` 为基底，
+    口径 = **模板填充**：以交付面 `docs/requirements/report-templates.md` 登记的 `模板-焊材气体.xlsx` 为基底，
     认标记文字 `DATA_START` 定位数据区、**尾块随行数派生**（《说明书》§7.1）。
 
     ⚠️ 三个筛选参数与页面**同名同义**（⛔ 不在前端另筛一遍）：

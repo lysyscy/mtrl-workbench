@@ -1,0 +1,30 @@
+{
+  "source_commit": "7e4dabbd8b2e7830fc705412eeb4aa57b964102b",
+  "archive": {
+    "source": ".scratch/legacy-active/设计-界面整改与欠款口径-20261009.md",
+    "target": "docs/archive/old-demo-retirement-20261019/ui-debt-design-20261009.md",
+    "sha256": "0934b834ae6ca9555b1754eaea4729ba5732f24e7c4ff1cae320683723a1f7af"
+  },
+  "template_duplicates": [
+    {
+      "removed": "delivery/demo/模板/模板-开会大表.xlsx",
+      "kept": "backend/app/resources/templates/模板-开会大表.xlsx",
+      "sha256": "5d4620f523898e3c6f62fd1f1a72c88854374c6565f41e7a16c094be27e3dd90"
+    },
+    {
+      "removed": "delivery/demo/模板/模板-焊材气体.xlsx",
+      "kept": "backend/app/resources/templates/模板-焊材气体.xlsx",
+      "sha256": "9a049140ce738792865a2101afa40cde543ca1c8d241697628f0a6068a549d55"
+    },
+    {
+      "removed": "delivery/demo/模板/模板-过程资料.xlsx",
+      "kept": "backend/app/resources/templates/模板-过程资料.xlsx",
+      "sha256": "74cc3db92a5c4926a2e29ed1be60c4fe1a5625c9e1a0025dc80037186a087eb4"
+    },
+    {
+      "removed": "delivery/demo/模板/模板-逐月欠款台账.xlsx",
+      "kept": "backend/app/resources/templates/模板-逐月欠款台账.xlsx",
+      "sha256": "6b8568d48a7e5e254dd258c5f3c7b91b6ba0ebd18d77e6b546a24e7e9bc14d74"
+    }
+  ]
+}

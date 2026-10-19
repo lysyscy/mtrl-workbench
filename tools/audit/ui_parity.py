@@ -44,9 +44,6 @@ from shell_source import SHELL_PARTS, SHELL_PATH, read_shell  # noqa: E402  ← 
 import shell_api  # noqa: E402  ← ⭐ 2026-10-03 `TAIL-219` 批 1：切片算法搬去那边（唯一主人）
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-#: **历史原型路径** —— 本件不把它当基准（`U1`/`U5` 已于 2026-09-30 `TAIL-201` 退场）。
-#: 留着只为一处**显式**用途：`backend/tests/test_ux_feedback.py` 那条「这处东西壳与原型**都没有**」的判据。
-PROTO = ROOT / "delivery" / "demo" / "材料报表自动化工作台-交互原型.html"
 # ⚠️ 2026-09-19（`P4`① 读取点收敛）：壳要拆成多件 ⇒ 源码一律走 `shell_source`。
 #    `SHELL` 仍留作**存在性检查**（指 `index.html` 本体）；**读文本则用 `read_shell()`**（合并后的全部件）
 #    —— 否则 `U2`（演示数组残留）与 `U4`（`/api/mNN` 在不在）会**静默**只看原型切片那一件。

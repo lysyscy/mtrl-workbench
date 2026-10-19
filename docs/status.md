@@ -25,7 +25,7 @@ m10机械费四页工作区复用mod06_proc/workbench，来源保护已加载，
 
 ### 0.4 当前工作
 
-- project-handoff漏提醒修复已改为My-Skills个人技能并发布安装：skip按回合失效、阶段完成有后续不再冒充整个任务结束，合理例外保留。My-Skills提交c7cdb8a及对应CI通过，原ID和6个部署目标保持，真实宿主新提醒链未实测。两项effort与六项审查来源已归档，界面旧设计仅留原型退出清单挂起；目录职责及归档原因审计见docs/archive/handoff-reminder-repair-20261019.md。材料工作台本轮不推送，付款计划现场未验边界不变。
+- project-handoff漏提醒修复已改为My-Skills个人技能并发布安装：skip按回合失效、阶段完成有后续不再冒充整个任务结束，合理例外保留。My-Skills提交c7cdb8a及对应CI通过，原ID和6个部署目标保持，真实宿主新提醒链未实测。两项effort与六项审查来源已归档，界面旧设计的最后原型退出范围已按后续用户授权完成，原件归档至docs/archive/old-demo-retirement-20261019；目录职责见README.md，旧demo退出证据见docs/archive/old-demo-retirement-20261019/README.md；前轮归档原因审计见docs/archive/handoff-reminder-repair-20261019.md。材料工作台本轮不推送，付款计划现场未验边界不变。
 
 - TAIL-350～355已完成并归档：来源保护已覆盖保存、两类导入、历史接续和回滚，含税/净额独立；11项目141月565个来源格正式采纳，169格变化，i6按9月年度AD，设备明细0条。i8完整309/70/130条，11项目结果已采用；大唐共享编号仅按11张明确标题单据核定本次归属。两库备份后重启加载，排除项目、乌兰净额和无关业务表不变；差额由用户跟进。验证、真实结果与未验边界回docs/archive/machinery-fee-workflow-20261019/evidence.md末节。
 

@@ -25,7 +25,7 @@ KEEP = ("必须修", "结论：", "_smoke", "_links", "_ids", "_doccheck", "台�
         "自测 ")          # ⭐ `refs_query --selftest` 的"自测 N/N"那一行（2026-10-05 加）
 
 CMDS: list[tuple[str, list[str]]] = [
-    ("tools/audit/doc_audit.py", ["--ui"]),
+    ("tools/audit/doc_audit.py", []),
     ("tools/audit/audit_drift.py", []),
     ("tools/audit/audit_meta.py", []),
     ("tools/audit/audit_work.py", []),

@@ -1,7 +1,7 @@
 """`ACC-PAY-IA-001`（付款域页面划分与列表页骨架）4 个判据点的验收断言。
 
 依据：《说明书》§4.1.2（范围定义）· §4.2 / §4.3（页面与筛选）
-      · `demo/设计规则-提炼自付款通知书页.md`（R1 折叠 · R2 指标区 · R4 筛选栏 · R10 空态 · R13 排序）。
+      · `docs/requirements/interaction-rules.md`（R1 折叠 · R2 指标区 · R4 筛选栏 · R10 空态 · R13 排序）。
 """
 
 from __future__ import annotations

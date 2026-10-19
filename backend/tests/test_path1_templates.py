@@ -24,7 +24,7 @@ from tests.acc_plugin import acc
 @acc()
 def test_路径1四份模板都在仓且都登记了SHA256():
     """资产前提：**要在仓、要登记** —— 否则闸门形同虚设（`require_template` 对未登记的名字只查存在）。"""
-    assert len(R.PATH1_TEMPLATES) == 6, "路径① 的模板数变了？回 `demo/模板/模板清单.md` §一/§二 核对"
+    assert len(R.PATH1_TEMPLATES) == 6, "路径① 的模板数变了？回 `docs/requirements/report-templates.md` §一/§二 核对"
     for p in R.PATH1_TEMPLATES:
         assert p.exists(), f"模板缺失：{p.name}（模板是产物的**基底本体**，不是「形态样例」）"
         assert p.name in R.EXPECTED_SHA256, f"`{p.name}` 没登记 SHA256 ⇒ 闸门对它只查存在、不查损坏"
@@ -47,7 +47,7 @@ def test_路径1四份模板openpyxl读得开():
             names.update(wb.sheetnames)
         finally:
             wb.close()
-    # 7 张 sheet 的**名字**来自 `demo/模板/模板清单.md` §二（唯一登记处）—— 这里只核对到"出现了"
+    # 7 张 sheet 的**名字**来自 `docs/requirements/report-templates.md` §二（唯一登记处）—— 这里只核对到"出现了"
     for sn in ("辅材", "机械", "特殊费用月报表", "汇总表", "焊材", "气", "Sheet1"):
         assert sn in names, f"模板里找不到工作表 `{sn}` ⇒ 清单 §二 与实物不符"
 

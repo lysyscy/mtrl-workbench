@@ -10,7 +10,6 @@ from types import SimpleNamespace
 from app.mod01_projects.domain import ordered
 from tests.acc_plugin import acc
 from tests.shell_src import SHELL, dl_kernel, parts_text
-from tools.audit.ui_parity import PROTO
 
 ROOT_BACKEND = __import__('pathlib').Path(__file__).resolve().parents[1]
 
@@ -82,8 +81,6 @@ def test_源文件缓存_存取往返与未命中(monkeypatch, tmp_path):
 
 
 @acc("ACC-UI-SHELL-001", "001-10")
-def test_m02_接口清单已删_壳与原型都没有():
+def test_m02_接口清单已删_正式壳没有():
     """用户裁定：接口清单删除 —— 每个接口在系统里都有自己的位置（抓取在各页 · 同步在 m01）。"""
-    proto = PROTO.read_text(encoding="utf-8", errors="replace") if PROTO.exists() else ""
-    for name, text in (("壳", SHELL), ("原型", proto)):
-        assert "数据接口清单" not in text, f"{name} 里还留着接口清单"
+    assert "数据接口清单" not in SHELL, "正式壳里还留着接口清单"

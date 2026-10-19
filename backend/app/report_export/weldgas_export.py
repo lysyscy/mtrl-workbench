@@ -5,7 +5,7 @@
 
 | 管什么 | 主人 |
 |---|---|
-| 形态（两个 sheet · 表头 · `DATA_START` · 列映射） | 交付面 `demo/模板/模板清单.md`（§二 登记表 · §5.4 列映射） |
+| 形态（两个 sheet · 表头 · `DATA_START` · 列映射） | 交付面 `docs/requirements/report-templates.md`（§二 登记表 · §5.4 列映射） |
 | 行为（认标记文字定位数据区 · 尾块随行数派生） | 《材料科业务全流程说明书》**§7.1** |
 | 取数（项目集合 / 各月金额 / 结余） | `mod07_setl/extract.py`（**纯函数**）＋ `service.build_extract_export` |
 | 摆位（写哪一格 · 清残留 · 尾块偏移） | `report_export/tpl_fill.py`（中立引擎） |

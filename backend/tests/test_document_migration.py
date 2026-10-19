@@ -153,7 +153,6 @@ def test_retired_host_inputs_have_real_consumers_and_missing_references_fail():
         state = audit_meta.TICKET_STATE_RE.search(ticket.read_text(encoding='utf-8')).group(1)
         rel = ticket.relative_to(ROOT).as_posix()
         assert (rel in scanned) == (state not in ('done', 'wontfix'))
-    assert any(rel.startswith('.scratch/legacy-active/') for rel in scanned)
     for path in ('docs/adr/D999-missing.md', '.scratch/tails/issues/TAIL-999-missing.md'):
         doc = [('仓', 'AGENTS.md', ROOT / 'AGENTS.md', [f'现行入口：`{path}`'], ['current'])]
         assert any(h['level'] == audit_common.RED for h in audit_drift.check_paths(doc))

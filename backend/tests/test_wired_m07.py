@@ -66,7 +66,7 @@ def test_壳里提取表两类按序且合计行紧贴():
     #   ⛔ 别退回钉字面（那等于宣布"以后不许抽通用件"）。现在断三件事：
     #   ① 切片**委托** `TBL` 并交出表的身份（`key:'m07:kinds'`）；② **显式** `sort:false`（刻意不可排）；
     #   ③ `TBL` 内核里「不可排」那条分支**真的只出 `data-sort-key`**、不出 `data-sort`。
-    #   ⚠️ 渲染形态那半由**原型侧真机**守：`demo/_smoke.js` 的分组表那条（表开标签不许含 `data-sort`）。
+    #   渲染形态以正式壳及其浏览器核验为准，旧原型自检已退役。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M5（去掉委托）／M7（`sort:false` 改回 `true`）都必须红。
     assert "TBL({cls:'cond',key:'m07:kinds',sort:false," in s, \
         "提取表没走统一出口 `TBL`，或没显式声明「刻意不可排」（`sort:false`）"

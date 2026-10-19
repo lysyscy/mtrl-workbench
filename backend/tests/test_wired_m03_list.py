@@ -86,7 +86,7 @@ def test_壳里列表页骨架齐备且表头18列():
     #   （那串搬进 `TBL` 内核后切片里不再出现）。⛔ 别退回钉字面（等于宣布"以后不许抽通用件"）。
     #   现在断三件事：① 切片**委托** `TBL` 并交出自己的身份（`key:'m03:notices'` ＋ 表头出口 `NT_THEAD`）；
     #   ② 行的**来源**仍是预算好的 `tb`（不是页里另拼一份）；③ 内核里「可排」那条分支**真的**出
-    #   `data-sort` ＋ `data-sort-key`。⚠️ 渲染形态那半由**原型侧真机**守（`demo/_smoke.js` 的这条表）。
+    #   `data-sort` ＋ `data-sort-key`。渲染形态以正式壳及其浏览器核验为准，旧原型自检已退役。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M12（去掉这处委托）必须红。
     assert "TBL({head:NT_THEAD,key:'m03:notices',rows:[tb]})" in SHELL, \
         "数据区没了（或没走统一出口 `TBL` / 没交出自己的身份 `m03:notices`）"

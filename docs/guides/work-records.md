@@ -11,7 +11,7 @@
 | 稳定工程结论或操作方法 | docs/architecture.md、docs/guides或docs/reference对应唯一主人 |
 | 重要取舍 | 新ADR放docs/adr；旧D件在docs/adr保留编号和原文 |
 | 已结束且有独有价值的过程 | docs/archive，保留原路径、固定SHA和必要证据；已有仓外原件按归档索引追溯 |
-| 实验输出、截图、导出和运行日志 | artifacts与logs的真实配置；必要证明在所属任务引用，避免另造权威 |
+| 实验输出、截图、导出和运行日志 | 程序产物按artifacts与logs真实配置；任务验证产物放.artifacts/<effort>；必要证明在所属任务引用，避免另造权威 |
 | 临时命令、提交草稿与本机恢复现场 | 既有.scratch/local；当前仍服务接续、恢复或未决验证的材料原地保留 |
 | 现行产品资料手工快照 | .artifacts/recovery/backups，具体保留规则回README.md §四；本次未清理 |
 
@@ -43,12 +43,12 @@
 
 ## 五、保留的项目例外
 
-现有票仓是已采用的真实本地tracker；旧D件是长期决定来源。本项目CodeBuddy的MEMORY、RULE和仓内技能接入已退出；项目约束由AGENTS按操作指向docs/agents/project-rules.md，文档审计由普通指南和tools/audit工具承接。artifacts、logs、backups、运行模板和delivery中的原型/第三方原件由现有程序或恢复契约消费。这些例外不持有另一份现行产品Markdown或工程正文，退出条件见workflow §六。
+现有票仓是已采用的真实本地tracker；旧D件是长期决定来源。本项目CodeBuddy的MEMORY、RULE和仓内技能接入已退出；项目约束由AGENTS按操作指向docs/agents/project-rules.md，文档审计由普通指南和tools/audit工具承接。artifacts、logs、backups、运行模板和delivery中的第三方原件由现有程序或恢复契约消费。这些例外不持有另一份现行产品Markdown或工程正文，退出条件见workflow §六。
 
 历史00-scratch现场继续保护，不按TTL清空；未来删除须逐项确认其活动与恢复用途已结束。旧逐日日志已在docs/archive/journal，不再作为常载入口。
 
 ## 六、当前旧设计资料
 
-六项只读审查来源已随docs/archive/completed-efforts-20261019归档；TAIL-287按历史导入退出后的撤回结论保存。当前仅保留界面整改原件：业务主线均已完成或被后续裁定替代，文头“一项未决”过时；§5历史原型退出清单仍挂起，具体消费者与缺项见.scratch/legacy-active/README.md。保留不等于授权开发；挂起范围被裁定或处理后再归档。
+六项只读审查来源已随docs/archive/completed-efforts-20261019归档；TAIL-287按历史导入退出后的撤回结论保存。界面整改主线已完成或被后续裁定替代，§5原型退出已于2026-10-19按用户授权完成，原件及完成证据在docs/archive/old-demo-retirement-20261019；旧活动目录已退出。
 
 文件拆分判据已在docs/guides/file-splitting.md，写动作刷新依据已在docs/architecture/write-refresh.md；其原来含义不因迁移改变。其余已结束设计与排障证据从docs/archive/index.md明确追溯。

@@ -3,7 +3,7 @@
 > **读取范围**：§一至§九保留两类材料报表的实测与引擎说明；机械费原四页独立导出读§十。
 
 > **性质（答什么问题）**：`MOD-07` 收发结存 / `MOD-08` 库存单据明细表的**成品文件写出**（`ACC-SETL-001/001-08` ·
-> `ACC-RPT-EXP-001` · `ACC-X-EXP-001`）—— 即 `docs/requirements/demo/模板/模板清单.md` §一 的 **路径②**：
+> `ACC-RPT-EXP-001` · `ACC-X-EXP-001`）—— 即 `docs/requirements/report-templates.md` §一 的 **路径②**：
 > 「**真·可操作透视表**」到底怎么做出来。**本条只答"怎么做得出"，不定义"该长什么样"**。
 > **方法**：拿 **2026-09-17 真机抓取**的两份 i8 导出件，直接跑**素材包** `input/` 里的现成管线，
 > 看成品是否生成、缓存是否对得上（**离线复算，不顶号**）。
@@ -51,7 +51,7 @@
 
 - §7.1 那两条硬规则 —— 「数据区起点认**标记文字 `DATA_START`**」与「**尾部行块随行数派生、不得删行让位**」
   —— 管的是 **路径①（模板填充）** 那 6 个 sheet（台账 / 过程资料 / 焊材气体 / 开会大表）。
-- **本条（路径②）两份报表不走模板填充**（`docs/requirements/demo/模板/模板清单.md` §二 第 8–12 行标的就是"**不需要** `DATA_START`"）
+- **本条（路径②）两份报表不走模板填充**（`docs/requirements/report-templates.md` §二 第 8–12 行标的就是"**不需要** `DATA_START`"）
   ⇒ **不适用**上述两条。
 - ⚠️ 但 `sfjc_process.update_sheet_data()` 里有 `ws.delete_rows()`、`common_tpl.gen_data_sheet()` 是**整块替换
   `<sheetData>`** —— 这两处写法**只对"数据区下面没有脚注/合并块"的 sheet 安全**。**若将来给这两份表加了
@@ -81,7 +81,7 @@
    ✅ **2026-09-18 已落成代码闸门** = `backend/app/report_export/resources.py::require_template()`
    （缺失 / 损坏〔SHA256 不符〕两种都拒；`EXPECTED_SHA256` 的**唯一登记处 = 本表**）。
 
-   **路径①（模板填充）**（2026-09-18 从交付面 `delivery/demo/模板/` 入库；⚠️ 清单见 `docs/requirements/demo/模板/模板清单.md`）：
+   **路径①（模板填充）**（2026-09-18 从交付面 旧demo模板目录（已退役） 入库；⚠️ 清单见 `docs/requirements/report-templates.md`）：
 
    | 文件 | SHA256 |
    |---|---|
@@ -101,7 +101,7 @@
 ---
 
 > **本文件性质**：工程侧实测结论（`docs/reference/`，**不进交付面**）· ⛔ 不含业务取值（取值回《说明书》）·
-> ⛔ 不定义成品的列序 / 表头文字（那是模板的事，登记在 `docs/requirements/demo/模板/模板清单.md`）。
+> ⛔ 不定义成品的列序 / 表头文字（那是模板的事，登记在 `docs/requirements/report-templates.md`）。
 
 
 ---
@@ -224,7 +224,7 @@ openpyxl 把它建模在 `openpyxl.pivot.cache.CacheDefinition.refreshOnLoad`）
 
 > 本节只讲**路径①**（`openpyxl` 读模板再填数）—— 与 §一~§八 的**路径②**（`zip` 字节替换）
 > **是两类做法**，⛔ 别混。形态登记（哪个 sheet / `DATA_START` 在哪格 / 列映射）见交付面
-> `docs/requirements/demo/模板/模板清单.md`；行为口径（**认标记文字** / **尾块随行数派生**）见《说明书》**§7.1**。
+> `docs/requirements/report-templates.md`；行为口径（**认标记文字** / **尾块随行数派生**）见《说明书》**§7.1**。
 
 ### 9.1 引擎 = 新中立件 `backend/app/report_export/tpl_fill.py`
 
@@ -262,7 +262,7 @@ openpyxl 把它建模在 `openpyxl.pivot.cache.CacheDefinition.refreshOnLoad`）
 - ⇒ 片 1 时**如实留空**（⛔ 不写 0、⛔ 不带模板示例值）；接缝 = `extract_template_grid(..., balances=)`。
 - ✅ **2026-09-18 用户裁定「甲」后已落地**（同日第二件）：新表 `weldgas_balance`
   （**唯一键 = 类别 × 仓库 · 不按月**）＋ 录入入口 = **提取页主表加一列「结余」· 点格即改**
-  （**原型与壳同步改**，走技能 `mtrl-workbench-prototype`）；取数**唯一出口** = `repository.load_balances`
+  （按正式壳及当前前端设计指南维护）；取数**唯一出口** = `repository.load_balances`
   ⇒ `service.build_extract_export` 一行接上（⛔ 不在 view / 实现层各读一份）。
   ⭐ **未录入 = 库里没有那一行** ⇒ 成品**如实留空**（⛔ 不写 0）；
   ⭐ **`0` 是合法录入值**（有行、金额 0）⇒ 成品里**写 0**，与"未录入的空白"可区分。
@@ -379,7 +379,7 @@ openpyxl 把它建模在 `openpyxl.pivot.cache.CacheDefinition.refreshOnLoad`）
 
 机械费使用独立运行模板 `backend/app/resources/templates/模板-机械费四页.xlsx`，SHA256为 `83a5a4e5eb5d04f3dedbbf018d08ba8aa5205d463f6654dece8da3ff1ad26fdd`。来源为用户已完成的2026年9月机械费四页文件；入库前清除业务明细、项目名、月值、累计、公式和缓存，仅保留原四页表头、样式与打印骨架。原件留在原目录，本模板不携带真实业务记录。
 
-四页顺序为「工程公司汇总表」「零租设备月报表」「包月外租设备月报」「年度汇总」。字段映射唯一登记在[模板清单§九](../requirements/demo/模板/模板清单.md#九机械费原四页独立报送模板2026-10-19)；业务口径回说明书§5.6.5。实现为 `report_export/mechanical_export.py`，与既有普通导出、过程资料模板及材料透视导出分别保留入口，不套用DATA_START或透视缓存重建。
+四页顺序为「工程公司汇总表」「零租设备月报表」「包月外租设备月报」「年度汇总」。字段映射唯一登记在[模板清单§九](../requirements/docs/requirements/report-templates.md#九机械费原四页独立报送模板2026-10-19)；业务口径回说明书§5.6.5。实现为 `report_export/mechanical_export.py`，与既有普通导出、过程资料模板及材料透视导出分别保留入口，不套用DATA_START或透视缓存重建。
 
 导出读取当次保存／确认版本的快照，按选择的月份和项目顺序生成数值文件。单价、净额、月值、累计及合计写冻结数值；原年度历史列从已确认的来源缓存承接，不把公式交给打开文件后的计算引擎求值。未保存草稿不混入，未知金额保持空白；采用值与明细不同、缺明细及待补字段在预览如实提示。忽略留底属于核对处置，不替换真实金额或原始差额。每次生成独立文件，后续修订不改旧文件。
 

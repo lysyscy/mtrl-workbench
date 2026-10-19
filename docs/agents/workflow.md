@@ -18,7 +18,7 @@
 | 需要绑定的内容 | 本仓主人与落点 |
 |---|---|
 | 现行需求与字段口径 | `docs/requirements/材料科业务全流程说明书.md` / `docs/requirements/PRD/`；按AGENTS.md定位对应MOD与原句 |
-| effort规格、采用记录及累计范围 | 已有设计件或所属票；新独立方案放 `.scratch/<effort>/`；旧活动方案在 `.scratch/legacy-active/`，单票目标与验收放票面。明确采用时记录用户确认、固定起点、累计范围与当次授权；不为接入新建空规格或第二份状态表 |
+| effort规格、采用记录及累计范围 | 已有设计件或所属票；新独立方案放 `.scratch/<effort>/`；已结束旧方案从docs/archive/index.md追溯，单票目标与验收放票面。明确采用时记录用户确认、固定起点、累计范围与当次授权；不为接入新建空规格或第二份状态表 |
 | 票源与阶段 | `docs/agents/issue-tracker.md` §一～§四；主计划§15是活跃索引，§14.3为排期，已销号姊妹件是历史短索引；开销票使用 `_tail_open.py` / `_tail_close.py` |
 | 资料目录与历史 | README.md §二/三/四/七、docs/guides/document-governance.md、docs/guides/work-records.md；术语及D件消费回 docs/agents/domain.md |
 | 验证程序与选择 | `tools/oneoff/_run_rulers.py` 的CMDS/SELFTESTS及 `tools/oneoff/_impactscope.py`；实际命令、环境及浏览器工具分工回 `docs/guides/development-and-verification.md` §十一 |
@@ -62,10 +62,9 @@
 | 保留范围 | 实际契约与读取方式 | 退出条件 |
 |---|---|---|
 | 现有TAIL票仓 | 已采用的本地tracker权威；原票状态与Comments保持，索引在docs/status.md §15，历史短索引在docs/archive/tickets/index.md | 保持tracker协议，实际票仓已迁至.scratch/tails/issues；切换tracker另行处理；新任务规格使用.scratch，不另造票状态 |
-| 一份旧设计的挂起清单 | 界面整改主线已完成，仅§5历史原型退出清单未处置；依据与具体缺项见.scratch/legacy-active/README.md。六项审查来源已归档，TAIL-287仍按原撤回结论 | 用户裁定该挂起范围或处置清单完成后归档；不因旧文头“一项未决”重开业务开发 |
 | 已有D件 | 长期来源与编号在docs/adr保持；现行消费指针在既有索引更新，新决定使用docs/adr | 来源继续保存，按具体冲突读取，不默认加载全部旧裁定 |
 | 项目约束与文档审计 | 用户已确认退出CodeBuddy项目接入；约束在docs/agents/project-rules.md，审计在docs/guides/document-audit.md与tools/audit | 已撤销两份宿主指针；本次不更新已安装技能 |
-| delivery原型/模板/第三方原件与实际运行资源 | 检查、历史对账和运行模块的真实输入；现行产品Markdown在docs/requirements | 真实程序或来源契约完成切换后再单独处置，不因文档统一搬动正在运行服务的资源 |
-| artifacts、logs、backups和旧00-scratch | 真实工具配置、忽略原件、活动证据与恢复现场，Git不能代替本机原件 | 逐项证明活动与恢复用途结束后再清理；已整体迁至.scratch/local与.artifacts/recovery/backups，本次不按日期批量清空 |
+| delivery第三方原件与实际运行资源 | 检查、历史对账和运行模块的真实输入；现行产品Markdown在docs/requirements | 真实程序或来源契约完成切换后再单独处置，不因文档统一搬动正在运行服务的资源 |
+| artifacts、logs、backups和旧00-scratch | 真实工具配置、忽略原件、活动证据与恢复现场，Git不能代替本机原件 | 逐项证明活动与恢复用途结束后再清理；旧00-scratch与手工备份分别迁至.scratch/local及.artifacts/recovery/backups；artifacts与logs仍保留实际配置位置，本次不按日期批量清空 |
 
 普通任务只搜索现行资料、当前effort和直接依赖；历史只有明确追溯才读。恢复仅还原本批拥有的路径，遇到后续新内容保护双方。当前目录与命名回README.md，资料生命周期回docs/guides/work-records.md。

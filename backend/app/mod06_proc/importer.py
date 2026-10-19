@@ -43,7 +43,7 @@ def _field(page: str, aliases: tuple[str, ...] = ()) -> Field:
 def _mk_fields() -> tuple[Field, ...]:
     """⭐ **域声明**：13 个字段 ＋ 真模板各种写法的**别名**（两类来源，⛔ 不自己发明名字）：
 
-    1. `PRD demo/模板/模板清单.md §5.3`（18 列「模板列（分组头 › 叶子）→ 页面列」的**登记表**）；
+    1. `PRD docs/requirements/report-templates.md §5.3`（18 列「模板列（分组头 › 叶子）→ 页面列」的**登记表**）；
     2. 三份真文件实测到的**拼名两种顺序**（父+子 / 子+父，见本文件顶部表）。
     """
     mats: list[Field] = [Field("ym", "核算月", aliases=tuple(h for h in YM_HEADERS if h != "核算月"),

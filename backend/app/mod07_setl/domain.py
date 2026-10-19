@@ -227,7 +227,7 @@ def zip_manifest(rows, ym: str) -> list[dict]:
     """**产出物清单**（001-08）：分仓库工作簿（每仓一份）＋ 总表。
 
     ⚠️ 份数**随仓数实时算** —— 清单里 `kind == "warehouse"` 的条数恒等于仓数。
-    ⚠️ 本函数只产**清单**；文件本身走路径②（脚本改 i8 导出源文件，`demo/模板/模板清单.md` §一）。
+    ⚠️ 本函数只产**清单**；文件本身走路径②（脚本改 i8 导出源文件，`docs/requirements/report-templates.md` §一）。
     """
     rows = list(rows or ())
     out = [{"name": f"{r.get(WAREHOUSE_KEY)}.xlsx", "kind": "warehouse"} for r in rows]

@@ -61,7 +61,7 @@ const NT_COLS = ['id','date','code','proj','doc','biz','recv','entry','approve',
 const FL_COLS = ['id','nid','date','amt','method','remark','op','voided','reason'];
 /* 付款流水的筛选状态（R4：改动即时生效、无「应用」按钮）
    ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 —— 默认按「当前核算月」核算**，
-     一个月内流水有限 ⇒ **不做分页**（分页取舍见 `demo/设计规则` §六 第 28 条）。
+     一个月内流水有限 ⇒ **不做分页**（分页取舍见 `docs/requirements/interaction-rules.md` §六 第 28 条）。
    ⭐⭐ 2026-10-10 用户裁定：状态**初始与重置都默认「生效」**（日常只关心还没撤销的钱）；
      「全部 / 已撤销」仍在状态下拉里**随时可手动切**，⛔ 不是把已撤销藏起来。
      ⚠️ 这里只管**壳内筛选** —— 后端 `/api/m05/flows` 仍是**全量查询**（`status` 留空即全给），

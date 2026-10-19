@@ -56,7 +56,6 @@
 用法（⚠️ 2026-09-24 订正：尺子已随 `TAIL-58` 搬进 `tools/audit/`，旧写法 `tools/doc_audit.py` 已不存在）：
     python tools/audit/doc_audit.py              # 人读报告（有红即非零退出）
     python tools/audit/doc_audit.py -v           # 附命中行上下文
-    python tools/audit/doc_audit.py --ui         # 顺带跑交付面四检（需 node）
     python tools/audit/doc_audit.py --block      # 打印可粘贴进交接文件的「当前状态」块
 
 ⚠️ 本工具**只读**（`--block` 也只打印、不写文件）。
@@ -71,10 +70,7 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
-import os
-import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -103,63 +99,6 @@ from audit_work import (                                          # noqa: E402
 
 
 # ------------------------------------------------------------------- 四检（可选）
-
-
-def _resolve_node() -> Path | None:
-    """⭐ A8（2026-09-29 · `TAIL-188`）：node 从**本机写死**改成**三级回退** ——
-    `MTRL_NODE`（目标机显式指路）⇒ `PATH` 里的 `node`（装过就有）⇒ 旧默认（本机那份）。
-    ⚠️ 换机时**必然不同**（本机写死的是 `C:/Users/Administrator/.workbuddy/...`）⇒ 找不到就**照实说**，⛔ 不静默。"""
-    cands: list[Path] = []
-    env = os.environ.get("MTRL_NODE", "").strip()
-    if env:
-        cands.append(Path(env))
-    which = shutil.which("node")
-    if which:
-        cands.append(Path(which))
-    cands.append(Path(r"C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-3\node.exe"))
-    for c in cands:
-        if c.exists():
-            return c
-    return None
-
-
-def run_ui_checks() -> tuple[list[str], list[str]]:
-    """跑**交付面四检** ⇒ `(逐行输出, **非零退出码的那几件**)`。
-
-    ⭐ `TAIL-197`（2026-09-30 办）：以前这里**只把退出码打印出来**，`main()` 的 rc **不看它**
-       ⇒ 交付面回归**报得出来、却拦不住**（2026-09-30 实测：`_smoke` **606/1** 那一轮，`doc_audit --ui`
-       仍 `rc=0`、`BAD: []`、四态全绿）—— 同族 = 「**打印了红 ≠ 拦住了**」。
-       ⇒ 现在把非零的**件名回传**，由 `main()` 并进自己的 rc（`_run_rulers` 里那把尺子当场红）。
-    ⚠️ **三种「跳过」不算失败**（找不到 node ／ 拿不到交付面根 ／ 交付面 demo 里没有四检脚本）——
-       那是 `docs/guides/deployment.md` 写明的**目标机已知代价**：目标机不装交付面时本件**照样要能当闸门用**。
-       ⛔ 别把「跳过」也并进 rc：那会让目标机上**每一轮闸门都红**，人就开始忽略它（**比不判还坏**）。
-    """
-    node = _resolve_node()
-    root = delivery_root()
-    if not node:
-        return ["  （跳过：找不到 node —— 试过三处：环境变量 `MTRL_NODE` / PATH / 旧默认路径。"
-                "⚠️ 装 node 或设 `MTRL_NODE=<node.exe 全路径>`；详见 `docs/guides/deployment.md`）"], []
-    if not root:
-        return ["  （跳过：拿不到产品资料根 —— 在仓根 `.env` 里设 `PRD_ACCEPTANCE_BASELINE=docs/requirements/PRD/验收/验收基线.json`；"
-                "从仓库根目录运行，详见 `docs/guides/deployment.md`）"], []
-    demo = REPO_ROOT / "delivery" / "demo"
-    if not (demo / "_smoke.js").exists():
-        return ["  （跳过：交付面 demo/ 里没有四检脚本）"], []
-    out: list[str] = []
-    failed: list[str] = []
-    for s in ("_smoke", "_doccheck", "_links", "_ids"):
-        js = demo / f"{s}.js"
-        if not js.exists():
-            out.append(f"  {s:<10} （无此脚本）")
-            continue
-        r = subprocess.run([str(node), str(js)], cwd=str(demo), capture_output=True,
-                           text=True, encoding="utf-8", errors="replace")
-        concl = next((l.strip() for l in reversed((r.stdout or "").splitlines())
-                      if "====" in l), "")
-        out.append(f"  {s:<10} 退出码={r.returncode}  {concl[:66]}")
-        if r.returncode != 0:
-            failed.append(s)
-    return out, failed
 
 
 # ----------------------------------------------------------------------- 主流程
@@ -211,7 +150,6 @@ def check_cover_registry() -> list[dict]:
 def main() -> int:
     ap = argparse.ArgumentParser(description="文档漂移自检")
     ap.add_argument("-v", "--verbose", action="store_true", help="附命中行上下文")
-    ap.add_argument("--ui", action="store_true", help="顺带跑交付面四检（需 node）")
     ap.add_argument("--block", action="store_true", help="打印可粘贴的「当前状态」块")
     args = ap.parse_args()
 
@@ -401,7 +339,6 @@ def main() -> int:
         print("  （无超限文件）")
     print()
 
-    ui_failed: list[str] = []
     # ⭐ `T23` **常态也要报出一行**（2026-10-05 立）：口径齐全不是"没消息"，是**有消息说它齐全**
     # —— 否则闸门里那条判据**跑过但看不见**（本仓"判据存在 ≠ 被看见"那族）。
     if not any(h["code"] == "T23" for h in raw):
@@ -431,19 +368,7 @@ def main() -> int:
     if not any(h["code"] in ("T27", "T28") for h in raw):
         print(face_summary() + "（页脚之后不许有内容 · 篇幅变化仅提示调查；反向灵敏度 `_mut_facedoc`）")
         print()
-    if args.ui:
-        print("交付面四检")
-        print("-" * 78)
-        lines, ui_failed = run_ui_checks()
-        for l in lines:
-            print(l)
-        if ui_failed:
-            # ⭐ `TAIL-197`：四检的**非零退出码**从此**并进本件的 rc**（以前只打印 ⇒ 拦截不住）。
-            print(f"  ⛔ 交付面四检有**非零退出码**：{'、'.join(ui_failed)} ⇒ 本件 rc 一并判红"
-                  "（`TAIL-197`：⛔ 别只看结论行 —— 那 4 行退出码现在**机器也判**）")
-        print()
-
-    bad = bool(reds or any(h["level"] == RED for h in sizes) or ui_failed)
+    bad = bool(reds or any(h["level"] == RED for h in sizes))
     return 1 if bad else 0
 
 

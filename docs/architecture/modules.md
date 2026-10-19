@@ -103,7 +103,7 @@
 
 #### 权威依据（读哪；⛔ 别自创口径）
 
-- **形态主人** = `docs/requirements/demo/模板/模板清单.md`（模板本体**当交付物随系统走**）；**行为口径** =《说明书》§7.1。
+- **形态主人** = `docs/requirements/report-templates.md`（模板本体**当交付物随系统走**）；**行为口径** =《说明书》§7.1。
 - **模板资产闸门**：一律走 `report_export/resources.require_template()`（带 SHA256 登记 ＋ 资产断言）。
 
 #### 引擎契约（`backend/app/report_export/tpl_fill.py`）—— **三条硬性，⛔ 不许简化**

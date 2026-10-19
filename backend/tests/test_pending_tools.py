@@ -1,8 +1,5 @@
 """检查工具承认已退役规格和样例配置，仍拒绝正常规格缺失。"""
 import importlib.util
-import json
-import shutil
-import subprocess
 from pathlib import Path
 
 from tests.acc_plugin import acc
@@ -45,19 +42,3 @@ def test_example_config_selects_settings_consumers():
     assert not pending
     assert tests.run and 'test_config_env_example.py' in tests.files
     assert 'tools/audit/bytes_guard.py' in checks
-
-
-@acc()
-def test_asset_count_ignores_only_printer_runtime_config_and_cache(tmp_path):
-    printer = tmp_path/'i8一键打印'
-    (printer/'__pycache__').mkdir(parents=True)
-    for relative in ('config.ini', 'source.py', '__pycache__/source.pyc'):
-        (printer/relative).write_text('fixture', encoding='utf-8')
-    (tmp_path/'other').mkdir()
-    (tmp_path/'other/config.ini').write_text('source config', encoding='utf-8')
-    source = (ROOT/'delivery/demo/_doccheck.js').read_text(encoding='utf-8')
-    count = source[source.index('const countFilesOnDisk ='):source.index('/* ══ 事实登记表')]
-    script = "const fs=require('fs'),path=require('path');const ROOT=" + json.dumps(str(tmp_path)) + ";const PACK='.';" + count
-    result = subprocess.run([shutil.which('node'), '-e', script+'console.log(countFilesOnDisk(PACK));'],
-                            encoding='utf-8', capture_output=True, check=True)
-    assert result.stdout.strip() == '2'
