@@ -49,6 +49,6 @@
 
 ## 六、当前旧设计资料
 
-当前仅保留涉及活动任务或未解决范围的三份原件：六项只读审查件（TAIL-284来源）、历史付款补录与集采关联（TAIL-287暂缓）以及界面整改与欠款口径（一项未决）。从docs/status.md及原票按需读取，不按旧标题重新开工；相应任务结束或未决项已裁定后，再按来源保护要求归档。
+六项只读审查来源已随docs/archive/completed-efforts-20261019归档；TAIL-287按历史导入退出后的撤回结论保存。当前仅保留界面整改原件：业务主线均已完成或被后续裁定替代，文头“一项未决”过时；§5历史原型退出清单仍挂起，具体消费者与缺项见.scratch/legacy-active/README.md。保留不等于授权开发；挂起范围被裁定或处理后再归档。
 
 文件拆分判据已在docs/guides/file-splitting.md，写动作刷新依据已在docs/architecture/write-refresh.md；其原来含义不因迁移改变。其余已结束设计与排障证据从docs/archive/index.md明确追溯。

@@ -28,7 +28,7 @@
 | docs/archive/index.md | 历史原文、旧路径及固定SHA；只在明确追溯时读 |
 | .scratch/<effort>/ | 新活动任务的必要规格、调查与证据；有实质内容时创建 |
 | .scratch/tails/issues/ | 已采用的真实TAIL票仓；开销票使用既有工具 |
-| .scratch/legacy-active/ | 两份仍涉及活动或未决范围的原件；按原票读取，任务结束后再归档 |
+| .scratch/legacy-active/ | 界面整改旧件仅余原型退出清单挂起；已完主线及保留理由见本目录README.md |
 | docs/agents/project-rules.md | 文件、保存、环境与真实写入的条件约束；由AGENTS按操作触发 |
 | .scratch/local/、.artifacts/recovery/backups/ | 既有临时证据、恢复现场及快照；已整体迁入新位置，原文字节与恢复用途保留 |
 | backend/app/、backend/tests/、backend/alembic/ | 运行代码、测试与数据库迁移 |
@@ -51,7 +51,7 @@
 | 实测结论与工程参考 | 按主题命名，如sticky-total-row、template-export、thresholds | `docs/reference/`；成立前提与来源随正文保留 |
 | 索引 / 地图 | `README.md` | 该层根的目录 |
 | **agent 入口 / 制度页** | 入口 = 固定名 `AGENTS.md` · 制度页 = 固定小写英文名 | 仓根 · `docs/agents/`（2026-10-15专项迁移首批；workflow为执行绑定，issue-tracker为票协议） |
-| 新任务规格与调查 | spec.md或必要主题件 | `.scratch/<effort>/`；两个旧任务原文放.scratch/legacy-active |
+| 新任务规格与调查 | spec.md或必要主题件 | `.scratch/<effort>/`；旧设计的真实余项从.scratch/legacy-active/README.md定位 |
 | 实验记录 | 必要持久证据 | 所属任务evidence.md；运行产物仍按实际配置 |
 | 问题排查 | 依用途保存 | 活动任务中保存；结束且有独有价值再归档 |
 | 决策记录 | 已有 `D<编号>-<主题>.md` 保持原名；新ADR按编号与主题命名 | 已有件保留 `docs/adr/`；新目录决定为 `docs/adr/0033-document-layout.md` |
