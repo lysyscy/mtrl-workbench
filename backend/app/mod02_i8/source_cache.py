@@ -14,7 +14,7 @@
 
 ## 落点
 
-`PROJECT_ROOT / artifacts / i8_source / <key> / <YYYY-MM>.xlsx`
+`PROJECT_ROOT / var / data / i8_source / <key> / <YYYY-MM>.xlsx`
 （照 `wh_cache` 的同款改法：目录表明是 i8 的东西；`artifacts/` 已在 `.gitignore`）
 """
 
@@ -24,7 +24,7 @@ import pathlib
 
 from app.core.config import PROJECT_ROOT
 
-DIR = PROJECT_ROOT / "artifacts" / "i8_source"
+DIR = PROJECT_ROOT / "var" / "data" / "i8_source"
 
 
 def _path(key: str, ym: str) -> pathlib.Path:

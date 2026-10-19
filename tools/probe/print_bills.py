@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.core.config import get_settings  # noqa: E402
@@ -42,8 +42,8 @@ from app.mod03_notice.print.signatures import (  # noqa: E402
 )
 from app.mod03_notice.service import render_notice_html  # noqa: E402
 
-OUT_DIR = ROOT / "artifacts" / "pdf"
-SIG_CACHE = ROOT / "artifacts" / ".sigcache"
+OUT_DIR = ROOT / "exports/pdf"
+SIG_CACHE = ROOT / "var/cache/signatures"
 LABEL = {"material": "其他支出", "mechanical": "付款通知书"}
 
 

@@ -160,7 +160,7 @@ def check_downgrade_candidates() -> list[dict]:
 
 # ------------------------------------------------- T20 保留期与容量（2026-09-28 立）
 
-#: `.artifacts/recovery/backups/` 顶层**允许的条目数**（口径出处 = `README.md` §三/§四「留 5 份 · 月度清」）
+#: `var/backups/manual/` 顶层**允许的条目数**（口径出处 = `README.md` §三/§四「留 5 份 · 月度清」）
 BACKUP_KEEP = 5
 #: 显式归档子目录（⛔ 不计入 `BACKUP_KEEP`；但会在报告里**如实打印它的件数与体积** —— 防"全塞进归档"糊弄）
 BACKUP_ARCHIVE_PREFIXES = ("_归档-", "_旧快照归档-")
@@ -209,7 +209,7 @@ def _hit(code: str, rel: str, what: str, why: str, fix: str, line: int = 1) -> d
 def check_scratch_ttl() -> list[dict]:
     """`T14`：scratch 超期 ＋ 散件落点（tools 根 / logs）。"""
     hits: list[dict] = []
-    scratch = REPO_ROOT / ".scratch" / "local"
+    scratch = REPO_ROOT / ".artifacts" / "active"
     now = time.time()
     if scratch.is_dir():
         for f in sorted(scratch.rglob("*")):
@@ -219,9 +219,30 @@ def check_scratch_ttl() -> list[dict]:
             if days > SCRATCH_TTL_DAYS:
                 hits.append(_hit(
                     "T14", f.relative_to(REPO_ROOT).as_posix(),
-                    f"临时件已放 {days:.0f} 天（TTL {SCRATCH_TTL_DAYS} 天）",
+                    f"开发运行仍未退出 active：{days:.0f} 天（调查线 {SCRATCH_TTL_DAYS} 天）",
                     "临时区变垃圾场（审计 P2 的复发形态）—— 过期件会让下个 Agent 以为是当前线索",
                     "按README归入当前任务、docs或历史；先核活动和恢复用途再清理"))
+    import json
+    from datetime import date, timedelta
+    archive = REPO_ROOT / '.artifacts/archive'
+    for effort in sorted(archive.iterdir()) if archive.is_dir() else []:
+        if not effort.is_dir():
+            continue
+        try:
+            policy = json.loads((effort/'retention.json').read_text(encoding='utf-8'))
+            expires = date.fromisoformat(policy['expires_on'])
+            if not policy.get('reason') or not date.today() <= expires <= date.today() + timedelta(days=30):
+                raise ValueError('缺少理由或期限越界')
+        except (OSError, ValueError, KeyError, TypeError):
+            hits.append(_hit('T14', effort.relative_to(REPO_ROOT).as_posix(),
+                             '本机证据缺少有效的有限保留期',
+                             '归档不能成为无限保存临时现场的入口',
+                             '核实际用途，删除无价值证据或迁入长期样本/数据；不自动续期'))
+    for legacy in ('artifacts', 'logs', '.scratch/local'):
+        path = REPO_ROOT/legacy
+        if path.is_dir() and any(path.iterdir()):
+            hits.append(_hit('T14', legacy, '旧混合目录仍有内容',
+                             '现行消费者应使用固定类型目录', '核在途任务和真实消费者后完成具名迁移；不可批量删除'))
     tools = REPO_ROOT / "tools"
     if tools.is_dir():
         for f in sorted(tools.glob("*.py")):
@@ -230,15 +251,15 @@ def check_scratch_ttl() -> list[dict]:
                 "`tools/` 根出现了散件脚本",
                 "工具根只放 `*_expected.txt` 登记表与 README（审计 P6）—— 根上散件没人知道它属于哪一类",
                 "归位：尺子→`audit/` · 变异→`mut/` · 探针→`probe/` · 一次性→`oneoff/`"))
-    logs = REPO_ROOT / "logs"
+    logs = REPO_ROOT / "var/log"
     if logs.is_dir():
         for f in sorted(logs.iterdir()):
             if f.is_file() and f.suffix not in (".log", "") and f.name != ".gitkeep":
                 hits.append(_hit(
-                    "T14", f"logs/{f.name}",
+                    "T14", f"var/log/{f.name}",
                     "`logs/` 里出现了非日志文件",
                     "logs 只放服务日志（审计 P13：探测便签混入过一次）",
-                    "移去 `.scratch/local/`"))
+                    "开发输出归本轮.artifacts/active/<effort>/<run>/<kind>"))
     return hits
 
 
@@ -334,7 +355,7 @@ def check_retention() -> list[dict]:
     背景（2026-09-28 文档审计 §四-7 —— ⭐ **那份审计件已于 2026-10-06 降档到仓外**
     `D:\dev\.归档-mtrl\work-10-designs\设计-文档审计-20260928.md`，⛔ 仓内已无原件；
     要原文走仓外那份或 git `show HEAD:.scratch/legacy-active/设计-文档审计-20260928.md`）：
-      `README.md` §三/§四 写着 `.artifacts/recovery/backups/`「**留 5 份 · 月度清**」，而 2026-09-22 那份整改
+      `README.md` §三/§四 写着 `var/backups/manual/`「**留 5 份 · 月度清**」，而 2026-09-22 那份整改
       设计给出的验收判据**就是**「`backups/` 目录计数 ≤5（可数）」—— 却**从没被机器守过**
       ⇒ `TAIL-73` 销号时只验了"备份收敛到唯一点"、没验"≤5" ⇒ **43 个条目静默堆着**（含 09-18 的旧快照）。
 
@@ -347,7 +368,7 @@ def check_retention() -> list[dict]:
     ⚠️ **黄**（与 `T5`/`T10`/`T12` 同款哲学：可能定错的不该挡合入，但**必须被看见**）。
     """
     hits: list[dict] = []
-    backups = REPO_ROOT / ".artifacts" / "recovery" / "backups"
+    backups = REPO_ROOT / "var/backups/manual"
     if backups.is_dir():
         counted, archived, face = [], [], []
         for e in sorted(backups.iterdir()):
@@ -375,7 +396,7 @@ def check_retention() -> list[dict]:
                   + " —— ⛔ **不计入「手工快照 5 份」上限**（另一种用途）；**何时清** = `README.md` §四 末两行")
             if len(face) > FACE_KEEP or mb > FACE_MAX_MB:
                 hits.append(_hit(
-                    "T20", ".artifacts/recovery/backups/ 交付面改前快照",
+                    "T20", "var/backups/manual/ 交付面改前快照",
                     f"{len(face)} 个条目 / {mb:.1f} MB > 提示线 {FACE_KEEP} 个 / {FACE_MAX_MB} MB",
                     "这一类**最容易只增不减** —— 老口径只说「另一用途、不计入 5 份上限」⇒ 它**自己一个上限都没有**"
                     "（`TAIL-217` · 2026-10-02 立本条：此前只打印、不判 ⇒ 涨到多少都没人看见）",
@@ -388,7 +409,7 @@ def check_retention() -> list[dict]:
                   + " —— 归档不计入「手工快照 5 份」，但**它自己有上限**；**何时清** = `README.md` §四 末两行")
             if n > ARCHIVE_KEEP or mb > ARCHIVE_MAX_MB:
                 hits.append(_hit(
-                    "T20", ".artifacts/recovery/backups/ 归档子目录",
+                    "T20", "var/backups/manual/ 归档子目录",
                     f"{n} 件 / {mb:.1f} MB > 提示线 {ARCHIVE_KEEP} 件 / {ARCHIVE_MAX_MB} MB",
                     "归档是「**先移后清**」的中转站 ⇒ 它没有上限时，上一条就变成「换个地方堆」"
                     "（原口径只在报告里**打印**件数、没有任何判定；`TAIL-217` · 2026-10-02 立本条）",
@@ -397,13 +418,13 @@ def check_retention() -> list[dict]:
         if len(counted) > BACKUP_KEEP:
             names = " · ".join(x.name for x in counted[:8])
             hits.append(_hit(
-                "T20", ".artifacts/recovery/backups/",
+                "T20", "var/backups/manual/",
                 f"顶层 {len(counted)} 个条目 > 上限 {BACKUP_KEEP}（口径：留 {BACKUP_KEEP} 份 · 月度清）",
                 "⭐ 口径在 `README.md` 写着、却没人守 ⇒ 只会继续长；本条是它的机器眼（2026-09-28 立）",
                 f"把旧的**移进** `_旧快照归档-YYYYMMDD/`（可逆）或清掉；现值：{names}"))
     oneoff = REPO_ROOT / "tools" / "oneoff"
     if oneoff.is_dir():
-        # ⭐⭐ 2026-09-30（用户「可以归档」）：**已入档的不计数** —— 口径与 `.artifacts/recovery/backups/` 完全一致
+        # ⭐⭐ 2026-09-30（用户「可以归档」）：**已入档的不计数** —— 口径与 `var/backups/manual/` 完全一致
         #    （那边有 `BACKUP_ARCHIVE_PREFIXES = ("_归档-", "_旧快照归档-")`）。
         #    ⚠️ 为什么这**不是"放松判据"**：`T20` 这一条的本意写得很清楚 ——「件数是**「翻不翻得动」**的代理指标」
         #       ⇒ 躺在 `_归档-YYYYMMDD/` 里的件**已经不在"堆"里**（且⛔ 一个字节都没删，随时可移回）。
@@ -434,7 +455,7 @@ def check_retention() -> list[dict]:
     #    ⚠️ 它**一直在盘上**（所以这条判据**不是**"扫空集"），只是**没被移走**：`.gitignore` 里有一条
     #       `.workbuddy/scratch/` 把它藏住了 ⇒ **`git status` 干净、盘上却有东西**
     #       （⭐ 本轮最初的判断就是被这一点带偏的 → 已在原处订正，⛔ 不留错话）。
-    #    ⇒ 第 7 步把旧落点**整棵清掉**（内容归位到 `.artifacts/recovery/backups/_归档-旧临时区-20261001/`，⛔ 没删）⇒
+    #    ⇒ 第 7 步把旧落点**整棵清掉**（内容归位到 `var/backups/manual/_归档-旧临时区-20261001/`，⛔ 没删）⇒
     #       这条判据从此**正式失去对象** ⇒ **撤掉**（⛔ 不是改指向）：临时件现在**只有一处** `work/00-scratch/`，
     #       已由 `T14`（TTL 14 天）管 ✔ —— ⛔ 两条判据盯同一个目录 = 第二套口径。
     #    ⚠️ 同批撤掉它的变异：`tools/mut/_mut_t20.py` 原本往 `.workbuddy/scratch/` 写 51 MB 稀疏文件

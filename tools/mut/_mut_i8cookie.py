@@ -16,6 +16,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import os
 import subprocess
@@ -57,7 +62,7 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
      "cookie", '        return raw, "", "legacy"', '        return None, "", ""', T_LEGACY),
     # ---- cookie 是凭证 ⇒ 必须被 .gitignore 挡住
     ("缓存规则从 .gitignore 挪走（凭证会进 git）",
-     "gitignore", "artifacts/i8_cookie/", "artifacts/__i8cookie_off__/", T_GIT),
+     "gitignore", "var/state/i8_cookie/", "var/state/__i8cookie_off__/", T_GIT),
     # ---- ⭐ 2026-09-30（`TAIL-202`）：**有身份却没绑 i8 ⇒ 拒绝**（《说明书》§7.8「未填即拒绝抓取、不回落」）
     #      ⚠️ 这条靶打的是"**不再拒绝**" ⇒ 会悄悄回落去用共享账号（i8 登录含强踢：顶掉同事的在线会话）。
     ("有身份却没绑 i8 时**不再拒绝**（悄悄回落用共享账号 ⇒ 顶掉同事的在线会话）",
@@ -74,7 +79,7 @@ def _child_env() -> dict:
     """给子进程（`pytest`）的环境：**显式 UTF-8** ＋ 四态写回**局部档**（⛔ 不冲权威档）。"""
     return {**os.environ,
             "PYTHONIOENCODING": "utf-8",
-            "ACC_RESULTS_PATH": str(ROOT / "artifacts" / "_mut_acc_results.json")}
+            "ACC_RESULTS_PATH": str(ROOT / _run_dir() / "_mut_acc_results.json")}
 
 
 def _fit(fragment: bytes, sample: bytes) -> bytes:

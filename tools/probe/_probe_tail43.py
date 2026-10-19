@@ -6,6 +6,11 @@
 """
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import re
 import sys
 import zipfile
@@ -14,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TPL = ROOT / "backend" / "app" / "resources" / "templates" / "模板_库存单据明细表.xlsx"
-PROD = ROOT / "artifacts" / "exports" / "库存单据明细表" / "2026年9月" / "库存单据明细表_2026年9月.xlsx"
+PROD = ROOT / _run_dir() / "exports" / "库存单据明细表" / "2026年9月" / "库存单据明细表_2026年9月.xlsx"
 
 
 def ss(ss_xml: str):

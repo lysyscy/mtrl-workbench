@@ -29,6 +29,8 @@ AUTO_LOADED: tuple[tuple[str, str], ...] = (
 
 # 跨文件扫描与壳接线用途清单；按被改输入触发，不再随局部后端修改全部附带。
 REPO_WIDE: tuple[tuple[str, str], ...] = (
+    ("test_acc_plugin_teardown.py", "直接模拟验收插件收尾；插件属于AUTO_LOADED，变化时全验"),
+    ("test_pipini_single_source.py", "读取backend/pyproject.toml；依赖配置变化由local_scanners选中"),
     ("test_ux_text.py", "扫 app/** 的用户可见串（不许拼异常原文/工程代号）"),
     ("test_layering.py", "分层边界十一靶（扫全部 mod* 目录）"),
     ("test_deps_declared.py", "pyproject 运行依赖不许漏登记（AST 扫 app/**）"),
@@ -65,6 +67,8 @@ REPO_WIDE: tuple[tuple[str, str], ...] = (
 #: 一个 `tools/probe/` 下的件 · 一处 `tools/**/*.py` 的通配扫描）⇒ 改成「目录级触发 ＋
 #: **跑哪些由扫描器现算**」（`outside_readers()`）⇒ **要登记的东西变成 0**。
 OUTSIDE_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("skills/", "项目业务技能源及资源；迁移后的机械费回归直接动态导入"),
+    ("data/source/i8-diagnostics/", "真实诊断导出样本；测试直接读取时须带出使用者"),
     (".scratch/", "活动任务与票仓的真实读取者"),
     ("tools/", "尺子与探针：好几件测试 import 它、还有一件**通配扫** `tools/**/*.py`"),
     ("docs/", "现行工程文档：设计守则、架构、核验与参考正文"),
@@ -82,7 +86,9 @@ SELF_ONLY: tuple[tuple[str, str], ...] = ()
 #: ⛔ **有意排除的落点**（**逐条带理由** · 别让它变成"悄悄不检查"）：被扫出来却**故意不登记**
 #: 进 `OUTSIDE_PREFIXES` 的那些。
 IGNORED_READS: tuple[tuple[str, str], ...] = (
-    ("artifacts/", "产物档：`acc_plugin` 只**写**它（四态档的出口），不是读入 ⇒ "
+    (".artifacts/", "本轮开发输出"),
+    ("var/", "运行状态与可丢弃回执；不是测试代码"),
+    ("artifacts/", "旧产物档：`acc_plugin` 只**写**它（四态档的出口），不是读入 ⇒ "
                    "登记它会让 pytest 自己触发自己（每轮都白跑一遍）"),
 )
 
@@ -757,7 +763,7 @@ def acc_path(pl) -> pathlib.Path:
     （实测：绿 138 · 未绑定 506）⇒ **下一轮** `doc_audit` 的 `T4` 立刻报红 ⇒ **闸门自己污染自己**
     （与「变异件跑子集冲权威档」同族，机理一模一样）。
     """
-    return ROOT / "artifacts" / ("acc_results.json" if pl.run_all else "_partial_acc_results.json")
+    return ROOT / "var/state/verification" / ("acc_results.json" if pl.run_all else "_partial_acc_results.json")
 
 
 def acc_note(pl) -> str:

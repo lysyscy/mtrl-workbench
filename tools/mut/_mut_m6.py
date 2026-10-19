@@ -5,7 +5,7 @@
 1. **变异 / 还原一律走 bytes** —— `write_text` 在 Windows 上会把 `\n` 写成 `\r\n` ⇒ MD5 假 BAD；
 2. **片段按目标文件的行尾归一**（本仓源码行尾不统一）；
 3. **变异点找不到 ⇒ 必须当红灯处理**（脚本报「未验证」，不报「通过」）；
-4. 跑完**重跑全套 pytest**（本脚本内只跑两个目标文件，会覆盖 `artifacts/acc_results.json`）。
+4. 跑完**重跑全套 pytest**（本脚本内只跑两个目标文件，会覆盖 `var/state/verification/acc_results.json`）。
 
 用法：`python tools/_mut_m6.py`（只读 → 变异 → 跑目标测试 → 还原 → 校验 MD5 逐字节一致）
 """

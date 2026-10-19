@@ -1,4 +1,9 @@
 """守截止过滤、全部历史替换、i8优先与有金额列记忆保护；仅修改隔离副本并调用真实判据。"""
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 from pathlib import Path
 import os, shutil, subprocess, sys, tempfile
 ROOT=Path(__file__).resolve().parents[2]
@@ -14,8 +19,8 @@ CASES=[
 ]
 def main():
     env=os.environ.copy();env['TEST_DATABASE_URL']=get_settings().test_database_url
-    env['ACC_RESULTS_PATH']=str(ROOT/'artifacts/_mut_tail262_results.json')
-    with tempfile.TemporaryDirectory(prefix='tmp-tail262-mut-',dir=ROOT/'.scratch/local') as folder:
+    env['ACC_RESULTS_PATH']=str(ROOT/str(_run_output('_mut_tail262_results.json')))
+    with tempfile.TemporaryDirectory(prefix='tmp-tail262-mut-',dir=ROOT/_run_dir('work')) as folder:
         base=Path(folder)/'backend';base.mkdir()
         shutil.copytree(ROOT/'backend/app',base/'app',ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copytree(ROOT/'backend/tests',base/'tests',ignore=shutil.ignore_patterns('__pycache__'))

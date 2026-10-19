@@ -56,7 +56,7 @@ def _git(*args: str) -> str:
                           encoding="utf-8", errors="replace").stdout
 
 
-EXCLUDED_DIRS = ("backend/.venv/", ".venv/", "logs/", ".artifacts/",
+EXCLUDED_DIRS = ("var/", "data/source/", "exports/", "dist/", "backend/.venv/", ".venv/", "logs/", ".artifacts/",
                  ".scratch/local/", ".git/")
 
 

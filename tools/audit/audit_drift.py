@@ -447,7 +447,7 @@ def check_status_line() -> list[dict]:
     out: list[dict] = []
     if actual is None:
         return [{"code": "T4", "side": "仓", "rel": HANDBOOK_REL, "line": 1, "what": "（无法校验）",
-                 "why": "拿不到真源：先跑全套 pytest 生成 artifacts/acc_results.json",
+                 "why": "拿不到真源：先跑全套 pytest 生成 var/state/verification/acc_results.json",
                  "fix": "跑 pytest 后再跑本工具", "level": YELLOW, "text": ""}]
     want = (actual["绿"], actual["红"], actual["待建"], actual["未绑定"])
     for rel, must_have in ((LEDGER_REL, True),):

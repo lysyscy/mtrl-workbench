@@ -35,7 +35,7 @@ _PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[3]
 #:   读写**根** `artifacts/import_profiles.json` ⇒ **同一份「导入映射记忆」分裂成两份**
 #:   （2026-09-24 实测：两个文件都在、都 608 字节、mtime 差 9 小时）。
 #:   ⇒ 一律挂**工程根**（与 `cookie_store` / `preview_store` / `wh_cache` 同款）。
-_DEFAULT_REL = _PROJECT_ROOT / "artifacts" / "import_profiles.json"
+_DEFAULT_REL = _PROJECT_ROOT / "var" / "data" / "import_profiles.json"
 
 
 def fingerprint(headers) -> str:
@@ -69,7 +69,7 @@ class Saved:
 
 
 class ProfileStore:
-    """JSON 文件版记忆（路径由调用方给 ⇒ 可测；默认 `artifacts/import_profiles.json`）。"""
+    """JSON 文件版记忆（路径由调用方给 ⇒ 可测；默认 `var/data/import_profiles.json`）。"""
 
     def __init__(self, path: str | os.PathLike | None = None) -> None:
         self.path = pathlib.Path(path or _DEFAULT_REL)

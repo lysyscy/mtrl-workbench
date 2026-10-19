@@ -19,6 +19,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import sys
 from pathlib import Path
 
@@ -268,7 +273,7 @@ def check(page, errors: list[str]) -> None:
         #    只能靠人眼发现 ⇒ 每改一次版式就留一张图，落到 `artifacts/`（**不是** `.workbuddy/scratch/`，
         #    那里 14 天 TTL）。⚠️ 截图失败**不影响判据**（它只是取证）。
         try:
-            shot = Path(__file__).resolve().parents[2] / "artifacts" / "imp_map_2.png"
+            shot = Path(__file__).resolve().parents[2] / _run_dir() / "imp_map_2.png"
             page.screenshot(path=str(shot), full_page=True)
             print(f"  📷 已截图 ② 列映射：{shot}")
         except Exception as exc:                              # noqa: BLE001

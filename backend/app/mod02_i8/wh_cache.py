@@ -8,7 +8,7 @@
 而且在回执里**如实说明用的是几点的缓存**（⛔ 不静默、⛔ 不把旧名单说成刚抓的）。
 
 ## 三段式（照交付面素材包 `app/warehouse_sync.py` 的 `save_cache`/`load_cache`，**只借鉴形态**）
-- `cache_path()` → `artifacts/i8_warehouse/list.json`（**唯一出口**）
+- `cache_path()` → `var/cache/i8_warehouse/list.json`（**唯一出口**）
 - `load()` → `(items, fetched_at)`；`save(items, source=…)` → 写入路径
 - `clear()` → 删缓存文件
 
@@ -21,7 +21,7 @@
 
 ## 与素材包的**两处刻意不同（并说明理由）**
 1. **落点**：素材包平铺在 `var/cache/仓库列表.json`；本仓改**子目录专属命名空间**
-   `artifacts/i8_warehouse/list.json`（照本仓 `cookie_store` 的同款改法：目录已表明是 i8 仓库名单）。
+   `var/cache/i8_warehouse/list.json`（照本仓 `cookie_store` 的同款改法：目录已表明是 i8 仓库名单）。
 2. **不做"下载目录兜底"**：素材包的调用方在"匹配不到时查缓存兜底建档"，本仓**不搬**那半 ——
    见 `TAIL-39`：建档的口径是「**先查名单、没命中要人确认**」，不是"缓存里有就直接建"
    （缓存只用来**回答"名单里有没有"**，⛔ 不当作建档许可）。
@@ -39,7 +39,7 @@ from app.core.logging import get_logger
 logger = get_logger()
 
 #: 缓存落点（**模块级常量** —— 测试用 `monkeypatch.setattr` 换到临时目录，不必碰真实盘）
-CACHE_DIR: Path = PROJECT_ROOT / "artifacts" / "i8_warehouse"
+CACHE_DIR: Path = PROJECT_ROOT / "var" / "cache" / "i8_warehouse"
 
 #: 文件名（ASCII：避免工具链上的编码花样；目录名已表明是 i8 仓库名单）
 CACHE_NAME = "list.json"

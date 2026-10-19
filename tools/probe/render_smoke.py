@@ -17,6 +17,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import argparse
 import os
 import sys
@@ -24,7 +29,7 @@ import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUT = REPO_ROOT / "artifacts" / "render_smoke.pdf"
+DEFAULT_OUT = REPO_ROOT / _run_dir() / "render_smoke.pdf"
 
 HTML = """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">

@@ -1,4 +1,9 @@
 """TAIL-266：真实浏览器守年度列、读取失败、年筛选与独立结余，大表沿用全月累计。"""
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 from tests.test_tail264_ui import page
 from tests.acc_plugin import acc
 from app.mod15_user.domain import UI_SCALES
@@ -55,7 +60,7 @@ def test_annual_columns_balance_and_unread_state(page):
     head_boxes = [head.nth(i).bounding_box() for i in range(2)]
     assert abs(head_boxes[0]['x'] - first_box['x']) <= 2
     assert abs(head_boxes[1]['x'] - second_box['x']) <= 2
-    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261009-annual.png'))
+    page.screenshot(path=str(Path(__file__).resolve().parents[2] / _run_output('tmp-20261009-annual.png', kind='screenshots')))
     page.evaluate('''async () => {
       API.m07Extract=async()=>{throw new Error('库存读取失败');};
       try{await reloadExtract();}catch(e){}

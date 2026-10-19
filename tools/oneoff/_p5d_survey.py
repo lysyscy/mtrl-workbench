@@ -17,6 +17,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import json
 import pathlib
 import re
@@ -27,7 +32,7 @@ sys.path.insert(0, str(ROOT / "tools" / "audit"))
 
 from shell_source import parts_text  # noqa: E402
 
-OUT = ROOT / "artifacts" / "_p5d_survey.json"
+OUT = ROOT / _run_dir() / "_p5d_survey.json"
 
 
 def _scan_call(t: str, i: int) -> str:

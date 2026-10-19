@@ -4,7 +4,7 @@
 
 ## 一、来源与项目输入
 
-本次目录标准固定于 lysyscy/My-Skills 已发布提交 `8fef41fa5c0dde5dd3f12dac2365a0159f8e8fa7`。来源为 setup-solo-workflow 所属的 references/document-layout.md、document-maintenance.md 与 document-migration.md；完整目录标准读原件，本页只保留项目绑定。调用前沿当前宿主或 Skills Manager 登记定位实际入口，核本次需要的资源；维护源与已安装版本不一致时区分来源，不因新会话自动同步。
+本次目录标准固定于 lysyscy/My-Skills 已发布提交 `aab574c26cae00fe2c5d1f6c114e41edb929792d`。来源为 setup-solo-workflow 所属的 references/document-layout.md、document-maintenance.md 与 document-migration.md；完整目录标准读原件，本页只保留项目绑定。调用前沿当前宿主或 Skills Manager 登记定位实际入口，核本次需要的资源；维护源与已安装版本不一致时区分来源，不因新会话自动同步。
 
 | 动作 | 同来源参考 |
 |---|---|
@@ -65,6 +65,10 @@
 | 已有D件 | 长期来源与编号在docs/adr保持；现行消费指针在既有索引更新，新决定使用docs/adr | 来源继续保存，按具体冲突读取，不默认加载全部旧裁定 |
 | 项目约束与文档审计 | 用户已确认退出CodeBuddy项目接入；约束在docs/agents/project-rules.md，审计在docs/guides/document-audit.md与tools/audit | 已撤销两份宿主指针；本次不更新已安装技能 |
 | delivery第三方原件与实际运行资源 | 检查、历史对账和运行模块的真实输入；现行产品Markdown在docs/requirements | 真实程序或来源契约完成切换后再单独处置，不因文档统一搬动正在运行服务的资源 |
-| artifacts、logs、backups和旧00-scratch | 真实工具配置、忽略原件、活动证据与恢复现场，Git不能代替本机原件 | 逐项证明活动与恢复用途结束后再清理；旧00-scratch与手工备份分别迁至.scratch/local及.artifacts/recovery/backups；artifacts与logs仍保留实际配置位置，本次不按日期批量清空 |
+| 运行数据与开发输出 | var按data/state/cache/log/tmp/backups分工；用户原件data/source、成品exports、分发包dist；实际绑定和恢复见docs/guides/work-records.md | 当前消费者已切换；历史旧路径按迁移清单查新地址，不保留双写入口 |
 
 普通任务只搜索现行资料、当前effort和直接依赖；历史只有明确追溯才读。恢复仅还原本批拥有的路径，遇到后续新内容保护双方。当前目录与命名回README.md，资料生命周期回docs/guides/work-records.md。
+
+本仓沿用Python组件契约backend/app、backend/tests、backend/alembic及backend/app/resources，不为统一改包路径；第三方素材delivery沿其来源契约。持续核验状态固定在var/state/verification（权威四态、可丢弃回执与输入签名、壳基线）；它们有后续机器消费者，不能和一次运行证据一起到期删除。壳基线只迁字节，不重新盖章；现存差异按原结论处理。
+
+开发工具共享tools/audit/workspace_paths.py：默认effort为checks-当天、run为时间与PID，子进程沿用MTRL_RUN_ID；只由创建轮次的父进程收尾。输出按kind生成；进程退出释放work，保留实际核验输出至同effort本机归档（首次创建的期限不随新运行延长）。Agent手动运行使用MTRL_EFFORT/MTRL_RUN_ID指定本轮身份时由Agent自己结束run，并从实际安装的setup-solo-workflow/scripts/workspace_check.py运行run-closed/closed；检查本身不会代替删除。凭据和原件不得进入工具输出。

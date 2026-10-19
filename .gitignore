@@ -17,7 +17,7 @@ htmlcov/
 .coverage
 artifacts/*
 !artifacts/.gitkeep
-artifacts/i8_cookie/
+var/state/i8_cookie/
 logs/*
 !logs/.gitkeep
 .edge_profile/
@@ -37,5 +37,10 @@ Thumbs.db
 desktop.ini
 
 # 本机恢复现场与临时输出；活动票及规格不整体忽略。
+/var/
+/data/source/
+/data/reference/
+/exports/
+/dist/
 /.artifacts/
 /.scratch/local/

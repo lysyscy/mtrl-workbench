@@ -55,7 +55,7 @@ def preview_report(ym: str = '', projects: str = ''):
 def export_report(ym: str = '', projects: str = '', snapshot_token: str = ''):
     from app.core.config import get_settings
     settings = get_settings()
-    output = settings.artifacts_path / 'exports'
+    output = settings.exports_path
     data = report_snapshot(ym, projects)
     if snapshot_token and snapshot_token != workbench.digest(data):
         raise MustReportError('预览后已保存内容有变化，请重新预览再导出')

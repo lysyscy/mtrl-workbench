@@ -10,6 +10,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import os
 import pathlib
@@ -17,7 +22,7 @@ import subprocess
 import sys
 
 # ⛔ **结果隔离**（本仓纪律）：非全套 pytest 必须把四态结果写到**临时文件**。
-os.environ.setdefault("ACC_RESULTS_PATH", "../artifacts/_mut_acc_results.json")
+os.environ.setdefault("ACC_RESULTS_PATH", str(_run_output('_mut_acc_results.json')))
 
 sys.stdout.reconfigure(encoding="utf-8")            # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[2]

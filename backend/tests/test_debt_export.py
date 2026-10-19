@@ -69,7 +69,7 @@ def test_总欠款表写出形态_金额是数值且带表尾说明(tmp_path: Pa
 
 
 @acc("ACC-FLOW-DEBT-001", "001-06")
-def test_导出返回的是Path而不是str(monkeypatch):
+def test_导出返回的是Path而不是str(monkeypatch, tmp_path):
     """⚠️⚠️ **2026-09-20 真机实测踩到**：`export_total_debt` 回的是 **`str`**，
     而端点那边写的是 `path.name` ⇒ 一调就 `AttributeError: 'str' object has no attribute 'name'`
     ＋ **HTTP 500**。
@@ -85,6 +85,8 @@ def test_导出返回的是Path而不是str(monkeypatch):
                    "material": Decimal("2"), "mech": Decimal("3")}],
         "jc_skipped": 0, "mech_settle_ready": False,
     })
+    from app.core import config
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
     path, note = S.export_total_debt(None)          # ⚠️ 会话已被打桩，不需要真库
     assert isinstance(path, Path), (
         "端点要 `path.name` ⇒ 实现必须回 `Path`；回 `str` 会 **HTTP 500**（真机踩过）")

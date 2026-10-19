@@ -5,7 +5,7 @@
 ⚠️ 三条纪律（都是踩出来的）：
 1. **本仓源码行尾不统一** ⇒ 片段一律按 LF 写，匹配前用 `_fit()` 按目标文件归一；
 2. **片段含中文要用 `str` + `.encode()`** —— bytes 字面量只允许 ASCII（`b"中文"` 直接 SyntaxError）；
-3. **跑完必须重跑一次全套 `pytest`** —— 否则 `artifacts/acc_results.json` 留的是**变异态**结果
+3. **跑完必须重跑一次全套 `pytest`** —— 否则 `var/state/verification/acc_results.json` 留的是**变异态**结果
    ⇒ `acc_report.py` / `doc_audit` 的 `T4` 会报**假数字**。
 """
 

@@ -1,4 +1,9 @@
 """TAIL-265：真实浏览器验证同窗导出、转置月份递增、失败输入、取消和最大字号布局。"""
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 from tests.test_tail264_ui import page
 from tests.acc_plugin import acc
 from app.mod15_user.domain import UI_SCALES
@@ -53,7 +58,7 @@ def test_export_same_modal_cancel_and_long_list_footer(page):
     assert box and box['y'] + box['height'] <= 900
     page.locator('#procExportProjects').evaluate('(el)=>{el.scrollTop=el.scrollHeight;}')
     assert button.is_visible()
-    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261009-proc-export.png'))
+    page.screenshot(path=str(Path(__file__).resolve().parents[2] / _run_output('tmp-20261009-proc-export.png', kind='screenshots')))
     page.locator('[data-act="procExpCancel"]').click()
     assert not page.locator('#procExportProjects').is_visible()
     assert page.evaluate('saved.length') == 0
@@ -123,6 +128,6 @@ def test_batch_max_scale_many_items_months_and_visible_footer(page):
     box = button.bounding_box()
     assert box and 0 <= box['y'] and box['y'] + box['height'] <= 720
     assert page.locator('#modalRoot [data-act="closeModal"]').last.is_visible()
-    page.screenshot(path=str(Path(__file__).resolve().parents[2] / '.scratch/local/tmp-20261009-month-entry.png'))
+    page.screenshot(path=str(Path(__file__).resolve().parents[2] / _run_output('tmp-20261009-month-entry.png', kind='screenshots')))
     page.locator('#modalRoot [data-act="closeModal"]').last.click()
     assert page.evaluate('saved.length') == 0

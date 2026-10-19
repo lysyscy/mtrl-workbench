@@ -29,7 +29,7 @@ CORE_PREFIXES = ("README.md", "ops/", "docs/architecture.md", "docs/architecture
                  "docs/status.md",
                  "docs/guides/work-records.md")
 #: 留痕档：只追加、不回读 ⇒ ⛔ 它们"没人引用"不是病
-HISTORY_PREFIXES = ("docs/archive/", "docs/adr/D", ".scratch/local/", ".artifacts/")
+HISTORY_PREFIXES = ("var/", "data/", "exports/", "dist/","docs/archive/", "docs/adr/D", ".scratch/local/", ".artifacts/")
 
 
 def repo_root() -> Path:

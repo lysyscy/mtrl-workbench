@@ -70,7 +70,7 @@ def backup_databases(urls: dict[str, str], pg_bin: Path, output: Path) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pg-bin', type=Path, required=True)
-    parser.add_argument('--output', type=Path, default=ROOT / '.artifacts/recovery/databases')
+    parser.add_argument('--output', type=Path, default=ROOT / 'var/backups/databases')
     parser.add_argument('--verify', type=Path, help='只读核对一份已完成备份')
     args = parser.parse_args()
     try:

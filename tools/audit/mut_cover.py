@@ -6,7 +6,7 @@
 （变异脚本 `tools/**/_mut_*.py`：把实现**故意改坏** ⇒ 对应断言必须变红，否则是**假绿**）。
 ⚠️② 这一层**没有台账** ⇒ "哪些代码区被变异验过、哪些**从没验过**"没人答得上来 ——
    且已有实测教训：`_mut_boot` / `_mut_m03pay` 曾因 `pick()` 签名变化**静默崩掉**（**守卫自己烂了**）。
-⇒ 本件把 ② 生成成一张台账（`artifacts/变异覆盖台账.md`），每条变异件列出：
+⇒ 本件把 ② 生成成一张台账（`var/state/verification/变异覆盖台账.md`），每条变异件列出：
    **守什么 / 改坏谁 / 用哪条判据验 / 怎么跑**；并列出**登记在案的"尚未有变异覆盖"的守卫**。
 
 ## 用法
@@ -33,7 +33,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 sys.stdout.reconfigure(encoding="utf-8")
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "artifacts" / "变异覆盖台账.md"
+OUT = ROOT / "var/state/verification" / "变异覆盖台账.md"
 
 #: ⭐ **登记在案：还没有变异覆盖的守卫**（⛔ 手工维护 —— 加一条守卫时来这里登记，
 #:    补了变异脚本就从这里删掉；**这条清单本身是台账的一半**，只生成"有 _mut 的"会漏掉这一半）。

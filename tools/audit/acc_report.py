@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
-DEFAULT_RESULTS: Path = REPO_ROOT / "artifacts" / "acc_results.json"
+DEFAULT_RESULTS: Path = REPO_ROOT / "var/state/verification" / "acc_results.json"
 
 GREEN, RED, PENDING, UNBOUND = "绿", "红", "待建", "未绑定"
 _ACC_RE = re.compile(r"ACC-[A-Z0-9]+(?:-[A-Z0-9*]+)*")

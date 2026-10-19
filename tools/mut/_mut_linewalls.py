@@ -27,6 +27,11 @@
 """
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import os
 import re
@@ -174,7 +179,7 @@ def main() -> int:
     global ROOT, META, PLAN, CLEAN_DOC
     original = ROOT
     from audit_common import iter_docs
-    with tempfile.TemporaryDirectory(prefix='tmp-linewalls-', dir=original/'.scratch/local') as name:
+    with tempfile.TemporaryDirectory(prefix='tmp-linewalls-', dir=original/_run_dir('work')) as name:
         fixture = Path(name)
         sources = {doc[2] for doc in iter_docs()}
         sources.update((original/'tools/audit').glob('*.py'))

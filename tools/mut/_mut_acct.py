@@ -12,6 +12,11 @@
 """
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import os
 import subprocess
@@ -46,7 +51,7 @@ def md5(p: Path) -> str:
 def run_pytest() -> int:
     """跑**与本变异相关**的两支测试；⚠️ 必须设 `ACC_RESULTS_PATH`（否则冲掉权威四态，`T4` 报红）。"""
     env = dict(os.environ)                       # ⭐ 继承完整环境（⛔ 别只传两项 —— 进程起不来 = 假"变红"）
-    env["ACC_RESULTS_PATH"] = "../artifacts/_mut_acc_results.json"
+    env["ACC_RESULTS_PATH"] = str(_run_output('_mut_acc_results.json'))
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     r = subprocess.run(
         [PY, "-m", "pytest", "-q", "tests/test_print_fields.py", "tests/test_acc_print_acct.py",

@@ -31,6 +31,11 @@ r"""`TAIL-64` **P4-b**：把剩下 **21 处**筛选栏的**外壳**收进统一�
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import argparse
 import pathlib
 import re
@@ -40,7 +45,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 WEB = ROOT / "backend" / "app" / "web"
 SHELL_PARTS = ("index.html", "shell/actions.js", "shell/legacy.js", "shell/pages-a.js", "shell/pages-b.js")
 PROTO = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\demo\材料报表自动化工作台-交互原型.html")
-BACKUPS = ROOT / "artifacts" / "delivery-backups"
+BACKUPS = ROOT / _run_dir() / "delivery-backups"
 
 NL = "\r\n"
 #: `<div class="fbar…">` 开标签 → `FBAR(...)` 调用头（**逐字**对应 `FBAR` 的拼装式）

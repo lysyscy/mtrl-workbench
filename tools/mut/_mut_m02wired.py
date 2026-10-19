@@ -3,12 +3,17 @@
 
 做法：把**壳里**那几处实现**故意改坏**，确认对应断言**确实变红**；每处跑完**逐字节复原**并核 MD5。
 ⚠️ 变异点一律**不是"无害变异"**（改了行为不变 ⇒ 断言当然不红），且**不改动断言本身的锚字符串**。
-⚠️ 跑 pytest 时把结果**另写**一份（⛔ 别把全套的 `artifacts/acc_results.json` 冲掉）。
+⚠️ 跑 pytest 时把结果**另写**一份（⛔ 别把全套的 `var/state/verification/acc_results.json` 冲掉）。
 
 跑法（工程根）：`backend\\.venv\\Scripts\\python.exe tools\\_mut_m02wired.py`
 """
 
 from __future__ import annotations
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 
 import hashlib
 import os
@@ -22,7 +27,7 @@ BE = ROOT / "backend"
 import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "audit"))  # ⭐ `TAIL-58` 分目录：shell_source 在 audit/
 from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
-MUT_RESULTS = str(ROOT / "artifacts" / "_mut_acc_results.json")
+MUT_RESULTS = str(ROOT / _run_dir() / "_mut_acc_results.json")
 T = "tests/test_wired_m02.py"
 
 MUTATIONS: list[dict] = [

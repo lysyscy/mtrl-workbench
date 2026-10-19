@@ -1,5 +1,7 @@
 # 材料报表自动化工作台 · 当前状态与开发计划
 
+工作区目录统一已完成：运行数据归var、原件归data/source、成品归exports，artifacts/logs/.scratch/local旧入口已退出；服务已受控加载。目录、恢复与未验边界见docs/archive/workspace-migration，现行约束回README及work-records。原在途任务与票状态保持。
+
 > **读者**：接手或查待办的人与Agent｜**回答**：当前状态、最新交接、有效排期和票索引。
 > **何时读**：按AGENTS.md接手，查§0、§13.6最新行、§14.3与§15；不通读历史销号表。
 > 工程约束住 docs/architecture.md，模块职责住 docs/architecture/modules.md，部署住 docs/guides/deployment.md；业务真源见 docs/requirements.md。
@@ -31,10 +33,10 @@ m10机械费四页工作区复用mod06_proc/workbench，来源保护已加载，
 
 - 2026-10-16自主待办处理已完成：TAIL-284空项目安全删除、欠款截止月份判据及检查工具修正已通过隔离验证和完整回归；源码保存状态见.scratch/pending-resolution/evidence.md。本轮未重启，项目删除后端入口尚未加载；其他8条活跃事项保持原状态；付款计划过程资料现已按2026-10-19用户授权归档，实体第二台电脑仍未验收。
 
-- 全库审计确认的20项清理已完成源码整合和隔离核验；真实断言修复、闲置实现移除、请求内读取复用及探针异常清理见.scratch/slop-cleanup/evidence.md。本轮源码与其他已有改动已按主题提交推送；2026-10-16按用户授权重启加载e47d6a2，服务Running、/app和/healthz均200。真实探针和i8未运行；回执见.scratch/local/slop-publish-20261016/restart-result.json。
+- 全库审计确认的20项清理已完成源码整合和隔离核验；真实断言修复、闲置实现移除、请求内读取复用及探针异常清理见.scratch/slop-cleanup/evidence.md。本轮源码与其他已有改动已按主题提交推送；2026-10-16按用户授权重启加载e47d6a2，服务Running、/app和/healthz均200。真实探针和i8未运行；历史回执原位置.scratch/local/slop-publish-20261016/restart-result.json已退出，迁移与恢复索引见docs/archive/workspace-migration。
 
 
-- 付款计划过程资料已按用户2026-10-19新授权归档，替代此前“暂不结项”的资料保留安排；对外交付物仍为artifacts/payment-plan-audit.skill。运行源、资源、分发及5个安装目标无effort依赖，34项隔离技能测试通过。来源与恢复见docs/archive/completed-efforts-20261019/README.md；实体第二台电脑、真实拟方式回写及实际付款未验，不因归档视作验收。
+- 付款计划过程资料已按用户2026-10-19新授权归档，替代此前“暂不结项”的资料保留安排；对外交付物仍为dist/payment-plan-audit.skill。运行源、资源、分发及5个安装目标无effort依赖，34项隔离技能测试通过。来源与恢复见docs/archive/completed-efforts-20261019/README.md；实体第二台电脑、真实拟方式回写及实际付款未验，不因归档视作验收。
 
 - 复盘获批第1/4项已完成：4个相关写库用例接入自动回滚，选集CLI未知参数退出2；全量回归、样例清理及既有审计失败见.scratch/retro-rollback-cli/evidence.md。
 
@@ -100,8 +102,8 @@ TAIL-337运行环境已升级并加载；本次两库备份向隔离PG18恢复�
 
 ### ③ 可选的清理（你随时可做）
 
-- ✅ **2026-10-01 已清**：`artifacts/pdf/` 里那 **884 个**旧导出产物（09-15 起 · 7.6 MB）已按你的话清掉（目录保留；新流程本来就不往里写）。
-- ⏸️ **待观察**：`artifacts/import_preview/`（导入预览的临时 token）—— 按你的话**不加保留期** ⇒ 它会随用量再长；哪天真碍事了说一句。
+- ✅ **2026-10-01 已清**：`artifacts/pdf/` 里那 **884 个**旧导出产物（09-15 起 · 7.6 MB）已按你的话清掉（旧目录现已退役；新流程不往里写）。
+- ⏸️ **待观察**：`var/state/import_preview/`（导入预览的临时 token）—— 按你的话**不加保留期** ⇒ 它会随用量再长；哪天真碍事了说一句。
 
 
 

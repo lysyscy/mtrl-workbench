@@ -8,6 +8,11 @@
 """
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import os
 import pathlib
@@ -49,9 +54,9 @@ for name, old, new, target in MUTS:
         continue
     SRC.write_text(orig.replace(old, new, 1), encoding="utf-8", newline="")
     env = dict(os.environ)
-    # ⛔ 必须指到**变异用**结果文件 —— 否则会把正式 `artifacts/acc_results.json` 覆盖成
+    # ⛔ 必须指到**变异用**结果文件 —— 否则会把正式 `var/state/verification/acc_results.json` 覆盖成
     #    局部跑的结果 ⇒ `doc_audit` 的 T4（文档数字 vs 实测）立刻对不上（踩过：一次 3 条红）
-    env["ACC_RESULTS_PATH"] = "../artifacts/_mut_acc_results.json"
+    env["ACC_RESULTS_PATH"] = str(_run_output('_mut_acc_results.json'))
     got = subprocess.run([str(PY), "-m", "pytest", target, "-q", "-p", "no:cacheprovider",
                           "--tb=no", "-x"], cwd=ROOT / "backend", capture_output=True, env=env)
     red = got.returncode != 0

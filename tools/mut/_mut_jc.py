@@ -4,7 +4,7 @@
 
 ⚠️ **本脚本比老的 `_mut_*.py` 多做了一件事（新纪律，建议后续脚本照做）**：
    跑 `pytest -k` **子集**时把 `ACC_RESULTS_PATH` 指到**临时文件** ——
-   否则 acc 插件会把"只跑了这几个测试"的结果写回工程基线 `artifacts/acc_results.json`，
+   否则 acc 插件会把"只跑了这几个测试"的结果写回工程基线 `var/state/verification/acc_results.json`，
    于是 `doc_audit` 的 `T4`（四态数字核对）**当场报错**（2026-09-19 实测踩到：基线被写成
    "绿 15 · 未绑定 495"）。⛔ 子集运行**永远**把结果指到外面。
 

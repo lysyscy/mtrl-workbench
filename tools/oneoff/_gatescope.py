@@ -68,7 +68,7 @@ def inventory(root: Path, faces: tuple[Path, ...] = ()) -> dict[str, str]:
             dirs[:] = sorted(d for d in dirs if d not in EXCLUDED)
             parent = Path(folder)
             relative = parent.relative_to(base).as_posix()
-            if label == 'repo' and (relative in {'.scratch/local', '.artifacts'}):
+            if label == 'repo' and (relative in {'.scratch/local', '.artifacts', 'var', 'data', 'exports', 'dist'}):
                 dirs[:] = []
                 continue
             if any((parent/d).is_symlink() for d in dirs):
@@ -77,14 +77,25 @@ def inventory(root: Path, faces: tuple[Path, ...] = ()) -> dict[str, str]:
                 path = parent/name
                 rel = path.relative_to(base).as_posix()
                 if label == 'repo' and rel.startswith('artifacts/') and rel not in (
-                        'artifacts/acc_results.json', 'artifacts/变异覆盖台账.md'):
+                        'var/state/verification/acc_results.json', 'var/state/verification/变异覆盖台账.md'):
                     continue
                 if path.is_symlink():
                     raise OSError('符号链接输入范围无法证明')
                 files[label+'/'+rel] = digest(path.read_bytes())
     # 壳章在备份目录，其他备份由常驻 T20 读取，不能用回执跳过。
-    for path in sorted((root/'.artifacts/recovery/backups').glob('*_壳单文件基线.html')):
+    for path in sorted((root/'var/state/verification/shell-baselines').glob('*_壳单文件基线.html')):
         files['repo/'+path.relative_to(root).as_posix()] = digest(path.read_bytes())
+    for name in ('acc_results.json', '变异覆盖台账.md'):
+        path = root/'var/state/verification'/name
+        if path.is_file():
+            files['repo/'+path.relative_to(root).as_posix()] = digest(path.read_bytes())
+    # The offline export regression reads real diagnostic originals, not runtime outputs.
+    diagnostics = root/'data/source/i8-diagnostics'
+    for path in sorted(diagnostics.rglob('*')):
+        if path.is_symlink() or path.is_junction():
+            raise OSError('诊断样本输入含链接')
+        if path.is_file():
+            files['repo/'+path.relative_to(root).as_posix()] = digest(path.read_bytes())
     return files
 
 
@@ -116,10 +127,10 @@ def input_signature(rel: str, args: list[str], files: dict, context: str) -> str
             n in {'repo/.env', 'repo/.env.example', 'repo/.gitignore', 'repo/.gitattributes', 'repo/AGENTS.md'}}
     elif rel == 'tools/audit/shell_verify.py':
         selected = {n: h for n, h in files.items() if n.startswith((
-            'repo/tools/', 'repo/backend/', 'repo/.artifacts/recovery/backups/'))}
+            'repo/tools/', 'repo/backend/', 'repo/var/state/verification/shell-baselines/'))}
     elif rel == 'tools/audit/mut_cover.py':
         selected = {n: h for n, h in files.items() if n.startswith('repo/tools/') or
-                    n == 'repo/artifacts/变异覆盖台账.md'}
+                    n == 'repo/var/state/verification/变异覆盖台账.md'}
         selected['namespace'] = digest('\n'.join(sorted(files)).encode())
     elif rel == 'tools/probe/_shell_smoke.py':
         # ⭐ 2026-10-11（`/retro` 候选 1 · 省不必要的检查）：真机自检的**证明输入 = 壳字节 ＋ 环境**
@@ -135,7 +146,7 @@ def input_signature(rel: str, args: list[str], files: dict, context: str) -> str
         selected = {n: h for n, h in files.items()
                     if n.startswith(('repo/backend/app/web/', 'repo/tools/probe/'))}
     elif rel == 'pytest':
-        selected = {n: h for n, h in files.items() if not n.startswith(('repo/artifacts/', 'repo/backend/.codebuddy/'))}
+        selected = {n: h for n, h in files.items() if not n.startswith(('repo/artifacts/', 'repo/var/', 'repo/backend/.codebuddy/'))}
     else:
         return None
     return digest(json.dumps([VERSION, rel, args, context, selected],
@@ -181,7 +192,7 @@ class Receipts:
     def __init__(self, root=ROOT, *, related=False, faces=(), context=None, git_ok=True):
         self.root = Path(root)
         self.faces = tuple(faces)
-        self.path = self.root/'artifacts/_gate_receipts.json'
+        self.path = self.root/'var/state/verification/_gate_receipts.json'
         self.related = related
         self.failed = False
         self.records = {}
@@ -246,7 +257,7 @@ class Receipts:
         if complete and not self.failed:
             shell = (self.root/'backend/app/web/index.html').read_bytes().decode('utf-8')
         inputs = current.get('pytest_inputs', self.pytest_inputs)
-        inputs_path = self.root/'artifacts/_pytest_inputs.json'
+        inputs_path = self.root/'var/state/verification/_pytest_inputs.json'
         if complete and not self.failed:
             inputs = digest(inputs_path.read_bytes()) if inputs_path.is_file() else ''
         data = {'version': VERSION, 'root': str(self.root.resolve()), 'context': self.context,
@@ -266,8 +277,7 @@ def open_receipts(*, related=False, git_ok=True):
     try:
         sys.path.insert(0, str(ROOT/'tools/audit'))
         from audit_common import delivery_root
-        from ui_parity import PROTO
-        faces = tuple(dict.fromkeys([delivery_root(), PROTO.parent.parent]))
+        faces = (delivery_root(),)
         return Receipts(related=related, faces=faces, git_ok=git_ok)
     except (OSError, ValueError, TypeError) as exc:
         print('相关核验：输入无法确定，禁用复用、按影响重验（'+type(exc).__name__+'）')
@@ -284,8 +294,8 @@ def selftest(*, dependencies=True) -> None:
         source.write_text('original', encoding='utf-8')
         ticket = root/'ticket.md'
         ticket.write_text('old', encoding='utf-8')
-        authority = root/'artifacts/acc_results.json'
-        authority.parent.mkdir()
+        authority = root/'var/state/verification/acc_results.json'
+        authority.parent.mkdir(parents=True)
         authority.write_text('authority', encoding='utf-8')
         def session(**kw):
             return Receipts(root, related=True, context='fixture', **kw)
@@ -359,7 +369,7 @@ def selftest(*, dependencies=True) -> None:
         proven.record('pytest', pytest_args, 0)
         proven.save()
         assert not session().required('pytest', pytest_args), 'pytest 同输入可复用'
-        for name in ('artifacts/acc_results.json',
+        for name in ('var/state/verification/acc_results.json',
                      'backend/.codebuddy/results.json',
                      '.scratch/local/result.json'):
             product = root/name

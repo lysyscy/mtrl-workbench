@@ -47,7 +47,7 @@ MUTS = [
 def red() -> int:
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1",
            "PLAYWRIGHT_BROWSERS_PATH": r"C:\ProgramData\ms-playwright",
-           "ACC_RESULTS_PATH": "../artifacts/acc_results.json"}
+           "ACC_RESULTS_PATH": "../var/state/verification/acc_results.json"}
     r = subprocess.run([PY, "-m", "pytest", "-q", TEST, "-p", "no:cacheprovider", "--tb=line"],
                        cwd=str(ROOT / "backend"), capture_output=True, text=True,
                        encoding="utf-8", errors="replace", env=env)

@@ -12,7 +12,7 @@
 | `T1` | **幽灵用例号** —— 文档提到的 `ACC-*` 在验收基线里不存在 | `验收基线.json` |
 | `T2` | **已废除术语** —— 命中 `RETIRED_TERMS` | `audit_common.py` |
 | `T3` | **幽灵路径** —— 反引号里的仓库内路径两侧都找不到（⭐ 2026-10-05 `TAIL-235` 丁-1 扩半：① 扫描面进 `.codebuddy/`（**治理区此前整片无人管**）② **仓外绝对路径**落在 `OUTSIDE_ROOTS` 白名单内 ⇒ 到那个根下**真核存在** ③ 带 `〔已归档〕` 标记的引用**剥掉标记照核** ⇒ ⛔ **标记不是豁免**，加前缀不再能把坏路径洗掉） | 文件系统 |
-| `T4` | **状态数字失配** —— 执行情况「当前版本」行的四态 ≠ 实际 | `artifacts/acc_results.json` |
+| `T4` | **状态数字失配** —— 执行情况「当前版本」行的四态 ≠ 实际 | `var/state/verification/acc_results.json` |
 | `T5` | **行数超限** —— 单文件 >400（黄 · 须登记拆分计划）/ >600（黄 · 须登记"为什么不拆"）<br>⚠️ 2026-09-21 **用户裁定：>600 从红降黄**（行数是代理指标，不作禁合入闸门） | 源文件行数（**输出即登记清单**）＋ `docs/reference/thresholds.md` |
 | `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `docs/status.md` |
 | `T7a`/`T7b` | **判据覆盖** —— 有登记的能力却没判据兜住（**登记档，不判红**） | `cover_gap.py` |
@@ -108,7 +108,7 @@ def _print_block() -> int:
     from audit_drift import _actual_states                          # noqa: PLC0415
     st = _actual_states()
     if st is None:
-        print("（拿不到真源：先跑全套 pytest 生成 artifacts/acc_results.json）")
+        print("（拿不到真源：先跑全套 pytest 生成 var/state/verification/acc_results.json）")
         return 2
     code = 0 if st["红"] == 0 else 1
     print("四态 **%d = 绿 %d · 红 %d · 待建 %d · 未绑定 %d**（退出码 %d）"

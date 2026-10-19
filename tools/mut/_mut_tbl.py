@@ -5,6 +5,11 @@
 执行异常均报失败；工作文件和仓外交付面不作靶，局部结果不刷新权威四态。
 """
 from __future__ import annotations
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 import hashlib
 import json
 import os
@@ -18,7 +23,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 PY = pathlib.Path(sys.executable)
 SHELL = ROOT/'backend/app/web/index.html'
 PROJ = ROOT/'backend/app/web/shell/proj.js'
-PARTIAL_ACC = ROOT/'artifacts/_mut_acc_results.json'
+PARTIAL_ACC = ROOT/str(_run_output('_mut_acc_results.json'))
 TARGETS = (
     'tests/test_wired_m06.py::test_合计行格数由表头派生',
     'tests/test_acc_jc_shell.py::test_空态行跨列数派生且全选框回显三态',

@@ -16,6 +16,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import argparse
 import pathlib
 import re
@@ -24,7 +29,7 @@ import shutil
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SHELL = ROOT / "backend" / "app" / "web" / "index.html"
 PROTO = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\demo\材料报表自动化工作台-交互原型.html")
-BACKUPS = ROOT / "artifacts" / "delivery-backups"
+BACKUPS = ROOT / _run_dir() / "delivery-backups"
 
 HEAD = '<details class="tip"><summary>口径说明 · '
 BLOCK = re.compile(r'<details class="tip"><summary>口径说明 · (\d+) 条')

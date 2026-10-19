@@ -48,7 +48,7 @@ ROOT = Path(__file__).resolve().parents[2]
 from tests.shell_src import SHELL, act_entry, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 API = (ROOT / "backend" / "app" / "mod07_setl" / "api.py").read_text(encoding="utf-8")
 INV_API = (ROOT / "backend" / "app" / "mod08_inv" / "router.py").read_text(encoding="utf-8")
-DIAG_INV = ROOT / "artifacts" / "_diag" / "inv_2026-09.xlsx"
+DIAG_INV = ROOT / "data/source/i8-diagnostics" / "inv_2026-09.xlsx"
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先自带剪刀 `_act`（`SHELL.find` ＋ 花括号配平）——
 #    已**整把删掉**，取动作条改走壳的语义口径 `act_entry`（定义 = `tools/audit/shell_api.py`）。⛔ 别写回来。

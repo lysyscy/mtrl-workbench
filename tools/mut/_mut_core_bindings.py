@@ -20,6 +20,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import os
 import pathlib
@@ -33,7 +38,7 @@ PROJECTS_CORE = CORE / "projects.py"         # 取数口之一（项目行）
 IDENTITY_CORE = CORE / "identity.py"         # 取数口之一（身份 → i8 绑定）
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 TARGETS: tuple[str, ...] = ("tests/test_core_bindings.py",)
-PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
+PARTIAL_ACC = ROOT / _run_dir() / "_mut_acc_results.json"
 
 
 def _b(text: str) -> bytes:

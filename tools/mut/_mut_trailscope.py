@@ -14,6 +14,11 @@
 """
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import subprocess
 import sys
@@ -75,7 +80,7 @@ def run_one(node: str) -> bool:
     且下次读报表的人会以为判据点少了一大截。
     """
     import os
-    env = {**os.environ, "ACC_RESULTS_PATH": "../artifacts/_mut_acc_results.json",
+    env = {**os.environ, "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
            "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run(
         [PY, "-m", "pytest", "-q", f"tests/{node}"],

@@ -1,6 +1,11 @@
 """真实浏览器加载壳，隔离写出口，保护供应商提交和导入向导的状态。"""
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import os
 import sys
 from pathlib import Path
@@ -71,7 +76,7 @@ def test_项目删除按真实预览启用并重拉列表(ui_page):
       return ACT.delPj({dataset:{id:'1'}});
     }''')
     assert p.is_enabled('[data-act="delPjOk"]')
-    p.screenshot(path=str(Path(__file__).resolve().parents[2]/'.scratch/local/pending-project-delete.png'))
+    p.screenshot(path=str(Path(__file__).resolve().parents[2]/_run_output('pending-project-delete.png', kind='screenshots')))
     p.click('[data-act="delPjOk"]')
     p.wait_for_function('window.reloadedProjects && window.reloadedNotices')
     assert p.evaluate('deletedProject') == '1'
@@ -89,7 +94,7 @@ def test_欠款标题显示账内截止月而非系统当月(ui_page):
     }''')
     assert '截至 2024-03' in p.inner_text('#view')
     assert '130.00元' in p.inner_text('#view').replace(' ', '')
-    p.screenshot(path=str(Path(__file__).resolve().parents[2]/'.scratch/local/pending-debt-cutoff.png'))
+    p.screenshot(path=str(Path(__file__).resolve().parents[2]/_run_output('pending-debt-cutoff.png', kind='screenshots')))
 
 
 @acc()
@@ -857,7 +862,7 @@ def test_集采存档号提示按项目最大值且不受筛选影响(ui_page):
     assert p.locator('[data-act="jcArchNo"][data-id="4"]').get_attribute('placeholder') == '7'
     assert p.locator('[data-act="jcArchNo"][data-id="5"]').get_attribute('placeholder') == '1'
     assert p.evaluate('window.archiveWrites') == 1
-    p.screenshot(path=str(Path(__file__).resolve().parents[2] / 'artifacts/jc-archive-hint-20261014.png'))
+    p.screenshot(path=str(Path(__file__).resolve().parents[2] / str(_run_output('jc-archive-hint-20261014.png'))))
 
 
 @acc()

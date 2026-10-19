@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PY = Path(sys.executable)
 
 CASES = {'gate': ('tools/oneoff/_gatescope.py',
-          [('pytest 产物误入签名', "('repo/artifacts/', 'repo/backend/.codebuddy/')", "('repo/artifacts/',)"),
+          [('pytest 产物误入签名', "('repo/artifacts/', 'repo/var/', 'repo/backend/.codebuddy/')", "('repo/artifacts/',)"),
            ('无证明跳过', 'return self.full or sign is None or record !=', 'return False and record !='),
            ('忽略输入内容变化', 'return hashlib.sha256(value).hexdigest()', "return 'constant'"),
            ('失败仍记绿', '        if rc != 0:', '        if False:'),

@@ -250,7 +250,7 @@ def test_记忆_默认落点与cwd无关(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)                    # ⭐ 把 cwd 挪走：相对路径必然落错
     st = ProfileStore()
     assert st.path.is_absolute(), f"默认落点必须是绝对路径，实为 {st.path}"
-    assert st.path.parts[-2:] == ("artifacts", "import_profiles.json"), st.path
+    assert st.path.parts[-2:] == ("data", "import_profiles.json"), st.path
 
 
 # ---------------------------------------------------- 像数据吗（`TAIL-129` 表头定位的硬门槛）

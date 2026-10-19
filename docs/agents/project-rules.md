@@ -26,7 +26,7 @@ AGENTS.md为会话入口；项目开发正文在docs/guides/，实现约束和�
 ## 四、文件与工具
 
 - `[助手自定]` JSON用结构操作；改已有文件保留其行尾，新文本UTF-8无BOM，ps1例外带BOM。字节保护由 tools/audit/bytes_guard.py 执行。
-- `[助手自定]` 长脚本及临时证据进所属任务.scratch或.scratch/local；输出完整落盘或取末尾，不能掐断正在写靶的进程。相关配方按需读docs/guides/development-and-verification.md §十七。
+- `[助手自定]` 长脚本进本轮.artifacts/active/<effort>/<run>/work，运行证据进对应kind，.scratch仅放任务Markdown；输出完整落盘或取末尾，不能掐断正在写靶的进程。相关配方按需读docs/guides/development-and-verification.md §十七。
 - `[助手自定]` 修改共享文件前重新读取；同一文件写入串行；变异用隔离夹具，不临时改正式工作文件。
 
 ## 五、协作边界

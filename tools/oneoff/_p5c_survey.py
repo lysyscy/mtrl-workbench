@@ -22,6 +22,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import json
 import os
 import pathlib
@@ -122,7 +127,7 @@ def main() -> int:
           f"{'⇒ 没有页指望页级那条路' if not bigpages else '⇒ ⛔ 这些行块删了页级就**不再虚拟化**（该收进 `TBL`）'}")
     print(f"④ 真机 console 错误：{len(errs)} 条" + ("" if not errs else f" —— {errs[:3]}"))
 
-    dst = ROOT / "artifacts" / "_p5c_survey.json"
+    dst = ROOT / _run_dir() / "_p5c_survey.json"
     dst.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n逐页读数已落：{dst.relative_to(ROOT)}")
     return 0

@@ -176,18 +176,18 @@ def test_host_lane_missing_or_wrong_suffix_still_fails(monkeypatch):
 @acc()
 def test_recovery_is_excluded_but_active_inputs_invalidate_receipts(tmp_path):
     (tmp_path / '.scratch/local').mkdir(parents=True)
-    (tmp_path / '.artifacts/recovery/backups').mkdir(parents=True)
+    (tmp_path / 'var/state/verification/shell-baselines').mkdir(parents=True)
     (tmp_path / '.scratch/tails/issues').mkdir(parents=True)
     (tmp_path / '.scratch/legacy-active').mkdir()
     (tmp_path / '.scratch/local/recovery.txt').write_text('private recovery', encoding='utf-8')
-    (tmp_path / '.artifacts/recovery/backups/backup.txt').write_text('private backup', encoding='utf-8')
+    (tmp_path / 'var/state/verification/shell-baselines/backup.txt').write_text('private backup', encoding='utf-8')
     active = tmp_path / '.scratch/tails/issues/TAIL-1-test.md'
     active.write_text('active', encoding='utf-8')
-    (tmp_path / '.artifacts/recovery/backups/fixture_壳单文件基线.html').write_text('shell baseline', encoding='utf-8')
+    (tmp_path / 'var/state/verification/shell-baselines/fixture_壳单文件基线.html').write_text('shell baseline', encoding='utf-8')
     inventory = _gatescope.inventory(tmp_path)
     assert 'repo/.scratch/tails/issues/TAIL-1-test.md' in inventory
     assert not any(p.endswith(('recovery.txt', 'backup.txt')) for p in inventory)
-    assert 'repo/.artifacts/recovery/backups/fixture_壳单文件基线.html' in inventory
+    assert 'repo/var/state/verification/shell-baselines/fixture_壳单文件基线.html' in inventory
     for rel in ('repo/.scratch/tails/issues/TAIL-1-test.md',
                 'repo/.scratch/legacy-active/设计-test.md', 'repo/AGENTS.md'):
         for tool in _gatescope.CODE_ONLY:

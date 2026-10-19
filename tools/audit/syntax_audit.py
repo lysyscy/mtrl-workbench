@@ -47,7 +47,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PY_ROOTS = [ROOT / "backend" / "app", ROOT / "backend" / "tests", ROOT / "tools"]
 
 #: 排除目录（虚拟环境 / 缓存 / 产物：不是本仓手写的源码）
-SKIP_DIRS = {".venv", "__pycache__", "node_modules", "artifacts", ".git", ".pytest_cache"}
+SKIP_DIRS = {".venv", "__pycache__", "node_modules", "var", "data", "exports", "dist", "artifacts", ".git", ".pytest_cache"}
 
 # ⚠️ 2026-09-19（`P4`① 读取点收敛）：壳的件清单来自唯一出口 `shell_source`（顺序 = 浏览器执行顺序）。
 #    `SHELL` 仍指 `index.html` 本体（存在性检查 / 单件模式用）。

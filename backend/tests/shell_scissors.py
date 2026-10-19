@@ -26,7 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 #: 与只读量测件同口径：不算活区的目录
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".pytest_cache", "artifacts"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", ".pytest_cache", "artifacts", "var", "data", "exports", "dist"}
 #: ⭐ 两个**所有者**：字节层（`shell_source`）与语义层（`shell_api`）本来就在读壳，⛔ 不算剪刀
 OWNERS = {"tools/audit/shell_api.py", "tools/audit/shell_source.py"}
 _EXTRACT_ATTRS = {"find", "split", "index", "count"}

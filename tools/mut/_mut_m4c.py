@@ -5,10 +5,15 @@
 ⚠️ 三条纪律（样板 = `tools/_mut_m4b.py`）：
 1. **本仓源码行尾不统一** ⇒ 片段一律按 LF 写，匹配前用 `_fit()` 按目标文件归一；
 2. **片段含中文要用 `str` + `.encode()`** —— bytes 字面量只允许 ASCII；
-3. **跑完必须重跑一次全套 `pytest`** —— 否则 `artifacts/acc_results.json` 留的是**变异态**结果。
+3. **跑完必须重跑一次全套 `pytest`** —— 否则 `var/state/verification/acc_results.json` 留的是**变异态**结果。
 """
 
 from __future__ import annotations
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 
 import hashlib
 import os
@@ -16,8 +21,8 @@ import pathlib
 import subprocess
 
 # ⛔ **结果隔离**（本仓纪律）：本脚本跑的是**子集** pytest ⇒ 必须把四态结果写到**临时文件**，
-#    否则会把权威 `artifacts/acc_results.json` 冲成"只有这几条"（`doc_audit` 的 T4 立刻报红）。
-os.environ.setdefault("ACC_RESULTS_PATH", "../artifacts/_mut_acc_results.json")
+#    否则会把权威 `var/state/verification/acc_results.json` 冲成"只有这几条"（`doc_audit` 的 T4 立刻报红）。
+os.environ.setdefault("ACC_RESULTS_PATH", str(_run_output('_mut_acc_results.json')))
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BE = ROOT / "backend"

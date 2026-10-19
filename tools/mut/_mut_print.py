@@ -10,6 +10,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import subprocess
 import sys
@@ -23,8 +28,8 @@ SERVICE = ROOT / "backend" / "app" / "mod03_notice" / "service.py"
 import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "audit"))  # ⭐ `TAIL-58` 分目录：shell_source 在 audit/
 from shell_source import SHELL_PATH as SHELL, pick  # noqa: F401  ← `P4`① 读取点收敛
-#: 变异跑的**结果另写**一处（⛔ 别冲掉全套的 `artifacts/acc_results.json` —— 见 `_run` 里的告警）
-MUT_RESULTS = ROOT / "artifacts" / "_mut_acc_results.json"
+#: 变异跑的**结果另写**一处（⛔ 别冲掉全套的 `var/state/verification/acc_results.json` —— 见 `_run` 里的告警）
+MUT_RESULTS = ROOT / _run_dir() / "_mut_acc_results.json"
 
 MUTS: list[dict[str, str]] = [
     {
@@ -114,7 +119,7 @@ def _run(test: str) -> int:
         env={
             **__import__("os").environ,
             "PYTHONDONTWRITEBYTECODE": "1",
-            # ⚠️⚠️ **必须另写**：不设它 ⇒ 每跑一处变异就把**全套** `artifacts/acc_results.json`
+            # ⚠️⚠️ **必须另写**：不设它 ⇒ 每跑一处变异就把**全套** `var/state/verification/acc_results.json`
             #     冲成"单条"（而且是在**改坏的代码**下写的）⇒ 之后 `acc_report` 会报"绿 0"，
             #     台账的四态数字全错。本仓实测踩过（`_mut_archpick.py` 早有同款注释）。
             "ACC_RESULTS_PATH": str(MUT_RESULTS),

@@ -29,15 +29,15 @@
 | .scratch/<effort>/ | 新活动任务的必要规格、调查与证据；有实质内容时创建 |
 | .scratch/tails/issues/ | 已采用的真实TAIL票仓；开销票使用既有工具 |
 | docs/agents/project-rules.md | 文件、保存、环境与真实写入的条件约束；由AGENTS按操作触发 |
-| .scratch/local/ | 检查入口的本机工作区：改前快照、核验回执、浏览器自检日志与隔离临时目录；忽略Git，仍有程序读写。历史文件逐项判断恢复价值 |
-| .artifacts/ | 按任务保存的本机验证产物、截图、隔离数据及恢复材料；其中recovery/backups含壳比较基线，仍被检查读取。忽略Git |
+| .artifacts/active/<effort>/<run>/<kind>/ | 当前开发验证输出；kind为logs、reports、screenshots、traces、exports、downloads、work、recovery；运行结束即退出 |
+| .artifacts/archive/<effort>/<run>/ | 选留的本机原始证据；同effort的retention.json写理由与最多30天期限，按次检查处置 |
 | backend/app/、backend/tests/、backend/alembic/ | 运行代码、测试与数据库迁移 |
 | skills/ | 本项目业务技能源；付款原表核对入口见 skills/payment-plan-audit/SKILL.md |
 | backend/app/resources/ | 程序实际消费的模板；由资源模块定义位置 |
 | delivery/ | 第三方素材原件；旧demo已退役，交互要求与模板清单归docs/requirements，运行模板归backend/app/resources/templates |
 | tools/、ops/ | 实际工具与运维脚本；说明分别从tools/README.md与ops/README.md读取 |
-| artifacts/ | 程序工作目录：导入预览、i8登录/仓库/源文件缓存、报表导出、验收结果及旧验证产物；不能作为纯垃圾目录清空 |
-| logs/ | 按实际配置保存的运行日志 |
+| var/{data,state,cache,log,tmp,backups}/ | 运行数据、凭据与预览状态、可重建缓存、服务日志、临时文件及业务备份；整体不入Git |
+| data/source/、data/reference/、exports/、dist/ | 原件、长期参考、用户成品和可重建分发包；默认不入Git，具体运行绑定见workflow §六 |
 
 资料创建、活动保护、归档和恢复方式见 `docs/guides/work-records.md`；目录迁移与例外见 `docs/adr/0033-document-layout.md`和workflow §六。
 
@@ -57,11 +57,11 @@
 | 问题排查 | 依用途保存 | 活动任务中保存；结束且有独有价值再归档 |
 | 决策记录 | 已有 `D<编号>-<主题>.md` 保持原名；新ADR按编号与主题命名 | 已有件保留 `docs/adr/`；新目录决定为 `docs/adr/0033-document-layout.md` |
 | **尾巴票** | `TAIL-<编号>-<短名>.md` | `.scratch/tails/issues/`（⭐ 2026-10-04 `TAIL-225` 起 —— 一张票一个文件；**索引 = 计划 §15 一行一票**；⭐ 用 `tools/oneoff/_tail_open.py` 建，⛔ 别手抄） |
-| 临时件 | 任务内必要临时文件 | 新任务.scratch/<effort>；旧00-scratch的恢复和活动材料继续保留，日期只产生复核候选 |
+| 临时件 | 本轮work目录或原生临时API | `.artifacts/active/<effort>/<run>/work/`；成功失败都释放，不进入长期归档 |
 | 现行权威 | 固定职责及主题名 | 需求docs/requirements.md及分册；状态docs/status.md；架构docs/architecture.md；指南、参考、协议各在docs对应目录 |
-| 手工备份 | `YYYYMMDD-HHMM_<对象名>/` | `.artifacts/recovery/backups/`（**备份唯一落点**，留 5 份；超出的 ⇒ 移进 `_旧快照归档-YYYYMMDD/`，`T20` 守上限并照实报归档件数）。⚠️ **一天做多批时**（如逐页推进 11 批）：**同一轮工作只保留当日末个快照** —— 中间批次⛔ **不再各建目录**，改在当批设计件里写**「改前差异说明」**（2026-09-29 实测：一天造了 **16 个**目录 ⇒ `T20` 只能**事后报警**、管不了「每批都建」这个**动作**）⭐ **何时清** = **备份数量超线时**复核一次（超线就移/清；上限数字见 `docs/reference/thresholds.md`，⛔ 不在此处抄） |
-| **产品资料改前备份** | `docs/requirements/` 正文与必要运行资源的改前快照 | `.artifacts/recovery/backups/`；文件本身由 Git 版本管理，手工快照只用于需要快速恢复的批量编辑 |
-| 产物 md | 仅工具生成物白名单（当前：`变异覆盖台账.md`） | `artifacts/` |
+| 手工备份 | 业务恢复点 | `var/backups/`；数据库备份与文件备份分开，按实际恢复窗口检查退出；临时源码副本用本轮recovery |
+| **产品资料改前备份** | 必要独有未提交字节 | 本轮recovery；保存核验后删除，Git足以恢复的内容不再整树复制 |
+| 产物 md | 现行结论归docs或任务正文；生成变异台账是核验状态 | `var/state/verification/变异覆盖台账.md`；开发报告进本轮reports |
 
 **格式三条**：① 每份文档**开头必须写**"读者是谁 / 回答什么问题 / 什么时候读"（work 区另加"状态 ＋ 关联 ID"）；② **跨文档引用写全路径**
 （⚠️ 反引号里的仓库内路径会被 `T3` 校验，写错就红 —— 但**交付面文档不得出现 `.codebuddy/…` 路径**）；

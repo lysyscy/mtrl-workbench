@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Callable
 
-from app.core.config import get_settings
+from app.core.config import PROJECT_ROOT, get_settings
 from app.core.db import session_scope
 from app.core.logging import get_logger
 from app.mod01_projects.domain import (
@@ -89,9 +89,9 @@ def get_batch_executor() -> Callable[[list[int], str], BatchResult]:
                 design_fetcher=DesignFetcher(client),
                 # 单张详情的三个来源（主表 / 明细 / 流程=签名）—— 渲染必需，漏传会印出空白件
                 detail_fetcher=NoticeDetailFetcher(client),
-                # 签名图缓存落 `artifacts/.sigcache`（与 `tools/render_preview.py` 同一处）
+                # 签名图缓存落 `var/cache/signatures`（与 `tools/render_preview.py` 同一处）
                 signature_store=SignatureStore(
-                    client, cache_dir=get_settings().artifacts_path / ".sigcache"
+                    client, cache_dir=PROJECT_ROOT / "var" / "cache" / "signatures"
                 ),
                 render_pdf=renderer.render_html_to_pdf,
                 # ⭐ 2026-09-18（`TAIL-46`-②）：投递走**通道分流**（`auto` = IPP → 系统驱动 → RAW 9100；

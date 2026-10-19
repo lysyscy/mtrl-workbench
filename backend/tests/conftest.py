@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
-ARTIFACTS_DIR: Path = REPO_ROOT / "artifacts"
+ARTIFACTS_DIR: Path = REPO_ROOT / "var/state/verification"
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 # ⛔ **这里不再 `setdefault` `ACC_RESULTS_PATH`**（2026-09-23 改）：
 #    原先那条 setdefault 让变量**永远有值** ⇒ `acc_plugin.pytest_configure` 的"没给变量就写**局部**文件"

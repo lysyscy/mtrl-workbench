@@ -16,12 +16,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.core.config import get_settings  # noqa: E402
@@ -42,9 +47,9 @@ from app.mod03_notice.print.template import (  # noqa: E402
 from app.mod03_notice.service import render_notice_html  # noqa: E402
 
 DESIGN_PATH = "/reportcenter/printManage/getPrintDesign"
-OUT_DIR = ROOT / "artifacts"
+OUT_DIR = ROOT / _run_dir()
 FIXTURES = ROOT / "backend" / "tests" / "fixtures"
-SIG_CACHE = OUT_DIR / ".sigcache"
+SIG_CACHE = ROOT / "var/cache/signatures"
 BILL_TYPE_LABEL = {"material": "其他支出", "mechanical": "付款通知书"}
 
 

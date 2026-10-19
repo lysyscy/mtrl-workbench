@@ -194,7 +194,7 @@ T17_TARGET = ROOT / "tools" / "audit" / "cover_gap.py"
 #:    ⚠️ 本件 2026-10-01 之前**根本没有入口**（单跑 0 行输出）；补齐后才有得截 ⇒ 靶才成立。
 T17_REGISTERED_TARGET = ROOT / "tools" / "audit" / "audit_work.py"
 #: ⭐ `T11` 靶：`artifacts/` 下**名字含「建议」**的 md 必须有「待办登记回执」⇒ 造一个**没有**的（用完删掉）
-T11_TMP = ROOT / "artifacts" / "_mut_建议_临时.md"
+T11_TMP = ROOT / ".artifacts/active/docaudit/fixture/reports" / "_mut_建议_临时.md"
 #: ⭐⭐ 2026-10-04（`TAIL-225` 票体系）`T6` 的**票文件**靶：
 #:   ① 把一张**在办票**的票文件挪开 ⇒ 必须报「没有票文件」（用完挪回）
 #:   ② 造一张**幽灵票文件**（编号在台账里不存在）⇒ 必须报「幽灵票文件」（用完删掉）
@@ -465,6 +465,7 @@ def _apply(c: dict) -> None:
     if "mkdir" in c:
         p.mkdir()                                   # `M27`：在根上造一个白名单外的目录
     elif "create" in c:
+        p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(c["create"], encoding="utf-8", newline="")
     elif "rename_away" in c:
         p.rename(c["rename_away"])
@@ -503,6 +504,10 @@ def _restore(c: dict, src: bytes) -> None:
         assert not p.exists(), "mkdir 式靶复原后目录仍在"
     elif "create" in c:
         p.unlink(missing_ok=True)
+        parent = p.parent
+        while parent.is_relative_to(ROOT/".artifacts/active") and parent != ROOT/".artifacts/active" and parent.is_dir() and not any(parent.iterdir()):
+            parent.rmdir()
+            parent = parent.parent
     elif "rename_away" in c:
         c["rename_away"].rename(p)
         assert p.read_bytes() == src, "rename 复原后内容不一致"
@@ -512,7 +517,7 @@ def _restore(c: dict, src: bytes) -> None:
 
 def tail293_selftest() -> int:
     """隔离副本证明 T6 活动/已办/幽灵判红、MD5复原与开销票实际搬行。"""
-    scratch = ROOT / ".scratch/local"
+    scratch = None
     with tempfile.TemporaryDirectory(prefix="tmp-20261011-tail293-", dir=scratch) as name:
         fixture = Path(name)
         print(f"隔离副本：{fixture}")

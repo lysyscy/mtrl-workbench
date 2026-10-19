@@ -96,10 +96,10 @@ def main() -> int:
     try:
         rc = _main()
     except BaseException:
-        (ROOT/'artifacts/_gate_receipts.json').unlink(missing_ok=True)
+        (ROOT/'var/state/verification/_gate_receipts.json').unlink(missing_ok=True)
         raise
     if rc:
-        path = ROOT/'artifacts/_gate_receipts.json'
+        path = ROOT/'var/state/verification/_gate_receipts.json'
         try:
             failed = json.loads(path.read_text(encoding='utf-8')).get('passed') is False
         except (OSError, ValueError, AttributeError):

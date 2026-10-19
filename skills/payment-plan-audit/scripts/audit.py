@@ -294,7 +294,7 @@ def main():
     mapping = json.loads(Path(args.project_map).read_text(encoding='utf-8')) if args.project_map else None
     preview = compare(plan, snapshot, mapping)
     plan['input_source_sha256'] = plan['source_sha256']
-    backups = (Path(args.repo)/'.artifacts/recovery/backups/payment-plan-audit' if args.repo
+    backups = (Path(args.repo)/'var/backups/payment-plan-audit' if args.repo
                else Path.home()/'.mtrl-workbench/backups/payment-plan-audit')
     plan['annotation'] = annotate(plan, backups)
     plan['source_sha256'] = preview['source_sha256'] = plan['annotation']['sha256']

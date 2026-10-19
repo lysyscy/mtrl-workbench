@@ -279,7 +279,7 @@ def check_doc_budgets() -> list[dict]:
 
 
 #: `T11` 扫的目录 / 认的"建议类"关键词 / 回执段标题
-RECEIPT_DIR = "artifacts"
+RECEIPT_DIR = ".artifacts/active"
 REPORT_KINDS: tuple[str, ...] = ("审计", "提案", "建议", "报告")
 RECEIPT_HEAD_RE = re.compile(r"^#{2,4}\s*(待办)?登记回执")
 #: ⛔ 例外：**留痕/备份类**文件（如 `X.md.备份-…`）不是"建议"，不该被要求回执
@@ -310,10 +310,10 @@ def check_report_receipts() -> list[dict]:
     ledger = REPO_ROOT / LEDGER_REL
     known = (set(re.findall(r"TAIL-(\d+)", ledger.read_text(encoding="utf-8", errors="replace")))
              if ledger.exists() else set())
-    for f in sorted(root.glob("*.md")):
+    for f in sorted(root.rglob("*.md")):
         if not any(w in f.name for w in REPORT_KINDS) or RECEIPT_SKIP_RE.search(f.name):
             continue
-        rel = f"{RECEIPT_DIR}/{f.name}"
+        rel = f.relative_to(REPO_ROOT).as_posix()
         lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
         start = next((k for k, l in enumerate(lines) if RECEIPT_HEAD_RE.match(l.strip())), None)
         if start is None:
@@ -437,6 +437,13 @@ def check_drop_zones() -> list[dict]:
     allow = {x.rstrip("/") for x in ROOT_ALLOW}
     tol_lit, tol_pat = _gitignore_tolerated()
     hits: list[dict] = []
+    for legacy in ('artifacts', 'logs', '.scratch/local'):
+        if (REPO_ROOT/legacy).exists():
+            hits.append({'code': 'T24', 'side': '仓', 'rel': legacy, 'line': 1,
+                         'what': '已退役的混合目录重新出现',
+                         'why': '实际消费者已经迁入固定类型目录，忽略规则不能豁免旧入口',
+                         'fix': '核实际读写者并归位；不得直接清空运行数据',
+                         'level': RED, 'text': ''})
     for p in sorted(REPO_ROOT.iterdir(), key=lambda x: x.name):
         name = p.name
         if p.is_file() and p.suffix == ".md":

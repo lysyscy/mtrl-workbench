@@ -32,6 +32,12 @@ from tests.acc_plugin import acc
 from tests.m04_helpers import make_project
 from tests.m08_helpers import FakeSession
 
+@pytest.fixture(autouse=True)
+def isolated_source_cache(monkeypatch, tmp_path):
+    from app.mod02_i8 import source_cache
+    monkeypatch.setattr(source_cache, "DIR", tmp_path / "i8_source")
+
+
 CASE = "ACC-INV-FETCH-001"
 
 HEADER = ("序号", "核算年", "核算月", "业务类型", "项目名称", "单据编号", "供应商", "安全费用",

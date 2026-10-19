@@ -13,7 +13,7 @@
 | **4** | **实测结论类** | 带"成立前提 / 何时必复做 / 复现命令" | `ops/<主题>-实测结论.md`（索引 = `docs/guides/operations.md`） | `T3`；索引行由 `docs/guides/operations.md` 的纪律守 | **前提变了没复做**（换机 / 改了被实测的那段代码）· **结论在、索引没加行** |
 | **5** | **工作记录类**（Agent 产物） | 前缀 `设计-` / `实验-` / `排查-` / `D<编号>-` ＋ 文头四行 | `.scratch/<effort>/`与`docs/adr/`；已结束旧设计从docs/archive/index.md追溯，生命周期回docs/guides/work-records.md | `T14` 落点与 scratch TTL · `T15` 产物白名单与 work 文头 | **命名不符**（漏前缀 ⇒ 落错区）· **该进 decisions 的写成 designs** · scratch 超 14 天没清 |
 | **6** | **留痕类**（按明确追溯或复发触发） | "过程 / 事故 / 逐次定案"；只追加不改写 | `docs/archive/journal/YYYY-MM-DD.md` · `docs/archive/legacy-plans/`  | **⛔ 故意不扫**（在留痕档里出现旧术语/旧数字是**对的**） | **被当口径读**（有人跑到 journal 里找规矩）· **混层**（日志混在 `memory/` 根下 ⇒ 分不清纪律与流水账） |
-| **7** | **快照 / 产物类**（不是给人读的"文档"） | 是留证 / 快照，不是叙述 | `.artifacts/recovery/backups/**`（**唯一手工备份点** · 保留与触发条件回README.md §四）· `artifacts/**`（白名单，如 `变异覆盖台账.md`） | `T11` 建议类报告的回执 · `T15` 白名单 | **被算进"文档量"**（占比膨胀）· **备份没策略**（留几份？何时清？）· **过程类 md 进了 `artifacts/`** |
+| **7** | **快照 / 产物类**（不是给人读的"文档"） | 是留证 / 快照，不是叙述 | `var/backups/**`（业务备份 · 保留与触发条件回README.md §四）· `.artifacts/active/**`（白名单，如 `var/state/verification/变异覆盖台账.md`） | `T11` 建议类报告的回执 · `T15` 白名单 | **被算进"文档量"**（占比膨胀）· **备份没策略**（留几份？何时清？）· **过程类 md 进了 `artifacts/`** |
 
 ## 二、七种病 × 本仓真例（找到病时，**回这里对一行**）
 

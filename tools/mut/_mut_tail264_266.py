@@ -7,6 +7,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import json
 import os
@@ -17,7 +22,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 PYTHON = BACKEND / ".venv/Scripts/python.exe"
-SCRATCH = ROOT / ".scratch/local"
+SCRATCH = ROOT / _run_dir('work')
 PREFIX = "tmp-20261009-tail264-266-mut"
 ACTIONS = ROOT / "backend/app/web/shell/actions.js"
 INVENTORY = ROOT / "backend/app/mod07_setl/inventory_extract.py"

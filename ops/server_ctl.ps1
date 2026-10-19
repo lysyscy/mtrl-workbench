@@ -10,7 +10,7 @@
 #   -Action 可选：status | start | stop | restart | log | port | pg | all
 #     status   服务状态 + 端口 + /app 探活（默认）
 #     start/stop/restart  起停重启（restart = stop → start → 探活）
-#     log      打印 logs\server.err.log 与 server.out.log 的尾部
+#     log      打印 var\log\server.err.log 与 server.out.log 的尾部
 #     port     占用 8000 的进程与其命令行（诊断"是不是旧进程"）
 #     pg       PostgreSQL 服务状态
 #     all      上面全部
@@ -29,7 +29,7 @@ param(
 
 $ErrorActionPreference = 'Continue'
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
-$LogsDir = Join-Path $RepoRoot 'logs'
+$LogsDir = Join-Path $RepoRoot 'var/log'
 
 function Line([string] $m) { Write-Host $m }
 

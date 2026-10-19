@@ -27,6 +27,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import os
 import pathlib
@@ -40,7 +45,7 @@ VIEW = ROOT / "backend" / "app" / "web" / "shell" / "view.js"
 PROJ = ROOT / "backend" / "app" / "web" / "shell" / "proj.js"
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 TARGETS: tuple[str, ...] = ("tests/test_shell_render.py",)   #: ⭐ 三条结构判据都在这一件里
-PARTIAL_ACC = ROOT / "artifacts" / "_mut_acc_results.json"
+PARTIAL_ACC = ROOT / _run_dir() / "_mut_acc_results.json"
 
 
 def _b(s: str) -> bytes:

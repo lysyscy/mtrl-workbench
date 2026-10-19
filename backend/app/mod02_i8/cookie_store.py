@@ -7,13 +7,13 @@ i8 侧是**单会话**：该账号已有在线会话时登录被拒（除非调�
 只在「缓存缺失 / 会话失效（401）」时才登录 —— 登录次数少 ⇒ 顶号风险小。
 
 ## 三段式（照交付面素材包 `common_export.py`，**只借鉴接口形态**，口径不反推）
-- `cookie_path(user)` → `artifacts/i8_cookie/<账号>.json`（**按账号分文件**；账号缺省回退 `I8_USER`）
+- `cookie_path(user)` → `var/state/i8_cookie/<账号>.json`（**按账号分文件**；账号缺省回退 `I8_USER`）
 - `load(user)` / `load_meta(user)` → 读 cookie（**兼容旧纯文本格式**，见 `load_meta`）
 - `save(cookie, source=…, user=…)` → 写 `{"cookie": …, "fetched_at": …, "source": …}`
 - `clear(user)` → 删缓存文件
 
 ## ⚠️ 三条纪律
-1. **cookie 是凭证** ⇒ 落点 `artifacts/` 由 `.gitignore`（`artifacts/*` ＋ 显式的 `artifacts/i8_cookie/`）
+1. **cookie 是凭证** ⇒ 落点 `artifacts/` 由 `.gitignore`（`artifacts/*` ＋ 显式的 `var/state/i8_cookie/`）
    忽略；本模块**不 commit、不打印 cookie**；写盘后尽量收紧权限（`0o600`，Windows 上为尽力而为）。
 2. **缓存是优化、不是功能** ⇒ 读 / 写 / 删**失败一律不抛**，只记 `warning`、退回「无缓存」。
    （若让缓存异常打断抓取，等于用"锦上添花"砸了"主流程"。）
@@ -30,7 +30,7 @@ i8 侧是**单会话**：该账号已有在线会话时登录被拒（除非调�
 
 ## 与素材包的**一处刻意不同（并说明理由）**
 素材包把 cookie 文件平铺在 `var/cache/信息化cookie_<账号>.json`（前置词把命名空间写在文件名里）；
-本仓改为**子目录专属命名空间** `artifacts/i8_cookie/<账号>.json`（目录已表明"这是 i8 cookie"，
+本仓改为**子目录专属命名空间** `var/state/i8_cookie/<账号>.json`（目录已表明"这是 i8 cookie"，
 文件名只留账号 ⇒ 更短、更清楚）。**三段式的接口形态与旧格式兼容行为保持不变**。
 """
 
@@ -47,7 +47,7 @@ from app.core.logging import get_logger
 logger = get_logger()
 
 #: 缓存落点（**模块级常量** —— 测试用 `monkeypatch.setattr` 换到临时目录，不必碰真实盘）
-CACHE_DIR: Path = PROJECT_ROOT / "artifacts" / "i8_cookie"
+CACHE_DIR: Path = PROJECT_ROOT / "var" / "state" / "i8_cookie"
 
 #: 账号解析不到时的中性回退名（素材包回退 `LOGIN_USER` 常量；本仓无此常量，用一个中性占位）
 DEFAULT_ACCOUNT = "default"

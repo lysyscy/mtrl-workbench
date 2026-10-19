@@ -2,12 +2,17 @@
 """反向灵敏度（变异测试）—— `TAIL-39`「兜底前先查 i8 仓库名单」的断言。
 
 做法：把实现**故意改坏**，确认对应断言**确实变红**；每处跑完**逐字节复原**并核 MD5。
-⚠️ 跑 pytest 时结果**另写**一份（⛔ 别把全套的 `artifacts/acc_results.json` 冲掉）。
+⚠️ 跑 pytest 时结果**另写**一份（⛔ 别把全套的 `var/state/verification/acc_results.json` 冲掉）。
 
 跑法（工程根）：`backend\\.venv\\Scripts\\python.exe tools\\_mut_ownwh.py`
 """
 
 from __future__ import annotations
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 
 import hashlib
 import os
@@ -21,7 +26,7 @@ from shell_source import SHELL_PATH  # noqa: E402  ← `P4`① 读取点收敛
 ROOT = Path(__file__).resolve().parents[2]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 BE = ROOT / "backend"
-MUT_RESULTS = str(ROOT / "artifacts" / "_mut_acc_results.json")
+MUT_RESULTS = str(ROOT / _run_dir() / "_mut_acc_results.json")
 
 MUTATIONS: list[dict] = [
     {

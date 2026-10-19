@@ -11,6 +11,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import os
 import subprocess
@@ -121,7 +126,7 @@ def md5(p: Path) -> str:
 
 def run_one(case: str) -> bool:
     env = {**os.environ,
-           "ACC_RESULTS_PATH": "../artifacts/_mut_acc_results.json",
+           "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
            "PYTHONIOENCODING": "utf-8",
            "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run(

@@ -145,7 +145,7 @@ def main() -> int:
           f"MD5 {'逐字节复原 ✅' if ok_md5 else '⛔ 不一致'}")
 
     # ⚠️ 这一趟**不是重复检查**（2026-10-11 `/retro` 查证）：各条变异只在**隔离出口**上跑目标件
-    #    （`ACC_RESULTS_PATH` 指临时档）⇒ 它同时也是**权威四态**（`artifacts/acc_results.json`）
+    #    （`ACC_RESULTS_PATH` 指临时档）⇒ 它同时也是**权威四态**（`var/state/verification/acc_results.json`）
     #    的写回。⛔ 别当"和按影响入口重叠"删掉。
     #    ⭐ 新增 `--no-full-suite`：本回合**已经另外刷过权威**（例如另跑过一支带全套的脚本）时，
     #    用它跳过这一趟；跳过即"本轮不刷新权威"，⛔ 别在票面宣称刷新过。

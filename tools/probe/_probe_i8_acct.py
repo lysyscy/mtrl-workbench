@@ -36,7 +36,7 @@ from app.mod02_i8.notice_source import NoticeDetailFetcher  # noqa: E402
 from app.mod03_notice.models import PaymentNotice           # noqa: E402
 from sqlalchemy import select                               # noqa: E402
 
-OUT = ROOT / "artifacts" / "_probe_acct_scan.json"
+OUT = ROOT / "data/reference/i8-account-probe" / "_probe_acct_scan.json"
 
 
 def main() -> int:

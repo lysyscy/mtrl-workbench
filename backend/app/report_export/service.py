@@ -8,7 +8,7 @@
    · `MOD-08` 库存单据明细表：**HTTP 现导** i8（`API-03`）拿源文件**字节** →
      直接喂实现层出成品（照素材包 `export_runner.run_once()` 的 kcdj 分支）。
 2. **调用**：转交 `setl_export.build_zip` / `kcdj_export.build_xlsx`（实现逐字来自交付面素材包）。
-3. **落点**：产物写到 `artifacts/exports/<报表>/<期间>/` —— 路径**唯一出口** = `EXPORT_ROOT`。
+3. **落点**：产物写到 `exports/<报表>/<期间>/` —— 路径**唯一出口** = `EXPORT_ROOT`。
 
 ⚠️ **判定一律在实现层与域内核**：金额对平、仓库集合、透视规则、剔合计**都不在本层**，
    本层只做「取数 → 转交 → 报路径」。
@@ -30,7 +30,7 @@ from app.report_export import kcdj_export, setl_export
 from app.mod02_i8 import source_cache            # ⭐ 「抓取导出分开」：导出读源文件缓存
 
 #: 成品文件的落点根（**唯一出口**；⛔ 别在 router / service 里各拼一次路径）
-EXPORT_ROOT: Path = PROJECT_ROOT / "artifacts" / "exports"
+EXPORT_ROOT: Path = PROJECT_ROOT / "exports"
 
 
 def setl_rows(session: Session, period: str) -> list[SetlDetail]:

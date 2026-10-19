@@ -71,3 +71,5 @@
 来源保护与11项目月值/i6、真实i8采用已完成；范围、核验及未验边界见[归档说明](machinery-fee-workflow-20261019/README.md)，原路径与逐件SHA见同目录manifest.json。私人原型及业务原件仅在本机保留。
 
 旧demo按用户授权于2026-10-19退役，界面整改最后挂起范围完成；原设计、来源SHA及完成证据见[退出记录](old-demo-retirement-20261019/README.md)。有效交互与模板规格分别归docs/requirements/interaction-rules.md及report-templates.md。
+
+- 2026-10-19 工作区运行数据与开发产物统一：docs/archive/workspace-migration；原件与成品实际位置见moved-files.tsv，临时源码去重恢复包按有限期限保留。

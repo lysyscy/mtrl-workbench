@@ -58,7 +58,7 @@ SKIP_DIRS = {".venv", "__pycache__", "node_modules", "artifacts", ".git", ".pyte
 #:   **别的尺子故意造的坏样本存放处**（`_t233_eol.py` 里就写着 `U+FFFD` 两个字符当断言值、
 #:   `_t235_*.txt` 是带 BOM 的样本）⇒ 把本哨扫进去，等于**逼尺子去报自己的粮食**。
 #:   ⛔ 所以这不是"放宽判据"，是把"源码"与"样本"分开—— 两者不该用同一条判据。
-SKIP_PREFIXES = ((".scratch", "local"), (".artifacts",))
+SKIP_PREFIXES = (("var",), ("data",), ("exports",), ("dist",), (".scratch", "local"), (".artifacts",))
 
 #: ⭐ **必须带 BOM** 的后缀（`B3` 的唯一例外）
 BOM_REQUIRED = {".ps1"}

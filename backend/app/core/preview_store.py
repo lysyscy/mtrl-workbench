@@ -9,7 +9,7 @@ from pathlib import Path
 from app.core.errors import MustReportError
 
 ROOT = Path(__file__).resolve().parents[3]      # ⚠️ 本文件在 `backend/app/core/` ⇒ 上溯 3 层才是**工程根**
-PREVIEW_DIR = ROOT / "artifacts" / "import_preview"
+PREVIEW_DIR = ROOT / "var" / "state" / "import_preview"
 
 EXPIRE_TIP = "预览已过期（临时文件不在了）—— 请重新上传文件解析一次。"
 

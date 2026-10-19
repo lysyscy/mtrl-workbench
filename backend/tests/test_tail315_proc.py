@@ -1,4 +1,9 @@
 """315: independent process-page reads, states and post-edit refresh in an isolated browser."""
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 from decimal import Decimal
 from pathlib import Path
 
@@ -45,7 +50,7 @@ def test_independent_reads_pending_failure_retry_difference_and_empty(ui_page):
     assert p.evaluate('calls') == ['matrix', 'mech']
     assert p.evaluate("pageState().kind") == 'ready'
     assert p.evaluate('IVs.length===0 && MECH_LABELS[0]') == '标签保留'
-    scratch = Path(__file__).resolve().parents[2] / '.scratch/local'
+    scratch = Path(__file__).resolve().parents[2] / _run_dir('work')
     p.screenshot(path=str(scratch / 'tmp-20261012-tail315-fixture-default.png'))
     p.click('[data-act="procTab"][data-i="2"]')
     assert '测试材料' in p.inner_text('#view') and '-10.01' in p.inner_text('#view')

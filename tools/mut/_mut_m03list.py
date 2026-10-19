@@ -4,12 +4,17 @@
 
 ⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿**（它没钉住它声称钉的东西）⇒ 脚本报错退出。
 ⚠️ 与 `_mut_m08wired.py` 的两点差别（都是本仓踩过的坑）：
-   ① 子进程**必须**设 `ACC_RESULTS_PATH` —— 否则每处变异都会把全套 `artifacts/acc_results.json`
+   ① 子进程**必须**设 `ACC_RESULTS_PATH` —— 否则每处变异都会把全套 `var/state/verification/acc_results.json`
       冲成"单条"，而且是在**改坏的代码**下写的 ⇒ 台账数字全错；
    ② 子进程**必须**设 `PYTHONIOENCODING=utf-8` —— 否则 Windows 上按 GBK 写 stdout，读线程解码崩。
 """
 
 from __future__ import annotations
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 
 import hashlib
 import os
@@ -106,7 +111,7 @@ def md5(p: Path) -> str:
 def run_one(case: str) -> bool:
     """跑单条断言 ⇒ True = 通过，False = 变红。"""
     env = {**os.environ,
-           "ACC_RESULTS_PATH": "../artifacts/_mut_acc_results.json",
+           "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
            "PYTHONIOENCODING": "utf-8",
            "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run(

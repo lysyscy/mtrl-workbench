@@ -137,8 +137,8 @@ class Settings(BaseSettings):
     session_secret: str = ""
 
     # --- 产物体与日志 ---
-    artifacts_dir: str = "artifacts"
-    logs_dir: str = "logs"
+    artifacts_dir: str = "var/data"
+    logs_dir: str = "var/log"
     log_retention_days: int = 30
 
     @property
@@ -150,9 +150,13 @@ class Settings(BaseSettings):
         return PROJECT_ROOT / self.logs_dir
 
     @property
+    def exports_path(self) -> Path:
+        return PROJECT_ROOT / "exports"
+
+    @property
     def pdf_export_path(self) -> Path:
-        """「仅导出 PDF」产物目录（artifacts/pdf/<批次时间戳>/）。"""
-        p = self.artifacts_path / "pdf"
+        """「仅导出 PDF」产物目录（exports/pdf/<批次时间戳>/）。"""
+        p = self.exports_path / "pdf"
         p.mkdir(parents=True, exist_ok=True)
         return p
 

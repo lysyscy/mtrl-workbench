@@ -2,7 +2,7 @@
 """`T20` 反向灵敏度 —— 证明「保留期与容量」这条判据**真的有牙**。
 
 守什么（`audit_work.check_retention`）：
-- `README.md` 写着 `.artifacts/recovery/backups/`「留 5 份 · 月度清」，而 2026-09-22 整改设计给的验收判据
+- `README.md` 写着 `var/backups/manual/`「留 5 份 · 月度清」，而 2026-09-22 整改设计给的验收判据
   就是「目录计数 ≤5（可数）」—— 却**从没被机器守过** ⇒ 43 个条目静默堆着（含 09-18 的旧快照）。
 - 2026-09-29（`TAIL-194`）加：**`tools/oneoff/` 件数 / 容量**。
 - ⭐⭐ 2026-10-02（`TAIL-217` · 用户选「②」）加**两条**：
@@ -16,10 +16,10 @@
   ⭐ 教训：**撤判据时，它的变异件必须同批撤** —— 否则留下一个"打不着的靶"，比没有更坏。
 
 变异（都在**新增临时件**上做，跑完**必清**；⛔ 不删任何既有备份）：
-  ① 往 `.artifacts/recovery/backups/` 放 `BACKUP_KEEP + 1` 个**假快照目录** ⇒ 「顶层手工快照」那条必须报出来；
+  ① 往 `var/backups/manual/` 放 `BACKUP_KEEP + 1` 个**假快照目录** ⇒ 「顶层手工快照」那条必须报出来；
   ② 往 `tools/oneoff/` 放一个 6 MB 稀疏文件（> 容量线 5 MB）⇒ 「oneoff」那条必须报出来；
-  ③ ⭐ 往 `.artifacts/recovery/backups/` 放 `FACE_KEEP + 1` 个假 `原型-备份-*` ⇒ 「交付面改前快照」那条必须报出来；
-  ④ ⭐ 往 `.artifacts/recovery/backups/_归档-t20probe/` 放 `ARCHIVE_KEEP + 1` 件 ⇒ 「归档子目录」那条必须报出来。
+  ③ ⭐ 往 `var/backups/manual/` 放 `FACE_KEEP + 1` 个假 `原型-备份-*` ⇒ 「交付面改前快照」那条必须报出来；
+  ④ ⭐ 往 `var/backups/manual/_归档-t20probe/` 放 `ARCHIVE_KEEP + 1` 件 ⇒ 「归档子目录」那条必须报出来。
 
 ⭐⭐ **判法（2026-09-29 订正 —— 这里踩过一次）**：原来只比「**命中条数**是否上升」，而这在该项
 **基线本就超线**时**必然失效** —— 那几处超线都只报**一行**，`7 → 8` 个条目仍是 **1 行** ⇒
@@ -29,8 +29,8 @@
 只是**读它报出来的数**。
 
 ⚠️⚠️ **2026-10-02（`TAIL-217`）marker 换靶 —— 这一处是"判据自己瞎了"的同族**：
-  原先按 `rel`（`.artifacts/recovery/backups/`）匹配；而本轮给 `T20` 新加的**两条**判定的 `rel` **也含**
-  `.artifacts/recovery/backups/` ⇒ 按 rel 会**读到别人那一行**（靶看着是绿的、其实瞄错了）。
+  原先按 `rel`（`var/backups/manual/`）匹配；而本轮给 `T20` 新加的**两条**判定的 `rel` **也含**
+  `var/backups/manual/` ⇒ 按 rel 会**读到别人那一行**（靶看着是绿的、其实瞄错了）。
   ⇒ 改成按**报告行里唯一的那截中文**匹配（`顶层 ` / `tools/oneoff/ ` / `交付面改前快照 ` / `归档子目录 `）。
   ⭐ 同族教训 = `T17` 那次「锚用**裸词** ⇒ 静默空扫」（见 `docs` 里那条 `M18`）。
 
@@ -49,7 +49,7 @@ R = pathlib.Path(r"D:\dev\mtrl-workbench")
 sys.path.insert(0, str(R / "tools" / "audit"))
 import audit_work as AW                                   # noqa: E402  ← ⭐ 上限的真源
 
-BK = R / ".artifacts" / "recovery" / "backups"
+BK = R / "var/backups/manual"
 
 #: ⚠️ 2026-10-01（`TAIL-204` 第 7 步）：①的靶**加厚**成 `BACKUP_KEEP + 1` 个 —— 原来只放 2 个，
 #:   只在"基线本来就贴着上限"时才会越线 ⇒ 基线收敛后**静默失效**（当场报 `None → None`）。

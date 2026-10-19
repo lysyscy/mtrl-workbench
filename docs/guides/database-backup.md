@@ -6,7 +6,7 @@
 -B -X utf8 "D:\dev\mtrl-workbench\ops\backup_databases.py" --pg-bin "D:\pgsql\18.6\pgsql\bin"
 ```
 
-脚本读取项目现有配置，不把口令放进参数、Git或回执。只接受两个不同的本机库。每次在`.artifacts/recovery/databases/.partial-*`创建两份custom格式归档，SHA256、字节数和pg_restore目录检查都通过后才发布为独立日期目录；`last-run.json`报告最近成功或失败。失败返回非零并保留半成品供调查，已完成备份不覆盖、不按日期自动删除。
+脚本读取项目现有配置，不把口令放进参数、Git或回执。只接受两个不同的本机库。每次在`var/backups/databases/.partial-*`创建两份custom格式归档，SHA256、字节数和pg_restore目录检查都通过后才发布为独立日期目录；`last-run.json`报告最近成功或失败。失败返回非零并保留半成品供调查，已完成备份不覆盖、不按日期自动删除。
 
 备份目录仅SYSTEM和本机Administrators可访问。2026-10-15已实际手动及SYSTEM运行成功（TAIL-341）；定时器未来每次是否成功，查看LastTaskResult和last-run.json，不从“已注册”推断。只读核对某份备份：
 

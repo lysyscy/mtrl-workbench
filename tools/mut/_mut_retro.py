@@ -1,4 +1,9 @@
 """选测和证据出口：只在隔离工具副本中造漏选、全量误选、正文泄漏及假绿。"""
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 from pathlib import Path
 import shutil
 import subprocess
@@ -9,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='tmp-retro-', dir=ROOT/'.scratch/local') as folder:
+    with tempfile.TemporaryDirectory(prefix='tmp-retro-', dir=ROOT/_run_dir('work')) as folder:
         base=Path(folder)
         shutil.copytree(ROOT/'tools/oneoff', base/'tools/oneoff', ignore=shutil.ignore_patterns('__pycache__', '_归档*'))
         runner=base/'proof.py'

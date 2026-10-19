@@ -1,4 +1,9 @@
 """守通知书搜索保留、隐藏核对、付款行序和失效清理：只在隔离壳副本造红，不连服务或数据库。"""
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 from pathlib import Path
 import json
 import subprocess
@@ -68,7 +73,7 @@ def main():
         assert code == 0, output
         print(output.strip().splitlines()[-1], flush=True)
     assert all(path.read_bytes() == data for path, data in before.items())
-    out = ROOT / "artifacts/tail309-integration/mutations.json"
+    out = ROOT / str(_run_output('tail309-integration/mutations.json'))
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"mutations": receipt, "restored_returncode": code,
                   "formal_source_unchanged": True}, ensure_ascii=False, indent=2), encoding="utf-8")

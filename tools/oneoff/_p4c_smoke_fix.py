@@ -14,13 +14,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import argparse
 import pathlib
 import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SMOKE = pathlib.Path(r"D:\工作\AI\PRD编写夹 - Workbuddy专用\demo\_smoke.js")
-BACKUPS = ROOT / "artifacts" / "delivery-backups"
+BACKUPS = ROOT / _run_dir() / "delivery-backups"
 
 OLD = """ck('X10｜MOD-02 口径说明为 6 条（新增定时抓取约束）', V.m02().indexOf('口径说明 · 6 条') >= 0 ? 1 : 0, 1);"""
 

@@ -374,7 +374,7 @@ def export_total_debt(s: Session, projects: str = "") -> tuple[Path, dict]:
     if not data["items"]:
         raise MustReportError("总欠款：**一个项目的欠款都算不出来**（通知书与集采合同都还没数据）"
                               "—— 请先抓取 / 导入，再导出。")
-    out_dir = PROJECT_ROOT / "artifacts" / "exports" / X.FILE_PREFIX
+    out_dir = PROJECT_ROOT / "exports" / X.FILE_PREFIX
     path = Path(X.build_xlsx(data["items"], out_dir, mark_mech=not data["mech_settle_ready"]))
     return path, {
         "rows": len(data["items"]),

@@ -94,3 +94,5 @@
 票仓实际迁至.scratch/tails/issues，三个未决设计迁至.scratch/legacy-active，旧D件统一到docs/adr。项目约束成为docs/agents/project-rules.md条件入口；docs-audit转为普通指南与tools/audit工具。两份仅含指针的宿主RULE和两个空白占位退役。忽略恢复材料整体迁至.scratch/local与.artifacts/recovery/backups，内部绝对链接修为新位置的相对链接；旧恢复记录中的原路径按该批来源解释。
 
 本阶段固定起点23a735c6c711d1b04c3702b1540d837d47a8e0d6；来源、整批清单、验证与恢复见docs/archive/codebuddy-retirement-20261015.md。实际根目录移除，不留兼容映射或链接。
+
+2026-10-19补充：运行与开发产物目录的后续统一已获用户批准；固定来源更新为My-Skills aab574c，现行绑定见docs/agents/workflow.md，实际迁移证据见docs/archive/workspace-migration。原文所记artifacts/logs/local例外已退出。

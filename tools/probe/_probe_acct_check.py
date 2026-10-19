@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = Path(r"D:\dev\mtrl-workbench")
-SCAN = ROOT / "artifacts" / "_probe_acct_scan.json"
+SCAN = ROOT / "data/reference/i8-account-probe" / "_probe_acct_scan.json"
 
 BILLS = """FKTZS2026080530 FKTZS2026081290 FKTZS2026081443 FKTZS2026081719 FKTZS2026090590
 FKTZS2026090611 FKTZS2026090613 FKTZS2026090615 FKTZS2026090798""".split()

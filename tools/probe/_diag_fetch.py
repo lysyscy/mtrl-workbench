@@ -17,7 +17,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 YM = "2026-09"
-OUT = ROOT / "artifacts" / "_diag"
+OUT = ROOT / "data/source/i8-diagnostics"
 
 
 def main() -> int:

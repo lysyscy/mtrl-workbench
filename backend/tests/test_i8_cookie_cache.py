@@ -182,6 +182,6 @@ def test_缓存文件不进git():
         ln.strip() for ln in text.splitlines()
         if ln.strip() and not ln.strip().startswith("#")
     }
-    assert "artifacts/i8_cookie/" in rules, "`.gitignore` 里没有 i8 cookie 缓存的**显式规则行**"
+    assert "var/state/i8_cookie/" in rules, "`.gitignore` 里没有 i8 cookie 缓存的**显式规则行**"
     rel = str(CS.CACHE_DIR).replace("\\", "/")
-    assert rel.endswith("/artifacts/i8_cookie"), f"缓存落点不在 artifacts/ 下：{rel}"
+    assert rel.endswith("/var/state/i8_cookie"), f"缓存落点不在 artifacts/ 下：{rel}"

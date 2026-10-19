@@ -46,7 +46,7 @@ if (-not $isAdmin) { Die '需要管理员权限 —— 请用「以管理员身�
 if (-not (Test-Path -LiteralPath $RepoRoot)) { Die "仓库根不存在：$RepoRoot" }
 $BackendDir = Join-Path $RepoRoot 'backend'
 $PythonExe  = Join-Path $BackendDir '.venv\Scripts\python.exe'
-$LogsDir    = Join-Path $RepoRoot 'logs'
+$LogsDir    = Join-Path $RepoRoot 'var/log'
 $StdOut     = Join-Path $LogsDir 'server.out.log'
 $StdErr     = Join-Path $LogsDir 'server.err.log'
 
@@ -133,7 +133,7 @@ if ($LASTEXITCODE -ne 0) { Die "nssm install 失败（exit=$LASTEXITCODE）" }
 
 & $nssm set $ServiceName AppDirectory        $BackendDir
 & $nssm set $ServiceName DisplayName          '材料报表自动化工作台（后端）'
-& $nssm set $ServiceName Description          'FastAPI + uvicorn 单 worker；工作目录 backend/；日志 logs\server.out.log / server.err.log'
+& $nssm set $ServiceName Description          'FastAPI + uvicorn 单 worker；工作目录 backend/；日志 var\log\server.out.log / server.err.log'
 
 # 日志：分流 ＋ 轮转（⛔ 不滚 = 日志无限长；这是调试期每天要看的东西）
 & $nssm set $ServiceName AppStdout           $StdOut
@@ -185,7 +185,7 @@ foreach ($i in 1..10) {
         if ($r.StatusCode -eq 200) { $ok = $true; break }
     } catch { Start-Sleep -Seconds 2 }
 }
-Say "GET /app 探活 = $(if ($ok) { '200 ✓' } else { '失败 ✗（看 logs\server.err.log）' })"
+Say "GET /app 探活 = $(if ($ok) { '200 ✓' } else { '失败 ✗（看 var\log\server.err.log）' })"
 
 if ($VerifySelfHeal) {
     Say '-VerifySelfHeal：杀掉后端进程，看 30 秒内是否自动拉起…'

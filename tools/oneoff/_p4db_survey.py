@@ -15,6 +15,11 @@ r"""`TAIL-64` **`P4-d-b`** 铺量前的**只读量测**（2026-09-30 · ⛔ 不�
 
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import pathlib
 import re
 
@@ -69,7 +74,7 @@ def main() -> int:
                       f" dyn_attr={str(dyn):<5} title={'有' if tm else '无':<2} style={sm.group(1) if sm else '?'}")
 
     # ── 逐枚原文落文件（供铺量脚本取靶串；⚠️ 别在聊天里截断看）
-    out = ROOT / "artifacts" / "_p4db_btn_raw.txt"
+    out = ROOT / _run_dir() / "_p4db_btn_raw.txt"
     out.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for tag, src in (("壳", sh), ("原", pr)):

@@ -8,7 +8,7 @@ from zipfile import ZipFile, ZIP_DEFLATED, ZipInfo
 ROOT = Path(__file__).resolve().parents[2]
 SKILL = ROOT/'skills/payment-plan-audit'
 TARGET = SKILL/'resources/audit-runtime.zip'
-PACKAGE = ROOT/'artifacts/payment-plan-audit.skill'
+PACKAGE = ROOT/'dist/payment-plan-audit.skill'
 PACKAGE_FILES = (
     'SKILL.md', 'references/payment-methods.md', 'resources/audit-runtime.zip',
     'scripts/annotate.py', 'scripts/audit.py', 'scripts/methods.py',

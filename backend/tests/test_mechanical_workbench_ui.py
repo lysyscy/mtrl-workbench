@@ -1,5 +1,10 @@
 """机械费工作区的金额、草稿隔离和动作契约；Node中不连接业务服务。"""
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 from tests.acc_plugin import acc
 from tests.test_shell_ui_workflow import ui_page  # noqa: F401
 from pathlib import Path
@@ -141,7 +146,7 @@ def test_detail_sources_require_explicit_switch_and_confirmation_columns_are_ind
     assert p.locator('[data-act="procMechSave"][data-i="2"]').count() == 0
     assert p.locator('[data-act="procMechSave"][data-i="4"]').count() == 1
     assert '明细确认' in p.inner_text('#view')
-    scratch = Path(__file__).resolve().parents[2] / '.artifacts/machinery-fee-workbench-fixes/20261019'
+    scratch = Path(__file__).resolve().parents[2] / _run_dir('screenshots')
     scratch.mkdir(parents=True, exist_ok=True)
     p.locator('[data-act="procMechManual"]').evaluate("el=>{const table=el.closest('.tw');table.scrollLeft=table.scrollWidth;}")
     p.screenshot(path=str(scratch / 'mechanical-source-process-readonly.png'))
@@ -217,7 +222,7 @@ def test_workbench_pending_followups_shared_links_and_column_groups(ui_page):
     p.click('[data-act="mwHistory"]')
     assert 'i6历史数据' in p.inner_text('#modalRoot')
     p.click('[data-act="closeModal"]')
-    scratch = Path(__file__).resolve().parents[2] / '.artifacts/mw-controls/20261019'
+    scratch = Path(__file__).resolve().parents[2] / _run_dir('screenshots')
     scratch.mkdir(parents=True, exist_ok=True)
     for scale in ('1', '1.25'):
         p.evaluate("scale=>document.documentElement.style.setProperty('--fscale',scale)", scale)
@@ -292,7 +297,7 @@ def test_agent_detail_file_preview_before_confirm_without_history_entry(ui_page)
     p.click('#modalRoot details summary')
     assert '汽车吊' in p.inner_text('#modalRoot') and '零租原报 5' in p.inner_text('#modalRoot')
     assert all(box['height']<150 for box in p.locator('.mw-import-table').evaluate_all('els=>els.map(el=>({height:el.getBoundingClientRect().height}))'))
-    scratch=Path(__file__).resolve().parents[2]/'.artifacts/mechanical-skill-import/20261019'
+    scratch=Path(__file__).resolve().parents[2]/_run_dir('screenshots')
     scratch.mkdir(parents=True,exist_ok=True)
     p.screenshot(path=str(scratch/'detail-preview.png'))
     p.evaluate("document.documentElement.style.setProperty('--fscale','1.25')")

@@ -4,6 +4,11 @@
 """
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import os
 from pathlib import Path
 import shutil
@@ -40,7 +45,7 @@ CASES=[
 
 def run(web, name=None):
     env=os.environ.copy();env['MTRL_UI_FIXTURE_WEB']=str(web)
-    env['ACC_RESULTS_PATH']=str(ROOT/'artifacts/_mut_ui_acc_results.json')
+    env['ACC_RESULTS_PATH']=str(ROOT/str(_run_output('_mut_ui_acc_results.json')))
     cmd=[str(PY),'-X','utf8','-m','pytest',TEST+('::test_'+name if name else ''),'-q','--tb=short']
     return subprocess.run(cmd,cwd=ROOT,env=env,text=True,encoding='utf-8',capture_output=True,timeout=65)
 
@@ -66,7 +71,7 @@ def static_checks():
         shell_api._scan_src.cache_clear()
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='tmp-ui-mut-',dir=ROOT/'.scratch/local') as folder:
+    with tempfile.TemporaryDirectory(prefix='tmp-ui-mut-',dir=ROOT/_run_dir('work')) as folder:
         web=Path(folder)/'web';shutil.copytree(WEB,web)
         normal=run(web)
         if normal.returncode:print(normal.stdout+normal.stderr);return 1

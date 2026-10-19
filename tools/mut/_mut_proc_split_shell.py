@@ -1,4 +1,9 @@
 """Independent process cutoff and unrestricted mechanical edit negative witnesses."""
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 from pathlib import Path
 import os
 import shutil
@@ -27,7 +32,7 @@ CASES = [
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix="tmp-proc-split-shell-", dir=ROOT / ".scratch/local") as folder:
+    with tempfile.TemporaryDirectory(prefix="tmp-proc-split-shell-", dir=ROOT / _run_dir('work')) as folder:
         isolated = Path(folder)
         for part in ("backend/app", "backend/tests", "tools/audit"):
             shutil.copytree(ROOT / part, isolated / part, ignore=shutil.ignore_patterns("__pycache__"))

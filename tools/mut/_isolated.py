@@ -1,4 +1,9 @@
 """机械存储反例的隔离后端配方：传测试库、隔离四态，结束移除临时副本。"""
+
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
 from contextlib import contextmanager
 from pathlib import Path
 import os
@@ -15,7 +20,7 @@ def isolated_backend(prefix):
     sys.path.insert(0, str(ROOT / 'backend'))
     from app.core.config import get_settings
     test_url = get_settings().test_database_url
-    with tempfile.TemporaryDirectory(prefix=prefix, dir=ROOT / '.scratch/local') as folder:
+    with tempfile.TemporaryDirectory(prefix=prefix, dir=ROOT / _run_dir('work')) as folder:
         base = Path(folder) / 'backend'
         base.mkdir()
         for name in ('app', 'tests'):

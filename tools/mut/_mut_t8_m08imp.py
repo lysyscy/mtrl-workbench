@@ -2,6 +2,11 @@
 """`T8` 反向灵敏度（m08 撤项）—— 在代码面塞回 `m08imp` ⇒ `audit_drift` 必须红；跑完复原。"""
 from __future__ import annotations
 
+from pathlib import Path as _WorkspacePath
+import sys as _workspace_sys
+_workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
+from workspace_paths import output as _run_output, output_dir as _run_dir
+
 import hashlib
 import pathlib
 import subprocess
@@ -9,8 +14,8 @@ import sys
 import os
 
 # ⛔ **结果隔离**（本仓纪律）：非全套 pytest 必须把四态结果写到**临时文件** ——
-#    否则每处变异都会把权威 `artifacts/acc_results.json` 冲成单条 ⇒ `doc_audit` 的 T4 立刻报红。
-os.environ.setdefault("ACC_RESULTS_PATH", "../artifacts/_mut_acc_results.json")
+#    否则每处变异都会把权威 `var/state/verification/acc_results.json` 冲成单条 ⇒ `doc_audit` 的 T4 立刻报红。
+os.environ.setdefault("ACC_RESULTS_PATH", str(_run_output('_mut_acc_results.json')))
 
 sys.stdout.reconfigure(encoding="utf-8")
 REPO = pathlib.Path(r"D:\dev\mtrl-workbench")

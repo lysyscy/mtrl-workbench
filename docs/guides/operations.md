@@ -57,7 +57,7 @@ Agent协议、工程正文、产品需求和状态已在docs固定职责位置�
 
 | 脚本 | 干什么 | 前提 / 何时必复做 |
 |---|---|---|
-| `nssm_install.ps1` | **幂等**把后端注册成 NSSM 服务（服务名 `mtrl-workbench-server` · 单 worker · `0.0.0.0:8000` · 开机自启 · 崩溃自重启 · 日志分流 `../logs/server.out.log` / `server.err.log` 带 10 MB 轮转 · 依赖 `postgresql-x64-16`）。**先停并删除同名计划任务**（⛔ 不允许两个实例抢 8000） | ⚠️ **必须管理员** PowerShell；需要 `nssm.exe`（放 `ops/nssm/`，**已 gitignore**；获取渠道见脚本提示）。⭐ **换机 / 改启动参数（host、port、worker 数）/ 改 venv 路径 ⇒ 必复做** |
+| `nssm_install.ps1` | **幂等**把后端注册成 NSSM 服务（服务名 `mtrl-workbench-server` · 单 worker · `0.0.0.0:8000` · 开机自启 · 崩溃自重启 · 日志分流 `../var/log/server.out.log` / `server.err.log` 带 10 MB 轮转 · 依赖 `postgresql-x64-16`）。**先停并删除同名计划任务**（⛔ 不允许两个实例抢 8000） | ⚠️ **必须管理员** PowerShell；需要 `nssm.exe`（放 `ops/nssm/`，**已 gitignore**；获取渠道见脚本提示）。⭐ **换机 / 改启动参数（host、port、worker 数）/ 改 venv 路径 ⇒ 必复做** |
 | `nssm_uninstall.ps1` | 撤销服务注册（⛔ 不动数据、不动 `backend/`、不动 `.env`）；`-RestoreScheduledTask` 可恢复迁移前的计划任务形态 | 同上 |
 | `server_ctl.ps1` | 日常遥控：`status` / `start` / `stop` / `restart` / `log` / `port` / `pg`；⭐ `port` 那条会打印占用 8000 的**进程命令行与启动时间**（诊断"是不是旧进程"） | 只读查询普通窗口即可；启停/重启须当前明确授权及管理员权限。服务无 `--reload`，后端Python变化的加载要求不构成重启授权；操作边界见 docs/guides/deployment.md §〇 |
 | `install_hooks.ps1` ＋ `hooks/pre-commit` | 安装仓内提交钩子；当前仅核暂存语法、字节和凭据文件名，实际清单读 `ops/hooks/pre-commit`。业务与文档核验按 `docs/agents/workflow.md`执行 | 新环境/克隆后安装；保留真实钩子输出。安装脚本幂等，不改git config；钩子不依赖tail/sed等外部工具 |

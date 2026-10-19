@@ -176,9 +176,9 @@ def main():
 
 
 def _check_real(details, plan):
-    """真机产物（`artifacts/exports/焊材气体提取表/<期间标签>/`）逐格对账。"""
+    """真机产物（`exports/焊材气体提取表/<期间标签>/`）逐格对账。"""
     ym = plan["report_ym"]
-    real = (Path("artifacts/exports/焊材气体提取表")
+    real = (Path("exports/焊材气体提取表")
             / W.period_label(ym) / W.file_name(ym))
     if not real.exists():
         print("   ⏭ 真机产物还没导出（先跑 GET /api/m07/extract/export）：", real)
