@@ -64,16 +64,16 @@ function mwTotals(rows) {
   const nets=rows.map(mwNet);
   return {amount:mwSum(rows.map(row=>row.amount)),net:mwSum(nets),missing:nets.filter(value=>value===null).length};
 }
-function mwPlateRequired(row, category=mwCategory()) {
-  if(category==='monthly' && MW.month<'2026-06') return false;
+function mwPlateRequired(row, category=mwCategory(), month=MW.month) {
+  if(category==='monthly' && month<'2026-06') return false;
   return !(mwConfig().plate_keywords || []).some(word=>String(row.device||'').includes(word));
 }
-function mwRowProblems(row, category=mwCategory()) {
+function mwRowProblems(row, category=mwCategory(), month=MW.month) {
   const problems=[];
   if(!String(row.device||'').trim()) problems.push('设备待补');
   if(mwCents(row.amount)===null) problems.push('合价待补');
   if(mwNet(row)===null) problems.push('票种／税率待补');
-  if(mwPlateRequired(row,category) && (!String(row.plate||'').trim() || /^(无|无牌|场内|炮捶|加班.*|有加班)$/.test(String(row.plate).trim()))) problems.push('车牌待补');
+  if(mwPlateRequired(row,category,month) && (!String(row.plate||'').trim() || /^(无|无牌|场内|炮捶|加班.*|有加班)$/.test(String(row.plate).trim()))) problems.push('车牌待补');
   return problems;
 }
 function mwButton(label, action, attrs='', primary=false) {

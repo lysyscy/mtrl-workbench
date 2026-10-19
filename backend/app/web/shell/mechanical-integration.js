@@ -2,29 +2,20 @@
 const MW_FLOW = {preview:null,kind:'',conflicts:[],file:null};
 function mechanicalWorkbenchImportDialog() {
   MW_FLOW.file=null;
-  modal({title:'录入原报',body:`<label class="mw-field">Agent整理的录入文件<input id="mw-import-file" type="file" accept=".json,application/json"></label><label class="mw-field">本次录入<select id="mw-import-kind" class="inp"><option value="import">零租／包月明细</option><option value="history">历史月值与累计接续</option></select></label><p class="mut">先查看项目、月份、来源和修订冲突；确认后才写入。明细录入不会自动确认月值。</p>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="mwImportPreview">查看录入预览</button>`});
+  modal({title:'录入原报明细',body:`<label class="mw-field">Agent整理的录入文件<input id="mw-import-file" type="file" accept=".json,application/json"></label><p class="mut">先查看零租／包月明细、来源和修订冲突；确认后才写入。月值在明细页另行确认更新。</p>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="mwImportPreview">查看录入预览</button>`});
 }
 function mwConflictRows() {
   return MW_FLOW.conflicts.map((c,i)=>`<tr><td>${esc(c.label)}</td><td>${esc(typeof c.current==='object'?JSON.stringify(c.current):c.current??'空白')}</td><td>${esc(typeof c.incoming==='object'?JSON.stringify(c.incoming):c.incoming??'空白')}</td><td><select class="inp" data-mw-resolution="${i}"><option value="">请选择</option><option value="current">保留系统值</option><option value="incoming">采用原报值</option></select></td></tr>`).join('');
 }
-function mwImportReview(result, kind) {
-  MW_FLOW.preview=result;MW_FLOW.kind=kind;MW_FLOW.conflicts=[];
-  let rows='';
-  if(kind==='import') {
-    rows=result.batches.map(b=>{
+function mwImportReview(result) {
+  MW_FLOW.preview=result;MW_FLOW.kind='import';MW_FLOW.conflicts=[];
+  const rows=result.batches.map(b=>{
       b.conflicts.forEach(c=>MW_FLOW.conflicts.push({...c,key:b.key+'|'+c.id,label:mwName(b.warehouse)+'／'+b.ym+'／'+c.field}));
-      return `<tr><td>${esc(mwName(b.warehouse))}</td><td>${esc(b.ym)}</td><td>${b.category==='zero'?'零租':'包月'}</td><td class="num">${b.rows.length}</td><td>${esc(typeof b.source==='string'?b.source:b.source?.file||'已附来源')}</td></tr>`;
+      const totals=mwTotals(b.incoming),gross=b.category==='zero'?'mech_2':'mech_3',net=b.category==='zero'?'mech_4':'mech_5';
+      return `<tr><td>${esc(mwName(b.warehouse))}</td><td>${esc(b.ym)}</td><td>${b.category==='zero'?'零租':'包月'}</td><td class="num">${b.rows.length}</td><td class="num">${mwMoney(b.effective?.values?.[gross])} → ${mwMoney(totals.amount)}</td><td class="num">${mwMoney(b.effective?.values?.[net])} → ${mwMoney(totals.net)}${totals.missing?'<br>部分净额待核':''}</td><td>${esc(typeof b.source==='string'?b.source:b.source?.file||'已附来源')}</td></tr>`;
     }).join('');
-  } else {
-    rows=result.projects.flatMap(p=>{
-      if(p.before_history && Object.keys(p.before_history).length)MW_FLOW.conflicts.push({key:p.warehouse+'|history',label:mwName(p.warehouse)+'／历史参考',current:'已有历史参考',incoming:'新文件历史参考'});
-      return p.months.map(m=>{
-        m.conflicts.forEach(c=>MW_FLOW.conflicts.push({...c,key:c.id,label:mwName(p.warehouse)+'／'+m.ym+'／'+c.column}));
-        return `<tr><td>${esc(mwName(p.warehouse))}</td><td>${esc(m.ym)}</td><td>历史月值</td><td>${Object.keys(m.values).length}项</td><td>${esc(m.source?.file||'已附来源')}</td></tr>`;
-      });
-    }).join('');
-  }
-  modal({title:kind==='import'?'确认录入明细':'确认历史接续',body:`<div class="tw"><table class="dt"><thead><tr><th>项目</th><th>月份</th><th>类别</th><th>记录</th><th>来源</th></tr></thead><tbody>${rows}</tbody></table></div>${MW_FLOW.conflicts.length?`<h4>逐项确认修订冲突</h4><div class="tw"><table class="dt"><thead><tr><th>位置</th><th>系统当前值</th><th>原报新值</th><th>采用</th></tr></thead><tbody>${mwConflictRows()}</tbody></table></div>`:'<p>没有需要人工选择的修订冲突。</p>'}`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="mwImportConfirm">确认写入${kind==='import'?'明细':'历史接续'}</button>`});
+  const details=result.batches.map(b=>`<details><summary>${esc(mwName(b.warehouse))}／${esc(b.ym)}／${b.category==='zero'?'零租':'包月'} · 查看明细</summary><div class="tw mw-import-table"><table class="dt"><thead><tr><th>设备／规格</th><th>出租单位</th><th>车牌</th><th>日期／期间</th><th class="num">含税</th><th>票种／税率</th><th class="num">不含税</th><th>来源</th><th>待补</th></tr></thead><tbody>${b.incoming.map(r=>`<tr><td>${esc(r.device)} ${esc(r.spec||'')}</td><td>${esc(r.vendor||'')}</td><td>${esc(r.plate||'待补')}</td><td>${esc(r.date||'')}</td><td class="num">${mwMoney(r.amount)}</td><td>${esc(r.tax||'待核')}</td><td class="num">${mwMoney(mwNet(r))}</td><td>${esc(r.source?.sheet||'')} ${esc(r.source?.row||'')}</td><td>${esc(mwRowProblems(r,b.category,b.ym).join('、')||'—')}</td></tr>`).join('')}</tbody></table></div></details>`).join('');
+  modal({title:'确认录入明细',wide:true,body:`<p class="mw-note">含税与净额展示系统月值 → 原报建议额（冲突选择影响最终保存内容）。确认只保存明细，月值在明细页另行确认更新。</p><div class="tw mw-import-table"><table class="dt"><thead><tr><th>项目</th><th>月份</th><th>类别</th><th>记录</th><th>含税</th><th>不含税</th><th>来源</th></tr></thead><tbody>${rows}</tbody></table></div>${details}${MW_FLOW.conflicts.length?`<h4>逐项确认修订冲突</h4><div class="tw mw-import-table"><table class="dt"><thead><tr><th>位置</th><th>系统当前值</th><th>原报新值</th><th>采用</th></tr></thead><tbody>${mwConflictRows()}</tbody></table></div>`:'<p>没有需要人工选择的修订冲突。</p>'}`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="mwImportConfirm">确认写入明细</button>`});
 }
 async function mechanicalWorkbenchI8Dialog(warehouse) {
   await mwRun(async()=>{
@@ -41,9 +32,9 @@ Object.assign(ACT, {
     if(!file){mwNotify('请选择Agent整理的录入文件。');return;}
     if(file.size>25*1024*1024){mwNotify('文件超过25MB，请按月份拆分。');return;}
     let data;try{data=JSON.parse(await file.text());}catch(error){mwNotify('文件内容无法识别，请核对录入文件。');return;}
-    const kind=document.getElementById('mw-import-kind').value;
-    data=(kind==='history'?data.history_import:data.detail_import)||data;
-    mwImportReview(await mwPost(kind+'-preview',{...data,request_id:crypto.randomUUID()}),kind);
+    data=data.detail_import||data;
+    if(!Array.isArray(data.batches)||!data.batches.length){mwNotify('请选择零租／包月明细录入文件。');return;}
+    mwImportReview(await mwPost('import-preview',{...data,request_id:crypto.randomUUID()}));
   }),
   mwImportConfirm:()=>mwRun(async()=>{
     const resolutions={};let missing=false;

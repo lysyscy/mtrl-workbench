@@ -81,3 +81,4 @@
 .mw-root ::selection{background:var(--pri-bd);color:var(--tx)}
 @media(max-width:1050px){.mw-toolbar>.sp{margin-left:0;width:100%}.mw-actions>.sp{margin-left:0;width:100%}.mw-root .tw{max-height:calc(100vh - 360px)}}
 @media(prefers-reduced-motion:no-preference){.mw-root .btn,.mw-root .inp{transition:background-color 150ms ease-out,border-color 150ms ease-out}}
+.mw-import-table{min-height:0}

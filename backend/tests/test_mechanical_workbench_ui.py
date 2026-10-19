@@ -254,3 +254,50 @@ def test_workbench_pending_followups_shared_links_and_column_groups(ui_page):
     assert p.locator('.mw-company .sumrow .vsep').count() == 3
     p.keyboard.press('Enter')
     assert p.evaluate('MW.tab') == 'zero'
+
+
+@acc()
+def test_agent_detail_file_preview_before_confirm_without_history_entry(ui_page):
+    import json
+    from app.mod03_notice.page import render_theme
+
+    p=ui_page
+    p.add_style_tag(content=render_theme('默认'))
+    web=Path(__file__).resolve().parents[1]/'app/web'
+    p.add_style_tag(content=(web/'shell/mechanical-workbench.css').read_text(encoding='utf-8'))
+    p.evaluate("""() => {
+      BOOTING=false;VIEW='m10';MW.tab='summary';window.importCalls=[];
+      crypto.randomUUID=()=> 'isolated-request';
+      MW.data={ok:true,projects:[{warehouse:'甲',name:'项目甲'}],settings:{shown_projects:['甲']},details:[],effective:[],summary:[],reconciliations:[],billDifferences:[],matters:[],discoveries:[],histories:[]};
+      API.get=async()=>structuredClone(MW.data);reloadMech=async()=>{};reloadProc=async()=>{};
+      API.post=async(url,body)=>{importCalls.push({url,body:structuredClone(body)});
+        if(url.endsWith('/import-preview'))return {ok:true,preview_id:'isolated',batches:[{
+          ...body.batches[0],incoming:body.batches[0].rows,key:'batch',conflicts:[],
+          effective:{values:{mech_2:'99.00',mech_4:'90.00'}}}]};
+        return {ok:true};};render();
+    }""")
+    p.click('[data-act="mwImport"]')
+    assert p.locator('#mw-import-kind').count()==0
+    assert '历史月值' not in p.inner_text('#modalRoot')
+    row={'id':'a','device':'汽车吊','spec':'25吨','plate':'苏A12345','amount':'113.00','tax':'13%专票',
+         'source':{'sheet':'零租原报','row':5}}
+    payload={'detail_import':{'batches':[{'warehouse':'甲','ym':'2026-10','category':'zero','rows':[row],'source':{'file':'原报.xlsx'}}]}}
+    p.set_input_files('#mw-import-file',{'name':'机械费录入.json','mimeType':'application/json','buffer':json.dumps(payload,ensure_ascii=False).encode()})
+    p.click('[data-act="mwImportPreview"]')
+    p.wait_for_selector('[data-act="mwImportConfirm"]')
+    assert '99.00 → 113.00' in p.inner_text('#modalRoot')
+    assert '90.00 → 100.00' in p.inner_text('#modalRoot')
+    assert len(p.evaluate('importCalls'))==1
+    assert p.evaluate('importCalls[0].url').endswith('/import-preview')
+    p.click('#modalRoot details summary')
+    assert '汽车吊' in p.inner_text('#modalRoot') and '零租原报 5' in p.inner_text('#modalRoot')
+    assert all(box['height']<150 for box in p.locator('.mw-import-table').evaluate_all('els=>els.map(el=>({height:el.getBoundingClientRect().height}))'))
+    scratch=Path(__file__).resolve().parents[2]/'.artifacts/mechanical-skill-import/20261019'
+    scratch.mkdir(parents=True,exist_ok=True)
+    p.screenshot(path=str(scratch/'detail-preview.png'))
+    p.evaluate("document.documentElement.style.setProperty('--fscale','1.25')")
+    p.screenshot(path=str(scratch/'detail-preview-1.25.png'))
+    assert p.locator('[data-act="mwImportConfirm"]').bounding_box()['y']<p.viewport_size['height']
+    p.click('[data-act="mwImportConfirm"]')
+    p.wait_for_function('importCalls.length===2 && !MW.busy')
+    assert p.evaluate('importCalls[1].body')=={'preview_id':'isolated','resolutions':{},'confirm_amounts':False}
