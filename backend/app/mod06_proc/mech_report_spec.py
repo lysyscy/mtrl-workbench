@@ -90,6 +90,9 @@ def commit(s, records, mapping, operator, options):
     if not (options or {}).get("confirmed"):
         raise MustReportError("请先核对差异清单并确认导入")
     ym, planned, unmatched, _, _ = plan(s, records, options)
+    planned = {warehouse: repository.writable_mech_values(repository.mech_row(s, warehouse, ym), values)
+               for warehouse, values in planned.items()}
+    planned = {warehouse: values for warehouse, values in planned.items() if values}
     with s.begin_nested():
         for warehouse, values in planned.items():
             # 与行内手录共用逐格写出口；不替换材料快照、不修改截止月，不写缺失列。

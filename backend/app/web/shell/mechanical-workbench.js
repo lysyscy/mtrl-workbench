@@ -233,10 +233,13 @@ async function mwSaveDetails() {
 function mwConfirmDialog() {
   MW.confirmation=mwScoped().map(warehouse=>{
     const detail=mwDetail(warehouse), effective=mwEffective(warehouse), column=mwCategory()==='zero'?'mech_2':'mech_3';
-    const existing=effective.values?.[column], next=detail.totals?.gross;
-    return {warehouse, detail, effective, column, blocked:!detail.rows.length||detail.issues.length>0, changed:mwCents(existing)!==mwCents(next), manual:existing!=null&&mwCents(existing)!==mwCents(next)};
+    return {warehouse, detail, effective, columns:[column,mwCategory()==='zero'?'mech_4':'mech_5']};
   });
-  modal({title:'确认有效月值 · '+(mwCategory()==='zero'?'零租':'包月'),wide:true,body:`<p class="mw-note">仅更新勾选项目的本类别含税、不含税月值；原人工采用额默认保留。</p><div class="tw mw-confirm-scroll"><table class="dt"><thead><tr><th>采用</th><th>项目</th><th class="num">原有效含税</th><th class="num">明细含税</th><th class="num">明细不含税</th><th>状态</th></tr></thead><tbody>${MW.confirmation.map((item,index)=>`<tr><td><input type="checkbox" class="chk" data-mw-confirm="${index}" ${item.blocked?'disabled':!item.manual?'checked':''} aria-label="采用${esc(mwName(item.warehouse))}明细金额"></td><td>${esc(mwName(item.warehouse))}</td><td class="num">${mwMoney(item.effective.values?.[item.column])}</td><td class="num">${mwMoney(item.detail.totals.gross)}</td><td class="num">${mwMoney(item.detail.totals.net)}</td><td>${item.blocked?(!item.detail.rows.length?'缺明细，保留原值':'字段待补，保留原值'):item.manual?'已有采用值，勾选后替换':'可确认'}</td></tr>`).join('')}</tbody></table></div>`,footer:`<button class="btn" data-act="closeModal">返回</button>${mwButton('确认勾选项目','mwConfirmApply','',true)}`});
+  modal({title:'确认有效月值 · '+(mwCategory()==='zero'?'零租':'包月'),wide:true,body:`<p class="mw-note">含税、不含税分别勾选；原人工采用额默认保留。确认后，该格在过程资料中只读。</p><div class="tw mw-confirm-scroll"><table class="dt"><thead><tr><th>项目</th><th>金额</th><th class="num">原有效值</th><th class="num">明细汇总</th><th>采用明细</th><th>状态</th></tr></thead><tbody>${MW.confirmation.flatMap((item,index)=>item.columns.map((column,offset)=>{
+    const existing=item.effective.values?.[column],manual=existing!=null&&item.effective.sources?.[column]?.mode!=='detail',label=offset?'不含税':'含税';
+    const blocked=!item.detail.rows.length||(item.detail.blocked_columns?.[column]??item.detail.issues).length>0;
+    return `<tr><td>${esc(mwName(item.warehouse))}</td><td>${label}</td><td class="num">${mwMoney(existing)}</td><td class="num">${mwMoney(item.detail.totals[offset?'net':'gross'])}</td><td><input type="checkbox" class="chk" data-mw-confirm="${index}" data-column="${column}" ${blocked?'disabled':!manual?'checked':''} aria-label="采用${esc(mwName(item.warehouse))}${label}明细金额"></td><td>${blocked?(!item.detail.rows.length?'缺明细，保留原值':'字段待补，保留原值'):manual?'人工采用值，勾选后替换':'可确认'}</td></tr>`;
+  })).join('')}</tbody></table></div>`,footer:`<button class="btn" data-act="closeModal">返回</button>${mwButton('确认勾选金额','mwConfirmApply','',true)}`});
 }
 function mwMattersDialog(warehouse='') {
   MW.matterScope=warehouse;
@@ -320,10 +323,22 @@ Object.assign(ACT, {
   mwSave:()=>mwRun(async()=>{const count=await mwSaveDetails();mwNotify(count?'明细已保存，有效月值仍待确认。':'当前范围没有待保存的修改。');}),
   mwSaveConfirm:()=>mwRun(async()=>{await mwSaveDetails();mwConfirmDialog();}),
   mwConfirmApply:()=>mwRun(async()=>{
-    const selected=[...document.querySelectorAll('[data-mw-confirm]:checked')].map(el=>MW.confirmation[Number(el.dataset.mwConfirm)]);
-    if(!selected.length){mwNotify('请勾选需要采用的项目。');return;}
-    for(const item of selected) await mwPost('amounts-confirm',{warehouse:item.warehouse,ym:MW.month,category:mwCategory(),revision:item.detail.revision,effective_signature:item.effective.signature});
-    await mwRefresh();closeModal();mwNotify('已确认勾选项目的有效月值。');
+    const selected=new Map(),month=MW.month,category=mwCategory(),confirmation=MW.confirmation;
+    document.querySelectorAll('[data-mw-confirm]:checked').forEach(el=>{const index=Number(el.dataset.mwConfirm);if(!selected.has(index))selected.set(index,[]);selected.get(index).push(el.dataset.column);});
+    if(!selected.size){mwNotify('请勾选需要采用的金额。');return;}
+    for(const [index,columns] of selected){const item=confirmation[index];await mwPost('amounts-confirm',{warehouse:item.warehouse,ym:month,category,columns,revision:item.detail.revision,effective_signature:item.effective.signature});}
+    await mwRefresh();closeModal();mwNotify('已确认勾选金额的有效月值。');
+  }),
+  procMechManual:t=>{
+    const warehouse=t.dataset.wh,ym=t.dataset.ym,column='mech_'+t.dataset.i;
+    MW.manualSource={warehouse,ym,columns:[column],effective_signature:MECH_SIGNATURES[warehouse]?.[ym],confirmed:true};
+    modal({title:'切为手填 · '+MECH_LABELS[Number(t.dataset.i)],body:`<p>${esc(pjLabel(warehouse))} · ${esc(ym)}</p><p>当前金额 ${mwMoney(mach6Arr(warehouse,ym)[Number(t.dataset.i)])} 元。切换后保留金额，该格可在过程资料中手填，之后确认明细可重新采用明细汇总。</p>`,footer:`<button class="btn" data-act="closeModal">保留明细来源</button>${mwButton('确认切为手填','procMechManualApply','',true)}`});
+  },
+  procMechManualApply:()=>mwRun(async()=>{
+    const source=MW.manualSource;
+    await procMechWrites;
+    await mwPost('source-manual',source);
+    await mwRefresh();closeModal();render();mwNotify('已切为手填，金额保留。');
   }),
   mwInternalEdit:t=>{MW.internal.set(mwKey(t.dataset.pj,'internal'),{warehouse:t.dataset.pj,ym:MW.month,values:{...mwInternal(t.dataset.pj),[t.dataset.field]:t.value}});t.classList.add('mw-dirty');const status=document.querySelector('.mw-status');if(status)status.textContent=`明细待保存 ${MW.drafts.size}组 · 内租待确认 ${MW.internal.size}项`;},
   mwInternalCancel:()=>{MW.internal.clear();mwPaint();mwNotify('已取消本次内租修改。');},

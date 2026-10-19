@@ -38,6 +38,12 @@ const procPjPanel=()=>projPanel({list:()=>pjSort(PROC_PJS),selected:()=>[procPj]
 let procExpPjs=[];
 /* 按提交顺序保存单格，未完成的输入留在当前格。 */
 let procMechWrites=Promise.resolve();
+function procMechCell(warehouse,ym,index,value,label){
+  const source=MECH_SOURCES[warehouse]?.[ym]?.['mech_'+index];
+  const attrs=`data-wh="${esc(warehouse)}" data-ym="${esc(ym)}" data-i="${index}"`;
+  if(source?.mode==='detail') return `<span>${M(value)}</span><div class="mut sm">明细确认 · <button class="link" data-act="procMechManual" ${attrs} aria-label="${esc(ym+' '+label+'切为手填')}">切为手填</button></div>`;
+  return `<input class="inp num" style="width:100%;min-width:calc(88px * var(--fscale))" data-act="procMechSave" data-submit-act="procMechSave" ${attrs} value="${esc(value==null?'':String(value))}" aria-label="${esc(ym+' '+label)}">`;
+}
 const procExpDlg=()=>{
   const keys=pjSort(PROC_PJS),selected=new Set(procExpPjs);
   modal({title:`批量导出 · ${procTabName()}`,wide:true,body:`

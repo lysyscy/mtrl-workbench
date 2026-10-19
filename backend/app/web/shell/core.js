@@ -1010,6 +1010,8 @@ async function reloadMech() {
      用途 = 把"**历史段不许手录**"在界面上也说清（守则 §5.5：不能做的要置灰并说明原因）。
      ⚠️ 判断**只认后端**（`domain.section_of`）：⛔ 壳里不许自己拿截止月比大小（那是第二份口径）。 */
   MECH_SECTIONS = d.sections || {};
+  MECH_SOURCES = d.sources || {};
+  MECH_SIGNATURES = d.effective_signatures || {};
   if (d.columns && d.columns.length) {
     MECH_LABELS.length = 0;
     d.columns.forEach(x => MECH_LABELS.push(x));

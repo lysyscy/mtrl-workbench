@@ -1,6 +1,7 @@
 """机械费工作区的金额、草稿隔离和动作契约；Node中不连接业务服务。"""
 
 from tests.acc_plugin import acc
+from tests.test_shell_ui_workflow import ui_page  # noqa: F401
 from pathlib import Path
 import shutil
 import subprocess
@@ -52,6 +53,13 @@ vm.runInContext(`(async()=>{
  MW.data.discoveries=[{id:'unmapped',warehouse:'',projectId:'shared',projectName:'待核实的小微壳',kind:'unmapped',status:'pending',totals:{usage:'125.00',project:'25.00',team:null}}];
  MW.filter='findings';const unmappedHTML=mwWork();assert.ok(unmappedHTML.includes('待核实的小微壳'));assert.ok(unmappedHTML.includes('125.00'));assert.ok(unmappedHTML.includes('data-id="unmapped"'));assert.ok(unmappedHTML.includes('核实发现'));assert.ok(!unmappedHTML.includes('data-pj="shared"'),'未明确映射不能把i8项目键当仓库采用');
  MW.filter='pending';MW.data.discoveries=[];
+ MW.tab='zero';MW.data.effective[0].sources={mech_2:{mode:'detail'},mech_4:{mode:'manual'}};MW.data.effective[0].values.mech_4='91.00';
+ MW.data.details[0].blocked_columns={mech_2:[],mech_4:[{id:'one',fields:['票种／税率']}]};mwConfirmDialog();
+ assert.match(latestModal.body,/data-column="mech_2" checked/);assert.match(latestModal.body,/data-column="mech_4" disabled/,'净额待补不能禁用已齐备的含税列');
+ MW.data.details[0].blocked_columns={mech_2:[],mech_4:[]};mwConfirmDialog();
+ assert.match(latestModal.body,/data-column="mech_4"  aria-label/,'人工净额默认不勾选');
+ selected=[{dataset:{mwConfirm:'0',column:'mech_2'}},{dataset:{mwConfirm:'0',column:'mech_4'}}];calls.length=0;await ACT.mwConfirmApply();
+ const confirmCalls=calls.filter(c=>c[1].endsWith('/amounts-confirm'));assert.equal(confirmCalls.length,1);assert.equal(JSON.stringify(confirmCalls[0][2].columns),'["mech_2","mech_4"]');selected=[];
  assert.equal(mwPlateRequired(MW.data.details[0].rows[0]),false);
  MW.tab='zero';MW.onlyProblems=true;
  const detailHTML=mwDetails();assert.ok(detailHTML.includes('130.00'));assert.ok(detailHTML.includes('121.00'));assert.ok(!detailHTML.includes('value="升降平台"'));assert.ok(detailHTML.includes('value="汽车"'));
@@ -86,3 +94,64 @@ vm.runInContext(`(async()=>{
     result = subprocess.run([node, '-e', program, str(source)], text=True,
                             encoding='utf-8', errors='strict', capture_output=True, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@acc()
+def test_detail_sources_require_explicit_switch_and_confirmation_columns_are_independent(ui_page):
+    from app.mod03_notice.page import render_theme
+    from tests.test_tail315_proc import report
+
+    p = ui_page
+    p.add_style_tag(content=render_theme('默认'))
+    p.add_style_tag(content=(Path(__file__).resolve().parents[1] / 'app/web/shell/mechanical-workbench.css').read_text(encoding='utf-8'))
+    p.evaluate("""async data => {
+      window.calls=[];BOOTING=false;VIEW='m06';
+      data.matrices['测试仓库'].raw[0].mech_2='109.00';
+      data.matrices['测试仓库'].adjusted[0].mech_2='109.00';
+      window.sources={测试仓库:{'2026-01':{mech_2:{mode:'detail'},mech_4:{mode:'manual'}}}};
+      API.m06Matrix=async()=>data;
+      API.m06Mech=async()=>({mech:{测试仓库:{'2026-01':['0','0','109.00','0','91.00','0']}},
+        sources,effective_signatures:{测试仓库:{'2026-01':'month-signature'}}});
+      MW.data={ok:true,projects:[{warehouse:'测试仓库',name:'测试项目'}],settings:{shown_projects:['测试仓库']},
+        details:[{warehouse:'测试仓库',ym:'2026-01',category:'zero',revision:4,rows:[{device:'车',amount:'109',net:'100'}],totals:{gross:'109',net:'100'},issues:[]}],
+        effective:[{warehouse:'测试仓库',ym:'2026-01',signature:'month-signature',values:{mech_2:'109',mech_4:'91'},sources:{mech_2:{mode:'detail'},mech_4:{mode:'manual'}}}]};
+      API.get=async()=>structuredClone(MW.data);
+      API.post=async(url,body)=>{calls.push({url,body:structuredClone(body)});
+        if(url.endsWith('/source-manual'))sources.测试仓库['2026-01'][body.columns[0]]={mode:'manual'};
+        return {ok:true};};
+      await reloadMech();await reloadProc();render();
+    }""", report())
+    assert p.locator('[data-act="procMechSave"][data-i="2"]').count() == 0
+    assert p.locator('[data-act="procMechSave"][data-i="4"]').count() == 1
+    assert '明细确认' in p.inner_text('#view')
+    scratch = Path(__file__).resolve().parents[2] / '.scratch/local'
+    p.locator('[data-act="procMechManual"]').evaluate("el=>{const table=el.closest('.tw');table.scrollLeft=table.scrollWidth;}")
+    p.screenshot(path=str(scratch / 'mechanical-source-process-readonly.png'))
+    before = p.evaluate('calls.length')
+    switch = p.locator('[data-act="procMechManual"][data-i="2"]')
+    switch.focus()
+    p.keyboard.press('Enter')
+    assert p.evaluate('calls.length') == before, '打开确认框不能修改来源'
+    assert '109.00' in p.inner_text('#modalRoot')
+    p.screenshot(path=str(scratch / 'mechanical-source-manual-dialog.png'))
+    p.click('[data-act="closeModal"]')
+    assert p.locator('[data-act="procMechSave"][data-i="2"]').count() == 0
+    p.click('[data-act="procMechManual"][data-i="2"]')
+    p.click('[data-act="procMechManualApply"]')
+    p.wait_for_function("document.querySelector('[data-act=procMechSave][data-i=\"2\"]')!==null")
+    assert p.locator('[data-act="procMechSave"][data-i="2"]').input_value() == '109'
+    assert p.evaluate('calls') == [{'url': '/api/m06/workbench/source-manual', 'body': {
+        'warehouse': '测试仓库', 'ym': '2026-01', 'columns': ['mech_2'],
+        'effective_signature': 'month-signature', 'confirmed': True}}]
+
+    p.evaluate("() => {MW.month='2026-01';MW.tab='zero';VIEW='m10';mwConfirmDialog();}")
+    assert p.locator('[data-mw-confirm][data-column="mech_2"]').is_checked()
+    assert not p.locator('[data-mw-confirm][data-column="mech_4"]').is_checked(), '已有人工净额默认保留'
+    p.locator('[data-mw-confirm][data-column="mech_2"]').uncheck()
+    p.locator('[data-mw-confirm][data-column="mech_4"]').check()
+    p.screenshot(path=str(scratch / 'mechanical-source-confirm-columns.png'))
+    p.click('[data-act="mwConfirmApply"]')
+    p.wait_for_function("calls.some(c=>c.url.endsWith('/amounts-confirm')) && !MW.busy")
+    assert p.evaluate("calls.find(c=>c.url.endsWith('/amounts-confirm')).body") == {
+        'warehouse': '测试仓库', 'ym': '2026-01', 'category': 'zero', 'columns': ['mech_4'],
+        'revision': 4, 'effective_signature': 'month-signature'}

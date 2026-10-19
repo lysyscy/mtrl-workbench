@@ -7,12 +7,15 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime
+import hashlib
+import json
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.mod06_proc.domain import CATEGORIES, MECH_COLUMNS, MATERIAL_KEYS
+from app.mod06_proc.domain import CATEGORIES, MECH_COLUMNS, MECH_KEYS, MATERIAL_KEYS
 from app.mod06_proc.models import (
     BATCH_ACTIVE,
     BATCH_ROLLED_BACK,
@@ -35,19 +38,58 @@ def load_inv_rows(s: Session) -> list[dict]:
     return P8S.load_rows(s)
 
 
+def mech_sources(row):
+    stored = (row.source_batches or {}).get('__detail_sources', {}) if row else {}
+    return {column: deepcopy(stored.get(column, {'mode': 'manual'})) for column in MECH_KEYS}
+
+
+def mech_effective(row, warehouse, ym):
+    from app.core.money import to_money
+    values = {column: format(to_money(getattr(row, column)), '.2f')
+              if row and getattr(row, column) not in (None, '') else None for column in MECH_KEYS}
+    sources = mech_sources(row)
+    signature = hashlib.sha256(json.dumps([values, sources, str(row.updated_at) if row else None],
+                                         ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
+    return {'warehouse': warehouse, 'ym': ym, 'values': values, 'sources': sources,
+            'signature': signature, 'source': deepcopy(row.source_batches or {}) if row else {}}
+
+
+def mech_row(s, warehouse, ym):
+    rows = s.execute(select(ProcMechManual).where(
+        ProcMechManual.warehouse_name == warehouse, ProcMechManual.ym == ym)
+        .with_for_update().execution_options(populate_existing=True)).scalars()
+    return next((row for row in rows if row.warehouse_name == warehouse and row.ym == ym), None)
+
+
+def writable_mech_values(row, values):
+    """A detail-confirmed cell keeps its amount and provenance on an identical import."""
+    from app.core.errors import MustReportError
+    from app.core.money import to_money
+    sources, writable = mech_sources(row), {}
+    for column, value in values.items():
+        if sources[column]['mode'] == 'detail':
+            if to_money(getattr(row, column)) != to_money(value):
+                label = MECH_COLUMNS[int(column.removeprefix('mech_'))]
+                raise MustReportError(f'{label}金额已由明细确认，请先明确切换为手填')
+        else:
+            writable[column] = value
+    return writable
+
+
 def load_mech(s: Session) -> list[dict]:
-    """机械 6 列手录值（旁路表）→ `{ym, warehouse, mech_0…mech_5}`。"""
-    out: list[dict] = []
-    for r in s.execute(select(ProcMechManual)).scalars():
-        row = {"ym": r.ym or "", "warehouse": r.warehouse_name or "", "project_id": r.project_id}
-        for i in range(len(MECH_COLUMNS)):
-            row[f"mech_{i}"] = getattr(r, f"mech_{i}", 0)
-        out.append(row)
+    """Effective six-column amounts and independently editable cell sources."""
+    out = []
+    for row in s.execute(select(ProcMechManual)).scalars():
+        state = mech_effective(row, row.warehouse_name or '', row.ym or '')
+        out.append({'ym': state['ym'], 'warehouse': state['warehouse'], 'project_id': row.project_id,
+                    **{column: getattr(row, column) for column in MECH_KEYS},
+                    'sources': state['sources'], 'effective_signature': state['signature']})
     return out
 
 
-def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: int | None = None):
-    """任意月份机械手录；只覆盖提交列，并撤除这些格的导入来源归属。"""
+def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: int | None = None,
+              detail_sources: dict | None = None):
+    """Write submitted cells; detail confirmation is the only source that can adopt details."""
     from app.core.money import require_non_negative
     from app.mod06_proc.domain import normalize_ym
 
@@ -55,22 +97,59 @@ def save_mech(s: Session, *, ym: str, warehouse: str, values: dict, project_id: 
     if not ym:
         raise ValueError("核算月认不出，请写 YYYY-MM")
     parsed = {key: require_non_negative(value, field=key) for key, value in values.items()
-              if key in {f"mech_{i}" for i in range(len(MECH_COLUMNS))}}
-    rows = list(s.execute(select(ProcMechManual).where(
-        ProcMechManual.warehouse_name == warehouse, ProcMechManual.ym == ym)).scalars())
-    found = next((x for x in rows if x.ym == ym and x.warehouse_name == warehouse), None)
+              if key in MECH_KEYS}
+    found = mech_row(s, warehouse, ym)
+    confirmed = detail_sources or {}
+    guarded = writable_mech_values(found, {k: v for k, v in parsed.items() if k not in confirmed})
+    parsed = {k: v for k, v in parsed.items() if k in guarded or k in confirmed}
+    if not parsed:
+        return found
     if found is None:
         found = ProcMechManual(ym=ym, warehouse_name=warehouse, project_id=project_id)
         s.add(found)
-    origins = dict(found.source_batches or {})
-    origins["__manual"] = "manual"
-    for key, value in parsed.items():
-        setattr(found, key, value)
-        origins.pop(key, None)
+    origins = deepcopy(found.source_batches or {})
+    sources = origins.get('__detail_sources', {})
+    if set(parsed) - set(confirmed):
+        origins['__manual'] = 'manual'
+    for column, value in parsed.items():
+        setattr(found, column, value)
+        origins.pop(column, None)
+        if column in confirmed:
+            previous = sources.get(column, {})
+            history = previous.get('history', [])
+            if previous:
+                history = [*history, {k: v for k, v in previous.items() if k != 'history'}]
+            sources[column] = {'mode': 'detail', 'basis': deepcopy(confirmed[column]), 'history': history}
+    if sources:
+        origins['__detail_sources'] = sources
     found.source_batches = origins
     found.updated_at = datetime.now()
     s.flush()
     return found
+
+
+def source_manual(s, *, warehouse, ym, columns, operator):
+    row = mech_row(s, warehouse, ym)
+    if row is None:
+        return
+    origins = deepcopy(row.source_batches or {})
+    sources = origins.get('__detail_sources', {})
+    changed = False
+    for column in columns:
+        previous = sources.get(column, {})
+        if previous.get('mode') != 'detail':
+            continue
+        sources[column] = {**previous, 'mode': 'manual', 'history': [*previous.get('history', []),
+                           {'action': 'source-manual', 'operator': operator,
+                            'at': datetime.now().isoformat(), 'previous_amount': str(getattr(row, column)),
+                            'previous_basis': deepcopy(previous.get('basis'))}]}
+        changed = True
+    if changed:
+        origins['__detail_sources'] = sources
+        origins['__manual'] = 'manual'
+        row.source_batches = origins
+        row.updated_at = datetime.now()
+        s.flush()
 
 
 # ============================================================ 历史段（§5.2.5）
@@ -176,7 +255,7 @@ def import_snapshot(
     s: Session, *, warehouse: str, rows: list[dict], batch_no: str, operator: str,
     cutoff_ym: str | None = None, project_id: int | None = None,
     material_cutoff_ym: str | None = None, mechanical_cutoff_ym: str | None = None,
-) -> ProcHistoryBatch:
+) -> ProcHistoryBatch | None:
     """两个截止只筛选本次输入；材料替换项目历史，机械逐月列覆盖统一有效值。"""
     from app.core.money import to_money
     from app.mod06_proc.importer import selected_cutoffs
@@ -203,6 +282,18 @@ def import_snapshot(
             monthly[key] = monthly.get(key, Decimal("0.00")) + value
     if not planned:
         raise ValueError("截止月及以前没有可写入的数据，原数据未改动")
+    effective_by_month = {row.ym: row for row in s.execute(
+        select(ProcMechManual).where(ProcMechManual.warehouse_name == warehouse)
+        .with_for_update().execution_options(populate_existing=True)).scalars()} if any(
+            key in MECH_KEYS for keys in planned.values() for key in keys) else {}
+    for ym, keys in list(planned.items()):
+        mechanical = {key: value for key, value in keys.items() if key in MECH_KEYS}
+        writable = writable_mech_values(effective_by_month.get(ym), mechanical)
+        planned[ym] = {key: value for key, value in keys.items() if key not in mechanical or key in writable}
+        if not planned[ym]:
+            del planned[ym]
+    if not planned:
+        return None
     with s.begin_nested():
         for old in load_batches(s):
             if old.warehouse_name == warehouse and old.status == BATCH_ACTIVE:
@@ -213,10 +304,6 @@ def import_snapshot(
         s.add(batch)
         # Flush the unique batch key before changing any effective values.
         s.flush()
-        effective_by_month = {row.ym: row for row in s.execute(
-            select(ProcMechManual).where(ProcMechManual.warehouse_name == warehouse)).scalars()
-            if row.warehouse_name == warehouse} if any(
-                key.startswith("mech_") for keys in planned.values() for key in keys) else {}
         for ym, keys in planned.items():
             values = {f"{mapping[key][0]}_{mapping[key][1]}": value for key, value in keys.items()}
             s.add(ProcHistorySnapshot(batch_no=batch_no, ym=ym, warehouse_name=warehouse,
@@ -263,8 +350,10 @@ def rollback_batch(s: Session, *, batch_no: str) -> int:
     change_lookup = {(c.batch_no, c.ym, c.column_key): c for c in changes}
     batch_lookup = {b.batch_no: b for b in load_batches(s)}
     effective_lookup = {r.ym: r for r in s.execute(select(ProcMechManual).where(
-        ProcMechManual.warehouse_name == batch.warehouse_name)).scalars()
+        ProcMechManual.warehouse_name == batch.warehouse_name)
+        .with_for_update().execution_options(populate_existing=True)).scalars()
         if r.warehouse_name == batch.warehouse_name}
+    restorations = []
     for change in changes:
         if change.batch_no != batch_no:
             continue
@@ -286,11 +375,15 @@ def rollback_batch(s: Session, *, batch_no: str) -> int:
             if prior_change is None:
                 break
             previous = prior_change
-        setattr(effective, change.column_key, previous.before_amount)
+        if writable_mech_values(effective, {change.column_key: previous.before_amount}):
+            restorations.append((effective, change.column_key, previous))
+    for effective, column, previous in restorations:
+        origins = dict(effective.source_batches or {})
+        setattr(effective, column, previous.before_amount)
         if previous.before_batch:
-            origins[change.column_key] = previous.before_batch
+            origins[column] = previous.before_batch
         else:
-            origins.pop(change.column_key, None)
+            origins.pop(column, None)
         effective.source_batches = origins
         effective.updated_at = datetime.now()
     batch.status = BATCH_ROLLED_BACK
@@ -301,6 +394,7 @@ def rollback_batch(s: Session, *, batch_no: str) -> int:
         no_remaining_import = not any(origins.get(f"mech_{i}") for i in range(len(MECH_COLUMNS)))
         if (creator and creator_batch is not None and creator_batch.status == BATCH_ROLLED_BACK
                 and not origins.get("__manual") and no_remaining_import
+                and not any(source['mode'] == 'detail' for source in mech_sources(effective).values())
                 and all((getattr(effective, f"mech_{i}") or 0) == 0 for i in range(len(MECH_COLUMNS)))):
             s.delete(effective)
     s.flush()

@@ -1,0 +1,142 @@
+{
+  "completed": "2026-10-19",
+  "source_root": ".scratch/machinery-fee-workflow",
+  "source_git_baseline": "1b3dfb5f26861327247d905329f38967f7f0750d",
+  "completion_evidence": "evidence.md",
+  "files": [
+    {
+      "original": ".scratch/machinery-fee-workflow/audit-plate-history.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/audit-plate-history.py",
+      "sha256": "6d9ea3fd91976e972ec5d347de5853ef95842de1538547852713a986453565ce",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/august-validation.md",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/august-validation.md",
+      "sha256": "5c61892c90da8a30658213587b604676fcb662dba3b9beb22bd3e23b28bff19e",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/build-cumulative-prototype.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/build-cumulative-prototype.py",
+      "sha256": "b3e9703ebfe571303ec01504b353617504018e537ce2739af04f51582d3145a3",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/evidence.md",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/evidence.md",
+      "sha256": "4e47fc330f200156aeb6569b26dccafc838c454b67452882242623551be2c3d2",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/finalize-plan.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/finalize-plan.py",
+      "sha256": "56a04a5bca3fa2687f50a6d1a96cbdf9141e1aebca0772595026ece34311eb14",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/final_artifacts.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/final_artifacts.py",
+      "sha256": "8d8eee27b20801845349be0b45792fb308cafd77171f67bffa3d5dc0ce79c1a7",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/history-contract.md",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/history-contract.md",
+      "sha256": "2bd0bea427e1513f707a1c9f13e437d1f67a5e7795a880305f9b238fbfcd37e0",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/interaction-prototype.html",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/interaction-prototype.html",
+      "sha256": "80e5b5eb22a48ca835de80370993147df4344fa1e776cb230584b2bbcb4e8d25",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/prepare-jan-sep.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/prepare-jan-sep.py",
+      "sha256": "496985116f7a02b340b2ac75d437c639ab7d330220814d40116061754146622d",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/prototype-polish.css",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/prototype-polish.css",
+      "sha256": "30b9fd34641ee02324597c5ce57ce0ee9d5f76287bc2d5530374dacd0c20d776",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/publish-business-tickets.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/publish-business-tickets.py",
+      "sha256": "94dc0a8f924446104ee885760625b64a452c7b7e7495ce7cbb01cda096579839",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/refine-detail-prototype.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/refine-detail-prototype.py",
+      "sha256": "6a0a8f188557bc7ab23cccea5b5302af8c669c4d72e44337dc0df54519c4b378",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/script-feasibility.md",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/script-feasibility.md",
+      "sha256": "aaad141ba0232588f36d40188267d5d05163c203e263b6e71218b33bd934e41a",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/serve_isolated.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/serve_isolated.py",
+      "sha256": "817e6299a7651e6af75d34f0239fa0e77948b5955846e8f9a27bf9bb0c795772",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/spec.md",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/spec.md",
+      "sha256": "d4f585555e6e60c1da8e5e1a8fd0c7e592c78a73e6f89916b97dd402651bbf6d",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/start_implementation.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/start_implementation.py",
+      "sha256": "fc4355039292450a3ca40b289144e8574345ff160b2b12a3549aca02c61adb3b",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/technical-feasibility.md",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/technical-feasibility.md",
+      "sha256": "a94db52d6581cbe6c100c98e2b6d619098ffd580c40452a5a9ec2f1026510a77",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/ticket-plan.md",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/ticket-plan.md",
+      "sha256": "51671d9bd61bb436400798305e0efc47da9f0e36dcd36cbaecee79839ec013bc",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/validate_history.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/validate_history.py",
+      "sha256": "c1b2dcb6b591809b915ea9257c213578edb3a6b610cc5e355f6ae43d20338897",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/verify-cumulative-prototype.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/verify-cumulative-prototype.py",
+      "sha256": "32f9b302c12e6e9748bd55eccfb39da7b14174ae6cbd706865b91fe137f62a0b",
+      "tracked_before": false
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/verify_excel.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/verify_excel.py",
+      "sha256": "15c01e4d3e92c8e2b8219c77e28e9a9c5c8be2099c34ee5761d016418b78b55d",
+      "tracked_before": true
+    },
+    {
+      "original": ".scratch/machinery-fee-workflow/verify_live_lists.py",
+      "archived": "docs/archive/machinery-fee-workflow-20261019/verify_live_lists.py",
+      "sha256": "300a16360aaff732837fa435e441f1ec2f19d656ebfb4cd64238d5516b0a9ff1",
+      "tracked_before": true
+    }
+  ],
+  "untracked_private_sources_preserved_locally": true,
+  "cache_excluded_from_manifest": true
+}

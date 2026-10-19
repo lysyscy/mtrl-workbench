@@ -61,3 +61,7 @@
 ## uv依赖审计与迁移收尾（2026-10-16）
 
 已结项。原 .scratch/uv-dependency-cleanup/ 及本次 .scratch/local/ 初次审计资料共27份原件，来源、固定Git基线及逐件SHA-256见 [归档说明](uv-dependency-cleanup-20261016/README.md) 与同目录 manifest.json；原文字节保持（两份PS1仅补BOM、两份Python仅补模块说明，均可逆且原SHA仍保留），已移出当前工作区。现行声明与锁文件回 backend/pyproject.toml、backend/uv.lock，操作方法回 docs/guides/deployment.md §六。
+
+## 机械费工作区与真实采用（2026-10-19）
+
+来源保护与11项目月值/i6、真实i8采用已完成；范围、核验及未验边界见[归档说明](machinery-fee-workflow-20261019/README.md)，原路径与逐件SHA见同目录manifest.json。私人原型及业务原件仅在本机保留。

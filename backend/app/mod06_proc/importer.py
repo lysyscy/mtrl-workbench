@@ -595,6 +595,11 @@ def commit(s, plan: ImportPlan, *, warehouse: str, batch: str, operator: str = "
         operator=operator, cutoff_ym=cutoff_ym, material_cutoff_ym=material_cutoff_ym,
         mechanical_cutoff_ym=mechanical_cutoff_ym,
     )
+    if batch_obj is None:
+        limits = selected_cutoffs(plan.rows, cutoff_ym=cutoff_ym, material_cutoff_ym=material_cutoff_ym,
+                                  mechanical_cutoff_ym=mechanical_cutoff_ym)
+        return {"batch": "", "rows": 0, "months": [], **limits,
+                "cutoff_ym": limits["material_cutoff_ym"], "message": "相同明细确认金额已略过，未新增批次"}
     return {"batch": batch_obj.batch_no, "rows": batch_obj.row_count,
             "cutoff_ym": batch_obj.cutoff_ym, "material_cutoff_ym": batch_obj.cutoff_ym,
             "mechanical_cutoff_ym": batch_obj.mechanical_cutoff_ym, "months": plan.months}

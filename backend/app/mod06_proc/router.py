@@ -182,8 +182,12 @@ def api_mech() -> dict:
         out.setdefault(wh, {})[ym] = (snap.get((wh, ym), zeros) if from_snapshot
                                       else manual.get((wh, ym), zeros))
         sections.setdefault(wh, {})[ym] = section
+    sources, signatures = {}, {}
+    for row in rows:
+        sources.setdefault(row['warehouse'], {})[row['ym']] = row['sources']
+        signatures.setdefault(row['warehouse'], {})[row['ym']] = row['effective_signature']
     return {"mech": out, "count": len(rows), "columns": list(D.MECH_COLUMNS),
-            "sections": sections}
+            "sections": sections, "sources": sources, "effective_signatures": signatures}
 
 
 class MechSaveRequest(BaseModel):

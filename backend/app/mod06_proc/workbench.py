@@ -113,15 +113,14 @@ def monthly_args(s, data):
 
 
 def effective(s, wh, ym, *, lock=False, cached_rows=None):
-    if cached_rows is None or lock:
-        query = select(ProcMechManual).where(ProcMechManual.warehouse_name == wh, ProcMechManual.ym == ym)
-        row = s.scalar(query.with_for_update() if lock else query)
+    if lock:
+        row = repo.mech_row(s, wh, ym)
+    elif cached_rows is None:
+        row = s.scalar(select(ProcMechManual).where(
+            ProcMechManual.warehouse_name == wh, ProcMechManual.ym == ym))
     else:
         row = cached_rows.get((wh, ym))
-    values = {f'mech_{i}': money(getattr(row, f'mech_{i}')) if row else None for i in range(6)}
-    return {'warehouse': wh, 'ym': ym, 'values': values,
-            'signature': digest([values, str(row.updated_at) if row else None]),
-            'source': deepcopy(row.source_batches or {}) if row else {}}
+    return repo.mech_effective(row, wh, ym)
 
 
 def check_effective(s, wh, ym, signature):
@@ -202,8 +201,12 @@ def detail_view(s, payload, revision, *, keywords=None):
             issues.append({'id': row['id'], 'fields': missing})
         row['net'] = net
         row['plateRequired'] = plate_required
+    gross, net = CATEGORY_COLUMNS[data['category']]
+    gross_issues = [{'id': issue['id'], 'fields': [f for f in issue['fields'] if f != '票种／税率']}
+                    for issue in issues]
     data.update(revision=revision, totals={'gross': total(r.get('amount') for r in data.get('rows', [])),
-                                         'net': total(nets)}, issues=issues)
+                                         'net': total(nets)}, issues=issues,
+                blocked_columns={gross: [issue for issue in gross_issues if issue['fields']], net: issues})
     return data
 
 
@@ -217,26 +220,56 @@ def save_details(s, data):
     return detail_view(s, payload, new_revision)
 
 
-def confirm_amounts(s, data):
+def confirm_amounts(s, data, operator=''):
     wh, ym, cat = monthly_args(s, data)
+    gross, net = CATEGORY_COLUMNS[cat]
+    columns = data.get('columns', [gross, net])
+    if not isinstance(columns, list) or not columns or any(column not in (gross, net) for column in columns):
+        raise MustReportError('请选择本类别的含税或净额格')
+    columns = list(dict.fromkeys(columns))
     record_key = key('details', wh, ym, cat)
     saved, revision = read(s, record_key)
-    if saved and saved.get('confirmation_request') == digest(data):
-        return deepcopy(saved['confirmation_result'])
+    request_signature = digest(data)
+    if saved and saved.get('confirmation_request') == request_signature:
+        current = effective(s, wh, ym, lock=True)
+        if all(current['sources'][column].get('mode') == 'detail' and
+               current['sources'][column].get('basis', {}).get('confirmation_request') == request_signature
+               for column in columns):
+            return current
+        raise MustReportError('有效月值已变化，请刷新并重新确认')
     if not saved or revision != data.get('revision'):
         raise MustReportError('明细已变化，请保存并重新预览')
     current = check_effective(s, wh, ym, data.get('effective_signature'))
     view = detail_view(s, saved, revision)
-    if view['issues']:
-        raise MustReportError('尚有字段待补，不能确认有效金额')
-    gross, net = CATEGORY_COLUMNS[cat]
-    repo.save_mech(s, ym=ym, warehouse=wh, values={gross: Decimal(view['totals']['gross']), net: Decimal(view['totals']['net'])})
-    mark_adoption(s, wh, ym, [gross, net])
+    if any(view['blocked_columns'][column] for column in columns):
+        raise MustReportError('所选金额尚有字段待补，不能确认有效金额')
+    values = {column: Decimal(view['totals']['gross' if column == gross else 'net']) for column in columns}
+    basis = {'category': cat, 'detail_revision': revision, 'detail_signature': digest(saved['rows']),
+             'rows': deepcopy(saved['rows']), 'source': deepcopy(saved.get('source')),
+             'operator': operator, 'at': datetime.now().isoformat(),
+             'confirmation_request': request_signature, 'previous_effective': current['values']}
+    repo.save_mech(s, ym=ym, warehouse=wh, values=values,
+                   detail_sources={column: {**basis, 'amount': str(value)} for column, value in values.items()})
+    mark_adoption(s, wh, ym, columns)
     saved['confirmed_signature'] = digest(saved['rows'])
     saved['previous_effective'] = current
-    saved['confirmation_request'] = digest(data)
+    saved['confirmation_request'] = request_signature
     saved['confirmation_result'] = effective(s, wh, ym)
     write(s, record_key, saved, revision)
+    return effective(s, wh, ym)
+
+
+def source_manual(s, data, operator=''):
+    wh = warehouse(s, data.get('warehouse'))
+    ym = normalize_ym(data.get('ym'))
+    columns = data.get('columns')
+    if (not ym or not isinstance(columns, list) or not columns or
+            any(not isinstance(column, str) or column not in {f'mech_{i}' for i in range(6)} for column in columns)):
+        raise MustReportError('请选择有效月份和金额格')
+    if data.get('confirmed') is not True:
+        raise MustReportError('请明确确认切换为手填')
+    check_effective(s, wh, ym, data.get('effective_signature'))
+    repo.source_manual(s, warehouse=wh, ym=ym, columns=list(dict.fromkeys(columns)), operator=operator)
     return effective(s, wh, ym)
 
 
@@ -340,7 +373,7 @@ def get_preview(s, data, kind):
     return preview
 
 
-def import_confirm(s, data):
+def import_confirm(s, data, operator=''):
     preview = get_preview(s, data, 'import')
     if preview.result is not None:
         return deepcopy(preview.result)
@@ -382,7 +415,7 @@ def import_confirm(s, data):
                 write(s, history_key, {'warehouse': batch['warehouse'], **batch['history']}, history_revision)
         if data.get('confirm_amounts'):
             confirm_amounts(s, {**batch, 'revision': revision,
-                                'effective_signature': effective(s, batch['warehouse'], batch['ym'])['signature']})
+                                'effective_signature': effective(s, batch['warehouse'], batch['ym'])['signature']}, operator=operator)
             revision = read(s, batch['key'])[1]
         results.append({'warehouse': batch['warehouse'], 'ym': batch['ym'], 'category': batch['category'], 'revision': revision})
     preview.result = {'ok': True, 'batches': results}
@@ -438,12 +471,18 @@ def history_confirm(s, data):
             for conflict in monthly['conflicts']:
                 if decisions.get(conflict['id']) not in ('current', 'incoming'):
                     raise MustReportError('历史采用值有冲突，请逐格确认')
+    writes = {}
     for project in preview.payload['projects']:
         wh = project['warehouse']
         for monthly in project['months']:
             conflict_ids = {c['column']: c['id'] for c in monthly['conflicts']}
             values = {k: Decimal(v) for k, v in monthly['values'].items()
                       if k not in conflict_ids or decisions[conflict_ids[k]] == 'incoming'}
+            writes[wh, monthly['ym']] = repo.writable_mech_values(repo.mech_row(s, wh, monthly['ym']), values)
+    for project in preview.payload['projects']:
+        wh = project['warehouse']
+        for monthly in project['months']:
+            values = writes[wh, monthly['ym']]
             if values:
                 repo.save_mech(s, ym=monthly['ym'], warehouse=wh, values=values)
         if not project['before_history'] or decisions.get(wh + '|history') == 'incoming':
@@ -797,7 +836,7 @@ def action(s, name, payload, operator=''):
         value = {'shown_projects': list(dict.fromkeys(shown)), 'plate_keywords': keywords}
         revision = write(s, 'settings', value, payload.get('revision', -1))
         return {'ok': True, **value, 'revision': revision}
-    handlers = {'details-save': save_details, 'amounts-confirm': confirm_amounts,
+    handlers = {'details-save': save_details, 'amounts-confirm': confirm_amounts, 'source-manual': source_manual,
                 'internal-save': internal_save, 'import-preview': import_preview,
                 'import-confirm': import_confirm, 'i8-preview': i8_preview,
                 'i8-confirm': i8_confirm, 'ignore': ignore, 'document-ignore': document_ignore,
@@ -805,4 +844,5 @@ def action(s, name, payload, operator=''):
                 'history-preview': history_preview, 'history-confirm': history_confirm}
     if name not in handlers:
         raise MustReportError('不支持的机械费操作')
-    return {'ok': True, **handlers[name](s, payload)}
+    args = {'operator': operator} if name in ('amounts-confirm', 'source-manual', 'import-confirm') else {}
+    return {'ok': True, **handlers[name](s, payload, **args)}
