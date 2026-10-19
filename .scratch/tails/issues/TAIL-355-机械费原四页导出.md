@@ -29,3 +29,5 @@
 **2026-10-19 · 后续重启。** 用户授权后已备份、迁移两张生产空表并加载76ad5db；原34张业务表及序列不变，新接口/静态资源200，未登录写入401。真实历史未采纳；共同证据见.scratch/machinery-fee-workflow/evidence.md。
 
 - [2026-10-19 · 月份目录到系统预览] 归集skill增加SYSTEM_IMPORT=1/EXCEL_EXPORT=0独立开关、已核提取到detail_import生成器和系统录入说明；日常录入去掉历史选择，保留后端历史修复合同及现存数据。预览展示原月值→原报建议额、逐行来源及待补，确认仍只保存明细。17项定向回归、18项来源保护通过，真实晋江8月14条外租只读生成和隔离预览通过，生产未录明细/i8未请求。证据.artifacts/mechanical-skill-import/20261019；本机技能经Skills Manager同步结果另核。
+
+- [2026-10-19 · 旧机械费项目退役] 按用户清理授权核查6个旧脚本与2份测试，无需新增生产实现；6项未重复测试迁入backend/tests/test_mechanical_skill_extraction.py、test_mechanical_skill_template_edits.py，泛化XML/公式/样式保护断言并补日期类型用例，共7项通过，连同录入合同合计9项通过。旧目录473个文件及2份Excel全部删除，仅保留删除清单和迁移判定；先移除共享Node junction，目标环境未删。业务流程README/AGENTS已改指新源，tools和在用分发包未动。清单和前后摘要回.artifacts/old-mechanical-cleanup/20261019。根.scratch调查：3个实际effort，付款计划未结项、界面审计待13票实施，业务技能分发已完成待归档；本轮未擅自删除其资料。
