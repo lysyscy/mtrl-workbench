@@ -17,6 +17,8 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+from itertools import combinations
+import re
 from typing import Any
 
 from app.core.money import amount_text            # ⭐ `TAIL-63`：金额洗净的唯一出口
@@ -285,7 +287,7 @@ __all__ = [
     "supplier_invoice_sum", "trade_invoice_sum", "pay_sum",
     "settle_amount", "debt_amount", "contract_amounts",
     "normalize_tag", "tag_after_fetch",
-    "link_hint", "dedup_blocked", "pick_candidates",
+    "link_hint", "dedup_blocked", "pick_candidates", "recommend_link",
 ]
 
 
@@ -299,3 +301,34 @@ def project_sequences(rows: list[dict]) -> dict[int, int]:
         counts[key] = counts.get(key, 0) + 1
         result[row["id"]] = counts[key]
     return result
+
+
+def recommend_link(*, amount, title, contract_no, trade_co, invoices, linked_notices):
+    """返回证据，不返回选择；供应商票与贸易公司票分别展示、按付款侧匹配。"""
+    target = Decimal(str(amount or 0))
+    side = 'trade' if trade_co else 'supplier'
+    rows = [r for r in invoices if r['kind'] == side]
+    reasons = []
+    if contract_no and contract_no.upper() in re.findall(r'(?<![A-Z0-9])CGHT\d+(?![A-Z0-9])', str(title).upper()):
+        reasons.append({'kind': 'contract_no', 'text': '通知书明确提及本合同号'})
+    matched = next(([r] for r in rows if Decimal(str(r['amount'])) == target and target > 0), None)
+    if not matched and target > 0:
+        if rows and sum(Decimal(str(r['amount'])) for r in rows) == target:
+            matched = rows
+        # shortcut: 超过12笔只匹配单笔和全部合计；确有大批拆票需求再改用有界组合求和。
+        elif len(rows) <= 12:
+            matched = next((list(group) for size in range(2, len(rows)) for group in combinations(rows, size)
+                            if sum(Decimal(str(r['amount'])) for r in group) == target), None)
+    if matched:
+        reasons.append({'kind': 'invoice', 'text': '单笔发票金额一致' if len(matched) == 1 else '多笔发票合计一致',
+                        'invoice_ids': [r['id'] for r in matched],
+                        'amounts': [str(r['amount']) for r in matched]})
+    elif rows and linked_notices and target > 0:
+        prior = sum(Decimal(str(n['amount'])) for n in linked_notices)
+        total = sum(Decimal(str(r['amount'])) for r in rows)
+        if prior > 0 and prior + target == total:
+            reasons.append({'kind': 'combined_notices', 'text': '与已关联通知书合计等于发票合计，需核对材料',
+                            'prior_amount': str(prior), 'invoice_total': str(total),
+                            'notice_codes': [n['code'] for n in linked_notices]})
+    return {'reasons': reasons, 'invoice_side': side,
+            'combination_limited': len(rows) > 12}

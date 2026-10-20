@@ -75,6 +75,7 @@ def test_browser_sequence_columns_and_export(ui_page):
       PJs.splice(0,PJs.length,{id:'1',type:'normal',name:r.project_key,disp:'测试项目',full:'测试项目全名',status:'在建',phid:'1',kw:''});
       NO[0].sup=r.supplier;
       API.m11Detail=async()=>({ok:true,data:{}});
+      API.m11LinkRecommendations=async()=>({ok:true,notice_amount:'12345.67',project_key:r.project_key,rows:contractRows.filter(c=>c.project_key===r.project_key&&c.supplier===r.supplier)});
       API.m11List=async()=>({rows:contractRows,columns:arg.cols,sum_keys:arg.sum_keys});
       API.flows=async()=>({rows:[]});
     }''',{'rows':data,'cols':cols,'sum_keys':list(D.SUM_KEYS)})
@@ -84,7 +85,7 @@ def test_browser_sequence_columns_and_export(ui_page):
         assert '序号 3 · 合同编号 00CGHT前导' in p.locator('#modalRoot h3').inner_text()
         p.evaluate('closeModal()')
     p.evaluate("ACT.jcLink({dataset:{id:'101'}})")
-    assert '序号 3 · 合同编号 00CGHT前导' in p.locator('#jcLinkId').inner_text()
+    assert '序号 3 · 合同编号 00CGHT前导' in p.locator('#jcLinkCandidates').inner_text()
     p.evaluate('closeModal()')
     p.evaluate("ACT.ntTrace({dataset:{id:'101'}})")
     assert '项目内序号' in p.locator('.mb').inner_text() and '00CGHT前导' in p.locator('.mb').inner_text()

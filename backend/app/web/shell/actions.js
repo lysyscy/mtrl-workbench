@@ -249,6 +249,30 @@ const EXP_ROUTES = {
   '付款通知书台账':   { rows: () => ntHit(fNt),  url: '/api/m03/notices/export' },
 };
 
+function jcLinkDialog(n,data){
+  const cands=(data.rows||[]).map(r=>({...adaptJc(r),linkInvoices:r.invoices||[],linkRecommendation:r.recommendation||{reasons:[]}}));
+  const cur=cands.find(j=>j.id===String(data.current_contract_id)), sel=cands.find(j=>j.id===jcLinkSel);
+  const invoiceHits=cands.filter(j=>j.linkRecommendation.reasons.some(r=>r.kind==='invoice'));
+  const invoices=j=>['supplier','trade'].map(kind=>{
+    const rows=j.linkInvoices.filter(v=>v.kind===kind);
+    if(kind==='trade'&&!j.tradeCo&&!rows.length) return '';
+    const marks=new Set(j.linkRecommendation.reasons.flatMap(r=>r.invoice_ids||[]));
+    return `<div><b>${kind==='trade'?'贸易公司':'供应商'}发票${rows.length?'（'+rows.length+'笔）':''}</b>${rows.length?rows.map(v=>`<div>${esc(v.date||'日期未填')} · ${marks.has(v.id)?'<b>':''}${M(N0(v.amount))}${marks.has(v.id)?'</b>':''}</div>`).join(''):'<div class="mut">未录入</div>'}</div>`;
+  }).join('');
+  const reasons=j=>j.linkRecommendation.reasons.map(r=>`<div><b>${esc(r.text)}</b>${r.kind==='invoice'?`<div>${r.amounts.map(v=>M(N0(v))).join(' + ')} = ${M(N0(data.notice_amount))}</div>`:''}${r.kind==='combined_notices'?`<div>已关联通知书审批额 ${M(N0(r.prior_amount))} + 本条 ${M(N0(data.notice_amount))} = 发票合计 ${M(N0(r.invoice_total))}</div><div class="mut">${r.notice_codes.map(esc).join('、')}</div>`:''}</div>`).join('')||'<span class="mut">暂无金额匹配依据</span>';
+  modal({title:`关联集采合同 · ${esc(n.code)}`,wide:true,linkNoticeId:n.id,linkCandidates:cands,reopen:()=>jcLinkDialog(n,data),body:
+    `<div class="tip">通知书审批金额 <b>${M(N0(data.notice_amount))}</b> · ${esc(pjLabel(data.project_key)||'项目未确定')} · ${esc(data.supplier||'供应商未指定')}。推荐不代表已选定，请核对材料和合同号后选择。<div>${esc(data.notice_title||n.doc||'')}</div></div>
+    ${invoiceHits.length>1?'<div class="tip wn">多份合同的发票金额均可对应，请核对材料和合同号。</div>':''}
+    ${cands.length?`<div class="tw"><table class="dt" id="jcLinkCandidates"><thead><tr><th>选择</th><th>合同</th><th>合同中的发票</th><th>推荐依据</th></tr></thead><tbody>${cands.map(j=>`<tr>
+      <td><input type="radio" name="jcLinkId" value="${esc(j.id)}" data-act="jcLinkPick" data-id="${n.id}" aria-label="选择${esc(jcIdentity(j))}" ${sel&&sel.id===j.id?'checked':''}></td>
+      <td style="min-width:220px;white-space:normal"><b>${jcIdentity(j)}</b>${cur&&cur.id===j.id?' '+tag('当前关联','in'):''}<div>${esc(j.material)} · ${esc(j.supplier)}</div><div>${esc(j.date||'合同日期未填')} · 合同金额 ${M(j.contractAmt)}</div>${j.tradeCo?`<div>贸易公司 ${esc(j.tradeCo)} · 合同金额 ${M(j.tradeContractAmt)}</div>`:''}</td>
+      <td class="sm" style="min-width:200px;white-space:normal">${invoices(j)}</td>
+      <td class="sm" style="min-width:220px;white-space:normal">${reasons(j)}${j.linkRecommendation.combination_limited?'<div class="mut">超过12笔，仅比较单笔及全部发票合计。</div>':''}</td></tr>`).join('')}</tbody></table></div>`:'<div class="tip">本项目、供应商范围内没有可选合同，请先检查项目归属、供应商或合同台账。</div>'}
+    ${sel?`<div class="tip">已选 <b>${jcIdentity(sel)}</b> · 当前欠款 ${M(jcDebt(sel))} · 本条统计付款金额 ${M(n.sp)} ${N2(jcDebt(sel))===N2(n.sp)?tag('一致','ok'):tag('金额不一致 · 仍可关联','wn')}</div>`:''}`,
+    footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消当前关联</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${sel?'':'disabled'}>${cur?'改关联到所选合同':'关联'}</button>`});
+}
+
+
 const ACT={
  /* 导航 */
  go:t=>go(t.dataset.k),
@@ -2179,28 +2203,26 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  /* —— 「关联集采合同」反向入口的动作（2026-09-13 用户裁定）——
     一对一 · 与 R8 共用同一份记录 · 去重按全库 · 金额不一致只提示不拦 · 关联 / 解绑**不留痕**。
     弹窗内所选合同走草稿 `jcLinkSel`：改选择要**重绘弹窗**（金额比对随之更新）。 */
- jcLink:t=>{ const n=NO.find(x=>x.id===t.dataset.id);
+ jcLink:async t=>{ const n=NO.find(x=>x.id===t.dataset.id);
    if(!n) return;
-   if(!ntLive(n)||n.cat!=='集采'){ toast('仅「集采」分类的记录可关联集采合同'); return; }
-   const cur=jcRefOf(n.id), cands=jcLinkCands(n).slice().sort((a,b)=>Number(a.id)-Number(b.id)), pk=ntProjKey(n);
-   if(!jcLinkSel||!cands.some(j=>j.id===jcLinkSel)) jcLinkSel=cur?cur.id:((cands[0]&&cands[0].id)||null);
-   const sel=cands.find(j=>j.id===jcLinkSel)||null;
-   const same=sel?N2(jcDebt(sel))===N2(n.sp):false;
-   modal({title:`关联集采合同 · ${n.code}`,reopen:()=>ACT.jcLink({dataset:{id:n.id}}),body:
-     `<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">一张通知书只能关联一份合同，不能重复引用。候选为本项目合同；本行项目：<b>${esc(pjLabel(pk)||'（未指定归属）')}</b>${pk?`（仓库名 <span class="fc">${esc(pk)}</span>）`:''}。</div>
-     ${cands.length?`<div class="fld"><label>选择集采合同（仅本项目）</label><select class="inp" id="jcLinkId" data-act="jcLinkPick" data-id="${n.id}">${cands.map(j=>`<option value="${j.id}" ${sel&&sel.id===j.id?'selected':''}>${jcIdentity(j)} · ${esc(j.date||"日期未填")} · ${esc(j.material)} · ${esc(j.supplier)} · 合同金额 ${M(j.contractAmt)} · 欠款 ${M(jcDebt(j))}${j.proj===pk?'':' · 他项目（当前已关联）'}</option>`).join('')}</select></div>`
-       :`<div class="tip" style="margin:0"><b>本项目下暂无集采合同</b> —— 请先到「集采台账」页为 <b>${esc(pjLabel(pk)||'该项目')}</b> 建档（或抓到 i8 合同），再回来关联。<br><span class="mut sm">本行项目：${esc(pjLabel(pk)||'（未指定归属）')}${pk?`（仓库名 ${esc(pk)}）`:''}</span></div>`}
-     ${sel?`<div class="fld"><label>金额比对（只提示，不拦截）</label><div class="sm" style="line-height:1.8">本行统计付款金额 <b>${M(n.sp)}</b> ｜ ${jcIdentity(sel)} 当前欠款 <b>${M(jcDebt(sel))}</b>${same?' '+tag('一致','ok'):' '+tag('不一致 · 仍可关联','wn')}</div></div>`:''}`,
-     footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消关联（序号 ${cur.projectSeq == null ? '—' : cur.projectSeq}）</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${cands.length?'':'disabled'} title="${cands.length?'':'本项目下没有可选合同 —— 先到「集采台账」建档'}">${cur?'改关联到所选合同':'关联'}</button>`}); },
- jcLinkPick:t=>{ jcLinkSel=t.value; render(); if(lastModal&&lastModal.reopen) lastModal.reopen(); },
+   if(!ntLive(n)||n.cat!=='集采') return toast('仅「集采」分类的记录可关联集采合同');
+   jcLinkSel=null;
+   modal({title:`关联集采合同 · ${esc(n.code)}`,body:'<div class="tip">正在读取候选合同及发票…</div>'});
+   const loading=lastModal;
+   try{
+     const data=await API.m11LinkRecommendations(n.id);
+     if(lastModal!==loading) return;
+     if(!data||!data.ok) throw new Error((data&&data.message)||'未能读取候选合同及发票');
+     jcLinkDialog(n,data);
+   }catch(e){
+     if(lastModal!==loading) return;
+     modal({title:'候选合同及发票未能读取',body:`<div class="tip wn">${esc(String(e.message||e))}</div>`,footer:`<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="jcLink" data-id="${n.id}">重试</button>`});
+   }
+ },
+ jcLinkPick:t=>{ jcLinkSel=t.value; if(lastModal&&lastModal.reopen) lastModal.reopen(); },
  jcLinkOk:async t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n) return;
-   const j=JCs.find(x=>x.id===jcLinkSel); if(!j) return toast('没有可关联的集采合同');
-   /* ⚠️ 2026-09-13 口径「只能关联本项目的合同」**不需要在这里再拦一道** —— 它由两件事闭合：
-      ① 候选只从 `jcLinkCands(n)`（= 本项目合同 ∪ 当前已关联那张）来；
-      ② `jcLinkPick` 记录选择后**立即重开弹窗**，`jcLink` 会拿候选集再校验一次 `jcLinkSel`
-         ⇒ 任何"他项目"的 id 都会被**回落**成合法候选，走不到这里。
-      （曾经在这里写过一道 `j.proj!==pk` 兜底，实测**不可达** ⇒ 按"不留死代码"删掉，
-         改由 `_smoke` 的 `T5` 直接断言 ② 那个"回落"行为。） */
+   const j=lastModal&&lastModal.linkNoticeId===n.id&&(lastModal.linkCandidates||[]).find(x=>x.id===jcLinkSel);
+   if(!j) return toast('请先选择一份集采合同');
    closeModal();
    /* ⭐ `M5-5`：后端保证「一对一」（换合同 = **先解绑再写新**）＋ 全库去重；⛔ 壳里不碰任何数组。 */
    await jcLinkAct(()=>API.m11Link({notice_id:Number(n.id), contract_id:Number(j.id)}),

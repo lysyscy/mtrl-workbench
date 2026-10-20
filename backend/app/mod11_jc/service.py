@@ -112,6 +112,39 @@ def notice_payment_effect(s: Session, notice_id: int) -> dict | None:
     return {"contract_id": c.id, "pay_sum": amounts["pay_sum"]}
 
 
+def link_recommendations(s: Session, notice_id: int) -> dict:
+    """按现有候选范围批量带回发票与推荐证据；不选择、不保存关联。"""
+    from app.mod01_projects import service as projects
+    from app.mod03_notice import service as notices
+
+    notice = notices.get_notice(s, notice_id)
+    if notice is None or notice.category != 'jc' or notice.excluded:
+        return {'ok': False, 'message': '找不到可关联的集采通知书'}
+    key = next((str(p.warehouse_name or '') for p in projects.all_projects(s)
+                if p.id == notice.ownership_id), '')
+    all_rows = build_list(s)['rows']
+    current = next((r['id'] for r in all_rows if notice_id in r['notice_ids']), None)
+    rows = D.pick_candidates(contracts=all_rows, project_key=key, supplier=notice.jc_supplier, current_id=current)
+    invoices = R.invoices_of_many(s, [r['id'] for r in rows])
+    linked_ids = {nid for r in rows for nid in r['notice_ids'] if nid != notice_id}
+    prior = {n.id: n for n in notices.all_notice_rows(s) if n.id in linked_ids and n.category == 'jc' and not n.excluded
+             and (not n.i8_revoked or n.revoked_joint)} if linked_ids else {}
+    for row in rows:
+        row['invoices'] = invoices.get(row['id'], [])
+        linked = [{'code': prior[nid].bill_no, 'amount': prior[nid].amount_approved}
+                  for nid in row['notice_ids'] if nid in prior]
+        row['recommendation'] = D.recommend_link(amount=notice.amount_approved, title=(notice.fields or {}).get('BillName', ''),
+                                         contract_no=row['contract_no'], trade_co=row['trade_co'],
+                                         invoices=row['invoices'], linked_notices=linked)
+        if row['project_key'] != key:
+            row['recommendation']['reasons'] = []
+    priority = {'contract_no': 0, 'invoice': 1, 'combined_notices': 2}
+    rows.sort(key=lambda r: (min((priority[x['kind']] for x in r['recommendation']['reasons']), default=3), r['id']))
+    return {'ok': True, 'notice_amount': str(notice.amount_approved), 'current_contract_id': current,
+            'notice_title': (notice.fields or {}).get('BillName', ''),
+            'supplier': notice.jc_supplier, 'project_key': key, 'rows': rows}
+
+
 def build_detail(s: Session, contract_id: int) -> dict | None:
     """单个合同的**明细**（两张发票子表 + 付款子表 + 派生金额）—— 子表弹窗的数据源。
 
@@ -433,7 +466,7 @@ def act_set_party_kind(s: Session, *, name: str, kind: str) -> dict:
 
 __all__ = ["project_references",
     "export_xlsx", "export_print_xlsx",
-    "build_list", "build_detail", "debt_of_ledger", "settlement_totals_by_project",
+    "build_list", "build_detail", "link_recommendations", "debt_of_ledger", "settlement_totals_by_project",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
     "act_update_contract", "act_add_invoice", "act_del_invoice",
     "act_add_payment", "act_del_payment",

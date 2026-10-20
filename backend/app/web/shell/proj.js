@@ -373,10 +373,6 @@ const jcRefOf=nid=>JCs.find(j=>(j.notice_ids||[]).some(x=>String(x)===String(nid
    ⚠️ **例外：当前已关联的那张合同无条件保留在候选里**（即便项目 / 供应商对不上）—— 否则弹窗无法回显"现在关联的是谁"，
       "改 / 解绑"会看起来像"从没关联过"（与「付款流水『付款项目』候选 = 现有 ∪ 当前已选」同一套做法）。
    ⚠️ 唯一出口：弹窗候选、空态判定、提交兜底**都从这里出**，别在别处再写一遍过滤条件。 */
-const jcLinkCands=n=>{ const k=ntProjKey(n), cur=jcRefOf(n.id), sup=String(n.sup||'').trim();
-  let list=JCs.filter(j=>j.proj===k);
-  if(sup) list=list.filter(j=>String(j.supplier||'').trim()===sup);
-  return (cur&&list.indexOf(cur)<0)?list.concat([cur]):list; };
 /* MOD-03「集采实际供应商」列内的关联区（入口就近放该列 —— 它本就是这行集采单据的专属格） */
 const jcLinkCell=n=>{ const j=jcRefOf(n.id);
   return j

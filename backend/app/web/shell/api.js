@@ -316,6 +316,7 @@ const API = {
 
   /* ---- MOD-11 集采台账（`M5-7`）⚠️ 金额后端出**字符串** ⇒ 适配层过 `N0()` ---- */
   m11List: () => API.get('/api/m11/list'),
+  m11LinkRecommendations: id => API.get(`/api/m11/link-recommendations?notice_id=${encodeURIComponent(id)}`),
   m11Detail: id => API.get(`/api/m11/detail?id=${encodeURIComponent(id)}`),
   /* ⭐ `M5-5` 付款域双向引用：**关联 / 解绑**。
      ⚠️ 关联关系**不另建表** —— 就写进合同的**付款子表**（`source=notice` ＋ `notice_id`）⇒

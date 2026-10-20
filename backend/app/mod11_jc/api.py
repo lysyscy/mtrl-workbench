@@ -73,6 +73,17 @@ def api_list(request: Request) -> dict:
     }
 
 
+@router.get("/api/m11/link-recommendations")
+def api_link_recommendations(notice_id: int) -> dict:
+    """仅供人工选择的候选及发票证据。"""
+    with session_scope() as s:
+        data = SV.link_recommendations(s, notice_id)
+    if data.get('ok'):
+        data['rows'] = [{**_row(row), 'invoices': [{**v, 'amount': _s(v['amount'])} for v in row['invoices']]}
+                        for row in data['rows']]
+    return data
+
+
 @router.get("/api/m11/detail")
 def api_detail(id: int) -> dict:
     """单个合同的明细（两张发票子表 ＋ 付款子表 ＋ 派生金额）—— 子表弹窗的数据源。"""
