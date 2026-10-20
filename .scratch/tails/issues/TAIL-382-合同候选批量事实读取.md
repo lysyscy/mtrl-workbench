@@ -27,3 +27,11 @@
 - 现行结构同步docs/architecture.md；B已本地提交41a5eac且真实提交钩子通过，临时缺pin副本已释放，原始失败日志按既有output器限期归档。未跑全量pytest、真实业务写入、真实i8或服务重启；推送仍沿TAIL-380自动审批限制，未尝试重推。资料按writing-for-agents与现有主人维护，未新建第二份术语表或ADR。
 
 **2026-10-21 · 收尾。** 两票已按工具销号，doc_audit退出0且必须修0；全部改动字节检查和git diff --check通过；workspace_check closed退出0。临时副本已退出，必要日志/截图由现有输出器限期归档，无活动effort遗留。最终累计91项通过证据有效，以下本地提交执行真实钩子；推送及运行加载仍未执行。
+
+**2026-10-21 · 获准推送与重启完成。** 用户明确授权本次所有提交推送到本人GitHub私库lysyscy/mtrl-workbench的master后重启服务，替代此前待具体目的地确认的状态。
+
+- `git push origin master`退出0，普通快进a47a652..bad703d，含6bf8291、5d65aff、41a5eac、bad703d四个提交；`git ls-remote origin refs/heads/master`与本地HEAD同为bad703ddbad24ce538bfce05202adc8150882bff。
+- 重启前核NSSM指向本仓backend/.venv/Scripts/python.exe，工作目录backend，启动参数为uvicorn app.main:app、8000端口；lifespan仅装配日志，无启动迁移。本轮无依赖、配置或数据库结构变更。
+- 使用现有`ops/server_ctl.ps1 -Action restart -WaitSec 30`，退出0。00:05:09新应用启动完成，服务Running；NSSM进程31040→32656，应用进程28668→14684，正式虚拟环境入口仍在本仓。
+- 重启后只读核验：`/healthz`和`/app`均200，health状态ok；/app包含本次layoutTables调用。`/static/shell/`的core.js、actions.js、proj.js、view.js均200且响应字节与仓库对应文件完全相同；最新启动日志Application startup complete，无本轮启动错误。
+- 源码未变化，复用最终累计91项通过的证据；本次只追加部署记录，不重跑全量pytest。未执行真实i8抓取、实体打印或业务写入，不将服务健康核对当作真实业务验收。当前状态和历史短索引同步，最终文档提交随后沿同一授权保存并推送。

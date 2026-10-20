@@ -32,3 +32,5 @@
 **2026-10-20 · 收尾检查。** doc_audit与10件文本bytes_guard均退出0、必须修0；git diff --check通过。HEAD网页临时副本已删除，沙箱诊断按30天期限转入本机.artifacts/archive/jc-subtable-refresh/diagnosis；workspace_check closed退出0。截图由现有输出器自动限期归档，无活动effort输出遗留。
 
 **2026-10-20 · 本地保存与推送受阻。** 主改动已提交6bf8291，真实pre-commit语法/字节/凭据检查通过。git push origin master两次均在执行前被自动审批拒绝，未发生远端写入；第一次因目的地未核实，随后GitHub连接器确认当前认证用户lysyscy及仓库owner同为83298716、私有仓库且有admin/push权限，再次审查仍要求人类明确确认该具体仓库master目的地。保留本地提交，等待用户对lysyscy/mtrl-workbench的master推送明确授权，不换工具绕过。生产重启与真实业务验收未做。
+
+**2026-10-21 · 推送与运行加载。** 用户已明确授权将本次所有提交推送到本人私库lysyscy/mtrl-workbench的master并重启服务。四个本地提交已普通快进推送，远端SHA与本地bad703ddbad24ce538bfce05202adc8150882bff一致；现有服务已重启且健康与新资源核对通过，完整回执见TAIL-382同日Comments。先前自动审批受阻为历史记录，本次已完成；无真实业务写入。
