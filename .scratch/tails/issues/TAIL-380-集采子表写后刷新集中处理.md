@@ -30,3 +30,5 @@
 - 未执行全量pytest、真实i8/业务写入、数据库迁移、生产重启或真实用户操作验收；两个其他架构候选不在本票范围。保存授权沿项目workflow，提交与远端结果另记，不以测试替代部署。
 
 **2026-10-20 · 收尾检查。** doc_audit与10件文本bytes_guard均退出0、必须修0；git diff --check通过。HEAD网页临时副本已删除，沙箱诊断按30天期限转入本机.artifacts/archive/jc-subtable-refresh/diagnosis；workspace_check closed退出0。截图由现有输出器自动限期归档，无活动effort输出遗留。
+
+**2026-10-20 · 本地保存与推送受阻。** 主改动已提交6bf8291，真实pre-commit语法/字节/凭据检查通过。git push origin master两次均在执行前被自动审批拒绝，未发生远端写入；第一次因目的地未核实，随后GitHub连接器确认当前认证用户lysyscy及仓库owner同为83298716、私有仓库且有admin/push权限，再次审查仍要求人类明确确认该具体仓库master目的地。保留本地提交，等待用户对lysyscy/mtrl-workbench的master推送明确授权，不换工具绕过。生产重启与真实业务验收未做。
