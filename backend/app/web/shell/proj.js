@@ -302,9 +302,9 @@ let jcSubD={date:'',amt:''};
 const jcSubOn=(k,id)=>jcSubKind===k&&jcSubId===id;      /* 渲染草稿行的唯一判据 */
 const jcSubReset=()=>{ jcSubKind=''; jcSubId=''; jcSubD={date:'',amt:''}; };
 const jcSubDlg=(k,id)=>{ if(!id) return;
-  if(k==='inv') ACT.jcInvDlg({dataset:{id}});
-  else if(k==='tinv') ACT.jcTInvDlg({dataset:{id}});
-  else if(k==='pay') ACT.jcPayDlg({dataset:{id}}); };
+  if(k==='inv') return ACT.jcInvDlg({dataset:{id}});
+  else if(k==='tinv') return ACT.jcTInvDlg({dataset:{id}});
+  else if(k==='pay') return ACT.jcPayDlg({dataset:{id}}); };
 /* 草稿行（列对齐 —— 发票两子表 4 格、付款子表 4 格，各自与所在表头一致） */
 const jcSubRow=()=>{ const d=jcSubD;
   const dateCell=`<td style="white-space:nowrap"><input class="inp" type="date" style="min-width:134px" data-act="jcSubSet" data-k="date" value="${esc(d.date||'')}" title="必填 —— 发票日期 / 付款日期（决定归月）"></td>`;

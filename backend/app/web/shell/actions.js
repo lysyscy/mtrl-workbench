@@ -2129,40 +2129,28 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  jcSubSet:t=>{ if(!jcSubKind) return; jcSubD[t.dataset.k]=t.value; },   /* 写草稿层，**不重绘**（避免每改一格就把焦点丢掉） */
  jcSubCancel:()=>{ const k=jcSubKind, id=jcSubId; if(!k) return; jcSubReset(); jcSubDlg(k,id);
    toast('已取消 —— 草稿行丢弃，<b>未写入任何数据</b>'); },
- /* 子表增行 ⇒ `POST /api/m11/invoice/add` / `payment/add`。
-    ⭐ `M5-7`：⛔ 原先这里是**本地 push 进数组**冒充落库（刷新就没了）⇒ 改为走后端 + 重拉明细。
-    ⚠️⚠️ `jcAct` 内部会 `reloadM11()` ⇒ **行对象被重建**（`JCs` 是原地换内容）⇒ 之后必须**重取**那一行，
-    否则 `jcLoadSub` 会写到一个已经不在表里的旧对象上 —— **静默失效**（弹窗看着"没变化"）。 */
+ /* 子表增行后由 jcSubAct 重载真实列表、清除成功草稿并刷新明细弹窗。 */
  jcSubSave:async()=>{ const j=JCs.find(x=>x.id===jcSubId), kind=jcSubKind; if(!j||!kind) return jcSubReset();
    const dt=String(jcSubD.date||'').trim(), nm=(kind==='pay'?'付款金额':(jcHistoryDate(j)?'历史未结金额':'发票金额')), dn=(kind==='pay'?'付款日期':(jcHistoryDate(j)?'核对截至日':'发票日期'));
    if(!/^\d{4}-\d{2}-\d{2}$/.test(dt)) return toast(`<b>请先填「${dn}」</b>：本子表录入<b>必须填日期</b>（草稿行第一个框）`);
    const v=numOf(jcSubD.amt); if(badMoney(v,{positive:1})) return toast(badMoneyMsg(nm,{positive:1}));
    /* 金额**不设上限**（2026-09-13 用户口径）—— 这里**刻意不接** `overCap`（与「统计两金额 ≤ 审批金额」那条无关）。 */
-   const r=await jcAct(
+   const j2=await jcSubAct(kind, j.id,
      () => (kind==='pay' ? API.m11PayAdd({id:j.id, date:dt, amount:String(v)})
            : API.m11InvAdd({id:j.id, kind:(kind==='tinv'?'trade':'supplier'), date:dt, amount:String(v)})),
      () => (kind==='pay' ? `已录入付款 <b>${M(v)}</b>（${dt}）`
-           : (kind==='tinv' ? `已增加贸易公司发票 <b>${M(v)}</b>（${dt}）` : `已增加${jcHistoryDate(j)?'历史未结金额':'发票'} <b>${M(v)}</b>（${dt}）`)));
-   if(!r) return;
-   const j2=JCs.find(x=>x.id===j.id); if(!j2) return;      /* ⚠️ 见上方：`jcAct` 重建了行 ⇒ 重取 */
-   jcSubReset();
-   await jcLoadSub(j2);                                     /* ⭐ 派生金额一律回后端算（⛔ 不前端现算） */
-   render();
-   if(JCSUB_KIND[kind]) jcSubDlg(kind,j2.id);               /* 重开弹窗，让新行露面 */
+            : (kind==='tinv' ? `已增加贸易公司发票 <b>${M(v)}</b>（${dt}）` : `已增加${jcHistoryDate(j)?'历史未结金额':'发票'} <b>${M(v)}</b>（${dt}）`)), true);
+   if(!j2) return;
    if(kind==='pay') toast(`已录入付款 <b>${M(v)}</b>（${dt}）→ 欠款 ${M(jcDebt(j2))}`);
    else if(kind==='tinv') toast(`已增加贸易公司发票 <b>${M(v)}</b>（${dt}）→ 结算金额 ${M(jcSettle(j2))}`);
    else toast(`已增加${jcHistoryDate(j)?'历史未结金额':'发票'} <b>${M(v)}</b>（${dt}）→ 发票合计 ${M(jcInvSum(j2))}`); },
  /* 子表删行 ⇒ `POST /api/m11/invoice/del` / `payment/del`（按**下标**取 id —— 见 `jcLoadSub` 里的 `j._ids`）。 */
  jcInvDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
    const rid=((j._ids||{}).inv||[])[+t.dataset.i]; if(!rid) return toast('这行还没载入，请关掉弹窗重开');
-   if(!await jcAct(()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行')) return;
-   const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
-   await jcLoadSub(j2); ACT.jcInvDlg({dataset:{id:j2.id}}); render(); },
+   await jcSubAct('inv', j.id, ()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行'); },
  jcTInvDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
    const rid=((j._ids||{}).tinv||[])[+t.dataset.i]; if(!rid) return toast('这行还没载入，请关掉弹窗重开');
-   if(!await jcAct(()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行')) return;
-   const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
-   await jcLoadSub(j2); ACT.jcTInvDlg({dataset:{id:j2.id}}); render(); },
+   await jcSubAct('tinv', j.id, ()=>API.m11InvDel({row_id:Number(rid)}), '已删除该发票行'); },
  jcPayNotice:async t=>{await refNotice(String(t.dataset.nid));},
  flNotice:async t=>{const f=FLs.find(x=>x.id===t.dataset.fid);if(!f||!f.nid)return toast('找不到对应通知书。');await refNotice(String(f.nid));},
  jcContract:async t=>{try{
@@ -2177,9 +2165,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  },
  jcPayDel:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
    const rid=t.dataset.rid; if(!rid) return toast('这行还没载入，请关掉弹窗重开');
-   if(!await jcAct(()=>API.m11PayDel({row_id:Number(rid)}), '已删除该付款行')) return;
-   const j2=JCs.find(x=>x.id===j.id); if(!j2) return;
-   await jcLoadSub(j2); ACT.jcPayDlg({dataset:{id:j2.id}}); render(); },
+   await jcSubAct('pay', j.id, ()=>API.m11PayDel({row_id:Number(rid)}), '已删除该付款行'); },
  /* 从付款域引用（R8）：**不做任何自动匹配**（DEV-J-01 已否掉标题 / 名字匹配）→ 纯人工选择；
     且**同一笔通知书只能引用一次**（去重，防付款重复计入） */
  jcPayRef:t=>{ const j=JCs.find(x=>x.id===t.dataset.id);

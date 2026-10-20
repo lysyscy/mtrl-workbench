@@ -1733,6 +1733,15 @@ async function jcAct(fn, okMsg) {
   return r;
 }
 
+async function jcSubAct(kind, id, fn, okMsg, resetDraft=false) {
+  if(!await jcAct(fn, okMsg)) return null;
+  // 列表重载会替换合同行；弹窗必须使用当前对象，明细只由弹窗入口读取。
+  const j=JCs.find(x=>x.id===id); if(!j) return null;
+  if(resetDraft) jcSubReset();
+  await jcSubDlg(kind, id);
+  return j;
+}
+
 /* ⭐ 抓取回执的**匹配预览**（`M5-6` 编排的 `matched_projects`/`unmatched_projects`）。
    ⚠️ 这不是"好看"——它是**唯一**能拦住"漏匹配被静默埋掉"的手段：
    匹配不上的按口径 = **不纳入**（终态、不会被后续抓取覆盖）⇒ 人必须**当场看一眼**再落。 */

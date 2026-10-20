@@ -93,20 +93,12 @@ def test_反向_没接的动作不假装成功():
 
 
 def test_子表弹窗按需拉明细_增删走_api():
-    """⭐ 子表半片：`/api/m11/list` **不给子表明细** ⇒ 弹窗开前必须拉 `/api/m11/detail`。
-
-    ⚠️ 另钉一条**最容易静默失效**的：`jcAct` 内部会 `reloadM11()` ⇒ `JCs` 是**原地换内容**、
-      行对象被**重建** ⇒ 之后必须**重取**那一行，否则 `jcLoadSub` 写到一个已不在表里的旧对象上
-      （弹窗看着"没变化"，且**不报错**）。
-    """
+    """子表仍走真实请求；重载后的对象与明细由子表刷新、弹窗焦点行为回归保护。"""
     s = read_shell()
     assert "async function jcLoadSub" in s, "要有子表按需载入器（唯一数据来源）"
-    assert s.count("await jcLoadSub(") >= 4, "三个弹窗 ＋ 增删之后都要重拉明细"
     for frag in ("API.m11InvAdd({id:j.id,", "API.m11PayAdd({id:j.id,",
                  "API.m11InvDel({row_id:Number(rid)})", "API.m11PayDel({row_id:Number(rid)})"):
         assert frag in s, f"子表动作没接上 API：{frag}"
-    assert "const j2=JCs.find(x=>x.id===j.id)" in s, \
-        "⛔ `jcAct` 重建行对象后必须**重取**（否则静默写到废弃对象上）"
     for bad in ("j.invoices.push(", "j.payments.push(", "j.invoices.splice(", "j.payments.splice("):
         assert bad not in s, f"⛔ 不许再本地改子表冒充落库：{bad}"
 

@@ -2,6 +2,7 @@
 import pytest
 from playwright.sync_api import expect
 
+from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
 from tests.ui_helpers import ui_page  # noqa: F401
 from tools.audit.workspace_paths import output
 
@@ -173,18 +174,23 @@ def test_月度会项目移到首位后焦点安全回标题(ui_page):
 ])
 def test_子表删除中间行后回标题避免连续回车误删(ui_page,open_act,delete_act):
     p=ui_page
-    p.evaluate("""async openAct => {
-      JCs.push({id:'11',proj:'测试仓库',material:'钢材',supplier:'测试供应商',
-        tradeCo:'贸易公司',remark:'',inv_sum:60,trade_inv_sum:60,pay_sum:60});
+    p.evaluate("""async arg => {
       window.modalSubRows=[1,2,3].map(id=>({id,date:'2026-10-01',amount:String(id*10),source:'manual'}));
-      window.deletedModalRows=[];
-      API.m11Detail=async()=>({data:{supplier_invoices:modalSubRows,
-        trade_invoices:modalSubRows,payments:modalSubRows,payment_display_rows:modalSubRows}});
+      window.deletedModalRows=[]; window.modalDetailReads=0;
+      API.m11List=async()=>{
+        const sum=String(modalSubRows.reduce((total,r)=>total+Number(r.amount),0));
+        return {columns:arg.columns,sum_keys:arg.sum_keys,rows:[{id:11,project_key:'测试仓库',
+          material:'钢材',supplier:'测试供应商',trade_co:'贸易公司',remark:'',
+          inv_sum:sum,trade_inv_sum:sum,pay_sum:sum,settle:sum,debt:'0.00'}]};
+      };
+      API.m11Detail=async()=>{modalDetailReads++;return {data:{supplier_invoices:modalSubRows,
+        trade_invoices:modalSubRows,payments:modalSubRows,payment_display_rows:modalSubRows}};};
       const remove=async b=>{deletedModalRows.push(b.row_id);
         modalSubRows=modalSubRows.filter(r=>r.id!==b.row_id);return {ok:true};};
-      API.m11InvDel=remove;API.m11PayDel=remove;reloadM11=async()=>{};
-      await ACT[openAct]({dataset:{id:'11'}});
-    }""",open_act)
+      API.m11InvDel=remove;API.m11PayDel=remove;
+      await reloadM11(); window.beforeDelete=JCs[0];
+      await ACT[arg.open_act]({dataset:{id:'11'}});
+    }""", {'open_act':open_act,'columns':list(JC_COLUMNS),'sum_keys':list(SUM_KEYS)})
     p.locator(f'[data-act="{delete_act}"]').nth(1).focus()
     p.keyboard.press('Enter')
     expect(p.locator(f'[data-act="{delete_act}"]')).to_have_count(2)
@@ -192,6 +198,10 @@ def test_子表删除中间行后回标题避免连续回车误删(ui_page,open_
     p.keyboard.press('Enter')
     p.evaluate('() => new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
     assert p.evaluate('deletedModalRows') == [2]
+    assert p.evaluate('JCs[0]!==beforeDelete')
+    assert p.evaluate('modalDetailReads') == 2
+    assert p.evaluate('JCs[0]._ids') == {'inv':['1','3'],'tinv':['1','3'],'pay':['1','3']}
+    assert p.evaluate('JCs[0].inv_sum') == 40
 
 
 def test_项目类型第二选项重绘保留同一按钮焦点(ui_page):
