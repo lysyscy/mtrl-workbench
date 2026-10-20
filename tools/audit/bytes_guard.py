@@ -201,7 +201,7 @@ def main(argv: list[str]) -> int:
         names = argv[argv.index('--paths') + 1:]
         if not names:
             # 无差异仍检查入口自己，不能空扫伪装成通过。
-            names = ['tools/oneoff/_run_rulers.py']
+            names = ['tools/audit/bytes_guard.py']
         files = []
         for name in names:
             p = (ROOT/name).resolve()

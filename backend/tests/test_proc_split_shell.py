@@ -2,7 +2,6 @@
 import json
 import subprocess
 
-from tests.acc_plugin import acc
 from tests.shell_src import act_entry, func_body
 
 
@@ -11,7 +10,6 @@ def run_js(code):
     return json.loads(result.stdout)
 
 
-@acc()
 def test_independent_cutoffs_preview_invalidation_and_project_switch():
     options = func_body("impOptions")
     handlers = act_entry("impCutEdit") + "\n" + act_entry("impMechCutEdit")
@@ -40,7 +38,6 @@ console.log(JSON.stringify({a,b,c,invalid,invalidMaterial}));
     assert result["c"]["mechanical_cutoff_ym"] == "2026-08"
 
 
-@acc()
 def test_mechanical_history_month_reaches_real_save_action():
     body = act_entry("procMechSave").strip().removeprefix("procMechSave:")
     result = run_js("""

@@ -6,10 +6,8 @@ from app.import_kit.api import domains_router
 from app.mod05_flow.router import router as flow
 from app.mod06_proc.router import router as process
 from app.mod11_jc.router import router as jc
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_retired_imports_have_no_catalog_or_http_write_entry():
     app = FastAPI()
     for router in (flow, process, jc, domains_router()):

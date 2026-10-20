@@ -4,8 +4,7 @@
 而 `tools/oneoff/` 里恰恰有很多件**被留痕 md、台账、设计件引用**（如 `_a175_measure.py` / `_tail189_*`）。
 ⇒ 处置前先分清「**被引用的**（留着）」与「**零引用的**（候选）」。
 
-另外一件必须分清的：**它里面有一批"其实不是一次性"的** —— `_run_rulers.py`（收工闸门一把跑）·
-`_ps_bom.py` / `_ps_parse_check.ps1`（PS 两条闸）· `_list_tails.py`（盘点）· `_page_measure.py`（逐页量测）
+另外一件必须分清的：**它里面有一批"其实不是一次性"的** —— `_ps_bom.py` / `_ps_parse_check.ps1`（PS 两条闸）· `_list_tails.py`（盘点）· `_page_measure.py`（逐页量测）
 这些是**反复要跑的常驻工具** ⇒ ⛔ 别按"一次性"盲清（本件会把它们标出来）。
 
 跑法：`backend\\.venv\\Scripts\\python.exe -X utf8 tools\\oneoff\\_oneoff_measure.py`
@@ -25,7 +24,7 @@ ONEOFF = ROOT / "tools" / "oneoff"
 
 #: ⭐ **常驻工具**（不是"一次性"）—— 收工闸门/口径会反复引用它们 ⇒ ⛔ 别按一次性处置
 STANDING = (
-    "_run_rulers.py", "_run_muts.py", "_ps_bom.py", "_ps_parse_check.ps1", "_list_tails.py",
+    "_ps_bom.py", "_ps_parse_check.ps1", "_list_tails.py",
     "_page_measure.py", "_prepush_sensitive.py", "_oneoff_measure.py",
     # ⭐ 2026-10-02（`/retro` 候选 1）：立/销台账是**每轮都可能用**的常驻件，⛔ 别按"一次性"处置
     "_tail_open.py", "_tail_close.py",

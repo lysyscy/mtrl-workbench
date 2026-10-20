@@ -14,7 +14,6 @@ from app.mod05_flow.domain import (
     total_debt,
 )
 from app.mod05_flow.models import CATEGORY_JC, CATEGORY_MATERIAL, CATEGORY_MECH
-from tests.acc_plugin import acc
 
 
 def _view(cat, settle, pay, *, excluded=False, owner=1, doc_date="2026-08-10"):
@@ -29,7 +28,6 @@ def _view(cat, settle, pay, *, excluded=False, owner=1, doc_date="2026-08-10"):
     )
 
 
-@acc("ACC-FLOW-DEBT-001", "001-01")
 def test_三类欠款各按口径独立复算且合计为三者之和():
     rows = [
         _view(CATEGORY_MATERIAL, "1000", "200"),   # 辅材净 800
@@ -45,7 +43,6 @@ def test_三类欠款各按口径独立复算且合计为三者之和():
     assert d[CATEGORY_MATERIAL] == debt_by_category(rows, openings, mech_settle_total=to_money("0"))[CATEGORY_MATERIAL]
 
 
-@acc("ACC-FLOW-DEBT-001", "001-02")
 def test_期初不单列成第四类():
     openings = [
         OpeningView(CATEGORY_MATERIAL, 1, "2026-07", to_money("50"), to_money("0")),
@@ -57,7 +54,6 @@ def test_期初不单列成第四类():
     assert d[CATEGORY_MECH] == to_money("80")         # 机械期初并入机械
 
 
-@acc("ACC-FLOW-DEBT-001", "001-03")
 def test_集采欠款不在本域计算只作合计展示():
     # 本域不接收"集采通知书行"的结算/付款贡献
     rows = [_view(CATEGORY_JC, "999", "999")]
@@ -69,7 +65,6 @@ def test_集采欠款不在本域计算只作合计展示():
     assert d2[CATEGORY_JC] == to_money("123")
 
 
-@acc("ACC-FLOW-DEBT-001", "001-04")
 def test_按项目看欠款按归属归集且未判定单列():
     # 同一壳全名下的两行 → 归属拆到**各自的具体小微**（owner=11 / 12）
     rows = [
@@ -84,7 +79,6 @@ def test_按项目看欠款按归属归集且未判定单列():
     assert 11 in by_p and 12 in by_p and UNASSIGNED in by_p
 
 
-@acc("ACC-FLOW-DEBT-001", "001-05")
 def test_剔除记录不计入欠款():
     rows = [
         _view(CATEGORY_MATERIAL, "1000", "0"),
@@ -95,7 +89,6 @@ def test_剔除记录不计入欠款():
     assert debt_by_project(rows)[1] == to_money("1000")
 
 
-@acc("ACC-FLOW-DEBT-001", "001-07")
 def test_集采欠款必须由装配层注入不许恒零(monkeypatch):
     """⭐ `TAIL-100`：**「集采由外部注入」这件事，注入方真的存在**。
 

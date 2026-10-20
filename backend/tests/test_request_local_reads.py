@@ -8,10 +8,8 @@ from app.mod05_flow.domain import OpeningView
 from app.mod05_flow.models import CATEGORY_MATERIAL
 from app.mod06_proc import service as M6
 from app.mod11_jc import fetch_service as M11
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_m05_reuses_openings_and_keeps_ids_and_amounts(monkeypatch):
     openings = [OpeningView(CATEGORY_MATERIAL, 7, "2026-01", Decimal("9"), Decimal("4"), 31)]
     calls = []
@@ -29,7 +27,6 @@ def test_m05_reuses_openings_and_keeps_ids_and_amounts(monkeypatch):
     }]
 
 
-@acc()
 def test_m05_reads_ledger_openings_once_and_keeps_missing_side_none(monkeypatch):
     openings = [OpeningView(CATEGORY_MATERIAL, 7, "2026-01", Decimal("9"), Decimal("4"), 31)]
     calls = []
@@ -50,7 +47,6 @@ def test_m05_reads_ledger_openings_once_and_keeps_missing_side_none(monkeypatch)
     assert mechanical["opening_id"] is None
 
 
-@acc()
 def test_m06_derives_both_mechanical_cutoff_keys_from_one_read(monkeypatch):
     calls = []
     monkeypatch.setattr(M6, "load_inv_rows", lambda _s: [{"warehouse": "A"}])
@@ -69,7 +65,6 @@ def test_m06_derives_both_mechanical_cutoff_keys_from_one_read(monkeypatch):
     assert data["mechanical_cutoffs"] == {"A": "2026-09"}
 
 
-@acc()
 def test_m11_fetch_closes_client_when_fetch_fails(monkeypatch):
     closed = []
     client = SimpleNamespace(close=lambda: closed.append(True))

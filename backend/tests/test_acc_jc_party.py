@@ -15,7 +15,6 @@ from decimal import Decimal
 
 import pytest
 
-from tests.acc_plugin import acc
 
 from app.core.db import session_scope
 from app.mod01_projects.models import Project
@@ -41,7 +40,6 @@ def _row(no: str, *, party: str, amt: str = "100.00", mat: str = "钢材") -> di
             "bill_name": "自检单据名", "party_name": party, "remark": ""}
 
 
-@acc()
 def test_正常甲方_i8的价落contract_amt():
     """正常甲方（第四工程公司）⇒ i8 那个价就是**供应商价** ⇒ 落 `contract_amt`。"""
     with session_scope() as s:
@@ -59,7 +57,6 @@ def test_正常甲方_i8的价落contract_amt():
         s.rollback()
 
 
-@acc()
 def test_抓取链路_分类要在匹配之前打上():
     """⭐⭐ 2026-09-26（用户报障「全量抓取后那批贸易公司合同还是没变」）—— **真 bug · 本片最贵的一条**：
 
@@ -103,7 +100,6 @@ def test_抓取链路_分类要在匹配之前打上():
         s.rollback()
 
 
-@acc()
 def test_贸易公司甲方_i8的价落trade_contract_amt且不碰contract_amt():
     """⭐⭐ **本片的核心**：贸易公司甲方 ⇒ i8 的价是**贸易公司的价** ⇒ 落 `trade_contract_amt`；
     而 `contract_amt`（**锚点** · 真供应商价）要留给人从 Excel 供应商线补 ⇒ **抓取绝不碰它**。
@@ -137,7 +133,6 @@ def test_贸易公司甲方_i8的价落trade_contract_amt且不碰contract_amt()
         s.rollback()
 
 
-@acc()
 def test_材料名空才填_人工改过的不被覆盖():
     """⭐ 用户口径原话：「**后续再抓，这些材料名已经不为空，就不要被覆盖了**」。
 
@@ -173,7 +168,6 @@ def test_材料名空才填_人工改过的不被覆盖():
         s.rollback()
 
 
-@acc()
 def test_没见过的甲方自动落unknown_不静默当成正常():
     """⭐ 用户口径：「**你得给个地方让我填谁是正常的**」—— 那"没填过的"就必须**露头**。
 
@@ -198,7 +192,6 @@ def test_没见过的甲方自动落unknown_不静默当成正常():
         s.rollback()
 
 
-@acc()
 def test_分类表拒绝非法类型():
     """⛔ 类型非法一律拒（判定在后端，前端不自行判）—— 否则会写进一个谁都不认识的类型。"""
     with session_scope() as s:

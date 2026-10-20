@@ -2,10 +2,8 @@
 import importlib.util
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_gitattributes_is_checked_and_unknown_binary_still_rejected(tmp_path, monkeypatch):
     path = Path(__file__).resolve().parents[2] / 'tools/audit/bytes_guard.py'
     spec = importlib.util.spec_from_file_location('bytes_guard_fixture', path)

@@ -25,7 +25,6 @@ from app.mod07_setl.models import SetlDetail
 from app.mod07_setl.service import build_page_data, parse_state
 from app.report_export import service as _EX
 from app.report_export import setl_export as _SE
-from tests.acc_plugin import acc
 from tests.m07_helpers import (
     EMPTY_MONTH,
     EXPECT,
@@ -61,7 +60,6 @@ def _data(*, period: str | None = None, params: dict | None = None) -> dict:
 # ============================================================ 判据点
 
 
-@acc(CASE, "001-01")
 def test_表体每仓一行且行数合计等于各仓行数之和():
     data = _data(period="2026-08")
     rows, summary = data["rows"], data["summary"]
@@ -85,7 +83,6 @@ def test_表体每仓一行且行数合计等于各仓行数之和():
     # 这里改走**数据出口**（页面只是印它），口径与独立复算一字未动。
 
 
-@acc(CASE, "001-02")
 def test_默认核算年月为北京时间上月():
     first = date.today().replace(day=1)
     want = (first - timedelta(days=1)).replace(day=1).strftime("%Y-%m")     # 独立推算
@@ -97,7 +94,6 @@ def test_默认核算年月为北京时间上月():
     # 上面两条**取数口径**（默认月怎么算、不给参数落哪儿）是实质，留着。
 
 
-@acc(CASE, "001-03")
 def test_切月后表数据跟着换且各月互不相同():
     totals: dict[str, int] = {}
     for ym in MONTHS:
@@ -113,7 +109,6 @@ def test_切月后表数据跟着换且各月互不相同():
     # 形态搬到壳（见上面 001-01 的说明 ＋ `test_wired_m07.py` 的「切月重取数」），这里改走数据出口。
 
 
-@acc(CASE, "001-04")
 def test_重置回到默认上月且不产生跨页状态():
     assert parse_state({})["period"] == D.default_month()
     # ⚠️ 2026-09-19（`TAIL-27` · `§19` 批 2）：原先这里看**旧页**的三件事 —— 「重置」链接
@@ -122,7 +117,6 @@ def test_重置回到默认上月且不产生跨页状态():
     # （`whReset` ＋ **本页切片**里不含别模块的筛选状态 ✓）。上面那条**取数口径**是实质，留着。
 
 
-@acc(CASE, "001-05")
 def test_空月的空态提示行跨列数等于表头列数():
     empty = _data(period=EMPTY_MONTH)
     assert empty["rows"] == [], "空月不该有数据行"
@@ -132,7 +126,6 @@ def test_空月的空态提示行跨列数等于表头列数():
     # 提示里带 `tmLabel(fWhYm)` ✓）。「空月不该有合计行」由 `empty["rows"] == []` 蕴含 ✓。
 
 
-@acc(CASE, "001-06")
 def test_抓取弹窗默认月份等于当前所选且可改():
     # ⚠️ 2026-09-19（`§19` 批 2）：原先这一整段查**旧页**的抓取弹窗（月份输入框 = 当前所选、
     # 可改、表单 action、二次确认 token、写没写「强踢」、入口能不能打开弹窗）；旧页删除（授权 `D18`）后
@@ -142,7 +135,6 @@ def test_抓取弹窗默认月份等于当前所选且可改():
     assert D.fetch_dialog_default("") == D.default_month()
 
 
-@acc(CASE, "001-07")
 def test_行仓文件三项计数随数据实时算():
     seen: list[tuple[int, int, int]] = []
     for ym in MONTHS:
@@ -163,7 +155,6 @@ def test_行仓文件三项计数随数据实时算():
     assert (empty["warehouses"], empty["rows"], empty["files"]) == (0, 0, 1)
 
 
-@acc(CASE, "001-08")
 def test_产出物为分仓库工作簿加总表且份数随仓数实时算():
     counts: list[int] = []
     for ym in MONTHS:
@@ -202,7 +193,6 @@ def test_产出物为分仓库工作簿加总表且份数随仓数实时算():
     assert len(members) == len(indep_warehouses(MONTHS[0])) + 1
 
 
-@acc(CASE, "001-09")
 def test_对平判据按两位小数归一后判等且动态判定():
     # ① 归一后相等 ⇒ 对平（原始差额 0.004 不足半分）
     assert D.is_balanced({"begin": "0.004", "in": 0, "out": 0, "end": 0}) is True

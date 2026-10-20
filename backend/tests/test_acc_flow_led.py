@@ -17,7 +17,6 @@ from app.mod05_flow.domain import (
     opening_defaults,
 )
 from app.mod05_flow.models import CATEGORY_MATERIAL, CATEGORY_MECH
-from tests.acc_plugin import acc
 
 
 def _view(ym, settle, pay, owner=1, cat=CATEGORY_MATERIAL):
@@ -31,7 +30,6 @@ def _view(ym, settle, pay, owner=1, cat=CATEGORY_MATERIAL):
     )
 
 
-@acc("ACC-FLOW-LED-001", "001-01")
 def test_第一行为期初其后从次月起逐月连续():
     rows = [_view("2026-08", "100", "0"), _view("2026-10", "200", "0")]
     monthly = monthly_aggregate(rows, CATEGORY_MATERIAL, 1)
@@ -42,7 +40,6 @@ def test_第一行为期初其后从次月起逐月连续():
     assert [r.seq for r in led] == [1, 2, 3, 4]
 
 
-@acc("ACC-FLOW-LED-001", "001-02")
 def test_其他支出金额为该月该项该分类统计结算合计():
     rows = [_view("2026-08", "100", "0"), _view("2026-08", "50", "0"), _view("2026-09", "70", "0")]
     monthly = monthly_aggregate(rows, CATEGORY_MATERIAL, 1)
@@ -56,7 +53,6 @@ def test_其他支出金额为该月该项该分类统计结算合计():
     assert build_ledger(category=CATEGORY_MATERIAL, monthly=m2)[0].other_expense == to_money("150")
 
 
-@acc("ACC-FLOW-LED-001", "001-03")
 def test_付款列取同口径统计付款合计():
     rows = [_view("2026-08", "1000", "300"), _view("2026-08", "0", "200")]
     monthly = monthly_aggregate(rows, CATEGORY_MATERIAL, 1)
@@ -65,7 +61,6 @@ def test_付款列取同口径统计付款合计():
     assert led[0].debt == to_money("500")         # 欠款 = 其他支出 − 付款
 
 
-@acc("ACC-FLOW-LED-001", "001-04")
 def test_机械其他支出为派生只读且无手填入口():
     mech_monthly = {"2026-08": to_money("600"), "2026-09": to_money("400")}
     led = build_ledger(
@@ -79,14 +74,12 @@ def test_机械其他支出为派生只读且无手填入口():
     assert MECH_HAS_MANUAL_INPUT is False                                        # **无手填入口**
 
 
-@acc("ACC-FLOW-LED-001", "001-05")
 def test_两侧共用同一选择器与导出入口且无切换按钮():
     assert LEDGER_SIDES == (CATEGORY_MATERIAL, CATEGORY_MECH)
     assert SHARED_PROJECT_SELECTOR is True and SHARED_EXPORT_ENTRY is True
     assert HAS_SWITCH_CALIBER_BUTTON is False
 
 
-@acc("ACC-FLOW-LED-001", "001-06")
 def test_备注键为口径项目月且可写可清():
     assert ledger_remarks_key(CATEGORY_MATERIAL, 7, "2026-08") == (CATEGORY_MATERIAL, 7, "2026-08")
     monthly = monthly_aggregate([_view("2026-08", "1", "0")], CATEGORY_MATERIAL, 1)
@@ -97,7 +90,6 @@ def test_备注键为口径项目月且可写可清():
     assert led2[0].remark == ""
 
 
-@acc("ACC-FLOW-LED-001", "001-07")
 def test_期初默认截止年月与录入后台账可见该行():
     rows = [_view("2026-08", "1", "0"), _view("2026-09", "1", "0")]
     d = opening_defaults(rows, CATEGORY_MATERIAL)

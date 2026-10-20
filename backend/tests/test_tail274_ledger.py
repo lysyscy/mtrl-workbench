@@ -6,11 +6,9 @@ from app.mod03_notice.models import PaymentNotice
 from app.mod05_flow import service, repository
 from app.mod05_flow.models import OpeningBalance
 from app.report_export import ledger_export
-from tests.acc_plugin import acc
 from tests.test_proc_split_cutoffs import session
 
 
-@acc()
 def test_history_manual_auto_and_export_are_independent(session, tmp_path, monkeypatch):
     p = Project(project_type='normal', name_full='__tail274__',
                 warehouse_name='未建仓-274-test', disp='历史项目')
@@ -71,7 +69,6 @@ def test_history_manual_auto_and_export_are_independent(session, tmp_path, monke
         assert side()['rows'][1]['payment'] == '0.00'
 
 
-@acc()
 def test_empty_archived_project_keeps_identity_and_both_ledgers(session, tmp_path, monkeypatch):
     p = Project(project_type='normal', name_full='__tail274_empty__',
                 warehouse_name='未建仓-274-empty', disp='无仓库项目')
@@ -101,7 +98,6 @@ def test_empty_archived_project_keeps_identity_and_both_ledgers(session, tmp_pat
         wb.close()
 
 
-@acc()
 def test_zero_automatic_payment_still_has_history_segment(session):
     p = Project(project_type='normal', name_full='__tail274_zero__',
                 warehouse_name='未建仓-274-zero', disp='零付款项目')
@@ -126,7 +122,6 @@ def test_zero_automatic_payment_still_has_history_segment(session):
     assert spec['tail'][0][1]['D'] == Decimal('700')
 
 
-@acc()
 def test_edit_total_payment_uses_current_auto_and_preserves_manual_settlement(session, monkeypatch):
     from contextlib import contextmanager
     from app.mod05_flow import router

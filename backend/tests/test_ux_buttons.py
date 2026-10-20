@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 
@@ -33,7 +32,6 @@ def _cls(tag: str) -> str:
     return tag[i + 7:tag.find('"', i + 7)]
 
 
-@acc("ACC-UI-SHELL-001", "001-27")
 def test_相反语义的一对按钮不许同款():
     """⭐ `批量剔除` 必须带 `dg`（危险 / 会影响统计的那一侧）、`恢复剔除` **不许**带（它是往回放）。
 
@@ -47,7 +45,6 @@ def test_相反语义的一对按钮不许同款():
         f"「恢复剔除」是**往回放**、不是危险动作 ⇒ 不许用危险色（守则 §4.5：颜色只承担语义）；现在是 `{_cls(un)}`"
 
 
-@acc("ACC-UI-SHELL-001", "001-28")
 def test_危险动作要让用户知道有退路():
     """⭐ 危险动作必须让用户知道**怎么退回来**（守则 §2.4 后果提前说 / §4.1 文案与行为一致）。
 

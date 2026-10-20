@@ -27,7 +27,6 @@ from app.mod08_inv import domain as D
 from app.mod08_inv.models import InvDetail
 from app.mod08_inv.repository import load_rows, save_adjustment
 from app.mod08_inv.service import build_page_data, parse_state
-from tests.acc_plugin import acc
 from tests.m08_helpers import FakeSession, dataset
 
 CASE = "ACC-INV-001"
@@ -47,7 +46,6 @@ def _sess() -> FakeSession:
 # ------------------------------------------------------------ 001-01 列结构
 
 
-@acc(CASE, "001-01")
 def test_列结构以主人为准且只有一个定义处():
     labels = [c["label"] for c in D.INV_TABLE_COLUMNS]
 
@@ -71,14 +69,12 @@ def test_列结构以主人为准且只有一个定义处():
 # ------------------------------------------------------------ 001-02 默认核算年月
 
 
-@acc(CASE, "001-02")
 def test_默认核算年月是北京时间上月():
     assert default_period("inventory", now=date(2026, 9, 16)) == "2026-08"   # 材料报表类 = 上月
     assert default_period("inventory", now=date(2026, 1, 3)) == "2025-12"    # 跨年不越界
     assert parse_state({})["period"] == default_period("inventory")
 
 
-@acc(CASE, "001-02")
 def test_切全部行数变多且重置回到默认():
     rows = load_rows(_sess())
     month = D.filter_rows(rows, ym="2026-08")
@@ -91,7 +87,6 @@ def test_切全部行数变多且重置回到默认():
 # ------------------------------------------------------------ 001-03 / 004 粗筛
 
 
-@acc(CASE, "001-03")
 def test_按项目筛选键是仓库名():
     rows = load_rows(_sess())
     got = D.filter_rows(rows, ym="2026-08", projects=["甲仓"])
@@ -102,7 +97,6 @@ def test_按项目筛选键是仓库名():
     assert len(D.filter_rows(rows, ym="2026-08")) == 3
 
 
-@acc(CASE, "001-04")
 def test_按出入库方向筛选():
     rows = load_rows(_sess())
     total = D.filter_rows(rows, ym="2026-08")
@@ -115,7 +109,6 @@ def test_按出入库方向筛选():
 # ------------------------------------------------------------ 001-05 每列可筛
 
 
-@acc(CASE, "001-05")
 def test_除操作列外每列都有筛选入口():
     assert set(D.filterable_keys()) == {c["key"] for c in D.INV_TABLE_COLUMNS} - set(D.PAGE_ONLY_KEYS)
     # ⚠️ 2026-09-18（`§19` 批 2）：原先还逐列去旧页 html 里找 `name="f_<key>"` 输入框；
@@ -123,7 +116,6 @@ def test_除操作列外每列都有筛选入口():
     # （壳的列筛选由 `IV_FCOL` 驱动，⛔ 前端不另立一份列清单）。上面的**列清单归属**是实质，留着。
 
 
-@acc(CASE, "001-05")
 def test_列条件之间是与关系():
     rows = load_rows(_sess())
     only_ins = D.filter_rows(rows, ym="2026-08", col_filters={"direction": {"v": ["入库"]}})
@@ -138,7 +130,6 @@ def test_列条件之间是与关系():
 # ------------------------------------------------------------ 001-06 数值列
 
 
-@acc(CASE, "001-06")
 def test_数值列既给区间也给值清单且勾选真的生效():
     rows = load_rows(_sess())
     # 区间
@@ -162,7 +153,6 @@ def test_数值列既给区间也给值清单且勾选真的生效():
 # ------------------------------------------------------------ 001-07 表内合计
 
 
-@acc(CASE, "001-07")
 def test_合计行逐列独立复算且随筛选变():
     rows = load_rows(_sess())
     got = D.filter_rows(rows, ym="2026-08")
@@ -200,7 +190,6 @@ def test_合计行逐列独立复算且随筛选变():
 # ------------------------------------------------------------ 001-09 / 010 调整单
 
 
-@acc(CASE, "001-09")
 def test_调整单只改调整后金额原始值不被覆盖():
     s = _sess()
     detail = next(d for d in s.by_model[InvDetail] if d.id == 1)
@@ -219,7 +208,6 @@ def test_调整单只改调整后金额原始值不被覆盖():
     assert merged["adj_amount"] == "0"
 
 
-@acc(CASE, "001-10")
 def test_调整后金额负值被拦零合法():
     assert D.adjustment_problem("-1", "理由") is not None      # 负值 ⇒ 拦
     assert D.adjustment_problem("0", "修正为 0") is None       # 0 ⇒ 合法
@@ -231,7 +219,6 @@ def test_调整后金额负值被拦零合法():
 # ------------------------------------------------------------ 001-11 抓取弹窗
 
 
-@acc(CASE, "001-11")
 def test_抓取弹窗默认月份等于本页当前所选核算年月():
     # ⚠️ 2026-09-18（`§19` 批 2）：原先还去旧页 html 里抠 `id="fetchMonth"` 的默认值与「强踢」文案；
     # 旧页删除（`D18`）后形态搬到壳 —— `test_wired_m08.py::test_抓取弹窗默认取本页核算年月且讲清强踢` ✓。
@@ -242,7 +229,6 @@ def test_抓取弹窗默认月份等于本页当前所选核算年月():
 # ------------------------------------------------------------ 001-12 两种导出
 
 
-@acc(CASE, "001-12")
 def test_两种导出并存且透视提示与模板形态一致():
     # ⚠️ 2026-09-18（`§19` 批 2）：原先还看旧页 html 里两个导出入口在不在；旧页删除（`D18`）后
     # 形态搬到壳 —— `test_wired_m08.py::test_两种导出并存且透视那份写明独立通道` ✓。下面是**清单与文案**的实质。
@@ -258,7 +244,6 @@ def test_两种导出并存且透视提示与模板形态一致():
 # ------------------------------------------------------------ 001-13 硬边界
 
 
-@acc(CASE, "001-13")
 def test_不新增删除入口且不建是否作废字段():
     keys = tuple(c["key"] for c in D.INV_TABLE_COLUMNS)
     assert D.boundary_violations(column_keys=keys, action_ids=("adjDlg", "exp", "expPivot")) == []

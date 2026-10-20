@@ -24,7 +24,6 @@ from app.core.config import get_settings
 from app.core.errors import MustReportError
 from app.core.db import session_scope
 from app.mod15_user import repository as R
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL   # ⚠️ 壳源码的唯一出口（⛔ 别直接读 index.html）
 
 TMP = "__自检_i8甲__"
@@ -44,7 +43,6 @@ def _drop_tmp() -> None:
         s.commit()
 
 
-@acc("ACC-USR-MGMT-001", "001-13")
 def test_i8凭据取当前登录用户绑定且未绑拒抓取():
     """① 绑了 ⇒ 用绑的；② **查无此人** ⇒ 回落 `.env`；③ **绑了但密码空 ⇒ 密码就是空**（⛔ 不回落）；
     ⭐⭐ ④ `TAIL-202`（2026-09-30）：**有身份却没绑 i8 ⇒ 拒绝抓取并给人话提示**（⛔ 不回落）。
@@ -104,7 +102,6 @@ def test_i8凭据取当前登录用户绑定且未绑拒抓取():
         _drop_tmp()
 
 
-@acc("ACC-USR-MGMT-001", "001-13")
 def test_i8客户端用当前用户那份凭据且缓存按账号分(monkeypatch):
     """消费方那半：`I8Client` **登录用的是当前用户那份**，**cookie 缓存也按账号分**。
 
@@ -136,7 +133,6 @@ def test_i8客户端用当前用户那份凭据且缓存按账号分(monkeypatch
     assert seen.get("save_user") == "i8acc-A", "写 cookie 缓存时**没带账号** ⇒ 会把会话写到别人的文件里"
 
 
-@acc()
 def test_set_i8的三种写法省略密码不改解绑一并清空():
     """`repository.set_i8` 的**三态**（`None` / 空串 / 有值）—— 它是"静默抹掉密码"的唯一入口。
 
@@ -170,7 +166,6 @@ def test_set_i8的三种写法省略密码不改解绑一并清空():
         "⇒ 后端会把它当成「显式改成空」而不是「不改」")
 
 
-@acc("ACC-USR-MGMT-001", "001-13")
 def test_壳上关于未绑定的说法跟新口径一致():
     """⭐ `TAIL-202`（2026-09-30 · 用户「全部按推荐」）：壳里那两处「未绑定」的说法必须与后端**同口径**
     —— 说「**抓取会被拦下**，提示你先填」，⛔ 不许再说"回落"，也不许把内部配置名 `.env` / `I8_USER`

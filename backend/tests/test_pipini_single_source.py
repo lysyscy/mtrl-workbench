@@ -5,13 +5,11 @@ from __future__ import annotations
 import pathlib
 import tomllib
 
-from tests.acc_plugin import acc
 
 BACKEND = pathlib.Path(__file__).resolve().parents[1]
 PROJECT = BACKEND / "pyproject.toml"
 
 
-@acc()
 def test_依赖安装源由项目配置唯一管理():
     config = tomllib.loads(PROJECT.read_text(encoding="utf-8"))
     indexes = config.get("tool", {}).get("uv", {}).get("index", [])

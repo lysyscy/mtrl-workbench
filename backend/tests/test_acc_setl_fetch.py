@@ -31,7 +31,6 @@ from app.mod07_setl import importer
 from app.mod07_setl.models import SOURCE_AUTO, SetlDetail
 from app.mod07_setl.repository import upsert_month
 from app.mod07_setl.service import build_page_data, parse_state
-from tests.acc_plugin import acc
 from tests.m07_helpers import FakeSession
 
 CASE = "ACC-SETL-FETCH-001"
@@ -153,7 +152,6 @@ def _project(pid: int, warehouse: str, phid: str):
 
 # ============================================================ 判据点
 
-@acc(CASE, "001-01")
 def test_入参为起止年月四个独立值且项目参数为pc():
     body = report_export.build_body(spec_key="setl", year_month="2026-08", proj_ids="1,2")
     params = {p["paramKey"]: p for p in body["queryParams"][0]["sheetQueryParams"]}
@@ -172,7 +170,6 @@ def test_入参为起止年月四个独立值且项目参数为pc():
     assert "xmid" not in text
 
 
-@acc(CASE, "001-02")
 def test_三项标识齐备且收发结存必须传表名():
     spec = I8_REPORTS["setl"]
     assert spec["rep_id"] == "3700000000000085"
@@ -200,7 +197,6 @@ def test_三项标识齐备且收发结存必须传表名():
         I8_REPORTS["setl"] = original
 
 
-@acc(CASE, "001-03")
 def test_抓取只允许单月():
     assert report_export.single_month("2026-08") == ("2026", "8", "2026", "8")
     assert FS.build_plan("2026-08")["ym"] == "2026-08"
@@ -209,7 +205,6 @@ def test_抓取只允许单月():
             FS.build_plan(bad)
 
 
-@acc(CASE, "001-04")
 def test_按表头文字认列且关键列缺失报错不猜():
     # ① 列序**被打乱**、且是单行表头 ⇒ 照样认得出（证明不依赖下标）
     shuffled = tuple(reversed(COLUMNS))
@@ -229,7 +224,6 @@ def test_按表头文字认列且关键列缺失报错不猜():
     assert "收金额" in str(exc.value)
 
 
-@acc(CASE, "001-05")
 def test_拆合并表头并剔除合计行():
     rows = importer.parse_rows(_xlsx_one(), ym="2026-08")
     # 合并表头认得出：第 1 行分组名（`期初统计`…）＋ 第 2 行真实列名（`期初金额`…）⇒ **取第 2 行**
@@ -249,7 +243,6 @@ def test_拆合并表头并剔除合计行():
     assert "仓库" in str(exc.value)
 
 
-@acc(CASE, "001-06")
 def test_数字列千分位与空值容错且非数字报错带行号():
     rows = importer.parse_rows(_xlsx_one(), ym="2026-08")
     # ⚠️ 千分位由 `core.money.to_money` 统一剥（金额口径的全站唯一出口）⇒ 这里验的是
@@ -270,7 +263,6 @@ def test_数字列千分位与空值容错且非数字报错带行号():
     assert "收金额" in str(exc.value) and "第 3 行" in str(exc.value)
 
 
-@acc(CASE, "001-07")
 def test_落库幂等且人工行不被覆盖():
     def _detail(row_id, code, amount, source=SOURCE_AUTO):
         return SetlDetail(id=row_id, ym="2026-08", warehouse_name="甲仓", resource_code=code,
@@ -301,7 +293,6 @@ def test_落库幂等且人工行不被覆盖():
     assert again["inserted"] == 0 and len(s.by_model[SetlDetail]) == 3
 
 
-@acc(CASE, "001-08")
 def test_抓取后页面即读到该月数据():
     from app.mod01_projects.models import Project
 
@@ -319,7 +310,6 @@ def test_抓取后页面即读到该月数据():
     assert data["counts"] == {"warehouses": 1, "rows": 2, "files": 2, "ym": "2026-08"}
 
 
-@acc(CASE, "001-09")
 def test_二次确认且失败降级不重试():
     s = FakeSession({})
     with pytest.raises(MustReportError) as exc:
@@ -347,7 +337,6 @@ def test_二次确认且失败降级不重试():
     assert len(records) == 1 and records[0].status == "failed"  # 失败要留执行记录
 
 
-@acc(CASE, "001-10")
 def test_陌生仓库自动建档扶正并逐条列出():
     """⭐ 口径（2026-09-17 按《说明书》§2.4.2 订正）：陌生仓库 ⇒ **自动建档 / 扶正** —— 无感、不要求用户操作。
 

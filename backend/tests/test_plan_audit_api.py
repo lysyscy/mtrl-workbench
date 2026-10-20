@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
-from tests.acc_plugin import acc
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -44,7 +43,6 @@ def client(monkeypatch):
     engine.dispose()
 
 
-@acc()
 def test_snapshot_rejects_anonymous_forged_disabled_deleted_before_export(client, monkeypatch):
     calls = []
     monkeypatch.setattr(API.DATA, 'capture', lambda: calls.append(True))
@@ -56,7 +54,6 @@ def test_snapshot_rejects_anonymous_forged_disabled_deleted_before_export(client
     assert calls == []
 
 
-@acc()
 def test_snapshot_keeps_complete_scope_and_no_cache(client, monkeypatch):
     payload = dict(schema=1, complete=True, projects=[{'id': 1}], notices=[{'id': 2}],
                    captured_at='2026-10-15T00:00:00+08:00', scope='全部月份与生效流水')
@@ -73,7 +70,6 @@ def preview():
              approved='100', paid='20', flow_amount='100', planned_amount='80')])
 
 
-@acc()
 @pytest.mark.parametrize('mutation', ['shape', 'source', 'fingerprint', 'duplicates', 'amount', 'method', 'row'])
 def test_write_metadata_rejected_before_any_transaction(client, monkeypatch, mutation):
     p = preview()
@@ -92,7 +88,6 @@ def test_write_metadata_rejected_before_any_transaction(client, monkeypatch, mut
     assert response.status_code == 409
 
 
-@acc()
 def test_method_endpoint_binds_approved_bytes_and_current_system(client, monkeypatch):
     p = preview()
     validate_changes(p)
@@ -107,7 +102,6 @@ def test_method_endpoint_binds_approved_bytes_and_current_system(client, monkeyp
     assert response.status_code == 409 and '快照不符' in response.json()['detail']
 
 
-@acc()
 def test_successful_method_endpoint_uses_atomic_update_and_returns_bound_receipt(client, monkeypatch):
     calls = []
 

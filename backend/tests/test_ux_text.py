@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import re
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 #: `(禁用整串, 它是谁 / 为什么不许上屏)` —— ⚠️ 只收**带上下文、只可能出现在界面上**的串
@@ -67,7 +66,6 @@ TOMBSTONES: tuple[tuple[str, str], ...] = (
 )
 
 
-@acc("ACC-UI-SHELL-001", "001-11")
 def test_上屏文案里这些内部串不许回来():
     """⭐ 逐条钉"这些**整串**不许出现在壳源码里"。
 
@@ -83,7 +81,6 @@ def test_上屏文案里这些内部串不许回来():
         + "\n".join(bad))
 
 
-@acc("ACC-UI-SHELL-001", "001-12")
 def test_导入页的域自报文案要渲染加粗_不许满屏星号():
     """⭐ 守则 §3.1（技术标记不上屏）· `TAIL-105`（2026-09-28）。
 
@@ -151,7 +148,6 @@ def _tip_blocks() -> list[tuple[str, int, int, str]]:
     return out
 
 
-@acc()
 def test_说明块都不超长_弹窗也在内():
     """⭐ `TAIL-209`（2026-10-01）：**说明块的机器眼要罩住弹窗**（守则 §3.4 / §5.9）。
 
@@ -221,7 +217,6 @@ def _literal_double_stars(text: str, *, html: bool = False) -> list[int]:
     return found
 
 
-@acc()
 def test_加粗守卫只判字面量且保留模板嵌套():
     assert not _literal_double_stars("const n=10n ** 2n; const r=/\\*\\*/; /* '**x**' */")
     assert _literal_double_stars("toast('**x**');")
@@ -236,7 +231,6 @@ def test_加粗守卫只判字面量且保留模板嵌套():
     assert _literal_double_stars('<style>p::after{content:"**x**"}</style>', html=True)
 
 
-@acc()
 def test_壳源码里不许有双层星号_加粗标记():
     """⭐ `TAIL-209`（2026-10-01 · 余项 ②）：**壳自己拼的 HTML 里不许出现 `**`**（守则 §3.1）。
 
@@ -282,7 +276,6 @@ _CODE_SHAPES: tuple[tuple[str, str], ...] = (
 )
 
 
-@acc()
 def test_用户可见串里不许出现工程代号():
     """⭐ `TAIL-209`（2026-10-01 · 余项 ②）：**把"工程代号混进用户可见文字"这一类交给机器眼**。
 
@@ -329,7 +322,6 @@ _TITLE_ATTR = re.compile(r'title="([^"$]{20,})"')
 _TITLE_JS = re.compile(r"\.title\s*=\s*'([^'$]{20,})'")
 
 
-@acc()
 def test_悬停文案也不超长():
     """⭐ 第二轮（2026-10-01）：**悬停文案（`title`）的机器眼**（守则 §3.4 / §5.9）。
 
@@ -400,7 +392,6 @@ def _backend_user_strings() -> list[tuple[str, int, str]]:
     return out
 
 
-@acc()
 def test_后端的用户可见串里也不许出现工程代号():
     """⭐ `TAIL-211`（2026-10-01）：**把"工程代号混进用户可见文字"这一类也罩住后端**（守则 §2.5 / §3.1）。
 
@@ -429,7 +420,6 @@ def test_后端的用户可见串里也不许出现工程代号():
     )
 
 
-@acc()
 def test_用户可见串里不许出现工程侧文件名():
     """⭐ 第二轮（2026-10-01 · 批 9）：**内部的目录名 / 文档名不许上屏**（守则 §3.1 技术实现细节不上屏）。
 
@@ -510,7 +500,6 @@ def _exception_class_hits(src: str) -> list[int]:
     return sorted(hit)
 
 
-@acc()
 def test_用户可见串里不许拼异常原文():
     """⭐⭐ `TAIL-212`（2026-10-01）：**异常类名 / 原始报错串不许拼进用户可见文案**（守则 §3.1 / §3.7）。
 
@@ -583,7 +572,6 @@ def _except_map(tree) -> dict:
     return out
 
 
-@acc()
 def test_用户可见串里不许拼异常正文():
     """⭐ `TAIL-220`（2026-10-02）：**原始异常正文**不许拼进用户可见文案（守则 §3.1 / §3.7）。
 

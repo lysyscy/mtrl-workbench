@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from app.mod06_proc import domain as D
 from app.mod06_proc.service import build_page_data, parse_state
-from tests.acc_plugin import acc
 from tests.m06_helpers import FakeSession, dataset
 
 CASE = "ACC-RPT-EXP-001"
@@ -38,7 +37,6 @@ def _cands() -> list[str]:
 # ------------------------------------------------------------ 001-01 每项目一份 · ≥2 打 zip
 
 
-@acc(CASE, "001-01")
 def test_每项目一份文件_多项目打成zip():
     cands = _cands()
     one = D.export_manifest([cands[0]], tab=D.TAB_ADJUSTED, ym=YM)
@@ -55,7 +53,6 @@ def test_每项目一份文件_多项目打成zip():
 # ------------------------------------------------------------ 001-02 默认选中 · 动过则保持
 
 
-@acc(CASE, "001-02")
 def test_展开区默认取当前项目_动过则保持():
     cands = _cands()
     # 没动过 ⇒ 默认 = 当前项目（空当前项目 ⇒ 空）
@@ -69,7 +66,6 @@ def test_展开区默认取当前项目_动过则保持():
 # ------------------------------------------------------------ 001-04 取数跟随当前所显示的表
 
 
-@acc(CASE, "001-04")
 def test_导出取数跟随当前所显示的那张表():
     """三张表**同形态**、只有数据与文件名不同 ⇒ 文件名里必须带**当前那张表**的名字
     （⛔ 不许固定成表② —— 那样用户看着表①导出，拿到的是别的表）。"""

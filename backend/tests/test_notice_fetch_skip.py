@@ -13,7 +13,6 @@ from app.mod01_projects.models import Project
 from app.mod02_i8.models import RunRecord
 from app.mod03_notice import notice_executors as ex, repository, router
 from app.mod03_notice.models import ExcludeRuleRow, NoticeStatLog, PaymentNotice
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -64,7 +63,6 @@ def fetch(case):
     return response.json()
 
 
-@acc('ACC-PRJ-OWN-001', '001-08')
 def test_valid_rows_commit_and_ignored_rows_report_reasons(case):
     case.rows = [row('GOOD'), row('BAD', bad=True), row('EXCLUDED', bad=True, biz_type='付劳务公司款')]
     result = fetch(case)
@@ -84,7 +82,6 @@ def test_valid_rows_commit_and_ignored_rows_report_reasons(case):
 
 
 @pytest.mark.parametrize('kind', ['not_archived', 'needs_choice'])
-@acc('ACC-PRJ-OWN-001', '001-08')
 def test_other_ownership_failures_only_skip_the_affected_row(case, monkeypatch, kind):
     bad = row('BAD', bad=True)
     if kind == 'not_archived':
@@ -104,7 +101,6 @@ def test_other_ownership_failures_only_skip_the_affected_row(case, monkeypatch, 
 
 
 @pytest.mark.parametrize('replacement', [False, True])
-@acc('ACC-PRJ-OWN-001', '001-08')
 def test_next_fetch_rechecks_corrected_or_replaced_source_without_duplicates(case, replacement):
     case.rows = [row('GOOD'), row('BAD', bad=True)]
     fetch(case)
@@ -123,7 +119,6 @@ def test_next_fetch_rechecks_corrected_or_replaced_source_without_duplicates(cas
 
 
 @pytest.mark.parametrize('bad_rows', [True, False])
-@acc('ACC-PRJ-OWN-001', '001-08')
 def test_all_ignored_then_source_deleted_or_empty_month(case, bad_rows):
     case.rows = [row('BAD', bad=True)] if bad_rows else []
     result = fetch(case)
@@ -135,7 +130,6 @@ def test_all_ignored_then_source_deleted_or_empty_month(case, bad_rows):
         assert repository.latest_unresolved(s) == []
 
 
-@acc('ACC-PRJ-OWN-001', '001-08')
 def test_write_error_rolls_back_valid_rows_instead_of_ignoring(case, monkeypatch):
     case.rows = [row('GOOD'), row('BAD', bad=True), row('WRITE-ERROR')]
     apply = ex.apply_fetched_row
@@ -153,7 +147,6 @@ def test_write_error_rolls_back_valid_rows_instead_of_ignoring(case, monkeypatch
         assert list(s.scalars(select(RunRecord))) == []
 
 
-@acc('ACC-PRJ-OWN-001', '001-10')
 def test_fetch_error_is_not_turned_into_ignored_rows(case):
     case.error = RuntimeError('isolated fetch failure')
     with pytest.raises(RuntimeError, match='isolated fetch failure'):

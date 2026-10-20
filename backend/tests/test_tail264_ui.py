@@ -2,7 +2,6 @@
 import os
 import pytest
 from playwright.sync_api import sync_playwright
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -33,7 +32,6 @@ def page():
         browser.close()
 
 
-@acc()
 def test_supplier_search_choose_and_failed_enter_keeps_full_name(page):
     field = page.locator('#supManualValue')
     field.fill('河南')
@@ -53,7 +51,6 @@ def test_supplier_search_choose_and_failed_enter_keeps_full_name(page):
     assert page.evaluate('saved[1].supplier') == '无匹配自由输入'
 
 
-@acc()
 def test_material_edit_uses_contract_id_and_preserves_failure(page):
     page.evaluate('''() => {
       closeModal();JCs.length=0;JCs.push({id:'501',material:'同名材料'},{id:'502',material:'同名材料'});
@@ -68,7 +65,6 @@ def test_material_edit_uses_contract_id_and_preserves_failure(page):
     assert page.evaluate('JCs[1].material') == '同名材料'
 
 
-@acc()
 def test_material_success_reloads_list_and_cancel_writes_nothing(page):
     page.evaluate('''() => {
       closeModal();JCs.length=0;JCs.push({id:'501',material:'旧材料'},{id:'502',material:'别的材料'});
@@ -86,7 +82,6 @@ def test_material_success_reloads_list_and_cancel_writes_nothing(page):
     assert not page._tail_errors
 
 
-@acc()
 def test_supplier_failed_pool_stays_failed_while_free_input_remains(page):
     page.evaluate('''async () => {
       closeModal();API.m03SupMatch=async()=>{throw new Error('离线');};
@@ -97,7 +92,6 @@ def test_supplier_failed_pool_stays_failed_while_free_input_remains(page):
     assert '正在读取' not in page.locator('#supManualPoolState').inner_text()
 
 
-@acc()
 def test_automatic_multiple_candidates_first_selection_and_confirmation(page):
     page.evaluate('''async () => {
       closeModal();API.m03SupMatch=async()=>({ok:true,pool:['河南安装集团','河南物资公司'],cands:['河南安装集团','河南物资公司'],level:3});

@@ -13,7 +13,6 @@ from decimal import Decimal
 
 from app.mod03_notice.domain import F_STAT_PAID, F_STAT_SETTLE, StatTrace
 from app.mod03_notice.merge import PROTECTED, plan_merge
-from tests.acc_plugin import acc
 
 
 def _trace(notice_id: int, field: str, before: str, after: str) -> StatTrace:
@@ -41,7 +40,6 @@ def _current(**kw) -> dict:
 # ---------------------------------------------------------------- 源字段跟随
 
 
-@acc("ACC-PAY-MERGE-001", "001-01")
 def test_源字段跟随i8新值():
     cur = _current()
     inc = {"amount_approved": Decimal("12000.00"),
@@ -52,7 +50,6 @@ def test_源字段跟随i8新值():
     assert "doc_date" not in plan.values                              # 值没变 ⇒ 不写
 
 
-@acc("ACC-PAY-MERGE-001", "001-02")
 def test_统计金额未手改则跟随新审批金额():
     cur = _current()
     inc = {"amount_approved": Decimal("8000.00")}
@@ -63,7 +60,6 @@ def test_统计金额未手改则跟随新审批金额():
     assert plan.alerts == []
 
 
-@acc("ACC-PAY-MERGE-001", "001-03")
 def test_统计金额手改过则保留人工值():
     cur = _current(stat_settle=Decimal("9000.00"), stat_paid=Decimal("9000.00"))
     traces = [_trace(1, F_STAT_SETTLE, "10000.00", "9000.00")]
@@ -74,7 +70,6 @@ def test_统计金额手改过则保留人工值():
     assert plan.values[F_STAT_PAID] == Decimal("8000.00")
 
 
-@acc("ACC-PAY-MERGE-001", "001-04")
 def test_越界只提醒绝不代替用户改写():
     cur = _current(stat_settle=Decimal("9500.00"), stat_paid=Decimal("9500.00"))
     traces = [
@@ -89,7 +84,6 @@ def test_越界只提醒绝不代替用户改写():
     assert "已超过新的审批金额" in plan.alerts[0] and "保留人工值" in plan.alerts[0]
 
 
-@acc("ACC-PAY-MERGE-001", "001-05")
 def test_审批金额没变就什么都不做():
     """⭐「**值没变就不动**」—— 审批金额没变 ⇒ **连重算都不做**（不是"重算后恰好值相同"）。
 
@@ -118,7 +112,6 @@ def test_审批金额没变就什么都不做():
     assert calls == [], f"审批金额没变 ⇒ 不该调用重算，实际调了 {len(calls)} 次"
 
 
-@acc("ACC-PAY-MERGE-001", "001-06")
 def test_审批金额调大时未手改值跟着涨():
     """这是"跟随"的应有结果（本就等于新审批金额），不是 bug。"""
     cur = _current()
@@ -130,7 +123,6 @@ def test_审批金额调大时未手改值跟着涨():
 # ---------------------------------------------------------------- 被保护的字段
 
 
-@acc("ACC-PAY-MERGE-001", "001-07")
 def test_分类剔除撤单归属一律不被覆盖():
     cur = _current(category="mechanical", excluded=True, exclude_source="manual",
                    i8_revoked=True, ownership_id=11)
@@ -150,7 +142,6 @@ def test_分类剔除撤单归属一律不被覆盖():
 # ---------------------------------------------------------------- 新行的初始赋值
 
 
-@acc("ACC-PAY-MERGE-001", "001-08")
 def test_新行初始赋值含分类剔除与统计两金额初值():
     """§4.2.5：**新行**的统计结算金额 = 审批金额、统计付款金额 = 付款金额（源）。
 
@@ -171,7 +162,6 @@ def test_新行初始赋值含分类剔除与统计两金额初值():
     assert values[F_STAT_PAID] == Decimal("4800.00")       # ⭐ = **已付金额**（流水汇总，§4.4.7）
 
 
-@acc("ACC-PAY-MERGE-001", "001-09")
 def test_新行命中剔除也照样给统计初值():
     """被剔除的行**仍然**要有统计初值 —— 剔除只是"不进日常统计"，不是"字段留空"。"""
     from app.mod03_notice.classify import decide_placement

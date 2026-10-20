@@ -15,7 +15,6 @@ from app.mod03_notice.notice_pay_actions import apply_batch_pay
 from app.mod05_flow import service as flows
 from app.mod05_flow.models import PaymentFlow
 from app.mod11_jc import repository as jc, service as contracts
-from tests.acc_plugin import acc
 from tests.test_acc_jc_pay_link import _project
 
 
@@ -45,7 +44,6 @@ def paid(s, ids):
                      .order_by(PaymentFlow.id)).scalars().all()
 
 
-@acc()
 def test_selected_beyond_display_cap_uses_actual_money(sample, monkeypatch):
     s, a, b = sample
     flows.create_flow(s, notice_id=a.id, project_id=None, amount=300)
@@ -83,7 +81,6 @@ def test_selected_beyond_display_cap_uses_actual_money(sample, monkeypatch):
     assert a.stat_paid == Decimal('50.00')
 
 
-@acc()
 def test_order_duplicates_missing_and_archived_rows(sample, monkeypatch):
     s, a, b = sample
     original = notices.get_notices_by_ids
@@ -107,7 +104,6 @@ def test_order_duplicates_missing_and_archived_rows(sample, monkeypatch):
         pay(s, [])
 
 
-@acc()
 def test_selected_links_and_default_full_query(sample, monkeypatch):
     s, a, b = sample
     p = _project(s, f'__自检仓_310_{uuid4().hex}__')
@@ -133,7 +129,6 @@ def test_selected_links_and_default_full_query(sample, monkeypatch):
     ('', {'amount': Decimal('0')}), ('', {'pay_method': '非法'}),
     ('', {'pay_method': '其他'}),
 ])
-@acc()
 def test_entire_batch_validates_before_first_write(sample, change, draft):
     s, a, b = sample
     if change:
@@ -143,7 +138,6 @@ def test_entire_batch_validates_before_first_write(sample, change, draft):
     assert not paid(s, [a.id, b.id])
 
 
-@acc()
 def test_request_id_and_caller_rollback(sample, monkeypatch):
     s, a, b = sample
     original = flows.create_flow

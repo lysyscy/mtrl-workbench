@@ -29,7 +29,6 @@ from app.mod03_notice.domain import (
 )
 from app.mod05_flow.domain import NoticeDebtView
 from app.mod05_flow.models import CATEGORY_MATERIAL
-from tests.acc_plugin import acc
 
 APPROVED = to_money("10000.00")
 PAID_TOTAL = to_money("8000.00")      # 已付金额（有效流水汇总）—— 刻意**不等于**审批金额
@@ -46,7 +45,6 @@ def _view(settle="10000.00", pay="8000.00") -> NoticeDebtView:
     )
 
 
-@acc("ACC-PAY-STAT-001", "001-01")
 def test_两个统计金额可手改且是否手改的唯一事实来源是留痕():
     # 默认值（§4.2.5 表 · §4.4.7）：统计结算金额 = 审批金额；
     # ⭐ 统计付款金额 = **已付金额（有效流水汇总）** —— 2026-09-16 起（原「= 付款金额（源）」已作废）
@@ -90,7 +88,6 @@ def test_两个统计金额可手改且是否手改的唯一事实来源是留�
     ) == to_money("9500.00")
 
 
-@acc("ACC-PAY-STAT-001", "001-02")
 def test_超过审批金额必须拦截并保留原值():
     # 上限 = 审批金额；超额 ⇒ 直接拦截、保留原值（不截断、不静默改写）
     with pytest.raises(MustReportError) as exc:
@@ -114,7 +111,6 @@ def test_超过审批金额必须拦截并保留原值():
         )
 
 
-@acc("ACC-PAY-STAT-001", "001-03")
 def test_往下调少付允许通过():
     t = adjust_stat(
         notice_id=7, field=F_STAT_PAID, value="6000.00",
@@ -135,7 +131,6 @@ def test_往下调少付允许通过():
     assert t3.after == to_money("0.00")
 
 
-@acc("ACC-PAY-STAT-001", "001-04")
 def test_非法金额必须被拒绝且原值不变():
     before = to_money("9000.00")
     for bad in ("", "   ", "abc", "1.2.3", None, "-1", "-0.01"):
@@ -154,7 +149,6 @@ def test_非法金额必须被拒绝且原值不变():
             )
 
 
-@acc("ACC-PAY-STAT-001", "001-05")
 def test_手改不产生隐式副作用():
     t = adjust_stat(
         notice_id=7, field=F_STAT_SETTLE, value="9000.00",
@@ -174,7 +168,6 @@ def test_手改不产生隐式副作用():
     assert isinstance(t2, StatTrace) and t2.field == F_STAT_PAID
 
 
-@acc("ACC-PAY-STAT-001", "001-06")
 def test_调整后欠款实时重算():
     rows = [_view()]
     assert recompute_debt(rows)[CATEGORY_MATERIAL] == to_money("2000.00")   # 10000 − 8000
@@ -191,7 +184,6 @@ def test_调整后欠款实时重算():
     assert recompute_debt([apply_trace(rows[0], t2)])[CATEGORY_MATERIAL] == to_money("5000.00")
 
 
-@acc("ACC-PAY-STAT-001", "001-07")
 def test_手改必须留痕():
     at = datetime(2026, 9, 15, 20, 30, 0)
     t = adjust_stat(

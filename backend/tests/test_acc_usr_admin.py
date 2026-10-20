@@ -18,11 +18,9 @@ from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.mod15_user import domain as D
 from app.mod15_user import repository as R
-from tests.acc_plugin import acc
 from tests.test_acc_usr_mgmt import _admin
 
 
-@acc("ACC-USR-MGMT-001", "001-02")
 def test_管理动作齐备且不设业务权限配置():
     """claim：「**管理动作齐备**（建号 / 改密 / 停用启用 / 删除 / 转让管理员），
     且**不设业务权限配置界面**」（§1.5.1 —— 「两人业务权限**无区别**」）
@@ -99,7 +97,6 @@ def test_管理动作齐备且不设业务权限配置():
         s.rollback()
 
 
-@acc("ACC-USR-MGMT-001", "001-02")
 def test_只有在用管理员能管理账号_且不靠按钮禁用():
     """claim：「**管理员** | 用户本人为管理员，**可管理其他账号**」（§1.5.1）—— 由 `001-02` 认领。
 
@@ -149,7 +146,6 @@ def test_只有在用管理员能管理账号_且不靠按钮禁用():
         s.rollback()
 
 
-@acc("ACC-USR-MGMT-001", "001-02")
 def test_本人可改自己密码而改别人仍要管理员():
     """⭐ 用户 2026-10-01 拍板：「**普通用户应该有改自己账户密码的权限**」（`TAIL-207`）。
 

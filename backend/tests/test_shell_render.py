@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import re
 
-from tests.acc_plugin import acc
 from tests.shell_src import read_shell, tbl_kernel           # ⭐ 壳源的**唯一读取出口**（P4①立的规矩）
 
 
@@ -28,7 +27,6 @@ def _render_body() -> str:
     return html[i:j if j > 0 else i + 12000]
 
 
-@acc()
 def test_本页内刷新不得跳滚动():
     body = _render_body()
     assert "scrollTop" in body and "keep" in body, (
@@ -43,7 +41,6 @@ def test_本页内刷新不得跳滚动():
     assert "scrollTop=0" in body_go, "go() 的切页回顶没了（那是故意的设计）"
 
 
-@acc()
 def test_虚拟滚动的设计红线():
     """⭐ 2026-09-21 用户裁定「走虚拟滚动」（m08 库存明细 1374 行 ≈ 2.75 万节点，一次 parse 卡几百毫秒）。
 
@@ -71,7 +68,6 @@ def test_虚拟滚动的设计红线():
     assert body.count("runBind(VIEW);") == 2, "普通与虚拟首画应各调用一次加工出口"
 
 
-@acc()
 def test_表级虚拟滚动_挂载点与分派顺序():
     """⭐ `TAIL-64` **P5-a**（2026-09-30）＋ **P5-c**（同日）：表级虚拟滚动的三条**结构性**保证。
 
@@ -121,7 +117,6 @@ def test_表级虚拟滚动_挂载点与分派顺序():
         "`startVirtual` 里没有「本页有没有带标记的表」这一步 ⇒ 表级那条路**永远不会接管**"
 
 
-@acc()
 def test_页级虚拟滚动那条死路已删():
     """⭐ `TAIL-64` **P5-c**（2026-09-30）：页级那条路（"整页一张大表自己滚"）**已删**，只剩**表级**。
 
@@ -157,7 +152,6 @@ def test_页级虚拟滚动那条死路已删():
     assert "VS_TS=[];" in body, "分派前没清空实例表 ⇒ 上一页认领过的表会留到下页"
 
 
-@acc()
 def test_通用浮层要逃出卡片裁剪_机制只有一处():
     """⭐⭐ 2026-09-26：`TAIL-109`（用户报障「**通用导入的项目选择控件，行数显示不全**」）＋
     `TAIL-110`（同类风险收口）。
@@ -207,7 +201,6 @@ def test_通用浮层要逃出卡片裁剪_机制只有一处():
     assert "addEventListener('resize', placePops)" in src, "缩窗口后浮层没重新定位"
 
 
-@acc()
 def test_项目面板的过滤与折叠_整页与浮层更新都要重涂():
     """⭐⭐ 2026-09-27（用户裁定 ①②）：项目面板的**搜索词与归档折叠**是"渲染后重涂"的。
 

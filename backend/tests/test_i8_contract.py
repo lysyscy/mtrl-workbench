@@ -23,7 +23,6 @@ from app.mod02_i8.notice_source import (
     bill_type_of,
 )
 from app.mod02_i8.sources import CommonProjectSource, WarehouseSource
-from tests.acc_plugin import acc
 
 # `API-01` 的一条**真实形态**样本（字段名 = 素材包实测真名）
 REC = {
@@ -76,7 +75,6 @@ def _isolated_settings(monkeypatch):
     get_settings.cache_clear()
 
 
-@acc()
 def test_API01十二字段真名都能正确映射():
     row = _map_record(REC)
     assert row is not None
@@ -93,18 +91,15 @@ def test_API01十二字段真名都能正确映射():
     assert row["fields"] is REC                            # 整条原样留存（不丢信息）
 
 
-@acc()
 def test_已付金额不由API01提供恒为零():
     # §4.3.3 / §4.4.2：已付金额 = **付款流水汇总**，不是 i8 字段
     assert _map_record(REC)["amount_paid"] == 0.0
 
 
-@acc()
 def test_缺主键的记录被丢弃():
     assert _map_record({"BillNo": "X"}) is None
 
 
-@acc()
 def test_审批状态零值判定的映射():
     for raw in (0, "0", "", None, "None", "null"):
         assert approve_status_of({"AppStatus": raw}) == APPROVE_STATUS_OTHER, raw
@@ -112,7 +107,6 @@ def test_审批状态零值判定的映射():
         assert approve_status_of({"AppStatus": raw}) == APPROVE_STATUS_DONE, raw
 
 
-@acc()
 def test_收付款类型到内部bill_type的分流与直觉相反():
     # §4.3.3：材料 → 其他支出；外租机械 → 付款通知书
     assert bill_type_of({"PhidRecPayType_EXName": "付款通知书"}) == BILL_TYPE_MECHANICAL
@@ -121,7 +115,6 @@ def test_收付款类型到内部bill_type的分流与直觉相反():
     assert bill_type_of({"PhidRecPayType_EXName": "付款申请"}) == "付款申请"
 
 
-@acc()
 def test_已批字面量在基础设施层与业务层不得漂移():
     """`mod02` 不依赖 `mod03`，所以字面量各声明一份 —— 用断言把它们钉在一起。"""
     from app.mod03_notice.domain import APPROVE_STATUS_DONE as BIZ_DONE
@@ -129,7 +122,6 @@ def test_已批字面量在基础设施层与业务层不得漂移():
     assert APPROVE_STATUS_DONE == BIZ_DONE == "已批"
 
 
-@acc()
 def test_旧别名仍然兼容_回归保护():
     # 真名缺失时回落到旧别名（防御性解析不退回原状）
     legacy = {"phId": "9", "billNo": "B", "ApproveStatus": "x", "AmountApproved": "7"}
@@ -138,7 +130,6 @@ def test_旧别名仍然兼容_回归保护():
     assert row["amount_approved"] == 7.0
 
 
-@acc()
 def test_API05仓库列表按真字段解析并跳作废(monkeypatch):
     monkeypatch.setenv("I8_BASE_URL", "http://i8/x")
     payload = {
@@ -155,7 +146,6 @@ def test_API05仓库列表按真字段解析并跳作废(monkeypatch):
     assert method == "POST" and "orgQuery" in form
 
 
-@acc()
 def test_API06常用项目按真字段解析(monkeypatch):
     monkeypatch.setenv("I8_BASE_URL", "http://i8/y")
     payload = {"Record": [{"PhId": "P1", "BillNo": "XMCB2025080001", "BillName": "某某项目", "Ab": "某某"}]}
@@ -163,7 +153,6 @@ def test_API06常用项目按真字段解析(monkeypatch):
     assert rows == [{"name_full": "某某项目", "phid": "P1", "code": "XMCB2025080001", "ab": "某某"}]
 
 
-@acc()
 def test_API01取数表单契约():
     from app.mod02_i8.notice_source import LIST_FORM, build_list_form, month_range
 
@@ -180,7 +169,6 @@ def test_API01取数表单契约():
     assert inner == {"BillDt*date*ge*1": "2026-08-01", "BillDt*date*le*1": "2026-08-31"}
 
 
-@acc()
 def test_API01抓取用POST且空结果会再确认一次(monkeypatch):
     """i8 会**偶发回"有效但空"** ⇒ 第一次 0 条时必须**再确认一次**，否则整月漏抓。"""
     from app.mod02_i8 import notice_source as ns
@@ -194,7 +182,6 @@ def test_API01抓取用POST且空结果会再确认一次(monkeypatch):
     assert all("queryfilter" in c[2] for c in client.calls)
 
 
-@acc()
 def test_取数端点一律走配置_未配置时显式报错(monkeypatch):
     from app.core.errors import NotConfiguredError
 

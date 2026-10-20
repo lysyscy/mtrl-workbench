@@ -14,11 +14,9 @@ from app.mod08_inv import service as inventory
 from app.mod08_inv.models import InvDetail, InvAdjustment
 from app.mod09_fee import repository as fees
 from app.mod11_jc import repository as jc, service as contracts
-from tests.acc_plugin import acc
 from tests.test_acc_jc_pay_link import _project
 
 
-@acc()
 def test_fee_original_excludes_adjustment(rollback_db):
     with session_scope() as s:
         row = InvDetail(ym='2026-08', warehouse_name='__300原单__',
@@ -34,7 +32,6 @@ def test_fee_original_excludes_adjustment(rollback_db):
         assert adjusted['adj_amount'] == Decimal('900')
 
 
-@acc()
 def test_jc_batch_facts_and_query_count(rollback_db):
     with session_scope() as s:
         project = _project(s, '__自检仓_300__')
@@ -73,7 +70,6 @@ def test_jc_batch_facts_and_query_count(rollback_db):
         assert next(r for r in one[made[0][0].id] if r['id']==manual.id)['date']=='2026-07-01'
 
 
-@acc()
 def test_notice_full_input_and_lock_parameters(monkeypatch):
     class Session:
         def __init__(self): self.calls=[]
@@ -94,7 +90,6 @@ def test_notice_full_input_and_lock_parameters(monkeypatch):
     assert s.calls==[(PaymentNotice,23,{'with_for_update':{'key_share':True},'populate_existing':True})]*2
 
 
-@acc()
 def test_jc_stat_reads_database_fact_not_cached_notice(rollback_db):
     with session_scope() as s:
         p=_project(s, '__自检仓_300_cache__')

@@ -23,7 +23,6 @@ from app.mod03_notice.print.fields import (
     uncovered_field_ids,
 )
 from app.mod03_notice.print.template import DS_DETAIL, parse_design
-from tests.acc_plugin import acc
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "i8_print_design_sample.json"
 NOW = datetime(2026, 9, 15, 21, 40)
@@ -55,26 +54,22 @@ DETAIL = [
 # ---------------------------------------------------------------- 金额格式
 
 
-@acc()
 def test_金额千分位两位小数():
     assert money(102765.0) == "102,765.00"
     assert money("1234.5") == "1,234.50"
     assert money(Decimal("0.01")) == "0.01"
 
 
-@acc()
 def test_金额零值留空():
     assert money(0) == "" and money("0.00") == "" and money(None) == "" and money("") == ""
     assert money(0.004) == ""                     # < 0.005 视为零
 
 
-@acc()
 def test_自定义金额字段blank_zero也留空():
     assert money(123.45, blank_zero=True) == ""    # 与素材包 blank_zero=True 的语义一致
     assert money("0", blank_zero=True) == ""
 
 
-@acc()
 def test_非数值金额原样显示不吞不猜():
     assert money("待定") == "待定"
 
@@ -82,7 +77,6 @@ def test_非数值金额原样显示不吞不猜():
 # ---------------------------------------------------------------- 主表 values
 
 
-@acc()
 def test_主表字段名与真机模板对齐且能全部取到值():
     tpl = _tpl()
     values = build_values(INFO, DETAIL, now=NOW)
@@ -96,7 +90,6 @@ def test_主表字段名与真机模板对齐且能全部取到值():
         assert key in values, key
 
 
-@acc()
 def test_值组装的关键语义():
     v = build_values(INFO, DETAIL, now=NOW)
     h = DS_HEADER
@@ -112,7 +105,6 @@ def test_值组装的关键语义():
     assert v[f"{DS_PAYMENT_BILL}.user_dfgz"] == ""
 
 
-@acc()
 def test_计划总额在无明细时退回单据头():
     v = build_values(INFO, [], now=NOW)
     assert v[f"{DS_HEADER}.计划总额"] == "102,765.00"
@@ -138,7 +130,6 @@ _TWO_ACCOUNT_SHAPES: tuple[dict, ...] = (
 )
 
 
-@acc("ACC-PAY-PRINT-001", "001-13")
 def test_收款账号银行取自定义字段_与i8原生打印同款():
     """`TAIL-60`（2026-09-21 用户报障「收款账号为空，和 i8 原生打印不符」）。
 
@@ -155,7 +146,6 @@ def test_收款账号银行取自定义字段_与i8原生打印同款():
     assert v2[f"{h}.收款银行1"] == "中国建设银行股份有限公司洛阳分行"
 
 
-@acc()
 def test_自定义字段缺失时退回标准字段_兜底():
     """⚠️ 反向 0 例 ⇒ 这条**没有真实数据能证伪**，只是保守行为；⛔ 不拿它当"与 i8 一致"的依据。"""
     d = {"RecAccNo": "8600003838000188", "PhidBank_EXName": "乌海银行股份有限公司乌达支行"}
@@ -168,7 +158,6 @@ def test_自定义字段缺失时退回标准字段_兜底():
 # ---------------------------------------------------------------- 明细行
 
 
-@acc()
 def test_明细行字段与外币金额算式():
     rows = build_detail_rows(DETAIL)
     assert len(rows) == 2
@@ -182,13 +171,11 @@ def test_明细行字段与外币金额算式():
 # ---------------------------------------------------------------- 覆盖度
 
 
-@acc()
 def test_真机模板的每个非图片格都被覆盖():
     """**防漂移的关键断言**：模板改了（加字段格）⇒ 这条会红，提醒补映射。"""
     assert uncovered_field_ids(_tpl()) == []
 
 
-@acc()
 def test_数据集常量与模板模块一致():
     from app.mod03_notice.print import template as tpl_mod
 

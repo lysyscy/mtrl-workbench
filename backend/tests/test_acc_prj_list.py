@@ -13,11 +13,9 @@ from app.mod01_projects.domain import (
     resolve_display,
 )
 from app.mod01_projects.models import STATUS_ARCHIVED, TYPE_SHELL, TYPE_SMALL
-from tests.acc_plugin import acc
 from tests.m01_helpers import make_project
 
 
-@acc("ACC-PRJ-LIST-001", "001-01")
 def test_候选含归档排最后且带标注():
     active = make_project(1, name_full="甲", warehouse="甲仓", order=1)
     archived = make_project(2, name_full="乙", warehouse="乙仓", order=0, status=STATUS_ARCHIVED)
@@ -27,7 +25,6 @@ def test_候选含归档排最后且带标注():
     assert cands[-1].key == "乙仓"                  # 带归档标注（archived 标志）
 
 
-@acc("ACC-PRJ-LIST-001", "001-02")
 def test_候选键为仓库名显示为展示名():
     p = make_project(1, name_full="某项目全名（很长的合同名）", warehouse="仓库X", disp="展示X")
     c = build_candidates([p])[0]
@@ -36,7 +33,6 @@ def test_候选键为仓库名显示为展示名():
     assert c.key != p.name_full     # **全名不作候选键**
 
 
-@acc("ACC-PRJ-LIST-001", "001-03")
 def test_只有能定位到仓库的档案进候选():
     has_wh = make_project(1, name_full="有仓库的", warehouse="仓库X")
     no_wh = make_project(2, name_full="未建档的项目名", warehouse=None)  # 无仓库 ⇒ 不可定位
@@ -44,7 +40,6 @@ def test_只有能定位到仓库的档案进候选():
     assert [c.key for c in cands] == ["仓库X"]
 
 
-@acc("ACC-PRJ-LIST-001", "001-04")
 def test_小微壳不进任何候选():
     shell = make_project(1, name_full="壳小微项目", warehouse=None, ptype=TYPE_SHELL)
     small = make_project(2, name_full="壳小微项目", warehouse="小微仓库", ptype=TYPE_SMALL, parent_shell_id=1)
@@ -52,7 +47,6 @@ def test_小微壳不进任何候选():
     assert len(cands) == 1 and cands[0].key == "小微仓库"   # 壳没有仓库 ⇒ 不进候选
 
 
-@acc("ACC-PRJ-LIST-001", "001-05")
 def test_多选语义空选全部与按与组合():
     keys = ["甲仓", "乙仓", "丙仓"]
     assert multi_select_keys([], keys) == keys                    # 空选 = 全部
@@ -60,7 +54,6 @@ def test_多选语义空选全部与按与组合():
     assert combine_filters(["甲仓", "乙仓"], ["乙仓", "丙仓"]) == ["乙仓"]  # 与其它筛选按「与」
 
 
-@acc("ACC-PRJ-LIST-001", "001-06")
 def test_展示名解析未建档与待指定():
     normal = make_project(1, name_full="普通项目", warehouse="仓库", disp="展示名")
     # 无匹配 ⇒ **必须显式标「未建档」**（不得静默留空）

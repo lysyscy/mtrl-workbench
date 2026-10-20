@@ -10,7 +10,6 @@ from openpyxl import Workbook
 
 from app.core.errors import MustReportError
 from app.import_kit import api, readers
-from tests.acc_plugin import acc
 
 
 def book_bytes(rows, merges=(), *, title="台账", empty_first=False):
@@ -31,7 +30,6 @@ def book_bytes(rows, merges=(), *, title="台账", empty_first=False):
     return buf.getvalue()
 
 
-@acc()
 def test_xlsx_values_and_shape_keep_each_callers_policy():
     data = book_bytes([[0, False, datetime(2026, 9, 15, 8, 30), time(8, 30), 45444, None]])
     generic, _ = readers.read_grid(data)
@@ -40,7 +38,6 @@ def test_xlsx_values_and_shape_keep_each_callers_policy():
     assert api.date_text("20260915") == "20260915"
 
 
-@acc()
 def test_merge_range_is_real_and_each_caller_keeps_its_extent():
     rows = [["供应商", "", "", "合法空列"], ["合同总价", "发票金额", "", ""]]
     rows += [[None] * 4 for _ in range(12)]
@@ -51,7 +48,6 @@ def test_merge_range_is_real_and_each_caller_keeps_its_extent():
     assert generic[15][1] is None, "通用数据区不得被整表展开"
 
 
-@acc()
 def test_xls_grid_keeps_coordinates_dates_bool_and_release(monkeypatch):
     """引擎隔离替身（非真实xls），覆盖真实样表没有的日期/布尔/合并块。"""
     import xlrd
@@ -71,7 +67,6 @@ def test_xls_grid_keeps_coordinates_dates_bool_and_release(monkeypatch):
     assert len(closed) == 1
 
 
-@acc()
 def test_sheet_format_and_failure_contracts_stay_distinct():
     data = book_bytes([], title="空表")
     assert readers.list_sheets(data) == ["空表"]

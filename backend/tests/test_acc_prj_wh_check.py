@@ -18,7 +18,6 @@ from app.mod01_projects.domain import i8_warehouse_lookup
 from app.mod02_i8 import wh_cache
 from app.mod03_notice import router as m03r
 from app.mod03_notice.schemas import WarehouseCheckRequest
-from tests.acc_plugin import acc
 
 ROWS = [
     {"warehouse_name": "兰考金不换前置车间项目", "owner_full_name": "第四工程公司2026年小微项目"},
@@ -46,7 +45,6 @@ def _call(name, rows=ROWS, allow_kick=False, seen=None):
 # --------------------------------------------------------------- 1 · 判定（唯一出口）
 
 
-@acc("ACC-PRJ-OWN-001", "001-15")
 def test_查名单的三态_命中_没命中_同名多主():
     """⚠️ 三种结果必须**分得开**：命中 ⇒ 给出所属全名；没命中 ⇒ 如实"没有"；同名多主 ⇒ 全给（⛔ 不替选）。"""
     hit = i8_warehouse_lookup("兰考金不换前置车间项目", ROWS)
@@ -65,7 +63,6 @@ def test_查名单的三态_命中_没命中_同名多主():
         "取不到名单 ⇒ 只是「没查到」，⛔ 不是「没有」（由调用方区分）"
 
 
-@acc("ACC-PRJ-OWN-001", "001-15")
 def test_仓库名比较是精确的白名单不剥尾码():
     """⛔ **不许把项目全名那套尾码剥离（§2.3.2）用到仓库名上**：仓库名是唯一标识 / 候选键（§2.7.4），
     剥了尾码就会**认错行**（把 "A仓(XM2)" 当成 "A仓"）。"""
@@ -78,7 +75,6 @@ def test_仓库名比较是精确的白名单不剥尾码():
 # --------------------------------------------------------------- 2 · 端点（只读 · 禁静默）
 
 
-@acc("ACC-PRJ-OWN-001", "001-15")
 def test_端点没命中时把后果说清():
     """没命中 ⇒ 回执要讲**后果**（将来 i8 建了会再建一行）＋ 要求**显式确认**（⛔ 不静默建）。"""
     miss = _call("不存在的仓库")
@@ -91,7 +87,6 @@ def test_端点没命中时把后果说清():
     assert "不替选" in hit.message
 
 
-@acc("ACC-PRJ-OWN-001", "001-15")
 def test_取不到名单必须降级且不许说成没有(monkeypatch, tmp_path):
     """⭐ **禁静默的核心**：「没取到名单」和「名单里没有」是**两回事** —— 取不到必须 `degraded=True`
     并在话里点明「**不等于**名单里没有」（否则用户会以为 i8 里真没有这个仓库）。
@@ -112,7 +107,6 @@ def test_取不到名单必须降级且不许说成没有(monkeypatch, tmp_path)
     assert blank.degraded is True and "先填" in blank.message, "空名字要当场提示（⛔ 别拿空串去查 i8）"
 
 
-@acc("ACC-PRJ-OWN-001", "001-15")
 def test_取不到名单但有上次缓存时用缓存并说清是几点的(monkeypatch, tmp_path):
     """⭐ 照交付面素材包 `warehouse_sync` 的 `save_cache`：名单**留一份快照**，
     查名单取不到（i8 不可用）时**接着判** —— ⛔ 但必须把「这是几点抓的」**说出来**
@@ -134,7 +128,6 @@ def test_取不到名单但有上次缓存时用缓存并说清是几点的(monk
     assert miss.from_cache is True and miss.found is False and "没有" in miss.message
 
 
-@acc("ACC-PRJ-OWN-001", "001-16")
 def test_名单缓存只读写文件且空名单不覆盖上一份(monkeypatch, tmp_path):
     """`wh_cache` 是**优化**（照本仓 `cookie_store` 的样板）：空名单**不许**覆盖上一份好的，
     路径走**唯一出口** `cache_path()`。"""
@@ -149,7 +142,6 @@ def test_名单缓存只读写文件且空名单不覆盖上一份(monkeypatch, 
     assert wh_cache.clear() is True and wh_cache.load() == (None, ""), "清得掉、清完当无缓存"
 
 
-@acc("ACC-PRJ-OWN-001", "001-16")
 def test_端点只读且判定走唯一出口():
     """⭐ ① **只读**：不落库、不建档（名单本身也不留档）—— 所以不碰 session / 仓储；
     ② 判定走 `domain.i8_warehouse_lookup`（**唯一出口**）—— 端点里⛔ 别自己写一份比较。"""
@@ -159,7 +151,6 @@ def test_端点只读且判定走唯一出口():
     assert "i8_warehouse_lookup(" in src, "判定要走唯一出口"
 
 
-@acc("ACC-PRJ-OWN-001", "001-16")
 def test_强踢授权默认关且原样透传():
     """`D9`：查名单**要登录 i8**、可能**强踢**在线用户 ⇒ `allow_kick` **默认 False**，
     且用户显式授权时**原样**传给取数件（⛔ 不许壳里悄悄替用户打开）。"""

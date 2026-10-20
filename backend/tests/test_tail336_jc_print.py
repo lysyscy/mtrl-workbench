@@ -5,11 +5,9 @@ import openpyxl
 import pytest
 
 from app.report_export import jc_print_export as export
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
-@acc("ACC-JC-UI-001", "001-16")
 def test_每项目独立版式_打印区随长表增长_金额与文本保真():
     rows = [{"project_seq": n, "date": "2026-10-14", "material": "=1+1",
              "supplier": "供应商", "contract_amt": None, "inv_sum": "100.25",
@@ -49,7 +47,6 @@ def test_每项目独立版式_打印区随长表增长_金额与文本保真():
         assert "付款方式" not in [c.value for row in ws.iter_rows(max_row=3) for c in row]
 
 
-@acc()
 def test_成品核对识别真正公式而允许等号开头的文本():
     from app.report_export import tpl_fill
     from app.report_export.save import workbook_bytes
@@ -67,7 +64,6 @@ def test_成品核对识别真正公式而允许等号开头的文本():
     assert any("还是公式" in p for p in tpl_fill.verify_filled(workbook_bytes(wb), plan))
 
 
-@acc("ACC-JC-UI-001", "001-16")
 def test_独立接口按全部纳入合同导出_判版不受不纳入行影响(monkeypatch):
     import base64
     from contextlib import contextmanager
@@ -120,7 +116,6 @@ def test_独立接口按全部纳入合同导出_判版不受不纳入行影响(
 
 
 
-@acc("ACC-JC-UI-001", "001-16")
 def test_打印入口在空筛选下仍可选项目并下载(ui_page, tmp_path):
     import base64
     import os

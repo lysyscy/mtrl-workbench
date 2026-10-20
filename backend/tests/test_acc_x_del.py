@@ -43,7 +43,6 @@ from app.core.errors import MustReportError as _MRE       # noqa: F401  （显�
 from app.mod03_notice import notice_manual_actions as NA
 from app.mod03_notice import rules_repository as RR
 from app.mod08_inv import domain as I
-from tests.acc_plugin import acc
 
 from tests.shell_src import SHELL, act_entry  # noqa: F401  ← `P4`① 读取点收敛
 
@@ -65,7 +64,6 @@ def _results() -> dict:
 # ---------------------------------------------------------- `001-01` 影响范围
 
 
-@acc("ACC-X-DEL-001", "001-01")
 def test_删除前列出真实影响范围而不是占位():
     from tests.m03_action_helpers import _client, _notice
     client, fake = _client([_notice(11, is_manual=True, ph_id="MANUAL-11", bill_no="M11",
@@ -81,7 +79,6 @@ def test_删除前列出真实影响范围而不是占位():
 # ---------------------------------------------------------- `001-04` 无删除入口
 
 
-@acc("ACC-X-DEL-001", "001-04")
 def test_i8源数据行一律无删除入口():
     """§4.2.7 / `NG-03`：**i8 抓取回来的行永不删**（源数据只读）⇒ 本页**连删除入口都不建**。
 
@@ -102,7 +99,6 @@ def test_i8源数据行一律无删除入口():
 # ---------------------------------------------------------- `001-02` 配置类硬删
 
 
-@acc("ACC-X-DEL-001", "001-02")
 def test_配置类数据硬删且被引用数据不随删():
     """§9.4 原文：「**配置类数据**（项目配置、规则配置等）→ **硬删除**」。
 
@@ -148,7 +144,6 @@ def test_配置类数据硬删且被引用数据不随删():
 # ---------------------------------------------------------- `001-05` 手动行删除
 
 
-@acc("ACC-X-DEL-001", "001-05")
 def test_手动行删除只删该行且清归属与勾选():
     """§4.2.6：「编辑 / 删除**只对手动新增行**开放；i8 抓取回来的行不受影响」。
 
@@ -180,7 +175,6 @@ def test_手动行删除只删该行且清归属与勾选():
 # ---------------------------------------------------------- `001-06` 只删选中行
 
 
-@acc("ACC-X-DEL-001", "001-06")
 def test_只删选中行且未确认就拒():
     from tests.m03_action_helpers import _client, _notice
     from app.mod03_notice.models import PaymentNotice
@@ -197,7 +191,6 @@ def test_只删选中行且未确认就拒():
 # ---------------------------------------------------------- `001-03` 账号软删（等 m15 的那条）
 
 
-@acc("ACC-X-DEL-001", "001-03")
 def test_软删档的账号_行保留可识别可恢复且走真库往返():
     """claim：「**软删类（账号）= 行保留 / 可识别 / 可恢复**」（§9.4 的**软删那一档**）。
 
@@ -252,7 +245,6 @@ def test_软删档的账号_行保留可识别可恢复且走真库往返():
 # ---------------------------------------------------------- `001-07` 撤销调整单
 
 
-@acc("ACC-X-DEL-001", "001-07")
 def test_撤销调整单只删该条且源数据不动():
     """2026-09-20 改写（原 claim 指着一个已撤的页）：**撤销调整单 = 只删这一条调整单**。
 
@@ -298,7 +290,6 @@ def _funcs(text: str) -> dict[str, str]:
     return out
 
 
-@acc("ACC-X-DEL-001", "001-08")
 def test_删除分档穷尽且不交叉():
     """§9.4 的**分档清单本身**（claim 原文：「哪些软删 / 哪些硬删 / 哪些不能删」）。
 

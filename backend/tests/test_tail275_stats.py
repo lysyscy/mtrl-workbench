@@ -5,12 +5,10 @@ from app.mod03_notice.models import PaymentNotice
 from app.mod05_flow.models import PaymentFlow
 from app.mod05_flow.service import build_stats, notice_debt_views
 from app.mod05_flow.domain import monthly_aggregate, CATEGORY_MATERIAL
-from tests.acc_plugin import acc
 from tests.m05_helpers import FakeSession, make_notice_row, make_flow, make_project
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
-@acc()
 def test_empty_payment_window_keeps_time_controls(ui_page):
     st = build_stats(FakeSession({Project: [], PaymentNotice: [], PaymentFlow: []}),
                      granularity='week', today=date(2026, 10, 10))
@@ -24,7 +22,6 @@ def test_empty_payment_window_keeps_time_controls(ui_page):
     assert '窗口合计' in card.inner_text()
 
 
-@acc()
 def test_week_picker_refetches_early_and_cross_quarter_weeks(ui_page):
     s = FakeSession({Project: [], PaymentNotice: [], PaymentFlow: []})
     for week in ('2026-06-29', '2026-07-06', '2026-08-03', '2026-09-28'):
@@ -45,7 +42,6 @@ def test_week_picker_refetches_early_and_cross_quarter_weeks(ui_page):
         assert ui_page.evaluate('m05Params().bucket') == week
 
 
-@acc()
 def test_stats_axis_and_selected_bucket_are_independent():
     s = FakeSession({Project: [], PaymentNotice: [], PaymentFlow: []})
     a = build_stats(s, granularity='week', year=2026, quarter=4, bucket='2026-07-06')
@@ -59,7 +55,6 @@ def test_stats_axis_and_selected_bucket_are_independent():
     assert c['selected']['bucket'] == '2025-09'
 
 
-@acc()
 def test_selected_bucket_window_total_count_and_ledger(ui_page):
     s = FakeSession({Project: [make_project(11, '甲仓', '甲项目')],
         PaymentNotice: [make_notice_row(1, doc_date='2026-08-03', paid='150'),
@@ -96,7 +91,6 @@ def test_selected_bucket_window_total_count_and_ledger(ui_page):
     assert p.evaluate('LED_THEAD').count('按单据日期') == 1
 
 
-@acc()
 def test_week_selection_uses_payment_dates(ui_page):
     p = ui_page
     p.evaluate('''() => {

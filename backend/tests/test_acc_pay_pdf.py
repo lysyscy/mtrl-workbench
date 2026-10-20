@@ -15,7 +15,6 @@ from app.core.errors import MustReportError
 from app.mod03_notice import pdf_cache as cache
 from app.mod03_notice.print.template import PrintTemplate
 from app.mod03_notice.service import MODE_PDF, MODE_PRINT, run_batch
-from tests.acc_plugin import acc
 from tests.m03_helpers import (
     DispatchSpy,
     FakeDesignFetcher,
@@ -64,7 +63,6 @@ def _executor_factory(notices):
 # ------------------------------------------------------------------ 001-01
 
 
-@acc("ACC-PAY-PDF-001", "001-01")
 def test_与批量打印共用同一次勾选():
     from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
@@ -87,7 +85,6 @@ def test_与批量打印共用同一次勾选():
 # ------------------------------------------------------------------ 001-02
 
 
-@acc("ACC-PAY-PDF-001", "001-02")
 def test_只渲染落盘不触发投递(tmp_path):
     dispatch = DispatchSpy()
     notices = [make_notice(1, "PN-1", "material"), make_notice(2, "PN-2", "material")]
@@ -105,7 +102,6 @@ def test_只渲染落盘不触发投递(tmp_path):
 # ------------------------------------------------------------------ 001-03
 
 
-@acc("ACC-PAY-PDF-001", "001-03")
 def test_产物不在本机留文件_直接交浏览器下载():
     """⭐ 口径 **2026-09-20 变更**（用户原文：「如果**导出**的话，**换成浏览器下载**吧」）。
 
@@ -137,7 +133,6 @@ def test_产物不在本机留文件_直接交浏览器下载():
 # ------------------------------------------------------------------ 001-04
 
 
-@acc("ACC-PAY-PDF-001", "001-04")
 def test_产物提供访问入口():
     from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
 
@@ -175,7 +170,6 @@ def test_产物提供访问入口():
 # ------------------------------------------------------------------ 001-05
 
 
-@acc("ACC-PAY-PDF-001", "001-05")
 def test_取不到版式或渲染失败须显式报错(tmp_path):
     # 渲染失败 ⇒ 该单记"未出 + 原因"，不产空白件、不静默跳过
     render = RenderSpy(fail=MustReportError("PDF 渲染失败：测试注入"))
@@ -189,7 +183,6 @@ def test_取不到版式或渲染失败须显式报错(tmp_path):
 # ------------------------------------------------------------------ 001-06
 
 
-@acc("ACC-PAY-PDF-001", "001-06")
 def test_批内未产出须列明未出单号():
     fail = {"mechanical": MustReportError("取不到单据类型「mechanical」对应的版式")}
     notices = [make_notice(1, "PN-1", "material"), make_notice(2, "PN-2", "mechanical")]
@@ -200,7 +193,6 @@ def test_批内未产出须列明未出单号():
 # ------------------------------------------------------------------ 001-07
 
 
-@acc("ACC-PAY-PDF-001", "001-07")
 def test_零值金额格留空():
     tpl = template([field_cell(0, 0, "本次结算金额"), field_cell(0, 1, "计划总额")], cols=2, rows=1)
     render = RenderSpy()
@@ -221,7 +213,6 @@ def test_零值金额格留空():
 # ------------------------------------------------------------------ 实现层自检（⛔ 不绑判据点）
 
 
-@acc()
 def test_多张打包成zip_单张直出PDF_过期给显式404():
     """`PDF-001-04` 的 **2026-09-20 形态**（导出改浏览器下载）—— 三条新路。
 

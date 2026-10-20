@@ -17,7 +17,6 @@ from app.mod06_proc.models import ProcMechManual
 from app.mod06_proc.workbench_models import MechanicalWorkbenchRecord, MechanicalWorkbenchPreview
 from app.mod06_proc import workbench, workbench_api as API, workbench_i8
 from app.mod02_i8.models import RunRecord
-from tests.acc_plugin import acc
 from tests.test_mechanical_workbench import session
 
 
@@ -85,7 +84,6 @@ def draft(**changes):
                       'rate': '103.00', 'qty': '1', 'date': '1日至3日', 'plate': ''}], **changes}
 
 
-@acc("ACC-RPT-MECH-001", "001-02")
 def test_get_post_public_contract_and_persisted_confirmation(api):
     response = api.client.get('/api/m06/workbench', params={'ym': '2026-09'})
     assert response.status_code == 200
@@ -110,8 +108,6 @@ def test_get_post_public_contract_and_persisted_confirmation(api):
 
 
 @pytest.mark.parametrize('name,payload', [('unsupported-action', {}), ('details-save', draft(warehouse='未知项目'))])
-@acc("ACC-RPT-MECH-001", "001-05")
-@acc("ACC-RPT-MECH-001", "001-02")
 def test_illegal_action_and_unmapped_warehouse_do_not_write(api, name, payload):
     response = api.client.post('/api/m06/workbench/' + name, json=payload)
     assert response.status_code == 400
@@ -122,7 +118,6 @@ def test_illegal_action_and_unmapped_warehouse_do_not_write(api, name, payload):
     assert api.tracker['rollbacks'] == 1
 
 
-@acc("ACC-RPT-MECH-001", "001-02")
 def test_route_failure_rolls_back_already_flushed_changes(api, monkeypatch):
     original_action = workbench.action
 
@@ -139,7 +134,6 @@ def test_route_failure_rolls_back_already_flushed_changes(api, monkeypatch):
     assert api.client.get('/api/m06/workbench').json()['details'] == []
 
 
-@acc("ACC-RPT-MECH-001", "001-12")
 def test_preview_export_read_only_saved_state_and_freeze_each_result(api):
     assert api.client.post('/api/m06/workbench/details-save', json=draft()).status_code == 200
     # An incoming GET query cannot insert a browser's unsaved draft into output.
@@ -162,7 +156,6 @@ def test_preview_export_read_only_saved_state_and_freeze_each_result(api):
     assert api.captured['exports'][0]['details'][0]['rows'][0]['amount'] == '103.00'
 
 
-@acc("ACC-RPT-MECH-001", "001-12")
 def test_export_rejects_preview_token_after_saved_state_changes(api):
     assert api.client.post('/api/m06/workbench/details-save', json=draft()).status_code == 200
     params = {'ym': '2026-09', 'projects': json.dumps(['甲'])}
@@ -189,7 +182,6 @@ def test_export_rejects_preview_token_after_saved_state_changes(api):
 
 
 @pytest.mark.parametrize('route', ['preview', 'export'])
-@acc("ACC-RPT-MECH-001", "001-12")
 def test_export_unknown_project_is_rejected_before_exporter(api, route):
     response = api.client.get('/api/m06/workbench/' + route,
                               params={'ym': '2026-09', 'projects': json.dumps(['甲', '不存在'])})
@@ -198,7 +190,6 @@ def test_export_unknown_project_is_rejected_before_exporter(api, route):
     assert not api.captured['previews'] and not api.captured['exports']
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_i8_network_fetch_happens_outside_database_session(api, monkeypatch):
     from datetime import datetime
     calls = []
@@ -245,7 +236,6 @@ def test_i8_network_fetch_happens_outside_database_session(api, monkeypatch):
     assert state['i8'] == []  # Fetch is a preview until an explicit confirmation.
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_i8_network_failure_does_not_open_write_session(api, monkeypatch):
     def fail_read(projects, previous):
         assert api.tracker['active'] == 0
@@ -265,7 +255,6 @@ def test_i8_network_failure_does_not_open_write_session(api, monkeypatch):
         assert record.error_message == '读取失败，旧值保持'
 
 
-@acc('ACC-RPT-MECH-001', '001-07')
 def test_fetch_passes_shell_archive_and_keywords_without_holding_session(api, monkeypatch):
     from app.mod01_projects import service as projects_service
     from app.mod06_proc.workbench_i8 import normalize
@@ -302,7 +291,6 @@ def test_fetch_passes_shell_archive_and_keywords_without_holding_session(api, mo
         'preview_id': preview['preview_id'], 'warehouses': ['甲', '乙']}).status_code == 200
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_i8_preview_failure_rolls_back_business_but_keeps_execution_record(api, monkeypatch):
     incoming = {'projects': [{'warehouse': '甲', 'projectId': 'i8-a',
         'sources': {'usage': [{'id': 'u', 'projectId': 'i8-a', 'amount': '1.00'}], 'project': [], 'team': []},
@@ -325,7 +313,6 @@ def test_i8_preview_failure_rolls_back_business_but_keeps_execution_record(api, 
         assert record.status == 'failed' and record.error_message == '预览未保存'
 
 
-@acc("ACC-RPT-MECH-001", "001-08")
 def test_complete_empty_fetch_requires_evidence_before_zeroing_old_project(api, monkeypatch):
     first = {'projects': [{'warehouse': '甲', 'projectId': 'i8-a',
         'sources': {'usage': [{'id': 'u', 'projectId': 'i8-a', 'amount': '100.00'}], 'project': [], 'team': []},

@@ -15,7 +15,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 from tests.shell_src import SHELL, act_entry, page_slice, with_kernel, with_tbl  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67` · `with_tbl`：`TAIL-64`）
@@ -30,14 +29,12 @@ ROUTER = (ROOT / "backend" / "app" / "mod06_proc" / "router.py").read_text(encod
 #   · `_act_body(name)` ⇒ `act_entry(name)`：⭐ 逐字节一致（`procExpToggle` 789 / `mechOpen` 2577 都对上）。
 
 
-@acc()
 def test_机械演示数组已删():
     """⛔ 演示值会让本页机械数与后端 KPI **打架**（真假混用比不接更糟）。"""
     assert "const MACH6 = {" not in SHELL, "机械演示数组 `MACH6` 还在壳里"
     assert "let MACH6 = {};" in SHELL, "`MACH6` 没改成「空对象起手 + 后端填充」"
 
 
-@acc()
 def test_机械值来自后端且boot会拉():
     assert "m06Mech: () => API.get('/api/m06/mech')" in SHELL, "API 层没有 `m06Mech`"
     assert "async function reloadMech()" in SHELL, "没有 `reloadMech()`"
@@ -53,7 +50,6 @@ def test_机械值来自后端且boot会拉():
     assert "机械 6 列" in _DEP["付款域"], "`付款域` 不再等机械值（m05 的机械欠款会取到空）"
 
 
-@acc()
 def test_机械结构未变_引用面一行未改():
     """⭐ 本轮的全部好处就在这：**只换来源**，所以这些派生函数仍是原型写法。"""
     for frag in (
@@ -63,27 +59,23 @@ def test_机械结构未变_引用面一行未改():
         assert frag in SHELL, f"机械派生函数被改动了（本轮只该换来源）：{frag[:46]}…"
 
 
-@acc()
 def test_m05的机械结算改用真源_且不再是取零出口():
     """接线后 `m05` 的机械欠款必须读真源 —— 那条「机械源未接线 ⇒ 取 0」的临时态要消失。"""
     assert "N2(machSettleOf(k)" in SHELL, "`V.m05` 的机械结算项没接真源"
     assert "m05MechSettle" not in SHELL, "取零出口 `m05MechSettle` 还有残留（临时态没清）"
 
 
-@acc()
 def test_后端机械读数端点存在且形状对齐原型():
     assert '@router.get("/api/m06/mech")' in ROUTER, "后端缺 `GET /api/m06/mech`"
     assert "MECH_COLUMNS" in ROUTER, "端点没按 `MECH_COLUMNS` 出 6 列"
     assert '"mech": out' in ROUTER, "端点没出 `mech` 键（壳按它填 `MACH6`）"
 
 
-@acc()
 def test_WIRED含m06():
     m = re.search(r"const WIRED=new Set\(\[([^\]]*)\]\);", SHELL)
     assert m and "'m06'" in m.group(1), "`WIRED` 里没有 `m06`"
 
 
-@acc()
 def test_视图切片未被改动():
     """⭐ 反向：`V.m06` 里不得出现 `API.` —— 渲染逻辑必须一行不改（`D18`）。"""
     body = page_slice("m06")
@@ -95,7 +87,6 @@ def test_视图切片未被改动():
 
 
 
-@acc()
 def test_录机械费走后端且不在前端复写判据():
     """⭐ 反向：不许本地改 `MACH6` 冒充落库（假成功）；校验（负数 / 非数字）也不在前端复写。"""
     body = act_entry("procMechSave")
@@ -113,7 +104,6 @@ def test_录机械费走后端且不在前端复写判据():
 # ⭐ 新壳把这些做成了**结构**（格数由表头派生 / 单选面板 / 选中即收起）—— 比逐格数更硬。
 
 
-@acc("ACC-RPT-EXP-001", "001-03")
 def test_导出展开区是独立出口_全壳恰好一处():
     """TAIL-265：项目与确认在独立弹窗，取消关闭；不再依赖表内浮层或镜像开关。"""
     assert SHELL.count("const procExpDlg=()=>") == 1, "导出弹窗必须有唯一构造出口"
@@ -122,7 +112,6 @@ def test_导出展开区是独立出口_全壳恰好一处():
     assert 'data-act="procExpSave"' in body and 'data-act="procExpCancel"' in body
     assert "procExpStrip" not in page_slice("m06"), "页面仍渲染旧展开区"
 
-@acc("ACC-RPT-EXP-001", "001-01")
 def test_导出展开区是多选_每项目一份_多项目打zip():
     """TAIL-265：同窗复选框、全选/清空，保留每项目一份与多项目ZIP出口。"""
     body = SHELL[SHELL.index("const procExpDlg=()=>"):SHELL.index("const procExpSelection=()=>")]
@@ -132,7 +121,6 @@ def test_导出展开区是多选_每项目一份_多项目打zip():
     assert "每项目一份" in body and "ZIP" in body
     assert "const pjs=procExpPjs.slice();" in act_entry("procExpSave")
 
-@acc("ACC-RPT-EXP-001", "001-01")
 def test_一个项目都没选时导出按钮禁用():
     """清空后禁用导出且处理器防空；不静默回退当前项目。"""
     body = SHELL[SHELL.index("const procExpDlg=()=>"):SHELL.index("const bigCands =")]
@@ -140,7 +128,6 @@ def test_一个项目都没选时导出按钮禁用():
     assert re.search(r"\w+\.disabled\s*=\s*!selected\.size", body), "全选/清空后没有同步禁用状态"
     assert "if(!pjs.length) return toast(" in act_entry("procExpSave")
 
-@acc("ACC-RPT-EXP-001", "001-04")
 def test_导出取数跟随当前所显示的表():
     """旧页：切表后「导出取数」提示逐一对上（`data-exp-tab`）。新壳对应：**导出 URL 带上当前表签**
     ⇒ 取数跟着用户眼前那张表走（⛔ 不许固定成表②）。"""
@@ -148,7 +135,6 @@ def test_导出取数跟随当前所显示的表():
         "导出请求没带当前表签 ⇒ 会导出与眼前不一致的表"
 
 
-@acc("ACC-RPT-EXP-001", "001-02")
 def test_导出展开区默认选中本页当前项目():
     """弹窗没有选择时默认当前项目；不修改页面单选，也不取首个候选。"""
     body = act_entry("procExpToggle")
@@ -156,7 +142,6 @@ def test_导出展开区默认选中本页当前项目():
     assert "procPj=" not in body and "PROC_PJS[0]" not in body
     assert "procExpDlg();" in body
 
-@acc()
 def test_导出面板一键开合_开合判据只认面板自身状态():
     """TAIL-265：点击直接开同一弹窗，取消后单次点击重开，取消不下载。"""
     body = act_entry("procExpToggle")
@@ -166,7 +151,6 @@ def test_导出面板一键开合_开合判据只认面板自身状态():
     assert "closeModal();" in cancel and "procExpPjs=[]" in cancel
     assert "dlExport" not in cancel and "procExpSave" not in cancel
 
-@acc()
 def test_过程资料机械手录不按截止月拦截():
     """导入截止月不再作为机械手录挡板。"""
     assert "MECH_SECTIONS = d.sections || {};" in SHELL, "后端机械段标记未落定"
@@ -174,14 +158,12 @@ def test_过程资料机械手录不按截止月拦截():
     assert "MECH_SECTIONS[wh]" not in act_entry("procMechSave"), "仍按历史段拒绝机械手录"
 
 
-@acc("ACC-RPT-PROC-001", "001-01")
 def test_默认停在调整后表():
     """旧页断言：不带参数 ⇒ `tab=1`（**表② 调整后**）。新壳对应 `procTab` 的**初值 = 1**
     ⇒ ⛔ 不许改成 0（原始）或 2（差异）。"""
     assert "let procPj='', procTab=1" in SHELL, "壳里 `procTab` 初值不是 1（表② 调整后）"
 
 
-@acc("ACC-RPT-PROC-001", "001-04")
 def test_项目筛选单选且选中即收起():
     """旧页：`type="radio"` ＋ `onchange` 提交 ＋ 收起态 `<details>`（且不给「全选 / 清空」）。
     新壳换成**单选面板** ⇒ claim 不变：**只单选** ＋ **选中即收起**。"""
@@ -193,14 +175,12 @@ def test_项目筛选单选且选中即收起():
         "选完项目没有收起面板"
 
 
-@acc("ACC-RPT-PROC-001", "001-03")
 def test_筛选栏不设只读年月框():
     """旧页断言筛选栏没有 `name="period"` / `readonly`。新壳同理：**核算月只作表内列**
     （§5.2.2）⇒ ⛔ 不给一个只读的年月框当摆设。"""
     assert 'name="period"' not in SHELL, "壳里出现了名为 `period` 的年月框"
 
 
-@acc("ACC-RPT-PROC-001", "001-05")
 def test_合计行格数由表头派生():
     """⭐ **三条判据点的共同形态**（`001-05` 逐列合计 · `001-06` 总求和各段 · `001-07` 差异表合计）：
     「**跨列数 = 表头列数**」。旧页靠"数 `colspan` 之和"验证；新壳把这条**做成了结构** ——
@@ -219,7 +199,6 @@ def test_合计行格数由表头派生():
         "`TBL` 内核没有把 rows 拼进 `tbody` ⇒ 表被掏空了（判据两段拼接：切片委托 ＋ 内核真做事）"
 
 
-@acc("ACC-RPT-PROC-002", "001-08")
 def test_正式段空态在壳里渲染成破折号而不是零():
     """⭐ 判据点**搬家**（`§19` 批 2）：原先钉在**旧服务端页**那一格（`render_proc_page` 的输出里
     空态渲染成「—」而不是 `0.00`）。旧页整体删除（授权 `D18`）⇒ 改指**新壳**（⛔ 判据不删）。
@@ -231,7 +210,6 @@ def test_正式段空态在壳里渲染成破折号而不是零():
         "壳的金额格式器没有「null ⇒ —」这一支 ⇒ 空态会被渲染成 0（正是 001-08 要防的「臆造 0」）"
 
 
-@acc("ACC-RPT-PROC-002", "001-03")
 def test_机械录入口只送mech键_材料列没有输入面():
     """机械提交不产生材料列写入。"""
     assert "'mech_'+" in act_entry("procMechSave")
@@ -239,7 +217,6 @@ def test_机械录入口只送mech键_材料列没有输入面():
         assert bad not in SHELL
 
 
-@acc()
 def test_机械列名由后端给():
     """⚠️ 列名的**唯一主人 = 后端** `domain.MECH_COLUMNS` ⇒ 壳里的 `MECH_LABELS` 只是兜底。
 
@@ -256,7 +233,6 @@ def test_机械列名由后端给():
     )
 
 
-@acc()
 def test_后端机械写端点存在():
     assert '@router.post("/api/m06/mech")' in ROUTER, "后端缺 `POST /api/m06/mech`（`TAIL-38` 的写入口）"
     # ⚠️ 必须**看 API 端点自己的函数体** —— 只写「文件里含 `mech_ui.parse_mech_values(`」是**假绿**：
@@ -272,7 +248,6 @@ def test_后端机械写端点存在():
 # --------------------------------------------------------------- 按模板导出（`TAIL-04` 片 4a）
 
 
-@acc("ACC-RPT-EXP-001", "001-08")
 def test_按模板导出走真下载而不是假成功():
     """⭐ `TAIL-04` **片 4a**：过程资料成品由后端模板填充生成 ⇒ 壳侧必须是**真下载**。
 
@@ -289,7 +264,6 @@ def test_按模板导出走真下载而不是假成功():
     assert 'data-act="procExpSave"' in SHELL, "预览弹窗的「保存到本地」没接到 `procExpSave`"
 
 
-@acc("ACC-RPT-EXP-001", "001-08")
 def test_按模板导出失败必须给人原因不静默():
     """后端失败回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（没选项目 / 项目没数据 / 取不到展示名 /
     模板坏 / **显示区对账不过**）⇒ 壳必须**弹原因**，⛔ 不能静默、也不能当文件下载。"""
@@ -306,7 +280,6 @@ def test_按模板导出失败必须给人原因不静默():
 # ------------- ⭐ `TAIL-173`（2026-09-29 · 用户裁定 `A`）：`A4` 顺手报的两件，本批落地
 
 
-@acc("ACC-RPT-EXP-001", "001-09")
 def test_卡头不再出现那枚永不出结果的导出按钮():
     """⭐ `TAIL-173`-①（用户裁定 `A`）：`m06` 卡头原先**并排两枚导出** —— 真入口
     「批量导出（先选项目）…」（按 17 列模板导出）＋ 一枚**永远只会说「这一页还没有导出功能」**的
@@ -330,7 +303,6 @@ def test_卡头不再出现那枚永不出结果的导出按钮():
         "兜底说明被顺手删了 —— `m08` 朴素那份 / 已取消的差异清单还在用它"
 
 
-@acc("ACC-RPT-PROC-001", "001-10")
 def test_差异表的差额列只标方向不整列标红():
     """⭐ `TAIL-173`-②（用户裁定 `A`）：差异表**每一行本来就是差异** ⇒ 差额列整列标红
     **没有区分度**（守则 §4.5：颜色只承担语义），而方向本来就在值里

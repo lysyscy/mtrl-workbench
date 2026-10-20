@@ -16,7 +16,6 @@ from app.mod05_flow.models import (
     PaymentFlow,
     PAY_METHODS,
 )
-from tests.acc_plugin import acc
 from tests.m03_action_helpers import FakeWriteSession, _notice
 
 APPROVED = Decimal("10000.00")
@@ -34,7 +33,6 @@ def _session(notices, flows=(), traces=()) -> FakeWriteSession:
 # ============================================================ ACC-PAY-STAT-002
 
 
-@acc("ACC-PAY-STAT-002", "002-01")
 def test_统计付款金额默认值等于已付金额():
     s = _session([_notice(7, stat_paid=Decimal("0.00"))],
                  flows=[PaymentFlow(id=1, notice_id=7, amount=Decimal("300.00"),
@@ -43,14 +41,12 @@ def test_统计付款金额默认值等于已付金额():
     assert s.by_model[PaymentNotice][0].stat_paid == Decimal("300.00")
 
 
-@acc("ACC-PAY-STAT-002", "002-02")
 def test_付款后自动重算():
     s = _session([_notice(7, stat_paid=Decimal("0.00"))])
     repo.create_flow(s, notice_id=7, project_id=None, amount="250.00", pay_date="2026-09-03")
     assert s.by_model[PaymentNotice][0].stat_paid == Decimal("250.00")
 
 
-@acc("ACC-PAY-STAT-002", "002-03")
 def test_撤销付款后自动重算_回退():
     s = _session([_notice(7, stat_paid=Decimal("0.00"))])
     flow = repo.create_flow(s, notice_id=7, project_id=None, amount="250.00",
@@ -60,7 +56,6 @@ def test_撤销付款后自动重算_回退():
     assert s.by_model[PaymentNotice][0].stat_paid == Decimal("0.00")
 
 
-@acc("ACC-PAY-STAT-002", "002-05")
 def test_手改过的行不被自动重算覆盖():
     trace = NoticeStatLog(id=1, notice_id=7, field="stat_paid",
                           before_amount=Decimal("0.00"), after_amount=Decimal("6000.00"),
@@ -70,7 +65,6 @@ def test_手改过的行不被自动重算覆盖():
     assert s.by_model[PaymentNotice][0].stat_paid == Decimal("6000.00")   # 人工值原样保留
 
 
-@acc("ACC-PAY-STAT-002", "002-06")
 def test_实付超过审批金额照实写入不封顶():
     """claim 是**两半**：「实付合计 > 审批金额 ⇒ **照实写入** ＋ **该单挂提醒**（不得静默封顶、
     不得改写）」。
@@ -121,8 +115,6 @@ def _assert_overpay_reminder() -> None:
 # ============================================================ ACC-PAY-AMT-001
 
 
-@acc("ACC-PAY-AMT-001", "001-01")
-@acc("ACC-PAY-AMT-001", "001-02")
 def test_金额字段结构是三金额且付款金额为派生列():
     from app.mod03_notice.domain import SOURCE_FIELDS, STAT_FIELDS, THREE_AMOUNT_FIELDS, derived_pay_amount
 
@@ -135,7 +127,6 @@ def test_金额字段结构是三金额且付款金额为派生列():
     assert "pay_amount_src" not in cols and "stat_paid" in cols
 
 
-@acc("ACC-PAY-AMT-001", "001-03")
 def test_抓取映射不再产出付款金额源字段():
     from app.mod02_i8.notice_source import _map_record
 

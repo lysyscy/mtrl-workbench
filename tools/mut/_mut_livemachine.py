@@ -1,18 +1,16 @@
-"""**反向灵敏度**：`T23`（活机器口径六路）**真有区分力**，且**已接进收工闸门**。
+"""**反向灵敏度**：`T23`（活机器口径六路）**真有区分力**。
 
 守什么：`tools/audit/audit_meta.py` 的 `check_live_machine()` ＋ `LIVE_MACHINE_REQUIRED`
-（判据的靶）＋ `tools/audit/audit_common.py` 的 `LIVE_MACHINE_GLOBS`（口径的唯一真源）
-＋ `tools/audit/doc_audit.py` 里的**接线**。
+（判据的靶）＋ `tools/audit/audit_common.py` 的 `LIVE_MACHINE_GLOBS`（口径的唯一真源）。
 
 为什么值得有（当天真翻过车）：清「零机器引用的死重」的第一版口径只扫后端与 `tools/` 下的
 `.py` ⇒ **漏了运维脚本与规则档两路** ⇒ 差点把一份**被运维脚本引用**的设计件当死重搬走。
 而**"命令自己测自己"不够** —— 翻车那版正是"口径只写在脚本里、没人钉"。
 
-做法（六例，缺一不可）：
+做法（五例，缺一不可）：
   ① **拿掉一路**必须报红（漏扫那一处却仍然全绿 ＝ 那天那场翻车）；
   ② **glob 写坏**（空命中）必须报红（扫空集却装作扫过 ＝ `T18` 同族的假绿）；
   ③ 命令件里**再抄一份口径**必须报黄（"只定义一次"要有牙）；
-  ④ **接线不许掉**（判据装了却没进 `doc_audit` ＝ 收工闸门里没有它 —— 本仓已有五例"僵尸闸门"）；
   ⑤ ⭐ **后缀白名单**改坏也必须报红（`/code-review` 当场指出首版只钉了 glob ⇒ 第三半边是哑的）；
   ⑥ **正常数据必须一条不报**（这一条比"会报"更要紧：只会误报的判据比没有判据更坏）。
 
@@ -33,7 +31,6 @@ ROOT = Path(__file__).resolve().parents[2]
 PY = ROOT / "backend" / ".venv" / "Scripts" / "python.exe"
 COMMON = ROOT / "tools" / "audit" / "audit_common.py"
 REFS = ROOT / "tools" / "audit" / "refs_query.py"
-DOCAUDIT = ROOT / "tools" / "audit" / "doc_audit.py"
 
 #: `LIVE_MACHINE_GLOBS` 里那一行的**完整字面**（⛔ 必须是唯一的结构行，不是"含 ops 的第一行"）
 LANE_PS1 = '("ops/*.ps1", "④ 运维脚本", (".ps1",)),'
@@ -71,11 +68,11 @@ def _restore(p: Path, src: bytes) -> None:
 
 
 def main() -> int:
-    for p in (COMMON, REFS, DOCAUDIT):
+    for p in (COMMON, REFS):
         if not p.exists():
             print("⛔ 靶件不在位：%s ⇒ 本件无法跑" % p.relative_to(ROOT))
             return 1
-    common_src, refs_src, doc_src = (p.read_bytes() for p in (COMMON, REFS, DOCAUDIT))
+    common_src, refs_src = (p.read_bytes() for p in (COMMON, REFS))
     base_n, base_out = probe()
     print("基线（未改坏）`T23` 命中 %d 条（**应为 0**）" % base_n)
     if base_n != 0:
@@ -90,8 +87,6 @@ def main() -> int:
     cases.append(("L2", "glob 写坏（空命中）⇒ 必须报红", COMMON, common_src, "break_glob", "empty"))
     # ③ 命令件里再抄一份口径 ⇒ 必须报黄
     cases.append(("L3", "`refs` 件代码里复述活机器路径 ⇒ 必须报黄", REFS, refs_src, "restate", "yellow"))
-    # ④ 接线不许掉（装了却没进收工闸门 ＝ 本仓已有五例"僵尸闸门"）
-    cases.append(("L4", "`doc_audit` 里的接线被拆掉 ⇒ 必须报红", DOCAUDIT, doc_src, "unwire", "red"))
     # ⑤ ⭐ 第三半边（`/code-review` 指出首版只钉了 glob）：**后缀白名单**改坏也必须报红
     cases.append(("L5", "**后缀白名单**改坏 ⇒ 必须报红（第三半边）", COMMON, common_src,
                   "break_suffix", "suffix"))
@@ -122,10 +117,6 @@ def main() -> int:
                 add = ('\n\n#: 变异注入（L3）：命令件里再抄一份活机器口径。\n'
                        '_L3_RESTATED = ("ops/*.ps1",)\n')
                 path.write_bytes((text + add).encode("utf-8"))
-            elif mode == "unwire":
-                old = "raw += check_live_machine()"
-                assert text.count(old) == 1, "接线那行不在（或不止一处）⇒ 本件需重定靶"
-                path.write_bytes(text.replace(old, "# 变异注入（L4）：接线被拆掉", 1).encode("utf-8"))
             n, out = probe()
         finally:
             _restore(path, src)
@@ -147,13 +138,13 @@ def main() -> int:
     print("  %s L6 正常数据**一条不报**（`T23` 命中 %d 条，期望 0）" % ("✅" if ok4 else "⛔", n2))
     hit += bool(ok4)
 
-    dirty = [p.name for p, b in ((COMMON, common_src), (REFS, refs_src), (DOCAUDIT, doc_src))
+    dirty = [p.name for p, b in ((COMMON, common_src), (REFS, refs_src))
              if md5(p) != hashlib.md5(b).hexdigest()]
     print()
-    print("  命中 %d/6" % hit)
+    print("  命中 %d/5" % hit)
     print("  复原校验（MD5 逐字节）：%s"
           % ("✅ 全部复原" if not dirty else "❌ 未复原：" + "、".join(dirty)))
-    return 0 if (hit == 6 and not dirty) else 1
+    return 0 if (hit == 5 and not dirty) else 1
 
 
 if __name__ == "__main__":

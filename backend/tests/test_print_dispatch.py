@@ -15,7 +15,6 @@ import pytest
 
 from app.core.errors import MustReportError
 from app.mod03_notice.print import dispatch as D
-from tests.acc_plugin import acc
 
 PDF = b"%PDF-1.4 fake"
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
@@ -50,7 +49,6 @@ def _settings(**kw) -> types.SimpleNamespace:
 # ------------------------------------------------------------------ 单通道：只走它
 
 
-@acc()
 def test_ipp_通道只走_ipp():
     ci, ipp = _spy("ipp", note="已投递（未核实）—— 打印机收下了")
     cd, drv = _spy("driver")
@@ -60,7 +58,6 @@ def test_ipp_通道只走_ipp():
     assert note == "已投递（未核实）—— 打印机收下了", "单通道的说明要**原样**带出来（⛔ 别改写）"
 
 
-@acc()
 def test_单通道失败只报那一档():
     calls, drv = _spy("driver", boom="本机没有打印驱动接口")
     with pytest.raises(MustReportError) as e:
@@ -72,7 +69,6 @@ def test_单通道失败只报那一档():
     assert calls and calls[0][1] == "RICOH IM 3000 PCL 6", "打印机名要**原样**交到通道（驱动靠它出纸）"
 
 
-@acc()
 def test_系统驱动不给打印机名_当场拒():
     """⭐ 这不是"多一道校验"，而是 `003` 的口径本身：`driver` 靠**本机驱动**出纸、不用 IP ⇒
     不给名字就只能落到"系统默认打印机"，那不是用户选的意思（⛔ 不猜）。在**发请求之前**就要拦住。"""
@@ -86,14 +82,12 @@ def test_系统驱动不给打印机名_当场拒():
 # ------------------------------------------------------------------ auto：顺序 与 两条硬规矩
 
 
-@acc()
 def test_auto_试法顺序是_ipp_驱动_raw():
     assert D.AUTO_ORDER == ("ipp", "driver", "raw"), (
         "口径照 `i8一键打印_新版`：先标准、再系统驱动、最后 RAW（⛔ 别改顺序）"
     )
 
 
-@acc()
 def test_auto_前一档报错就试下一档():
     """⭐ 降级**只允许**发生在"明确报错"时（IPP 被拒收 ⇒ 正是"没 PDF 解释器"那种情形）。"""
     _ci, ipp = _spy("ipp", boom="IPP 报 0x0400：document-format 被拒")
@@ -104,7 +98,6 @@ def test_auto_前一档报错就试下一档():
     assert "自动选「系统驱动」" in note, f"要告诉用户最终走的是哪一档：{note}"
 
 
-@acc()
 def test_auto_前一档说已投递就停住_绝不重复出纸():
     """⭐⭐ **最要紧的一条**：「已投递（未核实）」= "**可能已经打了**" ⇒ 必须停住。
 
@@ -118,7 +111,6 @@ def test_auto_前一档说已投递就停住_绝不重复出纸():
     assert "自动选「IPP」" in note and "已投递（未核实）" in note
 
 
-@acc()
 def test_auto_全失败要把三档理由都带上():
     """⭐ `001-08`「显式报出原因」：只给一句"打印失败" ⇒ 现场无从下手（实测教训）。"""
     _a, ipp = _spy("ipp", boom="连不上 192.168.5.248")
@@ -135,7 +127,6 @@ def test_auto_全失败要把三档理由都带上():
 # ------------------------------------------------------------------ RAW 目标与设置读取
 
 
-@acc()
 def test_raw_端口固定9100_地址里的端口不照抄():
     """⚠️ 地址里的端口（`ipp://host:631/…`）是 **IPP** 用的 —— 照抄到 RAW 等于投错门。"""
     assert D.raw_target("ipp://192.168.5.248") == ("192.168.5.248", 9100)
@@ -146,7 +137,6 @@ def test_raw_端口固定9100_地址里的端口不照抄():
     assert "看不懂" in str(e.value), f"地址取不出 IP 要显式报错：{e.value}"
 
 
-@acc()
 def test_通道按当前设置走_不用重启(monkeypatch):
     """设置弹窗改完即生效（`001-02`）⇒ 分流器每次都**现读**设置，⛔ 不许把通道缓存在别处。"""
     monkeypatch.setattr(D, "get_settings",
@@ -161,13 +151,11 @@ def test_通道按当前设置走_不用重启(monkeypatch):
 # ------------------------------------------------------------------ 接线与壳侧
 
 
-@acc()
 def test_接线点用的是分流器_不是裸_send_pdf():
     assert "print_dispatch if mode == MODE_PRINT" in EXEC, "排版那条路投递必须走分流器（②）"
     assert "dispatch_pdf=(send_pdf" not in EXEC, "⛔ 别退回裸 `send_pdf`（那样通道就白设了）"
 
 
-@acc()
 def test_壳侧有本机打印机名可选():
     assert "printerList: () => API.get('/api/m03/settings/printers')" in SHELL
     # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：`m03PrinterOpen` 搬进 `web/shell/print-export.js` 后，

@@ -30,7 +30,6 @@ from app.core.errors import MustReportError
 from app.mod07_setl import big_domain as B
 from app.report_export import big_export as BX
 from app.report_export import service as EX
-from tests.acc_plugin import acc
 
 SHEET = "Sheet1"
 YM = "2026-08"
@@ -118,7 +117,6 @@ def same(got: list, want: list) -> str:
 # ============================================================ ① 形态
 
 
-@acc("ACC-RPT-BIG-001", "001-16")
 def test_一张表二十列且三级表头照模板():
     """一本工作簿 / `Sheet1` / 20 列；三级表头 `R2~R4` **原样沿用模板**（⛔ 不重画）。"""
     rows = read(export())
@@ -130,7 +128,6 @@ def test_一张表二十列且三级表头照模板():
     assert rows[3][3] == "累计" and rows[3][4] == "当月", rows[3]
 
 
-@acc("ACC-RPT-BIG-001", "001-16")
 def test_列映射是恒等逐格等于域内核出口():
     """⭐ §5.5「20 列**同名同序**」（唯一完全一致的表）⇒ **第 i 列 ↔ `BIG_COLUMNS[i]`**：
     逐格与域内核的 `cell_value` 出口比（⛔ 不抄 20 个列字母，也就不会漂）。"""
@@ -141,7 +138,6 @@ def test_列映射是恒等逐格等于域内核出口():
         assert not diff, f"第 {i + 1} 行 · {diff}"
 
 
-@acc("ACC-RPT-BIG-001", "001-16")
 def test_标题随核算月重写且当月末日按日历算(tmp_path):
     """清单 §六-3：标题里**写死的日期**由系统替换 —— 认**括注形态**、月末日按**日历**算。"""
     from app.report_export import big_export
@@ -154,7 +150,6 @@ def test_标题随核算月重写且当月末日按日历算(tmp_path):
     assert "（数据截止8月31日）（8月份数据）" in str(read(export())[0][0]), "成品标题没跟着核算月走"
 
 
-@acc("ACC-RPT-BIG-001", "001-16")
 def test_成品文件名含报表名与期间标签():
     assert BX.file_name(YM) == "经济活动分析大表_2026年8月.xlsx", BX.file_name(YM)
 
@@ -162,7 +157,6 @@ def test_成品文件名含报表名与期间标签():
 # ============================================================ ② 格与格式
 
 
-@acc("ACC-RPT-BIG-001", "001-17")
 def test_两行逐格等于手写期望():
     """20 列逐格 = **手写期望**（含派生的「合计」= 外租 ＋ 设备租赁、比率列**不可得 ⇒ 留空**）。"""
     rows = read(export())
@@ -171,14 +165,12 @@ def test_两行逐格等于手写期望():
         assert not diff, f"第 {i + 1} 行 · {diff}"
 
 
-@acc("ACC-RPT-BIG-001", "001-17")
 def test_序号是系统行号且合计行不编号():
     rows = read(export())
     assert [rows[DS - 1 + i][0] for i in range(2)] == [1, 2], "序号 ≠ 1..N"
     assert str(rows[DS + 1][0]) == BX.TOTAL_LABEL, f"合计行首格 = {rows[DS + 1][0]!r}"
 
 
-@acc("ACC-RPT-BIG-001", "001-17")
 def test_开工时间是页面文本且数字格式为文本():
     """清单 §四-4 同款：开工时间 = `YYYY-MM` 文本；写前把该列数字格式设成文本（模板那列是数值）。"""
     path = export()
@@ -195,7 +187,6 @@ def test_开工时间是页面文本且数字格式为文本():
 # ============================================================ ③ 合计行
 
 
-@acc("ACC-RPT-BIG-001", "001-18")
 def test_合计行只给可合计的十四列_比率与备注留空():
     """合计行 = `TOTAL_KEYS` 的 14 列给数值；**比率列（使用率 / 产值完成率）与备注留空**（照模板：
     模板的 `R13` 只在 `D..S` 的 14 个格上写了 `=SUM`，`N/O/T` 本来就是空的）。"""
@@ -212,7 +203,6 @@ def test_合计行只给可合计的十四列_比率与备注留空():
     assert tot[13] in (None, "") and tot[14] in (None, ""), "比率列不合计"
 
 
-@acc("ACC-RPT-BIG-001", "001-18")
 def test_不可得的总额显式留空不写0():
     """⭐ **不可得 ≠ 0**（清单 §六-2）：主材累计的取数口未接入 ⇒ 合计行那格**留空**，
     ⛔ 不写 0 —— 而模板那格是 `=SUM(R5:R12)` ⇒ 必须**显式清掉**（引擎的「空串 = 显式留空」）。"""
@@ -224,7 +214,6 @@ def test_不可得的总额显式留空不写0():
 # ============================================================ ④ 公式覆盖 / 零残留 / 拒做
 
 
-@acc("ACC-RPT-BIG-001", "001-19")
 def test_全表残留公式为零且尾块以下不留残留():
     """⭐⭐ 清单 §六-2：模板公式**不参与求值** ⇒ 数据行的 `L=H+J` / `N=L/M` / `O=Q/P`
     与合计行 14 个 `=SUM(...)` 一律**以数值覆盖**；⛔ 尾块以下不留残留 / 行壳。"""
@@ -243,7 +232,6 @@ def test_全表残留公式为零且尾块以下不留残留():
     assert len(read(path)) == DS + 2
 
 
-@acc("ACC-RPT-BIG-001", "001-19")
 def test_拒做一行都没有():
     from app.mod07_setl import big_service as BS
 
@@ -256,7 +244,6 @@ def test_拒做一行都没有():
         pass
 
 
-@acc("ACC-RPT-BIG-001", "001-19")
 def test_拒做模板标题形态不认识():
     """标题里找不到那两个**日期括注** ⇒ **拒做**（清单 §六-3 登记了这两处由系统替换 ⇒ 认形态、不猜）。"""
     with pytest.raises(MustReportError) as e:

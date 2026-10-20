@@ -20,14 +20,12 @@ from app.core.money import amount_text
 from app.mod03_notice import notice_pay_actions as M03
 from app.mod09_fee import domain as M09
 from app.mod11_jc import domain as M11
-from tests.acc_plugin import acc          # ⭐ 工具自检：显式声明"不绑定判据点"（`@acc()`）
 
 DIRTY = ["1,234.56", "¥ 1,234.56", "￥ 88 ", "  1 234.56  ", "1，234.56"]
 CLEAN = ["1234.56", "1234.56", "88", "1234.56", "1234.56"]        # `amount_text` 的**洗净文本**
 MONEY = ["1234.56", "1234.56", "88.00", "1234.56", "1234.56"]     # 各 `parse_amount` 的 `str(Decimal)`
 
 
-@acc()
 def test_洗净件_去千分位货币符号与空白():
     assert amount_text(None) == ""
     assert amount_text("") == ""
@@ -36,7 +34,6 @@ def test_洗净件_去千分位货币符号与空白():
         assert amount_text(dirty) == want, f"{dirty!r} 没洗干净"
 
 
-@acc()
 def test_三处对脏输入解析出同一个数():
     """⭐ 这条是 `TAIL-63` 的**目的**：洗净只有一个主人 ⇒ 同一个脏输入到处都是同一个数。
 
@@ -52,7 +49,6 @@ def test_三处对脏输入解析出同一个数():
         assert got == [want] * 3, f"{dirty!r} 在三处解析结果不一致：{got}"
 
 
-@acc()
 def test_mod03_空即None_未手改():
     """`MOD-03`：空 ⇒ `None`（= 未手改，取「本次应付」）⇒ ⛔ 不是 0、不是报错。"""
     assert M03.parse_amount(None) is None
@@ -63,7 +59,6 @@ def test_mod03_空即None_未手改():
 
 
 
-@acc()
 def test_mod09_空即0且允许负数():
     """`MOD-09` 手填：**允许 0 与负数** ⇒ ⛔ 别跟 `MOD-11` 搅在一起。"""
     assert M09.parse_amount(None) == Decimal("0.00")
@@ -72,7 +67,6 @@ def test_mod09_空即0且允许负数():
     assert M09.parse_amount("¥ 1,234.56") == Decimal("1234.56")
 
 
-@acc()
 def test_mod11_空报错且必须大于0_与mod09刻意不同():
     """`MOD-11` 子表：**必须 > 0**，与 `MOD-09` **刻意不同**（两边注释都写着"别搅"）。"""
     with pytest.raises(ValueError, match="不合法"):
@@ -84,7 +78,6 @@ def test_mod11_空报错且必须大于0_与mod09刻意不同():
     assert M11.parse_amount("¥ 1,234.56") == Decimal("1234.56")
 
 
-@acc()
 def test_非数字一律报错_不静默取0():
     for mod in (M03, M09, M11):
         with pytest.raises(ValueError):

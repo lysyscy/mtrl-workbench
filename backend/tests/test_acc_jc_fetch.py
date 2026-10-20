@@ -23,7 +23,6 @@ from app.mod01_projects import repository as pj_repo
 from app.mod01_projects.models import TYPE_NORMAL, Project
 from app.mod11_jc import repository as R
 from app.mod11_jc.models import TAG_IN, TAG_OUT, JcContract
-from tests.acc_plugin import acc
 
 WH_F = "__自检仓_集采抓__"
 
@@ -43,7 +42,6 @@ def _fetched(no: str, *, date: str = "2026-09-15", supplier: str = "业祥",
             "supplier_name": supplier, "contract_amt": amount, "remark": "增补原合同"}
 
 
-@acc("ACC-JC-FETCH-001", "001-09")
 def test_再次导入不覆盖旁路字段_且不动已人工标记的行():
     """⭐ 两条判据一起验（它们本就是一件事的两面）：
 
@@ -81,7 +79,6 @@ def test_再次导入不覆盖旁路字段_且不动已人工标记的行():
         s.rollback()
 
 
-@acc("ACC-JC-FETCH-001", "001-08")
 def test_三态标记不留痕_没有留痕载体():
     """⭐ 判据原文「三态标记**不留痕**（**无留痕载体**）」—— 这是一条**约束型**判据：
     它要的不是"某功能存在"，而是"**某个东西不许存在**" ⇒ 只能靠**结构**来钉。
@@ -96,7 +93,6 @@ def test_三态标记不留痕_没有留痕载体():
         "⛔ 不许有「标记历史」表（判据 001-08：无留痕载体）"
 
 
-@acc()
 def test_落库幂等_按合同编号_且无编号的行被跳过并计数():
     """实现层自检（⛔ 不绑判据点）：幂等键 = **合同编号**；没编号的行**跳过并计数**（禁静默）。"""
     with session_scope() as s:
@@ -116,7 +112,6 @@ def test_落库幂等_按合同编号_且无编号的行被跳过并计数():
 # ============================================== 001-11 · 集采匹配 = 付款侧同一套归属（TAIL-92）
 
 
-@acc("ACC-JC-FETCH-001", "001-11")
 def test_集采匹配走付款侧同一套归属_不得挂到壳上():
     """⭐ 2026-09-25 用户口径：「**集采合同抓取和付款通知书抓取用同一套匹配逻辑**」＋ 铁律 §9.8-6。
 
@@ -168,7 +163,6 @@ def test_集采匹配走付款侧同一套归属_不得挂到壳上():
 # ============================================== 001-12 · 集采「归属未走完」可读回（TAIL-93）
 
 
-@acc("ACC-JC-FETCH-001", "001-12")
 def test_集采未走完清单只认最近一次抓取_且认得出域():
     """⭐ `TAIL-93`：集采的「归属未走完」要**能被读回**（否则界面上无从处理，只能人工写脚本建档案）。
 

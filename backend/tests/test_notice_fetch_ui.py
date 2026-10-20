@@ -1,6 +1,5 @@
 """真实壳抓取结果弹窗；复用隔离浏览器夹具，不连接 i8。"""
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 from app.mod03_notice.page import DEFAULT_THEME, render_theme
 
 
@@ -8,7 +7,6 @@ def load_styles(page):
     page.add_style_tag(content=render_theme(DEFAULT_THEME))
 
 
-@acc('ACC-PRJ-OWN-001', '001-08')
 def test_fetch_result_shows_ignored_rows_and_escapes_source_text(ui_page, tmp_path):
     p = ui_page
     load_styles(p)
@@ -37,7 +35,6 @@ def test_fetch_result_shows_ignored_rows_and_escapes_source_text(ui_page, tmp_pa
     p.click('[data-act="closeModal"]')
 
 
-@acc('ACC-PRJ-OWN-001', '001-08')
 def test_fetch_without_ignored_rows_does_not_show_previous_list(ui_page):
     p = ui_page
     p.evaluate('''async () => {

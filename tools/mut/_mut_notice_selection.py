@@ -26,7 +26,7 @@ MUTATIONS = [
 ]
 
 def run(base, env, selection=""):
-    command = [sys.executable, "-B", "-X", "utf8", "-m", "pytest", "-o", "addopts=-p tests.acc_plugin",
+    command = [sys.executable, "-B", "-X", "utf8", "-m", "pytest", "-o", "addopts=",
                "-q", "-p", "no:cacheprovider", "--tb=short", TEST]
     if selection:
         command += ["-k", selection]

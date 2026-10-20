@@ -26,7 +26,6 @@ from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnaps
 from app.mod06_proc.repository import import_snapshot, load_cutoff, rollback_batch, save_mech
 from app.mod06_proc.service import build_page_data, parse_state
 from app.mod08_inv.models import InvDetail
-from tests.acc_plugin import acc
 from tests.m06_helpers import (
     CUTOFF_YM,
     WAREHOUSE,
@@ -49,7 +48,6 @@ def _by_month(s: FakeSession) -> dict[str, dict]:
 
 # ------------------------------------------------------------ 001-01 历史段不引用库存单据
 
-@acc(CASE, "001-01")
 def test_同月库存优先_无库存历史材料取快照():
     rows = _by_month(_sess())
     assert rows["2026-05"]["section"] == D.SECTION_HISTORY
@@ -68,7 +66,6 @@ def test_同月库存优先_无库存历史材料取快照():
 
 # ------------------------------------------------------------ 001-02 正式段引用 ＋ 分界移动
 
-@acc(CASE, "001-02")
 def test_正式段只读引用库存单据且分界可移动():
     rows = _by_month(_sess())
     assert rows["2026-07"]["section"] == D.SECTION_FORMAL
@@ -90,7 +87,6 @@ def test_正式段只读引用库存单据且分界可移动():
 
 # ------------------------------------------------------------ 001-03 机械列按段切来源（2026-09-26 改口径）
 
-@acc(CASE, "001-03")
 def test_机械六列_历史段以导入值为准_正式段手录():
     """机械导入和手录共用有效表，任何月份可编辑；材料仍只读。"""
     s = _sess()
@@ -109,7 +105,6 @@ def test_机械六列_历史段以导入值为准_正式段手录():
 
 # ------------------------------------------------------------ 001-04 两段互不覆盖
 
-@acc(CASE, "001-04")
 def test_两段互不覆盖():
     base = _by_month(_sess())
     hist_before = {ym: base[ym][f"in_主辅材"] for ym in ("2026-05", "2026-06")}
@@ -141,7 +136,6 @@ def test_两段互不覆盖():
 
 # ------------------------------------------------------------ 001-05 截止核算月
 
-@acc(CASE, "001-05")
 def test_截止核算月默认取导入数据的最大核算月():
     s = FakeSession({})
     batch = import_snapshot(s, warehouse=WAREHOUSE, batch_no="B1",
@@ -167,7 +161,6 @@ def test_截止核算月默认取导入数据的最大核算月():
 
 # ------------------------------------------------------------ 001-06 历史段无行内编辑
 
-@acc(CASE, "001-06")
 def test_历史段不提供行内编辑入口():
     s = _sess()
     assert build_page_data(s, parse_state({}))["can_edit_history"] is False
@@ -199,7 +192,6 @@ def test_历史段不提供行内编辑入口():
 
 # ------------------------------------------------------------ 001-07 列取值出口同构
 
-@acc(CASE, "001-07")
 def test_机械列与材料列同构且数据源可插拔():
     # ⭐ 两类列走**同一个**出口：只靠 column_source(key, ym, cutoff) 决定数据源
     hist = {D.column_source(k, ym="2026-06", cutoff_ym=CUTOFF_YM) for k in D.MATERIAL_KEYS}
@@ -219,7 +211,6 @@ def test_机械列与材料列同构且数据源可插拔():
 
 # ------------------------------------------------------------ 001-08 正式段空态
 
-@acc(CASE, "001-08")
 def test_正式段无i8数据时给空态不臆造零():
     rows = _by_month(_sess())
     row = rows["2026-10"]

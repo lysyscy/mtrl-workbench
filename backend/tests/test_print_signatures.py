@@ -25,7 +25,6 @@ from app.mod03_notice.print.signatures import (
     unresolved_image_slots,
 )
 from app.mod03_notice.print.template import PrintTemplate, node_of, parse_design
-from tests.acc_plugin import acc
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 OTHER = FIXTURES / "i8_print_design_sample.json"
@@ -39,7 +38,6 @@ def _tpl(path: Path):
 # ---------------------------------------------------------------- 节点名 → 地址
 
 
-@acc()
 def test_节点名取task_des且跳过空签名():
     flow = [
         {"task_des": "流程发起", "signature": ""},                  # 无签名 ⇒ 跳过
@@ -50,7 +48,6 @@ def test_节点名取task_des且跳过空签名():
     assert collect_signature_paths(flow) == {"项目经理": "/a?s=1", "核算部部长": "/c"}
 
 
-@acc()
 def test_同名节点取靠后的那个():
     """流程数组按时间正序 ⇒ 靠后 = 更新的一次处理。"""
     flow = [
@@ -61,7 +58,6 @@ def test_同名节点取靠后的那个():
     assert collect_signature_paths(flow)["项目经理"] == "/new"
 
 
-@acc()
 def test_空流程与脏数据不炸():
     assert collect_signature_paths([]) == {}
     assert collect_signature_paths(None) == {}
@@ -71,14 +67,12 @@ def test_空流程与脏数据不炸():
 # ---------------------------------------------------------------- 缓存键 / MIME
 
 
-@acc()
 def test_缓存键忽略易变的query():
     # `?s=<token>` 每次都变 ⇒ 带 query 会永不命中缓存
     assert cache_key("/a/b.png?s=abc") == cache_key("/a/b.png?s=xyz")
     assert cache_key("/a/b.png") != cache_key("/a/c.png")
 
 
-@acc()
 def test_按魔术字节判mime():
     assert _to_data_uri(b"\xff\xd8\xff" + b"0" * 200).startswith("data:image/jpeg;base64,")
     assert _to_data_uri(b"GIF89a" + b"0" * 200).startswith("data:image/gif;base64,")
@@ -99,7 +93,6 @@ def _img_cell(row: int, col: int, data_filter: list[dict]) -> dict:
             "cellData": {"otherShowType": "image", "dataFilter": data_filter}, "cellBorders": {}}
 
 
-@acc()
 def test_模板签名格节点名去重保序():
     # ⚠️ 2026-09-16 起「核算部部长」**必须在内**（其他支出模板 row=15 col=3 那格）——
     #    旧断言按"漏认第 2 种写法"的错误输出写死了 6 个，等于把 bug 钉成了契约。
@@ -113,7 +106,6 @@ def test_模板签名格节点名去重保序():
     assert notice[0] == "项目经理" and "资产管理部总经理" in notice
 
 
-@acc()
 def test_图片格认两种筛选写法():
     """① `fieldId="办理节点"`（自定义字段）· ② `fieldId="task_des"`（直接筛流程字段）—— 都取 `value`。"""
     assert node_of(_img_cell(0, 0, [{"fieldId": "办理节点", "value": "项目经理"}])) == "项目经理"
@@ -129,14 +121,12 @@ def test_图片格认两种筛选写法():
     ])) == "分公司经理"
 
 
-@acc()
 def test_真实模板里没有认不出的签名格():
     """两份真机模板的图片格**两种写法都被认得** ⇒ 未决清单必须为空（否则会误停单）。"""
     assert unresolved_image_slots(_tpl(OTHER)) == []
     assert unresolved_image_slots(_tpl(NOTICE)) == []
 
 
-@acc()
 def test_有筛选却认不出节点必须报警():
     """⚠️ 静默失效的正面堵口：认不出写法 ⇒ 不许留白，必须停单报错。"""
     bad_filter = [{"fieldId": "某个未知字段", "value": "核算部部长"}]
@@ -148,7 +138,6 @@ def test_有筛选却认不出节点必须报警():
     assert "取不到审批节点名" in str(ei.value) and "row0col0" in str(ei.value)
 
 
-@acc()
 def test_无筛选的签名格不算未决且不报错():
     """无筛选 = i8 本身也印空（实测过）⇒ 合法；不许把它当"未决"误报停单。"""
     tpl = _tpl_with([_img_cell(0, 0, []), _img_cell(1, 0, [{"fieldId": "办理节点", "value": "项目经理"}])])
@@ -162,7 +151,6 @@ def test_无筛选的签名格不算未决且不报错():
 # ---------------------------------------------------------------- 两个模板的差异（防"写死"）
 
 
-@acc()
 def test_两个模板结构确实不同():
     """⚠️ 这条钉住"**必须模板驱动**"：两个版式的行列数/格数/下边距都不一样，写死必错。"""
     other, notice = _tpl(OTHER), _tpl(NOTICE)

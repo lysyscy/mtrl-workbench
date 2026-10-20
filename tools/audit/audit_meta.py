@@ -1182,37 +1182,10 @@ def check_live_machine() -> list[dict]:
 #    另一半（入口在、但判据没牙）由 `tools/mut/_mut_*.py` ＋ 台账表 B 管 —— **两半合起来才闭环**。
 # TAIL-245：现行清单只读 CMDS；历史 foreach / 交接口令不再定义闸门。
 GATE_RULER_DIR = "tools/audit"
-GATE_GUARD_RE = re.compile(r"^if\s+__name__\s*==\s*['\"]__main__['\"]\s*:", re.M)
 
 
-def gate_commands() -> list:
-    """现读唯一 CMDS 的路径及参数，不执行导入或历史文档中的代码。"""
-    sys.path.insert(0, str(REPO_ROOT / "tools/oneoff"))
-    from _gatescope import commands
-    return commands(REPO_ROOT) + commands(REPO_ROOT, 'SELFTESTS')
 
 
-def check_gate_liveness() -> list[dict]:
-    """T17：CMDS 不许空扫；每个登记路径在位、有入口且可见输出。"""
-    def hit(what, why, fix):
-        return {"code": "T17", "side": "仓", "rel": "tools/oneoff/_run_rulers.py", "line": 1,
-                "what": what, "why": why, "fix": fix, "level": RED, "text": ""}
-    out = []
-    try:
-        registered = gate_commands()
-    except (OSError, ValueError, SyntaxError, TypeError) as exc:
-        return [hit("CMDS 清单无法读取 ⇒ 空扫", str(exc), "恢复唯一 CMDS 登记")]
-    for rel, _args in registered:
-        path = REPO_ROOT / rel
-        if not path.is_file():
-            out.append(hit(f"闸门里的 `{rel}` 不存在", "登记项不在", "补件或订正 CMDS"))
-            continue
-        source = path.read_text(encoding="utf-8", errors="replace")
-        if GATE_GUARD_RE.search(source) is None:
-            out.append(hit(f"闸门里的 `{rel}` 没有 `__main__` ⇒ 空转", "入口被移除", "补执行入口"))
-        elif "print(" not in source:
-            out.append(hit(f"闸门里的 `{rel}` 一句都不打", "输出不可见", "补可见结果"))
-    return out
 
 
 # ------------------------------------------------- T18 路径 / glob 常量体检（治「搬目录后常量失效」）
@@ -1256,7 +1229,6 @@ GUARDED: tuple[tuple[str, str, str], ...] = (
     ("audit_meta", "DOC_BUDGETS", "path_first"),
     ("audit_meta", "RECEIPT_DIR", "path"),
     ("audit_meta", "THRESHOLD_DOC", "path"),
-    ("cover_gap", "CLEARED_REGISTRY", "path"),
 )
 
 #: 例外（`"模块.常量"` → 理由）。⛔ 加例外必须写理由，且**别拿它掩盖"该修没修"**。
@@ -1359,11 +1331,11 @@ def main(argv: list[str] | None = None) -> int:
            + check_report_receipts() + check_doc_layout() + check_drop_zones()
            + check_tail_ledger(cases)
            + check_plan_process() + check_line_walls() + check_line_splices()
-           + check_gate_liveness() + check_guard_constants() + check_live_machine())
+           + check_guard_constants() + check_live_machine())
     reds = [h for h in raw if h["level"] == RED]
     yellows = [h for h in raw if h["level"] == YELLOW]
     print("=" * 78)
-    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T17/T18/T21/T22/T23/T24"
+    print(" audit_meta 单跑 —— T5/T6/T9/T10/T11/T12/T13/T18/T21/T22/T23/T24"
           "（⚠️ T1–T4/T8 在 `audit_drift` · T7 在 `cover_gap` · T14/T15 在 `audit_work`）")
     print("=" * 78)
     print(f"必须修 {len(reds)} · 疑似 {len(yellows)}")

@@ -19,10 +19,8 @@ import openpyxl
 
 from app.mod05_flow import debt_export as X
 from app.mod05_flow import service as S
-from tests.acc_plugin import acc
 
 
-@acc("ACC-FLOW-DEBT-001", "001-06")
 def test_总欠款表的列序是用户指定的():
     """**A 序号 · B 项目展示名 · C 集采 · D 辅材 · E 机械** —— 用户原话指定的顺序。
 
@@ -32,7 +30,6 @@ def test_总欠款表的列序是用户指定的():
     assert X.COLUMNS == ("序号", "项目", "集采", "辅材", "机械")
 
 
-@acc("ACC-FLOW-DEBT-001", "001-06")
 def test_总欠款表写出形态_金额是数值且带表尾说明(tmp_path: Path):
     """产出形态三件：① 表头 → 数据 → **合计**；② 金额是**数值**；③ 机械说明**写进文件**。
 
@@ -68,7 +65,6 @@ def test_总欠款表写出形态_金额是数值且带表尾说明(tmp_path: Pa
     assert not any(X.FOOTNOTE in str(c or "") for r in rows2 for c in r)
 
 
-@acc("ACC-FLOW-DEBT-001", "001-06")
 def test_导出返回的是Path而不是str(monkeypatch, tmp_path):
     """⚠️⚠️ **2026-09-20 真机实测踩到**：`export_total_debt` 回的是 **`str`**，
     而端点那边写的是 `path.name` ⇒ 一调就 `AttributeError: 'str' object has no attribute 'name'`
@@ -95,7 +91,6 @@ def test_导出返回的是Path而不是str(monkeypatch, tmp_path):
     assert note["rows"] == 1 and note["mech_settle_ready"] is False
 
 
-@acc("ACC-FLOW-DEBT-001", "001-06")
 def test_总欠款的口径与页面同源():
     """⚠️ `total_debt_rows` **必须**用现场那两个出口算，⛔ 不许自己另写一套算钱的。
 

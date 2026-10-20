@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from app.core.config import Settings
 
@@ -37,7 +36,6 @@ def _env_example_keys() -> set[str]:
     return keys
 
 
-@acc()
 def test_样例必须覆盖配置的每一个字段():
     """缺哪个键 ⇒ 换机时那台机器上没人知道要填它。"""
     expected = {f.upper() for f in Settings.model_fields}
@@ -54,7 +52,6 @@ def test_样例必须覆盖配置的每一个字段():
     )
 
 
-@acc()
 def test_配置主人表必须在位():
     """⭐ 回答「改了 `.env` 为什么不生效」的**唯一地方**（`TAIL-192`-② · 库里也有值时**库优先**）。"""
     text = OPS_README.read_text(encoding="utf-8")

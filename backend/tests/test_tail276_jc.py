@@ -16,11 +16,9 @@ from app.mod03_notice.notice_actions import apply_stat_change
 from app.mod05_flow import repository as flows
 from app.mod05_flow import service as flow_service
 from app.mod11_jc import repository as R, service as S
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
-@acc()
 def test_history_summary_and_dynamic_stat_payment(monkeypatch):
     with session_scope() as s:
         @contextmanager
@@ -91,7 +89,6 @@ def test_history_summary_and_dynamic_stat_payment(monkeypatch):
         s.rollback()
 
 
-@acc()
 def test_shell_create_history_and_dates(ui_page):
     ui_page.evaluate("""() => {
       window.created=null; window.reloads=0;
@@ -132,7 +129,6 @@ def test_shell_create_history_and_dates(ui_page):
     assert ui_page.locator('#modalRoot [data-act="jcPayDel"]').count() == 0
 
 
-@acc()
 def test_warehouse_project_can_choose_history_or_normal_contract(ui_page):
     ui_page.evaluate("VIEW='m11';fJc.projs=['测试仓库'];render();ACT.jcAdd();")
     history = ui_page.locator('[data-act="jcNHistory"]')

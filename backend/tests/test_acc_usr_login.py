@@ -23,7 +23,6 @@ from app.core.errors import MustReportError
 from app.mod15_user import domain as D
 from app.mod15_user import login as LG
 from app.mod15_user import repository as R
-from tests.acc_plugin import acc
 from tests.shell_src import func_body        # ⭐ ⑤⑥ 要读 `boot()` 的函数体（`TAIL-219` 批 2：改走语义口径）
 from tests.shell_src import SHELL                # ⚠️ 壳源码的唯一出口（⛔ 别直接读 index.html）
 
@@ -37,7 +36,6 @@ def _login_ok(s, u, raw: str):
     return LG.sign_in(s, account=u.account, password=raw)
 
 
-@acc("ACC-USR-MGMT-001", "001-01")
 def test_当前登录用户是管理员且管理员恒一个(monkeypatch):
     """claim：「**账号数与 §1.5.1 一致（数量在此不复述）**；**当前登录用户 = 管理员**」（§1.5.1）。
 
@@ -102,7 +100,6 @@ def test_当前登录用户是管理员且管理员恒一个(monkeypatch):
         "「没身份」时没有**去登录**的出口 —— 用户只会看到按钮全灰、以为页面坏了")
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_登出入口与登出动作齐备():
     """claim：「**登出入口与登出动作齐备**」（§1.5.1「用户管理页提供**登出**入口；
     退出后**回到登录页**，**业务数据不受影响**」）。
@@ -176,7 +173,6 @@ def test_登出入口与登出动作齐备():
 #    ⛔ 也不写成 `@acc()`（那是"工具自检"的标法）—— 这些是**业务行为**，不是工具自检。
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_会话票可验签_长期有效且篡改不认(monkeypatch):
     """自签 cookie 的三条底线：**往返认** · **长期有效** · **篡改不认**（＋换密钥不认）。
 
@@ -227,7 +223,6 @@ def base64_bump(b64: str) -> str:
     return ("A" if b64[:1] != "A" else "B") + b64[1:]
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_登录判定的拒绝与最近登录只在成功时写():
     """登录的四条判定 ＋ ⭐「最近登录」的语义（**只在成功那一刻写**）。
 
@@ -279,7 +274,6 @@ def test_登录判定的拒绝与最近登录只在成功时写():
         s.rollback()
 
 
-@acc("ACC-USR-MGMT-001", "001-11")
 def test_当前登录用户是唯一出口且不得写死人名():
     """claim：「「当前登录用户」的供给：**留痕的改前人与录入人一律取当前登录用户**，
     **不得写死成某个名字**」（§1.5.1 末行 —— 它自称是"账号体系与业务字段的**唯一接点**"）。
@@ -384,7 +378,6 @@ def test_当前登录用户是唯一出口且不得写死人名():
 #    ⇒ 疑为"新测试件"的认领问题 ⇒ 搬进本件后立刻变绿（见 journal 2026-09-25 §67/§68）。
 
 
-@acc("ACC-USR-MGMT-001", "001-14")
 def test_未登录只能看_写动作一律拒():
     """未登录：**读放行**（落到路由层 404）· **写一律拒**（闸门先拦 401）· 登录/登出放行 · 带票写放行。
 

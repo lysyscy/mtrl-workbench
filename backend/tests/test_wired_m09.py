@@ -22,7 +22,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 from tests.shell_src import (  # noqa: F401  ← `P4`① 读取点收敛
@@ -52,7 +51,6 @@ def _awf_heads() -> list[str]:
             for h in re.findall(r"<th[^>]*>([\s\S]*?)</th>", const_src("AWF_THEAD"))]
 
 
-@acc("ACC-FEE-MON-001", "001-01")
 def test_壳里自动项与手填项同桌():
     """§5.5：**1 个固定自动项行 ＋ N 个手填项行**，同一张表（`m09:awf` 这一张）。
 
@@ -75,27 +73,23 @@ def test_壳里自动项与手填项同桌():
     assert 'data-act="awfName"' in s, "手填项「项名可改」的入口没了"
 
 
-@acc("ACC-FEE-MON-001", "001-02")
 def test_壳里合计行由共用出口出():
     """合计行的**金额格**由 `sumRowOf(AWF_THEAD, …)` 的 `{2:…}` 给出 —— 走全站唯一金额出口
     （**千分位**由它统一出，页面不再自己拼字符串）。"""
     assert "sumRowOf(AWF_THEAD, list, {2:()=>total" in SHELL, "合计行不是由共用出口出的"
 
 
-@acc("ACC-FEE-MON-001", "001-04")
 def test_壳里重置回默认月与默认项目():
     """「重置」= 核算年月回**默认月**（上月）＋ 项目回**默认项目**（候选第一个）。"""
     assert "awfReset:()=>{ awfYm=bjMonth(-1); awfPj=AWF_PJS[0]||'';" in SHELL, "重置没回默认"
 
 
-@acc("ACC-FEE-MON-001", "001-05")
 def test_壳里空态行跨列数由表头派生():
     """未录的那一份 ⇒ 空态提示行，`colspan` **由表头列数派生**（⛔ 不写死数字）。"""
     assert "EMPTYROW(thCount(AWF_THEAD)" in SHELL, "空态行的跨列数不再由表头派生"
     assert "还没有手填项" in SHELL, "未录的月没有提示"
 
 
-@acc("ACC-FEE-MON-001", "001-06")
 def test_壳里项目面板是单选且候选键来自后端():
     """§2.7.4：候选**键 = 仓库名**（后端 `projects` 的 `key`）；面板**单选**（`single:true` ⇒ 无全选/清空）；
     ⚠️ 传进 `projPanel` 的必须是**候选键**（`AWF_PJS`）而不是档案行对象（否则 `data-pj="[object Object]"`）。"""
@@ -104,7 +98,6 @@ def test_壳里项目面板是单选且候选键来自后端():
     assert "AWF_PJS = (d.projects || []).map(p => p.key)" in SHELL, "候选不是由后端落定（键 = 仓库名）"
 
 
-@acc("ACC-FEE-MON-001", "001-09")
 def test_壳里本页不设导出入口且写明随台账导出():
     """TAIL-263 撤掉默认说明，实际台账导出入口及确认仍含本表，本页无单独导出按钮。"""
     s = page_slice("m09")
@@ -113,7 +106,6 @@ def test_壳里本页不设导出入口且写明随台账导出():
     assert "export" not in s.lower(), "壳的 m09 视图里出现了导出入口（本页不该有）"
 
 
-@acc("ACC-FEE-MON-001", "001-10")
 def test_壳里表头是本表自己的列而非库存单据透视形态():
     """`DEV-R-04`：本表 = **独立新报表**。壳的表头 = `AWF_THEAD`（自家列出口）：含库存单据没有的
     **数据项 / 来源 / 占合计**，且**列数比库存单据少** —— 透视表不可能长这样。"""
@@ -128,7 +120,6 @@ def test_壳里表头是本表自己的列而非库存单据透视形态():
 
 # ============================================================== 1 · 演示数据已清
 
-@acc()
 def test_m09演示容器已删():
     """演示容器与其 3 个月演示值必须**物理删除**（留着就永远渲染演示数据 —— `U2b` 也查）。"""
     assert "let AWF = {" not in SHELL, "特殊费用演示容器 `let AWF = {` 还在"
@@ -137,7 +128,6 @@ def test_m09演示容器已删():
         assert dead not in SHELL, f"已失效的 `{dead}` 还在（它只服务于已删的演示容器）"
 
 
-@acc()
 def test_m09数据源改为后端填充():
     assert "let AWF_ROWS = [];" in SHELL, "`AWF_ROWS` 没改成「空数组 + 后端填充」"
     assert "let AWF_PJS = [];" in SHELL, "`AWF_PJS` 没改成「空数组 + 后端填充」"
@@ -150,7 +140,6 @@ def test_m09数据源改为后端填充():
 
 # ============================================================== 2 · 适配层
 
-@acc()
 def test_m09适配层把金额转成数字():
     """⛔ 后端金额出**字符串**，切片里却是 `r[1].toFixed(2)` ⇒ 不过 `N0()` **整页崩**。
 
@@ -162,7 +151,6 @@ def test_m09适配层把金额转成数字():
     assert "N0(r.amount)" in m.group(1), f"`awfList` 的金额没过 `N0()`：{m.group(1)[:80]}"
 
 
-@acc()
 def test_m09自动项不再由前端按单据日期算():
     """⭐ 口径：自动项取数用**核算年月**（`inv_detail.ym`）。
 
@@ -176,7 +164,6 @@ def test_m09自动项不再由前端按单据日期算():
     assert "IVs" not in line, "`awfAuto` 还在前端按 `IVs` 自算（口径应以后端 `inv_detail.ym` 为准）"
 
 
-@acc()
 def test_m09合计不再由前端自算():
     """⭐ 合计 = 自动项 ＋ Σ手填项 —— 算法主人是后端 `domain.total_amount`，前端只读结果。"""
     i = SHELL.find("const awfTotal =")
@@ -188,7 +175,6 @@ def test_m09合计不再由前端自算():
 
 # ============================================================== 3 · 候选与默认值
 
-@acc()
 def test_m09候选与默认项目由重拉落定():
     """⚠️ 原先 `awfPj = (pjSort(ntPjList())[0]||{name:''}).name` 是**加载时求值** ⇒ 静默空。
 
@@ -201,7 +187,6 @@ def test_m09候选与默认项目由重拉落定():
         "`reloadM09()` 没按后端回包的 `project` 落定默认项目"
 
 
-@acc()
 def test_m09面板候选用后端清单():
     """⭐ 候选必须与写路径**同源**：后端 `build_candidates` ⇒ 键 = 仓库名 ⇒ `project_by_key` 认。
 
@@ -216,7 +201,6 @@ def test_m09面板候选用后端清单():
 
 # ============================================================== 4 · 写动作走后端
 
-@acc()
 def test_m09四个写动作都走后端():
     for name, call in (("awfAdd", "API.m09Add("), ("awfDel", "API.m09Delete("),
                        ("awfName", "API.m09Name("), ("awfAmt", "API.m09Amount(")):
@@ -225,7 +209,6 @@ def test_m09四个写动作都走后端():
         assert "awfAct(" in body, f"`ACT.{name}` 没走 `awfAct`（失败路径会吞掉后端原因）"
 
 
-@acc()
 def test_m09不得本地改数据冒充落库():
     """⛔ 反向：写动作里不得再出现 `AWF_ROWS` 的本地增删 —— 那是"假成功"（库没变、页面变了）。"""
     for name in ("awfAdd", "awfDel", "awfName", "awfAmt"):
@@ -234,7 +217,6 @@ def test_m09不得本地改数据冒充落库():
             assert bad not in body, f"`ACT.{name}` 里出现 `{bad}` —— 本地改数据冒充落库"
 
 
-@acc()
 def test_m09金额判据不在前端复写():
     """§5.5 的金额判据唯一出口 = 后端 `domain.amount_problem`（只拦非数字、**允许 0 与负数**）。"""
     body = act_entry("awfAmt")
@@ -242,7 +224,6 @@ def test_m09金额判据不在前端复写():
         assert bad not in body, f"`ACT.awfAmt` 复写了金额判据（`{bad}`）⇒ 第二份口径"
 
 
-@acc()
 def test_m09失败也要看回执():
     """后端对「金额不合法」回 **HTTP 200 ＋ `ok:false`** ⇒ 只判 `!r` 会把那句原因**吞掉**。"""
     body = func_body("awfAct")
@@ -250,7 +231,6 @@ def test_m09失败也要看回执():
     assert "reloadM09()" in body, "`awfAct()` 事后没重拉（失败也得以后端为准）"
 
 
-@acc()
 def test_m09切月份切项目都重取数():
     """手填项**按「核算年月 ＋ 项目」各存一份** ⇒ 两个筛选一变都得重新取那一份（只 `render()` 会看到旧那一份）。"""
     assert "if(sc==='awf'){ awfYm=v; mp.open=null; reloadM09();" in SHELL, \
@@ -261,7 +241,6 @@ def test_m09切月份切项目都重取数():
 
 # ============================================================== 5 · 切片与纳管
 
-@acc()
 def test_m09切片不得直连后端():
     """⛔ `V.m09` 是**原型的渲染逻辑** ⇒ 一行不改（`ui_parity` 的 `U1` 也查）。"""
     body = page_slice("m09")
@@ -269,7 +248,6 @@ def test_m09切片不得直连后端():
         assert bad not in body, f"`V.m09` 里出现 `{bad}` —— 原型渲染逻辑被改（该走适配层）"
 
 
-@acc()
 def test_m09已进WIRED与boot():
     m = re.search(r"const WIRED=new Set\(\[([^\]]*)\]\)", SHELL)
     assert m, "壳里找不到 `const WIRED=new Set([...])`"
@@ -281,7 +259,6 @@ def test_m09已进WIRED与boot():
 
 # ============================================================== 6 · 后端端点
 
-@acc()
 def test_后端m09端点存在且复用service出口():
     """⚠️ 读端点走 `_payload` ⇒ `build_page_data`，写端点**各自**直接调 `SV.act_*`。
 
@@ -306,7 +283,6 @@ def test_后端m09端点存在且复用service出口():
         assert needle in seg, f"`{fn}` 没走 `{needle}`（判定该与 PRG 端点**同一出口**，不另写一套）"
 
 
-@acc()
 def test_后端m09端点剔除页面专用列():
     """⚠️ 「操作」列（`ops`）是**页面专用 HTML 占位** ⇒ `/api/*` 必须剔除（`domain.PAGE_ONLY_KEYS`）。
 
@@ -324,7 +300,6 @@ def test_后端m09端点剔除页面专用列():
     assert "if k in D.PAGE_ONLY_KEYS:" in seg, "`_row()` 没剔除 `PAGE_ONLY_KEYS`（操作列会漏进 API）"
 
 
-@acc()
 def test_后端m09路由已汇总():
     """`main.py` 不用改 —— `mod09` 的页面路由文件负责汇总（同 `mod07` 的做法）。"""
     assert "from app.mod09_fee.api import router as api_router" in ROUTER, \

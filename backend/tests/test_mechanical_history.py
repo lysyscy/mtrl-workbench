@@ -6,7 +6,6 @@ import hashlib
 import pytest
 
 from app.mod06_proc.workbench_history import build_history_payload, exact_projects, verify_source_hashes, yuan
-from tests.acc_plugin import acc
 
 
 def sample():
@@ -40,8 +39,6 @@ def sample():
     return seed, verification, system, workbooks
 
 
-@acc("ACC-RPT-MECH-001", "001-06")
-@acc("ACC-RPT-MECH-001", "001-05")
 def test_history_preserves_adopted_annual_precision_and_unknown_identity():
     inputs = sample()
     before = deepcopy(inputs)
@@ -68,7 +65,6 @@ def test_history_preserves_adopted_annual_precision_and_unknown_identity():
     assert '未配历史项目' not in exact_projects(inputs[2])
 
 
-@acc("ACC-RPT-MECH-001", "001-05")
 def test_explicit_mapping_is_a_new_preview_and_ambiguous_alias_stays_unmapped():
     args = sample()
     system = args[2]
@@ -83,20 +79,17 @@ def test_explicit_mapping_is_a_new_preview_and_ambiguous_alias_stays_unmapped():
 
 
 @pytest.mark.parametrize('value', [True, 'NaN', 'Infinity', 'bad'])
-@acc("ACC-RPT-MECH-001", "001-03")
 def test_invalid_history_money_is_not_zero(value):
     with pytest.raises(ValueError):
         yuan(value)
 
 
-@acc("ACC-RPT-MECH-001", "001-03")
 def test_decimal_conversion_preserves_source_fractional_cents():
     assert Decimal(yuan('1304618.63')) == Decimal('13046.1863')
     assert yuan(None) is None
     assert yuan(0) == '0'
 
 
-@acc("ACC-RPT-MECH-001", "001-06")
 def test_changed_source_file_blocks_history_verification(tmp_path):
     source = tmp_path / 'source.xlsx'
     source.write_bytes(b'reviewed source')

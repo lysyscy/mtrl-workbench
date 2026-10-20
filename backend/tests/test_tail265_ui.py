@@ -5,12 +5,10 @@ import sys as _workspace_sys
 _workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
 from workspace_paths import output as _run_output, output_dir as _run_dir
 from tests.test_tail264_ui import page
-from tests.acc_plugin import acc
 from app.mod15_user.domain import UI_SCALES
 from pathlib import Path
 
 
-@acc()
 def test_month_columns_increment_and_preserve_positions(page):
     page.evaluate('''() => {
       closeModal();awfPj='__隔离项目__';awfYm='2026-12';
@@ -39,7 +37,6 @@ def test_month_columns_increment_and_preserve_positions(page):
     assert page.locator('[data-act="awfCell"]').first.input_value() == '123.45'
 
 
-@acc()
 def test_export_same_modal_cancel_and_long_list_footer(page):
     page.evaluate('applyUiScale', max(UI_SCALES, key=lambda scale: float(scale[2]))[2])
     page.evaluate('''() => {
@@ -75,7 +72,6 @@ def test_export_same_modal_cancel_and_long_list_footer(page):
     assert page.locator('#procExportProjects input:checked').count() == 2
 
 
-@acc()
 def test_batch_invalid_start_failure_success_and_cancel(page):
     page.evaluate('''() => {
       closeModal();awfPj='__隔离项目__';awfYm='2026-12';
@@ -109,7 +105,6 @@ def test_batch_invalid_start_failure_success_and_cancel(page):
     assert not page._tail_errors
 
 
-@acc()
 def test_batch_max_scale_many_items_months_and_visible_footer(page):
     page.set_viewport_size({'width':1280,'height':720})
     page.evaluate('applyUiScale', max(UI_SCALES, key=lambda scale: float(scale[2]))[2])

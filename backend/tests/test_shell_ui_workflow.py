@@ -9,50 +9,14 @@ from workspace_paths import output as _run_output, output_dir as _run_dir
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 import pytest
-from playwright.sync_api import sync_playwright
 from tests.shell_src import SHELL_PATH
-from tests.acc_plugin import acc
 
 
-@pytest.fixture
-def ui_page():
-    web = Path(os.environ.get('MTRL_UI_FIXTURE_WEB', str(SHELL_PATH.parent)))
-    os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', 'C:/ProgramData/ms-playwright')
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        page = browser.new_page(viewport={'width': 1440, 'height': 1000})
-
-        def route(req):
-            path = urlparse(req.request.url).path
-            if path == '/app':
-                html = (web / 'index.html').read_text(encoding='utf-8')
-                assert html.count('<script>boot();</script>') == 1
-                req.fulfill(body=html.replace('<script>boot();</script>', '<script>window.testReady=true;</script>'), content_type='text/html')
-            elif path.startswith('/static/shell/'):
-                req.fulfill(body=(web / 'shell' / path.rsplit('/', 1)[-1]).read_text(encoding='utf-8'), content_type='application/javascript')
-            else:
-                req.fulfill(body='', content_type='text/css')
-
-        page.route('http://fixture.test/**', route)
-        page.goto('http://fixture.test/app', wait_until='load')
-        page.wait_for_function('window.testReady')
-        page.evaluate('''() => {
-          CUR.role='admin'; CUR.name='测试';
-          FAILED.clear(); PENDING.clear(); Object.keys(LOADERS).forEach(x=>LOADED.add(x));
-          PJs=[{id:'1',type:'normal',name:'测试仓库',disp:'测试项目',full:'测试项目全名',status:'在建',phid:'1',kw:''}];
-          NO=[{id:'101',date:bjMonth()+'-02',code:'DOC-101',proj:'测试项目全名',cat:'集采',astat:'已审批',doc:'甲乙材料',biz:'业务列唯一词',recv:'收款列唯一词',sup:'',entry:'录入列唯一词',approve:12345.67,pay:12345.67,ss:12345.67,sp:12345.67,excl:false,manual:false}];
-          JCs.splice(0); FLs.splice(0); VIEW='m03'; fNt.month='全部';fNt.stat='全部';
-          API.jcSupplier=async b=>{window.savedSupplier=b;return {ok:false,message:'隔离写出口已捕获'};};
-          render();
-        }''')
-        yield page
-        browser.close()
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
-@acc()
 def test_项目删除按真实预览启用并重拉列表(ui_page):
     p = ui_page
     from app.mod03_notice.page import DEFAULT_THEME, render_theme
@@ -83,7 +47,6 @@ def test_项目删除按真实预览启用并重拉列表(ui_page):
     assert p.evaluate('PJs.length') == 0
 
 
-@acc()
 def test_欠款标题显示账内截止月而非系统当月(ui_page):
     p = ui_page
     from app.mod03_notice.page import DEFAULT_THEME, render_theme
@@ -97,7 +60,6 @@ def test_欠款标题显示账内截止月而非系统当月(ui_page):
     p.screenshot(path=str(Path(__file__).resolve().parents[2]/_run_output('pending-debt-cutoff.png', kind='screenshots')))
 
 
-@acc()
 def test_供应商首项直接确定与人工回车(ui_page):
     p=ui_page
     p.evaluate('''async () => {
@@ -117,7 +79,6 @@ def test_供应商首项直接确定与人工回车(ui_page):
     assert '隔离写出口已捕获' in p.inner_text('#supManualError')
 
 
-@acc()
 def test_搜索各展示列并重置(ui_page):
     p=ui_page
     for q in ['DOC-101','业务列唯一词','收款列唯一词','录入列唯一词','测试项目','12,345.67','集采']:
@@ -131,7 +92,6 @@ def test_搜索各展示列并重置(ui_page):
     assert p.evaluate('ntHit(fNt).length') == 1
 
 
-@acc()
 def test_过程资料历史候选月份金额与后端一致(ui_page):
     p = ui_page
     p.evaluate('''async () => {
@@ -161,7 +121,6 @@ def test_过程资料历史候选月份金额与后端一致(ui_page):
     assert result == '读取过程资料失败，请重试'
 
 
-@acc()
 def test_截止月返回修改使旧预览无法确认(ui_page):
     p = ui_page
     p.evaluate('''() => {
@@ -174,7 +133,6 @@ def test_截止月返回修改使旧预览无法确认(ui_page):
     assert p.evaluate('IMP.preview===null && !window.staleCommitted')
 
 
-@acc()
 def test_导入只显示当前步骤并保留范围(ui_page):
     p=ui_page
     p.evaluate('''() => {
@@ -205,7 +163,6 @@ def test_导入只显示当前步骤并保留范围(ui_page):
     assert p.locator('[data-act="impMap"]').count() == 0
 
 
-@acc()
 def test_修改范围或列对应使旧预览失效(ui_page):
     p=ui_page
     p.evaluate('''() => {
@@ -221,7 +178,6 @@ def test_修改范围或列对应使旧预览失效(ui_page):
     assert p.evaluate('IMP.preview===null')
 
 
-@acc()
 def test_合同候选显示日期金额且仍按编号排序(ui_page):
     p=ui_page
     p.evaluate('''() => {
@@ -236,7 +192,6 @@ def test_合同候选显示日期金额且仍按编号排序(ui_page):
     assert '合同金额 20,000.00' in options.nth(0).inner_text()
 
 
-@acc()
 def test_审查颜色与看板删减(ui_page):
     p=ui_page
     tones=p.evaluate("['完全匹配','无单据号','单据号查不到','重复上报','超过未付','金额不符'].map(revTag)")
@@ -249,7 +204,6 @@ def test_审查颜色与看板删减(ui_page):
 
 
 
-@acc()
 def test_系统设置精简主题无障碍与尺寸切换(ui_page):
     p=ui_page
     p.evaluate('''() => {
@@ -281,7 +235,6 @@ def test_系统设置精简主题无障碍与尺寸切换(ui_page):
     assert '没有保存成功，请重试' in p.inner_text('#view .tip.dg')
 
 
-@acc()
 def test_默认页删说明保留操作与反馈(ui_page):
     p=ui_page
     assert p.evaluate("!NAV.some(g=>g.items.some(x=>x[0]==='m13')) && !TITLE.m13 && !V.m13")
@@ -303,7 +256,6 @@ def test_默认页删说明保留操作与反馈(ui_page):
     assert '读取失败，请刷新重试' in p.inner_text('#view')
 
 
-@acc()
 def test_项目页实际待办与错误保留(ui_page):
     p=ui_page
     p.evaluate("ARCP=[];ARCP_ERR='';ARCP_DROP=[{full_name:'其他同步数据',why_text:'保留数据'}];VIEW='m01';render();")
@@ -318,7 +270,6 @@ def test_项目页实际待办与错误保留(ui_page):
     assert '获取失败，请重试' in p.inner_text('#archBox')
 
 
-@acc()
 def test_付款流水默认只看生效且随时能看全部(ui_page):
     """⭐ 2026-10-10 用户裁定：状态**初始与重置都默认「生效」**；「全部 / 已撤销」仍随时可手动切。
 
@@ -354,7 +305,6 @@ def test_付款流水默认只看生效且随时能看全部(ui_page):
     assert p.evaluate('FLs.length') == 2, "默认收紧不该动数据（后端仍是全量）"
 
 
-@acc()
 def test_撤销付款跳转只定位生效流水(ui_page):
     """「撤销付款」有**多条**生效流水时跳 `MOD-05` 并逐条撤 ⇒ 落地页必须**只定位生效的那些**。
 
@@ -385,7 +335,6 @@ def test_撤销付款跳转只定位生效流水(ui_page):
     assert p.input_value('#flState') == '生效'
 
 
-@acc()
 def test_发票子表新增草稿默认北京时间当日且可改(ui_page):
     """⭐ 2026-10-10 用户裁定：**供应商发票 / 贸易公司发票 / 付款**三张子表新增草稿的日期
     都默认取**北京时间当日**、**可改**；「历史未结金额」那行仍按**核对截至日**（日期语义不同，不可同日）。
@@ -458,7 +407,6 @@ FL0 = dict(id=71, notice_id=101, flow_no='FL-X9', pay_date='2026-09-05', amount=
            amount_approved='1000.00', category_label='集采')
 
 
-@acc()
 def test_付款流水搜索各数据列并保持筛选范围(ui_page):
     p = ui_page
     p.evaluate('''f0 => {
@@ -490,7 +438,6 @@ def test_付款流水搜索各数据列并保持筛选范围(ui_page):
     assert p.evaluate("flSearchMatch({},' ， ')") is True
 
 
-@acc()
 def test_付款流水补通知书五列并改对操作人与流水号(ui_page):
     """票面验收：五项通知书信息上身；「操作人」= `created_by`（⛔ 不是创建时间）；
     「流水号」= 真 `flow_no`（⛔ 不是数据库行号）；**失联流水照样整条可查**、审批金额未知画「—」
@@ -544,7 +491,6 @@ def test_付款流水补通知书五列并改对操作人与流水号(ui_page):
         "拿数据库行号当流水号也搜出了行 —— 「流水号」这一列又说错话了"
 
 
-@acc()
 def test_付款流水合计只加实付且导出按屏幕行序(ui_page):
     """票面验收：**合计只加实付金额**（审批金额是每笔重复的对照数 ⇒ ⛔ 不纵向求和）；
     导出取的是**屏幕上真实的行序**（表头点击排序后行序只在 DOM 里 ⇒ ⛔ 不是数组原序）。"""
@@ -585,7 +531,6 @@ def test_付款流水合计只加实付且导出按屏幕行序(ui_page):
         "导出没按屏幕上看到的行序取 id（点过表头排序后 Excel 与屏幕对不上）"
 
 
-@acc()
 def test_通知书名含合计词的行不被排序钉到表尾(ui_page):
     """⭐ `TAIL-283` 附带发现：全站排序的「合计行」判定原先是**扫整行文本**里的「合计/总计/小计」——
     而通知书的「名称」是**自由文本**（`fields['BillName']`，来自 i8）⇒ 一张叫「…合计…」的单会让
@@ -613,7 +558,6 @@ def test_通知书名含合计词的行不被排序钉到表尾(ui_page):
 
 
 
-@acc()
 def test_当前错误同路替换逐页恢复与唯一横幅(ui_page):
     p = ui_page
     p.evaluate("""async () => {
@@ -685,7 +629,6 @@ def test_当前错误同路替换逐页恢复与唯一横幅(ui_page):
     assert p.evaluate("[BOOT_ERROR,typeof BOOT_ERROR,fails.length,failsTech.length,FAILED.size,FAILED_TECH.size,pageState().kind]") == ['', 'string', 0, 0, 0, 0, 'ready']
 
 
-@acc()
 def test_启动身份错误晚于页面加载且恢复保留其它错误(ui_page):
     p = ui_page
     # 首屏路径已缓存；身份失败晚于loadPaths收尾，boot必须收进当前横幅。
@@ -716,7 +659,6 @@ def test_启动身份错误晚于页面加载且恢复保留其它错误(ui_page
     assert p.evaluate('[BOOT_ERROR,fails.length,failsTech.length]') == ['', 0, 0]
 
 
-@acc()
 @pytest.mark.parametrize('count', [8, 450])
 def test_集采推进后保留横向位置_普通表与虚拟表(ui_page, count):
     from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
@@ -745,7 +687,6 @@ def test_集采推进后保留横向位置_普通表与虚拟表(ui_page, count)
     assert abs(after - before) < 2
 
 
-@acc()
 @pytest.mark.parametrize('count', [8, 450])
 @pytest.mark.parametrize('width', [1440, 6000])
 def test_集采推进后保留纵向位置_有无横向溢出(ui_page, count, width):
@@ -781,7 +722,6 @@ def test_集采推进后保留纵向位置_有无横向溢出(ui_page, count, wi
     assert abs(after['tableTop'] - before['tableTop']) < 2, (before, after)
 
 
-@acc()
 @pytest.mark.parametrize('action', ['jcArch', 'jcArchNo'])
 @pytest.mark.parametrize('count', [30, 450])
 def test_集采保存后不被重画锚定向上拉动(ui_page, action, count):
@@ -823,7 +763,6 @@ def test_集采保存后不被重画锚定向上拉动(ui_page, action, count):
     assert abs(after['top'] - before['top']) < 2, (before, after)
 
 
-@acc()
 def test_集采存档号提示按项目最大值且不受筛选影响(ui_page):
     from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
     from app.mod03_notice.page import render_theme
@@ -865,7 +804,6 @@ def test_集采存档号提示按项目最大值且不受筛选影响(ui_page):
     p.screenshot(path=str(Path(__file__).resolve().parents[2] / str(_run_output('jc-archive-hint-20261014.png'))))
 
 
-@acc()
 def test_集采默认合同日期升序且表头仍可倒序(ui_page):
     from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
 
@@ -891,7 +829,6 @@ def test_集采默认合同日期升序且表头仍可倒序(ui_page):
     assert str(p.evaluate('exportedIds[0]')) == ids()[0]
 
 
-@acc()
 def test_付款流水备注显示与编码链接键盘入口(ui_page):
     p = ui_page
     p.evaluate('''row => {
@@ -909,7 +846,6 @@ def test_付款流水备注显示与编码链接键盘入口(ui_page):
     assert p.evaluate('openedNotice') == '71'
 
 
-@acc()
 def test_历史初始化从导入类型隐藏且旧选中项恢复到可用域(ui_page):
     p = ui_page
     p.evaluate('''async () => {

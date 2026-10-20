@@ -8,7 +8,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from app.mod01_projects.domain import ordered
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL, dl_kernel, parts_text
 
 ROOT_BACKEND = __import__('pathlib').Path(__file__).resolve().parents[1]
@@ -18,7 +17,6 @@ def _shell_and_core() -> str:
     return "\n".join(t for _, t in parts_text())
 
 
-@acc("ACC-UI-SHELL-001", "001-05")
 def test_mod01_小微壳默认置底_归档仍在最底():
     """用户 2026-09-21：「小微壳改为默认置底」⇒ 顺序 = **归档最底 > 小微壳 > 普通项目**（各段内按 ord）。"""
     P = lambda **kw: SimpleNamespace(status=kw.get("status", "active"),
@@ -29,7 +27,6 @@ def test_mod01_小微壳默认置底_归档仍在最底():
     assert got == ["normal", "normal", "shell", "normal:arch", "shell:arch"], got
 
 
-@acc("ACC-UI-SHELL-001", "001-06")
 def test_抓取结果一律弹窗_不再是提示条():
     """⭐ 用户口径「统一像集采台账」：nt / wh / iv 三条抓取的结果**必须弹窗**（集采本就是弹窗）。"""
     src = _shell_and_core()
@@ -42,13 +39,11 @@ def test_抓取结果一律弹窗_不再是提示条():
     assert "function fetchResultModal" in src
 
 
-@acc("ACC-UI-SHELL-001", "001-07")
 def test_导出点击即有反馈_不再让人以为没点住():
     """`dlExport` 一进来就给「正在准备文件」的反馈（导出是重动作，几秒很正常）。"""
     assert "正在从服务器准备文件" in dl_kernel()
 
 
-@acc("ACC-UI-SHELL-001", "001-08")
 def test_m08导出_走最近一次抓取的缓存_不碰i8():
     """⭐ 用户裁定「**抓取导出分开**」（与 m07 同一套心智）：
 
@@ -69,7 +64,6 @@ def test_m08导出_走最近一次抓取的缓存_不碰i8():
     assert "source_cache.save(SPEC_KEY" in fs, "抓取时必须存档源文件"
 
 
-@acc("ACC-UI-SHELL-001", "001-09")
 def test_源文件缓存_存取往返与未命中(monkeypatch, tmp_path):
     import app.mod02_i8.source_cache as SC
     monkeypatch.setattr(SC, "DIR", tmp_path)
@@ -80,7 +74,6 @@ def test_源文件缓存_存取往返与未命中(monkeypatch, tmp_path):
     assert SC.load("inv", "2026-09") == b"PK\x03\x04new"
 
 
-@acc("ACC-UI-SHELL-001", "001-10")
 def test_m02_接口清单已删_正式壳没有():
     """用户裁定：接口清单删除 —— 每个接口在系统里都有自己的位置（抓取在各页 · 同步在 m01）。"""
     assert "数据接口清单" not in SHELL, "正式壳里还留着接口清单"

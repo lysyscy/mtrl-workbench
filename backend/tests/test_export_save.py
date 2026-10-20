@@ -16,12 +16,10 @@ import openpyxl
 
 from app.mod05_flow import debt_export as DEBT
 from app.report_export.save import save_workbook
-from tests.acc_plugin import acc          # ⭐ 工具自检：显式声明"不绑定判据点"（`@acc()`）
 
 APP = pathlib.Path(__file__).resolve().parents[1] / "app"
 
 
-@acc()
 def test_落盘到不存在的多级目录也要成功(tmp_path):
     """⭐ 这条是 `TAIL-68` 存在的理由：`mkdir(parents=True)` **一步都不能省**。"""
     out = tmp_path / "a" / "b" / "c" / "报表.xlsx"
@@ -33,7 +31,6 @@ def test_落盘到不存在的多级目录也要成功(tmp_path):
     assert openpyxl.load_workbook(got).active["A1"].value == "你好"
 
 
-@acc()
 def test_接受字符串路径():
     wb = openpyxl.Workbook()
     got = save_workbook(wb, str(pathlib.Path(__file__).parent / "_tmp_save_str.xlsx"))
@@ -43,7 +40,6 @@ def test_接受字符串路径():
         got.unlink(missing_ok=True)
 
 
-@acc()
 def test_落盘出口只剩一个():
     """⭐ **静态扫描**：除 `save.py` 自己，全站**不得再有** `wb.save(`
     ⇒ 防止以后有人新增一处"不带 mkdir 的落盘"（这正是 `setl_export` 当年的形态）。
@@ -63,7 +59,6 @@ def test_落盘出口只剩一个():
     assert not bad, "还有裸 `wb.save(`（落盘必须走 `save_workbook`）：\n  " + "\n  ".join(bad)
 
 
-@acc()
 def test_总欠款导出走落盘件_且文件名按口径(tmp_path):
     """端到端：`debt_export`（自足、不依赖模板）落到**不存在的子目录**也要成功。"""
     items = [{"index": 1, "project": "甲项目", "jc": "10.5", "material": "2", "mech": "0"},

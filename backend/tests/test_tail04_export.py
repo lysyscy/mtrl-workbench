@@ -40,7 +40,6 @@ from app.report_export import kcdj_export as KE
 from app.report_export import resources as R
 from app.report_export import service as EX
 from app.report_export import setl_export as SE
-from tests.acc_plugin import acc
 from tests.m07_helpers import dataset
 from tests.shell_load_helpers import exp_routes
 
@@ -57,7 +56,6 @@ DIAG_INV = ROOT / "data/source/i8-diagnostics" / "inv_2026-09.xlsx"
 # ============================================================== 001-02
 
 
-@acc("ACC-X-EXP-001", "001-02")
 def test_导出文件名随期间变且不硬编码月份():
     """`001-02` 导出文件名用**当前年月**，⛔ 不得硬编码成某个固定月份。"""
     # ① 随参数变（两个不同月份必须给出两个名字）
@@ -79,7 +77,6 @@ def test_导出文件名随期间变且不硬编码月份():
 # ============================================================== 接线（不绑判据点）
 
 
-@acc()
 def test_成品名只有一处主人且与实际产出逐字一致():
     """⭐ **清单（页面承诺）与实际产出必须同一个来源** —— 实测踩过两处各写一份命名。"""
     ym = "2026-08"
@@ -99,7 +96,6 @@ def test_成品名只有一处主人且与实际产出逐字一致():
     assert D.total_workbook_name(ym) in members
 
 
-@acc()
 def test_模板闸门缺失或损坏时显式报错():
     """⭐ `docs/reference/template-export.md` §五 点名的实现侧硬性：模板缺失 ⇒ **必须显式报错**。"""
     with pytest.raises(MustReportError) as e1:
@@ -122,7 +118,6 @@ def test_模板闸门缺失或损坏时显式报错():
         assert got == want, f"`{name}` 与登记的 SHA256 不符 —— 实现在跑，但闸门会在下次拒做"
 
 
-@acc()
 def test_三种失败都不产出文件且带回中文原因():
     """⭐ 空数据 / 坏期间 ⇒ 显式拒；⛔ 绝不静默产出一个空文件（那会被当成"交付了"）。"""
     import tempfile
@@ -144,7 +139,6 @@ def test_三种失败都不产出文件且带回中文原因():
         assert "格式不对" in str(e2.value)
 
 
-@acc()
 def test_壳侧导出按钮已接线且按content_type分流():
     """`zipSfjc` 必须**真下载**（不再只弹"尚未落地"），并按 `content-type` 分流失败原因。
 
@@ -208,7 +202,6 @@ def _kcdj_source() -> bytes:
     return DIAG_INV.read_bytes() if DIAG_INV.exists() else _synth_i8_bytes()
 
 
-@acc("ACC-X-EXP-001", "001-05")
 def test_库存单据明细表成品形态与模板一致且两张透视齐备():
     """绑 `ACC-X-EXP-001/001-05` —— **导出成品形态 / 提示语必须与模板实际形态一致**。
 
@@ -248,7 +241,6 @@ def test_库存单据明细表成品形态与模板一致且两张透视齐备()
         assert sn in sheets, f"成品缺工作表：{sn}（现有：{sheets}）"
 
 
-@acc("ACC-X-EXP-001", "001-05")
 def test_库存单据成品空源硬失败且不带出文件():
     """绑 `ACC-X-EXP-001/001-05`（must-report 侧）：该月**没有明细** ⇒ **显式报中文原因、不产出文件**。
 
@@ -264,7 +256,6 @@ def test_库存单据成品空源硬失败且不带出文件():
         assert not list(out_dir.glob("*.xlsx")) if out_dir.exists() else True, "拒做时不该留下成品"
 
 
-@acc("ACC-X-EXP-001", "001-05")
 def test_壳侧透视导出按钮真下载且端点按content_type分流():
     """绑 `ACC-X-EXP-001/001-05`：`expPivot` 必须**真下载**（不再只弹提示），且**提示语与模板形态一致**。
 
@@ -291,7 +282,6 @@ def test_壳侧透视导出按钮真下载且端点按content_type分流():
     assert "default_month()" in INV_API, "端点没把「本页默认月」用作期间缺省"
 
 
-@acc()
 def test_库存导出编排落点与期间标签唯一出口(monkeypatch):
     """接线（不绑判据点）：`export_inventory` 的**落点**与**期间标签**都走唯一出口。
 
@@ -329,7 +319,6 @@ def _m08_card_head() -> str:
     return SHELL[a:b]
 
 
-@acc("ACC-INV-001", "001-12")
 def test_库存单据只留真导出且透视提示与模板形态一致():
     """绑 `ACC-INV-001/001-12` —— ⭐ **2026-09-29（`TAIL-185` · 用户裁定 `A`）claim 已改**：
     **卡头只留真入口**（那枚"点了必然空转"的朴素导出**渲染后被 `BIND.m08` 摘除**）；
@@ -425,7 +414,6 @@ def _pivot_rows(path, part: str):
     return loc.group(1), int(ax.group(1)), wh_items, int(ri.group(1)), ri_rows
 
 
-@acc()
 def test_空集与未传语义相反_空集得0行项未传用全部仓库():
     """⭐ 缺陷回归：`warehouses=set()`（**空集**）≠ `warehouses=None`（**未传**）—— 判据在**真产出**里。
 
@@ -462,7 +450,6 @@ def test_空集与未传语义相反_空集得0行项未传用全部仓库():
                 f"未传 warehouses 的 pivot1 应用全部仓库（2 行项 / A3:N9），实得 {whp} / {locp}"
 
 
-@acc()
 def test_安全文明对账_空集明说未验证而非通过():
     """⭐ 缺陷回归：该月**没有**安全文明施工费数据 ⇒ 该条对账必须**明说「未验证 / 不适用」**，
     ⛔ **绝不**因为"空 == 空"就静默报"通过"（最贵的假绿）。

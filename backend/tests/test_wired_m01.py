@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
@@ -23,7 +22,6 @@ from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 # --------------------------------------------------------------- 接线点（正向）
 
 
-@acc()
 def test_壳把m01标为已接后端并指向真实端点():
     """`WIRED` 含 `m01`，且壳里真的出现该模块的端点（读全量 ＋ 留痕）。"""
     assert "'m01'" in SHELL and "const WIRED=new Set(" in SHELL
@@ -32,7 +30,6 @@ def test_壳把m01标为已接后端并指向真实端点():
     assert "/api/m01/trails" in SHELL
 
 
-@acc()
 def test_项目状态在适配层完成内部值与显示值的互转():
     """后端 `active/archived` ⇄ 原型枚举 `在建/归档`。
 
@@ -45,7 +42,6 @@ def test_项目状态在适配层完成内部值与显示值的互转():
     assert "PJ_STATUS_VALUE[v]||v" in SHELL, "写回时必须把中文换回内部值"
 
 
-@acc()
 def test_项目id与父壳id一律转字符串():
     """原型全站 `x.parent === p.id` 做**同值比较** ⇒ 两侧必须同为字符串。
 
@@ -55,7 +51,6 @@ def test_项目id与父壳id一律转字符串():
     assert "parent_shell_id == null ? null : String(" in SHELL
 
 
-@acc()
 def test_关键字与留痕在适配层转形():
     """关键词：后端**数组** ⇄ 原型**竖线串**；留痕：后端**对象** ⇄ 卡片的**六元数组**。"""
     assert "const kwJoin" in SHELL and "const kwSplit" in SHELL
@@ -63,7 +58,6 @@ def test_关键字与留痕在适配层转形():
     assert "kw: kwJoin(p.match_keywords)" in SHELL
 
 
-@acc()
 def test_写动作统一走后端并以后端为准重拉():
     """`reloadProjects` ＋ `pjAct`（失败时**把后端原因原样给用户**并回滚到后端状态）。"""
     assert "async function reloadProjects()" in SHELL
@@ -74,7 +68,6 @@ def test_写动作统一走后端并以后端为准重拉():
 # --------------------------------------------------------------- 反向（不许再出现）
 
 
-@acc()
 def test_前端不再自己算状态不变式():
     """⛔ 本地那套「壳下还有在建小微 ⇒ 不许归档」必须删干净 ——
 
@@ -85,7 +78,6 @@ def test_前端不再自己算状态不变式():
     assert "pushTrail(PJ_TRAIL" not in SHELL, "留痕必须由后端写（前端只读展示）"
 
 
-@acc()
 def test_写动作不許用本地赋值冒充落库():
     """旧写法（改内存 → `render()`）一律消失：改完必须**以后端为准重拉**。"""
     assert "p.disp=v; render()" not in SHELL
@@ -94,7 +86,6 @@ def test_写动作不許用本地赋值冒充落库():
     assert "p.name=nv;" not in SHELL
 
 
-@acc()
 def test_未接通的动作不得假装成功():
     """删除 / 两个同步**仍待接通**（依赖其它尾巴）⇒ 必须**如实说未接通**。
 
@@ -112,7 +103,6 @@ def test_未接通的动作不得假装成功():
 # --------------------------------------------------- 链路 B「人工指认」（`TAIL-30`-③）
 
 
-@acc("ACC-PRJ-AUTO-001", "001-11")
 def test_待人工指认清单与档案同源同刷且单独容错():
     """⭐ `TAIL-30`-③：`m01` 页首那个入口的清单 = **最近一次材料侧抓取**的待人工条目。
 
@@ -135,7 +125,6 @@ def test_待人工指认清单与档案同源同刷且单独容错():
     assert "PEND_ERR ? " in SHELL and "待指认清单没取到" in SHELL, "取不到时页面上要说出来"
 
 
-@acc("ACC-PRJ-AUTO-001", "001-10")
 def test_指认写入口按id定位并且前端不做第二份判定():
     """⭐ 铁律 5/6：**写操作按 id 定位，禁止用名字反查**；且**前端不算任何判定**（`D18`）。
 
@@ -156,7 +145,6 @@ def test_指认写入口按id定位并且前端不做第二份判定():
     assert "ph: !!c.is_placeholder" in SHELL, "占位行标记必须来自后端"
 
 
-@acc("ACC-PRJ-AUTO-001", "001-11")
 def test_材料侧抓取回执必须露出待人工并给跳转():
     """⭐ 补的缺口：壳上抓收发结存时，回包的 `recovery` **原先根本没露出来** ——
     用户看不到"待人工 N 条"，也就不知道要去 `m01` 处理（服务端渲染页有 `summary_text`，壳侧只报条数）。
@@ -171,7 +159,6 @@ def test_材料侧抓取回执必须露出待人工并给跳转():
 # --------------------------------------------------------------- 端点契约
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_待建档入口与清单同源且与指认那路各报各的():
     """⭐ `TAIL-45`：链路 A ③-b「≥2 个仓库 ⇒ 选定一个建行」的**入口**。
 
@@ -203,7 +190,6 @@ def test_待建档入口与清单同源且与指认那路各报各的():
     assert "ARCP_SRC" in SHELL, "要如实标清单来源（⛔ 不装作「刚刚」）"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-13")
 def test_建档动作只从后端给的候选里选仓库():
     """⭐ 仓库名**只能选、不能填**（§9.4：仓库名是 i8 的）＋ 前端**不做第二份判定**（`D18`）。
 
@@ -223,7 +209,6 @@ def test_建档动作只从后端给的候选里选仓库():
     assert "pjAct(()=>API.pjArchRow(" in SHELL, "写完必须走统一外壳（重拉清单，少一条才对）"
 
 
-@acc()
 def test_trails端点存在且limit有边界():
     """`GET /api/m01/trails`：存在、且 `limit` 有下上界（越界由 FastAPI 直接 422，不连库）。"""
     from fastapi.testclient import TestClient

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from app.mod01_projects.domain import build_candidates, ordered, reorder
 from app.mod01_projects.models import STATUS_ARCHIVED
-from tests.acc_plugin import acc
 from tests.m01_helpers import make_project
 
 
@@ -22,7 +21,6 @@ def _ids_in_order(assignments: list[tuple[int, int]]) -> list[int]:
     return [pid for pid, _ in sorted(assignments, key=lambda t: t[1])]
 
 
-@acc("ACC-PRJ-ORD-001", "001-01")
 def test_序号挂在档案行上三种叫法共用同一条():
     rows = _rows(with_archive=False)
     seq = ordered(rows)
@@ -31,7 +29,6 @@ def test_序号挂在档案行上三种叫法共用同一条():
     assert seq[0].ord == 1 and seq[0].name_full == "甲项目全名" and seq[0].warehouse_name == "甲仓"
 
 
-@acc("ACC-PRJ-ORD-001", "001-02")
 def test_归档后置优先于序号():
     a = make_project(1, warehouse="甲仓", order=1)
     d = make_project(4, warehouse="丁仓", order=0, status=STATUS_ARCHIVED)
@@ -40,7 +37,6 @@ def test_归档后置优先于序号():
     assert [p.id for p in ordered([a, d])] == [1, 4]
 
 
-@acc("ACC-PRJ-ORD-001", "001-03")
 def test_填序号是插到位置与上下移是对调():
     # 填序号 = 插到那个位置（不是改数字）
     res = reorder(_rows(with_archive=False), project_id=3, to_position=1)
@@ -50,7 +46,6 @@ def test_填序号是插到位置与上下移是对调():
     assert _ids_in_order(res2)[:2] == [2, 1]
 
 
-@acc("ACC-PRJ-ORD-001", "001-04")
 def test_改完全表重编号连续无重复():
     rows = _rows()
     res = reorder(rows, project_id=3, to_position=1)
@@ -58,7 +53,6 @@ def test_改完全表重编号连续无重复():
     assert ords == list(range(1, len(rows) + 1))          # 1..N 连续、无重复
 
 
-@acc("ACC-PRJ-ORD-001", "001-05")
 def test_改序号全站顺序同步():
     rows = _rows()
     # 列表与「项目候选」共用同一个 ordered() ⇒ 顺序一致（全站跟随）
@@ -67,7 +61,6 @@ def test_改序号全站顺序同步():
     assert [c.key for c in build_candidates(rows)] == [p.warehouse_name for p in ordered(rows)]
 
 
-@acc("ACC-PRJ-ORD-001", "001-06")
 def test_移动不得跨在建归档分界():
     rows = _rows()
     # 归档项（组内唯一）上移 ⇒ 到边界不动，绝不进入在建区
@@ -76,7 +69,6 @@ def test_移动不得跨在建归档分界():
     assert _ids_in_order(reorder(rows, project_id=3, direction="down")) == [1, 2, 3, 4]
 
 
-@acc("ACC-PRJ-ORD-001", "001-07")
 def test_排序改动不留痕():
     rows = _rows()
     res = reorder(rows, project_id=3, to_position=1)

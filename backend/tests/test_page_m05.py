@@ -17,7 +17,6 @@ from __future__ import annotations
 from app.mod05_flow.service import (
     build_debt, build_flows, build_ledger, build_stats, order_project_ids,
 )
-from tests.acc_plugin import acc
 from tests.m05_helpers import TODAY, FakeSession, dataset
 
 PROJECT_ID = 11
@@ -42,7 +41,6 @@ def _stats():
     return build_stats(FakeSession(dataset()), today=TODAY)
 
 
-@acc()
 def test_导出总欠款的行序_选了项目就按用户给的顺序():
     """⭐ 2026-09-28（用户口径）：**总欠款导出也能自己选项目 ＋ 定顺序**（像月度会大表那样）。
 
@@ -61,7 +59,6 @@ def test_导出总欠款的行序_选了项目就按用户给的顺序():
         "脏名字只跳过它自己，⛔ 不许把后面的都丢掉"
 
 
-@acc()
 def test_期初行在欠款与台账两侧必须给同一个id():
     """⭐ 2026-09-28（用户走查：「期初占位行录入后点删除没反应」）。
 
@@ -78,7 +75,6 @@ def test_期初行在欠款与台账两侧必须给同一个id():
         " ⇒ 壳「删除期初行」会静默点不动")
 
 
-@acc()
 def test_四份组装件都带自己的口径与指标区():
     """旧页的"五段骨架"是**页面形态**（随页消失）；它守的**实质**是"每份组装件都把口径 / 指标带上"
     —— 这一面在这里钉住：流水带 `kpis`、统计带 `layout`（左右栏口径）、欠款带三类、台账带两侧。"""
@@ -88,21 +84,18 @@ def test_四份组装件都带自己的口径与指标区():
     assert [s["category"] for s in _ledger()["sides"]] == ["material", "mechanical"]
 
 
-@acc()
 def test_台账两侧共用同一个项目选择器且无切换口径按钮():
     led = _ledger()
     assert led["shared_project_selector"] is True, "两侧没共用同一个项目选择器"
     assert led["has_switch_caliber_button"] is False, "出现了「切换口径」按钮（口径在域内核就是 False）"
 
 
-@acc()
 def test_台账机械侧没有手填入口_辅材侧有():
     by = {s["category"]: s for s in _ledger()["sides"]}
     assert by["material"]["has_manual_input"] is True, "辅材侧少了手填入口"
     assert by["mechanical"]["has_manual_input"] is False, "机械侧不该有手填入口（「其他支出金额」是派生只读）"
 
 
-@acc()
 def test_台账首行是期初且空月也出行():
     rows = _ledger()["sides"][0]["rows"]                     # 辅材侧
     assert rows[0]["is_opening"] is True, "首行不是期初行"
@@ -113,7 +106,6 @@ def test_台账首行是期初且空月也出行():
     assert months[0] <= "2026-07" and "2026-08" in months, f"本桩应含空月 2026-08：{months}"
 
 
-@acc()
 def test_流水默认走全部月份且撤销只对生效行有意义():
     """旧页那半（"默认当月" / "撤销表单只在生效行"）是**页面形态** ⇒ 搬到壳；这里钉**数据侧**：
     不传筛选 = 全部月份（约定 `year_month=""`）、不翻页、且每行都带 `status`（「生效 / 已撤销」由它定）。"""
@@ -124,7 +116,6 @@ def test_流水默认走全部月份且撤销只对生效行有意义():
     assert statuses <= {"effective", "revoked"} and "effective" in statuses, f"行的状态取值不对：{statuses}"
 
 
-@acc()
 def test_统计页左右栏都在且默认按周():
     data = _stats()
     assert data["granularity"] == "week"                  # 默认**按周**
@@ -132,7 +123,6 @@ def test_统计页左右栏都在且默认按周():
     assert data["buckets"] and data["left"] and data["right"]
 
 
-@acc()
 def test_流水列表不分页_空态那半在壳侧():
     data = build_flows(FakeSession({}), year_month="", status=None)   # ""=全部月份（约定）
     assert data["paginated"] is False
@@ -141,7 +131,6 @@ def test_流水列表不分页_空态那半在壳侧():
     # 旧页删除（`D18`）后那半搬到壳 —— `test_wired_m05.py` 的空态断言 ✓。
 
 
-@acc()
 def test_欠款页把三类与按项目都渲染出来():
     d = _debt()
     assert [c["label"] for c in d["by_category"]] == ["辅材", "机械", "集采"]

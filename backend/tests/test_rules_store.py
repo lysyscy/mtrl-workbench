@@ -20,7 +20,6 @@ import pytest
 
 from app.mod03_notice import classify
 from app.mod03_notice import rules_repository as RR
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 REPO = ROOT / "backend" / "app" / "mod03_notice" / "rules_repository.py"
@@ -34,7 +33,6 @@ RULES_API = ROOT / "backend" / "app" / "mod14_config" / "rules_api.py"
 # ============================================================== 1 · 命中值结构与分隔符
 
 
-@acc()
 def test_命中值分隔符全角为主_半角也认():
     """§4.2.2 表内写法 = **全角 `｜`**（与原型演示常量同款）；手输常见的**半角 `|` 也必须认**。
 
@@ -54,7 +52,6 @@ def test_命中值分隔符全角为主_半角也认():
     assert RR.SEP == "｜"
 
 
-@acc()
 def test_库行转判定值时对象是_excludeRule():
     """库行 → `classify.ExcludeRule`（判定用的**不可变值对象**）—— `meaning` **不参与判定**。"""
 
@@ -72,7 +69,6 @@ def test_库行转判定值时对象是_excludeRule():
 # ============================================================== 2 · 「库 → 出厂默认」语义
 
 
-@acc("ACC-CFG-RULE-001", "001-06")
 def test_库空回落到出厂默认():
     """⭐ 用户 2026-09-18 裁定：**库里有 ⇒ 以库为准；库空 ⇒ 回落 `DEFAULT_RULES`（＝ §4.2.2 那张表）**。
 
@@ -98,7 +94,6 @@ def test_库空回落到出厂默认():
         RR.all_rows = orig                    # type: ignore[assignment]
 
 
-@acc("ACC-CFG-RULE-001", "001-06")
 def test_幂等初始化不会重复落库():
     """`ensure_seeded` 只在**库空**时写一次；库非空时**返回 0 且一行不加**（幂等）。
 
@@ -117,7 +112,6 @@ def test_幂等初始化不会重复落库():
             assert RR.ensure_seeded(s) == 0, "第二次调用还在写 ⇒ 幂等破了"
 
 
-@acc()
 def test_出厂默认本身必须合法():
     """出厂默认要过同一份校验（§4.2.2 的四类 / 不得按收款单位 / 命中值非空）。
 
@@ -133,7 +127,6 @@ def test_出厂默认本身必须合法():
 # ============================================================== 3 · 抓取管线保持纯读 + 依赖单向
 
 
-@acc("ACC-CFG-RULE-001", "001-07")
 def test_抓取管线读到规则并同时喂给两处():
     """⭐ **一处读取、两处同一份**：`rows_needing_ownership`（挑需校验的行）与
     `apply_fetched_row`（落库时打剔除标记）必须用**同一批**规则 ——
@@ -148,7 +141,6 @@ def test_抓取管线读到规则并同时喂给两处():
         "`apply_fetched_row` 自己又读了一次规则（同一批要保证判据一致）"
 
 
-@acc("ACC-CFG-RULE-001", "001-06")
 def test_抓取管线不得调幂等初始化():
     """⛔ **抓取路径必须保持纯读**：`ensure_seeded`（会写库）只许由**配置页**触达。
 
@@ -159,7 +151,6 @@ def test_抓取管线不得调幂等初始化():
     assert "ensure_seeded" in RULES_API.read_text(encoding="utf-8"), "配置页端点没做初始化"
 
 
-@acc("ACC-CFG-RULE-001", "001-07")
 def test_付款域不反向依赖配置域():
     """依赖方向**单向** `mod14_config → mod03_notice`（§4.2.2：规则本身属付款域）。
 
@@ -179,7 +170,6 @@ def test_付款域不反向依赖配置域():
 # ============================================================== 4 · 端点已注册
 
 
-@acc("ACC-CFG-RULE-001", "001-08")
 def test_规则端点已注册且写侧恒200():
     """4 个端点齐；写侧**恒 HTTP 200 ＋ `ok` 标志**（拒绝是可预期的，那句中文必须给用户看）。"""
     from app.main import create_app
@@ -195,7 +185,6 @@ def test_规则端点已注册且写侧恒200():
 # ============================================================== 5 · 写侧拒绝路径
 
 
-@acc("ACC-CFG-RULE-001", "001-08")
 def test_非法写法一律拒并给人话():
     """`001-08` 写侧**拒绝路径** —— ⛔ 不静默忽略、更不静默写进去。
 

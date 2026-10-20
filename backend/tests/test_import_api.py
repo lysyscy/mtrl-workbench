@@ -21,7 +21,6 @@ from app.import_kit import api as imp_api
 from app.import_kit.mapping import Field, IGNORE
 from app.import_kit.profile_store import ProfileStore
 from app.import_kit.spec import DomainSpec, Hooks
-from tests.acc_plugin import acc
 
 SPEC = DomainSpec(
     domain="m04", title="付款计划", source_label="项目付款计划",
@@ -91,7 +90,6 @@ def _upload(client, sheet: str = ""):
                        data={"sheet": sheet})
 
 
-@acc()
 def test_schema_端点给字段契约(client):
     out = client.get("/api/imp/m04/schema").json()
     assert out["ok"] and out["title"] == "付款计划"
@@ -99,7 +97,6 @@ def test_schema_端点给字段契约(client):
     assert {f["label"] for f in out["fields"]} >= {"项目", "该流程金额", "付款时间", "付款方式"}
 
 
-@acc("ACC-IMP-MAP-001", "001-01")
 def test_解析_自动挑对工作表并认出列(client):
     """⭐ 真文件形态：第一张 sheet 是噪声 ⇒ 必须挑到**认得出表头**的那张。"""
     out = _upload(client).json()
@@ -118,14 +115,11 @@ def test_解析_自动挑对工作表并认出列(client):
     assert out["memory"] is None                       # 第一次 ⇒ 没有记忆
 
 
-@acc()
 def test_解析_指定不存在的工作表_要显式报错(client):
     out = _upload(client, sheet="没有这张表").json()
     assert out["ok"] is False and "工作表" in out["message"]
 
 
-@acc("ACC-IMP-MAP-001", "001-05")
-@acc("ACC-ODDVAL-001", "001-02")
 def test_预览_不写库_并把坏值与必填为空列成问题(client):
     parsed = _upload(client).json()
     body = {"token": parsed["token"], "mapping": {"项目": "项目", "该流程金额": "该流程金额",
@@ -140,7 +134,6 @@ def test_预览_不写库_并把坏值与必填为空列成问题(client):
     assert all("raw" not in r for r in out["preview"])   # 预览不回 raw（界面另取）
 
 
-@acc("ACC-IMP-MAP-001", "001-06")
 def test_确认前一个字节都不写库(client):
     """⭐ 解析 ＋ 预览全程只进 `preview_store`；**域钩子一次都没被调**（真落库只在确认那一步）。"""
     parsed = _upload(client).json()
@@ -149,8 +142,6 @@ def test_确认前一个字节都不写库(client):
     assert client.calls["commit"] == [] and client.calls["rollback"] == []
 
 
-@acc("ACC-IMP-MAP-001", "001-04")
-@acc("ACC-ODDVAL-001", "001-01")
 def test_未映射列原样保留_不丢也不报错(client):
     parsed = _upload(client).json()
     body = {"token": parsed["token"], "mapping": {"项目": "项目", "该流程金额": "该流程金额"}}
@@ -162,7 +153,6 @@ def test_未映射列原样保留_不丢也不报错(client):
     assert "审批状态" not in rec                        # ⛔ 不许进正式字段
 
 
-@acc()
 def test_确认落库_调域钩子并回报告(client):
     parsed = _upload(client).json()
     out = client.post("/api/imp/m04/commit",
@@ -173,7 +163,6 @@ def test_确认落库_调域钩子并回报告(client):
     assert "已导入 3 行" in out["message"]
 
 
-@acc("ACC-IMP-MAP-001", "001-07")
 def test_记忆_勾了记住_下次解析就预填(client):
     parsed = _upload(client).json()
     client.post("/api/imp/m04/commit",
@@ -185,7 +174,6 @@ def test_记忆_勾了记住_下次解析就预填(client):
     assert mem["mapping"]["项目"] == "项目"
 
 
-@acc()
 def test_回滚端点_只在域给了钩子时才存在(client):
     assert client.post("/api/imp/m04/rollback", json={"batch": "IMP-TEST-1"}).json()["ok"]
     assert client.calls["rollback"] == ["IMP-TEST-1"]
@@ -194,13 +182,11 @@ def test_回滚端点_只在域给了钩子时才存在(client):
     assert TestClient(app).post("/api/imp/m04/rollback", json={}).status_code == 404
 
 
-@acc()
 def test_预览_过期token要显式报错_不静默当空(client):
     out = client.post("/api/imp/m04/preview", json={"token": "deadbeef"}).json()
     assert out["ok"] is False and "重新上传" in out["message"]
 
 
-@acc()
 def test_不是Excel_要中文原因且HTTP仍是200(client):
     resp = client.post("/api/imp/m04/parse",
                        files={"file": ("假的.xlsx", b"not an excel", "application/octet-stream")})
@@ -209,7 +195,6 @@ def test_不是Excel_要中文原因且HTTP仍是200(client):
     assert out["ok"] is False and "读不成 Excel" in out["message"]
 
 
-@acc()
 def test_忽略哨兵_显式忽略的列进raw而不是字段(client):
     parsed = _upload(client).json()
     body = {"token": parsed["token"],

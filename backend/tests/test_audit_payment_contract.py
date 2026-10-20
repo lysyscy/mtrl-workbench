@@ -14,7 +14,6 @@ from app.mod05_flow import service as flows
 from app.mod05_flow.models import PaymentFlow
 from app.mod11_jc.models import JcContract
 from tests._auth import TestClient
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -64,7 +63,6 @@ def _paid(ids):
             select(PaymentFlow).where(PaymentFlow.notice_id.in_(ids)).order_by(PaymentFlow.id))]
 
 
-@acc()
 def test_http_duplicate_full_payment_preserves_first_selected_order(http_case):
     client, ids, _, _ = http_case
     a, b = ids
@@ -85,7 +83,6 @@ def test_http_duplicate_full_payment_preserves_first_selected_order(http_case):
     ('未批', {}), ('jc', {}), ('', {'amount': '100.01'}),
     ('', {'amount': '0'}), ('', {'pay_method': '非法'}), ('', {'pay_method': '其他'}),
 ])
-@acc()
 def test_http_payment_gates_reject_whole_batch(http_case, state, draft):
     client, ids, _, _ = http_case
     with db.session_scope() as s:
@@ -100,7 +97,6 @@ def test_http_payment_gates_reject_whole_batch(http_case, state, draft):
     assert _paid(ids) == []
 
 
-@acc()
 def test_http_payment_request_id_and_exception_rollback(http_case, monkeypatch):
     client, ids, _, _ = http_case
     original = flows.create_flow
@@ -126,7 +122,6 @@ def test_http_payment_request_id_and_exception_rollback(http_case, monkeypatch):
     assert _paid(ids) == [(ids[0], Decimal('10.00'), rid)]
 
 
-@acc()
 def test_http_manual_contract_save_and_readback(http_case):
     client, _, pid, key = http_case
     response = client.post('/api/m11/add', json={
@@ -149,7 +144,6 @@ def test_http_manual_contract_save_and_readback(http_case):
     assert Decimal(detail['data']['contract_amt']) == Decimal('123.45')
 
 
-@acc()
 def test_http_unknown_project_does_not_create_contract(http_case):
     client, _, pid, key = http_case
     with db.session_scope() as s:

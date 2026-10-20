@@ -13,7 +13,6 @@
 
 from __future__ import annotations
 
-from tests.acc_plugin import acc
 
 from app.core import projects as C
 from app.mod01_projects.models import Project
@@ -25,7 +24,6 @@ THREE = ("project_key", "project_label", "project_index")
 # --------------------------------------------------------------- 唯一实现（防倒退）
 
 
-@acc()
 def test_三件是同一个函数对象而不是各自包一层():
     """⭐ 最强的防倒退断言：钉**身份**（`is`），不是"两边都能调"。
 
@@ -36,7 +34,6 @@ def test_三件是同一个函数对象而不是各自包一层():
         assert getattr(S5, n) is getattr(C, n), f"mod05_flow 的 {n} 不是 core 的那一份"
 
 
-@acc()
 def test_业务模块源码里不得再出现这三件的定义():
     """反向守卫：谁再抄一份 `def project_key` 回业务模块 ⇒ **红**（不靠自觉）。"""
     import inspect
@@ -50,21 +47,18 @@ def test_业务模块源码里不得再出现这三件的定义():
 # --------------------------------------------------------------- 归并键口径（§2.7.4）
 
 
-@acc()
 def test_归并键就是仓库名():
     p = Project(id=1, warehouse_name="某仓库", name_full="某项目全名特别长", disp="展示名")
     assert C.project_key(p) == "某仓库"
     assert C.project_key(p) not in (p.name_full, "1")
 
 
-@acc()
 def test_仓库名缺失时退化为id而不猜():
     """壳的 `warehouse_name` 为 NULL ⇒ `#id`；⛔ **不许拿全名 / 展示名顶上**（不猜）。"""
     p = Project(id=7, warehouse_name=None, name_full="甲项目全名", disp="甲")
     assert C.project_key(p) == "#7"
 
 
-@acc()
 def test_展示名不参与归并_改展示名不得改变归并键():
     """展示名可改、会变 ⇒ 拿它当键，键就漂了（前端联动会静默失配）。"""
     a = Project(id=1, warehouse_name="W", disp="旧名")
@@ -75,7 +69,6 @@ def test_展示名不参与归并_改展示名不得改变归并键():
 # --------------------------------------------------------------- 显示名口径（§2.3.1）
 
 
-@acc()
 def test_显示名优先级为展示名到仓库名到全名到id():
     assert C.project_label(Project(id=1, warehouse_name="W", name_full="F", disp="D")) == "D"
     assert C.project_label(Project(id=1, warehouse_name="W", name_full="F", disp="")) == "W"
@@ -83,7 +76,6 @@ def test_显示名优先级为展示名到仓库名到全名到id():
     assert C.project_label(Project(id=9, warehouse_name=None, name_full="", disp="")) == "#9"
 
 
-@acc()
 def test_项目为None时一律空串不抛异常():
     """未归属行（`project_id` 为空 ⇒ 传 None）⇒ 空串；调用方据此判「没归属」。"""
     assert C.project_key(None) == ""
@@ -114,7 +106,6 @@ class _FakeSession:
         return _FakeResult(self._rows)
 
 
-@acc()
 def test_项目索引以id为键():
     a = Project(id=3, warehouse_name="A")
     b = Project(id=5, warehouse_name="B")

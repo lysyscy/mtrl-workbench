@@ -2,7 +2,6 @@
 from decimal import Decimal
 
 from app.mod06_proc import importer as I, domain as D
-from tests.acc_plugin import acc
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -13,7 +12,6 @@ from app.mod06_proc.models import (ProcMechManual, ProcHistoryBatch, ProcHistory
                                    ProcCutoff, ProcMechImportChange)
 
 
-@acc()
 def test_single_cell_api_preserves_other_amounts_and_origins(session, monkeypatch):
     from contextlib import contextmanager
     from app.mod06_proc import router
@@ -57,7 +55,6 @@ def session():
     engine.dispose()
 
 
-@acc()
 def test_category_cutoffs_filter_before_amount_validation():
     rows, _, bad = I.plan_rows([
         {"_row": 19, "核算月": "2025年12月（一标）", "入库主辅材": "备注", "内租设备": "12"},
@@ -75,7 +72,6 @@ def test_category_cutoffs_filter_before_amount_validation():
     assert not preview["skipped"]
 
 
-@acc()
 def test_effective_sources_ignore_import_cutoffs():
     rows = D.build_matrix(inv_rows=[], history_rows=[{"warehouse": "A", "ym": "2025-12", "in_主辅材": 10}],
                           manual_rows=[{"warehouse": "A", "ym": "2025-12", "mech_1": 20}],
@@ -85,7 +81,6 @@ def test_effective_sources_ignore_import_cutoffs():
     assert D.column_editable("mech_1", ym="2025-01", cutoff_ym="2025-11")
 
 
-@acc()
 def test_import_manual_reimport_and_rollback_preserve_later_edits(session):
     R.save_mech(session, ym="2025-09", warehouse="A", values={"mech_0": 1, "mech_1": 2})
     R.save_mech(session, ym="2026-10", warehouse="A", values={"mech_0": 77})
@@ -112,7 +107,6 @@ def test_import_manual_reimport_and_rollback_preserve_later_edits(session):
     assert R.rollback_batch(session, batch_no="third") == 0
 
 
-@acc()
 def test_mechanical_only_import_has_no_fake_material_and_zero_clears(session):
     R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-11", "in_主辅材": 123}],
                       batch_no="old", operator="验证")
@@ -131,7 +125,6 @@ def test_mechanical_only_import_has_no_fake_material_and_zero_clears(session):
     assert not any(row["ym"] == "2025-11" for row in R.load_history(session))
 
 
-@acc()
 def test_mechanical_import_preserves_red_letter_amount(session):
     from app.mod06_proc import imp_spec
     records = [{"_row": 4, "核算月": "2026-09", "内租设备": "-23.45"}]
@@ -141,7 +134,6 @@ def test_mechanical_import_preserves_red_letter_amount(session):
     assert R.load_mech(session)[0]["mech_1"] == Decimal("-23.45")
 
 
-@acc()
 def test_numeric_zero_is_imported_and_category_defaults_are_independent():
     rows, _, bad = I.plan_rows([{"_row": 4, "核算月": "2026-09", "内租设备": 0},
                                {"_row": 5, "核算月": "2025-11", "入库主辅材": 12}])
@@ -150,7 +142,6 @@ def test_numeric_zero_is_imported_and_category_defaults_are_independent():
     assert I.selected_cutoffs(rows) == {"material_cutoff_ym": "2025-11", "mechanical_cutoff_ym": "2026-09"}
 
 
-@acc()
 def test_rollback_removes_only_import_created_month_and_preserves_explicit_manual_zero(session):
     R.import_snapshot(session, warehouse="A", rows=[{"ym": "2026-08", "mech_0": 8}],
                       batch_no="only_import", operator="验证")
@@ -164,7 +155,6 @@ def test_rollback_removes_only_import_created_month_and_preserves_explicit_manua
     assert R.load_mech(session)[0]["mech_0"] == Decimal("0.00")
 
 
-@acc()
 def test_migration_uses_old_effective_history_and_preserves_formal_manual(session):
     import importlib.util
     from pathlib import Path
@@ -201,7 +191,6 @@ def test_migration_uses_old_effective_history_and_preserves_formal_manual(sessio
     assert legacy["2025-12"]["mech_0"] == Decimal("88.00")
 
 
-@acc()
 @pytest.mark.parametrize("project,late_months", [("晋江", 10), ("安徽国风", 3), ("福建南平", 6)])
 def test_real_workbooks_selected_categories_commit_without_mutating_source(session, project, late_months):
     from pathlib import Path

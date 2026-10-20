@@ -24,11 +24,9 @@ from app.mod03_notice.list_data import build_page_data
 from app.mod03_notice.list_view import NoticeFilters
 from app.mod03_notice.models import PaymentNotice
 from app.mod05_flow.models import PaymentFlow
-from tests.acc_plugin import acc
 from tests.m03_action_helpers import _client, _notice, FakeWriteSession
 
 
-@acc("ACC-PAY-ACTION-001", "001-03")
 def test_API把操作列剔除掉():
     """「操作」列是按钮 / 表单 HTML ⇒ **只在页面上成立**；API 必须剔除。
 
@@ -50,7 +48,6 @@ def test_API把操作列剔除掉():
 #    （`S1`/`S2a`/`S2b` 各轮已补），故那几条 PRG 用例**直接删除**（判据由对应 API 用例承载）。
 
 
-@acc("ACC-PAY-CAT-001", "001-11")
 def test_API_批量改分类落库并回报():
     """**批量改分类**（§4.2.4）：真的落库 ＋ 回一句**可直接给人看**的中文（前端原样显示）。
 
@@ -66,7 +63,6 @@ def test_API_批量改分类落库并回报():
     assert fake.by_model[PaymentNotice][0].category == "mechanical"      # 真落库
 
 
-@acc("ACC-PAY-CAT-001", "001-12")
 def test_API_未勾选改分类被拒且不改库():
     """⛔ **必须先勾选**（§4.2.4：批量 = 对勾选集操作，不是对整表操作）—— 空勾选 ⇒ 拒绝且一行不动。"""
     client, fake = _client([_notice(1)])
@@ -76,7 +72,6 @@ def test_API_未勾选改分类被拒且不改库():
     assert fake.by_model[PaymentNotice][0].category == "material"        # 原分类不变
 
 
-@acc("ACC-PAY-CAT-001", "001-13")
 def test_API_未勾选恢复剔除被拦():
     """「恢复剔除」同样**必须先勾选**（§4.2.2：不做整表一键放回）—— 空勾选 ⇒ 拒绝并给原因。"""
     client, _ = _client([_notice(1)])
@@ -84,7 +79,6 @@ def test_API_未勾选恢复剔除被拦():
     assert body["ok"] is False and "勾选" in body["message"]
 
 
-@acc()
 def test_API_恢复剔除真的落库且两类都放回():
     """⭐ 2026-10-08 BUG 钉子（端点层 · **落库**这一段原先全仓 0 覆盖）。
 
@@ -116,7 +110,6 @@ def test_API_恢复剔除真的落库且两类都放回():
 # ============================================================ 列表查询（能力 11 · 统计列的纯度）
 
 
-@acc("ACC-PAY-STAT-001", "001-10")
 def test_API的统计列仍不含HTML():
     """页面才注入输入框；`/api/m03/notice-list` 的显示值必须是纯文本。"""
     # ⚠️ 2026-10-01：本用例原先**不传 `filters`** ⇒ 走缺省「当月」（`default_period("notice")`），
@@ -136,7 +129,6 @@ def test_API的统计列仍不含HTML():
 # 旧页删除（授权 `D18`）后 PRG（上面那两条）随页消失，故**同样的实质**必须在新接口上有着落。
 
 
-@acc("ACC-PAY-STAT-001", "001-11")
 def test_API_统计手改落库并留痕():
     """**统计手改走 JSON API**：值真的落库 ＋ 留痕真的写进库（壳判「黄底」的唯一事实来源）。"""
     from app.mod03_notice.models import NoticeStatLog
@@ -156,7 +148,6 @@ def test_API_统计手改落库并留痕():
     assert "已留痕" in body["message"] and "欠款已实时重算" in body["message"]
 
 
-@acc("ACC-PAY-STAT-001", "001-12")
 def test_API_统计手改超上限被拦且保留原值():
     """上限 = 审批金额（§4.5.3「按发票走、只能少不能多」）⇒ **拦下并保留原值**，且**不留痕**。"""
     from app.mod03_notice.models import NoticeStatLog
@@ -173,7 +164,6 @@ def test_API_统计手改超上限被拦且保留原值():
     assert [x for x in fake.added if isinstance(x, NoticeStatLog)] == []         # 不留痕
 
 
-@acc()
 def test_API_统计手改值没变时说清什么都没做():
     """§4.2.7：值没变 ⇒ **不做无意义的重算、不留空痕** —— 但要让用户看见「什么都没做」（不是静默）。"""
     from app.mod03_notice.models import NoticeStatLog
@@ -188,7 +178,6 @@ def test_API_统计手改值没变时说清什么都没做():
     assert [x for x in fake.added if isinstance(x, NoticeStatLog)] == []
 
 
-@acc()
 def test_统计手改的API只许走唯一出口():
     """⛔ **防分叉**：判定 / 落库 / 文案只许一份 —— JSON API 必须调
     `notice_actions.apply_stat_change`，⛔ 不许内联 `repo.adjust_notice_stat`。
@@ -211,7 +200,6 @@ def test_统计手改的API只许走唯一出口():
 # 原委：壳的「手动新增 / 编辑」原来只在前端本地 `NO.push` / `Object.assign`（**不落库** ✗）⇒ 接真接口。
 
 
-@acc("ACC-PAY-MANUAL-001", "001-08")
 def test_API_新增手动行落库():
     """**手动行新增走 JSON API**：真的落库（`is_manual` ＋ **统计结算恒 0** §4.2.6）。"""
     client, fake = _client([_notice(1)])
@@ -231,7 +219,6 @@ def test_API_新增手动行落库():
     assert "已新增" in body["message"] and "只影响「付款」" in body["message"]
 
 
-@acc("ACC-PAY-MANUAL-001", "001-11")
 def test_API_保存校验失败不落库():
     """校验不过 ⇒ `ok=False` 且**一行都不落库**（外壳据此**保留草稿行**让用户改，R14③）。"""
     client, fake = _client([_notice(1)])
@@ -246,7 +233,6 @@ def test_API_保存校验失败不落库():
     assert len(fake.by_model[PaymentNotice]) == before
 
 
-@acc()
 def test_API_编辑手动行按改动字段回报():
     """编辑走**同一套**（§4.2.6）：只改传进来的那几列，回执报「改动 N 个字段」。"""
     client, fake = _client([_notice(1, is_manual=True, ph_id="MN01")])
@@ -263,7 +249,6 @@ def test_API_编辑手动行按改动字段回报():
     assert [x for x in fake.added if isinstance(x, PaymentNotice)] == [], "编辑不该新增行"
 
 
-@acc()
 def test_手动行保存的API只许走唯一出口():
     """⛔ **防分叉**：手动行的校验 / 落库 / 文案只许一份 —— JSON API 必须调
     `notice_manual_actions.apply_manual_save`，⛔ 不许内联 `repo.create_manual_notice` / `update_manual_notice`。"""
@@ -280,7 +265,6 @@ def test_手动行保存的API只许走唯一出口():
 # §7.2 / §9.4 是硬要求：**删除前必须列出影响范围**（关联数据、统计影响）⇒ 由后端给，壳原样显示。
 
 
-@acc("ACC-PAY-MANUAL-001", "001-10")
 def test_API_删除手动行成功():
     """**删除手动行走 JSON API**：真的落库（`session.delete`），文案由后端给。"""
     client, fake = _client([_notice(1, is_manual=True, ph_id="MN01")])
@@ -292,7 +276,6 @@ def test_API_删除手动行成功():
     assert fake.by_model[PaymentNotice] == []
 
 
-@acc("ACC-PAY-MANUAL-001", "001-09")
 def test_API_删除i8行被拒且连影响范围都不给():
     """§4.2.7 铁律：**i8 抓取行永不删**（不提供删除入口）—— 连"删除前的影响范围"都不给看。"""
     client, fake = _client([_notice(1, is_manual=False)])
@@ -306,7 +289,6 @@ def test_API_删除i8行被拒且连影响范围都不给():
     assert ri.json()["ok"] is False
 
 
-@acc()
 def test_API_删除影响范围由后端给():
     """影响范围 = 后端产出（§7.2/§9.4）：要有「统计付款金额退出台账当月付款列 ⇒ **欠款回增**」这条实质，
     **并同时说明「已付金额不受影响」**（否则用户会以为流水也跟着没了）。"""
@@ -322,7 +304,6 @@ def test_API_删除影响范围由后端给():
     assert "不做软删" in joined, "没讲清「不做软删」"
 
 
-@acc()
 def test_手动行删除的API只许走唯一出口():
     """⛔ **防分叉**：删除的校验 / 落库 / 文案只许一份 —— JSON API 必须调
     `notice_manual_actions.apply_manual_delete`，⛔ 不许内联 `repo.delete_notice`。"""
@@ -339,7 +320,6 @@ def test_手动行删除的API只许走唯一出口():
 # ⚠️ 语义变化要说清：动作改走后端之后，「取消」= **不调接口**（不再有服务端状态要回滚）。
 
 
-@acc("ACC-PAY-BATCH-001", "001-07")
 def test_API_批量付款落流水且一条付款一条流水():
     """**落库**：一条勾选 ⇒ **一条**独立流水，金额 / 方式 / 单据号 / **`request_id`** 都要对。"""
     from app.mod05_flow.models import PaymentFlow
@@ -359,7 +339,6 @@ def test_API_批量付款落流水且一条付款一条流水():
     assert "已登记 1 条付款流水" in body["message"]
 
 
-@acc("ACC-PAY-BATCH-001", "001-11")
 def test_API_重复提交被拒():
     """§4.4.4：**同一个 `request_id` 再提交 ⇒ 拒绝**，且**只产生一条**流水（幂等的意义就在这）。"""
     from app.mod05_flow.models import PaymentFlow
@@ -373,7 +352,6 @@ def test_API_重复提交被拒():
     assert len([f for f in fake.added if isinstance(f, PaymentFlow)]) == 1
 
 
-@acc("ACC-PAY-BATCH-001", "001-08")
 def test_API_提交时库中已变不可付则整批不落():
     """兜底：窗口打开时是「已批」、提交时库里已变「未批」⇒ **整批不落**（不产生任何流水）。"""
     from app.mod05_flow.models import PaymentFlow
@@ -387,7 +365,6 @@ def test_API_提交时库中已变不可付则整批不落():
     assert [f for f in fake.added if isinstance(f, PaymentFlow)] == []
 
 
-@acc("ACC-PAY-BATCH-001", "001-03")
 def test_API_付款方式缺省时兜底现汇():
     """§4.4.2：**默认取付款计划的值、取不到兜底「现汇」** —— 这里守"兜底"那半边
     （取计划那半边由 `default_pay_method` 的纯函数断言守着，见 `test_wired_m03_pay.py`）。"""
@@ -403,7 +380,6 @@ def test_API_付款方式缺省时兜底现汇():
     assert flows and flows[0].pay_method == "现汇", "取不到计划值时应兜底「现汇」"
 
 
-@acc()
 def test_批量付款的API只许走唯一出口():
     """⛔ **防分叉**：批量付款的整条管线（整批重算 / 不落半批 / 幂等 / 落流水）只许一份
     —— JSON API 必须调 `notice_pay_actions.apply_batch_pay`。
@@ -419,7 +395,6 @@ def test_批量付款的API只许走唯一出口():
     assert "confirm_batch(" not in api, "API 内联了判定（应共用唯一出口）"
 
 
-@acc()
 @pytest.mark.parametrize('remark', ['本批付款备注：补材料款', ''])
 def test_批量付款备注保存到每条流水(remark):
     from app.mod05_flow.models import PaymentFlow

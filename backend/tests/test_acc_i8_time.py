@@ -27,11 +27,9 @@ from app.core.period import (
     period_capabilities,
     period_range,
 )
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL   # ⚠️ 壳源码的唯一出口（⛔ 别直接读 index.html）
 
 
-@acc("ACC-I8-TIME-001", "001-01")
 def test_全站统一核算年月组件且无全局年月控件():
     # 全站唯一组件 + 四种模式；**不设「全局核算期」**（顶栏不再有全局年月控件）
     assert PERIOD_COMPONENT["id"] == "acc-period"
@@ -39,7 +37,6 @@ def test_全站统一核算年月组件且无全局年月控件():
     assert GLOBAL_PERIOD is None
 
 
-@acc("ACC-I8-TIME-001", "001-02")
 def test_能力由调用点声明():
     # 列表页给 4 种模式
     assert period_capabilities("notice") == ALL_MODES
@@ -48,7 +45,6 @@ def test_能力由调用点声明():
     assert period_capabilities("opening") == (MODE_MONTH,)
 
 
-@acc("ACC-I8-TIME-001", "001-03")
 def test_跨月两击选区间且闭区间生效():
     mode, value = parse_period("2026-01~2026-06")
     assert mode == MODE_SPAN and value == "2026-01~2026-06"
@@ -61,7 +57,6 @@ def test_跨月两击选区间且闭区间生效():
     assert not in_period("2025-12-31", "2026-01~2026-06")
 
 
-@acc("ACC-I8-TIME-001", "001-04")
 def test_年模式命中全年各月():
     assert parse_period("2026") == (MODE_YEAR, "2026")
     assert period_range("2026") == ("2026-01-01", "2026-12-31")
@@ -69,14 +64,12 @@ def test_年模式命中全年各月():
         assert in_period(f"2026-{m:02d}-15", "2026")
 
 
-@acc("ACC-I8-TIME-001", "001-05")
 def test_全部模式下发到付款流水与付款计划():
     # 「全部」不再是某一页独有 —— 付款通知书声明的它，同样下发到付款流水与付款计划
     for ctx in ("notice", "flow", "plan"):
         assert MODE_ALL in period_capabilities(ctx)
 
 
-@acc("ACC-I8-TIME-001", "001-06")
 def test_各表默认年月各按口径():
     fixed = date(2026, 9, 15)
     # 付款侧（通知书 / 计划 / 流水）= 当月
@@ -90,7 +83,6 @@ def test_各表默认年月各按口径():
     assert default_period("process", date(2026, 1, 5)) == "2025-12"
 
 
-@acc("ACC-I8-TIME-001", "001-07")
 def test_不设全局核算期且导出文件名用当前年月():
     assert GLOBAL_PERIOD is None
     # 单月 ⇒ 用该月
@@ -104,7 +96,6 @@ def test_不设全局核算期且导出文件名用当前年月():
         parse_period("2026/03")   # 非法形态 ⇒ 显式报错
 
 
-@acc("ACC-I8-TIME-001", "001-07")
 def test_壳的业务时钟取自北京时间而非写死():
     """⭐ `TAIL-51`：壳的**业务时钟**（全站默认年月的唯一源头）必须由**当前时间**派生。
 

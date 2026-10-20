@@ -28,7 +28,6 @@ from tests.imp_contract import assert_skipped_contract
 #    少一次导入，`proc_history_snapshot.project_id` 的外键就解析不到表（`NoReferencedTableError`，实测踩到）。
 from app.mod01_projects import models as _pj_models  # noqa: F401
 from app.mod06_proc import imp_spec
-from tests.acc_plugin import acc
 
 #: 两级表头（r2 分组头 ＋ r3 叶子）；`时间` = 核算月（真文件里那列叫「时间」）
 R2 = ["序号", "时间", "线上入库（不含税）", "", "", "", "线下出库（不含税）", "", "", "",
@@ -90,7 +89,6 @@ def _parse(client, sheet: str = "", book: bytes | None = None):
                        data={"sheet": sheet})
 
 
-@acc()
 def test_记忆不采集不能悄悄丢弃有金额的已识别列(client, monkeypatch):
     monkeypatch.setattr(ProfileStore, "prefill", lambda self, domain, headers:
                         ({"时间": "核算月", "线上入库（不含税）工具": ""}, "旧记忆", 1.0))
@@ -100,7 +98,6 @@ def test_记忆不采集不能悄悄丢弃有金额的已识别列(client, monke
     assert "已恢复识别" in got["memory"]["note"]
 
 
-@acc("ACC-IMP-MAP-001", "001-08")
 def test_通用面端到端_认列到落库再到回滚(client):
     """⭐ 第一个真域挂上通用面：挑表 / 认列（两级拼名 ＋ 序列号核算月）/ 预览 / 落库 / 整批回滚。"""
     got = _parse(client).json()
@@ -142,7 +139,6 @@ def test_通用面端到端_认列到落库再到回滚(client):
     assert back["ok"] and back["report"]["revoked"] == 2, back
 
 
-@acc()
 def test_统一面上三条老口径不许走样(client):
     """⭐ **空 ≠ 0**（没填的不落库）· **负数照收**（`D25` ①）—— 通用面与域内必须一致。"""
     got = _parse(client).json()
@@ -155,7 +151,6 @@ def test_统一面上三条老口径不许走样(client):
     assert "不是数字" not in " ".join(p["reason"] for p in pre["problems"]), pre["problems"]
 
 
-@acc()
 def test_缺项目选项要显式报错_不静默落库(client):
     """⚠️ 过程资料按项目分存 ⇒ 没选项目就**明确拒绝**（⛔ 不许落到"没项目"的桶里）。"""
     got = _parse(client).json()
@@ -165,7 +160,6 @@ def test_缺项目选项要显式报错_不静默落库(client):
     assert out["ok"] is False and "项目" in out["message"], out
 
 
-@acc()
 def test_每个项目的截止月各给一份_换项目不会串():
     """⭐ 2026-09-26（**真缺陷修复**）：界面上的「截止核算月」**按项目存**（`repository.load_cutoff`），
     而落库会把它**写进所选项目**（`importer.commit` → `import_snapshot(cutoff_ym=…)`）。
@@ -197,7 +191,6 @@ def test_每个项目的截止月各给一份_换项目不会串():
                 s.delete(r)
 
 
-@acc()
 def test_截止核算月认不出要拒_含糊写法归一(client):
     """⭐ 2026-09-26（用户报「**截止核算月的格式要求一下吧**」）—— 要求写清了，就得**有人执行**：
 
@@ -238,7 +231,6 @@ def test_截止核算月认不出要拒_含糊写法归一(client):
                         s.delete(r)
 
 
-@acc()
 def test_同一秒两次落库各自拿到批号(client):
     """⭐ 2026-09-26（`TAIL-108`）：默认批号 = `PROC-<yyyymmddHHMMSS>`（**秒**）⇒ **同一秒两次落库**
     会撞 `proc_history_batch.batch_no` 的唯一约束，用户看到 `导入失败：IntegrityError …重复键违反唯一约束`
@@ -265,7 +257,6 @@ def test_同一秒两次落库各自拿到批号(client):
     assert back["ok"], back
 
 
-@acc()
 def test_机械列导入落进历史段_并能被读到(client):
     """⭐⭐ 2026-09-26（`TAIL-107`）**端到端**：机械 6 列从 excel **导进来** ⇒ 落**历史段快照** ⇒ 读得到。
 
@@ -308,7 +299,6 @@ def test_机械列导入落进历史段_并能被读到(client):
                 s.delete(r)
 
 
-@acc()
 def test_合计与说明行跳过_不合规核算月不收_且在预览就报出来(client):
     """⭐⭐ 2026-09-26（用户报障收口 · 原话「**不合规的核算月文本不收**，我说了正式导入的时候会改成
     标准格式」＋「**合计说明行跳过**」）。
@@ -385,7 +375,6 @@ def test_合计与说明行跳过_不合规核算月不收_且在预览就报出
         "标准写法下不该再有「落不了库的行」"
 
 
-@acc()
 def test_schema_机械列也是目标字段(client):
     """⭐⭐ 2026-09-26（`TAIL-107`）**改口径**：机械 6 列**也是目标字段**（要落进历史段快照）。
 
@@ -402,7 +391,6 @@ def test_schema_机械列也是目标字段(client):
     assert "机械 6 列不导入" not in sch["keep_note"], "还留着旧口径那句话（机械列现在要导）"
 
 
-@acc("ACC-IMP-MAP-001", "001-09")
 def test_序号落进明确不采_机械列是目标字段(client):
     """⭐ 「**认得出但按口径不采**」与「**系统不认识**」必须分开 —— 否则界面上看着像系统漏了列。
 
@@ -420,7 +408,6 @@ def test_序号落进明确不采_机械列是目标字段(client):
     assert by_src["时间"]["ignored"] == "" and by_src["时间"]["field"] == "核算月"
 
 
-@acc()
 def test_导入候选要能选到只有档案行的项目_页面口径不许跟着改(client):
     """⭐⭐ 2026-09-27（用户裁定 · `TAIL-114`）——**两处候选口径刻意不同**（⛔ 别再合并成一处）：
 
@@ -466,7 +453,6 @@ def test_导入候选要能选到只有档案行的项目_页面口径不许跟�
                 s.delete(row)
 
 
-@acc()
 def test_通用面预览阶段不写库_且坏token显式报错(client, monkeypatch):
     """通用预览不调用写钩子且真实快照不变；坏token明确失败。"""
     from app.core.db import session_scope

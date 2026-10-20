@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'backend'))
-from tests import test_design_rules as rules
+from tests import check_design_rules as rules
 
 
 def main() -> int:

@@ -14,7 +14,6 @@ from app.mod07_setl.models import AnalysisBigManual
 from app.mod11_jc import repository as jc, service as contracts
 from app.mod11_jc.models import JcContract, JcInvoice, TAG_IN, TAG_OUT
 from tests.test_acc_jc_pay_link import _project
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -51,7 +50,6 @@ def build(s):
     return big.build_big_data(s, {'month': '2026-10'})
 
 
-@acc()
 def test_owner_matches_list_and_big_sees_uncommitted_invoice(sample, monkeypatch):
     s, (a, b, empty), rows = sample
     expected = {a: Decimal('132.00'), b: Decimal('7.25'), empty: Decimal('0.00')}
@@ -78,7 +76,6 @@ def test_owner_matches_list_and_big_sees_uncommitted_invoice(sample, monkeypatch
     assert data['rows'][1]['manual']['note']['value'] == '311带入'
 
 
-@acc()
 def test_owner_fixed_query_count_and_empty_set(sample):
     s, keys, _ = sample
     statements = []
@@ -103,7 +100,6 @@ def test_owner_fixed_query_count_and_empty_set(sample):
         event.remove(conn, 'before_cursor_execute', track)
 
 
-@acc()
 def test_big_calls_port_once_same_session_and_none_error(sample, monkeypatch):
     s, keys, _ = sample
     original = big.MAIN_MATERIAL_PORT
@@ -131,7 +127,6 @@ def test_big_calls_port_once_same_session_and_none_error(sample, monkeypatch):
     assert build(s)['rows'] == []
 
 
-@acc()
 def test_api_preserves_rows_order_and_decimal_strings(sample, monkeypatch):
     s, (a, b, empty), _ = sample
     @contextmanager

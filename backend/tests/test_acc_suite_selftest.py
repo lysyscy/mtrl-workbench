@@ -1,22 +1,13 @@
-"""验收套件自检 —— 钉住「四态机制」本身（不绑定业务判据点，显式 `@acc()` 声明）。
-
-为什么这层测试必须有：`PRD/验收/README.md` §三 说本项目**最贵的假绿**是
-「未绑定 = 通过」。⇒ 套件自己的行为必须先被钉住，否则后面所有"绿"都不可信。
-"""
+"""历史判据报表纯测试；只读伪基线和伪运行结果，不加载业务配置。"""
 
 from __future__ import annotations
 
 import importlib.util
 import json
-import os
-import subprocess
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-from tests.acc_plugin import acc
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ACC_REPORT = REPO_ROOT / "tools" / "audit" / "acc_report.py"      # ⭐ `TAIL-58` 分目录
@@ -30,7 +21,6 @@ def _load_acc_report():
     return module
 
 
-@acc()
 def test_配置的相对基线始终以仓根解释_显式CLI路径保持原语义(tmp_path, monkeypatch):
     mod = _load_acc_report()
     monkeypatch.setattr(mod, 'REPO_ROOT', tmp_path)
@@ -42,30 +32,6 @@ def test_配置的相对基线始终以仓根解释_显式CLI路径保持原语�
     assert mod.resolve_baseline('explicit.json') == Path('explicit.json')
 
 
-@acc()
-def test_四态报表可运行且能读出判据总数():
-    result = subprocess.run(
-        [sys.executable, str(ACC_REPORT), "--json"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        # ⚠️ 本机坑（2026-09-19）：**不显式给子进程 UTF-8 就会假红** —— Windows 上子进程默认按
-        #    GBK(cp936) 写 stdout，读取线程 `decode('utf-8')` 直接抛 `UnicodeDecodeError`
-        #    ⇒ `result.stdout` 变成 **None** ⇒ 下一条 `json.loads` 报 `TypeError`，看起来像
-        #    "报表坏了"，其实是**父进程没设 `PYTHONIOENCODING`**（我 2026-09-19 忘设一次就中招）。
-        #    ⇒ 这里**强制**子进程输出 UTF-8；`errors="replace"` 再兜一层（宁可看到乱码也不要 None）。
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
-        errors="replace",
-    )
-    # 有红 = 1、无红 = 0；两者都算"跑得起来"
-    assert result.returncode in (0, 1), f"报表异常退出：{result.stderr}"
-    payload = json.loads(result.stdout)
-    assert payload["total"] > 0, "判据总数应大于 0（基线未读到？）"
-    tally = payload["tally"]
-    assert sum(tally.values()) == payload["total"], "四态之和必须等于判据总数"
-
-
-@acc()
 def test_未绑定的判据点不得被算作通过():
     """★ 本项目最贵的一类假绿：没验过 = 通过。"""
     mod = _load_acc_report()
@@ -74,7 +40,6 @@ def test_未绑定的判据点不得被算作通过():
     assert states["ACC-DEMO-001"]["001-01"] == mod.UNBOUND
 
 
-@acc()
 def test_绑定了但未执行的判据点计为红():
     mod = _load_acc_report()
     points = {"ACC-DEMO-001": {"001-01": {"id": "001-01", "claim": "x"}}}
@@ -87,7 +52,6 @@ def test_绑定了但未执行的判据点计为红():
     assert states["ACC-DEMO-001"]["001-01"] == mod.RED
 
 
-@acc()
 def test_全部判据点绿才算用例绿_未达标须报分数():
     mod = _load_acc_report()
     points = {
@@ -105,7 +69,6 @@ def test_全部判据点绿才算用例绿_未达标须报分数():
     assert states["ACC-DEMO-002"]["001-02"] == mod.UNBOUND  # 只绿 1/2，不得算用例绿
 
 
-@acc()
 def test_基线待建区登记过的判据点计为待建而非未绑定():
     mod = _load_acc_report()
     points = {"ACC-DEMO-003": {"001-01": {"id": "001-01", "claim": "a"}}}
@@ -121,7 +84,6 @@ def test_基线待建区登记过的判据点计为待建而非未绑定():
     assert states["ACC-DEMO-003"]["001-01"] == mod.PENDING
 
 
-@acc()
 @pytest.mark.parametrize("outcome, exit_code, color", [("failed", 1, "RED"), ("passed", 0, "GREEN")])
 def test_报表退出码跟随实际判据状态(tmp_path, outcome, exit_code, color):
     mod = _load_acc_report()
@@ -130,6 +92,7 @@ def test_报表退出码跟随实际判据状态(tmp_path, outcome, exit_code, c
         "ACC-DEMO-004": {"points": [{"id": "001-01", "claim": "a"}]},
     }}), encoding="utf-8")
     results_path.write_text(json.dumps({
+        "pytest_exitstatus": 1 if outcome == "failed" else 0,
         "bindings": {"tests/test_x.py::test_a": [["ACC-DEMO-004", "001-01"]]},
         "results": {"tests/test_x.py::test_a": outcome},
     }), encoding="utf-8")
@@ -141,16 +104,99 @@ def test_报表退出码跟随实际判据状态(tmp_path, outcome, exit_code, c
     assert meta["tally"][getattr(mod, color)] == 1
 
 
-@acc()
-def test_真实基线里的待建项确实存在于判据点集合中():
-    """基线自洽性：`_pending_assertions` 的 A/B 档必须指向真实存在的判据点。"""
+@pytest.fixture
+def report_input(tmp_path):
+    baseline = tmp_path / "baseline.json"
+    results = tmp_path / "results.json"
+    baseline.write_text(json.dumps({"cases": {
+        "ACC-DEMO-001": {"points": [{"id": "001-01", "claim": "a"}]},
+    }}), encoding="utf-8")
+    args = SimpleNamespace(baseline=str(baseline), results=str(results),
+                           verbose=False, by_stage=False)
+    return args, results, {
+        "pytest_exitstatus": 0,
+        "bindings": {"test_bound": [["ACC-DEMO-001", "001-01"]]},
+        "results": {"test_bound": "passed"},
+    }
+
+
+@pytest.mark.parametrize("kind", ["unbound_failure", "missing_exitstatus", "nonzero",
+                                      "no_results", "missing_result", "unknown"])
+def test_判据全绿不能掩盖运行失败或不完整(report_input, kind, capsys):
+    args, path, payload = report_input
+    if kind == "unbound_failure":
+        payload["results"]["test_unbound"] = "failed"
+    elif kind == "missing_exitstatus":
+        del payload["pytest_exitstatus"]
+    elif kind == "nonzero":
+        payload["pytest_exitstatus"] = 2
+    elif kind == "no_results":
+        payload["bindings"] = {}
+        payload["results"] = {}
+    elif kind == "missing_result":
+        payload["bindings"]["test_not_run"] = []
+    elif kind == "unknown":
+        payload["results"]["test_unknown"] = "unknown"
+    path.write_text(json.dumps(payload), encoding="utf-8")
     mod = _load_acc_report()
-    baseline_path = mod.resolve_baseline(None)
-    baseline = mod.load_json(baseline_path)
-    points = mod.collect_points(baseline)
-    pending = mod.collect_pending(baseline)
-    dangling = [(c, p) for (c, p) in pending if c not in points or p not in points[c]]
-    assert not dangling, f"待建登记指向了不存在的判据点：{dangling}"
+    code, meta = mod.render(args)
+    assert code == 1
+    assert meta["run_issues"]
+    assert meta["pytest_exitstatus"] == payload.get("pytest_exitstatus")
+    if kind in ("unbound_failure", "missing_exitstatus", "nonzero", "missing_result", "unknown"):
+        assert meta["tally"][mod.GREEN] == 1
+    if kind == "unbound_failure":
+        assert meta["unbound_failed_tests"] == ["test_unbound"]
+        assert "test_unbound" in capsys.readouterr().out
+    if kind == "missing_result":
+        assert meta["missing_results"] == ["test_not_run"]
+    if kind == "unknown":
+        assert meta["unknown_results"] == ["test_unknown"]
+
+
+def test_结果文件缺失不能报通过(report_input):
+    args, path, _ = report_input
+    assert not path.exists()
+    code, meta = _load_acc_report().render(args)
+    assert code == 1
+    assert "运行结果文件缺失" in meta["run_issues"]
+
+
+@pytest.mark.parametrize("phase", ["setup", "teardown"])
+def test_前后置失败按已记录failed结果计红(report_input, phase):
+    args, path, payload = report_input
+    # 插件把 setup/teardown 失败折算为 failed；报表消费该结果。
+    nodeid = f"test_{phase}_failed"
+    payload["bindings"] = {nodeid: [["ACC-DEMO-001", "001-01"]]}
+    payload["results"] = {nodeid: "failed"}
+    payload["pytest_exitstatus"] = 1
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    mod = _load_acc_report()
+    code, meta = mod.render(args)
+    assert code == 1
+    assert meta["tally"][mod.RED] == 1
+    assert meta["failed_tests"] == [nodeid]
+
+
+def test_CLI只读取显式伪输入并输出运行状态(report_input):
+    import os
+    import subprocess
+    import sys
+
+    args, path, payload = report_input
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(ACC_REPORT), "--baseline", args.baseline,
+         "--results", args.results, "--json"],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+    )
+    assert result.returncode == 0, result.stderr
+    meta = json.loads(result.stdout)
+    assert meta["pytest_exitstatus"] == 0
+    assert meta["report_exitstatus"] == 0
+    assert meta["total"] == 1
+    assert not meta["run_issues"]
 
 
 if __name__ == "__main__":  # pragma: no cover

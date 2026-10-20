@@ -3,13 +3,11 @@
 做法：把**手抄的计数**改错 ⇒ `check_count_anchors()` **必须命中**（那条锚报出）⇒ 立刻**逐字节复原**（MD5）。
 
 ⚠️ 这类"锚点型"检查最容易退化成**永远绿**（正则没命中 = 不报，没人看得出）——
-   本件就是它的自证：**四条靶各改错一处 ⇒ 必须各自报一条**；⛔ 一条都不报 = 它瞎了。
+   本件就是它的自证：**三条靶各改错一处 ⇒ 必须各自报一条**；⛔ 一条都不报 = 它瞎了。
 ⚠️ 判据**不是 rc**：锚点是**黄档**（同 `T5`/`T10` 哲学"形式问题该被看见、不挡合入"）⇒ `doc_audit` 的 rc 不变，
    要判的是"**报告里出现了那条**"（本件直接调检查函数取命中列表，最精确）。
 
-靶：① 尾巴活跃计数 ② 尾巴已销号计数 ③ CMDS 定义锚（实际执行清单；TAIL-245 同批改靶）
-⑤ `docs/reference/thresholds.md` 自己（数字 vs 它自称的真源）。⚠️ ④（`U5` 登记数）没配靶：它的真值来自
-   ~~`ui_parity.U5_COUNT`~~（⛔ 2026-09-30 `TAIL-201`：`U5` 退场 ⇒ 那条锚点**已撤**），改文档里的数同样会报 —— 不为凑数硬加。
+靶：① 尾巴活跃计数 ② 尾巴已销号计数 ③ `docs/reference/thresholds.md` 数字与自称真源。
 
 用法：python tools/mut/_mut_countanchors.py
 """
@@ -28,7 +26,6 @@ from audit_drift import check_count_anchors  # noqa: E402
 
 PLAN = ROOT / "docs" / "status.md"
 THRESHOLDS = ROOT / "docs" / "reference" / "thresholds.md"
-RUNNER = ROOT / "tools" / "oneoff" / "_run_rulers.py"
 
 #: `(名称, 靶件, 旧串, 改成的错值, 期望命中的 what 关键词)`
 #: ⚠️⚠️ 2026-10-01（`TAIL-205` 收口 · 新闸门 `_run_muts.py` 一跑就抓到）：**靶一律"现取"，⛔ 不抄数字** ——
@@ -48,14 +45,6 @@ def _tail_cases(text: str) -> tuple[tuple[str, str, str], tuple[str, str, str]]:
             (old, closed_new, f"已销号{counts[1] - 1}"))
 
 
-def _ruler_case(text: str) -> tuple[str, str, str]:
-    """② CMDS 清单锚移除必须报黄；历史命令不再是计数主人。"""
-    m = re.search(r"(?m)^CMDS(?=:)", text)
-    if not m:
-        raise SystemExit("找不到 CMDS 定义锚")
-    return "CMDS:", "CMDS_MISSING:", "CMDS 清单"
-
-
 def _threshold_case(text: str) -> tuple[str, str, str]:
     """④ `docs/reference/thresholds.md` 的 `README.md` 行数预算 —— 现取并把数字加 1。"""
     m = re.search(r"\| \*\*(\d+)\*\* \| `README\.md` 行数预算", text)
@@ -67,13 +56,11 @@ def _threshold_case(text: str) -> tuple[str, str, str]:
 
 def build_cases(texts: dict) -> list[tuple[str, pathlib.Path, str, str, str]]:
     (o1, n1, k1), (o2, n2, k2) = _tail_cases(texts[PLAN])
-    o3, n3, k3 = _ruler_case(texts[RUNNER])
     o5, n5, k5 = _threshold_case(texts[THRESHOLDS])
     return [
         ("① 尾巴活跃计数", PLAN, o1, n1, k1),
         ("② 尾巴已销号计数", PLAN, o2, n2, k2),
-        ("③ CMDS 清单缺失必须报黄", RUNNER, o3, n3, k3),
-        ("⑤ `docs/reference/thresholds.md`（数字 vs 自称真源）", THRESHOLDS, o5, n5, k5),
+        ("③ `docs/reference/thresholds.md`（数字 vs 自称真源）", THRESHOLDS, o5, n5, k5),
     ]
 
 
@@ -82,7 +69,7 @@ def hits() -> list[dict]:
 
 
 def main() -> int:
-    before = {p: p.read_bytes() for p in (PLAN, THRESHOLDS, RUNNER)}
+    before = {p: p.read_bytes() for p in (PLAN, THRESHOLDS)}
     md5_before = {p: hashlib.md5(b).hexdigest() for p, b in before.items()}
     texts = {p: b.decode("utf-8") for p, b in before.items()}
 

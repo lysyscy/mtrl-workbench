@@ -1,13 +1,10 @@
 """TAIL-269：历史金额、2025空月、模板与大表共用年度合计。"""
 from decimal import Decimal as D
 from app.mod07_setl import extract as X, inventory_extract as I, big_service as B
-from tests.acc_plugin import acc
 from tests.m07_helpers import FakeSession
 from tests.test_tail266_inventory import inventory_data
 
 
-@acc('ACC-SETL-EXT-001', '001-02')
-@acc('ACC-SETL-EXT-001', '001-11')
 def test_history_year_boundary_and_all_consumers():
     amounts={'焊材':{'甲仓':{'2025-01':D('999'), '2025-11':D('888'),
         '2025-12':D('100'), '2026-01':D('25'), '2027-01':D('900')}}, '气体':{}}
@@ -26,8 +23,6 @@ def test_history_year_boundary_and_all_consumers():
         assert r['balance']==history and r['total']==want
 
 
-@acc('ACC-X-EXP-001', '001-05')
-@acc('ACC-X-EXP-001', '001-11')
 def test_2025_export_is_fixed_fifteen_columns(tmp_path):
     from app.report_export.weldgas_export import build_xlsx
     from openpyxl import load_workbook

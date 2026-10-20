@@ -35,7 +35,6 @@ from app.mod05_flow.models import (
 from app.mod08_inv.models import InvDetail
 from app.mod09_fee.models import FeeManualItem
 from app.report_export import ledger_export as LX
-from tests.acc_plugin import acc
 from tests.m05_helpers import make_notice_row, make_opening, make_project
 from tests.m09_helpers import M09Session, make_inv, make_item
 
@@ -174,7 +173,6 @@ def cells(rows: list[list], r: int, n: int) -> list:
 # ============================================================ ① 三张表齐
 
 
-@acc("ACC-FLOW-LED-001", "001-08")
 def test_三个sheet都在一个都不少(tmp_path):
     """⭐ **要么都填、要么不交付**：只填两个 sheet 就交付，第三张会把模板里别的项目的示例数据留下。"""
     path = build(tmp_path)
@@ -185,7 +183,6 @@ def test_三个sheet都在一个都不少(tmp_path):
         wb.close()
 
 
-@acc("ACC-FLOW-LED-001", "001-10")
 def test_模板示例数据一格不留(tmp_path):
     """`TAIL-43` 同族：模板里那些**别的项目**的示例格不得出现在成品里。"""
     path = build(tmp_path)
@@ -201,7 +198,6 @@ def test_模板示例数据一格不留(tmp_path):
 # ============================================================ ② 逐格独立复算
 
 
-@acc("ACC-FLOW-LED-001", "001-09")
 def test_台账两侧逐格等于手写期望(tmp_path):
     """台账 6 列逐格 = **手写期望表**（期初行 / 空月出行 / 当月值 / 欠款 = 其他支出 − 付款）。"""
     path = build(tmp_path)
@@ -218,7 +214,6 @@ def test_台账两侧逐格等于手写期望(tmp_path):
             f"[{name}] 行数 = {len(rows)}（应 = 表头 2 ＋ 数据 {len(want)} ＋ 合计 1 —— 多出行/少出行都算错）"
 
 
-@acc("ACC-FEE-MON-001", "001-13")
 def test_特殊费用月报表逐格等于手写期望(tmp_path):
     """特殊费用 3 列逐格 = 手写期望（1 自动项 ＋ N 手填项；**合计列 = 该月值**）。"""
     path = build(tmp_path)
@@ -231,7 +226,6 @@ def test_特殊费用月报表逐格等于手写期望(tmp_path):
 # ============================================================ ③ 月份文本口径
 
 
-@acc("ACC-FLOW-LED-001", "001-09")
 def test_期初行的月份是页面文本不是YYYY_MM(tmp_path):
     """⭐ `模板清单` §四-4 裁定「**按页面文本**」：期初行 = `截止 YYYY 年 M 月底`（⛔ 不是 `2026-06`）。"""
     path = build(tmp_path)
@@ -240,7 +234,6 @@ def test_期初行的月份是页面文本不是YYYY_MM(tmp_path):
         assert got == "截止 2026 年 6 月底", f"[{LX.SHEET_OF_CATEGORY[cat]}] 期初行月份 = {got!r}"
 
 
-@acc("ACC-FLOW-LED-001", "001-09")
 def test_月份列的数字格式是文本(tmp_path):
     """⭐ 同一条裁定的**另一半**：模板那列原本是日期/数值格式 ⇒ 写文本前必须先设成文本，
     否则 Excel 会把 `2026-07` 按日期吃掉（页面文本就再也看不见了）。"""
@@ -255,7 +248,6 @@ def test_月份列的数字格式是文本(tmp_path):
         wb.close()
 
 
-@acc("ACC-FLOW-LED-001", "001-09")
 def test_全本只有一个报告月(tmp_path):
     """⭐ **全本只有一个报告月**：台账的**止月**与「特殊费用月报表」的**月份列**必须是同一个月 ——
     否则一本文件里两张表说的不是同一个期间（读的人会拿 9 月的欠款去对 8 月的费用）。
@@ -278,7 +270,6 @@ def test_全本只有一个报告月(tmp_path):
 # ============================================================ ④ 尾块随行数派生
 
 
-@acc("ACC-FLOW-LED-001", "001-10")
 def test_合计行等于各数据行之和且紧随其后(tmp_path):
     """⭐ 模板的合计行**死在一个固定行号**上 ⇒ 必须随行数派生：合计 = 各数据行之和、且**紧随**最后一行。"""
     path = build(tmp_path)
@@ -295,7 +286,6 @@ def test_合计行等于各数据行之和且紧随其后(tmp_path):
         assert txt(tail[0]) == "" and txt(tail[5]) == "", f"[{name}] 合计行的序号 / 备注格应留空：{tail}"
 
 
-@acc("ACC-FEE-MON-001", "001-12")
 def test_特殊费用月报表的单月列由报告月生成(tmp_path):
     """⭐ `模板清单` §5.2 裁定①丙：`3月份`…`8月份` 只是示例 ⇒ 压成**报告月那一列** ＋ 合计（共 3 列）。"""
     path = build(tmp_path)
@@ -304,7 +294,6 @@ def test_特殊费用月报表的单月列由报告月生成(tmp_path):
     assert all(len(r) == 3 for r in rows), f"列数多于 3：{rows[:2]}"
 
 
-@acc("ACC-FEE-MON-001", "001-13")
 def test_特殊费用月报表的行数随数据项派生(tmp_path):
     """行数也随数据项派生：1 自动 ＋ N 手填，下面不留空壳行。"""
     path = build(tmp_path)
@@ -315,7 +304,6 @@ def test_特殊费用月报表的行数随数据项派生(tmp_path):
 # ============================================================ ⑤ 标题 / 拒做 / 打包
 
 
-@acc("ACC-FLOW-LED-001", "001-08")
 def test_标题用展示名且不带项目二字(tmp_path):
     """⭐ 用户 2026-09-18 裁定：标题 = **展示名 ＋ 模板后缀**（**不带「项目」二字**）。
     ⚠️ 模板那句 `龙源纸业项目辅材欠款` 里写着**别的项目名** ⇒ 必须整格换掉。"""
@@ -330,7 +318,6 @@ def test_标题用展示名且不带项目二字(tmp_path):
         wb.close()
 
 
-@acc("ACC-FLOW-LED-001", "001-11")
 def test_拿不到报告月就拒做不产出文件(tmp_path):
     """⛔ **拒做**：报告月拿不到 ⇒ 显式报错、**不产出文件**（半成品比不产出更坏）。"""
     with pytest.raises(MustReportError):
@@ -338,7 +325,6 @@ def test_拿不到报告月就拒做不产出文件(tmp_path):
     assert not list(Path(tmp_path).glob("*.xlsx")), "被拒的导出却留下了文件"
 
 
-@acc("ACC-FLOW-LED-001", "001-11")
 def test_项目不在档案里就拒做():
     """⛔ 导出的项目**必须在档案里**（拿不到展示名 ⇒ 拒做，⛔ 不拿仓库名冒充展示名）。"""
     from app.report_export import service as EX
@@ -347,7 +333,6 @@ def test_项目不在档案里就拒做():
         EX.export_ledger(session(), [WH_A, "查无此仓"])
 
 
-@acc("ACC-FLOW-LED-001", "001-11")
 def test_一个项目都没选就拒做():
     from app.report_export import service as EX
 
@@ -355,7 +340,6 @@ def test_一个项目都没选就拒做():
         EX.export_ledger(session(), [])
 
 
-@acc("ACC-FLOW-LED-001", "001-08")
 def test_两个项目打成一个zip(tmp_path):
     """交付形态：每项目一本工作簿；**≥2 个项目 ⇒ 一个 zip**（两本都在、名字带展示名与期间）。"""
     a = tmp_path / LX.file_name("甲公司项目", YM)
@@ -369,7 +353,6 @@ def test_两个项目打成一个zip(tmp_path):
         assert sorted(zf.namelist()) == sorted([a.name, b.name]), zf.namelist()
 
 
-@acc("ACC-FLOW-LED-001", "001-08")
 def test_成品名含展示名与期间():
     """文件名 = `{展示名}欠款台账_{期间标签}.xlsx`（原型口径：文件名含项目展示名与当前年月）。"""
     assert LX.file_name(DISP_A, YM) == "甲公司项目欠款台账_2026年9月.xlsx"

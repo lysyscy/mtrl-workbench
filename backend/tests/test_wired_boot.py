@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-from tests.acc_plugin import acc
 
 from tests.shell_load_helpers import (
     DEP, DEP_BEFORE, PAGES, SHELL, loaders, page_load,
@@ -25,7 +24,6 @@ from tests.shell_load_helpers import (
 from tests.shell_src import const_items, func_body
 
 
-@acc()
 def test_按需取数表覆盖每一页且标签都在LOADERS():
     """⭐ `P3` 的正面判据：**十一页都有清单**（十页 `WIRED` ＋ `home`），且清单里的每个标签都在 `LOADERS` 里。
 
@@ -41,7 +39,6 @@ def test_按需取数表覆盖每一页且标签都在LOADERS():
     assert len(ls) >= 13, f"`LOADERS` 只剩 {len(ls)} 路 —— 有取数口被删了？"
 
 
-@acc()
 def test_boot只拉初始视图而go按需拉():
     """⭐ 核心：`boot()` **只**拉初始视图那一格；进哪页由 `go(k)` 拉 ⇒ 首屏不再全量。
 
@@ -54,7 +51,6 @@ def test_boot只拉初始视图而go按需拉():
     assert "loadPaths(" in func_body("loadPaths"), "`loadPaths()` 自己没有取数"
 
 
-@acc()
 def test_依赖路必须等机械():
     """⛔ **依赖屏障不许挪**：`LOAD_DEP` 那两路必须等 `机械 6 列`；
     且**凡清单里出现它们的页，必须同时含前置路**（行为级 —— 比"顺序"断言更强）。"""
@@ -74,7 +70,6 @@ def test_依赖路必须等机械():
     assert i_pre > 0 and i_dep > i_pre, "`loadPaths()` 里依赖组没排在后面（组间串行被拆了）"
 
 
-@acc()
 def test_逐路容错未破():
     """逐路容错记录当前失败，加载与启动收尾都同步横幅（含全部恢复）。"""
     assert "const soft = async (label, fn) =>" in SHELL, "没有逐路容错出口 `soft()`"
@@ -88,7 +83,6 @@ def test_逐路容错未破():
     assert "soft(l, LOADERS[l])" in body, "`loadPaths()` 没有逐路走 `soft()`（容错被绕过）"
 
 
-@acc()
 def test_跨页写动作后全标脏():
     """⭐⭐ `TAIL-48` 余项 `P3`②（2026-09-24）：**跨页写 ⇒ 全标脏**（唯一出口 `markCrossPageStale()`）。
 
@@ -139,7 +133,6 @@ def test_跨页写动作后全标脏():
         "业务动作里手写清空 = 两处口径 ⇒ 下一个人会以为必须写，而漏写的人没有任何东西提醒他")
 
 
-@acc()
 def test_项目面板的搜索与归档折叠():
     """⭐⭐ 2026-09-27（用户裁定 ①② · 原话：「项目总会越来越多，不能无限制地让候选数量增加」）。
 
@@ -182,7 +175,6 @@ def test_项目面板的搜索与归档折叠():
         "有关键词时归档段没有自动展开（藏在折里 ⇒「搜得到」成了假话）"
 
 
-@acc()
 def test_没到位就不补拉():
     """⏳ `P3`① ＋ `P3` 主体的两道闸，防"启动期把 m05 那几路白白拉一遍"。
 

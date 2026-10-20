@@ -20,7 +20,6 @@ from pathlib import Path
 
 from app.mod06_proc import domain as D
 from app.mod06_proc.service import build_page_data, parse_state
-from tests.acc_plugin import acc
 from tests.m06_helpers import FakeSession, dataset
 
 CASE = "ACC-RPT-PROC-001"
@@ -46,7 +45,6 @@ def _data(**params) -> dict:
 
 # ------------------------------------------------------------ 001-01 三表齐备
 
-@acc(CASE, "001-01")
 def test_三表齐备且默认停在调整后表():
     labels = [label for _tab, label in D.TABS]
     assert len(D.TABS) == 3
@@ -63,7 +61,6 @@ def test_三表齐备且默认停在调整后表():
 
 # ------------------------------------------------------------ 001-02 逐月一行
 
-@acc(CASE, "001-02")
 def test_一个核算月一行且月份升序逐列独立复算():
     data = _data(pj="甲仓", tab=D.TAB_ADJUSTED)
     rows = data["rows"]
@@ -86,7 +83,6 @@ def test_一个核算月一行且月份升序逐列独立复算():
 
 # ------------------------------------------------------------ 001-03 列结构
 
-@acc(CASE, "001-03")
 def test_列结构以主人为准且筛选栏不设只读年月框():
     labels = [c["label"] for c in D.PROC_COLUMNS]
     assert labels[0] == "核算月" and labels[1:6] == [f"入库{c}" for c in D.CATEGORIES]
@@ -101,7 +97,6 @@ def test_列结构以主人为准且筛选栏不设只读年月框():
 
 # ------------------------------------------------------------ 001-04 项目单选
 
-@acc(CASE, "001-04")
 def test_项目筛选单选且不给全选清空():
     # ⚠️ 2026-09-18（`§19` 批 2）：原先借旧页筛选栏那一段 html 观测（radio / 无多选 / 选中即提交 /
     #    收起态 details）；旧页删（`D18`）后形态搬到壳（`test_wired_m06.py::test_项目筛选单选且选中即收起`
@@ -111,7 +106,6 @@ def test_项目筛选单选且不给全选清空():
 
 # ------------------------------------------------------------ 001-05 逐列合计
 
-@acc(CASE, "001-05")
 def test_表一二每个数据列下方给合计行():
     for tab in (D.TAB_RAW, D.TAB_ADJUSTED):
         data = _data(pj="甲仓", tab=tab)
@@ -123,7 +117,6 @@ def test_表一二每个数据列下方给合计行():
 
 # ------------------------------------------------------------ 001-06 总求和分段
 
-@acc(CASE, "001-06")
 def test_总求和按四段给出且跨列数与分段一致():
     adj = _data(pj="甲仓", tab=D.TAB_ADJUSTED)
     segs = adj["segments"]
@@ -146,7 +139,6 @@ def test_总求和按四段给出且跨列数与分段一致():
 
 # ------------------------------------------------------------ 001-07 差异表合计
 
-@acc(CASE, "001-07")
 def test_差异表合计只求三列且跨列数对齐():
     data = _data(pj="甲仓", tab=D.TAB_DIFF)
     diffs = data["diffs"]
@@ -163,7 +155,6 @@ def test_差异表合计只求三列且跨列数对齐():
 
 # ------------------------------------------------------------ 001-08 材料费只读
 
-@acc(CASE, "001-08")
 def test_材料费只作引用只读且无编辑入口():
     assert all(D.COLUMN_SOURCE[k] == D.SOURCE_INV for k in D.MATERIAL_KEYS)
     # ⭐ 2026-09-26（`TAIL-107`）：机械 6 列**不在**这张**静态**来源表里 —— 它们的来源**按段切**
@@ -189,7 +180,6 @@ def test_材料费只作引用只读且无编辑入口():
 
 # ------------------------------------------------------------ 001-09 差异行跳转
 
-@acc(CASE, "001-09")
 def test_差异行可跳转到库存单据():
     data = _data(pj="甲仓", tab=D.TAB_DIFF)
     # ⚠️ 2026-09-18（`§19` 批 2）：原先这里断言**旧页的 URL 形态**（`D.jump_query` →

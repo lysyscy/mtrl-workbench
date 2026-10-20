@@ -25,7 +25,6 @@ from app.mod03_notice.models import PaymentNotice
 from app.mod01_projects.models import Project
 from app.report_export import fl_export as FL
 from tests._auth import TestClient          # ⭐ 带会话票（同其余端点用例）
-from tests.acc_plugin import acc
 from tests.m05_helpers import FakeSession, make_flow, make_notice_row
 
 
@@ -79,7 +78,6 @@ def _idx() -> dict[str, int]:
 # ---------------------------------------------------------------- ① 装配：五项 ＋ 失联
 
 
-@acc()
 def test_装配补五项且失联流水照常出行():
     """五项全取后端（⛔ 不依赖前端 `NO` 缓存）；**失联不是消失**：
     `notice_id` 为空 / 指向已删除通知书 ⇒ 流水照出、五项留空、审批金额 `None`。"""
@@ -113,7 +111,6 @@ def test_装配补五项且失联流水照常出行():
     assert rows[74]["amount_approved"] == "0.00", "审批金额真是 0 时必须写 0.00（不许留空）"
 
 
-@acc()
 def test_装配不逐行查库():
     """⛔ 不许 N+1：通知书**一次预读**成字典，行数翻十倍，取数次数**不变**。"""
     notices = [_notice(i, bill_no=f"D{i}", settle="10") for i in range(1, 4)]
@@ -141,7 +138,6 @@ def test_装配不逐行查库():
 # ---------------------------------------------------------------- ② 导出：逐格 ＋ 口径
 
 
-@acc()
 def test_导出全量装配并逐格对上页面列():
     """导出 = **页面表头去掉「操作」**那 14 列，取值 = 页面显示的值；首列「流水号」是真 `flow_no`
     （⛔ 数据库行号只作定位、不进导出）；合计**只加实付**、审批金额不参与。"""
@@ -204,7 +200,6 @@ def test_导出全量装配并逐格对上页面列():
     assert len(cells) == 5, "行数不对（表头 ＋ 3 数据行 ＋ 合计行）—— 合计之外不许有伪数据行"
 
 
-@acc()
 def test_只有已撤销时导出仍写零合计且无伪数据行():
     """边界：选中行**全是已撤销** ⇒ 屏幕写「合计（生效 0 条）¥0.00」⇒ Excel 同步写零合计，
     ⛔ 但**不许**为凑合计而凭空添一行付款数据。"""
@@ -219,7 +214,6 @@ def test_只有已撤销时导出仍写零合计且无伪数据行():
     assert cells[-1][idx["amount"]] == 0.0, "全已撤销时合计应是 0.00（与屏幕一致）"
 
 
-@acc()
 def test_导出没挑到行时不留幽灵合计():
     """反面：传入的 id 一个都挑不到（页面上已经删掉的行）⇒ `rows=0`，⛔ 不写合计行。"""
     flows = [_flow(71, flow_no="FL-A", notice_id=None, amount="300.00", pay_date="2026-08-05")]

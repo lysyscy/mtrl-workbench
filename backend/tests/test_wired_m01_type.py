@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from tests.shell_src import SHELL, act_entry, api_entry, func_body  # noqa: F401  ← `P4`① 读取点收敛
 
@@ -20,7 +19,6 @@ from tests.shell_src import SHELL, act_entry, api_entry, func_body  # noqa: F401
 #    已**整把删掉**，取段改走壳的语义口径（函数 ⇒ `func_body` · 动作条 ⇒ `act_entry` · `API` 条目 ⇒ `api_entry`）。
 
 
-@acc("ACC-PRJ-OWN-001", "001-12")
 def test_类型列的人工覆盖入口由钩子注入():
     """⭐ 切片里那一格是只读的（`${typeTag(p.type)}`）⇒ 入口只能在**渲染后注入**（`BIND.m01`）。
 
@@ -33,7 +31,6 @@ def test_类型列的人工覆盖入口由钩子注入():
     assert "pjTypeOpen:t=>{" in SHELL and "data-id" in SHELL
 
 
-@acc("ACC-PRJ-OWN-001", "001-12")
 def test_弹窗讲清范围与留痕且只有两个可选():
     """人工覆盖只讲操作范围与留痕；自动判定规则由域内核负责，不在弹窗复述。"""
     dlg = func_body("pjTypeDlg")
@@ -44,7 +41,6 @@ def test_弹窗讲清范围与留痕且只有两个可选():
         "只给两个选项（普通项目 / 小微壳）"
 
 
-@acc("ACC-PRJ-OWN-001", "001-14")
 def test_选普通项目才出现仓库名且空值当场拦下():
     """⚖️ 仓库名的规矩在**两端各拦一次**（壳里给人话、后端是判据）：
     选「普通项目」⇒ 才出现仓库名输入；不填 ⇒ 当场说清为什么（⛔ 别等后端 400）。"""
@@ -54,7 +50,6 @@ def test_选普通项目才出现仓库名且空值当场拦下():
     assert "!wh" in ok and "必须填仓库名" in ok and "不猜" in ok, "空值要在壳里就讲清（后端那道判据仍在）"
 
 
-@acc("ACC-PRJ-OWN-001", "001-12")
 def test_反向_壳里不另写三类判定且只有一个出口():
     """⛔ 反向两条：
     ① 壳里**不许**再写一份"含小微 ⇒ 壳"之类的判定（那是 `classify_name` 的活）；

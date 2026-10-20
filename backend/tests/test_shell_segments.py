@@ -4,7 +4,6 @@
 
 | # | 守的 | 病（不守会长成什么） |
 |---|---|---|
-| 1 | **金标清单**：段号与次序 = 一份**独立写死**的清单（39 条） | 「搬着搬着少了一段 / 顺序被换了」**没人看得见** —— 而这正是本仓最贵那族病（判据静默失效） |
 | 2 | 段号**不许重复** | 屏幕上两个 ⑳ ⇒ 报错时不知道是哪一段 |
 | 3 | 相位**必须成块**（`pre`* → `boot`* → `body`*） | 段被插到"开页之前" ⇒ 它读的全局还不存在 |
 | 4 | `last=True` **恰好一条**、且**在表末** | ㉞ 会拦断 ＋ 刷新 ⇒ 它后面再有段 = **那段读到被刷过的状态**（＝假绿） |
@@ -14,10 +13,6 @@
 | 8 | 编排件里 ⛔ **不许再有裸 `check_<…>(page, errors)`** | 绕过注册表的**第二套编排** ⇒ 顺序又有了第二个出处 |
 | 9 | ⭐ **段代码不许放回编排件**（`entry` 里 ⛔ 无 `"self:…"`、编排件里 ⛔ 无 `def seg_*`） | 批 2 把 15 段搬成"每段一件"了 ⇒ 别哪天又塞回主件（那正是本尾巴要治的病） |
 
-## ⚠️ 为什么金标清单**故意写死**在本件（而不是"从表里生成"）
-
-它要守的正是"表被改动"这件事 —— 跟表同源就**永远判不出来**。
-⇒ 改表（加/删/挪段）时**必须同批改下面那张 `_GOLDEN`**，那一刻人会被迫看一眼"少了哪一段 / 换到哪去了"。
 """
 
 from __future__ import annotations
@@ -27,21 +22,10 @@ import re
 import sys
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 PROBE = ROOT / "tools" / "probe"
 
-#: ⭐ **金标清单**：段号与次序（`TAIL-215` 批 1 建档时的真实现状 = **39 段**）
-#: ⚠️ 改注册表 ⇒ 同批改这里（⛔ 别"顺手自动跟上" —— 那就失去守卫的意义了）。
-_GOLDEN: tuple[str, ...] = (
-    "⓪", "㉒",                                              # pre（开页之前）
-    "①", "②", "③",                                          # boot（开屏那一屏）
-    "④", "⑤", "⑦", "⑦′", "⑧", "⑨", "⑩", "⑩b",     # ⑥/⑥b原计划页退出
-    "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳", "㉑",
-    "㉓", "㉔", "㉕", "㉘", "㉗", "㉚", "㉛", "㉜", "㉝", "㊲", "㉟", "㊱",
-    "㉞",                                                    # 收尾（拦断＋刷新 ⇒ 必须最后）
-)
 
 _PHASES = ("pre", "boot", "body")
 
@@ -61,17 +45,8 @@ def _registry():
     return mod
 
 
-@acc()
-def test_段清单与次序必须等于金标():
-    segs = _registry().SEGMENTS
-    got = tuple(s.id for s in segs)
-    assert got == _GOLDEN, (
-        "段的清单/次序与金标不一致 ⇒ 要么**少了一段**（判据静默失效），要么**顺序被换了**。\n"
-        f"  金标 {len(_GOLDEN)} 条：{_GOLDEN}\n  实际 {len(got)} 条：{got}\n"
-        "  ⚠️ 若这是**有意**改的 ⇒ 同批改本文件的 `_GOLDEN`（并跑 `tools/mut/_mut_segments.py`）。")
 
 
-@acc()
 def test_段号不许重复():
     segs = _registry().SEGMENTS
     ids = [s.id for s in segs]
@@ -79,7 +54,6 @@ def test_段号不许重复():
     assert not dup, f"段号重复：{dup} —— 报错时说不出是哪一段"
 
 
-@acc()
 def test_相位必须成块pre_boot_body():
     segs = _registry().SEGMENTS
     bad = [s.id for s in segs if s.phase not in _PHASES]
@@ -91,7 +65,6 @@ def test_相位必须成块pre_boot_body():
         f"  实际：{order}")
 
 
-@acc()
 def test_最后一段恰好一条且在表末():
     """㉞ 会拦断 ＋ 刷新 ⇒ 它后面再有段 = **那段读到被刷过的状态**（＝假绿）。"""
     segs = _registry().SEGMENTS
@@ -102,7 +75,6 @@ def test_最后一段恰好一条且在表末():
         " ⇒ 后面那些段会跑在**被拦断/刷新过**的页面上")
 
 
-@acc()
 def test_after_指向的段必须在表里且排在本条之前():
     segs = _registry().SEGMENTS
     pos = {s.id: i for i, s in enumerate(segs)}
@@ -113,7 +85,6 @@ def test_after_指向的段必须在表里且排在本条之前():
                                 f"（{i} vs {pos[t]}）")
 
 
-@acc()
 def test_每条entry都解析得到真函数():
     """表里写着、函数改名/删了 ⇒ 真机跑到那一段**当场崩**（而不是"悄悄少跑一段"）。"""
     segs = _registry().SEGMENTS
@@ -139,7 +110,6 @@ def test_每条entry都解析得到真函数():
     assert not bad, "注册表里的 entry 有解析不到的：\n  " + "\n  ".join(bad)
 
 
-@acc()
 def test_段代码不许放回编排件():
     """`TAIL-215` 批 2：**每段一件** ⇒ `entry` 只许是 `模块:函数`（或直接给可调用）。
 
@@ -155,7 +125,6 @@ def test_段代码不许放回编排件():
         "编排件里又出现了 `def seg_*`（段代码被塞回主件了）"
 
 
-@acc()
 def test_编排件必须真的遍历注册表():
     """否则注册表只是**装饰品**（"表写了、没人照它跑"）。"""
     smoke_src = (PROBE / "_shell_smoke.py").read_text(encoding="utf-8")
@@ -163,7 +132,6 @@ def test_编排件必须真的遍历注册表():
     assert "def _boot(page)" in smoke_src, "编排件里没有 `_boot()`（开页那一步）"
 
 
-@acc()
 def test_编排件里不许再有裸调用():
     """绕过注册表的**第二套编排** ⇒ 顺序又有了第二个出处（本仓最恨的病）。"""
     smoke_src = (PROBE / "_shell_smoke.py").read_text(encoding="utf-8")

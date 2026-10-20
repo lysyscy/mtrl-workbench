@@ -28,7 +28,6 @@ from app.mod08_inv import fetch_service as FS
 from app.mod08_inv import importer
 from app.mod08_inv.models import InvAdjustment, InvDetail
 from app.mod08_inv.repository import load_rows
-from tests.acc_plugin import acc
 from tests.m04_helpers import make_project
 from tests.m08_helpers import FakeSession
 
@@ -103,7 +102,6 @@ def _run(s, *, content=None, boom=None, month="2026-08", confirmed=True, calls=N
 
 # ------------------------------------------------------------ 001-01 / 001-02 入参与标识
 
-@acc(CASE, "001-01")
 def test_入参是起止年月四个独立值且不是单据日期():
     body = report_export.build_body(spec_key="inv", year_month="2026-08", proj_ids="1,2")
     params = {p["paramKey"]: p for p in body["queryParams"][0]["sheetQueryParams"]}
@@ -119,7 +117,6 @@ def test_入参是起止年月四个独立值且不是单据日期():
     assert "BillDt" not in text and "queryfilter" not in text and "start_date" not in text
 
 
-@acc(CASE, "001-02")
 def test_三项标识逐表不同且库存单据的报表名为空():
     spec = I8_REPORTS["inv"]
     assert spec["rep_id"] == "3700000000000104"
@@ -138,7 +135,6 @@ def test_三项标识逐表不同且库存单据的报表名为空():
 
 # ------------------------------------------------------------ 001-03 只允许单月
 
-@acc(CASE, "001-03")
 def test_抓取只允许单月():
     assert report_export.single_month("2026-08") == ("2026", "8", "2026", "8")
     assert FS.build_plan("2026-08")["ym"] == "2026-08"
@@ -149,7 +145,6 @@ def test_抓取只允许单月():
 
 # ------------------------------------------------------------ 001-04 按表头认列
 
-@acc(CASE, "001-04")
 def test_按表头文字认列且缺关键列即报错():
     rows = importer.parse_rows(_xlsx([_row()]))
     assert rows[0]["doc_no"] == "K1" and rows[0]["material_property"] == "主材"
@@ -169,7 +164,6 @@ def test_按表头文字认列且缺关键列即报错():
 
 # ------------------------------------------------------------ 001-05 核算年月来源
 
-@acc(CASE, "001-05")
 def test_核算年月取自核算年月列而不是单据日期():
     rows = importer.parse_rows(_xlsx([
         _row(year=2026, month=7, doc_date="2026-08-31"),
@@ -183,7 +177,6 @@ def test_核算年月取自核算年月列而不是单据日期():
 
 # ------------------------------------------------------------ 001-06 幂等落库
 
-@acc(CASE, "001-06")
 def test_同月同项目重抓幂等不产生重复行():
     s = _sess()
     content = _xlsx([_row(doc_no="K1"), _row(seq=2, doc_no="K2", amount="200.00")])
@@ -215,7 +208,6 @@ def test_同月同项目重抓幂等不产生重复行():
 
 # ------------------------------------------------------------ 001-07 重抓不动调整单
 
-@acc(CASE, "001-07")
 def test_重抓不动调整单且消失的有调整行被保留():
     s = _sess()
     _run(s, content=_xlsx([_row(doc_no="K1"), _row(seq=2, doc_no="K2", amount="200.00")]))
@@ -239,7 +231,6 @@ def test_重抓不动调整单且消失的有调整行被保留():
 
 # ------------------------------------------------------------ 001-08 二次确认 / 降级 / 不重试
 
-@acc(CASE, "001-08")
 def test_未二次确认即拒且失败降级且不自动重试登录():
     # ⚠️ 2026-09-18（`§19` 批 2）：原先这三条借**旧页**的抓取弹窗 html 观测（确认 token、「强踢」告知、
     # 表单 action）；旧页删除（`D18`）后形态搬到壳 ——
@@ -270,7 +261,6 @@ def test_未二次确认即拒且失败降级且不自动重试登录():
 
 # ------------------------------------------------------------ 001-09 执行记录
 
-@acc(CASE, "001-09")
 def test_每次抓取留一条执行记录():
     s = _sess()
     ok = _run(s, content=_xlsx([_row(), _row(seq=2, doc_no="K2")]))

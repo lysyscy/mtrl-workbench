@@ -21,7 +21,7 @@
 | effort规格、采用记录及累计范围 | 已有设计件或所属票；新独立方案放 `.scratch/<effort>/`；已结束旧方案从docs/archive/index.md追溯，单票目标与验收放票面。明确采用时记录用户确认、固定起点、累计范围与当次授权；不为接入新建空规格或第二份状态表 |
 | 票源与阶段 | `docs/agents/issue-tracker.md` §一～§四；主计划§15是活跃索引，§14.3为排期，已销号姊妹件是历史短索引；开销票使用 `_tail_open.py` / `_tail_close.py` |
 | 资料目录与历史 | README.md §二/三/四/七、docs/guides/document-governance.md、docs/guides/work-records.md；术语及D件消费回 docs/agents/domain.md |
-| 验证程序与选择 | `tools/oneoff/_run_rulers.py` 的CMDS/SELFTESTS及 `tools/oneoff/_impactscope.py`；实际命令、环境及浏览器工具分工回 `docs/guides/development-and-verification.md` §十一 |
+| 验证程序与选择 | 按实际行为、风险及调用者选择现有 pytest 文件/节点和必要静态工具；命令、隔离及浏览器分工回 `docs/guides/development-and-verification.md` §十一 |
 | 结果与接续 | 当前票Comments留命令、退出码、关键数、未验边界与必要复现；跨会话且无合适票时才用当日日志；当前交接回主计划§13.6 |
 | 运行与数据权限 | docs/agents/project-rules.md的凭据边界；服务与恢复操作回 docs/guides/deployment.md。测试使用隔离数据；生产服务重启、迁移及真实业务写入按当前明确授权执行 |
 
@@ -40,11 +40,11 @@
 
 ## 四、按影响核验：项目能力与边界
 
-- 范围按运行代码、测试及机器输入的实际使用者选择；说明和索引通常核引用、语义、字节与结构。新删件、提交及已有dirty不自动扩大范围；显式完整检查使用 `--full`。
-- 金额、身份权限、写入、回滚、迁移、共享出口及已修复缺陷保留相关覆盖。局部pytest写独立结果，完整pytest才刷新权威四态；隔离自证失败不能算通过，未知影响由入口报非零并说明。
-- 回执复用读取实际签名：当前pytest回执按整组选集及广泛输入集合判断，票或规则文档变化也可能失效；没有跨票逐用例自动证明账。已有逐项证据是否仍有效按个人验证方法核实，不能因旧整体通过或基点存在而免验。
-- 真实服务39段与壳快照仅在现场问题、部署验收或用户明确需要时执行；未验仍记未验。归档工具的现有限制回 tools/README.md“按需自证与归档”，本次接入不改变该工具及检查机制。
-- 失败归因与处理读个人“验证与失败处理”；本仓原票Comments承载判断依据和后续入口，自动入口非零结果按实际记录。
+- 从实际行为、失败后果和调用者选择已有 pytest 文件/节点；已有保障足够就复用。共享计算、身份、存储/事务、配置/启动或影响不明时扩大；提交、新删件及已有 dirty 本身不触发全量。
+- 金额、身份权限、写入、回滚、迁移、共享出口及严重缺陷保留有效回归。先确认专用测试目标与实际 engine；无法确认时停止对应写入验证，继续不依赖它的工作。模拟接口浏览器只证明交互，不证明数据库写入。
+- 原始 pytest 退出码、实际选集、失败节点和未验边界是运行证据。默认不生成四态、不自动选集、不扫描广泛输入哈希或复用跨运行通过缓存；历史判据报告仅按需追溯，不能证明当前完整通过。
+- 证据只在内容、输入、环境、选择和预期仍相同且足够时复用；变化则复验受影响范围。未执行、未知、超时、空选择和非零结果不能报通过；保留首次失败并区分产品、测试和环境问题。
+- 语法/字节钩子保持；文档审计、链路/覆盖提示及变异只在对应调查或风险需要时显式使用，不维护日常变异登记。39段真机与壳快照仍仅用于现场、部署验收或明确需要，不访问未经授权的业务目标。
 
 ## 五、重构与跨会话接续
 
@@ -69,6 +69,6 @@
 
 普通任务只搜索现行资料、当前effort和直接依赖；历史只有明确追溯才读。恢复仅还原本批拥有的路径，遇到后续新内容保护双方。当前目录与命名回README.md，资料生命周期回docs/guides/work-records.md。
 
-本仓沿用Python组件契约backend/app、backend/tests、backend/alembic及backend/app/resources，不为统一改包路径；第三方素材delivery沿其来源契约。持续核验状态固定在var/state/verification（权威四态、可丢弃回执与输入签名、壳基线）；它们有后续机器消费者，不能和一次运行证据一起到期删除。壳基线只迁字节，不重新盖章；现存差异按原结论处理。
+本仓沿用Python组件契约backend/app、backend/tests、backend/alembic及backend/app/resources，不为统一改包路径；第三方素材delivery沿其来源契约。历史判据结果、旧回执和壳基线仍在var/state/verification；本轮仅退役其生成/复用义务，不清理旧证据、原件或壳基线。壳基线只迁字节，不重新盖章；现存差异按原结论处理。
 
 开发工具共享tools/audit/workspace_paths.py：默认effort为checks-当天、run为时间与PID，子进程沿用MTRL_RUN_ID；只由创建轮次的父进程收尾。输出按kind生成；进程退出释放work，保留实际核验输出至同effort本机归档（首次创建的期限不随新运行延长）。Agent手动运行使用MTRL_EFFORT/MTRL_RUN_ID指定本轮身份时由Agent自己结束run，并从实际安装的setup-solo-workflow/scripts/workspace_check.py运行run-closed/closed；检查本身不会代替删除。凭据和原件不得进入工具输出。

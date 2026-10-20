@@ -22,7 +22,6 @@ from app.mod04_plan.domain import (
     bucket,
 )
 from app.mod04_plan.models import EDITABLE_COLUMNS, PlanRow
-from tests.acc_plugin import acc
 
 
 def _notices() -> dict[str, NoticeAmounts]:
@@ -38,7 +37,6 @@ def row(**kw) -> dict:
     return base
 
 
-@acc("ACC-PLAN-AUDIT-001", "001-01")
 def test_审查结果不存字段按行实时派生():
     # 表里**没有** audit_result 列
     assert "audit_result" not in PlanRow.__table__.columns
@@ -49,7 +47,6 @@ def test_审查结果不存字段按行实时派生():
     assert audit_rows([r], changed)[0] == R_AMOUNT_MISMATCH
 
 
-@acc("ACC-PLAN-AUDIT-001", "001-02")
 def test_判定分支齐备六种都有样本():
     rows = [
         row(year_month="2026-07", doc_no="DOC-1", flow_amount="1000", planned_amount="800"),  # 完全匹配
@@ -64,7 +61,6 @@ def test_判定分支齐备六种都有样本():
     assert set(got) == set(ALL_RESULTS) and len(set(got)) == 6
 
 
-@acc("ACC-PLAN-AUDIT-001", "001-03")
 def test_完全匹配三条件同时成立():
     n = _notices()
     # 三条件齐 ⇒ 完全匹配（planned == 未付 也算「不超未付」）
@@ -77,7 +73,6 @@ def test_完全匹配三条件同时成立():
     assert audit_rows([row(doc_no="X", flow_amount="1000", planned_amount="1")], n)[0] == R_DOC_NOT_FOUND
 
 
-@acc("ACC-PLAN-AUDIT-001", "001-04")
 def test_金额不符比的是流程金额与审批金额():
     n = _notices()
     # 该流程金额 999 ≠ 审批金额 1000 ⇒ 金额不符（与 planned 无关：planned=1 不超未付）
@@ -86,7 +81,6 @@ def test_金额不符比的是流程金额与审批金额():
     assert audit_rows([row(doc_no="DOC-1", flow_amount="1000", planned_amount="1")], n)[0] == R_MATCHED
 
 
-@acc("ACC-PLAN-AUDIT-001", "001-05")
 def test_同月同单据号两行都判重():
     n = _notices()
     rows = [

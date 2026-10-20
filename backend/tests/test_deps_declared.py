@@ -21,7 +21,6 @@ import re
 import sys
 import tomllib
 
-from tests.acc_plugin import acc
 
 BACKEND = pathlib.Path(__file__).resolve().parents[1]
 APP = BACKEND / "app"
@@ -67,7 +66,6 @@ def _imported() -> dict[str, list[str]]:
     return out
 
 
-@acc()
 def test_代码里用到的第三方库都在依赖清单里():
     """`app/` import 到的每个第三方模块，其**发行包**必须在运行依赖里。
 
@@ -88,7 +86,6 @@ def test_代码里用到的第三方库都在依赖清单里():
         + "⛔ 别改成 try/except 绕过去。")
 
 
-@acc()
 def test_老xls台账的读表件在依赖清单里():
     """**今天这条真缺陷的直接钉子**：`xlrd` 必须在运行依赖里（老 `.xls` 台账靠它读）。
 

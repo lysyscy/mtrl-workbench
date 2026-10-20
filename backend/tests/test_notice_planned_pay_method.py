@@ -10,13 +10,11 @@ from alembic.operations import Operations
 
 from app.mod03_notice.merge import PROTECTED, plan_merge
 from app.mod05_flow.models import PaymentFlow
-from tests.acc_plugin import acc
 from tests.m03_action_helpers import _client, _notice
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 from tests.test_tail282_pay_draft import _setup
 
 
-@acc()
 def test_通知书拟付款方式完整读回且重抓不覆盖():
     client, _ = _client([_notice(1, planned_pay_method="供应链")])
     item = client.get("/api/m03/notice-list?period=").json()["items"][0]
@@ -27,7 +25,6 @@ def test_通知书拟付款方式完整读回且重抓不覆盖():
     assert "planned_pay_method" not in plan.values
 
 
-@acc()
 @pytest.mark.parametrize("draft,expected", [("", "供应链"), ("承兑", "承兑")])
 def test_付款默认通知书拟方式且本次手改优先(draft, expected):
     client, fake = _client([_notice(1, planned_pay_method="供应链")])
@@ -40,7 +37,6 @@ def test_付款默认通知书拟方式且本次手改优先(draft, expected):
     assert len(flows) == 1 and flows[0].pay_method == expected
 
 
-@acc()
 def test_拟方式其他仍须实际付款备注且整批拒绝():
     client, fake = _client([_notice(1, planned_pay_method="现汇"),
                             _notice(2, planned_pay_method="其他")])
@@ -54,7 +50,6 @@ def test_拟方式其他仍须实际付款备注且整批拒绝():
     assert {f.pay_method for f in fake.added if isinstance(f, PaymentFlow)} == {"现汇", "其他"}
 
 
-@acc()
 def test_存量迁移默认空且保留既有金额():
     path = Path(__file__).parents[1] / "alembic/versions/c350261015_notice_planned_pay_method.py"
     spec = importlib.util.spec_from_file_location("planned_method_migration", path)
@@ -76,7 +71,6 @@ def test_存量迁移默认空且保留既有金额():
     engine.dispose()
 
 
-@acc()
 def test_拟方式读回默认窗口且手改草稿保留(ui_page):
     page = ui_page
     _setup(page)

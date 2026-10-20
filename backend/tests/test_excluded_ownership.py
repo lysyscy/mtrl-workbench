@@ -5,10 +5,8 @@ from app.core.db import session_scope
 from app.mod01_projects import repository as projects
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice import notice_executors as ex
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_import_excluded_ownership_is_nonblocking_and_preserves_existing(monkeypatch):
     with session_scope() as s:
         p = projects.create_project(s, project_type='normal',

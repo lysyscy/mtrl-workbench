@@ -22,10 +22,8 @@ from app.core.money import (
     to_money,
     try_money,
 )
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_归一为两位小数且四舍五入():
     assert to_money("1.005") == Decimal("1.01")   # HALF_UP（不是银行家舍入）
     assert to_money("1.004") == Decimal("1.00")
@@ -34,14 +32,12 @@ def test_归一为两位小数且四舍五入():
     assert to_money("1,234.5") == Decimal("1234.50")  # 千分位容错
 
 
-@acc()
 def test_拒绝布尔空值与非法串():
     for bad in (True, False, None, "", "   ", "abc", "1.2.3"):
         with pytest.raises(MoneyError):
             to_money(bad)
 
 
-@acc()
 def test_不接受无穷与非数():
     with pytest.raises(MoneyError):
         to_money(Decimal("NaN"))
@@ -49,21 +45,18 @@ def test_不接受无穷与非数():
         to_money(Decimal("Infinity"))
 
 
-@acc()
 def test_判定容差为零():
     assert is_equal("1.00", Decimal("1"))
     assert not is_equal("1.00", "1.01")
     assert is_zero("0.000")
 
 
-@acc()
 def test_求和逐个归一后相加():
     assert sum_money(["0.005", "0.005", "0.005"]) == Decimal("0.03")
     assert sum_money([]) == Decimal("0.00")
     assert sub_money("10.00", "3.33") == Decimal("6.67")
 
 
-@acc()
 def test_取值判据三档有意不同():
     # ① 必须 > 0
     assert require_positive("0.01") == Decimal("0.01")
@@ -76,14 +69,12 @@ def test_取值判据三档有意不同():
         require_non_negative("-0.01")
 
 
-@acc()
 def test_可空字段用_try_money():
     assert try_money(None) is None
     assert try_money("") is None
     assert try_money("1.5") == Decimal("1.50")
 
 
-@acc()
 def test_转分仅供比较_不进存储():
     assert to_cents("1.00") == 100
     assert to_cents("1.005") == 101

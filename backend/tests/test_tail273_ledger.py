@@ -5,11 +5,9 @@ from app.mod03_notice.models import PaymentNotice
 from app.mod05_flow import service
 from app.mod05_flow.models import CATEGORY_MECH, OpeningBalance
 from app.mod06_proc import repository
-from tests.acc_plugin import acc
 from tests.test_proc_split_cutoffs import session
 
 
-@acc()
 def test_mechanical_ledger_uses_effective_taxed_values(session):
     p=Project(project_type='normal',name_full='__tail273_a__',warehouse_name='__tail273_a__',disp='甲')
     q=Project(project_type='normal',name_full='__tail273_b__',warehouse_name='__tail273_b__',disp='乙')

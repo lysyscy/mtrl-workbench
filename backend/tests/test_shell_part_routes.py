@@ -20,7 +20,6 @@ import re
 import sys
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "audit"))          # ⭐ `TAIL-58` 分目录：shell_source 在 audit/
@@ -34,7 +33,6 @@ def _srcs() -> list[str]:
     return re.findall(r"/static/shell/([\w.\-]+)", INDEX_HTML.read_text(encoding="utf-8"))
 
 
-@acc()
 def test_壳的每一件外链件都有路由():
     """⭐ **有 `<script src>` ⇒ 必须有路由**（缺 ⇒ 404 ⇒ 整支壳崩，且离线看不见）。"""
     srcs = _srcs()
@@ -45,7 +43,6 @@ def test_壳的每一件外链件都有路由():
                          f"（在 `main.py` 里照既有那几条加一条 `_shell_js` 路由）")
 
 
-@acc()
 def test_路由与外链件一一对应_没有孤儿():
     """⛔ 反向也要堵：别留"挂了路由但 `index.html` 不引"的孤儿（`Q3` 看不见它）。"""
     main_txt = MAIN.read_text(encoding="utf-8")
@@ -63,7 +60,6 @@ def test_路由与外链件一一对应_没有孤儿():
 _CANNOT_PIN_SHELL_COUNT = (ROOT / "docs" / "architecture.md", MAIN)   # ⚠️ 2026-10-01 起文档落 `ops/`（`docs/` 已并入）
 
 
-@acc()
 def test_活文档与注释不许写死壳件数():
     """⭐ 件数会随拆件涨（09-19 `P4`② · 09-24 `api.js` · 09-28 `P2-a` 六件）⇒ 只许写指针，写了必漂。
 
@@ -86,7 +82,6 @@ def test_活文档与注释不许写死壳件数():
 
 
 # ── `TAIL-192`-④：`API`（唯一数据出口）只许在 `api.js` 里定义 ─────────────────────
-@acc()
 def test_数据出口_API_只许在_api_js_里定义():
     """⭐ 防**同名遮蔽**：局部映射表也叫 `API` ⇒ 那个函数里再用 `API.xxx` 取数就**静默失效**。
 
@@ -107,7 +102,6 @@ def test_数据出口_API_只许在_api_js_里定义():
 
 
 # ── `TAIL-192`-③：`core.js` 头注要说清 `API` 去哪了 ─────────────────────────────
-@acc()
 def test_core_js_头注要说清_API_去哪了():
     """⭐ `API` 2026-09-24（`TAIL-48`）已切到 `api.js`，而 `core.js` 头注还把它算在本件里 ⇒ 按错的图找代码。"""
     text = (ROOT / "backend" / "app" / "web" / "shell" / "core.js").read_text(encoding="utf-8")

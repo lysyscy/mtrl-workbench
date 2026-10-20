@@ -31,7 +31,6 @@ from app.mod05_flow.domain import (
 from app.mod06_proc import importer as proc_importer
 from app.mod06_proc.models import ProcMechManual
 from app.mod06_proc.repository import import_snapshot, load_cutoff, load_mech, save_mech
-from tests.acc_plugin import acc
 from tests.m03_action_helpers import FakeWriteSession, _notice
 from tests.m06_helpers import WAREHOUSE, FakeSession, xlsx_bytes
 
@@ -49,7 +48,6 @@ def _paths() -> set[str]:
 # ============================================================ 付款域 · 期初占位行（i6 时代）
 
 
-@acc("ACC-INIT-001", "001-01")
 def test_期初占位行可手填且按其分类并入():
     """§9.7 第 1 行：更早（i6 时代）单据少、不抓取 ⇒ **期初占位行手填**这条路必须保留。
 
@@ -63,7 +61,6 @@ def test_期初占位行可手填且按其分类并入():
     assert set(by) == {CATEGORY_MATERIAL, CATEGORY_MECH, CATEGORY_JC}
 
 
-@acc("ACC-INIT-001", "001-02")
 def test_期初与i8期间流水不重叠且台账自截止月起排行():
     """§9.7 第 1 / 2 行：两条路**不重叠** —— 期初是**一段截止年月**，其后从**次月**起逐月连续。"""
     op = OpeningView(category=CATEGORY_MATERIAL, project_id=1, cutoff_ym="2025-11",
@@ -86,7 +83,6 @@ def test_期初与i8期间流水不重叠且台账自截止月起排行():
 
 
 
-@acc("ACC-INIT-001", "001-05")
 def test_过程资料手录与Excel上传两个入口都在():
     """§9.7 第 3 行：过程资料的**两条**初始化通道 —— **机械手录**（旁路表）＋ **Excel 上传**（定稿快照）。
 
@@ -127,7 +123,6 @@ def test_过程资料手录与Excel上传两个入口都在():
 # ============================================================ 库存单据 · 补抓历史月份
 
 
-@acc("ACC-INIT-001", "001-04")
 def test_库存单据可补抓历史月份():
     """§9.7 第 5 行：库存单据**从 i8 补抓历史月份**（不是只能抓当月）。
 
@@ -150,7 +145,6 @@ def test_库存单据可补抓历史月份():
 
 
 
-@acc("ACC-INIT-001", "001-06")
 def test_集采台账手录入口在():
     """claim：「集采台账：**手录**入口在（该域所有数据均手录）」。
 

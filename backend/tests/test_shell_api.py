@@ -25,7 +25,6 @@ import re
 
 import pytest
 
-from tests.acc_plugin import acc
 
 from tests.shell_src import (  # noqa: F401
     SHELL, act_entry, api_entry, bind_block, bind_blocks, const_items, const_obj,
@@ -44,7 +43,6 @@ _SLICE_RE_DEF = re.compile(r"""re\.compile\(\s*r?["'][^"'\n]*V\\\.[^"'\n]*["']""
 # ── 1 · 取得到 ＋ 只有一套算法 ─────────────────────────────────────────
 
 
-@acc()
 def test_页切片与壳自检的切片算法一致():
     """`ui_parity.slices()` 与语义层的切片**逐页逐字节一致**（说明"唯一算法"真的落地了）。"""
     from tools.audit import shell_api
@@ -54,7 +52,6 @@ def test_页切片与壳自检的切片算法一致():
     assert slices(lines) == shell_api.slices_of_lines(lines)
 
 
-@acc()
 def test_接线守卫允许机械费复用正式过程资料工作区():
     from tools.audit.ui_parity import wired_api_issues
 
@@ -65,7 +62,6 @@ def test_接线守卫允许机械费复用正式过程资料工作区():
     assert wired_api_issues(['m09'], "API.get('/api/m06/workbench')")
 
 
-@acc()
 def test_页切片与_page_seg_一致():
     """`tests.shell_src.page_seg()` 只是转发 ⇒ 与 `page_slice` 结果必须一字不差。"""
     from tests.shell_src import page_seg
@@ -74,7 +70,6 @@ def test_页切片与_page_seg_一致():
         assert page_seg(page) == page_slice(page)
 
 
-@acc()
 def test_不许在_ui_parity_与_shell_src_里写回第二套切片算法():
     """⛔ 病根形态：同一件事两处各算一遍。这两件现在**只转发** ⇒ 出现切片正则就是写回来了。"""
     hits = [p.relative_to(ROOT).as_posix() for p in _NO_SECOND_ALGO
@@ -97,7 +92,6 @@ const OTHER=1;
 """
 
 
-@acc()
 def test_取动作条_字符串里的花括号不算结束():
     """`ACT` 里某条的字符串含 `}` ⇒ 绝不能把它当成 `ACT` 对象的收尾。"""
     from tools.audit.shell_api import act_entry as A
@@ -107,7 +101,6 @@ def test_取动作条_字符串里的花括号不算结束():
     assert "return s;" in A("baz", source=_FAKE_ACT)
 
 
-@acc()
 def test_取动作条_注释里的_const_ACT_不算数():
     """⛔ 直接按字面找会命中**注释里**那个 `const ACT={…}`（2026-10-03 实测：配平当场收到 1 个字符）。"""
     from tools.audit.shell_api import act_entry as A
@@ -127,7 +120,6 @@ const ACT={
 """
 
 
-@acc()
 def test_取动作条_注释里列0的假定义不算数():
     """⭐ 定位必须走"注释置空后的文本" —— 否则注释里那份假定义会被当成真的（然后报"找不到动作"）。"""
     from tools.audit.shell_api import act_entry as A
@@ -145,7 +137,6 @@ function g(){
 """
 
 
-@acc()
 def test_取函数体_认结构():
     """函数体里的字符串含 `}` ⇒ 配平必须跳过它（⛔ 不是"数花括号"）。"""
     from tools.audit.shell_api import func_body as F
@@ -156,7 +147,6 @@ def test_取函数体_认结构():
     assert "if(s){ return s; }" in body
 
 
-@acc()
 def test_取动作条_缩进混用也要取到():
     """⭐ 真壳靶：`ACT` 的成员缩进 **1 与 2 空格混用**（` awfAdd:` / `  zipSfjc:` 并存）。
 
@@ -168,7 +158,6 @@ def test_取动作条_缩进混用也要取到():
         assert e.strip().startswith(f"{name}:"), f"`{name}` 没取对（缩进混用被漏？）：{e[:60]!r}"
 
 
-@acc()
 def test_取动作条_不命中山层里的同名键():
     """⛔ 成员值里**嵌着**同名键（更深一层）⇒ 不许把它当成 `ACT` 的成员。"""
     from tools.audit.shell_api import act_entry as A
@@ -185,7 +174,6 @@ def test_取动作条_不命中山层里的同名键():
     assert "inner" not in e and "dup:1" not in e, "命中了山层里的同名键"
 
 
-@acc()
 def test_取动作条_真壳里跨行的成员要取整():
     """⭐ 真壳靶：`awfAdd` 那条动作**跨两行**（第二行是回执文案）⇒ 截在换行就丢一半。"""
     e = act_entry("awfAdd")
@@ -205,7 +193,6 @@ const ACT={
 """
 
 
-@acc()
 def test_取动作条_赋值式也要取到():
     """⭐ 批 2b 余下 ①：`ACT.<名> = …;` **赋值式**（壳里 12 处 · `legacy.js` 的 i8 与导入两族）。
 
@@ -224,7 +211,6 @@ def test_取动作条_赋值式也要取到():
         act_entry("ghost", source=_FAKE_ASSIGN)      # 注释里那条**不算存在**
 
 
-@acc()
 def test_取动作条_两种形态不唯一就抛():
     """⛔ 同一个名字**成员与赋值式都命中** ⇒ 必须抛（静默挑一种 = 假绿）。"""
     from tools.audit.shell_api import act_entry as A
@@ -234,7 +220,6 @@ def test_取动作条_两种形态不唯一就抛():
         A("dup", source=fake)
 
 
-@acc()
 def test_取函数体_真壳里的正则不被当成注释或字符串():
     """⭐ 真壳靶：`splitRows` 里有 `/<(\\/?)(tr|tbody)\\b[^>]*>/gi`；`vsTableHits` 里有夹引号的正则。"""
     body = func_body("splitRows")
@@ -248,7 +233,6 @@ def test_取函数体_真壳里的正则不被当成注释或字符串():
 # ── 3 · 找不到 / 配不平 ⇒ 必抛 ────────────────────────────────────────
 
 
-@acc()
 def test_取不到必须抛_不许静默回空():
     """⛔ 四条访问器对**不存在**的名字都必须抛（静默回空 = 看着绿、其实什么都没查）。"""
     for fn in (lambda: page_slice("__nope__"),
@@ -259,7 +243,6 @@ def test_取不到必须抛_不许静默回空():
             fn()
 
 
-@acc()
 def test_取常量表_只认对象字面量():
     """`const EXP_ROUTES = {…}` 取得到（含花括号）；`const WIRED=new Set([…])` **不归它** ⇒ 必抛。"""
     obj = const_obj("EXP_ROUTES")
@@ -269,7 +252,6 @@ def test_取常量表_只认对象字面量():
         const_obj("WIRED")
 
 
-@acc()
 def test_取_API_客户端条目_只取这一条():
     """⭐ 批 2b 新增口子：`const API = {…}`（唯一数据出口）里某一条 —— ⛔ 别取到旁边那条。"""
     e = api_entry("pjType")
@@ -277,7 +259,6 @@ def test_取_API_客户端条目_只取这一条():
     assert "m02Records" not in e, "取多了 —— 吃进了下一条"
 
 
-@acc()
 def test_取_BIND_块_三种写法都要收():
     """加工登记三种参数形态（箭头 / 函数表达式 / 函数引用）都要收，且只收这一条登记。"""
     b6 = bind_block("m06")
@@ -291,7 +272,6 @@ def test_取_BIND_块_三种写法都要收():
     assert any(x.startswith("addBind('m03', function () {") for x in b3), "函数表达式那块没取到"
 
 
-@acc()
 def test_取_BIND_块_多处命中必须抛():
     """⚠️ 同一页有多块时**静默挑第一处 = 假绿**（实测 `m03`/`m11` 各两处，且第二块是**追加登记**）。"""
     with pytest.raises(LookupError):
@@ -299,7 +279,6 @@ def test_取_BIND_块_多处命中必须抛():
     assert len(bind_blocks("m03")) >= 2
 
 
-@acc()
 def test_取常量整句_多段模板串也取全():
     """⭐ 批 2b 新增口子：`const X = \\`…\\`;` 整句（含**多段拼接** —— `BIG_THEAD` 那种）。"""
     for name in ("NT_THEAD", "AWF_THEAD", "BIG_THEAD"):
@@ -309,7 +288,6 @@ def test_取常量整句_多段模板串也取全():
     assert const_src("BIG_THEAD").count("`") >= 4, "多段模板串拼接没取全（截在第一段了？）"
 
 
-@acc()
 def test_取常量项_数组与_Set_都认():
     """⭐ 批 2b 新增口子：数组 / `new Set([…])` 的字符串项；对象字面量**不归它**（必抛）。"""
     assert set(const_items("LOAD_DEP")) == {"收发结存与大表", "付款域"}
@@ -318,7 +296,6 @@ def test_取常量项_数组与_Set_都认():
         const_items("EXP_ROUTES")          # 对象字面量 ⇒ 没有 `[…]`
 
 
-@acc()
 def test_页名清单与壳里_V_切片数一致():
     """`pages()` 必须与壳里真实的 `V.<名>=` 一一对应（⛔ 不许少一个、也不许多一个）。"""
     from tools.audit.shell_api import page_map
@@ -334,7 +311,6 @@ def test_页名清单与壳里_V_切片数一致():
 # ── 4 · ⛔ 不许再自造剪刀（清单**只许变短**）─────────────────────────────
 
 
-@acc()
 def test_壳的语义剪刀清单只许变短():
     """⭐ 批 3（`TAIL-219` 收口）：老账分批还，**新账当场拦**。
 
@@ -357,7 +333,6 @@ def test_壳的语义剪刀清单只许变短():
     assert not stale, f"白名单里有条目已经不是剪刀了（换掉了就销号）：{stale}"
 
 
-@acc()
 def test_剪刀扫描排除归档原文但仍发现现行代码(tmp_path, monkeypatch):
     from tests import shell_scissors
     source = 'def split_shell():\n    return SHELL[SHELL.index("start"):]\n'

@@ -28,7 +28,6 @@ import pytest
 
 from app.core.db import session_scope
 from app.main import app
-from tests.acc_plugin import acc
 
 #: 一个**很长**但完全合法的项目全名（中文 ＋ 括号 ＋ 数字，模拟真实形态）。
 #: ⚠️ 长度按"能撑破一栏"来取 —— 太短的话这条断言**测不出任何东西**（照样绿）。
@@ -109,7 +108,6 @@ def _drop_project(pid: int) -> None:
         s.commit()
 
 
-@acc("ACC-PRJ-LIST-001", "001-07")
 def test_长项目名完整可读_真机量一遍不许被裁切():
     """真浏览器里量：那一行的**每个单元格**都不许被裁切。
 

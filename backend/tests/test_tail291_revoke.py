@@ -12,9 +12,8 @@ from app.mod05_flow import repository as flows, router as api
 from app.mod05_flow.models import FlowRevokeLog
 from app.mod11_jc import repository as jc, service as jcs
 from tests.test_acc_jc_pay_link import _project
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 from tests.test_tail282_pay_draft import _setup, _over
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -42,7 +41,6 @@ def revoke(b, **kw):
     return api.api_revoke(b.id, reason='291撤销', changed_by='291测试', **kw)
 
 
-@acc()
 def test_keep_manual(sample):
     s,n,p,c,a,b = sample
     revoke(b, stat_choice='keep')
@@ -52,7 +50,6 @@ def test_keep_manual(sample):
     assert D.stat_paid_is_manual(notices.list_stat_traces(s,n.id),n.id)
 
 
-@acc()
 def test_restore_follows_next_payment(sample):
     s,n,p,c,a,b = sample
     revoke(b, stat_choice='auto')
@@ -70,7 +67,6 @@ def test_restore_follows_next_payment(sample):
     assert [t.field for t in notices.list_stat_traces(s,n.id)]==[D.F_STAT_PAID,D.F_STAT_PAID_AUTO,D.F_STAT_PAID,D.F_STAT_PAID_AUTO]
 
 
-@acc()
 def test_equal_amount_still_manual_and_auto_no_choice(sample):
     s,n,p,c,a,b=sample
     apply_stat_change(s,notice_id=n.id,field='stat_paid',value='500',changed_by='291测试')
@@ -96,7 +92,6 @@ def facts(s,n,b):
             len(s.execute(select(FlowRevokeLog).where(FlowRevokeLog.flow_id==b.id)).scalars().all()))
 
 
-@acc()
 def test_invalid_and_duplicate_atomic(sample,monkeypatch):
     s,n,p,c,a,b=sample
     baseline=facts(s,n,b)
@@ -120,7 +115,6 @@ def test_invalid_and_duplicate_atomic(sample,monkeypatch):
         assert facts(s,n,b)==done
 
 
-@acc()
 @pytest.mark.parametrize('entry',['flow','notice'])
 def test_both_ui_entries_failure_and_drafts(ui_page,entry):
     p=ui_page;_setup(p)
@@ -149,7 +143,6 @@ def test_both_ui_entries_failure_and_drafts(ui_page,entry):
     assert not _over(p,'101') and _over(p,'102')
 
 
-@acc()
 def test_concurrent_edit_rejects_stale_snapshot():
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event

@@ -14,13 +14,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
 
-@acc()
 def test_适配层的proj必须是项目全名():
     """⛔ `project_display` 是**展示名** ⇒ 填它会让归属判定三条路径全部静默失配。"""
     i = SHELL.find("function adaptNotice(")
@@ -29,7 +27,6 @@ def test_适配层的proj必须是项目全名():
     assert "proj: x.project_display" not in body, "`proj` 仍在优先取**展示名**（归属会判不出）"
 
 
-@acc()
 def test_归属缓存由后端的ownership_id重建():
     """⭐ 后端给了 `ownership_id`（权威值）⇒ 每次重拉都要按它重建 `OWN`。"""
     i = SHELL.find("async function reloadNotices()")

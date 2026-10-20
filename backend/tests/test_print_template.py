@@ -23,7 +23,6 @@ from app.mod03_notice.print.template import (
     parse_design,
     render_html,
 )
-from tests.acc_plugin import acc
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "i8_print_design_sample.json"
 
@@ -35,7 +34,6 @@ def _sample_data() -> dict:
 # ---------------------------------------------------------------- 解析
 
 
-@acc()
 def test_真实样本能解析出模板且几何参数齐全():
     tpl = parse_design(_sample_data())
     assert tpl.print_name == "其他支出"
@@ -47,7 +45,6 @@ def test_真实样本能解析出模板且几何参数齐全():
     assert tpl.data_set_infos                        # dataSetInfos 可解析
 
 
-@acc()
 def test_真实样本里存在明细数据集之外的主表字段格():
     tpl = parse_design(_sample_data())
     fields = tpl.field_cells()
@@ -56,7 +53,6 @@ def test_真实样本里存在明细数据集之外的主表字段格():
     assert "项目名称" in ids and "收款单位" in ids    # 与素材包 build_values 的字段名对得上
 
 
-@acc()
 def test_取不到模板必须显式报错():
     with pytest.raises(MustReportError):
         parse_design({"printSchema": "[]", "printSetting": "[]"})
@@ -66,7 +62,6 @@ def test_取不到模板必须显式报错():
         parse_design("不是对象")
 
 
-@acc()
 def test_空壳的headerFooter与paging放行而带内容的才拦():
     # 真机样本里这两项**恒为空壳**（content=null / bodies=[]）⇒ 必须能正常解析
     assert parse_design(_sample_data()).print_name == "其他支出"
@@ -79,7 +74,6 @@ def test_空壳的headerFooter与paging放行而带内容的才拦():
         parse_design(data)
 
 
-@acc()
 def test_外层Data与裸Data两种形态都能取出():
     data = _sample_data()
     assert extract_design_data({"Status": "success", "Data": data}) is data
@@ -91,7 +85,6 @@ def test_外层Data与裸Data两种形态都能取出():
 # ---------------------------------------------------------------- 样式
 
 
-@acc()
 def test_字号按scale缩放且对齐与粗体来自className():
     css = cell_css({"className": "htMiddle htCenter htFontSize_26"})
     assert f"font-size:{26 * GEOMETRY['scale']:.2f}px" in css
@@ -100,7 +93,6 @@ def test_字号按scale缩放且对齐与粗体来自className():
     assert "text-align:right" in right and "font-weight:700" in right
 
 
-@acc()
 def test_框线缺省不画_hide也不画():
     css = cell_css({"className": "", "cellBorders": {}})
     for side in ("top", "bottom", "left", "right"):
@@ -110,7 +102,6 @@ def test_框线缺省不画_hide也不画():
     assert "border-top:1.00px solid #ff0000" in hidden
 
 
-@acc()
 def test_图片格两种筛选写法都认_无筛选就不渲染():
     """模板侧取节点名有**两种写法**（2026-09-16 补第 2 种，漏认会静默漏印签名）。"""
     with_filter = {"cellType": "field", "cellData": {
@@ -154,7 +145,6 @@ def _mini() -> PrintTemplate:
 DETAIL_IDS = frozenset({"DET"})
 
 
-@acc()
 def test_渲染出表结构且列宽行高取自模板():
     html, slots = render_html(_mini(), values={}, detail_rows=[{}], detail_ids=DETAIL_IDS)
     assert html.startswith("<!DOCTYPE html>")
@@ -164,7 +154,6 @@ def test_渲染出表结构且列宽行高取自模板():
     assert slots and slots[0][2] == "核算部部长" and slots[0][3] is False   # 无签名图 ⇒ 留空
 
 
-@acc()
 def test_明细行按数据条数重复渲染():
     rows = [{"单据号": "D1", "支付金额": "10.00"}, {"单据号": "D2", "支付金额": "20.00"}]
     html, _ = render_html(_mini(), values={}, detail_rows=rows, detail_ids=DETAIL_IDS)
@@ -174,20 +163,17 @@ def test_明细行按数据条数重复渲染():
     assert html.count('<td colspan="2" style=') == 3            # 标题 + 项目名称 + 签名（非明细行）
 
 
-@acc()
 def test_字段格取values的dataSetId点fieldId():
     html, _ = render_html(_mini(), values={"DS1.项目名称": "某某项目"}, detail_rows=[{}],
                           detail_ids=DETAIL_IDS)
     assert "某某项目" in html
 
 
-@acc()
 def test_静态文本会转义不注入HTML():
     html, _ = render_html(_mini(), values={}, detail_rows=[{}], detail_ids=DETAIL_IDS)
     assert "标题&lt;T&gt;" in html and "标题<T>" not in html
 
 
-@acc()
 def test_签名图取到才出img():
     html, slots = render_html(_mini(), values={}, detail_rows=[{}], detail_ids=DETAIL_IDS,
                               signatures={"核算部部长": "data:image/png;base64,AAA"})

@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 from app.core import db, identity as ID, session as SESS
 from app.mod15_user import api as API, domain as D, repository as R
 from app.mod15_user.models import UserAccount
-from tests.acc_plugin import acc
 
 SECRET = b"isolated-identity-test-secret"
 
@@ -119,7 +118,6 @@ def login(client, user, password="fake-password"):
     assert client.cookies.get(SESS.COOKIE_NAME)
 
 
-@acc("ACC-USR-MGMT-001", "001-02")
 @pytest.mark.parametrize("collision", ["same-name", "account-is-name", "name-is-account"])
 def test_login_keeps_worker_identity_and_rejects_admin_actions(isolated_identity, collision):
     client, create, scope, prefix = isolated_identity
@@ -142,7 +140,6 @@ def test_login_keeps_worker_identity_and_rejects_admin_actions(isolated_identity
     assert client.get("/api/m15/users").json()["counts"]["total"] == before
 
 
-@acc("ACC-USR-MGMT-001", "001-02")
 @pytest.mark.parametrize("isolated_identity", ["production"], indirect=True)
 def test_create_app_login_uses_real_assembly_and_rejects_admin_actions(isolated_identity):
     client, create, _, prefix = isolated_identity
@@ -158,7 +155,6 @@ def test_create_app_login_uses_real_assembly_and_rejects_admin_actions(isolated_
         "fake-i8-worker", "fake-i8-password-worker"]
 
 
-@acc("ACC-USR-MGMT-001", "001-13")
 def test_login_uses_own_preferences_i8_and_display_name(isolated_identity):
     client, create, scope, _ = isolated_identity
     admin = create("admin", name="Same display", role=D.ROLE_ADMIN)
@@ -198,7 +194,6 @@ def test_login_uses_own_preferences_i8_and_display_name(isolated_identity):
     assert client.get("/__identity_probe").json()["operator"] == "Updated display"
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 @pytest.mark.parametrize("label_kind", ["name", "account"])
 def test_legacy_session_requires_new_login(isolated_identity, label_kind):
     client, create, _, _ = isolated_identity
@@ -210,7 +205,6 @@ def test_legacy_session_requires_new_login(isolated_identity, label_kind):
     assert client.get("/api/m15/users").json()["me"]["id"] == worker.id
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 @pytest.mark.parametrize("collision", ["same-name", "cross-name", "deleted-collision", "historical-name-reuse"])
 def test_ambiguous_legacy_session_cannot_write_or_select_a_user(isolated_identity, collision):
     client, create, scope, prefix = isolated_identity
@@ -234,7 +228,6 @@ def test_ambiguous_legacy_session_cannot_write_or_select_a_user(isolated_identit
     assert client.post("/api/m15/ui-scale", json={"ui_scale": "large"}).status_code == 401
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_legal_login_and_account_named_like_a_version(isolated_identity):
     client, create, _, _ = isolated_identity
     worker = create("v2.account.with.dots", name="", password="")
@@ -245,7 +238,6 @@ def test_legal_login_and_account_named_like_a_version(isolated_identity):
     assert client.get("/api/m15/users").json()["me"] is None
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_version_is_structural_and_signed():
     for label in ("v2", "v2.admin", "uid:1", "张.伟", "...", "legacy:v2"):
         ticket = SESS.make(label)
@@ -263,7 +255,6 @@ def test_version_is_structural_and_signed():
         assert version == "v2"
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_internal_label_matches_once_and_disabled_session_policy_is_unchanged(isolated_identity):
     client, create, scope, prefix = isolated_identity
     worker = create("worker", name=prefix + "worker")

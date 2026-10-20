@@ -17,7 +17,6 @@ import pytest
 
 from app.core.errors import MustReportError
 from app.mod03_notice import settings_store as SS
-from tests.acc_plugin import acc
 
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
@@ -32,7 +31,6 @@ def _env(tmp_path: Path) -> Path:
 # ------------------------------------------------------------------ 校验（唯一出口）
 
 
-@acc()
 def test_四条通道都认_别的都不认():
     for m in ("auto", "ipp", "driver", "raw"):
         assert SS.validate_print_mode(m, "任意打印机名" if m == "driver" else "") == m
@@ -43,7 +41,6 @@ def test_四条通道都认_别的都不认():
     assert "只能是" in str(e.value), f"拒绝理由要把合法值列出来：{e.value}"
 
 
-@acc()
 def test_选系统驱动必须给打印机名():
     """`driver` 靠**本机驱动**出纸、不用 IP ⇒ 不给名字就只能落到"系统默认打印机"，
     ⛔ 那不是用户选的意思（不猜）。"""
@@ -56,7 +53,6 @@ def test_选系统驱动必须给打印机名():
 # ------------------------------------------------------------------ 落盘（三项一起写 · 先校验后写）
 
 
-@acc()
 def test_三项一起写且其余配置一字不动(tmp_path):
     env = _env(tmp_path)
     out = SS.apply_printer_setting("ipp://192.168.5.250", mode="driver",
@@ -68,7 +64,6 @@ def test_三项一起写且其余配置一字不动(tmp_path):
     assert "APP_ENV=dev" in text and "LOGS_DIR=logs" in text, "别的配置一字不动（001-05 的口径）"
 
 
-@acc()
 def test_任一项非法就一个字都不写(tmp_path):
     """⭐ 反向：**不许出现半套**（地址改了、通道没改）。校验在写之前 ⇒ 文件内容**逐字节不变**。"""
     env = _env(tmp_path)
@@ -82,7 +77,6 @@ def test_任一项非法就一个字都不写(tmp_path):
     assert env.read_bytes() == before, "非法任何一种 ⇒ 一个字都不许写"
 
 
-@acc()
 def test_端点三项进三项出(tmp_path, monkeypatch):
     """弹窗回填要三项、保存要三项（⛔ 别只回地址——那样用户改了通道也看不出来）。"""
     monkeypatch.setattr(SS, "ENV_FILE", _env(tmp_path))
@@ -99,7 +93,6 @@ def test_端点三项进三项出(tmp_path, monkeypatch):
 # ------------------------------------------------------------------ 壳侧
 
 
-@acc()
 def test_壳弹窗三项齐且判定全在后端():
     # ⚠️ 2026-09-19（性能 `P4`② 三刀真拆）：`m03PrinterOpen` 已搬进 `web/shell/print-export.js`，
     #    它**不再**紧跟 `openOwnDialog`（那句留在 `shell/core.js`）⇒ 原"截到下一个函数"的写法会 `ValueError`。

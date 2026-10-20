@@ -7,8 +7,7 @@ from workspace_paths import output as _run_output, output_dir as _run_dir
 from pathlib import Path
 
 import pytest
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 from tests.test_tail282_pay_draft import _setup
 
 
@@ -30,7 +29,6 @@ def setup(p):
     }""")
 
 
-@acc()
 def test_contract_id_conflicting_filters_and_return(ui_page):
     p=ui_page;setup(p)
     p.evaluate("() => {VIEW='m03';fJc={tag:'纳入台账',arch:'已存档',sup:'无命中',projs:['别仓'],amt:'filled'};window.oldJC=JSON.stringify(fJc);render();}")
@@ -50,7 +48,6 @@ def test_contract_id_conflicting_filters_and_return(ui_page):
     assert p.evaluate('VIEW')=='m03'
 
 
-@acc()
 @pytest.mark.parametrize('entry',['flow','jc'])
 def test_notice_exact_id_in_550_virtual_rows(ui_page,entry):
     p=ui_page;setup(p)
@@ -75,7 +72,6 @@ def test_notice_exact_id_in_550_virtual_rows(ui_page,entry):
     assert p.evaluate('VIEW')=='m05'
 
 
-@acc()
 def test_plan_unique_ambiguous_and_orphan_flow(ui_page):
     p=ui_page;setup(p)
     p.evaluate("() => {VIEW='m05';FLs[0].nid='';render();}")
@@ -83,7 +79,6 @@ def test_plan_unique_ambiguous_and_orphan_flow(ui_page):
     assert p.locator('span[title="找不到对应通知书"]').count()==1
 
 
-@acc()
 def test_inventory_original_id_virtual_and_return(ui_page):
     p=ui_page;setup(p)
     p.evaluate("() => {VIEW='m06';LOADED.delete('库存单据');fIvYm='2026-10';invWhs=['别仓'];fIvDir='入库';invOnlyAdj=true;fIvCol={2:{v:['无命中']}};window.oldIV=JSON.stringify([fIvYm,invWhs,fIvDir,invOnlyAdj,fIvCol]);}")

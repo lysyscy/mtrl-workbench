@@ -1,6 +1,5 @@
 """TAIL-309：真实壳 + 隔离回包，保护搜索选择、可见全选及付款批次。"""
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 import os
 from pathlib import Path
 import pytest
@@ -33,7 +32,6 @@ def _ids(p):
     return p.evaluate('[...pickSet].sort()')
 
 
-@acc()
 def test_搜索改词清空保留勾选且隐藏数量可见(ui_page):
     p = ui_page
     _setup(p)
@@ -51,7 +49,6 @@ def test_搜索改词清空保留勾选且隐藏数量可见(ui_page):
     assert '当前列表外' not in p.inner_text('.selbar')
 
 
-@acc()
 def test_多次搜索加选取消及全选只改当前可见候选(ui_page):
     p = ui_page
     _setup(p)
@@ -76,7 +73,6 @@ def test_多次搜索加选取消及全选只改当前可见候选(ui_page):
     assert _ids(p) == []
 
 
-@acc()
 def test_重复渲染同页导航不清选择离页及整页刷新清空(ui_page):
     p = ui_page
     _setup(p)
@@ -93,7 +89,6 @@ def test_重复渲染同页导航不清选择离页及整页刷新清空(ui_page
     assert _ids(p) == [], '没有整页刷新持久化的业务约定'
 
 
-@acc()
 def test_项目等业务筛选仍裁剪选择搜索不参与裁剪(ui_page):
     p = ui_page
     _setup(p)
@@ -106,7 +101,6 @@ def test_项目等业务筛选仍裁剪选择搜索不参与裁剪(ui_page):
     assert _pick(p, '101').is_checked()
 
 
-@acc()
 def test_重新拉取清理删除撤单保留搜索隐藏及恢复用剔除选择(ui_page):
     p = ui_page
     _setup(p)
@@ -130,7 +124,6 @@ def test_重新拉取清理删除撤单保留搜索隐藏及恢复用剔除选�
     assert _pick(p, '105').is_disabled()
 
 
-@acc()
 def test_付款窗口列全体已选含隐藏行提交对应金额(ui_page):
     p = ui_page
     _setup(p)
@@ -150,7 +143,6 @@ def test_付款窗口列全体已选含隐藏行提交对应金额(ui_page):
     assert p.evaluate('payRequest.drafts["102"].amount') == '222'
 
 
-@acc()
 def test_付款弹窗后删除或撤单不能错用剩余行金额(ui_page):
     p = ui_page
     _setup(p)
@@ -172,7 +164,6 @@ def test_付款弹窗后删除或撤单不能错用剩余行金额(ui_page):
     assert p.evaluate('!window.payRequest')
 
 
-@acc()
 def test_直接批量动作须看清隐藏选择且只读取有效选择(ui_page):
     p = ui_page
     _setup(p)
@@ -205,7 +196,6 @@ def test_直接批量动作须看清隐藏选择且只读取有效选择(ui_page
 
 
 
-@acc()
 def test_重拉失败和重置搜索不丢选择事实改为剔除才清理(ui_page):
     p = ui_page
     _setup(p)
@@ -225,7 +215,6 @@ def test_重拉失败和重置搜索不丢选择事实改为剔除才清理(ui_p
     assert _ids(p) == [], '剔除事实变化后不能留在普通业务范围的批次里'
 
 
-@acc()
 def test_批量出口清理未重绘的删除项不把陈旧ID提交(ui_page):
     p = ui_page
     _setup(p)
@@ -244,7 +233,6 @@ def test_批量出口清理未重绘的删除项不把陈旧ID提交(ui_page):
     assert [r['ids'] for r in p.evaluate('requests')] == [['102']] * 5
 
 
-@acc()
 @pytest.mark.parametrize('width,scale', [(1440, 'standard'), (1024, 'largest')])
 def test_虚拟长表搜索保留选择且放大核对条可操作(ui_page, width, scale):
     """550行真实虚拟表与最大字号，核对隐藏范围、金额和窄屏操作位置。"""

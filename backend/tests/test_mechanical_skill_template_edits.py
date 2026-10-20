@@ -5,7 +5,6 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tests.acc_plugin import acc
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 
@@ -33,7 +32,6 @@ class TemplateGuards(unittest.TestCase):
                                                    {"sheet":"表2","cell":"C5","type":"formula_cache","value":2}]}
         return source,plan
 
-    @acc()
     def test_preserves_other_parts_styles_and_formula(self):
         with tempfile.TemporaryDirectory() as temp:
             source,plan=self.prepare(temp);output=Path(temp)/"new.xlsx"
@@ -64,7 +62,6 @@ class TemplateGuards(unittest.TestCase):
             cache=openpyxl.load_workbook(output,data_only=True)
             self.assertEqual(cache["表2"]["C5"].value,2);cache.close()
 
-    @acc()
     def test_protects_source_existing_output_headers_and_sheet1(self):
         with tempfile.TemporaryDirectory() as temp:
             source,plan=self.prepare(temp)
@@ -80,7 +77,6 @@ class TemplateGuards(unittest.TestCase):
             with self.assertRaises(ValueError):writer.apply(plan,output)
             self.assertFalse(output.exists())
 
-    @acc()
     def test_stale_source_formula_replacement_and_nan_refused(self):
         with tempfile.TemporaryDirectory() as temp:
             source,plan=self.prepare(temp);output=Path(temp)/"new.xlsx"

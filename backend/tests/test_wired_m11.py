@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-from tests.acc_plugin import acc
 from tests.shell_src import read_shell
 
 # ⭐ 2026-10-03（`TAIL-219` 批 2b）：本件原先那个 `_sh()` 只是 `read_shell()` 的改名 ⇒ **删掉**，直接调 `read_shell()`。
@@ -18,7 +17,6 @@ from tests.shell_src import read_shell
 
 # ---------------------------------------------------------------- 结构：接线接上了
 
-@acc()
 def test_数据源接到后端_四处注册齐():
     s = read_shell()
     assert "API.m11List" in s and "/api/m11/list" in s, "取数要走 `/api/m11/list`"
@@ -28,7 +26,6 @@ def test_数据源接到后端_四处注册齐():
     assert "'m11'" in s, "`WIRED` 要加 `m11`（侧栏与顶栏据此不标「原型态」）"
 
 
-@acc()
 def test_适配层把后端字符串金额转成数字():
     """⚠️ 后端金额出**字符串**（`numeric(18,2)` 精度保护）⇒ 适配层必须过 `N0()`
     （漏了会让壳里求和变**字符串拼接**、合计安静地错）。"""
@@ -52,7 +49,6 @@ def test_适配层把后端字符串金额转成数字():
 
 # ---------------------------------------------------------------- 三条反向断言
 
-@acc()
 def test_反向_判定搬家_金额读后端不再前端现算():
     """⭐ 反向断言①：**不许再自己算不变式**（那是第二份口径，早晚与后端分叉）。
 
@@ -78,7 +74,6 @@ def test_反向_判定搬家_金额读后端不再前端现算():
         "⛔ 壳里不许再「按子表数组现算发票合计」（列表不给明细 ⇒ 恒 0，且那是第二份口径）"
 
 
-@acc()
 def test_反向_动作不再本地赋值冒充落库():
     """⭐ 反向断言②：**不许用本地赋值冒充落库**。"""
     s = read_shell()
@@ -89,7 +84,6 @@ def test_反向_动作不再本地赋值冒充落库():
     assert "cur.payments.length=0" not in s, "⛔ 取消关联不许再本地改付款子表"
 
 
-@acc()
 def test_反向_没接的动作不假装成功():
     """⭐ 反向断言③：**不许对没接的动作说成功**，要如实说"尚未接通 ＋ 归哪条"。"""
     s = read_shell()
@@ -98,7 +92,6 @@ def test_反向_没接的动作不假装成功():
     assert "M5-5" in s, "取消关联要说明它归 `M5-5`（⛔ 不留给用户一个沉默的按钮）"
 
 
-@acc()
 def test_子表弹窗按需拉明细_增删走_api():
     """⭐ 子表半片：`/api/m11/list` **不给子表明细** ⇒ 弹窗开前必须拉 `/api/m11/detail`。
 
@@ -118,14 +111,12 @@ def test_子表弹窗按需拉明细_增删走_api():
         assert bad not in s, f"⛔ 不许再本地改子表冒充落库：{bad}"
 
 
-@acc()
 def test_演示数组已清干净():
     s = read_shell()
     assert "const JC = [" not in s, "演示数组 `JC` 必须删（一份内容只许一个主人）"
     assert "const JC_COLS = [" not in s, "列序表 `JC_COLS` 随演示数据一起删"
 
 
-@acc()
 def test_写动作接上了_api_且抓取要二次确认():
     """⭐ 写动作半片：标记 / 批量 / 存档 / 付款方式 / 手工新增 都走 API（⛔ 不许本地改数组）。
 

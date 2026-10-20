@@ -1,8 +1,7 @@
 """316:大表按需读取，机械屏障、失败恢复与写后真实读取。浏览器出口全隔离。"""
 import pytest
 
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
 def setup(p):
@@ -24,7 +23,6 @@ def setup(p):
     }""")
 
 
-@acc()
 def test_first_visit_waits_for_mechanical_columns_without_inventory_and_keeps_values(ui_page):
     p = ui_page
     setup(p)
@@ -55,7 +53,6 @@ def test_first_visit_waits_for_mechanical_columns_without_inventory_and_keeps_va
     assert p.evaluate('calls.length') == before
 
 
-@acc()
 @pytest.mark.parametrize('endpoint,label', [('m06Mech', '机械 6 列'), ('m07Big', '收发结存与大表'), ('m07Extract', '收发结存与大表')])
 def test_failure_is_named_pending_cleared_and_retry_reads_real_state(ui_page, endpoint, label):
     p = ui_page
@@ -74,7 +71,6 @@ def test_failure_is_named_pending_cleared_and_retry_reads_real_state(ui_page, en
     assert 'inventory' not in p.evaluate('calls')
 
 
-@acc()
 def test_filters_exports_write_refresh_and_cross_page_navigation(ui_page):
     p = ui_page
     setup(p)

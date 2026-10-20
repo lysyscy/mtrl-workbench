@@ -23,7 +23,6 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.mod02_i8 import sources as S
-from tests.acc_plugin import acc
 
 CASE = "ACC-I8-SRC-001"
 
@@ -67,7 +66,6 @@ def _spec_section(head: str) -> str:
 # ============================================================ §3.1.1 数据来源清单
 
 
-@acc(CASE, "001-01")
 def test_来源清单六类数据源一个不少():
     """`§3.1.1` —— 来源清单是**六类**；实现侧必须每一条都有可追的载体。
 
@@ -88,7 +86,6 @@ def test_来源清单六类数据源一个不少():
     assert S.CommonProjectSource.table == "common_project"
 
 
-@acc(CASE, "001-02")
 def test_纯HTTP两类各自绑定正确的API编号():
     """`§3.1.1` ＋ 附录 E.1 —— **仓库列表 = `API-05` · 常用项目列表 = `API-06`**，不得互换。"""
     body = _spec_section("#### 3.1.1")
@@ -102,7 +99,6 @@ def test_纯HTTP两类各自绑定正确的API编号():
     assert I8_PATH_WAREHOUSE_LIST != I8_PATH_COMMON_PROJECT
 
 
-@acc(CASE, "001-03")
 def test_两类纯HTTP取数形态不同_POST与GET():
     """`§3.1.1` —— 形态**逐类不同**：仓库列表是 **POST form**、常用项目列表是 **GET**。
 
@@ -116,7 +112,6 @@ def test_两类纯HTTP取数形态不同_POST与GET():
     assert isinstance(S.WH_LIMIT, int) and S.WH_LIMIT > 0
 
 
-@acc(CASE, "001-04")
 def test_常用项目列表是phid的权威来源():
     """`§3.1.1` ＋ `§3.1.2` —— **常用项目列表 = phid 权威来源** ⇒ 它必须真的产 `phid`。
 
@@ -143,7 +138,6 @@ def test_常用项目列表是phid的权威来源():
     assert set(wh[0]) == {"warehouse_name", "owner_full_name"}
 
 
-@acc(CASE, "001-05")
 def test_仓库列表产出仓库名与所属项目全名两列():
     """`§3.1.1` —— 仓库列表的用途 = **仓库名 ↔ 所属项目全名**映射 ⇒ 这两列必须都有。"""
     class _C:
@@ -160,7 +154,6 @@ def test_仓库列表产出仓库名与所属项目全名两列():
 # ============================================================ §3.5 三表匹配规则汇总
 
 
-@acc(CASE, "001-06")
 def test_三表匹配规则汇总的口径逐行可核():
     """`§3.5` —— 三张表各靠什么认项目，各不相同（认错就会出现"数据对不上"）。"""
     body = _spec_section("### 3.5")
@@ -171,7 +164,6 @@ def test_三表匹配规则汇总的口径逐行可核():
     assert len(rows) == 4, f"§3.5 应为「表头 ＋ 三张表」，实际 {len(rows)} 行"   # noqa: PLR2004
 
 
-@acc(CASE, "001-07")
 def test_付款通知书靠全名认项目_与仓库侧只差全名的风险对称():
     """`§3.5` —— ⭐ 核心风险：**付款侧只有全名、仓库侧只有仓库名**（库存单据两把钥匙都有）。
 
@@ -191,7 +183,6 @@ def test_付款通知书靠全名认项目_与仓库侧只差全名的风险对�
     assert norm_full_name("某项目(XMCB2025080001)") != "甲仓"
 
 
-@acc(CASE, "001-08")
 def test_库存单据明细表最可靠两把钥匙都有():
     """`§3.5` —— 库存单据明细表**两把钥匙都有**（仓库名 ＋ 项目全名）⇒ 对账主工具。
 
@@ -203,7 +194,6 @@ def test_库存单据明细表最可靠两把钥匙都有():
     assert "warehouse" in src.lower() and ("name_full" in src or "项目" in src)
 
 
-@acc(CASE, "001-09")
 def test_小微须靠关键词拆_不能只认全名():
     """`§3.5` —— 付款通知书行的风险：**小微的全名对应多个具体小微 ⇒ 必须靠关键词拆**。
 

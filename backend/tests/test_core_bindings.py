@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import pytest
 
-from tests.acc_plugin import acc
 
 from app import core_bindings
 from app.core import app_settings as AS
@@ -26,7 +25,6 @@ from app.core import projects as P1
 # ------------------------------------------------------------------ ①② 装配齐全
 
 
-@acc()
 def test_装配层把三个口都接上了():
     """⭐ 漏接一件 ⇒ 红（**静默**半边：设置那处会悄悄回落 `.env` ⇒「页面改了但没生效」）。"""
     core_bindings.register_all()
@@ -35,7 +33,6 @@ def test_装配层把三个口都接上了():
     assert P1._ROWS_LOADER is not None, "项目行的取数口没接上"
 
 
-@acc()
 def test_接上之后项目索引照常_以id为键():
     """接上口以后，`project_index` 的口径（**键 = id**）不变。"""
     core_bindings.register_all()
@@ -56,7 +53,6 @@ class _EmptySession:
         return _R()
 
 
-@acc()
 def test_注册是幂等的_重复接不会换掉已接上的实现():
     core_bindings.register_all()
     before = (AS._VALUES_LOADER, ID._BINDING_LOOKUP, P1._ROWS_LOADER)
@@ -67,7 +63,6 @@ def test_注册是幂等的_重复接不会换掉已接上的实现():
 # ------------------------------------------------------------------ ②③ 没接上时的态度
 
 
-@acc()
 def test_项目行口没接上必须显式报错_不许静默回空表(monkeypatch):
     """⛔ 静默回空表 = 把"没装配"读成"库里一个项目都没有"。"""
     monkeypatch.setattr(P1, "_ROWS_LOADER", None)
@@ -79,7 +74,6 @@ def test_项目行口没接上必须显式报错_不许静默回空表(monkeypat
         raise AssertionError("项目行口没接上时必须显式报错，⛔ 不许静默回空表")
 
 
-@acc()
 def test_身份口没接上必须拒绝_不许回落共享账号(monkeypatch):
     """⛔ 回落 = 拿 `.env` 那个共享账号去登录（§7.8：顶掉同事会话、留痕记错人）。"""
     from app.core import session as SESS
@@ -123,7 +117,6 @@ class _Session:
         return _R()
 
 
-@acc()
 def test_三个口都是转发_测试补丁必须看得见(monkeypatch):
     """⭐⭐ 批 **2c** 的坑（模块级别名把函数对象**绑死**）⇒ 这里钉住三个口都是**转发**。
 

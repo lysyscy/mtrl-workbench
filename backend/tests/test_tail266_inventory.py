@@ -4,7 +4,6 @@ from app.mod07_setl import service
 from app.mod07_setl.models import SetlDetail, WeldGasBalance
 from app.mod08_inv.models import InvDetail
 from tests.m07_helpers import FakeSession
-from tests.acc_plugin import acc
 
 
 def inventory_data():
@@ -23,7 +22,6 @@ def inventory_data():
             WeldGasBalance: [WeldGasBalance(id=1,kind='焊材',warehouse_name='甲仓',amount=D('456'))]}
 
 
-@acc('ACC-SETL-EXT-001', '001-02')
 def test_inventory_year_months_future_and_balance_are_independent():
     data=service.build_extract_export(FakeSession(inventory_data()), {'status':'全部','period':'2026'})
     weld=data['annual_grids']['焊材']['rows'][0]
@@ -36,7 +34,6 @@ def test_inventory_year_months_future_and_balance_are_independent():
     assert data['grids']['焊材']['rows'][0]['total'] == D('501')
 
 
-@acc()
 def test_all_source_consumers_share_inventory_amounts():
     from app.mod07_setl import big_service
     s=FakeSession(inventory_data())
@@ -45,7 +42,6 @@ def test_all_source_consumers_share_inventory_amounts():
     assert big_service._extract_amounts(s)['焊材']['甲仓']['2026-01'] == D('25')
 
 
-@acc()
 def test_real_export_keeps_original_sheets_and_adds_annual_cents(tmp_path):
     from app.report_export.weldgas_export import build_xlsx
     from openpyxl import load_workbook
@@ -63,8 +59,6 @@ def test_real_export_keeps_original_sheets_and_adds_annual_cents(tmp_path):
     wb.close()
 
 
-@acc('ACC-SETL-EXT-001', '001-02')
-@acc('ACC-SETL-EXT-001', '001-11')
 def test_stored_inventory_months_and_balance_share_page_export_and_big():
     from app.core.db import session_scope
     from app.mod01_projects import repository as projects

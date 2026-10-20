@@ -21,14 +21,12 @@ from app.core.errors import MustReportError
 from app.mod15_user import domain as D
 from app.mod15_user import repository as R
 from app.mod15_user.api import UiScaleIn
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 
 # ------------------------------------------------------------ ① 档位清单（唯一真源）
 
 
-@acc()
 def test_档位清单是唯一真源且默认档合法():
     keys = [k for k, _, _ in D.UI_SCALES]
     assert keys, "档位清单不能是空的"
@@ -42,7 +40,6 @@ def test_档位清单是唯一真源且默认档合法():
 # ------------------------------------------------------------ ② 回落 / ③ 拒绝
 
 
-@acc()
 def test_未设置或认不出都回落标准档_未登录也是():
     assert D.effective_ui_scale(None) == D.DEFAULT_UI_SCALE, "没登录也要有档（⛔ 不能空）"
     assert D.effective_ui_scale(SimpleNamespace(ui_scale="")) == D.DEFAULT_UI_SCALE
@@ -53,7 +50,6 @@ def test_未设置或认不出都回落标准档_未登录也是():
         "倍率必须由 domain 一处给出（壳⛔ 不拿键去查表）"
 
 
-@acc()
 def test_非法档位显式拒绝不静默():
     """⚠️ 与主题的「非法名**静默**回落默认套」**有意不同**：主题的乱名页面还看得见一套样式
     （用户能察觉），而界面大小的乱值**什么都不会发生**（`--fscale` 算不出来）⇒ 必须当场说清。"""
@@ -80,7 +76,6 @@ class _Sess:
         pass
 
 
-@acc()
 def test_按用户隔离_只写自己那一行():
     a, b = SimpleNamespace(ui_scale=""), SimpleNamespace(ui_scale="")
     s = _Sess({1: a, 2: b})
@@ -91,7 +86,6 @@ def test_按用户隔离_只写自己那一行():
         R.set_ui_scale(s, 99, "larger")          # 账号不存在 ⇒ 显式报错（⛔ 不静默）
 
 
-@acc()
 def test_设置端点只收一个字段不接id():
     """⚠️ 多一个 `id` 就等于「管理员能改别人的界面大小」，而口径里没有这条 ——
     且那会让「按用户隔离」这条判据**测不出隔离**（同主题那条的注释）。"""
@@ -102,7 +96,6 @@ def test_设置端点只收一个字段不接id():
 # ------------------------------------------------------------ ⑤ 壳侧两条形态
 
 
-@acc()
 def test_壳的档位清单来自后端_不写死映射():
     assert "applyUiScale" in SHELL, "壳里没有应用界面大小的地方"
     assert "--fscale" in SHELL, "壳没有把倍率写到 `--fscale` 上"
@@ -112,14 +105,12 @@ def test_壳的档位清单来自后端_不写死映射():
             f"壳里出现了档位键字面量「{bad}」⇒ 档位映射被复制成了第二份真源"
 
 
-@acc()
 def test_启动那一路就应用界面大小():
     """⚠️ 只把应用挂在「系统设置」页的取数上 = **只有进过那一页才生效** ——
     那正是主题当年报过的毛病（`reloadTheme` 的注释里记着）。启动那一路是 `/api/m15/users` 的 `me`。"""
     assert "me.ui_scale_css" in SHELL, "启动那一路（`applyWho`）没应用界面大小"
 
 
-@acc()
 def test_样式块与内联样式里都没有裸px字号_且默认倍率在():
     """⭐ 方案 B 的全部效果 = "字号/间距都乘 `--fscale`" ⇒ 漏一处，那一处**放大时不动**。
 

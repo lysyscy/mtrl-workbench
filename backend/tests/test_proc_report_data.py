@@ -16,7 +16,6 @@ from app.core.db import get_engine
 from app.core.errors import MustReportError
 from app.mod06_proc import repository as R, service as M6
 from app.report_export import service as EX
-from tests.acc_plugin import acc
 
 INV, HIST, MECH, MIX, UNKNOWN, EMPTY = (
     "库存仓", "历史仓", "机械仓", "混合仓", "未登记仓", "无数据档案仓")
@@ -91,7 +90,6 @@ def workbook(path_or_bytes):
         book.close()
 
 
-@acc("ACC-RPT-EXP-001", "001-07")
 @pytest.mark.parametrize("tab", [0, 1, 2])
 @pytest.mark.parametrize("warehouse,month,raw,adjusted", [
     (INV, "2026-01", 11, 15), (HIST, "2025-10", 17, 17), (MECH, "2026-02", 7, 7)])
@@ -118,7 +116,6 @@ def test_each_effective_source_exports_independent_amounts(sources, warehouse, m
     assert page["cutoff_ym"] == sources.cutoffs[warehouse]
 
 
-@acc("ACC-RPT-EXP-001", "001-01")
 def test_zip_contents_names_and_sources_loaded_once(sources):
     path = export_ok([INV, HIST, MECH], 1)
     assert path.name == "过程资料_2026-03.zip"
@@ -138,7 +135,6 @@ def test_zip_contents_names_and_sources_loaded_once(sources):
     assert sources.calls["mechanical_cutoffs"] == 0
 
 
-@acc("ACC-RPT-PROC-001", "001-07")
 def test_page_shape_document_differences_and_monthly_export_are_distinct(sources):
     page = M6.build_page_data(None, M6.parse_state({"pj": MIX, "tab": "2"}))
     assert set(page) == {"state", "projects", "warehouse", "rows_raw", "rows_adjusted", "rows",
@@ -164,7 +160,6 @@ def test_page_shape_document_differences_and_monthly_export_are_distinct(sources
     assert EMPTY not in matrices["projects"] and EMPTY in M6.import_projects(None)
 
 
-@acc("ACC-RPT-EXP-001", "001-08")
 def test_empty_and_unregistered_errors_remain_export_rules(sources):
     for warehouses, message in (([], "一个项目都没选"), ([EMPTY], "没有数据"), ([UNKNOWN], "不在档案里")):
         with pytest.raises(MustReportError, match=message):
@@ -174,7 +169,6 @@ def test_empty_and_unregistered_errors_remain_export_rules(sources):
         EX.export_proc(None, [MECH], 1, ym="2026-03")
 
 
-@acc()
 def test_mechanical_only_subtotals_explicitly_clear_template_formulas(sources):
     from app.report_export import process_export as P
 
@@ -185,7 +179,6 @@ def test_mechanical_only_subtotals_explicitly_clear_template_formulas(sources):
     assert subtotal["M"] == 7
 
 
-@acc()
 def test_bucketed_matrices_keep_precedence_null_zero_order_and_document_trace(monkeypatch):
     inv = [
         {"id": 9, "warehouse": "A", "ym": "2025-11", "direction": "入库",
@@ -252,7 +245,6 @@ def pg_session():
             outer.rollback()
 
 
-@acc()
 def test_rollback_removes_history_but_manual_only_project_still_exports(pg_session, monkeypatch, tmp_path):
     warehouse = "__report_" + uuid4().hex
     monkeypatch.setattr(R, "load_inv_rows", lambda s: [])

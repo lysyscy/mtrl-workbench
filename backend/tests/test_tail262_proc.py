@@ -9,7 +9,6 @@ from app.core.db import Base
 from app.mod01_projects import models as _projects  # noqa: F401
 from app.mod06_proc import domain as D, imp_spec, repository as R
 from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -21,7 +20,6 @@ def session():
         yield s
 
 
-@acc()
 def test_cutoff_preview_and_commit_use_same_plan(session):
     records = [{"_row": 4, "核算月": "2025-11", "入库主辅材": "10"},
                {"_row": 5, "核算月": "2025-12", "入库主辅材": "20"},
@@ -35,7 +33,6 @@ def test_cutoff_preview_and_commit_use_same_plan(session):
     assert [r["ym"] for r in R.load_history(session)] == ["2025-11"]
 
 
-@acc()
 def test_reimport_replaces_all_project_history_and_failure_keeps_old(session):
     R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-01", "in_主辅材": 10},
                                                    {"ym": "2025-02", "in_主辅材": 20}],
@@ -54,7 +51,6 @@ def test_reimport_replaces_all_project_history_and_failure_keeps_old(session):
     assert len(R.load_history(session, active_only=False)) == 4
 
 
-@acc()
 def test_database_write_failure_restores_old_history_cutoff_without_outer_rollback(session):
     from sqlalchemy.exc import IntegrityError
     R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-01", "in_主辅材": 10}],
@@ -72,7 +68,6 @@ def test_database_write_failure_restores_old_history_cutoff_without_outer_rollba
     session.commit()
 
 
-@acc()
 def test_validation_failure_in_mixed_file_keeps_all_old_history(session):
     from app.core.errors import MustReportError
     R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-01", "in_主辅材": 10}],
@@ -87,7 +82,6 @@ def test_validation_failure_in_mixed_file_keeps_all_old_history(session):
 
 
 
-@acc()
 def test_material_i8_same_month_precedence_keeps_history_mechanical():
     inv = [{"warehouse": "A", "ym": "2025-11", "direction": "入库", "material_property": "主材",
             "amount": 10, "adj_amount": 15}]

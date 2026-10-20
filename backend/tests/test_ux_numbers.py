@@ -17,12 +17,10 @@ from __future__ import annotations
 
 import re
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 
 
-@acc("ACC-UI-SHELL-001", "001-29")
 def test_金额大数一律带单位():
     """⭐ KPI 那一格的金额**必须**走带单位的出口（`MONEY`），⛔ 不许裸 `M(`。
 
@@ -58,7 +56,6 @@ def test_金额大数一律带单位():
     #    （起因：看板清账删掉整行欠款 KPI ⇒ 计数掉到 3 ⇒ 假红。）
 
 
-@acc("ACC-UI-SHELL-001", "001-30")
 def test_不可得的金额不许冒充_0():
     """⭐ `null` ⇒ 「—」、**绝不显示 `0.00`**（守则：不可得 ≠ 0）—— 这是本项目反复强调的一条。
 
@@ -71,7 +68,6 @@ def test_不可得的金额不许冒充_0():
         f"`MONEY` 没先判 `null`（会显示「— 元」= 把『没取到』说成 0）：{seg[:120]}"
 
 
-@acc("ACC-UI-SHELL-001", "001-31")
 def test_欠款大数显示实际累计截止月份():
     from tests.shell_src import page_seg
 
@@ -80,7 +76,6 @@ def test_欠款大数显示实际累计截止月份():
     assert '${MONEY(cur)}</b><span class="mut sm">截至 ${esc(upto)}</span>' in page
 
 
-@acc("ACC-UI-SHELL-001", "001-32")
 def test_验收术语不许留在界面上():
     """⭐ 「容差 0」是**验收/开发术语**，界面上不许有（守则 §3.1/§3.3）⇒ 换成人话。
 
@@ -91,8 +86,6 @@ def test_验收术语不许留在界面上():
         assert tomb not in SHELL, f"验收术语又回到界面上来了：{tomb!r} ⇒ 换成人话（如「差 1 分也算不平」）"
 
 
-@acc()
-@acc()
 def test_口径说明不许再收进折叠块():
     """⭐⭐ `TAIL-213`（2026-10-01 · 用户拍板「甲」）：**「口径说明」不许再收进折叠块**。
 

@@ -34,7 +34,6 @@ import pandas as pd
 from app.report_export import kcdj_export as KE
 from app.report_export import setl_export as SE
 from app.report_export import tpl_engine as TE
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 TPL = ROOT / "backend" / "app" / "resources" / "templates" / "模板_库存单据明细表.xlsx"
@@ -148,7 +147,6 @@ def _cache_data(path):
 
 
 # ================================================================= 1. 口径标定
-@acc()
 def test_模板自身可标定_缓存复算逐格等于模板显示区():
     """⭐ 口径标定：模板的**缓存**与**显示**是同一个月的 ⇒ 用缓存复算它的每一个显示格，必须逐格对上。
 
@@ -197,7 +195,6 @@ def test_模板自身可标定_缓存复算逐格等于模板显示区():
 
 
 # ================================================================= 2. 修好了
-@acc("ACC-INV-001", "001-14")
 def test_显示区无僵尸行且行区间随仓库数收缩(tmp_path):
     """⭐ 病灶回归：本月仓库**比模板少** ⇒ 旧行必须**消失**（⛔ 不是留着空白）。"""
     out = _build(tmp_path, _synth(with_safe=False, whs=("甲仓", "乙仓")))
@@ -214,7 +211,6 @@ def test_显示区无僵尸行且行区间随仓库数收缩(tmp_path):
     assert _num(r1[7], "N7") == 700.0, "总计错：%s" % _num(r1[7], "N7")
 
 
-@acc("ACC-INV-001", "001-14")
 def test_该月无该费用时透视如实为空且不留模板旧值(tmp_path):
     """⭐ 用户看到的那一幕：本月**没有**安全文明施工费 ⇒ 那张透视必须**如实为空**。
 
@@ -231,7 +227,6 @@ def test_该月无该费用时透视如实为空且不留模板旧值(tmp_path):
     assert _label(out, r2, "A1") == "cbs名称" and _label(out, r2, "B1") == KE.SAFE_CBS
 
 
-@acc("ACC-INV-001", "001-14")
 def test_有该费用时逐仓与总计都写出来(tmp_path):
     """反向对照（证明上一条不是恒绿）：本月**确有**该费用 ⇒ 行数与值都要长出来。"""
     out = _build(tmp_path, _synth(with_safe=True, safe_amt=111.5))
@@ -242,7 +237,6 @@ def test_有该费用时逐仓与总计都写出来(tmp_path):
     assert _label(out, r2, "A6") == "总计" and _num(r2[6], "B6") == 223.0
 
 
-@acc()
 def test_页筛选保持模板形态不得改写成pageField_item(tmp_path):
     """⭐ 回答「`<pageField fld="27"/>` 缺 `item` 要不要补成 `item=N`」：**不许补**。
 
@@ -266,7 +260,6 @@ def test_页筛选保持模板形态不得改写成pageField_item(tmp_path):
         "页筛选被改写了（应逐字保持模板形态）：%s" % (page.group(0) if page else None)
 
 
-@acc("ACC-INV-001", "001-14")
 def test_三路一致_报表1与缓存与显示区逐格相同(tmp_path):
     """⭐ **三条独立路径**：`报表1`(写进去的明细) → 缓存 → 显示区静态值，逐格相同。"""
     out = _build(tmp_path, _synth(with_safe=True))
@@ -294,7 +287,6 @@ def test_三路一致_报表1与缓存与显示区逐格相同(tmp_path):
 
 
 # ================================================================= 3. 守卫有区分力
-@acc()
 def test_反向_把显示区换回模板旧值守卫必须报红(tmp_path):
     """⭐⭐ **反向灵敏度**：把新成品的显示区**换回模板的旧渲染值** ⇒ 守卫必须报红。
 
@@ -327,7 +319,6 @@ def test_反向_把显示区换回模板旧值守卫必须报红(tmp_path):
     assert any("vs 缓存重算" in p for p in problems), "没报出「格子的数与缓存对不上」"
 
 
-@acc("ACC-INV-001", "001-14")
 def test_安全费那张按规定自己的列聚合不许挪用过程资料的列(tmp_path):
     """⭐⭐ **静默错列回归**：两张透视的列结构**不同**（过程资料 13 列 / 安全费 1 列）。
 
@@ -347,7 +338,6 @@ def test_安全费那张按规定自己的列聚合不许挪用过程资料的�
     assert _num(r1[7], "N7") == 100.0 + 200.0 + 400.0
 
 
-@acc("ACC-SETL-001", "001-10")
 def test_收发结存的显示区也不许留旧行(tmp_path):
     """⭐ **一并复核的那份**（收发结存同一族做法）：`Sheet1` 就是它的显示区。
 
@@ -385,7 +375,6 @@ def test_收发结存的显示区也不许留旧行(tmp_path):
         "人为塞进去的旧行没被报出来 ⇒ 这把尺子守不住：%s" % problems
 
 
-@acc("ACC-INV-001", "001-14")
 def test_新仓库行顺序确定且不随哈希种子变(tmp_path):
     """⚠️ 顺手修的一处隐患：模板里没有的新仓库，行顺序原先来自 `set` 迭代顺序
     （字符串哈希随 `PYTHONHASHSEED` 变）⇒ 现在它**直接决定显示区每行的位置**，必须确定。

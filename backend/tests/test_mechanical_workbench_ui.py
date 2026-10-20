@@ -5,18 +5,12 @@ import sys as _workspace_sys
 _workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
 from workspace_paths import output as _run_output, output_dir as _run_dir
 
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 from pathlib import Path
 import shutil
 import subprocess
 
 
-@acc("ACC-RPT-MECH-001", "001-01")
-@acc("ACC-RPT-MECH-001", "001-02")
-@acc("ACC-RPT-MECH-001", "001-03")
-@acc("ACC-RPT-MECH-001", "001-04")
-@acc("ACC-RPT-MECH-001", "001-10")
 def test_mechanical_workbench_public_behaviour():
     node = shutil.which('node')
     assert node, '机械费壳行为核验需要 Node.js'
@@ -118,7 +112,6 @@ vm.runInContext(`(async()=>{
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@acc()
 def test_detail_sources_require_explicit_switch_and_confirmation_columns_are_independent(ui_page):
     from app.mod03_notice.page import render_theme
     from tests.test_tail315_proc import report
@@ -180,7 +173,6 @@ def test_detail_sources_require_explicit_switch_and_confirmation_columns_are_ind
         'revision': 4, 'effective_signature': 'month-signature'}
 
 
-@acc()
 def test_workbench_pending_followups_shared_links_and_column_groups(ui_page):
     from app.mod03_notice.page import render_theme
 
@@ -261,7 +253,6 @@ def test_workbench_pending_followups_shared_links_and_column_groups(ui_page):
     assert p.evaluate('MW.tab') == 'zero'
 
 
-@acc()
 def test_agent_detail_file_preview_before_confirm_without_history_entry(ui_page):
     import json
     from app.mod03_notice.page import render_theme

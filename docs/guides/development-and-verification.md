@@ -29,7 +29,7 @@
 | `trade_co` / `trade_contract_amt` | 贸易公司合同**首次写**（甲方名 / i8 那个价） | ⛔ 不能改 |
 | 5列 `remark/arch/arch_no/ret_date` ＋ 材料名 | ⛔ 不碰（人的地盘） | ✅ 能改（`EDITABLE_COLS` = 上述可编辑列） |
 
-合同日期保护由 `backend/app/mod11_jc/repository.py` 执行，判据为 `backend/tests/test_jc_contract_date_lock.py` 与 `backend/tests/test_jc_contract_date_transaction.py`；TAIL-313的90条审核修正及恢复证据回原票。锁定日期是已批准的专项修正范围，不扩大为全部i8事实字段可手改。
+合同日期保护由 `backend/app/mod11_jc/repository.py` 执行，判据为 `backend/tests/test_jc_contract_date_lock.py` 与 `backend/tests/check_jc_contract_date_transaction.py`；TAIL-313的90条审核修正及恢复证据回原票。锁定日期是已批准的专项修正范围，不扩大为全部i8事实字段可手改。
 
 - ⚠️ **历史坑**：抓取时甲方还没分类 ⇒ 价落进「合同金额」；**改分类不回头重算**（`service.py:335-337`），而重抓**只补 trade 两列、绝不碰合同金额** ⇒ 那批行（实测 27 条）必须**先清空**才对得上；已清（备份 `var/backups/manual/jc_trade_amt_clean_2026-09-26.json`）。
 - ⚠️ 《说明书》§6.4.1 原写「贸易公司名 / 贸易公司合同金额 = 手工」—— **2026-09-26 用户裁定废掉**（以抓取自动落为准），已改 3 处（备份 `var/backups/manual/说明书-before-贸易公司手工口径-2026-09-26.md`）。
@@ -104,7 +104,7 @@
 - ⭐⭐ **页级四态只有一处出口**（`TAIL-117` 批次 6 · 2026-09-27）：`core.js::pageState()`（`loading`／`error`／`ready`）＋ `pageGate()` 出状态页 ＋ `retryPage()` 重试（只重拉**本页那几路**）＋ `markPending()`（进页前"预告"要拉哪几路，第一帧就出「正在读取」）。⭐ **三本账别混**：`LOADED`（拉过没有 · 缓存）/`PENDING`（此刻在拉吗 · 加载态）/`FAILED`（这一路坏了吗 · 错误态）—— 拿"未 LOADED"当加载态 ⇒ 写动作 `LOADED.clear()` 之后**整页永久卡住**。`render()` 里 `const st=pageState();` 不 `ready` 就画状态页并 `return`（⛔ 不走走虚拟滚动 / `BIND[VIEW]` / `placePops()`）。判据 = `tests/test_ux_states.py`（7 条）＋ 真机 **㉗**（`tools/probe/_shell_states.py`）。
 - ⭐⭐ **空态只有一处出口**：表内 = `EMPTYROW(cols, why, next)`（现行backend/app/web/shell/proj.js），块级 = `EMPTYBOX(why, next)`；通用导入面那半走 `legacy.js::lgEmpty(cols, text)`（**已改成薄转发**，它的文案由**域**给）。⭐ 一条空态必须回答两件事：**为什么空 ＋ 下一步点哪儿**。⛔ 别再手写 `<tr><td colspan=… class="ctr mut">`（判据会红）。
 - ⚠️⚠️ **所有取数必须过 `api.js::rawFetch`**：`fetch` 自己被拒那条路（服务没起 / 断网 / 被拦）原来会把浏览器的 **`Failed to fetch`** **原样上屏**（批次 6 的 ㉗ 当场抓到）。裸取数只允许 **2 处**：`rawFetch` 自己 ＋ `core.js::dlExport`（导出下载，自有一份人话 catch）。判据 = `tests/test_ux_states.py::test_取数一律过连不上的人话包装`。
-- ⚠️ **局部测试与权威四态分开**：结果档规则和命令见本件 §十一；局部结果不覆盖权威档，完整核验才刷新权威档。2026-09-27 的覆盖事故源于旧环境变量用法，仅作教训，⛔ 不据此要求每轮全套 pytest。
+- 测试结果以原始退出码和实际选集为准；默认不装载验收插件或刷新历史四态。按需报告与历史事故的边界见本件 §十一。
 - ⭐⭐ **真机共用件 `_shell_common.settle()` 现在等两步**：① `pageState().kind !== 'loading'`（"不忙了"）② 再等 DOM 稳定。⚠️ 状态页的 DOM **也是稳的** ⇒ 只等稳定会在**加载中**就返回（实测 `m06` 量到 `tables: 0` 假红）；但**只等"不忙"、不等"没问题"**（`error` 态也放过去，让断言如实报红）。
 - ⚠️⚠️ **`rc=0` ≠ 全绿**（2026-09-27 用户问「你有保证文档及时归档么？」问出来的）：**黄档不改 rc**
   （`T5` 行数 · `T9` · **`T10`/`T13` 文档预算**）⇒ 运行核验时**必须读一眼各自的"必须修 N · 疑似 M"汇总**，⛔ 别只 grep rc。真例：主文档 **1872 > 1700** 连续超预算而尺子一直 rc=0（黄不拦合入是**有意**裁定，但没人看就拖成常态）。⇒ 现行操作见本件 §十一，范围见 docs/agents/workflow.md。
@@ -141,7 +141,7 @@
 - ⚠️ **pytest 函数名里不能放 `㉖` 这类带圈字符**（`U+3256` 不是合法标识符字符 ⇒ 收集期 `SyntaxError`，报错还指向别处）⇒ 写 `test_真机26号…`。同理：`python -c` 传参时**串里别用 ASCII 双引号**（外层引号会被截断成"unterminated string literal"）。
 - **金额展示出口**为MONEY(v)，表格单位由有效列定义承担；工程代号与单位判法回守则/D29，真实消费者为 backend/tests/test_ux_numbers.py。旧U5表头同步原型不再是当前步骤。
 - ⚠️ **读界面上的数字要按"一个数"读**：真机段原来把 innerText 里**所有数字字符拼起来**当数 ⇒ KPI 加了单位后变成 `83191167.722026-09-27` = `NaN`（副行里的时点数字污染了它）。⇒ 用 `/-?\d[\d,]*(?:\.\d+)?/` 取**第一个 token**（或直接读 `.v`）。⭐ 同理：**"两个来源的数"必然对不上**，先问"这个数哪儿来的"。
-- ⚠️ **写判据前先核守则条号**（守则 §0 要求判据指到真实条号）：`test_design_rules.py` 只守条号**存在**、守不了**引得对不对**。本仓真例：把"数字带单位"错引成 `§4.3`（真条号 = **`§2.3` ＋ `§5.7`**；`§4.3` 是"默认值最安全"）。
+- ⚠️ **写判据前先核守则条号**（守则 §0 要求判据指到真实条号）：`check_design_rules.py` 只守条号**存在**、守不了**引得对不对**。本仓真例：把"数字带单位"错引成 `§4.3`（真条号 = **`§2.3` ＋ `§5.7`**；`§4.3` 是"默认值最安全"）。
 - ⚠️⚠️ **壳自检的 expected 登记器（`ui_parity_expected.txt`，原在 tools 目录 · `TAIL-201` 已随 `U1`/`U5` 退场删除）有过一个真缺陷（2026-09-27 修）**：`--write-expected` 原先按**全局指纹**去重、而核对器**按页**查（`exp.get(key)`）⇒ 同一个指纹出现在**别的页**下时，本页那条**永远登记不上**（登记器报"新增 0 条"、核对器照旧红，只能手工写行绕）。⭐ **触发条件很常见：切片里插/删一行 ⇒ 页尾那几行的归属换页**。⇒ 去重键 = **(页, 指纹)**；"幽灵登记"判定同批改成按页（三处对齐）。⚠️ 副作用：切片里**插行**会让该切片**行号整体后移** ⇒ 一次登记几十条**位置漂移**（内容没变）—— 要么接受，要么把新增内容**塞进已有行**避免插行。
 - ⭐ **相似元素/颜色的可判边界（批次 3 定）**：机器**能判死**的是「**相反语义的一对按钮不许同款**」（危险侧必须 `dg`、恢复侧不许）＋「**危险动作的悬停里必须写明退路**」＋ 真机「**同一个卡头里按钮文案不许重复**」（行内每行的「删除」不算，它不在卡头里）；"够不够拉开 / 这个黄是不是真警告"仍归人眼。⛔ 别把后两条也写成机器判据（假阳性高）。判据件 = `backend/tests/test_ux_buttons.py`。
 - ⭐⭐ **「上屏文案不许有内部编号/开发话术」的判据是两半**（`TAIL-117` 批次 2 · 2026-09-27）：
@@ -171,7 +171,7 @@
 - ⚠️⚠️ **壳里新增浮层（下拉/面板/弹层）必须挂两个钩子**：锚 `pjwrap` ＋ 盒 `pjpop`（`pj` 是历史遗留名，现已是**全站通用**机制）。现行机制入口 = backend/app/web/shell/ui.js的 `placePops()`（渲染后把浮层提升为 `fixed` ⇒ 逃出 `.card{overflow:hidden}`；`render()` **两条路径都要调**）。⛔ 别按类型各写一套、⛔ 别新建第二种锚名；守卫 `test_shell_render::test_通用浮层要逃出卡片裁剪_机制只有一处` ＋ 真机 `_shell_pops.py`（㉑）。⚠️ `.card{overflow:hidden}` 是给表格圆角用的 ⇒ **不许全局放开**。
 - ⚠️⚠️ **同一个「行」在一页里只许一个口径 = Excel 行号**：③ 预览的**数据表**用通用面的 `_row`；域侧**必须把 `_row` 带进匹配层**（`m11.imp_spec._rows_of` 要带 `_row`、`match_and_apply` 用 `row_no = int(row.get("_row") or n)`）。⚠️ 漏带时匹配层只能自己数"第几条数据" ⇒ 块里写「行 1/2/5」而数据表写 Excel 行号「4/5/8」⇒ **用户在表里找不到**。判据 = `test_imp_m11_api`「块的『行』必须能在**数据表**里找到、且就是那一行」（**结构性**断言，⛔ 别写死行号）。⭐ 报"某处编号/行号对不上"时，先问**"这个数是哪儿来的"**（两个来源 ⇒ 必然对不上）。⚠️ **图例/说明类文案一律按需显示**（只写"表里真有的那一类"，守则 §2.1）。
 - ⚠️⚠️ **通用导入面 `/api/imp/{domain}/preview` 的回执是「白名单」放行**（`app/import_kit/api.py` 只透传 `problems`/`writable`/`kpis`/`blocks`/`skipped`）⇒ **域新加的键必须同批在这里放行**（漏了就是"域给了、界面永远收不到"，而两边测试都绿）。其中 `skipped = [{row: Excel 行号, why: 人话原因, kind}]` 是**行级**名单（域自报；`m04` **刻意不给** —— 它项目没配上照样入库）⇒ 壳据此把 `.skiprow`（浅底＋左竖条）＋ 行号旁「不写入」/「不导入」标在**那一行**上（守则 §2.7 §2.8）。契约 = `backend/tests/imp_contract.py`（4 域共用）＋ `test_imp_shell::test_不会落库的行要在行上直接标`；真机 = `_shell_legacy.py` ③″（⭐ 判词**拿"卡片说得出的数"比"行上真标出的条数"**）。⚠️ 该判据当场抓到过真 bug：数据表**题头 18 格 / 数据行 17 格**（行号格没画）⇒ 行号格**显式先画**。
-- **前端规则与文案**：交互取向、步骤与视觉完成条件回 docs/guides/frontend-design.md §0/§6/§9；上屏文字回D29。前端操作由AGENTS按动作指向该指南；CodeBuddy项目RULE已退出。结构消费者为 backend/tests/test_design_rules.py，不在本分册缓存版本/条数/旧§10。
+- **前端规则与文案**：交互取向、步骤与视觉完成条件回 docs/guides/frontend-design.md §0/§6/§9；上屏文字回D29。前端操作由AGENTS按动作指向该指南；CodeBuddy项目RULE已退出。结构消费者为 backend/tests/check_design_rules.py，不在本分册缓存版本/条数/旧§10。
 - ⚠️⚠️ **新增 ORM 模型必须同批登记进 `app/models_registry.py`**（⭐ 2026-09-30 `TAIL-195` 批 1：**已从 `core/` 挪到装配层** ⇒ ⛔ 旧路径 `app/core/models_registry.py` 不存在了）（漏 ⇒ `alembic autogenerate` 判成"**要删这张表**"⇒ 下一个人生成**破坏性迁移**；`TAIL-102` 就是这么炸的）。⭐ 现由 `backend/tests/test_schema_drift.py` 每轮守；反向：**模型漏声明库里已有的默认值/约束**也会报 `modify_default`/`remove_constraint` ⇒ **补模型**（零 DDL），⛔ 别写迁移去动线上库。
 - ⚠️⚠️ **自检 / 调试脚本对「开发库」的写入必须自清**（前缀 `__自检仓_<标记>_<随机>__`）：残留会**混进项目候选**（用户 2026-09-26 报障「底下有两个自检仓」）。⭐ 真机 **㉒ 卫生检查**每次扫 `project.warehouse_name like '__自检仓%'`；清残留**先备份**到 `var/backups/manual/` 再删。⛔ 别用"列表里把它滤掉"来糊。
 - ⚠️⚠️ **切/删文档块前先"量边界"**：2026-09-25 按"下一个 `####`"找块尾，把 **§14.3 排期表一起吃掉了** ⇒ 块尾用**唯一整串**定位，⛔ 别用"下一个某级标题"。
@@ -192,20 +192,23 @@
 
 ## 十一、核验与运行命令
 
-核验范围、证据复用、隔离保护与现场触发由 `docs/agents/workflow.md`决定。本节提供调用方法；参数与执行登记以当前脚本的 `--help` 和 CMDS / SELFTESTS 为准。
+范围、证据复用和扩大条件回 `docs/agents/workflow.md`。Agent 沿实际调用关系选择已有测试和静态工具，不维护路径映射或固定核心套件。
 
-1. 有已有 dirty 且需区分新增差异时：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --start .artifacts/active/<effort>/<run>/recovery/entry.json`。用 `--inspect <基点>` 查看摘要；干净仓直接与 HEAD 比较。
-2. 查看选集：`backend\.venv\Scripts\python.exe -X utf8 tools\oneoff\_run_rulers.py --explain`；有基点时加 `--since <基点>`，明确本轮路径时加 `--paths <实际差异路径...>`。完成条件：选中项对应已查明使用者，待查输入已说明。
-3. 执行同一选集：去掉 `--explain`；读取完整汇总与退出码。默认、`--related`、`--all` 都按影响选择；显式完整检查使用 `--full`。
-4. 需要真实服务验证时：按 `docs/guides/deployment.md` 核对现场前提，运行 `tools/probe/_shell_smoke.py`；运行后端重启入口为 `ops/server_ctl.ps1`。`tools/audit/shell_verify.py` 是可选快照排障入口。
+1. 先记录 HEAD、索引及已有未提交范围，保护其他工作；基点不证明测试通过。
+2. 在 backend 下用项目解释器运行明确文件/节点，例如 `./.venv/Scripts/python.exe -X utf8 -m pytest tests/test_core_money.py -q --tb=short`；共享基础层或无法界定影响时扩大。退出5表示未收集，不能算通过。
+3. 在仓根按需运行 `backend/.venv/Scripts/python.exe -X utf8 tools/audit/syntax_audit.py --staged`、`tools/audit/bytes_guard.py --staged`；字节工具也支持 `--paths <实际文件...>`。提交仍执行真实钩子。
+4. 文档专项用 `tools/audit/doc_audit.py`；链路、接线和反例仅在相关风险需要时明确选择。旧 scope/runner、自动回执和变异登记已退役，不以空运行返回成功。
+5. 历史判据报告显式用 `tools/audit/acc_report.py --results <旧结果.json>`；它保留判据含义及总运行状态，不刷新业务需求，不作为当前完整通过证明。pytest 默认不产生该JSON。
 
-现有 Python Playwright 回归环境为 `PLAYWRIGHT_BROWSERS_PATH=C:\ProgramData\ms-playwright`，只传给执行子进程；输出用 UTF-8。`ACC_RESULTS_PATH` 局部出口由选择器隔离，勿全局导出。临时脚本与证据放 00-scratch。
+Python Playwright 仍用 `PLAYWRIGHT_BROWSERS_PATH=C:/ProgramData/ms-playwright`，只传给子进程，输出UTF-8。运行日志/截图进本轮 `.artifacts/active/<effort>/<run>/<kind>`，使用 `tools/audit/workspace_paths.py`；结束由创建者收尾，不清理真实输入。
 
-### 写库测试隔离与选集CLI
+### 写库测试隔离
 
-普通写库测试可声明 `rollback_db` 夹具：接管 `app.core.db.session_scope()` 的会话工厂，提交只释放保存点，测试结束统一回滚外层事务；正常返回和断言失败均清理。不再靠用例末尾的一句 `rollback()` 防止残留。仅限已配置的测试库，不接管自建引擎/会话、原始连接或其他进程；验证真实提交的测试仍沿用独立数据及清理，不使用该夹具。
+全局测试守卫先核配置来源和专用测试目标，覆盖前保留原目标，再核应用实际 Settings/已缓存 engine。目标缺失、同库异写法或无法确认隔离时非零拒绝；错误不输出完整URL。纯测试使用假配置或无数据库配置的隔离现场，不能按文件名推断安全后借用业务库。
 
-`_pytestscope.py` 支持无参数、`--cover-only`、`--explain`、`--explain -- PATH...` 和 `--help`；未知、缩写和冲突参数退出2，不执行选集计算。工具自检按登记入口调用，不假设支持 `--selftest`。
+`rollback_db` 只接管已确认测试库的会话工厂；commit仅释放savepoint，结束回滚外层事务。它不接管自建engine、原始连接或另一进程。数据库回归还须确认可废弃目标、端口、身份和清理所有权；未核则列未验。
+
+文档格式与单次日期恢复测试不再默认发现，需要时显式运行 `tests/check_design_rules.py` 或 `tests/check_jc_contract_date_transaction.py`；后者仍须独立测试库。layering与dup_guards本轮保持默认收集。
 
 ### 浏览器工具的本仓分工
 
@@ -222,7 +225,7 @@
 
 **Git推送遇代理中断（2026-10-11实测）**：HTTPS报`curl 52 Empty reply from server`且SSH也被重置时，先用`git -c http.proxy= push <HTTPS远端> <当前分支>`作单次直连尝试；不改全局代理。随后用同样的单次选项读取远端分支SHA，与本地HEAD比较；连接中断或输出`Everything up-to-date`本身不能证明推送成功。提交与推送决策回 docs/agents/workflow.md「提交与推送」。
 
-现场证据复用与权威四态出口回 `docs/agents/workflow.md`「按影响核验」。
+现场证据复用与结果边界回 `docs/agents/workflow.md`「按影响核验」。
 
 ## 十二、`验收基线.json` 的实测格式（2026-09-29 从 `MEMORY.md` 下沉）
 
@@ -276,7 +279,7 @@
 
 ## 十四、项目文档编辑工具与历史案例
 
-资料维护方法读AGENTS指向的个人文档维护约定；本仓计数、票号与命名主人回docs/agents/issue-tracker.md、README.md及tools/oneoff/_run_rulers.py，不按历史U5数量重建已退役登记。
+资料维护方法读AGENTS指向的个人文档维护约定；本仓计数、票号与命名主人回docs/agents/issue-tracker.md、README.md及实际工具入口，不按历史U5数量重建已退役登记。
 
 1. 2026-09-30 P4-d-b逐字锚命中0次，emoji变体选择符差异是当时成因；含emoji本身不必然失配。编辑前读真实字符及行尾，短标记也须确认唯一；不能用宽泛正则覆盖别的行。项目已有tools/oneoff/_doc_tail*.py可供同类票表操作参考，实际写后核目标行和差异。
 2. 本机PowerShell遇带反引号或多行替换的转义问题时，可用apply_patch或00-scratch短脚本；不把旧宿主失败变成所有编辑必须新建脚本的要求。票号与索引由既有开销票工具维护；历史配方全文可从本文件整改前Git版本追溯。
@@ -369,7 +372,7 @@
   ② docstring **第一句就得是它**（⛔ 别把注释放它前面 —— `__doc__` 会静默变 `None`）＋
   docstring 里的 Windows 路径用**正斜杠或 raw 字符串**。
 - ⭐ **顺带记一条结构事实**：**收工闸门的清单不要再抄进注入档** —— 权威是
-  `tools/oneoff/_run_rulers.py` 的 `CMDS`（抄一份必漂）；注入档只留"清单在 CMDS"这句话。
+  当前按实际风险选择工具，命令由各脚本持有；不建立第二份执行清单。
 - ⭐⭐ **另一条结构事实（更要紧）**：`细则.md` 已 **619 / 620 行**（预算见 `audit_meta.DOC_BUDGETS`）
   ⇒ **注入档的另一个"下沉去处"自己满了** ⇒ 下一次蒸馏要动它（它 70 KB／619 行，**且不被注入**），
   而不是继续往它身上加。
@@ -415,6 +418,10 @@
 - ⚠️ 另一条同族：**判据的前置条件不许写成"世界的绝对状态"**（如"基线里不该有这条报法"）
   ⇒ 现实一正常地变化，它就自己把自己否决（本仓 `_mut_linewalls` 就这样哑的）⇒ 改成**相对**（记基线值、断言递增）。
 
+<!-- doc_audit:history -->
+
+> 以下记录旧自动选测机制的事故；该机制已退役，当前命令与结果边界回§十一。
+
 ## 十九、`TAIL-241`（2026-10-06）蒸馏：**按改动范围选测**的四个通病（任何「跑一部分判据」都会碰上）
 
 > ⭐ 触发 = 把收工闸门末尾那把 pytest 改成「按改动范围跑」（漏跑比慢跑严重得多）。
@@ -457,3 +464,5 @@
   `_partial_acc_results.json` **也满足** ⇒ 断言恒真、报绿（改成比**文件名相等**才立刻报红）。
 - **给「全跑」场景造样本时，先确认那个场景真的会全跑**：我拿「改一把尺子 ＋ 一个模块」当全跑样本，
   实际它只是选测 ⇒ 断言报红才发现。**三次都是断言在教我，不是代码在教我。**
+
+<!-- doc_audit:current -->

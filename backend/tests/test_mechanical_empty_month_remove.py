@@ -12,7 +12,6 @@ from app.mod06_proc import domain as D, repository as R, workbench as W
 from app.mod06_proc.models import ProcHistoryBatch, ProcHistorySnapshot, ProcMechImportChange
 from app.mod06_proc.workbench_models import MechanicalWorkbenchRecord
 from app.mod08_inv.models import InvDetail, InvAdjustment
-from tests.acc_plugin import acc
 from tests.test_mechanical_source_protection import session as source_session  # noqa: F401
 
 
@@ -67,7 +66,6 @@ def matrix(s, wh, adjusted):
                           warehouse=wh, adjusted=adjusted, cutoff_ym='2026-08')
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_remove_cleared_month_preserves_total_categories_and_other_manual_edit(session):
     original, batch_no = prepare(session)
     before_total = W.report_total(session, '甲')
@@ -98,7 +96,6 @@ def test_remove_cleared_month_preserves_total_categories_and_other_manual_edit(s
     assert R.mech_row(session, '甲', '2025-01') is None
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_new_revisions_after_removal_only_add_the_changed_amount(session):
     prepare(session)
     remove(session)
@@ -112,7 +109,6 @@ def test_new_revisions_after_removal_only_add_the_changed_amount(session):
     assert W.cumulative(session, '甲', '2025-01')['zero'] == '25.00'
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_dated_annual_reference_and_cumulative_adoption_are_preserved(session):
     prepare(session)
     history, revision = W.read(session, W.key('history', '甲'))
@@ -127,7 +123,6 @@ def test_dated_annual_reference_and_cumulative_adoption_are_preserved(session):
     assert W.read(session, W.key('adoption', '甲', '2026-09')) == adopted
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_removal_failure_rolls_back_audit_history_snapshots_and_batch(session, monkeypatch):
     original, _ = prepare(session)
     write = W.write
@@ -147,7 +142,6 @@ def test_removal_failure_rolls_back_audit_history_snapshots_and_batch(session, m
 
 
 @pytest.mark.parametrize('reason', ['nonzero', 'detail', 'draft', 'material', 'inventory', 'stale', 'unconfirmed'])
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_removal_rejects_nonempty_linked_or_stale_month_without_changes(session, reason):
     prepare(session)
     extra = {}
@@ -180,7 +174,6 @@ def test_removal_rejects_nonempty_linked_or_stale_month_without_changes(session,
         MechanicalWorkbenchRecord.key.like('empty-month-removal:%'))))
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_postgresql_empty_month_removal_persists_audit_and_removes_both_matrix_rows(rollback_db):
     from app.core import db
     assert rollback_db.dialect.name == 'postgresql'

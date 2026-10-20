@@ -16,7 +16,6 @@ from app.core import preview_store
 from app.import_kit.parse import amount, date_text, text
 from app.import_kit.readers import find_header, read_grid
 from app.import_kit.validators import Problems
-from tests.acc_plugin import acc
 
 
 @pytest.fixture(autouse=True)
@@ -39,7 +38,6 @@ def _grid(*rows: tuple) -> bytes:
 # ------------------------------------------------------------ parse（统一解析出口）
 
 
-@acc()
 def test_金额解析_禁float直传_空给零():
     assert amount("1,234.50") == Decimal("1234.50")          # 千分位
     assert amount(" 100 ") == Decimal("100")
@@ -47,7 +45,6 @@ def test_金额解析_禁float直传_空给零():
     assert amount(12.3) == Decimal("12.3"), "float 也先转字符串再归一（⛔ 直传）"
 
 
-@acc()
 def test_日期文本_datetime取ISO_字符串原样():
     from datetime import date, datetime
 
@@ -60,7 +57,6 @@ def test_日期文本_datetime取ISO_字符串原样():
 # ------------------------------------------------------------ readers（找表头）
 
 
-@acc()
 def test_读grid与前N行找表头():
     grid, name = read_grid(_grid(("备注", "x"), ("项目", "金额", "付款时间"), ("甲", 1, "d")))
     assert name and grid[0][0] == "备注"
@@ -70,13 +66,11 @@ def test_读grid与前N行找表头():
     assert idx == 1 and mapping["p"] == 0 and mapping["m"] == 1
 
 
-@acc()
 def test_表头行_找不到给None_报错话术归调用方():
     grid, _ = read_grid(_grid(("a", "b"), ("1", "2")))
     assert find_header(grid, lambda c: None) is None          # ⛔ 底座不发明报错文案
 
 
-@acc()
 def test_读表的格子都装得进载具_但数字仍是数字():
     """⭐ 2026-09-26 用户报障（**真上传课表.xlsx ⇒ 界面「解析失败：TypeError: Object of type
     time is not JSON serializable」**）—— **能证伪**：把 `read_grid` 的 xlsx 分支改回
@@ -105,14 +99,12 @@ def test_读表的格子都装得进载具_但数字仍是数字():
 # ------------------------------------------------------------ preview_store（唯一载具）
 
 
-@acc()
 def test_暂存往返_所见即所落():
     token = preview_store.save({"year_month": "2026-09", "rows": [{"a": "1"}]})
     assert token and len(token) >= 16
     assert preview_store.load(token) == {"year_month": "2026-09", "rows": [{"a": "1"}]}
 
 
-@acc()
 def test_暂存_坏token显式报错():
     from app.core.errors import MustReportError
 
@@ -123,7 +115,6 @@ def test_暂存_坏token显式报错():
 # ------------------------------------------------------------ validators（问题清单）
 
 
-@acc()
 def test_问题清单_保留原值与行号():
     ps = Problems()
     ps.add(7, "金额", "abc", "不是数字")

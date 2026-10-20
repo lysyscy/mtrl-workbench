@@ -5,10 +5,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/audit'))
 import workspace_paths as W
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_run_outputs_close_and_release_work(tmp_path, monkeypatch):
     monkeypatch.delenv('MTRL_RUN_ID', raising=False)
     monkeypatch.setenv('MTRL_EFFORT', 'migration-fixture')
@@ -24,7 +22,6 @@ def test_run_outputs_close_and_release_work(tmp_path, monkeypatch):
     assert json.loads((archive / 'retention.json').read_text(encoding='utf-8'))['expires_on']
 
 
-@acc()
 def test_output_rejects_path_traversal(tmp_path, monkeypatch):
     import pytest
     for name in ('../secret', 'D:/secret', 'a\\secret'):
@@ -35,7 +32,6 @@ def test_output_rejects_path_traversal(tmp_path, monkeypatch):
         W.output('result.json', root=tmp_path)
 
 
-@acc()
 def test_runtime_paths_are_absolute_and_separate(monkeypatch, tmp_path):
     from app.core.config import Settings
     from app.core import preview_store
@@ -54,7 +50,6 @@ def test_runtime_paths_are_absolute_and_separate(monkeypatch, tmp_path):
     assert ProfileStore().path == root / 'var/data/import_profiles.json'
 
 
-@acc()
 def test_retired_roots_fail_even_when_ignored(tmp_path, monkeypatch):
     import audit_meta
     monkeypatch.setattr(audit_meta, 'REPO_ROOT', tmp_path)
@@ -66,7 +61,6 @@ def test_retired_roots_fail_even_when_ignored(tmp_path, monkeypatch):
         'artifacts', 'logs', '.scratch/local'}
 
 
-@acc()
 def test_stale_runs_and_expired_archives_remain_visible(tmp_path, monkeypatch):
     import audit_work
     import os
@@ -83,19 +77,3 @@ def test_stale_runs_and_expired_archives_remain_visible(tmp_path, monkeypatch):
     hits = audit_work.check_scratch_ttl()
     assert any(h['rel'].endswith('result.json') for h in hits)
     assert any(h['rel'] == '.artifacts/archive/fixture' for h in hits)
-
-
-@acc()
-def test_real_diagnostic_input_invalidates_pytest_receipt(tmp_path):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/oneoff'))
-    import _gatescope as G
-    sample = tmp_path/'data/source/i8-diagnostics/inv_2026-09.xlsx'
-    sample.parent.mkdir(parents=True)
-    sample.write_bytes(b'original-fixture')
-    before = G.input_signature('pytest', ['tests/'], G.inventory(tmp_path), 'env')
-    state = tmp_path/'var/state/verification/_partial_acc_results.json'
-    state.parent.mkdir(parents=True)
-    state.write_text('{}')
-    assert G.input_signature('pytest', ['tests/'], G.inventory(tmp_path), 'env') == before
-    sample.write_bytes(b'changed-fixture')
-    assert G.input_signature('pytest', ['tests/'], G.inventory(tmp_path), 'env') != before

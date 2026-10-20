@@ -19,7 +19,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from tests.m07_shell_helpers import API, ROUTER, SHELL  # noqa: F401
 
@@ -34,7 +33,6 @@ from tests.shell_src import const_items, const_src, func_body, page_slice, tbl_k
 # 旧页删除（授权 `D18`）⇒ 形态**改指新壳**（⛔ 判据不删）。
 
 
-@acc("ACC-SETL-001", "001-04")
 def test_壳里重置回默认月且不串页():
     """「重置」= 核算年月回**默认月**（上月）；且本页**不得**带上别模块的筛选状态（跨页污染防线）。"""
     assert "whReset:()=>{ fWhYm=bjMonth(-1);" in SHELL, "重置没回到默认月"
@@ -42,13 +40,11 @@ def test_壳里重置回默认月且不串页():
     assert 'name="pj"' not in s and "invWh" not in s, "本页串进了别模块的筛选状态"
 
 
-@acc("ACC-SETL-EXT-001", "001-05")
 def test_壳里提取页重置回在建与上月():
     """「重置」= 项目状态回**默认**（在建）＋ 金额月份回**默认**（上月）。"""
     assert "fExtReset:async()=>{fExt.status='在建';fExt.year=bjMonth(-1).slice(0,4);" in SHELL, "提取页重置没回默认"
 
 
-@acc("ACC-SETL-EXT-001", "001-03")
 def test_壳里提取表两类按序且合计行紧贴():
     """两类按 `extBlock('焊材')` → `extBlock('气体')` 渲染；**每块的合计行在该块之内**（紧贴本类数据行）；
     该表**刻意不可排**（⛔ 不带 `data-sort`）。"""
@@ -75,7 +71,6 @@ def test_壳里提取表两类按序且合计行紧贴():
         "`TBL` 内核里「可排 / 不可排」两条分支不齐 ⇒ `sort:false` 那条保证（⛔ 不出 `data-sort`）没了"
 
 
-@acc("ACC-SETL-EXT-001", "001-04")
 def test_壳里按项目状态过滤且空态跨列派生():
     """① 可见行按**项目状态**过滤（`extVisible`）；③ 该状态下没有数据 ⇒ 空态提示行，
     `colspan` **由表头派生**，并点名是哪一类。"""
@@ -85,7 +80,6 @@ def test_壳里按项目状态过滤且空态跨列派生():
     assert "当前筛选条件下没有" in SHELL and "换个项目状态或年份" in SHELL, "空态提示丢了"
 
 
-@acc("ACC-SETL-EXT-001", "001-06")
 def test_壳里导出走真下载且带当前筛选():
     """导出矩阵走 `saveExt` → `/api/m07/extract/export?status=…&period=…`（带上**当前筛选**）。"""
     # ⚠️ 「保存到本地」按钮在 **`ACT`**（不在 `V.m07` 切片里）⇒ 查全文
@@ -94,7 +88,6 @@ def test_壳里导出走真下载且带当前筛选():
         "导出端点没带上当前筛选"
 
 
-@acc("ACC-SETL-001", "001-01")
 def test_壳里表体每仓一行且合计行由共用出口出():
     """表体 = **每仓一行**（逐行算校验）；合计行由 `sumRowOf(WH_THEAD, rows, …)` 出 —— 行数与
     四个金额列的合计都**按行派生**（⭐ 校验格另算，见 001-09）。"""
@@ -107,34 +100,29 @@ def test_壳里表体每仓一行且合计行由共用出口出():
         "收发结存表没走统一出口 `TBL`（`TAIL-64` P2③）"
 
 
-@acc("ACC-SETL-001", "001-02")
 def test_壳里核算年月默认上月且可切():
     """默认 = **北京时间上月**（§9.2）；并由 `whMonth` 控件承载（切了重取数，另有断言）。"""
     assert "let fWhYm = bjMonth(-1);" in SHELL, "默认没落成上月"
     assert "tmBtn('whMonth',{scope:'wh',val:fWhYm" in SHELL, "没有核算年月控件（或没绑到本页状态）"
 
 
-@acc("ACC-SETL-001", "001-05")
 def test_壳里空态跨列数由表头派生():
     """空月 ⇒ 空态提示行，`colspan` **由表头列数派生**，且提示里点名是哪个年月。"""
     assert "EMPTYROW(thCount(WH_THEAD)" in SHELL, "空态行跨列数不再由表头派生"
     assert "没有收发结存数据" in SHELL, "空月没有提示"
 
 
-@acc("ACC-SETL-001", "001-06")
 def test_壳里抓取弹窗默认取本页年月且讲清强踢():
     """抓取弹窗默认月 = **本页当前所选核算年月**（可改）；且须讲清**会登录 i8 强踢**（`D9`）。"""
     assert "fetchWh:()=>{ fetchKind='wh'; fetchM=fWhYm;" in SHELL, "抓取弹窗没取本页当前年月"
     assert "强踢" in SHELL, "D9（会强踢在线用户）没告知"
 
 
-@acc("ACC-SETL-001", "001-07")
 def test_壳里文件数恒为仓数加一():
     """「分仓库工作簿 ＋ 1 个总表」⇒ 回执文件数按仓数加一。"""
     assert "个分仓库 xlsx ＋ 1 个总表（zip）" in SHELL, "回执没有正确文件数"
 
 
-@acc("ACC-SETL-001", "001-08")
 def test_壳里产出物清单按仓数加总表且真导出():
     """TAIL-263 撤掉输出产物说明模块，真实分仓/总表导出入口与端点保留。"""
     assert 'data-act="zipSfjc"' in page_slice("m07"), "收发结存实际导出入口丢失"
@@ -145,7 +133,6 @@ def test_壳里产出物清单按仓数加总表且真导出():
     assert len(manifest) == 3 and manifest[-1]["name"].endswith("收发结存表.xlsx")
 
 
-@acc("ACC-SETL-001", "001-09")
 def test_壳里对平显示与合计行校验():
     """校验列按两位小数归一判等：对平写「已对平」、不平写「差 X」；且**合计行的校验格**
     是对**合计值本身**再判一次（`tagOf(totBal)`），⛔ 不是抄某一行。"""
@@ -155,7 +142,6 @@ def test_壳里对平显示与合计行校验():
 
 # ============================================================== 1 · 演示数据已清
 
-@acc()
 def test_m07演示块已删():
     """四个演示容器必须**物理删除**（留着就永远渲染演示数据 —— `ui_parity` 的 `U2b` 也查）。"""
     assert "const WHM = {" not in SHELL, "收发结存演示块 `const WHM = {` 还在"
@@ -165,7 +151,6 @@ def test_m07演示块已删():
     assert "WHM['2026-08']" not in SHELL, "切片仍在引用演示基线 `WHM['2026-08']`"
 
 
-@acc()
 def test_m07数据源改为后端填充():
     assert "let WHM = {};" in SHELL, "`WHM` 没改成「空容器 + 后端填充」"
     assert "let EXTM = {};" in SHELL, "`EXTM` 没改成「空容器 + 后端填充」"
@@ -176,7 +161,6 @@ def test_m07数据源改为后端填充():
         assert call in body, f"`reloadM07()` 没读 `{call.rstrip('(')}`"
 
 
-@acc()
 def test_未选题不得被前端兜底填满():
     """⛔ 反向：`BIGSET` 空了**不代表**「未选题」—— 后端有**标记行**区分两种情况。
 
@@ -188,7 +172,6 @@ def test_未选题不得被前端兜底填满():
 
 # ============================================================== 2 · 适配层
 
-@acc()
 def test_适配层覆盖大表手填列():
     """⭐ 手填 6 列的 key 必须与**后端**一致（`big_domain.BIG_MANUAL_KEYS`）——
 
@@ -204,7 +187,6 @@ def test_适配层覆盖大表手填列():
     )
 
 
-@acc()
 def test_适配层把金额转成数字():
     """⛔ **后端金额出的是字符串** ⇒ 适配层必须过 `N0()`。
 
@@ -224,7 +206,6 @@ def test_适配层把金额转成数字():
     assert "N0(" in ext, "`adaptExtract` 的金额没过 `N0()`（提取金额求和会变字符串拼接）"
 
 
-@acc()
 def test_适配层按后端格式判断金额列():
     """⚠️ 哪几列是金额**由后端 `manual_fmts` 决定** —— ⛔ 前端不硬编码"下标 1..4 是金额"。"""
     man = func_body("adaptManual")
@@ -233,7 +214,6 @@ def test_适配层按后端格式判断金额列():
 
 # ============================================================== 3 · 写动作走后端（含反向）
 
-@acc()
 def test_大表手填走后端且不在前端复写判据():
     """⭐ 反向：**不许**再有前端判据（`badMoney` / `bigStore`）+ 本地改 `BIGVAL` 冒充落库。"""
     i = SHELL.find("bigEdit:async t=>{")
@@ -247,7 +227,6 @@ def test_大表手填走后端且不在前端复写判据():
     assert "reloadM07()" in body, "`bigEdit` 成功后没「以后端为准重拉」"
 
 
-@acc()
 def test_选题落库走后端():
     """⭐ 反向：不许只在本地 `BIGSET.push` 冒充落库。"""
     i = SHELL.find("bigPickOk:async")
@@ -257,7 +236,6 @@ def test_选题落库走后端():
     assert "reloadM07()" in body, "`bigPickOk` 成功后没「以后端为准重拉」"
 
 
-@acc()
 def test_m07抓取分支接后端():
     assert "if(k==='wh') return whFetchBackend(m);" in SHELL, "抓取弹窗的收发结存分支没接后端"
     body = func_body("whFetchBackend")
@@ -265,7 +243,6 @@ def test_m07抓取分支接后端():
     assert "r.ok === false" in body, "抓取降级（i8 失败 ⇒ 手动导入）没处理"
 
 
-@acc()
 def test_导出已落地为真下载():
     """`TAIL-04` 落地后：`zipSfjc` 不再是「如实标注未落地」，而是**真的产出并下载文件**。
 
@@ -290,7 +267,6 @@ def test_导出已落地为真下载():
 
 # ============================================================== 5 · 「结余」录入（2026-09-18 用户裁定「甲」）
 
-@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余录入走后端且不在前端复写判据():
     """⭐ 反向：`extBal` 不许在前端复写「金额非负 / 空 = 清空」判据，也不许本地改 `BAL_EX` 冒充落库。"""
     i = SHELL.find("extBal:async t=>{")
@@ -307,7 +283,6 @@ def test_结余录入走后端且不在前端复写判据():
     assert "reloadM07()" in body, "`extBal` 成功后没「以后端为准重拉」"
 
 
-@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余是表单类动作由change委托承接():
     """⛔ 判词（不变）：**「结余」这个表单类动作必须真的能被 `change` 触发**（否则输入框「点了没反应」）。
 
@@ -319,13 +294,11 @@ def test_结余是表单类动作由change委托承接():
         "`change` 委托不是「不看名单直接跑」⇒ 表单类动作（含 `extBal`）会被**静默丢弃**")
 
 
-@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余演示容器已清成空容器():
     assert "const BAL_EX = {" not in SHELL, "结余演示块 `const BAL_EX = {` 还在"
     assert "let BAL_EX = {};" in SHELL, "`BAL_EX` 没改成「空容器 + 后端填充」"
 
 
-@acc("ACC-SETL-EXT-001", "001-07")
 def test_结余适配层过N0且不给未录入补值():
     """⚠️ 后端金额出**字符串**（不过 `N0()` 会显示成带引号的串）；
     ⛔ **不给未录入补 0** —— 一补，「没填」与「填了 0」就再也分不开。"""
@@ -335,7 +308,6 @@ def test_结余适配层过N0且不给未录入补值():
         "空值（未录入）没被跳过 ⇒ 会给未录入补一个值（0 与「未录入」就分不开了）"
 
 
-@acc("ACC-SETL-EXT-001", "001-11")
 def test_reloadM07填充结余():
     """⭐ 重拉是**唯一出口**：`BAL_EX` 必须由 `reloadM07()` 从后端 `balances` 原地填。"""
     body = func_body("reloadExtract")
@@ -344,7 +316,6 @@ def test_reloadM07填充结余():
         "`BAL_EX` 没「原地清空再填」（外部持有的引用会指向旧对象）"
 
 
-@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余列渲染成可编辑输入且合计下标跟着移():
     """「点格即改」的形态判据 ＋ ⚠️ **加列后合计行的列下标必须跟着移**（否则合计算到「结余」列上）。"""
     body = func_body("extBlock")
@@ -359,7 +330,6 @@ def test_结余列渲染成可编辑输入且合计下标跟着移():
     assert "{2:rs=>" not in body, "合计行还在按旧下标取列"
 
 
-@acc("ACC-SETL-EXT-001", "001-09")
 def test_结余列只在年份不晚于2025时显示且三处同步():
     """⭐ 2026-10-10 用户裁定：人工历史列「2025-11及之前」**只在所选年份 ≤ 2025 时显示**。
 
@@ -383,7 +353,6 @@ def test_结余列只在年份不晚于2025时显示且三处同步():
         assert keep in body, f"动显示时把 `{keep}` 弄丢了 —— 合计/取数/录入入口的口径不许变"
 
 
-@acc("ACC-SETL-EXT-001", "001-09")
 def test_表头含结余列且列序照模板():
     m = re.search(r"const EXT_THEAD=`([^`]*)`", SHELL)
     assert m, "找不到 `EXT_THEAD`"
@@ -394,14 +363,12 @@ def test_表头含结余列且列序照模板():
     assert line.index('往年金额') < line.index('MONTH-') < line.index('合计') < line.index('2025-11及之前')
 
 
-@acc("ACC-SETL-EXT-001", "001-09")
 def test_后端结余端点读写都在():
     assert '@router.post("/api/m07/extract/balance")' in API, "后端缺写端点"
     assert "S.save_balance_cell(" in API, "写端点没走服务层出口（判定会散到路由里）"
     assert "load_balances(s)" in API, "读端点没带上结余（壳里永远空）"
 
 
-@acc()
 def test_后端关键端点都在():
     for path, verb in (
         ("/api/m07/settlement", "get"), ("/api/m07/extract", "get"), ("/api/m07/big", "get"),
@@ -413,20 +380,17 @@ def test_后端关键端点都在():
     assert "router.include_router(api_router)" in ROUTER, "`mod07_setl/router.py` 没汇总 API 路由"
 
 
-@acc()
 def test_抓取端点必须显式确认():
     """⛔ 防"直接 POST 打进来"的静默抓取（**会顶号**）。"""
     assert "confirmed=req.confirm" in API, "抓取端点没把 `confirm` 交给 `run_fetch`（D9 二次确认形同虚设）"
 
 
-@acc()
 def test_大表手填校验走服务层出口():
     """⭐ 金额非负 / 开工时间格式的判定**唯一出口 = `big_service.save_manual_cell`**（不在路由里另写）。"""
     assert "BS.save_manual_cell(" in API, "手填端点没走 `big_service.save_manual_cell`"
     assert "month=req.month, warehouse=req.warehouse" in API, "手填端点的参数形态不对"
 
 
-@acc()
 def test_boot含m07且逐路容错():
     """⚠️ 2026-09-19（性能 `P3` 主体）：`boot()` 不再**逐路拉**（改成「进哪页拉哪页」）
     ⇒ 判据**一字未变地搬到取数表上**（原来证的是「`reloadM07` 必须等在 `reloadMech`/`reloadInv` 之后」）：
@@ -443,13 +407,11 @@ def test_boot含m07且逐路容错():
                     f"`PAGE_LOAD['{page}']` 吃了大表却没列前置的「{need}」（机械列 / 焊材气体列会取空）"
 
 
-@acc()
 def test_WIRED含m07():
     m = re.search(r"const WIRED=new Set\(\[([^\]]*)\]\);", SHELL)
     assert m and "'m07'" in m.group(1), "`WIRED` 里没有 `m07`（侧栏会仍标「原型态」）"
 
 
-@acc()
 def test_月份切换会重新取数():
     """⚠️ `WHM[月]` 现在来自后端 ⇒ 切月只 `render()` 会看到**空表**（且不报错）。"""
     assert "if(sc==='wh'){ fWhYm=v; mp.open=null; reloadM07();" in SHELL, (
@@ -457,7 +419,6 @@ def test_月份切换会重新取数():
     )
 
 
-@acc()
 def test_视图切片未被改动():
     """⭐ 反向：`V.m07` 里**不得**出现任何 `API.` 调用 —— 原型的渲染逻辑必须一行不改（`D18`）。
 
@@ -469,7 +430,6 @@ def test_视图切片未被改动():
     assert "WHM['2026-08']" not in body, "`V.m07` 仍引用演示基线（演示块已删 ⇒ 会崩）"
 
 
-@acc()
 def test_金额格式化认null():
     """后端给 `null`（不可得）⇒ 页面显「—」—— 现在主要发生在「取数口被显式摘除」时
     （`TAIL-25` 已接入 ⇒ 正常态有真数；⚠️ 这条守卫**必须留着**：兜底路一坏，"不可得"就会显示 0.00）。
@@ -484,7 +444,6 @@ def test_金额格式化认null():
     assert "Number(n)||0" in line, "`M()` 的数字分支被改动了（数字入参行为必须不变）"
 
 
-@acc()
 def test_主材累计不可得时不写0():
     """⚠️ `TAIL-25` 接入后正常态有真数；这条守的是**兜底路**（取数口被显式摘除 ⇒ `null` ⇒ 「—」，
     ⛔ 不写 0 冒充"确实没有"）—— 壳里那个 `MAT_OK ?` 三元**必须留着**，⛔ 别当死代码清掉。"""

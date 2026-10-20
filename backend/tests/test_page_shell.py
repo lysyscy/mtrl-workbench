@@ -15,7 +15,6 @@ from app.mod03_notice.page import (
     VSEP_CSS,
     render_list_page,
 )
-from tests.acc_plugin import acc
 
 COLUMNS = [
     {"key": "ym", "label": "核算月", "sortable": True},
@@ -53,7 +52,6 @@ def _tbody_rows(html: str) -> list[list[str]]:
     return [re.findall(r"<td\b[^>]*>", r) for r in rows]
 
 
-@acc()
 def test_分段线四处一致():
     """设计规则 R13：段首列的分段竖线必须在**表头 / 数据行 / 合计行 / 总求和行**四处一致。"""
     html = _render(summary=[{"ym": "合计"}, {"ym": "总求和（本表）"}])
@@ -67,7 +65,6 @@ def test_分段线四处一致():
         assert "vsep" not in tds[VSEP_IDX - 1]
 
 
-@acc()
 def test_合计行两条_合计与总求和():
     html = _render(summary=[{"ym": "合计"}, {"ym": "总求和（本表）"}])
     assert html.count('data-pin="1"') == 2               # 两条合计类行都在
@@ -76,7 +73,6 @@ def test_合计行两条_合计与总求和():
     assert len(rows) == 2 + 2                            # 2 数据行 ＋ 2 合计行
 
 
-@acc()
 def test_分段表可关掉吸附但仍钉在表尾():
     """分段表 / 分组表的合计行**不吸附**（`summary_sticky=False`），但**数据序照样钉在最后**。"""
     sticky = _render(summary={"ym": "合计"})
@@ -88,7 +84,6 @@ def test_分段表可关掉吸附但仍钉在表尾():
     assert 'data-seg="empty"' not in _render(summary={"ym": "合计"})
 
 
-@acc()
 def test_吸附置底的CSS契约_必须作用在tr上():
     """钉住实测结论：sticky **不能**写在 `td` 上（原型那套写法永不生效）。"""
     assert "tr.sumrow{position:sticky" in STICKY_BOTTOM_CSS.replace(" ", "")

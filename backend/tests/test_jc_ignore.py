@@ -20,7 +20,6 @@ from app.mod01_projects import repository as pj_repo
 from app.mod01_projects.models import TYPE_NORMAL
 from app.mod11_jc import repository as R
 from app.mod11_jc.fetch_service import match_projects, split_ignored
-from tests.acc_plugin import acc
 
 WH = "__自检仓_剔除名单__"
 FULL = f"{WH}项目"
@@ -31,7 +30,6 @@ def _rows() -> list:
             {"contract_no": "IG2", "project_name": "另有其名的项目", "fields": {"BillName": "单-B"}}]
 
 
-@acc("ACC-JC-IGNORE-001", "001-01")
 def test_名单命中则摘出_且不动未命中的行():
     """⭐ 命中名单只摘**那几行** —— 未命中的行**一行不动**（防"连坐"）。"""
     with session_scope() as s:
@@ -44,7 +42,6 @@ def test_名单命中则摘出_且不动未命中的行():
             s.rollback()
 
 
-@acc("ACC-JC-IGNORE-001", "001-02")
 def test_名单为空时与加名单之前逐字节一致():
     """⭐ 防回归：**名单为空**才是常态（多数时候没人登记）⇒ 它必须与"没有这个功能"完全一样。
 
@@ -60,7 +57,6 @@ def test_名单为空时与加名单之前逐字节一致():
             s.rollback()
 
 
-@acc("ACC-JC-IGNORE-001", "001-03")
 def test_反例_名单不许让未走完的行落库():
     """⭐ 这条是防"顺手放宽"的：摘掉忽略行之后，**未走完的行依然不落库**。"""
     with session_scope() as s:
@@ -79,7 +75,6 @@ def test_反例_名单不许让未走完的行落库():
             s.rollback()
 
 
-@acc("ACC-JC-IGNORE-001", "001-04")
 def test_写入同名幂等_停用后不再过滤但留在册():
     with session_scope() as s:
         try:

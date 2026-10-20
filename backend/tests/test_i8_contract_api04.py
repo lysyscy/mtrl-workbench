@@ -13,7 +13,6 @@ from __future__ import annotations
 from app.core.config import get_settings
 from app.core.errors import NotConfiguredError
 from app.mod02_i8 import contract_source as cs
-from tests.acc_plugin import acc
 
 # 用户 2026-09-19 提供的**真实**记录（字段名 = i8 真名；已按契约保留关键项）
 REC = {
@@ -68,7 +67,6 @@ def _fetch(monkeypatch, payload=None, *, payloads=None, url="http://i8/api04"): 
     return cs.ContractFetcher(fake).fetch_all(), fake          # type: ignore[arg-type]
 
 
-@acc()
 def test_请求形态是POST且query挂在url上(monkeypatch):  # noqa: ANN001
     rows, fake = _fetch(monkeypatch, {"Record": [REC]})
     method, url, params, data, timeout = fake.calls[0]
@@ -79,7 +77,6 @@ def test_请求形态是POST且query挂在url上(monkeypatch):  # noqa: ANN001
     assert len(rows) == 1
 
 
-@acc()
 def test_必须传limit否则只回10条(monkeypatch):  # noqa: ANN001
     """⛔ 2026-09-19 实测坑：`limit` 不放 body ⇒ i8 只回 **10 条**（默认页）⇒ 静默只抓一小截。"""
     _rows, fake = _fetch(monkeypatch, {"Record": [REC]})
@@ -91,7 +88,6 @@ def test_必须传limit否则只回10条(monkeypatch):  # noqa: ANN001
     assert timeout == cs.LIST_TIMEOUT and timeout > 30, "必须放大 timeout（默认 30s 会超时）"
 
 
-@acc()
 def test_字段真名映射到落库字段(monkeypatch):  # noqa: ANN001
     rows, _ = _fetch(monkeypatch, {"Record": [REC]})
     row = rows[0]
@@ -114,7 +110,6 @@ def test_字段真名映射到落库字段(monkeypatch):  # noqa: ANN001
     assert row["fields"] is REC, "整条原样留存（不丢信息）"
 
 
-@acc()
 def test_项目匹配字段是PhidPc_EXName而非解析BillName(monkeypatch):  # noqa: ANN001
     """⛔ 这条钉住"匹配靠谁" —— 若改成从 `BillName` 切项目名，此断言必须红。"""
     rows, _ = _fetch(monkeypatch, {"Record": [REC]})
@@ -123,7 +118,6 @@ def test_项目匹配字段是PhidPc_EXName而非解析BillName(monkeypatch):  #
     assert rows[0]["project_name"] != "四分晋江污泥处置项目", "⛔ 不得用 BillName 第 1 段当项目"
 
 
-@acc()
 def test_空结果会再确认一次防整批漏抓(monkeypatch):  # noqa: ANN001
     import app.mod02_i8.contract_source as _cs
     monkeypatch.setattr(_cs.time, "sleep", lambda *_: None)     # 别真等 1.2s
@@ -131,7 +125,6 @@ def test_空结果会再确认一次防整批漏抓(monkeypatch):  # noqa: ANN00
     assert len(rows) == 1 and len(fake.calls) == 2, "空结果必须再确认一次"
 
 
-@acc()
 def test_未配url显式报错不静默(monkeypatch):  # noqa: ANN001
     _patch(monkeypatch, "")
     try:
@@ -141,12 +134,10 @@ def test_未配url显式报错不静默(monkeypatch):  # noqa: ANN001
     raise AssertionError("未配置 URL 必须抛 NotConfiguredError（⛔ 不得静默返回空）")
 
 
-@acc()
 def test_没有合同编号的行被丢弃():
     assert cs._map_record({**REC, "BillNo": ""}) is None, "无 BillNo ⇒ 无法幂等落库 ⇒ 必须丢弃"
 
 
-@acc()
 def test_日期过滤必须包一层queryFilter():
     """⚠️⚠️ 钉住那个「**写错不报错**」的日期过滤写法（2026-09-19 用户给真机 body 才试出来）。
 
@@ -187,7 +178,6 @@ def test_日期过滤必须包一层queryFilter():
     assert full["limit"] == cs.LIST_LIMIT and full["page"] == "0" and full["start"] == "0"
 
 
-@acc()
 def test_供应商取EXName而不是拆单据名():
     """⭐ `M5-6` 修正：供应商取 i8 的 **`_EXName`**（i8 自己给的名字）—— ⛔ 不再拆单据名。
 
@@ -204,13 +194,11 @@ def test_供应商取EXName而不是拆单据名():
     assert cs._supplier_of({"PhidSupplyEnt": "3700000000025311"}) == "", "⛔ 只有 id ⇒ 留空，不拿 id 冒充名字"
 
 
-@acc()
 def test_概要给出条数与项目清单():
     s = cs.summary([{"project_name": "A"}, {"project_name": "A"}, {"project_name": "B"}, {}])
     assert s["total"] == 4 and s["projects"] == ["(无项目)", "A", "B"]
 
 
-@acc()
 def test_会话失效判据要认body里的NoSessionInfo():
     """⚠️⚠️ 2026-09-19 修的两处**静默缺陷** —— 症状都是「**抓取成功但 0 条**」。
 
@@ -243,7 +231,6 @@ def test_会话失效判据要认body里的NoSessionInfo():
     assert I8Client._is_session_invalid(resp(200, {"Code": "0", "Msg": "参数错误"})) is False  # noqa: SLF001
 
 
-@acc()
 def test_未审批的不抓且计数不静默(monkeypatch):  # noqa: ANN001
     """⭐ 用户 2026-09-19 定：未审批不抓 —— 但**丢弃数必须报出来**（禁静默丢数据）。
 

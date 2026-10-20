@@ -1,6 +1,5 @@
 """Public workbench behavior on the guarded PostgreSQL rollback fixture."""
 
-from tests.acc_plugin import acc
 from decimal import Decimal
 
 import pytest
@@ -50,7 +49,6 @@ def save(s, rows=None, revision=0, cat='zero', ym='2026-09'):
                                       'revision': revision, 'rows': [row()] if rows is None else rows})
 
 
-@acc("ACC-RPT-MECH-001", "001-02")
 def test_draft_confirm_history_and_unique_effective_source(session):
     saved = save(session)
     assert W.effective(session, '甲', '2026-09')['values']['mech_2'] is None
@@ -70,7 +68,6 @@ def test_draft_confirm_history_and_unique_effective_source(session):
         assert W.state(reopened)['effective'][0]['values']['mech_2'] == '103.00'
 
 
-@acc("ACC-RPT-MECH-001", "001-02")
 def test_revision_and_manual_effective_changes_block_stale_confirm(session):
     saved = save(session)
     with pytest.raises(MustReportError, match='其他操作'):
@@ -82,8 +79,6 @@ def test_revision_and_manual_effective_changes_block_stale_confirm(session):
                                    'revision': saved['revision'], 'effective_signature': before['signature']})
 
 
-@acc("ACC-RPT-MECH-001", "001-04")
-@acc("ACC-RPT-MECH-001", "001-03")
 def test_plate_shared_keywords_clear_and_legacy_monthly(session):
     value = save(session, [row(device='汽车吊')])
     assert value['issues'] == [{'id': 'a', 'fields': ['车牌']}]
@@ -97,14 +92,12 @@ def test_plate_shared_keywords_clear_and_legacy_monthly(session):
 
 
 @pytest.mark.parametrize('value', ['NaN', 'Infinity', '-1', True])
-@acc("ACC-RPT-MECH-001", "001-03")
 def test_invalid_amount_never_saved(session, value):
     with pytest.raises(MustReportError):
         save(session, [row(amount=value)])
     assert not W.state(session)['details']
 
 
-@acc("ACC-RPT-MECH-001", "001-05")
 def test_three_way_conflicts_and_idempotent_confirmation(session):
     source = {'file': 'source.xlsx', 'sha256': 'x', 'sheet': '表2', 'row': 5}
     def preview(rows, rid):
@@ -127,7 +120,6 @@ def test_three_way_conflicts_and_idempotent_confirmation(session):
     assert W.state(session)['details'][0]['rows'][0]['tax'] == '普票'
 
 
-@acc("ACC-RPT-MECH-001", "001-03")
 def test_source_precision_cached_net_and_invoice_text(session):
     rows = [row(id='a', amount='0.335', original='0.335', sourceNet='0.32524', originalTax='3%专'),
             row(id='b', amount='0.335', original='0.335', sourceNet='0.32524', originalTax='3%专')]
@@ -137,7 +129,6 @@ def test_source_precision_cached_net_and_invoice_text(session):
     assert W.row_net(row(tax='1%普票，不含油')) == '103.00'
 
 
-@acc("ACC-RPT-MECH-001", "001-02")
 def test_exact_confirmation_retry_is_idempotent(session):
     detail = save(session)
     request = {'warehouse': '甲', 'ym': '2026-09', 'category': 'zero', 'revision': detail['revision'],
@@ -147,7 +138,6 @@ def test_exact_confirmation_retry_is_idempotent(session):
     assert session.scalar(select(ProcMechManual)).mech_2 == Decimal('103.00')
 
 
-@acc("ACC-RPT-MECH-001", "001-09")
 def test_unapproved_unknown_document_is_retained_outside_approved_total(session):
     item = i8_project()
     item['sources']['team'].append({'id': 'unapproved', 'amount': None, 'approval': None, 'status': 0, 'workflow': 0})
@@ -172,8 +162,6 @@ def adopt_i8(s, projects, rid='i8', **options):
     return p
 
 
-@acc("ACC-RPT-MECH-001", "001-10")
-@acc("ACC-RPT-MECH-001", "001-08")
 def test_i8_single_project_independent_ignores_and_change_discovery(session):
     adopt_i8(session, [i8_project(), i8_project('乙')])
     checks, bills = W.reconciliations(session, ['甲'])
@@ -194,8 +182,6 @@ def test_i8_single_project_independent_ignores_and_change_discovery(session):
     assert any(d['warehouse'] == '乙' and d['kind'] == 'missing-project' for d in W.state(session)['discoveries'])
 
 
-@acc("ACC-RPT-MECH-001", "001-08")
-@acc("ACC-RPT-MECH-001", "001-09")
 def test_missing_incomplete_unknown_and_reduction_are_protected(session):
     adopt_i8(session, [i8_project(extra={'id': 'u2', 'amount': '1.00'})])
     p = W.i8_preview(session, {'request_id': 'drop', 'projects': [i8_project()]})
@@ -213,8 +199,6 @@ def test_missing_incomplete_unknown_and_reduction_are_protected(session):
     assert W.reconciliations(session, ['甲'])[0][1]['raw'] is None
 
 
-@acc("ACC-RPT-MECH-001", "001-06")
-@acc("ACC-RPT-MECH-001", "001-11")
 def test_history_conflict_protection_and_delta_is_replacement(session):
     W.repo.save_mech(session, ym='2026-08', warehouse='甲', values={'mech_1': Decimal('14000'), 'mech_2': Decimal('5000')})
     data = {'request_id': 'history', 'projects': [{'warehouse': '甲', 'history': {
@@ -239,7 +223,6 @@ def test_history_conflict_protection_and_delta_is_replacement(session):
     assert W.state(session)['matters'][0]['metadata']['adopted'] == '5000'
 
 
-@acc("ACC-RPT-MECH-001", "001-06")
 def test_initial_monthly_annual_conflict_does_not_rewrite_cumulative(session):
     p = W.history_preview(session, {'projects': [{'warehouse': '甲', 'history': {
         'source': {'file': 'history'}, 'base_month': '2026-09', 'report_total': '4850.00', 'i6': '0.00',
@@ -254,7 +237,6 @@ def test_initial_monthly_annual_conflict_does_not_rewrite_cumulative(session):
     assert W.cumulative(session, '甲', '2026-09')['zero'] == '5000.00'
 
 
-@acc("ACC-RPT-MECH-001", "001-03")
 def test_old_quantity_text_and_precision_survive_roundtrip(session):
     saved = save(session, [row(qty='0.5+', plan='2小时', used='0.111428571428571')])
     assert saved['rows'][0]['qty'] == '0.5+'
@@ -263,7 +245,6 @@ def test_old_quantity_text_and_precision_survive_roundtrip(session):
     assert saved['totals']['gross'] == '103.00'
 
 
-@acc("ACC-RPT-MECH-001", "001-10")
 def test_ignore_negative_change_zero_and_undo_no_automatic_tolerance(session):
     adopt_i8(session, [i8_project(usage='99.88')])
     W.ignore(session, {'warehouse': '甲', 'relation': 'internal', 'revision': 0})
@@ -278,7 +259,6 @@ def test_ignore_negative_change_zero_and_undo_no_automatic_tolerance(session):
     assert W.reconciliations(session, ['甲'])[0][1]['pending'] == '0.00'
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_same_amount_changed_document_is_discovered_but_order_is_not(session):
     original = i8_project(extra={'id': 'u2', 'amount': '1.00'})
     adopt_i8(session, [original])
@@ -293,8 +273,6 @@ def test_same_amount_changed_document_is_discovered_but_order_is_not(session):
     assert preview['projects'][0]['missing'] == ['usage:u2']
 
 
-@acc("ACC-RPT-MECH-001", "001-02")
-@acc("ACC-RPT-MECH-001", "001-05")
 def test_import_two_categories_confirms_one_atomic_month(session):
     batches = [{'warehouse': '甲', 'ym': '2026-09', 'category': cat, 'source': {'file': '原件'},
                 'rows': [row(id=cat)]} for cat in ('zero', 'monthly')]
@@ -305,8 +283,6 @@ def test_import_two_categories_confirms_one_atomic_month(session):
     assert values['mech_4'] == values['mech_5'] == '100.00'
 
 
-@acc("ACC-RPT-MECH-001", "001-02")
-@acc("ACC-RPT-MECH-001", "001-03")
 def test_empty_month_has_signature_and_unknown_cumulative(session):
     result = W.state(session, '2026-11')
     assert len(result['effective']) == 2
@@ -315,7 +291,6 @@ def test_empty_month_has_signature_and_unknown_cumulative(session):
     assert result['summary'][0]['cumulative']['zero'] is None
 
 
-@acc("ACC-RPT-MECH-001", "001-08")
 def test_i8_one_preview_can_confirm_projects_separately(session):
     preview = W.i8_preview(session, {'projects': [i8_project(), i8_project('乙')]})
     W.i8_confirm(session, {'preview_id': preview['preview_id'], 'warehouses': ['甲']})
@@ -326,7 +301,6 @@ def test_i8_one_preview_can_confirm_projects_separately(session):
     assert W.i8_confirm(session, {'preview_id': preview['preview_id'], 'warehouses': ['甲']}) == result
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_unmapped_i8_project_persists_fact_without_creating_archive_or_amount(session):
     unknown = {'projectId': 'unknown-i8-id', 'projectName': '新发现原名', 'sources': i8_project()['sources'],
                'complete': {'usage': True, 'team': True, 'project': True}}
@@ -341,7 +315,6 @@ def test_unmapped_i8_project_persists_fact_without_creating_archive_or_amount(se
 
 
 @pytest.mark.parametrize('case', ['exact', 'changed', 'missing', 'duplicate-owner'])
-@acc('ACC-RPT-MECH-001', '001-07')
 def test_adoption_retires_only_fully_covered_unique_original_ownership_warning(session, case):
     from copy import deepcopy
     incoming = i8_project()
@@ -368,7 +341,6 @@ def test_adoption_retires_only_fully_covered_unique_original_ownership_warning(s
     assert not W.state(session)['effective']
 
 
-@acc()
 def test_state_batches_reads_and_returns_independent_history_values(session):
     from copy import deepcopy
     from time import perf_counter
@@ -423,7 +395,6 @@ def test_state_batches_reads_and_returns_independent_history_values(session):
     assert W.state(session, '2026-09')['summary'][8]['cumulative']['zero'] == '148.45'
 
 
-@acc()
 def test_project_reads_use_owner_service_and_preserve_archive_fields(session, monkeypatch):
     from app.mod01_projects import service as projects
 
@@ -452,7 +423,6 @@ def test_project_reads_use_owner_service_and_preserve_archive_fields(session, mo
     ]
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_resolved_discovery_reopens_only_after_another_observed_fact(session):
     first = adopt_i8(session, [i8_project()], 'fact-a')
     a = next(d for d in W.state(session)['discoveries'] if d['id'] == first['projects'][0]['discovery_id'])
@@ -467,7 +437,6 @@ def test_resolved_discovery_reopens_only_after_another_observed_fact(session):
     assert len(pending) == 1 and pending[0]['id'] == a['id']
 
 
-@acc("ACC-RPT-MECH-001", "001-06")
 def test_confirm_old_company_month_replaces_historical_component(session):
     from tests.test_mechanical_history import sample
     from app.mod06_proc.workbench_history import build_history_payload
@@ -486,7 +455,6 @@ def test_confirm_old_company_month_replaces_historical_component(session):
     assert W.cumulative(session, '甲', '2026-02')['company'] == '150.00'
 
 
-@acc()
 def test_postgresql_effective_and_preview_queries_acquire_row_share_locks(session):
     assert session.bind.dialect.name == 'postgresql'
     W.repo.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_2': Decimal('103.00')})

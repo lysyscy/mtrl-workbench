@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from tests.shell_src import SHELL, act_entry, bind_blocks, func_body  # noqa: F401  ← `P4`① 读取点收敛
 
@@ -21,7 +20,6 @@ from tests.shell_src import SHELL, act_entry, bind_blocks, func_body  # noqa: F4
 #    已**整把删掉**，取段改走壳的语义口径（`BIND` 块 / 动作条 / 函数各用对口的那个）。⛔ 别写回来。
 
 
-@acc("ACC-PAY-SETUP-001", "001-01")
 def test_打印机设置入口在新壳里可发现且真读写后端():
     """`001-01` 的口径是「**系统内提供可发现的修改入口**」—— ⛔ 它钉的**不是**旧页文件。
     旧页要删（§19）⇒ 断言搬到新壳：入口由 `BIND.m03` 注入到「批量打印」旁边，读写走 GET/PUT。"""
@@ -38,7 +36,6 @@ def test_打印机设置入口在新壳里可发现且真读写后端():
     assert inject.startswith("addBind('m03',"), "打印加工应追加，不覆盖已有加工"
 
 
-@acc()
 def test_批量打印真的调后端且不再有模拟字样():
     """⭐ 原来那三件事只有旧页能做；壳里 `ntPrint` 只回「（模拟）→ 成功」= 假话。
     现在必须**真调** `POST /api/m03/batch`（`ids` = 系统内勾选的通知书）。"""
@@ -49,7 +46,6 @@ def test_批量打印真的调后端且不再有模拟字样():
     assert "pickSet" in nt, "`ids` 必须来自**系统内勾选**（001-09：不收文件 / 不收手输清单）"
 
 
-@acc()
 def test_结果逐条如实_失败与未产出单号都要说出来():
     """⛔ 禁静默：失败要带原因、**未产出的单号必须显式列出**（001-07 / PDF-001-06 都要求）。"""
     run = func_body("m03RunBatch")
@@ -59,7 +55,6 @@ def test_结果逐条如实_失败与未产出单号都要说出来():
     assert "不自建打印模板" in run, "口径要写清（DEV-P-07）"
 
 
-@acc()
 def test_只导出PDF与批量打印共用同一个出口():
     """同一次勾选、只换 `mode` ⇒ **只许有一个出口**（一份能力一个主人）。"""
     pdf = act_entry("ntPdf")
@@ -68,7 +63,6 @@ def test_只导出PDF与批量打印共用同一个出口():
     assert SHELL.count("async function m03RunBatch(") == 1, "出口只许**定义一次**（一份能力一个主人）"
 
 
-@acc()
 def test_反向_不做本地打印也不自造入参():
     """⛔ 两条反向：
     ① `DEV-P-07`：**不自建打印模板**、不做本地渲染 ⇒ 壳里不许出现 `window.print()` / 本地排版；

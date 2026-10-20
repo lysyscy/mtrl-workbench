@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc  # noqa: F401  ← 两个使用方都要它
 
 ROOT = Path(__file__).resolve().parents[2]
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛

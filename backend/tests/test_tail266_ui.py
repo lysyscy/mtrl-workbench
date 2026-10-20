@@ -5,12 +5,10 @@ import sys as _workspace_sys
 _workspace_sys.path.insert(0, str(_WorkspacePath(__file__).resolve().parents[2] / 'tools/audit'))
 from workspace_paths import output as _run_output, output_dir as _run_dir
 from tests.test_tail264_ui import page
-from tests.acc_plugin import acc
 from app.mod15_user.domain import UI_SCALES
 from pathlib import Path
 
 
-@acc()
 def test_annual_columns_balance_and_unread_state(page):
     page.evaluate('applyUiScale', max(UI_SCALES, key=lambda scale: float(scale[2]))[2])
     page.evaluate('''() => {
@@ -71,7 +69,6 @@ def test_annual_columns_balance_and_unread_state(page):
     assert not page._tail_errors
 
 
-@acc()
 def test_only_latest_request_can_publish_after_year_roundtrip(page):
     result = page.evaluate('''async () => {
       const waits=[]; API.m07Extract=()=>new Promise((resolve,reject)=>waits.push({resolve,reject}));
@@ -86,7 +83,6 @@ def test_only_latest_request_can_publish_after_year_roundtrip(page):
     assert result == {'total':'300','loaded':True,'error':''}
 
 
-@acc()
 def test_year_status_switch_reloads_and_empty_balance_stays_blank(page):
     page.evaluate('''async () => {
       closeModal();fExt.year='2026';fExt.status='全部';

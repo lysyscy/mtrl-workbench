@@ -28,7 +28,6 @@ from app.mod03_notice.classify import (
     validate_rules,
 )
 from app.mod05_flow.domain import CATEGORY_JC, CATEGORY_MATERIAL, CATEGORY_MECH
-from tests.acc_plugin import acc
 
 
 def _rec(**kw) -> dict:
@@ -41,7 +40,6 @@ def _rec(**kw) -> dict:
 # ---------------------------------------------------------------- §4.2.2 四类规则
 
 
-@acc("ACC-PAY-EXCL-001", "001-01")
 def test_四类规则各自命中():
     # ① 业务类型（等值）
     assert match_exclude_rule(_rec(biz_type="付劳务公司款")) is not None
@@ -55,7 +53,6 @@ def test_四类规则各自命中():
     assert match_exclude_rule(_rec(input_by="梁丽佳")) is not None
 
 
-@acc("ACC-PAY-EXCL-001", "001-02")
 def test_不命中的记录不算剔除():
     r = _rec(biz_type="付设备租赁款", payee="某租赁公司", input_by="王潜森",
              fields={"BillName": "材料款结算单"})
@@ -63,7 +60,6 @@ def test_不命中的记录不算剔除():
     assert is_excluded(r) is False
 
 
-@acc("ACC-PAY-EXCL-001", "001-03")
 def test_业务类型是等值而不是包含():
     """口径给的是完整值 ⇒ 「付材料采购款」不得因为"包含"而误命中别的写法。"""
     assert match_exclude_rule(_rec(biz_type="付材料采购款项下")) is None
@@ -72,14 +68,12 @@ def test_业务类型是等值而不是包含():
 # ---------------------------------------------------------------- 集采不走剔除（硬约束）
 
 
-@acc("ACC-PAY-EXCL-001", "001-04")
 def test_集采收款单位不参与剔除():
     r = _rec(biz_type="", payee=FORBIDDEN_PAYEE_VALUE)
     assert match_exclude_rule(r) is None           # **不剔除**
     assert decide_placement(r).category == CATEGORY_JC   # 而是**参与分类**
 
 
-@acc("ACC-PAY-EXCL-001", "001-05")
 def test_规则集里出现集采收款单位要显式拒绝():
     with pytest.raises(MustReportError):
         validate_rules((ExcludeRule(KIND_PAYEE, (FORBIDDEN_PAYEE_VALUE,)),))
@@ -94,7 +88,6 @@ def test_规则集里出现集采收款单位要显式拒绝():
 # ---------------------------------------------------------------- §4.2.3 分类
 
 
-@acc("ACC-PAY-EXCL-001", "001-06")
 def test_分类三类且顺序正确():
     # ① 付设备租赁款 → 机械（**优先于**集采收款单位）
     assert decide_placement(_rec(biz_type="付设备租赁款", payee=FORBIDDEN_PAYEE_VALUE)).category == CATEGORY_MECH
@@ -107,7 +100,6 @@ def test_分类三类且顺序正确():
 # ---------------------------------------------------------------- §4.2.4 手改保护
 
 
-@acc("ACC-PAY-CAT-001", "001-01")
 def test_手改过的分类不被重抓覆盖():
     rec = _rec(biz_type="付其他供应商款")             # 自动判定本应是「辅材」
     auto = decide_placement(rec)
@@ -121,7 +113,6 @@ def test_手改过的分类不被重抓覆盖():
 # ---------------------------------------------------------------- 人工剔除 vs 规则命中
 
 
-@acc("ACC-PAY-EXCL-001", "001-07")
 def test_人工剔除不会被规则结果降级():
     """`current_source=manual` 时必须保持人工 —— 否则"恢复剔除"会突然能放开它（§4.2.2）。"""
     rec = _rec(biz_type="付其他供应商款")             # 不命中任何规则
@@ -137,7 +128,6 @@ def test_人工剔除不会被规则结果降级():
 # ---------------------------------------------------------------- 「恢复剔除」（按勾选）
 
 
-@acc("ACC-PAY-CAT-001", "001-02")
 def test_恢复剔除人工与规则命中的都放回且必须勾选():
     """⭐ 2026-10-08 用户裁定：**规则命中的也恢复**（原先只放人工剔除的）。
 
@@ -165,7 +155,6 @@ def test_恢复剔除人工与规则命中的都放回且必须勾选():
     assert "不恢复" not in rep.message, "回执还在说「不恢复」（与实际行为相反 = 界面在说假话）"
 
 
-@acc("ACC-PAY-CAT-001", "001-03")
 def test_批量人工剔除必须勾选():
     rows = [{"id": 7}, {"id": 8}]
     with pytest.raises(MustReportError):
@@ -176,7 +165,6 @@ def test_批量人工剔除必须勾选():
 # ---------------------------------------------------------------- 注入 M2 的钩子
 
 
-@acc("ACC-PAY-EXCL-001", "001-08")
 def test_is_excluded_可直接注入M2抓取预览():
     """M2 `fetch_task.preview(rows, is_excluded=...)` 的钩子形态（§4.2.2 由付款域提供）。"""
     rows = [

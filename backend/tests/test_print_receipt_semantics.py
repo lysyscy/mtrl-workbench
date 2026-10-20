@@ -23,7 +23,6 @@ import pytest
 from app.core.errors import MustReportError
 from app.mod03_notice import service as S
 from app.mod03_notice.print import ipp
-from tests.acc_plugin import acc
 
 from tests.shell_src import SHELL  # noqa: F401  ← `P4`① 读取点收敛
 
@@ -42,7 +41,6 @@ def _ok_ipp_response(status: int = 0) -> bytes:
 # ------------------------------------------------------------------ 投递实现（ipp）
 
 
-@acc()
 @pytest.mark.parametrize("status", [0x0000, 0x0001, 0x0002])
 def test_成功接收的作业算已投递未核实而不是已完成也不失败(monkeypatch, status):
     """⭐ IPP 的 `successful-ok` = **作业被接收**；本实现不轮询作业状态 ⇒ **说不清"打完没有"**
@@ -57,7 +55,6 @@ def test_成功接收的作业算已投递未核实而不是已完成也不失�
         assert "属性" in note, "属性调整应提示核对出纸效果"
 
 
-@acc()
 def test_明确错误才算失败(monkeypatch):
     """明确错误 ⇒ **仍然抛**（001-08「显式报错、不静默丢弃」这条口径不动）。"""
     def _boom(*a, **k):
@@ -98,7 +95,6 @@ def _run(monkeypatch, dispatch):
     )
 
 
-@acc()
 def test_投递说明进回执且不算失败(monkeypatch):
     """⭐ 投递实现返回一句 ⇒ `ok=True, unverified=True, reason=那句`（**新第三态**）。"""
     r = _run(monkeypatch, lambda pdf: "已投递（未核实）")
@@ -108,7 +104,6 @@ def test_投递说明进回执且不算失败(monkeypatch):
     assert len(r.success) == 1, "它算**成功**（`success` 集合里）"
 
 
-@acc()
 def test_已核实与真失败两态不受影响(monkeypatch):
     """空串 = 已核实（`unverified=False`）；抛异常 = 失败（`ok=False`，⛔ 且不是 unverified）。"""
     o = _run(monkeypatch, lambda pdf: "").outcomes[0]
@@ -125,7 +120,6 @@ def test_已核实与真失败两态不受影响(monkeypatch):
 # ------------------------------------------------------------------ 壳侧回执
 
 
-@acc()
 def test_壳把已投递未核实单独说出来且不并进失败():
     """⛔ 壳里不许把"已投递未核实"并进"失败"（那正是"假失败"的来源）。"""
     body = SHELL[SHELL.index("async function m03RunBatch("):]

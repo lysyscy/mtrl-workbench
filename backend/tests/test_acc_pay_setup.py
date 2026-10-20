@@ -9,7 +9,6 @@ import pytest
 from app.core.config import Settings, get_settings
 from app.core.errors import MustReportError
 from app.mod03_notice.settings_store import apply_printer_setting, validate_printer_uri
-from tests.acc_plugin import acc
 
 # ⚠️ 2026-09-19（`§19` 批 4）：`_MOD03_HTML` 已随旧静态页 `m03.html` 一起消失（本处已无引用）——
 #    本文件的断言自 `TAIL-46`（2026-09-18）起就**只打新壳**（`app/web/index.html`）。
@@ -26,7 +25,6 @@ def _clear_settings_cache():
 # ------------------------------------------------------------------ 001-01
 
 
-@acc("ACC-PAY-SETUP-001", "001-01")
 def test_系统内提供可发现的修改入口():
     from fastapi.testclient import TestClient
 
@@ -52,7 +50,6 @@ def test_系统内提供可发现的修改入口():
     assert res.status_code == 200 and "printer_ipp_url" in res.json()
 
 
-@acc("ACC-PAY-SETUP-001", "001-01")
 def test_打印机地址只有这一处入口与一处存储():
     """⭐⭐ 2026-09-21（用户裁定「打印设置从 `MOD-14` **合并进** `MOD-03`」）——
     **单一入口 ＋ 单一存储**：⛔ 不许再出现"两个入口 / 两套存储"。
@@ -84,7 +81,6 @@ def test_打印机地址只有这一处入口与一处存储():
 # ------------------------------------------------------------------ 001-02
 
 
-@acc("ACC-PAY-SETUP-001", "001-02")
 def test_保存后即时生效无需重启(monkeypatch):
     from app.mod03_notice.print import ipp
 
@@ -117,7 +113,6 @@ def test_保存后即时生效无需重启(monkeypatch):
 # ------------------------------------------------------------------ 001-03
 
 
-@acc("ACC-PAY-SETUP-001", "001-03")
 def test_配置持久化重启后仍生效(tmp_path, monkeypatch):
     monkeypatch.delenv("PRINTER_IPP_URL", raising=False)
     env = tmp_path / ".env"
@@ -134,7 +129,6 @@ def test_配置持久化重启后仍生效(tmp_path, monkeypatch):
 # ------------------------------------------------------------------ 001-04
 
 
-@acc("ACC-PAY-SETUP-001", "001-04")
 def test_地址为空或非法须显式报错(tmp_path):
     for bad in ("", "   ", "192.168.5.248", "ftp://x", "ipp:/bad", "not a url"):
         with pytest.raises(MustReportError):
@@ -153,7 +147,6 @@ def test_地址为空或非法须显式报错(tmp_path):
 # ------------------------------------------------------------------ 001-05
 
 
-@acc("ACC-PAY-SETUP-001", "001-05")
 def test_只改打印机不动其他配置(tmp_path):
     env = tmp_path / ".env"
     env.write_text(

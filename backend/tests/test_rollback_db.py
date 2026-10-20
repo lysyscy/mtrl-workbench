@@ -8,12 +8,10 @@ from sqlalchemy import select
 
 from app.core import db
 from app.mod01_projects.models import Project
-from tests.acc_plugin import acc
 from tests.conftest import rollback_db
 
 
 @pytest.mark.parametrize('end', ['normal', 'commit', 'assertion'])
-@acc()
 def test_session_scope_writes_are_rolled_back(monkeypatch, end):
     key = '__rollback_db_' + uuid4().hex
     original_factory = db.get_session_factory()

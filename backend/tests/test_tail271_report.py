@@ -13,7 +13,6 @@ from openpyxl import Workbook
 from app.core.errors import MustReportError
 from app.mod06_proc import mech_report as reader, mech_report_spec as domain, repository
 from app.mod06_proc.models import ProcMechMatchRule
-from tests.acc_plugin import acc
 from tests.test_proc_split_cutoffs import session
 
 
@@ -56,7 +55,6 @@ def rules(session, monkeypatch):
     return session
 
 
-@acc()
 def test_month_sources_history_and_aggregate_rounding():
     data = book()
     rows = {r["报表项目名"]: r for r in reader.read_months(data, ["2026-09"])}
@@ -74,7 +72,6 @@ def test_month_sources_history_and_aggregate_rounding():
         reader.read_file(data, "")
 
 
-@acc()
 def test_confirmation_overwrite_and_missing_preserved(rules):
     s = rules
     repository.save_mech(s, ym="2026-09", warehouse="A", values={"mech_0": 77, "mech_2": 9})
@@ -108,7 +105,6 @@ def test_confirmation_overwrite_and_missing_preserved(rules):
         domain.preview(s, records, {}, {"year_month": "2026-08"})
 
 
-@acc()
 def test_entire_transaction_rolls_back(rules, monkeypatch):
     s = rules
     repository.save_mech(s, ym="2026-09", warehouse="A", values={"mech_2": 9})
@@ -125,7 +121,6 @@ def test_entire_transaction_rolls_back(rules, monkeypatch):
     assert repository.load_mech(s) == before
 
 
-@acc()
 def test_editing_stored_rule_changes_import_target(rules):
     from app.mod06_proc import mech_matching as matching
     matching.save_rule(rules, warehouse="A", aliases=["新报表A"])
@@ -140,7 +135,6 @@ def test_editing_stored_rule_changes_import_target(rules):
         matching.save_rule(rules, warehouse="B", aliases=["新报表A"])
 
 
-@acc()
 def test_generic_api_parse_preview_commit(rules, monkeypatch, tmp_path):
     from app.import_kit import api
     from app.core import preview_store

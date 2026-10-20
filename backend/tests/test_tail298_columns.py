@@ -28,7 +28,6 @@ from app.mod11_jc import domain as D
 from app.mod11_jc import service as SV
 from app.mod11_jc.models import TAG_IN, JcContract
 from app.report_export import jc_export as J
-from tests.acc_plugin import acc
 
 #: 屏幕注解（屏内文字，⛔ 不进 Excel 表头）——**只许这三列**：多一列就该显式改本件（见下）。
 SCREEN_ONLY = ("settle", "debt")
@@ -55,7 +54,6 @@ def _contract(s, *, project_id: int):
 # ============================================================== ① 导出列 = 域内核派生
 
 
-@acc()
 def test_导出列逐列等于域内核那张清单():
     """导出列**不是**在 `jc_export` 里"设计"的 —— 它必须**逐列等于** `domain.JC_COLUMNS` 去掉屏幕专用列。
 
@@ -74,7 +72,6 @@ def test_导出列逐列等于域内核那张清单():
     assert J.MONEY_KEYS <= {k for _, k in J.COLUMNS}, "合计列必须都在导出的列里"
 
 
-@acc()
 def test_导出表头的字与键名对齐_屏幕注解只许那三列():
     """屏幕带「（自动）」「（自由文本）」这类**屏内注解**，Excel **不带**（`export_label` 缺省 = `label`）。
 
@@ -91,7 +88,6 @@ def test_导出表头的字与键名对齐_屏幕注解只许那三列():
         "除白名单那三列外，屏幕与 Excel 的表头字必须**逐字相同** —— 差异只许是显式声明的")
 
 
-@acc()
 def test_序号列键名元数据行字典导出三者同名():
     """⭐ `TAIL-298`：序号列**一个键名走到底** = `project_seq`（⛔ 不再有 `idx` 这种只在元数据里存在的名字）。"""
     assert D.JC_COLUMNS[0]["key"] == "project_seq", "元数据（域内核列清单）首列的键必须是 `project_seq`"
@@ -106,7 +102,6 @@ def test_序号列键名元数据行字典导出三者同名():
 # ============================================================== ③ 值级缺口（真实行字典）
 
 
-@acc()
 def test_导出列每个键都出现在真实行字典里(monkeypatch: pytest.MonkeyPatch):
     """⭐ **值级缺口**：导出列引用的每个键，必须真的出现在 `service.build_list` 产的**行字典**里。
 

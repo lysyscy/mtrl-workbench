@@ -21,7 +21,6 @@ from app.core.errors import MustReportError
 from app.mod01_projects import repository as repo
 from app.mod01_projects.archive import plan_archive
 from app.mod01_projects.models import TYPE_NORMAL, TYPE_SHELL, TYPE_SMALL
-from tests.acc_plugin import acc
 
 _SHELL_NO_KEYWORD = "第四工程公司 2024 前置车间项目"      # ⚠️ **全名不含「小微」** = 那条根因
 _SHELL_WITH_KEYWORD = "第四工程公司 2024小微项目"
@@ -37,7 +36,6 @@ def _new_row(s, *, ptype=TYPE_NORMAL, name=_SHELL_NO_KEYWORD, wh="__自检仓_�
 # --------------------------------------------------------------- 1 · 人工纠正（唯一出口）
 
 
-@acc("ACC-PRJ-OWN-001", "001-12")
 def test_被误判成普通项目的壳可以人工纠正成壳():
     """⭐ 根因那条：错误判成普通项目的行 ⇒ 人工改成壳（**并通过留痕留下介入痕迹**）。"""
     with session_scope() as s:
@@ -55,7 +53,6 @@ def test_被误判成普通项目的壳可以人工纠正成壳():
         s.rollback()                                        # ⛔ 非破坏
 
 
-@acc("ACC-PRJ-OWN-001", "001-12")
 def test_具体小微不由人工指定且重复纠正被拒():
     """⛔ `small` 不受理（它得挂壳下 ＋ 占仓库名，由链路产生）；已是该类型 ⇒ 明确拒（不写空留痕）。"""
     with session_scope() as s:
@@ -74,7 +71,6 @@ def test_具体小微不由人工指定且重复纠正被拒():
 # --------------------------------------------------------------- 2 · "粘住"（覆盖要一直算数）
 
 
-@acc("ACC-PRJ-OWN-001", "001-13")
 def test_人工纠正过的壳_同族仓库在建行时按壳处理():
     """⭐ 根因的**后果**：纠正过一次之后，同族的仓库不该再被当成普通项目建出来。
 
@@ -112,7 +108,6 @@ def test_人工纠正过的壳_同族仓库在建行时按壳处理():
     assert sticky2["manual"], "壳下的两个仓库仍要显式列出（具体小微得人配关键词）"
 
 
-@acc("ACC-PRJ-OWN-001", "001-13")
 def test_粘住只认壳不认普通项目():
     """反向看住：`shell_names_in_archive` 只喂**壳**的全名 —— 别把普通项目的全名也算成壳。
     （`sync_and_archive` 里那条筛选就是按 `project_type == TYPE_SHELL` 取的。）"""
@@ -138,7 +133,6 @@ def test_粘住只认壳不认普通项目():
 # --------------------------------------------------------------- 3 · 仓库名的规矩 / 不变式
 
 
-@acc("ACC-PRJ-OWN-001", "001-14")
 def test_壳改回普通项目必须给出仓库名():
     """⚖️ 反方向：普通项目**必须**挂一个仓库名（候选键 §2.7.4），壳没有 ⇒ **要求显式给出**。
     ⛔ 不给就拒、被占用也拒 —— 不许猜一个填上。"""
@@ -158,7 +152,6 @@ def test_壳改回普通项目必须给出仓库名():
         s.rollback()
 
 
-@acc("ACC-PRJ-OWN-001", "001-14")
 def test_行下有具体小微时不许改类型():
     """§2.7.2 的壳 ⇄ 小微不变式：壳改成别的类型会把名下的小微**变成孤儿** ⇒ 先处理它们。"""
     with session_scope() as s:
@@ -175,7 +168,6 @@ def test_行下有具体小微时不许改类型():
         s.rollback()
 
 
-@acc("ACC-PRJ-OWN-001", "001-12")
 def test_反向_不许在别处直接写project_type():
     """⛔ 反向：改类型**只有一条路**（`repository.set_type`）——
     别处直接 `xxx.project_type = ...` 就会绕过仓库名一致性与留痕。"""

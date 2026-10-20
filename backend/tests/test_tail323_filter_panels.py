@@ -1,8 +1,7 @@
 """通用筛选浮层只改面板；展开不重画业务表或触发取数。"""
 import pytest
 
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 from tests.test_tail282_pay_draft import _setup
 
 
@@ -16,7 +15,6 @@ def setup(p, count):
     }''', count)
 
 
-@acc()
 @pytest.mark.parametrize('count', [8, 800])
 @pytest.mark.parametrize('action', ['pjToggle', 'mpToggle'])
 def test_首次展开筛选不重画业务表(ui_page, count, action):
@@ -31,7 +29,6 @@ def test_首次展开筛选不重画业务表(ui_page, count, action):
     assert metrics['sameTable'] and metrics['renders'] == 0
 
 
-@acc()
 @pytest.mark.parametrize('view,action', [('m05','flPjToggle'),('m08','invWhToggle'),('m11','jcPjToggle')])
 def test_各页项目筛选复用局部更新(ui_page, view, action):
     p = ui_page
@@ -44,7 +41,6 @@ def test_各页项目筛选复用局部更新(ui_page, view, action):
     assert p.evaluate('panelRenders') == 0
 
 
-@acc()
 def test_时间探索和收起只改浮层_确认范围才筛表(ui_page):
     p = ui_page
     setup(p, 800)
@@ -65,7 +61,6 @@ def test_时间探索和收起只改浮层_确认范围才筛表(ui_page):
     assert p.evaluate('panelRenders') == 0
 
 
-@acc()
 def test_项目搜索归档新候选和外部关闭(ui_page):
     p = ui_page
     setup(p, 8)
@@ -97,7 +92,6 @@ def test_项目搜索归档新候选和外部关闭(ui_page):
     assert p.evaluate('panelRenders') == 0
 
 
-@acc()
 @pytest.mark.parametrize('count', [8, 800])
 def test_新增按钮自动滚到草稿并聚焦(ui_page, count):
     p = ui_page
@@ -112,7 +106,6 @@ def test_新增按钮自动滚到草稿并聚焦(ui_page, count):
     assert p.evaluate("document.activeElement.dataset.k") == 'code'
 
 
-@acc()
 def test_手动保存被拒保留草稿和原筛选(ui_page):
     p = ui_page
     _setup(p)
@@ -127,7 +120,6 @@ def test_手动保存被拒保留草稿和原筛选(ui_page):
     assert p.evaluate('JSON.stringify(fNt)===beforeFilters')
 
 
-@acc()
 @pytest.mark.parametrize('count', [8, 550])
 def test_保存新增通知书解除冲突筛选并精确定位(ui_page, count):
     p = ui_page

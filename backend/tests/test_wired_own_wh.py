@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from tests.shell_src import api_entry, func_body
 
@@ -20,7 +19,6 @@ from tests.shell_src import api_entry, func_body
 #    已**整把删掉**，取段改走壳的语义口径（函数 ⇒ `func_body` · `API` 条目 ⇒ `api_entry`）。⛔ 别写回来。
 
 
-@acc("ACC-PRJ-OWN-001", "001-15")
 def test_新小微那块有查名单入口且先二次确认():
     """⭐ 用户原话「兜底前…应该有去仓库跑了一环」⇒ 弹窗的「新小微」那块必须有这一环，
     且因为**会登录 i8 并强踢**（`D9`）⇒ 先弹二次确认、确认之后才发请求。"""
@@ -35,7 +33,6 @@ def test_新小微那块有查名单入口且先二次确认():
     assert "allow_kick: true" in ok and "API.whCheck(" in ok, "确认之后才发请求（⛔ 别在按钮点下就发）"
 
 
-@acc("ACC-PRJ-OWN-001", "001-15")
 def test_没查过不许建_没命中要人确认():
     """⭐ 这一环的意义就在"**拦**"上：⛔ 不查就建 = 凭猜填仓库名（假档案行）。
     没查过 ⇒ 当场拦；查了**没命中**（或**没取到**）⇒ 必须**显式勾选确认**才放行。"""
@@ -47,7 +44,6 @@ def test_没查过不许建_没命中要人确认():
     assert "ownWhForce_" in ok and "checkbox" in ok, "勾选框由检查结果就地生成"
 
 
-@acc("ACC-PRJ-OWN-001", "001-15")
 def test_四态文案分开且没取到不等于没有():
     """⚠️ 三种结局要对用户说三种话：**命中** / **名单里没有** / **没取到名单** ——
     尤其「没取到」**不许**被说成「名单里没有」（那会让用户以为 i8 里真没这个仓库）。"""
@@ -59,7 +55,6 @@ def test_四态文案分开且没取到不等于没有():
         "命中时还要核「它挂的壳与条目上的壳是不是同一个」（否则会建错行）"
 
 
-@acc("ACC-PRJ-OWN-001", "001-16")
 def test_反向_强踢授权只有一处且壳里不自己判定():
     """⛔ 两条反向：
     ① `allow_kick: true` **只有一处**（确认之后的那个函数里）—— 别在别处悄悄打开；

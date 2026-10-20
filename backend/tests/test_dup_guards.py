@@ -33,7 +33,6 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "backend" / "app"
@@ -141,7 +140,6 @@ def _fmt(rows) -> str:
     return " · ".join(f"{rel}::def {fn}" for rel, fn in sorted(rows))
 
 
-@acc()
 def test_不许再长第N加1份实现():
     """⭐ 防扩散的正半：出现**登记册之外**的实现 ⇒ 红（去用唯一出口）。"""
     actual = _scan()
@@ -153,7 +151,6 @@ def test_不许再长第N加1份实现():
     assert not problems, "\n".join(problems)
 
 
-@acc()
 def test_登记册与现实同步_消掉副本要销号():
     """⭐ 反半：**少一处 = 好方向** —— 但登记册必须同步（⛔ 别让它成为"过去曾有过什么"）。"""
     actual = _scan()

@@ -23,28 +23,24 @@ from app.core.errors import MustReportError
 from app.mod03_notice import notice_actions as A
 from app.mod03_notice import notice_manual_actions as M
 from app.mod03_notice.models import PaymentNotice
-from tests.acc_plugin import acc
 from tests.m03_action_helpers import FakeWriteSession, _notice
 
 
 # ============================================================ 能力 2 · 批量改分类
 
 
-@acc("ACC-PAY-CAT-001", "001-04")
 def test_批量改分类只允许三类():
     with pytest.raises(MustReportError) as err:
         A.change_category([{"id": 1, "category": "material"}], [1], "other")
     assert "没有「其他」类" in err.value.message
 
 
-@acc("ACC-PAY-CAT-001", "001-05")
 def test_批量改分类必须先勾选():
     with pytest.raises(MustReportError) as err:
         A.change_category([{"id": 1, "category": "material"}], [], "mechanical")
     assert "必须先勾选" in err.value.message
 
 
-@acc("ACC-PAY-CAT-001", "001-06")
 def test_批量改分类分档回报且只动勾选行():
     rows = [
         {"id": 1, "category": "material"},
@@ -57,7 +53,6 @@ def test_批量改分类分档回报且只动勾选行():
     assert "不留痕" in change.message              # 手改分类不留痕（§9.3）
 
 
-@acc("ACC-PAY-CAT-001", "001-07")
 def test_批量改分类落库只改勾选行():
     from app.mod03_notice import repository as repo
 
@@ -71,7 +66,6 @@ def test_批量改分类落库只改勾选行():
 # ============================================================ 能力 3 · 剔除 / 恢复剔除
 
 
-@acc("ACC-PAY-CAT-001", "001-08")
 def test_人工剔除标记来源为manual且分档回报():
     rows = [{"id": 1, "excluded": False}, {"id": 2, "excluded": True}]
     report = A.manual_exclude(rows, [1, 2])
@@ -79,7 +73,6 @@ def test_人工剔除标记来源为manual且分档回报():
     assert "人工批量剔除" in report.message
 
 
-@acc("ACC-PAY-CAT-001", "001-09")
 def test_恢复剔除人工与规则命中的都放回且分开回报():
     """⭐ 2026-10-08 用户裁定：**规则命中的也恢复**（原先只放人工剔除的）。
 
@@ -100,7 +93,6 @@ def test_恢复剔除人工与规则命中的都放回且分开回报():
     assert "不恢复" not in report.message
 
 
-@acc("ACC-PAY-CAT-001", "001-10")
 def test_恢复剔除必须先勾选():
     """⚠️ 本 claim 有个**前提**：剔除行**必须勾得上** —— 否则"必须先勾选"变成**无路可走**
     （用户 2026-09-21 报障：勾选框对剔除行 `disabled`，而恢复又要求先勾 ⇒ 两道门互锁）。
@@ -129,7 +121,6 @@ def test_恢复剔除必须先勾选():
 # ============================================================ 能力 4 · 手动新增行
 
 
-@acc("ACC-PAY-MANUAL-001", "001-01")
 def test_手动行统计结算恒为0且录入人取自当前操作人():
     payload = M.manual_row_payload(
         entered_by="张三", doc_date="2026-09-01", amount_approved="50000",
@@ -145,7 +136,6 @@ def test_手动行统计结算恒为0且录入人取自当前操作人():
     assert "恒为 0" in "；".join(payload.notes)
 
 
-@acc("ACC-PAY-MANUAL-001", "001-02")
 def test_手动行超上限被拦截且保留原值():
     with pytest.raises(MustReportError) as err:
         M.manual_row_payload(entered_by="张三", doc_date="2026-09-01",
@@ -153,14 +143,12 @@ def test_手动行超上限被拦截且保留原值():
     assert "不能超过审批金额" in err.value.message and "保留原值" in err.value.message
 
 
-@acc("ACC-PAY-MANUAL-001", "001-03")
 def test_手动行必须填单据日期():
     with pytest.raises(MustReportError) as err:
         M.manual_row_payload(entered_by="张三", amount_approved="100")
     assert "单据日期" in err.value.message
 
 
-@acc("ACC-PAY-MANUAL-001", "001-04")
 def test_编辑删除只对手动行开放():
     with pytest.raises(MustReportError) as err:
         M.assert_manual_editable({"id": 1, "ph_id": "3700000000123", "is_manual": False})
@@ -168,7 +156,6 @@ def test_编辑删除只对手动行开放():
     M.assert_manual_editable({"id": 1, "ph_id": "MANUAL-abc123", "is_manual": True})   # 不抛
 
 
-@acc("ACC-PAY-MANUAL-001", "001-06")
 def test_手动行的审批状态必须落库_空值按已批_非法值拒():
     """⭐ 2026-10-08 BUG 钉子：手动增行**默认「已批」**、保存后**列表显示为空** ⇒ 付不了款。
 
@@ -196,7 +183,6 @@ def test_手动行的审批状态必须落库_空值按已批_非法值拒():
         "审批状态不在手动行可改白名单里 ⇒ 编辑时静默跳过（选了「未批」也存不进去）"
 
 
-@acc("ACC-PAY-MANUAL-001", "001-05")
 def test_手动行项目候选含归档但排除壳():
     class P:
         def __init__(self, pid, typ, status="active", disp="", wh=""):

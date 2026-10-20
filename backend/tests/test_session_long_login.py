@@ -13,7 +13,6 @@ from types import SimpleNamespace
 import pytest
 
 from app.core import session as SESS
-from tests.acc_plugin import acc
 
 KEY = b"isolated-long-login-key"
 
@@ -29,7 +28,6 @@ def signed(payload):
     return payload + "." + base64.urlsafe_b64encode(mac).decode().rstrip("=")
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 @pytest.mark.parametrize("elapsed", [dt.timedelta(hours=12, seconds=1), dt.timedelta(days=3650)])
 def test_signed_account_remains_valid_after_long_time(elapsed):
     issued = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
@@ -81,7 +79,6 @@ def memory_http(monkeypatch):
     client.close()
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_login_sets_persistent_cookie_and_logout_removes_identity(memory_http):
     client = memory_http
     response = client.post("/m15/login", data={
@@ -104,7 +101,6 @@ def test_login_sets_persistent_cookie_and_logout_removes_identity(memory_http):
     assert client.post("/__session_probe").status_code == 401
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_pre_change_v2_ticket_is_no_longer_rejected_by_its_old_expiry(memory_http):
     # 用独立签名构造旧版v2格式：第三段原是过期戳，早已超过原12小时期限。
     encoded = base64.urlsafe_b64encode(b"worker.with.dots").decode().rstrip("=")
@@ -114,7 +110,6 @@ def test_pre_change_v2_ticket_is_no_longer_rejected_by_its_old_expiry(memory_htt
     assert memory_http.post("/__session_probe").json() == {"account": "worker.with.dots"}
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 @pytest.mark.parametrize("part", [0, 1, 2, 3])
 def test_tampering_each_signed_field_is_rejected_by_read_and_write_gate(memory_http, part):
     fields = SESS.make("worker.with.dots").split(".")
@@ -125,14 +120,12 @@ def test_tampering_each_signed_field_is_rejected_by_read_and_write_gate(memory_h
     assert memory_http.post("/__session_probe").status_code == 401
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 def test_key_rotation_still_invalidates_signed_ticket(monkeypatch):
     ticket = SESS.make("worker.with.dots")
     monkeypatch.setattr(SESS, "secret", lambda: b"other-isolated-key")
     assert SESS.read(ticket) is None
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 @pytest.mark.parametrize("payload", [
     "d29ya2Vy.946684800", "d29ya2Vy.4102444800",  # 全部旧三段票，即便签名正确。
     "v1.d29ya2Vy.1", "v3.d29ya2Vy.1",            # 未知版本，即便按该版本重签。
@@ -146,7 +139,6 @@ def test_correct_signature_cannot_bypass_format_and_account_checks(memory_http, 
     assert memory_http.post("/__session_probe").status_code == 401
 
 
-@acc("ACC-USR-MGMT-001", "001-03")
 @pytest.mark.parametrize("value", [None, "", "abc", "a.b", "a.b.c.d", "v2.a.1"])
 def test_missing_or_garbage_cookie_remains_unauthenticated(value):
     assert SESS.read(value) is None

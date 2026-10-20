@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""`doc_audit` 漂移检查 —— `T1` 幽灵用例号 · `T2` 已废除术语 · `T3` 幽灵路径 · `T4` 状态数字失配。
+"""`doc_audit` 漂移检查 —— `T1` 幽灵用例号 · `T2` 已废除术语 · `T3` 幽灵路径 · `T4` 票计数及硬数字锚点。
 
 ⚠️ **纯搬运**（自 `doc_audit.py` 拆出，无逻辑改动）。真源与常量见 `audit_common.py`。
 """
@@ -19,7 +19,7 @@ from audit_common import (
     PATH_ROOTS, REPO_ROOT,
     RETIRED_TERMS, SOFT_EXEMPT, T3_HINT_WINDOW, T3_OLD_PATH_HINTS, T3_SKIP_PREFIXES,
     TOP_DIRS, YELLOW, RED,
-    _ACC_ID_RE, _ACC_RE, _MARKED_PATH_RE, _OUTSIDE_PATH_RE, _PATH_RE, _PLACEHOLDER, _STATUS_RE,
+    _ACC_ID_RE, _ACC_RE, _MARKED_PATH_RE, _OUTSIDE_PATH_RE, _PATH_RE, _PLACEHOLDER,
     _hit, delivery_root, iter_docs,
 )
 
@@ -411,74 +411,8 @@ def check_section_refs(docs: list) -> list[dict]:
 # --------------------------------------------------------- T4 交接文件状态数字
 
 
-def _actual_states() -> dict[str, int] | None:
-    try:
-        import acc_report as ar
-    except Exception:                                  # noqa: BLE001
-        return None
-    try:
-        baseline = ar.load_json(ar.resolve_baseline(None))
-        rp = ar.DEFAULT_RESULTS
-        payload = ar.load_json(rp) if rp.exists() else {}
-        states = ar.build_states(ar.collect_points(baseline),
-                                 ar.collect_pending(baseline), payload)
-    except SystemExit:
-        return None
-    tally = {"绿": 0, "红": 0, "待建": 0, "未绑定": 0}
-    for pts in states.values():
-        for st in pts.values():
-            tally[st] += 1
-    tally["合计"] = sum(tally.values())
-    return tally
 
 
-def check_status_line() -> list[dict]:
-    """`T4` · **两份活文档里每一处四态数字**都必须等于实际（2026-09-19 **扩面**）。
-
-    ⚠️ **为什么扩**：原实现只看「当前版本」行**后 8 行**里的**第一处**数字 —— 实测漏过一次：
-    `执行情况-主文档.md` 的「接手起步」清单里还写着 **521 = 绿 447**（已过期一周），而 `T4` 报
-    「必须修 0」。⇒ 现在**两份活文档的每一处**四态数字都核对，且**简略版（给用户看的那页）
-    必须至少有一处**（它要以真实数字开头）。⛔ **归档件不查**（那里的旧数字是**正确的留痕**）。
-
-    ⚠️ **认不出 / 拿不到真源 ⇒ 显式报黄**，绝不静默跳过 —— 静默跳过会让人把
-    「没检查」读成「检查通过」（本项目已栽过两次的同一类错）。
-    """
-    actual = _actual_states()
-    out: list[dict] = []
-    if actual is None:
-        return [{"code": "T4", "side": "仓", "rel": HANDBOOK_REL, "line": 1, "what": "（无法校验）",
-                 "why": "拿不到真源：先跑全套 pytest 生成 var/state/verification/acc_results.json",
-                 "fix": "跑 pytest 后再跑本工具", "level": YELLOW, "text": ""}]
-    want = (actual["绿"], actual["红"], actual["待建"], actual["未绑定"])
-    for rel, must_have in ((LEDGER_REL, True),):
-        f = REPO_ROOT / rel
-        if not f.exists():
-            out.append({"code": "T4", "side": "仓", "rel": rel, "line": 1, "what": "（文件不存在）",
-                        "why": "活文档缺失 ⇒ 无法校验状态数字", "fix": "恢复该文件",
-                        "level": YELLOW, "text": ""})
-            continue
-        lines = f.read_text(encoding="utf-8").splitlines()
-        hits = 0
-        for i, line in enumerate(lines):
-            m = _STATUS_RE.search(line)
-            if not m:
-                continue
-            hits += 1
-            got = tuple(int(g) for g in m.groups())
-            if got != want:
-                out.append({"code": "T4", "side": "仓", "rel": rel, "line": i + 1,
-                            "what": "绿%d·红%d·待建%d·未绑定%d" % got,
-                            "why": "实际是 绿%d·红%d·待建%d·未绑定%d（合计 %d）"
-                                   % (want + (actual["合计"],)),
-                            "fix": "跑 `python tools/audit/doc_audit.py --block` 后替换该处",
-                            "level": RED, "text": line.strip()})
-        if must_have and not hits:
-            out.append({"code": "T4", "side": "仓", "rel": rel, "line": 1,
-                        "what": "（当前状态页里认不出四态）",
-                        "why": "当前状态页必须保存可对照的检查账与未验边界",
-                        "fix": "在顶部写一行「绿 N · 红 N · 待建 N · 未绑定 N」",
-                        "level": YELLOW, "text": ""})
-    return out
 
 
 #: `T4` ④ 的靶文档
@@ -584,14 +518,6 @@ def check_count_anchors() -> list[dict]:
                         out.append(_anchor(rel, i, "尾巴计数 活跃%d·已销号%d" % got,
                                            "台账实际是 活跃%d·已销号%d" % want, line))
 
-    # ② 清单真值只读 CMDS，不再核历史 foreach 与手抄把数。
-    from audit_meta import gate_commands
-    try:
-        gate_commands()
-    except (OSError, ValueError, SyntaxError, TypeError) as exc:
-        out.append(_anchor("tools/oneoff/_run_rulers.py", 1, "CMDS 清单无法读取",
-                           str(exc), ""))
-
     # ③ ~~`U5` 登记条目数~~ —— ⛔ **已撤**（2026-09-30 `TAIL-201` 退场）：
     #    原来这里 import `ui_parity.U5_COUNT`，再核活文档里"登记 N 个规格件"那句。
     #    `U1`/`U5` 退场后那个常量不存在了 ⇒ 这条锚点连同 `_U5_ANCHOR_RE` 一起撤（⛔ 别留着 ——
@@ -617,7 +543,7 @@ def main(argv: list[str] | None = None) -> int:
     cases = set(ar.load_json(ar.resolve_baseline(None)).get("cases") or {})
     docs = iter_docs()
     raw = (check_acc_ids(cases, docs) + check_terms(docs) + check_paths(docs) + check_section_refs(docs)
-           + check_status_line() + check_count_anchors() + check_cancelled()
+           + check_count_anchors() + check_cancelled()
            + check_gitignore_drops())
     reds = [h for h in raw if h["level"] == RED]
     yellows = [h for h in raw if h["level"] == YELLOW]

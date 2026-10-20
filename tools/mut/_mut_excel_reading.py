@@ -35,7 +35,7 @@ def main():
     with isolated_backend('excel-reading-') as (base, env):
         def run(node=''):
             return subprocess.run([str(PY), '-X', 'utf8', '-B', '-m', 'pytest', TEST + node,
-                                   '-o', 'addopts=-p tests.acc_plugin', '-q'], cwd=base, env=env,
+                                   '-o', 'addopts=', '-q'], cwd=base, env=env,
                                   capture_output=True, encoding='utf-8', timeout=90)
         result = run()
         assert result.returncode == 0, result.stdout + result.stderr

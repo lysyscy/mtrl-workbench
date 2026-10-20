@@ -16,11 +16,9 @@ from app.mod03_notice.notice_api_router import _api_item
 from app.mod05_flow import repository as flows, router as flow_api
 from app.mod11_jc import repository as R, service as S, api as jc_api
 from tests.test_acc_jc_pay_link import _project
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
-from tests.acc_plugin import acc
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
-@acc()
 def test_display_and_revoke_receipt(monkeypatch, rollback_db):
     with session_scope() as s:
         @contextmanager
@@ -68,7 +66,6 @@ def test_display_and_revoke_receipt(monkeypatch, rollback_db):
         assert len(flows.list_flows_of_notice(s, n.id)) == 3
 
 
-@acc()
 def test_notice_only_revoked_flow():
     from app.mod03_notice.list_view import NoticeRow
     row = NoticeRow(notice_id=1, flows=({'status': 'revoked', 'amount': 10},))
@@ -76,7 +73,6 @@ def test_notice_only_revoked_flow():
     assert payload['has_any_flow'] and not payload['has_effective_flow']
 
 
-@acc()
 def test_browser_flow_dialogs_and_virtual_jump(ui_page):
     p = ui_page
     from app.mod03_notice.page import render_theme

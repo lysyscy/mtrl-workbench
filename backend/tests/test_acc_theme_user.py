@@ -24,7 +24,6 @@ from app.main import app
 from app.mod03_notice import page as P
 from app.mod15_user import domain as D
 from app.mod15_user import repository as R
-from tests.acc_plugin import acc
 
 #: 挑两套**互不相同**的主题（⚠️ 断言里要确认它们真的不同 —— ⛔ 别假设）
 THEME_A = "靛青"
@@ -46,7 +45,6 @@ def _css(c: TestClient) -> str:
     return r.text
 
 
-@acc("ACC-UI-THEME-001", "001-06")
 def test_主题按用户隔离且未设置回落默认套():
     """两个账号各选各的主题，**互不影响**；都没设置时各自回落默认套。"""
     # ⚠️ 先证明这两套真的不同（否则整条断言是空的 —— 两边都是同一份 CSS 也会"通过"）
@@ -110,7 +108,6 @@ def test_主题按用户隔离且未设置回落默认套():
             s.commit()
 
 
-@acc("ACC-UI-THEME-001", "001-06")
 def test_切换器住系统设置且清单由该页自取且不刷新页面():
     """⭐ 2026-09-21（用户报障「换主题无效 ＋ 换完被扔回看板」）⇒ 三件事一起钉住：
 
@@ -170,7 +167,6 @@ def test_切换器住系统设置且清单由该页自取且不刷新页面():
         "（用户 2026-09-21 报的就是这个）")
 
 
-@acc("ACC-UI-THEME-001", "001-06")
 def test_每套主题都给出一份配色标本且主色互不相同():
     """⭐ 2026-09-21（用户反馈「换主题**感觉不到颜色变化**」）⇒ 把"看得见差异"机械化：
 
@@ -202,7 +198,6 @@ def test_每套主题都给出一份配色标本且主色互不相同():
         "「默认」与「深色」的底色一样 ⇒ 深色套没生效（或 seed 写错了）")
 
 
-@acc("ACC-UI-THEME-001", "001-06")
 def test_主题偏好存在账号上而不是进程里():
     """隔离的**结构性**一半：偏好得落在**账号那一行**上（⛔ 不是模块级变量 / 全局缓存）。
 

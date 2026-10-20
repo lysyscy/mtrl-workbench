@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.mod01_projects.models import Project
 from app.mod11_jc import repository as R
 from app.mod11_jc.models import JcContract, TAG_OUT
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -33,7 +32,6 @@ def fetched(no, date):
 
 @pytest.mark.parametrize("source_date", ["2026-10-12", "", None, "202050225"])
 @pytest.mark.parametrize("locked", [True, False])
-@acc()
 def test_protected_date_and_other_sync_fields(session, source_date, locked):
     row = JcContract(contract_no="REVIEWED", project_id=1, contract_date="2025-02-25",
                      contract_date_locked=locked, supplier="旧供应商", material_name="人工材料",
@@ -51,7 +49,6 @@ def test_protected_date_and_other_sync_fields(session, source_date, locked):
     assert (row.material_name, row.tag, row.remark, row.project_id) == ("人工材料", TAG_OUT, "人工备注", 1)
 
 
-@acc()
 def test_new_contract_is_unprotected_and_missing_number_skips(session):
     result = R.upsert_fetched_contracts(session, project_id=1, rows=[fetched("NEW", "2026-10-12"), fetched("", "")])
     row = session.execute(select(JcContract)).scalar_one()
@@ -62,7 +59,6 @@ def test_new_contract_is_unprotected_and_missing_number_skips(session):
     assert row.contract_date == ""
 
 
-@acc()
 def test_cached_unprotected_row_reloads_new_protection(session):
     row = JcContract(contract_no="CACHED", project_id=1, contract_date="2025-11-14")
     session.add(row)
@@ -74,7 +70,6 @@ def test_cached_unprotected_row_reloads_new_protection(session):
     assert row.contract_date == "2025-02-25" and row.contract_date_locked is True
 
 
-@acc()
 def test_migration_defaults_and_downgrade_keep_dates():
     from alembic.migration import MigrationContext
     from alembic.operations import Operations

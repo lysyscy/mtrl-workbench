@@ -26,7 +26,6 @@ from app.core.errors import ExternalServiceError
 from app.mod02_i8 import client as C
 from app.mod02_i8 import cookie_store as CS
 from app.mod02_i8.login import LoginResult
-from tests.acc_plugin import acc
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GITIGNORE = REPO_ROOT / ".gitignore"
@@ -99,7 +98,6 @@ def env(monkeypatch, tmp_path):  # noqa: ANN001
 # --------------------------------------------------------------------- 断言
 
 
-@acc()
 def test_缓存命中则不登录(env):  # noqa: ANN001
     """⭐ **缓存命中 ⇒ 根本不登录**（这是本片的**核心**：导出不再次次撞单会话）。"""
     session, spy = env
@@ -110,7 +108,6 @@ def test_缓存命中则不登录(env):  # noqa: ANN001
     assert session.headers.get("Cookie") == "CACHED-COOKIE", "缓存里的 cookie 没被用上"
 
 
-@acc()
 def test_缓存命中也不绕过强踢授权语义(env):  # noqa: ANN001
     """缓存命中 ⇒ 根本不登录 ⇒ 无论 `allow_kick` 真假都**不踢人**（授权语义不被绕过）。"""
     _session, spy = env
@@ -119,7 +116,6 @@ def test_缓存命中也不绕过强踢授权语义(env):  # noqa: ANN001
     assert spy.count == 0, "缓存命中却走了登录 ⇒ 强踢授权语义被绕过"
 
 
-@acc()
 def test_无缓存则登录一次且写进缓存(env):  # noqa: ANN001
     """无缓存 ⇒ 登录一次；成功后 cookie **落盘**（下次才可能命中）。"""
     _session, spy = env
@@ -129,7 +125,6 @@ def test_无缓存则登录一次且写进缓存(env):  # noqa: ANN001
     assert CS.load() == "FRESH", "登录成功后 cookie 没落盘 ⇒ 下次还得再登一次"
 
 
-@acc()
 def test_401时重登一次并更新缓存(env):  # noqa: ANN001
     """会话失效（401）⇒ **重登一次**（D9：不得循环）且**缓存被更新**。"""
     session, spy = env
@@ -142,7 +137,6 @@ def test_401时重登一次并更新缓存(env):  # noqa: ANN001
     assert CS.load() == "RENEWED", "重登成功后缓存没更新（下次还会拿旧的再撞 401）"
 
 
-@acc()
 def test_重登后仍401则清掉已知不可用的缓存(env):  # noqa: ANN001
     """重登后**仍 401** ⇒ 该 cookie 已知不可用 ⇒ 从缓存抹掉（异常照旧抛，判定不变）。"""
     session, spy = env
@@ -155,7 +149,6 @@ def test_重登后仍401则清掉已知不可用的缓存(env):  # noqa: ANN001
     assert CS.load() is None, "已知不可用的 cookie 不该留在盘上（下次进程启动会先白撞一次 401）"
 
 
-@acc()
 def test_旧纯文本格式兼容(env):  # noqa: ANN001
     """素材包有先例：旧缓存文件是**一行纯 cookie**（无 JSON 元数据）⇒ 仍要认，且能直接用上。"""
     _session, spy = env
@@ -171,7 +164,6 @@ def test_旧纯文本格式兼容(env):  # noqa: ANN001
     assert spy.count == 0, "旧纯文本格式没被当缓存命中"
 
 
-@acc()
 def test_缓存文件不进git():
     """⚠️ cookie 是**凭证** ⇒ 落点必须在 `artifacts/` 下，且 `.gitignore` 有**显式规则行**。
 

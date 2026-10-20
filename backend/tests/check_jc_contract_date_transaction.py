@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.mod01_projects.models import Project
 from app.mod11_jc.models import JcContract
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -52,7 +51,6 @@ def isolated():
     engine.dispose()
 
 
-@acc()
 def test_90_updates_restore_and_excluded_record(isolated):
     c, module, before, records = isolated
     after = module.write_dates(c, before, records)
@@ -63,7 +61,6 @@ def test_90_updates_restore_and_excluded_record(isolated):
     assert all(r["contract_date"] == "2025-11-14" and not r["contract_date_locked"] for r in restored)
 
 
-@acc()
 def test_identity_mismatch_refuses_entire_batch(isolated):
     c, module, before, records = isolated
     records[-1]["contract_no"] = "WRONG"
@@ -72,7 +69,6 @@ def test_identity_mismatch_refuses_entire_batch(isolated):
     assert c.execute(text("select count(*) from jc_contract where contract_date_locked")).scalar_one() == 0
 
 
-@acc()
 def test_mid_batch_rowcount_failure_rolls_back(isolated):
     c, module, before, records = isolated
 

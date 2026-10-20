@@ -3,10 +3,8 @@
 import pytest
 from app.core.errors import MustReportError
 from app.mod06_proc.mech_matching import resolve_report_project
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_same_full_name_never_matches_and_edit_takes_effect():
     rules = [
         {"warehouse": "大唐雷州发电项目", "display": "大唐雷州", "aliases": ["广东大唐雷州项目"]},

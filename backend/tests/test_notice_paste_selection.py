@@ -1,7 +1,6 @@
 """Pasted bill numbers select only unique active records; manual picks stay put."""
 import pytest
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 from tests.test_tail309_notice_selection import _setup, _ids, _pick
 
 
@@ -16,9 +15,6 @@ def paste(p,text):
     p.locator('.modal h3').filter(has_text='单据号勾选结果').wait_for()
 
 
-@acc('ACC-NOTICE-PASTE-001','001-01')
-@acc('ACC-NOTICE-PASTE-001','001-02')
-@acc('ACC-NOTICE-PASTE-001','001-03')
 def test_paste_exact_codes_refresh_all_projects_report_conflicts_and_never_print(ui_page):
     p=ui_page
     _setup(p)
@@ -40,7 +36,6 @@ def test_paste_exact_codes_refresh_all_projects_report_conflicts_and_never_print
     assert p.locator('[data-act="ntPrint"]').is_enabled()
 
 
-@acc('ACC-NOTICE-PASTE-001','001-04')
 def test_manual_picks_and_unpicks_keep_positions_only_pasted_batch_is_grouped(ui_page):
     p=ui_page
     _setup(p)
@@ -60,7 +55,6 @@ def test_manual_picks_and_unpicks_keep_positions_only_pasted_batch_is_grouped(ui
     assert rows(p)==['102','103','101']
 
 
-@acc('ACC-NOTICE-PASTE-001','001-06')
 def test_empty_or_unmatched_paste_preserves_selection_and_input_for_correction(ui_page):
     p=ui_page
     _setup(p)
@@ -78,7 +72,6 @@ def test_empty_or_unmatched_paste_preserves_selection_and_input_for_correction(u
     assert p.input_value('#ntPasteInput')=='NOT-FOUND'
 
 
-@acc()
 def test_read_failure_or_closed_dialog_does_not_apply_stale_selection(ui_page):
     p=ui_page
     _setup(p)
@@ -97,7 +90,6 @@ def test_read_failure_or_closed_dialog_does_not_apply_stale_selection(ui_page):
     assert _ids(p)==['103']
 
 
-@acc('ACC-NOTICE-PASTE-001','001-05')
 def test_paste_group_reaches_top_of_virtual_table_without_manual_scroll_jumps(ui_page):
     p=ui_page
     _setup(p)

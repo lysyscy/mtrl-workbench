@@ -21,7 +21,6 @@ from pathlib import Path
 
 from app.mod01_projects import repository as repo
 from app.mod01_projects.models import LOGGED_FIELDS, STATUS_ARCHIVED, Project, ProjectFieldLog
-from tests.acc_plugin import acc
 from tests.m01_helpers import make_project
 from tests.m04_helpers import FakeSession
 
@@ -51,7 +50,6 @@ def _logs(s: _WriteSession) -> list[ProjectFieldLog]:
     return [r for r in s.added if isinstance(r, ProjectFieldLog)]
 
 
-@acc()
 def test_留痕白名单是_全名_状态_类型_三类():
     """`LOGGED_FIELDS` = 留痕范围的**正源** ⇒ 它**多一类 / 少一类**都必须被人看见。
 
@@ -69,7 +67,6 @@ def test_留痕白名单是_全名_状态_类型_三类():
             f"{not_logged} 不该留痕（§9.3 只给 全名 / 状态 / 类型）")
 
 
-@acc()
 def test_改展示名与关键词不写留痕():
     """展示名 = **显示别名**、关键词 = **匹配用** ⇒ 都不是"业务事实" ⇒ 改它们**不产生留痕**。
 
@@ -87,7 +84,6 @@ def test_改展示名与关键词不写留痕():
     assert p.match_keywords == ["石灰窑", "窑"], "关键词没去空去重"
 
 
-@acc()
 def test_改全名与状态各写一条留痕且字段名在白名单里():
     """⭐ 「是否手改」的**唯一事实来源 = 留痕** ⇒ 该留痕的两类必须**真留下**，且字段名在白名单里。
 
@@ -112,7 +108,6 @@ def test_改全名与状态各写一条留痕且字段名在白名单里():
         "状态留痕缺改前 / 改后值"
 
 
-@acc()
 def test_ProjectFieldLog只许在唯一出口里构造():
     """绕过白名单**直写**留痕 = 范围失控（今天改一处、明天别处偷偷写）⇒ 构造点只许**一处**。
 

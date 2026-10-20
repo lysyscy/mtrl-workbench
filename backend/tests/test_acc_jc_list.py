@@ -23,7 +23,6 @@ from app.mod03_notice import models as _m03  # noqa: F401
 from app.mod11_jc import domain as D
 from app.mod11_jc import service as SV
 from app.mod11_jc.models import TAG_IN, JcContract, JcInvoice, JcPayment
-from tests.acc_plugin import acc
 
 WH_A = "__自检仓_集采甲__"
 WH_B = "__自检仓_集采乙__"
@@ -62,7 +61,6 @@ def _payment(s, contract_id: int, date: str, amount: str, source: str = "manual"
     return row
 
 
-@acc("ACC-JC-UI-001", "001-02")
 def test_项目筛选键是仓库名_且筛选后行数独立复算_复位回全量():
     """⭐ 判据三条：① 键 = **仓库名**；② 筛选后行数 = **独立复算**；③ **复位后回到全量**。"""
     with session_scope() as s:
@@ -95,7 +93,6 @@ def test_项目筛选键是仓库名_且筛选后行数独立复算_复位回全
         s.rollback()
 
 
-@acc("ACC-JC-UI-001", "001-09")
 def test_派生金额由子表现算_改子表即改欠款():
     """⭐ 「**改子表即改欠款**」在**真库 ＋ 装配**上再验一遍（域内核那条是纯函数层）。"""
     with session_scope() as s:
@@ -122,7 +119,6 @@ def test_派生金额由子表现算_改子表即改欠款():
         s.rollback()
 
 
-@acc("ACC-JC-UI-001", "001-11")
 def test_合计行各金额列独立复算():
     """合计 = **逐行现算后相加**；这里用原生算术独立复算一遍（⛔ 不调 `service` 的合计）。"""
     with session_scope() as s:
@@ -141,7 +137,6 @@ def test_合计行各金额列独立复算():
         s.rollback()
 
 
-@acc("ACC-JC-PAY-001", "001-02")
 def test_去重集合是全库的_跨合同也算已引用():
     """⭐ 判据原文点明「**不分合同**」⇒ 去重集合必须从**全库**取（不是"本合同的付款"）。
 
@@ -174,7 +169,6 @@ def test_去重集合是全库的_跨合同也算已引用():
         s.rollback()
 
 
-@acc()
 def test_列表每行带引用过的通知书id_否则m03的集采关联会静默变空():
     """`M5-7` 接线前补的实现层自检（⛔ 不绑判据点）。
 
@@ -204,7 +198,6 @@ def test_列表每行带引用过的通知书id_否则m03的集采关联会静�
         s.rollback()
 
 
-@acc("ACC-JC-UI-001", "001-01")
 def test_主表字段数20列且列清单与两态取值域只有一个出口():
     """判据 `001-01`「主表字段数与字段名以 §6.4.1 为准」的**可机器化部分**：
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from app.mod01_projects.domain import OwnershipDecision, needs_archive
 
@@ -30,18 +29,15 @@ ROUTER_SRC = (
 # --------------------------------------------------------------- 纯函数（判定「要不要建档」）
 
 
-@acc("ACC-PRJ-SYNC-001", "001-11")
 def test_有未建档的行就要走建档():
     assert needs_archive([OwnershipDecision("not_archived")]) is True
 
 
-@acc("ACC-PRJ-SYNC-001", "001-11")
 def test_全部已走完就不必建档():
     ds = [OwnershipDecision("normal", target_id=1), OwnershipDecision("small", target_id=2)]
     assert needs_archive(ds) is False
 
 
-@acc("ACC-PRJ-SYNC-001", "001-11")
 def test_未命中关键词不触发建档():
     """⚠️ `needs_keyword` / `needs_choice` 走的是**链路 C 弹窗**，不是建档 —— 两者别混。"""
     assert needs_archive([OwnershipDecision("needs_keyword", shell_id=1)]) is False
@@ -57,7 +53,6 @@ def _idx(needle: str) -> int:
     return i
 
 
-@acc("ACC-PRJ-SYNC-001", "001-11")
 def test_顺序是判定到建档再到重判():
     """⭐ 钉住**顺序**：先问「要不要建档」→ 再建档 → 再**重判**（不重判 ⇒ 新档案不生效）。"""
     i_need = _idx("if needs_archive(")
@@ -67,7 +62,6 @@ def test_顺序是判定到建档再到重判():
     assert i_rejudge > i_arch, "建档之后**没有重判** —— 新档案不会生效"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-11")
 def test_建档复用同一个i8会话不额外登录():
     """⛔ 一次抓取只应登录一次 —— 否则会**多次强踢**（D9：反复顶号）。"""
     i_arch = _idx("archive_out = sync_and_archive(")
@@ -76,7 +70,6 @@ def test_建档复用同一个i8会话不额外登录():
     assert "wh_loader(allow_kick, client)" in seg, "仓库名单没复用会话"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-11")
 def test_降级时不拿空档案重判():
     """取数失败（降级）⇒ `sync_and_archive` **一行都不写** ⇒ 此时不得重判。"""
     i_arch = _idx("archive_out = sync_and_archive(")
@@ -84,7 +77,6 @@ def test_降级时不拿空档案重判():
     assert 'if not archive_out.get("degraded"):' in seg, "降级时没做保护"
 
 
-@acc()
 def test_拆件后router仍再导出四个执行器():
     """⛔ 2026-09-19 拆件（`T5`：「`router.py` 647 行 > 600 ⇒ 禁合入」）留下的**专属守卫**。
 

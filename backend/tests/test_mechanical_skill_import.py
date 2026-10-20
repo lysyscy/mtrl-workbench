@@ -9,7 +9,6 @@ import pytest
 
 from app.mod06_proc import workbench as W
 from tests.test_mechanical_workbench import session  # noqa: F401
-from tests.acc_plugin import acc
 
 SKILL = Path(__file__).resolve().parents[2] / 'skills/machinery-fee-consolidation'
 spec = importlib.util.spec_from_file_location('mechanical_skill_import', SKILL / 'scripts/build_system_import.py')
@@ -35,7 +34,6 @@ def inputs(tmp_path):
     return extraction, review, {'projects': [{'warehouse': '甲'}], 'details': []}
 
 
-@acc()
 def test_skill_payload_preview_confirm_revision_and_source_guard(session, inputs):
     extraction, review, state = inputs
     result = builder.build(*inputs)
@@ -70,7 +68,6 @@ def test_skill_payload_preview_confirm_revision_and_source_guard(session, inputs
     assert W.effective(session, '甲', '2026-10')['values']['mech_2'] == '113.00'
 
 
-@acc()
 def test_skill_rejects_unreviewed_changed_sources_and_unmatched_rows(inputs):
     extraction, review, state = inputs
     for mutate in (

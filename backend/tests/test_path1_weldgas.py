@@ -39,7 +39,6 @@ from app.mod07_setl.service import build_extract_data, build_extract_export, par
 from app.report_export import resources as R
 from app.report_export import tpl_fill
 from app.report_export import weldgas_export as W
-from tests.acc_plugin import acc
 from tests.m07_helpers import (
     ARCHIVED_WAREHOUSE,
     EXTRACT_EXPECT,
@@ -77,7 +76,6 @@ def _sheet(path, name: str) -> list[list]:
 # ============================================================ 形态（001-05）
 
 
-@acc(CASE, "001-05")
 def test_成品形态与模板登记一致(tmp_path):
     """绑 `001-05`：**真读回成品**，它的工作表 / 列结构必须与 `模板-焊材气体.xlsx` 登记的一致。"""
     plan = _plan()
@@ -105,7 +103,6 @@ def test_成品形态与模板登记一致(tmp_path):
 # ============================================================ 与筛选一致（001-08）
 
 
-@acc(CASE, "001-08")
 def test_成品行即所筛选项目且与页面同一份口径(tmp_path):
     """绑 `001-08`：行 = **当前筛选**下的项目（状态过滤 ＋ 档案顺序），与页面同源（⛔ 不各筛一份）。"""
     page = build_extract_data(FakeSession(extract_dataset()),
@@ -135,7 +132,6 @@ def test_成品行即所筛选项目且与页面同一份口径(tmp_path):
 # ============================================================ 逐格对账（独立手写期望）
 
 
-@acc(CASE, "001-11")
 def test_成品显示区逐格等于独立复算(tmp_path):
     """**两条独立路径**：① `m07_helpers.EXTRACT_EXPECT`（手写期望，不问实现）；
     ② 从成品显示区读回 —— 各月 / 合计 / 合计行必须逐格相同。"""
@@ -169,7 +165,6 @@ def test_成品显示区逐格等于独立复算(tmp_path):
                 f"[{sheet}] 合计行 {ym}：{got} ≠ {want}"
 
 
-@acc()
 def test_结余列无来源时如实为空(tmp_path):
     """⚠️ 2026-09-18 用户裁定：**结余 = 历史结余、由用户手工录入** ⇒ 系统无来源。
 
@@ -188,7 +183,6 @@ def test_结余列无来源时如实为空(tmp_path):
 # ============================================================ 引擎：尾块随行数派生 ＋ 零残留
 
 
-@acc(CASE, "001-10")
 def test_模板自带的示例值一格不留(tmp_path):
     """⭐ 与 `TAIL-43` 同族的守卫：模板里那份**示例数据**（项目名 / 数字）**一格都不许**进产物。
 
@@ -232,7 +226,6 @@ def test_模板自带的示例值一格不留(tmp_path):
         wb.close()
 
 
-@acc(CASE, "001-09")
 def test_数据区起点认标记文字而不是抄坐标():
     """⭐ 方案 A（《说明书》§7.1）：起点认 `DATA_START` 这串**文字** —— 把标记挪一行，定位就得跟着挪。
 
@@ -253,7 +246,6 @@ def test_数据区起点认标记文字而不是抄坐标():
         wb.close()
 
 
-@acc(CASE, "001-09")
 def test_引擎_尾块随行数派生且零行也不留残骸(tmp_path):
     """引擎级：n = 0 / 1 / 7（= 样板行数）/ 12 四种行数都要**尾块紧贴、下面一格不留**。
 
@@ -286,14 +278,12 @@ def test_引擎_尾块随行数派生且零行也不留残骸(tmp_path):
         assert not shells, f"n={n} 还有行属性空壳：{shells}"
 
 
-@acc(CASE, "001-10")
 def test_显示区对账抓得出残留(tmp_path):
     """绑 `001-10`（零残留）：尾块以下塞一个旧值 ⇒ `verify_filled` 必须报红。"""
     problems = _corrupt(tmp_path, _put_residue)
     assert any("尾块以下" in x for x in problems), f"没抓住残留：{problems[:3]}"
 
 
-@acc(CASE, "001-11")
 def test_显示区对账抓得出公式残留(tmp_path):
     """绑 `001-11`（以数值覆盖）：数据格里留公式 ⇒ `verify_filled` 必须报红。"""
     problems = _corrupt(tmp_path, _put_formula)
@@ -321,7 +311,6 @@ def _corrupt(tmp_path, mutate) -> list[str]:
     return tpl_fill.verify_filled(out, good)
 
 
-@acc(CASE, "001-12")
 def test_拿不到报告月时显式拒做(tmp_path):
     """⛔ 绝不静默交付：报告月拿不到（该筛选下没有数据）⇒ 中文原因、**不产出文件**。"""
     plan = _plan()
@@ -331,7 +320,6 @@ def test_拿不到报告月时显式拒做(tmp_path):
     assert not list(Path(tmp_path).rglob("*.xlsx")), "拒做时不该留下成品"
 
 
-@acc()
 def test_报告月口径_单月跨月年与全部():
     """报告月 = **止月**；「全部」⇒ 取数据里的最新一期（⛔ 不回落成"本月"）。"""
     from app.mod07_setl.service import export_report_ym
@@ -346,7 +334,6 @@ def test_报告月口径_单月跨月年与全部():
 # ============================================================ 壳侧（两个页面都要有真保存）
 
 
-@acc(CASE, "001-05")
 def test_壳侧提取导出真下载且提示与模板形态一致(tmp_path):
     """绑 `001-05`：壳里的 `expExt` / `saveExt` 必须**真下载**，且提示语 = **模板的实际形态**。
 

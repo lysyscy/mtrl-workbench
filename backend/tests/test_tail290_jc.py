@@ -5,8 +5,7 @@ import openpyxl
 from app.core.db import session_scope
 from app.mod11_jc import repository as R, service as S, domain as D
 from tests.test_acc_jc_pay_link import _project
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
-from tests.acc_plugin import acc
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
 def dataset():
@@ -38,12 +37,10 @@ def dataset():
         return data
 
 
-@acc()
 def test_project_sequence_and_xlsx():
     dataset()
 
 
-@acc()
 def test_browser_sequence_columns_and_export(ui_page):
     data=dataset()
     # ⭐ `TAIL-298`：表头由**后端列清单**现生成 ⇒ 本用例替身也必须把列清单放进去

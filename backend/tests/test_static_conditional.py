@@ -7,7 +7,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -23,7 +22,6 @@ def static_client(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("path", ["/app", "/static/shell/core.js"])
 @pytest.mark.parametrize("encoding", ["gzip", "identity"])
-@acc()
 def test_conditional_get_precedence_and_headers(static_client, path, encoding):
     client, _ = static_client
     base = {"Accept-Encoding": encoding}
@@ -65,7 +63,6 @@ def test_conditional_get_precedence_and_headers(static_client, path, encoding):
 
 
 @pytest.mark.parametrize("path,filename", [("/app", "index.html"), ("/static/shell/core.js", "shell/core.js")])
-@acc()
 def test_file_changes_and_missing_file_never_304(static_client, path, filename):
     client, web = static_client
     first = client.get(path)
@@ -82,7 +79,6 @@ def test_file_changes_and_missing_file_never_304(static_client, path, filename):
         client.get(path, headers={"If-None-Match": "*"})
 
 
-@acc()
 def test_static_validators_do_not_bypass_gates(static_client, monkeypatch):
     client, _ = static_client
     assert client.get("/app").status_code == 200  # existing anonymous read policy

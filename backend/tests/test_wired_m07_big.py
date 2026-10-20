@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import re
 
-from tests.acc_plugin import acc
 
 from tests.m07_shell_helpers import API, ROUTER, SHELL  # noqa: F401
 # ⭐ 2026-10-03（`TAIL-219` 批 2）：取片改走壳的语义口径（⛔ 别在本件自造剪刀）
@@ -33,7 +32,6 @@ def _big_thead() -> str:
     return m.group(1)
 
 
-@acc("ACC-RPT-BIG-001", "001-02")
 def test_壳里表头不含已裁掉的列():
     """拿**域内核那把尺子**（`boundary_violations`）扫壳的表头 ⇒ 不得含已裁掉的列（如「材料费」数据项）。"""
     from app.mod07_setl import big_domain as B
@@ -41,7 +39,6 @@ def test_壳里表头不含已裁掉的列():
     assert B.boundary_violations(html=_big_thead()) == [], "壳表头里出现了不得有的列"
 
 
-@acc("ACC-RPT-BIG-001", "001-03")
 def test_壳里输入框只出现在手填列():
     """手填列**恰好 6 个**：表体只经一个 `cell()` 生成输入框（`cell(0)…cell(5)`），⛔ 没有第 7 个。"""
     s = page_slice("m07")
@@ -51,7 +48,6 @@ def test_壳里输入框只出现在手填列():
     assert "${cell(6)}" not in s, "出现了第 7 个手填列（手填列应恰好 6 个）"
 
 
-@acc("ACC-RPT-BIG-001", "001-04")
 def test_壳里派生列是纯文本格():
     """派生列（合计 / 使用率 / 产值完成率）在壳里是**纯文本格**（走 `M(...)` / `pct(...)`），⛔ 无输入框。"""
     s = page_slice("m07")
@@ -59,7 +55,6 @@ def test_壳里派生列是纯文本格():
         assert expr in s, f"派生列的渲染点变了：{expr}"
 
 
-@acc("ACC-RPT-BIG-001", "001-05")
 def test_壳里主材累计走金额出口且取数口已接入():
     """⭐ 2026-09-21（`TAIL-25`）集采台账取数口**已接入**（`MAIN_MATERIAL_PORT is not None`）⇒
     该列显示**真数**；它在本表仍是**派生文本格**（`M(r.matC)`，⛔ 不是手填输入框）。
@@ -71,7 +66,6 @@ def test_壳里主材累计走金额出口且取数口已接入():
     assert "M(r.matC)" in s, "主材累计的渲染点变了（它必须是派生文本格，不能变成手填）"
 
 
-@acc("ACC-RPT-BIG-001", "001-09")
 def test_壳里零与未录入在输入框上分得开():
     """零是**合法录入值**（不得被误判成未录入）：输入框的值走 `bigDisp(c.v,i)`，而它的空值判定是
     **严格 `==null`** —— ⛔ 不用 `||`/`?` 之类的真值判断（那会把 `0` 吞掉、显示成未录入）。"""
@@ -81,7 +75,6 @@ def test_壳里零与未录入在输入框上分得开():
     assert "bigDisp(c.v,i)" in s, "输入框的值没走 `bigDisp` 出口"
 
 
-@acc("ACC-RPT-BIG-001", "001-12")
 def test_壳里带入格可辨且带来源月():
     """带入格**仍是可编辑输入框**（`class="inp…ed"`）＋ 带**来源月**标记（`↺MM月`）。"""
     s = page_slice("m07")
@@ -89,7 +82,6 @@ def test_壳里带入格可辨且带来源月():
     assert "↺${c.from.slice(5)}月" in s, "带入格没有来源月标记"
 
 
-@acc("ACC-RPT-BIG-001", "001-13")
 def test_壳里行只由一份装配出():
     """「页面行序 = 导出页行序」在壳里的等价形态：**行只从 `bigRows(...)` 这一处装配**（表体 ＋ 合计行），
     ⛔ 没有第二份行序；导出走 `/api/m07/big/export`（复用同一个 `big_service`，另有断言）。"""
@@ -99,7 +91,6 @@ def test_壳里行只由一份装配出():
     assert "/api/m07/big/export?period=" in SHELL, "导出没走 API（那一份才是与页面同源的）"
 
 
-@acc("ACC-RPT-BIG-001", "001-15")
 def test_壳里出纸走按模板导出且没有打印通道():
     """出纸 = **按模板导出 → Excel 打印**（壳的 `bigExport` → `/api/m07/big/export?period=`）；
     ⛔ 没有打印通道 / A3 入口（连标题里都不许出现）。"""
@@ -121,7 +112,6 @@ def test_壳里出纸走按模板导出且没有打印通道():
 # --------------------------------------------------------------- 活动大表导出（`TAIL-04` 片 4b）
 
 
-@acc("ACC-RPT-BIG-001", "001-19")
 def test_活动大表导出走真下载而不是假成功():
     """⭐ `TAIL-04` **片 4b**：大表成品由后端模板填充生成 ⇒ 壳侧必须是**真下载**。
 
@@ -137,7 +127,6 @@ def test_活动大表导出走真下载而不是假成功():
     assert 'data-act="bigExport"' in SHELL, "大表卡头的按钮没接到 `bigExport`"
 
 
-@acc("ACC-RPT-BIG-001", "001-19")
 def test_活动大表导出失败必须给人原因不静默():
     """后端失败回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（一行都没有 / 模板坏 / **显示区对账不过**）
     ⇒ 壳必须**弹原因**，⛔ 不能静默、也不能当文件下载。"""
@@ -151,7 +140,6 @@ def test_活动大表导出失败必须给人原因不静默():
         "非 2xx 没显式报错（会静默产出空文件）"
 
 
-@acc("ACC-RPT-BIG-001", "001-20")
 def test_大表零行时给后端那句空态而不是只剩三级表头():
     """⭐ `A5`（2026-09-29 逐页）：大表原先 0 行时 `return ''` ⇒ 用户看到一张**只剩三级表头的大空表**
     （20 列横表、没有任何「为什么空 / 下一步」）—— 与 `m04`（`A3`）/ `m06` 同族，本批第 3 例。

@@ -5,11 +5,9 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.mod03_notice.notice_pay_actions import default_pay_method
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 
-@acc('ACC-NOTICE-PASTE-001','001-07')
 def test_plan_page_import_and_write_routes_retire_audit_api_stays():
     app=create_app()
     paths=set(app.openapi()['paths'])

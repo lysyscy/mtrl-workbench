@@ -1,10 +1,8 @@
 """渲染后加工的登记、次序与普通/虚拟重画行为；只用隔离页面。"""
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 from tests.shell_src import bind_blocks
 
 
-@acc()
 def test_登记按原顺序且每次重画只跑一次(ui_page):
     p = ui_page
     sizes = p.evaluate('Object.fromEntries(Object.entries(BIND).map(([k,v])=>[k,v.length]))')
@@ -32,7 +30,6 @@ def test_登记按原顺序且每次重画只跑一次(ui_page):
     }''') == ['first', 'second']
 
 
-@acc()
 def test_状态页不加工与引用工具不重复且事件只响应一次(ui_page):
     p = ui_page
     p.evaluate('''() => {
@@ -61,7 +58,6 @@ def test_状态页不加工与引用工具不重复且事件只响应一次(ui_p
     assert p.locator('[data-act="refBack"]').count() == 0
 
 
-@acc()
 def test_虚拟首画加工一次而滚动不重跑页加工(ui_page):
     p = ui_page
     p.evaluate('''() => {
@@ -85,7 +81,6 @@ def test_虚拟首画加工一次而滚动不重跑页加工(ui_page):
     assert p.locator('[data-act="refBack"]').count() == 1
 
 
-@acc()
 def test_集采回显隐藏钉列导出与返回逐次保持(ui_page):
     p = ui_page
     p.evaluate('''() => {
@@ -114,7 +109,6 @@ def test_集采回显隐藏钉列导出与返回逐次保持(ui_page):
     assert p.locator('#jcTradeBtn').count() == 1
 
 
-@acc()
 def test_加工语义读取不吃下一个登记或注释伪登记():
     source = '''/* addBind('m03', bad); */
 addBind('m03', ()=>{ const text=";)}"; });

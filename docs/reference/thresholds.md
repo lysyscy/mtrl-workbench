@@ -80,7 +80,7 @@
 
 | **—（固定语法模式）** | T22检查会话入口和项目开发分册的行首粘连，发现时提示黄；只检查已登记目标，不声明实际自动注入。历史记录：2026-10-05 MEMORY曾93→92行且其他检查未检出；首版跨行正则曾误报78件、真粘连0件 | `[助手自定·2026-10-05]` | tools/audit/audit_meta.py的ALWAYS_READ_DOCS与SPLICE_RE；目标位置随2026-10-14迁移同步更新，模式不变 | 历史自证入口tools/mut/_mut_injectsplice.py；本次补新正文正常/粘连/复原隔离反馈 |
 
-| **3 类** | `T4` 计数与清单锚点（黄）：① 尾巴计数 ② CMDS 清单可读、非空且唯一（旧尺子把数已退场）③ 本表数字与真源一致 | `[助手自定]`（用户 2026-09-24「按推荐」；2026-10-07 `TAIL-245` 改现行真源） | ① audit_meta.ledger_counts()；② tools/oneoff/_run_rulers.py 的 CMDS（_gatescope.commands() 现读）；③ 本表每行「位置（真源）」所指文件 | 旧 foreach 把数与 U5 留作历史，不再承载现行清单；反向灵敏度 tools/mut/_mut_countanchors.py 随闸门执行 |
+| **2 类** | `T4` 计数锚点：尾巴计数与本表数字；旧CMDS清单自证已退役 | `[用户·2026-10-19]` 测试减负修订范围 | audit_meta.ledger_counts()；audit_drift._check_threshold_doc() |
 
 | **—（显式白名单 · 六路）** | ⭐ `T23` **活机器口径**（2026-10-05 `TAIL-236` 批 2）：判「某件还有谁在引用」时**代码侧**该扫哪几处（⛔ **清单本身不在本表** —— 抄一份必漂，见右栏那两个常量）。**缺一路 ⇒ 红**（2026-10-15原CodeBuddy规则路改为实际AGENTS宿主入口；当天第一版漏了运维脚本与规则档两路，差点搬走**被引用**的设计件）· 某条 glob **空命中 ⇒ 红** · **后缀白名单对不上 ⇒ 红** · 命令件里再抄一份 ⇒ 黄 | `[助手自定·2026-10-05]` | 执行真源 = `tools/audit/audit_common.py` 的 `LIVE_MACHINE_GLOBS`（**唯一一处定义**）＋ 判据的靶 = `tools/audit/audit_meta.py` 的 `LIVE_MACHINE_REQUIRED`（**含后缀白名单那一半**）＋ `T23` 半边④ 守接线 | **2026-10-05 立**（`TAIL-236` 批 2）：查询命令 = `tools/audit/refs_query.py`（只读 ＋ `--selftest`；工具及公共扫描/票规则变化时按需验证，触发回 tools/oneoff/_impactscope.py；归档变异不作活机器引用）；自证 = `tools/mut/_mut_livemachine.py`（⭐ 六例，`/code-review` 后从五例加到六例：补"后缀白名单改坏必须报红"） |
 

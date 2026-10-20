@@ -19,7 +19,6 @@ from app.mod01_projects.models import TYPE_NORMAL
 from app.mod01_projects.sync_service import sync_and_archive
 from app.mod11_jc import fetch_service as FS
 from app.mod11_jc import repository as R
-from tests.acc_plugin import acc
 
 WH_NEW = "__自检仓_抓取新项目__"
 FULL_NEW = f"{WH_NEW}项目(TBLX9999000001)"
@@ -49,7 +48,6 @@ def _sync_fail(s, *, load_common=None, load_warehouses=None) -> dict:
     raise RuntimeError("模拟：i8 名单取不到")
 
 
-@acc()
 def test_先同步常用项目再匹配_否则会把该纳管的判成不需要():
     """⭐ 顺序断言：**同步之后**那条原本"档案里没有"的项目才能匹配上。
 
@@ -78,7 +76,6 @@ def test_先同步常用项目再匹配_否则会把该纳管的判成不需要(
         s.rollback()
 
 
-@acc()
 def test_同步失败不拖垮抓取_降级进回执且仍按现有档案匹配():
     """⭐ 安全绳断言：同步那一步炸了 ⇒ **抓取照常完成**（数据与档案是两件事）+ 回执里说清。
 
@@ -95,7 +92,6 @@ def test_同步失败不拖垮抓取_降级进回执且仍按现有档案匹配(
         s.rollback()
 
 
-@acc()
 def test_未二次确认不写执行记录也不动数据():
     """用法错误（没二次确认）⇒ 抛 `MustReportError`，⛔ 不写执行记录、不碰档案。"""
     from app.core.errors import MustReportError

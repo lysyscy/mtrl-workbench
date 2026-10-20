@@ -14,7 +14,6 @@ from app.mod01_projects.models import Project, TYPE_NORMAL
 from app.mod07_setl.models import WeldGasBalance
 from app.mod08_inv.models import InvDetail, InvAdjustment
 from app.mod09_fee.models import FeeManualItem
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -56,7 +55,6 @@ def owned_rows(rollback_db):
         return wh, balance.id, detail.id, adjustment.id, manual.id
 
 
-@acc()
 @pytest.mark.parametrize("conflict", [False, True])
 def test_m07_atomic_owned_cleanup(owned_rows, conflict):
     wh, bid, _, _, _ = owned_rows
@@ -72,7 +70,6 @@ def test_m07_atomic_owned_cleanup(owned_rows, conflict):
         assert not M07.restore_balance_if_owned(kind="焊材", warehouse=wh, expected=Decimal("1234.56"))
 
 
-@acc()
 @pytest.mark.parametrize("conflict", [False, True])
 def test_m08_atomic_owned_cleanup(owned_rows, conflict):
     _, _, rid, aid, _ = owned_rows
@@ -89,7 +86,6 @@ def test_m08_atomic_owned_cleanup(owned_rows, conflict):
             assert s.get(InvAdjustment, aid) is None
 
 
-@acc()
 @pytest.mark.parametrize("conflict", [False, True])
 def test_m09_cleans_by_id_and_preserves_others(owned_rows, conflict):
     wh, _, _, _, mid = owned_rows
@@ -117,7 +113,6 @@ def test_m09_cleans_by_id_and_preserves_others(owned_rows, conflict):
         M09.cleanup_manual(**{**args, "baseline": {mid: args["expected"]}})
 
 
-@acc()
 def test_m09_real_api_zero_baseline_and_db_failure(owned_rows, monkeypatch):
     from fastapi import Request
     from urllib.parse import urlencode
@@ -146,7 +141,6 @@ class _Response:
         return self.body
 
 
-@acc()
 def test_own_keywords_success_and_conflict(owned_rows):
     from sqlalchemy import select
 
@@ -164,7 +158,6 @@ def test_own_keywords_success_and_conflict(owned_rows):
     assert OWN.keywords_of(pid) == ["并发词"]
 
 
-@acc()
 @pytest.mark.parametrize("existing", [Decimal("0"), Decimal("1234.56")])
 def test_m07_main_refuses_existing_balance_before_any_write(monkeypatch, existing):
     monkeypatch.setattr(M07, "pick_sample", lambda: ("2026-08", "甲仓"))
@@ -174,7 +167,6 @@ def test_m07_main_refuses_existing_balance_before_any_write(monkeypatch, existin
     assert M07.main() == 1
 
 
-@acc()
 def test_m07_main_finally_cleans_after_write_then_read_failure(monkeypatch):
     state = {"value": M07._MISSING}
     monkeypatch.setattr(M07, "pick_sample", lambda: ("2026-08", "甲仓"))
@@ -226,7 +218,6 @@ class _MainM08Client:
                           "amount": 101.23, "operator": "fake"})
 
 
-@acc()
 @pytest.mark.parametrize("already_present, duplicate_failure, dirty", [
     (False, False, False), (True, False, False), (True, True, False), (True, False, True),
     (False, "first", False),
@@ -294,7 +285,6 @@ def test_own_main_restores_or_keeps_existing_word(monkeypatch, already_present, 
         assert state["value"] == ["旧词"]
 
 
-@acc()
 @pytest.mark.parametrize("lose_response", [False, True, "rejected"])
 def test_m09_main_cleanup_needs_known_id(monkeypatch, lose_response):
     class Client:
@@ -348,7 +338,6 @@ def test_m09_main_cleanup_needs_known_id(monkeypatch, lose_response):
         assert M09.fails  # 不能把无法认领的残留报告成通过。
 
 
-@acc()
 @pytest.mark.parametrize("failure", ["read", "response_lost", "rejected"])
 def test_m08_main_cleans_after_committed_write(monkeypatch, failure):
     client = _MainM08Client()

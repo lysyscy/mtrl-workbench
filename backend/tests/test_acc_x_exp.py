@@ -11,7 +11,6 @@ import pathlib
 import re
 
 import app
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL, tbl_kernel  # noqa: F401  ← `P4`① 读取点收敛
 
 
@@ -52,7 +51,6 @@ EXPORT_EXEMPT = {
 }
 
 
-@acc("ACC-X-EXP-001", "001-01")
 def test_有数据的页面都有导出入口():
     """数据页保留真实导出；特殊费用随逐月欠款台账导出，在导出确认中显示去处。
 
@@ -147,7 +145,6 @@ RENDER_SEGMENTS = {
 EXPORT_RENDERERS = tuple(RENDER_SEGMENTS)
 
 
-@acc("ACC-X-EXP-001", "001-04")
 def test_导出展开区在滚动容器之外且全页恰好一处():
     """claim：「导出展开区**渲染在滚动容器之外**，且**全页恰好一处**」。
 
@@ -181,7 +178,6 @@ def test_导出展开区在滚动容器之外且全页恰好一处():
             "前面还有别的卡片（也带 `.tw`），那样会**假红**。")
 
 
-@acc("ACC-X-EXP-001", "001-03")
 def test_多项目导出的清单预览有单多两条形态():
     """claim：「多项目导出的**清单预览**：**单项目 = 一个工作簿（多工作表）**，
     **多项目 = zip ＋ 每项目一行清单**」。
@@ -221,7 +217,6 @@ def test_多项目导出的清单预览有单多两条形态():
         assert "zip" in multi.lower(), f"`{key}` 的多项目分支没说明**打成 zip**"
 
 
-@acc("ACC-X-EXP-001", "001-07")
 def test_导出相关渲染面无Markdown泄漏():
     """claim：「导出相关**渲染面无 Markdown 泄漏**」。
 
@@ -253,7 +248,6 @@ EXPORT_MODAL_TABLES = {
 NOT_SORTABLE_BY_DESIGN = ("modal:expExt",)
 
 
-@acc("ACC-X-EXP-001", "001-06")
 def test_导出清单弹窗里的表可排序():
     """claim：「导出**清单弹窗**里的表**可排序**」。
 

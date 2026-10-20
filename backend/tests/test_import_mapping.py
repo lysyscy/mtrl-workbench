@@ -13,7 +13,6 @@ from app.import_kit.mapping import (
     secondary, serial_hint,
 )
 from app.import_kit.profile_store import MIN_JACCARD, ProfileStore, fingerprint, jaccard
-from tests.acc_plugin import acc
 
 # —— 真文件里的字段声明（片段）——
 M06_FIELDS = [
@@ -30,14 +29,12 @@ M11_FIELDS = [
 
 
 # ------------------------------------------------------------------ 归一化（只用于比较）
-@acc()
 def test_归一化_去空白全半角与大小写():
     assert normalize("  付款 方式 ") == "付款方式"
     assert normalize("ＡＢＣ") == "abc"
     assert normalize("合计\n金额") == "合计金额"
 
 
-@acc()
 def test_归一化_只剥单位括号_语义括号必须留():
     """⭐ 真文件逼出来的：`金额（元）` 该剥；`线上入库（不含税）` **剥了就与「含税」撞车**。
 
@@ -51,14 +48,12 @@ def test_归一化_只剥单位括号_语义括号必须留():
     assert normalize(" 金额(元) ") == normalize("金额（元）")        # 全半角/空白等价
 
 
-@acc()
 def test_次要键_剥通用后缀词():
     assert secondary("材料名称") == "材料"
     assert secondary("供应商编号") == "供应商"
     assert secondary("供应商") == "供应商"       # ⛔ 不能把「供应商」剥空
 
 
-@acc()
 def test_两级拼名_两种顺序都要出():
     """慧能那份把「含税/不含税」放上级、把「外租设备（零租）」放下级 —— 与另两份**互换**。"""
     a, b = join_levels("外租机械（含税）", "零租")
@@ -72,7 +67,6 @@ def test_两级拼名_两种顺序都要出():
 
 
 # ------------------------------------------------------------------ 内容画像（用值说话）
-@acc()
 def test_画像_真文件里的六种形态():
     assert profile(["5,006.98", "595", "0"]) == "金额"             # 有千分位 ⇒ 金额
     assert profile(["797726.5", "28922"]) == "金额"                # 有小数点 ⇒ 金额
@@ -86,7 +80,6 @@ def test_画像_真文件里的六种形态():
     assert profile(["#REF!", ""]) == "文本"                        # 公式残值 ⇒ 不是金额
 
 
-@acc()
 def test_画像_纯整数不判金额_交给序列号提示由域裁():
     """⭐ 真文件的核心歧义：`45444` 既可能是金额也可能是 Excel 序列号 ⇒ 画像只敢说「数字」。"""
     vals = ["45444", "45475", "45507"]                             # 晋江那份的「时间」列
@@ -97,14 +90,12 @@ def test_画像_纯整数不判金额_交给序列号提示由域裁():
 
 
 # ------------------------------------------------------------------ 建议（三档 · 只出建议）
-@acc("ACC-IMP-MAP-001", "001-02")
 def test_建议_三档阈值():
     assert level_of(1.00) == "auto" and level_of(0.90) == "auto"
     assert level_of(0.89) == "confirm" and level_of(0.70) == "confirm"
     assert level_of(0.69) == "blank"
 
 
-@acc()
 def test_建议_真列名命中_自动档且可解释():
     got = {s.src: s for s in guess(["核算月", "入库主辅材"], M06_FIELDS)}
     assert got["核算月"].field == "核算月" and got["核算月"].level == "auto"
@@ -112,7 +103,6 @@ def test_建议_真列名命中_自动档且可解释():
     assert got["入库主辅材"].field == "入库主辅材"
 
 
-@acc()
 def test_建议_拼名写法也能命中():
     """模板列是两级拼名（`线上入库（不含税）› 主辅材`），页面列叫「入库主辅材」—— 必须认得。"""
     key, _ = join_levels("线上入库（不含税）", "主辅材")
@@ -120,15 +110,12 @@ def test_建议_拼名写法也能命中():
     assert got.field == "入库主辅材" and got.level == "auto", got
 
 
-@acc()
-@acc("ACC-ODDVAL-001", "001-05")
 def test_建议_认不出就留空_不猜():
     got = guess(["审批状态", "制单人", "（首列无名）"], M06_FIELDS)
     assert all(s.field is None and s.level == "blank" for s in got), got
     assert all("留给你选" in s.why for s in got)
 
 
-@acc()
 def test_建议_类型不符要降档并写明():
     """列名叫「付款时间」但整列是「电汇/承兑」⇒ 降 0.20 并标"值像枚举与字段类型 date 不符"。"""
     got = guess(["付款时间"], [Field("pay_date", "付款时间", type="date")],
@@ -137,7 +124,6 @@ def test_建议_类型不符要降档并写明():
     assert "不符" in got.why
 
 
-@acc("ACC-IMP-MAP-001", "001-03")
 def test_建议_文本列的弱画像不许把精确命中降档():
     """⭐ 回归：类型校验的方向（第一版写反 ⇒ **所有列**都被降权，"项目"这种精确命中也掉 confirm）。
 
@@ -151,7 +137,6 @@ def test_建议_文本列的弱画像不许把精确命中降档():
     assert got2.conf == 1.00 and got2.level == "auto", got2      # 金额画像 ＋ amount ⇒ 不降权
 
 
-@acc()
 def test_建议_相似但类型不符要掉到留空档():
     """⭐ `_CONF_CONFIRM` 的边界靠它守：0.82 再被类型降权 ⇒ 0.62 ⇒ **不许预选**（留空让人选）。"""
     got = guess(["分公司设备台账"], [Field("rent", "租分公司设备", type="amount")],
@@ -159,7 +144,6 @@ def test_建议_相似但类型不符要掉到留空档():
     assert got.conf < 0.70 and got.field is None and got.level == "blank", got
 
 
-@acc()
 def test_建议_同字段被多列认领要暴露出来():
     """台账/流水里「项目名称」与「项目」并存 ⇒ 记 `dupes`，⛔ 不自动裁决（域内才懂）。"""
     sugs = guess(["项目名称", "项目"], [Field("pj", "项目", type="text")])
@@ -167,7 +151,6 @@ def test_建议_同字段被多列认领要暴露出来():
 
 
 # ------------------------------------------------------------------ 取行（未映射 ⇒ 原样保留）
-@acc()
 def test_取行_未映射与忽略的列都原样保留():
     headers = ["项目", "审批状态", "该流程金额"]
     rows = [["灵宝二期", "已审批", "797,726.5"]]
@@ -178,21 +161,18 @@ def test_取行_未映射与忽略的列都原样保留():
     assert "审批状态" not in rec
 
 
-@acc()
 def test_取行_行比表头短不炸():
     rec = apply([["只有一格"]], ["a", "b"], {"a": "A"})[0]
     assert rec["A"] == "只有一格" and rec["raw"] == {"b": None}
 
 
 # ------------------------------------------------------------------ 记忆（按表头指纹）
-@acc()
 def test_指纹_同表同指纹_换顺序不同():
     h1 = ["项目", "付款时间", "该流程金额"]
     assert fingerprint(h1) == fingerprint(["项目", "付款时间", "该流程金额"])
     assert fingerprint(h1) != fingerprint(["项目", "该流程金额", "付款时间"])
 
 
-@acc()
 def test_记忆_指纹命中_预填并可改(tmp_path):
     st = ProfileStore(tmp_path / "p.json")
     h = ["项目", "材料：其他支出付资产处/贸易公司（编号）", "该流程金额"]
@@ -202,7 +182,6 @@ def test_记忆_指纹命中_预填并可改(tmp_path):
     assert hit[0]["项目"] == "项目"
 
 
-@acc()
 def test_记忆_表头大改就不用_小改用相似(tmp_path):
     """⭐ `MIN_JACCARD = 0.60`：表换了别拿旧映射硬套 —— 宁可空白让人选。"""
     st = ProfileStore(tmp_path / "p.json")
@@ -216,7 +195,6 @@ def test_记忆_表头大改就不用_小改用相似(tmp_path):
     assert jaccard(old, ["项目", "付款时间", "该流程金额", "付款方式", "备注", "制单人"]) >= MIN_JACCARD
 
 
-@acc()
 def test_记忆_落盘是原子写_且坏文件不炸(tmp_path):
     p = tmp_path / "p.json"
     st = ProfileStore(p)
@@ -227,7 +205,6 @@ def test_记忆_落盘是原子写_且坏文件不炸(tmp_path):
     assert ProfileStore(p).count() == 0               # ⇒ 当空处理，⛔ 不让它卡死导入
 
 
-@acc()
 def test_记忆_可删可数_且按域隔离(tmp_path):
     st = ProfileStore(tmp_path / "p.json")
     st.save("m04", ["项目", "付款时间"], {"项目": "项目"})
@@ -238,7 +215,6 @@ def test_记忆_可删可数_且按域隔离(tmp_path):
     assert st.count("m04") == 0
 
 
-@acc()
 def test_记忆_默认落点与cwd无关(tmp_path, monkeypatch):
     """⭐ 2026-09-24（真故障修）：默认落点必须是**工程根的绝对路径**。
 
@@ -256,7 +232,6 @@ def test_记忆_默认落点与cwd无关(tmp_path, monkeypatch):
 # ---------------------------------------------------- 像数据吗（`TAIL-129` 表头定位的硬门槛）
 
 
-@acc()
 def test_像数据的行不许当表头():
     """⭐⭐ 2026-09-27 **用户报障的最小回归**：「**最后落库的单据号大多都变成供应商名**了」。
 

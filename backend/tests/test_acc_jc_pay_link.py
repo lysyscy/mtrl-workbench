@@ -20,12 +20,10 @@ from app.mod03_notice.list_view import _links_by_notice
 from app.mod03_notice.models import PaymentNotice
 from app.mod11_jc import repository as R
 from app.mod11_jc import service as SV
-from tests.acc_plugin import acc
 
 WH_L = "__自检仓_集采关联__"
 
 
-@acc()
 def test_恢复剔除时自动回填归属_判不出则如实保持空():
     """⭐ 2026-10-08 BUG 钉子：被**规则剔除**的行恢复后，**付款项目显示"未建档"**、
     且**一选项目筛选就再也勾不上**（用户实测报障）。
@@ -73,7 +71,6 @@ def test_恢复剔除时自动回填归属_判不出则如实保持空():
         s.rollback()
 
 
-@acc()
 def test_恢复剔除端点真的调了回填_不是只写了函数没人用():
     """⚠️ 上一条只测了 `refill_ownership` **函数本身** —— 把它从端点上摘掉，那条照样绿。
     ⇒ 这条钉**端点 → 回填**这段接线（反向灵敏度：端点里改成 `refill_ownership(session, [])` ⇒ 本条必红）。
@@ -132,7 +129,6 @@ def _notice(s, *, ph: str, category: str = "jc", paid: str = "500",
     return row
 
 
-@acc("ACC-JC-PAY-001", "001-01")
 def test_两个方向写同一份记录_双向可见():
     """⭐ 判据原文「两个方向写**同一份**关联记录、**双向可见**」。
 
@@ -163,7 +159,6 @@ def test_两个方向写同一份记录_双向可见():
         s.rollback()
 
 
-@acc("ACC-JC-PAY-001", "001-03")
 def test_一对一_换合同先解绑再写新():
     """⭐ 判据原文「一条集采通知书**只能关联一个合同**（一对一；换合同 = **先解绑再写新**）」。
 
@@ -194,7 +189,6 @@ def test_一对一_换合同先解绑再写新():
         s.rollback()
 
 
-@acc()
 def test_解绑_零金额引用_与非集采分类不许填供应商():
     """实现层自检（⛔ 不绑判据点）—— 三件容易漏的事。"""
     from app.mod03_notice.notice_actions import jc_supplier_problem
@@ -231,7 +225,6 @@ def test_解绑_零金额引用_与非集采分类不许填供应商():
         s.rollback()
 
 
-@acc("ACC-JC-PAY-001", "001-07")
 def test_集采走付款域同一通道_识别方式只认收款单位():
     """⭐ `DEV-P-05`（§4.4.3）：**集采付款走付款计划、⛔ 不独立成通道**；
     识别方式 = **收款单位「资产处集中采购」**。2026-09-20 由「口径侧登记（待回问）」转为判据点。

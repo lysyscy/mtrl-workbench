@@ -16,13 +16,11 @@ from __future__ import annotations
 
 import pathlib
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
-@acc("ACC-UI-SHELL-001", "001-33")
 def test_接口清单表不许回来():
     """⭐ `TASK` 那张表：**零引用** ＋ 内容是**开发视角**（`API-0x` 代号 / 触发方式 / 数据源），
     数据源本就是《说明书》附录 E.1 的文档 ⇒ 需要时查文档，⛔ 别在壳里再抄一份（抄了必静默过期）。
@@ -36,7 +34,6 @@ def test_接口清单表不许回来():
             f"已删的「接口清单表」残骸又回来了：{tomb!r} —— ⓵它零引用 ⓶内容是开发视角（守则 §3.1）"
 
 
-@acc("ACC-UI-SHELL-001", "001-34")
 def test_过期话术墓碑():
     """⭐ 本批订正掉的两句**过期注释**（⛔ 别再写回来）：
 
@@ -50,7 +47,6 @@ def test_过期话术墓碑():
         assert tomb not in SHELL, f"过期话术又回来了：{tomb!r}（它是假说明书）"
 
 
-@acc("ACC-UI-SHELL-001", "001-35")
 def test_有意保留的留痕不许被顺手清掉():
     """⭐ 本批的另一半：**把"别清"这条也钉住** —— 下一个人看到 `V.m12` / `df*` 会觉得是残骸。
 
@@ -71,7 +67,6 @@ def test_有意保留的留痕不许被顺手清掉():
         "侧栏渲染不再取 `NAV` 第三列（模块编号）了 ⇒ 改这条要**先问用户**（裁定 5 选的是保留）"
 
 
-@acc("ACC-UI-SHELL-001", "001-36")
 def test_删掉的那张表不是判据要的():
     """⭐ 反向确认：`TASK` 不是任何判据 / 尺子的观测点（删它**不该**动到别的东西）。
 

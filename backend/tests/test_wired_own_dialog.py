@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from app.mod01_projects.domain import candidates_of
 from app.mod01_projects.models import STATUS_ACTIVE, STATUS_ARCHIVED, TYPE_SHELL, TYPE_SMALL
@@ -29,7 +28,6 @@ ROUTER_SRC = (
 # --------------------------------------------------------------- 候选小微（弹窗数据源）
 
 
-@acc("ACC-PRJ-OWN-001", "001-04")
 def test_候选小微按壳取且键是id():
     shell = make_project(1, name_full="某小微项目", ptype=TYPE_SHELL)
     a = make_project(11, name_full="某小微项目", warehouse="甲仓", ptype=TYPE_SMALL,
@@ -42,7 +40,6 @@ def test_候选小微按壳取且键是id():
     assert got[0]["warehouse_name"] == "甲仓" and got[0]["keywords"] == ["甲"]
 
 
-@acc("ACC-PRJ-OWN-001", "001-07")
 def test_候选含已归档的小微():
     """001-07：壳归档后仍可能有新单据 ⇒ **只匹配在建会阻塞导入**，所以候选要含归档项。"""
     shell = make_project(1, name_full="某小微项目", ptype=TYPE_SHELL)
@@ -54,7 +51,6 @@ def test_候选含已归档的小微():
     assert got[1]["status"] == STATUS_ARCHIVED and got[0]["status"] == STATUS_ACTIVE
 
 
-@acc("ACC-PRJ-OWN-001", "001-04")
 def test_壳下没有小微时候选为空():
     shell = make_project(1, name_full="某小微项目", ptype=TYPE_SHELL)
     assert candidates_of(1, [shell]) == []
@@ -63,13 +59,11 @@ def test_壳下没有小微时候选为空():
 # --------------------------------------------------------------- 两个端点确实挂上去了
 
 
-@acc("ACC-PRJ-OWN-001", "001-04")
 def test_弹窗数据源端点已挂():
     assert '@router.get("/notices/unresolved"' in ROUTER_SRC
     assert "candidates_of(" in ROUTER_SRC, "端点没去取候选小微 ⇒ 弹窗没有可选项"
 
 
-@acc("ACC-PRJ-OWN-001", "001-05")
 def test_提交端点在且先校验再写():
     """⭐ 顺序断言：**先**校验关键词（不在单据名里就拒绝）**再**写库。"""
     i_validate = ROUTER_SRC.find("keyword = validate_keyword_in_doc(")
@@ -77,7 +71,6 @@ def test_提交端点在且先校验再写():
     assert i_validate > 0 and i_write > i_validate, "没有「先校验、后写库」"
 
 
-@acc("ACC-PRJ-OWN-001", "001-06")
 def test_补词走去重追加而不是覆盖():
     """001-06：关键词**去重追加** —— ⛔ 直接赋值会把原有词覆盖掉。"""
     i_write = ROUTER_SRC.find("P1S.set_keywords(")
@@ -85,7 +78,6 @@ def test_补词走去重追加而不是覆盖():
     assert "append_keyword_dedup(" in seg, "补词没走 append_keyword_dedup（会覆盖原词）"
 
 
-@acc("ACC-PRJ-OWN-001", "001-06")
 def test_新建小微复用建档出口不另写一套():
     """⭐ 「属于新小微」分支必须走 `create_project`（它内部含 001-05 的归档壳校验）。
 

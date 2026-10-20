@@ -20,14 +20,12 @@ from app.mod03_notice.domain import (
     verify_row,
 )
 from app.mod05_flow.domain import CATEGORY_JC, CATEGORY_MATERIAL
-from tests.acc_plugin import acc
 
 
 def _ok(nid: int = 1, amount: str = "100.00") -> PayRow:
     return PayRow(notice_id=nid, approve_status="已批", payable=to_money(amount))
 
 
-@acc("ACC-PAY-VERIFY-001", "001-01")
 def test_已批是唯一自动核验项():
     assert VERIFY_ITEMS == ("approve_status",)                      # 核验项收敛为 1 项
     assert not any(("发票" in x) or ("特例" in x) for x in VERIFY_ITEMS)   # 发票核验 / 先付款特例均不做
@@ -38,7 +36,6 @@ def test_已批是唯一自动核验项():
     assert verify_row(PayRow(4, "已批", to_money("0"))) == BLOCK_NOTHING_DUE
 
 
-@acc("ACC-PAY-VERIFY-001", "001-02")
 def test_存在不可付行时确认付款处于禁用态():
     chk = check_batch([_ok(1), PayRow(2, "未批", to_money("100")), _ok(3)])
     assert chk.enabled is False                      # **直接禁用**（不是点了才拦）
@@ -52,7 +49,6 @@ def test_存在不可付行时确认付款处于禁用态():
     assert check_batch([_ok(1)]).blocked_ids == []
 
 
-@acc("ACC-PAY-VERIFY-001", "001-03")
 def test_禁用时必须给出原因与解除方式():
     chk = check_batch([PayRow(2, "未批", to_money("100")), PayRow(3, "已批", to_money("0"))])
     assert chk.reason and chk.how_to_fix                  # 原因 + 解除方式，两者都不得为空
@@ -65,7 +61,6 @@ def test_禁用时必须给出原因与解除方式():
     assert ok.enabled is True and ok.reason == "" and ok.how_to_fix == ""
 
 
-@acc("ACC-PAY-VERIFY-001", "001-04")
 def test_不可付行可逐行移出移出后恢复可点():
     rows = [_ok(1), PayRow(2, "未批", to_money("100"))]
     drafts = {1: PayDraft(pay_method="承兑", amount=to_money("80.00"))}
@@ -80,7 +75,6 @@ def test_不可付行可逐行移出移出后恢复可点():
     assert [r.notice_id for r in left2] == [1]
 
 
-@acc("ACC-PAY-VERIFY-001", "001-05")
 def test_移出重绘不丢失其它行已填的值():
     rows = [_ok(1, "100.00"), _ok(2, "200.00"), PayRow(3, "未批", to_money("300.00"))]
     drafts = {
@@ -110,7 +104,6 @@ def test_移出重绘不丢失其它行已填的值():
 # ============================================================== 001-06 · ⑤ 集采未关联不可付
 
 
-@acc("ACC-PAY-VERIFY-001", "001-06")
 def test_集采未关联合同不可付():
     """§4.4.3：集采分类的行**必须已关联集采合同**才可付（用户 2026-09-24 口述，**无例外**）。
 

@@ -1,6 +1,5 @@
 """Protect original four-sheet layout, frozen values and truthful annual mapping."""
 
-from tests.acc_plugin import acc
 from copy import deepcopy
 from decimal import Decimal
 from openpyxl import load_workbook
@@ -23,8 +22,6 @@ def sample():
             'i8': [], 'reconciliations': []}
 
 
-@acc("ACC-RPT-MECH-001", "001-12")
-@acc("ACC-RPT-MECH-001", "001-03")
 def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     data = sample()
     wb, warnings = export.build(data)
@@ -47,7 +44,6 @@ def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     wb.close()
 
 
-@acc("ACC-RPT-MECH-001", "001-12")
 def test_preview_matches_frozen_file_and_next_export_does_not_modify_first(tmp_path):
     data = sample()
     preview = export.preview(data)
@@ -65,7 +61,6 @@ def test_preview_matches_frozen_file_and_next_export_does_not_modify_first(tmp_p
     wb.close()
 
 
-@acc("ACC-RPT-MECH-001", "001-12")
 def test_monthly_hidden_net_column_survives_empty_template_cells():
     data = sample()
     data['details'].append({'warehouse': '甲', 'ym': '2026-09', 'category': 'monthly',
@@ -91,7 +86,6 @@ def annual_sample(year):
     return data
 
 
-@acc('ACC-RPT-MECH-001', '001-12')
 @pytest.mark.parametrize('year', [2025, 2026, 2027])
 def test_annual_columns_follow_real_year_without_relabeling_source_values(year):
     wb, _ = export.build(annual_sample(year))
@@ -119,7 +113,6 @@ def test_annual_columns_follow_real_year_without_relabeling_source_values(year):
     wb.close()
 
 
-@acc('ACC-RPT-MECH-001', '001-12')
 def test_rollover_older_total_uses_complete_previous_year_and_confirmed_revision_once():
     data = annual_sample(2027)
     cells = data['histories'][0]['annual_rows'][0]['cells']
@@ -131,7 +124,6 @@ def test_rollover_older_total_uses_complete_previous_year_and_confirmed_revision
     wb.close()
 
 
-@acc('ACC-RPT-MECH-001', '001-12')
 def test_annual_source_without_reliable_year_is_rejected_before_mislabeling():
     data = annual_sample(2027)
     data['histories'][0].pop('base_month')

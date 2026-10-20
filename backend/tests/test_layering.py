@@ -37,7 +37,6 @@ from collections import Counter
 
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 APP = Path(__file__).resolve().parents[1] / "app"
 CORE = APP / "core"
@@ -172,14 +171,12 @@ def _scan_c2() -> Counter:
     return found
 
 
-@acc()
 def test_C2_不得把别包模型当查询目标():
     allowed = set(_ALLOW_C2_PENDING) | set(_ALLOW_C2_BY_DESIGN)
     extra = {key: n for key, n in _scan_c2().items() if key not in allowed or n != 1}
     assert not extra, f'跨包查询目标必须走主人service；新直查或同处增加查询：{extra}'
 
 
-@acc()
 def test_C2_名单逐条命中且待清只许变短():
     assert len(_ALLOW_C2_PENDING) <= _C2_PENDING_START, 'C2 待清名单不许变长'
     assert not set(_ALLOW_C2_PENDING) & set(_ALLOW_C2_BY_DESIGN), 'C2 两张名单不能重叠'
@@ -269,7 +266,6 @@ def _scan_a() -> dict[tuple[str, str], int]:
     return found
 
 
-@acc()
 def test_A_core_不得反向依赖业务包_除放行名单():
     found = _scan_a()
     extra = sorted(k for k in found if k not in _ALLOW_A)
@@ -282,7 +278,6 @@ def test_A_core_不得反向依赖业务包_除放行名单():
     )
 
 
-@acc()
 def test_A_放行名单里不许留幽灵条目():
     """名单里每条**必须仍然命中** —— 某条反向依赖被去掉（如批 1b 做完）却忘了删名单 ⇒ 名单变假口径。"""
     stale = sorted(set(_ALLOW_A) - set(_scan_a()))
@@ -312,7 +307,6 @@ def _scan_b() -> dict[str, int]:
     return found
 
 
-@acc()
 def test_B_业务包不得直接_import_导出层_除放行名单():
     found = _scan_b()
     extra = sorted(k for k in found if k not in _ALLOW_B)
@@ -325,7 +319,6 @@ def test_B_业务包不得直接_import_导出层_除放行名单():
     )
 
 
-@acc()
 def test_B_放行名单里不许留幽灵条目():
     stale = sorted(set(_ALLOW_B) - set(_scan_b()))
     assert not stale, (
@@ -334,7 +327,6 @@ def test_B_放行名单里不许留幽灵条目():
     )
 
 
-@acc()
 def test_B2_注册表必须是叶子件():
     """`app/export_registry.py` ⛔ 不得 `import` 任何 `app.*`。
 
@@ -356,7 +348,6 @@ def test_B2_注册表必须是叶子件():
 _GET_RE = re.compile(r'\bEXP\.get\("([a-z0-9_]+)"\)')
 
 
-@acc()
 def test_B3_业务按名取的每个名字都必须在绑定表里():
     """规则 B 的**另一半**：业务写的名字必须与装配层那张表对得上。
 
@@ -449,7 +440,6 @@ def _c_allowed() -> set[tuple[str, str]]:
     return set(_ALLOW_C_PENDING) | set(_ALLOW_C_BY_DESIGN)
 
 
-@acc()
 def test_C_包间不得直查对方表_只许经包间出口():
     """计划 §2.3「包间只经 `service` 调用，**不得跨包直查对方表**」—— **一般式**（`TAIL-218`）。"""
     found = _scan_c()
@@ -464,7 +454,6 @@ def test_C_包间不得直查对方表_只许经包间出口():
     )
 
 
-@acc()
 def test_C_待清名单只许变短():
     """⛔ **不许为了让它变绿而往待清名单里加条目** —— 加条目 = 用名单掩盖新长的病。"""
     assert len(_ALLOW_C_PENDING) <= _C_PENDING_START, (
@@ -476,7 +465,6 @@ def test_C_待清名单只许变短():
           f"（按设计的例外 {len(_ALLOW_C_BY_DESIGN)} 条）")
 
 
-@acc()
 def test_C_待清名单里不许留幽灵条目():
     stale = sorted(set(_ALLOW_C_PENDING) - set(_scan_c()))
     assert not stale, (
@@ -486,7 +474,6 @@ def test_C_待清名单里不许留幽灵条目():
     )
 
 
-@acc()
 def test_C_按设计的例外必须带理由():
     """例外表**看理由不看数量** —— 每条必须带出处，且对象**必须还命中**。"""
     assert _ALLOW_C_BY_DESIGN, (
@@ -528,7 +515,6 @@ _EXPORT_SMOKE: tuple[tuple[str, str, str], ...] = (
 )
 
 
-@acc()
 def test_包间出口必须真转发_打得着桩():
     """⭐ `TAIL-218` 批 1：**出口 ⛔ 不许写成模块级别名**（`load_mech = R.load_mech`）。
 
@@ -584,7 +570,6 @@ def _scan_d() -> dict[tuple[str, str], int]:
     return found
 
 
-@acc()
 def test_D_导出层不得直查业务包的表():
     """`app/report_export/**` ⛔ `import app.mod*.repository`（计划 §2.3：包间只经 `service` 调用）。
 
@@ -602,7 +587,6 @@ def test_D_导出层不得直查业务包的表():
     )
 
 
-@acc()
 def test_D_放行名单里不许留幽灵条目():
     stale = sorted(set(_ALLOW_D) - set(_scan_d()))
     assert not stale, (

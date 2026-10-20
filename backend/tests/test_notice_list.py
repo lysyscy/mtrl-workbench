@@ -27,7 +27,6 @@ from app.mod05_flow.domain import (
     PAY_STATUS_PAID,
     PAY_STATUS_UNPAID,
 )
-from tests.acc_plugin import acc
 
 
 def _row(**kw) -> NoticeRow:
@@ -47,14 +46,12 @@ def _row(**kw) -> NoticeRow:
 # ---------------------------------------------------------------- 四金额与状态
 
 
-@acc("ACC-PAY-LIST-001", "001-01")
 def test_付款金额是派生列():
     """§4.2.5：列表「付款金额」= 审批金额 − 已付金额（**不是那四个金额之一**）。"""
     r = _row(amount_approved=Decimal("10000.00"), amount_paid=Decimal("3000.00"))
     assert r.pay_amount == Decimal("7000.00")
 
 
-@acc("ACC-PAY-LIST-001", "001-02")
 def test_付款状态两态且基准是审批金额():
     """§4.4.2：已付金额 ≥ **审批金额** ⇒ 已付清；「统计付款金额」不参与判定。"""
     assert _row(amount_approved=Decimal("100"), amount_paid=Decimal("100")).pay_status == PAY_STATUS_PAID
@@ -67,7 +64,6 @@ def test_付款状态两态且基准是审批金额():
 # ---------------------------------------------------------------- 默认隐藏剔除 / 撤单
 
 
-@acc("ACC-PAY-LIST-001", "001-03")
 def test_默认视图不出现剔除与撤单行():
     rows = [
         _row(notice_id=1),
@@ -78,7 +74,6 @@ def test_默认视图不出现剔除与撤单行():
     assert [r.notice_id for r in shown] == [1]
 
 
-@acc("ACC-PAY-LIST-001", "001-04")
 def test_分类筛选四档():
     rows = [
         _row(notice_id=1, category=CATEGORY_MATERIAL),
@@ -93,7 +88,6 @@ def test_分类筛选四档():
 # ---------------------------------------------------------------- 「分类 = 剔除」专用视图
 
 
-@acc("ACC-PAY-LIST-001", "001-05")
 def test_剔除视图不受审批状态与付款状态约束():
     """§4.2.2 明文：切到「分类 = 剔除」时**不再受审批状态 / 付款状态筛选约束**。
 
@@ -112,7 +106,6 @@ def test_剔除视图不受审批状态与付款状态约束():
     assert [r.notice_id for r in filter_rows(rows, f)] == [1, 2]
 
 
-@acc("ACC-PAY-LIST-001", "001-06")
 def test_剔除视图同时给出剔除与撤单行且分档():
     rows = [
         _row(notice_id=1),
@@ -134,7 +127,6 @@ def test_剔除视图同时给出剔除与撤单行且分档():
 # ---------------------------------------------------------------- 时间与项目
 
 
-@acc("ACC-PAY-LIST-001", "001-07")
 def test_年月闭区间与项目多选():
     rows = [
         _row(notice_id=1, doc_date="2026-08-31"),
@@ -162,7 +154,6 @@ def test_年月闭区间与项目多选():
 # ---------------------------------------------------------------- 计数
 
 
-@acc("ACC-PAY-LIST-001", "001-08")
 def test_计数含剔除分档与撤单():
     rows = [
         _row(notice_id=1),

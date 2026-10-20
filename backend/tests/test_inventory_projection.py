@@ -10,7 +10,6 @@ from app.core.db import session_scope
 from app.mod07_setl import extract, inventory_extract
 from app.mod08_inv import repository as R, router, service
 from app.mod08_inv.models import InvDetail, InvAdjustment
-from tests.acc_plugin import acc
 
 
 @contextmanager
@@ -50,7 +49,6 @@ def seed(s):
     return [r.id for r in rows]
 
 
-@acc()
 def test_rows_api_and_orm_consumers_keep_values_and_query_count(monkeypatch):
     with session_scope() as s:
         ids = seed(s)
@@ -100,7 +98,6 @@ def test_rows_api_and_orm_consumers_keep_values_and_query_count(monkeypatch):
         s.rollback()
 
 
-@acc()
 def test_original_inbound_four_fields_excludes_outbound_adjustment_and_tax():
     with session_scope() as s:
         seed(s)

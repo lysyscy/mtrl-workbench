@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from tests.acc_plugin import acc
 
 from app.mod11_jc import domain as D
 from app.mod11_jc.models import KIND_SUPPLIER, KIND_TRADE, TAG_IN, TAG_OUT
@@ -42,7 +41,6 @@ def _pay(date: str, amount: str, source: str = "manual", notice_id=None) -> dict
 # ---------------------------------------------------------------- 子表校验
 
 
-@acc("ACC-JC-UI-001", "001-05")
 def test_子表日期必填_只填金额不填日期不得落库():
     """发票与付款**同款**：日期是必填项（发票要能对上所属期）。"""
     assert D.invoice_problem("", "100") == D.MSG_NEED_DATE, "发票：只填金额不填日期 ⇒ 必须报错（不得落库）"
@@ -51,7 +49,6 @@ def test_子表日期必填_只填金额不填日期不得落库():
     assert D.payment_problem("2026-09-01", "100") is None
 
 
-@acc("ACC-JC-UI-001", "001-06")
 def test_发票金额只走大于零这一个出口_不设上限():
     """**可超合同金额**：金额上限这件事在口径里根本不存在（只拦 ≤ 0 与非数字）。"""
     big = "99999999.99"                      # 远超任何合同金额
@@ -66,7 +63,6 @@ def test_发票金额只走大于零这一个出口_不设上限():
 # ---------------------------------------------------------------- 结算 / 欠款
 
 
-@acc("ACC-JC-UI-001", "001-10")
 def test_结算两条路径各取各自子表合计_互不串用():
     """**有**贸易公司 → 贸易发票合计；**无** → 供应商发票合计；⭐ 两条路**互不串用**。"""
     invoices = [_inv(KIND_SUPPLIER, "2026-08-01", "1000"), _inv(KIND_TRADE, "2026-08-02", "700")]
@@ -83,7 +79,6 @@ def test_结算两条路径各取各自子表合计_互不串用():
         "无贸易公司 ⇒ 贸易发票子表再多也不许渗进结算"
 
 
-@acc("ACC-JC-UI-001", "001-09")
 def test_主表金额列只读汇总_改子表即改欠款():
     """⭐ 判据要的是「**改子表即改欠款**」⇒ 主表那 5 个金额列每次**现算**（⛔ 不落库）。"""
     payments = [_pay("2026-09-10", "400")]
@@ -111,7 +106,6 @@ def test_主表金额列只读汇总_改子表即改欠款():
 # ---------------------------------------------------------------- 自由文本（DEV-J-03）
 
 
-@acc("ACC-JC-UI-001", "001-15")
 def test_集采付款方式独立列已取消():
     """用户2026-10-14改为统一填写备注。"""
     from app.mod11_jc import repository
@@ -119,7 +113,6 @@ def test_集采付款方式独立列已取消():
     assert "method" not in repository.EDITABLE_COLS
 
 
-@acc("ACC-JC-FETCH-001", "001-10")
 def test_抓取不覆盖已人工标记的行():
     """⭐ 原为「待建」档。`TAIL-97` 两态化之后口径变成：
 
@@ -139,7 +132,6 @@ def test_抓取不覆盖已人工标记的行():
 # ---------------------------------------------------------------- 付款引用（§6.6.2）
 
 
-@acc("ACC-JC-PAY-001", "001-02")
 def test_全库去重_同一通知书只能被引用一次():
     """去重范围 = **全库、不分合同**（判据原文点明"不分合同"）。"""
     assert D.dedup_blocked(notice_id=7, existing_notice_ids=[3, 7, 9]) is True, "已被别的合同引用过 ⇒ 也要拦"
@@ -147,7 +139,6 @@ def test_全库去重_同一通知书只能被引用一次():
     assert D.dedup_blocked(notice_id=None, existing_notice_ids=[3]) is False, "手工录入的（无通知书 id）不参与去重"
 
 
-@acc("ACC-JC-PAY-001", "001-04")
 def test_关联不做金额校验_不一致只提示不拦截():
     """⚠️ 口径是"事实优先"：金额对不上**照样能关联**，只是给一句提示。"""
     assert D.link_hint(notice_amount=Decimal("100"), contract_debt=Decimal("100")) is None, "一致 ⇒ 无提示"
@@ -157,7 +148,6 @@ def test_关联不做金额校验_不一致只提示不拦截():
     assert D.link_hint(notice_amount=Decimal("1"), contract_debt=Decimal("99999")) is not None
 
 
-@acc("ACC-JC-PAY-001", "001-05")
 def test_候选范围收窄到本项目与已匹配供应商_且当前那张无条件保留():
     contracts = [
         {"id": 1, "project_key": "甲仓", "supplier": "业祥"},
@@ -175,7 +165,6 @@ def test_候选范围收窄到本项目与已匹配供应商_且当前那张无�
     assert 3 in got2 and 2 not in got2 and 4 not in got2
 
 
-@acc("ACC-JC-PAY-001", "001-06")
 def test_候选为空时给提示且不允许提交():
     """⚠️ 域层只负责"候选为空"这个**事实**；"不许提交"由调用方（API / 壳）据此拦截。"""
     contracts = [{"id": 1, "project_key": "甲仓", "supplier": "业祥"}]
@@ -184,7 +173,6 @@ def test_候选为空时给提示且不允许提交():
     assert D.pick_candidates(contracts=contracts, project_key="丙仓", supplier="业祥") == []
 
 
-@acc()
 def test_付款方式列宽够装真实条款():
     """⚠️⚠️ **2026-09-20 实测踩到（第二层）**：`method` 原先只有 `varchar(64)`，
     而用户台账里「详细付款方式」那种**整段付款条款**最长 **95 字**

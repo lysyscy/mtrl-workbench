@@ -8,8 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from app.mod06_proc import domain as D
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
 def report():
@@ -33,7 +32,6 @@ def report():
                   "matrices": {"测试仓库": matrix, "无调整仓库": {**matrix, "diffs": [], "diff_totals": D.diff_totals([])}}})
 
 
-@acc()
 def test_independent_reads_pending_failure_retry_difference_and_empty(ui_page):
     p = ui_page
     from app.mod03_notice.page import render_theme
@@ -70,7 +68,6 @@ def test_independent_reads_pending_failure_retry_difference_and_empty(ui_page):
     assert p.evaluate('FAILED.size') == 0
 
 
-@acc()
 def test_mechanical_write_refreshes_only_own_sources_and_keeps_cross_page_stale(ui_page):
     p = ui_page
     p.evaluate("""async data => {
@@ -89,7 +86,6 @@ def test_mechanical_write_refreshes_only_own_sources_and_keeps_cross_page_stale(
     assert p.evaluate('LOADED.size') == 0
 
 
-@acc()
 def test_inventory_adjustment_clear_dirties_process_and_navigation_reloads_its_two_routes(ui_page):
     p = ui_page
     p.route('**/api/m08/adjust/clear', lambda route: route.fulfill(

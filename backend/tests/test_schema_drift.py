@@ -30,7 +30,6 @@ from pathlib import Path
 
 import pytest
 
-from tests.acc_plugin import acc
 
 APP = Path(__file__).resolve().parents[1] / "app"
 #: ⭐ 2026-09-30（`TAIL-195` 批 1）：登记表**已从 `core/` 挪到装配层**（`app/` 顶层，与 `main.py` 同级）
@@ -52,7 +51,6 @@ def _code_lines(path: Path) -> list[str]:
     return out
 
 
-@acc()
 def test_每一个_models_模块都登记进了模型注册表():
     """⭐ 漏登记一个 ⇒ `alembic autogenerate` 判成"**要删掉这张表**"（破坏性、且没人拦）。
 
@@ -73,7 +71,6 @@ def test_每一个_models_模块都登记进了模型注册表():
     )
 
 
-@acc()
 def test_注册表里的导入都指向真实存在的模块():
     """反向那一半：登记表里**不许留有幽灵**（模块被删/改名后忘了改这一行 ⇒ 启动期才炸）。"""
     for ln in _code_lines(REGISTRY):
@@ -84,7 +81,6 @@ def test_注册表里的导入都指向真实存在的模块():
         assert target.exists(), f"`models_registry.py` 里这行指向的模块已不存在：{ln}"
 
 
-@acc()
 def test_元数据与测试库没有分叉():
     """⭐ 判据与 `alembic check` **同源**（同两个开关）—— 差异必须为 **0**。
 

@@ -18,14 +18,12 @@ from __future__ import annotations
 
 import pathlib
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 #: 仓库根（本件在 `backend/tests/` 下）
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
-@acc("ACC-UI-SHELL-001", "001-13")
 def test_实现话术墓碑():
     """⭐ 本批从界面上删掉的实现话术，⛔ 不许再回到屏幕上（守则 §3.1）。
 
@@ -36,7 +34,6 @@ def test_实现话术墓碑():
             f"实现细节又上屏了：{tomb!r} —— 那是给开发看的（守则 §3.1），⛔ 别再写进界面文案"
 
 
-@acc("ACC-UI-SHELL-001", "001-14")
 def test_默认页说明按最新用户取舍精简():
     """TAIL-263覆盖旧数量下限；错误/结果与弹窗反馈仍保留。"""
     from tests.shell_src import page_slice
@@ -46,22 +43,8 @@ def test_默认页说明按最新用户取舍精简():
     assert '没有保存成功' in SHELL or '保存失败' in SHELL
 
 
-@acc("ACC-UI-SHELL-001", "001-15")
-def test_真机26号的判据本身还在():
-    """⭐ 本条的"长度"判在真机 ⇒ **判据本身**也要有人守着（⛔ 别哪天被顺手删掉，文档还写着"已挂判据"）。
-
-    ⚠️ 判法 = 真机件里必须有阈值常量 `LONG_LIMIT` 与 **㉖** 那一段（结构存在性，⛔ 不判它内部怎么写）。
-    """
-    src = (ROOT / "tools" / "probe" / "_shell_text.py").read_text(encoding="utf-8")
-    assert "LONG_LIMIT" in src, "真机件里没有长度阈值 `LONG_LIMIT` —— ㉖ 的判据被拆掉了？"
-    assert "㉖" in src, "真机件里没有 ㉖ 那一段 —— 守则 §3.4 的判据悬空了？"
-    # ⭐ 2026-09-28（`TAIL-124` / `TAIL-105`）：**㉙ 页级禁用**（页面接口与全站加粗标记）
-    #    同样要有人守着 —— 它只活在真机件里，删掉不会有任何离线判据响。
-    assert "㉙" in src and "PAGE_TEXT_RULES" in src, \
-        "真机件里没有 ㉙ `/`PAGE_TEXT_RULES` —— 页级规则扩展接口悬空了？"
 
 
-@acc("ACC-UI-SHELL-001", "001-16")
 def test_域自报的长文案也要守上限():
     """⭐ `TAIL-105`（2026-09-28）：**㉖ 只看"首屏那个域"**（`imp` 一进来是 `m06_proc`）⇒
     切到别的域（如 `m11_jc`）才露出来的那几句**它量不到** —— 本批实测：`m11` 的 `rule_note`

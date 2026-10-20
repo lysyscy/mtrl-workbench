@@ -13,7 +13,6 @@ from app.mod01_projects.models import (
     TYPE_SHELL,
     TYPE_SMALL,
 )
-from tests.acc_plugin import acc
 from tests.m01_helpers import make_project
 
 _SHELL_NAME = "第四工程公司 2024小微项目"
@@ -36,7 +35,6 @@ def _shell_and_smalls(*statuses: str):
     return shell, smalls
 
 
-@acc("ACC-PRJ-ARCH-001", "001-01")
 def test_壳下有在建小微则归档被拦截():
     shell, smalls = _shell_and_smalls(STATUS_ACTIVE, STATUS_ACTIVE)
     r = apply_status_change(shell, STATUS_ARCHIVED, [shell, *smalls])
@@ -45,7 +43,6 @@ def test_壳下有在建小微则归档被拦截():
     assert len(r.blocked_by) == 2
 
 
-@acc("ACC-PRJ-ARCH-001", "001-02")
 def test_拦截时列出未归档小微():
     shell, smalls = _shell_and_smalls(STATUS_ACTIVE)
     r = apply_status_change(shell, STATUS_ARCHIVED, [shell, *smalls])
@@ -54,7 +51,6 @@ def test_拦截时列出未归档小微():
     assert "小微仓库0" in r.message and "归档" in r.message
 
 
-@acc("ACC-PRJ-ARCH-001", "001-03")
 def test_壳下全部归档后壳可归档():
     shell, smalls = _shell_and_smalls(STATUS_ARCHIVED, STATUS_ARCHIVED)
     r = apply_status_change(shell, STATUS_ARCHIVED, [shell, *smalls])
@@ -62,7 +58,6 @@ def test_壳下全部归档后壳可归档():
     assert r.writes == [{"id": 1, "field": "status", "value": STATUS_ARCHIVED}]
 
 
-@acc("ACC-PRJ-ARCH-001", "001-04")
 def test_归档最后一个在建小微则壳自动跟随():
     shell, smalls = _shell_and_smalls(STATUS_ARCHIVED, STATUS_ACTIVE)
     last = smalls[1]
@@ -73,7 +68,6 @@ def test_归档最后一个在建小微则壳自动跟随():
     assert r.follow_ups[0]["needs_log"] is True                 # 给壳**单独留痕**
 
 
-@acc("ACC-PRJ-ARCH-001", "001-05")
 def test_已归档壳下不许新建小微():
     shell, _ = _shell_and_smalls()
     shell.status = STATUS_ARCHIVED
@@ -81,7 +75,6 @@ def test_已归档壳下不许新建小微():
         can_create_small(shell)
 
 
-@acc("ACC-PRJ-ARCH-001", "001-06")
 def test_归档只改状态字段不动业务数据():
     p = make_project(1, name_full="普通项目A", warehouse="普通A仓库", ptype=TYPE_NORMAL)
     other = make_project(2, name_full="普通项目B", warehouse="普通B仓库")
@@ -92,7 +85,6 @@ def test_归档只改状态字段不动业务数据():
     assert {w["field"] for w in r.writes} == {"status"}
 
 
-@acc("ACC-PRJ-ARCH-001", "001-07")
 def test_归档可改回在建不锁死():
     p = make_project(1, name_full="普通项目A", warehouse="普通A仓库")
     p.status = STATUS_ARCHIVED

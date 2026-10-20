@@ -28,7 +28,6 @@ from app.mod01_projects.models import (
     TYPE_SHELL,
     TYPE_SMALL,
 )
-from tests.acc_plugin import acc
 from tests.m01_helpers import make_project
 
 CASE = "ACC-PRJ-NAME-001"
@@ -42,7 +41,6 @@ _CODE = "XMCB2025080001"
 # ============================================================ §2.3.2 尾码剥离
 
 
-@acc(CASE, "001-01")
 def test_尾码剥离认括号与裸尾两种写法():
     """`§2.3.2` —— i8 全名尾部两种写法都要认（认漏任一种 ⇒ 全名对不上）。"""
     assert strip_trailing_code(f"{_FULL}({_CODE})") == _FULL        # 半角括号
@@ -51,7 +49,6 @@ def test_尾码剥离认括号与裸尾两种写法():
     assert strip_trailing_code(f"{_FULL}({_CODE}) ".strip()) == _FULL
 
 
-@acc(CASE, "001-02")
 def test_最宽规则字母至少2位数字至少1位():
     """`§2.3.2` 决策 6 —— 规则取**最宽**的 `[A-Za-z]{2,}\\d+`（取窄了会漏剥）。"""
     # 长度 ≥2 的字母段都算：3 位、小写、大写、全大写混数字
@@ -60,7 +57,6 @@ def test_最宽规则字母至少2位数字至少1位():
     assert strip_trailing_code(f"{_FULL}(Xmcb2025)") == _FULL
 
 
-@acc(CASE, "001-03")
 def test_不是尾码的一律不动():
     """`§2.3.2` —— **只剥尾部**；中段出现、或不像项目代码的，**保持原样**（宁不剥不误剥）。"""
     # 全名里本来就带英文（不是尾码）—— 尾部无码 ⇒ 不动
@@ -76,7 +72,6 @@ def test_不是尾码的一律不动():
     assert strip_trailing_code(None) == ""
 
 
-@acc(CASE, "001-04")
 def test_三处共用同一出口且可传规则():
     """`§2.3.2` —— **付款通知书导出 / 仓库列表同步 / 项目列表同步 三处共用**一个函数。
 
@@ -95,7 +90,6 @@ def test_三处共用同一出口且可传规则():
         assert strip_trailing_code(x, pattern=r"[A-Za-z]{2,}\d+") == strip_trailing_code(x)
 
 
-@acc(CASE, "001-05")
 def test_比较一律走归一不拿原串比():
     """`§2.3.2` —— "全名对不上"的技术根因 = 有人**拿原始串比较** ⇒ 归一出口必须唯一。"""
     assert norm_full_name(f"{_FULL}({_CODE})") == norm_full_name(_FULL)
@@ -110,7 +104,6 @@ def test_比较一律走归一不拿原串比():
 # ============================================================ §2.3.1 命名与修改约束
 
 
-@acc(CASE, "001-06")
 def test_仓库名是唯一标识且占位行也占号():
     """`§2.3.1` —— 仓库名**唯一**；**不得人工改**（只能建档 / 扶正时由系统写入）。
 
@@ -127,7 +120,6 @@ def test_仓库名是唯一标识且占位行也占号():
         == f"{PLACEHOLDER_PREFIX}2"
 
 
-@acc(CASE, "001-07")
 def test_全名可改但归属仍按id不按全名反查():
     """`§2.3.1` —— 全名**可人工修改**（应对 i8 改名 / 全角半角差异）⇒ **归属必须按 id 存**。
 
@@ -148,7 +140,6 @@ def test_全名可改但归属仍按id不按全名反查():
     assert before.shell_id == after.shell_id
 
 
-@acc(CASE, "001-08")
 def test_展示名默认取仓库名且可独立改():
     """`§2.3.1` —— 展示名**默认取仓库名**、可改，且**改它不影响归属**。"""
     # 默认：没设 disp ⇒ 显示 = 仓库名
@@ -160,7 +151,6 @@ def test_展示名默认取仓库名且可独立改():
     assert c.display == "泗阳百通" and c.key == "泗阳百通4#锅炉项目仓库"
 
 
-@acc(CASE, "001-09")
 def test_phid不可人工改且缺phid显式拒绝():
     """`§2.3.1` —— phid 由 i8 带出、**不可人工改** ⇒ 缺 phid 必须**显式拒绝建档**、不得静默建行。
 
@@ -180,7 +170,6 @@ def test_phid不可人工改且缺phid显式拒绝():
     assert "常用项目列表" in rows[0]["reason"]                            # 指回 i8 侧该做的动作
 
 
-@acc(CASE, "001-10")
 def test_改全名必须留给痕而不是静默写(rollback_db):
     """`§2.3.1` —— 全名可改 ⇒ **需留痕**（不是静默 UPDATE）。
 

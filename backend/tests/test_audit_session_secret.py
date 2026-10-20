@@ -6,7 +6,6 @@ from types import SimpleNamespace
 import pytest
 
 from app.core import config, session
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -27,7 +26,6 @@ def isolated_secret(tmp_path, monkeypatch):
     return env_file, settings
 
 
-@acc()
 def test_unwritable_config_keeps_multiple_tickets_valid(isolated_secret):
     first = session.make("audit.first")
     second = session.make("audit.second")
@@ -37,7 +35,6 @@ def test_unwritable_config_keeps_multiple_tickets_valid(isolated_secret):
     assert not isolated_secret[0].exists()
 
 
-@acc()
 def test_parallel_first_logins_share_temporary_secret(isolated_secret):
     accounts = ["audit.first", "audit.second"]
     with ThreadPoolExecutor(max_workers=2) as workers:
@@ -45,7 +42,6 @@ def test_parallel_first_logins_share_temporary_secret(isolated_secret):
     assert [session.read(ticket) for ticket in tickets] == accounts
 
 
-@acc()
 @pytest.mark.parametrize("source", ["settings", "file"])
 def test_existing_secret_takes_priority_over_temporary(isolated_secret, source):
     env_file, settings = isolated_secret

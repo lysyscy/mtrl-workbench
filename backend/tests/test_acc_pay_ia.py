@@ -22,7 +22,6 @@ from app.mod03_notice.page import (
     sort_rows,
     tip_block_count,
 )
-from tests.acc_plugin import acc
 
 TIPS = [
     "付款计划 = i8 付款通知书的「本月预算版」",
@@ -57,7 +56,6 @@ def _render(rows):
     )
 
 
-@acc("ACC-PAY-IA-001", "001-01")
 def test_付款域页面划分与导航符合范围定义():
     ids = tuple(p["id"] for p in PAY_DOMAIN_PAGES)
     assert ids == ("m03", "m05")                     # 付款域两页，原表核对在skill（§4.1.2）
@@ -72,7 +70,6 @@ def test_付款域页面划分与导航符合范围定义():
     assert nav_violations() == []
 
 
-@acc("ACC-PAY-IA-001", "001-02")
 def test_列表页固定五段骨架顺序():
     assert LIST_PAGE_SEGMENTS == ("tip", "kpis", "filter", "data", "empty")
     html = _render([{"year_month": "2026-08", "doc_no": "D1",
@@ -93,7 +90,6 @@ def test_列表页固定五段骨架顺序():
     assert f'colspan="{len(COLUMNS)}"' in empty
 
 
-@acc("ACC-PAY-IA-001", "001-03")
 def test_一个页面只给一个口径说明折叠块():
     html = _render([])
     assert tip_block_count(html) == 1                 # **只有一处**折叠块
@@ -108,7 +104,6 @@ def test_一个页面只给一个口径说明折叠块():
     assert tip_block_count(one) == 1 and one.count("<li>") == 1
 
 
-@acc("ACC-PAY-IA-001", "001-04")
 def test_表头点击排序可用():
     html = _render([{"year_month": "2026-08", "doc_no": "D1", "planned_amount": "100.00",
                      "audit_result": "完全匹配", "op": ""}])

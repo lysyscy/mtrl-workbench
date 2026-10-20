@@ -25,7 +25,6 @@ from app.mod01_projects.models import TYPE_NORMAL, Project
 from app.mod03_notice import models as _m03  # noqa: F401
 from app.mod11_jc import service as SV
 from app.mod11_jc.models import TAG_IN, TAG_OUT, JcContract, JcInvoice
-from tests.acc_plugin import acc
 
 WH_A = "__自检仓_集采写甲__"
 
@@ -46,7 +45,6 @@ def _n_contracts(s, project_id: int) -> int:
     ).scalar_one())
 
 
-@acc("ACC-JC-UI-001", "001-13")
 def test_手工新增保存真的建档():
     """⭐ 判据「**保存真的建档**」—— 建档前后**独立复算**该仓下的行数。"""
     with session_scope() as s:
@@ -62,7 +60,6 @@ def test_手工新增保存真的建档():
         s.rollback()
 
 
-@acc("ACC-JC-FETCH-001", "001-07")
 def test_手工新增的三态默认是纳入台账():
     """⭐ 判据**原文**「默认值 = **纳入台账**」（比对加载时快照）。
 
@@ -97,7 +94,6 @@ def fetch_default_is_same_as_create_default() -> bool:
             and col_default is not None and col_default.arg == TAG_IN)
 
 
-@acc("ACC-JC-FETCH-001", "001-03")
 def test_三态标记可逐条也可批量():
     """⭐ 判据原文只要求"**两种都能**" ⇒ 逐条与批量各做一次，结果一致。"""
     with session_scope() as s:
@@ -118,7 +114,6 @@ def test_三态标记可逐条也可批量():
         s.rollback()
 
 
-@acc("ACC-JC-FETCH-001", "001-05")
 def test_批量标记只作用勾选行_不改行数_并回受影响id():
     """⭐ 判据三条：**只作用勾选行** · **动作后清空勾选**（壳按 `affected_ids` 清）· **不改行数**。"""
     with session_scope() as s:
@@ -143,7 +138,6 @@ def test_批量标记只作用勾选行_不改行数_并回受影响id():
         s.rollback()
 
 
-@acc("ACC-JC-UI-001", "001-12")
 def test_收发登记三列与备注可手改并落值():
     """⭐ 判据「合同收发登记三列 ＋ 备注可手改并**落值**」—— 改完**重新取一次**才叫落值。"""
     with session_scope() as s:
@@ -169,7 +163,6 @@ def test_收发登记三列与备注可手改并落值():
         s.rollback()
 
 
-@acc("ACC-JC-UI-001", "001-04")
 def test_发票子表字段是日期加金额_且日期必填():
     """⭐ 判据「发票子表字段 = **日期 ＋ 金额**，共用同一套表头且数据行**真的渲染出日期**」。
 

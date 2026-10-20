@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""四态验收报表（绿 / 红 / 待建 / 未绑定）。
+"""按需读取历史判据与 pytest 运行结果（绿 / 红 / 待建 / 未绑定）。
 
 契约（`PRD/验收/README.md` §三）：
 - 报表**按 `ACC-*` 分组**列出红 / 待建 / 未绑定；
-- **有红即非零退出**（供流水线判停）；
+- 判据有红、运行失败或结果不完整时非零退出；判据绿不代表整套测试通过；
 - ⚠️ **「未绑定」必须单独成态并显示** —— 否则出现「没验过 = 通过」（本项目最贵的一类假绿）；
 - 用例**全部判据点都绿**才算绿，未达标报「绿 X/Y」。
 
@@ -11,10 +11,10 @@
 `PRD/验收/验收基线.json`（D3：工程内**不留副本**）。
 
 用法：
-    python tools/acc_report.py                 # 人读报表
-    python tools/acc_report.py -v              # 附判据全文
-    python tools/acc_report.py --by-stage      # 按计划阶段分组（解析 PRD/05-任务分解.md）
-    python tools/acc_report.py --json          # 机器可读
+    python tools/audit/acc_report.py                 # 人读报表
+    python tools/audit/acc_report.py -v              # 附判据全文
+    python tools/audit/acc_report.py --by-stage      # 按计划阶段分组（解析 PRD/05-任务分解.md）
+    python tools/audit/acc_report.py --json          # 机器可读
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -215,11 +214,40 @@ def render(args: argparse.Namespace) -> tuple[int, dict]:
     boundary = collect_boundary(baseline)
     states = build_states(points, pending, results_payload)
 
+    outcomes = results_payload.get("results") or {}
+    bindings = results_payload.get("bindings") or {}
+    pytest_exitstatus = results_payload.get("pytest_exitstatus")
+    failed = sorted(n for n, outcome in outcomes.items() if outcome in ("failed", "error"))
+    missing = sorted(set(bindings) - set(outcomes))
+    unknown = sorted(n for n, outcome in outcomes.items()
+                     if outcome not in ("passed", "failed", "error", "skipped"))
+    run_issues = []
+    if not results_path.exists():
+        run_issues.append("运行结果文件缺失")
+    if type(pytest_exitstatus) is not int:
+        run_issues.append("pytest_exitstatus 缺失或未知")
+    elif pytest_exitstatus != 0:
+        run_issues.append(f"pytest 非零退出 {pytest_exitstatus}")
+    if not outcomes:
+        run_issues.append("没有测试运行结果（空选集或未执行）")
+    if failed:
+        run_issues.append(f"失败测试 {len(failed)}（含未绑定判据的测试）")
+    if missing:
+        run_issues.append(f"未执行或缺失结果 {len(missing)}")
+    if unknown:
+        run_issues.append(f"未知运行结果 {len(unknown)}")
+
     meta: dict[str, Any] = {
         "baseline": str(baseline_path),
         "baseline_asof": baseline.get("asof", ""),
         "results": str(results_path),
         "results_generated_at": results_payload.get("generated_at", "(未跑过测试)"),
+        "pytest_exitstatus": pytest_exitstatus,
+        "run_issues": run_issues,
+        "failed_tests": failed,
+        "unbound_failed_tests": [n for n in failed if not bindings.get(n)],
+        "missing_results": missing,
+        "unknown_results": unknown,
     }
 
     # --- 统计 ---
@@ -251,6 +279,12 @@ def render(args: argparse.Namespace) -> tuple[int, dict]:
     print(line)
     print(" 验收报表 · 材料报表自动化工作台")
     print(f" 判据基线 asof: {meta['baseline_asof']}    结果生成于: {meta['results_generated_at']}")
+    print(f" pytest_exitstatus: {pytest_exitstatus if type(pytest_exitstatus) is int else '未知'}")
+    print(" 运行结果: " + ("；".join(run_issues) if run_issues else "记录的测试通过"))
+    print(" 判据绿只表示对应断言通过；历史结果不证明当前整套测试通过。")
+    for label, nodes in (("失败", failed), ("未执行或缺失", missing), ("未知", unknown)):
+        for nodeid in nodes:
+            print(f"  {label}: {nodeid}")
     print(line)
     print(
         f"判据点合计 {total}    "
@@ -347,11 +381,12 @@ def render(args: argparse.Namespace) -> tuple[int, dict]:
         }
     )
 
-    exit_code = 1 if tally[RED] else 0
+    exit_code = 1 if tally[RED] or run_issues else 0
+    meta["report_exitstatus"] = exit_code
     print(line)
     print(
         f"退出码 {exit_code}"
-        + ("（有红）" if exit_code else "（无红）")
+        + ("（判据有红或运行失败/不完整）" if exit_code else "（判据无红，记录的运行成功）")
         + f"    ⚠️ 未绑定 {tally[UNBOUND]} 条不等于通过"
     )
     print(line)

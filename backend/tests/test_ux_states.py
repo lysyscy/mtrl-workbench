@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import pathlib
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -33,7 +32,6 @@ def _seg(marker: str, stop: str = "\n}") -> str:
     return SHELL[i:j + 2] if j > i else SHELL[i:]
 
 
-@acc("ACC-UI-SHELL-001", "001-17")
 def test_页级状态只有一个出口():
     """⭐「这一页现在该显示什么」只能由 `pageState()` 说了算（⛔ 别在各页 `V.*` 里各判一次）。
 
@@ -45,7 +43,6 @@ def test_页级状态只有一个出口():
         assert SHELL.count(fn) == 1, f"{fn}) 在壳里出现 {SHELL.count(fn)} 次（应当**只有一处**出口）"
 
 
-@acc("ACC-UI-SHELL-001", "001-18")
 def test_渲染必须先过页级状态():
     """⭐ `render()` 必须先问 `pageState()`：不 `ready` 就画状态页，⛔ 不许画空页。
 
@@ -58,7 +55,6 @@ def test_渲染必须先过页级状态():
         "`render()` 没有按页级状态分流（`if(st.kind!=='ready')`）—— 加载 / 错误态会被跳过"
 
 
-@acc("ACC-UI-SHELL-001", "001-19")
 def test_状态页必须给下一步():
     """⭐ 状态页不是"一片空白"：**加载态**要说"正在读**哪几项**、读完会自己出来"；
     **错误态**要说"哪一块没取到 ＋ 别的页照常可用 ＋ 重试"（守则 §2.2「为什么 ＋ 下一步」）。"""
@@ -72,7 +68,6 @@ def test_状态页必须给下一步():
         assert need in gate, f"页级状态页缺「{need}」（{why}）"
 
 
-@acc("ACC-UI-SHELL-001", "001-20")
 def test_空态只有一个出口且要说清为什么与下一步():
     """⭐ 表内空态一律走 `EMPTYROW`、块级一律走 `EMPTYBOX`（守则 §2.2 / §5.9）——
     ⛔ 不许再手写 `<tr><td colspan=… class="ctr mut">`（那种写法多半只写"无数据"，没有下一步）。
@@ -87,7 +82,6 @@ def test_空态只有一个出口且要说清为什么与下一步():
     assert "EMPTYBOX(" in SHELL, "块级空态出口 `EMPTYBOX` 不见了（图表 / 卡内空区要用它）"
 
 
-@acc("ACC-UI-SHELL-001", "001-21")
 def test_取数一律过连不上的人话包装():
     """⭐⭐ 本批 ㉗ 当场抓到的第二条缺口：**`fetch` 自己被拒**那条路（服务没起 / 断网 / 被拦）
     漏出了浏览器的英文原文 —— 页级错误态上写着 `Failed to fetch`。
@@ -109,7 +103,6 @@ def test_取数一律过连不上的人话包装():
         assert need in SHELL, f"「连不上」的人话包装缺件：{need!r}"
 
 
-@acc("ACC-UI-SHELL-001", "001-22")
 def test_逐路容错要按路记名():
     """⭐ 页级状态的数据源 = `soft()` 按**路名**记的失败表（`FAILED`）——
     ⛔ 别把它退回"只往 `fails` 里 push 一句话"（那样判不出"是**哪一页的哪一路**坏了"）。
@@ -125,7 +118,6 @@ def test_逐路容错要按路记名():
         "`loadPaths` 没在 `finally` 里摘 `PENDING` ⇒ 中途抛异常会让整页永久卡在「正在读取」"
 
 
-@acc("ACC-UI-SHELL-001", "001-23")
 def test_真机27号的判据还在():
     """⭐ 本批最要紧的三件（那一瞬画的是什么 / 取不到时画什么 / 重试真管用吗）**只有真机能验**
     ⇒ 判据本身也要有人守着（⛔ 别哪天被顺手删掉，文档还写着"已挂判据"）。"""
@@ -137,7 +129,6 @@ def test_真机27号的判据还在():
     assert "_shell_states:check" in smoke, "真机 ㉗ 没进注册表（`_shell_segments.py`）⇒ 等于没跑"
 
 
-@acc("ACC-UI-SHELL-001", "001-53")
 def test_真机31号的空态判据还在():
     """⭐ `TAIL-171`-①（2026-09-29 · 用户裁定「按推荐做」）：**全站此前没有任何真机探针验过「空态」**
     （`_shell_states.py` 只管 加载 / 错 / 重试）⇒ 空态此前**只有离线判据**，而"0 行那一刻屏幕上

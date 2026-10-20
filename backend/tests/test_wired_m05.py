@@ -15,7 +15,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 from tests.shell_src import SHELL, act_entry, page_slice, with_kernel  # noqa: F401  ← `P4`① 读取点收敛（`with_kernel`：`TAIL-67`）
 
@@ -28,7 +27,6 @@ from tests.shell_src import SHELL, act_entry, page_slice, with_kernel  # noqa: F
 # 原先在 `tests/test_page_m05.py` 里借**旧服务端页**观测（该文件已改守数据出口 ✓）。
 
 
-@acc("ACC-FLOW-LED-001", "001-05")
 def test_台账两侧共用同一个项目选择器且无切换口径():
     """§4.5.4：台账两侧**共用同一个**项目选择器（切一次两边都换）；⛔ 没有「切换口径」按钮。"""
     assert "const ledPjPanel=()=>projPanel({list:ledProjs,selected:()=>[ledCur()],pickAct:'ledPjPick'" in SHELL, \
@@ -36,7 +34,6 @@ def test_台账两侧共用同一个项目选择器且无切换口径():
     assert "切换口径" not in page_slice("m05"), "壳里出现了「切换口径」按钮"
 
 
-@acc("ACC-FLOW-LIST-001", "001-04")
 def test_撤销入口只在生效行且必须填原因():
     """§4.4.5：撤销按钮**只在生效行**出（已撤销那行给「—」）；撤销**必须填原因**（后端把关）。"""
     s = page_slice("m05")
@@ -46,7 +43,6 @@ def test_撤销入口只在生效行且必须填原因():
     assert "撤销原因必填" in SHELL, "没写明撤销必须填原因"
 
 
-@acc("ACC-FLOW-LIST-001", "001-06")
 def test_流水空态跨列由表头派生且不分页():
     """空态行的 `colspan` **由表头派生**（⛔ 不写死）；该表**不做分页**（一次给全）。"""
     s = page_slice("m05")
@@ -55,7 +51,6 @@ def test_流水空态跨列由表头派生且不分页():
     assert "不做分页" in s, "没写明「不做分页」"
 
 
-@acc("ACC-FLOW-LIST-001", "001-02")
 def test_流水状态初始与重置都默认生效():
     """⭐ 2026-10-10 用户裁定：状态**初始值与「重置」都默认「生效」**（日常只关心还没撤销的钱）。
 
@@ -85,7 +80,6 @@ def test_流水状态初始与重置都默认生效():
 # --------------------------------------------------------------- 接线点（正向）
 
 
-@acc()
 def test_壳把m05标为已接后端并指向四个端点():
     assert "'m05'" in SHELL and "const WIRED=new Set(" in SHELL
     for fn in ("API.flows()", "API.debt()", "API.stats(", "API.ledger(", "API.flowRevoke("):
@@ -94,7 +88,6 @@ def test_壳把m05标为已接后端并指向四个端点():
     assert "/api/m05/ledger?project_id=" in SHELL
 
 
-@acc()
 def test_流水行与期初行在适配层完成转形():
     assert "function adaptFlow(x)" in SHELL and "function adaptOpening(x)" in SHELL
     # ⭐ 仓库名（归并键）与展示名分开 —— 拿展示名当键会静默失配
@@ -103,7 +96,6 @@ def test_流水行与期初行在适配层完成转形():
     assert "proj: x.project_display || ''" in SHELL
 
 
-@acc()
 def test_读写都走统一的出口与外壳():
     assert "async function reloadM05()" in SHELL
     assert "async function m05Act(fn, okMsg, ms)" in SHELL
@@ -123,7 +115,6 @@ def test_读写都走统一的出口与外壳():
 # --------------------------------------------------------------- 反向（不许再出现）
 
 
-@acc()
 def test_欠款台账统计不再由前端自算():
     """⭐ 三块的**唯一出口 = 后端**（§4.5.1 / §4.5.4 / §4.5.5）。
 
@@ -145,7 +136,6 @@ def test_欠款台账统计不再由前端自算():
     assert "const axes=pstMonthsOfYear" not in SHELL, "付款统计还在前端拼时间轴"
 
 
-@acc()
 def test_写动作不許用本地赋值冒充落库():
     assert "f.voided=true; f.reason=rs;" not in SHELL, "撤销还在改内存"
     assert "LGs.push(O(['LG'" not in SHELL, "期初还在前端 push"
@@ -153,7 +143,6 @@ def test_写动作不許用本地赋值冒充落库():
     assert "LEDNOTE[k]=v" not in SHELL, "台账备注还在写前端缓存"
 
 
-@acc()
 def test_机械结算源已接线_读真源():
     """⭐ **本轮改动**（`TAIL-27` 第 6 页 · `MOD-06` 机械源接线）：机械结算源 = 过程资料机械 6 列，
     现已接后端（`/api/m06/mech` ⇒ 壳里 `MACH6`）⇒ `V.m05` 的机械结算项**恢复原型写法**
@@ -168,7 +157,6 @@ def test_机械结算源已接线_读真源():
     #    （本文件第一次就是这么切歪的）。**钉具体串**更准。
 
 
-@acc()
 def test_已接线页的演示数组必须已删():
     assert "const LG = [" not in SHELL
     assert "LG.map(r=>O(r,LG_COLS))" not in SHELL
@@ -179,7 +167,6 @@ def test_已接线页的演示数组必须已删():
 #    口径一个字没动，⛔ 表头 `LED_THEAD` 一字未改（⚠️ 2026-09-30 `TAIL-201`：`U5` 已**退场** ⇒ 这条理由作废；真理由 = 它是**界面口径**，改了要跑 `acc_*` ＋ 真机）。
 
 
-@acc("ACC-FLOW-LED-001", "001-12")
 def test_台账的现状数_截至行与入口名都钉住():
     """守四件（守则 §2.6 §2.7 先给结论 · §4.7 数字口径透明 · §4.4 相似元素不歧义 · §5.9 优先级）。
 
@@ -216,7 +203,6 @@ def test_台账的现状数_截至行与入口名都钉住():
     assert "const d=debts();" not in page_slice("m05"), "`V.m05` 里又出现没有读者的 `const d=debts();`"
 
 
-@acc("ACC-FLOW-LED-001", "001-13")
 def test_台账卡头按钮分组与点开有反馈都钉住():
     """`TAIL-142` ＋ `TAIL-144`（用户：①「上面几个按钮的显示和交互优化一下」② 截图报障
     「我要选辅材机械表的项目，要在右上角选离那么远；我要统一导出，点按钮后又要跑到最左边选项目」）。
@@ -283,7 +269,6 @@ def test_台账卡头按钮分组与点开有反馈都钉住():
 # --------------------------------------------------------------- 台账导出（`TAIL-04` 片 2＋3）
 
 
-@acc("ACC-FLOW-LED-001", "001-11")
 def test_台账导出走真下载而不是假成功():
     """⭐ `TAIL-04` **片 2＋3**：台账成品由后端模板填充生成 ⇒ 壳侧必须是**真下载**。
 
@@ -300,7 +285,6 @@ def test_台账导出走真下载而不是假成功():
     assert 'data-act="ledExpSave"' in SHELL, "预览弹窗的「保存到本地」没接到 `ledExpSave`"
 
 
-@acc("ACC-FLOW-LED-001", "001-11")
 def test_台账导出失败必须给人原因不静默():
     """后端失败回 **JSON 200 ＋ `ok:false` ＋ 中文原因**（没选项目 / 项目不在档案 / 模板坏 /
     **显示区对账不过**）⇒ 壳必须**弹原因**，⛔ 不能静默、也不能当文件下载。"""
@@ -316,7 +300,6 @@ def test_台账导出失败必须给人原因不静默():
         "非 2xx 没显式报错（会静默产出空文件）"
 
 
-@acc("ACC-FLOW-LED-001", "001-14")
 def test_总欠款导出与期初删除都不许静默失败():
     """⭐ 2026-09-28（用户走查两条「点了没反应」）—— 两条**同源**缺陷，各钉一条静态断言。
 

@@ -29,7 +29,6 @@ from app.mod03_notice.print.design import DesignFetcher
 from app.mod03_notice.print.signatures import check_signature_coverage
 from app.mod03_notice.print.template import PrintTemplate
 from app.mod03_notice.service import MODE_PDF, MODE_PRINT, run_batch
-from tests.acc_plugin import acc
 from tests.m03_helpers import (
     DispatchSpy,
     FakeDesignFetcher,
@@ -98,7 +97,6 @@ def _run(
 # ------------------------------------------------------------------ 001-01
 
 
-@acc("ACC-PAY-PRINT-001", "001-01")
 def test_产出版式取自i8不自存不自绘(tmp_path):
     """判据：产出版式取自 i8 原生版式；系统内不自存、不自绘版式。"""
     render = RenderSpy()
@@ -143,7 +141,6 @@ class _RecordingClient:
         return self._payload
 
 
-@acc("ACC-PAY-PRINT-001", "001-02")
 def test_单据按类型走对应版式(monkeypatch):
     """判据：单据按类型走对应版式（现有两类分流）。"""
     monkeypatch.setattr("app.mod03_notice.print.design.get_settings", lambda: _StubSettings())
@@ -175,7 +172,6 @@ def test_单据按类型走对应版式(monkeypatch):
 # ------------------------------------------------------------------ 001-03
 
 
-@acc("ACC-PAY-PRINT-001", "001-03")
 def test_取不到版式须显式报错不产空白件(tmp_path):
     """判据：取不到对应版式时须显式报错，不得静默产出空白件。"""
     # ① 取版式层：空模板 ⇒ MustReportError
@@ -230,7 +226,6 @@ def _sign_design() -> PrintTemplate:
 SIG_URI = "data:image/png;base64,PM"
 
 
-@acc("ACC-PAY-PRINT-001", "001-04")
 def test_签名按审批节点名绑定槽位(tmp_path):
     """判据：签名按审批节点名绑定到版式槽位。"""
     render = RenderSpy()
@@ -248,7 +243,6 @@ def test_签名按审批节点名绑定槽位(tmp_path):
     assert f'<img class="sig" src="{SIG_URI}">' in render.htmls[0]
 
 
-@acc("ACC-PAY-PRINT-001", "001-05")
 def test_流程未走到节点则槽位留空且不报错(tmp_path):
     """判据：版式有槽位、流程未走到该节点，则槽位留空 —— 正确行为，不得报错、不得补占位图。"""
     render = RenderSpy()
@@ -277,7 +271,6 @@ def test_流程未走到节点则槽位留空且不报错(tmp_path):
     assert SIG_URI in html
 
 
-@acc("ACC-PAY-PRINT-001", "001-06")
 def test_流程有数据却零命中须显式报警(tmp_path):
     """判据：槽位存在且流程有数据、却一个签名都未命中，必须显式报警（禁止静默产出无签名件）。"""
     tpl = _sign_design()
@@ -308,7 +301,6 @@ def test_流程有数据却零命中须显式报警(tmp_path):
 # ------------------------------------------------------------------ 001-07
 
 
-@acc("ACC-PAY-PRINT-001", "001-07")
 def test_批内未产出须列明未出单号():
     """判据：批量中任一单据未产出，结束时须显式列明未出单号；禁止静默漏单。"""
     fail = {"material": MustReportError("取不到单据类型「material」对应的版式")}
@@ -332,7 +324,6 @@ def test_批内未产出须列明未出单号():
 # ------------------------------------------------------------------ 001-08
 
 
-@acc("ACC-PAY-PRINT-001", "001-08")
 def test_出纸失败须显式报出原因(monkeypatch):
     """判据：出纸环节失败须显式报出原因；禁止把整批静默丢弃。"""
     # ① 编排层：第 2 张出纸失败 ⇒ 记为未出、带原因
@@ -361,7 +352,6 @@ def test_出纸失败须显式报出原因(monkeypatch):
 # ------------------------------------------------------------------ 001-09
 
 
-@acc("ACC-PAY-PRINT-001", "001-09")
 def test_系统内勾选_单选多选端到端():
     """判据：待打印单据来自系统内勾选（不依赖外部文件或手输清单）；单选与多选均能端到端跑通。"""
     from tests._auth import TestClient          # ⭐ 带会话票（见该件注释）
@@ -405,7 +395,6 @@ def test_系统内勾选_单选多选端到端():
 # ------------------------------------------------------------------ 001-10
 
 
-@acc("ACC-PAY-PRINT-001", "001-10")
 def test_零值金额格留空(tmp_path):
     """判据：零值金额格留空（不出现 0.00 占位）。"""
     tpl = template([field_cell(0, 0, "本次结算金额"), field_cell(0, 1, "计划总额")], cols=2, rows=1)
@@ -440,7 +429,6 @@ def _unrecognised_sign_design() -> PrintTemplate:
     return template([sign_cell(0, 0, "项目经理"), bad], cols=2, rows=2)
 
 
-@acc("ACC-PAY-PRINT-001", "001-11")
 def test_认不出签名格取人条件须显式报警(tmp_path):
     """判据：版式里有签名格带了「取人条件」、却解析不出该贴谁的签名时，必须显式报警并停单；不得静默留白。"""
     tpl = _unrecognised_sign_design()
@@ -487,7 +475,6 @@ def test_认不出签名格取人条件须显式报警(tmp_path):
 # ---------------------------------------------------------------- 出纸报文（真机实测固化 · 不绑定判据点）
 
 
-@acc()
 def test_IPP报文的值标签必须与属性类型一致():
     """⚠️ 2026-09-16 真机固化：`document-format` 的值标签必须是 **`0x49`（mimeMediaType）**。
 
@@ -507,7 +494,6 @@ def test_IPP报文的值标签必须与属性类型一致():
     assert body.endswith(b"%PDF-1.4-x")
 
 
-@acc()
 def test_出纸失败要带出打印机自报的原因(monkeypatch):
     """001-08 的加强：错误文本必须含打印机自报的 `status-message` —— 只给十六进制码现场无从下手。"""
     def _bad_post(url, **kw):  # noqa: ARG001
@@ -522,7 +508,6 @@ def test_出纸失败要带出打印机自报的原因(monkeypatch):
     assert "0x0400" in msg and "client-error-bad-request" in msg and "报文被拒" in msg
 
 
-@acc("ACC-PAY-PRINT-001", "001-12")
 def test_打印不在本机留文件(monkeypatch):
     """⭐ 用户 **2026-09-20** 口径：「**如果打印的话，不要在本地留文件**」。
 

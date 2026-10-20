@@ -23,7 +23,6 @@ from datetime import datetime
 from app.mod01_projects import archive_pending as AP
 from app.mod01_projects.models import TYPE_NORMAL, Project
 from app.mod02_i8.models import RunRecord
-from tests.acc_plugin import acc
 from tests.m01_helpers import make_project
 from tests.m09_helpers import M09Session
 
@@ -50,7 +49,6 @@ def sess(records=(), projects=()):
 # ============================================================ ① 只认「最近一次成功同步」
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_没带清单的同步记录要跳过():
     """⭐ **失败那次不改档案 ⇒ 它不换清单**：跳过没带清单的记录，认**最近一次成功**那次。
 
@@ -64,7 +62,6 @@ def test_没带清单的同步记录要跳过():
     assert AP.latest_pending(sess([ok, bad]))["items"] == got["items"], "反序喂入也要认（显式按 id 倒序）"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_最近一次成功同步清单为空就没有待办():
     """成功同步**就会换新**（哪怕换成一纸空清单）⇒ ⛔ 不回溯更早那条有内容的（`TAIL-41` 同族）。"""
     old = rec(1, items=[item()])
@@ -73,7 +70,6 @@ def test_最近一次成功同步清单为空就没有待办():
     assert AP.live_items(sess([old, new])) == []
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_只认常用项目列表那条同步记录():
     """仓库名单那条 `sync`（`target=仓库列表`）**不是**建档清单的出处 ⇒ 跳过；一条都没有 ⇒ `found=False`。"""
     other = rec(2, items=[item()], target="仓库列表", at="2026-09-18 12:00:00")
@@ -85,7 +81,6 @@ def test_只认常用项目列表那条同步记录():
 # ============================================================ ② 逐条按当前档案现算
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_已经建过行的当场丢掉():
     """清单是**当时的判定**，真相是**档案现在的样子**：该全名已经有行了 ⇒ 这条**当场消失**。
 
@@ -101,7 +96,6 @@ def test_已经建过行的当场丢掉():
     assert AP.live_pending(s)["dropped"] == 1, "丢了几条要如实报（⛔ 不静默）"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_候选不足两条的当场丢掉():
     """那条同步记录里的仓库清单，**只剩 1 个没被占用** ⇒ 下次同步系统**自己就建了**（不必打扰人）。"""
     projects = [make_project(7, name_full="别的项目", warehouse="乙仓")]   # 乙仓被别行占了
@@ -112,7 +106,6 @@ def test_候选不足两条的当场丢掉():
     assert len(AP.live_items(s2)) == 1
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_候选里不含已占用的仓库名():
     """界面能选的候选 = **i8 名单里那条** 减去**已被占用的**（仓库名是唯一标识）。"""
     projects = [make_project(7, name_full="别的项目", warehouse="乙仓")]
@@ -122,7 +115,6 @@ def test_候选里不含已占用的仓库名():
     assert it["stored_warehouses"] == ["甲仓", "乙仓", "丙仓"], "当时那份要留痕（看得见'少了谁'）"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_同步写侧必须真的把清单落进记录():
     """⭐ 光有读侧没用 —— **写侧**必须真把清单写进那条同步记录（原先写死 `detail={}`）。
 
@@ -146,7 +138,6 @@ def test_同步写侧必须真的把清单落进记录():
 # ============================================================ ③ 选定一个仓库 ⇒ 建行（含三条守卫）
 
 
-@acc("ACC-PRJ-SYNC-001", "001-13")
 def test_选定一个仓库就建行():
     """正题：候选里选一个 ⇒ 就地建行（普通项目 · 带**真实仓库名** · 类型判定走后端唯一出口）。"""
     s = sess([rec(1, items=[item(warehouses=("甲仓", "乙仓"))])])
@@ -157,7 +148,6 @@ def test_选定一个仓库就建行():
     assert row in s.added, "必须真的落库（走 create_project 唯一出口）"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-13")
 def test_建完就从清单里消失():
     """建完那一条**即从清单消失**；且同一项目的**其余仓库不再建行**（决策 2：普通项目 ↔ 仓库 = 1 : 1）。"""
     s = sess([rec(1, items=[item(warehouses=("甲仓", "乙仓"))])])
@@ -166,7 +156,6 @@ def test_建完就从清单里消失():
     assert len([p for p in s.by_model[Project]]) == 1, "只建选中的那一个（其余仓库不再建行）"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-13")
 def test_不在清单里的一律拒且不落库():
     """守卫①：不在「待人工」清单的（已经建过行 / 压根没报过）⇒ 拒，且**一行都不许落**。"""
     import pytest
@@ -186,7 +175,6 @@ def test_不在清单里的一律拒且不落库():
     assert s2.added == []
 
 
-@acc("ACC-PRJ-SYNC-001", "001-13")
 def test_手填或已被占用的仓库名都拒():
     """守卫②：仓库名**只能来自 i8 名单**（§9.4）—— 手打一个 / 已被别行占用，**都**拒且给一句人话。
 
@@ -212,7 +200,6 @@ def test_手填或已被占用的仓库名都拒():
 # ============================================================ ④ 「待人工」分两类、两条出路（`TAIL-190`）
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_待人工按出路分两类并且各自带kind():
     """⭐⭐ 2026-09-29（**用户真机报障** · 出处 = `.codebuddy/memory/2026-09-29.md` §㊳）：
     `manual` 里**混着两类、而两类出路完全不同** ——
@@ -239,7 +226,6 @@ def test_待人工按出路分两类并且各自带kind():
     assert counts_of(None)["manual_shell"] == 0
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_写入侧两类都打kind():
     """⭐ `kind` 是**机器认**的那个字段（⛔ 别拿中文 `reason` 串判类别 —— 文案一改就静默失效，
     `recovery.py` 起就是本仓纪律）。
@@ -256,7 +242,6 @@ def test_写入侧两类都打kind():
     assert src.count('"kind": MANUAL_MULTI') == 1, "多仓库那处要打 kind"
 
 
-@acc("ACC-PRJ-SYNC-001", "001-12")
 def test_壳下小微那类不进卡但要如实报出去():
     """⭐⭐ 报障的正面复现：**壳下具体小微**（没有候选仓库）⇒ 不进本卡（这一步是**对的**），
     但必须**如实报出去**（为什么 ＋ 该去哪）—— 只给一个 `dropped` 计数是不够的（用户只能猜）。

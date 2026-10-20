@@ -4,11 +4,9 @@ from contextlib import nullcontext
 from starlette.requests import Request
 
 from app.mod11_jc import domain as D, repository as R, service as S, api as A
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401
+from tests.ui_helpers import ui_page  # noqa: F401
 
 
-@acc()
 def test_sum_keys_from_domain(monkeypatch):
     for name in ('list_contracts', 'project_choices'):
         monkeypatch.setattr(R, name, lambda *a, **kw: [])
@@ -52,7 +50,6 @@ def _load(p, mode):
     return p.locator('table[data-sort-key="m11:jc"]'), [c['key'] for c in cols]
 
 
-@acc()
 def test_rows_follow_columns(ui_page):
     p=ui_page
     table,keys=_load(p,'base')
@@ -71,7 +68,6 @@ def test_rows_follow_columns(ui_page):
             assert html==expected, f'row cell must follow column id: {key}'
 
 
-@acc()
 def test_sums_follow_column_ids(ui_page):
     totals=dict(contract_amt='121.00',inv_sum='80.40',trade_contract_amt='200.55',
                 trade_inv_sum='150.35',settle='160.60',pay_sum='70.15',debt='90.45',extra_amt='10.00')

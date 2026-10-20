@@ -1,6 +1,5 @@
 """Protect complete i8 reads, unique project ownership and explicit reductions."""
 
-from tests.acc_plugin import acc
 import pytest
 import httpx
 
@@ -10,7 +9,6 @@ from app.mod01_projects.models import Project
 from app.mod06_proc.workbench_i8 import fetch_lists, preview_payload
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_custom_form_expired_session_is_recognized():
     response = httpx.Response(200, json={'status': 'error', 'msg': 'No SessionInfo found', 'data': None})
     assert I8Client._is_session_invalid(response)
@@ -37,8 +35,6 @@ class Client:
         return {'total': '3', 'data': [raw(str(i)) for i in (range(2) if self.broken else range(start, min(start + 2, 3)))]}
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
-@acc("ACC-RPT-MECH-001", "001-09")
 def test_full_pagination_and_original_approval_amounts():
     client = Client()
     lists = fetch_lists(client, page_size=2)
@@ -56,13 +52,11 @@ def test_full_pagination_and_original_approval_amounts():
     assert unmatched['projects'] == []
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_repeated_page_is_rejected():
     with pytest.raises(MustReportError, match='重复'):
         fetch_lists(Client(broken=True), page_size=2)
 
 
-@acc("ACC-RPT-MECH-001", "001-07")
 def test_shared_project_key_never_chooses_one_small_warehouse():
     lists = fetch_lists(Client(), page_size=2)
     projects = [project(1, '甲'), project(2, '乙')]
@@ -73,7 +67,6 @@ def test_shared_project_key_never_chooses_one_small_warehouse():
     assert first['unmapped_projects'][0]['candidate_warehouses'] == ['乙', '甲']
 
 
-@acc("ACC-RPT-MECH-001", "001-08")
 def test_complete_empty_lists_keep_old_project_in_reduction_preview():
     empty = {kind: {'total': 0, 'rows': []} for kind in ('usage', 'project', 'team')}
     result = preview_payload(empty, [project(1, '甲', phid='old-id'), project(2, '乙', phid='new-id')],
@@ -93,7 +86,6 @@ def small_family():
             project(5, '其他壳下大唐', 'small', phid='other-shell', parent_shell_id=4, match_keywords=['大唐'])]
 
 
-@acc('ACC-RPT-MECH-001', '001-07')
 def test_shared_shell_splits_each_source_by_existing_small_keywords():
     from app.mod06_proc.workbench_i8 import normalize
     lists = {kind: {'total': 2, 'rows': [normalize(raw('dt-' + kind, bill_name='四分大唐雷州项目'), kind),
@@ -110,7 +102,6 @@ def test_shared_shell_splits_each_source_by_existing_small_keywords():
 
 
 @pytest.mark.parametrize('title', ['', '未知项目', '大唐百利共同费用'])
-@acc('ACC-RPT-MECH-001', '001-07')
 def test_unmatched_or_multiple_small_keywords_preserve_facts_and_block_partial_adoption(title):
     from app.mod06_proc.workbench_i8 import normalize
     lists = {kind: {'total': 1, 'rows': [normalize(raw(kind, bill_name='大唐'), kind)]}
@@ -125,7 +116,6 @@ def test_unmatched_or_multiple_small_keywords_preserve_facts_and_block_partial_a
                for rows in p['sources'].values()) == 4
 
 
-@acc('ACC-RPT-MECH-001', '001-07')
 def test_only_small_child_still_needs_keyword_and_orphan_child_never_takes_whole_shell():
     lists = fetch_lists(Client(), page_size=2)
     family = small_family()[:2]
@@ -134,7 +124,6 @@ def test_only_small_child_still_needs_keyword_and_orphan_child_never_takes_whole
     assert preview_payload(lists, family[1:])['projects'] == []
 
 
-@acc('ACC-RPT-MECH-001', '001-08')
 def test_empty_complete_shell_sources_offer_separate_old_small_project_reductions():
     lists = {kind: {'total': 0, 'rows': []} for kind in ('usage', 'project', 'team')}
     result = preview_payload(lists, small_family(), {'大唐': {'p1'}, '佰利': {'p1'}})

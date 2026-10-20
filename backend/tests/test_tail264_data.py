@@ -4,10 +4,8 @@ from app.mod01_projects import repository as projects
 from app.mod01_projects.models import TYPE_NORMAL
 from app.mod11_jc import service, repository
 from app.mod11_jc.models import JcContract
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_material_name_update_is_scoped_and_survives_reload():
     with session_scope() as s:
         p = projects.create_project(s, project_type=TYPE_NORMAL, name_full='简称材料测试', warehouse_name='__TAIL264__', phid='')

@@ -17,7 +17,6 @@ from decimal import Decimal
 from app.mod07_setl import domain as D
 from app.mod07_setl import extract as X
 from app.mod07_setl.service import build_extract_data, parse_extract_state
-from tests.acc_plugin import acc
 from tests.m07_helpers import (
     ARCHIVED_WAREHOUSE,
     EXTRACT_MONTHS,
@@ -64,7 +63,6 @@ def _kind_rows(data: dict, kind: str) -> list[dict]:
 
 # ============================================================ 判据点
 
-@acc(CASE, "001-01")
 def test_两类齐备且各类合计等于逐项之和():
     data = _data(period="2026-08")
 
@@ -96,7 +94,6 @@ def test_两类齐备且各类合计等于逐项之和():
     # 名单与工具类口径已由 test_提取名单按在库实测样本_钉死() 单独钉住（`TAIL-267`）。
 
 
-@acc(CASE, "001-01")
 def test_提取名单按在库实测样本_钉死():
     """**名单本身**就是判据 —— 逐个物料名断言，**不是**抄一份金额再比一遍。
 
@@ -140,7 +137,6 @@ def test_提取名单按在库实测样本_钉死():
         assert X.match_kind(name, "气体", rules) is False, f"器具/焊材被当气体收了：{name}"
 
 
-@acc(CASE, "001-02")
 def test_金额按所选月份范围而总金额恒为全月累计():
     aug = _data(period="2026-08")
     jun = _data(period="2026-06")
@@ -167,7 +163,6 @@ def test_金额按所选月份范围而总金额恒为全月累计():
     assert cell(jun, "焊材", "乙仓")["total"] == Decimal("500.00")
 
 
-@acc(CASE, "001-03")
 def test_分组合计紧贴本类数据行且整表不可排():
     data = _data(period="2026-08")
     # 每个块**自带**数据行与合计行，块序 = 两类顺序 ⇒ 合计行**紧贴**本类数据行（不是表尾一张总合计）
@@ -183,7 +178,6 @@ def test_分组合计紧贴本类数据行且整表不可排():
     # ＋ `sumRowOf(EXT_THEAD, …, {lead:kind+'合计'})` 在**块内** ＋ 该表不帯 `data-sort` ✓）。
 
 
-@acc(CASE, "001-04")
 def test_项目状态默认在建且归档下给空态提示行():
     # ① 默认「在建」（取数口径）；⚠️ "页面选中项"那半已搬壳（壳的 `extVisible` 按状态过滤 ✓）
     assert parse_extract_state({})["status"] == "在建"
@@ -209,7 +203,6 @@ def test_项目状态默认在建且归档下给空态提示行():
     assert X.visible_warehouses(alien, statuses={}, status=X.STATUS_ALL) == ["丁仓"]
 
 
-@acc(CASE, "001-05")
 def test_重置回到默认月份与在建():
     # ⚠️ 2026-09-19（`§19` 批 2）：原先这里看**旧页**的「重置」链接（`href="/m07/extract"`）；
     # 旧页删除（授权 `D18`）后形态搬到壳 —— `test_wired_m07.py::test_壳里提取页重置回在建与上月` ✓。
@@ -227,7 +220,6 @@ def test_重置回到默认月份与在建():
     # 的「切月份切项目都重取数」）⇒ 那个形态问题在壳里**不存在**，随页移除。
 
 
-@acc(CASE, "001-06")
 def test_导出矩阵按项目与月份连续展开():
     data = _data(period="2026-08")
     ex = next(e for e in data["export"] if e["kind"] == "焊材")

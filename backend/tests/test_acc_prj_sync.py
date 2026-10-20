@@ -15,7 +15,6 @@ import pytest
 from app.mod01_projects import archive as A
 from app.mod01_projects.domain import DEFAULT_SMALL_KEYWORD
 from app.mod01_projects.models import STATUS_ACTIVE, TYPE_NORMAL, TYPE_SHELL
-from tests.acc_plugin import acc
 
 CASE = "ACC-PRJ-SYNC-001"
 
@@ -66,7 +65,6 @@ def _by_name(items, name) -> dict:
 
 
 # ----------------------------------------------------------------- 001-01
-@acc(CASE, "001-01")
 def test_来源两表同一次同步取齐():
     plan = _plan()
     assert len(A.warehouses_by_owner(_warehouses())) == 4        # 归集出口存在且键 = 项目全名
@@ -76,7 +74,6 @@ def test_来源两表同一次同步取齐():
 
 
 # ----------------------------------------------------------------- 001-02
-@acc(CASE, "001-02")
 def test_唯一仓库的普通项目带真实仓库名():
     row = _by_name(_plan()["create"], P_ONE)
     assert row["warehouse_name"] == "甲仓"        # ⭐ 真实仓库名
@@ -86,7 +83,6 @@ def test_唯一仓库的普通项目带真实仓库名():
 
 
 # ----------------------------------------------------------------- 001-03
-@acc(CASE, "001-03")
 def test_多仓库不自动建并显式列出():
     plan = _plan()
     assert not [c for c in plan["create"] if c["name_full"] == P_TWO]
@@ -95,7 +91,6 @@ def test_多仓库不自动建并显式列出():
 
 
 # ----------------------------------------------------------------- 001-04
-@acc(CASE, "001-04")
 def test_零仓库落占位行且全名仍是全名():
     row = _by_name(_plan(taken={"未建仓-1", "未建仓-2"})["create"], P_NONE)
     assert row["warehouse_name"] == "未建仓-3"      # 取号要跳过已占用的
@@ -106,7 +101,6 @@ def test_零仓库落占位行且全名仍是全名():
 
 
 # ----------------------------------------------------------------- 001-05
-@acc(CASE, "001-05")
 def test_含小微建壳且不写仓库名():
     row = _by_name(_plan()["create"], P_SHELL)
     assert row["project_type"] == TYPE_SHELL
@@ -115,7 +109,6 @@ def test_含小微建壳且不写仓库名():
 
 
 # ----------------------------------------------------------------- 001-06
-@acc(CASE, "001-06")
 def test_壳下仓库即具体小微不自动建():
     plan = _plan()
     assert not [c for c in plan["create"] if c["name_full"] == P_SHELL
@@ -140,7 +133,6 @@ def test_壳下仓库即具体小微不自动建():
 
 
 # ----------------------------------------------------------------- 001-07
-@acc(CASE, "001-07")
 def test_仓库侧有常用项目侧无则不建并报缺phid():
     plan = _plan()
     row = _by_name(plan["no_phid"], P_NOPHID)
@@ -150,7 +142,6 @@ def test_仓库侧有常用项目侧无则不建并报缺phid():
 
 
 # ----------------------------------------------------------------- 001-08
-@acc(CASE, "001-08")
 def test_幂等已在档案的全名不再建():
     plan = _plan(existing={P_ONE, P_EXIST})
     assert not [c for c in plan["create"] if c["name_full"] == P_ONE]
@@ -160,7 +151,6 @@ def test_幂等已在档案的全名不再建():
 
 
 # ----------------------------------------------------------------- 001-09
-@acc(CASE, "001-09")
 def test_新建行状态在建且判定走既有出口():
     from app.mod01_projects.domain import classify_name
 
@@ -175,7 +165,6 @@ def test_新建行状态在建且判定走既有出口():
 
 
 # ----------------------------------------------------------------- 001-10
-@acc(CASE, "001-10")
 def test_回执四类计数且接口不可用不动本地档案():
     from app.mod01_projects import sync_service as S
 

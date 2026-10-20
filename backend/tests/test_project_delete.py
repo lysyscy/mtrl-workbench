@@ -8,7 +8,6 @@ from app.core.db import Base, session_scope
 from app.core.errors import MustReportError
 from app.mod01_projects import deletion as D
 from app.mod01_projects.models import Project
-from tests.acc_plugin import acc
 
 
 def project(s, **kw):
@@ -19,7 +18,6 @@ def project(s, **kw):
     return p
 
 
-@acc('ACC-X-DEL-001', '001-06')
 def test_empty_delete_only_selected_and_tables_match_actual_schema(rollback_db):
     with session_scope() as s:
         p, other = project(s), project(s)
@@ -55,7 +53,6 @@ REFERENCES = [
 ]
 
 
-@acc('ACC-X-DEL-001', '001-01')
 @pytest.mark.parametrize('table,key', REFERENCES)
 def test_each_reference_refuses_without_loss(rollback_db, table, key):
     with session_scope() as s:
@@ -82,7 +79,6 @@ def test_each_reference_refuses_without_loss(rollback_db, table, key):
         assert s.execute(select(model)).scalars().all().count(row) == 1
 
 
-@acc()
 def test_hierarchy_recheck_and_read_failure(rollback_db, monkeypatch):
     from app.mod07_setl import service
     from app.mod09_fee.models import FeeManualItem
@@ -107,7 +103,6 @@ def test_hierarchy_recheck_and_read_failure(rollback_db, monkeypatch):
         assert s.get(Project, empty.id) is empty
 
 
-@acc()
 def test_text_key_insert_cannot_race_delete_check(rollback_db):
     from sqlalchemy import insert
     from sqlalchemy.exc import OperationalError
@@ -125,7 +120,6 @@ def test_text_key_insert_cannot_race_delete_check(rollback_db):
         assert D.delete_project(s, p.id)['ok']
 
 
-@acc()
 def test_empty_shell_without_warehouse_can_delete(rollback_db):
     with session_scope() as s:
         p = Project(name_full='__empty_shell_' + uuid4().hex, project_type='shell', warehouse_name=None)
@@ -136,7 +130,6 @@ def test_empty_shell_without_warehouse_can_delete(rollback_db):
         assert s.get(Project, p.id) is None
 
 
-@acc()
 def test_delete_api_requires_confirmation(rollback_db):
     from app.mod01_projects.router import delete_project
 

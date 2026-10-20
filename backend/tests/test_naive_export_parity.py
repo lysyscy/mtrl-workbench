@@ -17,7 +17,6 @@ from app.report_export import fl_export as FL
 from app.report_export import jc_export as JC
 from app.report_export import naive_export as N
 from app.report_export import pj_export as PJ
-from tests.acc_plugin import acc          # ⭐ 工具自检：显式声明"不绑定判据点"（`@acc()`）
 
 
 def _rows(columns, *, money_keys=frozenset(), seq_key=None, n: int = 3) -> list[dict]:
@@ -44,7 +43,6 @@ def _cells(ws) -> list[list]:
     return [[c.value for c in row] for row in ws.iter_rows()]
 
 
-@acc()
 def test_fl_表头加粗冻结_金额写数字_末行合计():
     rows = _rows(FL.COLUMNS, money_keys=FL.MONEY_KEYS)
     ws = _sheet(FL.build_xlsx(rows))
@@ -68,7 +66,6 @@ def test_fl_表头加粗冻结_金额写数字_末行合计():
         "审批金额被合计进去了（它是每笔重复的对照数）"
 
 
-@acc()
 def test_jc_项目内序号_列宽上限28():
     rows = _rows(JC.COLUMNS, money_keys=JC.MONEY_KEYS, seq_key=JC.SEQ_KEY)
     for r, seq in zip(rows, [3, 1, None]):
@@ -81,7 +78,6 @@ def test_jc_项目内序号_列宽上限28():
     assert max(w.width for w in ws.column_dimensions.values()) <= 28
 
 
-@acc()
 def test_pj_没有合计行():
     """⛔ 页面没有合计行 ⇒ 导出**不能**凭空补一个（补了 = 假值）。"""
     rows = _rows(PJ.COLUMNS)
@@ -91,7 +87,6 @@ def test_pj_没有合计行():
     assert len(cells) == 1 + len(rows)                           # 表头 + 数据，没有别的
 
 
-@acc()
 def test_pj_ord列写int():
     rows = [{**r, "ord": str(i)} for i, r in enumerate(_rows(PJ.COLUMNS), start=1)]
     ws = _sheet(PJ.build_xlsx(rows))
@@ -99,7 +94,6 @@ def test_pj_ord列写int():
     assert [r[i] for r in _cells(ws)[1:]] == [1, 2, 3]           # 字符串 "1" ⇒ int 1
 
 
-@acc()
 def test_三件与内核同输出_证明只有一个主人():
     """⭐ 这条是 `TAIL-62` 的**目的**：三件的输出必须**等于**内核直接产出
     （⇒ 谁改内核都改三处；谁在三件里偷偷另写一份，这里就会红）。"""

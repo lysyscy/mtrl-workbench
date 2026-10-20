@@ -29,7 +29,6 @@ from app.main import create_app
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.notice_api_router import get_session
 from app.report_export import fl_export, nt_export
-from tests.acc_plugin import acc
 from tests.m03_action_helpers import FakeWriteSession, _notice
 from tests.shell_load_helpers import exp_routes
 from tests.shell_src import SHELL, const_src  # noqa: F401  ← `P4`① 读取点收敛
@@ -75,7 +74,6 @@ def _row_by_first(rows: list[tuple], first) -> tuple:
 # ============================================================== 001-01 · 逐页都有导出入口
 
 
-@acc("ACC-X-EXP-001", "001-01")
 def test_四个列表页的导出按钮都已真分发():
     """claim：「**逐页**都有导出入口」—— ⚠️ 本件补的是**"入口真的通到后端"**那一半。
 
@@ -117,7 +115,6 @@ def test_四个列表页的导出按钮都已真分发():
         "过程资料朴素那份 / 已取消的差异清单）就只剩沉默或假成功")
 
 
-@acc("ACC-X-EXP-001", "001-01")
 def test_两个新端点都挂上了():
     """⭐ "已接"必须**有落点**：两个端点真的在 FastAPI 的路由表里（⛔ 不是只有函数名）。
 
@@ -133,7 +130,6 @@ def test_两个新端点都挂上了():
 # ============================================================== 列 = 页面表头
 
 
-@acc()
 def test_导出列就是页面表头去掉勾选与操作():
     """⭐ 导出的列**不是**在这里"设计"的 —— 它必须**逐字等于页面表头**去掉「勾选 / 操作」。
 
@@ -174,7 +170,6 @@ def test_导出列就是页面表头去掉勾选与操作():
         "m11 的表头必须按列清单现生成（`pages-b.js::jcThead()`）"
 
 
-@acc()
 def test_朴素导出其余四页的列键都在该页行字典里(monkeypatch):
     """`TAIL-298`：`naive_export` 的**每个调用页**都要有一条「`COLUMNS` 的每个 key 都出现在**该页产出的
     行字典**里」的断言 —— 堵 `r.get(key)` 那类**静默空列**（键名漂了不报错，只是那一列永远空着）。
@@ -252,7 +247,6 @@ def _nt_export_row(**kw) -> dict:
     return base
 
 
-@acc("ACC-X-EXP-001", "001-08")
 def test_付款通知书导出的合计只算有效行():
     """claim：「导出内容须与当前筛选一致」—— 本件补的是**合计行**那一半（§4.2.7）。
 
@@ -285,7 +279,6 @@ def test_付款通知书导出的合计只算有效行():
     assert len(rows2) == 1, f"不该多出行：{rows2}"
 
 
-@acc()
 def test_is_live两条口径方向相反且都成立():
     """`NoticeRow.is_live` 的四挡（⛔ 它是**唯一出口**，导出与统计都吃它）。"""
     def _r(**kw):
@@ -314,7 +307,6 @@ def test_is_live两条口径方向相反且都成立():
 
 
 
-@acc("ACC-X-EXP-001", "001-08")
 def test_付款通知书端点按传入id顺序出行且合计只算有效行():
     """⭐ **行 = 传入的那些 id**（⛔ 不是全表）· **顺序 = 传入顺序**（= 屏幕上的行序）
     · **合计只算有效行**。
@@ -382,7 +374,6 @@ def _filter_bits(text: str) -> tuple[str, str, str]:
     return type_m.group(1), q_m.group(0), filt.group(0)
 
 
-@acc()
 def test_项目档案的可见行出口与V_m01的筛选逐字一致():
     """⭐ `pjVisible()`（导出用）与 `V.m01` 里那段内联筛选**必须逐字一致**。
 

@@ -22,7 +22,6 @@ import app
 
 from app.core.db import session_scope
 from app.mod02_i8 import repository as R
-from tests.acc_plugin import acc
 
 #: 写执行记录的**两个出口**（⚠️ 别再只认一个 —— 2026-09-20 第一轮就栽在这上面：
 #: `mod07`/`mod08`/`mod11` 的抓取全走 `save_run_record`，只改 `create_run_record` 覆盖不到它们）
@@ -48,7 +47,6 @@ def _calls(text: str, name: str) -> list[str]:
     return out
 
 
-@acc("ACC-I8-FETCH-001", "001-10")
 def test_执行记录记得出真实耗时():
     """行为断言：`started_at` 传进去就**真的**用它 ⇒ `finished_at − started_at` 是那个差。
 
@@ -70,7 +68,6 @@ def test_执行记录记得出真实耗时():
         s.rollback()
 
 
-@acc("ACC-I8-FETCH-001", "001-10")
 def test_所有执行记录的调用点都要传耗时起点():
     """**结构性守卫**：⛔ 不许再出现"写 `run_record` 时不传 `started_at`"的调用点。
 

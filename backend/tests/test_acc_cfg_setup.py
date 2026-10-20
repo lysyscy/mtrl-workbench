@@ -35,7 +35,6 @@ from app.core.config import (
 from app.mod14_config import settings_api
 from app.mod14_config.models import AppSetting
 from app.mod14_config.repository import save
-from tests.acc_plugin import acc
 
 I8_PATHS = (I8_PATH_PAYMENT_NOTICE, I8_PATH_WAREHOUSE_LIST,
             I8_PATH_COMMON_PROJECT, I8_PATH_PRINT_DESIGN)
@@ -89,7 +88,6 @@ def _shell_src() -> str:
 # ------------------------------------------------------------ 001-01 页面范围
 
 
-@acc("ACC-CFG-SETUP-001", "001-01")
 def test_设置页只列连接参数不含账号密码与端点路径():
     html = _shown()
     for spec in SPECS:
@@ -129,7 +127,6 @@ def test_设置页只列连接参数不含账号密码与端点路径():
 # ------------------------------------------------------------ 001-02 取值优先级
 
 
-@acc("ACC-CFG-SETUP-001", "001-02")
 def test_取值优先级库优先_清空即回落(monkeypatch):
     monkeypatch.setattr(app_settings, "_load_from_db", lambda: {SETTING_I8_BASE_URL: "http://from-db"})
     app_settings.invalidate()
@@ -146,7 +143,6 @@ def test_取值优先级库优先_清空即回落(monkeypatch):
 # ------------------------------------------------------------ 001-03 改动留痕
 
 
-@acc("ACC-CFG-SETUP-001", "001-03")
 def test_改动留痕含改前改后与改动人():
     s = _Sess()
     changes = save(s, values={SETTING_PRINT_ID_MECHANICAL: "PID-NEW"}, operator="张三")
@@ -163,7 +159,6 @@ def test_改动留痕含改前改后与改动人():
     assert isinstance(s.added[0], AppSetting)       # 当前值也落了库
 
 
-@acc("ACC-CFG-SETUP-001", "001-03")
 def test_值没变则不记留痕():
     s = _Sess({SETTING_PRINT_ID_MECHANICAL: AppSetting(key=SETTING_PRINT_ID_MECHANICAL, value="PID-SAME")})
     changes = save(s, values={SETTING_PRINT_ID_MECHANICAL: "PID-SAME"}, operator="张三")
@@ -173,7 +168,6 @@ def test_值没变则不记留痕():
 # ------------------------------------------------------------ 001-04 反直觉提示
 
 
-@acc("ACC-CFG-SETUP-001", "001-04")
 def test_版式ID带反直觉提示():
     html = _shown()
     assert "其他支出" in html, "必须写明：材料类走「其他支出」版式"
@@ -187,7 +181,6 @@ def test_版式ID带反直觉提示():
 # ------------------------------------------------------------ 001-05 只影响传入项
 
 
-@acc("ACC-CFG-SETUP-001", "001-05")
 def test_保存只影响传入的key不得顺带改别的():
     rows = {
         SETTING_I8_BASE_URL: AppSetting(key=SETTING_I8_BASE_URL, value="http://keep-me"),
@@ -205,7 +198,6 @@ def test_保存只影响传入的key不得顺带改别的():
 # ------------------------------------------------------------ 001-06 端点随之推导
 
 
-@acc("ACC-CFG-SETUP-001", "001-06")
 def test_改服务地址后四个端点随之推导(monkeypatch):
     class _S:
         i8_base_url = "http://old-host:1"
@@ -228,7 +220,6 @@ def test_改服务地址后四个端点随之推导(monkeypatch):
 # ------------------------------------------------------------ 001-07 非法拒绝
 
 
-@acc("ACC-CFG-SETUP-001", "001-07")
 def test_地址格式非法须拒绝不静默写入():
     assert validate(SETTING_I8_BASE_URL, "106.46.169.212:30785") is not None   # 缺协议
     assert validate(SETTING_I8_BASE_URL, "") is None                            # 空 = 清除，合法

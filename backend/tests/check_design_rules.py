@@ -22,7 +22,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 #: 守则正文（`ops/` 在**仓根**下 —— 与 `shell_src` 取 `index.html` 同一个根）
@@ -60,7 +59,6 @@ def _cited_ids(text: str) -> set[str]:
     return {m.group(1) for m in re.finditer(r"守则\s*§(\d+(?:\.\d+)?)", text)}
 
 
-@acc()
 def test_守则的引用都落得住():
     """⭐ 每一个 `守则 §X` 都能在守则里找到那一条。
 
@@ -95,7 +93,6 @@ def test_守则的引用都落得住():
         "要么写法变了（那就同批改本件）")
 
 
-@acc()
 def test_守则每条栏位齐全_判据不许空():
     """⭐ §1–§5 的每一条，**每一栏都不许空** —— 尤其 `判据` 栏：空 = "还没兜住"，那就得写「人眼 · 未挂」。
 
@@ -109,7 +106,6 @@ def test_守则每条栏位齐全_判据不许空():
     assert not bad, "\n".join(bad)
 
 
-@acc()
 def test_守则的执行层只写执行形态_定义指回前面():
     """⭐ `v3` 起：**一条只在一处定义** —— §5（执行层）的「定义」栏必须指回 §1–§4 的某一条。
 
@@ -133,7 +129,6 @@ def test_守则的执行层只写执行形态_定义指回前面():
     assert not bad, "\n".join(bad)
 
 
-@acc()
 def test_守则的原话可追溯_附录不作口径():
     """⭐ 守则由用户口述演化而来（且用户 2026-09-27 授权"尽可能优化原文"）⇒ 两件事必须成立：
 

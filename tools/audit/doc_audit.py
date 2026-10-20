@@ -12,10 +12,9 @@
 | `T1` | **幽灵用例号** —— 文档提到的 `ACC-*` 在验收基线里不存在 | `验收基线.json` |
 | `T2` | **已废除术语** —— 命中 `RETIRED_TERMS` | `audit_common.py` |
 | `T3` | **幽灵路径** —— 反引号里的仓库内路径两侧都找不到（⭐ 2026-10-05 `TAIL-235` 丁-1 扩半：① 扫描面进 `.codebuddy/`（**治理区此前整片无人管**）② **仓外绝对路径**落在 `OUTSIDE_ROOTS` 白名单内 ⇒ 到那个根下**真核存在** ③ 带 `〔已归档〕` 标记的引用**剥掉标记照核** ⇒ ⛔ **标记不是豁免**，加前缀不再能把坏路径洗掉） | 文件系统 |
-| `T4` | **状态数字失配** —— 执行情况「当前版本」行的四态 ≠ 实际 | `var/state/verification/acc_results.json` |
+| `T4` | 票计数及硬数字锚点（历史四态检查已退役） | `audit_drift.check_count_anchors` |
 | `T5` | **行数超限** —— 单文件 >400（黄 · 须登记拆分计划）/ >600（黄 · 须登记"为什么不拆"）<br>⚠️ 2026-09-21 **用户裁定：>600 从红降黄**（行数是代理指标，不作禁合入闸门） | 源文件行数（**输出即登记清单**）＋ `docs/reference/thresholds.md` |
 | `T6` | **尾巴台账** —— 清点处在不在（计划 §15）/ 栏位 / 编号 / 落点 / 计数 | `docs/status.md` |
-| `T7a`/`T7b` | **判据覆盖** —— 有登记的能力却没判据兜住（**登记档，不判红**） | `cover_gap.py` |
 | `T8` | ⭐ **已撤项复活** —— 用户裁定取消的东西**不得在代码里长回来** | `audit_common.CANCELLED` |
 | `T9` | ⭐ **纪律册卫生（两半）** —— ① **口径出处标记**：`MEMORY.md` §八 每条必须带 `[用户]`/`[交付面]`/`[助手自定]`；② ⭐ **注入档里别复述守卫的阈值**（`T13`（行数预算 1700）那种 ⇒ **规则留、数字去**） | `docs/agents/project-rules.md` |
 | `T10` | ⭐ **文档读预算** —— 每会话**注入/必读**档超预算（黄 + 登记；治「太长读不完 ⇒ 只 grep ⇒ 没搜到的就丢了」） | `docs/reference/thresholds.md` ＋ `audit_meta.DOC_BUDGETS` |
@@ -24,8 +23,6 @@
 | `T13` | ⭐ **主文档过程回潮** —— 计划主文档行数超预算（1700）· 标题出现过程词（逐批/逐次/收官记录）⇒ 黄：该块**该下沉归档了**（`§13.1`「完成的就扔出去」的机器守） | `docs/status.md` |
 | `T14` | ⭐ **scratch 超期 / 落点合规** —— `.scratch/local/` 超 14 天未升档未删 · `tools/` 根与 `logs/` 再现散件 ⇒ 黄（`audit_work.py`） | 文件系统 mtime |
 | `T15` | ⭐ **产物白名单 ＋ 工作记录元信息** —— `artifacts/` 只许工具生成物 md · `.scratch/legacy-active`与`docs/adr`的旧D件文档必须带文头四行（读者/回答什么/何时读/状态；⚠️ **票仓不在扫描面里**，票按票面协议走）⭐ **2026-10-11 加一条**（`TAIL-296`）：**决策区**的件**状态词必须 ∈ 五档**，且「已定稿 / 已实施」**必须有「落地位置」行** ⇒ 黄 | `audit_work.py`（`STATE_WORDS` / `HEADER_ZONES` / `DECISION_ZONES` / `WORK_HEADER_KEYS` / `DECL_RE`） |
-| `T16` | ⭐ **`T7a` 登记册必须在位** —— 登记册**读不到 / 解析不出条目** ⇒ **红**（治「静默降级成全部未清」） | `cover_gap.CLEARED_REGISTRY` |
-| `T17` | ⭐ **闸门清单里每一把尺子都必须真有入口** —— 在跑却**0 行输出**（僵尸闸门）⇒ 红 | 计划 `§22.1` 的 `foreach` |
 | `T18` | ⭐ **登记在册的路径 / glob 常量必须解析得到真东西** —— 空命中 = 那一片**从没被扫过** ⇒ 红 | `audit_meta.GUARDED` |
 | `T19` | ⭐ **文档指针（节号）守卫** —— 「`X.md` §N」必须真有那一节（`T3` 只管文件在不在）⇒ 红 | `audit_drift` |
 | `T20` | ⭐ **保留期与容量** —— `.artifacts/recovery/backups/` 顶层条目 > 5（口径「留 5 份 · 月度清」）⭐ **`tools/oneoff/` 件数 / 容量超线**（⚠️ 原第三条「`.workbuddy/scratch/` 活区规模」**2026-10-01 已撤** —— 它守的是**搬家遗留的旧落点**（盘上一直在、被 `.gitignore` 藏着 ⇒ `git status` 看不见），第 7 步已把旧落点**整棵清掉** ⇒ 判据**失去对象**；临时件现由 `T14` 管）（`TAIL-194`；处置口径 = `tools/README.md`）⇒ 黄 | `README.md` §三/§四 ＋ `tools/README.md` ＋ `docs/reference/thresholds.md` ＋ `audit_work.py` |
@@ -56,9 +53,8 @@
 用法（⚠️ 2026-09-24 订正：尺子已随 `TAIL-58` 搬进 `tools/audit/`，旧写法 `tools/doc_audit.py` 已不存在）：
     python tools/audit/doc_audit.py              # 人读报告（有红即非零退出）
     python tools/audit/doc_audit.py -v           # 附命中行上下文
-    python tools/audit/doc_audit.py --block      # 打印可粘贴进交接文件的「当前状态」块
 
-⚠️ 本工具**只读**（`--block` 也只打印、不写文件）。
+本工具只读，用于文档专项；不承担测试完成或验收登记义务。
 
 **本文件是薄壳** —— 检查逻辑已拆到同目录五件（`T5` 逼的，本文件曾 597 行）：
 `audit_common.py`（常量 ＋ 扫描基础设施）· `audit_drift.py`（`T1`–`T4` · `T25` `.gitignore` 落点）·
@@ -81,12 +77,12 @@ from audit_common import (                                        # noqa: E402
 )
 from audit_drift import (                                         # noqa: E402
     check_acc_ids, check_cancelled, check_count_anchors, check_gitignore_drops, check_paths,
-    check_section_refs, check_status_line, check_terms,
+    check_section_refs, check_terms,
 )
 from audit_meta import (                                          # noqa: E402
     HARD_LIMIT, LINE_LIMIT, check_doc_budgets, check_doc_layout, check_drop_zones,
     check_file_sizes,
-    check_gate_liveness, check_guard_constants, check_line_splices, check_line_walls,
+    check_guard_constants, check_line_splices, check_line_walls,
     check_live_machine, check_plan_process,
     check_report_receipts, check_rule_origins, check_rule_restatements, check_tail_ledger,
 )
@@ -104,57 +100,14 @@ from audit_work import (                                          # noqa: E402
 # ----------------------------------------------------------------------- 主流程
 
 
-def _print_block() -> int:
-    from audit_drift import _actual_states                          # noqa: PLC0415
-    st = _actual_states()
-    if st is None:
-        print("（拿不到真源：先跑全套 pytest 生成 var/state/verification/acc_results.json）")
-        return 2
-    code = 0 if st["红"] == 0 else 1
-    print("四态 **%d = 绿 %d · 红 %d · 待建 %d · 未绑定 %d**（退出码 %d）"
-          % (st["合计"], st["绿"], st["红"], st["待建"], st["未绑定"], code))
-    return 0
 
 
-def check_cover_registry() -> list[dict]:
-    """`T16`：**`T7a` 登记册必须在位**（2026-09-24 立 · `TAIL-20`）。
-
-    ⭐ 治的是「**读不到 ⇒ 静默降级成「全部未清」**」—— 2026-09-24 实测：登记册在 `tools/`，
-    而 `cover_gap.CLEARED_REGISTRY` 按**自身所在目录**拼 ⇒ 恒读到空集 ⇒ 所有 `x` 标记**全部失效**，
-    且**没有任何报错**（降级方向还是"宁多报"，看着反而更安全）⇒ 只有变异测试才撞得出来。
-    ⇒ 光靠 stderr 不够（跑批只看 rc 时照样漏）⇒ 升成**红档**。
-    """
-    from cover_gap import CLEARED_REGISTRY
-
-    try:
-        rel = str(CLEARED_REGISTRY.resolve().relative_to(REPO_ROOT)).replace("\\", "/")
-    except ValueError:
-        rel = str(CLEARED_REGISTRY)
-    if not CLEARED_REGISTRY.exists():
-        return [{"code": "T16", "side": "仓", "rel": rel, "line": 1,
-                 "what": "（登记册文件不存在）",
-                 "why": "`T7a` 的「已清」登记读不到 ⇒ `load_cleared()` 返回空集 ⇒ 所有 `x` 失效（静默）",
-                 "fix": "恢复登记册，或改 `cover_gap.CLEARED_REGISTRY` 指向它的真实位置",
-                 "level": RED, "text": ""}]
-    rows = [ln for ln in CLEARED_REGISTRY.read_text(encoding="utf-8", errors="replace").splitlines()
-            if ln.strip() and not ln.lstrip().startswith("#")]
-    if not rows:
-        return [{"code": "T16", "side": "仓", "rel": rel, "line": 1,
-                 "what": "（登记册里解析不出任何条目行）",
-                 "why": "读得到文件却读不到条目 ⇒ `x` 照样全失效",
-                 "fix": "补回条目行（格式见登记册文件头注释）",
-                 "level": RED, "text": ""}]
-    return []
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="文档漂移自检")
     ap.add_argument("-v", "--verbose", action="store_true", help="附命中行上下文")
-    ap.add_argument("--block", action="store_true", help="打印可粘贴的「当前状态」块")
     args = ap.parse_args()
-
-    if args.block:
-        return _print_block()
 
     import acc_report as ar                                    # noqa: PLC0415
     baseline = ar.load_json(ar.resolve_baseline(None))
@@ -171,7 +124,6 @@ def main() -> int:
     #   找进了不存在的目录"）。⚠️ `T3` 拦不住这一类：它只认**带文件后缀**的引用，而落点多是
     #   **目录形态**（`.../00-scratch/`）⇒ 对 `T3` 完全隐形。
     raw += check_gitignore_drops()
-    raw += check_status_line()
     # `T4` **追加**（2026-09-24 立 · 用户「按推荐」）：**计数锚点**（黄）—— 手抄的、有机器真值的计数
     #   （尾巴计数 / `§22.1` 尺子把数 / `U5` 登记条目数）必须等于真值。⭐ 起因：一天内**两次**实测到
     #   "手抄的数字漂"（`claim_audit` 黄计数 · `U5` 登记 42↔43），而 `T4` 原先只管**四态数字**。
@@ -231,7 +183,6 @@ def main() -> int:
     #   ⭐ 一天内核出四例"僵尸闸门"（`shell_verify` · `cover_gap` · `audit_drift` · `audit_meta`），
     #   其中三例**从来没有 `__main__`** ⇒ 在闸门清单里跑了几个月，**0 行输出、rc 恒 0、什么都没判**。
     #   ⚠️ 清单**唯一出处 = 计划 `§22.1` 的 `foreach`**（本检查直接读它 ⇒ 新增尺子自动被查）。
-    raw += check_gate_liveness()
     # `T18`（2026-09-24 立 · 排查件 §一 的元发现）：**登记在册的路径 / glob 常量必须解析得到真东西** ——
     #   ⭐ 当天三处失效同根（`tools/audit/` 的常量在 `TAIL-58` 搬目录后没跟改），症状全是
     #   「**检查在跑，其实扫空集**」；立本条当天就抓出第 4 例（`SCAN_GLOBS` 里 `CHANGELOG.md` 的旧地址）。
@@ -265,13 +216,6 @@ def main() -> int:
     #      （实测退化件**多数等长** ⇒ 只钉行数不够）。
     #   ⚠️ 两条都**只定义一次**（标记 / 排除目录 / 扫描面在 `audit_common`，基线表在 `audit_face`）。
     raw += check_footer_tail() + check_prd_baseline()
-    # `T16`（2026-09-24 立 · `TAIL-20`）：**`T7a` 登记册必须在位** —— 读不到就静默降级成
-    #   「全部未清」，而那个方向看着还更安全 ⇒ 必须升成红档才看得见。
-    raw += check_cover_registry()
-    # `T7` 登记：有能力的口径没被判据兜住（**逻辑在 tools/cover_gap.py** —— 别再内联）
-    from cover_gap import T7_EXEMPT, check_cover_gaps         # noqa: PLC0415
-
-    cover_gaps = check_cover_gaps(delivery_root(), baseline)
     skipped = [h for h in raw if h["level"] == SKIP]
     yellows = [h for h in raw if h["level"] == YELLOW]
     reds = [h for h in raw if h["level"] == RED]
@@ -310,24 +254,6 @@ def main() -> int:
     if not reds and not yellows:
         print("✅ 无漂移：术语 / 用例号 / 路径 / 状态数字 全部一致")
         print()
-
-    gaps_a = [h for h in cover_gaps if h["code"] == "T7a"]
-    gaps_b = [h for h in cover_gaps if h["code"] == "T7b"]
-    print(f"判据覆盖 `T7`（**有登记的能力、判据却没兜住** —— 登记档，不判红；"
-          f"豁免 {len(T7_EXEMPT)} 类见代码 `T7_EXEMPT`）")
-    print("-" * 78)
-    print(f"  ⭐ `T7a` 无用例认领（末列没有 `ACC-*`）：{len(gaps_a)} 条"
-          f" ｜ `T7b` 口径无人 cover：{len(gaps_b)} 条")
-    if cover_gaps:
-        for tag, grp in (("T7a · 无用例认领", gaps_a), ("T7b · 口径无人 cover", gaps_b)):
-            if not grp:
-                continue
-            print(f"  -- {tag} --")
-            for h in grp:
-                print(f"  {h['rel'].replace('PRD/02-功能规格/', ''):<11} L{h['line']:<4} {h['what']}")
-    else:
-        print("  （无）")
-    print()
 
     print(f"文件行数（>{LINE_LIMIT} 须登记拆分计划 · >{HARD_LIMIT} 须登记「为什么不拆」——**都是黄**）"
           "—— **这份清单就是登记，别抄进文档**")

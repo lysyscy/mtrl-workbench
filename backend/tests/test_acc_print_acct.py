@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import app.mod02_i8.notice_source as ns
 from app.mod02_i8.notice_source import NoticeDetailFetcher
-from tests.acc_plugin import acc
 
 
 class _StubClient:
@@ -25,7 +24,6 @@ class _StubClient:
         return self._payloads.pop(0)
 
 
-@acc()
 def test_明细回空会再确认一次_重试取到就用(monkeypatch):
     """首次回空 ⇒ 重试一次；重试有数 ⇒ **用重试的结果**（旧行为会静默返回空）。"""
     monkeypatch.setattr(ns.time, "sleep", lambda *_: None)
@@ -35,7 +33,6 @@ def test_明细回空会再确认一次_重试取到就用(monkeypatch):
     assert stub.calls == 2                       # 两次请求 ⇒ 确认过一次
 
 
-@acc()
 def test_明细确认真空后接受空_不死循环(monkeypatch):
     """两次都空 ⇒ **接受空**（真有单据没有明细）并停住 —— ⛔ 不能无限重试。"""
     monkeypatch.setattr(ns.time, "sleep", lambda *_: None)
@@ -44,7 +41,6 @@ def test_明细确认真空后接受空_不死循环(monkeypatch):
     assert stub.calls == 2                       # 确认一次后停
 
 
-@acc()
 def test_明细正常回包不触发重试(monkeypatch):
     """有数 ⇒ **只调一次**（⛔ 别把"确认一次"做成"每次都取两遍"）。"""
     monkeypatch.setattr(ns.time, "sleep", lambda *_: None)

@@ -21,7 +21,6 @@
 
 from __future__ import annotations
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL
 
 #: 本批改掉的 14 处：`(墓碑整串, 为什么它原来是错的)`
@@ -52,7 +51,6 @@ TOMBSTONES: tuple[tuple[str, str], ...] = (
 )
 
 
-@acc("ACC-UI-SHELL-001", "001-24")
 def test_颜色语义错位不许回来():
     """⭐ 上面那 14 处（本节只列了不重复的墓碑串）**不许**再挂回成功绿 / 警示黄。
 
@@ -74,7 +72,6 @@ def test_颜色语义错位不许回来():
         assert 'class="tip ok"' not in seg, f"{tail!r} 那段导出预览又用了成功绿（事还没做）"
 
 
-@acc("ACC-UI-SHELL-001", "001-25")
 def test_壳不许替域挑颜色():
     """⭐ 通用导入面 ① 步那三句**域自报文案**（`note` / `keep_note` / `memory`）**一律普通 `tip`**
     （用户 2026-09-27 就"壳替域挑颜色"这一格裁定 `A`）。
@@ -89,7 +86,6 @@ def test_壳不许替域挑颜色():
             f"壳又在替域挑颜色了：{tomb!r} —— 域自报文案一律普通 `tip`（要分语气走 B 案：域自报 `note_kind`）"
 
 
-@acc("ACC-UI-SHELL-001", "001-26")
 def test_判法本身写进了守则():
     """⭐ 本批的**判法**（"绿只用于已完成 / 黄只用于风险"）必须留在守则 `§4.5` 里 ——
     ⛔ 只改代码不写清判法 ⇒ 下一个人会照着旧习惯再把绿色挂到"将要发生"的说明上。

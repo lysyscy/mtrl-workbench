@@ -2,12 +2,10 @@
 import importlib.util
 from pathlib import Path
 
-from tests.acc_plugin import acc
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@acc()
 def test_retired_spec_and_missing_active_capability(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location('face_probe_test', ROOT/'tools/probe/_audit_face.py')
     module = importlib.util.module_from_spec(spec)
@@ -29,16 +27,3 @@ def test_retired_spec_and_missing_active_capability(tmp_path, monkeypatch):
     assert module.main() == 1
     active.write_text('## 二、能力清单\n| 1 | `ACC-GHOST-001` |\n', encoding='utf-8')
     assert module.main() == 1
-
-
-@acc()
-def test_example_config_selects_settings_consumers():
-    import sys
-    sys.path.insert(0, str(ROOT/'tools/oneoff'))
-    import _impactscope as impact
-    import _run_rulers as rulers
-
-    checks, tests, pending = impact.selection({'.env.example': (b'OLD=1', b'NEW=2')}, rulers.CMDS)
-    assert not pending
-    assert tests.run and 'test_config_env_example.py' in tests.files
-    assert 'tools/audit/bytes_guard.py' in checks

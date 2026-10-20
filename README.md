@@ -61,7 +61,7 @@
 | 现行权威 | 固定职责及主题名 | 需求docs/requirements.md及分册；状态docs/status.md；架构docs/architecture.md；指南、参考、协议各在docs对应目录 |
 | 手工备份 | 业务恢复点 | `var/backups/`；数据库备份与文件备份分开，按实际恢复窗口检查退出；临时源码副本用本轮recovery |
 | **产品资料改前备份** | 必要独有未提交字节 | 本轮recovery；保存核验后删除，Git足以恢复的内容不再整树复制 |
-| 产物 md | 现行结论归docs或任务正文；生成变异台账是核验状态 | `var/state/verification/变异覆盖台账.md`；开发报告进本轮reports |
+| 产物 md | 现行结论归docs或任务正文；旧变异台账仅供历史追溯，不要求继续更新 | `var/state/verification/变异覆盖台账.md`；开发报告进本轮reports |
 
 **格式三条**：① 每份文档**开头必须写**"读者是谁 / 回答什么问题 / 什么时候读"（work 区另加"状态 ＋ 关联 ID"）；② **跨文档引用写全路径**
 （⚠️ 反引号里的仓库内路径会被 `T3` 校验，写错就红 —— 但**交付面文档不得出现 `.codebuddy/…` 路径**）；

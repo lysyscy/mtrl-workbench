@@ -18,10 +18,8 @@ import pytest
 
 from app.core.errors import MustReportError
 from app.report_export import resources as R
-from tests.acc_plugin import acc
 
 
-@acc()
 def test_路径1四份模板都在仓且都登记了SHA256():
     """资产前提：**要在仓、要登记** —— 否则闸门形同虚设（`require_template` 对未登记的名字只查存在）。"""
     assert len(R.PATH1_TEMPLATES) == 6, "路径① 的模板数变了？回 `docs/requirements/report-templates.md` §一/§二 核对"
@@ -34,7 +32,6 @@ def test_路径1四份模板都在仓且都登记了SHA256():
         assert R.require_template(p) == p
 
 
-@acc()
 def test_路径1四份模板openpyxl读得开():
     """⭐ 路径① 的做法就是 `openpyxl` 读模板 ⇒ **读不开 = 这条路根本走不通**（在资产层面先拦）。
 
@@ -52,7 +49,6 @@ def test_路径1四份模板openpyxl读得开():
         assert sn in names, f"模板里找不到工作表 `{sn}` ⇒ 清单 §二 与实物不符"
 
 
-@acc()
 def test_闸门对未登记名字只查存在不查损坏_已文档化():
     """⚠️ **诚实边界**：`require_template` 对**没登记**的名字**查不出损坏**（只查存在）。
 

@@ -20,7 +20,6 @@ from app.mod06_proc import importer, mech_ui, repository as repo
 from app.mod06_proc.models import ProcHistoryBatch, ProcHistorySnapshot
 from app.mod06_proc.service import build_page_data, build_import_data, parse_state
 from app.mod08_inv.models import InvDetail
-from tests.acc_plugin import acc
 from tests.m06_helpers import (
     CUTOFF_YM,
     WAREHOUSE,
@@ -61,7 +60,6 @@ def _xlsx(rows: list[list], header=MAT_HEADER) -> bytes:
 #    保留下来的两条只碰**入参解析/落库**（与页面无关）✓。
 
 
-@acc()
 def test_机械手录入参解析_空按零_负数与非数字报错():
     """⚠️ 原先这条还借旧页 html 看「核算月带回 / 现值预填」；那是页面形态，旧页删后随之删掉，
     留下的**入参解析（空按 0 / 负数与非数字报错）与月份归一**是与页面无关的实质。"""
@@ -78,7 +76,6 @@ def test_机械手录入参解析_空按零_负数与非数字报错():
     assert D.normalize_ym("2026-13") == "" and D.normalize_ym("八月") == ""
 
 
-@acc()
 def test_机械手录落库后表内取到_且重抓重导都不覆盖():
     s = _sess()
     repo.save_mech(s, ym="2026-09", warehouse=WAREHOUSE,
@@ -117,7 +114,6 @@ def _plan():
     return importer.parse_sheet(_xlsx(rows))
 
 
-@acc()
 def test_历史导入按表头认列_机械列也导_异常行必报():
     """⭐ 2026-09-26（`TAIL-107`）**改口径**：**机械 6 列也导入**（进历史段快照）。
 
@@ -159,7 +155,6 @@ def test_历史导入按表头认列_机械列也导_异常行必报():
         importer.parse_sheet(_xlsx([["2026-03", "1"]], header=("核算月", "备注")))
 
 
-@acc()
 def test_历史导入只写历史段_正式段与机械手录都不动():
     s = _sess()
     before_formal = _by_month(s)["2026-07"]["in_主辅材"]
@@ -177,7 +172,6 @@ def test_历史导入只写历史段_正式段与机械手录都不动():
     assert rows["2026-07"]["section"] == D.SECTION_FORMAL, "截止核算月被顺手挪了"
 
 
-@acc()
 def test_历史导入整批回滚后不再计入但不物理删():
     s = _sess()
     importer.commit(s, _plan(), warehouse=WAREHOUSE, batch="PROC-T2",
@@ -190,7 +184,6 @@ def test_历史导入整批回滚后不再计入但不物理删():
     assert len(kept) == 2, "回滚**不物理删**（留痕）"
 
 
-@acc()
 def test_核对报告列出不回落i8的月份():
     s = _sess()
     # 2026-05 在 i8 里有数据（9999）、快照里也有 ⇒ 不算空；把 2026-05 从快照里去掉再看
@@ -205,7 +198,6 @@ def test_核对报告列出不回落i8的月份():
 # ============================================================ 暂存载具（两个导入页共用）
 
 
-@acc()
 def test_预览暂存不落库且过程资料使用通用载具():
     token = preview_store.save({"rows": [{"ym": "2026-03"}]})
     assert preview_store.load(token)["rows"] == [{"ym": "2026-03"}]
@@ -224,7 +216,6 @@ def test_预览暂存不落库且过程资料使用通用载具():
 # ============================================================ 导入页（三步）
 
 
-@acc()
 def test_历史导入页三步齐备且带项目与截止月():
     """导入页**齐全**：三步（选文件 → 预览 → 确认）＋ 项目（键 = 仓库名）＋ 当前截止核算月 ＋ 列说明。
 
@@ -274,7 +265,6 @@ def test_历史导入页三步齐备且带项目与截止月():
 # ============================================================ 机械 6 列的有效值（`TAIL-107`）
 
 
-@acc()
 def test_接口按分界月给机械值_历史段读快照():
     """有效机械接口与显示共用统一表，历史月份也能被后续手录覆盖。"""
     import uuid

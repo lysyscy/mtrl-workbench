@@ -14,8 +14,7 @@
 
 from __future__ import annotations
 
-from tests.acc_plugin import acc
-from tests.test_shell_ui_workflow import ui_page  # noqa: F401  ← 真浏览器隔离 fixture（唯一出处，⛔ 别在本件另起一套）
+from tests.ui_helpers import ui_page  # noqa: F401  ← 真浏览器隔离 fixture（唯一出处，⛔ 别在本件另起一套）
 
 #: 两行通知书：A（审批 1000 · 已付 200 ⇒ 派生 800）· B（审批 500 · 已付 100 ⇒ 派生 400）
 ROWS = [
@@ -51,7 +50,6 @@ def _over(page, nid):
     return page.evaluate(f"payOver(NO.find(n=>n.id==='{nid}'))")
 
 
-@acc()
 def test_手改拟付后重拉列表草稿不丢且按通知书记(ui_page):
     """票面 ① ② ④：四条供应商路径最后都走 `reloadNotices()` ⇒ 草稿必须活过**整体换行对象**；
     两行互不串值；`0` 是有效覆盖；供应商写失败（`ok:false`）不碰草稿。"""
@@ -84,7 +82,6 @@ def test_手改拟付后重拉列表草稿不丢且按通知书记(ui_page):
     assert _eff(p, "102") == 120, "改一行影响了另一行"
 
 
-@acc()
 def test_审批额或已付额变化后旧草稿作废(ui_page):
     """票面 ⑤：真付款 / 撤销 / 审批额变 / 已付额变 ⇒ 旧草稿**失效**并按最新事实重算 ——
     免得拿一个过期数字去付款。"""
@@ -106,7 +103,6 @@ def test_审批额或已付额变化后旧草稿作废(ui_page):
     assert _over(p, "101") is False
 
 
-@acc()
 def test_付款成功后即使列表刷新失败也作废草稿(ui_page):
     """票面 ⑤ 的硬边界：**写成功是强事实信号** —— 付款成功那一瞬就该作废该单草稿，
     ⛔ 不能等 `reloadNotices()`（它可能失败 ⇒ 过期金额留在页面上，用户再付款看到的数是错的）。
@@ -127,7 +123,6 @@ def test_付款成功后即使列表刷新失败也作废草稿(ui_page):
     assert _over(p, "102") is False and _eff(p, "102") == 400, "本次付款之外的行被牵连"
 
 
-@acc()
 def test_撤销成功后即使刷新失败也作废草稿且回执仍在(ui_page):
     """票面 ⑤＋`TAIL-281` 不回归：撤销成功 ⇒ 该通知书草稿作废；
     ⚠️ 刷新失败**不等于**撤销失败 —— 成功回执必须照样显示。"""

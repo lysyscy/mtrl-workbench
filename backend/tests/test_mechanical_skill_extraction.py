@@ -6,7 +6,6 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tests.acc_plugin import acc
 
 import openpyxl
 
@@ -17,7 +16,6 @@ spec.loader.exec_module(reader)
 
 
 class ExtractionBehavior(unittest.TestCase):
-    @acc()
     def test_moved_columns_missing_sequence_repeated_header_and_repeated_business(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "fixture.xlsx"
@@ -45,7 +43,6 @@ class ExtractionBehavior(unittest.TestCase):
             self.assertNotIn("planned_months", first["fields"])
             self.assertEqual(Decimal(result["records"][2]["tax"]["net_check"]), Decimal("1000"))
 
-    @acc()
     def test_missing_amount_cache_missing_tax_and_internal_lease_remain_visible(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "fixture.xlsx"
@@ -66,14 +63,12 @@ class ExtractionBehavior(unittest.TestCase):
             with self.assertRaises(ValueError):
                 reader.extract({"period": "2026-09", "sheets": [selection, selection]})
 
-    @acc()
     def test_empty_plan_and_ambiguous_tax_are_not_successful_zero(self):
         with self.assertRaises(ValueError):
             reader.extract({"period": "2026-09", "sheets": []})
         self.assertEqual(reader.tax_check(1000, "3%或6%专票", "专票税率")["status"], "待核")
         self.assertEqual(reader.tax_check(1000, "普票", "专票税率")["net_check"], "1000")
 
-    @acc()
     def test_short_numeric_dates_keep_general_and_real_dates_keep_their_type(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "dates.xlsx"

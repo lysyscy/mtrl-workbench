@@ -8,11 +8,9 @@
 
 from __future__ import annotations
 
-from tests.acc_plugin import acc
 from tests.router_refs import broken_refs, router_modules
 
 
-@acc()
 def test_全站所有模块路由引用的域出口都真实存在():
     modules = router_modules()
     # ① 守卫本身不许退化成"什么都没扫"（发现不到路由 = 这个自检失效了）
@@ -27,7 +25,6 @@ def test_全站所有模块路由引用的域出口都真实存在():
     assert not bad, "路由引用了不存在的出口 —— 真机请求会 500：\n" + "\n".join(bad)
 
 
-@acc()
 def test_导入类页面引用的暂存载具是同一份():
     """「预览不写库」的载具**只许一份**（`preview_store`）—— 导入页共用，不各写一份。
 

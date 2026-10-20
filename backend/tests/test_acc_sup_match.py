@@ -17,12 +17,10 @@ from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.notice_api_router import SupMatchIn, api_sup_match
 from app.mod03_notice.sup_match import LVL_NAMES, frags_of, match_of, pool_of
 from app.mod11_jc.models import JcContract
-from tests.acc_plugin import acc
 
 WH = "__自检仓_供应商匹配__"
 
 
-@acc()
 def test_片段长度必须等于6减等级():
     """⚠️ 这条是**反向灵敏度**的重点目标：写错它不报错、只会悄悄改变等级语义。"""
     s = "河南安装集团"
@@ -41,7 +39,6 @@ def test_片段长度必须等于6减等级():
     assert LVL_NAMES == ("", "全名", "4 字片段", "3 字片段", "2 字片段"), "等级名与长度必须一一对应"
 
 
-@acc()
 def test_先长后短_高等级一命中就不看低等级():
     """⚠️ "先长后短"是这套算法的**全部意义**：若不这样做，2 字片段会把一堆无关供应商扯进来。"""
     pool = ["河南安装集团", "河南安装", "尚坤建设"]
@@ -66,7 +63,6 @@ def test_先长后短_高等级一命中就不看低等级():
     assert match_of("毫不相关的内容", pool) == {"level": 0, "level_name": "", "cands": []}, "0 命中"
 
 
-@acc()
 def test_候选池只取本项目且按全名去重():
     """⚠️ 不去重 ⇒ "一家被数成多家" ⇒ 多命中弹窗里出重复项、把"歧义"变成假的。"""
     rows = [
@@ -81,7 +77,6 @@ def test_候选池只取本项目且按全名去重():
     assert pool_of(rows, project_key="") == [], "项目键为空 ⇒ 池为空（⛔ 不回落成「全库」）"
 
 
-@acc()
 def test_端点真跑一次_只算不写():
     """端到端：造 1 项目 + 1 合同 + 1 通知书 ⇒ 真调端点 ⇒ 命中并给出候选。"""
     with session_scope() as s:
@@ -107,7 +102,6 @@ def test_端点真跑一次_只算不写():
         s.rollback()
 
 
-@acc()
 def test_写入集采实际供应商_列表必须读得回同一个值():
     """⭐ 2026-10-08 BUG 钉子（往返）：`jc-supplier` 写进去的值，**列表必须原样读回**。
 

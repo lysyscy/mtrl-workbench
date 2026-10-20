@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-from tests.acc_plugin import acc
 from tests.shell_src import SHELL, parts_text, func_body
 
 #: 造错的口（唯一）——名字变了就同批改本件（⛔ 别让判据静默失效）
@@ -30,7 +29,6 @@ def _part(suffix: str) -> str:
     raise AssertionError(f"壳里没有这一件：{suffix}（现有 {[r for r, _ in parts_text()]}）")
 
 
-@acc("ACC-UI-SHELL-001", "001-01")
 def test_造错的口只有一个():
     """⭐ `new Error(` 全壳**只许出现在「人话出口」的函数体里**。
 
@@ -46,7 +44,6 @@ def test_造错的口只有一个():
         "（散布出去 ⇒ 迟早有一处把状态码 / 接口地址当消息抛给用户）")
 
 
-@acc("ACC-UI-SHELL-001", "001-02")
 def test_五个取数失败点都过人话出口_技术串只进技术明细():
     """`api.js` 的 5 个失败点（`get` / `post` / `send` / `postForm` / `postFile`）必须**都**经人话出口，
     且原始串（`方法 全路径 → HTTP 状态码`）是**第二个实参** ⇒ 落到 `err.tech`（只进 console）。
@@ -63,7 +60,6 @@ def test_五个取数失败点都过人话出口_技术串只进技术明细():
     assert "→ HTTP ${r.status}" in api, "技术串（方法 → 全路径 → 状态码）消失了 ⇒ 排障没留痕"
 
 
-@acc("ACC-UI-SHELL-001", "001-03")
 def test_提示条那一行不许出现内部串():
     """⭐ 任何 `toast(...)` 的那一行都不许出现 `HTTP ${` 或 `/api/` ——
     提示条是**用户读的**（守则 §5.2：面向用户的文字要能用非技术语言读懂）。
@@ -76,7 +72,6 @@ def test_提示条那一行不许出现内部串():
     assert not bad, "这些提示条把内部串直接给用户看了（守则 §3.1/§3.7）：\n" + "\n".join(bad)
 
 
-@acc("ACC-UI-SHELL-001", "001-04")
 def test_首屏取数失败的横幅_人话在外技术明细折叠():
     """⭐ 首屏取数失败的那条**常驻横幅**（`bootErrorBanner`）必须：
     ① 可见区只说人话（`esc(BOOT_ERROR)` —— 它由 `soft()` 收到的 `e.message` 拼成，已是人话）；

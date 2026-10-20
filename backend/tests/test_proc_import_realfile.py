@@ -20,7 +20,6 @@ from openpyxl import Workbook
 
 from app.core.errors import MustReportError
 from app.mod06_proc import importer
-from tests.acc_plugin import acc
 
 #: 慧能那份：分组头 = 「含税/不含税」，叶子 = 「外租设备（零租）/（包月）」
 HUI = [
@@ -71,7 +70,6 @@ def _data(ym, *, main=1000, tool=20):
     return (1, ym, main, tool, "", "", "", "", "", "", 300, 400, 500, 600, 700, 800)
 
 
-@acc("ACC-PROC-IMPORT-001", "001-01")
 def test_两级表头拼名认列_父子在项目间互换也认得出():
     """⭐ 慧能（`含税`›`外租设备（零租）`）与晋江（`外租机械（含税）`›`零租`）**两种顺序都要认**。"""
     jj = importer.parse_sheet(_book(JJ, [_data(45871)]))
@@ -87,7 +85,6 @@ def test_两级表头拼名认列_父子在项目间互换也认得出():
     assert hui.header_levels == (2, 3) and hui.header_row == 2
 
 
-@acc("ACC-PROC-IMPORT-001", "001-02")
 def test_时间列_Excel序列号与浮点年月都认得出():
     """⭐ 「时间」= 核算月：`45444`（序列号 ⇒ 2024-06）· `2025.09` · `2025.1`（浮点丢了末位 0 ⇒ 10 月）。"""
     plan = importer.parse_sheet(_book(JJ, [_data(45444), _data(45475), _data(45507)]))
@@ -96,7 +93,6 @@ def test_时间列_Excel序列号与浮点年月都认得出():
     assert float_plan.months == ["2025-09", "2025-10", "2025-11"], "浮点年月 2025.1 = 2025-10"
 
 
-@acc("ACC-PROC-IMPORT-001", "001-03")
 def test_尾部合计行不计入也不报异常():
     """⭐ 真文件尾部是「合计/小计」行 ⇒ **不进 rows、也不进 anomalies**（只留一条提示）。"""
     plan = importer.parse_sheet(_book(JJ, [_data(45871), ("", "小计", 100, 20, 0, 0, 0, 0, 0, 0,
@@ -107,7 +103,6 @@ def test_尾部合计行不计入也不报异常():
     assert len(plan.notes) == 1 and "合计/小计行" in plan.notes[0] and "行 5、6" in plan.notes[0]
 
 
-@acc("ACC-PROC-IMPORT-001", "001-04")
 def test_机械列要进快照_且只填了机械列的行也算数据():
     """⭐⭐ 2026-09-26（`TAIL-107`）**改口径**：机械 6 列**要导**（历史机械费在 excel 里）。
 
@@ -128,7 +123,6 @@ def test_机械列要进快照_且只填了机械列的行也算数据():
     assert not [k for k in only_mech.rows[0] if k.startswith(("in_", "out_"))], "材料列一个都没填"
 
 
-@acc("ACC-PROC-IMPORT-001", "001-05")
 def test_非数据行一律跳过并提示_不当异常报():
     """⭐ 用户 2026-09-22 裁定 ③④：空行就是没数据 · 数据区下面的**手写说明行**不是数据 ·
     合计块的下半行也不是 ⇒ 三样都**跳过 ＋ 逐条提示**（⛔ 不静默、⛔ 不当异常）；**有数据但月份认不出**才报异常。"""
@@ -149,7 +143,6 @@ def test_非数据行一律跳过并提示_不当异常报():
     assert "行 4" in str(bad.value) and "核算月认不出" in str(bad.value)
 
 
-@acc("ACC-PROC-IMPORT-001", "001-06")
 def test_负数照收_导入层不改用户的定稿数字():
     """⭐ 用户 2026-09-22 裁定 ①：真文件里有**红字/冲销**（慧能「出库工具 = -7579.56」）⇒ **收**，
     值原样入库（⛔ 导入层不替它改数、⛔ 不因此丢整行）。"""
@@ -161,7 +154,6 @@ def test_负数照收_导入层不改用户的定稿数字():
     assert not plan.anomalies, plan.anomalies
 
 
-@acc("ACC-PROC-IMPORT-001", "001-07")
 def test_标段行_中文年月带后缀照认_值不换算():
     """⭐ 用户 2026-09-22 裁定 ②：「2025年9月（一标）」是**真数据**（大设备，数没错）⇒
     认月（2025-09）· **值原样不动** · 后缀进提示；同月多行（一标/三标）都进 rows（页面侧相加）。"""
@@ -177,7 +169,6 @@ def test_标段行_中文年月带后缀照认_值不换算():
     assert not plan.anomalies
 
 
-@acc()
 def test_多工作表_按哪张认得出表头挑():
     """真文件里第 1 张可能是「填表说明」这类别的表 ⇒ 按"认得出表头"挑，⛔ 不猜位置。"""
     plan = importer.parse_sheet(_book(JJ, [_data(45871)], extra_sheet=True))

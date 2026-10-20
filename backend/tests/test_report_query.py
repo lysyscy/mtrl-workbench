@@ -10,14 +10,12 @@ from app.mod07_setl import api as setl_api, service as setl
 from app.mod08_inv import service as inv
 from app.mod09_fee import api as fee_api, service as fee
 from app.mod11_jc import api as jc_api
-from tests.acc_plugin import acc
 
 
 def request(query):
     return Request({'type': 'http', 'query_string': query.encode()})
 
 
-@acc()  # 工程等价回归，不新增产品 claim。
 def test_single_value_contract():
     assert query_one(None, 'x', 'default') == 'default'
     for raw, expected in [(0, '0'), (False, 'False'), (None, ''), ('  ', ''),
@@ -26,14 +24,12 @@ def test_single_value_contract():
         assert query_one({'x': raw}, 'x', 'default') == expected
 
 
-@acc()
 def test_flatten_keeps_empty_order_and_duplicates():
     p = flatten_query(QueryParams('x=&x=0&x=0&x=%20a%20&single=%20a%20&empty='))
     assert p == {'x': ['', '0', '0', ' a '], 'single': ' a ', 'empty': ''}
     assert flatten_query(QueryParams('')) == {}
 
 
-@acc()
 def test_page_defaults_validation_and_explicit_empty(monkeypatch):
     monkeypatch.setattr(setl.D, 'default_month', lambda: '2026-09')
     monkeypatch.setattr(fee.D, 'default_ym', lambda: '2026-09')
@@ -51,7 +47,6 @@ def test_page_defaults_validation_and_explicit_empty(monkeypatch):
     assert st['warehouse'] == '0' and st['exp_open'] and st['exp_touched']
 
 
-@acc()
 def test_multivalue_business_differences():
     raw = [' a ', 'a', '', None, 0]
     assert proc.parse_state({'exppj': raw})['exp_selected'] == ['a']
@@ -62,7 +57,6 @@ def test_multivalue_business_differences():
     assert jc_api._tags(['invalid', *jc_api.D.TAGS]) == list(jc_api.D.TAGS)
 
 
-@acc()
 def test_actual_settlement_and_fee_entries(monkeypatch):
     monkeypatch.setattr(setl_api, 'session_scope', lambda: nullcontext(None))
     def page(s, st):
@@ -75,7 +69,6 @@ def test_actual_settlement_and_fee_entries(monkeypatch):
     assert fee_api.api_fee(request('ym=2026-02&pj=a&pj=b')) == {'ym': '2026-02', 'pj': "['a', 'b']"}
 
 
-@acc()
 def test_actual_proc_export_and_jc_entries(monkeypatch):
     from app import export_registry
     from app.core.errors import MustReportError
@@ -95,7 +88,6 @@ def test_actual_proc_export_and_jc_entries(monkeypatch):
     assert jc_api.api_list(request('tag=invalid&arch=a&arch=b&supplier=%20x%20&project=0'))['count'] == 0
 
 
-@acc()
 def test_actual_big_and_extract_export_entries(monkeypatch):
     from app import export_registry
     from app.core.errors import MustReportError

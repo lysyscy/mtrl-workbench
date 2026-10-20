@@ -12,7 +12,6 @@ from app.mod06_proc import repository as R, workbench as W
 from app.mod06_proc.models import (ProcMechManual, ProcCutoff, ProcHistoryBatch,
                                    ProcHistorySnapshot, ProcMechImportChange, ProcMechMatchRule)
 from app.mod06_proc.workbench_models import MechanicalWorkbenchRecord, MechanicalWorkbenchPreview
-from tests.acc_plugin import acc
 
 
 @pytest.fixture
@@ -32,7 +31,6 @@ def session():
     engine.dispose()
 
 
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_plain_save_cannot_overwrite_detail_confirmed_cell(session):
     item = ProcMechManual(warehouse_name='甲', ym='2026-09', mech_2=Decimal('103.00'),
                           source_batches={'__detail_sources': {'mech_2': {'mode': 'detail'}}})
@@ -45,7 +43,6 @@ def test_plain_save_cannot_overwrite_detail_confirmed_cell(session):
     assert item.source_batches == before
 
 
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_effective_keeps_unknown_cells_distinct_from_explicit_zero():
     row = ProcMechManual(warehouse_name='甲', ym='2026-09', mech_2=Decimal('0.00'), mech_3='')
     state = R.mech_effective(row, '甲', '2026-09')
@@ -55,7 +52,6 @@ def test_effective_keeps_unknown_cells_distinct_from_explicit_zero():
 
 
 @pytest.mark.parametrize('columns', [[], ['other'], [{}], 'mech_2'])
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_manual_switch_rejects_invalid_column_payload(session, columns):
     with pytest.raises(MustReportError, match='金额格'):
         W.action(session, 'source-manual', {'warehouse': '甲', 'ym': '2026-09', 'columns': columns,
@@ -78,7 +74,6 @@ def to_manual(s, state, columns, *, operator='宿主操作者', **extra):
                                        'effective_signature': state['signature'], 'confirmed': True, **extra}, operator)
 
 
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_gross_and_net_have_independent_confirmation_and_validation(session):
     state, _ = confirm(session, columns=['mech_2'], tax='')
     assert state['sources']['mech_2']['mode'] == 'detail'
@@ -95,7 +90,6 @@ def test_gross_and_net_have_independent_confirmation_and_validation(session):
     assert W.effective(session, '甲', '2026-09')['values']['mech_4'] == '99.00'
 
 
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_same_value_save_retains_signature_source_and_timestamp(session):
     state, _ = confirm(session)
     row = R.mech_row(session, '甲', '2026-09')
@@ -105,7 +99,6 @@ def test_same_value_save_retains_signature_source_and_timestamp(session):
     assert W.effective(session, '甲', '2026-09')['signature'] == state['signature']
 
 
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_explicit_manual_switch_preserves_evidence_and_does_not_replay_confirmation(session):
     state, request = confirm(session)
     adopted = W.read(session, W.key('adoption', '甲', '2026-09'))
@@ -129,7 +122,6 @@ def test_explicit_manual_switch_preserves_evidence_and_does_not_replay_confirmat
         R.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_4': '101.00'})
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_process_import_preflights_all_months_before_batch_changes(session):
     from app.mod06_proc import imp_spec
     R.import_snapshot(session, warehouse='甲', rows=[{'ym': '2026-08', 'mech_1': '7'}],
@@ -145,7 +137,6 @@ def test_process_import_preflights_all_months_before_batch_changes(session):
     assert W.effective(session, '甲', '2026-09')['signature'] == before['signature']
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_same_detail_process_import_skips_without_a_fake_batch_or_cutoff(session):
     from app.mod06_proc import imp_spec
     state, _ = confirm(session, columns=['mech_2'])
@@ -159,7 +150,6 @@ def test_same_detail_process_import_skips_without_a_fake_batch_or_cutoff(session
     assert W.effective(session, '甲', '2026-09')['signature'] == state['signature']
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_mixed_import_keeps_detail_ownership_and_imports_only_other_column(session):
     state, _ = confirm(session, columns=['mech_2'])
     R.import_snapshot(session, warehouse='甲', rows=[{'ym': '2026-09', 'mech_2': '103', 'mech_4': '99'}],
@@ -175,7 +165,6 @@ def test_mixed_import_keeps_detail_ownership_and_imports_only_other_column(sessi
     assert row.mech_2 == Decimal('103') and row.mech_4 == Decimal('0')
 
 
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_report_import_blocks_other_project_writes_and_skips_same_sources(session):
     from app.mod06_proc import mech_report_spec
     session.add_all([Project(warehouse_name='乙'), ProcMechMatchRule(warehouse_name='甲', aliases=[]),
@@ -193,7 +182,6 @@ def test_report_import_blocks_other_project_writes_and_skips_same_sources(sessio
     assert W.effective(session, '甲', '2026-09')['signature'] == state['signature']
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_history_incoming_decision_cannot_override_detail_mode(session):
     state, _ = confirm(session, columns=['mech_2'])
     p = W.history_preview(session, {'projects': [{'warehouse': '甲', 'history': {'source': {'file': '原表'}},
@@ -207,7 +195,6 @@ def test_history_incoming_decision_cannot_override_detail_mode(session):
     assert W.effective(session, '甲', '2026-09')['signature'] == state['signature']
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_detail_confirmation_survives_original_import_rollback_even_when_zero(session):
     R.import_snapshot(session, warehouse='甲', rows=[{'ym': '2026-09', 'mech_2': '10'}],
                       batch_no='old', operator='导入人')
@@ -218,7 +205,6 @@ def test_detail_confirmation_survives_original_import_rollback_even_when_zero(se
     assert R.mech_sources(row)['mech_2']['mode'] == 'detail'
 
 
-@acc('ACC-RPT-MECH-001', '001-06')
 def test_rollback_preflights_inconsistent_detail_ownership_before_other_restores(session):
     R.import_snapshot(session, warehouse='甲', rows=[{'ym': '2026-08', 'mech_2': '5'},
                                                    {'ym': '2026-09', 'mech_2': '10'}],
@@ -232,7 +218,6 @@ def test_rollback_preflights_inconsistent_detail_ownership_before_other_restores
     assert R.load_batches(session)[0].status == 'active'
 
 
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_process_get_exposes_same_source_and_signature_as_workbench(session, monkeypatch):
     from contextlib import contextmanager
     from app.mod06_proc import router
@@ -250,7 +235,6 @@ def test_process_get_exposes_same_source_and_signature_as_workbench(session, mon
         router.api_mech_save(router.MechSaveRequest(warehouse='甲', ym='2026-09', values={'mech_2': '999'}))
 
 
-@acc('ACC-RPT-MECH-001', '001-02')
 def test_postgresql_action_api_sources_switch_and_independent_net(rollback_db):
     """Exercise PostgreSQL JSON persistence and the real session-scope API boundary."""
     from uuid import uuid4
