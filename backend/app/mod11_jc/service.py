@@ -112,29 +112,50 @@ def notice_payment_effect(s: Session, notice_id: int) -> dict | None:
     return {"contract_id": c.id, "pay_sum": amounts["pay_sum"]}
 
 
-def link_recommendations(s: Session, notice_id: int) -> dict:
-    """按现有候选范围批量带回发票与推荐证据；不选择、不保存关联。"""
+def _link_candidates(s: Session, notice_ids: list[int]):
+    """批量读取候选事实；逐条产出，避免为整批通知书同时复制全部候选。"""
     from app.mod01_projects import service as projects
     from app.mod03_notice import service as notices
 
-    notice = notices.get_notice(s, notice_id)
+    ids = list(dict.fromkeys(notice_ids))
+    if not ids:
+        return
+    by_id = {n.id: n for n in notices.get_notices_by_ids(s, ids)}
+    keys = {p.id: str(p.warehouse_name or '') for p in projects.all_projects(s)}
+    contracts = list_contracts(s)
+    sequences = D.project_sequences(contracts)
+    links = R.links_by_notice(s, ids)
+    for nid in ids:
+        notice = by_id.get(nid)
+        key = keys.get(notice.ownership_id, '') if notice else ''
+        current = next(iter(links.get(nid, [])), None)
+        rows = D.pick_candidates(contracts=contracts, project_key=key,
+                                 supplier=notice.jc_supplier, current_id=current) if notice else []
+        yield {'notice_id': nid, 'notice': notice, 'project_key': key, 'current_contract_id': current,
+               'rows': [{**r, 'project_seq': sequences.get(r['id'])} for r in rows]}
+
+
+def link_recommendations(s: Session, notice_id: int) -> dict:
+    """按现有候选范围批量带回发票与推荐证据；不选择、不保存关联。"""
+    from app.mod03_notice import service as notices
+
+    context = next(_link_candidates(s, [notice_id]))
+    notice = context['notice']
     if notice is None or notice.category != 'jc' or notice.excluded:
         return {'ok': False, 'message': '找不到可关联的集采通知书'}
-    key = next((str(p.warehouse_name or '') for p in projects.all_projects(s)
-                if p.id == notice.ownership_id), '')
-    all_rows = build_list(s)['rows']
-    current = next((r['id'] for r in all_rows if notice_id in r['notice_ids']), None)
-    rows = D.pick_candidates(contracts=all_rows, project_key=key, supplier=notice.jc_supplier, current_id=current)
-    invoices = R.invoices_of_many(s, [r['id'] for r in rows])
-    linked_ids = {nid for r in rows for nid in r['notice_ids'] if nid != notice_id}
-    prior = {n.id: n for n in notices.all_notice_rows(s) if n.id in linked_ids and n.category == 'jc' and not n.excluded
-             and (not n.i8_revoked or n.revoked_joint)} if linked_ids else {}
+    key, current, rows = context['project_key'], context['current_contract_id'], context['rows']
+    ids = [r['id'] for r in rows]
+    invoices = R.invoices_of_many(s, ids)
+    payments = {cid: [p for p in values if p.get('notice_id') != notice_id]
+                for cid, values in R.payments_of_many(s, ids).items()}
+    linked_ids = {p['notice_id'] for values in payments.values() for p in values if p.get('notice_id') is not None}
+    prior = {n.id: n for n in notices.get_notices_by_ids(s, sorted(linked_ids))
+             if n.category == 'jc' and not n.excluded and (not n.i8_revoked or n.revoked_joint)}
     for row in rows:
         row['invoices'] = invoices.get(row['id'], [])
-        if row['id'] == current:
-            payments = [p for p in R.payments_of(s, current) if p.get('notice_id') != notice_id]
-            row.update(D.contract_amounts(trade_co=row['trade_co'], invoices=row['invoices'], payments=payments))
-            row['notice_ids'] = [nid for nid in row['notice_ids'] if nid != notice_id]
+        paid = payments.get(row['id'], [])
+        row.update(D.contract_amounts(trade_co=row['trade_co'], invoices=row['invoices'], payments=paid))
+        row['notice_ids'] = [int(p['notice_id']) for p in paid if p.get('notice_id') is not None]
         row['supplier_uninvoiced'] = row['contract_amt'] - row['inv_sum']
         row['trade_uninvoiced'] = (row['trade_contract_amt'] - row['trade_inv_sum']
                                     if row['trade_contract_amt'] is not None else None)
@@ -358,27 +379,22 @@ def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
 
 def auto_link_plan(s: Session, notice_ids: list[int], payables: list[dict]) -> dict:
     """只补未关联通知书；应付精确对应一个合同且本地候选唯一才可执行。"""
-    from app.mod01_projects import service as projects
-    from app.mod03_notice import service as notices
     from app.mod03_notice.domain import APPROVE_STATUS_DONE
-    keys = {p.id: str(p.warehouse_name or '') for p in projects.all_projects(s)}
-    contracts = list_contracts(s)
     rows = []
-    for nid in dict.fromkeys(notice_ids):
-        n = notices.get_notice(s, nid)
+    for context in _link_candidates(s, notice_ids):
+        nid, n = context['notice_id'], context['notice']
         row = {'notice_id': nid, 'code': n.bill_no if n else str(nid), 'contract_id': None}
         if n is None or n.category != 'jc' or n.excluded or n.i8_revoked or n.approve_status != APPROVE_STATUS_DONE:
             row['reason'] = '非有效集采通知书'
-        elif R.payment_of_notice(s, nid) is not None:
+        elif context['current_contract_id'] is not None:
             row['reason'] = '已有合同关联，保持不变'
-        elif not keys.get(n.ownership_id) or not n.jc_supplier or n.amount_approved <= 0:
+        elif not context['project_key'] or not n.jc_supplier or n.amount_approved <= 0:
             row['reason'] = '项目、供应商或审批金额未确定'
         else:
             hits = [p for p in payables if p['project'] == n.project_name and p['supplier'] == n.jc_supplier
                     and p['amount'] == n.amount_approved]
             nos = {p['contract_no'] for p in hits}
-            cands = D.pick_candidates(contracts=contracts, project_key=keys[n.ownership_id], supplier=n.jc_supplier)
-            targets = [c for c in cands if c['contract_no'] in nos and c['tag'] == D.TAG_IN]
+            targets = [c for c in context['rows'] if c['contract_no'] in nos and c['tag'] == D.TAG_IN]
             if len(nos) == 1 and '' not in nos and len(targets) == 1:
                 row.update(contract_id=targets[0]['id'], contract_no=targets[0]['contract_no'],
                            amount=str(n.amount_approved), payable_codes=[p['code'] for p in hits], reason='应付合同来源唯一')

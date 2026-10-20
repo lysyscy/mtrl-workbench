@@ -300,13 +300,18 @@ __all__ = ["project_references",
     "run_batch",
     "list_stat_traces",        # ⭐ 包间出口（`TAIL-195` 批 2a）
     "restore_stat_paid_auto",
-    "get_notice", "all_notice_rows", "stat_paid_of_many",
+    "get_notice", "get_notices_by_ids", "all_notice_rows", "stat_paid_of_many",
 ]
 
 
 def get_notice(session, notice_id, **kw):
     from app.mod03_notice import repository
     return repository.get_notice(session, notice_id, **kw)
+
+
+def get_notices_by_ids(session, ids):
+    from app.mod03_notice import repository
+    return repository.get_notices_by_ids(session, ids)
 
 
 def all_notice_rows(session):

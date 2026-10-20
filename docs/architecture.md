@@ -141,6 +141,8 @@ IPP回执按协议成功类别判定接收；属性替换或冲突提示核对�
 
 集采三张子表的新增、删除通过 `backend/app/web/shell/core.js` 的 `jcSubAct` 完成写后刷新：沿用 `jcAct` 重载真实列表，再以合同id定位当前行，由 `jcSubDlg` 对应弹窗读取一次明细。新增成功才清草稿；删除保留未保存草稿，拒绝或异常不清草稿。调用者不再保管跨刷新的行对象或自行安排重复重载。
 
+合同关联候选由 `backend/app/mod11_jc/service.py` 的 `_link_candidates` 按请求批量读取通知书、项目与既有关联，沿全项目合同集派生序号，再逐条产出候选；人工推荐只对候选读取一次发票和付款事实，一键关联预览不逐条查通知书及关系。推荐证据和唯一匹配仍分开判断，确认时重新读取应付、锁定重读通知书的要求不变。
+
 **列表页的「列身份」**（`TAIL-298` · `m11` 是样板）：一张表的列清单**一个主人** —— 业务包的 `domain.JC_COLUMNS`（`m11_jc`）⇒ ① 壳的表头由它**现生成**（`shell/pages-b.js::jcThead`，⛔ 壳里不再写列字面量）；② 屏幕行为（默认隐藏 / 钉列）只写**列 id**（`JC_HIDE_IDS` / `JC_PIN_IDS` = 后端 `key`，⛔ 不写列号 —— 列号是"位置"，加一列就得人肉同步且**漏改不报错**）；③ Excel 导出由它**派生**（`report_export/jc_export.py`：列集 = `JC_COLUMNS − PAGE_ONLY_KEYS`、表头字 = `export_label`（缺省 = `label`，屏幕注解不进 Excel）、合计列 = `SUM_KEYS`）。判据：`backend/tests/test_tail298_columns.py`（导出派生 ＋ **值级**键覆盖）· `backend/tests/test_ux_pages.py::001-61`（行为表 id ∈ 规格 ＋ 偏移量出来）· 真机 ㉝ `tools/probe/_shell_jcpin.py`；自证 `tools/mut/_mut_tail298_columns.py`。
 
 TAIL-301补齐行与合计：`V.m11` 单元格按id绑定、由同份列清单排列，普通新列读同名行字段；API的 `sum_keys` 派生自 `domain.SUM_KEYS`，`pages-b.js::jcSumColumns` 按id查位并保留原求和算法。判据 `backend/tests/test_tail301_columns.py` 演练加列/调序，隔离自证 `tools/mut/_mut_tail301_columns.py`。

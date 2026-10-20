@@ -26,3 +26,5 @@
 - 最终B/C累计命令：在backend目录用项目`.venv/Scripts/python.exe -X utf8 -m pytest`执行 `tests/test_table_layout.py tests/test_shell_bind.py tests/test_shell_render.py tests/test_shell_ui_workflow.py::test_通知书勾选后改付款金额保留两轴位置 tests/test_shell_ui_workflow.py::test_集采推进后保留横向位置_普通表与虚拟表 tests/test_shell_ui_workflow.py::test_集采推进后保留纵向位置_有无横向溢出 tests/test_shell_ui_workflow.py::test_集采保存后不被重画锚定向上拉动 tests/test_tail301_columns.py tests/test_ux_pages.py::test_集采台账行身份区钉列与隐藏列都按id定位_偏移必须量出来 tests/test_jc_subtable_refresh.py tests/test_modal_focus.py tests/test_candidate_reads.py tests/test_jc_link_recommendations.py tests/test_jc_auto_link.py tests/test_acc_jc_pay_link.py tests/test_layering.py -o addopts= -q --tb=short`，退出0，91 passed in 78.70s。其中B相关53项、C相关38项。C另见TAIL-382。
 - 已看默认主题显隐、1120视口及450行虚拟窗口截图，表头与冻结区完整，合同号未被覆盖；截图由既有output器自动限期归档在本机.artifacts/archive/checks-20261020，各次retention.json管理；最终累计场景也含A项子表与焦点，不替代生产验收。
 - 现行结构同步docs/architecture.md；未跑全量pytest、生产操作/重启、真实i8或实体打印；原抓取说明文字的旧断言不在本次改动和选集内。本次不推送，沿TAIL-380待具体远端目的地确认，不重复触发被拒绝动作。
+
+**2026-10-20 · 本地保存。** 41a5eac已本地提交；真实pre-commit语法、字节及凭据检查通过。未推送或重启。B/C全部累计91项通过，来源及C的专用测试库隔离证据见TAIL-382。
