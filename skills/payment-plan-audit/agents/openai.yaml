@@ -1,0 +1,5 @@
+interface:
+  display_name: "付款计划核对"
+
+policy:
+  allow_implicit_invocation: false

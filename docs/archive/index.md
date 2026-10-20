@@ -66,6 +66,10 @@
 
 已结项。原 .scratch/uv-dependency-cleanup/ 及本次 .scratch/local/ 初次审计资料共27份原件，来源、固定Git基线及逐件SHA-256见 [归档说明](uv-dependency-cleanup-20261016/README.md) 与同目录 manifest.json；原文字节保持（两份PS1仅补BOM、两份Python仅补模块说明，均可逆且原SHA仍保留），已移出当前工作区。现行声明与锁文件回 backend/pyproject.toml、backend/uv.lock，操作方法回 docs/guides/deployment.md §六。
 
+## 已结束 effort（2026-10-17）
+
+通知书导入修复、回滚与CLI修复、审计清理、自主待办处理已整体迁出.scratch；完成依据、原路径、固定SHA和未验边界见[归档说明](completed-efforts-20261017/README.md)。当时保留的付款计划过程资料已于2026-10-19另按用户授权归档，现场未验边界见本批说明。
+
 ## 机械费工作区与真实采用（2026-10-19）
 
 来源保护与11项目月值/i6、真实i8采用已完成；范围、核验及未验边界见[归档说明](machinery-fee-workflow-20261019/README.md)，原路径与逐件SHA见同目录manifest.json。私人原型及业务原件仅在本机保留。

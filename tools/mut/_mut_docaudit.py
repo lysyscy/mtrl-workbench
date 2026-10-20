@@ -305,6 +305,7 @@ MUTS_RED2: list[dict] = [
     # ⚠️ ② 仓外白名单：文档里写**仓外绝对路径** ⇒ `T3` 到那个根下**真核存在**
     #   （此前这类引用对所有尺子隐形 —— 不是因为合法，而是因为路径含中文、正则压根不匹配）。
     {"desc": "M22 `T3` **仓外白名单真核存在**（仓外根下点名一份不存在的件）", "mode": "needle",
+     "outside_fixture": True,
      "needle": ("[T3]", "仓外白名单根下找不到"), "path": THRESHOLD,
      "frag": lambda src: _fit(_b("\n\n\n归档件见 `D:\\dev\\.归档-mtrl\\ops\\nope_ghost.md`。\n\n\n"), src)},
     # ⚠️ ③ `TOP_DIRS` 新增 `.codebuddy/` 那一项**是不是承重**：
@@ -325,7 +326,7 @@ MUTS_RED2: list[dict] = [
     # ⚠️ `M25`/`M26` 钉 `T18` 的两个**新档**（`GUARDED` 加了它们，却没人为它们写靶）。
     {"desc": "M25 `T18` 仓外根登记**在盘上不存在**（`outside_prefix` 档）", "mode": "red",
      "also": ("[T18]", "仓外根"), "path": COMMON_SRC,
-     "old_new": (_b('OUTSIDE_ROOTS: tuple[str, ...] = ("D:/dev/.归档-mtrl",)'),
+     "old_new": (_b('OUTSIDE_ROOTS: tuple[str, ...] = ()'),
                  _b('OUTSIDE_ROOTS: tuple[str, ...] = ("D:/dev/.归档-mtrl_typo",)')), "all": False},
     {"desc": "M26 `T18` 豁免词表**不许有空项**（`nonempty` 档 · 空表 = 判据等于没有）", "mode": "red",
      "also": ("[T18]", "空项"), "path": COMMON_SRC,
@@ -357,6 +358,7 @@ MUTS_RED2: list[dict] = [
     #   （实测：扫描面里带 `archive` 的件 = 0）⇒ 仓外那份被清掉 ⇒ **指针变死，没任何人喊**。
     #   ⇒ 本条钉的就是「那一格真在扫描面里」：**造一个核不到的仓外路径进索引 ⇒ 必须报**。
     {"desc": "M31 `T3` 当前参考页的仓外幽灵路径必须报告", "mode": "needle",
+     "outside_fixture": True,
      "needle": ("[T3]", "仓外白名单根下找不到", "nope_outside"), "path": THRESHOLD,
      "frag": lambda src: _fit(_b("\n\n\n留档指针见 `D:\\dev\\.归档-mtrl\\nope_outside_幽灵件.md`。\n\n\n"), src)},
 ]
@@ -554,6 +556,22 @@ def tail293_selftest() -> int:
     return 0
 
 
+def _outside_path_fixture(c: dict) -> tuple[int, str]:
+    """旧归档已删除；显式配置临时根，仍验证仓外缺件分支。"""
+    sys.path.insert(0, str(ROOT / "tools" / "audit"))
+    import audit_drift
+    saved = audit_drift.OUTSIDE_ROOTS
+    try:
+        with tempfile.TemporaryDirectory(prefix="docaudit-outside-") as folder:
+            audit_drift.OUTSIDE_ROOTS = (Path(folder).as_posix(),)
+            text = c["frag"](b"").decode("utf-8").replace("D:\\dev\\.归档-mtrl", folder)
+            doc = ("repo", str(c["path"]), c["path"], text.splitlines(), [])
+            hits = audit_drift.check_paths([doc])
+            return 0, "\n".join("[T3] " + h["what"] for h in hits)
+    finally:
+        audit_drift.OUTSIDE_ROOTS = saved
+
+
 def main() -> int:
     if sys.argv[1:] == ["--tail293"]:
         return tail293_selftest()
@@ -599,6 +617,8 @@ def main() -> int:
         try:
             if c.get("ticket_fixture"):
                 red, out = _missing_ticket_fixture()
+            elif c.get("outside_fixture"):
+                red, out = _outside_path_fixture(c)
             else:
                 _apply(c)
                 if "lines" in c:                               # 自检：追加式必须恰好到目标行数
@@ -606,7 +626,7 @@ def main() -> int:
                     assert got_lines == c["lines"], f"追加后 {got_lines} 行 ≠ 目标 {c['lines']} 行"
                 red, out = run_doc_audit()
         finally:
-            if not c.get("ticket_fixture"):
+            if not (c.get("ticket_fixture") or c.get("outside_fixture")):
                 _restore(c, src)                               # ⭐ 逐条立刻按原 bytes 还原
         if c["mode"] == "red":
             ok = red > 0

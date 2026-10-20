@@ -32,7 +32,7 @@
 | .artifacts/active/<effort>/<run>/<kind>/ | 当前开发验证输出；kind为logs、reports、screenshots、traces、exports、downloads、work、recovery；运行结束即退出 |
 | .artifacts/archive/<effort>/<run>/ | 选留的本机原始证据；同effort的retention.json写理由与最多30天期限，按次检查处置 |
 | backend/app/、backend/tests/、backend/alembic/ | 运行代码、测试与数据库迁移 |
-| skills/ | 本项目业务技能源；付款原表核对入口见 skills/payment-plan-audit/SKILL.md |
+| skills/ | 本项目自有业务技能源：付款原表核对payment-plan-audit、机械费归集machinery-fee-consolidation；各SKILL.md按需引用references/maintenance.md，由Skills Manager分发；运行资源随技能维护，不依赖历史effort |
 | backend/app/resources/ | 程序实际消费的模板；由资源模块定义位置 |
 | delivery/ | 第三方素材原件；旧demo已退役，交互要求与模板清单归docs/requirements，运行模板归backend/app/resources/templates |
 | tools/、ops/ | 实际工具与运维脚本；说明分别从tools/README.md与ops/README.md读取 |

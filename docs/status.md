@@ -31,14 +31,14 @@ m10机械费四页工作区复用mod06_proc/workbench，来源保护已加载，
 
 - TAIL-350～355已完成并归档：来源保护已覆盖保存、两类导入、历史接续和回滚，含税/净额独立；11项目141月565个来源格正式采纳，169格变化，i6按9月年度AD，设备明细0条。i8完整309/70/130条，11项目结果已采用；大唐共享编号仅按11张明确标题单据核定本次归属。两库备份后重启加载，排除项目、乌兰净额和无关业务表不变；差额由用户跟进。验证、真实结果与未验边界回docs/archive/machinery-fee-workflow-20261019/evidence.md末节。
 
-- 2026-10-16自主待办处理已完成：TAIL-284空项目安全删除、欠款截止月份判据及检查工具修正已通过隔离验证和完整回归；源码保存状态见.scratch/pending-resolution/evidence.md。本轮未重启，项目删除后端入口尚未加载；其他8条活跃事项保持原状态；付款计划过程资料现已按2026-10-19用户授权归档，实体第二台电脑仍未验收。
+- 2026-10-16自主待办处理已完成：TAIL-284空项目安全删除、欠款截止月份判据及检查工具修正已通过隔离验证和完整回归；源码保存状态见docs/archive/completed-efforts-20261017/pending-resolution/evidence.md。本轮未重启，项目删除后端入口尚未加载；其他8条活跃事项保持原状态；付款计划过程资料现已按2026-10-19用户授权归档，实体第二台电脑仍未验收。
 
-- 全库审计确认的20项清理已完成源码整合和隔离核验；真实断言修复、闲置实现移除、请求内读取复用及探针异常清理见.scratch/slop-cleanup/evidence.md。本轮源码与其他已有改动已按主题提交推送；2026-10-16按用户授权重启加载e47d6a2，服务Running、/app和/healthz均200。真实探针和i8未运行；历史回执原位置.scratch/local/slop-publish-20261016/restart-result.json已退出，迁移与恢复索引见docs/archive/workspace-migration。
+- 全库审计确认的20项清理已完成源码整合和隔离核验；真实断言修复、闲置实现移除、请求内读取复用及探针异常清理见docs/archive/completed-efforts-20261017/slop-cleanup/evidence.md。本轮源码与其他已有改动已按主题提交推送；2026-10-16按用户授权重启加载e47d6a2，服务Running、/app和/healthz均200。真实探针和i8未运行；历史回执原位置.scratch/local/slop-publish-20261016/restart-result.json已退出，迁移与恢复索引见docs/archive/workspace-migration。
 
 
 - 付款计划过程资料已按用户2026-10-19新授权归档，替代此前“暂不结项”的资料保留安排；对外交付物仍为dist/payment-plan-audit.skill。运行源、资源、分发及5个安装目标无effort依赖，34项隔离技能测试通过。来源与恢复见docs/archive/completed-efforts-20261019/README.md；实体第二台电脑、真实拟方式回写及实际付款未验，不因归档视作验收。
 
-- 复盘获批第1/4项已完成：4个相关写库用例接入自动回滚，选集CLI未知参数退出2；全量回归、样例清理及既有审计失败见.scratch/retro-rollback-cli/evidence.md。
+- 复盘获批第1/4项已完成：4个相关写库用例接入自动回滚，选集CLI未知参数退出2；全量回归、样例清理及既有审计失败见docs/archive/completed-efforts-20261017/retro-rollback-cli/evidence.md。
 
 - 复制单据号勾选已实现并完成隔离浏览器与全量回归：仅自动匹配的一批置顶回顶，手动勾选/取消不移动行，用户自行打印；原系统付款计划页面和写入口退出，旧数据停用保留。用户本轮明确授权后已重启加载；服务Running、旧计划页面及接口404、两种过程资料导入及核对接口保留已核，未执行真实打印或付款。证据见docs/archive/completed-efforts-20261019/payment-plan-workflow/paste-pick-20261015/evidence.md。
 
@@ -263,6 +263,9 @@ TAIL-337运行环境已升级并加载；本次两库备份向隔离PG18恢复�
 | **2026-10-19 · 机械费来源保护与真实采用完成** | 用户最终确认后完成保护和隔离复验，两库备份20261019-171900-f2de3cdc后重启；正式接口采纳11项目月值/i6及11组i8，169格变化、0设备明细，原件及排除金额不变。大唐11张单据按原标题核定，不建立共享编号全局归属；普康两差额350/3950由用户跟进。本effort已归档，实值见docs/archive/machinery-fee-workflow-20261019/evidence.md末节；未重做新备份完整恢复或实体打印。 |
 | **2026-10-19 · 机械费生产重启加载** | 用户授权重启后先完成两库备份，生产c350261015→c350261019仅创建两张空表；PID8388→34600，34张既有业务表及序列不变。/healthz、/app、新静态资源和机械费读取均200，未登录写入401；真实历史未采纳，未请求i8或打印。回执见docs/archive/machinery-fee-workflow-20261019/evidence.md末节，后续只剩另行确认历史采用与现场业务验收。 |
 | **2026-10-19 · 机械费六票源码交付** | TAIL-350～355已销号，四页正式工作区、历史接续、三类i8核对和独立导出完成；完整1786项通过，审查后PG/行为80项、UI/UX45项、导出8项复验通过，Standards/Spec发现均关闭。两年样本WPS只读打印预览通过，原件不改；生产迁移、历史采纳、服务重启及实体打印未做。接续仅处理另行授权的生产加载与映射/冲突确认，证据和退出条件回docs/archive/machinery-fee-workflow-20261019/evidence.md。 |
+| **2026-10-19 · 全站界面精修票发布** | 用户批准逐页审计后的13项拆分，已发布TAIL-356～368；来源为docs/archive/frontend-visual-audit-20261020/spec.md，拆分与个人工作流接续见同目录ticket-plan.md。前12票无业务前置，368依赖356～367；建议先处理弹窗焦点、年月遮挡和身份反馈。正式实施须按implement-solo-spec与项目workflow核授权和隔离验证；本轮仅拆票，未开发、真实写入、部署或重启。 |
+| **2026-10-19 · 自有业务技能按需分发** | 已创建Skills Manager“材料业务·手动调用”preset，7项技能部署本机Codex、CodeBuddy、WorkBuddy、OpenCode、AutoClaw；未确认自动清单隐藏机制的ZCode/豆包不部署，未启用其他关闭的Agent。机械费归集源迁入本仓skills/machinery-fee-consolidation，历史报表/证据留原项目。每个技能一行引用维护说明，源在项目、更新经Skills Manager；隔离新库恢复显示7项均无部署，实体另一电脑未连接。范围、依据与验证见docs/archive/completed-efforts-20261019/business-skill-deployment/spec.md；未运行业务、写记忆、提交推送或重启。 |
+| **2026-10-18 · 机械费业务票发布与全站逐页审计** | 用户已批准并发布TAIL-350～355六张机械费业务票；最终规则回`docs/archive/machinery-fee-workflow-20261019/spec.md`一至十一节，业务拆分回同目录`ticket-plan.md`。旧精修6张提案未发布，已按要求重新审计15个侧栏页面及登录页，发现与建议见`docs/archive/frontend-visual-audit-20261020/spec.md`，待审阅后另定票。机械费五项判据仅作参考，按`docs/guides/frontend-design.md`§2.10先逐页审计。用户已删除旧仓外归档，本轮取消其常驻检查要求，显式配置根检查保留；文档审计必须修0。本轮未开发正式功能、迁移、业务写入、重启、提交或推送。 |
 | **2026-10-15 · 文档与项目接入迁移完成** | 96263a3已推送核对，现行目录实际统一，CodeBuddy专属项目接入全部退出；来源、10,409件本机材料及历史恢复保护见docs/archive/codebuddy-retirement-20261015.md。 |
 | **2026-10-15 · 尾巴清单与一次性导入退出** | TAIL-338/343记录本轮代码与完整测试；341/342备份及日志配置已核，287撤回；保留付款计划及过程资料导入，历史付款/集采专属实现和说明已归档；2026-10-15按用户授权重启加载，真实3域保留及旧schema404已核；未动已导入数据。 |
 | **2026-10-14 · 集采打印版完成** | TAIL-336源码及隔离统一检查通过，原导出保留；真实两项目Excel与6页预览核对完成。已按用户授权重启，真实页面下载与实样逐格核对通过，未做实体打印；证据见 `.scratch/tails/issues/TAIL-336-集采打印版导出与付款方式移除.md` Comments。 |

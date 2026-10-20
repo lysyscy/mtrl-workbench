@@ -44,7 +44,7 @@ from refs_query import (                                            # noqa: E402
 )
 
 #: 仓外归档根 = `OUTSIDE_ROOTS[0]`（`T18` 守着它在盘上真存在 ⇒ ⛔ 不在此写死第二份）
-OUT_ROOT = Path(OUTSIDE_ROOTS[0])
+OUT_ROOT = Path(OUTSIDE_ROOTS[0]) if OUTSIDE_ROOTS else None
 #: 仓内过程区 → 仓外子目录。⚠️ 沿用 2026-10-05（`TAIL-235` 甲2）**已建**的落点名，⛔ 不另起名。
 ZONE_OUT_SUBDIR: dict[str, str] = {".scratch/legacy-active": "work-10-designs"}
 #: ⛔ **不搬的区 ＋ 一句话理由**（⚠️ **不复述各区去向** —— 那是 `docs/guides/work-records.md` §二
@@ -234,6 +234,9 @@ def _index_insert(line: str, out_abs: Path) -> None:
 
 # --------------------------------------------------------------- 主流程
 def do_downgrade(name: str, apply: bool) -> int:
+    if OUT_ROOT is None:
+        print("未配置仓外归档目标；本次不搬运。当前资料归档按项目文档规则处理。")
+        return 2
     zone, path, err = _resolve(name)
     fname = Path(name).name
     if err:
