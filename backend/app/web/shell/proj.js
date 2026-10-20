@@ -343,13 +343,8 @@ const extHead=()=>{ const h=EXT_THEAD.replace(/MONTH-(\d+)/g,(_,m)=>`${fExt.year
       ⚠️ 两行表头 ⇒ 只有**第 1 行**的前两格是这两列（它们 `rowspan="2"`，第 2 行里没有）；
       ⚠️ 第 2 列必须让开第 1 列的宽，偏移规则在样式块 `.fl + .fl` 那一条（真机量过：两列严丝合缝）。
       ⚠️ 本常量在**原型与壳各存一份**（`ui_parity` 的 `U5` 逐字一致项）⇒ **两边必须同改同句**。 */
-const BIG_THEAD=`<tr><th rowspan="2" class="fl">序号</th><th rowspan="2" class="fl">项目名称</th><th rowspan="2">开工时间</th>`
-  +`<th colspan="4">辅材使用（不含税）</th><th colspan="4">外租使用（含税）</th>`
-  +`<th rowspan="2">合计</th><th rowspan="2">机械费测算</th><th rowspan="2">使用率</th>`
-  +`<th colspan="3">产值</th><th rowspan="2">主材累计<b class="mut">（含税）</b></th><th rowspan="2">工程用油</th><th rowspan="2">备注</th></tr>`
-  +`<tr><th>焊材<b class="mut">累计</b></th><th>焊材<b class="mut">当月</b></th><th>三气<b class="mut">累计</b></th><th>三气<b class="mut">当月</b></th>`
-  +`<th>外租机械<b class="mut">开工累计</b></th><th>外租机械<b class="mut">当月</b></th><th>设备租赁<b class="mut">开工累计</b></th><th>设备租赁<b class="mut">当月</b></th>`
-  +`<th>产值完成率</th><th>合同（预估）价</th><th>产值累计<b class="mut">（含税）</b></th></tr>`;
+const BIG_THEAD=`<tr><th colspan="3">项目</th><th colspan="4" class="vsep">辅材使用（不含税）</th><th colspan="7" class="vsep">机械使用与测算</th><th colspan="3" class="vsep">产值</th><th rowspan="2" class="vsep">主材累计（含税）</th><th rowspan="2" class="vsep">工程用油</th><th rowspan="2" class="vsep">备注</th></tr>`
+  +`<tr><th class="fl">序号</th><th class="fl">项目名称</th><th>开工时间</th><th class="vsep">焊材累计</th><th>焊材当月</th><th>三气累计</th><th>三气当月</th><th class="vsep">外租机械开工累计</th><th>外租机械当月</th><th>设备租赁开工累计</th><th>设备租赁当月</th><th>合计</th><th>机械费测算</th><th>使用率</th><th class="vsep">产值完成率</th><th>合同（预估）价</th><th>产值累计（含税）</th></tr>`;
 /* —— 2026-09-13 新抽的 3 张表头常量（为「表内合计行」提供列数出口 —— `sumRowOf` 按表头派生列数）——
    ⚠️ 一律**逐字搬**（含换行与缩进），不要顺手改标记/空格 —— `applySorts` 靠表头判列类型与可排性。 */
 

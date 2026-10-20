@@ -20,16 +20,19 @@ def test_notice_identity_amounts_and_batch_groups_remain_readable(ui_page, scale
     assert p.locator('[data-act="ntPdf"]').count() == 1
     assert p.locator('[data-act="batchCatApply"]').count() > 0
     table = p.locator('table[data-sort-key="m03:notices"]')
-    assert table.locator('tbody tr[data-notice-id="101"] td').nth(2).evaluate(
-        'e=>getComputedStyle(e).whiteSpace') == 'nowrap'
-    assert table.locator('tbody tr[data-notice-id="101"] td').nth(5).bounding_box()['width'] >= 220 * scale
+    assert table.locator('tbody tr[data-notice-id="101"] td').nth(2).inner_text() == 'FKTZS2026102000012345'
+    assert table.locator('tbody tr[data-notice-id="101"] td').nth(5).bounding_box()['width'] >= 140 * scale
+    assert table.locator('tbody td.num').evaluate_all('cells=>cells.every(c=>c.scrollWidth<=c.clientWidth+1)')
     assert p.locator('[data-act="editss"][data-k="pay"]').input_value() == '12345.67'
     assert p.locator('.notice-workspace>h4').evaluate('e=>e.scrollWidth<=e.clientWidth')
     p.locator('[data-act="pick"][data-id="101"]').uncheck()
     assert p.locator('[data-act="batchPay"]').is_disabled()
+    p.set_viewport_size({'width':2552,'height':1080})
+    p.wait_for_timeout(150)
+    assert table.evaluate('e=>e.getBoundingClientRect().width<=e.closest(".tw").clientWidth+1')
 
 
-def test_debt_overviews_scroll_and_each_ledger_uses_full_workspace(ui_page):
+def test_debt_overviews_align_and_ledgers_remain_side_by_side(ui_page):
     p = ui_page
     p.set_viewport_size({'width': 1280, 'height': 720})
     p.evaluate('''()=>{
@@ -37,7 +40,9 @@ def test_debt_overviews_scroll_and_each_ledger_uses_full_workspace(ui_page):
       PJs=NO.map((n,i)=>({id:String(i+1),name:'仓库'+i,full:n.proj,disp:'供应商及安装工程长项目名称'+i,type:'normal',status:'在建'}));
       LGs.splice(0,LGs.length,...PJs.map(p=>({proj:p.name,cat:'辅材',settle:1234567.89,paid:0})));
       M05.ledger={sides:['辅材','机械'].map(label=>({label,rows:[
-        {seq:1,month:'2026-10',other_expense:'1234567.89',payment:'234567.89',remark:'本项目当月结算与付款核对'}]}))};
+        {seq:1,month:'2026-08',other_expense:'0',payment:'0',remark:''},
+        {seq:2,month:'2026-09',other_expense:'0',payment:'0',remark:'已核实无需支出'},
+        {seq:3,month:'2026-10',other_expense:'1234567.89',payment:'234567.89',remark:'本项目当月结算与付款核对'}]}))};
       VIEW='m05';render();
     }''')
     overview = p.locator('.debt-overview').nth(1).locator('.bd')
@@ -45,9 +50,11 @@ def test_debt_overviews_scroll_and_each_ledger_uses_full_workspace(ui_page):
     assert overview.bounding_box()['height'] <= 160
     first, second = p.locator('.debt-ledger').all()
     a, b = first.bounding_box(), second.bounding_box()
-    assert abs(a['x'] - b['x']) < 1 and abs(a['width'] - b['width']) < 1
-    assert b['y'] >= a['y'] + a['height']
-    assert first.locator('table').bounding_box()['width'] > 760
+    assert b['x'] >= a['x'] + a['width'] and abs(a['y'] - b['y']) < 1
+    assert '2026-08' not in first.inner_text() and '2026-09' in first.inner_text()
+    assert first.locator('table').bounding_box()['width'] >= 520
+    assert overview.locator('.br .tk').evaluate_all(
+        'bars=>new Set(bars.map(b=>Math.round(b.getBoundingClientRect().x))).size===1')
     assert p.locator('[data-act="ledPjToggle"]').count() == 1
     assert p.locator('[data-act="ledExpToggle"]').count() == 1
     assert p.locator('table[data-sort-key="m05:flows"]').count() == 1
@@ -68,7 +75,7 @@ def test_procurement_supplier_and_sum_are_readable_and_exports_stay_distinct(ui_
     }''', {'cols': list(domain.JC_COLUMNS), 'sumKeys': list(domain.SUM_KEYS)})
     assert p.locator('[data-act="jcExport"]').count() == 1
     assert p.locator('[data-act="jcPrintOpen"]').count() == 1
-    assert p.locator('.jc-supplier').first.bounding_box()['width'] >= 180
+    assert p.locator('.jc-supplier').first.bounding_box()['width'] >= 140
     assert p.locator('.procurement-table .sumrow>td').first.evaluate(
         'e=>getComputedStyle(e).whiteSpace') == 'nowrap'
     table = p.locator('table[data-sort-key="m11:jc"]')

@@ -44,6 +44,14 @@ def test_first_visit_waits_for_mechanical_columns_without_inventory_and_keeps_va
     assert p.evaluate("bigRows(month)[1].hw") == 12.34
     assert p.evaluate("bigRows(month)[1].hwc") == 22.35
     assert p.evaluate("bigRows(month)[1].matC") == 50.01
+    assert p.locator('table[data-sort-key="m07:bigtable"] thead tr').first.locator('th').evaluate_all(
+        'cells=>cells.map(c=>c.colSpan)') == [3,4,7,3,1,1,1]
+    assert p.evaluate('''() => {
+      const table=document.querySelector('table[data-sort-key="m07:bigtable"]');
+      const row=[...table.tBodies[0].rows].find(r=>r.cells.length===20),sum=table.querySelector('.sumrow');
+      return sum.cells[0].colSpan===3 && [...sum.cells].slice(1).every((c,i)=>
+        Math.abs(c.getBoundingClientRect().x-row.cells[i+3].getBoundingClientRect().x)<1);
+    }''')
     assert p.evaluate("bigCell('测试仓库',month,4)") == {'v': 0, 'from': None}
     assert p.evaluate("bigCell('测试仓库',month,1)") == {'v': 100, 'from': p.evaluate('previous')}
     assert p.evaluate("bigCell('乙仓',month,1)") == {'v': None, 'from': None}

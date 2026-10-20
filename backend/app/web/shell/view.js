@@ -354,6 +354,10 @@ function drawVirtual(inst){
   if(!tb) return;
   inst.tb=tb;
   tb.innerHTML = SP(topH0) + winRows.join('') + SP(botH0);
+  const table=tb.closest('table');
+  if(table?.dataset.sortKey==='m11:jc')jcApplyHide();
+  if(table?.matches(FIT_TABLES))fitWideTable(table);
+  if(table?.dataset.sortKey==='m11:jc')jcApplyPin();
   /* 红线③：窗口行**实测回填**（行高 27~91px 不等高）＋ 差量吸收 ⇒ 文档总高恒为 `n*EH`。 */
   const trs=inst.tb?inst.tb.children:null;
   if(trs && trs.length){
@@ -379,6 +383,58 @@ function drawVirtual(inst){
   }
   inst.a=a; inst.b=b;
 }
+
+/* Widths follow visible columns and money values; virtual windows can grow the minimum. */
+const FIT_TABLES='.notice-table,[data-sort-key="m07:bigtable"],[data-sort-key="m08:invoices"],.mw-details,.procurement-table';
+function fitWideTables(){
+  document.querySelectorAll('#view '+FIT_TABLES.split(',').join(',#view ')).forEach(fitWideTable);
+}
+function fitWideTable(table){
+  const rows=[...table.tBodies].flatMap(body=>[...body.rows]);
+  const row=rows.find(r=>r.cells.length>=10&&[...r.cells].every(c=>c.colSpan===1)) || table.tHead?.rows[0];
+  if(!row) return;
+  const scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1;
+  const numeric=getComputedStyle(table.querySelector('td.num')||table);
+  const context=document.createElement('canvas').getContext('2d');
+  context.font=`600 ${numeric.fontSize} ${numeric.fontFamily}`;
+  const procurement=[28,38,92,80,128,150,0,0,150,0,0,0,0,0,85,70,75,65,110,85];
+  const widths=[...row.cells].map((cell,i)=>{
+    if(getComputedStyle(cell).display==='none') return 0;
+    if(cell.querySelector('input[type=checkbox]')) return 28;
+    if(i===1&&/^\d+$/.test(cell.textContent.trim())) return 38;
+    if(i===0) return table.matches('[data-sort-key="m08:invoices"]')?130*scale:38;
+    if(cell.classList.contains('num')||cell.querySelector('input.num')) return 72*scale;
+    return (table.matches('.procurement-table')?procurement[i]||95:cell.classList.contains('nt-title')?145:cell.classList.contains('nt-supplier')?150:i===1?90:95)*scale;
+  });
+  rows.forEach(row=>{
+    let column=0;
+    [...row.cells].forEach(cell=>{
+      if(cell.colSpan===1&&widths[column]&&(cell.classList.contains('num')||cell.querySelector('input.num'))){
+        const input=cell.querySelector('input');
+        const text=input?input.value:cell.textContent.trim();
+        widths[column]=Math.max(widths[column],context.measureText(text).width+24+cell.querySelectorAll('button').length*22);
+      }
+      if(table.dataset.sortKey==='m07:bigtable') cell.classList.toggle('vsep',[3,7,14,17,18,19].includes(column));
+      column+=cell.colSpan;
+    });
+  });
+  // Retain measured minima across virtual windows so scrolling cannot shrink columns.
+  const previous=table._fitScale===scale?table._fitWidths:[];
+  widths.forEach((width,i)=>{if(width)widths[i]=Math.max(width,previous?.[i]||0);});
+  table._fitScale=scale;table._fitWidths=widths;
+  const total=widths.reduce((a,b)=>a+b,0);
+  table.classList.add('fit-wide');
+  table.style.setProperty('min-width',Math.ceil(total)+'px','important');
+  let group=table.querySelector('colgroup[data-fit]');
+  if(!group){group=document.createElement('colgroup');group.dataset.fit='';table.prepend(group);}
+  group.innerHTML=widths.map(width=>`<col style="width:${width/total*100}%;${width?'':'display:none'}">`).join('');
+  if(table.dataset.sortKey==='m07:bigtable'){
+    table.style.setProperty('--fit-first',row.cells[0].getBoundingClientRect().width+'px');
+    table.style.setProperty('--fit-head',table.tHead.rows[0].getBoundingClientRect().height+'px');
+  }
+}
+let fitResizeTimer;
+window.addEventListener('resize',()=>{clearTimeout(fitResizeTimer);fitResizeTimer=setTimeout(fitWideTables,120);});
 
 const WIRED=new Set(['home','m03','m01','m02','m05','m06','m07','m08','m09','m10','m14','m11','m15',
   /* ⭐ `§19`「暂留件收口」（2026-09-21）：设置 —— 它**全读后端真数据**（`/api/m14/settings`）

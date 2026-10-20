@@ -151,21 +151,7 @@ table.dt{width:100%;border-collapse:collapse;font-size:calc(12.5px * var(--fscal
 .dt tbody tr:hover .fl{background:var(--row-hover)}
 .dt tbody tr.hl .fl{background:var(--wn-l)}
 .dt tbody tr.ex .fl{background:var(--ex-bg)}
-/* ⭐⭐ `TAIL-175`（2026-09-29 · 用户裁定 `A`）：**月度会大表的首列区**（序号 ＋ 项目名称）两列一起钉 ——
-   大表 `min-width:1620px`（20 列横表），往右填「机械费测算 / 合同价 / 产值累计」（手填 6 列正好在最右）
-   时首列区会跟着滚走 ⇒ **看不见自己在给哪个项目填**（会填错行）⇒ 守则 §5.9「核心数据一眼可见」。
-   ⚠️ 为什么只有这一条（其余全在 `.fl` 里）：房内先例（`m06` / `m03` / `m04` / `m11`）都是**一行**表头，
-      首格 `left:0` 就够了；本表是**两行**表头 —— 第 1 行的「序号 / 项目名称」`rowspan="2"` 自己跨两行，
-      而第 2 行里**没有**这两列 ⇒ 表头不必另算 `top` 偏移（`.dt th{top:0}` 照旧管）；**只有第 2 列
-      要让开第 1 列的宽**，那一条就是下面这行。
-   ⚠️ 偏移为什么能写成静态算式（⛔ 别改成"量出来的那个数"）：真机实测（`tools/oneoff/_a175_measure.py`）
-      「序号」列宽 = `padding 8×2 ＋「序号」两个汉字 11.5×2 = 39px`，**随 `--fscale` 线性缩放**
-      ⇒ 1440 / 1920 / 2560 视口 × 1 / 1.4 档 **六种组合偏差全为 0**（表被拉宽时多出来的宽都给了别的列）。
-      ⚠️ 改动「序号」这两个字 / `.dt th` 的字号或内边距 ⇒ 这里必须同批改（真机那支探针会当场红）。
-   ⚠️ 合计行首格是 `colspan="2"`（`sumRowOf` 的 `leadSpan:2`）⇒ 它**一格就盖住这两列**，
-      ⛔ 别再给它后面那一格挂 `.fl`（那就多钉一列了）。 */
-.dt[data-sort-key="m07:bigtable"] .fl + .fl{left:calc(39px * var(--fscale))}
-
+/* 首两列钉住行身份；列宽自适应后，偏移由 fitWideTable 实测。 */
 /* 标签 */
 .tag{display:inline-block;padding:calc(1px * var(--fscale)) calc(6px * var(--fscale));border-radius:4px;font-size:calc(11px * var(--fscale));line-height:1.55;white-space:nowrap;border:1px solid transparent}
 .t-pri{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-bd)}
@@ -432,10 +418,10 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 /* TAIL-357 / 361 / 362: page-scoped width, hierarchy and fixed identity. */
 .project-archive .dt[data-sort-key="m01:projects"]{min-width:calc(1780px * var(--fscale))}
 .project-archive .project-display{width:calc(232px * var(--fscale));min-width:calc(232px * var(--fscale))}
-.project-archive .project-full{width:calc(360px * var(--fscale));min-width:calc(360px * var(--fscale));line-height:1.5;resize:vertical;display:block}
+.project-archive .project-full{width:calc(360px * var(--fscale));min-width:calc(360px * var(--fscale));height:calc(29px * var(--fscale));line-height:1.3;display:block;text-overflow:ellipsis}
 .project-archive .project-warehouse{min-width:calc(200px * var(--fscale));max-width:calc(280px * var(--fscale));overflow-wrap:anywhere;background:var(--sf2);color:var(--tx2)}
-.project-archive textarea.inp:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-bd)}
-.project-archive textarea.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;cursor:not-allowed}
+.project-archive .project-full:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-bd)}
+.project-archive .project-full[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;cursor:not-allowed}
 .project-archive .dt[data-sort-key="m01:projects"] th:nth-child(3),.project-archive .dt[data-sort-key="m01:projects"] td:nth-child(3){position:sticky;left:0;z-index:3;background:var(--sf)}
 .project-archive .dt[data-sort-key="m01:projects"] th:last-child,.project-archive .dt[data-sort-key="m01:projects"] td:last-child{position:sticky;right:0;z-index:3;background:var(--sf);min-width:calc(142px * var(--fscale));border-left:1px solid var(--bd)}
 .project-archive .dt[data-sort-key="m01:projects"] th:nth-child(3),.project-archive .dt[data-sort-key="m01:projects"] th:last-child{z-index:4;background:var(--sf2)}
@@ -444,9 +430,9 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 .process-report .process-matrix td{border-bottom-color:var(--bd2);border-right:0}
 .process-report .process-matrix th.fl,.dt[data-sort-key="m07:bigtable"] th.fl{z-index:4}
 .process-report .process-matrix .vsep{border-left:1px solid var(--bd)}
-.process-report .process-matrix th:nth-child(n+12){background:var(--edit-l);color:var(--tx)}
+.process-report .process-matrix th:nth-child(n+12){background:var(--pri-l);color:var(--tx)}
 .process-report .proc-mechanical{min-width:calc(132px * var(--fscale))}
-.process-report .proc-mechanical .inp{background:var(--edit-l);border-color:var(--edit-bd)}
+.process-report .proc-mechanical .inp{background:var(--pri-l);border-color:var(--pri-bd)}
 .process-report .proc-mechanical .inp:hover{border-color:var(--pri)}
 .process-report .process-matrix .sumrow td{font-weight:600}
 .process-report .process-matrix tbody tr:last-child td{font-weight:600;border-top:1px solid var(--bd)}
@@ -495,15 +481,15 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 .debt-overviews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(12px * var(--fscale))}
 .debt-overview{min-width:0}
 .debt-overview>.bd{max-height:calc(160px * var(--fscale));overflow:auto;scrollbar-gutter:stable}
-.debt-overview .br{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:calc(4px * var(--fscale)) calc(8px * var(--fscale))}
+.debt-overview .br{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) calc(120px * var(--fscale));gap:calc(4px * var(--fscale)) calc(8px * var(--fscale));align-items:center}
 .debt-overview .br .nm{min-width:0;overflow-wrap:anywhere}
-.debt-overview .br .tk{display:none}
-.debt-overview .br .vl{white-space:nowrap}
-.debt-ledger-stack{display:grid;gap:calc(20px * var(--fscale));margin-top:calc(12px * var(--fscale))}
+.debt-overview .br .tk{display:block;width:100%;min-width:0}
+.debt-overview .br .vl{white-space:nowrap;width:100%;min-width:0;text-align:right}
+.debt-ledger-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16px * var(--fscale));margin-top:calc(12px * var(--fscale))}
 .debt-ledger{min-width:0}
-.debt-ledger+.debt-ledger{border-top:1px solid var(--bd2);padding-top:calc(16px * var(--fscale))}
+.debt-ledger+.debt-ledger{border-left:1px solid var(--bd2);padding-left:calc(16px * var(--fscale))}
 .debt-ledger .tw{min-height:0;max-height:calc(360px * var(--fscale))}
-.debt-ledger table{min-width:calc(760px * var(--fscale))}
+.debt-ledger table{width:100%;min-width:calc(520px * var(--fscale))}
 .debt-ledger td.num,.debt-ledger .sumrow>td{white-space:nowrap}
 .payment-statistics>h4,.payment-flows>h4{flex-wrap:wrap}
 .payment-statistics>h4 .sp,.payment-flows>h4 .sp{flex-wrap:wrap}
@@ -527,6 +513,26 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 }
 
 .notice-table .sumrow>td:first-child{white-space:nowrap}
+
+/* Approved compact workspaces; wide tables retain readable numeric columns. */
+.project-archive td{padding-top:4px;padding-bottom:4px}
+.project-archive td:first-child{white-space:nowrap}
+.fit-wide{width:100%!important;table-layout:fixed!important}
+.fit-wide :is(th,td){min-width:0!important;max-width:none!important;width:auto!important;white-space:normal;overflow-wrap:anywhere;padding-left:4px;padding-right:4px}
+.fit-wide td.num{white-space:nowrap;overflow-wrap:normal}
+.fit-wide :is(input:not([type=checkbox]),select,textarea){width:100%!important;min-width:0!important;max-width:100%!important}
+.fit-wide .nt-code,.fit-wide .jc-contract-code{white-space:normal;overflow-wrap:anywhere}
+.fit-wide td:not(.num) .btn{white-space:normal}
+.notice-table .nt-supplier>div>div{flex-wrap:wrap}
+.notice-table .nt-supplier>div>div>span{flex-basis:100%}
+.debt-ledger td{padding-left:4px;padding-right:4px}
+.debt-ledger input{max-width:100%!important;width:100%!important;min-width:0}
+.dt[data-sort-key="m07:bigtable"] .vsep{border-left:2px solid var(--bd3)}
+.dt[data-sort-key="m07:bigtable"] .bigc .inp{padding-left:0!important;padding-right:0!important}
+.dt[data-sort-key="m07:bigtable"] .fl+.fl{left:var(--fit-first,calc(39px * var(--fscale)))}
+.dt[data-sort-key="m07:bigtable"] thead tr:nth-child(2) th{top:var(--fit-head,calc(28px * var(--fscale)))}
+.dt[data-sort-key="m07:bigtable"] .sumrow td{text-align:right;font-variant-numeric:tabular-nums}
+.dt[data-sort-key="m07:bigtable"] .sumrow td:first-child{text-align:left}
 </style>
 </head>
 <body>
@@ -645,7 +651,7 @@ const V={}, BIND={};
 /* 渲染后加工按登记顺序运行；每次重建 #view 后各跑一次。
    不捕获旧钩子、不吞异常；局部返回只结束当前步骤。 */
 function addBind(view, step){ (BIND[view] ||= []).push(step); }
-function runBind(view){ for(const step of BIND[view] || []) step(); }
+function runBind(view){ for(const step of BIND[view] || []) step(); fitWideTables(); if(view==='m11') jcApplyPin(); }
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */
@@ -860,7 +866,8 @@ V.m05=()=>{
         见《开发计划》§15 `TAIL-141`（`P2-b` 注释分级：故事下沉台账，代码里只留"为什么必须这么写"）。 */
   const ledHalf=sc=>{ const rows=lp?ledRows(sc,lp):[];
     const totals=rows;
-    const mrows=rows.filter(r=>r.kind==='month'&&!r.open);
+    const shownRows=rows.filter(r=>r.kind!=='month'||r.open||N2(r.s)||N2(r.p)||String(r.note||'').trim());
+    const mrows=shownRows.filter(r=>r.kind==='month'&&!r.open);
     const cur=N2(totals.reduce((a,r)=>a+(r.s-r.p),0));
     const mLast=mrows.length?mrows[mrows.length-1]:null;
     const add=mLast?N2(mLast.s-mLast.p):null;                    /* 最近一月：其他支出金额 − 付款（当月新增，非累计） */
@@ -875,7 +882,7 @@ V.m05=()=>{
         </span></div>
       ${lgOn&&lgCat===sc?lgStrip():''}
       <div class="tw">${TBL({head:(sc==='机械'?LED_THEAD.replace('其他支出金额','机械结算金额'):LED_THEAD),key:'m05:ledger-'+sc,
-    rows:rows.map((r,i)=>{ const historical=r.kind!=='month';
+    rows:shownRows.map((r,i)=>{ const historical=r.kind!=='month';
       const z=!historical&&!r.open&&!N2(r.s)&&!N2(r.p)&&!String(r.note||'').trim();
       const cell=v=>z?`<span class="mut">${M(v)}</span>`:M(v);
       return `<tr${r.open?' class="hl"':''}>
@@ -1043,7 +1050,7 @@ V.m01=()=>{
       <td>${typeTag(p.type)}</td>
       <td>${p.type==='shell'?'<span class="mut sm">壳无展示名</span>':`<input class="inp project-display" aria-label="展示名：${esc(p.name)}" data-act="editDisp" data-id="${p.id}" value="${esc(p.disp)}" placeholder="默认取仓库名">`}</td>
       <td class="sm project-warehouse">${p.name?(p.name.startsWith('未建仓-')?`<span class="tag t-wn">无仓库（历史项目）</span> <span class="fc">${esc(p.name)}</span>`:`<span class="fc">${esc(p.name)}</span>`):'<span class="mut">壳无仓库</span>'}</td>
-      <td><textarea class="inp project-full" rows="2" aria-label="项目全名：${esc(p.name||p.full)}" data-act="editFull" data-id="${p.id}" ${p.parent?'readonly':''} title="${p.parent?'具体小微借壳全名，不可单独修改':''}">${esc(p.full)}</textarea></td>
+      <td><input class="inp project-full" type="text" aria-label="项目全名：${esc(p.name||p.full)}" data-act="editFull" data-id="${p.id}" ${p.parent?'readonly':''} title="${esc(p.full)}${p.parent?'（具体小微借壳全名，不可单独修改）':''}" value="${esc(p.full)}"></td>
       <td class="fc sm">${p.phid||'<span class="mut">无</span>'}</td>
       <td><select class="inp plain" style="width:auto" data-act="editStatus" data-id="${p.id}">${optsOf(enumVals('pjStatus'),p.status)}</select></td>
       <td class="sm">${p.parent?esc((PJs.find(x=>x.id===p.parent)||{}).full||''):'<span class="mut">—</span>'}</td>
@@ -1065,10 +1072,9 @@ V.m01=()=>{
 V.m02=()=>`<div class="m02-workspace">
   <p class="m02-guidance">抓取由人工触发；结存和库存单据需等 i8 过账完成。抓取失败时，可手动下载 Excel 后从「数据导入」核对入库。</p>
   <div class="card"><h4>抓取结果回显<span class="sp mut sm">各类最近一次执行结果</span></h4><div class="bd"><dl class="kv">${m02EchoKv()}</dl></div></div>
-  <details class="m02-history"${M02_ERR?' open':''}><summary>执行记录 · ${M02_RECS.length} 条</summary>
+  <details class="m02-history" open><summary>执行记录 · ${M02_RECS.length} 条</summary>
     <div class="card"><div class="tw">${TBL({cls:'cond',key:'m02:logs',head:'<th>时间</th><th>动作</th><th>结果</th><th>耗时</th>',rows:[m02LogRows()]})}</div></div>
   </details>
-  <details class="m02-help"><summary>取数说明</summary><p>本系统只读 i8，竞价平台不接入；本系统没有定时抓取，集采抓取成功后会自动同步一次常用项目列表。各业务表的导出仍在对应业务页。</p></details>
 </div>`;
 
 /* =====================================================================
@@ -1224,15 +1230,15 @@ V.m07=()=>{
       return `<tr><td class="fl fc">${ri+1}</td>
       <td class="fl sm" title="${esc(r.wh)}"><div style="max-width:180px;white-space:normal;overflow-wrap:anywhere;line-height:1.4">${esc(r.disp)}</div></td>
       ${cell(0)}
-      <td class="num" title="${esc(bigExtractTip('焊材',true))}">${M(r.hwc)}</td><td class="num" title="${esc(bigExtractTip('焊材',false))}">${M(r.hw)}</td><td class="num" title="${esc(bigExtractTip('气体',true))}">${M(r.qtc)}</td><td class="num" title="${esc(bigExtractTip('气体',false))}">${M(r.qt)}</td>
-      <td class="num" title="外租机械开工累计 = 过程资料本项目全部已存月份的外租零租含税＋外租包月含税；不按所看月份截断，不计内租、租分公司设备及不含税两列">${M(r.rentC)}</td><td class="num" title="外租机械当月 = 过程资料本项目核算月的外租零租含税＋外租包月含税；不计内租、租分公司设备及不含税两列">${M(r.rent)}</td><td class="num" title="设备租赁开工累计 = 过程资料本项目全部已存月份的内租设备金额之和；不按所看月份截断，不计租分公司设备和外租四列">${M(r.leaseC)}</td><td class="num" title="设备租赁当月 = 过程资料本项目核算月的内租设备金额；不计租分公司设备和外租四列">${M(r.lease)}</td>
+      <td class="num vsep" title="${esc(bigExtractTip('焊材',true))}">${M(r.hwc)}</td><td class="num" title="${esc(bigExtractTip('焊材',false))}">${M(r.hw)}</td><td class="num" title="${esc(bigExtractTip('气体',true))}">${M(r.qtc)}</td><td class="num" title="${esc(bigExtractTip('气体',false))}">${M(r.qt)}</td>
+      <td class="num vsep" title="外租机械开工累计 = 过程资料本项目全部已存月份的外租零租含税＋外租包月含税；不按所看月份截断，不计内租、租分公司设备及不含税两列">${M(r.rentC)}</td><td class="num" title="外租机械当月 = 过程资料本项目核算月的外租零租含税＋外租包月含税；不计内租、租分公司设备及不含税两列">${M(r.rent)}</td><td class="num" title="设备租赁开工累计 = 过程资料本项目全部已存月份的内租设备金额之和；不按所看月份截断，不计租分公司设备和外租四列">${M(r.leaseC)}</td><td class="num" title="设备租赁当月 = 过程资料本项目核算月的内租设备金额；不计租分公司设备和外租四列">${M(r.lease)}</td>
       <td class="num">${M(r.totC)}</td>
       ${cell(1)}
       <td class="num" title="使用率 = 本项目外租机械开工累计＋设备租赁开工累计，再除以本行机械费测算；测算取本月录入或最近一次带入值，分母空或0显示—">${pct(r.use)}</td>
-      <td class="num" title="产值完成率 = 本行产值累计（含税）÷合同（预估）价；两项取本月录入或最近一次带入值，不跨项目；分母空或0显示—">${pct(r.done)}</td>
+      <td class="num vsep" title="产值完成率 = 本行产值累计（含税）÷合同（预估）价；两项取本月录入或最近一次带入值，不跨项目；分母空或0显示—">${pct(r.done)}</td>
       ${cell(2)}${cell(3)}
-      <td class="num" title="派生（不手填）：按项目取「集采台账结算」额 = 该项目集采合同结算金额之和，只计「纳入台账」的合同（§5.7.1）；汇总全部已存合同，不按核算月或发票日期截断">${M(r.matC)}</td>
-      ${cell(4)}${cell(5)}
+      <td class="num vsep" title="派生（不手填）：按项目取「集采台账结算」额 = 该项目集采合同结算金额之和，只计「纳入台账」的合同（§5.7.1）；汇总全部已存合同，不按核算月或发票日期截断">${M(r.matC)}</td>
+      ${cell(4,'vsep')}${cell(5,'vsep')}
       </tr>`;}),
     sum:(()=>{ const rs=bigRows(bjMonth(-1));
         /* 合计行（唯一出口 `sumRowOf`）：列 0-1 合并放标签；列 3-11 / 17 是**行字段**逐列求和；
@@ -1240,7 +1246,7 @@ V.m07=()=>{
         const S=k=>r=>N2(r.reduce((a,x)=>a+x[k],0));
         const SC=i=>r=>N2(r.reduce((a,x)=>{ const v=bigCell(x.wh,bjMonth(-1),i).v; return a+(typeof v==='number'?v:0); },0));
         return rs.length?sumRowOf(BIG_THEAD, rs, {3:S('hwc'),4:S('hw'),5:S('qtc'),6:S('qt'),7:S('rentC'),8:S('rent'),
-          9:S('leaseC'),10:S('lease'),11:S('totC'),12:SC(1),15:SC(2),16:SC(3),17:S('matC'),18:SC(4)}, {leadSpan:2, leadCls:'fl',tip:'当前大表所选在建、非壳项目的金额合计；含手填金额的带入值，累计范围见各格提示，开工时间、比率和备注不求和'}):''; })(),
+          9:S('leaseC'),10:S('lease'),11:S('totC'),12:SC(1),15:SC(2),16:SC(3),17:S('matC'),18:SC(4)}, {leadSpan:3, leadCls:'fl',tip:'当前大表所选在建、非壳项目的金额合计；含手填金额的带入值，累计范围见各格提示，开工时间、比率和备注不求和'}):''; })(),
     empty:EMPTYROW(thCols(BIG_THEAD), BIG_EMPTY, '先去「项目档案」把项目置为「在建」，或点「选择项目」看看候选')})}</div>
   </div>
   </div>`;

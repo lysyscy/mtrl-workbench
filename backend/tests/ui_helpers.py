@@ -21,7 +21,7 @@ def ui_page():
                 assert html.count('<script>boot();</script>') == 1
                 req.fulfill(body=html.replace('<script>boot();</script>', '<script>window.testReady=true;</script>'), content_type='text/html')
             elif path.startswith('/static/shell/'):
-                req.fulfill(body=(web / 'shell' / path.rsplit('/', 1)[-1]).read_text(encoding='utf-8'), content_type='application/javascript')
+                req.fulfill(body=(web / 'shell' / path.rsplit('/', 1)[-1]).read_text(encoding='utf-8'), content_type='text/css' if path.endswith('.css') else 'application/javascript')
             else:
                 req.fulfill(body='', content_type='text/css')
 
