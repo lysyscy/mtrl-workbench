@@ -91,6 +91,7 @@ details.tip[open]>summary::before{content:'▾ '}
 /* 表格滚动容器：必须有高度上限，sticky 表头才「贴得住」。
    否则容器不滚动、整页滚动，表头会跟着一起滚走 —— 表现为「往下拖表头没了」。 */
 .tw{overflow:auto;max-height:calc(100vh - 330px);min-height:calc(260px * var(--fscale))}
+.jc-link-money{color:var(--pri);font-weight:700;font-size:calc(14px * var(--fscale));font-variant-numeric:tabular-nums;white-space:nowrap}
 table.dt{width:100%;border-collapse:collapse;font-size:calc(12.5px * var(--fscale))}
 .dt th{position:sticky;top:0;z-index:2;background:var(--sf2);border-bottom:1px solid var(--bd);padding:calc(6px * var(--fscale)) calc(8px * var(--fscale));text-align:left;font-weight:500;color:var(--tx2);white-space:nowrap;font-size:calc(11.5px * var(--fscale))}
 /* 「合计」行**统一置底**（2026-09-13 用户口径）：表头贴顶、合计行贴底 ⇒ 数据量大时不用滚到底才看得到（`sumRowOf` 产出的行带 `sumrow` 类）。

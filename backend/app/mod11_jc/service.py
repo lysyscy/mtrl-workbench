@@ -131,6 +131,9 @@ def link_recommendations(s: Session, notice_id: int) -> dict:
              and (not n.i8_revoked or n.revoked_joint)} if linked_ids else {}
     for row in rows:
         row['invoices'] = invoices.get(row['id'], [])
+        row['supplier_uninvoiced'] = row['contract_amt'] - row['inv_sum']
+        row['trade_uninvoiced'] = (row['trade_contract_amt'] - row['trade_inv_sum']
+                                    if row['trade_contract_amt'] is not None else None)
         linked = [{'code': prior[nid].bill_no, 'amount': prior[nid].amount_approved}
                   for nid in row['notice_ids'] if nid in prior]
         row['recommendation'] = D.recommend_link(amount=notice.amount_approved, title=(notice.fields or {}).get('BillName', ''),
@@ -138,8 +141,7 @@ def link_recommendations(s: Session, notice_id: int) -> dict:
                                          invoices=row['invoices'], linked_notices=linked)
         if row['project_key'] != key:
             row['recommendation']['reasons'] = []
-    priority = {'contract_no': 0, 'invoice': 1, 'combined_notices': 2}
-    rows.sort(key=lambda r: (min((priority[x['kind']] for x in r['recommendation']['reasons']), default=3), r['id']))
+    rows.sort(key=lambda r: (not bool(r['date']), r['date'], r['id']))
     return {'ok': True, 'notice_amount': str(notice.amount_approved), 'current_contract_id': current,
             'notice_title': (notice.fields or {}).get('BillName', ''),
             'supplier': notice.jc_supplier, 'project_key': key, 'rows': rows}

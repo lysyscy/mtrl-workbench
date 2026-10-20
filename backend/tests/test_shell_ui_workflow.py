@@ -178,18 +178,18 @@ def test_修改范围或列对应使旧预览失效(ui_page):
     assert p.evaluate('IMP.preview===null')
 
 
-def test_合同候选显示日期金额且仍按编号排序(ui_page):
+def test_合同候选保留接口日期顺序及金额(ui_page):
     p=ui_page
     p.evaluate('''() => {
       API.m11LinkRecommendations=async()=>({ok:true,notice_amount:'12345.67',project_key:'测试仓库',rows:[
-        {id:2,project_key:'测试仓库',date:'2026-10-01',material:'铝材',supplier:'乙供应商',contract_amt:'20000',invoices:[]},
-        {id:12,project_key:'测试仓库',date:'2024-01-01',material:'钢材',supplier:'甲供应商',contract_amt:'12000',invoices:[]}
+        {id:2,project_key:'测试仓库',date:'2024-01-01',material:'铝材',supplier:'乙供应商',contract_amt:'20000',invoices:[]},
+        {id:12,project_key:'测试仓库',date:'2026-10-01',material:'钢材',supplier:'甲供应商',contract_amt:'12000',invoices:[]}
       ]});
     }''')
     p.evaluate("ACT.jcLink({dataset:{id:'101'}})")
     options=p.locator('#jcLinkCandidates tbody tr')
     assert options.locator('input').evaluate_all('els=>els.map(x=>x.value)') == ['2','12']
-    assert '2026-10-01' in options.nth(0).inner_text()
+    assert '2024-01-01' in options.nth(0).inner_text()
     assert '序号 — · 合同编号 —' in options.nth(0).inner_text()
     assert '合同金额 20,000.00' in options.nth(0).inner_text()
     assert '未录入' in options.nth(0).inner_text()

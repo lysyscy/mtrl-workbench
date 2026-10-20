@@ -79,7 +79,8 @@ def api_link_recommendations(notice_id: int) -> dict:
     with session_scope() as s:
         data = SV.link_recommendations(s, notice_id)
     if data.get('ok'):
-        data['rows'] = [{**_row(row), 'invoices': [{**v, 'amount': _s(v['amount'])} for v in row['invoices']]}
+        data['rows'] = [{**_row(row), 'supplier_uninvoiced': _s(row['supplier_uninvoiced']),
+                         'trade_uninvoiced': _s(row['trade_uninvoiced']), 'invoices': [{**v, 'amount': _s(v['amount'])} for v in row['invoices']]}
                         for row in data['rows']]
     return data
 

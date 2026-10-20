@@ -43,19 +43,30 @@ def test_api_scopes_candidates_serializes_invoices_and_does_not_link(rollback_db
         p = _project(s, '__推荐甲__'); other = _project(s, '__推荐乙__')
         a = _contract(s, project_id=p.id, supplier='甲供应商')
         b = _contract(s, project_id=p.id, supplier='甲供应商')
+        blank = _contract(s, project_id=p.id, supplier='甲供应商')
+        a.contract_date = '2026-10-01'; b.contract_date = '2025-01-01'; blank.contract_date = ''
+        a.contract_amt = Decimal('150.02'); b.contract_amt = Decimal('90.00')
+        b.trade_co = '贸易公司'; b.trade_contract_amt = Decimal('200.02')
+        R.insert_invoice(s, contract_id=b.id, kind='trade', invoice_date='2026-10-10', amount='100.01')
         wrong = _contract(s, project_id=other.id, supplier='甲供应商')
         wrong_supplier = _contract(s, project_id=p.id, supplier='乙供应商')
         for c in (a, b, wrong, wrong_supplier):
             R.insert_invoice(s, contract_id=c.id, kind='supplier', invoice_date='2026-10-10', amount='100.01')
         n = _notice(s, ph='__推荐只读__', approved='100.01')
         n.ownership_id = p.id; n.jc_supplier = '甲供应商'; s.flush()
-        ids = {a.id, b.id}; nid = n.id
+        ids = {a.id, b.id, blank.id}; ordered = [b.id, a.id, blank.id]; nid = n.id
         count = s.scalar(select(func.count()).select_from(JcPayment))
     app = FastAPI(); app.include_router(api.router)
     data = TestClient(app).get('/api/m11/link-recommendations', params={'notice_id': nid}).json()
     assert data['ok'] and {r['id'] for r in data['rows']} == ids
-    assert all(r['invoices'][0]['amount'] == '100.01' for r in data['rows'])
-    assert all(r['recommendation']['reasons'][0]['kind'] == 'invoice' for r in data['rows'])
+    assert [r['id'] for r in data['rows']] == ordered
+    by_id = {r['id']: r for r in data['rows']}
+    assert by_id[ordered[0]]['supplier_uninvoiced'] == '-10.01'
+    assert by_id[ordered[0]]['trade_uninvoiced'] == '100.01'
+    assert by_id[ordered[1]]['supplier_uninvoiced'] == '50.01'
+    assert by_id[ordered[1]]['trade_uninvoiced'] is None
+    assert by_id[ordered[2]]['supplier_uninvoiced'] == '100.00'
+    assert all(r['recommendation']['reasons'][0]['kind'] == 'invoice' for r in data['rows'] if r['invoices'])
     assert data['current_contract_id'] is None and 'selected_id' not in data
     with session_scope() as s:
         assert s.scalar(select(func.count()).select_from(JcPayment)) == count
@@ -66,10 +77,10 @@ def test_dialog_shows_invoices_without_preselection_and_blocks_stale_choice(ui_p
     p = ui_page
     p.evaluate('''() => {
       window.linkWrites=[];
-      API.m11LinkRecommendations=async id=>({ok:true,notice_amount:'12345.67',project_key:'测试仓库',supplier:'供应商甲',current_contract_id:null,rows:[
-        {id:2,project_seq:1,contract_no:'CGHT20260002',material:'钢材',supplier:'供应商甲',project_key:'测试仓库',contract_amt:'20000',
+      API.m11LinkRecommendations=async id=>({ok:true,notice_amount:'12345.67',notice_title:'支付12345.67元',project_key:'测试仓库',supplier:'供应商甲',current_contract_id:null,rows:[
+        {id:2,project_seq:1,contract_no:'CGHT20260002',material:'钢材',supplier:'供应商甲',project_key:'测试仓库',contract_amt:'20000',supplier_uninvoiced:'7654.33',
           invoices:[{id:9,kind:'supplier',date:'2026-10-10',amount:'12345.67'}],recommendation:{reasons:[{kind:'invoice',text:'单笔发票金额一致',invoice_ids:[9],amounts:['12345.67']}]}},
-        {id:3,project_seq:2,contract_no:'CGHT20260003',material:'管材',supplier:'供应商甲',project_key:'测试仓库',trade_co:'贸易公司',
+        {id:3,project_seq:2,contract_no:'CGHT20260003',material:'管材',supplier:'供应商甲',project_key:'测试仓库',trade_co:'贸易公司',supplier_uninvoiced:'-20',trade_uninvoiced:null,
           invoices:[{id:10,kind:'trade',date:'2026-10-11',amount:'50.00'}],recommendation:{reasons:[]}}
       ]});
       API.m11Link=async body=>{linkWrites.push(body);return {ok:false,message:'隔离写出口'};};
@@ -82,6 +93,11 @@ def test_dialog_shows_invoices_without_preselection_and_blocks_stale_choice(ui_p
     assert '贸易公司发票' in p.locator('#jcLinkCandidates').inner_text()
     assert '2026-10-10' in p.locator('#jcLinkCandidates').inner_text()
     assert '12,345.67' in p.locator('#jcLinkCandidates').inner_text()
+    assert '未开票金额 7,654.33' in p.locator('#jcLinkCandidates').inner_text()
+    assert '超开票金额 20.00' in p.locator('#jcLinkCandidates').inner_text()
+    assert '未开票金额未确定' in p.locator('#jcLinkCandidates').inner_text()
+    assert p.locator('.jc-link-money').count() >= 7
+    assert p.locator('.jc-link-money').filter(has_text='12345.67').count() == 1
     p.evaluate("ACT.jcLinkOk({dataset:{id:'101'}})")
     assert p.evaluate('linkWrites.length') == 0
     p.locator('#jcLinkCandidates input[value="2"]').check()
