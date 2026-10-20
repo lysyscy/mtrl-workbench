@@ -54,13 +54,17 @@ def test_rows_follow_columns(ui_page):
     p=ui_page
     table,keys=_load(p,'base')
     cells=table.locator('tbody tr').first.locator('td')
-    originals=dict(zip(keys,cells.evaluate_all('(xs)=>xs.slice(1).map(x=>x.outerHTML)')))
+    # 列身份比较不包含量出来的浮点偏移；冻结几何由test_table_layout独立检查。
+    snapshot='''xs=>xs.slice(1).map(x=>{
+      const cell=x.cloneNode(true);cell.style.removeProperty('left');return cell.outerHTML;
+    })'''
+    originals=dict(zip(keys,cells.evaluate_all(snapshot)))
     assert '001合同' in originals['contract_no'] and '150.35' in originals['settle']
     assert 'jcPayDlg' in originals['pay_sum'] and 'jcMaterialOpen' in originals['material']
     for mode in ('reorder','insert'):
         table,keys=_load(p,mode)
         assert table.locator('thead th').count() == 1+len(keys)
-        actual=table.locator('tbody tr').first.locator('td').evaluate_all('(xs)=>xs.slice(1).map(x=>x.outerHTML)')
+        actual=table.locator('tbody tr').first.locator('td').evaluate_all(snapshot)
         assert len(actual)==len(keys), 'row cells must follow column count'
         for key,html in zip(keys,actual):
             expected=originals.get(key, {'extra_text':'<td>&lt;新增列&gt;</td>',
@@ -84,6 +88,6 @@ def test_contract_number_not_covered_after_width_changes(ui_page):
     p=ui_page
     table,keys=_load(p,'base')
     for scale in ('1', '1.25', '1.4', '1'):
-        p.evaluate("s=>{document.documentElement.style.setProperty('--fscale',s);fitWideTables();jcApplyPin();}",scale)
+        p.evaluate("s=>{document.documentElement.style.setProperty('--fscale',s);layoutTables();}",scale)
         gap=table.locator('tbody tr').first.locator('td').evaluate_all("es=>es[4].getBoundingClientRect().left-es[3].getBoundingClientRect().right")
         assert gap >= -0.6, f'contract number covered by material column: {gap}px at {scale}'

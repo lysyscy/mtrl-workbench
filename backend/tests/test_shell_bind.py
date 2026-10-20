@@ -102,8 +102,8 @@ def test_集采回显隐藏钉列导出与返回逐次保持(ui_page):
     assert p.locator('#jcAllBox').is_checked()
     assert not p.locator('#jcAllBox').evaluate('el=>el.indeterminate')
     p.locator('#jcTradeBtn').click()
-    # 切隐列沿用旧行为：render 加工一次，动作随后再重量一次列宽。
-    assert p.evaluate('work') == ['hide','pin']*5
+    # 切隐列只由本次重画完成布局，动作不重复加工。
+    assert p.evaluate('work') == ['hide','pin']*4
     p.evaluate('refReturn=null;render();')
     assert p.locator('[data-act="refBack"]').count() == 0
     assert p.locator('#jcTradeBtn').count() == 1

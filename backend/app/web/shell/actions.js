@@ -164,14 +164,6 @@ function jcApplyPin(){
     JC_PIN.forEach(i=>put(tds[i],i));
   });
 }
-/* ⚠️ 偏移是**量出来的** ⇒ **视口一变就得重量**（大表那种静态算式不需要这条）—— 只在本页生效。
-   ⚠️ 防抖：`resize` 一次会连发几十下，每下都排 330 行会把滚动卡住。 */
-let _jcPinTimer=null;
-window.addEventListener('resize',()=>{
-  if(typeof VIEW==='undefined'||VIEW!=='m11') return;
-  clearTimeout(_jcPinTimer); _jcPinTimer=setTimeout(jcApplyPin,120);
-});
-
 /* ⭐ `M5-9` base64 ⇒ 浏览器下载。
    ⚠️ 必须 `Blob` + `URL.createObjectURL`：把 base64 直接塞进 `<a href>` 在几百 KB 时会
       **静默失败**（URL 长度上限，而失败时**不会有任何提示** —— 那种"点了没反应"最难查）。 */
@@ -1958,9 +1950,6 @@ jcExport:async()=>{ const rows=jcVisible();
 jcToggleTrade:()=>{ jcHideTrade=!jcHideTrade;
   SORT['m11:jc']={i:-1,d:0};
   render();
-  jcApplyHide();                       /* ⚠️ **必须**：`render()` 重建了整张表 ⇒ 偏好得重新落一次 */
-  jcApplyPin();                        /* ⚠️ **同理**，而且这里更要紧：隐藏 / 显示那三列会**改剩下的列宽**
-                                          ⇒ 上面量出来的行身份区偏移**当场就过期了**（不重量 = 露缝 / 叠字） */
   toast(jcHideTrade
     ? '已隐藏「贸易公司」三列（剩下的列会<b>自动变宽</b>）<br><span class="mut sm">只是屏幕上的事 —— 导出永远是全列</span>'
     : '已显示「贸易公司」三列'); },

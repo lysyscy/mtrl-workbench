@@ -448,10 +448,7 @@ def test_集采台账行身份区钉列与隐藏列都按id定位_偏移必须�
        「合同编号」时那两处列号都得人肉同步，**漏改不报错**（悄悄藏错列 / 钉错列）。⇒ 本件钉两件：
        ① **每个 id 都在规格里**（写错 ⇒ 当场红，⛔ 不等真机上看出"某列没被藏 / 没被钉"）；
        ② 钉列 id 恰是列清单的**连续前缀**（`sticky` 的硬约束在**身份**这一层同样成立）。
-    ⚠️ 能证伪：把两条 id 里任一改错 / 删掉任一处 `jcApplyPin()` 调用 / 把「量宽」换成写死的偏移
-       / 把 `i===0` 那一条拿掉 ⇒ 本件必红（反向灵敏度 `tools/mut/_mut_tail298_columns.py`）；
-       **屏幕上是否真严丝合缝**离线判不了 ⇒ 由真机 **㉝**（`tools/probe/_shell_jcpin.py`）看管
-       （含"隐藏三列后重量"与"表头列数 = 1 ＋ 列清单长度"这两条）。
+    本件核列身份与连续前缀；实测偏移、显隐、缩放和虚拟窗口的几何后果回test_table_layout.py。
     """
     from app.mod11_jc import domain as D          # noqa: PLC0415 —— 只在本次对账时取「规格」
 
@@ -482,16 +479,7 @@ def test_集采台账行身份区钉列与隐藏列都按id定位_偏移必须�
     clean = _strip_block_comments(SHELL)
     assert "function jcApplyPin()" in clean, \
         "`m11` 行身份区的钉列函数不见了（`jcApplyPin`）—— 往右填那 4 列时看不见在给哪条合同填"
-    seg = clean.split("function jcApplyPin()", 1)[1].split("\nfunction ", 1)[0]
-    assert "getBoundingClientRect().right" in seg and "style.left" in seg, \
-        ("`jcApplyPin` 必须**量出**列宽再设 `left`（取前面那格的真实右缘）—— ⛔ 别改成写死的偏移，"
-         "本页列宽随视口变（29px / 34px）")
-    assert "i===0?0" in seg.replace(" ", ""), \
-        "`jcApplyPin` 的偏移函数必须单列 `i===0`（合计行首格也钉；`ths[-1]` 会**静默抛** `undefined`）"
-    assert clean.count("jcApplyPin();") >= 2, \
-        "`jcApplyPin()` 的调用点不够（至少要 2 处：`BIND.m11` 渲染后 ＋ 隐藏三列之后 —— 后者会改列宽）"
-    assert "setTimeout(jcApplyPin,120)" in clean.replace(" ", ""), \
-        "视口变化后没重量（本页偏移是量出来的 ⇒ `resize` 必须重算，⛔ 大表那种静态算式才不需要）"
+    # 实测偏移、首列0及显隐/resize/虚拟窗口收尾由test_table_layout行为回归验证。
     assert '.dt[data-sort-key="m11:jc"] .fl' not in clean, \
         ("`m11` 的钉列**不许**退回静态 CSS 规则（`.dt[data-sort-key=\"m11:jc\"] .fl{left:…}`）——"
          "实测列宽随视口变，静态值会错位")

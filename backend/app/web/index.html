@@ -652,7 +652,7 @@ const V={}, BIND={};
 /* 渲染后加工按登记顺序运行；每次重建 #view 后各跑一次。
    不捕获旧钩子、不吞异常；局部返回只结束当前步骤。 */
 function addBind(view, step){ (BIND[view] ||= []).push(step); }
-function runBind(view){ for(const step of BIND[view] || []) step(); fitWideTables(); if(view==='m11') jcApplyPin(); }
+function runBind(view){ for(const step of BIND[view] || []) step(); layoutTables(); }
 /* ⭐⭐ **已接后端**的视图（`boot()` 拉真数据）—— 侧栏与顶栏据此标注。
    ⚠️ 必须**按页说实话**：已接线的页**不是**模拟数据，否则用户没法判断"哪一页能信"。
    接线一页就往这里加一个（与 `ADAPTED` 同步）；⛔ 不许含糊成"全部都是模拟值"。 */

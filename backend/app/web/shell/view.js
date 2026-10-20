@@ -44,16 +44,7 @@ function go(k){ if(VIEW==='m03'&&k!=='m03') pickSet.clear(); VIEW=k;
   markPending(PAGE_LOAD[k]||[]);
   render(); $('.view').scrollTop=0; loadPaths(PAGE_LOAD[k]||[]); }   /* ⭐ `P3` 主体：进了哪页就（首次）拉哪页 —— ⛔ 不成环：`loadPaths` 只 render，不再调 `go` */
 function render(){
-  /* 金额编辑/布局收尾后还原两轴位置，防止重建表格丢失横向位置或布局锚定拉动。 */
-  const scrollKey={m03:'m03:notices',m11:'m11:jc'}[VIEW];
-  const tableScroll=scrollKey?$(`#view table[data-sort-key="${scrollKey}"]`)?.closest('.tw'):null;
-  const tableLeft=tableScroll?tableScroll.scrollLeft:0;
-  const tableTop=tableScroll?tableScroll.scrollTop:0;
-  const restoreTableScroll=()=>{
-    if(!tableScroll) return;
-    const tw=$(`#view table[data-sort-key="${scrollKey}"]`)?.closest('.tw');
-    if(tw){ tw.scrollLeft=tableLeft; tw.scrollTop=tableTop; }
-  };
+  const restoreTableScroll=saveTableScroll();
   /* ⭐ 2026-09-28（用户裁定 `B` · 见审计清单 §六 "裁定 5"）：侧栏每项左侧那一列 = **模块编号**
      （`NAV` 表第三列，如 `MOD-14`）—— 它是**给人看的编号**（文档 / 《说明书》/ 判据件都按这套编号对齐），
      ⛔ **不是**实现细节、**别当黑话清掉**（守则 §3.1 的**例外**栏写着这条；`test_ux_deadcode` 的
@@ -356,9 +347,7 @@ function drawVirtual(inst){
   inst.tb=tb;
   tb.innerHTML = SP(topH0) + winRows.join('') + SP(botH0);
   const table=tb.closest('table');
-  if(table?.dataset.sortKey==='m11:jc')jcApplyHide();
-  if(table?.matches(FIT_TABLES))fitWideTable(table);
-  if(table?.dataset.sortKey==='m11:jc')jcApplyPin();
+  layoutTable(table);
   /* 红线③：窗口行**实测回填**（行高 27~91px 不等高）＋ 差量吸收 ⇒ 文档总高恒为 `n*EH`。 */
   const trs=inst.tb?inst.tb.children:null;
   if(trs && trs.length){
@@ -387,8 +376,23 @@ function drawVirtual(inst){
 
 /* Widths follow visible columns and money values; virtual windows can grow the minimum. */
 const FIT_TABLES='.notice-table,[data-sort-key="m07:bigtable"],[data-sort-key="m08:invoices"],.mw-details,.procurement-table';
-function fitWideTables(){
-  document.querySelectorAll('#view '+FIT_TABLES.split(',').join(',#view ')).forEach(fitWideTable);
+function saveTableScroll(){
+  const key={m03:'m03:notices',m11:'m11:jc'}[VIEW];
+  const selector=key?`#view table[data-sort-key="${key}"]`:null;
+  const old=selector?$(selector)?.closest('.tw'):null;
+  const left=old?.scrollLeft||0, top=old?.scrollTop||0;
+  return ()=>{const tw=old?$(selector)?.closest('.tw'):null;
+    if(tw){tw.scrollLeft=left;tw.scrollTop=top;}};
+}
+function layoutTable(table){
+  if(!table) return;
+  const jc=table.dataset.sortKey==='m11:jc';
+  if(jc) jcApplyHide();
+  if(table.matches(FIT_TABLES)) fitWideTable(table);
+  if(jc) jcApplyPin();
+}
+function layoutTables(){
+  document.querySelectorAll('#view '+FIT_TABLES.split(',').join(',#view ')).forEach(layoutTable);
 }
 function fitWideTable(table){
   const rows=[...table.tBodies].flatMap(body=>[...body.rows]);
@@ -434,8 +438,8 @@ function fitWideTable(table){
     table.style.setProperty('--fit-head',table.tHead.rows[0].getBoundingClientRect().height+'px');
   }
 }
-let fitResizeTimer;
-window.addEventListener('resize',()=>{clearTimeout(fitResizeTimer);fitResizeTimer=setTimeout(fitWideTables,120);});
+let layoutResizeTimer;
+window.addEventListener('resize',()=>{clearTimeout(layoutResizeTimer);layoutResizeTimer=setTimeout(layoutTables,120);});
 
 const WIRED=new Set(['home','m03','m01','m02','m05','m06','m07','m08','m09','m10','m14','m11','m15',
   /* ⭐ `§19`「暂留件收口」（2026-09-21）：设置 —— 它**全读后端真数据**（`/api/m14/settings`）
