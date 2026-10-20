@@ -394,6 +394,38 @@ def test_发票子表新增草稿默认北京时间当日且可改(ui_page):
     assert p.evaluate('saved.length') == 1, "日期为空也写进去了 —— 必填校验被改坏了"
 
 
+@pytest.mark.parametrize('count', [30, 450])
+@pytest.mark.parametrize('field', ['pay', 'ss', 'sp'])
+def test_通知书勾选后改付款金额保留两轴位置(ui_page, count, field):
+    p = ui_page
+    p.set_viewport_size({'width': 900, 'height': 900})
+    p.evaluate('''async count=>{
+      const row=NO[0];
+      window.noticeRows=Array.from({length:count},(_,i)=>({notice_id:i+1,
+        doc_date:row.date,bill_no:'DOC-'+i,project_name:row.proj,category_label:'集采',
+        approve_status:row.astat,amount_approved:'12345.67',pay_amount:'12345.67',
+        stat_settle:'12345.67',stat_paid:'12345.67',bill_name:row.doc}));
+      API.notices=async()=>({items:noticeRows});
+      API.statCell=async b=>{noticeRows.find(n=>n.notice_id===b.notice_id)[b.field]=b.value;return {ok:true};};
+      API.m11List=async()=>({rows:[],columns:[],sum_keys:[]});
+      await reloadNotices();
+    }''', count)
+    p.locator('[data-act="pick"][data-id="1"]').click()
+    target = p.locator(f'[data-act="editss"][data-k="{field}"][data-id="16"]')
+    target.scroll_into_view_if_needed()
+    target.fill('100')
+    snapshot = '''()=>{const v=document.querySelector('#view'),t=v.querySelector('.tw');
+      return {view:v.scrollTop,top:t.scrollTop,left:t.scrollLeft};}'''
+    before = p.evaluate(snapshot)
+    assert before['top'] > 100, before
+    target.press('Tab')
+    p.wait_for_function("k=>{const n=NO.find(n=>n.id==='16');return (k==='pay'?payEff(n):n[k])===100}", arg=field)
+    p.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
+    after = p.evaluate(snapshot)
+    assert p.evaluate("pickSet.has('1')")
+    assert all(abs(after[k]-before[k]) < 2 for k in before), (before, after)
+
+
 # ============================================================== `TAIL-283` 付款流水列义
 # ⚠️ 这些用例**替换 `API.notices` 的回包**（= 后端真事实），⛔ 不整体覆写 `reloadNotices` ——
 #   那样会把被测函数绕开（同 `test_tail282_pay_draft.py` 的纪律）。
