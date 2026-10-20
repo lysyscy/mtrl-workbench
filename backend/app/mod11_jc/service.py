@@ -352,6 +352,63 @@ def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
                         if moved_from else f"已关联到集采合同 #{contract_id}")}
 
 
+def auto_link_plan(s: Session, notice_ids: list[int], payables: list[dict]) -> dict:
+    """只补未关联通知书；应付精确对应一个合同且本地候选唯一才可执行。"""
+    from app.mod01_projects import service as projects
+    from app.mod03_notice import service as notices
+    from app.mod03_notice.domain import APPROVE_STATUS_DONE
+    keys = {p.id: str(p.warehouse_name or '') for p in projects.all_projects(s)}
+    contracts = list_contracts(s)
+    rows = []
+    for nid in dict.fromkeys(notice_ids):
+        n = notices.get_notice(s, nid)
+        row = {'notice_id': nid, 'code': n.bill_no if n else str(nid), 'contract_id': None}
+        if n is None or n.category != 'jc' or n.excluded or n.i8_revoked or n.approve_status != APPROVE_STATUS_DONE:
+            row['reason'] = '非有效集采通知书'
+        elif R.payment_of_notice(s, nid) is not None:
+            row['reason'] = '已有合同关联，保持不变'
+        elif not keys.get(n.ownership_id) or not n.jc_supplier or n.amount_approved <= 0:
+            row['reason'] = '项目、供应商或审批金额未确定'
+        else:
+            hits = [p for p in payables if p['project'] == n.project_name and p['supplier'] == n.jc_supplier
+                    and p['amount'] == n.amount_approved]
+            nos = {p['contract_no'] for p in hits}
+            cands = D.pick_candidates(contracts=contracts, project_key=keys[n.ownership_id], supplier=n.jc_supplier)
+            targets = [c for c in cands if c['contract_no'] in nos and c['tag'] == D.TAG_IN]
+            if len(nos) == 1 and '' not in nos and len(targets) == 1:
+                row.update(contract_id=targets[0]['id'], contract_no=targets[0]['contract_no'],
+                           amount=str(n.amount_approved), payable_codes=[p['code'] for p in hits], reason='应付合同来源唯一')
+            else:
+                row['reason'] = '无唯一应付及本地合同对应，保留人工处理'
+        rows.append(row)
+    return {'ok': True, 'rows': rows, 'ready': sum(r['contract_id'] is not None for r in rows)}
+
+
+def act_auto_link(s: Session, expected: list[dict], payables: list[dict]) -> dict:
+    """确认时重新取数核对；不允许预览后发生变化的行被批量改关联。"""
+    from app.mod03_notice import service as notices
+    ids = sorted({r['notice_id'] for r in expected})
+    for nid in ids:
+        notices.get_notice(s, nid, with_for_update=True, populate_existing=True)
+    plan = auto_link_plan(s, ids, payables)
+    wanted = {r['notice_id']: r for r in expected}
+    linked = 0
+    for row in plan['rows']:
+        prior = wanted[row['notice_id']]
+        if row['contract_id'] is None:
+            continue
+        if any(row.get(k) != prior.get(k) for k in ('contract_id', 'amount', 'payable_codes')):
+            row['contract_id'] = None
+            row['reason'] = '来源或金额已变化，请重新预览'
+            continue
+        result = act_link_notice(s, notice_id=row['notice_id'], contract_id=row['contract_id'])
+        if not result['ok']:
+            from app.core.errors import MustReportError
+            raise MustReportError(result['message'])
+        linked += int(result.get('changed', False))
+    return {'ok': True, 'linked': linked, 'rows': plan['rows']}
+
+
 def act_unlink_notice(s: Session, *, notice_id: int) -> dict:
     """**解绑**：摘掉这条通知书的关联记录（= 删合同的付款子表里那条 `source=notice` 行）。
 
@@ -472,7 +529,7 @@ __all__ = ["project_references",
     "DEFAULT_TAG_ON_CREATE", "act_add_contract", "act_set_tag", "act_batch_tag",
     "act_update_contract", "act_add_invoice", "act_del_invoice",
     "act_add_payment", "act_del_payment",
-    "act_link_notice", "act_unlink_notice",
+    "act_link_notice", "act_unlink_notice", "auto_link_plan", "act_auto_link",
     "party_kinds", "act_set_party_kind",
     "list_contracts", "links_by_notice",
 ]

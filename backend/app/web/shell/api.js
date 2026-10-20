@@ -322,6 +322,8 @@ const API = {
      ⚠️ 关联关系**不另建表** —— 就写进合同的**付款子表**（`source=notice` ＋ `notice_id`）⇒
         与「从付款域引用（R8）」是**同一份记录** ⇒ 两个入口调的是**同一个端点**（`ACC-JC-PAY-001/001-01`）。
      ⚠️ 一对一（换合同 = **先解绑再写新**）/ 全库去重 / 不校验金额 —— 三条判定全在后端。 */
+  m11AutoLinkPreview: body => API.post('/api/m11/auto-link-preview', body),
+  m11AutoLink: body => API.post('/api/m11/auto-link', body),
   m11Link: body => API.post('/api/m11/link', body),
   m11Unlink: body => API.post('/api/m11/unlink', body),
 

@@ -290,6 +290,44 @@ class LinkIn(BaseModel):
     contract_id: int
 
 
+class AutoLinkSelection(BaseModel):
+    notice_id: int = Field(gt=0)
+    contract_id: int = Field(gt=0)
+    amount: str
+    payable_codes: list[str]
+
+
+class AutoLinkIn(BaseModel):
+    notice_ids: list[int] = Field(min_length=1, max_length=5000)
+    selections: list[AutoLinkSelection] = Field(default_factory=list, max_length=5000)
+
+
+def _read_payables():
+    from app.mod02_i8.client import I8Client
+    from app.mod02_i8.payable_source import fetch_payables
+    client = I8Client(allow_kick=False)
+    try:
+        return fetch_payables(client)
+    finally:
+        client.close()
+
+
+@router.post('/api/m11/auto-link-preview')
+def api_auto_link_preview(payload: AutoLinkIn) -> dict:
+    payables = _read_payables()
+    with session_scope() as s:
+        return SV.auto_link_plan(s, payload.notice_ids, payables)
+
+
+@router.post('/api/m11/auto-link')
+def api_auto_link(payload: AutoLinkIn) -> dict:
+    if not payload.selections or {r.notice_id for r in payload.selections} - set(payload.notice_ids):
+        return {'ok': False, 'message': '请先预览本次可关联通知书'}
+    payables = _read_payables()
+    with session_scope() as s:
+        return SV.act_auto_link(s, [r.model_dump() for r in payload.selections], payables)
+
+
 class UnlinkIn(BaseModel):
     notice_id: int
 

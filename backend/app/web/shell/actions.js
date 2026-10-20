@@ -2204,6 +2204,26 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  /* —— 「关联集采合同」反向入口的动作（2026-09-13 用户裁定）——
     一对一 · 与 R8 共用同一份记录 · 去重按全库 · 金额不一致只提示不拦 · 关联 / 解绑**不留痕**。
     弹窗内所选合同走草稿 `jcLinkSel`：改选择要**重绘弹窗**（金额比对随之更新）。 */
+ jcAutoLink:async()=>{
+   const ids=ntHit(fNt).filter(n=>ntLive(n)&&n.cat==='集采'&&!jcRefOf(n.id)).map(n=>Number(n.id));
+   if(!ids.length) return toast('当前列表没有未关联的有效集采通知书');
+   modal({title:'一键关联集采合同',body:'<div class="tip">正在读取采购合同应付并核对合同来源…</div>'});
+   const loading=lastModal;
+   try{
+     const data=await API.m11AutoLinkPreview({notice_ids:ids});
+     if(lastModal!==loading) return;
+     if(!data||!data.ok) throw new Error(data&&data.message||'采购合同应付未能读取');
+     const selections=data.rows.filter(r=>r.contract_id!=null);
+     modal({title:'一键关联集采合同',autoLink:{notice_ids:ids,selections},body:`<div class="tip">可关联 ${selections.length} 条，其余保留人工处理。只补当前列表的未关联通知书，已有合同保持不变。</div><div class="tw"><table class="dt"><thead><tr><th>通知书</th><th>合同／处理结果</th><th>采购应付依据</th></tr></thead><tbody>${data.rows.map(r=>`<tr><td>${esc(r.code)}</td><td>${esc(r.contract_no||r.reason)}${r.amount?`<div class="jc-link-money">${M(N0(r.amount))}</div>`:''}</td><td>${(r.payable_codes||[]).map(esc).join('、')}</td></tr>`).join('')}</tbody></table></div>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcAutoLinkOk" ${selections.length?'':'disabled'}>关联这 ${selections.length} 条</button>`});
+   }catch(e){if(lastModal===loading) modal({title:'应付读取失败',body:`<div class="tip wn">${esc(String(e.message||e))}</div>`,footer:'<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="jcAutoLink">重试</button>'});}
+ },
+ jcAutoLinkOk:async t=>{
+   const payload=lastModal&&lastModal.autoLink;
+   if(!payload||!payload.selections.length||t.disabled) return;
+   t.disabled=true;
+   const result=await jcLinkAct(()=>API.m11AutoLink(payload),r=>`已关联 ${r.linked} 条；未关联的请人工核对`);
+   if(result) closeModal(); else t.disabled=false;
+ },
  jcLink:async t=>{ const n=NO.find(x=>x.id===t.dataset.id);
    if(!n) return;
    if(!ntLive(n)||n.cat!=='集采') return toast('仅「集采」分类的记录可关联集采合同');

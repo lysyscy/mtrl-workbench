@@ -364,3 +364,9 @@
 | 库存单据明细 | 解析 559 行 · 分组 8 个（12 个 phid 里当月有单据的 8 个仓库）· 落库 559 行 |
 | 收发结存 | 解析 480 行 · 8 个仓库 · 落库 480 行（`inserted 480`） |
 | 陌生仓库 | `兰考金不换前置车间项目` —— **项目档案里没有**（抓取给了提示、未自动建档）⇒ 需在「项目档案」页点一次「同步常用项目列表」 |
+
+## 采购合同应付与附件（2026-10-20 Edge CDP只读核实）
+
+列表POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalList?model=7&floatmenuCondition=`；form带page/start/limit、queryfilter及公司OrgQuery上下文，与采购合同同组织。返回Success/Record/totalRows；PhId为应付键，PhidCnt/PhidCnt_EXName为合同主键/编号，PhidPc_EXName、PhidBalComp_EXName为项目/收款单位，AppAmtVatFc为审批本币额，AsrFlag=1、WfFlag=2为已批结束。分页不完整或重复键应拒绝继续关联；取数实现 `mod02_i8/payable_source.py`。
+
+详情POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalInfoFirst`，form `id`。抽查8条invoiceGrid均空，不能据此判定无发票；附件经 `/JFileSrv/reactAttach/tableAttachInit` 按asrTable=pcm3_cnt_projbal、asrCode=应付PhId、busTypeCode=PCM_BAL7取attachmentRecordList，asrFid是文件键，asrName是文件名。PDF预览可取得文字层；不在正文存签名文件URL、Token或Cookie。多个项目应付与附件样本的试验及匹配结果见TAIL-374；不是全历史覆盖证明。
