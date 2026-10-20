@@ -213,3 +213,11 @@ def project_references(session, project_id, warehouse, *, lock=False):
     from .models import SetlDetail, WeldGasBalance, AnalysisBigProject, AnalysisBigManual
 
     return read(session, ((SetlDetail, '收发结存'), (WeldGasBalance, '焊材气体结余'), (AnalysisBigProject, '大表项目排序'), (AnalysisBigManual, '大表手录'),), project_id, warehouse, lock=lock)
+
+
+def opening_months(session, warehouses, months):
+    """机械费只读复用大表同核算月的开工年月及上次值带入口径。"""
+    from . import big_repository as R, big_domain as B
+    own = R.load_manual(session)
+    return {wh: {ym: B.parse_month(B.manual_cell(own, ym, wh, 'open_ym')['value'])
+                 for ym in months} for wh in warehouses}

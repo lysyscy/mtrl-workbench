@@ -13,7 +13,7 @@ def sample():
     return {'ym': '2026-09', 'projects': [{'warehouse': '甲', 'name': '甲项目'}],
             'effective': [{'warehouse': '甲', 'ym': '2026-09', 'values': {'mech_2': '100.00', 'mech_3': '0.00'}}],
             'annual_effective': [{'warehouse': '甲', 'ym': '2026-09', 'values': {'mech_2': '100.00', 'mech_3': '0.00'}}],
-            'summary': [{'warehouse': '甲', 'ym': '2026-09', 'cumulative': {'zero': '150.00', 'monthly': '0.00', 'internal': '0.00', 'company': None}}],
+            'summary': [{'warehouse': '甲', 'ym': '2026-09', 'start_year': 2024, 'start_month': 3, 'cumulative': {'zero': '150.00', 'monthly': '0.00', 'internal': '0.00', 'company': None}}],
             'histories': [{'warehouse': '甲', 'i6': '10.00', 'annual_rows': [], 'meta_at': {'2026-09': {'year': 2025, 'month': 1}}}],
             'details': [{'warehouse': '甲', 'ym': '2026-09', 'category': 'zero', 'issues': [],
                          'totals': {'gross': '99.00', 'net': '96.1165048543689'},
@@ -29,7 +29,8 @@ def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     summary, zero, monthly, annual = wb.worksheets
     assert summary['J6'].value == Decimal('100.00')
     assert summary['E6'].value == Decimal('150.00')
-    assert summary['C6'].value == '2025'
+    assert summary['C6'].value == '2024'
+    assert summary['D6'].value == '3'
     assert zero['E6'].value == '2小时'
     assert zero['J6'].value == '8.21'
     assert zero['B6'].data_type == 's'
@@ -126,3 +127,11 @@ def test_annual_source_without_reliable_year_is_rejected_before_mislabeling():
     data['histories'][0]['annual_rows'][0]['source'].pop('year')
     with pytest.raises(MustReportError, match='年份依据'):
         export.build(data)
+
+
+def test_missing_big_table_start_date_does_not_fall_back_to_history():
+    data = sample()
+    data['summary'][0].update(start_year=None, start_month=None)
+    wb, _ = export.build(data)
+    assert wb.worksheets[0]['C6'].value == '' and wb.worksheets[0]['D6'].value == ''
+    wb.close()

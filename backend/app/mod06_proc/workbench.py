@@ -931,12 +931,16 @@ def state(s, ym=''):
     if normalize_ym(ym) and ym not in months:
         months.append(ym)
         months.sort()
+    from app.mod07_setl import service as meetings
+    openings = meetings.opening_months(s, [p['warehouse'] for p in projects], months)
     checks, bills = reconciliations(s, [p['warehouse'] for p in projects], records=records, manual_rows=manual_rows)
     return {'ok': True, 'settings': config, 'projects': projects, 'months': months,
             'ym': ym, 'details': details, 'effective': amounts, 'histories': histories,
             'reconciliations': checks, 'billDifferences': bills, 'discoveries': discoveries,
             'matters': matters, 'i8': snapshots,
             'summary': [{'warehouse': p['warehouse'], 'ym': month,
+                         'start_year': int(openings[p['warehouse']][month][:4]) if openings[p['warehouse']][month] else None,
+                         'start_month': int(openings[p['warehouse']][month][5:]) if openings[p['warehouse']][month] else None,
                          'cumulative': cumulative(s, p['warehouse'], month, records=records, manual_rows=manual_rows)}
                         for p in projects for month in months]}
 

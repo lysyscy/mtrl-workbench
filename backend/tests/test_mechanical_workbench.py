@@ -465,3 +465,22 @@ def test_postgresql_effective_and_preview_queries_acquire_row_share_locks(sessio
     locks = set(session.execute(text("SELECT relation::regclass::text FROM pg_locks "
                                     "WHERE pid=pg_backend_pid() AND mode='RowShareLock' AND granted")).scalars())
     assert {'proc_mech_manual', 'mechanical_workbench_preview'} <= locks
+
+
+def test_start_date_uses_big_table_as_of_month_read_only(session):
+    from app.mod07_setl import big_repository as big
+    from app.mod07_setl.models import AnalysisBigManual
+    session.query(AnalysisBigManual).filter(AnalysisBigManual.warehouse_name.in_(['甲','乙'])).delete(synchronize_session=False)
+    big.save_cell(session, ym='2026-08', warehouse='甲', key='open_ym', value='2024-03')
+    big.save_cell(session, ym='2026-10', warehouse='甲', key='open_ym', value='2025-06')
+    W.write(session, W.key('history','甲'), {'warehouse':'甲','meta_at':{'2026-09':{'year':1999,'month':1}}}, 0)
+    september = W.state(session, '2026-09')
+    row = next(r for r in september['summary'] if r['warehouse']=='甲' and r['ym']=='2026-09')
+    assert (row['start_year'], row['start_month']) == (2024,3)
+    missing = next(r for r in september['summary'] if r['warehouse']=='乙' and r['ym']=='2026-09')
+    assert missing['start_year'] is None and missing['start_month'] is None
+    october = W.snapshot(session, '2026-10', ['甲'])
+    row = next(r for r in october['summary'] if r['warehouse']=='甲' and r['ym']=='2026-10')
+    assert (row['start_year'], row['start_month']) == (2025,6)
+    assert big.load_manual(session)['2026-08']['甲']['open_ym']=='2024-03'
+    assert W.read(session,W.key('history','甲'))[0]['meta_at']['2026-09']['year']==1999

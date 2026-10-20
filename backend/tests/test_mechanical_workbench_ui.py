@@ -53,6 +53,12 @@ vm.runInContext(`(async()=>{
  MW.filter='findings';const unmappedHTML=mwWork();assert.ok(unmappedHTML.includes('待核实的小微壳'));assert.ok(unmappedHTML.includes('125.00'));assert.ok(unmappedHTML.includes('data-id="unmapped"'));assert.ok(unmappedHTML.includes('核实发现'));assert.ok(!unmappedHTML.includes('data-pj="shared"'),'未明确映射不能把i8项目键当仓库采用');
  MW.filter='pending';MW.data.discoveries=[];
  const workflowData=MW.data;
+ MW.data.summary[0].start_year=2024;MW.data.summary[0].start_month=3;
+ MW.data.histories=[{warehouse:'A',meta_at:{'2026-09':{year:1999,month:1}}}];
+ assert.ok(mwSummary().includes('>2024</td>'),'开工日期读大表派生摘要');
+ assert.ok(!mwSummary().includes('1999'),'历史原报日期不得覆盖大表');
+ MW.data.histories=[];
+
  MW.data={projects:['国风','龙源','兰考','缺侧'],settings:{shown_projects:['国风','龙源','兰考','缺侧']},details:[],effective:[],matters:[],billDifferences:[],
    reconciliations:['国风','龙源','兰考','缺侧'].flatMap(warehouse=>['report','internal'].map(relation=>({warehouse,relation,left:warehouse==='兰考'?null:'0.00',right:['兰考','缺侧'].includes(warehouse)?null:'0.00',pending:['兰考','缺侧'].includes(warehouse)?null:'0.00'}))),
    discoveries:[{warehouse:'国风',id:'first',kind:'first',status:'pending'},{warehouse:'龙源',id:'changed',kind:'changed',status:'pending'}]};

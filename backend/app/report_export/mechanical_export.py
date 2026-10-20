@@ -146,8 +146,8 @@ def build(data):
                   None, cumulative(data, wh, 'mech_1', ym), cumulative(data, wh, 'mech_0', ym),
                   amount(data, wh, ym, 'mech_2'), amount(data, wh, ym, 'mech_3'), None,
                   amount(data, wh, ym, 'mech_1'), amount(data, wh, ym, 'mech_0'), None]
-        metadata = history(data, wh).get('meta_at', {}).get(ym, {})
-        values[2:4] = [metadata.get('year'), metadata.get('month')]
+        metadata = next((r for r in data.get('summary', []) if r['warehouse'] == wh and r['ym'] == ym), {})
+        values[2:4] = [metadata.get('start_year'), metadata.get('start_month')]
         append_row(summary, i, values, styles[0][6], range(5, 15))
     total_row = 6 + len(data['projects'])
     append_row(summary, total_row, [None] * 15, styles[0][7])
