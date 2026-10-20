@@ -270,7 +270,7 @@ const ivColPass=(iv,i)=>{ const f=fIvCol[i]; if(!f) return true; const c=ivColMe
       常量本身（它要用于 `thCount` 与列对齐断言，保持纯净）。 */
 const ivThead=()=>{ let n=-1; return INV_THEAD.replace(/<th\b([^>]*)>([\s\S]*?)<\/th>/g,(m,a,txt)=>{ n++;
   if(n>=IV_COLN) return m; const on=ivHasF(n);
-  return `<th${a}>${txt} <button class="btn sm" data-act="ivColOpen" data-c="${n}" title="筛选本列${on?'（已设条件）':''}" style="padding:0 calc(4px * var(--fscale))">▾${on?'<b style="color:var(--pri)">·</b>':''}</button></th>`; }); };
+  return `<th${a}>${txt} <button class="btn sm iv-col-filter${on?' is-filtered':''}" aria-label="筛选本列${on?'，已设条件':''}" data-act="ivColOpen" data-c="${n}" title="筛选本列${on?'（已设条件）':''}" style="padding:0 calc(4px * var(--fscale))">▾${on?'<b class="iv-filter-note">已筛</b>':''}</button></th>`; }); };
 /* 列筛选面板：**渲染在表格之外**（表格滚动容器 `.tw` 会裁掉浮层 ⇒ 不能贴着表头弹出） */
 const ivColPanel=()=>{ const i=Number(invColOpen), c=ivColMeta(i); if(!c) return '';
   const f=fIvCol[i]||{};

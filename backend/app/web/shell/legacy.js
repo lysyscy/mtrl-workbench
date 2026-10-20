@@ -92,6 +92,7 @@ V.set = () => {
     return `<button class="thcard set-theme${on ? ' on' : ''}" data-act="themeSet" data-theme="${esc(p.name)}"
         aria-label="${esc(p.name)}" aria-pressed="${on}" title="${esc(p.name)}"
         style="--sample-bg:${p.bg};--sample-tx:${p.tx};--sample-pri:${p.pri};--sample-bd:${p.bd}">
+      <span class="set-theme-caption"><b>${esc(p.name)}</b><span class="set-theme-state" aria-hidden="true">${on ? '已选' : ''}</span></span>
       <span class="set-theme-preview" aria-hidden="true">
         <span class="set-preview-sidebar"><i></i><i></i><i></i></span>
         <span class="set-preview-main"><i class="set-preview-title"></i><i class="set-preview-toolbar"></i>
@@ -421,14 +422,14 @@ V.imp = () => {
      ⛔ 别再按字段名挑颜色；将来真要分语气走 `B` 案（域自报 `note_kind`）。判据 = `tests/test_ux_colors.py`。 */
   const domainTitle=sch?sch.title:'请选择导入类型';
   const highest=IMP.report?3:IMP.preview?2:IMP.cols.length?1:0;
-  const head = `<div class="card"><h4>数据导入<span class="sp"><span class="mut sm">${IMP.step===3?'本次结果':'确认写入前不会修改业务数据'}</span></span></h4><div class="bd">
+  const head = `<div class="card imp-overview"><h4>数据导入<span class="sp"><span class="mut sm">${IMP.step===3?'本次结果':'确认写入前不会修改业务数据'}</span></span></h4><div class="bd">
     ${lgSteps(IMP_STEPS, IMP.step)}
     ${IMP.step>0?`<div class="imp-summary"><strong>${esc(domainTitle)}</strong><span>${esc(IMP.fileName||(IMP.file&&IMP.file.name)||'')}</span>
       ${IMP.step<3?`<span style="margin-left:auto"><button class="btn sm" data-act="impStep" title="处理中请稍候，完成后可修改" data-step="0"${IMP.busy||IMP.working?' disabled':''}>文件与范围</button>
         ${IMP.step===2?`<button class="btn sm" data-act="impStep" title="处理中请稍候，完成后可返回核对" data-step="1"${IMP.busy?' disabled':''}>核对列</button>`:''}</span>`:''}</div>`:''}
     ${IMP.step===0?`${FBAR({cls:'pane',body:`<div class="fi"><label>导入类型</label><select class="inp" data-act="impDomain"${IMP.working?' disabled':''}>${doms||'<option value="">暂无导入类型</option>'}</select></div>`})}
       ${ctxBar}
-      ${sch&&sch.note?`<div class="tip">${lgMd(sch.note)}</div>`:''}
+      ${sch&&sch.note?`<div class="tip imp-guidance">${lgMd(sch.note)}</div>`:''}
       ${lgPick('iimp','impPick','impParse',IMP.file,'自动识别工作表和表头')}
       ${highest>0?`<div class="imp-actions"><button class="btn" data-act="impStep" title="处理中请稍候，完成后可返回核对" data-step="1"${IMP.working?' disabled':''}>继续核对已解析的列</button></div>`:''}`:''}
   </div></div>`;
@@ -468,7 +469,7 @@ V.imp = () => {
       + IMP.cols.map(c => `<td>${cellOf(c)}</td>`).join('') + '</tr>';
     mapCard = `<div class="card" style="margin-top:calc(12px * var(--fscale))"><h4>列映射<span class="sp"><span class="mut sm">
       核对每列的去向，认错的可以改</span></span></h4><div class="bd">
-      ${sch && sch.rule_note ? `<div class="tip" style="margin-bottom:calc(8px * var(--fscale))">${lgMd(sch.rule_note)}</div>` : ''}
+      ${sch && sch.rule_note ? `<div class="tip imp-guidance" style="margin-bottom:calc(8px * var(--fscale))">${lgMd(sch.rule_note)}</div>` : ''}
       ${IMP.memory?`<details class="imp-block"><summary>已沿用上次列对应，可修改</summary>${lgMd(IMP.memory)}</details>`:''}
       ${sch&&sch.keep_note?`<details class="imp-block"><summary>哪些内容不导入</summary>${lgMd(sch.keep_note)}</details>`:''}
       <div class="tw">${TBL({cls:'sm',head:'<th style="min-width:92px"></th>'+IMP.cols.map(c => `<th style="vertical-align:bottom;min-width:136px">
@@ -502,7 +503,7 @@ V.imp = () => {
             })
           : '' /* ⚠️ **一行"去向"都没内容 ⇒ 整行不画**（本域没这条信息，画个空行像坏了）*/
       ]})}</div>
-      <div class="tip ${lack.length ? 'wn' : ''}" style="margin-top:calc(10px * var(--fscale))">${lack.length
+      <div class="tip imp-readiness ${lack.length ? 'wn' : ''}" style="margin-top:calc(10px * var(--fscale))">${lack.length
         ? `缺少必填列：<b>${esc(lack.join(' / '))}</b>。请在上表补齐对应列。`
         : '必填列已齐全，可以检查数据。'}</div>
       ${(() => {
@@ -519,7 +520,7 @@ V.imp = () => {
           + `<td>${tagOf(kkinds[f.label] || '')}</td></tr>`).join('');
         const miss = fields.filter(f => !has(f.label)).length;
         const hint = String((sch && sch.field_list_hint) || '');
-        return `${hint ? `<div class="tip" style="margin-top:calc(10px * var(--fscale))">${lgMd(hint)}</div>` : ''}`
+        return `${hint ? `<div class="tip imp-guidance" style="margin-top:calc(10px * var(--fscale))">${lgMd(hint)}</div>` : ''}`
              + `<details style="margin-top:calc(8px * var(--fscale))"><summary class="mut sm" style="cursor:pointer">`
              + `本系统要哪些列 · ${fields.length} 列，未对应 ${miss} 列</summary>`
              + `<div class="tw" style="margin-top:calc(8px * var(--fscale))">${TBL({cls:'sm',head:'<th style="text-align:left">列名</th><th style="text-align:left">你表里</th><th style="text-align:left">去向</th>',

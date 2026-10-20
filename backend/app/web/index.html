@@ -385,6 +385,148 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .jc-pay-ref{cursor:pointer}
 .jc-pay-ref:hover td{background:var(--sf2)}
 tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -2px var(--pri)}
+/* 本轮逐页精修：只作用于对应工作区，不覆盖全站表格。 */
+.home-workspace>h5{font-size:inherit;font-weight:600;margin:calc(4px * var(--fscale)) 0 calc(8px * var(--fscale))}
+.home-workspace>h5:not(:first-child){margin-top:calc(20px * var(--fscale))}
+.home-workspace .todo-clear{background:transparent;box-shadow:none}
+.home-workspace .todo-clear .v{font-size:calc(20px * var(--fscale));color:var(--mut)}
+.home-workspace .todo-clear .k{font-weight:400}
+.home-run{grid-template-columns:1fr}
+.home-run .kpi{padding:calc(12px * var(--fscale))}
+.m02-guidance{color:var(--mut);line-height:1.6;margin-bottom:calc(12px * var(--fscale))}
+.m02-workspace .kv{grid-template-columns:minmax(calc(150px * var(--fscale)),auto) 1fr;gap:calc(10px * var(--fscale)) calc(24px * var(--fscale))}
+.m02-workspace .card h4{flex-wrap:wrap;gap:calc(8px * var(--fscale))}
+.m02-history>summary,.m02-help>summary{cursor:pointer;padding:calc(10px * var(--fscale)) 0;font-weight:500}
+.m02-workspace .tw{min-height:0;max-height:60vh}
+.m02-workspace table th:nth-child(1),.m02-workspace table td:nth-child(1){white-space:nowrap;min-width:calc(164px * var(--fscale))}
+.m02-workspace table th:nth-child(2),.m02-workspace table td:nth-child(2){min-width:calc(170px * var(--fscale))}
+.m02-workspace table td:last-child{white-space:nowrap}
+.m02-workspace table{min-width:calc(720px * var(--fscale))}
+.m02-error{margin-top:calc(4px * var(--fscale));overflow-wrap:anywhere}
+.m02-error>summary{cursor:pointer;color:var(--dg)}
+.m02-error>div{max-width:75ch;padding-top:calc(6px * var(--fscale));white-space:normal}
+.m02-help{margin-top:calc(8px * var(--fscale));color:var(--mut)}
+.m02-help p{line-height:1.7;max-width:75ch}
+.awf-workspace .tw{min-height:0}
+.awf-batch-entry{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale));padding:calc(12px * var(--fscale));border-top:1px solid var(--bd)}
+.section-nav{display:flex;flex-wrap:wrap;gap:calc(16px * var(--fscale));margin-bottom:calc(12px * var(--fscale))}
+.section-nav a{color:var(--pri);text-underline-offset:.2em}
+.rules-workspace .card{scroll-margin-top:calc(12px * var(--fscale));margin-bottom:calc(16px * var(--fscale))!important}
+.rules-workspace .dt{min-width:calc(800px * var(--fscale))}
+.rules-workspace .bd.np{overflow-x:auto}
+#rule-exclusions th:first-child,#rule-exclusions td:first-child{min-width:calc(132px * var(--fscale));white-space:nowrap}
+#rule-exclusions th:last-child,#rule-exclusions td:last-child{min-width:calc(130px * var(--fscale));white-space:nowrap}
+.rule-values{min-width:calc(320px * var(--fscale));line-height:1.7;overflow-wrap:anywhere}
+.rule-values>span{display:inline-block;margin-right:calc(14px * var(--fscale))}
+.account-access{padding:calc(10px * var(--fscale)) calc(12px * var(--fscale));color:var(--mut);border-bottom:1px solid var(--bd)}
+.users-workspace h4{flex-wrap:wrap;gap:calc(8px * var(--fscale))}
+.users-workspace .sp{flex-wrap:wrap}
+.users-workspace .btn:disabled{opacity:1;color:var(--mut);background:var(--sf2);border-color:var(--bd);cursor:not-allowed}
+.users-workspace .tw{min-height:0}
+.set-theme-caption{display:flex;align-items:baseline;justify-content:space-between;gap:calc(8px * var(--fscale));text-align:left;line-height:1.5}
+.set-theme-caption b{font-size:calc(14px * var(--fscale));font-weight:600;overflow-wrap:anywhere}
+.set-theme-state{flex-shrink:0;font-size:calc(12px * var(--fscale));font-weight:600;color:var(--sample-tx)}
+.imp-overview>.bd>.fbar.pane{background:transparent;border:0;border-radius:0;padding:calc(8px * var(--fscale)) 0;margin:0}
+.imp-overview>.bd>.fbar.pane+.fbar.pane{border-top:1px solid var(--bd)}
+.imp-workspace .tip.imp-guidance,.imp-workspace .tip.imp-readiness:not(.wn){background:transparent;border:0;border-radius:0;color:var(--tx);padding:calc(6px * var(--fscale)) 0;line-height:1.6}
+/* TAIL-357 / 361 / 362: page-scoped width, hierarchy and fixed identity. */
+.project-archive .dt[data-sort-key="m01:projects"]{min-width:calc(1780px * var(--fscale))}
+.project-archive .project-display{width:calc(232px * var(--fscale));min-width:calc(232px * var(--fscale))}
+.project-archive .project-full{width:calc(360px * var(--fscale));min-width:calc(360px * var(--fscale));line-height:1.5;resize:vertical;display:block}
+.project-archive .project-warehouse{min-width:calc(200px * var(--fscale));max-width:calc(280px * var(--fscale));overflow-wrap:anywhere;background:var(--sf2);color:var(--tx2)}
+.project-archive textarea.inp:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 2px var(--pri-bd)}
+.project-archive textarea.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;cursor:not-allowed}
+.project-archive .dt[data-sort-key="m01:projects"] th:nth-child(3),.project-archive .dt[data-sort-key="m01:projects"] td:nth-child(3){position:sticky;left:0;z-index:3;background:var(--sf)}
+.project-archive .dt[data-sort-key="m01:projects"] th:last-child,.project-archive .dt[data-sort-key="m01:projects"] td:last-child{position:sticky;right:0;z-index:3;background:var(--sf);min-width:calc(142px * var(--fscale));border-left:1px solid var(--bd)}
+.project-archive .dt[data-sort-key="m01:projects"] th:nth-child(3),.project-archive .dt[data-sort-key="m01:projects"] th:last-child{z-index:4;background:var(--sf2)}
+.project-archive .dt tbody tr:hover td:nth-child(3),.project-archive .dt tbody tr:hover td:last-child{background:var(--row-hover)}
+.project-archive .dt tbody tr.hl td:nth-child(3),.project-archive .dt tbody tr.hl td:last-child{background:var(--wn-l)}
+.process-report .process-matrix td{border-bottom-color:var(--bd2);border-right:0}
+.process-report .process-matrix th.fl,.dt[data-sort-key="m07:bigtable"] th.fl{z-index:4}
+.process-report .process-matrix .vsep{border-left:1px solid var(--bd)}
+.process-report .process-matrix th:nth-child(n+12){background:var(--edit-l);color:var(--tx)}
+.process-report .proc-mechanical{min-width:calc(132px * var(--fscale))}
+.process-report .proc-mechanical .inp{background:var(--edit-l);border-color:var(--edit-bd)}
+.process-report .proc-mechanical .inp:hover{border-color:var(--pri)}
+.process-report .process-matrix .sumrow td{font-weight:600}
+.process-report .process-matrix tbody tr:last-child td{font-weight:600;border-top:1px solid var(--bd)}
+.summary-nav{position:sticky;top:0;z-index:6;display:flex;flex-wrap:wrap;gap:calc(8px * var(--fscale));padding:calc(8px * var(--fscale)) 0;margin-bottom:calc(8px * var(--fscale));background:var(--bg)}
+.summary-nav a{text-decoration:none}
+.summary-nav a:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
+.summary-section{scroll-margin-top:calc(64px * var(--fscale))}
+#summary-warehouses .tag.t-ok{color:var(--tx2);background:var(--sf2);border-color:var(--bd2)}
+.dt[data-sort-key="m07:bigtable"] td.bigc{vertical-align:bottom}
+.dt[data-sort-key="m07:bigtable"] td.bigc .ctag{position:static;display:block;text-align:left;font-size:calc(10.5px * var(--fscale));line-height:1.4;margin-bottom:calc(3px * var(--fscale));white-space:nowrap}
+.dt[data-sort-key="m07:bigtable"] td.bigc .inp{padding-left:calc(6px * var(--fscale));font-variant-numeric:tabular-nums}
+.dt[data-sort-key="m07:bigtable"] td.bigc-ym .inp{min-width:11ch;width:11ch;text-align:left}
+.dt[data-sort-key="m07:bigtable"] td.bigc-m .inp{min-width:20ch;width:20ch}
+.dt[data-sort-key="m07:bigtable"] td.bigc-t .inp{min-width:28ch;width:28ch;text-align:left}
+.inventory-detail .dt[data-sort-key="m08:invoices"]{min-width:calc(2650px * var(--fscale))}
+.inventory-detail .dt[data-sort-key="m08:invoices"] th:first-child,.inventory-detail .dt[data-sort-key="m08:invoices"] td:first-child{position:sticky;left:0;z-index:3;min-width:24ch;white-space:nowrap;background:var(--sf);border-right:1px solid var(--bd)}
+.inventory-detail .dt[data-sort-key="m08:invoices"] th:nth-child(2),.inventory-detail .dt[data-sort-key="m08:invoices"] td:nth-child(2){min-width:calc(64px * var(--fscale));white-space:nowrap}
+.inventory-detail .dt[data-sort-key="m08:invoices"] th:nth-child(4),.inventory-detail .dt[data-sort-key="m08:invoices"] td:nth-child(4){min-width:calc(180px * var(--fscale));max-width:calc(240px * var(--fscale));overflow-wrap:anywhere}
+.inventory-detail .dt[data-sort-key="m08:invoices"] th:nth-child(5),.inventory-detail .dt[data-sort-key="m08:invoices"] td:nth-child(5){min-width:calc(220px * var(--fscale));width:calc(240px * var(--fscale));max-width:calc(320px * var(--fscale));white-space:normal;overflow-wrap:anywhere;color:var(--tx2)}
+.inventory-detail .dt[data-sort-key="m08:invoices"] th:last-child,.inventory-detail .dt[data-sort-key="m08:invoices"] td:last-child{position:sticky;right:0;z-index:3;min-width:calc(142px * var(--fscale));background:var(--sf);border-left:1px solid var(--bd)}
+.inventory-detail .dt[data-sort-key="m08:invoices"] th:first-child,.inventory-detail .dt[data-sort-key="m08:invoices"] th:last-child{z-index:4;background:var(--sf2)}
+.inventory-detail .dt tbody tr:hover td:first-child,.inventory-detail .dt tbody tr:hover td:last-child{background:var(--row-hover)}
+.inventory-detail .dt tbody tr.hl td:first-child,.inventory-detail .dt tbody tr.hl td:last-child{background:var(--wn-l)}
+.inventory-detail .dt tbody tr.sumrow td:first-child,.inventory-detail .dt tbody tr.sumrow td:last-child{background:var(--sf2)}
+.inventory-detail .iv-col-filter{background:transparent;border-color:transparent;color:var(--tx2)}
+.inventory-detail .iv-col-filter:hover,.inventory-detail .iv-col-filter:focus-visible{background:var(--sf);border-color:var(--pri);color:var(--tx)}
+.inventory-detail .iv-col-filter.is-filtered{background:var(--pri-l);border-color:var(--pri-bd);color:var(--pri-d)}
+.inventory-detail .iv-filter-note{font-size:calc(10px * var(--fscale));margin-left:calc(3px * var(--fscale));font-weight:500}
+
+/* TAIL-358/359/360: scoped financial workspaces; shared tables and dialogs retain their styles. */
+.financial-heading{flex-shrink:0;white-space:nowrap}
+.notice-workspace>h4,.procurement-workspace>h4{flex-wrap:wrap}
+.card>h4 .financial-tools{flex-wrap:wrap;justify-content:flex-end}
+.financial-batch{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale)) calc(20px * var(--fscale));padding:calc(8px * var(--fscale)) calc(13px * var(--fscale));border-bottom:1px solid var(--bd2)}
+.financial-action-group{display:flex;align-items:center;flex-wrap:wrap;gap:calc(6px * var(--fscale))}
+.notice-selection{flex-wrap:wrap;gap:calc(8px * var(--fscale));padding:calc(8px * var(--fscale)) calc(12px * var(--fscale))}
+.notice-selection .dv{margin:0 calc(4px * var(--fscale))}
+.notice-selection .act,.notice-selection .act>.sp{display:flex;flex-wrap:wrap;align-items:center;gap:calc(6px * var(--fscale))}
+.notice-table{min-width:calc(2250px * var(--fscale))}
+.notice-table .nt-code{white-space:nowrap;min-width:18ch}
+.notice-table .nt-project{min-width:calc(140px * var(--fscale));max-width:calc(220px * var(--fscale));white-space:normal;overflow-wrap:anywhere}
+.notice-table .nt-title{min-width:calc(230px * var(--fscale));max-width:calc(320px * var(--fscale));overflow-wrap:anywhere}
+.notice-table .nt-party{min-width:calc(130px * var(--fscale));max-width:calc(200px * var(--fscale));overflow-wrap:anywhere}
+.notice-table .nt-supplier{min-width:calc(200px * var(--fscale));max-width:calc(280px * var(--fscale));overflow-wrap:anywhere}
+.notice-table .num,.procurement-table .num,.flow-table .num{white-space:nowrap;font-variant-numeric:tabular-nums}
+.debt-overviews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(12px * var(--fscale))}
+.debt-overview{min-width:0}
+.debt-overview>.bd{max-height:calc(160px * var(--fscale));overflow:auto;scrollbar-gutter:stable}
+.debt-overview .br{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:calc(4px * var(--fscale)) calc(8px * var(--fscale))}
+.debt-overview .br .nm{min-width:0;overflow-wrap:anywhere}
+.debt-overview .br .tk{display:none}
+.debt-overview .br .vl{white-space:nowrap}
+.debt-ledger-stack{display:grid;gap:calc(20px * var(--fscale));margin-top:calc(12px * var(--fscale))}
+.debt-ledger{min-width:0}
+.debt-ledger+.debt-ledger{border-top:1px solid var(--bd2);padding-top:calc(16px * var(--fscale))}
+.debt-ledger .tw{min-height:0;max-height:calc(360px * var(--fscale))}
+.debt-ledger table{min-width:calc(760px * var(--fscale))}
+.debt-ledger td.num,.debt-ledger .sumrow>td{white-space:nowrap}
+.payment-statistics>h4,.payment-flows>h4{flex-wrap:wrap}
+.payment-statistics>h4 .sp,.payment-flows>h4 .sp{flex-wrap:wrap}
+.payment-statistics .grid2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.payment-statistics .bars .br{display:grid;grid-template-columns:minmax(0,1fr) minmax(calc(24px * var(--fscale)),.3fr) max-content}
+.payment-statistics .bars .nm{min-width:0}
+.payment-statistics .bars .vl{white-space:nowrap}
+.flow-table{min-width:calc(1920px * var(--fscale))}
+.flow-table td.fc{white-space:nowrap}
+.procurement-table{min-width:calc(2080px * var(--fscale))}
+.procurement-table .jc-contract-code{white-space:nowrap;min-width:19ch}
+.procurement-table .jc-supplier{min-width:calc(180px * var(--fscale));max-width:calc(260px * var(--fscale));overflow-wrap:anywhere}
+.procurement-table .sumrow>td:first-child{white-space:nowrap}
+.procurement-table th.fl{z-index:4}
+@media(max-width:1050px){
+  .debt-overviews{grid-template-columns:1fr}
+  .debt-overview>.bd{max-height:calc(112px * var(--fscale))}
+  .payment-statistics .grid2{grid-template-columns:1fr}
+  .card>h4 .financial-tools{margin-left:0}
+  .notice-selection{position:static}
+}
+
+.notice-table .sumrow>td:first-child{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -558,11 +700,13 @@ V.home=()=>{
     tile('ownership',nOwn,'wn','归属待指定',nOwn,'尚未确定所属项目的通知书','m03','去指定归属'),
     tile('placeholder',ph.length,'wn','占位行待扶正',ph.length,ph.length?('陌生仓库占位行：「'+esc(ph.map(p=>p.name).join('、'))+'」 · '):'— · ','m01','去项目档案'),
     tile('jcUnlinked',nNoLink,'wn','集采未关联合同',nNoLink,'未挂合同的集采通知书<b>付不了款</b>（已付清的不计） · ','m03','去关联合同'),
-    tile('voidJoint',nVoidJ,'dg','撤单但有牵涉',nVoidJ,'i8 已撤单却仍挂着付款 / 关联 —— 仍参与统计，要先撤销付款 / 解绑 · ','m03','去处理'),
+    tile('voidJoint',nVoidJ,'dg','撤单但有牵涉',nVoidJ,'i8 已撤单却仍挂着付款 / 关联 —— 仍参与统计，要先撤销付款 / 解绑 · ','m03','去处理')
+  ];
+  const runTiles=[
     runTile('fetchDue',fDone?0:1,fDone?'ok':'wn','本月抓取',fDone?'已抓':'未抓','本月（'+bjMonth()+'）'+(fDone?'已有成功抓取':'尚无成功抓取')+' · ','m02','去抓取任务')
   ];
   return `<div class="card"><h4>待办<span class="sp"><span class="mut sm">${tN?`共 ${tN} 项需处理`:'当前没有需要处理的事'}</span></span></h4>
-    <div class="bd"><div class="todo-grid">${todoTiles.join('')}</div></div></div>`;
+    <div class="bd home-workspace"><h5>业务待办</h5><div class="todo-grid">${todoTiles.join('')}</div><h5>取数状态</h5><div class="todo-grid home-run">${runTiles.join('')}</div></div></div>`;
   /* 业务事实监测告警卡已撤（2026-09-14 看板改造）：① 事实 1 并入上方「占位行待扶正」瓦片
      —— 两者同一数据源（PJs.filter(p => p.name.startsWith('未建仓-'))）；
      ② 事实 2（档案行数 vs i8 仓库数）按 2026-09-12 用户口径「不需要这个监控相关的东西」随卡移除。 */
@@ -593,13 +737,13 @@ V.m03=()=>{
     return `<tr data-notice-id="${n.id}" data-paste-top="${ntPasteTop.has(n.id)?1:0}" class="${ntArchCls(n)} ${pickSet.has(n.id)?'pick':''} ${ntFocusId===n.id?'nt-focus':''}">
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="pick" data-id="${n.id}" ${pickSet.has(n.id)?'checked':''} ${ntSelectable(n)?'':'disabled'}></td>
       <td class="now">${n.date}</td>
-      <td class="fc">${n.code}</td>
-      <td class="now" title="付款项目全名：${esc(n.proj)}">${dispCell(n.proj,n)}</td>
+      <td class="fc nt-code">${n.code}</td>
+      <td class="nt-project" title="付款项目全名：${esc(n.proj)}">${dispCell(n.proj,n)}</td>
       <td class="ctr">${ntArchTag(n)||`<select class="inp plain" style="width:auto" data-act="editCat" data-id="${n.id}" title="单行直接改分类，无需先勾选">${optsOf(enumVals('cat'),n.cat)}</select>`}</td>
-      <td>${esc(n.doc)}</td>
-      <td class="sm">${esc(n.biz)}</td>
-      <td class="sm">${esc(n.recv)}</td>
-      <td>${(!n.excl&&!ntVoid(n)&&n.cat==='集采')
+      <td class="nt-title">${esc(n.doc)}</td>
+      <td class="sm nt-party">${esc(n.biz)}</td>
+      <td class="sm nt-party">${esc(n.recv)}</td>
+      <td class="nt-supplier">${(!n.excl&&!ntVoid(n)&&n.cat==='集采')
         ? `<div style="display:flex;flex-direction:column;gap:calc(4px * var(--fscale))"><div style="display:flex;align-items:center;gap:calc(6px * var(--fscale))"><span class="${supHas(n)?'ed':''}">${esc(n.sup)||'<span class="mut">未录入</span>'}</span><button class="btn sm" data-act="supEditOpen" data-id="${n.id}">${n.sup?'修改':'录入'}</button></div>${supAutoCell(n)}${jcLinkCell(n)}</div>`
         : '<span class="mut sm" title="仅「集采」分类的记录可填该字段；i8 不提供该字段，抓取后为空">—</span>'}</td>
       <td class="sm">${esc(n.entry)}</td>
@@ -627,7 +771,7 @@ V.m03=()=>{
        : EMPTYROW(thCount(NT_THEAD), '当前筛选条件下没有付款通知书'+(ntDraftOn()?'（正在新增 1 行：填完点该行「保存」）':''), '换个筛选条件；或点右上角「＋ 手动新增通知书」补一行、或「抓取 i8 付款通知书（按月）」'));
   return `
     <div class="tip"><b>统计结算 / 统计付款金额</b>只能往下调（上限 = 审批金额）；<b>付款金额</b>手改只本次会话有效，<b>统计两金额</b>才持久（留痕、不被导入覆盖）。</div>
-  <div class="selbar">
+  <div class="selbar notice-selection">
     <div class="m"><span class="k">已勾选</span><span class="v">${pk.length} 行</span>${pk.length>pkPay.length?` <span class="tag t-wn" title="选中的行里有剔除行 / i8 撤单行 —— 它们不进付款批次（付款闸只收付款候选）；能被勾选是为了另一件事：「恢复剔除」。下面两项金额只算能付款的那些行。">其中 ${pk.length-pkPay.length} 条不进付款批次</span>`:""}</div>
     <div class="dv"></div>
     <div class="m"><span class="k">已勾选审批金额</span><span class="v">${MONEY(pkA)}</span></div>
@@ -640,19 +784,19 @@ V.m03=()=>{
       <button class="btn pri" data-act="batchPay" ${pk.length?'':'disabled'} title="${pk.length?'把已勾选的付款通知书提交付款（剔除行 / i8 撤单行不进批次）':'未勾选时置灰 —— 先勾选要付的行'}">付款${pk.length?` · ${pk.length} 条`:''}</button>
     </div>
   </div>
-  <div class="card" style="margin-bottom:0">
-    <h4>付款通知书<span class="sp" style="flex-wrap:wrap;justify-content:flex-end">
+  <div class="card notice-workspace" style="margin-bottom:0">
+    <h4><span class="financial-heading">付款通知书</span><span class="sp financial-tools">
       <button class="btn" data-act="fetchNt" title="i8 改了单据再抓一次：已手改的统计金额保住、未手改的跟随新审批金额（越界则挂「导入提醒」）；分类 / 集采供应商 / 调整单不被覆盖">抓取 i8 付款通知书（按月）</button>
       <button class="btn" data-act="ntRowAdd" title="在表尾增行录入一行付款通知书（不再弹窗）—— 用于付「期初占位行」的款（该笔无 i8 单据）；统计结算金额恒为 0、不可修改">＋ 手动新增通知书</button>
-      <span class="mut sm" style="margin:0 calc(2px * var(--fscale))">｜</span>
-      <span class="pill">批量改分类${pk.length?` · 已选 ${pk.length}`:' · 先勾选'}</span>
-      ${enumVals('cat').map(c=>`<button class="btn" data-act="batchCatApply" data-c="${c}" ${pk.length?'':'disabled'} title="把已勾选的行直接改为「${c}」，一次点击完成（未勾选时置灰 —— 先勾选行再用）">→ ${c}</button>`).join('')}
-      <span class="mut sm" style="margin:0 calc(2px * var(--fscale))">｜</span>
-      <button class="btn dg" data-act="batchEx" ${pk.length?'':'disabled'} title="把已勾选的这些行标成「剔除」：默认不再显示、也不计入欠款 —— 标记保留，随时可用「恢复剔除」放回来（未勾选时置灰 —— 先勾选行再用）">批量剔除</button>
-      <button class="btn" data-act="batchUnEx" title="只对已勾选的行生效：把勾选行里被剔除的记录恢复回来 —— 「人工批量剔除」和「规则命中」两类都恢复（§4.2.2）。恢复后这一行重新计入欠款与付款；想让它长期被剔除，请改「规则配置」并再抓一次（改规则本身不重算已有的剔除标记）">恢复剔除</button>
-      <span class="mut sm" style="margin:0 calc(2px * var(--fscale))">｜</span>
       <button class="btn pri" data-act="exp" data-t="付款通知书台账" title="导出当前筛选下看到的这些行">导出 Excel</button>
     </span></h4>
+    <div class="financial-batch" role="group" aria-label="已勾选通知书的批量处理"><div class="financial-action-group">
+      <span class="pill">批量改分类${pk.length?` · 已选 ${pk.length}`:' · 先勾选'}</span>
+      ${enumVals('cat').map(c=>`<button class="btn" data-act="batchCatApply" data-c="${c}" ${pk.length?'':'disabled'} title="把已勾选的行直接改为「${c}」，一次点击完成（未勾选时置灰 —— 先勾选行再用）">→ ${c}</button>`).join('')}
+      </div><div class="financial-action-group">
+      <button class="btn dg" data-act="batchEx" ${pk.length?'':'disabled'} title="把已勾选的这些行标成「剔除」：默认不再显示、也不计入欠款 —— 标记保留，随时可用「恢复剔除」放回来（未勾选时置灰 —— 先勾选行再用）">批量剔除</button>
+      <button class="btn" data-act="batchUnEx" title="只对已勾选的行生效：把勾选行里被剔除的记录恢复回来 —— 「人工批量剔除」和「规则命中」两类都恢复（§4.2.2）。恢复后这一行重新计入欠款与付款；想让它长期被剔除，请改「规则配置」并再抓一次（改规则本身不重算已有的剔除标记）">恢复剔除</button>
+    </div></div>
     ${FBAR({body:`
       <div class="fi"><label>单据年月</label>${tmBtn('ntMonth',{scope:'nt',val:fNt.month,label:tmLabel(fNt.month),modes:['月','跨月','年','全部']})}</div>
       <div class="fi"><label>对应单据日期（闭区间）</label><input class="inp" readonly style="width:198px" value="${esc(tmRange(fNt.month))}" title="按单据日期起止筛选，闭区间；抓取按时间全量、不选项目、不分页（§4.2.1）"></div>
@@ -666,7 +810,7 @@ V.m03=()=>{
       <button class="btn" data-act="filterReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(fNt.month)} 有效 ${NO.filter(n=>ntLive(n)&&inM(n)).length} 条 ｜ 剔除 ${NO.filter(n=>n.excl&&inM(n)).length} 条 ｜ i8 已撤单 ${NO.filter(n=>ntVoid(n)&&inM(n)).length} 条${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length?` ｜ <span class="tag t-dg" title="这些单据在 i8 侧被删了，但仍挂着付款流水 / 集采关联 —— 有牵涉时不许静默退出统计，它们仍参与统计。请先撤销付款 / 解绑关联，处理完它才退出统计；切「分类 = 剔除」可见。">⚠ 其中 ${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length} 条有牵涉</span>`:''}（切「分类 = 剔除」查看）</span>
     `})}
-    <div class="tw">${TBL({head:NT_THEAD,key:'m03:notices',rows:[tb]})}</div>
+    <div class="tw">${TBL({head:NT_THEAD,key:'m03:notices',cls:'notice-table',rows:[tb]})}</div>
   </div>`;
 };
 
@@ -699,7 +843,7 @@ V.m05=()=>{
     ks.delete('');
     return [...ks].map(k=>[k,projValOf(sc,k)]).sort((a,b)=>b[1]-a[1]); };
   const barCard=sc=>{ const list=barsOf(sc), mx=Math.max(...list.map(x=>x[1]),1);
-    return `<div class="card"><h4>按项目看<b>${sc}</b>欠款</h4><div class="bd">
+    return `<div class="card debt-overview"><h4>按项目看<b>${sc}</b>欠款</h4><div class="bd" tabindex="0" role="region" aria-label="${sc}各项目欠款">
       <div class="bars">${list.map(([k,dd])=>
         `<div class="br"><span class="nm" title="${esc(pjLabel(k))}">${esc(pjLabel(k))}</span>
           <span class="tk"><i class="${dd>0?'o':'g'}" style="width:${Math.max(2,(dd/mx*100)).toFixed(1)}%"></i></span>
@@ -721,7 +865,7 @@ V.m05=()=>{
     const mLast=mrows.length?mrows[mrows.length-1]:null;
     const add=mLast?N2(mLast.s-mLast.p):null;                    /* 最近一月：其他支出金额 − 付款（当月新增，非累计） */
     const upto=(mLast?mLast.ym:(rows.length?rows[rows.length-1].ym:''))||'—';
-    return `<div>
+    return `<section class="debt-ledger" aria-label="${sc}欠款台账">
       <div style="display:flex;align-items:baseline;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-bottom:calc(6px * var(--fscale))">
         <b>${sc}欠款台账</b>
         <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 自期初起累计（各月 结算 − 付款，含期初占位行）—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含期初）</span><b class="fc">${MONEY(cur)}</b><span class="mut sm">截至 ${esc(upto)}</span>
@@ -749,7 +893,7 @@ V.m05=()=>{
         4:[rs=>N2(rs.reduce((a,x)=>a+x.s-x.p,0)),v=>'<b>'+M(v)+'</b><span class="mut sm"> 当前欠款</span>']},
         {lead:`截至 ${esc(upto)}`,leadSpan:2,leadCls:'ctr',style:'',
          tip:`自期初起累计；欠款 = 本项目截至 ${upto} 还欠多少，与本栏上方同源`}):'',
-      empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；期初底数用本栏右上角「＋ 录入${sc}期初」补`)})}</div></div>`; };
+      empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；期初底数用本栏右上角「＋ 录入${sc}期初」补`)})}</div></section>`; };
   /* —— 付款流水（**实际付款记录**）——
      ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 —— 默认按「当前核算月」核算**（一个月内流水有限）
         ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 / 关键词（各数据列）
@@ -780,8 +924,8 @@ V.m05=()=>{
   <!-- 2026-09-28（用户口径 · 看板清账）：本页 4 条 KPI（欠款合计 / 辅材 / 机械 / 集采）<b>全删</b>
        —— 用户判「无用」。要看这三类欠款请看下方「<b>按项目看…欠款</b>」那三栏（那才是能定位到项目的数）。
        ⛔ 别再加回来（删除已登记）。⚠️ 本注释在模板字面量的文本区 ⇒ ⛔ 不许出现反引号。 -->
-  <div class="grid2" style="grid-template-columns:repeat(3,1fr)">${barCard('集采')}${barCard('辅材')}${barCard('机械')}</div>
-  <div class="card" style="margin-bottom:calc(12px * var(--fscale))"><h4>逐月欠款台账<span class="sp" style="flex-wrap:wrap;justify-content:flex-end">
+  <div class="debt-overviews">${barCard('集采')}${barCard('辅材')}${barCard('机械')}</div>
+  <div class="card debt-ledgers" style="margin-bottom:calc(12px * var(--fscale))"><h4>逐月欠款台账<span class="sp" style="flex-wrap:wrap;justify-content:flex-end">
     <button class="btn pri${ledExpOn?' on':''}" data-act="ledExpToggle" title="两个导出都在这条面板里：① 逐月台账 —— 每个项目一个工作簿（辅材欠款 / 机械欠款 / 特殊费用月报表）② 总欠款汇总 —— 每个项目一行（可挑项目与行序）">批量导出（先选项目）…</button>
   </span></h4>
     <div class="bd">
@@ -795,9 +939,9 @@ V.m05=()=>{
         <span class="pjwrap" style="position:relative;display:inline-block">${PJB({act:'ledPjToggle',panel:ledPjPanel,w:150,label:`${esc(pjLabel(lp))}${pjArcMark(pjRowOf(lp))}`,cls:`btn${pjIsOpen('ledPj')?' on':''}`,attrs:' title="台账左右两栏「共用」这一个项目（切一次两边都换）；⛔ 它只管屏幕上看哪一行 —— 导出要包含哪些项目在「导出…」那条面板里"'})}${pjIsOpen('ledPj')?ledPjPanel():''}</span>
       </div>
       <div class="mut sm">台账按单据日期归月，为了监控拖了很久的付款：单据日期越早，拖延越久。</div>
-      <div class="grid2">${ledHalf('辅材')}${ledHalf('机械')}</div></div>
+      <div class="debt-ledger-stack">${ledHalf('辅材')}${ledHalf('机械')}</div></div>
   </div>
-  <div class="card" style="margin-bottom:calc(12px * var(--fscale))"><h4>付款统计<span class="sp" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn sm${pd.g==='周'?'':' gost'}" data-act="pstGran" data-g="周">按周（周一 ~ 周日）</button>
+  <div class="card payment-statistics" style="margin-bottom:calc(12px * var(--fscale))"><h4>付款统计<span class="sp" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn sm${pd.g==='周'?'':' gost'}" data-act="pstGran" data-g="周">按周（周一 ~ 周日）</button>
     <button class="btn sm${pd.g==='月'?'':' gost'}" data-act="pstGran" data-g="月">按月</button>
     <span class="pill">取值 = Σ <b>实际付款金额</b> · 归${pd.g==='周'?'周':'月'}按<b>付款日期</b> · 项目按<b>归属</b></span>
     <span class="mut sm" title="本页不单独设导出按钮（2026-09-13 用户口径）：它是「付款流水」的汇总视图 —— 要看数就导出付款流水">汇总视图 · 不单独导出</span>
@@ -826,7 +970,7 @@ V.m05=()=>{
       :EMPTYBOX('没有付款数据（取值 = 实际付款金额）', '换个时间范围或粒度（左上 / 右上），或清掉筛选')}
     </div>
   </div>
-  <div class="card" style="margin-bottom:0"><h4>付款流水（实际付款记录）<span class="sp"><span class="mut sm">多次付款各记一条独立流水 · <b>撤销入口在本页</b> · 撤销必须填原因</span>
+  <div class="card payment-flows" style="margin-bottom:0"><h4>付款流水（实际付款记录）<span class="sp"><span class="mut sm">多次付款各记一条独立流水 · <b>撤销入口在本页</b> · 撤销必须填原因</span>
     <button class="btn pri" data-act="exp" data-t="付款流水" title="导出当前筛选下看到的这些行">导出 Excel</button></span></h4>
     ${FBAR({body:`
       <div class="fi"><label>付款年月</label>${tmBtn('flMonth',{scope:'fl',val:flf.ym,label:tmLabel(flf.ym),modes:['月','跨月','年','全部']})}</div>
@@ -839,7 +983,7 @@ V.m05=()=>{
       <button class="btn" data-act="flReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${flList.length}</b> 条 ｜ ${tmLabel(flf.ym)} 共 <b>${flScope.length}</b> 条</span>
     `})}
-    <div class="tw">${TBL({head:FL_THEAD,key:'m05:flows',
+    <div class="tw">${TBL({head:FL_THEAD,key:'m05:flows',cls:'flow-table',
     rows:flList.map(f=>{const n=ntOf(f);
       /* ⚠️⚠️ 列序与 `FL_THEAD`、`fl_export.COLUMNS` **三处逐字对应**（`TAIL-283` ⇒ 15 列）。
          「通知书五项」读**适配层**（`adaptFlow`）的值 ⇒ 不依赖 `NO` 缓存、失联流水也照样整条显示；
@@ -878,7 +1022,7 @@ V.m01=()=>{
   const typeTag=t=>enumTag('pjType',t);
   return `
     
-  <div class="card" style="margin-bottom:0">
+  <div class="card project-archive" style="margin-bottom:0">
     <h4>项目档案<span class="sp">
       <button class="btn" data-act="pjCreateOpen">＋ 手工建档</button>
       <button class="btn" data-act="syncWh" title="从 i8 拉最新的仓库名单（会登录 i8，需二次确认）">同步仓库名单</button>
@@ -897,9 +1041,9 @@ V.m01=()=>{
       <td class="ctr now"><input class="inp num" style="width:46px" data-act="editOrd" data-id="${p.id}" value="${p.ord}" title="自定义排序号：改它 → 全站（项目 / 仓库 / 展示名）的顺序都跟着变；序号会自动重编号保持连续">
         <button class="btn sm" data-act="ordUp" data-id="${p.id}" title="上移一位">↑</button><button class="btn sm" data-act="ordDown" data-id="${p.id}" title="下移一位">↓</button></td>
       <td>${typeTag(p.type)}</td>
-      <td>${p.type==='shell'?'<span class="mut sm">壳无展示名</span>':`<input class="inp plain" style="${nameW(p.disp||p.name,162)}" data-act="editDisp" data-id="${p.id}" value="${esc(p.disp)}" placeholder="默认取仓库名">`}</td>
-      <td class="sm">${p.name?(p.name.startsWith('未建仓-')?`<span class="tag t-wn">无仓库（历史项目）</span> <span class="fc">${esc(p.name)}</span>`:`<span class="fc">${esc(p.name)}</span>`):'<span class="mut">壳无仓库</span>'}</td>
-      <td><input class="inp plain" style="${nameW(p.full,240)}" data-act="editFull" data-id="${p.id}" value="${esc(p.full)}" ${p.parent?'readonly':''} title="${p.parent?'具体小微借壳全名，不可单独修改':''}"></td>
+      <td>${p.type==='shell'?'<span class="mut sm">壳无展示名</span>':`<input class="inp project-display" aria-label="展示名：${esc(p.name)}" data-act="editDisp" data-id="${p.id}" value="${esc(p.disp)}" placeholder="默认取仓库名">`}</td>
+      <td class="sm project-warehouse">${p.name?(p.name.startsWith('未建仓-')?`<span class="tag t-wn">无仓库（历史项目）</span> <span class="fc">${esc(p.name)}</span>`:`<span class="fc">${esc(p.name)}</span>`):'<span class="mut">壳无仓库</span>'}</td>
+      <td><textarea class="inp project-full" rows="2" aria-label="项目全名：${esc(p.name||p.full)}" data-act="editFull" data-id="${p.id}" ${p.parent?'readonly':''} title="${p.parent?'具体小微借壳全名，不可单独修改':''}">${esc(p.full)}</textarea></td>
       <td class="fc sm">${p.phid||'<span class="mut">无</span>'}</td>
       <td><select class="inp plain" style="width:auto" data-act="editStatus" data-id="${p.id}">${optsOf(enumVals('pjStatus'),p.status)}</select></td>
       <td class="sm">${p.parent?esc((PJs.find(x=>x.id===p.parent)||{}).full||''):'<span class="mut">—</span>'}</td>
@@ -918,31 +1062,14 @@ V.m01=()=>{
 /* =====================================================================
    8. MOD-02 i8 接入层
    ===================================================================== */
-V.m02=()=>`
-    <div class="tip">本系统只<b>只读</b> i8（竞价平台是另一套、不接）；结存 / 库存单据<b>要等 i8 过账完成</b>才有完整数据；i8 抓不到时可<b>手动下载 Excel → 导入</b>（与抓取走同一套解析）；本页<b>不单独导出</b>（各项抓取与导出在各自业务页）。</div>
-  <div class="tip" style="margin:calc(6px * var(--fscale)) 0 0">⭐ <b>抓取一律要人点</b> —— <b>本系统没有任何定时任务</b>，不会自己每天跑一次；唯一的「自动」是集采抓完<b>自动同步一次常用项目列表</b>。</div>
-  <div class="grid2">
-    <div class="card"><h4>抓取结果回显<span class="sp"><span class="mut sm">按<b>执行记录</b>里每类抓取<b>最近一次</b>的结果（⛔ 不是某页上的实时数）</span></span></h4><div class="bd">
-      <div class="kv"><dt>付款通知书</dt><dd>${NO.length} 条（剔除 ${NO.filter(n=>n.excl).length} · i8 已撤单 ${NO.filter(n=>ntVoid(n)).length} · 有效 ${NO.filter(ntLive).length}）</dd>
-        <dt>收发结存</dt><dd>${sums(WHs,'rows')} 行 / ${WHs.length} 仓</dd>
-        <dt>库存单据明细</dt><dd>${IVs.length} 行（模拟裁剪）</dd>
-        <dt>采购合同信息</dt><dd>${JCs.length} 条（纳入台账 ${JCs.filter(j=>j.tag==='纳入台账').length}）</dd>
-        <dt>仓库列表</dt><dd>${WHs.length} 个仓库</dd>
-        <dt>常用项目列表</dt><dd>${PJs.filter(p=>p.phid).length} 个项目</dd></div>
-    </div></div>
-    <div class="card"><h4>抓取任务日志</h4><div class="bd np">${TBL({cls:'cond', key:'m02:logs',
-      head:'<th>时间</th><th>接口</th><th>结果</th><th>耗时</th>',
-      rows:[
-        '<tr><td class="fc">2026-09-11 09:12:03</td><td>API-01 付款通知书</td><td><span class="tag t-ok">成功 24 条</span></td><td class="fc">1.8s</td></tr>',
-        '<tr><td class="fc">2026-09-11 09:11:47</td><td>API-06 常用项目列表</td><td><span class="tag t-ok">成功 9 条</span></td><td class="fc">0.6s</td></tr>',
-        '<tr><td class="fc">2026-09-11 09:11:45</td><td>API-05 仓库列表</td><td><span class="tag t-ok">成功 8 条</span></td><td class="fc">0.5s</td></tr>',
-        '<tr><td class="fc">2026-09-11 07:00:00</td><td>API-04 采购合同信息</td><td><span class="tag t-pri">人工触发 · 成功 3 条</span></td><td class="fc">1.2s</td></tr>',
-        '<tr><td class="fc">2026-09-10 16:40:12</td><td>API-02 收发结存表</td><td><span class="tag t-ok">成功 675 行</span></td><td class="fc">12.4s</td></tr>',
-        '<tr><td class="fc">2026-09-10 16:38:55</td><td>API-03 库存单据明细</td><td><span class="tag t-ok">成功 1373 行</span></td><td class="fc">21.7s</td></tr>',
-        '<tr><td class="fc">2026-09-10 09:02:31</td><td>API-01 付款通知书</td><td><span class="tag t-dg">失败：登录态失效</span></td><td class="fc">3.2s</td></tr>',
-        '<tr><td class="fc">2026-09-10 09:02:34</td><td>API-01 付款通知书</td><td><span class="tag t-wn">重登后重试成功</span></td><td class="fc">2.1s</td></tr>',
-      ]})}</div></div>
-  </div>`;
+V.m02=()=>`<div class="m02-workspace">
+  <p class="m02-guidance">抓取由人工触发；结存和库存单据需等 i8 过账完成。抓取失败时，可手动下载 Excel 后从「数据导入」核对入库。</p>
+  <div class="card"><h4>抓取结果回显<span class="sp mut sm">各类最近一次执行结果</span></h4><div class="bd"><dl class="kv">${m02EchoKv()}</dl></div></div>
+  <details class="m02-history"${M02_ERR?' open':''}><summary>执行记录 · ${M02_RECS.length} 条</summary>
+    <div class="card"><div class="tw">${TBL({cls:'cond',key:'m02:logs',head:'<th>时间</th><th>动作</th><th>结果</th><th>耗时</th>',rows:[m02LogRows()]})}</div></div>
+  </details>
+  <details class="m02-help"><summary>取数说明</summary><p>本系统只读 i8，竞价平台不接入；本系统没有定时抓取，集采抓取成功后会自动同步一次常用项目列表。各业务表的导出仍在对应业务页。</p></details>
+</div>`;
 
 /* =====================================================================
    9. MOD-06 过程资料（三表对照）
@@ -961,7 +1088,7 @@ V.m06=()=>{
   const vsc=i=>SEG.indexOf(i)>=0?' vsep':'';
   const head=`<th class="fl">核算月</th>${IVC5.map((c,i)=>`<th${vs(1+i)}>入库${c}</th>`).join('')}${IVC5.map((c,i)=>`<th${vs(6+i)}>出库${c}</th>`).join('')}<th${vs(11)}>租分公司设备</th><th>内租设备</th><th>外租零租含税</th><th>外租包月含税</th><th${vs(15)}>外租零租不含税</th><th>外租包月不含税</th>`;   /* ⭐ `TAIL-64` P2②（2026-09-29）：本常量**只留 `<th>`** —— 外层 `<thead><tr>` 由表格件 `TBL` 统一拼（与 `*_THEAD` 那批同一个形态）⇒ ⛔ 别把 `<tr>` 加回来（会双套）。 */
   const mH=['租分公司设备','内租设备','外租零租含税','外租包月含税','外租零租不含税','外租包月不含税'];
-  const row=(a,b,isAdj)=>`<tr><td class="fl fc" style="white-space:nowrap">${a.ym}</td>${IVC5.map((c,i)=>`<td class="num${isAdj&&a.inC[c]!==b.inC[c]?' ed':''}${vsc(1+i)}">${M(a.inC[c])}</td>`).join('')}${IVC5.map((c,i)=>`<td class="num${isAdj&&a.outC[c]!==b.outC[c]?' ed':''}${vsc(6+i)}">${M(a.outC[c])}</td>`).join('')}${a.m.map((v,j)=>`<td class="num${vsc(11+j)}">${procMechCell(procPj,a.ym,j,v,mH[j])}</td>`).join('')}</tr>`;
+  const row=(a,b,isAdj)=>`<tr><td class="fl fc" style="white-space:nowrap">${a.ym}</td>${IVC5.map((c,i)=>`<td class="num${isAdj&&a.inC[c]!==b.inC[c]?' ed':''}${vsc(1+i)}">${M(a.inC[c])}</td>`).join('')}${IVC5.map((c,i)=>`<td class="num${isAdj&&a.outC[c]!==b.outC[c]?' ed':''}${vsc(6+i)}">${M(a.outC[c])}</td>`).join('')}${a.m.map((v,j)=>`<td class="num proc-mechanical${vsc(11+j)}">${procMechCell(procPj,a.ym,j,v,mH[j])}</td>`).join('')}</tr>`;
   /* 表① = 原始；表② = 调整后（**逐月**与原始比对，被改过的格标 `ed`） */
   const body = procTab===1 ? rows1.map((a,i)=>row(a,rows0[i],true))
                            : rows0.map(a=>row(a,a,false));       /* ⭐ `TAIL-64` P2②：**不在这里 `join`** —— 直接把行数组交给 `TBL` 的 `rows`（拼装是它的事）。 */
@@ -998,7 +1125,7 @@ V.m06=()=>{
     + `<td class="num vsep" colspan="${a0.m.length - MACH_TAX_N}">不含税合计 ${M(totMNoTax)}</td></tr>`;
   return `
     
-  <div class="card" style="margin-bottom:0">
+  <div class="card process-report" style="margin-bottom:0">
     <h4>过程资料<span class="sp pjwrap" style="position:relative"><!-- 批量导出在同一弹窗选择项目并确认；页面筛选保持独立单选。 -->
       <button class="btn" data-act="procExpToggle">批量导出（先选项目）…</button>
       <button class="btn pri" data-act="exp" data-t="过程资料" data-sub="${procTabName()}" title="这一份（朴素）导出还没有落点 —— 点了会如实说明（⛔ 不假装成功）；要按模板导出请用上面的入口">导出 Excel</button>
@@ -1025,7 +1152,7 @@ V.m06=()=>{
           + `<td class="num">${SIG(diffTotals.delta)}</td><td colspan="4"></td></tr>`]
       :[],
       empty:EMPTYROW(thCount(DIFF_THEAD), '该项目无调整，原始表与调整后表一致', '无需处理')})}</div>`:
-    `<div class="tw">${TBL({head,rows:body,sum:sumRow+totRow})}</div>`}
+    `<div class="tw">${TBL({head,rows:body,sum:sumRow+totRow,cls:'process-matrix',sty:'min-width:2100px'})}</div>`}
     
   </div>`;
 };
@@ -1046,7 +1173,7 @@ V.m07=()=>{
   const totBal=balOf({begin:sum('begin'),in:sum('in'),out:sum('out'),end:sum('end')});
   return `
     
-  <div class="card"><h4>收发结存<span class="sp">
+  <nav class="summary-nav" aria-label="汇总区段"><a class="btn" href="#summary-warehouses">收发结存</a><a class="btn" href="#summary-annual">焊材 / 气体年度汇总</a><a class="btn" href="#summary-meeting">月度会大表</a></nav><div class="card summary-section" id="summary-warehouses"><h4>收发结存<span class="sp">
     <button class="btn" data-act="fetchOne" data-t="收发结存表">抓取 i8</button>
     <button class="btn pri" data-act="zipSfjc">导出分仓库 zip</button></span></h4>
     ${FBAR({body:`
@@ -1065,7 +1192,7 @@ V.m07=()=>{
     
   </div>
   <div>
-    <div class="card"><h4>焊材 / 气体年度汇总<span class="sp">
+    <div class="card summary-section" id="summary-annual"><h4>焊材 / 气体年度汇总<span class="sp">
       
       <button class="btn" data-act="expExt">导出年度汇总</button></span></h4>
     ${FBAR({body:`
@@ -1083,7 +1210,7 @@ V.m07=()=>{
     </div></div>
     
   </div>
-  <div class="card" style="margin-bottom:0"><h4 title="正式名 = 经济活动分析大表（《材料科业务全流程说明书》§5.7）；用户 2026-09-28 定：界面上叫「月度会大表」">月度会大表<span class="sp">
+  <div class="card summary-section" id="summary-meeting" style="margin-bottom:0"><h4 title="正式名 = 经济活动分析大表（《材料科业务全流程说明书》§5.7）；用户 2026-09-28 定：界面上叫「月度会大表」">月度会大表<span class="sp">
     <span class="mut sm">核算月 ${bjMonth(-1)}</span>
     <button class="btn" data-act="bigPick">选择项目（${BIGSET.length} 项 · 可调顺序）</button>
     <button class="btn pri" data-act="bigExport" title="按模板导出：一份（全项目在一张表里 · 20 列 · 三级表头 ＋ 合计行）">按模板导出 Excel</button></span></h4>
@@ -1092,7 +1219,7 @@ V.m07=()=>{
       const cell=(i,extra)=>{ const c=r.cells[i], f=BIGFMT[i];
         const ttl=c.from?`带入自 ${c.from} 的最近一次录入值（未确认，改一下就转为本月录入）`:`${bjMonth(-1)} 本月手填`;
         const mark=c.from?`<em class="ctag" title="带入自 ${c.from}">↺${c.from.slice(5)}月</em>`:'';
-        return `<td class="num bigc ${extra||''}">${mark}<input class="inp${f==='m'?' num':''}${c.from?' ed':''}" data-act="bigEdit" data-p="${esc(r.wh)}" data-i="${i}" value="${esc(bigDisp(c.v,i))}" placeholder="${f==='ym'?'YYYY-MM':(f==='t'?'可填':'待填')}" title="${esc(ttl)}"${f==='t'?' style="min-width:118px"':''}></td>`; };
+        return `<td class="num bigc bigc-${f} ${extra||''}">${mark}<input class="inp${f==='m'?' num':''}${c.from?' ed':''}" aria-label="${esc(r.disp+' · '+BIGCOLS[i])}" data-act="bigEdit" data-p="${esc(r.wh)}" data-i="${i}" value="${esc(bigDisp(c.v,i))}" placeholder="${f==='ym'?'YYYY-MM':(f==='t'?'可填':'待填')}" title="${esc(ttl)}"${f==='t'?' style="min-width:118px"':''}></td>`; };
       const pct=v=>v==null?'<span class="mut">—</span>':PCT(v);
       return `<tr><td class="fl fc">${ri+1}</td>
       <td class="fl sm" title="${esc(r.wh)}"><div style="max-width:180px;white-space:normal;overflow-wrap:anywhere;line-height:1.4">${esc(r.disp)}</div></td>
@@ -1148,7 +1275,7 @@ V.m08=()=>{
   return `
   
   ${invOnlyAdj?`<div class="filter-status">当前为<b>差异跳转视图</b>：只显示被调整单改过的行（来自过程资料 → 差异表 → 点击差异行）。<span class="link" data-act="clearInvAdj" tabindex="0" role="button">清除筛选，看全部 →</span></div>`:''}
-  <div class="card" style="margin-bottom:0">
+  <div class="card inventory-detail" style="margin-bottom:0">
     <h4>库存单据明细总表<span class="sp">
       <button class="btn" data-act="fetchOne" data-t="库存单据明细表">抓取 i8</button>
       <button class="btn" data-act="expPivot" title="额外导出一份带「数据透视表」的工作簿：明细（列随 i8 源文件）+「过程资料」透视 +「安全文明施工费」透视；不影响主表那份「导出 Excel」">导出（含数据透视表）</button>
@@ -1199,8 +1326,8 @@ V.m09=()=>{
   const pc=x=>total>0?PCT(x/total):'<span class="mut">—</span>';
   return `
     
-  <div class="card" style="margin-bottom:0"><h4>特殊费用月报表<span class="sp">
-    <button class="btn" data-act="awfAdd">＋ 增加手填项</button>
+  <div class="card awf-workspace" style="margin-bottom:0"><h4>特殊费用月报表<span class="sp">
+    <button class="btn pri" data-act="awfAdd">＋ 增加手填项</button>
     </span></h4>
     ${FBAR({body:`
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
@@ -1286,13 +1413,15 @@ V.m11=()=>{
   <!-- 2026-09-28（用户口径 · 看板清账）：本页 4 条 KPI（合同数 / 结算金额合计 / 付款金额合计 / 集采欠款）
        <b>全删</b> —— 用户判「无用」。⛔ 别再加回来（删除已登记）。要看合计请看<b>表尾合计行</b>（仍在）。
        ⚠️ 本注释在模板字面量的文本区 ⇒ ⛔ 不许出现反引号（会截断模板串）。 -->
-  <div class="card" style="margin-bottom:0">
-    <h4>集采台账 · 合同主表<span class="sp">
+  <div class="card procurement-workspace" style="margin-bottom:0">
+    <h4><span class="financial-heading">集采台账 · 合同主表</span><span class="sp financial-tools">
       <button class="btn" data-act="jcFetch" title="从 i8 抓采购合同 —— 会登录 i8、需二次确认；⚠️ 可能顶掉该账号其它在线会话（同事正在用 i8 时先择时）">抓取采购合同信息</button>
       <button class="btn" data-act="jcAdd" title="在表格上方展开「手工新增合同」录入区 —— 主表 19 字段里真正要录的 8 项在这里填；发票 / 付款金额建档后走各列「子表」">＋ 手工新增合同</button>
+      <button class="btn pri" data-act="exp" data-t="集采台账" title="导出当前屏幕上这些行（含筛选）为 Excel —— 列是全列（隐藏列也会导出）">导出 Excel</button></span></h4>
+    <div class="financial-batch" role="group" aria-label="已勾选合同的批量处理"><span class="mut sm">已勾选 ${jcPick.size} 行</span>
       <button class="btn" data-act="jcBatchTag" data-v="纳入台账" ${jcPick.size?'':'disabled'} title="${jcPick.size?'把勾选行批量标记为「纳入台账」':'请先勾选要标记的行'}">批量纳入台账</button>
       <button class="btn" data-act="jcBatchTag" data-v="不纳入" ${jcPick.size?'':'disabled'} title="${jcPick.size?'把勾选行批量标记为「不纳入」':'请先勾选要标记的行'}">批量不纳入</button>
-      <button class="btn pri" data-act="exp" data-t="集采台账" title="导出当前屏幕上这些行（含筛选）为 Excel —— 列是全列（隐藏列也会导出）">导出 Excel</button></span></h4>
+    </div>
     ${FBAR({body:`
       <div class="fi pjwrap" style="position:relative"><label>项目（可多选）</label>
         ${PJB({act:'jcPjToggle',panel:jcPjPanel,w:126,label:`${fJc.projs.length?`已选 ${fJc.projs.length} 个`:'全部项目'}`})}
@@ -1310,18 +1439,18 @@ V.m11=()=>{
       <span class="pill" style="margin-left:auto">已勾选 <b>${jcPick.size}</b> 行 ｜ 显示 <b>${jcRows.length}</b> 条</span>
     `})}
     ${jcNewOn?jcNewStrip():''}
-    <div class="tw">${TBL({head:jcThead(),key:'m11:jc',
+    <div class="tw">${TBL({head:jcThead(),key:'m11:jc',cls:'procurement-table',
     rows:jcRows.map(j=>{
       const nextArchive=archiveNumbers.get(j.proj)||'1';
       const cells = {
         project_seq: `<td class="fc" title="项目内动态序号，筛选不变">${j.projectSeq == null ? '—' : j.projectSeq}</td>`,
         date: `<td class="now">${j.date}</td>`,
         material: `<td><button class="btn sm" style="white-space:normal;text-align:left" data-act="jcMaterialOpen" data-id="${j.id}" title="修改材料名">${esc(j.material)||'填写材料名'}</button></td>`,
-        contract_no: `<td class="fc">${esc(j.contractNo||'—')}</td>`,
-        supplier: `<td class="sm">${esc(j.supplier)}</td>`,
+        contract_no: `<td class="fc jc-contract-code">${esc(j.contractNo||'—')}</td>`,
+        supplier: `<td class="sm jc-supplier">${esc(j.supplier)}</td>`,
         contract_amt: `<td class="num">${j.contractAmt?M(j.contractAmt):'<span class="mut" title="供应商合同价为空 —— 若是贸易公司合同，需从 Excel 的「供应商线」手工填进来（填完不被抓取覆盖）">— 待补</span>'}</td>`,
         inv_sum: `<td class="num" style="white-space:nowrap" title="发票金额 = 本合同供应商发票子表金额合计；不计贸易公司发票，不按发票日期截断">${M(jcInvSum(j))} <button class="btn sm" data-act="jcInvDlg" data-id="${j.id}" title="打开「供应商发票子表」（发票日期 + 金额 · 1..N 张）">子表</button></td>`,
-        trade_co: `<td class="sm">${j.tradeCo?esc(j.tradeCo):'<span class="mut">—</span>'}</td>`,
+        trade_co: `<td class="sm jc-supplier">${j.tradeCo?esc(j.tradeCo):'<span class="mut">—</span>'}</td>`,
         trade_contract_amt: `<td class="num">${j.tradeContractAmt?M(j.tradeContractAmt):'<span class="mut">—</span>'}</td>`,
         trade_inv_sum: `<td class="num" style="white-space:nowrap" title="贸易公司发票金额 = 本合同贸易公司发票子表金额合计；不计供应商发票，不按发票日期截断，无贸易公司显示—">${j.tradeCo?`${M(jcTradeInvSum(j))} <button class="btn sm" data-act="jcTInvDlg" data-id="${j.id}" title="打开「贸易公司发票子表」（同款 · 发票日期 + 金额）">子表</button>`:'<span class="mut">—</span>'}</td>`,
         settle: `<td class="num" title="结算金额 = 本合同发票子表金额合计；有贸易公司取贸易公司发票，无贸易公司取供应商发票，两侧不相加，不按发票日期截断"><b>${M(jcSettle(j))}</b></td>`,
@@ -1351,16 +1480,17 @@ V.m11=()=>{
 /* =====================================================================
    16. MOD-14 规则配置
    ===================================================================== */
-V.m14=()=>`
-  <div class="card"><h4>剔除规则（<b>${RULE_EX.length}</b> 类有效）<span class="sp"><button class="btn sm" data-act="ruleAdd" title="新增一条剔除规则（弹窗填「规则类别 / 命中值 / 业务含义」）">＋ 增加规则</button></span></h4>
+V.m14=()=>`<div class="rules-workspace">
+  <nav class="section-nav" aria-label="规则区段"><a href="#rule-exclusions">剔除规则</a><a href="#rule-projects">集采项目剔除名单</a><a href="#rule-machinery">机械报表项目匹配</a></nav>
+  <div class="card" id="rule-exclusions"><h4>剔除规则（<b>${RULE_EX.length}</b> 类有效）<span class="sp"><button class="btn sm" data-act="ruleAdd" title="新增一条剔除规则（弹窗填「规则类别 / 命中值 / 业务含义」）">＋ 增加规则</button></span></h4>
     <div class="bd np">${TBL({head:'<th>规则类别</th><th>命中值（多个用 ｜ 分隔）</th><th>剔除的业务含义</th><th>操作</th>',rows:[
-      ...RULE_EX.map((r,i)=>`<tr><td><b>${esc(r[0])}</b></td><td class="fc">${esc(r[1])}</td><td class="sm mut">${esc(r[2])}</td>
+      ...RULE_EX.map((r,i)=>`<tr><td><b>${esc(r[0])}</b></td><td class="rule-values">${String(r[1]).split(/[|｜]/).map(v=>`<span>${esc(v.trim())}</span>`).join('')}</td><td class="sm mut">${esc(r[2])}</td>
       <td class="ctr"><button class="btn sm" data-act="ruleEdit" data-i="${i}" title="改这条规则的「规则类别 / 命中值 / 业务含义」">编辑</button> <button class="btn sm dg" data-act="ruleDel" data-i="${i}" title="删除这条规则（配置类数据 = 硬删、不留痕，§9.4）">删除</button></td></tr>`)
     ]})}</div>
     <div class="bd"><div class="tip wn" style="margin:0"><b>剔除规则中不得配置「收款单位 = 资产处集中采购」</b>：集采<b>不走剔除</b>，而是参与<b>分类</b>。</div>
       </div>
   </div>
-  <div class="card" style="margin-bottom:0"><h4>集采项目剔除名单（<b>${(window.JCI_ALL||[]).filter(x=>x.active).length}</b> 项在用）</h4>
+  <div class="card" id="rule-projects" style="margin-bottom:0"><h4>集采项目剔除名单（<b>${(window.JCI_ALL||[]).filter(x=>x.active).length}</b> 项在用）</h4>
     <div class="bd np">${TBL({head:'<th>项目全名</th><th>加入理由</th><th>操作人</th><th>加入时间</th><th>状态 / 操作</th>',rows:[
       ...((window.JCI_ALL||[]).length ? (window.JCI_ALL||[]).map(x=>{
         const act = x.active
@@ -1370,19 +1500,19 @@ V.m14=()=>`
           +'<td class="sm mut">'+esc(x.reason||'')+'</td><td class="sm fc">'+esc(x.operator||'')+'</td>'
           +'<td class="sm fc">'+esc(x.created_at||'')+'</td>'
           +'<td class="ctr">'+(x.active?'在用 ':'已停用 ')+act+'</td></tr>';
-      }) : ['<tr><td colspan="5" class="mut">名单为空 —— 目前没有「不要的项目」</td></tr>'])
+      }) : [EMPTYROW(5,'集采项目剔除名单为空','需要排除项目时，在下方加入项目全名')])
     ]})}</div>
     <div class="bd">${FBAR({body:`<div class="fi"><label>加入一项（粘贴<b>项目全名</b>）</label><input class="inp" id="jciName" placeholder="例：某某项目安装工程"></div>
       <div class="fi"><label>理由（可选）</label><input class="inp" id="jciWhy" placeholder="例：老项目，款已付清"></div>
       <button class="btn pri sm" data-act="jciAdd" title="加入后：该项目从下次抓取起不再写入，也不再进「未写入」清单">加入剔除名单</button>`})}</div>
     
   </div>
-  <div class="card"><h4>机械报表项目匹配（${(window.MECH_RULES||[]).length} 项）</h4>
+  <div class="card" id="rule-machinery"><h4>机械报表项目匹配（${(window.MECH_RULES||[]).length} 项）</h4>
     <div class="bd np">${TBL({head:'<th>项目</th><th>报表项目名（多个用 ｜ 分隔）</th><th>操作</th>',rows:
       (window.MECH_RULES||[]).map((r,i)=>`<tr><td>${esc(r.display)}</td><td><input class="inp" style="width:100%" id="mechRule${i}" value="${esc(r.aliases.join(' ｜ '))}" aria-label="${esc(r.display)}的报表项目名"></td><td><button class="btn sm" data-act="mechRuleSave" data-i="${i}">保存</button></td></tr>`)
     })}</div>
   </div>
-
+</div>
 `;
 
 /* =====================================================================
@@ -1393,16 +1523,18 @@ V.m15=()=>{
   const offN=USERS.filter(u=>u.status==='已停用').length;
   const delN=USERS.filter(u=>u.status==='已删除').length;
   const admins=USERS.filter(u=>u.role==='admin'&&u.status==='在用');
-  const iAmAdmin=CUR.role==='admin';
+  const hasIdentity=!!(CUR.name&&CUR.role);
+  const iAmAdmin=hasIdentity&&CUR.role==='admin';
   /* 防锁死：**最后一个「在用管理员」**不能停用 / 删除（其余账号随便动） */
   const lockAdmin=u=>u.role==='admin'&&u.status==='在用'&&admins.length<=1;
   return `
     
-  <div class="card" style="margin-bottom:0"><h4>账号列表
-    <span class="sp"><span class="mut sm">当前登录 <b>${esc(CUR.name)}</b>（${iAmAdmin?'管理员':'普通用户'}）· 在用 <b>${on.length}</b> · 停用 <b>${offN}</b> · 已删除 <b>${delN}</b></span>
+  <div class="card users-workspace" style="margin-bottom:0"><h4>账号列表
+    <span class="sp"><span class="mut sm">${hasIdentity?`当前登录 <b>${esc(CUR.name)}</b>（${iAmAdmin?'管理员':'普通用户'}）`:WHO_STATE==='none'?'未登录 · <a href="/login">去登录</a>':'身份未取到 · 请刷新重试'} · 在用 <b>${on.length}</b> · 停用 <b>${offN}</b> · 已删除 <b>${delN}</b></span>
     ${iAmAdmin?`<button class="btn" data-act="userTransfer">转让管理员</button>`:''}
     <button class="btn pri" data-act="userAdd" ${iAmAdmin?'':'disabled'} title="${iAmAdmin?'':'只有管理员可管理账号'}">＋ 新增账号</button>
-    <button class="btn" data-act="logout">登出</button></span></h4>
+    ${hasIdentity?'<button class="btn" data-act="logout">登出</button>':''}</span></h4>
+    ${!iAmAdmin?`<p class="account-access">${hasIdentity?'只有管理员可以新增、启停或删除账号；自己的密码可在本人行修改。':'账号管理需管理员登录。'}</p>`:''}
     <div class="tw">${TBL({head:'<th>登录账号</th><th>姓名</th><th>角色</th><th>状态</th><th>最近登录</th><th>操作</th>',key:'m15:users',rows:[
     ...USERS.map(u=>`<tr class="${u.status==='在用'?'':'ex'}">
       <td class="fc">${esc(u.acc)}</td>
@@ -1413,8 +1545,8 @@ V.m15=()=>{
       <td class="ctr now">${u.status==='已删除'
         ? `<button class="btn sm" data-act="userRestore" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="恢复该账号；只有管理员能管理账号（不是管理员时置灰）">恢复</button>`
         : `<button class="btn sm" data-act="userPwd" data-id="${u.id}" ${(iAmAdmin||u.id===CUR.id)?'':'disabled'} title="${u.id===CUR.id?'改我自己的密码（⛔ 不用找管理员）':'改别人的密码要管理员（你自己的密码在你自己那一行点「改密」）'}">改密</button><button class="btn sm" data-act="userPwdView" data-id="${u.id}" ${iAmAdmin?'':'disabled'} title="查看明文密码（§1.5.1 明文裁定的显式出口）">看密码</button>
-           <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
-           ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
+           <button class="btn sm" data-act="userToggle" data-id="${u.id}" ${(iAmAdmin&&!(u.status==='在用'&&lockAdmin(u)))?'':'disabled'} title="${!iAmAdmin?'只有管理员可启停账号':lockAdmin(u)?'不能停用最后一个管理员':''}">${u.status==='在用'?'停用':'启用'}</button>
+           ${u.id===CUR.id?'':`<button class="btn sm dg" data-act="userDel" data-id="${u.id}" ${(iAmAdmin&&!lockAdmin(u))?'':'disabled'} title="${!iAmAdmin?'只有管理员可删除账号':lockAdmin(u)?'不能删除最后一个管理员':''}">删除</button>`}`}</td>
     </tr>`)]})}</div>
     
   </div>`;

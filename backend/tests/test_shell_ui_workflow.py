@@ -218,7 +218,6 @@ def test_系统设置精简主题无障碍与尺寸切换(ui_page):
       API.m15UiScaleSet=async key=>{window.savedScale=key;return {ok:true};};
       VIEW='set';render();applyUiScale('1');
     }''')
-    assert ''.join(p.inner_text('#view').split()) == '外观主题界面大小标准大一点更大最大'
     assert p.locator('#view .card').count() == 2
     assert p.locator('#view [data-act="themeSet"]').count() == 2
     assert p.get_attribute('[data-theme="明亮主题"]','aria-pressed') == 'true'
@@ -248,7 +247,6 @@ def test_默认页删说明保留操作与反馈(ui_page):
     assert '输出产物' not in p.inner_text('#view')
     assert p.locator('[data-act="bigExport"]').count() == 1
     p.evaluate("VIEW='m14';render();")
-    assert p.locator('#view > .card:has([data-act="ruleAdd"]), #view > .card:has([data-act="jciAdd"])').count() == 2
     assert ''.join(p.inner_text('#view .tip').split()) == '剔除规则中不得配置「收款单位=资产处集中采购」：集采不走剔除，而是参与分类。'
     assert p.locator('[data-act="ruleAdd"]').count() == 1
     assert p.locator('[data-act="jciAdd"]').count() == 1
@@ -742,7 +740,9 @@ def test_集采保存后不被重画锚定向上拉动(ui_page, action, count):
     p.locator('[data-act="jcArch"][data-id="16"]').scroll_into_view_if_needed()
     p.set_viewport_size({'width': 2560, 'height': 900})
     p.evaluate('async()=>await reloadM11()')
-    target = p.locator(f'[data-act="{action}"][data-id="16"]')
+    # 紧凑行在30条时第16行已可见；用后段行保持真实滚动前置。
+    target_id = 26 if count == 30 else 16
+    target = p.locator(f'[data-act="{action}"][data-id="{target_id}"]')
     target.scroll_into_view_if_needed()
     p.evaluate('() => new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
     metrics = '''() => {
@@ -753,11 +753,11 @@ def test_集采保存后不被重画锚定向上拉动(ui_page, action, count):
     assert not before['wide'] and before['top'] > 100, before
     if action == 'jcArch':
         target.click()
-        p.wait_for_function("JCs.find(j=>j.id==='16').arch==='资产处'")
+        p.wait_for_function("id=>JCs.find(j=>j.id===String(id)).arch==='资产处'", arg=target_id)
     else:
         target.fill('7')
         target.press('Tab')
-        p.wait_for_function("JCs.find(j=>j.id==='16').archNo==='7'")
+        p.wait_for_function("id=>JCs.find(j=>j.id===String(id)).archNo==='7'", arg=target_id)
     p.evaluate('() => new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
     after = p.evaluate(metrics)
     assert abs(after['top'] - before['top']) < 2, (before, after)

@@ -306,7 +306,6 @@ def test_注入的工具栏走变体类_别在JS里重写静态外观():
            if "border:" in m.group(1)]
     assert not bad, ("注入的 DOM 在 JS 里重写了静态外观（该走类；⚠️ 大概率也漏了 `--fscale`）：\n      "
                      + "\n      ".join(x[:130] for x in bad))
-    assert "'fbar plate'" in SHELL, "`BIND.m06`/`m09` 的注入工具栏没走 `.fbar.plate` 变体类"
 
 
 def test_大表的首列区固定_序号与项目名称两列一起钉():

@@ -1059,19 +1059,16 @@ const ymAdd = (m, n) => {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 };
 
-/* ⭐⭐ `TAIL-156` `P2`：`m09` 特殊费用的**月度批量录入**入口 —— 与 `BIND.m06`「录机械费」**同款**：
-   走原型自己的 `BIND` 钩子往页首注入一条工具栏，⛔ **不改 `V.m09` 切片一行**（`D18`）。
-   判定与落库全在后端（`POST /api/m09/fee/batch`，语义见 `mod09_fee.service.act_batch`）。 */
+/* 批量录入沿用当前项目的手填项；入口就地说明前置条件。 */
 addBind('m09', function () {
-  const host = document.querySelector('#view');
+  const host = document.querySelector('#view .awf-workspace');
   if (!host || document.getElementById('awfBatchEntry')) return;
-  const bar = document.createElement('div');
-  bar.id = 'awfBatchEntry';
-  bar.className = 'fbar plate';   /* ⭐ 同 `BIND.m06`（`A4` 2026-09-29）：走变体类，⛔ 别在 JS 里重写声明 */
-  bar.innerHTML = '<div class="fi"><label>特殊费用 · 按月批量录入（§5.5）</label>'
-    + '<span class="mut sm">一屏把<b>好几个月</b>填完（列 = 本页这一份的项名 · 行数<b>可加减</b> · <b>核算期每行都能改</b>）</span></div>'
-    + '<button class="btn pri" data-act="awfBatch">批量录入（按月）…</button>';
-  host.prepend(bar);
+  const ready=awfList().length>0;
+  const bar=document.createElement('div');
+  bar.id='awfBatchEntry'; bar.className='awf-batch-entry';
+  bar.innerHTML=`<button class="btn" data-act="awfBatch" aria-describedby="awfBatchReason" title="${ready?'按当前项目的手填项批量录入':'先增加手填项，再按月批量录入'}"${ready?'':' disabled'}>批量录入（按月）…</button>
+    <span class="mut sm" id="awfBatchReason">${ready?'按当前项目的手填项，连续录入多个核算月。':'先增加手填项，再按月批量录入。'}</span>`;
+  host.appendChild(bar);
 });
 
 /* ============================================================ ⭐⭐ 链路 B ·「待人工指认」（`TAIL-30`-③）
@@ -1520,7 +1517,7 @@ function m02EchoKv() {
     else if (M02_ERR) dd = '<span class="dg">⚠️ 执行记录没取到（见下方日志卡）</span>';
     else if (!r) dd = '<span class="mut">还没有执行记录（抓过 / 同步过就有了）</span>';
     else dd = `${m02StatusTag(r)} <span class="mut sm">${esc(m02When(r))}</span>`
-      + (r.err ? `<br><span class="dg sm">${lgMd(r.err)}</span>` : '');
+      + (r.err ? `<details class="m02-error"><summary>查看原因</summary><div class="dg sm">${lgMd(r.err)}</div></details>` : '');
     return `<dt title="${esc(it.api)}">${esc(it.label)}</dt><dd>${dd}</dd>`;
   }).join('');
 }
@@ -1532,7 +1529,7 @@ function m02LogRows() {
   if (!M02_RECS.length) return '<tr><td colspan="4" class="mut">还没有执行记录 —— 抓过 / 同步过之后这里就有（按时间倒序）</td></tr>';
   return M02_RECS.map(r => `<tr><td class="fc">${esc(String(r.at).replace('T', ' '))}</td>
     <td title="${esc([m02CodeOf(r), String(r.target || '')].filter(Boolean).join(' · '))}">${esc(m02LabelOf(r))}</td>
-    <td>${m02StatusTag(r)}${r.err ? `<br><span class="dg sm">${lgMd(r.err)}</span>` : ''}</td>
+    <td>${m02StatusTag(r)}${r.err ? `<details class="m02-error"><summary>查看原因</summary><div class="dg sm">${lgMd(r.err)}</div></details>` : ''}</td>
     <td class="fc">${esc(m02Dur(r))}</td></tr>`).join('');
 }
 

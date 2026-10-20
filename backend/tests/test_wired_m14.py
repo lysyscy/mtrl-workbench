@@ -97,6 +97,7 @@ const V = {}, window = {JCI_ALL: [], MECH_RULES: []};
 const RULE_EX = [['类别', '命中值', '含义']];
 const esc = x => String(x == null ? '' : x);
 const FBAR = ({body}) => body;
+const EMPTYROW = (n,why,next) => '<tr><td colspan="'+n+'">'+why+' '+next+'</td></tr>';
 """ + const_src('TBL') + '\n' + page_slice('m14') + '\nconsole.log(V.m14());'
     result = subprocess.run(['node'], input=script, capture_output=True,
                             text=True, encoding='utf-8', errors='replace')

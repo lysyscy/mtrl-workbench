@@ -75,3 +75,7 @@
 - 2026-10-19 工作区运行数据与开发产物统一：docs/archive/workspace-migration；原件与成品实际位置见moved-files.tsv，临时源码去重恢复包按有限期限保留。
 
 - 2026-10-20 测试减负：两仓基线、实施、验证与未验边界见[结项记录](testing-cleanup-20261020/evidence.md)。
+
+## 全站界面精修（2026-10-20）
+
+TAIL-356～368完成；原审计、批准拆分、实施与未验边界见[交付记录](frontend-visual-audit-20261020/README.md)，原位置和字节摘要见同目录manifest.json。本地提交，未推送或重启。

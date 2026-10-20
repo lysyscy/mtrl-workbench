@@ -406,27 +406,102 @@ let fetchKind='nt';      /* 当前抓取弹窗的目标：nt=付款通知书 · 
 let payBatchIds=[];      /* 批量付款窗口按通知书 id 固定本次行序；不是跨页面选择。 */
 let payDraft={};         /* 批量付款弹窗的草稿 {单据id: {m:付款方式, a:付款金额}} —— 重建弹窗时不丢已填值 */
 let jcLinkSel=null;      /* 「关联集采合同」弹窗里所选的合同 id（草稿；改选择要重绘弹窗 —— 金额比对随之更新） */
-let modalOpener=null;    /* D2 焦点归还（2026-09-15）：记住「打开弹窗的那个元素」，关闭时把焦点还回去。
-                            ⚠️ DOM-stub（`_smoke`）没有 `document.activeElement` ⇒ 全程防御式，取不到就是 null。 */
+let modalOpener=null, modalOpenerKey=null, modalScope='', modalFocus=null, modalObserver=null;
+let modalBackground=[];  /* 背景重绘可替换触发按钮；归还时再按稳定身份查找。 */
 let supSel=null;         /* 「选择供应商」弹窗（§6.6.3 多命中）里所选的全名（草稿；改选择不重绘，提交时读 */
 let OWN={};              /* 「归属」：付款通知书 id → 项目档案行 id。空 = 待指定（链路 C 尚未判定）。
                             属【付款通知书行】的字段（不是项目档案的字段）；普通项目自动确定，壳全名须判定。
                             落库 + 不被导入覆盖的持久值（正式实现在导入时写入，原型里由弹窗写） */
 function modal(o){
   const root=$('#modalRoot');
-  lastModal=o;
-  modalOpener=(typeof document!=='undefined' && document.activeElement && document.activeElement.focus)
-    ? document.activeElement : null;   /* D2：记下触发元素 */
   /* 弹窗内的表格同样支持表头排序：用 sortKey 给每类弹窗一个稳定键
      （不传则按标题推导并去掉数字，保证「已勾选 3 条」这类变化不会换键） */
   const sk=o.sortKey||('modal:'+String(o.title||'').replace(/[\d\s·]+/g,''));
-  root.innerHTML=`<div class="mask" data-act="maskBg"><div class="modal ${o.wide?'wide':''}${o.monthPicker?' month-picker':''}">
-    <h3>${o.title}<span class="x" data-act="closeModal" tabindex="0" role="button" title="关闭（Esc）">×</span></h3>
+  const redraw=!!lastModal, same=redraw&&modalScope===sk;
+  const focus=same?modalFocus:null, scroll=same&&root.querySelector?root.querySelector('.mb')?.scrollTop:0;
+  if(!redraw){
+    modalOpener=document.activeElement||null; modalOpenerKey=modalElementKey(modalOpener);
+  }
+  lastModal=o; modalScope=sk;
+  root.innerHTML=`<div class="mask" data-act="maskBg"><div class="modal ${o.wide?'wide':''}${o.monthPicker?' month-picker':''}" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h3><span id="modalTitle" tabindex="-1">${o.title}</span><span class="x" data-act="closeModal" tabindex="0" role="button" aria-label="关闭" title="关闭（Esc）">×</span></h3>
     <div class="mb">${applySorts(o.body,sk)}</div>
     ${o.footer===null?'':`<div class="mf">${o.footer||'<button class="btn" data-act="closeModal">关闭</button>'}</div>`}
   </div></div>`;
+  if(!root.querySelector||!root.addEventListener) return; /* 纯HTML烟测桩没有真实DOM。 */
+  const target=modalFind(root,focus?.key)||modalFind(root,focus?.anchor)
+    ||(focus?root.querySelector('#modalTitle'):null)
+    ||[...root.querySelectorAll('.mb input,.mb select,.mb textarea')]
+      .find(el=>!el.matches(':disabled')&&el.tabIndex>=0&&el.getClientRects().length)
+    ||root.querySelector('#modalTitle');
+  target?.focus({preventScroll:true});
+  if(same) root.querySelector('.mb').scrollTop=scroll||0;
+  if(!redraw){
+    modalBackground=[...document.body.children].filter(el=>el!==root&&!el.contains(root))
+      .map(el=>[el,el.inert]);
+    modalBackground.forEach(([el])=>{el.inert=true;});
+    root.addEventListener('keydown',modalKeydown,true);
+    root.addEventListener('focusin',modalRememberFocus);
+    modalObserver=new MutationObserver(()=>{
+      if(root.contains(document.activeElement)) return;
+      const next=modalFind(root,modalFocus?.key)||modalFind(root,modalFocus?.anchor)||root.querySelector('#modalTitle');
+      next?.focus({preventScroll:true});
+    });
+    modalObserver.observe(root,{childList:true,subtree:true});
+  }
+  modalRememberFocus();
 }
-const closeModal=()=>{$('#modalRoot').innerHTML=''; lastModal=null; jcLinkSel=null; if(modalOpener&&modalOpener.focus){ try{modalOpener.focus();}catch(_){} } modalOpener=null;};   /* D2：归还焦点 */
+function modalElementKey(el){
+  if(!el||!el.getAttribute) return null;
+  if(el.id) return {id:el.id};
+  const attrs=['data-act','data-id','data-scope','data-tk','data-i','data-d','data-k','data-kind','data-pj','data-m','data-wh','data-rid','data-t','data-name'];
+  const key={tag:el.tagName};
+  attrs.forEach(a=>{if(el.hasAttribute(a)) key[a]=el.getAttribute(a);});
+  return key['data-act']?key:null;
+}
+function modalFind(root,key){
+  if(!key||!root.querySelectorAll) return null;
+  return [...root.querySelectorAll(key.id?'[id]':'[data-act]')].find(el=>
+    !el.matches(':disabled')&&!el.closest('[inert]')&&el.getClientRects().length
+    &&Object.keys(key).every(k=>k==='tag'?el.tagName===key[k]:el.getAttribute(k)===key[k]));
+}
+function modalRememberFocus(){
+  const el=document.activeElement, root=$('#modalRoot');
+  if(!root.contains(el)) return;
+  /* 删除后数组下标可能由下一行复用，危险按钮重绘后不延续按键目标。 */
+  modalFocus={key:el.matches('.btn.dg')?null:modalElementKey(el),
+    anchor:modalElementKey(el.closest('.pjwrap')?.querySelector(':scope > button'))};
+}
+function modalKeydown(e){
+  const root=$('#modalRoot');
+  if(e.key==='Escape'){
+    e.preventDefault(); e.stopPropagation();
+    const pop=root.querySelector('.pjpop');
+    if(pop){
+      const anchor=pop.closest('.pjwrap')?.querySelector(':scope > button');
+      closeFilterPops(); anchor?.focus();
+    }else closeModal();
+    return;
+  }
+  if(e.key!=='Tab') return;
+  const stops=[...root.querySelectorAll('button,input,select,textarea,a[href],[tabindex],summary,[contenteditable="true"]')]
+    .filter(el=>el.tabIndex>=0&&!el.matches(':disabled')&&el.getClientRects().length&&!el.closest('[inert]'));
+  const first=stops[0], last=stops[stops.length-1], active=document.activeElement;
+  if(!first){e.preventDefault();root.querySelector('#modalTitle')?.focus();}
+  else if(e.shiftKey&&(active===first||!stops.includes(active))){e.preventDefault();last.focus();}
+  else if(!e.shiftKey&&(active===last||!stops.includes(active))){e.preventDefault();first.focus();}
+}
+const closeModal=()=>{
+  const root=$('#modalRoot');
+  modalObserver?.disconnect(); modalObserver=null;
+  root.removeEventListener?.('keydown',modalKeydown,true);
+  root.removeEventListener?.('focusin',modalRememberFocus);
+  root.innerHTML=''; lastModal=null; jcLinkSel=null; modalFocus=null; modalScope='';
+  modalBackground.forEach(([el,inert])=>{el.inert=inert;}); modalBackground=[];
+  const opener=modalOpener?.isConnected?modalOpener:modalFind(document,modalOpenerKey);
+  try{opener?.focus();}catch(_){}
+  modalOpener=null; modalOpenerKey=null;
+};
 const tag=(t,c)=>`<span class="tag t-${c}">${esc(t)}</span>`;
 /* ===== 配置层 · 枚举（值域的**唯一出处**）=====
    值域的主人 = 《材料科业务全流程说明书》附录 E 的 `ENT-*`。本层**只放值域与显示 / 语义色**，
