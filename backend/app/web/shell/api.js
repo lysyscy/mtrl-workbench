@@ -174,7 +174,6 @@ const API = {
      那个是**窗口**（`limit ≤ 200`），而 `run_record` 是**流水表**（≈10 条/天 ⇒ 一个月 ≈300 条）
      ⇒ 用窗口算「本月有没有成功抓取」**会漏、且漏了不报错**。
      本端点在后端走 **SQL 全表**（`app/home/service.py::run_counts`）。 */
-  homeRunCounts: () => API.get('/api/home/run-counts'),
 
   /* ---- MOD-03 · 抓取 ＋ 链路 C 弹窗（`TAIL-29`-② ④） ---- */
   /* 抓取结果包含本次忽略清单；失败也保留回执，由调用方显示原因。 */

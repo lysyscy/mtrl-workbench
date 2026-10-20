@@ -317,12 +317,12 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 
 
 /* 待办工作区与导入向导：宽度随内容，沿用主题与用户字号。 */
-.todo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(14px * var(--fscale))}
+.todo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:calc(14px * var(--fscale))}
 .todo-grid .kpi{padding:calc(20px * var(--fscale));display:grid;grid-template-columns:1fr auto;gap:calc(12px * var(--fscale));margin:0;box-shadow:none}
 .todo-grid .k{font-size:calc(15px * var(--fscale));font-weight:600;align-self:center}
 .todo-grid .v{font-size:calc(28px * var(--fscale));grid-column:2;grid-row:1}
 .todo-grid .s{grid-column:1 / -1;line-height:1.7;display:flex;justify-content:space-between;gap:calc(16px * var(--fscale));align-items:start}
-.todo-grid .s .link{white-space:nowrap;font-weight:600}
+.todo-grid .s .text-link{white-space:nowrap;font-weight:600}
 .todo-grid .todo-clear{border-color:var(--bd);background:var(--bg)}
 .todo-grid .todo-clear .v{color:var(--mut)}
 .imp-workspace{max-width:1500px;margin:0 auto}
@@ -613,7 +613,7 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
        · 材料报表类（收发结存等）    → bjMonth(-1)  北京时间上月
    ⚠️ 原型（`demo/`）那边是**固定时钟的演示快照**，⛔ 不去动它；
       而**本壳必须取真时间** —— 原先这里写死 2026-09，一过月全站默认年月就指到**空月份**
-      （材料域取上月 ⇒ 更早空），看板「本月抓取」还会照着假月份判（`TAIL-51`）。 */
+      （材料域取上月 ⇒ 更早空，`TAIL-51`）。 */
 const _BJ_NOW = (function(){
   /* 北京时间（`Asia/Shanghai` · 中国无夏令时）。优先用时区库；内核不支持 `timeZone` 参数时
      退到「UTC+8 固定偏移」兜底（⛔ 不退到本机时区 —— 口径要的是北京时间，不是"这台机的时间"）。 */
@@ -659,63 +659,19 @@ function runBind(view){ for(const step of BIND[view] || []) step(); fitWideTable
    3. 看板
    ===================================================================== */
 V.home=()=>{
-  const d=debts();
-  /* ⭐ i8 已撤单（ntLive）—— 撤单行**退出统计**；有牵涉（付款/关联）时仍算有效，直到人处理完 */
-  const nIn=NO.filter(ntLive).length, nEx=NO.filter(n=>n.excl).length, nUn=NO.filter(n=>ntLive(n)&&n.astat==='未批').length;
-  const nPaid=NO.filter(n=>ntLive(n)&&statOf(n)==='已付清').length;
-  const nVoid=NO.filter(ntVoid).length;
-  const ph=PJs.filter(p=>p.name.startsWith('未建仓-'));               /* 占位行 = 「陌生仓库」告警的由来 */
-  /* ⭐⭐ 2026-09-28（用户口径 · 看板补两项真待办）：下面两项都是**已经存在的事实**，只是原先没人报出来。
-     · `nNoLink`「集采未关联合同」= **有效 且 集采 且 未关联合同 且 未付清** —— 这类**付不了款**
-       （付款闸 `ntPayBlock` 的 ③ 就是它；支付路径见「补付」流程）；已付清的不必再关联，故排除。
-     · `nVoidJ`「撤单但有牵涉」= i8 已撤单却**仍挂着付款流水 / 集采关联** —— 按 §4.2.7 **仍参与统计**，
-       必须人先撤销付款 / 解绑关联它才退出统计（这类"账不准"是真正要处理的）。
-     ⚠️ 两项一律走本域出口（`ntJcUnlinked` / `ntVoidJoint`），⛔ 本页不另写判定。 */
-  const nNoLink=NO.filter(n=>ntLive(n)&&ntJcUnlinked(n)&&statOf(n)!=='已付清').length;
-  const nVoidJ=NO.filter(ntVoidJoint).length;
-  const mx=Math.max(...WHs.map(w=>w.rows));
-  /* ---------- ⭐ 2026-09-14 看板改造：本页定位 = **待办页**（不再是概览页）----------
-     8 项待办，每项一个 `.kpi` 瓦片：`data-todo`（机器把手）· `data-n`（待办数，0/1 = 有没有）
-     · `.s` 里一个 `data-act="go"` 链接（点它直达对应页面）。**零新增 CSS**（复用 `.kpis` / `.link` / `.tip`）。
-     ⚠️ 数字一律**实时算**、不得写死（`_smoke` 第 10f 组逐项复核：数字必须与数据源一致）。
-     口径出处逐项：① §4.4.2 · ② §2.5.1 · ③ §4.3.4 · ④ §6.5.3 · ⑤ §5.8.3 · ⑥ §2.4.2 · ⑦⑬ §3.1.3 · ⑭ §4.6 */
   const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;
-  /* ② 是**兜底项** —— 按 §2.5.1「归属未走完 ⇒ 整批不入库」⇒ 口径上**常态为 0**（演示数据里也是 0，
-     与项目档案 P12 的注释一致）；留着是为了「万一有行因数据问题没归属上，看板能亮」。 */
-  const nAdj=IVs.filter(iv=>adjOf(iv)).length;                  /* ⑤ §5.8.3 差异的**载体 = 调整单** */
-  /* ⑦⑬⑭ 取自**执行记录**（§3.1.3 / §4.6）—— 数一律从 `homeCounts()` 来：见它的定义处。 */
-  const H=homeCounts(), hErr=!!H.err, HC=H.counts, HL=H.latest;
-  const fDone=!hErr&&HC.fetchDue===0;                                       /* 本月有没有**成功**的抓取 */
-  const fFail=hErr?null:HL.fetchFail;                                       /* 最近一次抓取失败 */
-  const pFail=hErr?null:HL.printFail;                                       /* 打印投递失败 */
-  const tN=nOwn+ph.length+nNoLink+nVoidJ+(fDone?0:1);
-  /* 瓦片出口：`k` 把手 · `n` 待办数 · `cls` 语义色 · `v` 显示值 · `s` 说明（自带尾分隔）· `pg` 落点页 · `tx` 链接文字 */
+  const nNoLink=NO.filter(ntJcPending).length;
+  const nVoidJ=NO.filter(ntVoidJoint).length;
+  const tN=nOwn+nNoLink+nVoidJ;
   const tile=(k,n,cls,t,v,s,pg,tx)=>'<div class="kpi '+(n?cls:'todo-clear')+'" data-todo="'+k+'" data-n="'+n+'"><div class="k">'+t
-    +'</div><div class="v">'+v+'</div><div class="s"><span>'+s+'</span><span class="link" data-act="go" data-k="'+pg+'" tabindex="0" role="button">'+tx+' →</span></div></div>';
-  /* ⚠️ ⑦⑬⑭ 三格**依赖取数**：拿不到就**如实说**（显「—」＋原因），
-     ⛔ 不拿 0 冒充"没有待办"（铁律 4：「没数据就留空 / 标待接通，不写 0 冒充」）。 */
-  const runTile=(k,n,cls,t,v,s,pg,tx)=>hErr
-    ? tile(k,0,'wn',t,'—','<span class="dg">⚠️ 执行记录没取到（这三项要它）</span> · ',pg,tx)
-    : tile(k,n,cls,t,v,s,pg,tx);
-  /* 2026-09-28（用户口径 · 看板清账）：删掉 4 个瓦片 —— <b>未审批通知书 · 差异（看调整单）·
-     最近一次抓取失败 · 打印投递失败</b>（用户判「全无用」）。⛔ 别再加回来（删除已登记）。
-     保留：归属待指定 / 付款计划未匹配 / 占位行待扶正 / 本月抓取；⭐ 同日**随后又加了 2 项**（集采未关联合同 / 撤单但有牵涉 —— 见上面 `nNoLink` / `nVoidJ` 那段），本行原先只写了前 4 项 ⇒ 2026-09-29（`A11` 逐页）订正。
-     ⚠️ 上面那几个口径表达式（nUn / nAdj / fFail / pFail）**刻意留着** —— 它们是本域出口的留痕，
-     删了会让"口径只许有一个出口"这条判据失去靶子（判据改指见 test_acc_home_todo.py）。 */
+    +'</div><div class="v">'+v+'</div><div class="s"><span>'+s+'</span><button class="text-link" data-act="'+(k==='jcUnlinked'?'homeJcUnlinked':'go')+'" data-k="'+pg+'">'+tx+'</button></div></div>';
   const todoTiles=[
     tile('ownership',nOwn,'wn','归属待指定',nOwn,'尚未确定所属项目的通知书','m03','去指定归属'),
-    tile('placeholder',ph.length,'wn','占位行待扶正',ph.length,ph.length?('陌生仓库占位行：「'+esc(ph.map(p=>p.name).join('、'))+'」 · '):'— · ','m01','去项目档案'),
-    tile('jcUnlinked',nNoLink,'wn','集采未关联合同',nNoLink,'未挂合同的集采通知书<b>付不了款</b>（已付清的不计） · ','m03','去关联合同'),
-    tile('voidJoint',nVoidJ,'dg','撤单但有牵涉',nVoidJ,'i8 已撤单却仍挂着付款 / 关联 —— 仍参与统计，要先撤销付款 / 解绑 · ','m03','去处理')
-  ];
-  const runTiles=[
-    runTile('fetchDue',fDone?0:1,fDone?'ok':'wn','本月抓取',fDone?'已抓':'未抓','本月（'+bjMonth()+'）'+(fDone?'已有成功抓取':'尚无成功抓取')+' · ','m02','去抓取任务')
+    tile('jcUnlinked',nNoLink,'wn','集采未关联合同',nNoLink,'未关联合同且未付清的集采通知书','m03','去关联合同'),
+    tile('voidJoint',nVoidJ,'dg','撤单但有牵涉',nVoidJ,'i8 已撤单，仍有付款或合同关联','m03','去处理')
   ];
   return `<div class="card"><h4>待办<span class="sp"><span class="mut sm">${tN?`共 ${tN} 项需处理`:'当前没有需要处理的事'}</span></span></h4>
-    <div class="bd home-workspace"><h5>业务待办</h5><div class="todo-grid">${todoTiles.join('')}</div><h5>取数状态</h5><div class="todo-grid home-run">${runTiles.join('')}</div></div></div>`;
-  /* 业务事实监测告警卡已撤（2026-09-14 看板改造）：① 事实 1 并入上方「占位行待扶正」瓦片
-     —— 两者同一数据源（PJs.filter(p => p.name.startsWith('未建仓-'))）；
-     ② 事实 2（档案行数 vs i8 仓库数）按 2026-09-12 用户口径「不需要这个监控相关的东西」随卡移除。 */
+    <div class="bd home-workspace"><div class="todo-grid">${todoTiles.join('')}</div></div></div>`;
 };
 
 /* =====================================================================
@@ -810,12 +766,14 @@ V.m03=()=>{
         ${PJB({act:'pjToggle',panel:pjPanel,w:126,label:`${fNt.projs.length?`已选 ${fNt.projs.length} 个`:'全部项目'}`})}
         ${pjIsOpen('pj')?pjPanel():''}</div>
       <div class="fi"><label>分类</label><select class="inp" id="fCat" data-act="filterNt">${optsOf(['全部'].concat(enumVals('cat'),['剔除']),fNt.cat)}</select></div>
+      <div class="fi"><label>合同关联（集采）</label><select class="inp" id="fLink" data-act="filterNt" ${['全部','集采'].includes(fNt.cat)?'':'disabled'}>${optsOf(['全部','未关联','已关联'],fNt.link||'全部')}</select></div>
       <div class="fi"><label>审批状态</label><select class="inp" id="fAstat" data-act="filterNt">${enumOpts('astat',fNt.astat,1)}</select></div>
       <div class="fi"><label title="已付金额 ≥ 审批金额 ＝ 已付清（不看统计金额）">付款状态</label><select class="inp" id="fStat" data-act="filterNt">${enumOpts('payState',fNt.stat,1)}</select></div>
       <div class="fi"><label>搜索</label><input class="inp" type="search" id="ntSearch" data-act="ntSearch" value="${esc(fNt.q||'')}" placeholder="搜索各列内容" style="width:220px"></div>
       <button class="btn" data-act="filterReset">重置</button>
       <span class="pill" style="margin-left:auto">显示 <b>${list.length}</b> 条 ｜ ${tmLabel(fNt.month)} 有效 ${NO.filter(n=>ntLive(n)&&inM(n)).length} 条 ｜ 剔除 ${NO.filter(n=>n.excl&&inM(n)).length} 条 ｜ i8 已撤单 ${NO.filter(n=>ntVoid(n)&&inM(n)).length} 条${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length?` ｜ <span class="tag t-dg" title="这些单据在 i8 侧被删了，但仍挂着付款流水 / 集采关联 —— 有牵涉时不许静默退出统计，它们仍参与统计。请先撤销付款 / 解绑关联，处理完它才退出统计；切「分类 = 剔除」可见。">⚠ 其中 ${NO.filter(n=>ntVoidJoint(n)&&inM(n)).length} 条有牵涉</span>`:''}（切「分类 = 剔除」查看）</span>
     `})}
+    ${fNt.cat==='集采'&&fNt.link==='未关联'&&fNt.stat==='未付清'?`<div class="tip">集采待关联 · ${list.length} 条 <button class="text-link" data-act="ntClearPending">清除此筛选</button></div>`:''}
     <div class="tw">${TBL({head:NT_THEAD,key:'m03:notices',cls:'notice-table',rows:[tb]})}</div>
   </div>`;
 };
@@ -948,10 +906,8 @@ V.m05=()=>{
       <div class="mut sm">台账按单据日期归月，为了监控拖了很久的付款：单据日期越早，拖延越久。</div>
       <div class="debt-ledger-stack">${ledHalf('辅材')}${ledHalf('机械')}</div></div>
   </div>
-  <div class="card payment-statistics" style="margin-bottom:calc(12px * var(--fscale))"><h4>付款统计<span class="sp" style="flex-wrap:wrap;justify-content:flex-end"><button class="btn sm${pd.g==='周'?'':' gost'}" data-act="pstGran" data-g="周">按周（周一 ~ 周日）</button>
+  <div class="card payment-statistics" style="margin-bottom:calc(12px * var(--fscale))"><h4>付款统计<span class="sp" style="margin-left:calc(12px * var(--fscale));flex-wrap:wrap"><button class="btn sm${pd.g==='周'?'':' gost'}" data-act="pstGran" data-g="周">按周（周一 ~ 周日）</button>
     <button class="btn sm${pd.g==='月'?'':' gost'}" data-act="pstGran" data-g="月">按月</button>
-    <span class="pill">取值 = Σ <b>实际付款金额</b> · 归${pd.g==='周'?'周':'月'}按<b>付款日期</b> · 项目按<b>归属</b></span>
-    <span class="mut sm" title="本页不单独设导出按钮（2026-09-13 用户口径）：它是「付款流水」的汇总视图 —— 要看数就导出付款流水">汇总视图 · 不单独导出</span>
   </span></h4>
     <div class="bd">
       ${pd.n?`<div class="grid2">
@@ -977,7 +933,7 @@ V.m05=()=>{
       :EMPTYBOX('没有付款数据（取值 = 实际付款金额）', '换个时间范围或粒度（左上 / 右上），或清掉筛选')}
     </div>
   </div>
-  <div class="card payment-flows" style="margin-bottom:0"><h4>付款流水（实际付款记录）<span class="sp"><span class="mut sm">多次付款各记一条独立流水 · <b>撤销入口在本页</b> · 撤销必须填原因</span>
+  <div class="card payment-flows" style="margin-bottom:0"><h4>付款流水（实际付款记录）<span class="sp">
     <button class="btn pri" data-act="exp" data-t="付款流水" title="导出当前筛选下看到的这些行">导出 Excel</button></span></h4>
     ${FBAR({body:`
       <div class="fi"><label>付款年月</label>${tmBtn('flMonth',{scope:'fl',val:flf.ym,label:tmLabel(flf.ym),modes:['月','跨月','年','全部']})}</div>

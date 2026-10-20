@@ -1,27 +1,4 @@
-"""`ACC-HOME-TODO-001` —— 看板（默认落地页）= **待办页**（项数**以 `KEYS` 为准**，⛔ 别在文案里写死个数；用户增减待办项是常态）。
-
-判据 → `PRD/验收/验收基线.json` 的 `cases["ACC-HOME-TODO-001"]`。
-⚠️ **看板不占模块号**；本页交互按现行说明书及交互规则，断言读取正式壳。
-
-⭐⭐ **2026-09-21 判据搬家（`§19` 批 5 · 看板接真数据）**：看板原先有**服务端渲染页**
-   （`app/home/view.py` ＋ `home/domain.py` ＋ `home/service.gather`），10 点全钉在那半边。
-   看板现已进壳（`WIRED` 含 `home`）⇒ 旧页与那三个出口**已于 2026-09-21 删除**，
-   断言**改指新壳**（⛔ 判据一条不删、编号不变 —— 这就是"形态变、判据不变"）：
-
-| 点 | 现在的落点 |
-|---|---|
-| `001-01` `001-02` `001-03` `001-06` `001-07` `001-08` `001-09` `001-10` | 壳 `index.html` 的 `V.home` 切片（**A 段**） |
-| `001-04` `001-05` | 后端 `GET /api/home/run-counts`（`app/home/service.py::run_counts`，**B 段**） |
-
-⭐ **为什么 ⑦⑬⑭ 那两点落在后端**（不是偷懒）：`run_record` 是**流水表**
-   （2026-09-21 实测 5 天 49 条 ≈ **10 条/天** ⇒ 一个月 ≈300 条），而记录端点是**窗口**
-   （`limit ≤ 200`）⇒「本月有没有成功抓取」在窗口里**会漏**、**而且漏了不报错**
-   （症状 = 看板说"本月未抓" ⇒ 用户照着去重抓 ⇒ **白顶一次 i8 的号**）。
-   ⇒ 判据要求"取自执行记录"，那就必须**跨全表** ⇒ 只有后端能答。
-
-⚠️ 只读壳源码（`SHELL`）；A 段的断言一律在 **`V.home` 切片**里找 ——
-   不到全文里撞（`data-todo` / `tile(` 这类写法在别的页也有 ⇒ 会**假命中**）。
-"""
+"""现行三项看板待办及已退出看板的运行计数端点兼容性。"""
 
 from __future__ import annotations
 
@@ -35,22 +12,12 @@ from app.home import service as S
 
 CASE = "ACC-HOME-TODO-001"
 
-#: 8 项把手（**顺序也是契约** —— 看板按此序展示）
-#: ⭐ `TAIL-97`（2026-09-25）：`jcPending`（集采合同待确认）**已撤** ⇒ 9 项 ⇒ 8 项。
-# ⚠️ 2026-09-28（用户口径 · 看板清账）：删掉 4 个瓦片 —— `ntUnapproved` / `dfPending` /
-#    `fetchFail` / `printFail`（用户判「全无用」）。⭐ **claim 不变**：「留下的每一项」都必须
-#    **有本域出口 · 能点去对应页 · 不许写死数字」。⛔ 删除已登记，别把这几项加回来。
-#: ⭐ 2026-09-28（用户口径「**AB 做吧**」· 看板补两项真待办）：加 `jcUnlinked`（集采未关联合同 ⇒
-#:    **付不了款**）与 `voidJoint`（i8 已撤单但仍有牵涉 ⇒ 账不准）。⭐ **claim 不变**：
-#:    每一项都必须**有本域出口 · 能点去对应页 · 不许写死数字**。
-#: ⚠️ 顺序即契约（= 页面渲染顺序）：两个新把手**插在 `fetchDue` 之前** —— 前面几项都是「有具体东西要办」，
-#:    而「本月抓取」更像**例行状态**（已抓就绿）。⛔ 改顺序要**同批改壳里的瓦片顺序**，否则本件必红。
+# 用户2026-10-20确认的待办集合与显示顺序。
 KEYS = ("ownership",
-        "placeholder", "jcUnlinked", "voidJoint", "fetchDue")
+        "jcUnlinked", "voidJoint")
 
 #: 每项的去向页（`data-k`）—— 新加两项都去 `m03`（付款通知书页：关联合同 / 撤销付款 / 解绑都在那）
 DEST = {"ownership": "m03",
-        "placeholder": "m01", "fetchDue": "m02",
         "jcUnlinked": "m03", "voidJoint": "m03"}
 # ⚠️ 上面这张表里若还留着已删瓦片的条目（如 `ntUnapproved`），那是**惰性残留** —— 001-03 只按
 #    `KEYS` 逐项核对，多余的键不会生效；下次动本件时顺手清掉即可。
@@ -112,26 +79,18 @@ def test_每项数字都来自数据源不得写死():
     #    claim 不变：**留下的每一项**都取自本域出口（⛔ 不许本页另算中间量）。
     want_expr = {
         "ownership": "nOwn",
-        "placeholder": "ph.length",
         "jcUnlinked": "nNoLink", "voidJoint": "nVoidJ",
     }
     for key, expr in want_expr.items():
         assert calls[key].split(",")[1] == expr, f"{key} 的数不是取自 {expr}：{calls[key][:70]}"
-    # ⑦⑬⑭ 走 `runTile`（后端取数）—— 数字必须引 `fDone` / `fFail` / `pFail`，⛔ 不写死
-    assert "fDone?0:1" in calls["fetchDue"]
-    # ⚠️ 2026-09-28（看板清账）：`fetchFail` / `printFail` 两个瓦片已删 ⇒ 那两条形态断言随之去掉；
-    #    claim 不变：**留下的**这一项仍必须引后端取数的量（`fDone`），⛔ 不许写死。
     # ⭐ 逐条钉住**口径表达式本身**（谁把口径改了/换成写死的数 ⇒ 红）
     for line in (
-        "nUn=NO.filter(n=>ntLive(n)&&n.astat==='未批').length;",
         "const nOwn=NO.filter(n=>ntLive(n)&&isShellFull(n.proj)&&!ntProjKey(n)).length;",
-        "const nAdj=IVs.filter(iv=>adjOf(iv)).length;",
-        "const ph=PJs.filter(p=>p.name.startsWith('未建仓-'));",
         # ⭐ 2026-09-28 新增两项：口径**必须**走本域唯一出口（`ntJcUnlinked` / `ntVoidJoint`），
         #    ⛔ 不许本页另写判定（改口径 ⇒ 本行必红）。
         # ⚠️ 变量名**刻意不含 `nJc`** —— 001-09 那条旧墓碑写着"看板不许再数 `nJc`（集采待确认，TAIL-97 已撤）"，
         #    命名撞子串会让它**假红**（本次实测踩到）⇒ 这里用 `nNoLink`。
-        "const nNoLink=NO.filter(n=>ntLive(n)&&ntJcUnlinked(n)&&statOf(n)!=='已付清').length;",
+        "const nNoLink=NO.filter(ntJcPending).length;",
         "const nVoidJ=NO.filter(ntVoidJoint).length;",
     ):
         assert line in block, f"口径表达式的唯一出口不见了：{line}"
@@ -150,14 +109,14 @@ def test_八项都可点击跳到对应页():
         assert pg == f"'{DEST[key]}'", f"{key} 的去向 = {pg}（应为 'm{DEST[key][1:]}'）"
     # 瓦片出口必须**自带**可点三件套（否则 9 个瓦片全是死块）
     tmpl = block[block.find("const tile=(k,n,cls,t,v,s,pg,tx)=>"):]
-    for bit in ('data-act="go"', 'data-k="\'+pg+\'"', 'tabindex="0"', 'role="button"'):
-        assert bit in tmpl[:400], f"瓦片出口缺「可点」要件：{bit}"
+    for bit in ('<button class="text-link"', "homeJcUnlinked", 'data-k="\'+pg+\'"'):
+        assert bit in tmpl[:600], f"瓦片出口缺少原生按钮或导航动作：{bit}"
 
 
 # ----------------------------------------------------------------- 001-06
 def test_未审批只计有效且未审批():
     """⭐ 「未审批」= **有效且未审批**（撤单 / 剔除行不计）—— 出口是 `ntLive`（唯一判据）。"""
-    assert "nUn=NO.filter(n=>ntLive(n)&&n.astat==='未批').length;" in _home()
+    assert "ntUnapproved" not in _calls(_home())
 
 
 # ----------------------------------------------------------------- 001-07
@@ -179,7 +138,7 @@ def test_集采与差异各取本域出口且不臆造不隐藏():
        ⛔ 别退回"恒 0 ＋ 该域未实现"（那会让看板去谎报一个不存在的待办）。
     """
     block = _home()
-    assert "const nAdj=IVs.filter(iv=>adjOf(iv)).length;" in block
+    assert "dfPending" not in _calls(block)
     # ⭐ `TAIL-97`：`jcPending`（集采待确认）**已撤** ⇒ ④ 号那条口径出口**不许再出现**
     assert "nJc" not in block, "看板又数起了「集采待确认」（该待办已撤）"
     # ⛔ **已撤页的数据源不许长回来**（`DFs` 是 m12 的留痕残留、恒空 ⇒ 拿它当"待核对"就是谎报）
@@ -194,7 +153,7 @@ def test_集采与差异各取本域出口且不臆造不隐藏():
 # ----------------------------------------------------------------- 001-10
 def test_占位行按占位前缀计():
     """⭐ 「占位行」= 仓库名以占位前缀开头（`未建仓-`）的档案行数。"""
-    assert "const ph=PJs.filter(p=>p.name.startsWith('未建仓-'));" in _home()
+    assert "placeholder" not in _calls(_home())
 
 
 # ================================================================ B 段 · 后端（记账端点）
@@ -253,19 +212,9 @@ def test_抓取到期与失败取自执行记录(monkeypatch):
     out2 = S.run_counts(_Sess(success_rows=3))                  # 有成功记录 ⇒ 不提示
     assert out2["counts"]["fetchDue"] == 0
 
-    # ⭐ 结构：壳必须**问后端**（⛔ 不许在壳里扫记录窗口 —— 那会漏，且漏了不报错）
-    # ⚠️⚠️ **必须钉「代码行」而不是钉关键词** —— 本节三条断言第一版就是栽在这：
-    #    · `'看板计数' in SHELL` ⇒ 把 `LOADERS` 的键改名、而 `PAGE_LOAD` 里那个字符串还在 ⇒ **仍是绿的**；
-    #    · `'runFailInfo' in SHELL` ⇒ 改名成 `runFailInfoX` 后**子串仍命中** ⇒ **仍是绿的**；
-    #    · `'/api/home/run-counts' in SHELL` ⇒ 注释里也写着这个串 ⇒ **仍是绿的**。
-    #    ⇒ 三条全落空（`tools/mut/_归档-20261009/_mut_home_wired.py` 的 M5/M6/M7 实测无区分力）。
-    for line in ("  homeRunCounts: () => API.get('/api/home/run-counts'),",
-                 "  '看板计数': reloadHome,",
-                 "function runFailInfo(rec) {"):
-        assert line in SHELL, f"壳里少了这条代码（⛔ 注释里写着不算）：{line}"
-    assert "RUNLOG" not in _home(), "`V.home` 又读起了写死的演示记录数组"
-    assert "home: ['付款通知书', '项目档案', '看板计数']," in SHELL, \
-        "看板没把记账这一路加进取数表"
+    # 记账端点保持兼容，看板不再展示或请求运行状态。
+    assert 'homeRunCounts:' not in SHELL
+    assert "home: ['付款通知书', '项目档案', '集采台账']," in SHELL
     # ⚠️ **补盲区**：上面两条用的是 `_Sess` 桩件，而桩件的 `execute()` **直接返一个数**
     #    ⇒ 那句 SQL（按 run_type / status / **本月**筛）在桩件下**永远是对的**。
     #    这里按结构再钉一遍：三个条件一个都不能少（去掉「本月」那句 ⇒ 看板会拿旧月份报"已抓"）。
@@ -311,12 +260,7 @@ def test_打印失败取自打印执行记录(monkeypatch):
     assert out["counts"]["fetchFail"] == 0                      # 两种记录**不混用**
     assert out["latest"]["printFail"].run_type == "print"
     assert out["latest"]["fetchFail"] is None
-    # ⚠️ 时间必须与 m02 页同一展示口径（`T` 换空格），且**标签走 `m02LabelOf`**（同一个出口）
-    #    ⇒ ⛔ 只写 `"runFailInfo" in SHELL` 是**假绿**：改名成 `runFailInfoX` 子串照样命中（实测 M6 未命中）。
-    for line in ("function runFailInfo(rec) {",
-                 "  return { obj: m02LabelOf({ type: rec.run_type, target: rec.target }),",
-                 "           at: String(rec.started_at || '').replace('T', ' ') };"):
-        assert line in SHELL, f"壳里少了这条代码（⛔ 注释里写着不算）：{line}"
+
 
 
 # ================================================================ 附 · 旧渲染出口的坟
@@ -340,4 +284,6 @@ def test_看板只保留待办():
     page = page_slice('home')
     for text in ('怎么看这一页', '只列「需要你处理的事」', '状态一览'):
         assert text not in page, f'看板又出现已撤掉内容：{text}'
+    for text in ('取数状态', '本月抓取', '占位行待扶正'):
+        assert text not in page
     assert 'todoTiles.join' in page and 'todo-grid' in page

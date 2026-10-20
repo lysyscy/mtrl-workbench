@@ -198,9 +198,9 @@ def test_审查颜色与看板删减(ui_page):
     assert len(set(tones)) == 6
     p.evaluate("VIEW='home';render();")
     text=p.inner_text('#view')
-    for removed in ['怎么看这一页','只列「需要你处理的事」','状态一览']:
+    for removed in ['怎么看这一页','只列「需要你处理的事」','状态一览','取数状态','本月抓取','占位行待扶正']:
         assert removed not in text
-    assert p.locator('[data-todo]').count() == 5
+    assert p.locator('[data-todo]').count() == 3
 
 
 

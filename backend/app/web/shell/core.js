@@ -1580,46 +1580,6 @@ async function reloadM02IfOn() {
   render();
 }
 
-/* ⭐ 看板 ⑦⑬⑭ 的取数（`/api/home/run-counts` · 2026-09-21 接线）——
-   原先那两个瓦片读**写死的演示数组** `RUNLOG` ⇒ 看板成了全站唯一还显示模拟数据的页。
-   ⚠️⚠️ ⛔ **别改回"扫 `m02Records` 最近 N 条"**：那个端点是**窗口**（`limit ≤ 200`），
-      而 `run_record` 是**流水表**（实测 ≈10 条/天 ⇒ 一个月 ≈300 条）⇒ **会漏，且漏了不报错**
-      （症状 = 看板说"本月未抓" ⇒ 用户照着去重抓 ⇒ **白顶一次 i8 的号**）。
-   ⭐ 后端走 **SQL 全表**（`app/home/service.py::run_counts`）⇒ 答案与表有多大**无关**。 */
-/* ⭐⭐ 看板 ⑦⑬⑭ 的**取数接口**（`V.home` 只认这一个）—— ⚠️ 原型里有**同名同形**的一份，
-   两份都定义在 `V.home` **切片之外**，所以 `ui_parity` 的逐行比对不受影响（切片本身逐字一致）。
-   壳这一份 = **后端算好的**（`HOME`）；原型那一份 = 用它的演示记录现算。
-   ⛔ 别把这里改成"在壳里扫 `m02Records` 最近 N 条"——那会漏（窗口），且**漏了不报错**。 */
-function homeCounts() {
-  return { counts: { fetchDue: HOME.counts.fetchDue, fetchFail: HOME.counts.fetchFail,
-                     printFail: HOME.counts.printFail },
-           latest: { fetchFail: HOME.latest.fetchFail, printFail: HOME.latest.printFail },
-           err: HOME_ERR };
-}
-function runFailInfo(rec) {
-  if (!rec) return null;
-  /* 「表名 ＋ 时间」：标签走 `m02LabelOf`（与 `m02` 页**同一个出口**，⛔ 不在这儿另拼一套人话）；
-     时间与 `m02LogRows` 同一展示口径（ISO ⇒ `T` 换空格）。 */
-  return { obj: m02LabelOf({ type: rec.run_type, target: rec.target }),
-           at: String(rec.started_at || '').replace('T', ' ') };
-}
-async function reloadHome() {
-  try {
-    const d = await API.homeRunCounts();
-    const c = (d && d.counts) || {}, L = (d && d.latest) || {};
-    HOME = {
-      counts: { fetchDue: c.fetchDue ? 1 : 0, fetchFail: c.fetchFail ? 1 : 0,
-                printFail: c.printFail ? 1 : 0 },
-      latest: { fetchFail: runFailInfo(L.fetchFail), printFail: runFailInfo(L.printFail) },
-    };
-    HOME_ERR = '';
-  } catch (e) {
-    /* ⚠️ 记下来（三格要显「—」）**并且照常抛** —— 横幅得按路名点出这一路失败（`soft()` 的口径）。 */
-    HOME_ERR = String((e && e.message) || e);
-    throw e;
-  }
-}
-
 /* ⭐ 两个同步（`API-05` / `API-06`）的**唯一入口** —— 壳里三处入口共用它：
    `m02` 表里 API-05/06 两行的「触发」＋ `m01` 页首那两个「同步…」按钮。
    ⚠️ **D9：会强踢该账号的在线用户** ⇒ ① 先弹**二次确认**（讲清顶号与时段），⛔ 不确认不发请求；
@@ -1826,9 +1786,7 @@ function jcFetchPreview(d) {
       跨页写操作的陈旧性与改前**同级**（改前写 m03 也不会自动刷新 m05）；真要更强 = 写动作标脏，另立件。 */
 const PAGE_LOAD = {
   m10: ['机械费工作区'],
-  /* ⭐ `home`（看板）：前三路供 ①–⑥ 与欠款卡；⭐ **第四路 `看板计数`** = ⑦⑬⑭ —— 它**只能问后端**
-     （跨全表执行记录，见 `reloadHome` 上方那段为什么不能用记录窗口）。 */
-  home: ['付款通知书', '项目档案', '看板计数'],
+  home: ['付款通知书', '项目档案', '集采台账'],
   m01: ['项目档案', '待人工指认', '待人工建档', '修改留痕'],
   m02: ['i8 执行记录', '库存单据'],      /* `V.m02` 的回显卡读 `IVs`/`ADs` */
   /* ⭐ `M5-5`：m03 页**也要读 `JCs`** —— 「集采实际供应商」那一格的关联区（`jcRefOf` 反查"被哪张合同引用了"、
@@ -1874,7 +1832,6 @@ const LOADERS = {
   '待人工指认': reloadPending,   /* ⭐ `TAIL-30`-③：m01 页首那个入口的数据源（独立一路） */
   '待人工建档': reloadArchPend,  /* ⭐ `TAIL-45`：链路 A ③-b「多仓库 ⇒ 选定一个」那一路 */
   'i8 执行记录': reloadM02,     /* ⭐ `TAIL-27`：`m02` 回显与任务日志的唯一数据源 */
-  '看板计数': reloadHome,       /* ⭐ 看板 ⑦⑬⑭：**全表**记账（⛔ 与上面那路`窗口`是两回事，别合并） */
   '修改留痕': async () => {
     const tr = await API.trails();
     PJ_TRAIL.splice(0, PJ_TRAIL.length, ...(tr || []).map(adaptTrail));

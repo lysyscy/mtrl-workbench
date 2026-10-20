@@ -11,7 +11,7 @@
 
 let ntFocusId='';
 let refFocus={view:'',attr:'',id:''}, refReturn=null;
-let fNt={month:'全部',cat:'全部',astat:'全部',stat:'未付清',projs:[],q:''};   /* 年月默认「全部时间」；付款状态默认「未付清」 */
+let fNt={month:'全部',cat:'全部',astat:'全部',stat:'未付清',link:'全部',projs:[],q:''};   /* 年月默认「全部时间」；付款状态默认「未付清」 */
 /* —— 「手动新增 / 编辑付款通知书」弹窗（2026-09-12 用户口径）——
    用途：付「期初占位行」的款 —— 那笔钱没有 i8 单据，只能手工补一行通知书。
    `naD` 是弹窗的**草稿层**：弹窗里的年月组件一改动就要重建弹窗，
@@ -43,6 +43,7 @@ const ntHit=f=>{ const ex=f.cat==='剔除';
     &&(ex||f.cat==='全部'||n.cat===f.cat)
     &&(ex||f.astat==='全部'||n.astat===f.astat)
     &&(ex||f.stat==='全部'||statOf(n)===f.stat)
+    &&(ex||!f.link||f.link==='全部'||(f.link==='未关联'?ntJcUnlinked(n):n.cat==='集采'&&!!jcRefOf(n.id)))
     &&ntSearchMatch(n,f.q)); };
 /* 搜索的是表格实际展示的值，包括派生金额、项目展示名和状态。 */
 const ntSearchMatch=(n,q)=>{
@@ -467,6 +468,7 @@ const ntPayCand=n=>ntLive(n)&&!ntVoid(n);
    ⚠️ 「已关联」的判据 = `jcRefOf(n.id)`（关联关系就存在集采合同的**付款子表**里，§6.6.2）——
      与行内「查看关联」按钮、`ntHasLink` **同一个出口**，⛔ 不另写一份。 */
 const ntJcUnlinked=n=>n.cat==='集采'&&!jcRefOf(n.id);
+const ntJcPending=n=>ntLive(n)&&ntJcUnlinked(n)&&statOf(n)!=='已付清';
 /* 「本次不可付」的**唯一出口**（`''` = 可付）—— 与后端 `PayRow.block()` **逐条对应**：
    ① 审批状态非「已批」· ② 本次应付 ≤ 0 · ⑤ 集采未关联。
    （③ 已剔除 / ④ i8 已撤单在 `ntPayCand` 那层就被挡出批次，⛔ 不在这里再判一遍。）

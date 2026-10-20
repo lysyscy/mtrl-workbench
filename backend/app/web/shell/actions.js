@@ -252,6 +252,11 @@ const EXP_ROUTES = {
 const ACT={
  /* 导航 */
  go:t=>go(t.dataset.k),
+ homeJcUnlinked:()=>{
+   fNt={month:'全部',cat:'集采',astat:'全部',stat:'未付清',link:'未关联',projs:[],q:''};
+   pickSet.clear(); pjClose('pj'); go('m03');
+ },
+ ntClearPending:()=>{fNt.cat='全部';fNt.link='全部';prunePick();render();},
  /* ⭐ 批次 6（页级四态）：错误态那个「重试」按钮的唯一落点（`core.js::retryPage`）。
     ⚠️ 它只重拉**本页依赖的那几路** —— ⛔ 别改成"全站重拉"（那会把 `P3` 按需取数的收益还回去）。 */
  retryPage:()=>retryPage(),
@@ -2259,8 +2264,9 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
  /* —— 筛选 —— */
  /* 筛选项改动即时生效（不设独立「应用筛选」按钮；时间筛选由 tmBtn 统一组件驱动） */
  filterNt:()=>{
-   const cEl=$('#fCat'), aEl=$('#fAstat'), sEl=$('#fStat');
+   const cEl=$('#fCat'), aEl=$('#fAstat'), sEl=$('#fStat'), lEl=$('#fLink');
    fNt.cat=(cEl&&cEl.value)||'全部';
+   fNt.link=['全部','集采'].includes(fNt.cat)?((lEl&&lEl.value)||'全部'):'全部';
    fNt.astat=(aEl&&aEl.value)||'全部'; fNt.stat=(sEl&&sEl.value)||'全部';
    prunePick(); render();
  },
@@ -2270,7 +2276,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    const input=document.querySelector('#ntSearch');
    if(input){ input.focus(); if(start!=null) input.setSelectionRange(start,end); }
  },
- filterReset:()=>{ fNt={month:fNt.month,cat:'全部',astat:'全部',stat:'未付清',projs:[],q:''}; pjClose('pj'); prunePick(); render(); toast(`筛选条件已重置（年月保留 ${fNt.month}，付款状态回到默认「未付清」）`); },
+ filterReset:()=>{ fNt={month:fNt.month,cat:'全部',astat:'全部',stat:'未付清',link:'全部',projs:[],q:''}; pjClose('pj'); prunePick(); render(); toast(`筛选条件已重置（年月保留 ${fNt.month}，付款状态回到默认「未付清」）`); },
  /* 项目多选 */
  pjToggle:t=>{ pjToggle('pj',t); },
  pjPick:t=>{ const f=t.dataset.pj; const i=fNt.projs.indexOf(f); if(i>=0) fNt.projs.splice(i,1); else fNt.projs.push(f); prunePick(); render(); },
