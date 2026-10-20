@@ -263,13 +263,14 @@ function jcLinkDialog(n,data){
   const reasons=j=>j.linkRecommendation.reasons.map(r=>`<div><b>${esc(r.text)}</b>${r.kind==='invoice'?`<div>${r.amounts.map(money).join(' + ')} = ${money(data.notice_amount)}</div>`:''}${r.kind==='combined_notices'?`<div>已关联通知书审批额 ${money(r.prior_amount)} + 本条 ${money(data.notice_amount)} = 发票合计 ${money(r.invoice_total)}</div><div class="mut">${r.notice_codes.map(esc).join('、')}</div>`:''}</div>`).join('')||'<span class="mut">暂无金额匹配依据</span>';
   modal({title:`关联集采合同 · ${esc(n.code)}`,wide:true,linkNoticeId:n.id,linkCandidates:cands,reopen:()=>jcLinkDialog(n,data),body:
     `<div class="tip">通知书审批金额 <b>${money(data.notice_amount)}</b> · ${esc(pjLabel(data.project_key)||'项目未确定')} · ${esc(data.supplier||'供应商未指定')}。推荐不代表已选定，请核对材料和合同号后选择。<div>${esc(data.notice_title||n.doc||'').replace(/(\d[\d,]*(?:\.\d+)?)(?=元)/g,'<strong class="jc-link-money">$1</strong>')}</div></div>
+    ${cur?'<div class="tip">金额按本条通知书未关联时计算，其他付款仍计入。</div>':''}
     ${invoiceHits.length>1?'<div class="tip wn">多份合同的发票金额均可对应，请核对材料和合同号。</div>':''}
     ${cands.length?`<div class="tw"><table class="dt" id="jcLinkCandidates"><thead><tr><th>选择</th><th>合同</th><th>合同中的发票</th><th>推荐依据</th></tr></thead><tbody>${cands.map(j=>`<tr>
       <td><input type="radio" name="jcLinkId" value="${esc(j.id)}" data-act="jcLinkPick" data-id="${n.id}" aria-label="选择${esc(jcIdentity(j))}" ${sel&&sel.id===j.id?'checked':''}></td>
       <td style="min-width:220px;white-space:normal"><b>${jcIdentity(j)}</b>${cur&&cur.id===j.id?' '+tag('当前关联','in'):''}<div>${esc(j.material)} · ${esc(j.supplier)}</div><div>${esc(j.date||'合同日期未填')} · 合同金额 ${money(j.contractAmt)}</div><div>${uninvoiced(j.columnValues.supplier_uninvoiced)}</div>${j.tradeCo?`<div>贸易公司 ${esc(j.tradeCo)} · 合同金额 ${money(j.tradeContractAmt)}</div><div>${uninvoiced(j.columnValues.trade_uninvoiced)}</div>`:''}</td>
       <td class="sm" style="min-width:200px;white-space:normal">${invoices(j)}</td>
       <td class="sm" style="min-width:220px;white-space:normal">${reasons(j)}${j.linkRecommendation.combination_limited?'<div class="mut">超过12笔，仅比较单笔及全部发票合计。</div>':''}</td></tr>`).join('')}</tbody></table></div>`:'<div class="tip">本项目、供应商范围内没有可选合同，请先检查项目归属、供应商或合同台账。</div>'}
-    ${sel?`<div class="tip">已选 <b>${jcIdentity(sel)}</b> · 当前欠款 ${money(jcDebt(sel))} · 本条统计付款金额 ${money(n.sp)} ${N2(jcDebt(sel))===N2(n.sp)?tag('一致','ok'):tag('金额不一致 · 仍可关联','wn')}</div>`:''}`,
+    ${sel?`<div class="tip">已选 <b>${jcIdentity(sel)}</b> · 关联前欠款 ${money(jcDebt(sel))} · 本条统计付款金额 ${money(n.sp)} ${N2(jcDebt(sel))===N2(n.sp)?tag('一致','ok'):tag('金额不一致 · 仍可关联','wn')}</div>`:''}`,
     footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消当前关联</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${sel?'':'disabled'}>${cur?'改关联到所选合同':'关联'}</button>`});
 }
 

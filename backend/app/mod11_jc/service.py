@@ -131,6 +131,10 @@ def link_recommendations(s: Session, notice_id: int) -> dict:
              and (not n.i8_revoked or n.revoked_joint)} if linked_ids else {}
     for row in rows:
         row['invoices'] = invoices.get(row['id'], [])
+        if row['id'] == current:
+            payments = [p for p in R.payments_of(s, current) if p.get('notice_id') != notice_id]
+            row.update(D.contract_amounts(trade_co=row['trade_co'], invoices=row['invoices'], payments=payments))
+            row['notice_ids'] = [nid for nid in row['notice_ids'] if nid != notice_id]
         row['supplier_uninvoiced'] = row['contract_amt'] - row['inv_sum']
         row['trade_uninvoiced'] = (row['trade_contract_amt'] - row['trade_inv_sum']
                                     if row['trade_contract_amt'] is not None else None)

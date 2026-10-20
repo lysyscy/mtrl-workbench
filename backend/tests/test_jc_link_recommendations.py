@@ -77,8 +77,8 @@ def test_dialog_shows_invoices_without_preselection_and_blocks_stale_choice(ui_p
     p = ui_page
     p.evaluate('''() => {
       window.linkWrites=[];
-      API.m11LinkRecommendations=async id=>({ok:true,notice_amount:'12345.67',notice_title:'支付12345.67元',project_key:'测试仓库',supplier:'供应商甲',current_contract_id:null,rows:[
-        {id:2,project_seq:1,contract_no:'CGHT20260002',material:'钢材',supplier:'供应商甲',project_key:'测试仓库',contract_amt:'20000',supplier_uninvoiced:'7654.33',
+      API.m11LinkRecommendations=async id=>({ok:true,notice_amount:'12345.67',notice_title:'支付12345.67元',project_key:'测试仓库',supplier:'供应商甲',current_contract_id:2,rows:[
+        {id:2,project_seq:1,contract_no:'CGHT20260002',material:'钢材',supplier:'供应商甲',project_key:'测试仓库',contract_amt:'20000',supplier_uninvoiced:'7654.33',pay_sum:'50.00',settle:'1000.00',debt:'950.00',
           invoices:[{id:9,kind:'supplier',date:'2026-10-10',amount:'12345.67'}],recommendation:{reasons:[{kind:'invoice',text:'单笔发票金额一致',invoice_ids:[9],amounts:['12345.67']}]}},
         {id:3,project_seq:2,contract_no:'CGHT20260003',material:'管材',supplier:'供应商甲',project_key:'测试仓库',trade_co:'贸易公司',supplier_uninvoiced:'-20',trade_uninvoiced:null,
           invoices:[{id:10,kind:'trade',date:'2026-10-11',amount:'50.00'}],recommendation:{reasons:[]}}
@@ -101,6 +101,8 @@ def test_dialog_shows_invoices_without_preselection_and_blocks_stale_choice(ui_p
     p.evaluate("ACT.jcLinkOk({dataset:{id:'101'}})")
     assert p.evaluate('linkWrites.length') == 0
     p.locator('#jcLinkCandidates input[value="2"]').check()
+    assert '金额按本条通知书未关联时计算' in p.locator('#modalRoot').inner_text()
+    assert '关联前欠款 950.00' in p.locator('#modalRoot').inner_text()
     assert p.locator('[data-act="jcLinkOk"]').is_enabled()
     p.locator('[data-act="jcLinkOk"]').click()
     assert p.evaluate('linkWrites') == [{'notice_id': 101, 'contract_id': 2}]
@@ -110,3 +112,35 @@ def test_dialog_shows_invoices_without_preselection_and_blocks_stale_choice(ui_p
     p.evaluate("ACT.jcLink({dataset:{id:'101'}})")
     assert p.get_by_role('button', name='重试', exact=True).is_visible()
     assert p.locator('#jcLinkCandidates').count() == 0
+
+
+@pytest.mark.parametrize('stat_paid,trade', [('80.01', False), ('0', False), ('80.01', True)])
+def test_change_link_uses_unlinked_amounts_without_mutating_relation(rollback_db, stat_paid, trade):
+    from app.mod11_jc import service as S
+    with session_scope() as s:
+        p = _project(s, '__更改基准__')
+        c = _contract(s, project_id=p.id, supplier='甲')
+        if trade:
+            c.trade_co = '贸易公司'; c.trade_contract_amt = Decimal('2000')
+        R.insert_invoice(s, contract_id=c.id, kind='trade' if trade else 'supplier',
+                         invoice_date='2026-10-01', amount='1000')
+        n = _notice(s, ph='__更改当前__', approved='100', paid=stat_paid)
+        prior = _notice(s, ph='__更改其他__', approved='30', paid='30')
+        n.ownership_id = prior.ownership_id = p.id
+        n.jc_supplier = prior.jc_supplier = '甲'
+        S.act_link_notice(s, notice_id=n.id, contract_id=c.id)
+        S.act_link_notice(s, notice_id=prior.id, contract_id=c.id)
+        R.insert_payment(s, contract_id=c.id, pay_date='2026-10-01', amount='20', source='manual', notice_id=None)
+        link_id = R.payment_of_notice(s, n.id).id
+        live = next(r for r in S.build_list(s)['rows'] if r['id'] == c.id)
+        assert live['pay_sum'] == Decimal(stat_paid) + Decimal('50')
+        data = S.link_recommendations(s, n.id)
+        row = next(r for r in data['rows'] if r['id'] == c.id)
+        assert data['current_contract_id'] == c.id
+        assert row['pay_sum'] == Decimal('50.00') and row['debt'] == Decimal('950.00')
+        assert row['notice_ids'] == [prior.id]
+        assert row['settle'] == Decimal('1000.00')
+        assert row['recommendation']['reasons'] == []
+        assert R.payment_of_notice(s, n.id).id == link_id
+        again = next(r for r in S.build_list(s)['rows'] if r['id'] == c.id)
+        assert again['pay_sum'] == live['pay_sum'] and again['debt'] == live['debt']
