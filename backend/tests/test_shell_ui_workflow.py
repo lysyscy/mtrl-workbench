@@ -418,6 +418,7 @@ def test_通知书勾选后改付款金额保留两轴位置(ui_page, count, fie
       return {view:v.scrollTop,top:t.scrollTop,left:t.scrollLeft};}'''
     before = p.evaluate(snapshot)
     assert before['top'] > 100, before
+    assert before['left'] > 100, '夹具必须产生横向滚动，才能检出改金额后横向归零'
     target.press('Tab')
     p.wait_for_function("k=>{const n=NO.find(n=>n.id==='16');return (k==='pay'?payEff(n):n[k])===100}", arg=field)
     p.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
