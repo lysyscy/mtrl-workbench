@@ -23,6 +23,11 @@ def _month_columns(sheet):
     dated = []
     for cell in sheet[1]:
         value = cell.value
+        explicit = re.fullmatch(r'(20\d{2})年\s*(\d{1,2})月', str(value or '').strip())
+        if explicit and 1 <= int(explicit[2]) <= 12:
+            result[cell.column] = f'{explicit[1]}-{int(explicit[2]):02d}'
+            dated.append(int(explicit[1]))
+            continue
         dt = value if isinstance(value, (date, datetime)) else (
             from_excel(value) if isinstance(value, (int, float)) and 40000 < value < 60000 else None)
         if dt:
@@ -88,8 +93,11 @@ def read_months(data, selected):
         if missing:
             raise MustReportError("年度汇总没有所选月份：" + "、".join(sorted(missing)))
         records = {}
+        merged_names = {row: annual.cell(rng.min_row, 1).value for rng in annual.merged_cells.ranges
+                        if rng.min_col == rng.max_col == 1
+                        for row in range(rng.min_row, rng.max_row + 1)}
         for row in range(2, annual.max_row + 1):
-            name = str(annual.cell(row, 1).value or "").strip()
+            name = str(annual.cell(row, 1).value or merged_names.get(row, '')).strip()
             key = SUMMARY_FIELDS.get(str(annual.cell(row, 2).value or "").strip())
             if not key or not name or name in ("总计", "合计"):
                 continue
@@ -110,10 +118,12 @@ def read_months(data, selected):
                 continue
             current = ""
             sums = {}
+            groups = {rng.min_row for rng in sheet.merged_cells.ranges
+                      if rng.min_col == 2 and rng.max_col == 3 and rng.min_row == rng.max_row}
             for row in range(5, sheet.max_row + 1):
                 serial = sheet.cell(row, 1).value
                 name = str(sheet.cell(row, 2).value or "").strip()
-                if isinstance(serial, str) and re.fullmatch(r"[一二三四五六七八九十百]+", serial.strip()):
+                if row in groups or isinstance(serial, str) and re.fullmatch(r"[一二三四五六七八九十百]+", serial.strip()):
                     current = name
                     records.setdefault((ym, current), {"核算月": ym, "报表项目名": current})
                     continue  # 项目分组的汇总值不与明细重复相加。

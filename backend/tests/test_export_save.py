@@ -15,7 +15,7 @@ import re
 import openpyxl
 
 from app.mod05_flow import debt_export as DEBT
-from app.report_export.save import save_workbook
+from app.report_export.save import Formula, save_workbook, set_formula, workbook_bytes
 
 APP = pathlib.Path(__file__).resolve().parents[1] / "app"
 
@@ -29,6 +29,24 @@ def test_落盘到不存在的多级目录也要成功(tmp_path):
     assert got.is_absolute(), f"返回的不是绝对路径：{got}"
     assert got.exists() and got.stat().st_size > 0
     assert openpyxl.load_workbook(got).active["A1"].value == "你好"
+
+
+def test_formula_caches_survive_both_save_paths_and_literal_text_is_safe(tmp_path):
+    from io import BytesIO
+    from decimal import Decimal
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws['A1'] = Decimal('10.01')
+    set_formula(ws['A2'], Formula('=SUM(A1:A1)', Decimal('10.01')))
+    set_formula(ws['A3'], Formula('=IF(COUNT(B1)=0,"",B1)', None))
+    ws['B2'] = '=source text'
+    ws['B2'].data_type = 's'
+    for payload in (workbook_bytes(wb), save_workbook(wb, tmp_path / 'cached.xlsx').read_bytes()):
+        raw = openpyxl.load_workbook(BytesIO(payload)).active
+        values = openpyxl.load_workbook(BytesIO(payload), data_only=True).active
+        assert raw['A2'].value == '=SUM(A1:A1)'
+        assert values['A2'].value == 10.01 and values['A3'].value is None
+        assert raw['B2'].data_type == 's' and raw['B2'].value == '=source text'
 
 
 def test_接受字符串路径():

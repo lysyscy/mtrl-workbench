@@ -40,7 +40,7 @@ import openpyxl
 from app.core.errors import MustReportError
 from app.mod06_proc import domain as D
 from app.report_export import resources, tpl_fill
-from app.report_export.save import save_workbook
+from app.report_export.save import Formula, save_workbook, set_formula
 
 #: 该模板的 sheet（`模板清单` §二-4）
 SHEET = "汇总表"
@@ -83,14 +83,10 @@ def title_of(display: str) -> str:
 
 
 def _num(value) -> Decimal | None:
-    """金额列：空 ⇒ `None`（**留空**，清单 §六-2）；其余归一到 `Decimal`。
-
-    ⚠️ `0` 是**合法值**（该月该列确实是 0）⇒ **照写 0**，⛔ 不按"算出来是 0 就留空"处理
-       （留空留给的是**空态**：`build_matrix` 用 `None` 表示"该段该月没数据"）。
-    """
+    """Only the exported cells hide zero; domain and stored zero values retain their meaning."""
     if value is None or value == "":
         return None
-    return value if isinstance(value, Decimal) else Decimal(str(value))
+    return (value if isinstance(value, Decimal) else Decimal(str(value))) or None
 
 
 def body_spec(rows: list[dict]) -> dict:
@@ -113,9 +109,9 @@ def body_spec(rows: list[dict]) -> dict:
 
     totals = D.column_totals(list(rows or ()))
     # 尾块空列也须显式清掉模板公式；空串是现有引擎的留空约定，不能把None改成0。
-    sub = {COL_OF_KEY[k]: totals[k] if totals[k] is not None else "" for k in D.DATA_KEYS}
+    sub = {COL_OF_KEY[k]: totals[k] or "" for k in D.DATA_KEYS}
     segments = D.segment_totals(list(rows or ()))
-    total = {anchor: seg["total"] for anchor, seg in zip(TOTAL_ANCHORS, segments)}
+    total = {anchor: seg['total'] or '' for anchor, seg in zip(TOTAL_ANCHORS, segments)}
     # ⚠️ 尾块的**标签写在 B 列**（`小计` / `合计：`），⛔ **不是**引擎的 `label`（那会落到 A 列）——
     #    A 列是**序号**（B 类）：模板里小计 / 合计行**不编号**（清单 §5.3 明写）⇒ `label=None`。
     return {
@@ -142,6 +138,20 @@ def build_xlsx(rows: list[dict], out_dir, *, display: str, tab, ym: str) -> str:
         spec = body_spec(rows)
         sheet_plan = tpl_fill.fill_sheet(ws, spec)
         tpl_fill.set_text_format(ws, sheet_plan, TIME_COL)  # 「时间」列：写文本前先设文本格式
+        start, subtotal = sheet_plan['data_start'], sheet_plan['tail_start']
+        for row, _label, cells in sheet_plan['tail']:
+            for col, value in cells.items():
+                if col == TIME_COL:
+                    continue
+                if row == subtotal:
+                    expression = f'SUM({col}{start}:{col}{subtotal - 1})' if rows else '0'
+                else:
+                    keys = next(keys for _name, keys in D.SUM_SEGMENTS if COL_OF_KEY[keys[0]] == col)
+                    last_col = max(COL_OF_KEY[key] for key in keys)
+                    expression = f'SUM({col}{subtotal}:{last_col}{subtotal})'
+                formula = Formula(f'=IF({expression}=0,"",{expression})', value or None)
+                set_formula(ws[f'{col}{row}'], formula)
+                cells[col] = formula
         save_workbook(wb, out)
     finally:
         wb.close()

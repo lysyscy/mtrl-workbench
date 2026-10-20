@@ -103,16 +103,16 @@ def test_each_effective_source_exports_independent_amounts(sources, warehouse, m
     value = raw if tab == 0 else adjusted if tab == 1 else adjusted - raw
     if warehouse == MECH:
         assert rows[month][:10] == [None] * 10
-        assert rows[month][10] == value
-        book = openpyxl.load_workbook(path, data_only=False)
+        assert rows[month][10] == (value or None)
+        book = openpyxl.load_workbook(path, data_only=True)
         try:
             subtotal = next(row for row in book["汇总表"].iter_rows() if row[1].value == "小计")
             assert [cell.value for cell in subtotal[2:12]] == [None] * 10
-            assert subtotal[12].value == value
+            assert subtotal[12].value == (value or None)
         finally:
             book.close()
     else:
-        assert rows[month][0] == value
+        assert rows[month][0] == (value or None)
     assert page["cutoff_ym"] == sources.cutoffs[warehouse]
 
 
@@ -147,9 +147,9 @@ def test_page_shape_document_differences_and_monthly_export_are_distinct(sources
     assert page["rows_raw"][2]["mech_1"] == Decimal("0")
     _, rows = workbook(export_ok([MIX], 2))
     assert set(rows) == {"2025-12", "2026-01", "2026-03"}
-    assert rows["2026-01"][0] == 0  # 两张单据差额相抵，月度网格只有一个0。
+    assert rows["2026-01"][0] is None  # 差额相抵为0，导出按确认口径留空。
     assert rows["2026-03"][:10] == [None] * 10
-    assert rows["2026-03"][11] == 0
+    assert rows["2026-03"][11] is None
     matrices = M6.build_matrices(None)
     assert set(matrices) == {"projects", "matrices"}
     assert set(matrices["matrices"][MIX]) == {"raw", "adjusted", "cutoff_ym", "totals", "segments", "diffs", "diff_totals"}

@@ -34,8 +34,8 @@ def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     assert zero['J6'].value == '8.21'
     assert zero['B6'].data_type == 's'
     assert zero['I6'].value == Decimal('96.1165048543689')
-    assert monthly['O4'].value is None
-    assert not monthly['B6'].value
+    assert monthly['O4'].value == '不含税价'
+    assert monthly['A6'].value == '合计'
     assert any('未取得' in message for message in warnings)
     assert any('不同' in message for message in warnings)
     assert all(str(s.print_area) and s.print_title_rows for s in wb)
@@ -72,7 +72,7 @@ def test_monthly_hidden_net_column_survives_empty_template_cells():
     assert monthly['O6'].value == Decimal('100')
     assert monthly['M6'].value == '原备注'
     assert monthly['I6'].value == '8月1日'
-    assert monthly['O4'].value is None
+    assert monthly['O4'].value == '不含税价'
     wb.close()
 
 
@@ -90,26 +90,18 @@ def annual_sample(year):
 def test_annual_columns_follow_real_year_without_relabeling_source_values(year):
     wb, _ = export.build(annual_sample(year))
     annual = wb['年度汇总']
-    assert str(year) in str(annual['P1'].value)
-    assert str(year - 1) in str(annual['D1'].value)
+    months = {c.value: annual.cell(2, c.column).value for c in annual[1]
+              if isinstance(c.value, str) and '年' in c.value}
+    assert months['2023年2月'] == Decimal('99')
+    assert months['2025年1月'] == Decimal('10')
+    assert ('2025年12月' in months) == (year >= 2026)
+    assert ('2026年1月' in months) == (year >= 2026)
+    assert ('2026年12月' in months) == (year >= 2027)
     if year == 2027:
-        assert annual['D2'].value == Decimal('30')
-        assert annual['O2'].value == Decimal('40')
-        assert annual['P2'].value == Decimal('50')
-        assert annual['AA2'].value is None
-        assert annual['C2'].value is None  # The missing 2025 months cannot establish an older total.
-    elif year == 2025:
-        assert annual['P2'].value == Decimal('10')
-        assert annual['AA2'].value == Decimal('20')
-        assert annual['D2'].value is None
-        assert annual['C2'].value is None
-    else:
-        assert annual['C2'].value == Decimal('1000')
-        assert annual['D2'].value == Decimal('10')
-        assert annual['O2'].value == Decimal('20')
-        assert annual['P2'].value == Decimal('30')
-        assert annual['AA2'].value == Decimal('40')
-    assert annual['AH2'].value == Decimal('99')
+        assert months['2026年1月'] == Decimal('30')
+        assert months['2026年12月'] == Decimal('40')
+        assert months['2027年1月'] == Decimal('50')
+    assert '往年合计' not in [c.value for c in annual[1]]
     wb.close()
 
 
@@ -120,7 +112,11 @@ def test_rollover_older_total_uses_complete_previous_year_and_confirmed_revision
         cells[export.get_column_letter(3 + month)] = str(month)
     data['annual_effective'].append({'warehouse': '甲', 'ym': '2025-01', 'values': {'mech_2': '2'}})
     wb, _ = export.build(data)
-    assert wb['年度汇总']['C2'].value == Decimal('1079')
+    annual = wb['年度汇总']
+    col = next(c.column for c in annual[1] if c.value == '2025年1月')
+    assert annual.cell(2, col).value == Decimal('2')
+    # The opening lump sum is never silently allocated to a made-up month.
+    assert annual['C2'].value == Decimal('99')
     wb.close()
 
 

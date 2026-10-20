@@ -133,7 +133,7 @@ def export(tab: int, keys=(WH,), **kw):
 
 
 def read(path) -> list[list]:
-    wb = openpyxl.load_workbook(str(path), data_only=False)
+    wb = openpyxl.load_workbook(str(path), data_only=True)
     try:
         ws = wb[SHEET]
         return [[ws.cell(row=r, column=c).value for c in range(1, ws.max_column + 1)]
@@ -153,7 +153,7 @@ def row16(rows: list[list], r: int) -> list:
 
 def same(got: list, want: list) -> str:
     for i, (g, w) in enumerate(zip(got, want)):
-        if w is None:
+        if w is None or w == 0:
             if g not in (None, ""):
                 return f"第 {i + 1} 个数据列（{LETTERS16[i]}）该**留空**，实得 {g!r}"
         elif g is None or dec(g) != dec(w):

@@ -39,7 +39,7 @@ from pathlib import Path
 
 import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter
-from app.report_export.save import save_workbook
+from app.report_export.save import Formula, save_workbook
 
 #: 数据区起点的**标记文字**（方案 A：认文字，不认坐标/定义名称）
 MARKER = "DATA_START"
@@ -188,9 +188,11 @@ def _shift_merges(ws, from_row: int, offset: int) -> None:
       ⭐ 通法：**合并区的"几何"与"单元格本体"是两套账** —— 挪位置只该动前者。
     """
     moved = [rng for rng in list(ws.merged_cells.ranges) if rng.min_row >= from_row]
+    boxes = [(rng.min_col, rng.min_row + offset, rng.max_col, rng.max_row + offset) for rng in moved]
     for rng in moved:
-        box = (rng.min_col, rng.min_row + offset, rng.max_col, rng.max_row + offset)
         ws.merged_cells.ranges.remove(rng)
+    # Remove all old boxes first: a new total may lie inside the old footnote merge.
+    for box in boxes:
         ws.merge_cells(start_column=box[0], start_row=box[1], end_column=box[2], end_row=box[3])
 
 
@@ -403,6 +405,9 @@ def verify_filled(path, plan) -> list[str]:
             for r in range(ds, last + 1):                       # ④ 值覆盖不彻底
                 for c in range(1, max_col + 1):
                     if raw.cell(row=r, column=c).data_type == "f":
+                        expected = next((cells.get(get_column_letter(c)) for rr, _lb, cells in sp['tail'] if rr == r), None)
+                        if isinstance(expected, Formula) and raw.cell(r, c).value == str(expected):
+                            continue
                         problems.append("%s!%s%d 还是公式 ⇒ 值覆盖不彻底"
                                         % (sp["sheet"], get_column_letter(c), r))
     finally:
@@ -417,6 +422,8 @@ def _same(got, exp) -> bool:
     ⚠️ 期望值是**金额**（域内核给的是 `Decimal`）⇒ 数值比较必须认 `Decimal`
        —— 只判 `int/float` 会让 `Decimal("0.00")` 掉进字符串比较、报出「0 ≠ 0.00」的假红（实测踩到）。
     """
+    if isinstance(exp, Formula):
+        exp = exp.result
     if exp is None or exp == "":
         # ⚠️ 空串与 `None` 同义 = **该格留空**（`""` 是调用方表达"显式留空"的写法，见 `fill_sheet` 尾块）
         if got is None:

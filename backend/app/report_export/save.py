@@ -24,6 +24,61 @@
 from __future__ import annotations
 
 from pathlib import Path
+from decimal import Decimal
+from io import BytesIO
+import xml.etree.ElementTree as ET
+from zipfile import ZipFile
+
+
+class Formula(str):
+    """An Excel formula with its independently computed initial display value."""
+
+    def __new__(cls, expression, result):
+        value = super().__new__(cls, expression)
+        if not expression.startswith('='):
+            raise ValueError('Excel公式必须以=开头')
+        if result is not None and not Decimal(str(result)).is_finite():
+            raise ValueError('公式缓存必须为有限数值')
+        value.result = result
+        return value
+
+
+def set_formula(cell, formula):
+    cell.value = formula
+    # openpyxl coerces string subclasses; retain the cache metadata until serialization.
+    cell._value = formula
+
+
+def _cache_formulas(wb, payload):
+    cached = {i: {c.coordinate: c.value.result for row in sheet for c in row
+                  if isinstance(c.value, Formula)} for i, sheet in enumerate(wb, 1)}
+    if not any(cached.values()):
+        return payload
+    ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+    ET.register_namespace('', ns)
+    output = BytesIO()
+    with ZipFile(BytesIO(payload)) as source, ZipFile(output, 'w') as target:
+        sheets = {f'xl/worksheets/sheet{i}.xml': values for i, values in cached.items() if values}
+        for info in source.infolist():
+            content = source.read(info.filename)
+            if info.filename in sheets:
+                root = ET.fromstring(content)
+                for cell in root.findall(f'.//{{{ns}}}sheetData/{{{ns}}}row/{{{ns}}}c'):
+                    if cell.get('r') not in sheets[info.filename]:
+                        continue
+                    value = sheets[info.filename][cell.get('r')]
+                    cache = cell.find(f'{{{ns}}}v')
+                    if cache is None:
+                        cache = ET.SubElement(cell, f'{{{ns}}}v')
+                    if value is None:
+                        cell.set('t', 'str')
+                        cache.text = None
+                    else:
+                        cell.attrib.pop('t', None)
+                        cache.text = format(Decimal(str(value)), 'f')
+                content = ET.tostring(root, encoding='utf-8', xml_declaration=True)
+            target.writestr(info, content)
+    return output.getvalue()
 
 
 def save_workbook(wb, out: str | Path) -> Path:
@@ -35,7 +90,7 @@ def save_workbook(wb, out: str | Path) -> Path:
     """
     p = Path(out)
     p.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(str(p))
+    p.write_bytes(workbook_bytes(wb))
     try:
         wb.close()
     except Exception:                        # noqa: BLE001 —— close 失败不影响"文件已经写出来了"
@@ -50,11 +105,9 @@ def workbook_bytes(wb) -> bytes:
     ⇒ `tests/test_export_save.py::test_落盘出口只剩一个` 的静态扫描才能成立。
     ⚠️ **不 `close()`** —— 这里没有文件句柄要还；调用方拿着 `bytes` 该干嘛干嘛。
     """
-    from io import BytesIO
-
     buf = BytesIO()
     wb.save(buf)
-    return buf.getvalue()
+    return _cache_formulas(wb, buf.getvalue())
 
 
-__all__ = ["save_workbook", "workbook_bytes"]
+__all__ = ["save_workbook", "workbook_bytes", "Formula", "set_formula"]
