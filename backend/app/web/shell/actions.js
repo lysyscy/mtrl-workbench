@@ -115,7 +115,7 @@ function jcApplyHide(){
       ① 本表表头**带排序箭头**（`applySorts` 加的）⇒ 列宽不是"纯文字宽 × 倍率"；
       ② `table.dt` 是 `table-layout:auto` ⇒ 余宽会分给某些列 ⇒「勾选框」列 **1440/1920 时 29px、2560 时 34px**
       ⇒ 静态算式在某档视口 / 某种列数下**必然错位**（错位是 `sticky` 的经典失败模式，且**不报错**）。
-      ⇒ 本页一律**渲染后按表头实测**，`left` 取**相邻格的真实右缘**（⛔ 不取整 —— 取整会攒出 1px 的缝）。
+      ⇒ 本页一律**渲染后按表头实测**，`left` 取**前面各列真实宽度的累计值**（⛔ 不取整 —— 取整会攒出 1px 的缝）。
    ⚠️ **钉的必须是「连续前缀」**（`sticky` 的硬约束）：序号(#1) 与 材料名(#3) 中间隔着 合同日期(#2)
       ⇒ 只钉两头会让 #2 从缝里露出来 / 被盖住 ⇒ **一并钉上 #2**（用户选 `B` 时点的是"行身份区"）。
    ⭐ `TAIL-298`：钉哪几列**按 id 现算**（`JC_PIN_IDS` · id = 后端列的 `key`，见 `pages-b.js`）——
@@ -134,12 +134,9 @@ function jcApplyPin(){
   const JC_PIN=cols.map(i=>i+1);
   if(!JC_PIN.length||JC_PIN[0]!==1||!JC_PIN.every((v,i)=>v===JC_PIN[0]+i)) return;   /* 硬约束：连续前缀 */
   if(ths.length<=JC_PIN[JC_PIN.length-1]) return;         /* 列数不像预期 ⇒ ⛔ 别瞎设偏移 */
-  const L0=ths[0].getBoundingClientRect().left;
-  /* 第 i 列的 `left` = **它前面那一格的右缘**（真实边界，见上）。
-     ⚠️ `i===0` 必须单列（左缘 = `L0`）—— 合计行首格「合计」也钉 `i=0`，而 `ths[-1]` 是 `undefined`
-     ⇒ 不单列会**静默抛** `Cannot read properties of undefined`（实测：真机 3 次 pageerror；
-     ⚠️ 它**不报在界面上** —— 只有 `fl` 那句先跑到了，看起来"居然还是对的"，最难查的那种）。 */
-  const off=i=>i===0?0:ths[i-1].getBoundingClientRect().right-L0;
+  // 自适应列宽后，sticky格的位置仍含旧left；按当前实际宽度累计，避免覆盖后面的合同号。
+  const widths=ths.slice(0,JC_PIN[JC_PIN.length-1]).map(th=>th.getBoundingClientRect().width);
+  const off=i=>i===0?0:widths.slice(0,i).reduce((sum,width)=>sum+width,0);
   /* ⭐⭐ `TAIL-214`（2026-10-02 · 用户报障「打开 mod11 页面有几秒的卡顿」）—— **偏移只跟列有关、跟行无关**
      ⇒ 下面必须分成**两个相**（读全 ⇒ 再写全）：
        ① **先把要用的偏移一次量完**（`OFF` 只有 4 个数：首格 ＋ `JC_PIN` 那 3 列）；

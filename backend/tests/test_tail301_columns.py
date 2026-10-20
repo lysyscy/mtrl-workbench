@@ -78,3 +78,12 @@ def test_sums_follow_column_ids(ui_page):
         for key,text in zip(keys,cells[1:]):
             expected=totals[key] if key in D.SUM_KEYS or key=='extra_amt' else ''
             assert text==expected, f'sum must follow column id: {key}: {text} != {expected}'
+
+
+def test_contract_number_not_covered_after_width_changes(ui_page):
+    p=ui_page
+    table,keys=_load(p,'base')
+    for scale in ('1', '1.25', '1.4', '1'):
+        p.evaluate("s=>{document.documentElement.style.setProperty('--fscale',s);fitWideTables();jcApplyPin();}",scale)
+        gap=table.locator('tbody tr').first.locator('td').evaluate_all("es=>es[4].getBoundingClientRect().left-es[3].getBoundingClientRect().right")
+        assert gap >= -0.6, f'contract number covered by material column: {gap}px at {scale}'
