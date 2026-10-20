@@ -1,4 +1,4 @@
-"""机械存储反例的隔离后端配方：传测试库、隔离四态，结束移除临时副本。"""
+"""机械存储反例的隔离后端配方：传原库与测试库供守卫核验，结束移除临时副本。"""
 
 from pathlib import Path as _WorkspacePath
 import sys as _workspace_sys
@@ -19,7 +19,8 @@ def isolated_backend(prefix):
     """供_mut_proc_split与_mut_tail270使用；正式源码和凭据不作变异靶。"""
     sys.path.insert(0, str(ROOT / 'backend'))
     from app.core.config import get_settings
-    test_url = get_settings().test_database_url
+    settings = get_settings()
+    test_url = settings.test_database_url
     with tempfile.TemporaryDirectory(prefix=prefix, dir=ROOT / _run_dir('work')) as folder:
         base = Path(folder) / 'backend'
         base.mkdir()
@@ -28,6 +29,6 @@ def isolated_backend(prefix):
                             ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copy2(ROOT / 'backend/pytest.ini', base / 'pytest.ini')
         env = dict(os.environ, TEST_DATABASE_URL=test_url,
-                   DATABASE_URL=test_url, PYTHONIOENCODING='utf-8',
+                   DATABASE_URL=settings.database_url, PYTHONIOENCODING='utf-8',
                    ACC_RESULTS_PATH=str(Path(folder) / 'results.json'))
         yield base, env
