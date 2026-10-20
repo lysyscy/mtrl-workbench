@@ -56,3 +56,13 @@ Standards与Spec采用两个独立Sol6.1/high上下文覆盖本任务累计差�
 3条仅约束全文/层级/类名的旧形式断言已退役，行为覆盖保留。当前scope无新业务裁定或环境阻塞。全部票、资料及本机run实际退出后运行workspace_check closed；提交由主Agent串行执行真实钩子，不混入其他既有改动。提交号从本次Git提交与最终回执读取，不以自指回执反复生成提交。
 
 TAIL-356～368已逐票经官方工具干跑及真跑销号；活跃8、已销号363。原规格/发布来源与本轮证据已归本目录，本机必要原始证据归.artifacts/archive/frontend-visual-audit，临时work已释放。workspace_check的run-closed和closed均退出0、errors=[]；最初3件旧任务资料的分类问题随实际归档关闭。共享文档仅暂存本任务的计数、交付行与归档索引，无关已有工作区修改未暂存。
+
+## 用户授权推送与重启（2026-10-20）
+
+- 新授权：用户明确要求“推送并重启”，覆盖本批源码及必要收尾记录；不写业务数据或迁移，不重跑全套。
+- 发布前HEAD为c9d1c0b0b76cb42838c431f66500d936cb1aa2a7；origin/master为父提交616242f，正常push后远端完整SHA已核与c9一致，无强推。暂存区原为空；backend/app、迁移、依赖与ops无dirty或未跟踪运行代码。服务NSSM配置明确指向本仓backend/.venv/Scripts/python.exe与backend工作目录，单uvicorn且无reload。
+- 重启前两库备份：var/backups/databases/20261020-100353-aaa26955，pg_dump成功，归档目录及SHA已由备份脚本校验；未重做恢复演练。没有执行Alembic或任何业务写入口；启动lifespan仅日志。
+- 使用ops/server_ctl.ps1 -Action restart，退出0；服务Running/Automatic，NSSM PID18500→33812、应用PID35396→31356；/app于启动1秒后200，/healthz返回200/status=ok。/app与base.js、core.js、legacy.js、pages-b.js共5个资源的实际响应与本机文件及c9提交内容逐件一致（只归一Git行尾）。健康接口本身没有Git SHA字段，运行版本结论来自进程路径和实际资源比对。
+- GitHub读取该SHA的workflow runs、check runs及commit statuses均0；combined status的pending来自空statuses，不是正在运行的CI，也不称CI通过。本仓没有受跟踪的.github工作流。
+- 重启前后原30项dirty逐文件摘要完全一致；运行源码未混入未验业务改动。后续本段、368回执及共享索引的本任务增量单独提交，原无关修改保持未暂存。
+- 本机原始前后状态和资源摘要：.artifacts/archive/frontend-visual-audit/rollout-20261020/reports/{before,after}.json；CI计数同目录ci-c9.json。没有重做全站功能/视觉审计，实体打印、真实账号及业务操作仍沿实施阶段未验边界。

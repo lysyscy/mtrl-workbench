@@ -78,4 +78,4 @@
 
 ## 全站界面精修（2026-10-20）
 
-TAIL-356～368完成；原审计、批准拆分、实施与未验边界见[交付记录](frontend-visual-audit-20261020/README.md)，原位置和字节摘要见同目录manifest.json。本地提交，未推送或重启。
+TAIL-356～368完成；原审计、批准拆分、实施与未验边界见[交付记录](frontend-visual-audit-20261020/README.md)，原位置和字节摘要见同目录manifest.json。用户授权后已推送并重启，运行验收见交付记录。
