@@ -327,7 +327,7 @@ const m05Params = () => ({
   bucket: pst.ym||'',
   pj: ledCur(),
 });
-let m05Refetching = false, m05Request = 0;
+let m05Refetching = false, m05Request = 0, m05RenderPending = false;
 /* ⏳ **启动期间不补拉**（性能 `P3`① · 2026-09-19）：`boot()` 里那 13 路**陆续到位**时，
    每路都会 `render()`，而 `m05Sync()` 挂在 `render` 上 —— 它的参数里有 `ledCur()`（依赖 `ledProjs()`，
    随项目数据到位而**变**）⇒ 实测同一页加载里 `/api/m05/{flows,stats,debt}` 各发了 **3 次**、
@@ -352,7 +352,7 @@ async function reloadM05() {
   M05_FETCHED.quarter = p.quarter; M05_FETCHED.pj = p.pj; M05_FETCHED.bucket = p.bucket;
   // 写出口会清空LOADED；本次已完整刷新，恢复参数切换的补拉资格。
   LOADED.add('付款域');
-  render();
+  renderM05();
 }
 /* 参数（粒度 / 轴 / 台账项目）变了就**自动补拉** —— 收敛成一个点，
    ⛔ 不必给每个选择器（`pstGran` / 时间轴 / `ledPjPick`）各挂一个钩子。 */
@@ -371,7 +371,28 @@ async function m05Sync() {
 /* ⭐ 把 `render` 包一层：渲染完顺手对账 m05 的参数（变了就补拉）。
    ⚠️ 这是**取数钩子**、不是改交互 —— `V.*` 一个切片都没碰（`ui_parity` U1 仍只认那 2 条已登记漂移）。 */
 const _renderProto = render;
-render = function () { _renderProto.apply(this, arguments); m05Sync(); };
+render = function () { m05RenderPending=false; _renderProto.apply(this, arguments); m05Sync(); };
+
+function renderM05(){
+  // 保留正在编辑的原生输入框及草稿，连续Tab换格时不拆掉DOM。
+  if(VIEW==='m05'&&document.activeElement?.matches('[data-act="ledHistoryCell"],[data-act="ledNote"],#flQ')){
+    m05RenderPending=true; return;
+  }
+  render();
+}
+document.addEventListener('focusout',()=>{
+  if(m05RenderPending) requestAnimationFrame(()=>{
+    if(!m05RenderPending) return;
+    // 先让按钮/选择器完成点击，再补画，避免mousedown与click之间换掉目标。
+    if(document.activeElement?.closest('button,a,select,[role="button"],input[type="checkbox"],input[type="radio"]')) return;
+    if(VIEW==='m05') renderM05(); else m05RenderPending=false;
+  });
+});
+document.addEventListener('click',()=>{
+  if(m05RenderPending) requestAnimationFrame(()=>{
+    if(m05RenderPending&&VIEW==='m05') renderM05();
+  });
+});
 
 /* 写动作外壳（与 `pjAct` / `plAct` 同款：失败**原样显示后端原因**并回滚到后端真实状态） */
 async function m05Act(fn, okMsg, ms) {
@@ -384,7 +405,7 @@ async function m05Act(fn, okMsg, ms) {
     return r;
   } catch (e) {
     if(saved){
-      render();
+      renderM05();
       toast(`已保存，但页面数据未能刷新：${esc(String((e && e.message) || e))}。请刷新页面查看，无需重复保存。`,7000);
       return null;
     }

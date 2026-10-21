@@ -185,6 +185,7 @@ const ledHistoryInput=(r,sc,field)=>`<input class="inp led-cell ${field==='remar
   ${field==='cutoff_ym'?'type="month" max="2025-11"':field==='remark'?'maxlength="512"':'inputmode="decimal"'}
   aria-label="${sc} ${r.ym} ${{cutoff_ym:'月份',settle_amount:'结算',paid_amount:'付款',remark:'备注'}[field]}"
   data-act="ledHistoryCell" data-sc="${sc}" data-seq="${r.seq}" data-field="${field}"
+  data-id="${r.id||''}" data-month="${r.ym}" data-project-id="${(M05.ledger||{}).project_id}"
   value="${esc(field==='cutoff_ym'?r.ym:field==='settle_amount'?r.s.toFixed(2):field==='paid_amount'?r.p.toFixed(2):r.note)}"
   title="离开单元格即保存">`;
 const ledRowPayload=(r,sc)=>({id:r.id||null,project_id:Number((M05.ledger||{}).project_id),

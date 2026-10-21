@@ -143,6 +143,89 @@ def pick_project(p,name):
     p.locator('[data-act="ledPjPick"][data-pj="'+name+'"]').click()
 
 
+def test_previous_cell_save_keeps_next_cell_focus_and_draft(ui_page):
+    p=ui_page;server,ledger=project_server(p)
+    server['rows'][1]=[{'seq':1,'month':'2025-11','row_kind':'manual','record_id':501,
+        'editable':True,'token':'original','other_expense':'10.00','payment':'1.00','remark':''}]
+    p.evaluate('void reloadM05()')
+    settle=p.locator('[data-sc="辅材"][data-field="settle_amount"]')
+    paid=p.locator('[data-sc="辅材"][data-field="paid_amount"]')
+    expect(settle).to_have_value('10.00')
+    server['hold'].add(1)
+    settle.fill('100');settle.press('Tab')
+    expect(paid).to_be_focused();paid.fill('555')
+    p.wait_for_function('window.pendingLedgerReads===1')
+    assert len(server['writes'])==1 and server['writes'][0]['settle_amount']=='100'
+    server['hold'].clear()
+    _,req=server['pending'].pop();req.fulfill(json=ledger(1))
+    expect(p.locator('.toast').last).to_contain_text('台账已保存')
+    assert paid.evaluate('(el)=>({focused:document.activeElement===el,value:el.value})')=={
+        'focused':True,'value':'555'}
+    if folder:=os.environ.get('MTRL_UI_EVIDENCE_PATH'):
+        p.screenshot(path=str(Path(folder)/'ledger-focus-kept.png'),full_page=True)
+    server['hold'].add(1);paid.press('Tab')
+    p.wait_for_function('window.pendingLedgerReads===1')
+    toggle=p.locator('[data-act="ledPjToggle"]');button=toggle.element_handle()
+    toggle.hover();p.mouse.down()
+    p.evaluate('()=>new Promise(requestAnimationFrame)')
+    assert button.evaluate('el=>el.isConnected'), '离格补画不得吞掉下一次按钮点击'
+    p.mouse.up()
+    expect(p.locator('[data-act="ledPjPick"]').first).to_be_visible()
+    server['hold'].clear();_,req=server['pending'].pop();req.fulfill(json=ledger(1))
+    expect(paid).to_have_value('555.00')
+    assert server['writes'][-1]['paid_amount']=='555'
+    assert server['writes'][-1]['settle_amount']=='100.00'
+
+
+def test_deferred_redraw_edits_record_id_after_month_reorders_rows(ui_page):
+    p=ui_page;server,ledger=project_server(p)
+    server['rows'][1]=[{'seq':i,'month':month,'row_kind':'manual','record_id':rid,
+        'editable':True,'token':'original','other_expense':'10.00','payment':'1.00','remark':''}
+        for i,month,rid in [(1,'2025-10',502),(2,'2025-11',501)]]
+    def save(req):
+        body=req.request.post_data_json;server['writes'].append(body)
+        row=next(r for r in server['rows'][1] if r['record_id']==body['id'])
+        row.update(month=body['cutoff_ym'],other_expense=body['settle_amount'],
+            payment=body['paid_amount'],remark=body['remark'],token='saved')
+        server['rows'][1].sort(key=lambda r:r['month'])
+        for i,r in enumerate(server['rows'][1],1):r['seq']=i
+        req.fulfill(json={'ok':True,'id':body['id']})
+    p.route('**/api/m05/history/save',save)
+    p.evaluate('void reloadM05()')
+    month=p.locator('[data-sc="辅材"][data-field="cutoff_ym"]').nth(1)
+    expect(month).to_have_value('2025-11')
+    server['hold'].add(1);month.fill('2025-09')
+    paid=p.locator('[data-sc="辅材"][data-field="paid_amount"]').nth(1)
+    paid.click();paid.fill('777')
+    p.wait_for_function('window.pendingLedgerReads===1')
+    server['hold'].clear();_,req=server['pending'].pop();req.fulfill(json=ledger(1))
+    expect(p.locator('.toast').last).to_contain_text('台账已保存')
+    expect(paid).to_be_focused();expect(paid).to_have_value('777')
+    paid.press('Tab');p.locator('#ttl').click()
+    expect(p.locator('[data-sc="辅材"][data-field="paid_amount"]').first).to_have_value('777.00')
+    assert server['writes'][-1]['id']==501
+    assert next(r for r in server['rows'][1] if r['record_id']==502)['payment']=='1.00'
+
+
+def test_deferred_redraw_does_not_silently_overwrite_changed_cell(ui_page):
+    p=ui_page;server,ledger=project_server(p)
+    server['rows'][1]=[{'seq':1,'month':'2025-11','row_kind':'manual','record_id':501,
+        'editable':True,'token':'original','other_expense':'10.00','payment':'1.00','remark':''}]
+    p.evaluate('void reloadM05()')
+    settle=p.locator('[data-sc="辅材"][data-field="settle_amount"]')
+    paid=p.locator('[data-sc="辅材"][data-field="paid_amount"]')
+    expect(settle).to_have_value('10.00');server['hold'].add(1)
+    settle.fill('100');settle.press('Tab');paid.fill('555')
+    p.wait_for_function('window.pendingLedgerReads===1')
+    server['rows'][1][0].update(payment='2.00',token='external')
+    server['hold'].clear();_,req=server['pending'].pop();req.fulfill(json=ledger(1))
+    expect(p.locator('.toast').last).to_contain_text('台账已保存')
+    paid.press('Tab')
+    expect(p.locator('.toast').last).to_contain_text('这一格已变化')
+    assert len(server['writes'])==1
+    p.locator('#ttl').click();expect(paid).to_have_value('2.00')
+
+
 def test_saved_history_never_appears_under_another_project(ui_page):
     p=ui_page;server,ledger=project_server(p)
     p.get_by_role('button',name='＋ 新增历史行',exact=True).click()

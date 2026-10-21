@@ -925,10 +925,17 @@ const ACT={
        const input=r&&$(`[data-act="ledHistoryCell"][data-sc="辅材"][data-seq="${r.seq}"]`);
        if(input){input.scrollIntoView({block:'nearest'});input.focus();}}
    }finally{ledAdding=false; if(t.isConnected)t.disabled=false;} },
- ledHistoryCell:t=>{const sc=t.dataset.sc, r=ledRows(sc).find(r=>String(r.seq)===t.dataset.seq);
+  ledHistoryCell:async t=>{const sc=t.dataset.sc, r=Number(t.dataset.projectId)===Number((M05.ledger||{}).project_id)
+    &&ledRows(sc).find(r=>t.dataset.id?String(r.id)===t.dataset.id:r.ym===t.dataset.month);
    if(!r||!r.editable) return toast('这一行已变化，请刷新后重试');
-   const payload=ledRowPayload(r,sc); payload[t.dataset.field]=String(t.value);
-   return m05Act(()=>API.send('POST','/api/m05/history/save',payload),'台账已保存'); },
+    const field=t.dataset.field, amount=field==='settle_amount'||field==='paid_amount';
+    const payload=ledRowPayload(r,sc), shown=amount?numOr0(t.defaultValue).toFixed(2):t.defaultValue;
+    // 后台刷新了版本但尚未重画时，仍保护用户开始编辑时看到的格值。
+    if(payload[field]!==shown) return toast('这一格已变化，请刷新后重试');
+    payload[field]=String(t.value);
+    const result=await m05Act(()=>API.send('POST','/api/m05/history/save',payload),'台账已保存');
+    if(result&&t.isConnected) t.defaultValue=amount?numOr0(payload[field]).toFixed(2):payload[field].trim();
+    return result; },
  historyDelete:t=>{const sc=t.dataset.sc, r=ledRows(sc).find(r=>String(r.id)===t.dataset.id);
    if(!r||r.kind!=='manual') return toast('这一行已变化，请刷新后重试');
    return m05Act(()=>API.send('POST','/api/m05/history/delete',{id:r.id,token:r.token}),
