@@ -4,11 +4,11 @@
 
 **Blocked by:** None
 
-**Status:** claimed
+**Status:** done
 
 - [x] 未录期初不造占位、不截断历史月份；两侧、其他项目与导出同源。
 - [x] 真实期初使用实际截止月；未填日期付款保留且不重复，编辑不凭空创建期初。
-- [ ] 默认截止月按当前项目分类取值；验证、全项目只读核对、资料同步、推送及重启完成。
+- [x] 默认截止月按当前项目分类取值；验证、全项目只读核对、资料同步、推送及重启完成。
 
 ---
 
@@ -25,3 +25,9 @@
 **2026-10-21 · 最终输入核验。** 录入默认截止月的前端旧硬编码也由新浏览器回归先红（3秒未进入2024-05，退出1）；现改为读取同项目分类API默认值，已有期初优先保留原截止月，跨项目时按需读取对应台账。默认值请求等待中禁止保存，乱序只取最新，失败与取消不改草稿项目或重新打开表单。tests/test_ledger_opening_ui.py两项同时覆盖无期初两侧历史行、自动付款只读、分类默认切换、异步乱序/失败/取消和等待中不写入。
 
 最终命令（backend目录）：`.venv/Scripts/python.exe -X utf8 -m pytest tests/test_ledger_opening_ui.py tests/test_ledger_opening_range.py tests/test_tail274_ledger.py tests/test_tail273_ledger.py tests/test_acc_flow_led.py tests/test_acc_init.py tests/test_page_m05.py tests/test_ledger_export.py tests/test_wired_m05.py tests/test_acc_flow_debt.py tests/test_layering.py -o addopts= -q --tb=short`，退出0，94 passed in 13.65s。doc_audit退出0、必须修0（既有疑似32），git diff --check退出0。需求正文§4.5.4、MOD-05及模板月份文字同步；前端仅期初草稿默认值取数和必要保护，无新增依赖、迁移、生产写入或i8访问。准备按明确授权推送并加载；重启后还需实际接口及画面核对，不以此测试替代。
+
+**2026-10-21 · 推送、重启与现场加载。** 主修复f5a0f4a3e5e189ff0bd1fe127fefd5b6ba651852已提交，真实pre-commit语法/字节/凭据检查通过；git push origin master退出0，远端refs/heads/master与本地SHA一致。既有ops/server_ctl.ps1 -Action restart -WaitSec 30退出0，08:47:41启动完成；服务Running，NSSM PID2704，应用PID14684→16352。健康status=ok，/app、actions.js与pages-a.js均200且响应字节与最终源码相同。
+
+重启后再次在READ ONLY事务逐19项目38侧核对运行接口，全部与最终源码display_rows/原始行/默认值一致（退出0）。晋江辅材首月2025-12、欠款1,038,954.77；机械API首月2024-06、欠款978,829.06，2024-06全零按既有页面隐藏空月规则不显示，实际页面首个有金额月2024-07，2025-11的86,750.00与此前各月均恢复。已在用户现有Edge实际看晋江两栏及默认主题独立只读浏览器画面，日期/金额/表头/合计可读，无空期初或新遮挡；无未保存期初草稿后才刷新用户页面。未点击任何真实保存/删除。
+
+实际运行截图限期归档于本机.artifacts/archive/checks-20261021/084923-611874-12776/screenshots/jinjiang-ledger-after.png，按该effort retention.json到期处置；独立浏览器进程已退出。未跑全量pytest、真实业务写入、i8抓取或实体打印；无数据库迁移或数据订正，恢复金额完全由已有来源重新显示。最后仅文档销号和部署回执提交推送，不需要再次重启。
