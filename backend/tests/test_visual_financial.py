@@ -32,13 +32,15 @@ def test_notice_identity_amounts_and_batch_groups_remain_readable(ui_page, scale
     assert table.evaluate('e=>e.getBoundingClientRect().width<=e.closest(".tw").clientWidth+1')
 
 
-def test_debt_overviews_align_and_ledgers_remain_side_by_side(ui_page):
+@pytest.mark.parametrize('width', [1280, 1920])
+def test_debt_overviews_expand_align_and_ledgers_adapt(ui_page, width):
     p = ui_page
-    p.set_viewport_size({'width': 1280, 'height': 720})
+    p.set_viewport_size({'width': width, 'height': 1080})
     p.evaluate('''()=>{
       NO=Array.from({length:30},(_,i)=>({...NO[0],id:String(100+i),proj:'项目全名'+i,cat:'辅材'}));
       PJs=NO.map((n,i)=>({id:String(i+1),name:'仓库'+i,full:n.proj,disp:'供应商及安装工程长项目名称'+i,type:'normal',status:'在建'}));
-      LGs.splice(0,LGs.length,...PJs.map(p=>({proj:p.name,cat:'辅材',settle:1234567.89,paid:0})));
+      LGs.splice(0,LGs.length,...PJs.map((p,i)=>({proj:p.name,cat:'辅材',settle:i===0?0:i===1?-100:1234567.89,paid:0})));
+      MACH6={'仓库0':{'2026-10':[0,0,88,0,0,0]}};
       M05.ledger={sides:['辅材','机械'].map(label=>({label,rows:[
         {seq:1,month:'2026-08',other_expense:'0',payment:'0',remark:''},
         {seq:2,month:'2026-09',other_expense:'0',payment:'0',remark:'已核实无需支出'},
@@ -46,11 +48,19 @@ def test_debt_overviews_align_and_ledgers_remain_side_by_side(ui_page):
       VIEW='m05';render();
     }''')
     overview = p.locator('.debt-overview').nth(1).locator('.bd')
-    assert overview.evaluate('e=>e.scrollHeight>e.clientHeight')
-    assert overview.bounding_box()['height'] <= 160
+    assert overview.evaluate('e=>e.scrollHeight<=e.clientHeight+1')
+    assert overview.locator('.br').count() == 29
+    assert '-100.00' in overview.inner_text()
+    mechanical=p.locator('.debt-overview').nth(2)
+    assert mechanical.locator('.br').count()==1 and '88.00' in mechanical.inner_text()
+    bottoms=p.locator('.debt-overview').evaluate_all('cards=>cards.map(e=>e.getBoundingClientRect().bottom)')
+    assert max(bottoms)-min(bottoms)<1
     first, second = p.locator('.debt-ledger').all()
     a, b = first.bounding_box(), second.bounding_box()
-    assert b['x'] >= a['x'] + a['width'] and abs(a['y'] - b['y']) < 1
+    if width == 1920:
+        assert b['x'] >= a['x'] + a['width'] and abs(a['y'] - b['y']) < 1
+    else:
+        assert b['y'] >= a['y'] + a['height']
     assert '2026-08' not in first.inner_text() and '2026-09' in first.inner_text()
     assert first.locator('table').bounding_box()['width'] >= 520
     assert overview.locator('.br .tk').evaluate_all(

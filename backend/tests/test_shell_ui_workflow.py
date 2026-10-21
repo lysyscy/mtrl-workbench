@@ -14,7 +14,7 @@ import pytest
 from tests.shell_src import SHELL_PATH
 
 
-from tests.ui_helpers import ui_page  # noqa: F401
+from tests.ui_helpers import search_notices, ui_page  # noqa: F401
 
 
 def test_项目删除按真实预览启用并重拉列表(ui_page):
@@ -82,10 +82,10 @@ def test_供应商首项直接确定与人工回车(ui_page):
 def test_搜索各展示列并重置(ui_page):
     p=ui_page
     for q in ['DOC-101','业务列唯一词','收款列唯一词','录入列唯一词','测试项目','12,345.67','集采']:
-        p.fill('#ntSearch',q)
+        search_notices(p, q)
         assert p.evaluate('ntHit(fNt).length') == 1, q
         assert p.evaluate('document.activeElement.id') == 'ntSearch'
-    p.fill('#ntSearch','不存在的值')
+    search_notices(p, '不存在的值')
     assert p.evaluate('ntHit(fNt).length') == 0
     p.click('[data-act="filterReset"]')
     assert p.input_value('#ntSearch') == ''

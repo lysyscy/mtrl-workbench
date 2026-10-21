@@ -1,6 +1,6 @@
 """Pasted bill numbers select only unique active records; manual picks stay put."""
 import pytest
-from tests.ui_helpers import ui_page  # noqa: F401
+from tests.ui_helpers import search_notices, ui_page  # noqa: F401
 from tests.test_tail309_notice_selection import _setup as _base_setup, _ids, _pick
 
 
@@ -184,7 +184,7 @@ def test_paste_report_large_font_and_long_details_fit(ui_page,width,scale):
         p.screenshot(path=str(Path(output)/f'result-{width}-{scale}.png'))
     button.click()
     assert rows(p)==['104']
-    p.fill('#ntSearch','自动剔除')
+    search_notices(p, '自动剔除')
     assert rows(p)==['104']
     if output:
         p.screenshot(path=str(Path(output)/f'process-{width}-{scale}.png'))

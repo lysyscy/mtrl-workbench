@@ -1,5 +1,5 @@
 """TAIL-309：真实壳 + 隔离回包，保护搜索选择、可见全选及付款批次。"""
-from tests.ui_helpers import ui_page  # noqa: F401
+from tests.ui_helpers import search_notices, ui_page  # noqa: F401
 import os
 from pathlib import Path
 import pytest
@@ -36,15 +36,15 @@ def test_搜索改词清空保留勾选且隐藏数量可见(ui_page):
     p = ui_page
     _setup(p)
     _pick(p, '101').check()
-    p.fill('#ntSearch', 'DOC-B')
+    search_notices(p, 'DOC-B')
     assert _ids(p) == ['101'], '搜索隐藏行不应取消勾选'
     assert '当前列表外 1 条' in p.inner_text('.selbar')
     assert '1 行' in p.inner_text('.selbar')
     assert '1,000.00' in p.inner_text('.selbar')
     assert p.evaluate('document.activeElement.id') == 'ntSearch'
-    p.fill('#ntSearch', '不存在')
+    search_notices(p, '不存在')
     assert _ids(p) == ['101']
-    p.fill('#ntSearch', '')
+    search_notices(p, '')
     assert _pick(p, '101').is_checked()
     assert '当前列表外' not in p.inner_text('.selbar')
 
@@ -53,19 +53,19 @@ def test_多次搜索加选取消及全选只改当前可见候选(ui_page):
     p = ui_page
     _setup(p)
     _pick(p, '101').check()
-    p.fill('#ntSearch', 'DOC-B')
+    search_notices(p, 'DOC-B')
     _pick(p, '102').check()
-    p.fill('#ntSearch', 'DOC-C')
+    search_notices(p, 'DOC-C')
     assert not p.locator('#pickAllBox').is_checked()
     assert not p.locator('#pickAllBox').evaluate('e=>e.indeterminate')
     p.locator('#pickAllBox').check()
     assert _ids(p) == ['101', '102', '103']
     p.locator('#pickAllBox').uncheck()
     assert _ids(p) == ['101', '102'], '取消全选不应删掉搜索外选择'
-    p.fill('#ntSearch', 'DOC-A')
+    search_notices(p, 'DOC-A')
     _pick(p, '101').uncheck()
     assert _ids(p) == ['102']
-    p.fill('#ntSearch', '')
+    search_notices(p, '')
     assert p.locator('#pickAllBox').evaluate('e=>e.indeterminate')
     p.locator('#pickAllBox').check()
     assert _ids(p) == ['101', '102', '103'], '剔除/撤单的隐藏行不应被全选'
@@ -77,12 +77,12 @@ def test_重复渲染同页导航不清选择离页及整页刷新清空(ui_page
     p = ui_page
     _setup(p)
     _pick(p, '101').check()
-    p.fill('#ntSearch', 'DOC-B')
+    search_notices(p, 'DOC-B')
     p.evaluate('render();render();go("m03");')
     assert _ids(p) == ['101']
     p.evaluate('go("m04");go("m03");')
     assert _ids(p) == [], '选择不能跨页面串入别的批次'
-    p.fill('#ntSearch', '')
+    search_notices(p, '')
     _pick(p, '102').check()
     p.reload()
     p.wait_for_function('window.testReady')
@@ -94,10 +94,10 @@ def test_项目等业务筛选仍裁剪选择搜索不参与裁剪(ui_page):
     _setup(p)
     _pick(p, '101').check()
     _pick(p, '103').check()
-    p.fill('#ntSearch', 'DOC-B')
+    search_notices(p, 'DOC-B')
     p.evaluate('ACT.pjPick({dataset:{pj:"测试仓库"}});')
     assert _ids(p) == ['101'], '项目范围仍按原约定，搜索不得附带取消'
-    p.fill('#ntSearch', '')
+    search_notices(p, '')
     assert _pick(p, '101').is_checked()
 
 
@@ -105,21 +105,21 @@ def test_重新拉取清理删除撤单保留搜索隐藏及恢复用剔除选�
     p = ui_page
     _setup(p)
     p.locator('#pickAllBox').check()
-    p.fill('#ntSearch', '不存在')
+    search_notices(p, '不存在')
     p.evaluate("""async () => {
       SRV=SRV.filter(n=>n.notice_id!==101);SRV.find(n=>n.notice_id===102).is_revoked=true;
       await reloadNotices();
     }""")
     assert _ids(p) == ['103']
-    p.fill('#ntSearch', '')
+    search_notices(p, '')
     assert _pick(p, '103').is_checked()
     p.select_option('#fCat', '剔除')
     assert _ids(p) == []
     _pick(p, '104').check()
-    p.fill('#ntSearch', '不存在')
+    search_notices(p, '不存在')
     p.evaluate('async()=>{await reloadNotices();}')
     assert _ids(p) == ['104'], '恢复剔除需要可选的剔除行'
-    p.fill('#ntSearch', '')
+    search_notices(p, '')
     assert _pick(p, '104').is_checked()
     assert _pick(p, '105').is_disabled()
 
@@ -128,7 +128,7 @@ def test_付款窗口列全体已选含隐藏行提交对应金额(ui_page):
     p = ui_page
     _setup(p)
     _pick(p, '101').check()
-    p.fill('#ntSearch', 'DOC-B')
+    search_notices(p, 'DOC-B')
     _pick(p, '102').check()
     p.evaluate("API.batchPay=async b=>{window.payRequest=b;return {ok:false,message:'隔离捕获'};};")
     p.click('[data-act="batchPay"]')
@@ -166,7 +166,7 @@ def test_付款弹窗后删除或撤单不能错用剩余行金额(ui_page):
 
 def test_修改分类剔除恢复须看清隐藏选择(ui_page):
     p=ui_page;_setup(p)
-    _pick(p,'101').check();p.fill('#ntSearch','DOC-B');_pick(p,'102').check()
+    _pick(p,'101').check();search_notices(p, 'DOC-B');_pick(p,'102').check()
     p.evaluate("""()=>{
       window.requests=[];
       for(const k of ['setCategory','exclude','restore'])
@@ -178,7 +178,7 @@ def test_修改分类剔除恢复须看清隐藏选择(ui_page):
       await ACT.batchCatApply({dataset:{c:'机械'}});await ACT.batchEx();await ACT.batchUnEx();
     }""")
     assert p.evaluate('requests')==[]
-    p.fill('#ntSearch','')
+    search_notices(p, '')
     p.evaluate("""async()=>{
       await ACT.batchCatApply({dataset:{c:'机械'}});await ACT.batchEx();await ACT.batchUnEx();
     }""")
@@ -190,7 +190,7 @@ def test_重拉失败和重置搜索不丢选择事实改为剔除才清理(ui_p
     p = ui_page
     _setup(p)
     _pick(p, '101').check()
-    p.fill('#ntSearch', 'DOC-B')
+    search_notices(p, 'DOC-B')
     error = p.evaluate("""async () => {
       const old=API.notices;API.notices=async()=>{throw Error('隔离读取失败');};
       try {await reloadNotices();} catch(e) {return e.message;}
@@ -241,7 +241,7 @@ def test_虚拟长表搜索保留选择且放大核对条可操作(ui_page, widt
     }""")
     assert p.evaluate('VS_TS.length>0 && ntHit(fNt).length===550')
     _pick(p, '1000').check()
-    p.fill('#ntSearch', 'LONG-549')
+    search_notices(p, 'LONG-549')
     p.locator('#pickAllBox').check()
     assert _ids(p) == ['1000', '1549']
     assert '当前列表外 1 条' in p.inner_text('.selbar')

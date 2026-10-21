@@ -326,13 +326,13 @@ const CN='零一二三四五六七八九十';
 /* 派生：付款流水汇总、状态、欠款 */
 /* ⭐ 已付金额 = **后端流水汇总**（`notice-list` 的 `amount_paid`）—— ⛔ 前端**不重算钱**。
    未接线的页（本地无该字段）才回落到原型内存流水，保持原型态可用。 */
-const paidOf=nid=>{ const n=NO.find(x=>x.id===nid);
+const paidOf=(nid,n=NO.find(x=>x.id===nid))=>{
   return N2(n&&n.paidApi!=null ? n.paidApi
     : FLs.filter(f=>f.nid===nid&&!f.voided).reduce((a,f)=>a+f.amt,0)); };
 /* 付款状态判定基准 = 审批金额（§4.4.2）
    ⚠️ 已作废、勿用：「按统计付款金额判状态」—— 统计字段只管算欠款、不管判状态
    已付金额 ≥ 审批金额 → 已付清；无「部分付」中间态 */
-function statOf(n){ if(n.excl) return '—'; return paidOf(n.id)>=n.approve?'已付清':'未付清'; }
+function statOf(n){ if(n.excl) return '—'; return paidOf(n.id,n)>=n.approve?'已付清':'未付清'; }
 const hasT=(n,label)=>hasTrail(n.trail,label);   /* 留痕读取的唯一出口（形状见上） */
 /* 付款金额（本次应付）：默认 = 审批金额 − 已付金额，随付款 / 撤销实时变化。
    人工手改 = 【仅本次会话的临时覆盖】，记在下面这张表里（键 = 通知书 id）：
@@ -349,7 +349,7 @@ const hasT=(n,label)=>hasTrail(n.trail,label);   /* 留痕读取的唯一出口�
      ⛔ 别在 `editss` / `jcLinkAct` / `reloadNotices` 各写一遍（三份必然漂）。
    ⚠️ `0` 是**有效覆盖**（= 本次不付）⇒ 一律用 `undefined` / `!==null` 判，⛔ 不许 `||`、`!!`。 */
 const PAY_OV={};
-const payFacts=n=>({approve:N2(n.approve),paid:N2(paidOf(n.id))});
+const payFacts=n=>({approve:N2(n.approve),paid:N2(paidOf(n.id,n))});
 function payOvEntry(n){ const id=String(n.id), e=PAY_OV[id];
   if(e===undefined) return null;
   const f=payFacts(n);
@@ -364,7 +364,7 @@ function reconcilePayOv(){ const cur=new Set(NO.map(n=>String(n.id)));
   Object.keys(PAY_OV).forEach(id=>{ if(!cur.has(id)) delete PAY_OV[id]; });
   NO.forEach(n=>payOvEntry(n)); }
 const payOver=n=>payOvEntry(n)!==null;
-const payEff=n=>{ const e=payOvEntry(n); return e!==null?N2(e.amount):N2(n.approve-paidOf(n.id)); };
+const payEff=n=>{ const e=payOvEntry(n); return e!==null?N2(e.amount):N2(n.approve-paidOf(n.id,n)); };
 /* ⭐⭐ **主表那 5 个派生金额列一律读后端派生值**（`M5-7` 判定搬家；唯一出口 = `mod11_jc.domain`）。
    ⛔ 原实现在浏览器里按**子表数组**现算 —— 那是**第二份口径**（早晚与后端分叉），而且
       `/api/m11/list` **故意不给子表明细**（`adaptJc` 里那三个数组**恒为空**）⇒ 算出来**恒 0**。

@@ -2240,10 +2240,15 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    prunePick(); render();
  },
  ntSearch:t=>{
-   const start=t.selectionStart, end=t.selectionEnd;
-   fNt.q=t.value; render();
-   const input=document.querySelector('#ntSearch');
-   if(input){ input.focus(); if(start!=null) input.setSelectionRange(start,end); }
+   fNt.q=t.value;
+   clearTimeout(ntSearchTimer);
+   ntSearchTimer=setTimeout(()=>{
+     if(VIEW!=='m03'||!t.isConnected) return;
+     const focused=document.activeElement===t, start=t.selectionStart, end=t.selectionEnd;
+     render();
+     const input=$('#ntSearch');
+     if(focused&&input){input.focus();if(start!=null)input.setSelectionRange(start,end);}
+   },120);
  },
  filterReset:()=>{ fNt={month:fNt.month,cat:'全部',astat:'全部',stat:'未付清',link:'全部',projs:[],q:''}; pjClose('pj'); prunePick(); render(); toast(`筛选条件已重置（年月保留 ${fNt.month}，付款状态回到默认「未付清」）`); },
  /* 项目多选 */
@@ -2475,6 +2480,8 @@ document.addEventListener('change',e=>{
       见 `jcSubSet` 那条注释）⇒ 这里只**切 DOM 显示**（`applyPjFilters()`），
       关键词存进 `PJ_TXT`（⛔ 不重绘），重绘时由 `render()` 收尾把它填回去。
    ⚠️ 与 `change` / `click` 同一个委托风格：**没有名单**（`data-act` 只可能挂在真实输入上）。 */
+let ntSearchTimer;
+document.addEventListener('compositionstart',e=>{if(e.target.id==='ntSearch')clearTimeout(ntSearchTimer);});
 document.addEventListener('input',e=>{
   if(e.target.id==='supManualValue'&&!e.isComposing){ACT.supManualFilter(e.target);return;}
   const search=e.target.closest('[data-act="ntSearch"]');

@@ -490,7 +490,7 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 .notice-table .num,.procurement-table .num,.flow-table .num{white-space:nowrap;font-variant-numeric:tabular-nums}
 .debt-overviews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(12px * var(--fscale))}
 .debt-overview{min-width:0}
-.debt-overview>.bd{max-height:calc(160px * var(--fscale));overflow:auto;scrollbar-gutter:stable}
+.debt-overview>.bd{overflow:visible}
 .debt-overview .br{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) calc(120px * var(--fscale));gap:calc(4px * var(--fscale)) calc(8px * var(--fscale));align-items:center}
 .debt-overview .br .nm{min-width:0;overflow-wrap:anywhere}
 .debt-overview .br .tk{display:block;width:100%;min-width:0}
@@ -516,7 +516,6 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 .procurement-table th.fl{z-index:4}
 @media(max-width:1050px){
   .debt-overviews{grid-template-columns:1fr}
-  .debt-overview>.bd{max-height:calc(112px * var(--fscale))}
   .payment-statistics .grid2{grid-template-columns:1fr}
   .card>h4 .financial-tools{margin-left:0}
   .notice-selection{position:static}
@@ -711,7 +710,7 @@ V.m03=()=>{
      ⚠️ 同页 3 处金额输入框仍写 `n.excl||ntVoid(n)`（与"非候选"同义，本次**不动**）。 */
   const tb=list.map(n=>{
     if(n.id===naEditId) return ntDraftRow();   /* 编辑中：该行**原地变草稿行**（不新增行）；草稿层 `naD` */
-    const p=paidOf(n.id), st=statOf(n);
+    const p=paidOf(n.id,n), st=statOf(n);
     return `<tr data-notice-id="${n.id}" data-paste-top="${ntPasteTop.has(n.id)?1:0}" class="${ntArchCls(n)} ${pickSet.has(n.id)?'pick':''} ${ntFocusId===n.id?'nt-focus':''}">
       <td class="ctr fl"><input type="checkbox" class="chk" data-act="pick" data-id="${n.id}" ${pickSet.has(n.id)?'checked':''} ${ntSelectable(n)?'':'disabled'}></td>
       <td class="now">${n.date}</td>
@@ -740,7 +739,7 @@ V.m03=()=>{
     + (sumRows.length?sumRowOf(NT_THEAD,sumRows,{
         10:rs=>N2(rs.reduce((a,n)=>a+n.approve,0)),
         11:rs=>N2(rs.reduce((a,n)=>a+payEff(n),0)),
-        12:rs=>N2(rs.reduce((a,n)=>a+paidOf(n.id),0)),
+        12:rs=>N2(rs.reduce((a,n)=>a+paidOf(n.id,n),0)),
         13:rs=>N2(rs.reduce((a,n)=>a+n.ss,0)),
         14:rs=>N2(rs.reduce((a,n)=>a+n.sp,0))},
         {tip:'当前筛选结果中「非剔除」行的合计 —— 剔除行不计入（与欠款口径一致）',leadCls:'fl'})
@@ -819,14 +818,15 @@ V.m05=()=>{
     else if(sc==='辅材') NO.filter(n=>ntLive(n)&&n.cat==='辅材').forEach(n=>ks.add(ntProjKey(n)));
     else NO.filter(n=>ntLive(n)&&n.cat==='机械').forEach(n=>ks.add(ntProjKey(n)));
     LGs.filter(l=>l.cat===sc).forEach(l=>ks.add(lgProjKeyOf(l.proj)));
+    if(sc==='机械') Object.keys(MACH6).forEach(k=>ks.add(k));
     ks.delete('');
-    return [...ks].map(k=>[k,projValOf(sc,k)]).sort((a,b)=>b[1]-a[1]); };
+    return [...ks].map(k=>[k,projValOf(sc,k)]).filter(([,value])=>value!==0).sort((a,b)=>b[1]-a[1]); };
   const barCard=sc=>{ const list=barsOf(sc), mx=Math.max(...list.map(x=>x[1]),1);
     return `<div class="card debt-overview"><h4>按项目看<b>${sc}</b>欠款</h4><div class="bd" tabindex="0" role="region" aria-label="${sc}各项目欠款">
       <div class="bars">${list.map(([k,dd])=>
         `<div class="br"><span class="nm" title="${esc(pjLabel(k))}">${esc(pjLabel(k))}</span>
           <span class="tk"><i class="${dd>0?'o':'g'}" style="width:${Math.max(2,(dd/mx*100)).toFixed(1)}%"></i></span>
-          <span class="vl" title="${esc(debtSourceTip(sc))}">${M(dd)}</span></div>`).join('')||`<div class="mut">没有${sc}欠款数据</div>`}</div>
+          <span class="vl" title="${esc(debtSourceTip(sc))}">${M(dd)}</span></div>`).join('')||`<div class="mut">暂无${sc}未结清欠款</div>`}</div>
     </div></div>`; };
   /* —— 逐月欠款台账（§4.5.1 口径，见上文 4.9 段）——
      ⭐ 2026-09-13 用户口径：**与两侧台账卡合并为一个统一模块** —— 一张卡：卡头放两侧共用的
@@ -845,7 +845,7 @@ V.m05=()=>{
     const mLast=mrows.length?mrows[mrows.length-1]:null;
     const add=mLast?N2(mLast.s-mLast.p):null;                    /* 最近一月：其他支出金额 − 付款（当月新增，非累计） */
     const upto=(mLast?mLast.ym:(rows.length?rows[rows.length-1].ym:''))||'—';
-    return `<section class="debt-ledger" aria-label="${sc}欠款台账">
+    return `<section class="debt-ledger" data-ledger-project="${esc(lp)}:${M05.ledger?.project_id||''}" aria-label="${sc}欠款台账">
       <div style="display:flex;align-items:baseline;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-bottom:calc(6px * var(--fscale))">
         <b>${sc}欠款台账</b>
         <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 历史数据加各月结算减付款，含未填单据日期付款—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含历史数据）</span><b class="fc">${MONEY(cur)}</b><span class="mut sm">截至 ${esc(upto)}</span>

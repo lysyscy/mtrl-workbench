@@ -31,7 +31,7 @@ let ntSaving=false;
      · ⭐「分类 = 剔除」= 「看剔除记录」的专用视图：**不受审批状态 / 付款状态筛选约束**
        （否则默认「付款状态 = 未付清」会把剔除行全部挡掉 → 切了也看不到，等于该视图失效） */
 /* 项目筛选：候选键 = **仓库名**（§2.7.4），按**归属**命中（壳全名下的行拆到各自小微） */
-const ntHit=f=>{ const ex=f.cat==='剔除';
+const ntHit=f=>{ const ex=f.cat==='剔除', needle=ntSearchNorm(f.q);
   /* ⭐ 「分类 = 剔除」= 「看剔除记录」的专用视图，**同时承载两类行、按来源分档**：
      · 剔除行（`n.excl`）
      · **i8 已撤单行**（`ntVoid`）—— 用户口径 2026-09-14：撤单行**默认隐藏**，
@@ -44,18 +44,17 @@ const ntHit=f=>{ const ex=f.cat==='剔除';
     &&(ex||f.astat==='全部'||n.astat===f.astat)
     &&(ex||f.stat==='全部'||statOf(n)===f.stat)
     &&(ex||!f.link||f.link==='全部'||(f.link==='未关联'?ntJcUnlinked(n):n.cat==='集采'&&!!jcRefOf(n.id)))
-    &&ntSearchMatch(n,f.q)); };
+    &&ntSearchMatch(n,needle)); };
 /* 搜索的是表格实际展示的值，包括派生金额、项目展示名和状态。 */
-const ntSearchMatch=(n,q)=>{
-  const norm=v=>String(v==null?'':v).toLocaleLowerCase().replace(/[,，\s]/g,'');
-  const needle=norm(q); if(!needle) return true;
-  const j=jcRefOf(n.id), p=ownOf(n);
-  return [n.id,n.date,n.code,n.proj,p&&pjDisp(p),n.cat,n.doc,n.biz,n.recv,n.sup,n.entry,
-    n.approve,payEff(n),paidOf(n.id),n.ss,n.sp,
-    ...[n.approve,payEff(n),paidOf(n.id),n.ss,n.sp].map(M),
-    n.astat,statOf(n),n.excl?ntArchLabel(n):'',ntVoid(n)?'i8 已撤单':'',n.manual?'手动':'',
-    supHas(n)?'自动匹配 待确认':'',j?'已关联 '+j.id:'关联集采合同',n.over?'超付':'']
-    .some(v=>norm(v).includes(needle));
+const ntSearchNorm=v=>String(v==null?'':v).toLocaleLowerCase().replace(/[,，\s]/g,'');
+const ntSearchMatch=(n,needle)=>{
+  if(!needle) return true;
+  const matches=values=>values.some(v=>ntSearchNorm(v).includes(needle));
+  if(matches([n.id,n.date,n.code,n.proj,n.cat,n.doc,n.biz,n.recv,n.sup,n.entry,n.astat])) return true;
+  const j=jcRefOf(n.id), p=ownOf(n), amounts=[n.approve,payEff(n),paidOf(n.id,n),n.ss,n.sp];
+  return matches([p&&pjDisp(p),...amounts,...amounts.map(M),
+    statOf(n),n.excl?ntArchLabel(n):'',ntVoid(n)?'i8 已撤单':'',n.manual?'手动':'',
+    supHas(n)?'自动匹配 待确认':'',j?'已关联 '+j.id:'关联集采合同',n.over?'超付':'']);
 };
 /* 搜索只改变展示；项目 / 年月 / 分类等业务范围变化仍按原约定裁剪选择。 */
 const prunePick=()=>{ const scope=new Set(ntHit({...fNt,q:''}).filter(ntSelectable).map(n=>n.id));
@@ -63,7 +62,7 @@ const prunePick=()=>{ const scope=new Set(ntHit({...fNt,q:''}).filter(ntSelectab
 /* 全量列表重拉 / 普通重绘只清实际删除或不可勾选项，不能按当前搜索结果清选择。 */
 const reconcilePick=()=>{ const valid=new Set(NO.filter(ntSelectable).map(n=>n.id));
   [...pickSet].forEach(i=>{ if(!valid.has(i)) pickSet.delete(i); }); };
-const ntHiddenPickCount=()=>{ const vis=new Set(ntHit(fNt).map(n=>n.id));
+const ntHiddenPickCount=(rows=ntHit(fNt))=>{ const vis=new Set(rows.map(n=>n.id));
   return [...pickSet].filter(i=>!vis.has(i)).length; };
 /* 付款有逐行核对弹窗；直接批量动作须先看清搜索隐藏的选择，避免只看见一行却改整批。 */
 const ntBatchVisible=()=>{ reconcilePick(); const hidden=ntHiddenPickCount();

@@ -7,6 +7,13 @@ from playwright.sync_api import sync_playwright
 from tests.shell_src import SHELL_PATH
 from app.mod03_notice.page import render_theme
 
+
+def search_notices(page, query):
+    """Wait for the debounced search to replace the actual input and results."""
+    old = page.locator('#ntSearch').element_handle()
+    old.fill(query)
+    page.wait_for_function('old=>!old.isConnected', arg=old)
+
 @pytest.fixture
 def ui_page():
     web = Path(os.environ.get('MTRL_UI_FIXTURE_WEB', str(SHELL_PATH.parent)))

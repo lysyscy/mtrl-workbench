@@ -12,10 +12,10 @@
 addBind('m03', ()=>{ const box=$('#pickAllBox'); if(!box) return;
   /* ⚠️ 全选框的「可见候选」必须与 `pickAll` 走**同一个出口** —— 否则撤单行留在 `vis` 里、
      却永远勾不上 ⇒ 全选框会永久卡在"半选"态（勾满了还是个半选框）。 */
-  const vis=ntHit(fNt).filter(ntSelectable).map(n=>n.id), hit=vis.filter(i=>pickSet.has(i)).length;
+  const rows=ntHit(fNt), vis=rows.filter(ntSelectable).map(n=>n.id), hit=vis.filter(i=>pickSet.has(i)).length;
   box.checked = vis.length>0 && hit===vis.length;
   box.indeterminate = hit>0 && hit<vis.length;
-  const hidden=ntHiddenPickCount(), bar=$('#view .selbar');
+  const hidden=ntHiddenPickCount(rows), bar=$('#view .selbar');
   if(!bar) return;
   if(fNt.ids) bar.insertAdjacentHTML('beforebegin',`<div class="sm" style="margin-bottom:calc(8px * var(--fscale))">仅显示本次已剔除或撤单单据 · ${fNt.ids.length} 条 <button class="btn" data-act="ntPasteScopeClear">清除此定位</button></div>`);
   /* 新增核对入口随内容换行，窄屏不能把付款按钮挤出可见区域。 */

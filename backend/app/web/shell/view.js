@@ -378,6 +378,23 @@ function drawVirtual(inst){
 /* Widths follow visible columns and money values; virtual windows can grow the minimum. */
 const FIT_TABLES='.notice-table,.flow-table,.process-matrix,[data-sort-key="m07:kinds"],[data-sort-key="m07:bigtable"],[data-sort-key="m08:invoices"],.mw-details,.procurement-table';
 function saveTableScroll(){
+  if(VIEW==='m05'){
+    const view=$('#view'), top=view.scrollTop;
+    const positions=new Map([...view.querySelectorAll('.debt-ledger .tw')].map(tw=>[
+      tw.querySelector('table').dataset.sortKey,
+      {project:tw.closest('.debt-ledger').dataset.ledgerProject,top:tw.scrollTop,left:tw.scrollLeft}]));
+    return ()=>{
+      view.querySelectorAll('.debt-ledger .tw').forEach(tw=>{
+        const previous=positions.get(tw.querySelector('table').dataset.sortKey);
+        const same=previous?.project===tw.closest('.debt-ledger').dataset.ledgerProject;
+        tw.scrollTop=same?previous.top:tw.scrollHeight;
+        tw.scrollLeft=same?previous.left:0;
+        const inst=VS_TS.find(it=>it.tw===tw);
+        if(inst){inst.force=true;drawVirtual(inst);inst.force=false;}
+      });
+      if(positions.size) view.scrollTop=top;
+    };
+  }
   const key={m03:'m03:notices',m11:'m11:jc'}[VIEW];
   const selector=key?`#view table[data-sort-key="${key}"]`:null;
   const old=selector?$(selector)?.closest('.tw'):null;
@@ -418,7 +435,8 @@ function fitWideTable(table){
   rows.forEach(row=>{
     let column=0;
     [...row.cells].forEach(cell=>{
-      if(table.classList.contains('flow-table')&&cell.colSpan===1&&cell.classList.contains('now')&&/^\d{4}-\d{2}-\d{2}$/.test(cell.textContent.trim())){
+      if(cell.colSpan===1&&((cell.classList.contains('now')&&/^\d{4}-\d{2}-\d{2}$/.test(cell.textContent.trim()))
+          ||cell.classList.contains('nt-code')||(table.dataset.sortKey==='m08:invoices'&&column===0))){
         numbers.add(column);
         widths[column]=Math.max(widths[column],context.measureText(cell.textContent.trim()).width+12);
       }
@@ -437,7 +455,7 @@ function fitWideTable(table){
   const previous=table._fitScale===scale?table._fitWidths:[];
   widths.forEach((width,i)=>{if(width)widths[i]=Math.max(width,previous?.[i]||0);});
   table._fitScale=scale;table._fitWidths=[...widths];
-  // Text can wrap within a readable floor; measured amounts must keep their full width.
+  // Measured amounts, dates and identifiers keep their width; other text can wrap.
   const floors=widths.map((width,i)=>numbers.has(i)?width:Math.min(width,
     (row.cells[i].matches('.nt-title,.nt-supplier,.jc-supplier')?140:60)*scale));
   const preferred=widths.reduce((a,b)=>a+b,0), minimum=floors.reduce((a,b)=>a+b,0);
