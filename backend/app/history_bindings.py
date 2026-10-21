@@ -14,6 +14,8 @@ def configure():
     }))
     project = Rule(Project, frozenset({'disp', 'ord'}))
     opening = Rule(OpeningBalance, frozenset({'settle_amount', 'paid_amount', 'remark'}), True)
+    historical = Rule(OpeningBalance, frozenset({'cutoff_ym', 'settle_amount', 'paid_amount', 'remark',
+                        'paid_basis', 'settle_basis', 'input_mode'}), True)
     remark = Rule(LedgerRemark, frozenset({'remark'}), True)
     fee = Rule(FeeManualItem, frozenset({'item_name', 'amount'}), True)
     big = Rule(AnalysisBigManual, frozenset({
@@ -35,6 +37,8 @@ def configure():
         ('POST', '/api/m05/ledger/opening-payment', '修改期初付款', [opening]),
         ('POST', '/m05/opening', '保存手动期初', [opening]),
         ('POST', '/m05/opening/delete', '删除手动期初', [opening]),
+        ('POST', '/api/m05/history/save', '保存历史数据', [historical]),
+        ('POST', '/api/m05/history/delete', '删除历史数据', [historical]),
         ('POST', '/m05/ledger/remark', '修改欠款台账备注', [remark]),
         ('POST', r'/api/m09/fee/(add|name|amount|delete|batch)', '编辑特殊费用', [fee]),
         ('POST', '/api/m07/big/cell', '编辑月度会大表', [big]),

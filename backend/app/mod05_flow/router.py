@@ -20,6 +20,7 @@ from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.mod05_flow import repository as repo
 from app.mod05_flow import service as svc
+from app.mod05_flow import history
 from app.mod05_flow.domain import default_flow_period
 # ⭐ `TAIL-283`：导出合计的基数判「生效 / 已撤销」用**域里的常量**（⛔ 别在本文件写 'effective' 字面）
 from app.mod05_flow.models import FLOW_EFFECTIVE
@@ -208,11 +209,51 @@ class OpeningPaymentIn(BaseModel):
     payment: str
 
 
+class HistoryIn(BaseModel):
+    id: int | None = Field(None, gt=0)
+    project_id: int = Field(gt=0)
+    category: str
+    entry_kind: str
+    cutoff_ym: str
+    input_mode: str = "paid"
+    amount: str
+    remark: str = Field("", max_length=512)
+
+
+class HistorySaveIn(HistoryIn):
+    token: str
+
+
+class HistoryDeleteIn(BaseModel):
+    id: int = Field(gt=0)
+    token: str
+
+
+@router.post("/api/m05/history/preview")
+def api_history_preview(body: HistoryIn) -> dict:
+    with session_scope() as s:
+        return history.preview(s, body.model_dump())
+
+
+@router.post("/api/m05/history/save")
+def api_history_save(body: HistorySaveIn) -> dict:
+    with session_scope() as s:
+        return history.save(s, body.model_dump(exclude={"token"}), body.token)
+
+
+@router.post("/api/m05/history/delete")
+def api_history_delete(body: HistoryDeleteIn) -> dict:
+    with session_scope() as s:
+        row = s.get(history.OpeningBalance, body.id, with_for_update=True)
+        if row is None or history.kind(row) == "legacy" or body.token != history.record_token(row):
+            raise MustReportError("历史记录已变化，请刷新后重新核对")
+        s.delete(row)
+    return {"ok": True, "message": "历史记录已删除"}
+
+
 @router.post("/api/m05/ledger/opening-payment")
 def api_opening_payment(body: OpeningPaymentIn) -> dict:
-    with session_scope() as s:
-        return svc.set_opening_payment(s, project_id=body.project_id,
-                                      category=body.category, payment=body.payment)
+    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后使用历史数据对账"})
 
 
 @router.get("/api/m05/flows/{flow_id}/revoke-info")
@@ -360,17 +401,7 @@ def act_opening(
 
     ⚠️ **参数一律 `Form`**（同上：期初表单的输入全在 body）。
     """
-    try:
-        if not str(cutoff_ym).strip():
-            raise MustReportError("期初占位行必须填「截止年月」")
-        with session_scope() as s:
-            repo.upsert_opening(
-                s, category=category, project_id=int(project_id), cutoff_ym=str(cutoff_ym).strip(),
-                settle_amount=settle_amount or 0, paid_amount=paid_amount or 0, remark=remark,
-            )
-        return {"ok": True, "message": f"已录入期初占位行（{category} · 截止 {cutoff_ym}）"}
-    except MustReportError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "message": exc.message})
+    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后使用历史数据录入"})
 
 
 @router.post("/m05/opening/delete")
@@ -378,9 +409,7 @@ def act_opening_delete(
     opening_id: int = Form(...), project_id: int = Form(0), end_ym: str = Form("")
 ) -> dict:
     """删除期初占位行并回执；参数仍用 Form。"""
-    with session_scope() as s:
-        n = repo.delete_opening(s, opening_id)
-    return {"ok": True, "message": f"已删除 {n} 条期初占位行（台账首行随之消失）"}
+    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后核对并删除对应历史记录"})
 
 
 @router.post("/m05/ledger/remark")

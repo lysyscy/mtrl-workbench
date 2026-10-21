@@ -926,21 +926,22 @@ const ACT={
   const cutoff=await lgCutFor(project,cat);
   if(!cutoff) return;
   lgPjName=project; lgCat=cat; lgCut=cutoff;
-  const existing=LGs.find(l=>l.cat===lgCat&&lgProjKeyOf(l.proj)===lgPjName&&l.cutoff===lgCut);
-  lgD.s=existing?String(existing.settle):'0.00';
-  lgD.p=existing?String(existing.paid):'0.00'; lgD.r=LG_R_DEF;
+  lgKind=cat==='机械'?'payment':'settlement'; lgMode='paid'; lgEditId=null; lgPending=null;lgReview=null;
+  lgD.s='0.00'; lgD.p='0.00'; lgD.r='';
   lgOn=true; pjClose('lgPj'); render();
-  toast(`已在「<b>${esc(lgCat)}</b>」栏上方展开期初占位行录入区 —— 填完点「保存」写入、点「取消」丢弃（<b>草稿不写入</b>）`,5400); },
+  toast(`已展开${esc(lgCat)}历史数据录入；核对金额后保存`); },
  lgCancel:()=>{ lgOn=false; ++lgCutRequest; lgCutPending=false; pjClose('lgPj'); render();
   toast('已取消期初占位行录入 —— <b>未写入任何数据</b>'); },
  /* 草稿层写入口：输入立即记下，展开区重绘时不丢 */
  lgS:t=>{ lgD.s=String((t&&t.value)!=null?t.value:''); },
  lgP:t=>{ lgD.p=String((t&&t.value)!=null?t.value:''); },
  lgR:t=>{ lgD.r=String((t&&t.value)!=null?t.value:''); },
+ lgKind:t=>{lgKind=t.value;lgPending=null;render();},
+ lgMode:t=>{lgMode=t.value;lgD.p='0.00';lgPending=null;render();},
  lgCat:async t=>{ const cat=String((t&&t.value)||lgCat);
   const cutoff=await lgCutFor(lgPjName,cat);
   if(!lgOn) return;
-  if(cutoff) { lgCat=cat; lgCut=cutoff; } render(); },
+  if(cutoff) { lgCat=cat; lgCut=cutoff; if(cat==='机械') lgKind='payment'; } render(); },
  /* —— 付款流水的筛选（R4：改动即时生效、不设「应用」按钮） ——
     ⚠️ 复位一律【原地改字段】，不要 `flf={...}` 重新赋值（同 `fJc` / `BIGVAL` 的教训）
     ⚠️ ⭐ 「付款项目」自 2026-09-13 起是**共用面板（多选）** ⇒ 本动作**不再读 `#flPj`**（该控件已不存在），
@@ -967,6 +968,7 @@ const ACT={
  /* 「项目」共用面板（**单选** —— 能力由调用点声明，与 `MOD-09` / 台账主选择器同款：点一下即切换并收起） */
  lgPjToggle:t=>{ pjToggle('lgPj',t); },
  lgPjPick:async t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
+  if(lgEditId) return toast('编辑已有记录时项目不变；更换项目请取消后新增');
   const cutoff=await lgCutFor(v,lgCat);
   if(!cutoff||!lgOn) return;
   lgPjName=v; lgCut=cutoff; pjClose('lgPj'); render();
@@ -978,17 +980,44 @@ const ACT={
    return m05Act(()=>API.send('POST','/api/m05/ledger/opening-payment', {
      project_id:project.id, category:CAT_API[t.dataset.sc], payment:t.value,
    }), '期初付款已保存，手动金额已按合计反算'); },
- addLgOk:()=>{ if(lgCutPending) return toast('正在读取期初默认年月，请稍后保存');
+ addLgOk:async()=>{ if(lgCutPending) return toast('正在读取默认年月，请稍后保存');
   const pj=lgPjName; if(!pj){ toast('<b>请先选「项目」</b>（点展开区里的「项目」按钮）'); return; }
     const row=pjRowOf(pj);
     if(!row||!row.id){ toast('<b>项目没对上档案</b>（请重选）—— 未写入任何数据'); return; }
-    return m05Act(async()=>{const result=await API.postForm('/m05/opening', {
-        category: CAT_API[lgCat] || lgCat, project_id: row.id,
-        cutoff_ym: lgCut, settle_amount: String(lgD.s||''), paid_amount: String(lgD.p||''),
-        remark: String(lgD.r||''), end_ym: '',
-      }); lgOn=false; ++lgCutRequest; lgCutPending=false; pjClose('lgPj'); ledProj=pj; return result;
-      }, ()=>{ return `期初占位行已录入（<b>${lgCat}</b> · ${esc(ledCutLabel(lgCut))}）`
-                 + `，台账已切到 <b>${esc(pjLabel(ledCur()))}</b>，欠款与台账已重算`; }); },
+    const payload={id:lgEditId,category:CAT_API[lgCat],project_id:Number(row.id),
+      cutoff_ym:lgCut,entry_kind:lgKind,input_mode:lgKind==='settlement'?'paid':lgMode,
+      amount:String(lgKind==='settlement'?lgD.s:lgD.p),remark:String(lgD.r||'')};
+    try {const result=await API.send('POST','/api/m05/history/preview',payload);
+      lgPending={...payload,token:result.token};
+      const pairs=lgKind==='settlement'
+        ?[['项目',result.project_label],['截止月份',lgCut],['本次新增结算',M(result.amount)+' 元']]
+        :[['项目',result.project_label],['截止月份',lgCut],['截至当时结算',M(result.settlement)+' 元'],
+          ['系统已记录同期付款',M(result.recorded_paid)+' 元'],['累计付款',M(result.paid_total)+' 元'],
+          ['历史付款补差',M(result.payment_adjustment)+' 元'],['截至当时欠款',M(result.debt)+' 元']];
+      modal({title:'核对历史数据',body:'<div class="history-check">'+kvBlock(pairs.map(([k,v])=>[k,esc(v)]))+'</div>'+
+        `<div class="tip">${lgKind==='settlement'?'请确认本次金额未包含系统已统计的同一笔结算。'
+          :'累计付款包含系统已有的同期付款；只保存补差，不产生付款流水。后续再补录这段历史的付款明细时，请重新核对此记录；真正新增的付款仍照常计入。'}</div>`,
+        footer:`<button class="btn" data-act="closeModal">返回修改</button><button class="btn pri" data-act="historySave">确认保存</button>`});
+    }catch(e){toast(esc(e.message||'未能核对历史数据'));} },
+ historySave:()=>{if(!lgPending) return toast('请重新核对金额');
+   const payload={...lgPending}, pj=lgPjName;
+   return m05Act(async()=>{const result=await API.send('POST','/api/m05/history/save',payload);
+     lgOn=false;lgPending=null;++lgCutRequest;lgCutPending=false;pjClose('lgPj');ledProj=pj;closeModal();return result;
+   },'历史数据已保存，欠款与台账已重算');},
+ historyEdit:t=>{const row=((M05.ledger||{}).history||[]).find(r=>String(r.id)===t.dataset.id);
+   if(!row) return toast('请刷新后重试');
+   lgPjName=ledCur();lgCat=Object.keys(CAT_API).find(k=>CAT_API[k]===row.category);
+   lgEditId=row.id;lgKind=row.entry_kind;lgMode=row.input_mode;lgCut=row.cutoff_ym;
+   lgD.s=row.settle_amount;lgD.p=row.input_amount;lgD.r=row.remark||'';lgOn=true;lgPending=null;lgReview=row.needs_review?row:null;render();
+   if(row.needs_review) toast(`原记录包含系统付款 ${M(row.paid_basis)} 元，当前为 ${M(row.current_paid)} 元。若是补录已包含的历史付款，维持原累计；若是真正新增付款，请相应增加累计。`,9000);},
+ historyDelete:t=>{const row=((M05.ledger||{}).history||[]).find(r=>String(r.id)===t.dataset.id);
+   if(!row) return toast('请刷新后重试');
+   modal({title:'删除历史记录',body:'<div class="history-check">'+kvBlock([['截止月份',esc(row.cutoff_ym)],
+       [row.entry_kind==='settlement'?'i6结算补录':'累计付款',M(row.entry_kind==='settlement'?row.settle_amount:row.paid_amount)+' 元']])+'</div>'+
+       `<div class="tip dg">删除后欠款会重算。${row.entry_kind==='payment'?'如有更早的累计付款记录，将重新采用其中最新的一条。':''}</div>`,
+     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="historyDeleteOk" data-id="${row.id}" data-token="${row.token}">确认删除</button>`});},
+ historyDeleteOk:t=>m05Act(async()=>{const result=await API.send('POST','/api/m05/history/delete',
+     {id:Number(t.dataset.id),token:t.dataset.token});closeModal();return result;},'历史记录已删除，欠款与台账已重算'),
  /* 删除前先看清影响范围（§7.2 / §9.4）：期初属「**用户自录、随时可重录**」那一档 ⇒ **真删**
    （§9.4 的 2026-09-20 定案：**按「删了能不能凭源数据复原」分**）。
    ⚠️ 2026-09-29 `A6` 订正：这里原写「核心业务数据『软删留痕』」—— 与后端 `repo.delete_opening`（就是 `s.delete`）**相反**，也与 §9.4 定案相反（行里根本没有留痕字段）。 */

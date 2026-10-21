@@ -92,6 +92,10 @@ class OpeningBalance(Base):
     paid_amount: Mapped[float] = mapped_column(MONEY, default=0)        # 手填付款
     remark: Mapped[str] = mapped_column(String(512), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    entry_kind: Mapped[str] = mapped_column(String(16), default="legacy", server_default="legacy")
+    paid_basis: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")
+    settle_basis: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")
+    input_mode: Mapped[str] = mapped_column(String(8), default="paid", server_default="paid")
 
 
 class LedgerRemark(Base):

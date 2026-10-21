@@ -81,7 +81,9 @@ def export_phids(session: Session) -> str:
     return ",".join(seen)
 
 
-def get_project(session: Session, project_id: int) -> Project | None:
+def get_project(session: Session, project_id: int, *, for_update: bool = False) -> Project | None:
+    if for_update:
+        return session.get(Project, project_id, with_for_update=True, populate_existing=True)
     return session.get(Project, project_id)
 
 

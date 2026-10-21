@@ -28,6 +28,12 @@ def all_projects(session, **kw):
     return R.all_projects(session, **kw)
 
 
+def get_project(session, project_id, **kw):
+    """历史数据核对在同一事务内读取并按需锁定所属项目。"""
+    from app.mod01_projects import repository as R
+    return R.get_project(session, project_id, **kw)
+
+
 def list_projects(session, **kw):
     """⭐ 包间出口：按筛选取档案（缺省**只筛「在建」** ＋ 自定义排序 —— 口径见 `repository.list_projects`）。"""
     from app.mod01_projects import repository as R
@@ -63,4 +69,4 @@ def warehouse_index(session):
     return R.warehouse_index(session)
 
 
-__all__ = ["all_projects", "list_projects", "export_phids", "create_project", "set_keywords", "warehouse_index"]
+__all__ = ["all_projects", "get_project", "list_projects", "export_phids", "create_project", "set_keywords", "warehouse_index"]

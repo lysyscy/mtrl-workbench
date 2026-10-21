@@ -108,6 +108,7 @@ let lgD={s:'0.00',p:'0.00',r:LG_R_DEF};
 let lgPjName='';                           /* 展开区里选的**项目键（仓库名）**（打开时默认＝台账当前项目） */
 let lgOn=false;                            /* 增行态开关：展开区是否打开（取代原弹窗的"是否开着"） */
 let lgCutRequest=0, lgCutPending=false;
+let lgKind='settlement', lgMode='paid', lgEditId=null, lgPending=null, lgReview=null;
 /* 展开态在 `PJ_OPEN`（key='lgPj'） */                        /* 展开区里「项目」共用面板是否展开（真实浮层 —— 在 .tw 之外，不会被裁） */
 const LEDNOTE={};                          /* { '口径|项目键|月': 文本 } —— 逐月台账备注（手填；不在 §9.3 留痕范围） */
 /* 通知书行的**项目键** = 归属档案行的**仓库名**（§2.7.4）；无归属 / 壳未判定 → ''（落不到任何项目上）。
@@ -221,20 +222,41 @@ const lgPjPanel=()=>projPanel({list:()=>pjKeysOfRows(lgPjList()),selected:()=>[l
 /* 「期初占位行」的**增行展开区**（渲染在表格 `.tw` **之外**的上方条带；只在 `lgCat` 对应的那一栏出现）
    ⚠️ 只在该分类对应的一栏渲染 ⇒ **不会出现重复 id**（`lgCat`/`lgS`/`lgP`/`lgR`）。 */
 const lgStrip=()=>`${FBAR({cls:'strip mb6',body:`
-      <div class="fi"><span class="pill" style="margin:0" title="只保存手动结算和付款，自动付款独立更新">手动期初</span></div>
+      <div class="fi"><label>历史数据</label><select class="inp" data-act="lgKind" ${lgEditId?'disabled':''}>
+        ${lgCat==='辅材'?`<option value="settlement" ${lgKind==='settlement'?'selected':''}>i6结算补录</option>`:''}
+        <option value="payment" ${lgKind==='payment'?'selected':''}>累计付款对账</option></select></div>
       <div class="fi pjwrap" style="position:relative"><label>项目</label>
         ${PJB({act:'lgPjToggle',panel:lgPjPanel,w:150,label:`${esc(pjLabel(lgPjName))}${pjArcMark(pjRowOf(lgPjName))}`})}
         ${pjIsOpen('lgPj')?lgPjPanel():''}</div>
-      <div class="fi"><label>分类</label><select class="inp" style="width:auto" id="lgCat" data-act="lgCat">${['辅材','机械'].map(c=>`<option ${lgCat===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="fi"><label>分类</label><select class="inp" style="width:auto" id="lgCat" data-act="lgCat" ${lgEditId?'disabled':''}>${['辅材','机械'].map(c=>`<option ${lgCat===c?'selected':''}>${c}</option>`).join('')}</select></div>
       <div class="fi"><label>截止年月</label>${tmBtn('lgCutoff',{scope:'lg',val:lgCut,modes:['月']})}</div>
-      <div class="fi"><label>统计结算金额</label><input class="inp num" style="width:118px" id="lgS" data-act="lgS" value="${esc(lgD.s)}"></div>
-      <div class="fi"><label>统计付款金额</label><input class="inp num" style="width:118px" id="lgP" data-act="lgP" value="${esc(lgD.p)}"></div>
+      ${lgKind==='settlement'?`<div class="fi"><label>本次新增结算（元）</label><input class="inp num" style="width:150px" id="lgS" data-act="lgS" value="${esc(lgD.s)}"></div>`:
+        `<div class="fi"><label>已知金额</label><select class="inp" data-act="lgMode"><option value="paid" ${lgMode==='paid'?'selected':''}>累计付款</option><option value="debt" ${lgMode==='debt'?'selected':''}>截至当时欠款</option></select></div>
+         <div class="fi"><label>${lgMode==='debt'?'欠款':'累计付款'}（元）</label><input class="inp num" style="width:150px" id="lgP" data-act="lgP" value="${esc(lgD.p)}"></div>`}
       <div class="fi"><label>备注</label><input class="inp" style="min-width:160px" id="lgR" data-act="lgR" value="${esc(lgD.r)}"></div>
-      <button class="btn pri" data-act="addLgOk" title="写入期初占位行（统计结算 / 统计付款一并计入欠款）">保存</button>
+      <button class="btn pri" data-act="addLgOk">核对并保存</button>
       <button class="btn" data-act="lgCancel" title="丢弃这条期初录入（不入库）">取消</button>
-      <span class="pill" style="margin-left:auto">${esc(ledCutLabel(lgCut))} ｜ 保存手动金额</span>
-      <div class="mut sm" style="flex-basis:100%">⭐ 本行两个金额是<b>手填的静止值</b>：实付请走<b>「手动新增通知书」</b>（偿还期初欠款时统计结算填0；有新结算按事实填）—— 它会自动冲减欠款合计与项目池，⛔ 但<b>不会</b>改本行这两个数（要它跟着反映 ⇒ 手工改「统计付款金额」）。⚠️ <b>两者成对使用</b>，分类与项目要和通知书一致，否则冲错池子；仅录付款而未录对应结算时，本栏可能为<b>负数</b>。</div>
+      <span class="pill" style="margin-left:auto">${esc(ledCutLabel(lgCut))}</span>
+      ${lgReview?`<div class="tip" style="flex-basis:100%">原记录包含系统付款 ${M(lgReview.paid_basis)} 元，当前为 ${M(lgReview.current_paid)} 元。
+        补录已包含的历史付款时，保留原累计；真正新增付款时，应增加累计。
+        ${lgReview.input_mode==='debt'?`原结算 ${M(lgReview.settle_basis)} 元，当前 ${M(lgReview.current_settlement)} 元；已保存的累计付款 ${M(lgReview.paid_amount)} 元没有自动改变。`:''}</div>`:''}
+      <div class="mut sm" style="flex-basis:100%">${lgKind==='settlement'
+        ?'只填尚未计入系统的结算，支持分次补录；已有通知书已统计的同一笔结算不要再录。截止月用于标明这笔历史结算的范围，不截断通知书月份。'
+        :'填截至所选月底的累计付款或欠款。系统扣除已记录的同期付款后只补差；同一项目、分类仅最新截止记录生效，旧记录保留供核对。此处不生成实际付款流水。'}</div>
     `})}`;
+const lgHistory=sc=>{ const rows=((M05.ledger||{}).history||[]).filter(r=>r.category===CAT_API[sc]);
+  if(!rows.length) return '';
+  const review=rows.some(r=>r.active&&r.needs_review);
+  return `<details class="mb6" ${review?'open':''}><summary class="mut sm">历史数据 · ${rows.length}条${review?' · 有记录需核对':''}</summary>
+    ${rows.map(r=>`<div class="strip" data-history-record="${r.id}" style="display:flex;gap:calc(8px * var(--fscale));align-items:center;flex-wrap:wrap">
+      <span>${esc(r.cutoff_ym)}及以前 · ${r.entry_kind==='settlement'?'i6结算补录':'累计付款'}</span>
+      <b class="fc">${M(r.entry_kind==='settlement'?r.settle_amount:r.paid_amount)} 元</b>
+      ${r.active?'':`<span class="mut sm">已被后续截止记录替代</span>`}
+      ${r.needs_review&&r.active?`<span class="dg sm">同期数据已变化，需核对</span>`:''}
+      <span class="mut sm">${esc(r.remark||'')}</span>
+      <button class="btn sm" style="margin-left:auto" data-act="historyEdit" data-id="${r.id}">编辑${r.needs_review?' / 核对':''}</button>
+      <button class="btn sm dg" data-act="historyDelete" data-id="${r.id}">删除</button>
+    </div>`).join('')}</details>`; };
 /* 造行：期初行 + 从「期初次月」到「最近一个有数据的月」逐月一行（空月也出行） */
 const ledRows=(sc,proj)=>{ const side=m05Side(sc); if(!side) return [];
   return (side.display_rows||side.rows||[]).map(r=>({ ym:r.month, open:!!r.is_opening,

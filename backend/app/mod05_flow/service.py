@@ -25,6 +25,7 @@ from app.core.projects import project_index, project_key, project_label
 from app.mod01_projects.models import Project
 from app.mod05_flow import domain as dom
 from app.mod05_flow import repository as repo
+from app.mod05_flow import history
 from app.mod05_flow.domain import LedgerRow, NoticeDebtView, OpeningView
 from app.mod05_flow.models import (
     CATEGORY_JC,
@@ -43,9 +44,8 @@ CATEGORY_LABELS: dict[str, str] = {
     CATEGORY_JC: "集采",
 }
 
-# ⚠️ 机械侧「其他支出金额」的输入源 = **机械费结算金额**，它来自**过程资料**（`MOD-06`，未接）。
-#    在接上前，本层**显式按 0 计**并把这件事标到页面上（**不臆造数值**）。
-MECH_SETTLE_SOURCE_READY = False
+# 生产装配与台账、对账均读取过程资料的有效机械费外租含税两列。
+MECH_SETTLE_SOURCE_READY = True
 
 
 # ------------------------------------------------- 包间出口（`TAIL-195` 批 2a）
@@ -82,17 +82,7 @@ def notice_debt_views(s: Session) -> list[NoticeDebtView]:
 
 
 def opening_views(s: Session, project_id: int | None = None) -> list[OpeningView]:
-    return [
-        OpeningView(
-            category=str(o.category or ""),
-            project_id=o.project_id,
-            cutoff_ym=str(o.cutoff_ym or ""),
-            settle_amount=to_money(o.settle_amount),
-            paid_amount=to_money(o.paid_amount),
-            opening_id=int(o.id or 0),                  # ⭐ 真 id（与 `ledger.opening_id` 同源 · 见 domain 注释）
-        )
-        for o in repo.list_openings(s, project_id=project_id)
-    ]
+    return history.adjustments(repo.list_openings(s, project_id=project_id))
 
 
 def project_options(s: Session) -> list[dict]:
@@ -202,7 +192,7 @@ def build_flows(
 # ---------------------------------------------------------------- ② 欠款（三类 + 按项目）
 
 
-def build_debt(s: Session, *, jc_debt=None) -> dict:
+def build_debt(s: Session, *, jc_debt=None, mech_settle_total=Decimal("0")) -> dict:
     """「按项目看欠款」+ 三类合计（§4.5.1）。
 
     - 辅材 = Σ辅助统计结算 − Σ辅助统计付款 ＋ 辅材期初
@@ -211,7 +201,7 @@ def build_debt(s: Session, *, jc_debt=None) -> dict:
     """
     rows = notice_debt_views(s)
     openings = opening_views(s)
-    by_cat = dom.debt_by_category(rows, openings, mech_settle_total=Decimal("0"), jc_debt=jc_debt)
+    by_cat = dom.debt_by_category(rows, openings, mech_settle_total=mech_settle_total, jc_debt=jc_debt)
     by_project = dom.debt_by_project(rows)
     index = project_index(s)                       # ⚠️ 取一次（`names` 与 `openings` 共用）
     names = {pid: project_label(p) for pid, p in index.items()}
@@ -264,7 +254,25 @@ def build_debt_live(s: Session, **kw) -> dict:
     """
     from app.mod11_jc import service as M11      # 局部导入：mod11 ⇄ mod05 不成环（同 `total_debt_rows` 写法）
     kw.setdefault("jc_debt", M11.debt_of_ledger(s))
+    kw.setdefault("mech_settle_total", sum_money(mechanical_totals(s).values()))
     return build_debt(s, **kw)
+
+
+def mechanical_settlements(s: Session) -> dict[int, dict[str, Decimal]]:
+    from app.mod06_proc import service as proc
+    index = {project_key(p): pid for pid, p in project_index(s).items() if project_key(p)}
+    totals = {}
+    if not index:
+        return totals
+    for row in proc.load_mech(s):
+        pid = index.get(row.get("warehouse"))
+        if pid is not None and row.get("ym"):
+            totals.setdefault(pid, {})[str(row["ym"])] = sum_money([row.get("mech_2"), row.get("mech_3")])
+    return totals
+
+
+def mechanical_totals(s: Session) -> dict[int, Decimal]:
+    return {pid: sum_money(months.values()) for pid, months in mechanical_settlements(s).items()}
 
 
 # ---------------------------------------------------------------- ③ 逐月台账
@@ -304,8 +312,7 @@ def total_debt_rows(s: Session, *, order: list[str] | None = None) -> dict:
       · 集采 ⇒ `mod11_jc.service.build_list(...)` 的行
         —— 与**集采台账页**同一个函数（`debt` 就是那一页显示的欠款）。
 
-    ⚠️ 机械欠款**不含机械费结算**（那个来源在 `MOD-06`、还没接通，见 `MECH_SETTLE_SOURCE_READY`）
-      ⇒ 本函数**照实算**、把 `mech_settle_ready` 一并回出去，由调用方**显式标在表尾**（禁静默）。
+    机械结算与逐月台账同源，取有效机械费的外租含税两列。
     ⚠️ 集采只计「**纳入台账**」的行（「待确认 / 不纳入」按定义不进台账）；
        排除了几条**一并回出来**（⛔ 禁静默少算）。
     ⚠️ 项目**只从名册里认**（`project_index`）—— 展示名的主人是档案，⛔ 不自己拼名字。
@@ -313,6 +320,7 @@ def total_debt_rows(s: Session, *, order: list[str] | None = None) -> dict:
     rows = notice_debt_views(s)
     openings = opening_views(s)
     index = project_index(s)
+    mechanical = mechanical_totals(s)
     by_wh = {str(getattr(p, "warehouse_name", "") or ""): pid for pid, p in index.items()}
 
     # ① 辅材 / 机械：**逐项目**复用 `debt_by_category`（⚠️ 是内存里切行，不是逐条查库 = 无 N+1）
@@ -320,9 +328,9 @@ def total_debt_rows(s: Session, *, order: list[str] | None = None) -> dict:
     for pid in index:
         mine = [r for r in rows if r.ownership_id == pid]
         mine_open = [o for o in openings if o.project_id == pid]
-        if not mine and not mine_open:
+        if not mine and not mine_open and pid not in mechanical:
             continue                                    # 该项目两边都没数 ⇒ 不出行（⛔ 别刷一屏 0）
-        by_cat = dom.debt_by_category(mine, mine_open, mech_settle_total=Decimal("0"))
+        by_cat = dom.debt_by_category(mine, mine_open, mech_settle_total=mechanical.get(pid, to_money(0)))
         per[pid] = {CATEGORY_MATERIAL: by_cat[CATEGORY_MATERIAL],
                     CATEGORY_MECH: by_cat[CATEGORY_MECH]}
 
@@ -352,7 +360,7 @@ def total_debt_rows(s: Session, *, order: list[str] | None = None) -> dict:
         }
         for n, pid in enumerate(pids, start=1)
     ]
-    return {"items": items, "jc_skipped": jc_skipped, "mech_settle_ready": MECH_SETTLE_SOURCE_READY}
+    return {"items": items, "jc_skipped": jc_skipped, "mech_settle_ready": True}
 
 
 def export_total_debt(s: Session, projects: str = "") -> tuple[Path, dict]:
@@ -393,16 +401,12 @@ def build_ledger(
     - 机械侧「其他支出金额」= **派生只读**，**无手填入口**（`MECH_HAS_MANUAL_INPUT=False`）
     """
     rows = notice_debt_views(s)
-    openings = opening_views(s, project_id=project_id)
+    records = repo.list_openings(s, project_id=project_id)
+    openings = history.adjustments([r for r in records if history.kind(r) == "legacy"])
+    history_rows = history.adjustments([r for r in records if history.kind(r) != "legacy"], end_ym)
     today = today or date.today()
     sides = []
-    # 同一有效机械值供导入、手录、过程资料和台账读取；只接外租含税两列。
-    from app.mod06_proc import service as P6S
-
-    from app.mod01_projects import service as PS
-    wh = project_key(next((p for p in PS.all_projects(s) if p.id == int(project_id)), None))
-    mech_settle = {str(r['ym']): sum_money([r.get('mech_2'), r.get('mech_3')])
-                   for r in P6S.load_mech(s) if wh and r.get('warehouse') == wh and r.get('ym')}
+    mech_settle = mechanical_settlements(s).get(int(project_id), {})
     for cat in dom.LEDGER_SIDES:
         mine = [o for o in openings if o.category == cat]
         opening = mine[0] if mine else None
@@ -421,6 +425,18 @@ def build_ledger(
             remarks=repo.remarks_map(s, category=cat, project_id=int(project_id)),
             opening_auto=automatic if opening is not None or historical_notices else None,
         )
+        for h in history_rows:
+            if h.category != cat or (not h.settle_amount and not h.paid_amount):
+                continue
+            record = next(r for r in records if r.id == h.opening_id)
+            label = "i6结算补录" if history.kind(record) == "settlement" else "历史付款补差"
+            ledger.append(LedgerRow(seq=0, month=h.cutoff_ym, other_expense=h.settle_amount,
+                                   payment=h.paid_amount, remark=record.remark,
+                                   row_kind=history.kind(record),
+                                   month_label=f"截至{h.cutoff_ym} · {label}"))
+        ledger.sort(key=lambda r: (r.month, r.row_kind == "month"))
+        for i, row in enumerate(ledger, 1):
+            row.seq = i
         sides.append({
             "category": cat,
             "label": CATEGORY_LABELS[cat],
@@ -466,6 +482,7 @@ def build_ledger(
         "project_id": int(project_id),
         "project_options": project_options(s),
         "sides": sides,
+        "history": history.records_data(s, project_id, rows, records),
         "shared_project_selector": dom.SHARED_PROJECT_SELECTOR,
         "has_switch_caliber_button": dom.HAS_SWITCH_CALIBER_BUTTON,
     }
