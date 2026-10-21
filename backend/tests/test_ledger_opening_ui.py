@@ -1,5 +1,6 @@
 """真实壳内直接编辑历史行；接口均拦截，不写正式数据。"""
 from pathlib import Path
+import os
 import pytest
 from playwright.sync_api import expect
 from tests.ui_helpers import ui_page  # noqa: F401
@@ -71,8 +72,9 @@ def test_ledger_layout_is_readable_at_supported_widths(ui_page,width,scale):
         side=p.get_by_role('region',name=label+'欠款台账')
         expect(side.locator('[data-field="paid_amount"]')).to_be_visible()
         assert side.evaluate('e=>e.scrollWidth<=e.clientWidth+1')
-    folder=Path(__file__).parents[2]/'.artifacts/active/historical-ledger-prototype/20261021/screenshots'
-    folder.mkdir(parents=True,exist_ok=True);p.screenshot(path=str(folder/f'ledger-{width}-{scale}.png'),full_page=True)
+    if output:=os.environ.get('MTRL_UI_EVIDENCE_PATH'):
+        folder=Path(output);folder.mkdir(parents=True,exist_ok=True)
+        p.screenshot(path=str(folder/f'ledger-{width}-{scale}.png'),full_page=True)
 
 
 def test_archive_states_use_distinct_readable_colors_in_existing_themes(ui_page):
@@ -95,5 +97,6 @@ def test_archive_states_use_distinct_readable_colors_in_existing_themes(ui_page)
         style.evaluate('e=>e.remove()')
     p.add_style_tag(content=render_theme('松绿'))
     asset.scroll_into_view_if_needed()
-    folder=Path(__file__).parents[2]/'.artifacts/active/historical-ledger-prototype/20261021/screenshots'
-    folder.mkdir(parents=True,exist_ok=True);p.screenshot(path=str(folder/'archive-colors.png'))
+    if output:=os.environ.get('MTRL_UI_EVIDENCE_PATH'):
+        folder=Path(output);folder.mkdir(parents=True,exist_ok=True)
+        p.screenshot(path=str(folder/'archive-colors.png'))
