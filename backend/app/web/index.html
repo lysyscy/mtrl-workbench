@@ -726,9 +726,7 @@ V.m03=()=>{
         : `<span class="mut">${M(n.approve)}</span>`}${impHasWarn(n)?` <span class="tag t-wn" title="再次导入时：i8 把审批金额改小了，这行有已被人工手改过的统计金额、现已越界 —— 系统保留了人工值 —— 请你定夺">导入提醒</span>`:''}${ntVoidJoint(n)?` <span class="tag t-dg" title="该单据已在 i8 侧被删除（撤单），且仍挂着付款流水 / 集采关联 —— 有牵涉时不许静默退出统计：请先撤销付款 / 解绑关联，处理完它才退出统计。">⚠ 撤单有牵涉</span>`:''}${ntVoid(n)&&!ntVoidJoint(n)?` <span class="tag t-wn" title="该单据已在 i8 侧被删除（撤单）—— 标记保留、可查，但已退出全部统计；单据号必变 ⇒ 此为终态，不做自动复原（§4.2.7）。">i8 已撤单</span>`:''}</td>
       <td class="num"><input class="inp num ${payOver(n)?'ed':''}" style="width:96px" data-act="editss" data-id="${n.id}" data-k="pay" value="${payEff(n).toFixed(2)}" title="${payOver(n)?'本次会话已临时覆盖（刷新页面后恢复默认）；i8 原值 '+M(n.pay)+' 未改动':'自动 = 审批金额 '+M(n.approve)+' − 已付金额 '+M(p)+'（可手改，仅本次会话生效）'}" ${n.excl||ntVoid(n)?'disabled':''}></td>
       <td class="num">${p?M(p):'<span class="mut">0.00</span>'}${n.over?` <span class="tag t-dg" title="超付（§4.4.6）：已付金额 ${M(p)} 大于审批金额 ${M(n.approve)} —— NC 侧确实付了，是既成事实 ⇒ 流水照记、统计照实不封顶；系统不改写、不冲销，只在此提醒。⚠️ 与「付款动作禁止超付」（§4.4.4）不冲突：那条约束的是动作。">超付</span>`:""}</td>
-      <td class="num">${n.manual
-        ? '<span class="mut" title="手动新增行：这笔钱没有新结算（无 i8 单据）⇒ 统计结算金额恒为 0、不可修改；要入账请填「统计付款金额」">0.00</span>'
-        : `<input class="inp num ${hasT(n,'统计结算金额')?'ed':''}" style="width:96px" data-act="editss" data-id="${n.id}" data-k="ss" value="${n.ss.toFixed(2)}" title="上限 = 审批金额 ${M(n.approve)}（按发票走，只能往下调）" ${n.excl||ntVoid(n)?'disabled':''}>`}</td>
+      <td class="num"><input class="inp num ${hasT(n,'统计结算金额')?'ed':''}" style="width:96px" data-act="editss" data-id="${n.id}" data-k="ss" value="${n.ss.toFixed(2)}" title="上限 = 审批金额 ${M(n.approve)}（按发票走，只能往下调）" ${n.excl||ntVoid(n)?'disabled':''}></td>
       <td class="num"><input class="inp num ${hasT(n,'统计付款金额')?'ed':''}" style="width:96px" data-act="editss" data-id="${n.id}" data-k="sp" value="${n.sp.toFixed(2)}" title="上限 = 审批金额 ${M(n.approve)}（按发票走，只能往下调）" ${n.excl||ntVoid(n)?'disabled':''}></td>
       <td class="ctr">${n.excl?'<span class="mut">—</span>':astatTag(n.astat)}</td>
       <td class="ctr">${stTag(st)}</td>

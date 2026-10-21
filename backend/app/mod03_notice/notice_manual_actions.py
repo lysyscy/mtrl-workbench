@@ -1,7 +1,7 @@
 """`MOD-03` 能力 4 —— **手动新增行**（§4.2.6）的判定 · 载荷组装 · **唯一出口**。
 
 依据：
-- 《说明书》§4.2.6（手动新增行：**统计结算金额恒 0 且不可改** · **录入人 = 当前登录用户** ·
+- 《说明书》§4.2.6（手动新增行：**统计结算金额默认0，可手填** · **录入人 = 当前登录用户** ·
   项目 = 全部已建档项目（含归档；**小微壳除外**）· **编辑 / 删除只对手动行开放** · 上限口径同样适用）
 - §4.2.7（i8 抓取回来的行**永不改、永不删** —— 要改去 i8 改后重新抓取）
 - §7.2 / §9.4（删除前**必须列出影响范围**）
@@ -28,7 +28,7 @@ from app.mod05_flow.domain import classify
 
 # 审批状态字面量 ⛔ **同一个出口**（§4.4.1 唯一需要识别的字面量 =「已批」，附录 E 枚举 = 已批 / 未批）
 # —— 另有一处同值声明在 `mod02_i8.notice_source`，`tests/test_i8_contract.py` 钉着两处不漂移。
-from app.mod03_notice.domain import APPROVE_STATUS_DONE
+from app.mod03_notice.domain import APPROVE_STATUS_DONE, adjust_stat
 
 #: 审批状态的**合法取值**（附录 E：已批 / 未批，**无例外**）
 APPROVE_STATUS_CHOICES: tuple[str, ...] = ("已批", "未批")
@@ -40,10 +40,6 @@ _ZERO = to_money(0)
 
 # 手动行的本地主键前缀（**不是 i8 单据**；`ph_id` 列 unique 且非空 ⇒ 必须给一个不冲突的值）
 MANUAL_PH_PREFIX = "MANUAL-"
-
-# 「统计结算金额」对手动行**恒 0 且不可改**（§4.2.6：这笔钱没有新的结算，只有付款）
-STAT_SETTLE_FIXED = _ZERO
-
 
 def new_manual_ph_id() -> str:
     """手动行的本地 `ph_id`（带前缀，**永不与 i8 的单据主键冲突**）。"""
@@ -102,16 +98,14 @@ def manual_row_payload(
     ownership_id: int | None = None,
     remark: str = "",
     approve_status: str = "",
-    # ⚠️ 下面两个**收下但一律忽略**（不是"签名里没有"）——
-    #    §4.2.6：统计结算金额**恒 0 且不可改**；录入人 = **当前登录用户**、不由手填。
-    #    收下是为了让"乱传也不生效"这条**真的被防住**（而不是靠调用方不传）。
     stat_settle: object = None,
+    # 录入人只取当前登录用户，忽略表单中的 input_by。
     input_by: str = "",
 ) -> ManualRow:
     """组装一条**手动新增付款通知书行**的落库字段（§4.2.6）。
 
     口径要点（逐条对照 §4.2.6 表）：
-    1. **统计结算金额恒 0 且不可改**（`STAT_SETTLE_FIXED`）—— 传进来的值**一律忽略**并说明；
+    1. 统计结算金额默认0，可手填；两个统计金额均不得超过审批金额。
     2. **录入人 = 当前登录用户**（由调用方传 `entered_by`，**不从表单取**）；
     3. **上限口径同样适用**：统计付款金额 ≤ 审批金额（超额**拦截并保留原值**）；
     4. **审批金额由人定**（手动行没有 i8 结算）⇒ 必填且 ≥ 0；
@@ -142,6 +136,14 @@ def manual_row_payload(
         raise MustReportError(
             f"统计付款金额不能超过审批金额 {approved}（按发票走，只能少付、不能多付）—— 已保留原值"
         )
+
+    try:
+        settle = require_non_negative(stat_settle if stat_settle not in (None, "") else 0,
+                                      field="统计结算金额")
+    except MoneyError as exc:
+        raise MustReportError(f"统计结算金额输入不合法（{exc}）—— 已保留原值") from exc
+    if settle > approved:
+        raise MustReportError(f"统计结算金额不能超过审批金额 {approved}—— 已保留原值")
 
     cat = str(category or "").strip()
     if cat and cat not in CATEGORY_CHOICES:
@@ -177,7 +179,7 @@ def manual_row_payload(
         "excluded": False,
         "exclude_source": EXCLUDE_NONE,
         "amount_approved": approved,
-        "stat_settle": STAT_SETTLE_FIXED,           # ① **恒 0 且不可改**
+        "stat_settle": settle,
         "stat_paid": paid,
         "i8_revoked": False,
         "revoked_joint": False,
@@ -185,7 +187,6 @@ def manual_row_payload(
         # 列表页的「单据名称」从 `fields["BillName"]` 取（表里没有独立列）
         "fields": {"BillName": str(bill_name or ""), "Remark": str(remark or ""), "Manual": "1"},
     }
-    notes.append("统计结算金额恒为 0 且不可修改（这笔钱没有新的结算，只有付款）；要入账请填「统计付款金额」")
     if str(remark or ""):
         notes.append("备注已记入该行原始字段")
     return ManualRow(values=values, notes=notes)
@@ -224,12 +225,12 @@ def apply_manual_save(session, *, row_id: str = "", entered_by: str, fields: dic
     （`POST /api/m03/actions/manual-save`）**共用这一份**：⛔ 不许两份校验、不许两份文案。
 
     分三层，各有各的主人（本函数只做"接线"）：
-      · **校验与载荷**：`manual_row_payload`（录入人取当前登录用户、不从表单取；统计结算恒 0 等口径都在那里）；
+      · **校验与载荷**：`manual_row_payload`（录入人取当前登录用户、不从表单取；统计结算默认0、可填等口径都在那里）；
       · **是不是手动行**：`assert_manual_editable`（⛔ i8 抓取行永不可改，§4.2.7）；
       · **落库**：`repository.create_manual_notice` / `update_manual_notice`（编辑返回**被改动的列名**）。
 
     `row_id` 空 = **新增**；有值 = **编辑该手动行**（「新增与编辑共用同一套」，§4.2.6）。
-    返回 `(row, message)`，`message` 是可直接给人看的中文（含被改字段数 / 只影响「付款」那类说明）。
+    返回 `(row, message)`，`message` 是可直接给人看的中文（含被改字段数 / 按单据日期入账的说明）。
     """
     from app.mod03_notice import repository as repo
 
@@ -237,17 +238,27 @@ def apply_manual_save(session, *, row_id: str = "", entered_by: str, fields: dic
     #    那一层的入参口径没变）—— 两个出口谁都不必自己转（一处转，处处一致）。
     rest = dict(fields or {})
     oid = str(rest.pop("ownership_id", "") or "").strip()
-    payload = manual_row_payload(
-        entered_by=entered_by, ownership_id=int(oid) if oid.isdigit() else None, **rest
-    )
-    values = payload.values
     rid = str(row_id or "").strip()
+    row = None
     if rid.isdigit():
         row = repo.get_notice(session, int(rid))
         if row is None:
             raise MustReportError(f"要保存的手动行 {row_id} 不存在")
         assert_manual_editable(row)
+        # Older clients omit this newly writable field; editing must not zero an existing value.
+        if rest.get("stat_settle") is None:
+            rest["stat_settle"] = row.stat_settle
+    payload = manual_row_payload(
+        entered_by=entered_by, ownership_id=int(oid) if oid.isdigit() else None, **rest
+    )
+    values = payload.values
+    if row is not None:
+        trace = adjust_stat(notice_id=row.id, field="stat_settle", value=values["stat_settle"],
+                            approved=values["amount_approved"], before=row.stat_settle,
+                            changed_by=entered_by)
         touched = repo.update_manual_notice(session, row, values)
+        if trace is not None:
+            repo.add_stat_trace(session, trace)
         msg = (
             f"已保存手动行 {row.bill_no or row.id}（改动 {len(touched)} 个字段：{'、'.join(touched) or '无'}）"
             " —— 它参与欠款统计、与 i8 数据无关"
@@ -256,7 +267,7 @@ def apply_manual_save(session, *, row_id: str = "", entered_by: str, fields: dic
         row = repo.create_manual_notice(session, values)
         msg = (
             f"已新增 1 行手动付款通知书（本地编号 {row.ph_id}）"
-            "；该行**只影响「付款」**、不影响「其他支出金额」"
+            "；统计结算与统计付款按单据日期计入台账"
         )
     if payload.notes:
         msg += "；" + "；".join(payload.notes)
@@ -322,7 +333,7 @@ def apply_manual_delete(session, notice_id: int) -> tuple[object, str]:
 
 
 __all__ = [
-    "MANUAL_PH_PREFIX", "STAT_SETTLE_FIXED", "APPROVE_STATUS_CHOICES",
+    "MANUAL_PH_PREFIX", "APPROVE_STATUS_CHOICES",
     "new_manual_ph_id", "is_manual_ph_id", "is_manual_row", "assert_manual_editable",
     "ManualRow", "manual_row_payload", "manual_project_options",
     "apply_manual_save",

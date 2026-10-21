@@ -129,11 +129,12 @@ def test_API的统计列仍不含HTML():
 # 旧页删除（授权 `D18`）后 PRG（上面那两条）随页消失，故**同样的实质**必须在新接口上有着落。
 
 
-def test_API_统计手改落库并留痕():
+@pytest.mark.parametrize('manual', [False, True])
+def test_API_统计手改落库并留痕(manual):
     """**统计手改走 JSON API**：值真的落库 ＋ 留痕真的写进库（壳判「黄底」的唯一事实来源）。"""
     from app.mod03_notice.models import NoticeStatLog
 
-    client, fake = _client([_notice(1)])
+    client, fake = _client([_notice(1, is_manual=manual)])
     fake.by_model.setdefault(NoticeStatLog, [])
     r = client.post("/api/m03/actions/stat",
                     json={"notice_id": 1, "field": "stat_settle", "value": "8000"})
@@ -200,13 +201,15 @@ def test_统计手改的API只许走唯一出口():
 # 原委：壳的「手动新增 / 编辑」原来只在前端本地 `NO.push` / `Object.assign`（**不落库** ✗）⇒ 接真接口。
 
 
-def test_API_新增手动行落库():
-    """**手动行新增走 JSON API**：真的落库（`is_manual` ＋ **统计结算恒 0** §4.2.6）。"""
+@pytest.mark.parametrize('settle', [None, '20000'])
+def test_API_新增手动行落库(settle):
+    """省略结算仍为0，显式金额原样校验并落库。"""
     client, fake = _client([_notice(1)])
     r = client.post("/api/m03/actions/manual-save", json={
         "doc_date": "2026-09-01", "bill_no": "MN01", "bill_name": "期初占位",
         "biz_type": "付其他供应商款", "payee": "某供应商", "category": "material",   # ⚠️ 服务端只认**键**（辅材/机械/集采是显示名）
         "amount_approved": "50000", "stat_paid": "20000",
+        **({'stat_settle': settle} if settle is not None else {}),
     })
     assert r.status_code == 200
     body = r.json()
@@ -214,9 +217,9 @@ def test_API_新增手动行落库():
     added = [x for x in fake.added if isinstance(x, PaymentNotice)]
     assert len(added) == 1, "接口说成功但一行都没落库"
     assert added[0].is_manual is True
-    assert added[0].stat_settle == Decimal("0.00"), "手动行「统计结算金额」必须恒 0（这笔钱没有新结算）"
+    assert added[0].stat_settle == Decimal(settle or '0')
     assert added[0].stat_paid == Decimal("20000.00")
-    assert "已新增" in body["message"] and "只影响「付款」" in body["message"]
+    assert "已新增" in body["message"] and "按单据日期计入台账" in body["message"]
 
 
 def test_API_保存校验失败不落库():
@@ -239,13 +242,14 @@ def test_API_编辑手动行按改动字段回报():
     r = client.post("/api/m03/actions/manual-save", json={
         # ⚠️ 数字必须自洽：全站口径「统计两金额 ≤ 审批金额」（超了后端会正确地拦下）
         "row_id": "1", "doc_date": "2026-09-05", "stat_paid": "30000",
-        "amount_approved": "50000", "category": "material",
+        "amount_approved": "50000", "stat_settle": "20000", "category": "material",
     })
     body = r.json()
     assert body["ok"] is True and body["is_new"] is False
     assert "改动" in body["message"] and "个字段" in body["message"]
     row = fake.by_model[PaymentNotice][0]
     assert row.stat_paid == Decimal("30000.00")
+    assert row.stat_settle == Decimal("20000.00")
     assert [x for x in fake.added if isinstance(x, PaymentNotice)] == [], "编辑不该新增行"
 
 

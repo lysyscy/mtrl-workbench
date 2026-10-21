@@ -200,6 +200,7 @@ class ManualSaveIn(BaseModel):
     payee: str = ""
     category: str = ""
     amount_approved: str = ""
+    stat_settle: str | None = None
     stat_paid: str = ""
     ownership_id: str = ""
 

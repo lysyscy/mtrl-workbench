@@ -9,7 +9,7 @@
   · `ACC-PAY-ACTION-001/001-02` 多条生效流水 ⇒ 跳流水页**只筛这一单**、**不提供一键撤全部**
   · `ACC-PAY-ACTION-001/001-04` 查看关联 = **纯只读**，流水子表**含已撤销**（带原因）
   · `ACC-PAY-ACTION-001/001-05` 查看关联**不臆造集采取值**（没有就给说明，不给假值）
-  · `ACC-PAY-MANUAL-001/001-07` 草稿行：「统计结算」**恒 0 且不可改**、录入人不由手填
+  · `ACC-PAY-MANUAL-001/001-07` 草稿行：「统计结算」默认0、可填、录入人不由手填
   · `ACC-PAY-STAT-001/001-08` 统计两列是**行内可改格**；没手改过 ⇒ **不黄底**
   · `ACC-PAY-STAT-001/001-09` 手改过的格子**黄底**，判据 = **留痕**
 
@@ -247,13 +247,12 @@ def test_壳里查看关联不臆造集采取值():
 # ---------------------------------------------------------------- 草稿行 / 统计格
 
 
-def test_壳里草稿行统计结算只读且录入人不由手填():
-    """§4.2.6：手动新增行「统计结算」**恒 0 且不可修改**（不是输入框）；录入人**取当前登录用户**。"""
+def test_壳里草稿行统计结算可填且录入人不由手填():
+    """手动结算有输入框；录入人仍只取当前用户。"""
     reg = _draft_row()
     assert 'class="draftrow"' in reg, "草稿行没挂 `draftrow`（排序 pin 也靠它）"
-    assert "统计结算金额恒为 0、不可修改" in reg, "「统计结算恒 0 不可改」这条没讲清"
-    assert '<td class="num"><span class="mut" title="手动新增行：这笔钱没有新结算' in reg, \
-        "统计结算格不是**只读文本**（被做成了可改的输入框）"
+    assert 'data-act="ntRowSet" data-k="ss"' in reg
+    assert 'stat_settle:String(naD.ss' in SHELL
     assert "${esc(CUR.name)}" in reg, "录入人不是取当前登录用户（变成可手填了）"
     assert 'data-act="ntRowSave"' in reg and 'data-act="ntRowCancel"' in reg, "草稿行的保存/取消没了"
     assert 'data-act="ntRowAdd"' in SHELL and "＋ 手动新增通知书" in SHELL, "增行入口没了"

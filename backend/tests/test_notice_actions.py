@@ -2,7 +2,7 @@
 
 判据点归属（2026-09-16 起）：
 - `ACC-PAY-CAT-001`    —— 批量改分类（三类 · 必须先勾选 · 分档回报 · 只动勾选行）⇒ `§4.2.4`
-- `ACC-PAY-MANUAL-001` —— 手动新增行（统计结算恒 0 · 录入人 · 项目候选 · 编辑删除边界 · 上限）⇒ `§4.2.6`
+- `ACC-PAY-MANUAL-001` —— 手动新增行（统计结算默认0、可手填 · 录入人 · 项目候选 · 编辑删除边界 · 上限）⇒ `§4.2.6`
 
 ⚠️ 本件只放**不碰页面与路由**的纯函数断言；渲染面见 `test_wired_m03_action.py`（原 `test_notice_action_page.py` —— 该件已不在仓里）、
 端点见 `test_notice_action_api.py`（2026-09-16 自 `test_notice_actions.py` 拆出，断言未改）。
@@ -121,19 +121,33 @@ def test_恢复剔除必须先勾选():
 # ============================================================ 能力 4 · 手动新增行
 
 
-def test_手动行统计结算恒为0且录入人取自当前操作人():
+def test_手动行可填统计结算且录入人取自当前操作人():
     payload = M.manual_row_payload(
         entered_by="张三", doc_date="2026-09-01", amount_approved="50000",
-        stat_paid="30000", stat_settle="999999",     # ← 故意乱传：必须被忽略
+        stat_paid="30000", stat_settle="20000",
         input_by="别人",                              # ← 故意乱传：必须被忽略
     )
     v = payload.values
-    assert v["stat_settle"] == Decimal("0.00")       # §4.2.6：**恒 0 且不可改**
+    assert v["stat_settle"] == Decimal("20000.00")
     assert v["input_by"] == "张三"                    # 录入人 = 当前登录用户
     assert v["stat_paid"] == Decimal("30000.00")
     assert v["is_manual"] is True
     assert v["ph_id"].startswith(M.MANUAL_PH_PREFIX)  # 本地编号，不是 i8 单据
-    assert "恒为 0" in "；".join(payload.notes)
+    assert "恒为 0" not in "；".join(payload.notes)
+
+
+@pytest.mark.parametrize('value', ['-1', 'abc', 'NaN', 'Infinity', '20000.01'])
+def test_手动结算非法或超审批拒绝(value):
+    with pytest.raises(MustReportError):
+        M.manual_row_payload(entered_by='测试', doc_date='2026-09-01',
+                             amount_approved='20000', stat_settle=value)
+
+
+@pytest.mark.parametrize('value', [None, '', '0'])
+def test_手动结算省略或留空默认零(value):
+    row = M.manual_row_payload(entered_by='测试', doc_date='2026-09-01',
+                               amount_approved='20000', stat_settle=value)
+    assert row.values['stat_settle'] == Decimal('0.00')
 
 
 def test_手动行超上限被拦截且保留原值():

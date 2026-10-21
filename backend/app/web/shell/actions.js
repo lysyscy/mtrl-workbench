@@ -789,14 +789,16 @@ const ACT={
    naEditId=n.id;
    naD={date:n.date, code:n.code, pid:((ownOf(n)||{}).id)||'',
      doc:n.doc, biz:n.biz, recv:n.recv, cat:n.cat, astat:n.astat,
-     approve:String(n.approve), sp:String(n.sp), sup:n.sup||''};
+      approve:String(n.approve), ss:String(n.ss), sp:String(n.sp), sup:n.sup||''};
    ntReveal(); render();
    toast(`正在<b>原地编辑</b>手动行 <b>${esc(n.id)}</b> —— 该行已变为草稿态；点「保存」写入、点「取消」保持原样`,5200); },
  /* 保存 = 原弹窗的「确认新增 / 保存修改」——校验链**一字未改**（项目必选 → badMoney → overCap 拦截并保留原值） */
  ntRowSave:()=>{ const pj=PJs.find(p=>p.id===naD.pid);
    if(!pj){ toast('<b>请先选「付款项目」</b>：候选 = 全部已建档项目（含归档；壳除外，§六-9）'); return; }
-   const ap=naNum(naD.approve), sp=naNum(naD.sp);
+    const ap=naNum(naD.approve), ss=naNum(naD.ss), sp=naNum(naD.sp);
    if(badMoney(ap)){ toast(badMoneyMsg('审批金额')); return; }
+    if(badMoney(ss)){ toast(badMoneyMsg('统计结算金额')); return; }
+    if(overCap(ss,ap)){ toast('统计结算金额不能超过审批金额，草稿已保留。'); return; }
    if(badMoney(sp)){ toast(badMoneyMsg('统计付款金额')); return; }
    if(overCap(sp,ap)){ toast(`<b>统计付款金额超上限</b>：全站口径「按发票走、只能少不能多」⇒ 上限 = 审批金额 <b>${M(ap)}</b>。<br>要付 <b>${M(sp)}</b> 就把<b>审批金额</b>也填到 <b>${M(sp)}</b>（手动行没有 i8 结算、审批金额由你定），已保留原值`,7000); return; }
    const cat=naD.cat||'辅材';
@@ -805,7 +807,7 @@ const ACT={
      recv:String(naD.recv||'').trim(), cat, astat:naD.astat||'已批', approve:ap, sp,
      sup:(cat==='集采')?String(naD.sup||'').trim():''};
    /* ⭐ 2026-09-19 接线（`§19` 批 4 · **S2a**）：手动行**新增 / 编辑一律落库走后端**
-      `POST /api/m03/actions/manual-save` —— 校验（录入人取当前登录用户 · 统计结算恒 0 ·
+      `POST /api/m03/actions/manual-save` —— 校验（录入人取当前登录用户 · 统计结算默认0、可手填 ·
       全站「统计两金额 ≤ 审批金额」· 是不是手动行…）**只在后端一处**（`manual_row_payload` ＋ `assert_manual_editable`）。
       ⛔ 前端不再本地改对象 / 本地塞数组冒充落库（原先就是这样，刷新即丢）。
       回执里的中文说明**原样给用户**；失败 ⇒ `ok=False` ⇒ 提示并把**草稿行保留**（R14③，不清空已填内容）。 */
@@ -820,7 +822,7 @@ const ACT={
     approve_status:f.astat,
     /* ⚠️ 分类：下拉框的值是**中文标签**（`ENUMS.cat`），而服务端只认**键** ⇒ 必须映射
        （照 `setCategory` 的既有做法 `CAT_API`）—— 不映射会被后端按「分类不合法」拒掉。 */
-    category:CAT_API[f.cat]||f.cat, amount_approved:String(naD.approve||''), stat_paid:String(naD.sp||''),
+     category:CAT_API[f.cat]||f.cat, amount_approved:String(naD.approve||''), stat_settle:String(naD.ss||'0'), stat_paid:String(naD.sp||''),
      ownership_id:String(pj.id) };
    API.manualSave(body)
      /* ⚠️⚠️ 2026-09-20 补：**先判 `ok` 再清草稿**。原先不管成败都先 `naEditId=''; naD={}`
@@ -845,9 +847,8 @@ const ACT={
  editApprove:t=>{ const n=NO.find(x=>x.id===t.dataset.id); if(!n||!n.manual) return;
    const v=naNum(t.value);
    if(badMoney(v)){ toast(badMoneyMsg('审批金额')+` ${M(n.approve)}`); render(); return; }
-   if(overCap(n.sp,v)){ toast(`<b>审批金额不能低于「统计付款金额」</b>：全站口径「统计两金额 ≤ 审批金额」⇒ 至少 <b>${M(n.sp)}</b>（先把统计付款金额调小，或把审批金额填大），已保留原值 ${M(n.approve)}`,6000); render(); return; }
-   n.approve=v; render();
-   toast(`手动行 <b>${n.id}</b> 审批金额已改为 <b>${M(v)}</b> —— 「付款金额（本次应付）」与付款状态已实时重判`); },
+   if(overCap(Math.max(n.ss,n.sp),v)){ toast(`审批金额不能低于统计结算或统计付款金额，至少 ${M(Math.max(n.ss,n.sp))}；已保留原值。`,6000); render(); return; }
+   ACT.ntEdit(t); naD.approve=String(v); ACT.ntRowSave(); },
  /* ⭐ 2026-09-19 接线（`§19` 批 4 · **S2b**）：**删除前的影响范围由后端给**（§7.2 / §9.4 是硬要求）——
     项目 / 统计付款金额 / 已付金额 / 「欠款回增」那句全由 `/api/m03/actions/manual-delete-impact` 出，
     ⛔ 前端不再自己拼这段文字（原先正是本地拼的 ✗）。⚠️ i8 抓取行连"影响范围"都不给看（§4.2.7）。 */
@@ -857,7 +858,7 @@ const ACT={
     .then(imp=>{ if(!imp.ok) return toast(imp.message);
       modal({title:'删除确认 · 手动新增付款通知书',
         body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">${imp.message}</div>
-    ${kvBlock([['单据',`<span class="fc">${esc(imp.label)}</span>`],['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(imp.project_name)}</span>`],['单据日期',`<span class="fc">${esc(imp.doc_date)}</span>`],['统计结算金额',`<span class="fc">${esc(imp.stat_settle)}</span>（恒 0）`],['统计付款金额',`<span class="fc">${esc(imp.stat_paid)}</span>`],['已付金额（流水）',`<span class="fc">${esc(imp.amount_paid)}</span>`]])}
+    ${kvBlock([['单据',`<span class="fc">${esc(imp.label)}</span>`],['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(imp.project_name)}</span>`],['单据日期',`<span class="fc">${esc(imp.doc_date)}</span>`],['统计结算金额',`<span class="fc">${esc(imp.stat_settle)}</span>`],['统计付款金额',`<span class="fc">${esc(imp.stat_paid)}</span>`],['已付金额（流水）',`<span class="fc">${esc(imp.amount_paid)}</span>`]])}
     <div class="tip" style="margin:0">${imp.effects.map(x=>`· ${esc(x)}`).join('<br>')}</div>`,
         footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="ntDelOk" data-id="${id}">确认删除</button>`}); })
     .catch(e=>toast(`<b>取删除影响范围失败</b>：${esc(e.message||e)}`)); },

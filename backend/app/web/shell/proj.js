@@ -74,7 +74,7 @@ const ntBatchVisible=()=>{ reconcilePick(); const hidden=ntHiddenPickCount();
 /* ---------- 手动新增 / 编辑付款通知书（2026-09-12 用户口径）----------
    场景：付「期初占位行」的款 —— 系统上线前那笔欠款**没有 i8 单据**，只能手工补一行通知书。
    用户拍板：① 行内一切信息都可手改（「编辑」走同一个弹窗）② 项目候选 = **全部已建档项目（含归档）**
-   ③ 审批金额可改、默认 0 ④ **只对手动行**开放删除 ⑤ **统计结算金额恒 0 且只读** ⑥ 录入人 = 当前登录用户（§1.5.1）
+   ③ 审批金额可改、默认 0 ④ **只对手动行**开放删除 ⑤ **统计结算金额默认0、可手填** ⑥ 录入人 = 当前登录用户（§1.5.1）
    ⚠️ 全站口径「统计两金额 ≤ 审批金额」对手动行**同样有效**：要付 5 万，就把审批金额也填到 5 万
       （手动行没有 i8 结算，审批金额由人定；否则会被拦截）。 */
 const ntPjList=()=>pjRowsWithKey(pjNoShell());   /* 壳本身没有付款单据（§六-9）⇒ 不进候选；一律走共性出口（归档后置 + ord 排序） */
@@ -85,7 +85,7 @@ const naDefDate=()=>tmStart(fNt.month)+'-01';
 const ntBlank=()=>{ const L=ntPjList(), cur=ledCur();     /* 默认项目 = 欠款台账当前选中的项目（键 = 仓库名） */
   const pid=(L.find(p=>pjKey(p)===cur)||L[0]||{}).id||'';
   return {date:naDefDate(), code:'', pid, doc:'', biz:'', recv:'',
-    cat:'辅材', astat:'已批', approve:'0', sp:'0', sup:''}; };
+    cat:'辅材', astat:'已批', approve:'0', ss:'0', sp:'0', sup:''}; };
 /* 「付款项目」候选：**值 = 仓库名**（§2.7.4）、**显示 = 展示名**；写库仍按档案 id（§9.8-5） */
 const ntOpts=()=>pjSort(ntPjList()).map(p=>`<option value="${esc(p.name)}" ${naD.pid===p.id?'selected':''}>${esc(pjDisp(p))}${pjArcMark(p,1)}</option>`).join('');
 /* ---------- 增行模式（2026-09-13 用户口径：**取消「手动新增 / 编辑」弹窗**，改**表内增行**）----------
@@ -119,11 +119,11 @@ const ntDraftRow=()=>{ const d=naD, cat=d.cat||'辅材', isJc=cat==='集采';
     <td class="num"><input class="inp num" style="width:96px" data-act="ntRowSet" data-k="approve" value="${esc(d.approve)}" title="手动行：审批金额可直接手改（i8 抓取行仍只读）；全站口径「统计两金额 ≤ 审批金额」仍成立"></td>
     <td class="num"><span class="mut" title="尚未写入 —— 写入后按「审批金额 − 已付金额」派生">0.00</span></td>
     <td class="num"><span class="mut">0.00</span></td>
-    <td class="num"><span class="mut" title="手动新增行：这笔钱没有新结算（无 i8 单据）⇒ 统计结算金额恒为 0、不可修改；要入账请填「统计付款金额」">0.00</span></td>
+    <td class="num"><input class="inp num" style="width:96px" data-act="ntRowSet" data-k="ss" value="${esc(d.ss)}" title="统计结算金额默认0，可手填；上限 = 审批金额"></td>
     <td class="num"><input class="inp num" style="width:96px" data-act="ntRowSet" data-k="sp" value="${esc(d.sp)}" title="上限 = 审批金额（按发票走，只能往下调）"></td>
     <td class="ctr"><select class="inp" style="width:auto" data-act="ntRowSet" data-k="astat">${enumOpts('astat',d.astat)}</select></td>
     <td class="ctr">${stTag('未付清')}</td>
-    <td class="ctr now"><button class="btn sm pri" data-act="ntRowSave"${ntSaving?' disabled':''} title="${ntSaving?'正在保存 —— 请勿重复点击':'校验通过后写入（统计结算恒 0 · 录入人 = 当前登录用户）'}">${ntSaving?'保存中…':'保存'}</button> <button class="btn sm" data-act="ntRowCancel"${ntSaving?' disabled':''} title="丢弃这一行草稿（不写入）">取消</button></td>
+    <td class="ctr now"><button class="btn sm pri" data-act="ntRowSave"${ntSaving?' disabled':''} title="${ntSaving?'正在保存 —— 请勿重复点击':'校验通过后写入（统计结算默认0、可手填 · 录入人 = 当前登录用户）'}">${ntSaving?'保存中…':'保存'}</button> <button class="btn sm" data-act="ntRowCancel"${ntSaving?' disabled':''} title="丢弃这一行草稿（不写入）">取消</button></td>
   </tr>`; };
 /* ===== 列定义 → 表头 / 空态跨列数（阶段 4 · **试点：只接 m03**）=====
    原先"表头 / 每行 `<td>` / 空态行 `colspan`"三处各写一遍 ⇒ **加一列要改三处**。
@@ -550,7 +550,7 @@ const ntHasFlow=n=>N2(paidOf(n.id))>0;
 const ntHasLink=n=>!!jcRefOf(n.id);
 const ntActCell=n=>{
   const L=[];
-  if(n.manual) L.push(`<span class="tag t-in">手动</span> <button class="btn sm" data-act="ntEdit" data-id="${n.id}" title="编辑这一行手动新增的通知书（一切信息可改；「统计结算金额」恒 0 只读）">编辑</button> <button class="btn sm dg" data-act="ntDel" data-id="${n.id}" title="删除这一行手动新增的通知书（删除前列影响范围）">删除</button>`);
+  if(n.manual) L.push(`<span class="tag t-in">手动</span> <button class="btn sm" data-act="ntEdit" data-id="${n.id}" title="编辑这一行手动新增的通知书（一切信息可改；「统计结算金额」默认0、可手填）">编辑</button> <button class="btn sm dg" data-act="ntDel" data-id="${n.id}" title="删除这一行手动新增的通知书（删除前列影响范围）">删除</button>`);
   if(ntHasFlow(n)) L.push(`<button class="btn sm dg" data-act="ntRevoke" data-id="${n.id}" title="撤销这笔已登记的付款流水。撤销必须填原因并留痕；撤销后「已付金额」回退、状态按「已付金额 ≥ 审批金额」重判（§4.4.5）">撤销付款</button>`);
   if(n.hasAnyFlow) L.push(`<button class="btn sm" data-act="ntFlows" data-id="${n.id}" title="查看生效和已撤销的流水">查看流水</button>`);
   return L.length?L.join(' '):'<span class="mut">—</span>'; };

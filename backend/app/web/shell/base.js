@@ -53,7 +53,7 @@ const extBalOf = (kind, wh) => { const m = BAL_EX[kind]; const v = m ? m[wh] : u
 
 /* ---------- 付款通知书（ENT-02） MOD-03 ---------- */
 /* manual = 「手动新增行」标记（2026-09-12 新增）：i8 抓取行为 undefined、手动新增行为 true。
-   用途三处：① 列表打「手动」标签 ② 只对手动行开放「编辑 / 删除」 ③ 手动行的「统计结算金额」恒 0 只读。
+   用途三处：① 列表打「手动」标签 ② 只对手动行开放「编辑 / 删除」 ③ 手动行的「统计结算金额」默认0、可手填。
    ⚠️ 追加在**末尾** —— `O(arr,NT_COLS)` 按位置取值，已有 19 元素的行 `manual` 自然为 undefined。 */
 const NT_COLS = ['id','date','code','proj','doc','biz','recv','entry','approve','pay','ss','sp','cat','astat','excl','exrule','sup','trail','planId','manual'];
 
