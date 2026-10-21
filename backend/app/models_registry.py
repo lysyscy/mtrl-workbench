@@ -8,6 +8,7 @@
 """
 
 # --- 随阶段登记（未启用时保持注释）---
+from app.core.history import OperationHistory as _operation_history  # noqa: F401
 from app.mod01_projects import models as _m01  # noqa: F401  ← M2 切片 2 启用
 from app.mod02_i8 import models as _m02  # noqa: F401  ← 运行记录 RunRecord 2026-09-15 移入
 from app.mod03_notice import models as _m03  # noqa: F401  ← M1 切片 1 启用

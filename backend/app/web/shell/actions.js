@@ -265,6 +265,8 @@ function jcLinkDialog(n,data){
 
 
 const ACT={
+ historyUndo:()=>historyApply('undo'),
+ historyRedo:()=>historyApply('redo'),
  /* 导航 */
  go:t=>go(t.dataset.k),
  homeJcUnlinked:()=>{
@@ -2566,6 +2568,7 @@ document.addEventListener('click',e=>{
   if(ch) closeFilterPops();
 });
 document.addEventListener('keydown',e=>{
+  if(typeof historyKey==='function'&&historyKey(e)) return;
   const field=e.target&&e.target.closest&&e.target.closest('[data-submit-act]');
   if(e.key==='Enter'&&!e.isComposing&&field&&ACT[field.dataset.submitAct]){e.preventDefault();ACT[field.dataset.submitAct](field);return;}
   /* 「非按钮但可点」元素的键盘等价操作 —— **通用一条，不逐个点名**：

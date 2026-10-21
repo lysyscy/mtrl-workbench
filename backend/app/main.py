@@ -277,6 +277,8 @@ def create_app() -> FastAPI:
     _install_auth_gate(app)          # ⭐ §1.5.1「未登录 ⇒ 写动作一律拒」（2026-09-25 用户裁定 A）
     _install_ip_allowlist(app)
     _install_error_handlers(app)
+    from app.history_api import install as install_history
+    install_history(app)
 
     # ⭐ 看板 = 默认落地页（**不占模块号** · 原型导读）—— ⚠️ 2026-09-21 起**看板在壳里**
     #    （`§19` 批 5 收口：旧服务端渲染页 `home/view.py` 已删）⇒ 本路由现在只剩

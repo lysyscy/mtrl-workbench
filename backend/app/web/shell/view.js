@@ -44,6 +44,7 @@ function go(k){ if(VIEW==='m03'&&k!=='m03') pickSet.clear(); VIEW=k;
   markPending(PAGE_LOAD[k]||[]);
   render(); $('.view').scrollTop=0; loadPaths(PAGE_LOAD[k]||[]); }   /* ⭐ `P3` 主体：进了哪页就（首次）拉哪页 —— ⛔ 不成环：`loadPaths` 只 render，不再调 `go` */
 function render(){
+  if(typeof historyRender==='function') historyRender();
   const restoreTableScroll=saveTableScroll();
   /* ⭐ 2026-09-28（用户裁定 `B` · 见审计清单 §六 "裁定 5"）：侧栏每项左侧那一列 = **模块编号**
      （`NAV` 表第三列，如 `MOD-14`）—— 它是**给人看的编号**（文档 / 《说明书》/ 判据件都按这套编号对齐），

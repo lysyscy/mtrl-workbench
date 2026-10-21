@@ -52,8 +52,13 @@ const netErr = (tech) => errHuman(
    ⚠️ 判据 `tests/test_ux_states.py` 数的是"**没经过包装的取数**"（壳里只允许两处：
       本函数 ＋ `core.js::dlExport`——后者自己有一份人话 catch）。 */
 const rawFetch = async (url, opts, tech) => {
-  try { return await fetch(url, opts); }
+  const track=opts&&opts.method&&!['GET','HEAD','OPTIONS'].includes(opts.method.toUpperCase())
+    &&!url.startsWith('/api/history/')&&typeof historyWriteStarted==='function';
+  if(track) historyWriteStarted();
+  let response;
+  try { response=await fetch(url, opts);return response; }
   catch (e) { throw netErr(`${tech} · ${String((e && e.message) || e)}`); }
+  finally { if(track) await historyWriteFinished(response); }
 };
 const getSafe = (url, tech) => rawFetch(url, { headers: { Accept: 'application/json' } }, tech);
 const postSafe = (url, body, tech) => rawFetch(url, {

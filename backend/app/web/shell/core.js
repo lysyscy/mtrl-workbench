@@ -917,6 +917,7 @@ function applyWho(d) {
      ⛔ 不必为它新开一路请求（也⛔ 别只挂在 `reloadTheme` 上 —— 那一路上次就是这么把主题坑了的：
      只有进过"系统设置"页才生效）。⚠️ 取不到（`me` 为空 / 字段缺失）⇒ 什么都不做 = **保持标准档** ✓ */
   if (me.ui_scale_css) { CUR_UI_SCALE = String(me.ui_scale || ''); applyUiScale(me.ui_scale_css); }
+  if(typeof historyRefresh==='function') historyRefresh();
 }
 async function reloadWho() { applyWho(await API.users()); }
 

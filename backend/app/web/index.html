@@ -558,6 +558,11 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
     <div class="tb">
       <h1 id="ttl">—</h1>
       <div class="sp">
+        <span id="historyControls" style="display:inline-flex;align-items:center;gap:calc(6px * var(--fscale));margin-right:calc(10px * var(--fscale))">
+          <button class="btn sm" data-act="historyUndo" disabled>撤销</button>
+          <button class="btn sm" data-act="historyRedo" disabled>重做</button>
+          <span class="mut sm" role="status" aria-live="polite"></span>
+        </span>
         <span class="pill" id="who"></span>
       </div>
     </div>
@@ -1533,6 +1538,7 @@ V.m15=()=>{
   <script src="/static/shell/legacy.js"></script>
   <script src="/static/shell/api.js"></script>
   <script src="/static/shell/core.js"></script>
+  <script src="/static/shell/history.js"></script>
   <script src="/static/shell/print-export.js"></script>
   <link rel="stylesheet" href="/static/shell/mechanical-workbench.css">
   <script src="/static/shell/mechanical-workbench.js"></script>

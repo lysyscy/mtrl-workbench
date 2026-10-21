@@ -111,6 +111,14 @@ IPP回执按协议成功类别判定接收；属性替换或冲突提示核对�
 - deleted时间戳与业务撤销voided语义不同；快照保留金额原始精度。依赖规则见 docs/guides/deployment.md §六，行数与读取预算只回 docs/reference/thresholds.md，原计划的“超线禁合入”旧文字已退场。
 - 本机事实与写文件/运行命令的坑回 docs/guides/operations.md §三/§四；方法回 docs/guides/development-and-verification.md。服务调用外部程序时，必须按服务账户身份复核路径可达。
 
+### 安全操作历史
+
+`core/history.py` 在 `session_scope` 事务内观察变更，`history_bindings.py` 装配允许的入口、模型和字段；可逆快照或不支持边界与业务写入同事务提交到 `operation_history`。账号绑定键由完整账号摘要生成，原账号不限长度；历史值仅留服务端。独立连接的拟付款方式入口单独登记不支持边界。
+
+`history_api.py` 核当前在用账号，按账号事务锁串行写入/撤销；重放核预期历史头、锁定目标及关联项目，比较完整值和 PostgreSQL xmin，整批通过后才修改。可信逆操作只为下一步匹配值更新版本，保持连续撤销/重做与外部冲突检测。规则或表结构变化不猜测重放。
+
+壳 `history.js` 持有摘要、写入等待和快捷键，静态按钮位于用户名左侧；复用 `API.send` 的统一跨页标脏和现有加载链。`api.js` 在写入后刷新历史（包含表单303回跳），切换账号立即清旧摘要。功能范围回《说明书》§1.5.1。
+
 ## 三、主题与壳加载
 
 主题行为回交付面《说明书》§7.7与 docs/guides/frontend-design.md；以下只记录工程实现形态。

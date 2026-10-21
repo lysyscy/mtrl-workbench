@@ -54,7 +54,8 @@ def get_session() -> Iterator[Session]:
         yield session
 
 
-DBSession = Depends(get_session)
+# 写入提交后才发送回执，顶栏历史与返回结果使用同一个已提交事务。
+DBSession = Depends(get_session, scope='function')
 
 
 def notice_filters(period, project, category, approve_status, pay_status) -> NoticeFilters:
@@ -388,7 +389,7 @@ def api_jc_supplier(req: JcSupplierIn, session: Session = DBSession) -> dict:
     if problem:
         return {"ok": False, "message": problem}
     row.jc_supplier = str(req.supplier or "").strip()[:128]
-    session.commit()
+    session.flush()
     return {"ok": True, "notice_id": int(row.id), "supplier": row.jc_supplier,
             "message": (f"已录入集采实际供应商：{row.jc_supplier}"
                         if row.jc_supplier else "已清空集采实际供应商")}

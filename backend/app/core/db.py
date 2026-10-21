@@ -65,13 +65,22 @@ def session_scope() -> Iterator[Session]:
     ⚠️ 长耗时任务（抓取 / 渲染 / 打包）**先取完数据、关掉写事务再做**，不得持写事务。
     """
     session = get_session_factory()()
+    tracker = None
     try:
+        from app.core.history import track
+        tracker = track(session)
         yield session
+        if tracker is not None:
+            tracker.prepare()
         session.commit()
+        if tracker is not None:
+            tracker.committed()
     except Exception:
         session.rollback()
         raise
     finally:
+        if tracker is not None:
+            tracker.close()
         session.close()
 
 
