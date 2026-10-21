@@ -4,12 +4,12 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** claimed
+**Status:** done
 
 - [x] 标准单据号精确匹配；未识别文本与未找到单据号分列，旧勾选保护继续生效。
 - [x] 已剔除单据展示名称、项目、收款单位、日期、审批金额及来源；去处理仅定位这些记录，支持清除定位。
 - [x] 手动剔除、自动剔除标签区分；悬停显示现行命中规则，不伪称旧标记保存了历史依据。
-- [ ] 相关回归、资料同步、提交推送与运行服务验收完成。
+- [x] 相关回归、资料同步、提交推送与运行服务验收完成。
 
 ---
 
@@ -22,3 +22,7 @@
 **2026-10-21 · 实施与验证。** 只认 FKTZS/QTZC＋YYYYMM＋四位序号；区分原始未识别文本与有效格式但缺失的单据号。剔除／撤单明细保留名称、项目、日期、收款单位、审批金额和来源；重号中的剔除记录也展示。去处理按内部ID过滤、清空勾选并提供清除定位；搜索能搜到来源标签。领域共用现有 match_exclude_rule，接口输出当前规则解释，不变更业务标记、不做迁移、不重算历史。
 
 **2026-10-21 · 核验。** 最终命令（backend）：`.venv/Scripts/python.exe -X utf8 -m pytest tests/test_notice_paste_selection.py tests/test_tail309_notice_selection.py tests/test_wired_m03_list.py tests/test_notice_list.py tests/test_notice_action_api.py tests/test_classify.py tests/test_shell_part_routes.py tests/test_notice_list_source.py -q`，退出0，88项通过，42.58秒。1440标准字号／1024宽125%字号的模拟页面实测无横向溢出、处理按钮可达；截图人工检查通过。证据收尾归 `.artifacts/archive/tail-385/notice-paste-20261021/`。首次扩大选集发现旧骨架字面断言未跟随既有 notice-table 类（HEAD已如此），更新为当前真实TBL调用；没有修改产品表结构。未用真实付款、恢复剔除或打印来验证。
+
+**2026-10-21 · 推送与加载。** 3ce90b03a18772692ed54da1a7692bfcff916a51 已推送私库 master，ls-remote 完整SHA一致；真实提交钩子 syntax_audit／bytes_guard／凭据文件检查均通过。按既有授权重启服务，应用PID26224→14924，GET /app 200，四个脚本与源码逐字节一致。登录页面实际验证：无效文本、未找到单号分列；两条真实剔除记录的详情与当前规则提示可见；“去处理”仅筛出这两条、勾选0行。未执行生产业务写入。
+
+**2026-10-21 · 现场补修与收尾。** 实测发现剔除专用视图有记录时仍输出“没有付款通知书”的旧空态分支，新增断言先红后绿；只修模板的空态条件，未改金额合计口径。受影响粘贴／选择／列表／脚本路由40项退出0；线上重新加载确认2条记录且无错误空态。最终HTML与源码一致，后端无需重复重启。核验输出已归档、workspace_check run-closed及closed均ok；后续提交仅含该模板补修、回归及本票收尾资料。

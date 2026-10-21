@@ -736,7 +736,7 @@ V.m03=()=>{
         13:rs=>N2(rs.reduce((a,n)=>a+n.ss,0)),
         14:rs=>N2(rs.reduce((a,n)=>a+n.sp,0))},
         {tip:'当前筛选结果中「非剔除」行的合计 —— 剔除行不计入（与欠款口径一致）',leadCls:'fl'})
-       : EMPTYROW(thCount(NT_THEAD), '当前筛选条件下没有付款通知书'+(ntDraftOn()?'（正在新增 1 行：填完点该行「保存」）':''), '换个筛选条件；或点右上角「＋ 手动新增通知书」补一行、或「抓取 i8 付款通知书（按月）」'));
+       : list.length?'':EMPTYROW(thCount(NT_THEAD), '当前筛选条件下没有付款通知书'+(ntDraftOn()?'（正在新增 1 行：填完点该行「保存」）':''), '换个筛选条件；或点右上角「＋ 手动新增通知书」补一行、或「抓取 i8 付款通知书（按月）」'));
   return `
     <div class="tip"><b>统计结算 / 统计付款金额</b>只能往下调（上限 = 审批金额）；<b>付款金额</b>手改只本次会话有效，<b>统计两金额</b>才持久（留痕、不被导入覆盖）。</div>
   <div class="selbar notice-selection">

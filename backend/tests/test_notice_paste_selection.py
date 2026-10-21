@@ -143,6 +143,7 @@ def test_excluded_details_and_process_only_those_exact_records(ui_page):
         assert text in result
     p.get_by_role('button',name='去处理',exact=True).click()
     assert set(rows(p))=={'104','108'}
+    assert '当前筛选条件下没有付款通知书' not in p.inner_text('#view')
     assert _ids(p)==[]  # Never carry active payment picks into archive processing.
     assert '仅显示本次已剔除或撤单单据' in p.inner_text('#view')
     assert p.locator('tr[data-notice-id="104"] .tag').filter(has_text='手动剔除').count()==1
