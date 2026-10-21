@@ -149,10 +149,12 @@ def test_恢复剔除人工与规则命中的都放回且必须勾选():
     assert rep.restored_by_rule == [2], "「其中规则命中的那几条」要单独记一份（回执要分档说清）"
     assert rep.untouched == [3], "本就未剔除的行不该被算成恢复"
     assert not hasattr(rep, "kept_by_rule"), "旧字段 `kept_by_rule`（=不恢复）已随口径作废，别留着骗人"
-    # **分开回报**（口径要求界面把两类说清）＋ 把"要长期剔除该改规则"讲明白
+    # 分开回报，并说明重抓保护当前状态；再次剔除须由用户手动操作。
     assert "已恢复 2 条" in rep.message
     assert "「规则命中」" in rep.message and "一并放回" in rep.message
     assert "不恢复" not in rep.message, "回执还在说「不恢复」（与实际行为相反 = 界面在说假话）"
+    assert "再次抓取会保留当前状态" in rep.message
+    assert "手动剔除" in rep.message
 
 
 def test_批量人工剔除必须勾选():

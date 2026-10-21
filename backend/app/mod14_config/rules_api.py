@@ -28,7 +28,7 @@ from app.mod03_notice import rules_repository as RR
 
 router = APIRouter(tags=["mod14"])
 
-NO_RECOMPUTE_NOTE = "（⚠️ 本次改动**只影响后续抓取**；已产生的剔除标记**不重算**，必要时再抓一次。）"
+NO_RECOMPUTE_NOTE = "（规则用于后续首次抓入的新单据；已有单据的剔除状态保持不变，再次抓取也不重算。）"
 
 
 # ============================================================ 读

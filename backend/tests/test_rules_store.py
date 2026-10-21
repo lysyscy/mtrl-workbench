@@ -173,6 +173,10 @@ def test_付款域不反向依赖配置域():
 def test_规则端点已注册且写侧恒200():
     """4 个端点齐；写侧**恒 HTTP 200 ＋ `ok` 标志**（拒绝是可预期的，那句中文必须给用户看）。"""
     from app.main import create_app
+    from app.mod14_config.rules_api import NO_RECOMPUTE_NOTE
+
+    assert "首次抓入的新单据" in NO_RECOMPUTE_NOTE
+    assert "再次抓取也不重算" in NO_RECOMPUTE_NOTE
 
     paths = create_app().openapi()["paths"]
     assert ("GET", "POST") == tuple(sorted(m.upper() for m in paths["/api/m14/rules"]))

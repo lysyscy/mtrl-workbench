@@ -253,7 +253,7 @@ class RestoreReport:
             parts.append(
                 f"其中 {len(self.restored_by_rule)} 条是「规则命中」的 —— 已一并放回，"
                 "重新计入统计与付款"
-                "（要长期剔除请改「规则配置」，改完再抓一次才会重新剔除）"
+                "（再次抓取会保留当前状态；如需再次剔除，请选中该单据手动剔除）"
             )
         if self.untouched:
             parts.append(f"另有 {len(self.untouched)} 条本就未剔除")
@@ -272,8 +272,8 @@ def restore_excluded(rows: list[dict], picked) -> RestoreReport:
        `mod14_config.rules_api` 明写「改规则**不重算**历史剔除标记」，而再次导入时
        `merge.PROTECTED` 又不覆盖 `excluded` / `exclude_source`
        ⇒ 规则命中的行**没有任何放开出口**（按钮却照旧提示"要放开请改规则配置"）。
-       既然那条路走不通，就让「恢复剔除」本身能放开；想让某行长期被剔除，**改规则配置**仍是正解
-       —— 只是需要**再抓一次**才生效（回执已如实说明）。
+       既然那条路走不通，就让「恢复剔除」本身能放开；已有行再次抓取保持当前状态，
+       需要再次剔除时由用户手动操作（2026-10-21 用户确认）。
     ⚠️ 代价（用户已知）：恢复后该行**重新进统计与付款**；再次抓取**不会**自动反弹（人工标记受保护）。
     """
     want = {int(x) for x in (picked or ())}
