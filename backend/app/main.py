@@ -420,6 +420,10 @@ def create_app() -> FastAPI:
     def shell_core_js(request: Request) -> Response:
         return _shell_js(request, "core.js")
 
+    @app.get("/static/shell/history.js", include_in_schema=False)
+    def shell_history_js(request: Request) -> Response:
+        return _shell_js(request, "history.js")
+
     @app.get("/static/shell/mechanical-workbench.js", include_in_schema=False)
     def mechanical_workbench_js(request: Request) -> Response:
         return _shell_js(request, "mechanical-workbench.js")
