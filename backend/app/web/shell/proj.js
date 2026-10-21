@@ -487,7 +487,7 @@ const ntSelectable=n=>ntPayCand(n)||!!n.excl;
    · 正常行 → 空（分类下拉照旧）
    ⚠️ 撤单行**不写 `n.excl`** —— 它没被剔除；判据永远是 `ntVoid`（不新增枚举值、不改 `ENUMS.cat`）。 */
 const ntArchLabel=n=>n.exsource==='manual'?'手动剔除':n.exsource==='rule'?'自动剔除':'剔除（来源未知）';
-const ntArchTag=n=>n.excl?`<span class="tag t-dg" title="${esc(n.exrule||'剔除来源未记录')}">${esc(ntArchLabel(n))}</span>`:(ntVoid(n)?tag('i8 已撤单','wn'):'');
+const ntArchTag=n=>n.excl?`<span class="tag t-${n.exsource==='manual'?'bl':n.exsource==='rule'?'dg':'in'}" title="${esc(n.exrule||'剔除来源未记录')}">${esc(ntArchLabel(n))}</span>`:(ntVoid(n)?tag('i8 已撤单','wn'):'');
 const ntArchCls=n=>n.excl?'ex':(ntVoid(n)?'ex ntvoid':'');
 /* 该行是否被「统计结算金额 / 统计付款金额」手改过（留痕 = 唯一事实来源，两个字段各判各的） */
 const impManSS=n=>hasT(n,'统计结算金额');

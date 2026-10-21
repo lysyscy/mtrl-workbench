@@ -412,6 +412,8 @@ def test_通知书勾选后改付款金额保留两轴位置(ui_page, count, fie
     }''', count)
     p.locator('[data-act="pick"][data-id="1"]').click()
     target = p.locator(f'[data-act="editss"][data-k="{field}"][data-id="16"]')
+    # Enter editing before positioning; otherwise the virtual window can replace the setup target.
+    target.focus()
     target.scroll_into_view_if_needed()
     target.fill('100')
     snapshot = '''()=>{const v=document.querySelector('#view'),t=v.querySelector('.tw');
@@ -748,7 +750,16 @@ def test_集采推进后保留纵向位置_有无横向溢出(ui_page, count, wi
     before = p.evaluate(snapshot)
     assert before['wide'] == (width == 1440), before
     assert before['viewTop'] > 20, before
+    # Playwright may scroll both ancestors again before pointerdown; preserve the action's starting position.
+    p.evaluate('''() => {
+      document.addEventListener('pointerdown',()=>{
+        const v=document.querySelector('#view');
+        const tw=v.querySelector('table[data-sort-key="m11:jc"]').closest('.tw');
+        window.jcClickScroll={viewTop:v.scrollTop,tableTop:tw.scrollTop};
+      },{once:true,capture:true});
+    }''')
     button.click()
+    before = p.evaluate('jcClickScroll')
     p.wait_for_function("JCs.find(j=>j.id==='6').arch==='资产处'")
     p.evaluate('() => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
     after = p.evaluate(snapshot)

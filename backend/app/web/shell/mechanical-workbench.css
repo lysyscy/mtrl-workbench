@@ -16,7 +16,7 @@
 .mw-root .tw{min-height:0;max-height:calc(100vh - 278px)}
 .mw-root .dt th{font-size:calc(11.5px * var(--fscale));line-height:1.5;padding:calc(7px * var(--fscale)) calc(8px * var(--fscale))}
 .mw-root .dt td{height:calc(34px * var(--fscale));padding:calc(3px * var(--fscale)) calc(6px * var(--fscale));font-size:calc(12px * var(--fscale))}
-.mw-root .dt .num{font-family:var(--fm);font-size:calc(12px * var(--fscale));font-variant-numeric:tabular-nums}
+.mw-root .dt .num{font-family:var(--fm);font-size:calc(13px * var(--fscale));font-variant-numeric:tabular-nums}
 .mw-company{min-width:calc(1300px * var(--fscale))}
 .mw-company th,.mw-company td{min-width:calc(105px * var(--fscale))}
 .mw-company th:first-child,.mw-company td:first-child{min-width:calc(42px * var(--fscale))}

@@ -403,6 +403,8 @@ function fitWideTable(table){
   const numeric=getComputedStyle(table.querySelector('td.num')||table);
   const context=document.createElement('canvas').getContext('2d');
   context.font=`600 ${numeric.fontSize} ${numeric.fontFamily}`;
+  // Canvas has no tabular-nums setting; budget every digit at the widest glyph.
+  const digitWidth=Math.max(...Array.from('0123456789',d=>context.measureText(d).width));
   const procurement=[28,38,92,80,128,150,0,0,150,0,0,0,0,0,85,70,75,65,110,85];
   const widths=[...row.cells].map((cell,i)=>{
     if(getComputedStyle(cell).display==='none') return 0;
@@ -418,7 +420,8 @@ function fitWideTable(table){
       if(cell.colSpan===1&&widths[column]&&(cell.classList.contains('num')||cell.querySelector('input.num'))){
         const input=cell.querySelector('input');
         const text=input?input.value:cell.textContent.trim();
-        widths[column]=Math.max(widths[column],context.measureText(text).width+24+cell.querySelectorAll('button').length*22);
+        const textWidth=context.measureText(text.replace(/[0-9]/g,'')).width+(text.match(/[0-9]/g)||[]).length*digitWidth;
+        widths[column]=Math.max(widths[column],textWidth+(input?36:24)+cell.querySelectorAll('button').length*22);
       }
       if(table.dataset.sortKey==='m07:bigtable') cell.classList.toggle('vsep',[3,7,14,17,18,19].includes(column));
       column+=cell.colSpan;
@@ -441,6 +444,8 @@ function fitWideTable(table){
 }
 let layoutResizeTimer;
 window.addEventListener('resize',()=>{clearTimeout(layoutResizeTimer);layoutResizeTimer=setTimeout(layoutTables,120);});
+// Re-measure widths and frozen offsets when a locally served face replaces the fallback.
+document.fonts.addEventListener('loadingdone',layoutTables);
 
 const WIRED=new Set(['home','m03','m01','m02','m05','m06','m07','m08','m09','m10','m14','m11','m15',
   /* ⭐ `§19`「暂留件收口」（2026-09-21）：设置 —— 它**全读后端真数据**（`/api/m14/settings`）

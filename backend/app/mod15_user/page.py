@@ -24,10 +24,10 @@ _PAGE = """<!DOCTYPE html>
      ⭐ 变量名一律用**主题表里真有的**（`--bg` `--sf` `--bd` `--tx` `--mut` `--pri` `--dg` `--dg-l` `--on` `--shadow`），
         ⛔ 别自造 `--fg` / `--card` 这种"看着像"的名字：那样既不生效、又不报错（最坏的一种）。*/
   body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-        background:var(--bg);font:14px/1.6 system-ui,"Microsoft YaHei",sans-serif;color:var(--tx)}}
+        background:var(--bg);font:14px/1.6 var(--fs);color:var(--tx)}}
   .box{{width:340px;background:var(--sf);border:1px solid var(--bd);
         border-radius:var(--r);padding:24px 22px;box-shadow:var(--shadow-md)}}
-  h1{{margin:0 0 4px;font-size:17px}}
+  h1{{margin:0 0 4px;font-size:17px;font-weight:600}}
   .sub{{margin:0 0 16px;font-size:12px;color:var(--mut)}}
   label{{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}}
   input{{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--bd);

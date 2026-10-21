@@ -27,9 +27,12 @@ def check_geometry(p):
 
 
 @pytest.mark.parametrize('count', [30, 450])
-def test_布局收尾覆盖重画显隐缩放及虚拟窗口(ui_page, count):
+@pytest.mark.parametrize('scale', [1, 1.25])
+def test_布局收尾覆盖重画显隐缩放及虚拟窗口(ui_page, count, scale):
     p = ui_page
     p.add_style_tag(content=render_theme('默认'))
+    p.evaluate("scale=>document.documentElement.style.setProperty('--fscale',scale)", scale)
+    p.evaluate('document.fonts.ready')
     _load(p, 'base')
     p.evaluate("""count=>{
       const row=JCs[0];JCs.splice(0,JCs.length,...Array.from({length:count},(_,i)=>({...row,id:String(i+1)})));

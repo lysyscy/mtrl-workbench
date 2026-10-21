@@ -22,7 +22,7 @@ from ipaddress import ip_address, ip_network
 from pathlib import Path
 from typing import AsyncIterator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
@@ -350,6 +350,19 @@ def create_app() -> FastAPI:
             content=render_theme(name), media_type="text/css",
             headers={"Cache-Control": "no-cache"},
         )
+
+    @app.get("/static/fonts/{name}", include_in_schema=False)
+    def font_asset(request: Request, name: str) -> Response:
+        media = {
+            "MiSans-Regular.woff2": "font/woff2",
+            "MiSans-Medium.woff2": "font/woff2",
+            "MiSans-Semibold.woff2": "font/woff2",
+            "COPYRIGHT.txt": "text/plain",
+            "MiSans-License.pdf": "application/pdf",
+        }
+        if name not in media:
+            raise HTTPException(status_code=404)
+        return _static_file(request, _APP_DIR / "web" / "fonts" / name, media[name])
 
     # ⭐ **新前端壳**（`app/web/index.html`）—— 走「原型直接接数据」（用户 2026-09-17 裁定）。
     #    ⚠️ 挂在 `/app`（**不抢 `/`**）：打样期间与旧服务端渲染页**并存** ⇒ 逐页切换、随时可停。

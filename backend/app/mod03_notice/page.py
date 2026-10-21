@@ -110,6 +110,12 @@ def nav_violations() -> list[str]:
 #    （中性档 `--in-*` / 特殊档 `--vi-*` / 侧栏 `--sb-*` / 阴影 `--shadow-*` / 几何与字体
 #    `--r` `--r2` `--fs` `--fm`）**一并收进本表** ⇒ 壳此后**零本地变量定义**（只有一条 `<link>`）。
 #    ⛔ 再往壳里写色值字面量或自带 `:root` ⇒ `test_theme.py` 的红灯（已扫壳）。
+FONT_CSS = """
+@font-face{font-family:MiSans;src:url('/static/fonts/MiSans-Regular.woff2') format('woff2');font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:MiSans;src:url('/static/fonts/MiSans-Medium.woff2') format('woff2');font-style:normal;font-weight:500;font-display:swap}
+@font-face{font-family:MiSans;src:url('/static/fonts/MiSans-Semibold.woff2') format('woff2');font-style:normal;font-weight:600;font-display:swap}
+"""
+
 THEME_CSS = """
 :root{
   /* 中性 / 表面 */
@@ -126,6 +132,7 @@ THEME_CSS = """
   /* 中性档（普通 / 未付款）与特殊档（集采 / 紫）—— 同样四档成组 */
   --in:#64748b; --in-d:#475569; --in-l:#f1f5f9; --in-bd:#e2e8f0;
   --vi:#7c3aed; --vi-d:#6d28d9; --vi-l:#f5f3ff; --vi-bd:#ddd6fe;
+  --bl:#2563eb; --bl-d:#1e40af; --bl-l:#eff6ff; --bl-bd:#bfdbfe;
   /* 行态 / 可改格 */
   --row-hover:#fafbfc; --ex-bg:#fafafa; --hl:#fff8f0; --hl-hover:#fef3c7;
   --sel:#e0e7ff; --void-bg:#fffbf5; --draft:#fffdf5; --edit-l:#fffbeb; --edit-bd:#fcd34d;
@@ -143,10 +150,11 @@ THEME_CSS = """
   --shadow-md:0 12px 32px #0f172a2e; --shadow-toast:0 8px 22px #0f172a3d; --mask:#0f172a66;
   /* 几何与字体（非颜色；壳与页面共用同一份，故一并收进真源） */
   --r:8px; --r2:12px;
-  --fs:'Microsoft YaHei','PingFang SC',system-ui,-apple-system,'Segoe UI',sans-serif;
-  --fm:ui-monospace,'Cascadia Mono',Consolas,monospace;
+  --fs:'MiSans','Microsoft YaHei','PingFang SC',system-ui,sans-serif;
+  --fm:var(--fs);
 }
 """
+THEME_CSS += FONT_CSS
 
 # ============================================================ 多主题（《说明书》§7.7）
 # ⭐ 用户 2026-09-20 定：预置主题清单**≥10 套**（"换着玩"）。
@@ -207,7 +215,7 @@ _PURE_WHITE = "#ffffff"
 _SB_ANCHOR = "#070b14"
 
 #: 三个状态色 ＋ 中性档 ＋ 特殊档的**种子**（每套主题一样，只有色相不同）
-_STATE_SEEDS = {"ok": "#16a34a", "wn": "#d97706", "dg": "#dc2626",
+_STATE_SEEDS = {"ok": "#16a34a", "wn": "#d97706", "dg": "#dc2626", "bl": "#2563eb",
                 "in": "#64748b", "vi": "#7c3aed"}
 
 
@@ -298,8 +306,8 @@ def _derive(seed: dict) -> dict[str, str]:
 #: 几何与字体 —— **所有主题共用**（不是颜色；换主题不该改变尺寸与字号）
 GEOMETRY = {
     "--r": "8px", "--r2": "12px",
-    "--fs": "'Microsoft YaHei','PingFang SC',system-ui,-apple-system,'Segoe UI',sans-serif",
-    "--fm": "ui-monospace,'Cascadia Mono',Consolas,monospace",
+    "--fs": "'MiSans','Microsoft YaHei','PingFang SC',system-ui,sans-serif",
+    "--fm": "var(--fs)",
 }
 
 #: ⭐ **预置主题清单的种子表**（加一套 = 加一行；《说明书》§7.7 列了清单与取向）
@@ -366,7 +374,7 @@ def render_theme(name: str) -> str:
             f"主题「{name}」缺变量 {missing} —— §7.7：每套必须覆盖同一组变量名，缺项即显式报错"
             "（⛔ 不得静默沿用旧值）")
     body = "\n".join(f"  {k}:{v[k]};" for k in _var_names())
-    return ":root{\n" + body + "\n}\n"
+    return ":root{\n" + body + "\n}\n" + FONT_CSS
 
 
 def _var_names() -> list[str]:
@@ -428,7 +436,9 @@ VSEP_CSS = ".dt th.vsep,.dt td.vsep{border-left:2px solid var(--bd)}"
 # ⚠️ 本段**不得再出现色值字面量** —— 一律走 `var(--…)`（换主题只改 `THEME_CSS` 一份）。
 BASE_CSS = THEME_CSS + """
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.6 "Microsoft YaHei","PingFang SC",system-ui,sans-serif}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.6 var(--fs);font-variant-numeric:tabular-nums}
+button,input,select,textarea{font-family:var(--fs);font-variant-numeric:tabular-nums}
+b,strong{font-weight:600}
 .wrap{max-width:1360px;margin:0 auto;padding:16px 18px 40px}
 header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 header h1{font-size:18px;margin:0;font-weight:600}
@@ -458,7 +468,7 @@ details.tip ul{margin:6px 0 0;padding-left:18px;line-height:1.8}
 /* 全站分组侧栏导航（唯一出口 `nav_html()`）—— **固定定位** ⇒ 调用方不必改 HTML 结构 */
 .sbar{position:fixed;left:0;top:0;bottom:0;width:196px;overflow:auto;z-index:20;
       background:var(--sf);border-right:1px solid var(--bd);padding:10px 8px;font-size:12.5px}
-.sbar .sb-h{font-weight:700;font-size:13px;margin:2px 0 8px 4px}
+.sbar .sb-h{font-weight:600;font-size:13px;margin:2px 0 8px 4px}
 .sbar .sb-g{margin:9px 0 3px 4px;font-size:11px;color:var(--mut)}
 .sbar .sb-i{display:flex;gap:6px;align-items:center;padding:4px 8px;border-radius:6px;color:var(--tx);
             text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

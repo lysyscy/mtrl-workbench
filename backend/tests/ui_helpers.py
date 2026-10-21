@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import pytest
 from playwright.sync_api import sync_playwright
 from tests.shell_src import SHELL_PATH
+from app.mod03_notice.page import render_theme
 
 @pytest.fixture
 def ui_page():
@@ -22,6 +23,10 @@ def ui_page():
                 req.fulfill(body=html.replace('<script>boot();</script>', '<script>window.testReady=true;</script>'), content_type='text/html')
             elif path.startswith('/static/shell/'):
                 req.fulfill(body=(web / 'shell' / path.rsplit('/', 1)[-1]).read_text(encoding='utf-8'), content_type='text/css' if path.endswith('.css') else 'application/javascript')
+            elif path.startswith('/static/fonts/'):
+                req.fulfill(body=(web / 'fonts' / path.rsplit('/', 1)[-1]).read_bytes(), content_type='font/woff2')
+            elif path == '/static/theme.css':
+                req.fulfill(body=render_theme('默认'), content_type='text/css')
             else:
                 req.fulfill(body='', content_type='text/css')
 
@@ -37,5 +42,6 @@ def ui_page():
           API.jcSupplier=async b=>{window.savedSupplier=b;return {ok:false,message:'隔离写出口已捕获'};};
           render();
         }''')
+        page.evaluate('document.fonts.ready')
         yield page
         browser.close()
