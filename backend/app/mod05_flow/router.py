@@ -1,4 +1,4 @@
-"""`MOD-05` 路由 —— **API（JSON）＋ 页面（服务端渲染 · PRG）**。
+"""MOD-05 路由：JSON API 与壳调用的表单写入回执。
 
 ⚠️ 薄层：判定与形态全在 `domain.py`（纯函数）；组装在 `service.py`；页面在 `view.py`。
 ⚠️ 取数经 `Depends` 暴露 ⇒ 自检可注入桩（**不连库**），与 `MOD-02` / `MOD-04` 同款。
@@ -10,11 +10,10 @@
 from __future__ import annotations
 
 from typing import Callable
-from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Query
 # ⚠️ 2026-09-21：`HTMLResponse` 已无人用（本模块的服务端渲染页全清）⇒ 从 import 里去掉。
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.core.db import session_scope
@@ -271,7 +270,7 @@ def api_revoke(
 #    （付款统计）＋ PRG `POST /m05/revoke`（壳走 `POST /api/m05/flows/{id}/revoke` ✓）＋ **`view.py`（451 行）**。
 #    ⇒ 这四页的读一律走 **JSON API**（`/api/m05/flows` · `/debt` · `/ledger` · `/stats`，壳在用 ✓）；
 #    ⛔ 别再往本文件加页面路由（`D18` 的口径：新页面 = 新壳 + API）。
-# ⚠️ **唯一例外（⛔ 不许删）**：**三个 PRG**
+# ⚠️ 保留三个壳正在调用的表单写入口；回 JSON 回执，不再跳转旧页面。
 #    （`POST /m05/opening` · `/m05/opening/delete` · `/m05/ledger/remark`）**新壳正在用**（另有真机 `_e2e_m05_wired.py`）。
 # 历史付款导入已退出系统，源码与说明在docs/archive/retired-imports-20261015。
 
@@ -348,7 +347,7 @@ def api_export_total_debt(
 
 
 
-# --------------------------------------------------------------- 动作（303 回原查询）
+# --------------------------------------------------------------- 表单写动作（JSON 回执）
 
 
 @router.post("/m05/opening")
@@ -356,12 +355,11 @@ def act_opening(
     category: str = Form(...), project_id: int = Form(...), cutoff_ym: str = Form(""),
     settle_amount: str = Form(""), paid_amount: str = Form(""), remark: str = Form(""),
     end_ym: str = Form(""),
-) -> RedirectResponse:
-    """录入 / 覆盖**期初占位行**（同一「口径 + 项目 + 截止年月」重复录入 = 覆盖）→ 303 回**台账页**。
+) -> dict:
+    """录入 / 覆盖期初占位行；直接回执给壳，避免写入后跳转已退役页面。
 
     ⚠️ **参数一律 `Form`**（同上：期初表单的输入全在 body）。
     """
-    q = {"project_id": project_id, "end_ym": end_ym}
     try:
         if not str(cutoff_ym).strip():
             raise MustReportError("期初占位行必须填「截止年月」")
@@ -370,45 +368,37 @@ def act_opening(
                 s, category=category, project_id=int(project_id), cutoff_ym=str(cutoff_ym).strip(),
                 settle_amount=settle_amount or 0, paid_amount=paid_amount or 0, remark=remark,
             )
-        return _back(q, f"已录入期初占位行（{category} · 截止 {cutoff_ym}）", path="/m05/ledger")
+        return {"ok": True, "message": f"已录入期初占位行（{category} · 截止 {cutoff_ym}）"}
     except MustReportError as exc:
-        return _back(q, exc.message, kind="err", path="/m05/ledger")
+        return JSONResponse(status_code=400, content={"ok": False, "message": exc.message})
 
 
 @router.post("/m05/opening/delete")
 def act_opening_delete(
     opening_id: int = Form(...), project_id: int = Form(0), end_ym: str = Form("")
-) -> RedirectResponse:
-    """删除期初占位行 → 303 回台账页。⚠️ **参数一律 `Form`**（同上）。"""
-    q = {"project_id": project_id, "end_ym": end_ym}
+) -> dict:
+    """删除期初占位行并回执；参数仍用 Form。"""
     with session_scope() as s:
         n = repo.delete_opening(s, opening_id)
-    return _back(q, f"已删除 {n} 条期初占位行（台账首行随之消失）", kind="wn", path="/m05/ledger")
+    return {"ok": True, "message": f"已删除 {n} 条期初占位行（台账首行随之消失）"}
 
 
 @router.post("/m05/ledger/remark")
 def act_remark(
     category: str = Form(...), project_id: int = Form(...), ym: str = Form(""),
     remark: str = Form(""), end_ym: str = Form(""),
-) -> RedirectResponse:
-    """写 / 清台账备注（**空串 = 清除该格**；键 = 口径 + 项目 + 月）→ 303 回**台账页**。
+) -> dict:
+    """写 / 清台账备注（空串 = 清除该格；键 = 口径 + 项目 + 月）并回执。
 
     ⚠️ **参数一律 `Form`**（同上）。
     """
     with session_scope() as s:
         text = repo.set_remark(s, category=category, project_id=int(project_id), ym=ym, remark=remark)
     tip = "已清除该格备注" if not text else f"备注已存：{text}"
-    return _back({"project_id": project_id, "end_ym": end_ym}, tip, path="/m05/ledger")
+    return {"ok": True, "message": tip}
 
 
 # --------------------------------------------------------------- 内部
-
-
-def _back(query: dict, msg: str, *, kind: str = "ok", path: str = "/m05") -> RedirectResponse:
-    """303 回原查询（PRG）—— 防止刷新重放提交。"""
-    data = {k: v for k, v in query.items() if v not in (None, "")}
-    data.update({"msg": msg, "msgkind": kind})
-    return RedirectResponse(f"{path}?{urlencode(data)}", status_code=303)
 
 
 def _first_project_id() -> int | None:

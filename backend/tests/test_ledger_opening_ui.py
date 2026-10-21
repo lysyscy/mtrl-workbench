@@ -2,6 +2,7 @@
 from playwright.sync_api import expect
 from app.mod03_notice.page import render_theme
 from tests.ui_helpers import ui_page  # noqa: F401
+import pytest
 
 
 def test_无期初两侧历史月和自动付款只读_录入默认沿当前项目(ui_page):
@@ -64,3 +65,40 @@ def test_期初默认月异步切项目不串响应_失败取消不改项目且�
       cutoffResolvers['2']({sides:[{label:'机械',opening_default:{cutoff_ym:'2021-02'}}]});
       await pending;return [lgOn,lgCutPending,lgPjName,lgCut,savedOpening];
     }""") == [False, False, '丙仓', '2022-03', 0]
+
+
+@pytest.mark.parametrize('accepted', [True, False])
+def test_opening_receipt_closes_only_saved_draft(ui_page, accepted):
+    p = ui_page
+    p.route('**/m05/opening', lambda r: r.fulfill(status=200 if accepted else 400,
+        json={'ok': accepted, 'message': '已录入期初' if accepted else '金额不能为负数'}))
+    p.evaluate('''async()=>{
+      VIEW='m05';ledProj='测试仓库';
+      M05.ledger={project_id:1,sides:[{label:'辅材',opening_default:{cutoff_ym:'2025-11'},display_rows:[]}]};
+      reloadM05=async()=>{Object.keys(LOADERS).forEach(x=>LOADED.add(x));render();};
+      await ACT.addLg({dataset:{sc:'辅材'}});
+    }''')
+    p.locator('#lgS').fill('1510869.33')
+    p.locator('#lgP').fill('1510869.33')
+    p.locator('[data-act="addLgOk"]').click()
+    if accepted:
+        expect(p.locator('#lgS')).to_have_count(0)
+        expect(p.locator('.toast').last).to_contain_text('期初占位行已录入')
+    else:
+        expect(p.locator('#lgS')).to_have_value('1510869.33')
+        expect(p.locator('.toast').last).to_contain_text('金额不能为负数')
+
+
+def test_saved_opening_refresh_failure_is_not_reported_as_rejected(ui_page):
+    p = ui_page
+    p.route('**/m05/opening', lambda r: r.fulfill(json={'ok': True, 'message': '已保存'}))
+    p.evaluate('''async()=>{
+      VIEW='m05';ledProj='测试仓库';
+      M05.ledger={project_id:1,sides:[{label:'辅材',opening_default:{cutoff_ym:'2025-11'},display_rows:[]}]};
+      await ACT.addLg({dataset:{sc:'辅材'}});
+      BOOTING=false; m05Sync=()=>{};
+      reloadM05=async()=>{throw new Error('隔离读取失败');};
+    }''')
+    p.locator('[data-act="addLgOk"]').click()
+    expect(p.locator('.toast').last).to_contain_text('已保存，但页面数据未能刷新')
+    expect(p.locator('#lgS')).to_have_count(0)

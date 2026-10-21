@@ -135,13 +135,13 @@ const lgCutFor=async(v,cat)=>{
   const request=++lgCutRequest; lgCutPending=true;
   try {
     const project=pjRowOf(v), key=pjKey(project);
-    if(!project||!project.id) throw new Error('请重新选择项目');
+    if(!project||!project.id) throw errHuman('请重新选择项目');
     const existing=LGs.find(l=>l.cat===cat&&lgProjKeyOf(l.proj)===key);
     if(existing) return existing.cutoff;
     const ledger=M05.ledger&&String(M05.ledger.project_id)===String(project.id)
       ? M05.ledger : await API.ledger(project.id);
     const side=(ledger.sides||[]).find(s=>s.label===cat);
-    if(!side||!side.opening_default) throw new Error('未取得该分类的默认截止年月');
+    if(!side||!side.opening_default) throw errHuman('未取得该分类的默认截止年月');
     return request===lgCutRequest?side.opening_default.cutoff_ym:null;
   } catch(e) { toast(`未能取得期初默认年月：${esc(String(e.message||e))}`); return null; }
   finally { if(request===lgCutRequest) lgCutPending=false; }

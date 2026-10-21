@@ -370,12 +370,19 @@ render = function () { _renderProto.apply(this, arguments); m05Sync(); };
 
 /* 写动作外壳（与 `pjAct` / `plAct` 同款：失败**原样显示后端原因**并回滚到后端真实状态） */
 async function m05Act(fn, okMsg, ms) {
+  let saved=false;
   try {
     const r = await fn();
+    saved=true;
     await reloadM05();
     toast(typeof okMsg === 'function' ? okMsg(r) : okMsg, ms);
     return r;
   } catch (e) {
+    if(saved){
+      render();
+      toast(`已保存，但页面数据未能刷新：${esc(String((e && e.message) || e))}。请刷新页面查看，无需重复保存。`,7000);
+      return null;
+    }
     try { await reloadM05(); } catch (_) { }
     toast(`<b>没能改成</b>：${esc(String((e && e.message) || e))}`, 7000);
     return null;

@@ -971,7 +971,7 @@ const ACT={
   lgPjName=v; lgCut=cutoff; pjClose('lgPj'); render();
   toast(`期初占位行的项目已切到 <b>${esc(pjLabel(v))}</b>（截止年月仍按当前「分类」单独算）`); },
  /* 保存 = 原弹窗的「保存」——**只读草稿层**，不再从 DOM 取值（增行模式：没有弹窗可读） */
- /* ⭐ 已接后端：`POST /m05/opening`（PRG 表单端点 · 同一「口径 + 项目 + 截止年月」重复录入 = **覆盖**）
+ /* ⭐ 已接后端：`POST /m05/opening`（表单写入、JSON回执 · 同一「口径 + 项目 + 截止年月」重复录入 = **覆盖**）
     ⚠️ 草稿层（`lgD`）的取数方式不变，只是**落库不再由前端 push**。 */
  ledOpeningPay:t=>{ const project=pjRowOf(t.dataset.proj); if(!project||!project.id) return toast('请重新选择项目');
    return m05Act(()=>API.send('POST','/api/m05/ledger/opening-payment', {
@@ -981,11 +981,12 @@ const ACT={
   const pj=lgPjName; if(!pj){ toast('<b>请先选「项目」</b>（点展开区里的「项目」按钮）'); return; }
     const row=pjRowOf(pj);
     if(!row||!row.id){ toast('<b>项目没对上档案</b>（请重选）—— 未写入任何数据'); return; }
-    m05Act(()=>API.postForm('/m05/opening', {
+    return m05Act(async()=>{const result=await API.postForm('/m05/opening', {
         category: CAT_API[lgCat] || lgCat, project_id: row.id,
         cutoff_ym: lgCut, settle_amount: String(lgD.s||''), paid_amount: String(lgD.p||''),
         remark: String(lgD.r||''), end_ym: '',
-      }), ()=>{ ledProj=pj; return `期初占位行已录入（<b>${lgCat}</b> · ${esc(ledCutLabel(lgCut))}）`
+      }); lgOn=false; ++lgCutRequest; lgCutPending=false; pjClose('lgPj'); ledProj=pj; return result;
+      }, ()=>{ return `期初占位行已录入（<b>${lgCat}</b> · ${esc(ledCutLabel(lgCut))}）`
                  + `，台账已切到 <b>${esc(pjLabel(ledCur()))}</b>，欠款与台账已重算`; }); },
  /* 删除前先看清影响范围（§7.2 / §9.4）：期初属「**用户自录、随时可重录**」那一档 ⇒ **真删**
    （§9.4 的 2026-09-20 定案：**按「删了能不能凭源数据复原」分**）。
@@ -2201,7 +2202,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    try{
      const data=await API.m11AutoLinkPreview({notice_ids:ids});
      if(lastModal!==loading) return;
-     if(!data||!data.ok) throw new Error(data&&data.message||'采购合同应付未能读取');
+     if(!data||!data.ok) throw errHuman(data&&data.message||'采购合同应付未能读取');
      const selections=data.rows.filter(r=>r.contract_id!=null);
      modal({title:'一键关联集采合同',autoLink:{notice_ids:ids,selections},body:`<div class="tip">可关联 ${selections.length} 条，其余保留人工处理。只补当前列表的未关联通知书，已有合同保持不变。</div><div class="tw"><table class="dt"><thead><tr><th>通知书</th><th>合同／处理结果</th><th>采购应付依据</th></tr></thead><tbody>${data.rows.map(r=>`<tr><td>${esc(r.code)}</td><td>${esc(r.contract_no||r.reason)}${r.amount?`<div class="jc-link-money">${M(N0(r.amount))}</div>`:''}</td><td>${(r.payable_codes||[]).map(esc).join('、')}</td></tr>`).join('')}</tbody></table></div>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcAutoLinkOk" ${selections.length?'':'disabled'}>关联这 ${selections.length} 条</button>`});
    }catch(e){if(lastModal===loading) modal({title:'应付读取失败',body:`<div class="tip wn">${esc(String(e.message||e))}</div>`,footer:'<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="jcAutoLink">重试</button>'});}
@@ -2222,7 +2223,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    try{
      const data=await API.m11LinkRecommendations(n.id);
      if(lastModal!==loading) return;
-     if(!data||!data.ok) throw new Error((data&&data.message)||'未能读取候选合同及发票');
+     if(!data||!data.ok) throw errHuman((data&&data.message)||'未能读取候选合同及发票');
      jcLinkDialog(n,data);
    }catch(e){
      if(lastModal!==loading) return;

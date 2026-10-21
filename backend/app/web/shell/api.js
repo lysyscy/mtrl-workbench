@@ -230,7 +230,7 @@ const API = {
     return r.ok ? { ok: true, ...body } : { ok: false, ...body };
   },
 
-  /* ---- MOD-05 付款流水与欠款（读 4 个端点；写：撤销走 JSON、期初/备注走 PRG 表单端点） ---- */
+  /* ---- MOD-05 付款流水与欠款（读 4 个端点；写：撤销走 JSON、期初/备注收表单回 JSON） ---- */
   flows: () => API.get('/api/m05/flows?year_month='),
   debt: () => API.get('/api/m05/debt'),
   stats: q => API.get('/api/m05/stats?granularity=' + encodeURIComponent(q.granularity || 'week')
@@ -239,8 +239,7 @@ const API = {
   flowRevokeInfo: id => API.get(`/api/m05/flows/${id}/revoke-info`),
   flowRevoke: (id, reason, statChoice='', expected='') => API.send('POST',
     `/api/m05/flows/${id}/revoke?reason=${encodeURIComponent(reason || '')}&stat_choice=${encodeURIComponent(statChoice)}&expected=${encodeURIComponent(expected)}`, null),
-  /* ⚠️ 期初录入 / 期初删除 / 台账备注 **目前只有 PRG 表单端点**（收 `Form`）⇒ 用表单编码发；
-     它们回 303，我们**不看那页 HTML**，改「重拉数据 ＋ 自己的回执」（同一批落库出口）。 */
+  /* 期初录入 / 删除 / 台账备注收 Form，回 JSON；不能跳转已退役的旧台账页。 */
   postForm: async (url, obj) => {
     const r = await rawFetch(url, {
       method: 'POST',
@@ -248,9 +247,10 @@ const API = {
       body: new URLSearchParams(obj || {}).toString(),
       redirect: 'follow',
     }, `POST ${url}`);
-    if (!r.ok) { const [wy, nx] = errWhyByStatus(r.status);
-      throw errHuman('这一步没能完成：' + wy + '。' + nx, `POST ${url} → HTTP ${r.status}`); }
-    markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：PRG 表单写出口（期初录入 / 台账备注） */
+    const data = await r.json().catch(() => null);
+    if (!r.ok || data?.ok !== true) { const [wy, nx] = errWhyByStatus(r.status);
+      throw errHuman(data?.message || ('这一步没能完成：' + wy + '。' + nx), `POST ${url} → HTTP ${r.status}`); }
+    markCrossPageStale();         /* ⭐ `TAIL-48` `P3`②：表单写出口（期初录入 / 台账备注） */
     return true;
   },
   /* ---- MOD-08 库存单据与调整单（读全量 + 调整单；写走 JSON） ---- */

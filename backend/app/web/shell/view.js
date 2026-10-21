@@ -376,7 +376,7 @@ function drawVirtual(inst){
 }
 
 /* Widths follow visible columns and money values; virtual windows can grow the minimum. */
-const FIT_TABLES='.notice-table,[data-sort-key="m07:bigtable"],[data-sort-key="m08:invoices"],.mw-details,.procurement-table';
+const FIT_TABLES='.notice-table,.flow-table,.process-matrix,[data-sort-key="m07:kinds"],[data-sort-key="m07:bigtable"],[data-sort-key="m08:invoices"],.mw-details,.procurement-table';
 function saveTableScroll(){
   const key={m03:'m03:notices',m11:'m11:jc'}[VIEW];
   const selector=key?`#view table[data-sort-key="${key}"]`:null;
@@ -410,14 +410,16 @@ function fitWideTable(table){
     if(getComputedStyle(cell).display==='none') return 0;
     if(cell.querySelector('input[type=checkbox]')) return 28;
     if(i===1&&/^\d+$/.test(cell.textContent.trim())) return 38;
-    if(i===0) return table.matches('[data-sort-key="m08:invoices"]')?130*scale:38;
+    if(i===0) return table.matches('[data-sort-key="m08:invoices"],.process-matrix,.flow-table')?130*scale:table.dataset.sortKey==='m07:kinds'?76*scale:38;
     if(cell.classList.contains('num')||cell.querySelector('input.num')) return 72*scale;
     return (table.matches('.procurement-table')?procurement[i]||95:cell.classList.contains('nt-title')?145:cell.classList.contains('nt-supplier')?150:i===1?90:95)*scale;
   });
+  const numbers=new Set();
   rows.forEach(row=>{
     let column=0;
     [...row.cells].forEach(cell=>{
       if(cell.colSpan===1&&widths[column]&&(cell.classList.contains('num')||cell.querySelector('input.num'))){
+        numbers.add(column);
         const input=cell.querySelector('input');
         const text=input?input.value:cell.textContent.trim();
         const textWidth=context.measureText(text.replace(/[0-9]/g,'')).width+(text.match(/[0-9]/g)||[]).length*digitWidth;
@@ -430,14 +432,21 @@ function fitWideTable(table){
   // Retain measured minima across virtual windows so scrolling cannot shrink columns.
   const previous=table._fitScale===scale?table._fitWidths:[];
   widths.forEach((width,i)=>{if(width)widths[i]=Math.max(width,previous?.[i]||0);});
-  table._fitScale=scale;table._fitWidths=widths;
+  table._fitScale=scale;table._fitWidths=[...widths];
+  // Text can wrap within a readable floor; measured amounts must keep their full width.
+  const floors=widths.map((width,i)=>numbers.has(i)?width:Math.min(width,
+    (row.cells[i].matches('.nt-title,.nt-supplier,.jc-supplier')?140:60)*scale));
+  const preferred=widths.reduce((a,b)=>a+b,0), minimum=floors.reduce((a,b)=>a+b,0);
+  const available=table.closest('.tw')?.clientWidth||preferred;
+  const shrink=preferred>minimum?Math.min(1,Math.max(0,(preferred-available)/(preferred-minimum))):0;
+  widths.forEach((width,i)=>{widths[i]=width-(width-floors[i])*shrink;});
   const total=widths.reduce((a,b)=>a+b,0);
   table.classList.add('fit-wide');
   table.style.setProperty('min-width',Math.ceil(total)+'px','important');
   let group=table.querySelector('colgroup[data-fit]');
   if(!group){group=document.createElement('colgroup');group.dataset.fit='';table.prepend(group);}
   group.innerHTML=widths.map(width=>`<col style="width:${width/total*100}%;${width?'':'display:none'}">`).join('');
-  if(table.dataset.sortKey==='m07:bigtable'){
+  if(table.matches('[data-sort-key="m07:bigtable"],[data-sort-key="m07:kinds"]')){
     table.style.setProperty('--fit-first',row.cells[0].getBoundingClientRect().width+'px');
     table.style.setProperty('--fit-head',table.tHead.rows[0].getBoundingClientRect().height+'px');
   }

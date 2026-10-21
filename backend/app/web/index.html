@@ -373,7 +373,7 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .dt[data-sort-key="m07:kinds"],.dt[data-sort-key="modal:expExt"]{table-layout:fixed;width:calc(1800px * var(--fscale));min-width:calc(1800px * var(--fscale))}
 .dt[data-sort-key="m07:kinds"] th:first-child,.dt[data-sort-key="modal:expExt"] th:first-child{width:calc(76px * var(--fscale))}
 .dt[data-sort-key="m07:kinds"] th:nth-child(2),.dt[data-sort-key="modal:expExt"] th:nth-child(2){width:calc(200px * var(--fscale))}
-.dt[data-sort-key="m07:kinds"] .fl:nth-child(2),.dt[data-sort-key="modal:expExt"] .fl:nth-child(2){left:calc(76px * var(--fscale))}
+.dt[data-sort-key="m07:kinds"] .fl:nth-child(2),.dt[data-sort-key="modal:expExt"] .fl:nth-child(2){left:var(--fit-first,calc(76px * var(--fscale)))}
 .jc-pay-ref{cursor:pointer}
 .jc-pay-ref:hover td{background:var(--sf2)}
 tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -2px var(--pri)}
@@ -526,6 +526,7 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 .fit-wide{width:100%!important;table-layout:fixed!important}
 .fit-wide :is(th,td){min-width:0!important;max-width:none!important;width:auto!important;white-space:normal;overflow-wrap:anywhere;padding-left:4px;padding-right:4px}
 .fit-wide td.num{white-space:nowrap;overflow-wrap:normal}
+.fit-wide .ctr.now{white-space:normal}
 .fit-wide :is(input:not([type=checkbox]),select,textarea){width:100%!important;min-width:0!important;max-width:100%!important}
 .fit-wide .nt-code,.fit-wide .jc-contract-code{white-space:normal;overflow-wrap:anywhere}
 .fit-wide td:not(.num) .btn{white-space:normal}
