@@ -327,7 +327,7 @@ const m05Params = () => ({
   bucket: pst.ym||'',
   pj: ledCur(),
 });
-let m05Refetching = false;
+let m05Refetching = false, m05Request = 0;
 /* ⏳ **启动期间不补拉**（性能 `P3`① · 2026-09-19）：`boot()` 里那 13 路**陆续到位**时，
    每路都会 `render()`，而 `m05Sync()` 挂在 `render` 上 —— 它的参数里有 `ledCur()`（依赖 `ledProjs()`，
    随项目数据到位而**变**）⇒ 实测同一页加载里 `/api/m05/{flows,stats,debt}` 各发了 **3 次**、
@@ -336,17 +336,22 @@ let m05Refetching = false;
    ⇒ `boot()` 期间一律不补拉；boot 末尾**本就有一次显式 `reloadM05()`**（第二组）✓，参数那时已稳定。 */
 let BOOTING = true;
 async function reloadM05() {
-  const p = m05Params();
+  const request = ++m05Request, p = m05Params();
   const row = p.pj ? pjRowOf(p.pj) : null;
   const [fl, debt, st, lg] = await Promise.all([
     API.flows(), API.debt(), API.stats(p),
     (row && row.id) ? API.ledger(row.id) : Promise.resolve(null),
   ]);
+  if (request !== m05Request) return;
+  // 切换发生在请求途中时，直接补取最后所选项目，不发布旧项目的响应。
+  if (JSON.stringify(p) !== JSON.stringify(m05Params())) return reloadM05();
   FLs = (fl.rows || []).map(adaptFlow);
   LGs.splice(0, LGs.length, ...((debt.openings || []).map(adaptOpening)));   /* `const` ⇒ 原地改 */
   M05.debt = debt; M05.stats = st; M05.ledger = lg;
   M05_FETCHED.gran = p.granularity; M05_FETCHED.year = p.year;
   M05_FETCHED.quarter = p.quarter; M05_FETCHED.pj = p.pj; M05_FETCHED.bucket = p.bucket;
+  // 写出口会清空LOADED；本次已完整刷新，恢复参数切换的补拉资格。
+  LOADED.add('付款域');
   render();
 }
 /* 参数（粒度 / 轴 / 台账项目）变了就**自动补拉** —— 收敛成一个点，
@@ -389,7 +394,9 @@ async function m05Act(fn, okMsg, ms) {
   }
 }
 /* 台账当前项目在**后端**的那一侧（按中文分类名找） */
-const m05Side = sc => { const lg = M05.ledger; return lg ? ((lg.sides || []).find(x => x.label === sc) || null) : null; };
+const m05Side = sc => { const lg = M05.ledger, project = pjRowOf(ledCur());
+  if (!lg || !project || Number(lg.project_id) !== Number(project.id)) return null;
+  return (lg.sides || []).find(x => x.label === sc) || null; };
 /* ---------- 启动：拉真数据 → 渲染；失败**降级成可读提示**（⛔ 不白屏、不静默） ---------- */
 let BOOT_ERROR = '';
 /* =====================================================================

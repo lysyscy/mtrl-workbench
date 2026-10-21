@@ -4,6 +4,7 @@ import os
 import pytest
 from playwright.sync_api import expect
 from tests.ui_helpers import ui_page  # noqa: F401
+from tools.audit.workspace_paths import output
 
 
 def setup(p):
@@ -100,3 +101,105 @@ def test_archive_states_use_distinct_readable_colors_in_existing_themes(ui_page)
     if output:=os.environ.get('MTRL_UI_EVIDENCE_PATH'):
         folder=Path(output);folder.mkdir(parents=True,exist_ok=True)
         p.screenshot(path=str(folder/'archive-colors.png'))
+
+
+def project_server(p):
+    """模拟按项目独立存储，使用真实reloadM05及项目选择动作。"""
+    from urllib.parse import urlparse,parse_qs
+    server={'rows':{1:[],2:[],3:[]},'writes':[],'hold':set(),'pending':[],'reads':[]}
+    def ledger(pid):
+        return {'project_id':pid,'sides':[{'label':label,'rows':server['rows'][pid] if i==0 else []}
+            for i,label in enumerate(('辅材','机械'))]}
+    def route(req):
+        path=urlparse(req.request.url).path
+        if path.endswith('/ledger'):
+            pid=int(parse_qs(urlparse(req.request.url).query)['project_id'][0]);server['reads'].append(pid)
+            if pid in server['hold']:
+                server['pending'].append((pid,req))
+                p.evaluate('n=>window.pendingLedgerReads=n',len(server['pending']))
+            else:req.fulfill(json=ledger(pid))
+        elif path.endswith('/history/save'):
+            body=req.request.post_data_json;server['writes'].append(body);pid=body['project_id']
+            server['rows'][pid]=[{'seq':1,'month':body['cutoff_ym'],'row_kind':'manual','record_id':501,
+                'editable':True,'token':'saved','other_expense':body['settle_amount'],
+                'payment':body['paid_amount'],'remark':body['remark']}]
+            req.fulfill(json={'ok':True,'id':501})
+        elif path.endswith('/flows'):req.fulfill(json={'rows':[]})
+        elif path.endswith('/debt'):req.fulfill(json={'openings':[],'by_category':[]})
+        else:req.fulfill(json={})
+    p.route('**/api/m05/**',route)
+    p.route('**/api/history/status',lambda req:req.fulfill(json={'undo':None,'redo':None}))
+    p.evaluate("""()=>{
+      PJs=[['乌兰仓','乌兰察布'],['乙仓','乙项目'],['丙仓','丙项目']].map(([name,disp],i)=>({
+        id:String(i+1),name,disp,full:disp,type:'normal',status:'在建',phid:String(i+1)}));
+      NO=[];VIEW='m05';ledProj='乌兰仓';BOOTING=false;render();
+    }""")
+    p.wait_for_function('M05.ledger?.project_id===1')
+    return server,ledger
+
+
+def pick_project(p,name):
+    p.locator('[data-act="ledPjToggle"]').click()
+    p.locator('[data-act="ledPjPick"][data-pj="'+name+'"]').click()
+
+
+def test_saved_history_never_appears_under_another_project(ui_page):
+    p=ui_page;server,ledger=project_server(p)
+    p.get_by_role('button',name='＋ 新增历史行',exact=True).click()
+    amount=p.locator('[data-sc="辅材"][data-field="settle_amount"]')
+    expect(amount).to_have_count(1)
+    amount.fill('1234.56');amount.press('Tab')
+    expect(p.locator('.toast').last).to_contain_text('台账已保存')
+    server['hold'].add(2)
+    pick_project(p,'乙仓')
+    # 新项目读取尚未返回时，也不能把旧项目历史行当成新项目可编辑行。
+    expect(p.get_by_role('region',name='辅材欠款台账').locator('[data-act="ledHistoryCell"]')).to_have_count(0)
+    p.wait_for_function("document.querySelector('[data-act=ledPjToggle]').textContent.includes('乙项目')")
+    p.wait_for_function('window.pendingLedgerReads===1')
+    assert len(server['pending'])==1
+    p.locator('.debt-ledgers').screenshot(path=str(output('ledger-project-loading.png',kind='screenshots')))
+    server['hold'].clear();pid,req=server['pending'].pop();req.fulfill(json=ledger(pid))
+    p.wait_for_function('M05.ledger?.project_id===2')
+    expect(p.get_by_role('region',name='辅材欠款台账')).not_to_contain_text('1,234.56')
+    pick_project(p,'丙仓');p.wait_for_function('M05.ledger?.project_id===3')
+    expect(p.locator('[data-act="ledHistoryCell"]')).to_have_count(0)
+    pick_project(p,'乌兰仓');p.wait_for_function('M05.ledger?.project_id===1')
+    expect(p.locator('[data-sc="辅材"][data-field="settle_amount"]')).to_have_value('1234.56')
+    p.locator('.debt-ledgers').screenshot(path=str(output('ledger-project-restored.png',kind='screenshots')))
+    assert [w['project_id'] for w in server['writes']]==[1,1]
+
+
+def test_switch_during_inflight_ledger_read_finishes_at_latest_project(ui_page):
+    p=ui_page;server,ledger=project_server(p)
+    server['rows'][2]=[{'seq':1,'month':'2025-11','row_kind':'manual','record_id':602,
+        'editable':True,'token':'other','other_expense':'987.65','payment':'0','remark':'仅乙项目'}]
+    server['hold'].add(2)
+    pick_project(p,'乙仓')
+    p.wait_for_function('m05Refetching && window.pendingLedgerReads===1')
+    pick_project(p,'丙仓')
+    server['hold'].clear();pid,req=server['pending'].pop();req.fulfill(json=ledger(pid))
+    p.wait_for_function('!m05Refetching')
+    assert p.evaluate('M05.ledger.project_id')==3
+    expect(p.get_by_role('region',name='辅材欠款台账')).not_to_contain_text('仅乙项目')
+    assert server['reads'][-1]==3
+    assert server['writes']==[]
+
+
+def test_older_same_project_response_cannot_overwrite_newer_history(ui_page):
+    p=ui_page;server,ledger=project_server(p)
+    row={'seq':1,'month':'2025-11','row_kind':'manual','record_id':501,
+        'editable':True,'token':'latest','other_expense':'4321.00','payment':'0','remark':'最新历史行'}
+    server['hold'].add(1)
+    p.evaluate('window.oldLedger=reloadM05();void 0')
+    p.wait_for_function('window.pendingLedgerReads===1')
+    p.evaluate('window.newLedger=reloadM05();void 0')
+    p.wait_for_function('window.pendingLedgerReads===2')
+    server['rows'][1]=[row]
+    server['pending'][1][1].fulfill(json=ledger(1))
+    p.evaluate('newLedger')
+    # 较早的读在最后到达，仍不能把已显示的新历史行抹掉。
+    server['rows'][1]=[]
+    server['pending'][0][1].fulfill(json=ledger(1))
+    p.evaluate('oldLedger')
+    expect(p.locator('[data-sc="辅材"][data-field="settle_amount"]')).to_have_value('4321.00')
+    assert server['writes']==[]

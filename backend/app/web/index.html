@@ -832,7 +832,7 @@ V.m05=()=>{
      ⭐ 2026-09-13 用户口径：**与两侧台账卡合并为一个统一模块** —— 一张卡：卡头放两侧共用的
         「项目」选择器，卡内左右两栏（左辅材 / 右机械），每栏自带小标题与该侧「＋ 录入期初占位行 / 导出 Excel」；
         **不再有「辅材 / 机械」切换按钮**。 */
-  const lp=ledCur();
+  const lp=ledCur(), ledgerReady=!!m05Side('辅材');
   /* ⚠️ 口径：本栏两个数**只属于「卡头所选的那个项目」**，与**上方那三栏**（按项目分列）**不是同一个数**
        ⇒ 一律写明「本项目」（§4.7：同一个数不许两处换说法、不同口径不许并排不说明）。
      —— 本栏显示设计（现状行 / 合计行正名 / 空月压暗 / 按钮带分类名）的来历与逐条理由：
@@ -848,7 +848,7 @@ V.m05=()=>{
     return `<section class="debt-ledger" data-ledger-project="${esc(lp)}:${M05.ledger?.project_id||''}" aria-label="${sc}欠款台账">
       <div style="display:flex;align-items:baseline;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-bottom:calc(6px * var(--fscale))">
         <b>${sc}欠款台账</b>
-        <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 历史数据加各月结算减付款，含未填单据日期付款—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含历史数据）</span><b class="fc">${MONEY(cur)}</b><span class="mut sm">截至 ${esc(upto)}</span>
+        <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 历史数据加各月结算减付款，含未填单据日期付款—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含历史数据）</span><b class="fc">${ledgerReady?MONEY(cur):'—'}</b><span class="mut sm">截至 ${esc(upto)}</span>
         ${mLast?`<span class="mut sm" title="最近一月（${esc(mLast.ym)}）：其他支出金额 − 付款 —— 当月新增，不是累计">· ${esc(mLast.ym)} 新增</span><b class="fc" style="color:var(--${N2(add)>0?'dg':'mut'})">${MONEY(add)}</b>`:''}
         <span style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale));flex-wrap:wrap">
           ${sc==='辅材'?`<button class="btn sm" data-act="addLg" data-sc="辅材">＋ 新增历史行</button>`:''}
@@ -871,7 +871,7 @@ V.m05=()=>{
         4:[rs=>N2(rs.reduce((a,x)=>a+x.s-x.p,0)),v=>'<b>'+M(v)+'</b><span class="mut sm"> 当前欠款</span>']},
         {lead:`截至 ${esc(upto)}`,leadSpan:2,leadCls:'ctr',style:'',
          tip:`历史数据与各月累计，含未填单据日期付款；欠款 = 本项目截至 ${upto} 还欠多少，与本栏上方同源`}):'',
-      empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；辅材历史数据可直接新增行，机械结算取机械费台账`)})}</div></section>`; };
+      empty:EMPTYROW(thCount(LED_THEAD), !ledgerReady&&lp?'该项目台账尚未加载':'该项目在本口径下暂无数据', !ledgerReady&&lp?'请稍候；若未更新，请刷新页面重试':`换个项目；或先在「付款通知书」页补录；辅材历史数据可直接新增行，机械结算取机械费台账`)})}</div></section>`; };
   /* —— 付款流水（**实际付款记录**）——
      ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 —— 默认按「当前核算月」核算**（一个月内流水有限）
         ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 / 关键词（各数据列）
