@@ -13,7 +13,7 @@ def test_report_tables_fit_resize_without_clipping(ui_page, kind, scale, viewpor
     p.evaluate('''kind=>{
       const specs={
         notice:{cls:'notice-table',key:'m03:notices',head:NT_THEAD,n:18,nums:[10,11,12,13,14],inputs:[11,13,14]},
-        flows:{cls:'flow-table',key:'m05:flows',head:FL_THEAD,n:15,nums:[7,9]},
+        flows:{cls:'flow-table',key:'m05:flows',head:FL_THEAD,n:14,nums:[6,8]},
         process:{cls:'process-matrix',n:17,nums:Array.from({length:16},(_,i)=>i+1),min:'min-width:2100px'},
         weld:{key:'m07:kinds',head:extHead(),n:16,nums:Array.from({length:14},(_,i)=>i+2),min:'min-width:1800px'},
         inventory:{key:'m08:invoices',n:20,nums:[8,9,10,11,12,13]},

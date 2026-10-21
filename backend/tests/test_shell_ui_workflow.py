@@ -474,9 +474,9 @@ def test_付款流水搜索各数据列并保持筛选范围(ui_page):
     assert p.evaluate("flSearchMatch({},' ， ')") is True
 
 
-def test_付款流水补通知书五列并改对操作人与流水号(ui_page):
+def test_付款流水保留通知书信息并省略流水号(ui_page):
     """票面验收：五项通知书信息上身；「操作人」= `created_by`（⛔ 不是创建时间）；
-    「流水号」= 真 `flow_no`（⛔ 不是数据库行号）；**失联流水照样整条可查**、审批金额未知画「—」
+    流水号不直接显示；**失联流水照样整条可查**、审批金额未知画「—」
     （⛔ 不伪 0）；`notice_id` 指向已删除通知书的流水也不消失。"""
     p = ui_page
     p.evaluate('''(f0) => {
@@ -494,27 +494,28 @@ def test_付款流水补通知书五列并改对操作人与流水号(ui_page):
     }''', FL0)
     rows = p.locator('[data-sort-key="m05:flows"] tbody tr[data-flow-id]')
     assert rows.count() == 3, "失联 / 通知书已删除的流水被丢掉了"
-    assert p.locator('[data-sort-key="m05:flows"] tbody tr[data-flow-id]:first-child td').count() == 15, \
-        "流水行的格子数不是 15（表头、行、合计三处的列序必须逐字对应）"
+    assert p.locator('[data-sort-key="m05:flows"] tbody tr[data-flow-id]:first-child td').count() == 14
+    assert '流水号' not in p.locator('[data-sort-key="m05:flows"] thead').inner_text()
+    assert 'FL-X9' not in rows.first.inner_text()
 
     def cell(i: int, j: int) -> str:
         return rows.nth(i).locator('td').nth(j).inner_text().strip()
 
-    # 第 1 行：数据齐全 —— 逐格对账（0 流水号 / 1 编码 / 2 单据日期 / 3 名称 / 4 项目 / 5 收款单位
-    #           / 6 分类 / 7 审批金额 / 8 付款日期 / 9 付款金额 / 12 操作人 / 13 状态）
-    assert [cell(0, j) for j in (0, 1, 2, 3, 5, 6, 7, 12)] == \
-        ['FL-X9', 'DOC-101', '2026-09-01', '钢材付款', '甲公司', '集采', '1,000.00', '乙'], \
+    # 第 1 行：数据齐全，移除流水号后各列左移一格。
+
+    assert [cell(0, j) for j in (0, 1, 2, 4, 5, 6, 11)] == \
+        ['DOC-101', '2026-09-01', '钢材付款', '甲公司', '集采', '1,000.00', '乙'], \
         "通知书五项 / 流水号 / 操作人的取值不对"
-    assert cell(0, 9) == '300.00' and '生效' in cell(0, 13)
-    # 第 2 行：`notice_id` 为空（历史/导入的失联流水）—— 新列留白/—，**付款金额与流水号仍在**
-    assert cell(1, 0) == '—' and cell(1, 7) == '—', "失联流水的新列没有如实留空 / 留「—」"
-    assert cell(1, 9) == '200.00', "失联流水的付款金额被吞了"
+    assert cell(0, 8) == '300.00' and '生效' in cell(0, 12)
+    # 第 2 行：`notice_id` 为空（历史/导入的失联流水）—— 新列留白/—，**付款金额仍在**
+    assert cell(1, 0) == '—' and cell(1, 6) == '—', "失联流水的新列没有如实留空 / 留「—」"
+    assert cell(1, 8) == '200.00', "失联流水的付款金额被吞了"
     # 第 3 行：`notice_id` 指向已删除的通知书 —— 同样照常显示，且带撤销原因
-    assert cell(2, 7) == '—', "通知书失联时审批金额被伪成了别的数"
-    assert cell(2, 9) == '100.00' and '已撤销' in cell(2, 13) and '冲正' in cell(2, 13)
+    assert cell(2, 6) == '—', "通知书失联时审批金额被伪成了别的数"
+    assert cell(2, 8) == '100.00' and '已撤销' in cell(2, 12) and '冲正' in cell(2, 12)
     # ⭐「未知」与「真是 0」必须分开：未知的排序值留空（`data-v=""`），真实的 0 才写 0
     assert p.evaluate('''() => [...document.querySelectorAll(
-        '#view table[data-sort-key="m05:flows"] tbody tr[data-flow-id] td:nth-child(8)')]
+        '#view table[data-sort-key="m05:flows"] tbody tr[data-flow-id] td:nth-child(7)')]
         .map(td => td.dataset.v).join('|')''') == '1000||', \
         "审批金额未知时被写成了 0（拿 0 冒充「没有这个数」）"
     # ⭐ 票面 #3 的**第三处**口径：关键词仍能搜**流水号 / 单据编码**（现在也覆盖其它数据列）（页面列 · 搜索 · Excel 三处同一个东西）。
@@ -547,15 +548,15 @@ def test_付款流水合计只加实付且导出按屏幕行序(ui_page):
     }''', FL0)
     # ① 合计行：只加**生效**的实付（300＋200），已撤销那笔不进；审批金额那一列**根本不参与**
     sumcells = p.locator('[data-sort-key="m05:flows"] tbody tr.sumrow td')
-    assert sumcells.count() == 7, "合计行的跨列数变了（leadSpan 该是 9：9 格合并 + 6 个数据格）"
-    assert sumcells.nth(0).get_attribute('colspan') == '9', "合计行首格的 colspan 不是 9"
+    assert sumcells.count() == 7, "合计行应有8列合并及6个数据格"
+    assert sumcells.nth(0).get_attribute('colspan') == '8'
     assert sumcells.nth(1).inner_text().strip() == '500.00', \
         "合计不是「只加生效实付」（300＋200=500）—— 多加了或口径变了"
     assert '2,000.00' not in sumcells.all_inner_texts().__str__(), \
         "审批金额被纵向求和了（同一张单的每笔是**对照数**，加起来是假数）"
 
     # ② 点表头「审批金额」升序 ⇒ DOM 行序 = 20 → 1000 → 未知（空值恒排最后）
-    p.click('[data-sort-key="m05:flows"] thead th:nth-child(8)')
+    p.locator('[data-sort-key="m05:flows"] thead th').filter(has_text='审批金额').click()
     dom = p.evaluate('''() => [...document.querySelectorAll(
         '#view table[data-sort-key="m05:flows"] tbody tr[data-flow-id]')].map(tr => tr.dataset.flowId)''')
     assert dom == ['72', '71', '73'], f"表头排序后的屏幕行序不对：{dom}（未知值必须排最后）"
@@ -700,6 +701,7 @@ def test_集采推进后保留横向位置_普通表与虚拟表(ui_page, count)
     from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS
 
     p = ui_page
+    p.set_viewport_size({'width':1024,'height':1000})
     p.evaluate('''async ({count,columns,sumKeys}) => {
       window.jcRowsFixture=Array.from({length:count},(_,i)=>({
         id:i+1,project_seq:i+1,project_key:'测试仓库',date:'2026-01-01',

@@ -504,7 +504,8 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 .payment-statistics .bars .nm{min-width:0}
 .payment-statistics .bars .vl{white-space:nowrap}
 .flow-table{min-width:calc(1920px * var(--fscale))}
-.flow-table td.fc{white-space:nowrap}
+.flow-table .doc-link{max-width:100%;white-space:normal}
+.flow-table .doc-link-code{min-width:0;overflow-wrap:anywhere}
 .procurement-table{min-width:calc(2080px * var(--fscale))}
 .procurement-table .jc-contract-code{white-space:nowrap;min-width:19ch}
 .procurement-table .jc-supplier{min-width:calc(180px * var(--fscale));max-width:calc(260px * var(--fscale));overflow-wrap:anywhere}
@@ -959,12 +960,11 @@ V.m05=()=>{
     `})}
     <div class="tw">${TBL({head:FL_THEAD,key:'m05:flows',cls:'flow-table',
     rows:flList.map(f=>{const n=ntOf(f);
-      /* ⚠️⚠️ 列序与 `FL_THEAD`、`fl_export.COLUMNS` **三处逐字对应**（`TAIL-283` ⇒ 15 列）。
+      /* 页面14列，省略内部流水号；导出仍保留原有流水号，操作按data-flow-id定位。
          「通知书五项」读**适配层**（`adaptFlow`）的值 ⇒ 不依赖 `NO` 缓存、失联流水也照样整条显示；
          ⛔ 审批金额**未知**画「—」（`amountApproved==null`）、**真实 0** 画 `0.00` —— 两者不许混。
          `data-flow-id` = 屏幕行序的证据（导出按它取序，见 `pages-a.js::flDomIds`）。 */
       return `<tr class="${f.voided?'ex':''}" data-flow-id="${f.id}">
-      <td class="fc">${esc(f.flowNo)||'<span class="mut">—</span>'}</td>
       <td class="fc">${f.nid?`<button class="doc-link" data-act="flNotice" data-fid="${f.id}" title="查看付款通知书"><span class="doc-link-code">${esc(f.doc)||'—'}</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></button>`:`<span title="找不到对应通知书">${esc(f.doc)||'—'}</span>`}</td>
       <td class="now">${esc(f.docDate)||'<span class="mut">—</span>'}</td>
       <td class="sm" title="${esc(f.billName)}"><div style="max-width:240px">${esc(f.billName)||'<span class="mut">—</span>'}</div></td>
@@ -977,8 +977,8 @@ V.m05=()=>{
       <td class="sm mut">${esc(f.remark)||'—'}</td><td class="sm">${esc(f.op)}</td>
       <td>${f.voided?enumTag('flowState','已撤销')+' <span class="mut sm">'+esc(f.reason)+'</span>':enumTag('flowState','生效')}</td>
       <td class="ctr now">${f.voided?'<span class="mut sm">—</span>':`<button class="btn sm dg" data-act="revDlg" data-fid="${f.id}">撤销</button>`}</td></tr>`;}),
-    sum:flList.length?sumRowOf(FL_THEAD, flOn, {9:[rs=>N2(rs.reduce((a,x)=>a+x.amt,0)),v=>'<b>'+M(v)+'</b>']},
-        {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：</b>`,leadSpan:9,leadCls:'ctr',style:'',tip:'当前付款年月、项目、方式、状态及关键词筛选结果的付款金额合计；只计生效流水，已撤销不计入'}):'',
+    sum:flList.length?sumRowOf(FL_THEAD, flOn, {8:[rs=>N2(rs.reduce((a,x)=>a+x.amt,0)),v=>'<b>'+M(v)+'</b>']},
+        {lead:`<b>合计（生效 ${flOn.length} 条 · 不含已撤销）：</b>`,leadSpan:8,leadCls:'ctr',style:'',tip:'当前付款年月、项目、方式、状态及关键词筛选结果的付款金额合计；只计生效流水，已撤销不计入'}):'',
     empty:EMPTYROW(thCount(FL_THEAD), '该筛选条件下没有付款流水', '换个年月 / 项目 / 状态，或点「重置」')})}</div>
     
   </div>`;

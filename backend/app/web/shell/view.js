@@ -418,6 +418,10 @@ function fitWideTable(table){
   rows.forEach(row=>{
     let column=0;
     [...row.cells].forEach(cell=>{
+      if(table.classList.contains('flow-table')&&cell.colSpan===1&&cell.classList.contains('now')&&/^\d{4}-\d{2}-\d{2}$/.test(cell.textContent.trim())){
+        numbers.add(column);
+        widths[column]=Math.max(widths[column],context.measureText(cell.textContent.trim()).width+12);
+      }
       if(cell.colSpan===1&&widths[column]&&(cell.classList.contains('num')||cell.querySelector('input.num'))){
         numbers.add(column);
         const input=cell.querySelector('input');

@@ -275,10 +275,9 @@ const LED_THEAD=`      <th style="width:44px">序号</th><th>月份（按单据�
    ⭐ 2026-10-11 `TAIL-283`：**15 列**（14 数据 ＋ 操作）—— 新增「这笔流水来自哪张通知书」五项
    （通知书日期 / 通知书名称 / 收款单位 / 审批金额 / 分类），并把两处列义改对：
    「流水号」= 真 `flow_no`（⛔ 不再是数据库行号）、「操作人」= `created_by`（⛔ 不再是创建时间）。
-   ⚠️ 列序与 `fl_export.COLUMNS` **必须逐字对应**（导出 = 本表头去掉「操作」）——
-       `report_export/fl_export.py` 的模块头写着同一条；改这里就同批改它。
+   页面省略流水号；Excel保留原有14个数据列，操作仍按内部id定位。
    ⚠️ 「审批金额」是**同一张通知书在每笔上重复出现的对照数** ⇒ 它**不参与合计**（见 `sumRowOf` 调用点）。 */
-const FL_THEAD=`<th>流水号</th><th>单据编码</th><th>通知书日期</th><th>通知书名称</th><th>付款项目</th><th>收款单位</th><th>分类</th><th>审批金额</th><th>付款日期</th><th>付款金额</th><th>实际付款方式</th><th>备注</th><th>操作人</th><th>状态</th><th>操作</th>`;
+const FL_THEAD=`<th>单据编码</th><th>通知书日期</th><th>通知书名称</th><th>付款项目</th><th>收款单位</th><th>分类</th><th>审批金额</th><th>付款日期</th><th>付款金额</th><th>实际付款方式</th><th>备注</th><th>操作人</th><th>状态</th><th>操作</th>`;
 const PJ_THEAD=`<th data-nosort>排序<span class="mut">（自定义 · 全站跟随）</span></th><th>类型</th><th>展示名<span class="mut">（默认取仓库名 · 可改）</span></th><th>仓库名<span class="mut">（唯一标识 · 不可改）</span></th><th>项目全名<span class="mut">（可改 · 留痕）</span></th><th>信息化编号<span class="mut">（不可改）</span></th><th>状态</th><th>所属壳</th><th>小微识别关键词</th><th>操作</th>`;
 const DIFF_THEAD=`<th>单据编号</th><th>序号</th><th>物料</th><th>仓库</th><th>原值（i8）</th><th>调整后</th><th>差额</th><th>备注</th><th>操作人</th><th>时间</th><th>操作</th>`;
 const INV_THEAD=`<th>单据编号</th><th>序号</th><th>方向</th><th>物料</th><th>规格</th><th>单位</th><th>数量</th><th>不含税单价</th><th>含税单价</th><th>金额</th><th>调整后金额</th><th>价税合计</th><th>业务类型</th><th>供应商 / 班组</th><th>单据日期</th><th>审核日期</th><th>仓库</th><th>wbs 名称</th><th>cbs 名称</th><th>操作</th>`;
