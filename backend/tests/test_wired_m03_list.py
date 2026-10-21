@@ -86,7 +86,7 @@ def test_壳里列表页骨架齐备且表头18列():
     #   ② 行的**来源**仍是预算好的 `tb`（不是页里另拼一份）；③ 内核里「可排」那条分支**真的**出
     #   `data-sort` ＋ `data-sort-key`。渲染形态以正式壳及其浏览器核验为准，旧原型自检已退役。
     #   自证 = `tools/mut/_mut_tbl.py` 的 M12（去掉这处委托）必须红。
-    assert "TBL({head:NT_THEAD,key:'m03:notices',rows:[tb]})" in SHELL, \
+    assert "TBL({head:NT_THEAD,key:'m03:notices',cls:'notice-table',rows:[tb]})" in SHELL, \
         "数据区没了（或没走统一出口 `TBL` / 没交出自己的身份 `m03:notices`）"
     kern = tbl_kernel()
     assert "' data-sort data-sort-key=\"'+key+'\"'" in kern, \
@@ -145,13 +145,14 @@ def test_汇总pill把撤单里有牵涉的单独报一档():
 
 def test_壳里剔除来源分档不混作一谈():
     """旧页：切「分类 = 剔除」时按来源分档打标签（`人工批量剔除` / `规则命中` / `i8 已撤单`）。
-    新壳：来源分档走唯一出口 `exrule`（`exclude_source === 'manual' ? 人工批量剔除 : 规则命中`）
+    新壳：保留原始来源 `exsource` 与后端规则提示 `exrule`
     ＋ 行标签出口 `ntArchTag`（§4.2.2）。
     ⚠️ **两类的分档仍要分开标** —— 哪怕两者都能恢复，用户也要看得出"这一条当初是被谁剔掉的"。
     """
-    assert "exrule: x.exclude_source === 'manual' ? '人工批量剔除' : '规则命中'," in SHELL, \
+    assert "exsource: x.exclude_source || ''," in SHELL, \
         "剔除来源分档出口没了"
-    assert "const ntArchTag=n=>n.excl?tag('剔除','dg'):" in SHELL, "行标签出口 `ntArchTag` 没了"
+    assert "x.exclude_rule_hint" in SHELL and 'title="${esc(n.exrule' in SHELL
+    assert "n.exsource==='manual'?'手动剔除':n.exsource==='rule'?'自动剔除'" in SHELL
     # ⭐ 2026-10-08 用户裁定：**规则命中的也能用「恢复剔除」放回** ⇒ 按钮提示不得再写
     #    "任何情况下都不在此恢复"，那正是让用户以为按钮坏了的兑现不了的承诺。
     assert "任何情况下都不在此恢复" not in SHELL, \

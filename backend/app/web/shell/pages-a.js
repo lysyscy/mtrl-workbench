@@ -17,6 +17,7 @@ addBind('m03', ()=>{ const box=$('#pickAllBox'); if(!box) return;
   box.indeterminate = hit>0 && hit<vis.length;
   const hidden=ntHiddenPickCount(), bar=$('#view .selbar');
   if(!bar) return;
+  if(fNt.ids) bar.insertAdjacentHTML('beforebegin',`<div class="sm" style="margin-bottom:calc(8px * var(--fscale))">仅显示本次已剔除或撤单单据 · ${fNt.ids.length} 条 <button class="btn" data-act="ntPasteScopeClear">清除此定位</button></div>`);
   /* 新增核对入口随内容换行，窄屏不能把付款按钮挤出可见区域。 */
   bar.style.flexWrap='wrap'; bar.style.rowGap='calc(6px * var(--fscale))';
   bar.style.paddingTop=bar.style.paddingBottom='calc(6px * var(--fscale))';
@@ -32,28 +33,33 @@ addBind('m03', ()=>{ const box=$('#pickAllBox'); if(!box) return;
 let ntPasteTop=new Set(), ntPasteRaw='', ntPasteReport=null, ntPasteBusy=false;
 const ntPasteMatch=(raw,notices)=>{
   const key=v=>String(v==null?'':v).trim().toUpperCase();
-  const tokens=String(raw||'').split(/[\s,，;；、]+/).map(v=>v.replace(/^["“”]+|["“”]+$/g,'')).filter(Boolean);
-  const counts=new Map(), byCode=new Map();
-  tokens.forEach(v=>{const k=key(v);counts.set(k,(counts.get(k)||0)+1);});
+  const tokens=String(raw||'').split(/[\s,，;；、]+/).filter(Boolean);
+  const counts=new Map(), byCode=new Map(), invalid=[];
+  tokens.forEach(v=>{
+    const k=key(v.replace(/^["“](.+)["”]$/, '$1'));
+    if(!/^(?:FKTZS|QTZC)\d{4}(?:0[1-9]|1[0-2])\d{4}$/.test(k)){invalid.push(v);return;}
+    counts.set(k,(counts.get(k)||0)+1);
+  });
   notices.forEach(n=>{const k=key(n.code);if(!k)return;if(!byCode.has(k))byCode.set(k,[]);byCode.get(k).push(n);});
-  const result={total:tokens.length,unique:counts.size,ids:[],missing:[],ambiguous:[],blocked:[],duplicates:[],paid:[]};
+  const result={total:tokens.length,unique:counts.size,invalid,ids:[],missing:[],ambiguous:[],blocked:[],duplicates:[],paid:[]};
   for(const [code,count] of counts){
     if(count>1)result.duplicates.push(`${code}（${count}次）`);
     const hits=byCode.get(code)||[];
     if(!hits.length){result.missing.push(code);continue;}
-    if(hits.length!==1){result.ambiguous.push(`${code}（系统${hits.length}条）`);continue;}
+    if(hits.length!==1){result.ambiguous.push(`${code}（系统${hits.length}条）`);result.blocked.push(...hits.filter(n=>!ntPayCand(n)));continue;}
     const n=hits[0];
-    if(!ntPayCand(n)){result.blocked.push(`${code}（${ntVoid(n)?'已撤单':'已剔除'}）`);continue;}
+    if(!ntPayCand(n)){result.blocked.push(n);continue;}
     result.ids.push(n.id);
     if(statOf(n)==='已付清')result.paid.push(code);
   }
   return result;
 };
 const ntPasteReportHTML=r=>{
-  const groups=[['未找到',r.missing,'dg'],['系统重号，未勾选',r.ambiguous,'wn'],
-    ['剔除或撤单，未勾选',r.blocked,'wn'],['重复输入，已合并',r.duplicates,'in'],['已付清，仍可打印',r.paid,'in']];
-  return `<p>输入 ${r.total} 个单据号，去重后 ${r.unique} 个。${r.ids.length?`已勾选 <b>${r.ids.length}</b> 条，集中在表格顶部。`:'没有可勾选的单据，原勾选保持不变。'}</p>`+
-    groups.filter(g=>g[1].length).map(([label,list,color])=>`<div style="margin-top:calc(12px * var(--fscale))"><b class="${color==='dg'?'dg':'mut'}">${label} · ${list.length}</b><div class="sm" style="margin-top:calc(4px * var(--fscale));max-height:calc(160px * var(--fscale));overflow:auto;overflow-wrap:anywhere">${list.map(esc).join('、')}</div></div>`).join('');
+  const groups=[['未识别为单据号的文本',r.invalid,'dg'],['未找到的单据号',r.missing,'dg'],
+    ['系统重号，未勾选',r.ambiguous,'wn'],['重复输入，已合并',r.duplicates,'in'],['已付清，仍可打印',r.paid,'in']];
+  return `<p>输入 ${r.total} 段文本，识别出 ${r.unique} 个不重复单据号。${r.ids.length?`已勾选 <b>${r.ids.length}</b> 条，集中在表格顶部。`:'没有可勾选的单据，原勾选保持不变。'}</p>`+
+    groups.filter(g=>g[1].length).map(([label,list,color])=>`<div style="margin-top:calc(12px * var(--fscale))"><b class="${color==='dg'?'dg':'mut'}">${label} · ${list.length}</b><div class="sm" style="margin-top:calc(4px * var(--fscale));max-height:calc(160px * var(--fscale));overflow:auto;overflow-wrap:anywhere">${list.map(esc).join('、')}</div></div>`).join('')+
+    (r.blocked.length?`<div style="margin-top:calc(16px * var(--fscale))"><b>已剔除或已撤单，未勾选 · ${r.blocked.length}</b> <button class="btn" data-act="ntPasteProcess">去处理</button><p class="sm mut">只筛选这些单据，清空当前勾选；请核对后自行勾选处理。</p><div style="max-height:calc(300px * var(--fscale));overflow:auto">${r.blocked.map(n=>`<div style="padding:calc(8px * var(--fscale)) 0;border-top:1px solid var(--bd);overflow-wrap:anywhere"><b>${esc(n.code)}</b> ${ntArchTag(n)}${n.excl&&ntVoid(n)?' '+tag('i8 已撤单','wn'):''}<div>${esc(n.doc||'（无单据名称）')}</div><div class="sm mut">${esc(ntProjName(n))} · ${esc(n.date)} · ${esc(n.recv||'（无收款单位）')} · 审批金额 ${M(n.approve)}</div></div>`).join('')}</div></div>`:'');
 };
 
 /* 全选框状态回显（与 MOD-03 / MOD-04 同款逻辑：全选 / 半选）—— `MOD-11` 集采台账

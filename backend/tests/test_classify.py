@@ -173,3 +173,14 @@ def test_is_excluded_可直接注入M2抓取预览():
     ]
     kept = [r for r in rows if not is_excluded(r)]
     assert len(kept) == 1 and kept[0]["biz_type"] == "付设备租赁款"
+
+
+def test_current_rule_hint_does_not_claim_historical_provenance():
+    from app.mod03_notice.classify import current_exclude_hint
+    rules=(ExcludeRule('bill_name', ('水电','房租')), ExcludeRule('input_by', ('张三',)))
+    hint=current_exclude_hint({'fields':{'BillName':'十月房租'},'input_by':'张三'},rules)
+    assert '单据名称关键字（房租）' in hint and '水电' not in hint
+    assert '当前匹配规则' in hint and '历史命中规则未保存' in hint
+    assert '录入人（张三）' in current_exclude_hint({'input_by':'张三'},rules)
+    assert '当前无匹配规则' in current_exclude_hint({'input_by':'李四'},rules)
+    assert '无法追溯' in current_exclude_hint({},())

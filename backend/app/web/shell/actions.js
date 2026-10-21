@@ -727,7 +727,7 @@ const ACT={
 
  /* Pasting replaces selection; manual checkbox actions keep the row order. */
  ntPasteOpen:()=>{
-   modal({title:'粘贴单据号勾选',body:`<div class="fld"><label for="ntPasteInput">单据号</label><textarea class="inp" id="ntPasteInput" rows="7" style="width:100%;resize:vertical" placeholder="从 Excel 复制单据号列，粘贴到这里">${esc(ntPasteRaw)}</textarea></div><p class="sm mut">按完整单据号匹配，支持换行、空格或逗号分隔。勾选将替换当前勾选并清空筛选，本次命中单据集中置顶。</p><div id="ntPasteError" class="dg" role="status"></div>`,
+   modal({title:'粘贴单据号勾选',body:`<div class="fld"><label for="ntPasteInput">单据号</label><textarea class="inp" id="ntPasteInput" rows="7" style="width:100%;resize:vertical" placeholder="从 Excel 复制单据号列，粘贴到这里">${esc(ntPasteRaw)}</textarea></div><p class="sm mut">标准格式：FKTZS 或 QTZC＋年月六位＋序号四位，如 FKTZS2026100001。支持换行、空格或逗号分隔。勾选将替换当前勾选并清空筛选，本次命中单据集中置顶。</p><div id="ntPasteError" class="dg" role="status"></div>`,
      footer:'<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="ntPasteApply">匹配并勾选</button>'});
    $('#ntPasteInput')?.focus();
  },
@@ -754,6 +754,13 @@ const ACT={
  ntPasteResult:()=>{if(!ntPasteReport)return;
    modal({title:'单据号勾选结果',body:ntPasteReportHTML(ntPasteReport),
      footer:'<button class="btn" data-act="ntPasteOpen">修改清单</button><button class="btn pri" data-act="closeModal">完成</button>'});},
+ ntPasteProcess:()=>{
+   if(!ntPasteReport?.blocked.length)return;
+   fNt={month:'全部',cat:'剔除',astat:'全部',stat:'全部',projs:[],q:'',ids:ntPasteReport.blocked.map(n=>n.id)};
+   pickSet.clear();pjClose('pj');closeModal();render();
+   const host=scrollHost();if(host)host.scrollTop=0;
+ },
+ ntPasteScopeClear:()=>{delete fNt.ids;prunePick();render();},
 
  /* —— MOD-03 · 手动新增 / 编辑付款通知书 = **表内增行模式**（2026-09-13 用户口径）——
     用途不变：付「期初占位行」的款 —— 那笔钱没有 i8 单据，只能手工补一行。

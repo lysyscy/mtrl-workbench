@@ -149,6 +149,16 @@ def is_excluded(rec: dict, rules=DEFAULT_RULES) -> bool:
     return match_exclude_rule(rec, rules) is not None
 
 
+def current_exclude_hint(rec: dict, rules=DEFAULT_RULES) -> str:
+    """旧标记没有规则快照；只说明当前匹配，不能冒充当时的剔除依据。"""
+    rule = match_exclude_rule(rec, rules)
+    if not rule:
+        return "当前无匹配规则；历史命中规则未保存，无法追溯"
+    value = _value_of(rec, rule.kind)
+    matched = [v for v in rule.values if v and v in value] if rule.kind == KIND_BILL_NAME else [value]
+    return f"当前匹配规则：{rule.label}（{'、'.join(matched)}）；历史命中规则未保存"
+
+
 def rows_needing_ownership(rows: list[dict], rules=DEFAULT_RULES) -> list[tuple[int, dict]]:
     """挑出**需要走归属校验**的行 → `(原序号, 行)`（`TAIL-29`-①）。
 
@@ -302,7 +312,7 @@ __all__ = [
     "KIND_BIZ_TYPE", "KIND_PROJECT_NAME", "KIND_BILL_NAME", "KIND_INPUT_BY", "KIND_PAYEE",
     "KIND_LABELS", "FORBIDDEN_PAYEE_VALUE",
     "ExcludeRule", "DEFAULT_RULES", "validate_rules",
-    "match_exclude_rule", "is_excluded", "rows_needing_ownership",
+    "match_exclude_rule", "is_excluded", "current_exclude_hint", "rows_needing_ownership",
     "Placement", "decide_placement",
     "RestoreReport", "restore_excluded", "apply_manual_exclude",
 ]

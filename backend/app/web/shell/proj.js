@@ -37,7 +37,7 @@ const ntHit=f=>{ const ex=f.cat==='剔除';
      · **i8 已撤单行**（`ntVoid`）—— 用户口径 2026-09-14：撤单行**默认隐藏**，
        藏处 = 并进本视图（**不新增分类枚举值**），渲染时按来源给不同标签，两者不相混。 */
   const arch=n=>ex?(n.excl||ntVoid(n)):ntLive(n);
-  return NO.filter(n=>tmIn(f.month,n.date)
+  return NO.filter(n=>(!f.ids||f.ids.includes(n.id))&&tmIn(f.month,n.date)
     &&(!f.projs||!f.projs.length||f.projs.includes(ntProjKey(n)))
     &&arch(n)
     &&(ex||f.cat==='全部'||n.cat===f.cat)
@@ -53,7 +53,7 @@ const ntSearchMatch=(n,q)=>{
   return [n.id,n.date,n.code,n.proj,p&&pjDisp(p),n.cat,n.doc,n.biz,n.recv,n.sup,n.entry,
     n.approve,payEff(n),paidOf(n.id),n.ss,n.sp,
     ...[n.approve,payEff(n),paidOf(n.id),n.ss,n.sp].map(M),
-    n.astat,statOf(n),n.excl?'剔除':'',ntVoid(n)?'i8 已撤单':'',n.manual?'手动':'',
+    n.astat,statOf(n),n.excl?ntArchLabel(n):'',ntVoid(n)?'i8 已撤单':'',n.manual?'手动':'',
     supHas(n)?'自动匹配 待确认':'',j?'已关联 '+j.id:'关联集采合同',n.over?'超付':'']
     .some(v=>norm(v).includes(needle));
 };
@@ -482,11 +482,12 @@ const ntPayBlock=n=>n.astat!=='已批'?`审批状态「${n.astat||'（空）'}�
       （付款闸在批量付款那一步，且那里还有一道兜底，防"勾上之后才被标撤单"的状态错位）。 */
 const ntSelectable=n=>ntPayCand(n)||!!n.excl;
 /* ⭐ 列表「分类」列 / 行样式的**唯一分档出口**（2026-09-14 用户口径：按来源分档、两者不相混）：
-   · 剔除行 → `剔除`
+   · 剔除行 → `手动剔除` / `自动剔除`；无来源的历史行明确提示未知
    · i8 已撤单行 → `i8 已撤单`（有牵涉时**仍留列表 + 带警示**，提示"请先撤销付款 / 解绑关联"）
    · 正常行 → 空（分类下拉照旧）
    ⚠️ 撤单行**不写 `n.excl`** —— 它没被剔除；判据永远是 `ntVoid`（不新增枚举值、不改 `ENUMS.cat`）。 */
-const ntArchTag=n=>n.excl?tag('剔除','dg'):(ntVoid(n)?tag('i8 已撤单','wn'):'');
+const ntArchLabel=n=>n.exsource==='manual'?'手动剔除':n.exsource==='rule'?'自动剔除':'剔除（来源未知）';
+const ntArchTag=n=>n.excl?`<span class="tag t-dg" title="${esc(n.exrule||'剔除来源未记录')}">${esc(ntArchLabel(n))}</span>`:(ntVoid(n)?tag('i8 已撤单','wn'):'');
 const ntArchCls=n=>n.excl?'ex':(ntVoid(n)?'ex ntvoid':'');
 /* 该行是否被「统计结算金额 / 统计付款金额」手改过（留痕 = 唯一事实来源，两个字段各判各的） */
 const impManSS=n=>hasT(n,'统计结算金额');

@@ -70,6 +70,7 @@ class NoticeRow:
     approve_status: str = ""
     excluded: bool = False
     exclude_source: str = EXCLUDE_NONE
+    exclude_rule_hint: str = ""
     i8_revoked: bool = False
     is_manual: bool = False                 # 手动新增行 ⇒ 「操作」列才有编辑 / 删除（§4.2.6）
     ownership_id: int | None = None
@@ -190,10 +191,20 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None) -> list
     if traces_of is None:
         traces_of = _traces_by_notice(session)
 
+    from app.mod03_notice.classify import current_exclude_hint
+    from app.mod03_notice.rules_repository import effective_rules
+
+    rules = None
     rows: list[NoticeRow] = []
     for n in notice_rows(session):
         approved = to_money(n.amount_approved)
         paid = effective_total(flows_of(int(n.id)))
+        hint = ""
+        if n.excluded and n.exclude_source == EXCLUDE_BY_RULE:
+            if rules is None:
+                rules = effective_rules(session)
+            hint = current_exclude_hint({"biz_type": n.biz_type, "project_name": n.project_name,
+                                         "input_by": n.input_by, "fields": n.fields}, rules)
         rows.append(
             NoticeRow(
                 notice_id=int(n.id),
@@ -212,6 +223,7 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None) -> list
                 approve_status=str(n.approve_status or ""),
                 excluded=bool(n.excluded),
                 exclude_source=str(n.exclude_source or EXCLUDE_NONE),
+                exclude_rule_hint=hint,
                 i8_revoked=bool(n.i8_revoked),
                 is_manual=bool(getattr(n, "is_manual", False)),
                 ownership_id=n.ownership_id,

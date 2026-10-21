@@ -415,6 +415,7 @@ def _api_item(rec: dict) -> dict:
         "ownership_id": row.ownership_id,
         "is_excluded": bool(row.excluded),
         "exclude_source": row.exclude_source,
+        "exclude_rule_hint": row.exclude_rule_hint,
         "is_revoked": bool(row.i8_revoked),
         "is_manual": bool(row.is_manual),
         "edited_fields": list(row.edited_fields or ()),

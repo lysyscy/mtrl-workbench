@@ -408,3 +408,20 @@ def test_批量付款备注保存到每条流水(remark):
     flows = [f for f in fake.added if isinstance(f, PaymentFlow)]
     assert len(flows) == 2
     assert [f.remark for f in flows] == [remark, remark]
+
+
+def test_API_rule_hint_uses_current_config_without_changing_exclusion():
+    from app.mod03_notice.models import ExcludeRuleRow
+    client, fake = _client([
+        _notice(1, excluded=True, exclude_source='rule', input_by='张三'),
+        _notice(2, excluded=True, exclude_source='rule', input_by='李四'),
+        _notice(3, excluded=True, exclude_source='manual', input_by='张三'),
+    ])
+    fake.by_model[ExcludeRuleRow] = [ExcludeRuleRow(id=1, ord=0, kind='input_by', values='张三')]
+    items=client.get('/api/m03/notice-list',params={'period':''}).json()['items']
+    by_id={n['notice_id']:n for n in items}
+    assert '录入人（张三）' in by_id[1]['exclude_rule_hint']
+    assert '历史命中规则未保存' in by_id[1]['exclude_rule_hint']
+    assert '当前无匹配规则' in by_id[2]['exclude_rule_hint']
+    assert by_id[3]['exclude_rule_hint']==''
+    assert all(n.excluded for n in fake.by_model[PaymentNotice])
