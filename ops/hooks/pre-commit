@@ -42,11 +42,15 @@ do
   if [ "$rc" -eq 0 ]; then
     echo "pre-commit ✅ $script $*"
   else
-    echo "pre-commit ⛔ $script $*（rc=$rc）"
+    if [ "$rc" -eq 2 ] && [ "$script" = "tools/audit/syntax_audit.py" ]; then
+      echo "pre-commit ⚠️ $script $* 未完成（缺运行依赖，rc=2）"
+    else
+      echo "pre-commit ⛔ $script $*（rc=$rc）"
+    fi
     printf '%s\n' "$out" | tail_n 10
     bad="$bad $script"
   fi
 done
-if [ -n "$bad" ]; then echo "pre-commit：相关检查失败，先修再提交"; exit 1; fi
+if [ -n "$bad" ]; then echo "pre-commit：相关检查未完成或失败，先核原因再提交"; exit 1; fi
 echo "pre-commit：暂存语法、字节及凭据文件检查通过"
 exit 0

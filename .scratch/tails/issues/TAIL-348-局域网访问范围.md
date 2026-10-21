@@ -2,7 +2,7 @@
 
 **What to build:** 确认办公室允许访问的设备或网段后收紧应用访问范围
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** 等待用户确认允许访问的设备或办公室网段
 
 **Status:** needs-info
 

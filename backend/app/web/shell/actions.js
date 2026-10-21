@@ -260,7 +260,7 @@ function jcLinkDialog(n,data){
       <td class="sm" style="min-width:200px;white-space:normal">${invoices(j)}</td>
       <td class="sm" style="min-width:220px;white-space:normal">${reasons(j)}${j.linkRecommendation.combination_limited?'<div class="mut">超过12笔，仅比较单笔及全部发票合计。</div>':''}</td></tr>`).join('')}</tbody></table></div>`:'<div class="tip">本项目、供应商范围内没有可选合同，请先检查项目归属、供应商或合同台账。</div>'}
     ${sel?`<div class="tip">已选 <b>${jcIdentity(sel)}</b> · 关联前欠款 ${money(jcDebt(sel))} · 本条统计付款金额 ${money(n.sp)} ${N2(jcDebt(sel))===N2(n.sp)?tag('一致','ok'):tag('金额不一致 · 仍可关联','wn')}</div>`:''}`,
-    footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消当前关联</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${sel?'':'disabled'}>${cur?'改关联到所选合同':'关联'}</button>`});
+    footer:`${cur?`<button class="btn dg" data-act="jcUnlink" data-id="${n.id}">取消当前关联</button>`:''}<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcLinkOk" data-id="${n.id}" ${sel?'':`disabled title="${cands.length?'请先选择一份合同':'当前范围没有可选合同'}"`}>${cur?'改关联到所选合同':'关联'}</button>`});
 }
 
 
@@ -2140,7 +2140,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
      if(lastModal!==loading) return;
      if(!data||!data.ok) throw errHuman(data&&data.message||'采购合同应付未能读取');
      const selections=data.rows.filter(r=>r.contract_id!=null);
-     modal({title:'一键关联集采合同',autoLink:{notice_ids:ids,selections},body:`<div class="tip">可关联 ${selections.length} 条，其余保留人工处理。只补当前列表的未关联通知书，已有合同保持不变。</div><div class="tw"><table class="dt"><thead><tr><th>通知书</th><th>合同／处理结果</th><th>采购应付依据</th></tr></thead><tbody>${data.rows.map(r=>`<tr><td>${esc(r.code)}</td><td>${esc(r.contract_no||r.reason)}${r.amount?`<div class="jc-link-money">${M(N0(r.amount))}</div>`:''}</td><td>${(r.payable_codes||[]).map(esc).join('、')}</td></tr>`).join('')}</tbody></table></div>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcAutoLinkOk" ${selections.length?'':'disabled'}>关联这 ${selections.length} 条</button>`});
+     modal({title:'一键关联集采合同',autoLink:{notice_ids:ids,selections},body:`<div class="tip">可关联 ${selections.length} 条，其余保留人工处理。只补当前列表的未关联通知书，已有合同保持不变。</div><div class="tw"><table class="dt"><thead><tr><th>通知书</th><th>合同／处理结果</th><th>采购应付依据</th></tr></thead><tbody>${data.rows.map(r=>`<tr><td>${esc(r.code)}</td><td>${esc(r.contract_no||r.reason)}${r.amount?`<div class="jc-link-money">${M(N0(r.amount))}</div>`:''}</td><td>${(r.payable_codes||[]).map(esc).join('、')}</td></tr>`).join('')}</tbody></table></div>`,footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn pri" data-act="jcAutoLinkOk" ${selections.length?'':'disabled title="暂无可关联的通知书，请查看逐行处理结果"'}>关联这 ${selections.length} 条</button>`});
    }catch(e){if(lastModal===loading) modal({title:'应付读取失败',body:`<div class="tip wn">${esc(String(e.message||e))}</div>`,footer:'<button class="btn" data-act="closeModal">关闭</button><button class="btn pri" data-act="jcAutoLink">重试</button>'});}
  },
  jcAutoLinkOk:async t=>{

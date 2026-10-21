@@ -2,7 +2,7 @@
 
 **What to build:** 新机安装与迁移验收暂缓至实际换机
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** 等待用户实际提出换机或重装
 
 **Status:** needs-triage
 

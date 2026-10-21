@@ -155,8 +155,8 @@ class Tracker:
                 self.unsupported = True
                 continue
             if id(obj) not in self.records:
-                before = None if obj in session.new else _read(session, obj.__table__, obj.id, lock=True)[0]
-                self.records[id(obj)] = (obj, rule, before)
+                before, before_version = (None, None) if obj in session.new else _read(session, obj.__table__, obj.id, lock=True)
+                self.records[id(obj)] = (obj, rule, before, before_version)
 
     def prepare(self):
         self.session.flush()
@@ -169,7 +169,7 @@ class Tracker:
         self.preparing = True
         changes = []
         parents = {}
-        for obj, rule, before in self.records.values():
+        for obj, rule, before, before_version in self.records.values():
             after, version = _read(self.session, obj.__table__, obj.id)
             if _same(before, after):
                 continue
@@ -193,7 +193,7 @@ class Tracker:
                                          'data': data, 'version': parent_version}
                 guards.append(parents[identity])
             changes.append({'table': obj.__tablename__, 'id': obj.id, 'before': before,
-                            'after': after, 'version': version, 'parents': guards})
+                            'after': after, 'version': version, 'target_version': before_version, 'parents': guards})
         if not changes and not self.unsupported:
             return
         self.session.connection().execute(update(OperationHistory).where(
@@ -227,7 +227,7 @@ def track(session):
 
 
 def record_barrier(session, actor, label):
-    """独立连接的既有写入口也要明确截断历史，不能跨越重放。"""
+    """在调用者的业务事务内截断历史并使旧重做失效。"""
     lock_actor(session, actor)
     session.connection().execute(update(OperationHistory).where(
         OperationHistory.actor == actor_key(actor), OperationHistory.state == 'undone'
@@ -235,10 +235,14 @@ def record_barrier(session, actor, label):
     session.add(OperationHistory(actor=actor_key(actor), label=label, state='barrier', changes=[]))
 
 
-def _top(session, actor, direction):
-    barrier = session.scalar(select(OperationHistory.id).where(
+def _barrier_id(session, actor):
+    return session.scalar(select(OperationHistory.id).where(
         OperationHistory.actor == actor_key(actor), OperationHistory.state == 'barrier'
     ).order_by(OperationHistory.id.desc()).limit(1)) or 0
+
+
+def _top(session, actor, direction):
+    barrier = _barrier_id(session, actor)
     state = 'applied' if direction == 'undo' else 'undone'
     order = OperationHistory.id.desc() if direction == 'undo' else OperationHistory.id.asc()
     return session.scalar(select(OperationHistory).where(
@@ -314,22 +318,44 @@ def replay(session, actor, direction, expected_id):
     restored = {}
     for rule, change in prepared:
         row, version = _read(session, rule.model.__table__, change['id'])
-        change['version'] = version
-        restored[(change['table'], change['id'])] = (row, version)
+        # 目标旧版本是可信链的凭据；旧条目缺失时不猜测续接。
+        if 'target_version' in change:
+            restored[(change['table'], change['id'])] = (row, version, change['target_version'])
+        change['target_version'], change['version'] = change['version'], version
     operation.changes = changes
     session.flush()
-    # 只有本次可信逆操作还原的行，才可更新下一步的事务版本；外部改动不放行。
-    next_op = _top(session, actor, direction)
-    if next_op:
+    state = 'applied' if direction == 'undo' else 'undone'
+    order = OperationHistory.id.desc() if direction == 'undo' else OperationHistory.id.asc()
+    pending = session.scalars(select(OperationHistory).where(
+        OperationHistory.actor == actor_key(actor), OperationHistory.state == state,
+        OperationHistory.id > _barrier_id(session, actor),
+        OperationHistory.id < operation.id if direction == 'undo' else OperationHistory.id > operation.id,
+    ).order_by(order))
+    for next_op in pending:
+        if not restored:
+            break
         next_changes = json.loads(json.dumps(next_op.changes))
+        changed = False
         for change in next_changes:
-            restored_row = restored.get((change['table'], change['id']))
-            if restored_row and _same(restored_row[0], change[source]):
-                change['version'] = restored_row[1]
             for parent in change.get('parents', []):
-                restored_parent = restored.get((parent['table'], parent['id']))
-                if restored_parent and _same(restored_parent[0], parent['data']):
-                    parent['version'] = restored_parent[1]
-        next_op.changes = next_changes
+                identity = (parent['table'], parent['id'])
+                trusted = restored.get(identity)
+                if trusted:
+                    row, version, previous = trusted
+                    if _same(row, parent['data']) and parent['version'] == previous:
+                        parent['version'] = version
+                        changed = True
+                    else:
+                        restored.pop(identity)
+            identity = (change['table'], change['id'])
+            trusted = restored.pop(identity, None)
+            if trusted:
+                row, version, previous = trusted
+                if _same(row, change[source]) and change['version'] == previous:
+                    change['version'] = version
+                    changed = True
+                # 到真正修改该行的动作即停止；它重放后负责下一段续接。
+        if changed:
+            next_op.changes = next_changes
     return {'ok': True, 'label': operation.label, 'count': len(changes),
             'message': f"已{'撤销' if direction == 'undo' else '重做'}：{operation.label}（{len(changes)}条）"}

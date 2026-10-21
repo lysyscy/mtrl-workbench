@@ -378,3 +378,164 @@ def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, m
                 assert s.get(OpeningBalance, row_id).cutoff_ym == '2025-11'
         result = client.post('/api/history/redo', json={'operation_id': entry['id']})
         assert result.status_code == 200 and value() == after, result.text
+
+
+@pytest.fixture
+def committed_data(monkeypatch):
+    """真实独立提交；仅清理唯一actor及本用例创建的行。"""
+    from uuid import uuid4
+    from sqlalchemy import create_engine, delete
+    from sqlalchemy.orm import sessionmaker
+    from app.core import db
+    from app.core.config import get_settings
+    from tests.conftest import _DB_GUARD
+    engine = create_engine(get_settings().test_database_url)
+    _DB_GUARD.assert_runtime(engine.url)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    monkeypatch.setattr(db, '_session_factory', factory)
+    actor = '__history_remediation_' + uuid4().hex
+    configure()
+    project_id = notice_id = None
+    notice_ids = []
+    fees = []
+    try:
+        with factory.begin() as s:
+            project = Project(project_type='normal', name_full=actor, warehouse_name=actor, disp='原名')
+            s.add(project); s.flush(); project_id = project.id
+            rows = [FeeManualItem(project_id=project_id, ym='2026-10', item_name=actor+str(i), amount=v)
+                    for i,v in enumerate((1,10,100))]
+            notice = PaymentNotice(ph_id=actor, bill_no=actor, category='material',
+                ownership_id=project_id, amount_approved=100, planned_pay_method='',
+                stat_paid=0, stat_settle=100, excluded=False, fields={})
+            other = PaymentNotice(ph_id=actor+'second', bill_no=actor+'second', category='material',
+                ownership_id=project_id, amount_approved=100, planned_pay_method='',
+                stat_paid=0, stat_settle=100, excluded=False, fields={})
+            s.add_all([*rows,notice,other]);s.flush()
+            fees = [r.id for r in rows];notice_id=notice.id
+            notice_ids=[notice.id,other.id]
+        yield dict(actor=actor, factory=factory, engine=engine, project=project_id, fees=fees,
+                   notice=notice_id, notices=notice_ids)
+    finally:
+        with engine.begin() as c:
+            c.execute(delete(history.OperationHistory).where(history.OperationHistory.actor.in_(
+                [history.actor_key(actor),history.actor_key(actor+'other')])))
+            if fees: c.execute(delete(FeeManualItem).where(FeeManualItem.id.in_(fees)))
+            if notice_ids: c.execute(delete(PaymentNotice).where(PaymentNotice.id.in_(notice_ids)))
+            if project_id is not None: c.execute(delete(Project).where(Project.id==project_id))
+        engine.dispose()
+
+
+def test_interleaved_commits_and_parent_guards_roundtrip(committed_data):
+    d=committed_data;actor=d['actor'];a,b,c=d['fees']
+    def change(row,value):
+        return perform('/api/m09/fee/amount',lambda s:setattr(s.get(FeeManualItem,row),'amount',value),actor)
+    def amounts():
+        with d['factory']() as s:
+            return [s.get(FeeManualItem,i).amount for i in (a,b,c)]
+    change(a,2);first=status(actor)['undo']['id']
+    change(b,11);middle=status(actor)['undo']['id']
+    change(a,3);last=status(actor)['undo']['id']
+    for ident,want in [(last,[2,11,100]),(middle,[2,10,100]),(first,[1,10,100])]:
+        replay('undo',actor,ident);assert amounts()==want
+    for ident,want in [(first,[2,10,100]),(middle,[2,11,100]),(last,[3,11,100])]:
+        replay('redo',actor,ident);assert amounts()==want
+    rename=lambda name:perform(f"/api/m01/projects/{d['project']}",
+        lambda s:setattr(s.get(Project,d['project']),'disp',name),actor,method='PUT')
+    rename('中间名');change(a,4);change(b,12);change(c,101);rename('最终名')
+    for _ in range(8): replay('undo',actor)
+    assert amounts()==[1,10,100] and status(actor)['undo'] is None
+    with d['factory']() as s: assert s.get(Project,d['project']).disp=='原名'
+    for _ in range(8): replay('redo',actor)
+    assert amounts()==[4,12,101] and status(actor)['redo'] is None
+    with d['factory']() as s: assert s.get(Project,d['project']).disp=='最终名'
+
+
+@pytest.mark.parametrize('parent', [False,True])
+def test_external_aba_before_later_tracked_write_is_not_trusted(committed_data,parent):
+    d=committed_data;actor=d['actor'];a,b,_=d['fees']
+    def tracked(value):
+        if parent:
+            perform(f"/api/m01/projects/{d['project']}",
+                lambda s:setattr(s.get(Project,d['project']),'disp',str(value)),actor,method='PUT')
+        else:
+            perform('/api/m09/fee/amount',lambda s:setattr(s.get(FeeManualItem,a),'amount',value),actor)
+    tracked(2)
+    if parent:
+        # 两个子项均依赖同一父版本，不能跨过外部ABA续接。
+        for row in (a,b):
+            perform('/api/m09/fee/amount',lambda s,row=row:setattr(s.get(FeeManualItem,row),'amount',20),actor)
+    for value in (99,2):
+        with d['factory'].begin() as s:
+            if parent:s.get(Project,d['project']).disp=str(value)
+            else:s.get(FeeManualItem,a).amount=value
+    tracked(3)
+    replay('undo',actor)
+    before=status(actor)
+    with pytest.raises(MustReportError,match='后续操作'):
+        replay('undo',actor)
+    assert status(actor)==before
+    with d['factory']() as s:
+        assert s.get(FeeManualItem,a).amount==(20 if parent else 2)
+
+
+@pytest.mark.parametrize('case', ['barrier','success','hash','fingerprint','old'])
+def test_plan_methods_and_barrier_commit_atomically(committed_data,monkeypatch,case):
+    from fastapi.testclient import TestClient
+    from sqlalchemy import event
+    from app import history_api
+    from app.main import create_app
+    from app.core import session as SESS
+    from app.mod03_notice import plan_audit_api as api
+    from tests.test_plan_audit_api import preview
+    from hashlib import sha256
+    import json
+    d=committed_data;actor=d['actor'];a=d['fees'][0]
+    perform('/api/m09/fee/amount',lambda s:setattr(s.get(FeeManualItem,a),'amount',2),actor)
+    replay('undo',actor)
+    before=status(actor)
+    p=preview();p['changes'][0].update(id=d['notice'],bill_no=actor,ownership_id=d['project'],paid='0')
+    p['changes'].append({**p['changes'][0],'id':d['notices'][1],'bill_no':actor+'second','source_row':5})
+    if case=='old':p['changes'][1]['old']='现汇'
+    p['snapshot']['database_fingerprint']=('c'*64 if case=='fingerprint' else api.DATA.database_fingerprint(d['engine']))
+    fail_barrier=case=='barrier'
+    failed=case!='success'
+    raw=json.dumps(p);body={'preview_json':raw,'approved_sha256':sha256(raw.encode()).hexdigest()}
+    if case=='hash':body['approved_sha256']='0'*64
+    monkeypatch.setattr(SESS,'secret',lambda:b'isolated-history-atomic')
+    monkeypatch.setattr(api,'active_account',lambda *args:object())
+    monkeypatch.setattr(history_api,'active_account',lambda *args:object())
+    def reject(conn,cursor,statement,parameters,context,many):
+        if 'INSERT INTO operation_history' in statement:
+            raise RuntimeError('barrier storage failure')
+    if fail_barrier:event.listen(d['engine'],'before_cursor_execute',reject)
+    try:
+        with TestClient(create_app(),raise_server_exceptions=False) as client:
+            client.cookies.set(SESS.COOKIE_NAME,SESS.make(actor))
+            result=client.post('/api/m03/plan-audit/methods',json=body)
+            assert result.status_code==(500 if fail_barrier else 409 if failed else 200),result.text
+            if not failed:assert result.headers['X-Operation-History']=='unsupported'
+    finally:
+        if fail_barrier:event.remove(d['engine'],'before_cursor_execute',reject)
+    with d['factory']() as s:
+        assert [s.get(PaymentNotice,i).planned_pay_method for i in d['notices']]==(['',''] if failed else ['承兑','承兑'])
+        rows=list(s.scalars(select(history.OperationHistory).where(
+            history.OperationHistory.actor==history.actor_key(actor))))
+        assert len(rows)==(1 if failed else 2)
+        assert [r.state for r in rows]==(['undone'] if failed else ['discarded','barrier'])
+    if failed:assert status(actor)==before
+    else:assert status(actor)=={'undo':None,'redo':None,'notice':'上一步暂不支持撤销／重做'}
+
+
+def test_legacy_history_without_target_version_keeps_conservative_boundary(committed_data):
+    d=committed_data;actor=d['actor'];row=d['fees'][0]
+    for value in (2,3):
+        perform('/api/m09/fee/amount',lambda s,value=value:setattr(s.get(FeeManualItem,row),'amount',value),actor)
+    latest=status(actor)['undo']['id']
+    with d['factory'].begin() as s:
+        item=s.get(history.OperationHistory,latest)
+        item.changes=[{k:v for k,v in c.items() if k!='target_version'} for c in item.changes]
+    replay('undo',actor)
+    with d['factory']() as s:assert s.get(FeeManualItem,row).amount==2
+    with pytest.raises(MustReportError,match='后续操作'):replay('undo',actor)
+    replay('redo',actor)
+    with d['factory']() as s:assert s.get(FeeManualItem,row).amount==3

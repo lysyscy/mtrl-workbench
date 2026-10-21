@@ -2,7 +2,7 @@
 
 **What to build:** 请求并发治理保留为暂缓尾巴
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** 等待用户重新确认并发治理优先级并确定具体复现页
 
 **Status:** needs-triage
 

@@ -109,16 +109,21 @@ def test_successful_method_endpoint_uses_atomic_update_and_returns_bound_receipt
         def exec_driver_sql(self, sql):
             calls.append(sql)
 
-    class Engine:
-        dialect = SimpleNamespace(name='postgresql')
+    conn = Conn()
+    @contextmanager
+    def scope():
+        yield SimpleNamespace(connection=lambda:conn)
 
-        @contextmanager
-        def begin(self):
-            yield Conn()
-
-    monkeypatch.setattr(API, 'get_engine', Engine)
+    monkeypatch.setattr(API, 'session_scope', scope)
+    monkeypatch.setattr(API, 'active_account', lambda *args:object())
+    monkeypatch.setattr(API.history, 'lock_actor', lambda session,actor:calls.append(('lock',actor)))
+    monkeypatch.setattr(API.history, 'record_barrier', lambda session,actor,label:calls.append(('barrier',actor)))
+    monkeypatch.setattr(API, 'get_engine', lambda:SimpleNamespace(dialect=SimpleNamespace(name='postgresql')))
     monkeypatch.setattr(API.DATA, 'database_fingerprint', lambda _: 'b'*64)
-    monkeypatch.setattr(API, 'apply_changes', lambda conn, p: calls.append(p['changes']))
+    def apply(connection,p):
+        assert connection is conn
+        calls.append(p['changes'])
+    monkeypatch.setattr(API, 'apply_changes', apply)
     client.cookies.set(SESS.COOKIE_NAME, SESS.make('active'))
     raw = json.dumps(preview(), ensure_ascii=False)
     digest = sha256(raw.encode()).hexdigest()
@@ -126,4 +131,6 @@ def test_successful_method_endpoint_uses_atomic_update_and_returns_bound_receipt
     assert response.status_code == 200
     assert response.json() == dict(status='committed', count=1, preview_sha256=digest, source_sha256='a'*64)
     assert response.headers['Cache-Control'] == 'no-store'
-    assert len(calls) == 3 and calls[-1] == preview()['changes']
+    assert response.headers['X-Operation-History'] == 'unsupported'
+    assert len(calls) == 5 and calls[0] == ('lock','active')
+    assert calls[-2] == preview()['changes'] and calls[-1] == ('barrier','active')

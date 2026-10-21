@@ -20,7 +20,7 @@
 
 ⚠️ **本哨只查语法**（⛔ 不做风格评审）：能编译 / 能解析就不是它管的事
 （"内层引号一律「」"那条是**人写文时的规矩**，不是机器判据 —— 机器只认"它到底能不能跑"）。
-⚠️ `Q2` 需要 `node`；**机器上没有就"跳过"并明说**（⛔ 不静默通过 —— 静默通过比不查更坏）。
+⚠️ `Q2` 需要 `node`；**机器上没有就明说未验并退出2**（⛔ 不静默通过 —— 静默通过比不查更坏）。
 
 ## 自检（证明这两条**真的有区分力**）
 `python tools/syntax_audit.py --selftest` —— 在临时目录里造两个"已知必错"的样本
@@ -271,12 +271,13 @@ def main(argv: list[str]) -> int:
         print("\n─ Q4 · 模块 docstring：跳过（要看它请跑 `syntax_audit.py --staged`）")
 
     print(f"\n结论：**必须修 {must}**" + ("（有红 ⇒ 非零退出）" if must else ""))
-    return 0 if must == 0 else 1
+    return 1 if must else 2 if note else 0
 
 
 def _selftest() -> int:
     """自检：两个"已知必错"样本必须判红、两个"合法"样本必须放行（证明哨子真有区分力）。"""
     ok = True
+    unverified = False
     with tempfile.TemporaryDirectory(prefix="syntax_selftest_") as d:
         base = Path(d)
         bad_py = base / "bad.py"
@@ -325,7 +326,7 @@ def _selftest() -> int:
         q2_ok, _ = rule_q2(good_html)
         if note:
             print("自检 Q2：", note, "⇒ 无法自证（先装 node）")
-            ok = False
+            unverified = True
         else:
             print("自检 Q2：坏样本判红 =", bool(q2), "· 好样本放行 =", not q2_ok)
             if q2:
@@ -339,7 +340,8 @@ def _selftest() -> int:
         css_bad, _ = rule_q2(css)
         js_bad, _ = rule_q2(bad_js)
         print("自检 Q2②：CSS不当脚本 = ", not css_bad, "· 外链JS坏样本判红 = ", bool(js_bad))
-        ok &= not css_bad and bool(js_bad)
+        if not unverified:
+            ok &= not css_bad and bool(js_bad)
 
         # Q3：临时目录里造一个"备份散件" ⇒ 必须判红；把它当作"壳件"传进去 ⇒ 必须放行
         stray = base / "stray.js.bak-sync"
@@ -351,8 +353,8 @@ def _selftest() -> int:
             print("        ", q3_bad[0][:110])
         ok &= bool(q3_bad) and not q3_ok
 
-    print("\n自检结论：", "✅ 四条规则都能区分（坏的红、好的放行）" if ok else "⛔ 自检未通过")
-    return 0 if ok else 1
+    print("\n自检结论：", "⛔ 自检未通过" if not ok else "Q2缺node，未完成自证" if unverified else "✅ 四条规则都能区分（坏的红、好的放行）")
+    return 1 if not ok else 2 if unverified else 0
 
 
 if __name__ == "__main__":

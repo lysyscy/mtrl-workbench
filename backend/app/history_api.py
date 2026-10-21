@@ -58,11 +58,6 @@ def install(app):
         token, state = history.begin_request(actor, request.method, request.url.path)
         try:
             response = await call_next(request)
-            if (state and response.status_code < 300
-                    and request.url.path == '/api/m03/plan-audit/methods'):
-                with session_scope() as session:
-                    history.record_barrier(session, state.actor, '修改拟付款方式')
-                state.result = 'unsupported'
             if state and state.result:
                 response.headers['X-Operation-History'] = state.result
             return response

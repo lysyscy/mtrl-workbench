@@ -9,9 +9,9 @@
 
 ## 一、现行导入：范围与匹配
 
-现行导入保留付款计划（m04_plan）、过程资料（m06_proc）及其既有机械费报表（m06_mech_report）。历史付款流水与集采Excel导入已退出运行注册，专属源码、旧测试与原说明见 docs/archive/retired-imports-20261015/README.md。
+现行导入保留过程资料（m06_proc）及其既有机械费报表（m06_mech_report）。付款计划、历史付款流水与集采Excel导入已退出运行注册，专属源码、旧测试与原说明见 docs/archive/retired-imports-20261015/README.md。
 
-范围栏在①选域与文件；付款计划按本批归属年月导入，过程资料按项目及截止核算月导入。③显示只读预览，④确认前不写库；过程资料的项目不预选，截止月随所选项目更新。契约由各域imp_spec声明，共享载具由import_kit使用preview_store提供。
+范围栏在①选域与文件；过程资料按项目及截止核算月导入。③显示只读预览，④确认前不写库；过程资料的项目不预选，截止月随所选项目更新。契约由各域imp_spec声明，共享载具由import_kit使用preview_store提供。
 
 ## 二、抓取 / 建档归属 ＋ 集采「谁覆盖谁」矩阵
 
@@ -198,7 +198,7 @@
 
 1. 先记录 HEAD、索引及已有未提交范围，保护其他工作；基点不证明测试通过。
 2. 在 backend 下用项目解释器运行明确文件/节点，例如 `./.venv/Scripts/python.exe -X utf8 -m pytest tests/test_core_money.py -q --tb=short`；共享基础层或无法界定影响时扩大。退出5表示未收集，不能算通过。
-3. 在仓根按需运行 `backend/.venv/Scripts/python.exe -X utf8 tools/audit/syntax_audit.py --staged`、`tools/audit/bytes_guard.py --staged`；字节工具也支持 `--paths <实际文件...>`。提交仍执行真实钩子。
+3. 在仓根按需运行 `backend/.venv/Scripts/python.exe -X utf8 tools/audit/syntax_audit.py --staged`、`tools/audit/bytes_guard.py --staged`；字节工具也支持 `--paths <实际文件...>`。语法工具退出0=所选检查完成，1=已检出失败，2=缺依赖未验（其他规则仍检查；真实失败优先退出1）；不能把2当源码语法失败或通过。提交仍执行真实钩子。
 4. 文档专项用 `tools/audit/doc_audit.py`；链路、接线和反例仅在相关风险需要时明确选择。旧 scope/runner、自动回执和变异登记已退役，不以空运行返回成功。
 5. 历史判据报告显式用 `tools/audit/acc_report.py --results <旧结果.json>`；它保留判据含义及总运行状态，不刷新业务需求，不作为当前完整通过证明。pytest 默认不产生该JSON。
 

@@ -44,3 +44,6 @@ desktop.ini
 /dist/
 /.artifacts/
 /.scratch/local/
+
+# Codex user attachments; original input stays local.
+.codex-attachments/

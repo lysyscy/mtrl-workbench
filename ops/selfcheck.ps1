@@ -8,7 +8,7 @@
 #     ② http://127.0.0.1:8000/app 返回 200
 #     ③ 库连得上、基础表数量检查（走**后端自己的配置**去连 —— 口径只认一份）
 #     ④ 两份运行时模板在，且 SHA256 对得上（防回退/拷贝损坏 —— 历史踩过）
-#     ⑤ 三个历史导入域 ＋ 库存单据端点在（从 /openapi.json 里找；拿不到就照实说「跳过 + 原因」）
+#     ⑤ 两个现行导入域 ＋ 库存单据端点在（从 /openapi.json 里找；拿不到就照实说「跳过 + 原因」）
 #
 # 用法（目标机 · 普通窗口即可）：
 #   powershell -ExecutionPolicy Bypass -File ops\selfcheck.ps1
@@ -120,12 +120,12 @@ print('RESULT ' + ('ALL-OK' if not bad else 'BAD:' + ','.join(bad)))
 
 # ---- ⑤ 初始化入口的端点 ----
 Write-Host ''
-Write-Host '⑤ 初始化入口（付款存量 / 过程资料 / 集采 / 库存补抓）'
+Write-Host '⑤ 初始化入口（过程资料 / 机械费报表 / 库存补抓）'
 try {
     $spec = (Invoke-WebRequest -Uri ($Base + '/openapi.json') -UseBasicParsing -TimeoutSec 15).Content | ConvertFrom-Json
     $paths = @($spec.paths.PSObject.Properties.Name)
-    # 前三个历史导入域都走**通用导入面** /imp/<域>/*（D26：导入只留通用面）⇒ 逐个域核，别只看「面在」
-    foreach ($d in @('m05_flow', 'm06_proc', 'm11_jc')) {
+    # 前两个现行导入域都走**通用导入面** /imp/<域>/*（D26：导入只留通用面）⇒ 逐个域核，别只看「面在」
+    foreach ($d in @('m06_proc', 'm06_mech_report')) {
         $hit = @($paths | Where-Object { $_ -like ('/api/imp/' + $d + '/*') })
         if ($hit.Count -gt 0) { Ok ('导入域 ' + $d + ' 在（' + $hit.Count + ' 个端点）') } else { Bad ('导入域 ' + $d + ' 不在 openapi 里') }
     }

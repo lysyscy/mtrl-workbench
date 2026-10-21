@@ -5,7 +5,8 @@ function historyRender(){
   ['undo','redo'].forEach(direction=>{
     const label=direction==='undo'?'撤销':'重做', item=HISTORY[direction];
     const key=direction==='undo'?'Ctrl+Z':'Ctrl+Y';
-    const title=item?`${label}：${item.label}（${item.count}条，${key}）`:`暂无可${label}的操作（${key}）`;
+    const reason=!CUR.role?'请先登录':HISTORY.busy?'正在撤销或重做，请稍候':HISTORY.writes?'请等当前操作保存完成':HISTORY.loading?'正在读取操作历史':!item?`暂无可${label}的操作（${key}）`:'';
+    const title=reason||`${label}：${item.label}（${item.count}条，${key}）`;
     const disabled=!CUR.role||!item||HISTORY.busy||HISTORY.writes||HISTORY.loading;
     const button=root.querySelector(`[data-act="history${direction==='undo'?'Undo':'Redo'}"]`);
     button.disabled=!!disabled;button.title=title;

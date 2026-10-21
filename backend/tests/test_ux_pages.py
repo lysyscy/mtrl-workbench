@@ -15,6 +15,10 @@ from __future__ import annotations
 
 import re
 
+from playwright.sync_api import expect
+from tests.ui_helpers import ui_page  # noqa: F401
+from tools.audit.workspace_paths import output
+
 from tests.shell_src import (  # noqa: F401  ← `P4`① 读取点收敛
     SHELL, act_entry, const_items, fbar_kernel, page_slice, pjb_kernel, read_shell, tbl_kernel, with_fbar,
 )
@@ -251,17 +255,46 @@ def test_每个导出按钮都写清了导的是什么():
     assert "导出当前筛选下看到的这些行" in SHELL, "真导出那几处的范围说明没了"
 
 
-def test_置灰的按钮都写清了为什么灰():
-    """守则 §4.6（看不见的功能不留"点了报错"的入口 · 置灰要说明原因）/ §5.5。
-
-    ⚠️ 只判**模板里字面写的 `disabled`**（`<button … disabled …>`）—— 那才是"用户会看见它灰着"的那一类；
-       运行期用 JS 临时置灰的（提交中 / 重入闸）各有各自动作里的守卫，**不在这里判**。
-    ⚠️ 能证伪：把任一处的 `title` 摘掉 ⇒ 本件必红。
-    """
+def test_置灰的按钮都写清了为什么灰(ui_page):
+    """保留字面禁用模板的保障；运行期赋题的控件观察实际DOM。"""
     bad = [m.group(0) for m in re.finditer(r"<button[^>]*\bdisabled[^>]*>", _strip_block_comments(SHELL))
-           if "title=" not in m.group(0)]
-    assert not bad, ("这些置灰按钮没说为什么灰（§4.6：灰按钮不给理由）：\n      "
-                     + "\n      ".join(x[:140] for x in bad))
+           if 'title=' not in m.group(0)
+           and not re.search(r'data-act="history(?:Undo|Redo)"', m.group(0))]
+    assert not bad, '置灰模板缺少说明：' + '\n'.join(bad)
+    p = ui_page
+    undo = p.locator('[data-act="historyUndo"]')
+    p.evaluate("HISTORY.undo=null;historyRender()")
+    expect(undo).to_be_disabled()
+    expect(undo).to_have_attribute('title', re.compile('暂无可撤销'))
+    expect(p.locator('[data-act="historyRedo"]')).to_have_attribute('title', re.compile('暂无可重做'))
+    p.evaluate("HISTORY.undo={id:1,label:'编辑',count:1};HISTORY.loading=true;historyRender()")
+    expect(undo).to_be_disabled()
+    expect(undo).to_have_attribute('title', re.compile('读取'))
+    p.evaluate("HISTORY.loading=false;HISTORY.writes=1;historyRender()")
+    expect(undo).to_be_disabled()
+    expect(undo).to_have_attribute('title', re.compile('保存'))
+    p.evaluate("HISTORY.writes=0;HISTORY.busy=true;historyRender()")
+    expect(undo).to_have_attribute('title', re.compile('正在'))
+    p.evaluate("HISTORY.busy=false;CUR.role='';historyRender()")
+    expect(undo).to_have_attribute('title', re.compile('登录'))
+    p.evaluate("CUR.role='admin';jcLinkSel=null;jcLinkDialog(NO[0],{rows:[],notice_amount:100})")
+    link = p.locator('[data-act="jcLinkOk"]')
+    expect(link).to_be_disabled()
+    expect(link).to_have_attribute('title', re.compile('没有可选合同'))
+    p.evaluate("jcLinkDialog(NO[0],{rows:[{id:1,contract_no:'HT-1',supplier:'测试'}],notice_amount:100})")
+    expect(link).to_be_disabled()
+    expect(link).to_have_attribute('title', re.compile('先选择'))
+    p.evaluate("jcLinkSel='1';lastModal.reopen()")
+    expect(link).to_be_enabled()
+    p.evaluate("closeModal();API.m11AutoLinkPreview=async()=>({ok:true,rows:[{code:'DOC-101',contract_id:null,reason:'没有匹配合同'}]});ACT.jcAutoLink()")
+    batch = p.locator('[data-act="jcAutoLinkOk"]')
+    expect(batch).to_be_disabled()
+    expect(batch).to_have_attribute('title', re.compile('暂无可关联'))
+    expect(p.locator('#modalRoot')).to_contain_text('没有匹配合同')
+    p.evaluate("closeModal();ledExpPjs=[];document.querySelector('#view').innerHTML=ledExpStrip()")
+    export = p.locator('[data-act="ledExpOk"]')
+    expect(export).to_be_disabled()
+    expect(export).to_have_attribute('title', '请先选项目')
 
 
 def test_勾选表的固定列_表头与数据行同进同退():
@@ -308,32 +341,36 @@ def test_注入的工具栏走变体类_别在JS里重写静态外观():
                      + "\n      ".join(x[:130] for x in bad))
 
 
-def test_大表的首列区固定_序号与项目名称两列一起钉():
-    """守则 §5.9（核心操作与核心数据一眼可见）/ §4.2（别让人做错事）。
-
-    ⚠️ `TAIL-175`（2026-09-29 用户裁定 `A`）：月度会大表是 **20 列横表**（`min-width:1620px`）——
-       往右填手填那 6 列（机械费测算 / 合同价 / 产值累计…，正好落在最右）时，**首列区
-       （序号 ＋ 项目名称）会跟着滚走** ⇒ 用户**看不见自己在给哪个项目填**（会填错行）。
-       ⇒ 首列区两列挂 `.fl`（sticky-left），**表头 / 数据行 / 合计行同进同退**（与 `001-52` 同一口径）。
-    ⚠️ 大表与房内先例（`m06` / `m03` / `m04` / `m11` 都是**一行**表头）**形态不同**，两件事单独钉住：
-       ① 只有**表头第 1 行**的前两格是「序号 / 项目名称」（`rowspan="2"`）—— 第 2 行里没有它们；
-       ② 合计行首格是 `colspan="2"`（`sumRowOf` 的 `leadSpan:2`）⇒ 它**一格就盖住这两列**，
-          ⛔ 别再给它后面那一格挂 `.fl`（那就多钉一列）。
-    ⚠️ 第 2 列的偏移（`left`）= 第 1 列的宽，写成静态算式 `calc(39px * var(--fscale))` ——
-       真机量过（`tools/oneoff/_a175_measure.py`：1440 / 1920 / 2560 视口 × 1 / 1.4 档**六种组合偏差 0**）；
-       **屏幕上是否真的严丝合缝**离线判不了 ⇒ 由真机 **㉜**（`tools/probe/_shell_bigpin.py`）看管。
-    ⚠️ 能证伪：摘掉任一处 `fl` / 去掉那条偏移 / 退回 `leadSpan:2` 不给 `leadCls` ⇒ 本件必红（真机 ㉜ 也会红）。
-    """
-    clean = _strip_block_comments(SHELL)          # ⚠️ 剥块注释：别把"说明里引述的写法"当实现
-    assert '<th rowspan="2" class="fl">序号</th><th rowspan="2" class="fl">项目名称</th>' in clean, \
-        "大表表头首列区没挂 `.fl`（往右填时看不见自己在给哪个项目填）"
-    assert '<td class="fl fc">${ri+1}</td>' in clean and '<td class="fl sm" title="${esc(r.wh)}">' in clean, \
-        "大表**数据行**首列区没跟表头一起钉（`001-52` 同口径：横滚时表头浮着、行里那两格滚走）"
-    assert re.search(r"sumRowOf\(BIG_THEAD,(?:(?!\}\):'').)*?\{leadSpan:2,\s*leadCls:'fl'(?:,|\})", clean, re.S), \
-        "大表**合计行**首格没钉（它是 `colspan=2`，一格就该盖住首列区两列）"
-    assert '.dt[data-sort-key="m07:bigtable"] .fl + .fl{left:calc(39px * var(--fscale))}' in clean, \
-        ("大表第 2 列没让开首列的宽 —— 要么露缝（露出被滚走的内容）、要么叠住首列的字；"
-         "算式真机量过，⛔ 别改成「量出来的那个数」")
+def test_大表的首列区固定_序号与项目名称两列一起钉(ui_page):
+    """多级表头、项目身份和合并合计格在横滚后仍固定且不重叠。"""
+    p = ui_page
+    p.set_viewport_size({'width': 1120, 'height': 800})
+    p.evaluate("document.documentElement.style.setProperty('--fscale','1.25');BIGSET.push('测试仓库');VIEW='m07';render()")
+    table = p.locator('table[data-sort-key="m07:bigtable"]')
+    expect(table.locator('thead tr')).to_have_count(2)
+    expect(table.locator('thead tr').last.locator('th').nth(0)).to_have_text('序号')
+    expect(table.locator('thead tr').last.locator('th').nth(1)).to_have_text('项目名称')
+    def geometry():
+        return table.evaluate("""t=>{
+          const box=el=>{const r=el.getBoundingClientRect();return {x:r.x,right:r.right,width:r.width};};
+          const heads=[...t.tHead.rows[1].cells].slice(0,2).map(box);
+          const row=[...t.tBodies[0].rows].find(r=>!r.classList.contains('sumrow'));
+          return {heads,cells:[...row.cells].slice(0,2).map(box),
+            sum:box(t.querySelector('.sumrow td')),host:box(t.closest('.tw'))};
+        }""")
+    table.scroll_into_view_if_needed()
+    before = geometry()
+    table.evaluate("t=>{const w=t.closest('.tw');w.scrollLeft=600;w.dispatchEvent(new Event('scroll'));}")
+    p.wait_for_function("document.querySelector('[data-sort-key=\"m07:bigtable\"]').closest('.tw').scrollLeft>100")
+    after = geometry()
+    for group in ('heads', 'cells'):
+        for i in range(2):
+            assert abs(after[group][i]['x'] - before[group][i]['x']) < 1, after
+            assert abs(after[group][i]['x'] - after['heads'][i]['x']) < 1, after
+        assert abs(after[group][0]['right'] - after[group][1]['x']) < 1, after
+    assert abs(after['sum']['x'] - before['sum']['x']) < 1, after
+    assert after['sum']['right'] <= after['host']['right'], after
+    p.screenshot(path=str(output('meeting-table-frozen.png', kind='screenshots')))
 
 
 def test_空态指路的按钮名必须真实存在():
@@ -360,30 +397,13 @@ def test_空态指路的按钮名必须真实存在():
 
 
 def test_删除确认里不许把要求句甩给用户():
-    """守则 §1.1（不是给使用用户看的 ⇒ 删掉/换成人话）/ §2.5（用业务术语，不用内部话术）
-    ＋ §2.4（**后果提前说清**）。
-
-    ⚠️ `A6`（2026-09-29 逐页 · `m01`）实测：删除确认弹窗的第一句 = 「⚠️ 必须**列出删除影响范围**（§7.2）」
-       —— 那是《说明书》§7.2 里**写给实现的要求句**，被原样搬上了界面 ⇒ 用户在删除前看到的
-       不是"删了会怎样"（他要知道的），而是一句**要求我们（开发）做事**的话。
-    ⚠️ 同日**顺藤摸出同族还有两处**（同一句话的变体，都在别的页的删除确认里）：
-       `m03` 手动行「⚠️ 删除前**必须列出影响范围**」· `m05` 期初行「⚠️ 删除前**必须列出影响范围**」
-       ⇒ ⭐ **判据不能只钉一处**（只钉 `m01` ＝「判据比条文弱」＝ 另一种假绿）⇒ 本件改成**一般式**：
-       「`必须列出` 这种**要求句式**一律不许上屏」（⚠️ 先**剥块注释**再判 —— 注释里会引述旧写法作留痕，
-       那是本仓踩过三次的老课）。
-    ⚠️ 判法两半：① **要求句式**不许上屏（一般式墓碑）；② 删除确认里必须留下**人话的后果**
-       （项目删除不可撤销；通知书展示实际message/effects；期初展示金额与欠款后果）。
-    ⚠️ 能证伪：任一处改回要求句、或把人话后果删掉 ⇒ 本件必红（反向灵敏度 `_mut_a6.py` 各打一次）。
-    """
+    """保留项目及通知书删除后果；已退役的期初确认不再作为契约。"""
     clean = _strip_block_comments(SHELL)
-    assert "必须列出" not in clean, \
-        "界面上又出现**写给实现的要求句**（『必须列出…』）—— 用户要知道的是「删了会怎样」，不是我们的待办"
+    assert "必须列出" not in clean
     project = act_entry('delPj')
     notice = clean[clean.index("ntDel:t=>"):clean.index("ntDelOk:")]
-    opening = clean[clean.index("delLg:t=>"):clean.index("delLgOk:")]
     assert '${esc(r.message)}' in project, "项目删除没展示后端真实影响与不可撤销后果"
     assert "${imp.message}" in notice and "imp.effects.map(" in notice, "通知书删除没展示真实影响回执"
-    assert "欠款合计" in opening and "重新录入" in opening, "期初删除没有金额后果及重录说明"
 
 
 def test_点不通的按钮必须置灰而且理由要看得见():
@@ -520,26 +540,13 @@ def test_启动失败横幅不许盖住内容():
 
 
 def test_删除分档的界面说法必须与定案一致():
-    """守则 §4.2（**状态必须真实**：删了会怎样，界面说法必须与实现/定案一致）/ §2.5（人话）。
-
-    ⚠️ `A6b`（2026-09-29 · 用户「按推荐」）实测两处**页面在说旧口径**（都是"照抄规格"漏下来的）：
-       ① `m05` 期初行的删除确认写着「该行按**软删留痕**处理（属核心业务数据）」——
-          而 `mod05_flow.repository.delete_opening` 就是 `s.delete(row)`（**真删**、行里根本没有留痕字段），
-          《说明书》§9.4 的 2026-09-20 定案也把「**期初**」明确列在**硬删**那一档
-          ⇒ 那句话给的是**假的安全感**（用户以为"删了还能恢复"）；
-       ② `m14` 的「硬规矩」表第 6 条写着「核心数据删除是『软删 + 留痕』；配置类是真删」——
-          那是 §9.4 **改判之前**的"按类别分"说法（定案改成**按「删了能不能复原」分**）。
-    ⚠️ 判法两半：① 旧说法**不许回来**（墓碑）；② 必须留下**真实后果**
-       （「真的删掉、删了不能恢复」＋「随时可以重新录入」）。
-    ⚠️ 能证伪：任一处改回旧说法 ⇒ 本件必红。
-    """
+    """历史行采用顶部撤销；不再要求已退出期初页的不可恢复文案。"""
     clean = _strip_block_comments(SHELL)
-    assert "该行按<b>软删留痕</b>处理" not in clean, \
-        "`m05` 期初行又说「软删留痕」了 —— 后端就是真删、§9.4 定案也把期初划在硬删档（假的安全感）"
-    assert "核心数据删除是「软删 + 留痕」" not in clean, \
-        "`m14` 的「硬规矩」表又用回 §9.4 改判前的「按类别分」说法了"
-    assert "删了不能恢复" in clean and "随时可以重新录入" in clean, \
-        "期初删除确认必须保留不可恢复的真实后果及重新录入入口"
+    assert "该行按<b>软删留痕</b>处理" not in clean
+    assert "核心数据删除是「软删 + 留痕」" not in clean
+    history = act_entry('historyDelete')
+    assert "/api/m05/history/delete" in history
+    assert "历史行已删除，可用顶部撤销恢复" in history
 
 
 def test_壳新增的人工指认清单表也走统一出口_TBL():

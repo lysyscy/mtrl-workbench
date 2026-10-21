@@ -4,7 +4,7 @@
 
 ## 〇、入口与核验
 
-- `[用户·2026-10-08]` 本仓执行与核验绑定 = docs/agents/workflow.md；个人方法条件入口 = AGENTS.md；命令 = docs/guides/development-and-verification.md §十一。新删件、提交和旧dirty不自动全验；基点不是通过证明。相关失败不能报通过，自证用隔离输入。review按当前用户授权和实际需要使用。
+- `[用户·2026-10-08]` 本仓执行与核验绑定 = docs/agents/workflow.md；个人方法条件入口 = AGENTS.md；命令 = docs/guides/development-and-verification.md §十一。新删件、提交和旧dirty不自动全验；基点不是通过证明。相关失败不能报通过，自证用隔离输入。交付前由Agent按workflow §四判断审查深度，不能因同一对话连续修复而漏掉累计范围。
 - 当前状态回主计划§0和§15，测试证据以实际选集、原始退出码和未验边界为准；历史判据视图不证明当前完整通过。阅读分派只回 AGENTS.md。
 
 ## 一、用户偏好

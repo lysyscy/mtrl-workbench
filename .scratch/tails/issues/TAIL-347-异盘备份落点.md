@@ -2,7 +2,7 @@
 
 **What to build:** 确定并验证独立物理磁盘的备份落点
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** 等待用户指定允许保存业务备份的独立介质
 
 **Status:** needs-info
 

@@ -2,7 +2,7 @@
 
 **What to build:** 集采独立打印版的实体纸面效果待现场确认
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** 等待用户具备现场打印条件并执行纸面验收
 
 **Status:** ready-for-human
 

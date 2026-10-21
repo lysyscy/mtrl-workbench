@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from app.core import session as SESS
+from app.core import history, session as SESS
 from app.core.db import get_engine, session_scope
 from app.mod15_user.service import active_account
 from app.mod03_notice import plan_audit_data as DATA
@@ -47,10 +47,14 @@ def update_methods(req: MethodRequest, response: Response, user=Depends(audit_us
         if (engine.dialect.name != 'postgresql'
                 or DATA.database_fingerprint(engine) != preview['snapshot']['database_fingerprint']):
             raise ValueError('当前系统与核对快照不符，未写入')
-        with engine.begin() as conn:
+        with session_scope() as session:
+            history.lock_actor(session, str(user))
+            conn = session.connection()
             conn.exec_driver_sql("SET LOCAL lock_timeout = '5s'")
             conn.exec_driver_sql("SET LOCAL statement_timeout = '15s'")
             apply_changes(conn, preview)
+            history.record_barrier(session, str(user), '修改拟付款方式')
+        response.headers['X-Operation-History'] = 'unsupported'
     except (ValueError, KeyError, TypeError) as exc:
         if isinstance(exc, ValueError) and not isinstance(exc, json.JSONDecodeError):
             message = str(exc)
