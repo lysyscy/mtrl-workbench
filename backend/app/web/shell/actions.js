@@ -397,7 +397,6 @@ const ACT={
 
  /* —— MOD-03 付款通知书 —— */
  pickClear:()=>{ pickSet.clear(); render(); },
- pickSearchClear:()=>{ fNt.q=''; render(); },
  pick:t=>{ const id=t.dataset.id; t.checked?pickSet.add(id):pickSet.delete(id); render(); },
  /* 全选：范围 = 【当前筛选结果里的可勾选行】，而不是全库（否则会选中看不见的行） */
  pickAll:t=>{ const ids=ntHit(fNt).filter(ntSelectable).map(n=>n.id);
@@ -450,11 +449,11 @@ const ACT={
       也**不清空勾选**（打印不改数据，属 R14 的"非消费型"动作，与"就地改值型"同侧）。
     ⭐ 2026-09-18 接线（`TAIL-46`）：原来只回一条「（模拟）→ 成功」（与 syncWh 同款）⇒ 现在**真调**
       `POST /api/m03/batch`，结果**逐条如实**（成功 N / 失败 M / **未产出单号显式列出**）—— 见 `m03RunBatch`。 */
- ntPrint:async ()=>{ if(!ntBatchVisible()) return; const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+ ntPrint:async ()=>{ reconcilePick(); const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    if(!rows.length) return toast('请先勾选要打印的付款通知书');   /* 防御：按钮在未勾选时已禁用 */
    return m03RunBatch(rows,'print'); },
  /* 只导出 PDF：与批量打印**同一次勾选**，只换 `mode`（后端 `MODE_PRINT` 分流）—— 入口由 `BIND.m03` 注入 */
- ntPdf:async ()=>{ if(!ntBatchVisible()) return; const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
+ ntPdf:async ()=>{ reconcilePick(); const rows=[...pickSet].map(id=>NO.find(n=>n.id===id)).filter(Boolean);
    if(!rows.length) return toast('请先勾选要导出的付款通知书');
    return m03RunBatch(rows,'pdf'); },
  /* ⭐ `TAIL-46`：打印机设置的入口与保存（入口由 `BIND.m03` 注入到「批量打印」旁边） */
@@ -916,32 +915,24 @@ const ACT={
    }catch(e){ toast(esc(e.message)); } },
 
  /* —— MOD-05 —— */
- /* data-sc = 从哪一栏点进来的 —— 作为「分类」的预选值（仍可在展开区里改）
-    ⭐ 2026-09-13 增行模式（用户拍板 C-1 / C-7）：**「录入期初占位行」弹窗取消** ⇒
-       改为**栏内展开区**，且整条展开区渲染在 `.tw` **之外**（表格上方的独立条带）。 */
- addLg:async t=>{ const sc=t&&t.dataset?t.dataset.sc:'';
-  /* 项目默认 = 台账当前项目；截止月与金额读取已有记录，新记录沿后端默认值。
-     普通重绘保留草稿日期；改分类或项目时重取对应默认值。 */
-  const project=lgDefPjName(), cat=sc||lgCat;
-  const cutoff=await lgCutFor(project,cat);
-  if(!cutoff) return;
-  lgPjName=project; lgCat=cat; lgCut=cutoff;
-  lgKind=cat==='机械'?'payment':'settlement'; lgMode='paid'; lgEditId=null; lgPending=null;lgReview=null;
-  lgD.s='0.00'; lgD.p='0.00'; lgD.r='';
-  lgOn=true; pjClose('lgPj'); render();
-  toast(`已展开${esc(lgCat)}历史数据录入；核对金额后保存`); },
- lgCancel:()=>{ lgOn=false; ++lgCutRequest; lgCutPending=false; pjClose('lgPj'); render();
-  toast('已取消期初占位行录入 —— <b>未写入任何数据</b>'); },
- /* 草稿层写入口：输入立即记下，展开区重绘时不丢 */
- lgS:t=>{ lgD.s=String((t&&t.value)!=null?t.value:''); },
- lgP:t=>{ lgD.p=String((t&&t.value)!=null?t.value:''); },
- lgR:t=>{ lgD.r=String((t&&t.value)!=null?t.value:''); },
- lgKind:t=>{lgKind=t.value;lgPending=null;render();},
- lgMode:t=>{lgMode=t.value;lgD.p='0.00';lgPending=null;render();},
- lgCat:async t=>{ const cat=String((t&&t.value)||lgCat);
-  const cutoff=await lgCutFor(lgPjName,cat);
-  if(!lgOn) return;
-  if(cutoff) { lgCat=cat; lgCut=cutoff; if(cat==='机械') lgKind='payment'; } render(); },
+ addLg:async t=>{ if(ledAdding) return; const project=pjRowOf(ledCur());
+   if(!project||!project.id) return toast('请先选择项目');
+   ledAdding=true; t.disabled=true;
+   try {const result=await m05Act(()=>API.send('POST','/api/m05/history/save',{
+     project_id:Number(project.id),category:'material',entry_kind:'manual',cutoff_ym:'2025-11',
+     settle_amount:'0.00',paid_amount:'0.00',remark:''}), '已新增历史行，可直接填表');
+     if(result){const r=ledRows('辅材').find(r=>r.id===result.id);
+       const input=r&&$(`[data-act="ledHistoryCell"][data-sc="辅材"][data-seq="${r.seq}"]`);
+       if(input){input.scrollIntoView({block:'nearest'});input.focus();}}
+   }finally{ledAdding=false; if(t.isConnected)t.disabled=false;} },
+ ledHistoryCell:t=>{const sc=t.dataset.sc, r=ledRows(sc).find(r=>String(r.seq)===t.dataset.seq);
+   if(!r||!r.editable) return toast('这一行已变化，请刷新后重试');
+   const payload=ledRowPayload(r,sc); payload[t.dataset.field]=String(t.value);
+   return m05Act(()=>API.send('POST','/api/m05/history/save',payload),'台账已保存'); },
+ historyDelete:t=>{const sc=t.dataset.sc, r=ledRows(sc).find(r=>String(r.id)===t.dataset.id);
+   if(!r||r.kind!=='manual') return toast('这一行已变化，请刷新后重试');
+   return m05Act(()=>API.send('POST','/api/m05/history/delete',{id:r.id,token:r.token}),
+     '历史行已删除，可用顶部撤销恢复'); },
  /* —— 付款流水的筛选（R4：改动即时生效、不设「应用」按钮） ——
     ⚠️ 复位一律【原地改字段】，不要 `flf={...}` 重新赋值（同 `fJc` / `BIGVAL` 的教训）
     ⚠️ ⭐ 「付款项目」自 2026-09-13 起是**共用面板（多选）** ⇒ 本动作**不再读 `#flPj`**（该控件已不存在），
@@ -965,91 +956,6 @@ const ACT={
   /* 联动 = 把该项目**并进 / 移出**「付款流水」的「付款项目」**多选**（语义不变：再点一次 = 取消） */
   const i=flf.projs.indexOf(k); if(i>=0) flf.projs.splice(i,1); else flf.projs.push(k); render();
   toast(i>=0?`付款统计 → 下方「付款流水」已取消 <b>${esc(pjLabel(k))}</b> 的筛选`:`付款统计 → 下方「付款流水」已加选 <b>${esc(pjLabel(k))}</b>`); },
- /* 「项目」共用面板（**单选** —— 能力由调用点声明，与 `MOD-09` / 台账主选择器同款：点一下即切换并收起） */
- lgPjToggle:t=>{ pjToggle('lgPj',t); },
- lgPjPick:async t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
-  if(lgEditId) return toast('编辑已有记录时项目不变；更换项目请取消后新增');
-  const cutoff=await lgCutFor(v,lgCat);
-  if(!cutoff||!lgOn) return;
-  lgPjName=v; lgCut=cutoff; pjClose('lgPj'); render();
-  toast(`期初占位行的项目已切到 <b>${esc(pjLabel(v))}</b>（截止年月仍按当前「分类」单独算）`); },
- /* 保存 = 原弹窗的「保存」——**只读草稿层**，不再从 DOM 取值（增行模式：没有弹窗可读） */
- /* ⭐ 已接后端：`POST /m05/opening`（表单写入、JSON回执 · 同一「口径 + 项目 + 截止年月」重复录入 = **覆盖**）
-    ⚠️ 草稿层（`lgD`）的取数方式不变，只是**落库不再由前端 push**。 */
- ledOpeningPay:t=>{ const project=pjRowOf(t.dataset.proj); if(!project||!project.id) return toast('请重新选择项目');
-   return m05Act(()=>API.send('POST','/api/m05/ledger/opening-payment', {
-     project_id:project.id, category:CAT_API[t.dataset.sc], payment:t.value,
-   }), '期初付款已保存，手动金额已按合计反算'); },
- addLgOk:async()=>{ if(lgCutPending) return toast('正在读取默认年月，请稍后保存');
-  const pj=lgPjName; if(!pj){ toast('<b>请先选「项目」</b>（点展开区里的「项目」按钮）'); return; }
-    const row=pjRowOf(pj);
-    if(!row||!row.id){ toast('<b>项目没对上档案</b>（请重选）—— 未写入任何数据'); return; }
-    const payload={id:lgEditId,category:CAT_API[lgCat],project_id:Number(row.id),
-      cutoff_ym:lgCut,entry_kind:lgKind,input_mode:lgKind==='settlement'?'paid':lgMode,
-      amount:String(lgKind==='settlement'?lgD.s:lgD.p),remark:String(lgD.r||'')};
-    try {const result=await API.send('POST','/api/m05/history/preview',payload);
-      lgPending={...payload,token:result.token};
-      const pairs=lgKind==='settlement'
-        ?[['项目',result.project_label],['截止月份',lgCut],['本次新增结算',M(result.amount)+' 元']]
-        :[['项目',result.project_label],['截止月份',lgCut],['截至当时结算',M(result.settlement)+' 元'],
-          ['系统已记录同期付款',M(result.recorded_paid)+' 元'],['累计付款',M(result.paid_total)+' 元'],
-          ['历史付款补差',M(result.payment_adjustment)+' 元'],['截至当时欠款',M(result.debt)+' 元']];
-      modal({title:'核对历史数据',body:'<div class="history-check">'+kvBlock(pairs.map(([k,v])=>[k,esc(v)]))+'</div>'+
-        `<div class="tip">${lgKind==='settlement'?'请确认本次金额未包含系统已统计的同一笔结算。'
-          :'累计付款包含系统已有的同期付款；只保存补差，不产生付款流水。后续再补录这段历史的付款明细时，请重新核对此记录；真正新增的付款仍照常计入。'}</div>`,
-        footer:`<button class="btn" data-act="closeModal">返回修改</button><button class="btn pri" data-act="historySave">确认保存</button>`});
-    }catch(e){toast(esc(e.message||'未能核对历史数据'));} },
- historySave:()=>{if(!lgPending) return toast('请重新核对金额');
-   const payload={...lgPending}, pj=lgPjName;
-   return m05Act(async()=>{const result=await API.send('POST','/api/m05/history/save',payload);
-     lgOn=false;lgPending=null;++lgCutRequest;lgCutPending=false;pjClose('lgPj');ledProj=pj;closeModal();return result;
-   },'历史数据已保存，欠款与台账已重算');},
- historyEdit:t=>{const row=((M05.ledger||{}).history||[]).find(r=>String(r.id)===t.dataset.id);
-   if(!row) return toast('请刷新后重试');
-   lgPjName=ledCur();lgCat=Object.keys(CAT_API).find(k=>CAT_API[k]===row.category);
-   lgEditId=row.id;lgKind=row.entry_kind;lgMode=row.input_mode;lgCut=row.cutoff_ym;
-   lgD.s=row.settle_amount;lgD.p=row.input_amount;lgD.r=row.remark||'';lgOn=true;lgPending=null;lgReview=row.needs_review?row:null;render();
-   if(row.needs_review) toast(`原记录包含系统付款 ${M(row.paid_basis)} 元，当前为 ${M(row.current_paid)} 元。若是补录已包含的历史付款，维持原累计；若是真正新增付款，请相应增加累计。`,9000);},
- historyDelete:t=>{const row=((M05.ledger||{}).history||[]).find(r=>String(r.id)===t.dataset.id);
-   if(!row) return toast('请刷新后重试');
-   modal({title:'删除历史记录',body:'<div class="history-check">'+kvBlock([['截止月份',esc(row.cutoff_ym)],
-       [row.entry_kind==='settlement'?'i6结算补录':'累计付款',M(row.entry_kind==='settlement'?row.settle_amount:row.paid_amount)+' 元']])+'</div>'+
-       `<div class="tip dg">删除后欠款会重算。${row.entry_kind==='payment'?'如有更早的累计付款记录，将重新采用其中最新的一条。':''}</div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="historyDeleteOk" data-id="${row.id}" data-token="${row.token}">确认删除</button>`});},
- historyDeleteOk:t=>m05Act(async()=>{const result=await API.send('POST','/api/m05/history/delete',
-     {id:Number(t.dataset.id),token:t.dataset.token});closeModal();return result;},'历史记录已删除，欠款与台账已重算'),
- /* 删除前先看清影响范围（§7.2 / §9.4）：期初属「**用户自录、随时可重录**」那一档 ⇒ **真删**
-   （§9.4 的 2026-09-20 定案：**按「删了能不能凭源数据复原」分**）。
-   ⚠️ 2026-09-29 `A6` 订正：这里原写「核心业务数据『软删留痕』」—— 与后端 `repo.delete_opening`（就是 `s.delete`）**相反**，也与 §9.4 定案相反（行里根本没有留痕字段）。 */
- /* ⭐⭐ 2026-09-28 修「点了删除没反应」（用户走查报障 · 守则 §5.5「看着能点必须符合预期或给明确反馈」）：
-    老写法 = `LGs.find(x=>x.id===t.dataset.id)` ⇒ **三个坑叠一起必失败**：
-      ① `LGs` 的 id 曾是**假值 `''`**（`core.js::adaptOpening` 写死 —— 因为 `/api/m05/debt` 那时不返回 id）；
-      ② `t.dataset.id` **恒是字符串**，而 `x.id` 是数字 ⇒ `===` 恒 false；
-      ③ 找不到就 `return` ⇒ **静默**，用户只看到"点了没反应"。
-    新写法：① 优先在**台账真源**里找（按钮就在台账行上，数据同源）② 回退 `LGs`（`String()` 归一）
-    ③ ⛔ **两处都没有 ⇒ 必须给可见反馈**（"点了没反应"就是本条的老毛病）。 */
- delLg:t=>{ const id=String((t&&t.dataset&&t.dataset.id)||'');
-   if(!id) return toast('这一行没有 id（界面数据异常）—— 请刷新页面后重试');
-   let it=null;
-   for(const sd of ((M05.ledger||{}).sides||[])){
-     const r=(sd.rows||[]).find(x=>x.is_opening&&String(sd.opening_id)===id);
-     if(r){ it={id, proj:pjLabel(ledCur()), settle:numOr0(r.other_expense), paid:numOr0(r.payment)}; break; }
-   }
-   if(!it){ const l=LGs.find(x=>String(x.id)===id);
-     if(l) it={id, proj:l.proj, settle:numOr0(l.settle), paid:numOr0(l.paid)}; }
-   if(!it) return toast(`没找到这条期初占位行（id=${esc(id)}）—— 它可能已被删除，<b>请刷新页面</b>再试`, 7000);
-   const dd=N2(it.settle-it.paid);
-   modal({title:'删除确认 · 期初占位行',body:`<div class="tip dg" style="margin-bottom:calc(10px * var(--fscale))">删除不可撤销。</div>
-     ${kvBlock([['项目',`<span style="font-size:calc(11.5px * var(--fscale))">${esc(it.proj)}</span>`],['统计结算金额',`<span class="fc">${M(it.settle)}</span>`],['统计付款金额',`<span class="fc">${M(it.paid)}</span>`],['该行欠款',`<span class="fc">${M(dd)}</span>`]])}
-     <div class="tip" style="margin:0">删除后：<b>期初占位欠款 ${M(dd)} → 0</b>、<b>欠款合计</b>同步重算。⚠️ 这一行<b>真删、不能恢复</b>（需要时随时可<b>重新录入</b>）。</div>`,
-     footer:`<button class="btn" data-act="closeModal">取消</button><button class="btn dg" data-act="delLgOk" data-id="${it.id}">确认删除</button>`}); },
- /* ⭐ 已接后端：`POST /m05/opening/delete`（**真删** ＋ 统计重算由后端做 —— `mod05_flow.repository.delete_opening` 就是 `s.delete(row)`；
-   ⚠️ 2026-09-29 订正：原写「软删留痕」与后端相反） */
- delLgOk:t=>{ const id=t.dataset.id; if(!id) return;
-    closeModal();
-    m05Act(()=>API.postForm('/m05/opening/delete', { opening_id:id, project_id:'', end_ym:'' }),
-      '期初占位行已删除（删了不能恢复、需要时随时可以重新录入），欠款与台账已重算'); },
-
   /* —— MOD-01 —— */
   /* ⭐ 已接后端：`PUT /api/m01/projects/{id}` —— 全名**可改 + 留痕**（§2.3.1 / §9.3）。
      ⚠️ 尾码剥离（`strip_trailing_code`）在**后端**做：导出 / 仓库同步 / 项目同步**三处共用同一份**。 */
@@ -2364,7 +2270,6 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    mp.a=''; mp.b=''; mp.mode='';
    if(sc==='fetch'){ fetchM=v; mp.open=null; render(); ACT.fetchDlg(); return; }   /* 抓取弹窗内选月 → 重建弹窗回显（三个抓取入口共用） */
    /* ⛔ `plimp`（导入弹窗内选月）已随弹窗删除（`TAIL-75` `B5c`）—— 年月现在在「数据导入」页里选。 */
-   if(sc==='lg'){ lgCut=v; mp.open=null; render(); return; }                        /* 期初展开区内选「截止年月」→ **只重绘**（不重算默认值） */
    if(sc==='fl'){ flf.ym=v; mp.open=null; render(); toast(`付款流水已切到 <b>${tmLabel(v)}</b>`); return; }
    if(sc==='awf'){ awfYm=v; mp.open=null; reloadM09(); toast(`特殊费用月报表已切到 <b>${tmLabel(v)}</b>（核算年月，§9.2）`); return; }   /* ⭐ 切换核算年月 ⇒ **重新取数**（手填项按「核算年月 ＋ 项目」各存一份；只 `render()` 会看到上一月那一份） */
    if(sc==='iv'){ fIvYm=v; mp.open=null; render();

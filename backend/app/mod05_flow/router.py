@@ -209,30 +209,21 @@ class OpeningPaymentIn(BaseModel):
     payment: str
 
 
-class HistoryIn(BaseModel):
+class HistorySaveIn(BaseModel):
     id: int | None = Field(None, gt=0)
     project_id: int = Field(gt=0)
     category: str
-    entry_kind: str
+    entry_kind: str = "manual"
     cutoff_ym: str
-    input_mode: str = "paid"
-    amount: str
+    settle_amount: str
+    paid_amount: str
     remark: str = Field("", max_length=512)
-
-
-class HistorySaveIn(HistoryIn):
-    token: str
+    token: str = ""
 
 
 class HistoryDeleteIn(BaseModel):
     id: int = Field(gt=0)
     token: str
-
-
-@router.post("/api/m05/history/preview")
-def api_history_preview(body: HistoryIn) -> dict:
-    with session_scope() as s:
-        return history.preview(s, body.model_dump())
 
 
 @router.post("/api/m05/history/save")
@@ -244,16 +235,12 @@ def api_history_save(body: HistorySaveIn) -> dict:
 @router.post("/api/m05/history/delete")
 def api_history_delete(body: HistoryDeleteIn) -> dict:
     with session_scope() as s:
-        row = s.get(history.OpeningBalance, body.id, with_for_update=True)
-        if row is None or history.kind(row) == "legacy" or body.token != history.record_token(row):
-            raise MustReportError("历史记录已变化，请刷新后重新核对")
-        s.delete(row)
-    return {"ok": True, "message": "历史记录已删除"}
+        return history.delete(s, body.id, body.token)
 
 
 @router.post("/api/m05/ledger/opening-payment")
 def api_opening_payment(body: OpeningPaymentIn) -> dict:
-    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后使用历史数据对账"})
+    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后在台账中直接修改付款"})
 
 
 @router.get("/api/m05/flows/{flow_id}/revoke-info")
@@ -401,7 +388,7 @@ def act_opening(
 
     ⚠️ **参数一律 `Form`**（同上：期初表单的输入全在 body）。
     """
-    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后使用历史数据录入"})
+    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后在辅材台账中新增历史行"})
 
 
 @router.post("/m05/opening/delete")
@@ -409,7 +396,7 @@ def act_opening_delete(
     opening_id: int = Form(...), project_id: int = Form(0), end_ym: str = Form("")
 ) -> dict:
     """删除期初占位行并回执；参数仍用 Form。"""
-    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后核对并删除对应历史记录"})
+    return JSONResponse(status_code=410, content={"ok": False, "message": "页面已更新，请刷新后删除对应历史行"})
 
 
 @router.post("/m05/ledger/remark")

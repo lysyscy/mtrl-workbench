@@ -1255,8 +1255,7 @@ addBind('m03', function () {
   anchor.dataset.m03More = '1';
   const box = document.createElement('span');
   box.className = 'sp';
-  const hidden=ntHiddenPickCount();
-  box.innerHTML = `<button class="btn" data-act="ntPdf" ${hidden?'disabled':''} title="${hidden?'当前列表外还有已勾选记录，请先清空搜索核对':'与批量打印同一次勾选，只换成「只产出 PDF」'}">只导出 PDF</button>
+  box.innerHTML = `<button class="btn" data-act="ntPdf" ${pickSet.size?'':'disabled'} title="导出全部已勾选的通知书，执行前核对清单">只导出 PDF</button>
     <button class="btn gost" data-act="m03PrinterOpen" title="打印机地址（保存后即时生效、无需重启）">打印机设置</button>`;
   anchor.insertAdjacentElement('afterend', box);
 });

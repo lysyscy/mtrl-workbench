@@ -322,7 +322,7 @@ def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, m
     monkeypatch.setattr(history_api, 'active_account', lambda s, identity: object())
     with session_scope() as s:
         opening = OpeningBalance(project_id=data['project'], category='material', cutoff_ym='2025-11',
-                                 settle_amount=100, paid_amount=0, remark='', entry_kind='settlement')
+                                 settle_amount=100, paid_amount=0, remark='', entry_kind='manual')
         note = LedgerRemark(project_id=data['project'], category='material', ym='2026-01', remark='原备注')
         big = AnalysisBigManual(project_id=data['project'], warehouse_name='__undo__', ym='2026-10', oil=1)
         balance = WeldGasBalance(warehouse_name='__undo__', kind='焊材', amount=1)
@@ -337,9 +337,9 @@ def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, m
                          PaymentNotice, data['ids'][0], 'jc_supplier', '', '新供应商'),
             'project': ('PUT', f"/api/m01/projects/{data['project']}", {'disp': '新展示名'},
                         Project, data['project'], 'disp', '撤销测试', '新展示名'),
-            'opening': ('POST', '/api/m05/history/save', {'id': opening.id, 'entry_kind': 'settlement',
-                        'category': 'material', 'project_id': data['project'], 'input_mode': 'paid',
-                        'cutoff_ym': '2025-11', 'amount': '200.12', 'remark': ''},
+            'opening': ('POST', '/api/m05/history/save', {'id': opening.id, 'entry_kind': 'manual',
+                        'category': 'material', 'project_id': data['project'], 'paid_amount': '0',
+                        'cutoff_ym': '2025-11', 'settle_amount': '200.12', 'remark': ''},
                         OpeningBalance, opening.id, 'settle_amount', Decimal('100'), Decimal('200.12')),
             'remark': ('POST', '/m05/ledger/remark', {'category': 'material', 'project_id': data['project'],
                         'ym': '2026-01', 'remark': '新备注'},
@@ -362,9 +362,9 @@ def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, m
     with TestClient(create_app()) as client:
         client.cookies.set(SESS.COOKIE_NAME, SESS.make('__undo_a__'))
         if case == 'opening':
-            preview = client.post('/api/m05/history/preview', json=body)
-            assert preview.status_code == 200, preview.text
-            body = {**body, 'token': preview.json()['token']}
+            from app.mod05_flow.history import record_token
+            with session_scope() as s:
+                body = {**body, 'token': record_token(s.get(OpeningBalance, row_id))}
         args = {'data': body} if path.startswith('/m05/') else {'json': body}
         response = client.request(method, path, follow_redirects=False, **args)
         assert response.status_code in (200, 303), response.text

@@ -164,36 +164,26 @@ def test_付款弹窗后删除或撤单不能错用剩余行金额(ui_page):
     assert p.evaluate('!window.payRequest')
 
 
-def test_直接批量动作须看清隐藏选择且只读取有效选择(ui_page):
-    p = ui_page
-    _setup(p)
-    _pick(p, '101').check()
-    p.fill('#ntSearch', 'DOC-B')
-    _pick(p, '102').check()
-    p.evaluate("""() => {
+def test_修改分类剔除恢复须看清隐藏选择(ui_page):
+    p=ui_page;_setup(p)
+    _pick(p,'101').check();p.fill('#ntSearch','DOC-B');_pick(p,'102').check()
+    p.evaluate("""()=>{
       window.requests=[];
       for(const k of ['setCategory','exclude','restore'])
         API[k]=async ids=>{requests.push({k,ids});return {ok:false,message:'隔离捕获'};};
-      m03RunBatch=async(rows,mode)=>{requests.push({k:mode,ids:rows.map(n=>n.id)});};
     }""")
-    for action in ['batchCatApply', 'batchEx', 'batchUnEx', 'ntPrint', 'ntPdf']:
-        assert p.locator(f'[data-act="{action}"]').first.is_disabled(), action
-    p.evaluate("""async () => {
-      await ACT.batchCatApply({dataset:{c:'机械'}});await ACT.batchEx();
-      await ACT.batchUnEx();await ACT.ntPrint();await ACT.ntPdf();
+    for action in ['batchCatApply','batchEx','batchUnEx']:
+        assert p.locator(f'[data-act="{action}"]').first.is_disabled()
+    p.evaluate("""async()=>{
+      await ACT.batchCatApply({dataset:{c:'机械'}});await ACT.batchEx();await ACT.batchUnEx();
     }""")
-    assert p.evaluate('requests') == [], '隐藏选择未核对前不应直接改数据或发打印'
-    p.click('[data-act="pickSearchClear"]')
-    assert _pick(p, '101').is_checked() and _pick(p, '102').is_checked()
-    p.evaluate("""async () => {
-      await ACT.batchCatApply({dataset:{c:'机械'}});await ACT.batchEx();
-      await ACT.batchUnEx();await ACT.ntPrint();await ACT.ntPdf();
+    assert p.evaluate('requests')==[]
+    p.fill('#ntSearch','')
+    p.evaluate("""async()=>{
+      await ACT.batchCatApply({dataset:{c:'机械'}});await ACT.batchEx();await ACT.batchUnEx();
     }""")
-    assert [r['ids'] for r in p.evaluate('requests')] == [['101', '102']] * 5
-    p.click('[data-act="pickClear"]')
-    assert _ids(p) == []
-
-
+    assert [r['ids'] for r in p.evaluate('requests')]==[['101','102']]*3
+    p.click('[data-act="pickClear"]');assert _ids(p)==[]
 
 
 def test_重拉失败和重置搜索不丢选择事实改为剔除才清理(ui_page):

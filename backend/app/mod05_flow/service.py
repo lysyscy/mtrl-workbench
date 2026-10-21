@@ -82,7 +82,7 @@ def notice_debt_views(s: Session) -> list[NoticeDebtView]:
 
 
 def opening_views(s: Session, project_id: int | None = None) -> list[OpeningView]:
-    return history.adjustments(repo.list_openings(s, project_id=project_id))
+    return history.adjustments(repo.list_openings(s, project_id=project_id), notice_debt_views(s))
 
 
 def project_options(s: Session) -> list[dict]:
@@ -396,118 +396,68 @@ def build_ledger(
 ) -> dict:
     """逐月台账（§4.5.4）—— **两侧（辅材 / 机械）共用同一个项目选择器**，各自一套行。
 
-    - 真实期初控制起点；无期初的未填日期付款独立显示，不截断正常月份
+    - 历史自录行不截断正常月份；未填日期付款独立计入一次
     - 空月也出行（三列记 0）
     - 机械侧「其他支出金额」= **派生只读**，**无手填入口**（`MECH_HAS_MANUAL_INPUT=False`）
     """
     rows = notice_debt_views(s)
     records = repo.list_openings(s, project_id=project_id)
-    openings = history.adjustments([r for r in records if history.kind(r) == "legacy"])
-    history_rows = history.adjustments([r for r in records if history.kind(r) != "legacy"], end_ym)
-    today = today or date.today()
-    sides = []
     mech_settle = mechanical_settlements(s).get(int(project_id), {})
+    sides = []
     for cat in dom.LEDGER_SIDES:
-        mine = [o for o in openings if o.category == cat]
-        opening = mine[0] if mine else None
         monthly = dom.monthly_aggregate(rows, cat, int(project_id))
-        # 空单据日期归期初；仍取统计付款，保留用户手改统计金额的口径。
-        historical_notices = [r for r in rows if not r.excluded and r.category == cat
-                              and r.ownership_id == int(project_id) and not r.doc_date]
-        automatic = sum_money([r.pay_stat for r in historical_notices])
-        months = sorted(set(monthly) | (set(mech_settle) if cat == CATEGORY_MECH else set()))
-        ledger: list[LedgerRow] = dom.build_ledger(
-            category=cat,
-            monthly=monthly,
-            opening=opening,
-            mech_settle_by_month=mech_settle if cat == CATEGORY_MECH else None,
-            end_ym=end_ym or None,
-            remarks=repo.remarks_map(s, category=cat, project_id=int(project_id)),
-            opening_auto=automatic if opening is not None or historical_notices else None,
-        )
-        for h in history_rows:
-            if h.category != cat or (not h.settle_amount and not h.paid_amount):
+        manual_months = {r.cutoff_ym for r in records if r.category == cat and history.kind(r) != "month"}
+        for ym in manual_months:
+            monthly.setdefault(ym, {"settle": to_money(0), "pay": to_money(0)})
+        undated = [r for r in rows if not r.excluded and r.category == cat
+                   and r.ownership_id == int(project_id) and not r.doc_date]
+        overrides = {r.cutoff_ym: r for r in records if r.category == cat and history.kind(r) == "month"}
+        for ym, record in overrides.items():
+            monthly[ym] = {"settle": to_money(record.settle_amount), "pay": to_money(record.paid_amount)}
+        remarks = repo.remarks_map(s, category=cat, project_id=int(project_id))
+        ledger = dom.build_ledger(category=cat, monthly=monthly,
+                    mech_settle_by_month=mech_settle if cat == CATEGORY_MECH else None,
+                    end_ym=end_ym or None, remarks=remarks,
+                    opening_auto=sum_money(r.pay_stat for r in undated) if undated else None)
+        shown = []
+        for r in ledger:
+            if (r.month in manual_months and not r.other_expense and not r.payment
+                    and not remarks.get(r.month) and r.month not in overrides):
                 continue
-            record = next(r for r in records if r.id == h.opening_id)
-            label = "i6结算补录" if history.kind(record) == "settlement" else "历史付款补差"
-            ledger.append(LedgerRow(seq=0, month=h.cutoff_ym, other_expense=h.settle_amount,
-                                   payment=h.paid_amount, remark=record.remark,
-                                   row_kind=history.kind(record),
-                                   month_label=f"截至{h.cutoff_ym} · {label}"))
-        ledger.sort(key=lambda r: (r.month, r.row_kind == "month"))
-        for i, row in enumerate(ledger, 1):
-            row.seq = i
-        sides.append({
-            "category": cat,
-            "label": CATEGORY_LABELS[cat],
-            "opening_id": opening.opening_id if opening else None,
-            "opening_default": ({"cutoff_ym": dom.prev_month(months[0]), "fallback": False}
-                                if months else dom.opening_defaults([], cat, today)),
-            "has_manual_input": not (cat == CATEGORY_MECH and not dom.MECH_HAS_MANUAL_INPUT),
-            "rows": [
-                {
-                    "seq": r.seq, "month": r.month,
-                    "other_expense": f"{r.other_expense:.2f}",
-                    "payment": f"{r.payment:.2f}",
-                    "debt": f"{r.debt:.2f}",
-                    "remark": r.remark,
-                    "is_opening": r.is_opening,
-                    "row_kind": r.row_kind,
-                    "month_label": r.month_label,
-                    "counts_in_total": r.counts_in_total,
-                    "remark_key": dom.ledger_remarks_key(cat, int(project_id), r.month),
-                }
-                for r in ledger
-            ],
-        })
-    for side in sides:
-        raw = side["rows"]
-        manual = next((r for r in raw if r["row_kind"] == "opening_manual"), None)
-        auto = next((r for r in raw if r["row_kind"] == "opening_auto"), None)
-        combined = any(r["row_kind"] == "opening_total" for r in raw)
-        visible = []
-        for row in raw:
-            if combined and row["row_kind"] in ("opening_manual", "opening_auto"):
+            record = overrides.get(r.month)
+            note = record.remark if record else r.remark
+            shown.append({"month": r.month, "other_expense": f"{r.other_expense:.2f}",
+                          "payment": f"{r.payment:.2f}", "debt": f"{r.debt:.2f}", "remark": note,
+                          "is_opening": False, "row_kind": "month" if r.month else "undated",
+                          "month_label": r.month_label, "counts_in_total": True,
+                          "record_id": record.id if record else None,
+                          "editable": bool(r.month and r.month <= history.CUTOFF),
+                          "token": history.cell_token(project_id, cat, r.month, r.other_expense,
+                                                       r.payment, note, record.id if record else None)})
+        for record in records:
+            if record.category != cat or history.kind(record) == "month" or (end_ym and record.cutoff_ym > end_ym):
                 continue
-            shown = dict(row)
-            if row["row_kind"] == "opening_total":
-                shown.update(month_label=f"{row['month']}及之前", counts_in_total=True,
-                             is_opening=bool(manual and manual["is_opening"]),
-                             manual_payment=manual["payment"], automatic_payment=auto["payment"],
-                             remark=manual["remark"])
-            shown["seq"] = len(visible) + 1
-            visible.append(shown)
-        side["display_rows"] = visible
-    return {
-        "project_id": int(project_id),
-        "project_options": project_options(s),
-        "sides": sides,
-        "history": history.records_data(s, project_id, rows, records),
-        "shared_project_selector": dom.SHARED_PROJECT_SELECTOR,
-        "has_switch_caliber_button": dom.HAS_SWITCH_CALIBER_BUTTON,
-    }
+            settle, paid = to_money(record.settle_amount), to_money(record.paid_amount)
+            shown.append({"month": record.cutoff_ym, "other_expense": f"{settle:.2f}",
+                          "payment": f"{paid:.2f}", "debt": f"{settle-paid:.2f}", "remark": record.remark,
+                          "is_opening": False, "row_kind": "manual", "month_label": "",
+                          "counts_in_total": True, "record_id": record.id, "editable": True,
+                          "token": history.record_token(record)})
+        shown.sort(key=lambda r: (r["month"], r["row_kind"] == "month", r["record_id"] or 0))
+        for i, row in enumerate(shown, 1):
+            row["seq"] = i
+        sides.append({"category": cat, "label": CATEGORY_LABELS[cat],
+                      "rows": shown, "display_rows": shown, "opening_id": None,
+                      "has_manual_input": cat == CATEGORY_MATERIAL})
+    return {"project_id": int(project_id), "project_options": project_options(s), "sides": sides,
+            "historical_cutoff": history.CUTOFF, "shared_project_selector": dom.SHARED_PROJECT_SELECTOR,
+            "shared_export_entry": dom.SHARED_EXPORT_ENTRY,
+            "has_switch_caliber_button": dom.HAS_SWITCH_CALIBER_BUTTON}
+
 
 
 # ---------------------------------------------------------------- ④ 实际付款统计
 
-
-def set_opening_payment(s: Session, *, project_id: int, category: str, payment: str) -> dict:
-    """编辑期初合计付款；按保存时的自动统计金额反算手动值。"""
-    side = next((x for x in build_ledger(s, project_id=project_id)["sides"]
-                 if x["category"] == category), None)
-    if side is None:
-        raise MustReportError("请选择辅材或机械台账")
-    auto = next((r for r in side["rows"] if r["row_kind"] == "opening_auto"), None)
-    existing = next(iter(repo.list_openings(s, project_id=project_id, category=category)), None)
-    if auto is None or existing is None:
-        raise MustReportError("请先录入该项目、本分类的期初记录")
-    paid = to_money(payment) - to_money(auto["payment"])
-    opening = repo.upsert_opening(s, category=category, project_id=project_id,
-                                 cutoff_ym=existing.cutoff_ym,
-                                 settle_amount=existing.settle_amount,
-                                 paid_amount=paid, remark=existing.remark)
-    return {"ok": True, "opening_id": opening.id, "manual_payment": f"{paid:.2f}",
-            "automatic_payment": auto["payment"]}
 
 
 def _current_bucket(granularity: str, today: date) -> str:
@@ -601,4 +551,4 @@ def project_references(session, project_id, warehouse, *, lock=False):
     from app.core.references import project_references as read
     from .models import PaymentFlow, OpeningBalance, LedgerRemark
 
-    return read(session, ((PaymentFlow, '付款流水'), (OpeningBalance, '期初余额'), (LedgerRemark, '台账备注'),), project_id, warehouse, lock=lock)
+    return read(session, ((PaymentFlow, '付款流水'), (OpeningBalance, '历史台账'), (LedgerRemark, '台账备注'),), project_id, warehouse, lock=lock)

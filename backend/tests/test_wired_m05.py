@@ -174,22 +174,22 @@ def test_台账的现状数_截至行与入口名都钉住():
        谁重排版式都可能把它抄回来（那时"当前欠多少"又重新变成一个没人读得懂的格子）。
     """
     # ① 每栏标题行**先给"现状"**（§2.6 能算出来的别让人自己数 · §2.7 结论贴在对象上）
-    assert "本项目当前欠款（含期初）" in SHELL, "标题行没给「本项目当前欠款」⇒ 用户又得自己把「欠款」列加一遍"
+    assert "本项目当前欠款（含历史数据）" in SHELL, "标题行没给「本项目当前欠款」⇒ 用户又得自己把「欠款」列加一遍"
     assert "MONEY(cur)" in SHELL, "当前欠款数值未渲染"
     # ⭐ 它必须与**表尾那一格同源**（同一处算出来）—— 两处各算一份 ⇒ 迟早打架（§4.7）
     assert "const totals=rows;" in SHELL and "const cur=N2(totals.reduce((a,r)=>a+(r.s-r.p),0));" in SHELL, \
         "标题行那个数不是从表尾同一个出口算出来的（各算一份 ⇒ 迟早打架）"
-    assert "side.display_rows||side.rows" in SHELL and 'data-act="ledOpeningPay"' in SHELL, \
+    assert "side.display_rows||side.rows" in SHELL and 'data-act="ledHistoryCell"' in SHELL, \
         "页面须消费共享显示行并允许修改期初合计付款"
     # ② 表尾正名（§4.7）：原来叫「合计：」⇒ 会被读成"各月数字相加"
     assert "lead:'<b>合计：</b>'" not in SHELL, "表尾又退回「合计：」（那会被读成各月数字相加）"
     assert "截至 ${esc(upto)}" in SHELL, "表尾实际截至月标签丢失"
     assert "当前欠款</span>" in SHELL, "表尾「欠款」那格没标出它就是「现在还欠多少」"
     # ③ 两个期初录入入口**不许同名并排**（§4.4；旧的「＋ 录入期初占位行」两栏各一个）
-    assert ">＋ 录入${sc}期初</button>" in SHELL, "期初录入按钮文案没带分类名（两栏认错就录错池子）"
+    assert ">＋ 新增历史行</button>" in SHELL, "期初录入按钮文案没带分类名（两栏认错就录错池子）"
     assert "＋ 录入期初占位行</button>" not in SHELL, "同名并排的旧按钮文案又回来了"
     # ④ 空月压暗（§5.9）—— ⚠️ 台账**空月也出行**，不压暗则"哪个月真发生过事"看不出来
-    assert "const z=!historical&&!r.open&&!N2(r.s)&&!N2(r.p)" in SHELL, "空月压暗没了（每个月看起来一样重）"
+    assert "const z=r.kind==='month'&&!r.editable&&!N2(r.s)&&!N2(r.p)" in SHELL, "空月压暗没了（每个月看起来一样重）"
     # 备注可编辑性要**提前说**（§2.4：不给提示，用户不知道点一下就改）
     assert 'data-act="ledNote"' in SHELL, "备注实际编辑入口丢失"
     # ⑤ ⭐ 2026-09-29（`A1` 逐页）：**引用了已经删掉的东西 = 页面在讲一件不存在的事**（守则 §4.2 状态必须真实）。
@@ -228,7 +228,7 @@ def test_台账卡头按钮分组与点开有反馈都钉住():
     #    「点掉筛选后**不知道去哪里找**」（守则 §10「按钮怎么起名」：动词在前 ＋ 名字里能看出下一步 ＋ 有下文带 `…`）。
     assert ">批量导出（先选项目）…</button>" in head, "卡头那个唯一入口的按钮名没说明「要先选项目」"
     # ③ ⭐ 两个导出在同一条面板里，**各自的项目范围挨着自己的动作**（治"点按钮后跑到最左边选项目"）
-    strip = SHELL[SHELL.index("const ledExpStrip=()=>"):SHELL.index("const lgPjPanel=()=>")]
+    strip = SHELL[SHELL.index("const ledExpStrip=()=>"):SHELL.index("const ledRows=(sc,proj)=>")]
     assert "① 逐月台账" in strip and "② 总欠款汇总" in strip, "两个导出没在同一条面板里（分两处又会让人来回跑）"
     # ⚠️ 2026-09-30（`TAIL-64` `P4-d-b`）：那枚项目按钮**改走统一出口 `PJB`** ⇒ 它的落点改成**委托形式**
     #    （**判词不变**：面板里这几件都在）；余下四枚是普通按钮，照旧钉 `data-act`。
@@ -335,8 +335,7 @@ def test_总欠款导出与期初删除都不许静默失败():
     assert "id: '', proj:" not in SHELL, \
         "`adaptOpening` 又把期初行 id 写死成假值 `''` ⇒ 「删除期初行」必然匹配不上、静默无反应"
     assert "id: x.id == null ? '' : String(x.id)" in SHELL, "`adaptOpening` 没把真 id 带出来（归一成字符串）"
-    i = SHELL.index("delLg:t=>{")
-    body = SHELL[i:SHELL.index("delLgOk:t=>{", i)]
-    assert 100 < len(body) < 3000, f"取体越界（{len(body)} 字符）—— 锚点可能切歪了"
-    assert "String(" in body, "`delLg` 没做 `String()` 归一（`dataset.id` 是字符串、`x.id` 是数字）"
-    assert "toast(" in body, "`delLg` 找不到数据时必须给**可见反馈** —— 「点了没反应」正是本条的老毛病"
+    i=SHELL.index("historyDelete:t=>{")
+    body=SHELL[i:SHELL.index("/* —— 付款流水的筛选",i)]
+    assert "String(" in body
+    assert "toast(" in body

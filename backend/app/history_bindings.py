@@ -15,7 +15,7 @@ def configure():
     project = Rule(Project, frozenset({'disp', 'ord'}))
     opening = Rule(OpeningBalance, frozenset({'settle_amount', 'paid_amount', 'remark'}), True)
     historical = Rule(OpeningBalance, frozenset({'cutoff_ym', 'settle_amount', 'paid_amount', 'remark',
-                        'paid_basis', 'settle_basis', 'input_mode'}), True)
+                        'entry_kind'}), True)
     remark = Rule(LedgerRemark, frozenset({'remark'}), True)
     fee = Rule(FeeManualItem, frozenset({'item_name', 'amount'}), True)
     big = Rule(AnalysisBigManual, frozenset({

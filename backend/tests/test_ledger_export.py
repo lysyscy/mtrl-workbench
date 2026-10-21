@@ -39,24 +39,19 @@ from tests.m05_helpers import make_notice_row, make_opening, make_project
 from tests.m09_helpers import M09Session, make_inv, make_item
 
 YM = "2026-09"                     # 报告月（台账止月 = 特殊费用月报表的月份列，**必须同一个**）
-OPEN_YM = "2026-06"                # 期初截止月 ⇒ 台账从 `2026-07` 起逐月出行
+OPEN_YM = "2025-11"                # 历史行月份；后续空月仍连续导出
 WH_A, WH_B = "甲仓库", "乙仓库"
 DISP_A = "甲公司项目"
 
-#: 手写期望（**独立复算**，⛔ 不问实现）：台账两侧各 4 行 = 期初 ＋ 07/08/09（空月也出行）
+#: 手写期望（**独立复算**，⛔ 不问实现）：台账两侧历史辅材行及后续月份；机械仅取已有台账月份
 LEDGER_EXPECT: dict[str, list[tuple]] = {
     "material": [
-        ("1", "2026-06及之前", "100.00", "0.00", "100.00", ""),
-        ("2", "2026-07", "0.00", "0.00", "0.00", ""),
-        ("3", "2026-08", "0.00", "0.00", "0.00", ""),
-        ("4", "2026-09", "1000.00", "200.00", "800.00", ""),
+        ("1", "2025-11", "100.00", "0.00", "100.00", ""),
+        *[(str(i+2),ym,"0.00","0.00","0.00","") for i,ym in enumerate([
+          "2025-12","2026-01","2026-02","2026-03","2026-04","2026-05","2026-06","2026-07","2026-08"])],
+        ("11", "2026-09", "1000.00", "200.00", "800.00", ""),
     ],
-    "mechanical": [
-        ("1", "2026-06及之前", "50.00", "0.00", "50.00", ""),
-        ("2", "2026-07", "0.00", "0.00", "0.00", ""),
-        ("3", "2026-08", "0.00", "0.00", "0.00", ""),
-        ("4", "2026-09", "0.00", "300.00", "-300.00", ""),
-    ],
+    "mechanical": [("1","2026-09","0.00","300.00","-300.00","")],
 }
 
 #: 手写期望：特殊费用月报表 = 1 自动项（安文费 800）＋ 2 手填项；**单月列 ⇒ 合计 = 该月值**
@@ -91,8 +86,6 @@ def dataset() -> dict:
         OpeningBalance: [
             make_opening(201, category=CATEGORY_MATERIAL, project_id=11, cutoff_ym=OPEN_YM,
                          settle="100", paid="0"),
-            make_opening(202, category=CATEGORY_MECH, project_id=11, cutoff_ym=OPEN_YM,
-                         settle="50", paid="0"),
         ],
         LedgerRemark: [],
         InvDetail: [make_inv(YM, WH_A, "出库", "CBS-安文费", "800.00", rid=301)],
@@ -226,12 +219,10 @@ def test_特殊费用月报表逐格等于手写期望(tmp_path):
 # ============================================================ ③ 月份文本口径
 
 
-def test_期初行的月份是页面文本不是YYYY_MM(tmp_path):
-    """⭐ `模板清单` §四-4 裁定「**按页面文本**」：期初行 = `YYYY-MM及之前`（⛔ 不是 `2026-06`）。"""
-    path = build(tmp_path)
-    for cat in LEDGER_EXPECT:
-        got = txt(sheet(path, LX.SHEET_OF_CATEGORY[cat])[2][1])
-        assert got == "2026-06及之前", f"[{LX.SHEET_OF_CATEGORY[cat]}] 期初行月份 = {got!r}"
+def test_历史行月份按普通月份导出(tmp_path):
+    path=build(tmp_path)
+    for cat,want in LEDGER_EXPECT.items():
+        assert txt(sheet(path,LX.SHEET_OF_CATEGORY[cat])[2][1])==want[0][1]
 
 
 def test_月份列的数字格式是文本(tmp_path):
@@ -242,7 +233,7 @@ def test_月份列的数字格式是文本(tmp_path):
     try:
         for cat in LEDGER_EXPECT:
             ws = wb[LX.SHEET_OF_CATEGORY[cat]]
-            fmts = {ws.cell(row=r, column=2).number_format for r in range(3, 7)}
+            fmts = {ws.cell(row=r, column=2).number_format for r in range(3, 3+len(LEDGER_EXPECT[cat]))}
             assert fmts == {LX.TEXT_FMT}, f"[{ws.title}] 月份列数字格式 = {fmts}（应为 {LX.TEXT_FMT!r}）"
     finally:
         wb.close()

@@ -78,7 +78,7 @@ class PaymentFlow(Base):
 
 
 class OpeningBalance(Base):
-    """期初占位行（**手填**、无付款通知书对应；带**分类**与**截止年月**，§4.5.1 / §4.5.2）。"""
+    """历史台账编辑记录；manual为辅材独立行，month为历史月份金额覆盖。"""
 
     __tablename__ = "opening_balance"
 
@@ -87,15 +87,12 @@ class OpeningBalance(Base):
     project_id: Mapped[int | None] = mapped_column(
         ForeignKey("project.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    cutoff_ym: Mapped[str] = mapped_column(String(7), default="")       # 「截止 YYYY-MM 底」= 台账起点
+    cutoff_ym: Mapped[str] = mapped_column(String(7), default="")       # 所属月份，不截断其他行
     settle_amount: Mapped[float] = mapped_column(MONEY, default=0)      # 手填结算
     paid_amount: Mapped[float] = mapped_column(MONEY, default=0)        # 手填付款
     remark: Mapped[str] = mapped_column(String(512), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    entry_kind: Mapped[str] = mapped_column(String(16), default="legacy", server_default="legacy")
-    paid_basis: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")
-    settle_basis: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")
-    input_mode: Mapped[str] = mapped_column(String(8), default="paid", server_default="paid")
+    entry_kind: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
 
 
 class LedgerRemark(Base):

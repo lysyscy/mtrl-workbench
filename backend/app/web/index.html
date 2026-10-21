@@ -269,9 +269,10 @@ input.inp[readonly]{background:var(--sf2);color:var(--tx2);border-style:dashed;c
 .kv{display:grid;grid-template-columns:112px 1fr;gap:calc(6px * var(--fscale)) calc(10px * var(--fscale));font-size:calc(12px * var(--fscale))}
 .kv dt{color:var(--mut)}
 .kv dd{font-family:var(--fm)}
-.modal:has(.history-check){width:calc(500px * var(--fscale))}
-.history-check>div{grid-template-columns:minmax(0,1fr) auto!important;align-items:baseline}
-.history-check>div>div:nth-child(even){text-align:right;max-width:calc(260px * var(--fscale));overflow-wrap:anywhere}
+.led-cell{width:100%;min-width:calc(104px * var(--fscale));border-color:var(--bd2);background:var(--bg)}
+.led-cell[type="month"]{min-width:calc(135px * var(--fscale))}
+.led-cell[data-field="remark"]{min-width:calc(130px * var(--fscale));max-width:calc(190px * var(--fscale))}
+
 
 /* 提示条 */
 /* ⚠️ `pointer-events:none`（2026-09-26 真机段 ㉑ 量出来的真缺陷）：提示条是**纯提示**、没人给它挂点击，
@@ -494,9 +495,8 @@ tr.nt-focus td{background:var(--sf2);box-shadow:inset 0 2px var(--pri),inset 0 -
 .debt-overview .br .nm{min-width:0;overflow-wrap:anywhere}
 .debt-overview .br .tk{display:block;width:100%;min-width:0}
 .debt-overview .br .vl{white-space:nowrap;width:100%;min-width:0;text-align:right}
-.debt-ledger-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(16px * var(--fscale));margin-top:calc(12px * var(--fscale))}
+.debt-ledger-stack{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(640px * var(--fscale))),1fr));gap:calc(16px * var(--fscale));margin-top:calc(12px * var(--fscale))}
 .debt-ledger{min-width:0}
-.debt-ledger+.debt-ledger{border-left:1px solid var(--bd2);padding-left:calc(16px * var(--fscale))}
 .debt-ledger .tw{min-height:0;max-height:calc(360px * var(--fscale))}
 .debt-ledger table{width:100%;min-width:calc(520px * var(--fscale))}
 .debt-ledger td.num,.debt-ledger .sumrow>td{white-space:nowrap}
@@ -851,30 +851,27 @@ V.m05=()=>{
         <span class="mut sm" title="只算「卡头所选的那个项目」；口径 = 历史数据加各月结算减付款，含未填单据日期付款—— 与上方那三栏不是同一个数（那三栏按项目分列，这里只算选中的那一个）">本项目当前欠款（含历史数据）</span><b class="fc">${MONEY(cur)}</b><span class="mut sm">截至 ${esc(upto)}</span>
         ${mLast?`<span class="mut sm" title="最近一月（${esc(mLast.ym)}）：其他支出金额 − 付款 —— 当月新增，不是累计">· ${esc(mLast.ym)} 新增</span><b class="fc" style="color:var(--${N2(add)>0?'dg':'mut'})">${MONEY(add)}</b>`:''}
         <span style="margin-left:auto;display:flex;gap:calc(6px * var(--fscale));flex-wrap:wrap">
-          <button class="btn sm" data-act="addLg" data-sc="${sc}" title="${sc==='辅材'?'分次补录i6结算，或核对历史累计付款':'结算取机械费台账，补录历史累计付款或欠款'}">＋ ${sc}历史数据</button>
+          ${sc==='辅材'?`<button class="btn sm" data-act="addLg" data-sc="辅材">＋ 新增历史行</button>`:''}
         </span></div>
-      ${lgOn&&lgCat===sc?lgStrip():''}
-      ${lgHistory(sc)}
+      <p class="mut sm mb6">${sc==='辅材'?'2025-11及以前可增行、改结算和付款；2025-12起按通知书统计。':'2025-11及以前可直接填付款；结算取机械费台账。'}</p>
       <div class="tw">${TBL({head:(sc==='机械'?LED_THEAD.replace('其他支出金额','机械结算金额'):LED_THEAD),key:'m05:ledger-'+sc,
-    rows:shownRows.map((r,i)=>{ const historical=r.kind!=='month';
-      const z=!historical&&!r.open&&!N2(r.s)&&!N2(r.p)&&!String(r.note||'').trim();
+    rows:shownRows.map((r,i)=>{
+      const z=r.kind==='month'&&!r.editable&&!N2(r.s)&&!N2(r.p)&&!String(r.note||'').trim();
       const cell=v=>z?`<span class="mut">${M(v)}</span>`:M(v);
-      return `<tr${r.open?' class="hl"':''}>
-      <td class="fc">${i+1}${r.open?` <span class="tag t-in">期初 · ${esc(r.cat||'')}</span>`:''}</td>
-      <td class="now">${r.label?esc(r.label):r.open?esc(ledCutLabel(r.ym)):(z?`<span class="mut">${r.ym}</span>`:r.ym)}</td>
-      <td class="num" title="${r.kind==='settlement'?'本次补录的i6结算金额':r.kind==='payment'?'本行只补历史付款，不新增结算':r.kind==='opening_auto'?'本行只归集付款，结算为0':r.kind==='opening_total'?'本项目、本分类期初占位行的手填结算金额':r.kind==='opening_manual'||r.open?'本项目、本分类期初占位行的手填结算金额':sc==='机械'?'机械费结算金额 = 派生只读，取自过程资料机械 6 列的「外租零租含税 ＋ 外租包月含税」；租分公司设备 / 内租设备不参与欠款统计':'辅材其他支出金额 = 付款通知书中本项目、本单据年月、分类为辅材的统计结算金额之和；剔除行不计入'}">${cell(r.s)}</td>
-      <td class="num" title="${r.kind==='payment'?'累计付款扣除核对时已记录同期付款后的补差':r.kind==='settlement'?'本行只补录结算，不新增付款':r.kind==='opening_auto'?'本项目、本分类未填单据日期的通知书统计付款合计；剔除行不计，保留人工调整':r.kind==='opening_total'?'本段手动付款＋自动付款；外层合计只计一次':r.kind==='opening_manual'||r.open?'本项目、本分类期初占位行的手填付款金额':'付款 = 付款通知书中本项目、本单据年月、同分类的统计付款金额之和；剔除行不计入，不是实际付款流水金额'}">${r.kind==='opening_total'?`<input class="inp num" style="width:110px" data-act="ledOpeningPay" data-sc="${sc}" data-proj="${esc(lp)}" value="${r.p.toFixed(2)}" title="手动${M(r.manual)}元＋自动${M(r.auto)}元；修改合计付款，离开即保存">`:cell(r.p)}</td>
+      return `<tr><td class="fc">${i+1}</td>
+      <td class="now">${r.kind==='manual'?ledHistoryInput(r,sc,'cutoff_ym'):esc(r.label||r.ym)}</td>
+      <td class="num" title="${sc==='机械'?'机械费台账外租含税结算合计':'其他支出金额'}">${r.editable&&sc==='辅材'?ledHistoryInput(r,sc,'settle_amount'):cell(r.s)}</td>
+      <td class="num">${r.editable?ledHistoryInput(r,sc,'paid_amount'):cell(r.p)}</td>
       <td class="num" style="color:var(--${N2(r.s-r.p)>0?'dg':'mut'})">${cell(N2(r.s-r.p))}</td>
-      <td>${r.open||historical?`<span class="mut sm">${esc(r.note)}</span>`
-        :`<input class="inp" style="max-width:150px" data-act="ledNote" data-sc="${sc}" data-proj="${esc(lp)}" data-m="${r.ym}" value="${esc(r.note)}" placeholder="—" title="点这一格就能改：离开它即保存（清空 = 清除这格备注）">`}</td>
-      <td class="ctr">${r.open?`<button class="btn sm dg" data-act="delLg" data-id="${r.id}" title="删除这一行期初占位行（删除前列出影响范围）">删除期初行</button>`:'<span class="mut">—</span>'}</td></tr>`;}),
+      <td>${r.editable?ledHistoryInput(r,sc,'remark'):`<input class="inp" style="max-width:150px" data-act="ledNote" data-sc="${sc}" data-proj="${esc(lp)}" data-m="${r.ym}" value="${esc(r.note)}" placeholder="—" title="离开单元格即保存">`}</td>
+      <td class="ctr">${r.kind==='manual'?`<button class="btn sm dg" data-act="historyDelete" data-sc="${sc}" data-id="${r.id}">删除</button>`:'<span class="mut">—</span>'}</td></tr>`;}),
     sum:rows.length?sumRowOf(LED_THEAD, totals, {
         2:[rs=>N2(rs.reduce((a,x)=>a+x.s,0)),v=>'<b>'+M(v)+'</b>'],
         3:[rs=>N2(rs.reduce((a,x)=>a+x.p,0)),v=>'<b>'+M(v)+'</b>'],
         4:[rs=>N2(rs.reduce((a,x)=>a+x.s-x.p,0)),v=>'<b>'+M(v)+'</b><span class="mut sm"> 当前欠款</span>']},
         {lead:`截至 ${esc(upto)}`,leadSpan:2,leadCls:'ctr',style:'',
          tip:`历史数据与各月累计，含未填单据日期付款；欠款 = 本项目截至 ${upto} 还欠多少，与本栏上方同源`}):'',
-      empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；历史结算或累计付款用本栏右上角「＋ ${sc}历史数据」补`)})}</div></section>`; };
+      empty:EMPTYROW(thCount(LED_THEAD), '该项目在本口径下暂无数据', `换个项目；或先在「付款通知书」页补录；辅材历史数据可直接新增行，机械结算取机械费台账`)})}</div></section>`; };
   /* —— 付款流水（**实际付款记录**）——
      ⭐ 2026-09-13 用户口径：与 MOD-03 / MOD-04 **同一逻辑 —— 默认按「当前核算月」核算**（一个月内流水有限）
         ⇒ **不做分页**。筛选 = 付款年月 / 付款项目 / 实际付款方式 / 状态 / 关键词（各数据列）

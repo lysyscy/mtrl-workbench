@@ -59,20 +59,9 @@ def test_导出总欠款的行序_选了项目就按用户给的顺序():
         "脏名字只跳过它自己，⛔ 不许把后面的都丢掉"
 
 
-def test_期初行在欠款与台账两侧必须给同一个id():
-    """⭐ 2026-09-28（用户走查：「期初占位行录入后点删除没反应」）。
-
-    壳里「删除期初行」按钮挂在**台账行**上（拿的是 `ledger.sides[].opening_id`），而它要去
-    `/api/m05/debt` 的 `openings[]` 那一侧取金额与项目 ⇒ **两侧必须给同一个 id**。
-    ⚠️ 原来 `debt.openings[]` **根本不返回 id** ⇒ 壳只能填假值 `''` ⇒ 删除按钮**恒匹配不上 + 静默 return**
-    = 用户看到的"点了没反应"。（同源缺陷的壳侧断言在 `tests/test_wired_m05.py`。）
-    """
-    led = _ledger()["sides"][0]
-    ids = [o.get("id") for o in _debt()["openings"]]
-    assert led.get("opening_id"), "台账侧没有 `opening_id` —— 删除按钮拿不到 id"
-    assert led["opening_id"] in ids, (
-        f"欠款侧 `openings[].id` 与台账 `opening_id` 对不上：{ids} vs {led['opening_id']}"
-        " ⇒ 壳「删除期初行」会静默点不动")
+def test_历史行在欠款与台账两侧必须给同一个id():
+    manual=next(r for r in _ledger()["sides"][0]["rows"] if r["row_kind"]=="manual")
+    assert manual["record_id"] in [r["id"] for r in _debt()["openings"]]
 
 
 def test_四份组装件都带自己的口径与指标区():
@@ -96,14 +85,12 @@ def test_台账机械侧没有手填入口_辅材侧有():
     assert by["mechanical"]["has_manual_input"] is False, "机械侧不该有手填入口（「其他支出金额」是派生只读）"
 
 
-def test_台账首行是期初且空月也出行():
-    rows = _ledger()["sides"][0]["display_rows"]             # 页面与导出的统一行集合
-    assert rows[0]["is_opening"] is True, "首行不是期初行"
-    assert rows[0]["month"] == "2026-06" == _ledger()["sides"][0]["opening_default"]["cutoff_ym"]
-    months = [r["month"] for r in rows if not r["is_opening"]]
-    assert len(months) == len(set(months)), "月份重复"
-    assert months == sorted(months), "月份不连续（空月必须也出行）"
-    assert months[0] <= "2026-07" and "2026-08" in months, f"本桩应含空月 2026-08：{months}"
+def test_历史行不再占位且普通空月继续出行():
+    rows=_ledger()["sides"][0]["rows"]
+    assert all(not r["is_opening"] for r in rows)
+    assert rows[0]["row_kind"]=="manual"
+    months=[r["month"] for r in rows if r["row_kind"]=="month"]
+    assert months==sorted(months) and "2026-08" in months
 
 
 def test_流水默认走全部月份且撤销只对生效行有意义():

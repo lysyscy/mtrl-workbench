@@ -519,7 +519,7 @@ const ENUMS={
   pjStatus: {vals:['在建','归档'], tone:{在建:'in',归档:'in'}},
   pjType:   {vals:['normal','shell','small'], text:{normal:'普通项目',shell:'小微壳',small:'具体小微'}, tone:{normal:'in',shell:'vi',small:'wn'}},
   jcTag:    {vals:['纳入台账','不纳入'], tone:{纳入台账:'ok',不纳入:'in'}},
-  jcArch:   {vals:['未存档','资产处','已存档'], tone:{未存档:'wn',资产处:'pri',已存档:'ok'}},
+  jcArch:   {vals:['未存档','资产处','已存档'], tone:{未存档:'wn',资产处:'vi',已存档:'ok'}},
   plRev:    {vals:['完全匹配','金额不符','单据号查不到','无单据号','重复上报','超过未付'],
              tone:{完全匹配:'ok',金额不符:'wn',单据号查不到:'dg',无单据号:'dg',重复上报:'wn',超过未付:'dg'}},
   plRevF:   {vals:['全部','完全匹配','未匹配']},            /* 筛选两档归并（判定仍 6 种，见 §4.3.4）*/

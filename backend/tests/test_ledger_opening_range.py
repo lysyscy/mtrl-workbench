@@ -1,4 +1,4 @@
-"""真实期初控制月界，无期初与未填日期付款均不能截断历史月。"""
+"""直接录入历史行与未填日期付款均不能截断正常月份。"""
 from decimal import Decimal as D
 
 import pytest
@@ -52,8 +52,7 @@ def test_no_opening_preserves_old_months_and_export(session, cat, auto, tmp_path
     assert months[0]["month"] == ("2024-06" if cat == "mechanical" else "2024-07")
     assert months[-1]["month"] == "2025-12"
     assert next(r for r in months if r["month"] == "2024-07")["payment"] == "10.00"
-    assert side["opening_default"] == {"cutoff_ym": "2024-05" if cat == "mechanical" else "2024-06", "fallback": False}
-    historical = [r for r in side["display_rows"] if r["row_kind"] == "opening_auto"]
+    historical = [r for r in side["display_rows"] if r["row_kind"] == "undated"]
     assert len(historical) == (auto is not None)
     if historical:
         assert historical[0]["payment"] == f"{D(auto):.2f}"
@@ -66,8 +65,6 @@ def test_no_opening_preserves_old_months_and_export(session, cat, auto, tmp_path
     assert "2024-07" in [r[1]["B"] for r in spec["rows"]]
     opposite = next(s for s in data["sides"] if s["category"] != cat)
     assert opposite["rows"] == [] and opposite["display_rows"] == []
-    with pytest.raises(MustReportError, match="期初"):
-        service.set_opening_payment(session, project_id=p.id, category=cat, payment="50")
     assert repository.list_openings(session, project_id=p.id, category=cat) == []
     if auto == "25.12":
         import openpyxl
@@ -86,25 +83,19 @@ def test_no_opening_preserves_old_months_and_export(session, cat, auto, tmp_path
             workbook.close()
 
 
-@pytest.mark.parametrize("cat", ["material", "mechanical"])
-@pytest.mark.parametrize("cutoff", ["2024-08", "2025-11", "2026-02"])
-def test_real_opening_keeps_its_cutoff_and_counts_auto_once(session, cat, cutoff):
-    p = project(session, "__ledger_cutoff__")
-    session.add(OpeningBalance(category=cat, project_id=p.id, cutoff_ym=cutoff,
-                               settle_amount=1000, paid_amount=100))
-    session.flush()
-    notice(session, p, cat, "2024-07-10", 999)
-    notice(session, p, cat, "2026-03-10", 20)
-    notice(session, p, cat, "", 25)
-    side = next(s for s in service.build_ledger(session, project_id=p.id)["sides"] if s["category"] == cat)
-    first, *monthly = side["display_rows"]
-    assert first["month"] == cutoff and first["month_label"] == cutoff + "及之前"
-    assert first["is_opening"] and first["payment"] == "125.00"
-    assert all(r["month"] > cutoff for r in monthly)
-    assert monthly[-1]["month"] == "2026-03"
-    spec = ledger_export.ledger_spec(ledger_export.SHEET_OF_CATEGORY[cat], side, display=p.disp)
-    assert spec["tail"][0][1]["D"] == D(145)
-    service.set_opening_payment(session, project_id=p.id, category=cat, payment="150")
-    opening = repository.list_openings(session, project_id=p.id, category=cat)[0]
-    assert opening.cutoff_ym == cutoff and opening.settle_amount == D(1000)
-    assert opening.paid_amount == D(125)
+@pytest.mark.parametrize("month",["2024-08","2025-11"])
+def test_manual_rows_keep_all_notices_and_undated_payment_once(session,month):
+    p=project(session,"__ledger_manual_range__")
+    session.add(OpeningBalance(category="material",project_id=p.id,cutoff_ym=month,
+                               settle_amount=1000,paid_amount=100,entry_kind="manual"));session.flush()
+    notice(session,p,"material","2024-07-10",999)
+    notice(session,p,"material","2026-03-10",20)
+    notice(session,p,"material","",25)
+    side=service.build_ledger(session,project_id=p.id)["sides"][0]
+    rows=side["display_rows"]
+    manual=next(r for r in rows if r["row_kind"]=="manual")
+    assert manual["month"]==month and manual["payment"]=="100.00"
+    assert not any(r["is_opening"] for r in rows)
+    assert any(r["month"]=="2024-07" and r["payment"]=="999.00" for r in rows)
+    spec=ledger_export.ledger_spec("辅材",side,display=p.disp)
+    assert spec["tail"][0][1]=={"C":D(1200),"D":D(1144),"E":D(56)}
