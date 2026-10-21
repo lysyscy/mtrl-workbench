@@ -909,24 +909,28 @@ const ACT={
  /* data-sc = 从哪一栏点进来的 —— 作为「分类」的预选值（仍可在展开区里改）
     ⭐ 2026-09-13 增行模式（用户拍板 C-1 / C-7）：**「录入期初占位行」弹窗取消** ⇒
        改为**栏内展开区**，且整条展开区渲染在 `.tw` **之外**（表格上方的独立条带）。 */
- addLg:t=>{ const sc=t&&t.dataset?t.dataset.sc:''; if(sc) lgCat=sc;
-  /* 项目默认 = 台账当前项目；截止月与金额读取该分类已有手动记录，新记录默认历史段。
-     ⚠️ 只在「进入增行态」时算一次；展开区内重绘（选截止年月 / 改分类）**不重算** —— 否则会把用户选的值冲掉。
-        唯一例外：**改「分类」**要重算 —— 辅材 / 机械 的最早数据月各算各的，不重算就会给出错的默认值。 */
-  lgPjName=lgDefPjName(); lgCut=lgCutFor(lgPjName,lgCat);
+ addLg:async t=>{ const sc=t&&t.dataset?t.dataset.sc:'';
+  /* 项目默认 = 台账当前项目；截止月与金额读取已有记录，新记录沿后端默认值。
+     普通重绘保留草稿日期；改分类或项目时重取对应默认值。 */
+  const project=lgDefPjName(), cat=sc||lgCat;
+  const cutoff=await lgCutFor(project,cat);
+  if(!cutoff) return;
+  lgPjName=project; lgCat=cat; lgCut=cutoff;
   const existing=LGs.find(l=>l.cat===lgCat&&lgProjKeyOf(l.proj)===lgPjName&&l.cutoff===lgCut);
   lgD.s=existing?String(existing.settle):'0.00';
   lgD.p=existing?String(existing.paid):'0.00'; lgD.r=LG_R_DEF;
   lgOn=true; pjClose('lgPj'); render();
   toast(`已在「<b>${esc(lgCat)}</b>」栏上方展开期初占位行录入区 —— 填完点「保存」写入、点「取消」丢弃（<b>草稿不写入</b>）`,5400); },
- lgCancel:()=>{ lgOn=false; pjClose('lgPj'); render();
+ lgCancel:()=>{ lgOn=false; ++lgCutRequest; lgCutPending=false; pjClose('lgPj'); render();
   toast('已取消期初占位行录入 —— <b>未写入任何数据</b>'); },
  /* 草稿层写入口：输入立即记下，展开区重绘时不丢 */
  lgS:t=>{ lgD.s=String((t&&t.value)!=null?t.value:''); },
  lgP:t=>{ lgD.p=String((t&&t.value)!=null?t.value:''); },
  lgR:t=>{ lgD.r=String((t&&t.value)!=null?t.value:''); },
- lgCat:t=>{ lgCat=String((t&&t.value)||lgCat);
-  lgCut=lgCutFor(lgPjName,lgCat); render(); },   /* 改「分类」→ 截止年月按新分类重算（**唯一会重算的入口**） */
+ lgCat:async t=>{ const cat=String((t&&t.value)||lgCat);
+  const cutoff=await lgCutFor(lgPjName,cat);
+  if(!lgOn) return;
+  if(cutoff) { lgCat=cat; lgCut=cutoff; } render(); },
  /* —— 付款流水的筛选（R4：改动即时生效、不设「应用」按钮） ——
     ⚠️ 复位一律【原地改字段】，不要 `flf={...}` 重新赋值（同 `fJc` / `BIGVAL` 的教训）
     ⚠️ ⭐ 「付款项目」自 2026-09-13 起是**共用面板（多选）** ⇒ 本动作**不再读 `#flPj`**（该控件已不存在），
@@ -952,8 +956,10 @@ const ACT={
   toast(i>=0?`付款统计 → 下方「付款流水」已取消 <b>${esc(pjLabel(k))}</b> 的筛选`:`付款统计 → 下方「付款流水」已加选 <b>${esc(pjLabel(k))}</b>`); },
  /* 「项目」共用面板（**单选** —— 能力由调用点声明，与 `MOD-09` / 台账主选择器同款：点一下即切换并收起） */
  lgPjToggle:t=>{ pjToggle('lgPj',t); },
- lgPjPick:t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
-  lgPjName=v; pjClose('lgPj'); render();
+ lgPjPick:async t=>{ const v=(t&&t.dataset&&t.dataset.pj)||''; if(!v) return;
+  const cutoff=await lgCutFor(v,lgCat);
+  if(!cutoff||!lgOn) return;
+  lgPjName=v; lgCut=cutoff; pjClose('lgPj'); render();
   toast(`期初占位行的项目已切到 <b>${esc(pjLabel(v))}</b>（截止年月仍按当前「分类」单独算）`); },
  /* 保存 = 原弹窗的「保存」——**只读草稿层**，不再从 DOM 取值（增行模式：没有弹窗可读） */
  /* ⭐ 已接后端：`POST /m05/opening`（PRG 表单端点 · 同一「口径 + 项目 + 截止年月」重复录入 = **覆盖**）
@@ -962,7 +968,8 @@ const ACT={
    return m05Act(()=>API.send('POST','/api/m05/ledger/opening-payment', {
      project_id:project.id, category:CAT_API[t.dataset.sc], payment:t.value,
    }), '期初付款已保存，手动金额已按合计反算'); },
- addLgOk:()=>{ const pj=lgPjName; if(!pj){ toast('<b>请先选「项目」</b>（点展开区里的「项目」按钮）'); return; }
+ addLgOk:()=>{ if(lgCutPending) return toast('正在读取期初默认年月，请稍后保存');
+  const pj=lgPjName; if(!pj){ toast('<b>请先选「项目」</b>（点展开区里的「项目」按钮）'); return; }
     const row=pjRowOf(pj);
     if(!row||!row.id){ toast('<b>项目没对上档案</b>（请重选）—— 未写入任何数据'); return; }
     m05Act(()=>API.postForm('/m05/opening', {

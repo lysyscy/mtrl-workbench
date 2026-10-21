@@ -23,7 +23,7 @@ def test_mechanical_ledger_uses_effective_taxed_values(session):
     session.add(OpeningBalance(category=CATEGORY_MECH,project_id=p.id,cutoff_ym='2026-07',settle_amount=Decimal('50'),paid_amount=Decimal('10')))
     session.flush()
     def rows(end):
-        return next(x for x in service.build_ledger(session,project_id=p.id,end_ym=end)['sides'] if x['category']==CATEGORY_MECH)['rows']
+        return next(x for x in service.build_ledger(session,project_id=p.id,end_ym=end)['sides'] if x['category']==CATEGORY_MECH)['display_rows']
     current=rows('2026-09')
     assert [(r['month'],r['other_expense'],r['payment'],r['debt']) for r in current]==[
         ('2026-07','50.00','10.00','40.00'),

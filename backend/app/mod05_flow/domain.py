@@ -281,8 +281,8 @@ def build_ledger(
 ) -> list[LedgerRow]:
     """逐月台账（`LED-001-01/02/03/04/06`）。
 
-    - `opening_auto`给出时，历史段拆成手动、自动、合计；合计行不重复参与外层累计
-    - 较晚截止月的已有期初仍保留其起点；只带本口径的期初
+    - 有真实期初时按其截止月合并手动、自动付款；合计行不重复参与外层累计
+    - 无期初时保留独立的未填日期付款，不改变正常月份起点
     - 其后从**期初次月**起**逐月连续**出行；**空月也出行**（三列记 0）
     - 「其他支出金额」：辅材 = 该月统计结算合计；**机械 = 派生只读**（`mech_settle_by_month`）
     - 「付款」：同分类的统计付款合计
@@ -292,11 +292,10 @@ def build_ledger(
     seq = 1
 
     start_ym = None
-    if opening_auto is not None:
-        cutoff = "2025-11"
-        manual = opening if opening is not None and opening.cutoff_ym <= cutoff else None
-        settle = to_money(manual.settle_amount if manual else 0)
-        paid = to_money(manual.paid_amount if manual else 0)
+    if opening_auto is not None and opening is not None:
+        cutoff = opening.cutoff_ym
+        settle = to_money(opening.settle_amount)
+        paid = to_money(opening.paid_amount)
         auto = to_money(opening_auto)
         for kind, label, other, pay in (
             ("opening_manual", "手动", settle, paid),
@@ -305,15 +304,20 @@ def build_ledger(
         ):
             rows.append(LedgerRow(
                 seq=seq, month=cutoff, other_expense=other, payment=pay,
-                is_opening=manual is not None and kind == "opening_manual",
-                row_kind=kind, month_label=f"2025-11及之前 · {label}",
+                is_opening=kind == "opening_manual",
+                row_kind=kind, month_label=f"{cutoff}及之前 · {label}",
                 counts_in_total=kind != "opening_total",
                 remark=remarks.get(cutoff, "") if kind == "opening_manual" else "",
             ))
             seq += 1
-        start_ym = "2025-12"
-        if manual is not None:
-            opening = None
+        start_ym = next_month(cutoff)
+        opening = None
+    elif opening_auto is not None:
+        rows.append(LedgerRow(
+            seq=seq, month="", other_expense=_ZERO, payment=to_money(opening_auto),
+            row_kind="opening_auto", month_label="未填单据日期付款",
+        ))
+        seq += 1
     if opening is not None:
         start_ym = opening.cutoff_ym
         rows.append(
@@ -329,8 +333,9 @@ def build_ledger(
         seq += 1
         start_ym = next_month(opening.cutoff_ym) if opening.cutoff_ym else None
 
-    months = [m for m in (monthly or {}).keys()]
     candidates = sorted(set(monthly or {}) | set(mech_settle_by_month or {}))
+    if not candidates and start_ym is None:
+        return rows
     last = end_ym or (max(candidates) if candidates else None)
     if last is None:
         return rows

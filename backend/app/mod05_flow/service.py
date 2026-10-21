@@ -388,7 +388,7 @@ def build_ledger(
 ) -> dict:
     """逐月台账（§4.5.4）—— **两侧（辅材 / 机械）共用同一个项目选择器**，各自一套行。
 
-    - 历史段为手动、自动、合计；删除入口仅给真实手动期初记录
+    - 真实期初控制起点；无期初的未填日期付款独立显示，不截断正常月份
     - 空月也出行（三列记 0）
     - 机械侧「其他支出金额」= **派生只读**，**无手填入口**（`MECH_HAS_MANUAL_INPUT=False`）
     """
@@ -411,7 +411,7 @@ def build_ledger(
         historical_notices = [r for r in rows if not r.excluded and r.category == cat
                               and r.ownership_id == int(project_id) and not r.doc_date]
         automatic = sum_money([r.pay_stat for r in historical_notices])
-        history_segment = opening is None or opening.cutoff_ym <= "2025-11" or bool(historical_notices)
+        months = sorted(set(monthly) | (set(mech_settle) if cat == CATEGORY_MECH else set()))
         ledger: list[LedgerRow] = dom.build_ledger(
             category=cat,
             monthly=monthly,
@@ -419,14 +419,14 @@ def build_ledger(
             mech_settle_by_month=mech_settle if cat == CATEGORY_MECH else None,
             end_ym=end_ym or None,
             remarks=repo.remarks_map(s, category=cat, project_id=int(project_id)),
-            opening_auto=automatic if history_segment else None,
+            opening_auto=automatic if opening is not None or historical_notices else None,
         )
         sides.append({
             "category": cat,
             "label": CATEGORY_LABELS[cat],
             "opening_id": opening.opening_id if opening else None,
-            "opening_default": ({"cutoff_ym": "2025-11", "fallback": False}
-                                if history_segment else dom.opening_defaults(rows, cat, today)),
+            "opening_default": ({"cutoff_ym": dom.prev_month(months[0]), "fallback": False}
+                                if months else dom.opening_defaults([], cat, today)),
             "has_manual_input": not (cat == CATEGORY_MECH and not dom.MECH_HAS_MANUAL_INPUT),
             "rows": [
                 {
@@ -448,13 +448,14 @@ def build_ledger(
         raw = side["rows"]
         manual = next((r for r in raw if r["row_kind"] == "opening_manual"), None)
         auto = next((r for r in raw if r["row_kind"] == "opening_auto"), None)
+        combined = any(r["row_kind"] == "opening_total" for r in raw)
         visible = []
         for row in raw:
-            if row["row_kind"] in ("opening_manual", "opening_auto"):
+            if combined and row["row_kind"] in ("opening_manual", "opening_auto"):
                 continue
             shown = dict(row)
             if row["row_kind"] == "opening_total":
-                shown.update(month_label="2025-11及之前", counts_in_total=True,
+                shown.update(month_label=f"{row['month']}及之前", counts_in_total=True,
                              is_opening=bool(manual and manual["is_opening"]),
                              manual_payment=manual["payment"], automatic_payment=auto["payment"],
                              remark=manual["remark"])
@@ -480,15 +481,14 @@ def set_opening_payment(s: Session, *, project_id: int, category: str, payment: 
     if side is None:
         raise MustReportError("请选择辅材或机械台账")
     auto = next((r for r in side["rows"] if r["row_kind"] == "opening_auto"), None)
-    if auto is None:
-        raise MustReportError("当前台账没有2025-11及之前的期初段")
-    existing = next((o for o in repo.list_openings(s, project_id=project_id, category=category)
-                     if o.cutoff_ym <= "2025-11"), None)
+    existing = next(iter(repo.list_openings(s, project_id=project_id, category=category)), None)
+    if auto is None or existing is None:
+        raise MustReportError("请先录入该项目、本分类的期初记录")
     paid = to_money(payment) - to_money(auto["payment"])
     opening = repo.upsert_opening(s, category=category, project_id=project_id,
-                                 cutoff_ym=existing.cutoff_ym if existing else "2025-11",
-                                 settle_amount=existing.settle_amount if existing else 0,
-                                 paid_amount=paid, remark=existing.remark if existing else "")
+                                 cutoff_ym=existing.cutoff_ym,
+                                 settle_amount=existing.settle_amount,
+                                 paid_amount=paid, remark=existing.remark)
     return {"ok": True, "opening_id": opening.id, "manual_payment": f"{paid:.2f}",
             "automatic_payment": auto["payment"]}
 

@@ -80,9 +80,7 @@ def test_empty_archived_project_keeps_identity_and_both_ledgers(session, tmp_pat
     assert option['warehouse_name'] == p.warehouse_name
     assert [s['category'] for s in data['sides']] == ['material', 'mechanical']
     for side in data['sides']:
-        assert len(side['rows']) == 4
-        assert side['rows'][-1]['month'] == '2025-12'
-        assert all(r['payment'] == '0.00' for r in side['rows'])
+        assert side['rows'] == [] and side['display_rows'] == []
     from app.report_export import service as export_service
     import openpyxl
     monkeypatch.setattr(export_service, 'EXPORT_ROOT', tmp_path)
@@ -92,7 +90,7 @@ def test_empty_archived_project_keeps_identity_and_both_ledgers(session, tmp_pat
         assert wb.sheetnames == ['辅材', '机械', '特殊费用月报表']
         for name in ('辅材', '机械'):
             labels = [row[1].value for row in wb[name].iter_rows()]
-            assert '2025-11及之前' in labels
+            assert '2025-11及之前' not in labels
             assert not any(' · ' in str(label) for label in labels)
     finally:
         wb.close()

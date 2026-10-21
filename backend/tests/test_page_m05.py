@@ -97,7 +97,7 @@ def test_台账机械侧没有手填入口_辅材侧有():
 
 
 def test_台账首行是期初且空月也出行():
-    rows = _ledger()["sides"][0]["rows"]                     # 辅材侧
+    rows = _ledger()["sides"][0]["display_rows"]             # 页面与导出的统一行集合
     assert rows[0]["is_opening"] is True, "首行不是期初行"
     assert rows[0]["month"] == "2026-06" == _ledger()["sides"][0]["opening_default"]["cutoff_ym"]
     months = [r["month"] for r in rows if not r["is_opening"]]

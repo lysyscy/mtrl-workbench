@@ -101,6 +101,7 @@ const LG_R_DEF='系统上线前已发生，无付款通知书';
 let lgD={s:'0.00',p:'0.00',r:LG_R_DEF};
 let lgPjName='';                           /* 展开区里选的**项目键（仓库名）**（打开时默认＝台账当前项目） */
 let lgOn=false;                            /* 增行态开关：展开区是否打开（取代原弹窗的"是否开着"） */
+let lgCutRequest=0, lgCutPending=false;
 /* 展开态在 `PJ_OPEN`（key='lgPj'） */                        /* 展开区里「项目」共用面板是否展开（真实浮层 —— 在 .tw 之外，不会被裁） */
 const LEDNOTE={};                          /* { '口径|项目键|月': 文本 } —— 逐月台账备注（手填；不在 §9.3 留痕范围） */
 /* 通知书行的**项目键** = 归属档案行的**仓库名**（§2.7.4）；无归属 / 壳未判定 → ''（落不到任何项目上）。
@@ -117,17 +118,28 @@ const nextYm=m=>{ const [y,mm]=String(m).split('-').map(Number); const t=new Dat
   return ymOf(t); };
 const prevYm=m=>{ const [y,mm]=String(m).split('-').map(Number); const t=new Date(y,mm-2,1);
   return ymOf(t); };
-/* 录入默认项目沿用台账；已有手动记录保留其截止月，新记录默认历史段2025-11。 */
+/* 已有记录保留截止月；新记录默认值与后端台账同源。 */
 /* 期初占位行的项目候选（与该弹窗下拉**同一集合**）：**含归档**、归档靠后（2026-09-13 用户口径）。
    候选键 = **仓库名**（`pjRowsWithKey` 已把壳剔除 —— 壳没有仓库名） */
 const lgPjList=()=>pjRowsWithKey(pjNoShell());
 const lgDefPjName=()=>{ const L=lgPjList(), cur=ledCur();
   const hit=L.find(p=>pjKey(p)===cur||pjDisp(p)===cur);
   return (hit||L[0]||{}).name||''; };
-const lgCutFor=(v,cat)=>{
-  const key=pjKey(pjRowOf(v));
-  const existing=LGs.find(l=>l.cat===cat&&lgProjKeyOf(l.proj)===key);
-  return existing?existing.cutoff:'2025-11'; };
+const lgCutFor=async(v,cat)=>{
+  const request=++lgCutRequest; lgCutPending=true;
+  try {
+    const project=pjRowOf(v), key=pjKey(project);
+    if(!project||!project.id) throw new Error('请重新选择项目');
+    const existing=LGs.find(l=>l.cat===cat&&lgProjKeyOf(l.proj)===key);
+    if(existing) return existing.cutoff;
+    const ledger=M05.ledger&&String(M05.ledger.project_id)===String(project.id)
+      ? M05.ledger : await API.ledger(project.id);
+    const side=(ledger.sides||[]).find(s=>s.label===cat);
+    if(!side||!side.opening_default) throw new Error('未取得该分类的默认截止年月');
+    return request===lgCutRequest?side.opening_default.cutoff_ym:null;
+  } catch(e) { toast(`未能取得期初默认年月：${esc(String(e.message||e))}`); return null; }
+  finally { if(request===lgCutRequest) lgCutPending=false; }
+};
 const ledCutLabel=m=>/^\d{4}-\d{2}$/.test(String(m||''))?`截止 ${m.slice(0,4)} 年 ${Number(m.slice(5,7))} 月底`:'截止时间未填';
 /* 台账可选项目 = 该口径下**有数据**的项目（通知书；机械结算源未接线 ⇒ 暂不计）+ **该口径的**期初占位行。**键 = 仓库名**
    ⚠️ 原第 2 行按**演示** `MACH6` 的键补候选 —— 那是演示数据 ⇒ 会往选择器里塞**幻影项目**（真库里没有的仓库名）。
