@@ -1,6 +1,7 @@
 """TAIL-397 local preview: own schema, existing migrations, test accounts, cleanup.
 
 Run with the worktree's Python; source-env is read only for database targets.
+Tests may supply an explicit mtrl_workbench_test DSN without source configuration.
 No credentials are printed or copied to the worktree .env.
 """
 from __future__ import annotations
@@ -21,13 +22,21 @@ sys.path.insert(0, str(ROOT))
 
 
 @contextmanager
-def isolated_database(source_env: Path, *, copy_source: bool = False):
+def isolated_database(source_env: Path | None = None, *, copy_source: bool = False, test_url: str = ""):
     from app.core.config import Settings
-    from tests.db_guard import TestDatabaseGuard
+    from tests.db_guard import TestDatabaseGuard, database_identity
     from sqlalchemy import create_engine, text
 
-    source = Settings(_env_file=source_env)
-    guard = TestDatabaseGuard.from_sources((source.database_url,), source.test_database_url)
+    if test_url:
+        if copy_source or database_identity(test_url)[2] != 'mtrl_workbench_test':
+            raise RuntimeError('直接测试DSN仅允许mtrl_workbench_test且不复制来源库')
+        source = None
+        guard = TestDatabaseGuard(test_url)
+    else:
+        if source_env is None:
+            raise RuntimeError('缺少明确测试DSN或已批准来源配置')
+        source = Settings(_env_file=source_env)
+        guard = TestDatabaseGuard.from_sources((source.database_url,), source.test_database_url)
     if not guard.test_url:
         raise RuntimeError('缺少可确认的专用测试库配置')
     engine = create_engine(guard.test_url)

@@ -5,12 +5,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.app_settings import SPEC_BY_KEY
+from app.core.app_settings import SETTING_I8_BASE_URL, SPEC_BY_KEY
+from app.core.errors import DataConflictError
 from app.mod14_config.models import AppSetting, AppSettingLog
 
 
@@ -47,6 +48,38 @@ def save(s: Session, *, values: dict[str, str], operator: str) -> list[dict]:
     return changes
 
 
+
+def address_state(s: Session) -> dict[str, str]:
+    """Read value and revision from the same row, including the absent-row state."""
+    row = s.get(AppSetting, SETTING_I8_BASE_URL)
+    return {"stored": (row.value or "").strip() if row else "",
+            "version": row.updated_at.isoformat(timespec="microseconds") if row else "missing"}
+
+
+def save_settings(s: Session, *, values: dict[str, str], operator: str,
+                  expected_version: str | None = None) -> list[dict]:
+    """Fence late address writes; legacy callers also advance the address revision."""
+    if SETTING_I8_BASE_URL not in values:
+        return save(s, values=values, operator=operator)
+    # Same transaction-lock convention as history; serialize even when the row is absent.
+    s.connection().exec_driver_sql("SELECT pg_advisory_xact_lock(%s, %s)", (419, 0))
+    current = address_state(s)
+    if expected_version is not None and current["version"] != expected_version:
+        raise DataConflictError("服务地址已变化，请重读配置后再保存；本次输入已保留。")
+    row = s.get(AppSetting, SETTING_I8_BASE_URL)
+    previous = row.updated_at if row else None
+    changes = save(s, values=values, operator=operator)
+    row = s.get(AppSetting, SETTING_I8_BASE_URL)
+    if row is None:
+        row = AppSetting(key=SETTING_I8_BASE_URL, value="")
+        s.add(row)
+    # A no-op still fences older requests, without manufacturing a value-change log.
+    row.updated_at = max(datetime.now(), previous + timedelta(microseconds=1)) if previous else datetime.now()
+    row.updated_by = operator
+    s.flush()
+    return changes
+
+
 def recent_logs(s: Session, *, limit: int = 30) -> list[AppSettingLog]:
     """最近 N 条变更留痕（倒序）。"""
     return list(
@@ -56,4 +89,4 @@ def recent_logs(s: Session, *, limit: int = 30) -> list[AppSettingLog]:
     )
 
 
-__all__ = ["read_values", "save", "recent_logs"]
+__all__ = ["read_values", "save", "save_settings", "address_state", "recent_logs"]

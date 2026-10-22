@@ -44,3 +44,21 @@
 资源以本轮 `reports/resource-db.json`、`resource-processes.json` 为准：7个精确owned schema均已不存在、对应连接0；8个登记PID及监听端口均不存在，fixture已closed。自身work脚本、Vite临时缓存与空目录已释放，必要日志/JUnit/合成截图已实际归档到上述本机证据位置；父审所需dist随既有worktree生命周期保留，未清其他任务资源。`workspace_check.py check --effort frontend-vue-rewrite --run tail419-address-20261022 --phase run-closed`退出0、ok=true；effort仍在办，未执行effort closed。保留真实提交钩子，本地提交号及clean状态由最终回执提供，未push/部署。
 
 **2026-10-22 · 成功标记缺失的最终补检。** 最后自查把settings回执的 `ok === true` 纳入严格读取；有地址明细但缺明确成功标记也按结果不明处理。沿同一隔离实际写入→截去ok→浏览器核对场景新增参数，最终单跑 `apps/frontend/tests/test_i8_settings.py`：**7通过/23.10秒，退出0**（补充run `tail419-receipt-20261022` 的 `settings-final.log`/JUnit）；TS7 typecheck与Vite build再次退出0。该7项替代前述18项中的地址6项最终证据；400原11项及共享换号1项输入/预期未变，沿用58.90秒那次有效结果。未增加功能、依赖或外部动作。补充run的1个owned schema/连接及1组进程端口已只读核无残留；最小日志/报告/合成截图按同一2026-11-21期限选留，最后run-closed结果回最终回执。
+
+**2026-10-22 · 独立审查P2有界修补（待父复审）。** 基点 `c3afdface68b4f1543c5feb2537accd50d2cf273`、初始clean；父未放行两项P2并要求补旧POST仍在途证据，本轮仅修补419地址切片。旧记录“人工勾选确认无在途保存”的恢复方式已被下述版本校验替代，400外部任务原核对方式不变。
+
+红灯 `review-red.log`：**2失败/7未选、退出1**，真实隔离后端已保存后截断JSON，界面却按status200解除未知锁；111字符空姓名合法账号保存返回500。后者服务日志为StringDataRightTruncation，两个64字符字段均属于配置主人。现在API错误仅为解析出的ok:false附明确拒绝标记，地址保存不再把所有status200当拒绝；网络中断、缺ok及坏JSON保留未知锁。模型 `app_setting.updated_by` 与 `app_setting_log.operator` 无损Text，迁移 `c419261022` 前置c400；回归用111字符空姓名账号真实登录→版本化地址保存→配置/留痕重读，两个完整身份均一致。
+
+**在途与恢复。** 仅地址复用现有updated_at为不透明版本，GET从同一数据库行取值/版本，POST在既有事务锁惯例下比较 `expected_version` 后复用原save/留痕/invalidate；同值或缺行空值保存也推进版本，防旧请求再次命中，不伪造值变更日志。新客户端每次都带版本及账号，旧客户端未带版本仍兼容并推进地址版本。结果不明先重读即可恢复编辑，后续保存受版本约束；无需用户判断旧POST是否结束。不增加通用任务表、后台取消或打印设置，仍只提交i8_base_url。
+
+固定外部替身内用异步事件将真实旧POST保留在途，浏览器先丢回执再重读；分别验证新保存先提交（旧请求随后409）、旧请求先提交（新请求409且保留输入，重读后可保存）、新保存同值也阻止旧覆盖。另验证缺行/空值保存推进missing版本。所有新保存成功后重读的实际配置及m02生效地址保持新值，无人工勾选。未知态截图已看，旧值标“上次读取”，保存按钮用禁用样式，重读入口可操作。
+
+**定向结果。** 最终选集为 `test_i8_settings.py`（13项）、`test_preview.py::test_explicit_test_dsn_rejects_other_database_and_source_copy`（2项）、原 `test_i8.py::test_invalid_address_disables_execution_and_safe_reads_never_login` 及 `test_preview.py::test_switch_account_drops_old_scope_and_late_response`（各1项）：**17通过/39.56秒、退出0**（settings-final.log/JUnit）。中间12通过/24.13秒保留作过程；第一次临时runner因缺run变量退出1、尚未启动测试，未掩盖该脚本错误。原8项配置离线断言保留，用新快照读取接缝替身继续无数据库运行：**8通过/0.34秒、退出0**（config-offline.log），与17分别记数，不同旧18/7等复验相加宣称独立33项。
+
+迁移专项 `migration.log`总退出0：旧两表值/身份/时间逐值保留，升级后两身份列均Text，111字符可完整保存；含长身份的降级子命令预期退出1并明确refusing to truncate，随后数据及head均不变，未执行成功降级。只在独占mtrl_workbench_test schema迁移，正式schema未动。
+
+本轮fixture新增显式测试DSN入口：仅mtrl_workbench_test，禁止copy_source；缺目标失败、无public回退，实际数据库/schema/search_path仍在seed及后端启动核验。受控runner仅提取TEST_DATABASE_URL，不把正式DSN传子进程；未重试此前被拒的后端组合。模块browser/逐例context、schema日志与finally清理保持。最终TS7/type和Vite/build均退出0，必要静态、最后2项UI复验与资源收尾另补实测结果；不跑全仓、不改既有分层B/C归422、不推401/其他设置，不真实i8/强踢/打印/正式写入/部署/人工预览。必要证据归档 `.artifacts/archive/frontend-vue-rewrite/tail419-review-20261022/`，沿2026-11-21期限，父复审仍独立进行。
+
+**2026-10-22 · 用户纠偏后的停止点与最小收尾。** 用户明确实际大概率仅两账号，父要求立即收缩过度防御。本轮长身份Text源码/测试库迁移和地址专用版本核对在收到纠偏前已完成，保持现状供父裁减，不机械回滚；从此停止新增迁移、并发协议、边界回归或审查，不再把长账号作为页面验收阻塞。地址版本代码只复用现有updated_at及同一事务锁，无新增表/列/通用平台；用户是否保留此已完成范围由父按主体目标决定。419仍claimed、401及其他设置未推进，未宣布人工通过。
+
+已完成：上述17项定向检查及8项离线检查分别通过；最后界面2项复验12.07秒和禁用样式单项8.59秒均退出0，属于重叠复验，不追加独立用例总数。最终type/build、syntax/bytes均退出0；按同一字节规则补查TS/TSX退出0，detector []；文档扫描必须修0/既有黄33。8个本轮精确schema均已清理、对应连接0；7组owned进程/端口已退出。一次PID23520复核短暂非空但无监听，最后只读再查已不存在，未停止任何不明或他人进程，过程保留于resource-processes.json。本机原始日志/JUnit/截图留原定期限，work释放、归档、真实本地提交钩子和run-closed在本次最小收尾完成，结果回最终回执。未重试此前被拒组合，未传正式DSN、未生产/外部动作、未push/部署或人工预览。

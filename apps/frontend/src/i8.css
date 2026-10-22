@@ -3,3 +3,4 @@
 .i8-records table{table-layout:fixed;min-width:73em}.i8-records th:nth-child(1){width:13em}.i8-records th:nth-child(2){width:11em}.i8-records th:nth-child(3){width:14em}.i8-records th:nth-child(4){width:9em}.i8-records th:nth-child(5){width:19em}.i8-records th:nth-child(6){width:7em}
 
 .i8-address-dialog dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.5rem .8rem}.i8-address-dialog dt{color:var(--tx2)}.i8-address-dialog dd{margin:0;overflow-wrap:anywhere}.i8-address-field{display:flex;flex-direction:column;gap:.5rem}.i8-address-field input{width:100%;min-width:0}.i8-address-dialog .dialog-actions{flex-wrap:wrap}.i8-address-dialog .i8-kick{background:var(--sf2);color:var(--tx)}
+.i8-address-dialog button:disabled,.i8-address-dialog button.primary:disabled{background:var(--sf2);border-color:var(--bd);color:var(--mut);cursor:default}

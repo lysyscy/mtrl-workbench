@@ -29,7 +29,7 @@ from app.core.app_settings import (
 from app.core.config import get_settings
 from app.core.db import session_scope
 from app.core.identity import current_operator, require_expected_account
-from app.mod14_config.repository import recent_logs, save
+from app.mod14_config.repository import address_state, recent_logs, save_settings
 
 router = APIRouter(tags=["mod14-api"])
 
@@ -59,9 +59,11 @@ def items() -> list[dict]:
     ⚠️ `stored` 空 ⇒ 该行走 `.env`（壳侧据此显示「.env」徽标）；`stored` 非空 ⇒ 显示「本页所设」。
     """
     env = _env_values()
+    with session_scope() as s:
+        address = address_state(s)
     out: list[dict] = []
     for spec in SPECS:
-        stored = stored_value(spec.key)
+        stored = address["stored"] if spec.key == "i8_base_url" else stored_value(spec.key)
         env_value = env.get(spec.key, "")
         out.append({
             "key": spec.key,
@@ -70,7 +72,8 @@ def items() -> list[dict]:
             "kind": spec.kind,
             "stored": stored,
             "env": env_value,
-            "effective": effective(spec.key, env_value),
+            "effective": (stored or env_value.strip()) if spec.key == "i8_base_url" else effective(spec.key, env_value),
+            **({"version": address["version"]} if spec.key == "i8_base_url" else {}),
         })
     return out
 
@@ -92,7 +95,8 @@ def api_settings_get() -> dict:
 
 
 @router.post("/api/m14/settings")
-async def api_settings_save(request: Request, expected_account: str | None = Query(None)) -> dict:
+async def api_settings_save(request: Request, expected_account: str | None = Query(None),
+                            expected_version: str | None = Query(None)) -> dict:
     """保存（**只处理传进来的 key**）→ 逐项校验；有错 ⇒ **一个字都不写库**，把原因原样交回。
 
     ⚠️ 恒 **HTTP 200**：非法格式是**可预期的拒绝**（§7.8 ③），壳侧据 `ok` 分流并**原样显示** `errors`。
@@ -106,7 +110,7 @@ async def api_settings_save(request: Request, expected_account: str | None = Que
         return {"ok": False, "message": "；".join(errors), "errors": errors, "items": items(), "logs": logs()}
 
     with session_scope() as s:
-        save(s, values=values, operator=current_operator())
+        save_settings(s, values=values, operator=current_operator(), expected_version=expected_version)
     invalidate()          # ⭐ 清缓存 —— 否则页面改了不生效（同 PRG 那条路）
     return {"ok": True, "message": "已保存（改动已留痕）", "items": items(), "logs": logs()}
 

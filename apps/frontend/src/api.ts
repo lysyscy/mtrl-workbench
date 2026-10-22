@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(message: string, public status = 0, public code = '') { super(message); }
+  constructor(message: string, public status = 0, public code = '', public rejected = false) { super(message); }
 }
 
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
@@ -24,7 +24,7 @@ async function jsonResult(response: Response): Promise<unknown> {
   catch { throw new ApiError('读取结果不完整，请重试；仍失败请联系维护人员。', response.status); }
   if (!response.ok || (record(data) && data.ok === false)) {
     const message = record(data) && typeof data.message === 'string' ? data.message : '读取失败，请重试；仍失败请联系维护人员。';
-    throw new ApiError(message, response.status, record(data) && typeof data.code === 'string' ? data.code : '');
+    throw new ApiError(message, response.status, record(data) && typeof data.code === 'string' ? data.code : '', record(data) && data.ok === false);
   }
   return data;
 }

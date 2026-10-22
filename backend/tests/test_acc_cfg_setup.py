@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.core import app_settings
 from app.core.app_settings import (
     SETTING_I8_BASE_URL,
@@ -35,6 +37,14 @@ from app.core.config import (
 from app.mod14_config import settings_api
 from app.mod14_config.models import AppSetting
 from app.mod14_config.repository import save
+
+@pytest.fixture(autouse=True)
+def _offline_address_state(monkeypatch):
+    # These display-contract tests stay offline; HTTP tests cover the real versioned row.
+    monkeypatch.setattr(settings_api, "address_state", lambda _session: {"stored": "", "version": "missing"})
+    from contextlib import nullcontext
+    monkeypatch.setattr(settings_api, "session_scope", lambda: nullcontext(None))
+
 
 I8_PATHS = (I8_PATH_PAYMENT_NOTICE, I8_PATH_WAREHOUSE_LIST,
             I8_PATH_COMMON_PROJECT, I8_PATH_PRINT_DESIGN)

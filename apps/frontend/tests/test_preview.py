@@ -22,12 +22,13 @@ from tools.dev.frontend_preview import isolated_database
 @pytest.fixture(scope='module')
 def server(preview_seed, preview_factory):
     source = os.environ.get('MTRL_PREVIEW_SOURCE_ENV')
-    if not source:
-        pytest.fail('MTRL_PREVIEW_SOURCE_ENV must identify the approved database configuration')
+    test_url = os.environ.get('MTRL_PREVIEW_TEST_DATABASE_URL', '')
+    if not source and not test_url:
+        pytest.fail('Explicit test DSN or approved source configuration is required')
     with socket.socket() as probe:
         probe.bind(('127.0.0.1', 0))
         port = probe.getsockname()[1]
-    with isolated_database(Path(source)) as env:
+    with isolated_database(Path(source) if source else None, test_url=test_url) as env:
         preview_seed(env)
         log_path = output(env['PGAPPNAME'] + '.log', kind='logs')
         with log_path.open('w', encoding='utf-8') as log:
@@ -246,3 +247,13 @@ def test_initial_identity_failure_has_no_workspace(server, browser_page):
     page.get_by_role('button', name='重试', exact=True).click()
     expect(page.get_by_text('未登录 · 只读', exact=True)).to_be_visible()
     expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
+
+
+@pytest.mark.parametrize(('url', 'copy_source'), [
+    ('postgresql+psycopg://synthetic@127.0.0.1:1/mtrl_workbench', False),
+    ('postgresql+psycopg://synthetic@127.0.0.1:1/mtrl_workbench_test', True),
+])
+def test_explicit_test_dsn_rejects_other_database_and_source_copy(url, copy_source):
+    with pytest.raises(RuntimeError, match='直接测试DSN'):
+        with isolated_database(test_url=url, copy_source=copy_source):
+            pytest.fail('Guard must reject before connecting or creating a schema')
