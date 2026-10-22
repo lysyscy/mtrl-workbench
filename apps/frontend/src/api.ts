@@ -63,6 +63,7 @@ export function readIdentity(value: unknown): Identity | null {
 }
 
 export interface Project { id: number; name_full: string; warehouse_name: string | null; disp: string; project_type: 'normal' | 'shell' | 'small'; status: 'active' | 'archived'; ord: number; phid: string }
+export function projectLabel(project: Project): string { return project.disp.trim() || '未设置展示名'; }
 export function readProjects(value: unknown): Project[] {
   if (!Array.isArray(value)) throw new ApiError('项目列表不完整，请重试；仍失败请联系维护人员。');
   return value.map((row: unknown) => {

@@ -105,9 +105,6 @@ def test_fastapi_build_assets_cookie_and_read(server, browser_page):
     page.get_by_label('状态', exact=True).select_option('archived')
     expect(page.get_by_role('cell', name='归档样例', exact=True)).to_be_visible()
     page.get_by_label('项目', exact=True).fill('不存在的验收项目')
-    page.get_by_label('项目', exact=True).press('Tab')
-    expect(page.get_by_role('button', name='查询', exact=True)).to_be_focused()
-    page.get_by_role('button', name='查询', exact=True).press('Enter')
     expect(page.get_by_text('没有符合条件的项目。可调整状态或关键词。', exact=True)).to_be_visible()
     page.screenshot(path=str(output('projects-empty.png', kind='screenshots')), full_page=True)
 
@@ -143,7 +140,6 @@ def test_switch_account_drops_old_scope_and_late_response(server, browser_page):
     pending = []
     page.route('**/api/m01/projects?**keyword=older**', lambda route: pending.append(route))
     page.get_by_label('项目', exact=True).fill('older')
-    page.get_by_role('button', name='查询', exact=True).click()
     expect(page.get_by_text('正在读取项目…', exact=True)).to_be_visible()
     assert pending
     with httpx.Client() as client:
@@ -221,7 +217,7 @@ def test_temporary_identity_failure_preserves_scope(server, browser_page, failur
         expect(page.get_by_text('预览管理员 · 管理员', exact=True)).to_be_visible()
         expect(page.get_by_label('状态', exact=True)).to_have_value('archived')
         expect(page.get_by_label('项目', exact=True)).to_have_value('尚未提交的筛选')
-        expect(page.get_by_role('cell', name='归档样例', exact=True)).to_be_visible()
+        expect(page.get_by_text('没有符合条件的项目。可调整状态或关键词。', exact=True)).to_be_visible()
         page.screenshot(path=str(output(f'identity-recovered-{failure}.png', kind='screenshots')), full_page=True)
     else:
         identity = '预览同事 · 普通用户' if recovery == 'switched' else '未登录 · 只读'

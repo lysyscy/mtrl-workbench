@@ -127,3 +127,17 @@ export_total_debt改用report_export.service.EXPORT_ROOT，正式默认仍为PRO
 - corepack pnpm@12.14.0 install --frozen-lockfile退出0；最终typecheck和build各退出0，锁/声明未改。最终CSS index-DU0KB08V、主包index-dK56kNfW、台账ledger-BozIKtrH；保留已有大块提示。Impeccable限定三个UI文件detect返回[]、退出0；差异字节/语法由真实提交钩子再核。
 
 本批按固定基点对调用者、状态流与后端出口自查；仅共享控制反馈返回值和导出根接合，无金额或写入协议改动，原写入/恢复保障已跑全，选自查而未假称独立审查。最终七个准确自有schema（883728c76ff74a9a947e311a10f63349、e3a4dd96296343b495dc4cb057693d9f、8526ccd212b54e169e385521ec62f77a、ce64a7933dd64f269cb12ce66e4642ce、8d5c4c2f3c234a2d92551a7112ace182、1d42ba0a838447698b6980bc454a057d、bf07b5b8baa44cf8a5f6bc9d8c4cf0da，均带frontend_rewrite_397_前缀）有正常cleaned回执，已只读核mtrl_workbench_test中全部消失；8037关闭，未建常驻真实副本。上述本机产物按现有retention保留最多30天，临时work由run主人正常收尾；整个effort仍由父任务继续，不能按本批完成清理共同规格。仅本地提交，不推送、不部署、不重启正式服务；历史原现场禁用状态未能追溯，完整流水欠款页面仍待后续实施后人工验收。
+
+
+**2026-10-22 · B批内部交付：读取界面反馈。** 基点51cb8c741de5263a5ceca0d9c62eba2923ed2e62，复用原React worktree/工具链；只改读取UI，未启动399，不代替完整页面人工验收。Ponytail full、Impeccable Operate及writing-for-agents用于本批。两侧台账卡头只留标题和新增入口，表内截至月、合计、当前欠款与必要错误回执保留。项目档案取消常驻刷新/查询，输入250ms防抖、中文合成结束后查询，复用条件queryKey及AbortSignal拒绝旧范围响应；状态即时筛选，失败仍可重试，无轮询。项目类型按旧版normal=in、shell=vi、small=wn使用主题色且保留文字与现有字号。
+
+通用查看选择、两套独立导出候选/确认/排序标签统一只显示展示名，空白展示名用“未设置展示名”，不回退全名/仓库名，不改业务名称、ID或仓库键；归档标识、查看单选、双导出独立多选/顺序与原搜索匹配能力保留。原A的EXPORT_ROOT、账号/草稿/未确认历史结果保护未改。手工建档、两项同步、条件操作、ord拖动排序和档案Excel仍归401/400，无空壳按钮。
+
+验证按真实分轮记账（日志均在.artifacts/archive/frontend-vue-rewrite/对应run/logs，退出后自动归档）：
+- 最小反例：test_read_ui.py -k input_debounces，1 failed/3 deselected、退出1（13.16s），旧版仍有刷新；170249-747689-32044/b-read-ui-red.log。
+- pytest apps/frontend/tests/test_read_ui.py apps/frontend/tests/test_preview.py -q -s --tb=short：14 passed、退出0（41.81s），含中文合成、防抖/无轮询、旧成功/失败、账号暂停/换号、缺展示名、三类语义色；170539-016581-23144/b-read-and-identity-first.log。保留既有Starlette TestClient弃用警告，不改依赖。
+- pytest apps/frontend/tests/test_ledger.py apps/frontend/tests/test_ledger_layout.py apps/frontend/tests/test_export_dialogs.py -q -s --tb=short：1 failed/42 passed、退出1（146.54s）；170707-889326-28640/b-ledger-and-exports.log。唯一失败是新增后模拟focus读取时备注仍为空的等待断言；原节点单跑和明确活动输入诊断各1 passed（10.64s/9.34s），日志171033-054191-35664、171137-814072-23672。未据不稳定复现更改产品保护；测试补充确认新增月份已聚焦、离开输入后再验证外部修改与实际文件，保留全部金额/拒绝/文件断言。重跑完整test_ledger.py：21 passed、退出0（65.59s），171239-203839-14728/b-ledger-final.log；原轮已绿的布局/双导出22项未受该测试步骤影响。不是一次57项聚合全绿。
+- 展示名补图定向1 passed/3 deselected、退出0（10.20s）；171405-885496-25792/b-display-only-final.log。实际看图发现共用面板搜索标签折行，固定标签不收缩后最终再跑同节点1 passed/3 deselected、退出0（8.15s），171613-720682-27176/b-final-ui.log；最终截图同run/screenshots，选择器单行标签、纯展示名及两确认清单已实际查看。浅色1440/深色大字号800档案截图在170539，同期1440/1024台账截图在170707，已确认标题无重复摘要、表内合计保留和容器内横滚。
+- corepack pnpm@12.14.0 install --frozen-lockfile退出0（27ms）；170440-858619-30920/b-toolchain.log，依赖/锁未改。最终typecheck、build各退出0，最终产物index-D7towwsv.css、index-BdgHxM4T.js、ledger-bwn9jmJm.js；已有大分块提示保留。最终四个受影响UI文件Impeccable detect返回[]、退出0。实际提交钩子及SHA见保存回执。
+
+按B固定基点对全部调用者和上述差异自查；仅显示出口/读取交互与局部主题样式，金额、权限、写入协议未改，现有高后果保护已定向覆盖，因此选自查；父任务仍组织A/B技术检查及后续完整页面关口。全部11个准确自有合成schema均有正常ISOLATION cleaned回执，按上述日志提取名称只读核mtrl_workbench_test中剩余0；8037关闭、无worktree根.env。9个自有运行已归本机archive并通过run-closed，临时脚本仅stdin、无work残留；保留最小原始日志/合成截图/测试导出按既有retention最多30天。共同effort和原worktree仍由父任务继续，不移走共同规格或清理复用依赖/dist。仅本地保存，不推送、不部署、不启动常驻人工预览、无源库写入或真实库复制；401完整档案页及流水欠款综合页仍待后续齐备后人工验收。

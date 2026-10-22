@@ -17,22 +17,27 @@ function Projects({ blocked }: { blocked: boolean }) {
   const [status, setStatus] = useState('active');
   const [keyword, setKeyword] = useState('');
   const [search, setSearch] = useState('');
+  const [composing, setComposing] = useState(false);
+  useEffect(() => {
+    if (blocked || composing) return;
+    const timer = window.setTimeout(() => setSearch(keyword.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [keyword, composing, blocked]);
   const query = useQuery({
     queryKey: ['projects', status, search],
     enabled: !blocked,
     queryFn: async ({ signal }) => readProjects(await requestJson(`/api/m01/projects?${new URLSearchParams({ status, keyword: search })}`, { signal })),
   });
   return <section aria-labelledby="projects-title">
-    <div className="card-head"><h1 id="projects-title">项目档案</h1><button onClick={() => void query.refetch()} disabled={query.isFetching}>刷新</button></div>
-    <form className="filters" onSubmit={event => { event.preventDefault(); setSearch(keyword.trim()); }}>
+    <div className="card-head"><h1 id="projects-title">项目档案</h1></div>
+    <form className="filters" onSubmit={event => event.preventDefault()}>
       <div className="filter-field"><label htmlFor="project-status">状态</label><select id="project-status" value={status} onChange={event => setStatus(event.target.value)}><option value="active">在建</option><option value="archived">归档</option><option value="all">全部</option></select></div>
-      <label className="search">项目<input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="全名、仓库名或展示名" /></label>
-      <button type="submit">查询</button>
+      <label className="search">项目<input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={event => { setKeyword(event.currentTarget.value); setComposing(false); }} placeholder="全名、仓库名或展示名" /></label>
     </form>
     {query.isPending ? <p role="status" className="state">正在读取项目…</p> : query.isError ? <Notice message={query.error.message} retry={() => void query.refetch()} /> : query.data.length === 0 ? <p role="status" className="state">没有符合条件的项目。可调整状态或关键词。</p> : <>
       <p className="result" role="status">共 {query.data.length} 个项目{query.isFetching ? ' · 正在刷新…' : ''}</p>
       <div className="table-scroll" tabIndex={0} role="region" aria-label="项目列表"><table><thead><tr><th>序号</th><th>项目类型</th><th>展示名</th><th>仓库名</th><th>项目全名</th><th>信息化编号</th><th>状态</th></tr></thead><tbody>{query.data.map(project => <tr key={project.id}>
-        <td>{project.ord}</td><td>{{ normal: '普通项目', shell: '小微壳', small: '具体小微' }[project.project_type]}</td><td>{project.disp || '—'}</td><td>{project.warehouse_name ?? '—'}</td><td>{project.name_full}</td><td>{project.phid || '—'}</td><td>{project.status === 'active' ? '在建' : '归档'}</td>
+        <td>{project.ord}</td><td><span className={`project-type project-type-${project.project_type}`}>{{ normal: '普通项目', shell: '小微壳', small: '具体小微' }[project.project_type]}</span></td><td>{project.disp || '—'}</td><td>{project.warehouse_name ?? '—'}</td><td>{project.name_full}</td><td>{project.phid || '—'}</td><td>{project.status === 'active' ? '在建' : '归档'}</td>
       </tr>)}</tbody></table></div>
     </>}
   </section>;

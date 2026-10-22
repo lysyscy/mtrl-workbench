@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
-import { ApiError, readProjects, record, requestJson } from './api';
+import { ApiError, projectLabel, readProjects, record, requestJson } from './api';
 import type { Identity } from './api';
 import { amount, editable, loadLedger, payload, same, sum } from './ledger-api';
 import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
@@ -103,7 +103,7 @@ function Side({ side, scope, actions, writable, busy, add, focusRecord, focused 
     });
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
-    <div className="ledger-summary"><h2>{side.label}欠款台账</h2><span className="muted">当前欠款</span><b>{amount(sum(side.rows, 'debt'))}<small>元</small></b><span className="muted">截至 {upto}</span>{latest && <><span className="muted">· {latest.month} 新增</span><b className={Number(latest.debt) > 0 ? 'debt-positive' : 'muted'}>{amount(latest.debt)}<small>元</small></b></>}{side.category === 'material' && <button aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</button>}</div>
+    <div className="ledger-summary"><h2>{side.label}欠款台账</h2>{side.category === 'material' && <button aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</button>}</div>
     <div className="ledger-table-scroll"><div className="ledger-grid" style={{ height: Math.min(360 * scale, (29 + Math.max(visible.length, 1) * 38 + (total.length ? 30 : 0) + 2) * scale) }}><AgGridReact<LedgerRow> theme={gridTheme}
       context={context} columnDefs={columns} rowData={visible} pinnedBottomRowData={total}
       getRowId={params => params.data.key} defaultColDef={defaultColumn}
@@ -142,7 +142,7 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
   useEffect(() => { mounted.current = true; lifetime.current = new AbortController(); return () => { mounted.current = false; lifetime.current?.abort(); }; }, []);
   const projects = useQuery({ queryKey: ['projects', 'all', ''], enabled: !blocked,
     queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
-  const candidates = useMemo(() => projects.data?.filter(item => item.project_type !== 'shell').sort((a, b) => a.ord - b.ord || (a.disp || a.name_full).localeCompare(b.disp || b.name_full, 'zh')) ?? [], [projects.data]);
+  const candidates = useMemo(() => projects.data?.filter(item => item.project_type !== 'shell').sort((a, b) => a.ord - b.ord || projectLabel(a).localeCompare(projectLabel(b), 'zh')) ?? [], [projects.data]);
   useEffect(() => { if (!blocked && projects.data && !candidates.some(item => item.id === project)) setProject(candidates[0]?.id ?? 0); }, [blocked, projects.data, candidates, project, setProject]);
   const query = useQuery({ queryKey: ['ledger', owner, project, end], enabled: !blocked && project > 0,
     queryFn: ({ signal }) => loadLedger(project, end, signal) });

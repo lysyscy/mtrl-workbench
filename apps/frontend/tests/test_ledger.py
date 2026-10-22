@@ -336,6 +336,8 @@ def test_duplicate_add_stale_token_and_real_export(server,browser_page):
     after={row['record_id'] for side in data(page,server,project)['sides'] for row in side['rows'] if row['record_id']}
     assert len(after-before)==1
     rid=next(iter(after-before));old=row_data(data(page,server,project),rid)
+    expect(cell(page,rid,'month')).to_be_focused()
+    page.get_by_role('heading',name='逐月欠款台账',exact=True).click()
     body=body_for(project,old,settle_amount='234.56',paid_amount='34.56',remark='导出核对行')
     assert page.request.post(server+'/api/m05/history/save',data=body).json()['ok']
     duplicate=page.request.post(server+'/api/m05/history/save',data=body)

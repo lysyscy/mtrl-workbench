@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Project } from './api';
-import { requestFile } from './api';
+import { projectLabel, requestFile } from './api';
 
 export function ProjectPicker({ projects, selected, pick, multiple = false, label, disabled = false, initiallyOpen = false }: {
   projects: Project[]; selected: number[]; pick: (ids: number[]) => void; multiple?: boolean; label: string; disabled?: boolean; initiallyOpen?: boolean;
@@ -13,12 +13,12 @@ export function ProjectPicker({ projects, selected, pick, multiple = false, labe
     document.addEventListener('pointerdown', close); return () => document.removeEventListener('pointerdown', close);
   }, []);
   return <div className="ledger-project" ref={root} onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
-    <button className={open ? 'on' : ''} aria-label={label} aria-expanded={open} disabled={disabled} onClick={() => setOpen(value => !value)}>{multiple ? `已选 ${selected.length} 个项目` : (() => { const item = projects.find(item => selected.includes(item.id)); return item ? `${item.disp || item.name_full}${item.status === 'archived' ? '（归档）' : ''}` : '请选择项目'; })()} ▾</button>
+    <button className={open ? 'on' : ''} aria-label={label} aria-expanded={open} disabled={disabled} onClick={() => setOpen(value => !value)}>{multiple ? `已选 ${selected.length} 个项目` : (() => { const item = projects.find(item => selected.includes(item.id)); return item ? `${projectLabel(item)}${item.status === 'archived' ? '（归档）' : ''}` : '请选择项目'; })()} ▾</button>
     {open && <div className="ledger-project-menu" role="group" aria-label={multiple ? '导出项目候选' : '查看项目候选'}>
       <label><span>搜索项目</span><input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} /></label>
       {multiple && <div className="picker-actions"><button onClick={() => pick(projects.map(item => item.id))}>全选</button><button onClick={() => pick([])}>清空</button></div>}
       <div className="picker-options">{projects.filter(item => `${item.disp}${item.name_full}${item.warehouse_name ?? ''}`.includes(keyword.trim())).map(item => <button key={item.id} aria-pressed={selected.includes(item.id)} onClick={() => { pick(multiple ? selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id] : [item.id]); if (!multiple) setOpen(false); }}>
-        <span>{multiple ? `${selected.includes(item.id) ? '☑' : '☐'} ` : ''}{item.disp || item.name_full}{item.status === 'archived' && <span className="archived">（归档）</span>}</span><small>{item.warehouse_name || '未建仓'} · {item.name_full}</small>
+        <span>{multiple ? `${selected.includes(item.id) ? '☑' : '☐'} ` : ''}{projectLabel(item)}{item.status === 'archived' && <span className="archived">（归档）</span>}</span>
       </button>)}</div>
     </div>}
   </div>;
@@ -79,12 +79,12 @@ export function LedgerExport({ kind, projects, project, unavailable, run, messag
       {!confirm ? <>
         <div className="export-selection-tools"><label><span>搜索项目</span><input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} /></label><button onClick={() => setIds(projects.map(item => item.id))}>全选</button><button onClick={() => setIds([])}>清空</button></div>
         <div className="export-projects" role="group" aria-label="导出项目候选">{projects.filter(item => `${item.disp}${item.name_full}${item.warehouse_name ?? ''}`.includes(keyword.trim())).map(item => <button key={item.id} aria-pressed={selected.includes(item.id)} onClick={() => { setFeedback(''); setIds(selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id]); }}>
-          {selected.includes(item.id) ? '☑' : '☐'} {item.disp || item.name_full}{item.status === 'archived' ? '（归档）' : ''}
+          {selected.includes(item.id) ? '☑' : '☐'} {projectLabel(item)}{item.status === 'archived' ? '（归档）' : ''}
         </button>)}</div>
         <p>已选 {chosen.length} 个项目</p>
       </> : <>
         <p>{kind === 'ledger' ? chosen.length === 1 ? '将生成1个工作簿。' : `选了${chosen.length}个项目，将生成一个zip。` : `已选 ${chosen.length} 个项目，按以下顺序导出。`}</p>
-        <div className="export-table"><table><thead><tr><th>顺序</th><th><button disabled={busy} onClick={() => setIds([...chosen].sort((a, b) => (a.disp || a.name_full).localeCompare(b.disp || b.name_full, 'zh')).map(item => item.id))}>项目排序</button></th><th>调整顺序</th></tr></thead><tbody>{chosen.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{item.disp || item.name_full}</td><td><button aria-label={`上移${item.disp || item.name_full}`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</button> <button aria-label={`下移${item.disp || item.name_full}`} disabled={busy || index === chosen.length - 1} onClick={() => move(index, 1)}>下移</button></td></tr>)}</tbody></table></div>
+        <div className="export-table"><table><thead><tr><th>顺序</th><th><button disabled={busy} onClick={() => setIds([...chosen].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b), 'zh')).map(item => item.id))}>项目排序</button></th><th>调整顺序</th></tr></thead><tbody>{chosen.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{projectLabel(item)}</td><td><button aria-label={`上移${projectLabel(item)}`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</button> <button aria-label={`下移${projectLabel(item)}`} disabled={busy || index === chosen.length - 1} onClick={() => move(index, 1)}>下移</button></td></tr>)}</tbody></table></div>
       </>}
       {(reason || feedback) && <p className="notice" role="alert">{reason || feedback}</p>}
       {busy && <p role="status">正在生成文件…</p>}

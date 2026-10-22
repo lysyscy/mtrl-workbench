@@ -29,9 +29,11 @@ def test_same_synthetic_project_period_viewport_and_scale_pair(server,browser_pa
         for item in [old,page]: item.evaluate('document.fonts.ready')
         assert old.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--fscale').trim()") == page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--fscale').trim()")
         assert page.get_by_label('截止月份',exact=True).count()==0
-        assert page.locator('.ledger-summary').get_by_text('当前欠款',exact=True).count()==2
+        assert page.locator('.ledger-summary').locator('span,b,small').count()==0
+        expect(page.locator('.ag-row-pinned')).to_have_count(2)
+        expect(page.get_by_role('button',name='新增历史行',exact=True)).to_be_visible()
         assert page.get_by_role('columnheader',name='机械结算金额',exact=True).count()==1
-        expect(page.get_by_role('region',name='机械欠款台账',exact=True)).to_contain_text('2025-11 新增')
+        expect(page.get_by_role('region',name='机械欠款台账',exact=True).locator('.ag-row-pinned')).to_contain_text('截至 2025-11')
         expect(page.locator('.ledger-purpose,.ledger-boundary,.ledger-preview-scope')).to_have_count(0)
         expect(page.get_by_role('button',name='刷新台账',exact=True)).to_have_count(0)
         undo=page.get_by_role('button',name='撤销',exact=True).bounding_box(); identity=page.locator('.account-area>span').bounding_box()
