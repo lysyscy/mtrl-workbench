@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 from app.core.app_settings import (
     SETTING_KEYS,
@@ -28,7 +28,7 @@ from app.core.app_settings import (
 )
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.core.identity import current_operator
+from app.core.identity import current_operator, require_expected_account
 from app.mod14_config.repository import recent_logs, save
 
 router = APIRouter(tags=["mod14-api"])
@@ -92,17 +92,18 @@ def api_settings_get() -> dict:
 
 
 @router.post("/api/m14/settings")
-async def api_settings_save(request: Request) -> dict:
+async def api_settings_save(request: Request, expected_account: str | None = Query(None)) -> dict:
     """保存（**只处理传进来的 key**）→ 逐项校验；有错 ⇒ **一个字都不写库**，把原因原样交回。
 
     ⚠️ 恒 **HTTP 200**：非法格式是**可预期的拒绝**（§7.8 ③），壳侧据 `ok` 分流并**原样显示** `errors`。
     """
+    require_expected_account(expected_account)
     form = await request.json()
-    values = {k: str((form or {}).get(k) or "") for k in SETTING_KEYS}
+    values = {k: str((form or {}).get(k) or "") for k in SETTING_KEYS if k in (form or {})}
 
     errors = [e for e in (validate(k, v) for k, v in values.items()) if e]
     if errors:
-        return {"ok": False, "errors": errors, "items": items(), "logs": logs()}
+        return {"ok": False, "message": "；".join(errors), "errors": errors, "items": items(), "logs": logs()}
 
     with session_scope() as s:
         save(s, values=values, operator=current_operator())

@@ -61,3 +61,5 @@
 **本轮静态与证据。** TS7 `tsc --noEmit`、Vite build均实际退出0，既有主题URL/大chunk提示仍在；无独立lint/aggregate脚本，语法/字节/文档按仓库入口，最终结果及清理见收尾补记。必要日志/JUnit/合成截图在 `.artifacts/archive/frontend-vue-rewrite/tail400-review-20261022/`，沿effort既定2026-11-21保留期限，不延长；原tail400-20261022证据不动。
 
 **2026-10-22 · 修补静态与资源补记。** syntax_audit --staged、bytes_guard --staged（10件）均退出0、必须修0；doc_audit退出0、必须修0/疑似33，独占临时worktree.env仅公开PRD路径并已finally删除。未新增架构豁免。4个精确owned schema及对应数据库连接均已不存在；3组日志登记的preview/dev PID及监听端口均不存在、fixture均closed（reports/resource-db.json、resource-processes.json）。清理解析器首次遇空日志产生非终止报错，按字符串空值修正后重新只读核对，退出0，未因此重跑业务测试。本次按P2及夹具差异自查，父复审仍另行；本地提交保留真实钩子，工作脚本/缓存释放、归档与run-closed最终结果见回执。整个effort继续在办。
+
+**2026-10-22 · 父复审结论与地址切片接续。** 父本次委派确认b423f58修补已通过独立技术审查：长账号Text迁移、111字符成功/外部失败原错保留、建档有效假地址夹具及零行错误回归均通过，400技术阻塞解除。既有47后端+11 HTTP/browser及hooks/type/build证据仍以本票原记录为准。当前419先行地址切片已实施并完成定向检查，待父审，证据回[419原票](TAIL-419-规则与配置维护.md)。400仍claimed，完整i8页人工验收待本切片通过及整页验证；未代用户验收、未销号、未推进401。MOD05/06旧分层B/C仍归422。

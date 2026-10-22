@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Callable
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,16 @@ def validate(key: str, value: str) -> str | None:
         return f"未知设置项：{key}"
     if spec.kind == "url" and not (v.startswith("http://") or v.startswith("https://") or v.startswith("ipp://")):
         return f"「{spec.label}」须以 http:// 或 https:// 或 ipp:// 开头"
+    if spec.kind == "url":
+        try:
+            parsed = urlsplit(v)
+            valid = bool(parsed.hostname) and not any(c.isspace() or ord(c) < 32 for c in v)
+            valid = valid and parsed.username is None and parsed.password is None and not parsed.query and not parsed.fragment
+            _ = parsed.port  # Invalid and out-of-range ports must be rejected before saving.
+        except ValueError:
+            valid = False
+        if not valid:
+            return f"「{spec.label}」地址格式不完整，请核对主机和端口；不要填写账号密码、查询参数或片段"
     return None
 
 

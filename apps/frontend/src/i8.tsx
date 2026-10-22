@@ -6,6 +6,7 @@ import { duration, readConfig, readPlan, readRecords, recordLabel, recordScope, 
 import type { RunRecord } from './i8-api';
 import { actionLabel } from './i8-api';
 import { useI8Execution } from './i8-execution';
+import { I8AddressEditor } from './i8-settings';
 
 function Status({ row }: { row: RunRecord }) {
   const unit = row.run_type === 'print' || row.run_type === 'export_pdf' ? '张' : '条';
@@ -22,6 +23,7 @@ export function I8Page({ me, blocked }: { me: Identity | null; blocked: boolean 
   const [limit, setLimit] = useState(50);
   const [type, setType] = useState('all');
   const [reviewed, setReviewed] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
   const { execution, busy, prepare, dismiss, acknowledge } = useI8Execution();
   useEffect(() => { setReviewed(false); }, [execution?.startedAt]);
   const config = useQuery({ queryKey: ['i8-config', me?.id ?? 0], enabled: !blocked, queryFn: async ({ signal }) => readConfig(await requestJson('/api/m02/config', { signal }), me?.account ?? ''), refetchOnMount: 'always' });
@@ -56,8 +58,10 @@ export function I8Page({ me, blocked }: { me: Identity | null; blocked: boolean 
       {config.isPending ? <p role="status">正在读取配置…</p> : config.isError ? <ReadError message={config.error.message} retry={() => void config.refetch()} label="重读配置" /> : <>
         <dl><dt>服务地址</dt><dd>{config.data.base_url || '未配置'} <span className="muted">（{config.data.source === 'page' ? '界面所设' : '环境配置'}）</span></dd><dt>当前 i8 账号</dt><dd>{config.data.i8_user || '未绑定'}</dd></dl>
         {config.data.message && <p className="i8-note">{config.data.message}</p>}
+        <button disabled={blocked || !me} title={!me ? '登录后才能修改。' : undefined} onClick={() => setEditingAddress(true)}>修改服务地址</button>
       </>}
     </details>
+    {editingAddress && me && <I8AddressEditor me={me} blocked={blocked} onClose={() => setEditingAddress(false)} />}
     <div className="i8-block">
       <h2>最近结果</h2>
       {records.isPending ? <p role="status">正在读取执行记录…</p> : records.isError ? <ReadError message={records.error.message} retry={() => void records.refetch()} label="重读记录" /> : <>
