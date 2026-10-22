@@ -11,7 +11,7 @@ import type { MechanicalReport, ReportSheet } from './mechanical-api';
 
 interface SummaryRow { id: string; [column: string]: string }
 const groupLabels = ['零租', '包月', '合计', '租赁公司内租', '工程公司内租'];
-function Summary({ report, projectIds, detail }: { report: MechanicalReport; projectIds: number[]; detail: (sheet: number, name: string) => void }) {
+function Summary({ report, projectIds, detail }: { report: MechanicalReport; projectIds: number[]; detail: (sheet: number, projectId: string) => void }) {
   const api = useRef<GridApi<SummaryRow> | null>(null);
   const [find, setFind] = useState(''); const [feedback, setFeedback] = useState('');
   const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
@@ -26,7 +26,7 @@ function Summary({ report, projectIds, detail }: { report: MechanicalReport; pro
     { headerName: '开工年月', children: [{ field: 'c2', headerName: '年', width: 75 * scale }, { field: 'c3', headerName: '月', width: 65 * scale, cellClass: 'mechanical-group-end', headerClass: 'mechanical-group-end' }] },
     ...['累计', '当月'].map((name, group) => ({ headerName: name, headerClass: 'mechanical-group-end', children: groupLabels.map((label, index): ColDef<SummaryRow> => ({
       field: `c${4 + group * 5 + index}`, headerName: label, width: (index > 2 ? 140 : 112) * scale, cellClass: index === 4 ? 'money mechanical-group-end' : 'money', headerClass: index === 4 ? 'mechanical-group-end' : '',
-      ...(group === 1 && index < 2 ? { cellRenderer: (params: ICellRendererParams<SummaryRow, string>) => params.node.rowPinned || !params.value ? params.value ?? '' : <button className="mechanical-link" aria-label={`${params.data?.c1} ${label}明细`} onClick={() => detail(index + 1, params.data?.c1 ?? '')}>{params.value}</button> } : {}),
+      ...(group === 1 && index < 2 ? { cellRenderer: (params: ICellRendererParams<SummaryRow, string>) => params.node.rowPinned || !params.value ? params.value ?? '' : <button className="mechanical-link" aria-label={`${params.data?.c1} ${label}明细`} onClick={() => detail(index + 1, params.data?.id ?? '')}>{params.value}</button> } : {}),
     })) })),
     { field: 'c14', headerName: '备注', width: 160 * scale, wrapText: true, autoHeight: true },
   ], [scale, detail]);
@@ -48,14 +48,15 @@ function Sheet({ sheet, index, target }: { sheet: ReportSheet; index: number; ta
   const headers = index === 0 ? 5 : index === 3 ? 1 : 4;
   useEffect(() => {
     if (!target) return;
-    const row = [...(root.current?.querySelectorAll('tbody tr') ?? [])].find(row => [...row.querySelectorAll('td')].some(cell => cell.textContent === target));
+    const row = root.current?.querySelector<HTMLTableRowElement>(`tr[data-project="${CSS.escape(target)}"]`);
     row?.scrollIntoView({ block: 'center' });
   }, [sheet, target]);
   const firstWidth = index === 3 ? 210 : 60;
   const secondWidth = index === 3 ? 120 : 210;
   const columns = Math.max(...sheet.rows.flatMap(row => row.map(cell => cell.column + cell.colspan - 1)));
+  const projectRows = new Map(sheet.project_rows.map(group => [group.row, group.warehouse]));
   function renderRow(cells: ReportSheet['rows'][number], row: number, head: boolean) {
-    return <tr key={row}>{cells.map(cell => { const Tag = head ? 'th' : 'td'; return <Tag key={cell.column} className={cell.column + cell.colspan - 1 <= 2 ? 'mechanical-frozen' : ''} style={cell.column + cell.colspan - 1 <= 2 ? { left: cell.column === 1 ? 0 : `calc(${firstWidth}px * var(--fscale))` } : undefined} rowSpan={cell.rowspan} colSpan={cell.colspan}>{cell.value}</Tag>; })}</tr>;
+    return <tr key={row} data-project={projectRows.get(row + (head ? 1 : headers + 1))}>{cells.map(cell => { const Tag = head ? 'th' : 'td'; return <Tag key={cell.column} className={cell.column + cell.colspan - 1 <= 2 ? 'mechanical-frozen' : ''} style={cell.column + cell.colspan - 1 <= 2 ? { left: cell.column === 1 ? 0 : `calc(${firstWidth}px * var(--fscale))` } : undefined} rowSpan={cell.rowspan} colSpan={cell.colspan}>{cell.value}</Tag>; })}</tr>;
   }
   return <div ref={root} className="mechanical-sheet" tabIndex={0} role="region" aria-label={sheet.name}><table><caption>{sheet.name}</caption><colgroup>{Array.from({ length: columns }, (_, column) => <col key={column} style={{ width: `calc(${column === 0 ? firstWidth : column === 1 ? secondWidth : 120}px * var(--fscale))` }} />)}</colgroup><thead>{sheet.rows.slice(0, headers).map((cells, row) => renderRow(cells, row, true))}</thead><tbody>{sheet.rows.slice(headers).map((cells, row) => renderRow(cells, row, false))}</tbody></table></div>;
 }
@@ -67,7 +68,7 @@ export function MechanicalPage({ me, blocked, exportGuard }: { me: Identity | nu
   const projects = useQuery({ queryKey: ['projects', 'all', ''], enabled: !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const state = useQuery({ queryKey: ['mechanical-state'], enabled: !blocked, queryFn: async ({ signal }) => readWorkbench(await requestJson('/api/m06/workbench', { signal })) });
   const candidates = useMemo(() => projects.data?.filter(project => state.data?.warehouses.includes(project.warehouse_name ?? '')) ?? [], [projects.data, state.data]);
-  const selected = useMemo(() => ids ?? (state.data?.shown.length ? state.data.shown.flatMap(warehouse => candidates.filter(project => project.warehouse_name === warehouse).map(project => project.id)) : candidates.map(project => project.id)), [ids, state.data, candidates]);
+  const selected = useMemo(() => ids ?? (state.data?.shown.flatMap(warehouse => candidates.filter(project => project.warehouse_name === warehouse).map(project => project.id)) ?? []), [ids, state.data, candidates]);
   const warehouses = useMemo(() => selected.flatMap(id => candidates.find(project => project.id === id)?.warehouse_name ?? []), [selected, candidates]);
   const ym = month || state.data?.months.at(-1) || '';
   const scopeError = selected.length !== warehouses.length ? '所选项目范围已变化，请重新选择。' : projects.isError || state.isError ? '项目或月份读取失败，请先重新读取。' : '';
@@ -87,7 +88,10 @@ export function MechanicalPage({ me, blocked, exportGuard }: { me: Identity | nu
     } catch (error) { if (!controller.signal.aborted && valid.current.scope === scope) setMessage(error instanceof Error ? error.message : '导出失败，请重新预览后重试。'); }
     finally { if (download.current === controller) { download.current = null; setBusy(false); } }
   }
-  function detail(index: number, name: string) { setSheet(index); setTarget(name); }
+  function detail(index: number, projectId: string) {
+    const warehouse = candidates.find(project => String(project.id) === projectId)?.warehouse_name;
+    if (warehouse) { setSheet(index); setTarget(warehouse); }
+  }
   const error = projects.error || state.error || report.error;
   return <section className="mechanical-card" aria-labelledby="mechanical-title">
     <div className="card-head"><h1 id="mechanical-title">机械费</h1><button ref={previewButton} disabled={Boolean(scopeError) || !report.data || report.isFetching || report.isError} onClick={() => { setSheet(0); setTarget(''); }}>四页报送预览</button></div>

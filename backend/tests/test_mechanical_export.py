@@ -49,6 +49,7 @@ def test_preview_matches_frozen_file_and_next_export_does_not_modify_first(tmp_p
     data = sample()
     preview = export.preview(data)
     assert [sheet['name'] for sheet in preview['sheets']] == ['工程公司汇总表', '零租设备月报表', '包月外租设备月报', '年度汇总']
+    assert [sheet['project_rows'] for sheet in preview['sheets']] == [[{'warehouse':'甲','row':row}] for row in [6,5,5,2]]
     path = export.export(data, tmp_path)
     before = path.read_bytes()
     changed = deepcopy(data)

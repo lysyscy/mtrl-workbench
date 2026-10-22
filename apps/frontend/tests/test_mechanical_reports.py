@@ -11,6 +11,10 @@ from sqlalchemy.orm import Session
 from test_preview import server, browser_page, login
 from tools.audit.workspace_paths import output, output_dir
 
+DUPLICATE_NAME = '重复展示名'
+REMARK_NAME = '备注同文项目'
+REVIEW_WAREHOUSES = ['审查同名甲', '审查同名乙', '审查同文备注']
+
 LONG_NAME = '长名称机械项目用于检查换行冻结列与合计保持可见' * 3
 
 @pytest.fixture(scope='module')
@@ -25,7 +29,10 @@ def preview_seed():
             with Session(engine) as session:
                 assert session.execute(text('select current_database(),current_schema()')).one() == ('mtrl_workbench_test', env['PGOPTIONS'].split('search_path=')[1])
                 session.add_all([Project(name_full=f'合成机械网格项目{i:03}', disp=LONG_NAME if i == 1 else f'网格样例{i:03}', warehouse_name=f'合成机械仓库{i:03}', ord=i+3) for i in range(1, 91)])
+                session.add_all([Project(name_full=wh, warehouse_name=wh, disp=DUPLICATE_NAME if i < 2 else REMARK_NAME, ord=100+i) for i,wh in enumerate(REVIEW_WAREHOUSES)])
                 session.commit()
+                initial = [p.warehouse_name for p in session.scalars(select(Project).order_by(Project.ord,Project.id)) if p.warehouse_name and p.warehouse_name not in REVIEW_WAREHOUSES]
+                work.action(session,'settings',{'revision':0,'shown_projects':initial})
                 for wh, zero_count, monthly_count in [('隔离验收仓库',160,3),('合成机械仓库001',2,1)]:
                     for month in ['2026-08','2026-09']:
                         for category, count in [('zero',zero_count),('monthly',monthly_count)]:
@@ -34,6 +41,11 @@ def preview_seed():
                             rows = [{'id':f'{category}-{i}', 'device':f'升降设备{i+1:03}', 'spec':'长规格说明' * 5, 'unit':'台班', 'qty':'2小时', 'plan':'30', 'used':'28', 'rate':amount, 'amount':amount, 'tax':'3%专', 'date':'8.21至月底', 'plate':'合成牌照', 'memo':'中文备注\n分行核对' if i == 0 else f'明细{i+1:03}'} for i in range(count)]
                             saved=work.action(session,'details-save',{'warehouse':wh,'ym':month,'category':category,'revision':0,'rows':rows})
                             work.action(session,'amounts-confirm',{'warehouse':wh,'ym':month,'category':category,'revision':saved['revision'],'effective_signature':work.effective(session,wh,month)['signature']},'399-synthetic')
+                for index,wh in enumerate(REVIEW_WAREHOUSES):
+                    for category in ['zero','monthly']:
+                        rows=[{'id':f'{category}-{i}', 'device':f'升降审查设备{i}', 'amount':'103', 'rate':'103', 'tax':'3%专', 'qty':'1', 'plan':'1', 'used':'1', 'plate':'合成牌照', 'memo':REMARK_NAME if i==0 else f'审查明细{i}'} for i in range(140 if index==0 else 1)]
+                        saved=work.action(session,'details-save',{'warehouse':wh,'ym':'2026-09','category':category,'revision':0,'rows':rows})
+                        work.action(session,'amounts-confirm',{'warehouse':wh,'ym':'2026-09','category':category,'revision':saved['revision'],'effective_signature':work.effective(session,wh,'2026-09')['signature']},'399-review-synthetic')
                 session.commit()
         finally: engine.dispose()
     return seed
@@ -243,3 +255,51 @@ def test_late_report_file_cannot_download_after_scope_or_account_changes(server,
     page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
     assert downloads==[]
     expect(page.get_by_text('四页文件已导出。',exact=True)).to_have_count(0)
+
+
+@pytest.mark.parametrize(('warehouse','body_row'),[('审查同名乙',141),('审查同文备注',143)])
+@pytest.mark.parametrize(('column','sheet_name'),[('c9','零租设备月报表'),('c10','包月外租设备月报')])
+def test_detail_jump_uses_project_identity_with_duplicate_names_and_same_text_remarks(server,browser_page,warehouse,body_row,column,sheet_name):
+    page,_=browser_page;open_reports(page,server)
+    page.get_by_role('button',name='报表项目',exact=True).click()
+    menu=page.get_by_role('group',name='导出项目候选',exact=True)
+    menu.get_by_role('button',name='清空',exact=True).click()
+    for _ in range(2): menu.get_by_role('button',name='☐ '+DUPLICATE_NAME,exact=True).first.click()
+    menu.get_by_role('button',name='☐ '+REMARK_NAME,exact=True).click()
+    page.get_by_role('button',name='报表项目',exact=True).click()
+    grid=page.get_by_role('region',name='公司汇总',exact=True);expect(grid).to_be_visible(timeout=30000)
+    projects=page.request.get(server+'/api/m01/projects?status=all').json()
+    project=next(project for project in projects if project['warehouse_name']==warehouse)
+    expect(grid.locator(f'[row-id="{project["id"]}"] [col-id="{column}"] button')).to_be_visible()
+    grid.locator(f'[row-id="{project["id"]}"] [col-id="{column}"] button').click()
+    preview=page.get_by_role('region',name=sheet_name,exact=True);expect(preview).to_be_visible()
+    group=preview.locator('tbody tr').nth(body_row)
+    expect(group).to_contain_text(project['disp'])
+    expect(group).to_be_in_viewport()
+    bounds=group.bounding_box();viewport=preview.bounding_box()
+    assert viewport['y'] <= bounds['y'] < viewport['y']+viewport['height'],(bounds,viewport)
+    assert preview.locator('thead').evaluate("head=>{const cell=head.querySelector('tr:last-child th');const r=cell.getBoundingClientRect();return head.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}")
+    page.screenshot(path=str(output(f'399-review-jump-{column}-{warehouse}.png',kind='screenshots')),full_page=True)
+
+
+def test_saved_empty_project_list_requires_explicit_selection_on_entry_and_reload(server,browser_page):
+    page,_=browser_page;login(page,server)
+    state=page.request.get(server+'/api/m06/workbench').json();original=state['settings']
+    saved=page.request.post(server+'/api/m06/workbench/settings',data={**original,'shown_projects':[]});assert saved.ok,saved.text()
+    reads=[]
+    page.on('request',lambda request: reads.append(request.url) if '/api/m06/workbench/preview?' in request.url or '/api/m06/workbench/export?' in request.url else None)
+    try:
+        page.get_by_role('link',name='MOD-10 机械费',exact=True).click()
+        expect(page.get_by_text('请选择项目查看报表。',exact=True)).to_be_visible(timeout=30000)
+        expect(page.get_by_role('button',name='报表项目',exact=True)).to_contain_text('已选 0 个项目')
+        expect(page.get_by_role('button',name='四页报送预览',exact=True)).to_be_disabled()
+        assert reads==[]
+        page.screenshot(path=str(output('399-review-empty-saved-scope.png',kind='screenshots')),full_page=True)
+        page.reload()
+        expect(page.get_by_text('请选择项目查看报表。',exact=True)).to_be_visible(timeout=30000)
+        assert reads==[]
+        select_projects(page,['隔离项目'])
+        assert reads and all(json.loads(parse_qs(urlparse(url).query)['projects'][0])==['隔离验收仓库'] for url in reads)
+    finally:
+        current=page.request.get(server+'/api/m06/workbench').json()['settings']
+        response=page.request.post(server+'/api/m06/workbench/settings',data={**original,'revision':current['revision']});assert response.ok,response.text()

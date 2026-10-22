@@ -121,12 +121,17 @@ def sum_formula(sheet, row, col, rows, *, empty_zero=False):
     return result
 
 
-def build(data):
+def build(data, *, project_rows=None):
     ym = data.get('ym', '')
     if len(ym) != 7 or not data.get('projects'):
         raise MustReportError('请选择报表月份和至少一个项目')
     wb = load_workbook(require_template(MECHANICAL_TEMPLATE))
     warnings = []
+
+    def mark_project(sheet, warehouse, row):
+        if project_rows is not None:
+            project_rows.setdefault(sheet.title, []).append({'warehouse': warehouse, 'row': row})
+
     styles = {i: {r: [copy(sheet.cell(r, c)._style) for c in range(1, width + 1)]
                   for r in rows} for i, (sheet, rows, width) in enumerate(zip(
                       wb, ((6, 7), (5, 6, 7), (5, 6, 7), range(1, 8)), (15, 17, 15, 35)))}
@@ -141,6 +146,7 @@ def build(data):
     summary.row_dimensions[5].height = 33
     for i, project in enumerate(data['projects'], 6):
         wh = project['warehouse']
+        mark_project(summary, wh, i)
         values = [i - 5, project['name'], None, None,
                   cumulative(data, wh, 'mech_2', ym), cumulative(data, wh, 'mech_3', ym),
                   None, cumulative(data, wh, 'mech_1', ym), cumulative(data, wh, 'mech_0', ym),
@@ -167,6 +173,7 @@ def build(data):
             gross = detail['totals']['gross'] if detail else None
             net = detail['totals']['net'] if detail else None
             group_row = row_no
+            mark_project(sheet, wh, group_row)
             groups.append(group_row)
             append_row(sheet, row_no, [None] * len(styles[sheet_index][5]), styles[sheet_index][5])
             put(sheet, row_no, 1, group_no, number=True)
@@ -252,6 +259,7 @@ def build(data):
     for project_index, project in enumerate(data['projects']):
         wh, hist = project['warehouse'], history(data, project['warehouse'])
         start = row_no
+        mark_project(annual, wh, start)
         for template_row, (category, label) in enumerate(categories, 2):
             append_row(annual, row_no, [None] * width, annual_styles(template_row))
             put(annual, row_no, 2, label)
@@ -311,7 +319,8 @@ def build(data):
 
 
 def preview(data):
-    wb, warnings = build(data)
+    project_rows = {}
+    wb, warnings = build(data, project_rows=project_rows)
     sheets = []
     for sheet in wb.worksheets:
         merged_starts, hidden = {}, set()
@@ -331,7 +340,7 @@ def preview(data):
                     value = value.result
                 cells.append({'value': '' if value is None else str(value), 'rowspan': rs, 'colspan': cs, 'column': cell.column})
             rows.append(cells)
-        sheets.append({'name': sheet.title, 'rows': rows})
+        sheets.append({'name': sheet.title, 'rows': rows, 'project_rows': project_rows[sheet.title]})
     wb.close()
     return {'ok': True, 'ym': data['ym'], 'projects': data['projects'], 'sheets': sheets, 'warnings': warnings}
 

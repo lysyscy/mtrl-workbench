@@ -2,7 +2,7 @@ import { ApiError, record } from './api';
 
 export interface Workbench { months: string[]; shown: string[]; warehouses: string[] }
 export interface ReportCell { value: string; rowspan: number; colspan: number; column: number }
-export interface ReportSheet { name: string; rows: ReportCell[][] }
+export interface ReportSheet { name: string; rows: ReportCell[][]; project_rows: { warehouse: string; row: number }[] }
 export interface MechanicalReport { ym: string; sheets: ReportSheet[]; warnings: string[]; snapshot_token: string }
 const sheetNames = ['工程公司汇总表', '零租设备月报表', '包月外租设备月报', '年度汇总'];
 const invalid = () => new ApiError('机械报表结果不完整，请重新读取；仍失败请联系维护人员。');
@@ -15,7 +15,7 @@ export function readWorkbench(value: unknown): Workbench {
 export function readMechanicalReport(value: unknown, ym: string, warehouses: string[]): MechanicalReport {
   if (!record(value) || value.ok !== true || value.ym !== ym || typeof value.snapshot_token !== 'string' || !/^[a-f0-9]{64}$/.test(value.snapshot_token) || !strings(value.warnings) || !Array.isArray(value.projects) || value.projects.length !== warehouses.length || value.projects.some((project: unknown, index: number) => !record(project) || project.warehouse !== warehouses[index]) || !Array.isArray(value.sheets) || value.sheets.length !== 4) throw invalid();
   const sheets = value.sheets.map((sheet: unknown, index: number): ReportSheet => {
-    if (!record(sheet) || typeof sheet.name !== 'string' || sheet.name !== sheetNames[index] || !Array.isArray(sheet.rows)) throw invalid();
+    if (!record(sheet) || typeof sheet.name !== 'string' || sheet.name !== sheetNames[index] || !Array.isArray(sheet.rows) || !Array.isArray(sheet.project_rows) || sheet.project_rows.length !== warehouses.length) throw invalid();
     const rows = sheet.rows.map((row: unknown): ReportCell[] => {
       if (!Array.isArray(row)) throw invalid();
       let previous = 0;
@@ -25,7 +25,12 @@ export function readMechanicalReport(value: unknown, ym: string, warehouses: str
         return { value: cell.value, rowspan: cell.rowspan, colspan: cell.colspan, column: cell.column };
       });
     });
-    return { name: sheet.name, rows };
+    const project_rows = sheet.project_rows.map((group: unknown, index: number) => {
+      if (!record(group) || typeof group.warehouse !== 'string' || group.warehouse !== warehouses[index] || typeof group.row !== 'number' || !Number.isSafeInteger(group.row) || group.row < 1 || group.row > rows.length) throw invalid();
+      return { warehouse: group.warehouse, row: group.row };
+    });
+    if (new Set(project_rows.map(group => group.row)).size !== project_rows.length) throw invalid();
+    return { name: sheet.name, rows, project_rows };
   });
   if (sheets[0]!.rows.length !== warehouses.length + 6) throw invalid();
   return { ym, sheets, warnings: value.warnings, snapshot_token: value.snapshot_token };
