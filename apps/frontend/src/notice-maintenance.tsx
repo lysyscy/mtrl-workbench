@@ -1,0 +1,88 @@
+import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
+import { ApiError, record, requestJson } from './api';
+import type { Project } from './api';
+import { body, categories, currentMonth, money, receipt } from './notices-api';
+import type { NoticeRow } from './notices-api';
+
+export type Draft = { row_id: string; doc_date: string; bill_no: string; bill_name: string; biz_type: string; payee: string; category: string; amount_approved: string; stat_settle: string; stat_paid: string; ownership_id: string; approve_status: string };
+export function manualDraft(row?: NoticeRow): Draft {
+  return { row_id: row ? String(row.notice_id) : '', doc_date: row?.doc_date ?? `${currentMonth()}-01`, bill_no: row?.bill_no ?? '', bill_name: row?.bill_name ?? '', biz_type: row?.biz_type ?? '', payee: row?.payee ?? '', category: row?.category ?? 'material', amount_approved: row?.amount_approved ?? '0', stat_settle: row?.stat_settle ?? '0', stat_paid: row?.stat_paid ?? '0', ownership_id: row?.ownership_id ? String(row.ownership_id) : '', approve_status: row?.approve_status ?? '已批' };
+}
+export function DraftField({ draft, field, label, disabled, projects }: { draft: Draft; field: keyof Draft; label: string; disabled: boolean; projects: Project[] }) {
+  const options = field === 'category' ? Object.entries(categories) : field === 'approve_status' ? [['已批','已批'],['未批','未批']] : field === 'ownership_id' ? [['','请选择项目'],...projects.filter(p => p.project_type !== 'shell').map(p => [String(p.id),`${p.disp || p.warehouse_name}${p.status === 'archived' ? '（归档）' : ''}`])] : null;
+  return options ? <select aria-label={`草稿${label}`} defaultValue={draft[field]} disabled={disabled} onChange={e => { draft[field] = e.target.value; }}>{options.map(([v,t]) => <option key={v} value={v}>{t}</option>)}</select> : <input aria-label={`草稿${label}`} type={field === 'doc_date' ? 'date' : 'text'} inputMode={['amount_approved','stat_settle','stat_paid'].includes(field) ? 'decimal' : undefined} defaultValue={draft[field]} disabled={disabled} onChange={e => { draft[field] = e.target.value; }} />;
+}
+export function StatCell({ row, field, drafts, disabled, save }: { row: NoticeRow; field: 'amount_approved' | 'stat_settle' | 'stat_paid'; drafts: Record<string,string>; disabled: boolean; save: (path: string, payload: unknown) => Promise<boolean> }) {
+  const draftKey = `${row.notice_id}:${field}`;
+  const [value, setValue] = useState(drafts[draftKey] ?? row[field]); const dirty = useRef(draftKey in drafts), saving = useRef(false);
+  useEffect(() => { if (!dirty.current) setValue(row[field]); }, [row[field]]);
+  async function commit() {
+    if (disabled || saving.current || !dirty.current) return;
+    saving.current = true;
+    const accepted = await save(field === 'amount_approved' ? '/api/m03/actions/manual-save' : '/api/m03/actions/stat', field === 'amount_approved' ? {...manualDraft(row),amount_approved:value} : { notice_id: row.notice_id, field, value });
+    if (accepted) {dirty.current = false;delete drafts[draftKey];}
+    saving.current = false;
+  }
+  return <input className={row.edited_fields.includes(field) ? 'notice-edited' : ''} aria-label={`${row.bill_no}${field === 'amount_approved' ? '审批金额' : field === 'stat_settle' ? '统计结算金额' : '统计付款金额'}`} title={`${dirty.current ? '尚未保存 · ' : ''}${field === 'amount_approved' ? '手动行审批金额；两个统计金额不得超过它' : `上限 = 审批金额 ${money(row.amount_approved)}`}；保存失败保留输入`} inputMode="decimal" value={value} disabled={disabled} onChange={e => { dirty.current = true;drafts[draftKey] = e.target.value; setValue(e.target.value); }} onBlur={() => void commit()} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commit(); } if (e.key === 'Escape') { dirty.current = false;delete drafts[draftKey];setValue(row[field]); } }} />;
+}
+export type NoticeDialogState = { kind: 'delete' | 'supplier' | 'match' | 'link' | 'ownership'; row: NoticeRow };
+interface Candidate { id: number; contract_no: string; date: string; supplier: string; material: string; contract_amt: string; pay_sum: string; debt: string; trade_co: string; supplier_uninvoiced: string; trade_uninvoiced: string | null; invoices: { id: number; kind: string; date: string; amount: string }[]; recommendation: { reasons: { text: string }[] } }
+function strings(value: unknown): string[] { if (!Array.isArray(value) || !value.every(x => typeof x === 'string')) throw new ApiError('候选读取不完整，请重读。'); return value; }
+function resultObject(value: unknown) { if (!record(value)) throw new ApiError('读取不完整，请重试。'); return value; }
+export function NoticeDialog({ state, projects, blocked, close, refresh, announce }: { state: NoticeDialogState; projects: Project[]; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (message: string) => void }) {
+  const { row, kind } = state, dialog = useRef<HTMLDialogElement>(null), lock = useRef(false);
+  const [busy,setBusy] = useState(false), [done,setDone] = useState(false), [error,setError] = useState(''), [value,setValue] = useState(kind === 'supplier' ? row.jc_supplier : ''), [keyword,setKeyword] = useState('');
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  useEffect(() => { if (blocked) dialog.current?.close(); else if (!dialog.current?.open) dialog.current?.showModal(); }, [blocked]);
+  const query = useQuery({ queryKey: ['notice-maintenance',kind,row.notice_id,row.bill_no], enabled: !blocked, staleTime: 0, refetchOnMount: 'always', queryFn: async ({ signal }) => {
+    const path = kind === 'delete' ? '/api/m03/actions/manual-delete-impact' : kind === 'supplier' || kind === 'match' ? '/api/m03/actions/sup-match' : kind === 'link' ? `/api/m11/link-recommendations?notice_id=${row.notice_id}` : '/api/m01/ownership';
+    const data = resultObject(await requestJson(path, kind === 'link' ? { signal } : { method: 'POST', signal, ...body(kind === 'ownership' ? { name_full: row.project_name, doc_name: row.bill_name } : { notice_id: row.notice_id }) }));
+    if (kind === 'supplier' || kind === 'match') { strings(data.pool); strings(data.cands); }
+    if (kind === 'link' && (!Array.isArray(data.rows) || !data.rows.every(x => record(x) && Number.isSafeInteger(x.id) && Array.isArray(x.invoices) && record(x.recommendation)))) throw new ApiError('合同候选读取不完整，请重读。');
+    if (kind === 'ownership' && (!Array.isArray(data.candidates) || !data.candidates.every(x => record(x) && typeof x.key === 'string' && typeof x.display === 'string'))) throw new ApiError('归属候选读取不完整，请重读。');
+    if (kind === 'delete' && (typeof data.message !== 'string' || !Array.isArray(data.effects))) throw new ApiError('删除影响读取不完整，请重读。');
+    return data;
+  } });
+  const data = query.data, pool = data && (kind === 'supplier' || kind === 'match') ? strings(data.pool) : [], cands = data && kind === 'match' ? strings(data.cands) : [];
+  const contracts = kind === 'link' && data ? data.rows as Candidate[] : [];
+  const ownership = kind === 'ownership' && data ? data.candidates as { key: string; display: string; archived: boolean }[] : [];
+  const unavailable = blocked || busy || done || query.isFetching || (!data && kind !== 'supplier');
+  useEffect(() => { if (kind === 'match' && data && Array.isArray(data.cands) && data.cands.length === 1) setValue(String(data.cands[0])); }, [data]);
+  async function write(path: string, payload: unknown) {
+    if (blocked || busy || done || lock.current) return;
+    lock.current = true; setBusy(true); setError(''); let saved = false;
+    try {
+      const response = await requestJson(path,{ method: 'POST', ...body(payload) }); saved = true; setDone(true);
+      const message = receipt(response);
+      announce(message); await refresh(); close();
+    } catch (failure) { setError(`${saved ? '操作已保存，但读取尚待核对；请关闭后重读，勿重复保存。' : ''}${failure instanceof Error ? failure.message : '操作未完成，请重试。'}`); }
+    finally { setBusy(false);lock.current = false; }
+  }
+  function submit() {
+    if (unavailable) return;
+    if (kind === 'delete') void write('/api/m03/actions/manual-delete',{ notice_id: row.notice_id });
+    if (kind === 'supplier' || kind === 'match') void write('/api/m03/actions/jc-supplier',{ notice_id: row.notice_id, supplier: value.trim() });
+    if (kind === 'link' && value) void write('/api/m11/link',{ notice_id: row.notice_id, contract_id: Number(value) });
+    if (kind === 'ownership' && value) void write('/api/m03/notices/ownership-assign',{ doc_name: row.bill_name, keyword, small_id: Number(value) });
+  }
+  const title = { delete: '删除手动通知书', supplier: '集采实际供应商', match: '自动匹配供应商', link: '关联集采合同', ownership: '指定项目归属' }[kind];
+  return <dialog className={`project-dialog notice-dialog ${kind === 'link' ? 'notice-contract-dialog' : ''}`} ref={dialog} aria-labelledby="notice-maintenance-title" onCancel={e => { e.preventDefault(); if (!busy) close(); }}><form onSubmit={e => { e.preventDefault();submit(); }}><h2 id="notice-maintenance-title">{title}</h2><p>{row.bill_no} · {row.bill_name} · {kind === 'ownership' ? row.project_name : row.project_display}</p>
+    {query.isPending && <p role="status">正在读取…</p>}{query.isError && <p className="notice" role="alert">{query.error.message}<button type="button" onClick={() => void query.refetch()}>重读候选</button></p>}
+    {kind === 'delete' && data && <><p className="danger">{receipt(data)}</p><dl>{[['项目',data.project_name],['单据日期',data.doc_date],['统计结算金额',data.stat_settle],['统计付款金额',data.stat_paid],['已付金额（流水）',data.amount_paid]].map(([label,number]) => <div key={String(label)}><dt>{String(label)}</dt><dd>{String(number)}</dd></div>)}</dl><ul>{(data.effects as string[]).map(effect => <li key={effect}>{effect.replace(/\*\*/g,'')}</li>)}</ul></>}
+    {(kind === 'supplier' || kind === 'match') && <>{kind === 'match' && data && <><p>{String(data.level_name)} · 命中 {cands.length} 家{cands.length > 1 ? '，请选择，不自动取第一家。' : cands.length === 1 ? '，自动匹配 · 待确认，须人工采用。' : '，可手工指定。'}</p>{data.level === 4 && <p className="danger">仅2字片段命中，请核对供应商全名。</p>}{cands.map(name => <label className="notice-choice" key={name}><input type="radio" name="supplier-candidate" value={name} checked={value === name} disabled={busy} onChange={() => setValue(name)} />{name}</label>)}</>}<label>供应商名称<input autoFocus value={value} maxLength={128} disabled={busy || done} onChange={e => setValue(e.target.value)} /></label>{!pool.length && data && <p>本项目暂无集采合同供应商，可直接录入全名。</p>}{pool.filter(name => name.includes(value)).map(name => <button className="notice-pool" type="button" key={name} disabled={busy || done} onClick={() => setValue(name)}>{name}</button>)}</>}
+    {kind === 'link' && data && <><p>审批金额 <b>{money(row.amount_approved)}</b> 元 · 当前供应商：{String(data.supplier || '未录入')}。请选择合同后确认。</p>{contracts.length === 0 && <p>没有可关联候选，请先核对项目和供应商。</p>}{contracts.map(c => <div className="notice-contract" key={c.id}><label className="notice-choice"><input type="radio" name="contract" checked={value === String(c.id)} disabled={busy || done} onChange={() => setValue(String(c.id))} /><b>{c.contract_no || '无合同号'}</b> · {c.date || '无日期'} · {c.material} · {c.supplier}{Number(data.current_contract_id) === c.id ? '（当前关联）' : ''}</label><p>合同额 {money(c.contract_amt)} · 付款 {money(c.pay_sum)} · 欠款 {money(c.debt)} · 供应商未开票差额 {money(c.supplier_uninvoiced)}{c.trade_uninvoiced !== null && ` · 贸易公司未开票差额 ${money(c.trade_uninvoiced)}`}</p>{c.recommendation.reasons.map((r,i) => <p key={i}>{r.text}</p>)}{c.invoices.length > 0 && <details><summary>发票依据（{c.invoices.length}）</summary>{c.invoices.map(i => <p key={i.id}>{i.kind === 'trade' ? '贸易公司' : '供应商'} · {i.date} · {money(i.amount)} 元</p>)}</details>}</div>)}{Boolean(data.current_contract_id) && <button type="button" className="danger" disabled={unavailable} onClick={() => void write('/api/m11/unlink',{ notice_id: row.notice_id })}>确认解绑当前合同</button>}</>}
+    {kind === 'ownership' && data && <><p>{String(data.reason)}。关键词须出现在单据名称里；补完档案后须重新抓取，不改本条既有关系。</p><label>归属小微<select value={value} disabled={busy || done} onChange={e => setValue(e.target.value)}><option value="">请选择</option>{ownership.map(p => <option key={p.key} value={projects.find(project => project.warehouse_name === p.key)?.id ?? ''}>{p.display}{p.archived ? '（归档）' : ''}</option>)}</select></label><label>关键词<input value={keyword} disabled={busy || done} onChange={e => setKeyword(e.target.value)} /></label><Link to={`/projects?notice=${row.notice_id}&bill=${encodeURIComponent(row.bill_no)}`} onClick={close}>到项目档案核对 {row.bill_no}</Link></>}
+    {error && <p className="notice" role="alert">{error}</p>}{busy && <p role="status">正在保存…</p>}<div className="dialog-actions"><button type="button" disabled={busy} onClick={close}>{done ? '关闭' : '取消'}</button>{!done && <button type="submit" className={kind === 'delete' ? 'danger' : 'primary'} disabled={unavailable || (['match','link','ownership'].includes(kind) && !value) || (kind === 'ownership' && !keyword)}>{kind === 'delete' ? '确认删除' : kind === 'match' ? '采用' : kind === 'link' ? '确认关联' : kind === 'ownership' ? '确认补充档案' : '保存'}</button>}</div>
+  </form></dialog>;
+}
+
+export function OwnershipPending({ blocked, open }: { blocked: boolean; open: (row: NoticeRow) => void }) {
+  const query=useQuery({queryKey:['notice-ownership-pending'],enabled:!blocked,refetchOnMount:'always',queryFn:async({signal})=>{
+    const r=resultObject(await requestJson('/api/m03/notices/unresolved',{signal}));
+    if(!Array.isArray(r.items)||!r.items.every(x=>record(x)&&['bill_no','doc_name','project_name','reason'].every(k=>typeof x[k]==='string')))throw new ApiError('归属待办读取不完整，请重读。');
+    return r.items as {bill_no:string;doc_name:string;project_name:string;reason:string}[];
+  }});
+  return query.isError ? <p className="notice" role="alert">{query.error.message}<button onClick={()=>void query.refetch()}>重读归属待办</button></p> : query.data?.length ? <details className="notice-ownership" open><summary>待指定归属 · {query.data.length} 条（本次未写入）</summary>{query.data.map((r,i)=><p key={`${r.bill_no}:${i}`}>{r.bill_no} · {r.project_name} · {r.doc_name} · {r.reason}<button disabled={blocked} onClick={()=>open({notice_id:0,bill_no:r.bill_no,bill_name:r.doc_name,project_name:r.project_name,project_display:r.project_name} as NoticeRow)}>指定归属</button></p>)}</details> : null;
+}

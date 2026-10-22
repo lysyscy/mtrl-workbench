@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, readProjects, record, requestJson } from './api';
 import type { Identity, Project } from './api';
@@ -37,6 +38,7 @@ function OrderInput({ project, disabled, move }: { project: ArchiveProject; disa
 }
 export function Projects({ me, blocked }: { me: Identity | null; blocked: boolean }) {
   const client = useQueryClient();
+  const [params] = useSearchParams();
   const [sort, setSort] = useState<{ key: string; descending: boolean } | null>(null);
   const [status, setStatus] = useState('active'), [type, setType] = useState('all'), [keyword, setKeyword] = useState('');
   const [modal, setModal] = useState<DialogState | null>(null), [feedback, setFeedback] = useState(''), [busy, setBusy] = useState(false);
@@ -81,7 +83,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
       const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = result.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, `已按显示顺序导出 ${ids.length} 个项目。`);
   }
-  return <section className="projects-page" aria-labelledby="page-title">
+  return <section className="projects-page" aria-labelledby="page-title">{params.get('bill') && <p><Link to={`/notices?notice=${encodeURIComponent(params.get('notice')??'')}`}>返回通知书 {params.get('bill')} 继续核对</Link></p>}
     <div className="project-toolbar"><button disabled={unavailable} onClick={() => setModal({ kind: 'create' })}>＋ 手工建档</button><button disabled={unavailable} onClick={() => setModal({ kind: 'sync', source: 'warehouses' })}>同步仓库名单</button><button disabled={unavailable} onClick={() => setModal({ kind: 'sync', source: 'common-projects' })}>同步常用项目列表</button><button className="primary" disabled={unavailable || !rows.length} onClick={() => void exportRows()}>导出 Excel</button></div>
     {!me && <p className="state">登录后可维护项目和导出。</p>}
     <form className="filters" onSubmit={e => e.preventDefault()}><label>状态<select value={status} onChange={e => setStatus(e.target.value)}><option value="active">在建</option><option value="archived">归档</option><option value="all">全部</option></select></label><label>项目类型<select value={type} onChange={e => setType(e.target.value)}><option value="all">全部</option>{Object.entries(typeNames).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label><label className="search">项目<input type="search" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="全名、仓库名或展示名" /></label><button onClick={() => { setStatus('active'); setType('all'); setKeyword(''); setSort(null); }}>重置</button></form>
