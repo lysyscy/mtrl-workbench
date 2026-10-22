@@ -93,8 +93,8 @@ export function MechanicalPage({ me, blocked, exportGuard }: { me: Identity | nu
     if (warehouse) { setSheet(index); setTarget(warehouse); }
   }
   const error = projects.error || state.error || report.error;
-  return <section className="mechanical-card" aria-labelledby="mechanical-title">
-    <div className="card-head"><h1 id="mechanical-title">机械费</h1><button ref={previewButton} disabled={Boolean(scopeError) || !report.data || report.isFetching || report.isError} onClick={() => { setSheet(0); setTarget(''); }}>四页报送预览</button></div>
+  return <section className="mechanical-card" aria-labelledby="page-title">
+    <div className="card-head"><button ref={previewButton} disabled={Boolean(scopeError) || !report.data || report.isFetching || report.isError} onClick={() => { setSheet(0); setTarget(''); }}>四页报送预览</button></div>
     <div className="filters"><label htmlFor="mechanical-month">月份</label><select id="mechanical-month" value={ym} disabled={blocked || state.isPending} onChange={event => setMonth(event.target.value)}>{state.data?.months.map(month => <option key={month}>{month}</option>)}</select><ProjectPicker projects={candidates} selected={selected} pick={setIds} multiple label="报表项目" disabled={blocked || projects.isPending || state.isPending} /></div>
     <p className="mechanical-boundary">当前可核对已保存报表。明细编辑、月值确认与取数核对尚未接入。</p>
     {scopeError && !error && <p className="notice" role="alert">{scopeError}</p>}

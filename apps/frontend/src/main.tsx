@@ -6,7 +6,6 @@ import { readIdentity, readProjects, requestJson } from './api';
 import type { Identity } from './api';
 const MechanicalPage = lazy(() => import('./mechanical').then(module => ({ default: module.MechanicalPage })));
 const LedgerPage = lazy(() => import('./ledger').then(module => ({ default: module.LedgerPage })));
-import { I8ExecutionProvider } from './i8-execution';
 const I8Page = lazy(() => import('./i8').then(module => ({ default: module.I8Page })));
 import './style.css';
 
@@ -31,8 +30,7 @@ function Projects({ blocked }: { blocked: boolean }) {
     enabled: !blocked,
     queryFn: async ({ signal }) => readProjects(await requestJson(`/api/m01/projects?${new URLSearchParams({ status, keyword: search })}`, { signal })),
   });
-  return <section aria-labelledby="projects-title">
-    <div className="card-head"><h1 id="projects-title">项目档案</h1></div>
+  return <section aria-labelledby="page-title">
     <form className="filters" onSubmit={event => event.preventDefault()}>
       <div className="filter-field"><label htmlFor="project-status">状态</label><select id="project-status" value={status} onChange={event => setStatus(event.target.value)}><option value="active">在建</option><option value="archived">归档</option><option value="all">全部</option></select></div>
       <label className="search">项目<input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={event => { setKeyword(event.currentTarget.value); setComposing(false); }} placeholder="全名、仓库名或展示名" /></label>
@@ -52,7 +50,9 @@ function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; bloc
   const [logoutError, setLogoutError] = useState('');
   const [ledgerExportGuard, setLedgerExportGuard] = useState('');
   const [ledgerProject, setLedgerProject] = useState(0);
-  const ledgerActive = useLocation().pathname === '/ledger';
+  const page = useLocation().pathname;
+  const title = ({ '/projects': '项目档案', '/i8': 'i8 接入层', '/ledger': '付款流水与欠款统计', '/mechanical': '机械费' } as Record<string, string>)[page] ?? '材料工作台';
+  const ledgerActive = page === '/ledger';
   const [ledgerVisited, setLedgerVisited] = useState(ledgerActive);
   useEffect(() => { if (ledgerActive) setLedgerVisited(true); }, [ledgerActive]);
   const [busy, setBusy] = useState(false);
@@ -74,8 +74,8 @@ function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; bloc
   return <QueryClientProvider client={client}><div className="workspace" hidden={blocked} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
     <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink><NavLink to="/i8">MOD-02 i8 接入层</NavLink><NavLink to="/ledger" title="当前预览提供逐月台账，综合页面其余区域尚未接入">MOD-05 付款流水与欠款统计</NavLink><NavLink to="/mechanical">MOD-10 机械费</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
-    <div className="main"><header><div id="ledger-status" /><div className="account-area"><div id="history-controls" /><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</div></header>
-      <main id="content" tabIndex={-1}><I8ExecutionProvider me={me} blocked={blocked}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/i8" element={<Suspense fallback={<p role="status">正在读取 i8 接入层…</p>}><I8Page me={me} blocked={blocked} /></Suspense>} /><Route path="/ledger" element={null} /><Route path="/mechanical" element={<Suspense fallback={<p role="status">正在读取机械费…</p>}><MechanicalPage me={me} blocked={blocked} exportGuard={ledgerExportGuard} /></Suspense>} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>{(ledgerVisited || ledgerActive) && <div hidden={!ledgerActive} inert={!ledgerActive}><Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked || !ledgerActive} active={ledgerActive} project={ledgerProject} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} /></Suspense></div>}</I8ExecutionProvider></main>
+    <div className="main"><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><div className="history-slot"><div id="history-controls" /><div className="history-fallback ledger-tools"><button disabled title="当前页面没有可撤销的操作">撤销</button><button disabled title="当前页面没有可重做的操作">重做</button></div></div><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</div></header>
+      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/i8" element={<Suspense fallback={<p role="status">正在读取 i8 接入层…</p>}><I8Page blocked={blocked} /></Suspense>} /><Route path="/ledger" element={null} /><Route path="/mechanical" element={<Suspense fallback={<p role="status">正在读取机械费…</p>}><MechanicalPage me={me} blocked={blocked} exportGuard={ledgerExportGuard} /></Suspense>} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>{(ledgerVisited || ledgerActive) && <div hidden={!ledgerActive} inert={!ledgerActive}><Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked || !ledgerActive} active={ledgerActive} project={ledgerProject} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} /></Suspense></div>}</main>
     </div>
   </div></QueryClientProvider>;
 }
