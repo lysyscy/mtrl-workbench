@@ -402,13 +402,21 @@ def act_opening_delete(
 @router.post("/m05/ledger/remark")
 def act_remark(
     category: str = Form(...), project_id: int = Form(...), ym: str = Form(""),
-    remark: str = Form(""), end_ym: str = Form(""),
+    remark: str = Form(""), end_ym: str = Form(""), token: str = Form(""),
 ) -> dict:
     """写 / 清台账备注（空串 = 清除该格；键 = 口径 + 项目 + 月）并回执。
 
     ⚠️ **参数一律 `Form`**（同上）。
     """
     with session_scope() as s:
+        from app.mod01_projects import repository as projects
+        projects.get_project(s, int(project_id), for_update=True)
+        if token:
+            ledger = svc.build_ledger(s, project_id=int(project_id))
+            side = next((side for side in ledger["sides"] if side["category"] == category), None)
+            row = next((row for row in side["rows"] if row["month"] == ym and row["row_kind"] != "manual"), None) if side else None
+            if row is None or row["token"] != token:
+                raise MustReportError("这一行已变化，请刷新后重试")
         text = repo.set_remark(s, category=category, project_id=int(project_id), ym=ym, remark=remark)
     tip = "已清除该格备注" if not text else f"备注已存：{text}"
     return {"ok": True, "message": tip}

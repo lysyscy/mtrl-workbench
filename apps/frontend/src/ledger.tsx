@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
-import { ApiError, readProjects, record, requestFile, requestJson } from './api';
+import { ApiError, readProjects, record, requestJson } from './api';
 import type { Identity } from './api';
 import { amount, editable, loadLedger, payload, same, sum } from './ledger-api';
 import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 const fields: Field[] = ['month', 'other_expense', 'payment', 'remark'];
+const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
 const labels = { month: '月份', other_expense: '结算', payment: '付款', remark: '备注' };
-const defaultColumn: ColDef<LedgerRow> = { sortable: false, resizable: false, suppressMovable: true, suppressKeyboardEvent: event => event.event.target instanceof HTMLInputElement };
-const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(14px * var(--fscale))',
+const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: false, suppressMovable: true, suppressKeyboardEvent: event => event.event.target instanceof HTMLInputElement };
+const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(12.5px * var(--fscale))',
   backgroundColor: 'var(--sf)', foregroundColor: 'var(--tx)', borderColor: 'var(--bd)',
   headerBackgroundColor: 'var(--sf2)', headerTextColor: 'var(--tx2)', accentColor: 'var(--pri)',
   oddRowBackgroundColor: 'var(--sf)', browserColorScheme: 'inherit', rowHoverColor: 'var(--sf2)',
@@ -68,33 +71,47 @@ function Cell(props: ICellRendererParams<LedgerRow, string, GridContext>) {
     onKeyDown={tab} onCompositionStart={() => { composing.current = true; }}
     onCompositionEnd={event => { composing.current = false; change(event.currentTarget.value); if (document.activeElement !== event.currentTarget) context.actions.current.commit(context.scope, row, field); }} />;
 }
-function DeleteCell({ data: row, context }: ICellRendererParams<LedgerRow, string, GridContext>) {
-  return row?.row_kind === 'manual' && context.actions.current.writable() ? <button className="text-action" disabled={context.actions.current.busy()} title="删除历史行，可撤销" onClick={() => context.actions.current.remove(context.scope, row)}>删除</button> : null;
+function DeleteCell({ data: row, context, node }: ICellRendererParams<LedgerRow, string, GridContext>) {
+  return row?.row_kind === 'manual' && context.actions.current.writable() ? <button className="ledger-delete" disabled={context.actions.current.busy()} title="删除历史行，可撤销" onClick={() => context.actions.current.remove(context.scope, row)}>删除</button> : node.rowPinned ? null : <span className="muted">—</span>;
 }
-function Side({ side, scope, actions, writable, busy }: { side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean }) {
-  const api = useRef<GridApi<LedgerRow> | null>(null);
+function Side({ side, scope, actions, writable, busy, add, focusRecord, focused }: { side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
+  const api = useRef<GridApi<LedgerRow> | null>(null); const root = useRef<HTMLDivElement>(null);
+  const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
   const context = useMemo(() => ({ scope, actions, api }), [scope, actions]);
   useEffect(() => { if (writable) api.current?.refreshCells({ force: true }); }, [writable, busy]);
+  const visible = useMemo(() => side.rows.filter(row => row.row_kind !== 'month' || row.editable || row.other_expense !== '0.00' || row.payment !== '0.00' || row.remark).map((row, index) => ({ ...row, seq: index + 1 })), [side.rows]);
+  const months = visible.filter(row => row.row_kind === 'month'); const latest = months.at(-1);
+  const upto = latest?.month || side.rows.at(-1)?.month || '—';
+  const total = useMemo<LedgerRow[]>(() => side.rows.length ? [{ key: 'total', category: side.category, seq: 0, month: '', month_label: `截至 ${upto}`, row_kind: 'undated', record_id: null, other_expense: sum(side.rows, 'other_expense'), payment: sum(side.rows, 'payment'), debt: sum(side.rows, 'debt'), remark: '当前欠款', token: '', editable: false, counts_in_total: false }] : [], [side, upto]);
   const columns = useMemo<ColDef<LedgerRow>[]>(() => [
-    { field: 'seq', headerName: '序号', width: 70, pinned: 'left' },
-    { field: 'month', headerName: '月份', width: 145, pinned: 'left', cellRenderer: Cell },
-    { field: 'other_expense', headerName: '其他支出金额', width: 185, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'payment', headerName: '付款', width: 175, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'debt', headerName: '欠款', width: 175, valueFormatter: p => typeof p.value === 'string' ? amount(p.value) : '—', cellClass: 'money' },
-    { field: 'remark', headerName: '备注', width: 260, flex: 1, minWidth: 180, cellRenderer: Cell, wrapText: true, autoHeight: true },
-    { colId: 'actions', headerName: '操作', width: 78, cellRenderer: DeleteCell },
-  ], []);
-  const visible = useMemo(() => side.rows.filter(row => row.row_kind !== 'month' || row.other_expense !== '0.00' || row.payment !== '0.00' || row.remark), [side.rows]);
-  const total = useMemo<LedgerRow[]>(() => [{ key: 'total', category: side.category, seq: 0, month: '', month_label: '合计', row_kind: 'undated', record_id: null, other_expense: sum(side.rows, 'other_expense'), payment: sum(side.rows, 'payment'), debt: sum(side.rows, 'debt'), remark: '', token: '', editable: false, counts_in_total: false }], [side]);
-  return <div role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
-    <h2>{side.label}欠款台账</h2>
-    <div className="ledger-grid"><AgGridReact<LedgerRow> theme={gridTheme}
+    { field: 'seq', headerName: '序号', width: 44 * scale, minWidth: 44 * scale, flex: .44, colSpan: p => p.node?.rowPinned ? 2 : 1, cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
+    { field: 'month', headerName: '月份（按单据日期）', width: 143 * scale, minWidth: 130 * scale, flex: 1.43, cellRenderer: Cell },
+    { field: 'other_expense', headerName: side.category === 'mechanical' ? '机械结算金额' : '其他支出金额', minWidth: 100 * scale, flex: 1.52, comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
+    { field: 'payment', headerName: '付款', minWidth: 72 * scale, flex: 1.05, comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
+    { field: 'debt', headerName: '欠款', minWidth: 85 * scale, flex: 1.14, comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span className={p.node?.rowPinned ? '' : Number(p.value) > 0 ? 'debt-positive' : 'muted'}>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
+    { field: 'remark', headerName: '备注', minWidth: 124 * scale, flex: 1.6, cellRenderer: Cell },
+    { colId: 'actions', headerName: '操作', width: 52 * scale, minWidth: 48 * scale, flex: .44, sortable: false, cellRenderer: DeleteCell },
+  ], [side.category, scale, upto]);
+  useEffect(() => {
+    if (!focusRecord || !api.current) return;
+    const node = api.current.getRowNode(`${side.category}:manual:${focusRecord}`);
+    if (node?.rowIndex === null || node?.rowIndex === undefined) return;
+    api.current.ensureIndexVisible(node.rowIndex); api.current.ensureColumnVisible('month');
+    requestAnimationFrame(() => {
+      const input = root.current?.querySelector<HTMLInputElement>(`[row-id="${side.category}:manual:${focusRecord}"] [col-id="month"] input`);
+      if (input) { input.scrollIntoView({ block: 'nearest', inline: 'nearest' }); input.focus({ preventScroll: true }); focused(); }
+    });
+  }, [focusRecord, visible, side.category, focused]);
+  return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
+    <div className="ledger-summary"><h2>{side.label}欠款台账</h2><span className="muted">本项目当前欠款（含历史数据）</span><b>{amount(sum(side.rows, 'debt'))}<small>元</small></b><span className="muted">截至 {upto}</span>{latest && <><span className="muted">· {latest.month} 新增</span><b className={Number(latest.debt) > 0 ? 'debt-positive' : 'muted'}>{amount(latest.debt)}<small>元</small></b></>}{side.category === 'material' && <button aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</button>}</div>
+    <p className="ledger-boundary muted">{side.category === 'material' ? '2025-11及以前可增行、改结算和付款；2025-12起按通知书统计。' : '2025-11及以前可直接填付款；结算取机械费台账。'}</p>
+    <div className="ledger-table-scroll"><div className="ledger-grid" style={{ height: Math.min(360 * scale, (29 + Math.max(visible.length, 1) * 38 + (total.length ? 30 : 0) + 2) * scale) }}><AgGridReact<LedgerRow> theme={gridTheme}
       context={context} columnDefs={columns} rowData={visible} pinnedBottomRowData={total}
       getRowId={params => params.data.key} defaultColDef={defaultColumn}
-      rowHeight={44} headerHeight={40} suppressCellFocus={true} suppressScrollOnNewData={true}
-      overlayNoRowsTemplate="没有台账数据，可在辅材中新增历史行。" animateRows={false}
+      rowHeight={38 * scale} getRowHeight={params => params.node.rowPinned ? 30 * scale : 38 * scale} headerHeight={29 * scale} suppressCellFocus={true} suppressScrollOnNewData={true}
+      overlayNoRowsTemplate="该项目在本口径下暂无数据；换个项目，辅材历史数据可新增行，机械结算取机械费台账。" animateRows={false}
       onGridReady={event => { api.current = event.api; }} onFirstDataRendered={event => { if (visible.length) event.api.ensureIndexVisible(visible.length - 1, 'bottom'); }} />
-    </div>
+    </div></div>
   </div>;
 }
 interface HistoryItem { id: number; label: string; count: number }
@@ -108,12 +125,10 @@ function readHistory(value: unknown): HistoryStatus {
   }
   return { undo: item(value.undo), redo: item(value.redo), notice: typeof value.notice === 'string' ? value.notice : '' };
 }
-function previousMonth() { const now = new Date(); return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7); }
-
-export function LedgerPage({ me, blocked }: { me: Identity | null; blocked: boolean }) {
+export function LedgerPage({ me, blocked, project, setProject, active }: { me: Identity | null; blocked: boolean; active: boolean; project: number; setProject: (project: number) => void }) {
   const client = useQueryClient();
-  const [project, setProject] = useState(0); const [end, setEnd] = useState(previousMonth);
-  const [choosing, setChoosing] = useState(false); const [keyword, setKeyword] = useState('');
+  const end = ''; // The established ledger follows the data's last month; report month belongs to export only.
+  const [focusRecord, setFocusRecord] = useState<number | null>(null);
   const [, render] = useState(0); const [controlBusy, setControlBusy] = useState(false);
   const owner = me ? `${me.id}:${me.account}` : 'anonymous';
   const scope = useMemo<Scope>(() => ({ key: `${owner}:${project}:${end}`, owner, project, end }), [owner, project, end]);
@@ -127,6 +142,8 @@ export function LedgerPage({ me, blocked }: { me: Identity | null; blocked: bool
   useEffect(() => { mounted.current = true; lifetime.current = new AbortController(); return () => { mounted.current = false; lifetime.current?.abort(); }; }, []);
   const projects = useQuery({ queryKey: ['projects', 'all', ''], enabled: !blocked,
     queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
+  const candidates = useMemo(() => projects.data?.filter(item => item.project_type !== 'shell').sort((a, b) => a.ord - b.ord || (a.disp || a.name_full).localeCompare(b.disp || b.name_full, 'zh')) ?? [], [projects.data]);
+  useEffect(() => { if (!blocked && projects.data && !candidates.some(item => item.id === project)) setProject(candidates[0]?.id ?? 0); }, [blocked, projects.data, candidates, project, setProject]);
   const query = useQuery({ queryKey: ['ledger', owner, project, end], enabled: !blocked && project > 0,
     queryFn: ({ signal }) => loadLedger(project, end, signal) });
   const history = useQuery({ queryKey: ['history', owner], enabled: !blocked && Boolean(me),
@@ -191,8 +208,11 @@ export function LedgerPage({ me, blocked }: { me: Identity | null; blocked: bool
         }
         void client.cancelQueries({ queryKey: ['ledger', edit.scope.owner, edit.scope.project] });
         const before = edit.base;
-        const result = await requestJson('/api/m05/history/save', { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload(edit.scope.project, { ...before, [task.field]: task.text })) });
-        if (!record(result) || typeof result.id !== 'number' || !Number.isInteger(result.id)) throw new ApiError('保存结果未确认，请刷新核对后再试。');
+        const remarkOnly = !before.editable && task.field === 'remark';
+        const result = await requestJson(remarkOnly ? '/m05/ledger/remark' : '/api/m05/history/save', { method: 'POST', signal: lifetime.current!.signal,
+          headers: { 'Content-Type': remarkOnly ? 'application/x-www-form-urlencoded' : 'application/json' },
+          body: remarkOnly ? new URLSearchParams({ project_id: String(edit.scope.project), category: before.category, ym: before.month, remark: task.text.trim(), token: before.token }) : JSON.stringify(payload(edit.scope.project, { ...before, [task.field]: task.text })) });
+        if (!record(result) || (!remarkOnly && (typeof result.id !== 'number' || !Number.isInteger(result.id)))) throw new ApiError('保存结果未确认，请刷新核对后再试。');
         if (edit.drafts[task.field]?.version === task.version) delete edit.drafts[task.field];
         edit.locked = true;
         try {
@@ -277,36 +297,34 @@ export function LedgerPage({ me, blocked }: { me: Identity | null; blocked: bool
     const key = event.key.toLowerCase(); const direction = key === 'z' ? event.shiftKey ? 'redo' : 'undo' : key === 'y' ? 'redo' : null;
     if (direction) { event.preventDefault(); void replayRef.current(direction); }
   }; window.addEventListener('keydown', listener); return () => window.removeEventListener('keydown', listener); }, []);
-  const selected = projects.data?.find(item => item.id === project);
+  async function add() {
+    await control(scope, async () => {
+      const result = await requestJson('/api/m05/history/save', { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: project, category: 'material', entry_kind: 'manual', cutoff_ym: '2025-11', settle_amount: '0', paid_amount: '0', remark: '' }) });
+      if (!record(result) || typeof result.id !== 'number') throw new ApiError('新增结果未确认，请刷新核对后再试。');
+      try { await refresh(scope); if (mounted.current && !current.current.blocked && scope.key === current.current.scope.key) setFocusRecord(result.id); message(scope, '已新增历史行，可直接填写。'); }
+      catch { message(scope, '已新增历史行，但页面数据未能刷新。请刷新核对，不必重复新增。'); }
+    });
+  }
   const shown = display?.key === scope.key ? display.data : null;
-  return <section aria-labelledby="ledger-title">
-    <div className="card-head"><h1 id="ledger-title">历史台账</h1><div className="ledger-tools">
-      <button disabled={!me || blocked || controlBusy || !history.data?.undo} title={history.data?.undo?.label ?? '暂无可撤销的操作'} onClick={() => void replay('undo')}>撤销</button>
-      <button disabled={!me || blocked || controlBusy || !history.data?.redo} title={history.data?.redo?.label ?? '暂无可重做的操作'} onClick={() => void replay('redo')}>重做</button>
-      <button disabled={!project || blocked || controlBusy} onClick={() => { if (!me) { void query.refetch(); return; } void control(scope, async () => { await refresh(scope); message(scope, '台账已刷新，未保存输入仍保留。'); }, true); }}>刷新台账</button>
-      <button disabled={!me || !selected?.warehouse_name || !end || blocked || controlBusy} title={!end ? '请选择截止月份后导出' : '导出已保存的同项目、同截止月份台账'} onClick={() => { void control(scope, async () => {
-        const result = await requestFile(`/api/m05/ledger/export?${new URLSearchParams({ projects: selected?.warehouse_name ?? '', ym: end })}`);
-        if (!mounted.current || current.current.blocked || scope.key !== current.current.scope.key) return;
-        const url = URL.createObjectURL(result.blob); const link = document.createElement('a'); link.href = url; link.download = result.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); message(scope, '台账已导出。');
-      }); }}>导出台账</button>
-    </div></div>
-    <div className="filters"><button aria-expanded={choosing} aria-controls="ledger-projects" onClick={() => setChoosing(value => !value)}>选择项目</button><span>{selected?.disp || selected?.name_full || '尚未选择项目'}</span>
-      <label>截止月份<input aria-label="截止月份" type="month" value={end} onChange={event => setEnd(event.target.value)} /></label>
-      <button disabled={!me || !project || blocked || controlBusy} onClick={() => { void control(scope, async () => {
-        const result = await requestJson('/api/m05/history/save', { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: project, category: 'material', entry_kind: 'manual', cutoff_ym: end && end < '2025-11' ? end : '2025-11', settle_amount: '0', paid_amount: '0', remark: '' }) });
-        if (!record(result) || typeof result.id !== 'number') throw new ApiError('新增结果未确认，请刷新核对后再试。');
-        try { await refresh(scope); message(scope, '已新增历史行，请直接填写。'); }
-        catch { message(scope, '已新增历史行，但页面数据未能刷新。请刷新核对，不必重复新增。'); }
-      }); }}>新增历史行</button>
-    </div>
-    {choosing && <div id="ledger-projects" className="project-picker"><label>搜索项目<input value={keyword} onChange={event => setKeyword(event.target.value)} /></label>
-      {projects.isError ? <p role="alert">{projects.error.message}</p> : projects.isPending ? <p role="status">正在读取项目…</p> : projects.data.filter(item => item.project_type !== 'shell' && `${item.name_full}${item.disp}${item.warehouse_name ?? ''}`.includes(keyword.trim())).map(item => <button key={item.id} aria-pressed={item.id === project} onClick={() => { setProject(item.id); setChoosing(false); }}>{item.disp || item.name_full}</button>)}
-    </div>}
-    <div className="ledger-receipts"><p role="status" aria-label="保存回执">{messages.current.get(scope.key) ?? (me ? '离开单元格即保存。' : '未登录，台账只读。')}{[...edits.current.values()].some(edit => edit.scope.key === scope.key && edit.saving) ? ' 正在保存…' : ''}</p>
-      {hasDrafts(scope) && <button onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } message(scope, '已放弃未保存输入。'); changed(); }}>放弃未保存输入</button>}
-      {history.isError && <p role="alert">操作历史未能读取，请刷新重试。</p>}{history.data?.notice && <p>{history.data.notice}</p>}
-    </div>
-    {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}</p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
-    {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked} busy={controlBusy} />)}</div>}
-  </section>;
+  const toolbar = <div className="ledger-tools">
+    <button disabled={!me || blocked || controlBusy || !history.data?.undo} title={history.data?.undo?.label ?? '暂无可撤销的操作'} onClick={() => void replay('undo')}>撤销</button>
+    <button disabled={!me || blocked || controlBusy || !history.data?.redo} title={history.data?.redo?.label ?? '暂无可重做的操作'} onClick={() => void replay('redo')}>重做</button>
+    <button disabled={!project || blocked || controlBusy} onClick={() => { if (!me) { void query.refetch(); return; } void control(scope, async () => { await refresh(scope); message(scope, '台账已刷新；未保存输入仍保留。'); }, true); }}>刷新台账</button>
+    <span role="status" aria-label="保存回执">{messages.current.get(scope.key) ?? (me ? '' : '未登录，台账只读。')}{[...edits.current.values()].some(edit => edit.scope.key === scope.key && edit.saving) ? ' 正在保存…' : ''}</span>
+    {hasDrafts(scope) && <button onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } message(scope, '已放弃未保存输入。'); changed(); }}>放弃未保存输入</button>}
+  </div>;
+  return <>
+    {active && document.getElementById('history-controls') && createPortal(toolbar, document.getElementById('history-controls')!)}
+    <p className="ledger-preview-scope">本批预览：付款流水与欠款统计中的逐月台账；欠款概览、付款统计及流水待405接入，页面整体布局尚待人工确认。</p>
+    <section className="ledger-card" aria-labelledby="ledger-title">
+      <div className="ledger-card-head"><h1 id="ledger-title">逐月欠款台账</h1><LedgerExport projects={candidates} project={project} disabled={!me || blocked || controlBusy} run={action => control(scope, action)} message={text => message(scope, text)} paused={blocked} valid={() => mounted.current && !current.current.blocked && scope.key === current.current.scope.key} signal={lifetime.current?.signal} /></div>
+      <div className="ledger-card-body"><div id="ledger-export-slot" />
+        <div className="ledger-view-project"><span className="muted">看哪个项目（两侧共用）</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked} /></div>
+        <p className="ledger-purpose muted">台账按单据日期归月，为了监控拖了很久的付款：单据日期越早，拖延越久。</p>
+        {projects.isError && <p role="alert">{projects.error.message}</p>}{history.isError && <p role="alert">操作历史未能读取，请刷新重试。</p>}{history.data?.notice && <p>{history.data.notice}</p>}
+        {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}</p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
+        {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
+      </div>
+    </section>
+  </>;
 }

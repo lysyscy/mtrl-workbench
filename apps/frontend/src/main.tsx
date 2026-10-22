@@ -1,6 +1,6 @@
 import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router';
+import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { readIdentity, readProjects, requestJson } from './api';
 import type { Identity } from './api';
@@ -42,6 +42,10 @@ function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; bloc
   // A new account gets a new cache and component tree, including future page drafts/history.
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
   const [logoutError, setLogoutError] = useState('');
+  const [ledgerProject, setLedgerProject] = useState(0);
+  const ledgerActive = useLocation().pathname === '/ledger';
+  const [ledgerVisited, setLedgerVisited] = useState(ledgerActive);
+  useEffect(() => { if (ledgerActive) setLedgerVisited(true); }, [ledgerActive]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     document.documentElement.style.setProperty('--fscale', me?.ui_scale_css ?? '1');
@@ -60,9 +64,9 @@ function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; bloc
   }
   return <QueryClientProvider client={client}><div className="workspace" hidden={blocked} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
-    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink><NavLink to="/ledger">MOD-05 历史台账</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
-    <div className="main"><header><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</header>
-      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/ledger" element={<Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked} /></Suspense>} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes></main>
+    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink><NavLink to="/ledger">MOD-05 付款流水与欠款统计</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
+    <div className="main"><header><div id="history-controls" /><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</header>
+      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/ledger" element={null} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>{(ledgerVisited || ledgerActive) && <div hidden={!ledgerActive} inert={!ledgerActive}><Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked || !ledgerActive} active={ledgerActive} project={ledgerProject} setProject={setLedgerProject} /></Suspense></div>}</main>
     </div>
   </div></QueryClientProvider>;
 }

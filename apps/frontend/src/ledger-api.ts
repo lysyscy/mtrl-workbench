@@ -46,7 +46,7 @@ export function payload(project: number, row: LedgerRow) {
     settle_amount: row.other_expense, paid_amount: row.payment, remark: row.remark, token: row.token };
 }
 export function editable(row: LedgerRow, field: Field): boolean {
-  return row.editable && (field !== 'month' || row.row_kind === 'manual') && (field !== 'other_expense' || row.category === 'material');
+  return Boolean(row.token) && (field === 'remark' || row.editable) && (field !== 'month' || row.row_kind === 'manual') && (field !== 'other_expense' || row.category === 'material');
 }
 export function amount(value: string): string { return value.replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 export function sum(rows: LedgerRow[], field: 'other_expense' | 'payment' | 'debt'): string {
