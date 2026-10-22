@@ -215,9 +215,7 @@
 
 **旧版及正式授权门。** 用户要求旧前端放着不管：不改其通用页、导航、脚本，不给退役入口补兼容实现；后端清理落地后旧入口可能失效，交付时明确报告。这不授权部署、重启正式服务、执行423切换或424整套旧前端退役；423/424原有授权门保持。最后清理不依赖先删除整套旧前端，以免误扩大范围。
 
-**登记基线。** docs/requirements.md、验收README及.env.example共同指定PRD_ACCEPTANCE_BASELINE=docs/requirements/PRD/验收/验收基线.json；不是规划提交号。当前59个cases，工作副本与Git的JSON内容一致。原工具只从根.env读取，故在单次命令内独占创建仅含该公开路径的配置，finally校验内容后删除；未改全局环境或复制真实.env。
-
-**登记状态（待补齐，不是已建票）。** 清理拟用425，阶段使用受控值“随时”，最后工程批顺序写入前置。补齐基线后按原_tail_open.py正式重试，末次审计仅剩既有T3红项：docs/guides/operations.md:80引用的ops/nssm/nssm.exe在worktree缺失，原仓D:/dev/mtrl-workbench中实际存在。工具退出1并逐字节回滚，425文件仍不存在；临时配置已清除。未改检查器、未安装/复制运行工具、未手写索引；末尾范围由本节持有，待父任务处理缺件边界后沿原票仓创建，不把拟编号当已建票。
+**登记与本机资源。** [TAIL-425](../tails/issues/TAIL-425-通用导入后端退役清理.md)已由原_tail_open.py正式创建、审计必须修0，仍为ready-for-agent，仅依赖422；其后补清理差异验证/累计审查，423再守独立切换授权。登记使用docs/requirements.md、验收README及.env.example指定的PRD_ACCEPTANCE_BASELINE=docs/requirements/PRD/验收/验收基线.json；命令内独占临时配置已清除。按父任务明确授权，从原仓复制缺失NSSM到本worktree同相对位置，源/目标哈希一致，详情回425 Comments。该ignored工具是worktree必要资源，随整个worktree收尾管理，不是本次随机临时产物；未执行、安装或改服务，不提交工具及gitignore。
 
 ### 已批准票索引与执行接续
 
@@ -251,8 +249,9 @@
 | 24 | [TAIL-420 · 用户与个人设置](../tails/issues/TAIL-420-用户与个人设置.md) | TAIL-399 |
 | 25 | [TAIL-421 · 首页待办与跨模块导航](../tails/issues/TAIL-421-首页待办与跨模块导航.md) | TAIL-402、TAIL-416 |
 | 26 | [TAIL-422 · 累计集成验收与切换准备](../tails/issues/TAIL-422-累计集成验收与切换准备.md) | TAIL-397、TAIL-398、TAIL-399、TAIL-400、TAIL-401、TAIL-402、TAIL-403、TAIL-404、TAIL-405、TAIL-406、TAIL-407、TAIL-408、TAIL-409、TAIL-410、TAIL-412、TAIL-413、TAIL-414、TAIL-415、TAIL-416、TAIL-417、TAIL-418、TAIL-419、TAIL-420、TAIL-421 |
-| 27 | [TAIL-423 · 正式入口切换与运行核验](../tails/issues/TAIL-423-正式入口切换与运行核验.md) | TAIL-422；另获正式切换授权 |
+| 27 | [TAIL-423 · 正式入口切换与运行核验](../tails/issues/TAIL-423-正式入口切换与运行核验.md) | TAIL-422、TAIL-425；另获正式切换授权 |
 | 28 | [TAIL-424 · 旧前端退役与清理](../tails/issues/TAIL-424-旧前端退役与清理.md) | TAIL-423；日常使用确认及另获退役授权 |
+| 末尾工程批 | [TAIL-425 · 通用导入后端退役清理](../tails/issues/TAIL-425-通用导入后端退役清理.md) | TAIL-422；正式切换前完成，不依赖先删除整套旧前端 |
 
 **累计范围。** 代码调查固定点仍为33a9bb4e7a11c3faed9ead9fa514537812627baa。建票前仅本规格目录未跟踪，无其他已修改文件；本规格和本次28票/索引属于本effort。实际启动时复核并记录其他并行改动及分支/worktree，保留原基点，不静默重置累计审查范围。
 
