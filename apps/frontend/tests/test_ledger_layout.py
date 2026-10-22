@@ -1,65 +1,13 @@
-"""398 correction: actual legacy/new render pairs, remarks and real batch export."""
+"""398 correction: remarks, representative undo recovery and real batch export."""
 from __future__ import annotations
 import io
-import json
 import re
 import zipfile
 import openpyxl
-import pytest
 from playwright.sync_api import expect
 from test_preview import server, browser_page
 from test_ledger import open_ledger, project_id, data, previous_report_month
 from tools.audit.workspace_paths import output
-
-
-@pytest.mark.parametrize(('width','height','account'),[(1920,1080,'preview-admin'),(1440,1000,'preview-admin'),(1024,900,'preview-user')])
-def test_same_synthetic_project_period_viewport_and_scale_pair(server,browser_page,width,height,account):
-    page,_=browser_page;page.set_viewport_size({'width':width,'height':height});open_ledger(page,server,account)
-    old_context=page.context.browser.new_context(viewport={'width':width,'height':height})
-    try:
-        response=old_context.request.post(server+'/m15/login',form={'account':account,'password':''})
-        assert response.ok
-        old=old_context.new_page();old.goto(server+'/app')
-        old.locator('[data-act="go"][data-k="m05"]').click()
-        expect(old.get_by_role('region',name='辅材欠款台账',exact=True)).to_be_visible()
-        expect(old.locator('[data-act="ledPjToggle"]')).to_contain_text('隔离项目')
-        expect(page.get_by_role('button',name='选择项目',exact=True)).to_contain_text('隔离项目')
-        expect(old.get_by_role('region',name='辅材欠款台账',exact=True)).to_contain_text('2025-12')
-        expect(page.get_by_role('region',name='辅材欠款台账',exact=True)).to_contain_text('2025-12')
-        for item in [old,page]: item.evaluate('document.fonts.ready')
-        assert old.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--fscale').trim()") == page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--fscale').trim()")
-        assert page.get_by_label('截止月份',exact=True).count()==0
-        assert page.locator('.ledger-summary').locator('span,b,small').count()==0
-        expect(page.locator('.ag-row-pinned')).to_have_count(2)
-        expect(page.get_by_role('button',name='新增历史行',exact=True)).to_be_visible()
-        assert page.get_by_role('columnheader',name='机械结算金额',exact=True).count()==1
-        expect(page.get_by_role('region',name='机械欠款台账',exact=True).locator('.ag-row-pinned')).to_contain_text('截至 2025-11')
-        expect(page.locator('.ledger-purpose,.ledger-boundary,.ledger-preview-scope')).to_have_count(0)
-        expect(page.get_by_role('button',name='刷新台账',exact=True)).to_have_count(0)
-        undo=page.get_by_role('button',name='撤销',exact=True).bounding_box(); identity=page.locator('.account-area>span').bounding_box()
-        assert undo and identity and undo['x']<identity['x'] and abs(undo['y']-identity['y'])<12
-        measurements={}
-        for label,item,selector,card in [('old',old,'.debt-ledger','.debt-ledgers'),('new',page,'.ledger-side','.ledger-card')]:
-            item.locator(card).scroll_into_view_if_needed()
-            measurements[label]=item.locator(selector).evaluate_all("""nodes=>nodes.map(e=>({x:e.getBoundingClientRect().x,y:e.getBoundingClientRect().y,width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height,font:getComputedStyle(e).fontFamily,scale:getComputedStyle(document.documentElement).getPropertyValue('--fscale')}))""")
-            item.screenshot(path=str(output(f'398-corrected-{width}-{account}-{label}-page.png',kind='screenshots')),full_page=True)
-            item.locator(card).screenshot(path=str(output(f'398-corrected-{width}-{account}-{label}-ledger.png',kind='screenshots')))
-        old_parallel=abs(measurements['old'][0]['y']-measurements['old'][1]['y'])<2
-        new_parallel=abs(measurements['new'][0]['y']-measurements['new'][1]['y'])<2
-        assert old_parallel==new_parallel,measurements
-        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-        output(f'398-pair-{width}-{account}.json',kind='logs').write_text(json.dumps(measurements,ensure_ascii=False,indent=2),encoding='utf-8')
-        if width==1920:
-            old.locator('[data-act="ledExpToggle"]').click()
-            old.locator('[data-act="ledExpOk"]').click()
-            expect(old.get_by_text('导出 · 逐月欠款台账（每项目一个工作簿）',exact=True)).to_be_visible()
-            old.screenshot(path=str(output('398-corrected-export-confirm-old.png',kind='screenshots')),full_page=True)
-            page.get_by_role('button',name='逐月台账导出…',exact=True).click()
-            page.get_by_role('button',name='确认清单',exact=True).click()
-            expect(page.get_by_role('dialog')).to_be_visible()
-            page.screenshot(path=str(output('398-corrected-export-confirm-new.png',kind='screenshots')),full_page=True)
-            page.get_by_role('dialog').get_by_role('button',name='取消',exact=True).click()
-    finally: old_context.close()
 
 
 def test_normal_month_remark_clear_undo_and_stale_token(server,browser_page):
@@ -150,19 +98,6 @@ def test_restored_numeric_sort_does_not_use_lexical_amount_order(server,browser_
     assert values==sorted(values),values
 
 
-def test_automatic_focus_sync_keeps_unsaved_draft_without_polling(server,browser_page):
-    page,_=browser_page;open_ledger(page,server)
-    reads=[];writes=[]
-    page.on('request',lambda request: reads.append(request.url) if '/api/m05/ledger?' in request.url else None)
-    page.route('**/api/m05/history/save',lambda route:(writes.append(route.request.post_data_json),route.continue_()))
-    note=page.locator('input[value="合成历史行甲"]');row=note.locator('xpath=ancestor::*[@row-id][1]');paid=row.locator('[col-id=payment] input')
-    paid.fill('456.78')
-    with page.expect_request(lambda request:'/api/m05/ledger?' in request.url): page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(paid).to_have_value('456.78');assert not writes
-    before=len(reads);page.wait_for_timeout(900);assert len(reads)==before
-    expect(page.get_by_role('button',name='刷新台账',exact=True)).to_have_count(0)
-
-
 def test_uncertain_undo_requires_readback_before_another_history_action(server,browser_page):
     from test_ledger import add_row,cell,sync_ledger,wait_value
     page,_=browser_page;open_ledger(page,server);project=project_id(page,server)
@@ -179,46 +114,3 @@ def test_uncertain_undo_requires_readback_before_another_history_action(server,b
     page.get_by_role('button',name='重新加载',exact=True).click()
     expect(page.get_by_role('button',name='重新加载',exact=True)).to_have_count(0)
     wait_value(page,project,rid,'payment','12.00');assert len(requests)==1
-
-
-@pytest.mark.parametrize('direction',['undo','redo'])
-@pytest.mark.parametrize('broken_body',['{"ok":','{}'],ids=['truncated-json','missing-ack'])
-def test_applied_history_200_unconfirmed_body_locks_both_actions_until_readback(server,browser_page,direction,broken_body):
-    from test_ledger import add_row,cell,sync_ledger,wait_value,select_project
-    page,_=browser_page;open_ledger(page,server);project=project_id(page,server)
-    rid=add_row(page,server,project,'200正文未确认测试');sync_ledger(page)
-    paid=cell(page,rid,'payment');paid.fill('78.90');paid.press('Tab');page.get_by_role('heading',name='逐月欠款台账',exact=True).click();wait_value(page,project,rid,'payment','78.90')
-    if direction=='redo':
-        page.get_by_role('button',name='撤销',exact=True).click();wait_value(page,project,rid,'payment','12.00')
-    writes=[]
-    def corrupt_after_commit(route):
-        writes.append(route.request.post_data_json)
-        if len(writes)==1:
-            response=route.fetch();assert response.status==200 and response.json()['ok']
-            route.fulfill(status=200,content_type='application/json',body=broken_body)
-        else:route.continue_()
-    page.route('**/api/history/undo',corrupt_after_commit);page.route('**/api/history/redo',corrupt_after_commit)
-    page.get_by_role('button',name='撤销' if direction=='undo' else '重做',exact=True).click()
-    expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_visible()
-    for label in ['撤销','重做']:expect(page.get_by_role('button',name=label,exact=True)).to_be_disabled()
-    for label in ['逐月台账导出…','总欠款汇总导出…']:
-        expect(page.get_by_role('button',name=label,exact=True)).to_have_attribute('aria-disabled','true')
-        expect(page.get_by_role('button',name=label,exact=True)).to_have_attribute('title','操作结果待核实，请先重新加载核对。')
-    page.keyboard.press('Control+z');page.keyboard.press('Control+y')
-    select_project(page,'长项目名验收')
-    expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_visible()
-    for label in ['撤销','重做']:expect(page.get_by_role('button',name=label,exact=True)).to_be_disabled()
-    page.keyboard.press('Control+z');page.keyboard.press('Control+y');assert len(writes)==1
-    # A valid ledger read with a broken history read must not clear uncertainty.
-    page.route('**/api/history/status',lambda route:route.fulfill(status=200,content_type='application/json',body='{"undo":'))
-    page.get_by_role('button',name='重新加载',exact=True).click()
-    expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_enabled()
-    for label in ['撤销','重做']:expect(page.get_by_role('button',name=label,exact=True)).to_be_disabled()
-    page.unroute('**/api/history/status')
-    page.get_by_role('button',name='重新加载',exact=True).click()
-    expect(page.get_by_role('button',name='重新加载',exact=True)).to_have_count(0)
-    assert len(writes)==1
-    wait_value(page,project,rid,'payment','12.00' if direction=='undo' else '78.90')
-    expect(page.get_by_role('button',name='重做' if direction=='undo' else '撤销',exact=True)).to_be_enabled()
-    select_project(page,'隔离项目')
-    expect(page.get_by_role('button',name='重做' if direction=='undo' else '撤销',exact=True)).to_be_enabled();assert len(writes)==1

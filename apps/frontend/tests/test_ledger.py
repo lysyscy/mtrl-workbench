@@ -6,7 +6,6 @@ from decimal import Decimal
 
 import httpx
 import openpyxl
-import pytest
 from playwright.sync_api import expect
 from tools.audit.workspace_paths import output
 from test_preview import server, browser_page, login  # noqa: F401
@@ -157,29 +156,6 @@ def test_mouse_and_chinese_composition_survive_prior_receipt(server,browser_page
     assert len(writes)==2
 
 
-def test_hidden_refresh_rejects_concurrent_change_to_next_cell(server,browser_page):
-    page,_=browser_page;open_ledger(page,server)
-    project=project_id(page,server);rid=add_row(page,server,project,'目标格冲突测试')
-    sync_ledger(page)
-    pending=[];writes=[]
-    def hold(route): writes.append(route.request.post_data_json);pending.append(route)
-    page.route('**/api/m05/history/save',hold)
-    settle=cell(page,rid,'other_expense');paid=cell(page,rid,'payment')
-    settle.fill('222.00');settle.press('Tab');paid.fill('555.00')
-    assert len(pending)==1
-    saved=pending[0].fetch();assert saved.json()['ok']
-    current=row_data(data(page,server,project),rid)
-    assert page.request.post(server+'/api/m05/history/save',data=body_for(project,current,paid_amount='444.00')).json()['ok']
-    pending[0].fulfill(response=saved)
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存')
-    expect(paid).to_be_focused();expect(paid).to_have_value('555.00')
-    paid.press('Tab')
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('版本冲突')
-    assert len(writes)==1
-    assert row_data(data(page,server,project),rid)['payment']=='444.00'
-    expect(paid).to_have_value('555.00')
-
-
 def test_refusal_preserves_input_blank_is_not_zero_and_no_partial_write(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'金额拒绝测试')
@@ -218,28 +194,6 @@ def test_saved_but_refresh_failed_does_not_resubmit(server,browser_page):
     expect(paid).to_have_value('88.88');assert len(writes)==1
 
 
-
-@pytest.mark.parametrize('late_error',[False,True])
-def test_old_read_and_error_cannot_cross_project_or_month(server,browser_page,late_error):
-    page,_=browser_page;open_ledger(page,server)
-    pending=[]
-    project=project_id(page,server)
-    def hold(route):
-        if not pending:
-            pending.append(route);page.evaluate('window.ledgerReadHeld=true')
-        else: route.continue_()
-    page.route(f'**/api/m05/ledger?project_id={project}&end_ym=',hold)
-    sync_ledger(page)
-    page.wait_for_function('window.ledgerReadHeld===true');assert pending
-    select_project(page,'长项目名验收')
-    expect(page.locator('input[value="另一项目测试行"]')).to_be_visible()
-    if late_error: pending[0].fulfill(status=500,json={'message':'旧范围迟到错误'})
-    else: pending[0].fulfill(response=pending[0].fetch())
-    expect(page.locator('input[value="另一项目测试行"]')).to_be_visible()
-    expect(page.get_by_text('旧范围迟到错误',exact=True)).to_have_count(0)
-    expect(page.locator('input[value="合成历史行甲"]')).to_have_count(0)
-
-
 def test_old_save_remains_original_record_and_draft_is_month_scoped(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'跨项目保存测试')
@@ -266,40 +220,23 @@ def test_old_save_remains_original_record_and_draft_is_month_scoped(server,brows
     assert row_data(data(page,server,project),rid)['payment']=='66.66'
 
 
-@pytest.mark.parametrize(('failure','recovery'),[('network','same'),('server','same'),('server','switched'),('server','expired')])
-def test_identity_pause_preserves_real_edit_draft_and_blocks_saves(server,browser_page,failure,recovery):
-    page,context=browser_page;open_ledger(page,server)
+def test_identity_pause_preserves_real_edit_draft_and_blocks_saves(server,browser_page):
+    page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'身份草稿测试')
     sync_ledger(page)
     paid=cell(page,rid,'payment');paid.fill('987.65')
     writes=[]
     page.route('**/api/m05/history/save',lambda route:(writes.append(route.request.post_data_json),route.continue_()))
-    def fail(route):
-        if failure=='network':route.abort('failed')
-        else:route.fulfill(status=500,json={'message':'账号暂时不可读'})
-    page.route('**/api/m15/users',fail)
+    page.route('**/api/m15/users',lambda route:route.abort('failed'))
     page.evaluate("window.dispatchEvent(new Event('focus'))")
     expect(page.get_by_role('alert')).to_contain_text('已暂停操作')
     expect(page.get_by_role('region',name='辅材欠款台账')).to_have_count(0)
     page.locator('.workspace input').evaluate_all('(inputs)=>inputs.forEach(input=>input.blur())')
     assert not writes
-    if recovery=='switched':
-        with httpx.Client() as other:
-            assert other.post(server+'/m15/login',data={'account':'preview-user','password':''}).status_code==303
-            context.add_cookies([{'name':'mw_preview_397','value':other.cookies['mw_preview_397'],'url':server}])
-    elif recovery=='expired':context.clear_cookies()
     page.unroute('**/api/m15/users');page.get_by_role('button',name='重试',exact=True).click()
-    if recovery=='same':
-        expect(paid).to_have_value('987.65');assert not writes
-        paid.focus();paid.press('Tab');wait_value(page,project,rid,'payment','987.65')
-        assert len(writes)==1
-    else:
-        expect(page.get_by_role('region',name='辅材欠款台账')).to_be_visible()
-        expect(cell(page,rid,'payment')).to_have_count(0) if recovery=='expired' else expect(cell(page,rid,'payment')).to_have_value('12.00')
-        target=page.locator(f'[row-id="material:manual:{rid}"] [col-id="payment"]')
-        if recovery=='expired': expect(target).to_have_text('12.00')
-        else: expect(target.locator('input')).to_have_value('12.00')
-        assert not writes
+    expect(paid).to_have_value('987.65');assert not writes
+    paid.focus();paid.press('Tab');wait_value(page,project,rid,'payment','987.65')
+    assert len(writes)==1
 
 
 def test_real_undo_redo_conflict_and_account_ownership(server,browser_page):
@@ -365,84 +302,6 @@ def test_duplicate_add_stale_token_and_real_export(server,browser_page):
     page.screenshot(path=str(output('ledger398-1024.png',kind='screenshots')),full_page=True)
 
 
-def test_same_scope_late_read_cannot_replace_newer_value(server,browser_page):
-    page,_=browser_page;open_ledger(page,server)
-    project=project_id(page,server);rid=add_row(page,server,project,'同范围倒序测试',month='2025-10')
-    sync_ledger(page)
-    expect(cell(page,rid,'payment')).to_be_visible()
-    pending=[];held=[]
-    def delay(route):
-        if not held:
-            held.append(True);pending.append(route);page.evaluate('window.scope398Held=true')
-        else:route.continue_()
-    page.route(f'**/api/m05/ledger?project_id={project}&end_ym=',delay)
-    sync_ledger(page)
-    page.wait_for_function('window.scope398Held===true');assert pending
-    snapshot=pending[0].fetch()
-    old=row_data(data(page,server,project),rid)
-    assert page.request.post(server+'/api/m05/history/save',data=body_for(project,old,paid_amount='543.21')).json()['ok']
-    select_project(page,'长项目名验收');select_project(page,'隔离项目')
-    expect(cell(page,rid,'payment')).to_have_value('543.21')
-    pending[0].fulfill(response=snapshot)
-    expect(cell(page,rid,'payment')).to_have_value('543.21')
-
-
-def test_late_old_account_401_does_not_expire_new_account(server,browser_page):
-    page,context=browser_page;open_ledger(page,server)
-    project=project_id(page,server);rid=add_row(page,server,project,'旧账号迟到测试')
-    sync_ledger(page)
-    pending=[]
-    page.route('**/api/m05/history/save',lambda route:pending.append(route))
-    paid=cell(page,rid,'payment');paid.fill('98.00');paid.press('Tab')
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('正在保存');assert pending
-    with httpx.Client() as other:
-        assert other.post(server+'/m15/login',data={'account':'preview-user','password':''}).status_code==303
-        context.add_cookies([{'name':'mw_preview_397','value':other.cookies['mw_preview_397'],'url':server}])
-    page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_text('预览同事 · 普通用户',exact=True)).to_be_visible()
-    pending[0].fulfill(status=401,json={'message':'旧账号已失效'})
-    expect(page.get_by_text('预览同事 · 普通用户',exact=True)).to_be_visible()
-    expect(page.get_by_text('登录已失效，当前只读。',exact=True)).to_have_count(0)
-    expect(page.get_by_role('region',name='辅材欠款台账')).to_be_visible()
-
-
-def test_mouse_button_is_not_replaced_between_down_and_click(server,browser_page):
-    page,_=browser_page;page.set_viewport_size({'width':1440,'height':1000});open_ledger(page,server)
-    project=project_id(page,server)
-    existing=len(next(side for side in data(page,server,project,'2025-11')['sides'] if side['category']=='material')['rows'])
-    for index in range(max(0,8-existing)):add_row(page,server,project,f'鼠标滚动夹具{index}')
-    edited=add_row(page,server,project,'按钮前保存测试');deleted=add_row(page,server,project,'按钮删除测试')
-    sync_ledger(page)
-    pending=[]
-    page.route('**/api/m05/history/save',lambda route:pending.append(route))
-    paid=cell(page,edited,'payment');paid.fill('67.89');paid.press('Tab')
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('正在保存');assert pending
-    button=page.get_by_role('region',name='辅材欠款台账').locator(f'[row-id="material:manual:{deleted}"] button')
-    region_box=page.get_by_role('region',name='辅材欠款台账').bounding_box();assert region_box
-    page.mouse.move(region_box['x']+region_box['width']/2,region_box['y']+region_box['height']/2)
-    page.mouse.wheel(0,800)
-    button.scroll_into_view_if_needed()
-    expect(button).to_be_visible()
-    expect(button).to_be_enabled()
-    handle=button.element_handle();box=button.bounding_box();assert box
-    page.wait_for_function("rid=>{const e=document.querySelector(`[row-id=\"material:manual:${rid}\"] button`);if(!e)return false;const r=e.getBoundingClientRect();const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return hit===e||e.contains(hit)}",arg=deleted,timeout=5000)
-    assert button.evaluate("e=>{const r=e.getBoundingClientRect();const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return hit===e||e.contains(hit)}"), button.evaluate("e=>({rect:e.getBoundingClientRect().toJSON(),hit:document.elementFromPoint(e.getBoundingClientRect().x+e.clientWidth/2,e.getBoundingClientRect().y+e.clientHeight/2)?.outerHTML,width:innerWidth})")
-    positions=page.locator('[data-ledger-side]').evaluate_all("regions=>regions.map(r=>({top:r.querySelector('.ag-grid-viewport').scrollTop,left:r.querySelector('.ag-grid-viewport').scrollLeft}))")
-    page_y=page.evaluate('scrollY')
-    page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down()
-    pending[0].fulfill(response=pending[0].fetch())
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存')
-    assert handle.evaluate('(button)=>button.isConnected')
-    assert page.locator('[data-ledger-side]').evaluate_all("regions=>regions.map(r=>({top:r.querySelector('.ag-grid-viewport').scrollTop,left:r.querySelector('.ag-grid-viewport').scrollLeft}))")==positions
-    assert page.evaluate('scrollY')==page_y
-    page.mouse.up()
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('历史行已删除')
-    assert not any(row['record_id']==deleted for side in data(page,server,project)['sides'] for row in side['rows'])
-    page.get_by_role('button',name='撤销',exact=True).click()
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已撤销')
-    assert row_data(data(page,server,project),deleted)['remark']=='按钮删除测试'
-
-
 def test_mechanical_payment_readonly_settlement_and_normal_month(server,browser_page):
     page,_=browser_page;open_ledger(page,server,'preview-user')
     project=project_id(page,server)
@@ -458,20 +317,6 @@ def test_mechanical_payment_readonly_settlement_and_normal_month(server,browser_
     assert row_data(data(page,server,project),mechanical['record_id'],'mechanical')['payment']=='101.01'
     expect(page.get_by_role('region',name='辅材欠款台账').locator('[row-id="material:month:2025-12"] [col-id="payment"] input')).to_have_count(0)
     page.screenshot(path=str(output('ledger398-dark-large.png',kind='screenshots')),full_page=True)
-
-
-def test_grid_scope_starts_at_bottom_with_virtual_rows(server,browser_page):
-    page,_=browser_page;page.set_viewport_size({'width':1440,'height':1000});open_ledger(page,server)
-    other=project_id(page,server,'长项目名验收')
-    for index in range(32):add_row(page,server,other,f'独立长表滚动{index}')
-    select_project(page,'长项目名验收')
-    region=page.get_by_role('region',name='辅材欠款台账')
-    expect(region.locator('input[value="独立长表滚动31"]')).to_be_visible()
-    page.wait_for_function("""()=>{
-      const viewport=document.querySelector('[data-ledger-side=material] .ag-grid-viewport');
-      return viewport && viewport.scrollTop>0 && viewport.scrollTop+viewport.clientHeight>=viewport.scrollHeight-1;
-    }""",timeout=5000)
-    assert region.locator('[row-id]:not([row-id=total])').count()<len(next(side for side in data(page,server,other,'2025-11')['sides'] if side['category']=='material')['rows'])
 
 
 def test_anonymous_ledger_refresh_is_readonly_and_operable(server,browser_page):

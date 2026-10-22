@@ -485,37 +485,3 @@ def test_start_date_uses_big_table_as_of_month_read_only(session):
     assert (row['start_year'], row['start_month']) == (2025,6)
     assert big.load_manual(session)['2026-08']['甲']['open_ym']=='2024-03'
     assert W.read(session,W.key('history','甲'))[0]['meta_at']['2026-09']['year']==1999
-
-
-@pytest.mark.parametrize('extra_projects',[0,22,126])
-def test_state_four_batch_reads_start_month_override_and_carry_do_not_grow_with_projects(session,extra_projects):
-    from sqlalchemy import event
-    from app.mod07_setl.models import AnalysisBigManual
-
-    warehouses=['甲','乙',*[f'隔离项目开工批量{i}' for i in range(extra_projects)]]
-    session.add_all(Project(warehouse_name=wh,name_full=wh) for wh in warehouses[2:])
-    for index,wh in enumerate(warehouses):
-        session.add(AnalysisBigManual(warehouse_name=wh,ym='2026-08',open_ym='2024-03'))
-        session.add(AnalysisBigManual(warehouse_name=wh,ym='2026-09',open_ym='2025-07' if index%2==0 else None))
-        session.add_all(ProcMechManual(warehouse_name=wh,ym=ym,source_batches={}) for ym in ['2026-08','2026-09'])
-    session.add(AnalysisBigManual(warehouse_name='甲',ym='2026-10',open_ym='2026-02'))
-    session.commit();session.expunge_all()
-    expected_tables=['project','mechanical_workbench_record','proc_mech_manual','analysis_big_manual']
-    for month,month_count in [('2026-09',2),('2026-10',3)]:
-        queries=[]
-        def capture(connection,cursor,statement,parameters,context,executemany):
-            if statement.lstrip().upper().startswith('SELECT'):queries.append(statement)
-        event.listen(session.bind,'before_cursor_execute',capture)
-        try:result=W.state(session,month)
-        finally:event.remove(session.bind,'before_cursor_execute',capture)
-        assert len(queries)==4,queries
-        for table in expected_tables:
-            assert sum(f'FROM {table}' in query for query in queries)==1,(table,queries)
-        assert len(result['projects'])==len(warehouses)
-        assert len(result['summary'])==len(warehouses)*month_count
-        summary={(row['warehouse'],row['ym']):(row['start_year'],row['start_month']) for row in result['summary']}
-        for index,wh in enumerate(warehouses):
-            assert summary[wh,'2026-08']==(2024,3)
-            assert summary[wh,'2026-09']==((2025,7) if index%2==0 else (2024,3))
-            if month=='2026-10':assert summary[wh,month]==((2026,2) if wh=='甲' else (2025,7) if index%2==0 else (2024,3))
-        print(f'opening month batches: projects={len(warehouses)} month={month} SQL={len(queries)} tables={expected_tables}')

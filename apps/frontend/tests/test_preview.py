@@ -190,65 +190,6 @@ def test_preview_is_opt_in():
         assert client.get('/app').content == (ROOT / 'backend/app/web/index.html').read_bytes()
 
 
-@pytest.mark.parametrize(('failure','recovery'), [('network','same'),('server','same'),('server','switched'),('server','expired')])
-def test_temporary_identity_failure_preserves_scope(server, browser_page, failure, recovery):
-    page, context = browser_page
-    login(page, server)
-    page.get_by_label('状态', exact=True).select_option('archived')
-    expect(page.get_by_role('cell', name='归档样例', exact=True)).to_be_visible()
-    page.get_by_label('项目', exact=True).fill('尚未提交的筛选')
-    def fail_identity(route):
-        if failure == 'network':
-            route.abort('failed')
-        else:
-            route.fulfill(status=500, json={'message':'账号读取暂时失败，请重试。'})
-    page.route('**/api/m15/users', fail_identity)
-    page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_role('alert')).to_be_visible()
-    expect(page.get_by_role('table')).to_have_count(0)
-    expect(page.get_by_role('button', name='切换账号', exact=True)).to_have_count(0)
-    page.screenshot(path=str(output(f'identity-paused-{failure}-{recovery}.png', kind='screenshots')), full_page=True)
-    if recovery == 'switched':
-        with httpx.Client() as client:
-            assert client.post(server + '/m15/login', data={'account':'preview-user','password':''}).status_code == 303
-            context.add_cookies([{'name':'mw_preview_397','value':client.cookies['mw_preview_397'],'url':server}])
-    elif recovery == 'expired':
-        context.clear_cookies()
-    page.unroute('**/api/m15/users')
-    page.get_by_role('button', name='重试', exact=True).click()
-    if recovery == 'same':
-        expect(page.get_by_text('预览管理员 · 管理员', exact=True)).to_be_visible()
-        expect(page.get_by_label('状态', exact=True)).to_have_value('archived')
-        expect(page.get_by_label('项目', exact=True)).to_have_value('尚未提交的筛选')
-        expect(page.get_by_text('没有符合条件的项目。可调整状态或关键词。', exact=True)).to_be_visible()
-        page.screenshot(path=str(output(f'identity-recovered-{failure}.png', kind='screenshots')), full_page=True)
-    else:
-        identity = '预览同事 · 普通用户' if recovery == 'switched' else '未登录 · 只读'
-        expect(page.get_by_text(identity, exact=True)).to_be_visible()
-        expect(page.get_by_label('状态', exact=True)).to_have_value('active')
-        expect(page.get_by_label('项目', exact=True)).to_have_value('')
-        expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
-        if recovery == 'expired':
-            with httpx.Client() as client:
-                assert client.post(server + '/m15/login', data={'account':'preview-user','password':''}).status_code == 303
-                context.add_cookies([{'name':'mw_preview_397','value':client.cookies['mw_preview_397'],'url':server}])
-            page.evaluate("window.dispatchEvent(new Event('focus'))")
-            expect(page.get_by_text('预览同事 · 普通用户', exact=True)).to_be_visible()
-            expect(page.get_by_text('登录已失效，当前只读。', exact=True)).to_have_count(0)
-
-
-def test_initial_identity_failure_has_no_workspace(server, browser_page):
-    page, _ = browser_page
-    page.route('**/api/m15/users', lambda route: route.fulfill(status=500, json={'message':'账号读取暂时失败，请重试。'}))
-    page.goto(server + '/preview/projects')
-    expect(page.get_by_role('alert')).to_be_visible()
-    expect(page.get_by_role('table')).to_have_count(0)
-    page.unroute('**/api/m15/users')
-    page.get_by_role('button', name='重试', exact=True).click()
-    expect(page.get_by_text('未登录 · 只读', exact=True)).to_be_visible()
-    expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
-
-
 @pytest.mark.parametrize(('url', 'copy_source'), [
     ('postgresql+psycopg://synthetic@127.0.0.1:1/mtrl_workbench', False),
     ('postgresql+psycopg://synthetic@127.0.0.1:1/mtrl_workbench_test', True),

@@ -6,7 +6,7 @@
 
 首次使用个人方法时，读 `docs/agents/workflow.md` §一定位实际来源和本次需要的资源，按当前授权区分只读与维护；不因新会话自动同步。复盘个人方法或获准维护个人包时使用所列 improve-workflow。运行中任务沿用固定规则与授权基线。
 
-实施、核验、保存或按票接续时，读 `docs/agents/workflow.md`：§一是输入和个人 execution 参考，§二是提交推送，§四是验证接线，§五是既有采用与接续限制。跨批统筹仅在明确采用时读取 coordination，创建子代理前读取 delegation；实际参考定位回该页 §一。
+实施开工先读 `docs/agents/workflow.md` §三的项目规模与测试取舍（唯一正文）；核验、保存或按票接续也读该页：§一是输入和个人 execution 参考，§二是提交推送，§四是验证接线，§五是既有采用与接续限制。跨批统筹仅在明确采用时读取 coordination，创建子代理前读取 delegation；实际参考定位回该页 §一。
 
 生成或修改文档时，按 workflow §一定位个人 document-maintenance；选择目录或专项迁移时分别读取 document-layout、document-migration。项目迁移决定见 `docs/adr/0033-document-layout.md`；未迁部分按 `docs/guides/document-governance.md` 与 `docs/guides/work-records.md` 的既有落点操作。
 

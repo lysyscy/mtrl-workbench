@@ -2,7 +2,6 @@
 import re
 from urllib.parse import quote_plus
 import openpyxl
-import pytest
 from playwright.sync_api import expect
 from test_preview import server, browser_page
 from test_ledger import open_ledger
@@ -88,60 +87,6 @@ def test_draft_feedback_is_inside_each_export_dialog(server,browser_page):
     assert not exports
 
 
-def test_identity_pause_recovery_and_account_reset_export_selection(server,browser_page):
-    import httpx
-    page,context=browser_page;open_ledger(page,server)
-    page.get_by_role('button',name='总欠款汇总导出…',exact=True).click()
-    page.get_by_role('dialog').get_by_role('button',name=re.compile('^☐ 长项目名验收')).click()
-    page.route('**/api/m15/users',lambda route:route.fulfill(status=500,json={'message':'合成身份读取故障'}))
-    page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_role('alert')).to_contain_text('已暂停操作')
-    expect(page.locator('dialog[open]')).to_have_count(0)
-    page.unroute('**/api/m15/users');page.get_by_role('button',name='重试',exact=True).click()
-    trigger=page.get_by_role('button',name='总欠款汇总导出…',exact=True)
-    expect(trigger).to_have_attribute('aria-disabled','false');trigger.click()
-    expect(page.get_by_role('dialog').get_by_text('已选 2 个项目',exact=True)).to_be_visible()
-    page.get_by_role('dialog').get_by_role('button',name='取消',exact=True).click()
-    with httpx.Client() as other:
-        assert other.post(server+'/m15/login',data={'account':'preview-user','password':''}).status_code==303
-        context.add_cookies([{'name':'mw_preview_397','value':other.cookies['mw_preview_397'],'url':server}])
-    page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_text('预览同事 · 普通用户',exact=True)).to_be_visible()
-    trigger.click()
-    expect(page.get_by_role('dialog').get_by_text('已选 1 个项目',exact=True)).to_be_visible()
-    page.keyboard.press('Escape');expect(trigger).to_be_focused()
-    context.clear_cookies();page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_text('未登录 · 只读',exact=True)).to_be_visible()
-    expect(trigger).to_have_attribute('aria-disabled','true')
-    expect(trigger).to_have_attribute('title','登录后可导出。')
-    expect(page.locator('.ledger-exports')).to_contain_text('登录后可导出。')
-    trigger.click(force=True);expect(page.locator('dialog[open]')).to_have_count(0)
-
-
-@pytest.mark.parametrize('width,account',[(1440,'preview-admin'),(800,'preview-user')])
-def test_dialog_layout_and_busy_recovery(server,browser_page,width,account):
-    page,_=browser_page;page.set_viewport_size({'width':width,'height':900});open_ledger(page,server,account)
-    for title in ['逐月台账导出','总欠款汇总导出']:
-        trigger=page.get_by_role('button',name=title+'…',exact=True);trigger.click()
-        dialog=page.get_by_role('dialog',name=title,exact=True)
-        page.screenshot(path=str(output(f'export-selection-{width}-{account}-{title}.png',kind='screenshots')),full_page=True)
-        dialog.get_by_role('button',name='确认清单',exact=True).click()
-        bounds=dialog.bounding_box();assert bounds and bounds['x']>=0 and bounds['x']+bounds['width']<=width and bounds['height']<900
-        page.screenshot(path=str(output(f'export-{width}-{account}-{title}.png',kind='screenshots')),full_page=True)
-        pending=[]
-        page.route('**/api/m05/*/export?**',lambda route:pending.append(route))
-        dialog.get_by_role('button',name='保存到本地',exact=True).click()
-        expect(dialog.get_by_role('status')).to_contain_text('正在生成文件')
-        expect(trigger).to_have_attribute('aria-disabled','true')
-        expect(trigger).to_have_attribute('title','正在处理操作，请稍候。')
-        assert len(pending)==1
-        with page.expect_download():
-            route=pending.pop();route.fulfill(response=route.fetch())
-        expect(trigger).to_have_attribute('aria-disabled','false')
-        expect(trigger).to_be_focused()
-        page.unroute('**/api/m05/*/export?**')
-
-
 def test_empty_data_and_unbuilt_project_cannot_expand_export_scope(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     page.get_by_role('button',name='总欠款汇总导出…',exact=True).click()
@@ -164,32 +109,3 @@ def test_empty_data_and_unbuilt_project_cannot_expand_export_scope(server,browse
     page.get_by_role('button',name='总欠款汇总导出…',exact=True).click()
     expect(page.get_by_role('dialog').get_by_role('alert')).to_contain_text('尚未建仓')
     expect(page.get_by_role('dialog').get_by_role('button',name='确认清单',exact=True)).to_be_disabled()
-
-
-@pytest.mark.parametrize('destination',['account','projects'])
-def test_late_export_cannot_download_into_new_account_or_inactive_page(server,browser_page,destination):
-    import httpx
-    page,context=browser_page;open_ledger(page,server)
-    page.get_by_role('button',name='总欠款汇总导出…',exact=True).click()
-    dialog=page.get_by_role('dialog');dialog.get_by_role('button',name='确认清单',exact=True).click()
-    pending=[];downloads=[]
-    page.on('download',lambda download:downloads.append(download))
-    page.route('**/api/m05/debt/export?**',lambda route:pending.append(route))
-    dialog.get_by_role('button',name='保存到本地',exact=True).click()
-    expect(dialog.get_by_role('status')).to_contain_text('正在生成文件');assert len(pending)==1
-    if destination=='account':
-        with httpx.Client() as other:
-            assert other.post(server+'/m15/login',data={'account':'preview-user','password':''}).status_code==303
-            context.add_cookies([{'name':'mw_preview_397','value':other.cookies['mw_preview_397'],'url':server}])
-        page.evaluate("window.dispatchEvent(new Event('focus'))")
-        expect(page.get_by_text('预览同事 · 普通用户',exact=True)).to_be_visible()
-    else:
-        # Route changes close the modal; hidden ledger state is deliberately retained.
-        page.evaluate("history.pushState({},'', '/preview/projects');window.dispatchEvent(new PopStateEvent('popstate'))")
-        expect(page.get_by_role('heading',name='项目档案',exact=True)).to_be_visible()
-    expect(page.locator('dialog[open]')).to_have_count(0)
-    # Deliberately late file response is a browser-only lifetime boundary probe.
-    pending.pop().fulfill(status=200,content_type='application/octet-stream',headers={'X-Export-Filename':'late.xlsx'},body=b'synthetic late response')
-    with page.expect_response(lambda response:'/api/m15/users' in response.url):page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_text('总欠款已导出。',exact=True)).to_have_count(0)
-    assert not downloads

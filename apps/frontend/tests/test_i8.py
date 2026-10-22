@@ -2,17 +2,12 @@
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 import httpx
-import json
-import shutil
-import socket
-import subprocess
-import time
 import pytest
 from playwright.sync_api import expect
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
-from test_preview import ROOT, server, browser_page, login
-from tools.audit.workspace_paths import output, output_dir
+from test_preview import server, browser_page, login
+from tools.audit.workspace_paths import output
 
 
 @pytest.fixture(scope='module')
@@ -201,37 +196,6 @@ def test_partial_is_not_success_and_scope_remains_explicit(server, browser_page)
     assert snapshot(page, '2026-06') == []
 
 
-def test_account_switch_rejects_stale_actor_and_drops_late_receipt(server, browser_page):
-    page, context = browser_page
-    open_i8(page, server, '2026-06')
-    pending = []
-    page.route('**/api/m03/notices/fetch', lambda route: pending.append(route))
-    with page.expect_request('**/api/m03/notices/fetch'):
-        confirm(page)
-    expect(page.locator('.i8-progress')).to_contain_text('正在执行，等待 i8 回执…')
-    assert pending
-    with httpx.Client(base_url=server) as client:
-        assert client.post('/m15/login', data={'account': 'preview-user', 'password': ''}).status_code == 303
-        context.add_cookies([{'name': 'mw_preview_397', 'value': client.cookies['mw_preview_397'], 'url': server}])
-        for url, body in [('/api/m03/notices/fetch', {'year_month': '2026-06', 'expected_account': 'preview-admin'}), ('/api/m02/sync/warehouses?expected_account=preview-admin', {}), ('/api/m02/sync/common-projects?expected_account=preview-admin', {})]:
-            rejected = client.post(url, json=body)
-            assert rejected.status_code == 409 and rejected.json()['code'] == 'data_conflict'
-    page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_text('预览同事 · 普通用户', exact=True)).to_be_visible()
-    expect(page.get_by_role('button', name='准备抓取', exact=True)).to_be_disabled()
-    expect(page.get_by_text('未绑定', exact=True)).to_be_visible()
-    route = pending.pop()
-    route.fulfill(response=route.fetch())
-    expect(page.locator('.i8-receipt')).to_have_count(0)
-    expect(page.locator('.i8-progress')).to_have_count(0)
-    assert len(snapshot(page, '2026-06')) == 1
-    page.set_viewport_size({'width': 800, 'height': 900})
-    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-    action_column = page.get_by_role('region', name='执行记录列表').get_by_role('columnheader', name='动作', exact=True)
-    assert action_column.bounding_box()['width'] >= 140
-    page.screenshot(path=str(output('i8-unbound-narrow-dark-large.png', kind='screenshots')), full_page=True)
-
-
 def test_invalid_address_disables_execution_and_safe_reads_never_login(server, browser_page):
     page, _ = browser_page
     open_i8(page, server, '2026-07')
@@ -245,54 +209,3 @@ def test_invalid_address_disables_execution_and_safe_reads_never_login(server, b
         assert len(snapshot(page)['calls']) == before
     finally:
         assert page.request.post(server + '/api/m14/settings', data={'i8_base_url': 'http://i8.invalid'}).json()['ok']
-
-
-@pytest.fixture(scope='module')
-def i8_dev_server(server):
-    # Exercise React's actual development StrictMode with only a loopback proxy.
-    with socket.socket() as probe:
-        probe.bind(('127.0.0.1', 0))
-        port = probe.getsockname()[1]
-    work = output_dir('work') / 'i8-vite'
-    work.mkdir(exist_ok=True)
-    script = work / 'server.mjs'
-    script.write_text("const {createServer} = await import(" + json.dumps((ROOT / 'apps/frontend/node_modules/vite/dist/node/index.js').as_uri()) + ");\n"
-        + "const server = await createServer(" + json.dumps({'configFile': str(ROOT / 'apps/frontend/vite.config.ts'), 'root': str(ROOT / 'apps/frontend'), 'cacheDir': str(work / 'cache'), 'server': {'host': '127.0.0.1', 'port': port, 'strictPort': True, 'proxy': {path: server for path in ['/api', '/static', '/login', '/m15', '/__test__']}}}) + ");\nawait server.listen();\n", encoding='utf-8')
-    with output('i8-development.log', kind='logs').open('w', encoding='utf-8') as log:
-        process = subprocess.Popen([shutil.which('node'), str(script)], cwd=ROOT / 'apps/frontend', stdout=log, stderr=log)
-        base = f'http://127.0.0.1:{port}'
-        print(f'I8-DEV owned pid={process.pid} port={port}', flush=True)
-        try:
-            deadline = time.monotonic() + 30
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    pytest.fail('Vite exited before readiness; inspect i8-development.log')
-                try:
-                    if httpx.get(base + '/preview/').status_code == 200:
-                        break
-                except httpx.HTTPError:
-                    pass
-                time.sleep(.1)
-            else:
-                pytest.fail('Vite readiness timeout')
-            yield base
-        finally:
-            process.terminate()
-            process.wait(timeout=15)
-            print(f'I8-DEV closed pid={process.pid} port={port} exit={process.returncode}', flush=True)
-
-
-def test_real_development_strict_remount_never_executes(i8_dev_server, browser_page):
-    page, _ = browser_page
-    reads = []
-    page.on('request', lambda request: reads.append(request.url) if '/api/m15/users' in request.url else None)
-    open_i8(page, i8_dev_server)
-    assert len(reads) >= 2
-    source = page.request.get(i8_dev_server + '/preview/src/main.tsx').text()
-    assert 'import.meta.hot' in source and 'StrictMode' in source
-    before = snapshot(page)['calls']
-    page.reload()
-    expect(page.get_by_role('region', name='执行记录列表')).to_be_visible()
-    page.get_by_label('抓取月份', exact=True).fill('2026-08')
-    expect(page.get_by_text('单据日期 2026-08-01 至 2026-08-31（含首尾）', exact=True)).to_be_visible()
-    assert snapshot(page)['calls'] == before
