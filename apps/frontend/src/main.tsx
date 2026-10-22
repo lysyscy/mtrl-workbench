@@ -12,12 +12,13 @@ function Notice({ message, retry }: { message: string; retry?: () => void }) {
   return <div className="notice" role="alert"><span>{message}</span>{retry && <button onClick={retry}>重试</button>}</div>;
 }
 
-function Projects() {
+function Projects({ blocked }: { blocked: boolean }) {
   const [status, setStatus] = useState('active');
   const [keyword, setKeyword] = useState('');
   const [search, setSearch] = useState('');
   const query = useQuery({
     queryKey: ['projects', status, search],
+    enabled: !blocked,
     queryFn: async ({ signal }) => readProjects(await requestJson(`/api/m01/projects?${new URLSearchParams({ status, keyword: search })}`, { signal })),
   });
   return <section aria-labelledby="projects-title">
@@ -36,7 +37,7 @@ function Projects() {
   </section>;
 }
 
-function AccountWorkspace({ me, onLogout }: { me: Identity | null; onLogout: () => void }) {
+function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; blocked: boolean; onLogout: () => void }) {
   // A new account gets a new cache and component tree, including future page drafts/history.
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
   const [logoutError, setLogoutError] = useState('');
@@ -47,6 +48,7 @@ function AccountWorkspace({ me, onLogout }: { me: Identity | null; onLogout: () 
     if (theme) theme.href = `/static/theme.css?identity=${encodeURIComponent(me?.account ?? '')}`;
   }, [me?.account, me?.ui_scale_css]);
   useEffect(() => () => { void client.cancelQueries(); client.clear(); }, [client]);
+  useEffect(() => { if (blocked) void client.cancelQueries(); }, [blocked, client]);
   async function logout() {
     setBusy(true); setLogoutError('');
     try {
@@ -55,11 +57,11 @@ function AccountWorkspace({ me, onLogout }: { me: Identity | null; onLogout: () 
       window.location.assign(loginUrl);
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
-  return <QueryClientProvider client={client}><div className="workspace">
+  return <QueryClientProvider client={client}><div className="workspace" hidden={blocked} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
     <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
     <div className="main"><header><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</header>
-      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects />} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes></main>
+      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes></main>
     </div>
   </div></QueryClientProvider>;
 }
@@ -68,30 +70,39 @@ function App() {
   const [me, setMe] = useState<Identity | null | undefined>(undefined);
   const [error, setError] = useState('');
   const [expired, setExpired] = useState(false);
+  const [checking, setChecking] = useState(true);
   const request = useRef<AbortController | null>(null);
   const knownIdentity = useRef<Identity | null>(null);
   async function check() {
     request.current?.abort();
     const controller = new AbortController(); request.current = controller;
+    setChecking(true); setError('');
     try {
       const next = readIdentity(await requestJson('/api/m15/users', { signal: controller.signal }));
       if (controller.signal.aborted) return;
-      if (knownIdentity.current && !next) setExpired(true);
-      knownIdentity.current = next; setMe(next); setError('');
+      if (next) setExpired(false);
+      else if (knownIdentity.current) setExpired(true);
+      knownIdentity.current = next; setMe(next); setChecking(false);
     } catch (failure) {
-      if (!controller.signal.aborted) { setMe(undefined); setError(failure instanceof Error ? failure.message : '账号读取失败，请重试。'); }
+      if (!controller.signal.aborted) {
+        // A failed check cannot establish an account change; keep local state while access is paused.
+        setError(failure instanceof Error ? failure.message : '账号读取失败，请重试。'); setChecking(false);
+      }
     }
   }
   useEffect(() => {
     void check();
     const focus = () => void check();
-    const lost = () => { request.current?.abort(); setMe(null); setExpired(true); };
+    const lost = () => { request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
     window.addEventListener('focus', focus); window.addEventListener('session-lost', lost);
     return () => { request.current?.abort(); window.removeEventListener('focus', focus); window.removeEventListener('session-lost', lost); };
   }, []);
-  if (error) return <main className="startup"><Notice message={error} retry={() => void check()} /></main>;
-  if (me === undefined) return <main className="startup" role="status">正在识别账号…</main>;
-  return <>{expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl}>重新登录</a></div>}<AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} onLogout={() => { setMe(null); setExpired(false); }} /></>;
+  if (me === undefined) return <main className="startup">{error ? <Notice message={error} retry={() => void check()} /> : <p role="status">正在识别账号…</p>}</main>;
+  return <>
+    {expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl}>重新登录</a></div>}
+    {error ? <main className="startup"><Notice message={`账号暂时无法核实，已暂停操作。${error}`} retry={() => void check()} /></main> : checking && <p className="startup" role="status">正在核实账号…</p>}
+    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} onLogout={() => { request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
+  </>;
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><BrowserRouter basename="/preview"><App /></BrowserRouter></StrictMode>);

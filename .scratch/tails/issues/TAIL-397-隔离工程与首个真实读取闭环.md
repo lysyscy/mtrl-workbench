@@ -47,3 +47,16 @@
 **证据选留与下一批。** 本机原始截图/日志在.artifacts/archive/frontend-vue-rewrite，最终键盘/窄屏轮为121611-985967-26044，retention.json到2026-11-21；首次失败轮120632-430324-13500保留用于归因，无活动run。后端var/log/frontend-397为隔离实例运行日志，依赖/缓存和dist留工作树供验收/398接续；整体effort仍活动不做closed。398只需复用账号子树、api.ts、React Query、/preview和该隔离启动器，在其中加历史台账路径与草稿/历史接线，不复建全局缓存，不提前触碰399复杂网格。没有推送、正式部署/重启、真实写入或i8/打印动作。
 
 **保存与验收归属。** 本执行者只提交本批源码/必要文档和原票；Status保持claimed，父任务验收后按既有销号工具更新公共状态/历史索引。本地提交SHA由最终回执提供，不为自指SHA再造提交。未跑后端全量、398编辑/金额/导出/网格、正式现场或跨设备；这些不能由本批51项定向结果推导。
+
+
+**2026-10-22 · 父任务验收修复：临时身份核验失败保留上下文。** 父任务指出02a29b2的窗口焦点检查在网络失败/500时setMe(undefined)，并通过error早退卸载账号树，清QueryClient和筛选。先在原实际构建上执行pytest apps/frontend/tests/test_preview.py -k 'temporary_identity and network' -q --tb=short，退出1：恢复同账号后状态实际active，预期archived；失败轮123325-173524-1320的独占schema已清理。该反馈直接证明本次症状，不扩展成全仓诊断。
+
+修复分三态：初次身份读取失败只提供重试；已有身份核验中/暂时失败保留已挂载账号树，隐藏数据并inert阻止操作，取消/暂停查询；确认同账号恢复原上下文并重新读取，确认换号/会话失效才重建树并清缓存，后续重新确认有效身份清除失效提示。未提前实现398草稿。已更新唯一预览指南：398编辑中必须覆盖焦点身份网络失败/500后恢复同账号保草稿，暂停期间不得发起保存，确认换号/失效不得串用旧状态。
+
+修复后原命令pytest apps/frontend/tests/test_preview.py -q --tb=short为10 passed、退出0（28.75s），包含原5项、网络/500同账号恢复、失败后确认换号/失效清上下文、初次身份失败无数据；暂停时可见table和切账号入口数均0。末次补齐失效后重新确认有效账号的提示复位，定向-k 'temporary_identity and expired'为1 passed/9 deselected、退出0（7.25s），未重复其余有效保障。最终Vite build退出0，JS index-D8lQHLy-.js约299.76kB，CSS index-CxJbAjDx.css约3.72kB；严格类型检查通过，无依赖变化。实际看图：暂停只见错误/重试，恢复后仍为归档、未提交关键词及归档样例。绿色轮123521-372697-32032和末次123731-131328-23260的日志/截图按既有30天期限归档；未触碰正式服务或398。
+
+**2026-10-22 · 按用户新证据复核临时文件清理。** 用户明确要求去掉-Force；上次首个删除拒绝后14项均未删除。已按14个精确绝对路径核对存在、普通文件且无链接，创建/修改时间均对应本批，脚本源码已在本轮创建记录中核对；无需保留的独有结果，实际源码/验收证据另有Git与归档。仅通过正常工具一次执行Remove-Item -LiteralPath <精确文件> -ErrorAction Stop，不带-Force、不用通配、不改ACL/所有权。仍在首项C:/Users/Administrator/AppData/Local/Temp/tail397-preflight.py报Access denied，操作状态为拒绝；随即停止，逐项复核结果为14存在、0删除。工具未给自动审批策略拒绝说明，不把系统Access denied伪称不可覆盖策略。未换工具/权限/路径重试，需父任务或用户在有实际删除权限的正常环境处理。
+
+14项均在C:/Users/Administrator/AppData/Local/Temp/，精确文件名：tail397-preflight.py、tail397-write.py、tail397-backend.py、tail397-fix.py、tail397-tests.py、tail397-testfix.py、tail397-fix2.py、tail397-docs.py、tail397-finalfix.py、tail397-audit.py、tail397-exitfix.py、tail397-evidence.py、tail397-final-db.py、tail397-commit.py。本次修复使用短脚本stdin，没有再创建Temp辅助脚本。
+
+**2026-10-22 · NSSM红项根因查清（只读）。** 原仓D:/dev/mtrl-workbench/ops/nssm/nssm.exe存在（331264字节）；正式mtrl-workbench-server状态Running、LocalSystem，PathName正为该文件，Application为原仓backend/.venv/Scripts/python.exe，AppDirectory为原仓backend，参数为uvicorn监听8000。工作树对应文件不存在，因为该工具按既有.gitignore不提交，Git worktree不复制它。属于工作树未共享本机运维运行资源，不是过时路径或正式部署缺件；文档引用与真实部署一致，无纯文档误指向可修。最小处理建议：保留正确引用与本工作树审计环境差异，不为397隔离预览下载/安装/复制正式服务工具，不放宽T3；如父任务另要求该工作树完整运维审计归零，应单独决定运行资源准备方式。本次仅查询服务信息和三项非秘密注册参数，没有启停/执行NSSM或读取服务环境凭据。
