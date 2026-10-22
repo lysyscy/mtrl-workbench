@@ -53,7 +53,8 @@ def isolated_database(source_env: Path, *, copy_source: bool = False):
                    FRONTEND_PREVIEW_DIR=str(ROOT / 'apps/frontend/dist'),
                    MTRL_PREVIEW_EXPORT_DIR=str(export_dir),
                    MTRL_PREVIEW_COPY_SOURCE='1' if copy_source else '0',
-                   ARTIFACTS_DIR='var/tmp/frontend-397', LOGS_DIR='var/log/frontend-397',
+                   ARTIFACTS_DIR=str(output_dir('work') / schema),
+                   LOGS_DIR=str(output_dir('logs') / schema),
                    PYTHONPATH=str(ROOT / 'backend'), PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright')
         subprocess.run([sys.executable, '-X', 'utf8', '-m', 'alembic', 'upgrade', 'head'],
                        cwd=ROOT / 'backend', env=env, check=True)

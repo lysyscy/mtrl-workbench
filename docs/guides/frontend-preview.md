@@ -10,9 +10,9 @@
 
 ```powershell
 Set-Location apps/frontend
-corepack pnpm@12.14.0 install --frozen-lockfile
-corepack pnpm@12.14.0 typecheck
-corepack pnpm@12.14.0 build
+corepack pnpm install --frozen-lockfile
+corepack pnpm typecheck
+corepack pnpm build
 ```
 
 每条分别核原始退出码；构建不代替类型检查。`/static/theme.css` 由同源 FastAPI 按账号返回，Vite 的构建期资源提示是保留运行时 URL。Vite 开发代理仅指向回环 8037；生产形态验收使用下面的 FastAPI 入口。
@@ -25,6 +25,8 @@ $env:PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright'
 $env:MTRL_EFFORT='frontend-vue-rewrite'
 backend/.venv/Scripts/python.exe -X utf8 -m pytest apps/frontend/tests/test_preview.py -q --tb=short
 ```
+
+浏览器进程只在同一测试模块内复用，每例创建独立context，Cookie、storage、路由和视口互不继承；pageerror断言失败也在finally关闭context，模块结束关闭浏览器。后端临时数据位于本轮work的schema目录，日志及服务stdout按schema留在本轮logs，结束按workspace_paths生命周期释放/选留。
 
 测试创建独占 schema、运行现有 Alembic 迁移，以真实后端验证 Cookie/身份/读取、历史编辑与撤销、拒绝和导出；只有加载/403/500 与迟到错误的浏览器分支使用定向替身。截图和服务日志由现有 workspace_paths 归档到本机 `.artifacts/archive/`，最长保留30天。模拟回包不能证明真实权限，另有普通用户真实管理动作被拒且账号数不变的检查。
 

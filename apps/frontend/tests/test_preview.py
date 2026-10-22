@@ -11,7 +11,7 @@ import time
 
 import httpx
 import pytest
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import expect
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
@@ -29,7 +29,7 @@ def server(preview_seed):
         port = probe.getsockname()[1]
     with isolated_database(Path(source)) as env:
         preview_seed(env)
-        log_path = output('preview-server.log', kind='logs')
+        log_path = output(env['PGAPPNAME'] + '.log', kind='logs')
         with log_path.open('w', encoding='utf-8') as log:
             process = subprocess.Popen([sys.executable, '-X', 'utf8', '-m', 'uvicorn',
                 'tools.dev.frontend_preview:create_preview_app', '--factory', '--host', '127.0.0.1',
@@ -55,17 +55,16 @@ def server(preview_seed):
 
 
 @pytest.fixture
-def browser_page(server):
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        context = browser.new_context(viewport={'width': 1920, 'height': 1080})
+def browser_page(server, preview_browser):
+    context = preview_browser.new_context(viewport={'width': 1920, 'height': 1080})
+    try:
         page = context.new_page()
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         yield page, context
         assert not errors, errors
+    finally:
         context.close()
-        browser.close()
 
 
 def login(page, server, account='preview-admin'):
