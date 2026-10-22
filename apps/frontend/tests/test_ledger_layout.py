@@ -174,3 +174,43 @@ def test_uncertain_undo_requires_readback_before_another_history_action(server,b
     page.get_by_role('button',name='重新加载',exact=True).click()
     expect(page.get_by_role('button',name='重新加载',exact=True)).to_have_count(0)
     wait_value(page,project,rid,'payment','12.00');assert len(requests)==1
+
+
+@pytest.mark.parametrize('direction',['undo','redo'])
+@pytest.mark.parametrize('broken_body',['{"ok":','{}'],ids=['truncated-json','missing-ack'])
+def test_applied_history_200_unconfirmed_body_locks_both_actions_until_readback(server,browser_page,direction,broken_body):
+    from test_ledger import add_row,cell,sync_ledger,wait_value,select_project
+    page,_=browser_page;open_ledger(page,server);project=project_id(page,server)
+    rid=add_row(page,server,project,'200正文未确认测试');sync_ledger(page)
+    paid=cell(page,rid,'payment');paid.fill('78.90');paid.press('Tab');page.get_by_role('heading',name='逐月欠款台账',exact=True).click();wait_value(page,project,rid,'payment','78.90')
+    if direction=='redo':
+        page.get_by_role('button',name='撤销',exact=True).click();wait_value(page,project,rid,'payment','12.00')
+    writes=[]
+    def corrupt_after_commit(route):
+        writes.append(route.request.post_data_json)
+        if len(writes)==1:
+            response=route.fetch();assert response.status==200 and response.json()['ok']
+            route.fulfill(status=200,content_type='application/json',body=broken_body)
+        else:route.continue_()
+    page.route('**/api/history/undo',corrupt_after_commit);page.route('**/api/history/redo',corrupt_after_commit)
+    page.get_by_role('button',name='撤销' if direction=='undo' else '重做',exact=True).click()
+    expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_visible()
+    for label in ['撤销','重做']:expect(page.get_by_role('button',name=label,exact=True)).to_be_disabled()
+    page.keyboard.press('Control+z');page.keyboard.press('Control+y')
+    select_project(page,'长项目名验收')
+    expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_visible()
+    for label in ['撤销','重做']:expect(page.get_by_role('button',name=label,exact=True)).to_be_disabled()
+    page.keyboard.press('Control+z');page.keyboard.press('Control+y');assert len(writes)==1
+    # A valid ledger read with a broken history read must not clear uncertainty.
+    page.route('**/api/history/status',lambda route:route.fulfill(status=200,content_type='application/json',body='{"undo":'))
+    page.get_by_role('button',name='重新加载',exact=True).click()
+    expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_enabled()
+    for label in ['撤销','重做']:expect(page.get_by_role('button',name=label,exact=True)).to_be_disabled()
+    page.unroute('**/api/history/status')
+    page.get_by_role('button',name='重新加载',exact=True).click()
+    expect(page.get_by_role('button',name='重新加载',exact=True)).to_have_count(0)
+    assert len(writes)==1
+    wait_value(page,project,rid,'payment','12.00' if direction=='undo' else '78.90')
+    expect(page.get_by_role('button',name='重做' if direction=='undo' else '撤销',exact=True)).to_be_enabled()
+    select_project(page,'隔离项目')
+    expect(page.get_by_role('button',name='重做' if direction=='undo' else '撤销',exact=True)).to_be_enabled();assert len(writes)==1

@@ -96,3 +96,14 @@
 
 
 **2026-10-22 · 第二轮保存冻结。** 最后恢复守卫的3项真实合成验证退出0：test_real_undo_redo_conflict_and_account_ownership、test_saved_but_refresh_failed_does_not_resubmit、test_uncertain_undo_requires_readback_before_another_history_action，共3 passed（17.28秒），已生效撤销丢回包后按钮与Ctrl+Z均不重复发起，重新加载读回原实际结果。其余本轮29项界面与3项复制安全结果按上文分轮复用，新增不确定撤销1项，因此本轮有效覆盖30项界面＋3项复制安全，不冒称一次聚合全跑。最后typecheck/build各退出0，产物index-Bp5Sr840.js 301.32kB、ledger-B1d1Lr2Q.js 1183.15kB、CSS index-_wDILFg3.css 10.42kB；frozen install退出0（33ms），锁未改。合成实屏在.artifacts/archive/frontend-vue-rewrite/145449-966726-33164/screenshots，实际查看1920整页确认说明删除与按钮位置；没有查看/回传真实副本业务截图。副本计数/散列回执已正常归档到.artifacts/archive/frontend-vue-rewrite/145721-859340-26784/logs/preview-copy-verification.json。当前无预览schema、8037已关闭、无根.env及临时脚本残留；不按最新恢复指令重复制/重启动。提交SHA和最终dirty由保存回执提供，父任务据此协调一次最终人工入口，未代用户验收。
+
+
+**2026-10-22 · 父任务阻断修复：200正文未确认不按状态码放行。** 父任务只读复核发现ApiError保留HTTP200时旧控制错误分类未锁定，可能在撤销已生效但JSON损坏后再次撤销。先正常Ctrl+C关闭72726，收到frontend_rewrite_397_a802f6357acc4ce5b72677ffc538465d准确清理回执；只读复核schema0、8037关闭后才修改/构建，没有改活实例资产。
+
+修复仅在ledger撤销/重做和可靠读回边界：POST发出后的错误、200截断JSON、合法JSON但缺明确ok:true确认，都设置账号子树内历史结果待核实锁；不把HTTP200映射为网络失败，也不再用0/409/500枚举猜结果。锁跨项目保留，按钮与Ctrl+Z/Ctrl+Y共用入口；对应范围提供重新加载。可靠台账读回后还必须用同一QueryClient严格取得并校验历史；不吞invalidate错误，结果待核实时先取消写前旧历史请求。历史正文仍损坏则锁不解除；两者可靠读回后才清对应不确定回执和锁，切回原项目不会再卡在旧锁。api.ts接口/其他业务路径未改，无后端业务规则或副本机制变更。
+
+合成真实后端反例先取得红灯：test_applied_history_200...truncated-json-undo，1 failed/12 deselected、退出1（13.09秒），后端已成功undo再返回200截断正文，旧版确实无重新加载且撤销仍可用。新增4参数组合覆盖undo/redo × 截断JSON/缺成功确认；确认真实后端先完成、再损坏响应，锁内点击与两种快捷键不再POST，切项目仍锁，历史200损坏的恢复不提前复位，可靠读回后复位并核实际金额与单次写入，切回原项目也正常。
+
+最终命令pytest apps/frontend/tests/test_ledger.py apps/frontend/tests/test_ledger_layout.py -q --tb=short -k 'applied_history_200 or uncertain_undo or real_undo or saved_but_refresh or continuous_edit or month_reorder or mouse_and_chinese or identity_pause'：14 passed/20 deselected、退出0（44.15秒），含原网络不确定、真实撤销冲突、保存成功读失败、连续Tab/中文/月份队列和4类身份暂停恢复；未删除真实保护、不在业务副本做破坏性测试。严格typecheck退出0，独立build退出0，产物index-BRGM6xHj.js 301.32kB、ledger-Dux9wIr-.js 1183.82kB，CSS未变；保留分块提示，锁和依赖未改，冻结安装按回执。其余未受影响结果沿原证据，不扩大其他范围或全站审计。
+
+本地保存后按本轮明确授权重建一次最终真实只读快照副本，保持8037运行到父任务通知结束；新准确进程/schema归属由最终回执提供，不能沿用已清理72726。登录资料只查本机指南，不回传业务明细/真实截图；继续不推送、不部署、不碰源库写入、不启动399，398仍待人工验收。

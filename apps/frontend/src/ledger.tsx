@@ -136,6 +136,7 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
   const mounted = useRef(true); const edits = useRef(new Map<string, Edit>()); const messages = useRef(new Map<string, { text: string; reload: boolean }>());
   const jobs = useRef(new Set<Promise<void>>()); const serial = useRef(0); const acting = useRef(false);
   const pointerDown = useRef(false);
+  const historyNeedsReadback = useRef<{ scope: Scope; text: string } | null>(null);
   const body = useRef<HTMLDivElement>(null); const [display, setDisplay] = useState<{ key: string; data: Ledger } | null>(null);
   const pendingDisplay = useRef<{ key: string; data: Ledger } | null>(null);
   useEffect(() => { mounted.current = true; lifetime.current = new AbortController(); return () => { mounted.current = false; lifetime.current?.abort(); }; }, []);
@@ -185,7 +186,11 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
     accept(s, full);
     if (!current.current.blocked) {
       await client.invalidateQueries({ queryKey: ['ledger', s.owner, s.project], refetchType: 'none' });
-      await client.invalidateQueries({ queryKey: ['history', s.owner] });
+      if (historyNeedsReadback.current) await client.cancelQueries({ queryKey: ['history', s.owner] });
+      await client.fetchQuery({ queryKey: ['history', s.owner], queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })), staleTime: 0 });
+      const uncertain = historyNeedsReadback.current;
+      if (uncertain && messages.current.get(uncertain.scope.key)?.text === uncertain.text) messages.current.set(uncertain.scope.key, { text: '已重新读取操作结果。', reload: false });
+      historyNeedsReadback.current = null; changed();
     }
     return full;
   }
@@ -281,14 +286,22 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
   };
   async function replay(direction: 'undo' | 'redo') {
     const s = current.current.scope;
-    if (query.isError || messages.current.get(s.key)?.reload) return;
+    if (historyNeedsReadback.current || query.isError || messages.current.get(s.key)?.reload) return;
     await control(s, async () => {
       const latest = await client.fetchQuery({ queryKey: ['history', owner], queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })), staleTime: 0 });
       if (!mounted.current || current.current.blocked || !current.current.me) return;
       const item = latest[direction]; if (!item) { message(s, direction === 'undo' ? '暂无可撤销的操作。' : '暂无可重做的操作。'); return; }
-      await requestJson(`/api/history/${direction}`, { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation_id: item.id }) });
+      try {
+        const result = await requestJson(`/api/history/${direction}`, { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation_id: item.id }) });
+        if (!record(result) || result.ok !== true) throw new ApiError('操作结果未确认。');
+      } catch (error) {
+        // After the write is sent, neither an HTTP status nor a malformed body proves its outcome.
+        const text = `${error instanceof Error ? error.message : '操作结果未确认。'}请重新加载核对。`;
+        historyNeedsReadback.current = { scope: s, text };
+        message(s, text, true); return;
+      }
       try { await refresh(s); await client.invalidateQueries({ queryKey: ['projects'] }); message(s, direction === 'undo' ? '已撤销。' : '已重做。'); }
-      catch { message(s, '操作已完成，读取失败；请重新加载，不必重复操作。', true); }
+      catch { const text = '操作已完成，读取失败；请重新加载，不必重复操作。'; historyNeedsReadback.current = { scope: s, text }; message(s, text, true); }
     });
   }
   const replayRef = useRef(replay); replayRef.current = replay;
@@ -311,14 +324,14 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
     await control(scope, async () => { await refresh(scope); message(scope, '已重新加载；未保存输入仍保留。'); }, true);
   }
   const receipt = messages.current.get(scope.key);
-  const needsReload = Boolean(receipt?.reload || query.isError);
+  const needsReload = Boolean(historyNeedsReadback.current || receipt?.reload || query.isError);
   const toolbar = <div className="ledger-tools">
     <button disabled={!me || blocked || controlBusy || needsReload || !history.data?.undo} title={history.data?.undo?.label ?? '暂无可撤销的操作'} onClick={() => void replay('undo')}>撤销</button>
     <button disabled={!me || blocked || controlBusy || needsReload || !history.data?.redo} title={history.data?.redo?.label ?? '暂无可重做的操作'} onClick={() => void replay('redo')}>重做</button>
   </div>;
   const status = <div className="ledger-status">
-    <span role="status" aria-label="保存回执">{receipt?.text ?? (me ? '' : '未登录，台账只读。')}{[...edits.current.values()].some(edit => edit.scope.key === scope.key && edit.saving) ? ' 正在保存…' : ''}</span>
-    {receipt?.reload && !query.isError && <button disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</button>}
+    <span role="status" aria-label="保存回执">{receipt?.text ?? (historyNeedsReadback.current ? '操作结果待核实，请重新加载。' : me ? '' : '未登录，台账只读。')}{[...edits.current.values()].some(edit => edit.scope.key === scope.key && edit.saving) ? ' 正在保存…' : ''}</span>
+    {(historyNeedsReadback.current || receipt?.reload) && !query.isError && <button disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</button>}
     {hasDrafts(scope) && <button onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } message(scope, '已放弃未保存输入。'); changed(); }}>放弃未保存输入</button>}
   </div>;
   return <>
