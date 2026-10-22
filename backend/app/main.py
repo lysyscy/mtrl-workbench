@@ -466,6 +466,9 @@ def create_app() -> FastAPI:
     # ⚠️ 根路径 `/` 已由 `home_router` 接管（**302 → `/app`** —— 看板已进壳），**别再注册第二个 `/`** ——
     #    FastAPI 按注册顺序匹配（先注册的赢），多注册一个会让人以为是它在生效。
 
+    from app.core.frontend import install_preview
+    install_preview(app, settings.frontend_preview_dir, _static_file)
+
     return app
 
 

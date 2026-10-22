@@ -97,6 +97,8 @@ class Settings(BaseSettings):
     allowed_ip_cidrs: str = ""
     # 同源部署时留空；仅开发期前端 dev server 需要
     cors_allow_origins: str = ""
+    # Opt-in isolated React build; empty keeps the current entry points.
+    frontend_preview_dir: str = ""
 
     # --- 数据库（开发库 / 测试库物理隔离）---
     database_url: str = ""

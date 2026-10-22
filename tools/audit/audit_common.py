@@ -233,7 +233,7 @@ KNOWN_ABSENT: frozenset[str] = frozenset({"ACC-X-ATT-001", "ACC-X-ATT-002"})
 
 #: `T3` 只检查这些顶级目录开头的路径（`C:\…`、URL、SSH 一律不管）
 TOP_DIRS: tuple[str, ...] = (
-    "var/", "data/", "exports/", "dist/", "backend/", "tools/", "ops/", "docs/", ".scratch/", ".artifacts/", "delivery/", "demo/", "PRD/", "app/", "tests/",
+    "var/", "data/", "exports/", "dist/", "backend/", "apps/", "tools/", "ops/", "docs/", ".scratch/", ".artifacts/", "delivery/", "demo/", "PRD/", "app/", "tests/",
     "alembic/", "artifacts/", "frontend/", "static/", "scripts/", "input/",
     # ⭐⭐ 2026-10-05（`TAIL-235` 丁-1）：**治理区进 `T3` 的眼**。
     #    ⚠️ 此前**整个 `.codebuddy/` 不在表内** ⇒ 票仓 / 记忆档 / 规则档 / 决策档里写下的
@@ -270,7 +270,7 @@ TOP_DIRS: tuple[str, ...] = (
 #:   ⇒ 列进来就是**同一件事两处写**（本仓最贵的病，必漂）。
 #: ⚠️ 目录带尾斜杠、文件不带（判据按**名字**比，斜杠只是可读性）。
 ROOT_ALLOW: tuple[str, ...] = (
-    "var/", "data/", "exports/", "dist/", ".artifacts/", ".scratch/", ".git/", "artifacts/", "backend/", "docs/", "delivery/", "logs/", "ops/", "skills/", "tools/",
+    "var/", "data/", "exports/", "dist/", ".artifacts/", ".scratch/", ".git/", "artifacts/", "backend/", "apps/", "docs/", "delivery/", "logs/", "ops/", "skills/", "tools/",
     ".env", ".env.example", ".gitignore",
 )
 

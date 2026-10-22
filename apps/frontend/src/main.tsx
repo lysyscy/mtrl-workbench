@@ -1,0 +1,97 @@
+import { StrictMode, useEffect, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { readIdentity, readProjects, requestJson } from './api';
+import type { Identity } from './api';
+import './style.css';
+
+const loginUrl = '/login?next=%2Fpreview%2Fprojects';
+
+function Notice({ message, retry }: { message: string; retry?: () => void }) {
+  return <div className="notice" role="alert"><span>{message}</span>{retry && <button onClick={retry}>重试</button>}</div>;
+}
+
+function Projects() {
+  const [status, setStatus] = useState('active');
+  const [keyword, setKeyword] = useState('');
+  const [search, setSearch] = useState('');
+  const query = useQuery({
+    queryKey: ['projects', status, search],
+    queryFn: async ({ signal }) => readProjects(await requestJson(`/api/m01/projects?${new URLSearchParams({ status, keyword: search })}`, { signal })),
+  });
+  return <section aria-labelledby="projects-title">
+    <div className="card-head"><h1 id="projects-title">项目档案</h1><button onClick={() => void query.refetch()} disabled={query.isFetching}>刷新</button></div>
+    <form className="filters" onSubmit={event => { event.preventDefault(); setSearch(keyword.trim()); }}>
+      <div className="filter-field"><label htmlFor="project-status">状态</label><select id="project-status" value={status} onChange={event => setStatus(event.target.value)}><option value="active">在建</option><option value="archived">归档</option><option value="all">全部</option></select></div>
+      <label className="search">项目<input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} placeholder="全名、仓库名或展示名" /></label>
+      <button type="submit">查询</button>
+    </form>
+    {query.isPending ? <p role="status" className="state">正在读取项目…</p> : query.isError ? <Notice message={query.error.message} retry={() => void query.refetch()} /> : query.data.length === 0 ? <p role="status" className="state">没有符合条件的项目。可调整状态或关键词。</p> : <>
+      <p className="result" role="status">共 {query.data.length} 个项目{query.isFetching ? ' · 正在刷新…' : ''}</p>
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="项目列表"><table><thead><tr><th>序号</th><th>项目类型</th><th>展示名</th><th>仓库名</th><th>项目全名</th><th>信息化编号</th><th>状态</th></tr></thead><tbody>{query.data.map(project => <tr key={project.id}>
+        <td>{project.ord}</td><td>{{ normal: '普通项目', shell: '小微壳', small: '具体小微' }[project.project_type]}</td><td>{project.disp || '—'}</td><td>{project.warehouse_name ?? '—'}</td><td>{project.name_full}</td><td>{project.phid || '—'}</td><td>{project.status === 'active' ? '在建' : '归档'}</td>
+      </tr>)}</tbody></table></div>
+    </>}
+  </section>;
+}
+
+function AccountWorkspace({ me, onLogout }: { me: Identity | null; onLogout: () => void }) {
+  // A new account gets a new cache and component tree, including future page drafts/history.
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
+  const [logoutError, setLogoutError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    document.documentElement.style.setProperty('--fscale', me?.ui_scale_css ?? '1');
+    const theme = document.querySelector<HTMLLinkElement>('#user-theme');
+    if (theme) theme.href = `/static/theme.css?identity=${encodeURIComponent(me?.account ?? '')}`;
+  }, [me?.account, me?.ui_scale_css]);
+  useEffect(() => () => { void client.cancelQueries(); client.clear(); }, [client]);
+  async function logout() {
+    setBusy(true); setLogoutError('');
+    try {
+      await requestJson('/api/m15/logout', { method: 'POST' });
+      await client.cancelQueries(); client.clear(); onLogout();
+      window.location.assign(loginUrl);
+    } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
+  }
+  return <QueryClientProvider client={client}><div className="workspace">
+    <a className="skip" href="#content">跳到内容</a>
+    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
+    <div className="main"><header><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</header>
+      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects />} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes></main>
+    </div>
+  </div></QueryClientProvider>;
+}
+
+function App() {
+  const [me, setMe] = useState<Identity | null | undefined>(undefined);
+  const [error, setError] = useState('');
+  const [expired, setExpired] = useState(false);
+  const request = useRef<AbortController | null>(null);
+  const knownIdentity = useRef<Identity | null>(null);
+  async function check() {
+    request.current?.abort();
+    const controller = new AbortController(); request.current = controller;
+    try {
+      const next = readIdentity(await requestJson('/api/m15/users', { signal: controller.signal }));
+      if (controller.signal.aborted) return;
+      if (knownIdentity.current && !next) setExpired(true);
+      knownIdentity.current = next; setMe(next); setError('');
+    } catch (failure) {
+      if (!controller.signal.aborted) { setMe(undefined); setError(failure instanceof Error ? failure.message : '账号读取失败，请重试。'); }
+    }
+  }
+  useEffect(() => {
+    void check();
+    const focus = () => void check();
+    const lost = () => { request.current?.abort(); setMe(null); setExpired(true); };
+    window.addEventListener('focus', focus); window.addEventListener('session-lost', lost);
+    return () => { request.current?.abort(); window.removeEventListener('focus', focus); window.removeEventListener('session-lost', lost); };
+  }, []);
+  if (error) return <main className="startup"><Notice message={error} retry={() => void check()} /></main>;
+  if (me === undefined) return <main className="startup" role="status">正在识别账号…</main>;
+  return <>{expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl}>重新登录</a></div>}<AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} onLogout={() => { setMe(null); setExpired(false); }} /></>;
+}
+
+createRoot(document.getElementById('root')!).render(<StrictMode><BrowserRouter basename="/preview"><App /></BrowserRouter></StrictMode>);

@@ -47,3 +47,6 @@ desktop.ini
 
 # Codex user attachments; original input stays local.
 .codex-attachments/
+
+# Isolated React build output
+/apps/frontend/dist/
