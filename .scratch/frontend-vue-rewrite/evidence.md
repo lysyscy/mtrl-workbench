@@ -121,3 +121,19 @@ Python 3.15.1、pytest 9.1.1；复用原构建，六轮dist聚合字节SHA256均
 本票ready-for-human；用户睡眠授权只延后人工关口，不等于接受本页。没有未决新增业务规则；真实外部联调和人验收均未完成。自查范围及理由回原票；422最终累计审查保持。
 
 收尾实测：两次自有schema及其数据库会话均为0，8038无监听，两个执行会话均退出0；PID24988创建时间未变。临时work和本票浏览器下载已删除，必要产物已归档，workspace_check.py run-closed退出0。最后自查补回包ord回写，使后端夹紧位置后输入显示实际保存值；最终type/build仍退出0，没有为此重复旧后端或全仓测试。
+
+## 2026-10-23 TAIL-402付款通知基础处理
+
+基点8f9837af8824436a98d8fef6c3d84eb6c4354b98、codex/react-frontend-rewrite、开工clean。范围/旧UI依据/未做票/自查及晨验收边界回[402原票](../tails/issues/TAIL-402-付款通知查询与基础处理.md)。旧合成`/app`已实际打开并看图，新页默认及抓取结果弹窗也已目视，未冒称生产画面或真实外部联调。沿当前安装的implement-solo-spec执行参考及writing-for-agents维护原票/规格；不更新个人技能。
+
+- `node apps/frontend/node_modules/typescript/bin/tsc --noEmit --project apps/frontend/tsconfig.json`最终退出0；`apps/frontend`内`node node_modules/vite/bin/vite.js build`最终退出0，156模块；既有theme.css运行时路径及grid大chunk提示保留。首次可空表头TS错误已修；未安装依赖、未部署。
+- 临时`verify_api.py`最终退出0，5组真实隔离后端/Excel代表核对通过，结果为`api-check.json`及`api-final.log`；金额和权限等未变后端保障复用既有400/401证据，不复跑全仓。新页面不包含金额写入；试制过的金额输入已裁出最终差异，后续维护/付款批次承接，不将试制时的成功保存计作本票交付能力。
+- CUA内置浏览器操作与真实隔离后端组合验证，结果为`browser-check.json`。250行合成长表上先后勾选窗口外两行，共300.25元；返回保留勾选与底部位置；分类、撤销重做、剔除和仅所选恢复均经真实列表再读核对。搜索隐藏的勾选仍在汇总，直接批量动作禁用；普通剔除视图禁选撤单、可勾剔除行。抓取弹窗只由确认提交，固定在线冲突停止，重新勾选允许强踢后成功；挂载不发起抓取。
+- 浏览器真实下载`browser-export.xlsx`以openpyxl读取，10数据行/16列、单据0240至0249与显示排序一致；API单独指定序导出为2行16列。原下载已移入本run证据。新页只读金额按分计算合计，不另造金额规则；分类/剔除/恢复及历史回放仍由原接口决定。
+- 首轮夹具把app_settings.effective误当dict，导致绑定读取500；首次api.log和preview.log保留，已修为隔离进程固定I8_BASE_URL后重建自有环境通过。读后脚本首次把账号误期待为展示名，改为实际接口账号preview-admin后通过；不改产品规则。CUA月份fill只改原生显示而未提交React变更，改用原生月份键盘选择并核状态后完成冲突路径；实际发起的多一次固定2026-10抓取如实在调用记录中。
+
+两次隔离均明确`mtrl_workbench_test`及唯一schema，search_path无public；只从正式配置读测试DSN，正式DSN未传子进程、未复制生产业务数据。8038归本run，真实外部HTTP/打印由既有固定替身阻断；两个schema及对应连接均为0、8038无监听、两执行会话退出0，`resource-check.json`记录精确schema。必要日志/报告/合成Excel已归`.artifacts/archive/frontend-vue-rewrite/tail402-20261023/`，沿effort既定2026-11-21到期，不续期；临时work、预览标签页及下载已清理，workspace_check.py run-closed退出0。8037用户i8副本PID24988创建时间2026-10-22 23:56:50未变，schema/数据/停止方式仍归原preview-handoff。
+
+402状态ready-for-human，四项勾选只指技术覆盖；401同样待晨验收。403/404/405/406未实施或代签，金额维护/付款/打印全页能力未完成；后续由父统筹按原授权安排，本子任务停止。最终保存运行真实提交钩子，不push/正式部署；自查足够的理由回原票，422累计独立审查保持。
+
+收尾静态：syntax_audit --staged退出0、必须修0。bytes_guard首次检出本次追加使evidence.md混行尾，已恢复该件原LF；最终字节与真实提交钩子结果见提交回执。
