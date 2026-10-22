@@ -15,7 +15,7 @@ export function ProjectPicker({ projects, selected, pick, multiple = false, labe
   return <div className="ledger-project" ref={root} onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
     <button className={open ? 'on' : ''} aria-label={label} aria-expanded={open} disabled={disabled} onClick={() => setOpen(value => !value)}>{multiple ? `已选 ${selected.length} 个项目` : (() => { const item = projects.find(item => selected.includes(item.id)); return item ? `${item.disp || item.name_full}${item.status === 'archived' ? '（归档）' : ''}` : '请选择项目'; })()} ▾</button>
     {open && <div className="ledger-project-menu" role="group" aria-label={multiple ? '导出项目候选' : '查看项目候选'}>
-      <label>搜索项目<input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} /></label>
+      <label><span>搜索项目</span><input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} /></label>
       {multiple && <div className="picker-actions"><button onClick={() => pick(projects.map(item => item.id))}>全选</button><button onClick={() => pick([])}>清空</button></div>}
       <div className="picker-options">{projects.filter(item => `${item.disp}${item.name_full}${item.warehouse_name ?? ''}`.includes(keyword.trim())).map(item => <button key={item.id} aria-pressed={selected.includes(item.id)} onClick={() => { pick(multiple ? selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id] : [item.id]); if (!multiple) setOpen(false); }}>
         <span>{multiple ? `${selected.includes(item.id) ? '☑' : '☐'} ` : ''}{item.disp || item.name_full}{item.status === 'archived' && <span className="archived">（归档）</span>}</span><small>{item.warehouse_name || '未建仓'} · {item.name_full}</small>
@@ -30,33 +30,65 @@ export function reportMonth() {
   return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
 }
 
-export function LedgerExport({ projects, project, disabled, run, message, valid, signal, paused }: {
-  projects: Project[]; project: number; disabled: boolean; run: (action: () => Promise<void>) => Promise<void>; message: (text: string) => void; valid: () => boolean; signal: AbortSignal | undefined; paused: boolean;
+export function LedgerExport({ kind, projects, project, unavailable, run, message, valid, signal, paused }: {
+  kind: 'ledger' | 'debt'; projects: Project[]; project: number; unavailable: string;
+  run: (action: () => Promise<void>, projects: number[]) => Promise<string | null>;
+  message: (text: string) => void; valid: () => boolean; signal: AbortSignal | undefined; paused: boolean;
 }) {
-  const [open, setOpen] = useState(false); const [ids, setIds] = useState<number[]>([]);
-  const [preview, setPreview] = useState<Project[] | null>(null); const [sort, setSort] = useState({ column: 'seq', descending: false });
+  const [open, setOpen] = useState(false); const [ids, setIds] = useState<number[] | null>(null);
+  const [confirm, setConfirm] = useState(false); const [keyword, setKeyword] = useState('');
+  const [feedback, setFeedback] = useState(''); const [busy, setBusy] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => { if (preview) dialog.current?.showModal(); else { dialog.current?.close(); trigger.current?.focus(); } }, [preview]);
-  useEffect(() => { if (paused) { dialog.current?.close(); setPreview(null); } }, [paused]);
-  const chosen = projects.filter(item => ids.includes(item.id));
-  const shown = preview ? [...preview].sort((a, b) => (sort.column === 'name' ? (a.disp || a.name_full).localeCompare(b.disp || b.name_full, 'zh') : preview.indexOf(a) - preview.indexOf(b)) * (sort.descending ? -1 : 1)) : [];
+  const title = kind === 'ledger' ? '逐月台账导出' : '总欠款汇总导出';
+  const selected = ids ?? (project ? [project] : []);
+  const chosen = selected.flatMap(id => { const item = projects.find(item => item.id === id); return item ? [item] : []; });
   const month = reportMonth();
-  return <>
-    <button className={`ledger-export-toggle primary${open ? ' on' : ''}`} aria-expanded={open} disabled={disabled} onClick={() => { if (!open && !ids.length) setIds(project ? [project] : []); setOpen(value => !value); }}>批量导出（先选项目）…</button>
-    {open && createPortal(<div className="ledger-export-strip">
-      <div className="export-line"><b>① 逐月台账</b><span>项目（可多选）</span><ProjectPicker key="export" projects={projects} selected={ids} pick={setIds} multiple label="导出项目（可多选）" disabled={disabled} initiallyOpen />
-        <button ref={trigger} className="primary" disabled={disabled || !chosen.length} onClick={() => { setSort({ column: 'seq', descending: false }); setPreview(chosen); }}>导出台账</button><button onClick={() => { setOpen(false); setIds([]); }}>取消</button></div>
-      <p>{chosen.length}个项目 · 每项目3表 · 报告月{month} · 多项目ZIP</p>
-      <div className="export-line export-debt"><b>② 总欠款汇总</b><span>本次预览尚未接入</span><a href="/app">打开旧版预览</a></div>
-    </div>, document.getElementById('ledger-export-slot')!)}
-    {preview && <dialog ref={dialog} className="ledger-export-dialog" onCancel={() => setPreview(null)} onClose={() => setPreview(null)}>
-      <h2>导出 · 逐月欠款台账（每项目一个工作簿）</h2><p>{preview.length === 1 ? '将生成1个工作簿' : `选了${preview.length}个项目，将生成一个zip，内含${preview.length}个工作簿`}；每本3个工作表。</p>
-      <table><thead><tr>{[['seq', '#'], ['name', '工作簿（每项目一个）'], ['sheets', '工作表']].map(([key, label]) => <th key={key}><button onClick={() => setSort(value => ({ column: key!, descending: value.column === key ? !value.descending : false }))}>{label} ↕</button></th>)}</tr></thead><tbody>{shown.map(item => <tr key={item.id}><td>{preview.indexOf(item) + 1}</td><td>{item.disp || item.name_full}_欠款台账_{month}.xlsx</td><td>辅材欠款 / 机械欠款 / 特殊费用月报表</td></tr>)}</tbody></table>
-      <div className="dialog-actions"><button onClick={() => setPreview(null)}>关闭</button><button className="primary" disabled={disabled} onClick={() => { const snapshot = preview; void run(async () => {
-        const result = await requestFile(`/api/m05/ledger/export?${new URLSearchParams({ projects: snapshot.map(item => item.warehouse_name || item.name_full).join(','), ym: month })}`, signal);
+  const scopeError = chosen.length !== selected.length ? '项目范围已变化，请重新选择。' : chosen.some(item => !item.warehouse_name?.trim()) ? '所选项目尚未建仓，请调整范围。' : '';
+  const reason = unavailable || scopeError;
+  useEffect(() => { if (open) dialog.current?.showModal(); }, [open]);
+  useEffect(() => { if (paused) { dialog.current?.close(); setOpen(false); } }, [paused]);
+  const close = () => { dialog.current?.close(); setOpen(false); if (!paused && valid()) requestAnimationFrame(() => trigger.current?.focus()); };
+  const move = (index: number, offset: number) => {
+    const next = [...selected]; [next[index], next[index + offset]] = [next[index + offset]!, next[index]!]; setIds(next);
+  };
+  async function save() {
+    if (reason || busy || !chosen.length) return;
+    setBusy(true); setFeedback('');
+    const snapshot = [...chosen];
+    try {
+      const failure = await run(async () => {
+        const params = new URLSearchParams({ projects: snapshot.map(item => item.warehouse_name!).join(',') });
+        if (kind === 'ledger') params.set('ym', month);
+        const result = await requestFile(`/api/m05/${kind === 'ledger' ? 'ledger' : 'debt'}/export?${params}`, signal);
         if (!valid() || signal?.aborted) return;
-        const url = URL.createObjectURL(result.blob); const link = document.createElement('a'); link.href = url; link.download = result.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setPreview(null); message('台账已导出。');
-      }); }}>保存到本地</button></div>
-    </dialog>}
+        const url = URL.createObjectURL(result.blob); const link = document.createElement('a'); link.href = url; link.download = result.filename; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000); close(); message(kind === 'ledger' ? '台账已导出。' : '总欠款已导出。');
+      }, snapshot.map(item => item.id));
+      if (valid() && failure) setFeedback(failure);
+    } finally { setBusy(false); }
+  }
+  return <>
+    <button ref={trigger} className="ledger-export-toggle" aria-haspopup="dialog" aria-disabled={Boolean(unavailable)} title={unavailable || title} onClick={() => {
+      if (unavailable) return;
+      if (ids === null) setIds(project ? [project] : []);
+      setFeedback(''); setConfirm(false); setOpen(true);
+    }}>{title}…</button>
+    {open && createPortal(<dialog ref={dialog} className="ledger-export-dialog" aria-labelledby={`${kind}-export-title`} onCancel={event => { if (busy) event.preventDefault(); else close(); }} onClose={close}>
+      <h2 id={`${kind}-export-title`}>{title}</h2>
+      <p>{kind === 'ledger' ? `报告月 ${month} · 每项目3表 · 多项目ZIP` : '实时汇总 · 一项目一行 · 无欠款数据的项目不出行'}</p>
+      {!confirm ? <>
+        <div className="export-selection-tools"><label><span>搜索项目</span><input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} /></label><button onClick={() => setIds(projects.map(item => item.id))}>全选</button><button onClick={() => setIds([])}>清空</button></div>
+        <div className="export-projects" role="group" aria-label="导出项目候选">{projects.filter(item => `${item.disp}${item.name_full}${item.warehouse_name ?? ''}`.includes(keyword.trim())).map(item => <button key={item.id} aria-pressed={selected.includes(item.id)} onClick={() => { setFeedback(''); setIds(selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id]); }}>
+          {selected.includes(item.id) ? '☑' : '☐'} {item.disp || item.name_full}{item.status === 'archived' ? '（归档）' : ''}
+        </button>)}</div>
+        <p>已选 {chosen.length} 个项目</p>
+      </> : <>
+        <p>{kind === 'ledger' ? chosen.length === 1 ? '将生成1个工作簿。' : `选了${chosen.length}个项目，将生成一个zip。` : `已选 ${chosen.length} 个项目，按以下顺序导出。`}</p>
+        <div className="export-table"><table><thead><tr><th>顺序</th><th><button disabled={busy} onClick={() => setIds([...chosen].sort((a, b) => (a.disp || a.name_full).localeCompare(b.disp || b.name_full, 'zh')).map(item => item.id))}>项目排序</button></th><th>调整顺序</th></tr></thead><tbody>{chosen.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{item.disp || item.name_full}</td><td><button aria-label={`上移${item.disp || item.name_full}`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</button> <button aria-label={`下移${item.disp || item.name_full}`} disabled={busy || index === chosen.length - 1} onClick={() => move(index, 1)}>下移</button></td></tr>)}</tbody></table></div>
+      </>}
+      {(reason || feedback) && <p className="notice" role="alert">{reason || feedback}</p>}
+      {busy && <p role="status">正在生成文件…</p>}
+      <div className="dialog-actions"><button disabled={busy} onClick={close}>取消</button>{confirm ? <><button disabled={busy} onClick={() => { setFeedback(''); setConfirm(false); }}>返回选择</button><button className="primary" disabled={Boolean(reason) || busy || !chosen.length} onClick={() => void save()}>保存到本地</button></> : <button className="primary" disabled={Boolean(reason) || !chosen.length} onClick={() => { setFeedback(''); setConfirm(true); }}>确认清单</button>}</div>
+    </dialog>, document.body)}
   </>;
 }

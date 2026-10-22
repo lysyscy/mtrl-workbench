@@ -81,8 +81,8 @@ def test_导出返回的是Path而不是str(monkeypatch, tmp_path):
                    "material": Decimal("2"), "mech": Decimal("3")}],
         "jc_skipped": 0, "mech_settle_ready": False,
     })
-    from app.core import config
-    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    from app.report_export import service as exports
+    monkeypatch.setattr(exports, "EXPORT_ROOT", tmp_path)
     path, note = S.export_total_debt(None)          # ⚠️ 会话已被打桩，不需要真库
     assert isinstance(path, Path), (
         "端点要 `path.name` ⇒ 实现必须回 `Path`；回 `str` 会 **HTTP 500**（真机踩过）")
@@ -105,3 +105,16 @@ def test_总欠款的口径与页面同源():
     # ⚠️ 反例守卫：⛔ 不许在本函数里自己累加 `settle / pay`（那就是第二份口径）
     assert "settle_stat" not in src and "pay_stat" not in src, \
         "本函数只许**转交**给域内核，⛔ 不许自己算欠款"
+
+
+def test_total_debt_uses_shared_export_root(monkeypatch, tmp_path):
+    from app.report_export import service as exports
+    monkeypatch.setattr(exports, 'EXPORT_ROOT', tmp_path)
+    monkeypatch.setattr(S, 'total_debt_rows', lambda *_args, **_kwargs: {
+        'items': [{'index': 1, 'project': '合成项目', 'jc': 0, 'material': 12, 'mech': 0}],
+        'jc_skipped': 0, 'mech_settle_ready': True})
+    captured=[]
+    monkeypatch.setattr(X, 'build_xlsx', lambda items, out_dir, **kwargs: captured.append(out_dir) or str(out_dir / 'synthetic.xlsx'))
+    path, note = S.export_total_debt(object(), '合成仓库')
+    assert captured == [tmp_path / '总欠款']
+    assert path.parent == tmp_path / '总欠款' and note['rows'] == 1

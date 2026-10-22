@@ -11,7 +11,7 @@
 - [x] 服务端拒绝、版本冲突、重复提交与保存成功但刷新失败分别呈现；合计适时更新，金额空/零语义保持。
 - [x] 实际后端与隔离库验证写入、历史摘要刷新、撤销/重做、冲突及账号隔离，失败无部分写入；移植 TAIL-394/396 的有效保障。
 - [x] 下载并读取实际台账导出，与同范围数据核对；记录首个编辑表格的适配证据和待复杂报表确认项。
-- [ ] 逐月台账导出可按实际身份/忙碌边界正常打开独立弹窗，多选项目和顺序独立于查看单选及总欠款导出；实际文件内容正确，预览输出不进入正式目录。
+- [x] 逐月台账导出可按实际身份/忙碌边界正常打开独立弹窗，多选项目和顺序独立于查看单选及总欠款导出；实际文件内容正确，预览输出不进入正式目录。
 
 规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 18, 19, 20, 21, 22, 23, 24, 25, 26, 41, 43）；业务口径：[MOD-05](../../../docs/requirements/PRD/02-功能规格/MOD-05.md)。
 
@@ -110,3 +110,20 @@
 本地保存后按本轮明确授权重建一次最终真实只读快照副本，保持8037运行到父任务通知结束；新准确进程/schema归属由最终回执提供，不能沿用已清理72726。登录资料只查本机指南，不回传业务明细/真实截图；继续不推送、不部署、不碰源库写入、不启动399，398仍待人工验收。
 
 **2026-10-22 · 最新反馈与完整页面关口（仅计划更新）。** 用户已明确导出是悬停即显示不能点击，尚未核实身份及其他禁用条件，不记录为保存后无反馈或猜测未登录。最新要求是页面功能与交互完整后再人工验收，不是每技术小批次或台账局部路由都叫用户试用；此前局部人工前置安排由共同规格[当前反馈与两批接续](../../frontend-vue-rewrite/spec.md#当前反馈与两批接续)的待裁定调度方案替代。A双导出/隔离出口、B读取UI反馈分别另开有界执行对话，内部核验后统一纳入完整流水欠款页（398＋405）人工关口，不在原398线程无限追加。项目完整维护回401，通知书完整页范围及399→400/401→402—405建议回共同规格；当前399仍暂停、398仍claimed，不虚报用户通过或改依赖。本次只维护文档并本地保存，未改代码、未操作预览；父任务已确认8037正常清理，新的启动须另按真实状态协调。
+
+
+**2026-10-22 · A批内部交付：双独立导出与隔离出口。** 基点5163eee（业务65ad1de）；只实施398导出与405总欠款切片，B/399未启动，未代替完整页面人工验收。采用Ponytail full、Impeccable Operate及writing-for-agents；无依赖新增，身份、金额与历史写入确认口径保留。
+
+根因证据：旧入口原生disabled由未登录、身份核验暂停、controlBusy三项驱动，却没有入口原因；control的草稿阻止/失败仅写弹窗后方回执；旧确认表排序未用于实际请求。正常登录读取、身份刷新同账号恢复和控制动作finally释放已实测，未重现永久busy，无法追溯用户原现场身份，不归因为“未登录”。现入口保留身份/忙碌/读取失败/不确定操作保护，给出就地原因；两个独立弹窗分别持有多选、选择顺序、项目排序/上移下移、确认与取消，取消后保留选择，查看仍单选。草稿保护覆盖本账号所选项目（含切走的项目），阻止原因和导出异常在弹窗内显示；导出GET失败可重试，不误置历史写入恢复锁。弹窗关闭先解除原生模态再返回对应入口焦点；换号/离页/身份暂停关闭模态，迟到文件不下载。
+
+export_total_debt改用report_export.service.EXPORT_ROOT，正式默认仍为PROJECT_ROOT/exports，预览进本轮隔离目录。空选/缺仓库键不提交，不会把空projects误解释为全选；总欠款实际文件核单项目范围、两项目自定行序、数值金额，逐月核单本三表/ZIP项目、备注与月份，排序按确认清单真实发出。未改任何金额计算。
+
+验证与首次失败（均保留，未删保护用例）：
+- 修复前路径反例：pytest backend/tests/test_debt_export.py -k shared_export_root -q --tb=short，1 failed/4 deselected，退出1；修复前新弹窗反例1 failed，退出1。后者schema 883728c76ff74a9a947e311a10f63349正常清理，原服务日志归本机164200-750463-34768。
+- 首轮新导出选集1 failed/5 passed，退出1，真实暴露下载后焦点竞争，已修复；完整原始日志 `.artifacts/archive/frontend-vue-rewrite/164525-161629-6028/logs/a-exports-first.log`。
+- pytest apps/frontend/tests/test_export_dialogs.py apps/frontend/tests/test_ledger.py apps/frontend/tests/test_ledger_layout.py -q -s --tb=short：41 passed、退出0（127.61秒），覆盖真实单本/ZIP/总欠款、身份暂停/恢复/换号、草稿、错误、busy释放、焦点及65ad1de四类undo/redo坏正文、冲突和连续编辑；日志 `.artifacts/archive/frontend-vue-rewrite/164745-341217-25080/logs/a-exports-and-ledger.log`。
+- 新增迟到下载换号/离页后，pytest apps/frontend/tests/test_export_dialogs.py backend/tests/test_debt_export.py -q -s --tb=short：9个浏览器＋5个后端用例全通过、退出0（后端配置叠加quiet故原始输出无计时总结，未虚构）；日志 `.artifacts/archive/frontend-vue-rewrite/165054-027737-11512/logs/a-final-edge-and-backend.log`。旧Path测试的PROJECT_ROOT替身同步改成EXPORT_ROOT；该旧替身首次留下的唯一默认目录合成文件经创建时间与固定自检行(1,2,3)确认，已精确删除文件及本轮新建空目录，无Force/递归或源库写入。
+- 最后按截图修正窄屏搜索标签换行并删重复说明后，pytest apps/frontend/tests/test_export_dialogs.py -k dialog_layout -o addopts= -q -s --tb=short：2 passed/7 deselected、退出0（10.71秒）；最终浅色1440、深色大字号800两弹窗选择/确认截图归 `.artifacts/archive/frontend-vue-rewrite/165230-529245-19724/screenshots/`，已实际看图。日志为同run/logs/a-final-layout.log。
+- corepack pnpm@12.14.0 install --frozen-lockfile退出0；最终typecheck和build各退出0，锁/声明未改。最终CSS index-DU0KB08V、主包index-dK56kNfW、台账ledger-BozIKtrH；保留已有大块提示。Impeccable限定三个UI文件detect返回[]、退出0；差异字节/语法由真实提交钩子再核。
+
+本批按固定基点对调用者、状态流与后端出口自查；仅共享控制反馈返回值和导出根接合，无金额或写入协议改动，原写入/恢复保障已跑全，选自查而未假称独立审查。最终七个准确自有schema（883728c76ff74a9a947e311a10f63349、e3a4dd96296343b495dc4cb057693d9f、8526ccd212b54e169e385521ec62f77a、ce64a7933dd64f269cb12ce66e4642ce、8d5c4c2f3c234a2d92551a7112ace182、1d42ba0a838447698b6980bc454a057d、bf07b5b8baa44cf8a5f6bc9d8c4cf0da，均带frontend_rewrite_397_前缀）有正常cleaned回执，已只读核mtrl_workbench_test中全部消失；8037关闭，未建常驻真实副本。上述本机产物按现有retention保留最多30天，临时work由run主人正常收尾；整个effort仍由父任务继续，不能按本批完成清理共同规格。仅本地提交，不推送、不部署、不重启正式服务；历史原现场禁用状态未能追溯，完整流水欠款页面仍待后续实施后人工验收。

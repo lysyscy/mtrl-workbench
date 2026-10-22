@@ -52,11 +52,11 @@ def test_same_synthetic_project_period_viewport_and_scale_pair(server,browser_pa
             old.locator('[data-act="ledExpOk"]').click()
             expect(old.get_by_text('导出 · 逐月欠款台账（每项目一个工作簿）',exact=True)).to_be_visible()
             old.screenshot(path=str(output('398-corrected-export-confirm-old.png',kind='screenshots')),full_page=True)
-            page.get_by_role('button',name='批量导出（先选项目）…',exact=True).click()
-            page.get_by_role('button',name='导出台账',exact=True).click()
+            page.get_by_role('button',name='逐月台账导出…',exact=True).click()
+            page.get_by_role('button',name='确认清单',exact=True).click()
             expect(page.get_by_role('dialog')).to_be_visible()
             page.screenshot(path=str(output('398-corrected-export-confirm-new.png',kind='screenshots')),full_page=True)
-            page.get_by_role('dialog').get_by_role('button',name='关闭',exact=True).click()
+            page.get_by_role('dialog').get_by_role('button',name='取消',exact=True).click()
     finally: old_context.close()
 
 
@@ -86,22 +86,25 @@ def test_normal_month_remark_clear_undo_and_stale_token(server,browser_page):
 
 def test_independent_multi_project_preview_cancel_and_actual_zip(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
-    page.get_by_role('button',name='批量导出（先选项目）…',exact=True).click()
+    page.get_by_role('button',name='逐月台账导出…',exact=True).click()
     picker=page.get_by_role('group',name='导出项目候选');expect(picker).to_be_visible()
     picker.get_by_role('button',name=re.compile('^☐ 长项目名验收')).click()
     expect(page.get_by_role('button',name='选择项目',exact=True)).to_contain_text('隔离项目')
-    page.get_by_role('button',name='导出台账',exact=True).click()
+    page.get_by_role('button',name='确认清单',exact=True).click()
     dialog=page.get_by_role('dialog');expect(dialog).to_contain_text('选了2个项目')
     expect(dialog.get_by_role('row')).to_have_count(3)
-    dialog.get_by_role('button',name='工作簿（每项目一个） ↕',exact=True).click()
-    dialog.get_by_role('button',name='关闭',exact=True).click();expect(dialog).to_have_count(0)
+    dialog.get_by_role('button',name='项目排序',exact=True).click()
+    dialog.get_by_role('button',name='取消',exact=True).click();expect(dialog).to_have_count(0)
     assert not list(page.context.pages)[0].is_closed()
-    page.get_by_role('button',name='导出台账',exact=True).click()
+    page.get_by_role('button',name='逐月台账导出…',exact=True).click()
+    page.get_by_role('button',name='确认清单',exact=True).click()
+    order=dialog.locator('tbody tr td:nth-child(2)').all_text_contents()
     with page.expect_download() as event: page.get_by_role('button',name='保存到本地',exact=True).click()
     download=event.value;path=output(download.suggested_filename,kind='exports');download.save_as(path)
     assert path.suffix=='.zip'
     with zipfile.ZipFile(path) as archive:
         assert len(archive.namelist())==2
+        assert [next(disp for disp in order if disp in name) for name in archive.namelist()] == order
         assert any('隔离项目' in n for n in archive.namelist()) and any('长项目名验收' in n for n in archive.namelist())
         for name in archive.namelist():
             workbook=openpyxl.load_workbook(io.BytesIO(archive.read(name)),data_only=True)
@@ -196,6 +199,9 @@ def test_applied_history_200_unconfirmed_body_locks_both_actions_until_readback(
     page.get_by_role('button',name='撤销' if direction=='undo' else '重做',exact=True).click()
     expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_visible()
     for label in ['撤销','重做']:expect(page.get_by_role('button',name=label,exact=True)).to_be_disabled()
+    for label in ['逐月台账导出…','总欠款汇总导出…']:
+        expect(page.get_by_role('button',name=label,exact=True)).to_have_attribute('aria-disabled','true')
+        expect(page.get_by_role('button',name=label,exact=True)).to_have_attribute('title','操作结果待核实，请先重新加载核对。')
     page.keyboard.press('Control+z');page.keyboard.press('Control+y')
     select_project(page,'长项目名验收')
     expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_visible()

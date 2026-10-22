@@ -343,8 +343,8 @@ def test_duplicate_add_stale_token_and_real_export(server,browser_page):
     sync_ledger(page)
     expect(cell(page,rid,'remark')).to_have_value('导出核对行')
     expected=data(page,server,project,previous_report_month(page))
-    page.get_by_role('button',name='批量导出（先选项目）…',exact=True).click()
-    page.get_by_role('button',name='导出台账',exact=True).click()
+    page.get_by_role('button',name='逐月台账导出…',exact=True).click()
+    page.get_by_role('button',name='确认清单',exact=True).click()
     with page.expect_download() as event:page.get_by_role('button',name='保存到本地',exact=True).click()
     download=event.value;path=output(download.suggested_filename,kind='exports');download.save_as(path)
     assert path.stat().st_size>1000 and path.suffix=='.xlsx'
