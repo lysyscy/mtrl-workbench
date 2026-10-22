@@ -47,3 +47,17 @@
 静态入口：TS7/最终build退出0；syntax_audit --staged退出0，必须修0；bytes_guard --staged最终覆盖20件、同一check规则额外覆盖5件TS/TSX，均退出0；Impeccable最终检测[]/退出0。doc_audit必须修0、疑似33、退出0，未为基线黄项扩票；首次缺基线与不支持--baseline参数各退出2，随后沿既有配方独占临时本worktree.env仅写公开PRD路径，finally核内容删除，未写D:/dev配置。最后提交运行真实语法/字节钩子。
 
 资源复核以本机reports/resource-db.json、resource-processes.json为准：本轮精确schema均已不存在、对应连接为0；已登记服务/dev进程均已wait退出，PID与端口无残留，无临时.env或测试导出。必要日志/JUnit/合成截图选留原定30天位置，工作脚本、两份基点源码快照、Vite临时缓存和schema工作目录均由本轮释放；最终前端dist供父审保留，随现有worktree生命周期管理。run-closed与本地提交结果以本次最终回执为准；整个frontend effort仍在办，未执行effort closed。
+
+**2026-10-22 · 独立审查后有界修补（待父复审）。** 起点1a809030861f979cc9507d9adc74bb57f8e405b3、工作区clean；父独立审查未放行，按P2修补后再交回。`current_operator` 在姓名为空时合法回退完整账号，而原 `run_record.triggered_by` 仅64字符：111字符合成账号的成功取数和外部失败两条真实HTTP路径均在flush时500，外部原错被盖住（`long-account-red.log`：2失败，退出1；服务日志确认StringDataRightTruncation）。模型改Text，新增迁移 `c400261022`（前置c391261021）保留完整值；此前“无迁移”的实施记录由此补正。降级先锁表并检查超长值，存在则明确拒绝截断。只在mtrl_workbench_test独占schema执行，正式库未迁移；以后部署本改动须先按正式授权升级schema。
+
+**修复证据。** 固定外部替身新增专用失败月份，合成账号姓名为空、111字符，保留真实登录态→原取数解析/归属→隔离PostgreSQL→记录读取。`test_long_account_preserved_in_success_and_external_failure` 两参数分别验证HTTP200/完整成功留痕及HTTP502/原external_service消息/完整失败留痕，真实耗时、仅一次外部替身调用和数据有无均断言。随原9条浏览器流程运行 `python -X utf8 -m pytest apps/frontend/tests/test_i8.py -q --tb=short -s`：**11通过/30.68秒，退出0**（`i8-final.log`、JUnit）；模块browser/逐例context/日志按schema隔离及外发阻断保持。未改前端产品源码。
+
+迁移专用隔离验证 `migration.log` 总退出0：在c391的varchar(64)旧表保留合成旧身份和原错误，再升级head逐值不变；写入111字符后，降级子命令按预期退出1、明确refusing to truncate，随后核Text/head/完整长短身份均未改变。该预期拒绝不算成功执行降级，不涉及生产库。
+
+**建档夹具与零行错误复验。** 父审离线定位的建档失败是固定客户端输入缺少有效i8地址；仅在原 `test_陌生仓库自动建档扶正并逐条列出` 补 `http://fixed-i8.invalid` 缓存输入，客户端和导出仍为替身，全部原断言保留（扶正1/创建0、逐条结果、未归属及降级等）。独占schema中运行 `tests/test_i8_manual_safety.py tests/test_acc_i8_fetch.py tests/test_run_record_timing.py tests/test_acc_setl_fetch.py tests/test_acc_inv_fetch.py tests/test_acc_jc_fetch_orch.py tests/test_notice_fetch_skip.py -o addopts='' -q --tb=short`：**47通过/2.95秒，退出0**（`backend-final.log`、JUnit），含该原节点及 `test_failed_zero_row_sync_is_not_recorded_as_success`。前轮零行错误修复与红灯/最终通过证据保留，未删除断言，也未扩大退役通用导入。
+
+**非阻塞项与页面关口。** layering B/C是真实的MOD05/06既有架构违规，按父裁定记入[422累计收口](TAIL-422-累计集成验收与切换准备.md)，本轮不改架构、不加豁免；此次未重跑分层或全仓，不能据定向通过宣称全绿。400继续只承接配置查看；地址编辑归[419先行切片](TAIL-419-规则与配置维护.md)，父将于400技术收口后另开线程完成，再开i8整页人工关口，不等419全部规则，也不把419整票标完。个人凭据420、打印406、401业务均未扩展；本轮不报整页候选，不发起人工预览、真实i8、同步、打印、push或部署。票仍claimed待父复审。
+
+**本轮静态与证据。** TS7 `tsc --noEmit`、Vite build均实际退出0，既有主题URL/大chunk提示仍在；无独立lint/aggregate脚本，语法/字节/文档按仓库入口，最终结果及清理见收尾补记。必要日志/JUnit/合成截图在 `.artifacts/archive/frontend-vue-rewrite/tail400-review-20261022/`，沿effort既定2026-11-21保留期限，不延长；原tail400-20261022证据不动。
+
+**2026-10-22 · 修补静态与资源补记。** syntax_audit --staged、bytes_guard --staged（10件）均退出0、必须修0；doc_audit退出0、必须修0/疑似33，独占临时worktree.env仅公开PRD路径并已finally删除。未新增架构豁免。4个精确owned schema及对应数据库连接均已不存在；3组日志登记的preview/dev PID及监听端口均不存在、fixture均closed（reports/resource-db.json、resource-processes.json）。清理解析器首次遇空日志产生非终止报错，按字符串空值修正后重新只读核对，退出0，未因此重跑业务测试。本次按P2及夹具差异自查，父复审仍另行；本地提交保留真实钩子，工作脚本/缓存释放、归档与run-closed最终结果见回执。整个effort继续在办。

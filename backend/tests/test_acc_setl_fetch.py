@@ -337,7 +337,7 @@ def test_二次确认且失败降级不重试():
     assert len(records) == 1 and records[0].status == "failed"  # 失败要留执行记录
 
 
-def test_陌生仓库自动建档扶正并逐条列出():
+def test_陌生仓库自动建档扶正并逐条列出(monkeypatch):
     """⭐ 口径（2026-09-17 按《说明书》§2.4.2 订正）：陌生仓库 ⇒ **自动建档 / 扶正** —— 无感、不要求用户操作。
 
     ⚠️ 本条原来钉的是「**不自动建档**」，那与 §2.4.2「**B 材料侧扶正**：陌生仓库 → 同步仓库名单 →
@@ -345,6 +345,10 @@ def test_陌生仓库自动建档扶正并逐条列出():
     """
     from app.mod01_projects.models import Project
     from app.mod01_projects.repository import all_projects
+
+    from app.core import app_settings
+    # WarehouseSource requires a valid address before calling the fixed client.
+    monkeypatch.setattr(app_settings, "_CACHE", {"i8_base_url": "http://fixed-i8.invalid"})
 
     s = FakeSession({Project: [_project(1, "甲仓", "P1"),
                                _project(2, "未建仓-1", "P2")]})      # 2 号 = 占位行，等扶正

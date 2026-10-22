@@ -40,7 +40,7 @@ def create_app():
         finally:
             active_month.reset(token)
         time.sleep(2 if month in ('2026-01', '2026-04', '2026-06') else .25)
-        if month == '2026-03':
+        if month in ('2026-03', '2026-09'):
             raise ExternalServiceError('fixed i8 failure: no real request')
         rows = [{'PhId': 'TAIL400-' + month, 'BillNo': 'TAIL400-' + month,
                  'PhidPc_EXName': '隔离验收项目', 'BillName': '合成材料款',

@@ -32,7 +32,7 @@ class RunRecord(Base):
     success_count: Mapped[int] = mapped_column(Integer, default=0)
     fail_count: Mapped[int] = mapped_column(Integer, default=0)
     total_count: Mapped[int] = mapped_column(Integer, default=0)
-    triggered_by: Mapped[str] = mapped_column(String(64), default="manual")
+    triggered_by: Mapped[str] = mapped_column(Text, default="manual")
     error_message: Mapped[str] = mapped_column(Text, default="")
     detail: Mapped[dict] = mapped_column(JSON, default=dict)  # 逐单据结果 / 失败原因
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
