@@ -50,7 +50,19 @@ def get_debt_data() -> PageData:
         with session_scope() as s:
             # ⭐ `TAIL-100`：走 `build_debt_live`（＝ `build_debt` ＋ **注入集采欠款**）——
             #   原先这里直接 `build_debt(s)` ⇒ `jc_debt` 恒 `None` ⇒ 「集采欠款」恒 ¥0.00。
-            return svc.build_debt_live(s, **kw)
+            data = svc.build_debt_live(s, **kw)
+            # Same project/category amounts as the existing total-debt export.
+            data["by_project_category"] = [
+                {"project": row["project"], **{key: f"{row[key]:.2f}" for key in ("jc", "material", "mech")}}
+                for row in svc.total_debt_rows(s)["items"]
+            ]
+            from app.mod05_flow import domain
+            unassigned = [row for row in svc.notice_debt_views(s) if row.ownership_id is None]
+            values = domain.debt_by_category(unassigned, [])
+            if any(values[c] for c in ("material", "mechanical")):
+                data["by_project_category"].append({"project": "待指定归属", "jc": "0.00",
+                    "material": f'{values["material"]:.2f}', "mech": f'{values["mechanical"]:.2f}'})
+            return data
 
     return _load
 

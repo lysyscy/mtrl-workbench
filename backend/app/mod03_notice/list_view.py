@@ -257,6 +257,8 @@ def _flows_by_notice(session):
 
     grouped: dict[int, list[dict]] = {}
     for f in flow_service.list_flows(session):
+        if f.notice_id is None:
+            continue  # The flow remains visible in MOD-05 without a linked notice.
         grouped.setdefault(int(f.notice_id), []).append(
             {
                 "id": f.id,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
@@ -40,10 +40,11 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   const [payIds,setPayIds] = useState<number[]|null>(null), [payOverrides,setPayOverrides] = useState<Record<number,PayOverride>>({});
   function setPay(row: NoticeRow, value: string) { setPayOverrides(old => ({ ...old, [row.notice_id]: { value, basis: `${row.amount_approved}:${row.amount_paid}` } })); }
   function paid(ids: number[]) { setPayOverrides(old => Object.fromEntries(Object.entries(old).filter(([id]) => !ids.includes(Number(id))))); setPicked(new Set()); }
+  useEffect(() => { const listener=(event:Event)=> { const id=Number((event as CustomEvent<number>).detail);setPayOverrides(old=>Object.fromEntries(Object.entries(old).filter(([key])=>Number(key)!==id))); };window.addEventListener('payment-revoked',listener);return()=>window.removeEventListener('payment-revoked',listener); },[]);
   const [autoIds,setAutoIds] = useState<number[]|null>(null);
   const dialog = useRef<HTMLDialogElement>(null), draftRef = useRef<Draft | null>(null), moneyDrafts = useRef<Record<string,string>>({}), pendingFocus = useRef(0);
   const [draft, setDraft] = useState<Draft | null>(null), [maintenance, setMaintenance] = useState<NoticeDialogState | null>(null), [focusId,setFocusId] = useState(0);
-  useEffect(() => { const id=Number(params.get('notice'));if(id>0){pendingFocus.current=id;setFocusId(id);} }, [params]);
+  useEffect(() => { const id=Number(params.get('notice'));if(id>0){pendingFocus.current=id;setFocusId(id);setFilters({...defaults(),mode:'all',paid:''});setSearch('');} }, [params]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const query = useQuery({ queryKey: ['notices'], enabled: !blocked && active, queryFn: async ({ signal }) => readNotices(await requestJson('/api/m03/notice-list?period=', { signal })), refetchOnMount: 'always' });
   useEffect(() => { if (query.data) setPayOverrides(old => { const entries=Object.entries(old).filter(([id,draft]) => query.data.some(row => row.notice_id===Number(id) && draft.basis===`${row.amount_approved}:${row.amount_paid}`));return entries.length===Object.keys(old).length ? old : Object.fromEntries(entries); }); }, [query.data]);
@@ -118,7 +119,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     ...moneyKeys.map((key): ColDef<NoticeRow> => ({ field: key, headerName: amountNames[key], width: 155 * scale, cellClass: 'money', comparator: (a: string, b: string) => cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0,
       cellRenderer: (p: ICellRendererParams<NoticeRow>) => !p.node.rowPinned && key === 'pay_amount' ? <PayAmountCell row={p.data!} override={current.current.payOverrides[p.data!.notice_id]} change={current.current.setPay} disabled={current.current.unavailable || p.data!.is_excluded || p.data!.is_revoked} /> : !p.node.rowPinned && (key === 'stat_settle' || key === 'stat_paid' || key === 'amount_approved' && p.data!.is_manual) ? <StatCell drafts={current.current.moneyDrafts} row={p.data!} field={key} disabled={current.current.unavailable || p.data!.is_excluded || p.data!.is_revoked} save={(path,payload) => current.current.action(path,payload)} /> : <span>{money(p.data![key])}{!p.node.rowPinned && key === 'amount_paid' && p.data!.is_overpaid && <span className="notice-tag rule">超付</span>}</span> })),
     { field: 'approve_status', headerName: '审批状态', width: 105 * scale }, { field: 'pay_status', headerName: '付款状态', width: 110 * scale },
-    { colId: 'actions', headerName: '操作', width: 175 * scale, sortable: false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned || !p.data!.is_manual ? '' : <div className="notice-row-actions"><span className="notice-tag">手动</span><button disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</button><button className="danger" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</button></div> },
+    { colId: 'actions', headerName: '操作', width: 175 * scale, sortable: false, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <div className="notice-row-actions">{cents(p.data!.amount_paid)>0n && <Link className="text-link" to={`/ledger?notice=${p.data!.notice_id}`}>撤销付款</Link>}{p.data!.is_manual && <><span className="notice-tag">手动</span><button disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.begin(p.data!)}>编辑</button><button className="danger" disabled={current.current.unavailable || Boolean(current.current.draft)} onClick={() => current.current.open('delete',p.data!)}>删除</button></>}</div> },
   ] as ColDef<NoticeRow>[]).map((column: ColDef<NoticeRow>): ColDef<NoticeRow> => {
     const original = column.cellRenderer;
     const mapping: Record<string,keyof Draft> = { doc_date:'doc_date',bill_no:'bill_no',project_display:'ownership_id',category_label:'category',bill_name:'bill_name',biz_type:'biz_type',payee:'payee',amount_approved:'amount_approved',stat_settle:'stat_settle',stat_paid:'stat_paid',approve_status:'approve_status' };

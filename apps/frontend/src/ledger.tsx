@@ -181,6 +181,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
     accept(s, full);
     if (!current.current.blocked) {
       await client.invalidateQueries({ queryKey: ['ledger', s.owner, s.project], refetchType: 'none' });
+      await client.invalidateQueries({ queryKey: ['debt'] }, { throwOnError: true });
       if (historyNeedsReadback.current) await client.cancelQueries({ queryKey: ['history', s.owner] });
       await client.fetchQuery({ queryKey: ['history', s.owner], queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })), staleTime: 0 });
       const uncertain = historyNeedsReadback.current;
