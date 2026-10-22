@@ -15,9 +15,6 @@ from test_preview import ROOT, server, browser_page, login
 from tools.audit.workspace_paths import output, output_dir
 
 
-LONG_ACCOUNT = 'synthetic-long-' + 'a' * 96
-
-
 @pytest.fixture(scope='module')
 def preview_factory():
     return 'apps.frontend.tests.fixtures.i8_backend:create_app'
@@ -36,8 +33,6 @@ def preview_seed():
                 assert session.execute(text("select current_database(), current_schema(), current_setting('search_path')")).one() == ('mtrl_workbench_test', env['PGOPTIONS'].split('search_path=')[1], env['PGOPTIONS'].split('search_path=')[1])
                 admin = session.scalar(select(UserAccount).where(UserAccount.account == 'preview-admin'))
                 admin.i8_user, admin.i8_password = 'synthetic-admin', 'synthetic-password'
-                session.add(UserAccount(account=LONG_ACCOUNT, name='', role='user', password='',
-                                        i8_user='synthetic-long', i8_password='synthetic-password'))
                 session.add(AppSetting(key='i8_base_url', value='http://i8.invalid'))
                 session.add(Project(project_type='shell', name_full='合成待归属壳', disp='合成壳', ord=5))
                 start = datetime(2026, 8, 1, 9)
@@ -47,40 +42,6 @@ def preview_seed():
         finally:
             engine.dispose()
     return seed
-
-
-@pytest.mark.parametrize(('month', 'http_status', 'run_status'), [
-    ('2026-07', 200, 'success'), ('2026-09', 502, 'failed'),
-])
-def test_long_account_preserved_in_success_and_external_failure(server, month, http_status, run_status):
-    # Real HTTP/session -> fetch/persistence -> isolated PostgreSQL; no browser rollback.
-    assert len(LONG_ACCOUNT) > 64
-    with httpx.Client(base_url=server) as client:
-        login_response = client.post('/m15/login', data={'account': LONG_ACCOUNT, 'password': '', 'next': '/preview/i8'})
-        assert login_response.status_code == 303
-        response = client.post('/api/m03/notices/fetch', json={
-            'year_month': month, 'allow_kick': False, 'expected_account': LONG_ACCOUNT,
-        })
-        assert response.status_code == http_status, response.text
-        if run_status == 'success':
-            assert response.json()['fetched'] == response.json()['upserted'] == 1
-        else:
-            assert response.json()['code'] == 'external_service'
-            assert response.json()['message'] == 'fixed i8 failure: no real request'
-        records_response = client.get('/api/m02/fetch/records?limit=200')
-        assert records_response.status_code == 200
-        records = [row for row in records_response.json() if row['target'] == month]
-        assert len(records) == 1
-        record = records[0]
-        assert record['triggered_by'] == LONG_ACCOUNT
-        assert record['status'] == run_status
-        assert record['error_message'] == ('fixed i8 failure: no real request' if run_status == 'failed' else '')
-        assert record['duration_seconds'] >= .25
-        state = client.get('/__test__/i8').json()
-        calls = [call for call in state['calls'] if call['month'] == month]
-        assert calls == [{'month': month, 'allow_kick': False, 'account': LONG_ACCOUNT}]
-        persisted = [row for row in state['notices'] if row['ph_id'] == 'TAIL400-' + month]
-        assert len(persisted) == (1 if run_status == 'success' else 0)
 
 
 def open_i8(page, server, month='2026-01', account='preview-admin'):

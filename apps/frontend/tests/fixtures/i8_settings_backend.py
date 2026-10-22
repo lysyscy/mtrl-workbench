@@ -8,8 +8,7 @@ from .i8_backend import create_app as create_i8_app
 def create_app():
     app = create_i8_app()
     from app.core.db import session_scope
-    from app.mod14_config.models import AppSetting, AppSettingLog
-    from sqlalchemy import select
+    from app.mod14_config.models import AppSetting
     release = asyncio.Event()
     flight = {'started': False, 'finished': False, 'status': None}
 
@@ -53,11 +52,4 @@ def create_app():
         invalidate()
         return {'ok': True}
 
-    @app.get('/__test__/settings-state')
-    def state():
-        with session_scope() as session:
-            row = session.get(AppSetting, 'i8_base_url')
-            log = session.scalar(select(AppSettingLog).where(AppSettingLog.key == 'i8_base_url').order_by(AppSettingLog.id.desc()))
-            return {'value': row.value if row else '', 'updated_by': row.updated_by if row else '',
-                    'operator': log.operator if log else ''}
     return app

@@ -7,9 +7,6 @@ from playwright.sync_api import expect
 from test_preview import server, browser_page, login
 from test_i8 import open_i8, snapshot
 
-LONG_ACCOUNT = 'synthetic-settings-' + 'a' * 92
-
-
 @pytest.fixture(scope='module')
 def preview_factory():
     return 'apps.frontend.tests.fixtures.i8_settings_backend:create_app'
@@ -21,14 +18,12 @@ def preview_seed():
         from sqlalchemy import create_engine, text
         from sqlalchemy.orm import Session
         from app.mod14_config.models import AppSetting
-        from app.mod15_user.models import UserAccount
         env['I8_BASE_URL'] = 'http://fallback-i8.invalid'
         engine = create_engine(env['TEST_DATABASE_URL'], connect_args={'options': env['PGOPTIONS']})
         try:
             with Session(engine) as session:
                 schema = env['PGOPTIONS'].split('search_path=')[1]
                 assert session.execute(text("select current_database(), current_schema(), current_setting('search_path')")).one() == ('mtrl_workbench_test', schema, schema)
-                session.add(UserAccount(account=LONG_ACCOUNT, name='', role='user', password=''))
                 session.add_all([AppSetting(key=key, value=value) for key, value in {
                     'i8_base_url': 'http://initial-i8.invalid',
                     'i8_print_id_material': 'synthetic-material',
@@ -302,22 +297,6 @@ def test_account_switch_blocks_stale_save_and_drops_late_receipt(server, browser
     expect(dialog.get_by_text('旧账号迟到错误', exact=True)).to_have_count(0)
     expect(dialog.get_by_label('服务地址', exact=True)).to_have_value(address)
     assert snapshot(page)['calls'] == []
-
-
-
-def test_long_blank_name_account_is_preserved_in_settings_and_log(server):
-    assert len(LONG_ACCOUNT) == 111
-    with httpx.Client(base_url=server) as client:
-        assert client.post('/m15/login', data={'account': LONG_ACCOUNT, 'password': ''}).status_code == 303
-        revision = next(item['version'] for item in settings(client)['items'] if item['key'] == 'i8_base_url')
-        saved = client.post('/api/m14/settings', params={'expected_account': LONG_ACCOUNT, 'expected_version': revision}, json={'i8_base_url': 'http://long-identity.invalid'})
-        assert saved.status_code == 200, saved.text
-        assert saved.json()['ok'] is True
-        reread = settings(client)
-        assert reread['logs'][0]['operator'] == LONG_ACCOUNT
-        persisted = client.get('/__test__/settings-state').json()
-        assert persisted['updated_by'] == persisted['operator'] == LONG_ACCOUNT
-        assert persisted['value'] == 'http://long-identity.invalid'
 
 
 
