@@ -17,3 +17,8 @@ def preview_browser():
 @pytest.fixture(scope='module')
 def preview_seed():
     return lambda env: None
+
+
+@pytest.fixture(scope='module')
+def preview_factory():
+    return 'tools.dev.frontend_preview:create_preview_app'

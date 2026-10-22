@@ -103,6 +103,34 @@ def get_common_project_rows() -> Callable[..., list[dict]]:
 # --------------------------------------------------------------- 路由
 
 
+@router.get("/config")
+def connection_config() -> dict:
+    """Read effective address and own binding without logging into i8."""
+    from app.core.app_settings import SETTING_I8_BASE_URL, is_overridden, validate
+    from app.core.config import get_settings, i8_base_of
+    from app.core.errors import MustReportError
+    from app.core.identity import current_i8_credentials
+    from app.core.session import current_name
+
+    address = i8_base_of(get_settings())
+    reasons = []
+    user = password = ""
+    if not address or validate(SETTING_I8_BASE_URL, address):
+        reasons.append("i8 服务地址未配置或格式不正确，请联系维护人员核对。")
+    if not current_name():
+        reasons.append("登录后才能执行抓取。")
+    else:
+        try:
+            user, password = current_i8_credentials()
+        except MustReportError as exc:
+            reasons.append(str(exc))
+        if user and not password:
+            reasons.append("当前账号未填写 i8 密码，请在用户管理中补齐绑定。")
+    return {"account": str(current_name()), "base_url": address, "source": "page" if is_overridden(SETTING_I8_BASE_URL) else "environment",
+            "i8_user": user, "ready": bool(address and user and password and not reasons),
+            "message": " ".join(reasons)}
+
+
 @router.get("/fetch/plan", response_model=FetchPlanOut)
 def fetch_plan(year_month: str = Query(..., description="核算年月，形如 2026-08")) -> FetchPlanOut:
     """核算年月 → 单据日期起止（闭区间）＋ 回显；**只允许「月」**（001-01 / 001-02）。"""
@@ -180,12 +208,16 @@ def fetch_run(
 def sync_warehouses(
     allow_kick: bool = Query(False, description="⭐ 须用户在界面二次确认后才为 true（D9：强踢）"),
     rows_loader: Callable[..., list[dict]] = Depends(get_warehouse_rows),
+    expected_account: str | None = Query(None),
 ) -> SyncOut:
     """**同步仓库名单**（`API-05`，手动点击）—— 建档推导判据 / 占位行扶正的数据源。
 
     ⚠️ 仓库名单**本身不落库**（它是「仓库名 ↔ 所属项目全名」的**映射**、不是档案行）——
        它是**建档的输入**；要建档请点「**同步常用项目列表**」（`ACC-PRJ-SYNC-001`）。
     """
+    from app.core.identity import require_expected_account
+
+    require_expected_account(expected_account)
     t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时要有起点
     try:
         rows = rows_loader(allow_kick)
@@ -205,6 +237,7 @@ def sync_common_projects(
     allow_kick: bool = Query(False, description="⭐ 须用户在界面二次确认后才为 true（D9：强踢）"),
     rows_loader: Callable[..., list[dict]] = Depends(get_common_project_rows),
     wh_loader: Callable[..., list[dict]] = Depends(get_warehouse_rows),
+    expected_account: str | None = Query(None),
 ) -> SyncOut:
     """**同步常用项目列表**（`API-06`，手动点击）—— **`phid` 权威来源**；抓完**按 `phid` 幂等建档**。
 
@@ -215,7 +248,10 @@ def sync_common_projects(
     ⚠️ 仓库名单（`API-05`）**与本次同步一起取**（它是"仓库名 ↔ 所属项目全名"的映射，建档要用）。
     ⚠️ `allow_kick=True` 会**踢掉该账号其他在线会话**（D9）⇒ 只能由界面二次确认后传。
     """
+    from app.core.identity import require_expected_account
     from app.mod01_projects.sync_service import sync_and_archive      # noqa: PLC0415
+
+    require_expected_account(expected_account)
 
     t0 = datetime.now()          # ⚠️ 同 `fetch_run`：耗时的起点（本次同步要拉两个名单，通常是最慢的一条）
     with session_scope() as s:

@@ -20,7 +20,7 @@ from tools.dev.frontend_preview import isolated_database
 
 
 @pytest.fixture(scope='module')
-def server(preview_seed):
+def server(preview_seed, preview_factory):
     source = os.environ.get('MTRL_PREVIEW_SOURCE_ENV')
     if not source:
         pytest.fail('MTRL_PREVIEW_SOURCE_ENV must identify the approved database configuration')
@@ -32,8 +32,9 @@ def server(preview_seed):
         log_path = output(env['PGAPPNAME'] + '.log', kind='logs')
         with log_path.open('w', encoding='utf-8') as log:
             process = subprocess.Popen([sys.executable, '-X', 'utf8', '-m', 'uvicorn',
-                'tools.dev.frontend_preview:create_preview_app', '--factory', '--host', '127.0.0.1',
+                preview_factory, '--factory', '--host', '127.0.0.1',
                 '--port', str(port), '--log-level', 'warning'], cwd=ROOT, env=env, stdout=log, stderr=log)
+            print(f'PREVIEW owned pid={process.pid} port={port} schema={env["PGAPPNAME"]}', flush=True)
             base = f'http://127.0.0.1:{port}'
             try:
                 deadline = time.monotonic() + 30
@@ -52,6 +53,7 @@ def server(preview_seed):
             finally:
                 process.terminate()
                 process.wait(timeout=15)
+                print(f'PREVIEW closed pid={process.pid} port={port} exit={process.returncode}', flush=True)
 
 
 @pytest.fixture

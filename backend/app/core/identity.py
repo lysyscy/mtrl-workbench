@@ -76,6 +76,15 @@ def is_placeholder() -> bool:
     return current_operator() == PLACEHOLDER_OPERATOR
 
 
+def require_expected_account(expected_account: str | None) -> None:
+    """New manual clients bind confirmation to the account that opened it."""
+    from app.core.session import current_name
+    from app.core.errors import DataConflictError
+
+    if expected_account is not None and current_name() != expected_account:
+        raise DataConflictError("账号已变化，请重新核实当前账号后操作。")
+
+
 def current_i8_credentials() -> tuple[str, str]:
     """**当前登录用户绑定的 i8 账号 / 密码**（§7.8：「i8 的账号与密码…**绑定到本系统账号、每人一份**」）。
 

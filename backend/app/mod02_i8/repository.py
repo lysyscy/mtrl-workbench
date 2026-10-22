@@ -9,6 +9,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.core.identity import current_operator
 from app.mod02_i8.models import RunRecord
 from app.mod02_i8.schemas import RunRecordOut
 
@@ -30,7 +31,8 @@ def create_run_record(session: Session, *, run_type: str, target: str, total: in
     ⛔ 别把这里改成 `min(现在, 传入值)` 之类"兜底"：那会把"调用方忘了传"这件事**藏起来**，
        而"忘了传 ⇒ 耗时恒 0"正是这次要根除的那个坑。
     """
-    rec = RunRecord(run_type=run_type, target=target, total_count=total, status="running")
+    rec = RunRecord(run_type=run_type, target=target, total_count=total, status="running",
+                    triggered_by=current_operator())
     if started_at is not None:
         rec.started_at = started_at          # ⚠️ 显式值**覆盖**列默认（列上是 `default=datetime.now`）
     session.add(rec)
@@ -91,6 +93,9 @@ def run_record_out(r: RunRecord) -> RunRecordOut:
         error_message=r.error_message,
         started_at=r.started_at.isoformat(timespec="seconds"),
         finished_at=r.finished_at.isoformat(timespec="seconds") if r.finished_at else None,
+        triggered_by=r.triggered_by,
+        duration_seconds=((r.finished_at - r.started_at).total_seconds()
+                          if r.finished_at and r.finished_at >= r.started_at else None),
     )
 
 
@@ -126,7 +131,7 @@ def save_run_record(
         run_type=run_type, target=target, status=status,
         success_count=success_count, fail_count=fail_count, total_count=total_count,
         error_message=error_message, detail=detail or {},
-        triggered_by=operator or "manual", finished_at=datetime.now(),
+        triggered_by=operator or current_operator(), finished_at=datetime.now(),
     )
     if started_at is not None:
         rec.started_at = started_at          # ⚠️ 显式值**覆盖**列默认（列上是 `default=datetime.now`）

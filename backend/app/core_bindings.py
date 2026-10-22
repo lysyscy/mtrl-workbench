@@ -32,7 +32,10 @@ def _settings_values():
     """取数口 · 系统设置（**转发** ⇒ 测试的 monkeypatch 仍然生效）。"""
     from app.mod14_config import repository as C14R
 
-    return C14R.read_values()
+    from app.core.db import session_scope
+
+    with session_scope() as session:
+        return C14R.read_values(session)
 
 
 def _i8_binding(session, who):

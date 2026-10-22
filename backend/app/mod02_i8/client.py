@@ -59,6 +59,11 @@ def serialize_fetch(table: str):
         lock.release()
 
 
+class I8OnlineConflictError(ExternalServiceError):
+    code = "i8_online_conflict"
+    http_status = 409
+
+
 class I8Client:
     """持会话的 i8 客户端。
 
@@ -127,6 +132,8 @@ class I8Client:
         user, password = self._creds()
         result = http_login(user=user, password=password, allow_kick=self._allow_kick)
         if not result.ok:
+            if result.conflict and not self._allow_kick:
+                raise I8OnlineConflictError("该 i8 账号已有在线会话，本次未强踢。请先退出其他会话，或重新确认并允许强踢。")
             raise ExternalServiceError(f"i8 登录失败：{result.detail}")
         self._cookie = result.cookie
         cookie_store.save(result.cookie, source="http_login", user=user)   # ⭐ 落盘复用（按账号）

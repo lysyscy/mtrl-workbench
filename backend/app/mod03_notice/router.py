@@ -91,6 +91,11 @@ def fetch_notices(
     ⚠️ 登录含强踢（KillOnlineUser）：`allow_kick=False` 时若检测到在线冲突 ⇒ 直接失败、不踢人。
     ⚠️ 抓取失败**不自动重试登录**（D9）。
     """
+    from app.core.identity import require_expected_account
+    from app.mod02_i8.fetch_task import build_fetch_params
+
+    require_expected_account(req.expected_account)
+    build_fetch_params(req.year_month)
     fetched, upserted, ignored = executor(req.year_month, req.allow_kick)
     return FetchResponse(year_month=req.year_month, fetched=fetched, upserted=upserted, ignored=ignored)
 

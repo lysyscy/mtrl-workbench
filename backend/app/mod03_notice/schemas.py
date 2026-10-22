@@ -48,6 +48,7 @@ class FetchRequest(BaseModel):
     """按核算年月抓取付款通知书（D4 最小取数 · 纯手动触发）。"""
 
     year_month: str = Field(..., description="核算年月，形如 2026-08")
+    expected_account: str | None = None
     allow_kick: bool = Field(
         False,
         description="是否允许强踢（KillOnlineUser）。⚠️ 登录会挤掉该账号其他在线会话，须用户显式授权",

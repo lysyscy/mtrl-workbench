@@ -65,3 +65,5 @@ class RunRecordOut(BaseModel):
     error_message: str
     started_at: str
     finished_at: str | None = None
+    triggered_by: str = "manual"
+    duration_seconds: float | None = None

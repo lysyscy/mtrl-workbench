@@ -158,7 +158,7 @@ def fetch_record_payload(
 
     供看板提示「本月尚未抓取」「最近一次抓取失败」。
     """
-    if fail and not success:
+    if (fail or error_message) and not success:
         status = "failed"
     elif fail:
         status = "partial"

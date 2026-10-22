@@ -127,7 +127,7 @@ def test_三个口都是转发_测试补丁必须看得见(monkeypatch):
     from app.mod14_config import repository as C14R
     from app.mod15_user import repository as USR
 
-    monkeypatch.setattr(C14R, "read_values", lambda: {"i8_base_url": "补丁"})
+    monkeypatch.setattr(C14R, "read_values", lambda _s: {"i8_base_url": "补丁"})
     monkeypatch.setattr(USR, "by_identity", lambda _s, who: f"补丁:{who}")
     monkeypatch.setattr(P1R, "all_projects", lambda _s: [_Row(7)])
 

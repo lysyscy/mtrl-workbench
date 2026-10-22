@@ -6,6 +6,8 @@ import { readIdentity, readProjects, requestJson } from './api';
 import type { Identity } from './api';
 const MechanicalPage = lazy(() => import('./mechanical').then(module => ({ default: module.MechanicalPage })));
 const LedgerPage = lazy(() => import('./ledger').then(module => ({ default: module.LedgerPage })));
+import { I8ExecutionProvider } from './i8-execution';
+const I8Page = lazy(() => import('./i8').then(module => ({ default: module.I8Page })));
 import './style.css';
 
 const loginUrl = '/login?next=%2Fpreview%2Fprojects';
@@ -71,9 +73,9 @@ function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; bloc
   }
   return <QueryClientProvider client={client}><div className="workspace" hidden={blocked} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
-    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink><NavLink to="/ledger" title="当前预览提供逐月台账，综合页面其余区域尚未接入">MOD-05 付款流水与欠款统计</NavLink><NavLink to="/mechanical">MOD-10 机械费</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
+    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink><NavLink to="/i8">MOD-02 i8 接入层</NavLink><NavLink to="/ledger" title="当前预览提供逐月台账，综合页面其余区域尚未接入">MOD-05 付款流水与欠款统计</NavLink><NavLink to="/mechanical">MOD-10 机械费</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
     <div className="main"><header><div id="ledger-status" /><div className="account-area"><div id="history-controls" /><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</div></header>
-      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/ledger" element={null} /><Route path="/mechanical" element={<Suspense fallback={<p role="status">正在读取机械费…</p>}><MechanicalPage me={me} blocked={blocked} exportGuard={ledgerExportGuard} /></Suspense>} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>{(ledgerVisited || ledgerActive) && <div hidden={!ledgerActive} inert={!ledgerActive}><Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked || !ledgerActive} active={ledgerActive} project={ledgerProject} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} /></Suspense></div>}</main>
+      <main id="content" tabIndex={-1}><I8ExecutionProvider me={me} blocked={blocked}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/i8" element={<Suspense fallback={<p role="status">正在读取 i8 接入层…</p>}><I8Page me={me} blocked={blocked} /></Suspense>} /><Route path="/ledger" element={null} /><Route path="/mechanical" element={<Suspense fallback={<p role="status">正在读取机械费…</p>}><MechanicalPage me={me} blocked={blocked} exportGuard={ledgerExportGuard} /></Suspense>} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>{(ledgerVisited || ledgerActive) && <div hidden={!ledgerActive} inert={!ledgerActive}><Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked || !ledgerActive} active={ledgerActive} project={ledgerProject} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} /></Suspense></div>}</I8ExecutionProvider></main>
     </div>
   </div></QueryClientProvider>;
 }
