@@ -128,3 +128,24 @@ Agent协议、工程正文、产品需求和状态已在docs固定职责位置�
 - Playwright目录 C:/ProgramData/ms-playwright；只给执行子进程传环境，ACC_RESULTS_PATH不全局导出。
 - PostgreSQL在 D:/pgsql/18.6/pgsql/bin；桌面为 D:/UserData/Desktop。环境变化时复核当前配置，勿沿用历史位置。
 
+### 2026-10-22 重构工作树安全更新
+
+本轮只在 `codex/react-frontend-rewrite` 的既有 worktree 更新依赖；起点 `30be5c1513ed7c02fcf1b2d32c131b10c38a551b`，未实施 TAIL-400、推送、部署或重启正式服务。以下是本次实测快照，接续仍须核实际路径。
+
+| 项目 | 实际结果 | 作用范围 |
+|---|---|---|
+| uv | 0.13.5；原 `.local/bin` 原生 self update | 全局工具；使用已核无受影响 emSign 根的系统证书引导，正常 TLS；官方归档 SHA256 与三个安装二进制一致 |
+| pnpm | 12.15.0；Corepack 0.36.0 管理，官方包装包及 win32-x64 原生包 integrity 已核 | 声明与实际版本一致；脚本仍使用系统 Node 24.21.0；store 沿用 `D:/.pnpm-store/v11` |
+| 工作树 Python | 3.15.1；`backend/.python-version` 精确固定，venv 的 base 指向受管 `cpython-3.15.1-windows-x86_64-none` | 只重建此工作树 venv；pip 26.2.2、certifi 2026.10.19 及 pip 内置 certifi 2026.10.19 已实际导入 |
+| 系统 Node | **仍为 24.21.0，24.22.1 未安装** | 另一项目的询价后台 PID 2776 正在使用系统 Node；未证明可免停进程/重启更新，待父任务协调窗口，未运行 MSI |
+| 正式环境与宿主 | 正式 Python 3.15.0、pip 26.2.1、certifi 2026.07.22；Codex 内置 Node 24.19.0 与内置 Git 未处理 | 正式在用解释器和旧证书风险保留；本轮授权不覆盖它们，不因工作树通过而视为全机安全更新完成 |
+
+uv 0.13.5 安装 Python 时会更新 minor Junction，即使使用 `--no-bin`。本次使用其支持的 `--install-dir`，在原共享管理根的自有 `.temp` 区安装官方可迁移包后移入同根标准补丁目录，未切换全局别名或注册表；暂存区已清除。`cpython-3.15` Junction 与全部全局 Python 入口仍指向 3.15.0。来源：[uv 安装实现](https://github.com/astral-sh/uv/blob/0.13.5/crates/uv-python-commands/src/install.rs)、[官方可迁移发行包](https://github.com/astral-sh/python-build-standalone)。
+
+锁定范围：`backend/uv.lock` 仅更新 pip、certifi；前端锁的独立包管理器段仅更新 pnpm 及其原生包，应用依赖段逐字节不变。AG Grid patch、workspace 配置和 TypeScript strict 配置字节不变。首次完整性检查将整个 pnpm 锁视为应不变而退出 1，查清多文档结构后改为上述逐段约束及官方 integrity 核验；未删改产品测试断言。
+
+验证：冻结安装、typecheck、build、pip check、uv 离线锁定同步检查均退出 0；最终 Python 3.15.1 下金额单元 8 项、真实后端浏览器 5 项通过，覆盖登录/资源、保存读回、撤销冲突、双导出与机械四页文件。两轮共 8 个准确合成 schema 仅在 `mtrl_workbench_test/mtrl`，无 public 回退，已查询剩余 0；预览进程已退、8037 无监听。查看了项目页及四页报送的最终合成截图。
+
+正式锁、声明、venv 配置与 3.15.0 解释器摘要未变；正式服务 PID 8740、Python PID 8904/9044 及启动时间未变，健康 200。原始核验见本机 `.artifacts/archive/security-toolchain-20261022/update/{logs,reports,screenshots}`，保留至 2026-11-21。旧 venv、下载、校验脚本与解压副本在本轮验证后释放；保留在用 3.15.0、工作树新 venv 和共享管理器缓存。锁与声明可由起点 Git 版本恢复，工作树旧解释器仍在，回退不依赖改正式 Junction。
+
+安全更新尚缺系统 Node，不能据此记录“全部更新完成”或自行恢复 400；由父任务协调剩余安装与后续开发。官方依据：[Node 安全发布](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)、[uv CA 公告](https://github.com/astral-sh/uv/security/advisories/GHSA-hq85-5cpj-mr62)、[Python 3.15.1](https://www.python.org/downloads/release/python-3151/)、[pnpm 12.15.0](https://github.com/pnpm/pnpm/releases/tag/v12.15.0)。
