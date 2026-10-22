@@ -75,3 +75,24 @@
 **2026-10-22 · 纠偏冻结回执。** 最后合计金额回欠款列、说明回备注列后，严格typecheck退出0，独立build退出0；产物index-DDHBH6A9.js 301.15kB、ledger-Dg2CtpQ6.js 1183.82kB、index-DILbdYNl.css 9.99kB，保留大分块提示。只对最后布局影响补跑pytest apps/frontend/tests/test_ledger_layout.py -k same_synthetic -q --tb=short：3 passed/4 deselected、退出0、16.33秒；最终三组新旧页面/台账截图与导出确认对照在.artifacts/archive/frontend-vue-rewrite/142235-542574-36608/screenshots，配套测量在logs。实际ZIP与7项末次业务验证保持上一有效轮141952-629515-7460；38项组合证据轮141451-683174-36732不改报为新一轮全跑。
 
 收尾只读核mtrl_workbench_test/mtrl，frontend_rewrite_397_预览schema列表为空、8037关闭、active effort轮次为空；所有测试服务和数据已由夹具正常收尾。没有重新留下人工常驻实例，父任务核对后可按唯一指南安全开启全新合成预览；不是已失效URL冒称可用。无本批Temp辅助脚本、根.env或待清理项，不重试删除397旧名单、不改ACL、不碰正式服务。仅本地保存，SHA/dirty由提交回执提供；人工验收仍待，399不启动。
+
+
+**2026-10-22 · 第二轮人工反馈（文案、右上角操作与业务副本）。** 用户明确不要求一比一还原，允许从用户视角精简说明；批准移除不读的解释、撤销/重做贴账号区左侧、取消日常刷新，并复制现有数据库用于本地隔离人工预览。先Ctrl+C关闭终端4343，收到准确schema frontend_rewrite_397_8efd82bf525e48cca418504a5a7fd0ab清理回执；只读复核旧schema0与8037关闭。原仓代码/服务未动，未开始399。
+
+已移除台账目的、两类历史限制和局部页长段说明；金额/月度摘要保留并简为当前欠款、截至与新增。操作回执简短，撤销/重做仍只有一套，portal移到账号区左侧，状态/草稿留独立状态位，账号隔离和离页守卫不变。原刷新按钮是手动强制重读及失败恢复，不是保存步骤；现取消常驻按钮。进入/切项目、返回页面或账号核实恢复、保存成功自动读取；保存已取回完整结果后不再重复请求同范围，无轮询。失败/冲突才显示重新加载，允许读回而不丢草稿，不自动重投保存。
+
+**复制机制与权限核验。** 源本机mtrl_workbench仅在REPEATABLE READ/READ ONLY事务内读取，实际transaction_read_only=on，版本c391261021；目标仍由TestDatabaseGuard确认mtrl_workbench_test，独占新schema且无public回退。复用原启动器、Alembic、生命周期与两测试身份，新增显式--copy-source；默认仍合成，自动写入回归不使用真实副本。复制前核版本/表列/主键/唯一/检查/外键，按关系与项目自引用顺序复制，按主键逐表比计数与内容散列，复制并核32序列，调用原build_ledger对比全部非壳项目行、金额和摘要。未修改源库/权限，未生成含凭据dump；用户数据只在本机测试库，不进Git、不上传业务明细/真实截图。原账号保留ID但停用别名，password/i8_user/i8_password在源读取投影中置空；app_setting/app_setting_log/operation_history/run_record不带入，测试登录仅在副本新增，旧生产撤销链不复用。HTTP副本模式白名单只开放台账本地读写/历史/登录/资产，其他路由403；i8/打印/抓取/配置修改不可触发，外部配置同时清空。应用真正连接池启动时核数据库、schema、search_path，不能只验证单独检查连接。
+
+**真实结果。** 合成浏览器有效覆盖29项：首轮5 passed后仅旧长回执文本断言红；改短文案后失败恢复1 passed；迟到读取2 passed；余下21 passed/8 deselected、退出0（72.14秒），覆盖右上角位置、无常驻说明/刷新、自动同步不盖草稿/不发保存/无轮询、连续输入、冲突、撤销、账号暂停恢复及实际导出。不是一次聚合全绿；空回执与异步焦点检查的旧等待方式曾红，改为真实请求及持有标志，不删业务保障。复制安全test_preview_copy.py最终3 passed、退出0（6.01秒），两个独占合成schema验证业务一致、原凭据清除、序列可新增、同库拒绝和外发路由先拦截；此前合成夹具漏updated_at和独立工具未接core_bindings两红均修复，失败schema正常清理。
+
+末轮严格typecheck退出0，build退出0；index-5Odx7rMv.js 301.32kB、ledger-BK23zCP_.js 1183.04kB、index-_wDILFg3.css 10.42kB，保留既有大分块提示；依赖版本和锁未改，冻结安装结果按保存回执。说明最后只缩短成功/空态文案，其余有效保障复用，无扩大审计。
+
+**业务副本实际启动与归属。** 终端47258，Python14944→26784，schema frontend_rewrite_397_6a6141174b1741f3a62d9b90b1494a5b，目标mtrl_workbench_test/mtrl。启动时验证33表/32序列/16非壳项目台账一致；计数证据仅记录项目19、历史记录82、通知书1193、普通备注1，不转录明细或金额。实际应用池仅连测试库、search_path仅该schema，当前只有此预览schema，无前轮残留。资产HTTP逐字节等于最终dist，健康/ledger200，本机私有无头上下文布尔检查渲染/文案/按钮位置通过，不回传真实DOM或截图。仅测试身份登录更新时间在副本写入验证成功，未对复制的业务记录做自动写入；拦截探针用不存在的路径验证403，不尝试真实外发动作。末个元数据断言初红仅因PG把70字节application_name截到63字节，按实际标识复核已通过，不更改数据库权限或数据。
+
+复制回执只含计数/散列，位于.artifacts/active/frontend-vue-rewrite/145721-859340-26784/logs/preview-copy-verification.json，正常退出后沿原机制归archive。预览http://127.0.0.1:8037/preview/ledger保留运行供用户验收；登录资料只查本机唯一指南。父任务协调结束后由本线程向47258发Ctrl+C，等待准确schema的ISOLATION cleaned再核消失及8037关闭；不硬杀、不按前缀删除，不删除用户已有数据库/文件。当前获准保留的有主副本不是清理遗漏。指南已同步新授权和交互，398仍待用户验收，不解锁399。
+
+
+**2026-10-22 · 最后恢复守卫与现场状态更正。** 取消常驻刷新后的自查补充：撤销请求已生效但响应丢失时，错误状态提供重新加载；读回前按钮和Ctrl+Z/Ctrl+Y都不再执行下一条历史操作。只用合成夹具验证，不在真实副本做业务写入。为构建该最后修正，15:03:53已正常Ctrl+C关闭47258，收到frontend_rewrite_397_6a6141174b1741f3a62d9b90b1494a5b准确清理回执；只读确认该schema0、预览schema列表空、8037关闭。此前“保留运行”记录仅表示该次启动时状态，以此条为准。父任务随后要求容量恢复时不重复复制/启动，本线程遵守，未重建副本；继续独立完成验证/提交，当前没有可复用的活实例或有效入口。源库从未写入，不存在丢失生产数据；副本清理发生于对外重新交付人工前，只有本机测试身份登录写入，业务记录未被自动修改。最终启动须由父任务按真实状态另行协调，不冒称已失效URL可用。
+
+
+**2026-10-22 · 第二轮保存冻结。** 最后恢复守卫的3项真实合成验证退出0：test_real_undo_redo_conflict_and_account_ownership、test_saved_but_refresh_failed_does_not_resubmit、test_uncertain_undo_requires_readback_before_another_history_action，共3 passed（17.28秒），已生效撤销丢回包后按钮与Ctrl+Z均不重复发起，重新加载读回原实际结果。其余本轮29项界面与3项复制安全结果按上文分轮复用，新增不确定撤销1项，因此本轮有效覆盖30项界面＋3项复制安全，不冒称一次聚合全跑。最后typecheck/build各退出0，产物index-Bp5Sr840.js 301.32kB、ledger-B1d1Lr2Q.js 1183.15kB、CSS index-_wDILFg3.css 10.42kB；frozen install退出0（33ms），锁未改。合成实屏在.artifacts/archive/frontend-vue-rewrite/145449-966726-33164/screenshots，实际查看1920整页确认说明删除与按钮位置；没有查看/回传真实副本业务截图。副本计数/散列回执已正常归档到.artifacts/archive/frontend-vue-rewrite/145721-859340-26784/logs/preview-copy-verification.json。当前无预览schema、8037已关闭、无根.env及临时脚本残留；不按最新恢复指令重复制/重启动。提交SHA和最终dirty由保存回执提供，父任务据此协调一次最终人工入口，未代用户验收。

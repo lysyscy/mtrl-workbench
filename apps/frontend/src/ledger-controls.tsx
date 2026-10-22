@@ -46,8 +46,8 @@ export function LedgerExport({ projects, project, disabled, run, message, valid,
     {open && createPortal(<div className="ledger-export-strip">
       <div className="export-line"><b>① 逐月台账</b><span>项目（可多选）</span><ProjectPicker key="export" projects={projects} selected={ids} pick={setIds} multiple label="导出项目（可多选）" disabled={disabled} initiallyOpen />
         <button ref={trigger} className="primary" disabled={disabled || !chosen.length} onClick={() => { setSort({ column: 'seq', descending: false }); setPreview(chosen); }}>导出台账</button><button onClick={() => { setOpen(false); setIds([]); }}>取消</button></div>
-      <p>每个项目一个工作簿（辅材欠款 / 机械欠款 / 特殊费用月报表）；选2个以上打成一个zip。每次首次打开默认选中本页当前项目；这里的项目只决定导出哪些，不改变屏幕上查看的项目。报告月按原规则取上月。</p>
-      <div className="export-line export-debt"><b>② 总欠款汇总</b><span>项目范围、行序和总欠款导出待405接入；当前可在同一隔离实例的旧版使用。</span><a href="/app">打开旧版预览</a></div>
+      <p>{chosen.length}个项目 · 每项目3表 · 报告月{month} · 多项目ZIP</p>
+      <div className="export-line export-debt"><b>② 总欠款汇总</b><span>本次预览尚未接入</span><a href="/app">打开旧版预览</a></div>
     </div>, document.getElementById('ledger-export-slot')!)}
     {preview && <dialog ref={dialog} className="ledger-export-dialog" onCancel={() => setPreview(null)} onClose={() => setPreview(null)}>
       <h2>导出 · 逐月欠款台账（每项目一个工作簿）</h2><p>{preview.length === 1 ? '将生成1个工作簿' : `选了${preview.length}个项目，将生成一个zip，内含${preview.length}个工作簿`}；每本3个工作表。</p>

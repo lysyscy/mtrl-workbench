@@ -29,9 +29,13 @@ def test_same_synthetic_project_period_viewport_and_scale_pair(server,browser_pa
         for item in [old,page]: item.evaluate('document.fonts.ready')
         assert old.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--fscale').trim()") == page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--fscale').trim()")
         assert page.get_by_label('截止月份',exact=True).count()==0
-        assert page.get_by_text('本项目当前欠款（含历史数据）',exact=True).count()==2
+        assert page.locator('.ledger-summary').get_by_text('当前欠款',exact=True).count()==2
         assert page.get_by_role('columnheader',name='机械结算金额',exact=True).count()==1
         expect(page.get_by_role('region',name='机械欠款台账',exact=True)).to_contain_text('2025-11 新增')
+        expect(page.locator('.ledger-purpose,.ledger-boundary,.ledger-preview-scope')).to_have_count(0)
+        expect(page.get_by_role('button',name='刷新台账',exact=True)).to_have_count(0)
+        undo=page.get_by_role('button',name='撤销',exact=True).bounding_box(); identity=page.locator('.account-area>span').bounding_box()
+        assert undo and identity and undo['x']<identity['x'] and abs(undo['y']-identity['y'])<12
         measurements={}
         for label,item,selector,card in [('old',old,'.debt-ledger','.debt-ledgers'),('new',page,'.ledger-side','.ledger-card')]:
             item.locator(card).scroll_into_view_if_needed()
@@ -139,3 +143,34 @@ def test_restored_numeric_sort_does_not_use_lexical_amount_order(server,browser_
     expect(region.get_by_role('columnheader',name='付款',exact=True)).to_have_attribute('aria-sort','ascending')
     values=region.locator('[row-id]:not([row-id=total])').evaluate_all("""rows=>rows.sort((a,b)=>Number(a.getAttribute('row-index'))-Number(b.getAttribute('row-index'))).map(row=>{const cell=row.querySelector('[col-id=payment]');return Number((cell.querySelector('input')?.value||cell.textContent).replaceAll(',',''))})""")
     assert values==sorted(values),values
+
+
+def test_automatic_focus_sync_keeps_unsaved_draft_without_polling(server,browser_page):
+    page,_=browser_page;open_ledger(page,server)
+    reads=[];writes=[]
+    page.on('request',lambda request: reads.append(request.url) if '/api/m05/ledger?' in request.url else None)
+    page.route('**/api/m05/history/save',lambda route:(writes.append(route.request.post_data_json),route.continue_()))
+    note=page.locator('input[value="合成历史行甲"]');row=note.locator('xpath=ancestor::*[@row-id][1]');paid=row.locator('[col-id=payment] input')
+    paid.fill('456.78')
+    with page.expect_request(lambda request:'/api/m05/ledger?' in request.url): page.evaluate("window.dispatchEvent(new Event('focus'))")
+    expect(paid).to_have_value('456.78');assert not writes
+    before=len(reads);page.wait_for_timeout(900);assert len(reads)==before
+    expect(page.get_by_role('button',name='刷新台账',exact=True)).to_have_count(0)
+
+
+def test_uncertain_undo_requires_readback_before_another_history_action(server,browser_page):
+    from test_ledger import add_row,cell,sync_ledger,wait_value
+    page,_=browser_page;open_ledger(page,server);project=project_id(page,server)
+    rid=add_row(page,server,project,'撤销响应不确定测试');sync_ledger(page)
+    paid=cell(page,rid,'payment');paid.fill('78.90');paid.press('Tab');page.get_by_role('heading',name='逐月欠款台账',exact=True).click();wait_value(page,project,rid,'payment','78.90')
+    requests=[]
+    def uncertain(route):
+        requests.append(route.request.post_data_json);response=route.fetch();assert response.json()['ok'];route.abort('failed')
+    page.route('**/api/history/undo',uncertain)
+    page.get_by_role('button',name='撤销',exact=True).click()
+    expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_visible()
+    expect(page.get_by_role('button',name='撤销',exact=True)).to_be_disabled()
+    page.keyboard.press('Control+z');assert len(requests)==1
+    page.get_by_role('button',name='重新加载',exact=True).click()
+    expect(page.get_by_role('button',name='重新加载',exact=True)).to_have_count(0)
+    wait_value(page,project,rid,'payment','12.00');assert len(requests)==1

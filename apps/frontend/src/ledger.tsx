@@ -103,13 +103,12 @@ function Side({ side, scope, actions, writable, busy, add, focusRecord, focused 
     });
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
-    <div className="ledger-summary"><h2>{side.label}欠款台账</h2><span className="muted">本项目当前欠款（含历史数据）</span><b>{amount(sum(side.rows, 'debt'))}<small>元</small></b><span className="muted">截至 {upto}</span>{latest && <><span className="muted">· {latest.month} 新增</span><b className={Number(latest.debt) > 0 ? 'debt-positive' : 'muted'}>{amount(latest.debt)}<small>元</small></b></>}{side.category === 'material' && <button aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</button>}</div>
-    <p className="ledger-boundary muted">{side.category === 'material' ? '2025-11及以前可增行、改结算和付款；2025-12起按通知书统计。' : '2025-11及以前可直接填付款；结算取机械费台账。'}</p>
+    <div className="ledger-summary"><h2>{side.label}欠款台账</h2><span className="muted">当前欠款</span><b>{amount(sum(side.rows, 'debt'))}<small>元</small></b><span className="muted">截至 {upto}</span>{latest && <><span className="muted">· {latest.month} 新增</span><b className={Number(latest.debt) > 0 ? 'debt-positive' : 'muted'}>{amount(latest.debt)}<small>元</small></b></>}{side.category === 'material' && <button aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</button>}</div>
     <div className="ledger-table-scroll"><div className="ledger-grid" style={{ height: Math.min(360 * scale, (29 + Math.max(visible.length, 1) * 38 + (total.length ? 30 : 0) + 2) * scale) }}><AgGridReact<LedgerRow> theme={gridTheme}
       context={context} columnDefs={columns} rowData={visible} pinnedBottomRowData={total}
       getRowId={params => params.data.key} defaultColDef={defaultColumn}
       rowHeight={38 * scale} getRowHeight={params => params.node.rowPinned ? 30 * scale : 38 * scale} headerHeight={29 * scale} suppressCellFocus={true} suppressScrollOnNewData={true}
-      overlayNoRowsTemplate="该项目在本口径下暂无数据；换个项目，辅材历史数据可新增行，机械结算取机械费台账。" animateRows={false}
+      overlayNoRowsTemplate="暂无台账数据。" animateRows={false}
       onGridReady={event => { api.current = event.api; }} onFirstDataRendered={event => { if (visible.length) event.api.ensureIndexVisible(visible.length - 1, 'bottom'); }} />
     </div></div>
   </div>;
@@ -134,7 +133,7 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
   const scope = useMemo<Scope>(() => ({ key: `${owner}:${project}:${end}`, owner, project, end }), [owner, project, end]);
   const current = useRef({ scope, blocked, me }); current.current = { scope, blocked, me };
   const lifetime = useRef<AbortController | null>(null);
-  const mounted = useRef(true); const edits = useRef(new Map<string, Edit>()); const messages = useRef(new Map<string, string>());
+  const mounted = useRef(true); const edits = useRef(new Map<string, Edit>()); const messages = useRef(new Map<string, { text: string; reload: boolean }>());
   const jobs = useRef(new Set<Promise<void>>()); const serial = useRef(0); const acting = useRef(false);
   const pointerDown = useRef(false);
   const body = useRef<HTMLDivElement>(null); const [display, setDisplay] = useState<{ key: string; data: Ledger } | null>(null);
@@ -149,7 +148,7 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
   const history = useQuery({ queryKey: ['history', owner], enabled: !blocked && Boolean(me),
     queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) });
   const changed = () => { if (mounted.current) render(n => n + 1); };
-  function message(s: Scope, text: string) { messages.current.set(s.key, text); changed(); }
+  function message(s: Scope, text: string, reload = false) { messages.current.set(s.key, { text, reload }); changed(); }
   function state(s: Scope, row: LedgerRow): Edit {
     const key = `${s.key}|${row.key}`; let edit = edits.current.get(key);
     if (!edit) { edit = { scope: s, base: row, drafts: {}, own: new Map(), queue: [], saving: false, locked: false }; edits.current.set(key, edit); }
@@ -185,7 +184,7 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
     if (!mounted.current) return full;
     accept(s, full);
     if (!current.current.blocked) {
-      await client.invalidateQueries({ queryKey: ['ledger', s.owner, s.project] });
+      await client.invalidateQueries({ queryKey: ['ledger', s.owner, s.project], refetchType: 'none' });
       await client.invalidateQueries({ queryKey: ['history', s.owner] });
     }
     return full;
@@ -198,13 +197,13 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
       while (edit.queue.length) {
         if (!mounted.current || current.current.blocked || !current.current.me) { clearQueue(edit); return; }
         const task = edit.queue.shift(); if (!task) break;
-        if (edit.locked) { clearQueue(edit); message(edit.scope, '已保存，但页面数据未能刷新。请先刷新核对；后续输入已保留。'); break; }
+        if (edit.locked) { clearQueue(edit); message(edit.scope, '已保存，读取失败；后续输入已保留。', true); break; }
         if (same(task.field, edit.base[task.field], task.text)) {
           if (edit.drafts[task.field]?.version === task.version) delete edit.drafts[task.field];
           continue;
         }
         if (task.month !== edit.base.month || !same(task.field, edit.base[task.field], task.base)) {
-          clearQueue(edit); message(edit.scope, '版本冲突：这一格已变化，未覆盖。请刷新核对，重新填写或放弃未保存输入。'); break;
+          clearQueue(edit); message(edit.scope, '版本冲突，输入已保留。请重新加载核对。', true); break;
         }
         void client.cancelQueries({ queryKey: ['ledger', edit.scope.owner, edit.scope.project] });
         const before = edit.base;
@@ -233,15 +232,15 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
               for (const queued of other.queue) if (queued.field === task.field && same(task.field, queued.base, task.base)) queued.base = saved[task.field];
             }
           }
-          edit.base = saved; edit.locked = false; message(edit.scope, '台账已保存；合计在结束连续编辑后更新。');
+          edit.base = saved; edit.locked = false; message(edit.scope, '台账已保存。');
         } catch (error) {
-          clearQueue(edit); message(edit.scope, `已保存，但页面数据未能刷新。请刷新核对，不必重复提交已保存值。${error instanceof Error ? error.message : ''}`); break;
+          clearQueue(edit); message(edit.scope, `已保存，读取失败；请重新加载，不必重复提交。${error instanceof Error ? error.message : ''}`, true); break;
         }
       }
     } catch (error) {
       clearQueue(edit);
       const text = error instanceof Error ? error.message : '请刷新核对后重试。';
-      message(edit.scope, error instanceof ApiError && error.status === 0 ? `保存结果未确认：${text}请刷新核对，输入已保留。` : /已变化|冲突/.test(text) || (error instanceof ApiError && error.status === 409) ? `版本冲突：${text}输入已保留，请刷新核对。` : `保存被拒：${text}输入已保留，请修改后重试。`);
+      message(edit.scope, error instanceof ApiError && error.status === 0 ? `保存结果未确认：${text}请刷新核对，输入已保留。` : /已变化|冲突/.test(text) || (error instanceof ApiError && error.status === 409) ? `版本冲突：${text}输入已保留，请刷新核对。` : `保存被拒：${text}输入已保留，请修改后重试。`, (error instanceof ApiError && (error.status === 0 || error.status === 409)) || /已变化|冲突/.test(text));
     } finally { edit.saving = false; changed(); }
   }
   function hasDrafts(s: Scope) { return [...edits.current.values()].some(edit => edit.scope.key === s.key && Object.keys(edit.drafts).length > 0); }
@@ -253,7 +252,7 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
       if (!mounted.current || current.current.blocked || s.key !== current.current.scope.key) return;
       if (!allowDrafts && hasDrafts(s)) { message(s, '请先处理未保存输入，再执行本次操作。'); return; }
       await action();
-    } catch (error) { message(s, error instanceof Error ? error.message : '操作失败，请重试。'); }
+    } catch (error) { message(s, error instanceof Error ? error.message : '操作失败，请重试。', error instanceof ApiError && (error.status === 0 || error.status === 409 || error.status >= 500)); }
     finally { acting.current = false; if (mounted.current) setControlBusy(false); }
   }
   const actions = useRef<Actions>(null!);
@@ -277,18 +276,19 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
       if (edit.locked) throw new ApiError('请先刷新核对，再删除历史行。');
       await requestJson('/api/m05/history/delete', { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: edit.base.record_id, token: edit.base.token }) });
       try { await refresh(s); message(s, '历史行已删除，可撤销。'); }
-      catch { message(s, '已删除，但页面数据未能刷新。请刷新核对，不必重复删除。'); }
+      catch { message(s, '已删除，读取失败；请重新加载，不必重复删除。', true); }
     }); },
   };
   async function replay(direction: 'undo' | 'redo') {
     const s = current.current.scope;
+    if (query.isError || messages.current.get(s.key)?.reload) return;
     await control(s, async () => {
       const latest = await client.fetchQuery({ queryKey: ['history', owner], queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })), staleTime: 0 });
       if (!mounted.current || current.current.blocked || !current.current.me) return;
       const item = latest[direction]; if (!item) { message(s, direction === 'undo' ? '暂无可撤销的操作。' : '暂无可重做的操作。'); return; }
       await requestJson(`/api/history/${direction}`, { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation_id: item.id }) });
       try { await refresh(s); await client.invalidateQueries({ queryKey: ['projects'] }); message(s, direction === 'undo' ? '已撤销。' : '已重做。'); }
-      catch { message(s, '操作已完成，但页面数据未能刷新。请刷新核对，不必重复操作。'); }
+      catch { message(s, '操作已完成，读取失败；请重新加载，不必重复操作。', true); }
     });
   }
   const replayRef = useRef(replay); replayRef.current = replay;
@@ -302,27 +302,34 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
       const result = await requestJson('/api/m05/history/save', { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: project, category: 'material', entry_kind: 'manual', cutoff_ym: '2025-11', settle_amount: '0', paid_amount: '0', remark: '' }) });
       if (!record(result) || typeof result.id !== 'number') throw new ApiError('新增结果未确认，请刷新核对后再试。');
       try { await refresh(scope); if (mounted.current && !current.current.blocked && scope.key === current.current.scope.key) setFocusRecord(result.id); message(scope, '已新增历史行，可直接填写。'); }
-      catch { message(scope, '已新增历史行，但页面数据未能刷新。请刷新核对，不必重复新增。'); }
+      catch { message(scope, '已新增，读取失败；请重新加载，不必重复新增。', true); }
     });
   }
   const shown = display?.key === scope.key ? display.data : null;
+  async function reload() {
+    if (!me) { void query.refetch(); return; }
+    await control(scope, async () => { await refresh(scope); message(scope, '已重新加载；未保存输入仍保留。'); }, true);
+  }
+  const receipt = messages.current.get(scope.key);
+  const needsReload = Boolean(receipt?.reload || query.isError);
   const toolbar = <div className="ledger-tools">
-    <button disabled={!me || blocked || controlBusy || !history.data?.undo} title={history.data?.undo?.label ?? '暂无可撤销的操作'} onClick={() => void replay('undo')}>撤销</button>
-    <button disabled={!me || blocked || controlBusy || !history.data?.redo} title={history.data?.redo?.label ?? '暂无可重做的操作'} onClick={() => void replay('redo')}>重做</button>
-    <button disabled={!project || blocked || controlBusy} onClick={() => { if (!me) { void query.refetch(); return; } void control(scope, async () => { await refresh(scope); message(scope, '台账已刷新；未保存输入仍保留。'); }, true); }}>刷新台账</button>
-    <span role="status" aria-label="保存回执">{messages.current.get(scope.key) ?? (me ? '' : '未登录，台账只读。')}{[...edits.current.values()].some(edit => edit.scope.key === scope.key && edit.saving) ? ' 正在保存…' : ''}</span>
+    <button disabled={!me || blocked || controlBusy || needsReload || !history.data?.undo} title={history.data?.undo?.label ?? '暂无可撤销的操作'} onClick={() => void replay('undo')}>撤销</button>
+    <button disabled={!me || blocked || controlBusy || needsReload || !history.data?.redo} title={history.data?.redo?.label ?? '暂无可重做的操作'} onClick={() => void replay('redo')}>重做</button>
+  </div>;
+  const status = <div className="ledger-status">
+    <span role="status" aria-label="保存回执">{receipt?.text ?? (me ? '' : '未登录，台账只读。')}{[...edits.current.values()].some(edit => edit.scope.key === scope.key && edit.saving) ? ' 正在保存…' : ''}</span>
+    {receipt?.reload && !query.isError && <button disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</button>}
     {hasDrafts(scope) && <button onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } message(scope, '已放弃未保存输入。'); changed(); }}>放弃未保存输入</button>}
   </div>;
   return <>
     {active && document.getElementById('history-controls') && createPortal(toolbar, document.getElementById('history-controls')!)}
-    <p className="ledger-preview-scope">本批预览：付款流水与欠款统计中的逐月台账；欠款概览、付款统计及流水待405接入，页面整体布局尚待人工确认。</p>
+    {active && document.getElementById('ledger-status') && createPortal(status, document.getElementById('ledger-status')!)}
     <section className="ledger-card" aria-labelledby="ledger-title">
       <div className="ledger-card-head"><h1 id="ledger-title">逐月欠款台账</h1><LedgerExport projects={candidates} project={project} disabled={!me || blocked || controlBusy} run={action => control(scope, action)} message={text => message(scope, text)} paused={blocked} valid={() => mounted.current && !current.current.blocked && scope.key === current.current.scope.key} signal={lifetime.current?.signal} /></div>
       <div className="ledger-card-body"><div id="ledger-export-slot" />
-        <div className="ledger-view-project"><span className="muted">看哪个项目（两侧共用）</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked} /></div>
-        <p className="ledger-purpose muted">台账按单据日期归月，为了监控拖了很久的付款：单据日期越早，拖延越久。</p>
+        <div className="ledger-view-project"><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked} /></div>
         {projects.isError && <p role="alert">{projects.error.message}</p>}{history.isError && <p role="alert">操作历史未能读取，请刷新重试。</p>}{history.data?.notice && <p>{history.data.notice}</p>}
-        {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}</p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
+        {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}<button disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</button></p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
         {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
       </div>
     </section>

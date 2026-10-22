@@ -120,7 +120,7 @@ def test_month_reorder_keeps_record_id_and_queued_field(server,browser_page):
     open_ledger(page,server)
     project=project_id(page,server)
     rid=add_row(page,server,project,'月份重排测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     month=cell(page,rid,'month');settle=cell(page,rid,'other_expense');paid=cell(page,rid,'payment')
     month.fill('2025-08');month.press('Tab')
     expect(settle).to_be_focused();settle.fill('333.33');settle.press('Tab')
@@ -137,7 +137,7 @@ def test_month_reorder_keeps_record_id_and_queued_field(server,browser_page):
 def test_mouse_and_chinese_composition_survive_prior_receipt(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'中文合成测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     pending=[];writes=[]
     def hold(route):
         writes.append(route.request.post_data_json)
@@ -160,7 +160,7 @@ def test_mouse_and_chinese_composition_survive_prior_receipt(server,browser_page
 def test_hidden_refresh_rejects_concurrent_change_to_next_cell(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'目标格冲突测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     pending=[];writes=[]
     def hold(route): writes.append(route.request.post_data_json);pending.append(route)
     page.route('**/api/m05/history/save',hold)
@@ -183,7 +183,7 @@ def test_hidden_refresh_rejects_concurrent_change_to_next_cell(server,browser_pa
 def test_refusal_preserves_input_blank_is_not_zero_and_no_partial_write(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'金额拒绝测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     paid=cell(page,rid,'payment');paid.fill('invalid');paid.press('Tab')
     expect(page.get_by_role('status',name='保存回执')).to_contain_text('保存被拒')
     expect(paid).to_have_value('invalid')
@@ -204,18 +204,19 @@ def test_refusal_preserves_input_blank_is_not_zero_and_no_partial_write(server,b
 def test_saved_but_refresh_failed_does_not_resubmit(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'刷新失败测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     paid=cell(page,rid,'payment');expect(paid).to_be_visible()
     writes=[]
     page.route('**/api/m05/history/save',lambda route:(writes.append(route.request.post_data_json),route.continue_()))
     page.route('**/api/m05/ledger?**',lambda route:route.fulfill(status=500,json={'message':'隔离读取失败'}))
     paid.fill('88.88');paid.press('Tab')
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存，但页面数据未能刷新')
+    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存，读取失败')
     assert row_data(data(page,server,project),rid)['payment']=='88.88'
     assert len(writes)==1
     page.unroute('**/api/m05/ledger?**')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    page.get_by_role('button',name='重新加载',exact=True).click()
     expect(paid).to_have_value('88.88');assert len(writes)==1
+
 
 
 @pytest.mark.parametrize('late_error',[False,True])
@@ -224,11 +225,12 @@ def test_old_read_and_error_cannot_cross_project_or_month(server,browser_page,la
     pending=[]
     project=project_id(page,server)
     def hold(route):
-        if not pending: pending.append(route)
+        if not pending:
+            pending.append(route);page.evaluate('window.ledgerReadHeld=true')
         else: route.continue_()
     page.route(f'**/api/m05/ledger?project_id={project}&end_ym=',hold)
-    page.get_by_role('button',name='刷新台账',exact=True).click()
-    expect(page.get_by_role('button',name='刷新台账',exact=True)).to_be_disabled();assert pending
+    sync_ledger(page)
+    page.wait_for_function('window.ledgerReadHeld===true');assert pending
     select_project(page,'长项目名验收')
     expect(page.locator('input[value="另一项目测试行"]')).to_be_visible()
     if late_error: pending[0].fulfill(status=500,json={'message':'旧范围迟到错误'})
@@ -241,7 +243,7 @@ def test_old_read_and_error_cannot_cross_project_or_month(server,browser_page,la
 def test_old_save_remains_original_record_and_draft_is_month_scoped(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'跨项目保存测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     pending=[]
     page.route('**/api/m05/history/save',lambda route:pending.append(route))
     paid=cell(page,rid,'payment');paid.fill('66.66');paid.press('Tab')
@@ -252,7 +254,7 @@ def test_old_save_remains_original_record_and_draft_is_month_scoped(server,brows
     assert pending[0].request.post_data_json['id']==rid
     pending[0].fulfill(response=pending[0].fetch())
     wait_value(page,project,rid,'payment','66.66')
-    expect(page.get_by_role('status',name='保存回执')).not_to_contain_text('台账已保存')
+    expect(page.locator('[aria-label="保存回执"]')).not_to_contain_text('台账已保存')
     page.unroute('**/api/m05/history/save')
     select_project(page,'隔离项目');paid=cell(page,rid,'payment');expect(paid).to_have_value('66.66')
     paid.fill('bad');paid.press('Tab')
@@ -268,7 +270,7 @@ def test_old_save_remains_original_record_and_draft_is_month_scoped(server,brows
 def test_identity_pause_preserves_real_edit_draft_and_blocks_saves(server,browser_page,failure,recovery):
     page,context=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'身份草稿测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     paid=cell(page,rid,'payment');paid.fill('987.65')
     writes=[]
     page.route('**/api/m05/history/save',lambda route:(writes.append(route.request.post_data_json),route.continue_()))
@@ -303,7 +305,7 @@ def test_identity_pause_preserves_real_edit_draft_and_blocks_saves(server,browse
 def test_real_undo_redo_conflict_and_account_ownership(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'撤销重做测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     paid=cell(page,rid,'payment');paid.fill('77.77');paid.press('Tab')
     page.get_by_role('heading',name='逐月欠款台账',exact=True).click();wait_value(page,project,rid,'payment','77.77')
     expect(page.get_by_role('status',name='保存回执')).not_to_contain_text('正在保存')
@@ -338,7 +340,7 @@ def test_duplicate_add_stale_token_and_real_export(server,browser_page):
     assert page.request.post(server+'/api/m05/history/save',data=body).json()['ok']
     duplicate=page.request.post(server+'/api/m05/history/save',data=body)
     assert duplicate.status==400 and '已变化' in duplicate.json()['message']
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     expect(cell(page,rid,'remark')).to_have_value('导出核对行')
     expected=data(page,server,project,previous_report_month(page))
     page.get_by_role('button',name='批量导出（先选项目）…',exact=True).click()
@@ -364,15 +366,15 @@ def test_duplicate_add_stale_token_and_real_export(server,browser_page):
 def test_same_scope_late_read_cannot_replace_newer_value(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'同范围倒序测试',month='2025-10')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
-    expect(page.get_by_role('button',name='刷新台账',exact=True)).to_be_enabled()
+    sync_ledger(page)
+    expect(cell(page,rid,'payment')).to_be_visible()
     pending=[];held=[]
     def delay(route):
         if not held:
             held.append(True);pending.append(route);page.evaluate('window.scope398Held=true')
         else:route.continue_()
     page.route(f'**/api/m05/ledger?project_id={project}&end_ym=',delay)
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     page.wait_for_function('window.scope398Held===true');assert pending
     snapshot=pending[0].fetch()
     old=row_data(data(page,server,project),rid)
@@ -386,7 +388,7 @@ def test_same_scope_late_read_cannot_replace_newer_value(server,browser_page):
 def test_late_old_account_401_does_not_expire_new_account(server,browser_page):
     page,context=browser_page;open_ledger(page,server)
     project=project_id(page,server);rid=add_row(page,server,project,'旧账号迟到测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     pending=[]
     page.route('**/api/m05/history/save',lambda route:pending.append(route))
     paid=cell(page,rid,'payment');paid.fill('98.00');paid.press('Tab')
@@ -408,7 +410,7 @@ def test_mouse_button_is_not_replaced_between_down_and_click(server,browser_page
     existing=len(next(side for side in data(page,server,project,'2025-11')['sides'] if side['category']=='material')['rows'])
     for index in range(max(0,8-existing)):add_row(page,server,project,f'鼠标滚动夹具{index}')
     edited=add_row(page,server,project,'按钮前保存测试');deleted=add_row(page,server,project,'按钮删除测试')
-    page.get_by_role('button',name='刷新台账',exact=True).click()
+    sync_ledger(page)
     pending=[]
     page.route('**/api/m05/history/save',lambda route:pending.append(route))
     paid=cell(page,edited,'payment');paid.fill('67.89');paid.press('Tab')
@@ -478,10 +480,15 @@ def test_anonymous_ledger_refresh_is_readonly_and_operable(server,browser_page):
     expect(region.locator('.ledger-input')).to_have_count(0)
     expect(page.get_by_role('button',name='新增历史行',exact=True)).to_be_disabled()
     with page.expect_request(lambda request:'/api/m05/ledger?' in request.url) as event:
-        page.get_by_role('button',name='刷新台账',exact=True).click()
+        sync_ledger(page)
     response=event.value.response();assert response and response.ok
     assert response.json()['project_id']==project_id(page,server)
     expect(region.locator('.ledger-input')).to_have_count(0)
+
+
+def sync_ledger(page):
+    with page.expect_request(lambda request:'/api/m05/ledger?' in request.url):
+        page.evaluate("window.dispatchEvent(new Event('focus'))")
 
 
 def previous_report_month(page):

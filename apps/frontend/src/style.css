@@ -10,3 +10,5 @@ html{--fscale:1;font-family:var(--fs);font-size:calc(14px * var(--fscale));color
 .ledger-view-project>.ledger-project>button{min-width:calc(150px * var(--fscale));display:flex;justify-content:space-between;gap:1em}.ledger-grid .ag-cell.ledger-total-label{justify-content:center}.ledger-summary small{font-size:calc(10px * var(--fscale));font-weight:400;color:var(--mut);margin-left:2px}.ledger-grid .money{white-space:nowrap}.ledger-grid .ag-root-wrapper{border:0}.ledger-export-strip .ledger-project>button{min-width:calc(186px * var(--fscale))}
 
 .ledger-grid .ag-row-pinned [col-id=debt]{text-align:left}
+
+.account-area{display:flex;align-items:center;justify-content:flex-end;gap:calc(10px * var(--fscale));margin-left:auto}.account-area #history-controls{flex:0 0 auto}.ledger-status{display:flex;align-items:center;flex-wrap:wrap;gap:.5em;font-size:calc(12px * var(--fscale));color:var(--tx2)}#ledger-status{min-width:0}.ledger-status button{font-size:inherit;min-height:0;padding:.25em .5em}.ledger-status [role=status]:empty{display:none}
