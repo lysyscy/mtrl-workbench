@@ -36,6 +36,7 @@ from app.mod03_notice.notice_actions import (
 )
 from app.mod03_notice.page import SORT_NONE
 from app.mod03_notice.plan_audit_api import router as plan_audit_router
+from app.mod05_flow.models import PAY_METHODS
 
 api_router = APIRouter(tags=["mod03-json"])
 
@@ -322,7 +323,13 @@ def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
     except MustReportError as exc:
         return {"ok": False, "created": [], "message": exc.message}
 
-    return {"ok": True, "created": created, "count": len(created), "message": message}
+    from app.mod05_flow import service as flow_service
+    flows = [f for f in flow_service.flows_of_notices(session, created)
+             if req.request_id and f.request_id == req.request_id.strip()]
+    return {"ok": True, "created": created, "count": len(created), "message": message,
+            "flows": [{"notice_id": f.notice_id, "flow_no": f.flow_no, "amount": str(f.amount),
+                       "pay_date": f.pay_date, "pay_method": f.pay_method, "remark": f.remark}
+                      for f in flows]}
 
 
 # --------------------------------------------------------------- 列表查询（新壳 m03 页的数据源）
@@ -410,7 +417,11 @@ def _api_item(rec: dict) -> dict:
     out = {k: v for k, v in rec.items() if k != "_row" and k not in PAGE_ONLY_KEYS}
     if row is None:
         return out
+    from app.mod03_notice.domain import PayRow
+    reason = ("已剔除" if row.excluded else "i8 已撤单" if row.i8_revoked else
+              PayRow(row.notice_id, row.approve_status, row.pay_amount, row.category, bool(row.has_link)).label)
     out.update({
+        "pay_block_reason": reason,
         "category": row.category,
         "project_name": row.project_name,
         "ownership_id": row.ownership_id,
@@ -466,6 +477,7 @@ def get_notice_list(
             "revoked": c.revoked, "excluded_by": c.excluded_by, "text": c.text(),
         },
         # ⚠️ **页面专用**的列（「操作」列是按钮 / 表单 HTML）**不进 API** —— 本端点只吐纯数据
+        "payment_methods": list(PAY_METHODS),
         "items": [_api_item(rec) for rec in data["rows"]],
     }
 

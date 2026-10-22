@@ -137,3 +137,18 @@ Python 3.15.1、pytest 9.1.1；复用原构建，六轮dist聚合字节SHA256均
 402状态ready-for-human，四项勾选只指技术覆盖；401同样待晨验收。403/404/405/406未实施或代签，金额维护/付款/打印全页能力未完成；后续由父统筹按原授权安排，本子任务停止。最终保存运行真实提交钩子，不push/正式部署；自查足够的理由回原票，422累计独立审查保持。
 
 收尾静态：syntax_audit --staged退出0、必须修0。bytes_guard首次检出本次追加使evidence.md混行尾，已恢复该件原LF；最终字节与真实提交钩子结果见提交回执。
+
+
+## 2026-10-23 TAIL-404批量付款
+
+固定起点23319d408ad68ef7a02e954ad9a896168fc622b0、codex/react-frontend-rewrite、开工clean。完成范围、旧实际UI/事件依据、技术验收与晨间人工边界回[404原票](../tails/issues/TAIL-404-付款通知批量付款.md)。只做本票，未clone或推进405；原后端付款判定、事务与历史边界不变，API增补同源限制/方式及真实逐项流水凭据，旧客户端兼容。
+
+- 最终TS7 `node apps/frontend/node_modules/typescript/bin/tsc --noEmit --project apps/frontend/tsconfig.json`及组件cwd `node node_modules/vite/bin/vite.js build`退出0；最终构建已在浏览器重载，既有theme.css与chunk提示不变。
+- 临时verify_api.py最终退出0，4组真实隔离API检查见本机reports/api-check.json；首次登录路径错误导致匿名拒绝，未产生付款，api.log保留非零；api-final.log记录纠正后通过。第二条流水固定抛错的500是预期事务反例，全部回滚与统计原值已实查，未隐藏该日志。
+- CUA内置浏览器实际旧/app弹窗及新页面/结果截图已在工具回显目视；代表交互与一次请求证据见reports/browser-check.json。双击仅1POST，实际流水FL202610230648334108、125.25元、方式其他、批次备注与请求号均由SQL核对。付款成功后固定阻断列表请求，成功回执和刷新故障区分；撤除阻断并重读成功，没有重付。表内拟付60.25跨页保留，取消后SQL为0流水。最终SQL全schema仅3条（API2+浏览器1），失败/移出目标无流水，见reports/final-db.json。
+- 所有schema由既有isolated_database建立，mtrl_workbench_test/mtrl、唯一search_path且无public；最初导入错误/观察旧页/最终验证共3个自有schema，精确名字及清理回resource-check.json。I8Client构造和所有httpx出站被固定阻断，无真实i8、强踢、抓取、同步或打印；未复制生产业务数据。
+
+自查基点与范围、审批工具后续已执行的准确状态、首次错误和未验边界只回原票。未新增持久测试、不跑矩阵或全仓、422累计独立审查保持。8037未被本任务操作；末次只读健康ReadTimeout且PID24988未查到，需要父任务核实用户预览，未擅自重启/重建。必要日志/报告归本机 `.artifacts/archive/frontend-vue-rewrite/tail404-20261023/`，沿既有2026-11-21期限，不延长；自有资源清理与run-closed结果后附。
+
+
+**2026-10-23 · 本次收尾实测。** 3个精确自有schema及其应用连接均为0，8038无监听、会话81795退出0；临时work/脚本/故障开关和浏览器页已清，Network临时阻断已撤除。必要日志/报告已归上述本机archive，run-closed退出0。8037未操作，末查超时/PID24988未见的问题交父核实；不擅自重建或删除其数据。源码提交及真实钩子结果见最终回执，不push或部署。
