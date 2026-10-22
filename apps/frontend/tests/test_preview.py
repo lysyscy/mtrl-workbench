@@ -20,7 +20,7 @@ from tools.dev.frontend_preview import isolated_database
 
 
 @pytest.fixture(scope='module')
-def server():
+def server(preview_seed):
     source = os.environ.get('MTRL_PREVIEW_SOURCE_ENV')
     if not source:
         pytest.fail('MTRL_PREVIEW_SOURCE_ENV must identify the approved database configuration')
@@ -28,6 +28,7 @@ def server():
         probe.bind(('127.0.0.1', 0))
         port = probe.getsockname()[1]
     with isolated_database(Path(source)) as env:
+        preview_seed(env)
         log_path = output('preview-server.log', kind='logs')
         with log_path.open('w', encoding='utf-8') as log:
             process = subprocess.Popen([sys.executable, '-X', 'utf8', '-m', 'uvicorn',

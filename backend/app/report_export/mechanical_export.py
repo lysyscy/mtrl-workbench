@@ -313,7 +313,7 @@ def build(data):
 def preview(data):
     wb, warnings = build(data)
     sheets = []
-    for sheet in wb.worksheets[:3]:
+    for sheet in wb.worksheets:
         merged_starts, hidden = {}, set()
         for item in sheet.merged_cells.ranges:
             merged_starts[(item.min_row, item.min_col)] = (item.max_row - item.min_row + 1, item.max_col - item.min_col + 1)
@@ -329,7 +329,7 @@ def preview(data):
                 value = cell.value
                 if isinstance(value, Formula):
                     value = value.result
-                cells.append({'value': '' if value is None else str(value), 'rowspan': rs, 'colspan': cs})
+                cells.append({'value': '' if value is None else str(value), 'rowspan': rs, 'colspan': cs, 'column': cell.column})
             rows.append(cells)
         sheets.append({'name': sheet.title, 'rows': rows})
     wb.close()

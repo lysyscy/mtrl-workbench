@@ -48,6 +48,7 @@ def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
 def test_preview_matches_frozen_file_and_next_export_does_not_modify_first(tmp_path):
     data = sample()
     preview = export.preview(data)
+    assert [sheet['name'] for sheet in preview['sheets']] == ['工程公司汇总表', '零租设备月报表', '包月外租设备月报', '年度汇总']
     path = export.export(data, tmp_path)
     before = path.read_bytes()
     changed = deepcopy(data)

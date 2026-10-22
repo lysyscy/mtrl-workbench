@@ -3,23 +3,18 @@ import { createPortal } from 'react-dom';
 import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
-import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
+import { gridTheme } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, projectLabel, readProjects, record, requestJson } from './api';
 import type { Identity } from './api';
 import { amount, editable, loadLedger, payload, same, sum } from './ledger-api';
 import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
 
-ModuleRegistry.registerModules([AllCommunityModule]);
 const fields: Field[] = ['month', 'other_expense', 'payment', 'remark'];
 const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
 const labels = { month: '月份', other_expense: '结算', payment: '付款', remark: '备注' };
 const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: false, suppressMovable: true, suppressKeyboardEvent: event => event.event.target instanceof HTMLInputElement };
-const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(12.5px * var(--fscale))',
-  backgroundColor: 'var(--sf)', foregroundColor: 'var(--tx)', borderColor: 'var(--bd)',
-  headerBackgroundColor: 'var(--sf2)', headerTextColor: 'var(--tx2)', accentColor: 'var(--pri)',
-  oddRowBackgroundColor: 'var(--sf)', browserColorScheme: 'inherit', rowHoverColor: 'var(--sf2)',
-  borderRadius: 0, wrapperBorderRadius: 0 });
+
 interface Scope { key: string; owner: string; project: number; end: string }
 interface Draft { text: string; base: string; version: number; queued: boolean; month: string }
 interface Task extends Draft { field: Field }
@@ -124,7 +119,7 @@ function readHistory(value: unknown): HistoryStatus {
   }
   return { undo: item(value.undo), redo: item(value.redo), notice: typeof value.notice === 'string' ? value.notice : '' };
 }
-export function LedgerPage({ me, blocked, project, setProject, active }: { me: Identity | null; blocked: boolean; active: boolean; project: number; setProject: (project: number) => void }) {
+export function LedgerPage({ me, blocked, project, setProject, active, onExportGuard }: { me: Identity | null; blocked: boolean; active: boolean; project: number; setProject: (project: number) => void; onExportGuard: (reason: string) => void }) {
   const client = useQueryClient();
   const end = ''; // The established ledger follows the data's last month; report month belongs to export only.
   const [focusRecord, setFocusRecord] = useState<number | null>(null);
@@ -325,6 +320,8 @@ export function LedgerPage({ me, blocked, project, setProject, active }: { me: I
     if (!me) { void query.refetch(); return; }
     await control(scope, async () => { await refresh(scope); message(scope, '已重新加载；未保存输入仍保留。'); }, true);
   }
+  const sharedGuard = historyNeedsReadback.current || [...messages.current.values()].some(item => item.reload) || [...edits.current.values()].some(edit => edit.locked) ? '台账操作结果待核实，请返回台账重新加载。' : controlBusy || [...edits.current.values()].some(edit => edit.saving) ? '台账正在保存，请稍候。' : [...edits.current.values()].some(edit => Object.keys(edit.drafts).length > 0) ? '台账有未保存输入，请返回台账处理。' : '';
+  useEffect(() => { onExportGuard(sharedGuard); }, [onExportGuard, sharedGuard]);
   const receipt = messages.current.get(scope.key);
   const needsReload = Boolean(historyNeedsReadback.current || receipt?.reload || query.isError);
   const exportUnavailable = !me ? '登录后可导出。' : blocked ? '正在核实账号，暂不能导出。' : controlBusy ? '正在处理操作，请稍候。' : historyNeedsReadback.current || receipt?.reload ? '操作结果待核实，请先重新加载核对。' : query.isError ? '台账读取失败，请先重新加载。' : projects.isError ? '项目读取失败，请先重试。' : projects.isPending ? '正在读取项目…' : '';

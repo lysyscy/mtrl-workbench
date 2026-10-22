@@ -46,8 +46,8 @@ def api(session, monkeypatch, tmp_path):
 
     monkeypatch.setattr(API, 'session_scope', session_scope)
     monkeypatch.setattr(API, 'current_operator', lambda: 'isolated-test')
-    from app.core import config
-    monkeypatch.setattr(config, 'get_settings', lambda: SimpleNamespace(exports_path=tmp_path))
+    from app.report_export import service as exports
+    monkeypatch.setattr(exports, 'EXPORT_ROOT', tmp_path)
 
     captured = {'previews': [], 'exports': []}
 
