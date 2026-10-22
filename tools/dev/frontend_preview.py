@@ -17,6 +17,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'backend'))
+sys.path.insert(0, str(ROOT))
 
 
 @contextmanager
@@ -40,6 +41,8 @@ def isolated_database(source_env: Path):
                 raise RuntimeError('实际测试库身份不符')
             connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
             owned = True
+        from tools.audit.workspace_paths import output_dir
+        export_dir = output_dir('exports')
         env = os.environ.copy()
         # No public fallback: missing tables fail instead of reaching shared test data.
         env.update(DATABASE_URL=guard.test_url, TEST_DATABASE_URL=guard.test_url,
@@ -48,6 +51,7 @@ def isolated_database(source_env: Path):
                    CORS_ALLOW_ORIGINS='', I8_BASE_URL='', I8_USER='', I8_PASSWORD='',
                    PRINTER_IPP_URL='', PRINTER_NAME='',
                    FRONTEND_PREVIEW_DIR=str(ROOT / 'apps/frontend/dist'),
+                   MTRL_PREVIEW_EXPORT_DIR=str(export_dir),
                    ARTIFACTS_DIR='var/tmp/frontend-397', LOGS_DIR='var/log/frontend-397',
                    PYTHONPATH=str(ROOT / 'backend'), PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright')
         subprocess.run([sys.executable, '-X', 'utf8', '-m', 'alembic', 'upgrade', 'head'],
@@ -70,6 +74,28 @@ def isolated_database(source_env: Path):
                     Project(project_type='normal', name_full='隔离验收归档项目', warehouse_name='隔离归档仓库', disp='归档样例', status='archived', ord=2),
                     Project(project_type='normal', name_full='隔离验收长项目名称用于核对窄屏换行与横向滚动的可读性', warehouse_name='长名称验收仓库', disp='长项目名验收', ord=3),
                 ])
+                session.flush()
+                from app.mod05_flow.models import OpeningBalance
+                from app.mod03_notice.models import PaymentNotice
+                from sqlalchemy import select
+                project = session.scalar(select(Project).where(Project.disp == '隔离项目'))
+                other = session.scalar(select(Project).where(Project.disp == '长项目名验收'))
+                session.add_all([
+                    OpeningBalance(project_id=project.id, category='material', entry_kind='manual',
+                                   cutoff_ym='2025-10', settle_amount=1000, paid_amount=100, remark='合成历史行甲'),
+                    OpeningBalance(project_id=project.id, category='material', entry_kind='manual',
+                                   cutoff_ym='2025-11', settle_amount=500, paid_amount=50, remark='合成历史行乙'),
+                    OpeningBalance(project_id=project.id, category='mechanical', entry_kind='month',
+                                   cutoff_ym='2025-11', settle_amount=0, paid_amount=75, remark='合成机械付款'),
+                    OpeningBalance(project_id=other.id, category='material', entry_kind='manual',
+                                   cutoff_ym='2025-11', settle_amount=300, paid_amount=30, remark='另一项目测试行'),
+                    PaymentNotice(ph_id='PREVIEW-HISTORY', bill_no='PREVIEW-HISTORY', project_name=project.name_full,
+                                  ownership_id=project.id, category='material', doc_date='2025-09-01',
+                                  stat_settle=200, stat_paid=20, amount_approved=200),
+                    PaymentNotice(ph_id='PREVIEW-NORMAL', bill_no='PREVIEW-NORMAL', project_name=project.name_full,
+                                  ownership_id=project.id, category='material', doc_date='2025-12-01',
+                                  stat_settle=400, stat_paid=40, amount_approved=400),
+                ])
                 session.commit()
         finally:
             scoped.dispose()
@@ -90,6 +116,11 @@ def create_preview_app():
     # Cookies ignore ports: keep preview logins away from the normal workbench.
     from app.core import session
     session.COOKIE_NAME = 'mw_preview_397'
+    from app.report_export import service as exports
+    export_dir = Path(os.environ['MTRL_PREVIEW_EXPORT_DIR']).resolve()
+    if not export_dir.is_relative_to(ROOT / '.artifacts/active'):
+        raise RuntimeError('预览导出目录不在本轮隔离产物内')
+    exports.EXPORT_ROOT = export_dir
     from app.main import create_app
     return create_app()
 

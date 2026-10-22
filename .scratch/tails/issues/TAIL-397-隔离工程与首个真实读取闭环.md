@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** claimed
+**Status:** done
 
 - [x] 同仓独立 worktree 与分支、组件源码位置和 pnpm 单包布局落实；报告实际绝对路径，依赖及构建不覆盖在用文件。
 - [x] 固定 React/React DOM 19.3.1、TypeScript 7.0.2、pnpm 12.14.0；实测兼容后固定 Vite、React 插件及类型声明，冻结锁文件安装、严格类型检查和生产构建分别通过。
@@ -60,3 +60,5 @@
 14项均在C:/Users/Administrator/AppData/Local/Temp/，精确文件名：tail397-preflight.py、tail397-write.py、tail397-backend.py、tail397-fix.py、tail397-tests.py、tail397-testfix.py、tail397-fix2.py、tail397-docs.py、tail397-finalfix.py、tail397-audit.py、tail397-exitfix.py、tail397-evidence.py、tail397-final-db.py、tail397-commit.py。本次修复使用短脚本stdin，没有再创建Temp辅助脚本。
 
 **2026-10-22 · NSSM红项根因查清（只读）。** 原仓D:/dev/mtrl-workbench/ops/nssm/nssm.exe存在（331264字节）；正式mtrl-workbench-server状态Running、LocalSystem，PathName正为该文件，Application为原仓backend/.venv/Scripts/python.exe，AppDirectory为原仓backend，参数为uvicorn监听8000。工作树对应文件不存在，因为该工具按既有.gitignore不提交，Git worktree不复制它。属于工作树未共享本机运维运行资源，不是过时路径或正式部署缺件；文档引用与真实部署一致，无纯文档误指向可修。最小处理建议：保留正确引用与本工作树审计环境差异，不为397隔离预览下载/安装/复制正式服务工具，不放宽T3；如父任务另要求该工作树完整运维审计归零，应单独决定运行资源准备方式。本次仅查询服务信息和三项非秘密注册参数，没有启停/执行NSSM或读取服务环境凭据。
+
+**2026-10-22 · 父任务功能验收通过并授权销号。** 父任务已验收02a29b2及0485e20的397范围；安装、类型、构建及原5真实闭环/46既有保障、修复后10项和末次失效恢复1项证据沿上述记录冻结，不计入398通过。按用户“已手动删除”新证据只读逐项核397精确14项Temp文件，全部不存在（14不存在/0残留），本次没有删除、改ACL或清理通配操作。NSSM仅工作树缺忽略资源的环境差异保留，审计退出1不改报全绿。预览8037已关、schema0沿父任务核实；398另验写入与草稿。

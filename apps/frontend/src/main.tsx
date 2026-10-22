@@ -1,9 +1,10 @@
-import { StrictMode, useEffect, useRef, useState } from 'react';
+import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { readIdentity, readProjects, requestJson } from './api';
 import type { Identity } from './api';
+const LedgerPage = lazy(() => import('./ledger').then(module => ({ default: module.LedgerPage })));
 import './style.css';
 
 const loginUrl = '/login?next=%2Fpreview%2Fprojects';
@@ -59,9 +60,9 @@ function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; bloc
   }
   return <QueryClientProvider client={client}><div className="workspace" hidden={blocked} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
-    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
+    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink><NavLink to="/ledger">MOD-05 历史台账</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
     <div className="main"><header><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</header>
-      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes></main>
+      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/ledger" element={<Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked} /></Suspense>} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes></main>
     </div>
   </div></QueryClientProvider>;
 }

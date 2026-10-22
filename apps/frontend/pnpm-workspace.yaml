@@ -1,2 +1,4 @@
 minimumReleaseAgeExclude:
   - vite@8.3.5
+patchedDependencies:
+  ag-grid-community@36.2.0: patches/ag-grid-community@36.2.0.patch
