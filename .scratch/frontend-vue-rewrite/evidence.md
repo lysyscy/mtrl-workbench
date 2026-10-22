@@ -106,3 +106,18 @@ Python 3.15.1、pytest 9.1.1；复用原构建，六轮dist聚合字节SHA256均
 删除i8页付款抓取和配置整区；清理i8-settings/i8-execution、仅它们使用的前端解析/错误标志/CSS，以及5个地址测试＋7个失去页面入口的抓取测试（共12函数）；固定响应夹具退出长期测试树，现有8037预览仅在自有run/work保留临时副本直至用户结束。未新增永久测试。共享后端和迁移不变，旧测试结果保留为历史、不冒称当前保留覆盖。
 
 `npm run typecheck`、`npm run build`退出0。复用现有8037与真实业务副本，单次只读Playwright冒烟通过：两区无入口、结果/记录保留、标题身份同排、禁用撤销重做位于身份左侧、动作筛选可用、页面错误0、业务POST 0；本机修正版截图已目视。原图Library返回云端路径本机不可见，未看到原图。产物归现有`.artifacts/active/frontend-vue-rewrite/i8-human-preview-20261022/reports/smoke-correction.json`与`i8-corrected.png`，进程/schema/停止方式归同目录preview-handoff。未重启、重复制或删除用户预览数据；运行中不执行run-closed。当前差异局部可逆且无后端/资金写入，定向自查足够；按用户要求不追加独立审查循环。未push/部署，400待用户复看、419地址取消/其他待做、402未实施、401未推进。
+
+## 2026-10-23 TAIL-401项目维护
+
+授权与旧UI对照只回[本规格](spec.md#tail-401-单票接续)，逐项技术完成、审查及未验边界回[TAIL-401](../tails/issues/TAIL-401-项目维护与人工归属.md)。基点 `f667be4bdf25d34d51999b328d4caf6a1b40a4ef`，分支 `codex/react-frontend-rewrite`，开工clean；未clone/push/部署或调用真实外部系统。
+
+- `node apps/frontend/node_modules/typescript/bin/tsc --noEmit --project apps/frontend/tsconfig.json` 最终退出0。首次未使用导入/类型收窄及本地模板拼写检查失败已修正；一次Vite误传`--root`被CLI拒绝，未产出构建，改回项目cwd命令后成功。
+- 在 `apps/frontend` 执行 `node node_modules/vite/bin/vite.js build` 最终退出0，152模块；theme.css保持运行时路径，既有grid大chunk提示保留。构建仅供预览，未部署正式服务。
+- 临时 `tail401-20261023/work/verify_preview.py` 实际8组检查通过，连接身份逐次断言 `mtrl_workbench_test / mtrl / 唯一schema`，search_path不回落public。仅从正式配置读取测试DSN，不传正式DSN给迁移或测试子进程，未读取生产业务数据。外部HTTP和打印均阻断，i8来源固定替身；首次缺测试地址使前端正确禁用同步，后续仅补 `http://fixed-i8.invalid` 并重启自己的合成预览。首次与修正后两次schema均由同一finally清理，不借pytest回滚覆盖浏览器写入。
+- 浏览器使用CUA内置浏览器，实际旧/app只读观察＋新页真实交互；两个Excel均用openpyxl读取。API指定序导出「待指认乙、待指认甲」，浏览器筛选＋表头序导出「待指认甲、待指认乙」，均2行/9列。浏览器文件已移入本run证据，原下载清除。变更后的选择器实际显示「改后选择项」；原项目ID保持，公共台账继续读取。没有新增长期测试、外部替身或脚本。
+
+本机原始报告和必要日志/两份合成XLSX归 `.artifacts/archive/frontend-vue-rewrite/tail401-20261023/`，沿既有retention保留至2026-11-21。8038本票合成预览结束后停止，专属schema、端口、临时work和下载均清理，run-closed结果见本回执后续落账。8037用户i8副本PID24988/session35463及其schema/数据保持，仍按原preview-handoff停止方式；新build可供父任务整合项目页预览，但该8037路由白名单仍会将项目页转到i8，不能把它报成401可验收入口。401人工预览需父任务在接续中按原边界另开或调整，未扩大现有副本写权限。
+
+本票ready-for-human；用户睡眠授权只延后人工关口，不等于接受本页。没有未决新增业务规则；真实外部联调和人验收均未完成。自查范围及理由回原票；422最终累计审查保持。
+
+收尾实测：两次自有schema及其数据库会话均为0，8038无监听，两个执行会话均退出0；PID24988创建时间未变。临时work和本票浏览器下载已删除，必要产物已归档，workspace_check.py run-closed退出0。最后自查补回包ord回写，使后端夹紧位置后输入显示实际保存值；最终type/build仍退出0，没有为此重复旧后端或全仓测试。

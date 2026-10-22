@@ -1,47 +1,19 @@
 import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from 'react-router';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { readIdentity, readProjects, requestJson } from './api';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { readIdentity, requestJson } from './api';
 import type { Identity } from './api';
 const MechanicalPage = lazy(() => import('./mechanical').then(module => ({ default: module.MechanicalPage })));
 const LedgerPage = lazy(() => import('./ledger').then(module => ({ default: module.LedgerPage })));
 const I8Page = lazy(() => import('./i8').then(module => ({ default: module.I8Page })));
 import './style.css';
+import { Projects } from './projects';
 
 const loginUrl = '/login?next=%2Fpreview%2Fprojects';
 
 function Notice({ message, retry }: { message: string; retry?: () => void }) {
   return <div className="notice" role="alert"><span>{message}</span>{retry && <button onClick={retry}>重试</button>}</div>;
-}
-
-function Projects({ blocked }: { blocked: boolean }) {
-  const [status, setStatus] = useState('active');
-  const [keyword, setKeyword] = useState('');
-  const [search, setSearch] = useState('');
-  const [composing, setComposing] = useState(false);
-  useEffect(() => {
-    if (blocked || composing) return;
-    const timer = window.setTimeout(() => setSearch(keyword.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [keyword, composing, blocked]);
-  const query = useQuery({
-    queryKey: ['projects', status, search],
-    enabled: !blocked,
-    queryFn: async ({ signal }) => readProjects(await requestJson(`/api/m01/projects?${new URLSearchParams({ status, keyword: search })}`, { signal })),
-  });
-  return <section aria-labelledby="page-title">
-    <form className="filters" onSubmit={event => event.preventDefault()}>
-      <div className="filter-field"><label htmlFor="project-status">状态</label><select id="project-status" value={status} onChange={event => setStatus(event.target.value)}><option value="active">在建</option><option value="archived">归档</option><option value="all">全部</option></select></div>
-      <label className="search">项目<input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={event => { setKeyword(event.currentTarget.value); setComposing(false); }} placeholder="全名、仓库名或展示名" /></label>
-    </form>
-    {query.isPending ? <p role="status" className="state">正在读取项目…</p> : query.isError ? <Notice message={query.error.message} retry={() => void query.refetch()} /> : query.data.length === 0 ? <p role="status" className="state">没有符合条件的项目。可调整状态或关键词。</p> : <>
-      <p className="result" role="status">共 {query.data.length} 个项目{query.isFetching ? ' · 正在刷新…' : ''}</p>
-      <div className="table-scroll" tabIndex={0} role="region" aria-label="项目列表"><table><thead><tr><th>序号</th><th>项目类型</th><th>展示名</th><th>仓库名</th><th>项目全名</th><th>信息化编号</th><th>状态</th></tr></thead><tbody>{query.data.map(project => <tr key={project.id}>
-        <td>{project.ord}</td><td><span className={`project-type project-type-${project.project_type}`}>{{ normal: '普通项目', shell: '小微壳', small: '具体小微' }[project.project_type]}</span></td><td>{project.disp || '—'}</td><td>{project.warehouse_name ?? '—'}</td><td>{project.name_full}</td><td>{project.phid || '—'}</td><td>{project.status === 'active' ? '在建' : '归档'}</td>
-      </tr>)}</tbody></table></div>
-    </>}
-  </section>;
 }
 
 function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; blocked: boolean; onLogout: () => void }) {
@@ -75,7 +47,7 @@ function AccountWorkspace({ me, blocked, onLogout }: { me: Identity | null; bloc
     <a className="skip" href="#content">跳到内容</a>
     <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink><NavLink to="/i8">MOD-02 i8 接入层</NavLink><NavLink to="/ledger" title="当前预览提供逐月台账，综合页面其余区域尚未接入">MOD-05 付款流水与欠款统计</NavLink><NavLink to="/mechanical">MOD-10 机械费</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
     <div className="main"><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><div className="history-slot"><div id="history-controls" /><div className="history-fallback ledger-tools"><button disabled title="当前页面没有可撤销的操作">撤销</button><button disabled title="当前页面没有可重做的操作">重做</button></div></div><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</div></header>
-      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects blocked={blocked} />} /><Route path="/i8" element={<Suspense fallback={<p role="status">正在读取 i8 接入层…</p>}><I8Page blocked={blocked} /></Suspense>} /><Route path="/ledger" element={null} /><Route path="/mechanical" element={<Suspense fallback={<p role="status">正在读取机械费…</p>}><MechanicalPage me={me} blocked={blocked} exportGuard={ledgerExportGuard} /></Suspense>} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>{(ledgerVisited || ledgerActive) && <div hidden={!ledgerActive} inert={!ledgerActive}><Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked || !ledgerActive} active={ledgerActive} project={ledgerProject} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} /></Suspense></div>}</main>
+      <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={<Projects me={me} blocked={blocked} />} /><Route path="/i8" element={<Suspense fallback={<p role="status">正在读取 i8 接入层…</p>}><I8Page blocked={blocked} /></Suspense>} /><Route path="/ledger" element={null} /><Route path="/mechanical" element={<Suspense fallback={<p role="status">正在读取机械费…</p>}><MechanicalPage me={me} blocked={blocked} exportGuard={ledgerExportGuard} /></Suspense>} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>{(ledgerVisited || ledgerActive) && <div hidden={!ledgerActive} inert={!ledgerActive}><Suspense fallback={<p role="status">正在读取台账…</p>}><LedgerPage me={me} blocked={blocked || !ledgerActive} active={ledgerActive} project={ledgerProject} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} /></Suspense></div>}</main>
     </div>
   </div></QueryClientProvider>;
 }
