@@ -102,6 +102,10 @@ def test_投递说明进回执且不算失败(monkeypatch):
     assert o.ok is True, "『说不清』⛔ 不是失败"
     assert o.unverified is True and o.reason == "已投递（未核实）"
     assert len(r.success) == 1, "它算**成功**（`success` 集合里）"
+    from app.mod03_notice.router import batch
+    from app.mod03_notice.schemas import BatchRequest
+    response = batch(BatchRequest(ids=[1], mode="print"), executor=lambda ids, mode: r)
+    assert response.items[0].unverified is True, "API不能丢掉未核实标记，避免误导重复投递"
 
 
 def test_已核实与真失败两态不受影响(monkeypatch):

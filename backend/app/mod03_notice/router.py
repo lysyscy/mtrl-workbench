@@ -310,6 +310,7 @@ def batch(
             notice_id=o.notice_id,
             bill_no=o.bill_no,
             ok=o.ok,
+            unverified=o.unverified,
             reason=o.reason,
             pdf_path=o.pdf_path,
             download_url=(
