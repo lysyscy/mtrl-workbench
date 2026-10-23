@@ -79,7 +79,7 @@ function Side({ side, scope, actions, writable, busy, add, focusRecord, focused 
   const visible = useMemo(() => side.rows.filter(row => row.row_kind !== 'month' || row.editable || row.other_expense !== '0.00' || row.payment !== '0.00' || row.remark).map((row, index) => ({ ...row, seq: index + 1 })), [side.rows]);
   const months = visible.filter(row => row.row_kind === 'month'); const latest = months.at(-1);
   const upto = latest?.month || side.rows.at(-1)?.month || '—';
-  const total = useMemo<LedgerRow[]>(() => side.rows.length ? [{ key: 'total', category: side.category, seq: 0, month: '', month_label: `截至 ${upto}`, row_kind: 'undated', record_id: null, other_expense: sum(side.rows, 'other_expense'), payment: sum(side.rows, 'payment'), debt: sum(side.rows, 'debt'), remark: side.category === 'material' ? '' : '当前欠款', token: '', editable: false, counts_in_total: false }] : [], [side, upto]);
+  const total = useMemo<LedgerRow[]>(() => side.rows.length ? [{ key: 'total', category: side.category, seq: 0, month: '', month_label: `截至 ${upto}`, row_kind: 'undated', record_id: null, other_expense: sum(side.rows, 'other_expense'), payment: sum(side.rows, 'payment'), debt: sum(side.rows, 'debt'), remark: '', token: '', editable: false, counts_in_total: false }] : [], [side, upto]);
   const columns = useMemo<ColDef<LedgerRow>[]>(() => [
     { field: 'seq', headerName: '序号', ...contentWidth(44, 58, scale), colSpan: p => p.node?.rowPinned ? 2 : 1, cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
     { field: 'month', headerName: '月份（按单据日期）', ...contentWidth(124, 180, scale), cellRenderer: Cell },

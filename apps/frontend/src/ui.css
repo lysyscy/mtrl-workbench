@@ -1,4 +1,4 @@
-.business-modal{max-width:calc(100vw - 24px);top:8vh;padding-bottom:0}
+.business-modal{max-width:calc(100vw - 24px);padding-bottom:0}
 .business-modal .ant-modal-container{padding:0}
 .business-modal .ant-modal-body{max-height:84dvh;overflow:auto;scrollbar-color:var(--bd3) var(--sf2)}
 .business-modal .ant-modal-body>div{margin:0;max-width:calc(100vw - 24px);max-height:none;overflow:visible;border:0;border-radius:0;background:transparent;color:var(--tx);box-shadow:none}
