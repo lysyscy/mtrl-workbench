@@ -26,6 +26,7 @@ AGENTS.md为会话入口；项目开发正文在docs/guides/，实现约束和�
 ## 四、文件与工具
 
 - `[用户·2026-10-17]` 网页探查优先使用内置浏览器（in-app browser）；内置浏览器能力不足时再按需选择其他工具，Computer Use 不作为网页探查的首选。
+- `[用户·2026-10-23]` i8 接口探测、验证和调用先读 [统一收录入口](../reference/i8-contract.md#〇统一收录与调用)；探测到的接口在完成相应验证后统一收录，已有记录和封装优先复用。
 
 - `[助手自定]` JSON用结构操作；改已有文件保留其行尾，新文本UTF-8无BOM，ps1例外带BOM。字节保护由 tools/audit/bytes_guard.py 执行。
 - `[助手自定]` 长脚本进本轮.artifacts/active/<effort>/<run>/work，运行证据进对应kind，.scratch仅放任务Markdown；输出完整落盘或取末尾，不能掐断正在写靶的进程。相关配方按需读docs/guides/development-and-verification.md §十七。

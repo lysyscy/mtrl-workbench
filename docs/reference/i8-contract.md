@@ -16,6 +16,15 @@
 
 ---
 
+## 〇、统一收录与调用
+
+[用户·2026-10-23] 本文件是本项目 i8 已探测接口的统一收录入口。调用或继续探测前先查本文件与现有接入封装；确认缺口后再探测。
+
+- 接口完成与用途相应的验证后，在本文件按业务归类收录：用途、HTTP 方法与路径、必要参数及组织范围、关键响应字段、会话与读写副作用、验证日期和适用边界、已有调用封装位置。分页、附件或业务写入按实际涉及的行为验证，不统一扩展测试矩阵。
+- 尚未完成验证的接口标为“待验证”，注明已知部分和缺口；仅探测成功不能登记为可稳定调用，文档收录也不代表已接入产品。
+- 可复用调用沿用 `backend/app/mod02_i8/client.py` 及对应数据源；其他位置已有实现时记录其指针，避免重复封装。一次性取数不因此自动变成长驻功能。
+- 收录参数结构与去敏后的响应形态；Cookie、Token、签名下载地址及业务原件保留在各自受保护位置，不进入接口文档或 Git。
+
 ## 一、`API-01` 付款通知书列表
 
 **URL**：`{I8_BASE_URL}/FC/FM/PaymentBill/getList`（**POST**，`application/x-www-form-urlencoded`）
@@ -369,4 +378,4 @@
 
 列表POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalList?model=7&floatmenuCondition=`；form带page/start/limit、queryfilter及公司OrgQuery上下文，与采购合同同组织。返回Success/Record/totalRows；PhId为应付键，PhidCnt/PhidCnt_EXName为合同主键/编号，PhidPc_EXName、PhidBalComp_EXName为项目/收款单位，AppAmtVatFc为审批本币额，AsrFlag=1、WfFlag=2为已批结束。分页不完整或重复键应拒绝继续关联；取数实现 `mod02_i8/payable_source.py`。
 
-详情POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalInfoFirst`，form `id`。抽查8条invoiceGrid均空，不能据此判定无发票；附件经 `/JFileSrv/reactAttach/tableAttachInit` 按asrTable=pcm3_cnt_projbal、asrCode=应付PhId、busTypeCode=PCM_BAL7取attachmentRecordList，asrFid是文件键，asrName是文件名。PDF预览可取得文字层；不在正文存签名文件URL、Token或Cookie。多个项目应付与附件样本的试验及匹配结果见TAIL-374；不是全历史覆盖证明。
+详情POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalInfoFirst`，form `id`。抽查8条invoiceGrid均空，不能据此判定无发票；附件目录使用 **GET** `/JFileSrv/reactAttach/tableAttachInit`，query带asrTable=pcm3_cnt_projbal、asrCode=应付PhId、busTypeCode=PCM_BAL7；返回code/data/message，code=200时从data.attachmentRecordList取文件列表，asrFid是文件键，asrName是文件名（2026-10-23浏览器会话只读核实，POST不受支持）。PDF预览可取得文字层；不在正文存签名文件URL、Token或Cookie。多个项目应付与附件样本的试验及匹配结果见TAIL-374；不是全历史覆盖证明。
