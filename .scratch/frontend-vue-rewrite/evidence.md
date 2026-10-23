@@ -157,3 +157,8 @@ Python 3.15.1、pytest 9.1.1；复用原构建，六轮dist聚合字节SHA256均
 ### 2026-10-23 TAIL-406打印PDF与设置
 
 本轮固定起点59197066390f700bdb8e57492bdf57c653eb36f3，串行技术交付和验证/首次失败/浏览器策略拒绝/资源收尾只回[406原票](../tails/issues/TAIL-406-付款通知PDF打印与设置.md)。必要原始日志及合成PDF/PNG在本机`.artifacts/archive/frontend-vue-rewrite/tail406/`，沿既有2026-11-21期限。当前停在406，待父架构检查和完整人工验收，不推进407。
+
+
+### 2026-10-23 TAIL-407机械明细与有效月值
+
+串行实现与技术证据、首次非零、13项现有检查、真实浏览器/SQL/四页文件和自有资源收尾只回[407原票](../tails/issues/TAIL-407-机械零租与月度明细编辑.md)。必要logs/reports/screenshots在本机`.artifacts/archive/frontend-vue-rewrite/tail407-20261023/`，沿既有2026-11-21期限；临时构建/脚本/下载和8038独立schema已清。ready-for-human，未代人工验收；8037 PID19956及其共享构建13文件保持，未开放机械页。407停下交父统筹408，本轮未推进408。
