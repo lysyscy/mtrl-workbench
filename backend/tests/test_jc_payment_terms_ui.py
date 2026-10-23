@@ -22,6 +22,7 @@ def test_contract_terms_edit_and_create(ui_page, width, scale):
     }""", {'columns': list(JC_COLUMNS), 'sum_keys': list(SUM_KEYS), 'payment_methods': list(PAY_METHODS)})
     term = p.get_by_role('textbox', name='账期', exact=True)
     expect(term).to_have_value('90±10天')
+    assert term.get_attribute('placeholder') is None
     term.fill('60天')
     term.blur()
     expect(p.locator('.toast').last).to_contain_text('合同付款约定已保存')
@@ -32,6 +33,8 @@ def test_contract_terms_edit_and_create(ui_page, width, scale):
         {'id': '21', 'fields': {'payment_method': '供应链'}}]
     assert p.get_by_role('combobox', name='合同付款方式', exact=True).evaluate('e=>e.getBoundingClientRect().width') >= 100*scale
     p.evaluate('ACT.jcAdd()')
+    expect(p.locator('#jcNTerm')).to_have_value('')
+    assert p.locator('#jcNTerm').get_attribute('placeholder') is None
     p.locator('#jcNTerm').fill('30天')
     p.locator('#jcNMethod').select_option('其他')
     p.locator('[data-act="jcRowSave"]').click()

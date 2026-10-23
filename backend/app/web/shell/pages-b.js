@@ -99,7 +99,7 @@ const JC_SUM_KEYS = [];  /* /api/m11/list 的 sum_keys = domain.SUM_KEYS，壳�
 /** 普通新增列按后端同名字段生成；特殊控件由 V.m11 的 id 映射提供。 */
 function jcDefaultCell(j,c){
   const v = j.columnValues[c.key];
-  if(c.key==='payment_term') return `<td><input class="inp" aria-label="账期" style="width:110px" data-act="jcPaymentField" data-id="${j.id}" data-k="payment_term" value="${esc(v||'')}" placeholder="90±10天"></td>`;
+  if(c.key==='payment_term') return `<td><input class="inp" aria-label="账期" style="width:110px" data-act="jcPaymentField" data-id="${j.id}" data-k="payment_term" value="${esc(v||'')}"></td>`;
   if(c.key==='payment_method') return `<td><select class="inp" aria-label="合同付款方式" data-act="jcPaymentField" data-id="${j.id}" data-k="payment_method"><option value="">未约定</option>${JC_PAYMENT_METHODS.map(m=>`<option ${m===v?'selected':''}>${esc(m)}</option>`).join('')}</select></td>`;
   return c.type === 'num' ? `<td class="num">${M(N0(v))}</td>` : `<td>${esc(v == null ? '' : String(v))}</td>`;
 }
@@ -375,7 +375,7 @@ const jcNewStrip=()=>`${FBAR({cls:'strip mb6',body:`
       <div class="fi"><label>合同金额</label><input class="inp num" style="width:118px" id="jcNAmt" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="contractAmt" value="${esc(jcND.contractAmt)}"></div>
       <div class="fi"><label>贸易公司名</label><input class="inp" style="min-width:130px" id="jcNTradeCo" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="tradeCo" value="${esc(jcND.tradeCo)}" placeholder="留空 = 无贸易公司"></div>
       <div class="fi"><label>贸易公司合同金额</label><input class="inp num" style="width:118px" id="jcNTradeAmt" ${jcND.history?'disabled':''} data-act="jcNSet" data-k="tradeContractAmt" value="${esc(jcND.tradeContractAmt)}" placeholder="—"></div>
-      <div class="fi"><label for="jcNTerm">账期</label><input class="inp" style="width:110px" id="jcNTerm" data-act="jcNSet" data-k="payment_term" value="${esc(jcND.payment_term||'')}" placeholder="90±10天"></div>
+      <div class="fi"><label for="jcNTerm">账期</label><input class="inp" style="width:110px" id="jcNTerm" data-act="jcNSet" data-k="payment_term" value="${esc(jcND.payment_term||'')}"></div>
       <div class="fi"><label for="jcNMethod">合同付款方式</label><select class="inp" id="jcNMethod" data-act="jcNSet" data-k="payment_method"><option value="">未约定</option>${JC_PAYMENT_METHODS.map(m=>`<option ${m===jcND.payment_method?'selected':''}>${esc(m)}</option>`).join('')}</select></div>
       <div class="fi"><label>备注</label><input class="inp" style="min-width:130px" id="jcNRemark" data-act="jcNSet" data-k="remark" value="${esc(jcND.remark)}"></div>
       <button class="btn pri" data-act="jcRowSave" title="建档（两态默认「纳入台账」，与抓取行一致）">保存</button>
