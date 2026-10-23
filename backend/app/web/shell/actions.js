@@ -500,8 +500,6 @@ const ACT={
         ⛔ 别在这里另写一套文案（两套必然漂）。 */
   const whyCell=n=>{ const w=ntPayBlock(n);
     return w?`<span class="mut sm" title="${esc(w)}">不可付：${esc(w)}</span>`:'<span class="mut sm">不可付</span>'; };
-  const badWhy=(()=>{ const m={}; bad.forEach(n=>{ const w=ntPayBlock(n); if(w) m[w]=(m[w]||0)+1; });
-    return Object.keys(m).map(w=>w+' '+m[w]+' 条').join(' · '); })();
    Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });   /* 清掉已不在批次里的草稿 */
    const dt=$('#bDate')?.value||SYS_TODAY, remark=$('#bRemark')?.value||'';
    const request=++payContextRequest, view=VIEW;
@@ -512,8 +510,7 @@ const ACT={
    if(!context?.ok) return toast(esc(context?.message||'无法核对合同账期，请重试'));
    const byId=new Map(context.rows.map(r=>[String(r.notice_id),r]));
    const whyOf=n=>ntVoid(n)?'i8 已撤单':'已剔除';
-   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）；剔除或撤单记录不产生付款，请核对已付与关联记录。</div>`:''}<div class="tip" style="margin-bottom:calc(10px * var(--fscale))">已勾选 <b>${rows.length}</b> 条。付款方式选「其他」须填备注；<b>任一校验不通过，整批不产生流水。</b></div>
-     ${bad.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>${badWhy?`（${badWhy}）`:''}请移出不可付记录，或关闭后调整勾选；移出会取消该行勾选，其他行已填方式与金额保留。${bad.some(ntJcUnlinked)?'<br>集采未关联合同的记录须先在付款通知书页关联合同。':''}</div>`:''}
+   const body=`${drop.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 已自动排除 ${drop.length} 条不可付款的记录</b>（${esc(drop.map(n=>n.code+'（'+whyOf(n)+'）').join('、'))}）；剔除或撤单记录不产生付款，请核对已付与关联记录。</div>`:''}
      <div class="tw" style="min-height:0;max-height:44vh">${TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD,
      rows:rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
        const dm=byId.get(n.id)?.default_pay_method||n.plannedPayMethod||'现汇';
