@@ -44,3 +44,6 @@
 
 
 **2026-10-23 · 收尾实测。** 8038/PID14052通过本票stop-request优雅退出，原执行会话退出0；唯一schema`frontend_rewrite_397_8d976f2cb284462884471254e8198f53`及其应用连接均为0，8038端口已释放。8037健康200、原PID19956启动时点07:57:55保持，原schema仍存在、共享dist的13件SHA256逐项一致（reports/resource-check.json）；未操作其数据或开放新页面。本票浏览器上下文已关闭，临时脚本/JSON/构建/导出和自有active run已实际删除，必要logs/reports/screenshots已归上述archive，既有retention不续期；workspace_check.py run-closed退出0。整个frontend effort及8037仍活动，未执行closed或清理他人内容。本轮只本地提交、不push/部署/正式切换；无真实i8/强踢/同步/物理打印、持久凭据或权限变更。停在408，交父统筹后票。
+
+
+**2026-10-23 · 本地保存与浏览器收尾限制。** 实现/记录已本地提交b1f7fa8，真实pre-commit语法、字节及凭据文件检查均通过，无push/部署。成功探查页2与所有Python Playwright上下文已关闭；最初8038未就绪产生的临时错误页标签1，在取得关闭句柄时被浏览器data URL策略拒绝，关闭未执行、当前未确认已关闭；停止该动作，不换工具绕过。该页未标记deliverable/handoff，按宿主默认于本轮结束回收，不能把宿主未来回收冒称已完成。本限制只涉及无业务状态的临时错误标签，8038/schema/work与run-closed已实际完成，8037仍按原owner保留。
