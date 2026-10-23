@@ -1,13 +1,4 @@
-"""**反向灵敏度**：证明 `test_wired_m03_pay.py`（`§19` 批 4 · S4⑤ 搬的 9 条壳侧断言）**真有区分力**。
-
-做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。
-⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿** ⇒ 脚本报错退出。
-
-⚠️ 一律走 **bytes**（`index.html` = **CRLF**；`notice_pay_actions.py` = **LF**）：按目标文件行尾归一后再替换，
-   还原也用**原 bytes** —— 用 `write_text(newline=…)` 会把 CRLF 静默换成 LF ⇒ MD5 假 BAD。
-⚠️ 子进程必须设 `ACC_RESULTS_PATH`（否则每处变异把权威 `acc_results.json` 冲成单条）
-   与 `PYTHONIOENCODING=utf-8`（否则 Windows 上 GBK 解码假红）—— 见 `_mut_m03list.py` 的说明。
-"""
+'**反向灵敏度**：证明 `test_wired_m03_pay.py`（`§19` 批 4 · S4⑤ 搬的 9 条壳侧断言）**真有区分力**。\n\n做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。\n⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿** ⇒ 脚本报错退出。'
 
 from __future__ import annotations
 
@@ -126,7 +117,7 @@ def md5(p: Path) -> str:
 
 def run_one(case: str) -> bool:
     env = {**os.environ,
-           "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
+
            "PYTHONIOENCODING": "utf-8",
            "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run(

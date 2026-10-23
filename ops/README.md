@@ -1,6 +1,6 @@
 # 运维脚本入口
 
-运行、配置、服务账号与前提见 `docs/guides/operations.md`；首次部署和恢复见 `docs/guides/deployment.md`。本目录保留实际执行资源，现行工程正文已经迁入docs。
+运行、配置、服务账号与前提见 `docs/guides/deployment.md`；首次部署和恢复见 `docs/guides/deployment.md`。本目录保留实际执行资源，现行工程正文已经迁入docs。
 
 | 动作 | 入口 |
 |---|---|

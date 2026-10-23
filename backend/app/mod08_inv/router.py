@@ -23,7 +23,7 @@ from app.mod08_inv.repository import (
 # ⛔ **「手动 Excel 导入」已整体删除**（用户 2026-09-22 裁定：「库存单据手动导入这个模块给删掉，
 #    不要了」—— 降级通道改为：i8 不可用 ⇒ **显式报错待人处理**，⛔ 不做手动兜底入口）。
 #    曾经的 `import_router.py` ＋ `import_view.py` ＋ `import_api.py` ＋ `importer.py` ＋ 壳 `V.m08imp`
-#    **全部已删**（`T8` 守卫登记在 `audit_common.CANCELLED`，复活即红）。
+#    **全部已删**（保留相应端点/注册行为测试）。
 # ⚠️ 2026-09-19（`§19` 批 2）：`app.mod08_inv.view`（`render_inv_page`/`fetch_dialog_html`/`render_adjust_page`）
 #    已随「明细总表页半边」整体删除（授权 `D18`）—— ⛔ 别再加回来。
 

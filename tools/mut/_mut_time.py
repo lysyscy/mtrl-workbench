@@ -1,18 +1,4 @@
-"""**反向灵敏度**：证明 `tests/test_acc_i8_time.py::test_壳的业务时钟取自北京时间而非写死`
-（⭐ `TAIL-51` · 壳的业务时钟接真）**真有区分力**。
-
-做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。
-⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿** ⇒ 脚本报错退出。
-
-⚠️ 一律走 **bytes**：还原用**原 bytes**（用 `write_text(newline=…)` 会把 CRLF 静默换成 LF ⇒ MD5 假 BAD）。
-⚠️ 子进程必须设 `ACC_RESULTS_PATH`（否则每处变异把权威 `acc_results.json` 冲成单条）
-   与 `PYTHONIOENCODING=utf-8`（否则 Windows 上 GBK 解码假红）。
-⚠️ 跑完**必须再跑一次全套 pytest** 把权威结果写回（见 `MEMORY.md` §十七「本机环境坑」那条）。
-
-⭐ 与 `_mut_boot.py` 的一处**改进**：锚点**同时**试「原样 LF」与「按目标文件行尾归一」两种形态，
-   取唯一命中的那一种 —— 本仓 `index.html` 出现过**混行尾**（手写块 LF、`git checkout` 出来的块 CRLF），
-   只试一种会报「命中 0」，而那个报错**看起来像锚点写错了**（其实只是行尾）。
-"""
+'**反向灵敏度**：证明 `tests/test_acc_i8_time.py::test_壳的业务时钟取自北京时间而非写死`\n（⭐ `TAIL-51` · 壳的业务时钟接真）**真有区分力**。\n\n做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。\n⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿** ⇒ 脚本报错退出。\n\n⭐ 与 `_mut_boot.py` 的一处**改进**：锚点**同时**试「原样 LF」与「按目标文件行尾归一」两种形态，\n   取唯一命中的那一种 —— 本仓 `index.html` 出现过**混行尾**（手写块 LF、`git checkout` 出来的块 CRLF），\n   只试一种会报「命中 0」，而那个报错**看起来像锚点写错了**（其实只是行尾）。\n'
 
 from __future__ import annotations
 
@@ -116,7 +102,7 @@ def md5(p: Path) -> str:
 
 def run_one() -> bool:
     env = {**os.environ,
-           "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
+
            "PYTHONIOENCODING": "utf-8",
            "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run(

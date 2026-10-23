@@ -102,9 +102,6 @@ class Settings(BaseSettings):
     database_url: str = ""
     test_database_url: str = ""
 
-    # --- 验收基线（D3：直读 PRD 快照，工程内不留副本）---
-    prd_acceptance_baseline: str = ""
-
     # --- i8（纯 HTTP；登录含强踢，抓取一律人工触发）---
     i8_base_url: str = ""
     i8_user: str = ""

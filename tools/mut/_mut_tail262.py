@@ -19,7 +19,6 @@ CASES=[
 ]
 def main():
     env=os.environ.copy();env['TEST_DATABASE_URL']=get_settings().test_database_url
-    env['ACC_RESULTS_PATH']=str(ROOT/str(_run_output('_mut_tail262_results.json')))
     with tempfile.TemporaryDirectory(prefix='tmp-tail262-mut-',dir=ROOT/_run_dir('work')) as folder:
         base=Path(folder)/'backend';base.mkdir()
         shutil.copytree(ROOT/'backend/app',base/'app',ignore=shutil.ignore_patterns('__pycache__'))

@@ -1,15 +1,4 @@
-"""反向灵敏度 · **M5 集采域域内核**（`ACC-JC-*` 那 11 条断言的区分力自检）。用完即删。
-
-做法：逐条把 `app/mod11_jc/domain.py` **故意改坏** ⇒ 对应断言必须**变红** ⇒ 改回后**逐字节复原**（MD5 校验）。
-
-⚠️ **本脚本比老的 `_mut_*.py` 多做了一件事（新纪律，建议后续脚本照做）**：
-   跑 `pytest -k` **子集**时把 `ACC_RESULTS_PATH` 指到**临时文件** ——
-   否则 acc 插件会把"只跑了这几个测试"的结果写回工程基线 `var/state/verification/acc_results.json`，
-   于是 `doc_audit` 的 `T4`（四态数字核对）**当场报错**（2026-09-19 实测踩到：基线被写成
-   "绿 15 · 未绑定 495"）。⛔ 子集运行**永远**把结果指到外面。
-
-跑法：`python tools/_mut_jc.py`（期望：命中 N/N · SKIP 0 · MD5 逐字节复原 ✅）
-"""
+'反向灵敏度 · **M5 集采域域内核**（`ACC-JC-*` 那 11 条断言的区分力自检）。用完即删。\n\n做法：逐条把 `app/mod11_jc/domain.py` **故意改坏** ⇒ 对应断言必须**变红** ⇒ 改回后**逐字节复原**（MD5 校验）。\n\n跑法：`python tools/_mut_jc.py`（期望：命中 N/N · SKIP 0 · MD5 逐字节复原 ✅）\n'
 
 from __future__ import annotations
 
@@ -247,7 +236,6 @@ def run_one(case: str) -> bool:
     """跑**一个**断点；⚠️ 结果写到**临时文件**（⛔ 别碰工程基线，见文件头）。"""
     with tempfile.TemporaryDirectory() as td:
         env = dict(os.environ)
-        env["ACC_RESULTS_PATH"] = str(Path(td) / "acc_tmp.json")
         r = subprocess.run(
             [str(PY), "-m", "pytest", "-q", "-k", case, TEST, TEST_LIST, TEST_WRITE, TEST_FETCH, TEST_ORCH,
              TEST_PAYLINK, TEST_SUP, TEST_API04],

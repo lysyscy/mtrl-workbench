@@ -1,11 +1,4 @@
-"""**反向灵敏度**：证明「未登录 ⇒ 无身份」那条断言（`ACC-USR-MGMT-001/001-01`）**真有区分力**。
-
-做法：逐条把实现**改坏** → 确认对应断言变红 → 全部复原（**MD5 逐字节校验**）。
-⚠️ 一律走 bytes（`index.html` 是 CRLF、`.py` 是 LF）；还原用**原 bytes**。
-⚠️ 子进程必须设 `ACC_RESULTS_PATH`，跑完**必须再跑一次全套 pytest**。
-
-用法：`backend/.venv/Scripts/python.exe tools/_mut_auth.py`
-"""
+'**反向灵敏度**：证明「未登录 ⇒ 无身份」那条断言（`ACC-USR-MGMT-001/001-01`）**真有区分力**。\n\n用法：`backend/.venv/Scripts/python.exe tools/_mut_auth.py`\n'
 from __future__ import annotations
 
 from pathlib import Path as _WorkspacePath
@@ -82,7 +75,7 @@ def md5(p: Path) -> str:
 
 
 def run_one(case: str) -> bool:
-    env = {**os.environ, "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
+    env = {**os.environ,
            "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1",
            "PLAYWRIGHT_BROWSERS_PATH": r"C:\ProgramData\ms-playwright"}
     r = subprocess.run([str(PY), "-m", "pytest", "-q", case], cwd=str(BE),

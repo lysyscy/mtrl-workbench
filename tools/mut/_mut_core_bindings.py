@@ -1,22 +1,4 @@
-"""反向灵敏度 · `TAIL-195` 批 1b（`core` 取数口 ＋ 装配层接线）—— **四靶**。
-
-做法：把**故意改坏**（漏接 / 静默 / 回落 / 别名）塞进对应文件（改坏 → 跑 `tests/test_core_bindings.py`
-期望红且**那条断言的原话**出现在输出里 → **逐字节复原**）。不红 ⇒ 那条判据是假绿。
-
-- `B1` **漏接一件**：装配层少接一个口（`projects`）⇒ `test_装配层把三个口都接上了` 必红。
-- `B2` **静默回空表**：`core/projects.py` 把"没接上 ⇒ 显式报错"改成 `return {}`
-  ⇒ ⛔ 那会把"没装配"读成"库里一个项目都没有"（本仓最贵的一类错：看着正常、数字不对）。
-- `B3` **回落共享账号**：`core/identity.py` 把"没接上 ⇒ 拒绝"改成回落 ⇒ 拿 `.env` 那个共享账号去登录
-  （§7.8：会顶掉同事的在线会话、留痕记错人）。
-- `B4` **别名冒充转发**：装配层接成模块级别名（`from …repository import all_projects as _ALIAS`）
-  ⇒ `monkeypatch` 打不着（⭐ 批 **2c** 实测踩过的坑：12 条判据当场红）。
-
-⚠️ 判据 = **目标测试件 rc≠0** ＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc）。
-⚠️ 子集 pytest 用 `ACC_RESULTS_PATH` 指到 `artifacts/_mut_acc_results.json`（⭐ 别把权威四态冲成残档）。
-⚠️ 靶串含中文 ⇒ 一律经 `_b()` 编 bytes（ASCII 字面量的坑见 `_mut_layering` 的注释）。
-
-用法：`python tools/mut/_mut_core_bindings.py`
-"""
+'反向灵敏度 · `TAIL-195` 批 1b（`core` 取数口 ＋ 装配层接线）—— **四靶**。\n\n做法：把**故意改坏**（漏接 / 静默 / 回落 / 别名）塞进对应文件（改坏 → 跑 `tests/test_core_bindings.py`\n期望红且**那条断言的原话**出现在输出里 → **逐字节复原**）。不红 ⇒ 那条判据是假绿。\n\n- `B1` **漏接一件**：装配层少接一个口（`projects`）⇒ `test_装配层把三个口都接上了` 必红。\n- `B2` **静默回空表**：`core/projects.py` 把"没接上 ⇒ 显式报错"改成 `return {}`\n  ⇒ ⛔ 那会把"没装配"读成"库里一个项目都没有"（本仓最贵的一类错：看着正常、数字不对）。\n- `B3` **回落共享账号**：`core/identity.py` 把"没接上 ⇒ 拒绝"改成回落 ⇒ 拿 `.env` 那个共享账号去登录\n  （§7.8：会顶掉同事的在线会话、留痕记错人）。\n- `B4` **别名冒充转发**：装配层接成模块级别名（`from …repository import all_projects as _ALIAS`）\n  ⇒ `monkeypatch` 打不着（⭐ 批 **2c** 实测踩过的坑：12 条判据当场红）。\n\n用法：`python tools/mut/_mut_core_bindings.py`\n'
 
 from __future__ import annotations
 
@@ -79,8 +61,7 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
 
 
 def run_target() -> tuple[int, str]:
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1",
-           "ACC_RESULTS_PATH": str(PARTIAL_ACC)}
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run([str(PY), "-m", "pytest", "-q", *TARGETS, "-p", "no:cacheprovider",
                         "--tb=line"], cwd=str(ROOT / "backend"), capture_output=True,
                        text=True, encoding="utf-8", errors="replace", env=env)

@@ -1,22 +1,4 @@
-"""**反向灵敏度** —— `TAIL-282` / `TAIL-283` 本批**新增或改形**的判据**到底有没有区分力**。
-
-## 为什么有这个件
-
-2026-10-11 的双轴 `/code-review`（基点 `14d53aa`）**Standards 轴当场判红**：本批新增的 11 条用例
-在 `tools/mut/` 里 **grep 0 命中** —— 违反 `docs/agents/workflow.md`「自证」与
-`docs/guides/frontend-design.md` §0「**新增／修改判据时按仓内流程补隔离反向灵敏度**」。
-（本件就是那条硬违规的补件：⛔ 不是"为了绿而补"，而是"这些断言到底拦不拦得住退化"此前无人证明。）
-
-## 做法（同 `_mut_m03pay.py`）
-
-逐条把实现**改坏** → 跑**点名的那一条判据** → 必须变红 → 按**原 bytes**复原 → 末尾 MD5 逐字节校验。
-⚠️ 锚点命中 0 次 ⇒ 报「**未验证**」并计入失败（⛔ 不许静默跳过 —— 静默失效是这套东西最大的坑）。
-
-⚠️ 一律走 **bytes**（壳件 = **CRLF**）：按目标文件行尾归一后再替换，还原也用**原 bytes**。
-⚠️ 子进程必须设 `ACC_RESULTS_PATH`（否则每处变异把权威 `acc_results.json` 冲成单条）
-   与 `PYTHONIOENCODING=utf-8`（否则 Windows 上 GBK 解码假红）—— 同 `_mut_m03list.py` 的说明。
-⚠️ 本件**不碰** `delivery/` 与凭据；壳是多件 ⇒ 锚点在哪件就改哪件（`pick`）。
-"""
+'**反向灵敏度** —— `TAIL-282` / `TAIL-283` 本批**新增或改形**的判据**到底有没有区分力**。\n\n## 为什么有这个件\n\n2026-10-11 的双轴 `/code-review`（基点 `14d53aa`）**Standards 轴当场判红**：本批新增的 11 条用例\n在 `tools/mut/` 里 **grep 0 命中** —— 违反 `docs/agents/workflow.md`「自证」与\n`docs/guides/frontend-design.md` §0「**新增／修改判据时按仓内流程补隔离反向灵敏度**」。\n（本件就是那条硬违规的补件：⛔ 不是"为了绿而补"，而是"这些断言到底拦不拦得住退化"此前无人证明。）\n\n## 做法（同 `_mut_m03pay.py`）\n\n逐条把实现**改坏** → 跑**点名的那一条判据** → 必须变红 → 按**原 bytes**复原 → 末尾 MD5 逐字节校验。\n⚠️ 锚点命中 0 次 ⇒ 报「**未验证**」并计入失败（⛔ 不许静默跳过 —— 静默失效是这套东西最大的坑）。'
 
 from __future__ import annotations
 
@@ -178,7 +160,7 @@ def md5(p: Path) -> str:
 
 def run_one(case: str) -> bool:
     env = {**os.environ,
-           "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
+
            "PYTHONIOENCODING": "utf-8",
            "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run([str(PY), "-m", "pytest", "-q", case],

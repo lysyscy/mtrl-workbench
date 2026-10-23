@@ -56,7 +56,6 @@ for name, old, new, target in MUTS:
     env = dict(os.environ)
     # ⛔ 必须指到**变异用**结果文件 —— 否则会把正式 `var/state/verification/acc_results.json` 覆盖成
     #    局部跑的结果 ⇒ `doc_audit` 的 T4（文档数字 vs 实测）立刻对不上（踩过：一次 3 条红）
-    env["ACC_RESULTS_PATH"] = str(_run_output('_mut_acc_results.json'))
     got = subprocess.run([str(PY), "-m", "pytest", target, "-q", "-p", "no:cacheprovider",
                           "--tb=no", "-x"], cwd=ROOT / "backend", capture_output=True, env=env)
     red = got.returncode != 0

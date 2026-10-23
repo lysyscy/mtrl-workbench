@@ -11,7 +11,7 @@
 - [ ] 打印用可检查的投递替代边界验证参数、失败和运行记录，避免重复投递。
 - [ ] 隔离保存和重读设置，错误地址/权限失败不误报成功；实体纸面打印和真实投递明确列为另行现场授权项。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 12, 17, 39, 43）；业务口径：[MOD-02](../../../docs/requirements/PRD/02-功能规格/MOD-02.md)、[MOD-03](../../../docs/requirements/PRD/02-功能规格/MOD-03.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 12, 17, 39, 43）；业务口径：[i8-contract](../../../docs/reference/i8-contract.md)、[payments](../../../docs/requirements/payments.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

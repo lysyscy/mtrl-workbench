@@ -1,20 +1,8 @@
-# i8 接口契约 · 旁证摘要（**实现层参考**）
+# i8 接口契约
 
-> **性质**：旁证摘录（来源 = `delivery/PRD素材包-20260911/` 的**可读实现**）。
-> ⚠️ **红线**：素材包是**旁证**，**口径一律不得反推** —— 本文件只登记**接口形态**（URL / 参数 / 字段名），
-> 业务取值一律回《材料科业务全流程说明书》。改接口与解析时先核§六/§真机实测纠正的日期、样本、账户与版式前提；已有未变有效结果可复用，变化输入按 docs/agents/workflow.md补验。
->
-> **本文用途**：把原先登记为「待用户提供」的三项（取版式契约 · API-01 字段名 · 打印机 IPP 路径）
-> 从素材包中**取齐并固化**，避免每次交接重复查找。
-> ⭐ **2026-09-15 真机核验**：§一 / §二 / §三 / §四 **全部经真机复核**（探测脚本 = `tools/probe/i8_contract_probe.py`、
-> 取数冒烟 = `tools/probe/i8_fetch_smoke.py`）—— 结论见 **§六 真机核验记录**；下文保留"旁证"原始记载以便对照。
->
-> 摘录日期 2026-09-15。⚠️ 以下为**素材包（老工程）内路径，非本工程**，仅供溯源：
-> 源文件：
-> input/pay_notice_export_http.py · app/warehouse_sync.py · app/project_sync.py ·
-> `i8一键打印/反解件/{profiles_payment_bill,print_paynotice,print_pdf}.py{,c}`
+本文件统一收录本项目已探测接口。业务意义见 [需求](../requirements.md)，封装复用 backend/app/mod02_i8/client.py 与对应 source。下列既有请求形态在2026-09-15/17样本核过；后续采购应付/附件以各节日期和范围为准。旧素材仅作旁证，不覆盖实测纠正。接口变化/新输入按实际影响复验；历史成功不证明当前会话、权限或分页完整。
 
----
+纯 HTTP 登录使用 SM2/Cookie；Cookie状态由本机受保护位置保存，登录可能强踢，人工链路授权与失败不重登边界见 [架构](../architecture.md)。通知书数据来自审批金额而非i8付款事实。
 
 ## 〇、统一收录与调用
 
@@ -71,7 +59,7 @@
 | 备注 | `Remark` |
 | 主键 | `PhId` |
 
-> ℹ️ **2026-09-16**：**本工程不再取 `ApplyAmt`** —— 原「付款金额（源）」字段**已取消**（§4.2.5）；
+> ℹ️ **2026-09-16**：**本工程不再取 `ApplyAmt`** —— 原「付款金额（源）」字段**已取消**（见付款需求）；
 > 金额只取 **`ApproveAmt`（审批金额）**（实测 `ApplyAmt ≡ ApproveAmt`，且**付款动作不在 i8 发生**）。
 
 ### 详情与流程（同一单的另三个接口）
@@ -86,7 +74,7 @@
 
 ## 二、`API-05` 仓库列表 / `API-06` 常用项目
 
-### `API-05` GetWareHouseList（**已实测可用**，见 §⑥ M0-0C）
+### `API-05` GetWareHouseList（**已实测可用**）
 
 - **URL**：`{BASE}/PMS/PMM/KcBaseSetting/GetWareHouseList`（**POST** urlencoded）
 - **固定参数**：`orgQuery=#type:ORG#curOrg:3700000000000014#subOrg:#curProj:#cubProj:#parentNode:` ·
@@ -184,167 +172,14 @@
 
 ---
 
-## 五、历史落地记录（2026-09-15；当前状态回主计划§0/§15）
 
-| # | 待办 | 状态 |
-|---|---|---|
-| 1 | `.env` 填真值（`PRINTER_IPP_URL` · `I8_PRINT_DESIGN_URL` · `I8_PRINT_ID_*` · 三个取数 URL） | ✅ 已填（2026-09-15） |
-| 2 | `_map_record` 按 12 字段真名对齐 | ✅ 已改 ＋ `tests/test_i8_contract.py`（10 项） |
-| 3 | `API-05`/`API-06` 的 URL / 参数 / 字段对齐 | ✅ 已改（`API-05` 改 POST form） |
-| 4 | IPP 路径真机核验 | ✅ 已核（`ipp://192.168.5.248:631/ipp/print`，转换与素材包一致） |
-| 5 | **`API-01` 取数方式改为 POST form（＋空结果确认）** | ✅ 已改，**真机取到 124 条** |
-| 6 | **版式渲染改为"模板驱动"** | ✅ **已接线（2026-09-15）** —— 见下 |
+## 打印解析边界
 
----
-
-## 六、真机核验记录（**2026-09-15** · 探测脚本可复现）
-
-> ⚠️ 下列探测均**登录 i8**（含 `KillOnlineUser` 强踢）—— 只在用户同意时运行。
-> 复现：`backend/.venv/Scripts/python.exe tools/probe/i8_contract_probe.py [YYYY-MM]`（契约探测）
-> 　　　`backend/.venv/Scripts/python.exe tools/probe/i8_fetch_smoke.py [YYYY-MM]`（取数冒烟 + 取样本）
-
-### ① `API-01` 取数方式 —— ✅ **POST form 确认可用**
-
-- `POST {BASE}/FC/FM/PaymentBill/getList`，`application/x-www-form-urlencoded`
-- 用素材包的 11 项固定表单 ＋ `queryfilter`（**双层 JSON 串**）**实测取到 2026-08 月 124 条**；
-  原实现的「GET + `yearMonth` 参数」**一条也取不到** ⇒ 已改为 POST（`notice_source.build_list_form`）。
-- ⚠️ **`dataKey` 必须传空串**（素材包旁证一致）。
-- ⚠️ **空结果必须再确认一次**：i8 偶发返回"有效但空"（`EMPTY_RETRY=1`，`notice_source.fetch_month` 已实现）。
-- ⚠️ 响应里 `AppStatus` 是**原始值**（`1` = 已审批），需映射为本工程字面量「已批」（§4.4.1）。
-- ⚠️ 响应字段包含**远超 12 个**（`PhidApp_EXName` / `ApplyAmt` / `PrintCount` / `NgRecordVer` …）——
-  12 字段是**导出表**口径，取数时按需取。
-
-### ② `API-05` / `API-06` —— ✅ 与旁证一致
-
-- `API-05` = **POST form**（`WH_PARAMS`）· `API-06` = **GET**（URL 自带 query）⇒ 已分别实现。
-
-### ③ `API-07` 取版式 —— ⭐ **真契约不是 HTML，是"版式模板 JSON"**
-
-- `GET {BASE}/reportcenter/printManage/getPrintDesign?printId=<id>` ·
-  **外层** = `{"Status","Code","Msg","Data"}` ⇒ **模板在 `Data` 里**（不是顶层）。
-- `Data` 的键（**实测**）：
-  | 键 | 形态 | 说明 |
-  |---|---|---|
-  | `printId` / `printName` | str | `3700000000000215` / `其他支出` |
-  | **`printSchema`** | **JSON 串** → `[0]` | `cells[]` · `globalSettings{cols,rows,widths,heights,frozen}` · `sheetName` |
-  | **`printSetting`** | **JSON 串** → `[0].printConfig` | `page{direction,scaleRatio,paperSize:"210,297",…}` · `margin{top,down,left,right,header,footer}` · `headerFooter`（**空壳**）· `paging`（**空壳**） |
-  | `sheetProperty` / `globalProperty` / `dataSetInfos` / `workflowHistorySetting` | JSON 串 | `dataSetInfos` 含 `PaymentBill` / `PaymentBillD` / **`3700000000000010`（主表）** / **`3700000000000212` `3700000000000019`（明细）** |
-- `cells[i]` = `{cellType, className, row, col, colspan, rowspan, cellData, cellBorders, cellName, extension, interaction}`；
-  `cellType="text"` ⇒ `cellData.value`；`cellType="field"` ⇒ `cellData.{dataSetId,fieldId}`（图片格另有 `otherShowType:"image"` + `dataFilter`）。
-- **真实样本已入库**：`backend/tests/fixtures/i8_print_design_sample.json`（65 701 字节，**不含业务数据**，只含模板与静态标题）。
-- ⇒ **实锤结论**：原实现「取回 HTML 再注字段」**必然报"取不到版式"** ⇒ 必须**模板驱动渲染**；
-  引擎已落地 = `backend/app/mod03_notice/print/template.py`（353 行，13 项自检）。
-
-### ④ 打印机 IPP —— ✅ 与旁证一致
-
-- `ipp://192.168.5.248:631/ipp/print`；工程侧 `print/ipp.py::_to_http_uri` 转换后 =
-  `http://192.168.5.248:631/ipp/print` —— **与素材包 `print_pdf.py` 完全一致**（端口不能省）。
-
----
-
-## 七、接线落地记录（**2026-09-15 · 打印链路已换到模板驱动**）
-
-> 目的：把"预览看到的"与"实际印出来的"变成**同一条路径**，并删掉那条已被真机证伪的旧路。
-
-### 收敛后的打印件（`backend/app/mod03_notice/print/`）
-
-| 文件 | 行数 | 职责 |
-|---|---|---|
-| `design.py` | 70 | 按类型取版式 → **解析成模板**（`Data` → `extract_design_data` → `parse_design`）；取不到**显式报错** |
-| `template.py` | 388 | 模板驱动渲染（几何/样式/明细行/签名格全部**现场取自模板**）＋ `node_of()` **认两种筛选写法** |
-| `fields.py` | 174 | 字段值组装（千分位＋2 位小数 · 零值留空）＋ **覆盖度自检** `uncovered_field_ids()` |
-| `signatures.py` | 279 | 签名图取值 + 缓存 ＋ **零命中报警**（`001-06`）＋ **认不出写法报警**（`unresolved_image_slots`） |
-| `ipp.py` | 78 | IPP 直投 |
-| `render.py` | 67 | **只剩** HTML→PDF（Playwright） |
-
-**已删**（其核心假设被真机证伪）：
-- `print/sign.py`（73 行）—— 依赖 `<span class="sign-slot" data-node="…">`，而真实版式里**没有这种东西**；
-- `render.py::build_print_html`（＋`_fmt_scalar`/`_is_amount_key`）—— 依赖"响应是 HTML、做 `{{占位符}}` 替换"，而真实响应是**模板 JSON**。
-
-**唯一渲染入口** = `service.render_notice_html(notice, tpl, detail_fetcher, signature_store)`
-⇒ `run_batch`（生产）与 `tools/probe/render_preview.py`（预览工具）**都调它**；预览不再自己拼一份组装。
-
-### 验收处置（**判据语义一字未改，仅迁断言载体**）
-
-`ACC-PAY-PRINT-001` 的 `001-04/05/06/10` 原打在 `build_print_html` / `sign-slot` 上 ⇒ 迁到真实模板形态
-（签名格 = `cellData.otherShowType=image` ＋ `dataFilter` 的「办理节点」）；`ACC-PAY-PDF-001` 全组补上新增依赖。
-**M1 = 22/22 保持全绿**；全套 `pytest 216 passed`。
-
-### 离线一致性核对（用真机快照跑新入口）
-
-| 单据 | 类型 | td | 签名图 | 表格宽 |
-|---|---|---|---|---|
-| `FKTZS2026090065` | 材料 / 其他支出 | 79 | ~~3~~ → **4** | 575.23px |
-| `FKTZS2026082350` | 机械 / 付款通知书 | 73 | 4 | 701.11px |
-
-⚠️ **2026-09-16 更正**：上表「其他支出 · 签名图 3」是**当时的错误值**（不是"与真机一致"）——
-真机件上那一格（`row=15 col=3` · 核算部部长）也是**有签名**的，只是我们**漏认了第 ② 种筛选写法**，
-于是它被当成"无节点 ⇒ 留空"。**当时的"逐项一致"只证明了两条路径同样地漏**，不证明对 ——
-⚠️ **教训：「两处产出相同」不等于「产出正确」**，同源一致性只能证明没有分叉，证明不了正确。
-修法见 §三-2 与 §六-③ 的补记。
-
-### 遗留
-
-- ✅ **已清理（2026-09-15）**：`payment_notice.sign_nodes` / `signatures` 两列**已删**（迁移 `dca078236657`）——
-  写入点 `notice_source._map_record` 同步删掉（⚠️ 它此前仍在写这两列，是本次核查才发现的）；
-  `upgrade`/`downgrade` **往返实测可逆**；执行时表 0 行 ⇒ 无数据丢失。删后 `payment_notice` = 24 列。
-- ⏳ **唯一未做项 = 真机打印件对照**（需登录 i8 ＋ 打印机在位）—— 已按用户指示登记为**待办**，见交接文件 §⑦「待办」。
-
----
-
-## 八、真机打印件对照结论（**2026-09-16 · 用户实印**）
-
-> **这一节补上了 §七 的"唯一未做项"。** 用户拿 `artifacts/` 里生成的打印件**实打了一次**。
-
-| 项 | 结论 |
-|---|---|
-| **版式**（版心 / 行列 / 框线 / 字号） | ✅ **无问题** |
-| **数据**（字段值 / 金额格式 / 零值留空） | ✅ 无问题 |
-| **签名** | ❌ **「其他支出」的核算部部长是空的** —— 已定位并修复，见下 |
-
-### 根因（**纯本地逻辑，不依赖 i8**）
-
-`i8_print_design_sample.json`（其他支出 · `printId=3700000000000215`）的 `row=15 col=3` 签名格，
-`dataFilter` 用的是**第 ② 种写法**：
-
-```json
-{"fieldId": "task_des", "dataSetId": "workflow_history", "operator": "eq", "value": "核算部部长"}
-```
-
-而旧 `node_of()` **只认** `fieldId == "办理节点"` ⇒ 该格返回空 ⇒ **它连签名槽位都算不上**：
-`signature_slots()` 只返回 6 个（漏了核算部部长）⇒ 既不在 `missing`、也不在 `blank_by_design` ⇒
-`001-04/05/06` **三条判据一条都不触发**（`001-06` 要求"一个签名都没命中"才报，而此处其余 4 个都命中了）。
-
-> ⚠️ **这是"静默失效"的教科书形态**：不报错、不崩、日志干净、报表全绿，只是**印少了一个签名**。
-
-### 修复（2026-09-16）
-
-1. `template.node_of()` —— **两种写法都认**（`NODE_FILTER_FIELD` / `NODE_FIELD_ID`）；
-2. `signatures.unresolved_image_slots()` —— **带了筛选却取不到节点名** ⇒ 不认识的写法 ⇒
-   `check_signature_coverage()` **抛错停单**（⚠️ 与"无筛选 ⇒ 合法留白"严格区分，不许误报）；
-3. 测试更新：`test_模板签名格节点名去重保序` 原先把漏认的输出（6 个）**写死成了契约** ⇒ 改为 7 个；
-   新增 4 条自检（两种写法 / 真实模板无未决 / 认不出必报 / 无筛选不报）。
-
-### 离线复算（真机快照 + 真机模板 → **生产同一渲染入口**）
-
-| 单据 | 槽位 | 命中 | 留空（流程未走到） | 模板里的签名图 |
-|---|---|---|---|---|
-| `FKTZS2026090065` · 其他支出 | **7**（原 6） | **4**（含**核算部部长**） | 事业部分部经理 / 财务公司经理 / 总经理 | **4**（原 3） |
-| `FKTZS2026082350` · 付款通知书 | 7 | 3 → **4 张图**（核算部部长占 2 格） | 事业部分部经理 / 分公司常务副经理…/ 资产管理部总经理 / 主管领导 | 4 |
-
-> 复算脚本 = 本文件 §六 的一次性离线跑法（读 `artifacts/preview_data_*.json` 快照 + `tests/fixtures/` 模板，
-> **不发任何 i8 请求、不登录、不强踢**）。⇒ 以后调渲染都可先离线复算，不必登录 i8。
-
-### 遗留
-
-- ⏳ **待用户复打一次「其他支出」**确认真机上核算部部长已有签名（本次只到"离线复算"为止）。
-
----
+模板签名过滤同时识别“办理节点”和 task_des/workflow_history；有筛选但无法识别节点名应停止该单，不能误作合法留白。无筛选的槽位可按版式留白。模板驱动映射与实际槽位数量沿 mod03_notice/print 的 template/signatures/render；节点名未归一化和版式无槽位是已接受边界，不能据其他签名命中推全签名齐全。IPP成功类别只证明接收，不能称纸面完成。
 
 ## §真机实测纠正（2026-09-17 · `API-03` 库存单据明细 ＋ `API-02` 收发结存）
 
-> **性质**：本文件是**旁证**（来自素材包），而这一节是**真机实测**——按本文件索引行自己写的
-> 「⭐ 真跑前需真机核验一次」，这就是那次核验的结论。**冲突时以本节为准**。
+> 2026-09-17样本实测纠正；与旧素材冲突时以本节为准。
 > ⚠️ 本次是**一次登录**（`KillOnlineUser` 强踢过一次），导出件留证在 `data/source/i8-diagnostics/`
 > （`artifacts/`不进库；先核本机现存样本与离线fixture。样本缺失时记录未复现；重新登录或抓取须按本节既有授权边界处理）。
 
@@ -378,10 +213,10 @@
 
 列表POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalList?model=7&floatmenuCondition=`；form带page/start/limit、queryfilter及公司OrgQuery上下文，与采购合同同组织。返回Success/Record/totalRows；PhId为应付键，PhidCnt/PhidCnt_EXName为合同主键/编号，PhidPc_EXName、PhidBalComp_EXName为项目/收款单位，AppAmtVatFc为审批本币额，AsrFlag=1、WfFlag=2为已批结束。分页不完整或重复键应拒绝继续关联；取数实现 `mod02_i8/payable_source.py`。
 
-详情POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalInfoFirst`，form `id`。抽查8条invoiceGrid均空，不能据此判定无发票；附件目录使用 **GET** `/JFileSrv/reactAttach/tableAttachInit`，query带asrTable=pcm3_cnt_projbal、asrCode=应付PhId、busTypeCode=PCM_BAL7；返回code/data/message，code=200时从data.attachmentRecordList取文件列表，asrFid是文件键，asrName是文件名（2026-10-23浏览器会话只读核实，POST不受支持）。PDF预览可取得文字层；不在正文存签名文件URL、Token或Cookie。多个项目应付与附件样本的试验及匹配结果见TAIL-374；不是全历史覆盖证明。
+详情POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalInfoFirst`，form `id`。抽查8条invoiceGrid均空，不能据此判定无发票；附件目录使用 **GET** `/JFileSrv/reactAttach/tableAttachInit`，query带asrTable=pcm3_cnt_projbal、asrCode=应付PhId、busTypeCode=PCM_BAL7；返回code/data/message，code=200时从data.attachmentRecordList取文件列表，asrFid是文件键，asrName是文件名（2026-10-23浏览器会话只读核实，POST不受支持）。PDF预览可取得文字层；不在正文存签名文件URL、Token或Cookie。已核样本不代表全历史覆盖。
 
 ### 附件预览文件读取（2026-10-23 已验证）
 
 POST `/JFileSrv/api/getPreviewUrl`，JSON带`asrFids`文件键数组、当前会话的`loginId`/`orgId`、`busTypeCode=PCM_BAL7`，本次`wmDisabled="1"`、`billWM=""`沿页面实际参数。响应`code=200`、`data`为文件键到相对预览文件路径的映射；随后GET返回的`/JFileSrv/previewFiles/...`地址，保留服务生成的签名参数，不自行拼接、修改或长期保存。实际验证单键及最多20键一批、99个PDF/图片读取成功；检验Word不作为发票来源，未验证其预览转换。
 
-调用复用I8Client及当前浏览器恢复的会话，未重新登录或踢人；目录与文件读取不修改业务单据，页面原生PDF预览空白不等于文件无法下载。预览转换可能产生服务端缓存；未验证永久缓存期限或原件下载接口，不登记为通用原件下载能力。本次只做一次性核票，临时调用与原票已清理，未新增常驻封装；Cookie/签名URL不入Git。
+调用复用I8Client及当前浏览器恢复的会话，未重新登录或踢人；目录与文件读取不修改业务单据，页面原生PDF预览空白不等于文件无法下载。预览转换可能产生服务端缓存；未验证永久缓存期限或原件下载接口，不登记为通用原件下载能力。未新增常驻封装；Cookie/签名URL不入Git。

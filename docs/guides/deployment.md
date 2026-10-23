@@ -1,113 +1,29 @@
-# 部署 · 本机维护与未来重装说明
+# 部署、配置与服务加载
 
-> **读者**：在目标机上落地的人（当前就是用户本人）｜**回答**：已经部署的本机如何维护，未来重装要准备什么、如何区分自检与恢复证明
-> **何时读**：本机更新、换机、重装或服务报障时｜**状态**：2026-09-29 建（`M8` · `TAIL-188`）· ⚠️ **本页只写"怎么落"，⛔ 不写业务口径**（业务口径 =《说明书》）
-> **配套**：`ops/deploy_restore.ps1`（首次空库安装）· `ops/selfcheck.ps1`（环境自检）· `ops/server_ctl.ps1`（本机服务维护）；旧迁移设计仅在追溯TAIL-188时读取。
+现行服务入口为 ops/server_ctl.ps1，部署脚本与参数以 ops 中实际文件为准。先核所在工作树、目标服务、进程命令行、启动时间和资源目录，分支隔离不等于浏览器发布隔离。源码提交、服务已加载和业务验收是三个事实。
 
-> **当前使用方式**：本机就是办公室电脑，已原地部署自用；最新运行版本、待加载改动和未验项回docs/status.md 使用者现状与待验与主计划§0。现场健康按本页§〇只读核实，旧部署快照不能代替当前调查。
-> **恢复边界**：TAIL-337已核实两库逻辑备份向隔离PG18恢复及数据、序列一致；2026-10-15每日备份任务以SYSTEM执行成功，两库摘要及归档目录已核，日志在线10MB轮转配置在位。异盘落点、允许访问范围、实体打印与真实样本分别回TAIL-347、348、345、346；新机安装按用户决定暂缓（344）。这不等于本次新备份已重做完整恢复或强制触发过日志轮转。
-> 以下命令仅供首次空库安装，不适用于已有库升级或数据恢复；本轮恢复证明范围见上一行。
+## 只读定位与有权操作
 
----
+从仓根运行 `powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action status`，按症状选 log/port/pg。这些分支查服务/进程/日志/GET /app，不启停或写库。start/stop/restart 须当次明确授权及管理员权限，结束再核 PID、探活与受影响行为。服务没有 --reload，Python 改动可能需加载，但这不构成重启授权。
 
-## §〇 操作分支与完成回执
+ops/nssm_install.ps1 注册 mtrl-workbench-server，nssm_uninstall.ps1 退出注册，不能同时让旧计划任务抢应用端口。脚本中的当前命令、依赖服务名、路径与端口优先于历史机器记录。NSSM 二进制按 .gitignore 不入 Git；服务操作用 NSSM/PowerShell cmdlet，计划任务用 ScheduledTask cmdlet。
 
-服务报障先走只读调查：`powershell -NoProfile -ExecutionPolicy Bypass -File ops/server_ctl.ps1 -Action status`；再按症状选`log`、`port`、`pg`。这些分支查询服务/端口/日志或GET `/app`，不启停服务、不写库；结束条件是已定位服务状态、占用进程及探活结果，仍未知则据日志继续调查。
+## 配置主人
 
-| 分支 | 前提与权限 | 改变什么 | 完成回执与边界 |
-|---|---|---|---|
-| start / stop / restart | 当前明确操作授权（回 docs/agents/workflow.md）；管理员；已有NSSM服务 | 服务与运行进程 | 查status确认状态/新PID与探活；命令发出不等于新行为已验证 |
-| deploy_restore | 已 clone 的目标仓、管理员、uv管理的Python 3.15/PG18/NSSM/浏览器已准备、.env 已填；应用角色及两库均不存在 | venv、依赖、建库与迁移、服务；不下载源码或恢复数据 | 必要命令非零即停；selfcheck 的 Skip 项仍未验证，退出0不证明真实恢复 |
-| 初始化保留入口 | 另有真实数据动作授权和样本 | 确认导入与抓取会写业务库；抓取会登录i8 | 预览、批号、拒绝路径及实际写入核对，不能只以“有行写入”为成功 |
+| 配置 | 当前出口与生效 |
+|---|---|
+| i8 地址、两个打印版式 ID | 页面写库，经 app_settings.effective 取值，保存清缓存 |
+| 打印机 IPP 地址、PRINT_MODE/PRINTER_NAME | 页面入口写仓根 .env 并清缓存 |
+| 数据库、账号口令、SESSION_SECRET、访问范围及其余启动项 | 仓根 .env，键名/默认值读 .env.example 与 core/config.py；启动时读取 |
 
-**执行边界**：脚本先检查配置及 SQL 对应目标，实际执行时先查询应用角色/两库是否已存在，再准备环境；遇到已有目标即停止。`-DryRun` 不运行子进程、不建目录、不写配置、不访问数据库或服务，只能证明静态前提和计划可构造。外部命令失败立即停止，已完成的安装步骤不自动回滚；失败后的半成品不得直接重跑，应先调查处理。SQL 仍是一次性初始化，不提供已有系统升级模式。
+真实 .env、账号会话和私有恢复材料不提交；不能把示例当现场配置。配置更新后是否需要新进程按实际缓存/加载入口判断，需重启时另依授权操作。
 
-## §一 GitHub 三步部署（新目标 · 管理员窗口）
+服务以 LocalSystem 等身份运行时看不到普通用户的 Playwright 缓存。机器级浏览器位置可用 C:/ProgramData/ms-playwright，PLAYWRIGHT_BROWSERS_PATH 在服务和验证子进程中都应可达；环境变量变化仅作用新进程。抓取成功不能证明浏览器导出可用，需按目标身份核实际导出。模板、MiSans 字体和授权文件属于运行资源，不能随文档删除。
 
-前提：Git、可调用的uv及其已安装Python 3.15、运行中的 PostgreSQL 18、管理员权限；按 `ops/nssm_install.ps1` 的查找路径准备 NSSM，服务账号能访问 `C:/ProgramData/ms-playwright` 中所需的 Playwright 浏览器。NSSM 和浏览器不随 Git 克隆；开发验收另需 node，配置回§四之补。PG管理员认证使用目标机既有的口令提示或 pgpass 配置，不把口令写进命令。
+## 安装、升级与恢复的不同动作
 
-```powershell
-# 1) clone 并进入仓根（路径可自选）
-git clone https://github.com/lysyscy/mtrl-workbench.git
-Set-Location mtrl-workbench
-# 2) 仅新目标：复制后填写 .env；已有文件直接编辑，勿覆盖
-Copy-Item -LiteralPath .env.example -Destination .env
-notepad .env
-# 3) 先看计划；确认新目标无应用角色及两库后才实际运行
-powershell -NoProfile -ExecutionPolicy Bypass -File ops/deploy_restore.ps1 -DryRun
-powershell -NoProfile -ExecutionPolicy Bypass -File ops/deploy_restore.ps1
-```
+首次空库安装用 ops/deploy_restore.ps1：先准备真实仓、Python/PG/NSSM/浏览器及私有配置，确认应用角色与两个目标库不存在，必要步骤非零即停。它负责环境/建库/迁移/服务，不负责源码下载或已有数据恢复。selfcheck 的 Skip 仍未验证，退出0不能证明整机恢复。
 
-uv不在PATH时传`-UvPath <uv.exe路径>`；脚本不会额外下载Python。PG 不在默认安装目录时传 `-PgBin <PG18的bin目录>`；`-RepoRoot` 可指定已 clone 的仓库，默认取脚本父目录。两条数据库 URL 使用 SQL 定义的角色、库名及目标机同一回环地址/端口，不能留模板占位。真实命令会建角色/两库、运行 Alembic、安装并启动服务及调用自检；核对自检明细，再打开 `/app`，业务初始化按§三另验。现有迁移入口只迁移应用库，开发测试库的迁移按既有开发流程单独进行。
+已有库升级仅 schema 变化时走 Alembic 并核开发/测试两库结构；纯文档/模块位置变化不触发 upgrade。隔离目标和实际 engine 未核实前不执行写入检查。数据恢复另读 [数据库备份](database-backup.md)，先在隔离空库验证再考虑替换，恢复不能用全仓 hard reset。
 
-Git 提供受跟踪代码和 `delivery/`，不提供本机 `.env`、数据库、NSSM、浏览器或忽略的壳备份。clone 完成不代表旧数据已恢复；已有数据迁移须另定恢复方案和隔离验证。
-
-本机2026-10-14：uv管理的Python3.15.0、PostgreSQL18.6（D:/pgsql/18.6/pgsql/bin）、Node.js24.21.0、Git2.56.0.windows.2；后端依赖声明在`backend/pyproject.toml`，解析锁在`backend/uv.lock`。服务依赖为postgresql-x64-18。
-
-## §二 落地前后**要改的几项**
-
-**配置与既有风险**：沿用已确认的 SQL 角色定义，本票不改 SQL 口令或生产账号。`.env` 的连接信息须与目标 PG 实际账号一致，不能假定模板已填。`ops/init_db.sql` 曾将具体口令提交到公开仓库，这是既有泄露风险；本次不旋转凭据，后续处置需独立决定并同步实际数据库，删除当前文本也不会清除历史。
-
-| 项 | 在哪 | 目标机上怎么定 |
-|---|---|---|
-| **库连接** | `ops/init_db.sql` 的初始化定义 ＋ 仓根 `.env`（不入版本库） | 按目标机实际角色填写两条 URL；首次初始化沿用 SQL 定义，不自动修改口令；只连本机 PG |
-| **i8 账号** | **仓根 `.env`**（键名见**仓根 `.env.example`**） | ⭐ 用**那个人的**账号（i8 每人一份 · `§1.5.1`）；⚠️ 未填即拒绝抓取、**不回落** |
-| **`ALLOWED_IP_CIDRS`** | **仓根 `.env`**（键名见**仓根 `.env.example`**） | 办公室**局域网段**（i8 在**外网** ⇒ 目标机要能上外网） |
-| **打印机** | 付款通知书页「打印机设置」弹窗；配置主人见docs/guides/operations.md §一之五 | 按目标机打印机、驱动与地址实际核对；本机旧确认不能覆盖新目标，相关打印需实际验证 |
-| **Python / PG / node / nssm** | 目标机环境 | 按目标用途逐项核安装、版本、路径、服务权限及运行依赖；2026-09-29的旧机确认不证明新目标已齐备 |
-| ⭐ **依赖来源与索引** | `backend/pyproject.toml` 声明依赖并固定官方 PyPI 索引，`backend/uv.lock` 锁定可复现版本；部署入口执行 `uv sync --locked --no-dev` | 命令在 `backend/` 执行，或从仓根加 `--project backend`。开发用 `uv sync --locked`；目标机重建 venv 用 `uv sync --locked --no-dev`。不要维护 requirements 或 venv 级 pip.ini 副本。 |
-
-⚠️ **改了 `.env` 却不生效？** 见 `docs/guides/operations.md` **§一之五 配置主人表**（库 vs `.env` 谁优先 · 改完要不要重启）—— ⛔ 别在这里再抄一份。
-
-## §三 通关判据（三层，别混）
-
-| 层 | 判据 | 谁证明 |
-|---|---|---|
-| ① 装上了 | `ops/selfcheck.ps1` 各项通过（服务 Running/Automatic · `/app` 200 · 库连得上表齐 · **两份模板 SHA256 对上** · 导入面/库存端点存在） | 脚本 |
-| ② **真实数据恢复** | 已有自检只证明系统装好；必须把真实备份还原到隔离空库并核对数据与校验结果，才证明可恢复 | 本轮两库恢复已核实，证据回TAIL-337；不代表日常备份链已核实 |
-| ③ **`M8` ①** | 保留的三个初始化入口各走一小段真数据（清单见下表） | **人工**（openapi 证明不了域清单） |
-
-**保留入口的人工清单**（取得真实样本和动作授权后，在目标机验证）：
-
-| # | 入口 | 在哪 | 核验与完成条件 |
-|---|---|---|---|
-| 1 | 过程资料导入 | 数据导入 → `m06_proc` | 先解析预览，核项目、截止月、来源与异常整批拒绝；授权写入后核批号及对应月值。 |
-| 2 | 机械费报表导入 | 数据导入 → `m06_mech_report` | 核真实工作簿、来源保护和含税/净额；隔离验证后才按明确授权写入。 |
-| 3 | 库存单据补抓 | 库存单据页 | 会登录i8并写入；授权后核目标月份与回执，失败须明确报错。 |
-
-付款计划、历史付款流水和集采Excel导入已退役，不补旧初始化样本、不恢复入口；付款与集采正常业务仍保留。2026-10-05的过程资料、集采导入及库存补抓实测是历史证据（回TAIL-188及Git），不能推导当前保留流程完整验收。机械费已采用真实历史和i8快照的范围回docs/status.md；其余真实Excel兼容缺口仍由TAIL-346等待样本，不能用OpenAPI或构造样本代替。
-
-
-## §四 出问题看哪（按顺序）
-
-1. `ops\server_ctl.ps1 status`（服务在不在）→ `log`（日志尾 200 行）→ `port`（**8000 被谁占** —— 会打印进程命令行与启动时间，诊断"是不是旧进程"）
-2. `ops\server_ctl.ps1 pg`（PG 服务在不在）· `logs\server.err.log`（后端异常）
-3. 页面报"没能取到" ⇒ ⭐ 点**重试**（只重拉本页那几路）；报错文案一律是"人话 + 下一步"
-4. 服务没有 `--reload`；运行后端Python变化须在当前明确授权后按§〇加载，未加载时据实报告源码与运行版本的差别。改壳、工具或文档不因此重启服务。
-5. **产品资料真源**位于仓内 `delivery/`，清单与读取边界见 docs/requirements.md §一/§三。
-   `.env` 的 `PRD_ACCEPTANCE_BASELINE` 指向 `docs/requirements/PRD/验收/验收基线.json`；换机时克隆仓库即可取得完整资料。
-   `ui_parity` 只查壳自身；配置方法统一见下节。
-
-## §四之补 · 换机路径配置（✅ 已做成可配 · A8 · 2026-09-29）
-
-- ✅ **路径可配**（A8 · 2026-09-29）：
-  | 要配的 | 怎么配 | ⛔ 不配会怎样 |
-  |---|---|---|
-| **产品资料定位** | 仓根 `.env`：`PRD_ACCEPTANCE_BASELINE=docs/requirements/PRD/验收/验收基线.json`（**同一机制**：`doc_audit` 与 `_audit_face.py` 都读它） | 留空 ⇒ 产品资料检查或四态报表无法取得需求基线；⚠️ **`ui_parity` 不受影响**（2026-09-30 `TAIL-201`：它只查壳自己，不用任何基准） |
-  | **Playwright 浏览器** | `PLAYWRIGHT_BROWSERS_PATH`；核服务账号可访问的浏览器安装，配置主人回docs/guides/operations.md | 运行PDF/导出和真机探针均可能需要浏览器；仅不跑开发探针不免运行依赖。换机须实际核对服务导出 |
-  仓内产品资料按验收用途配齐；node按实际工具用途配置；系统运行仍须满足实际运行依赖，尤其服务账号能找到导出所需浏览器。selfcheck未覆盖实际导出，不能凭它退出0免掉这项。
-
----
-
-## §五 在目标机继续开发
-
-- 仓包括完整git历史、tools、backend/tests及计划/台账/记忆；工具用途回 tools/README.md，测试通过不能替代恢复证明。
-- **交付面配置**见§四第5条；不再沿用云同步迁移安排。
-- ✅ **换机路径配置**（产品资料定位 · Playwright 浏览器）**已做成可配** —— 怎么配、⛔ 不配会怎样：见上面 **§四之补**（⭐ **唯一主人**；⛔ 别在这里再抄一份 —— 2026-09-29 订正：本行原写着"**改完之前**，用到它们的尺子会报错"，而 §四之补 已写"✅ 已做成可配" ⇒ 同一份文件两处口径打架，删旧留新）。
-- 开工、核验与提交按 `docs/agents/workflow.md`；前端改动先读 `docs/guides/frontend-design.md`。
-- 本机自用、边用边改，结构冻结已按用户决定取消。数据库schema变化才走Alembic并核两库结构一致，判据为 `backend/tests/test_schema_drift.py`；迁移执行、业务口径变更与部署动作按当前授权，普通模块或文档结构调整不触发两库upgrade。决定追溯回 `docs/adr/D索引-D1-D32.md`，不再从旧主计划§9.5取已搬走的正文。
-
-## §六 依赖来源与加固
-
-D10原镜像设置的历史裁定见`docs/adr/D索引-D1-D32.md` §二；当前依赖索引固定为官方 PyPI，唯一配置在`backend/pyproject.toml`。运行依赖与测试/审计工具分组记录；`uv.lock` 是解析锁，部署以`uv sync --locked --no-dev`安装，不再维护requirements锁或venv级pip.ini副本。运行依赖用 `uv add/remove` 维护，开发工具用 `uv add --dev`；提交声明与锁文件，日常用 `uv run --locked` 调用项目命令。Uvicorn 使用基础包加 `httptools`，保留 HTTP 加速；当前不启用 WebSocket、热重载及 YAML 日志配置。`pycryptodomex` 由 `gmssl` 间接安装；`requests` 仅在开发组保留旧工具用途，测试直接使用的 `starlette` 同时登记在开发组。新增依赖后仍运行pip-audit并保存审计报告；GitHub直装、私有源、预发布及不满足工程底线下载量要求的小众库仍禁止；阈值回交付面《技术栈选型分析》与工程底线。
-上述是要求，不代表每项已完成；实际安装/落地状态按本页其他节和主计划§0核对。
+依赖声明和唯一锁是 backend/pyproject.toml、backend/uv.lock，官方 PyPI 来源沿配置；部署 `uv sync --locked --no-dev`，开发用 `uv sync --locked`/`uv run --locked`。新增依赖同时更新声明/锁，按实际风险做已有审计，不恢复旧 requirements 或 venv 私有索引副本。ops/init_db.sql 按既有用户裁定保留，不因此扩大凭据公开。

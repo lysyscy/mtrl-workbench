@@ -73,14 +73,9 @@ MUTATIONS: list[tuple[str, Path, str, str, str, bool]] = [
 
 
 def run_one(node: str) -> bool:
-    """跑一条判据 ⇒ True = **通过**（⚠️ "没跑起来"另判 —— 那正是"假绿"的一种）。
-
-    ⚠️⚠️ **必须显式给 `ACC_RESULTS_PATH` 指向局部档**（`MEMORY.md §十七` 的铁律）：
-    跑**非全套** pytest 若不指路 ⇒ 会把**权威四态档**冲成"只剩这几条"的残档 ⇒ `T4` 立刻报红，
-    且下次读报表的人会以为判据点少了一大截。
-    """
+    '跑一条判据 ⇒ True = **通过**（⚠️ "没跑起来"另判 —— 那正是"假绿"的一种）。'
     import os
-    env = {**os.environ, "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
+    env = {**os.environ,
            "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run(
         [PY, "-m", "pytest", "-q", f"tests/{node}"],

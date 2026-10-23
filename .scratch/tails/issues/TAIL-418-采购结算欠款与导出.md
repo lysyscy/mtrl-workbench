@@ -11,7 +11,7 @@
 - [ ] 保存重读、权限、冲突和失败回滚可核实，合同及有关统计刷新一致。
 - [ ] 实际下载普通及独立打印版文件，核金额、行范围、顺序及当前模板/分页要求；实体纸面单独标明。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 35, 39, 18）；业务口径：[MOD-11](../../../docs/requirements/PRD/02-功能规格/MOD-11.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 35, 39, 18）；业务口径：[central-procurement](../../../docs/requirements/central-procurement.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

@@ -1,15 +1,5 @@
 #!/usr/bin/env python
-"""`TAIL-60` / `TAIL-61` 修法的**反向灵敏度** —— 故意改坏 3 处，对应断言必须变红；结束**逐字节复原**。
-
-| 变异 | 改坏什么 | 应红的断言 |
-|---|---|---|
-| `M1` | `fields.py` 收款账号改回**标准字段**（= 修之前的错法） | `test_收款账号银行取自定义字段_与i8原生打印同款` |
-| `M2` | `fields.py` 收款银行改回**标准字段** | 同上 |
-| `M3` | `notice_source.py::fetch_detail` 去掉"空结果再确认" | `tests/test_acc_print_acct.py`（3 条） |
-
-用法：`backend\\.venv\\Scripts\\python.exe tools\\_mut_acct.py`（⚠️ 临时改源码，结束复原并校验 MD5）。
-⚠️ 跑**非全套** pytest 必须设 `ACC_RESULTS_PATH`（本仓纪律，防冲掉权威 `acc_results.json`）。
-"""
+'`TAIL-60` / `TAIL-61` 修法的**反向灵敏度** —— 故意改坏 3 处，对应断言必须变红；结束**逐字节复原**。\n\n| 变异 | 改坏什么 | 应红的断言 |\n|---|---|---|\n| `M1` | `fields.py` 收款账号改回**标准字段**（= 修之前的错法） | `test_收款账号银行取自定义字段_与i8原生打印同款` |\n| `M2` | `fields.py` 收款银行改回**标准字段** | 同上 |\n| `M3` | `notice_source.py::fetch_detail` 去掉"空结果再确认" | `tests/test_acc_print_acct.py`（3 条） |'
 from __future__ import annotations
 
 from pathlib import Path as _WorkspacePath
@@ -49,9 +39,8 @@ def md5(p: Path) -> str:
 
 
 def run_pytest() -> int:
-    """跑**与本变异相关**的两支测试；⚠️ 必须设 `ACC_RESULTS_PATH`（否则冲掉权威四态，`T4` 报红）。"""
+    'Run the existing targeted behavior checks.'
     env = dict(os.environ)                       # ⭐ 继承完整环境（⛔ 别只传两项 —— 进程起不来 = 假"变红"）
-    env["ACC_RESULTS_PATH"] = str(_run_output('_mut_acc_results.json'))
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     r = subprocess.run(
         [PY, "-m", "pytest", "-q", "tests/test_print_fields.py", "tests/test_acc_print_acct.py",

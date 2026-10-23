@@ -11,7 +11,7 @@
 - [ ] 用既有付款夹具独立验证读取和撤销，不以批量付款新页面完成为前置；隔离核金额与失败回滚。
 - [ ] 实际下载读取有关导出，与相同筛选范围的行集合、金额及排序核对。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 18, 25, 26, 39）；业务口径：[MOD-03](../../../docs/requirements/PRD/02-功能规格/MOD-03.md)、[MOD-05](../../../docs/requirements/PRD/02-功能规格/MOD-05.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 18, 25, 26, 39）；业务口径：[payments](../../../docs/requirements/payments.md)、[payments](../../../docs/requirements/payments.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

@@ -11,7 +11,7 @@
 - [ ] 写后结果回执、报表及相关导出使用同一份已保存数据，原始文件保持不变。
 - [ ] 仅保留现行过程资料导入，不借通用向导恢复已退出流程。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 27, 36, 43）；业务口径：[MOD-06](../../../docs/requirements/PRD/02-功能规格/MOD-06.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 27, 36, 43）；业务口径：[materials-reports](../../../docs/requirements/materials-reports.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

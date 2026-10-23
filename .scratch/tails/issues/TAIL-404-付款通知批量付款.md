@@ -11,7 +11,7 @@
 - [ ] 隔离真实后端覆盖成功、冲突、超额、无权限及事务失败，核通知书和流水实际结果，失败无部分写入。
 - [ ] 付款回执与保存后刷新失败区分，写后重读相关页面及操作历史；不以本地乐观金额代替事实。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 14, 16, 18, 21, 22, 25, 26, 43）；业务口径：[MOD-03](../../../docs/requirements/PRD/02-功能规格/MOD-03.md)、[MOD-05](../../../docs/requirements/PRD/02-功能规格/MOD-05.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 14, 16, 18, 21, 22, 25, 26, 43）；业务口径：[payments](../../../docs/requirements/payments.md)、[payments](../../../docs/requirements/payments.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

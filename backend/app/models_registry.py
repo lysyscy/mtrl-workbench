@@ -23,7 +23,7 @@ from app.mod11_jc import models as _m11  # noqa: F401  ← M5 切片 5 启用（
 # ⛔ `MOD-12` 差异登**已取消**（2026-09-20 用户裁定）⇒ 此处原有一行 `mod12_diff` 导入**已删除**。
 #    依据：《说明书》§5.8.3「差异归属恒为「**库存单据**」（**不独立成模块**）」
 #    ⇒ 差异的**载体 = 调整单**（`m08`）、**产出 = 差异表**（`m06` 按调整单算）⇒ ⛔ 无独立模块。
-#    ⭐ 本行是**撤项记录**（由 `doc_audit` 的 `T8` 守卫兜着 —— 见 `audit_common.CANCELLED`）。
+#    ⭐ 本行是**撤项记录**（相关退役行为由现行业务测试保护）。
 from app.mod14_config import models as _m14  # noqa: F401  ← M6 系统设置 2026-09-16 启用
 from app.mod15_user import models as _m15  # noqa: F401  ← 2026-09-26 启用（`TAIL-102` 修复：原先这行是注释 ⇒
 #   `user_account` 在元数据里根本不存在 ⇒ `alembic check` 判成「**要删掉这张表**」（⛔ 谁跑一次 autogenerate

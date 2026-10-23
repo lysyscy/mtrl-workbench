@@ -61,7 +61,7 @@ def md5(p: Path) -> str:
 def run(test: str, k: str) -> int:
     env = dict(os.environ)
     env.update({"PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1",
-                "CODEBUDDY_SAFE_DELETE_ENABLED": "0", "ACC_RESULTS_PATH": MUT_RESULTS})
+                "CODEBUDDY_SAFE_DELETE_ENABLED": "0"})
     r = subprocess.run([str(PY), "-m", "pytest", "-q", test, "-k", k, "-p", "no:cacheprovider",
                         "--no-header"], cwd=BE, env=env, capture_output=True, text=True,
                        encoding="utf-8", errors="replace")

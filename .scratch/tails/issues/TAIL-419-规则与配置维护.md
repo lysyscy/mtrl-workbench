@@ -11,7 +11,7 @@
 - [ ] 隔离验证有效修改、非法值、无权限及冲突失败，真实重读与相关业务页面效果一致。
 - [ ] 配置说明及错误提示沿现行熟手口径，技术细节按既有排障边界处理。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 37, 5, 9, 25）；业务口径：[MOD-14](../../../docs/requirements/PRD/02-功能规格/MOD-14.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 37, 5, 9, 25）；业务口径：[development-and-verification](../../../docs/guides/development-and-verification.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

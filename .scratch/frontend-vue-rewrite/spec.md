@@ -1,7 +1,7 @@
 # 前端独立重做规格：React + TypeScript 7 + Vite
 
-> **状态：2026-10-22 已确认主体规格、目录、pnpm及28票依赖；本轮发布至现有TAIL票仓。** 尚未开始实施。
-> **本轮授权：** 按已确认的28票与依赖建票、同步规格及现有索引；不开始实施，不创建开发副本、安装依赖、改正式前端、操作服务或写入业务数据。后续执行入口为implement-solo-spec，启动范围另待授权。
+> **主线接续：2026-10-23只读核实独立React工作树至5d7b96266c358e6e125e1d248b8b9f42e614e66a。** 用户验收产品c348aadd；2A、2B/2C及2D技术接入完成，阶段2人工验收由父统筹。下文原建票授权与采用基线保留；主线票状态不代签工作树进度。
+> **最初建票授权（历史边界，后续实施授权在独立工作树规格中）：** 按已确认的28票与依赖建票、同步规格及现有索引；不开始实施，不创建开发副本、安装依赖、改正式前端、操作服务或写入业务数据。后续执行入口为implement-solo-spec，启动范围另待授权。
 > **验收边界：** 用户于 2026-10-22 确认浏览器操作、后端接口与隔离数据库、导出文件与实际构建产物三个入口。
 > **代码调查基点：** `33a9bb4e7a11c3faed9ead9fa514537812627baa`。该基点用于后续核对变化，不代表测试通过或正式服务版本证明。
 
@@ -231,13 +231,13 @@
 业务含义以现行需求及最新有效裁定为准；源码用于核对当前行为，旧原型与旧运行快照仅作历史证据。
 
 - [当前能力、近期修复及未验边界](../../docs/status.md)
-- [业务需求入口](../../docs/requirements.md) 与 [材料科业务全流程说明书](../../docs/requirements/材料科业务全流程说明书.md)
-- [模块职责](../../docs/architecture/modules.md) 与 [现行工程约束](../../docs/architecture.md)
+- [业务需求入口](../../docs/requirements.md) 与 [材料科业务全流程说明书](../../docs/requirements.md)
+- [模块职责](../../docs/architecture.md) 与 [现行工程约束](../../docs/architecture.md)
 - [前端设计与视觉验收](../../docs/guides/frontend-design.md)
 - [测试隔离与浏览器分工](../../docs/guides/development-and-verification.md)
-- [业务验收口径](../../docs/requirements/PRD/验收/README.md)
+- [业务验收口径](../../docs/guides/development-and-verification.md)
 - [项目工作流](../../docs/agents/workflow.md) 与 [部署及现场验收边界](../../docs/guides/deployment.md)
-- [既有决定索引：D7、D18](../../docs/adr/D索引-D1-D32.md)
+- [当前架构及React并行边界](../../docs/architecture.md)
 
 ### 版本依据（2026-10-22 核对）
 
@@ -249,3 +249,6 @@
 - [Vite TypeScript 支持](https://vite.dev/guide/features.html#typescript)：代码转换与类型检查分开；具体 Vite/React 插件版本在获准的首批工程中核定。
 - [pnpm 官方 npm latest 元数据](https://registry.npmjs.org/pnpm/latest)：本次版本为 12.14.0，作为本轮包管理补充建议；没有执行安装。
 - [pnpm 包声明与版本固定](https://pnpm.io/package_json)、[冻结锁文件安装](https://pnpm.io/cli/install) 及 [内容寻址 store](https://pnpm.io/motivation)：固定包管理器、可复现依赖和工作副本间缓存复用的依据。
+
+
+本轮文档清理只更新主线当前知识引用，不更换React原采用规则/累计基点。独立树中的AntD选型、阶段计划、2D契约与验证、C六源码/409/人工证据及交接保护继续有效；安全边界后由父安排吸收清理提交。现行规则以主线相应主人为准，需原固定旧规则时从固定Git内容读取，不在当前树复刻。

@@ -11,7 +11,7 @@
 - [ ] 使用已有来源夹具及外部响应替身核隔离后端采纳、拒绝、冲突、跟进和重读，失败无部分写入。
 - [ ] 采纳后的有效月值、公司汇总及有关页面刷新一致，不把草稿当作已确认报送值。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 11, 25, 31, 32, 33）；业务口径：[MOD-02](../../../docs/requirements/PRD/02-功能规格/MOD-02.md)、[MOD-10](../../../docs/requirements/PRD/02-功能规格/MOD-10.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 11, 25, 31, 32, 33）；业务口径：[i8-contract](../../../docs/reference/i8-contract.md)、[machinery-fees](../../../docs/requirements/machinery-fees.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

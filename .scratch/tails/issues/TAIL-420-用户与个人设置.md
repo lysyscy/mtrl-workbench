@@ -11,7 +11,7 @@
 - [ ] 隔离核业务移交目标、关联影响、权限和失败回滚，失败不部分转让。
 - [ ] 个人主题保存重读后符合既有字体与配色基线，不影响Excel或其他账号设置。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 5, 6, 7, 38, 23, 25）；业务口径：[MOD-15](../../../docs/requirements/PRD/02-功能规格/MOD-15.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 5, 6, 7, 38, 23, 25）；业务口径：[projects](../../../docs/requirements/projects.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 
