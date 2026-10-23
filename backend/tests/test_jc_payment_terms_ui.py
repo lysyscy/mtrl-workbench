@@ -41,3 +41,41 @@ def test_contract_terms_edit_and_create(ui_page, width, scale):
     out = Path(__file__).resolve().parents[2] / '.artifacts/active/jc-payment-terms/20261023-implementation/screenshots'
     out.mkdir(parents=True, exist_ok=True)
     p.screenshot(path=str(out / f'contract-terms-{width}.png'), full_page=True)
+
+
+
+def test_payment_warning_tracks_date_without_overwriting_manual_method(ui_page):
+    p = ui_page
+    p.evaluate("""()=>{
+      SYS_TODAY='2026-04-11';NO[0].astat='已批';NO[0].paid=0;NO[0].amountPaid=0;
+      JCs.push(adaptJc({id:21,notice_ids:[101],contract_no:'TEST-21',tag:'纳入台账'}));
+      window.contextCalls=[];
+      window.warning={message:'该合同存在未满账期的发票，请核对本次付款',payment_term:'90±10天',max_days:100,
+        pay_date:'2026-04-11',invoice_side:'supplier',invoices:[{invoice_id:1,invoice_date:'2026-01-01',remind_through:'2026-04-11'}]};
+      API.paymentContext=async body=>{contextCalls.push(body);return {ok:true,rows:[{notice_id:101,contract_id:21,
+        contract_no:'TEST-21',default_pay_method:'承兑',default_pay_method_source:'contract',
+        term_warning:body.pay_date==='2026-04-11'?warning:null}]};};
+      API.batchPay=async body=>{window.contextPayment=body;return {ok:true,message:'已登记付款'};};
+      reloadNotices=async()=>{};
+      pickSet.clear();pickSet.add('101');return ACT.batchPay();
+    }""")
+    expect(p.locator('#bm0')).to_have_value('承兑')
+    expect(p.locator('#batchPayTerms')).to_contain_text('2026-04-11')
+    expect(p.locator('#batchPayTerms')).to_contain_text('90±10天')
+    p.locator('#bm0').select_option('现汇')
+    p.locator('#bDate').fill('2026-04-12')
+    p.locator('#bDate').blur()
+    expect(p.locator('#batchPayTerms')).to_be_empty()
+    expect(p.locator('#bm0')).to_have_value('现汇')
+    p.locator('#bDate').fill('2026-04-11')
+    p.locator('#bDate').blur()
+    expect(p.locator('#batchPayTerms')).to_contain_text('存在未满账期')
+    expect(p.locator('#bm0')).to_have_value('现汇')
+    out=Path(__file__).resolve().parents[2]/'.artifacts/active/jc-payment-terms/20261023-implementation/screenshots'
+    out.mkdir(parents=True,exist_ok=True)
+    p.screenshot(path=str(out/'payment-terms-warning.png'),full_page=True)
+    p.on('dialog',lambda dialog:dialog.accept())
+    p.locator('[data-act="batchPayOk"]').click()
+    p.wait_for_function('window.contextPayment')
+    assert p.evaluate('contextPayment.drafts["101"].pay_method') == '现汇'
+    assert p.evaluate('contextPayment.pay_date') == '2026-04-11'

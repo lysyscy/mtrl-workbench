@@ -1,7 +1,7 @@
 """`MOD-03` **批量付款**（§4.4.2 / §4.4.4）的入参归一 ＋ 「唯一出口」。
 
 依据：
-- 付款方式默认值：通知书拟方式 →「现汇」（用户2026-10-15）；窗口与提交同口径。
+- 付款方式默认值：通知书已确认拟方式 → 合同约定 →「现汇」（用户2026-10-23）；窗口与提交同口径。
 - §4.4.4（批量付款：整批判定 ⇒ **不落半批** · `request_id` **幂等** · 一次付款一条独立流水）
 - §4.4.3（集采付款：**未关联集采合同 ⇒ 不可付**——用户 2026-09-24 口述，**无例外**）
 - §4.2.7（撤单 / 剔除行一律排除）
@@ -26,9 +26,9 @@ from app.core.money import amount_text, to_money
 # ======================================================== 批量付款（§4.4.2 / §4.4.4）
 
 
-def default_pay_method(planned_pay_method: str = "") -> str:
-    """通知书拟付款方式未设置时默认现汇。"""
-    return str(planned_pay_method or "现汇")
+def default_pay_method(planned_pay_method: str = "", contract_method: str = "") -> str:
+    """已确认计划优先，其次合同约定，最后现汇。"""
+    return str(planned_pay_method or contract_method or "现汇")
 
 
 def parse_amount(text):
@@ -96,12 +96,13 @@ def apply_batch_pay(
         )
         for r in targets
     ]
+    context = contracts.payment_contexts(session, selected_ids)
     submitted = {}
     for r in targets:
         d = (drafts or {}).get(int(r.id)) or {}
         submitted[int(r.id)] = PayDraft(
             # ⚠️ 表单没给 ⇒ 用**与窗口渲染同一个出口**的默认值（§4.4.2）
-            pay_method=str(d.get("pay_method") or default_pay_method(r.planned_pay_method)),
+            pay_method=str(d.get("pay_method") or default_pay_method(r.planned_pay_method, context.get(int(r.id), {}).get("contract_payment_method", ""))),
             amount=d.get("amount"),
         )
 
@@ -140,3 +141,36 @@ def apply_batch_pay(
 __all__ = [
     "default_pay_method", "parse_amount", "apply_batch_pay",
 ]
+
+
+
+def payment_context(session, *, ids: list[int], pay_date: str) -> dict:
+    from datetime import date
+    from app.mod03_notice.repository import get_notices_by_ids
+    from app.mod05_flow import service as flows
+    from app.mod05_flow.domain import effective_total
+    from app.mod11_jc import service as contracts
+    try:
+        day = date.fromisoformat(pay_date).isoformat()
+    except (ValueError, TypeError):
+        raise MustReportError("请选择完整付款日期") from None
+    selected = list(dict.fromkeys(ids))
+    linked = contracts.payment_contexts(session, selected, day)
+    payments = {}
+    for flow in flows.flows_of_notices(session, selected):
+        payments.setdefault(int(flow.notice_id), []).append({"amount": flow.amount, "status": flow.status})
+    result = []
+    notices = {int(n.id): n for n in get_notices_by_ids(session, selected)}
+    for nid in selected:
+        if nid not in notices:
+            continue
+        notice = notices[nid]
+        c = linked.get(int(notice.id), {})
+        planned = notice.planned_pay_method or ""
+        method = c.get("contract_payment_method", "")
+        unpaid = to_money(notice.amount_approved) - effective_total(payments.get(int(notice.id), []))
+        result.append({"notice_id": int(notice.id), **c,
+                       "default_pay_method": default_pay_method(planned, method),
+                       "default_pay_method_source": "plan" if planned else "contract" if method else "fallback",
+                       "term_warning": c.get("term_warning") if unpaid > 0 and not notice.excluded and not notice.i8_revoked else None})
+    return {"ok": True, "pay_date": day, "rows": result}

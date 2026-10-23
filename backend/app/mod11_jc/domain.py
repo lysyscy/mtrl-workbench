@@ -385,3 +385,30 @@ def remark_payment_proposal(*, remark, payment_term="", payment_method="") -> di
         kept = [i for i in range(0, len(parts), 2) if i not in remove and parts[i].strip()]
         result["remark"] = "".join((parts[i-1] if n else "") + parts[i] for n, i in enumerate(kept)).strip()
     return result
+
+
+
+def payment_term_warning(*, payment_term, trade_co, invoices, debt, pay_date):
+    from datetime import date
+    if not payment_term or Decimal(str(debt)) <= 0 or not pay_date:
+        return None
+    term = normalize_payment_term(payment_term)
+    base, margin = term.removesuffix("天").split("±")
+    maximum = int(base) + int(margin)
+    day = date.fromisoformat(pay_date)
+    side = KIND_TRADE if str(trade_co or "").strip() else KIND_SUPPLIER
+    evidence = []
+    for invoice in invoices:
+        if invoice["kind"] != side:
+            continue
+        try:
+            start = date.fromisoformat(invoice["date"])
+        except (ValueError, TypeError):
+            continue
+        if (day - start).days <= maximum:
+            last = start.toordinal() + maximum
+            evidence.append({"invoice_id": invoice["id"], "invoice_date": start.isoformat(),
+                             "remind_through": date.fromordinal(last).isoformat() if last <= date.max.toordinal() else None})
+    return ({"message": "该合同存在未满账期的发票，请核对本次付款", "payment_term": term,
+             "max_days": maximum, "pay_date": day.isoformat(), "invoice_side": side, "invoices": evidence}
+            if evidence else None)

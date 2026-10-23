@@ -405,3 +405,12 @@ function jcNextArchiveNumbers(){
 let busy=false;
 const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;gap:calc(6px * var(--fscale)) calc(12px * var(--fscale));font-size:calc(12px * var(--fscale));margin-bottom:calc(13px * var(--fscale))">${pairs.map(([k,v])=>`<div class="mut">${k}</div><div>${v}</div>`).join('')}</div>`;
 
+
+
+function payTermsHtml(rows){
+  const contracts=new Map(rows.filter(r=>r.term_warning).map(r=>[r.contract_id,r]));
+  return [...contracts.values()].map(r=>{
+    const w=r.term_warning;
+    return `<div class="tip wn"><b>${esc(w.message)}</b><div>合同 ${esc(r.contract_no||String(r.contract_id))} · 账期 ${esc(w.payment_term)} · 付款日期 ${esc(w.pay_date)}</div><div>${w.invoices.map(i=>`发票 ${esc(i.invoice_date)}，提醒截至 ${esc(i.remind_through||'日期范围以外')}`).join('；')}</div><div>请核对本次付款，可继续确认。</div></div>`;
+  }).join('');
+}

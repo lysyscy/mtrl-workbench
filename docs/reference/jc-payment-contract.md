@@ -17,3 +17,11 @@
 `tools/oneoff/_jc_payment_terms.py <本机预览JSON>` 默认只读，生成JSON及同名Markdown逐条对照。只迁出独立明确片段，冲突、阶段、月份及质保条款留在备注；已填字段不覆盖。
 
 正式字段迁移与真实备注回写分别需要用户明确授权。获准后才对已确认JSON使用 `--apply --confirmed-sha256 <摘要>`；同事务锁定并核对合同身份、原字段与重算建议，任一变化整批拒绝。JSON及真实合同对照保存在本机exports，不入Git。
+
+## 付款窗口上下文
+
+`POST /api/m03/payment-context`，请求`{"ids":[通知书id],"pay_date":"YYYY-MM-DD"}`；只读事实，返回`ok/pay_date/rows`，rows按去重后的请求顺序，未知ID省略。每行有`notice_id/default_pay_method/default_pay_method_source/term_warning`；来源为`plan`、`contract`或`fallback`。无关联合同时不带合同字段，默认仍按计划／现汇。
+
+有关联合同时带`contract_id/contract_no/payment_term/contract_payment_method`。`term_warning`为空表示本次无需提醒；非空包含`message/payment_term/max_days/pay_date/invoice_side/invoices`，invoices逐条包含`invoice_id/invoice_date/remind_through`。`invoice_side`为supplier或trade；异常大账期超出可表达日期范围时remind_through为空，max_days仍保留完整依据。仅返回未满账期的相关日期，不推断付款分摊或到期可付额。
+
+旧付款窗口打开时读取默认；日期变化只刷新提醒，保留手改。最终按当前日期重读并可继续确认提醒，所有实际付款仍走原batch-pay端点；该端点缺省方式也按同一后端优先级取值。未增加数据库迁移或实际流水字段。

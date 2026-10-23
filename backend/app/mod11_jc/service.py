@@ -581,3 +581,27 @@ def project_references(session, project_id, warehouse, *, lock=False):
     from .models import JcContract, JcImportBatch
 
     return read(session, ((JcContract, '集采合同'), (JcImportBatch, '集采导入历史批次'),), project_id, warehouse, lock=lock)
+
+
+
+def payment_contexts(s: Session, notice_ids: list[int], pay_date: str = "") -> dict:
+    """合同付款约定与提醒事实；复用现有结算/付款/欠款口径。"""
+    links = R.links_by_notice(s, notice_ids)
+    ids = sorted({cid for linked in links.values() for cid in linked})
+    if not ids:
+        return {}
+    invoices = R.invoices_of_many(s, ids)
+    payments = R.payments_of_many(s, ids)
+    rows = {r["id"]: r for r in R.list_contracts(s) if r["id"] in ids}
+    result = {}
+    for nid, linked in links.items():
+        c = rows.get(linked[0])
+        if not c:
+            continue
+        cid = c["id"]
+        amounts = D.contract_amounts(trade_co=c["trade_co"], invoices=invoices.get(cid, []), payments=payments.get(cid, []))
+        result[nid] = {"contract_id": cid, "contract_no": c["contract_no"],
+                       "payment_term": c["payment_term"], "contract_payment_method": c["payment_method"],
+                       "term_warning": D.payment_term_warning(payment_term=c["payment_term"], trade_co=c["trade_co"],
+                           invoices=invoices.get(cid, []), debt=amounts["debt"], pay_date=pay_date)}
+    return result

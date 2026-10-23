@@ -40,17 +40,17 @@ def _slice(start: str, end: str, *, what: str) -> str:
 
 def _batch_pay() -> str:
     """批量付款窗口的组装出口 `batchPay`（含"不可付 / 排除撤单"的提示与页脚按钮）。"""
-    return _slice("batchPay:()=>{", "/* 草稿记录", what="批量付款窗口出口")
+    return _slice("batchPay:async()=>{", "/* 草稿记录", what="批量付款窗口出口")
 
 
 def _batch_pay_ok() -> str:
     """提交出口 `batchPayOk`（整批重算 + 拦截 + 走后端）。"""
-    return _slice("batchPayOk:t=>{", "revDlg:async t=>{", what="批量付款提交出口")
+    return _slice("batchPayOk:async t=>{", "revDlg:async t=>{", what="批量付款提交出口")
 
 
 def _batch_pay_del() -> str:
     """「移出本次付款」处理器 `batchPayDel`。"""
-    return _slice("batchPayDel:t=>{", "batchPayOk:t=>{", what="移出处理器")
+    return _slice("batchPayDel:t=>{", "batchPayOk:async t=>{", what="移出处理器")
 
 
 def _pay_block() -> str:
@@ -114,7 +114,7 @@ def test_壳里本次应付为0也不可付():
     #   ⇒ 静态只钉**口径**（默认仍是「审批金额 − 已付金额」；覆盖不再挂行对象、必须有共用出口），
     #   草稿的生命周期（存活 / 作废 / 0 有效）由真机反例守：`tests/test_tail282_pay_draft.py`。
     assert "const payEff=n=>{" in SHELL, "「本次应付」的口径出口没了"
-    assert "N2(n.approve-paidOf(n.id))" in SHELL, "默认口径不再是「审批金额 − 已付金额」"
+    assert "N2(n.approve-paidOf(n.id,n))" in SHELL, "默认口径不再是「审批金额 − 已付金额」"
     # ⚠️ 2026-10-11（双轴 review 的判断题）：这里原写成 `".payOv" not in SHELL` —— 那是**全文负扫**，
     #   与本文件开头的纪律（"断言一律在**切片**里找，不到全文里撞"）相抵，且此后任何**注释/说明**
     #   里出现 `.payOv` 都会假红，报错还会把人指向"实现又挂回行对象"。⇒ 改成钉**读/写出口**这一段。
