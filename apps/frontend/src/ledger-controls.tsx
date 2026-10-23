@@ -1,26 +1,45 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Project } from './api';
 import { projectLabel, requestFile } from './api';
+import { DialogContents, useDialogClose } from './dialog-close';
+import './project-picker.css';
 
-export function ProjectPicker({ projects, selected, pick, multiple = false, label, disabled = false, initiallyOpen = false }: {
-  projects: Project[]; selected: number[]; pick: (ids: number[]) => void; multiple?: boolean; label: string; disabled?: boolean; initiallyOpen?: boolean;
+export function ProjectPicker({ projects, selected, pick, multiple = false, label, disabled = false, initiallyOpen = false, emptyLabel = '请选择项目' }: {
+  projects: Project[]; selected: number[]; pick: (ids: number[]) => void; multiple?: boolean; label: string; disabled?: boolean; initiallyOpen?: boolean; emptyLabel?: string;
 }) {
-  const [open, setOpen] = useState(initiallyOpen); const [keyword, setKeyword] = useState('');
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const close = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener('pointerdown', close); return () => document.removeEventListener('pointerdown', close);
-  }, []);
-  return <div className="ledger-project" ref={root} onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
-    <button className={open ? 'on' : ''} aria-label={label} aria-expanded={open} disabled={disabled} onClick={() => setOpen(value => !value)}>{multiple ? `已选 ${selected.length} 个项目` : (() => { const item = projects.find(item => selected.includes(item.id)); return item ? `${projectLabel(item)}${item.status === 'archived' ? '（归档）' : ''}` : '请选择项目'; })()} ▾</button>
-    {open && <div className="ledger-project-menu" role="group" aria-label={multiple ? '导出项目候选' : '查看项目候选'}>
-      <label><span>搜索项目</span><input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} /></label>
-      {multiple && <div className="picker-actions"><button onClick={() => pick(projects.map(item => item.id))}>全选</button><button onClick={() => pick([])}>清空</button></div>}
-      <div className="picker-options">{projects.filter(item => `${item.disp}${item.name_full}${item.warehouse_name ?? ''}`.includes(keyword.trim())).map(item => <button key={item.id} aria-pressed={selected.includes(item.id)} onClick={() => { pick(multiple ? selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id] : [item.id]); if (!multiple) setOpen(false); }}>
-        <span>{multiple ? `${selected.includes(item.id) ? '☑' : '☐'} ` : ''}{projectLabel(item)}{item.status === 'archived' && <span className="archived">（归档）</span>}</span>
-      </button>)}</div>
-    </div>}
+  const [open, setOpen] = useState(false); const [keyword, setKeyword] = useState('');
+  const trigger = useRef<HTMLButtonElement>(null); const panel = useRef<HTMLDivElement>(null); const name = useId();
+  const [position, setPosition] = useState({ left: 0, top: 0 });
+  const chosen = projects.filter(item => selected.includes(item.id));
+  const summary = chosen.length ? chosen.map(projectLabel).join('、') : emptyLabel;
+  const matches = projects.filter(item => projectLabel(item).toLocaleLowerCase().includes(keyword.trim().toLocaleLowerCase()));
+  const close = () => panel.current?.hidePopover();
+  useEffect(() => { if (disabled) close(); else if (initiallyOpen) panel.current?.showPopover(); }, [disabled, initiallyOpen]);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const anchor = trigger.current?.getBoundingClientRect(), pop = panel.current?.getBoundingClientRect();
+      if (!anchor || !pop) return;
+      const gap = 6, viewport = document.documentElement.clientWidth;
+      setPosition({ left: Math.max(gap, Math.min(anchor.left, viewport - pop.width - gap)), top: Math.max(gap, Math.min(anchor.bottom + gap, window.innerHeight - pop.height - gap)) });
+    };
+    place(); window.addEventListener('resize', place); window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [open, keyword, projects]);
+  return <div className="ledger-project project-picker" onKeyDown={event => { if (open && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); trigger.current?.focus(); } }}>
+    <button ref={trigger} type="button" className={open ? 'on' : ''} aria-label={label} aria-expanded={open} aria-controls={`${name}-options`} disabled={disabled} title={summary} onClick={() => { if (open) close(); else panel.current?.showPopover(); }}><span>{summary}</span><svg aria-hidden="true" viewBox="0 0 12 12"><path d="m3 4.5 3 3 3-3" /></svg></button>
+    <div ref={panel} className="ledger-project-menu" id={`${name}-options`} popover="auto" style={position} onToggle={event => setOpen(event.newState === 'open')} role="group" aria-label={multiple ? '导出项目候选' : '查看项目候选'}>
+      <label className="project-picker-search"><span>搜索项目</span><input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} /></label>
+      {multiple && <div className="picker-actions"><button type="button" onClick={() => pick(projects.map(item => item.id))}>全选</button><button type="button" onClick={() => pick([])}>清空</button></div>}
+      <div className="picker-options">{(['active', 'archived'] as const).map(status => {
+        const items = matches.filter(item => item.status === status);
+        return items.length > 0 && <fieldset key={status}><legend>{status === 'archived' ? '归档项目' : '在用项目'}</legend>{items.map(item => <label className="project-picker-option" key={item.id}>
+          <input type={multiple ? 'checkbox' : 'radio'} name={name} checked={selected.includes(item.id)} onClick={() => { if (!multiple) { close(); trigger.current?.focus(); } }} onChange={() => { pick(multiple ? selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id] : [item.id]); if (!multiple) { close(); trigger.current?.focus(); } }} />
+          <span>{projectLabel(item)}</span>
+        </label>)}</fieldset>;
+      })}{!matches.length && <p className="project-picker-empty" role="status">{projects.length ? '没有匹配的项目' : '暂无可选项目'}</p>}</div>
+    </div>
   </div>;
 }
 
@@ -39,15 +58,16 @@ export function LedgerExport({ kind, projects, project, unavailable, run, messag
   const [confirm, setConfirm] = useState(false); const [keyword, setKeyword] = useState('');
   const [feedback, setFeedback] = useState(''); const [busy, setBusy] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null); const trigger = useRef<HTMLButtonElement>(null);
+  const initialSelection = useRef<number[]>([]);
   const title = kind === 'ledger' ? '逐月台账导出' : '总欠款汇总导出';
   const selected = ids ?? (project ? [project] : []);
   const chosen = selected.flatMap(id => { const item = projects.find(item => item.id === id); return item ? [item] : []; });
   const month = reportMonth();
   const scopeError = chosen.length !== selected.length ? '项目范围已变化，请重新选择。' : chosen.some(item => !item.warehouse_name?.trim()) ? '所选项目尚未建仓，请调整范围。' : '';
   const reason = unavailable || scopeError;
-  useEffect(() => { if (open) dialog.current?.showModal(); }, [open]);
-  useEffect(() => { if (paused) { dialog.current?.close(); setOpen(false); } }, [paused]);
+  useEffect(() => { if (open && !paused) { if (!dialog.current?.open) dialog.current?.showModal(); } else dialog.current?.close(); }, [open,paused]);
   const close = () => { dialog.current?.close(); setOpen(false); if (!paused && valid()) requestAnimationFrame(() => trigger.current?.focus()); };
+  const closing = useDialogClose({ busy, dirty: JSON.stringify(selected) !== JSON.stringify(initialSelection.current), close: () => { setIds([...initialSelection.current]); close(); } });
   const move = (index: number, offset: number) => {
     const next = [...selected]; [next[index], next[index + offset]] = [next[index + offset]!, next[index]!]; setIds(next);
   };
@@ -70,11 +90,11 @@ export function LedgerExport({ kind, projects, project, unavailable, run, messag
   return <>
     <button ref={trigger} className="ledger-export-toggle" aria-haspopup="dialog" aria-disabled={Boolean(unavailable)} title={unavailable || title} onClick={() => {
       if (unavailable) return;
+      initialSelection.current = [...selected];
       if (ids === null) setIds(project ? [project] : []);
       setFeedback(''); setConfirm(false); setOpen(true);
     }}>{title}…</button>
-    {open && createPortal(<dialog ref={dialog} className="ledger-export-dialog" aria-labelledby={`${kind}-export-title`} onCancel={event => { if (busy) event.preventDefault(); else close(); }} onClose={close}>
-      <h2 id={`${kind}-export-title`}>{title}</h2>
+    {open && createPortal(<dialog ref={dialog} className="ledger-export-dialog" aria-labelledby={`${kind}-export-title`} {...closing.dialogProps}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
       <p>{kind === 'ledger' ? `报告月 ${month} · 每项目3表 · 多项目ZIP` : '实时汇总 · 一项目一行 · 无欠款数据的项目不出行'}</p>
       {!confirm ? <>
         <div className="export-selection-tools"><label><span>搜索项目</span><input type="search" value={keyword} onChange={event => setKeyword(event.target.value)} /></label><button onClick={() => setIds(projects.map(item => item.id))}>全选</button><button onClick={() => setIds([])}>清空</button></div>
@@ -88,7 +108,7 @@ export function LedgerExport({ kind, projects, project, unavailable, run, messag
       </>}
       {(reason || feedback) && <p className="notice" role="alert">{reason || feedback}</p>}
       {busy && <p role="status">正在生成文件…</p>}
-      <div className="dialog-actions"><button disabled={busy} onClick={close}>取消</button>{confirm ? <><button disabled={busy} onClick={() => { setFeedback(''); setConfirm(false); }}>返回选择</button><button className="primary" disabled={Boolean(reason) || busy || !chosen.length} onClick={() => void save()}>保存到本地</button></> : <button className="primary" disabled={Boolean(reason) || !chosen.length} onClick={() => { setFeedback(''); setConfirm(true); }}>确认清单</button>}</div>
-    </dialog>, document.body)}
+      <div className="dialog-actions"><button disabled={busy} onClick={closing.requestClose}>取消</button>{confirm ? <><button disabled={busy} onClick={() => { setFeedback(''); setConfirm(false); }}>返回选择</button><button className="primary" disabled={Boolean(reason) || busy || !chosen.length} onClick={() => void save()}>保存到本地</button></> : <button className="primary" disabled={Boolean(reason) || !chosen.length} onClick={() => { setFeedback(''); setConfirm(true); }}>确认清单</button>}</div>
+    </DialogContents></dialog>, document.body)}
   </>;
 }

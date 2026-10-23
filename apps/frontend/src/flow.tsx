@@ -11,12 +11,13 @@ import { body, cents, currentMonth, decimal, money, searchKey } from './notices-
 import { loadFlows, saveBlob } from './flow-api';
 import type { Flow } from './flow-api';
 import { FlowRevoke } from './flow-revoke';
-import { gridTheme } from './grid';
+import { fixedWidth, gridTheme, textWidth } from './grid';
 import './flow.css';
+import { TimePicker, timeMatches } from './time-picker';
 interface Bar { key: string; label: string; amount: string }
 interface Debt { project: string; jc: string; material: string; mech: string }
 interface Stats { granularity: string; buckets: string[]; right: string[]; counts: number[]; selected: { bucket: string; projects: Bar[]; total: string; count: number } }
-const initial = () => ({ mode:'month', from:currentMonth(), to:currentMonth(), projects: [] as number[], method:'', status:'effective', keyword:'', notice:0 });
+const initial = () => ({ period:currentMonth(), projects: [] as number[], method:'', status:'effective', keyword:'', notice:0 });
 function Bars({ rows, choose, selected }: { rows: Bar[]; choose?: (key:string) => void; selected?: string | undefined }) {
   const max=rows.reduce((value,row)=> { const n=cents(row.amount);return n<0n ? -n>value?-n:value : n>value?n:value; },1n);
   return <div className="flow-bars">{rows.map(row => {
@@ -46,13 +47,13 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
     if(!record(data)||!Array.isArray(data.buckets)||!Array.isArray(data.right)||!record(data.selected))throw new ApiError('付款统计读取不完整，请重试。');return data as unknown as Stats;
   }});
   useEffect(()=>{ if(enabled){void flows.refetch();void debt.refetch();void stats.refetch();} },[props.active]);
-  useEffect(()=>{ const id=Number(params.get('notice'));if(id>0){locatePending.current=true;setFilter({...initial(),mode:'all',status:'',notice:id});setSearch('');} },[params]);
+  useEffect(()=>{ if (!props.active) return; const id=Number(params.get('notice'));if(id>0){locatePending.current=true;setFilter({...initial(),period:'全部',status:'',notice:id});setSearch('');} },[params.get('notice'),props.active]);
   useEffect(()=>{if(enabled&&!flows.isPending&&!ledgerLoading&&props.project>0&&locatePending.current){locatePending.current=false;requestAnimationFrame(()=>flowSection.current?.scrollIntoView({block:'start'}));}},[params,enabled,flows.isPending,ledgerLoading,props.project]);
   const projectQuery=useQuery({queryKey:['projects','all',''],enabled,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   const projects=useMemo(()=>(projectQuery.data??[]).filter(project=>(flows.data??[]).some(row=>row.project_id===project.id)||filter.projects.includes(project.id)),[projectQuery.data,flows.data,filter.projects]);
   const rows=useMemo(()=>(flows.data??[]).filter(row=> {
-    const month=row.pay_date.slice(0,7), f=filter, needle=searchKey(f.keyword);
-    const time=f.mode==='all'||(f.mode==='year'?month.startsWith(f.from.slice(0,4)):month>=f.from&&month<=(f.mode==='range'?f.to:f.from));
+    const f=filter, needle=searchKey(f.keyword);
+    const time=timeMatches(f.period,row.pay_date);
     return time&&(!f.projects.length||f.projects.includes(row.project_id??0))&&(!f.notice||f.notice===row.notice_id)&&(!f.method||row.pay_method===f.method)&&(!f.status||f.status===row.status)&&(!needle||Object.values(row).some(value=>value!==null&&searchKey(String(value)).includes(needle)));
   }),[flows.data,filter]);
   const effective=rows.filter(row=>row.status==='effective'),total=decimal(effective.reduce((n,row)=>n+cents(row.amount),0n));
@@ -60,15 +61,15 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
   const current=useRef({writable,open:setRevoke});current.current={writable,open:setRevoke};
   const scale=Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))||1;
   const columns=useMemo<ColDef<Flow>[]>(()=> { const list:ColDef<Flow>[]=[
-    {field:'doc_no',headerName:'单据编码',minWidth:170,cellRenderer:(p:ICellRendererParams<Flow>)=>p.data?.notice_id&&p.value?<Link className="text-link" to={`/notices?notice=${p.data.notice_id}`}>{p.value}</Link>:p.value||'—'},
-    {field:'doc_date',headerName:'通知书日期',minWidth:120},{field:'bill_name',headerName:'通知书名称',minWidth:180},
-    {field:'project_display',headerName:'付款项目',minWidth:160},{field:'payee',headerName:'收款单位',minWidth:180},{field:'category_label',headerName:'分类',minWidth:80},
-    {field:'amount_approved',headerName:'审批金额',minWidth:130,cellClass:'money',valueFormatter:p=>p.value===null||p.value===undefined?'—':money(p.value),comparator:(a,b)=>Number(a??0)-Number(b??0)},
-    {field:'pay_date',headerName:'付款日期',minWidth:120},{field:'amount',headerName:'付款金额',minWidth:130,cellClass:'money',valueFormatter:p=>p.value?money(p.value):'',comparator:(a,b)=>Number(a)-Number(b)},
-    {field:'pay_method',headerName:'实际付款方式',minWidth:120},{field:'remark',headerName:'备注',minWidth:160},{field:'created_by',headerName:'操作人',minWidth:100},
-    {field:'status_label',headerName:'状态',minWidth:140,valueGetter:p=>p.data?`${p.data.status_label}${p.data.revoke_reason?`（${p.data.revoke_reason}）`:''}`:''},
-    {colId:'actions',headerName:'操作',minWidth:80,sortable:false,cellRenderer:(p:ICellRendererParams<Flow>)=>p.data?.status==='effective'?<button className="danger" disabled={!current.current.writable} onClick={()=>current.current.open(p.data!)}>撤销</button>:null},
-  ]; return list.map(col=>({...col,minWidth:(col.minWidth??100)*scale})); },[scale]);
+    {field:'doc_no',headerName:'单据编码',...fixedWidth(180,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.data?.notice_id&&p.value?<Link className="text-link" to={`/notices?notice=${p.data.notice_id}`}>{p.value}</Link>:p.value||'—'},
+    {field:'doc_date',headerName:'通知书日期',...fixedWidth(120,scale)},{field:'bill_name',headerName:'通知书名称',...textWidth(180,320,scale),wrapText:true,autoHeight:true},
+    {field:'project_display',headerName:'付款项目',...textWidth(160,280,scale),wrapText:true,autoHeight:true},{field:'payee',headerName:'收款单位',...textWidth(180,320,scale),wrapText:true,autoHeight:true},{field:'category_label',headerName:'分类',...fixedWidth(80,scale)},
+    {field:'amount_approved',headerName:'审批金额',...fixedWidth(155,scale),cellClass:'money',valueFormatter:p=>p.value===null||p.value===undefined?'—':money(p.value),comparator:(a,b)=>Number(a??0)-Number(b??0)},
+    {field:'pay_date',headerName:'付款日期',...fixedWidth(120,scale)},{field:'amount',headerName:'付款金额',...fixedWidth(155,scale),cellClass:'money',valueFormatter:p=>p.value?money(p.value):'',comparator:(a,b)=>Number(a)-Number(b)},
+    {field:'pay_method',headerName:'实际付款方式',...fixedWidth(120,scale)},{field:'remark',headerName:'备注',...textWidth(160,320,scale),wrapText:true,autoHeight:true},{field:'created_by',headerName:'操作人',...fixedWidth(100,scale)},
+    {field:'status_label',headerName:'状态',...textWidth(140,260,scale),wrapText:true,autoHeight:true,valueGetter:p=>p.data?`${p.data.status_label}${p.data.revoke_reason?`（${p.data.revoke_reason}）`:''}`:''},
+    {colId:'actions',headerName:'操作',...fixedWidth(90,scale),sortable:false,cellRenderer:(p:ICellRendererParams<Flow>)=>p.data?.status==='effective'?<button className="danger" disabled={!current.current.writable} onClick={()=>current.current.open(p.data!)}>撤销</button>:null},
+  ]; return list; },[scale]);
   useEffect(()=>{api.current?.refreshCells({force:true});},[writable]);
   async function exportFlows() {
     if(exporting||!props.me||!enabled||flows.isError)return;
@@ -90,18 +91,18 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
   const categories=[['jc','集采'],['material','辅材'],['mech','机械']] as const;
   const trend=(stats.data?.buckets??[]).map((key,i)=>({key,label:gran==='month'?key:key+' 起',amount:stats.data!.right[i]??'0.00'}));
   return <div className="flow-workspace">
-    <div className="debt-overviews">{categories.map(([key,label])=><section className="flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body"><ReadState query={debt}/>{debt.data&&!debt.isError&&(()=>{const items=debt.data.filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);return items.length?<Bars rows={items.map((row,index)=>({key:String(index),label:row.project,amount:row[key]}))}/>:<p className="muted">暂无{label}未结清欠款</p>;})()}</div></section>)}</div>
+    <div className="debt-overviews">{categories.map(([key,label])=><section className="flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body"><ReadState query={debt}/>{debt.data&&(()=>{const items=debt.data.filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);return items.length?<Bars rows={items.map((row,index)=>({key:String(index),label:row.project,amount:row[key]}))}/>:<p className="muted">暂无{label}未结清欠款</p>;})()}</div></section>)}</div>
     <LedgerPage {...props} onExportGuard={value=>{setGuard(value);props.onExportGuard(value);}}/>
     <section className="flow-card" aria-labelledby="stats-title"><div className="flow-card-head"><h2 id="stats-title">付款统计</h2><div><button aria-pressed={gran==='week'} onClick={()=>{setGran('week');setBucket('');}}>按周（周一至周日）</button><button aria-pressed={gran==='month'} onClick={()=>{setGran('month');setBucket('');}}>按月</button></div></div><div className="flow-card-body">
-      <ReadState query={stats}/>{stats.data&&!stats.isError&&<div className="payment-stat-columns"><div><div className="flow-toolbar"><strong>按项目</strong><label>{gran==='week'?'周起日':'月份'}<input type={gran==='week'?'date':'month'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} onChange={e=>setBucket(e.target.value)}/></label><span>合计 {money(stats.data.selected.total)} 元 · {stats.data.selected.count} 笔</span></div>{stats.data.selected.projects.length?<Bars rows={stats.data.selected.projects} choose={chooseProject} selected={projects.find(p=>filter.projects.includes(p.id))?.warehouse_name??undefined}/>:<p className="muted">该时段没有付款。</p>}</div><div><div className="flow-toolbar"><strong>按{gran==='week'?'周':'月'}</strong><label>年份<input type="number" min="2000" max="2100" value={year} onChange={e=>{if(e.target.value)setYear(Number(e.target.value));}}/></label>{gran==='week'&&<label>季度<select value={quarter} onChange={e=>setQuarter(Number(e.target.value))}>{[1,2,3,4].map(q=><option key={q} value={q}>第{q}季度</option>)}</select></label>}<span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span></div><Bars rows={trend}/></div></div>}
+      <ReadState query={stats}/>{stats.data&&<div className="payment-stat-columns"><div><div className="flow-toolbar"><strong>按项目</strong><TimePicker label={gran==='week'?'统计周':'统计月'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} modes={gran==='week'?['周']:['月']} onChange={setBucket}/><span>合计 {money(stats.data.selected.total)} 元 · {stats.data.selected.count} 笔</span></div>{stats.data.selected.projects.length?<Bars rows={stats.data.selected.projects} choose={chooseProject} selected={projects.find(p=>filter.projects.includes(p.id))?.warehouse_name??undefined}/>:<p className="muted">该时段没有付款。</p>}</div><div><div className="flow-toolbar"><strong>按{gran==='week'?'周':'月'}</strong><TimePicker label="统计窗口" value={gran==='week'?`${year}Q${quarter}`:String(year)} modes={gran==='week'?['季度']:['年']} onChange={value=>{setYear(Number(value.slice(0,4)));if(gran==='week')setQuarter(Number(value.slice(5)));}}/><span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span></div><Bars rows={trend}/></div></div>}
     </div></section>
     <section ref={flowSection} className="flow-card" aria-labelledby="flows-title"><div className="flow-card-head"><h2 id="flows-title">付款流水（实际付款记录）</h2><button disabled={!props.me||!enabled||!rows.length||flows.isFetching||flows.isError||exporting||Boolean(guard)} title={guard||''} onClick={()=>void exportFlows()}>{exporting?'正在导出…':'导出 Excel'}</button></div>
-      <div className="flow-toolbar"><label>付款年月<select value={filter.mode} onChange={e=>setFilter(f=>({...f,mode:e.target.value}))}><option value="month">月</option><option value="year">年</option><option value="range">月范围</option><option value="all">全部</option></select></label>{filter.mode!=='all'&&<input aria-label="付款时间" type={filter.mode==='year'?'number':'month'} value={filter.mode==='year'?filter.from.slice(0,4):filter.from} onChange={e=>setFilter(f=>({...f,from:filter.mode==='year'?e.target.value+'-01':e.target.value}))}/>}{filter.mode==='range'&&<label>至<input aria-label="付款止月" type="month" value={filter.to} onChange={e=>setFilter(f=>({...f,to:e.target.value}))}/></label>}
-      <span>付款项目</span><ProjectPicker projects={projects} selected={filter.projects} multiple pick={ids=>setFilter(f=>({...f,projects:ids}))} label="付款项目"/>
+      <div className="flow-toolbar"><div className="time-picker-field"><span>付款时间</span><TimePicker label="付款时间" value={filter.period} modes={['月','跨月','年','全部']} onChange={period=>setFilter(f=>({...f,period}))} /></div>
+      <span>付款项目</span><ProjectPicker projects={projects} selected={filter.projects} multiple emptyLabel="全部项目" pick={ids=>setFilter(f=>({...f,projects:ids}))} label="付款项目"/>
       <label>实际付款方式<select value={filter.method} onChange={e=>setFilter(f=>({...f,method:e.target.value}))}><option value="">全部</option>{['现汇','承兑','供应链','其他'].map(v=><option key={v}>{v}</option>)}</select></label><label>状态<select value={filter.status} onChange={e=>setFilter(f=>({...f,status:e.target.value}))}><option value="">全部</option><option value="effective">生效</option><option value="revoked">已撤销</option></select></label>
       <form onSubmit={e=>{e.preventDefault();setFilter(f=>({...f,keyword:search}));}}><label>关键词<input value={search} onChange={e=>setSearch(e.target.value)}/></label><button>搜索</button></form><button onClick={()=>{setFilter(initial());setSearch('');}}>重置</button><span>显示 {rows.length} 条</span>{filter.notice>0&&<button onClick={()=>setFilter(f=>({...f,notice:0}))}>清除通知书定位</button>}{filter.projects.includes(0)&&<span>待指定归属</span>}
       </div><ReadState query={flows}/>{feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}{guard&&<p className="muted">{guard}</p>}
-      {flows.data&&!flows.isError&&<><div className="flow-grid" style={{height:Math.min(420,(Math.max(rows.length,1)*38+58)*scale)}}><AgGridReact<Flow> theme={gridTheme} rowData={rows} columnDefs={columns} defaultColDef={{sortable:true,resizable:false,suppressMovable:true,flex:1}} getRowId={p=>String(p.data.id)} rowHeight={38*scale} headerHeight={34*scale} onGridReady={e=>{api.current=e.api;}} overlayNoRowsTemplate="当前筛选没有付款流水。"/></div><div className="flow-total">合计（生效 {effective.length} 条）<b>{money(total)} 元</b></div></>}
+      {flows.data&&<><div className="flow-grid" style={{height:Math.min(420,(Math.max(rows.length,1)*38+58)*scale)}}><AgGridReact<Flow> theme={gridTheme} rowData={rows} columnDefs={columns} defaultColDef={{sortable:true,resizable:false,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true}} getRowId={p=>String(p.data.id)} rowHeight={38*scale} headerHeight={34*scale} onGridReady={e=>{api.current=e.api;}} overlayNoRowsTemplate="当前筛选没有付款流水。"/></div><div className="flow-total">合计（生效 {effective.length} 条）<b>{money(total)} 元</b></div></>}
     </section>
     {revoke&&<FlowRevoke key={revoke.id} flow={revoke} blocked={!writable} close={()=>setRevoke(null)} completed={(notice,text)=>{if(notice)window.dispatchEvent(new CustomEvent('payment-revoked',{detail:notice}));setFeedback(text);}}/>}
   </div>;

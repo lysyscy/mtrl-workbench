@@ -66,7 +66,7 @@ export function MechanicalImport({ writable, keywords, label, close, refresh, bu
     const read=await refresh();
     if(alive.current)setMessage(read?'明细已写入，有效月值仍待单独确认。':'明细已写入，重新读取失败；关闭后请重新读取。');
   }
-  return <MechanicalDialog title={receipt?'原报明细录入回执':preview?'确认录入明细':'录入原报明细'} close={close} busy={busy}>
+  return <MechanicalDialog title={receipt?'原报明细录入回执':preview?'确认录入明细':'录入原报明细'} close={close} busy={busy} dirty={!receipt && Boolean(file || Object.keys(resolutions).length)}>{requestClose => <>
     {!preview&&!receipt&&<label>Agent整理的录入文件<input type="file" accept=".json,application/json" disabled={busy} onChange={event=>{setFile(event.target.files?.[0]??null);setMessage('');}} /></label>}
     {preview&&!receipt&&<>
       <p>确认只保存明细；有效月值在明细页另行确认。金额单位：元。</p>
@@ -87,6 +87,6 @@ export function MechanicalImport({ writable, keywords, label, close, refresh, bu
     </>}
     {receipt&&<ul>{receipt.map(batch=><li key={batch.warehouse+batch.ym+batch.category}>{label(batch.warehouse)}／{batch.ym}／{batch.category==='zero'?'零租':'包月'} · 已保存 <button disabled={busy||!writable} onClick={()=>view(batch)}>查看明细</button></li>)}</ul>}
     {message&&<p role="status">{message}</p>}
-    <footer><button disabled={busy} onClick={close}>{receipt?'关闭':'取消'}</button>{!receipt&&(preview?<><button disabled={busy||!writable} onClick={()=>{setPreview(null);setResolutions({});setMessage('');}}>重新选择文件</button><button disabled={busy||!writable||missing||unsaved} title={missing?'请逐项选择修订冲突':''} onClick={()=>void run(confirm)}>{busy?'正在写入…':'确认写入明细'}</button></>:<button disabled={busy||!writable} onClick={()=>void run(load)}>{busy?'正在预览…':'查看录入预览'}</button>)}</footer>
-  </MechanicalDialog>;
+    <footer><button disabled={busy} onClick={requestClose}>{receipt?'关闭':'取消'}</button>{!receipt&&(preview?<><button disabled={busy||!writable} onClick={()=>{setPreview(null);setResolutions({});setMessage('');}}>重新选择文件</button><button disabled={busy||!writable||missing||unsaved} title={missing?'请逐项选择修订冲突':''} onClick={()=>void run(confirm)}>{busy?'正在写入…':'确认写入明细'}</button></>:<button disabled={busy||!writable} onClick={()=>void run(load)}>{busy?'正在预览…':'查看录入预览'}</button>)}</footer>
+  </>}</MechanicalDialog>;
 }

@@ -6,3 +6,11 @@ export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontS
   headerBackgroundColor: 'var(--sf2)', headerTextColor: 'var(--tx2)', accentColor: 'var(--pri)',
   oddRowBackgroundColor: 'var(--sf)', browserColorScheme: 'inherit', rowHoverColor: 'var(--sf2)',
   borderRadius: 0, wrapperBorderRadius: 0 });
+
+export function fixedWidth(width: number, scale = 1) {
+  return { width: width * scale, minWidth: width * scale, maxWidth: width * scale, flex: 0 };
+}
+
+export function textWidth(min: number, max: number, scale = 1, flex = 1) {
+  return { minWidth: min * scale, maxWidth: max * scale, flex };
+}

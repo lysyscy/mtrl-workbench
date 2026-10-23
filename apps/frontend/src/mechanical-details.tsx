@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef } from 'react';
+import { DialogContents, useDialogClose } from './dialog-close';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridApi } from 'ag-grid-community';
 import { gridTheme } from './grid';
@@ -53,8 +54,10 @@ export function Details({ name, saved, effective, draft, category, ym, keywords,
   </section>;
 }
 
-export function MechanicalDialog({ title, close, busy, children }: { title: string; close: () => void; busy: boolean; children: React.ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { const previous = document.activeElement as HTMLElement | null;ref.current?.showModal();return () => {ref.current?.close();previous?.focus();}; }, []);
-  return <dialog ref={ref} className="mechanical-dialog" aria-label={title} onCancel={event => {event.preventDefault();if(!busy)close();}}><div className="mechanical-detail-head"><h2>{title}</h2><button disabled={busy} aria-label="关闭" onClick={close}>关闭</button></div>{children}</dialog>;
+export function MechanicalDialog({ title, close, busy, dirty = false, paused = false, children }: { title: string; close: () => void; busy: boolean; dirty?: boolean; paused?: boolean; children: React.ReactNode | ((requestClose: () => boolean) => React.ReactNode) }) {
+  const ref = useRef<HTMLDialogElement>(null), titleId = useId();
+  const closing = useDialogClose({ busy, dirty, close });
+  useEffect(() => { const previous = document.activeElement as HTMLElement | null; return () => {ref.current?.close();previous?.focus();}; }, []);
+  useEffect(() => { if (paused) ref.current?.close(); else if (!ref.current?.open) ref.current?.showModal(); }, [paused]);
+  return <dialog ref={ref} className="mechanical-dialog" aria-labelledby={titleId} {...closing.dialogProps}><DialogContents title={title} titleId={titleId} closing={closing}>{typeof children === 'function' ? children(closing.requestClose) : children}</DialogContents></dialog>;
 }

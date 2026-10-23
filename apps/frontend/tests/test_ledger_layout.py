@@ -44,9 +44,10 @@ def test_independent_multi_project_preview_cancel_and_actual_zip(server,browser_
     dialog=page.get_by_role('dialog');expect(dialog).to_contain_text('选了2个项目')
     expect(dialog.get_by_role('row')).to_have_count(3)
     dialog.get_by_role('button',name='项目排序',exact=True).click()
-    dialog.get_by_role('button',name='取消',exact=True).click();expect(dialog).to_have_count(0)
+    dialog.get_by_role('button',name='取消',exact=True).click();dialog.get_by_role('button',name='放弃并关闭',exact=True).click();expect(dialog).to_have_count(0)
     assert not list(page.context.pages)[0].is_closed()
     page.get_by_role('button',name='逐月台账导出…',exact=True).click()
+    picker.get_by_role('button',name=re.compile('^☐ 长项目名验收')).click()
     page.get_by_role('button',name='确认清单',exact=True).click()
     order=dialog.locator('tbody tr td:nth-child(2)').all_text_contents()
     with page.expect_download() as event: page.get_by_role('button',name='保存到本地',exact=True).click()
@@ -80,12 +81,12 @@ def test_add_focuses_new_record_at_fixed_historical_month_and_project_survives_n
     assert actual['month']=='2025-11'
     draft=page.locator(f'[row-id="material:manual:{rid}"] [col-id=payment] input');draft.fill('bad');draft.press('Tab')
     expect(page.get_by_role('status',name='保存回执')).to_contain_text('保存被拒')
-    page.get_by_role('button',name='选择项目',exact=True).click();page.get_by_role('group',name='查看项目候选').get_by_role('button',name=re.compile('^归档样例')).click()
+    page.get_by_role('button',name='选择项目',exact=True).click();page.get_by_role('group',name='查看项目候选').get_by_role('radio',name=re.compile('^归档样例')).click()
     expect(page.get_by_role('button',name='选择项目',exact=True)).to_contain_text('归档')
     page.get_by_role('link',name='MOD-01 项目档案',exact=True).click();page.get_by_role('link',name='MOD-05 付款流水与欠款统计',exact=True).click()
     expect(page.get_by_role('button',name='选择项目',exact=True)).to_contain_text('归档样例')
 
-    page.get_by_role('button',name='选择项目',exact=True).click();page.get_by_role('group',name='查看项目候选').get_by_role('button',name=re.compile('^隔离项目')).click()
+    page.get_by_role('button',name='选择项目',exact=True).click();page.get_by_role('group',name='查看项目候选').get_by_role('radio',name=re.compile('^隔离项目')).click()
     expect(draft).to_have_value('bad')
 
 

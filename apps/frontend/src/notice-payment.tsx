@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson } from './api';
 import { body, cents, decimal, money, readNotices, receipt } from './notices-api';
 import type { NoticeRow } from './notices-api';
+import { DialogContents, useDialogClose } from './dialog-close';
 
 export interface PayOverride { value: string; basis: string }
 const basis = (row: NoticeRow) => `${row.amount_approved}:${row.amount_paid}`;
@@ -39,14 +40,17 @@ export function NoticePayment({ ids, overrides, blocked, remove, close, paid, re
     return { rows: readNotices(value), methods: value.payment_methods as string[] };
   } });
   useEffect(() => { if (blocked) dialog.current?.close(); else if (!dialog.current?.open) dialog.current?.showModal(); }, [blocked]);
+  const initialDate = useRef(date), initialDrafts = useRef<Record<number,PaymentDraft>>({});
   const rows = ids.map(id => query.data?.rows.find(row => row.notice_id === id)).filter((row): row is NoticeRow => Boolean(row));
   const excluded = rows.filter(row => row.is_excluded || row.is_revoked), targets = rows.filter(row => !row.is_excluded && !row.is_revoked);
   const missing = ids.filter(id => !rows.some(row => row.notice_id === id));
-  function draft(row: NoticeRow): PaymentDraft { return drafts.current[row.notice_id] ?? { amount: paymentValue(row,overrides), pay_method: row.planned_pay_method || '现汇' }; }
+  function draft(row: NoticeRow): PaymentDraft { const fallback = { amount: paymentValue(row,overrides), pay_method: row.planned_pay_method || '现汇' }; initialDrafts.current[row.notice_id] ??= fallback; return drafts.current[row.notice_id] ?? fallback; }
   function update(row: NoticeRow, field: keyof PaymentDraft, value: string) { drafts.current[row.notice_id] = {...draft(row),[field]:value};setRevision(revision+1); }
   function reason(row: NoticeRow): string { return row.pay_block_reason || (cents(paymentValue(row,overrides)) <= 0n ? '本次应付不大于0，请调整付款金额' : ''); }
   const invalid = targets.some(row => reason(row)), busy = phase === 'sending', editable = phase === 'edit';
-  function removeRow(id: number) { remove(id);if(ids.length===1)close(); }
+  const dirty = phase !== 'saved' && (date !== initialDate.current || Boolean(remark) || Object.entries(drafts.current).some(([id,value]) => { const initial = initialDrafts.current[Number(id)]; return !initial || value.amount !== initial.amount || value.pay_method !== initial.pay_method; }));
+  const closing = useDialogClose({ busy, dirty, close });
+  function removeRow(id: number) { if(ids.length===1) { if (closing.requestClose()) remove(id); } else remove(id); }
   async function reread() {
     setRefreshFailed(false);
     try { await refresh(); } catch { setRefreshFailed(true); }
@@ -84,8 +88,7 @@ export function NoticePayment({ ids, overrides, blocked, remove, close, paid, re
       setError(`${saved ? '付款已登记，勿重复提交。' : failure instanceof ApiError && failure.status > 0 && failure.status < 500 ? '整批未登记，输入已保留。' : '提交结果尚未核实，请重读列表并到付款流水核对，勿重复付款。'}${failure instanceof Error ? failure.message : '请重读核对。'}`);
     } finally { lock.current=false; }
   }
-  return <dialog ref={dialog} className="project-dialog notice-pay-dialog" aria-labelledby="notice-pay-title" onCancel={event => { event.preventDefault();if(!busy)close(); }}>
-    <h2 id="notice-pay-title">{phase === 'saved' ? '付款结果' : '批量付款'}</h2>
+  return <dialog ref={dialog} className="project-dialog notice-pay-dialog" aria-labelledby="notice-pay-title" {...closing.dialogProps}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={closing}>
     {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<button onClick={() => void query.refetch()}>重读</button></p> : <>
       {message && <p role="status" className="notice-feedback">{message}</p>}
       {editable && <p>任一校验不通过，整批不产生流水；选「其他」须填备注。</p>}
@@ -97,6 +100,6 @@ export function NoticePayment({ ids, overrides, blocked, remove, close, paid, re
     </>}
     {error && <p className="notice" role="alert">{error}</p>}
     {refreshFailed && <p className="notice" role="alert">付款已登记，列表尚待重读核对。<button onClick={() => void reread()}>重读核对</button></p>}
-    <div className="dialog-actions"><button disabled={busy} onClick={close}>{phase === 'saved' ? '关闭' : '取消'}</button>{phase === 'uncertain' && <button onClick={() => void reread()}>重读列表核对</button>}{editable && <button className="primary" disabled={blocked||busy||query.isPending||query.isFetching||query.isError||invalid||Boolean(missing.length)||!targets.length} onClick={() => void submit()}>确认付款</button>}{busy && <span role="status">正在提交…</span>}</div>
-  </dialog>;
+    <div className="dialog-actions"><button disabled={busy} onClick={closing.requestClose}>{phase === 'saved' ? '关闭' : '取消'}</button>{phase === 'uncertain' && <button onClick={() => void reread()}>重读列表核对</button>}{editable && <button className="primary" disabled={blocked||busy||query.isPending||query.isFetching||query.isError||invalid||Boolean(missing.length)||!targets.length} onClick={() => void submit()}>确认付款</button>}{busy && <span role="status">正在提交…</span>}</div>
+  </DialogContents></dialog>;
 }

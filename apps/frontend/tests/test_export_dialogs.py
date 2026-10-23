@@ -84,6 +84,7 @@ def test_draft_feedback_is_inside_each_export_dialog(server,browser_page):
         dialog.get_by_role('button',name='保存到本地',exact=True).click()
         expect(dialog.get_by_role('alert')).to_contain_text('请先处理未保存输入')
         dialog.get_by_role('button',name='取消',exact=True).click()
+        page.get_by_role('dialog',name='放弃未保存的修改？',exact=True).get_by_role('button',name='放弃并关闭',exact=True).click()
     assert not exports
 
 
@@ -99,6 +100,7 @@ def test_empty_data_and_unbuilt_project_cannot_expand_export_scope(server,browse
     dialog.get_by_role('button',name='返回选择',exact=True).click()
     expect(dialog.get_by_role('button',name=re.compile('^☑ 归档样例'))).to_be_visible()
     dialog.get_by_role('button',name='取消',exact=True).click()
+    dialog.get_by_role('button',name='放弃并关闭',exact=True).click()
     def no_warehouse(route):
         response=route.fetch();rows=response.json()
         for row in rows:
