@@ -79,3 +79,33 @@ def test_payment_warning_tracks_date_without_overwriting_manual_method(ui_page):
     p.wait_for_function('window.contextPayment')
     assert p.evaluate('contextPayment.drafts["101"].pay_method') == '现汇'
     assert p.evaluate('contextPayment.pay_date') == '2026-04-11'
+
+
+
+def test_old_backend_without_terms_still_opens_payment_window(ui_page):
+    p = ui_page
+    p.route('**/api/m03/payment-context', lambda route: route.fulfill(status=404, json={'detail':'Not Found'}))
+    p.evaluate("""()=>{
+      API.paymentContext=window.originalPaymentContext;
+      NO[0].code='FKTZS2026060313';NO[0].cat='辅材';NO[0].astat='已批';
+      NO[0].plannedPayMethod='供应链';
+      pickSet.clear();pickSet.add('101');return ACT.batchPay();
+    }""")
+    expect(p.locator('#bm0')).to_have_value('供应链')
+    expect(p.locator('#batchPayTerms')).to_contain_text('暂未启用')
+    expect(p.locator('#batchPayTerms')).to_contain_text('人工核对')
+    p.locator('#bm0').select_option('承兑')
+    p.locator('#bDate').fill('2026-04-12')
+    p.locator('#bDate').blur()
+    expect(p.locator('#batchPayTerms')).to_contain_text('人工核对')
+    expect(p.locator('#bm0')).to_have_value('承兑')
+    assert p.locator('[data-act="batchPayOk"]').is_enabled()
+
+
+def test_terms_server_error_does_not_become_old_backend_fallback(ui_page):
+    p=ui_page
+    p.route('**/api/m03/payment-context',lambda route:route.fulfill(status=500,json={'detail':'failed'}))
+    p.evaluate("""()=>{API.paymentContext=window.originalPaymentContext;
+      pickSet.clear();pickSet.add('101');return ACT.batchPay();}""")
+    expect(p.locator('.toast').last).to_contain_text('无法核对合同账期')
+    assert p.locator('#bm0').count()==0

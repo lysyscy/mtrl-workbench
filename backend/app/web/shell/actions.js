@@ -516,7 +516,7 @@ const ACT={
      ${bad.length?`<div class="tip wn" style="margin-bottom:calc(10px * var(--fscale))"><b>⚠️ 有 ${bad.length} 条不可付，「确认付款」已禁用。</b>${badWhy?`（${badWhy}）`:''}请移出不可付记录，或关闭后调整勾选；移出会取消该行勾选，其他行已填方式与金额保留。${bad.some(ntJcUnlinked)?'<br>集采未关联合同的记录须先在付款通知书页关联合同。':''}</div>`:''}
      <div class="tw" style="min-height:0;max-height:44vh">${TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD,
      rows:rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
-       const dm=byId.get(n.id)?.default_pay_method||'现汇';
+       const dm=byId.get(n.id)?.default_pay_method||n.plannedPayMethod||'现汇';
        const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);
        return `<tr class="${ok?'':'hl'}"><td class="fc">${n.code}</td>
        <td class="now" title="付款项目全名：${esc(n.proj)}">${dispCell(n.proj,n)}</td>
@@ -531,7 +531,7 @@ const ACT={
        <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" data-act="batchPayTerms" value="${esc(dt)}"></div>
        <div class="fld"><label>本批付款备注</label><input class="inp" id="bRemark" value="${esc(remark)}" placeholder="写入本批每条付款流水；选「其他」时必填"></div>
      </div>
-     <div id="batchPayTerms" aria-live="polite">${payTermsHtml(context.rows)}</div>
+     <div id="batchPayTerms" aria-live="polite">${payTermsHtml(context.rows,context.available)}</div>
      <div class="tip" style="margin:0">确认后每条生成一笔付款流水，并更新已付金额与付款状态。</div>`;
    payBatchIds=rows.map(n=>n.id);  /* 本次窗口的行序，防删除 / 撤单后金额输入框串到剩余行。 */
    modal({wide:true,title:`批量付款 · 已勾选 ${rows.length} 条`,body,reopen:()=>ACT.batchPay(),
@@ -547,7 +547,7 @@ const ACT={
      const result=await API.paymentContext({ids:payBatchIds.map(Number),pay_date:day});
      if(request!==payContextRequest||!box.isConnected||date.value!==day) return null;
      if(!result?.ok){box.textContent=result?.message||'账期核对失败，请重试';return null;}
-     box.innerHTML=payTermsHtml(result.rows);return result;
+     box.innerHTML=payTermsHtml(result.rows,result.available);return result;
    }catch(e){if(box.isConnected) box.textContent='账期核对失败，请重试';return null;}
  },
  batchPayCancel:()=>{ payContextRequest++;payDraft={}; closeModal(); },

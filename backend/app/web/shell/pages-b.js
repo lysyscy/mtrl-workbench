@@ -407,7 +407,8 @@ const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;g
 
 
 
-function payTermsHtml(rows){
+function payTermsHtml(rows,available=true){
+  if(available===false) return '<div class="tip">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</div>';
   const contracts=new Map(rows.filter(r=>r.term_warning).map(r=>[r.contract_id,r]));
   return [...contracts.values()].map(r=>{
     const w=r.term_warning;
