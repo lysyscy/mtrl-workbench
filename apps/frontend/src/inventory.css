@@ -1,0 +1,27 @@
+.inventory-page { display:flex; flex-direction:column; gap:calc(12px * var(--fscale)); min-width:0; }
+.inventory-toolbar, .inventory-toolbar > div, .inventory-filter, .inventory-summary { display:flex; align-items:center; flex-wrap:wrap; gap:calc(10px * var(--fscale)); }
+.inventory-toolbar { justify-content:space-between; }
+.inventory-toolbar label, .inventory-fields, .inventory-remark { display:flex; gap:calc(8px * var(--fscale)); align-items:center; }
+.inventory-toolbar .ant-select { min-width:7em; }
+.inventory-filter { padding:calc(12px * var(--fscale)); background:var(--sf2); }
+.inventory-filter > .ant-select { width:14em; max-width:100%; }
+.inventory-filter > .ant-select-multiple { width:24em; }
+.inventory-filter > .ant-input { width:14em; }
+.inventory-filter label { display:flex; align-items:center; gap:6px; }
+.inventory-filter label .ant-input { width:10em; }
+.inventory-summary { color:var(--tx2); }
+.inventory-grid { height:calc(100vh - 290px * var(--fscale)); min-height:320px; width:100%; }
+.inventory-dialog { width:min(calc(620px * var(--fscale)),calc(100vw - 48px)); max-height:calc(100vh - 72px); overflow:auto; padding:calc(20px * var(--fscale)); }
+.inventory-details { display:grid; grid-template-columns:auto minmax(0,1fr); gap:calc(8px * var(--fscale)) calc(16px * var(--fscale)); }
+.inventory-details dt { color:var(--tx2); }
+.inventory-details dd { margin:0; overflow-wrap:anywhere; }
+.inventory-fields { flex-wrap:wrap; margin-block:calc(12px * var(--fscale)); }
+.inventory-fields label { display:flex; flex:1; min-width:12em; flex-direction:column; align-items:stretch; gap:6px; }
+.inventory-fields output { display:block; padding:7px 0; font-variant-numeric:tabular-nums; }
+.inventory-remark { align-items:stretch; flex-direction:column; }
+.inventory-trail { background:var(--sf2); padding:calc(10px * var(--fscale)); overflow-wrap:anywhere; }
+.inventory-trail p { margin-block:4px; }
+.inventory-warning { padding:calc(12px * var(--fscale)); background:var(--wn-l); color:var(--wn-d); }
+.inventory-warning .ant-btn + .ant-btn, .inventory-trail .ant-btn + .ant-btn { margin-inline-start:8px; }
+.inventory-grid .ag-row-pinned { font-weight:600; background:var(--sf2); }
+.inventory-location { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:12px; background:var(--pri-l); }

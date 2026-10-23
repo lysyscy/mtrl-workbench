@@ -1,0 +1,20 @@
+.big-page { padding: 12px; }
+.big-page, .big-page > div { min-width: 0; }
+.big-period label, .big-toolbar, .big-toolbar > div, .big-draft { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.big-period label { gap: 8px; }
+.big-toolbar > div:first-child { flex: 1 1 440px; }
+.big-toolbar { justify-content: space-between; margin: 12px 0; }
+.big-toolbar .ant-select { width: min(22em, 100%); min-width: 12em; }
+.big-grid { height: max(320px, calc(100dvh - 260px)); width: 100%; }
+.big-grid .big-money, .big-money-input { text-align: right; font-variant-numeric: tabular-nums; }
+.big-grid .ag-row-pinned { font-weight: 600; background: var(--sf2); }
+.big-grid .ag-header-cell-label { justify-content: center; }
+.big-manual { display: flex; flex-direction: column; align-items: stretch; justify-content: center; height: 100%; gap: 2px; }
+.big-manual .ant-input { min-height: 28px; }
+.big-manual .ant-tag { align-self: flex-end; font-size: .82em; margin: 0; line-height: 18px; }
+.big-origin { color: var(--tx2); font-size: .82em; line-height: 18px; }
+.big-draft { margin: 8px 0; }
+.big-draft [role="alert"] { color: var(--danger); }
+.big-order-dialog { width: min(740px, calc(100vw - 32px)); }
+.big-order-table, .big-export-list { max-height: 44vh; overflow: auto; }
+.big-order-table td:last-child { white-space: nowrap; }

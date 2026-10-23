@@ -1,0 +1,17 @@
+.settlement-page { display: grid; gap: 16px; min-width: 0; }
+.settlement-page > div { min-width: 0; }
+.settlement-toolbar, .settlement-toolbar > div, .settlement-toolbar label, .settlement-summary, .settlement-draft { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.settlement-toolbar { justify-content: space-between; margin: 12px 0; }
+.settlement-toolbar label { gap: 8px; }
+.settlement-toolbar .ant-select { min-width: 6em; }
+.settlement-summary { color: var(--tx2); }
+.settlement-grid { height: min(60vh, 640px); min-height: 260px; width: 100%; }
+.annual-grid { height: min(42vh, 460px); }
+.settlement-page h2 { font-size: 1.05em; margin: 20px 0 8px; }
+.settlement-grid .money { text-align: right; font-variant-numeric: tabular-nums; }
+.settlement-grid .ant-input { text-align: right; font-variant-numeric: tabular-nums; }
+.settlement-grid .ag-row-pinned { font-weight: 600; background: var(--sf2); }
+.settlement-draft { margin: 8px 0; }
+.settlement-draft [role="alert"] { color: var(--danger); }
+.settlement-export-dialog { width: min(640px, calc(100vw - 32px)); }
+.settlement-export-list { max-height: 40vh; overflow: auto; padding-inline-start: 24px; }

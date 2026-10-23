@@ -253,3 +253,27 @@ def test_拒做模板标题形态不认识():
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+def test_big_api_exposes_existing_totals_without_recalculation(monkeypatch):
+    """React consumes the same totals as template export, including unavailable material."""
+    from contextlib import contextmanager
+    from starlette.requests import Request
+    from app.mod07_setl import api, big_service
+
+    @contextmanager
+    def no_database():
+        yield None
+
+    data = payload()
+    data.update(selected=[p['warehouse'] for p in PROJ], candidates=PROJ, mat_available=False)
+    monkeypatch.setattr(api, 'session_scope', no_database)
+    monkeypatch.setattr(api, 'load_manual', lambda s: {})
+    monkeypatch.setattr(big_service, 'build_big_data', lambda s, state: data)
+    result = api.api_big(Request({'type': 'http', 'query_string': b'period=2026-08'}))
+    assert result['totals']['hw_cum'] == '101.00'
+    assert result['totals']['total_cum'] == '12.00'
+    assert result['totals']['mech_est'] == '1000.00'
+    assert result['totals']['mat_cum'] is None
+    assert 'use_rate' not in result['totals']
+    assert [row['warehouse'] for row in result['rows']] == ['甲仓库', '乙仓库']

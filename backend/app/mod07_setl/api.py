@@ -190,6 +190,7 @@ def api_big(request: Request) -> dict:
         "manual_keys": list(B.BIG_MANUAL_KEYS),
         "manual_fmts": [B.MANUAL_FMT[k] for k in B.BIG_MANUAL_KEYS],
         "rows": [_big_row(r) for r in (data["rows"] or [])],
+        "totals": {k: _s(v) for k, v in data["totals"].items()},
         "mat_available": bool(data["mat_available"]),
         # ⭐ `A5`（2026-09-29）：大表空态文案随包给出（主人 = `big_domain.empty_text`）。
         "empty_text": B.empty_text(data["month"]),

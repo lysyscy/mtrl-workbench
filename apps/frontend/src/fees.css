@@ -1,0 +1,22 @@
+.fee-filters,.fee-toolbar,.fee-toolbar>div,.fee-batch-toolbar,.fee-row-actions{display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap}
+.fee-filters{margin-bottom:calc(16px * var(--fscale))}
+.fee-filters label,.fee-batch-toolbar label{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
+.fee-toolbar{justify-content:space-between;margin-bottom:calc(12px * var(--fscale))}
+.fee-feedback{color:var(--tx2);margin:calc(8px * var(--fscale)) 0}
+.fees-grid{height:calc(100vh - 290px);min-height:280px;width:100%}
+.fees-grid .ag-cell{display:flex;align-items:center}
+.fees-grid .ag-cell-wrapper,.fees-grid .ag-cell-value{width:100%}
+.fees-grid .money{justify-content:flex-end;font-variant-numeric:tabular-nums}
+.fee-money-input{text-align:right;font-variant-numeric:tabular-nums}
+.fee-batch-dialog{width:min(1080px,calc(100vw - 48px))}
+.fee-delete-dialog{width:min(420px,calc(100vw - 48px))}
+.fee-batch-toolbar{margin:calc(12px * var(--fscale)) 0}
+.fee-batch-table{max-height:48vh;overflow:auto}
+.fee-batch-table table{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
+.fee-batch-table th,.fee-batch-table td{min-width:calc(140px * var(--fscale));padding:calc(8px * var(--fscale));border-bottom:1px solid var(--bd);text-align:right}
+.fee-batch-table th{background:var(--sf2);font-weight:500}
+.fee-batch-table thead th{position:sticky;top:0;z-index:2}
+.fee-batch-table th:first-child{position:sticky;left:0;min-width:calc(180px * var(--fscale));text-align:left;z-index:1}
+.fee-batch-table thead th:first-child{z-index:3}
+.fees-page .notice .ant-btn{margin-left:calc(8px * var(--fscale))}
+@media(max-width:800px){.fee-toolbar{align-items:flex-start}.fee-toolbar>.muted{width:100%}.fees-grid{height:65vh}}

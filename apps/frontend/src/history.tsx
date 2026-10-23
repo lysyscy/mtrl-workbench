@@ -22,6 +22,14 @@ export function HistoryGate({ children }: { children: ReactNode }) {
   return <div className="history-gate" inert={busy || uncertain} aria-busy={busy}>{children}</div>;
 }
 const Guards = createContext<Map<string, () => string> | null>(null);
+function guardReason(guards: Map<string, () => string> | null) {
+  for (const reason of guards?.values() ?? []) { const text = reason(); if (text) return text; }
+  return '';
+}
+export function useHistoryProtection() {
+  const guards = useContext(Guards);
+  return () => guardReason(guards);
+}
 export function useHistoryGuard(name: string, reason: () => string) {
   const guards = useContext(Guards), current = useRef(reason); current.current = reason;
   useEffect(() => { guards?.set(name, () => current.current()); return () => { guards?.delete(name); }; }, [guards, name]);
@@ -44,7 +52,7 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
   function protectedReason() {
     if (!state.current.me || state.current.blocked) return '当前账号暂不能操作。';
     if (state.current.guard) return state.current.guard;
-    for (const reason of guards?.values() ?? []) { const text = reason(); if (text) return text; }
+    const reason = guardReason(guards); if (reason) return reason;
     if (document.querySelector('.ant-modal-wrap:not([style*="display: none"]),dialog[open]')) return '请先关闭弹窗。';
     return '';
   }

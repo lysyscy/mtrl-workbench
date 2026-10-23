@@ -11,6 +11,7 @@ import { mechanicalMoney as money, readDetail, readMechanicalReport, readWorkben
 import { Details, MechanicalDialog, detailKey } from './mechanical-details';
 import { MechanicalImport } from './mechanical-import';
 import { TimePicker } from './time-picker';
+import { useHistoryProtection } from './history';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
 import type { Category, Detail, Effective, Workbench, MechanicalReport, ReportSheet } from './mechanical-api';
@@ -117,6 +118,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const internalDrafts=useRef(new Map<string,{warehouse:string;ym:string;values:Record<string,string>}>());
   const [internalEpoch,setInternalEpoch]=useState(0);
   const [internalConfirmation,setInternalConfirmation]=useState<{warehouse:string;ym:string;values:Record<string,string>;effective:Effective}[]|null>(null);
+  const historyProtection = useHistoryProtection();
   const history = useQuery({queryKey:['history',me?.account],enabled:!blocked && Boolean(me),queryFn:({signal}) => requestJson('/api/history/status',{signal})});
   const writable = Boolean(me) && !blocked && !needsRead && Boolean(state.data) && !state.isError;
   const category: Category = tab === 'monthly' ? 'monthly' : 'zero';
@@ -181,7 +183,9 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     setConfirmation(null);if(await refresh())setMessage('已确认勾选金额的有效月值。');
   }
   async function replay(direction:'undo'|'redo'){
+    const reason = exportGuard || historyProtection(); if (reason) throw new Error(reason);
     const status=await requestJson('/api/history/status');
+    const currentReason = exportGuard || historyProtection(); if (currentReason) throw new Error(currentReason);
     const item=typeof status==='object'&&status!==null ? (status as Record<string,unknown>)[direction] : null;
     if(!item||typeof item!=='object'||!('id' in item))return;
     await requestJson('/api/history/'+direction,{method:'POST',...body({operation_id:item.id})});
@@ -191,7 +195,8 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const historyData=typeof history.data==='object'&&history.data!==null ? history.data as Record<string,unknown> : {};
   const internalTargets=[...internalDrafts.current.values()].filter(d=>d.ym===ym&&warehouses.includes(d.warehouse));
   const internal:InternalEditing={epoch:internalEpoch,writable,value:(id,column)=>internalDrafts.current.get(JSON.stringify([id,ym]))?.values[column],change:(id,column,value)=>{const key=JSON.stringify([id,ym]),warehouse=candidates.find(p=>String(p.id)===id)?.warehouse_name;if(!warehouse)return;const old=internalDrafts.current.get(key);internalDrafts.current.set(key,{warehouse,ym,values:{...old?.values,[column]:value}});render(n=>n+1);}};
-  const historyControls=<div className="ledger-tools">{(['undo','redo'] as const).map(direction=><button key={direction} disabled={!writable||writing||(drafts.current.size>0||internalDrafts.current.size>0)||!historyData[direction]} title={drafts.current.size||internalDrafts.current.size?'请先保存或撤销未保存修改':typeof historyData.notice==='string'&&historyData.notice?historyData.notice:direction==='undo'?'暂无可撤销的操作':'暂无可重做的操作'} onClick={()=>void operate(()=>replay(direction))}>{direction==='undo'?'撤销':'重做'}</button>)}</div>;
+  const historyReason = exportGuard || historyProtection();
+  const historyControls=<div className="ledger-tools">{(['undo','redo'] as const).map(direction=><button key={direction} disabled={!writable||writing||Boolean(historyReason)||(drafts.current.size>0||internalDrafts.current.size>0)||!historyData[direction]} title={historyReason || (drafts.current.size||internalDrafts.current.size?'请先保存或撤销未保存修改':typeof historyData.notice==='string'&&historyData.notice?historyData.notice:direction==='undo'?'暂无可撤销的操作':'暂无可重做的操作')} onClick={()=>void operate(()=>replay(direction))}>{direction==='undo'?'撤销':'重做'}</button>)}</div>;
   const error = projects.error || state.error || report.error;
   return <section className="mechanical-card" aria-labelledby="page-title"><div className="mechanical-toolbar">
     {active && document.getElementById('history-controls') && createPortal(historyControls,document.getElementById('history-controls')!)}

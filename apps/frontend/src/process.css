@@ -1,0 +1,16 @@
+.process-page { min-width:0; }
+.process-toolbar,.process-toolbar>div,.process-status,.process-export-tools { display:flex; align-items:center; gap:calc(10px * var(--fscale)); flex-wrap:wrap; }
+.process-toolbar { justify-content:space-between; margin-bottom:calc(12px * var(--fscale)); }
+.process-toolbar label { display:flex; align-items:center; gap:8px; }
+.process-grid { height:calc(100vh - 260px * var(--fscale)); min-height:320px; width:100%; }
+.process-grid .ag-row-pinned { font-weight:600; background:var(--sf2); }
+.process-grid .process-segment { border-inline-start:2px solid var(--bd); }
+.process-cell { display:flex; flex-direction:column; gap:3px; width:100%; padding-block:4px; }
+.process-cell .ant-input { text-align:right; font-variant-numeric:tabular-nums; }
+.process-cell small { font-size:inherit; line-height:1.2; color:var(--tx2); }
+.process-cell .ant-btn { align-self:flex-end; }
+.process-dirty .ant-input,.process-grid .process-adjusted { background:var(--pri-l); }
+.process-status { min-height:calc(36px * var(--fscale)); margin-bottom:8px; }
+.process-totals { display:flex; flex-wrap:wrap; gap:calc(20px * var(--fscale)); padding:calc(12px * var(--fscale)); background:var(--sf2); font-weight:600; font-variant-numeric:tabular-nums; }
+.process-source-dialog,.process-export-dialog { width:min(calc(560px * var(--fscale)),calc(100vw - 48px)); max-height:calc(100vh - 72px); overflow:auto; padding:calc(20px * var(--fscale)); }
+.process-export-projects { display:flex; flex-direction:column; gap:10px; max-height:44vh; overflow:auto; margin-block:16px; }
