@@ -22,7 +22,7 @@
    ⇒ 那条口径的**机器化落点就是 `uq_jc_payment_notice`**；⚠️ SQLite / PG 都允许多个 `NULL`
    （手工录入的付款没有通知书 id ⇒ 不参与去重）。
 
-`method`仅保留历史数据库兼容；2026-10-14用户取消集采付款方式独立列，统一填写备注。
+`method`仅保留历史数据库兼容；新约定使用payment_term/payment_method，不转换旧自由文本。
 
 ⚠️ **`project_id` 必有**：§6.4.1「合同**必有**项目（抓取回来的必带）⇒ **不存在"为空"**」
    ⇒ `nullable=False` ＋ **命名外键**（迁移纪律：无名外键会让 `downgrade()` 必失败）。
@@ -120,6 +120,8 @@ class JcContract(Base):
     #:    512 = 实测 95 字的 5 倍余量（付款条款只会更长、不会更短）。
     #:    ⚠️ 判据 `ACC-JC-UI-001/001-12`（三列可手改并落值）也管这一列 ⇒ 装不下就是**落值失败**。
     method: Mapped[str] = mapped_column(String(512), default="")                        # 历史兼容字段，不再提供录入、显示或导入
+    payment_term: Mapped[str] = mapped_column(String(32), default="", server_default="")
+    payment_method: Mapped[str] = mapped_column(String(16), default="", server_default="")
     remark: Mapped[str] = mapped_column(String(255), default="")                        # 备注（手工）
     project_id: Mapped[int] = mapped_column(
         # ⚠️ 外键**必须命名**（迁移纪律）；⛔ 不随项目级联删：合同是业务事实，

@@ -295,6 +295,15 @@ class BatchPayIn(BaseModel):
     request_id: str = ""
 
 
+@api_router.post("/api/m03/payment-context")
+def api_payment_context(req: BatchPayIn, session: Session = DBSession) -> dict:
+    from app.mod03_notice.notice_pay_actions import payment_context
+    try:
+        return payment_context(session, ids=req.ids, pay_date=req.pay_date)
+    except MustReportError as exc:
+        return {"ok": False, "message": exc.message}
+
+
 @api_router.post("/api/m03/actions/batch-pay")
 def api_batch_pay(req: BatchPayIn, session: Session = DBSession) -> dict:
     """**批量付款**（§4.4.4）—— 整批重算，任一不过 ⇒ **整批不产生任何流水**（不落半批）；

@@ -11,7 +11,7 @@
 - **§6.6.2** —— 付款引用：**全库去重** · **一对一** · ⚠️ **不做金额校验**（不一致**只提示、不拦截**）；
 - **§2.7.4** —— 项目**候选键 = 仓库名**（比较 / 筛选一律用它）。
 
-[用户2026-10-14] 集采付款方式独立列已取消，统一填写备注；付款域的实际付款方式不受影响。
+[用户2026-10-23] 账期与合同付款方式独立维护，其余条件保留备注；旧method仅作历史兼容。
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from itertools import combinations
 import re
 from typing import Any
 
+from app.mod05_flow.models import PAY_METHODS
 from app.core.money import amount_text            # ⭐ `TAIL-63`：金额洗净的唯一出口
 from app.mod11_jc.models import (
     KIND_SUPPLIER,
@@ -58,6 +59,8 @@ JC_COLUMNS: tuple[dict[str, Any], ...] = (
     {"key": "settle", "label": "结算金额（自动）", "export_label": "结算金额", "type": "num"},    # 系统自动算
     {"key": "pay_sum", "label": "付款金额", "type": "num"},           # = 付款子表合计（派生）
     {"key": "debt", "label": "欠款金额（自动）", "export_label": "欠款金额", "type": "num"},      # 系统自动算
+    {"key": "payment_term", "label": "账期", "type": "text"},
+    {"key": "payment_method", "label": "合同付款方式", "type": "text"},
     {"key": "remark", "label": "备注", "type": "text"},
     {"key": "tag", "label": "三态", "type": "tag"},
     {"key": "arch", "label": "合同存档情况", "type": "tag"},
@@ -332,3 +335,55 @@ def recommend_link(*, amount, title, contract_no, trade_co, invoices, linked_not
                             'notice_codes': [n['code'] for n in linked_notices]})
     return {'reasons': reasons, 'invoice_side': side,
             'combination_limited': len(rows) > 12}
+
+
+def normalize_payment_term(raw) -> str:
+    if raw is None or raw == "":
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError("账期请填写 x±y天，例如90±10天")
+    value = re.fullmatch(r"\s*([0-9]+)\s*(?:±\s*([0-9]+)\s*)?天?\s*", raw)
+    if not value or len(raw) > 32:
+        raise ValueError("账期请填写非负整数 x±y天，例如90±10天")
+    result = f"{int(value[1])}±{int(value[2] or 0)}天"
+    if len(result) > 32:
+        raise ValueError("账期过长，请核对天数")
+    return result
+
+
+def normalize_payment_fields(fields: dict) -> dict:
+    result = dict(fields)
+    if "payment_term" in result:
+        result["payment_term"] = normalize_payment_term(result["payment_term"])
+    if "payment_method" in result:
+        method = result["payment_method"]
+        if not isinstance(method, str) or method.strip() not in ("", *PAY_METHODS):
+            raise ValueError("合同付款方式请选择现汇、承兑、供应链或其他；未约定可留空")
+        result["payment_method"] = method.strip()
+    return result
+
+
+def payment_term_warning(*, payment_term, trade_co, invoices, debt, pay_date):
+    from datetime import date
+    if not payment_term or Decimal(str(debt)) <= 0 or not pay_date:
+        return None
+    term = normalize_payment_term(payment_term)
+    base, margin = term.removesuffix("天").split("±")
+    maximum = int(base) + int(margin)
+    day = date.fromisoformat(pay_date)
+    side = KIND_TRADE if str(trade_co or "").strip() else KIND_SUPPLIER
+    evidence = []
+    for invoice in invoices:
+        if invoice["kind"] != side:
+            continue
+        try:
+            start = date.fromisoformat(invoice["date"])
+        except (ValueError, TypeError):
+            continue
+        if (day - start).days <= maximum:
+            last = start.toordinal() + maximum
+            evidence.append({"invoice_id": invoice["id"], "invoice_date": start.isoformat(),
+                             "remind_through": date.fromordinal(last).isoformat() if last <= date.max.toordinal() else None})
+    return ({"message": "该合同存在未满账期的发票，请核对本次付款", "payment_term": term,
+             "max_days": maximum, "pay_date": day.isoformat(), "invoice_side": side, "invoices": evidence}
+            if evidence else None)

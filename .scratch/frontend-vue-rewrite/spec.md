@@ -375,3 +375,18 @@
 - [Vite TypeScript 支持](https://vite.dev/guide/features.html#typescript)：代码转换与类型检查分开；具体 Vite/React 插件版本在获准的首批工程中核定。
 - [pnpm 官方 npm latest 元数据](https://registry.npmjs.org/pnpm/latest)：本次版本为 12.14.0，作为本轮包管理补充建议；没有执行安装。
 - [pnpm 包声明与版本固定](https://pnpm.io/package_json)、[冻结锁文件安装](https://pnpm.io/cli/install) 及 [内容寻址 store](https://pnpm.io/motivation)：固定包管理器、可复现依赖和工作副本间缓存复用的依据。
+
+
+### 阶段2A：后端付款契约
+
+本次有界接入技术完成，已通过真实隔离API/PG验证35项及固定范围独立Standards/Spec审查；本地保存、不push/部署。基点为ad59bf03760da2791b616d212c392db5655c3303，来源生产仓master（本机无main引用）固定a8004d605b409d70ba5e255e2218d7d2c530368d；不整包合并。范围为MOD11合同payment_term/payment_method的模型、列表/详情/新增/字段更新、校验与重抓保护，MOD03只读payment-context及batch-pay缺省方式统一。端点、错误和日期依据见[唯一接口说明](../../docs/reference/jc-payment-contract.md)。保留React既有batch-pay flows回执、notice-list/payment-preview字段和暂停C原hunk；不带入Excel核对、备注批迁移、旧壳代码或新React UI。
+
+迁移c432261023仅新增两个空默认非空字段，保持main原父c391261021与原件字节一致；空合并节点c2a261023汇合它与本分支c419261022，保持单head。从生产已有c432或重构已有c419升级都能补齐另一条前置链，避免重写已发布revision父节点。只在mtrl_workbench_test/mtrl自有合成schema实际upgrade并验证；生产、public、8037原schema及8041未迁移。2D不得直接向8037旧schema调用新模型，须用后续新建的专用schema升级到c2a261023后验证。未确认的备注账期、发票来源/真实日期不能被UI推断为准确应付款日；接口没有可信度等级、到期可付额或付款分摊。
+
+**2D消费。** 打开付款窗口按ids与当前pay_date读取POST /api/m03/payment-context；只将返回默认用于未手改方式，日期变更只刷新提醒、按notice_id匹配黄底；保留手改方式/金额及排序/移除后的行身份。提交前按最新日期重读，非空提醒可再次确认并继续原batch-pay；原金额/状态/幂等/事务校验不变。仅404允许回退为旧计划/现汇并明确“账期提醒暂未启用，请按合同人工核对”；认证、网络与服务器错误须显示失败、可重试，不能冒充无提醒。contract_id用于合同材料名反查，payment-context不返回材料名：当前React尚无MOD11完整台账，2D可用现有GET /api/m11/detail?id取material并处理缺失/失败，完整合同页往返依赖阶段3，不能用假页面顶替。
+
+**用户最新界面参考。** 用户2026-10-23要求“界面参考我最新改好的”。已重新只读核生产仓HEAD/未提交差异：HEAD仍a8004d6，工作区与索引干净；相关最新提交时间2026-10-23T16:55:56+08:00。实际http://127.0.0.1:8000/app返回200；actions.js、pages-b.js、api.js、core.js四个实际HTTP资源与磁盘哈希逐项一致。此证据是已服务源码核对，没有登录或模拟真实业务点击，也不冒称截图视觉验收。后续UI实施前仍核当时最新来源，不以本次快照覆盖用户后改。 最终收尾时master外部推进到94c0021cb26446a338dfe694102298181e0c882e（2026-10-23T22:08:09+08:00），仅5件文档导航/状态收敛；已读相关guidance增量，付款契约、迁移及上述UI源码与固定a8004d6无差异。未合并该文档整包，不把外部推进误记为本任务改动。
+
+main当前布局：合同主表在备注前为账期文本框（宽110px、无占位示例）及合同付款方式选择（空值“未约定”，候选来自后端）；新增合同同款字段。付款弹窗主表上部内滚（44vh），九列为单据号/付款项目/审批状态/审批金额/已付金额/本次应付/付款方式/本次付款金额/操作，底部保持应付与实付合计；下方并排付款日期/本批备注，再按条件显示“未满账期 · 可继续付款”的黄色提醒块。六列是付款项目/合同材料名/本条付款金额/发票日期/账期/提醒截止；按通知书分组，同合同多通知书分开、多发票逐行保留日期，金额随本次草稿即时变。无提醒不显示块；日期重读同步行黄底，不覆手改，异步过期响应丢弃；移除同步取消勾选，取消清本批草稿。最终确认重读并对未满账期二次确认，所有实付仍走原batch-pay。现有React/AntD基础承接这些行为，2A没有改页面。
+
+验证复用main的合同字段与context API/PG测试、原audit_payment_contract及jc_domain；新增一个只读/去重顺序/未知ID省略/未关联fallback的契约测试。全部在自有schema运行；迁移合并节点补正后再次验证来源c432/重构c419两条已有路径并复验35项。最终从暂存树导出仅后端/既有工具的快照，排除C/409后35 passed（4.21s），11件后端源与暂存内容仅有仓库CRLF导出转换，逐项归一化比较一致。首次因ASGI虚拟地址不在预览IP白名单返回403，调整测试进程dev环境后通过；快照首轮缺少无需使用的前端dist导致收集失败，清空该测试进程FRONTEND_PREVIEW_DIR后通过，未改产品闸或断言。Standards的旧验收元数据发现已修复且定向关闭：既有合同/批付用例更新判词和测试来源，不增case/point，不恢复退役装饰器；Spec原范围及追加元数据均独立复核。迁移拓扑增量亦已获原Standards/Spec审查者定向复核通过。语法、字节及git diff --check均退出0；真实提交钩子在本地提交时执行。原始日志和开工/收尾保护哈希归本机task-23的.artifacts/archive/frontend-vue-rewrite/phase2a/reports；不修改已有共享脏evidence/handoff。2A技术通过不代表2D/UI人工验收或正式加载；本轮不push/部署、不启2B/2C/2D写者。
