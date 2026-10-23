@@ -32,3 +32,11 @@
 **2026-10-23 · 保存。** 实现提交3b3c5a7，真实提交钩子通过；本票完成时仅保存功能分支，推送结果在最终回执统一核实。最终迁移预览SHA256=bda468c6f21ad7369a3276e44d6ab2375e906631503f35fb75b582337af22d2b。
 
 **2026-10-23 · 保存与累计收尾。** 本票实现3b3c5a7；后续433 d9d92e9、404修复8881fc0、434及累计审查修复48a4323241886b90014c384b5a04497305585d66已推送origin/codex/jc-payment-terms，ls-remote与本地SHA一致。最终101项累计选集通过；实际265条备注对照仍仅预览，正式字段/备注迁移与后端重启未执行。
+
+**2026-10-23 · 正式迁移与部署（用户授权）。** 用户明确要求“执行正式迁移和部署，然后把29条备注迁移前后对照直接列在正文里”。本轮执行字段迁移和部署；备注业务写入仍须对照确认，未执行_jc_payment_terms.py --apply。工作区干净，远端master为ef19454且为功能分支祖先，已快进到已验收77f5b20，未操作重构工作树/8037。
+
+正式库mtrl_workbench与测试库mtrl_workbench_test的public schema从c391261021升级c432261023，两次upgrade与两次alembic check均退出0，新增字段结构一致。迁移前后jc_contract265、jc_invoice300、jc_payment277、payment_notice1193、payment_flow506条的原字段内容指纹完全一致；仅新增空默认payment_term/payment_method，不修改备注/金额/流水/发票日期。其他Agent schema不在search_path中。
+
+正式服务经ops/server_ctl.ps1 stop→start加载：NSSM PID8044→28440，后端PID9196→26796；/healthz、/app、/openapi.json均200，新payment-context路径已登记；未登录调用401，沿现有正常登录会话的快照已含jc_contract上下文。另开验收标签，FKTZS2026060313审批10000、已付5000、本次应付5000，付款窗口正常且无旧接口未启用提示，随后点取消并关闭验收标签，未确认付款。api/actions/pages-b三份正式静态文件与源码逐字节一致，用户原页面未重载。真实写入与i8抓取未执行。
+
+实际265条合同只读重核后，原29条备注建议及目标指纹与已交付预览完全一致，将在本轮正文逐条列示。该清单尚未得到确认，不执行备注回写。迁移/结构/原值指纹与窗口截图证据按本轮jc-payment-terms/20261023-deployment留存，后续归本机30日验收归档。
