@@ -16,7 +16,7 @@
 
 `POST /api/m03/payment-context`，请求`{"ids":[通知书id],"pay_date":"YYYY-MM-DD"}`；只读事实，返回`ok/pay_date/rows`，rows按去重后的请求顺序，未知ID省略。每行有`notice_id/default_pay_method/default_pay_method_source/term_warning`；来源为`plan`、`contract`或`fallback`。无关联合同时不带合同字段，默认仍按计划／现汇。
 
-有关联合同时带`contract_id/contract_no/payment_term/contract_payment_method`。`term_warning`为空表示本次无需提醒；非空包含`message/payment_term/max_days/pay_date/invoice_side/invoices`，invoices逐条包含`invoice_id/invoice_date/remind_through`。`invoice_side`为supplier或trade；异常大账期超出可表达日期范围时remind_through为空，max_days仍保留完整依据。仅返回未满账期的相关日期，不推断付款分摊或到期可付额。
+有关联合同时带`contract_id/contract_no/payment_term/contract_payment_method`。`term_warning`为空表示本次无需提醒；非空包含`message/payment_term/max_days/pay_date/invoice_side/invoices`，invoices逐条包含`invoice_id/invoice_date/remind_through`。`invoice_side`为supplier或trade；异常大账期超出可表达日期范围时remind_through为JSON null，max_days仍保留完整依据。仅返回未满账期的相关日期，不推断付款分摊或到期可付额。
 
 main 的旧付款窗口打开时读取默认；未满账期的通知书整行黄底，下方按通知书逐条展示付款项目、合同材料名、本条付款金额、发票日期、账期、提醒截止，并标明可继续付款。同合同多张通知书分别展示；材料名按合同id取已加载的集采台账，金额及窗口合计随当前付款草稿即时更新，多张相关发票逐行保留日期。日期变化按notice_id同步更新行标记与日期依据，排序或刷新提醒不覆盖手改方式和金额。最终按当前日期重读并可继续确认提醒，所有实际付款仍走原batch-pay端点；该端点缺省方式也按同一后端优先级取值。未增加数据库迁移或实际流水字段。
 
@@ -26,4 +26,6 @@ main 的旧付款窗口打开时读取默认；未满账期的通知书整行黄
 
 `remind_through` 是录入发票日期加最大账期的提醒截止，不能标为准确应付款日。来源接口没有可信度等级、开票来源核验或到期可付额；不解析备注来猜账期。无法解析的发票日期跳过；空提醒只说明本次规则没有返回提醒，不证明日期真实或合同可付。金额、准入、幂等和事务仍由原 batch-pay 校验。
 
-迁移只允许在明确的专用测试 schema 验证；原8037预览仍使用旧模型/旧schema，未加载本契约。后续2D验证需新建自有schema并升级到c2a261023，不能直接给8037旧schema升级。通知书列表、payment-preview及batch-pay的既有React响应字段保留；本端点不写草稿、关联或流水。
+迁移只允许在明确的专用测试 schema 验证；原8037预览仍使用旧模型/旧schema，未加载本契约。2D已在新自有schema升级到c2a261023验证并清理，后续验收仍需明确目标schema并升级到c2a261023，不能直接给8037旧schema升级。通知书列表、payment-preview及batch-pay的既有React响应字段保留；本端点不写草稿、关联或流水。
+
+React阶段2D已按上述契约接入付款窗口，状态与证据回[阶段2D](../../.scratch/frontend-vue-rewrite/spec.md#阶段2d付款预检接线与阶段2验收范围)。默认只初始化未手改方式，改期不重置金额/备注/方式，最终确认先重读；404明确人工核对，其他错误阻止继续并可重试。材料名读取失败单独提供重读，不冒充已获取材料或完整合同页；付款成功后列表重读失败与未知提交结果分别表述。
