@@ -70,6 +70,7 @@ def api_list(request: Request) -> dict:
         "projects": list(data["projects"] or []),
         # 三态取值域（壳的筛选下拉与批量标记按钮都用它 ⇒ ⛔ 别在壳里另抄一份）
         "tags": list(D.TAGS),
+        "payment_methods": list(D.PAY_METHODS),
     }
 
 
@@ -123,6 +124,8 @@ class AddIn(BaseModel):
     trade_contract_amt: str | None = None
     tag: str = ""                     # 留空 ⇒ 服务层按「手工新增 = 纳入台账」填（判据 `001-07`）
     remark: str = ""
+    payment_term: str = ""
+    payment_method: str = ""
 
 
 class FetchIn(BaseModel):

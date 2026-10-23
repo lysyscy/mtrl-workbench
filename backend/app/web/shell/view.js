@@ -413,6 +413,7 @@ function layoutTables(){
   document.querySelectorAll('#view '+FIT_TABLES.split(',').join(',#view ')).forEach(layoutTable);
 }
 function fitWideTable(table){
+  const jc=table.dataset.sortKey==='m11:jc';
   const rows=[...table.tBodies].flatMap(body=>[...body.rows]);
   const row=rows.find(r=>r.cells.length>=10&&[...r.cells].every(c=>c.colSpan===1)) || table.tHead?.rows[0];
   if(!row) return;
@@ -426,6 +427,7 @@ function fitWideTable(table){
   const widths=[...row.cells].map((cell,i)=>{
     if(getComputedStyle(cell).display==='none') return 0;
     if(cell.querySelector('input[type=checkbox]')) return 28;
+    if(jc&&cell.querySelector('[data-act="jcPaymentField"]')) return 120*scale;
     if(i===1&&/^\d+$/.test(cell.textContent.trim())) return 38;
     if(i===0) return table.matches('[data-sort-key="m08:invoices"],.process-matrix,.flow-table')?130*scale:table.dataset.sortKey==='m07:kinds'?76*scale:38;
     if(cell.classList.contains('num')||cell.querySelector('input.num')) return 72*scale;
@@ -456,7 +458,7 @@ function fitWideTable(table){
   widths.forEach((width,i)=>{if(width)widths[i]=Math.max(width,previous?.[i]||0);});
   table._fitScale=scale;table._fitWidths=[...widths];
   // Measured amounts, dates and identifiers keep their width; other text can wrap.
-  const floors=widths.map((width,i)=>numbers.has(i)?width:Math.min(width,
+  const floors=widths.map((width,i)=>numbers.has(i)||(jc&&row.cells[i].querySelector('[data-act="jcPaymentField"]'))?width:Math.min(width,
     (row.cells[i].matches('.nt-title,.nt-supplier,.jc-supplier')?140:60)*scale));
   const preferred=widths.reduce((a,b)=>a+b,0), minimum=floors.reduce((a,b)=>a+b,0);
   const available=table.closest('.tw')?.clientWidth||preferred;

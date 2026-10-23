@@ -1718,6 +1718,7 @@ async function reloadM11() {
   const cols = (d.columns || []).map(c => ({key: String(c.key || ''), label: String(c.label || ''),
                                             type: String(c.type || 'text')}));
   JC_COLUMNS.length = 0; cols.forEach(c => JC_COLUMNS.push(c));
+  JC_PAYMENT_METHODS.splice(0, JC_PAYMENT_METHODS.length, ...(d.payment_methods || []));
   JC_SUM_KEYS.splice(0, JC_SUM_KEYS.length, ...(d.sum_keys || []));
   JCs.length = 0;                       /* ⚠️ **原地**替换（`JCs` 是 `const` ⇒ 只许改内容；同 `LGs` 的教训）。
                                            理由：`JCs` **跨页共享** —— 整支换引用会让 `JC_PROJ_LIST` 等派生量失效。 */

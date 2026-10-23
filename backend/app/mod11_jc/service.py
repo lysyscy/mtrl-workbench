@@ -193,6 +193,8 @@ def build_detail(s: Session, contract_id: int) -> dict | None:
         "contract_amt": c.contract_amt,
         "trade_co": c.trade_co,
         "trade_contract_amt": c.trade_contract_amt,
+        "payment_term": c.payment_term,
+        "payment_method": c.payment_method,
         "remark": c.remark,
         "tag": c.tag,
         "arch": c.arch,
@@ -240,6 +242,10 @@ def act_add_contract(s: Session, *, project_id: int, **fields) -> dict:
 
     ⚠️「取消不入库」= 前端**不调本接口**（本接口一旦被调用就落库）⇒ 本层⛔ 没有"草稿态"。
     """
+    try:
+        fields = D.normalize_payment_fields(fields)
+    except ValueError:
+        return {"ok": False, "kind": "err", "message": "账期请填写非负整数 x±y天，合同付款方式请选择候选值"}
     tag = D.normalize_tag(fields.pop("tag", None) or DEFAULT_TAG_ON_CREATE)
     row = R.insert_contract(s, project_id=int(project_id), tag=tag, **fields)
     return {"ok": True, "kind": "ok", "id": int(row.id), "tag": tag,
@@ -280,7 +286,11 @@ def act_update_contract(s: Session, *, contract_id: int, **cols) -> dict:
     ⚠️ 白名单在 `repository.EDITABLE_COLS`（三态**不在其中** ⇒ 它走 `act_set_tag`）。
     """
     if "method" in cols:
-        return {"ok": False, "kind": "err", "message": "付款方式列已取消，请填写备注"}
+        return {"ok": False, "kind": "err", "message": "旧付款条件字段已停用，请填写账期和合同付款方式"}
+    try:
+        cols = D.normalize_payment_fields(cols)
+    except ValueError:
+        return {"ok": False, "kind": "err", "message": "账期请填写非负整数 x±y天，合同付款方式请选择候选值"}
     if not R.update_contract(s, contract_id, **cols):
         return {"ok": False, "kind": "err", "message": f"找不到合同 {contract_id}"}
     return {"ok": True, "kind": "ok", "id": int(contract_id), "message": "已保存"}

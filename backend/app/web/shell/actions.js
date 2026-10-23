@@ -2026,6 +2026,10 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
    const v=String(t.value==null?'':t.value).trim();
    await jcAct(()=>API.m11Fields({id:j.id, fields:{ret_date:v}}),
      `合同 <b>${j.id}</b> 寄回日期已保存${v?`：<b>${esc(v)}</b>`:'（已清空）'}`); },
+ jcPaymentField:async t=>{
+   const j=JCs.find(x=>x.id===t.dataset.id);if(!j) return;
+   await jcAct(()=>API.m11Fields({id:j.id,fields:{[t.dataset.k]:t.value}}), '合同付款约定已保存');
+ },
  jcRemark:async t=>{ const j=JCs.find(x=>x.id===t.dataset.id); if(!j) return;
    const v=String(t.value==null?'':t.value).trim();
    await jcAct(()=>API.m11Fields({id:j.id, fields:{remark:v}}),
@@ -2222,6 +2226,7 @@ jcFetchOk:async()=>{ const el=$('#jcFetchSince');
        material_name:String(jcND.material||'').trim(), supplier:String(jcND.supplier||'').trim(),
        contract_amt:String(amt), trade_co:String(jcND.tradeCo||'').trim()||null,
        trade_contract_amt:(tAmt===''?null:String(tAmt)),
+       payment_term:jcND.payment_term||'',payment_method:jcND.payment_method||'',
        remark:(jcND.history?JC_HISTORY_PREFIX+jcND.cutoff+'；':'')+String(jcND.remark||'').trim()}),
      x=>`已新增集采合同 <b>#${x.id}</b>（${esc(pjLabel(jcND.pj))} · ${esc(String(jcND.material||'').trim()||'（未填材料名）')}）—— 三态默认 <b>${esc(x.tag||'纳入台账')}</b><br><span class="mut sm">发票 / 付款金额请在该行「子表」里录入</span>`);
    if(r){

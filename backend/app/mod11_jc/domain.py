@@ -11,7 +11,7 @@
 - **§6.6.2** —— 付款引用：**全库去重** · **一对一** · ⚠️ **不做金额校验**（不一致**只提示、不拦截**）；
 - **§2.7.4** —— 项目**候选键 = 仓库名**（比较 / 筛选一律用它）。
 
-[用户2026-10-14] 集采付款方式独立列已取消，统一填写备注；付款域的实际付款方式不受影响。
+[用户2026-10-23] 账期与合同付款方式独立维护，其余条件保留备注；旧method仅作历史兼容。
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from itertools import combinations
 import re
 from typing import Any
 
+from app.mod05_flow.models import PAY_METHODS
 from app.core.money import amount_text            # ⭐ `TAIL-63`：金额洗净的唯一出口
 from app.mod11_jc.models import (
     KIND_SUPPLIER,
@@ -58,6 +59,8 @@ JC_COLUMNS: tuple[dict[str, Any], ...] = (
     {"key": "settle", "label": "结算金额（自动）", "export_label": "结算金额", "type": "num"},    # 系统自动算
     {"key": "pay_sum", "label": "付款金额", "type": "num"},           # = 付款子表合计（派生）
     {"key": "debt", "label": "欠款金额（自动）", "export_label": "欠款金额", "type": "num"},      # 系统自动算
+    {"key": "payment_term", "label": "账期", "type": "text"},
+    {"key": "payment_method", "label": "合同付款方式", "type": "text"},
     {"key": "remark", "label": "备注", "type": "text"},
     {"key": "tag", "label": "三态", "type": "tag"},
     {"key": "arch", "label": "合同存档情况", "type": "tag"},
@@ -332,3 +335,53 @@ def recommend_link(*, amount, title, contract_no, trade_co, invoices, linked_not
                             'notice_codes': [n['code'] for n in linked_notices]})
     return {'reasons': reasons, 'invoice_side': side,
             'combination_limited': len(rows) > 12}
+
+
+def normalize_payment_term(raw) -> str:
+    if raw is None or raw == "":
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError("账期请填写 x±y天，例如90±10天")
+    value = re.fullmatch(r"\s*([0-9]+)\s*(?:±\s*([0-9]+)\s*)?天?\s*", raw)
+    if not value or len(raw) > 32:
+        raise ValueError("账期请填写非负整数 x±y天，例如90±10天")
+    result = f"{int(value[1])}±{int(value[2] or 0)}天"
+    if len(result) > 32:
+        raise ValueError("账期过长，请核对天数")
+    return result
+
+
+def normalize_payment_fields(fields: dict) -> dict:
+    result = dict(fields)
+    if "payment_term" in result:
+        result["payment_term"] = normalize_payment_term(result["payment_term"])
+    if "payment_method" in result:
+        method = result["payment_method"]
+        if not isinstance(method, str) or method.strip() not in ("", *PAY_METHODS):
+            raise ValueError("合同付款方式请选择现汇、承兑、供应链或其他；未约定可留空")
+        result["payment_method"] = method.strip()
+    return result
+
+
+def remark_payment_proposal(*, remark, payment_term="", payment_method="") -> dict:
+    """只迁移独立、明确的片段；冲突或模糊文本原样保留。"""
+    parts = re.split(r"([，,；;、\n]+)", remark or "")
+    candidates = {"payment_term": [], "payment_method": []}
+    for index in range(0, len(parts), 2):
+        token = parts[index].strip()
+        if re.fullmatch(r"[0-9]+\s*(?:±\s*[0-9]+\s*(?:天(?:内)?)?|天(?:内)?)", token):
+            candidates["payment_term"].append((index, normalize_payment_term(token.removesuffix("内"))))
+        methods = {"银行承兑": "承兑", "银承": "承兑", **{m: m for m in PAY_METHODS}}
+        if token in methods:
+            candidates["payment_method"].append((index, methods[token]))
+    result = {"payment_term": payment_term or "", "payment_method": payment_method or "", "remark": remark or ""}
+    remove = set()
+    for key, matches in candidates.items():
+        values = {value for _, value in matches}
+        if len(values) == 1 and not result[key]:
+            result[key] = next(iter(values))
+            remove.update(index for index, _ in matches)
+    if remove:
+        kept = [i for i in range(0, len(parts), 2) if i not in remove and parts[i].strip()]
+        result["remark"] = "".join((parts[i-1] if n else "") + parts[i] for n, i in enumerate(kept)).strip()
+    return result

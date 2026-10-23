@@ -27,7 +27,7 @@
 | `tag` 三态 | 只做归一：人工「不纳入」**保留**（`:436-438`） | 专门出口 `set_tag` |
 | `contract_amt` 合同金额（供应商价） | 正常甲方刷新；**贸易公司甲方时绝不自动动**（`:420-435`） | ⛔ **不能改**（界面无入口） |
 | `trade_co` / `trade_contract_amt` | 贸易公司合同**首次写**（甲方名 / i8 那个价） | ⛔ 不能改 |
-| 5列 `remark/arch/arch_no/ret_date` ＋ 材料名 | ⛔ 不碰（人的地盘） | ✅ 能改（`EDITABLE_COLS` = 上述可编辑列） |
+| 人工列 `payment_term/payment_method/remark/arch/arch_no/ret_date` ＋ 材料名 | ⛔ 不碰（人的地盘） | ✅ 能改（`EDITABLE_COLS` = 上述可编辑列） |
 
 合同日期保护由 `backend/app/mod11_jc/repository.py` 执行，判据为 `backend/tests/test_jc_contract_date_lock.py` 与 `backend/tests/check_jc_contract_date_transaction.py`；TAIL-313的90条审核修正及恢复证据回原票。锁定日期是已批准的专项修正范围，不扩大为全部i8事实字段可手改。
 
