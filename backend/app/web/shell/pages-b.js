@@ -409,10 +409,12 @@ const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;g
 
 function payTermsHtml(rows,available=true){
   if(available===false) return '<div class="tip">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</div>';
-  const contracts=new Map(rows.filter(r=>r.term_warning).map(r=>[r.contract_id,r]));
-  if(!contracts.size) return '';
-  return `<section class="pay-term-note" aria-label="账期提醒"><div class="pay-term-heading"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 19 18H1Z"/><path d="M10 7v5m0 3v.1"/></svg><b>未满账期</b><span>可继续付款</span></div><table class="pay-term-details"><thead><tr><th>合同</th><th>账期</th><th>发票日期</th><th>提醒截至</th></tr></thead><tbody>${[...contracts.values()].map(r=>{
-    const w=r.term_warning;
-    return w.invoices.map((i,index)=>`<tr>${index?'':`<td rowspan="${w.invoices.length}">${esc(r.contract_no||String(r.contract_id))}</td><td rowspan="${w.invoices.length}">${esc(w.payment_term)}</td>`}<td><time>${esc(i.invoice_date)}</time></td><td><time>${esc(i.remind_through||'日期范围以外')}</time></td></tr>`).join('');
+  const warnings=rows.filter(r=>r.term_warning);
+  if(!warnings.length) return '';
+  return `<section class="pay-term-note" aria-label="账期提醒"><div class="pay-term-heading"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 19 18H1Z"/><path d="M10 7v5m0 3v.1"/></svg><b>未满账期</b><span>可继续付款</span></div><table class="pay-term-details"><thead><tr><th>付款项目</th><th>合同材料名</th><th class="num">本条付款金额</th><th>发票日期</th><th>账期</th><th>提醒截止</th></tr></thead><tbody>${warnings.map(r=>{
+    const w=r.term_warning, id=String(r.notice_id), n=NO.find(n=>n.id===id);
+    const j=JCs.find(j=>j.id===String(r.contract_id)), count=w.invoices.length;
+    const amount=n&&!ntPayBlock(n)?numOf(payDraft[id]?.a??payEff(n)):NaN;
+    return w.invoices.map((i,index)=>`<tr${index?'':' class="pay-term-start"'}>${index?'':`<td rowspan="${count}">${n?dispCell(n.proj,n):'—'}</td><td rowspan="${count}">${esc(j?.material||'—')}</td><td rowspan="${count}" class="num" data-pay-term-amount="${esc(id)}"><b>${Number.isFinite(amount)?M(amount):'—'}</b></td>`}<td><time>${esc(i.invoice_date)}</time></td>${index?'':`<td rowspan="${count}" class="now">${esc(w.payment_term)}</td>`}<td><time>${esc(i.remind_through||'日期范围以外')}</time></td></tr>`).join('');
   }).join('')}</tbody></table></section>`;
 }

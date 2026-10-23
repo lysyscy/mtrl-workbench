@@ -514,7 +514,7 @@ const ACT={
      <div class="tw" style="min-height:0;max-height:44vh">${TBL({cls:'cond',key:'modal:batchPay',head:BP_THEAD,
      rows:rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
        const dm=byId.get(n.id)?.default_pay_method||n.plannedPayMethod||'现汇';
-       const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);
+       const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a??can.toFixed(2);
         return `<tr data-pay-notice-id="${n.id}" class="${[ok?'':'hl',byId.get(n.id)?.term_warning?'pay-term-warning':''].filter(Boolean).join(' ')}"><td class="fc">${n.code}</td>
        <td class="now" title="付款项目全名：${esc(n.proj)}">${dispCell(n.proj,n)}</td>
        <td class="ctr">${astatTag(n.astat)}</td>
@@ -523,7 +523,7 @@ const ACT={
        <td>${ok?`<select class="inp" id="bm${i}" data-act="payDraft" data-id="${n.id}" data-f="m">${optsOf(enumVals('payMethod'),curM)}</select>`:whyCell(n)}</td>
        <td class="num">${ok?`<input class="inp num" id="ba${i}" data-act="payDraft" data-id="${n.id}" data-f="a" value="${curA}">`:'<span class="mut">—</span>'}</td>
        <td class="ctr now"><button class="btn sm dg" data-act="batchPayDel" data-id="${n.id}">删除</button></td></tr>`}),
-     sum:rows.length?sumRowOf(BP_THEAD,rows,{5:rs=>N2(rs.reduce((a,n)=>a+payEff(n),0)),7:rs=>N2(rs.reduce((a,n)=>a+Number((payDraft[n.id]&&payDraft[n.id].a)||payEff(n)),0))},{tip:'本次应付 / 本次付款金额 合计；「本次付款金额」按当前已填值合计（改金额后重绘刷新）'}):''})}</div>
+     sum:rows.length?sumRowOf(BP_THEAD,rows,{5:rs=>N2(rs.reduce((a,n)=>a+payEff(n),0)),7:[rs=>N2(rs.reduce((a,n)=>a+numOf(payDraft[n.id]?.a??payEff(n)),0)),v=>`<b id="batchPayTotal">${Number.isFinite(v)?M(v):'—'}</b>`]},{tip:'本次应付 / 本次付款金额 合计；「本次付款金额」按当前已填值合计'}):''})}</div>
      <div class="f2" style="margin-top:calc(11px * var(--fscale))">
        <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" data-act="batchPayTerms" value="${esc(dt)}"></div>
        <div class="fld"><label>本批付款备注</label><input class="inp" id="bRemark" value="${esc(remark)}" placeholder="写入本批每条付款流水；选「其他」时必填"></div>
@@ -534,7 +534,13 @@ const ACT={
      footer:`<button class="btn" data-act="batchPayCancel">取消</button><button class="btn pri" data-act="batchPayOk"${bad.length?` disabled title="有 ${bad.length} 条不可付，请先删除这些行"`:''}>确认付款</button>`}); },
  /* 草稿记录：行内的付款方式 / 金额一改就存下，重建弹窗（删除行、排序）时不丢 */
  payDraft:t=>{ const id=t.dataset.id; const d=payDraft[id]||(payDraft[id]={});
-   if(t.dataset.f==='m') d.m=t.value; else d.a=t.value; },
+   if(t.dataset.f==='m') d.m=t.value;
+   else { d.a=t.value;
+     const amount=numOf(t.value), cell=$(`[data-pay-term-amount="${id}"] b`);
+     if(cell) cell.textContent=Number.isFinite(amount)?M(amount):'—';
+     const total=$('#batchPayTotal'), sum=payBatchIds.reduce((a,id)=>a+numOf(payDraft[id]?.a??payEff(NO.find(n=>n.id===id))),0);
+     if(total) total.textContent=Number.isFinite(sum)?M(sum):'—';
+   } },
  batchPayTerms:async()=>{
    const box=$('#batchPayTerms'), date=$('#bDate');if(!box||!date) return null;
    const request=++payContextRequest, day=date.value;
@@ -2518,6 +2524,7 @@ document.addEventListener('change',e=>{
 let ntSearchTimer;
 document.addEventListener('compositionstart',e=>{if(e.target.id==='ntSearch')clearTimeout(ntSearchTimer);});
 document.addEventListener('input',e=>{
+  if(e.target.dataset.act==='payDraft'){ACT.payDraft(e.target);return;}
   if(e.target.id==='supManualValue'&&!e.isComposing){ACT.supManualFilter(e.target);return;}
   const search=e.target.closest('[data-act="ntSearch"]');
   if(search&&!e.isComposing){ACT.ntSearch(search);return;}

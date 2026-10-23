@@ -75,6 +75,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .pay-term-details th,.pay-term-details td{padding:calc(4px * var(--fscale)) calc(8px * var(--fscale));vertical-align:top}
 .pay-term-details th{font-weight:500;border-bottom:1px solid var(--wn-bd)}
 .pay-term-details th:first-child,.pay-term-details td[rowspan]:first-child{padding-left:0}
+.pay-term-details .pay-term-start:not(:first-child)>td{border-top:1px solid var(--wn-bd)}
 .pay-term-details time{white-space:nowrap}
 .tip code{font-family:var(--fm);font-size:calc(11px * var(--fscale));background:var(--code-bg);padding:calc(1px * var(--fscale)) calc(4px * var(--fscale));border-radius:3px}
 /* 可折叠的口径说明：默认收起，把纵向空间让给数据 */
@@ -755,7 +756,6 @@ V.m03=()=>{
         {tip:'当前筛选结果中「非剔除」行的合计 —— 剔除行不计入（与欠款口径一致）',leadCls:'fl'})
        : list.length?'':EMPTYROW(thCount(NT_THEAD), '当前筛选条件下没有付款通知书'+(ntDraftOn()?'（正在新增 1 行：填完点该行「保存」）':''), '换个筛选条件；或点右上角「＋ 手动新增通知书」补一行、或「抓取 i8 付款通知书（按月）」'));
   return `
-    <div class="tip"><b>统计结算 / 统计付款金额</b>只能往下调（上限 = 审批金额）；<b>付款金额</b>手改只本次会话有效，<b>统计两金额</b>才持久（留痕、不被导入覆盖）。</div>
   <div class="selbar notice-selection">
     <div class="m"><span class="k">已勾选</span><span class="v">${pk.length} 行</span>${pk.length>pkPay.length?` <span class="tag t-wn" title="选中的行里有剔除行 / i8 撤单行 —— 它们不进付款批次（付款闸只收付款候选）；能被勾选是为了另一件事：「恢复剔除」。下面两项金额只算能付款的那些行。">其中 ${pk.length-pkPay.length} 条不进付款批次</span>`:""}</div>
     <div class="dv"></div>

@@ -202,7 +202,7 @@ def test_壳里移出后其它行已填值仍在():
     reg = _batch_pay()
     assert "Object.keys(payDraft).forEach(id=>{ if(!pickSet.has(id)) delete payDraft[id]; });" in reg, \
         "草稿清理没有只清「已不在批次里」的那些（会连其它行的已填值一起清掉）"
-    assert "const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);" in reg, \
+    assert "const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a??can.toFixed(2);" in reg, \
         "重建窗口时没有把已填值带回来（其它行会回默认）"
 
 

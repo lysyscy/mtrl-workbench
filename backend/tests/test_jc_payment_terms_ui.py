@@ -28,17 +28,29 @@ def test_contract_payment_method_sort_uses_current_choice(ui_page):
     assert choices.evaluate_all('els=>els.map(e=>e.value)') == original
 
 
-def test_payment_warning_groups_contract_and_preserves_all_invoice_dates(ui_page):
+def test_payment_warning_separates_notices_and_preserves_all_invoice_dates(ui_page):
     p = ui_page
     result = p.evaluate("""()=>{
-      const row={contract_id:21,contract_no:'TEST-21',term_warning:{payment_term:'60±7天',
+      NO[0].astat='已批';NO[0].cat='辅材';
+      NO.push({...NO[0],id:'102'});
+      JCs.push(adaptJc({id:21,material:'防水卷材',notice_ids:[101,102]}));
+      payDraft={'101':{a:'100.00'},'102':{a:'2200.00'}};
+      const row={notice_id:101,contract_id:21,contract_no:'TEST-21',term_warning:{payment_term:'60±7天',
         invoices:[{invoice_date:'2026-08-01',remind_through:'2026-10-07'},
           {invoice_date:'2026-09-01',remind_through:'2026-11-07'}]}};
-      const host=document.createElement('div');host.innerHTML=payTermsHtml([row,row]);
-      return {contracts:host.querySelectorAll('td[rowspan="2"]').length,
+      const host=document.createElement('div');host.innerHTML=payTermsHtml([row,{...row,notice_id:102}]);
+      return {headers:[...host.querySelectorAll('th')].map(c=>c.textContent),
+        amounts:[...host.querySelectorAll('[data-pay-term-amount]')].map(c=>[c.dataset.payTermAmount,c.textContent]),
+        groups:[...host.querySelectorAll('.pay-term-start')].map(r=>[...r.cells].map(c=>c.textContent)),
         rows:host.querySelectorAll('tbody tr').length,dates:[...host.querySelectorAll('time')].map(t=>t.textContent)};
     }""")
-    assert result == {'contracts': 2, 'rows': 2, 'dates': ['2026-08-01', '2026-10-07', '2026-09-01', '2026-11-07']}
+    assert result['headers'] == ['付款项目', '合同材料名', '本条付款金额', '发票日期', '账期', '提醒截止']
+    assert result['amounts'] == [['101', '100.00'], ['102', '2,200.00']]
+    assert result['rows'] == 4
+    assert result['groups'] == [
+        ['测试项目', '防水卷材', amount, '2026-08-01', '60±7天', '2026-10-07']
+        for amount in ['100.00', '2,200.00']]
+    assert result['dates'] == ['2026-08-01', '2026-10-07', '2026-09-01', '2026-11-07'] * 2
 
 
 @pytest.mark.parametrize("width,scale", [(1920, 1), (1280, 1.4)])
@@ -91,14 +103,15 @@ def test_payment_warning_tracks_date_without_overwriting_manual_method(ui_page, 
     p.evaluate("""()=>{
       SYS_TODAY='2026-04-11';NO[0].astat='已批';NO[0].paid=0;NO[0].amountPaid=0;
       NO.push({...NO[0],id:'102',code:'DOC-102'});
-      JCs.push(adaptJc({id:21,notice_ids:[101,102],contract_no:'TEST-21',tag:'纳入台账'}));
+      JCs.push(adaptJc({id:21,notice_ids:[101,102],material:'复合防水卷材（含配套基层处理材料）',contract_no:'TEST-21',tag:'纳入台账'}));
       window.contextCalls=[];
-      window.warning={message:'该合同存在未满账期的发票，请核对本次付款',payment_term:'90±10天',max_days:100,
-        pay_date:'2026-04-11',invoice_side:'supplier',invoices:[{invoice_id:1,invoice_date:'2026-01-01',remind_through:'2026-04-11'}]};
+      window.warning={message:'该合同存在未满账期的发票，请核对本次付款',payment_term:'60±7天',max_days:67,
+        pay_date:'2026-04-11',invoice_side:'supplier',invoices:[{invoice_id:1,invoice_date:'2026-02-03',remind_through:'2026-04-11'}]};
       API.paymentContext=async body=>{contextCalls.push(body);return {ok:true,rows:[{notice_id:101,contract_id:21,
         contract_no:'TEST-21',default_pay_method:'承兑',default_pay_method_source:'contract',
         term_warning:body.pay_date==='2026-04-11'?warning:null},
-        {notice_id:102,contract_id:22,contract_no:'TEST-22',default_pay_method:'现汇',term_warning:null}]};};
+        {notice_id:102,contract_id:21,contract_no:'TEST-21',default_pay_method:'现汇',
+          term_warning:window.warnSecond&&body.pay_date==='2026-04-11'?warning:null}]};};
       API.batchPay=async body=>{window.contextPayment=body;return {ok:true,message:'已登记付款'};};
       reloadNotices=async()=>{};
       pickSet.clear();pickSet.add('101');pickSet.add('102');return ACT.batchPay();
@@ -112,9 +125,17 @@ def test_payment_warning_tracks_date_without_overwriting_manual_method(ui_page, 
     assert row.locator('td').first.evaluate('c=>getComputedStyle(c).backgroundColor') != normal.locator('td').first.evaluate('c=>getComputedStyle(c).backgroundColor')
     expect(p.get_by_role('dialog')).not_to_contain_text('确认后每条生成一笔付款流水')
     expect(p.locator('#batchPayTerms')).to_contain_text('2026-04-11')
-    expect(p.locator('#batchPayTerms')).to_contain_text('90±10天')
+    expect(p.locator('#batchPayTerms')).to_contain_text('60±7天')
+    expect(p.locator('#batchPayTerms')).to_contain_text('测试项目')
+    expect(p.locator('#batchPayTerms')).to_contain_text('复合防水卷材（含配套基层处理材料）')
+    expect(p.locator('[role="status"]')).not_to_contain_text('手改只本次会话有效')
     p.locator('#bm0').select_option('现汇')
+    p.locator('#ba0').fill('')
+    expect(p.locator('[data-pay-term-amount="101"]')).to_have_text('—')
     p.locator('#ba0').fill('100.00')
+    expect(p.locator('[data-pay-term-amount="101"]')).to_have_text('100.00')
+    expect(p.locator('#ba0')).to_be_focused()
+    assert p.evaluate('contextCalls.length') == 1
     p.locator('#ba0').blur()
     header = p.get_by_role('dialog').get_by_role('button', name='单据编码↕', exact=True)
     header.click()
@@ -131,6 +152,14 @@ def test_payment_warning_tracks_date_without_overwriting_manual_method(ui_page, 
     expect(p.locator('#batchPayTerms')).to_contain_text('未满账期')
     expect(row).to_have_class('pay-term-warning')
     expect(p.locator('#bm0')).to_have_value('现汇')
+    expect(p.locator('[data-pay-term-amount="101"]')).to_have_text('100.00')
+    assert p.locator('.pay-term-details').evaluate('e=>e.getBoundingClientRect().right<=e.closest(".modal").getBoundingClientRect().right')
+    p.locator('#ba1').fill('2200.00')
+    expect(p.locator('#batchPayTotal')).to_have_text('2,300.00')
+    p.evaluate('()=>{window.warnSecond=true;return ACT.batchPayTerms();}')
+    expect(p.locator('.pay-term-start')).to_have_count(2)
+    expect(p.locator('[data-pay-term-amount="102"]')).to_have_text('2,200.00')
+    expect(normal).to_have_class('pay-term-warning')
     if output := os.environ.get('MTRL_UI_EVIDENCE_PATH'):
         out=Path(output)
         out.mkdir(parents=True,exist_ok=True)
@@ -141,6 +170,7 @@ def test_payment_warning_tracks_date_without_overwriting_manual_method(ui_page, 
     assert p.evaluate('contextPayment.drafts["101"].pay_method') == '现汇'
     assert p.evaluate('contextPayment.pay_date') == '2026-04-11'
     assert p.evaluate('contextPayment.drafts["101"].amount') == '100.00'
+    assert p.evaluate('contextPayment.drafts["102"].amount') == '2200.00'
 
 
 
