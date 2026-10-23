@@ -14,3 +14,5 @@
 .notice-paste-dialog textarea{width:100%;font:inherit;resize:vertical;color:var(--tx);background:var(--sf);border:1px solid var(--bd3);border-radius:var(--r);padding:calc(8px * var(--fscale));caret-color:var(--pri)}.notice-paste-dialog h3{font-size:1rem;margin:1rem 0 .4rem}
 
 .notice-grid select:has(option[value="已批"]:checked){color:var(--ok-d);background:var(--ok-l);border-color:var(--ok-bd)}.notice-grid select:has(option[value="未批"]:checked){color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd)}
+
+.notice-flows-dialog{width:min(1120px,96vw);max-height:90dvh}.notice-flows-table{overflow:auto;max-height:60dvh}.notice-flows-table table{width:100%;border-collapse:collapse;font-size:calc(12.5px * var(--fscale))}.notice-flows-table th,.notice-flows-table td{padding:8px;border-bottom:1px solid var(--bd);text-align:left;overflow-wrap:anywhere}.notice-flows-table th{background:var(--sf2);position:sticky;top:0;font-weight:500}.notice-flows-table .money{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}

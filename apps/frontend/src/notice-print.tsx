@@ -15,12 +15,12 @@ function readResult(value: unknown): Result {
 function download(url: string, filename: string) { const link=document.createElement('a');link.href=url;link.download=filename;link.click(); }
 export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[]; mode: 'pdf'|'print'; blocked: boolean; close: () => void }) {
   const dialog=useRef<HTMLDialogElement>(null), lock=useRef(false), attempted=useRef(false);
-  const [busy,setBusy]=useState(false), [result,setResult]=useState<Result|null>(null), [error,setError]=useState('');
+  const [busy,setBusy]=useState(true), [result,setResult]=useState<Result|null>(null), [error,setError]=useState('');
   const [file,setFile]=useState<{url:string;filename:string;pdf:boolean}|null>(null);
   const blobUrl=useRef('');
   const title=mode==='print'?'批量打印':'只导出 PDF';
   const closing = useDialogClose({ busy, dirty: false, close });
-  useEffect(()=>{ if (!blocked) dialog.current?.showModal();else dialog.current?.close(); },[blocked]);
+  useEffect(()=>{ if (!blocked) { dialog.current?.showModal();void run(); } else dialog.current?.close(); },[blocked]);
   useEffect(()=>()=>{ if(blobUrl.current) URL.revokeObjectURL(blobUrl.current); },[]);
   async function loadFile(value: Result) {
     const url=value.items.find(x=>x.ok && x.download_url)?.download_url;
@@ -41,7 +41,7 @@ export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[];
     try { await loadFile(result); }catch(e) { setError(e instanceof Error?e.message:'下载失败，请重试下载。'); }finally {setBusy(false);}
   }
   return <dialog ref={dialog} className="project-dialog notice-print-dialog" aria-labelledby="notice-print-title" {...closing.dialogProps}><DialogContents title={title} titleId="notice-print-title" closing={closing}>
-    <p>已勾选 {rows.length} 条通知书（含搜索隐藏行）。{mode==='print'?'确认后取 i8 版式并投递打印机；可能挤掉该 i8 账号的在线会话。':'确认后取 i8 版式生成文件；可能挤掉该 i8 账号的在线会话，不投递打印机。'}</p>
+    <p>本批 {rows.length} 条通知书（含搜索隐藏行）。</p>
     <div className="notice-print-list"><BoundedTable columns={[{ min: 12, max: 16 },{ min: 9, max: 28, flex: 1 },{ min: 10, max: 16 }]}><thead><tr><th>单据编码</th><th>付款项目</th><th>审批金额（元）</th></tr></thead><tbody>{rows.map(row=><tr key={row.notice_id}><td>{row.bill_no||'—'}</td><td>{row.project_display}</td><td>{money(row.amount_approved)}</td></tr>)}</tbody></BoundedTable></div>
     {busy&&<p role="status">正在{title}，请勿重复操作…</p>}
     {result&&<section aria-label="执行回执"><p role="status">{mode==='pdf'?'已生成':'已投递'} {result.success} / 共 {result.total} 条，失败 {result.failed} 条。</p>
@@ -50,10 +50,9 @@ export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[];
     </section>}
     {error&&<p className="notice" role="alert">{error}</p>}
     {file?.pdf&&<><p><a href={file.url} target="_blank" rel="noreferrer">在新窗口预览 PDF</a></p><iframe className="notice-pdf-preview" title="付款通知书 PDF 预览" src={file.url} /></>}
-    <div className="dialog-actions"><Link to="/i8" onClick={event=>{if(busy)event.preventDefault();else closing.requestClose();}}>查看运行记录</Link><button disabled={busy} onClick={closing.requestClose}>{attempted.current?'关闭':'取消'}</button>
+    <div className="dialog-actions"><Link to="/i8" onClick={event=>{if(busy)event.preventDefault();else closing.requestClose();}}>查看运行记录</Link><button disabled={busy} onClick={closing.requestClose}>关闭</button>
       {file&&<button className="primary" disabled={busy||blocked} onClick={()=>download(file.url,file.filename)}>下载 {file.filename}</button>}
       {result&&mode==='pdf'&&result.success>0&&!file&&<button disabled={busy||blocked} onClick={()=>void retryDownload()}>重试下载</button>}
-      {!attempted.current&&<button className="primary" disabled={busy||blocked||!rows.length} onClick={()=>void run()}>确认{mode==='print'?'打印':'生成 PDF'}</button>}
     </div>
   </DialogContents></dialog>;
 }
