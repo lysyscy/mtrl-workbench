@@ -1,3 +1,4 @@
+import { EnumTag } from './enum-tag';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -63,10 +64,10 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
   const columns=useMemo<ColDef<Flow>[]>(()=> { const list:ColDef<Flow>[]=[
     {field:'doc_no',tooltipField:'doc_no',headerName:'单据编码',...contentWidth(145,195,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.data?.notice_id&&p.value?<Link className="text-link" to={`/notices?notice=${p.data.notice_id}`}>{p.value}</Link>:p.value||'—'},
     {field:'doc_date',tooltipField:'doc_date',headerName:'通知书日期',...contentWidth(100,150,scale)},{field:'bill_name',headerName:'通知书名称',...contentWidth(100,320,scale,1),wrapText:true,autoHeight:true},
-    {field:'project_display',headerName:'付款项目',...contentWidth(85,280,scale,1),wrapText:true,autoHeight:true},{field:'payee',headerName:'收款单位',...contentWidth(100,320,scale,1),wrapText:true,autoHeight:true},{field:'category_label',headerName:'分类',...contentWidth(60,90,scale)},
+    {field:'project_display',headerName:'付款项目',...contentWidth(85,280,scale,1),wrapText:true,autoHeight:true},{field:'payee',headerName:'收款单位',...contentWidth(100,320,scale,1),wrapText:true,autoHeight:true},{field:'category_label',headerName:'分类',...contentWidth(60,90,scale),cellRenderer:(p:ICellRendererParams<Flow>)=><EnumTag kind="category" value={p.value}/>},
     {field:'amount_approved',headerName:'审批金额',...contentWidth(110,175,scale),cellClass:'money',valueFormatter:p=>p.value===null||p.value===undefined?'—':money(p.value),comparator:(a,b)=>Number(a??0)-Number(b??0)},
     {field:'pay_date',tooltipField:'pay_date',headerName:'付款日期',...contentWidth(100,150,scale)},{field:'amount',headerName:'付款金额',...contentWidth(110,175,scale),cellClass:'money',valueFormatter:p=>p.value?money(p.value):'',comparator:(a,b)=>Number(a)-Number(b)},
-    {field:'pay_method',headerName:'实际付款方式',...contentWidth(100,150,scale)},{field:'remark',headerName:'备注',...contentWidth(90,320,scale,1),wrapText:true,autoHeight:true},{field:'created_by',tooltipField:'created_by',headerName:'操作人',...contentWidth(70,120,scale)},
+    {field:'pay_method',headerName:'实际付款方式',...contentWidth(100,150,scale),cellRenderer:(p:ICellRendererParams<Flow>)=><EnumTag kind="payMethod" value={p.value}/>},{field:'remark',headerName:'备注',...contentWidth(90,320,scale,1),wrapText:true,autoHeight:true},{field:'created_by',tooltipField:'created_by',headerName:'操作人',...contentWidth(70,120,scale)},
     {field:'status_label',headerName:'状态',...contentWidth(90,260,scale,1),wrapText:true,autoHeight:true,cellRenderer:(p:ICellRendererParams<Flow>)=>p.data?<span><span className={`status-tag ${p.data.status==='effective'?'status-positive':'status-neutral'}`}>{p.data.status_label}</span>{p.data.revoke_reason&&<span>（{p.data.revoke_reason}）</span>}</span>:''},
     {colId:'actions',headerName:'操作',...contentWidth(76,100,scale),sortable:false,cellRenderer:(p:ICellRendererParams<Flow>)=>p.data?.status==='effective'?<button className="danger" disabled={!current.current.writable} onClick={()=>current.current.open(p.data!)}>撤销</button>:null},
   ]; return list; },[scale]);

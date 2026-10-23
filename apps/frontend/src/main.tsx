@@ -17,6 +17,27 @@ function Notice({ message, retry }: { message: string; retry?: () => void }) {
   return <div className="notice" role="alert"><span>{message}</span>{retry && <button onClick={retry}>重试</button>}</div>;
 }
 
+function AccountMenu({ me, busy, logout }: { me: Identity; busy: boolean; logout: () => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), item = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    item.current?.focus();
+    const outside = (event: Event) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); setOpen(false); trigger.current?.focus(); } };
+    document.addEventListener('pointerdown', outside); document.addEventListener('focusin', outside); document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('focusin', outside); document.removeEventListener('keydown', escape); };
+  }, [open]);
+  return <div className="account-menu" ref={root}>
+    <button className="account-pill" ref={trigger} aria-haspopup="menu" aria-expanded={open} aria-controls="account-actions" disabled={busy} onClick={() => setOpen(value => !value)} onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); } }}>
+      <span className="account-dot" aria-hidden="true" />{me.name || me.account}（{me.role === 'admin' ? '管理员' : '普通用户'}）
+    </button>
+    {open && <div id="account-actions" className="account-actions" role="menu" aria-label="账号操作" onKeyDown={event => { if (['ArrowDown','ArrowUp','Home','End'].includes(event.key)) { event.preventDefault(); item.current?.focus(); } }}>
+      <button ref={item} role="menuitem" disabled={busy} onClick={logout}>{busy ? '正在退出…' : '退出登录'}</button>
+    </div>}
+  </div>;
+}
+
 function AccountWorkspace({ me, blocked, obscured, onLogout }: { me: Identity | null; blocked: boolean; obscured: boolean; onLogout: () => void }) {
   // A new account gets a new cache and component tree, including future page drafts/history.
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
@@ -55,8 +76,11 @@ function AccountWorkspace({ me, blocked, obscured, onLogout }: { me: Identity | 
   }
   return <QueryClientProvider client={client}><div className="workspace" hidden={obscured} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
-    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航"><NavLink to="/projects">MOD-01 项目档案</NavLink><NavLink to="/i8">MOD-02 i8 接入层</NavLink><NavLink to="/notices">MOD-03 付款通知书</NavLink><NavLink to="/ledger">MOD-05 付款流水与欠款统计</NavLink><NavLink to="/mechanical">MOD-10 机械费</NavLink></nav><a className="old-app" href="/app">打开旧版预览</a></aside>
-    <div className="main"><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><div className="history-slot"><div id="history-controls" /><div className="history-fallback ledger-tools"><button disabled title="当前页面没有可撤销的操作">撤销</button><button disabled title="当前页面没有可重做的操作">重做</button></div></div><span>{me ? `${me.name || me.account} · ${me.role === 'admin' ? '管理员' : '普通用户'}` : '未登录 · 只读'}</span>{me ? <button onClick={() => void logout()} disabled={busy}>{busy ? '正在退出…' : '切换账号'}</button> : <a href={loginUrl}>登录</a>}</div></header>
+    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
+      <div className="nav-group" role="group" aria-labelledby="nav-base"><h2 id="nav-base">主数据 · 基础</h2><NavLink to="/projects"><span className="nav-code">MOD-01</span><span>项目档案</span></NavLink><NavLink to="/i8"><span className="nav-code">MOD-02</span><span>i8 接入层</span></NavLink></div>
+      <div className="nav-group" role="group" aria-labelledby="nav-payment"><h2 id="nav-payment">付款域</h2><NavLink to="/notices"><span className="nav-code">MOD-03</span><span>付款通知书</span></NavLink><NavLink to="/ledger"><span className="nav-code">MOD-05</span><span>付款流水与欠款统计</span></NavLink></div>
+    </nav><a className="old-app" href="/app">打开旧版预览</a></aside>
+    <div className="main"><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><div className="history-slot"><div id="history-controls" /><div className="history-fallback ledger-tools"><button disabled title="当前页面没有可撤销的操作">撤销</button><button disabled title="当前页面没有可重做的操作">重做</button></div></div><span hidden={Boolean(me)}>未登录 · 只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} /> : <a href={loginUrl}>登录</a>}</div></header>
       <main id="content" tabIndex={-1}>{logoutError && <Notice message={logoutError} />}<Routes><Route path="/projects" element={null} /><Route path="/i8" element={null} /><Route path="/notices" element={null} /><Route path="/ledger" element={null} /><Route path="/mechanical" element={null} /><Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>
         {(visited.has('/projects') || projectsActive) && <div className="page-view" hidden={!projectsActive} inert={!projectsActive}><Projects me={me} blocked={blocked || !projectsActive} /></div>}
         {(visited.has('/i8') || i8Active) && <div className="page-view" hidden={!i8Active} inert={!i8Active}><Suspense fallback={<p role="status">正在读取 i8 接入层…</p>}><I8Page blocked={blocked || !i8Active} /></Suspense></div>}
