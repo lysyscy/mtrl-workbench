@@ -84,8 +84,8 @@ function Side({ side, scope, actions, writable, busy, add, focusRecord, focused 
     { field: 'seq', headerName: '序号', ...contentWidth(44, 58, scale), colSpan: p => p.node?.rowPinned ? 2 : 1, cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
     { field: 'month', headerName: '月份（按单据日期）', ...contentWidth(110, 180, scale), cellRenderer: Cell },
     { field: 'other_expense', headerName: side.category === 'mechanical' ? '机械结算金额' : '其他支出金额', ...contentWidth(110, 190, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'payment', headerName: '付款', ...contentWidth(90, 175, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'debt', headerName: '欠款', ...contentWidth(90, 175, scale), comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span className={p.node?.rowPinned ? '' : Number(p.value) > 0 ? 'debt-positive' : 'muted'}>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
+    { field: 'payment', headerName: '付款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
+    { field: 'debt', headerName: '欠款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span className={p.node?.rowPinned ? '' : Number(p.value) > 0 ? 'debt-positive' : 'muted'}>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
     { field: 'remark', headerName: '备注', ...contentWidth(90, 300, scale, 1), wrapText: true, autoHeight: true, cellRenderer: Cell },
     { colId: 'actions', headerName: '操作', ...contentWidth(52, 78, scale), sortable: false, cellRenderer: DeleteCell },
   ], [side.category, scale, upto]);
