@@ -13,7 +13,7 @@ type PendingList = { items: Pending[]; source: { at?: string; target?: string };
 type Trail = { at: string; project: string; field_label: string; before: string; after: string; by: string };
 type Impact = { can_delete: boolean; message: string; groups: { label: string; count: number; rows: Record<string, unknown>[] }[] };
 type Connection = { account: string; i8_user: string; ready: boolean; message: string };
-type DialogState = { kind: 'create' } | { kind: 'edit' | 'status' | 'keywords' | 'delete' | 'type'; project: ArchiveProject } | { kind: 'promote' | 'archive'; item: Pending } | { kind: 'sync'; source: 'warehouses' | 'common-projects' };
+type DialogState = { kind: 'create' } | { kind: 'edit' | 'keywords' | 'delete' | 'type'; project: ArchiveProject } | { kind: 'promote' | 'archive'; item: Pending } | { kind: 'sync'; source: 'warehouses' | 'common-projects' };
 const typeNames = { normal: '普通项目', shell: '小微壳', small: '具体小微' };
 const label = (p: Project) => p.disp || p.name_full;
 const trailValue = (trail: Trail, value: string) => trail.field_label === '项目状态' ? ({ active: '在建', archived: '归档' } as Record<string, string>)[value] ?? value : trail.field_label === '项目类型' ? (typeNames as Record<string, string>)[value] ?? value : value;
@@ -43,6 +43,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const [sort, setSort] = useState<{ key: string; descending: boolean } | null>(null);
   const [status, setStatus] = useState('active'), [type, setType] = useState('all'), [keyword, setKeyword] = useState('');
   const [modal, setModal] = useState<DialogState | null>(null), [feedback, setFeedback] = useState(''), [busy, setBusy] = useState(false);
+  const [statusEdit, setStatusEdit] = useState<{ id: number; value: Project['status'] } | null>(null), [statusErrors, setStatusErrors] = useState<Record<number,string>>({});
   const lock = useRef(false), mounted = useRef(true), dragging = useRef<number | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const projects = useQuery({ queryKey: ['project-archive'], enabled: !blocked, queryFn: ({ signal }) => archiveProjects(signal) });
@@ -64,6 +65,18 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
     try { await action(); if (!mounted.current) return false; setFeedback(success); await refresh(); return true; }
     catch (error) { if (mounted.current) setFeedback(messageOf(error)); return false; }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
+  }
+  async function changeStatus(project: ArchiveProject, value: Project['status']) {
+    if (unavailable || lock.current || value === project.status) return;
+    lock.current = true; setBusy(true); setStatusEdit({ id: project.id, value });
+    setStatusErrors(old => ({ ...old, [project.id]: '' })); let written = false;
+    try {
+      const result = await requestJson(`/api/m01/projects/${project.id}/status`, { method: 'PUT', ...body({ status: value }) }); written = true;
+      if (!mounted.current) return;
+      setFeedback(record(result) && typeof result.message === 'string' ? result.message : `「${label(project)}」状态已保存。`);
+      await refresh();
+    } catch (failure) { if (mounted.current) setStatusErrors(old => ({ ...old, [project.id]: `${written ? '已保存，请重读核对。' : '未保存，已恢复原状态。'}${messageOf(failure)}` })); }
+    finally { lock.current = false; if (mounted.current) { setBusy(false); setStatusEdit(null); } }
   }
   async function move(id: number, position: number | 'up' | 'down') {
     const p = all.find(item => item.id === id); if (!p) return null; setSort(null);
@@ -95,7 +108,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
       const match = pending.data?.items.find(item => item.candidates?.some(c => c.id === p.id && c.is_placeholder));
       return <tr key={p.id} className={p.is_placeholder ? 'project-placeholder' : ''} onDragOver={e => { const source = all.find(item => item.id === dragging.current); if (source && source.status === p.status && source.id !== p.id) e.preventDefault(); }} onDrop={e => { e.preventDefault(); const id = dragging.current; dragging.current = null; if (id && all.find(item => item.id === id)?.status === p.status && !unavailable) void move(id, all.findIndex(item => item.id === p.id) + 1); }}>
         <td>{status === 'all' && p.status === 'archived' && previous?.status !== 'archived' && <span className="archive-divider">归档</span>}<div className="project-order"><button draggable={!unavailable} disabled={unavailable} title="拖动调整全局顺序；也可填序号或用上移、下移" aria-label={`拖动排序：${label(p)}`} onDragStart={e => { dragging.current = p.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(p.id)); }} onDragEnd={() => { dragging.current = null; }}>⠿</button><OrderInput project={p} disabled={unavailable} move={move} /><button aria-label={`上移：${label(p)}`} disabled={unavailable || at === 0} onClick={() => void move(p.id, 'up')}>↑</button><button aria-label={`下移：${label(p)}`} disabled={unavailable || at === inGroup.length - 1} onClick={() => void move(p.id, 'down')}>↓</button></div></td>
-        <td><button className={`project-type project-type-${p.project_type}`} title="纠正项目类型" disabled={unavailable} onClick={() => setModal({ kind: 'type', project: p })}>{typeNames[p.project_type]}</button></td><td>{p.project_type === 'shell' ? '—' : p.disp || '—'}</td><td>{p.warehouse_name || '—'}{p.is_placeholder && <span className="project-placeholder-label">无仓库（历史项目）</span>}</td><td>{p.name_full}</td><td>{p.phid || '—'}</td><td><button className="project-link" disabled={unavailable} onClick={() => setModal({ kind: 'status', project: p })}>{p.status === 'active' ? '在建' : '归档'}</button></td><td>{all.find(item => item.id === p.parent_shell_id)?.name_full || '—'}</td><td>{p.match_keywords.join('、') || '—'}</td><td><div className="project-row-actions"><button className="project-link" disabled={unavailable} onClick={() => setModal({ kind: 'edit', project: p })}>编辑</button>{p.is_placeholder && match && <button className="project-link" disabled={unavailable} onClick={() => setModal({ kind: 'promote', item: match })}>扶正</button>}{p.project_type === 'small' && <button className="project-link" disabled={unavailable} onClick={() => setModal({ kind: 'keywords', project: p })}>改关键词</button>}<button className="project-link danger" disabled={unavailable} onClick={() => setModal({ kind: 'delete', project: p })}>删除</button></div></td>
+        <td><button className={`project-type project-type-${p.project_type}`} title="纠正项目类型" disabled={unavailable} onClick={() => setModal({ kind: 'type', project: p })}>{typeNames[p.project_type]}</button></td><td>{p.project_type === 'shell' ? '—' : p.disp || '—'}</td><td>{p.warehouse_name || '—'}{p.is_placeholder && <span className="project-placeholder-label">无仓库（历史项目）</span>}</td><td>{p.name_full}</td><td>{p.phid || '—'}</td><td><select aria-label={`状态：${label(p)}`} aria-describedby={statusErrors[p.id] ? `project-status-error-${p.id}` : undefined} disabled={unavailable} value={statusEdit?.id === p.id ? statusEdit.value : p.status} onChange={e => void changeStatus(p, e.target.value as Project['status'])}><option value="active">在建</option><option value="archived">归档</option></select>{statusEdit?.id === p.id && <span role="status">正在保存…</span>}{statusErrors[p.id] && <p id={`project-status-error-${p.id}`} className="notice" role="alert">{statusErrors[p.id]}</p>}</td><td>{all.find(item => item.id === p.parent_shell_id)?.name_full || '—'}</td><td>{p.match_keywords.join('、') || '—'}</td><td><div className="project-row-actions"><button className="project-link" disabled={unavailable} onClick={() => setModal({ kind: 'edit', project: p })}>编辑</button>{p.is_placeholder && match && <button className="project-link" disabled={unavailable} onClick={() => setModal({ kind: 'promote', item: match })}>扶正</button>}{p.project_type === 'small' && <button className="project-link" disabled={unavailable} onClick={() => setModal({ kind: 'keywords', project: p })}>改关键词</button>}<button className="project-link danger" disabled={unavailable} onClick={() => setModal({ kind: 'delete', project: p })}>删除</button></div></td>
       </tr>;
     })}</tbody></table></div>}</>}
     {trails.isError ? <p className="notice" role="alert">{trails.error.message}<button onClick={() => void trails.refetch()}>重读留痕</button></p> : trails.data?.length ? <details className="project-trails" open><summary>修改留痕（全名 / 状态）</summary><div className="table-scroll"><table><thead><tr><th>时间</th><th>项目</th><th>字段</th><th>改前值</th><th>改后值</th><th>改动人</th></tr></thead><tbody>{trails.data.map((t, i) => <tr key={i}><td>{t.at}</td><td>{t.project}</td><td>{t.field_label}</td><td>{trailValue(t, t.before)}</td><td>{trailValue(t, t.after)}</td><td>{t.by}</td></tr>)}</tbody></table></div></details> : null}
@@ -104,7 +117,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
 }
 function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state: DialogState; me: Identity | null; blocked: boolean; close: () => void; refresh: () => Promise<void>; announce: (message: string) => void }) {
   const p = 'project' in state ? state.project : null, item = 'item' in state ? state.item : null;
-  const [full, setFull] = useState(p?.name_full ?? ''), [disp, setDisp] = useState(p?.disp ?? ''), [status, setStatus] = useState(p?.status ?? 'active');
+  const [full, setFull] = useState(p?.name_full ?? ''), [disp, setDisp] = useState(p?.disp ?? '');
   const [newType, setNewType] = useState(''), [warehouse, setWarehouse] = useState(p?.warehouse_name ?? '');
   const [keywords, setKeywords] = useState(p?.match_keywords.join(' | ') ?? ''), [choice, setChoice] = useState(''), [kick, setKick] = useState(false);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [done, setDone] = useState(false), [receipt, setReceipt] = useState(''), [samples, setSamples] = useState<Record<string, unknown>[]>([]);
@@ -113,9 +126,9 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
   useEffect(() => { if (blocked) dialog.current?.close(); else if (!dialog.current?.open) dialog.current?.showModal(); }, [blocked]);
   const impact = useQuery({ queryKey: ['project-impact', p?.id], enabled: state.kind === 'delete' && !blocked, queryFn: async ({ signal }) => object<Impact>(await requestJson(`/api/m01/projects/${p!.id}/delete-impact`, { signal }), x => typeof x.can_delete === 'boolean' && typeof x.message === 'string' && Array.isArray(x.groups)), staleTime: 0 });
   const connection = useQuery({ queryKey: ['project-sync-config'], enabled: state.kind === 'sync' && !blocked, queryFn: async ({ signal }) => object<Connection>(await requestJson('/api/m02/config', { signal }), x => typeof x.account === 'string' && typeof x.i8_user === 'string' && typeof x.ready === 'boolean' && typeof x.message === 'string'), staleTime: 0, refetchOnMount: 'always' });
-  const title = state.kind === 'sync' ? `同步${state.source === 'warehouses' ? '仓库名单' : '常用项目列表'}` : ({ create: '手工建档 · 无仓库项目', edit: '编辑项目', type: '纠正项目类型', status: '修改项目状态', keywords: '小微识别关键词', delete: '删除项目档案', promote: '人工指认 · 扶正', archive: '选择仓库建档' } as const)[state.kind];
-  const initial = useRef(JSON.stringify([full,disp,status,newType,warehouse,keywords,choice,kick]));
-  const closing = useDialogClose({ busy, dirty: !done && JSON.stringify([full,disp,status,newType,warehouse,keywords,choice,kick]) !== initial.current, close });
+  const title = state.kind === 'sync' ? `同步${state.source === 'warehouses' ? '仓库名单' : '常用项目列表'}` : ({ create: '手工建档 · 无仓库项目', edit: '编辑项目', type: '纠正项目类型', keywords: '小微识别关键词', delete: '删除项目档案', promote: '人工指认 · 扶正', archive: '选择仓库建档' } as const)[state.kind];
+  const initial = useRef(JSON.stringify([full,disp,newType,warehouse,keywords,choice,kick]));
+  const closing = useDialogClose({ busy, dirty: !done && JSON.stringify([full,disp,newType,warehouse,keywords,choice,kick]) !== initial.current, close });
   const cannot = blocked || !me || busy || (state.kind === 'delete' && (!impact.data?.can_delete || impact.isFetching || impact.isError)) || (state.kind === 'sync' && (!connection.data?.ready || connection.isFetching || connection.isError || connection.data.account !== me?.account));
   async function save() {
     if (cannot || lock.current) return;
@@ -129,7 +142,6 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
       if (state.kind === 'create') result = await requestJson('/api/m01/projects', { method: 'POST', ...body({ project_type: 'normal', name_full: full.trim(), disp: disp.trim() || full.trim() }) });
       else if (state.kind === 'edit') result = await requestJson(`/api/m01/projects/${p!.id}`, { method: 'PUT', ...body({ ...(p!.parent_shell_id ? {} : { name_full: full.trim() }), ...(p!.project_type === 'shell' ? {} : { disp: disp.trim() }) }) });
       else if (state.kind === 'type') result = await requestJson(`/api/m01/projects/${p!.id}/type`, { method: 'PUT', ...body({ project_type: newType, warehouse_name: warehouse.trim() }) });
-      else if (state.kind === 'status') result = await requestJson(`/api/m01/projects/${p!.id}/status`, { method: 'PUT', ...body({ status }) });
       else if (state.kind === 'keywords') result = await requestJson(`/api/m01/projects/${p!.id}`, { method: 'PUT', ...body({ match_keywords: keywords.split('|').map(x => x.trim()).filter(Boolean) }) });
       else if (state.kind === 'delete') result = await requestJson(`/api/m01/projects/${p!.id}?confirmed=true`, { method: 'DELETE' });
       else if (state.kind === 'promote') result = await requestJson('/api/m01/promote', { method: 'POST', ...body({ project_id: Number(choice), warehouse_name: item!.warehouse_name, full_name: item!.full_name }) });
@@ -150,7 +162,6 @@ function ProjectDialog({ state, me, blocked, close, refresh, announce }: { state
   return <dialog ref={dialog} className="project-dialog" aria-labelledby="project-dialog-title" {...closing.dialogProps}><DialogContents titleId="project-dialog-title" title={title} closing={closing}><form onSubmit={e => { e.preventDefault(); void save(); }}>{p && <p>{label(p)}</p>}{item && <p>{item.full_name}{item.warehouse_name ? ` · ${item.warehouse_name}` : ''}</p>}
     {(state.kind === 'create' || state.kind === 'edit') && <><label>项目全名<input autoFocus required value={full} readOnly={Boolean(p?.parent_shell_id)} title={p?.parent_shell_id ? '具体小微借壳全名，不可单独修改' : ''} disabled={busy} onChange={e => setFull(e.target.value)} /></label>{p?.parent_shell_id && <p>具体小微借壳全名，不可单独修改。</p>}{p?.project_type !== 'shell' && <label>展示名<input value={disp} disabled={busy} placeholder={state.kind === 'create' ? '留空取项目全名' : '留空取仓库名'} onChange={e => setDisp(e.target.value)} /></label>}</>}
     {state.kind === 'type' && <><label>目标类型<select autoFocus value={newType} disabled={busy} onChange={e => setNewType(e.target.value)}><option value="">请选择类型</option><option value="normal" disabled={p?.project_type === 'normal'}>普通项目</option><option value="shell" disabled={p?.project_type === 'shell'}>小微壳</option></select></label>{newType === 'normal' && <label>仓库名<input required value={warehouse} disabled={busy} onChange={e => setWarehouse(e.target.value)} /></label>}<p>类型修改会留痕。小微壳不挂仓库；具体小微由建档流程产生。</p></>}
-    {state.kind === 'status' && <label>状态<select value={status} disabled={busy} onChange={e => setStatus(e.target.value as Project['status'])}><option value="active">在建</option><option value="archived">归档</option></select></label>}
     {state.kind === 'keywords' && <label>关键词（多个用 | 分隔）<input autoFocus value={keywords} disabled={busy} onChange={e => setKeywords(e.target.value)} /></label>}
     {state.kind === 'promote' && <label>指定档案<select autoFocus value={choice} disabled={busy} onChange={e => setChoice(e.target.value)}><option value="">请选择档案</option>{item!.candidates?.map(c => <option key={c.id} value={c.id} disabled={!c.is_placeholder}>{c.disp || c.warehouse_name} · {c.warehouse_name}{c.status === 'archived' ? '（归档）' : ''}{!c.is_placeholder ? '（已有仓库，不可扶正）' : ''}</option>)}</select></label>}
     {state.kind === 'archive' && <><label>仓库<select autoFocus value={choice} disabled={busy} onChange={e => setChoice(e.target.value)}><option value="">请选择仓库</option>{item!.warehouses?.map(wh => <option key={wh} value={wh}>{wh}</option>)}</select></label><p>只为选中的仓库建档，其余仓库不建行。</p></>}
