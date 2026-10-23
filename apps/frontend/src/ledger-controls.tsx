@@ -1,3 +1,4 @@
+import { BoundedTable } from './bounded-table';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Project } from './api';
@@ -120,7 +121,7 @@ export function LedgerExport({ kind, owner, projects, project, unavailable, run,
         <p>已选 {chosen.length} 个项目</p>
       </> : <>
         <p>{kind === 'ledger' ? chosen.length === 1 ? '将生成1个工作簿。' : `选了${chosen.length}个项目，将生成一个zip。` : `已选 ${chosen.length} 个项目，按以下顺序导出。`}</p>
-        <div className="export-table"><table><thead><tr><th>顺序</th><th><button disabled={busy} onClick={() => choose([...chosen].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b), 'zh')).map(item => item.id))}>项目排序</button></th><th>调整顺序</th></tr></thead><tbody>{chosen.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{projectLabel(item)}</td><td><button aria-label={`上移${projectLabel(item)}`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</button> <button aria-label={`下移${projectLabel(item)}`} disabled={busy || index === chosen.length - 1} onClick={() => move(index, 1)}>下移</button></td></tr>)}</tbody></table></div>
+        <div className="export-table"><BoundedTable columns={[{ min: 4, max: 6 },{ min: 10, max: 28, flex: 1 },{ min: 10, max: 14 }]}><thead><tr><th>顺序</th><th><button disabled={busy} onClick={() => choose([...chosen].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b), 'zh')).map(item => item.id))}>项目排序</button></th><th>调整顺序</th></tr></thead><tbody>{chosen.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{projectLabel(item)}</td><td><button aria-label={`上移${projectLabel(item)}`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</button> <button aria-label={`下移${projectLabel(item)}`} disabled={busy || index === chosen.length - 1} onClick={() => move(index, 1)}>下移</button></td></tr>)}</tbody></BoundedTable></div>
       </>}
       {(reason || feedback) && <p className="notice" role="alert">{reason || feedback}</p>}
       {busy && <p role="status">正在生成文件…</p>}

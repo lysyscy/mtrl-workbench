@@ -1,3 +1,4 @@
+import { BoundedTable } from './bounded-table';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson } from './api';
@@ -26,7 +27,7 @@ function InvoiceSide({ candidate, kind }: { candidate: Candidate; kind: 'supplie
     {hasTradeSide(candidate) && <p className="contract-trade-name">{name} · {trade ? candidate.trade_co || '名称未填' : candidate.supplier}</p>}
     <div className="contract-amounts"><div><span>{name}合同金额</span><strong>{trade && candidate.trade_contract_amt === null ? '未确定' : `${money(trade ? candidate.trade_contract_amt! : candidate.contract_amt)} 元`}</strong></div><div><span>{name}发票总金额</span><strong>{money(trade ? candidate.trade_inv_sum : candidate.inv_sum)} 元</strong></div></div>
     <p className="contract-uninvoiced">{uninvoiced === null ? '未开票金额未确定' : <>{cents(uninvoiced) < 0n ? '超开票' : '未开票'} {money(uninvoiced.replace(/^-/,''))} 元</>}</p>
-    <table className="contract-invoices" aria-label={`${contractName(candidate)}${name}发票明细`}><thead><tr><th>{name}发票日期</th><th>金额（元）</th></tr></thead><tbody>{invoices.length ? invoices.map(invoice => <tr key={invoice.id}><td>{invoice.date || '日期未填'}</td><td>{money(invoice.amount)}</td></tr>) : <tr><td colSpan={2}>未录入发票</td></tr>}</tbody></table>
+    <BoundedTable columns={[{ min: 10, max: 18, flex: 1 },{ min: 9, max: 16, flex: 1 }]} className="contract-invoices" aria-label={`${contractName(candidate)}${name}发票明细`}><thead><tr><th>{name}发票日期</th><th>金额（元）</th></tr></thead><tbody>{invoices.length ? invoices.map(invoice => <tr key={invoice.id}><td>{invoice.date || '日期未填'}</td><td>{money(invoice.amount)}</td></tr>) : <tr><td colSpan={2}>未录入发票</td></tr>}</tbody></BoundedTable>
   </div>;
 }
 function Recommendation({ candidate, amount }: { candidate: Candidate; amount: string }) {

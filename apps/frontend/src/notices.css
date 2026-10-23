@@ -12,3 +12,5 @@
 
 .notice-filters .time-picker-field{flex-direction:column;align-items:start;gap:.3em}
 .notice-paste-dialog textarea{width:100%;font:inherit;resize:vertical;color:var(--tx);background:var(--sf);border:1px solid var(--bd3);border-radius:var(--r);padding:calc(8px * var(--fscale));caret-color:var(--pri)}.notice-paste-dialog h3{font-size:1rem;margin:1rem 0 .4rem}
+
+.notice-grid select:has(option[value="已批"]:checked){color:var(--ok-d);background:var(--ok-l);border-color:var(--ok-bd)}.notice-grid select:has(option[value="未批"]:checked){color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd)}

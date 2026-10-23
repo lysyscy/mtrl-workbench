@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
-import { gridTheme } from './grid';
+import { fitGridColumns, contentWidth, gridTheme } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, projectLabel, readProjects, record, requestJson } from './api';
 import type { Identity } from './api';
@@ -77,15 +77,15 @@ function Side({ side, scope, actions, writable, busy, add, focusRecord, focused 
   const visible = useMemo(() => side.rows.filter(row => row.row_kind !== 'month' || row.editable || row.other_expense !== '0.00' || row.payment !== '0.00' || row.remark).map((row, index) => ({ ...row, seq: index + 1 })), [side.rows]);
   const months = visible.filter(row => row.row_kind === 'month'); const latest = months.at(-1);
   const upto = latest?.month || side.rows.at(-1)?.month || '—';
-  const total = useMemo<LedgerRow[]>(() => side.rows.length ? [{ key: 'total', category: side.category, seq: 0, month: '', month_label: `截至 ${upto}`, row_kind: 'undated', record_id: null, other_expense: sum(side.rows, 'other_expense'), payment: sum(side.rows, 'payment'), debt: sum(side.rows, 'debt'), remark: '当前欠款', token: '', editable: false, counts_in_total: false }] : [], [side, upto]);
+  const total = useMemo<LedgerRow[]>(() => side.rows.length ? [{ key: 'total', category: side.category, seq: 0, month: '', month_label: `截至 ${upto}`, row_kind: 'undated', record_id: null, other_expense: sum(side.rows, 'other_expense'), payment: sum(side.rows, 'payment'), debt: sum(side.rows, 'debt'), remark: side.category === 'material' ? '' : '当前欠款', token: '', editable: false, counts_in_total: false }] : [], [side, upto]);
   const columns = useMemo<ColDef<LedgerRow>[]>(() => [
-    { field: 'seq', headerName: '序号', width: 44 * scale, minWidth: 44 * scale, flex: .44, colSpan: p => p.node?.rowPinned ? 2 : 1, cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
-    { field: 'month', headerName: '月份（按单据日期）', width: 143 * scale, minWidth: 130 * scale, flex: 1.43, cellRenderer: Cell },
-    { field: 'other_expense', headerName: side.category === 'mechanical' ? '机械结算金额' : '其他支出金额', minWidth: 100 * scale, flex: 1.52, comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'payment', headerName: '付款', minWidth: 72 * scale, flex: 1.05, comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'debt', headerName: '欠款', minWidth: 85 * scale, flex: 1.14, comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span className={p.node?.rowPinned ? '' : Number(p.value) > 0 ? 'debt-positive' : 'muted'}>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
-    { field: 'remark', headerName: '备注', minWidth: 124 * scale, flex: 1.6, cellRenderer: Cell },
-    { colId: 'actions', headerName: '操作', width: 52 * scale, minWidth: 48 * scale, flex: .44, sortable: false, cellRenderer: DeleteCell },
+    { field: 'seq', headerName: '序号', ...contentWidth(44, 58, scale), colSpan: p => p.node?.rowPinned ? 2 : 1, cellClass: p => p.node?.rowPinned ? 'ledger-total-label' : '', valueFormatter: p => p.node?.rowPinned ? `截至 ${upto}` : String(p.value ?? '') },
+    { field: 'month', headerName: '月份（按单据日期）', ...contentWidth(110, 180, scale), cellRenderer: Cell },
+    { field: 'other_expense', headerName: side.category === 'mechanical' ? '机械结算金额' : '其他支出金额', ...contentWidth(110, 190, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
+    { field: 'payment', headerName: '付款', ...contentWidth(90, 175, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
+    { field: 'debt', headerName: '欠款', ...contentWidth(90, 175, scale), comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span className={p.node?.rowPinned ? '' : Number(p.value) > 0 ? 'debt-positive' : 'muted'}>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
+    { field: 'remark', headerName: '备注', ...contentWidth(90, 300, scale, 1), wrapText: true, autoHeight: true, cellRenderer: Cell },
+    { colId: 'actions', headerName: '操作', ...contentWidth(52, 78, scale), sortable: false, cellRenderer: DeleteCell },
   ], [side.category, scale, upto]);
   useEffect(() => {
     if (!focusRecord || !api.current) return;
@@ -99,12 +99,12 @@ function Side({ side, scope, actions, writable, busy, add, focusRecord, focused 
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
     <div className="ledger-summary"><h2>{side.label}欠款台账</h2>{side.category === 'material' && <button aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</button>}</div>
-    <div className="ledger-table-scroll"><div className="ledger-grid" style={{ height: Math.min(360 * scale, (29 + Math.max(visible.length, 1) * 38 + (total.length ? 30 : 0) + 2) * scale) }}><AgGridReact<LedgerRow> theme={gridTheme} enableCellTextSelection ensureDomOrder
+    <div className="ledger-table-scroll"><div className="ledger-grid" style={{ height: Math.min(360 * scale, (29 + Math.max(visible.length, 1) * 38 + (total.length ? 30 : 0) + 2) * scale) }}><AgGridReact<LedgerRow> theme={gridTheme} onGridSizeChanged={e => fitGridColumns(e.api, root.current)} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
       context={context} columnDefs={columns} rowData={visible} pinnedBottomRowData={total}
       getRowId={params => params.data.key} defaultColDef={defaultColumn}
       rowHeight={38 * scale} getRowHeight={params => params.node.rowPinned ? 30 * scale : 38 * scale} headerHeight={29 * scale} suppressCellFocus={true} suppressScrollOnNewData={true}
       overlayNoRowsTemplate="暂无台账数据。" animateRows={false}
-      onGridReady={event => { api.current = event.api; }} onFirstDataRendered={event => { if (visible.length) event.api.ensureIndexVisible(visible.length - 1, 'bottom'); }} />
+      onGridReady={event => { api.current = event.api; }} onFirstDataRendered={event => { fitGridColumns(event.api, root.current, true); if (visible.length) event.api.ensureIndexVisible(visible.length - 1, 'bottom'); }} />
     </div></div>
   </div>;
 }

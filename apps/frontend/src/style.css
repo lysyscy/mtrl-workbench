@@ -9,7 +9,7 @@ html{--fscale:1;font-family:var(--fs);font-size:calc(14px * var(--fscale));color
 
 .ledger-view-project>.ledger-project>button{min-width:0;display:flex;justify-content:space-between;gap:1em}.ledger-grid .ag-cell.ledger-total-label{justify-content:center}.ledger-grid .money{white-space:nowrap}.ledger-grid .ag-root-wrapper{border:0}
 
-.ledger-grid .ag-row-pinned [col-id=debt]{text-align:left}
+.ledger-grid .ag-row-pinned [col-id=debt]{text-align:right}
 
 .account-area{display:flex;align-items:center;justify-content:flex-end;gap:calc(10px * var(--fscale));margin-left:auto}.account-area #history-controls{flex:0 0 auto}.ledger-status{display:flex;align-items:center;flex-wrap:wrap;gap:.5em;font-size:calc(12px * var(--fscale));color:var(--tx2)}#ledger-status{min-width:0}.ledger-status button{font-size:inherit;min-height:0;padding:.25em .5em}.ledger-status [role=status]:empty{display:none}
 
@@ -30,6 +30,9 @@ html{--fscale:1;font-family:var(--fs);font-size:calc(14px * var(--fscale));color
 button.project-link,button.mechanical-link{border:1px solid var(--bd);border-radius:var(--r);background:var(--sf);padding:.2em .5em;min-height:1.8em;text-decoration:none}button.project-link:hover,button.mechanical-link:hover{background:var(--sf2);border-color:var(--pri-bd)}button.danger{border-color:var(--dg-bd);color:var(--dg-d)}button.danger:hover{background:var(--dg-l)}button.primary{background:var(--pri);border-color:var(--pri);color:var(--on)}button.primary:hover{background:var(--pri-d)}button[aria-pressed=true]{background:var(--pri-l);border-color:var(--pri-bd);color:var(--pri-d)}
 .row-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--bd3);border-radius:var(--r);background:var(--sf);padding:.2em .5em;min-height:1.8em;color:var(--tx);font:inherit;line-height:1.4;text-decoration:none;white-space:nowrap}.row-button:hover{background:var(--sf2);border-color:var(--pri-bd);text-decoration:none}
 .status-tag{display:inline-block;padding:.1em .5em;border:1px solid var(--bd);border-radius:4px;line-height:1.5;white-space:nowrap;font-size:inherit}.status-positive{color:var(--ok-d);background:var(--ok-l);border-color:var(--ok-bd)}.status-pending{color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd)}.status-neutral{color:var(--tx2);background:var(--sf2);border-color:var(--bd3)}
+/* Mouse text selection does not need a second cell-sized ring. */
+:is(.notice-grid,.flow-grid) .ag-cell-focus:not(:focus-visible){border-color:transparent!important;outline:none!important;box-shadow:none!important}
+:is(.notice-grid,.flow-grid) .ag-cell-focus:focus-visible{border-color:var(--pri)!important;outline:none!important;box-shadow:none!important}
 /* Embedded inputs own focus. The grid ring remains on keyboard-focused read-only cells. */
 .ag-cell:has(input:focus,select:focus,textarea:focus){border-color:transparent!important;outline:none!important;box-shadow:none!important}.ag-cell input:focus,.ag-cell select:focus{outline:2px solid var(--pri);outline-offset:-2px;border-color:var(--pri)}.ag-cell input[type=checkbox]:focus-visible{outline-offset:2px}.notice-focused{outline:none;background:var(--pri-l)}
 .dialog-close-heading{display:flex;align-items:start;justify-content:space-between;gap:1rem}.dialog-close-heading h2{margin-right:auto}.dialog-close-button{display:grid;place-items:center;flex-shrink:0;width:2rem;height:2rem;min-height:0;padding:.35rem;border:0;background:transparent;color:var(--tx2)}.dialog-close-button svg{width:1.1rem;height:1.1rem;fill:none;stroke:currentColor;stroke-width:1.8}.dialog-close-button:hover{background:var(--sf2);color:var(--tx)}.dialog-discard p{line-height:1.5}.dialog-actions{flex-wrap:wrap}
@@ -37,3 +40,5 @@ button.project-link,button.mechanical-link{border:1px solid var(--bd);border-rad
 @media(max-width:520px){.sidebar{width:calc(125px * var(--fscale))}.sidebar nav a{font-size:.9rem;overflow-wrap:anywhere}.main>header{padding:.6rem}.page-view{padding:.6rem}.account-area{font-size:.85rem}.preview-label{font-size:.8rem}}
 
 html,body{height:100%}body{display:flex;flex-direction:column}#root{display:flex;flex-direction:column;flex:1;min-height:0}.workspace{flex:1;height:auto}.main>main>.notice{flex-shrink:0}
+
+.bounded-table.bounded-table th,.bounded-table.bounded-table td{white-space:normal;overflow-wrap:anywhere;min-width:0!important;max-width:none!important}
