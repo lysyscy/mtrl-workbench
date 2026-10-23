@@ -2,3 +2,8 @@ minimumReleaseAgeExclude:
   - vite@8.3.5
 patchedDependencies:
   ag-grid-community@36.2.0: patches/ag-grid-community@36.2.0.patch
+  'antd@6.6.7': patches/antd@6.6.7.patch
+  '@rc-component/cascader@1.22.0': patches/rc-component__cascader@1.22.0.patch
+  '@rc-component/image@1.10.0': patches/rc-component__image@1.10.0.patch
+  '@rc-component/menu@1.5.0': patches/rc-component__menu@1.5.0.patch
+  '@rc-component/picker@1.12.2': patches/rc-component__picker@1.12.2.patch

@@ -1,0 +1,24 @@
+diff --git a/es/PickerPanel/index.d.ts b/es/PickerPanel/index.d.ts
+--- a/es/PickerPanel/index.d.ts
++++ b/es/PickerPanel/index.d.ts
+@@ -3,7 +3,7 @@
+ export interface PickerPanelRef {
+     nativeElement: HTMLDivElement;
+ }
+-export interface BasePickerPanelProps<DateType extends object = any> extends Pick<SharedPanelProps<DateType>, 'locale' | 'generateConfig' | 'disabledDate' | 'minDate' | 'maxDate' | 'prevIcon' | 'nextIcon' | 'superPrevIcon' | 'superNextIcon'>, SharedTimeProps<DateType>, Pick<React.HTMLAttributes<HTMLDivElement>, 'tabIndex'> {
++export interface BasePickerPanelProps<DateType extends object = any> extends Pick<SharedPanelProps<DateType>, 'locale' | 'generateConfig' | 'disabledDate' | 'minDate' | 'maxDate' | 'prevIcon' | 'nextIcon' | 'superPrevIcon' | 'superNextIcon'>, Omit<SharedTimeProps<DateType>, 'defaultValue'>, Pick<React.HTMLAttributes<HTMLDivElement>, 'tabIndex'> {
+     prefixCls?: string;
+     direction?: 'ltr' | 'rtl';
+     onSelect?: (date: DateType) => void;
+diff --git a/lib/PickerPanel/index.d.ts b/lib/PickerPanel/index.d.ts
+--- a/lib/PickerPanel/index.d.ts
++++ b/lib/PickerPanel/index.d.ts
+@@ -3,7 +3,7 @@
+ export interface PickerPanelRef {
+     nativeElement: HTMLDivElement;
+ }
+-export interface BasePickerPanelProps<DateType extends object = any> extends Pick<SharedPanelProps<DateType>, 'locale' | 'generateConfig' | 'disabledDate' | 'minDate' | 'maxDate' | 'prevIcon' | 'nextIcon' | 'superPrevIcon' | 'superNextIcon'>, SharedTimeProps<DateType>, Pick<React.HTMLAttributes<HTMLDivElement>, 'tabIndex'> {
++export interface BasePickerPanelProps<DateType extends object = any> extends Pick<SharedPanelProps<DateType>, 'locale' | 'generateConfig' | 'disabledDate' | 'minDate' | 'maxDate' | 'prevIcon' | 'nextIcon' | 'superPrevIcon' | 'superNextIcon'>, Omit<SharedTimeProps<DateType>, 'defaultValue'>, Pick<React.HTMLAttributes<HTMLDivElement>, 'tabIndex'> {
+     prefixCls?: string;
+     direction?: 'ltr' | 'rtl';
+     onSelect?: (date: DateType) => void;

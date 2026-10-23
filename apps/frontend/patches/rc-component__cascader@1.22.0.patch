@@ -1,0 +1,56 @@
+diff --git a/es/Cascader.d.ts b/es/Cascader.d.ts
+--- a/es/Cascader.d.ts
++++ b/es/Cascader.d.ts
+@@ -4,11 +4,11 @@
+ import Panel from './Panel';
+ import { SHOW_CHILD, SHOW_PARENT } from './utils/commonUtil';
+ export interface BaseOptionType {
+-    disabled?: boolean;
+-    disableCheckbox?: boolean;
++    disabled?: boolean | undefined;
++    disableCheckbox?: boolean | undefined;
+     label?: React.ReactNode;
+-    value?: string | number | null;
+-    children?: DefaultOptionType[];
++    value?: string | number | null | undefined;
++    children?: DefaultOptionType[] | undefined;
+ }
+ export type DefaultOptionType = BaseOptionType & Record<string, any>;
+ export interface SearchConfig<OptionType extends DefaultOptionType = DefaultOptionType, ValueField extends keyof OptionType = keyof OptionType> {
+@@ -22,7 +22,7 @@
+     autoClearSearchValue?: boolean;
+ }
+ export type ShowCheckedStrategy = typeof SHOW_PARENT | typeof SHOW_CHILD;
+-interface BaseCascaderProps<OptionType extends DefaultOptionType = DefaultOptionType, ValueField extends keyof OptionType = keyof OptionType> extends Omit<BaseSelectPropsWithoutPrivate, 'tokenSeparators' | 'labelInValue' | 'mode' | 'showSearch'> {
++interface BaseCascaderProps<OptionType extends DefaultOptionType = DefaultOptionType, ValueField extends keyof OptionType = keyof OptionType> extends Omit<BaseSelectPropsWithoutPrivate, 'placement' | 'tokenSeparators' | 'labelInValue' | 'mode' | 'showSearch'> {
+     id?: string;
+     prefixCls?: string;
+     fieldNames?: FieldNames<OptionType, ValueField>;
+diff --git a/lib/Cascader.d.ts b/lib/Cascader.d.ts
+--- a/lib/Cascader.d.ts
++++ b/lib/Cascader.d.ts
+@@ -4,11 +4,11 @@
+ import Panel from './Panel';
+ import { SHOW_CHILD, SHOW_PARENT } from './utils/commonUtil';
+ export interface BaseOptionType {
+-    disabled?: boolean;
+-    disableCheckbox?: boolean;
++    disabled?: boolean | undefined;
++    disableCheckbox?: boolean | undefined;
+     label?: React.ReactNode;
+-    value?: string | number | null;
+-    children?: DefaultOptionType[];
++    value?: string | number | null | undefined;
++    children?: DefaultOptionType[] | undefined;
+ }
+ export type DefaultOptionType = BaseOptionType & Record<string, any>;
+ export interface SearchConfig<OptionType extends DefaultOptionType = DefaultOptionType, ValueField extends keyof OptionType = keyof OptionType> {
+@@ -22,7 +22,7 @@
+     autoClearSearchValue?: boolean;
+ }
+ export type ShowCheckedStrategy = typeof SHOW_PARENT | typeof SHOW_CHILD;
+-interface BaseCascaderProps<OptionType extends DefaultOptionType = DefaultOptionType, ValueField extends keyof OptionType = keyof OptionType> extends Omit<BaseSelectPropsWithoutPrivate, 'tokenSeparators' | 'labelInValue' | 'mode' | 'showSearch'> {
++interface BaseCascaderProps<OptionType extends DefaultOptionType = DefaultOptionType, ValueField extends keyof OptionType = keyof OptionType> extends Omit<BaseSelectPropsWithoutPrivate, 'placement' | 'tokenSeparators' | 'labelInValue' | 'mode' | 'showSearch'> {
+     id?: string;
+     prefixCls?: string;
+     fieldNames?: FieldNames<OptionType, ValueField>;

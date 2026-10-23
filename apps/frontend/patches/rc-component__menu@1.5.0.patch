@@ -1,0 +1,22 @@
+diff --git a/es/MenuItem.d.ts b/es/MenuItem.d.ts
+--- a/es/MenuItem.d.ts
++++ b/es/MenuItem.d.ts
+@@ -1,6 +1,6 @@
+ import * as React from 'react';
+ import type { ItemData, MenuItemType } from './interface';
+-export interface MenuItemProps extends Omit<MenuItemType, 'label' | 'key' | 'ref'>, Omit<React.HTMLAttributes<HTMLLIElement>, 'onClick' | 'onMouseEnter' | 'onMouseLeave' | 'onSelect'> {
++export interface MenuItemProps extends Omit<MenuItemType, 'label' | 'key' | 'ref'>, Omit<React.HTMLAttributes<HTMLLIElement>, 'className' | 'style' | 'onClick' | 'onMouseEnter' | 'onMouseLeave' | 'onSelect'> {
+     children?: React.ReactNode;
+     /** @private Internal filled key. Do not set it directly */
+     eventKey?: string;
+diff --git a/lib/MenuItem.d.ts b/lib/MenuItem.d.ts
+--- a/lib/MenuItem.d.ts
++++ b/lib/MenuItem.d.ts
+@@ -1,6 +1,6 @@
+ import * as React from 'react';
+ import type { ItemData, MenuItemType } from './interface';
+-export interface MenuItemProps extends Omit<MenuItemType, 'label' | 'key' | 'ref'>, Omit<React.HTMLAttributes<HTMLLIElement>, 'onClick' | 'onMouseEnter' | 'onMouseLeave' | 'onSelect'> {
++export interface MenuItemProps extends Omit<MenuItemType, 'label' | 'key' | 'ref'>, Omit<React.HTMLAttributes<HTMLLIElement>, 'className' | 'style' | 'onClick' | 'onMouseEnter' | 'onMouseLeave' | 'onSelect'> {
+     children?: React.ReactNode;
+     /** @private Internal filled key. Do not set it directly */
+     eventKey?: string;

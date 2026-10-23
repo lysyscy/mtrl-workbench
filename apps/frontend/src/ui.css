@@ -1,0 +1,28 @@
+.business-modal{max-width:calc(100vw - 24px);top:8vh;padding-bottom:0}
+.business-modal .ant-modal-container{padding:0}
+.business-modal .ant-modal-body{max-height:84dvh;overflow:auto;scrollbar-color:var(--bd3) var(--sf2)}
+.business-modal .ant-modal-body>div{margin:0;max-width:calc(100vw - 24px);max-height:none;overflow:visible;border:0;border-radius:0;background:transparent;color:var(--tx);box-shadow:none}
+.business-modal .project-dialog{width:min(calc(560px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .notice-pay-dialog{width:min(calc(1240px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .notice-contract-dialog,.business-modal .contract-dialog,.business-modal .notice-flows-dialog{width:min(calc(1000px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .ledger-export-dialog{width:min(calc(650px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .flow-revoke{width:min(calc(620px * var(--fscale)),calc(100vw - 24px));padding:1.2rem}
+.business-project-picker{display:inline-block;min-width:min(10rem,100%);max-width:100%;vertical-align:middle}
+.business-project-picker .ant-select{width:100%}
+.business-project-popup{max-width:calc(100vw - 24px)}
+.business-project-popup .ant-select-item-option-content{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.business-project-option{display:flex;gap:.5em;align-items:center;min-width:0}
+.business-project-option>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.business-project-option .ant-checkbox-wrapper,.business-project-option .ant-radio-wrapper{pointer-events:none;flex:none;margin:0}
+.business-project-actions{display:flex;gap:.4rem;padding:.3rem;border-bottom:1px solid var(--bd)}
+.business-time-picker{display:inline-flex;gap:.3rem;align-items:center;min-width:0;max-width:100%}
+.business-time-picker .ant-picker{min-width:0;max-width:100%}
+.business-time-picker .ant-select{min-width:5em}
+.ag-custom-component-popup{font-family:var(--fs)}
+.ant-btn{font-variant-numeric:tabular-nums}
+.ant-btn.dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
+.ant-btn.dialog-close-button svg{width:1.1rem;height:1.1rem;fill:none;stroke:currentColor;stroke-width:1.8}
+.account-actions .ant-dropdown-menu{min-width:9rem}
+.history-tools{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}.history-tools [role=alert]{max-width:24em}
+
+.history-gate{display:contents}

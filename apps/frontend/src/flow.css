@@ -4,3 +4,5 @@
 .flow-revoke{border:1px solid var(--bd3);border-radius:var(--r2);background:var(--sf);color:var(--tx);padding:calc(18px * var(--fscale));box-shadow:var(--shadow-md)}.flow-revoke::backdrop{background:var(--mask)}
 
 .flow-grid .ag-cell,.flow-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale))}
+
+.flow-bars>.ant-btn.flow-bar{display:grid;grid-template-columns:subgrid;grid-column:1/-1;height:auto;white-space:normal;text-align:left;justify-content:normal;box-shadow:none}

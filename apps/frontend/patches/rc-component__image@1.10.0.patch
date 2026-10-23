@@ -1,0 +1,24 @@
+diff --git a/es/PreviewGroup.d.ts b/es/PreviewGroup.d.ts
+--- a/es/PreviewGroup.d.ts
++++ b/es/PreviewGroup.d.ts
+@@ -3,7 +3,7 @@
+ import type { InternalPreviewConfig, PreviewProps, PreviewSemanticName } from './Preview';
+ import type { TransformType } from './hooks/useImageTransform';
+ import type { ImageElementProps } from './interface';
+-export interface GroupPreviewConfig extends InternalPreviewConfig {
++export interface GroupPreviewConfig extends Omit<InternalPreviewConfig, 'imageRender' | 'onOpenChange'> {
+     current?: number;
+     imageRender?: (originalNode: React.ReactElement, info: {
+         transform: TransformType;
+diff --git a/lib/PreviewGroup.d.ts b/lib/PreviewGroup.d.ts
+--- a/lib/PreviewGroup.d.ts
++++ b/lib/PreviewGroup.d.ts
+@@ -3,7 +3,7 @@
+ import type { InternalPreviewConfig, PreviewProps, PreviewSemanticName } from './Preview';
+ import type { TransformType } from './hooks/useImageTransform';
+ import type { ImageElementProps } from './interface';
+-export interface GroupPreviewConfig extends InternalPreviewConfig {
++export interface GroupPreviewConfig extends Omit<InternalPreviewConfig, 'imageRender' | 'onOpenChange'> {
+     current?: number;
+     imageRender?: (originalNode: React.ReactElement, info: {
+         transform: TransformType;

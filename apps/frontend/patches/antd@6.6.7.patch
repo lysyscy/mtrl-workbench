@@ -1,0 +1,72 @@
+diff --git a/es/button/Button.d.ts b/es/button/Button.d.ts
+--- a/es/button/Button.d.ts
++++ b/es/button/Button.d.ts
+@@ -45,7 +45,7 @@
+     /** @private Only for internal usage. Do not use in your production */
+     _skipSemantic?: boolean;
+ }
+-type MergedHTMLAttributes = Omit<React.HTMLAttributes<HTMLElement> & React.ButtonHTMLAttributes<HTMLElement> & React.AnchorHTMLAttributes<HTMLElement>, 'type' | 'color'>;
++type MergedHTMLAttributes = Omit<React.HTMLAttributes<HTMLElement> & React.ButtonHTMLAttributes<HTMLElement> & React.AnchorHTMLAttributes<HTMLElement>, 'type' | 'color' | keyof BaseButtonProps>;
+ export interface ButtonProps extends BaseButtonProps, MergedHTMLAttributes {
+     href?: string;
+     htmlType?: ButtonHTMLType;
+diff --git a/lib/button/Button.d.ts b/lib/button/Button.d.ts
+--- a/lib/button/Button.d.ts
++++ b/lib/button/Button.d.ts
+@@ -45,7 +45,7 @@
+     /** @private Only for internal usage. Do not use in your production */
+     _skipSemantic?: boolean;
+ }
+-type MergedHTMLAttributes = Omit<React.HTMLAttributes<HTMLElement> & React.ButtonHTMLAttributes<HTMLElement> & React.AnchorHTMLAttributes<HTMLElement>, 'type' | 'color'>;
++type MergedHTMLAttributes = Omit<React.HTMLAttributes<HTMLElement> & React.ButtonHTMLAttributes<HTMLElement> & React.AnchorHTMLAttributes<HTMLElement>, 'type' | 'color' | keyof BaseButtonProps>;
+ export interface ButtonProps extends BaseButtonProps, MergedHTMLAttributes {
+     href?: string;
+     htmlType?: ButtonHTMLType;
+diff --git a/es/drawer/Drawer.d.ts b/es/drawer/Drawer.d.ts
+--- a/es/drawer/Drawer.d.ts
++++ b/es/drawer/Drawer.d.ts
+@@ -13,7 +13,7 @@
+     onResizeStart?: () => void;
+     onResizeEnd?: () => void;
+ }
+-export interface DrawerProps extends Omit<RcDrawerProps, 'maskStyle' | 'destroyOnClose' | 'mask' | 'resizable' | 'classNames' | 'styles' | OmitFocusType>, Omit<DrawerPanelProps, 'prefixCls' | 'ariaId'> {
++export interface DrawerProps extends Omit<RcDrawerProps, 'onClose' | 'maskStyle' | 'destroyOnClose' | 'mask' | 'resizable' | 'classNames' | 'styles' | OmitFocusType>, Omit<DrawerPanelProps, 'prefixCls' | 'ariaId'> {
+     size?: sizeType | number | string;
+     resizable?: boolean | DrawerResizableConfig;
+     open?: boolean;
+diff --git a/lib/drawer/Drawer.d.ts b/lib/drawer/Drawer.d.ts
+--- a/lib/drawer/Drawer.d.ts
++++ b/lib/drawer/Drawer.d.ts
+@@ -13,7 +13,7 @@
+     onResizeStart?: () => void;
+     onResizeEnd?: () => void;
+ }
+-export interface DrawerProps extends Omit<RcDrawerProps, 'maskStyle' | 'destroyOnClose' | 'mask' | 'resizable' | 'classNames' | 'styles' | OmitFocusType>, Omit<DrawerPanelProps, 'prefixCls' | 'ariaId'> {
++export interface DrawerProps extends Omit<RcDrawerProps, 'onClose' | 'maskStyle' | 'destroyOnClose' | 'mask' | 'resizable' | 'classNames' | 'styles' | OmitFocusType>, Omit<DrawerPanelProps, 'prefixCls' | 'ariaId'> {
+     size?: sizeType | number | string;
+     resizable?: boolean | DrawerResizableConfig;
+     open?: boolean;
+diff --git a/es/qr-code/interface.d.ts b/es/qr-code/interface.d.ts
+--- a/es/qr-code/interface.d.ts
++++ b/es/qr-code/interface.d.ts
+@@ -23,7 +23,7 @@
+     };
+ };
+ export type QRCodeSemanticAllType = GenerateSemantic<QRCodeSemanticType, QRCodeProps>;
+-export interface QRCodeProps extends Omit<QRProps, 'fgColor' | 'imageSettings' | 'includeMargin' | 'level' | 'minVersion'>, React.HTMLAttributes<HTMLDivElement> {
++export interface QRCodeProps extends Omit<QRProps, 'style' | 'title' | 'fgColor' | 'imageSettings' | 'includeMargin' | 'level' | 'minVersion'>, React.HTMLAttributes<HTMLDivElement> {
+     type?: 'canvas' | 'svg';
+     className?: string;
+     rootClassName?: string;
+diff --git a/lib/qr-code/interface.d.ts b/lib/qr-code/interface.d.ts
+--- a/lib/qr-code/interface.d.ts
++++ b/lib/qr-code/interface.d.ts
+@@ -23,7 +23,7 @@
+     };
+ };
+ export type QRCodeSemanticAllType = GenerateSemantic<QRCodeSemanticType, QRCodeProps>;
+-export interface QRCodeProps extends Omit<QRProps, 'fgColor' | 'imageSettings' | 'includeMargin' | 'level' | 'minVersion'>, React.HTMLAttributes<HTMLDivElement> {
++export interface QRCodeProps extends Omit<QRProps, 'style' | 'title' | 'fgColor' | 'imageSettings' | 'includeMargin' | 'level' | 'minVersion'>, React.HTMLAttributes<HTMLDivElement> {
+     type?: 'canvas' | 'svg';
+     className?: string;
+     rootClassName?: string;

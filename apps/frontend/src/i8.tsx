@@ -1,3 +1,4 @@
+import Button from 'antd/es/button';
 import { BoundedTable } from './bounded-table';
 import { useState } from 'react';
 import './i8.css';
@@ -13,7 +14,7 @@ function Status({ row }: { row: RunRecord }) {
   return <span className={`i8-status i8-${tone}`}>{text}</span>;
 }
 function ReadError({ message, retry, label }: { message: string; retry: () => void; label: string }) {
-  return <div className="notice" role="alert"><span>{message}</span><button onClick={retry}>{label}</button></div>;
+  return <div className="notice" role="alert"><span>{message}</span><Button htmlType="submit" onClick={retry}>{label}</Button></div>;
 }
 const when = (value: string) => value.replace('T', ' ');
 export function I8Page({ blocked }: { blocked: boolean }) {
