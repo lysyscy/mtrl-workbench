@@ -518,7 +518,7 @@ const ACT={
      rows:rows.map((n,i)=>{const p=paidOf(n.id), can=payEff(n), ok=!ntPayBlock(n);
        const dm=byId.get(n.id)?.default_pay_method||n.plannedPayMethod||'现汇';
        const df=payDraft[n.id]||{}, curM=df.m||dm, curA=df.a||can.toFixed(2);
-       return `<tr class="${ok?'':'hl'}"><td class="fc">${n.code}</td>
+        return `<tr data-pay-notice-id="${n.id}" class="${[ok?'':'hl',byId.get(n.id)?.term_warning?'pay-term-warning':''].filter(Boolean).join(' ')}"><td class="fc">${n.code}</td>
        <td class="now" title="付款项目全名：${esc(n.proj)}">${dispCell(n.proj,n)}</td>
        <td class="ctr">${astatTag(n.astat)}</td>
        <td class="num">${M(n.approve)}</td><td class="num">${M(p)}</td>
@@ -531,8 +531,7 @@ const ACT={
        <div class="fld"><label>付款日期</label><input class="inp" type="date" id="bDate" data-act="batchPayTerms" value="${esc(dt)}"></div>
        <div class="fld"><label>本批付款备注</label><input class="inp" id="bRemark" value="${esc(remark)}" placeholder="写入本批每条付款流水；选「其他」时必填"></div>
      </div>
-     <div id="batchPayTerms" aria-live="polite">${payTermsHtml(context.rows,context.available)}</div>
-     <div class="tip" style="margin:0">确认后每条生成一笔付款流水，并更新已付金额与付款状态。</div>`;
+      <div id="batchPayTerms" aria-live="polite">${payTermsHtml(context.rows,context.available)}</div>`;
    payBatchIds=rows.map(n=>n.id);  /* 本次窗口的行序，防删除 / 撤单后金额输入框串到剩余行。 */
    modal({wide:true,title:`批量付款 · 已勾选 ${rows.length} 条`,body,reopen:()=>ACT.batchPay(),
      footer:`<button class="btn" data-act="batchPayCancel">取消</button><button class="btn pri" data-act="batchPayOk"${bad.length?` disabled title="有 ${bad.length} 条不可付，请先删除这些行"`:''}>确认付款</button>`}); },
@@ -547,7 +546,11 @@ const ACT={
      const result=await API.paymentContext({ids:payBatchIds.map(Number),pay_date:day});
      if(request!==payContextRequest||!box.isConnected||date.value!==day) return null;
      if(!result?.ok){box.textContent=result?.message||'账期核对失败，请重试';return null;}
-     box.innerHTML=payTermsHtml(result.rows,result.available);return result;
+      box.innerHTML=payTermsHtml(result.rows,result.available);
+      const warningIds=new Set(result.rows.filter(r=>r.term_warning).map(r=>String(r.notice_id)));
+      box.closest('.modal').querySelectorAll('[data-pay-notice-id]').forEach(row=>
+        row.classList.toggle('pay-term-warning',warningIds.has(row.dataset.payNoticeId)));
+      return result;
    }catch(e){if(request===payContextRequest&&box.isConnected&&date.value===day) box.textContent=e.message||'账期核对失败，请重试';return null;}
  },
  batchPayCancel:()=>{ payContextRequest++;payDraft={}; closeModal(); },

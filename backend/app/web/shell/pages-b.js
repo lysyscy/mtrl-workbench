@@ -100,7 +100,7 @@ const JC_SUM_KEYS = [];  /* /api/m11/list 的 sum_keys = domain.SUM_KEYS，壳�
 function jcDefaultCell(j,c){
   const v = j.columnValues[c.key];
   if(c.key==='payment_term') return `<td><input class="inp" aria-label="账期" style="width:110px" data-act="jcPaymentField" data-id="${j.id}" data-k="payment_term" value="${esc(v||'')}"></td>`;
-  if(c.key==='payment_method') return `<td><select class="inp" aria-label="合同付款方式" data-act="jcPaymentField" data-id="${j.id}" data-k="payment_method"><option value="">未约定</option>${JC_PAYMENT_METHODS.map(m=>`<option ${m===v?'selected':''}>${esc(m)}</option>`).join('')}</select></td>`;
+  if(c.key==='payment_method') return `<td data-v="${esc(v||'')}"><select class="inp" aria-label="合同付款方式" data-act="jcPaymentField" data-id="${j.id}" data-k="payment_method"><option value="">未约定</option>${JC_PAYMENT_METHODS.map(m=>`<option ${m===v?'selected':''}>${esc(m)}</option>`).join('')}</select></td>`;
   return c.type === 'num' ? `<td class="num">${M(N0(v))}</td>` : `<td>${esc(v == null ? '' : String(v))}</td>`;
 }
 /** 现有七列仍走原取值（子表/列表共用）；新增金额列读同名行字段。 */
@@ -410,8 +410,9 @@ const kvBlock=pairs=>`<div style="display:grid;grid-template-columns:118px 1fr;g
 function payTermsHtml(rows,available=true){
   if(available===false) return '<div class="tip">账期提醒暂未启用，请按合同人工核对；原有付款校验继续执行。</div>';
   const contracts=new Map(rows.filter(r=>r.term_warning).map(r=>[r.contract_id,r]));
-  return [...contracts.values()].map(r=>{
+  if(!contracts.size) return '';
+  return `<section class="pay-term-note" aria-label="账期提醒"><div class="pay-term-heading"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 19 18H1Z"/><path d="M10 7v5m0 3v.1"/></svg><b>未满账期</b><span>可继续付款</span></div><table class="pay-term-details"><thead><tr><th>合同</th><th>账期</th><th>发票日期</th><th>提醒截至</th></tr></thead><tbody>${[...contracts.values()].map(r=>{
     const w=r.term_warning;
-    return `<div class="tip wn"><b>${esc(w.message)}</b><div>合同 ${esc(r.contract_no||String(r.contract_id))} · 账期 ${esc(w.payment_term)} · 付款日期 ${esc(w.pay_date)}</div><div>${w.invoices.map(i=>`发票 ${esc(i.invoice_date)}，提醒截至 ${esc(i.remind_through||'日期范围以外')}`).join('；')}</div><div>请核对本次付款，可继续确认。</div></div>`;
-  }).join('');
+    return w.invoices.map((i,index)=>`<tr>${index?'':`<td rowspan="${w.invoices.length}">${esc(r.contract_no||String(r.contract_id))}</td><td rowspan="${w.invoices.length}">${esc(w.payment_term)}</td>`}<td><time>${esc(i.invoice_date)}</time></td><td><time>${esc(i.remind_through||'日期范围以外')}</time></td></tr>`).join('');
+  }).join('')}</tbody></table></section>`;
 }

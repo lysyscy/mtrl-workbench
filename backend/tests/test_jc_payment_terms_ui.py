@@ -1,9 +1,44 @@
 """旧台账字段的浏览器回归；所有 API 写入均为脱敏夹具。"""
 from pathlib import Path
+import os
 import pytest
 from playwright.sync_api import expect
 from app.mod11_jc.domain import JC_COLUMNS, SUM_KEYS, PAY_METHODS
 from tests.ui_helpers import ui_page  # noqa: F401
+
+
+def test_contract_payment_method_sort_uses_current_choice(ui_page):
+    p = ui_page
+    p.evaluate("""data=>{
+      const methods=['现汇','供应链','其他','承兑',''];
+      window.sortRows=methods.map((method,i)=>({id:21+i,date:'2026-01-01',material:'钢材',
+        supplier:'测试供应商',contract_no:'TEST-'+(21+i),project_key:'测试仓库',
+        tag:'纳入台账',contract_amt:'123.45',payment_method:method}));
+      API.m11List=async()=>({...data,rows:sortRows});
+      VIEW='m11';fJc.tag='全部';fJc.projs=[];return reloadM11();
+    }""", {'columns': list(JC_COLUMNS), 'sum_keys': list(SUM_KEYS), 'payment_methods': list(PAY_METHODS)})
+    header = p.locator('th[data-tk="m11:jc"]').filter(has_text='合同付款方式')
+    choices = p.get_by_role('combobox', name='合同付款方式', exact=True)
+    original = choices.evaluate_all('els=>els.map(e=>e.value)')
+    header.click()
+    assert choices.evaluate_all('els=>els.map(e=>e.value)') == ['承兑', '供应链', '其他', '现汇', '']
+    header.click()
+    assert choices.evaluate_all('els=>els.map(e=>e.value)') == ['现汇', '其他', '供应链', '承兑', '']
+    header.click()
+    assert choices.evaluate_all('els=>els.map(e=>e.value)') == original
+
+
+def test_payment_warning_groups_contract_and_preserves_all_invoice_dates(ui_page):
+    p = ui_page
+    result = p.evaluate("""()=>{
+      const row={contract_id:21,contract_no:'TEST-21',term_warning:{payment_term:'60±7天',
+        invoices:[{invoice_date:'2026-08-01',remind_through:'2026-10-07'},
+          {invoice_date:'2026-09-01',remind_through:'2026-11-07'}]}};
+      const host=document.createElement('div');host.innerHTML=payTermsHtml([row,row]);
+      return {contracts:host.querySelectorAll('td[rowspan="2"]').length,
+        rows:host.querySelectorAll('tbody tr').length,dates:[...host.querySelectorAll('time')].map(t=>t.textContent)};
+    }""")
+    assert result == {'contracts': 2, 'rows': 2, 'dates': ['2026-08-01', '2026-10-07', '2026-09-01', '2026-11-07']}
 
 
 @pytest.mark.parametrize("width,scale", [(1920, 1), (1280, 1.4)])
@@ -41,47 +76,71 @@ def test_contract_terms_edit_and_create(ui_page, width, scale):
     p.wait_for_function('window.termsAdded')
     assert p.evaluate('termsAdded.payment_term') == '30天'
     assert p.evaluate('termsAdded.payment_method') == '其他'
-    out = Path(__file__).resolve().parents[2] / '.artifacts/active/jc-payment-terms/20261023-implementation/screenshots'
-    out.mkdir(parents=True, exist_ok=True)
-    p.screenshot(path=str(out / f'contract-terms-{width}.png'), full_page=True)
+    if output := os.environ.get('MTRL_UI_EVIDENCE_PATH'):
+        out = Path(output)
+        out.mkdir(parents=True, exist_ok=True)
+        p.screenshot(path=str(out / f'contract-terms-{width}.png'), full_page=True)
 
 
 
-def test_payment_warning_tracks_date_without_overwriting_manual_method(ui_page):
+@pytest.mark.parametrize("width,scale", [(1920, 1), (1280, 1.4)])
+def test_payment_warning_tracks_date_without_overwriting_manual_method(ui_page, width, scale):
     p = ui_page
+    p.set_viewport_size({'width': width, 'height': 1080})
+    p.evaluate("scale=>document.documentElement.style.setProperty('--fscale',scale)", scale)
     p.evaluate("""()=>{
       SYS_TODAY='2026-04-11';NO[0].astat='已批';NO[0].paid=0;NO[0].amountPaid=0;
-      JCs.push(adaptJc({id:21,notice_ids:[101],contract_no:'TEST-21',tag:'纳入台账'}));
+      NO.push({...NO[0],id:'102',code:'DOC-102'});
+      JCs.push(adaptJc({id:21,notice_ids:[101,102],contract_no:'TEST-21',tag:'纳入台账'}));
       window.contextCalls=[];
       window.warning={message:'该合同存在未满账期的发票，请核对本次付款',payment_term:'90±10天',max_days:100,
         pay_date:'2026-04-11',invoice_side:'supplier',invoices:[{invoice_id:1,invoice_date:'2026-01-01',remind_through:'2026-04-11'}]};
       API.paymentContext=async body=>{contextCalls.push(body);return {ok:true,rows:[{notice_id:101,contract_id:21,
         contract_no:'TEST-21',default_pay_method:'承兑',default_pay_method_source:'contract',
-        term_warning:body.pay_date==='2026-04-11'?warning:null}]};};
+        term_warning:body.pay_date==='2026-04-11'?warning:null},
+        {notice_id:102,contract_id:22,contract_no:'TEST-22',default_pay_method:'现汇',term_warning:null}]};};
       API.batchPay=async body=>{window.contextPayment=body;return {ok:true,message:'已登记付款'};};
       reloadNotices=async()=>{};
-      pickSet.clear();pickSet.add('101');return ACT.batchPay();
+      pickSet.clear();pickSet.add('101');pickSet.add('102');return ACT.batchPay();
     }""")
     expect(p.locator('#bm0')).to_have_value('承兑')
+    row = p.locator('[data-pay-notice-id="101"]')
+    expect(row).to_have_class('pay-term-warning')
+    assert row.locator('td').evaluate_all('cells=>cells.every(c=>getComputedStyle(c).backgroundColor===getComputedStyle(cells[0]).backgroundColor)')
+    normal = p.locator('[data-pay-notice-id="102"]')
+    expect(normal).not_to_have_class('pay-term-warning')
+    assert row.locator('td').first.evaluate('c=>getComputedStyle(c).backgroundColor') != normal.locator('td').first.evaluate('c=>getComputedStyle(c).backgroundColor')
+    expect(p.get_by_role('dialog')).not_to_contain_text('确认后每条生成一笔付款流水')
     expect(p.locator('#batchPayTerms')).to_contain_text('2026-04-11')
     expect(p.locator('#batchPayTerms')).to_contain_text('90±10天')
     p.locator('#bm0').select_option('现汇')
+    p.locator('#ba0').fill('100.00')
+    p.locator('#ba0').blur()
+    header = p.get_by_role('dialog').get_by_role('button', name='单据编码↕', exact=True)
+    header.click()
+    p.get_by_role('dialog').get_by_role('button', name='单据编码▲', exact=True).click()
+    expect(p.get_by_role('dialog').locator('[data-pay-notice-id]').first).to_have_attribute('data-pay-notice-id', '102')
     p.locator('#bDate').fill('2026-04-12')
     p.locator('#bDate').blur()
     expect(p.locator('#batchPayTerms')).to_be_empty()
+    expect(row).not_to_have_class('pay-term-warning')
     expect(p.locator('#bm0')).to_have_value('现汇')
+    expect(p.locator('#ba0')).to_have_value('100.00')
     p.locator('#bDate').fill('2026-04-11')
     p.locator('#bDate').blur()
-    expect(p.locator('#batchPayTerms')).to_contain_text('存在未满账期')
+    expect(p.locator('#batchPayTerms')).to_contain_text('未满账期')
+    expect(row).to_have_class('pay-term-warning')
     expect(p.locator('#bm0')).to_have_value('现汇')
-    out=Path(__file__).resolve().parents[2]/'.artifacts/active/jc-payment-terms/20261023-implementation/screenshots'
-    out.mkdir(parents=True,exist_ok=True)
-    p.screenshot(path=str(out/'payment-terms-warning.png'),full_page=True)
+    if output := os.environ.get('MTRL_UI_EVIDENCE_PATH'):
+        out=Path(output)
+        out.mkdir(parents=True,exist_ok=True)
+        p.get_by_role('dialog').screenshot(path=str(out/f'payment-terms-warning-{width}.png'))
     p.on('dialog',lambda dialog:dialog.accept())
     p.locator('[data-act="batchPayOk"]').click()
     p.wait_for_function('window.contextPayment')
     assert p.evaluate('contextPayment.drafts["101"].pay_method') == '现汇'
     assert p.evaluate('contextPayment.pay_date') == '2026-04-11'
+    assert p.evaluate('contextPayment.drafts["101"].amount') == '100.00'
 
 
 

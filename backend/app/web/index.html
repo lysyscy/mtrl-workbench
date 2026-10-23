@@ -66,6 +66,16 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .tip.dg{background:var(--dg-l);border-color:var(--dg-bd);border-left-color:var(--dg);color:var(--dg-d)}
 .tip.ok{background:var(--ok-l);border-color:var(--ok-bd);border-left-color:var(--ok);color:var(--ok-d)}
 .tip b{font-weight:500}
+.dt tbody tr.pay-term-warning>td{background:color-mix(in srgb,var(--wn-l) 60%,var(--wn-bd))}
+.pay-term-note{margin-top:calc(10px * var(--fscale));padding:calc(9px * var(--fscale)) calc(12px * var(--fscale));border:1px solid var(--wn-bd);border-radius:6px;background:var(--wn-l);color:var(--wn-d);font-size:calc(12px * var(--fscale))}
+.pay-term-heading{display:flex;align-items:center;gap:calc(7px * var(--fscale));margin-bottom:calc(7px * var(--fscale))}
+.pay-term-heading svg{width:calc(16px * var(--fscale));height:calc(16px * var(--fscale));fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.pay-term-heading span{margin-left:auto}
+.pay-term-details{width:100%;border-collapse:collapse;text-align:left;font-variant-numeric:tabular-nums}
+.pay-term-details th,.pay-term-details td{padding:calc(4px * var(--fscale)) calc(8px * var(--fscale));vertical-align:top}
+.pay-term-details th{font-weight:500;border-bottom:1px solid var(--wn-bd)}
+.pay-term-details th:first-child,.pay-term-details td[rowspan]:first-child{padding-left:0}
+.pay-term-details time{white-space:nowrap}
 .tip code{font-family:var(--fm);font-size:calc(11px * var(--fscale));background:var(--code-bg);padding:calc(1px * var(--fscale)) calc(4px * var(--fscale));border-radius:3px}
 /* 可折叠的口径说明：默认收起，把纵向空间让给数据 */
 details.tip>summary{cursor:pointer;font-weight:500;outline:none;list-style:none}
