@@ -17,7 +17,7 @@
 
 | 需要绑定的内容 | 本仓主人与落点 |
 |---|---|
-| 现行需求与字段口径 | `docs/requirements/材料科业务全流程说明书.md` / `docs/requirements/PRD/`；按AGENTS.md定位对应MOD与原句 |
+| 现行需求与字段口径 | `docs/requirements/材料科业务全流程说明书.md` / `docs/requirements/PRD/`；按说明书附录 F 定位对应 MOD 与章节，关键口径编号见 §0.6.1 |
 | effort规格、采用记录及累计范围 | 已有设计件或所属票；新独立方案放 `.scratch/<effort>/`；已结束旧方案从docs/archive/index.md追溯，单票目标与验收放票面。明确采用时记录用户确认、固定起点、累计范围与当次授权；不为接入新建空规格或第二份状态表 |
 | 票源与阶段 | `docs/agents/issue-tracker.md` §一～§四；主计划§15是活跃索引，§14.3为排期，已销号姊妹件是历史短索引；开销票使用 `_tail_open.py` / `_tail_close.py` |
 | 资料目录与历史 | README.md §二/三/四/七、docs/guides/document-governance.md、docs/guides/work-records.md；术语及D件消费回 docs/agents/domain.md |
@@ -25,7 +25,7 @@
 | 结果与接续 | 当前票Comments留命令、退出码、关键数、未验边界与必要复现；跨会话且无合适票时才用当日日志；当前交接回主计划§13.6 |
 | 运行与数据权限 | docs/agents/project-rules.md的凭据边界；服务与恢复操作回 docs/guides/deployment.md。测试使用隔离数据；生产服务重启、迁移及真实业务写入按当前明确授权执行 |
 
-金额或日期出口变化仍先按业务样例核对字段目的、实际事实与统计调整；已确认规格沿用，不重新访谈。未知使用者继续调查并留下缺口；验收、证据和票状态须一致。资料同步及最终输入核验按AGENTS.md指向的个人方法执行。
+金额或日期出口变化仍先按业务样例核对字段目的、实际事实与统计调整；已确认规格沿用，不重新访谈。未知使用者继续调查并留下缺口；验收、证据和票状态须一致。资料同步及最终输入核验按本页§一所列 execution.md 执行。
 
 ## 二、提交与推送
 

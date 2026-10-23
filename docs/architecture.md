@@ -21,7 +21,7 @@ FastAPI由NSSM托管，单worker；PostgreSQL同机，测试库与开发库物�
 
 ## 二、共用实现约束
 
-以下为工程实现的约束与查阅入口；表内《说明书》节号指仓内 `delivery/`，完整清单见 docs/requirements.md。
+以下为工程实现的约束与查阅入口；本节《说明书》节号指 [材料科业务全流程说明书](requirements/材料科业务全流程说明书.md)，产品资料清单见 docs/requirements.md；`delivery/` 保留第三方原件及实际资源，不作为现行业务正文入口。
 
 ### 查询文本读取
 
