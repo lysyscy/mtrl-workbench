@@ -14,7 +14,7 @@ def test_two_independent_dialogs_preserve_scope_and_real_debt_file(server, brows
     page.get_by_role('button', name='逐月台账导出…', exact=True).click()
     dialog = page.get_by_role('dialog', name='逐月台账导出', exact=True)
     expect(dialog).to_be_visible()
-    dialog.get_by_role('button', name='取消', exact=True).click()
+    dialog.get_by_role('button', name='关闭', exact=True).click()
     page.get_by_role('button', name='总欠款汇总导出…', exact=True).click()
     dialog = page.get_by_role('dialog', name='总欠款汇总导出', exact=True)
     expect(dialog).to_be_visible()
@@ -23,6 +23,11 @@ def test_two_independent_dialogs_preserve_scope_and_real_debt_file(server, brows
     expect(dialog.get_by_role('button', name='确认清单', exact=True)).to_be_disabled()
     for name in ['长项目名验收', '隔离项目']:
         dialog.get_by_role('button', name=re.compile('^☐ '+name)).click()
+    dialog.get_by_role('button', name='关闭', exact=True).click()
+    page.reload()
+    expect(page.get_by_role('region', name='辅材欠款台账')).to_be_visible()
+    page.get_by_role('button', name='总欠款汇总导出…', exact=True).click()
+    dialog = page.get_by_role('dialog', name='总欠款汇总导出', exact=True)
     dialog.get_by_role('button', name='确认清单', exact=True).click()
     expect(dialog.get_by_role('row')).to_have_count(3)
     assert dialog.locator('tbody tr td:nth-child(2)').all_text_contents() == ['长项目名验收','隔离项目']
@@ -83,8 +88,7 @@ def test_draft_feedback_is_inside_each_export_dialog(server,browser_page):
         dialog.get_by_role('button',name='确认清单',exact=True).click()
         dialog.get_by_role('button',name='保存到本地',exact=True).click()
         expect(dialog.get_by_role('alert')).to_contain_text('请先处理未保存输入')
-        dialog.get_by_role('button',name='取消',exact=True).click()
-        page.get_by_role('dialog',name='放弃未保存的修改？',exact=True).get_by_role('button',name='放弃并关闭',exact=True).click()
+        dialog.get_by_role('button',name='关闭',exact=True).click()
     assert not exports
 
 
@@ -99,8 +103,9 @@ def test_empty_data_and_unbuilt_project_cannot_expand_export_scope(server,browse
     expect(dialog.get_by_role('alert')).to_contain_text('一个项目的欠款都算不出来')
     dialog.get_by_role('button',name='返回选择',exact=True).click()
     expect(dialog.get_by_role('button',name=re.compile('^☑ 归档样例'))).to_be_visible()
-    dialog.get_by_role('button',name='取消',exact=True).click()
-    dialog.get_by_role('button',name='放弃并关闭',exact=True).click()
+    dialog.get_by_role('button',name='清空',exact=True).click()
+    dialog.get_by_role('button',name=re.compile('^☐ 隔离项目')).click()
+    dialog.get_by_role('button',name='关闭',exact=True).click()
     def no_warehouse(route):
         response=route.fetch();rows=response.json()
         for row in rows:
@@ -111,3 +116,66 @@ def test_empty_data_and_unbuilt_project_cannot_expand_export_scope(server,browse
     page.get_by_role('button',name='总欠款汇总导出…',exact=True).click()
     expect(page.get_by_role('dialog').get_by_role('alert')).to_contain_text('尚未建仓')
     expect(page.get_by_role('dialog').get_by_role('button',name='确认清单',exact=True)).to_be_disabled()
+
+
+def test_export_preferences_restore_order_empty_selection_and_account_isolation(server, browser_page):
+    page, _ = browser_page
+    open_ledger(page, server)
+
+    def opening(title):
+        page.get_by_role('button', name=title+'…', exact=True).click()
+        return page.get_by_role('dialog', name=title, exact=True)
+
+    def selected(dialog, name):
+        return dialog.get_by_role('button', name=re.compile('^☑ '+name))
+
+    ledger = opening('逐月台账导出')
+    ledger.get_by_role('button', name=re.compile('^☐ 长项目名验收')).click()
+    ledger.get_by_role('button', name='确认清单', exact=True).click()
+    ledger.get_by_role('button', name='上移长项目名验收', exact=True).click()
+    ledger.press('Escape')
+    expect(page.locator('dialog[open]')).to_have_count(0)
+    debt = opening('总欠款汇总导出')
+    debt.get_by_role('button', name='清空', exact=True).click()
+    debt.get_by_role('button', name='关闭弹窗', exact=True).click()
+    page.reload()
+    expect(page.get_by_role('region', name='辅材欠款台账')).to_be_visible()
+    ledger = opening('逐月台账导出')
+    ledger.get_by_role('button', name='确认清单', exact=True).click()
+    assert ledger.locator('tbody tr td:nth-child(2)').all_text_contents() == ['长项目名验收', '隔离项目']
+    ledger.get_by_role('button', name='关闭', exact=True).click()
+    debt = opening('总欠款汇总导出')
+    expect(debt.get_by_role('button', name='确认清单', exact=True)).to_be_disabled()
+    expect(debt).to_contain_text('已选 0 个项目')
+    debt.get_by_role('button', name='关闭', exact=True).click()
+    page.get_by_role('button', name='切换账号', exact=True).click()
+    expect(page).to_have_url(re.compile('/login'))
+    open_ledger(page, server, 'preview-user')
+    ledger = opening('逐月台账导出')
+    expect(selected(ledger, '隔离项目')).to_be_visible()
+    expect(ledger.get_by_role('button', name=re.compile('^☐ 长项目名验收'))).to_be_visible()
+    ledger.get_by_role('button', name='清空', exact=True).click()
+    ledger.get_by_role('button', name='关闭', exact=True).click()
+    page.get_by_role('button', name='切换账号', exact=True).click()
+    expect(page).to_have_url(re.compile('/login'))
+    open_ledger(page, server)
+    ledger = opening('逐月台账导出')
+    expect(selected(ledger, '长项目名验收')).to_be_visible()
+    ledger.get_by_role('button', name='关闭', exact=True).click()
+
+    def changed_projects(route):
+        response = route.fetch()
+        rows = response.json()
+        rows = [row for row in rows if row['disp'] != '长项目名验收']
+        rows.append({**rows[0], 'id': 999999, 'disp': '新项目不自动加入'})
+        route.fulfill(response=response, json=rows)
+
+    page.route('**/api/m01/projects?**', changed_projects)
+    page.reload()
+    expect(page.get_by_role('region', name='辅材欠款台账')).to_be_visible()
+    ledger = opening('逐月台账导出')
+    expect(selected(ledger, '隔离项目')).to_be_visible()
+    expect(ledger.get_by_role('button', name=re.compile('^☐ 新项目不自动加入'))).to_be_visible()
+    ledger.get_by_role('button', name='确认清单', exact=True).click()
+    assert ledger.locator('tbody tr td:nth-child(2)').all_text_contents() == ['隔离项目']
+    ledger.get_by_role('button', name='关闭', exact=True).click()
