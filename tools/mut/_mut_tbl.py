@@ -79,7 +79,7 @@ def run_target() -> tuple[int, str, list[dict]]:
     report.unlink(missing_ok=True)
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1",
            "PYTHONPATH": str(plugin.parent)+os.pathsep+os.environ.get('PYTHONPATH',''),
-           "TBL_WITNESS": str(report), "ACC_RESULTS_PATH": str(PARTIAL_ACC)}
+           "TBL_WITNESS": str(report)}
     r = subprocess.run([str(PY), "-X", "utf8", "-m", "pytest", "-q", *TARGETS,
                         "-p", "_tbl_witness", "-p", "no:cacheprovider", "--tb=line"],
                        cwd=str(ROOT / "backend"), capture_output=True,

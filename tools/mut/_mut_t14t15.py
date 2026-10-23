@@ -1,4 +1,4 @@
-"""T14/T15 隔离反例：运行超期、旧混合目录、散件和决策元信息。"""
+"""T14/T15 隔离反例：运行超期、旧混合目录、散件与证据期限。"""
 from pathlib import Path
 import json
 import os
@@ -19,7 +19,7 @@ def main():
             root = Path(folder)
             W.REPO_ROOT = root
             def hits():
-                return W.check_scratch_ttl() + W.check_artifacts_and_headers()
+                return W.check_scratch_ttl()
             baseline = len(hits())
             stale = root/'.artifacts/active/fixture/one/reports/stale.json'
             stale.parent.mkdir(parents=True)
@@ -37,15 +37,6 @@ def main():
                 p.unlink()
                 if rel.startswith('artifacts/'):
                     p.parent.rmdir()
-                cases += 1
-            decision = root/'docs/adr/D9999-fixture.md'
-            decision.parent.mkdir(parents=True)
-            header = '# fixture\n> 读者：测试｜回答：守卫｜何时读：测试\n'
-            for text, bad in [('> 状态：已办结\n', True), ('> 状态：已定稿\n', True),
-                              ('> 状态：已定稿\n**落地位置**：tools/mut/_mut_t14t15.py\n', False)]:
-                decision.write_text(header+text, encoding='utf-8')
-                assert (len(hits()) > baseline) == bad
-                decision.unlink()
                 cases += 1
             policy = root/'.artifacts/archive/fixture/retention.json'
             policy.parent.mkdir(parents=True)

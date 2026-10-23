@@ -1,29 +1,4 @@
-"""反向灵敏度（**表级虚拟滚动** —— `TAIL-64` `P5-a` ＋ `P5-c`）—— 证明那几条**结构性**判据真有区分力。
-
-⚠️ 本件为什么必需：`P5-a` 把虚拟滚动从"整页"下沉到"**那张表自己**"，而它**不产生任何渲染差异**
-   （窗口大小、行高、合计行位置都一样）⇒ 人眼 / 真机 / `U1` 都看不出"某一处到底接没接上"。
-   ⚠️ 尤其第一条：把**滚动监听的挂载点**写错位置那次，**离线判据全绿、`node --check` 全绿**，
-      靠真机才发现（滚动条能拖、内容一动不动）⇒ 只有"改坏了必须红"能证明它。
-
-七靶（改完**立刻按 bytes 复原** ＋ MD5 校验）：
-- `M1` **内核不拼标记**：`TBL` 里 `'<tbody data-vs="'` 改成 `'<tbody data-vz="'`（合法字面 ⇒ 不触发语法错）
-  ⇒ "认领不到任何表"必须红。
-- `M2` **摘掉挂载点**：`view.js` 里 `vsBindScroll();` 那一次调用改成 `void 0;` ⇒ "表级那条路没人挂监听"必须红。
-- `M3` **摘掉分派**：`view.js` 里 `vsTableHits(html)` 换成 `[]` ⇒ "表级那条路永远不会接管"必须红。
-- `M4` **摘掉清空**（`P5-c`）：`startVirtual` 里那句 `VS_TS=[];` 改成 `void 0;`
-  ⇒ "分派前先清空"必须红（摘了 ⇒ 上一页认领过的表留到下页，滚动时认错对象、**不报错**）。
-- `M5` **不写回行**（`P5-c`）：那张**没有 `.tw`** 的表本该"行原样写回"，把写回那句抹掉
-  ⇒ "只剩一个垫高行"必须红（真机表现 = 一张**看起来是空的**表）。
-- `M6` **认领会认错表**（`P5-c`）：把按 `data-vs-i` **对位**改回按 `data-vs` 的**值**查
-  ⇒ "不该按值查"必须红（一页多表同键时窗口会画到别人那张表上）。
-- `M7` **滚动帧退回整页写**（`P5-c` / 红线②）：把"只换 `tbody` 的行"改成 `$('#view').innerHTML=…`
-  ⇒ 红线② 必须红（那正是当年**两次用户报障**的病根：打断滚轮手势、`scrollTop` 归零）。
-
-⚠️ 判据 = **目标测试件 rc≠0** ＋ **那条断言的原话出现在输出里**（⛔ 别只看 rc）。
-⚠️ 子集 pytest 用 `ACC_RESULTS_PATH` 指到 `artifacts/_mut_acc_results.json`（⭐ 别把权威四态冲成残档）。
-
-用法：python tools/mut/_mut_p5a.py
-"""
+'反向灵敏度（**表级虚拟滚动** —— `TAIL-64` `P5-a` ＋ `P5-c`）—— 证明那几条**结构性**判据真有区分力。\n\n⚠️ 本件为什么必需：`P5-a` 把虚拟滚动从"整页"下沉到"**那张表自己**"，而它**不产生任何渲染差异**\n   （窗口大小、行高、合计行位置都一样）⇒ 人眼 / 真机 / `U1` 都看不出"某一处到底接没接上"。\n   ⚠️ 尤其第一条：把**滚动监听的挂载点**写错位置那次，**离线判据全绿、`node --check` 全绿**，\n      靠真机才发现（滚动条能拖、内容一动不动）⇒ 只有"改坏了必须红"能证明它。\n\n七靶（改完**立刻按 bytes 复原** ＋ MD5 校验）：\n- `M1` **内核不拼标记**：`TBL` 里 `\'<tbody data-vs="\'` 改成 `\'<tbody data-vz="\'`（合法字面 ⇒ 不触发语法错）\n  ⇒ "认领不到任何表"必须红。\n- `M2` **摘掉挂载点**：`view.js` 里 `vsBindScroll();` 那一次调用改成 `void 0;` ⇒ "表级那条路没人挂监听"必须红。\n- `M3` **摘掉分派**：`view.js` 里 `vsTableHits(html)` 换成 `[]` ⇒ "表级那条路永远不会接管"必须红。\n- `M4` **摘掉清空**（`P5-c`）：`startVirtual` 里那句 `VS_TS=[];` 改成 `void 0;`\n  ⇒ "分派前先清空"必须红（摘了 ⇒ 上一页认领过的表留到下页，滚动时认错对象、**不报错**）。\n- `M5` **不写回行**（`P5-c`）：那张**没有 `.tw`** 的表本该"行原样写回"，把写回那句抹掉\n  ⇒ "只剩一个垫高行"必须红（真机表现 = 一张**看起来是空的**表）。\n- `M6` **认领会认错表**（`P5-c`）：把按 `data-vs-i` **对位**改回按 `data-vs` 的**值**查\n  ⇒ "不该按值查"必须红（一页多表同键时窗口会画到别人那张表上）。\n- `M7` **滚动帧退回整页写**（`P5-c` / 红线②）：把"只换 `tbody` 的行"改成 `$(\'#view\').innerHTML=…`\n  ⇒ 红线② 必须红（那正是当年**两次用户报障**的病根：打断滚轮手势、`scrollTop` 归零）。\n\n用法：python tools/mut/_mut_p5a.py\n'
 
 from __future__ import annotations
 
@@ -85,8 +60,7 @@ CASES: list[tuple[pathlib.Path, str, bytes, bytes, str]] = [
 
 
 def run_target() -> tuple[int, str]:
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1",
-           "ACC_RESULTS_PATH": str(PARTIAL_ACC)}
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run([str(PY), "-m", "pytest", "-q", *TARGETS, "-p", "no:cacheprovider",
                         "--tb=line"], cwd=str(ROOT / "backend"), capture_output=True,
                        text=True, encoding="utf-8", errors="replace", env=env)

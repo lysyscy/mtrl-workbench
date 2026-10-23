@@ -11,7 +11,7 @@
 - [ ] 隔离验证排序与人工值保存、重读、冲突和拒绝，旧响应不覆盖新上下文。
 - [ ] 实际导出核金额、行集合和顺序；同数据记录进入/筛选/编辑/滚动表现，明显退化有处理结论。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 28, 39, 40, 41, 42）；业务口径：[MOD-07](../../../docs/requirements/PRD/02-功能规格/MOD-07.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 28, 39, 40, 41, 42）；业务口径：[materials-reports](../../../docs/requirements/materials-reports.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

@@ -38,7 +38,6 @@ def main():
             shutil.copytree(ROOT / part, isolated / part, ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copy2(ROOT / "backend/pytest.ini", isolated / "backend/pytest.ini")
         env = os.environ.copy()
-        env["ACC_RESULTS_PATH"] = str(isolated / "results.json")
         def run(test):
             return subprocess.run([str(ROOT / "backend/.venv/Scripts/python.exe"), "-X", "utf8", "-m", "pytest",
                                    "tests/test_proc_split_shell.py::" + test, "-q", "--tb=short"],

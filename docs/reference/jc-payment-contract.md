@@ -1,6 +1,6 @@
 # 集采付款约定接口
 
-供旧台账与新前端接入使用；业务规则主人为《材料科业务全流程说明书》§6.4.1，来源 main/master 固定提交 `a8004d605b409d70ba5e255e2218d7d2c530368d` 的 TAIL-432/433；本次只接后端契约，React UI 消费进度回[规格](../../.scratch/frontend-vue-rewrite/spec.md#阶段2a后端付款契约)。
+供旧前端与 React 接入；业务含义见[集采](../requirements/central-procurement.md)。后端来源固定 `a8004d605b409d70ba5e255e2218d7d2c530368d`；本分支当前 UI、验证与加载状态回[阶段2D](../../.scratch/frontend-vue-rewrite/spec.md#阶段2d付款预检接线与阶段2验收范围)。
 
 ## 合同字段
 
@@ -26,6 +26,10 @@ main 的旧付款窗口打开时读取默认；未满账期的通知书整行黄
 
 `remind_through` 是录入发票日期加最大账期的提醒截止，不能标为准确应付款日。来源接口没有可信度等级、开票来源核验或到期可付额；不解析备注来猜账期。无法解析的发票日期跳过；空提醒只说明本次规则没有返回提醒，不证明日期真实或合同可付。金额、准入、幂等和事务仍由原 batch-pay 校验。
 
-迁移只允许在明确的专用测试 schema 验证；原8037预览仍使用旧模型/旧schema，未加载本契约。2D已在新自有schema升级到c2a261023验证并清理，后续验收仍需明确目标schema并升级到c2a261023，不能直接给8037旧schema升级。通知书列表、payment-preview及batch-pay的既有React响应字段保留；本端点不写草稿、关联或流水。
+迁移/模型验证先核明确的专用测试 schema 及当前版本；本分支目标为合并节点 `c2a261023`。在用预览的模型、schema、前端和回退依据分别核实，不能仅换前端而沿旧 schema 使用新模型；本次文档吸收不操作任何预览。notice-list、payment-preview 及 batch-pay 的 React 既有字段继续保留；payment-context 不写草稿、关联或流水。
 
 React阶段2D已按上述契约接入付款窗口，状态与证据回[阶段2D](../../.scratch/frontend-vue-rewrite/spec.md#阶段2d付款预检接线与阶段2验收范围)。默认只初始化未手改方式，改期不重置金额/备注/方式，最终确认先重读；404明确人工核对，其他错误阻止继续并可重试。材料名读取失败单独提供重读，不冒充已获取材料或完整合同页；付款成功后列表重读失败与未知提交结果分别表述。
+
+## 主线原表核对与备注迁移
+
+主线已有合同方式快照/核对例外及逐条备注迁移的共享接口扩展，其有效契约和真实写入确认边界见[主线固定接口正文](https://github.com/lysyscy/mtrl-workbench/blob/e55ff04822c78338d130e0fd914835ce60deaa2b/docs/reference/jc-payment-contract.md#excel核对与计划回写)及同件“备注迁移”。本分支尚未吸收对应 snapshot/method-preview/methods 与 `_jc_payment_terms.py` 实现；文档吸收不等于这些能力或个人技能已发布到 React，后续范围回共同规格。

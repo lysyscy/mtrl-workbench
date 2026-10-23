@@ -1,10 +1,4 @@
-"""**反向灵敏度**：证明 `test_wired_m03_action.py`（`§19` 批 4 小轮③ 搬的 8 条壳侧断言）**真有区分力**。
-
-做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。
-⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿** ⇒ 脚本报错退出。
-⚠️ 子进程必须设 `ACC_RESULTS_PATH`（否则每处变异把权威 `acc_results.json` 冲成单条）
-   与 `PYTHONIOENCODING=utf-8`（否则 Windows 上 GBK 解码假红）—— 见 `_mut_m03list.py` 的说明。
-"""
+'**反向灵敏度**：证明 `test_wired_m03_action.py`（`§19` 批 4 小轮③ 搬的 8 条壳侧断言）**真有区分力**。'
 
 from __future__ import annotations
 
@@ -95,7 +89,7 @@ def md5(p: Path) -> str:
 
 def run_one(case: str) -> bool:
     env = {**os.environ,
-           "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
+
            "PYTHONIOENCODING": "utf-8",
            "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run(

@@ -22,7 +22,6 @@ import subprocess
 import sys
 
 # ⛔ **结果隔离**（本仓纪律）：非全套 pytest 必须把四态结果写到**临时文件**。
-os.environ.setdefault("ACC_RESULTS_PATH", str(_run_output('_mut_acc_results.json')))
 
 sys.stdout.reconfigure(encoding="utf-8")            # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[2]

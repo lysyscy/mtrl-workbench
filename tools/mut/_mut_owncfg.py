@@ -83,7 +83,6 @@ def run(test: str, k: str) -> int:
     env = dict(os.environ)
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    env["ACC_RESULTS_PATH"] = MUT_RESULTS
     r = subprocess.run([str(PY), "-m", "pytest", "-q", test, "-k", k,
                         "-p", "no:cacheprovider", "--no-header", "-x"],
                        cwd=BE, env=env, capture_output=True, text=True,

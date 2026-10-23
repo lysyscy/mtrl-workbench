@@ -98,7 +98,7 @@ def _fit(fragment: bytes, sample: bytes) -> bytes:
 def run_one(case: str) -> bool:
     """跑**全 `tests/`** 里名字含 `case` 的用例（跨文件才靠得住，理由见模块头）。"""
     env = {**os.environ,
-           "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
+
            "PYTHONIOENCODING": "utf-8",
            "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run([str(PY), "-m", "pytest", "-q", "-k", case, "tests/"],

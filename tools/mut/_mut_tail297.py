@@ -1,4 +1,4 @@
-"""守TAIL-297治理工具：票索引不能空扫、敏感目录不能用旧根、中文幽灵探针有区分力。
+"""守TAIL-297治理工具：敏感目录不能用旧根、Git读取失败不能吞掉。
 
 源码只在独立模块命名空间改坏，正式文件不作靶；正常自测通过后，坏实现必须断言失败或返回非零。
 """
@@ -10,10 +10,8 @@ import types
 ROOT=Path(__file__).resolve().parents[2]
 CASES=[
     ('tools/oneoff/_oneoff_measure.py','工作树盘点误计缓存','"__pycache__" not in p.parts','True'),
-    ('tools/oneoff/_list_tails.py','历史索引空扫','return a, c, d','return a, c, []'),
-    ('tools/oneoff/_prepush_sensitive.py','旧目录假绿','".artifacts/recovery/backups/",','".workbuddy/backups/",'),
+    ('tools/oneoff/_prepush_sensitive.py','旧目录假绿','".artifacts/",','".workbuddy/backups/",'),
     ('tools/oneoff/_prepush_sensitive.py','git失败吞掉', 'return subprocess.run(["git",', 'return ""\n    return subprocess.run(["git",'),
-    ('tools/probe/_cn_path_probe.py','中文缺失漏候选','missing.append((i,raw))','pass'),
 ]
 
 

@@ -122,7 +122,7 @@ def _run(test: str) -> int:
             # ⚠️⚠️ **必须另写**：不设它 ⇒ 每跑一处变异就把**全套** `var/state/verification/acc_results.json`
             #     冲成"单条"（而且是在**改坏的代码**下写的）⇒ 之后 `acc_report` 会报"绿 0"，
             #     台账的四态数字全错。本仓实测踩过（`_mut_archpick.py` 早有同款注释）。
-            "ACC_RESULTS_PATH": str(MUT_RESULTS),
+
         },
     )
     return proc.returncode

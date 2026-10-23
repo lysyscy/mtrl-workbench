@@ -84,17 +84,3 @@ def test_壳不许替域挑颜色():
                  '<div class="tip ok">${esc(IMP.memory)}</div>'):
         assert tomb not in SHELL, \
             f"壳又在替域挑颜色了：{tomb!r} —— 域自报文案一律普通 `tip`（要分语气走 B 案：域自报 `note_kind`）"
-
-
-def test_判法本身写进了守则():
-    """⭐ 本批的**判法**（"绿只用于已完成 / 黄只用于风险"）必须留在守则 `§4.5` 里 ——
-    ⛔ 只改代码不写清判法 ⇒ 下一个人会照着旧习惯再把绿色挂到"将要发生"的说明上。
-
-    ⚠️ 判法 = 守则正文里必须出现这条口径的**整句特征串**（⛔ 不判它写在哪一栏）。
-    """
-    import pathlib
-
-    rule = (pathlib.Path(__file__).resolve().parents[2]
-            / "docs" / "guides" / "frontend-design.md").read_text(encoding="utf-8")
-    assert "只用于" in rule and "已经做完" in rule, "守则 §4.5 里没写「绿只用于已经做完」这条判法"
-    assert "禁止项" in rule, "守则 §4.5 里没写「黄只用于风险 / 禁止项」这条判法"

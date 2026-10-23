@@ -11,7 +11,7 @@
 - [ ] 隔离与外部响应替身验证成功、拒绝、撤销、失败回滚及有关页面刷新，不恢复独立差异页或手动导入。
 - [ ] 实际导出文件与当前范围的库存、调整结果及顺序核对。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 11, 29, 25, 39）；业务口径：[MOD-08](../../../docs/requirements/PRD/02-功能规格/MOD-08.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 11, 29, 25, 39）；业务口径：[materials-reports](../../../docs/requirements/materials-reports.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

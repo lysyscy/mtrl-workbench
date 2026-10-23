@@ -11,7 +11,7 @@
 - [ ] 新增/维护/删除及关联影响反馈完成真实保存和重读，长表与子表刷新保留滚动、定位及草稿。
 - [ ] 隔离与外部响应替身验证权限、记录冲突、歧义候选和失败回滚，原合同及其他业务关系不误改。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 11, 35, 23, 25）；业务口径：[MOD-11](../../../docs/requirements/PRD/02-功能规格/MOD-11.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 11, 35, 23, 25）；业务口径：[central-procurement](../../../docs/requirements/central-procurement.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

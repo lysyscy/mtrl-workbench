@@ -11,7 +11,7 @@
 - [x] 保存重读、拒绝、冲突、删除影响提示和未保存输入处理保持当前语义。
 - [x] 隔离库核对目标记录、相关页面新鲜度及失败无部分写入，不改其他通知书的既有关系。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 10, 15, 21, 22, 24, 25）；业务口径：[MOD-01](../../../docs/requirements/PRD/02-功能规格/MOD-01.md)、[MOD-03](../../../docs/requirements/PRD/02-功能规格/MOD-03.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 10, 15, 21, 22, 24, 25）；业务口径：[projects](../../../docs/requirements/projects.md)、[payments](../../../docs/requirements/payments.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

@@ -45,7 +45,6 @@ CASES=[
 
 def run(web, name=None):
     env=os.environ.copy();env['MTRL_UI_FIXTURE_WEB']=str(web)
-    env['ACC_RESULTS_PATH']=str(ROOT/str(_run_output('_mut_ui_acc_results.json')))
     cmd=[str(PY),'-X','utf8','-m','pytest',TEST+('::test_'+name if name else ''),'-q','--tb=short']
     return subprocess.run(cmd,cwd=ROOT,env=env,text=True,encoding='utf-8',capture_output=True,timeout=65)
 

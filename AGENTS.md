@@ -1,31 +1,20 @@
-# 材料报表自动化工作台 · Agent 读取入口
+# Agent 读取入口
 
-接手从 `docs/status.md` 定位当前状态与任务；实施或按票接续读该页 §0、§13.6 当前交接与 §15 相关票。处理文件、保存、环境或真实写入前，按 `docs/agents/project-rules.md` 读取相关边界；其余资料按下表取当前动作命中章节，只读调查不展开实施收尾。
+按当前动作读取下列主人及其必要源码。接手活动工作先从 [status](docs/status.md) 到原规格/票，核所在分支、工作树及实际进度。
 
-目录职责、分层和命名由 `README.md` 持有；本件只维护读取指针。
-
-首次使用个人方法时，读 `docs/agents/workflow.md` §一定位实际来源和本次需要的资源，按当前授权区分只读与维护；不因新会话自动同步。复盘个人方法或获准维护个人包时使用所列 improve-workflow。运行中任务沿用固定规则与授权基线。
-
-实施开工先读 `docs/agents/workflow.md` §三的项目规模与测试取舍（唯一正文）；核验、保存或按票接续也读该页：§一是输入和个人 execution 参考，§二是提交推送，§四是验证接线，§五是既有采用与接续限制。跨批统筹仅在明确采用时读取 coordination，创建子代理前读取 delegation；实际参考定位回该页 §一。
-
-生成或修改文档时，按 workflow §一定位个人 document-maintenance；选择目录或专项迁移时分别读取 document-layout、document-migration。项目迁移决定见 `docs/adr/0033-document-layout.md`；未迁部分按 `docs/guides/document-governance.md` 与 `docs/guides/work-records.md` 的既有落点操作。
-
-
-| 当前动作 / 要判断的事 | 读取位置 |
+| 当前动作 | 先读 |
 |---|---|
-| 查本仓输入、核验绑定、拆批记录、提交推送 | `docs/agents/workflow.md`；运行命令见 `docs/guides/development-and-verification.md` §十一 |
-| 开票、领票、销号、判断依赖或状态 | `docs/agents/issue-tracker.md`；活跃索引见主计划 §15；标签见 `docs/agents/triage-labels.md` |
-| 改业务行为、字段含义 | `docs/requirements/材料科业务全流程说明书.md`、`docs/requirements/PRD/` 对应 `MOD-*`；领域资料用法见 `docs/agents/domain.md` |
-| 改界面或处理显示、交互报障 | `docs/guides/frontend-design.md` §0 → §9 |
-| 写上屏文字 | `docs/adr/D29-文案审计口径-以熟手为准.md` |
-| 改壳适配、监听、重画或共享调用 | `docs/guides/development-and-verification.md` §十 / §十五 / §十六 |
-| 涉及打印、主题、历史数据、配置出口、模块搬运或判据 | 先取 `docs/guides/implementation-constraints.md` 标题，再读命中小节；业务含义回 `docs/requirements.md` |
-| 改工具脚本、处理编码或文件操作 | `docs/guides/implementation-constraints.md` §廿三、`tools/README.md` 对应项 |
-| 碰环境、起停、部署、架构或模块分工 | `docs/guides/operations.md` 索引 |
-| 查硬数字的依据 | `docs/reference/thresholds.md` |
-| 推翻既有决定、追溯当初原因 | `docs/adr/` 对应 D 件 |
-| 找资料、检查读取范围或历史位置 | `README.md` §三 → `docs/guides/operations.md`、`docs/guides/work-records.md` §六 |
-| 建文档、归档、删件或调整文档结构 | `docs/guides/document-governance.md` |
-| 整理重复、过期或难以定位的文档 | `docs/guides/document-audit.md`；写 Agent 文档时使用实际安装的 writing-for-agents，定位见 workflow §五 |
+| 实施、验证、提交、环境或文件操作 | [项目工作流](docs/agents/workflow.md)，实施开工先读“够用即止” |
+| 开票、领票、改状态或依赖 | [票协议](docs/agents/issue-tracker.md) |
+| 改业务、金额、归属或权限 | [当前需求](docs/requirements.md)中的相应主题 |
+| 改共享结构、写入/撤销或刷新链 | [架构](docs/architecture.md) |
+| 改界面与文案 | [前端设计](docs/guides/frontend-design.md)；旧壳机制再读 [旧前端参考](docs/reference/legacy-frontend.md) |
+| React 构建、隔离预览或前端票接续 | [预览指南](docs/guides/frontend-preview.md)与活动规格；先核在用资源与目标 schema |
+| 运行开发工具、选择检查或排查隔离 | [开发与验证](docs/guides/development-and-verification.md) |
+| 配置、启停、部署或服务加载 | [部署](docs/guides/deployment.md)；恢复再读 [备份](docs/guides/database-backup.md) |
+| i8 调用、探测或解析 | [i8 契约](docs/reference/i8-contract.md)与既有封装 |
+| 集采付款方式/账期接口 | [共享契约](docs/reference/jc-payment-contract.md) |
+| 模板生成、字段映射与导出 | [模板导出](docs/reference/template-export.md) |
+| 文档维护或专项迁移 | workflow 的个人方法入口；实际安装的 writing-for-agents |
 
-凭据与生产数据边界见 `docs/agents/project-rules.md`；真实 `.env` 不提交，钩子见 `ops/hooks/pre-commit`。
+凭据和真实业务原件保持受保护；真实服务、外部写入与业务数据操作按当次授权。独立 React 工作树的改动及索引由其任务持有，公共票号由指定整合者串行分配。

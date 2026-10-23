@@ -1,13 +1,4 @@
-"""**反向灵敏度**：证明 `test_wired_m03_list.py`（`§19` 批 4 小轮① 搬的 10 条壳侧断言）**真有区分力**。
-
-做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。
-
-⚠️ 若某条变异**没能让断言变红** ⇒ 那条断言是**假绿**（它没钉住它声称钉的东西）⇒ 脚本报错退出。
-⚠️ 与 `_mut_m08wired.py` 的两点差别（都是本仓踩过的坑）：
-   ① 子进程**必须**设 `ACC_RESULTS_PATH` —— 否则每处变异都会把全套 `var/state/verification/acc_results.json`
-      冲成"单条"，而且是在**改坏的代码**下写的 ⇒ 台账数字全错；
-   ② 子进程**必须**设 `PYTHONIOENCODING=utf-8` —— 否则 Windows 上按 GBK 写 stdout，读线程解码崩。
-"""
+'**反向灵敏度**：证明 `test_wired_m03_list.py`（`§19` 批 4 小轮① 搬的 10 条壳侧断言）**真有区分力**。\n\n做法：逐条把实现**改坏** → 确认**对应的那条断言变红** → 全部复原（**MD5 逐字节校验**）。'
 
 from __future__ import annotations
 
@@ -111,7 +102,7 @@ def md5(p: Path) -> str:
 def run_one(case: str) -> bool:
     """跑单条断言 ⇒ True = 通过，False = 变红。"""
     env = {**os.environ,
-           "ACC_RESULTS_PATH": str(_run_output('_mut_acc_results.json')),
+
            "PYTHONIOENCODING": "utf-8",
            "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run(

@@ -99,7 +99,6 @@ def run(label: str, tests: list[str], *, override: Path | None = None, inventory
     env["PYTHONPATH"] = str(SCRATCH) + os.pathsep + env.get("PYTHONPATH", "")
     report_path = SCRATCH / f"{PREFIX}-{label}-failures.json"
     env["TAIL_MUT_REPORT"] = str(report_path)
-    env["ACC_RESULTS_PATH"] = str(SCRATCH / f"{PREFIX}-{label}-acc.json")
     if override:
         env["TAIL_INVENTORY_OVERRIDE" if inventory else "TAIL_ACTIONS_OVERRIDE"] = str(override)
     command = [str(PYTHON), "-m", "pytest", "-q", "--tb=short", "-p", "tail264_266_mutation_plugin", *tests]

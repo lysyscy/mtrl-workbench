@@ -29,6 +29,5 @@ def isolated_backend(prefix):
                             ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copy2(ROOT / 'backend/pytest.ini', base / 'pytest.ini')
         env = dict(os.environ, TEST_DATABASE_URL=test_url,
-                   DATABASE_URL=settings.database_url, PYTHONIOENCODING='utf-8',
-                   ACC_RESULTS_PATH=str(Path(folder) / 'results.json'))
+                   DATABASE_URL=settings.database_url, PYTHONIOENCODING='utf-8')
         yield base, env

@@ -11,7 +11,7 @@
 - [ ] 隔离验证保存重读、空/零、权限、冲突和失败回滚。
 - [ ] 实际导出文件核相同范围的行、金额、合计及现行模板要求。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 30, 19, 23, 25, 39）；业务口径：[MOD-09](../../../docs/requirements/PRD/02-功能规格/MOD-09.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 30, 19, 23, 25, 39）；业务口径：[materials-reports](../../../docs/requirements/materials-reports.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

@@ -10,7 +10,7 @@
 - [x] 仅2025-11及以前材料录入的剩余用途由用户认可的Agent方式替代；本票不触发真实业务写入。
 - [x] 已存历史数据和过程资料查询/导出不属于退役范围；旧后端及专属测试留给最后清理批次。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 27, 36, 43）；业务口径：[MOD-06](../../../docs/requirements/PRD/02-功能规格/MOD-06.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 27, 36, 43）；业务口径：[materials-reports](../../../docs/requirements/materials-reports.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 

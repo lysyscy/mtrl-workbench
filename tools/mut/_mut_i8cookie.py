@@ -78,8 +78,7 @@ MUTATIONS: list[tuple[str, str, str, str, str]] = [
 def _child_env() -> dict:
     """给子进程（`pytest`）的环境：**显式 UTF-8** ＋ 四态写回**局部档**（⛔ 不冲权威档）。"""
     return {**os.environ,
-            "PYTHONIOENCODING": "utf-8",
-            "ACC_RESULTS_PATH": str(ROOT / _run_dir() / "_mut_acc_results.json")}
+            "PYTHONIOENCODING": "utf-8"}
 
 
 def _fit(fragment: bytes, sample: bytes) -> bytes:

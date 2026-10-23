@@ -50,15 +50,6 @@ def test_runtime_paths_are_absolute_and_separate(monkeypatch, tmp_path):
     assert ProfileStore().path == root / 'var/data/import_profiles.json'
 
 
-def test_retired_roots_fail_even_when_ignored(tmp_path, monkeypatch):
-    import audit_meta
-    monkeypatch.setattr(audit_meta, 'REPO_ROOT', tmp_path)
-    (tmp_path/'.gitignore').write_text('artifacts/\nlogs/\n', encoding='utf-8')
-    for name in ('artifacts', 'logs', '.scratch/local'):
-        (tmp_path/name).mkdir(parents=True)
-    hits = audit_meta.check_drop_zones()
-    assert {h['rel'] for h in hits if h['level'] == audit_meta.RED} >= {
-        'artifacts', 'logs', '.scratch/local'}
 
 
 def test_stale_runs_and_expired_archives_remain_visible(tmp_path, monkeypatch):

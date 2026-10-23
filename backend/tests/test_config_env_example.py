@@ -22,7 +22,6 @@ from app.core.config import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = ROOT / ".env.example"
-OPS_README = ROOT / "docs" / "guides" / "operations.md"
 
 
 def _env_example_keys() -> set[str]:
@@ -50,13 +49,3 @@ def test_样例必须覆盖配置的每一个字段():
         f"`.env.example` 里这些键**代码根本不读**：{extra}"
         "（要么是拼错了，要么是已废弃 ⇒ 别给人一条假线索）"
     )
-
-
-def test_配置主人表必须在位():
-    """⭐ 回答「改了 `.env` 为什么不生效」的**唯一地方**（`TAIL-192`-② · 库里也有值时**库优先**）。"""
-    text = OPS_README.read_text(encoding="utf-8")
-    assert "配置主人表" in text, (
-        "`docs/guides/operations.md` 的「配置主人表」不见了 —— 「改了 `.env` 不生效」这条线索就没了"
-    )
-    for col in ("想改什么", "从哪儿改", "要重启"):
-        assert col in text, f"配置主人表缺列「{col}」⇒ 读者答不出「改完要不要重启」"

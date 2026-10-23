@@ -22,7 +22,6 @@ import subprocess
 
 # ⛔ **结果隔离**（本仓纪律）：本脚本跑的是**子集** pytest ⇒ 必须把四态结果写到**临时文件**，
 #    否则会把权威 `var/state/verification/acc_results.json` 冲成"只有这几条"（`doc_audit` 的 T4 立刻报红）。
-os.environ.setdefault("ACC_RESULTS_PATH", str(_run_output('_mut_acc_results.json')))
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BE = ROOT / "backend"

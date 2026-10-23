@@ -11,7 +11,7 @@
 - [ ] 保存、变更关联及删除后子表读回、草稿/滚动/焦点/新对象定位正确。
 - [ ] 隔离核合同、发票、通知书与付款金额及状态，覆盖权限、重复、版本冲突、事务失败和有关撤销。
 
-规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 16, 35, 21, 22, 25, 26）；业务口径：[MOD-03](../../../docs/requirements/PRD/02-功能规格/MOD-03.md)、[MOD-11](../../../docs/requirements/PRD/02-功能规格/MOD-11.md)。
+规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 16, 35, 21, 22, 25, 26）；业务口径：[payments](../../../docs/requirements/payments.md)、[central-procurement](../../../docs/requirements/central-procurement.md)。
 
 验证类型：浏览器可观察行为＋实际后端/隔离数据库；涉及导出时检查实际文件，涉及外部系统时使用明确替身边界。复用有效既有保障，按本票风险补缺，不重复整套检查。
 
