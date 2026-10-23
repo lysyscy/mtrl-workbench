@@ -51,3 +51,9 @@ export async function contractWrite(path: string, payload: unknown, method = 'PO
   if(!record(value)||value.ok!==true)throw new ApiError('操作回执未确认，请重读核对，勿重复提交。',0,'invalid_response');
   return value;
 }
+
+const historyPrefix='历史未结金额；核对截至日：';
+export function contractHistoryDate(remark:string):string{return remark.startsWith(historyPrefix)?remark.slice(historyPrefix.length,historyPrefix.length+10):'';}
+export function historyContractRemark(date:string,remark:string):string{return `${historyPrefix}${date}；${remark.trim()}`;}
+
+export function contractRemarkText(remark:string):string{const date=contractHistoryDate(remark);return date?remark.slice(historyContractRemark(date,'').length):remark;}

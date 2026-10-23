@@ -88,3 +88,67 @@ def test_contract_reverse_link_preserves_other_contract_draft(server,browser_pag
     page.get_by_role('dialog').get_by_role('button',name='取消',exact=True).click()
     page.get_by_role('button',name='隔离钢材合同',exact=True).click()
     expect(page.get_by_role('dialog').get_by_label('备注',exact=True)).to_have_value('合同A未保存草稿')
+
+
+def test_history_summary_cutoff_and_subtable_drafts(server,browser_page):
+    page,_=browser_page
+    login(page,server)
+    page.get_by_role('link',name='MOD-11 集采合同').click()
+    page.get_by_role('button',name='新增合同',exact=True).click()
+    dialog=page.get_by_role('dialog')
+    dialog.get_by_role('checkbox',name='历史汇总',exact=True).check()
+    dialog.get_by_label('核对截至日',exact=True).fill('2025-11-30')
+    dialog.get_by_role('combobox',name='合同项目',exact=True).click()
+    page.locator('.ant-select-item-option-content').filter(has_text='归档样例').click()
+    dialog.get_by_role('button',name='保存合同',exact=True).click()
+    expect(dialog.get_by_role('heading',name='历史未结金额',exact=True)).to_be_visible()
+    expect(dialog.get_by_label('核对截至日',exact=True)).to_have_value('2025-11-30')
+    dialog.get_by_label('历史未结金额（元）',exact=True).fill('1234.56')
+    dialog.get_by_role('button',name='新增历史未结金额',exact=True).click()
+    expect(dialog.get_by_role('status')).to_contain_text('历史未结金额已新增')
+    dialog.get_by_label('手工付款金额（元）',exact=True).fill('25')
+    dialog.get_by_role('textbox',name='备注',exact=True).fill('仅修改正文')
+    dialog.get_by_role('button',name='保存合同',exact=True).click()
+    # Saving the parent must neither close nor freeze another subtable draft.
+    expect(dialog.get_by_label('手工付款金额（元）',exact=True)).to_have_value('25')
+    expect(dialog.get_by_role('button',name='新增手工付款',exact=True)).to_be_enabled()
+    dialog.get_by_role('button',name='新增手工付款',exact=True).click()
+    expect(dialog.get_by_role('status')).to_contain_text('手工付款已新增')
+    summary=next(r for r in page.request.get(server+'/api/m11/list').json()['rows'] if r['remark'].startswith('历史未结金额；核对截至日：2025-11-30；'))
+    assert summary['remark']=='历史未结金额；核对截至日：2025-11-30；仅修改正文'
+    data=page.request.get(server+f'/api/m11/detail?id={summary["id"]}').json()['data']
+    assert data['supplier_invoices'][0]['date']=='2025-11-30'
+    assert (str(data['settle']),str(data['pay_sum']),str(data['debt']))==('1234.56','25.00','1209.56')
+    dialog.get_by_role('button',name='关闭',exact=True).click()
+    page.get_by_role('button',name='新增合同',exact=True).click()
+    dialog.get_by_role('checkbox',name='历史汇总',exact=True).check()
+    dialog.get_by_label('核对截至日',exact=True).fill('2025-11-30')
+    dialog.get_by_role('combobox',name='合同项目',exact=True).click()
+    page.locator('.ant-select-item-option-content').filter(has_text='归档样例').click()
+    dialog.get_by_role('button',name='保存合同',exact=True).click()
+    expect(dialog.get_by_role('alert')).to_contain_text('本项目已有历史汇总')
+
+
+def test_late_new_contract_receipt_does_not_replace_reverse_link_editor(server,browser_page):
+    page,_=browser_page
+    login(page,server)
+    page.get_by_role('link',name='MOD-11 集采合同').click()
+    cid=next(r['id'] for r in page.request.get(server+'/api/m11/list').json()['rows'] if r['contract_no']=='TAIL416-CONTRACT')
+    pending=[]
+    page.route('**/api/m11/add',lambda route:pending.append(route))
+    page.get_by_role('button',name='新增合同',exact=True).click()
+    dialog=page.get_by_role('dialog')
+    dialog.get_by_role('combobox',name='合同项目',exact=True).click()
+    page.locator('.ant-select-item-option-content').filter(has_text='隔离项目').click()
+    dialog.get_by_role('button',name='保存合同',exact=True).click()
+    expect(dialog.get_by_role('button',name='正在保存…',exact=True)).to_be_visible()
+    page.go_back()
+    page.get_by_role('link',name='MOD-03 付款通知书').click()
+    page.get_by_role('button',name='查看 / 更改关联',exact=True).click()
+    page.get_by_role('link',name='查看合同详情',exact=True).click()
+    expect(dialog.get_by_label('材料名',exact=True)).to_have_value('隔离管件合同B')
+    # No DB write: reuse an existing ID to expose any late callback that opens A.
+    assert len(pending)==1
+    pending[0].fulfill(json={'ok':True,'id':cid,'message':'合成迟到回执'})
+    expect(page.locator('.contract-feedback')).to_contain_text('合同已新增')
+    expect(dialog.get_by_label('材料名',exact=True)).to_have_value('隔离管件合同B')

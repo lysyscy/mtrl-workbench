@@ -42,10 +42,29 @@ export function reportMonth() {
   return new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7);
 }
 
-export function LedgerExport({ kind, owner, projects, project, unavailable, run, message, valid, signal, paused }: {
-  kind: 'ledger' | 'debt'; owner: string; projects: Project[]; project: number; unavailable: string;
+interface ExportScopeProps {
+  kind: string; owner: string; projects: Project[]; project: number; unavailable: string;
   run: (action: () => Promise<void>, projects: number[]) => Promise<string | null>;
   message: (text: string) => void; valid: () => boolean; signal: AbortSignal | undefined; paused: boolean;
+}
+
+export function LedgerExport(props: ExportScopeProps & { kind: 'ledger' | 'debt' }) {
+  const { kind } = props;
+  const month = reportMonth();
+  return <ProjectExport {...props} title={kind === 'ledger' ? '逐月台账导出' : '总欠款汇总导出'}
+    description={kind === 'ledger' ? `报告月 ${month} · 每项目3表 · 多项目ZIP` : '实时汇总 · 一项目一行 · 无欠款数据的项目不出行'}
+    summary={count => kind === 'ledger' ? count === 1 ? '将生成1个工作簿。' : `选了${count}个项目，将生成一个zip。` : `已选 ${count} 个项目，按以下顺序导出。`}
+    success={kind === 'ledger' ? '台账已导出。' : '总欠款已导出。'}
+    exportFile={(chosen, signal) => {
+      const params = new URLSearchParams({ projects: chosen.map(item => item.warehouse_name!).join(',') });
+      if (kind === 'ledger') params.set('ym', month);
+      return requestFile(`/api/m05/${kind === 'ledger' ? 'ledger' : 'debt'}/export?${params}`, signal);
+    }} />;
+}
+
+export function ProjectExport({ kind, owner, projects, project, unavailable, run, message, valid, signal, paused, title, description, summary, success, exportFile }: ExportScopeProps & {
+  title: string; description: string; summary: (count: number) => string; success: string;
+  exportFile: (projects: Project[], signal?: AbortSignal) => Promise<{ blob: Blob; filename: string }>;
 }) {
   const [open, setOpen] = useState(false); const [ids, setIds] = useState<number[] | null>(null);
   const [confirm, setConfirm] = useState(false);
@@ -53,10 +72,8 @@ export function LedgerExport({ kind, owner, projects, project, unavailable, run,
   const trigger = useRef<HTMLButtonElement>(null);
   const [preferenceError, setPreferenceError] = useState('');
   const preferenceKey = `mtrl:export-projects:v1:${encodeURIComponent(owner)}:${kind}`;
-  const title = kind === 'ledger' ? '逐月台账导出' : '总欠款汇总导出';
   const selected = (ids ?? (project ? [project] : [])).filter(id => projects.some(item => item.id === id));
   const chosen = selected.flatMap(id => { const item = projects.find(item => item.id === id); return item ? [item] : []; });
-  const month = reportMonth();
   const scopeError = chosen.length !== selected.length ? '项目范围已变化，请重新选择。' : chosen.some(item => !item.warehouse_name?.trim()) ? '所选项目尚未建仓，请调整范围。' : '';
   const reason = unavailable || scopeError;
   const close = () => { setOpen(false); if (!paused && valid()) requestAnimationFrame(() => trigger.current?.focus()); };
@@ -84,12 +101,10 @@ export function LedgerExport({ kind, owner, projects, project, unavailable, run,
     const snapshot = [...chosen];
     try {
       const failure = await run(async () => {
-        const params = new URLSearchParams({ projects: snapshot.map(item => item.warehouse_name!).join(',') });
-        if (kind === 'ledger') params.set('ym', month);
-        const result = await requestFile(`/api/m05/${kind === 'ledger' ? 'ledger' : 'debt'}/export?${params}`, signal);
+        const result = await exportFile(snapshot, signal);
         if (!valid() || signal?.aborted) return;
         const url = URL.createObjectURL(result.blob); const link = document.createElement('a'); link.href = url; link.download = result.filename; link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000); close(); message(kind === 'ledger' ? '台账已导出。' : '总欠款已导出。');
+        setTimeout(() => URL.revokeObjectURL(url), 1000); close(); message(success);
       }, snapshot.map(item => item.id));
       if (valid() && failure) setFeedback(failure);
     } finally { setBusy(false); }
@@ -101,14 +116,14 @@ export function LedgerExport({ kind, owner, projects, project, unavailable, run,
       setFeedback(''); setConfirm(false); setOpen(true);
     }}>{title}…</Button>
     {open && createPortal(<BusinessModal open={open && !paused} className="ledger-export-dialog" titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
-      <p>{kind === 'ledger' ? `报告月 ${month} · 每项目3表 · 多项目ZIP` : '实时汇总 · 一项目一行 · 无欠款数据的项目不出行'}</p>
+      <p>{description}</p>
       <p className="muted">项目与顺序自动记在本机，关闭不撤销选择；清除浏览器数据或换设备需重选。</p>
       {preferenceError && <p className="notice" role="alert">{preferenceError}</p>}
       {!confirm ? <>
         <ProjectPicker projects={projects} selected={selected} pick={choose} multiple initiallyOpen label="导出项目" emptyLabel="请选择项目" disabled={busy} />
         <p>已选 {chosen.length} 个项目</p>
       </> : <>
-        <p>{kind === 'ledger' ? chosen.length === 1 ? '将生成1个工作簿。' : `选了${chosen.length}个项目，将生成一个zip。` : `已选 ${chosen.length} 个项目，按以下顺序导出。`}</p>
+        <p>{summary(chosen.length)}</p>
         <div className="export-table"><BoundedTable columns={[{ min: 4, max: 6 },{ min: 10, max: 28, flex: 1 },{ min: 10, max: 14 }]}><thead><tr><th>顺序</th><th><Button htmlType="submit" disabled={busy} onClick={() => choose([...chosen].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b), 'zh')).map(item => item.id))}>项目排序</Button></th><th>调整顺序</th></tr></thead><tbody>{chosen.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td>{projectLabel(item)}</td><td><Button htmlType="submit" aria-label={`上移${projectLabel(item)}`} disabled={busy || index === 0} onClick={() => move(index, -1)}>上移</Button> <Button htmlType="submit" aria-label={`下移${projectLabel(item)}`} disabled={busy || index === chosen.length - 1} onClick={() => move(index, 1)}>下移</Button></td></tr>)}</tbody></BoundedTable></div>
       </>}
       {(reason || feedback) && <p className="notice" role="alert">{reason || feedback}</p>}

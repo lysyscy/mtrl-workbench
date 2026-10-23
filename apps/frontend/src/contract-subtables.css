@@ -1,0 +1,23 @@
+.contract-subtables { border-top:1px solid var(--bd);margin-top:1em;padding-top:.8em; }
+.contract-subtables h3,.contract-subtables h4 { margin:.5em 0; }
+.subtable-heading,.subtable-links,.subtable-reconcile { display:flex;align-items:center;gap:.7em;flex-wrap:wrap; }
+.subtable-heading { justify-content:space-between; }
+.subtable-totals { display:flex;gap:1.8em;flex-wrap:wrap;margin:.8em 0; }
+.subtable-totals span { display:grid;gap:.25em; }
+.subtable-totals strong,.contract-subtables .money,.subtable-draft input { font-variant-numeric:tabular-nums; }
+.subtable-invoices { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,29em),1fr));gap:1em; }
+.subtable-scroll { overflow:auto;max-height:24em; }
+.contract-subtables table { border-collapse:collapse; }
+.contract-subtables th,.contract-subtables td { padding:.55em .6em;border-bottom:1px solid var(--bd);text-align:left;vertical-align:middle;overflow-wrap:anywhere; }
+.contract-subtables .money { text-align:right;white-space:nowrap; }
+.contract-subtables thead { position:sticky;top:0;background:var(--sf2);z-index:1; }
+.contract-subtables tfoot { font-weight:600;background:var(--sf2); }
+.contract-subtables small { display:block;color:var(--mut);margin-top:.3em; }
+.subtable-draft input:not([type=date]) { text-align:right; }
+.subtable-links { margin:.8em 0; }
+.subtable-delete { border:1px solid var(--bd);padding:.8em;margin:.8em 0; }
+.subtable-delete button+button { margin-left:.5em; }
+.contract-subtables tr:focus { outline:2px solid var(--pri);outline-offset:-2px; }
+
+.contract-subtables section { border:0;border-radius:0;overflow:visible; }
+.contract-subtables table.bounded-table .money { white-space:nowrap; }
