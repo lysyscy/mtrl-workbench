@@ -10,6 +10,7 @@ import { gridTheme } from './grid';
 import { mechanicalMoney as money, readDetail, readMechanicalReport, readWorkbench } from './mechanical-api';
 import { Details, MechanicalDialog, detailKey } from './mechanical-details';
 import { MechanicalImport } from './mechanical-import';
+import { TimePicker } from './time-picker';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
 import type { Category, Detail, Effective, Workbench, MechanicalReport, ReportSheet } from './mechanical-api';
@@ -21,7 +22,7 @@ function InternalCell({ id, column, value, label, editing, epoch }: { id: string
   return <input aria-label={label} inputMode="decimal" className="mechanical-internal-input money" value={text} onChange={event=>{setText(event.target.value);editing.current.change(id,column,event.target.value);}} />;
 }
 interface SummaryRow { id: string; [column: string]: string }
-const groupLabels = ['零租', '包月', '合计', '租赁公司内租', '工程公司内租'];
+const groupLabels = ['零租', '包月', '周材费', '租赁公司内租', '工程公司内租'];
 function Summary({ report, projectIds, detail, internal }: { internal: InternalEditing; report: MechanicalReport; projectIds: number[]; detail: (sheet: number, projectId: string) => void }) {
   const api = useRef<GridApi<SummaryRow> | null>(null);
   const current=useRef(internal);current.current=internal;
@@ -196,7 +197,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     {active && document.getElementById('history-controls') && createPortal(historyControls,document.getElementById('history-controls')!)}
     <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1·公司汇总'],['zero','表2·零租明细'],['monthly','表3·包月明细'],['work','核对工作台']] as const).map(([id,name])=><button key={id} aria-pressed={tab===id&&sheet===null} onClick={()=>{stopEditors();setTab(id);setSheet(null);setTemporary('');setProblemsOnly(false);}}>{name}</button>)}</div>
     <div className="mechanical-preview-entry"><button disabled={!writable||writing||state.isFetching} onClick={()=>{stopEditors();setImportOpen(true);}}>录入原报明细</button><button ref={previewButton} disabled={Boolean(scopeError) || !report.data || report.isFetching || report.isError} onClick={() => { stopEditors();setTemporary('');setSheet(0); setTarget(''); }}>四页报送预览</button></div>
-    <div className="filters"><label htmlFor="mechanical-month">月份</label><input id="mechanical-month" type="month" value={ym} disabled={blocked} onChange={event=>{if(event.target.value){stopEditors();setMonth(event.target.value);}}} /><ProjectPicker projects={candidates} selected={selected} pick={value=>{stopEditors();setIds(value);}} multiple label="报表项目" disabled={blocked || projects.isPending || state.isPending} /></div>
+    <div className="filters"><span>月份</span><TimePicker label="月份" modes={['月']} value={ym} disabled={blocked} onChange={value=>{stopEditors();setMonth(value);}} /><ProjectPicker projects={candidates} selected={selected} pick={value=>{stopEditors();setIds(value);}} multiple label="报表项目" disabled={blocked || projects.isPending || state.isPending} /></div>
     <div className="mechanical-project-tools"><button disabled={!writable||writing||state.isFetching} onClick={()=>setDialog('projects')}>保存显示项目及顺序</button>{tab==='summary'&&sheet===null&&<><button disabled={!writable||writing||!internalTargets.length} onClick={()=>{for(const [key,d] of internalDrafts.current)if(d.ym===ym&&warehouses.includes(d.warehouse))internalDrafts.current.delete(key);setInternalEpoch(n=>n+1);render(n=>n+1);}}>取消内租修改</button><button disabled={!writable||writing||!internalTargets.length} onClick={()=>setInternalConfirmation(internalTargets.map(d=>({...structuredClone(d),effective:state.data!.effective.find(e=>e.warehouse===d.warehouse&&e.ym===d.ym)!})).filter(d=>d.effective))}>确认内租（{internalTargets.length}项）</button></>}</div>
     </div>
     {needsRead && <p className="notice" role="alert">保存后需要重新读取。<button onClick={()=>void refresh()}>重新读取</button></p>}

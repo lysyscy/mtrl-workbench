@@ -27,6 +27,8 @@ def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     wb, warnings = export.build(data)
     assert wb.sheetnames == ['工程公司汇总表', '零租设备月报表', '包月外租设备月报', '年度汇总']
     summary, zero, monthly, annual = wb.worksheets
+    assert summary['G5'].value == '累计周材费' and summary['L5'].value == '当月周材费'
+    assert summary['G6'].value is None and summary['L6'].value is None
     assert summary['J6'].value == Decimal('100.00')
     assert summary['E6'].value == Decimal('150.00')
     assert summary['C6'].value == '2024'

@@ -143,6 +143,8 @@ def build(data, *, project_rows=None):
     for sheet, header in zip(wb.worksheets[:3], (5, 4, 4)):
         sheet.delete_rows(header + 1, sheet.max_row - header)
     summary = wb.worksheets[0]
+    put(summary, 5, 7, '累计周材费')
+    put(summary, 5, 12, '当月周材费')
     summary.row_dimensions[5].height = 33
     for i, project in enumerate(data['projects'], 6):
         wh = project['warehouse']

@@ -1,9 +1,10 @@
 import { useEffect, useId, useMemo, useRef } from 'react';
 import { DialogContents, useDialogClose } from './dialog-close';
+import { BusinessModal } from './business-modal';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridApi } from 'ag-grid-community';
 import { gridTheme } from './grid';
-import { mechanicalMoney as money, detailNet, detailProblems, detailSum } from './mechanical-api';
+import { mechanicalMoney as money, detailNet, detailProblems, detailSum, editDetailRow } from './mechanical-api';
 import type { Category, Detail, DetailRow, Effective } from './mechanical-api';
 import './mechanical.css';
 
@@ -33,7 +34,7 @@ export function Details({ name, saved, effective, draft, category, ym, keywords,
       editable:field !== 'net' ? () => current.current.writable : false,
       valueGetter:p => p.data ? field === 'net' ? detailNet(p.data) : p.data[field] ?? p.data[aliases[field] ?? ''] ?? '' : '',
       valueFormatter:p => field === 'net' ? money(p.value as string | null) : String(p.value ?? ''),
-      cellClass:['amount','rate','net'].includes(field) ? 'money' : '',
+      cellClass:['amount','rate','net','qty','plan','used'].includes(field) ? 'money' : '',
       cellEditorParams:{maxLength:4000},
       cellClassRules:{ 'mechanical-missing':p => Boolean(p.data && detailProblems(p.data,category,ym,current.current.keywords).includes(field === 'device' ? '设备名称' : field === 'amount' ? '合价' : field === 'tax' ? '票种／税率' : field === 'plate' ? '车牌' : '')) },
     })),
@@ -44,20 +45,18 @@ export function Details({ name, saved, effective, draft, category, ym, keywords,
   return <section className="mechanical-detail-group" aria-label={`${name}${category === 'zero' ? '零租' : '包月'}明细`}>
     <div className="mechanical-detail-head"><h2>{name}</h2><span>{rows.length} 条 · {draft ? '待保存（草稿参考）' : '已保存明细'}</span><button disabled={!writable} onClick={() => { const row = {id:crypto.randomUUID(),device:'',amount:'',tax:''};change([...rows,row]);requestAnimationFrame(() => {const grid=api.current;const node=grid?.getRowNode(row.id);if(node?.rowIndex != null){grid?.ensureIndexVisible(node.rowIndex);grid?.startEditingCell({rowIndex:node.rowIndex,colKey:'device'});}}); }}>增行</button></div>
     <div className="mechanical-detail-totals"><span>明细含税 <strong>{money(gross)}</strong> · 不含税 <strong>{money(net)}</strong>{rows.some(row=>detailNet(row)===null)?`（${rows.filter(row=>detailNet(row)===null).length}条待补）`:''}</span><span>有效月值：含税 {money(effective?.values[columns[0]!])} · 不含税 {money(effective?.values[columns[1]!])}</span></div>
-    <div className="mechanical-detail-grid" onInputCapture={event=>{const input=event.target;if(!(input instanceof HTMLInputElement)||!current.current.writable)return;const id=input.closest('[row-id]')?.getAttribute('row-id'),field=input.closest('[col-id]')?.getAttribute('col-id');if(!id||!field||field==='net')return;current.current.change(current.current.rows.map(row=>row.id===id?{...row,[field]:input.value}:row));}} style={{height:Math.min(420,80+Math.max(rows.length,2)*34)*scale}}>
+    <div className="mechanical-detail-grid" onInputCapture={event=>{const input=event.target;if(!(input instanceof HTMLInputElement)||!current.current.writable)return;const id=input.closest('[row-id]')?.getAttribute('row-id'),field=input.closest('[col-id]')?.getAttribute('col-id');if(!id||!field||field==='net')return;current.current.change(current.current.rows.map(row=>row.id===id?editDetailRow(row,field,input.value,category):row));}} style={{height:Math.min(420,80+Math.max(rows.length,2)*34)*scale}}>
       <AgGridReact<DetailRow> theme={gridTheme} rowData={visible} columnDefs={columnDefs} getRowId={p => p.data.id} readOnlyEdit singleClickEdit stopEditingWhenCellsLoseFocus suppressScrollOnNewData animateRows={false}
         rowHeight={34*scale} headerHeight={42*scale} defaultColDef={{sortable:false,resizable:true,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true}}
         overlayNoRowsTemplate={problemsOnly ? '此项目没有待补字段。' : '尚无明细；可增行，有效月值保留。'}
         onGridReady={event => {api.current=event.api;register(event.api);}} onGridPreDestroyed={() => register(null)}
-        onCellEditRequest={event => {const field=event.colDef.field;if(!field || !event.data || !current.current.writable)return;current.current.change(current.current.rows.map(row => row.id === event.data!.id ? {...row,[field]:String(event.newValue ?? '')} : row));}} />
+        onCellEditRequest={event => {const field=event.colDef.field;if(!field || !event.data || !current.current.writable)return;current.current.change(current.current.rows.map(row => row.id === event.data!.id ? editDetailRow(row,field,String(event.newValue ?? ''),category) : row));}} />
     </div>
   </section>;
 }
 
 export function MechanicalDialog({ title, close, busy, dirty = false, paused = false, children }: { title: string; close: () => void; busy: boolean; dirty?: boolean; paused?: boolean; children: React.ReactNode | ((requestClose: () => boolean) => React.ReactNode) }) {
-  const ref = useRef<HTMLDialogElement>(null), titleId = useId();
-  const closing = useDialogClose({ busy, dirty, close });
-  useEffect(() => { const previous = document.activeElement as HTMLElement | null; return () => {ref.current?.close();previous?.focus();}; }, []);
-  useEffect(() => { if (paused) ref.current?.close(); else if (!ref.current?.open) ref.current?.showModal(); }, [paused]);
-  return <dialog ref={ref} className="mechanical-dialog" aria-labelledby={titleId} {...closing.dialogProps}><DialogContents title={title} titleId={titleId} closing={closing}>{typeof children === 'function' ? children(closing.requestClose) : children}</DialogContents></dialog>;
+  const titleId = useId();
+  const closing = useDialogClose({ busy, dirty, close, active: !paused });
+  return <BusinessModal open={!paused} requestClose={closing.requestClose} className="mechanical-dialog" titleId={titleId}><DialogContents title={title} titleId={titleId} closing={closing}>{typeof children === 'function' ? children(closing.requestClose) : children}</DialogContents></BusinessModal>;
 }

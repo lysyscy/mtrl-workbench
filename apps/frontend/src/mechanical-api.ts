@@ -82,6 +82,19 @@ export function detailProblems(row: DetailRow, category: Category, month: string
   return problems;
 }
 
+export function editDetailRow(row: DetailRow, field: string, value: string, category: Category): DetailRow {
+  const next = { ...row, [field]: value };
+  const alias = ({ use: 'usage', vendor: 'lessor', memo: 'note' } as Record<string,string>)[field];
+  if (alias) delete next[alias];
+  const measure = category === 'zero' ? 'qty' : 'used';
+  if ((field === 'rate' || field === measure) && /^\d+(?:\.\d{1,3})?$/.test(String(next[measure] ?? ''))) {
+    const rate = decimal(next.rate), quantity = decimal(next[measure]);
+    if (rate && quantity) next.amount = textMoney(round(rate.value * quantity.value * 100n, 10n ** BigInt(rate.places + quantity.places)));
+  }
+  if (['amount', 'rate', measure, 'tax'].includes(field)) delete next.net;
+  return next;
+}
+
 export function mechanicalMoney(value: unknown): string {
   const text=detailSum([value]); return text === null ? '—' : text.replace(/\B(?=(\d{3})+(?!\d))/g,',');
 }
