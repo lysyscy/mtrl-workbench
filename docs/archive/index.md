@@ -8,6 +8,7 @@
 
 | 原位置 | 归档位置 | 独有信息与处置依据 |
 |---|---|---|
+| `.scratch/jc-payment-terms/spec.md` | [集采账期与付款方式规格](jc-payment-terms/spec.md) | 2026-10-23功能、正式备注迁移及一次性发票日期补正完成；保留确认方案与授权边界，现行接口见docs/reference/jc-payment-contract.md，过程回TAIL-432—434 |
 | 旧路径 `.codebuddy/memory/journal/2026-09-24.md` | `docs/archive/journal/2026-09-24.md` | 已结束调查、过程证据或既有历史索引；原文字节保留，按需追溯 |
 | 旧路径 `.codebuddy/memory/journal/2026-09-25.md` | `docs/archive/journal/2026-09-25.md` | 已结束调查、过程证据或既有历史索引；原文字节保留，按需追溯 |
 | 旧路径 `.codebuddy/memory/journal/2026-09-26.md` | `docs/archive/journal/2026-09-26.md` | 已结束调查、过程证据或既有历史索引；原文字节保留，按需追溯 |

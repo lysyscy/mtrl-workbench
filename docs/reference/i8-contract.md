@@ -379,3 +379,9 @@
 列表POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalList?model=7&floatmenuCondition=`；form带page/start/limit、queryfilter及公司OrgQuery上下文，与采购合同同组织。返回Success/Record/totalRows；PhId为应付键，PhidCnt/PhidCnt_EXName为合同主键/编号，PhidPc_EXName、PhidBalComp_EXName为项目/收款单位，AppAmtVatFc为审批本币额，AsrFlag=1、WfFlag=2为已批结束。分页不完整或重复键应拒绝继续关联；取数实现 `mod02_i8/payable_source.py`。
 
 详情POST `/PMS/PCM/Contract/ProjBal/GetCntProjBalInfoFirst`，form `id`。抽查8条invoiceGrid均空，不能据此判定无发票；附件目录使用 **GET** `/JFileSrv/reactAttach/tableAttachInit`，query带asrTable=pcm3_cnt_projbal、asrCode=应付PhId、busTypeCode=PCM_BAL7；返回code/data/message，code=200时从data.attachmentRecordList取文件列表，asrFid是文件键，asrName是文件名（2026-10-23浏览器会话只读核实，POST不受支持）。PDF预览可取得文字层；不在正文存签名文件URL、Token或Cookie。多个项目应付与附件样本的试验及匹配结果见TAIL-374；不是全历史覆盖证明。
+
+### 附件预览文件读取（2026-10-23 已验证）
+
+POST `/JFileSrv/api/getPreviewUrl`，JSON带`asrFids`文件键数组、当前会话的`loginId`/`orgId`、`busTypeCode=PCM_BAL7`，本次`wmDisabled="1"`、`billWM=""`沿页面实际参数。响应`code=200`、`data`为文件键到相对预览文件路径的映射；随后GET返回的`/JFileSrv/previewFiles/...`地址，保留服务生成的签名参数，不自行拼接、修改或长期保存。实际验证单键及最多20键一批、99个PDF/图片读取成功；检验Word不作为发票来源，未验证其预览转换。
+
+调用复用I8Client及当前浏览器恢复的会话，未重新登录或踢人；目录与文件读取不修改业务单据，页面原生PDF预览空白不等于文件无法下载。预览转换可能产生服务端缓存；未验证永久缓存期限或原件下载接口，不登记为通用原件下载能力。本次只做一次性核票，临时调用与原票已清理，未新增常驻封装；Cookie/签名URL不入Git。
