@@ -9,6 +9,7 @@ import { ProjectPicker } from './ledger-controls';
 import { gridTheme } from './grid';
 import { mechanicalMoney as money, readDetail, readMechanicalReport, readWorkbench } from './mechanical-api';
 import { Details, MechanicalDialog, detailKey } from './mechanical-details';
+import { MechanicalImport } from './mechanical-import';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
 import type { Category, Detail, Effective, Workbench, MechanicalReport, ReportSheet } from './mechanical-api';
@@ -104,6 +105,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     finally { if (download.current === controller) { download.current = null; setBusy(false); } }
   }
   const [tab, setTab] = useState<'summary' | 'zero' | 'monthly' | 'work'>('summary');
+  const [importOpen,setImportOpen] = useState(false);
   const [temporary, setTemporary] = useState(''); const [problemsOnly, setProblemsOnly] = useState(false);
   const drafts = useRef(new Map<string,Draft>()); const grids = useRef(new Map<string,GridApi<import('./mechanical-api').DetailRow>>());
   const [,render] = useState(0); const [writing,setWriting] = useState(false); const writeLock = useRef(false);
@@ -124,8 +126,8 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     const warehouse = projects.data?.find(project => String(project.id) === projectId)?.warehouse_name;
     if (warehouse) { setSheet(null);setTab(index === 2 ? 'monthly' : 'zero');setTemporary(warehouse);setProblemsOnly(false); }
   },[projects.data]);
-  useEffect(() => {setTemporary('');setProblemsOnly(false);setConfirmation(null);setInternalConfirmation(null);setDialog(current=>current==='projects'?'projects':null);},[scope]);
-  useEffect(()=>{if(!active){setConfirmation(null);setInternalConfirmation(null);setDialog(null);}},[active]);
+  useEffect(() => {setImportOpen(false);setTemporary('');setProblemsOnly(false);setConfirmation(null);setInternalConfirmation(null);setDialog(current=>current==='projects'?'projects':null);},[scope]);
+  useEffect(()=>{if(!active){setImportOpen(false);setConfirmation(null);setInternalConfirmation(null);setDialog(null);}},[active]);
   function stopEditors() {grids.current.forEach(grid => {if(!grid.isDestroyed())grid.stopEditing();});}
   function edit(warehouse: string, rows: import('./mechanical-api').DetailRow[]) {
     if (!writable) return;
@@ -193,7 +195,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   return <section className="mechanical-card" aria-labelledby="page-title"><div className="mechanical-toolbar">
     {active && document.getElementById('history-controls') && createPortal(historyControls,document.getElementById('history-controls')!)}
     <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1·公司汇总'],['zero','表2·零租明细'],['monthly','表3·包月明细'],['work','核对工作台']] as const).map(([id,name])=><button key={id} aria-pressed={tab===id&&sheet===null} onClick={()=>{stopEditors();setTab(id);setSheet(null);setTemporary('');setProblemsOnly(false);}}>{name}</button>)}</div>
-    <div className="mechanical-preview-entry"><button ref={previewButton} disabled={Boolean(scopeError) || !report.data || report.isFetching || report.isError} onClick={() => { stopEditors();setTemporary('');setSheet(0); setTarget(''); }}>四页报送预览</button></div>
+    <div className="mechanical-preview-entry"><button disabled={!writable||writing||state.isFetching} onClick={()=>{stopEditors();setImportOpen(true);}}>录入原报明细</button><button ref={previewButton} disabled={Boolean(scopeError) || !report.data || report.isFetching || report.isError} onClick={() => { stopEditors();setTemporary('');setSheet(0); setTarget(''); }}>四页报送预览</button></div>
     <div className="filters"><label htmlFor="mechanical-month">月份</label><input id="mechanical-month" type="month" value={ym} disabled={blocked} onChange={event=>{if(event.target.value){stopEditors();setMonth(event.target.value);}}} /><ProjectPicker projects={candidates} selected={selected} pick={value=>{stopEditors();setIds(value);}} multiple label="报表项目" disabled={blocked || projects.isPending || state.isPending} /></div>
     <div className="mechanical-project-tools"><button disabled={!writable||writing||state.isFetching} onClick={()=>setDialog('projects')}>保存显示项目及顺序</button>{tab==='summary'&&sheet===null&&<><button disabled={!writable||writing||!internalTargets.length} onClick={()=>{for(const [key,d] of internalDrafts.current)if(d.ym===ym&&warehouses.includes(d.warehouse))internalDrafts.current.delete(key);setInternalEpoch(n=>n+1);render(n=>n+1);}}>取消内租修改</button><button disabled={!writable||writing||!internalTargets.length} onClick={()=>setInternalConfirmation(internalTargets.map(d=>({...structuredClone(d),effective:state.data!.effective.find(e=>e.warehouse===d.warehouse&&e.ym===d.ym)!})).filter(d=>d.effective))}>确认内租（{internalTargets.length}项）</button></>}</div>
     </div>
@@ -213,6 +215,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
         <Sheet key={sheet} sheet={report.data.sheets[sheet]!} index={sheet} target={target} />
       </>}
     </>}
+    {importOpen&&<MechanicalImport writable={writable} keywords={state.data?.settings.plate_keywords??[]} label={label} close={()=>setImportOpen(false)} refresh={refresh} busyChanged={setWriting} draftConflict={batches=>batches.some(b=>drafts.current.has(detailKey(b.warehouse,b.ym,b.category)))} view={batch=>{const project=candidates.find(p=>p.warehouse_name===batch.warehouse);if(project&&!selected.includes(project.id))setIds([...selected,project.id]);setMonth(batch.ym);setTab(batch.category);setSheet(null);setProblemsOnly(false);setImportOpen(false);}} />}
     {dialog==='projects'&&<MechanicalDialog title="显示项目及顺序" close={()=>setDialog(null)} busy={writing}><ol>{selected.map((id,index)=><li key={id}>{candidates.find(p=>p.id===id)?.disp}<button disabled={writing||index===0} onClick={()=>{const next=[...selected];[next[index-1],next[index]]=[next[index]!,next[index-1]!];setIds(next);}}>上移</button><button disabled={writing||index===selected.length-1} onClick={()=>{const next=[...selected];[next[index+1],next[index]]=[next[index]!,next[index+1]!];setIds(next);}}>下移</button></li>)}</ol><footer><button disabled={writing} onClick={()=>setDialog(null)}>返回</button><button disabled={!writable||writing} onClick={()=>void operate(async()=>{await requestJson('/api/m06/workbench/settings',{method:'POST',...body({revision:state.data?.settings.revision,shown_projects:warehouses})});setDialog(null);if(await refresh())setMessage('显示项目及顺序已保存。');})}>保存显示名单</button></footer></MechanicalDialog>}
     {internalConfirmation&&<MechanicalDialog title="确认内租填数" close={()=>setInternalConfirmation(null)} busy={writing}><table><thead><tr><th>项目／月份</th><th>类别</th><th>原有效值</th><th>拟采用值</th></tr></thead><tbody>{internalConfirmation.flatMap(d=>Object.entries(d.values).map(([column,value])=><tr key={d.warehouse+d.ym+column}><td>{label(d.warehouse)}／{d.ym}</td><td>{column==='mech_0'?'工程公司内租':'租赁公司内租'}</td><td>{money(d.effective.values[column])}</td><td>{money(value)}{Number(value)<Number(d.effective.values[column])?' · 金额减少，请核实':''}</td></tr>))}</tbody></table><footer><button disabled={writing} onClick={()=>setInternalConfirmation(null)}>返回修改</button><button disabled={!writable||writing} onClick={()=>void operate(async()=>{if(internalConfirmation.some(d=>Object.values(d.values).some(value=>!/^\d+(?:\.\d{1,2})?$/.test(value.trim()))))throw new Error('内租须填写非负金额，最多两位小数。');let count=0;try{for(const d of internalConfirmation){await requestJson('/api/m06/workbench/internal-save',{method:'POST',...body({...d,effective_signature:d.effective.signature})});for(const [key,current] of internalDrafts.current)if(current.warehouse===d.warehouse&&current.ym===d.ym&&JSON.stringify(current.values)===JSON.stringify(d.values))internalDrafts.current.delete(key);count++;}}catch(error){setInternalConfirmation(null);await refresh();throw new Error(`已更新 ${count} 组，其余输入保留。${error instanceof Error?error.message:'请重新核对。'}`);}setInternalConfirmation(null);setInternalEpoch(n=>n+1);if(await refresh())setMessage('内租有效月值已确认。');})}>确认更新内租</button></footer></MechanicalDialog>}
     {confirmation && <MechanicalDialog title="确认有效月值" close={()=>setConfirmation(null)} busy={writing}>

@@ -162,3 +162,8 @@ Python 3.15.1、pytest 9.1.1；复用原构建，六轮dist聚合字节SHA256均
 ### 2026-10-23 TAIL-407机械明细与有效月值
 
 串行实现与技术证据、首次非零、13项现有检查、真实浏览器/SQL/四页文件和自有资源收尾只回[407原票](../tails/issues/TAIL-407-机械零租与月度明细编辑.md)。必要logs/reports/screenshots在本机`.artifacts/archive/frontend-vue-rewrite/tail407-20261023/`，沿既有2026-11-21期限；临时构建/脚本/下载和8038独立schema已清。ready-for-human，未代人工验收；8037 PID19956及其共享构建13文件保持，未开放机械页。407停下交父统筹408，本轮未推进408。
+
+
+### 2026-10-23 TAIL-408 JSON明细录入
+
+仅现行JSON路线的实现、旧实际UI依据、9项现有检查、真实预览/冲突/拒绝/独立月值/四页文件、首次非零及资源收尾只回[408原票](../tails/issues/TAIL-408-机械报表文件导入.md)。必要logs/reports/screenshots在本机`.artifacts/archive/frontend-vue-rewrite/tail408-20261023/`，沿既有2026-11-21期限；ready-for-human未代人工验收。8037原PID19956/schema/构建受保护，未开放407/408；不重启通用导入、不推进409，仅本地提交，未push/部署。

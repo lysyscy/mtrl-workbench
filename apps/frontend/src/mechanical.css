@@ -5,3 +5,7 @@
 .mechanical-toolbar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.65rem 1rem;border-bottom:1px solid var(--bd2)}.mechanical-toolbar .mechanical-tabs{padding:0;border:0}.mechanical-toolbar .filters{padding:0;margin:0}.mechanical-toolbar .mechanical-preview-entry{margin-left:auto}.mechanical-project-tools{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem}.mechanical-toolbar input[type=month]{width:10em}
 
 .mechanical-card .mechanical-detail-group{border:0;border-bottom:1px solid var(--bd2);border-radius:0;overflow:visible;background:transparent}
+
+.mechanical-import-table{overflow-x:auto;max-width:100%}.mechanical-import-table table{min-width:760px}.mechanical-import-source{overflow-wrap:anywhere}.mechanical-dialog details{margin:.75rem 0}.mechanical-import-table select{min-width:9em}.mechanical-preview-entry{display:flex;gap:.5rem;flex-wrap:wrap}
+
+.mechanical-import-table .money{white-space:nowrap}.mechanical-dialog details .mechanical-import-table table{min-width:1050px}.mechanical-dialog details .mechanical-import-table td{min-width:90px;overflow-wrap:normal}
