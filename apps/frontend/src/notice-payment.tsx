@@ -29,7 +29,7 @@ export function PayAmountCell({ row, override, disabled, change }: { row: Notice
 interface PaymentDraft { amount: string; pay_method: string }
 interface FlowReceipt { notice_id: number; flow_no: string; amount: string; pay_date: string; pay_method: string; remark: string }
 export function NoticePayment({ ids, overrides, blocked, remove, close, paid, refresh, announce }: { ids: number[]; overrides: Record<number,PayOverride>; blocked: boolean; remove: (id: number) => void; close: () => void; paid: (ids: number[]) => void; refresh: () => Promise<void>; announce: (message: string) => void }) {
-  const dialog = useRef<HTMLDialogElement>(null), lock = useRef(false), requestId = useRef('');
+  const dialog = useRef<HTMLDialogElement>(null), lock = useRef(false), requestId = useRef(''), removing = useRef<number | null>(null);
   const originalIds = useRef(ids), drafts = useRef<Record<number,PaymentDraft>>({});
   const [revision,setRevision] = useState(0), [phase,setPhase] = useState<'edit'|'sending'|'saved'|'uncertain'>('edit');
   const [date,setDate] = useState(() => new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()));
@@ -49,8 +49,9 @@ export function NoticePayment({ ids, overrides, blocked, remove, close, paid, re
   function reason(row: NoticeRow): string { return row.pay_block_reason || (cents(paymentValue(row,overrides)) <= 0n ? '本次应付不大于0，请调整付款金额' : ''); }
   const invalid = targets.some(row => reason(row)), busy = phase === 'sending', editable = phase === 'edit';
   const dirty = phase !== 'saved' && (date !== initialDate.current || Boolean(remark) || Object.entries(drafts.current).some(([id,value]) => { const initial = initialDrafts.current[Number(id)]; return !initial || value.amount !== initial.amount || value.pay_method !== initial.pay_method; }));
-  const closing = useDialogClose({ busy, dirty, close });
-  function removeRow(id: number) { if(ids.length===1) { if (closing.requestClose()) remove(id); } else remove(id); }
+  const closing = useDialogClose({ busy, dirty, close: () => { const id = removing.current; removing.current = null; if (id !== null) remove(id); close(); } });
+  const paymentClosing = { ...closing, resume: () => { removing.current = null; closing.resume(); } };
+  function removeRow(id: number) { if(ids.length===1) { removing.current = id; closing.requestClose(); } else remove(id); }
   async function reread() {
     setRefreshFailed(false);
     try { await refresh(); } catch { setRefreshFailed(true); }
@@ -88,7 +89,7 @@ export function NoticePayment({ ids, overrides, blocked, remove, close, paid, re
       setError(`${saved ? '付款已登记，勿重复提交。' : failure instanceof ApiError && failure.status > 0 && failure.status < 500 ? '整批未登记，输入已保留。' : '提交结果尚未核实，请重读列表并到付款流水核对，勿重复付款。'}${failure instanceof Error ? failure.message : '请重读核对。'}`);
     } finally { lock.current=false; }
   }
-  return <dialog ref={dialog} className="project-dialog notice-pay-dialog" aria-labelledby="notice-pay-title" {...closing.dialogProps}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={closing}>
+  return <dialog ref={dialog} className="project-dialog notice-pay-dialog" aria-labelledby="notice-pay-title" {...closing.dialogProps}><DialogContents title={phase === 'saved' ? '付款结果' : '批量付款'} titleId="notice-pay-title" closing={paymentClosing}>
     {query.isPending && editable ? <p role="status">正在核对付款记录…</p> : query.isError && editable ? <p className="notice" role="alert">{query.error.message}<button onClick={() => void query.refetch()}>重读</button></p> : <>
       {message && <p role="status" className="notice-feedback">{message}</p>}
       {editable && <p>任一校验不通过，整批不产生流水；选「其他」须填备注。</p>}
