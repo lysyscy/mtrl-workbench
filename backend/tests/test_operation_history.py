@@ -309,7 +309,7 @@ def test_committed_versions_aba_and_concurrent_same_actor_are_safe(monkeypatch):
 
 
 @pytest.mark.parametrize('case', ['category', 'supplier', 'project', 'opening', 'remark',
-                                  'fee', 'big', 'balance', 'contract_tag', 'contract_field'])
+                                  'fee', 'big', 'balance', 'contract_tag', 'contract_field', 'contract_term', 'contract_method'])
 def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, monkeypatch, case):
     from fastapi.testclient import TestClient
     from app.main import create_app
@@ -354,6 +354,10 @@ def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, m
                              JcContract, contract.id, 'tag', TAG_IN, TAG_OUT),
             'contract_field': ('POST', '/api/m11/fields', {'id': contract.id, 'fields': {'remark': '新备注'}},
                                JcContract, contract.id, 'remark', '原备注', '新备注'),
+            'contract_term': ('POST', '/api/m11/fields', {'id': contract.id, 'fields': {'payment_term': '60天'}},
+                              JcContract, contract.id, 'payment_term', '', '60±0天'),
+            'contract_method': ('POST', '/api/m11/fields', {'id': contract.id, 'fields': {'payment_method': '承兑'}},
+                                JcContract, contract.id, 'payment_method', '', '承兑'),
         }
         method, path, body, model, row_id, field, before, after = cases[case]
     def value():

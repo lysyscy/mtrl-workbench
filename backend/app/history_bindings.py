@@ -25,7 +25,7 @@ def configure():
     contract = Rule(JcContract, frozenset({
         'contract_no', 'contract_date', 'contract_date_locked', 'material_name', 'supplier',
         'contract_amt', 'trade_co', 'trade_contract_amt', 'tag', 'arch', 'arch_no',
-        'ret_date', 'remark',
+        'ret_date', 'remark', 'payment_term', 'payment_method',
     }))
     bind_policies([
         ('POST', '/api/m03/actions/exclude', '剔除付款通知书', [notice]),

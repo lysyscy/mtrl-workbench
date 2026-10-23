@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useHistoryGuard } from './history';
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
@@ -57,14 +58,19 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
     try {
       const result = await requestJson(unlink ? '/api/m11/unlink' : '/api/m11/link',{method:'POST',...body({notice_id:row.notice_id,...(unlink ? {} : {contract_id:chosen!.id})})});
       written=true;setSaved(true);announce(receipt(result));await refresh();close();
-    } catch (failure) { setDecision('none');setError(`${written ? '关联已保存，列表尚待重读核对，勿重复保存。' : ''}${failure instanceof Error ? failure.message : '关联未保存，请重试。'}`); }
+    } catch (failure) {
+      setDecision('none');
+      const unknown=failure instanceof ApiError && (failure.status===0 || failure.code==='invalid_response');
+      if(unknown)setSaved(true);
+      setError(`${written ? '关联已保存，列表尚待重读核对，勿重复保存。' : unknown ? '关联结果待核实，请关闭后重读核对，勿重复保存。' : ''}${failure instanceof Error ? failure.message : '关联未保存，请重试。'}`);
+    }
     finally { lock.current=false;setBusy(false); }
   }
   return <BusinessModal open={!blocked} className="project-dialog contract-dialog" titleId="contract-dialog-title" requestClose={requestClose}>    {decision !== 'none' ? <div className="contract-decision"><h2 ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">{decision === 'discard' ? '放弃本次选择？' : '解除当前合同关联？'}</h2><p>{decision === 'discard' ? '尚未保存，原有关联不会改变。' : current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={() => setDecision('none')}>{decision === 'discard' ? '继续选择' : '返回'}</Button><Button htmlType="submit" className={decision === 'discard' ? 'primary' : 'danger'} disabled={busy} onClick={() => decision === 'discard' ? close() : void save(true)}>{decision === 'discard' ? '放弃并关闭' : '确认解除'}</Button></div></div> : <>
       <div className="contract-dialog-heading"><h2 id="contract-dialog-title">{modifying ? '修改合同关联' : '新增合同关联'}</h2><Button htmlType="submit" ref={closeButton} className="contract-close" aria-label="关闭合同关联" disabled={busy} onClick={requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
       <div className="contract-notice"><div><strong>{row.bill_name || row.bill_no}</strong><span>{row.project_display} · {row.bill_no} · {data?.supplier || row.jc_supplier || '供应商未录入'}</span></div><div className="contract-notice-amount"><span>通知书审批金额</span><strong>{money(data?.notice_amount ?? row.amount_approved)}<small> 元</small></strong></div></div>
       {query.isPending ? <p role="status" className="contract-loading">正在读取合同与发票…</p> : query.isError ? <p role="alert" className="notice">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重读候选</Button></p> : data && <>
-        {modifying && <div className="contract-current"><span className="contract-state">当前关联</span><strong>{current ? contractName(current) : '当前合同不在候选中'}</strong><span>{current?.contract_no}</span></div>}
+        {modifying && <div className="contract-current"><span className="contract-state">当前关联</span><strong>{current ? contractName(current) : '当前合同不在候选中'}</strong><span>{current?.contract_no}</span><Link to={`/contracts?contract=${data.current_contract_id}`}>查看合同详情</Link></div>}
         {data.rows.filter(candidate => candidate.recommendation.reasons.some(reason => reason.kind === 'invoice')).length > 1 && <p className="contract-candidate-note">多份合同的发票金额均可对应，请核对材料和合同号。</p>}
         {data.rows.length === 0 ? <p className="contract-empty">本项目、供应商下没有可选合同，请核对项目归属和供应商。</p> : <div className="contract-candidates" role="radiogroup" aria-label={modifying ? '选择拟换合同' : '选择关联合同'}>{data.rows.map(candidate => {
           const isCurrent = candidate.id === data.current_contract_id, isSelected = selected === candidate.id, recommended = candidate.recommendation.reasons.length > 0;

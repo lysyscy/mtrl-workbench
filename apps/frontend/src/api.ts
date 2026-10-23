@@ -21,7 +21,7 @@ async function requestResponse(path: string, init: RequestInit = {}): Promise<Re
 async function jsonResult(response: Response): Promise<unknown> {
   let data: unknown;
   try { data = await response.json(); }
-  catch { throw new ApiError('读取结果不完整，请重试；仍失败请联系维护人员。', response.status); }
+  catch { throw new ApiError('读取结果不完整，请重试；仍失败请联系维护人员。', response.status, 'invalid_response'); }
   if (!response.ok || (record(data) && data.ok === false)) {
     const message = record(data) && typeof data.message === 'string' ? data.message : '读取失败，请重试；仍失败请联系维护人员。';
     throw new ApiError(message, response.status, record(data) && typeof data.code === 'string' ? data.code : '');
