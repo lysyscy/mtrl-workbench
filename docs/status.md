@@ -27,6 +27,8 @@ m10机械费四页工作区复用mod06_proc/workbench，来源保护已加载，
 
 ### 0.4 当前工作
 
+- 集采账期提醒与付款方式方案已获用户确认，规格见[本轮规格](../.scratch/jc-payment-terms/spec.md)。合同字段及备注迁移、旧付款窗口提醒、Excel核对技能拟拆3票，拆票待确认；功能尚未实施，真实备注迁移与正式部署仍另待授权。一次性i8发票日期补正尚未写入业务数据。
+
 - 前端独立重做已按用户确认发布TAIL-397—424共28票，采用React＋TS7＋Vite、独立worktree及pnpm；规格与依赖回[共同规格](../.scratch/frontend-vue-rewrite/spec.md)。本轮仅建票，实施尚未启动；后续按implement-solo-spec，正式切换423与旧版退役424另待授权。
 
 - Mini App「付款原表核对台」已立规格，并按用户确认发布TAIL-425—431共7票（依赖425→426→427→{428,429,430}→431）：只覆盖付款原表核对一条线，不新增后端端点、不重写技能脚本、不碰导入面；第4步「复制单据号」原样保留。规格回[本轮规格](../.scratch/miniapp-payment-plan-audit/spec.md)，定位与边界回`docs/adr/0034-miniapp-payment-plan-audit.md`，活跃索引回§15。本轮仅建票与立规格，未建包、未装依赖、未调写库接口；实施尚未启动，后续按implement-solo-spec。
