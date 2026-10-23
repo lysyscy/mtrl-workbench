@@ -16,3 +16,4 @@
 .notice-grid select:has(option[value="已批"]:checked){color:var(--ok-d);background:var(--ok-l);border-color:var(--ok-bd)}.notice-grid select:has(option[value="未批"]:checked){color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd)}
 
 .notice-flows-dialog{width:min(1120px,96vw);max-height:90dvh}.notice-flows-table{overflow:auto;max-height:60dvh}.notice-flows-table table{width:100%;border-collapse:collapse;font-size:calc(12.5px * var(--fscale))}.notice-flows-table th,.notice-flows-table td{padding:8px;border-bottom:1px solid var(--bd);text-align:left;overflow-wrap:anywhere}.notice-flows-table th{background:var(--sf2);position:sticky;top:0;font-weight:500}.notice-flows-table .money{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.notice-tag.notice-revoke-hint{white-space:normal;line-height:1.5}

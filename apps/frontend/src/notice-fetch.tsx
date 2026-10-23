@@ -30,9 +30,12 @@ export function NoticeFetch({ me, blocked, close, refresh }: { me: Identity | nu
       if (!record(value) || typeof value.fetched !== 'number' || typeof value.upserted !== 'number' || !Array.isArray(value.ignored) || !value.ignored.every(x => record(x) && ['bill_no','project_name','doc_name','reason'].every(k => typeof x[k] === 'string'))) throw new ApiError('抓取回执不完整，请到 i8 执行记录核对，勿重复抓取。');
       if (!mounted.current) return;
       setResult(`${value.year_month} 抓取 ${value.fetched} 条，写入 ${value.upserted} 条，本次忽略 ${value.ignored.length} 条。`); setIgnored(value.ignored); setDone(true);
-      await refresh();
     } catch (failure) { if (mounted.current) setError(`${written ? '抓取已返回，列表或回执尚待核对。' : ''}${failure instanceof Error ? failure.message : '抓取未完成，请核对执行记录后重试。'}`); }
-    finally { lock.current = false; if (mounted.current) setBusy(false); }
+    finally {
+      try { await refresh(); }
+      catch { if (mounted.current) setError(previous => `${previous}${previous ? ' ' : ''}列表、执行记录或归属待办更新失败，请关闭后重读核对，勿重复抓取。`); }
+      finally { lock.current = false; if (mounted.current) setBusy(false); }
+    }
   }
   return <BusinessModal open={!blocked} className="project-dialog" titleId="notice-fetch-title" requestClose={closing.requestClose}><DialogContents titleId="notice-fetch-title" title="抓取 i8 付款通知书（按月）" closing={closing}><form onSubmit={e => { e.preventDefault(); void run(); }}>
     {config.isError ? <p className="notice" role="alert">{config.error.message}<Button htmlType="button" onClick={() => void config.refetch()}>重读绑定</Button></p> : config.data ? <><p>当前账号：{me?.name || me?.account} · i8：{config.data.i8_user || '未绑定'}</p>{(!config.data.ready || config.data.account !== me?.account) && <p role="alert">{config.data.message || '账号已变化，请关闭后重新打开。'}</p>}</> : <p role="status">正在核对 i8 绑定…</p>}

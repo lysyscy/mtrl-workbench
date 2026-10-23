@@ -20,12 +20,12 @@ interface Bar { key: string; label: string; amount: string }
 interface Debt { project: string; jc: string; material: string; mech: string }
 interface Stats { granularity: string; buckets: string[]; right: string[]; counts: number[]; selected: { bucket: string; projects: Bar[]; total: string; count: number } }
 const initial = () => ({ period:currentMonth(), projects: [] as number[], method:'', status:'effective', keyword:'', notice:0 });
-function Bars({ rows, choose, selected }: { rows: Bar[]; choose?: (key:string) => void; selected?: string | undefined }) {
+function Bars({ rows, choose, selected }: { rows: Bar[]; choose?: (key:string) => void; selected?: string[] | undefined }) {
   const max=rows.reduce((value,row)=> { const n=cents(row.amount);return n<0n ? -n>value?-n:value : n>value?n:value; },1n);
   return <div className="flow-bars">{rows.map(row => {
     const value=cents(row.amount), width=Number((value<0n?-value:value)*10000n/max)/100;
     const content=[<span key="name" className="bar-name">{row.label}</span>,<span key="track" className="bar-track"><i className={value<0n?'negative':''} style={{width:`${width}%`}} /></span>,<span key="amount" className="money">{money(row.amount)}</span>];
-    return choose ? <Button htmlType="submit" key={row.key} className="flow-bar" aria-pressed={selected===row.key} onClick={()=>choose(row.key)} title="筛选下方付款流水，再点一次取消">{content}</Button> : <div key={row.key} className="flow-bar">{content}</div>;
+    return choose ? <Button htmlType="submit" key={row.key} className="flow-bar" aria-pressed={selected?.includes(row.key)??false} onClick={()=>choose(row.key)} title="筛选下方付款流水，再点一次取消">{content}</Button> : <div key={row.key} className="flow-bar">{content}</div>;
   })}</div>;
 }
 function ReadState({ query }: { query: {isPending:boolean;isError:boolean;error:Error|null;refetch:()=>unknown} }) {
@@ -88,7 +88,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
     const project=projectQuery.data?.find(p=>p.warehouse_name===key);
     // Stats entries with no flows still remain a real filter, rather than silently showing all.
     const id=project?.id??0;
-    setFilter(f=>({...f,projects:f.projects.length===1&&f.projects[0]===id?[]:[id]}));
+    setFilter(f=>({...f,projects:f.projects.includes(id)?f.projects.filter(value=>value!==id):[...f.projects,id]}));
     flowSection.current?.scrollIntoView({block:'start',behavior:'smooth'});
   }
   const categories=[['jc','集采'],['material','辅材'],['mech','机械']] as const;
@@ -97,7 +97,7 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
     <div className="debt-overviews">{categories.map(([key,label])=><section className="flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body"><ReadState query={debt}/>{debt.data&&(()=>{const items=debt.data.filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);return items.length?<Bars rows={items.map((row,index)=>({key:String(index),label:row.project,amount:row[key]}))}/>:<p className="muted">暂无{label}未结清欠款</p>;})()}</div></section>)}</div>
     <LedgerPage {...props} onExportGuard={value=>{setGuard(value);props.onExportGuard(value);}}/>
     <section className="flow-card" aria-labelledby="stats-title"><div className="flow-card-head payment-stat-head"><h2 id="stats-title">付款统计</h2><div><Button htmlType="submit" aria-pressed={gran==='week'} onClick={()=>{setGran('week');setBucket('');}}>按周（周一至周日）</Button><Button htmlType="submit" aria-pressed={gran==='month'} onClick={()=>{setGran('month');setBucket('');}}>按月</Button></div></div><div className="flow-card-body">
-      <ReadState query={stats}/>{stats.data&&<div className="payment-stat-columns"><div><div className="flow-toolbar"><strong>按项目</strong><TimePicker label={gran==='week'?'统计周':'统计月'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} modes={gran==='week'?['周']:['月']} onChange={setBucket}/><span>合计 {money(stats.data.selected.total)} 元 · {stats.data.selected.count} 笔</span></div>{stats.data.selected.projects.length?<Bars rows={stats.data.selected.projects} choose={chooseProject} selected={projects.find(p=>filter.projects.includes(p.id))?.warehouse_name??undefined}/>:<p className="muted">该时段没有付款。</p>}</div><div><div className="flow-toolbar"><strong>按{gran==='week'?'周':'月'}</strong><TimePicker label="统计窗口" value={gran==='week'?`${year}Q${quarter}`:String(year)} modes={gran==='week'?['季度']:['年']} onChange={value=>{setYear(Number(value.slice(0,4)));if(gran==='week')setQuarter(Number(value.slice(5)));}}/><span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span></div><Bars rows={trend}/></div></div>}
+      <ReadState query={stats}/>{stats.data&&<div className="payment-stat-columns"><div><div className="flow-toolbar"><strong>按项目</strong><TimePicker label={gran==='week'?'统计周':'统计月'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} modes={gran==='week'?['周']:['月']} onChange={setBucket}/><span>合计 {money(stats.data.selected.total)} 元 · {stats.data.selected.count} 笔</span></div>{stats.data.selected.projects.length?<Bars rows={stats.data.selected.projects} choose={chooseProject} selected={[...(projectQuery.data??[]).filter(p=>filter.projects.includes(p.id)).map(p=>p.warehouse_name??''),...(filter.projects.includes(0)?['']:[])]}/>:<p className="muted">该时段没有付款。</p>}</div><div><div className="flow-toolbar"><strong>按{gran==='week'?'周':'月'}</strong><TimePicker label="统计窗口" value={gran==='week'?`${year}Q${quarter}`:String(year)} modes={gran==='week'?['季度']:['年']} onChange={value=>{setYear(Number(value.slice(0,4)));if(gran==='week')setQuarter(Number(value.slice(5)));}}/><span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span></div><Bars rows={trend}/></div></div>}
     </div></section>
     <section ref={flowSection} className="flow-card" aria-labelledby="flows-title"><div className="flow-card-head"><h2 id="flows-title">付款流水（实际付款记录）</h2><Button htmlType="submit" disabled={!props.me||!enabled||!rows.length||flows.isFetching||flows.isError||exporting||Boolean(guard)} title={guard||''} onClick={()=>void exportFlows()}>{exporting?'正在导出…':'导出 Excel'}</Button></div>
       <div className="flow-toolbar"><div className="time-picker-field"><span>付款时间</span><TimePicker label="付款时间" value={filter.period} modes={['月','跨月','年','全部']} onChange={period=>setFilter(f=>({...f,period}))} /></div>
