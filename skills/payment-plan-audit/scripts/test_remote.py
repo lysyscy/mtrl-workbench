@@ -161,7 +161,7 @@ def test_distributable_excludes_development_data_and_runs_unpacked(tmp_path, mon
     payload = package.read_bytes()
     with ZipFile(package) as archive:
         expected = {'payment-plan-audit/'+name for name in (
-            'SKILL.md', 'references/payment-methods.md', 'resources/audit-runtime.zip',
+            'SKILL.md', 'references/maintenance.md', 'references/payment-methods.md', 'resources/audit-runtime.zip',
             'scripts/annotate.py', 'scripts/audit.py', 'scripts/methods.py',
             'scripts/projects.py', 'scripts/remote.py', 'scripts/snapshot.py')}
         assert set(archive.namelist()) == expected

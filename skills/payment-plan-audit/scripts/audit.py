@@ -174,7 +174,7 @@ def read_plan(source, month, sheet_name=None):
             raise ValueError('核对期间原文件发生变化，请重新核对')
 
 
-def compare(plan, snapshot, project_map=None):
+def compare(plan, snapshot, project_map=None, confirmed_method_rows=()):
     from app.mod04_plan.domain import NoticeAmounts, ProjectBrief, audit_rows, match_project
     from app.core.money import to_money
     validate(snapshot)
@@ -189,6 +189,9 @@ def compare(plan, snapshot, project_map=None):
              for doc, ns in by_doc.items() if len(ns) == 1 and doc}
     inputs = [dict(r, year_month=plan['month']) for r in plan['rows']]
     results = audit_rows(inputs, views)
+    confirmed = set(confirmed_method_rows)
+    if not confirmed <= {r['row'] for r in plan['rows']}:
+        raise ValueError('确认例外的行号不在本次明细中，请核对原表行号')
     changes = []
     for row, result in zip(plan['rows'], results):
         hits = by_doc.get(row['doc_no'], [])
@@ -212,6 +215,19 @@ def compare(plan, snapshot, project_map=None):
             row['input_issues'].append('项目未唯一对应系统通知书归属')
         if n and (n.get('excluded') or n.get('i8_revoked')):
             row['input_issues'].append('系统通知书已剔除或撤单')
+        contract = (n or {}).get('jc_contract')
+        row['method_exception_confirmed'] = False
+        method_problem = ('合同付款方式上下文缺失，请重新取得系统快照核实'
+                          if n and 'jc_contract' not in n else None)
+        if contract and row['pay_method']:
+            method = contract.get('payment_method') or ''
+            if not method or method != row['pay_method']:
+                problem = ('合同付款方式未填写，待核实' if not method else
+                           f"合同付款方式为{method}，计划为{row['pay_method']}，请核对")
+                if row['row'] in confirmed:
+                    row['method_exception_confirmed'] = True
+                else:
+                    method_problem = problem
         row['final_status'] = ('核对通过' if row['audit_result'] == '完全匹配' and not row['input_issues']
                                else '待人工核对')
         row['month_payments'] = []
@@ -230,6 +246,9 @@ def compare(plan, snapshot, project_map=None):
                                    and sum(monthly.values()) >= Decimal(row['planned_amount']))
         if row['plan_already_paid']:
             row['final_status'] = '本月已付'
+        elif method_problem:
+            row['input_issues'].append(method_problem)
+            row['final_status'] = '待人工核对'
         eligible = (n and row['audit_result'] == '完全匹配' and not row['input_issues']
                     and not row['plan_already_paid'] and Decimal(row['planned_amount'] or 0) > 0)
         row['method_action'] = '待人工处理'
@@ -241,6 +260,7 @@ def compare(plan, snapshot, project_map=None):
                                 'ownership_id': n.get('ownership_id'), 'old': old,
                                 'new': row['pay_method'], 'source_row': row['row'],
                                 'source_method': row['pay_method_raw'],
+                                'jc_contract': contract, 'method_exception_confirmed': row['method_exception_confirmed'],
                                 'approved': n['approved'], 'paid': n['paid'],
                                 'flow_amount': row['flow_amount'], 'planned_amount': row['planned_amount']})
     if len({c['id'] for c in changes}) != len(changes):
@@ -267,6 +287,7 @@ def main():
     ap.add_argument('--sheet')
     ap.add_argument('--snapshot')
     ap.add_argument('--prepare', action='store_true', help='只生成项目匹配上下文，原表不标注')
+    ap.add_argument('--confirm-method-row', action='append', type=int, default=[], help='仅对用户明确确认的特殊付款方式行使用，可重复传入原Excel行号')
     ap.add_argument('--project-map', help='Agent根据当前项目清单给出的匹配决策JSON')
     ap.add_argument('--output-dir', required=True)
     args = ap.parse_args()
@@ -292,7 +313,7 @@ def main():
         return
     plan['snapshot_origin'] = '离线复核，沿用旧快照' if args.snapshot else '本次系统接口只读快照'
     mapping = json.loads(Path(args.project_map).read_text(encoding='utf-8')) if args.project_map else None
-    preview = compare(plan, snapshot, mapping)
+    preview = compare(plan, snapshot, mapping, args.confirm_method_row)
     plan['input_source_sha256'] = plan['source_sha256']
     backups = (Path(args.repo)/'var/backups/payment-plan-audit' if args.repo
                else Path.home()/'.mtrl-workbench/backups/payment-plan-audit')

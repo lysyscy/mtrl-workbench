@@ -507,7 +507,7 @@ const ACT={
    const request=++payContextRequest, view=VIEW;
    let context;
    try{ context=await API.paymentContext({ids:rows.map(n=>Number(n.id)),pay_date:dt}); }
-   catch(e){ return toast('无法核对合同账期，请重试'); }
+   catch(e){ return toast(esc(e.message||'无法核对合同账期，请重试')); }
    if(request!==payContextRequest||VIEW!==view) return;
    if(!context?.ok) return toast(esc(context?.message||'无法核对合同账期，请重试'));
    const byId=new Map(context.rows.map(r=>[String(r.notice_id),r]));
@@ -548,7 +548,7 @@ const ACT={
      if(request!==payContextRequest||!box.isConnected||date.value!==day) return null;
      if(!result?.ok){box.textContent=result?.message||'账期核对失败，请重试';return null;}
      box.innerHTML=payTermsHtml(result.rows,result.available);return result;
-   }catch(e){if(box.isConnected) box.textContent='账期核对失败，请重试';return null;}
+   }catch(e){if(request===payContextRequest&&box.isConnected&&date.value===day) box.textContent=e.message||'账期核对失败，请重试';return null;}
  },
  batchPayCancel:()=>{ payContextRequest++;payDraft={}; closeModal(); },
  /* 删除行：从本次付款中移出该行（= 取消该行勾选），并重建弹窗 */

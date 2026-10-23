@@ -107,5 +107,27 @@ def test_terms_server_error_does_not_become_old_backend_fallback(ui_page):
     p.route('**/api/m03/payment-context',lambda route:route.fulfill(status=500,json={'detail':'failed'}))
     p.evaluate("""()=>{API.paymentContext=window.originalPaymentContext;
       pickSet.clear();pickSet.add('101');return ACT.batchPay();}""")
-    expect(p.locator('.toast').last).to_contain_text('无法核对合同账期')
+    expect(p.locator('.toast').last).to_contain_text('系统内部出错了')
+    expect(p.locator('.toast').last).to_contain_text('请刷新页面重试')
     assert p.locator('#bm0').count()==0
+
+
+@pytest.mark.parametrize('status,reason', [(401,'登录'),(403,'权限')])
+def test_terms_auth_errors_keep_actionable_reason(ui_page,status,reason):
+    p=ui_page
+    p.route('**/api/m03/payment-context',lambda route:route.fulfill(status=status,json={'detail':'denied'}))
+    p.evaluate("""()=>{API.paymentContext=window.originalPaymentContext;
+      pickSet.clear();pickSet.add('101');return ACT.batchPay();}""")
+    expect(p.locator('.toast').last).to_contain_text(reason)
+    assert p.locator('#bm0').count()==0
+
+
+def test_date_recheck_preserves_network_reason(ui_page):
+    p=ui_page
+    p.evaluate("""()=>{pickSet.clear();pickSet.add('101');return ACT.batchPay();}""")
+    p.route('**/api/m03/payment-context',lambda route:route.abort('failed'))
+    p.evaluate('()=>{API.paymentContext=window.originalPaymentContext;}')
+    p.locator('#bDate').fill('2026-04-12')
+    p.locator('#bDate').blur()
+    expect(p.locator('#batchPayTerms')).to_contain_text('连不上服务器')
+    expect(p.locator('#batchPayTerms')).to_contain_text('网络正常')

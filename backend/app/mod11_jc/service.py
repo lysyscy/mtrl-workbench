@@ -20,6 +20,10 @@ from app.mod11_jc.models import INVOICE_KINDS, SRC_MANUAL, SRC_NOTICE, TAG_IN, J
 from app.core.money import sum_money
 
 
+def plan_audit_contexts(connection, *, lock=False):
+    return R.plan_audit_contexts(connection, lock=lock)
+
+
 def settlement_totals_by_project(s: Session, warehouse_keys: set[str]) -> dict[str, Decimal]:
     """同会话批量读取纳入合同的结算；无合同为0，空项目集合不查询。"""
     totals = dict.fromkeys(warehouse_keys, D.ZERO)

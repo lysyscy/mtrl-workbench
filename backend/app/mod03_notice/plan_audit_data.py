@@ -3,6 +3,7 @@ from datetime import datetime
 from hashlib import sha256
 import json
 from zoneinfo import ZoneInfo
+from app.mod11_jc import service as JC
 
 def database_fingerprint(engine):
     url = engine.url
@@ -35,7 +36,9 @@ def capture():
             projects = [dict(r) for r in conn.execute(text(
                 'SELECT id, disp, warehouse_name, name_full, match_keywords, status, project_type FROM project ORDER BY id'
             )).mappings()]
+            contracts = JC.plan_audit_contexts(conn)
             for n in notices:
+                n['jc_contract'] = contracts.get(n['id'])
                 n['approved'] = str(n.pop('amount_approved'))
                 n['payments'] = flows.get(n['id'], [])
                 n['paid'] = str(sum_money(f['amount'] for f in n['payments']))
