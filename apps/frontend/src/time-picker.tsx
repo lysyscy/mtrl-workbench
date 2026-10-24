@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { currentMonth } from './business-time';
 import DatePicker from 'antd/es/date-picker';
 import Select from 'antd/es/select';
+import Button from 'antd/es/button';
+import Popover from 'antd/es/popover';
+import Calendar from 'antd/es/calendar';
+import Segmented from 'antd/es/segmented';
+import './business-period.css';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 dayjs.locale('zh-cn');
@@ -13,6 +19,7 @@ export interface TimePickerProps {
   modes: readonly TimeMode[];
   disabled?: boolean;
   label?: string;
+  singleEntry?: boolean;
 }
 const pad = (n: number) => String(n).padStart(2, '0');
 const dateText = (date: Date) => `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
@@ -59,7 +66,11 @@ export function BusinessDate({ value, onChange, disabled = false, label }: { val
     getPopupContainer={trigger => trigger.closest<HTMLElement>('.ant-modal-container') ?? document.body} />;
 }
 
-export function TimePicker({ value, onChange, modes, disabled = false, label = '时间' }: TimePickerProps) {
+export function TimePicker(props: TimePickerProps) {
+  return props.singleEntry ? <SingleEntryPeriod {...props} /> : <StandardTimePicker {...props} />;
+}
+
+function StandardTimePicker({ value, onChange, modes, disabled = false, label = '时间' }: TimePickerProps) {
   const [mode, setMode] = useState<TimeMode>(() => modes.includes(modeOf(value)) ? modeOf(value) : modes[0] ?? '月');
   useEffect(() => { const next = modeOf(value); if (modes.includes(next)) setMode(next); }, [value, modes.join(',')]);
   const available = modes.includes(mode) ? mode : modes[0] ?? '月';
@@ -82,4 +93,48 @@ export function TimePicker({ value, onChange, modes, disabled = false, label = '
       format={available === '周' ? date => `${monday(date.format('YYYY-MM-DD'))} 起` : available === '季度' ? 'YYYY[Q]Q' : available === '年' ? 'YYYY' : 'YYYY-MM'}
       value={current} onChange={choose} disabled={disabled} allowClear={modes.includes('全部')} getPopupContainer={container} classNames={popup} />}
   </span>;
+}
+
+/** One popover owns mode and period selection; Calendar supplies the month grid. */
+function SingleEntryPeriod({ value, onChange, modes, disabled = false, label = '时间' }: TimePickerProps) {
+  const [open, setOpen] = useState(false);
+  const panel = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null);
+  const initial = modeOf(value);
+  const [mode, setMode] = useState<TimeMode>(initial === '全部' ? '月' : initial);
+  const [year, setYear] = useState(() => /^\d{4}/.test(value) ? Number(value.slice(0, 4)) : Number(currentMonth().slice(0, 4)));
+  const [start, setStart] = useState<number | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const available = modes.includes(mode) ? mode : modes.find(item => item !== '全部') ?? '月';
+  function commit(next: string) { onChange(next); setOpen(false); setStart(null); setHover(null); trigger.current?.focus(); }
+  function changeOpen(next: boolean) {
+    if (disabled) return;
+    setOpen(next); setStart(null); setHover(null);
+    if (next) { setMode(initial === '全部' ? modes.find(item => item !== '全部') ?? '月' : initial); setYear(/^\d{4}/.test(value) ? Number(value.slice(0, 4)) : Number(currentMonth().slice(0, 4))); requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>('.ant-segmented input:checked,button[aria-pressed="true"],button')?.focus()); }
+  }
+  function chooseMonth(month: number) {
+    if (available === '跨月') {
+      if (start === null) { setStart(month); setHover(month); }
+      else commit(`${year}-${pad(Math.min(start, month) + 1)}~${year}-${pad(Math.max(start, month) + 1)}`);
+    } else commit(`${year}-${pad(month + 1)}`);
+  }
+  const selectedRange = modeOf(value) === '跨月' && Number(value.slice(0, 4)) === year ? [Number(value.slice(5, 7)) - 1, Number(value.slice(13, 15)) - 1] : null;
+  const endpoint = hover ?? start;
+  const yearsStart = Math.floor(year / 10) * 10 - 1;
+  const popup = <div ref={panel} role="dialog" aria-label={`${label}选择`} className="business-period-panel" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setOpen(false); trigger.current?.focus(); } }}>
+    {modes.length > 1 && <Segmented aria-label={`${label}模式`} value={available} options={[...modes]} block onChange={next => { setStart(null); setHover(null); if (next === '全部') commit('全部'); else setMode(next as TimeMode); }} />}
+    <div className="business-period-year"><Button aria-label={available === '年' ? '前十年' : '上一年'} type="text" disabled={start !== null} onClick={() => setYear(year - (available === '年' ? 10 : 1))}>‹</Button><strong aria-live="polite">{available === '年' ? `${yearsStart + 1} — ${yearsStart + 10}` : `${year} 年`}</strong><Button aria-label={available === '年' ? '后十年' : '下一年'} type="text" disabled={start !== null} onClick={() => setYear(year + (available === '年' ? 10 : 1))}>›</Button></div>
+    {available === '年' ? <div className="business-period-years">{Array.from({ length: 12 }, (_, index) => yearsStart + index).map(item => <Button key={item} type={value === String(item) ? 'primary' : 'text'} onClick={() => commit(String(item))}>{item}</Button>)}</div> : <Calendar mode="year" fullscreen={false} value={dayjs(`${year}-01-01`)} headerRender={() => null}
+      onSelect={(date, info) => { if (info.source === 'month') chooseMonth(date.month()); }}
+      fullCellRender={(date, info) => {
+        if (info.type !== 'month') return info.originNode;
+        const month = date.month();
+        const range = start === null ? selectedRange : [Math.min(start, endpoint!), Math.max(start, endpoint!)];
+        const selected = range ? month === range[0] || month === range[1] : modeOf(value) === '月' && value === `${year}-${pad(month + 1)}`;
+        return <Button type="text" aria-label={`${year}年${month + 1}月`} aria-pressed={selected} className={`business-period-month${selected ? ' is-selected' : ''}${range && month >= range[0]! && month <= range[1]! ? ' in-range' : ''}`} onMouseEnter={() => { if (start !== null) setHover(month); }} onFocus={() => { if (start !== null) setHover(month); }} onClick={event => { event.stopPropagation(); chooseMonth(month); }}>{month + 1}月</Button>;
+      }} />}
+    <div className="business-period-footer"><span aria-live="polite">{available === '跨月' ? start === null ? '选择起月，再选择止月' : `已选 ${start + 1} 月，请选止月` : '选择即生效'}</span><Button type="link" onClick={() => commit(currentMonth())}>本月</Button></div>
+  </div>;
+  return <Popover trigger="click" open={open && !disabled} onOpenChange={changeOpen} content={popup} placement="bottomLeft" classNames={{ root: 'business-period-popover ag-custom-component-popup' }} getPopupContainer={trigger => trigger.closest<HTMLElement>('.ant-modal-container') ?? document.body}>
+    <Button ref={trigger} className="business-period-trigger" disabled={disabled} aria-label={label} aria-haspopup="dialog" aria-expanded={open}>{timeLabel(value)}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg></Button>
+  </Popover>;
 }

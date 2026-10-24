@@ -4,8 +4,16 @@ export type Category = 'zero' | 'monthly';
 export interface DetailRow { id: string; [field: string]: unknown }
 export interface Detail { warehouse: string; ym: string; category: Category; revision: number; rows: DetailRow[]; totals: { gross: string | null; net: string | null }; issues: { id: string; fields: string[] }[]; blocked_columns: Record<string, { id: string; fields: string[] }[]> }
 export interface Effective { warehouse: string; ym: string; signature: string; values: Record<string, string | null>; sources: Record<string, { mode: string }> }
-export interface Relation { warehouse: string; relation: string; left: string | null; right: string | null; pending: string | null }
-export interface Workbench { months: string[]; shown: string[]; warehouses: string[]; details: Detail[]; effective: Effective[]; relations: Relation[]; settings: { revision: number; plate_keywords: string[] } }
+export interface SourceRow { id: string; bill?: string; periodName?: string; periodKey?: string; amount?: string | null; approval?: string | null }
+export interface Relation { warehouse: string; relation: string; left: string | null; right: string | null; pending: string | null; raw: string | null; ignored: string; revision: number; i8_revision: number; i6: string | null; fetched_at?: string }
+export interface BillDifference extends SourceRow { warehouse: string; document_id: string; fact: string; settlement: string; difference: string; ignored: boolean; revision: number }
+export interface Discovery { id: string; warehouse: string; kind: string; status: string; revision: number; note?: string; projectName?: string; projectId?: string; totals?: Record<string,string | null>; sources?: Record<string,SourceRow[]> }
+export interface Matter { id: string; warehouse: string; text: string; completed: boolean; revision: number; metadata: Record<string,unknown> }
+export interface I8Snapshot { warehouse: string; sources: Record<string,SourceRow[]>; totals: Record<string,string | null>; scope?: unknown }
+export interface I8Project extends I8Snapshot { before: Partial<I8Snapshot>; complete: boolean; reduction: boolean; changed: boolean; missing: string[] }
+export interface I8Preview { preview_id: string; projects: I8Project[]; unmapped_projects: Discovery[]; counts: Record<string,number> }
+export interface WorkbenchSummary { warehouse:string; ym:string; cumulative:Record<string,string|null>; note?:string }
+export interface Workbench { months: string[]; shown: string[]; warehouses: string[]; details: Detail[]; effective: Effective[]; relations: Relation[]; billDifferences: BillDifference[]; discoveries: Discovery[]; matters: Matter[]; i8: I8Snapshot[]; histories: Record<string,unknown>[]; summary:WorkbenchSummary[]; settings: { revision: number; plate_keywords: string[] } }
 export function readDetail(value: unknown): Detail {
   if (!record(value) || typeof value.warehouse !== 'string' || typeof value.ym !== 'string' || !['zero','monthly'].includes(String(value.category)) || !Number.isSafeInteger(value.revision) || !Array.isArray(value.rows) || value.rows.some((r: unknown) => !record(r) || typeof r.id !== 'string') || !record(value.totals) || !Array.isArray(value.issues) || !record(value.blocked_columns)) throw invalid();
   return value as unknown as Detail;
@@ -16,15 +24,51 @@ export interface MechanicalReport { ym: string; sheets: ReportSheet[]; warnings:
 const sheetNames = ['工程公司汇总表', '零租设备月报表', '包月外租设备月报', '年度汇总'];
 const invalid = () => new ApiError('机械报表结果不完整，请重新读取；仍失败请联系维护人员。');
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string');
+const revision = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+const amount = (value: unknown) => typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value);
+const nullableAmount = (value: unknown) => value === null || amount(value);
+const sourceKinds = ['usage','project','team'] as const;
+function sources(value: unknown): boolean {
+  return record(value) && sourceKinds.every(kind => Array.isArray(value[kind]) && value[kind].every((row: unknown) => record(row) && typeof row.id === 'string' && !!row.id && ['bill','periodName','periodKey'].every(key => row[key] == null || typeof row[key] === 'string') && ['amount','approval'].every(key => row[key] === undefined || nullableAmount(row[key]))));
+}
+const totals = (value: unknown) => record(value) && sourceKinds.every(kind => nullableAmount(value[kind]));
+const snapshot = (value: unknown) => record(value) && typeof value.warehouse === 'string' && !!value.warehouse && sources(value.sources) && totals(value.totals);
+function discovery(value: unknown, requireRevision = true): boolean {
+  return record(value) && typeof value.id === 'string' && !!value.id && typeof value.warehouse === 'string' && ['first','changed','unmapped','missing-project'].includes(String(value.kind)) && ['pending','resolved'].includes(String(value.status)) && (!requireRevision || revision(value.revision)) && ['note','projectName','projectId'].every(key => value[key] == null || typeof value[key] === 'string') && (value.sources === undefined || sources(value.sources)) && (value.totals === undefined || totals(value.totals));
+}
+const matter = (value: unknown) => record(value) && typeof value.id === 'string' && !!value.id && typeof value.warehouse === 'string' && typeof value.text === 'string' && typeof value.completed === 'boolean' && revision(value.revision) && record(value.metadata);
+export function readI8Preview(value: unknown): I8Preview {
+  const counts=record(value)?value.counts:undefined;
+  if (!record(value) || value.ok !== true || typeof value.preview_id !== 'string' || !value.preview_id || !record(counts) || !sourceKinds.every(kind => revision(counts[kind])) || !Array.isArray(value.projects) || !Array.isArray(value.unmapped_projects) || !value.unmapped_projects.every(item => discovery(item, false))) throw invalid();
+  for (const item of value.projects) {
+    if (!record(item) || !snapshot(item) || typeof item.complete !== 'boolean' || typeof item.reduction !== 'boolean' || typeof item.changed !== 'boolean' || !strings(item.missing) || !record(item.before) || (Object.keys(item.before).length > 0 && (!snapshot(item.before) || item.before.warehouse !== item.warehouse))) throw invalid();
+  }
+  if (new Set(value.projects.map(item => item.warehouse)).size !== value.projects.length) throw invalid();
+  return value as unknown as I8Preview;
+}
+export function readWorkResult(value: unknown, action: string, payload: Record<string,unknown>): void {
+  if (!record(value) || value.ok !== true) throw receiptInvalid();
+  const warehouses=value.warehouses;
+  const valid = action === 'i8-confirm' ? strings(warehouses) && strings(payload.warehouses) && payload.warehouses.every(wh => warehouses.includes(wh))
+    : action === 'ignore' ? revision(value.revision) && amount(value.amount)
+    : action === 'document-ignore' ? revision(value.revision) && value.ignored === !payload.undo
+    : action === 'settings' ? revision(value.revision) && strings(value.shown_projects) && strings(value.plate_keywords)
+    : action === 'matter-save' ? matter(value) && value.warehouse === payload.warehouse && value.text === String(payload.text).trim() && value.completed === payload.completed && (!payload.id || value.id === payload.id)
+    : action === 'discovery-resolve' ? discovery(value) && value.id === payload.id && value.status === 'resolved' && value.note === String(payload.note).trim()
+    : false;
+  if (!valid) throw receiptInvalid();
+}
+const receiptInvalid = () => new ApiError('操作回执不完整，请重新读取核对后再办理。', 0, 'invalid_receipt');
 export function readWorkbench(value: unknown): Workbench {
   if (!record(value) || value.ok !== true || !strings(value.months) || value.months.some(month => !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) || !record(value.settings) || !strings(value.settings.shown_projects) || !Array.isArray(value.projects)) throw invalid();
   const warehouses = value.projects.map((project: unknown) => { if (!record(project) || typeof project.warehouse !== 'string') throw invalid(); return project.warehouse; });
-  if (!Array.isArray(value.details) || !Array.isArray(value.effective) || !Array.isArray(value.reconciliations) || !Number.isSafeInteger(value.settings.revision) || !strings(value.settings.plate_keywords)) throw invalid();
+  if (!Array.isArray(value.details) || !Array.isArray(value.effective) || !Array.isArray(value.reconciliations) || !Array.isArray(value.billDifferences) || !Array.isArray(value.discoveries) || !Array.isArray(value.matters) || !Array.isArray(value.i8) || !Array.isArray(value.histories) || !Array.isArray(value.summary) || value.summary.some((item:unknown)=>!record(item)||typeof item.warehouse!=='string'||typeof item.ym!=='string'||!record(item.cumulative)||!Object.values(item.cumulative).every(nullableAmount)||(item.note!=null&&typeof item.note!=='string')) || !revision(value.settings.revision) || !strings(value.settings.plate_keywords)) throw invalid();
   const effective = value.effective.map((r: unknown): Effective => {
     if (!record(r) || typeof r.warehouse !== 'string' || typeof r.ym !== 'string' || typeof r.signature !== 'string' || !record(r.values) || !record(r.sources)) throw invalid();
     return r as unknown as Effective;
   });
-  return { months: value.months, shown: value.settings.shown_projects, warehouses, details: value.details.map(readDetail), effective, relations: value.reconciliations as Relation[], settings: { revision: value.settings.revision as number, plate_keywords: value.settings.plate_keywords } };
+  if (value.reconciliations.some((r: unknown) => !record(r) || typeof r.warehouse !== 'string' || !['report','internal'].includes(String(r.relation)) || !['left','right','pending','raw','i6'].every(key => nullableAmount(r[key])) || !amount(r.ignored) || !revision(r.revision) || !revision(r.i8_revision) || (r.fetched_at != null && typeof r.fetched_at !== 'string')) || value.billDifferences.some((r: unknown) => !record(r) || typeof r.warehouse !== 'string' || !['id','document_id','fact'].every(key => typeof r[key] === 'string' && !!r[key]) || !['settlement','approval','difference'].every(key => amount(r[key])) || !revision(r.revision) || typeof r.ignored !== 'boolean') || !value.discoveries.every(item => discovery(item)) || !value.matters.every(matter) || !value.i8.every(snapshot) || value.histories.some((item: unknown) => !record(item) || typeof item.warehouse !== 'string')) throw invalid();
+  return { months: value.months, shown: value.settings.shown_projects, warehouses, details: value.details.map(readDetail), effective, relations: value.reconciliations as Relation[], billDifferences: value.billDifferences as BillDifference[], discoveries: value.discoveries as Discovery[], matters: value.matters as Matter[], i8: value.i8 as I8Snapshot[], histories: value.histories as Record<string,unknown>[], summary:value.summary as WorkbenchSummary[], settings: { revision: value.settings.revision as number, plate_keywords: value.settings.plate_keywords } };
 }
 export function readMechanicalReport(value: unknown, ym: string, warehouses: string[]): MechanicalReport {
   if (!record(value) || value.ok !== true || value.ym !== ym || typeof value.snapshot_token !== 'string' || !/^[a-f0-9]{64}$/.test(value.snapshot_token) || !strings(value.warnings) || !Array.isArray(value.projects) || value.projects.length !== warehouses.length || value.projects.some((project: unknown, index: number) => !record(project) || project.warehouse !== warehouses[index]) || !Array.isArray(value.sheets) || value.sheets.length !== 4) throw invalid();

@@ -35,3 +35,16 @@ export const uncertainFee = (error: unknown) => !(error instanceof ApiError) || 
 export function addMonth(month: string, offset: number) {
   return new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)) - 1 + offset, 1)).toISOString().slice(0, 7);
 }
+
+export interface FeeYearRow { item: string; manual: boolean; prior: string | null; months: (string | null)[]; total: string; periods: string[] }
+export interface FeeYearData { year: string; project: string; project_display: string; can_edit: boolean; rows: FeeYearRow[]; prior: string; months: string[]; total: string }
+export async function getFeeYear(year: string, project: string, signal?: AbortSignal): Promise<FeeYearData> {
+  const data = await requestJson(`/api/m09/fee/year?${new URLSearchParams({year,pj:project})}`, signal ? {signal} : {});
+  const amounts = (r: Record<string,unknown>, nullable: boolean) =>
+    (nullable && r.prior === null || moneyText(r.prior)) && moneyText(r.total) && Array.isArray(r.months) && r.months.length === 12 && r.months.every(v => nullable && v === null || moneyText(v));
+  if (!record(data) || data.year !== year || typeof data.project !== 'string' || project && data.project !== project ||
+    typeof data.project_display !== 'string' || typeof data.can_edit !== 'boolean' || !amounts(data,false) || !Array.isArray(data.rows) ||
+    !data.rows.every(r => record(r) && typeof r.item === 'string' && typeof r.manual === 'boolean' && amounts(r,true) && Array.isArray(r.periods) && r.periods.every(ym => typeof ym === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(ym) && ym <= `${year}-12`)) ||
+    new Set(data.rows.map(r => r.item)).size !== data.rows.length) throw new ApiError('费用年度数据读取不完整，请重读。');
+  return data as unknown as FeeYearData;
+}

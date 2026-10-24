@@ -338,6 +338,7 @@ def create_app() -> FastAPI:
         from app.core import session as SESS
         from app.core.db import session_scope
         from app.mod03_notice.page import render_theme
+        from app.mod03_notice.theme_react import render_react_theme
         from app.mod15_user import repository as USR
 
         who = SESS.read(request.cookies.get(SESS.COOKIE_NAME))
@@ -347,7 +348,7 @@ def create_app() -> FastAPI:
         else:
             name = _DEFAULT_THEME
         return Response(
-            content=render_theme(name), media_type="text/css",
+            content=(render_react_theme(name) if request.query_params.get("surface") == "react" else render_theme(name)), media_type="text/css",
             headers={"Cache-Control": "no-cache"},
         )
 

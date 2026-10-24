@@ -63,6 +63,16 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     }
 
 
+def build_year_data(s: Session, *, year: str, project: str) -> dict:
+    if len(year) != 4 or not year.isascii() or not year.isdigit() or not 1 <= int(year) <= 9999:
+        raise ValueError("年份请写成 YYYY")
+    cands, key, pj = _resolve(s, {"project": project})
+    items, inv = R.year_facts(s, year=year, project_id=pj.id if pj else None, warehouse=key)
+    return {"year": year, "project": key,
+            "project_display": next((c.display for c in cands if c.key == key), key),
+            "can_edit": pj is not None, **D.annual_rows(year=year, project_key=key, items=items, inv_rows=inv)}
+
+
 # ---------------------------------------------------------------- 写动作（PRG：都返回回执）
 
 

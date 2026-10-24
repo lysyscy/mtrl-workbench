@@ -17,6 +17,7 @@ export interface ContractDetail extends ContractRow { supplier_invoices: Contrac
 const moneyText = (x: unknown) => typeof x === 'string' && /^-?\d+(?:\.\d{1,2})?$/.test(x);
 const id = (x: unknown): x is number => typeof x === 'number' && Number.isSafeInteger(x) && x > 0;
 function contractRow(value: unknown): ContractRow {
+  if (record(value) && value.ret_date === null) value = { ...value, ret_date: '' };
   if (!record(value) || !id(value.id) || !(value.project_seq === null || id(value.project_seq)) ||
     !['contract_no','date','material','supplier','payment_term','payment_method','remark','tag','arch','arch_no','ret_date'].every(k => typeof value[k] === 'string') ||
     !(value.trade_co === null || typeof value.trade_co === 'string') ||
@@ -35,12 +36,12 @@ export function readContracts(value: unknown): ContractList {
 }
 export function readContractDetail(value: unknown): ContractDetail {
   if (!record(value) || !record(value.data)) throw new ApiError('合同详情读取不完整，请重读。');
-  contractRow(value.data);
+  const row = contractRow(value.data);
   for (const key of ['supplier_invoices','trade_invoices']) {
     const invoices = value.data[key];
     if (!Array.isArray(invoices) || !invoices.every(x => record(x) && id(x.id) && typeof x.kind === 'string' && typeof x.date === 'string' && moneyText(x.amount))) throw new ApiError('合同发票依据读取不完整，请重读。');
   }
-  return value.data as unknown as ContractDetail;
+  return { ...value.data, ...row } as unknown as ContractDetail;
 }
 export function contractFields(row: ContractRow): ContractFields {
   return { material_name: row.material, payment_term: row.payment_term, payment_method: row.payment_method,

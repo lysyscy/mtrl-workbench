@@ -319,6 +319,25 @@ GEOMETRY = {
 #:   ① `pri` 作**链接/强调字**要能在 `bg` 上读（≥4.5）⇒ 不能取太亮的色；
 #:   ② `tx` 与 `bg` ≥4.5；③ `sf` 与 `bg` 要**看得出层次**（卡片浮起来）；
 #:   ④ 各套的 `bg` 差异要**看得出来**（这个值取自上一版"看着都一样"的教训：原先只差 1~3 个灰阶）。
+# React uses the same palette choices, with its accepted surface and geometry vocabulary.
+_REACT_LIGHT = {
+    "--bg": "#f6f6f4", "--sf": "#ffffff", "--sf2": "#fafaf8",
+    "--bd": "#ececea", "--bd2": "#ececea", "--bd3": "#e0dfdc",
+    "--tx": "#1d1c1a", "--tx2": "#6f6d68", "--mut": "#6f6d68",
+}
+_REACT_STATES = {
+    "ok": ("#2f9e6e", "#20734f", "#e6f6ef", "#b9dfce"),
+    "wn": ("#c7881a", "#865d0f", "#fdf3e0", "#ecd49f"),
+    "dg": ("#d64545", "#b72e35", "#fdeaea", "#efbcbc"),
+    "bl": ("#3d7fd6", "#245fa6", "#e9f2fc", "#bdd2ef"),
+    "vi": ("#5b5bd6", "#4d4dc9", "#eeeefc", "#c9c8ee"),
+}
+_REACT_SHADOWS = {
+    "--shadow": "0 1px 2px rgba(25,24,20,.05)",
+    "--shadow-pop": "0 4px 16px rgba(25,24,20,.07),0 1px 3px rgba(25,24,20,.04)",
+    "--shadow-md": "0 24px 64px rgba(25,24,20,.16),0 8px 20px rgba(25,24,20,.08)",
+}
+
 THEME_SEEDS: dict[str, dict] = {
     "默认": {},                                            # ⚠️ 空 = 用上面那段字面量（观感基准）
     "靛青": {"bg": "#f2f3fb", "sf": "#ffffff", "tx": "#1b1830", "pri": "#4338ca"},

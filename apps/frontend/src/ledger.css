@@ -1,0 +1,36 @@
+/* C-style ledger: business input and export state remain with existing owners. */
+.ledger-card{background:var(--sf);font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.ledger-card-head{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));background:var(--sf);border-radius:var(--radius-card) var(--radius-card) 0 0;flex-wrap:wrap}
+.ledger-card-head h1{font-size:calc(15px * var(--fscale));font-weight:600}
+.ledger-card-body{padding:calc(16px * var(--fscale))}
+.ledger-view-project,.ledger-summary,.ledger-exports{font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.ledger-card .ant-btn,.ledger-export-dialog .ant-btn{border-radius:var(--radius-pill);font-size:calc(12px * var(--fscale));height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));padding:0 calc(12px * var(--fscale))}
+.ledger-summary>button,.ledger-card .ledger-delete{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding:0 calc(8px * var(--fscale));font-size:calc(12px * var(--fscale))}
+.ledger-input{font-size:calc(var(--font-ui-size) * 1px * var(--fscale));height:calc(32px * var(--fscale));border-radius:var(--radius-input);background:var(--sf2);padding-inline:calc(5px * var(--fscale))}
+.ledger-input:focus{background:var(--sf)}
+.ledger-summary{margin-bottom:calc(8px * var(--fscale))}
+.ledger-grid .ag-cell{padding-inline:calc(6px * var(--fscale))}
+.ledger-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
+.business-modal .ledger-export-dialog{padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.ledger-export-dialog table{font-size:inherit}
+.ledger-export-dialog th{font-size:calc(11.5px * var(--fscale));font-weight:500}
+.ledger-export-dialog th button{box-shadow:none;transform:none}
+.ledger-export-dialog .export-table{border:1px solid var(--bd);border-radius:var(--radius-input)}
+.ledger-export-dialog .export-table thead{position:sticky;top:0;background:var(--sf2);z-index:1}
+
+.business-modal .ledger-project-export{width:min(calc(560px * var(--fscale)),calc(100vw - 72px))}
+.export-project-actions{display:flex;align-items:center;gap:8px;margin:calc(16px * var(--fscale)) 0 calc(8px * var(--fscale));flex-wrap:wrap}
+.export-project-actions>span{margin-left:auto;color:var(--tx2)}
+.export-project-list{max-height:42dvh;overflow:auto;border:1px solid var(--bd);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2);overscroll-behavior:contain}
+.export-project-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:calc(8px * var(--fscale)) calc(12px * var(--fscale))}
+.export-project-row+.export-project-row{border-top:1px solid var(--bd)}
+.export-project-row:has(:checked){background:var(--pri-l)}
+.export-project-row>.ant-checkbox-wrapper{flex:1;min-width:0;font-size:inherit;line-height:1.5;overflow-wrap:anywhere}
+.export-project-row>div{display:flex;gap:4px;flex:none}
+.export-project-row .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
+
+/* Only the project list scrolls; keep close and download visible at maximum type. */
+.business-modal .ant-modal-body:has(>.ledger-project-export){overflow:hidden;max-height:none}
+.ledger-project-export>div:not([hidden]){display:flex;flex-direction:column;max-height:calc(100dvh - 48px - 40px * var(--fscale))}
+.ledger-project-export>div:not([hidden])>:not(.export-project-list){flex-shrink:0}
+.ledger-project-export .export-project-list{flex:0 1 auto;min-height:0}

@@ -29,6 +29,6 @@ export function selectable(row: NoticeRow): boolean { return !row.is_revoked || 
 export function archiveLabel(row: NoticeRow): string { return row.is_excluded ? row.exclude_source === 'manual' ? '手动剔除' : row.exclude_source === 'rule' ? '自动剔除' : '已剔除（来源未知）' : row.is_revoked ? 'i8 已撤单' : ''; }
 export function total(rows: NoticeRow[], key: MoneyKey): string { return decimal(rows.reduce((sum, row) => sum + cents(row[key]), 0n)); }
 export function searchKey(value: string): string { return value.toLocaleLowerCase().replace(/[,，\s]/g, ''); }
-export function currentMonth(): string { const p = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit' }).formatToParts(new Date()); return `${p.find(x => x.type === 'year')!.value}-${p.find(x => x.type === 'month')!.value}`; }
+export { currentMonth } from './business-time';
 export const body = (value: unknown) => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
 export function receipt(value: unknown): string { if (!record(value) || typeof value.message !== 'string') throw new ApiError('操作回执不完整，请重新读取列表核对。'); return value.message.replace(/<[^>]*>/g, '').replace(/\*\*/g, ''); }

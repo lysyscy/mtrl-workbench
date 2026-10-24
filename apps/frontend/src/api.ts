@@ -52,14 +52,14 @@ export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export interface Identity { id: number; account: string; name: string; role: 'admin' | 'user'; ui_scale_css: string }
+export interface Identity { id: number; account: string; name: string; role: 'admin' | 'user'; ui_scale_css: string; theme?: string; ui_scale?: string }
 export function readIdentity(value: unknown): Identity | null {
   if (record(value) && value.me === null) return null;
   const me = record(value) ? value.me : undefined;
   if (!record(me) || !Number.isInteger(me.id) || typeof me.id !== 'number' || typeof me.account !== 'string' || !me.account || typeof me.name !== 'string' || (me.role !== 'admin' && me.role !== 'user') || typeof me.ui_scale_css !== 'string' || !/^1(?:\.\d+)?$/.test(me.ui_scale_css)) {
     throw new ApiError('账号信息不完整，请重新登录；仍失败请联系维护人员。');
   }
-  return { id: me.id, account: me.account, name: me.name, role: me.role, ui_scale_css: me.ui_scale_css };
+  return { id: me.id, account: me.account, name: me.name, role: me.role, ui_scale_css: me.ui_scale_css, theme: typeof me.theme === 'string' ? me.theme : '', ui_scale: typeof me.ui_scale === 'string' ? me.ui_scale : '' };
 }
 
 export interface Project { id: number; name_full: string; warehouse_name: string | null; disp: string; project_type: 'normal' | 'shell' | 'small'; status: 'active' | 'archived'; ord: number; phid: string }

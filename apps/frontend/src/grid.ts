@@ -3,11 +3,16 @@ import type { GridApi } from 'ag-grid-community';
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
-export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(12.5px * var(--fscale))',
+export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(var(--font-ui-size,13.5) * 1px * var(--fscale))', headerFontSize: 'calc(11.5px * var(--fscale))',
   backgroundColor: 'var(--sf)', foregroundColor: 'var(--tx)', borderColor: 'var(--bd)',
   headerBackgroundColor: 'var(--sf2)', headerTextColor: 'var(--tx2)', accentColor: 'var(--pri)',
   oddRowBackgroundColor: 'var(--sf)', browserColorScheme: 'inherit', rowHoverColor: 'var(--sf2)',
   borderRadius: 0, wrapperBorderRadius: 0 });
+
+// Whole-page tables share compact geometry; dialog tables keep their task-specific sizing.
+export function pageGridGeometry(scale = 1) {
+  return { rowHeight: 36 * scale, headerHeight: 34 * scale, groupHeaderHeight: 34 * scale };
+}
 
 export function fixedWidth(width: number, scale = 1) {
   return { width: width * scale, minWidth: width * scale, maxWidth: width * scale, flex: 0 };
@@ -56,7 +61,7 @@ export function fitGridColumns(api: GridApi, root: HTMLElement | null, measure =
       if (!available) return;
       const specs = columns.map(column => { const def = column.getColDef(); return { min: def.minWidth ?? 60, max: def.maxWidth ?? 400, flex: def.context?.widthFlex ?? 0 }; });
       const widths = tableWidths(specs, columns.map(column => preferred.get(column.getColId()) ?? column.getActualWidth()), available, 1);
-      api.setColumnWidths(columns.map((column, i) => ({ key: column, newWidth: Math.floor(widths[i]!) })));
+      api.setColumnWidths(columns.map((column, i) => ({ key: column, newWidth: widths[i]! })));
     };
     const run = (measure: boolean) => { needsMeasure ||= measure; if (!frame) frame = requestAnimationFrame(fit); };
     const afterEdit = () => { if (pending) run(false); };

@@ -1,17 +1,51 @@
-.settlement-page { display: grid; gap: 16px; min-width: 0; }
-.settlement-page > div { min-width: 0; }
-.settlement-toolbar, .settlement-toolbar > div, .settlement-toolbar label, .settlement-summary, .settlement-draft { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.settlement-toolbar { justify-content: space-between; margin: 12px 0; }
-.settlement-toolbar label { gap: 8px; }
-.settlement-toolbar .ant-select { min-width: 6em; }
-.settlement-summary { color: var(--tx2); }
-.settlement-grid { height: min(60vh, 640px); min-height: 260px; width: 100%; }
-.annual-grid { height: min(42vh, 460px); }
-.settlement-page h2 { font-size: 1.05em; margin: 20px 0 8px; }
-.settlement-grid .money { text-align: right; font-variant-numeric: tabular-nums; }
-.settlement-grid .ant-input { text-align: right; font-variant-numeric: tabular-nums; }
-.settlement-grid .ag-row-pinned { font-weight: 600; background: var(--sf2); }
-.settlement-draft { margin: 8px 0; }
-.settlement-draft [role="alert"] { color: var(--danger); }
-.settlement-export-dialog { width: min(640px, calc(100vw - 32px)); }
-.settlement-export-list { max-height: 40vh; overflow: auto; padding-inline-start: 24px; }
+.settlement-page{display:block;overflow:visible;min-width:0;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.settlement-page>div{min-width:0}
+.settlement-tabs{justify-self:start;margin:calc(16px * var(--fscale)) calc(16px * var(--fscale)) 0;max-width:100%;border-radius:var(--radius-pill)}
+.settlement-tabs .ant-segmented-item,.settlement-tabs .ant-segmented-thumb{border-radius:var(--radius-pill)}
+.settlement-tabs .ant-segmented-item-label{min-height:calc(32px * var(--fscale));line-height:calc(32px * var(--fscale));padding-inline:calc(16px * var(--fscale));white-space:normal}
+.settlement-toolbar,.settlement-toolbar>div,.settlement-toolbar label,.settlement-summary,.settlement-draft{display:flex;align-items:center;gap:calc(12px * var(--fscale));flex-wrap:wrap}
+.settlement-toolbar{justify-content:space-between;margin:0;padding:calc(16px * var(--fscale));background:var(--sf);border-bottom:1px solid var(--bd2)}
+.settlement-toolbar>div{gap:calc(12px * var(--fscale)) calc(16px * var(--fscale));min-width:0}
+.settlement-toolbar label{gap:calc(8px * var(--fscale));min-width:0;max-width:100%;color:var(--tx2)}
+.settlement-toolbar .ant-select{min-width:6em;max-width:100%}
+.settlement-toolbar .business-time-picker{max-width:100%}
+.settlement-page .ant-btn,.settlement-toolbar .ant-select,.settlement-toolbar .ant-picker{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font:inherit}
+.settlement-page .ant-btn{padding-inline:calc(12px * var(--fscale))}
+.settlement-summary{margin:0;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));color:var(--tx2);line-height:1.55;font-variant-numeric:tabular-nums}
+.settlement-grid{height:min(60dvh,640px);min-height:calc(260px * var(--fscale));width:100%;min-width:0;border-radius:0 0 var(--radius-card) var(--radius-card);overflow:hidden;scrollbar-color:var(--bd3) var(--sf2)}
+.settlement-grid .ag-root-wrapper{border:0;border-radius:0 0 var(--radius-card) var(--radius-card)}
+.settlement-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale));font-size:calc(11.5px * var(--fscale));font-weight:500}
+.settlement-grid .ag-cell{display:flex;align-items:center;padding-inline:calc(8px * var(--fscale));line-height:1.55}
+.settlement-grid .ag-cell-wrapper,.settlement-grid .ag-cell-value{width:100%;min-width:0}
+.settlement-grid .ag-cell-wrap-text{white-space:normal;overflow-wrap:anywhere}
+.settlement-grid .money{text-align:right;justify-content:flex-end;font-variant-numeric:tabular-nums}
+.settlement-grid .money .ag-cell-value{text-align:right}
+.settlement-grid .status-tag{margin:0;max-width:100%;white-space:normal;line-height:1.5}
+.settlement-grid .ant-input{width:100%;min-width:0;height:calc(32px * var(--fscale));padding-inline:calc(8px * var(--fscale));border-radius:var(--radius-input);background:var(--sf2);font:inherit;text-align:right;font-variant-numeric:tabular-nums}
+.settlement-grid .ant-input:hover,.settlement-grid .ant-input:focus{background:var(--sf)}
+.settlement-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
+.settlement-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
+.settlement-grid .ag-cell-focus:not(:focus-visible){border-color:transparent;outline:none;box-shadow:none}
+.settlement-grid .ag-cell-focus:focus-visible{border-color:var(--pri);outline:none;box-shadow:none}
+.settlement-annual{margin-top:calc(16px * var(--fscale));min-width:0;background:var(--sf);border-radius:var(--radius-card);box-shadow:var(--shadow);overflow:hidden}
+.settlement-annual h2{margin:0;padding:calc(16px * var(--fscale));font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4}
+.settlement-annual .annual-grid{border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:none}
+.settlement-annual .ag-root-wrapper{border-radius:0 0 var(--radius-card) var(--radius-card)}
+.settlement-draft{margin:calc(8px * var(--fscale)) 0;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));background:var(--sf);border:1px solid var(--bd);border-radius:var(--radius-inner);line-height:1.55}
+.settlement-draft>span{min-width:0;overflow-wrap:anywhere;flex:1 1 20em}
+.settlement-draft [role=alert]{color:var(--dg-d)}
+.settlement-page .notice{line-height:1.55;overflow-wrap:anywhere}
+.settlement-page .notice .ant-btn{margin-inline-start:calc(8px * var(--fscale))}
+.business-modal .settlement-export-dialog{width:min(calc(640px * var(--fscale)),calc(100vw - 24px));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.settlement-export-dialog h2{margin:0;font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4}
+.settlement-export-dialog p,.settlement-export-list{line-height:1.55;overflow-wrap:anywhere}
+.settlement-export-list{max-height:40dvh;overflow:auto;padding-inline-start:calc(24px * var(--fscale));scrollbar-color:var(--bd3) var(--sf2)}
+.settlement-export-list li+li{margin-top:calc(8px * var(--fscale))}
+.settlement-export-dialog .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font:inherit}
+.settlement-export-dialog .dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
+@media(max-width:800px){.settlement-toolbar{align-items:flex-start}.settlement-toolbar label{flex-wrap:wrap}.settlement-tabs .ant-segmented-item-label{padding-inline:calc(10px * var(--fscale))}.business-modal .settlement-export-dialog{padding:calc(16px * var(--fscale))}}
+
+/* Only these reports expand with their rows; inventory shares the base grid styles. */
+.settlement-page .settlement-grid{height:auto;min-height:0}
+.settlement-page .settlement-grid:not(.is-empty) .ag-grid-scrolling-rows{min-height:0}
+.settlement-page .settlement-annual .money{white-space:nowrap}

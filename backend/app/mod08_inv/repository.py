@@ -50,11 +50,15 @@ def to_row(detail: InvDetail | Row, adj: InvAdjustment | None = None) -> dict:
     return row
 
 
-def list_details(s: Session, *, ym: str | None = None) -> list[InvDetail]:
+def list_details(s: Session, *, ym: str | None = None, warehouse: str | None = None, through_ym: str | None = None) -> list[InvDetail]:
     """按核算年月取明细行（`ym` 空 ⇒ 全部）。"""
     stmt = select(InvDetail)
     if ym:
         stmt = stmt.where(InvDetail.ym == ym)
+    if warehouse is not None:
+        stmt = stmt.where(InvDetail.warehouse_name == warehouse)
+    if through_ym is not None:
+        stmt = stmt.where(InvDetail.ym <= through_ym)
     return list(s.execute(stmt.order_by(InvDetail.id)).scalars())
 
 

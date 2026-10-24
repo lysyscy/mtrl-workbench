@@ -93,6 +93,20 @@ def api_fee(request: Request) -> dict:
         return _payload(s, ym=str(p.get("ym") or ""), pj=str(p.get("pj") or ""))
 
 
+@router.get("/api/m09/fee/year")
+def api_fee_year(request: Request) -> dict:
+    from fastapi import HTTPException
+    p = flatten_query(request.query_params)
+    with session_scope() as s:
+        try:
+            data = SV.build_year_data(s, year=str(p.get("year") or ""), project=str(p.get("pj") or ""))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    def amounts(row):
+        return {**row, "prior": _s(row["prior"]), "months": [_s(v) for v in row["months"]], "total": _s(row["total"])}
+    return {**amounts(data), "rows": [amounts(row) for row in data["rows"]]}
+
+
 # ============================================================ 写（四个动作 · 全部只落在「当前那份」上）
 
 

@@ -1,3 +1,4 @@
+import './ledger.css';
 import { BusinessModal } from './business-modal';
 import { BoundedTable } from './bounded-table';
 import { useEffect, useRef, useState } from 'react';
@@ -67,6 +68,8 @@ export function ProjectExport({ kind, owner, projects, project, unavailable, run
   exportFile: (projects: Project[], signal?: AbortSignal) => Promise<{ blob: Blob; filename: string }>;
 }) {
   const [open, setOpen] = useState(false); const [ids, setIds] = useState<number[] | null>(null);
+  const singleList = kind === 'ledger' || kind === 'debt';
+  const [order, setOrder] = useState<number[]>([]);
   const [confirm, setConfirm] = useState(false);
   const [feedback, setFeedback] = useState(''); const [busy, setBusy] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -74,6 +77,7 @@ export function ProjectExport({ kind, owner, projects, project, unavailable, run
   const preferenceKey = `mtrl:export-projects:v1:${encodeURIComponent(owner)}:${kind}`;
   const selected = (ids ?? (project ? [project] : [])).filter(id => projects.some(item => item.id === id));
   const chosen = selected.flatMap(id => { const item = projects.find(item => item.id === id); return item ? [item] : []; });
+  const ordered = [...order, ...projects.map(item => item.id).filter(id => !order.includes(id))].flatMap(id => { const item = projects.find(item => item.id === id); return item ? [item] : []; });
   const scopeError = chosen.length !== selected.length ? '项目范围已变化，请重新选择。' : chosen.some(item => !item.warehouse_name?.trim()) ? '所选项目尚未建仓，请调整范围。' : '';
   const reason = unavailable || scopeError;
   const close = () => { setOpen(false); if (!paused && valid()) requestAnimationFrame(() => trigger.current?.focus()); };
@@ -89,12 +93,19 @@ export function ProjectExport({ kind, owner, projects, project, unavailable, run
       const saved = localStorage.getItem(preferenceKey);
       const value: unknown = saved === null ? (project ? [project] : []) : JSON.parse(saved);
       if (!Array.isArray(value) || !value.every(id => Number.isSafeInteger(id) && id > 0)) throw new Error('Invalid export preference');
-      choose([...new Set<number>(value)].filter(id => projects.some(item => item.id === id)));
-    } catch { setIds([]); setPreferenceError('本机记忆未能读取，请重新选择；本次仍可导出。'); }
+      const restored = [...new Set<number>(value)].filter(id => projects.some(item => item.id === id));
+      setOrder([...restored, ...projects.map(item => item.id).filter(id => !restored.includes(id))]);
+      choose(restored);
+    } catch { setOrder(projects.map(item => item.id)); setIds([]); setPreferenceError('本机记忆未能读取，请重新选择；本次仍可导出。'); }
   }
   const move = (index: number, offset: number) => {
     const next = [...selected]; [next[index], next[index + offset]] = [next[index + offset]!, next[index]!]; choose(next);
   };
+  function moveProject(index: number, offset: number) {
+    const next = ordered.map(item => item.id);
+    [next[index], next[index + offset]] = [next[index + offset]!, next[index]!];
+    setOrder(next); choose(next.filter(id => selected.includes(id)));
+  }
   async function save() {
     if (reason || busy || !chosen.length) return;
     setBusy(true); setFeedback('');
@@ -115,11 +126,19 @@ export function ProjectExport({ kind, owner, projects, project, unavailable, run
       restore();
       setFeedback(''); setConfirm(false); setOpen(true);
     }}>{title}…</Button>
-    {open && createPortal(<BusinessModal open={open && !paused} className="ledger-export-dialog" titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
+    {open && createPortal(<BusinessModal open={open && !paused} className={`ledger-export-dialog${singleList ? ' ledger-project-export' : ''}`} titleId={`${kind}-export-title`} requestClose={closing.requestClose}><DialogContents title={title} titleId={`${kind}-export-title`} closing={closing}>
       <p>{description}</p>
       <p className="muted">项目与顺序自动记在本机，关闭不撤销选择；清除浏览器数据或换设备需重选。</p>
       {preferenceError && <p className="notice" role="alert">{preferenceError}</p>}
-      {!confirm ? <>
+      {singleList ? <>
+        <div className="export-project-actions"><Button disabled={busy} onClick={()=>choose(ordered.map(item=>item.id))}>全选</Button><Button disabled={busy} onClick={()=>choose([])}>全不选</Button><span role="status">已选 {chosen.length} 个项目</span></div>
+        <div className="export-project-list" role="group" aria-label="导出项目选择与顺序">{ordered.map((item,index)=><div className="export-project-row" key={item.id}>
+          <Checkbox disabled={busy} checked={selected.includes(item.id)} onChange={event=>choose(ordered.filter(p=>p.id===item.id?event.target.checked:selected.includes(p.id)).map(p=>p.id))}><span title={projectLabel(item)}>{projectLabel(item)}</span></Checkbox>
+          <div><Button aria-label={`上移${projectLabel(item)}`} disabled={busy||index===0} onClick={()=>moveProject(index,-1)}>上移</Button><Button aria-label={`下移${projectLabel(item)}`} disabled={busy||index===ordered.length-1} onClick={()=>moveProject(index,1)}>下移</Button></div>
+        </div>)}</div>
+        {!ordered.length&&<p className="muted">暂无可选项目</p>}
+        <p className="muted">{summary(chosen.length)}</p>
+      </> : !confirm ? <>
         <ProjectPicker projects={projects} selected={selected} pick={choose} multiple initiallyOpen label="导出项目" emptyLabel="请选择项目" disabled={busy} />
         <p>已选 {chosen.length} 个项目</p>
       </> : <>
@@ -128,7 +147,7 @@ export function ProjectExport({ kind, owner, projects, project, unavailable, run
       </>}
       {(reason || feedback) && <p className="notice" role="alert">{reason || feedback}</p>}
       {busy && <p role="status">正在生成文件…</p>}
-      <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>关闭</Button>{confirm ? <><Button htmlType="submit" disabled={busy} onClick={() => { setFeedback(''); setConfirm(false); }}>返回选择</Button><Button htmlType="submit" className="primary" disabled={Boolean(reason) || busy || !chosen.length} onClick={() => void save()}>保存到本地</Button></> : <Button htmlType="submit" className="primary" disabled={Boolean(reason) || !chosen.length} onClick={() => { setFeedback(''); setConfirm(true); }}>确认清单</Button>}</div>
+      <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>关闭</Button>{singleList ? <Button htmlType="submit" className="primary" disabled={Boolean(reason)||busy||!chosen.length} onClick={()=>void save()}>保存到本地</Button> : confirm ? <><Button htmlType="submit" disabled={busy} onClick={() => { setFeedback(''); setConfirm(false); }}>返回选择</Button><Button htmlType="submit" className="primary" disabled={Boolean(reason) || busy || !chosen.length} onClick={() => void save()}>保存到本地</Button></> : <Button htmlType="submit" className="primary" disabled={Boolean(reason) || !chosen.length} onClick={() => { setFeedback(''); setConfirm(true); }}>确认清单</Button>}</div>
     </DialogContents></BusinessModal>, document.body)}
   </>;
 }

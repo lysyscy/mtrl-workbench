@@ -6,3 +6,44 @@
 .flow-grid .ag-cell,.flow-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale))}
 
 .flow-bars>.ant-btn.flow-bar{display:grid;grid-template-columns:subgrid;grid-column:1/-1;height:auto;white-space:normal;text-align:left;justify-content:normal;box-shadow:none}
+
+/* Page-local geometry consumes the shared account theme. */
+.flow-workspace{font-size:calc(var(--font-ui-size) * 1px * var(--fscale));gap:calc(16px * var(--fscale))}
+.flow-card{border:0;border-radius:var(--radius-card);box-shadow:var(--shadow)}
+.flow-card>h2,.flow-card-head{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));background:var(--sf)}
+.flow-card h2{font-size:calc(15px * var(--fscale))}
+.flow-card-body{padding:calc(16px * var(--fscale))}
+.flow-toolbar{gap:8px 16px;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));align-items:flex-end}
+.flow-toolbar label,.flow-toolbar>.time-picker-field{display:flex;flex-direction:column;align-items:stretch;gap:6px;color:var(--tx2);font-size:calc(12px * var(--fscale))}
+.flow-toolbar .ant-select{width:calc(112px * var(--fscale));min-width:0;height:calc(32px * var(--fscale))}
+.flow-toolbar .business-period-trigger{min-width:calc(144px * var(--fscale));height:calc(32px * var(--fscale))}
+.flow-toolbar .ant-input{width:calc(200px * var(--fscale));max-width:100%;height:calc(32px * var(--fscale));border-radius:var(--radius-pill)}
+.flow-toolbar form{align-items:flex-end;max-width:100%}
+.flow-toolbar>.business-project-picker{max-width:min(100%,calc(300px * var(--fscale)))}
+.flow-toolbar>.business-project-picker .ant-select{width:100%}
+.flow-grid .ag-cell{padding-block:calc(4px * var(--fscale))}
+.flow-grid .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding:0 calc(8px * var(--fscale));font-size:calc(12px * var(--fscale))}
+.flow-grid .ag-cell.money{font-variant-numeric:tabular-nums;white-space:nowrap}
+.flow-grid .ag-row-pinned .ag-cell{border-top-color:var(--bd3)}
+.flow-bars{grid-template-columns:minmax(90px,1.2fr) minmax(25px,1fr) max-content}
+.bar-track{background:var(--pri-l);border-radius:var(--radius-pill)}
+.bar-track i,.bar-track i.negative{background:var(--pri)}
+.flow-bars>.ant-btn.flow-bar{color:var(--tx);border:0;border-radius:var(--radius-input);padding:calc(8px * var(--fscale)) calc(4px * var(--fscale));box-shadow:none;transform:none;line-height:1.5}
+.flow-bars>.ant-btn.flow-bar[aria-pressed=true]{background:var(--pri-l);color:var(--pri-d);outline:1px solid var(--pri-bd);outline-offset:-1px}
+.flow-bars>.ant-btn.flow-bar:not(:disabled):hover{background:var(--sf2);color:var(--tx)}
+.business-modal .flow-revoke{padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.flow-revoke input:not([type=radio]){border-radius:var(--radius-input);min-height:calc(32px * var(--fscale))}
+.flow-revoke dd{font-variant-numeric:tabular-nums}
+.flow-revoke fieldset{border:1px solid var(--bd);border-radius:var(--radius-inner);margin:16px 0;padding:12px}
+@media(max-width:740px){.flow-toolbar form{flex-wrap:wrap}.flow-toolbar form label{max-width:100%}.flow-revoke dl{grid-template-columns:1fr;gap:4px}.flow-revoke dd{margin-bottom:8px}}
+
+.flow-toolbar .business-time-picker .ant-picker{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale))}
+.flow-toolbar .flow-project-field{width:calc(180px * var(--fscale));max-width:100%}
+.flow-project-field .business-project-picker{width:100%!important;min-width:0}
+.flow-toolbar .flow-project-field .ant-select{width:100%}
+.flow-grid .ag-cell-wrap-text{line-height:1.5}.flow-grid .ag-cell-wrap-text,.flow-grid .ag-cell-wrap-text a{overflow-wrap:anywhere;white-space:normal;text-overflow:clip}
+
+.flow-revoke>div>label{display:grid;gap:8px}
+.flow-revoke>div>label input{width:100%}
+.flow-revoke fieldset label{display:flex;align-items:center;gap:8px;margin:8px 0}
+.flow-revoke input[type=radio]{width:auto;height:auto;min-height:0;margin:0;accent-color:var(--pri);flex:none}

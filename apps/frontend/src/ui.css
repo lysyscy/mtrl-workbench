@@ -26,3 +26,17 @@
 .history-tools{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}.history-tools [role=alert]{max-width:24em}
 
 .history-gate{display:contents}
+
+/* Control widths belong to the caller; dropdowns retain AntD keyboard behavior. */
+.projects-page .filters .ant-select,.flow-toolbar .ant-select,.notice-filters .ant-select,.i8-record-tools .ant-select{min-width:8em}
+.projects-page .filters .ant-select{min-width:7em}
+.project-dialog label>.ant-select,.project-dialog label>.ant-input{width:100%}
+.project-status{min-width:6em;width:100%}
+.project-status .ant-tag{margin-inline-end:0}
+.notice-category-select{width:100%;min-width:0}
+.notice-category-select .ant-tag{margin-inline-end:0;padding-inline:.25em}
+.mechanical-import-table .ant-select{min-width:10em;width:100%}
+.notice-pay-table .ant-select{min-width:7em;width:100%}
+.contract-form-grid .ant-picker,.contract-field>.ant-picker,.subtable-draft .ant-picker{width:100%;min-width:0}
+.subtable-draft .ant-picker-input>input{min-width:0}
+.ant-tag.status-tag{margin-inline-end:0}

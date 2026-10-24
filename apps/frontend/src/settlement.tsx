@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import type { Identity } from './api';
-import { contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
 import { reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { money } from './notices-api';
@@ -22,7 +22,7 @@ type Props = { me: Identity | null; blocked: boolean; active: boolean };
 export function SettlementPage(props: Props) {
   const [tab,setTab] = useState('month');
   return <section className="settlement-page" aria-label="收发结存与提取">
-    <Segmented aria-label="收发结存页面" value={tab} options={[{value:'month',label:'收发结存月报'},{value:'extract',label:'焊材 / 气体提取'}]} onChange={setTab} disabled={props.blocked} />
+    <Segmented className="settlement-tabs" aria-label="收发结存页面" value={tab} options={[{value:'month',label:'收发结存月报'},{value:'extract',label:'焊材 / 气体提取'}]} onChange={setTab} disabled={props.blocked} />
     <div hidden={tab !== 'month'} inert={tab !== 'month'}><Monthly {...props} active={props.active && tab === 'month'} /></div>
     <div hidden={tab !== 'extract'} inert={tab !== 'extract'}><Extract {...props} active={props.active && tab === 'extract'} /></div>
   </section>;
@@ -34,8 +34,8 @@ function Monthly({ me, blocked, active }: Props) {
   const columns = useMemo<ColDef<SettlementRow>[]>(() => [
     {field:'name',headerName:'仓库名',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(200,500,scale,1)},
     {field:'rows',headerName:'行数',cellClass:'money',...fixedWidth(85,scale)},
-    ...(['begin','in','out','end'] as const).map((field,i) => ({field,headerName:['期初金额','收金额','发金额','结存金额'][i]!,cellClass:'money',valueFormatter:(p: {value: unknown}) => money(String(p.value)),...contentWidth(135,220,scale)})),
-    {colId:'check',headerName:'校验',...fixedWidth(100,scale),cellRenderer:(p: ICellRendererParams<SettlementRow>) => p.data && <Tag color={balanced(p.data) ? 'success' : 'error'}>{balanced(p.data) ? '已对平' : '未对平'}</Tag>},
+    ...(['begin','in','out','end'] as const).map((field,i) => ({field,headerName:['期初金额','收金额','发金额','结存金额'][i]!,cellClass:'money',wrapText:true,autoHeight:true,valueFormatter:(p: {value: unknown}) => money(String(p.value)),...contentWidth(160,260,scale)})),
+    {colId:'check',headerName:'校验',...fixedWidth(100,scale),cellRenderer:(p: ICellRendererParams<SettlementRow>) => p.data && <Tag className={`status-tag ${balanced(p.data) ? 'status-positive' : 'status-negative'}`}>{balanced(p.data) ? '已对平' : '未对平'}</Tag>},
   ],[scale]);
   const total = useMemo(() => query.data?.rows.length ? [{ id:'__total',name:'合计',rows:query.data.counts.rows,
     begin:settlementTotal(query.data.rows,'begin'),in:settlementTotal(query.data.rows,'in'),out:settlementTotal(query.data.rows,'out'),end:settlementTotal(query.data.rows,'end') }] : [],[query.data]);
@@ -48,9 +48,9 @@ function Monthly({ me, blocked, active }: Props) {
     </div>
     {query.isError && <p className="notice" role="alert">{query.error.message}<Button onClick={() => void query.refetch()} disabled={blocked}>重读</Button></p>}
     {query.isPending ? <p role="status">正在读取收发结存…</p> : query.data && <>
-      <p className="settlement-summary">{ym} · {query.data.counts.warehouses} 仓 · {query.data.counts.rows} 行 · {query.data.counts.files} 个文件{query.data.rows.length > 0 && <Tag color={query.data.balance_ok ? 'success' : 'error'}>{query.data.balance_ok ? '全部对平' : '存在未对平'}</Tag>}</p>
-      <div className="settlement-grid" ref={root}><AgGridReact<SettlementRow> theme={gridTheme} rowData={query.data.rows} columnDefs={columns} pinnedBottomRowData={total}
-        getRowId={p => p.data.id} defaultColDef={{resizable:false,sortable:false,suppressMovable:true}} rowHeight={44*scale} headerHeight={42*scale}
+      <p className="settlement-summary">{ym} · {query.data.counts.warehouses} 仓 · {query.data.counts.rows} 行 · {query.data.counts.files} 个文件{query.data.rows.length > 0 && <Tag className={`status-tag ${query.data.balance_ok ? 'status-positive' : 'status-negative'}`}>{query.data.balance_ok ? '全部对平' : '存在未对平'}</Tag>}</p>
+      <div className={`settlement-grid${query.data.rows.length ? '' : ' is-empty'}`} ref={root}><AgGridReact<SettlementRow> theme={gridTheme} domLayout="autoHeight" rowData={query.data.rows} columnDefs={columns} pinnedBottomRowData={total}
+        getRowId={p => p.data.id} defaultColDef={{resizable:false,sortable:false,suppressMovable:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight}
         overlayNoRowsTemplate="该核算月没有收发结存数据" suppressColumnVirtualisation suppressScrollOnNewData
         onGridReady={e => fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e => fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e => fitGridColumns(e.api,root.current)} /></div>
     </>}
@@ -139,16 +139,23 @@ function Extract({ me, blocked, active }: Props) {
 }
 function AnnualTable({grid,scale}:{grid: import('./settlement-api').AnnualGrid;scale:number}) {
   const root = useRef<HTMLDivElement>(null), history = grid.year <= '2025';
-  const columns = useMemo<ColDef<AnnualRow>[]>(() => [
-    {field:'warehouse',headerName:'仓库名',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(190,320,scale,1)},
-    {field:'prior',headerName:'往年金额',cellClass:'money',valueFormatter:p => money(p.value),...contentWidth(125,170,scale)},
-    ...grid.months.map((month,i):ColDef<AnnualRow> => ({colId:month,headerName:`${i+1}月`,valueGetter:p => p.data?.cells[i],valueFormatter:p => p.value == null ? '' : money(p.value),cellClass:'money',...contentWidth(108,150,scale)})),
-    {field:'total',headerName:'合计',cellClass:'money',valueFormatter:p => money(String(p.value)),...contentWidth(135,190,scale)},
-    ...(history ? [{field:'balance' as const,headerName:'2025-11及之前',cellRenderer:BalanceInput,...contentWidth(190,210,scale),context:{kind:grid.kind}}] : []),
-  ],[grid.kind,grid.year,scale]);
+  const columns = useMemo<ColDef<AnnualRow>[]>(() => {
+    // Use the complete result and its supplied totals, including rows below the viewport.
+    const amountWidth = (values: (string | null | undefined)[], minimum = 72) => {
+      const width = Math.max(minimum, ...values.map(value => value == null ? 0 : money(value).length * 8.2 + 20));
+      return contentWidth(width,width + 64,scale,1);
+    };
+    return [
+      {field:'warehouse',headerName:'仓库名',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(160,320,scale,1)},
+      {field:'prior',headerName:'往年金额',cellClass:'money',valueFormatter:p => p.value == null ? '' : money(p.value),...amountWidth([...grid.rows.map(row => row.prior),grid.sum_row[0]])},
+      ...grid.months.map((month,i):ColDef<AnnualRow> => ({colId:month,headerName:`${i+1}月`,valueGetter:p => p.data?.cells[i],valueFormatter:p => p.value == null ? '' : money(p.value),cellClass:'money',...amountWidth([...grid.rows.map(row => row.cells[i]),grid.sum_row[i+1]])})),
+      {field:'total',headerName:'合计',cellClass:'money',valueFormatter:p => p.value == null ? '' : money(p.value),...amountWidth([...grid.rows.map(row => row.total),grid.sum_row[13]])},
+      ...(history ? [{field:'balance' as const,headerName:'2025-11及之前',cellRenderer:BalanceInput,...amountWidth(grid.rows.map(row => row.balance),148),context:{kind:grid.kind}}] : []),
+    ];
+  },[grid,history,scale]);
   const total: AnnualRow[] = [{warehouse:`${grid.kind}合计`,prior:grid.sum_row[0]!,cells:grid.sum_row.slice(1,13),total:grid.sum_row[13]!,balance:null}];
-  return <section aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><div ref={root} className="settlement-grid annual-grid"><AgGridReact<AnnualRow> theme={gridTheme} rowData={grid.rows} columnDefs={columns} pinnedBottomRowData={total}
+  return <section className="settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><div ref={root} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`}><AgGridReact<AnnualRow> theme={gridTheme} domLayout="autoHeight" rowData={grid.rows} columnDefs={columns} pinnedBottomRowData={total}
     getRowId={p => p.data.warehouse} defaultColDef={{resizable:true,sortable:false,suppressMovable:true,suppressKeyboardEvent:e => e.event.target instanceof HTMLInputElement}}
-    rowHeight={46*scale} headerHeight={42*scale} overlayNoRowsTemplate={`当前筛选条件下没有${grid.kind}数据`} suppressScrollOnNewData suppressColumnVirtualisation
-    onGridReady={e => fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e => fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e => fitGridColumns(e.api,root.current)} /></div></section>;
+    rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} overlayNoRowsTemplate={`当前筛选条件下没有${grid.kind}数据`} suppressScrollOnNewData suppressColumnVirtualisation
+    onGridReady={e => fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e => fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e => fitGridColumns(e.api,root.current)} onRowDataUpdated={e => fitGridColumns(e.api,root.current,true)} /></div></section>;
 }

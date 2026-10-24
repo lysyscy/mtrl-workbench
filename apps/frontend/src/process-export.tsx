@@ -26,8 +26,8 @@ export function ProcessExport({projects,current,tab,paused,reason}:{projects:Pro
     }catch(e){if(!controller.signal.aborted)setError(e instanceof Error?e.message:'导出失败，请重试。');}
     finally{lock.current=false;setBusy(false);}
   }
-  return <><Button ref={trigger} type="primary" disabled={paused||Boolean(reason)||!projects.length} title={reason} onClick={()=>{setOpen(true);setError('');}}>导出文件…</Button>
-    {open&&<BusinessModal open={!paused} titleId="process-export-title" requestClose={closing.requestClose} className="process-export-dialog"><DialogContents title={`导出 · ${tabLabels[tab]}`} titleId="process-export-title" closing={closing}>
+  return <><Button ref={trigger} type="primary" disabled={paused||Boolean(reason)||!projects.length} title={reason} onClick={()=>{setOpen(true);setError('');}}>批量导出（先选项目）…</Button>
+    {open&&<BusinessModal open={!paused} titleId="process-export-title" requestClose={closing.requestClose} className="process-export-dialog"><DialogContents title={`批量导出 · ${tabLabels[tab]}`} titleId="process-export-title" closing={closing}>
       <p>每项目一本工作簿，多个项目打包为 ZIP。{tab===2?'差异导出按月逐列列示调整后与原始的差额。':''}</p>
       <div className="process-export-tools"><Button disabled={busy} onClick={()=>setSelected(projects.map(p=>p.warehouse_name!))}>全选</Button><Button disabled={busy} onClick={()=>setSelected([])}>清空</Button><span>已选 {chosen.length} 个项目</span></div>
       <div className="process-export-projects">{projects.map(p=><Checkbox key={p.id} disabled={busy} checked={chosen.includes(p.warehouse_name!)} onChange={e=>setSelected(e.target.checked?[...chosen,p.warehouse_name!]:chosen.filter(k=>k!==p.warehouse_name))}>{p.disp}</Checkbox>)}</div>

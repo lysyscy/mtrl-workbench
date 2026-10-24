@@ -1,13 +1,19 @@
+import { BusinessDate } from './time-picker';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
-import { useEffect, useId, useRef } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import { Link } from 'react-router';
+import Select from 'antd/es/select';
+import Pagination from 'antd/es/pagination';
+import { useEffect, useId, useRef, useState } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import { useHref, useLinkClickHandler } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError } from './api';
-import { BoundedTable } from './bounded-table';
+import { ApiError, requestJson } from './api';
+import { BusinessModal } from './business-modal';
+import { DialogContents, useDialogClose } from './dialog-close';
+import { contractHistoryDate, contractWrite } from './contracts-api';
+import type { ContractRow } from './contracts-api';
 import { useHistoryGuard } from './history';
-import { money } from './notices-api';
+import { live, money, readNotices } from './notices-api';
 import { draftProblem, emptySubtableDraft, loadSubtables, writeSubtable } from './contract-subtables-api';
 import type { SubtableDraft, SubtableKind } from './contract-subtables-api';
 import './contract-subtables.css';
@@ -20,12 +26,23 @@ export interface SubtableState {
 export type SubtableWorkspace = Record<number, SubtableState>;
 export type ChangeSubtables = Dispatch<SetStateAction<SubtableWorkspace>>;
 export function newSubtableState(historyDate=''): SubtableState { const supplier=emptySubtableDraft();if(historyDate){supplier.date=historyDate;supplier.initialDate=historyDate;}return {drafts:{supplier,trade:emptySubtableDraft(),payment:emptySubtableDraft()},busy:false,uncertain:false,reconciled:false,error:'',feedback:'',deleting:null,focus:null}; }
+function NoticeButton({id,children}:{id:number;children:ReactNode}) {
+  const to=`/notices?notice=${id}`, href=useHref(to), onClick=useLinkClickHandler<HTMLAnchorElement>(to);
+  return <Button size="small" href={href} onClick={onClick}>{children}</Button>;
+}
 const draftDirty = (d: SubtableDraft) => d.amount !== '' || d.date !== d.initialDate;
 export function hasSubtableDrafts(state: SubtableState | undefined): boolean { return Boolean(state && Object.values(state.drafts).some(draftDirty)); }
-export function ContractSubtables({ contractId, historyDate, workspace, change, writable, paused }: {
-  contractId:number;historyDate:string;workspace:SubtableWorkspace;change:ChangeSubtables;writable:boolean;paused:boolean;
+export function ContractSubtables({ contractId, historyDate, workspace, change, writable, paused, onlyKind, summaryRow, contracts = [], pageSize = 2 }: {
+  contractId:number;historyDate:string;workspace:SubtableWorkspace;change:ChangeSubtables;writable:boolean;paused:boolean;onlyKind?:SubtableKind;summaryRow?:ContractRow;contracts?:ContractRow[];pageSize?:number;
 }) {
   const client=useQueryClient(), root=useRef<HTMLDivElement>(null), lock=useRef(false), guard=useId();
+  const [referencing,setReferencing]=useState(false);
+  const focused=useRef<SubtableState['focus']>(null);
+  const [pages,setPages]=useState<Record<SubtableKind,number>>({supplier:1,trade:1,payment:1}),[linkPage,setLinkPage]=useState(1);
+  const linkPageSize=8;
+  const pageFor=(kind:SubtableKind,total:number)=>Math.max(1,Math.min(pages[kind],Math.ceil(total/pageSize)));
+  const pageRows=<T,>(kind:SubtableKind,rows:T[])=>rows.slice((pageFor(kind,rows.length)-1)*pageSize,pageFor(kind,rows.length)*pageSize);
+  const pagination=(kind:SubtableKind,total:number)=><div className="subtable-pagination"><span>共 {total} 条</span>{total>pageSize&&<Pagination aria-label={`${labels[kind]}明细分页`} size="small" current={pageFor(kind,total)} pageSize={pageSize} total={total} showSizeChanger={false} onChange={page=>setPages(old=>({...old,[kind]:page}))}/>}</div>;
   const labels:Record<SubtableKind,string>={supplier:historyDate?'历史未结金额':'供应商发票',trade:'贸易公司发票',payment:'手工付款'};
   const state=workspace[contractId], live=useRef({writable,paused});live.current={writable,paused};
   const query=useQuery({queryKey:['contract-subtables',contractId],enabled:!paused,staleTime:0,refetchOnMount:'always',refetchOnWindowFocus:false,retry:false,queryFn:({signal})=>loadSubtables(contractId,signal)});
@@ -33,10 +50,14 @@ export function ContractSubtables({ contractId, historyDate, workspace, change, 
   useEffect(()=>{change(old=>old[contractId]?old:{...old,[contractId]:newSubtableState(historyDate)});},[contractId,historyDate,change]);
   useHistoryGuard(guard,()=>paused?'':state?.busy?'合同子表正在保存，请稍候。':state?.uncertain?'合同子表结果待核实，请先重读。':hasSubtableDrafts(state)?'合同子表有未保存输入，请先处理。':'');
   useEffect(()=>{
-    if(!state?.focus||query.isFetching||paused)return;
+    if(!state?.focus||state.focus===focused.current||query.isFetching||paused)return;
+    const rows=state.focus.kind==='payment'?query.data?.payment_display_rows:query.data?.[state.focus.kind==='supplier'?'supplier_invoices':'trade_invoices'];
+    const index=rows?.findIndex(row=>row.id===state.focus!.id)??-1;
+    if(index>=0) {const page=Math.floor(index/pageSize)+1;if(pages[state.focus.kind]!==page){setPages(old=>({...old,[state.focus!.kind]:page}));return;}}
     const target=root.current?.querySelector<HTMLElement>(`[data-subtable="${state.focus.kind}"][data-row="${state.focus.id}"]`);
     if(target && (!root.current?.contains(document.activeElement)||document.activeElement?.tagName==='BUTTON')) {target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}
-  },[state?.focus,query.data,query.isFetching,paused]);
+    if(target) focused.current=state.focus;
+  },[state?.focus,query.data,query.isFetching,paused,pages,pageSize]);
   const unavailable=!writable||paused||!state||state.busy||state.uncertain||query.isFetching||query.isError||!query.data;
   async function refresh() { await client.invalidateQueries({}, {throwOnError:true}); }
   async function save(kind:SubtableKind, deleting=false) {
@@ -64,19 +85,79 @@ export function ContractSubtables({ contractId, historyDate, workspace, change, 
     finally{lock.current=false;update(s=>({...s,busy:false}));}
   }
   function input(kind:SubtableKind,key:'date'|'amount',value:string) {update(s=>({...s,drafts:{...s.drafts,[kind]:{...s.drafts[kind],[key]:value}}}));}
-  function draftRow(kind:SubtableKind) {return state&&<tr className="subtable-draft"><td><Input type="date" aria-label={kind==='supplier'&&historyDate?'核对截至日':`${labels[kind]}日期`} value={state.drafts[kind].date} disabled={!writable||paused||state.busy||state.uncertain} onChange={e=>input(kind,'date',e.target.value)}/></td><td><Input aria-label={kind==='supplier'&&historyDate?'历史未结金额（元）':`${labels[kind]}金额（元）`} inputMode="decimal" value={state.drafts[kind].amount} disabled={!writable||paused||state.busy||state.uncertain} onChange={e=>input(kind,'amount',e.target.value)}/></td>{kind==='payment'&&<td>手工录入</td>}<td><Button htmlType="button" className="primary" disabled={unavailable} onClick={()=>void save(kind)}>新增{labels[kind]}</Button></td></tr>;}
+  function draftRow(kind:SubtableKind) {return state&&<tr className="subtable-draft"><td data-label="日期"><BusinessDate label={kind==='supplier'&&historyDate?'核对截至日':`${labels[kind]}日期`} value={state.drafts[kind].date} disabled={!writable||paused||state.busy||state.uncertain} onChange={value=>input(kind,'date',value)}/></td><td data-label="金额（元）"><Input aria-label={kind==='supplier'&&historyDate?'历史未结金额（元）':`${labels[kind]}金额（元）`} inputMode="decimal" value={state.drafts[kind].amount} disabled={!writable||paused||state.busy||state.uncertain} onChange={e=>input(kind,'amount',e.target.value)}/></td>{kind==='payment'&&<td data-label="来源与口径">手工录入</td>}<td data-label="操作"><div className="subtable-draft-actions"><Button htmlType="button" className="primary" disabled={unavailable} onClick={()=>void save(kind)}>新增{labels[kind]}</Button><Button htmlType="button" disabled={!writable||paused||state.busy||state.uncertain||!draftDirty(state.drafts[kind])} onClick={()=>update(s=>({...s,drafts:{...s.drafts,[kind]:newSubtableState(historyDate).drafts[kind]}}))}>取消</Button></div></td></tr>;}
   function remove(kind:SubtableKind,row:{id:number;date:string;amount:string}) {update(s=>({...s,deleting:{kind,...row}}));}
   const data=query.data;
+  const linkedNotices=[...new Set((data?.payments??[]).filter(p=>p.source==='notice').map(p=>p.notice_id!))];
+  const currentLinkPage=Math.max(1,Math.min(linkPage,Math.ceil(linkedNotices.length/linkPageSize)));
+  const invoiceRows=(kind:'supplier'|'trade')=>data?.[kind==='supplier'?'supplier_invoices':'trade_invoices']??[];
   return <div ref={root} className="contract-subtables" onKeyDown={e=>{if(e.key==='Enter'&&e.target instanceof HTMLInputElement&&!e.nativeEvent.isComposing)e.preventDefault();}} aria-label="合同发票与付款明细">
-    <div className="subtable-heading"><h3>发票与付款</h3><Button htmlType="button" disabled={paused||Boolean(state?.busy)} onClick={()=>void reread()}>重读明细</Button></div>
+    <div className="subtable-heading">{!onlyKind&&<h3>发票与付款</h3>}<div className="subtable-tools"><Button htmlType="button" disabled={paused||Boolean(state?.busy)} onClick={()=>void reread()}>重读明细</Button>{onlyKind==='payment'&&<Button htmlType="button" disabled={unavailable} onClick={()=>setReferencing(true)}>从付款域引用</Button>}</div></div>
+    {onlyKind&&summaryRow&&<dl className="subtable-summary"><div><dt>供应商</dt><dd>{onlyKind==='trade'?summaryRow.trade_co||'未填':summaryRow.supplier||'未填'}</dd></div><div><dt>材料名</dt><dd>{summaryRow.material||'未填'}</dd></div><div><dt>{onlyKind==='payment'?'结算金额':'合同金额'}</dt><dd className="money">{onlyKind==='payment'?`${money(data?.settle??summaryRow.settle)} 元`:onlyKind==='trade'?(summaryRow.trade_contract_amt===null?'—':`${money(summaryRow.trade_contract_amt)} 元`):`${money(summaryRow.contract_amt)} 元`}</dd></div></dl>}
     {query.isPending?<p role="status">正在读取合同子表…</p>:query.isError?<p className="notice" role="alert">{query.error.message}</p>:null}
-    {data&&<>{historyDate&&<p>历史未结金额，核对截至日 {historyDate}；已扣除此前付款，请勿重复录入。</p>}<div className="subtable-totals">{[['结算金额',data.settle],['付款金额',data.pay_sum],['欠款金额',data.debt]].map(([label,value])=><span key={label}>{label}<strong>{money(value!)} 元</strong></span>)}</div>
-      <div className="subtable-invoices">{(['supplier','trade'] as const).filter(kind=>kind==='supplier'||data.trade_co||data.trade_invoices.length||state&&draftDirty(state.drafts.trade)).map(kind=><section key={kind} aria-label={labels[kind]}><h4>{labels[kind]}{kind==='trade'&&data.trade_co?` · ${data.trade_co}`:kind==='supplier'&&data.supplier?` · ${data.supplier}`:''}</h4><div className="subtable-scroll"><BoundedTable columns={[{min:10,max:13},{min:10,max:18,flex:1},{min:9,max:12}]}><thead><tr><th scope="col">{kind==='supplier'&&historyDate?'核对截至日':'发票日期'}</th><th scope="col" className="money">金额（元）</th><th scope="col">操作</th></tr></thead><tbody>{data[kind==='supplier'?'supplier_invoices':'trade_invoices'].map(row=><tr key={row.id} tabIndex={-1} data-subtable={kind} data-row={row.id}><td>{row.date||'日期未填'}</td><td className="money">{money(row.amount)}</td><td><Button htmlType="button" danger size="small" disabled={unavailable} onClick={()=>remove(kind,row)}>删除发票</Button></td></tr>)}{draftRow(kind)}</tbody><tfoot><tr><th scope="row">{kind==='supplier'&&historyDate?'历史未结合计':'发票合计'}</th><td className="money">{money(kind==='supplier'?data.inv_sum:data.trade_inv_sum)}</td><td/></tr></tfoot></BoundedTable></div></section>)}</div>
-      <section aria-label="合同付款明细"><h4>付款明细</h4><div className="subtable-scroll"><BoundedTable columns={[{min:10,max:13},{min:10,max:18},{min:14,max:32,flex:1},{min:9,max:13}]}><thead><tr><th scope="col">付款日期</th><th scope="col" className="money">金额（元）</th><th scope="col">来源与口径</th><th scope="col">操作</th></tr></thead><tbody>{data.payment_display_rows.map(row=><tr key={`${row.id}:${row.flow_id??row.display_kind}`} tabIndex={-1} data-subtable="payment" data-row={row.id}><td>{row.date||'日期未填'}{row.display_kind==='stat'&&row.date&&<small>最近实际付款日</small>}</td><td className="money">{money(row.amount)}</td><td>{row.display_kind==='manual'?'手工录入':<><Link to={`/notices?notice=${row.notice_id}`}>查看通知书</Link><small>{row.display_kind==='flow'?'实际付款（统计一致）':'统计累计 · 与实际付款有差异'}</small></>}</td><td>{row.source==='manual'?<Button htmlType="button" danger size="small" disabled={unavailable} onClick={()=>remove('payment',row)}>删除手工付款</Button>:<span className="muted">回通知书改关联</span>}</td></tr>)}{draftRow('payment')}</tbody><tfoot><tr><th scope="row">合同付款合计</th><td className="money">{money(data.pay_sum)}</td><td colSpan={2}/></tr></tfoot></BoundedTable></div></section>
-      {data.payments.some(p=>p.source==='notice')&&<div className="subtable-links"><span>已关联通知书</span>{[...new Set(data.payments.filter(p=>p.source==='notice').map(p=>p.notice_id!))].map((id,index)=><Link key={id} to={`/notices?notice=${id}`}>通知书 {index+1}</Link>)}</div>}
+    {data&&<>{historyDate&&<p>历史未结金额，核对截至日 {historyDate}；已扣除此前付款，请勿重复录入。</p>}{!onlyKind&&<div className="subtable-totals">{[['结算金额',data.settle],['付款金额',data.pay_sum],['欠款金额',data.debt]].map(([label,value])=><span key={label}>{label}<strong>{money(value!)} 元</strong></span>)}</div>}
+      <div className="subtable-invoices">{(['supplier','trade'] as const).filter(kind=>(!onlyKind||kind===onlyKind)&&(kind==='supplier'||data.trade_co||data.trade_invoices.length||state&&draftDirty(state.drafts.trade))).map(kind=><section key={kind} aria-label={labels[kind]}>{!onlyKind&&<h4>{labels[kind]}{kind==='trade'&&data.trade_co?` · ${data.trade_co}`:kind==='supplier'&&data.supplier?` · ${data.supplier}`:''}</h4>}<div className="subtable-scroll"><table className="subtable-invoice-table"><colgroup><col/><col/><col/></colgroup><thead><tr><th scope="col">{kind==='supplier'&&historyDate?'核对截至日':'发票日期'}</th><th scope="col" className="money">金额（元）</th><th scope="col">操作</th></tr></thead><tbody>{pageRows(kind,invoiceRows(kind)).map(row=><tr key={row.id} tabIndex={-1} data-subtable={kind} data-row={row.id}><td data-label="日期">{row.date||'日期未填'}</td><td data-label="金额（元）" className="money">{money(row.amount)}</td><td data-label="操作"><Button htmlType="button" danger size="small" disabled={unavailable} onClick={()=>remove(kind,row)}>删除发票</Button></td></tr>)}{draftRow(kind)}</tbody><tfoot><tr><th scope="row">{kind==='supplier'&&historyDate?'历史未结合计':'发票合计'}</th><td className="money">{money(kind==='supplier'?data.inv_sum:data.trade_inv_sum)}</td><td/></tr></tfoot></table></div>{pagination(kind,invoiceRows(kind).length)}</section>)}</div>
+      {(!onlyKind||onlyKind==='payment')&&<section aria-label="合同付款明细">{!onlyKind&&<div className="subtable-heading"><h4>付款明细</h4><Button htmlType="button" disabled={unavailable} onClick={()=>setReferencing(true)}>从付款域引用</Button></div>}<div className="subtable-scroll"><table className="subtable-payment-table"><colgroup><col/><col/><col/><col/></colgroup><thead><tr><th scope="col">付款日期</th><th scope="col" className="money">金额（元）</th><th scope="col">来源与口径</th><th scope="col">操作</th></tr></thead><tbody>{pageRows('payment',data.payment_display_rows).map(row=><tr key={`${row.id}:${row.flow_id??row.display_kind}`} tabIndex={-1} data-subtable="payment" data-row={row.id}><td data-label="付款日期">{row.date||'日期未填'}{row.display_kind==='stat'&&row.date&&<small>最近实际付款日</small>}</td><td data-label="金额（元）" className="money">{money(row.amount)}</td><td data-label="来源与口径">{row.display_kind==='manual'?'手工录入':<span className="subtable-payment-source"><NoticeButton id={row.notice_id!}>查看通知书</NoticeButton><small>{row.display_kind==='flow'?'实际付款（统计一致）':'统计累计 · 与实际付款有差异'}</small></span>}</td><td data-label="操作">{row.source==='manual'?<Button htmlType="button" danger size="small" disabled={unavailable} onClick={()=>remove('payment',row)}>删除手工付款</Button>:<span className="muted">回通知书改关联</span>}</td></tr>)}{draftRow('payment')}</tbody><tfoot><tr><th scope="row">合同付款合计</th><td className="money">{money(data.pay_sum)}</td><td colSpan={2}/></tr></tfoot></table></div>{pagination('payment',data.payment_display_rows.length)}</section>}
+      {(!onlyKind||onlyKind==='payment')&&linkedNotices.length>0&&<div className="subtable-linked-group"><div className="subtable-links"><span>已关联通知书</span>{linkedNotices.slice((currentLinkPage-1)*linkPageSize,currentLinkPage*linkPageSize).map((id,index)=><NoticeButton key={id} id={id}>通知书 {(currentLinkPage-1)*linkPageSize+index+1}</NoticeButton>)}</div>{linkedNotices.length>linkPageSize&&<Pagination aria-label="已关联通知书分页" size="small" current={currentLinkPage} pageSize={linkPageSize} total={linkedNotices.length} showSizeChanger={false} onChange={setLinkPage}/>}</div>}
     </>}
-    {state?.deleting&&<div className="subtable-delete" role="group" aria-label="确认删除子行"><p>删除{labels[state.deleting.kind]}：{state.deleting.date||'日期未填'}，{money(state.deleting.amount)} 元？</p><Button htmlType="button" disabled={state.busy} onClick={()=>update(s=>({...s,deleting:null}))}>取消删除</Button><Button htmlType="button" danger disabled={unavailable} onClick={()=>void save(state.deleting!.kind,true)}>确认删除</Button></div>}
+    {referencing&&<ContractPaymentReference contractId={contractId} contracts={contracts} paused={paused} writable={writable} state={state} update={update} refresh={refresh} close={()=>setReferencing(false)}/>}
+    {state?.deleting&&(!onlyKind||state.deleting.kind===onlyKind)&&<div className="subtable-delete" role="group" aria-label="确认删除子行"><p>删除{labels[state.deleting.kind]}：{state.deleting.date||'日期未填'}，{money(state.deleting.amount)} 元？</p><Button htmlType="button" disabled={state.busy} onClick={()=>update(s=>({...s,deleting:null}))}>取消删除</Button><Button htmlType="button" danger disabled={unavailable} onClick={()=>void save(state.deleting!.kind,true)}>确认删除</Button></div>}
     {state?.busy&&<p role="status">正在处理合同子表…</p>}{state?.feedback&&<p role="status">{state.feedback}</p>}{state?.error&&<p className="notice" role="alert">{state.error}</p>}
     {state?.uncertain&&<div className="subtable-reconcile"><span>先核对已保存行；本次输入保留。</span><Button htmlType="button" disabled={paused||!writable||!state.reconciled||state.busy||query.isFetching||query.isError||!data} onClick={()=>update(s=>({...s,uncertain:false,error:'',deleting:null,feedback:'已确认核对结果，请按需处理保留的输入。'}))}>已核对结果，继续处理</Button></div>}
   </div>;
+}
+
+export function ContractSubtableDialog({ scale, row, kind, contracts, workspace, change, paused, writable, close }: {
+  scale:number;row:ContractRow;kind:SubtableKind;contracts:ContractRow[];workspace:SubtableWorkspace;change:ChangeSubtables;paused:boolean;writable:boolean;close:()=>void;
+}) {
+  const state=workspace[row.id], historyDate=contractHistoryDate(row.remark), titleId=useId();
+  const [shortViewport,setShortViewport]=useState(()=>window.matchMedia('(max-height:760px)').matches);
+  useEffect(()=>{
+    const media=window.matchMedia('(max-height:760px)'), changed=()=>setShortViewport(media.matches);
+    media.addEventListener('change',changed);changed();
+    return ()=>media.removeEventListener('change',changed);
+  },[]);
+  const compact=shortViewport&&scale>1;
+  const closing=useDialogClose({busy:Boolean(state?.busy),dirty:Boolean(state&&draftDirty(state.drafts[kind])),active:!paused,close:()=>{
+    change(old=>old[row.id]?{...old,[row.id]:{...old[row.id]!,drafts:{...old[row.id]!.drafts,[kind]:newSubtableState(historyDate).drafts[kind]},deleting:old[row.id]!.deleting?.kind===kind?null:old[row.id]!.deleting}}:old);
+    close();
+  }});
+  const title=kind==='payment'?'付款子表':kind==='trade'?'贸易公司发票子表':historyDate?'历史未结金额':'供应商发票子表';
+  return <BusinessModal open={!paused} className={`project-dialog contract-subtable-dialog${compact?' contract-subtable-dialog-compact':''}`} titleId={titleId} requestClose={closing.requestClose}><DialogContents title={title} titleId={titleId} closing={closing}>
+    <ContractSubtables contractId={row.id} historyDate={historyDate} contracts={contracts} workspace={workspace} change={change} writable={writable} paused={paused} onlyKind={kind} summaryRow={row} pageSize={compact?1:2}/>
+    <div className="dialog-actions"><Button htmlType="button" disabled={Boolean(state?.busy)} onClick={closing.requestClose}>关闭</Button></div>
+  </DialogContents></BusinessModal>;
+}
+
+function ContractPaymentReference({contractId,contracts,paused,writable,state,update,refresh,close}:{
+  contractId:number;contracts:ContractRow[];paused:boolean;writable:boolean;state:SubtableState|undefined;update:(fn:(s:SubtableState)=>SubtableState)=>void;refresh:()=>Promise<void>;close:()=>void;
+}) {
+  const [selected,setSelected]=useState<number|undefined>(),[saved,setSaved]=useState(false),[error,setError]=useState('');
+  const lock=useRef(false),titleId=useId();
+  const closing=useDialogClose({busy:Boolean(state?.busy),dirty:!saved&&selected!==undefined,close,active:!paused});
+  const query=useQuery({queryKey:['contract-payment-candidates',contractId],enabled:!paused,staleTime:0,refetchOnMount:'always',retry:false,queryFn:async({signal})=>readNotices(await requestJson('/api/m03/notice-list?period=',{signal}))});
+  const used=new Set(contracts.flatMap(row=>row.notice_ids));
+  const candidates=(query.data??[]).filter(row=>live(row)&&row.category==='jc'&&!used.has(row.notice_id));
+  const chosen=candidates.find(row=>row.notice_id===selected);
+  const unavailable=paused||!writable||Boolean(state?.busy||state?.uncertain)||saved||query.isFetching||query.isError||!chosen;
+  async function reference() {
+    if(unavailable||lock.current||!chosen)return;
+    lock.current=true;update(s=>({...s,busy:true,error:'',feedback:''}));setError('');let written=false;
+    try {
+      await contractWrite('/api/m11/link',{notice_id:chosen.notice_id,contract_id:contractId});written=true;setSaved(true);
+      update(s=>({...s,feedback:'已从付款域引用，两侧关联已同步。'}));
+      await refresh();close();
+    } catch(failure) {
+      const rejected=failure instanceof ApiError&&failure.code!=='invalid_response'&&(failure.status===200||failure.status>=400&&failure.status<500);
+      const message=`${written?'已关联，重读失败，请核对，勿重复引用。':rejected?'未关联。':'关联结果待核实，请重读核对，勿重复引用。'}${failure instanceof Error?failure.message:''}`;
+      update(s=>({...s,uncertain:!written&&!rejected,reconciled:false,error:message}));setError(message);
+    } finally {lock.current=false;update(s=>({...s,busy:false}));}
+  }
+  return <BusinessModal open={!paused} className="project-dialog contract-payment-reference" titleId={titleId} requestClose={closing.requestClose}><DialogContents title="从付款域引用付款记录" titleId={titleId} closing={closing}>
+    <p>按集采实际供应商核对；同一通知书只能引用一次。</p>
+    {query.isPending?<p role="status">正在读取可引用通知书…</p>:query.isError?<p role="alert" className="notice">{query.error.message}<Button htmlType="button" onClick={()=>void query.refetch()}>重读候选</Button></p>:<label className="contract-field">集采通知书<Select aria-label="引用集采通知书" placeholder="请选择通知书" value={selected} disabled={Boolean(state?.busy)||saved||Boolean(state?.uncertain)} onChange={setSelected} options={candidates.map(row=>({value:row.notice_id,label:`${row.bill_no} · ${row.jc_supplier||'未录入供应商'} · ${money(row.stat_paid)} 元`}))}/></label>}
+    {!query.isPending&&!query.isError&&!candidates.length&&<p>没有可引用的通知书。</p>}
+    {error&&<p className="notice" role="alert">{error}</p>}
+    <div className="dialog-actions"><Button htmlType="button" disabled={Boolean(state?.busy)} onClick={closing.requestClose}>{saved?'关闭':'取消'}</Button>{!saved&&<Button htmlType="button" type="primary" disabled={unavailable} onClick={()=>void reference()}>引用</Button>}</div>
+  </DialogContents></BusinessModal>;
 }

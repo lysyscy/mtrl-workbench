@@ -12,7 +12,7 @@ import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
-import { contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
 import { cents, money } from './notices-api';
 import { coarseRows, emptyFilter, fields, filterOn, filterRows, getInventory, sumRows } from './inventory-api';
 import type { Field, Filters, InventoryRow } from './inventory-api';
@@ -61,9 +61,9 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
     ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num',autoHeight:type !== 'num',
       ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:(a:string,b:string) => !a || !b ? a ? 1 : b ? -1 : 0 : cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0} : {}),
       ...(field === 'doc_no' ? {pinned:'left' as const} : {}),
-      ...contentWidth(type === 'num' ? 130 : field === 'doc_no' ? 180 : ['seq','unit','direction'].includes(field) ? 65 : 125,type === 'num' ? 190 : ['seq','unit','direction'].includes(field) ? 85 : 300,scale,field === 'material' ? 1 : 0),
+      ...contentWidth(type === 'num' ? 130 : field === 'doc_no' ? 140 : ['seq','unit','direction'].includes(field) ? 52 : ['doc_date','audit_date'].includes(field) ? 96 : field === 'biz_type' ? 90 : ['spec','wbs_name','cbs_name'].includes(field) ? 108 : field === 'material' ? 125 : 120,type === 'num' ? 190 : ['seq','unit','direction'].includes(field) ? 85 : 300,scale,field === 'material' ? 1 : 0),
     })),
-    {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(116,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={paused || query.isError || query.isFetching || Boolean(pending && pending.id !== p.data.id)} onClick={() => {setEditing(p.data!);}}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
+    {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(100,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={paused || query.isError || query.isFetching || Boolean(pending && pending.id !== p.data.id)} onClick={() => {setEditing(p.data!);}}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
   ],[scale,paused,query.isError,query.isFetching,pending]);
   const totals = useMemo(() => rows.length ? [{id:-1,doc_no:'合计',qty:sumRows(rows,'qty'),amount:sumRows(rows,'amount'),adj_amount:sumRows(rows,'adj_amount'),tax_total:sumRows(rows,'tax_total')}] : [],[rows]);
   function changeFilter(key:'q'|'min'|'max'|'values',value:string|string[]) {setFilters(old => ({...old,[column]:{...filter,[key]:value}}));}
@@ -87,10 +87,10 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
       {meta[2] === 'num' ? <><label>最小值<Input aria-label="列最小值" value={filter.min} disabled={paused} onChange={e => changeFilter('min',e.target.value)} /></label><label>最大值<Input aria-label="列最大值" value={filter.max} disabled={paused} onChange={e => changeFilter('max',e.target.value)} /></label></> : meta[2] === 'text' && <Input aria-label="列包含文字" placeholder="包含…" value={filter.q} disabled={paused} onChange={e => changeFilter('q',e.target.value)} />}
       <Select mode="multiple" aria-label="列值清单" placeholder="值清单（多选）" value={filter.values} onChange={value => changeFilter('values',value)} options={values.map(value => ({value,label:value}))} showSearch={{optionFilterProp:'label'}} disabled={paused} maxTagCount="responsive" />
       <Button disabled={paused} onClick={() => setFilters(old => {const next = {...old};delete next[column];return next;})}>清除此列</Button><Button disabled={paused} onClick={() => setFilters({})}>清除全部列</Button>{filterProblem && <span role="alert">{filterProblem}</span>}</div>}
-    <div className="inventory-summary"><span>{query.data ? `${rows.length} / ${query.data.rows.length} 行` : '尚未读取'}</span>{onlyAdjusted && <Tag color="processing">已调整</Tag>}{query.isFetching && <span role="status">正在重读…</span>}<Button disabled={paused || query.isFetching} onClick={() => void query.refetch()}>重读库存</Button></div>
-    {query.isError && <p className="notice" role="alert">{query.error.message}{query.data ? ' 保留上次读取的内容。' : ' 尚未读取库存。'}</p>}{projects.isError && <p className="notice" role="alert">{projects.error.message}<Button disabled={paused} onClick={() => void projects.refetch()}>重读项目</Button></p>}
+    <div className="inventory-summary"><span>{query.data ? `${rows.length} / ${query.data.rows.length} 行` : '尚未读取'}</span>{onlyAdjusted && <Tag className="status-tag status-info">已调整</Tag>}{query.isFetching && <span role="status">正在重读…</span>}</div>
+    {query.isError && <p className="notice" role="alert">{query.error.message}{query.data ? ' 保留上次读取的内容。' : ' 尚未读取库存。'}<Button disabled={paused || query.isFetching} onClick={() => void query.refetch()}>重试读取库存</Button></p>}{projects.isError && <p className="notice" role="alert">{projects.error.message}<Button disabled={paused} onClick={() => void projects.refetch()}>重读项目</Button></p>}
     {query.isPending ? <p role="status">正在读取库存单据…</p> : query.data && <div className="inventory-grid" ref={root}><AgGridReact<InventoryRow> theme={gridTheme} rowData={rows} columnDefs={columns} pinnedBottomRowData={totals as InventoryRow[]}
-      getRowId={p => String(p.data.id)} defaultColDef={{resizable:true,suppressMovable:true}} rowHeight={46*scale} headerHeight={44*scale}
+      getRowId={p => String(p.data.id)} defaultColDef={{resizable:true,suppressMovable:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight}
       suppressScrollOnNewData suppressColumnVirtualisation overlayNoRowsTemplate="当前筛选条件下没有库存单据"
       onGridReady={e => fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e => fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e => fitGridColumns(e.api,root.current)} /></div>}
     {editRow && <InventoryAdjust key={editRow.id} row={editRow} adjustment={query.data?.adjustments.find(a => a.row_id === editRow.id)} me={editMissing ? null : me} paused={paused} close={() => setEditing(null)} reload={reload} unknown={Boolean(pending)} onUnknown={value => setPending(value ? editRow : null)} missing={editMissing} />}

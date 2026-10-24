@@ -1,0 +1,89 @@
+/* Geometry and component treatment consume the account theme's role tokens. */
+html{font-variant-numeric:tabular-nums}
+.sidebar{border-right:1px solid var(--sb-bd)}
+.sidebar .brand{color:var(--sb-hd)}
+.sidebar .preview-label,.sidebar .nav-group h2{color:var(--sb-mut)}
+.sidebar nav a{border-radius:var(--radius-input);text-decoration:none;transition:background-color var(--motion-fast),color var(--motion-fast)}
+.sidebar nav a:hover{background:var(--sb-hover);color:var(--sb-hd);text-decoration:none}
+.sidebar nav a.active{background:var(--sb-on);color:var(--sb-on-hl);font-weight:500}
+.main>header{background:var(--bg);border-bottom-color:transparent}
+.main>header h1{font-size:calc(18px * var(--fscale))}
+.notice-card,.notice-selection,.projects-page,.ledger-card,.mechanical-card{border-radius:var(--radius-card);box-shadow:var(--shadow)}
+.notice-card{box-shadow:var(--shadow-pop)}
+.workspace .ant-btn,.business-modal .ant-btn,.row-button{border-radius:var(--radius-pill);transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast),transform var(--motion-fast)}
+.ant-btn:not(:disabled):not(.ant-btn-link):not(.ant-btn-text):hover,.row-button:hover{transform:translateY(-1px)}
+.ant-btn:not(.ant-btn-link):not(.ant-btn-text){box-shadow:var(--shadow)}
+.ant-btn.danger:not(:disabled),.row-button.danger{color:var(--dg-d);border-color:var(--dg-bd)}
+.ant-btn.danger:not(:disabled):hover,.row-button.danger:hover{color:var(--dg-d);background:var(--dg-l);border-color:var(--dg-d)}
+.ant-btn:disabled,.row-button[aria-disabled=true]{cursor:not-allowed}
+.ant-btn.dialog-close-button,.ant-btn.contract-close{box-shadow:none;border:0;transform:none}
+.workspace .status-tag,.workspace .enum-tag,.notices-page .notice-tag,.contract-dialog .contract-state,.workspace .project-type{border-radius:var(--radius-pill)}
+.business-modal .ant-modal-container{border-radius:var(--radius-card);box-shadow:var(--shadow-md);overflow:hidden}
+.business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
+.business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
+.business-modal .notice-pay-table th,.business-modal .notice-flows-table th{font-size:calc(11.5px * var(--fscale))}
+.appearance-fields{display:grid;gap:16px;margin-top:16px}
+.appearance-fields label{display:grid;gap:8px;margin:0}
+.appearance-fields p{margin:0;color:var(--tx2)}
+
+.notices-page{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscale));--field-short:calc(112px * var(--fscale));--field-medium:calc(144px * var(--fscale));--field-wide:calc(220px * var(--fscale));--field-search:calc(248px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.notices-page .notice-selection{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));gap:8px 24px;margin-bottom:calc(16px * var(--fscale))}
+.notices-page .notice-tools{gap:8px;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
+.notices-page .notice-batch>span{color:var(--tx2);font-size:calc(12px * var(--fscale))}
+.notices-page .notice-selection .notice-pay-action:disabled{color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd);opacity:.65;cursor:not-allowed}
+.notices-page .notice-filters{padding:calc(16px * var(--fscale));gap:12px calc(16px * var(--fscale));align-items:flex-end;border-bottom:1px solid var(--bd)}
+.notices-page .notice-filters>label,.notices-page .notice-filters>.time-picker-field,.notices-page .notice-filters>.notice-project{display:flex;flex-direction:column;align-items:stretch;gap:6px;font-size:calc(12px * var(--fscale));line-height:20px;width:var(--field-short);min-width:0;margin:0;color:var(--tx2)}
+.notices-page .notice-filters>.time-picker-field,.notices-page .notice-filters>label:has([aria-label="合同关联"]){width:var(--field-medium)}
+.notices-page .notice-filters>.notice-project{width:var(--field-wide);max-width:100%}
+.notices-page .notice-filters>.notice-search-field{width:var(--field-search);flex:1;max-width:360px;min-width:180px}
+.notices-page .notice-filters .business-project-picker{width:100%!important;min-width:0}
+.notices-page .notice-filters .ant-select{width:100%;min-width:0;height:var(--control-h)}
+.notices-page .notice-filters .ant-input,.notices-page .notice-filters>.ant-btn,.notices-page .notice-filters .business-period-trigger{height:var(--control-h);min-height:var(--control-h)}
+.notices-page .notice-filters input[type=search]{width:100%;border-radius:var(--radius-pill)}
+.notices-page .notice-count{font-size:calc(12px * var(--fscale));margin:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
+.notices-page .notice-grid{font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.notices-page .notice-grid .ag-header-cell{font-size:calc(11.5px * var(--fscale));font-weight:500}
+.notices-page .notice-grid .ag-cell{padding-block:4px}
+.notices-page .notice-grid .ant-btn,.notices-page .notice-grid .row-button{height:var(--control-sm);min-height:var(--control-sm);padding:0 8px;font-size:calc(12px * var(--fscale));line-height:1}
+.notices-page .notice-grid .ag-cell.money input{text-align:right}
+.notices-page .notice-grid input:not([type=checkbox]):not([class*="ant-"]){border-radius:var(--radius-input);background:var(--sf2);padding-inline:4px;box-shadow:none}
+.notices-page .notice-grid input:not([type=checkbox]):not([class*="ant-"]):focus{background:var(--sf);border-color:var(--pri)}
+.business-modal:has(.contract-dialog) .ant-modal-body{overflow:hidden;max-height:none}
+.business-modal .contract-dialog{display:flex;flex-direction:column;height:min(800px,88dvh);max-height:88dvh;overflow:hidden;font-size:calc(var(--font-ui-size) * 1px * var(--fscale));border-radius:var(--radius-card)}
+.contract-dialog .contract-fixed-header{flex:none;border-bottom:1px solid var(--bd);background:var(--sf)}
+.contract-dialog .contract-dialog-heading{padding:16px 24px 12px}
+.contract-dialog .contract-dialog-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
+.contract-dialog .contract-notice{margin:0 24px 16px;padding:12px 16px;border-radius:var(--radius-inner)}
+.contract-dialog .contract-current{margin:12px 24px;flex:none}
+.contract-dialog .contract-candidate-note{margin:0 24px 8px;flex:none}
+.contract-dialog .contract-candidates{padding:16px 24px;overflow:auto;min-height:0;flex:1;gap:16px;align-content:start;overscroll-behavior:contain}
+.contract-dialog .contract-candidate{padding:16px;border-radius:var(--radius-inner);box-shadow:var(--shadow);transition:border-color var(--motion-fast),background-color var(--motion-fast)}
+.contract-dialog .contract-candidate:hover{border-color:var(--bd3)}
+.contract-dialog .contract-candidate.is-selected{outline:none;border-color:var(--pri);background:var(--pri-l)}
+.contract-dialog .contract-state.recommended{color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd)}
+.contract-dialog .contract-amounts{border-radius:var(--radius-input)}
+.contract-dialog .contract-reasons{color:var(--pri-d)}
+.contract-dialog .contract-selection{flex:none;margin:12px 24px 0;border-radius:var(--radius-inner)}
+.contract-dialog .contract-footer{flex:none;position:static;margin-top:12px;padding:12px 24px}
+.contract-dialog>.notice{flex:none}
+.business-modal .contract-dialog:has(.contract-decision){height:auto;max-width:480px}
+.business-period-popover .ant-popover-container{border-radius:var(--radius-inner);box-shadow:var(--shadow-pop)}
+.business-period-panel .business-period-month.ant-btn{border-radius:var(--radius-input);box-shadow:none;transform:none}
+.business-modal .payment-terms,.business-modal .payment-confirmation{border-radius:var(--radius-inner)}
+@media(max-width:740px){.notices-page .notice-tools .notice-toolbar{margin-left:0}.notices-page .notice-filters>.notice-project{width:100%;max-width:300px}.notices-page .notice-filters>.notice-search-field{flex-basis:100%;max-width:300px}.contract-dialog .contract-candidates,.contract-dialog .contract-dialog-heading,.contract-dialog .contract-footer{padding-inline:16px}.contract-dialog .contract-notice,.contract-dialog .contract-current,.contract-dialog .contract-candidate-note,.contract-dialog .contract-selection{margin-inline:16px}.contract-dialog .contract-candidate{padding:12px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}.ant-btn:hover,.row-button:hover{transform:none!important}}
+
+
+/* Compact whole-page tables: preserve font size, controls and natural multi-line rows. */
+.workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-grid,.mechanical-detail-grid) .ag-cell{padding-block:calc(2px * var(--fscale));line-height:1.5}
+.workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-detail-grid) :is(.ant-input,.ant-select){height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-block:0}
+.workspace .page-view .mechanical-grid .mechanical-internal-input{height:calc(28px * var(--fscale));min-height:0;padding-block:0}
+.workspace .page-view .contracts-grid .ant-btn{padding-block:0}
+.workspace .page-view :is(.projects-page .project-table,.i8-latest,.i8-records,.mechanical-work-table,.mechanical-sheet) :is(th,td){padding-block:calc(4px * var(--fscale))}
+
+/* Fill the page's remaining space instead of leaving a fixed 62dvh table above unused space. */
+.workspace .page-view :is(.process-page,.inventory-page,.notices-page){display:flex;flex-direction:column;height:100%;min-height:min-content}
+.workspace .page-view :is(.process-page,.inventory-page,.notices-page)>:not(.process-grid):not(.inventory-grid):not(.notice-card){flex-shrink:0}
+.workspace .page-view .notices-page .notice-card{display:flex;flex-direction:column;flex:1;min-height:min-content}
+.workspace .page-view .notice-card>:not(.notice-grid){flex-shrink:0}
+.workspace .page-view :is(.notice-grid,.process-grid,.inventory-grid){flex:1 0 calc(240px * var(--fscale));height:auto;min-height:calc(240px * var(--fscale))}

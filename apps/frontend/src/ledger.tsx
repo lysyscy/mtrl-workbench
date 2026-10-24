@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
-import { fitGridColumns, contentWidth, gridTheme } from './grid';
+import { pageGridGeometry, fitGridColumns, contentWidth, gridTheme } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, projectLabel, readProjects, record, requestJson } from './api';
 import type { Identity } from './api';
@@ -71,9 +71,8 @@ function Cell(props: ICellRendererParams<LedgerRow, string, GridContext>) {
 function DeleteCell({ data: row, context, node }: ICellRendererParams<LedgerRow, string, GridContext>) {
   return row?.row_kind === 'manual' && context.actions.current.writable() ? <Button htmlType="submit" className="ledger-delete" disabled={context.actions.current.busy()} title="删除历史行，可撤销" onClick={() => context.actions.current.remove(context.scope, row)}>删除</Button> : node.rowPinned ? null : <span className="muted">—</span>;
 }
-function Side({ side, scope, actions, writable, busy, add, focusRecord, focused }: { side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
+function Side({ scale, side, scope, actions, writable, busy, add, focusRecord, focused }: { scale: number; side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
   const api = useRef<GridApi<LedgerRow> | null>(null); const root = useRef<HTMLDivElement>(null);
-  const scale = Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1;
   const context = useMemo(() => ({ scope, actions, api }), [scope, actions]);
   useEffect(() => { if (writable) api.current?.refreshCells({ force: true }); }, [writable, busy]);
   const visible = useMemo(() => side.rows.filter(row => row.row_kind !== 'month' || row.editable || row.other_expense !== '0.00' || row.payment !== '0.00' || row.remark).map((row, index) => ({ ...row, seq: index + 1 })), [side.rows]);
@@ -85,7 +84,7 @@ function Side({ side, scope, actions, writable, busy, add, focusRecord, focused 
     { field: 'month', headerName: '月份（按单据日期）', ...contentWidth(124, 180, scale), cellRenderer: Cell },
     { field: 'other_expense', headerName: side.category === 'mechanical' ? '机械结算金额' : '其他支出金额', ...contentWidth(110, 190, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
     { field: 'payment', headerName: '付款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
-    { field: 'debt', headerName: '欠款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span className={p.node?.rowPinned ? '' : Number(p.value) > 0 ? 'debt-positive' : 'muted'}>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
+    { field: 'debt', headerName: '欠款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
     { field: 'remark', headerName: '备注', ...contentWidth(90, 300, scale, 1), wrapText: true, autoHeight: true, cellRenderer: Cell },
     { colId: 'actions', headerName: '操作', ...contentWidth(52, 78, scale), sortable: false, cellRenderer: DeleteCell },
   ], [side.category, scale, upto]);
@@ -101,10 +100,10 @@ function Side({ side, scope, actions, writable, busy, add, focusRecord, focused 
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
     <div className="ledger-summary"><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
-    <div className="ledger-table-scroll"><div className="ledger-grid" style={{ height: Math.min(360 * scale, (29 + Math.max(visible.length, 1) * 38 + (total.length ? 30 : 0) + 2) * scale) }}><AgGridReact<LedgerRow> theme={gridTheme} onGridSizeChanged={e => fitGridColumns(e.api, root.current)} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
+    <div className="ledger-table-scroll"><div className="ledger-grid" style={{ height: Math.min(360 * scale, pageGridGeometry(scale).headerHeight + (Math.max(visible.length, 1) + total.length) * pageGridGeometry(scale).rowHeight + 2 * scale) }}><AgGridReact<LedgerRow> theme={gridTheme} onGridSizeChanged={e => fitGridColumns(e.api, root.current)} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
       context={context} columnDefs={columns} rowData={visible} pinnedBottomRowData={total}
       getRowId={params => params.data.key} defaultColDef={defaultColumn}
-      rowHeight={38 * scale} getRowHeight={params => params.node.rowPinned ? 30 * scale : 38 * scale} headerHeight={29 * scale} suppressCellFocus={true} suppressScrollOnNewData={true}
+      rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={true} suppressScrollOnNewData={true}
       overlayNoRowsTemplate="暂无台账数据。" animateRows={false}
       onGridReady={event => { api.current = event.api; }} onFirstDataRendered={event => { fitGridColumns(event.api, root.current, true); if (visible.length) event.api.ensureIndexVisible(visible.length - 1, 'bottom'); }} />
     </div></div>
@@ -299,7 +298,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
         <div className="ledger-view-project"><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked} /></div>
         {projects.isError && <p role="alert">{projects.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void projects.refetch()}>重试项目</Button></p>}
         {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</Button></p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
-        {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked && !historyBusy && !historyUncertain} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
+        {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side scale={Number(me?.ui_scale_css) || 1} key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked && !historyBusy && !historyUncertain} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
       </div>
     </section>
   </>;

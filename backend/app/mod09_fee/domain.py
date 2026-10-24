@@ -150,6 +150,40 @@ def total_amount(inv_rows: list[dict], items: list[dict] | None, *, ym: str, pro
     )
 
 
+def annual_rows(*, year: str, project_key: str, items: list[dict], inv_rows: list[dict]) -> dict:
+    """按原始项名汇总；空月与真实零分开，累计只加往年及所选年。"""
+    rows = {AUTO_NAME: {"item": AUTO_NAME, "manual": False, "prior": ZERO,
+                        "months": [ZERO for _ in range(12)], "periods": set()}}
+
+    def add(name, ym, amount, manual):
+        if not parse_ym(ym) or ym > f"{year}-12":
+            return
+        row = rows.setdefault(name, {"item": name, "manual": True, "prior": None,
+                                    "months": [None for _ in range(12)], "periods": set()})
+        row["manual"] = row["manual"] or manual
+        row["periods"].add(ym)
+        value = Decimal(str(amount or 0))
+        if ym < f"{year}-01":
+            row["prior"] = (row["prior"] or ZERO) + value
+        else:
+            month = int(ym[5:]) - 1
+            row["months"][month] = (row["months"][month] or ZERO) + value
+
+    for r in inv_rows:
+        if r.get("warehouse") == project_key and r.get("cbs") == CBS_AWF and r.get("direction") == DIRECTION_OUT:
+            add(AUTO_NAME, str(r.get("ym") or ""), r.get("amount"), False)
+    for r in items:
+        add(str(r.get("name") or ""), str(r.get("ym") or ""), r.get("amount"), True)
+    result = []
+    for row in rows.values():
+        row["total"] = (row["prior"] or ZERO) + sum((v or ZERO for v in row["months"]), ZERO)
+        row["periods"] = sorted(row["periods"])
+        result.append(row)
+    return {"rows": result, "prior": sum((r["prior"] or ZERO for r in result), ZERO),
+            "months": [sum((r["months"][i] or ZERO for r in result), ZERO) for i in range(12)],
+            "total": sum((r["total"] for r in result), ZERO)}
+
+
 def share_text(part, total) -> str:
     """「占合计」= 该项 / 合计；**合计 ≤ 0 ⇒ 「—」**（不是 `NaN%`、也不是 0.0%）。"""
     t = Decimal(str(total or 0))

@@ -1,3 +1,5 @@
+import Select from 'antd/es/select';
+import Tag from 'antd/es/tag';
 import Button from 'antd/es/button';
 import { BoundedTable } from './bounded-table';
 import { useState } from 'react';
@@ -11,7 +13,7 @@ function Status({ row }: { row: RunRecord }) {
   const unit = row.run_type === 'print' || row.run_type === 'export_pdf' ? '张' : '条';
   const text = ({ success: `成功 ${row.success_count} ${unit}`, failed: '失败', partial: `部分成功 ${row.success_count} / ${row.success_count + row.fail_count} ${unit}`, running: '执行中' } as Record<string, string>)[row.status] ?? `其他状态：${row.status}`;
   const tone = ['success', 'failed', 'partial', 'running'].includes(row.status) ? row.status : 'unknown';
-  return <span className={`i8-status i8-${tone}`}>{text}</span>;
+  return <Tag className={`status-tag status-${tone==='success'?'positive':tone==='failed'?'negative':tone==='partial'||tone==='running'?'pending':'neutral'}`}>{text}</Tag>;
 }
 function ReadError({ message, retry, label }: { message: string; retry: () => void; label: string }) {
   return <div className="notice" role="alert"><span>{message}</span><Button htmlType="submit" onClick={retry}>{label}</Button></div>;
@@ -32,7 +34,7 @@ export function I8Page({ blocked }: { blocked: boolean }) {
         })}</tbody></BoundedTable></div>
         <details className="i8-history" open>
           <summary>执行记录</summary>
-          <div className="i8-record-tools"><label>读取范围<select aria-label="读取范围" value={limit} onChange={event => setLimit(Number(event.target.value))}><option value={50}>最近 50 条</option><option value={100}>最近 100 条</option><option value={200}>最近 200 条</option></select></label><label>动作<select aria-label="动作" value={type} onChange={event => setType(event.target.value)}><option value="all">全部</option><option value="fetch">抓取</option><option value="sync">同步</option><option value="print">打印</option><option value="export_pdf">导出 PDF</option></select></label>{records.isFetching && <span role="status">正在更新记录…</span>}</div>
+          <div className="i8-record-tools"><label>读取范围<Select aria-label="读取范围" value={limit} onChange={setLimit} options={[50,100,200].map(value=>({value,label:`最近 ${value} 条`}))}/></label><label>动作<Select aria-label="动作" value={type} onChange={setType} options={[['all','全部'],['fetch','抓取'],['sync','同步'],['print','打印'],['export_pdf','导出 PDF']].map(([value,label])=>({value,label}))}/></label>{records.isFetching && <span role="status">正在更新记录…</span>}</div>
           {visible.length === 0 ? <p className="state">{(records.data ?? []).length === 0 ? '还没有执行记录。完成抓取、同步或打印后可在这里核对。' : '当前读取范围内没有这类执行记录。'}</p> : <div className="table-scroll i8-records" role="region" aria-label="执行记录列表" tabIndex={0}><BoundedTable columns={[{ min: 12, max: 16 },{ min: 8, max: 16 },{ min: 10, max: 28, flex: 1 },{ min: 6, max: 12 },{ min: 12, max: 28, flex: 1 },{ min: 5, max: 8 }]}><thead><tr><th>开始时间</th><th>动作</th><th>范围 / 对象</th><th>操作人</th><th>结果</th><th>耗时</th></tr></thead><tbody>{visible.map(row => <tr key={row.id}>
             <td>{when(row.started_at)}</td><td>{recordLabel(row)}</td><td>{row.target}</td><td>{row.triggered_by === 'manual' ? '未记录（旧记录）' : row.triggered_by}</td><td><Status row={row} />{row.error_message && <details className="i8-error"><summary>查看原因</summary><pre>{row.error_message}</pre></details>}</td><td>{duration(row)}</td>
           </tr>)}</tbody></BoundedTable></div>}

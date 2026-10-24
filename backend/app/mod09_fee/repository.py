@@ -27,6 +27,21 @@ def inv_rows(s: Session, *, ym: str) -> list[dict]:
     ]
 
 
+def year_facts(s: Session, *, year: str, project_id: int | None, warehouse: str) -> tuple[list[dict], list[dict]]:
+    """截至所选年末的原始事实；不改明细，不借用提取历史余额。"""
+    end = f"{year}-12"
+    items = [] if project_id is None else [
+        {"ym": r.ym, "name": r.item_name, "amount": r.amount}
+        for r in s.execute(select(FeeManualItem).where(
+            FeeManualItem.project_id == project_id, FeeManualItem.ym <= end
+        ).order_by(FeeManualItem.id)).scalars()
+    ]
+    inv = [{"ym": r.ym, "warehouse": r.warehouse_name, "direction": r.direction,
+            "cbs": r.cbs_name, "amount": r.amount}
+           for r in inventory.load_original_details(s, warehouse=warehouse, through_ym=end)]
+    return items, inv
+
+
 def project_by_key(s: Session, warehouse_name: str) -> Project | None:
     """候选键（**仓库名**）→ 档案行（§2.7.4：比较用键、写库按 id）。"""
     key = str(warehouse_name or "").strip()

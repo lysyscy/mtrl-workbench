@@ -36,10 +36,10 @@ export function ContractExports({ owner, projects, project, getIds, scope, unava
   }
   const reason = unavailable || (paused ? '当前页面暂不可操作。' : busy ? '正在生成文件，请稍候。' : '');
   return <>
-    <Button disabled={Boolean(reason)} title={reason || '导出当前筛选及排序的全部合同，包含隐藏贸易列'} onClick={() => void ordinary()}>普通导出</Button>
+    <Button type="primary" disabled={Boolean(reason)} title={reason || '导出当前筛选及排序的全部合同，包含隐藏贸易列'} onClick={() => void ordinary()}>导出 Excel</Button>
     <ProjectExport kind="contracts-print" owner={owner} projects={projects} project={project}
       unavailable={reason} paused={paused} run={run} valid={valid} signal={undefined} message={setFeedback}
-      title="集采打印版导出" description="按所选项目的全部纳入合同生成，各项目独立工作表。" summary={count => `已选 ${count} 个项目，按以下顺序导出。`}
+      title="导出打印版" description="按所选项目的全部纳入合同生成，各项目独立工作表。" summary={count => `已选 ${count} 个项目，按以下顺序导出。`}
       success="集采打印台账已导出。" exportFile={chosen => loadContractExport('print', chosen.map(item => item.warehouse_name!), request.current!.signal)} />
     {feedback && <span role="status">{feedback}</span>}
   </>;
