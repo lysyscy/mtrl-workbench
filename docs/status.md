@@ -2,15 +2,17 @@
 
 ## React 前端独立重做
 
-A/B/C/D/E反馈修正已完成本地技术核验。2026-10-24用户在新本地接手会话明确验收并指示签done：原ready-for-human 11票（398、400–409）已按票协议签done，验收对象为8060真实只读副本，各票Comments留验收依据。缺原验收验证的票仍保留in-progress，阶段6和累计/清理前置按原票如实记录；没有把未上线作为统一不完成理由，也没有代签未验收票。
+唯一React分支codex/react-frontend-rewrite（生产master另置，未合并）。2026-10-24用户人工验收落地：原ready-for-human 11票（398、400–409）按票协议签done，验收对象为8060真实只读副本，各票Comments留依据；397/399原done，411 wontfix。同日分支收拢：五条付款分支核实为master祖先后删除（提交仍由master保有），tail-415候选7个独有提交由tag `archive/codex-tail-415-candidate`归档后删分支及其干净worktree；未推送、未上线。
 
-接手本地对话先读[同一交接](D:/UserData/Documents/Codex/2026-10-24/task-17/.scratch/react-c-material-reports/handoff.md)（PH-20261024-react-final-01）：含最终HEAD/剩余dirty、分支worktree取舍、在用8060及最小恢复来源、只读数据库边界、待验和可复制开场白。[简短状态地图](D:/UserData/Documents/Codex/2026-10-24/task-17/.artifacts/active/react-c-map/run-01/exports/progress-map.md)逐项只导航唯一原票，但为2026-10-24签收前快照，Status以票仓为准；实际Status/验收/依据仍归`.scratch/tails/issues/`，协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)。
+**票务导航。** 活动票：410、412–418、420实施已有但缺真实写链/权限/文件链验证；419未实施；421/425前置未完；422累计验收；423/424需独立授权。逐票Status/验收/依据归`.scratch/tails/issues/`，列票用仓根`backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py`；协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)，A–E技术回执指针在各票Comments。技术完成不代签done，缺验证留原票。
 
-当前8060为`react-c-preview-e-v6-8f1204a8f9f5-real-copy`，保留运行；真实库隔离只读副本、内存预览身份/外观，不开放业务写或完整下载。E九项目1440×900标准字号20列/金额全显（1186/1186px），1438宽仍差1px；切页字号/焦点列恢复与集采分组已核，导出顺序仅内存XLSX验证，旧/app像素因403未验且不绕过。具体证据回E原回执，不能替代422累计或用户验收。
+**工作树保留件。** 8件dirty保持原字节、不得以HEAD覆盖：性能C在途六源码`apps/frontend/src/{flow,notice-payment,notices}.tsx`、`backend/app/mod03_notice/{list_data,list_view,notice_api_router}.py`，及旧协调资料`.scratch/frontend-vue-rewrite/{evidence,handoff}.md`。恢复依据在task-22 `archive/react-final-handoff/run-01/`（75件原字节/哈希与`reports/final-state.json`）及task-13 `component-coverage/recovery/{baseline.json,baseline.patch}`（task-N均在`D:/UserData/Documents/Codex/2026-10-24/`）。性能收口与同条件新旧比较归422，保留不阻止其他有界后续工作。
 
-已按补充授权本地保存可归因源码，原性能C混合六源码和两件旧协调资料仍保留dirty，不能以HEAD覆盖当前工作树；当前准确提交及指纹见交接。主线master、8060服务/构建/目标schema未改；未推送、合并或上线。2026-10-24本地分支已收拢：五条付款分支均核实为master祖先后删除（提交仍由master保有），tail-415候选7个独有提交由tag `archive/codex-tail-415-candidate`归档后删分支及其干净worktree；现仅剩codex/react-frontend-rewrite与生产master。
+**8060与恢复。** 当前`react-c-preview-e-v6-8f1204a8f9f5-real-copy`保留运行、不重启：真实库隔离只读副本，独立schema `frontend_rewrite_397_68b8838c875e4985a8656faeaca9b205`，PG强只读＋精确GET白名单，业务写/导出/旧/app被403屏障。在用run为task-19 `react-e-fit/run-01`（`exports/build-e6`，身份`reports/real_owner.json`）；仅当获服务恢复授权且进程确实退出时，用项目venv按同schema运行其`work/resume_real_preview_e6.py`恢复，不用普通启动器新建/复制schema。E视觉回执同run `reports/delivery.md`：九项目1440×900、20列1186/1186px金额全显，1438宽差1px，旧/app像素403未验；不能替代422累计。
 
-下一步仅建议：419/420/421及原票缺验证（410、412–418、420的真实写链/权限/文件链）→422累计→425最后工程清理→另获423正式切换授权→日常确认后另获424退役授权。本轮到票仓/分支收口即止，未启动任何后续票。409已恢复技术接通；411撤销，旧八尾工339/340/344/345/346/347/348/349不复活；i8页不动、Excel式筛选不做、通用导入不迁均保持。React/MiniApp的425重号由422正式集成核身份，不在本次静默改号。
+**已定事项与下一步。** C为全站方向（10主题/4字号、语义危险色、旧版有效布局/工具顺序；窄屏/大字号以完整金额与操作可达为底线）；费用年度按原项名汇总不物理合并；409已恢复、411撤销，旧八尾工339/340/344–349不复活；通用导入/旧机械Excel不迁（408仅JSON）；i8页不动、Excel式筛选取消；React/MiniApp的425重号由422正式集成核身份；发号高水位434。下一步仅建议：419/420/421及原票缺验证→422累计→425最后工程清理→另获423正式切换授权→日常确认后另获424退役授权。真实i8、付款外发、物理打印、生产写入仍按每次明确授权。
+
+原外部交接PH-20261024-react-final-01与状态票图已于2026-10-24按用户指示退役：持久事实吸收进本页与票仓，原件删除；票仓与`_list_tails.py`为唯一状态源。
 
 ## Mini App 付款原表核对台
 

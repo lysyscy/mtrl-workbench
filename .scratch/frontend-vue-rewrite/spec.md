@@ -1,6 +1,6 @@
 # 前端独立重做规格：React + TypeScript 7 + Vite
 
-> **2026-10-24最终接手入口：** A–E已完成本地技术核验；[同一交接](D:/UserData/Documents/Codex/2026-10-24/task-17/.scratch/react-c-material-reports/handoff.md)（PH-20261024-react-final-01）持有最终本地HEAD/dirty、8060只读运行与分支取舍；[状态地图](D:/UserData/Documents/Codex/2026-10-24/task-17/.artifacts/active/react-c-map/run-01/exports/progress-map.md)逐票指回原票。下文分批状态/暂停措辞为当时记录；409现已恢复。原完整页面人工关口仍有效，技术完成不代签done；缺验证留原票，不重复立票。本次整理结束后停止，阶段6、422、425、423/424均未启动。
+> **2026-10-24最终接手入口：** A–E已完成本地技术核验；原外部交接PH-20261024-react-final-01与状态票图已按用户指示退役，持久事实吸收进[项目状态](../../../docs/status.md)与票仓。下文分批状态/暂停措辞为当时记录；409现已恢复。原完整页面人工关口仍有效，技术完成不代签done；缺验证留原票，不重复立票。本次整理结束后停止，阶段6、422、425、423/424均未启动。
 
 > **2026-10-24人工验收与分支收拢：** 用户在新本地接手会话明确验收通过并指示签done；原ready-for-human 11票（398、400–409）已按票协议签done，验收对象为8060真实只读副本`react-c-preview-e-v6-8f1204a8f9f5-real-copy`。缺验证票（410、412–418、420）与阶段6/422/425/423/424保持原状，技术完成不代签done的规则继续适用于剩余票。本地分支已收拢为codex/react-frontend-rewrite单分支加生产master；tail-415候选独有提交由tag `archive/codex-tail-415-candidate`归档，五条付款分支按master祖先核实后删除。
 
