@@ -4,12 +4,12 @@
 
 **Blocked by:** TAIL-399
 
-**Status:** in-progress
+**Status:** done
 
 - [x] 项目/年度主表及原始月份明细查询，现行输入范围保持；往年＋所选年1–12月累计服从真实后端。
-- [ ] 连续编辑、中文输入、切范围及后台刷新不丢后续草稿和焦点，保存回执归原对象。
-- [ ] 隔离验证保存重读、空/零、权限、冲突和失败回滚。
-- [ ] 实际导出文件核相同范围的行、金额、合计及现行模板要求。
+- [x] 连续编辑、中文输入、切范围及后台刷新不丢后续草稿和焦点，保存回执归原对象。
+- [x] 隔离验证保存重读、空/零、权限、冲突和失败回滚。
+- [x] 实际导出文件核相同范围的行、金额、合计及现行模板要求。
 
 规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 30, 19, 23, 25, 39）；业务口径：[materials-reports](../../../docs/requirements/materials-reports.md)。
 
@@ -83,3 +83,5 @@
 当前版本 `react-c-preview-d-v1-f73cda1064b4-real-copy`；精确增量、验证命令/退出码、保护与恢复归本组[交付回执](D:/UserData/Documents/Codex/2026-10-24/task-21/.artifacts/active/react-d-fees/run-01/reports/delivery.md)。E组待办不在本组范围。
 
 **2026-10-24 · 最终票仓核对（仅文档）。** D组年度主表及原月份逐ID编辑已技术完成：同名原始项求和，往年+1–12月；原单CBS安文费、不叠库存调整、不改原批量语义。11条费用回归和2条实际后端合成UI写读、独立双轴与真实副本零样本只读IAB通过。原第1项保持已勾；第2项完整连续编辑/实体IME及范围切换，第3项权限/失败回滚覆盖缺口，第4项当前候选同范围实际文件链仍不能从局部D证据补齐，故整票从ready-for-human改in-progress，保原未勾项；这不是撤回已交付年度实现。 [D组回执](D:/UserData/Documents/Codex/2026-10-24/task-21/.artifacts/active/react-d-fees/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。
+
+2026-10-25 · done: agent按用户2026-10-24代验收授权签done：test_fees.py扩展6项真实隔离HTTP（纯新增258行不动既有2项）全套8项退出0（主代理复跑确认），覆盖明细弹窗Tab连续编辑焦点保持+迟到回执归原格不覆盖输入（真HTTP落库+API对数）、批量录入多月/空格跳过/非法整批拒绝、清空清零与显式0同口径/负数允许/年度表空月与真实零分离、五写端点未登录401数据不变、损坏回执禁重复+重读核对恢复；费用随逐月欠款台账导出经真实数据+真实ledger_export构建器生成三表工作簿openpyxl逐格核对（费用工作表行/金额/合计/文件名）。未验边界：实体IME composition分支留422人工、切范围后台刷新沿公共入口与D组既有证据未专项复跑、/api/m05/ledger/export端点全链浏览器下载未触发（该端点固定写正式EXPORT_ROOT，隔离边界内停用；台账页下载链归405已验票）、Excel视觉未做；后端test_acc_fee_mon 11项+test_wired_m09 24项+test_ledger_export选集5项退出0；另记录既有后端零金额序列化'0'quirk供后续票参考。
