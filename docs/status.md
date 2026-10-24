@@ -4,7 +4,7 @@
 
 唯一React分支codex/react-frontend-rewrite（生产master另置，未合并）。2026-10-24用户人工验收落地：原ready-for-human 11票（398、400–409）按票协议签done，验收对象为8060真实只读副本，各票Comments留依据；397/399原done，411 wontfix。同日分支收拢：五条付款分支核实为master祖先后删除（提交仍由master保有），tail-415候选7个独有提交由tag `archive/codex-tail-415-candidate`归档后删分支及其干净worktree；未推送、未上线。
 
-**票务导航。** 活动票：410、412–418、420实施已有但缺真实写链/权限/文件链验证；419未实施；421/425前置未完；422累计验收；423/424需独立授权。逐票Status/验收/依据归`.scratch/tails/issues/`，列票用仓根`backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py`；协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)，A–E技术回执指针在各票Comments。技术完成不代签done，缺验证留原票。
+**票务导航。** 活动票：410、412–418、420实施已有但缺真实写链/权限/文件链验证；419规则配置页已实施并过隔离技术验证（5项浏览器+fees回归+agent-browser实看，证据在票Comments），待人工验收口径与视觉；421/425前置未完；422累计验收；423/424需独立授权。逐票Status/验收/依据归`.scratch/tails/issues/`，列票用仓根`backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py`；协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)，A–E技术回执指针在各票Comments。技术完成不代签done，缺验证留原票。
 
 **工作树保留件。** 8件dirty保持原字节、不得以HEAD覆盖：性能C在途六源码`apps/frontend/src/{flow,notice-payment,notices}.tsx`、`backend/app/mod03_notice/{list_data,list_view,notice_api_router}.py`，及旧协调资料`.scratch/frontend-vue-rewrite/{evidence,handoff}.md`。恢复依据在task-22 `archive/react-final-handoff/run-01/`（75件原字节/哈希与`reports/final-state.json`）及task-13 `component-coverage/recovery/{baseline.json,baseline.patch}`（task-N均在`D:/UserData/Documents/Codex/2026-10-24/`）。性能收口与同条件新旧比较归422，保留不阻止其他有界后续工作。
 
