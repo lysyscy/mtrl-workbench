@@ -5,8 +5,7 @@ from urllib.parse import parse_qs, urlparse
 import openpyxl
 import pytest
 from playwright.sync_api import expect
-from sqlalchemy import create_engine, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 from test_preview import server, browser_page, login
 from tools.audit.workspace_paths import output, output_dir
 
@@ -16,37 +15,33 @@ REVIEW_WAREHOUSES = ['审查同名甲', '审查同名乙']
 LONG_NAME = '长名称机械项目用于检查换行冻结列与合计保持可见' * 3
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed, preview_session):
     def seed(env):
         from app import models_registry, core_bindings
         from app.mod01_projects.models import Project
         from app.mod06_proc import workbench as work
         core_bindings.register_all()
-        engine = create_engine(env['TEST_DATABASE_URL'], connect_args={'options': env['PGOPTIONS']})
-        try:
-            with Session(engine) as session:
-                assert session.execute(text('select current_database(),current_schema()')).one() == ('mtrl_workbench_test', env['PGOPTIONS'].split('search_path=')[1])
-                session.add_all([Project(name_full=f'合成机械网格项目{i:03}', disp=LONG_NAME if i == 1 else f'网格样例{i:03}', warehouse_name=f'合成机械仓库{i:03}', ord=i+3) for i in range(1, 91)])
-                session.add_all([Project(name_full=wh, warehouse_name=wh, disp=DUPLICATE_NAME, ord=100+i) for i,wh in enumerate(REVIEW_WAREHOUSES)])
-                session.commit()
-                initial = [p.warehouse_name for p in session.scalars(select(Project).order_by(Project.ord,Project.id)) if p.warehouse_name and p.warehouse_name not in REVIEW_WAREHOUSES]
-                work.action(session,'settings',{'revision':0,'shown_projects':initial})
-                for wh, zero_count, monthly_count in [('隔离验收仓库',160,3),('合成机械仓库001',2,1)]:
-                    for month in ['2026-08','2026-09']:
-                        for category, count in [('zero',zero_count),('monthly',monthly_count)]:
-                            count = count if month == '2026-09' else 1
-                            amount = ('103' if wh == '隔离验收仓库' else '51.5') if category == 'zero' else ('206' if wh == '隔离验收仓库' else '309')
-                            rows = [{'id':f'{category}-{i}', 'device':f'升降设备{i+1:03}', 'spec':'长规格说明' * 5, 'unit':'台班', 'qty':'2小时', 'plan':'30', 'used':'28', 'rate':amount, 'amount':amount, 'tax':'3%专', 'date':'8.21至月底', 'plate':'合成牌照', 'memo':'中文备注\n分行核对' if i == 0 else f'明细{i+1:03}'} for i in range(count)]
-                            saved=work.action(session,'details-save',{'warehouse':wh,'ym':month,'category':category,'revision':0,'rows':rows})
-                            work.action(session,'amounts-confirm',{'warehouse':wh,'ym':month,'category':category,'revision':saved['revision'],'effective_signature':work.effective(session,wh,month)['signature']},'399-synthetic')
-                for index,wh in enumerate(REVIEW_WAREHOUSES):
-                    for category in ['zero','monthly']:
-                        rows=[{'id':f'{category}-{i}', 'device':f'升降审查设备{i}', 'amount':'103', 'rate':'103', 'tax':'3%专', 'qty':'1', 'plan':'1', 'used':'1', 'plate':'合成牌照', 'memo':f'审查明细{i}'} for i in range(140 if index==0 else 1)]
-                        saved=work.action(session,'details-save',{'warehouse':wh,'ym':'2026-09','category':category,'revision':0,'rows':rows})
-                        work.action(session,'amounts-confirm',{'warehouse':wh,'ym':'2026-09','category':category,'revision':saved['revision'],'effective_signature':work.effective(session,wh,'2026-09')['signature']},'399-review-synthetic')
-                session.commit()
-        finally: engine.dispose()
-    return seed
+        with preview_session(env) as session:
+            session.add_all([Project(name_full=f'合成机械网格项目{i:03}', disp=LONG_NAME if i == 1 else f'网格样例{i:03}', warehouse_name=f'合成机械仓库{i:03}', ord=i+3) for i in range(1, 91)])
+            session.add_all([Project(name_full=wh, warehouse_name=wh, disp=DUPLICATE_NAME, ord=100+i) for i,wh in enumerate(REVIEW_WAREHOUSES)])
+            session.commit()
+            initial = [p.warehouse_name for p in session.scalars(select(Project).order_by(Project.ord,Project.id)) if p.warehouse_name and p.warehouse_name not in REVIEW_WAREHOUSES]
+            work.action(session,'settings',{'revision':0,'shown_projects':initial})
+            for wh, zero_count, monthly_count in [('隔离验收仓库',160,3),('合成机械仓库001',2,1)]:
+                for month in ['2026-08','2026-09']:
+                    for category, count in [('zero',zero_count),('monthly',monthly_count)]:
+                        count = count if month == '2026-09' else 1
+                        amount = ('103' if wh == '隔离验收仓库' else '51.5') if category == 'zero' else ('206' if wh == '隔离验收仓库' else '309')
+                        rows = [{'id':f'{category}-{i}', 'device':f'升降设备{i+1:03}', 'spec':'长规格说明' * 5, 'unit':'台班', 'qty':'2小时', 'plan':'30', 'used':'28', 'rate':amount, 'amount':amount, 'tax':'3%专', 'date':'8.21至月底', 'plate':'合成牌照', 'memo':'中文备注\n分行核对' if i == 0 else f'明细{i+1:03}'} for i in range(count)]
+                        saved=work.action(session,'details-save',{'warehouse':wh,'ym':month,'category':category,'revision':0,'rows':rows})
+                        work.action(session,'amounts-confirm',{'warehouse':wh,'ym':month,'category':category,'revision':saved['revision'],'effective_signature':work.effective(session,wh,month)['signature']},'399-synthetic')
+            for index,wh in enumerate(REVIEW_WAREHOUSES):
+                for category in ['zero','monthly']:
+                    rows=[{'id':f'{category}-{i}', 'device':f'升降审查设备{i}', 'amount':'103', 'rate':'103', 'tax':'3%专', 'qty':'1', 'plan':'1', 'used':'1', 'plate':'合成牌照', 'memo':f'审查明细{i}'} for i in range(140 if index==0 else 1)]
+                    saved=work.action(session,'details-save',{'warehouse':wh,'ym':'2026-09','category':category,'revision':0,'rows':rows})
+                    work.action(session,'amounts-confirm',{'warehouse':wh,'ym':'2026-09','category':category,'revision':saved['revision'],'effective_signature':work.effective(session,wh,'2026-09')['signature']},'399-review-synthetic')
+            session.commit()
+    return make_preview_seed(seed)
 
 
 def open_reports(page, server, account='preview-admin'):

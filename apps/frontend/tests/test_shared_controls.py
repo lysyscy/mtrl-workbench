@@ -1,6 +1,7 @@
 """Shared controls keep account-session work while routes and background reads change."""
 import re
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server, browser_page, login  # noqa: F401
 
 
@@ -88,3 +89,32 @@ def test_time_modes_and_modal_discard_keep_input(server, browser_page):
     expect(dialog.get_by_role('heading', name='放弃未保存的修改？')).to_be_visible()
     dialog.get_by_role('button', name='放弃并关闭', exact=True).click()
     expect(dialog).not_to_be_visible()
+
+
+def test_page_registry_keeps_instances_and_resets_on_account_loss(server, browser_page):
+    page, context = browser_page
+    login(page, server)
+    page.get_by_label('项目搜索', exact=True).fill('隔离')
+    page.get_by_role('link', name='MOD-02 i8 接入层', exact=True).click()
+    pick_option(page, '动作', '打印')
+    titles = ['付款通知书', '付款流水与欠款统计', '集采台账', '过程资料',
+              '收发结存与提取', '月度会大表', '库存单据与调整单', '特殊费用',
+              '机械费', '规则配置', '用户管理']
+    links = page.get_by_role('navigation', name='主导航').get_by_role('link')
+    expect(links).to_have_count(13)
+    for title in titles:
+        links.filter(has_text=title).click()
+        expect(page.locator('#page-title')).to_have_text(title)
+        active = page.locator('.page-view:not([hidden])')
+        expect(active).to_have_count(1)
+        expect(active.locator(':scope > p[role="status"]')).to_have_count(0)
+        expect(active).not_to_have_attribute('inert', '')
+    page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
+    expect(page.get_by_label('项目搜索', exact=True)).to_have_value('隔离')
+    page.get_by_role('link', name='MOD-02 i8 接入层', exact=True).click()
+    expect(page.locator('.i8-record-tools')).to_contain_text('打印')
+    context.clear_cookies()
+    page.evaluate("window.dispatchEvent(new Event('focus'))")
+    expect(page.get_by_text('未登录 · 只读', exact=True)).to_be_visible()
+    page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
+    expect(page.get_by_label('项目搜索', exact=True)).to_have_value('')

@@ -1,18 +1,10 @@
 """TAIL-420: user management and personal settings through the real isolated backend."""
-import os
 
 import httpx
 import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server, browser_page, login
-
-
-@pytest.fixture(scope='module')
-def preview_seed():
-    def seed(env):
-        if os.environ.get('MTRL_USERS_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_USERS_TEST_BUILD']
-    return seed
 
 
 def users_api(page, server):
@@ -204,11 +196,9 @@ def test_theme_and_scale_persist_per_account(server, browser_page):
     page.get_by_role('button', name='预览管理员（管理员）').click()
     page.get_by_role('menuitem', name='外观与字号').click()
     dialog = page.locator('.appearance-dialog')
-    dialog.get_by_label('配色主题').click()
-    page.locator('.ant-select-item-option-content').filter(has_text=target).click()
+    pick_option(page, '配色主题', target)
     expect(dialog).to_contain_text('仅影响当前账号')
-    dialog.get_by_label('界面字号').click()
-    page.locator('.ant-select-item-option-content').filter(has_text='大一点').click()
+    pick_option(page, '界面字号', '大一点')
     page.wait_for_function("document.documentElement.style.getPropertyValue('--fscale') === '1.12'")
     # The preference survives a reload and applies to the served theme.
     page.reload()
@@ -225,9 +215,7 @@ def test_theme_and_scale_persist_per_account(server, browser_page):
     login(page, server)
     page.get_by_role('button', name='预览管理员（管理员）').click()
     page.get_by_role('menuitem', name='外观与字号').click()
-    dialog.get_by_label('配色主题').click()
-    page.locator('.ant-select-item-option-content').filter(has_text=current).click()
-    dialog.get_by_label('界面字号').click()
-    page.locator('.ant-select-item-option-content').filter(has_text='标准').click()
+    pick_option(page, '配色主题', current)
+    pick_option(page, '界面字号', '标准')
     restored = page.request.get(server + '/api/m15/theme').json()
     assert restored['theme'] == current and restored['ui_scale'] == original['ui_scale']

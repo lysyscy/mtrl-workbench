@@ -8,7 +8,6 @@ Isolated real-backend checks for the contracts page export entry:
 - damaged receipts lock instead of silently retrying; exports produce real files
   saved only into this run's artifacts.
 """
-import os
 import re
 import subprocess
 import sys
@@ -19,6 +18,7 @@ import httpx
 import openpyxl
 import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option, pick_popup_option
 from test_preview import server, browser_page, login
 from tools.audit.workspace_paths import output
 
@@ -29,10 +29,8 @@ ORD_HEADERS = ['序号', '合同日期', '材料名', '合同编号', '供应商
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed):
     def seed(env):
-        if os.environ.get('MTRL_CEXP_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_CEXP_TEST_BUILD']
         code = """
 from app.core.db import session_scope
 from app.mod01_projects.models import Project
@@ -63,7 +61,7 @@ with session_scope() as s:
     s.add(JcPayment(contract_id=a.id,source='notice',notice_id=n.id,pay_date='',amount=0))
 """
         subprocess.run([sys.executable, '-X', 'utf8', '-c', code], env=env, check=True)
-    return seed
+    return make_preview_seed(seed)
 
 
 def rows_of(page, server):
@@ -138,8 +136,7 @@ def test_detail_totals_match_grid_and_settlement_semantics(server, browser_page)
     d = detail(page, server, ids['TAIL418-OUT'])
     assert (d['settle'], d['pay_sum'], d['debt']) == ('0.00', '0.00', '0.00')
     # The excluded row is hidden by the default tag filter; widen it before reading its cells.
-    page.get_by_label('纳入状态', exact=True).click()
-    page.locator('.ant-select-item-option-content').filter(has_text=re.compile('^全部$')).click()
+    pick_option(page, '纳入状态', '全部')
     for label in ['TAIL418-ORD', 'TAIL418-TRADE', 'TAIL418历史汇总', 'TAIL418-P2', 'TAIL418-OUT']:
         cid = ids[label]
         d = detail(page, server, cid)
@@ -327,9 +324,8 @@ def test_print_export_project_order_file_and_memory(server, browser_page):
     page.get_by_role('button', name='导出打印版…', exact=True).click()
     dialog = page.locator('.ledger-export-dialog')
     expect(dialog.get_by_role('heading', name='导出打印版', exact=True)).to_be_visible()
-    popup = page.locator('.business-project-popup')
-    popup.locator('.ant-select-item-option-content').filter(has_text=re.compile('^隔离项目$')).click()
-    popup.locator('.ant-select-item-option-content').filter(has_text=re.compile('^长项目名验收$')).click()
+    pick_popup_option(page, '隔离项目')
+    pick_popup_option(page, '长项目名验收')
     dialog.get_by_role('button', name='确认清单', exact=True).click()
     assert dialog.locator('tbody tr td:nth-child(2)').all_text_contents() == ['隔离项目', '长项目名验收']
     # The printed project order is the confirmed order, not the natural project order.
@@ -403,8 +399,7 @@ def test_print_export_rejects_project_without_included_contracts(server, browser
     page.get_by_role('button', name='导出打印版…', exact=True).click()
     dialog = page.locator('.ledger-export-dialog')
     expect(dialog.get_by_role('heading', name='导出打印版', exact=True)).to_be_visible()
-    popup = page.locator('.business-project-popup')
-    popup.locator('.ant-select-item-option-content').filter(has_text=re.compile('^归档样例$')).click()
+    pick_popup_option(page, '归档样例')
     dialog.get_by_role('button', name='确认清单', exact=True).click()
     downloads = []
     page.on('download', lambda d: downloads.append(d))

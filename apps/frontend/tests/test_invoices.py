@@ -1,5 +1,4 @@
 """TAIL-417: invoice and payment subtables through the real isolated backend."""
-import os
 import re
 import subprocess
 import sys
@@ -7,15 +6,14 @@ import sys
 import httpx
 import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server, browser_page, login
 from tools.audit.workspace_paths import output
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed):
     def seed(env):
-        if os.environ.get('MTRL_SUB_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_SUB_TEST_BUILD']
         code = """
 from app.core.db import session_scope
 from app.mod01_projects.models import Project
@@ -50,7 +48,7 @@ with session_scope() as s:
     s.add(JcPayment(contract_id=c.id, source='notice', notice_id=n3.id, pay_date='', amount=55.5))
 """
         subprocess.run([sys.executable, '-X', 'utf8', '-c', code], env=env, check=True)
-    return seed
+    return make_preview_seed(seed)
 
 
 def contract_id(page, server, no):
@@ -210,15 +208,7 @@ def test_payment_domain_reference_keeps_source_and_notice_lookback(server, brows
     modal = page.locator('.contract-subtable-dialog')
     modal.get_by_role('button', name='从付款域引用', exact=True).click()
     ref = page.locator('.contract-payment-reference')
-    ref.get_by_label('引用集采通知书', exact=True).click()
-    option = page.locator('.ant-select-item-option-content').filter(has_text='TAIL417-N1')
-    expect(option).to_be_visible()
-    # Let the open motion and the candidate refetch settle before the mouse click.
-    page.wait_for_timeout(350)
-    if not page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').count():
-        ref.get_by_label('引用集采通知书', exact=True).click()
-        expect(option).to_be_visible()
-    option.click()
+    pick_option(page, '引用集采通知书', re.compile(r'^TAIL417-N1 ·'))
     ref.get_by_role('button', name='引用', exact=True).click()
     expect(modal.get_by_role('status').filter(has_text='已从付款域引用')).to_be_visible()
     # The referenced notice disappears from the candidate list: one reference only.

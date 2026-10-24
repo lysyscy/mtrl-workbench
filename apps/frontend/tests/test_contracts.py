@@ -1,5 +1,4 @@
 """TAIL-416: contract maintenance through the real isolated backend."""
-import os
 import re
 import subprocess
 import sys
@@ -7,14 +6,13 @@ import sys
 import httpx
 import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server, browser_page, login
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed):
     def seed(env):
-        if os.environ.get('MTRL_CONTRACTS_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_CONTRACTS_TEST_BUILD']
         code = """
 from app.core.db import session_scope
 from app.mod01_projects.models import Project
@@ -32,7 +30,7 @@ with session_scope() as s:
     s.add(JcPayment(contract_id=b.id,source='notice',notice_id=n.id,pay_date='',amount=0))
 """
         subprocess.run([sys.executable, '-X', 'utf8', '-c', code], env=env, check=True)
-    return seed
+    return make_preview_seed(seed)
 
 
 def contract_id(page, server, contract_no='TAIL416-CONTRACT'):
@@ -122,8 +120,7 @@ def test_history_summary_creation_payment_and_duplicate_rejection(server, browse
     editor = page.locator('.contract-inline-editor')
     editor.get_by_role('checkbox', name='历史汇总', exact=True).check()
     editor.get_by_label('核对截至日', exact=True).fill('2025-11-30')
-    editor.get_by_role('combobox', name='合同项目', exact=True).click()
-    page.locator('.ant-select-item-option-content').filter(has_text='归档样例').click()
+    pick_option(page, '合同项目', '归档样例')
     editor.get_by_role('button', name='保存合同', exact=True).click()
     # Saving positions the new history contract at its settlement subtable.
     modal = page.locator('.contract-subtable-dialog')
@@ -160,8 +157,7 @@ def test_history_summary_creation_payment_and_duplicate_rejection(server, browse
     editor = page.locator('.contract-inline-editor')
     editor.get_by_role('checkbox', name='历史汇总', exact=True).check()
     editor.get_by_label('核对截至日', exact=True).fill('2025-11-30')
-    editor.get_by_role('combobox', name='合同项目', exact=True).click()
-    page.locator('.ant-select-item-option-content').filter(has_text='归档样例').click()
+    pick_option(page, '合同项目', '归档样例')
     editor.get_by_role('button', name='保存合同', exact=True).click()
     expect(editor.get_by_role('alert')).to_contain_text('本项目已有历史汇总')
     rows = page.request.get(server + '/api/m11/list').json()['rows']
@@ -177,8 +173,7 @@ def test_late_new_contract_receipt_does_not_steal_deep_link_focus(server, browse
     page.route('**/api/m11/add', lambda route: pending.append(route))
     page.get_by_role('button', name='＋ 手工新增合同', exact=True).click()
     dialog = page.locator('.contract-inline-editor')
-    dialog.get_by_role('combobox', name='合同项目', exact=True).click()
-    page.locator('.ant-select-item-option-content').filter(has_text='隔离项目').click()
+    pick_option(page, '合同项目', '隔离项目')
     dialog.get_by_role('button', name='保存合同', exact=True).click()
     expect(dialog.get_by_role('button', name='正在保存…', exact=True)).to_be_visible()
     page.go_back()
@@ -269,8 +264,7 @@ def test_writes_require_login_and_fetch_boundary(server, browser_page):
     tags = {r['id']: r['tag'] for r in page.request.get(server + '/api/m11/list').json()['rows']}
     assert tags[cid] == '不纳入'
     # The default tag filter hides the excluded row; widen it before restoring.
-    page.get_by_label('纳入状态', exact=True).click()
-    page.locator('.ant-select-item-option-content').filter(has_text=re.compile('^全部$')).click()
+    pick_option(page, '纳入状态', '全部')
     row.get_by_role('button', name='纳入', exact=True).click()
     expect(page.locator('.contract-feedback')).to_contain_text('已把 1 行标记为「纳入台账」')
     tags = {r['id']: r['tag'] for r in page.request.get(server + '/api/m11/list').json()['rows']}

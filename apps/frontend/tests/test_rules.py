@@ -1,35 +1,25 @@
 """Rules maintenance keeps validation, receipts, permission and history honest."""
-import os
 
 import httpx
 import pytest
 from playwright.sync_api import expect
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
 from test_preview import server, browser_page, login  # noqa: F401
 from tools.audit.workspace_paths import output
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed, preview_session):
     def seed(env):
         from app.mod06_proc.models import ProcMechMatchRule
         from app.mod11_jc.models import JcIgnoreProject
-        if os.environ.get('MTRL_RULES_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_RULES_TEST_BUILD']
-        engine = create_engine(env['TEST_DATABASE_URL'], connect_args={'options': env['PGOPTIONS']})
-        try:
-            with Session(engine) as s:
-                assert s.execute(text('SELECT current_database(),current_schema()')).one() == ('mtrl_workbench_test', env['PGOPTIONS'].split('search_path=')[1])
-                s.add_all([
-                    ProcMechMatchRule(warehouse_name='隔离验收仓库', aliases=['别名验收项目']),
-                    ProcMechMatchRule(warehouse_name='长名称验收仓库', aliases=['长名报表名']),
-                    JcIgnoreProject(name_full='停用样例项目', reason='停用样例', operator='预览管理员', active=False),
-                ])
-                s.commit()
-        finally:
-            engine.dispose()
-    return seed
+        with preview_session(env) as s:
+            s.add_all([
+                ProcMechMatchRule(warehouse_name='隔离验收仓库', aliases=['别名验收项目']),
+                ProcMechMatchRule(warehouse_name='长名称验收仓库', aliases=['长名报表名']),
+                JcIgnoreProject(name_full='停用样例项目', reason='停用样例', operator='预览管理员', active=False),
+            ])
+            s.commit()
+    return make_preview_seed(seed)
 
 
 def notice_flags(page, server):

@@ -1,6 +1,5 @@
 """TAIL-410: process reports maintenance and export through the real isolated backend."""
 import io
-import os
 import re
 import shutil
 import subprocess
@@ -14,6 +13,7 @@ import httpx
 import openpyxl
 import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server, browser_page, login
 from tools.audit.workspace_paths import output
 
@@ -76,12 +76,10 @@ with session_scope() as s:
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed):
     def seed(env):
-        if os.environ.get('MTRL_PROC_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_PROC_TEST_BUILD']
         subprocess.run([sys.executable, '-X', 'utf8', '-c', SEED], env=env, check=True)
-    return seed
+    return make_preview_seed(seed)
 
 
 def fmt(value):
@@ -104,8 +102,7 @@ def matrix_api(page, server):
 
 
 def pick_project(page, disp):
-    page.get_by_role('combobox', name='过程资料项目').click()
-    page.locator('.ant-select-item-option-content').filter(has_text=disp).click()
+    pick_option(page, '过程资料项目', disp)
 
 
 def col(letter):

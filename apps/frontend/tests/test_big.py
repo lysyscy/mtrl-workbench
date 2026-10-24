@@ -1,5 +1,4 @@
 """TAIL-413: big analysis table, manual values, selection order and export through the real isolated backend."""
-import os
 import subprocess
 import sys
 import time
@@ -8,6 +7,7 @@ from decimal import Decimal
 import httpx
 import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server, browser_page, login
 from tools.audit.workspace_paths import output
 
@@ -31,10 +31,8 @@ GROUP_STARTS = 6  # 辅材/机械/产值 group starts + standalone 主材累计/
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed):
     def seed(env):
-        if os.environ.get('MTRL_BIG_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_BIG_TEST_BUILD']
         code = """
 from decimal import Decimal
 from app.core.db import session_scope
@@ -87,7 +85,7 @@ with session_scope() as s:
     s.add(JcInvoice(contract_id=b.id, kind='supplier', invoice_date='2026-08-02', amount=Decimal('100')))
 """
         subprocess.run([sys.executable, '-X', 'utf8', '-c', code], env=env, check=True)
-    return seed
+    return make_preview_seed(seed)
 
 
 def money(text) -> str:
@@ -279,8 +277,7 @@ def test_selection_order_dialog_save_reread_and_cancel(server, browser_page):
     # Reorder again and drop one project; only the chosen ones stay, in the saved order.
     page.get_by_role('button', name='选择项目与排序…', exact=True).click()
     dialog.get_by_role('button', name='下移大表验收甲', exact=True).click()
-    dialog.get_by_label('大表项目', exact=True).click()
-    page.locator('.ant-select-item-option-content').filter(has_text='大表验收辛').click()
+    pick_option(page, '大表项目', '大表验收辛')
     page.keyboard.press('Escape')
     expect(dialog.get_by_text('9 个项目 · 页面与导出同序', exact=True)).to_be_visible()
     dialog.get_by_role('button', name='保存项目与顺序', exact=True).click()

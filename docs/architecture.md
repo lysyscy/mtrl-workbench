@@ -4,6 +4,8 @@ FastAPI 承载业务，PostgreSQL 保存事实，NSSM 托管现行单 worker 服
 
 React 已获准采用构建步骤；原无构建/不另用 React 的旧阶段限制已被本次授权取代。业务判定、金额与写入仍归后端，正式切换和旧版退役分别守原授权。
 
+React 账号工作区由 `apps/frontend/src/main.tsx` 的 `pages` 注册表统一派生页面标题、分组导航、路由和已访问页面的保活容器。切页只暂停所属页面，账号树与 QueryClient 的重建边界保持独立。
+
 ## 分层与装配
 
 core 保存金额、时间、配置、身份和共用机制，不 import 业务包；需要业务数据时由 core_bindings 注入 loader，取数实现归数据主人。mod 包间调用 service，不跨包直查 repository/表；既有允许边界以 test_layering 与实现头说明为准。page 的按钮/表单 HTML 不进入 API 导出，PAGE_ONLY_KEYS 负责剔除。

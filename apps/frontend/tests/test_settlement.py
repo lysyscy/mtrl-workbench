@@ -7,7 +7,6 @@ Seed (fresh schema per run):
 """
 import io
 import json
-import os
 import subprocess
 import sys
 import zipfile
@@ -18,6 +17,7 @@ import httpx
 import openpyxl
 import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server, browser_page, login, output
 
 
@@ -32,10 +32,8 @@ UNBALANCED_TOTALS = {'begin': '1510.11', 'in': '12596.69', 'out': '13150.72', 'e
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed):
     def seed(env):
-        if os.environ.get('MTRL_SETL_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_SETL_TEST_BUILD']
         code = """
 from app.core.db import session_scope
 from app.mod01_projects.models import Project
@@ -67,7 +65,7 @@ with session_scope() as s:
                for w, m, n, a in inv])
 """
         subprocess.run([sys.executable, '-X', 'utf8', '-c', code], env=env, check=True)
-    return seed
+    return make_preview_seed(seed)
 
 
 # ============================================================ helpers
@@ -91,9 +89,7 @@ def pick_period(page, label, value):
 
 
 def pick_status(page, value):
-    box = page.locator('label', has_text='项目状态').filter(has=page.locator('.ant-select'))
-    box.locator('.ant-select').click()
-    page.locator(f'.ant-select-item-option[title="{value}"]').click()
+    pick_option(page, '提取项目状态', value)
 
 
 def switch_tab(page, label):

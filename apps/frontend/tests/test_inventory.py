@@ -17,16 +17,15 @@ from pathlib import Path
 import httpx
 import openpyxl
 import pytest
-from playwright.sync_api import TimeoutError, expect
+from playwright.sync_api import expect
 from test_preview import server, browser_page, login
+from preview_select import open_popup, pick_option
 from tools.audit.workspace_paths import output, output_dir
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed):
     def seed(env):
-        if os.environ.get('MTRL_INV_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_INV_TEST_BUILD']
         runtime = Path(output_dir('work')) / 'tail414-runtime'
         runtime.mkdir(parents=True, exist_ok=True)
         cache_dir = runtime / 'i8_source_cache'
@@ -112,7 +111,7 @@ cache.write_bytes(content_09)
 print('SEED inventory rows parsed and source cache written', flush=True)
 """
         subprocess.run([sys.executable, '-X', 'utf8', '-c', code], env=env, check=True)
-    return seed
+    return make_preview_seed(seed)
 
 
 def rows_of(page, text=''):
@@ -135,36 +134,6 @@ def api_inventory(page, server):
 
 def row_id_of(data, doc, material):
     return next(row['id'] for row in data['rows'] if row['doc_no'] == doc and row['material'] == material)
-
-
-def reset_virtual_scroll(dropdown):
-    # antd virtualizes long option lists: opening scrolled to the selected row
-    # can leave earlier options unrendered, so reset whatever actually scrolls.
-    dropdown.first.evaluate("""el => {
-        const scroller = [...el.querySelectorAll('*')].find(
-            n => n.clientHeight > 0 && n.scrollHeight > n.clientHeight + 1);
-        if (scroller) scroller.scrollTop = 0;
-    }""")
-
-
-def open_popup(page, label):
-    page.get_by_label(label, exact=True).click()
-    # Only the open popup: closed antd dropdowns stay mounted in the DOM.
-    dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-    reset_virtual_scroll(dropdown)
-    return dropdown.locator('.ant-select-item-option-content')
-
-
-def pick_option(page, label, text):
-    options = open_popup(page, label).filter(has_text=re.compile(f'^{re.escape(text)}$'))
-    for attempt in range(2):
-        try:
-            options.click(timeout=6000)
-            return
-        except TimeoutError:
-            if attempt:
-                raise
-            reset_virtual_scroll(page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)'))
 
 
 def set_column_filter(page, column, *, text=None, min_value=None, max_value=None, values=()):

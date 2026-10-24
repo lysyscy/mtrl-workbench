@@ -1,44 +1,35 @@
 """Annual display uses original facts; edits continue to address individual months."""
-import os
 from decimal import Decimal
 
 import pytest
 from playwright.sync_api import expect
-from sqlalchemy import create_engine, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 from test_preview import server, browser_page, login
 from tools.audit.workspace_paths import output
 
 
 @pytest.fixture(scope='module')
-def preview_seed():
+def preview_seed(make_preview_seed, preview_session):
     def seed(env):
         from app.mod01_projects.models import Project
         from app.mod08_inv.models import InvDetail
         from app.mod09_fee.models import FeeManualItem
-        if os.environ.get('MTRL_FEE_TEST_BUILD'):
-            env['FRONTEND_PREVIEW_DIR'] = os.environ['MTRL_FEE_TEST_BUILD']
-        engine = create_engine(env['TEST_DATABASE_URL'], connect_args={'options': env['PGOPTIONS']})
-        try:
-            with Session(engine) as s:
-                assert s.execute(text('SELECT current_database(),current_schema()')).one() == ('mtrl_workbench_test',env['PGOPTIONS'].split('search_path=')[1])
-                pj = s.scalar(select(Project).where(Project.warehouse_name == '隔离验收仓库'))
-                other = s.scalar(select(Project).where(Project.warehouse_name == '长名称验收仓库'))
-                s.add_all([FeeManualItem(project_id=pid,ym=ym,item_name=name,amount=Decimal(amount)) for pid,ym,name,amount in [
-                    (pj.id,'2024-03','运费','10.10'),(pj.id,'2025-12','运费','-2.10'),
-                    (pj.id,'2026-01','运费','10'),(pj.id,'2026-01','运费','20'),(pj.id,'2026-12','运费','-5'),
-                    (pj.id,'2027-01','未来项','999'),(other.id,'2026-01','运费','999'),
-                    (pj.id,'2026-09','油卡','0'),(pj.id,'2026-09',' 油卡','1'),
-                    (pj.id,'2025-12','大额','999999.99'),(pj.id,'2026-01','大额','1234567.89'),
-                ]])
-                s.add_all([InvDetail(project_id=pj.id,warehouse_name='隔离验收仓库',ym=ym,direction=direction,cbs_name=cbs,amount=Decimal(amount),doc_date='2099-01-01') for ym,direction,cbs,amount in [
-                    ('2025-01','出库','CBS-安文费','100'),('2026-02','出库','CBS-安文费','20'),
-                    ('2026-02','入库','CBS-安文费','1000'),('2026-02','出库','其他','1000'),('2027-02','出库','CBS-安文费','1000'),
-                ]])
-                s.commit()
-        finally:
-            engine.dispose()
-    return seed
+        with preview_session(env) as s:
+            pj = s.scalar(select(Project).where(Project.warehouse_name == '隔离验收仓库'))
+            other = s.scalar(select(Project).where(Project.warehouse_name == '长名称验收仓库'))
+            s.add_all([FeeManualItem(project_id=pid,ym=ym,item_name=name,amount=Decimal(amount)) for pid,ym,name,amount in [
+                (pj.id,'2024-03','运费','10.10'),(pj.id,'2025-12','运费','-2.10'),
+                (pj.id,'2026-01','运费','10'),(pj.id,'2026-01','运费','20'),(pj.id,'2026-12','运费','-5'),
+                (pj.id,'2027-01','未来项','999'),(other.id,'2026-01','运费','999'),
+                (pj.id,'2026-09','油卡','0'),(pj.id,'2026-09',' 油卡','1'),
+                (pj.id,'2025-12','大额','999999.99'),(pj.id,'2026-01','大额','1234567.89'),
+            ]])
+            s.add_all([InvDetail(project_id=pj.id,warehouse_name='隔离验收仓库',ym=ym,direction=direction,cbs_name=cbs,amount=Decimal(amount),doc_date='2099-01-01') for ym,direction,cbs,amount in [
+                ('2025-01','出库','CBS-安文费','100'),('2026-02','出库','CBS-安文费','20'),
+                ('2026-02','入库','CBS-安文费','1000'),('2026-02','出库','其他','1000'),('2027-02','出库','CBS-安文费','1000'),
+            ]])
+            s.commit()
+    return make_preview_seed(seed)
 
 
 def annual(page, base, year='2026'):

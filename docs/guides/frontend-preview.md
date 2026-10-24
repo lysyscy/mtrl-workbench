@@ -26,6 +26,8 @@ $env:MTRL_EFFORT='frontend-vue-rewrite'
 backend/.venv/Scripts/python.exe -X utf8 -m pytest apps/frontend/tests/test_preview.py -q --tb=short
 ```
 
+自选隔离构建统一通过 `MTRL_PREVIEW_TEST_BUILD` 传入绝对路径；`tests/conftest.py` 的 `make_preview_seed` 工厂为默认及各模块种子接线，`preview_session` 集中核对独占 schema。业务造数仍归各测试模块。antd 下拉选择复用 `tests/preview_select.py`，只匹配打开的弹层并处理虚拟滚动；普通原生控件继续用原生选择。
+
 浏览器进程只在同一测试模块内复用，每例创建独立context，Cookie、storage、路由和视口互不继承；pageerror断言失败也在finally关闭context，模块结束关闭浏览器。后端临时数据位于本轮work的schema目录，日志及服务stdout按schema留在本轮logs，结束按workspace_paths生命周期释放/选留。
 
 测试创建独占 schema、运行现有 Alembic 迁移，以真实后端验证 Cookie/身份/读取、历史编辑与撤销、拒绝和导出；只有加载/403/500 与迟到错误的浏览器分支使用定向替身。截图和服务日志由现有 workspace_paths 归档到本机 `.artifacts/archive/`，最长保留30天。模拟回包不能证明真实权限，另有普通用户真实管理动作被拒且账号数不变的检查。
