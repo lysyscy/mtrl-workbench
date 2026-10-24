@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-402
 
-**Status:** ready-for-human
+**Status:** done
 
 - [x] 流水、欠款、统计的项目/月度/筛选及跳转通知书对应正确，空值与零值和统计金额服从后端口径。
 - [x] 撤销确认、权限、冲突及撤销后通知书/流水/历史刷新完整可用。
@@ -51,3 +51,5 @@
 **2026-10-23 · 资源收尾与最终输入。** 两个具名自有schema删除后仅连接mtrl_workbench_test、search_path=pg_catalog只读元数据核剩余0；8038无监听、预览进程正常退出。浏览器临时页已关闭；本票一次性脚本/work及实际下载文件已按归档副本SHA核对后删除。只选留logs/exports到上述归档，沿既有2026-11-21期限；没有遗留自有活动run。apps/frontend/dist为既有共享构建出口，留给父预览，不误删在用资源。日志自查还排除了成功撤销后无用的revoke-info再拉取，最终typecheck/build再过，未重复业务验证。8037如已由其负责人恢复，须由父核其后端是否加载本票新增欠款装配字段；本任务没有擅自重启或介入。技术工作无剩余阻塞，人工验收仍待用户。
 
 **2026-10-24 · 最终票仓核对（仅文档）。** 原五项技术清单及实际文件/撤销证据保留；A两种导出单名单和E内存XLSX反转选择顺序核验已完成，导出排序行为未改。原性能C六件混合源码仍在途，不能用局部业务检查宣布性能阶段完成；累计性能比较归422。完整综合页人工验收未签收。 共同规格“完整页面人工关口”及原票明确保留整页人工验收；本次没有用户整页通过证据，因此技术完成准确记ready-for-human，不伪签done；未生产部署本身不是本票未done的理由。 [A组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-c-a-acceptance/run-01/reports/delivery.md) [E组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-e-fit/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。
+
+2026-10-24 · done: 用户2026-10-24在新本地接手会话明确指示验收通过并签done；验收对象为8060真实只读副本react-c-preview-e-v6-8f1204a8f9f5-real-copy（本会话实核版本一致、页面可渲染）。技术清单与既有回执不变，未新增真实写入验证。

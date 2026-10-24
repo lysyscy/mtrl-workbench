@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-399
 
-**Status:** ready-for-human
+**Status:** done
 
 - [x] 仅接收现行机械费明细JSON，保留解析、明细/来源预览、拒绝、修订冲突确认及回执，原始指纹与人工来源保护保持。
 - [x] 缺失明细结构、异常金额、重复来源、冲突和减少情形可判定，错误文件及过期预览不能误采纳；明细保存与有效月值确认分开。
@@ -54,3 +54,5 @@
 纯候选排除开工13项dirty后typecheck/build通过；独立Standards/Spec无实质发现。离线金额断言、9次现有纯导出测试函数和实际XLSX检查通过；普通IAB合成接口核联算、仅保存/单独含税采用、月份草稿、JSON预览/冲突/草稿阻挡/关闭保留及四页下载。JSON最终写入确认本批未重跑；原票真实隔离后端证据仍为历史证据，未补记本轮真实DB。安全测试DSN未确认，未读取.env或恢复已拒测试来源。8037/8047资源保持；409流程/状态/WIP未纳入提交，整页不作已验收。原始证据及未验清单见本机task-5的.artifacts/archive/frontend-vue-rewrite/stage4-407408/reports/delivery.md。
 
 **2026-10-24 · 最终票仓核对（仅文档）。** 本票只承接JSON明细预览/冲突/确认，不恢复旧Excel或通用导入。原9项后端及真实隔离JSON/四表XLSX证据保留，C组保留保存不采用和独立采用语义。文件名沿历史保留，不误解为还欠旧Excel迁移；完整机械页人工验收未签收。 共同规格“完整页面人工关口”及原票明确保留整页人工验收；本次没有用户整页通过证据，因此技术完成准确记ready-for-human，不伪签done；未生产部署本身不是本票未done的理由。 [C组回执](D:/UserData/Documents/Codex/2026-10-24/task-20/.artifacts/active/react-c-c-acceptance/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。
+
+2026-10-24 · done: 用户2026-10-24在新本地接手会话明确指示验收通过并签done；验收对象为8060真实只读副本react-c-preview-e-v6-8f1204a8f9f5-real-copy（本会话实核版本一致、页面可渲染）。技术清单与既有回执不变，未新增真实写入验证。
