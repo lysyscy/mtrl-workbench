@@ -74,6 +74,8 @@ export function ContractsPage({ me,blocked,active }: { me:Identity|null;blocked:
   useEffect(()=>{const valid=new Set(rows.map(row=>row.id));setPicked(old=>{const next=new Set([...old].filter(id=>valid.has(id)));return next.size===old.size?old:next;});},[rows]);
   useEffect(()=>{if(!active)return;const id=Number(params.get('contract'));if(id>0&&query.data){const row=query.data.rows.find(row=>row.id===id);pendingFocus.current=id;if(row){setEditorId(null);setFilters({...initialFilters(),tag:''});setSearch('');grid.current?.ensureNodeVisible(node=>node.data?.id===id,'middle');}else {setEditorId(null);setError('合同已不在列表中，请重读核对。');}}},[params.get('contract'),active,Boolean(query.data)]);
   useEffect(()=>{if(!blocked&&active&&grid.current)fitGridColumns(grid.current,root.current);},[active,blocked]);
+  // Uncertain flips do not change row data, so cells must be forced to re-render their disabled state.
+  useEffect(()=>{if(active&&grid.current)grid.current.refreshCells({force:true});},[uncertain]);
   async function refresh(){await client.invalidateQueries({predicate:q=>q.queryKey[0]!=='contract-detail'&&q.queryKey[0]!=='notice-maintenance'},{throwOnError:true});}
   async function reread(){try{await refresh();setUncertain(false);setError('');setFeedback('已重读，请核对合同状态与关联。');}catch(failure){setError(failure instanceof Error?failure.message:'重读失败，请重试。');}}
   async function tag(ids:number[],value:string){
