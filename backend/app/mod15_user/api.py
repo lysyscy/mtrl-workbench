@@ -357,6 +357,10 @@ def api_view_password(id: Any = 0) -> dict:
     """
     def go():
         with session_scope() as s:
+            # ⭐ 2026-10-24（TAIL-420）：补服务端闸 —— 本出口的定位就是**管理员的运维动作**
+            #    （下方注释"供管理员告诉同事"、旧壳按钮也只对管理员亮），此前仅靠前端置灰，
+            #    直调 API 时普通用户可读任意账号的明文密码与 i8 凭据；现与建号/停用同一道闸。
+            D.assert_is_admin(_me(s))
             row = R.get(s, _uid(id))
             if row is None:
                 raise AppError(f"账号不存在：id={id!r}")
