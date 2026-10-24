@@ -4,12 +4,12 @@
 
 **Blocked by:** TAIL-399
 
-**Status:** ready-for-human
+**Status:** done
 
 - [x] 规则读取、允许字段编辑、校验和保存回执完整可用，权限由服务端判定。
 - [x] 现有配置默认值、缺失/空值和历史保护含义保持，不暗示修改配置会自动重算历史。
 - [x] 隔离验证有效修改、非法值、无权限及冲突失败，真实重读与相关业务页面效果一致。
-- [ ] 配置说明及错误提示沿现行熟手口径，技术细节按既有排障边界处理。
+- [x] 配置说明及错误提示沿现行熟手口径，技术细节按既有排障边界处理。
 
 规格：[前端独立重做规格](../../frontend-vue-rewrite/spec.md)（User Stories 37, 5, 9, 25）；业务口径：[development-and-verification](../../../docs/guides/development-and-verification.md)。
 
@@ -77,3 +77,5 @@
 **验证证据。** 独立构建（`--outDir`本轮work/dist；共享apps/frontend/dist前后未动、8060未动）后真实隔离浏览器＋后端＋PG：新增`apps/frontend/tests/test_rules.py` **5项通过/15.19秒、退出0**，覆盖默认规则首读落库与"来源：系统配置"、增改删全链路回执（含"已有单据的剔除状态保持不变，再次抓取也不重算"）、空命中值客户端拒绝且弹窗保留、"资产处集中采购"服务端拒绝且输入保留、行被删后的编辑/删除冲突提示与表格收敛、集采同名幂等/停用恢复并经API核对active真值、机械别名保存与两项目重名拒绝且输入保留、未登录写端点401×4且数据不变、800px无页面横溢；通知单PREVIEW-HISTORY/NORMAL的is_excluded在全部规则改动前后不变（历史不重算）。生效规则与名单状态均经业务自身API核对（`/api/m14/rules`即抓取管线同一份、notice-list、jc-ignore），未直连DB。fees回归**2项通过/14.08秒、退出0**（核main.tsx接线不破坏既有页）。严格typecheck与Vite build均退出0（仅既有大chunk提示）。另用agent-browser经独立CDP Chrome实看（隔离预览8064、独占schema，已按精确名核权清理）：三区段、新增/删除弹窗结构与文案、真实保存/删除回执均符合，截图归档。
 
 **未验与边界。** 验收项4（熟手口径与视觉）留人工关口，未代签done；jc-ignore"行被物理删"冲突分支无API可达（该域无删除端点），未伪造验证；未跑全仓套件、未访问真实i8/生产库、未push/部署。本机证据归`.artifacts/archive/frontend-vue-rewrite/tail419-20261024/`（截图4件＋测试与预览日志）；本轮5个独占schema均已清（现存两个frontend_rewrite_397 schema属8037/8060受保护预览，未动）。workspace_check.py本机未安装，run-closed检查未执行。
+
+2026-10-24 · done: 用户2026-10-24在本会话明确验收通过并指示签done；技术证据见票内同日实施与技术验证Comments（隔离浏览器5项+fees回归2项+typecheck/build+agent-browser实看，规则改动不重算历史已核，证据归archive/tail419-20261024）。
