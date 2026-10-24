@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-416
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] 历史结算和欠款查询、筛选、允许的维护及统计保持当前口径，不恢复历史一次性导入。
 - [ ] 使用已有发票和付款夹具验证实际后端结果，无须等待新明细页面才能核对。
@@ -25,3 +25,5 @@
 
 
 **2026-10-24 · 阶段3有界集成（agent）。** 已接普通导出（当前筛选排序完整ID，空集合明确为空）、独立打印版（项目顺序/记忆及原模板）及手工历史汇总最小入口；业务语义回集采需求，不恢复旧导入。类型/构建与IAB合成服务的排序、空集合、项目清单和两类下载已核；合成文件仅证明传输。候选deca381既有真实后端5项结果保原来源，本轮真实DB/实际模板重验、权限/事务及完整人工验收未做。原状态及验收框保留；后续仅测试DSN按预览指南新端口/独占schema，不覆盖8037/8047。
+
+**2026-10-24 · 最终票仓核对（仅文档）。** contract-export.tsx/API和历史汇总入口已接普通当前筛选排序ID与独立打印版项目范围/记忆，A/E工具分组保持。既有候选deca381五条后端结果及合成传输有来源，但当前真实副本只读不能补第3项保存/权限/冲突/回滚或第4项实际后端普通/打印版成品模板分页链。ready-for-agent改in-progress，实体纸面仍单列。 [A组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-c-a-acceptance/run-01/reports/delivery.md) [E组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-e-fit/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。

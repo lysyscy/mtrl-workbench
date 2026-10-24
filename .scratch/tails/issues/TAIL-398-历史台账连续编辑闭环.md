@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-397
 
-**Status:** claimed
+**Status:** ready-for-human
 
 - [x] 保存立即发起；连续输入、Tab/鼠标切格、中文合成、月份重排和按钮点击均保留目标行、焦点及后续草稿。
 - [x] 项目/月度/账号切换后，旧读取、旧保存结果和旧错误不覆盖当前范围，原保存仍归原记录；活动编辑不被后台刷新打断。
@@ -141,3 +141,5 @@ export_total_debt改用report_export.service.EXPORT_ROOT，正式默认仍为PRO
 - corepack pnpm@12.14.0 install --frozen-lockfile退出0（27ms）；170440-858619-30920/b-toolchain.log，依赖/锁未改。最终typecheck、build各退出0，最终产物index-D7towwsv.css、index-BdgHxM4T.js、ledger-bwn9jmJm.js；已有大分块提示保留。最终四个受影响UI文件Impeccable detect返回[]、退出0。实际提交钩子及SHA见保存回执。
 
 按B固定基点对全部调用者和上述差异自查；仅显示出口/读取交互与局部主题样式，金额、权限、写入协议未改，现有高后果保护已定向覆盖，因此选自查；父任务仍组织A/B技术检查及后续完整页面关口。全部11个准确自有合成schema均有正常ISOLATION cleaned回执，按上述日志提取名称只读核mtrl_workbench_test中剩余0；8037关闭、无worktree根.env。9个自有运行已归本机archive并通过run-closed，临时脚本仅stdin、无work残留；保留最小原始日志/合成截图/测试导出按既有retention最多30天。共同effort和原worktree仍由父任务继续，不移走共同规格或清理复用依赖/dist。仅本地保存，不推送、不部署、不启动常驻人工预览、无源库写入或真实库复制；401完整档案页及流水欠款综合页仍待后续齐备后人工验收。
+
+**2026-10-24 · 最终票仓核对（仅文档）。** 技术清单六项已有真实隔离写读/撤销、实际XLSX/ZIP及A/B导出回执；当前ledger.tsx、ledger-controls.tsx和flow.tsx已在综合页接合。A组单名单及E内存XLSX顺序核验保持：总欠款按项目选择顺序出行，逐月各本内部不受项目间顺序影响。原claimed已滞后，改ready-for-human。当前真实副本禁止业务写/下载，历史隔离证据不冒充本次现场全链。 共同规格“完整页面人工关口”及原票明确保留整页人工验收；本次没有用户整页通过证据，因此技术完成准确记ready-for-human，不伪签done；未生产部署本身不是本票未done的理由。 [A组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-c-a-acceptance/run-01/reports/delivery.md) [E组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-e-fit/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。

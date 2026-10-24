@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-399
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] 收发结存、提取与结余入口、项目/月度范围及可维护字段符合当前业务真源。
 - [ ] 对有关维护完成真实保存重读、拒绝与冲突处理，快速切范围无串写或旧响应覆盖。
@@ -43,3 +43,5 @@
 必要原始日志限期保留在候选本机 `.artifacts/archive/tail-412/verify/logs`（同effort retention.json），结论以本条为准。自有8162/临时入口/构建/依赖结束释放；已接线候选工作树留父任务选择吸收，临时补丁已由本次实际接线取代。
 
 **2026-10-24 · 活动树有界吸收。** 本页已从候选 `808c17e6` 最终累计树接入活动基点 `73ed77ea`，公共入口、共享保护及本批最小验证见[整合证据](../../frontend-vue-rewrite/evidence.md#阶段5ab串行整合)。代码保存不代替安全DB、真实业务文件及完整人工验收；本票状态与验收项保持原判定。
+
+**2026-10-24 · 最终票仓核对（仅文档）。** settlement.tsx/settlement-api.ts/settlement-export.tsx已接月报、年度提取、历史结余维护及原导出；B组自然表高、全项目无内纵滚和完整金额已核。原33项离线/成品及真实副本行集金额可复用，故ready-for-agent落后于实现，改in-progress。剩余第2–3项真实隔离保存/拒绝/冲突/权限/事务，以及第4项当前候选真实后端浏览器成功下载全链；不把合成保存当PG业务写读。 [B组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-c-b-acceptance/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。

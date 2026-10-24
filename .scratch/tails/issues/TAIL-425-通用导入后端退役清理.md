@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-422
 
-**Status:** ready-for-agent
+**Status:** blocked
 
 - [ ] 422收窄范围累计验收后，作为最后工程批执行；清理后补受影响回归和清理差异的Standards/Spec独立审查，再交423，保持本票独立完成证据。
 - [ ] 先核静态/动态调用、路由注册、工具和数据读取者，列清旧通用域清单、m06_proc与m06_mech_report两域的专属实现及测试；只删除已退役专属部分，不按import_kit或mod06_proc目录整删。
@@ -26,3 +26,5 @@
 **2026-10-22 · 原工具登记与工作树资源。** 先前配置缺失和无效阶段值导致回滚均已核清；按docs/requirements.md、验收README和.env.example核准唯一判据JSON，使用受控阶段“随时”，时序放前置/本票验收。命令内独占根.env仅含公开PRD_ACCEPTANCE_BASELINE路径，finally核内容后删除。原_tail_open.py先干跑、后--apply退出0，完整doc_audit必须修0；未手写索引、修改检查器或伪造基线。
 
 父任务明确允许补齐同机已有资源后，核D:/dev/mtrl-workbench/ops/nssm/nssm.exe为普通文件331264字节、目标缺失，且.gitignore第28行忽略ops/nssm/、Git未跟踪该工具；以拒绝覆盖方式复制到本worktree同路径。源复制前后及目标SHA256均为F689EE9AF94B00E9E3F0BB072B34CAAF207F32DCB4F5782FC9CA351DF9A06C97。未下载、安装、执行exe或改动任何服务/权限，工具不暂存提交，不改gitignore。它是worktree必要资源，随worktree整体生命周期管理，不能在本次票据维护收尾中当临时残留删除。
+
+**2026-10-24 · 最终票仓核对（仅文档）。** backend/app/main.py仍挂import_kit域清单，mod06_proc/router.py及imp_spec.py/mech_report_spec.py仍注册旧两域；没有退役清理提交/回执。新React不迁通用导入，408只JSON、411撤销均保持。因422未done，ready-for-agent改blocked；422后最后工程批清专属后端/测试、保共享消费者及历史数据、补受影响回归/清理差异双轴，然后另守423/424授权门。重号冲突已归422正式集成核对，当前不改票号。 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。

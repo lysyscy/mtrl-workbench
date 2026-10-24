@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-400
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] 抓取入口沿明确事件与外部边界约束，列表、筛选、调整单及撤销入口按现行职责工作。
 - [ ] 差异由库存调整单承载，保留原始来源、权限、金额/数量校验和撤销冲突提示。
@@ -66,3 +66,5 @@
 自有8164合成进程与临时IAB页/视口均退出；合成下载、源xlsx、临时快照/构建、脚本、候选独立node_modules在核验后清理。专用Python环境供真实提交钩子运行后删除。最小日志有限归档，运行work与active退出，执行run-closed检查；其余历史证据、415/412文件、活动服务与他人状态保持。本地提交号由执行最终回执给出，父先审已接线候选的干净提交范围，再决定吸收及补真实环境验收。
 
 **2026-10-24 · 活动树有界吸收。** 本页已从候选 `808c17e6` 最终累计树接入活动基点 `73ed77ea`，公共入口、共享保护及本批最小验证见[整合证据](../../frontend-vue-rewrite/evidence.md#阶段5ab串行整合)。代码保存不代替安全DB、真实业务文件及完整人工验收；本票状态与验收项保持原判定。
+
+**2026-10-24 · 最终票仓核对（仅文档）。** inventory.tsx/inventory-adjust.tsx/inventory-fetch.tsx及原API已迁查询、调整/撤销和人工抓取入口；B只删除常驻重读，保错误重试和正常刷新。已有23项离线/替身、合成调整/撤销及透视XLSX，不是未实现；ready-for-agent改in-progress。剩余第3项真实隔离HTTP权限、保存/撤销、事务失败与第4项同业务范围实际后端下载；历史test_tail04_export的数据库未配置失败未被只读副本读取消除，不能称全绿。Excel式筛选已取消，不另立调研/企业版票。 [B组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-c-b-acceptance/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。

@@ -4,7 +4,7 @@
 
 **Blocked by:** TAIL-400
 
-**Status:** blocked
+**Status:** in-progress
 
 - [ ] 合同抓取、筛选、详情、状态、忽略恢复、供应商及现行关联维护完整可用。
 - [ ] 候选依据、推荐和明确人工确认保持当前行为，已有关系不隐式移动或覆盖。
@@ -31,3 +31,5 @@
 
 
 **2026-10-24 · 阶段3有界集成（agent）。** 已接417子表与418导出，补历史汇总最小入口；稳定ID草稿及损坏回执保护保留。类型/独立构建与IAB合成代表路径已核，真实DB、整票及人工验收仍待。接合范围及未验依据见417/418本次评论，未改状态或验收框。
+
+**2026-10-24 · 最终票仓核对（仅文档）。** contracts.tsx/contract-dialog.tsx/contract-tools.tsx及现行API已接主流程；A/E旧工具顺序、行内账期/方式、备注窗/层级和三子表已整合，真实副本265合同读取可用。400已技术接通，原blocked已落后于实际实施，改in-progress；不把此调整当400人工关口通过。剩余原第3–4项真实隔离保存/权限/冲突/事务及现有test_contracts.py/操作历史集采账期方式参数的实际执行证据；旧版无合同删除API，不新增删除验收。 [A组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-c-a-acceptance/run-01/reports/delivery.md) [E组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-e-fit/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。
