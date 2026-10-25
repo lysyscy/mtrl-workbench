@@ -87,7 +87,7 @@ html{font-variant-numeric:tabular-nums}
 
 /* Keep navigation feedback brief and independent of data/operation completion. */
 @media(prefers-reduced-motion:no-preference){
-  .page-view:not([hidden]){animation:workspace-enter var(--motion-fast,130ms) ease-out}
+  .workspace #page-title{animation:workspace-enter var(--motion-fast,130ms) ease-out}
   .inventory-count-feedback{animation:inventory-count-feedback var(--motion-fast,130ms) ease-out}
 }
 @keyframes workspace-enter{from{opacity:.85;transform:translateY(2px)}to{opacity:1;transform:none}}

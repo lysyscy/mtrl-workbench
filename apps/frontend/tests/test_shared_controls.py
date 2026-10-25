@@ -102,7 +102,7 @@ def test_motion_preference_changes_keep_modal_draft_and_focus(server, browser_pa
         view = page.locator('.page-view:not([hidden])')
         expect(view).to_have_count(1)
         expected = 'none' if preference == 'reduce' else 'workspace-enter'
-        page.wait_for_function("name => getComputedStyle(document.querySelector('.page-view:not([hidden])')).animationName === name", arg=expected)
+        page.wait_for_function("name => getComputedStyle(document.querySelector('#page-title')).animationName === name", arg=expected)
         trigger = page.get_by_role('button', name='＋ 手工建档', exact=True)
         trigger.click()
         dialog = page.get_by_role('dialog')
