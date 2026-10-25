@@ -1,17 +1,4 @@
-"""`MOD-06` 过程资料 · **历史段 / 正式段** —— 离线自检（**不连库**）。
-
-对应判据 `ACC-RPT-PROC-002`（8 点，`PRD/验收/验收基线.json`）：
-- `001-01` 历史段（核算月 ≤ 截止核算月）材料列来自**导入的定稿快照**、**不引用库存单据**
-- `001-02` 正式段（> 截止核算月）**只读引用**库存单据；两段分界 = 截止核算月，**改它分界随之移动**
-- `001-03` ⭐ **2026-09-26 改口径**（`TAIL-107`）：机械 6 列**按段切来源** —— 历史段以**导入的快照**
-  为准（**不许手录**）· 正式段手录（"手录仅限于正式启用系统后"）；手录值落旁路载体，**不被重抓 / 重导覆盖**
-- `001-04` ⭐ **两段互不覆盖**：重抓 i8 不动历史段 · 重导历史不动正式段
-- `001-05` **截止核算月**在导入时设定；默认 = 导入数据里**最大的核算月**；一次设定、可改
-- `001-06` 历史段要改**只能走导入**；页面**不提供历史段的行内编辑入口**
-- `001-07` ⭐ 机械列与材料列**在页面上同构** —— 都经**同一个「列取值出口」**、数据源可插拔
-  （材料列：历史段快照 / 正式段库存单据；机械列：历史段快照 / 正式段手录）
-- `001-08` 正式段某月尚无 i8 数据时，材料列给**空态提示**、**不臆造 0**
-"""
+"""过程资料历史读取、i8整月优先、手录有效值及只读材料的回归。"""
 
 from __future__ import annotations
 
@@ -21,9 +8,9 @@ from decimal import Decimal
 import pytest
 
 from app.mod06_proc import domain as D
-from app.mod06_proc import importer, mech_ui
+from app.mod06_proc import mech_ui
 from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot
-from app.mod06_proc.repository import import_snapshot, load_cutoff, rollback_batch, save_mech
+from app.mod06_proc.repository import save_mech
 from app.mod06_proc.service import build_page_data, parse_state
 from app.mod08_inv.models import InvDetail
 from tests.m06_helpers import (
@@ -105,89 +92,36 @@ def test_机械六列_历史段以导入值为准_正式段手录():
 
 # ------------------------------------------------------------ 001-04 两段互不覆盖
 
-def test_两段互不覆盖():
-    base = _by_month(_sess())
-    hist_before = {ym: base[ym][f"in_主辅材"] for ym in ("2026-05", "2026-06")}
-    formal_before = {ym: base[ym][f"in_主辅材"] for ym in ("2026-07", "2026-08")}
-
-    # ① 「重抓 i8」= 批量改库存单据金额 ⇒ 历史段一格都不动
+def test_i8重抓保留历史原件且有效批次筛选不改库存():
     s = _sess()
-    for r in s.by_model[InvDetail]:
-        r.amount = Decimal("12345.00")
-    after_refetch = _by_month(s)
-    assert after_refetch["2026-05"]["in_主辅材"] == Decimal("12345.00")
-    assert s.by_model[ProcHistorySnapshot][0].in_0 == Decimal("1000.00"), "i8重抓不改快照记录"
-    assert after_refetch["2026-07"][f"in_主辅材"] == Decimal("12345.00"), "正式段应随重抓变"
-
-    # ② 「重导历史」= 新批次快照 ⇒ 正式段一格都不动
-    s2 = _sess()
-    import_snapshot(s2, warehouse=WAREHOUSE, batch_no="H20260916-02",
-                    rows=[{"ym": "2026-06", "in_主辅材": "777.00"}], operator="自检",
-                    cutoff_ym=CUTOFF_YM)
-    after_reimport = _by_month(s2)
-    assert {ym: after_reimport[ym][f"in_主辅材"] for ym in formal_before} == formal_before, \
-        "重导历史 **不得**动正式段"
-    assert after_reimport["2026-06"][f"in_主辅材"] == Decimal("777.00"), "无库存的月份使用新有效历史"
-    assert after_reimport["2026-06"][f"out_主辅材"] == Decimal("0.00"), "旧批次必须退出有效历史"
-    s2.by_model[InvDetail] = [r for r in s2.by_model[InvDetail] if r.ym != "2026-06"]
-    assert _by_month(s2)["2026-06"]["in_主辅材"] == Decimal("777.00")
-    assert _by_month(s2)["2026-06"]["out_主辅材"] == Decimal("0.00"), "旧批次整体退出"
+    for row in s.by_model[InvDetail]:
+        row.amount = Decimal('12345.00')
+    assert _by_month(s)['2026-05']['in_主辅材'] == Decimal('12345.00')
+    assert s.by_model[ProcHistorySnapshot][0].in_0 == Decimal('1000.00')
+    assert _by_month(s)['2026-07']['in_主辅材'] == Decimal('12345.00')
+    original = s.by_model[ProcHistoryBatch][0]
+    original.status = 'replaced'
+    s.add(make_batch('new'))
+    s.add(make_snapshot(90, ym='2026-06', ins='777.00', batch_no='new'))
+    rows = _by_month(s)
+    assert rows['2026-06']['in_主辅材'] == Decimal('777.00')
+    assert rows['2026-06']['out_主辅材'] == Decimal('0.00')
+    assert rows['2026-07']['in_主辅材'] == Decimal('12345.00')
+    assert len(s.by_model[ProcHistorySnapshot]) == 3
 
 
 # ------------------------------------------------------------ 001-05 截止核算月
 
-def test_截止核算月默认取导入数据的最大核算月():
-    s = FakeSession({})
-    batch = import_snapshot(s, warehouse=WAREHOUSE, batch_no="B1",
-                            rows=[{"ym": "2026-03", "in_主辅材": "10.00"},
-                                  {"ym": "2026-06", "in_主辅材": "20.00"}],
-                            operator="科室用户")
-    assert batch.cutoff_ym == "2026-06", "默认 = 导入数据里最大的核算月"
-    assert load_cutoff(s, warehouse=WAREHOUSE) == "2026-06"
-
-    # 一次设定、可改
-    import_snapshot(s, warehouse=WAREHOUSE, batch_no="B2",
-                    rows=[{"ym": "2026-04", "in_主辅材": "30.00"}],
-                    operator="科室用户", cutoff_ym="2026-04")
-    assert load_cutoff(s, warehouse=WAREHOUSE) == "2026-04"
-
-    # 空导入 ⇒ 拒绝（不把历史段清空）
-    try:
-        import_snapshot(s, warehouse=WAREHOUSE, batch_no="B3", rows=[], operator="科室用户")
-        raise AssertionError("空导入必须被拒")
-    except ValueError:
-        pass
-
 
 # ------------------------------------------------------------ 001-06 历史段无行内编辑
 
-def test_历史段不提供行内编辑入口():
+def test_历史段不提供行内编辑且已退出批次保留原件():
     s = _sess()
-    assert build_page_data(s, parse_state({}))["can_edit_history"] is False
-    # ⚠️ 2026-09-18（`§19` 批 2）：原先还借旧页 html 看「历史段不提供行内编辑」这句提示与
-    #    「材料列无输入框」；旧页删（`D18`）后 —— 前者是**页面文案**、后者已由壳侧
-    #    `test_wired_m06.py::test_机械录入口只送mech键_材料列没有输入面` 与上面域出口断言合围 ✓
-    #    （`can_edit_history is False` 这条**实质**就在本行 ✓ 不动）。
-
-    # 回滚是「再导一次」的配套动作（置状态、**不物理删**）
-    assert rollback_batch(s, batch_no="H20260916-01") == 2
-    assert s.by_model[ProcHistoryBatch][0].status == "rolled_back"
-    assert _by_month(s)["2026-05"]["in_主辅材"] == Decimal("9999.00"), "回滚历史不影响库存优先"
-
-    # ⭐ **唯一修改通道真的能改**（`TAIL-02`）：再导一次 ⇒ 历史段跟着变，**正式段一格不动**
-    s2 = _sess()
-    formal_before = _by_month(s2)["2026-07"]["in_主辅材"]
-    plan = importer.ImportPlan(rows=[{"ym": "2026-05", "in_主辅材": Decimal("4321.00")}])
-    out = importer.commit(s2, plan, warehouse=WAREHOUSE, batch="PROC-006",
-                          operator="科室用户", cutoff_ym=CUTOFF_YM)
-    assert out["rows"] == 1 and out["cutoff_ym"] == CUTOFF_YM, "截止核算月应保持不动"
-    assert _by_month(s2)["2026-07"]["in_主辅材"] == formal_before, "重导历史不得动正式段"
-    # 重导替换历史；有库存月份仍优先显示库存。
-    assert _by_month(s2)["2026-05"]["in_主辅材"] == Decimal("9999.00")
-    # 回滚已替换旧批不影响新批；无库存时读取新历史。
-    importer.rollback(s2, batch_no="H20260916-01")
-    s2.by_model[InvDetail] = [r for r in s2.by_model[InvDetail] if r.ym != "2026-05"]
-    assert _by_month(s2)["2026-05"]["in_主辅材"] == Decimal("4321.00"), "回滚旧批后应只剩新批"
+    assert build_page_data(s, parse_state({}))['can_edit_history'] is False
+    s.by_model[ProcHistoryBatch][0].status = 'rolled_back'
+    assert _by_month(s)['2026-05']['in_主辅材'] == Decimal('9999.00')
+    assert '2026-06' in _by_month(s)  # 有机械有效值的历史月份仍可读。
+    assert len(s.by_model[ProcHistorySnapshot]) == 2
 
 
 # ------------------------------------------------------------ 001-07 列取值出口同构

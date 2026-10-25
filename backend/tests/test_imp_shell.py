@@ -422,8 +422,6 @@ def test_本页的项目面板走注册表收起():
         "本页「项目」面板的收起没走注册表 `PJ_OPEN`（key 由 `pickAct` 派生：`impPjPick` ⇒ `impPj`）"
 
 
-
-
 def test_预览的行要能对得上号_不许静默截断也不许藏行号():
     """⭐⭐ 2026-09-26（用户报障 · 原话）：「我导入晋江的过程资料时，**第 4 步，显示的行不完整**」。
 
@@ -458,12 +456,3 @@ def test_截止核算月要说清它是什么_不是只给一个名字():
         assert must in code, f"导入范围缺少 {must}"
     assert '历史段 / 正式段的分界月' not in code
     assert '之后走 i8' not in code
-
-
-def test_当前导入域字段说明沿声明完整渲染():
-    from app.mod06_proc import imp_spec
-    assert {f.label for f in imp_spec.SPEC.fields}
-    assert {x[2] for x in imp_spec.SPEC.impacts} <= {"写台账", "当钥匙", "不参与"}
-    for word in ("本系统要哪些列", "field_list_hint", "写台账", "当钥匙", "不参与"):
-        assert word in SHELL
-    assert "认行" not in str(imp_spec.SPEC.impacts)

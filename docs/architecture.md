@@ -32,4 +32,4 @@ core/history 在业务 session_scope 内观察变更，history_bindings 装配�
 
 配置有效值沿 core/app_settings.py 的 effective 链，页面库值与 .env 职责见 [部署](guides/deployment.md)。PDF 使用 headless Chromium，服务账户必须能访问浏览器及字体；render.py 为避挂死保留的回收方式在改变生命周期前要核实际服务环境。打印版式来自 i8，IPP 接收不等于纸面完成。
 
-Excel 机械读取复用 import_kit/workbook/readers，选表/映射/业务归域；模板生成及透视缓存回 [模板](reference/template-export.md)。真实资产由 report_export/resources.py 和文件字节定义，delivery 只作第三方来源，不能反推业务。有效分层、隔离、金额、撤销及模板测试保留；已退出文档机器链不再影响运行配置。
+共享Excel读表与单元格解析保留在import_kit/workbook、readers、parse；React425移除通用API/域映射向导及旧两域专属编排，不移除模型、历史批次/来源读取或机械JSON链。mod06_proc/mech_report的只读报表解析仍用于真实导出回读验证；模板生成及透视缓存回 [模板](reference/template-export.md)。真实资产由 report_export/resources.py 和文件字节定义，delivery 只作第三方来源，不能反推业务。有效分层、隔离、金额、撤销及模板测试保留；已退出文档机器链不再影响运行配置。

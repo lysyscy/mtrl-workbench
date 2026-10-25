@@ -1,7 +1,4 @@
-"""MOD-06 过程资料读取、机械手录和通用导入 API。
-材料只读；任何月份机械可手录，导入同月列可覆盖手录。
-导入唯一入口 /api/imp/m06_proc/*；写失败不改变有效数据。
-"""
+"""MOD-06 过程资料读取、导出及机械手录；明细 JSON 由 workbench_api 持有。"""
 
 from __future__ import annotations
 
@@ -14,14 +11,8 @@ from pydantic import BaseModel
 from app.core.db import session_scope
 from app.core.errors import MustReportError
 from app.core.identity import current_operator
-from app.import_kit.api import build_router as build_imp_router
 from app.mod06_proc import domain as D
-from app.mod06_proc import imp_spec
 from app.mod06_proc import mech_ui, repository as repo
-# ⚠️ 历史导入三步（§5.2.5 ①②）的**沿革**（别再往回搬）：
-#    2026-09-21（`§19` 收口）三条 PRG ＋ `import_view.py` ⇒ 搬成 JSON API `import_api.py`；
-#    2026-09-22/23（`TAIL-75` `B5c`/`B5c-2`）⇒ 旧页与 `import_api.py`**全部退休**，
-#    过程资料的导入**只走通用导入面** `/api/imp/m06_proc/*`（见下面 ② 段）。
 from app.mod06_proc.service import build_page_data, parse_state
 # ⚠️ 2026-09-18（`§19` 批 2）：`app.mod06_proc.view`（`render_proc_page`/`render_export_preview`）
 #    的导入已随"过程资料页半边"删除 —— ⛔ 别再加回来（那两个渲染件已整体删除）。
@@ -42,14 +33,6 @@ def _one(params: dict, name: str, default: str = "") -> str:
     if isinstance(value, (list, tuple)):
         value = value[0] if value else ""
     return str(value or "").strip()
-
-
-# ⚠️ 2026-09-18（`TAIL-27` · `§19` **批 2**）：**过程资料页半边已删**（授权 `D18`）——
-#    `proc_page`（`GET /m06`）与 `proc_export`（`GET /m06/export` 的清单预览页）都已删除；
-#    导出**真下载**走 `/api/m06/export`（壳在用 ✓，保留）。
-#    ⚠️ **本文件的「历史导入」半边仍在**：`GET /m06/import` ＋ `preview|confirm|rollback` 三个 PRG ——
-#       壳里**没有任何 `m06/import` 引用**（实测）⇒ 那是全站**唯一**的导入入口 ⇒ **暂留**（前置未满足：
-#       要删得先给壳一个"历史导入"入口）。（同 `m14` 的设置页：能力只在旧页，删了就没了。）
 
 
 @router.get("/api/m06/export")
@@ -100,22 +83,6 @@ def api_proc_matrix():
 #    壳走的是 JSON 版 `POST /api/m06/mech`（与它**同一份判定** `mech_ui.parse_mech_values`
 #    ＋ `repo.save_mech` ✓，见本文件下方）。⛔ 别把"机械手录"整条当成没实现。
 # ---------------------------------------------------------------- ① 机械手录（§5.2.5 ③）
-
-
-# ---------------------------------------------------------------- ② 导入（§5.2.5 ①②）＝ **只走通用导入面**
-#
-# ⚠️ 2026-09-23（`TAIL-75` `B5c-2`）：`/api/m06/import/{data,meta,parse,confirm,rollback}` 五条
-#    **已全部退休**（`import_api.py` 连件删除）—— 过程资料的导入**只剩这一条路**：
-#      · 解析 / 建议 / 记忆 / 预览 / 暂存 = `import_kit`（通用层）；
-#      · 落库 / 回滚 = 域钩子 `imp_spec.commit/rollback`（**原样调 `importer.commit`** →
-#        `repository.import_snapshot`，⛔ 不是第二套落库）；
-#      · 候选项目 / 截止月 / 批次 = 域钩子 `imp_spec.options` ⇒ `GET /api/imp/m06_proc/options`。
-#    ⛔ 别再往本文件加导入路由（`D18` 口径 ＋ "同一件事不留两个入口"）。
-router.include_router(build_imp_router(imp_spec.SPEC, imp_spec.HOOKS))
-
-from app.mod06_proc import mech_report_spec  # noqa: E402
-
-router.include_router(build_imp_router(mech_report_spec.SPEC, mech_report_spec.HOOKS))
 
 
 # ============================================================ JSON API（前端壳：原型直接接数据）

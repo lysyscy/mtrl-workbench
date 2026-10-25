@@ -41,30 +41,3 @@ def test_默认页说明按最新用户取舍精简():
         assert '<div class="tip"' not in page_slice(key), key
     assert '待建档清单没取到' in SHELL
     assert '没有保存成功' in SHELL or '保存失败' in SHELL
-
-
-
-
-def test_域自报的长文案也要守上限():
-    """⭐ `TAIL-105`（2026-09-28）：**㉖ 只看"首屏那个域"**（`imp` 一进来是 `m06_proc`）⇒
-    切到别的域（如 `m11_jc`）才露出来的那几句**它量不到** —— 本批实测：`m11` 的 `rule_note`
-    曾写到 ~250 字，而**所有尺子全绿**。⇒ 离线在**源头**再钉一道（域自报的每一句都过一遍）。
-
-    ⚠️ 上限**沿用 ㉖ 的同一个数**（200）⇒ ⛔ 不另立一个新阈值（守则 §3.4 / §5.9）。
-    ⚠️ 字数按**渲染后**算（`**` 是标记、不计；空白不计）—— 与 ㉖ 量 DOM 的口径对齐。
-    ⚠️ **能证伪**：把 `m11` 的 `rule_note` 写回 250 字 ⇒ 本件必红。
-    """
-    import re
-
-    from app.main import app as _app  # noqa: F401  ← 触发各域登记（`build_router` 期写进 `REGISTRY`）
-    from app.import_kit.api import REGISTRY
-
-    upper = 200
-    over = []
-    for dom, spec in sorted(REGISTRY.items()):
-        for fld in ("note", "keep_note", "rule_note", "field_list_hint"):
-            txt = re.sub(r"\*\*|\s", "", getattr(spec, fld, "") or "")
-            if len(txt) > upper:
-                over.append(f"{dom}.{fld} = {len(txt)} 字")
-    assert not over, (
-        f"域自报文案超过 {upper} 字（守则 §3.4 / §5.9）—— 它默认展开、就铺在 ①/② 步上：{over}")

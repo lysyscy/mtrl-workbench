@@ -9,7 +9,8 @@ import pytest
 from openpyxl import Workbook
 
 from app.core.errors import MustReportError
-from app.import_kit import api, readers
+from app.import_kit import readers
+from app.import_kit.parse import amount, date_text
 
 
 def book_bytes(rows, merges=(), *, title="台账", empty_first=False):
@@ -34,8 +35,8 @@ def test_xlsx_values_and_shape_keep_each_callers_policy():
     data = book_bytes([[0, False, datetime(2026, 9, 15, 8, 30), time(8, 30), 45444, None]])
     generic, _ = readers.read_grid(data)
     assert generic == [[0, False, "2026-09-15", "08:30:00", 45444, None]]
-    assert api.parse_amount("1.005") == Decimal("1.01")
-    assert api.date_text("20260915") == "20260915"
+    assert amount("1.005") == Decimal("1.01")
+    assert date_text("20260915") == "20260915"
 
 
 def test_merge_range_is_real_and_each_caller_keeps_its_extent():

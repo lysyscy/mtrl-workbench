@@ -3,6 +3,7 @@
 import pytest
 from app.core.errors import MustReportError
 from app.mod06_proc.mech_matching import resolve_report_project
+from tests.test_mechanical_source_protection import session  # noqa: F401
 
 
 def test_same_full_name_never_matches_and_edit_takes_effect():
@@ -25,3 +26,19 @@ def test_same_full_name_never_matches_and_edit_takes_effect():
     rules[1]["aliases"] = ["新报表名称"]
     with pytest.raises(MustReportError, match="多个项目"):
         resolve_report_project("新报表名称", rules)
+
+
+def test_editing_stored_rule_changes_current_match(session, monkeypatch):
+    from app.mod06_proc import mech_matching as matching
+    from app.mod01_projects.models import Project
+    session.add(Project(warehouse_name='乙'))
+    session.flush()
+    monkeypatch.setattr(matching, 'project_rows', lambda s: [
+        {'warehouse': '甲', 'display': '甲项目'}, {'warehouse': '乙', 'display': '乙项目'}])
+    matching.save_rule(session, warehouse='甲', aliases=['旧报表名'])
+    matching.save_rule(session, warehouse='甲', aliases=['新报表名'])
+    rules = matching.list_rules(session)['items']
+    assert matching.resolve_report_project('新报表名', rules) == '甲'
+    assert matching.resolve_report_project('旧报表名', rules) == ''
+    with pytest.raises(MustReportError, match='多个项目'):
+        matching.save_rule(session, warehouse='乙', aliases=['新报表名'])

@@ -67,7 +67,6 @@ DUP_FAMILIES: tuple[DupFamily, ...] = (
         owner="**（暂无唯一出口）** —— `core/money.py` 只管数值口径，这一族还没有主人",
         pattern=r"^def (_money|money_text|fmt_num|norm_num|_money_or_none)\s*\(",
         copies=(
-            ("backend/app/mod06_proc/importer.py", "_money_or_none"),
             ("backend/app/mod08_inv/router.py", "_money"),
             ("backend/app/mod09_fee/domain.py", "money_text"),
             # fl/jc 的闲置副本已删除，实际导出沿用 naive_export.money。
@@ -93,17 +92,15 @@ DUP_FAMILIES: tuple[DupFamily, ...] = (
         owner_files=("backend/app/core/timing.py",),
         copies=(
             ("backend/app/mod06_proc/domain.py", "normalize_ym"),
-            ("backend/app/mod06_proc/importer.py", "ym_of"),
             ("backend/app/mod09_fee/domain.py", "parse_ym"),
         ),
     ),
     DupFamily(
         fam="文本归一（做比较键用）",
-        owner="`import_kit/mapping.py::normalize`（列名）／ `mod01_projects/domain.py::norm_full_name`（项目全名）",
+        owner="`mod01_projects/domain.py::norm_full_name`（项目全名）",
         pattern=r"^def (_norm)\s*\(",
         forward_files=("backend/app/mod01_projects/recovery.py",),
         copies=(
-            ("backend/app/mod06_proc/importer.py", "_norm"),
             ("backend/app/mod07_setl/importer.py", "_norm"),
             ("backend/app/mod08_inv/importer.py", "_norm"),
         ),

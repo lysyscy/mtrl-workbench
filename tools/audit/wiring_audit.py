@@ -56,7 +56,7 @@ def scan(paths: list[Path]) -> tuple[list[Def], dict[str, list[tuple[str, int]]]
        （`alias` 节点不是 `Name`）；这正是要抓的形态：**导入了却没调用**。
     ⭐ **2026-09-28 补：别名也算引用** —— `from x import build_router as build_imp_router` 之后写
        `build_imp_router(...)`，旧版只认 `build_router` 这个裸名 ⇒ 把**在用**的函数误判成死代码
-       （实测：`import_kit.api.build_router`/`domains_router` 被四个域与 `main.py` 以别名调用）。
+       （别名调用同样属于真实装配，不应误报为未使用）。
     """
     defs: list[Def] = []
     refs: dict[str, list[tuple[str, int]]] = defaultdict(list)

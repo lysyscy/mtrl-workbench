@@ -36,7 +36,6 @@ def test_runtime_paths_are_absolute_and_separate(monkeypatch, tmp_path):
     from app.core.config import Settings
     from app.core import preview_store
     from app.mod02_i8 import cookie_store, source_cache, wh_cache
-    from app.import_kit.profile_store import ProfileStore
     monkeypatch.chdir(tmp_path)
     settings = Settings(_env_file=None)
     root = Path(__file__).resolve().parents[2]
@@ -47,7 +46,6 @@ def test_runtime_paths_are_absolute_and_separate(monkeypatch, tmp_path):
     assert cookie_store.CACHE_DIR == root / 'var/state/i8_cookie'
     assert source_cache.DIR == root / 'var/data/i8_source'
     assert wh_cache.CACHE_DIR == root / 'var/cache/i8_warehouse'
-    assert ProfileStore().path == root / 'var/data/import_profiles.json'
 
 
 

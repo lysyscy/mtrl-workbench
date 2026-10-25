@@ -53,7 +53,6 @@ def sources(monkeypatch, tmp_path):
     monkeypatch.setattr(R, "load_mech", loader("mechanical", manual))
     monkeypatch.setattr(R, "load_history", loader("history", history))
     monkeypatch.setattr(M6, "load_cutoffs", loader("material_cutoffs", cutoffs))
-    monkeypatch.setattr(M6, "load_mechanical_cutoffs", loader("mechanical_cutoffs", {MECH: "2026-01"}))
     monkeypatch.setattr(M6, "load_batches", loader("batches", []))
     monkeypatch.setattr(M6, "displays_by_key", loader("displays", displays))
 
@@ -157,7 +156,7 @@ def test_page_shape_document_differences_and_monthly_export_are_distinct(sources
     assert matrices["matrices"][MIX]["diff_totals"] == page["diff_totals"]
     assert matrices["matrices"][MECH]["diffs"] == []
     assert matrices["matrices"][MECH]["diff_totals"]["before"] is None
-    assert EMPTY not in matrices["projects"] and EMPTY in M6.import_projects(None)
+    assert EMPTY not in matrices["projects"]
 
 
 def test_empty_and_unregistered_errors_remain_export_rules(sources):
@@ -245,26 +244,23 @@ def pg_session():
             outer.rollback()
 
 
-def test_rollback_removes_history_but_manual_only_project_still_exports(pg_session, monkeypatch, tmp_path):
-    warehouse = "__report_" + uuid4().hex
-    monkeypatch.setattr(R, "load_inv_rows", lambda s: [])
-    monkeypatch.setattr(M6, "displays_by_key", lambda s: {warehouse: "回滚验证展示"})
-    monkeypatch.setattr(EX, "EXPORT_ROOT", tmp_path / "exports")
-    R.save_mech(pg_session, warehouse=warehouse, ym="2026-03", values={"mech_1": 7})
-    R.import_snapshot(pg_session, warehouse=warehouse,
-                      rows=[{"ym": "2026-01", "in_主辅材": 10, "mech_0": 2}],
-                      material_cutoff_ym="2026-01", mechanical_cutoff_ym="2026-02",
-                      batch_no="__report_batch_" + uuid4().hex, operator="隔离验证")
-    batches = R.load_batches(pg_session)
-    before = EX.export_proc(pg_session, [warehouse], 0, ym="2026-03")
-    _, rows = workbook(before)
-    assert rows["2026-01"][0] == 10 and rows["2026-01"][10] == 2
-    R.rollback_batch(pg_session, batch_no=batches[0].batch_no)
+def test_inactive_historical_batch_keeps_trace_and_manual_only_project_still_exports(pg_session, monkeypatch, tmp_path):
+    from app.mod06_proc.models import ProcHistoryBatch, ProcHistorySnapshot
+    warehouse = '__report_' + uuid4().hex
+    monkeypatch.setattr(R, 'load_inv_rows', lambda s: [])
+    monkeypatch.setattr(M6, 'displays_by_key', lambda s: {warehouse: '历史验证展示'})
+    monkeypatch.setattr(EX, 'EXPORT_ROOT', tmp_path / 'exports')
+    R.save_mech(pg_session, warehouse=warehouse, ym='2026-03', values={'mech_1': 7})
+    batch = ProcHistoryBatch(batch_no='__report_batch_' + uuid4().hex, warehouse_name=warehouse, status='active')
+    snapshot = ProcHistorySnapshot(batch_no=batch.batch_no, warehouse_name=warehouse, ym='2026-01', in_0=10)
+    pg_session.add_all([batch, snapshot])
+    pg_session.flush()
+    _, rows = workbook(EX.export_proc(pg_session, [warehouse], 0, ym='2026-03'))
+    assert rows['2026-01'][0] == 10
+    batch.status = 'rolled_back'
+    pg_session.flush()
     assert R.load_history(pg_session) == []
-    try:
-        after = EX.export_proc(pg_session, [warehouse], 0, ym="2026-03")
-    except MustReportError as exc:
-        raise AssertionError(f"回滚后仍有手录机械费，却被导出拒绝：{exc}") from None
-    _, rows = workbook(after)
-    assert set(rows) == {"2026-03"} and rows["2026-03"][:10] == [None] * 10
-    assert rows["2026-03"][11] == 7
+    assert len(R.load_history(pg_session, active_only=False)) == 1
+    _, rows = workbook(EX.export_proc(pg_session, [warehouse], 0, ym='2026-03'))
+    assert set(rows) == {'2026-03'} and rows['2026-03'][:10] == [None] * 10
+    assert rows['2026-03'][11] == 7

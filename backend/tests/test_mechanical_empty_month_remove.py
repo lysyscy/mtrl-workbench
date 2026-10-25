@@ -92,8 +92,6 @@ def test_remove_cleared_month_preserves_total_categories_and_other_manual_edit(s
     assert audit['snapshots'][0]['mech_3'] == '189000.00'
     assert audit['batches_before'][0]['row_count'] == 2
     assert len(audit['import_changes']) == 6
-    R.rollback_batch(session, batch_no=batch_no)
-    assert R.mech_row(session, '甲', '2025-01') is None
 
 
 def test_new_revisions_after_removal_only_add_the_changed_amount(session):

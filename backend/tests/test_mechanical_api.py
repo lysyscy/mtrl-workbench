@@ -134,6 +134,43 @@ def test_route_failure_rolls_back_already_flushed_changes(api, monkeypatch):
     assert api.client.get('/api/m06/workbench').json()['details'] == []
 
 
+def test_json_import_confirmation_failure_rolls_back_every_batch_and_can_retry(api, monkeypatch):
+    from tests.test_mechanical_workbench import row
+
+    batches = [{'warehouse': '甲', 'ym': '2026-09', 'category': category,
+                'source': {'file': '合成原件'}, 'rows': [row(id=category)]}
+               for category in ('zero', 'monthly')]
+    response = api.client.post('/api/m06/workbench/import-preview',
+                               json={'request_id': 'atomic-failure', 'batches': batches})
+    assert response.status_code == 200
+    preview_id = response.json()['preview_id']
+    payload = {'preview_id': preview_id, 'confirm_amounts': True}
+    original = workbench.confirm_amounts
+    confirmed = []
+
+    def fail_on_second_batch(session, data, operator=''):
+        result = original(session, data, operator)
+        confirmed.append(data['category'])
+        if len(confirmed) == 2:
+            raise MustReportError('第二类确认失败')
+        return result
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(workbench, 'confirm_amounts', fail_on_second_batch)
+        failed = api.client.post('/api/m06/workbench/import-confirm', json=payload)
+    assert failed.status_code == 400 and confirmed == ['zero', 'monthly']
+    with api.factory() as session:
+        assert list(session.scalars(select(MechanicalWorkbenchRecord))) == []
+        assert list(session.scalars(select(ProcMechManual))) == []
+        assert session.get(MechanicalWorkbenchPreview, preview_id).result is None
+    retried = api.client.post('/api/m06/workbench/import-confirm', json=payload)
+    assert retried.status_code == 200
+    with api.factory() as session:
+        values = workbench.effective(session, '甲', '2026-09')['values']
+        assert values['mech_2'] == values['mech_3'] == '103.00'
+        assert values['mech_4'] == values['mech_5'] == '100.00'
+
+
 def test_preview_export_read_only_saved_state_and_freeze_each_result(api):
     assert api.client.post('/api/m06/workbench/details-save', json=draft()).status_code == 200
     # An incoming GET query cannot insert a browser's unsaved draft into output.

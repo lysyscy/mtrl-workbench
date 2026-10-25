@@ -1,4 +1,4 @@
-"""守截止过滤、全部历史替换、i8优先与有金额列记忆保护；仅修改隔离副本并调用真实判据。"""
+"""历史材料同月优先i8的反向灵敏度；只修改隔离副本。"""
 
 from pathlib import Path as _WorkspacePath
 import sys as _workspace_sys
@@ -10,12 +10,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'backend'))
 from app.core.config import get_settings
 CASES=[
- ('校验拒整批','mod06_proc/imp_spec.py','if bad:\n        why =','if False:\n        why =', 'test_tail262_proc.py::test_validation_failure_in_mixed_file_keeps_all_old_history'),
- ('截止过滤','mod06_proc/importer.py','if limit and ym > limit:','if False:', 'test_tail262_proc.py::test_cutoff_preview_and_commit_use_same_plan'),
- ('历史替换','mod06_proc/repository.py','old.status = BATCH_REPLACED','old.status = BATCH_ACTIVE','test_tail262_proc.py::test_reimport_replaces_all_project_history_and_failure_keeps_old'),
- ('i8优先','mod06_proc/domain.py','if has_inventory:','if False:','test_tail262_proc.py::test_material_i8_same_month_precedence_keeps_history_mechanical'),
- ('列记忆保护','import_kit/api.py','if memory and spec.protect_populated_columns:','if False:','test_imp_m06_api.py::test_记忆不采集不能悄悄丢弃有金额的已识别列'),
- ('事务保存点','mod06_proc/repository.py','with s.begin_nested():','with __import__("contextlib").nullcontext():','test_tail262_proc.py::test_database_write_failure_restores_old_history_cutoff_without_outer_rollback'),
+    ('i8优先','mod06_proc/domain.py','if has_inventory:','if False:','test_tail262_proc.py::test_material_i8_same_month_precedence_keeps_history_mechanical')
 ]
 def main():
     env=os.environ.copy();env['TEST_DATABASE_URL']=get_settings().test_database_url

@@ -122,66 +122,6 @@ def test_explicit_manual_switch_preserves_evidence_and_does_not_replay_confirmat
         R.save_mech(session, ym='2026-09', warehouse='甲', values={'mech_4': '101.00'})
 
 
-def test_process_import_preflights_all_months_before_batch_changes(session):
-    from app.mod06_proc import imp_spec
-    R.import_snapshot(session, warehouse='甲', rows=[{'ym': '2026-08', 'mech_1': '7'}],
-                      batch_no='old', operator='导入人')
-    confirm(session, columns=['mech_2'])
-    before = W.effective(session, '甲', '2026-09')
-    with pytest.raises(MustReportError, match='明细'):
-        imp_spec.commit(session, [{'_row': 2, '核算月': '2026-08', '外租零租含税': '22'},
-                                  {'_row': 3, '核算月': '2026-09', '外租零租含税': '999'}], {}, '导入人',
-                        {'warehouse': '甲', 'batch': 'new'})
-    assert [(b.batch_no, b.status) for b in R.load_batches(session)] == [('old', 'active')]
-    assert R.mech_row(session, '甲', '2026-08').mech_2 == Decimal('0.00')
-    assert W.effective(session, '甲', '2026-09')['signature'] == before['signature']
-
-
-def test_same_detail_process_import_skips_without_a_fake_batch_or_cutoff(session):
-    from app.mod06_proc import imp_spec
-    state, _ = confirm(session, columns=['mech_2'])
-    out = imp_spec.commit(session, [{'_row': 2, '核算月': '2026-09', '外租零租含税': '103'}], {}, '导入人',
-                          {'warehouse': '甲', 'batch': 'same'})
-    assert out['rows'] == 0 and out['batch'] == ''
-    assert not R.load_batches(session)
-    assert not list(session.scalars(select(ProcHistorySnapshot)))
-    assert not list(session.scalars(select(ProcMechImportChange)))
-    assert not R.load_cutoffs(session)
-    assert W.effective(session, '甲', '2026-09')['signature'] == state['signature']
-
-
-def test_mixed_import_keeps_detail_ownership_and_imports_only_other_column(session):
-    state, _ = confirm(session, columns=['mech_2'])
-    R.import_snapshot(session, warehouse='甲', rows=[{'ym': '2026-09', 'mech_2': '103', 'mech_4': '99'}],
-                      batch_no='mixed', operator='导入人')
-    row = R.mech_row(session, '甲', '2026-09')
-    assert row.mech_2 == Decimal('103') and row.mech_4 == Decimal('99')
-    assert 'mech_2' not in row.source_batches
-    assert row.source_batches['mech_4'] == 'mixed'
-    assert R.mech_sources(row)['mech_2'] == state['sources']['mech_2']
-    assert [c.column_key for c in session.scalars(select(ProcMechImportChange))] == ['mech_4']
-    R.rollback_batch(session, batch_no='mixed')
-    assert R.mech_sources(row)['mech_2']['mode'] == 'detail'
-    assert row.mech_2 == Decimal('103') and row.mech_4 == Decimal('0')
-
-
-def test_report_import_blocks_other_project_writes_and_skips_same_sources(session):
-    from app.mod06_proc import mech_report_spec
-    session.add_all([Project(warehouse_name='乙'), ProcMechMatchRule(warehouse_name='甲', aliases=[]),
-                     ProcMechMatchRule(warehouse_name='乙', aliases=[])])
-    session.flush()
-    state, _ = confirm(session, columns=['mech_2'])
-    records = [{'核算月': '2026-09', '报表项目名': '乙', '外租零租含税': '5'},
-               {'核算月': '2026-09', '报表项目名': '甲', '外租零租含税': '999'}]
-    with pytest.raises(MustReportError, match='明细'):
-        mech_report_spec.commit(session, records, {}, '导入人', {'year_month': '2026-09', 'confirmed': True})
-    assert R.mech_row(session, '乙', '2026-09') is None
-    records[1]['外租零租含税'] = '103'
-    result = mech_report_spec.commit(session, records, {}, '导入人', {'year_month': '2026-09', 'confirmed': True})
-    assert result['rows'] == 1
-    assert W.effective(session, '甲', '2026-09')['signature'] == state['signature']
-
-
 def test_history_incoming_decision_cannot_override_detail_mode(session):
     state, _ = confirm(session, columns=['mech_2'])
     p = W.history_preview(session, {'projects': [{'warehouse': '甲', 'history': {'source': {'file': '原表'}},
@@ -195,27 +135,19 @@ def test_history_incoming_decision_cannot_override_detail_mode(session):
     assert W.effective(session, '甲', '2026-09')['signature'] == state['signature']
 
 
-def test_detail_confirmation_survives_original_import_rollback_even_when_zero(session):
-    R.import_snapshot(session, warehouse='甲', rows=[{'ym': '2026-09', 'mech_2': '10'}],
-                      batch_no='old', operator='导入人')
-    confirm(session, columns=['mech_2'], amount='0.00')
-    R.rollback_batch(session, batch_no='old')
-    row = R.mech_row(session, '甲', '2026-09')
-    assert row is not None and row.mech_2 == 0
-    assert R.mech_sources(row)['mech_2']['mode'] == 'detail'
-
-
-def test_rollback_preflights_inconsistent_detail_ownership_before_other_restores(session):
-    R.import_snapshot(session, warehouse='甲', rows=[{'ym': '2026-08', 'mech_2': '5'},
-                                                   {'ym': '2026-09', 'mech_2': '10'}],
-                      batch_no='old', operator='导入人')
-    row = R.mech_row(session, '甲', '2026-09')
-    row.source_batches = {**row.source_batches, '__detail_sources': {'mech_2': {'mode': 'detail'}}}
+def test_detail_confirmation_preserves_original_historical_provenance_even_when_zero(session):
+    batch = ProcHistoryBatch(batch_no='old', warehouse_name='甲', status='active')
+    snapshot = ProcHistorySnapshot(batch_no='old', warehouse_name='甲', ym='2026-09', mech_2=10)
+    change = ProcMechImportChange(batch_no='old', warehouse_name='甲', ym='2026-09',
+                                 column_key='mech_2', before_amount=0, before_batch='')
+    session.add_all([batch, snapshot, change])
+    row = R.save_mech(session, warehouse='甲', ym='2026-09', values={'mech_2': '10'})
+    row.source_batches = {'mech_2': 'old'}
     session.flush()
-    with pytest.raises(MustReportError, match='明细'):
-        R.rollback_batch(session, batch_no='old')
-    assert R.mech_row(session, '甲', '2026-08').mech_2 == Decimal('5')
-    assert R.load_batches(session)[0].status == 'active'
+    confirm(session, columns=['mech_2'], amount='0.00')
+    assert row.mech_2 == 0 and R.mech_sources(row)['mech_2']['mode'] == 'detail'
+    assert snapshot.mech_2 == Decimal('10') and batch.status == 'active'
+    assert session.get(ProcMechImportChange, change.id).before_amount == 0
 
 
 def test_process_get_exposes_same_source_and_signature_as_workbench(session, monkeypatch):

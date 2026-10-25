@@ -8,7 +8,7 @@
 #     ② http://127.0.0.1:8000/app 返回 200
 #     ③ 库连得上、基础表数量检查（走**后端自己的配置**去连 —— 口径只认一份）
 #     ④ 两份运行时模板在，且 SHA256 对得上（防回退/拷贝损坏 —— 历史踩过）
-#     ⑤ 两个现行导入域 ＋ 库存单据端点在（从 /openapi.json 里找；拿不到就照实说「跳过 + 原因」）
+#     ⑤ 现行机械/过程报表及库存端点在，全部通用导入未挂载、旧路径404
 #
 # 用法（目标机 · 普通窗口即可）：
 #   powershell -ExecutionPolicy Bypass -File ops\selfcheck.ps1
@@ -120,17 +120,29 @@ print('RESULT ' + ('ALL-OK' if not bad else 'BAD:' + ','.join(bad)))
 
 # ---- ⑤ 初始化入口的端点 ----
 Write-Host ''
-Write-Host '⑤ 初始化入口（过程资料 / 机械费报表 / 库存补抓）'
+Write-Host '⑤ 现行读取与退役入口（过程资料 / 机械费 / 库存补抓）'
 try {
     $spec = (Invoke-WebRequest -Uri ($Base + '/openapi.json') -UseBasicParsing -TimeoutSec 15).Content | ConvertFrom-Json
     $paths = @($spec.paths.PSObject.Properties.Name)
-    # 前两个现行导入域都走**通用导入面** /imp/<域>/*（D26：导入只留通用面）⇒ 逐个域核，别只看「面在」
-    foreach ($d in @('m06_proc', 'm06_mech_report')) {
-        $hit = @($paths | Where-Object { $_ -like ('/api/imp/' + $d + '/*') })
-        if ($hit.Count -gt 0) { Ok ('导入域 ' + $d + ' 在（' + $hit.Count + ' 个端点）') } else { Bad ('导入域 ' + $d + ' 不在 openapi 里') }
+    foreach ($p in @('/api/m06/matrix', '/api/m06/export', '/api/m06/mech', '/api/m06/workbench', '/api/m06/workbench/preview', '/api/m06/workbench/export', '/api/m06/workbench/{name}')) {
+        if ($paths -contains $p) { Ok ('现行出口 ' + $p + ' 在') } else { Bad ('现行出口 ' + $p + ' 不在 openapi 里') }
     }
+    if (@($paths | Where-Object { $_ -like '/api/imp/*' }).Count -eq 0) { Ok '通用导入未挂载' } else { Bad '通用导入仍在 openapi 里' }
     if (@($paths | Where-Object { $_ -like '/api/m08*' }).Count -gt 0) { Ok '库存单据 /api/m08* 在（补抓入口）' } else { Bad '库存单据 /api/m08* 不在' }
-    Skip '「点进去真能导」只能人工走一小段真数据（openapi 只证明端点存在）⇒ 见 docs\guides\deployment.md §三'
+    $retired = @('/api/imp/domains')
+    foreach ($d in @('m06_proc', 'm06_mech_report')) {
+        foreach ($endpoint in @('schema', 'options', 'parse', 'preview', 'commit', 'rollback')) { $retired += '/api/imp/' + $d + '/' + $endpoint }
+    }
+    foreach ($p in $retired) {
+        # 残留POST路由对GET回405；只读探查不需要写会话，也不触发业务写入。
+        try { $status = [int](Invoke-WebRequest -Uri ($Base + $p) -UseBasicParsing -TimeoutSec 15).StatusCode }
+        catch {
+            if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+            else { Bad ('退役路径探查失败 ' + $p + '：' + $_.Exception.Message); continue }
+        }
+        if ($status -eq 404) { Ok ('退役路径 ' + $p + ' 返回404') } else { Bad ('退役路径 ' + $p + ' 返回' + $status + '，应为404') }
+    }
+    Skip '端点检查不证明JSON明细确认或报表成品正确；按隔离回归和实际导出另核'
 } catch { Skip ('拿不到 /openapi.json：' + $_.Exception.Message) }
 
 Write-Host ''

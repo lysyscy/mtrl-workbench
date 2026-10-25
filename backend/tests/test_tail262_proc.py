@@ -1,4 +1,4 @@
-"""TAIL-262: process history import and public matrix regression seams."""
+"""TAIL-262: historical reads and public matrix regression seams."""
 from decimal import Decimal
 
 import pytest
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import Base
 from app.mod01_projects import models as _projects  # noqa: F401
-from app.mod06_proc import domain as D, imp_spec, repository as R
+from app.mod06_proc import domain as D, repository as R
 from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot
 
 
@@ -18,68 +18,6 @@ def session():
                                            ProcHistoryBatch.__table__, ProcHistorySnapshot.__table__])
     with Session(engine) as s:
         yield s
-
-
-def test_cutoff_preview_and_commit_use_same_plan(session):
-    records = [{"_row": 4, "核算月": "2025-11", "入库主辅材": "10"},
-               {"_row": 5, "核算月": "2025-12", "入库主辅材": "20"},
-               {"_row": 6, "核算月": "2026-01", "入库主辅材": ""}]
-    opts = {"warehouse": "历史项目", "cutoff_ym": "2025-11", "batch": "cutoff"}
-    preview = imp_spec.preview(session, records, {}, opts)
-    assert preview["writable"] == 1
-    assert any(x["row"] == 5 and "截止" in x["why"] for x in preview["skipped"])
-    result = imp_spec.commit(session, records, {}, "自检", opts)
-    assert result["rows"] == 1 and result["months"] == ["2025-11"]
-    assert [r["ym"] for r in R.load_history(session)] == ["2025-11"]
-
-
-def test_reimport_replaces_all_project_history_and_failure_keeps_old(session):
-    R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-01", "in_主辅材": 10},
-                                                   {"ym": "2025-02", "in_主辅材": 20}],
-                      batch_no="old", operator="自检")
-    R.import_snapshot(session, warehouse="B", rows=[{"ym": "2025-01", "in_主辅材": 99}],
-                      batch_no="other", operator="自检")
-    session.commit()
-    with pytest.raises(Exception):
-        R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-03", "in_主辅材": "invalid"}],
-                          batch_no="fail", operator="自检")
-    session.rollback()
-    assert [r["ym"] for r in R.load_history(session) if r["warehouse"] == "A"] == ["2025-01", "2025-02"]
-    R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-03", "in_主辅材": 30}],
-                      batch_no="new", operator="自检")
-    assert [(r["warehouse"], r["ym"]) for r in R.load_history(session)] == [("B", "2025-01"), ("A", "2025-03")]
-    assert len(R.load_history(session, active_only=False)) == 4
-
-
-def test_database_write_failure_restores_old_history_cutoff_without_outer_rollback(session):
-    from sqlalchemy.exc import IntegrityError
-    R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-01", "in_主辅材": 10}],
-                      batch_no="old", operator="自检", cutoff_ym="2025-01")
-    R.import_snapshot(session, warehouse="B", rows=[{"ym": "2025-02", "in_主辅材": 99}],
-                      batch_no="other", operator="自检", cutoff_ym="2025-02")
-    session.commit()
-    with pytest.raises(IntegrityError):
-        R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-03", "in_主辅材": 30}],
-                          batch_no="old", operator="自检", cutoff_ym="2025-03")
-    assert [(r["warehouse"], r["ym"], r["in_主辅材"]) for r in R.load_history(session)] == [
-        ("A", "2025-01", Decimal("10.00")), ("B", "2025-02", Decimal("99.00"))]
-    assert R.load_cutoff(session, warehouse="A") == "2025-01"
-    assert R.load_cutoff(session, warehouse="B") == "2025-02"
-    session.commit()
-
-
-def test_validation_failure_in_mixed_file_keeps_all_old_history(session):
-    from app.core.errors import MustReportError
-    R.import_snapshot(session, warehouse="A", rows=[{"ym": "2025-01", "in_主辅材": 10}],
-                      batch_no="old", operator="自检", cutoff_ym="2025-01")
-    session.commit()
-    with pytest.raises(MustReportError):
-        imp_spec.commit(session, [{"_row":4,"核算月":"2025-03","入库主辅材":"30"},
-                                  {"_row":5,"核算月":"坏月份","入库主辅材":"40"}], {}, "自检",
-                        {"warehouse":"A","cutoff_ym":"2025-03"})
-    assert [(r['ym'],r['in_主辅材']) for r in R.load_history(session)] == [('2025-01',Decimal('10.00'))]
-    assert R.load_cutoff(session,warehouse='A') == '2025-01'
-
 
 
 def test_material_i8_same_month_precedence_keeps_history_mechanical():
@@ -100,3 +38,15 @@ def test_material_i8_same_month_precedence_keeps_history_mechanical():
     inv[0]["amount"] = 0
     zero = D.build_matrix(inv_rows=inv, history_rows=history, manual_rows=[{"warehouse": "A", "ym": "2025-11", "mech_0": 7}, {"warehouse": "A", "ym": "2025-10", "mech_0": 6}], warehouse="A", adjusted=False, cutoff_ym="2025-11")
     assert zero[1]["in_主辅材"] == zero[1]["in_工具"] == Decimal("0.00")
+
+
+def test_historical_batches_filter_active_values_without_removing_trace(session):
+    session.add_all([ProcHistoryBatch(batch_no=name, warehouse_name='A', status=status)
+                     for name, status in [('active', 'active'), ('old', 'replaced'), ('undo', 'rolled_back')]])
+    session.add_all([ProcHistorySnapshot(batch_no=name, warehouse_name='A', ym='2025-01', in_0=amount)
+                     for name, amount in [('active', '12.34'), ('old', '999'), ('undo', '888')]])
+    session.flush()
+    active = R.load_history(session)
+    assert [(row['ym'], row['in_主辅材']) for row in active] == [('2025-01', Decimal('12.34'))]
+    assert len(R.load_history(session, active_only=False)) == 3
+    assert {row.status for row in R.load_batches(session)} == {'active', 'replaced', 'rolled_back'}

@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from app.mod05_flow import service as M5
 from app.mod05_flow.domain import OpeningView
 from app.mod05_flow.models import CATEGORY_MATERIAL
-from app.mod06_proc import service as M6
 from app.mod11_jc import fetch_service as M11
 
 
@@ -47,24 +46,6 @@ def test_m05_reads_ledger_openings_once_and_keeps_missing_side_none(monkeypatch)
     assert material["rows"][0]["other_expense"] == "9.00"
     assert material["rows"][0]["payment"] == "4.00"
     assert mechanical["opening_id"] is None
-
-
-def test_m06_derives_both_mechanical_cutoff_keys_from_one_read(monkeypatch):
-    calls = []
-    monkeypatch.setattr(M6, "load_inv_rows", lambda _s: [{"warehouse": "A"}])
-    monkeypatch.setattr(M6, "load_history", lambda _s: [])
-    monkeypatch.setattr(M6, "load_mech", lambda _s: [])
-    monkeypatch.setattr(M6, "displays_by_key", lambda _s: {})
-    monkeypatch.setattr(M6, "load_cutoff", lambda _s, **kwargs: "")
-    monkeypatch.setattr(M6, "load_cutoffs", lambda _s: {})
-    monkeypatch.setattr(M6, "load_batches", lambda _s: [])
-    monkeypatch.setattr(M6, "load_mechanical_cutoffs", lambda _s: calls.append(1) or {"A": "2026-09"})
-
-    data = M6.build_import_data(None, warehouse="A")
-
-    assert calls == [1]
-    assert data["mechanical_cutoff_ym"] == "2026-09"
-    assert data["mechanical_cutoffs"] == {"A": "2026-09"}
 
 
 def test_m11_fetch_closes_client_when_fetch_fails(monkeypatch):

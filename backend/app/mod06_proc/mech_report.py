@@ -13,7 +13,6 @@ from app.core.money import amount_text, require_non_negative, to_money
 
 LABELS = {"mech_1": "内租设备", "mech_2": "外租零租含税", "mech_3": "外租包月含税",
           "mech_4": "外租零租不含税", "mech_5": "外租包月不含税"}
-HEADERS = ["核算月", "报表项目名", *LABELS.values()]
 SUMMARY_FIELDS = {"当月内租费": "mech_1", "当月零租费": "mech_2", "当月包月费": "mech_3"}
 
 
@@ -149,11 +148,3 @@ def available_months(data):
         return sorted(set(_month_columns(wb["年度汇总"]).values()))
     finally:
         wb.close()
-
-
-def read_file(data, ym):
-    """向通用导入返回该月规范表；源表映射固定，界面仍复用通用预览与结果。"""
-    records = read_months(data, [ym])
-    return {"sheet": "机械费报表", "headers": HEADERS,
-            "grid_rows": [[r.get(label) for label in HEADERS] for r in records],
-            "first_row": 1, "sheets": ["年度汇总", "零租设备月报表", "包月外租设备月报"]}

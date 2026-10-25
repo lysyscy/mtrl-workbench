@@ -15,7 +15,6 @@ import pytest
 from app.core import preview_store
 from app.import_kit.parse import amount, date_text, text
 from app.import_kit.readers import find_header, read_grid
-from app.import_kit.validators import Problems
 
 
 @pytest.fixture(autouse=True)
@@ -113,13 +112,3 @@ def test_暂存_坏token显式报错():
 
 
 # ------------------------------------------------------------ validators（问题清单）
-
-
-def test_问题清单_保留原值与行号():
-    ps = Problems()
-    ps.add(7, "金额", "abc", "不是数字")
-    ps.add(9, "项目", None, "必填")
-    assert len(ps) == 2 and bool(ps)
-    assert ps.as_list()[0] == {"row": 7, "column": "金额", "raw": "abc", "reason": "不是数字"}
-    assert ps.as_list()[1]["raw"] == "", "None 原值显示为空串（⛔ 不猜成 0）"
-    assert not Problems()

@@ -313,13 +313,6 @@ def create_app() -> FastAPI:
     #  ⚠️ 本模块还顺手把 `core/identity.py` 的「当前登录用户」对到了**真实账号**
     #     （§1.5.1 末行：留痕的改前人 / 录入人「统一取当前登录用户」＝ 账号体系与业务字段的唯一接点）
     app.include_router(mod15_api_router)
-    # ⭐ 通用导入面（`TAIL-75`）：这里只挂**域清单**那一个端点（`GET /api/imp/domains`）——
-    #   ⚠️ 各域自己的 `parse/preview/commit` 端点在**各自模块的 router** 里挂（`import_kit.build_router`
-    #   ⇒ `mod06_proc/router.py` 已挂 m06）⇒ 加一个域**不用改本文件**。
-    from app.import_kit.api import domains_router as _imp_domains_router   # noqa: PLC0415
-
-    app.include_router(_imp_domains_router())
-
     @app.get("/healthz", tags=["meta"])
     def healthz() -> dict[str, str]:
         return {"status": "ok", "env": settings.app_env}

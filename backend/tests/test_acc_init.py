@@ -1,14 +1,4 @@
-"""`ACC-INIT-001` · 系统上线前的历史数据初始化（《说明书》§9.7 ＋ §7.6 指针）。
-
-判据点归属：`MOD-13` 能力 9（此前无用例认领 —— 2026-09-17 补）。
-
-⚠️ 本用例只钉「**入口存在** ＋ **初始化原则**」：
-- ✅ `001-05`（过程资料**手录 ＋ Excel 上传**）—— 2026-09-17 入口落地（`/m06/mech` · `/m06/import*`）后**已绑**。
-- ✅ `001-06`（集采台账手录）—— **2026-09-20 已钉**（原先写"对应的域尚未实现（M5）"，
-  那是 09-17 的判断、**现已过期**：`m11` 上三个手录入口齐备）。
-- 库存单据的**抓取动作**细判据归 `ACC-INV-FETCH-001`；本用例只钉「**过去月份可补抓**」这一点。
-- ⚠️ `ACC-RPT-PROC-001` 管过程资料的**月度**口径，本用例管**上线前初始化**这一层，别交叉挂。
-"""
+"""现行初始化入口：付款期初、过程资料机械手录、集采及库存补抓。"""
 
 from __future__ import annotations
 
@@ -28,9 +18,8 @@ from app.mod05_flow.domain import (
     CATEGORY_JC, CATEGORY_MATERIAL, CATEGORY_MECH,
     OpeningView, build_ledger, debt_by_category, total_debt,
 )
-from app.mod06_proc import importer as proc_importer
 from app.mod06_proc.models import ProcMechManual
-from app.mod06_proc.repository import import_snapshot, load_cutoff, load_mech, save_mech
+from app.mod06_proc.repository import load_mech, save_mech
 from tests.m03_action_helpers import FakeWriteSession, _notice
 from tests.m06_helpers import WAREHOUSE, FakeSession, xlsx_bytes
 
@@ -81,43 +70,11 @@ def test_期初与i8期间流水不重叠且台账自截止月起排行():
 # ============================================================ 付款域 · i8 期间的两条入口
 
 
-
-
-def test_过程资料手录与Excel上传两个入口都在():
-    """§9.7 第 3 行：过程资料的**两条**初始化通道 —— **机械手录**（旁路表）＋ **Excel 上传**（定稿快照）。
-
-    ⚠️ 它管的是**上线前初始化**这一层（「入口在不在、能不能直接落数」）；
-       过程资料的**月度口径**归 `ACC-RPT-PROC-001/002` —— 别交叉挂。
-    """
-    paths = _paths()
-    # ⚠️ 2026-09-18（`§19` 批 2）：PRG 版手录端点 `POST /m06/mech` 已随**过程资料页**删除（授权 `D18`）——
-    #    它的 claim（「机械手录入口在」）**没删，搬到了壳**：`tests/test_wired_m06.py` 的
-    #    「录机械费入口挂在 `BIND` 钩子」＋「后端机械写端点存在」（`POST /api/m06/mech` ✓）。
-    # ⚠️ 2026-09-21（`§19` 四个暂留件收口）：历史导入半边**也搬进了新壳** ⇒ 三条 PRG 已删、
-    #    `core/nav.py` 里那条入口同批清掉（那是指向已删路由的**幽灵导航**）；
-    #    **判词不变**（"Excel 上传这条路真的存在"）—— 改由下面两半钉住：
-    # ⚠️ 2026-09-23（`TAIL-75` `B5c-2`）：旧端点 `/api/m06/import/*`（五条）**已全部退休**
-    #    ⇒ 落点换到**通用导入面**。**判词一字未改**（"过程资料的 Excel 上传这条路真的存在"
-    #    ＋ 有**纠错通道**），只是三步的名字按通用面叫 `parse/commit/rollback`。
-    assert {"/api/imp/m06_proc/parse", "/api/imp/m06_proc/commit",
-            "/api/imp/m06_proc/rollback"} <= paths                   # 上传三步 ＋ 纠错通道
-    from tests.shell_src import SHELL                                # noqa: PLC0415
-    assert "imp" in SHELL and "/api/imp/" in SHELL, \
-        "壳侧栏要有「数据导入」这个入口（过程资料的上传走通用面）"
-
-    # ① 手录**真的落得进**（旁路载体：无审批、不受源数据约束）
+def test_过程资料机械手录入口保留():
+    assert '/api/m06/mech' in _paths()
     st = FakeSession({ProcMechManual: []})
-    save_mech(st, ym="2025-12", warehouse=WAREHOUSE, values={"mech_0": Decimal("100.00")})
-    assert [r["mech_0"] for r in load_mech(st)] == [Decimal("100.00")]
-
-    # ② 上传**真的解析得出** ＋ **默认截止核算月 = 导入数据里最大的核算月**
-    plan = proc_importer.parse_sheet(xlsx_bytes([["2025-11", "1000.00"], ["2025-12", "2000.00"]]))
-    assert plan.months == ["2025-11", "2025-12"]
-    assert plan.default_cutoff == "2025-12"
-    batch = import_snapshot(st, warehouse=WAREHOUSE, rows=plan.rows, batch_no="PROC-INIT-001",
-                            operator="科室用户", cutoff_ym=plan.default_cutoff)
-    assert batch.cutoff_ym == "2025-12"
-    assert load_cutoff(st, warehouse=WAREHOUSE) == "2025-12"
+    save_mech(st, ym='2025-12', warehouse=WAREHOUSE, values={'mech_0': Decimal('100.00')})
+    assert [r['mech_0'] for r in load_mech(st)] == [Decimal('100.00')]
 
 
 # ============================================================ 库存单据 · 补抓历史月份
@@ -139,10 +96,6 @@ def test_库存单据可补抓历史月份():
 
 
 # ============================================================ 原则 · 不重走审批
-
-
-
-
 
 
 def test_集采台账手录入口在():
