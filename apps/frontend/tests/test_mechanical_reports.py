@@ -247,7 +247,7 @@ def test_ledger_cross_page_guard_blocks_mechanical_download(server, browser_page
         page.route('**/api/m05/history/save', lambda route: route.fulfill(status=502, json={'message':'定向未知回执'}))
         field.fill('98.76')
         field.press('Tab')
-        expect(page.get_by_role('status', name='保存回执')).to_contain_text('待核实')
+        expect(page.get_by_role('status', name='保存回执')).to_contain_text('保存结果未确认')
         reason = '台账操作结果待核实'
     else:
         field.fill('未保存输入')
