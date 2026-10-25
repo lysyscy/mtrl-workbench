@@ -144,3 +144,29 @@ backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_preview.py --source-
 切页只对标题做130ms短反馈，库存计数做局部反馈，不给大表整体位移/逐行入场，也不等待动画再操作。减少动效偏好实时更新，CSS与始终存在的公共 `@rc-component/motion` Provider共同处理；避免动态修改AntD motion token插入Provider、重建账号树而丢失弹窗/草稿。公共Provider是既有传递依赖的直接声明，无额外动画库。自动回归在弹窗输入后切换偏好，核原草稿、取消确认与焦点；视觉暂停截图只用于合成布局检查，不作为性能计时。
 
 本轮同条件报告与剩余卡顿边界归[共同证据](../../.scratch/frontend-vue-rewrite/evidence.md#442444流畅度实施与同条件对照)。最终产品不是整页淡入的中间候选，不以中间较优个别数字替代最终样本。
+
+## 性能测量入口
+
+对已获准的真实只读预览使用 `tools/dev/frontend_measure.py`，不再复制final/r1/r2测量脚本。该工具只复用在用实例，核本工作树active内的运行身份、测试库/schema、非8000回环端口、未插桩构建逐文件hash及在线index；不启动/停止服务，不写业务数据，也不改变账号外观。Cookie只保存在浏览器内存。
+
+先指定旧对照的summary文件；相邻同名environment及real_owner必须存在，浏览器/视口/字号条件、正常字体方法和库/schema/revision需匹配。历史默认主题/standard字号对照要求当前偏好也为默认/standard；不一致即退出，不自动重置用户偏好。schema身份不等于内容指纹，复测前仍按既有副本约定确认数据未刷新/改变。
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright'
+backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_measure.py run --preview-run '<当前只读run绝对路径>' --baseline-summary '<对照run的reports/summary文件绝对路径>' --label 'candidate'
+```
+
+默认先全14页预热，再对付款/集采/库存各3次热切换、库存输入/清筛选各5次筛查；`--stage screen`只做此步。脚本/HTTP/资源失败、缺样或重复样本禁止进入完整阶段。相对同条件旧中位，ready或主线程同时增加超过25%及50ms时，记录筛查告警并以2退出，保留原件；这是发现明显退化的便宜反馈，不是正式性能目标或统计显著性证明。小样只轮换3页，与完整14页轮换顺序不同，不能将它替代最终对照。没有告警才用独立contexts继续原方法的14页×3冷×3热84组。
+
+字体字符check不代表整个FontFaceSet稳定；loading样本保留并在quality标注，`font_set_stable_for_all_samples=false`，不自动删掉或伪称全部稳定。导航不再输出包含测试端response.body的“下一帧”耗时；热ready仍是历史document idle/fonts/2rAF代理，不称INP。输入仅收集EventTiming16ms及长任务，缺entry不当作0，脚本insertText不代表实体IME。
+
+新run按workspace_paths自动分配，报告保存产品版本、测量入口摘要、环境/外观、对照摘要、screen原始样本/交互/quality；完整阶段另存samples.jsonl/summary/quality。字段/JSON或启动失败以1退出，质量/退化告警以2退出；字体状态与旧导航口径为可见警告，退出0也须读quality的限制。正常退出自动归档至`.artifacts/archive/frontend-measure/`（如父任务显式设置effort/run，沿父任务并由父任务收尾）。输出用独占创建，拒绝覆盖已有证据；原始基线、旧脚本和当前验看构建保持各自消费者，不由新工具清理。
+
+只读复查已有完整84组及可选旧交互，不启动浏览器、不改原件：
+
+```powershell
+backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_measure.py check --samples '<原samples.jsonl>' --interactions '<原interactions.json>'
+backend/.venv/Scripts/python.exe -X utf8 -m pytest --noconftest backend/tests/test_frontend_measure.py -q
+```
+
+工具回归覆盖纯逻辑/输入边界及合成data文档的实际浏览器采集，不启动另一预览，不需要应用conftest或数据库。最终报告仍须分别说明口径检查、真实浏览器执行与人工验看；只检测历史原件不能称新版本性能重测通过。
