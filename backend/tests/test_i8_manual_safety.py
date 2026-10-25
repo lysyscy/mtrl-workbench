@@ -114,3 +114,22 @@ def test_failed_zero_row_sync_is_not_recorded_as_success(rollback_db):
         row = s.scalar(select(RunRecord).where(RunRecord.target == '仓库列表').order_by(RunRecord.id.desc()))
         assert row.status == 'failed' and row.success_count == 0
         assert row.error_message == 'fixed failure'
+
+
+def test_empty_i8_password_is_configured_but_not_authenticated(monkeypatch):
+    import app.core.config as config
+    import app.core.identity as identity
+    monkeypatch.setattr(session, 'current_name', lambda: 'preview-admin')
+    monkeypatch.setattr(identity, 'current_i8_credentials', lambda: ('synthetic-admin', ''))
+    monkeypatch.setattr(config, 'get_settings', lambda: SimpleNamespace(i8_base_url='http://fixed-i8.invalid'))
+    monkeypatch.setattr(app_settings, '_CACHE', {})
+    def forbidden(*args, **kwargs):
+        raise AssertionError('configuration read attempted i8 authentication')
+    monkeypatch.setattr(clients, 'http_login', forbidden)
+    app = FastAPI()
+    app.include_router(router.router)
+    with TestClient(app) as client:
+        value = client.get('/api/m02/config').json()
+    assert value['ready'] and value['account'] == 'preview-admin'
+    assert value['i8_user'] == 'synthetic-admin' and value['message'] == ''
+    assert 'i8_password' not in value

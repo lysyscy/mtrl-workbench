@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -24,7 +24,7 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(512), default="", server_default="")
-    updated_by: Mapped[str] = mapped_column(Text, default="", server_default="")
+    updated_by: Mapped[str] = mapped_column(String(64), default="", server_default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
@@ -37,7 +37,7 @@ class AppSettingLog(Base):
     key: Mapped[str] = mapped_column(String(64), index=True)
     old_value: Mapped[str] = mapped_column(String(512), default="", server_default="")
     new_value: Mapped[str] = mapped_column(String(512), default="", server_default="")
-    operator: Mapped[str] = mapped_column(Text, default="", server_default="")
+    operator: Mapped[str] = mapped_column(String(64), default="", server_default="")
     at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 

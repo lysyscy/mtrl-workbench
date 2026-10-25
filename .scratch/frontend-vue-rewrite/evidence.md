@@ -226,3 +226,17 @@ Chromium156.0.8078.4/headless，1350×940/DPR1、zh-CN/Asia-Shanghai，本机回
 最终typecheck/build通过；442有效库存6项、443共享/库存9项、444共享/合同/台账/身份/回执12项通过，标题动效最终增量再核偏好切换/草稿/焦点。动态AntD token实测会重建账号树，新回归先红后改稳定MotionProvider通过。独立Standards初审发现1项P1：443误漏机械页exportGuard；已恢复所有消费者，新draft/unknown跨页两支旧版分别红、修复版2通过，既有机械失败/迟到用例通过。Spec初审未识别此项，后续明确更正、复核修复。修复与最终标题动效两轴当前均0；最终文档增量两轴均0未解决，回执final-review.json；不能把初审写成一直0。完整文本/金额/编辑体验定向覆盖：合成超长中英、窄宽视口/最大字号、筛选清除；3表末端/横向/固定列；32套实际项目字号/字重、14入口标准/最大两档42次检查（标准重复，28独立组合）；长名3次（标准重复），既有省略项保完整title；动效合成三图实看、减少动效无活动动画。本批Impeccable机械扫描一次[]。
 
 未做本次人工全站业务验看、实体IME/操作系统200%缩放、现场长期帧率/RUM INP、最终全站Lighthouse、真实外部动作/打印/生产业务写入。当前run仍由8065验看与复测消费；保留在用最终构建/运行器/最少脚本和原始报告，清理无消费者中间构建及诊断插件，记录 `lifecycle-final.json`。停在用户验看关口，不自动推进下一轮。
+
+## 可写admin与真实i8业务预览
+
+2026-10-25用户要求管理账号admin空密码、解除业务只读并接真实i8，明确选择新建可写隔离副本、正式库不变。新运行`.artifacts/active/react-writable-preview/20261025-admin-i8`持有相同完整React构建（前端09697808/index89ad45e8）与正常业务后端，唯一 http://127.0.0.1:8065/preview/inventory 已登录admin。Cookie `mw_writable_preview_8065`，当前PID/创建时间/启动命令见reports/real_owner.json/process-identity.json；停止脚本先核身份，仅停8065、保留schema及用户试用改动。
+
+用户明确否决三处额外操作人字段扩容，已恢复run_record.triggered_by、app_setting.updated_by、app_setting_log.operator为varchar64并删除c400/c419/c2三份迁移；React head、正式库和新可写副本均c432261023，370列定义逐项相同，见schema-comparison.json。回退先核无超长值，未截断；回退前后37数据表指纹/行数一致（revert-extra-fields.json）。首次直接downgrade到c432只去掉合并标记、留下c419分支，检查当即发现，随后在同一目标事务中执行原两份downgrade函数并移除已回退分支标记；保留实际失败，不报首次即成功。正式库未迁移/写入，8000服务及子进程/创建时间不变。
+
+此前准备新副本时，直接复制因版本不同被正确拒绝；最终先按正式c432结构，以只读一致快照复制33保留表/32序列，16非壳项目台账相等，再曾升级新副本到c2；该额外扩容现已按用户指令撤回。初始19项目/1193通知书/18198库存/265合同，不是后续用户修改后的计数。新schema `frontend_writable_61e11b3fd1fb471483b8131cb0e762e7`，精确search_path、transaction_read_only=off，无public兜底；来源快照与新副本对应回logs/preview-copy-verification.json及preparation.json。
+
+正常账号admin密码空、role=admin，自检正常登录及持久主题写入读回恢复通过。配置/导出/来源缓存限本轮，私有配置与i8会话在忽略的var/state，不入Git/归档。i8配置接口原来误把空密码当未配置，现与既有http_login允许空串的行为一致，认证仍由i8负责；新回归在旧1265端点先红，当前新回归/账号变化/非强踢保护3项绿。
+
+i8按用户指定账号的已有匹配绑定接入，密码确为空。最初提取/复制缓存被自动审批拒绝；用户随后明确批准，缓存只读请求401。用户再明确批准一次登录、遇冲突停止且不强踢：既有http_login调用1次成功、无冲突、allow_kick=false，随后只读仓库接口200返回1条。新Cookie仅存新预览私有目录，未输出或提交凭据、未写来源会话文件；没有代用户执行抓取导入、付款外发或物理打印，证据i8-connection.json/i8-login-verification.json。
+
+原只读8065已停，冻结副本仍保留；frozen-baseline-final.json重核38表hash/计数与原件一致，旧c2修订仅属该固定历史现场，不在本次改写。两套基线及442–444样本保留，新可写副本不作固定性能对照，本轮未重跑84组。423/424及最终上线复核未开始。当前run由用户业务验看消费，运行器/构建/创建证据、schema及私有状态留到用户明确处置，不能自动删除其改动。

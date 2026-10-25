@@ -124,10 +124,8 @@ def connection_config() -> dict:
             user, password = current_i8_credentials()
         except MustReportError as exc:
             reasons.append(str(exc))
-        if user and not password:
-            reasons.append("当前账号未填写 i8 密码，请在用户管理中补齐绑定。")
     return {"account": str(current_name()), "base_url": address, "source": "page" if is_overridden(SETTING_I8_BASE_URL) else "environment",
-            "i8_user": user, "ready": bool(address and user and password and not reasons),
+            "i8_user": user, "ready": bool(address and user and not reasons),
             "message": " ".join(reasons)}
 
 
