@@ -2,14 +2,14 @@
 
 2026-10-25，执行工作树 `D:/UserData/Documents/Codex/2026-10-22/task/mtrl-workbench`，分支 `codex/react-frontend-rewrite`。交接身份 PH-20261025-tail422-01。固定累计基点 `33a9bb4e7a11c3faed9ead9fa514537812627baa`，开始HEAD `db63af3c08e15c46bf2bdbf8fb39d5f950abf38f`；包含本轮所属dirty及六张435–440规划票，未把它们单独遗漏在高水位之外。
 
-**当前结论（2026-10-25用户签收）：422按“本票签done”指令关闭，固定首次累计基线3197ff1。** 下列性能数字及未验事实原样保留，签票不表示退化已修、现场未验已实测或正式切换获准。外观卡片预览/主题重设计另在questions.md澄清准备开票。React425、435–440、423/424均未启动，未推送、未合并master、未部署或迁移生产。
+**422签收时结论（2026-10-25历史快照）：422按“本票签done”指令关闭，固定首次累计基线3197ff1。** 下列性能数字及未验事实原样保留，签票不表示退化已修、现场未验已实测或正式切换获准。外观卡片预览/主题重设计另在questions.md澄清准备开票。React425、435–440、423/424均未启动，未推送、未合并master、未部署或迁移生产。
 
-## 当前候选与数据
+## 422验收时的候选与数据（旧实例已退出）
 
 - 入口 `http://127.0.0.1:8061/preview`；登录 `preview-admin`，密码留空；普通用户 `preview-user`，密码留空。
 - 数据全部合成：211项目、1503通知书、200流水、4历史行、23库存明细、4合同、11费用项及两项目机械零租/包月明细。包含空、零、历史和长名称样例。可在本schema保存、撤销、下载；不可将样例金额用于业务。
 - 独立Cookie `mw_preview_422`；真实i8抓取/同步、批量打印/PDF外部链及物理打印均由候选中间件拒绝，配置不含i8/打印凭据。未使用8060真实只读副本代替本候选。
-- 运行所有者、准确PID/schema/build与停止方式见下文运行回执；当前仍有人工消费者，不能清理它的构建或schema。
+- 原运行所有者、PID/schema/build与停止方式见下文历史运行回执。441签收后用户已要求关闭8060/8061；当前状态及证据去向见本文末尾退出记录。
 
 ## 本轮实际修复
 
@@ -144,10 +144,17 @@ master425 = MiniApp骨架，master426依赖425，427依赖426，428/429/430依�
 
 ## 运行回执与保存状态
 
-- 人工运行 `.artifacts/active/react-tail422/20261025-human`，PID `29076`，端口8061，schema `frontend_rewrite_397_eaf2872bd448424fbde95d3d8365e799`，准确身份见 `reports/preview-owner.json`。单独Cookie `mw_preview_422`；build逐文件48项SHA256在 `reports/build-manifest.json`，index hash同上。
+- 人工运行 `.artifacts/archive/react-tail422/20261025-human`，PID `29076`，端口8061，schema `frontend_rewrite_397_eaf2872bd448424fbde95d3d8365e799`，准确身份见 `reports/preview-owner.json`。单独Cookie `mw_preview_422`；build逐文件48项SHA256在 `reports/build-manifest.json`，index hash同上。
 - 人工工作进程由本会话保留；本会话负责收到验收/关闭指令后，在该运行 `work/STOP-PREVIEW` 写停止标记，等待准确 `ISOLATION cleaned schema=...`，再核端口关闭和本schema消失。不按端口杀未知进程，不清理8060或其他schema。
 - 最终FastAPI实际打开14入口、逐一核标题，无pageerror；首页/通知书/机械截图已实际查看。8个外部执行端点实发后全为403，原8060仍200且SHA256 `8f1204a8f9f5a3b43a77c64445309c0c8863d8c0fd36c72948ea05d39d91d7fd`。
-- 本轮各临时验证schema均退出，验证run无在用构建；仅上述人工运行保留明确消费者。422已签收；整个前端effort尚有后续工作，8061继续被外观讨论消费，未运行整个effort的closed检查冒称重做/上线已完成。
+- 本轮各临时验证schema均退出，验证run无在用构建；当时仅上述人工运行保留明确消费者，现该消费者已结束并按末尾记录退出。422已签收；整个前端effort尚有后续工作，未运行整个effort的closed检查冒称重做/上线已完成。
 - 原始失败/最终JUnit、必要截图及合成成品有限归档30天；本轮一次性脚本、源快照、评审patch和重复构建在保存后清理。
 
 最终本地源码提交由本轮回复给出，真实钩子不绕过。没有push、合并master、生产重启/迁移、真实外部写入、物理打印或人工代签。
+
+
+### 2026-10-25 旧预览按用户指令退出
+
+441验看签done并清理其一次性资源后，用户明确要求关闭8060/8061。8061以STOP-PREVIEW优雅退出，收到准确schema清理回执，测试库只读查询确认其合成schema已不存在；8060核PID/命令后停止，两个端口不可连接，8000仍可用。8060真实数据只读副本schema仍保留，旧运行所有者已标stopped-schema-preserved；未重复制、迁移或删除该副本，未建立新基线，也未开始435–440。
+
+8061人工运行work/构建/截图及无消费者日志已释放；reports与最终退出日志归.artifacts/archive/react-tail422/20261025-human，沿既有retention.json保留至2026-11-24。上文原人工入口、运行PID与构建信息仅为422验收时的记录，当前不能用于访问在用预览或恢复包含441的候选。
