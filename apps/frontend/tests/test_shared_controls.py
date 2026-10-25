@@ -90,3 +90,31 @@ def test_page_registry_keeps_instances_and_resets_on_account_loss(server, browse
     expect(page.get_by_text('未登录 · 只读', exact=True)).to_be_visible()
     page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
     expect(page.get_by_label('项目搜索', exact=True)).to_have_value('')
+
+
+def test_motion_preference_changes_keep_modal_draft_and_focus(server, browser_page):
+    page, _ = browser_page
+    login(page, server)
+    for preference in ['no-preference', 'reduce']:
+        page.emulate_media(reduced_motion=preference)
+        page.get_by_role('link', name='MOD-02 i8 接入层', exact=True).click()
+        page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
+        view = page.locator('.page-view:not([hidden])')
+        expect(view).to_have_count(1)
+        expected = 'none' if preference == 'reduce' else 'workspace-enter'
+        page.wait_for_function("name => getComputedStyle(document.querySelector('.page-view:not([hidden])')).animationName === name", arg=expected)
+        trigger = page.get_by_role('button', name='＋ 手工建档', exact=True)
+        trigger.click()
+        dialog = page.get_by_role('dialog')
+        field = dialog.get_by_label('项目全名', exact=True)
+        field.fill('动效切换未保存输入')
+        page.emulate_media(reduced_motion='reduce' if preference == 'no-preference' else 'no-preference')
+        expect(field).to_have_value('动效切换未保存输入')
+        dialog.press('Escape')
+        expect(dialog.get_by_role('heading', name='放弃未保存的修改？')).to_be_visible()
+        dialog.get_by_role('button', name='继续编辑', exact=True).click()
+        expect(field).to_have_value('动效切换未保存输入')
+        dialog.get_by_role('button', name='取消', exact=True).click()
+        dialog.get_by_role('button', name='放弃并关闭', exact=True).click()
+        expect(dialog).not_to_be_visible()
+        expect(trigger).to_be_focused()

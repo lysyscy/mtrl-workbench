@@ -1,3 +1,4 @@
+import { Provider as MotionProvider } from '@rc-component/motion';
 import App from 'antd/es/app';
 import ConfigProvider from 'antd/es/config-provider';
 import theme from 'antd/es/theme';
@@ -27,6 +28,13 @@ function appearance() {
 
 export function UiProvider({ children }: { children: ReactNode }) {
   const [value, setValue] = useState(appearance);
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   useEffect(() => {
     const update = () => setValue(appearance());
     const observer = new MutationObserver(update);
@@ -35,8 +43,9 @@ export function UiProvider({ children }: { children: ReactNode }) {
     stylesheet?.addEventListener('load', update); update();
     return () => { observer.disconnect(); stylesheet?.removeEventListener('load', update); };
   }, []);
-  return <ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} componentSize="small" theme={{
+  // Keep the provider tree stable when the OS motion preference changes mid-edit.
+  return <MotionProvider motion={!reducedMotion}><ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} componentSize="small" theme={{
     algorithm: value.dark ? [theme.darkAlgorithm, theme.compactAlgorithm] : theme.compactAlgorithm,
     token: value.token, components: { Button: { borderRadius: 999, borderRadiusSM: 999 }, Tag: { borderRadiusSM: 999 }, Checkbox: { borderRadiusSM: 4 } },
-  }}><App component={false}>{children}</App></ConfigProvider>;
+  }}><App component={false}>{children}</App></ConfigProvider></MotionProvider>;
 }

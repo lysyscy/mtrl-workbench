@@ -84,3 +84,11 @@ html{font-variant-numeric:tabular-nums}
 .workspace .page-view .notices-page .notice-card{display:flex;flex-direction:column;flex:1;min-height:min-content}
 .workspace .page-view .notice-card>:not(.notice-grid){flex-shrink:0}
 .workspace .page-view :is(.notice-grid,.process-grid,.inventory-grid){flex:1 0 calc(240px * var(--fscale));height:auto;min-height:calc(240px * var(--fscale))}
+
+/* Keep navigation feedback brief and independent of data/operation completion. */
+@media(prefers-reduced-motion:no-preference){
+  .page-view:not([hidden]){animation:workspace-enter var(--motion-fast,130ms) ease-out}
+  .inventory-count-feedback{animation:inventory-count-feedback var(--motion-fast,130ms) ease-out}
+}
+@keyframes workspace-enter{from{opacity:.85;transform:translateY(2px)}to{opacity:1;transform:none}}
+@keyframes inventory-count-feedback{from{color:var(--pri-d)}to{color:inherit}}
