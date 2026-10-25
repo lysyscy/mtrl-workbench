@@ -491,6 +491,13 @@ def get_notice_list(
     }
 
 
+@api_router.get("/api/m03/payment-preview")
+def payment_preview(ids: list[int] = Query(default=[]), session: Session = DBSession) -> dict:
+    """核对所选通知书的当前付款状态；与列表复用金额和不可付原因。"""
+    data = build_page_data(session, filters=notice_filters("", [], "", "", ""), notice_ids=ids)
+    return {"payment_methods": list(PAY_METHODS), "items": [_api_item(rec) for rec in data["rows"]]}
+
+
 class ExportIn(BaseModel):
     """导出请求（`TAIL-04` · §7.1）。
 

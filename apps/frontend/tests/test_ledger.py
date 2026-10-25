@@ -7,6 +7,7 @@ from decimal import Decimal
 import httpx
 import openpyxl
 from playwright.sync_api import expect
+from preview_select import pick_option
 from tools.audit.workspace_paths import output
 from test_preview import server, browser_page, login  # noqa: F401
 
@@ -14,9 +15,7 @@ from test_preview import server, browser_page, login  # noqa: F401
 def open_ledger(page, server, account='preview-admin'):
     login(page, server, account)
     page.get_by_role('link', name='MOD-05 付款流水与欠款统计', exact=True).click()
-    page.get_by_role('button', name='选择项目', exact=True).click()
-    page.get_by_role('group', name='查看项目候选').get_by_role('radio', name=re.compile('^隔离项目')).click()
-    expect(page.get_by_role('group', name='查看项目候选')).not_to_be_visible()
+    select_project(page, '隔离项目')
     expect(page.get_by_role('region', name='辅材欠款台账', exact=True)).to_be_visible()
 
 
@@ -51,8 +50,7 @@ def test_continuous_edit_real_save_and_readback(server, browser_page):
     expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存')
     expect(page.get_by_role('status',name='保存回执')).not_to_contain_text('正在保存')
     page.reload()
-    page.get_by_role('button',name='选择项目',exact=True).click()
-    page.get_by_role('group', name='查看项目候选').get_by_role('radio', name=re.compile('^隔离项目')).click()
+    select_project(page, '隔离项目')
     row=history_row(page)
     expect(row.locator('[col-id="other_expense"] input')).to_have_value('1234.56')
     expect(row.locator('[col-id="payment"] input')).to_have_value('222.22')
@@ -92,8 +90,7 @@ def cell(page, rid, field, category='material'):
 
 
 def select_project(page, name):
-    page.get_by_role('button',name='选择项目',exact=True).click()
-    page.get_by_role('group',name='查看项目候选').get_by_role('radio',name=re.compile('^'+re.escape(name))).click()
+    pick_option(page, '选择项目', name)
 
 
 def wait_value(page, project, rid, field, value, category='material'):
@@ -231,7 +228,7 @@ def test_identity_pause_preserves_real_edit_draft_and_blocks_saves(server,browse
     page.route('**/api/m15/users',lambda route:route.abort('failed'))
     page.evaluate("window.dispatchEvent(new Event('focus'))")
     expect(page.get_by_role('alert')).to_contain_text('已暂停操作')
-    expect(page.get_by_role('region',name='辅材欠款台账')).to_have_count(0)
+    expect(page.locator('.workspace')).to_be_hidden()
     page.locator('.workspace input').evaluate_all('(inputs)=>inputs.forEach(input=>input.blur())')
     assert not writes
     page.unroute('**/api/m15/users');page.get_by_role('button',name='重试',exact=True).click()

@@ -23,7 +23,7 @@
 
 **2026-10-22 · 授权与执行入口。** 已批准建票及上述依赖，后续采用 implement-solo-spec 跨批统筹；本轮仅建票，尚未授权开始实施。ready-for-agent 仅表示任务已说清，仍需实施启动授权；外部真实动作、正式切换及退役各守规格授权门。
 
-**2026-10-24 · 5A候选资料归位。** 原候选 `808c17e6af6df9f9afeb7d032d89d6eb5b7fc859` 的 `tail-414-candidate.md` 按当前票协议归入本票Comments；实现、原始证据及未验边界保留，当前活动树吸收回执见[共同证据](../../frontend-vue-rewrite/evidence.md#阶段5ab串行整合)。原验收和状态不因资料归位而改变。
+**2026-10-24 · 5A候选资料归位。** 原候选 `808c17e6af6df9f9afeb7d032d89d6eb5b7fc859` 的 `tail-414-candidate.md` 按当前票协议归入本票Comments；实现、原始证据及未验边界保留，当前活动树吸收回执见[共同证据](../../frontend-vue-rewrite/spec.md#阶段5ab串行整合)。原验收和状态不因资料归位而改变。
 
 ### TAIL-414 独立候选交付依据（原文归本票）
 
@@ -32,7 +32,7 @@
 #### 实现与整合
 
 - 五份新增源码为 `apps/frontend/src/inventory.tsx`、`inventory-api.ts`、`inventory-adjust.tsx`、`inventory-fetch.tsx`、`inventory.css`。复用账号树/QueryClient、AntD、AG Grid、项目/期间控件、BusinessModal、操作历史保护、请求与文件下载出口；没有新依赖、后端协议、迁移或测试平台。
-- 库存已在独立候选 `apps/frontend/src/main.tsx` 实际接线，入口 `/preview/inventory`，按账号保活挂载。父授权后按费用→收发结存→库存顺序应用原补丁并删除已取代补丁；main为当前唯一接线来源，index未改。新增接线范围与验证见[阶段5A公共接线](../../frontend-vue-rewrite/evidence.md#阶段5a候选公共接线)，未集成活动机械树。
+- 库存已在独立候选 `apps/frontend/src/main.tsx` 实际接线，入口 `/preview/inventory`，按账号保活挂载。父授权后按费用→收发结存→库存顺序应用原补丁并删除已取代补丁；main为当前唯一接线来源，index未改。新增接线范围与验证见[阶段5A公共接线](../../frontend-vue-rewrite/spec.md#阶段5a公共接线)，未集成活动机械树。
 - 查询沿全量 `/api/m08/inventory`；按实际 `ym` 核算月筛选，不用单据日期代替。保项目多选、方向、只调整、19列文字/数值范围/值清单交集、排序与随筛选合计；单价不求和。冻结单据号/操作、有限列宽、必要横滚。数量/源字段只读，未调整金额空白、调整到0仍为0。
 - 调整/撤销沿既有 `/api/m08/adjust`、`/adjust/clear`，原文交后端处理金额准入与舍入；备注必填、原单与调整留痕分别显示。撤销前显示调整→原单影响并确认。写入串行、防重复，成功重读后显示规范金额；拒绝保稿，未知/已写待读回有持续历史保护，关闭或切页不解除，须重读并人工核对。
 - 抓取只在人工确认按钮发 POST `/api/m08/fetch`，先读既有 `/api/m02/config` 核绑定；告知全项目核算单月及退出其他i8会话，不自动重试。未知结果按账号写 sessionStorage，重开/刷新保留；本次显式读取执行记录成功并人工确认无在途后才允许再次准备。成功/明确拒绝亦等实际相关刷新完成才解除保护。只读配置与打开页面均不抓取。
@@ -65,7 +65,7 @@
 
 自有8164合成进程与临时IAB页/视口均退出；合成下载、源xlsx、临时快照/构建、脚本、候选独立node_modules在核验后清理。专用Python环境供真实提交钩子运行后删除。最小日志有限归档，运行work与active退出，执行run-closed检查；其余历史证据、415/412文件、活动服务与他人状态保持。本地提交号由执行最终回执给出，父先审已接线候选的干净提交范围，再决定吸收及补真实环境验收。
 
-**2026-10-24 · 活动树有界吸收。** 本页已从候选 `808c17e6` 最终累计树接入活动基点 `73ed77ea`，公共入口、共享保护及本批最小验证见[整合证据](../../frontend-vue-rewrite/evidence.md#阶段5ab串行整合)。代码保存不代替安全DB、真实业务文件及完整人工验收；本票状态与验收项保持原判定。
+**2026-10-24 · 活动树有界吸收。** 本页已从候选 `808c17e6` 最终累计树接入活动基点 `73ed77ea`，公共入口、共享保护及本批最小验证见[整合证据](../../frontend-vue-rewrite/spec.md#阶段5ab串行整合)。代码保存不代替安全DB、真实业务文件及完整人工验收；本票状态与验收项保持原判定。
 
 **2026-10-24 · 最终票仓核对（仅文档）。** inventory.tsx/inventory-adjust.tsx/inventory-fetch.tsx及原API已迁查询、调整/撤销和人工抓取入口；B只删除常驻重读，保错误重试和正常刷新。已有23项离线/替身、合成调整/撤销及透视XLSX，不是未实现；ready-for-agent改in-progress。剩余第3项真实隔离HTTP权限、保存/撤销、事务失败与第4项同业务范围实际后端下载；历史test_tail04_export的数据库未配置失败未被只读副本读取消除，不能称全绿。Excel式筛选已取消，不另立调研/企业版票。 [B组回执](D:/UserData/Documents/Codex/2026-10-24/task-19/.artifacts/active/react-c-b-acceptance/run-01/reports/delivery.md) 本次未编码、未补跑业务测试；完整当前接手入口回[项目状态](../../../docs/status.md)。
 

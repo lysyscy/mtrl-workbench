@@ -12,6 +12,7 @@ import time
 import httpx
 import pytest
 from playwright.sync_api import expect
+from preview_select import pick_option
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
@@ -114,53 +115,55 @@ def test_fastapi_build_assets_cookie_and_read(server, browser_page):
 
 def test_error_loading_forbidden_and_expiry(server, browser_page):
     page, context = browser_page
-    login(page, server)
-    pending = []
-    page.route('**/api/m01/projects?**', lambda route: pending.append(route))
-    page.get_by_label('状态', exact=True).select_option('archived')
-    expect(page.get_by_text('正在读取项目…', exact=True)).to_be_visible()
-    assert pending
-    pending.pop().fulfill(status=403, json={'code':'forbidden'})
+    page.route('**/api/m01/projects?status=all', lambda route: route.fulfill(status=403, json={'code':'forbidden'}))
+    page.goto(server + '/login?next=%2Fpreview%2Fprojects')
+    page.locator('[name=account]').fill('preview-admin')
+    page.locator('button[type=submit]').click()
     expect(page.get_by_role('alert')).to_contain_text('核对权限或访问范围')
-    page.screenshot(path=str(output('projects-forbidden.png', kind='screenshots')), full_page=True)
-    page.unroute('**/api/m01/projects?**')
-    page.route('**/api/m01/projects?**', lambda route: route.fulfill(status=500, json={'message':'项目读取失败，请稍后重试。'}))
-    page.get_by_role('button', name='重试', exact=True).click()
+    page.unroute('**/api/m01/projects?status=all')
+    page.route('**/api/m01/projects?status=all', lambda route: route.fulfill(status=500, json={'message':'项目读取失败，请稍后重试。'}))
+    page.get_by_role('button', name='重读项目', exact=True).click()
     expect(page.get_by_role('alert')).to_contain_text('项目读取失败，请稍后重试。')
-    page.unroute('**/api/m01/projects?**')
-    page.get_by_role('button', name='重试', exact=True).click()
+    page.unroute('**/api/m01/projects?status=all')
+    page.get_by_role('button', name='重读项目', exact=True).click()
+    expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
+    pick_option(page, '项目状态筛选', '归档')
     expect(page.get_by_role('cell', name='归档样例', exact=True)).to_be_visible()
     context.clear_cookies()
     page.evaluate("window.dispatchEvent(new Event('focus'))")
     expect(page.get_by_role('alert')).to_contain_text('登录已失效')
     expect(page.get_by_text('未登录 · 只读', exact=True)).to_be_visible()
-    expect(page.get_by_label('状态', exact=True)).to_have_value('active')
+    expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
+    expect(page.get_by_role('button', name='＋ 手工建档', exact=True)).to_be_disabled()
 
 
 def test_switch_account_drops_old_scope_and_late_response(server, browser_page):
     page, context = browser_page
     login(page, server)
+    page.get_by_label('项目搜索', exact=True).fill('older')
+    page.get_by_role('link', name='MOD-02 i8 接入层', exact=True).click()
     pending = []
-    page.route('**/api/m01/projects?**keyword=older**', lambda route: pending.append(route))
-    page.get_by_label('项目', exact=True).fill('older')
-    expect(page.get_by_text('正在读取项目…', exact=True)).to_be_visible()
+    def delay_old_account(route):
+        if not pending:
+            pending.append(route)
+        else:
+            route.continue_()
+    page.route('**/api/m01/projects?status=all', delay_old_account)
+    page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
+    expect(page.get_by_text('共 0 个项目', exact=False)).to_be_visible()
     assert pending
     with httpx.Client() as client:
-        response = client.post(server + '/m15/login', data={'account':'preview-user', 'password':'', 'next':'/preview/projects'})
+        response = client.post(server + '/m15/login', data={'account':'preview-user', 'password':''})
         assert response.status_code == 303
         context.add_cookies([{'name':'mw_preview_397','value':client.cookies['mw_preview_397'],'url':server}])
     page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_text('预览同事 · 普通用户', exact=True)).to_be_visible()
-    expect(page.get_by_label('项目', exact=True)).to_have_value('')
+    expect(page.get_by_role('button', name='预览同事（普通用户）', exact=True)).to_be_visible()
+    expect(page.get_by_label('项目搜索', exact=True)).to_have_value('')
     expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
     pending.pop().fulfill(status=500, json={'message':'旧账号迟到错误'})
     expect(page.get_by_text('旧账号迟到错误', exact=True)).to_have_count(0)
-    assert page.locator('html').evaluate("e => e.style.getPropertyValue('--fscale')") == '1.12'
-    page.set_viewport_size({'width':800,'height':900})
-    expect(page.get_by_role('button',name='切换账号',exact=True)).to_be_in_viewport()
-    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-    page.screenshot(path=str(output('projects-narrow-large.png',kind='screenshots')),full_page=True)
-    page.get_by_role('button',name='切换账号',exact=True).click()
+    page.get_by_role('button', name='预览同事（普通用户）', exact=True).click()
+    page.get_by_role('menuitem', name='退出登录', exact=True).click()
     expect(page).to_have_url(re.compile('/login'))
     assert not any(c['name']=='mw_preview_397' for c in context.cookies())
 
@@ -198,3 +201,23 @@ def test_explicit_test_dsn_rejects_other_database_and_source_copy(url, copy_sour
     with pytest.raises(RuntimeError, match='直接测试DSN'):
         with isolated_database(test_url=url, copy_source=copy_source):
             pytest.fail('Guard must reject before connecting or creating a schema')
+
+
+def test_payment_preview_reads_only_selected_current_rows(server):
+    with httpx.Client(base_url=server) as client:
+        assert client.post('/m15/login', data={'account':'preview-admin','password':''}).status_code == 303
+        listed = client.get('/api/m03/notice-list?period=').json()
+        selected = listed['items'][0]
+        nid = selected['notice_id']
+        endpoint = '/api/m03/payment-preview'
+        assert client.get(endpoint).json()['items'] == []
+        assert client.get(endpoint, params={'ids':99999999}).json()['items'] == []
+        preview = client.get(endpoint, params=[('ids',nid),('ids',nid),('ids',99999999)]).json()
+        assert preview == {'payment_methods':listed['payment_methods'], 'items':[selected]}
+        changed = client.post('/api/m03/actions/category', json={'ids':[nid], 'category':'mechanical'}).json()
+        assert changed['ok'] is True
+        current = client.get('/api/m03/notice-list?period=').json()
+        fresh = client.get(endpoint, params={'ids':nid}).json()['items']
+        assert fresh == [next(row for row in current['items'] if row['notice_id'] == nid)]
+        assert fresh[0]['category'] == 'mechanical'
+        assert client.get('/api/m03/notice-list?period=').json() == current

@@ -149,6 +149,7 @@ def build_page_data(
     draft_error: str = "",
     plan_ym: str = "",
     plan_docs=None,
+    notice_ids: list[int] | None = None,
 ) -> dict:
     """组装一页所需的一切（列表页与 API 共用同一个出口）。
 
@@ -160,7 +161,8 @@ def build_page_data(
     from app.mod03_notice.notice_manual_actions import manual_project_options
 
     f = filters or NoticeFilters(period=default_period(PERIOD_DEFAULT_KEY))
-    rows = build_rows(session, flows_of=flows_of, links_of=links_of, traces_of=traces_of)
+    options = {} if notice_ids is None else {"notice_ids": notice_ids}
+    rows = build_rows(session, flows_of=flows_of, links_of=links_of, traces_of=traces_of, **options)
     shown = filter_rows(rows, f, project_key=lambda r: r.ownership_id)
     counters = count_rows(rows, shown)
 

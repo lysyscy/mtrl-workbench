@@ -119,7 +119,7 @@ backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_preview.py --source-
 
 ## 材料与报表公共入口
 
-`/preview/settlement`、`/preview/inventory`、`/preview/fees`、`/preview/big` 与上文过程资料同属材料与报表组；均在当前账号树内保活，离页暂停请求与待发写入，换号清理。大表合计直接消费既有后端合计，不在页面重算另一套。费用主表按年读取 `/api/m09/fee/year`，往年＋所选年12个月组成累计；同名展示汇总、原始明细不合并，点击项名或月份金额进入原有逐月明细增改删及批量入口。单月读写API及月报表导出保持原能力；费用无独立导出，仍随逐月欠款台账的特殊费用工作表导出；库存导出单月全项目原源缓存，不叠加页面筛选或人工调整。原票保各自真实DB及人工未验边界，当前集成证据见[共同证据](../../.scratch/frontend-vue-rewrite/evidence.md#阶段5ab串行整合)。
+`/preview/settlement`、`/preview/inventory`、`/preview/fees`、`/preview/big` 与上文过程资料同属材料与报表组；均在当前账号树内保活，离页暂停请求与待发写入，换号清理。大表合计直接消费既有后端合计，不在页面重算另一套。费用主表按年读取 `/api/m09/fee/year`，往年＋所选年12个月组成累计；同名展示汇总、原始明细不合并，点击项名或月份金额进入原有逐月明细增改删及批量入口。单月读写API及月报表导出保持原能力；费用无独立导出，仍随逐月欠款台账的特殊费用工作表导出；库存导出单月全项目原源缓存，不叠加页面筛选或人工调整。原票保各自真实DB及人工未验边界，当前集成证据见[共同证据](../../.scratch/frontend-vue-rewrite/spec.md#阶段5ab串行整合)。
 
 ## 报表高度与列宽
 

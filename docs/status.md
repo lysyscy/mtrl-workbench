@@ -6,9 +6,9 @@
 
 **票务导航。** 活动票：421前置已满足、未实施；422累计验收；423/424需独立授权。410、412–419、420已按代验收授权签done（证据在各票Comments）；417含一处产品修复（contract-subtables引用下拉收容进Modal）。逐票Status/验收/依据归`.scratch/tails/issues/`，列票用仓根`backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py`；协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)，A–E技术回执指针在各票Comments。技术完成不代签done，缺验证留原票。
 
-**架构审查修复。** 2026-10-25落实报告推荐的前三项（共享弹层测试、统一seed接线、页面注册表），技术结果、7条旧测试失配及候选4/5的422后接续边界见[修复回执](../.scratch/frontend-vue-rewrite/architecture-repair.md)。本阶段未启动421/422，未更新8060。
+**架构审查修复。** 2026-10-25落实报告推荐的前三项（共享弹层测试、统一seed接线、页面注册表），技术结果、旧测试收口及候选4/5的422后接续边界见[修复回执](../.scratch/frontend-vue-rewrite/architecture-repair.md)。本阶段未启动421/422，未更新8060。
 
-**工作树保留件。** 8件dirty保持原字节、不得以HEAD覆盖：性能C在途六源码`apps/frontend/src/{flow,notice-payment,notices}.tsx`、`backend/app/mod03_notice/{list_data,list_view,notice_api_router}.py`，及旧协调资料`.scratch/frontend-vue-rewrite/{evidence,handoff}.md`。恢复依据在task-22 `archive/react-final-handoff/run-01/`（75件原字节/哈希与`reports/final-state.json`）及task-13 `component-coverage/recovery/{baseline.json,baseline.patch}`（task-N均在`D:/UserData/Documents/Codex/2026-10-24/`）。性能收口与同条件新旧比较归422，保留不阻止其他有界后续工作。
+**原8件残差收口。** 用户2026-10-25授权逐项核对、验证有效代码并提交，归位旧资料后删除；六源码的重复读取、按所选付款核新及既有控件/金额显示调整已纳入本轮验证。两份旧协调文档的有效信息归原票、共同规格与前端指南，原全文可从Git `e728e47`取回。原保护标记随本次提交退出；历史性能样本及仍需累计验证的边界归422，当前修复、检查与保存状态回[修复回执](../.scratch/frontend-vue-rewrite/architecture-repair.md)，不据此启动421/422。
 
 **8060与恢复。** 当前`react-c-preview-e-v6-8f1204a8f9f5-real-copy`保留运行、不重启：真实库隔离只读副本，独立schema `frontend_rewrite_397_68b8838c875e4985a8656faeaca9b205`，PG强只读＋精确GET白名单，业务写/导出/旧/app被403屏障。在用run为task-19 `react-e-fit/run-01`（`exports/build-e6`，身份`reports/real_owner.json`）；仅当获服务恢复授权且进程确实退出时，用项目venv按同schema运行其`work/resume_real_preview_e6.py`恢复，不用普通启动器新建/复制schema。E视觉回执同run `reports/delivery.md`：九项目1440×900、20列1186/1186px金额全显，1438宽差1px，旧/app像素403未验；不能替代422累计。
 

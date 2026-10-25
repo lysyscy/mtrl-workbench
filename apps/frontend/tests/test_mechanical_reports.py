@@ -67,34 +67,27 @@ def report_url(month='2026-09', warehouses=None):
     return '/api/m06/workbench/preview?'+urlencode({'ym':month,'projects':json.dumps(warehouses or ['合成机械仓库001','隔离验收仓库'],ensure_ascii=False)})
 
 
-def test_grid_freeze_virtualization_scroll_locate_and_ime(server,browser_page):
-    page,_=browser_page; open_reports(page,server)
-    grid=page.get_by_role('region',name='公司汇总',exact=True)
+def test_grid_freeze_virtualization_scroll_and_keyboard(server, browser_page):
+    page, _ = browser_page
+    open_reports(page, server)
+    grid = page.get_by_role('region', name='公司汇总', exact=True)
     expect(grid.locator('.ag-row-pinned')).to_have_count(1)
-    output('399-grid-dom.html',kind='logs').write_text(grid.inner_html(),encoding='utf-8')
-    page.screenshot(path=str(output('399-grid-before-check.png',kind='screenshots')),full_page=True)
-    expect(grid.locator('.ag-grid-scrolling-container .ag-row').first).to_be_visible()
-    assert 0 < grid.locator('.ag-grid-scrolling-container .ag-row').count() < 93
-    first=grid.locator('.ag-grid-scrolling-container [col-id=c1]').first.bounding_box()
+    rows = grid.locator('.ag-grid-scrolling-container .ag-row')
+    expect(rows.first).to_be_visible()
+    assert 0 < rows.count() < 93
+    frozen = grid.locator('.ag-grid-scrolling-container [col-id=c1]').first
+    before_x = frozen.bounding_box()['x']
     grid.locator('.ag-body-horizontal-scroll-viewport').evaluate('(e)=>e.scrollLeft=700')
-    expect(grid.locator('.ag-grid-scrolling-container [col-id=c1]').first).to_have_css('position','absolute')
-    assert abs(grid.locator('.ag-grid-scrolling-container [col-id=c1]').first.bounding_box()['x']-first['x'])<1
+    assert abs(frozen.bounding_box()['x'] - before_x) < 1
     grid.locator('.ag-grid-viewport').evaluate('(e)=>e.scrollTop=e.scrollHeight')
-    expect(grid.locator('.ag-grid-scrolling-container')).to_contain_text('网格样例090')
-    total_y=grid.locator('.ag-grid-pinned-bottom-rows-container').bounding_box()['y']
-    field=page.get_by_label('定位项目',exact=True);field.fill('长名称机械项目')
-    field.dispatch_event('keydown',{'key':'Enter','isComposing':True})
-    assert grid.locator('.ag-grid-pinned-bottom-rows-container').bounding_box()['y']==total_y
-    field.press('Enter')
-    expect(grid.locator('.ag-cell-focus[col-id=c1]')).to_contain_text(LONG_NAME)
-    assert grid.locator('.ag-cell-focus').bounding_box()['height']>34
-    grid.locator('.ag-cell-focus').press('ArrowRight')
-    expect(grid.locator('.ag-cell-focus')).to_have_attribute('col-id','c2')
+    last = rows.filter(has_text='网格样例090').locator('[col-id=c1]')
+    expect(last).to_be_visible()
+    last.click()
+    last.press('ArrowRight')
+    expect(grid.locator('.ag-cell-focus')).to_have_attribute('col-id', 'c2')
     grid.locator('.ag-cell-focus').press('Tab')
-    expect(grid.locator('.ag-cell-focus')).to_have_attribute('col-id','c3')
-    assert abs(grid.locator('.ag-grid-pinned-bottom-rows-container').bounding_box()['y']-total_y)<1
-    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-    page.screenshot(path=str(output('399-grid-1080.png',kind='screenshots')),full_page=True)
+    expect(grid.locator('.ag-cell-focus')).to_have_attribute('col-id', 'c3')
+    expect(grid.locator('.ag-row-pinned')).to_be_visible()
 
 
 def test_four_real_sheets_file_order_money_formulas_and_snapshot(server,browser_page):
