@@ -2,7 +2,7 @@
 
 ## React 前端独立重做
 
-**性能优化技术完成，待用户验看（2026-10-25）。** 用户已验看425/441完整基线并授权435–440，本轮按依赖完成并逐票记录技术验收，累计起点`d9a59e3`，最终产品源码`5dc133e7`；本地保存、未push。原`98d2d66`完整构建及84组基线原件保留。唯一新预览[8065](http://127.0.0.1:8065/preview)只读接原固定副本，原8064已退出；进程/构建hash/停止方式与完整同条件84组对照归[本轮证据](../.scratch/frontend-vue-rewrite/evidence.md#435440性能优化同条件对照)。项目/通知/付款CLS、三表热切换与欠款读取有改善；多数冷ready上升、库存接口未改善、规则冷CLS及偶发>200ms任务仍保留，不能概括全站性能达标。8000身份未变，不启动最终上线候选复核或423/424，停本次用户验看。
+**435–440已按用户指令签收done，继续研究流畅度（2026-10-25）。** 用户已验看425/441完整基线并授权435–440，本轮按依赖完成并逐票记录技术验收，累计起点`d9a59e3`，最终产品源码`5dc133e7`；本地保存、未push。原`98d2d66`完整构建及84组基线原件保留。唯一新预览[8065](http://127.0.0.1:8065/preview)只读接原固定副本，原8064已退出；进程/构建hash/停止方式与完整同条件84组对照归[本轮证据](../.scratch/frontend-vue-rewrite/evidence.md#435440性能优化同条件对照)。项目/通知/付款CLS、三表热切换与欠款读取有改善；多数冷ready上升、库存接口未改善、规则冷CLS及偶发>200ms任务仍保留，不能概括全站性能达标。8000身份未变，不启动最终上线候选复核或423/424，用户收到测量与未验边界后明确“先签done”；本轮已签收，不据此声称剩余卡顿消失或额外人工项目全验。后续按用户调用research调查实际交互卡顿、优化与动效成熟方案，字体/虚拟滚动仅为候选；研究不预设它们是重点。
 
 **当前阶段：精细打磨（2026-10-25）。** [React425通用导入后端退役清理](../.scratch/tails/issues/TAIL-425-通用导入后端退役清理.md)已按授权完成；固定清理基线为本次425提交（父8b090266），受影响280项＋工具95项通过、独立Standards/Spec各0项，证据与未验边界回原票。仅本React分支本地保存，master与8000正式服务未动；8060/8061已按本次指令关闭。435–440已在本轮授权下按依赖技术完成，当前结果及剩余边界见上方；441正式接线已获用户实看签收done。441一次性样板及8062/8063验看资源已清理，正式实现保存于React分支，验收依据回原票；423/424仍另守授权。
 
@@ -16,7 +16,7 @@
 
 唯一React分支codex/react-frontend-rewrite（生产master另置，未合并）。2026-10-24用户人工验收落地：原ready-for-human 11票（398、400–409）按票协议签done，验收对象为8060真实只读副本，各票Comments留依据；397/399原done，411 wontfix。同日419规则配置页经用户验收签done（实施、隔离技术验证与实看证据在其票Comments）。同日分支收拢：五条付款分支核实为master祖先后删除（提交仍由master保有），tail-415候选7个独有提交由tag `archive/codex-tail-415-candidate`归档后删分支及其干净worktree；未推送、未上线。
 
-**票务导航。** 422已按用户指令done（固定基线与未验边界见[验收材料](../.scratch/frontend-vue-rewrite/evidence.md)）；441正式接线已由用户验看签done，样板残留已清；425已完成最后工程清理；435—440本轮技术完成待用户验看，直接前置和授权仍回原票；423/424需独立授权。410、412–421已按代验收授权签done（证据在各票Comments）；417含一处产品修复（contract-subtables引用下拉收容进Modal），421新增首页待办页（`/preview`，三卡计数与通知页同源落位，见[预览指南](guides/frontend-preview.md#首页待办421)）。逐票Status/验收/依据归`.scratch/tails/issues/`，列票用仓根`backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py`；协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)，A–E技术回执指针在各票Comments。技术完成不代签done，缺验证留原票。
+**票务导航。** 422已按用户指令done（固定基线与未验边界见[验收材料](../.scratch/frontend-vue-rewrite/evidence.md)）；441正式接线已由用户验看签done，样板残留已清；425已完成最后工程清理；435—440已按用户指令签收done，直接前置和授权仍回原票；423/424需独立授权。410、412–421已按代验收授权签done（证据在各票Comments）；417含一处产品修复（contract-subtables引用下拉收容进Modal），421新增首页待办页（`/preview`，三卡计数与通知页同源落位，见[预览指南](guides/frontend-preview.md#首页待办421)）。逐票Status/验收/依据归`.scratch/tails/issues/`，列票用仓根`backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py`；协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)，A–E技术回执指针在各票Comments。技术完成不代签done，缺验证留原票。
 
 **架构审查修复。** 2026-10-25落实报告推荐的前三项（共享弹层测试、统一seed接线、页面注册表），技术结果与旧测试收口见[修复回执](../.scratch/frontend-vue-rewrite/architecture-repair.md)；用户本日已将候选4（公共回执/工具归位）、5（台账写出口）纳入[422原票](../.scratch/tails/issues/TAIL-422-累计集成验收与切换准备.md)，按4→5→累计验证/审查收敛，不再留到422后。该修复阶段当时未启动421/422；本轮422进度以原票及验收材料为准，8060保持原状。
 
