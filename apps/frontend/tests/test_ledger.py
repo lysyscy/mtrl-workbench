@@ -254,7 +254,7 @@ def test_real_undo_redo_conflict_and_account_ownership(server,browser_page):
         current=row_data(data(page,server,project),rid)
         assert other.post('/api/m05/history/save',json=body_for(project,current,paid_amount='99.99')).json()['ok']
     page.get_by_role('button',name='撤销',exact=True).click()
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已被后续操作修改')
+    expect(page.locator('.history-tools [role=status]')).to_contain_text('已被后续操作修改')
     current=row_data(data(page,server,project),rid)
     assert current['payment']=='99.99' and current['other_expense']=='120.00'
 
@@ -281,7 +281,7 @@ def test_duplicate_add_stale_token_and_real_export(server,browser_page):
     expect(cell(page,rid,'remark')).to_have_value('导出核对行')
     expected=data(page,server,project,previous_report_month(page))
     page.get_by_role('button',name='逐月台账导出…',exact=True).click()
-    page.get_by_role('button',name='确认清单',exact=True).click()
+    expect(page.get_by_role('dialog').get_by_role('group', name='导出项目选择与顺序')).to_be_visible()
     with page.expect_download() as event:page.get_by_role('button',name='保存到本地',exact=True).click()
     download=event.value;path=output(download.suggested_filename,kind='exports');download.save_as(path)
     assert path.stat().st_size>1000 and path.suffix=='.xlsx'

@@ -1,5 +1,4 @@
-import { ApiError, record, requestJson } from './api';
-import { body, cents, decimal } from './notices-api';
+import { ApiError, body, cents, confirmWrite, decimal, record, requestJson } from './api';
 import { timeMatches } from './time-picker';
 
 export const fields = [
@@ -66,6 +65,5 @@ export function sumRows(rows:InventoryRow[], key:'qty'|'amount'|'adj_amount'|'ta
 }
 export async function adjustInventory(rowId:number, amount:string, remark:string, clear:boolean,signal:AbortSignal) {
   const value = await requestJson(`/api/m08/adjust${clear ? '/clear' : ''}`, {method:'POST',signal,...body(clear ? {row_id:rowId} : {row_id:rowId,amount,remark})});
-  if (!record(value) || value.ok !== true || value.row_id !== rowId) throw new ApiError('操作回执未确认，请重读核对，勿重复提交。',0,'invalid_response');
+  confirmWrite(record(value) && value.ok === true && value.row_id === rowId, '操作回执未确认，请重读核对，勿重复提交。');
 }
-export const uncertainWrite = (e:unknown) => !(e instanceof ApiError) || !e.status || e.status >= 500 || e.code === 'invalid_response';

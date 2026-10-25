@@ -27,6 +27,7 @@ def test_mechanical_ledger_uses_effective_taxed_values(session):
     current=rows('2026-09')
     assert [(r['month'],r['other_expense'],r['payment'],r['debt']) for r in current]==[
         ('2026-07','50.00','10.00','40.00'),
+        ('2026-07','100.00','0.00','100.00'),
         ('2026-08','0.00','0.00','0.00'),
         ('2026-09','85600.00','5000.00','80600.00'),
     ]

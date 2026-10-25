@@ -5,7 +5,7 @@ import Select from 'antd/es/select';
 import Checkbox from 'antd/es/checkbox';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ApiError, requestJson } from './api';
+import { ApiError, uncertainWrite, requestJson } from './api';
 import type { Identity, Project } from './api';
 import { ProjectPicker } from './ledger-controls';
 import { BusinessModal } from './business-modal';
@@ -62,7 +62,7 @@ export function ContractEditor({ inline=false, materialOnly=false, subtables, ch
       if (row) await detail.refetch({throwOnError:true});
       announce(row?'合同已保存。':'合同已新增。');if(!subdirty)close();if(!row&&typeof result.id==='number')created(result.id);
     } catch (failure) {
-      const known=failure instanceof ApiError && failure.status>0 && failure.code!=='invalid_response';
+      const known=!uncertainWrite(failure);
       const unknown=!written && !known;
       setUncertain(unknown);
       setError(`${written?'合同已保存，重读失败；勿重复保存。':unknown?'保存结果待核实，请重读列表和详情核对，勿重复提交。':''}${failure instanceof Error?failure.message:'保存未完成，请重试。'}`);

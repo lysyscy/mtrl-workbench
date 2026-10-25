@@ -113,7 +113,7 @@ def test_恢复剔除必须先勾选():
     #     （反向灵敏度第 3/4 条实测抓到过；这两条正是"全选框永久卡半选态"的成因）。
     assert "pickAll:t=>{ const ids=ntHit(fNt).filter(ntSelectable).map(n=>n.id);" in SHELL, \
         "全选没走可勾选出口 ⇒ 点「全选」漏掉剔除行"
-    assert ("const vis=ntHit(fNt).filter(ntSelectable).map(n=>n.id), "
+    assert ("const rows=ntHit(fNt), vis=rows.filter(ntSelectable).map(n=>n.id), "
             "hit=vis.filter(i=>pickSet.has(i)).length;") in SHELL, \
         "全选框回显与勾选框走了**两个**出口 ⇒ 全选框会永久卡在半选态（勾满了还是个半选框）"
 

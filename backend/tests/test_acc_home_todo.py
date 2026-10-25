@@ -181,6 +181,7 @@ class _Rec:
     def __init__(self, run_type="fetch", target="付款通知书", status="failed"):
         self.id, self.run_type, self.target, self.status = 1, run_type, target, status
         self.success_count, self.fail_count = 0, 1
+        self.triggered_by = ""
         self.error_message = "i8 接口超时"
         self.started_at = datetime(2026, 9, 14, 9, 12, 7)
         self.finished_at = datetime(2026, 9, 14, 9, 12, 38)

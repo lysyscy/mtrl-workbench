@@ -91,7 +91,7 @@ def rebuild_cache_def(tpl_pcd, data, num_cols, field_count, empty_fields=()):
                 new_seg = new_seg[:m.start()] + '<sharedItems%s>' % attr_s + new_seg[m.end():]
             new_seg = re.sub(r'count="\d+"', 'count="%d"' % len(nums), new_seg)
             if added:
-                new_seg = new_seg[:-len('</sharedItems>')] + extra + '</sharedItems>'
+                new_seg = new_seg.replace('</sharedItems>', extra + '</sharedItems>', 1)
         else:
             for j, v in enumerate(seen):
                 idx[str(v)] = j
@@ -108,7 +108,7 @@ def rebuild_cache_def(tpl_pcd, data, num_cols, field_count, empty_fields=()):
                             % escape(str(k), {chr(34): '&quot;', chr(39): '&apos;'}) for k in added)
             new_seg = re.sub(r'count="\d+"', 'count="%d"' % len(seen), body)
             if added:
-                new_seg = new_seg[:-len('</sharedItems>')] + extra + '</sharedItems>'
+                new_seg = new_seg.replace('</sharedItems>', extra + '</sharedItems>', 1)
         field_maps.append(idx)
         new_parts.append(new_seg)
     names = []

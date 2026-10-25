@@ -1,4 +1,4 @@
-import { ApiError, record, requestJson } from './api';
+import { ApiError, body, confirmWrite, record, requestJson } from './api';
 
 export type Category = 'material' | 'mechanical';
 export type Field = 'month' | 'other_expense' | 'payment' | 'remark';
@@ -62,4 +62,21 @@ export function same(field: Field, a: string, b: string): boolean {
     return match ? BigInt(`${match[1]}${match[2]}${(match[3] ?? '').padEnd(2, '0')}`).toString() : value;
   };
   return normalize(a) === normalize(b);
+}
+
+export async function saveLedgerCell(project: number, row: LedgerRow, field: Field, text: string, signal: AbortSignal) {
+  const remarkOnly = !row.editable && field === 'remark';
+  const result = await requestJson(remarkOnly ? '/m05/ledger/remark' : '/api/m05/history/save', { method: 'POST', signal,
+    headers: { 'Content-Type': remarkOnly ? 'application/x-www-form-urlencoded' : 'application/json' },
+    body: remarkOnly ? new URLSearchParams({ project_id: String(project), category: row.category, ym: row.month, remark: text.trim(), token: row.token }) : JSON.stringify(payload(project, { ...row, [field]: text })) });
+  confirmWrite(record(result) && result.ok === true && (remarkOnly || typeof result.id === 'number' && Number.isSafeInteger(result.id) && result.id > 0), '保存结果未确认，请刷新核对后再试。');
+}
+export async function deleteLedgerRow(row: LedgerRow, signal: AbortSignal) {
+  const result = await requestJson('/api/m05/history/delete', { method: 'POST', signal, ...body({ id: row.record_id, token: row.token }) });
+  confirmWrite(record(result) && result.ok === true, '删除结果未确认，请刷新核对，勿重复删除。');
+}
+export async function addLedgerRow(project: number, signal: AbortSignal): Promise<number> {
+  const result = await requestJson('/api/m05/history/save', { method: 'POST', signal, ...body({ project_id: project, category: 'material', entry_kind: 'manual', cutoff_ym: '2025-11', settle_amount: '0', paid_amount: '0', remark: '' }) });
+  if (!record(result) || result.ok !== true || typeof result.id !== 'number' || !Number.isSafeInteger(result.id) || result.id <= 0) throw new ApiError('新增结果未确认，请刷新核对后再试。', 0, 'invalid_response');
+  return result.id;
 }

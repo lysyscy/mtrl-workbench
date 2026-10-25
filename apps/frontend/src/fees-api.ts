@@ -1,4 +1,4 @@
-import { ApiError, record, requestJson } from './api';
+import { ApiError, body, confirmWrite, record, requestJson } from './api';
 
 export interface FeeRow { kind: 'auto' | 'manual'; id: number; index: number; item: string; source: string; amount: string; share: string }
 export interface FeeData {
@@ -28,10 +28,9 @@ export async function getFees(ym: string, project: string, signal?: AbortSignal)
   return data;
 }
 export async function feeWrite(action: string, payload: unknown, signal: AbortSignal) {
-  const data = await requestJson(`/api/m09/fee/${action}`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  if (!record(data) || data.ok !== true || data.kind !== 'ok') throw new ApiError('保存回执未确认，请重读核对，勿重复提交。', 0, 'invalid_response');
+  const data = await requestJson(`/api/m09/fee/${action}`, { method: 'POST', signal, ...body(payload) });
+  confirmWrite(record(data) && data.ok === true && data.kind === 'ok', '保存回执未确认，请重读核对，勿重复提交。');
 }
-export const uncertainFee = (error: unknown) => !(error instanceof ApiError) || !error.status || error.status >= 500 || error.code === 'invalid_response';
 export function addMonth(month: string, offset: number) {
   return new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)) - 1 + offset, 1)).toISOString().slice(0, 7);
 }

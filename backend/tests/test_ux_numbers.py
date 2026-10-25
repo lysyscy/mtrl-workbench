@@ -42,7 +42,7 @@ def test_金额大数一律带单位():
     #    ⚠️ 上面那条判据用的是 `<div class="v">`（卡片里 KPI 的形态），**扫不到勾选条的 `<span class="v">`**
     #    ⇒ 这就是它的盲区（判据比口径弱 = 另一种假绿；同 `A1` 卡头那条的教训）。
     # ① 正向守卫之一：`m05` 逐月欠款台账标题行那个「本项目当前欠款（含期初）」
-    assert '<b class="fc">${MONEY(cur)}</b>' in SHELL, \
+    assert '<b class="fc">${ledgerReady?MONEY(cur):\'—\'}</b>' in SHELL, \
         "`m05` 台账标题行的「本项目当前欠款」没带单位（那是这一页最显眼的数）"
     # ② 正向守卫之二：`m03` 勾选汇总条的两个数（用户按它们判断「这一批要付多少」）
     for tag, k in (("已勾选审批金额", "pkA"), ("已勾选本次应付", "pkP")):
@@ -73,7 +73,7 @@ def test_欠款大数显示实际累计截止月份():
 
     page = page_seg('m05')
     assert 'const upto=(mLast?mLast.ym:' in page
-    assert '${MONEY(cur)}</b><span class="mut sm">截至 ${esc(upto)}</span>' in page
+    assert '${ledgerReady?MONEY(cur):\'—\'}</b><span class="mut sm">截至 ${esc(upto)}</span>' in page
 
 
 def test_验收术语不许留在界面上():

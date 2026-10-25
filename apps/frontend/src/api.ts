@@ -2,14 +2,22 @@ export class ApiError extends Error {
   constructor(message: string, public status = 0, public code = '') { super(message); }
 }
 
+let requestIdentity = '';
+let identityRequests = new AbortController();
+export function setRequestIdentity(identity: string) {
+  if (identity === requestIdentity) return;
+  identityRequests.abort(); identityRequests = new AbortController(); requestIdentity = identity;
+}
+
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
+  const signal = init.signal ? AbortSignal.any([init.signal, identityRequests.signal]) : identityRequests.signal;
   let response: Response;
-  try { response = await fetch(path, { ...init, credentials: 'same-origin', headers: { Accept: 'application/json', ...init.headers } }); }
+  try { response = await fetch(path, { ...init, signal, credentials: 'same-origin', headers: { Accept: 'application/json', ...init.headers } }); }
   catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new ApiError('连接失败，请检查网络后重试。');
   }
-  if (init.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
   if (response.status === 401) {
     window.dispatchEvent(new Event('session-lost'));
     throw new ApiError('登录已失效，请重新登录后重试。', 401);
@@ -30,7 +38,10 @@ async function jsonResult(response: Response): Promise<unknown> {
 }
 
 export async function requestJson(path: string, init: RequestInit = {}): Promise<unknown> {
-  return jsonResult(await requestResponse(path, init));
+  const lifetime = identityRequests.signal;
+  const result = await jsonResult(await requestResponse(path, init));
+  if (lifetime.aborted) throw new DOMException('Aborted', 'AbortError');
+  return result;
 }
 
 export async function requestFile(path: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> {
@@ -71,3 +82,17 @@ export function readProjects(value: unknown): Project[] {
     return { id: row.id, name_full: row.name_full, warehouse_name: row.warehouse_name, disp: row.disp, project_type: row.project_type as Project['project_type'], status: row.status as Project['status'], ord: row.ord, phid: row.phid };
   });
 }
+
+export function cents(value: string): bigint {
+  const match = /^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(value);
+  if (!match) throw new ApiError('金额读取不完整，请重试。');
+  return (match[1] ? -1n : 1n) * (BigInt(match[2]!) * 100n + BigInt((match[3] ?? '').padEnd(2, '0')));
+}
+export function decimal(value: bigint): string { const n = value < 0n ? -value : value; return `${value < 0n ? '-' : ''}${n / 100n}.${String(n % 100n).padStart(2, '0')}`; }
+export function money(value: string): string { const [whole, part] = decimal(cents(value)).split('.'); return `${whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${part}`; }
+export const body = (value: unknown) => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
+
+export function confirmWrite(confirmed: boolean, message: string) {
+  if (!confirmed) throw new ApiError(message, 0, 'invalid_response');
+}
+export const uncertainWrite = (error: unknown) => !(error instanceof ApiError) || !error.status || error.status >= 500 || error.code === 'invalid_response';

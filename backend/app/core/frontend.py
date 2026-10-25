@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from starlette.staticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles
 
 
 def install_preview(app: FastAPI, directory: str, static_file) -> None:

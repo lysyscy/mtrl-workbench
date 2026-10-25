@@ -14,7 +14,7 @@ import { useHistoryGuard } from './history';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { money } from './notices-api';
-import { uncertainWrite } from './inventory-api';
+import { uncertainWrite } from './api';
 import { categories, getProcess, manualProcess, mechKeys, mechLabels, saveProcess, tabLabels } from './process-api';
 import type { Difference, ProcessRow } from './process-api';
 import { ProcessExport } from './process-export';

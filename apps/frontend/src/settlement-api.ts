@@ -1,4 +1,4 @@
-import { ApiError, record, requestJson } from './api';
+import { ApiError, body, cents, confirmWrite, decimal, record, requestJson } from './api';
 
 export const kinds = ['焊材', '气体'] as const;
 export type ExtractKind = typeof kinds[number];
@@ -37,14 +37,11 @@ export function readExtract(value: unknown, year: string): ExtractData {
 export const getSettlement = async (ym: string, signal?: AbortSignal) => readSettlement(await requestJson(`/api/m07/settlement?${new URLSearchParams({ period: ym })}`, signal ? { signal } : {}), ym);
 export const getExtract = async (year: string, status: string, signal?: AbortSignal) => readExtract(await requestJson(`/api/m07/extract?${new URLSearchParams({ year, status })}`, signal ? { signal } : {}), year);
 export async function saveBalance(kind: ExtractKind, warehouse: string, raw: string, signal: AbortSignal) {
-  const value = await requestJson('/api/m07/extract/balance', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, warehouse, raw }) });
+  const value = await requestJson('/api/m07/extract/balance', { method: 'POST', signal, ...body({ kind, warehouse, raw }) });
   // This existing endpoint returns Decimal values as JSON numbers, and null when cleared.
-  if (!record(value) || value.ok !== true || !(amount(value.value) || typeof value.value === 'number' && Number.isFinite(value.value))) throw new ApiError('保存回执未确认，请重读核对，勿重复提交。', 0, 'invalid_response');
+  confirmWrite(record(value) && value.ok === true && (amount(value.value) || typeof value.value === 'number' && Number.isFinite(value.value)), '保存回执未确认，请重读核对，勿重复提交。');
 }
-export const uncertainBalance = (e: unknown) => !(e instanceof ApiError) || !e.status || e.status >= 500 || e.code === 'invalid_response';
-const cents = (value: string) => { const [whole, fraction = ''] = value.split('.'); return BigInt(`${whole}${fraction.padEnd(2,'0')}`); };
 export function settlementTotal(rows: SettlementRow[], field: 'begin' | 'in' | 'out' | 'end') {
-  const value = rows.reduce((n,r) => n + cents(r[field]), 0n), digits = String(value < 0n ? -value : value).padStart(3,'0');
-  return `${value < 0n ? '-' : ''}${digits.slice(0,-2)}.${digits.slice(-2)}`;
+  return decimal(rows.reduce((n,r) => n + cents(r[field]), 0n));
 }
 export const balanced = (r: SettlementRow) => cents(r.begin) + cents(r.in) - cents(r.out) === cents(r.end);

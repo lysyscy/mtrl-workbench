@@ -19,9 +19,10 @@ export function BusinessModal({ open, requestClose, className, titleId, children
   }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; restore(); }; }, []);
   useEffect(() => { if (!open) restore(); }, [open]);
+  // rc-dialog labels only its own header; our heading lives in the body.
   return <Modal open={open} onCancel={requestClose} footer={null} closable={false} keyboard centered
     mask={{ closable: true }} width="max-content" focusable={{ focusTriggerAfterClose: false }}
-    aria-labelledby={titleId} className="business-modal" destroyOnHidden={false}>
+    panelRef={panel => { panel?.setAttribute('aria-labelledby', titleId); }} className="business-modal" destroyOnHidden={false}>
     <div ref={body} className={className}>{children}</div>
   </Modal>;
 }

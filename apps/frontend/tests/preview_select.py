@@ -1,7 +1,7 @@
 """Select only the open antd popup, including virtualized option lists."""
 import re
 
-from playwright.sync_api import TimeoutError
+from playwright.sync_api import TimeoutError, expect
 
 
 def reset_virtual_scroll(dropdown):
@@ -47,3 +47,7 @@ def pick_option(page, label, text):
             raise
         open_popup(page, label)
         pick_popup_option(page, text)
+
+    control = page.get_by_label(label, exact=True)
+    if control.count() and control.get_attribute('aria-expanded') == 'false':
+        expect(page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')).to_have_count(0)

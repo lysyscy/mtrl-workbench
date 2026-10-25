@@ -1,3 +1,4 @@
+import { uncertainWrite } from './api';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import { useEffect, useRef, useState } from 'react';
@@ -6,7 +7,7 @@ import { BusinessModal } from './business-modal';
 import { BoundedTable } from './bounded-table';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { TimePicker } from './time-picker';
-import { addMonth, feeWrite, uncertainFee } from './fees-api';
+import { addMonth, feeWrite } from './fees-api';
 import type { FeeRow } from './fees-api';
 
 export function FeeBatch({ me, ym, project, display, rows, paused, close, saved }: {
@@ -33,8 +34,8 @@ export function FeeBatch({ me, ym, project, display, rows, paused, close, saved 
       success = true; setWritten(true); await saved(); close();
     } catch (failure) {
       if (writeAbort.current.signal.aborted) return;
-      setUncertain(success || uncertainFee(failure)); setVerified(false);
-      setError(`${success ? '已保存，重读失败。' : ''}${failure instanceof Error ? failure.message : '操作失败。'}${success || uncertainFee(failure) ? '请先核对，勿重复提交。' : ''}`);
+      setUncertain(success || uncertainWrite(failure)); setVerified(false);
+      setError(`${success ? '已保存，重读失败。' : ''}${failure instanceof Error ? failure.message : '操作失败。'}${success || uncertainWrite(failure) ? '请先核对，勿重复提交。' : ''}`);
     } finally { lock.current = false; setBusy(false); }
   }
   async function reread() {

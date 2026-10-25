@@ -1,6 +1,7 @@
 """B: exact pasted selection and inline status writes; no real i8 or printing."""
 import re
 from playwright.sync_api import expect
+from preview_select import pick_option
 from test_preview import server, browser_page  # noqa: F401
 
 
@@ -25,7 +26,7 @@ def test_exact_paste_replaces_picks_reports_exceptions_and_preserves_order(serve
     expect(page.get_by_label('勾选FKTZS2026100006')).to_be_visible()
     page.get_by_label('勾选FKTZS2026100006').click()
     expect(page.get_by_label('勾选FKTZS2026100006')).to_be_checked()
-    page.get_by_label('搜索', exact=True).fill('不会匹配')
+    page.get_by_label('通知书搜索', exact=True).fill('不会匹配')
     page.get_by_role('button',name='粘贴单据号勾选',exact=True).click()
     dialog = page.get_by_role('dialog',name='粘贴单据号勾选',exact=True)
     dialog.get_by_label('单据号',exact=True).fill('"fktzs2026100002"\nFKTZS2026100001 FKTZS2026100001,FKTZS2026100003；FKTZS2026100004\tFKTZS2026100005 QTZC2026100001 FKTZS2026130001 FKTZS2026109999 名称FKTZS2026100006')
@@ -35,8 +36,8 @@ def test_exact_paste_replaces_picks_reports_exceptions_and_preserves_order(serve
     for text in ['未识别为单据号','QTZC2026100001','未找到','FKTZS2026109999','系统重号','重复输入','已付清，仍可打印','已剔除或已撤单']:
         expect(result).to_contain_text(text)
     result.get_by_role('button',name='完成',exact=True).click()
-    expect(page.get_by_label('搜索',exact=True)).to_have_value('')
-    expect(page.locator('.notice-filters label').filter(has_text=re.compile('^付款状态')).locator('select')).to_have_value('')
+    expect(page.get_by_label('通知书搜索',exact=True)).to_have_value('')
+    expect(page.get_by_label('付款状态', exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('全部')
     expect(page.get_by_label('勾选FKTZS2026100006')).not_to_be_checked()
     expect(page.get_by_label('勾选FKTZS2026100001')).to_be_checked()
     expect(page.get_by_label('勾选FKTZS2026100002')).to_be_checked()
@@ -53,36 +54,36 @@ def test_exact_paste_replaces_picks_reports_exceptions_and_preserves_order(serve
     page.get_by_role('button',name='去处理',exact=True).click()
     expect(page.get_by_label('勾选FKTZS2026100004')).not_to_be_checked()
     expect(page.get_by_label('勾选FKTZS2026100006')).to_have_count(0)
-    page.locator('.notice-filters label').filter(has_text=re.compile('^分类')).locator('select').select_option('material')
+    pick_option(page, '通知书分类', '辅材')
     expect(page.get_by_label('勾选FKTZS2026100004')).to_have_count(0)
-    expect(page.get_by_label('搜索',exact=True)).to_be_visible()
+    expect(page.get_by_label('通知书搜索',exact=True)).to_be_visible()
 
 
 def test_inline_project_status_saves_and_failed_save_restores_value(server, browser_page):
     page, _ = browser_page
     login_b(page, server)
-    page.locator('.projects-page .filters select').first.select_option('all')
+    pick_option(page, '项目状态筛选', '全部')
     field = page.get_by_label('状态：隔离项目',exact=True)
     project = next(p for p in page.request.get(server+'/api/m01/projects?status=all').json() if p['disp']=='隔离项目')
     pending=[]
     url=f'**/api/m01/projects/{project["id"]}/status'
     page.route(url,lambda route:pending.append(route))
-    field.select_option('archived')
+    pick_option(page, '状态：隔离项目', '归档')
     expect(field).to_be_disabled()
     expect(page.get_by_role('dialog')).to_have_count(0)
     expect(page.get_by_text('正在保存…',exact=True)).to_be_visible()
     pending.pop().fulfill(status=400,json={'ok':False,'message':'合成拒绝：仍有在建小微'})
-    expect(field).to_have_value('active')
+    expect(field.locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('在建')
     expect(field).to_be_enabled()
-    expect(field.locator('..')).to_contain_text('合成拒绝：仍有在建小微')
+    expect(field.locator('xpath=ancestor::td')).to_contain_text('合成拒绝：仍有在建小微')
     page.unroute(url)
-    field.select_option('archived')
+    pick_option(page, '状态：隔离项目', '归档')
     expect(field).to_be_enabled()
-    expect(field).to_have_value('archived')
+    expect(field.locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('归档')
     actual=next(p for p in page.request.get(server+'/api/m01/projects?status=all').json() if p['id']==project['id'])
     assert actual['status']=='archived'
     trails=page.request.get(server+'/api/m01/trails?limit=8').json()
     assert any(t['field_label']=='项目状态' and t['after']=='archived' for t in trails)
-    field.select_option('active')
+    pick_option(page, '状态：隔离项目', '在建')
     expect(field).to_be_enabled()
-    expect(field).to_have_value('active')
+    expect(field.locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('在建')

@@ -52,7 +52,7 @@ def test_欠款标题显示账内截止月而非系统当月(ui_page):
     from app.mod03_notice.page import DEFAULT_THEME, render_theme
     p.add_style_tag(content=render_theme(DEFAULT_THEME))
     p.evaluate('''() => {
-      M05.ledger={sides:[{label:'辅材',rows:[{month:'2024-03',other_expense:150,payment:20,is_opening:false}]}]};
+      M05.ledger={project_id:1,sides:[{label:'辅材',rows:[{month:'2024-03',other_expense:150,payment:20,is_opening:false}]}]};
       VIEW='m05';ledProj='测试仓库';render();
     }''')
     assert '截至 2024-03' in p.inner_text('#view')

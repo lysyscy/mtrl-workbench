@@ -421,7 +421,7 @@ def act_remark(
     ⚠️ **参数一律 `Form`**（同上）。
     """
     with session_scope() as s:
-        from app.mod01_projects import repository as projects
+        from app.mod01_projects import service as projects
         projects.get_project(s, int(project_id), for_update=True)
         if token:
             ledger = svc.build_ledger(s, project_id=int(project_id))

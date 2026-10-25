@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.core.errors import MustReportError
 from app.mod05_flow import router as routes
+from app.mod01_projects import service as projects
 
 
 @pytest.mark.parametrize('path,body,method', [
@@ -20,6 +21,7 @@ def test_form_write_returns_receipt_without_visiting_retired_page(monkeypatch, p
     writes = []
     monkeypatch.setattr(routes, 'session_scope', lambda: nullcontext(None))
     monkeypatch.setattr(routes.repo, method, lambda *a, **kw: writes.append(kw) or 1)
+    monkeypatch.setattr(projects, 'get_project', lambda *a, **kw: None)
     with TestClient(app) as client:
         response = client.post(path, data=body)
     retired = path != '/m05/ledger/remark'

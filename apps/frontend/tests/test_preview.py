@@ -86,7 +86,9 @@ def test_fastapi_build_assets_cookie_and_read(server, browser_page):
     html = httpx.get(server + '/preview/projects')
     assert html.status_code == 200 and html.headers['cache-control'] == 'no-cache'
     assets = re.findall(r'(?:src|href)="(/preview/assets/[^" ]+)"', html.text)
-    assert len(assets) == 2 and all(httpx.get(server + asset).status_code == 200 for asset in assets)
+    assert assets and len(set(assets)) == len(assets)
+    assert any(asset.endswith('.js') for asset in assets) and any(asset.endswith('.css') for asset in assets)
+    assert all(httpx.get(server + asset).status_code == 200 for asset in assets)
     assert httpx.get(server + '/preview/assets/missing.js').status_code == 404
     assert httpx.get(server + '/preview/missing.js').status_code == 404
     assert httpx.get(server + '/app').content == (ROOT / 'backend/app/web/index.html').read_bytes()
@@ -94,22 +96,22 @@ def test_fastapi_build_assets_cookie_and_read(server, browser_page):
     expect(page.get_by_text('未登录 · 只读', exact=True)).to_be_visible()
     expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
     login(page, server)
-    expect(page.get_by_text('预览管理员 · 管理员', exact=True)).to_be_visible()
+    expect(page.get_by_role('button', name='预览管理员（管理员）', exact=True)).to_be_visible()
     cookies = {c['name']: c for c in context.cookies()}
     assert cookies['mw_preview_397']['httpOnly'] and cookies['mw_preview_397']['sameSite'] == 'Lax'
     assert 'mw_session' not in cookies
     api = page.request.get(server + '/api/m01/projects').json()
     assert [p['disp'] for p in api] == ['隔离项目', '长项目名验收']
     page.reload()
-    expect(page.get_by_text('预览管理员 · 管理员', exact=True)).to_be_visible()
+    expect(page.get_by_role('button', name='预览管理员（管理员）', exact=True)).to_be_visible()
     expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
     page.evaluate('document.fonts.ready')
     assert page.evaluate("document.fonts.check('14px MiSans')")
     page.screenshot(path=str(output('projects-1080.png', kind='screenshots')), full_page=True)
-    page.get_by_label('状态', exact=True).select_option('archived')
+    pick_option(page, '项目状态筛选', '归档')
     expect(page.get_by_role('cell', name='归档样例', exact=True)).to_be_visible()
-    page.get_by_label('项目', exact=True).fill('不存在的验收项目')
-    expect(page.get_by_text('没有符合条件的项目。可调整状态或关键词。', exact=True)).to_be_visible()
+    page.get_by_label('项目搜索', exact=True).fill('不存在的验收项目')
+    expect(page.get_by_text('没有符合条件的项目。可调整筛选，或手工建档、同步名单。', exact=True)).to_be_visible()
     page.screenshot(path=str(output('projects-empty.png', kind='screenshots')), full_page=True)
 
 
@@ -149,7 +151,8 @@ def test_switch_account_drops_old_scope_and_late_response(server, browser_page):
         else:
             route.continue_()
     page.route('**/api/m01/projects?status=all', delay_old_account)
-    page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
+    with page.expect_request('**/api/m01/projects?status=all'):
+        page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
     expect(page.get_by_text('共 0 个项目', exact=False)).to_be_visible()
     assert pending
     with httpx.Client() as client:

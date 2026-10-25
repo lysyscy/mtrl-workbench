@@ -1,3 +1,4 @@
+import { uncertainWrite } from './api';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Tag from 'antd/es/tag';
@@ -11,7 +12,7 @@ import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { useHistoryGuard } from './history';
 import { money } from './notices-api';
-import { feeWrite, getFees, uncertainFee } from './fees-api';
+import { feeWrite, getFees } from './fees-api';
 import type { FeeField, FeeRow } from './fees-api';
 import { FeeBatch } from './fees-batch';
 import './fees.css';
@@ -113,7 +114,7 @@ export function FeeScope({ ym, project, me, blocked, active, status }: { ym: str
     } catch (failure) {
       if (!alive.current) return;
       const message = failure instanceof Error ? failure.message : '保存失败，请重试。';
-      if (written || uncertainFee(failure)) { setUncertain(true); setVerified(false); state.current.uncertain = true; queue.current = []; setError(`${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读并核对，勿重复提交。`); }
+      if (written || uncertainWrite(failure)) { setUncertain(true); setVerified(false); state.current.uncertain = true; queue.current = []; setError(`${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读并核对，勿重复提交。`); }
       else { const next = { ...state.current.drafts }; if (next[key]) next[key] = { ...next[key], error: message }; update(next); setError(message); }
     } finally {
       lock.current = false; if (alive.current) { setBusy(false); void drain(); }
@@ -133,7 +134,7 @@ export function FeeScope({ ym, project, me, blocked, active, status }: { ym: str
       await feeWrite(action, { ym, project, ...(row ? { index: row.index } : {}) }, writeAbort.current.signal);
       written = true; if (!alive.current) return; setDeleting(null);
       const data = await reload(); if (alive.current) setFeedback(`${scopeName} · 已${action === 'add' ? '增加手填项' : '删除'}，合计 ${money(data.total)}`);
-    } catch (failure) { if (alive.current) { setUncertain(written || uncertainFee(failure)); setVerified(false); setError(`${written ? '已保存，重读失败。' : ''}${failure instanceof Error ? failure.message : '操作失败。'}`); } }
+    } catch (failure) { if (alive.current) { setUncertain(written || uncertainWrite(failure)); setVerified(false); setError(`${written ? '已保存，重读失败。' : ''}${failure instanceof Error ? failure.message : '操作失败。'}`); } }
     finally { lock.current = false; if (alive.current) setBusy(false); }
   }
   async function reread() {

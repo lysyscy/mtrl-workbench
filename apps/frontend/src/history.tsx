@@ -2,7 +2,7 @@ import Button from 'antd/es/button';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, record, requestJson } from './api';
+import { ApiError, record, requestJson, uncertainWrite } from './api';
 import type { Identity } from './api';
 
 interface HistoryItem { id: number; label: string; count: number }
@@ -68,7 +68,7 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
     const reason = protectedReason(); if (reason) { setFeedback(reason); return; }
     lock.current = true; setBusy(true); setFeedback('');
     const controller = new AbortController(); request.current = controller;
-    let sent = false;
+    let sent = false, confirmed = false;
     try {
       const latest = await client.fetchQuery({ queryKey: ['history', owner], staleTime: 0,
         queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) });
@@ -78,10 +78,15 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
       const result = await requestJson(`/api/history/${direction}`, { method: 'POST', signal: controller.signal,
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation_id: item.id }) });
       if (!record(result) || result.ok !== true) throw new ApiError('操作结果未确认。');
+      confirmed = true;
       await client.invalidateQueries({}, { throwOnError: true });
       if (alive.current) setFeedback(direction === 'undo' ? '已撤销。' : '已重做。');
     } catch (error) {
-      if (alive.current) { setUncertain(sent); setFeedback(sent ? '操作结果待核实，请重读核对；勿重复撤销或重做。' : error instanceof Error ? error.message : '操作历史读取失败，请重试。'); }
+      if (alive.current) {
+        const unknown = confirmed || sent && uncertainWrite(error);
+        setUncertain(unknown);
+        setFeedback(confirmed ? '操作已完成，重读失败，请重读核对；勿重复撤销或重做。' : unknown ? '操作结果待核实，请重读核对；勿重复撤销或重做。' : error instanceof Error ? error.message : '操作历史读取失败，请重试。');
+      }
     } finally { lock.current = false; if (alive.current) setBusy(false); }
   }
   const replayRef = useRef(replay); replayRef.current = replay;

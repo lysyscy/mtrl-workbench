@@ -11,7 +11,7 @@ import { Link, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
-import { ApiError, projectLabel, readProjects, record, requestJson } from './api';
+import { ApiError, confirmWrite, uncertainWrite, projectLabel, readProjects, record, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker } from './ledger-controls';
 import { pageGridGeometry, fitGridColumns, contentWidth, fixedWidth, gridTheme } from './grid';
@@ -54,6 +54,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   useEffect(() => { const listener=(event:Event)=> { const id=Number((event as CustomEvent<number>).detail);setPayOverrides(old=>Object.fromEntries(Object.entries(old).filter(([key])=>Number(key)!==id))); };window.addEventListener('payment-revoked',listener);return()=>window.removeEventListener('payment-revoked',listener); },[]);
   const [autoIds,setAutoIds] = useState<number[]|null>(null);
   const draftRef = useRef<Draft | null>(null), moneyDrafts = useRef<Record<string,string>>({}), pendingFocus = useRef(0);
+  const [draftUncertain, setDraftUncertain] = useState(false), [draftChecked, setDraftChecked] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null), [maintenance, setMaintenance] = useState<NoticeDialogState | null>(null), [focusId,setFocusId] = useState(0);
   useEffect(() => { if (!active) return; const id=Number(params.get('notice'));if(id>0){pendingFocus.current=id;setFocusId(id);setFilters({...defaults(),period:'全部',paid:''});setSearch('');} }, [params.get('notice'), active]);
   // Home todo tiles land here with ?todo=: conflicting old filters are reset so the
@@ -75,12 +76,12 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
   const selectedPay = selected.filter(r => !r.is_excluded && !r.is_revoked);
   const liveShown = shown.filter(live);
   const summary = liveShown.length ? [{ notice_id: -1, bill_no: '合计', ...Object.fromEntries(moneyKeys.map(k => [k, total(liveShown, k)])) } as NoticeRow] : [];
-  const unavailable = blocked || !active || !me || busy || query.isPending || query.isError || query.isFetching;
+  const unavailable = draftUncertain || blocked || !active || !me || busy || query.isPending || query.isError || query.isFetching;
   useHistoryGuard('notices', () => busy || lock.current ? '付款通知书正在处理，请稍候。' : draftRef.current || Object.keys(moneyDrafts.current).length ? '付款通知书有未保存输入，请先处理。' : '');
   const batchUnavailable = unavailable || !picked.size || hidden > 0;
   const batchReason = hidden ? '当前列表外还有勾选，请先清空搜索核对' : !picked.size ? '请先勾选通知书' : !me ? '请先登录' : '';
   async function refresh() { await client.invalidateQueries({ predicate: query => query.queryKey[0] !== 'notice-maintenance' }, { throwOnError: true }); }
-  function cancelDraft() { draftRef.current = null; setDraft(null); }
+  function cancelDraft() { draftRef.current = null; setDraft(null); setDraftUncertain(false); setDraftChecked(false); }
   function begin(row?: NoticeRow) {
     if (unavailable || draftRef.current) return;
     const next = manualDraft(row); if (!row && filters.period !== '全部') next.doc_date = timeRange(filters.period).dateFrom; draftRef.current = next; setDraft(next);
@@ -89,15 +90,17 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     api.current?.refreshCells({ force: true });
   }
   async function saveDraft() {
-    const currentDraft = draftRef.current; if (!currentDraft || unavailable || lock.current) return;
+    const currentDraft = draftRef.current; if (!currentDraft || draftUncertain || unavailable || lock.current) return;
     lock.current = true;setBusy(true);setError('');setFeedback('');let saved = false;
     try {
-      const value = await requestJson('/api/m03/actions/manual-save',{ method: 'POST', ...body(currentDraft) }); saved = true;
+      const value = await requestJson('/api/m03/actions/manual-save',{ method: 'POST', ...body(currentDraft) });
+      if (!mounted.current) return;
+      confirmWrite(record(value) && value.ok === true && typeof value.row_id === 'string' && /^[1-9]\d*$/.test(value.row_id) && Number.isSafeInteger(Number(value.row_id)) && typeof value.message === 'string', '保存结果待核实，请重读列表核对，勿重复新增。'); saved = true;
       const id = record(value) ? Number(value.row_id) : 0; cancelDraft();
       setFeedback(receipt(value));
       setFilters(f => ({ ...f, period: currentDraft.doc_date.slice(0,7), category: '', approval: '', paid: '', link: '', projects: f.projects.length && !f.projects.includes(Number(currentDraft.ownership_id)) ? [...f.projects,Number(currentDraft.ownership_id)] : f.projects })); setSearch('');pendingFocus.current=id;setFocusId(id);
       await refresh();
-    } catch (failure) { setError(`${saved ? '已保存，但列表尚待重读核对，勿重复新增。' : '保存失败，草稿已保留。'}${failure instanceof Error ? failure.message : '请重试。'}`); }
+    } catch (failure) { if (!mounted.current) return; const unknown = !saved && uncertainWrite(failure); setDraftUncertain(unknown); setDraftChecked(false); setError(`${saved ? '已保存，但列表尚待重读核对，勿重复新增。' : unknown ? '保存结果待核实，草稿已保留；勿重复新增。' : '保存失败，草稿已保留。'}${failure instanceof Error ? failure.message : '请重试。'}`); }
     finally { lock.current=false;setBusy(false); }
   }
   function draftCell(_row: NoticeRow, field: keyof Draft, label: string) { return <DraftField key={`${draftRef.current?.row_id || 'new'}:${field}`} draft={draftRef.current!} field={field} label={label} disabled={busy || blocked} projects={projects.data ?? []} />; }
@@ -167,6 +170,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       {pasteScope && <p className="notice-feedback">仅显示本次已剔除或撤单单据<Button htmlType="submit" onClick={() => setPasteScope(null)}>清除此筛选</Button></p>}
       {feedback && <p className="notice-feedback" role="status">{feedback}</p>}{error && <p className="notice" role="alert">{error}<Button htmlType="submit" disabled={busy} onClick={() => void refresh().then(() => setError('')).catch(e => setError(e.message))}>重读核对</Button></p>}
       {query.isError && query.data && <p className="notice" role="alert">列表更新失败，保留上次结果。{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试读取</Button></p>}{query.isPending ? <p className="state" role="status">正在读取付款通知书…</p> : query.isError && !query.data ? <p className="notice" role="alert">{query.error.message}<Button htmlType="submit" onClick={() => void query.refetch()}>重试</Button></p> : <><p className="notice-count">显示 {shown.length} 条 · 当前时间范围有效 {rows.filter(r => inTime(r, filters) && live(r)).length} 条 · 剔除 {rows.filter(r => inTime(r, filters) && r.is_excluded).length} 条 · i8 已撤单 {rows.filter(r => inTime(r, filters) && r.is_revoked).length} 条（切「分类＝剔除」查看）</p>{busy && <p className="notice-feedback" role="status">正在保存，请稍候…</p>}<div className="notice-grid" ref={gridRoot} role="region" aria-label="付款通知书列表"><AgGridReact<NoticeRow> theme={gridTheme} onFirstDataRendered={e => fitGridColumns(e.api, gridRoot.current, true)} onGridSizeChanged={e => fitGridColumns(e.api, gridRoot.current)} onNewColumnsLoaded={e => fitGridColumns(e.api, gridRoot.current, true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder rowData={shown} columnDefs={columns} pinnedBottomRowData={draft && !draft.row_id ? [{ notice_id: -2 } as NoticeRow,...summary] : summary} getRowId={p => String(p.data.notice_id)} getRowClass={p => p.data?.notice_id === focusId ? 'notice-focused' : ''} defaultColDef={{ cellDataType: false, sortable: true, resizable: false, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData animateRows={false} postSortRows={params => { const top = params.nodes.filter(node => pasteTop.has(node.data!.notice_id)), rest = params.nodes.filter(node => !pasteTop.has(node.data!.notice_id)); params.nodes.splice(0,params.nodes.length,...top,...rest); }} onGridReady={e => { api.current = e.api; }} overlayNoRowsTemplate="当前筛选条件下没有付款通知书，请调整条件或按月抓取。" /></div></>}
+      {draftUncertain && <p role="alert" className="notice">新增结果待核实。<Button disabled={blocked || busy} onClick={() => { setBusy(true); void refresh().then(() => setDraftChecked(true)).catch(failure => setError(failure instanceof Error ? failure.message : '重读失败，请重试。')).finally(() => setBusy(false)); }}>重读核对新增结果</Button><Button disabled={blocked || busy || !draftChecked} onClick={cancelDraft}>已核对，关闭草稿</Button></p>}
       {draft && <p role="status" className="notice-feedback">{draft.row_id ? `正在编辑 ${draft.bill_no}` : '新增草稿位于表尾'} · 尚未保存，返回本页可继续填写。<Button htmlType="submit" disabled={unavailable} onClick={() => void saveDraft()}>保存草稿</Button><Button htmlType="submit" disabled={unavailable} onClick={cancelDraft}>取消草稿</Button></p>}
       <OwnershipPending blocked={blocked || !active} open={row => setMaintenance({kind:'ownership',row})} />
       {autoIds&&<AutoLinkDialog ids={autoIds} blocked={blocked||!active} close={()=>setAutoIds(null)} refresh={refresh} announce={setFeedback} />}

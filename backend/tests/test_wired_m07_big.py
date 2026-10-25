@@ -44,7 +44,7 @@ def test_壳里输入框只出现在手填列():
     s = page_slice("m07")
     assert s.count('data-act="bigEdit"') == 1, "输入框渲染点不止一处（应只有一个 `cell()` 生成器）"
     for i in range(6):
-        assert f"${{cell({i})}}" in s, f"手填列 `cell({i})` 没了"
+        assert re.search(rf'\$\{{cell\({i}(?:,|\))', s), f"手填列 `cell({i})` 没了"
     assert "${cell(6)}" not in s, "出现了第 7 个手填列（手填列应恰好 6 个）"
 
 

@@ -28,20 +28,22 @@ def test_m05_reuses_openings_and_keeps_ids_and_amounts(monkeypatch):
 
 
 def test_m05_reads_ledger_openings_once_and_keeps_missing_side_none(monkeypatch):
-    openings = [OpeningView(CATEGORY_MATERIAL, 7, "2026-01", Decimal("9"), Decimal("4"), 31)]
+    openings = [SimpleNamespace(category=CATEGORY_MATERIAL, project_id=7, cutoff_ym='2026-01', settle_amount=Decimal('9'), paid_amount=Decimal('4'), id=31, entry_kind='manual', remark='')]
     calls = []
     monkeypatch.setattr(M5, "notice_debt_views", lambda _s: [])
-    monkeypatch.setattr(M5, "opening_views", lambda _s, project_id=None: calls.append(project_id) or openings)
+    monkeypatch.setattr(M5.repo, 'list_openings', lambda _s, project_id=None: calls.append(project_id) or openings)
     monkeypatch.setattr(M5, "project_options", lambda _s: [])
     monkeypatch.setattr(M5.repo, "remarks_map", lambda *args, **kwargs: {})
     monkeypatch.setattr("app.mod01_projects.service.all_projects", lambda _s: [])
-    monkeypatch.setattr(M6, "load_mech", lambda _s: [])
+    monkeypatch.setattr(M5, "mechanical_settlements", lambda _s: {})
 
     ledger = M5.build_ledger(None, project_id=7, end_ym="2026-02")
 
     assert calls == [7]
     material, mechanical = ledger["sides"]
-    assert material["opening_id"] == 31
+    assert material['opening_id'] is None
+    assert material['rows'][0]['record_id'] == 31
+    assert material['rows'][0]['row_kind'] == 'manual'
     assert material["rows"][0]["other_expense"] == "9.00"
     assert material["rows"][0]["payment"] == "4.00"
     assert mechanical["opening_id"] is None

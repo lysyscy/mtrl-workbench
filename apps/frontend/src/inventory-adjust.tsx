@@ -1,3 +1,4 @@
+import { uncertainWrite } from './api';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import { useEffect, useRef, useState } from 'react';
@@ -5,7 +6,7 @@ import type { Identity } from './api';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { cents, decimal, money } from './notices-api';
-import { adjustInventory, uncertainWrite } from './inventory-api';
+import { adjustInventory } from './inventory-api';
 import type { Adjustment, Inventory, InventoryRow } from './inventory-api';
 
 export function InventoryAdjust({row,adjustment,me,paused,close,reload,unknown,onUnknown,missing}: {

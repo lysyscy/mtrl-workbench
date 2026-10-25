@@ -7,7 +7,7 @@ import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { readIdentity, requestJson } from './api';
+import { readIdentity, setRequestIdentity, requestJson } from './api';
 import type { Identity } from './api';
 import type { ComponentType } from 'react';
 import './style.css';
@@ -64,7 +64,6 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
   const [ledgerProject, setLedgerProject] = useState(0);
   const page = useLocation().pathname;
   const title = pages.find(entry => entry.path === page)?.title ?? '材料工作台';
-  const mechanicalActive = page === '/mechanical';
   const [visited, setVisited] = useState(() => new Set([page]));
   useEffect(() => { setVisited(old => old.has(page) ? old : new Set([...old, page])); }, [page]);
   const [busy, setBusy] = useState(false);
@@ -88,7 +87,7 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
     <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}>{entry.mod && <span className="nav-code">MOD-{entry.mod}</span>}<span>{entry.title}</span></NavLink>)}</div>)}
     </nav><a className="old-app" href="/app">打开旧版预览</a></aside>
-    <div className="main"><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><div hidden={mechanicalActive}><HistoryControls me={me} blocked={blocked || busy || mechanicalActive} guard={ledgerExportGuard} /></div>{mechanicalActive && <div id="history-controls" />}<span hidden={Boolean(me)}>未登录 · 只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl}>登录</a>}</div></header>
+    <div className="main"><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录 · 只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl}>登录</a>}</div></header>
       <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>
         {pages.map(entry => {
           const active = page === entry.path;
@@ -116,6 +115,7 @@ function App() {
       if (controller.signal.aborted) return;
       if (next) setExpired(false);
       else if (knownIdentity.current) setExpired(true);
+      setRequestIdentity(next ? `${next.id}:${next.account}` : 'anonymous');
       knownIdentity.current = next; setMe(next); setChecking(false);
     } catch (failure) {
       if (!controller.signal.aborted) {
@@ -127,7 +127,7 @@ function App() {
   useEffect(() => {
     void check();
     const focus = () => void check();
-    const lost = () => { request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
+    const lost = () => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
     window.addEventListener('focus', focus); window.addEventListener('session-lost', lost);
     return () => { request.current?.abort(); window.removeEventListener('focus', focus); window.removeEventListener('session-lost', lost); };
   }, []);
@@ -135,7 +135,7 @@ function App() {
   return <>
     {expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl}>重新登录</a></div>}
     {error ? <main className="startup"><Notice message={`账号暂时无法核实，已暂停操作。${error}`} retry={() => void check()} /></main> : null}
-    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} onPreferencesSaved={() => check(false)} onLogout={() => { request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
+    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} onPreferencesSaved={() => check(false)} onLogout={() => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
   </>;
 }
 

@@ -1,3 +1,4 @@
+import { uncertainWrite } from './api';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Segmented from 'antd/es/segmented';
@@ -13,7 +14,7 @@ import { reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { money } from './notices-api';
 import { useHistoryGuard } from './history';
-import { balanced, getExtract, getSettlement, kinds, saveBalance, settlementTotal, uncertainBalance } from './settlement-api';
+import { balanced, getExtract, getSettlement, kinds, saveBalance, settlementTotal } from './settlement-api';
 import type { AnnualRow, ExtractKind, SettlementRow } from './settlement-api';
 import { SettlementExport } from './settlement-export';
 import './settlement.css';
@@ -103,7 +104,7 @@ function Extract({ me, blocked, active }: Props) {
     } catch(e) {
       if(!alive.current) return;
       const message = e instanceof Error ? e.message : '保存失败，请重试。';
-      if(written || uncertainBalance(e)) {state.current.uncertain = true; setUncertain(true); setVerified(false); queue.current = []; setError(`${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
+      if(written || uncertainWrite(e)) {state.current.uncertain = true; setUncertain(true); setVerified(false); queue.current = []; setError(`${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
       else {const next = {...state.current.drafts}; if(next[key]) next[key] = {...next[key],error:message}; update(next); setError(message);}
     } finally {lock.current = false; if(alive.current) {setBusy(false); void drain();}}
   }

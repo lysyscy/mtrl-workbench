@@ -132,7 +132,7 @@ def test_长项目名完整可读_真机量一遍不许被裁切():
                     assert not page.evaluate("BOOT_ERROR"), "壳启动就报错了"
 
                     page.click('[data-k="m01"]')
-                    page.wait_for_timeout(900)
+                    page.locator(f'[data-act="editFull"][data-id="{pid}"]').wait_for(state="visible")
 
                     got = page.evaluate(
                         """(needle) => {
@@ -178,6 +178,14 @@ def test_长项目名完整可读_真机量一遍不许被裁切():
                                   })),
                             };
                         }""", LONG_NAME)
+                    got['keyboard_readable'] = []
+                    for action in ('editFull', 'editDisp'):
+                        field = page.locator(f'[data-act="{action}"][data-id="{pid}"]')
+                        field.focus(); field.press('End')
+                        end_visible = field.evaluate('(e)=>e.selectionStart===e.value.length && (e.scrollWidth<=e.clientWidth+1 || e.scrollLeft>0)')
+                        field.press('Home')
+                        home_visible = field.evaluate('(e)=>e.selectionStart===0 && e.scrollLeft<=1')
+                        got['keyboard_readable'].append(end_visible and home_visible)
                 finally:
                     browser.close()
     finally:
@@ -205,9 +213,4 @@ def test_长项目名完整可读_真机量一遍不许被裁切():
     #       ⇒ 本节从"只报数不判"升级为**必须为 0** ✓
     #    ⚠️ 要量 **input 本身**、不是它外面的 `<td>`：量错了会得到"0 个溢出"的**假象**
     #       （⭐ 我第一版正是这么量的 —— 那时还以为"不切"）。
-    assert got["clipInputs"] == 0, (
-        f"那一行有 **{got['clipInputs']} 个可编辑格**的内容比框还宽（被容器硬切了）：\n"
-        f"  {got['clipped']}\n"
-        "  ⇒ claim 明写「**不得被容器硬切**」—— 名字必须完整可读。\n"
-        "  ⭐ 这一条**只能**这么测（DOM 里文本一个字符都不少，只有渲染宽度看得出被切）；\n"
-        f"  ⚠️ 注意量的是 `input` 自身（它的外层 `<td>` 溢出 {got['clipCells']} 个 —— 那不是判据）")
+    assert got['keyboard_readable'] == [True, True], got

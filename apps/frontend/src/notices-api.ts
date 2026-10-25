@@ -1,4 +1,5 @@
-import { ApiError, record } from './api';
+import { ApiError, cents, decimal, record } from './api';
+export { body, cents, decimal, money } from './api';
 export interface NoticeRow {
   notice_id: number; doc_date: string; bill_no: string; project_display: string; project_name: string; ownership_id: number | null;
   category: string; category_label: string; bill_name: string; biz_type: string; payee: string; jc_supplier: string; input_by: string;
@@ -9,13 +10,6 @@ export interface NoticeRow {
 export const categories: Record<string, string> = { material: '辅材', mechanical: '机械', jc: '集采' };
 export const moneyKeys = ['amount_approved', 'pay_amount', 'amount_paid', 'stat_settle', 'stat_paid'] as const;
 export type MoneyKey = typeof moneyKeys[number];
-export function cents(value: string): bigint {
-  const match = /^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(value);
-  if (!match) throw new ApiError('金额读取不完整，请重试。');
-  return (match[1] ? -1n : 1n) * (BigInt(match[2]!) * 100n + BigInt((match[3] ?? '').padEnd(2, '0')));
-}
-export function decimal(value: bigint): string { const n = value < 0n ? -value : value; return `${value < 0n ? '-' : ''}${n / 100n}.${String(n % 100n).padStart(2, '0')}`; }
-export function money(value: string): string { const [whole, part] = decimal(cents(value)).split('.'); return `${whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${part}`; }
 export function readNotices(value: unknown): NoticeRow[] {
   if (!record(value) || !Array.isArray(value.items)) throw new ApiError('通知书列表读取不完整，请重试。');
   return value.items.map((row: unknown) => {
@@ -30,5 +24,4 @@ export function archiveLabel(row: NoticeRow): string { return row.is_excluded ? 
 export function total(rows: NoticeRow[], key: MoneyKey): string { return decimal(rows.reduce((sum, row) => sum + cents(row[key]), 0n)); }
 export function searchKey(value: string): string { return value.toLocaleLowerCase().replace(/[,，\s]/g, ''); }
 export { currentMonth } from './business-time';
-export const body = (value: unknown) => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
 export function receipt(value: unknown): string { if (!record(value) || typeof value.message !== 'string') throw new ApiError('操作回执不完整，请重新读取列表核对。'); return value.message.replace(/<[^>]*>/g, '').replace(/\*\*/g, ''); }

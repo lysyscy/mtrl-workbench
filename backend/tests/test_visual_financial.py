@@ -41,7 +41,7 @@ def test_debt_overviews_expand_align_and_ledgers_adapt(ui_page, width):
       PJs=NO.map((n,i)=>({id:String(i+1),name:'仓库'+i,full:n.proj,disp:'供应商及安装工程长项目名称'+i,type:'normal',status:'在建'}));
       LGs.splice(0,LGs.length,...PJs.map((p,i)=>({proj:p.name,cat:'辅材',settle:i===0?0:i===1?-100:1234567.89,paid:0})));
       MACH6={'仓库0':{'2026-10':[0,0,88,0,0,0]}};
-      M05.ledger={sides:['辅材','机械'].map(label=>({label,rows:[
+      M05.ledger={project_id:1,sides:['辅材','机械'].map(label=>({label,rows:[
         {seq:1,month:'2026-08',other_expense:'0',payment:'0',remark:''},
         {seq:2,month:'2026-09',other_expense:'0',payment:'0',remark:'已核实无需支出'},
         {seq:3,month:'2026-10',other_expense:'1234567.89',payment:'234567.89',remark:'本项目当月结算与付款核对'}]}))};

@@ -29,10 +29,10 @@ def dataset():
         assert ws['D3'].value=='—'
         assert ws['F2'].value==12 and ws['F3'].value==10 and ws['F4'].value==22
         assert ws['F2'].number_format=='General' and ws['F2'].data_type=='n'
-        assert ws.max_column==18
+        assert ws.max_column==len(D.JC_COLUMNS)-len(D.PAGE_ONLY_KEYS)
         filtered=S.build_list(s,supplier='供应商2',project_key=a.warehouse_name)['rows']
         data=[{k:(str(v) if k in D.SUM_KEYS else v) for k,v in rows[c.id].items()} for c in aa+bb]
-        print('DB/xlsx PASS: A=1,2,3,4 B=1,2; excluded=None; filter=3; cells/order/19columns/format/total=22')
+        print('DB/xlsx PASS: A=1,2,3,4 B=1,2; excluded=None; filter=3; cells/order/derived-columns/format/total=22')
         s.rollback()
         return data
 
@@ -51,7 +51,7 @@ def test_browser_sequence_columns_and_export(ui_page):
     p.add_style_tag(content=render_theme('默认'))
     p.evaluate('''arg=>{JC_COLUMNS.splice(0,JC_COLUMNS.length,...arg.cols);JC_SUM_KEYS.splice(0,JC_SUM_KEYS.length,...arg.sum_keys);JCs.splice(0,JCs.length,...arg.rows.map(adaptJc));VIEW='m11';fJc.tag='全部';fJc.arch='全部';fJc.sup='';render();}''',{'rows':data,'cols':cols,'sum_keys':list(D.SUM_KEYS)})
     print(p.evaluate('({filter:fJc,rows:jcVisible().map(j=>j.projectSeq)})'))
-    assert p.locator('table[data-sort-key="m11:jc"] th').count()==20
+    assert p.locator('table[data-sort-key="m11:jc"] th').count()==len(D.JC_COLUMNS)+1
     assert p.locator('table[data-sort-key="m11:jc"] th').nth(8).is_hidden()
     p.click('#jcTradeBtn')
     assert p.locator('table[data-sort-key="m11:jc"] th').nth(8).is_visible()

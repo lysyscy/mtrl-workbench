@@ -478,3 +478,23 @@ def test_安全文明对账_空集明说未验证而非通过():
     safe_log = _log(_synth_i8_bytes(with_safe=True))
     assert re.search(r"安全文明施工费透视[^\n]{0,16}✓", safe_log), \
         f"有安全文明费时没报该条「✓ 通过」：\n{safe_log}"
+
+
+def test_unregistered_material_property_preserves_group_metadata_and_exports(tmp_path):
+    import io
+    import xml.etree.ElementTree as ET
+    source = openpyxl.load_workbook(io.BytesIO(_synth_i8_bytes()))
+    source.active.cell(3, 12, '未登记性质 & 特殊"值')
+    stream = io.BytesIO(); source.save(stream); source.close()
+    out = Path(KE.build_xlsx(stream.getvalue(), tmp_path / KE.FILE_PREFIX / '2026年9月'))
+    with zipfile.ZipFile(out) as archive:
+        for name in archive.namelist():
+            if name.endswith('.xml'): ET.fromstring(archive.read(name))
+        cache = ET.fromstring(archive.read('xl/pivotCache/pivotCacheDefinition1.xml'))
+        assert any(item.attrib.get('v') == '未登记性质 & 特殊"值' for item in cache.iter())
+        assert any(node.tag.endswith('fieldGroup') for node in cache.iter())
+    book = openpyxl.load_workbook(out, read_only=True, data_only=True)
+    try:
+        assert book['报表1'].cell(2, 12).value == '未登记性质 & 特殊"值'
+        assert book['报表1'].cell(2, 16).value == 100
+    finally: book.close()

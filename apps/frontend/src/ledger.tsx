@@ -7,9 +7,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import { pageGridGeometry, fitGridColumns, contentWidth, gridTheme } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
-import { ApiError, projectLabel, readProjects, record, requestJson } from './api';
+import { ApiError, uncertainWrite, projectLabel, readProjects, requestJson } from './api';
 import type { Identity } from './api';
-import { amount, editable, loadLedger, payload, same, sum } from './ledger-api';
+import { addLedgerRow, amount, deleteLedgerRow, editable, loadLedger, same, saveLedgerCell, sum } from './ledger-api';
 import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
 
 const fields: Field[] = ['month', 'other_expense', 'payment', 'remark'];
@@ -193,11 +193,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
         }
         void client.cancelQueries({ queryKey: ['ledger', edit.scope.owner, edit.scope.project] });
         const before = edit.base;
-        const remarkOnly = !before.editable && task.field === 'remark';
-        const result = await requestJson(remarkOnly ? '/m05/ledger/remark' : '/api/m05/history/save', { method: 'POST', signal: lifetime.current!.signal,
-          headers: { 'Content-Type': remarkOnly ? 'application/x-www-form-urlencoded' : 'application/json' },
-          body: remarkOnly ? new URLSearchParams({ project_id: String(edit.scope.project), category: before.category, ym: before.month, remark: task.text.trim(), token: before.token }) : JSON.stringify(payload(edit.scope.project, { ...before, [task.field]: task.text })) });
-        if (!record(result) || (!remarkOnly && (typeof result.id !== 'number' || !Number.isInteger(result.id)))) throw new ApiError('保存结果未确认，请刷新核对后再试。');
+        await saveLedgerCell(edit.scope.project, before, task.field, task.text, lifetime.current!.signal);
         if (edit.drafts[task.field]?.version === task.version) delete edit.drafts[task.field];
         edit.locked = true;
         try {
@@ -226,7 +222,8 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
     } catch (error) {
       clearQueue(edit);
       const text = error instanceof Error ? error.message : '请刷新核对后重试。';
-      message(edit.scope, error instanceof ApiError && error.status === 0 ? `保存结果未确认：${text}请刷新核对，输入已保留。` : /已变化|冲突/.test(text) || (error instanceof ApiError && error.status === 409) ? `版本冲突：${text}输入已保留，请刷新核对。` : `保存被拒：${text}输入已保留，请修改后重试。`, (error instanceof ApiError && (error.status === 0 || error.status === 409)) || /已变化|冲突/.test(text));
+      const unknown = uncertainWrite(error);
+      message(edit.scope, unknown ? `保存结果未确认：${text}请刷新核对，输入已保留。` : /已变化|冲突/.test(text) || (error instanceof ApiError && error.status === 409) ? `版本冲突：${text}输入已保留，请刷新核对。` : `保存被拒：${text}输入已保留，请修改后重试。`, unknown || (error instanceof ApiError && error.status === 409) || /已变化|冲突/.test(text));
     } finally { edit.saving = false; changed(); }
   }
   function hasDrafts(s: Scope) { return [...edits.current.values()].some(edit => edit.scope.key === s.key && Object.keys(edit.drafts).length > 0); }
@@ -239,9 +236,10 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
       if (!mounted.current || current.current.blocked || s.key !== current.current.scope.key) return '账号或查看范围已变化，请重新确认。';
       if (exportProjects && (messages.current.get(s.key)?.reload || [...edits.current.values()].some(edit => edit.scope.owner === s.owner && exportProjects.includes(edit.scope.project) && edit.locked))) return '操作结果待核实，请先重新加载核对。';
       const drafts = exportProjects ? [...edits.current.values()].some(edit => edit.scope.owner === s.owner && exportProjects.includes(edit.scope.project) && Object.keys(edit.drafts).length > 0) : hasDrafts(s);
+      if (!allowDrafts && messages.current.get(s.key)?.reload) return '操作结果待核实，请先重新加载核对。';
       if (!allowDrafts && drafts) { const text = '请先处理未保存输入，再执行本次操作。'; message(s, text); return text; }
       await action(); return null;
-    } catch (error) { const text = error instanceof Error ? error.message : '操作失败，请重试。'; message(s, text, !exportProjects && error instanceof ApiError && (error.status === 0 || error.status === 409 || error.status >= 500)); return text; }
+    } catch (error) { const text = error instanceof Error ? error.message : '操作失败，请重试。'; message(s, text, !exportProjects && (uncertainWrite(error) || error instanceof ApiError && error.status === 409)); return text; }
     finally { acting.current = false; if (mounted.current) setControlBusy(false); }
   }
   const actions = useRef<Actions>(null!);
@@ -254,6 +252,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
       edit.drafts[field] = { text, base: edit.drafts[field]?.base ?? own?.[field] ?? base, version: ++serial.current, queued: false, month: edit.drafts[field]?.month ?? own?.month ?? row.month }; changed();
     },
     commit: (s, row, field) => {
+      if (messages.current.get(s.key)?.reload) return;
       const edit = state(s, row); const draft = edit.drafts[field]; if (!draft || draft.queued) return;
       if (current.current.blocked || current.current.historyBusy || current.current.historyUncertain || !current.current.me) { message(s, '输入已保留；账号恢复后重新离格保存。'); return; }
       if (same(field, draft.text, draft.base) && !edit.saving && !edit.queue.length) { delete edit.drafts[field]; changed(); return; }
@@ -263,16 +262,15 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
     remove: (s, row) => { void control(s, async () => {
       const edit = state(s, row);
       if (edit.locked) throw new ApiError('请先刷新核对，再删除历史行。');
-      await requestJson('/api/m05/history/delete', { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: edit.base.record_id, token: edit.base.token }) });
+      await deleteLedgerRow(edit.base, lifetime.current!.signal);
       try { await refresh(s); message(s, '历史行已删除，可撤销。'); }
       catch { message(s, '已删除，读取失败；请重新加载，不必重复删除。', true); }
     }); },
   };
   async function add() {
     await control(scope, async () => {
-      const result = await requestJson('/api/m05/history/save', { method: 'POST', signal: lifetime.current!.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: project, category: 'material', entry_kind: 'manual', cutoff_ym: '2025-11', settle_amount: '0', paid_amount: '0', remark: '' }) });
-      if (!record(result) || typeof result.id !== 'number') throw new ApiError('新增结果未确认，请刷新核对后再试。');
-      try { await refresh(scope); if (mounted.current && !current.current.blocked && scope.key === current.current.scope.key) setFocusRecord(result.id); message(scope, '已新增历史行，可直接填写。'); }
+      const id = await addLedgerRow(project, lifetime.current!.signal);
+      try { await refresh(scope); if (mounted.current && !current.current.blocked && scope.key === current.current.scope.key) setFocusRecord(id); message(scope, '已新增历史行，可直接填写。'); }
       catch { message(scope, '已新增，读取失败；请重新加载，不必重复新增。', true); }
     });
   }
@@ -288,7 +286,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   const status = <div className="ledger-status">
     <span role="status" aria-label="保存回执">{receipt?.text ?? (me ? '' : '未登录，台账只读。')}{[...edits.current.values()].some(edit => edit.scope.key === scope.key && edit.saving) ? ' 正在保存…' : ''}</span>
     {(receipt?.reload) && !query.isError && <Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</Button>}
-    {hasDrafts(scope) && <Button htmlType="submit" onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } message(scope, '已放弃未保存输入。'); changed(); }}>放弃未保存输入</Button>}
+    {hasDrafts(scope) && <Button htmlType="submit" onClick={() => { for (const edit of edits.current.values()) if (edit.scope.key === scope.key && !edit.saving) { edit.drafts = {}; clearQueue(edit); } if (query.data) { pendingDisplay.current = { key: scope.key, data: query.data }; publish(); } message(scope, '已放弃未保存输入。', Boolean(messages.current.get(scope.key)?.reload)); changed(); }}>放弃未保存输入</Button>}
   </div>;
   return <>
     {active && document.getElementById('ledger-status') && createPortal(status, document.getElementById('ledger-status')!)}

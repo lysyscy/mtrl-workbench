@@ -1,5 +1,6 @@
-"""期初三行在共享台账与导出同源，两类金额独立且只累计一次。"""
+"""逐条历史行、未填日期付款与导出同源；退役累计调整不再写入。"""
 from decimal import Decimal
+import json
 
 from app.mod01_projects.models import Project
 from app.mod03_notice.models import PaymentNotice
@@ -30,15 +31,16 @@ def test_history_manual_auto_and_export_are_independent(session, tmp_path, monke
                         end_ym='2025-12')['sides'] if s['category'] == cat)
 
         data = side()
-        assert [r['row_kind'] for r in data['rows'][:3]] == ['opening_manual', 'opening_auto', 'opening_total']
-        assert [r['payment'] for r in data['rows'][:3]] == ['4000.00', '2000.00', '6000.00']
-        assert [r['other_expense'] for r in data['rows'][:3]] == ['10000.00', '0.00', '10000.00']
+        assert [r['row_kind'] for r in data['rows'][:3]] == ['undated', 'manual', 'month']
+        assert [r['payment'] for r in data['rows'][:3]] == ['2000.00', '4000.00', '0.00']
+        assert [r['other_expense'] for r in data['rows'][:3]] == ['0.00', '10000.00', '0.00']
         spec = ledger_export.ledger_spec(ledger_export.SHEET_OF_CATEGORY[cat], data, display='历史项目')
         assert spec['tail'][0][1]['D'] == Decimal('6000')
         assert spec['tail'][0][1]['E'] == Decimal('4000')
-        assert [r[1]['B'] for r in spec['rows']] == ['2025-11及之前', '2025-12']
-        assert data['display_rows'][0]['manual_payment'] == '4000.00'
-        assert data['display_rows'][0]['automatic_payment'] == '2000.00'
+        assert '未填' in data['rows'][0]['month_label']
+        assert [r[1]['B'] for r in spec['rows']] == [data['rows'][0]['month_label'], '2025-11', '2025-12']
+        assert sum(Decimal(r['payment']) for r in data['rows'] if r['counts_in_total']) == Decimal('6000')
+        assert data['rows'][1]['record_id'] == opening.id
         # 核对完整导出调用者写出的实际单元格，非仅拼装spec。
         from app.report_export import service as export_service
         import openpyxl
@@ -48,25 +50,13 @@ def test_history_manual_auto_and_export_are_independent(session, tmp_path, monke
         try:
             ws = wb[ledger_export.SHEET_OF_CATEGORY[cat]]
             exported = {r[1].value: r[3].value for r in ws.iter_rows()}
-            assert exported['2025-11及之前'] == 6000
+            assert exported[data['rows'][0]['month_label']] == 2000
+            assert exported['2025-11'] == 4000
             assert not any(' · ' in str(label) for label in exported)
             tail = next(r for r in ws.iter_rows() if r[1].value == '合计：')
             assert tail[3].value == 6000
         finally:
             wb.close()
-        service.set_opening_payment(session, category=cat, project_id=p.id, payment='6500')
-        session.flush()
-        assert [r['payment'] for r in side()['rows'][:3]] == ['4500.00', '2000.00', '6500.00']
-        repository.create_flow(session, notice_id=notice.id, project_id=p.id,
-                               amount=1000, pay_date='2026-10-10')
-        session.flush()
-        assert [r['payment'] for r in side()['rows'][:3]] == ['4500.00', '3000.00', '7500.00']
-        notice.stat_paid = Decimal('1500')
-        session.flush()
-        assert [r['payment'] for r in side()['rows'][:3]] == ['4500.00', '1500.00', '6000.00']
-        notice.excluded = True
-        session.flush()
-        assert side()['rows'][1]['payment'] == '0.00'
 
 
 def test_empty_archived_project_keeps_identity_and_both_ledgers(session, tmp_path, monkeypatch):
@@ -102,7 +92,7 @@ def test_zero_automatic_payment_still_has_history_segment(session):
     session.add(p)
     session.flush()
     session.add_all([
-        OpeningBalance(category='material', project_id=p.id, cutoff_ym='2025-12',
+        OpeningBalance(category='material', project_id=p.id, cutoff_ym='2025-11',
                        settle_amount=10, paid_amount=0),
         PaymentNotice(ph_id='__tail274_zero__', bill_no='__tail274_zero__',
                       category='material', ownership_id=p.id, doc_date='',
@@ -113,14 +103,15 @@ def test_zero_automatic_payment_still_has_history_segment(session):
     ])
     session.flush()
     side = service.build_ledger(session, project_id=p.id, end_ym='2026-01')['sides'][0]
-    assert [r['row_kind'] for r in side['rows'][:3]] == ['opening_manual', 'opening_auto', 'opening_total']
-    assert side['rows'][1]['payment'] == '0.00'
+    assert [r['row_kind'] for r in side['rows'][:3]] == ['undated', 'manual', 'month']
+    assert side['rows'][0]['payment'] == '0.00'
+    assert side['rows'][0]['row_kind'] == 'undated'
     assert side['rows'][-1]['payment'] == '700.00'
     spec = ledger_export.ledger_spec('辅材', side, display='零付款项目')
     assert spec['tail'][0][1]['D'] == Decimal('700')
 
 
-def test_edit_total_payment_uses_current_auto_and_preserves_manual_settlement(session, monkeypatch):
+def test_retired_total_payment_route_preserves_individual_history_and_source(session, monkeypatch):
     from contextlib import contextmanager
     from app.mod05_flow import router
     p = Project(project_type='normal', name_full='__tail274_edit__',
@@ -140,14 +131,7 @@ def test_edit_total_payment_uses_current_auto_and_preserves_manual_settlement(se
     monkeypatch.setattr(router, 'session_scope', scope)
     result = router.api_opening_payment(router.OpeningPaymentIn(
         category='material', project_id=p.id, payment='6000'))
-    assert result['manual_payment'] == '4000.00'
-    assert result['automatic_payment'] == '2000.00'
+    assert result.status_code == 410 and json.loads(result.body)['ok'] is False
     opening = repository.list_openings(session, project_id=p.id, category='material')[0]
-    assert opening.settle_amount == Decimal('9000') and opening.remark == '保留'
-    n.stat_paid = Decimal('1500')
-    session.flush()
-    assert service.build_ledger(session, project_id=p.id)['sides'][0]['display_rows'][0]['payment'] == '5500.00'
-    assert opening.paid_amount == Decimal('4000')
-    result = router.api_opening_payment(router.OpeningPaymentIn(
-        category='material', project_id=p.id, payment='6500'))
-    assert result['manual_payment'] == '5000.00'
+    assert opening.settle_amount == Decimal('9000') and opening.paid_amount == Decimal('1000')
+    assert opening.remark == '保留' and n.stat_paid == Decimal('2000')

@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from app.mod03_notice import page
+from app.mod03_notice import page, theme_react
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 THEME_SOURCE = APP_DIR / "mod03_notice" / "page.py"
@@ -92,7 +92,7 @@ def test_全工程引用的变量都有定义_引用了没定义会静默失效(
        「只能在主题真源里定义」⇒ 放开这一处**不会**削弱颜色那半：
        颜色另有更严的守卫（壳不许自带 `:root` / 硬编码色清零 / `ACC-UI-THEME-001` 那几条）。
     """
-    defined = set(_theme_vars())
+    defined = set(_theme_vars()) | set(_VAR_DEF_RE.findall(theme_react.render_react_theme(page.DEFAULT_THEME)))
     for _name, text in _iter_html():
         defined |= set(_VAR_DEF_RE.findall(text))       # ⭐ 壳自己定义的（`html{--fscale:1}` 这种）
     used: set[str] = set()
@@ -182,9 +182,10 @@ def test_主题只在一处定义_不得出现第二份副本():
     """换主题 = 改这一份。多一份副本 = 迟早漂移。"""
     owners = []
     for f in _iter_app_py():
-        if ":root{" in f.read_text(encoding="utf-8"):
+        if f.name != 'theme_react.py' and ":root{" in f.read_text(encoding="utf-8"):
             owners.append(f.name)
-    assert owners == ["page.py"], f"定义 `:root` 的文件应只有 page.py，实际：{owners}"
+    assert owners == ["page.py"], f"主题调色板只能由page.py持有，实际：{owners}"
+    assert theme_react.THEME_SEEDS is page.THEME_SEEDS
 
 
 def test_一套主题的值互不重复_成对色的底与字必须不同():

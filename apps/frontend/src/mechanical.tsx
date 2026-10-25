@@ -2,7 +2,6 @@ import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Checkbox from 'antd/es/checkbox';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
@@ -14,7 +13,7 @@ import { DetailsTable, MechanicalDialog, detailKey, mechanicalNumberWidth } from
 import { MechanicalImport } from './mechanical-import';
 import { TimePicker } from './time-picker';
 import { currentMonth } from './business-time';
-import { useHistoryProtection } from './history';
+import { useHistoryGuard } from './history';
 import { MechanicalWork } from './mechanical-work';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
@@ -118,8 +117,6 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const internalDrafts=useRef(new Map<string,{warehouse:string;ym:string;values:Record<string,string>}>());
   const [internalEpoch,setInternalEpoch]=useState(0);
   const [internalConfirmation,setInternalConfirmation]=useState<{warehouse:string;ym:string;values:Record<string,string>;effective:Effective}[]|null>(null);
-  const historyProtection = useHistoryProtection();
-  const history = useQuery({queryKey:['history',me?.account],enabled:!blocked && Boolean(me),queryFn:({signal}) => requestJson('/api/history/status',{signal})});
   const writable = Boolean(me) && active && !blocked && !writing && !needsRead && Boolean(state.data) && !state.isError;
   const category: Category = tab === 'monthly' ? 'monthly' : 'zero';
   const editingWarehouses = temporary ? warehouses.filter(w => w === temporary) : warehouses;
@@ -182,26 +179,14 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     catch(error){setConfirmation(null);await refresh();throw new Error(`${count ? '已确认 '+count+' 组。' : ''}${error instanceof Error ? error.message : '确认失败，请重新核对。'}`);}
     setConfirmation(null);if(await refresh())setMessage('已确认勾选金额的有效月值。');
   }
-  async function replay(direction:'undo'|'redo'){
-    const reason = exportGuard || historyProtection(); if (reason) throw new Error(reason);
-    const status=await requestJson('/api/history/status');
-    const currentReason = exportGuard || historyProtection(); if (currentReason) throw new Error(currentReason);
-    const item=typeof status==='object'&&status!==null ? (status as Record<string,unknown>)[direction] : null;
-    if(!item||typeof item!=='object'||!('id' in item))return;
-    await requestJson('/api/history/'+direction,{method:'POST',...body({operation_id:item.id})});
-    if(await refresh())setMessage(direction==='undo'?'已撤销。':'已重做。');
-  }
   const dirty=[...drafts.current.values()].filter(d=>d.ym===ym&&d.category===category&&editingWarehouses.includes(d.warehouse)).length;
-  const historyData=typeof history.data==='object'&&history.data!==null ? history.data as Record<string,unknown> : {};
   const internalTargets=[...internalDrafts.current.values()].filter(d=>d.ym===ym&&warehouses.includes(d.warehouse));
   const internal:InternalEditing={epoch:internalEpoch,writable,value:(id,column)=>internalDrafts.current.get(JSON.stringify([id,ym]))?.values[column],change:(id,column,value)=>{const key=JSON.stringify([id,ym]),warehouse=candidates.find(p=>String(p.id)===id)?.warehouse_name;if(!warehouse)return;const old=internalDrafts.current.get(key);internalDrafts.current.set(key,{warehouse,ym,values:{...old?.values,[column]:value}});render(n=>n+1);}};
   function openPicker(kind:'projects'|'export'){stopEditors();setTemporary('');const order=[...selected,...candidates.map(p=>p.id).filter(id=>!selected.includes(id))];setPickerOrder(order);setPickerIds([...selected]);setDialog(kind);}
   function previewButtonControl(){return <Button ref={previewButton} disabled={blocked||writing||projects.isPending||state.isPending||Boolean(scopeError)} onClick={()=>openPicker('export')}>导出预览</Button>;}
-  const historyReason = exportGuard || historyProtection();
-  const historyControls=<div className="ledger-tools">{(['undo','redo'] as const).map(direction=><Button key={direction} disabled={!writable||writing||Boolean(historyReason)||(drafts.current.size>0||internalDrafts.current.size>0)||!historyData[direction]} title={historyReason || (drafts.current.size||internalDrafts.current.size?'请先保存或撤销未保存修改':typeof historyData.notice==='string'&&historyData.notice?historyData.notice:direction==='undo'?'暂无可撤销的操作':'暂无可重做的操作')} onClick={()=>void operate(()=>replay(direction))}>{direction==='undo'?'撤销':'重做'}</Button>)}</div>;
+  useHistoryGuard('mechanical', () => writing ? '机械费正在保存，请稍候。' : needsRead ? '机械费操作结果待核实，请返回重新读取。' : drafts.current.size || internalDrafts.current.size ? '请先保存或撤销机械费未保存修改。' : '');
   const error = projects.error || state.error || report.error;
   return <section className="mechanical-card" aria-labelledby="page-title"><div className="mechanical-toolbar">
-    {active && document.getElementById('history-controls') && createPortal(historyControls,document.getElementById('history-controls')!)}
     <div className="mechanical-month"><span>月份</span><TimePicker label="月份" modes={['月']} value={ym} disabled={blocked||writing} onChange={value=>{stopEditors();setMonth(value);}} /></div>
     <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1·公司汇总'],['zero','表2·零租明细'],['monthly','表3·包月明细'],['work','核对工作台']] as const).map(([id,name])=><Button key={id} disabled={writing} aria-pressed={tab===id&&sheet===null} onClick={()=>{stopEditors();setTab(id);setSheet(null);setExportIds(null);setTemporary('');setProblemsOnly(false);}}>{name}</Button>)}</div>
     <div className="mechanical-preview-entry"><Button disabled={blocked||writing||state.isFetching} onClick={()=>openPicker('projects')}>显示项目</Button><Button disabled={!writable||state.isFetching} onClick={()=>{stopEditors();setImportOpen(true);}}>录入预览</Button></div>
@@ -219,7 +204,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     {report.data && !scopeError && !report.isError && !report.isFetching && (sheet===null?warehouses.length:reportWarehouses.length) > 0 && <>
       {report.data.warnings.length > 0 && <details className="mechanical-warnings"><summary>报表待核对（{report.data.warnings.length}）</summary><ul>{report.data.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details>}
       {sheet === null ? tab==='summary' ? <Summary scale={Number(me?.ui_scale_css) || 1} key={ym} report={report.data} projectIds={selected} detail={detail} internal={internal} data={state.data!} warehouses={warehouses} /> : null : <>
-        <div className="mechanical-preview-tools"><strong>报送导出预览 · {ym}</strong><Button onClick={() => { setSheet(null); setExportIds(null); setTarget(''); setTemporary(''); requestAnimationFrame(() => previewButton.current?.focus()); }}>返回查看／编辑</Button><Button type="primary" disabled={Boolean(unavailable) || busy} title={unavailable || '下载当前预览的四页文件'} onClick={() => void save()}>{busy ? '正在生成…' : '下载四页Excel'}</Button></div>
+        <div className="mechanical-preview-tools"><strong>报送导出预览 · {ym}</strong><Button onClick={() => { setSheet(null); setExportIds(null); setTarget(''); setTemporary(''); requestAnimationFrame(() => previewButton.current?.focus()); }}>返回查看／编辑</Button><Button disabled={blocked || busy || report.isFetching} onClick={() => { setMessage(''); void report.refetch(); }}>重新预览</Button><Button type="primary" disabled={Boolean(unavailable) || busy} title={unavailable || '下载当前预览的四页文件'} onClick={() => void save()}>{busy ? '正在生成…' : '下载四页Excel'}</Button></div>
         {unavailable && <p className="mechanical-feedback" role="status">{unavailable}</p>}
         <div className="mechanical-continuous-preview">{report.data.sheets.map((item,index)=><Sheet key={item.name} sheet={item} index={index} target={target} />)}</div>
       </>}

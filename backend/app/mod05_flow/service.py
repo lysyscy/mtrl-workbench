@@ -373,8 +373,10 @@ def export_total_debt(s: Session, projects: str = "") -> tuple[Path, dict]:
     ⚠️ 回执里必须带三件事（禁静默）：① 出了几行；② 集采**排除了几条**（不是"纳入台账"的）；
       ③ 机械口径**未接通**这件事（表尾也写了同一句 —— 文件离开页面后还得说清）。
     """
-    from app.report_export import service as exports
+    from app import export_registry
     from app.mod05_flow import debt_export as X
+
+    exports = export_registry.get('service')
 
     # ⭐ `projects` = 壳里「选择项目」给的**仓库名**，逗号分隔、**顺序即行序**（空 = 全部，现状行为）
     order = [x.strip() for x in str(projects or "").split(",") if x.strip()]

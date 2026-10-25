@@ -69,11 +69,11 @@ def test_page_registry_keeps_instances_and_resets_on_account_loss(server, browse
     page.get_by_label('项目搜索', exact=True).fill('隔离')
     page.get_by_role('link', name='MOD-02 i8 接入层', exact=True).click()
     pick_option(page, '动作', '打印')
-    titles = ['付款通知书', '付款流水与欠款统计', '集采台账', '过程资料',
+    titles = ['首页', '付款通知书', '付款流水与欠款统计', '集采台账', '过程资料',
               '收发结存与提取', '月度会大表', '库存单据与调整单', '特殊费用',
               '机械费', '规则配置', '用户管理']
     links = page.get_by_role('navigation', name='主导航').get_by_role('link')
-    expect(links).to_have_count(13)
+    expect(links).to_have_count(len(titles) + 2)
     for title in titles:
         links.filter(has_text=title).click()
         expect(page.locator('#page-title')).to_have_text(title)

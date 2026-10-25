@@ -51,15 +51,32 @@ def open_reports(page, server, account='preview-admin'):
     expect(page.get_by_label('月份',exact=True)).to_have_value('2026-09')
 
 
-def select_projects(page,names):
-    page.get_by_role('button',name='报表项目',exact=True).click()
-    menu=page.get_by_role('group',name='导出项目候选',exact=True)
-    menu.get_by_role('button',name='清空',exact=True).click()
+def select_projects(page, names):
+    page.get_by_role('button', name='显示项目', exact=True).click()
+    dialog = page.get_by_role('dialog', name='选择显示项目及顺序', exact=True)
+    dialog.get_by_role('button', name='全不选', exact=True).click()
     for name in names:
-        menu.get_by_label('搜索项目',exact=True).fill(name)
-        menu.get_by_role('button',name='☐ '+name,exact=True).click()
-    page.get_by_role('button',name='报表项目',exact=True).click()
-    if names: expect(page.get_by_role('region',name='公司汇总',exact=True)).to_be_visible(timeout=30000)
+        dialog.get_by_role('checkbox', name=name, exact=True).check()
+    for name in reversed(names):
+        row = dialog.locator('li').filter(has=page.get_by_role('checkbox', name=name, exact=True))
+        up = row.get_by_role('button', name='上移', exact=True)
+        while up.is_enabled(): up.click()
+    dialog.get_by_role('button', name='应用项目选择', exact=True).click()
+    expect(dialog).to_have_count(0)
+    if names: expect(page.get_by_role('region', name='公司汇总', exact=True)).to_be_visible(timeout=30000)
+
+
+def export_preview(page):
+    page.get_by_role('button', name='导出预览', exact=True).click()
+    dialog = page.get_by_role('dialog', name='选择本次报送项目', exact=True)
+    dialog.get_by_role('button', name='生成报送预览', exact=True).click()
+    expect(page.get_by_role('button', name='下载四页Excel', exact=True)).to_be_enabled(timeout=30000)
+
+
+def set_month(page, value):
+    field = page.get_by_label('月份', exact=True)
+    field.fill(value); field.press('Enter')
+    expect(field).to_have_value(value)
 
 
 def report_url(month='2026-09', warehouses=None):
@@ -95,15 +112,13 @@ def test_four_real_sheets_file_order_money_formulas_and_snapshot(server,browser_
     select_projects(page,[LONG_NAME,'隔离项目'])
     preview=page.request.get(server+report_url()).json()
     assert len(preview['sheets'])==4
-    page.get_by_role('button',name='四页报送预览',exact=True).click()
+    export_preview(page)
     for sheet in preview['sheets']:
-        page.get_by_role('button',name=sheet['name'],exact=True).click()
         expect(page.get_by_role('region',name=sheet['name'],exact=True)).to_be_visible()
     annual=page.get_by_role('region',name='年度汇总',exact=True)
     frozen=annual.locator('tbody .mechanical-frozen').first;before_x=frozen.bounding_box()['x']
     annual.evaluate('(e)=>e.scrollLeft=400')
     assert abs(frozen.bounding_box()['x']-before_x)<2
-    page.get_by_role('button',name='零租设备月报表',exact=True).click()
     expect(page.get_by_role('region',name='零租设备月报表',exact=True)).to_contain_text('明细160')
     page.screenshot(path=str(output('399-four-page-preview.png',kind='screenshots')),full_page=True)
     requests=[];page.on('request',lambda request:requests.append(request.url) if '/workbench/export?' in request.url else None)
@@ -144,17 +159,18 @@ def test_four_real_sheets_file_order_money_formulas_and_snapshot(server,browser_
 def test_report_failures_empty_selection_and_stale_response(server,browser_page):
     page,_=browser_page;open_reports(page,server)
     pending=[];page.route('**/api/m06/workbench/preview?**ym=2026-08**',lambda route:pending.append(route))
-    page.get_by_label('月份',exact=True).select_option('2026-08')
+    with page.expect_request('**/api/m06/workbench/preview?**ym=2026-08**'):
+        set_month(page, '2026-08')
     expect(page.get_by_text('正在读取机械报表…',exact=True)).to_be_visible();assert pending
-    page.get_by_label('月份',exact=True).select_option('2026-09')
+    set_month(page, '2026-09')
     expect(page.get_by_role('region',name='公司汇总',exact=True)).to_be_visible(timeout=30000)
     pending.pop().fulfill(status=500,json={'message':'旧月份失败'})
     expect(page.get_by_text('旧月份失败',exact=True)).to_have_count(0)
     page.unroute('**/api/m06/workbench/preview?**ym=2026-08**')
     page.route('**/api/m06/workbench/preview?**ym=2026-08**',lambda route:route.fulfill(status=200,json={'ok':True,'sheets':[]}))
-    page.get_by_label('月份',exact=True).select_option('2026-08')
+    set_month(page, '2026-08')
     expect(page.get_by_role('alert')).to_contain_text('机械报表结果不完整')
-    expect(page.get_by_role('button',name='四页报送预览',exact=True)).to_be_disabled()
+    expect(page.get_by_role('button',name='下载四页Excel',exact=True)).to_have_count(0)
     page.unroute('**/api/m06/workbench/preview?**ym=2026-08**')
     page.get_by_role('button',name='重新读取',exact=True).click()
     expect(page.get_by_role('region',name='公司汇总',exact=True)).to_be_visible(timeout=30000)
@@ -162,27 +178,29 @@ def test_report_failures_empty_selection_and_stale_response(server,browser_page)
     expect(page.get_by_text('请选择项目查看报表。',exact=True)).to_be_visible()
 
 
-def test_detail_jump_uses_project_identity_with_duplicate_names(server,browser_page):
-    warehouse,body_row,column,sheet_name = '审查同名乙',141,'c9','零租设备月报表'
-    page,_=browser_page;open_reports(page,server)
-    page.get_by_role('button',name='报表项目',exact=True).click()
-    menu=page.get_by_role('group',name='导出项目候选',exact=True)
-    menu.get_by_role('button',name='清空',exact=True).click()
-    for _ in range(2): menu.get_by_role('button',name='☐ '+DUPLICATE_NAME,exact=True).first.click()
-    page.get_by_role('button',name='报表项目',exact=True).click()
-    grid=page.get_by_role('region',name='公司汇总',exact=True);expect(grid).to_be_visible(timeout=30000)
-    projects=page.request.get(server+'/api/m01/projects?status=all').json()
-    project=next(project for project in projects if project['warehouse_name']==warehouse)
-    expect(grid.locator(f'[row-id="{project["id"]}"] [col-id="{column}"] button')).to_be_visible()
-    grid.locator(f'[row-id="{project["id"]}"] [col-id="{column}"] button').click()
-    preview=page.get_by_role('region',name=sheet_name,exact=True);expect(preview).to_be_visible()
-    group=preview.locator('tbody tr').nth(body_row)
-    expect(group).to_contain_text(project['disp'])
-    expect(group).to_be_in_viewport()
-    bounds=group.bounding_box();viewport=preview.bounding_box()
-    assert viewport['y'] <= bounds['y'] < viewport['y']+viewport['height'],(bounds,viewport)
-    assert preview.locator('thead').evaluate("head=>{const cell=head.querySelector('tr:last-child th');const r=cell.getBoundingClientRect();return head.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}")
-    page.screenshot(path=str(output(f'399-review-jump-{column}-{warehouse}.png',kind='screenshots')),full_page=True)
+def test_detail_jump_uses_project_identity_with_duplicate_names(server, browser_page):
+    page, _ = browser_page; login(page, server)
+    page.get_by_role('link', name='MOD-10 机械费', exact=True).click()
+    page.get_by_role('button', name='显示项目', exact=True).click()
+    dialog = page.get_by_role('dialog', name='选择显示项目及顺序', exact=True)
+    dialog.get_by_role('button', name='全不选', exact=True).click()
+    for index in range(2): dialog.get_by_role('checkbox', name=DUPLICATE_NAME, exact=True).nth(index).check()
+    dialog.get_by_role('button', name='应用项目选择', exact=True).click()
+    grid = page.get_by_role('region', name='公司汇总', exact=True)
+    expect(grid).to_be_visible(timeout=30000)
+    projects = page.request.get(server+'/api/m01/projects?status=all').json()
+    project = next(project for project in projects if project['warehouse_name']=='审查同名乙')
+    grid.locator(f'[row-id="{project["id"]}"] [col-id="c9"] button').click()
+    detail = page.get_by_role('region', name='零租明细', exact=True)
+    expect(detail).to_be_visible()
+    # Same display name: the second project's one row must not become the first project's 140 rows.
+    expect(detail.locator('.mechanical-detail-group-row')).to_have_count(1)
+    expect(detail.locator('.mechanical-detail-group-row')).to_contain_text('1条')
+    expect(detail.locator('tbody tr')).to_have_count(2)
+    page.get_by_role('button', name='取消筛选', exact=True).click()
+    expect(detail.locator('.mechanical-detail-group-row')).to_have_count(2)
+    expect(detail.locator('tbody tr')).to_have_count(143)
+    page.screenshot(path=str(output('399-review-jump-same-name.png', kind='screenshots')), full_page=True)
 
 
 def test_saved_empty_project_list_requires_explicit_selection_on_entry_and_reload(server,browser_page):
@@ -194,8 +212,12 @@ def test_saved_empty_project_list_requires_explicit_selection_on_entry_and_reloa
     try:
         page.get_by_role('link',name='MOD-10 机械费',exact=True).click()
         expect(page.get_by_text('请选择项目查看报表。',exact=True)).to_be_visible(timeout=30000)
-        expect(page.get_by_role('button',name='报表项目',exact=True)).to_contain_text('已选 0 个项目')
-        expect(page.get_by_role('button',name='四页报送预览',exact=True)).to_be_disabled()
+        page.get_by_role('button', name='导出预览', exact=True).click()
+        dialog = page.get_by_role('dialog', name='选择本次报送项目', exact=True)
+        expect(dialog).to_contain_text('已选 0 个项目')
+        expect(dialog.get_by_role('button', name='生成报送预览', exact=True)).to_be_disabled()
+        dialog.get_by_role('button', name='取消', exact=True).click()
+        expect(page.get_by_role('button',name='下载四页Excel',exact=True)).to_have_count(0)
         assert reads==[]
         page.screenshot(path=str(output('399-review-empty-saved-scope.png',kind='screenshots')),full_page=True)
         page.reload()

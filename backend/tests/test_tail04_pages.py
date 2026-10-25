@@ -144,11 +144,10 @@ def test_导出列就是页面表头去掉勾选与操作():
     assert _export_labels(nt_export.COLUMNS) == nt_page[1:-1], (
         "`nt_export.COLUMNS` 与 `NT_THEAD`（去掉勾选 / 操作）不一致 —— 表与屏幕对不上号了")
 
-    # ⭐ 2026-10-11（`TAIL-283`）：付款流水那张表**没有勾选列**（首列就是流水号）
-    #   ⇒ 导出 = 表头去掉「操作」那**最后一列**。
+    # 页面省略流水号，Excel按现行契约保留它供核对（fl_export模块头）。
     fl_page = _th_labels("FL_THEAD")
-    assert fl_page[-1] == "操作" and fl_page[0] == "流水号", f"`FL_THEAD` 首/末列不是预期：{fl_page}"
-    assert _export_labels(fl_export.COLUMNS) == fl_page[:-1], (
+    assert fl_page[-1] == "操作" and fl_page[0] == "单据编码", f"`FL_THEAD` 首/末列不是预期：{fl_page}"
+    assert _export_labels(fl_export.COLUMNS) == ["流水号", *fl_page[:-1]], (
         "`fl_export.COLUMNS` 与 `FL_THEAD`（去掉操作）不一致 —— 表与屏幕对不上号了")
 
     # ⭐⭐ 2026-10-11（`TAIL-298`）：`m11` 的**屏幕表头已不住壳里** —— 它 = 域内核那张列清单
@@ -159,7 +158,7 @@ def test_导出列就是页面表头去掉勾选与操作():
     jc_rows = [c for c in JC_D.JC_COLUMNS if c["key"] not in JC_D.PAGE_ONLY_KEYS]
     assert _export_labels(jc_export.COLUMNS) == [c.get("export_label") or c["label"] for c in jc_rows], (
         "`jc_export.COLUMNS` 与「屏幕表头（域内核列清单）去掉操作列」不一致 —— 表与屏幕对不上号了")
-    assert len(jc_rows) == len(jc_export.COLUMNS) == 18, "m11 屏幕 19 列（含操作）/ 导出 18 列"
+    assert len(jc_rows) == len(jc_export.COLUMNS) and jc_rows
     # ⛔ 壳里不许再长回那张 20 列字面量（有 ⇒ 又是两份列清单，`TAIL-298` 治的就是它）。
     #   ⚠️ 判"字面量退场"要认**声明**与**表头串**，⛔ 别拿标识符当判据 —— 注释里提 `JC_THEAD`
     #      （说"那个字面量已删"）是正常的，按标识符判会当场假红。

@@ -8,7 +8,7 @@ import { BusinessModal } from './business-modal';
 import { BoundedTable } from './bounded-table';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ApiError, record, requestJson, projectLabel } from './api';
+import { ApiError, confirmWrite, uncertainWrite, record, requestJson, projectLabel } from './api';
 import { body, cents, decimal, money, readNotices, receipt } from './notices-api';
 import { readPaymentContext } from './payment-context';
 import type { PaymentContext } from './payment-context';
@@ -114,6 +114,8 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
     let saved = false;
     try {
       const value = await requestJson('/api/m03/actions/batch-pay',{method:'POST',...body({...payload,request_id:requestId.current})});
+      if (!active.current) return;
+      confirmWrite(record(value) && value.ok === true, '付款结果待核实，请到付款流水核对，勿重复提交。');
       saved=true;setPhase('saved');paid(targets.map(row => row.notice_id));
       const text = receipt(value);setMessage(text);announce(text);
       if (!record(value) || !Array.isArray(value.flows) || !Array.isArray(value.created) || value.flows.length !== value.created.length || !value.flows.every(f => record(f) && Number.isSafeInteger(f.notice_id) && ['flow_no','amount','pay_date','pay_method','remark'].every(k => typeof f[k] === 'string'))) throw new ApiError('付款已登记，流水回执不完整，请到付款流水核对，勿重复付款。');
@@ -122,12 +124,13 @@ export function NoticePayment({ ids, overrides, projects, blocked, remove, close
       if (skipped.length) setMessage(`${text}；本次未登记：${skipped.map(row => row.bill_no).join('、')}，请重读核对状态。`);
       await reread();
     } catch (failure) {
+      if (!active.current) return;
       if (!saved) {
-        const rejected = failure instanceof ApiError && failure.status > 0 && failure.status < 500;
+        const rejected = !uncertainWrite(failure);
         setPhase(rejected ? 'edit' : 'uncertain');
         if (rejected) void query.refetch();
       }
-      setError(`${saved ? '付款已登记，勿重复提交。' : failure instanceof ApiError && failure.status > 0 && failure.status < 500 ? '整批未登记，输入已保留。' : '提交结果尚未核实，请重读列表并到付款流水核对，勿重复付款。'}${failure instanceof Error ? failure.message : '请重读核对。'}`);
+      setError(`${saved ? '付款已登记，勿重复提交。' : !uncertainWrite(failure) ? '整批未登记，输入已保留。' : '提交结果尚未核实，请重读列表并到付款流水核对，勿重复付款。'}${failure instanceof Error ? failure.message : '请重读核对。'}`);
     } finally { lock.current=false; }
   }
   async function continuePayment() {

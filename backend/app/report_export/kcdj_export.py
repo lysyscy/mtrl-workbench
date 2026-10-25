@@ -84,7 +84,7 @@ def aggregate_grid(data, columns, nat2group, *, wh_col=COL_WAREHOUSE, dir_col=CO
         w = str(row[wh_col]).strip()
         d = str(row[dir_col]).strip()
         g = nat2group.get(str(row[nat_col]).strip())
-        for key in ((d, g), (d, None), (None, None)):
+        for key in {(d, g), (d, None), (None, None)}:
             for acc, k in ((per_wh, (w,) + key), (over, key)):
                 s, n = acc.get(k, (0.0, 0))
                 acc[k] = (round(s + amt, 2), n + 1)

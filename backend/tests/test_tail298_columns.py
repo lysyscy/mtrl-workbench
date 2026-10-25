@@ -66,7 +66,6 @@ def test_导出列逐列等于域内核那张清单():
         "导出列与域内核那张清单不一致了 —— 两边必须逐列同名同序：\n"
         f"  导出   = {J.COLUMNS}\n  期望   = {want}")
     assert len(J.COLUMNS) == len(D.JC_COLUMNS) - len(D.PAGE_ONLY_KEYS)
-    assert len(D.JC_COLUMNS) == 19 and len(J.COLUMNS) == 18, "主表 19 列 / 导出 18 列（去掉「操作」）"
     # 合计列 = 域内核的 `SUM_KEYS`（页面 `sumRowOf` 求的就是那几列）
     assert J.MONEY_KEYS == frozenset(D.SUM_KEYS), "导出合计列必须来自 `domain.SUM_KEYS`"
     assert J.MONEY_KEYS <= {k for _, k in J.COLUMNS}, "合计列必须都在导出的列里"

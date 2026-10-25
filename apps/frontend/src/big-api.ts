@@ -1,4 +1,4 @@
-import { ApiError, record, requestJson } from './api';
+import { ApiError, body, confirmWrite, record, requestJson } from './api';
 
 export const manualKeys = ['open_ym','mech_est','contract','output_cum','oil','note'] as const;
 export type ManualKey = typeof manualKeys[number];
@@ -46,11 +46,10 @@ export function readBig(value: unknown, ym: string): BigData {
 }
 export const getBig = async (ym: string, signal?: AbortSignal) => readBig(await requestJson(`/api/m07/big?${new URLSearchParams({period:ym})}`, signal ? {signal} : {}),ym);
 export async function saveBigCell(ym: string, warehouse: string, key: ManualKey, raw: string, signal: AbortSignal) {
-  const result = await requestJson('/api/m07/big/cell', {method:'POST',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({month:ym,warehouse,key,raw})});
-  if (!record(result) || result.ok !== true || !('value' in result)) throw new ApiError('保存回执未确认，请重读核对，勿重复提交。',0,'invalid_response');
+  const result = await requestJson('/api/m07/big/cell', {method:'POST',signal,...body({month:ym,warehouse,key,raw})});
+  confirmWrite(record(result) && result.ok === true && 'value' in result, '保存回执未确认，请重读核对，勿重复提交。');
 }
 export async function saveBigSelection(selected: string[], signal: AbortSignal) {
-  const result = await requestJson('/api/m07/big/selection', {method:'POST',signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({selected})});
-  if (!record(result) || result.ok !== true || !Array.isArray(result.selected) || !result.selected.every(v => typeof v === 'string')) throw new ApiError('选题回执未确认，请重读核对，勿重复提交。',0,'invalid_response');
+  const result = await requestJson('/api/m07/big/selection', {method:'POST',signal,...body({selected})});
+  confirmWrite(record(result) && result.ok === true && Array.isArray(result.selected) && result.selected.every(v => typeof v === 'string'), '选题回执未确认，请重读核对，勿重复提交。');
 }
-export const uncertainBig = (e: unknown) => !(e instanceof ApiError) || !e.status || e.status >= 500 || e.code === 'invalid_response';

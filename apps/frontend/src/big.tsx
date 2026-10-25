@@ -1,3 +1,4 @@
+import { uncertainWrite } from './api';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
@@ -17,7 +18,7 @@ import { BoundedTable } from './bounded-table';
 import { useHistoryGuard } from './history';
 import { money } from './notices-api';
 import { SettlementExport } from './settlement-export';
-import { getBig, manualKeys, saveBigCell, saveBigSelection, uncertainBig } from './big-api';
+import { getBig, manualKeys, saveBigCell, saveBigSelection } from './big-api';
 import type { AutoKey, BigData, BigRow, DerivedKey, ManualKey, TotalKey } from './big-api';
 import './big.css';
 
@@ -105,7 +106,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     } catch(e) {
       if(!alive.current) return;
       const message=e instanceof Error ? e.message : '保存失败，请重试。';
-      if(written || uncertainBig(e)) {state.current.uncertain=true;setUncertain(true);setVerified(false);queue.current=[];setError(`${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
+      if(written || uncertainWrite(e)) {state.current.uncertain=true;setUncertain(true);setVerified(false);queue.current=[];setError(`${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
       else {queue.current=[];const next={...state.current.drafts};if(next[id]) next[id]={...next[id],error:message};update(next);setError(message);}
     } finally {lock.current=false;if(alive.current) {setBusy(false);void drain();}}
   }
@@ -122,7 +123,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       await saveBigSelection(selected,writeAbort.current.signal);written=true;await reload();await refreshOthers();setFeedback('项目与顺序已保存。');return true;
     } catch(e) {
       const message=e instanceof Error ? e.message : '选题保存失败。';
-      if(written || uncertainBig(e)) {state.current.uncertain=true;setUncertain(true);setVerified(false);setError(`${written ? '选题已保存，重读失败。' : '选题结果待核实。'}${message}请重读核对。`);}
+      if(written || uncertainWrite(e)) {state.current.uncertain=true;setUncertain(true);setVerified(false);setError(`${written ? '选题已保存，重读失败。' : '选题结果待核实。'}${message}请重读核对。`);}
       else setError(message);
       return false;
     } finally {lock.current=false;setBusy(false);}

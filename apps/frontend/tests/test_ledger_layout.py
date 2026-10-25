@@ -6,7 +6,8 @@ import zipfile
 import openpyxl
 from playwright.sync_api import expect
 from test_preview import server, browser_page
-from test_ledger import open_ledger, project_id, data, previous_report_month
+from test_ledger import open_ledger, project_id, data, previous_report_month, select_project
+from test_export_dialogs import open_export, selected_names, move_first
 from tools.audit.workspace_paths import output
 
 
@@ -18,8 +19,8 @@ def test_normal_month_remark_clear_undo_and_stale_token(server,browser_page):
     expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存')
     def normal(): return next(r for side in data(page,server,project)['sides'] if side['category']=='material' for r in side['rows'] if r['month']=='2025-12' and r['row_kind']=='month')
     assert normal()['remark']=='正常月份中文备注'
-    page.get_by_role('button',name='撤销',exact=True).click();expect(page.get_by_role('status',name='保存回执')).to_contain_text('已撤销');assert normal()['remark']==''
-    page.get_by_role('button',name='重做',exact=True).click();expect(page.get_by_role('status',name='保存回执')).to_contain_text('已重做');assert normal()['remark']=='正常月份中文备注'
+    page.get_by_role('button',name='撤销',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('已撤销');assert normal()['remark']==''
+    page.get_by_role('button',name='重做',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('已重做');assert normal()['remark']=='正常月份中文备注'
     with page.expect_response(lambda response:'/m05/ledger/remark' in response.url and response.request.method=='POST') as saved:
         note.fill('');note.press('Tab')
     assert saved.value.json()['ok'];expect(note).to_have_value('')
@@ -36,22 +37,19 @@ def test_normal_month_remark_clear_undo_and_stale_token(server,browser_page):
 
 def test_independent_multi_project_preview_cancel_and_actual_zip(server,browser_page):
     page,_=browser_page;open_ledger(page,server)
-    page.get_by_role('button',name='逐月台账导出…',exact=True).click()
-    picker=page.get_by_role('group',name='导出项目候选');expect(picker).to_be_visible()
-    picker.get_by_role('button',name=re.compile('^☐ 长项目名验收')).click()
-    expect(page.get_by_role('button',name='选择项目',exact=True)).to_contain_text('隔离项目')
-    page.get_by_role('button',name='确认清单',exact=True).click()
-    dialog=page.get_by_role('dialog');expect(dialog).to_contain_text('选了2个项目')
-    expect(dialog.get_by_role('row')).to_have_count(3)
-    dialog.get_by_role('button',name='项目排序',exact=True).click()
-    dialog.get_by_role('button',name='关闭',exact=True).click();expect(dialog).to_have_count(0)
-    assert not list(page.context.pages)[0].is_closed()
+    dialog = open_export(page, '逐月台账导出')
+    dialog.get_by_role('checkbox', name='长项目名验收', exact=True).check()
+    move_first(dialog, '长项目名验收')
+    expect(page.get_by_label('选择项目', exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('隔离项目')
+    expect(dialog).to_contain_text('选了2个项目')
+    order = selected_names(dialog)
+    dialog.get_by_role('button', name='关闭', exact=True).click()
+    expect(dialog).to_have_count(0)
     page.reload()
-    expect(page.get_by_role('region',name='辅材欠款台账',exact=True)).to_be_visible()
-    page.get_by_role('button',name='逐月台账导出…',exact=True).click()
-    expect(picker.get_by_role('button',name=re.compile('^☑ 长项目名验收'))).to_be_visible()
-    page.get_by_role('button',name='确认清单',exact=True).click()
-    order=dialog.locator('tbody tr td:nth-child(2)').all_text_contents()
+    expect(page.get_by_role('region', name='辅材欠款台账', exact=True)).to_be_visible()
+    dialog = open_export(page, '逐月台账导出')
+    expect(dialog.get_by_role('checkbox', name='长项目名验收', exact=True)).to_be_checked()
+    assert selected_names(dialog) == order
     with page.expect_download() as event: page.get_by_role('button',name='保存到本地',exact=True).click()
     download=event.value;path=output(download.suggested_filename,kind='exports');download.save_as(path)
     assert path.suffix=='.zip'
@@ -68,7 +66,7 @@ def test_independent_multi_project_preview_cancel_and_actual_zip(server,browser_
                 exported=[(str(cells[1]),str(cells[5] or '')) for cells in workbook[side['label']].iter_rows(min_row=3,max_col=6,values_only=True) if re.fullmatch(r'\d{4}-\d{2}',str(cells[1] or ''))]
                 assert exported==[(r['month'],r['remark']) for r in side['rows']]
             workbook.close()
-    expect(page.get_by_role('button',name='选择项目',exact=True)).to_contain_text('隔离项目')
+    expect(page.get_by_label('选择项目',exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('隔离项目')
 
 
 def test_add_focuses_new_record_at_fixed_historical_month_and_project_survives_navigation(server,browser_page):
@@ -83,12 +81,12 @@ def test_add_focuses_new_record_at_fixed_historical_month_and_project_survives_n
     assert actual['month']=='2025-11'
     draft=page.locator(f'[row-id="material:manual:{rid}"] [col-id=payment] input');draft.fill('bad');draft.press('Tab')
     expect(page.get_by_role('status',name='保存回执')).to_contain_text('保存被拒')
-    page.get_by_role('button',name='选择项目',exact=True).click();page.get_by_role('group',name='查看项目候选').get_by_role('radio',name=re.compile('^归档样例')).click()
-    expect(page.get_by_role('button',name='选择项目',exact=True)).to_contain_text('归档')
+    select_project(page, '归档样例')
+    expect(page.get_by_label('选择项目',exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('归档')
     page.get_by_role('link',name='MOD-01 项目档案',exact=True).click();page.get_by_role('link',name='MOD-05 付款流水与欠款统计',exact=True).click()
-    expect(page.get_by_role('button',name='选择项目',exact=True)).to_contain_text('归档样例')
+    expect(page.get_by_label('选择项目',exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('归档样例')
 
-    page.get_by_role('button',name='选择项目',exact=True).click();page.get_by_role('group',name='查看项目候选').get_by_role('radio',name=re.compile('^隔离项目')).click()
+    select_project(page, '隔离项目')
     expect(draft).to_have_value('bad')
 
 
@@ -111,9 +109,14 @@ def test_uncertain_undo_requires_readback_before_another_history_action(server,b
         requests.append(route.request.post_data_json);response=route.fetch();assert response.json()['ok'];route.abort('failed')
     page.route('**/api/history/undo',uncertain)
     page.get_by_role('button',name='撤销',exact=True).click()
-    expect(page.get_by_role('button',name='重新加载',exact=True)).to_be_visible()
+    expect(page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True)).to_be_visible()
     expect(page.get_by_role('button',name='撤销',exact=True)).to_be_disabled()
     page.keyboard.press('Control+z');assert len(requests)==1
-    page.get_by_role('button',name='重新加载',exact=True).click()
-    expect(page.get_by_role('button',name='重新加载',exact=True)).to_have_count(0)
+    page.get_by_role('link',name='MOD-10 机械费',exact=True).click()
+    expect(page.get_by_role('button',name='撤销',exact=True)).to_be_disabled()
+    expect(page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True)).to_be_visible()
+    page.keyboard.press('Control+z');assert len(requests)==1
+    page.get_by_role('link',name='MOD-05 付款流水与欠款统计',exact=True).click()
+    page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True).click()
+    expect(page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True)).to_have_count(0)
     wait_value(page,project,rid,'payment','12.00');assert len(requests)==1

@@ -62,10 +62,12 @@ def test_当前结果优先且长错误可展开(ui_page):
       VIEW='m02';render();
     }''')
     assert p.locator('.m02-workspace .kv').is_visible()
-    assert not p.locator('.m02-history').get_attribute('open')
+    assert p.locator('.m02-history').evaluate('(element)=>element.open')
     assert not p.locator('.m02-error div').first.is_visible()
     p.locator('.kv .m02-error summary').click()
     assert p.locator('.kv .m02-error div').is_visible()
+    p.locator('.m02-history>summary').click()
+    assert not p.locator('[data-sort-key="m02:logs"] tbody').is_visible()
     p.locator('.m02-history>summary').click()
     assert p.locator('[data-sort-key="m02:logs"] tbody').is_visible()
     assert p.locator('[data-sort-key="m02:logs"] td').first.evaluate('(e)=>getComputedStyle(e).whiteSpace') == 'nowrap'
