@@ -103,7 +103,7 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;
           const Page = entry.component;
-          return <div key={entry.path} className="page-view" hidden={!active} inert={!active}><Suspense fallback={<p role="status">{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/ledger' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={entry.path === '/ledger' ? ledgerExportGuard : ''} /></Suspense></div>;
+          return <div key={entry.path} className="page-view" hidden={!active} inert={!active}><Suspense fallback={<p role="status">{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/ledger' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></div>;
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}

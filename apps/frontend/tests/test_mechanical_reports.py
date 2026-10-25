@@ -1,4 +1,5 @@
 """TAIL-399: real saved/confirmed synthetic reports and production assets."""
+import re
 from decimal import Decimal
 import json
 from urllib.parse import parse_qs, urlparse
@@ -228,3 +229,36 @@ def test_saved_empty_project_list_requires_explicit_selection_on_entry_and_reloa
     finally:
         current=page.request.get(server+'/api/m06/workbench').json()['settings']
         response=page.request.post(server+'/api/m06/workbench/settings',data={**original,'revision':current['revision']});assert response.ok,response.text()
+
+
+@pytest.mark.parametrize('state', ['draft', 'unknown'])
+def test_ledger_cross_page_guard_blocks_mechanical_download(server, browser_page, state):
+    from preview_select import pick_option
+    page, _ = browser_page
+    open_reports(page, server)
+    export_preview(page)
+    page.get_by_role('link', name='MOD-05 付款流水与欠款统计', exact=True).click()
+    pick_option(page, '选择项目', '隔离项目')
+    row = page.get_by_role('region', name='辅材欠款台账', exact=True).locator('[row-id]').filter(
+        has=page.locator('input[value="合成历史行甲"]'))
+    field = row.locator('[col-id="other_expense"] input')
+    if state == 'unknown':
+        # This is the UI's unknown-response branch; committed-then-unknown is covered separately.
+        page.route('**/api/m05/history/save', lambda route: route.fulfill(status=502, json={'message':'定向未知回执'}))
+        field.fill('98.76')
+        field.press('Tab')
+        expect(page.get_by_role('status', name='保存回执')).to_contain_text('待核实')
+        reason = '台账操作结果待核实'
+    else:
+        field.fill('未保存输入')
+        field.press('Tab')
+        reason = '台账有未保存输入'
+    page.get_by_role('link', name='MOD-10 机械费', exact=True).click()
+    page.get_by_role('button', name='导出预览', exact=True).click()
+    dialog = page.get_by_role('dialog', name='选择本次报送项目', exact=True)
+    dialog.get_by_role('button', name='生成报送预览', exact=True).click()
+    download = page.get_by_role('button', name='下载四页Excel', exact=True)
+    expect(download).to_be_disabled()
+    expect(download).to_have_attribute('title', re.compile(reason))
+    page.get_by_role('link', name='MOD-05 付款流水与欠款统计', exact=True).click()
+    expect(field).to_have_value('98.76' if state == 'unknown' else '未保存输入')
