@@ -61,7 +61,8 @@ export function fitGridColumns(api: GridApi, root: HTMLElement | null, measure =
       if (!available) return;
       const specs = columns.map(column => { const def = column.getColDef(); return { min: def.minWidth ?? 60, max: def.maxWidth ?? 400, flex: def.context?.widthFlex ?? 0 }; });
       const widths = tableWidths(specs, columns.map(column => preferred.get(column.getColId()) ?? column.getActualWidth()), available, 1);
-      api.setColumnWidths(columns.map((column, i) => ({ key: column, newWidth: widths[i]! })));
+      const changed = columns.flatMap((column, i) => Math.abs(column.getActualWidth() - widths[i]!) >= .5 ? [{ key: column, newWidth: widths[i]! }] : []);
+      if (changed.length) api.setColumnWidths(changed);
     };
     const run = (measure: boolean) => { needsMeasure ||= measure; if (!frame) frame = requestAnimationFrame(fit); };
     const afterEdit = () => { if (pending) run(false); };
