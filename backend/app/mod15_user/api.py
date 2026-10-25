@@ -247,7 +247,7 @@ def _palette(name: str) -> dict:
 
 
 @router.get("/api/m15/theme")
-def api_theme() -> dict:
+def api_theme(surface: str = "") -> dict:
     """**当前登录用户**的主题（＋ 可选清单 ＋ 每套的配色标本）。
 
     ⚠️ 返回的是"**该用哪套**"（`domain.effective_theme` 已经把"未设置 ⇒ 默认"判完了），
@@ -256,16 +256,19 @@ def api_theme() -> dict:
     """
     from app.mod03_notice import page as P
 
-    names = list(P.theme_names())
+    from app.mod03_notice import theme_react
+    react = surface == "react"
+    choices = theme_react.theme_choices() if react else []
+    names = [item["name"] for item in choices] if react else list(P.theme_names())
     with session_scope() as s:
         me = _me(s)
         return {
             "ok": True,
-            "theme": D.effective_theme(me),
+            "theme": theme_react.theme_name(D.effective_theme(me)) if react else D.effective_theme(me),
             "themes": names,
             "default": P.DEFAULT_THEME,
             # ⭐ 每套一张"配色标本"卡（见 `_palette` 的注释）—— 壳只负责画，取值全在这儿
-            "palette": [_palette(n) for n in names],
+            "palette": choices if react else [_palette(n) for n in names],
             # ⭐⭐ 2026-09-27（`TAIL-129` 界面大小）：**档位清单的真源在后端**（`domain.UI_SCALES`）——
             #    壳拿它画按钮、⛔ 不写死档位映射（加一档要改两处就是两份真源）；
             #    `css` 是喂 `--fscale` 的倍率字符串（壳直接用，⛔ 不用键去查表）。

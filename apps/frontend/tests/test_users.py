@@ -1,9 +1,8 @@
-"""TAIL-420: user management and personal settings through the real isolated backend."""
+"""TAIL-420/441: user management and appearance through the real isolated backend."""
 
 import httpx
 import pytest
 from playwright.sync_api import expect
-from preview_select import pick_option
 from test_preview import server, browser_page, login
 
 
@@ -190,32 +189,111 @@ def test_transfer_atomicity_and_disabled_sessions(server, browser_page):
 def test_theme_and_scale_persist_per_account(server, browser_page):
     page, _ = browser_page
     login(page, server)
-    original = page.request.get(server + '/api/m15/theme').json()
-    current, options = original['theme'], original['themes']
-    target = next(theme for theme in options if theme != current)
+    original = page.request.get(server + '/api/m15/theme?surface=react').json()
+    current, target = original['theme'], '玫瑰柔粉'
     page.get_by_role('button', name='预览管理员（管理员）').click()
     page.get_by_role('menuitem', name='外观与字号').click()
     dialog = page.locator('.appearance-dialog')
-    pick_option(page, '配色主题', target)
-    expect(dialog).to_contain_text('仅影响当前账号')
-    pick_option(page, '界面字号', '大一点')
+    expect(dialog.get_by_role('radio')).to_have_count(12)
+    dialog.get_by_role('radio', name=target + '主题', exact=True).click()
+    expect(dialog.get_by_role('radio', name=target + '主题', exact=True)).to_have_attribute('aria-checked', 'true')
+    dialog.get_by_role('radio', name='大一点字号', exact=True).click()
     page.wait_for_function("document.documentElement.style.getPropertyValue('--fscale') === '1.12'")
-    # The preference survives a reload and applies to the served theme.
+    expect(dialog).to_contain_text('仅影响当前账号')
     page.reload()
     expect(page.get_by_role('button', name='预览管理员（管理员）')).to_be_visible()
-    saved = page.request.get(server + '/api/m15/theme').json()
+    saved = page.request.get(server + '/api/m15/theme?surface=react').json()
     assert saved['theme'] == target
     page.wait_for_function("document.documentElement.style.getPropertyValue('--fscale') === '1.12'")
-    assert target in page.evaluate("decodeURIComponent(document.querySelector('#user-theme').getAttribute('href'))")
-    # Another account's preferences are untouched.
+    page.wait_for_function("getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() === '#f9edf2'")
     login(page, server, 'preview-user')
-    other = page.request.get(server + '/api/m15/theme').json()
+    other = page.request.get(server + '/api/m15/theme?surface=react').json()
     assert other['theme'] == '深色' and other['ui_scale'] == 'large'
-    # Restore the original admin preference.
     login(page, server)
     page.get_by_role('button', name='预览管理员（管理员）').click()
     page.get_by_role('menuitem', name='外观与字号').click()
-    pick_option(page, '配色主题', current)
-    pick_option(page, '界面字号', '标准')
-    restored = page.request.get(server + '/api/m15/theme').json()
+    label = next(item['label'] for item in original['palette'] if item['name'] == current)
+    dialog.get_by_role('radio', name=label + '主题', exact=True).click()
+    expect(dialog.get_by_role('radio', name=label + '主题', exact=True)).to_have_attribute('aria-checked', 'true')
+    dialog.get_by_role('radio', name='标准字号', exact=True).click()
+    page.wait_for_function("document.documentElement.style.getPropertyValue('--fscale') === '1'")
+    restored = page.request.get(server + '/api/m15/theme?surface=react').json()
     assert restored['theme'] == current and restored['ui_scale'] == original['ui_scale']
+
+
+
+def test_appearance_unknown_save_requires_readback_before_another_choice(server, browser_page):
+    page, _ = browser_page
+    login(page, server)
+    page.get_by_role('button', name='预览管理员（管理员）').click()
+    page.get_by_role('menuitem', name='外观与字号').click()
+    dialog = page.locator('.appearance-dialog')
+    target = dialog.get_by_role('radio', name='丁香浅紫主题', exact=True)
+    expect(target).to_be_visible()
+    writes = []
+
+    def lose_confirmation(route):
+        writes.append(route.request.post_data_json)
+        response = route.fetch()
+        assert response.ok
+        route.fulfill(status=200, content_type='application/json', body='{}')
+
+    page.route('**/api/m15/theme', lose_confirmation)
+    target.click()
+    expect(dialog.get_by_role('alert')).to_contain_text('保存结果未确认')
+    expect(dialog.get_by_role('radio', name='松绿主题', exact=True)).to_be_disabled()
+    assert len(writes) == 1
+    page.unroute('**/api/m15/theme', lose_confirmation)
+    dialog.get_by_role('button', name='重新读取', exact=True).click()
+    expect(target).to_have_attribute('aria-checked', 'true')
+    expect(dialog).to_contain_text('已重新读取当前账号设置')
+    page.wait_for_function("getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() === '#f0edfa'")
+    dialog.get_by_role('radio', name='松绿主题', exact=True).click()
+    expect(dialog.get_by_role('radio', name='松绿主题', exact=True)).to_have_attribute('aria-checked', 'true')
+    dialog.get_by_role('button', name='收起外观面板', exact=True).click()
+    expect(page.get_by_role('button', name='预览管理员（管理员）')).to_be_focused()
+
+
+def test_appearance_cards_geometry_keyboard_and_narrow(server, browser_page):
+    page, _ = browser_page
+    login(page, server)
+    search = page.get_by_role('searchbox', name='项目搜索', exact=True)
+    search.fill('隔离')
+    page.get_by_role('button', name='预览管理员（管理员）').click()
+    page.get_by_role('menuitem', name='外观与字号').click()
+    panel = page.locator('.appearance-dialog')
+    expect(panel.get_by_role('radio')).to_have_count(12)
+    # All cards exercise the actual account endpoint and the matching full-page CSS.
+    palettes = page.request.get(server + '/api/m15/theme?surface=react').json()['palette']
+    for item in palettes:
+        card = panel.get_by_role('radio', name=item['label'] + '主题', exact=True)
+        card.click()
+        expect(card).to_have_attribute('aria-checked', 'true')
+        expect(panel).to_have_attribute('aria-busy', 'false')
+        page.wait_for_function('(bg) => getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() === bg', arg=item['vars']['--bg'])
+    for label, scale in [('标准', '1'), ('大一点', '1.12'), ('更大', '1.25'), ('最大', '1.4')]:
+        card = panel.get_by_role('radio', name=label + '字号', exact=True)
+        card.click()
+        expect(card).to_have_attribute('aria-checked', 'true')
+        expect(panel).to_have_attribute('aria-busy', 'false')
+        page.wait_for_function('(scale) => document.documentElement.style.getPropertyValue("--fscale") === scale', arg=scale)
+    expect(search).to_have_value('隔离')
+    samples = panel.locator('.appearance-size-sample').evaluate_all('(items) => items.map(el => parseFloat(getComputedStyle(el).fontSize))')
+    assert samples == [13.5, 15.12, 16.875, 18.9]
+    current = panel.get_by_role('radio', name='丁香浅紫主题', exact=True)
+    current.press('Home')
+    expect(panel.get_by_role('radio', name='中性浅色主题', exact=True)).to_have_attribute('aria-checked', 'true')
+    expect(panel).to_have_attribute('aria-busy', 'false')
+    # Resizing while focus is in the page moves it into the compact dialog.
+    search.focus()
+    page.set_viewport_size({'width': 390, 'height': 844})
+    expect(panel).to_have_attribute('aria-modal', 'true')
+    close = panel.get_by_role('button', name='收起外观面板', exact=True)
+    expect(close).to_be_focused()
+    assert page.locator('.main').evaluate('(el) => el.inert')
+    assert panel.evaluate('(el) => el.getBoundingClientRect().left >= 0 && el.getBoundingClientRect().right <= innerWidth && el.scrollWidth <= el.clientWidth')
+    for card in panel.locator('.appearance-choice').all():
+        assert card.evaluate('(el) => el.scrollWidth <= el.clientWidth'), card.get_attribute('aria-label')
+    close.press('Escape')
+    expect(panel).not_to_be_visible()
+    assert not page.locator('.main').evaluate('(el) => el.inert')

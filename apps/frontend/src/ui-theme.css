@@ -22,9 +22,6 @@ html{font-variant-numeric:tabular-nums}
 .business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
 .business-modal .notice-pay-table th,.business-modal .notice-flows-table th{font-size:calc(11.5px * var(--fscale))}
-.appearance-fields{display:grid;gap:16px;margin-top:16px}
-.appearance-fields label{display:grid;gap:8px;margin:0}
-.appearance-fields p{margin:0;color:var(--tx2)}
 
 .notices-page{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscale));--field-short:calc(112px * var(--fscale));--field-medium:calc(144px * var(--fscale));--field-wide:calc(220px * var(--fscale));--field-search:calc(248px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .notices-page .notice-selection{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));gap:8px 24px;margin-bottom:calc(16px * var(--fscale))}

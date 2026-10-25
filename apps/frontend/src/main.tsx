@@ -60,6 +60,13 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
   const [logoutError, setLogoutError] = useState('');
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [compactAppearance, setCompactAppearance] = useState(() => window.matchMedia('(max-width:900px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width:900px)');
+    const update = () => setCompactAppearance(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
   const [ledgerExportGuard, setLedgerExportGuard] = useState('');
   const [ledgerProject, setLedgerProject] = useState(0);
   const page = useLocation().pathname;
@@ -84,10 +91,10 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
   }
   return <QueryClientProvider client={client}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
-    <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
+    <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}>{entry.mod && <span className="nav-code">MOD-{entry.mod}</span>}<span>{entry.title}</span></NavLink>)}</div>)}
     </nav><a className="old-app" href="/app">打开旧版预览</a></aside>
-    <div className="main"><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录 · 只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl}>登录</a>}</div></header>
+    <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录 · 只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl}>登录</a>}</div></header>
       <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>
         {pages.map(entry => {
           const active = page === entry.path;
@@ -96,7 +103,8 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
           return <div key={entry.path} className="page-view" hidden={!active} inert={!active}><Suspense fallback={<p role="status">{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={ledgerProject} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></div>;
         })}</HistoryGate></main>
     </div>
-  </div>{appearanceOpen && me && !blocked && <AppearancePreferences close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}</HistoryScope></QueryClientProvider>;
+    {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}
+  </div></HistoryScope></QueryClientProvider>;
 }
 
 function App() {

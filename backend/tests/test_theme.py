@@ -185,7 +185,8 @@ def test_主题只在一处定义_不得出现第二份副本():
         if f.name != 'theme_react.py' and ":root{" in f.read_text(encoding="utf-8"):
             owners.append(f.name)
     assert owners == ["page.py"], f"主题调色板只能由page.py持有，实际：{owners}"
-    assert theme_react.THEME_SEEDS is page.THEME_SEEDS
+    assert theme_react.REACT_THEME_OVERRIDES is page.REACT_THEME_OVERRIDES
+    assert theme_react.REACT_THEME_SPEC is page.REACT_THEME_SPEC
 
 
 def test_一套主题的值互不重复_成对色的底与字必须不同():
