@@ -25,6 +25,7 @@ import './inventory.css';
 import { InventoryText, measureInventoryRows } from './inventory-rows';
 
 const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true};
+const totalsOf = (rows: InventoryRow[]) => rows.length ? [{id:-1,doc_no:'合计',qty:sumRows(rows,'qty'),amount:sumRows(rows,'amount'),adj_amount:sumRows(rows,'adj_amount'),tax_total:sumRows(rows,'tax_total')}] : [];
 
 export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:boolean;active:boolean}) {
   const location = useLocation(), navigate = useNavigate();
@@ -51,7 +52,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const coarse = useMemo(() => coarseRows(query.data?.rows ?? [],period,warehouses,direction,onlyAdjusted),[query.data,period,warehouses.join('\0'),direction,onlyAdjusted]);
   const rows = useMemo(() => target !== null ? (query.data?.rows ?? []).filter(row => row.id === target) : filterRows(coarse,filters),[coarse,filters,target,query.data]);
   const filter = filters[column] ?? emptyFilter(), meta = fields.find(([key]) => key === column)!;
-  const values = [...new Set(coarse.map(row => row[column]).filter(Boolean))].sort();
+  const values = useMemo(() => filterOpen ? [...new Set(coarse.map(row => row[column]).filter(Boolean))].sort() : [], [coarse, column, filterOpen]);
   const filterCount = Object.values(filters).filter(filterOn).length;
   const scale = Number(me?.ui_scale_css ?? 1), paused = blocked || !active;
   async function reload() {
@@ -78,7 +79,8 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
     })),
     {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(100,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={controls.current.unavailable || Boolean(controls.current.pendingId !== null && controls.current.pendingId !== p.data.id)} onClick={() => { if (!controls.current.unavailable && (controls.current.pendingId === null || controls.current.pendingId === p.data!.id)) setEditing(p.data!); }}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
   ],[scale]);
-  const totals = useMemo(() => rows.length ? [{id:-1,doc_no:'合计',qty:sumRows(rows,'qty'),amount:sumRows(rows,'amount'),adj_amount:sumRows(rows,'adj_amount'),tax_total:sumRows(rows,'tax_total')}] : [],[rows]);
+  const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
+  const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
   function changeFilter(key:'q'|'min'|'max'|'values',value:string|string[]) {setFilters(old => ({...old,[column]:{...filter,[key]:value}}));}
   const filterProblem = [filter.min,filter.max].some(raw => raw && !Number.isFinite(Number(raw.replace(/,/g,'')))) ? '列数值无效，请修改或清除此列。' : '';
   const editRow = editing && (query.data?.rows.find(r => r.id === editing.id) ?? editing);

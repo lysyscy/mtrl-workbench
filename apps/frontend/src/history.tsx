@@ -1,5 +1,5 @@
 import Button from 'antd/es/button';
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, record, requestJson, uncertainWrite } from './api';
@@ -37,7 +37,8 @@ export function useHistoryGuard(name: string, reason: () => string) {
 export function HistoryScope({ children }: { children: ReactNode }) {
   const [guards] = useState(() => new Map<string, () => string>());
   const [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false);
-  return <ReplayState.Provider value={{ busy, uncertain, setBusy, setUncertain }}><Guards.Provider value={guards}>{children}</Guards.Provider></ReplayState.Provider>;
+  const state = useMemo(() => ({ busy, uncertain, setBusy, setUncertain }), [busy, uncertain]);
+  return <ReplayState.Provider value={state}><Guards.Provider value={guards}>{children}</Guards.Provider></ReplayState.Provider>;
 }
 export function HistoryControls({ me, blocked, guard }: { me: Identity | null; blocked: boolean; guard: string }) {
   const client = useQueryClient(), guards = useContext(Guards);

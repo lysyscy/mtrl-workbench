@@ -45,20 +45,23 @@ export function coarseRows(rows:InventoryRow[], period:string, warehouses:string
   return rows.filter(r => timeMatches(period,`${r.ym}-01`) && (!warehouses.length || warehouses.includes(r.warehouse)) && (direction === '全部' || direction === r.direction) && (!adjusted || r.adjusted));
 }
 export function filterRows(rows:InventoryRow[], filters:Filters) {
-  return rows.filter(r => fields.every(([key,,type]) => {
-    const f = filters[key]; if (!f || !filterOn(f)) return true;
-    const raw = r[key];
-    if (type === 'num') {
+  const active = fields.flatMap(([key,,type]) => {
+    const f = filters[key];
+    return f && filterOn(f) ? [{key,type,q:f.q.toLocaleLowerCase(),min:f.min,max:f.max,
+      lower:Number(f.min.replace(/,/g,'')),upper:Number(f.max.replace(/,/g,'')),values:f.values}] : [];
+  });
+  if (!active.length) return rows;
+  return rows.filter(r => active.every(f => {
+    const raw = r[f.key];
+    if (f.type === 'num') {
       if (!raw) return false;
-      for (const [rawBound,lower] of [[f.min,true],[f.max,false]] as const) {
-        if (!rawBound) continue;
-        const bound = Number(rawBound.replace(/,/g,''));
-        if (!Number.isFinite(bound) || (lower ? Number(raw) < bound : Number(raw) > bound)) return false;
-      }
-    } else if (f.q && !raw.toLocaleLowerCase().includes(f.q.toLocaleLowerCase())) return false;
+      if (f.min && (!Number.isFinite(f.lower) || Number(raw) < f.lower)) return false;
+      if (f.max && (!Number.isFinite(f.upper) || Number(raw) > f.upper)) return false;
+    } else if (f.q && !raw.toLocaleLowerCase().includes(f.q)) return false;
     return !f.values.length || f.values.includes(raw);
   }));
 }
+
 export function sumRows(rows:InventoryRow[], key:'qty'|'amount'|'adj_amount'|'tax_total') {
   const values = rows.map(r => r[key]).filter(Boolean);
   return values.length ? decimal(values.reduce((sum,value) => sum + cents(value),0n)) : '';

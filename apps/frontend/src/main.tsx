@@ -3,7 +3,7 @@ import Dropdown from 'antd/es/dropdown';
 import { UiProvider } from './ui-provider';
 import { AppearancePreferences } from './appearance-preferences';
 import { HistoryControls, HistoryScope, HistoryGate } from './history';
-import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, memo, StrictMode, Suspense, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -42,6 +42,9 @@ const pages: { path: string; title: string; mod: string; group: string; loading?
   { path: '/rules', title: '规则配置', mod: '14', group: 'global', loading: '正在读取规则配置…', component: lazy(() => import('./rules').then(module => ({ default: module.RulesPage }))) },
   { path: '/users', title: '用户管理', mod: '15', group: 'global', loading: '正在读取用户管理…', component: lazy(() => import('./users').then(module => ({ default: module.UsersPage }))) },
 ];
+
+// Skip parent-only updates for unrelated retained pages; context updates still propagate.
+for (const entry of pages) entry.component = memo(entry.component);
 
 const loginUrl = '/login?next=%2Fpreview%2Fprojects';
 
@@ -100,7 +103,7 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;
           const Page = entry.component;
-          return <div key={entry.path} className="page-view" hidden={!active} inert={!active}><Suspense fallback={<p role="status">{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={ledgerProject} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></div>;
+          return <div key={entry.path} className="page-view" hidden={!active} inert={!active}><Suspense fallback={<p role="status">{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/ledger' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={entry.path === '/ledger' ? ledgerExportGuard : ''} /></Suspense></div>;
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}
