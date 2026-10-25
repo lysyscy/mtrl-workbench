@@ -345,15 +345,21 @@ def create_app() -> FastAPI:
             headers={"Cache-Control": "no-cache"},
         )
 
-    @app.get("/static/fonts/{name}", include_in_schema=False)
+    @app.get("/static/fonts/{name:path}", include_in_schema=False)
     def font_asset(request: Request, name: str) -> Response:
         media = {
+            "misans-web.css": "text/css",
             "MiSans-Regular.woff2": "font/woff2",
             "MiSans-Medium.woff2": "font/woff2",
             "MiSans-Semibold.woff2": "font/woff2",
             "COPYRIGHT.txt": "text/plain",
             "MiSans-License.pdf": "application/pdf",
         }
+        if re.fullmatch(r"misans-web/(400|500|600)-[a-z0-9.]+\.woff2", name):
+            path = _APP_DIR / "web" / "fonts" / name
+            if not path.is_file():
+                raise HTTPException(status_code=404)
+            return _static_file(request, path, "font/woff2")
         if name not in media:
             raise HTTPException(status_code=404)
         return _static_file(request, _APP_DIR / "web" / "fonts" / name, media[name])

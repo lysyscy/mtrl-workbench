@@ -2,7 +2,7 @@
 import re
 
 from .page import (
-    DEFAULT_THEME, FONT_CSS, REACT_GEOMETRY, REACT_THEME_SPEC, REACT_THEME_OVERRIDES,
+    DEFAULT_THEME, REACT_GEOMETRY, REACT_THEME_SPEC, REACT_THEME_OVERRIDES,
     _REACT_LIGHT, _REACT_SHADOWS, _REACT_STATES, render_theme,
 )
 
@@ -37,4 +37,4 @@ def theme_choices() -> list[dict]:
 
 def render_react_theme(name: str) -> str:
     body = "\n".join(f"  {key}:{value};" for key, value in _variables(name).items())
-    return ":root{\n" + body + "\n  color-scheme:var(--ui-scheme);\n}\n" + FONT_CSS
+    return "@import url('/static/fonts/misans-web.css');\n:root{\n" + body + "\n  color-scheme:var(--ui-scheme);\n}\n"

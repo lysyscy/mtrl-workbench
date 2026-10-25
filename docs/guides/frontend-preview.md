@@ -50,7 +50,7 @@ backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_preview.py --source-
 
 - 后端仅新增可选配置 `FRONTEND_PREVIEW_DIR`：未配置时无 `/preview` 入口；配置完整 dist 后由 FastAPI 提供索引与版本化 assets。索引每次重验证，缺失 asset 返回404。`/app` 和现行 JSON/表单接口保持原主人。
 - 请求出口为 `apps/frontend/src/api.ts`：同源 Cookie、AbortSignal、运行时响应校验、401/403与业务失败；查询不自动重试。数据与页面状态位于账号 key 对应的组件树和独立 QueryClient 中。初次身份读取失败只提供重试；已知身份的暂时核验失败保留该组件树和筛选，隐藏数据并用inert暂停操作，取消/暂停查询；重试确认同账号后恢复原上下文并重新读取。只有确认换号或会话失效才清缓存并重建账号树，不能把网络失败当退出。历史台账的草稿、保存队列及操作历史查询沿用该账号子树；草稿身份含账号、项目、查询范围、行记录和原所属月份；页面沿旧版自动末月范围，同账号导航往返保留台账上下文，离页暂停查询与后续写入，换号或失效时一并退出。
-- 主题继续从 `/static/theme.css` 和官方本地 MiSans 获取，界面倍率取身份响应 `ui_scale_css`；不要复制主题色值或改 Excel/打印样式。
+- 主题继续从 `/static/theme.css` 获取；React 字体使用官方本地 MiSans unicode 分片，官方未覆盖码位按需取原完整字库兜底，来源/散列与覆盖归 `backend/app/web/fonts/misans-web/manifest.json`，更新工具为 `tools/dev/sync_misans_web.py`。旧壳、Excel/打印字体契约保留；界面倍率取身份响应 `ui_scale_css`，不要复制主题色值。
 - 历史台账入口为 `/preview/ledger`，源码 `apps/frontend/src/ledger.tsx`、严格响应边界 `apps/frontend/src/ledger-api.ts`。AG Grid Community 36.2.0 只使用基础能力；直接输入、合计与虚拟窗口由单一网格承载，不引入企业版。pnpm受管补丁仅修正该版两处声明的undefined兼容，保留TS7全部严格选项；升级包时应先验证补丁是否可移除。复杂报表由399在同一Community网格及共享主题上验证；合并布局用语义HTML表格，实际证据与选择结论回399原票。
 - 保存离格立即发起，同记录后续修改等待新凭据，其他格的草稿继续保留；正常读回不替换活动输入，结束连续编辑后更新表格/合计。只推进自己已确认成功版本的基线，外部变更仍拒绝覆盖。账号核验暂停期间不发新写入，恢复同账号保留草稿；换号/失效重建树，取消旧请求的迟到401不清新账号。中断HTTP并不证明服务端没有完成原保存，重新进入后须读回核对。
 - 旧版并行变更由父任务对共同调查点及每批交付 SHA 的后续差异按迁移面核对；不能把一次基线 clean 或某批通过当作未来无差异证明。

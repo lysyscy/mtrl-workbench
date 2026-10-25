@@ -133,3 +133,26 @@ def test_notice_amounts_fit_after_font_load_and_horizontal_scroll(ui_page, width
         assert p.locator('tr[data-notice-id="101"] .t-bl').inner_text() == '手动剔除'
         assert p.locator('tr[data-notice-id="102"] .t-dg').get_attribute('title') == '业务类型（付材料采购款）'
         p.screenshot(path=str(output(f'misans-exclusions-{width}.png', kind='screenshots')))
+
+
+def test_react_subsets_are_local_and_unknown_font_paths_are_rejected():
+    import hashlib
+    import json
+    from app.mod03_notice.theme_react import render_react_theme
+
+    manifest = json.loads((FONTS / 'misans-web/manifest.json').read_text(encoding='utf-8'))
+    assert render_react_theme('松绿').startswith("@import url('/static/fonts/misans-web.css');")
+    with TestClient(create_app(), client=('127.0.0.1', 50123)) as client:
+        css = client.get('/static/fonts/misans-web.css')
+        assert css.status_code == 200 and css.content == (FONTS / 'misans-web.css').read_bytes()
+        assert 'https://' not in css.text
+        assert client.get('/static/fonts/misans-web.css', headers={'If-None-Match': css.headers['etag']}).status_code == 304
+        for weight in ['400', '500', '600']:
+            files = [f for f in manifest['unmodified_official_subsets'] if f['file'].startswith(weight + '-')]
+            for item in [files[0], files[-1]]:
+                response = client.get('/static/fonts/misans-web/' + item['file'])
+                assert response.status_code == 200
+                assert hashlib.sha256(response.content).hexdigest() == item['sha256']
+                assert response.headers['content-type'] == 'font/woff2'
+        for name in ['misans-web/manifest.json', 'misans-web/missing.woff2', 'misans-web/%2e%2e/main.py']:
+            assert client.get('/static/fonts/' + name).status_code == 404
