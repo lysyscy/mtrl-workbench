@@ -3,7 +3,7 @@ import Checkbox from 'antd/es/checkbox';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
 import Tag from 'antd/es/tag';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
@@ -22,6 +22,7 @@ import { SettlementExport } from './settlement-export';
 import { useHistoryGuard } from './history';
 import './settlement.css';
 import './inventory.css';
+import { InventoryText, measureInventoryRows } from './inventory-rows';
 
 const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true};
 
@@ -60,11 +61,17 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
     return data;
   }
   const grid = useRef<GridApi<InventoryRow> | null>(null);
+  useLayoutEffect(() => { if (active) measureInventoryRows(grid.current, root.current); }, [active, rows, scale]);
+  useEffect(() => {
+    const loaded = () => measureInventoryRows(grid.current, root.current);
+    document.fonts.addEventListener('loadingdone', loaded);
+    return () => document.fonts.removeEventListener('loadingdone', loaded);
+  }, []);
   const controls = useRef({ unavailable: false, pendingId: null as number | null });
   controls.current = { unavailable: paused || query.isError || query.isFetching, pendingId: pending?.id ?? null };
   useEffect(() => { if (active) grid.current?.refreshCells({ force: true, columns: ['actions'] }); }, [active, paused, query.isError, query.isFetching, pending]);
   const columns = useMemo<ColDef<InventoryRow>[]>(() => [
-    ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num',autoHeight:type !== 'num',
+    ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num',cellRenderer:type === 'num' ? undefined : InventoryText,
       ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:(a:string,b:string) => !a || !b ? a ? 1 : b ? -1 : 0 : cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0} : {}),
       ...(field === 'doc_no' ? {pinned:'left' as const} : {}),
       ...contentWidth(type === 'num' ? 130 : field === 'doc_no' ? 140 : ['seq','unit','direction'].includes(field) ? 52 : ['doc_date','audit_date'].includes(field) ? 96 : field === 'biz_type' ? 90 : ['spec','wbs_name','cbs_name'].includes(field) ? 108 : field === 'material' ? 125 : 120,type === 'num' ? 190 : ['seq','unit','direction'].includes(field) ? 85 : 300,scale,field === 'material' ? 1 : 0),
@@ -98,7 +105,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
     {query.isPending ? <p role="status">正在读取库存单据…</p> : query.data && <div className="inventory-grid" ref={root}><AgGridReact<InventoryRow> theme={gridTheme} rowBuffer={2} rowData={rows} columnDefs={columns} pinnedBottomRowData={totals as InventoryRow[]}
       getRowId={p => String(p.data.id)} defaultColDef={defaultColumn} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight}
       suppressScrollOnNewData suppressColumnVirtualisation overlayNoRowsTemplate="当前筛选条件下没有库存单据"
-      onGridReady={e => { grid.current = e.api; fitGridColumns(e.api,root.current,true); }} onFirstDataRendered={e => fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e => fitGridColumns(e.api,root.current)} /></div>}
+      onGridReady={e => { grid.current = e.api; fitGridColumns(e.api,root.current,true); measureInventoryRows(e.api,root.current); }} onFirstDataRendered={e => { fitGridColumns(e.api,root.current,true); measureInventoryRows(e.api,root.current); }} onGridSizeChanged={e => { fitGridColumns(e.api,root.current); measureInventoryRows(e.api,root.current); }} onColumnResized={e => measureInventoryRows(e.api,root.current)} /></div>}
     {editRow && <InventoryAdjust key={editRow.id} row={editRow} adjustment={query.data?.adjustments.find(a => a.row_id === editRow.id)} me={editMissing ? null : me} paused={paused} close={() => setEditing(null)} reload={reload} unknown={Boolean(pending)} onUnknown={value => setPending(value ? editRow : null)} missing={editMissing} />}
     {fetchMonth !== null && <InventoryFetch month={fetchMonth} me={me} paused={paused} close={() => setFetchMonth(null)} refresh={async() => {await reload();}} pending={Boolean(fetchPending)} onPending={updateFetchPending} />}
   </section>;

@@ -483,3 +483,48 @@ def test_export_real_file_matches_source_and_ignores_page_scope(server, browser_
     expect(page.get_by_text('导出请选择单月', exact=True)).to_be_visible()
     expect(page.get_by_role('button', name='导出文件…', exact=True)).to_be_disabled()
     page.screenshot(path=str(output('tail414-export-hint.png', kind='screenshots')), full_page=True)
+
+
+def test_long_text_remains_visible_after_width_scale_and_filter_changes(server, browser_page):
+    page, _ = browser_page
+    long_text = '合成验证长规格，包含中文与ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890，' * 5
+
+    def long_spec(route):
+        response = route.fetch()
+        data = response.json()
+        for row in data['rows']:
+            if row['doc_no'] == 'TAIL414-D1' and row['material'] == '螺纹钢':
+                row['spec'] = long_text
+        route.fulfill(response=response, json=data)
+
+    page.route('**/api/m08/inventory', long_spec)
+    open_inventory(page, server)
+    check = r"""text => {
+      const cells = [...document.querySelectorAll('.inventory-grid .ag-cell[col-id="spec"]')];
+      const cell = cells.find(c => c.textContent === text);
+      if (!cell) return false;
+      const box = cell.getBoundingClientRect(), css = getComputedStyle(cell);
+      const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+      let node;
+      while (node = walker.nextNode()) {
+        const range = document.createRange(); range.selectNodeContents(node);
+        for (const r of range.getClientRects()) {
+          if (r.width && (r.left < box.left - 1 || r.right > box.right + 1 ||
+              r.top < box.top - 1 || r.bottom > box.bottom + 1)) return false;
+        }
+      }
+      return box.height > 100 && cell.scrollHeight <= cell.clientHeight + 1;
+    }"""
+    preferences = page.request.get(server + '/api/m15/theme?surface=react').json()
+    for scale in ['standard', preferences['scales'][-1]['key']]:
+        assert page.request.post(server + '/api/m15/ui-scale', data={'ui_scale': scale}).ok
+        page.reload(wait_until='networkidle')
+        page.evaluate('document.fonts.ready')
+        for width in [1350, 980, 1920]:
+            page.set_viewport_size({'width': width, 'height': 940})
+            page.wait_for_function(check, arg=long_text)
+        set_column_filter(page, '物料', text='螺纹')
+        page.wait_for_function(check, arg=long_text)
+        page.get_by_role('button', name='清除全部列', exact=True).click()
+        page.wait_for_function(check, arg=long_text)
+    page.screenshot(path=str(output('inventory442-long-text.png', kind='screenshots')), full_page=True)
