@@ -5,7 +5,7 @@ import { AppearancePreferences } from './appearance-preferences';
 import { HistoryControls, HistoryScope, HistoryGate } from './history';
 import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation } from 'react-router';
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readIdentity, requestJson } from './api';
 import type { Identity } from './api';
@@ -21,11 +21,13 @@ type WorkspacePageProps = {
 };
 
 const groups = [
+  { id: 'home', title: '工作台' },
   { id: 'base', title: '主数据 · 基础' }, { id: 'payment', title: '付款域' },
   { id: 'contracts', title: '集采域' }, { id: 'materials', title: '材料与报表' },
   { id: 'global', title: '全局' },
 ];
 const pages: { path: string; title: string; mod: string; group: string; loading?: string; component: ComponentType<WorkspacePageProps> }[] = [
+  { path: '/', title: '首页', mod: '', group: 'home', loading: '正在读取首页…', component: lazy(() => import('./home').then(module => ({ default: module.HomePage }))) },
   { path: '/projects', title: '项目档案', mod: '01', group: 'base', component: Projects },
   { path: '/i8', title: 'i8 接入层', mod: '02', group: 'base', loading: '正在读取 i8 接入层…', component: lazy(() => import('./i8').then(module => ({ default: module.I8Page }))) },
   { path: '/notices', title: '付款通知书', mod: '03', group: 'payment', loading: '正在读取付款通知书…', component: lazy(() => import('./notices').then(module => ({ default: module.NoticesPage }))) },
@@ -84,10 +86,10 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
   return <QueryClientProvider client={client}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
     <aside className="sidebar"><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
-      {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path}><span className="nav-code">MOD-{entry.mod}</span><span>{entry.title}</span></NavLink>)}</div>)}
+      {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}>{entry.mod && <span className="nav-code">MOD-{entry.mod}</span>}<span>{entry.title}</span></NavLink>)}</div>)}
     </nav><a className="old-app" href="/app">打开旧版预览</a></aside>
     <div className="main"><header><div className="page-heading"><h1 id="page-title">{title}</h1><div id="ledger-status" /></div><div className="account-area"><div hidden={mechanicalActive}><HistoryControls me={me} blocked={blocked || busy || mechanicalActive} guard={ledgerExportGuard} /></div>{mechanicalActive && <div id="history-controls" />}<span hidden={Boolean(me)}>未登录 · 只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl}>登录</a>}</div></header>
-      <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="/" element={<Navigate to="/projects" replace />} /><Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>
+      <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>
         {pages.map(entry => {
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;

@@ -36,6 +36,11 @@
 - `test_ledger.py::test_continuous_edit_real_save_and_readback`、`test_identity_pause_preserves_real_edit_draft_and_blocks_saves`：停在`选择项目`旧按钮；基点接入FlowPage及`付款项目`控件。
 - `test_mechanical_reports.py::test_grid_freeze_virtualization_scroll_locate_and_ime`：停在旧`定位项目`输入；当前源码使用机械项目定位控件。种子已完成，浏览器后续交互未验。
 
+2026-10-25 421实施会话补记三项同类滞后（经421前后两种构建均失败证实非421引入，同属422接续）：
+
+- `test_preview.py::test_fastapi_build_assets_cookie_and_read`：断言索引恰好2个资产引用；现行rolldown构建索引含8个（入口js/css＋modulepreload分块），断言口径待按现行构建形态核。
+- `test_read_ui.py::test_projects_input_debounces_and_waits_for_chinese_composition`、`test_projects_old_success_and_failure_do_not_replace_new_filter`：停在旧`项目`标签控件；当前项目页为antd筛选控件，未通过节点需按现行功能逐项核。
+
 初查workspace_check已存在419的历史产物分类错误：`.artifacts/archive/frontend-vue-rewrite/tail419-20261024/rules-preview-logs`，本轮不改他人证据；最终全根生命周期检查可能继续非零。本轮自有run另核已退出active，无常驻进程或在用产物。
 
 保存边界：本地提交，不推送、不部署；本回执不替代422全站人工复核与性能累计核验。

@@ -2,11 +2,11 @@
 
 ## React 前端独立重做
 
-**执行安排（2026-10-25用户确认）。** 当前仍在421实施前：先完成421→422（含架构候选4→5及首次累计验收）→425，再进入“精细打磨”状态；具体打磨项单独立票，不建打磨总票。准备上线时以最终候选版本另立复核票、补齐打磨后的受影响验证，之后另获423上线授权；424仍另守日常使用与退役授权。422完成后不因后续打磨反复重开，具体规则见[共同规格](../.scratch/frontend-vue-rewrite/spec.md#精细打磨与上线前候选复核)。421交另一Agent实施，当前会话只登记安排及交付提示词，不同时改业务代码。
+**执行安排（2026-10-25用户确认）。** 421已由实施会话完成并签done；下一步422（含架构候选4→5及首次累计验收）→425，再进入“精细打磨”状态；具体打磨项单独立票，不建打磨总票。准备上线时以最终候选版本另立复核票、补齐打磨后的受影响验证，之后另获423上线授权；424仍另守日常使用与退役授权。422完成后不因后续打磨反复重开，具体规则见[共同规格](../.scratch/frontend-vue-rewrite/spec.md#精细打磨与上线前候选复核)。
 
 唯一React分支codex/react-frontend-rewrite（生产master另置，未合并）。2026-10-24用户人工验收落地：原ready-for-human 11票（398、400–409）按票协议签done，验收对象为8060真实只读副本，各票Comments留依据；397/399原done，411 wontfix。同日419规则配置页经用户验收签done（实施、隔离技术验证与实看证据在其票Comments）。同日分支收拢：五条付款分支核实为master祖先后删除（提交仍由master保有），tail-415候选7个独有提交由tag `archive/codex-tail-415-candidate`归档后删分支及其干净worktree；未推送、未上线。
 
-**票务导航。** 活动票：421前置已满足，票已校正ready-for-agent、尚未实施；422累计验收（含架构候选4/5），仍被421阻塞；425在422后工程清理；423/424需独立授权。410、412–419、420已按代验收授权签done（证据在各票Comments）；417含一处产品修复（contract-subtables引用下拉收容进Modal）。逐票Status/验收/依据归`.scratch/tails/issues/`，列票用仓根`backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py`；协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)，A–E技术回执指针在各票Comments。技术完成不代签done，缺验证留原票。
+**票务导航。** 活动票：422累计验收（含架构候选4/5，前置421已满足）；425在422后工程清理；423/424需独立授权。410、412–421已按代验收授权签done（证据在各票Comments）；417含一处产品修复（contract-subtables引用下拉收容进Modal），421新增首页待办页（`/preview`，三卡计数与通知页同源落位，见[预览指南](guides/frontend-preview.md#首页待办421)）。逐票Status/验收/依据归`.scratch/tails/issues/`，列票用仓根`backend/.venv/Scripts/python.exe -X utf8 tools/oneoff/_list_tails.py`；协议回[票协议](agents/issue-tracker.md)，范围/48故事归[共同规格](../.scratch/frontend-vue-rewrite/spec.md)，A–E技术回执指针在各票Comments。技术完成不代签done，缺验证留原票。
 
 **架构审查修复。** 2026-10-25落实报告推荐的前三项（共享弹层测试、统一seed接线、页面注册表），技术结果与旧测试收口见[修复回执](../.scratch/frontend-vue-rewrite/architecture-repair.md)；用户本日已将候选4（公共回执/工具归位）、5（台账写出口）纳入[422原票](../.scratch/tails/issues/TAIL-422-累计集成验收与切换准备.md)，按4→5→累计验证/审查收敛，不再留到422后。本阶段未启动421/422，未更新8060。
 
