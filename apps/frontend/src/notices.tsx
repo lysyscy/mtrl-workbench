@@ -6,7 +6,7 @@ import { EnumTag } from './enum-tag';
 import Button from 'antd/es/button';
 import { useHistoryGuard } from './history';
 import { BusinessModal } from './business-modal';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
@@ -33,6 +33,25 @@ interface Filters { period: string; projects: number[]; category: string; approv
 const defaults = (): Filters => ({ period: '全部', projects: [], category: '', approval: '', paid: '未付清', link: '', pending: '' });
 interface RenderState { viewFlows: (row: NoticeRow) => void; unavailable: boolean; shown: NoticeRow[]; picked: Set<number>; action: (path: string, payload: unknown, clear?: boolean) => Promise<boolean>; pick: (id: number, checked: boolean) => void; chooseAll: (checked: boolean) => void; draft: Draft | null; begin: (row?: NoticeRow) => void; saveDraft: () => Promise<void>; cancelDraft: () => void; open: (kind: NoticeDialogState['kind'], row: NoticeRow) => void; payOverrides: Record<number,PayOverride>; setPay: (row: NoticeRow, value: string) => void; moneyDrafts: Record<string,string>; draftCell: (row: NoticeRow, field: keyof Draft, label: string) => React.ReactNode; }
 const amountNames: Record<MoneyKey, string> = { amount_approved: '审批金额', pay_amount: '付款金额', amount_paid: '已付金额', stat_settle: '统计结算金额', stat_paid: '统计付款金额' };
+const heightUpdates = new WeakSet<GridApi>();
+function NoticeAutoHeight({ params, children }: { params: ICellRendererParams<NoticeRow>; children: import('react').ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = ref.current, cell = element?.closest<HTMLElement>('.ag-cell');
+    if (!element || !cell || params.api.isDestroyed()) return;
+    const css = getComputedStyle(cell);
+    const height = element.offsetHeight + [css.paddingTop, css.paddingBottom, css.borderTopWidth, css.borderBottomWidth].reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+    if (height <= (params.node.rowHeight ?? 0)) return;
+    params.node.setRowHeight(height);
+    // Coalesce public row-height updates after the render stack, before the first paint.
+    if (!heightUpdates.has(params.api)) {
+      heightUpdates.add(params.api);
+      queueMicrotask(() => { heightUpdates.delete(params.api); if (!params.api.isDestroyed()) params.api.onRowHeightChanged(); });
+    }
+  });
+  return <div ref={ref} style={{ width: '100%', minWidth: 0 }}>{children}</div>;
+}
+
 function inTime(r: NoticeRow, f: Filters): boolean { return timeMatches(f.period, r.doc_date); }
 function scopeHit(r: NoticeRow, f: Filters): boolean {
   const arch = f.category === 'exclude';
@@ -143,7 +162,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     return { ...column, cellRenderer: (p: ICellRendererParams<NoticeRow>) => {
       const d = current.current.draft, editing = d && (p.data?.notice_id === -2 || String(p.data?.notice_id) === d.row_id);
       if (p.data?.notice_id === -2 && !d) return '';
-      if (!editing) return original ? original(p) : p.value ?? '';
+      if (!editing) { const content = original ? original(p) : p.value ?? ''; return column.autoHeight ? <NoticeAutoHeight params={p}>{content}</NoticeAutoHeight> : content; }
       if (column.colId === 'pick') return <span className="notice-tag">草稿</span>;
       if (column.colId === 'actions') return <div className="notice-row-actions"><Button htmlType="submit" disabled={current.current.unavailable} onClick={() => void current.current.saveDraft()}>保存</Button><Button htmlType="submit" disabled={current.current.unavailable} onClick={current.current.cancelDraft}>取消</Button></div>;
       const field = mapping[column.field ?? '']; return field ? current.current.draftCell(p.data!,field,column.headerName ?? '') : '—';

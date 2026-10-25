@@ -19,7 +19,7 @@ export function fixedWidth(width: number, scale = 1) {
 }
 
 export function contentWidth(min: number, max: number, scale = 1, stretch = 0) {
-  return { minWidth: min * scale, maxWidth: max * scale, flex: 0, context: { widthFlex: stretch } };
+  return { width: min * scale, minWidth: min * scale, maxWidth: max * scale, flex: 0, context: { widthFlex: stretch } };
 }
 
 export function textWidth(min: number, max: number, scale = 1, flex = 1) {
