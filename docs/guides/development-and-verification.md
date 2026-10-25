@@ -23,6 +23,8 @@ db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/
 
 网页探查优先内置浏览器，专用回归保留已有 Python Playwright 与原入口。需要 CLI 时读实际安装 playwright-cli；使用自己命名的会话，结束关闭。Python Playwright 浏览器路径只传子进程，服务身份与浏览器环境回 [部署](deployment.md)。i8 登录/抓取、真实打印、生产导入/付款均按当次明确授权，不能用浏览器或测试的存在推导权限。
 
+界面改动与迁移按同来源 implement-solo-spec / `references/verification.md` 的界面分支核旧行为与实际结果，以“页面入口 + 用户动作 + 结果”复用当前规格或票。旧界面的操作、必要截图与源码/接口互补，无法运行时留具体未验项；本项目已有大型迁移验收保持。打印输出按已授权预览、PDF 或现场边界核对象集合和业务口径，不因规则验收操作真实打印机。
+
 旧壳源码读取走 tools/audit/shell_source.py / shell_api.py 与 backend/tests/shell_src.py，前端机制见 [旧前端参考](../reference/legacy-frontend.md)，交互/文案归 [frontend-design](frontend-design.md)。壳快照只在对应现场调查需要时用，不强制差异清零。
 
 ## 工具与产物
