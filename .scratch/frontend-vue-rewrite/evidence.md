@@ -240,3 +240,28 @@ Chromium156.0.8078.4/headless，1350×940/DPR1、zh-CN/Asia-Shanghai，本机回
 i8按用户指定账号的已有匹配绑定接入，密码确为空。最初提取/复制缓存被自动审批拒绝；用户随后明确批准，缓存只读请求401。用户再明确批准一次登录、遇冲突停止且不强踢：既有http_login调用1次成功、无冲突、allow_kick=false，随后只读仓库接口200返回1条。新Cookie仅存新预览私有目录，未输出或提交凭据、未写来源会话文件；没有代用户执行抓取导入、付款外发或物理打印，证据i8-connection.json/i8-login-verification.json。
 
 原只读8065已停，冻结副本仍保留；frozen-baseline-final.json重核38表hash/计数与原件一致，旧c2修订仅属该固定历史现场，不在本次改写。两套基线及442–444样本保留，新可写副本不作固定性能对照，本轮未重跑84组。423/424及最终上线复核未开始。当前run由用户业务验看消费，运行器/构建/创建证据、schema及私有状态留到用户明确处置，不能自动删除其改动。
+
+## 445–448界面与交互打磨
+
+2026-10-26用户睡前清单实施，累计起点`f15d4b8d33ff63485bfc2295e31fdc89499a3a8e`，开工独立React工作树干净。本批明确事项技术完成，445–448记ready-for-human，未代本轮用户实看；原8000/8065及用户副本数据不动。master原有status/高水位及`--full-page`保持，不向主线写本批UI。单票验收/边界回原票，不重开422或推进423/424。
+
+运行与证据：本工作树`.artifacts/active/frontend-vue-rewrite/ui-polish-20261026`。当前[8066合成候选](http://127.0.0.1:8066/preview)账号`preview-admin`空密码；数据来自独占`mtrl_workbench_test`新schema和合成seed，不复制来源业务数据，不携i8凭据。来源.env仅由既有TestDatabaseGuard确认测试目标，所有写入验证限本轮独占schema，禁止public回退。原[8065可写业务预览](http://127.0.0.1:8065/preview)继续使用其原版本/用户数据；本批新界面尚未加载到8065。
+
+| 验证 | 实际结果与适用范围 |
+|---|---|
+| 最终类型与独立构建 | 直接本地Node tsc --noEmit / Vite build至work/dist-delivery，退出0；不自动装包。原>500KB分包警告保留，不作本批性能达标证明；最终仅flow.css移除多余EOF空行，不改产出语义。logs/final-{typecheck,build}.log |
+| 受影响浏览器A | preview/shared_controls/big/contracts/ledger/ledger_layout/settlement/read_ui首轮57过5失败（ui-regression-a.log），失败与修复保留；Big聚焦列宽确有缺陷，改initialWidth保已拟合宽；3个layout用例改实际AG Grid viewport定位；settlement迟到结果改显式等待实际行，原断言不放宽。5项修复复验过，Big完整7过1失败为旧用例隐含前序9项目状态，显式独立设9项目后该例单独通过。Big 8例有效覆盖来自这些实际运行，未虚称一次全绿 |
+| 受影响浏览器B | 费用/库存/共用导出首轮19项全部通过，ui-regression-b.log。费用复核后的最终全文件9项全部通过（28.16s），fees-review-fix-final.log；首次新增安文费用例定位器失败保留，按实际AG Grid行定位后全文件通过 |
+| 项目修复最终验证 | 原生drag_to经过整行预览、2行相邻动画、真实ord PUT＋GET与归档组不变；失败输入跨筛选保留；响应丢失/坏回执后Esc不解锁、GET失败不解锁；未送达请求读回旧值保稿并可再保存。最终dist-delivery定向5项全部通过10.32s，reports/project-delivery-final.log；两轮真实红灯保留project-draft-uncertain-red.log、project-undelivered-readback-red.log |
+| 集采统一搜索最终验证 | 合同全文件7项通过30.91s，logs/contracts-review-fix-final.log；代表档案号、合同/寄回日期、横线/斜线、裸金额/中英千分位与清空。早期缺测试环境在建schema前被guard拒绝，不算通过 |
+| 后端离线 | 原test_acc_fee_mon/test_wired_m09共35项通过；先读FakeSession确认无数据库，--noconftest，backend-fee-offline.log。一次试图将来源业务DSN覆盖隔离环境的命令被自动审批拒绝、未运行，改用该安全离线路径；不称后端全套已重跑 |
+| 设计与实看 | Impeccable机械检测当时完成源码范围退出0/[]；独立IAB实际查看项目/同步确认、大表/选择排序、费用和i8/收发结存窄幅。最终8066合成Big保存100后确认撤销还原，确认弹窗实显操作名/影响数量；截图在本会话visualizations目录ui-polish-{i8,undo}-final.png。实体IME、全8主题/4字号、200%宿主缩放及真人业务试用未穷举 |
+| 独立双轴 | Standards初3项P2（项目筛选丢稿、未知结果Esc解除、费用同名自动额隐藏），Spec初2项P2（搜索漏列、连续Add未成行）。修复后Standards追加可靠GET旧值丢稿P2，亦修复并以未送达红灯/最终用例证明。原两审查者定向核源码/测试，全部关闭；静态独立复核不冒称独立重跑浏览器 |
+
+最终源文件与构建hash、基点及PID/schema归`reports/delivery-version.json`；运行创建时间/命令归`reports/visual-preview-delivery-owner.json`，最终本批源码提交归Git。构建后的合同/费用未再变源码，项目最终修复另用dist-delivery复验；此前未变范围复用原有效证据，不重复整站或性能矩阵。真实提交钩子及保存回执归logs/local-commit.log。
+
+当前资源仍供用户验看，保留work/dist-delivery、work/start_visual_preview.py及独占合成schema。正常退出：先对owner登记PID、创建时间和命令核身份，再写同run `work/stop-visual-preview.request`；脚本监测后正常停uvicorn并由isolated_database清理仅它拥有的schema。中途dist-reviewed预览已按此方式退出并得到cleaned日志；首次8066进程退出后也核该独占schema已不存在，见visual-first-cleanup.log。硬停不可假设清库完成；只核本批合成schema和所有者后处理。用户验看结束后释放本run work，必要证据按30天规则归archive；不停止仍被使用的8065或整个React effort。
+
+未决业务范围：大表六手填值现已按月＋项目独立，未录月继续显式标源月带入；项目集合/排序仍全表共享。“分月保存”是否还要求集合/顺序分月、未录月全空，留[本轮待裁定](questions.md#2026-10-26本轮待裁定)，不据此改历史口径。没有真实i8/付款/打印、生产业务写入、正式服务加载、合并或React推送。
+
+本批无消费者的dist/dist-final/dist-reviewed及测试runtime已核路径后退出，只保留在用dist-delivery。workspace_check active实际退出1：唯一错误为本批之前已存在的`.scratch/frontend-vue-rewrite/architecture-repair.md`不在检查器允许的任务文件名集合（完整日志workspace-active-final.log；首个调用缺check参数的日志另存）。该历史回执仍被既有status/规格消费，本批未授权迁移该资料，未为凑绿删除或放宽检查。将其保留为共享effort目录收尾缺口，不冒称生命周期全绿，也不阻塞本批UI候选验看；整个React effort并未退出。原8000 `/app`及8065 `/preview`仍HTTP200，原PID/启动命令仍在，主线既有3件dirty未动，见protected-runtime-final.json。

@@ -151,17 +151,37 @@ def set_column_filter(page, column, *, text=None, min_value=None, max_value=None
         page.keyboard.press('Escape')
 
 
+def inventory_mode(page, mode):
+    page.get_by_role('button',name='库存核算期间',exact=True).click()
+    panel=page.get_by_role('dialog',name='库存核算期间选择',exact=True)
+    panel.get_by_text(mode,exact=True).click()
+    return panel
+
+
 def back_to_default_month(page):
-    """From 全部 back to the default single month through the picker, or reload."""
-    pick_option(page, '库存核算期间模式', '月')
-    page.get_by_label('库存核算期间', exact=True).click()
-    cell = page.locator('.ant-picker-panel td[title="2026-09"]')
-    if cell.count():
-        cell.click()
-    else:
-        page.keyboard.press('Escape')
-        page.reload()
-    expect(page.get_by_text('5 / 6 行', exact=True)).to_be_visible()
+    panel=inventory_mode(page,'月')
+    panel.get_by_role('button',name='2026年9月',exact=True).click()
+    expect(page.get_by_text('5 / 6 行',exact=True)).to_be_visible()
+
+
+def test_inventory_period_matches_single_entry_notice_picker(server,browser_page):
+    page,_=browser_page
+    open_inventory(page,server)
+    trigger=page.get_by_role('button',name='库存核算期间',exact=True)
+    expect(trigger).to_have_text('2026-09')
+    panel=inventory_mode(page,'跨月')
+    panel.get_by_role('button',name='2026年8月',exact=True).click()
+    expect(panel).to_be_visible()
+    panel.get_by_role('button',name='2026年9月',exact=True).click()
+    expect(trigger).to_have_text('2026-08 ~ 2026-09')
+    expect(page.get_by_text('6 / 6 行',exact=True)).to_be_visible()
+    panel=inventory_mode(page,'年')
+    panel.get_by_role('button',name='2026',exact=True).click()
+    expect(trigger).to_have_text('2026')
+    expect(page.get_by_text('6 / 6 行',exact=True)).to_be_visible()
+    inventory_mode(page,'全部')
+    expect(trigger).to_have_text('全部时间')
+    back_to_default_month(page)
 
 
 def test_writes_need_login_and_fetch_stays_inside_external_boundary(server, browser_page):
@@ -227,7 +247,7 @@ def test_period_project_direction_and_column_filters_match_api(server, browser_p
         ['TAIL414-D1', 'TAIL414-D1', 'TAIL414-D3', 'TAIL414-D2', 'TAIL414-D2']
     # Default period is last month: the 2026-08 cement row stays out until 全部.
     expect(rows_of(page, '水泥')).to_have_count(0)
-    pick_option(page, '库存核算期间模式', '全部')
+    inventory_mode(page,'全部')
     expect(page.get_by_text('6 / 6 行', exact=True)).to_be_visible()
     expect(rows_of(page, 'TAIL414-D0')).to_be_visible()
     back_to_default_month(page)
@@ -479,7 +499,7 @@ def test_export_real_file_matches_source_and_ignores_page_scope(server, browser_
         refused = page.request.get(server + f'/api/m08/inventory/export?period={period}').json()
         assert refused.get('ok') is False and ('请先抓取' in refused['message'] or '源文件不在本地' in refused['message'])
     # Cross-month / whole-year ranges keep the single-month hint and block the export.
-    pick_option(page, '库存核算期间模式', '全部')
+    inventory_mode(page,'全部')
     expect(page.get_by_text('导出请选择单月', exact=True)).to_be_visible()
     expect(page.get_by_role('button', name='导出文件…', exact=True)).to_be_disabled()
     page.screenshot(path=str(output('tail414-export-hint.png', kind='screenshots')), full_page=True)

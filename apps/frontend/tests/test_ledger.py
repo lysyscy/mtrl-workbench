@@ -244,8 +244,8 @@ def test_real_undo_redo_conflict_and_account_ownership(server,browser_page):
     paid=cell(page,rid,'payment');paid.fill('77.77');paid.press('Tab')
     page.get_by_role('heading',name='逐月欠款台账',exact=True).click();wait_value(page,project,rid,'payment','77.77')
     expect(page.get_by_role('status',name='保存回执')).not_to_contain_text('正在保存')
-    page.get_by_role('button',name='撤销',exact=True).click();wait_value(page,project,rid,'payment','12.00')
-    page.get_by_role('button',name='重做',exact=True).click();wait_value(page,project,rid,'payment','77.77')
+    page.get_by_role('button',name='撤销',exact=True).click();page.get_by_role('button',name='确认撤销',exact=True).click();wait_value(page,project,rid,'payment','12.00')
+    page.get_by_role('button',name='重做',exact=True).click();page.get_by_role('button',name='确认重做',exact=True).click();wait_value(page,project,rid,'payment','77.77')
     admin_history=page.request.get(server+'/api/history/status').json()['undo']
     with httpx.Client(base_url=server) as other:
         assert other.post('/m15/login',data={'account':'preview-user','password':''}).status_code==303
@@ -253,7 +253,7 @@ def test_real_undo_redo_conflict_and_account_ownership(server,browser_page):
         assert denied.status_code==409 and denied.json()['ok'] is False
         current=row_data(data(page,server,project),rid)
         assert other.post('/api/m05/history/save',json=body_for(project,current,paid_amount='99.99')).json()['ok']
-    page.get_by_role('button',name='撤销',exact=True).click()
+    page.get_by_role('button',name='撤销',exact=True).click();page.get_by_role('button',name='确认撤销',exact=True).click()
     expect(page.locator('.history-tools [role=status]')).to_contain_text('已被后续操作修改')
     current=row_data(data(page,server,project),rid)
     assert current['payment']=='99.99' and current['other_expense']=='120.00'
@@ -338,3 +338,36 @@ def sync_ledger(page):
 
 def previous_report_month(page):
     return page.evaluate("""() => {const parts=new Intl.DateTimeFormat('en',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit'}).formatToParts(new Date());return new Date(Date.UTC(Number(parts.find(p=>p.type==='year').value),Number(parts.find(p=>p.type==='month').value)-2,1)).toISOString().slice(0,7)}""")
+
+
+def test_flow_search_is_live_clearable_and_preserves_composing_text(server, browser_page):
+    page, _ = browser_page
+    open_ledger(page, server)
+    month = page.evaluate("""() => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit'}).format(new Date())""")
+    rows = [dict(id=i, notice_id=None, flow_no=f'FLOW-{i}', doc_no=f'SEARCH-{i}',
+        doc_date=f'{month}-01', bill_name=f'搜索验收{i}', project_id=None,
+        project_key='', project_display='隔离项目', payee=f'合成收款单位{i}', category_label='辅材',
+        amount_approved='100.00', pay_date=f'{month}-01', amount='25.00', pay_method='现汇',
+        remark='', created_by='合成账号', status='effective', status_label='生效', revoke_reason='') for i in [1, 2]]
+    page.route('**/api/m05/flows?**', lambda route: route.fulfill(json={'rows': rows}))
+    page.reload()
+    section = page.locator('section[aria-labelledby="flows-title"]')
+    search = section.get_by_label('流水关键词', exact=True)
+    clear = section.locator('.ant-input-clear-icon:visible')
+    expect(section.get_by_role('button', name='搜索', exact=True)).to_have_count(0)
+    expect(clear).to_have_count(0)
+    expect(section.locator('.flow-toolbar')).to_contain_text('显示 2 条')
+    search.fill('SEARCH-1')
+    expect(section.locator('.flow-toolbar')).to_contain_text('显示 1 条')
+    expect(search).to_be_focused()
+    clear.click()
+    expect(search).to_have_value('')
+    expect(clear).to_have_count(0)
+    expect(section.locator('.flow-toolbar')).to_contain_text('显示 2 条')
+    search.dispatch_event('compositionstart')
+    search.fill('合成收款单位2')
+    expect(search).to_have_value('合成收款单位2')
+    expect(section.locator('.flow-toolbar')).to_contain_text('显示 2 条')
+    search.dispatch_event('compositionend', {'data': '合成收款单位2'})
+    expect(section.locator('.flow-toolbar')).to_contain_text('显示 1 条')
+    expect(search).to_have_value('合成收款单位2')

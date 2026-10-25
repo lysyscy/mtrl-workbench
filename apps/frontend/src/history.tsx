@@ -1,4 +1,6 @@
 import Button from 'antd/es/button';
+import { BusinessModal } from './business-modal';
+import { DialogContents, useDialogClose } from './dialog-close';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -47,14 +49,17 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
     queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) });
   const { busy, uncertain, setBusy, setUncertain } = useHistoryState();
   const [feedback, setFeedback] = useState('');
+  const [confirmation, setConfirmation] = useState<{ direction: 'undo' | 'redo'; item: HistoryItem } | null>(null);
+  // Replay has its own lock; a page guard for this modal would block its confirmation.
+  const closing = useDialogClose({ busy, dirty: false, close: () => setConfirmation(null), active: false });
   const lock = useRef(false), alive = useRef(true), request = useRef<AbortController | null>(null);
   const state = useRef({ me, blocked, guard }); state.current = { me, blocked, guard };
   useEffect(() => { alive.current = true; return () => { alive.current = false; request.current?.abort(); }; }, []);
-  function protectedReason() {
+  function protectedReason(ownConfirmation = false) {
     if (!state.current.me || state.current.blocked) return '当前账号暂不能操作。';
     if (state.current.guard) return state.current.guard;
     const reason = guardReason(guards); if (reason) return reason;
-    if (document.querySelector('.ant-modal-wrap:not([style*="display: none"]),dialog[open]')) return '请先关闭弹窗。';
+    if ([...document.querySelectorAll('.ant-modal-wrap:not([style*="display: none"]),dialog[open]')].some(dialog => !ownConfirmation || !dialog.querySelector('.history-confirm-dialog'))) return '请先关闭弹窗。';
     return '';
   }
   async function reload() {
@@ -64,28 +69,30 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
     catch { if (alive.current) setFeedback('读取失败，请重读核对；勿重复撤销或重做。'); }
     finally { lock.current = false; if (alive.current) setBusy(false); }
   }
-  async function replay(direction: 'undo' | 'redo') {
+  async function replay(direction: 'undo' | 'redo', expected?: HistoryItem) {
     if (lock.current || uncertain) return;
-    const reason = protectedReason(); if (reason) { setFeedback(reason); return; }
+    const reason = protectedReason(Boolean(expected)); if (reason) { setFeedback(reason); return; }
     lock.current = true; setBusy(true); setFeedback('');
     const controller = new AbortController(); request.current = controller;
     let sent = false, confirmed = false;
     try {
       const latest = await client.fetchQuery({ queryKey: ['history', owner], staleTime: 0,
         queryFn: async ({ signal }) => readHistory(await requestJson('/api/history/status', { signal })) });
-      if (!alive.current || protectedReason()) return;
-      const item = latest[direction]; if (!item) return;
+      if (!alive.current || protectedReason(Boolean(expected))) return;
+      const item = latest[direction];
+      if (!item || expected && item.id !== expected.id) { setConfirmation(null); setFeedback('可操作的历史已变化，请重新查看后再确认。'); return; }
+      if (!expected) { setConfirmation({ direction, item }); return; }
       sent = true;
       const result = await requestJson(`/api/history/${direction}`, { method: 'POST', signal: controller.signal,
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation_id: item.id }) });
       if (!record(result) || result.ok !== true) throw new ApiError('操作结果未确认。');
-      confirmed = true;
+      confirmed = true; setConfirmation(null);
       await client.invalidateQueries({}, { throwOnError: true });
       if (alive.current) setFeedback(direction === 'undo' ? '已撤销。' : '已重做。');
     } catch (error) {
       if (alive.current) {
         const unknown = confirmed || sent && uncertainWrite(error);
-        setUncertain(unknown);
+        setUncertain(unknown); if (unknown) setConfirmation(null);
         setFeedback(confirmed ? '操作已完成，重读失败，请重读核对；勿重复撤销或重做。' : unknown ? '操作结果待核实，请重读核对；勿重复撤销或重做。' : error instanceof Error ? error.message : '操作历史读取失败，请重试。');
       }
     } finally { lock.current = false; if (alive.current) setBusy(false); }
@@ -107,5 +114,13 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
     onClick={() => void replay(direction)}>{direction === 'undo' ? '撤销' : '重做'}</Button>)}
     {(feedback || history.isError || history.data?.notice) && <span role="status">{feedback || (history.isError ? '操作历史未能读取。' : history.data?.notice)}</span>}
     {(uncertain || history.isError) && <Button disabled={busy || blocked} onClick={() => void reload()}>重读核对</Button>}
+    {confirmation && <BusinessModal open={!blocked} requestClose={closing.requestClose} className="history-confirm-dialog" titleId="history-confirm-title">
+      <DialogContents title={confirmation.direction === 'undo' ? '确认撤销？' : '确认重做？'} titleId="history-confirm-title" closing={closing}>
+        <p>这一步将{confirmation.direction === 'undo' ? '撤销' : '重做'}以下操作：</p>
+        <div className="history-operation"><strong>{confirmation.item.label}</strong><span>涉及 {confirmation.item.count} 项变更</span></div>
+        {feedback && <p className="notice" role="alert">{feedback}</p>}
+        <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" loading={busy} disabled={blocked || uncertain} onClick={() => void replay(confirmation.direction, confirmation.item)}>{confirmation.direction === 'undo' ? '确认撤销' : '确认重做'}</Button></div>
+      </DialogContents>
+    </BusinessModal>}
   </div>;
 }

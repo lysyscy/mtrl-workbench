@@ -63,6 +63,19 @@ export function LedgerExport(props: ExportScopeProps & { kind: 'ledger' | 'debt'
     }} />;
 }
 
+export function ProjectSelectionOrder({ projects, selected, choose, move, disabled, label = '导出项目选择与顺序' }: {
+  projects: Project[]; selected: number[]; choose: (ids: number[]) => void; move: (index: number, offset: number) => void; disabled: boolean; label?: string;
+}) {
+  return <>
+    <div className="export-project-actions"><Button disabled={disabled} onClick={() => choose(projects.map(item => item.id))}>全选</Button><Button disabled={disabled} onClick={() => choose([])}>全不选</Button><span role="status">已选 {selected.length} 个项目</span></div>
+    <div className="export-project-list" role="group" aria-label={label}>{projects.map((item, index) => <div className="export-project-row" key={item.id}>
+      <Checkbox disabled={disabled} checked={selected.includes(item.id)} onChange={event => choose(projects.filter(p => p.id === item.id ? event.target.checked : selected.includes(p.id)).map(p => p.id))}><span title={projectLabel(item)}>{projectLabel(item)}</span></Checkbox>
+      <div><Button aria-label={`上移${projectLabel(item)}`} disabled={disabled || index === 0} onClick={() => move(index, -1)}>上移</Button><Button aria-label={`下移${projectLabel(item)}`} disabled={disabled || index === projects.length - 1} onClick={() => move(index, 1)}>下移</Button></div>
+    </div>)}</div>
+    {!projects.length && <p className="muted">暂无可选项目</p>}
+  </>;
+}
+
 export function ProjectExport({ kind, owner, projects, project, unavailable, run, message, valid, signal, paused, title, description, summary, success, exportFile }: ExportScopeProps & {
   title: string; description: string; summary: (count: number) => string; success: string;
   exportFile: (projects: Project[], signal?: AbortSignal) => Promise<{ blob: Blob; filename: string }>;
@@ -131,12 +144,7 @@ export function ProjectExport({ kind, owner, projects, project, unavailable, run
       <p className="muted">项目与顺序自动记在本机，关闭不撤销选择；清除浏览器数据或换设备需重选。</p>
       {preferenceError && <p className="notice" role="alert">{preferenceError}</p>}
       {singleList ? <>
-        <div className="export-project-actions"><Button disabled={busy} onClick={()=>choose(ordered.map(item=>item.id))}>全选</Button><Button disabled={busy} onClick={()=>choose([])}>全不选</Button><span role="status">已选 {chosen.length} 个项目</span></div>
-        <div className="export-project-list" role="group" aria-label="导出项目选择与顺序">{ordered.map((item,index)=><div className="export-project-row" key={item.id}>
-          <Checkbox disabled={busy} checked={selected.includes(item.id)} onChange={event=>choose(ordered.filter(p=>p.id===item.id?event.target.checked:selected.includes(p.id)).map(p=>p.id))}><span title={projectLabel(item)}>{projectLabel(item)}</span></Checkbox>
-          <div><Button aria-label={`上移${projectLabel(item)}`} disabled={busy||index===0} onClick={()=>moveProject(index,-1)}>上移</Button><Button aria-label={`下移${projectLabel(item)}`} disabled={busy||index===ordered.length-1} onClick={()=>moveProject(index,1)}>下移</Button></div>
-        </div>)}</div>
-        {!ordered.length&&<p className="muted">暂无可选项目</p>}
+        <ProjectSelectionOrder projects={ordered} selected={selected} choose={choose} move={moveProject} disabled={busy} />
         <p className="muted">{summary(chosen.length)}</p>
       </> : !confirm ? <>
         <ProjectPicker projects={projects} selected={selected} pick={choose} multiple initiallyOpen label="导出项目" emptyLabel="请选择项目" disabled={busy} />

@@ -4,6 +4,7 @@ import io
 import re
 import zipfile
 import openpyxl
+import pytest
 from playwright.sync_api import expect
 from test_preview import server, browser_page
 from test_ledger import open_ledger, project_id, data, previous_report_month, select_project
@@ -19,8 +20,8 @@ def test_normal_month_remark_clear_undo_and_stale_token(server,browser_page):
     expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存')
     def normal(): return next(r for side in data(page,server,project)['sides'] if side['category']=='material' for r in side['rows'] if r['month']=='2025-12' and r['row_kind']=='month')
     assert normal()['remark']=='正常月份中文备注'
-    page.get_by_role('button',name='撤销',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('已撤销');assert normal()['remark']==''
-    page.get_by_role('button',name='重做',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('已重做');assert normal()['remark']=='正常月份中文备注'
+    page.get_by_role('button',name='撤销',exact=True).click();page.get_by_role('button',name='确认撤销',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('已撤销');assert normal()['remark']==''
+    page.get_by_role('button',name='重做',exact=True).click();page.get_by_role('button',name='确认重做',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('已重做');assert normal()['remark']=='正常月份中文备注'
     with page.expect_response(lambda response:'/m05/ledger/remark' in response.url and response.request.method=='POST') as saved:
         note.fill('');note.press('Tab')
     assert saved.value.json()['ok'];expect(note).to_have_value('')
@@ -108,7 +109,7 @@ def test_uncertain_undo_requires_readback_before_another_history_action(server,b
     def uncertain(route):
         requests.append(route.request.post_data_json);response=route.fetch();assert response.json()['ok'];route.abort('failed')
     page.route('**/api/history/undo',uncertain)
-    page.get_by_role('button',name='撤销',exact=True).click()
+    page.get_by_role('button',name='撤销',exact=True).click();page.get_by_role('button',name='确认撤销',exact=True).click()
     expect(page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True)).to_be_visible()
     expect(page.get_by_role('button',name='撤销',exact=True)).to_be_disabled()
     page.keyboard.press('Control+z');assert len(requests)==1
@@ -120,3 +121,40 @@ def test_uncertain_undo_requires_readback_before_another_history_action(server,b
     page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True).click()
     expect(page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True)).to_have_count(0)
     wait_value(page,project,rid,'payment','12.00');assert len(requests)==1
+
+
+@pytest.mark.parametrize('row_count', [0, 2, 24])
+def test_monthly_ledger_card_follows_content_and_keeps_bounded_scroll(server, browser_page, row_count):
+    page, _ = browser_page
+    open_ledger(page, server)
+    project = project_id(page, server)
+    result = data(page, server, project)
+    for side in result['sides']:
+        side['rows'] = [dict(seq=i + 1, month=f'{2024 + i // 12}-{i % 12 + 1:02d}',
+            month_label='', row_kind='month', record_id=None, other_expense='100.00',
+            payment='25.00', debt='75.00', remark='', token=f'layout-{i}',
+            editable=False, counts_in_total=True) for i in range(row_count)]
+    page.route('**/api/m05/ledger?**', lambda route: route.fulfill(json=result))
+    page.reload()
+    select_project(page, '隔离项目')
+    region = page.get_by_role('region', name='辅材欠款台账', exact=True)
+    expect(region).to_be_visible()
+    # The card ends at its two content-sized tables plus the authored bottom padding.
+    page.wait_for_function("""() => {
+        const body=document.querySelector('.flow-workspace .ledger-card-body');
+        const sides=body?.querySelector('.ledger-sides');
+        return body && sides && Math.abs(body.getBoundingClientRect().bottom -
+          sides.getBoundingClientRect().bottom - parseFloat(getComputedStyle(body).paddingBottom)) < 3;
+    }""")
+    grid = region.locator('.ledger-grid')
+    metrics = grid.evaluate("""grid=>{const viewport=grid.querySelector('.ag-grid-viewport,.ag-body-viewport');
+        return {height:grid.getBoundingClientRect().height,
+          scrollable:viewport.scrollHeight>viewport.clientHeight};}""")
+    scale = page.evaluate("Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1")
+    assert metrics['height'] <= 360 * scale + 2
+    if row_count < 3:
+        assert metrics['height'] < 300 * scale
+    else:
+        assert metrics['scrollable']
+    if row_count:
+        expect(region.locator('[row-id="total"] [col-id="debt"]')).to_have_text(f'{75 * row_count:,.2f}')

@@ -4,9 +4,6 @@
 .contract-toolbar h2{margin:0;font-size:calc(14px * var(--fscale));font-weight:600;white-space:nowrap}
 .contract-toolbar>div{margin-left:auto;justify-content:flex-end}
 .contract-filter-count{margin-left:auto;align-self:center;white-space:nowrap;color:var(--tx2);font-size:calc(12px * var(--fscale))}
-.contract-search{display:flex;justify-content:flex-end}
-.contract-search label{display:flex;align-items:center;gap:8px;color:var(--tx2);font-size:calc(12px * var(--fscale));width:min(360px,100%)}
-.contract-search .ant-input-affix-wrapper{min-width:0;flex:1}
 .contract-filters{align-items:flex-end;padding:calc(16px * var(--fscale));gap:12px 16px;background:var(--sf);border-radius:var(--radius-card);box-shadow:var(--shadow)}
 .contract-filters label,.contract-form-grid label,.contract-ignore-add label,.contract-field,.contract-remark{display:flex;flex-direction:column;gap:6px;color:var(--tx2)}
 .contract-filters label{width:calc(112px * var(--fscale));min-width:0;font-size:calc(12px * var(--fscale))}

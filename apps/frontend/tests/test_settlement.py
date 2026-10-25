@@ -466,7 +466,7 @@ def test_fast_scope_switch_late_responses_do_not_overwrite(server, browser_page)
         pending.pop().fulfill(json=late_extract_payload('2025', '焊材', '迟到2025仓', '1.00', '5.00'))
     except Exception:
         pass  # aborted request: the late payload must render nowhere either way
-    assert grid_rows(annual(page, '焊材')).count() == 1
+    expect(grid_rows(annual(page, '焊材'))).to_have_count(1)
     expect(annual(page, '焊材')).not_to_contain_text('迟到2025仓')
     assert row_cell(annual(page, '焊材'), '隔离验收仓库', '2026-03').text_content() == '11.11'
     page.unroute('**/api/m07/extract?**')

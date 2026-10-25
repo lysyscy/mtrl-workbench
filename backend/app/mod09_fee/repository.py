@@ -31,7 +31,7 @@ def year_facts(s: Session, *, year: str, project_id: int | None, warehouse: str)
     """截至所选年末的原始事实；不改明细，不借用提取历史余额。"""
     end = f"{year}-12"
     items = [] if project_id is None else [
-        {"ym": r.ym, "name": r.item_name, "amount": r.amount}
+        {"id": r.id, "ym": r.ym, "name": r.item_name, "amount": r.amount}
         for r in s.execute(select(FeeManualItem).where(
             FeeManualItem.project_id == project_id, FeeManualItem.ym <= end
         ).order_by(FeeManualItem.id)).scalars()

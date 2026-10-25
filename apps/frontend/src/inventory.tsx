@@ -86,7 +86,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const editRow = editing && (query.data?.rows.find(r => r.id === editing.id) ?? editing);
   const editMissing = Boolean(editing && query.data && !query.data.rows.some(r => r.id === editing.id));
   return <section className="inventory-page" aria-label="库存单据与调整单">
-    <div className="inventory-toolbar"><div><label>核算期间<TimePicker label="库存核算期间" value={period} modes={['月','跨月','年','全部']} onChange={setPeriod} disabled={paused} /></label>
+    <div className="inventory-toolbar"><div><label>核算期间<TimePicker singleEntry label="库存核算期间" value={period} modes={['月','跨月','年','全部']} onChange={setPeriod} disabled={paused} /></label>
       <ProjectPicker label="库存项目" projects={(projects.data ?? []).filter(p => query.data?.projects.includes(p.warehouse_name ?? ''))} selected={ids} pick={setIds} multiple emptyLabel="全部项目" disabled={paused || projects.isPending || projects.isError} />
       <label>方向<Select aria-label="库存方向" value={direction} onChange={setDirection} options={['全部','入库','出库'].map(value => ({value,label:value}))} disabled={paused} /></label>
       <Checkbox checked={onlyAdjusted} disabled={paused} onChange={e => setOnlyAdjusted(e.target.checked)}>只看被调整行</Checkbox></div>

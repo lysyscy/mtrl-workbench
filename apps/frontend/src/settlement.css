@@ -49,3 +49,5 @@
 .settlement-page .settlement-grid{height:auto;min-height:0}
 .settlement-page .settlement-grid:not(.is-empty) .ag-grid-scrolling-rows{min-height:0}
 .settlement-page .settlement-annual .money{white-space:nowrap}
+
+.settlement-month-page{width:min(100%,calc(1180px * var(--fscale)));margin-inline:auto}

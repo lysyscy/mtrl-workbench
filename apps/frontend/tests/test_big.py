@@ -265,7 +265,7 @@ def test_selection_order_dialog_save_reread_and_cancel(server, browser_page):
     up = dialog.get_by_role('button', name='上移大表验收甲', exact=True)
     up.click()
     up.click()
-    expect(dialog.locator('.big-order-table tbody tr').first).to_contain_text('大表验收甲')
+    expect(dialog.locator('.export-project-row').first).to_contain_text('大表验收甲')
     dialog.get_by_role('button', name='保存项目与顺序', exact=True).click()
     expect(dialog).not_to_be_visible()
     expect(page.locator('.big-feedback')).to_contain_text('项目与顺序已保存。')
@@ -277,8 +277,7 @@ def test_selection_order_dialog_save_reread_and_cancel(server, browser_page):
     # Reorder again and drop one project; only the chosen ones stay, in the saved order.
     page.get_by_role('button', name='选择项目与排序…', exact=True).click()
     dialog.get_by_role('button', name='下移大表验收甲', exact=True).click()
-    pick_option(page, '大表项目', '大表验收辛')
-    page.keyboard.press('Escape')
+    dialog.get_by_role('checkbox', name='大表验收辛', exact=True).uncheck()
     expect(dialog.get_by_text('9 个项目 · 页面与导出同序', exact=True)).to_be_visible()
     dialog.get_by_role('button', name='保存项目与顺序', exact=True).click()
     expect(dialog).not_to_be_visible()
@@ -425,6 +424,9 @@ def test_layout_money_complete_narrow_viewport_and_performance(server, browser_p
     expect(visible_grid(page).locator('.ag-row').first).to_be_visible()
     timings['enter_to_first_row'] = round(time.perf_counter() - started, 2)
     choose_month(page, MONTH)
+    selected = [wh for wh in big_api(page, server)['selected'] if wh != '大表验收仓库辛']
+    assert page.request.post(server + '/api/m07/big/selection', data={'selected': selected}).json()['ok']
+    page.reload()
     expect(page.locator('.big-count')).to_have_text('9 个项目')
     # Group boundaries exist on the group starts and the three standalone columns.
     starts = visible_grid(page).locator('.ag-header-cell.big-group-start, .ag-header-group-cell.big-group-start')
@@ -495,3 +497,29 @@ def test_layout_money_complete_narrow_viewport_and_performance(server, browser_p
     report = output('tail413-big-perf.txt', kind='reports')
     report.write_text('\n'.join(f'{key}: {value}' for key, value in timings.items()) + '\n', encoding='utf-8')
     print('TAIL-413 timings:', timings, flush=True)
+
+
+def test_edit_focus_keeps_width_and_saved_months_are_independent(server, browser_page):
+    page, _ = browser_page
+    open_big(page, server)
+    grid = visible_grid(page)
+    widths = lambda: grid.locator('.ag-header-cell').evaluate_all("els => els.map(e => [e.getAttribute('col-id'),e.getBoundingClientRect().width])")
+    before = widths()
+    box = cell_input(page, WH_A, 'oil')
+    box.click()
+    box.fill('123.45')
+    assert widths() == before
+    box.press('Tab')
+    expect(page.locator('.big-feedback')).to_contain_text('工程用油 · 已保存到本月')
+    assert row_by(big_api(page, server), WH_A)['manual']['oil'] == {'value':'123.45','from':''}
+    choose_month(page, NEXT_MONTH)
+    next_box = cell_input(page, WH_A, 'oil')
+    expect(next_box).to_have_value('123.45')
+    next_box.fill('678.90')
+    next_box.press('Tab')
+    expect(page.locator('.big-month:not([hidden]) .big-feedback')).to_contain_text('工程用油 · 已保存到本月')
+    assert row_by(big_api(page, server, NEXT_MONTH), WH_A)['manual']['oil'] == {'value':'678.90','from':''}
+    assert row_by(big_api(page, server, MONTH), WH_A)['manual']['oil'] == {'value':'123.45','from':''}
+    choose_month(page, MONTH)
+    expect(cell_input(page, WH_A, 'oil')).to_have_value('123.45')
+    expect(page.get_by_label('定位大表项目', exact=True)).to_have_count(0)

@@ -1,7 +1,6 @@
 import { uncertainWrite } from './api';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
-import Select from 'antd/es/select';
 import Tag from 'antd/es/tag';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,11 +9,10 @@ import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-
 import { readProjects, requestJson } from './api';
 import type { Identity, Project } from './api';
 import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
-import { ProjectPicker, reportMonth } from './ledger-controls';
+import { ProjectSelectionOrder, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
-import { BoundedTable } from './bounded-table';
 import { useHistoryGuard } from './history';
 import { money } from './notices-api';
 import { SettlementExport } from './settlement-export';
@@ -41,8 +39,7 @@ function ManualInput({data,node,colDef,api}: ICellRendererParams<BigRow>) {
     <Input aria-label={`${data.display} · ${labels[field]}`} value={draft?.value ?? cell.value ?? ''} disabled={cells.disabled}
       placeholder="待填" status={draft?.error ? 'error' : ''} title={draft?.error || (draft ? '未保存' : cell.from ? `带入自 ${cell.from}；修改保存为本月值，清空恢复带入` : cell.value === null ? '尚未录入' : '本月录入；清空恢复带入')}
       className={field === 'note' || field === 'open_ym' ? '' : 'big-money-input'}
-      onFocus={() => {const width=colDef?.context?.editingWidth;if(width && (api.getColumn(field)?.getActualWidth() ?? 0)<width)api.setColumnWidths([{key:field,newWidth:width}]);}}
-      onChange={e => cells.change(data,field,e.target.value)} onBlur={e => {cells.save(key);fitGridColumns(api,e.currentTarget.closest<HTMLElement>('.big-grid'));}} onKeyDown={e => {
+      onChange={e => cells.change(data,field,e.target.value)} onBlur={() => cells.save(key)} onKeyDown={e => {
         e.stopPropagation(); if(e.nativeEvent.isComposing) return;
         if(e.key === 'Enter') {e.preventDefault();cells.save(key,true);}
         if(e.key === 'Escape') cells.cancel(key);
@@ -71,7 +68,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
   const queryKey = ['big',ym];
   const query = useQuery({queryKey,enabled:active && !blocked,queryFn:({signal}) => getBig(ym,signal)});
   const [drafts,setDrafts] = useState<Record<string,Draft>>({}), [busy,setBusy] = useState(false), [uncertain,setUncertain] = useState(false), [verified,setVerified] = useState(false);
-  const [error,setError] = useState(''), [feedback,setFeedback] = useState(''), [picking,setPicking] = useState(false), [locate,setLocate] = useState<string | undefined>();
+  const [error,setError] = useState(''), [feedback,setFeedback] = useState(''), [picking,setPicking] = useState(false);
   const writeAbort = useRef(new AbortController());
   useEffect(() => { writeAbort.current = new AbortController(); return () => writeAbort.current.abort(); }, []);
   const lock = useRef(false), queue = useRef<string[]>([]), alive = useRef(true), revision = useRef(0);
@@ -160,13 +157,21 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       values.push(query.data?.totals[key as TotalKey] ?? null);
       const texts = values.map(amount => amount == null ? '—' : key.endsWith('rate') ? `${(Number(amount)*100).toFixed(1)}%` : money(String(amount)));
       const edge=['hw_cum','rent_cum','mat_cum','oil','output_rate'].includes(key)?5:4;
-      const width = Math.ceil(Math.max(key.endsWith('rate') ? 20 : editable ? 38 : 0, ...texts.map(text => textWidth(text) + (editable ? 8 : edge))));
-      return {...contentWidth(width,Math.max(width + 48,editable ? 160 : 0),scale,1),context:{widthFlex:1,editingWidth:editable ? Math.max(width,160)*scale : undefined}};
+      const width = Math.ceil(Math.max(key.endsWith('rate') ? 20 : editable ? 80 : 0, ...texts.map(text => textWidth(text) + (editable ? 8 : edge))));
+      return {...contentWidth(width,Math.max(width + 48,editable ? 160 : 0),scale,1),context:{widthFlex:1}};
     };
     const number=(key:AutoKey|DerivedKey,label:string,tip?:string):ColDef<BigRow> => ({colId:key,headerName:label,headerTooltip:tip ?? label,headerClass:key.endsWith('rate')?'big-rate-header':'',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),valueFormatter:p=>p.value==null?(p.node?.rowPinned?'':'—'):key.endsWith('rate') ? `${(Number(p.value)*100).toFixed(1)}%` : money(String(p.value)),...amountWidth(key)});
     const manual=(key:ManualKey):ColDef<BigRow> => ({colId:key,headerName:labels[key],headerTooltip:key==='open_ym'?'开工时间 · YYYY-MM':labels[key],cellClass:key==='note'?'big-manual-cell':'big-manual-cell big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),cellRendererSelector:p=>p.node.rowPinned?undefined:{component:ManualInput},valueFormatter:p=>p.value==null?'':key==='open_ym'||key==='note'?String(p.value):money(String(p.value)),...(key==='note' ? contentWidth(40,240,scale,1) : key==='open_ym' ? contentWidth(dateWidth,112,scale) : amountWidth(key,true))});
     const boundary = (column: ColDef<BigRow>): ColDef<BigRow> => ({...column,headerClass:`${column.headerClass ?? ''} big-group-start`,cellClass:`${column.cellClass ?? ''} big-group-start`});
-    return [
+    // Initial widths must not reset fitted columns when data/fonts refresh during input.
+    function initialWidths(items: (ColDef<BigRow>|ColGroupDef<BigRow>)[]): (ColDef<BigRow>|ColGroupDef<BigRow>)[] {
+      return items.map(column => {
+        if ('children' in column) return {...column, children:initialWidths(column.children)};
+        const {width,...definition}=column;
+        return width === undefined ? definition : {...definition,initialWidth:width};
+      });
+    }
+    return initialWidths([
       {headerName:'项目',marryChildren:true,children:[
         {field:'seq',headerName:'序号',pinned:'left',valueGetter:p=>p.node?.rowPinned?'':p.data?.seq,...fixedWidth(Math.max(18,Math.ceil(textWidth(String(query.data?.rows.length ?? 0)) + 4)),scale)},
         {field:'display',headerName:'项目名称',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(46,180,scale,1)},
@@ -176,7 +181,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       {headerName:'机械使用与测算',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('rent_cum','外租机械开工累计','有效零租含税＋包月含税，开工累计')),number('rent_mon','外租机械当月'),number('lease_cum','设备租赁开工累计','有效内租设备，开工累计'),number('lease_mon','设备租赁当月'),number('total_cum','合计','外租机械开工累计＋设备租赁开工累计'),manual('mech_est'),number('use_rate','使用率','合计÷机械费测算；零分母留空')]},
       {headerName:'产值',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('output_rate','产值完成率','产值累计÷合同（预估）价；零分母留空')),manual('contract'),manual('output_cum')]},
       boundary(number('mat_cum','主材累计（含税）','本项目纳入集采台账的合同结算合计')),boundary(manual('oil')),boundary(manual('note')),
-    ];
+    ]);
   },[scale,query.data,fontsReady,rendered]);
   const total=useMemo(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals} as unknown as BigRow] : [],[query.data]);
   function focus(warehouse:string,key:ManualKey) {
@@ -184,13 +189,12 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>(`[row-id="${CSS.escape(warehouse)}"] [col-id="${key}"] input`)?.focus());
   }
   return <>
-    <div className="big-toolbar"><div><Button disabled={controlsDisabled || !!projectsError || !query.data} onClick={()=>setPicking(true)}>选择项目与排序…</Button>
-      <Select aria-label="定位大表项目" placeholder="定位项目" value={locate} showSearch={{optionFilterProp:'label'}} options={query.data?.rows.map(r=>({value:r.warehouse,label:r.display})) ?? []} onChange={warehouse=>{setLocate(warehouse);if(!warehouse)return;api.current?.ensureNodeVisible(n=>n.data?.warehouse===warehouse,'middle');requestAnimationFrame(()=>root.current?.querySelector<HTMLElement>(`[row-id="${CSS.escape(warehouse)}"] [col-id="display"]`)?.scrollIntoView({block:'center'}));}} disabled={blocked || !query.data} />
-      <span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span></div>
+    <div className="big-toolbar"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span><div className="big-export-actions">
+      <Button disabled={controlsDisabled || !!projectsError || !query.data} onClick={()=>setPicking(true)}>选择项目与排序…</Button>
       <SettlementExport scope={`${ym} 月度会大表`} url={`/api/m07/big/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={controlsDisabled || !query.data?.rows.length}>
         <p>{ym} · {query.data?.rows.length} 个项目 · 原模板 Excel</p><ol className="big-export-list">{query.data?.rows.map(r=><li key={r.warehouse}>{r.display}</li>)}</ol>
       </SettlementExport>
-    </div>
+    </div></div>
     {(busy || feedback) && <p className="big-feedback" role="status">{busy?'正在保存…':feedback}</p>}
     {(error || query.isError || projectsError) && <p className="notice" role="alert">{error || query.error?.message || projectsError}<Button disabled={busy || blocked} onClick={()=>{
       retryProjects();void reload().then(()=>{setError('');setVerified(true);setFeedback('已重读，未保存输入仍保留。');}).catch(e=>setError(e instanceof Error?e.message:'重读失败。'));
@@ -216,15 +220,16 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
 function ProjectOrder({data,projects,busy,disabled,paused,save,close}:{data:BigData;projects:Project[];busy:boolean;disabled:boolean;paused:boolean;save:(selected:string[])=>Promise<boolean>;close:()=>void}) {
   const available=projects.filter(p=>data.candidates.some(c=>c.warehouse===p.warehouse_name));
   const [selected,setSelected]=useState(()=>[...data.selected]);
+  const [order,setOrder]=useState(()=>[...data.selected,...data.candidates.map(c=>c.warehouse).filter(wh=>!data.selected.includes(wh))]);
+  const ordered=order.flatMap(wh=>available.filter(p=>p.warehouse_name===wh));
   const dirty=selected.join('\0')!==data.selected.join('\0');
   const closing=useDialogClose({busy,dirty,close,active:!paused});
-  function move(index:number,offset:number) {const next=[...selected];[next[index],next[index+offset]]=[next[index+offset]!,next[index]!];setSelected(next);}
+  function move(index:number,offset:number) {const next=[...order];[next[index],next[index+offset]]=[next[index+offset]!,next[index]!];setOrder(next);setSelected(next.filter(wh=>selected.includes(wh)));}
   const missing=data.candidates.some(c=>!available.some(p=>p.warehouse_name===c.warehouse));
   return <BusinessModal open={!paused} requestClose={closing.requestClose} titleId="big-order-title" className="big-order-dialog"><DialogContents title="选择项目与排序" titleId="big-order-title" closing={closing}>
-    <ProjectPicker projects={available} selected={selected.flatMap(wh=>available.filter(p=>p.warehouse_name===wh).map(p=>p.id))} pick={ids=>setSelected(ids.flatMap(id=>{const p=available.find(p=>p.id===id);return p?.warehouse_name?[p.warehouse_name]:[];}))} multiple label="大表项目" disabled={busy || disabled || missing} emptyLabel="未选择项目" />
+    <ProjectSelectionOrder projects={ordered} selected={selected.flatMap(wh=>available.filter(p=>p.warehouse_name===wh).map(p=>p.id))} choose={ids=>setSelected(ids.flatMap(id=>{const p=available.find(p=>p.id===id);return p?.warehouse_name?[p.warehouse_name]:[];}))} move={move} disabled={busy || disabled || missing} label="大表项目选择与顺序" />
     <p className="big-order-summary">{selected.length} 个项目 · 页面与导出同序</p>
     {missing && <p className="notice" role="alert">项目档案已变化，请关闭后重读再选。</p>}
-    <div className="big-order-table"><BoundedTable columns={[{min:4,max:5},{min:10,max:30,flex:1},{min:12,max:14}]}><thead><tr><th>顺序</th><th>项目名称</th><th>调整顺序</th></tr></thead><tbody>{selected.map((wh,i)=><tr key={wh}><td>{i+1}</td><td>{data.candidates.find(c=>c.warehouse===wh)?.display}</td><td><Button size="small" aria-label={`上移${data.candidates.find(c=>c.warehouse===wh)?.display}`} disabled={busy || disabled || i===0} onClick={()=>move(i,-1)}>上移</Button> <Button size="small" aria-label={`下移${data.candidates.find(c=>c.warehouse===wh)?.display}`} disabled={busy || disabled || i===selected.length-1} onClick={()=>move(i,1)}>下移</Button></td></tr>)}</tbody></BoundedTable></div>
     {!selected.length && <p>保存后大表为空；以后可重新选择项目。</p>}
     <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" loading={busy} disabled={disabled || missing || !dirty} onClick={()=>void save([...selected]).then(ok=>{if(ok)close();})}>保存项目与顺序</Button></div>
   </DialogContents></BusinessModal>;

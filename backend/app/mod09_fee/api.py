@@ -104,7 +104,8 @@ def api_fee_year(request: Request) -> dict:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     def amounts(row):
         return {**row, "prior": _s(row["prior"]), "months": [_s(v) for v in row["months"]], "total": _s(row["total"])}
-    return {**amounts(data), "rows": [amounts(row) for row in data["rows"]]}
+    return {**amounts(data), "rows": [amounts(row) for row in data["rows"]],
+            "records": [{**row, "amount": _s(row["amount"])} for row in data["records"]]}
 
 
 # ============================================================ 写（四个动作 · 全部只落在「当前那份」上）
@@ -130,14 +131,19 @@ class CellRequest(ScopeRequest):
 
 def _flash(f: dict) -> dict:
     """`service` 的回执 → JSON：`kind` 原样带上，另给壳一个好判的 `ok`。"""
-    return {"ok": f.get("kind") == "ok", "kind": f.get("kind") or "err", "message": f.get("message") or ""}
+    return {"ok": f.get("kind") == "ok", "kind": f.get("kind") or "err", "message": f.get("message") or "", **({"row_id": f["row_id"]} if "row_id" in f else {})}
+
+
+class AddRequest(ScopeRequest):
+    name: str = D.DEFAULT_ITEM_NAME
+    raw: Any = ""
 
 
 @router.post("/api/m09/fee/add")
-def api_add(req: ScopeRequest) -> dict:
+def api_add(req: AddRequest) -> dict:
     """「＋ 增加手填项」：在该 (月, 项目) 那一份末尾追加一行（初值 = 名称可改、金额 0）。"""
     with session_scope() as s:
-        return _flash(SV.act_add(s, ym=req.ym, project_key=req.project))
+        return _flash(SV.act_add(s, ym=req.ym, project_key=req.project, name=req.name, raw=req.raw))
 
 
 @router.post("/api/m09/fee/name")

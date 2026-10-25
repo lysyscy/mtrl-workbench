@@ -1,5 +1,7 @@
-"""Annual display uses original facts; edits continue to address individual months."""
+"""Inline annual editing keeps original month, project and record identity."""
 from decimal import Decimal
+import re
+import time
 
 import pytest
 from playwright.sync_api import expect
@@ -21,11 +23,13 @@ def preview_seed(make_preview_seed, preview_session):
                 (pj.id,'2024-03','运费','10.10'),(pj.id,'2025-12','运费','-2.10'),
                 (pj.id,'2026-01','运费','10'),(pj.id,'2026-01','运费','20'),(pj.id,'2026-12','运费','-5'),
                 (pj.id,'2027-01','未来项','999'),(other.id,'2026-01','运费','999'),
+                (pj.id,'2028-01','安全文明施工费（按 CBS 分类）','20'),
                 (pj.id,'2026-09','油卡','0'),(pj.id,'2026-09',' 油卡','1'),
                 (pj.id,'2025-12','大额','999999.99'),(pj.id,'2026-01','大额','1234567.89'),
             ]])
             s.add_all([InvDetail(project_id=pj.id,warehouse_name='隔离验收仓库',ym=ym,direction=direction,cbs_name=cbs,amount=Decimal(amount),doc_date='2099-01-01') for ym,direction,cbs,amount in [
                 ('2025-01','出库','CBS-安文费','100'),('2026-02','出库','CBS-安文费','20'),
+                ('2028-01','出库','CBS-安文费','100'),('2028-02','出库','CBS-安文费','100'),
                 ('2026-02','入库','CBS-安文费','1000'),('2026-02','出库','其他','1000'),('2027-02','出库','CBS-安文费','1000'),
             ]])
             s.commit()
@@ -33,298 +37,192 @@ def preview_seed(make_preview_seed, preview_session):
 
 
 def annual(page, base, year='2026'):
-    response = page.request.get(base+'/api/m09/fee/year',params={'year':year,'pj':'隔离验收仓库'})
-    assert response.status == 200
+    response=page.request.get(base+'/api/m09/fee/year',params={'year':year,'pj':'隔离验收仓库'})
+    assert response.status==200
     return response.json()
 
 
-def test_annual_original_history_duplicates_and_record_edits(server,browser_page):
-    page,_ = browser_page
-    login(page,server)
-    data = annual(page,server)
-    rows = {r['item']:r for r in data['rows']}
-    assert rows['运费']['prior'] == '8.00'
-    assert rows['运费']['months'] == ['30.00',None,None,None,None,None,None,None,None,None,None,'-5.00']
-    assert rows['运费']['total'] == '33.00'
-    auto = rows['安全文明施工费（按 CBS 分类）']
-    assert (auto['prior'],auto['months'][1],auto['total']) == ('100.00','20.00','120.00')
-    assert rows['油卡']['months'][8] == '0.00' and ' 油卡' in rows and '未来项' not in rows
-    assert rows['大额']['total'] == '2234567.88'
-    assert data['total'] == '2234721.88'
-    assert annual(page,server,'2027')['rows'][0]['prior'] == '120.00'
-    page.get_by_role('link',name='MOD-09 特殊费用',exact=True).click()
-    grid = page.get_by_label('特殊费用年度表',exact=True)
-    expect(grid.get_by_role('columnheader',name='累计',exact=True)).to_be_visible()
-    assert grid.get_by_role('columnheader').count() == 15
-    expect(page.get_by_label('费用年份',exact=True)).to_have_value('2026')
-    page.set_viewport_size({'width':1440,'height':900})
-    expect(grid.get_by_role('button',name='大额 累计明细',exact=True)).to_have_text('2,234,567.88')
-    assert grid.locator('.ag-cell.money').evaluate_all('(cells)=>cells.every(c=>c.scrollWidth<=c.clientWidth)')
-    page.screenshot(path=str(output('fee-year-1440-synthetic.png',kind='screenshots')),full_page=True)
-    page.get_by_role('button',name='运费 1月明细',exact=True).click()
-    dialog = page.locator('.fee-details-dialog')
-    amounts = dialog.get_by_role('textbox',name='运费金额',exact=True)
-    expect(amounts).to_have_count(2)
-    amounts.first.fill('15')
-    amounts.first.press('Tab')
-    expect(dialog.get_by_role('status')).to_contain_text('已保存',timeout=15000)
-    assert annual(page,server)['rows'][1]['months'][0] == '35.00'
-    amounts = dialog.get_by_role('textbox',name='运费金额',exact=True)
-    expect(amounts.nth(1)).to_have_value('20.00')
-    amounts.first.fill('abc')
-    amounts.first.press('Tab')
-    expect(dialog.get_by_role('alert').first).to_contain_text('金额不合法')
-    assert annual(page,server)['rows'][1]['months'][0] == '35.00'
-    dialog.get_by_role('button',name='取消这项修改',exact=True).click()
-    dialog.locator('.ag-row').filter(has=page.get_by_role('textbox',name='运费金额',exact=True)).nth(1).get_by_role('button',name='删除',exact=True).click()
-    delete = page.locator('.fee-delete-dialog')
-    expect(delete).to_contain_text('2026-01')
-    expect(delete).to_contain_text('20.00')
-    delete.get_by_role('button',name='删除',exact=True).click()
-    expect(amounts).to_have_count(1)
-    assert annual(page,server)['rows'][1]['months'][0] == '15.00'
-    dialog.get_by_role('button',name='增加手填项',exact=True).click()
-    names = dialog.get_by_role('textbox',name='新项项名',exact=True)
-    expect(names).to_have_count(1)
-    names.fill('临建')
-    names.press('Tab')
-    expect(dialog.get_by_role('textbox',name='临建金额',exact=True)).to_be_visible()
-    amount = dialog.get_by_role('textbox',name='临建金额',exact=True)
-    amount.fill('-3.5'); amount.press('Tab')
-    expect(dialog.get_by_role('status')).to_contain_text('已保存',timeout=15000)
-    assert {r['item']:r for r in annual(page,server)['rows']}['临建']['total'] == '-3.50'
-    dialog.get_by_role('button',name='批量录入（按月）…',exact=True).click()
-    batch = page.locator('.fee-batch-dialog')
-    expect(batch).to_be_visible()
-    batch.get_by_role('textbox',name='2026-01运费金额',exact=True).fill('18')
-    batch.get_by_role('button',name='保存',exact=True).click()
-    expect(batch).not_to_be_visible()
-    assert {r['item']:r for r in annual(page,server)['rows']}['运费']['months'][0] == '18.00'
-    dialog.get_by_role('button',name='关闭',exact=True).click()
-    expect(dialog).not_to_be_visible()
-    expect(page.get_by_role('button',name='运费 1月明细',exact=True)).to_have_text('18.00')
+def monthly(page,base,ym):
+    response=page.request.get(base+'/api/m09/fee',params={'ym':ym,'pj':'隔离验收仓库'})
+    assert response.status==200
+    return response.json()['manuals']
 
 
-def test_readonly_details_do_not_enable_writes(server,browser_page):
-    page,_ = browser_page
-    page.goto(server+'/preview/fees')
-    expect(page.get_by_label('特殊费用年度表',exact=True)).to_be_visible()
-    expect(page.get_by_role('button',name='增加手填项',exact=True)).to_be_disabled()
-    page.get_by_role('button',name='运费 1月明细',exact=True).click()
-    dialog=page.locator('.fee-details-dialog')
-    expect(dialog.get_by_role('textbox',name='运费金额',exact=True).first).to_be_disabled()
-    expect(dialog.get_by_role('button',name='删除',exact=True).first).to_be_disabled()
+def editor(page,ym,item,field='金额'):
+    return page.get_by_role('textbox',name=re.compile('^'+re.escape(f'{ym} {item}{field}')+r' #\d+$'),include_hidden=field=='项名')
 
 
-# ------------------------------------------------------------------ TAIL-415 隔离补验（以下为新增）
-
-import time
-
-
-def fee_manuals(page, server, ym):
-    response = page.request.get(server+'/api/m09/fee',params={'ym':ym,'pj':'隔离验收仓库'})
-    assert response.status == 200
-    # 金额按 Decimal 数值语义对数（后端契约测试同款）；零值序列化为 '0'/'0.00' 均等价。
-    return [(r['item'],Decimal(r['amount'])) for r in response.json()['manuals']]
-
-
-def wait_pair(page, server, ym, pair, timeout=15000):
-    """后端落库结果的确定性等待（不依赖 UI 状态文本时序）。"""
-    deadline = time.monotonic()+timeout/1000
-    while True:
-        if pair in fee_manuals(page,server,ym):
+def wait_pair(page,base,ym,item,value):
+    deadline=time.monotonic()+15
+    while time.monotonic()<deadline:
+        if any(r['item']==item and Decimal(r['amount'])==Decimal(value) for r in monthly(page,base,ym)):
             return
-        if time.monotonic() > deadline:
-            raise AssertionError(f'{ym} 里未出现 {pair}；实际：{fee_manuals(page,server,ym)}')
-        time.sleep(0.2)
+        page.wait_for_timeout(100)
+    raise AssertionError(monthly(page,base,ym))
 
 
-def test_continuous_editing_keeps_focus_and_receipts_stay_with_their_cell(server,browser_page):
-    """明细弹窗内 Tab 连续编辑：前一格保存回执不打断后续输入与焦点，回执归原对象。"""
-    page,_ = browser_page
-    login(page,server)
-    page.get_by_role('link',name='MOD-09 特殊费用',exact=True).click()
-    page.get_by_role('button',name='运费 1月明细',exact=True).click()
-    dialog = page.locator('.fee-details-dialog')
-    add = dialog.get_by_role('button',name='增加手填项',exact=True)
-    add.click(); add.click()
-    amounts = dialog.get_by_role('textbox',name='新项金额',exact=True)
+def open_fees(page,base,authenticated=True):
+    if authenticated:
+        login(page,base)
+        page.get_by_role('link',name='MOD-09 特殊费用',exact=True).click()
+    else:
+        page.goto(base+'/preview/fees')
+    expect(page.get_by_label('特殊费用年度表',exact=True)).to_be_visible()
+
+
+def test_annual_original_history_duplicates_and_inline_record_edits(server,browser_page):
+    page,_=browser_page
+    month_reads=[]
+    page.on('request',lambda request:month_reads.append(request.url) if '/api/m09/fee?' in request.url else None)
+    open_fees(page,server)
+    initial=annual(page,server)
+    assert month_reads==[]
+    assert len(initial['records'])==6
+    assert [r['index'] for r in initial['records'] if r['ym']=='2026-01']==[0,1,2]
+    rows={r['item']:r for r in initial['rows']}
+    assert (rows['运费']['prior'],rows['运费']['months'][0],rows['运费']['total'])==('8.00','30.00','33.00')
+    assert rows['运费']['months'][1] is None
+    auto=rows['安全文明施工费（按 CBS 分类）']
+    assert (auto['prior'],auto['months'][1],auto['total'])==('100.00','20.00','120.00')
+    assert rows['油卡']['months'][8]=='0.00' and ' 油卡' in rows and '未来项' not in rows
+    grid=page.get_by_label('特殊费用年度表',exact=True)
+    assert grid.get_by_role('columnheader').count()==15
+    assert grid.locator('[col-id=prior] input,[col-id=total] input').count()==0
+    assert grid.locator('.ag-row').filter(has_text='安全文明施工费（按 CBS 分类）').get_by_role('textbox').count()==0
+    assert page.get_by_role('dialog').count()==0
+    amounts=editor(page,'2026-01','运费')
     expect(amounts).to_have_count(2)
-    held = []
-    def hold(route):
-        response = route.fetch()            # 写请求真实到达后端（会落库）
-        held.append((route,response))       # 只把回执压后，模拟迟到回执
-    page.route('**/api/m09/fee/amount',hold)
-    amounts.nth(0).fill('11.5')
-    amounts.nth(0).press('Tab')          # blur 保存第一行金额；Tab 落到第二行项名
-    expect(dialog.get_by_role('status')).to_contain_text('正在保存')
-    names = dialog.get_by_role('textbox',name='新项项名',exact=True)
-    expect(names).to_have_count(2)
-    expect(names.nth(1)).to_be_focused()
-    names.nth(1).fill('记号乙')           # 第一格回执仍在途，后续输入继续
-    names.nth(1).press('Tab')            # 项名 Tab 落到同行金额
-    second = dialog.get_by_role('textbox',name='新项金额',exact=True).nth(1)
-    expect(second).to_be_focused()
-    second.fill('-2.25')
-    assert len(held) == 1
-    route,response = held.pop()
-    route.fulfill(response=response)     # 此刻才把真实回执交给页面
-    page.unroute('**/api/m09/fee/amount')
-    # 迟到回执既不覆盖新输入，也不抢走焦点。
-    saved = dialog.get_by_role('textbox',name='记号乙金额',exact=True)
-    expect(saved).to_have_value('-2.25')
-    expect(saved).to_be_focused()
-    saved.press('Tab')                   # 离格保存改名行的金额
-    wait_pair(page,server,'2026-01',('记号乙',Decimal('-2.25')))
-    expect(saved).to_have_value('-2.25')
-    expect(dialog.get_by_role('status')).to_contain_text('已保存',timeout=15000)
-    rows = {r['item']:r for r in annual(page,server)['rows']}
-    assert rows['新项']['months'][0] == '11.50'      # A 格回执落在 A 行
-    assert rows['记号乙']['months'][0] == '-2.25'    # B 格输入未被 A 的回执覆盖
-    page.screenshot(path=str(output('fee-continuous-edit.png',kind='screenshots')),full_page=True)
-    dialog.get_by_role('button',name='关闭',exact=True).click()
-    expect(dialog).not_to_be_visible()
+    amounts.first.fill('15');amounts.first.press('Tab')
+    wait_pair(page,server,'2026-01','运费','15')
+    expect(amounts.first).to_have_value('15.00')
+    assert [Decimal(r['amount']) for r in monthly(page,server,'2026-01') if r['item']=='运费']==[Decimal('15'),Decimal('20')]
+    assert {r['item']:r for r in annual(page,server)['rows']}['运费']['months'][0]=='35.00'
+    assert len(month_reads)==1
+    amounts.first.fill('abc');amounts.first.press('Tab')
+    expect(page.get_by_role('alert').first).to_contain_text('金额不合法')
+    assert [Decimal(r['amount']) for r in monthly(page,server,'2026-01') if r['item']=='运费']==[Decimal('15'),Decimal('20')]
+    page.get_by_role('button',name='取消这项修改',exact=True).click()
+    name=editor(page,'2026-01','运费','项名').nth(1)
+    name.locator('xpath=ancestor::details').locator('summary').click()
+    name.fill('专用运费');name.press('Tab')
+    wait_pair(page,server,'2026-01','专用运费','20')
+    expect(editor(page,'2026-01','专用运费')).to_have_value('20.00')
+    assert {r['item']:r for r in annual(page,server)['rows']}['运费']['prior']=='8.00'
+    editor(page,'2026-01','专用运费','项名').locator('xpath=ancestor::details').locator('summary').click()
+    page.get_by_role('button',name=re.compile(r'^2026-01 专用运费删除 #')).click()
+    page.get_by_role('button',name='删除',exact=True).last.click()
+    expect(editor(page,'2026-01','专用运费')).to_have_count(0)
+    assert any(r['item']=='运费' and Decimal(r['amount'])==15 for r in monthly(page,server,'2026-01'))
+    page.screenshot(path=str(output('fee-inline-records-synthetic.png',kind='screenshots')),full_page=True)
 
 
-def test_batch_month_entry_real_save_semantics(server,browser_page):
-    """批量录入（按月）真实保存：非法整批拒绝、空格跳过、同月同名更新最早一条。"""
-    import re
-    page,_ = browser_page
-    login(page,server)
-    page.get_by_role('link',name='MOD-09 特殊费用',exact=True).click()
-    page.get_by_role('button',name='油卡 9月明细',exact=True).first.click()
-    dialog = page.locator('.fee-details-dialog')
-    expect(dialog.get_by_role('textbox',name='油卡金额',exact=True)).to_have_count(2)
-    dialog.get_by_role('button',name='批量录入（按月）…',exact=True).click()
-    batch = page.locator('.fee-batch-dialog')
-    expect(batch.get_by_text('同名项合为一行；批量保存更新每月最早一条同名项。',exact=True)).to_be_visible()
-    # 报告月格子预填当前最早一条的金额（零值序列化 '0'，数字语义等价 0.00）。
-    expect(batch.get_by_role('textbox',name='2026-09油卡金额',exact=True)).to_have_value(re.compile(r'^0(\.00)?$'))
-    batch.get_by_role('textbox',name='2026-07油卡金额',exact=True).fill('7.70')
-    batch.get_by_role('textbox',name='2026-08油卡金额',exact=True).fill('abc')
-    batch.get_by_role('textbox',name='2026-09油卡金额',exact=True).fill('9.90')
-    page.screenshot(path=str(output('fee-batch-invalid.png',kind='screenshots')),full_page=True)
-    batch.get_by_role('button',name='保存',exact=True).click()
-    expect(batch.get_by_role('alert')).to_contain_text('金额不合法')
-    expect(batch.get_by_role('alert')).to_contain_text('这一批')
-    # 非法整批拒绝：一格都没写。
-    assert fee_manuals(page,server,'2026-07') == []
-    assert fee_manuals(page,server,'2026-08') == []
-    assert fee_manuals(page,server,'2026-09') == [('油卡',Decimal('0.00')),(' 油卡',Decimal('1.00'))]
-    batch.get_by_role('textbox',name='2026-08油卡金额',exact=True).fill('')
-    batch.get_by_role('button',name='保存',exact=True).click()
-    expect(batch).not_to_be_visible()
-    assert fee_manuals(page,server,'2026-07') == [('油卡',Decimal('7.70'))]    # 空月新建
-    assert fee_manuals(page,server,'2026-08') == []                            # 空格整格跳过（不写 0、不建行）
-    assert fee_manuals(page,server,'2026-09') == [('油卡',Decimal('9.90')),(' 油卡',Decimal('1.00'))]  # 同月同名更新最早一条
-    rows = {r['item']:r for r in annual(page,server)['rows']}
-    assert (rows['油卡']['months'][6],rows['油卡']['months'][8],rows[' 油卡']['months'][8]) == ('7.70','9.90','1.00')
-    expect(dialog.get_by_role('textbox',name='油卡金额',exact=True).first).to_have_value('9.90')
-    dialog.get_by_role('button',name='关闭',exact=True).click()
-    expect(dialog).not_to_be_visible()
-
-
-def test_empty_zero_and_negative_amount_semantics(server,browser_page):
-    """单格清空=清零（记录保留），显式 0 与负数同口径；年度表区分空月与真实零。"""
-    import re
-    page,_ = browser_page
-    login(page,server)
-    page.get_by_role('link',name='MOD-09 特殊费用',exact=True).click()
-    page.get_by_role('button',name='运费 12月明细',exact=True).click()
-    dialog = page.locator('.fee-details-dialog')
-    dialog.get_by_role('button',name='增加手填项',exact=True).click()
-    name = dialog.get_by_role('textbox',name='新项项名',exact=True)
+def test_add_immediately_creates_inline_row_and_empty_zero_negative(server,browser_page):
+    page,_=browser_page
+    open_fees(page,server)
+    ym=page.get_by_label('新增费用核算月',exact=True).input_value()
+    before=monthly(page,server,ym)
+    page.get_by_role('button',name='增加手填项',exact=True).click()
+    name=editor(page,ym,'新项','项名')
     expect(name).to_have_count(1)
-    name.fill('清零样例'); name.press('Tab')
-    amount = dialog.get_by_role('textbox',name='清零样例金额',exact=True)
-    expect(amount).to_be_visible()
-    zero = re.compile(r'^0(\.00)?$')     # 零值序列化 '0'/'0.00' 数字语义等价
-    amount.fill('5'); amount.press('Tab')
-    wait_pair(page,server,'2026-12',('清零样例',Decimal('5.00')))
-    expect(amount).to_have_value('5.00')
-    amount.fill(''); amount.press('Tab')     # 单格清空 = 清零语义（记录保留，不是删除也不是报错）
-    wait_pair(page,server,'2026-12',('清零样例',Decimal('0.00')))
-    expect(amount).to_have_value(zero)
-    amount.fill('0'); amount.press('Tab')    # 显式 0 同口径
-    wait_pair(page,server,'2026-12',('清零样例',Decimal('0.00')))
-    expect(amount).to_have_value(zero)
-    amount.fill('-12.34'); amount.press('Tab')
-    wait_pair(page,server,'2026-12',('清零样例',Decimal('-12.34')))
-    expect(amount).to_have_value('-12.34')
-    expect(dialog.get_by_role('status')).to_contain_text('已保存',timeout=15000)
-    rows = {r['item']:r for r in annual(page,server)['rows']}
-    assert rows['清零样例']['months'][11] == '-12.34'
-    assert rows['清零样例']['months'][10] is None      # 没录的月仍是空，不臆造 0
-    page.screenshot(path=str(output('fee-empty-zero-negative.png',kind='screenshots')),full_page=True)
-    dialog.get_by_role('button',name='关闭',exact=True).click()
-    expect(dialog).not_to_be_visible()
+    assert page.get_by_role('dialog').count()==0
+    assert len(monthly(page,server,ym))==len(before)+1
+    name.fill('清零样例');name.press('Tab')
+    amount=editor(page,ym,'清零样例')
+    expect(amount).to_have_value(re.compile(r'^0(\.00)?$'))
+    for raw,expected in [('5','5.00'),('','0.00'),('0','0.00'),('-12.34','-12.34')]:
+        amount.fill(raw);amount.press('Tab')
+        wait_pair(page,server,ym,'清零样例',expected)
+        expect(amount).to_have_value(re.compile(r'^0(\.00)?$') if expected=='0.00' else expected)
+    blank=page.get_by_role('textbox',name='2026-03 运费金额',exact=True)
+    expect(blank).to_have_value('')
+    blank.fill('0');blank.press('Tab')
+    wait_pair(page,server,'2026-03','运费','0')
+    expect(editor(page,'2026-03','运费')).to_have_value(re.compile(r'^0(\.00)?$'))
+    blank=page.locator('input[aria-label="2026-04  油卡金额"]')
+    blank.fill('-3.5');blank.press('Tab')
+    wait_pair(page,server,'2026-04',' 油卡','-3.5')
+    assert {r['item']:r for r in annual(page,server)['rows']}['运费']['months'][4] is None
+
+
+def test_existing_add_contract_validates_before_create_and_returns_identity(server,browser_page):
+    page,_=browser_page
+    login(page,server)
+    scope={'ym':'2026-06','project':'隔离验收仓库'}
+    before=monthly(page,server,'2026-06')
+    invalid=page.request.post(server+'/api/m09/fee/add',data={**scope,'name':'非法新项','raw':'abc'})
+    assert invalid.status==200 and invalid.json()['ok'] is False
+    assert monthly(page,server,'2026-06')==before
+    for name,raw in [(' 原名','0'),(' 原名','-2.25')]:
+        saved=page.request.post(server+'/api/m09/fee/add',data={**scope,'name':name,'raw':raw}).json()
+        assert saved['ok'] and isinstance(saved['row_id'],int)
+        assert any(r['id']==saved['row_id'] and r['item']==name and Decimal(r['amount'])==Decimal(raw) for r in monthly(page,server,'2026-06'))
+    assert len(monthly(page,server,'2026-06'))==len(before)+2
+
+
+def test_late_amount_receipt_preserves_next_draft_and_focus(server,browser_page):
+    page,_=browser_page
+    open_fees(page,server)
+    held=[]
+    def hold(route):
+        response=route.fetch();held.append((route,response))
+    page.route('**/api/m09/fee/amount',hold)
+    first=editor(page,'2026-01','运费').first
+    other=editor(page,'2026-01','大额').first
+    first.fill('17');first.press('Tab')
+    expect(page.get_by_role('status')).to_contain_text('正在保存')
+    other.fill('-22.25')
+    expect(other).to_be_focused()
+    assert len(held)==1
+    route,response=held.pop();route.fulfill(response=response)
+    page.unroute('**/api/m09/fee/amount')
+    expect(other).to_have_value('-22.25')
+    expect(other).to_be_focused()
+    other.press('Tab')
+    wait_pair(page,server,'2026-01','大额','-22.25')
+    wait_pair(page,server,'2026-01','运费','17')
+
+
+def test_damaged_add_receipt_rereads_without_readding(server,browser_page):
+    page,_=browser_page
+    open_fees(page,server)
+    writes=[]
+    def damaged(route):
+        writes.append(route.request.post_data)
+        response=route.fetch();assert response.ok
+        route.fulfill(response=response,body='{')
+    page.route('**/api/m09/fee/add',damaged)
+    blank=page.get_by_role('textbox',name='2026-05 运费金额',exact=True)
+    blank.fill('-4.25');blank.press('Tab')
+    expect(page.get_by_role('alert').first).to_contain_text('保存结果待核实')
+    assert len(writes)==1
+    expect(page.get_by_role('button',name='增加手填项',exact=True)).to_be_disabled()
+    wait_pair(page,server,'2026-05','运费','-4.25')
+    page.unroute('**/api/m09/fee/add')
+    page.get_by_role('button',name='重读核对',exact=True).click()
+    expect(page.get_by_role('status')).to_contain_text('已重读')
+    page.get_by_role('button',name='已核对，保留输入继续',exact=True).click()
+    field=editor(page,'2026-05','运费')
+    expect(field).to_have_value('-4.25')
+    field.fill('-4.5');field.press('Tab')
+    wait_pair(page,server,'2026-05','运费','-4.5')
+    assert len([r for r in monthly(page,server,'2026-05') if r['item']=='运费'])==1
 
 
 def test_fee_writes_require_login_and_change_nothing(server,browser_page):
-    """未登录：页面按钮禁用；POST /api/m09/fee/* 直发 401 且数据不变。"""
     import httpx
-    page,_ = browser_page
-    page.goto(server+'/preview/fees')
-    expect(page.get_by_text('未登录 · 只读',exact=True)).to_be_visible()
+    page,_=browser_page
+    open_fees(page,server,authenticated=False)
     expect(page.get_by_role('button',name='增加手填项',exact=True)).to_be_disabled()
-    page.get_by_role('button',name='运费 1月明细',exact=True).click()
-    dialog = page.locator('.fee-details-dialog')
-    expect(dialog.get_by_role('button',name='批量录入（按月）…',exact=True)).to_be_disabled()
-    def snapshot():
-        return page.request.get(server+'/api/m09/fee',params={'ym':'2026-01','pj':'隔离验收仓库'}).json()
-    before = snapshot()
+    expect(editor(page,'2026-01','运费').first).to_be_disabled()
+    before=monthly(page,server,'2026-01')
     with httpx.Client(base_url=server) as client:
         for path,payload in [
-            ('/api/m09/fee/add',{'ym':'2026-01','project':'隔离验收仓库'}),
-            ('/api/m09/fee/name',{'ym':'2026-01','project':'隔离验收仓库','index':0,'value':'越权改名'}),
-            ('/api/m09/fee/amount',{'ym':'2026-01','project':'隔离验收仓库','index':0,'value':'999'}),
-            ('/api/m09/fee/delete',{'ym':'2026-01','project':'隔离验收仓库','index':0}),
-            ('/api/m09/fee/batch',{'project':'隔离验收仓库','items':['越权项'],'months':[{'ym':'2026-01','values':{'越权项':'1'}}]}),
+            ('add',{'name':'越权项','raw':'999'}),('name',{'index':0,'value':'越权'}),
+            ('amount',{'index':0,'value':'999'}),('delete',{'index':0}),
         ]:
-            response = client.post(path,json=payload)
-            assert response.status_code == 401,(path,response.status_code)
-            assert '未登录' in response.json()['message']
-    assert snapshot() == before
-
-
-def test_damaged_amount_receipt_requires_reread_before_recovery(server,browser_page):
-    """200 截断回执 → uncertain：禁重复提交；写已落库，重读核对后恢复继续编辑。"""
-    page,_ = browser_page
-    login(page,server)
-    page.get_by_role('link',name='MOD-09 特殊费用',exact=True).click()
-    page.get_by_role('button',name='运费 1月明细',exact=True).click()
-    dialog = page.locator('.fee-details-dialog')
-    target = dialog.get_by_role('textbox',name='运费金额',exact=True).first
-    writes = []
-    def damaged(route):
-        writes.append(route.request.post_data)
-        response = route.fetch()
-        assert response.ok
-        route.fulfill(response=response,body='{')
-    page.route('**/api/m09/fee/amount',damaged)
-    target.fill('25')
-    target.press('Tab')
-    expect(dialog.get_by_role('alert').first).to_contain_text('保存结果待核实')
-    expect(dialog.get_by_role('alert').first).to_contain_text('勿重复提交')
-    assert len(writes) == 1
-    expect(target).to_be_disabled()
-    page.screenshot(path=str(output('fee-damaged-receipt.png',kind='screenshots')),full_page=True)
-    wait_pair(page,server,'2026-01',('运费',Decimal('25.00')))    # 写已真实落库，只是回执不可读
-    page.unroute('**/api/m09/fee/amount')
-    dialog.get_by_role('button',name='重读核对',exact=True).click()
-    expect(dialog.get_by_role('status')).to_contain_text('已重读，请核对刚才的操作结果。')
-    dialog.get_by_role('button',name='已核对，保留输入继续',exact=True).click()
-    expect(dialog.get_by_role('status')).to_contain_text('已确认，请核对保留输入后再保存。')
-    recovered = dialog.get_by_role('textbox',name='运费金额',exact=True).first
-    expect(recovered).to_be_enabled()
-    expect(recovered).to_have_value('25')
-    recovered.fill('26')
-    recovered.press('Tab')
-    wait_pair(page,server,'2026-01',('运费',Decimal('26.00')))
-    expect(dialog.get_by_role('status')).to_contain_text('已保存',timeout=15000)
-    assert {r['item']:r for r in annual(page,server)['rows']}['运费']['months'][0] == '26.00'
-    dialog.get_by_role('button',name='关闭',exact=True).click()
-    expect(dialog).not_to_be_visible()
+            response=client.post('/api/m09/fee/'+path,json={'ym':'2026-01','project':'隔离验收仓库',**payload})
+            assert response.status_code==401
+    assert monthly(page,server,'2026-01')==before
 
 
 def test_fee_sheet_exports_in_ledger_workbook(server,browser_page):
@@ -372,3 +270,56 @@ def test_fee_sheet_exports_in_ledger_workbook(server,browser_page):
     assert sum(Decimal(it['amount']) for it in items) == Decimal(fee['total'])
     wb.close()
     page.screenshot(path=str(output('fee-export-workbook.png',kind='screenshots')),full_page=True)
+
+
+def test_repeated_add_is_visible_as_separate_annual_rows(server,browser_page):
+    page,_=browser_page
+    login(page,server)
+    scope={'project':'隔离验收仓库'}
+    originals=[]
+    for ym,name,raw in [('2026-07','新项','2'),('2026-07','新项','3'),('2026-08','新项2','4')]:
+        response=page.request.post(server+'/api/m09/fee/add',data={**scope,'ym':ym,'name':name,'raw':raw})
+        assert response.ok and response.json()['ok']
+        originals.append(response.json()['row_id'])
+    page.get_by_role('link',name='MOD-09 特殊费用',exact=True).click()
+    expect(page.get_by_label('特殊费用年度表',exact=True)).to_be_visible()
+    before=annual(page,server)
+    add=page.get_by_role('button',name='增加手填项',exact=True)
+    ym=page.get_by_label('新增费用核算月',exact=True).input_value()
+    for name in ['新项3','新项4']:
+        expect(add).to_be_enabled()
+        add.click()
+        expect(editor(page,ym,name,'项名')).to_be_visible()
+        assert any(row['item']==name for row in annual(page,server)['rows'])
+    after=annual(page,server)
+    assert len(after['rows'])==len(before['rows'])+2
+    assert [row['item'] for row in after['records'] if row['id'] in originals]==['新项','新项','新项2']
+    assert [Decimal(row['amount']) for row in monthly(page,server,'2026-07') if row['id'] in originals]==[Decimal('2'),Decimal('3')]
+
+
+def test_automatic_amount_remains_visible_beside_same_name_manual_records(server,browser_page):
+    page,_=browser_page
+    open_fees(page,server)
+    year=page.get_by_label('费用年份',exact=True)
+    year.fill('2028');year.press('Enter')
+    name='安全文明施工费（按 CBS 分类）'
+    manual=editor(page,'2028-01',name)
+    expect(manual).to_have_value('20.00')
+    grid=page.get_by_label('特殊费用年度表',exact=True)
+    row=grid.locator('.ag-row').filter(has=manual)
+    january=row.locator('[col-id="month-1"]')
+    february=row.locator('[col-id="month-2"]')
+    expect(january.locator('.fee-auto-amount')).to_have_text('自动 100.00')
+    expect(january.get_by_text('合计 120.00',exact=True)).to_be_visible()
+    expect(february.locator('.fee-auto-amount')).to_have_text('自动 100.00')
+    expect(february.get_by_role('textbox')).to_have_value('')
+    assert january.locator('.fee-auto-amount input').count()==0
+    assert february.locator('.fee-auto-amount input').count()==0
+    for raw,total in [('-5','95.00'),('0','100.00')]:
+        manual.fill(raw);manual.press('Tab')
+        wait_pair(page,server,'2028-01',name,raw)
+        expect(january.get_by_text('合计 '+total,exact=True)).to_be_visible()
+        expect(january.locator('.fee-auto-amount')).to_have_text('自动 100.00')
+        assert {r['item']:r for r in annual(page,server,'2028')['rows']}[name]['months'][0]==total
+        monthly_data=page.request.get(server+'/api/m09/fee',params={'ym':'2028-01','pj':'隔离验收仓库'}).json()
+        assert Decimal(monthly_data['auto']['amount'])==Decimal('100')

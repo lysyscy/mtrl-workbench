@@ -17,8 +17,11 @@
 .flow-toolbar label,.flow-toolbar>.time-picker-field{display:flex;flex-direction:column;align-items:stretch;gap:6px;color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .flow-toolbar .ant-select{width:calc(112px * var(--fscale));min-width:0;height:calc(32px * var(--fscale))}
 .flow-toolbar .business-period-trigger{min-width:calc(144px * var(--fscale));height:calc(32px * var(--fscale))}
-.flow-toolbar .ant-input{width:calc(200px * var(--fscale));max-width:100%;height:calc(32px * var(--fscale));border-radius:var(--radius-pill)}
-.flow-toolbar form{align-items:flex-end;max-width:100%}
+.flow-toolbar .ant-input,.flow-toolbar .ant-input-affix-wrapper{width:calc(200px * var(--fscale));max-width:100%;height:calc(32px * var(--fscale));border-radius:var(--radius-pill)}
+.flow-toolbar .flow-search-field{max-width:100%}
+.flow-toolbar .ant-input-affix-wrapper input.ant-input{width:100%;height:auto;min-height:0;border-radius:0}
+.payment-stat-head+.flow-card-body{padding-top:calc(8px * var(--fscale))}
+.payment-stat-columns .flow-toolbar{padding:0 0 calc(8px * var(--fscale));align-items:center}
 .flow-toolbar>.business-project-picker{max-width:min(100%,calc(300px * var(--fscale)))}
 .flow-toolbar>.business-project-picker .ant-select{width:100%}
 .flow-grid .ag-cell{padding-block:calc(4px * var(--fscale))}
@@ -51,4 +54,3 @@
 /* Reserve the existing chart viewport while its asynchronous data arrives. */
 .debt-overviews .flow-card-body{min-block-size:calc(262px * var(--fscale));box-sizing:border-box}
 .flow-card[aria-labelledby="stats-title"]>.flow-card-body{min-block-size:calc(378px * var(--fscale));box-sizing:border-box}
-.flow-workspace .ledger-card-body{min-block-size:calc(554px * var(--fscale));box-sizing:border-box}

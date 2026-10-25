@@ -20,7 +20,7 @@ def test_routes_keep_filters_selection_draft_and_refresh_resets(server, browser_
     page.route('**/api/m01/projects?status=all', lambda route: route.fulfill(status=500, json={'message':'定向重读失败'}))
     page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
     expect(page.get_by_role('alert')).to_contain_text('项目更新失败')
-    expect(page.get_by_role('cell', name='隔离项目', exact=True)).to_be_visible()
+    expect(page.get_by_label('展示名：隔离项目', exact=True)).to_have_value('隔离项目')
     page.unroute('**/api/m01/projects?status=all')
     page.get_by_role('button', name='重读项目', exact=True).click()
     expect(page.get_by_text('项目更新失败', exact=False)).to_have_count(0)
@@ -118,3 +118,44 @@ def test_motion_preference_changes_keep_modal_draft_and_focus(server, browser_pa
         dialog.get_by_role('button', name='放弃并关闭', exact=True).click()
         expect(dialog).not_to_be_visible()
         expect(trigger).to_be_focused()
+
+
+def test_history_confirmation_describes_target_cancel_and_rechecks_head(server, browser_page):
+    page, _ = browser_page
+    state = {'undo':{'id':901,'label':'修改隔离项目展示名','count':1},'redo':None,'notice':''}
+    sent = []
+    page.route('**/api/history/status',lambda route:route.fulfill(json=state))
+    page.route('**/api/history/undo',lambda route:(sent.append(route.request.post_data_json),route.fulfill(json={'ok':True})))
+    login(page, server)
+    page.get_by_role('button',name='撤销',exact=True).click()
+    dialog = page.get_by_role('dialog',name='确认撤销？',exact=True)
+    expect(dialog).to_contain_text('修改隔离项目展示名')
+    expect(dialog).to_contain_text('涉及 1 项变更')
+    assert sent == []
+    dialog.get_by_role('button',name='取消',exact=True).click()
+    expect(dialog).not_to_be_visible()
+    assert sent == []
+    page.locator('#page-title').click()
+    page.keyboard.press('Control+z')
+    expect(dialog).to_be_visible()
+    state['undo']={'id':902,'label':'另一条后续修改','count':2}
+    dialog.get_by_role('button',name='确认撤销',exact=True).click()
+    expect(dialog).not_to_be_visible()
+    expect(page.locator('.history-tools [role=status]')).to_contain_text('历史已变化')
+    assert sent == []
+    page.get_by_role('button',name='撤销',exact=True).click()
+    expect(dialog).to_contain_text('另一条后续修改')
+    dialog.get_by_role('button',name='确认撤销',exact=True).click()
+    expect(page.locator('.history-tools [role=status]')).to_contain_text('已撤销')
+    assert sent == [{'operation_id':902}]
+    state['undo']=None
+    state['redo']={'id':903,'label':'恢复隔离项目备注','count':1}
+    page.reload()
+    page.locator('#page-title').click()
+    expect(page.get_by_role('button',name='重做',exact=True)).to_be_enabled()
+    page.keyboard.press('Control+Shift+z')
+    redo=page.get_by_role('dialog',name='确认重做？',exact=True)
+    expect(redo).to_contain_text('恢复隔离项目备注')
+    redo.press('Escape')
+    expect(redo).not_to_be_visible()
+    assert sent == [{'operation_id':902}]

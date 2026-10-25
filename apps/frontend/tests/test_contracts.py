@@ -21,7 +21,7 @@ from app.mod03_notice.models import PaymentNotice
 from sqlalchemy import select
 with session_scope() as s:
     p=s.scalar(select(Project).where(Project.disp=='隔离项目'))
-    c=JcContract(project_id=p.id,contract_no='TAIL416-CONTRACT',contract_date='2026-10-01',material_name='隔离钢材合同',supplier='合成供应商',contract_amt=12345.67,payment_term='60±7天',payment_method='承兑')
+    c=JcContract(project_id=p.id,contract_no='TAIL416-CONTRACT',contract_date='2026-10-01',material_name='隔离钢材合同',supplier='合成供应商',contract_amt=12345.67,payment_term='60±7天',payment_method='承兑',arch_no='ARCH-SEARCH-446',ret_date='2026-10-21')
     s.add(c);s.flush()
     s.add(JcInvoice(contract_id=c.id,kind='supplier',invoice_date='2026-10-10',amount=12345.67))
     b=JcContract(project_id=p.id,contract_no='TAIL416-B',material_name='隔离管件合同B',supplier='合成供应商',contract_amt=100)
@@ -269,3 +269,31 @@ def test_writes_require_login_and_fetch_boundary(server, browser_page):
     expect(page.locator('.contract-feedback')).to_contain_text('已把 1 行标记为「纳入台账」')
     tags = {r['id']: r['tag'] for r in page.request.get(server + '/api/m11/list').json()['rows']}
     assert tags[cid] == '纳入台账'
+
+
+def test_unified_contract_search_is_in_filters_and_keeps_all_search_fields(server, browser_page):
+    page, _ = browser_page
+    login(page, server)
+    page.get_by_role('link', name='MOD-11 集采台账').click()
+    filters = page.locator('.contract-filters')
+    search = filters.get_by_label('搜索', exact=True)
+    expect(page.get_by_label('搜索', exact=True)).to_have_count(1)
+    expect(filters.get_by_label('供应商', exact=True)).to_have_count(0)
+    expect(page.get_by_label('合同金额筛选', exact=True)).to_have_count(0)
+    clear = filters.locator('.ant-input-clear-icon:visible')
+    expect(clear).to_have_count(0)
+    contract = next(row for row in page.request.get(server + '/api/m11/list').json()['rows'] if row['contract_no'] == 'TAIL416-CONTRACT')
+    # All business columns share the table metadata, including dates, archive numbers,
+    # and raw/formatted amounts. Search normalization ignores commas and whitespace.
+    for keyword in ['TAIL416-CONTRACT', '钢材', '合成供应商', contract['payment_term'], '承兑', '隔离项目',
+                    'ARCH-SEARCH-446', '2026-10-01', '2026/10/01', '2026-10-21',
+                    '12345.67', '12,345.67', ' 12，345.67 ', '纳入台账']:
+        search.fill(keyword)
+        expect(page.get_by_role('button', name='隔离钢材合同', exact=True)).to_be_visible()
+        expect(clear).to_have_count(1)
+    search.fill('无此合同关键词XYZ')
+    expect(page.get_by_role('button', name='隔离钢材合同', exact=True)).to_have_count(0)
+    clear.click()
+    expect(search).to_have_value('')
+    expect(clear).to_have_count(0)
+    expect(page.get_by_role('button', name='隔离钢材合同', exact=True)).to_be_visible()

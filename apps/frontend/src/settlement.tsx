@@ -22,7 +22,7 @@ import './settlement.css';
 type Props = { me: Identity | null; blocked: boolean; active: boolean };
 export function SettlementPage(props: Props) {
   const [tab,setTab] = useState('month');
-  return <section className="settlement-page" aria-label="收发结存与提取">
+  return <section className={`settlement-page${tab === 'month' ? ' settlement-month-page' : ''}`} aria-label="收发结存与提取">
     <Segmented className="settlement-tabs" aria-label="收发结存页面" value={tab} options={[{value:'month',label:'收发结存月报'},{value:'extract',label:'焊材 / 气体提取'}]} onChange={setTab} disabled={props.blocked} />
     <div hidden={tab !== 'month'} inert={tab !== 'month'}><Monthly {...props} active={props.active && tab === 'month'} /></div>
     <div hidden={tab !== 'extract'} inert={tab !== 'extract'}><Extract {...props} active={props.active && tab === 'extract'} /></div>

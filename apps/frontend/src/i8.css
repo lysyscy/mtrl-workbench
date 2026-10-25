@@ -21,3 +21,4 @@
 .i8-error>summary:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 .i8-error pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.5;color:var(--tx);background:var(--sf2);border-radius:var(--radius-input);padding:12px}
 .i8-page .notice .ant-btn{margin-left:8px}
+.i8-page{width:min(100%,calc(1080px * var(--fscale)));margin-inline:auto;box-sizing:border-box}

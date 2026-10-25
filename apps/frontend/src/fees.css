@@ -1,9 +1,9 @@
 .fees-page{overflow:visible;min-width:0;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
-.fee-filters,.fee-toolbar,.fee-toolbar>div,.fee-batch-toolbar,.fee-row-actions{display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap}
+.fee-filters,.fee-toolbar,.fee-toolbar>div{display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap}
 .fee-filters{gap:calc(12px * var(--fscale)) calc(16px * var(--fscale));padding:calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
-.fee-filters label,.fee-batch-toolbar label{display:flex;align-items:center;gap:calc(8px * var(--fscale));min-width:0;max-width:100%}
+.fee-filters label{display:flex;align-items:center;gap:calc(8px * var(--fscale));min-width:0;max-width:100%}
 .fee-filters .business-project-picker{min-width:calc(180px * var(--fscale));max-width:min(calc(360px * var(--fscale)),100%)}
-.fee-filters .business-time-picker .ant-picker,.fee-batch-toolbar .business-time-picker .ant-picker{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale))}
+.fee-filters .business-time-picker .ant-picker{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale))}
 .fee-toolbar{justify-content:space-between;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}
 .fee-toolbar>.muted{font-size:calc(12px * var(--fscale));color:var(--tx2)}
 .fee-feedback{color:var(--tx2);margin:calc(12px * var(--fscale)) calc(16px * var(--fscale));line-height:1.55;overflow-wrap:anywhere}
@@ -17,40 +17,29 @@
 .fees-grid .ag-cell-focus:not(:focus-visible){border-color:transparent;outline:none;box-shadow:none}
 .fees-grid .ag-cell-focus:focus-visible{border-color:var(--pri);outline:none;box-shadow:none}
 .fees-grid .money{justify-content:flex-end;font-variant-numeric:tabular-nums;white-space:nowrap}
-.fees-grid .ant-tag{margin:0;max-width:100%;white-space:normal;line-height:1.5}
 .fees-grid .muted{font-size:calc(12px * var(--fscale));color:var(--tx2)}
-.fees-page .ant-btn,.fee-batch-dialog .ant-btn,.fee-delete-dialog .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(12px * var(--fscale))}
-.fee-row-actions{flex-wrap:nowrap;gap:calc(6px * var(--fscale))}
-.fee-row-actions .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
-.fees-grid .ant-input,.fee-batch-table .ant-input{width:100%;min-width:0;height:calc(32px * var(--fscale));border-radius:var(--radius-input);background:var(--sf2);font:inherit;padding-inline:calc(8px * var(--fscale))}
-.fees-grid .ant-input:hover,.fees-grid .ant-input:focus,.fee-batch-table .ant-input:hover,.fee-batch-table .ant-input:focus{background:var(--sf)}
+.fees-page .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(12px * var(--fscale))}
+.fees-grid .ant-input{width:100%;min-width:0;height:calc(32px * var(--fscale));border-radius:var(--radius-input);background:var(--sf2);font:inherit;padding-inline:calc(8px * var(--fscale))}
+.fees-grid .ant-input:hover,.fees-grid .ant-input:focus{background:var(--sf)}
 .fee-money-input{text-align:right;font-variant-numeric:tabular-nums}
-.business-modal .fee-batch-dialog{width:min(calc(1080px * var(--fscale)),calc(100vw - 24px));font-size:calc(var(--font-ui-size) * 1px * var(--fscale));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
-.business-modal .fee-delete-dialog{width:min(calc(440px * var(--fscale)),calc(100vw - 24px));font-size:calc(var(--font-ui-size) * 1px * var(--fscale));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
-.fee-batch-dialog h2,.fee-delete-dialog h2{font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4;margin:0}
-.fee-batch-dialog p,.fee-delete-dialog p{line-height:1.55;overflow-wrap:anywhere}
-.fee-batch-dialog .dialog-close-button,.fee-delete-dialog .dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
-.fee-batch-toolbar{margin:calc(16px * var(--fscale)) 0}
-.fee-batch-table{max-height:48dvh;overflow:auto;border:1px solid var(--bd);border-radius:var(--radius-input);scrollbar-color:var(--bd3) var(--sf2)}
-.fee-batch-table table{border-collapse:separate;border-spacing:0;font:inherit;font-variant-numeric:tabular-nums}
-.fee-batch-table th,.fee-batch-table td{min-width:0;padding:calc(8px * var(--fscale));border-bottom:1px solid var(--bd);text-align:right;vertical-align:middle;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
-.fee-batch-table th{background:var(--sf2);font-size:calc(11.5px * var(--fscale));font-weight:500}
-.fee-batch-table thead th{position:sticky;top:0;z-index:2}
-.fee-batch-table tbody th{background:var(--sf);font-size:inherit}
-.fee-batch-table th:first-child{position:sticky;left:0;text-align:left;z-index:1;border-right:1px solid var(--bd)}
-.fee-batch-table thead th:first-child{z-index:3}
 .fees-page .notice .ant-btn{margin-left:calc(8px * var(--fscale))}
-@media(max-width:800px){.fee-toolbar{align-items:flex-start}.fee-toolbar>.muted{width:100%}.fee-filters label{flex-wrap:wrap}.fees-grid{height:65dvh}.business-modal .fee-batch-dialog,.business-modal .fee-delete-dialog{padding:calc(16px * var(--fscale))}}
+@media(max-width:800px){.fee-toolbar{align-items:flex-start}.fee-toolbar>.muted{width:100%}.fee-filters label{flex-wrap:wrap}}
 
 .fees-annual-grid{height:auto;min-height:0}
 .fees-annual-grid .ag-grid-scrolling-rows{min-height:0}
 .fees-annual-grid .ag-cell-wrap-text{white-space:normal;overflow-wrap:anywhere}
-.fee-amount-link,.fee-name-link{padding:0;border:0;background:transparent;color:var(--pri);font:inherit;line-height:inherit;cursor:pointer}
-.fee-amount-link{width:100%;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-.fee-name-link{text-align:left;white-space:normal;overflow-wrap:anywhere}
-.fee-amount-link:hover,.fee-name-link:hover{text-decoration:underline}
-.fee-amount-link:focus-visible,.fee-name-link:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
-.business-modal .fee-details-dialog{width:min(calc(1180px * var(--fscale)),calc(100vw - 24px));padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
-.fee-details-dialog h2{margin:0;font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4}
-.fee-details-dialog .fees-grid{height:auto;min-height:0}
-.fee-details-dialog .dialog-close-button{width:2rem;height:2rem;min-height:0;padding:.35rem}
+.fee-toolbar label{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
+.fee-record-names,.fee-record-amounts{display:flex;flex-direction:column;gap:calc(6px * var(--fscale));width:100%;padding-block:calc(6px * var(--fscale))}
+.fee-record-names label{display:flex;align-items:center;gap:calc(6px * var(--fscale));width:100%}
+.fee-record-names label>span{flex:none;font-size:calc(11px * var(--fscale));color:var(--tx2)}
+.fee-record-names .ant-input{flex:1;width:0}
+.fee-record-names .ant-btn{padding-inline:calc(6px * var(--fscale));height:calc(28px * var(--fscale));min-height:0}
+.fee-record-note,.fee-draft-feedback{margin:calc(8px * var(--fscale)) calc(16px * var(--fscale));line-height:1.55}
+.fee-draft-feedback{overflow-wrap:anywhere}
+.fee-draft-feedback .ant-btn{margin-left:calc(6px * var(--fscale))}
+.fees-annual-grid .ag-cell{overflow:visible}
+
+.fee-record-name-details{width:100%;padding-block:calc(6px * var(--fscale))}
+.fee-record-name-details summary{cursor:pointer;line-height:1.5;overflow-wrap:anywhere}
+.fee-record-name-details summary span{display:block;color:var(--tx2);font-size:calc(11px * var(--fscale))}
+.fee-record-name-details summary:focus-visible{outline:2px solid var(--pri);outline-offset:2px}

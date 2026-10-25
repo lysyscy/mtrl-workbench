@@ -68,9 +68,20 @@ def build_year_data(s: Session, *, year: str, project: str) -> dict:
         raise ValueError("年份请写成 YYYY")
     cands, key, pj = _resolve(s, {"project": project})
     items, inv = R.year_facts(s, year=year, project_id=pj.id if pj else None, warehouse=key)
+    indexes: dict[str, int] = {}
+    records = []
+    for item in items:
+        ym = item["ym"]
+        if not ym.startswith(f"{year}-") or not D.parse_ym(ym):
+            continue
+        index = indexes.get(ym, 0)
+        records.append({"ym": ym, "id": item["id"], "index": index,
+                        "item": item["name"], "amount": item["amount"]})
+        indexes[ym] = index + 1
     return {"year": year, "project": key,
             "project_display": next((c.display for c in cands if c.key == key), key),
-            "can_edit": pj is not None, **D.annual_rows(year=year, project_key=key, items=items, inv_rows=inv)}
+            "records": records, "auto_name": D.AUTO_NAME, "can_edit": pj is not None,
+            **D.annual_rows(year=year, project_key=key, items=items, inv_rows=inv)}
 
 
 # ---------------------------------------------------------------- 写动作（PRG：都返回回执）
@@ -89,13 +100,16 @@ def _label(data_ym: str, disp: str) -> str:
     return f"{data_ym} · {disp}"
 
 
-def act_add(s: Session, *, ym: str, project_key: str) -> dict:
+def act_add(s: Session, *, ym: str, project_key: str, name: str = D.DEFAULT_ITEM_NAME, raw=0) -> dict:
     """「＋ 增加手填项」：在该 (月, 项目) 那一份末尾追加一行（初值 = 名称可改、金额 0）。"""
     pj, _ = _scope(s, ym=ym, project_key=project_key)
     if pj is None:
         return _flash("err", f"项目「{project_key or '（未选）'}」不在档案里 —— 先建档再录")
-    R.add_item(s, ym=ym, project_id=pj.id, name=D.DEFAULT_ITEM_NAME, amount=D.ZERO)
-    return _flash("ok", f"已在 {_label(ym, project_key)} 增加手填项：**名称可改、金额可填**（§5.5）")
+    problem = D.amount_problem(raw)
+    if problem:
+        return _flash("err", problem)
+    row = R.add_item(s, ym=ym, project_id=pj.id, name=name, amount=D.parse_amount(raw))
+    return {**_flash("ok", f"已在 {_label(ym, project_key)} 增加手填项：**名称可改、金额可填**（§5.5）"), "row_id": row.id}
 
 
 def act_rename(s: Session, *, ym: str, project_key: str, index: int, value: str) -> dict:

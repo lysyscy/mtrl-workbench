@@ -40,3 +40,9 @@
 .contract-form-grid .ant-picker,.contract-field>.ant-picker,.subtable-draft .ant-picker{width:100%;min-width:0}
 .subtable-draft .ant-picker-input>input{min-width:0}
 .ant-tag.status-tag{margin-inline-end:0}
+
+.history-confirm-dialog{width:min(calc(480px * var(--fscale)),calc(100vw - 32px));padding:calc(20px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale));line-height:1.55}
+.history-confirm-dialog h2{font-size:calc(18px * var(--fscale));margin:0}
+.history-confirm-dialog p{margin-block:calc(12px * var(--fscale))}
+.history-operation{display:grid;gap:calc(6px * var(--fscale));padding:calc(12px * var(--fscale));background:var(--sf2);border-radius:var(--radius-inner);overflow-wrap:anywhere}
+.history-operation span{color:var(--tx2)}
