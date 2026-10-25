@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.orm import Session
 
 from app.mod02_i8.repository import (  # noqa: F401  ← 运行记录仓储归 MOD-02，此处再导出
@@ -313,6 +313,16 @@ def restore_stat_paid_auto(session: Session, notice: PaymentNotice, *, changed_b
 def all_notice_rows(session: Session) -> list[PaymentNotice]:
     """完整通知书事实输入，含剔除/撤单，按id升序，不受列表上限影响。"""
     return list(session.execute(select(PaymentNotice).order_by(PaymentNotice.id.asc())).scalars().all())
+
+
+def debt_notice_rows(session: Session) -> list[Row]:
+    """欠款事实窄投影，保留全部行及顺序，避免重复解码无关原始 JSON。"""
+    stmt = select(
+        PaymentNotice.id, PaymentNotice.doc_date, PaymentNotice.category,
+        PaymentNotice.stat_settle, PaymentNotice.stat_paid,
+        PaymentNotice.excluded, PaymentNotice.ownership_id,
+    ).order_by(PaymentNotice.id.asc())
+    return list(session.execute(stmt))
 
 
 def stat_paid_of_many(session: Session, ids: list[int]) -> dict[int, Decimal | None]:

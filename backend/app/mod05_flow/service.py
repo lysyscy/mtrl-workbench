@@ -65,7 +65,7 @@ list_flows = repo.list_flows            # 全部流水（含已撤销）—— �
 def notice_debt_views(s: Session) -> list[NoticeDebtView]:
     """付款通知书 → 欠款/台账视图；付款统计只借其归属和剔除信息。"""
     out: list[NoticeDebtView] = []
-    for n in repo.notice_rows(s):
+    for n in repo.debt_notice_rows(s):
         cat = str(n.category or "").strip() or CATEGORY_MATERIAL
         out.append(
             NoticeDebtView(

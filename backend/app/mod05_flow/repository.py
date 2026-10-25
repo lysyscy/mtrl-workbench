@@ -322,6 +322,11 @@ def notice_rows(s: Session) -> list[PaymentNotice]:
     return notices.all_notice_rows(s)
 
 
+def debt_notice_rows(s: Session):
+    from app.mod03_notice import service as notices
+    return notices.debt_notice_rows(s)
+
+
 __all__ = [
     "list_flows", "get_flow", "list_flows_of_notice", "next_flow_no", "has_request_id",
     "create_flow", "revoke", "revoke_info",
@@ -330,7 +335,7 @@ __all__ = [
 
     "FLOW_SOURCE_MANUAL", "FLOW_SOURCE_IMPORTED", "FLOW_EFFECTIVE", "FLOW_REVOKED",
     "list_openings", "get_opening", "upsert_opening", "delete_opening",
-    "remarks_map", "set_remark", "notice_rows",
+    "remarks_map", "set_remark", "notice_rows", "debt_notice_rows",
 ]
 
 

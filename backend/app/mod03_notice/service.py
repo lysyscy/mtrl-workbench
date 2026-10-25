@@ -300,7 +300,7 @@ __all__ = ["project_references",
     "run_batch",
     "list_stat_traces",        # ⭐ 包间出口（`TAIL-195` 批 2a）
     "restore_stat_paid_auto",
-    "get_notice", "get_notices_by_ids", "all_notice_rows", "stat_paid_of_many",
+    "get_notice", "get_notices_by_ids", "all_notice_rows", "debt_notice_rows", "stat_paid_of_many",
 ]
 
 
@@ -317,6 +317,11 @@ def get_notices_by_ids(session, ids):
 def all_notice_rows(session):
     from app.mod03_notice import repository
     return repository.all_notice_rows(session)
+
+
+def debt_notice_rows(session):
+    from app.mod03_notice import repository
+    return repository.debt_notice_rows(session)
 
 
 def stat_paid_of_many(session, ids):

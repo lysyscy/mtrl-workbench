@@ -66,3 +66,42 @@ def test_m11_fetch_closes_client_when_fetch_fails(monkeypatch):
 
     assert result["ok"] is False
     assert closed == [True]
+
+
+def test_debt_projection_keeps_all_facts_and_reads_fresh_values():
+    from sqlalchemy import event, update
+    from app.core.db import session_scope
+    from app.mod03_notice.models import PaymentNotice
+    from app.mod05_flow.domain import NoticeDebtView
+    from app.core.money import to_money
+
+    with session_scope() as session:
+        notices = [PaymentNotice(ph_id=f"__440_{i}__", doc_date="2026-10-25",
+                                 category=category, stat_settle=Decimal("12.34"),
+                                 stat_paid=Decimal("0.00"), excluded=excluded,
+                                 fields={"large": ["原始单据"] * 100})
+                   for i, (category, excluded) in enumerate([("", False), ("材料", True)])]
+        session.add_all(notices)
+        session.flush()
+        original = [NoticeDebtView(notice_id=int(n.id), doc_date=str(n.doc_date or ""),
+                    category=str(n.category or "").strip() or CATEGORY_MATERIAL,
+                    settle_stat=to_money(n.stat_settle), pay_stat=to_money(n.stat_paid),
+                    excluded=bool(n.excluded), ownership_id=n.ownership_id)
+                    for n in M5.repo.notice_rows(session)]
+        statements = []
+        conn = session.connection()
+        def record(_conn, _cursor, stmt, _params, _context, _many):
+            statements.append(stmt)
+        event.listen(conn, "before_cursor_execute", record)
+        try:
+            assert M5.notice_debt_views(session) == original
+        finally:
+            event.remove(conn, "before_cursor_execute", record)
+        assert len(statements) == 1 and "payment_notice.fields" not in statements[0]
+        session.execute(update(PaymentNotice).where(PaymentNotice.id == notices[0].id)
+                        .values(stat_paid=Decimal("3.21")),
+                        execution_options={"synchronize_session": False})
+        fresh = {n.notice_id: n for n in M5.notice_debt_views(session)}
+        assert fresh[notices[0].id].pay_stat == Decimal("3.21")
+        assert fresh[notices[1].id].excluded and fresh[notices[1].id].ownership_id is None
+        session.rollback()
