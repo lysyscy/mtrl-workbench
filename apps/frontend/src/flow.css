@@ -47,3 +47,8 @@
 .flow-revoke>div>label input{width:100%}
 .flow-revoke fieldset label{display:flex;align-items:center;gap:8px;margin:8px 0}
 .flow-revoke input[type=radio]{width:auto;height:auto;min-height:0;margin:0;accent-color:var(--pri);flex:none}
+
+/* Reserve the existing chart viewport while its asynchronous data arrives. */
+.debt-overviews .flow-card-body{min-block-size:calc(262px * var(--fscale));box-sizing:border-box}
+.flow-card[aria-labelledby="stats-title"]>.flow-card-body{min-block-size:calc(378px * var(--fscale));box-sizing:border-box}
+.flow-workspace .ledger-card-body{min-block-size:calc(554px * var(--fscale));box-sizing:border-box}
