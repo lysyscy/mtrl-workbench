@@ -41,7 +41,7 @@ export function BoundedTable({ columns, children, style, ...props }: ComponentPr
     const fonts = new MutationObserver(() => { const next = getComputedStyle(table).font; if (next !== font) { font = next; schedule(); } });
     fonts.observe(document.documentElement, { attributes: true, attributeFilter: ['class','style'] });
     table.addEventListener('focusout', afterEdit);
-    observer.observe(container); schedule(); void document.fonts.ready.then(schedule);
+    observer.observe(container); fit(); lastWidth = container.clientWidth; void document.fonts.ready.then(schedule);
     return () => { disposed = true; observer.disconnect(); fonts.disconnect(); table.removeEventListener('focusout', afterEdit); cancelAnimationFrame(frame); };
   }, [specification]);
   return <table {...props} ref={ref} className={`bounded-table ${props.className ?? ''}`} style={{ ...style, tableLayout: 'fixed', minWidth: 0, maxWidth: 'none', width: widths.length ? widths.reduce((a, b) => a + b, 0) : undefined }}><colgroup>{columns.map((_, i) => <col key={i} style={{ width: widths[i] }} />)}</colgroup>{children}</table>;
