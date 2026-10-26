@@ -35,3 +35,30 @@ def test_actual_company_summary_and_four_sheet_snapshot_download(server,browser_
             assert Decimal(str(workbook.worksheets[0].cell(position,cell['column']).value))==Decimal(cell['value']);checked+=1
     assert checked,'真实报送项目没有金额格，API到文件金额未覆盖'
     workbook.close()
+
+
+def test_actual_company_summary_layout_and_amounts_readonly(server,browser_page,api,projects):
+    page,_=browser_page;page.set_viewport_size({'width':2400,'height':1200})
+    open_page(page,server,'mechanical','机械费');grid=page.get_by_role('region',name='公司汇总',exact=True)
+    expect(grid).to_be_visible();ym=page.get_by_label('月份',exact=True).input_value()
+    state=get(api,'/api/m06/workbench',ym=ym);warehouses=state['shown'];assert warehouses
+    preview=get(api,'/api/m06/workbench/preview',ym=ym,projects=json.dumps(warehouses,ensure_ascii=False))
+    count=len(preview['sheets'][0]['project_rows']);assert count
+    page.wait_for_function("""count=>{const g=document.querySelector('.mechanical-grid');const last=g?.querySelector('[row-index="'+(count-1)+'"]');const total=g?.querySelector('.ag-row-pinned');return last&&total&&Math.abs(total.getBoundingClientRect().top-last.getBoundingClientRect().bottom)<2;}""",arg=count)
+    scale=page.evaluate("Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale'))")
+    assert grid.locator('.ag-header-cell[col-id="c1"]').bounding_box()['width']<=200*scale+1
+    assert grid.locator('.ag-header-cell[col-id="c14"]').bounding_box()['width']<=144*scale+1
+    project=next(p for p in projects if p['warehouse_name']==warehouses[0])
+    position=next(item['row'] for item in preview['sheets'][0]['project_rows'] if item['warehouse']==warehouses[0])
+    row=grid_row(page,'.mechanical-grid',project['id'])
+    for dom,cells in [(row,preview['sheets'][0]['rows'][position-1]),(grid.locator('.ag-row-pinned'),preview['sheets'][0]['rows'][-1])]:
+        values={cell['column']-1:cell['value'] for cell in cells}
+        for column in [4,5,7,8,9,10,12,13]:
+            expected=values[column].replace(',','');cell=dom.locator('[col-id="c'+str(column)+'"]')
+            actual=(cell.locator('input').input_value() if cell.locator('input').count() else cell.inner_text()).replace(',','')
+            if re.fullmatch(r'-?\d+(?:\.\d+)?',expected):assert Decimal(actual)==Decimal(expected)
+            else:assert actual=='—'
+    page.set_viewport_size({'width':2400,'height':500})
+    page.wait_for_function("document.querySelector('.mechanical-grid').getBoundingClientRect().height<340")
+    header=grid.locator('.ag-header').bounding_box();grid.locator('[row-index="'+str(count-1)+'"]').scroll_into_view_if_needed()
+    assert abs(grid.locator('.ag-header').bounding_box()['y']-header['y'])<1

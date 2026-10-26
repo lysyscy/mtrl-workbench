@@ -20,9 +20,9 @@
 .mechanical-locate{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale));margin:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
 .mechanical-locate label,.mechanical-edit-tools label{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
 .mechanical-locate .ant-input{width:calc(200px * var(--fscale));max-width:100%;height:calc(32px * var(--fscale));border-radius:var(--radius-input)}
-.mechanical-card:has(>.mechanical-grid){display:flex;flex-direction:column;height:100%;min-height:min-content}
+.mechanical-card:has(>.mechanical-grid){display:flex;flex-direction:column;height:auto;min-height:0}
 .mechanical-card:has(>.mechanical-grid)>:not(.mechanical-grid){flex-shrink:0}
-.mechanical-grid{flex:1 0 calc(300px * var(--fscale));height:auto;min-height:calc(300px * var(--fscale));width:100%;min-width:0}
+.mechanical-grid{flex:none;height:calc(300px * var(--fscale));min-height:0;width:100%;min-width:0}
 .mechanical-grid,.mechanical-detail-grid{font-size:calc(var(--font-ui-size) * 1px * var(--fscale));scrollbar-color:var(--bd3) var(--sf2)}
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-cell{line-height:1.55;padding:calc(6px * var(--fscale)) calc(6px * var(--fscale));overflow-wrap:anywhere}
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-header-cell{padding-inline:calc(6px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500}

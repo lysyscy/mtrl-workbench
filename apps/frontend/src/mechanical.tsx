@@ -29,7 +29,26 @@ interface SummaryRow { id: string; [column: string]: string }
 const groupLabels = ['零租', '包月', '周材', '内租（租赁公司）', '内租（工程公司）'];
 function Summary({ scale, report, projectIds, detail, internal, data, warehouses }: { scale: number; data:Workbench; warehouses:string[]; internal: InternalEditing; report: MechanicalReport; projectIds: number[]; detail: (sheet: number, projectId: string) => void }) {
   const api = useRef<GridApi<SummaryRow> | null>(null);
-  const root = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null), heightFrame = useRef(0);
+  const fitHeight = useCallback(() => {
+    if (heightFrame.current) return;
+    heightFrame.current = requestAnimationFrame(() => {
+      heightFrame.current = 0;
+      const grid = api.current, element = root.current;
+      if (!grid || grid.isDestroyed() || !element) return;
+      const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1);
+      const natural = (element.querySelector('.ag-header')?.getBoundingClientRect().height ?? 68 * scale)
+        + (last ? (last.rowTop ?? 0) + (last.rowHeight ?? 36 * scale) : 36 * scale)
+        + (grid.getPinnedBottomRow(0)?.rowHeight ?? 0)
+        + (element.querySelector('.ag-body-horizontal-scroll')?.getBoundingClientRect().height ?? 0) + 2;
+      const height = Math.ceil(Math.min(natural, Math.max(200 * scale, window.innerHeight - element.getBoundingClientRect().top - 16 * scale)));
+      if (Math.abs(element.getBoundingClientRect().height - height) > .5) element.style.height = `${height}px`;
+    });
+  }, [scale]);
+  useEffect(() => {
+    window.addEventListener('resize', fitHeight); void document.fonts.ready.then(fitHeight);
+    return () => { window.removeEventListener('resize', fitHeight); cancelAnimationFrame(heightFrame.current); heightFrame.current = 0; };
+  }, [fitHeight]);
   const current=useRef(internal);current.current=internal;
   useEffect(()=>{api.current?.refreshCells({force:true});},[internal.epoch,internal.writable]);
   const rows = useMemo(() => report.sheets[0]!.rows.slice(5).map((cells, index) => {
@@ -42,18 +61,18 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
   }), [report, projectIds, data, warehouses]);
   const columns = useMemo<(ColDef<SummaryRow> | ColGroupDef<SummaryRow>)[]>(() => [
     { field: 'c0', headerName: '序号', pinned: 'left', ...fixedWidth(48, scale) },
-    { field: 'c1', headerName: '项目名称', pinned: 'left', ...contentWidth(96, Number.MAX_SAFE_INTEGER, scale, 1), wrapText: true, autoHeight: true },
+    { field: 'c1', headerName: '项目名称', pinned: 'left', ...contentWidth(120, 200, scale), wrapText: true, autoHeight: true },
     { headerName: '开工日期', children: [{ field: 'c2', headerName: '年', ...contentWidth(48, 68, scale) }, { field: 'c3', headerName: '月', ...contentWidth(34, 56, scale), cellClass: 'mechanical-group-end', headerClass: 'mechanical-group-end' }] },
     ...['开工累计费用（元）', '本月产生费用（元）'].map((name, group) => ({ headerName: name, headerClass: 'mechanical-group-end', children: groupLabels.map((label, index): ColDef<SummaryRow> => ({
-      field: `c${4 + group * 5 + index}`, headerName: label, ...mechanicalNumberWidth(rows.map(row => money(row[`c${4 + group * 5 + index}`])), scale, group === 1 && index !== 2), wrapText: false, autoHeight: true, valueFormatter:p=>money(p.value), cellClass: index === 4 ? 'money mechanical-group-end' : 'money', headerClass: index === 4 ? 'mechanical-group-end' : '',
+      field: `c${4 + group * 5 + index}`, headerName: label, ...mechanicalNumberWidth(rows.map(row => money(row[`c${4 + group * 5 + index}`])), scale, group === 1 && index !== 2), context: { widthFlex: 1 }, wrapText: false, autoHeight: true, valueFormatter:p=>money(p.value), cellClass: index === 4 ? 'money mechanical-group-end' : 'money', headerClass: index === 4 ? 'mechanical-group-end' : '',
       ...(group===1&&index>2?{cellRenderer:(params:ICellRendererParams<SummaryRow,string>)=>params.node.rowPinned||!current.current.writable?money(params.value):<InternalCell id={params.data!.id} column={index===3?'mech_1':'mech_0'} value={params.value??''} label={`${params.data?.c1} ${label}`} editing={current} epoch={current.current.epoch} />}:{}),
       ...(group === 1 && index < 2 ? { cellRenderer: (params: ICellRendererParams<SummaryRow, string>) => params.node.rowPinned ? money(params.value) : <Button className="mechanical-amount-button" aria-label={`${params.data?.c1} ${label}明细`} onClick={() => detail(index + 1, params.data?.id ?? '')}>{money(params.value)}</Button> } : {}),
     })) })),
-    { field: 'c14', headerName: '备注', ...contentWidth(60, Number.MAX_SAFE_INTEGER, scale, 1), wrapText: true, autoHeight: true },
+    { field: 'c14', headerName: '备注', ...contentWidth(72, 144, scale), wrapText: true, autoHeight: true },
   ], [scale, detail, rows]);
   return <>
     <div ref={root} className="mechanical-grid" role="region" aria-label="公司汇总">
-      <AgGridReact<SummaryRow> theme={gridTheme} rowData={rows.slice(0, -1)} pinnedBottomRowData={rows.slice(-1)} columnDefs={columns} defaultColDef={{ sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }} getRowId={params => params.data.id} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder onFirstDataRendered={e => fitGridColumns(e.api, root.current, true)} onGridSizeChanged={e => fitGridColumns(e.api, root.current)} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} onGridReady={event => { api.current = event.api; }} />
+      <AgGridReact<SummaryRow> theme={gridTheme} rowData={rows.slice(0, -1)} pinnedBottomRowData={rows.slice(-1)} columnDefs={columns} defaultColDef={{ sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }} getRowId={params => params.data.id} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder onFirstDataRendered={e => { fitGridColumns(e.api, root.current, true); fitHeight(); }} onGridSizeChanged={e => { fitGridColumns(e.api, root.current); fitHeight(); }} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} onModelUpdated={fitHeight} onColumnResized={fitHeight} onGridReady={event => { api.current = event.api; }} />
     </div>
   </>;
 }
