@@ -36,6 +36,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
       heightFrame.current = 0;
       const grid = api.current, element = root.current;
       if (!grid || grid.isDestroyed() || !element) return;
+      const scale = Number(getComputedStyle(element).getPropertyValue('--fscale')) || 1;
       const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1);
       const natural = (element.querySelector('.ag-header')?.getBoundingClientRect().height ?? 68 * scale)
         + (last ? (last.rowTop ?? 0) + (last.rowHeight ?? 36 * scale) : 36 * scale)
@@ -44,7 +45,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
       const height = Math.ceil(Math.min(natural, Math.max(200 * scale, window.innerHeight - element.getBoundingClientRect().top - 16 * scale)));
       if (Math.abs(element.getBoundingClientRect().height - height) > .5) element.style.height = `${height}px`;
     });
-  }, [scale]);
+  }, []);
   useEffect(() => {
     window.addEventListener('resize', fitHeight); void document.fonts.ready.then(fitHeight);
     return () => { window.removeEventListener('resize', fitHeight); cancelAnimationFrame(heightFrame.current); heightFrame.current = 0; };
@@ -72,7 +73,15 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
   ], [scale, detail, rows]);
   return <>
     <div ref={root} className="mechanical-grid" role="region" aria-label="公司汇总">
-      <AgGridReact<SummaryRow> theme={gridTheme} rowData={rows.slice(0, -1)} pinnedBottomRowData={rows.slice(-1)} columnDefs={columns} defaultColDef={{ sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }} getRowId={params => params.data.id} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder onFirstDataRendered={e => { fitGridColumns(e.api, root.current, true); fitHeight(); }} onGridSizeChanged={e => { fitGridColumns(e.api, root.current); fitHeight(); }} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} onModelUpdated={fitHeight} onColumnResized={fitHeight} onGridReady={event => { api.current = event.api; }} />
+      <AgGridReact<SummaryRow> theme={gridTheme} rowData={rows.slice(0, -1)} pinnedBottomRowData={rows.slice(-1)} columnDefs={columns} defaultColDef={{ sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }} getRowId={params => params.data.id} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder onFirstDataRendered={e => { fitGridColumns(e.api, root.current, true); fitHeight(); }} onGridSizeChanged={e => { fitGridColumns(e.api, root.current); fitHeight(); }} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} onModelUpdated={fitHeight} onColumnResized={fitHeight} onGridReady={event => {
+        api.current = event.api;
+        // Header wrapping and scrollbar visibility can settle after the first data render.
+        const observer = new ResizeObserver(fitHeight);
+        for (const selector of ['.ag-header','.ag-body-horizontal-scroll','.ag-grid-pinned-bottom-rows']) {
+          const element = root.current?.querySelector(selector); if (element) observer.observe(element);
+        }
+        event.api.addEventListener('gridPreDestroyed', () => observer.disconnect());
+      }} />
     </div>
   </>;
 }
