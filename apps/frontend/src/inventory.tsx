@@ -3,7 +3,7 @@ import Checkbox from 'antd/es/checkbox';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
 import Tag from 'antd/es/tag';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
@@ -12,17 +12,20 @@ import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
-import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme, numberColumnWidth } from './grid';
-import { cents, money } from './notices-api';
+import { pageGridGeometry, contentWidth, fixedWidth, gridTheme, numberColumnWidth } from './grid';
+import { cents, decimal, money } from './notices-api';
 import { coarseRows, emptyFilter, fields, filterOn, filterRows, getInventory, sumRows } from './inventory-api';
 import type { Field, Filters, InventoryRow } from './inventory-api';
 import { InventoryAdjust } from './inventory-adjust';
 import { InventoryFetch } from './inventory-fetch';
 import { SettlementExport } from './settlement-export';
 import { useHistoryGuard } from './history';
-import { InventoryText, measureInventoryRows } from './inventory-rows';
+import { InventoryText } from './inventory-rows';
+import { useTextGridLayout } from './grid-layout';
 
-const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true};
+const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true,wrapHeaderText:true};
+const inventoryRowId = (row: InventoryRow) => String(row.id);
+const layoutColumns = fields.map(([id,,type]) => ({ id, text: (row: InventoryRow) => type === 'num' ? row[id] ? money(row[id]) : '' : row[id] ?? '', wrap: type !== 'num', className: 'inventory-cell-text' }));
 const totalsOf = (rows: InventoryRow[]) => rows.length ? [{id:-1,doc_no:'合计',qty:sumRows(rows,'qty'),amount:sumRows(rows,'amount'),adj_amount:sumRows(rows,'adj_amount'),tax_total:sumRows(rows,'tax_total')}] : [];
 
 export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:boolean;active:boolean}) {
@@ -60,25 +63,25 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
     return data;
   }
   const grid = useRef<GridApi<InventoryRow> | null>(null);
-  useLayoutEffect(() => { if (active) measureInventoryRows(grid.current, root.current); }, [active, rows, scale]);
-  useEffect(() => {
-    const loaded = () => measureInventoryRows(grid.current, root.current);
-    document.fonts.addEventListener('loadingdone', loaded);
-    return () => document.fonts.removeEventListener('loadingdone', loaded);
-  }, []);
   const controls = useRef({ unavailable: false, pendingId: null as number | null });
-  controls.current = { unavailable: paused || query.isError || query.isFetching, pendingId: pending?.id ?? null };
-  useEffect(() => { if (active) grid.current?.refreshCells({ force: true, columns: ['actions'] }); }, [active, paused, query.isError, query.isFetching, pending]);
   const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
   const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
-  const columns = useMemo<ColDef<InventoryRow>[]>(() => [
+  const amountWidths = useMemo(() => Object.fromEntries(fields.filter(([, ,type]) => type === 'num').map(([field]) => {
+    let low = 0n, high = 0n, positive = 0n, negative = 0n;
+    for (const row of query.data?.rows ?? []) { if (!row[field]) continue; const value = cents(row[field]); low = value < low ? value : low; high = value > high ? value : high; if (value >= 0n) positive += value; else negative += value; }
+    return [field, numberColumnWidth([low, high, positive, negative].map(value => money(decimal(value))), scale)];
+  })), [scale, query.data]);
+  const columns = useMemo<ColDef<InventoryRow>[]>(() => ([
     ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num',cellRenderer:type === 'num' ? undefined : InventoryText,
       ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:(a:string,b:string) => !a || !b ? a ? 1 : b ? -1 : 0 : cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0} : {}),
       ...(field === 'doc_no' ? {pinned:'left' as const} : {}),
-      ...(type === 'num' ? numberColumnWidth([...rows.map(row => row[field] ? money(row[field]) : ''), ...totals.map(row => { const value=(row as Partial<InventoryRow>)[field]; return value ? money(value) : ''; })], scale) : contentWidth(field === 'doc_no' ? 108 : ['seq','unit','direction'].includes(field) ? 40 : ['doc_date','audit_date'].includes(field) ? 70 : field === 'biz_type' ? 64 : ['spec','wbs_name','cbs_name'].includes(field) ? 72 : 92,['seq','unit','direction'].includes(field) ? 85 : 300,scale,field === 'material' ? 1 : 0)),
+      ...(type === 'num' ? amountWidths[field]! : contentWidth(field === 'doc_no' ? 108 : ['seq','unit','direction'].includes(field) ? 40 : ['doc_date','audit_date'].includes(field) ? 70 : field === 'biz_type' ? 64 : ['spec','wbs_name','cbs_name'].includes(field) ? 72 : 92,['seq','unit','direction'].includes(field) ? 85 : 300,scale,field === 'material' ? 1 : 0)),
     })),
     {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(100,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={controls.current.unavailable || Boolean(controls.current.pendingId !== null && controls.current.pendingId !== p.data.id)} onClick={() => { if (!controls.current.unavailable && (controls.current.pendingId === null || controls.current.pendingId === p.data!.id)) setEditing(p.data!); }}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
-  ],[scale, rows, totals]);
+  ] satisfies ColDef<InventoryRow>[]).map(({width,...column}) => width === undefined ? column : {...column,initialWidth:width}),[scale, amountWidths]);
+  const layout = useTextGridLayout({ root, active: active && !blocked, rows, totals: totals as InventoryRow[], columns: layoutColumns, scope: JSON.stringify([period,[...ids].sort(),direction,onlyAdjusted,filters,target]), identity: [...ids].sort().join(','), rowId: inventoryRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight });
+  controls.current = { unavailable: paused || query.isError || query.isFetching || layout.state === 'updating', pendingId: pending?.id ?? null };
+  useEffect(() => { if (active) grid.current?.refreshCells({ force: true, columns: ['actions'] }); }, [active, paused, query.isError, query.isFetching, pending, layout.state]);
   function changeFilter(key:'q'|'min'|'max'|'values',value:string|string[]) {setFilters(old => ({...old,[column]:{...filter,[key]:value}}));}
   const filterProblem = [filter.min,filter.max].some(raw => raw && !Number.isFinite(Number(raw.replace(/,/g,'')))) ? '列数值无效，请修改或清除此列。' : '';
   const editRow = editing && (query.data?.rows.find(r => r.id === editing.id) ?? editing);
@@ -100,12 +103,13 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
       {meta[2] === 'num' ? <><label>最小值<Input aria-label="列最小值" value={filter.min} disabled={paused} onChange={e => changeFilter('min',e.target.value)} /></label><label>最大值<Input aria-label="列最大值" value={filter.max} disabled={paused} onChange={e => changeFilter('max',e.target.value)} /></label></> : meta[2] === 'text' && <Input aria-label="列包含文字" placeholder="包含…" value={filter.q} disabled={paused} onChange={e => changeFilter('q',e.target.value)} />}
       <Select mode="multiple" aria-label="列值清单" placeholder="值清单（多选）" value={filter.values} onChange={value => changeFilter('values',value)} options={values.map(value => ({value,label:value}))} showSearch={{optionFilterProp:'label'}} disabled={paused} maxTagCount="responsive" />
       <Button disabled={paused} onClick={() => setFilters(old => {const next = {...old};delete next[column];return next;})}>清除此列</Button><Button disabled={paused} onClick={() => setFilters({})}>清除全部列</Button>{filterProblem && <span role="alert">{filterProblem}</span>}</div>}
-    <div className="inventory-summary"><span aria-live="polite" aria-atomic="true"><span className="inventory-count-feedback" key={`${rows.length}:${query.data?.rows.length ?? 0}`}>{query.data ? `${rows.length} / ${query.data.rows.length} 行` : '尚未读取'}</span></span>{onlyAdjusted && <Tag className="status-tag status-info">已调整</Tag>}{query.isFetching && <span role="status">正在重读…</span>}</div>
+    <div className="inventory-summary"><span aria-live="polite" aria-atomic="true"><span className="inventory-count-feedback" key={`${rows.length}:${query.data?.rows.length ?? 0}`}>{query.data ? `${rows.length} / ${query.data.rows.length} 行` : '尚未读取'}</span></span>{onlyAdjusted && <Tag className="status-tag status-info">已调整</Tag>}{query.isFetching ? <span role="status">正在重读…</span> : layout.state === 'updating' && <span role="status">正在更新表格…</span>}</div>
     {query.isError && <p className="notice" role="alert">{query.error.message}{query.data ? ' 保留上次读取的内容。' : ' 尚未读取库存。'}<Button disabled={paused || query.isFetching} onClick={() => void query.refetch()}>重试读取库存</Button></p>}{projects.isError && <p className="notice" role="alert">{projects.error.message}<Button disabled={paused} onClick={() => void projects.refetch()}>重读项目</Button></p>}
-    {query.isPending ? <p role="status">正在读取库存单据…</p> : query.data && <div className="inventory-grid" ref={root}><AgGridReact<InventoryRow> theme={gridTheme} rowBuffer={2} rowData={rows} columnDefs={columns} pinnedBottomRowData={totals as InventoryRow[]}
+    {query.isPending ? <p role="status">正在读取库存单据…</p> : query.data && <div className="inventory-grid" ref={root} inert={layout.concealed} style={{visibility: layout.concealed ? 'hidden' : undefined}} aria-busy={layout.state === 'preparing' || layout.state === 'updating'} data-layout-state={layout.state} data-layout-error={layout.error || undefined}><AgGridReact<InventoryRow> theme={gridTheme} alwaysShowVerticalScroll rowBuffer={2} columnDefs={columns}
       getRowId={p => String(p.data.id)} defaultColDef={defaultColumn} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight}
       suppressScrollOnNewData suppressColumnVirtualisation overlayNoRowsTemplate="当前筛选条件下没有库存单据"
-      onGridReady={e => { grid.current = e.api; fitGridColumns(e.api,root.current,true); measureInventoryRows(e.api,root.current); }} onFirstDataRendered={e => { fitGridColumns(e.api,root.current,true); measureInventoryRows(e.api,root.current); }} onGridSizeChanged={e => { fitGridColumns(e.api,root.current); measureInventoryRows(e.api,root.current); }} onColumnResized={e => measureInventoryRows(e.api,root.current)} /></div>}
+      onGridReady={e => { grid.current = e.api; layout.attach(e.api); }} /></div>}
+    {layout.error && <p className="notice" role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
     {editRow && <InventoryAdjust key={editRow.id} row={editRow} adjustment={query.data?.adjustments.find(a => a.row_id === editRow.id)} me={editMissing ? null : me} paused={paused} close={() => setEditing(null)} reload={reload} unknown={Boolean(pending)} onUnknown={value => setPending(value ? editRow : null)} missing={editMissing} />}
     {fetchMonth !== null && <InventoryFetch month={fetchMonth} me={me} paused={paused} close={() => setFetchMonth(null)} refresh={async() => {await reload();}} pending={Boolean(fetchPending)} onPending={updateFetchPending} />}
   </section>;

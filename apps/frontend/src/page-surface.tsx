@@ -15,7 +15,10 @@ export function PageSurface({ active, title, children }: { active: boolean; titl
     let disposed = false, frame = 0, preparing = false;
     function schedule() { if (!disposed && !preparing && !complete.current) { cancelAnimationFrame(frame); frame = requestAnimationFrame(prepare); } }
     async function prepare() {
-      if (disposed || preparing || client.isFetching() || node!.querySelector('[data-page-loading]')) return;
+      if (disposed || preparing) return;
+      const failed = node!.querySelector<HTMLElement>('[data-layout-state=error]');
+      if (failed) { setError(failed.dataset.layoutError || '表格尺寸准备失败，请重试。'); return; }
+      if (client.isFetching() || node!.querySelector('[data-page-loading],[data-layout-state=preparing]')) return;
       preparing = true;
       const text = node!.textContent ?? '';
       try {
@@ -34,13 +37,13 @@ export function PageSurface({ active, title, children }: { active: boolean; titl
       }
     }
     const observer = new MutationObserver(schedule);
-    observer.observe(node, { childList: true, subtree: true, characterData: true });
+    observer.observe(node, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-layout-state','data-layout-error'] });
     const unsubscribe = client.getQueryCache().subscribe(schedule);
     schedule();
     return () => { disposed = true; observer.disconnect(); unsubscribe(); cancelAnimationFrame(frame); };
   }, [active, client]);
   return <>
-    {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <Button onClick={() => window.location.reload()}>重试字体加载</Button>}</div>}
+    {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <Button onClick={() => window.location.reload()}>{error.startsWith('表格') ? '重试表格加载' : '重试字体加载'}</Button>}</div>}
     <div ref={root} className="page-view" hidden={!active} inert={!active || !ready} style={{ visibility: ready ? undefined : 'hidden' }}>{children}</div>
   </>;
 }

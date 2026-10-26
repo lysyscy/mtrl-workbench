@@ -37,3 +37,32 @@ def test_actual_inventory_adjustment_save_readback_and_revoke(server,browser_pag
     dialog.get_by_role('button',name='撤销调整单…',exact=True).click();dialog.get_by_role('button',name='确认撤销调整单',exact=True).click();expect(dialog).not_to_be_visible()
     restored=get(api,'/api/m08/inventory');assert next(r for r in restored['rows'] if r['id']==row['id'])==row
     assert not any(a['row_id']==row['id'] for a in restored['adjustments'])
+
+
+def test_known_inventory_rows_keep_scroll_extent(server,browser_page,api):
+    """Known long rows must not change the scrollbar extent as virtual windows mount."""
+    page,_=browser_page;data=get(api,'/api/m08/inventory');assert data['rows']
+    open_page(page,server,'inventory','库存单据与调整单')
+    grid=page.locator('.inventory-grid')
+    expect(grid).to_have_attribute('aria-busy','false')
+    page.get_by_role('button',name='库存核算期间',exact=True).click()
+    page.get_by_role('dialog',name='库存核算期间选择',exact=True).get_by_text('全部',exact=True).click();page.keyboard.press('Escape')
+    expect(page.locator('.inventory-count-feedback')).to_have_text(f"{len(data['rows'])} / {len(data['rows'])} 行")
+    expect(grid).to_have_attribute('aria-busy','false',timeout=30000)
+    viewport=grid.locator('.ag-grid-viewport,.ag-body-viewport').first
+    extent=viewport.evaluate('e=>e.scrollHeight')
+    for fraction in [.25,.5,.75,1,0]:
+        viewport.evaluate("""async(e,f)=>{e.scrollTop=(e.scrollHeight-e.clientHeight)*f;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));}""",fraction)
+        assert viewport.evaluate('e=>e.scrollHeight')==extent
+        assert grid.locator('.inventory-cell-text').evaluate_all("""els=>els.every(e=>{const c=e.closest('.ag-cell');return e.getBoundingClientRect().height<=c.clientHeight+1})""")
+        assert grid.locator('.ag-cell.money').evaluate_all('els=>els.every(e=>e.scrollWidth<=e.clientWidth+1)')
+    # A manual width survives a local filter and its reset.
+    header=grid.locator('.ag-header-cell[col-id=material]')
+    before=header.evaluate('e=>e.getBoundingClientRect().width')
+    handle=header.locator('.ag-header-cell-resize').bounding_box();assert handle
+    page.mouse.move(handle['x']+handle['width']/2,handle['y']+handle['height']/2);page.mouse.down();page.mouse.move(handle['x']+handle['width']/2+40,handle['y']+handle['height']/2,steps=4);page.mouse.up()
+    expect(grid).to_have_attribute('aria-busy','false',timeout=30000)
+    resized=header.evaluate('e=>e.getBoundingClientRect().width');assert resized>before+20
+    pick_option(page,'库存方向','入库');expect(grid).to_have_attribute('aria-busy','false',timeout=30000)
+    pick_option(page,'库存方向','全部');expect(grid).to_have_attribute('aria-busy','false',timeout=30000)
+    assert abs(header.evaluate('e=>e.getBoundingClientRect().width')-resized)<1
