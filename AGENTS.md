@@ -1,10 +1,12 @@
 # Agent 读取入口
 
+共享记忆按宿主统一自定义指令执行；本项目固定库为 `project-3379fef93fbada35`，逻辑身份和普通业务/开发分流见 [工作流绑定](docs/agents/workflow.md#共享记忆)。记忆不能替代当前规则或授权。
+
 按当前动作读取下列主人及其必要源码。接手活动工作先从 [status](docs/status.md) 到原规格/票，核所在分支、工作树及实际进度。
 
 | 当前动作 | 先读 |
 |---|---|
-| 实施、验证、提交、环境或文件操作 | [项目工作流](docs/agents/workflow.md)，实施开工先读“够用即止” |
+| 开发实施、工程验证、提交或开发环境操作 | [项目工作流](docs/agents/workflow.md)，实施开工先读“够用即止” |
 | 开票、领票、改状态或依赖 | [票协议](docs/agents/issue-tracker.md) |
 | 改业务、金额、归属或权限 | [当前需求](docs/requirements.md)中的相应主题 |
 | 改共享结构、写入/撤销或刷新链 | [架构](docs/architecture.md) |
