@@ -24,7 +24,7 @@ import './settlement.css';
 import './inventory.css';
 import { InventoryText, measureInventoryRows } from './inventory-rows';
 
-const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true};
+const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true};
 const totalsOf = (rows: InventoryRow[]) => rows.length ? [{id:-1,doc_no:'合计',qty:sumRows(rows,'qty'),amount:sumRows(rows,'amount'),adj_amount:sumRows(rows,'adj_amount'),tax_total:sumRows(rows,'tax_total')}] : [];
 
 export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:boolean;active:boolean}) {
