@@ -1,22 +1,43 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import type { RefObject } from 'react';
-import type { GridApi } from 'ag-grid-community';
+import { createElement, Fragment, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal, flushSync } from 'react-dom';
+import type { ReactNode, RefObject } from 'react';
+import type { ColDef, GridApi, IRowNode } from 'ag-grid-community';
 import { loadTextFonts } from './appearance-ready';
 import { tableWidths } from './table-widths';
 
-// Opt-in preparation for grids whose wrapping cells render plain text. Rich renderers
-// keep their existing sizing until their actual content has a matching preparation path.
+// Opt-in preparation. Rich cells render through a portal in the owning React tree,
+// keeping their real router, appearance and editor context during bounded measurement.
 export interface TextGridColumn<T> {
   id: string;
   text: (row: T) => string;
   wrap: boolean;
   className?: string;
+  render?: (row: T, pinned: boolean) => ReactNode;
+  signature?: (row: T, pinned: boolean) => string;
+}
+
+// React/AG treats a replacement renderer definition as a new component even if
+// row IDs and values are unchanged. Defer that replacement through an input session.
+export function useRetainedGridColumns<T>(columns: ColDef<T>[], root: RefObject<HTMLElement | null>) {
+  const [displayed, setDisplayed] = useState(columns);
+  useLayoutEffect(() => {
+    const node = root.current; let frame = 0;
+    const publish = () => {
+      if (node?.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea')) return;
+      setDisplayed(columns);
+    };
+    const released = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(publish); };
+    publish(); node?.addEventListener('focusout', released);
+    return () => { cancelAnimationFrame(frame); node?.removeEventListener('focusout', released); };
+  }, [columns, root]);
+  return displayed;
 }
 
 export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity }: {
   root: RefObject<HTMLElement | null>; active: boolean; rows: T[]; totals: T[];
   scope: string; identity: string; columns: TextGridColumn<T>[]; rowId: (row: T) => string; minimum: number; headerMinimum: number;
 }) {
+  const [measurement, setMeasurement] = useState<ReactNode>(null);
   const [api, attach] = useState<GridApi<T> | null>(null);
   const [state, setState] = useState<'preparing' | 'updating' | 'ready' | 'error'>('preparing');
   const [error, setError] = useState(''), [retry, setRetry] = useState(0);
@@ -24,7 +45,8 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
   rowSize.current = {minimum,rowId};
   const ready = useRef(false), heights = useRef(new Map<string, number>());
   const cache = useRef(new Map<string, number>()), geometry = useRef(''), userWidths = useRef(false);
-  const readingAnchor = useRef<{id: string; offset: number; header: number; scope: string} | null>(null), appliedWidth = useRef(0);
+  const readingAnchor = useRef<{id: string; offset: number; header: number; scope: string} | null>(null), appliedWidth = useRef(0), appliedHeight = useRef(0);
+  const restoredTop = useRef<number | null>(null), appliedGeometry = useRef('');
   const fitted = useRef(''), appliedScope = useRef(scope), appliedIdentity = useRef(identity);
   useLayoutEffect(() => {
     const node = root.current;
@@ -42,8 +64,8 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
       const started = performance.now(); preparing = true;
       let host: HTMLDivElement | undefined;
       try {
-        const wrapping = columns.filter(c => c.wrap);
-        const body = [...new Set(wrapping.flatMap(column => rows.map(column.text)))].join('') + '0123456789,.-';
+        const wrapping = columns.filter(c => c.wrap || c.render);
+        const body = [...new Set(wrapping.flatMap(column => rows.map(column.text)))].join('') + '0123456789,.-草稿选择供应商与合同已关联未关联查看流水撤销付款手动编辑删除保存取消待指定归属超付';
         const footer = columns.flatMap(column => totals.map(column.text)).join('');
         await Promise.all([loadTextFonts(body, [400]), loadTextFonts(footer, [600]),
           loadTextFonts(grid.getAllDisplayedColumns().map(c => c.getColDef().headerName ?? '').join(''), [500])]);
@@ -80,13 +102,14 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         }
         const widthById = new Map(displayed.map((col,i) => [col.getColId(),plannedWidths[i]!]));
         const key = `${css.font}:${css.lineHeight}:${minimum}:${displayed.map(c => `${c.getColId()}:${widthById.get(c.getColId())}`).join('|')}`;
+        const geometryChanged = appliedGeometry.current !== key;
         if (geometry.current !== key) { cache.current.clear(); geometry.current = key; }
         host.replaceChildren();
         const rowCss = getComputedStyle(host), rowBorder = (parseFloat(rowCss.borderTopWidth) || 0) + (parseFloat(rowCss.borderBottomWidth) || 0);
-        const jobs = new Map<string, { text: string; column: TextGridColumn<T>; width: number; weight: string }>();
+        const jobs = new Map<string, { text: string; column: TextGridColumn<T>; width: number; weight: string; row: T; pinned: boolean }>();
         function cellKey(row: T, column: TextGridColumn<T>, pinned: boolean) {
           const width = widthById.get(column.id)!, weight = pinned ? '600' : '400', text = column.text(row);
-          return { key: `${column.id}\0${weight}\0${text}`, text, width, weight, column };
+          return { key: `${column.id}\0${weight}\0${column.signature?.(row, pinned) ?? text}`, text, width, weight, column, row, pinned };
         }
         for (const [data, pinned] of [[rows, false], [totals, true]] as const) for (const row of data) for (const column of wrapping) {
           const cell = cellKey(row, column, pinned);
@@ -96,7 +119,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         // Multiline/long strings still use the browser's real breaking rules below.
         if (canFitLine && singleLine <= minimum) for (const [key, job] of jobs) {
           context.font = `${job.weight} ${bodyFont}`;
-          if (!job.text.includes('\n') && context.measureText(job.text).width <= job.width - padding - 2) { cache.current.set(key, minimum); jobs.delete(key); }
+          if (!job.column.render && !job.text.includes('\n') && context.measureText(job.text).width <= job.width - padding - 2) { cache.current.set(key, minimum); jobs.delete(key); }
         }
         const pending = [...jobs];
         // The measuring DOM is bounded; read each batch after writing it, then release it.
@@ -104,11 +127,20 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         for (let start = 0; start < pending.length; start += 128) {
           const batch = pending.slice(start, start + 128);
           const elements = batch.map(([, job]) => {
-            const cell = document.createElement('div'); cell.className = 'ag-cell ag-cell-wrap-text';
+            const cell = document.createElement('div'); cell.className = `ag-cell ag-cell-not-inline-editing ${job.column.wrap ? 'ag-cell-wrap-text' : ''} ${job.column.className ?? ''}`;
+            cell.setAttribute('col-id', job.column.id);
             Object.assign(cell.style, { position: 'relative', height: 'auto', minHeight: '0', width: `${job.width}px`, fontWeight: job.weight });
-            const text = document.createElement('div'); text.className = job.column.className ?? ''; text.textContent = job.text; cell.append(text); host!.append(cell); return cell;
+            host!.append(cell);
+            if (!job.column.render) { const text = document.createElement('div'); text.className = job.column.className ?? ''; text.textContent = job.text; cell.append(text); }
+            return cell;
           });
+          if (batch.some(([, job]) => job.column.render)) {
+            flushSync(() => setMeasurement(createElement(Fragment, null, ...batch.flatMap(([, job], index) => job.column.render ? [createPortal(
+              createElement('div', {className: 'ag-cell-wrapper', style: {width: '100%', height: 'auto'}}, createElement('span', {className: 'ag-cell-value', style: {width: '100%'}}, job.column.render(job.row, job.pinned))), elements[index]!, batch[index]![0])]
+              : []))));
+          }
           elements.forEach((cell, i) => cache.current.set(batch[i]![0], Math.ceil(cell.getBoundingClientRect().height + rowBorder)));
+          if (batch.some(([, job]) => job.column.render)) flushSync(() => setMeasurement(null));
           host.replaceChildren();
           if (start + 128 < pending.length && performance.now() - yieldedAt > 8) { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); yieldedAt = performance.now(); }
           if (cancelled(run)) return;
@@ -129,6 +161,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         }
         if (cancelled(run) || editable()) return;
         const anchor = readingAnchor.current?.scope === scope ? readingAnchor.current : null;
+        const contentChanged = publishedRows.current !== rows;
         heights.current = next;
         const widths = displayed.flatMap((col,i) => Math.abs(col.getActualWidth() - plannedWidths[i]!) >= .5 ? [{key:col,newWidth:plannedWidths[i]!}] : []);
         if (widths.length) grid.setColumnWidths(widths);
@@ -137,19 +170,41 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         if (publishedRows.current !== rows) { grid.setGridOption('rowData', rows); publishedRows.current = rows; }
         if (publishedTotals.current !== totals) { grid.setGridOption('pinnedBottomRowData', totals); publishedTotals.current = totals; }
         let changed = false;
-        grid.forEachNode(n => { if (n.data) { const height = next.get(rowId(n.data)) ?? minimum; if (Math.abs((n.rowHeight ?? 0) - height) >= .1) { n.setRowHeight(height); changed = true; } } });
+        const applyHeight = (n: IRowNode<T>) => { if (n.data) { const height = next.get(rowId(n.data)) ?? minimum; if (Math.abs((n.rowHeight ?? 0) - height) >= .1) { n.setRowHeight(height); changed = true; } } };
+        grid.forEachNode(applyHeight); for (let i = 0; i < grid.getPinnedBottomRowCount(); i++) { const node = grid.getPinnedBottomRow<T>(i); if (node) applyHeight(node); }
         if (changed) grid.onRowHeightChanged();
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         if (cancelled(run)) return;
         if (scope !== appliedScope.current) viewport.scrollTop = 0;
-        else if (anchor) { const restored = grid.getRowNode(anchor.id); if (restored?.rowTop != null) viewport.scrollTop = Math.round((restored.rowTop + anchor.offset + header - anchor.header) / scrollScale()); }
-        appliedScope.current = scope; appliedIdentity.current = identity; appliedWidth.current = node!.clientWidth;
-        cancelAnimationFrame(anchorFrame); anchorFrame = requestAnimationFrame(captureAnchor);
-        node!.dataset.layoutTiming = JSON.stringify({ started, fonts: fontsAt, applied: performance.now(), measured: jobs.size, rows: rows.length, width: node!.clientWidth, anchor, restored: viewport.scrollTop });
+        else if (anchor && (geometryChanged || contentChanged || node!.clientWidth !== appliedWidth.current || node!.clientHeight !== appliedHeight.current)) {
+          const restored = grid.getRowNode(anchor.id);
+          if (restored?.rowTop != null) {
+            viewport.scrollTop = Math.round((restored.rowTop + anchor.offset) / scrollScale());
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            if (cancelled(run)) return;
+            let element = node!.querySelector<HTMLElement>(`.ag-row[row-id="${CSS.escape(anchor.id)}"]`);
+            if (!element) {
+              grid.ensureNodeVisible(restored, 'top');
+              await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+              if (cancelled(run)) return;
+              element = node!.querySelector<HTMLElement>(`.ag-row[row-id="${CSS.escape(anchor.id)}"]`);
+            }
+            // Keep the row relative to the header bottom as type changes. The
+            // native viewport includes header/footer geometry and AG floors its
+            // stretch offset. Correct against the actual row, not a second estimate.
+            if (element) viewport.scrollTop += (element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - (header - anchor.offset)) / scrollScale();
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            if (cancelled(run)) return;
+          }
+        }
+        appliedGeometry.current = key; appliedScope.current = scope; appliedIdentity.current = identity; appliedWidth.current = node!.clientWidth; appliedHeight.current = node!.clientHeight;
+        restoredTop.current = viewport.scrollTop;
+        cancelAnimationFrame(anchorFrame); if (!anchor || scope !== anchor.scope) anchorFrame = requestAnimationFrame(captureAnchor);
+        node!.dataset.layoutTiming = JSON.stringify({ started, fonts: fontsAt, applied: performance.now(), measured: jobs.size, minimum, rows: rows.length, width: node!.clientWidth, anchor, restored: viewport.scrollTop });
         ready.current = true; setState('ready'); setError('');
       } catch (failure) {
         if (!cancelled(run)) { setError(failure instanceof Error ? failure.message : '表格尺寸准备失败，请重试。'); setState(ready.current ? 'ready' : 'error'); }
-      } finally { host?.remove(); if (run === version) preparing = false; }
+      } finally { setMeasurement(null); host?.remove(); if (run === version) preparing = false; }
     }
     const viewport = node.querySelector<HTMLElement>('.ag-grid-viewport,.ag-body-viewport');
     function scrollScale() {
@@ -169,10 +224,13 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
       if (visible) { const header = grid.getGridOption('headerHeight') ?? headerMinimum; readingAnchor.current = {id: visible.getAttribute('row-id')!, offset: header - (visible.getBoundingClientRect().top - box.top), header, scope}; }
 
     }
-    const scrolled = () => { if (!preparing) { cancelAnimationFrame(anchorFrame); anchorFrame = requestAnimationFrame(captureAnchor); } };
+    // Programmatic restoration may round in a compressed scroll range. Keep the
+    // requested reading anchor until the reader actually scrolls, so the residual
+    // never becomes the input for the next restoration.
+    const scrolled = () => { if (!preparing && viewport?.scrollTop !== restoredTop.current) { cancelAnimationFrame(anchorFrame); anchorFrame = requestAnimationFrame(captureAnchor); } };
     viewport?.addEventListener('scroll', scrolled, {passive: true});
-    let width = node.clientWidth, font = getComputedStyle(node).font;
-    const resize = new ResizeObserver(() => { const next = node.clientWidth; if (next && next !== width) { width = next; schedule(); } });
+    let width = node.clientWidth, height = node.clientHeight, font = getComputedStyle(node).font;
+    const resize = new ResizeObserver(() => { const next = node.clientWidth, nextHeight = node.clientHeight; if (next && (next !== width || nextHeight !== height)) { width = next; height = nextHeight; schedule(); } });
     resize.observe(node);
     const appearance = new MutationObserver(() => { const next = getComputedStyle(node).font; if (next !== font) { font = next; userWidths.current = false; fitted.current = ''; schedule(); } });
     appearance.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
@@ -183,5 +241,5 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     schedule();
     return () => { disposed = true; cancelAnimationFrame(frame); cancelAnimationFrame(anchorFrame); viewport?.removeEventListener('scroll', scrolled); resize.disconnect(); appearance.disconnect(); grid.removeEventListener('columnResized', resized); node.removeEventListener('focusout', afterEdit); document.fonts.removeEventListener('loadingdone', schedule); };
   }, [api, active, root, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, retry]);
-  return { attach, state, error, concealed: ready.current && appliedIdentity.current !== identity, retry: () => setRetry(n => n + 1) };
+  return { attach, state, error, measurement, concealed: ready.current && appliedIdentity.current !== identity, retry: () => setRetry(n => n + 1) };
 }

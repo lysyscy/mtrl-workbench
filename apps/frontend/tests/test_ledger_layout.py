@@ -87,6 +87,8 @@ def test_project_loading_keeps_ledger_space_and_hides_old_values(server,browser_
 def test_split_pages_keep_unsaved_ledger_guard_without_business_write(server,browser_page,api,projects):
     page,_=browser_page;project,side,row,key=ledger_sample(api,projects,editable=True)
     open_sample(page,server,project)
+    # The ledger opens at the latest month; expose this actual first manual record.
+    page.locator('.ledger-grid .ag-grid-viewport,.ledger-grid .ag-body-viewport').evaluate_all('es=>es.forEach(e=>e.scrollTop=0)')
     field=grid_row(page,'.ledger-grid',key).locator('[col-id="remark"] input')
     expect(field).to_be_visible();attempts=[]
     def reject_locally(route):

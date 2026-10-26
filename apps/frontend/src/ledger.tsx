@@ -5,13 +5,16 @@ import { createPortal } from 'react-dom';
 import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
-import { pageGridGeometry, fitGridColumns, contentWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, gridTheme } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, uncertainWrite, projectLabel, readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { addLedgerRow, amount, deleteLedgerRow, editable, loadLedger, same, saveLedgerCell, sum } from './ledger-api';
 import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
 
+import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
+import { rendererLayoutColumns } from './grid-render-layout';
+const ledgerRowId = (row: LedgerRow) => row.key;
 const fields: Field[] = ['month', 'other_expense', 'payment', 'remark'];
 const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
 const labels = { month: '月份', other_expense: '结算', payment: '付款', remark: '备注' };
@@ -71,7 +74,7 @@ function Cell(props: ICellRendererParams<LedgerRow, string, GridContext>) {
 function DeleteCell({ data: row, context, node }: ICellRendererParams<LedgerRow, string, GridContext>) {
   return row?.row_kind === 'manual' && context.actions.current.writable() ? <Button htmlType="submit" className="ledger-delete" disabled={context.actions.current.busy()} title="删除历史行，可撤销" onClick={() => context.actions.current.remove(context.scope, row)}>删除</Button> : node.rowPinned ? null : <span className="muted">—</span>;
 }
-function Side({ scale, side, scope, actions, writable, busy, add, focusRecord, focused }: { scale: number; side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
+function Side({ active, scale, side, scope, actions, writable, busy, add, focusRecord, focused }: { active: boolean; scale: number; side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
   const api = useRef<GridApi<LedgerRow> | null>(null); const root = useRef<HTMLDivElement>(null);
   const context = useMemo(() => ({ scope, actions, api }), [scope, actions]);
   useEffect(() => { if (writable) api.current?.refreshCells({ force: true }); }, [writable, busy]);
@@ -85,9 +88,12 @@ function Side({ scale, side, scope, actions, writable, busy, add, focusRecord, f
     { field: 'other_expense', headerName: side.category === 'mechanical' ? '机械结算金额' : '其他支出金额', ...contentWidth(110, 190, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
     { field: 'payment', headerName: '付款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: Cell, cellClass: 'money' },
     { field: 'debt', headerName: '欠款', ...contentWidth(110, 175, scale), comparator: compareMoney, cellRenderer: (p: ICellRendererParams<LedgerRow, string>) => <span>{typeof p.value === 'string' ? amount(p.value) : '—'}</span>, cellClass: 'money' },
-    { field: 'remark', headerName: '备注', ...contentWidth(90, 300, scale, 1), wrapText: true, autoHeight: true, cellRenderer: Cell },
+    { field: 'remark', headerName: '备注', ...contentWidth(90, 300, scale, 1), wrapText: true, cellRenderer: Cell },
     { colId: 'actions', headerName: '操作', ...contentWidth(52, 78, scale), sortable: false, cellRenderer: DeleteCell },
   ], [side.category, scale, upto]);
+  const gridColumns = useRetainedGridColumns(columns, root);
+  const prepared = useMemo(() => rendererLayoutColumns(gridColumns, context, (row, id, pinned) => JSON.stringify([pinned, row[id as keyof LedgerRow], row.row_kind, row.editable, writable])), [gridColumns,context,writable]);
+  const layout = useTextGridLayout({root, active, rows: visible, totals: total, columns: prepared, rowId: ledgerRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: scope.key, identity: scope.key});
   useEffect(() => {
     if (!focusRecord || !api.current) return;
     const node = api.current.getRowNode(`${side.category}:manual:${focusRecord}`);
@@ -100,13 +106,13 @@ function Side({ scale, side, scope, actions, writable, busy, add, focusRecord, f
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
     <div className="ledger-summary"><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
-    <div className="ledger-table-scroll"><div className="ledger-grid"><AgGridReact<LedgerRow> theme={gridTheme} onGridSizeChanged={e => fitGridColumns(e.api, root.current)} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
-      context={context} columnDefs={columns} rowData={visible} pinnedBottomRowData={total}
+    <div className="ledger-table-scroll"><div className="ledger-grid" data-layout-state={layout.state} data-layout-error={layout.error || undefined} aria-busy={layout.state !== 'ready'}><AgGridReact<LedgerRow> theme={gridTheme} alwaysShowVerticalScroll rowBuffer={2} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
+      context={context} columnDefs={gridColumns}
       getRowId={params => params.data.key} defaultColDef={defaultColumn}
       rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={true} suppressScrollOnNewData={true}
       overlayNoRowsTemplate="暂无台账数据。" animateRows={false}
-      onGridReady={event => { api.current = event.api; }} onFirstDataRendered={event => { fitGridColumns(event.api, root.current, true); if (visible.length) event.api.ensureIndexVisible(visible.length - 1, 'bottom'); }} />
-    </div></div>
+      onGridReady={event => { api.current = event.api; layout.attach(event.api); }} onFirstDataRendered={event => { if (visible.length) event.api.ensureIndexVisible(visible.length - 1, 'bottom'); }} />
+    </div></div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
   </div>;
 }
 export function LedgerPage({ me, blocked, project, setProject, active, onExportGuard }: { me: Identity | null; blocked: boolean; active: boolean; project: number; setProject: (project: number) => void; onExportGuard: (reason: string) => void }) {
@@ -298,7 +304,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
         <div className="ledger-content" aria-busy={!shown && !query.isError && project > 0}>
         {!shown && <div className="ledger-placeholder" aria-hidden="true"><span/><span/></div>}
         {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</Button></p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
-        {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side scale={Number(me?.ui_scale_css) || 1} key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked && !historyBusy && !historyUncertain} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
+        {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side active={active && !blocked} scale={Number(me?.ui_scale_css) || 1} key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked && !historyBusy && !historyUncertain} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
         </div>
       </div>
     </section>
