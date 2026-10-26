@@ -2,6 +2,8 @@
 
 ## React 前端独立重做
 
+最新复制/鼠标焦点反馈已修正并启动原8065，源码4a18d39e；8项定向检查通过，最终构建与已测候选散列一致。按用户要求快速收尾，不追加核对、不再调用Hindsight；待刷新验看，回[证据](../.scratch/frontend-vue-rewrite/evidence.md#表格复制与鼠标焦点修正)。
+
 当前人工接续入口为[交接材料](../.scratch/frontend-vue-rewrite/handoff.md)（PH-20261026-notice-visual-01）：用户已接受通知书视觉试点，并授权推广全站、关闭专用快速回退、修03/06/08/09/10列宽及删侧栏MOD编号/收窄。已实施并加载原8065，类型/构建、只读检查和逐页技术验看完成，待用户实看全站结果；实际覆盖及资源退出回[当前证据](../.scratch/frontend-vue-rewrite/evidence.md#全站视觉收敛窄边栏与五页列宽)。随后按实看反馈补齐流水单入口时间筛选及过程资料白框贴合居中（保完整单总表），又按确认整理两层分组表头并实现滚动置顶；机械费公司汇总也按用户参考实现整页宽、列比例收敛、短表合计紧跟数据，回[机械汇总证据](../.scratch/frontend-vue-rewrite/evidence.md#机械费公司汇总参考布局)，已加载/定向验证，回[最新证据](../.scratch/frontend-vue-rewrite/evidence.md#过程资料分组表头与置顶)。试用数据保留，本轮原“松绿 + 大一点”偏好已恢复，随后用户仅恢复共用样式与主题/字体/组件CSS首帧就绪，已实施并加载原8065，待实看，回[最新切片证据](../.scratch/frontend-vue-rewrite/evidence.md#共用样式与首帧就绪切片)；集采列宽排除，449全站尺寸链等剩余范围仍暂停。此前已接手PH-20261026-react-trial-01。表格稳定与MOD05拆页已获完整方案确认并实施：左栏「欠款台账」「付款流水」，两页主表占满剩余可用高度，欠款加载占位、普通行动画与拖拽叠加分别处理。原8065用户副本原位更新，试用数据保护、实际验证及用户未验边界回[当前证据](../.scratch/frontend-vue-rewrite/evidence.md#表格稳定与mod05拆页)；未代用户验收。
 
 分支 `codex/react-frontend-rewrite` 未合并 master。445–448界面打磨与447大表分月增量已技术实现，待用户实看；范围及未完成验收回[共同规格](../.scratch/frontend-vue-rewrite/spec.md#2026-10-26界面与交互打磨)、当前[月度确认](../.scratch/frontend-vue-rewrite/questions.md#2026-10-26大表分月口径已确认)和[证据](../.scratch/frontend-vue-rewrite/evidence.md)。本次文档生命周期与唯一真实副本入口整改已完成定向技术验证与独立双轴审查，原用户副本已恢复，原模拟预览已退出；实际运行与试用数据归属只查证据所指owner，不从旧端口/PID流水推当前状态。
