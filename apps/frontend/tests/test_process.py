@@ -1,7 +1,7 @@
 """Real process matrix mapping and existing manual mechanical cell save."""
 from decimal import Decimal
 from playwright.sync_api import expect
-from preview_select import pick_option
+from preview_select import pick_option, pick_popup_option
 from test_preview import server,browser_page
 from live_data import get,open_page,money
 
@@ -18,7 +18,9 @@ def sample(api,projects):
 
 
 def test_real_process_raw_adjusted_rows_and_totals(server,browser_page,api,projects):
-    page,_=browser_page;project,matrix=sample(api,projects);open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
+    page,_=browser_page;project,matrix=sample(api,projects);open_page(page,server,'process','过程资料')
+    control=page.get_by_label('过程资料项目',exact=True);control.click();control.fill(project['disp'])
+    pick_popup_option(page,project['disp'])
     for label,kind in [('表② 调整后表','adjusted'),('表① 原始表','raw')]:
         page.get_by_text(label,exact=True).click();table=page.locator('.process-matrix');row=matrix[kind][0]
         dom=table.locator('tbody tr').filter(has=page.get_by_role('rowheader',name=row['ym'],exact=True)).first
