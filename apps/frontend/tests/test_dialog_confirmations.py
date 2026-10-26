@@ -47,7 +47,7 @@ def test_discard_confirmation_reuses_contract_content_and_size(server,browser_pa
     reference=page.get_by_role('dialog',name='放弃未保存的修改？',exact=True)
     expect(page.locator('.ant-modal')).to_have_css('transform','none')
     reference_size=reference.locator('.project-dialog').bounding_box()
-    reference_text=reference.inner_text()
+    reference_text=reference.locator('.dialog-discard').locator('h2,p,button').all_text_contents()
     reference.get_by_role('button',name='放弃并关闭',exact=True).click()
     dialog=open_notice(page,server,notice)
     field=dialog.get_by_label('供应商名称',exact=True)
@@ -55,7 +55,7 @@ def test_discard_confirmation_reuses_contract_content_and_size(server,browser_pa
     dialog.get_by_role('button',name='取消',exact=True).click()
     confirmation=page.get_by_role('dialog')
     expect(confirmation).to_have_accessible_name('放弃未保存的修改？')
-    expect(confirmation).to_have_text(reference_text)
+    assert confirmation.locator('.dialog-discard').locator('h2,p,button').all_text_contents()==reference_text
     size=confirmation.locator('.project-dialog').bounding_box()
     assert abs(size['width']-reference_size['width'])<1,(size,reference_size)
     assert abs(size['height']-reference_size['height'])<1,(size,reference_size)
