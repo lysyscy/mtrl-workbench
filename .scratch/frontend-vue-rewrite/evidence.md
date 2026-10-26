@@ -174,3 +174,5 @@ UI批累计起点`f15d4b8d33ff63485bfc2295e31fdc89499a3a8e`；445–448技术实
 - 未关闭：切页返回保住同一行，但严格小于2px的局部探针仍出现2px余差，未通过；宽/窄窗同一行检查走过，像素位置不报全绿。瞬时CSS字号探针等待新计划超时，尚未确认为产品缺陷；四档账号字号未逐档验证，账号偏好未写入。reduced-motion及其他消费者尺寸链、业务写入/撤销、用户实看均未由本批验收。
 - 证据与交接：本机选留报告/截图归`.artifacts/archive/table-stability-449/batch1-20261027`（30天），主要为`paired-baseline.json`、`final-v12.json`、`inventory-independent.json`。实际运行入口继续查主检出`var/state/react-writable-preview/current.json`所指owner；原试用数据和私有状态保留，未新建schema/预览、未推送/合并/部署或操作正式库、i8、实体打印。
 - 自查采用基点05388d71到本批差异，核显式接入边界、公开API、源数据/输入散列、缓存/取消、行高和完整金额。只有库存接入新入口，其他消费者行为保持；未改权限或写入事务，因此选择定向自查和真实浏览器证据，未另开独立双轴，也不冒称独立审查通过。下一步先关闭当前锚点/字号未验项，再由主对话选择下一消费者组；不在本批继续铺开。
+
+- 资源收口：本批12个无消费者中间构建已退出，在用`tail449-text-grid-v12`保留供验看；必要报告/截图已按上列位置归档。run-closed原始退出码1：全仓归档扫描发现既有notice-association/20261026下final、validation、verified三个归档含临时work/downloads，且notice-association根缺retention.json；本批归档未被列错，未越范围修改其他任务资源，目录检查不报通过。严格锚点/字号复现脚本仍有活动用途，保留于本次委派任务目录，关闭这两项后退出。
