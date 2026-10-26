@@ -63,12 +63,12 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
 
   return <section className="users-page" aria-label="用户管理">
     <div className="users-block">
-      <div className="users-head"><h2>账号列表{data && <span className="users-count">（在用 {data.counts.active} · 停用 {data.counts.disabled} · 已删除 {data.counts.deleted}）</span>}</h2>
+      <div className="users-head"><h2>账号列表{data && <span className="users-count">（在用 {data.counts.active}，停用 {data.counts.disabled}，已删除 {data.counts.deleted}）</span>}</h2>
         <div className="users-head-tools">
           <Button htmlType="submit" disabled={!isAdmin} onClick={() => { setDialog({ kind: 'transfer' }); setError(''); }}>转让管理员</Button>
           <Button htmlType="submit" className="primary" disabled={!isAdmin} onClick={() => { setDialog({ kind: 'add' }); setError(''); }}>＋ 新增账号</Button>
         </div></div>
-      {current && <p className="muted users-note">当前登录 {current.name || current.account}（{isAdmin ? '管理员' : '普通用户'}）{isAdmin ? '' : ' · 只有管理员可以新增、启停或删除账号；自己的密码和 i8 绑定可在本人行修改。'}</p>}
+      {current && <p className="muted users-note">当前登录 {current.name || current.account}（{isAdmin ? '管理员' : '普通用户'}）{isAdmin ? '' : '，只有管理员可以新增、启停或删除账号；自己的密码和 i8 绑定可在本人行修改。'}</p>}
       {query.isError && !data && <div className="notice" role="alert"><span>{query.error instanceof Error ? query.error.message : '账号列表读取失败，请重试。'}</span><Button htmlType="submit" onClick={() => void query.refetch()}>重读</Button></div>}
       {query.isPending ? <p role="status">正在读取账号列表…</p> : data && <>
         <Feedback receipt={receipt} error={error} />
@@ -169,7 +169,7 @@ function PasswordDialog({ row, blocked, close, done }: { row: UserRow; blocked: 
       setError(`${savedPassword ? '系统密码已改，但 i8 绑定没存上 —— 重开本弹窗再存一次 i8 绑定即可。' : ''}${failure instanceof Error ? failure.message : '没能保存，请重试。'}`);
     } finally { setBusy(false); }
   }
-  return <BusinessModal open={!blocked} className="users-dialog" titleId="users-pwd-title" requestClose={closing.requestClose}><DialogContents title={`密码与 i8 绑定 · ${row.name || row.account}`} titleId="users-pwd-title" closing={closing}>
+  return <BusinessModal open={!blocked} className="users-dialog" titleId="users-pwd-title" requestClose={closing.requestClose}><DialogContents title={`密码与 i8 绑定，${row.name || row.account}`} titleId="users-pwd-title" closing={closing}>
     <p className="users-note muted">新密码留空会清空该账号密码，空密码即可登录。</p>
     <label>新密码（可为空）<input value={password} disabled={busy} placeholder="留空即清空该账号密码" onChange={event => setPassword(event.target.value)} /></label>
     <label>i8 账号（绑定到本系统账号、每人一份）<input value={i8User} disabled={busy} placeholder="留空 = 解绑（解绑后抓取会被拦下，提示你先填）" onChange={event => setI8User(event.target.value)} /></label>
@@ -182,7 +182,7 @@ function PasswordDialog({ row, blocked, close, done }: { row: UserRow; blocked: 
 
 function ViewDialog({ data, close }: { data: { account: string; name: string; password: string; i8User: string; i8Password: string }; close: () => void }) {
   const closing = useSaving(false, false, close);
-  return <BusinessModal open className="users-dialog" titleId="users-view-title" requestClose={closing.requestClose}><DialogContents title={`查看密码与 i8 绑定 · ${data.name || data.account}`} titleId="users-view-title" closing={closing}>
+  return <BusinessModal open className="users-dialog" titleId="users-view-title" requestClose={closing.requestClose}><DialogContents title={`查看密码与 i8 绑定，${data.name || data.account}`} titleId="users-view-title" closing={closing}>
     <label>登录账号<input value={data.account} readOnly /></label>
     <label>当前密码<input value={data.password} readOnly />{!data.password && <span className="muted users-note">该账号没有设密码（空密码即可登录）。</span>}</label>
     {data.i8User
@@ -228,7 +228,7 @@ function DeleteDialog({ row, blocked, close, done }: { row: UserRow; blocked: bo
     finally { setBusy(false); }
   }
   return <BusinessModal open={!blocked} className="users-dialog" titleId="users-delete-title" requestClose={closing.requestClose}><DialogContents title="删除账号确认" titleId="users-delete-title" closing={closing}>
-    <p>删除 {row.name || row.account}（{row.account} · {row.role === 'admin' ? '管理员' : '普通用户'}）？</p>
+    <p>删除 {row.name || row.account}（{row.account}，{row.role === 'admin' ? '管理员' : '普通用户'}）？</p>
     <p className="users-warning">删除后不能登录；账号姓名与已有留痕记录保留，必要时可恢复。</p>
     {error && <p className="notice" role="alert">{error}</p>}
     <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>取消</Button><Button htmlType="submit" className="danger" disabled={busy} onClick={() => void remove()}>{busy ? '正在删除…' : '确认删除'}</Button></div>

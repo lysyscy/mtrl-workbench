@@ -25,7 +25,7 @@
 .contract-subtables th,.contract-subtables td { padding:calc(8px * var(--fscale));border-bottom:1px solid var(--bd);text-align:left;vertical-align:middle;overflow-wrap:anywhere;line-height:1.5; }
 .contract-subtables thead tr { height:calc(38px * var(--fscale)); }
 .contract-subtables tbody tr:not(.subtable-draft) { height:calc(42px * var(--fscale)); }
-.contract-subtables th { font-size:calc(11.5px * var(--fscale));font-weight:500; }
+.contract-subtables th { font-size:calc(12px * var(--fscale));font-weight:500; }
 .contract-subtables table .money { font-size:inherit;text-align:right;white-space:normal;overflow-wrap:anywhere; }
 .contract-subtables thead { background:var(--sf2);color:var(--tx2); }
 .contract-subtables tfoot { font-weight:600;background:var(--sf2); }
@@ -57,7 +57,7 @@
  .contract-subtables tbody tr:not(.subtable-draft) { height:auto; }
  .contract-subtables tbody tr { display:grid;grid-template-columns:minmax(0,1fr);padding:calc(8px * var(--fscale));border-bottom:1px solid var(--bd); }
  .contract-subtables tbody td { display:block;width:auto;padding:calc(4px * var(--fscale));border:0; }
- .contract-subtables tbody td[data-label]::before { content:attr(data-label);display:block;color:var(--tx2);font-size:calc(11.5px * var(--fscale));margin-bottom:4px;font-weight:500;text-align:left; }
+ .contract-subtables tbody td[data-label]::before { content:attr(data-label);display:block;color:var(--tx2);font-size:calc(12px * var(--fscale));margin-bottom:4px;font-weight:500;text-align:left; }
  .contract-subtables table .money { text-align:left; }
  .contract-subtables tfoot tr { display:grid;grid-template-columns:minmax(0,1fr);padding:calc(8px * var(--fscale)); }
  .contract-subtables tfoot th,.contract-subtables tfoot td { display:block;padding:4px;border:0; }

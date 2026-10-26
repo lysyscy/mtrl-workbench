@@ -30,7 +30,7 @@ export function FlowRevoke({ flow, blocked, close, completed }: { flow: Flow; bl
     } catch (failure) { setError(failure instanceof Error ? failure.message : '撤销失败，请重试。'); }
     finally {lock.current=false;setBusy(false);}
   }
-  return <BusinessModal open={!blocked} className="flow-revoke" titleId="revoke-title" requestClose={closing.requestClose}><DialogContents title={<>撤销付款流水 · {flow.flow_no || '—'}</>} titleId="revoke-title" closing={closing}>
+  return <BusinessModal open={!blocked} className="flow-revoke" titleId="revoke-title" requestClose={closing.requestClose}><DialogContents title={<>撤销付款流水，{flow.flow_no || '—'}</>} titleId="revoke-title" closing={closing}>
     <p>撤销后已付金额减少，付款状态重新判定。</p>
     <dl><dt>单据编码</dt><dd>{flow.doc_no || '—'}</dd><dt>付款项目</dt><dd>{flow.project_display || '—'}</dd><dt>付款金额</dt><dd>{money(flow.amount)} 元</dd><dt>付款日期 / 方式</dt><dd>{flow.pay_date || '—'} / {flow.pay_method || '—'}</dd></dl>
     {info.isPending && <p role="status">正在读取撤销信息…</p>}

@@ -13,7 +13,7 @@
 .ledger-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 .business-modal .ledger-export-dialog{padding:calc(20px * var(--fscale)) calc(24px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .ledger-export-dialog table{font-size:inherit}
-.ledger-export-dialog th{font-size:calc(11.5px * var(--fscale));font-weight:500}
+.ledger-export-dialog th{font-size:calc(12px * var(--fscale));font-weight:500}
 .ledger-export-dialog th button{box-shadow:none;transform:none}
 .ledger-export-dialog .export-table{border:1px solid var(--bd);border-radius:var(--radius-input)}
 .ledger-export-dialog .export-table thead{position:sticky;top:0;background:var(--sf2);z-index:1}

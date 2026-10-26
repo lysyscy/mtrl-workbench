@@ -36,7 +36,7 @@ function ManualInput({data,node,colDef,api}: ICellRendererParams<BigRow>) {
   if (!data || node.rowPinned) return null;
   const field = colDef!.colId as ManualKey, key = keyOf(data.warehouse,field), draft = cells.drafts[key], cell = data.manual[field];
   return <div className={`big-manual${draft ? ' is-draft' : ''}${draft?.error ? ' has-error' : ''}`}>
-    <Input aria-label={`${data.display} · ${labels[field]}`} value={draft?.value ?? cell.value ?? ''} disabled={cells.disabled}
+    <Input aria-label={`${data.display}，${labels[field]}`} value={draft?.value ?? cell.value ?? ''} disabled={cells.disabled}
       placeholder="待填" status={draft?.error ? 'error' : ''} title={draft?.error || (draft ? '未保存' : cell.from ? `带入自 ${cell.from}；修改保存为本月值，清空恢复带入` : cell.value === null ? '尚未录入' : '本月录入；清空恢复带入')}
       className={field === 'note' || field === 'open_ym' ? '' : 'big-money-input'}
       onChange={e => cells.change(data,field,e.target.value)} onBlur={() => cells.save(key)} onKeyDown={e => {
@@ -99,7 +99,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       else if(next[id]) next[id]={...next[id],original:draft.value};
       update(next);
       await reload();await refreshOthers();
-      if(alive.current) setFeedback(`${draft.display} · ${labels[draft.key]} · ${draft.value.trim() ? '已保存到本月' : '已清空，恢复带入'}`);
+      if(alive.current) setFeedback(`${draft.display}，${labels[draft.key]}，${draft.value.trim() ? '已保存到本月' : '已清空，恢复带入'}`);
     } catch(e) {
       if(!alive.current) return;
       const message=e instanceof Error ? e.message : '保存失败，请重试。';
@@ -169,7 +169,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       return {...contentWidth(width,Math.max(width + 48,editable ? 160 : 0),scale,1),context:{widthFlex:1}};
     };
     const number=(key:AutoKey|DerivedKey,label:string,tip?:string):ColDef<BigRow> => ({colId:key,headerName:label,headerTooltip:tip ?? label,headerClass:key.endsWith('rate')?'big-rate-header':'',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),valueFormatter:p=>p.value==null?(p.node?.rowPinned?'':'—'):key.endsWith('rate') ? `${(Number(p.value)*100).toFixed(1)}%` : money(String(p.value)),...amountWidth(key)});
-    const manual=(key:ManualKey):ColDef<BigRow> => ({colId:key,headerName:labels[key],headerTooltip:key==='open_ym'?'开工时间 · YYYY-MM':labels[key],cellClass:key==='note'?'big-manual-cell':'big-manual-cell big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),cellRendererSelector:p=>p.node.rowPinned?undefined:{component:ManualInput},valueFormatter:p=>p.value==null?'':key==='open_ym'||key==='note'?String(p.value):money(String(p.value)),...(key==='note' ? contentWidth(40,240,scale,1) : key==='open_ym' ? contentWidth(dateWidth,112,scale) : amountWidth(key,true))});
+    const manual=(key:ManualKey):ColDef<BigRow> => ({colId:key,headerName:labels[key],headerTooltip:key==='open_ym'?'开工时间，YYYY-MM':labels[key],cellClass:key==='note'?'big-manual-cell':'big-manual-cell big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),cellRendererSelector:p=>p.node.rowPinned?undefined:{component:ManualInput},valueFormatter:p=>p.value==null?'':key==='open_ym'||key==='note'?String(p.value):money(String(p.value)),...(key==='note' ? contentWidth(40,240,scale,1) : key==='open_ym' ? contentWidth(dateWidth,112,scale) : amountWidth(key,true))});
     const boundary = (column: ColDef<BigRow>): ColDef<BigRow> => ({...column,headerClass:`${column.headerClass ?? ''} big-group-start`,cellClass:`${column.cellClass ?? ''} big-group-start`});
     // Initial widths must not reset fitted columns when data/fonts refresh during input.
     function initialWidths(items: (ColDef<BigRow>|ColGroupDef<BigRow>)[]): (ColDef<BigRow>|ColGroupDef<BigRow>)[] {
@@ -197,10 +197,10 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>(`[row-id="${CSS.escape(warehouse)}"] [col-id="${key}"] input`)?.focus());
   }
   return <>
-    <div className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单 · 待固定' : query.data.selection.source === 'default' ? '默认项目名单 · 待固定' : `名单沿用 ${query.data.selection.source} · 待固定`}</span>}</div><div className="big-export-actions">
+    <div className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单，待固定' : query.data.selection.source === 'default' ? '默认项目名单，待固定' : `名单沿用 ${query.data.selection.source}，待固定`}</span>}</div><div className="big-export-actions">
       <Button disabled={controlsDisabled || !!projectsError || !query.data} onClick={()=>setPicking(true)}>选择项目与排序…</Button>
       <SettlementExport method="POST" onSettled={reconcileExport} scope={`${ym} 月度会大表`} url={`/api/m07/big/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={controlsDisabled || !query.data?.rows.length}>
-        <p>{ym} · {query.data?.rows.length} 个项目 · 原模板 Excel</p><ol className="big-export-list">{query.data?.rows.map(r=><li key={r.warehouse}>{r.display}</li>)}</ol>
+        <p>{ym}，{query.data?.rows.length} 个项目，原模板 Excel</p><ol className="big-export-list">{query.data?.rows.map(r=><li key={r.warehouse}>{r.display}</li>)}</ol>
       </SettlementExport>
     </div></div>
     {(busy || feedback) && <p className="big-feedback" role="status">{busy?'正在保存…':feedback}</p>}
@@ -208,7 +208,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       retryProjects();void reload().then(async()=>{await refreshOthers();setError('');setVerified(true);setFeedback('已重读，未保存输入仍保留。');}).catch(e=>setError(e instanceof Error?e.message:'重读失败。'));
     }}>重读核对</Button></p>}
     {uncertain && <p className="notice" role="alert">核对刚才的保存结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={()=>{state.current.uncertain=false;setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，继续</Button></p>}
-    {Object.entries(drafts).map(([id,d])=><div className="big-draft" key={id}><span>{d.display} · {labels[d.key]}：{d.value || '清空，恢复带入'}{d.error && <span role="alert"> · {d.error}</span>}</span>
+    {Object.entries(drafts).map(([id,d])=><div className="big-draft" key={id}><span>{d.display}，{labels[d.key]}：{d.value || '清空，恢复带入'}{d.error && <span role="alert">，{d.error}</span>}</span>
       <Button size="small" disabled={disabled || busy} onMouseDown={e=>e.preventDefault()} onClick={()=>save(id,true)}>保存这项</Button>
       <Button size="small" disabled={busy} onMouseDown={e=>e.preventDefault()} onClick={()=>{queue.current=queue.current.filter(k=>k!==id);const next={...state.current.drafts};delete next[id];update(next);}}>取消修改</Button></div>)}
     {query.isPending ? <p role="status">正在读取月度会大表…</p> : query.data && <BigCells.Provider value={{drafts,disabled,save,focus,
@@ -234,9 +234,9 @@ function ProjectOrder({data,projects,busy,disabled,paused,save,close}:{data:BigD
   const closing=useDialogClose({busy,dirty,close,active:!paused});
   function move(index:number,offset:number) {const next=[...order];[next[index],next[index+offset]]=[next[index+offset]!,next[index]!];setOrder(next);setSelected(next.filter(wh=>selected.includes(wh)));}
   const missing=data.candidates.some(c=>!available.some(p=>p.warehouse_name===c.warehouse));
-  return <BusinessModal open={!paused} requestClose={closing.requestClose} titleId="big-order-title" className="big-order-dialog"><DialogContents title={`${data.month} · 选择项目与排序`} titleId="big-order-title" closing={closing}>
+  return <BusinessModal open={!paused} requestClose={closing.requestClose} titleId="big-order-title" className="big-order-dialog"><DialogContents title={`${data.month}，选择项目与排序`} titleId="big-order-title" closing={closing}>
     <ProjectSelectionOrder projects={ordered} selected={selected.flatMap(wh=>available.filter(p=>p.warehouse_name===wh).map(p=>p.id))} choose={ids=>setSelected(ids.flatMap(id=>{const p=available.find(p=>p.id===id);return p?.warehouse_name?[p.warehouse_name]:[];}))} move={move} disabled={busy || disabled || missing} label="大表项目选择与顺序" />
-    <p className="big-order-summary">{selected.length} 个项目 · 页面与导出同序</p>
+    <p className="big-order-summary">{selected.length} 个项目，页面与导出同序</p>
     {missing && <p className="notice" role="alert">项目档案已变化，请关闭后重读再选。</p>}
     {!selected.length && <p>保存后大表为空；以后可重新选择项目。</p>}
     <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" loading={busy} disabled={disabled || missing || (!dirty && data.selection.fixed)} onClick={()=>void save([...selected]).then(ok=>{if(ok)close();})}>保存项目与顺序</Button></div>

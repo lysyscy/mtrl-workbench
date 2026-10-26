@@ -22,7 +22,7 @@ type WorkspacePageProps = {
 
 const groups = [
   { id: 'home', title: '工作台' },
-  { id: 'base', title: '主数据 · 基础' }, { id: 'payment', title: '付款域' },
+  { id: 'base', title: '主数据 / 基础' }, { id: 'payment', title: '付款域' },
   { id: 'contracts', title: '集采域' }, { id: 'materials', title: '材料与报表' },
   { id: 'global', title: '全局' },
 ];
@@ -96,9 +96,9 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
   return <QueryClientProvider client={client}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked}>
     <a className="skip" href="#content">跳到内容</a>
     <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
-      {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}>{entry.mod && <span className="nav-code">MOD-{entry.mod}</span>}<span>{entry.title}</span></NavLink>)}</div>)}
+      {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}><span>{entry.title}</span></NavLink>)}</div>)}
     </nav><a className="old-app" href="/app">打开旧版预览</a></aside>
-    <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录 · 只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl}>登录</a>}</div></header>
+    <div className="main" inert={appearanceOpen && compactAppearance}><header><div className="page-heading"><h1 id="page-title" key={page}>{title}</h1><div id="ledger-status" /></div><div className="account-area"><HistoryControls me={me} blocked={blocked || busy} guard={ledgerExportGuard} /><span hidden={Boolean(me)}>未登录，只读</span>{me ? <AccountMenu me={me} busy={busy} logout={() => void logout()} appearance={() => setAppearanceOpen(true)} /> : <a href={loginUrl}>登录</a>}</div></header>
       <main id="content" tabIndex={-1}><HistoryGate>{logoutError && <Notice message={logoutError} />}<Routes>{pages.map(entry => <Route key={entry.path} path={entry.path} element={null} />)}<Route path="*" element={<section><h1>页面尚未接入</h1><NavLink to="/projects">返回项目档案</NavLink></section>} /></Routes>
         {pages.map(entry => {
           const active = page === entry.path;

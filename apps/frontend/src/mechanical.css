@@ -25,8 +25,8 @@
 .mechanical-grid{flex:1 0 calc(300px * var(--fscale));height:auto;min-height:calc(300px * var(--fscale));width:100%;min-width:0}
 .mechanical-grid,.mechanical-detail-grid{font-size:calc(var(--font-ui-size) * 1px * var(--fscale));scrollbar-color:var(--bd3) var(--sf2)}
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-cell{line-height:1.55;padding:calc(6px * var(--fscale)) calc(6px * var(--fscale));overflow-wrap:anywhere}
-:is(.mechanical-grid,.mechanical-detail-grid) .ag-header-cell{padding-inline:calc(6px * var(--fscale));font-size:calc(11.5px * var(--fscale));font-weight:500}
-:is(.mechanical-grid,.mechanical-detail-grid) .ag-header-group-cell{font-size:calc(11.5px * var(--fscale));font-weight:500}
+:is(.mechanical-grid,.mechanical-detail-grid) .ag-header-cell{padding-inline:calc(6px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500}
+:is(.mechanical-grid,.mechanical-detail-grid) .ag-header-group-cell{font-size:calc(12px * var(--fscale));font-weight:500}
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-cell.money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;overflow-wrap:normal;word-break:normal}
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-cell-focus:not(:focus-visible){border-color:transparent;outline:none;box-shadow:none}
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-cell-focus:focus-visible{border-color:var(--pri);outline:none;box-shadow:none}
@@ -53,7 +53,7 @@
 .mechanical-sheet table{width:max-content;min-width:100%;font-size:calc(var(--font-ui-size) * 1px * var(--fscale));table-layout:fixed}
 .mechanical-sheet caption{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));text-align:left;font-weight:600}
 .mechanical-sheet thead{position:sticky;top:0;z-index:2;background:var(--sf2)}
-.mechanical-sheet th{position:static;font-size:calc(11.5px * var(--fscale));font-weight:500}
+.mechanical-sheet th{position:static;font-size:calc(12px * var(--fscale));font-weight:500}
 .mechanical-sheet th,.mechanical-sheet td{min-width:0;max-width:none;padding:calc(9px * var(--fscale)) calc(8px * var(--fscale));border:1px solid var(--bd);vertical-align:middle;white-space:pre-wrap;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;line-height:1.55}
 .mechanical-sheet tbody tr:last-child{position:sticky;bottom:0;background:var(--sf2);font-weight:600}
 .mechanical-sheet .mechanical-frozen{position:sticky;z-index:1;background:var(--sf)}
@@ -70,7 +70,7 @@
 .mechanical-dialog-body{min-height:0;overflow:auto;scrollbar-color:var(--bd3) var(--sf2);overscroll-behavior:contain}
 .mechanical-dialog table{width:100%;border-collapse:collapse;margin:calc(12px * var(--fscale)) 0;font-size:inherit}
 .mechanical-dialog td,.mechanical-dialog th{min-width:0;max-width:none;padding:calc(10px * var(--fscale)) calc(8px * var(--fscale));text-align:left;border-bottom:1px solid var(--bd2);white-space:normal;line-height:1.55;vertical-align:middle}
-.mechanical-dialog th{font-size:calc(11.5px * var(--fscale));font-weight:500;position:static}
+.mechanical-dialog th{font-size:calc(12px * var(--fscale));font-weight:500;position:static}
 .mechanical-dialog thead{position:sticky;top:0;z-index:1;background:var(--sf2)}
 .mechanical-dialog .money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mechanical-dialog textarea{width:100%;min-height:12em;margin:calc(12px * var(--fscale)) 0;border-radius:var(--radius-input);font:inherit}
@@ -123,7 +123,7 @@
 .mechanical-detail-table{overflow:auto;max-height:65dvh;max-width:100%;scrollbar-color:var(--bd3) var(--sf2)}
 .mechanical-detail-table table{width:max-content;min-width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0}
 .mechanical-detail-table th,.mechanical-detail-table td{padding:calc(4px * var(--fscale));border-right:1px solid var(--bd2);border-bottom:1px solid var(--bd2);vertical-align:middle;line-height:1.55;overflow-wrap:anywhere}
-.mechanical-detail-table thead{position:sticky;top:0;z-index:2;background:var(--sf2)}.mechanical-detail-table thead th{font-weight:500;font-size:calc(11.5px * var(--fscale))}
+.mechanical-detail-table thead{position:sticky;top:0;z-index:2;background:var(--sf2)}.mechanical-detail-table thead th{font-weight:500;font-size:calc(12px * var(--fscale))}
 .mechanical-detail-table .money{white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}.mechanical-detail-table .ant-input{width:100%;min-width:0;height:calc(28px * var(--fscale));font:inherit;padding-inline:calc(4px * var(--fscale))}
 .mechanical-detail-group-row{background:var(--sf2)}.mechanical-detail-group-row th{text-align:left}.mechanical-detail-group-row span,.mechanical-detail-group-row small{font-weight:400;color:var(--tx2)}.mechanical-detail-group-row small{display:block}
 .mechanical-detail-table .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}

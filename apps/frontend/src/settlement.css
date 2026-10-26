@@ -14,7 +14,7 @@
 .settlement-summary{margin:0;padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));color:var(--tx2);line-height:1.55;font-variant-numeric:tabular-nums}
 .settlement-grid{height:min(60dvh,640px);min-height:calc(260px * var(--fscale));width:100%;min-width:0;border-radius:0 0 var(--radius-card) var(--radius-card);overflow:hidden;scrollbar-color:var(--bd3) var(--sf2)}
 .settlement-grid .ag-root-wrapper{border:0;border-radius:0 0 var(--radius-card) var(--radius-card)}
-.settlement-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale));font-size:calc(11.5px * var(--fscale));font-weight:500}
+.settlement-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500}
 .settlement-grid .ag-cell{display:flex;align-items:center;padding-inline:calc(8px * var(--fscale));line-height:1.55}
 .settlement-grid .ag-cell-wrapper,.settlement-grid .ag-cell-value{width:100%;min-width:0}
 .settlement-grid .ag-cell-wrap-text{white-space:normal;overflow-wrap:anywhere}

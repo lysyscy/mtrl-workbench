@@ -8,20 +8,18 @@ html{font-variant-numeric:tabular-nums}
 .sidebar nav a.active{background:var(--sb-on);color:var(--sb-on-hl);font-weight:500}
 .main>header{background:var(--bg);border-bottom-color:transparent}
 .main>header h1{font-size:calc(18px * var(--fscale))}
-.notice-card,.notice-selection,.projects-page,.ledger-card,.mechanical-card{border-radius:var(--radius-card);box-shadow:var(--shadow)}
-.notice-card{box-shadow:var(--shadow-pop)}
-.workspace .ant-btn,.business-modal .ant-btn,.row-button{border-radius:var(--radius-pill);transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast),transform var(--motion-fast)}
-.ant-btn:not(:disabled):not(.ant-btn-link):not(.ant-btn-text):hover,.row-button:hover{transform:translateY(-1px)}
-.ant-btn:not(.ant-btn-link):not(.ant-btn-text){box-shadow:var(--shadow)}
+.notice-card,.notice-selection,.projects-page,.ledger-card,.mechanical-card{border-radius:var(--radius-card);box-shadow:none}
+.workspace .ant-btn,.business-modal .ant-btn,.row-button{border-radius:var(--radius-pill);transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast)}
+.ant-btn:not(.ant-btn-link):not(.ant-btn-text){box-shadow:none}
 .ant-btn.danger:not(:disabled),.row-button.danger{color:var(--dg-d);border-color:var(--dg-bd)}
 .ant-btn.danger:not(:disabled):hover,.row-button.danger:hover{color:var(--dg-d);background:var(--dg-l);border-color:var(--dg-d)}
 .ant-btn:disabled,.row-button[aria-disabled=true]{cursor:not-allowed}
 .ant-btn.dialog-close-button,.ant-btn.contract-close{box-shadow:none;border:0;transform:none}
-.workspace .status-tag,.workspace .enum-tag,.notices-page .notice-tag,.contract-dialog .contract-state,.workspace .project-type{border-radius:var(--radius-pill)}
+.workspace .status-tag,.workspace .enum-tag,.notices-page .notice-tag,.contract-dialog .contract-state,.workspace .project-type{border-radius:4px;border-width:.5px}
 .business-modal .ant-modal-container{border-radius:var(--radius-card);box-shadow:var(--shadow-md);overflow:hidden}
 .business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
 .business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
-.business-modal .notice-pay-table th,.business-modal .notice-flows-table th{font-size:calc(11.5px * var(--fscale))}
+.business-modal .notice-pay-table th,.business-modal .notice-flows-table th{font-size:calc(12px * var(--fscale))}
 
 .notices-page{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscale));--field-short:calc(112px * var(--fscale));--field-medium:calc(144px * var(--fscale));--field-wide:calc(220px * var(--fscale));--field-search:calc(248px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .notices-page .notice-selection{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));gap:8px 24px;margin-bottom:calc(16px * var(--fscale))}
@@ -39,7 +37,7 @@ html{font-variant-numeric:tabular-nums}
 .notices-page .notice-filters input[type=search]{width:100%;border-radius:var(--radius-pill)}
 .notices-page .notice-count{font-size:calc(12px * var(--fscale));margin:calc(8px * var(--fscale)) calc(16px * var(--fscale))}
 .notices-page .notice-grid{font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
-.notices-page .notice-grid .ag-header-cell{font-size:calc(11.5px * var(--fscale));font-weight:500}
+.notices-page .notice-grid .ag-header-cell{font-size:calc(12px * var(--fscale));font-weight:500}
 .notices-page .notice-grid .ag-cell{padding-block:4px}
 .notices-page .notice-grid .ant-btn,.notices-page .notice-grid .row-button{height:var(--control-sm);min-height:var(--control-sm);padding:0 8px;font-size:calc(12px * var(--fscale));line-height:1}
 .notices-page .notice-grid .ag-cell.money input{text-align:right}
@@ -54,7 +52,7 @@ html{font-variant-numeric:tabular-nums}
 .contract-dialog .contract-current{margin:12px 24px;flex:none}
 .contract-dialog .contract-candidate-note{margin:0 24px 8px;flex:none}
 .contract-dialog .contract-candidates{padding:16px 24px;overflow:auto;min-height:0;flex:1;gap:16px;align-content:start;overscroll-behavior:contain}
-.contract-dialog .contract-candidate{padding:16px;border-radius:var(--radius-inner);box-shadow:var(--shadow);transition:border-color var(--motion-fast),background-color var(--motion-fast)}
+.contract-dialog .contract-candidate{padding:16px;border-radius:var(--radius-inner);box-shadow:none;transition:border-color var(--motion-fast),background-color var(--motion-fast)}
 .contract-dialog .contract-candidate:hover{border-color:var(--bd3)}
 .contract-dialog .contract-candidate.is-selected{outline:none;border-color:var(--pri);background:var(--pri-l)}
 .contract-dialog .contract-state.recommended{color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd)}
@@ -92,3 +90,9 @@ html{font-variant-numeric:tabular-nums}
 }
 @keyframes workspace-enter{from{opacity:.85;transform:translateY(2px)}to{opacity:1;transform:none}}
 @keyframes inventory-count-feedback{from{color:var(--pri-d)}to{color:inherit}}
+
+/* Shared treatment accepted after the notice trial. Keep floating layers distinct. */
+.workspace section,.workspace .notice-selection{border-width:.5px}
+:where(.workspace,.business-modal) :is(input:not([class*="ant-"]):not([type=checkbox]):not([type=radio]),select:not([class*="ant-"]),textarea:not([class*="ant-"]),.row-button){border-width:.5px;border-radius:var(--radius-input)}
+.workspace .ag-header-cell,.workspace .ag-header-group-cell{font-size:calc(12px * var(--fscale));font-weight:500}
+.workspace small,.business-modal small{font-size:calc(12px * var(--fscale))}

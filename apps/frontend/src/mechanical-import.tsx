@@ -20,7 +20,7 @@ function sourceText(value: unknown): string {
 }
 function sourceLocation(value: unknown): string {
   if (!record(value)) return sourceText(value);
-  return [value.sheet,value.row!=null?'第'+sourceText(value.row)+'行':null,value.cell].filter(Boolean).join(' · ') || sourceText(value.file) || '已附来源';
+  return [value.sheet,value.row!=null?'第'+sourceText(value.row)+'行':null,value.cell].filter(Boolean).join('，') || sourceText(value.file) || '已附来源';
 }
 function conflictText(value: unknown, category: Category, wholeRow: boolean): string {
   if (value == null) return wholeRow ? '移除该行' : '空白';
@@ -76,10 +76,10 @@ export function MechanicalImport({ writable, keywords, label, close, refresh, bu
         const gross=detailSum(batch.incoming.map(row=>row.amount)),net=detailSum(batch.incoming.map(detailNet));
         const oldGross=batch.effective.values[batch.category==='zero'?'mech_2':'mech_3'],oldNet=batch.effective.values[batch.category==='zero'?'mech_4':'mech_5'];
         const source=record(batch.source)?batch.source.file:batch.source;
-        const reduction=(old:unknown,next:string|null)=>old!=null&&next!=null&&Number(next)<Number(old)?' · 减少，请核实':'';
-        return <tr key={batch.key}><th>{label(batch.warehouse)}／{batch.ym}</th><td>{batch.category==='zero'?'零租':'包月'}</td><td className="money">{batch.incoming.length}</td><td className="money">{money(oldGross)} → {money(gross)}{reduction(oldGross,gross)}</td><td className="money">{money(oldNet)} → {money(net)}{reduction(oldNet,net)}{batch.incoming.some(row=>detailNet(row)===null)?' · 部分净额待核':''}</td><td>{sourceText(source)}</td></tr>;
+        const reduction=(old:unknown,next:string|null)=>old!=null&&next!=null&&Number(next)<Number(old)?'，减少，请核实':'';
+        return <tr key={batch.key}><th>{label(batch.warehouse)}／{batch.ym}</th><td>{batch.category==='zero'?'零租':'包月'}</td><td className="money">{batch.incoming.length}</td><td className="money">{money(oldGross)} → {money(gross)}{reduction(oldGross,gross)}</td><td className="money">{money(oldNet)} → {money(net)}{reduction(oldNet,net)}{batch.incoming.some(row=>detailNet(row)===null)?'，部分净额待核':''}</td><td>{sourceText(source)}</td></tr>;
       })}</tbody></table></div>
-      {preview.batches.map(batch=><details key={batch.key}><summary>{label(batch.warehouse)}／{batch.ym}／{batch.category==='zero'?'零租':'包月'} · 查看原报明细与来源</summary><p className="mechanical-import-source">{record(batch.source)?<>{sourceText(batch.source.file)} · {sourceLocation(batch.source)}{batch.source.sha256!=null&&<><br />原文件指纹：{sourceText(batch.source.sha256)}</>}</>:sourceText(batch.source)}</p><div className="mechanical-import-table"><table><thead><tr><th>设备／规格</th><th>出租单位</th><th>车牌</th><th>日期／期间</th><th>含税</th><th>票种／税率</th><th>不含税</th><th>来源</th><th>待补</th></tr></thead><tbody>{batch.incoming.map(row=><tr key={row.id}><td>{sourceText(row.device)} {String(row.spec??'')}</td><td>{String(row.vendor??row.lessor??'')}</td><td>{String(row.plate||'待补')}</td><td>{String(row.date??'')}</td><td className="money">{money(row.amount)}</td><td>{String(row.tax||'待核')}</td><td className="money">{money(detailNet(row))}</td><td>{sourceLocation(row.source)}</td><td>{detailProblems(row,batch.category,batch.ym,keywords).join('、')||'—'}</td></tr>)}</tbody></table></div></details>)}
+      {preview.batches.map(batch=><details key={batch.key}><summary>{label(batch.warehouse)}／{batch.ym}／{batch.category==='zero'?'零租':'包月'}，查看原报明细与来源</summary><p className="mechanical-import-source">{record(batch.source)?<>{sourceText(batch.source.file)}，{sourceLocation(batch.source)}{batch.source.sha256!=null&&<><br />原文件指纹：{sourceText(batch.source.sha256)}</>}</>:sourceText(batch.source)}</p><div className="mechanical-import-table"><table><thead><tr><th>设备／规格</th><th>出租单位</th><th>车牌</th><th>日期／期间</th><th>含税</th><th>票种／税率</th><th>不含税</th><th>来源</th><th>待补</th></tr></thead><tbody>{batch.incoming.map(row=><tr key={row.id}><td>{sourceText(row.device)} {String(row.spec??'')}</td><td>{String(row.vendor??row.lessor??'')}</td><td>{String(row.plate||'待补')}</td><td>{String(row.date??'')}</td><td className="money">{money(row.amount)}</td><td>{String(row.tax||'待核')}</td><td className="money">{money(detailNet(row))}</td><td>{sourceLocation(row.source)}</td><td>{detailProblems(row,batch.category,batch.ym,keywords).join('、')||'—'}</td></tr>)}</tbody></table></div></details>)}
       {conflicts.length>0&&<><h3>逐项确认修订冲突</h3><div className="mechanical-import-table"><table><thead><tr><th>位置</th><th>系统当前值</th><th>原报新值</th><th>采用</th></tr></thead><tbody>{conflicts.map(({batch,conflict,key})=>{
         const field=conflict.field==='__row__'?'整行／拆合行':fields[batch.category].find(([field])=>field===({usage:'use',lessor:'vendor',note:'memo'} as Record<string,string>)[conflict.field]||field===conflict.field)?.[1]??({original:'原报含税',sourceNet:'原报不含税',originalTax:'原报票种／税率',source:'来源'} as Record<string,string>)[conflict.field]??'明细字段';
         const row=batch.incoming.find(row=>row.id===conflict.row_id)??batch.rows.find(row=>row.id===conflict.row_id);
@@ -87,7 +87,7 @@ export function MechanicalImport({ writable, keywords, label, close, refresh, bu
       })}</tbody></table></div></>}
       {unsaved&&<p role="alert">本次项目／月份有未保存明细，请关闭后先保存或撤销修改，再重新预览。</p>}
     </>}
-    {receipt&&<ul>{receipt.map(batch=><li key={batch.warehouse+batch.ym+batch.category}>{label(batch.warehouse)}／{batch.ym}／{batch.category==='zero'?'零租':'包月'} · 已保存 <Button disabled={busy||!writable} onClick={()=>view(batch)}>查看明细</Button></li>)}</ul>}
+    {receipt&&<ul>{receipt.map(batch=><li key={batch.warehouse+batch.ym+batch.category}>{label(batch.warehouse)}／{batch.ym}／{batch.category==='zero'?'零租':'包月'}，已保存 <Button disabled={busy||!writable} onClick={()=>view(batch)}>查看明细</Button></li>)}</ul>}
     {message&&<p role="status">{message}</p>}
     <footer><Button disabled={busy} onClick={requestClose}>{receipt?'关闭':'取消'}</Button>{!receipt&&(preview?<><Button disabled={busy||!writable} onClick={()=>{setPreview(null);setResolutions({});setMessage('');}}>重新选择文件</Button><Button type="primary" disabled={busy||!writable||missing||unsaved} title={missing?'请逐项选择修订冲突':''} onClick={()=>void run(confirm)}>{busy?'正在写入…':'确认写入明细'}</Button></>:<Button type="primary" disabled={busy||!writable} onClick={()=>void run(load)}>{busy?'正在预览…':'查看录入预览'}</Button>)}</footer>
   </>}</MechanicalDialog>;

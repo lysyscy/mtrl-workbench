@@ -33,7 +33,7 @@ export function SettlementExport({ url, scope, disabled, paused, children, metho
     }
   }
   return <><Button ref={trigger} type="primary" disabled={disabled || paused} onClick={() => { setError(''); setOpen(true); }}>导出文件…</Button>
-    {open && <BusinessModal open={!paused} requestClose={closing.requestClose} titleId="settlement-export-title" className="settlement-export-dialog"><DialogContents title={`导出 · ${scope}`} titleId="settlement-export-title" closing={closing}>
+    {open && <BusinessModal open={!paused} requestClose={closing.requestClose} titleId="settlement-export-title" className="settlement-export-dialog"><DialogContents title={`导出，${scope}`} titleId="settlement-export-title" closing={closing}>
       {children}{error && <p className="notice" role="alert">{error}</p>}
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" disabled={disabled || paused} loading={busy} onClick={() => void download()}>保存到本地</Button></div>
     </DialogContents></BusinessModal>}

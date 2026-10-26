@@ -35,7 +35,7 @@
 
 .inventory-grid .ag-root-wrapper{border:0;border-radius:0 0 var(--radius-card) var(--radius-card)}
 .inventory-grid .ag-cell{line-height:1.55;padding:calc(6px * var(--fscale));overflow-wrap:anywhere}
-.inventory-grid .ag-header-cell,.inventory-grid .ag-header-group-cell{font-size:calc(11.5px * var(--fscale));font-weight:500;padding-inline:calc(6px * var(--fscale))}
+.inventory-grid .ag-header-cell,.inventory-grid .ag-header-group-cell{font-size:calc(12px * var(--fscale));font-weight:500;padding-inline:calc(6px * var(--fscale))}
 .inventory-grid .ag-cell.money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .inventory-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .inventory-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}

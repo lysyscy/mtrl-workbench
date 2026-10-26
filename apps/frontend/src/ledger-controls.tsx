@@ -54,7 +54,7 @@ export function LedgerExport(props: ExportScopeProps & { kind: 'ledger' | 'debt'
   const { kind } = props;
   const month = reportMonth();
   return <ProjectExport {...props} title={kind === 'ledger' ? '逐月台账导出' : '总欠款汇总导出'}
-    description={kind === 'ledger' ? `报告月 ${month} · 每项目3表 · 多项目ZIP` : '实时汇总 · 一项目一行 · 无欠款数据的项目不出行'}
+    description={kind === 'ledger' ? `报告月 ${month}，每项目3表，多项目ZIP` : '实时汇总，一项目一行，无欠款数据的项目不出行'}
     summary={count => kind === 'ledger' ? count === 1 ? '将生成1个工作簿。' : `选了${count}个项目，将生成一个zip。` : `已选 ${count} 个项目，按以下顺序导出。`}
     success={kind === 'ledger' ? '台账已导出。' : '总欠款已导出。'}
     exportFile={(chosen, signal) => {

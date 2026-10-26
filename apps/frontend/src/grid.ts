@@ -5,7 +5,7 @@ import { AllCommunityModule, ModuleRegistry, provideGlobalGridOptions, themeQuar
 ModuleRegistry.registerModules([AllCommunityModule]);
 // Ordinary reads and reordering stay still; project drag feedback is handled separately.
 provideGlobalGridOptions({ animateRows: false });
-export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(var(--font-ui-size,13.5) * 1px * var(--fscale))', headerFontSize: 'calc(11.5px * var(--fscale))',
+export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(var(--font-ui-size,13.5) * 1px * var(--fscale))', headerFontSize: 'calc(12px * var(--fscale))',
   backgroundColor: 'var(--sf)', foregroundColor: 'var(--tx)', borderColor: 'var(--bd)',
   headerBackgroundColor: 'var(--sf2)', headerTextColor: 'var(--tx2)', accentColor: 'var(--pri)',
   oddRowBackgroundColor: 'var(--sf)', browserColorScheme: 'inherit', rowHoverColor: 'var(--sf2)',
@@ -22,6 +22,17 @@ export function fixedWidth(width: number, scale = 1) {
 
 export function contentWidth(min: number, max: number, scale = 1, stretch = 0) {
   return { width: min * scale, minWidth: min * scale, maxWidth: max * scale, flex: 0, context: { widthFlex: stretch } };
+}
+
+// Size complete values and totals, rather than imposing the same wide floor on every number.
+export function numberColumnWidth(values: readonly unknown[], scale = 1, editable = false) {
+  const css = getComputedStyle(document.documentElement), fontSize = Number(css.getPropertyValue('--font-ui-size')) || 13.5;
+  const context = document.createElement('canvas').getContext('2d')!;
+  context.font = `600 ${fontSize * scale}px ${css.fontFamily}`;
+  let widest = context.measureText('0.00').width;
+  for (const value of new Set(values.map(value => String(value ?? '')))) widest = Math.max(widest, context.measureText(value).width);
+  const minimum = Math.ceil(widest / scale + (editable ? 32 : 20));
+  return contentWidth(minimum, Math.max(minimum, 180), scale);
 }
 
 export function textWidth(min: number, max: number, scale = 1, flex = 1) {

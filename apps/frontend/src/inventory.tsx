@@ -12,7 +12,7 @@ import { readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { ProjectPicker, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
-import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme, numberColumnWidth } from './grid';
 import { cents, money } from './notices-api';
 import { coarseRows, emptyFilter, fields, filterOn, filterRows, getInventory, sumRows } from './inventory-api';
 import type { Field, Filters, InventoryRow } from './inventory-api';
@@ -71,16 +71,16 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
   const controls = useRef({ unavailable: false, pendingId: null as number | null });
   controls.current = { unavailable: paused || query.isError || query.isFetching, pendingId: pending?.id ?? null };
   useEffect(() => { if (active) grid.current?.refreshCells({ force: true, columns: ['actions'] }); }, [active, paused, query.isError, query.isFetching, pending]);
+  const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
+  const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
   const columns = useMemo<ColDef<InventoryRow>[]>(() => [
     ...fields.map(([field,headerName,type]):ColDef<InventoryRow> => ({field,headerName,sortable:true,wrapText:type !== 'num',cellRenderer:type === 'num' ? undefined : InventoryText,
       ...(type === 'num' ? {cellClass:'money',valueFormatter:(p:{value:unknown}) => p.value === '' || p.value == null ? '' : money(String(p.value)),comparator:(a:string,b:string) => !a || !b ? a ? 1 : b ? -1 : 0 : cents(a) < cents(b) ? -1 : cents(a) > cents(b) ? 1 : 0} : {}),
       ...(field === 'doc_no' ? {pinned:'left' as const} : {}),
-      ...contentWidth(type === 'num' ? 130 : field === 'doc_no' ? 140 : ['seq','unit','direction'].includes(field) ? 52 : ['doc_date','audit_date'].includes(field) ? 96 : field === 'biz_type' ? 90 : ['spec','wbs_name','cbs_name'].includes(field) ? 108 : field === 'material' ? 125 : 120,type === 'num' ? 190 : ['seq','unit','direction'].includes(field) ? 85 : 300,scale,field === 'material' ? 1 : 0),
+      ...(type === 'num' ? numberColumnWidth([...rows.map(row => money(row[field])), ...totals.map(row => money((row as Partial<InventoryRow>)[field] ?? ''))], scale) : contentWidth(field === 'doc_no' ? 108 : ['seq','unit','direction'].includes(field) ? 40 : ['doc_date','audit_date'].includes(field) ? 70 : field === 'biz_type' ? 64 : ['spec','wbs_name','cbs_name'].includes(field) ? 72 : 92,['seq','unit','direction'].includes(field) ? 85 : 300,scale,field === 'material' ? 1 : 0)),
     })),
     {colId:'actions',headerName:'调整单',pinned:'right',sortable:false,...fixedWidth(100,scale),cellRenderer:(p:ICellRendererParams<InventoryRow>) => p.data && !p.node.rowPinned && <Button size="small" disabled={controls.current.unavailable || Boolean(controls.current.pendingId !== null && controls.current.pendingId !== p.data.id)} onClick={() => { if (!controls.current.unavailable && (controls.current.pendingId === null || controls.current.pendingId === p.data!.id)) setEditing(p.data!); }}>{p.data.adjusted ? '查看 / 调整' : '办理调整'}</Button>},
-  ],[scale]);
-  const coarseTotals = useMemo(() => totalsOf(coarse), [coarse]);
-  const totals = useMemo(() => rows === coarse ? coarseTotals : totalsOf(rows), [rows, coarse, coarseTotals]);
+  ],[scale, rows, totals]);
   function changeFilter(key:'q'|'min'|'max'|'values',value:string|string[]) {setFilters(old => ({...old,[column]:{...filter,[key]:value}}));}
   const filterProblem = [filter.min,filter.max].some(raw => raw && !Number.isFinite(Number(raw.replace(/,/g,'')))) ? '列数值无效，请修改或清除此列。' : '';
   const editRow = editing && (query.data?.rows.find(r => r.id === editing.id) ?? editing);
@@ -90,7 +90,7 @@ export function InventoryPage({me,blocked,active}:{me:Identity|null;blocked:bool
       <ProjectPicker label="库存项目" projects={(projects.data ?? []).filter(p => query.data?.projects.includes(p.warehouse_name ?? ''))} selected={ids} pick={setIds} multiple emptyLabel="全部项目" disabled={paused || projects.isPending || projects.isError} />
       <label>方向<Select aria-label="库存方向" value={direction} onChange={setDirection} options={['全部','入库','出库'].map(value => ({value,label:value}))} disabled={paused} /></label>
       <Checkbox checked={onlyAdjusted} disabled={paused} onChange={e => setOnlyAdjusted(e.target.checked)}>只看被调整行</Checkbox></div>
-      <div><Button disabled={paused} onClick={() => setFilterOpen(!filterOpen)}>列筛选{filterCount ? ` · ${filterCount} 列` : ''}</Button><Button disabled={paused || !me || Boolean(pending)} onClick={() => setFetchMonth(fetchPending ?? (/^\d{4}-\d{2}$/.test(period) ? period : reportMonth()))}>{fetchPending ? '核对抓取…' : '按月抓取…'}</Button>
+      <div><Button disabled={paused} onClick={() => setFilterOpen(!filterOpen)}>列筛选{filterCount ? `，${filterCount} 列` : ''}</Button><Button disabled={paused || !me || Boolean(pending)} onClick={() => setFetchMonth(fetchPending ?? (/^\d{4}-\d{2}$/.test(period) ? period : reportMonth()))}>{fetchPending ? '核对抓取…' : '按月抓取…'}</Button>
       {!/^\d{4}-\d{2}$/.test(period) && <span>导出请选择单月</span>}<SettlementExport url={`/api/m08/inventory/export?${new URLSearchParams({period})}`} scope={`${period} 库存（含数据透视表）`} paused={paused} disabled={query.isPending || query.isError || !/^\d{4}-\d{2}$/.test(period)}>
         <p>按核算期间导出全部项目；不受本页项目、方向和列筛选限制。</p><p>读取最近抓取的源文件，不叠加调整单。包含原单明细、过程资料透视、安全文明施工费透视；没有缓存时请先抓取。</p>
       </SettlementExport></div>

@@ -28,13 +28,7 @@
 .payment-terms-heading{display:flex;align-items:baseline;gap:10px}.payment-terms-heading strong{font-weight:600}.payment-terms p{margin:6px 0 10px;font-size:calc(12px * var(--fscale))}
 .payment-terms-table{overflow:auto;max-height:26dvh}.payment-terms table{width:100%;border-collapse:collapse;font-size:calc(12.5px * var(--fscale))}.payment-terms th,.payment-terms td{padding:7px 8px;text-align:left;overflow-wrap:anywhere}.payment-terms th{position:sticky;top:0;background:var(--wn-l);font-weight:500}.payment-terms-start td{border-top:1px solid var(--wn-bd)}.payment-terms .money{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.payment-terms time{white-space:nowrap}
 
-/* Notice-only visual trial; account colors and shared geometry remain authoritative. */
-.workspace .page-view .notices-page{
-  --radius-pill:calc(6px * var(--fscale));
-  --radius-input:calc(6px * var(--fscale));
-  --radius-card:calc(8px * var(--fscale));
-  --r:calc(6px * var(--fscale));
-}
+/* Notice-specific hierarchy uses the shared account appearance. */
 .workspace .notices-page :is(.notice-card,.notice-selection){border-width:.5px;box-shadow:none}
 .workspace .notices-page .notice-selection{color:var(--tx2);background:var(--sf)}
 .workspace .notices-page .notice-selection b{color:var(--tx);font-weight:600}

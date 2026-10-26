@@ -48,7 +48,7 @@ export function NoticePrint({ rows, mode, blocked, close }: { rows: NoticeRow[];
     {busy&&<p role="status">正在{title}，请勿重复操作…</p>}
     {result&&<section aria-label="执行回执"><p role="status">{mode==='pdf'?'已生成':'已投递'} {result.success} / 共 {result.total} 条，失败 {result.failed} 条。</p>
       {result.unprinted_bill_nos.length>0&&<p className="notice" role="alert">未产出的单号：{result.unprinted_bill_nos.join('、')}</p>}
-      <ul>{result.items.map((item,i)=><li key={`${item.notice_id}-${i}`} className={!item.ok?'notice':''}>{item.bill_no||item.notice_id}：{!item.ok?'失败':item.unverified?'已投递但未核实，请核对出纸，勿重复打印':mode==='pdf'?'已生成':'已投递'}{item.reason&&` · ${item.reason}`}</li>)}</ul>
+      <ul>{result.items.map((item,i)=><li key={`${item.notice_id}-${i}`} className={!item.ok?'notice':''}>{item.bill_no||item.notice_id}：{!item.ok?'失败':item.unverified?'已投递但未核实，请核对出纸，勿重复打印':mode==='pdf'?'已生成':'已投递'}{item.reason&&`，${item.reason}`}</li>)}</ul>
     </section>}
     {error&&<p className="notice" role="alert">{error}</p>}
     {file?.pdf&&<><p><a href={file.url} target="_blank" rel="noreferrer">在新窗口预览 PDF</a></p><iframe className="notice-pdf-preview" title="付款通知书 PDF 预览" src={file.url} /></>}
@@ -89,7 +89,7 @@ export function PrinterSettings({ blocked, close }: { blocked:boolean;close:()=>
     <label>出纸通道<select value={printer.print_mode} onChange={e=>setPrinter({...printer,print_mode:e.target.value})}>{[['auto','自动（推荐）'],['ipp','IPP'],['driver','系统驱动'],['raw','RAW 9100']].map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label>
     <p>优先选自动；系统驱动需安装驱动并填写打印机名。RAW 不受支持时可能打出乱码。</p>
     <label>打印机名<input list="notice-printer-names" value={printer.printer_name} onChange={e=>setPrinter({...printer,printer_name:e.target.value})} /></label><datalist id="notice-printer-names">{names.map(n=><option key={n} value={n}/>)}</datalist>{!names.length&&<p>未取到本机打印机名，可手动填写。</p>}
-    {layouts.map(item=><div key={item.key}><label>{item.label}<input value={item.stored} placeholder={item.env} onChange={e=>setLayouts(old=>old.map(x=>x.key===item.key?{...x,stored:e.target.value}:x))}/></label><p>{plain(item.hint)}</p><p className="mut">当前生效：{item.effective||'未设置'} · {item.stored?'本处所设；清空并保存后使用默认值':'默认值'}</p></div>)}</>}
+    {layouts.map(item=><div key={item.key}><label>{item.label}<input value={item.stored} placeholder={item.env} onChange={e=>setLayouts(old=>old.map(x=>x.key===item.key?{...x,stored:e.target.value}:x))}/></label><p>{plain(item.hint)}</p><p className="mut">当前生效：{item.effective||'未设置'}，{item.stored?'本处所设；清空并保存后使用默认值':'默认值'}</p></div>)}</>}
     {error&&<p className="notice" role="alert">{error}<Button htmlType="submit" disabled={busy} onClick={()=>void load()}>重读设置</Button></p>}{feedback&&<p role="status">{feedback}</p>}
     <div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={closing.requestClose}>取消</Button><Button htmlType="submit" className="primary" disabled={busy||blocked||!printer} onClick={()=>void save()}>{busy?'正在保存…':'保存'}</Button></div>
   </DialogContents></BusinessModal>;

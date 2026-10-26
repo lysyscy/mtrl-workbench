@@ -44,12 +44,12 @@ function Monthly({ me, blocked, active }: Props) {
     <div className="settlement-toolbar"><label>核算月<TimePicker value={ym} onChange={setYm} modes={['月']} label="收发结存核算月" disabled={blocked} /></label>
       <SettlementExport scope={`${ym} 收发结存`} url={`/api/m07/settlement/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={!query.data?.rows.length || query.isFetching || query.isError}>
         <p>{query.data?.counts.warehouses} 个分仓库工作簿 ＋ 1 个总表，打包 ZIP。</p>
-        <ul className="settlement-export-list">{query.data?.rows.map(row => <li key={row.id}>{row.name} · {row.rows} 行</li>)}</ul>
+        <ul className="settlement-export-list">{query.data?.rows.map(row => <li key={row.id}>{row.name}，{row.rows} 行</li>)}</ul>
       </SettlementExport>
     </div>
     {query.isError && <p className="notice" role="alert">{query.error.message}<Button onClick={() => void query.refetch()} disabled={blocked}>重读</Button></p>}
     {query.isPending ? <p role="status">正在读取收发结存…</p> : query.data && <>
-      <p className="settlement-summary">{ym} · {query.data.counts.warehouses} 仓 · {query.data.counts.rows} 行 · {query.data.counts.files} 个文件{query.data.rows.length > 0 && <Tag className={`status-tag ${query.data.balance_ok ? 'status-positive' : 'status-negative'}`}>{query.data.balance_ok ? '全部对平' : '存在未对平'}</Tag>}</p>
+      <p className="settlement-summary">{ym}，{query.data.counts.warehouses} 仓，{query.data.counts.rows} 行，{query.data.counts.files} 个文件{query.data.rows.length > 0 && <Tag className={`status-tag ${query.data.balance_ok ? 'status-positive' : 'status-negative'}`}>{query.data.balance_ok ? '全部对平' : '存在未对平'}</Tag>}</p>
       <div className={`settlement-grid${query.data.rows.length ? '' : ' is-empty'}`} ref={root}><AgGridReact<SettlementRow> theme={gridTheme} domLayout="autoHeight" rowData={query.data.rows} columnDefs={columns} pinnedBottomRowData={total}
         getRowId={p => p.data.id} defaultColDef={{resizable:false,sortable:false,suppressMovable:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight}
         overlayNoRowsTemplate="该核算月没有收发结存数据" suppressColumnVirtualisation suppressScrollOnNewData
@@ -66,7 +66,7 @@ function BalanceInput({data,node,colDef}: ICellRendererParams<AnnualRow>) {
   const cells = useContext(Cells)!, kind = colDef?.context.kind as ExtractKind;
   if (!data || node.rowPinned) return null;
   const key = keyOf(kind,data.warehouse), draft = cells.drafts[key];
-  return <Input aria-label={`${kind} · ${data.warehouse} · 2025-11及之前`} value={draft?.value ?? data.balance ?? ''} placeholder="未录入" disabled={cells.disabled}
+  return <Input aria-label={`${kind}，${data.warehouse}，2025-11及之前`} value={draft?.value ?? data.balance ?? ''} placeholder="未录入" disabled={cells.disabled}
     status={draft?.error ? 'error' : ''} onChange={e => cells.change(kind,data.warehouse,data.balance ?? '',e.target.value)} onBlur={() => cells.save(key)}
     onKeyDown={e => { if(e.nativeEvent.isComposing) return; if(e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } if(e.key === 'Escape') {e.stopPropagation(); cells.cancel(key);} }} />;
 }
@@ -100,7 +100,7 @@ function Extract({ me, blocked, active }: Props) {
       await saveBalance(draft.kind,draft.warehouse,draft.value,controller.signal); written = true;
       if(!alive.current) return;
       const next = {...state.current.drafts}; if(next[key]?.value === draft.value) delete next[key]; update(next);
-      await reload(); if(alive.current) setFeedback(`${draft.kind} · ${draft.warehouse} · 已${draft.value.trim() ? '保存' : '清空'}`);
+      await reload(); if(alive.current) setFeedback(`${draft.kind}，${draft.warehouse}，已${draft.value.trim() ? '保存' : '清空'}`);
     } catch(e) {
       if(!alive.current) return;
       const message = e instanceof Error ? e.message : '保存失败，请重试。';
@@ -119,7 +119,7 @@ function Extract({ me, blocked, active }: Props) {
     <div className="settlement-toolbar"><div><label>年份<TimePicker value={year} onChange={setYear} modes={['年']} label="提取年份" disabled={blocked} /></label>
       <label>项目状态<Select aria-label="提取项目状态" value={status} onChange={setStatus} options={['在建','归档','全部'].map(value => ({value,label:value}))} disabled={blocked} /></label></div>
       <SettlementExport scope={`${year} 焊材 / 气体`} url={`/api/m07/extract/export?${new URLSearchParams({period:year,status})}`} paused={!active || blocked} disabled={!query.data || query.isFetching || query.isError || busy || dirty || uncertain}>
-        <p>{year} · {status} · 焊材 {query.data?.annual.焊材.rows.length} 仓 / 气体 {query.data?.annual.气体.rows.length} 仓</p>
+        <p>{year}，{status}，焊材 {query.data?.annual.焊材.rows.length} 仓 / 气体 {query.data?.annual.气体.rows.length} 仓</p>
         <p>保留原模板，并附年度汇总；合计包含历史值与所选年 12 个月，2025 年 1–11 月留空。</p>
       </SettlementExport>
     </div>
@@ -128,7 +128,7 @@ function Extract({ me, blocked, active }: Props) {
       void reload().then(() => {setError('');setVerified(true);setFeedback('已重读，未保存输入仍保留。');}).catch(e => setError(e instanceof Error ? e.message : '重读失败。'));
     }}>重读核对</Button></p>}
     {uncertain && <p className="notice" role="alert">核对刚才的操作结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={() => {setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，保留输入继续</Button></p>}
-    {Object.entries(drafts).map(([key,d]) => <div className="settlement-draft" key={key}><span>{d.kind} · {d.warehouse} · 2025-11及之前：{d.value || '清空'}{d.error && <span role="alert"> · {d.error}</span>}</span>
+    {Object.entries(drafts).map(([key,d]) => <div className="settlement-draft" key={key}><span>{d.kind}，{d.warehouse}，2025-11及之前：{d.value || '清空'}{d.error && <span role="alert">，{d.error}</span>}</span>
       <Button disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => {const next = {...state.current.drafts}; if(next[key]) next[key] = {...next[key],error:''};update(next);save(key);}}>保存这项</Button>
       <Button disabled={busy} onMouseDown={e => e.preventDefault()} onClick={() => {const next = {...state.current.drafts};delete next[key];update(next);}}>取消修改</Button></div>)}
     {query.isPending ? <p role="status">正在读取库存年度汇总…</p> : query.data && <Cells.Provider value={{drafts,disabled,save,

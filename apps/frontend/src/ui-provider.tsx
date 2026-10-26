@@ -11,11 +11,11 @@ function appearance() {
   const css = getComputedStyle(document.documentElement);
   const read = (name: string) => css.getPropertyValue(name).trim();
   const scale = Number(read('--fscale')) || 1;
-  const radius = Number.parseFloat(read('--radius-input')) || 10;
+  const radius = Number.parseFloat(read('--radius-input')) || 6;
   return { dark: read('--ui-scheme') === 'dark', token: {
     fontFamily: read('--fs') || 'MiSans, sans-serif', fontSize: (Number(read('--font-ui-size')) || 13.5) * scale,
-    controlHeight: 32 * scale, controlHeightSM: 32 * scale,
-    borderRadius: radius, borderRadiusSM: radius, borderRadiusLG: Number.parseFloat(read('--radius-card')) || 16,
+    controlHeight: 32 * scale, controlHeightSM: 32 * scale, lineWidth: .5,
+    borderRadius: radius, borderRadiusSM: radius, borderRadiusLG: Number.parseFloat(read('--radius-card')) || 8,
     colorPrimary: read('--pri'), colorTextLightSolid: read('--on'), colorPrimaryHover: read('--pri-d'), colorText: read('--tx'),
     colorTextSecondary: read('--tx2'), colorTextPlaceholder: read('--tx2'),
     colorBgContainer: read('--sf'), colorBgElevated: read('--sf'), colorBorder: read('--bd3'),
@@ -46,6 +46,6 @@ export function UiProvider({ children }: { children: ReactNode }) {
   // Keep the provider tree stable when the OS motion preference changes mid-edit.
   return <MotionProvider motion={!reducedMotion}><ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} componentSize="small" theme={{
     algorithm: value.dark ? [theme.darkAlgorithm, theme.compactAlgorithm] : theme.compactAlgorithm,
-    token: value.token, components: { Button: { borderRadius: 999, borderRadiusSM: 999 }, Tag: { borderRadiusSM: 999 }, Checkbox: { borderRadiusSM: 4 } },
+    token: value.token, components: { Tag: { borderRadiusSM: 4 }, Checkbox: { borderRadiusSM: 4 } },
   }}><App component={false}>{children}</App></ConfigProvider></MotionProvider>;
 }

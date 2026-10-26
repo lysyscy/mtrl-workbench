@@ -11,7 +11,7 @@
 .fees-grid .ag-root-wrapper{border:0;border-radius:0 0 var(--radius-card) var(--radius-card)}
 .fees-grid .ag-cell{display:flex;align-items:center;padding-inline:calc(8px * var(--fscale));line-height:1.55}
 .fees-grid .ag-cell-wrapper,.fees-grid .ag-cell-value{width:100%;min-width:0}
-.fees-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale));font-size:calc(11.5px * var(--fscale));font-weight:500}
+.fees-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500}
 .fees-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .fees-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 .fees-grid .ag-cell-focus:not(:focus-visible){border-color:transparent;outline:none;box-shadow:none}
@@ -31,7 +31,7 @@
 .fee-toolbar label{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
 .fee-record-names,.fee-record-amounts{display:flex;flex-direction:column;gap:calc(6px * var(--fscale));width:100%;padding-block:calc(6px * var(--fscale))}
 .fee-record-names label{display:flex;align-items:center;gap:calc(6px * var(--fscale));width:100%}
-.fee-record-names label>span{flex:none;font-size:calc(11px * var(--fscale));color:var(--tx2)}
+.fee-record-names label>span{flex:none;font-size:calc(12px * var(--fscale));color:var(--tx2)}
 .fee-record-names .ant-input{flex:1;width:0}
 .fee-record-names .ant-btn{padding-inline:calc(6px * var(--fscale));height:calc(28px * var(--fscale));min-height:0}
 .fee-record-note,.fee-draft-feedback{margin:calc(8px * var(--fscale)) calc(16px * var(--fscale));line-height:1.55}
@@ -41,5 +41,5 @@
 
 .fee-record-name-details{width:100%;padding-block:calc(6px * var(--fscale))}
 .fee-record-name-details summary{cursor:pointer;line-height:1.5;overflow-wrap:anywhere}
-.fee-record-name-details summary span{display:block;color:var(--tx2);font-size:calc(11px * var(--fscale))}
+.fee-record-name-details summary span{display:block;color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .fee-record-name-details summary:focus-visible{outline:2px solid var(--pri);outline-offset:2px}

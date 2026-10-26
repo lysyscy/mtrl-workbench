@@ -97,7 +97,7 @@ def test_real_post_export_pause_and_lost_response_lock_until_readback(server,bro
     expect(page.locator('.history-tools')).to_contain_text('正在导出')
     route=pending.pop();response=route.fetch();assert response.status==200;route.abort('failed')
     assert get(api,'/api/m07/big',period=ym)['selection']=={'fixed':True,'source':ym}
-    page.get_by_role('link',name='MOD-07 月度会大表',exact=True).click();scope=page.locator('.big-month:not([hidden])')
+    page.get_by_role('link',name='月度会大表',exact=True).click();scope=page.locator('.big-month:not([hidden])')
     expect(scope.get_by_role('alert').first).to_contain_text('待核实');expect(scope.get_by_role('button',name='选择项目与排序…',exact=True)).to_be_disabled();assert not downloads
     page.unroute(export_url);page.unroute(read_url);scope.get_by_role('button',name='重读核对',exact=True).click();expect(scope.get_by_role('button',name='已核对，继续',exact=True)).to_be_enabled();scope.get_by_role('button',name='已核对，继续',exact=True).click()
     expect(scope.get_by_role('button',name='选择项目与排序…',exact=True)).to_be_enabled();assert not history and not downloads

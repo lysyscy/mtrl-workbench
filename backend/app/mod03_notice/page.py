@@ -370,13 +370,13 @@ THEME_SPEC: dict[str, dict[str, str]] = {
 # React eight-theme palette approved in TAIL-441. Legacy themes above keep their output.
 REACT_GEOMETRY = {'--ui-scheme': 'light',
  '--font-ui-size': '13.5',
- '--radius-input': '10px',
- '--radius-card': '16px',
- '--radius-inner': '14px',
- '--radius-pill': '999px',
+ '--radius-input': '6px',
+ '--radius-card': '8px',
+ '--radius-inner': '6px',
+ '--radius-pill': '6px',
  '--motion-fast': '130ms',
- '--r': '10px',
- '--r2': '16px'}
+ '--r': '6px',
+ '--r2': '8px'}
 REACT_THEME_SPEC = {'默认': {'description': '灰白层级 · 蓝色交互', 'scene': '日常录入 · 综合台账', 'label': '中性浅色'},
  '松绿': {'description': '原版松绿 · 完整保留', 'scene': '财务对账 · 数据核对', 'label': '松绿'},
  '暖色纸面': {'description': '米纸底 · 胡桃主色', 'scene': '暖光办公 · 长表阅读', 'label': '暖色纸面'},

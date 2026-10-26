@@ -135,7 +135,7 @@ function ExclusionRules({ enabled, writable, blocked }: { enabled: boolean; writ
       <p className="rules-note muted">{NO_RECOMPUTE}</p>
       <p className="rules-warning">剔除规则中不得配置「收款单位 = 资产处集中采购」：集采不走剔除，而是参与分类。</p>
     </>}
-    {form && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={form.id === null ? '新增剔除规则' : `编辑剔除规则 · ${data?.rules.find(rule => rule.id === form.id)?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>
+    {form && <BusinessModal open={!blocked} className="rules-dialog" titleId="rules-form-title" requestClose={closing.requestClose}><DialogContents title={form.id === null ? '新增剔除规则' : `编辑剔除规则，${data?.rules.find(rule => rule.id === form.id)?.kindLabel ?? ''}`} titleId="rules-form-title" closing={closing}>
       <p className="rules-note muted">修改只影响后续抓取，已有剔除标记不重算。</p>
       <label>规则类别 ＊<select value={form.kind} disabled={busy} onChange={event => setForm({ ...form, kind: event.target.value })}>{(data?.kinds ?? []).map(kind => <option key={kind.kind} value={kind.kind}>{kind.label}</option>)}</select></label>
       <label>命中值 ＊（多个用 ｜ 分隔）<input value={form.values} disabled={busy} placeholder="例：水电｜水费｜电费" onChange={event => setForm({ ...form, values: event.target.value })} /></label>

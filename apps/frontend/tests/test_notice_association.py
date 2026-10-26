@@ -73,7 +73,7 @@ def test_real_two_step_association_and_uncertain_hint(server, browser_page, api,
     actual = get(api,'/api/m11/link-recommendations',notice_id=nid)
     assert actual['current_contract_id']==target['id'] and actual['supplier']==supplier
     trigger.click()
-    expect(dialog.locator('.association-steps [aria-current=step]')).to_have_text('2 · 选择合同')
+    expect(dialog.locator('.association-steps [aria-current=step]')).to_have_text('2，选择合同')
     expect(dialog.get_by_role('link',name='查看合同详情',exact=True)).to_be_visible()
     dialog.get_by_role('button',name='解除当前关联',exact=True).click()
     page.get_by_role('button',name='确认解除',exact=True).click()
@@ -118,7 +118,7 @@ def test_real_multiple_suppliers_remain_bounded_and_uncommitted(server,browser_p
     expect(page.locator('.ant-modal')).to_have_css('transform','none')
     before=dialog.locator('.notice-association-dialog').bounding_box()
     dialog.get_by_role('button',name='下一步：选择合同',exact=True).click()
-    expect(dialog.locator('.association-steps [aria-current=step]')).to_have_text('2 · 选择合同')
+    expect(dialog.locator('.association-steps [aria-current=step]')).to_have_text('2，选择合同')
     after=dialog.locator('.notice-association-dialog').bounding_box()
     assert all(abs(before[k]-after[k])<1 for k in ('x','y','width','height')),(before,after)
     footer=dialog.locator('.contract-footer').bounding_box()

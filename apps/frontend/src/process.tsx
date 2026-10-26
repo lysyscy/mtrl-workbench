@@ -8,7 +8,8 @@ import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { Link } from 'react-router';
 import { readProjects, requestJson } from './api';
 import type { Identity, Project } from './api';
-import { pageGridGeometry, contentWidth, fitGridColumns, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fitGridColumns, gridTheme, numberColumnWidth } from './grid';
+import { BoundedTable } from './bounded-table';
 import { ProjectPicker } from './ledger-controls';
 import { useHistoryGuard } from './history';
 import { BusinessModal } from './business-modal';
@@ -33,7 +34,7 @@ function MechanicalCell({data,column}:{data:ProcessRow;column:string}) {
   const cells=useContext(ProcessCells)!;
   const label=mechLabels[mechKeys.indexOf(column)]!,key=keyOf(cells.warehouse,data.ym,column),draft=cells.drafts[key];
   if(cells.source(data.ym,column)) return <div className="process-cell"><span>{show(data[column])}</span><small>明细确认</small><Button size="small" disabled={cells.disabled} onClick={()=>cells.switchSource(data.ym,column)}>切为手填</Button></div>;
-  return <div className={`process-cell${draft?' process-dirty':''}`}><Input aria-label={`${data.ym} ${label}`} value={draft?.value??data[column]??''} disabled={cells.disabled} style={{width:`${Math.max(11,(draft?.value??data[column]??'').length+1)}ch`}}
+  return <div className={`process-cell${draft?' process-dirty':''}`}><Input aria-label={`${data.ym} ${label}`} value={draft?.value??data[column]??''} disabled={cells.disabled}
     status={draft?.error?'error':''} title={draft?.error||(draft?'未保存':'手填；清空按 0 保存')} onChange={e=>cells.change(data.ym,column,e.target.value)} onBlur={()=>cells.save(key)}
     onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();cells.save(key,true);}}} />{draft&&<small>{draft.error?'未保存':'待保存'}</small>}</div>;
 }
@@ -76,9 +77,9 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     try{
       await saveProcess(wh,ym,column,value,writeAbort.current.signal);written=true;if(!alive.current)return;
       const next={...state.current.drafts};if(next[key]?.revision===draft.revision)delete next[key];update(next);
-      await reload();if(alive.current&&state.current.warehouse===wh)setFeedback(`${name(wh)} · ${ym} ${mechLabels[mechKeys.indexOf(column)]}已保存`);
+      await reload();if(alive.current&&state.current.warehouse===wh)setFeedback(`${name(wh)}，${ym} ${mechLabels[mechKeys.indexOf(column)]}已保存`);
     }catch(e){if(!alive.current)return;const message=e instanceof Error?e.message:'保存失败，请重试。';
-      if(written||uncertainWrite(e)){state.current.uncertain=true;setUncertain(true);setVerified(false);queue.current=[];setError(`${name(wh)} · ${ym} ${written?'已保存，重读失败。':'保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
+      if(written||uncertainWrite(e)){state.current.uncertain=true;setUncertain(true);setVerified(false);queue.current=[];setError(`${name(wh)}，${ym} ${written?'已保存，重读失败。':'保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
       else{const next={...state.current.drafts};if(next[key])next[key]={...next[key],error:message};update(next);if(state.current.warehouse===wh)setError(message);}
     }finally{lock.current=false;if(alive.current){setBusy(false);void drain();}}
   }
@@ -102,6 +103,14 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   const paused=blocked||!active;
   const closing=useDialogClose({busy,dirty:false,close:()=>setSource(null),active:Boolean(source)&&active});
   const matrix=query.data?.matrices[warehouse],kind=tab===0?'raw':'adjusted',scale=Number(me?.ui_scale_css??1);
+  const matrixWidths=useMemo(()=>{
+    if(!matrix)return [];
+    const em=(Number(getComputedStyle(document.documentElement).getPropertyValue('--font-ui-size'))||13.5)*scale;
+    return [{min:6.5,max:8},...matrixColumns.map(column=>{
+      const width=numberColumnWidth([...matrix[kind].map(row=>show(row[column.field])),show(matrix.totals[kind][column.field])],scale,column.field.startsWith('mech_')).minWidth/em;
+      return {min:width,max:Math.max(width,12)};
+    })];
+  },[matrix,kind,scale]);
   const diffs=useMemo<ColDef<Difference>[]>(()=>[
     ...(['doc_no','seq','material','warehouse','before','after','delta','remark','operator','at'] as const).map((field,i):ColDef<Difference>=>({field,headerName:['单据编号','序号','物料','仓库','原值（i8）','调整后','差额','备注','操作人','时间'][i]!,...(field==='doc_no'?{pinned:'left' as const}:{}),...contentWidth(field==='seq'?52:['before','after','delta'].includes(field)?130:field==='operator'?96:['material','warehouse','at'].includes(field)?128:140,field==='seq'?80:260,scale,field==='remark'?1:0),wrapText:true,autoHeight:true,...(['before','after','delta'].includes(field)?{cellClass:'money',valueFormatter:(p:{value:unknown})=>show(p.value)}:{})})),
     {colId:'locate',headerName:'操作',pinned:'right',...contentWidth(100,130,scale),cellRenderer:(p:ICellRendererParams<Difference>)=>p.data&&!p.node.rowPinned&&<Link className="row-button" to={`/inventory?row=${p.data.id}`}>定位原行</Link>},
@@ -122,16 +131,16 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
         getRowId={p=>String(p.data.id)} defaultColDef={{resizable:true,sortable:false,suppressMovable:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation overlayNoRowsTemplate="当前项目没有调整差异"
         onGridReady={e=>fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e=>fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e=>fitGridColumns(e.api,root.current)} /></div>:
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,switchSource:(ym,column)=>{const signature=query.data?.signatures[warehouse]?.[ym];if(!signature)return;setError('');setSource({warehouse,ym,column,signature,value:matrix[kind].find(r=>r.ym===ym)?.[column]??null});}}}>
-        <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label="过程资料月度表，可横向滚动"><table className="process-matrix" aria-label={`${tabLabels[tab]}，金额单位：元`}>
+        <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label="过程资料月度表，可横向滚动"><BoundedTable className="process-matrix" aria-label={`${tabLabels[tab]}，金额单位：元`} columns={matrixWidths}>
           <thead><tr><th scope="col">核算月</th>{matrixColumns.map(column=><th scope="col" key={column.field} className={column.segment?'process-segment':''}>{column.label}</th>)}</tr></thead>
           <tbody>{matrix[kind].length?matrix[kind].map(row=><tr key={row.ym}><th scope="row">{row.ym}</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}${tab===1&&!column.field.startsWith('mech_')&&matrix.raw.find(raw=>raw.ym===row.ym)?.[column.field]!==row[column.field]?' process-adjusted':''}`}>{column.field.startsWith('mech_')?<MechanicalCell data={row} column={column.field}/>:show(row[column.field])}</td>)}</tr>):<tr><td colSpan={17} className="process-empty">当前项目没有月度记录</td></tr>}</tbody>
           <tfoot><tr><th scope="row">合计</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}`}>{show(matrix.totals[kind][column.field])}</td>)}</tr>
             <tr><th scope="row">总求和（本表）</th>{matrix.segments[kind].map((segment,i)=><td key={segment.name} colSpan={[5,5,4,2][i]} className="money process-segment">{['入库合计','出库合计','机械合计','不含税合计'][i]} {show(segment.total)}</td>)}</tr></tfoot>
-        </table></div>
+        </BoundedTable></div>
       </ProcessCells.Provider>}
     </>}
-    {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title={`切为手填 · ${mechLabels[mechKeys.indexOf(source.column)]}`} titleId="process-source-title" closing={closing}>
-      <p>{name(source.warehouse)} · {source.ym}</p><p>当前金额 {show(source.value)} 元。切换后保留金额，该格可手填；之后确认明细可重新采用明细汇总。</p>{error&&<p role="alert" className="notice">{error}</p>}
+    {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title={`切为手填，${mechLabels[mechKeys.indexOf(source.column)]}`} titleId="process-source-title" closing={closing}>
+      <p>{name(source.warehouse)}，{source.ym}</p><p>当前金额 {show(source.value)} 元。切换后保留金额，该格可手填；之后确认明细可重新采用明细汇总。</p>{error&&<p role="alert" className="notice">{error}</p>}
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>保留明细来源</Button><Button type="primary" loading={busy} disabled={disabled} onClick={()=>void switchManual()}>确认切为手填</Button></div>
     </DialogContents></BusinessModal>}
   </section>;

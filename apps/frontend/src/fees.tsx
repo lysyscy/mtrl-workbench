@@ -7,7 +7,7 @@ import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import type { Identity } from './api';
 import { cents, decimal, readProjects, requestJson, uncertainWrite } from './api';
-import { contentWidth, fitGridColumns, gridTheme, pageGridGeometry } from './grid';
+import { contentWidth, fitGridColumns, gridTheme, pageGridGeometry, numberColumnWidth } from './grid';
 import { ProjectPicker, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { useHistoryGuard } from './history';
@@ -40,7 +40,7 @@ function NameCell({ data, node }: ICellRendererParams<AnnualRow>) {
   const cells = useContext(FeeCells)!;
   if (!data) return null;
   if (node.rowPinned || !data.manual || !data.records.length) return data.item || '未命名';
-  return <details className="fee-record-name-details"><summary>{data.item || '未命名'}<span>各月项名 · {data.records.length} 条</span></summary><div className="fee-record-names">{data.records.map(row => <label key={row.id}><span>{row.ym.slice(5)}月</span><FeeEditor row={row} item={data.item} ym={row.ym} field="item" /><Popconfirm title={`删除 ${row.ym}「${row.item || '未命名'}」 ${money(row.amount)} 元？`} okText="删除" cancelText="取消" disabled={cells.structuralDisabled} onConfirm={() => cells.remove(row)}><Button size="small" danger disabled={cells.structuralDisabled} aria-label={`${row.ym} ${row.item || '未命名'}删除 #${row.id}`}>删除</Button></Popconfirm></label>)}</div></details>;
+  return <details className="fee-record-name-details"><summary>{data.item || '未命名'}<span>各月项名，{data.records.length} 条</span></summary><div className="fee-record-names">{data.records.map(row => <label key={row.id}><span>{row.ym.slice(5)}月</span><FeeEditor row={row} item={data.item} ym={row.ym} field="item" /><Popconfirm title={`删除 ${row.ym}「${row.item || '未命名'}」 ${money(row.amount)} 元？`} okText="删除" cancelText="取消" disabled={cells.structuralDisabled} onConfirm={() => cells.remove(row)}><Button size="small" danger disabled={cells.structuralDisabled} aria-label={`${row.ym} ${row.item || '未命名'}删除 #${row.id}`}>删除</Button></Popconfirm></label>)}</div></details>;
 }
 function AmountCell({ data, node, colDef }: ICellRendererParams<AnnualRow>) {
   if (!data) return null;
@@ -52,7 +52,7 @@ function AmountCell({ data, node, colDef }: ICellRendererParams<AnnualRow>) {
   const automatic = data.automatic && value !== null && value !== undefined ? decimal(cents(value) - records.reduce((sum,row) => sum + cents(row.amount),0n)) : null;
   return <div className="fee-record-amounts">{data.automatic && <span className="fee-auto-amount">自动 {automatic === null ? '未读取' : money(automatic)}</span>}
     {data.automatic && <span className="muted">手填</span>}{records.length ? records.map(row => <FeeEditor key={row.id} row={row} item={data.item} ym={ym} field="amount" />)
-    : <FeeEditor item={data.item} ym={ym} field="amount" />}{(records.length > 1 || data.automatic && records.length > 0) && <span className="muted">合计 {money(value!)}{records.length > 1 ? ` · ${records.length} 条手填` : ''}</span>}</div>;
+    : <FeeEditor item={data.item} ym={ym} field="amount" />}{(records.length > 1 || data.automatic && records.length > 0) && <span className="muted">合计 {money(value!)}{records.length > 1 ? `，${records.length} 条手填` : ''}</span>}</div>;
 }
 
 export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked: boolean; active: boolean }) {
@@ -119,7 +119,7 @@ export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked
       const data = await reload(); if (!alive.current) return;
       const remaining = {...state.current.drafts};
       for (const [k,d] of Object.entries(remaining)) { const saved = data.records.find(r => r.id === d.row?.id); if (saved) remaining[k] = {...d,row:saved}; }
-      update(remaining);setFeedback(`${draft.ym} · ${project} · 已保存，年度合计 ${money(data.total)}`);
+      update(remaining);setFeedback(`${draft.ym}，${project}，已保存，年度合计 ${money(data.total)}`);
     } catch (failure) {
       if (!alive.current) return;
       const message = failure instanceof Error ? failure.message : '保存失败，请重试。';
@@ -136,14 +136,14 @@ export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked
     lock.current=true;setBusy(true);setError('');let written=false;
     const names=new Set(query.data?.rows.map(row=>row.item));
     let name='新项';for(let index=2;names.has(name);index++)name=`新项${index}`;
-    try {const id=await feeWrite('add',{ym:addMonth,project,name},abort.current.signal);written=true;await reload();setFeedback(`${addMonth} · 已增加手填项`);requestAnimationFrame(()=>{const input=root.current?.querySelector<HTMLInputElement>(`input[data-fee-key="${id}:item"]`);const details=input?.closest('details');if(details)details.open=true;input?.focus();});}
+    try {const id=await feeWrite('add',{ym:addMonth,project,name},abort.current.signal);written=true;await reload();setFeedback(`${addMonth}，已增加手填项`);requestAnimationFrame(()=>{const input=root.current?.querySelector<HTMLInputElement>(`input[data-fee-key="${id}:item"]`);const details=input?.closest('details');if(details)details.open=true;input?.focus();});}
     catch(failure){if(alive.current){const unknown=written || uncertainWrite(failure);state.current.uncertain=unknown;setUncertain(unknown);setVerified(false);setError(`${unknown ? '新增结果待核实，请重读核对，勿重复增加。' : ''}${failure instanceof Error ? failure.message : '新增失败。'}`);}}
     finally{lock.current=false;if(alive.current)setBusy(false);}
   }
   async function remove(record:RecordRow) {
     if(disabled || lock.current || dirty)return;
     lock.current=true;setBusy(true);setError('');let written=false;
-    try {const monthly=await getFees(record.ym,project,abort.current.signal);const row=monthly.manuals.find(r=>r.id===record.id);if(!row)throw new Error('原记录已不在当前月份，请重读核对。');await feeWrite('delete',{ym:record.ym,project,index:row.index},abort.current.signal);written=true;const data=await reload();setFeedback(`${record.ym} · 已删除「${record.item || '未命名'}」，年度合计 ${money(data.total)}`);}
+    try {const monthly=await getFees(record.ym,project,abort.current.signal);const row=monthly.manuals.find(r=>r.id===record.id);if(!row)throw new Error('原记录已不在当前月份，请重读核对。');await feeWrite('delete',{ym:record.ym,project,index:row.index},abort.current.signal);written=true;const data=await reload();setFeedback(`${record.ym}，已删除「${record.item || '未命名'}」，年度合计 ${money(data.total)}`);}
     catch(failure){if(alive.current){const unknown=written || uncertainWrite(failure);state.current.uncertain=unknown;setUncertain(unknown);setVerified(false);setError(`${unknown?'删除结果待核实，请重读核对。':''}${failure instanceof Error?failure.message:'删除失败。'}`);}}
     finally{lock.current=false;if(alive.current)setBusy(false);}
   }
@@ -159,23 +159,23 @@ export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked
   const rows = useMemo<AnnualRow[]>(() => query.data?.rows.map(row=>({...row,automatic:row.item===query.data!.auto_name,records:query.data!.records.filter(record=>record.item===row.item)})) ?? [],[query.data]);
   const scale=Number(me?.ui_scale_css ?? 1);
   const columns=useMemo<ColDef<AnnualRow>[]>(()=>[
-    {field:'item',headerName:'费用项名称',pinned:'left',autoHeight:true,wrapText:true,...contentWidth(224,300,scale,1),cellRenderer:NameCell},
-    {field:'prior',headerName:'往年',cellClass:'money',valueFormatter:p=>p.value===null?'':money(p.value),...contentWidth(140,220,scale)},
-    ...Array.from({length:12},(_,i):ColDef<AnnualRow>=>({colId:`month-${i+1}`,headerName:`${i+1}月`,headerTooltip:year,cellClass:'money',autoHeight:true,valueGetter:p=>p.data?.months[i],cellRenderer:AmountCell,...contentWidth(156,220,scale)})),
-    {field:'total',headerName:'累计',headerTooltip:'往年 + 所选年1至12月',cellClass:'money',valueFormatter:p=>money(p.value),...contentWidth(150,240,scale)},
-  ],[year,scale]);
+    {field:'item',headerName:'费用项名称',pinned:'left',autoHeight:true,wrapText:true,...contentWidth(160,300,scale,1),cellRenderer:NameCell},
+    {field:'prior',headerName:'往年',cellClass:'money',valueFormatter:p=>p.value===null?'':money(p.value),...numberColumnWidth([query.data?.prior,...rows.map(row=>row.prior)].map(value=>value==null?'':money(value)),scale)},
+    ...Array.from({length:12},(_,i):ColDef<AnnualRow>=>({colId:`month-${i+1}`,headerName:`${i+1}月`,headerTooltip:year,cellClass:'money',autoHeight:true,valueGetter:p=>p.data?.months[i],cellRenderer:AmountCell,...numberColumnWidth([query.data?.months[i],...rows.map(row=>row.months[i]),...rows.flatMap(row=>row.records.filter(record=>record.ym===`${year}-${String(i+1).padStart(2,'0')}`).map(record=>record.amount))].map(value=>value==null?'':money(value)),scale,true)})),
+    {field:'total',headerName:'累计',headerTooltip:'往年 + 所选年1至12月',cellClass:'money',valueFormatter:p=>money(p.value),...numberColumnWidth([query.data?.total,...rows.map(row=>row.total)].map(value=>value==null?'':money(value)),scale)},
+  ],[year,scale,rows,query.data]);
   const totals:AnnualRow[]=query.data?[{item:'合计',manual:false,prior:query.data.prior,months:query.data.months,total:query.data.total,periods:[],records:[],automatic:false}]:[];
   return <section className="fees-page" aria-label="特殊费用">
     <div className="fee-filters"><label>年份<TimePicker label="费用年份" modes={['年']} value={year} onChange={setYear} disabled={paused} /></label>
       <label>项目<ProjectPicker projects={(projects.data ?? []).filter(p=>p.warehouse_name && p.project_type!=='shell')} selected={(projects.data ?? []).filter(p=>p.warehouse_name===project).map(p=>p.id)} pick={ids=>{const next=projects.data?.find(p=>p.id===ids[0])?.warehouse_name;if(next)setProject(next);}} label="费用项目" disabled={paused || projects.isPending} /></label></div>
-    <div className="fee-toolbar"><div><label>新增核算月<TimePicker label="新增费用核算月" modes={['月']} value={addMonth} onChange={next=>{if(next.startsWith(year))setAddMonth(next);}} disabled={paused} /></label><Button disabled={disabled || busy || dirty || query.isFetching} onClick={()=>void add()}>增加手填项</Button></div><span className="muted">随逐月欠款台账导出 · 特殊费用月报表</span></div>
+    <div className="fee-toolbar"><div><label>新增核算月<TimePicker label="新增费用核算月" modes={['月']} value={addMonth} onChange={next=>{if(next.startsWith(year))setAddMonth(next);}} disabled={paused} /></label><Button disabled={disabled || busy || dirty || query.isFetching} onClick={()=>void add()}>增加手填项</Button></div><span className="muted">随逐月欠款台账导出，特殊费用月报表</span></div>
     {(busy || feedback) && <p role="status" className="fee-feedback">{busy?'正在保存费用…':feedback}</p>}
     {(error || projects.isError || query.isError) && <p role="alert" className="notice">{error || projects.error?.message || query.error?.message}<Button disabled={busy || blocked} onClick={()=>void reread()}>重读核对</Button></p>}
     {uncertain && <p className="notice" role="alert">核对结果后再继续。<Button disabled={!verified || busy} onClick={()=>{pendingCreate.current=null;state.current.uncertain=false;setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，保留输入继续</Button></p>}
-    {Object.entries(drafts).map(([key,d])=><p key={key} className="fee-draft-feedback">{d.ym} · {d.item || '未命名'} · {d.field==='item'?'项名':'金额'}：{d.error || '未保存'} <Button size="small" disabled={busy || blocked || uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>save(key,true)}>保存</Button><Button size="small" disabled={busy || blocked} onMouseDown={e=>e.preventDefault()} onClick={()=>{const next={...state.current.drafts};delete next[key];update(next);}}>取消这项修改</Button></p>)}
+    {Object.entries(drafts).map(([key,d])=><p key={key} className="fee-draft-feedback">{d.ym}，{d.item || '未命名'}，{d.field==='item'?'项名':'金额'}：{d.error || '未保存'} <Button size="small" disabled={busy || blocked || uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>save(key,true)}>保存</Button><Button size="small" disabled={busy || blocked} onMouseDown={e=>e.preventDefault()} onClick={()=>{const next={...state.current.drafts};delete next[key];update(next);}}>取消这项修改</Button></p>)}
     <p className="fee-record-note muted">同月同名的多条记录分别填写，月合计自动相加；项名旁标明所属月份。</p>
     {query.isPending?<p role="status">正在读取费用…</p>:ready && <FeeCells.Provider value={{drafts,disabled,structuralDisabled:disabled || busy || dirty || query.isFetching,remove,change,save}}><div ref={root} className="fees-grid fees-annual-grid" aria-label="特殊费用年度表"><AgGridReact<AnnualRow> theme={gridTheme} domLayout="autoHeight" rowData={rows} columnDefs={columns} pinnedBottomRowData={totals} getRowId={p=>JSON.stringify(p.data.item)}
-      defaultColDef={{resizable:true,sortable:false,suppressMovable:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation
+      defaultColDef={{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation
       onGridReady={e=>fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e=>fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e=>fitGridColumns(e.api,root.current)} /></div></FeeCells.Provider>}
   </section>;
 }
