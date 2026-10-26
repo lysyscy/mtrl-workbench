@@ -38,10 +38,11 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
       if (!grid || grid.isDestroyed() || !element) return;
       const scale = Number(getComputedStyle(element).getPropertyValue('--fscale')) || 1;
       const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1);
+      const horizontal = element.querySelector('.ag-body-horizontal-scroll');
       const natural = (element.querySelector('.ag-header')?.getBoundingClientRect().height ?? 68 * scale)
         + (last ? (last.rowTop ?? 0) + (last.rowHeight ?? 36 * scale) : 36 * scale)
         + (element.querySelector('.ag-grid-pinned-bottom-rows')?.getBoundingClientRect().height ?? grid.getPinnedBottomRow(0)?.rowHeight ?? 0)
-        + (element.querySelector('.ag-body-horizontal-scroll')?.getBoundingClientRect().height ?? 0) + 2;
+        + (horizontal && getComputedStyle(horizontal).visibility !== 'hidden' ? horizontal.getBoundingClientRect().height : 0) + 2;
       const height = Math.ceil(Math.min(natural, Math.max(200 * scale, window.innerHeight - element.getBoundingClientRect().top - 16 * scale)));
       if (Math.abs(element.getBoundingClientRect().height - height) > .5) element.style.height = `${height}px`;
     });
@@ -80,7 +81,9 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
         for (const selector of ['.ag-header','.ag-body-horizontal-scroll','.ag-grid-pinned-bottom-rows']) {
           const element = root.current?.querySelector(selector); if (element) observer.observe(element);
         }
-        event.api.addEventListener('gridPreDestroyed', () => observer.disconnect());
+        const visibility = new MutationObserver(fitHeight), scrollbar = root.current?.querySelector('.ag-body-horizontal-scroll');
+        if (scrollbar) visibility.observe(scrollbar, { attributes: true, attributeFilter: ['class','style'] });
+        event.api.addEventListener('gridPreDestroyed', () => { observer.disconnect(); visibility.disconnect(); });
       }} />
     </div>
   </>;
