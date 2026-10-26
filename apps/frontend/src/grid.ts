@@ -1,8 +1,10 @@
 import { tableWidths } from './table-widths';
 import type { GridApi } from 'ag-grid-community';
-import { AllCommunityModule, ModuleRegistry, themeQuartz } from 'ag-grid-community';
+import { AllCommunityModule, ModuleRegistry, provideGlobalGridOptions, themeQuartz } from 'ag-grid-community';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+// Ordinary reads and reordering stay still; project drag feedback is handled separately.
+provideGlobalGridOptions({ animateRows: false });
 export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(var(--font-ui-size,13.5) * 1px * var(--fscale))', headerFontSize: 'calc(11.5px * var(--fscale))',
   backgroundColor: 'var(--sf)', foregroundColor: 'var(--tx)', borderColor: 'var(--bd)',
   headerBackgroundColor: 'var(--sf2)', headerTextColor: 'var(--tx2)', accentColor: 'var(--pri)',

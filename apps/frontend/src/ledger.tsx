@@ -100,7 +100,7 @@ function Side({ scale, side, scope, actions, writable, busy, add, focusRecord, f
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
     <div className="ledger-summary"><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
-    <div className="ledger-table-scroll"><div className="ledger-grid" style={{ height: Math.min(360 * scale, pageGridGeometry(scale).headerHeight + (Math.max(visible.length, 1) + total.length) * pageGridGeometry(scale).rowHeight + 2 * scale) }}><AgGridReact<LedgerRow> theme={gridTheme} onGridSizeChanged={e => fitGridColumns(e.api, root.current)} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
+    <div className="ledger-table-scroll"><div className="ledger-grid"><AgGridReact<LedgerRow> theme={gridTheme} onGridSizeChanged={e => fitGridColumns(e.api, root.current)} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
       context={context} columnDefs={columns} rowData={visible} pinnedBottomRowData={total}
       getRowId={params => params.data.key} defaultColDef={defaultColumn}
       rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={true} suppressScrollOnNewData={true}
@@ -295,8 +295,11 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
       <div className="ledger-card-body">
         <div className="ledger-view-project"><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked} /></div>
         {projects.isError && <p role="alert">{projects.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void projects.refetch()}>重试项目</Button></p>}
+        <div className="ledger-content" aria-busy={!shown && !query.isError && project > 0}>
+        {!shown && <div className="ledger-placeholder" aria-hidden="true"><span/><span/></div>}
         {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</Button></p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
         {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side scale={Number(me?.ui_scale_css) || 1} key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked && !historyBusy && !historyUncertain} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}
+        </div>
       </div>
     </section>
   </>;

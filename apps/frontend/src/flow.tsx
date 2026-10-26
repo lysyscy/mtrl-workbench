@@ -7,7 +7,7 @@ import { EnumTag } from './enum-tag';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useIsFetching, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, record, requestJson, readProjects } from './api';
@@ -35,26 +35,31 @@ function Bars({ rows, choose, selected }: { rows: Bar[]; choose?: (key:string) =
 function ReadState({ query }: { query: {isPending:boolean;isError:boolean;error:Error|null;refetch:()=>unknown} }) {
   return query.isError ? <p className="notice" role="alert">{query.error?.message}<Button htmlType="submit" onClick={()=>void query.refetch()}>重试读取</Button></p> : query.isPending ? <p role="status">正在读取…</p> : null;
 }
-export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
-  const [params] = useSearchParams();
-  const { message } = App.useApp();
-  const [filter,setFilter]=useState(initial), [search,setSearch]=useState(''), [guard,setGuard]=useState(''), [revoke,setRevoke]=useState<Flow|null>(null), [feedback,setFeedback]=useState(''), [error,setError]=useState(''), [exporting,setExporting]=useState(false);
-  const [gran,setGran]=useState('week'),[year,setYear]=useState(Number(currentMonth().slice(0,4))),[quarter,setQuarter]=useState(Math.ceil(Number(currentMonth().slice(5))/3)),[bucket,setBucket]=useState('');
-  const api=useRef<GridApi<Flow>|null>(null), gridRoot=useRef<HTMLDivElement>(null), flowSection=useRef<HTMLElement>(null), locatePending=useRef(false), searchComposing=useRef(false);
-  const ledgerLoading=useIsFetching({queryKey:['ledger']});
-  const enabled=props.active && !props.blocked;
-  const flows=useQuery({queryKey:['flows'],enabled,queryFn:({signal})=>loadFlows(signal)});
+export function DebtPage(props: ComponentProps<typeof LedgerPage>) {
+  const enabled=props.active&&!props.blocked;
   const debt=useQuery({queryKey:['debt'],enabled,queryFn:async({signal}):Promise<Debt[]>=>{
     const data=await requestJson('/api/m05/debt',{signal});
     if(!record(data)||!Array.isArray(data.by_project_category))throw new ApiError('欠款读取不完整，请重试。');
-    return data.by_project_category.map(row=>{ if(!record(row)||typeof row.project!=='string')throw new ApiError('欠款读取不完整，请重试。');return {project:row.project,jc:String(row.jc),material:String(row.material),mech:String(row.mech)}; });
+    return data.by_project_category.map(row=>{if(!record(row)||typeof row.project!=='string')throw new ApiError('欠款读取不完整，请重试。');return {project:row.project,jc:String(row.jc),material:String(row.material),mech:String(row.mech)};});
   }});
+  const categories=[['jc','集采'],['material','辅材'],['mech','机械']] as const;
+  return <div className="debt-workspace"><div className="debt-overviews">{categories.map(([key,label])=><section className="flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body"><ReadState query={debt}/>{debt.data&&(()=>{const items=debt.data.filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);return items.length?<Bars rows={items.map((row,index)=>({key:String(index),label:row.project,amount:row[key]}))}/>:<p className="muted">暂无{label}未结清欠款</p>;})()}</div></section>)}</div><LedgerPage {...props}/></div>;
+}
+export function FlowPage(props: ComponentProps<typeof LedgerPage> & { exportGuard: string }) {
+  const [params] = useSearchParams();
+  const { message } = App.useApp();
+  const [filter,setFilter]=useState(initial), [search,setSearch]=useState(''), [revoke,setRevoke]=useState<Flow|null>(null), [feedback,setFeedback]=useState(''), [error,setError]=useState(''), [exporting,setExporting]=useState(false);
+  const [gran,setGran]=useState('week'),[year,setYear]=useState(Number(currentMonth().slice(0,4))),[quarter,setQuarter]=useState(Math.ceil(Number(currentMonth().slice(5))/3)),[bucket,setBucket]=useState('');
+  const api=useRef<GridApi<Flow>|null>(null), gridRoot=useRef<HTMLDivElement>(null), flowSection=useRef<HTMLElement>(null), locatePending=useRef(false), searchComposing=useRef(false);
+  const guard=props.exportGuard;
+  const enabled=props.active && !props.blocked;
+  const flows=useQuery({queryKey:['flows'],enabled,queryFn:({signal})=>loadFlows(signal)});
   const stats=useQuery({queryKey:['payment-stats',gran,year,quarter,bucket],enabled,queryFn:async({signal}):Promise<Stats>=>{
     const data=await requestJson(`/api/m05/stats?${new URLSearchParams({granularity:gran,year:String(year),quarter:String(quarter),bucket})}`,{signal});
     if(!record(data)||!Array.isArray(data.buckets)||!Array.isArray(data.right)||!record(data.selected))throw new ApiError('付款统计读取不完整，请重试。');return data as unknown as Stats;
   }});
   useEffect(()=>{ if (!props.active) return; const id=Number(params.get('notice'));if(id>0){locatePending.current=true;setFilter({...initial(),period:'全部',status:'',notice:id});setSearch('');} },[params.get('notice'),props.active]);
-  useEffect(()=>{if(enabled&&!flows.isPending&&!ledgerLoading&&props.project>0&&locatePending.current){locatePending.current=false;requestAnimationFrame(()=>flowSection.current?.scrollIntoView({block:'start'}));}},[params,enabled,flows.isPending,ledgerLoading,props.project]);
+  useEffect(()=>{if(enabled&&!flows.isPending&&locatePending.current){locatePending.current=false;requestAnimationFrame(()=>flowSection.current?.scrollIntoView({block:'start'}));}},[params,enabled,flows.isPending]);
   const projectQuery=useQuery({queryKey:['projects','all',''],enabled,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   const projects=useMemo(()=>(projectQuery.data??[]).filter(project=>(flows.data??[]).some(row=>row.project_id===project.id)||filter.projects.includes(project.id)),[projectQuery.data,flows.data,filter.projects]);
   const rows=useMemo(()=>(flows.data??[]).filter(row=> {
@@ -74,8 +79,8 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
     {field:'project_display',headerName:'付款项目',...contentWidth(100,280,scale,1),wrapText:true,autoHeight:true},{field:'payee',headerName:'收款单位',...contentWidth(144,320,scale,1),wrapText:true,autoHeight:true},{field:'category_label',headerName:'分类',...contentWidth(60,90,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="category" value={p.value}/>},
     {field:'amount_approved',headerName:'审批金额',...contentWidth(amountWidth,Math.max(amountWidth,190),scale),cellClass:'money',valueFormatter:p=>p.node?.rowPinned?'':p.value===null||p.value===undefined?'—':money(p.value),comparator:(a,b)=>Number(a??0)-Number(b??0)},
     {field:'pay_date',tooltipField:'pay_date',headerName:'付款日期',wrapText:true,autoHeight:true,...contentWidth(96,150,scale)},{field:'amount',headerName:'付款金额',...contentWidth(amountWidth,Math.max(amountWidth,190),scale),cellClass:'money',valueFormatter:p=>p.value?money(p.value):'',comparator:(a,b)=>Number(a)-Number(b)},
-    {field:'pay_method',headerName:'实际付款方式',...contentWidth(96,150,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="payMethod" value={p.value}/>},{field:'remark',headerName:'备注',...contentWidth(70,320,scale,1),wrapText:true,autoHeight:true},{field:'created_by',tooltipField:'created_by',headerName:'操作人',wrapText:true,autoHeight:true,...contentWidth(56,120,scale)},
-    {field:'status_label',headerName:'状态',...contentWidth(76,260,scale,1),wrapText:true,autoHeight:true,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:p.data?<span><Tag className={`status-tag ${p.data.status==='effective'?'status-positive':'status-neutral'}`}>{p.data.status_label}</Tag>{p.data.revoke_reason&&<span>（{p.data.revoke_reason}）</span>}</span>:''},
+    {field:'pay_method',headerName:'实际付款方式',...contentWidth(96,150,scale),cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:<EnumTag kind="payMethod" value={p.value}/>},{field:'remark',headerName:'备注',...contentWidth(70,320,scale,1),wrapText:true,autoHeight:true},{field:'created_by',tooltipField:'created_by',headerName:'操作人',wrapText:true,autoHeight:true,...contentWidth(112,160,scale)},
+    {field:'status_label',headerName:'状态',...contentWidth(76,100,scale),wrapText:true,autoHeight:true,cellRenderer:(p:ICellRendererParams<Flow>)=>p.node.rowPinned?null:p.data?<span><Tag className={`status-tag ${p.data.status==='effective'?'status-positive':'status-neutral'}`}>{p.data.status_label}</Tag>{p.data.revoke_reason&&<span>（{p.data.revoke_reason}）</span>}</span>:''},
     {colId:'actions',headerName:'操作',...contentWidth(64,100,scale),sortable:false,cellRenderer:(p:ICellRendererParams<Flow>)=>!p.node.rowPinned&&p.data?.status==='effective'?<Button htmlType="submit" className="danger" disabled={!current.current.writable} onClick={()=>current.current.open(p.data!)}>撤销</Button>:null},
   ]; return list; },[scale,amountWidth]);
   useEffect(()=>{api.current?.refreshCells({force:true});},[writable]);
@@ -94,23 +99,20 @@ export function FlowPage(props: ComponentProps<typeof LedgerPage>) {
     // Stats entries with no flows still remain a real filter, rather than silently showing all.
     const id=project?.id??0;
     setFilter(f=>({...f,projects:f.projects.includes(id)?f.projects.filter(value=>value!==id):[...f.projects,id]}));
-    flowSection.current?.scrollIntoView({block:'start',behavior:'smooth'});
+    flowSection.current?.scrollIntoView({block:'nearest'});
   }
-  const categories=[['jc','集采'],['material','辅材'],['mech','机械']] as const;
   const trend=(stats.data?.buckets??[]).map((key,i)=>({key,label:gran==='month'?key:key+' 起',amount:stats.data!.right[i]??'0.00'}));
   return <div className="flow-workspace">
-    <div className="debt-overviews">{categories.map(([key,label])=><section className="flow-card" key={key}><h2>按项目看{label}欠款</h2><div className="flow-card-body"><ReadState query={debt}/>{debt.data&&(()=>{const items=debt.data.filter(row=>cents(row[key])!==0n).sort((a,b)=>cents(a[key])>cents(b[key])?-1:1);return items.length?<Bars rows={items.map((row,index)=>({key:String(index),label:row.project,amount:row[key]}))}/>:<p className="muted">暂无{label}未结清欠款</p>;})()}</div></section>)}</div>
-    <LedgerPage {...props} onExportGuard={value=>{setGuard(value);props.onExportGuard(value);}}/>
-    <section className="flow-card" aria-labelledby="stats-title"><div className="flow-card-head payment-stat-head"><h2 id="stats-title">付款统计</h2><div><Button htmlType="submit" aria-pressed={gran==='week'} onClick={()=>{setGran('week');setBucket('');}}>按周（周一至周日）</Button><Button htmlType="submit" aria-pressed={gran==='month'} onClick={()=>{setGran('month');setBucket('');}}>按月</Button></div></div><div className="flow-card-body">
+    <section className="flow-card payment-stats" aria-labelledby="stats-title"><div className="flow-card-head payment-stat-head"><h2 id="stats-title">付款统计</h2><div><Button htmlType="submit" aria-pressed={gran==='week'} onClick={()=>{setGran('week');setBucket('');}}>按周（周一至周日）</Button><Button htmlType="submit" aria-pressed={gran==='month'} onClick={()=>{setGran('month');setBucket('');}}>按月</Button></div></div><div className="flow-card-body">
       <ReadState query={stats}/>{stats.data&&<div className="payment-stat-columns"><div><div className="flow-toolbar"><strong>按项目</strong><TimePicker label={gran==='week'?'统计周':'统计月'} value={bucket||stats.data.selected.bucket.slice(0,gran==='week'?10:7)} modes={gran==='week'?['周']:['月']} onChange={setBucket}/><span>合计 {money(stats.data.selected.total)} 元 · {stats.data.selected.count} 笔</span></div>{stats.data.selected.projects.length?<Bars rows={stats.data.selected.projects} choose={chooseProject} selected={[...(projectQuery.data??[]).filter(p=>filter.projects.includes(p.id)).map(p=>p.warehouse_name??''),...(filter.projects.includes(0)?['']:[])]}/>:<p className="muted">该时段没有付款。</p>}</div><div><div className="flow-toolbar"><strong>按{gran==='week'?'周':'月'}</strong><TimePicker label="统计窗口" value={gran==='week'?`${year}Q${quarter}`:String(year)} modes={gran==='week'?['季度']:['年']} onChange={value=>{setYear(Number(value.slice(0,4)));if(gran==='week')setQuarter(Number(value.slice(5)));}}/><span>窗口合计 {money(decimal(trend.reduce((n,row)=>n+cents(row.amount),0n)))} 元</span></div><Bars rows={trend}/></div></div>}
     </div></section>
-    <section ref={flowSection} className="flow-card" aria-labelledby="flows-title"><div className="flow-card-head"><h2 id="flows-title">付款流水（实际付款记录）</h2><Button htmlType="submit" disabled={!props.me||!enabled||!rows.length||flows.isFetching||flows.isError||exporting||Boolean(guard)} title={guard||''} onClick={()=>void exportFlows()}>{exporting?'正在导出…':'导出 Excel'}</Button></div>
+    <section ref={flowSection} className="flow-card flow-list" aria-labelledby="flows-title"><div className="flow-card-head"><h2 id="flows-title">付款流水（实际付款记录）</h2><Button htmlType="submit" disabled={!props.me||!enabled||!rows.length||flows.isFetching||flows.isError||exporting||Boolean(guard)} title={guard||''} onClick={()=>void exportFlows()}>{exporting?'正在导出…':'导出 Excel'}</Button></div>
       <div className="flow-toolbar"><div className="time-picker-field"><span>付款时间</span><TimePicker label="付款时间" value={filter.period} modes={['月','跨月','年','全部']} onChange={period=>setFilter(f=>({...f,period}))} /></div>
       <div className="time-picker-field flow-project-field"><span>付款项目</span><ProjectPicker projects={projects} selected={filter.projects} multiple emptyLabel="全部项目" pick={ids=>setFilter(f=>({...f,projects:ids}))} label="付款项目"/></div>
       <label>实际付款方式<Select aria-label="实际付款方式" value={filter.method} onChange={value=>setFilter(f=>({...f,method:value}))} options={[{value:'',label:'全部'},...['现汇','承兑','供应链','其他'].map(value=>({value,label:value}))]}/></label><label>状态<Select aria-label="流水状态" value={filter.status} onChange={value=>setFilter(f=>({...f,status:value}))} options={[{value:'',label:'全部'},{value:'effective',label:'生效'},{value:'revoked',label:'已撤销'}]}/></label>
       <label className="flow-search-field">搜索<Input aria-label="流水关键词" allowClear placeholder="搜索各列内容" value={search} onChange={e=>{const value=e.target.value;setSearch(value);if(!searchComposing.current||!value)setFilter(f=>({...f,keyword:value}));}} onCompositionStart={()=>{searchComposing.current=true;}} onCompositionEnd={e=>{searchComposing.current=false;const value=e.currentTarget.value;setSearch(value);setFilter(f=>({...f,keyword:value}));}}/></label><Button htmlType="submit" onClick={()=>{setFilter(initial());setSearch('');}}>重置</Button><span>显示 {rows.length} 条</span>{filter.notice>0&&<Button htmlType="submit" onClick={()=>setFilter(f=>({...f,notice:0}))}>清除通知书定位</Button>}{filter.projects.includes(0)&&<span>待指定归属</span>}
       </div><ReadState query={flows}/>{feedback&&<p role="status">{feedback}</p>}{error&&<p className="notice" role="alert">{error}</p>}{guard&&<p className="muted">{guard}</p>}
-      {flows.data&&<><div className="flow-grid" ref={gridRoot} style={{height:Math.min(420*scale,Math.max(rows.length,1)*pageGridGeometry(scale).rowHeight+pageGridGeometry(scale).headerHeight+pageGridGeometry(scale).rowHeight+18*scale)}}><AgGridReact<Flow> theme={gridTheme} onFirstDataRendered={e=>fitGridColumns(e.api,gridRoot.current,true)} onGridSizeChanged={e=>fitGridColumns(e.api,gridRoot.current)} onNewColumnsLoaded={e=>fitGridColumns(e.api,gridRoot.current,true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder rowData={rows} pinnedBottomRowData={summary} columnDefs={columns} defaultColDef={{cellDataType:false,sortable:true,resizable:false,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true}} getRowId={p=>p.rowPinned?'flow-total':String(p.data.id)} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} onGridReady={e=>{api.current=e.api;}} overlayNoRowsTemplate="当前筛选没有付款流水。"/></div></>}
+      {flows.data&&<><div className="flow-grid" ref={gridRoot}><AgGridReact<Flow> theme={gridTheme} onFirstDataRendered={e=>fitGridColumns(e.api,gridRoot.current,true)} onGridSizeChanged={e=>fitGridColumns(e.api,gridRoot.current)} onNewColumnsLoaded={e=>fitGridColumns(e.api,gridRoot.current,true)} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder rowData={rows} pinnedBottomRowData={summary} columnDefs={columns} defaultColDef={{cellDataType:false,sortable:true,resizable:false,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true}} getRowId={p=>p.rowPinned?'flow-total':String(p.data.id)} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} onGridReady={e=>{api.current=e.api;}} overlayNoRowsTemplate="当前筛选没有付款流水。"/></div></>}
     </section>
     {revoke&&<FlowRevoke key={revoke.id} flow={revoke} blocked={!writable} close={()=>setRevoke(null)} completed={(notice,text)=>{if(notice)window.dispatchEvent(new CustomEvent('payment-revoked',{detail:notice}));setFeedback(text);}}/>}
   </div>;

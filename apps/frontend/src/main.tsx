@@ -31,7 +31,8 @@ const pages: { path: string; title: string; mod: string; group: string; loading?
   { path: '/projects', title: '项目档案', mod: '01', group: 'base', component: Projects },
   { path: '/i8', title: 'i8 接入层', mod: '02', group: 'base', loading: '正在读取 i8 接入层…', component: lazy(() => import('./i8').then(module => ({ default: module.I8Page }))) },
   { path: '/notices', title: '付款通知书', mod: '03', group: 'payment', loading: '正在读取付款通知书…', component: lazy(() => import('./notices').then(module => ({ default: module.NoticesPage }))) },
-  { path: '/ledger', title: '付款流水与欠款统计', mod: '05', group: 'payment', loading: '正在读取台账…', component: lazy(() => import('./flow').then(module => ({ default: module.FlowPage }))) },
+  { path: '/debt', title: '欠款台账', mod: '05', group: 'payment', loading: '正在读取欠款台账…', component: lazy(() => import('./flow').then(module => ({ default: module.DebtPage }))) },
+  { path: '/ledger', title: '付款流水', mod: '05', group: 'payment', loading: '正在读取付款流水…', component: lazy(() => import('./flow').then(module => ({ default: module.FlowPage }))) },
   { path: '/contracts', title: '集采台账', mod: '11', group: 'contracts', loading: '正在读取集采合同…', component: lazy(() => import('./contracts').then(module => ({ default: module.ContractsPage }))) },
   { path: '/process', title: '过程资料', mod: '06', group: 'materials', loading: '正在读取过程资料…', component: lazy(() => import('./process').then(module => ({ default: module.ProcessPage }))) },
   { path: '/settlement', title: '收发结存与提取', mod: '07', group: 'materials', loading: '正在读取收发结存…', component: lazy(() => import('./settlement').then(module => ({ default: module.SettlementPage }))) },
@@ -103,7 +104,7 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;
           const Page = entry.component;
-          return <div key={entry.path} className="page-view" hidden={!active} inert={!active}><Suspense fallback={<p role="status">{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/ledger' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></div>;
+          return <div key={entry.path} className="page-view" hidden={!active} inert={!active}><Suspense fallback={<p role="status">{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></div>;
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}

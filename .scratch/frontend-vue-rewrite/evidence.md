@@ -2,6 +2,18 @@
 
 当前范围、批准与验收归[共同规格](spec.md)，大表分月决定归[当前确认](questions.md#2026-10-26大表分月口径已确认)。本页只保仍供验看/复测消费的结果和来源；本机原始输出不随Git提交，旧通过数不代表最新版本已经验收。
 
+## 表格稳定与MOD05拆页
+
+本轮实施基点`d927de0e76b84206c2e09c2894fac7c4e1978b02`，用户已确认完整方案及原8065更新授权。已实现并加载，停在用户实看；当前行为回前端设计/付款需求，实际运行仍由下节唯一owner持有。没有新增schema或另一预览，也未执行真实业务保存/撤销、i8外呼或实体打印。
+
+- 修复前真实复现：搜索34→1条导致流水420→124px；切欠款项目535→177（加载）→427px，下方流水往返但节点/opacity保持；取消drop的连续拖拽测得每行最多4个叠加动画。修复分别处理三个已证机制，不称同一根因，也不把自动测高当作已定位根因。
+- 初轮新增回归非零，旧标题/未拆页断言失败；此前真实几何测量已证明搜索高度缺陷。首轮构建取到内置旧Node/pnpm，之后用本机Node24.22.1/项目固定pnpm12.15.0重新typecheck/build通过。原件为原run `logs/table-stability-red.log`、`logs/drag-motion-before.json`、`logs/{typecheck,build}-initial-toolchain.log`；不抹除失败和工具链警告。
+- 最终6项只读浏览器回归通过（29.46s），显式排除1项真实备注保存用例：主表高度/筛选跨页保留/列宽，桌面与900宽度加载占位不显示旧项目，台账内容与金额可读，浏览器本地拦截保存的草稿/跨页导出guard及API原值回读，通知书直接定位不加载欠款页。最后表头最小高度对齐现有32px按钮后，受影响3项几何/加载定向补验通过（16.45s）。日志分别为 `logs/table-stability-browser-final.log`、`logs/table-stability-alignment-final.log`；不是9个不同用例。
+- 取消drop拖拽复测每行最多1个并发动画；1920×1080、1366×768、900×900布局检查通过，最终截图为原run `screenshots/{debt,flow}-table-stability-final.png`。另实测双侧表头对齐、按月统计图筛选流水及取消恢复，见 `reports/table-stability-preservation.json`。取消拖拽未发出排序保存；本地拦截的台账保存未到达后端。没有宣称全站所有页面/全部字号/实体IME/真实写入均通过。
+- 七个界面源码Impeccable机械检查退出0、无发现，原件 `reports/table-stability-detector.json`。独立Standards/Spec均已收拢、无未关闭发现；Standards指出新增测试使用客户端派生key定位API原行，已改为record_id/row_kind/month并经原审查者复核关闭及最终测试通过。摘要 `reports/table-stability-review.json`；最后只读最小表头尺寸修正复用其余有效审查。
+- 最终release构建的完整资源、前后端输入、HTTP及进程身份已核；沿原run/owner/schema/revision/私有状态原位更新8065。更新前后38表集合不变、37张非账号表逐表摘要一致；user_account摘要随本地正常登录改变，未将它计为全表内容完全不变。原始摘要 `reports/table-stability-before.json`，最终核验 `reports/table-stability-preservation.json`。试用库未重拷、重建或迁移。
+- 本轮三个未投入使用的中间构建已核无消费者后删除，原回退构建与最终在用release保留；本run仍为用户验看主预览，当前截图/日志继续由它持有。源码提交、远端SHA、服务加载和用户验收分别判断；本轮正常保存沿既有授权，用户实看及正式切换尚未完成。
+
 ## 当前真实副本与治理执行
 
 用户2026-10-26批准文档生命周期方案及N1–N6，React改造基点`8629a33df9d182669b70c29f7c5ec2deceecd49f`。个人方法最终源`0b251b0286ff8508f18ae1924c00171cb3a3c971`的[精确CI](https://github.com/lysyscy/My-Skills/actions/runs/40256562119)通过；179项本机检查完成（其中4项原平台条件跳过），结构核验通过。官方Manager原位更新、完整本机资源/原ID/标签/Preset/部署集合、更新检测及远端备份均已核验，备份`a2568470cc7090c076cbbc6324166772dcc18d1c`。当前任务已实际读取安装后规则并在原规格采用；其他实体设备及宿主重载未实测，新设备恢复后须按官方Manager update/check校准。包核验原件由主检出本轮`.artifacts/archive/docs-lifecycle/20261026/reports`持有。

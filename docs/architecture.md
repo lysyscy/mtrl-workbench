@@ -6,6 +6,8 @@ React 已获准采用构建步骤；原无构建/不另用 React 的旧阶段限
 
 React 账号工作区由 `apps/frontend/src/main.tsx` 的 `pages` 注册表统一派生页面标题、分组导航、路由和已访问页面的保活容器。切页只暂停所属页面，账号树与 QueryClient 的重建边界保持独立。每个账号组件树持有独立 QueryClient；初次身份读取失败只提供重试，已知身份暂时核验失败时保留树、筛选和草稿，隐藏数据并以 inert 暂停操作及查询，同账号核实后恢复并重读，确定换号或会话失效才清缓存重建。
 
+欠款页与流水页共享同一账号 QueryClient，但分别保活。台账编辑/保存仍由 LedgerPage 持有，跨页导出与历史操作继续消费账号工作区的台账 guard；不能因拆导航而卸载草稿或绕过在途/未知结果保护。通知书定位流水不依赖欠款项目或欠款查询就绪。
+
 ## 分层与装配
 
 core 保存金额、时间、配置、身份和共用机制，不 import 业务包；需要业务数据时由 core_bindings 注入 loader，取数实现归数据主人。mod 包间调用 service，不跨包直查 repository/表；既有允许边界以 test_layering 与实现头说明为准。page 的按钮/表单 HTML 不进入 API 导出，PAGE_ONLY_KEYS 负责剔除。

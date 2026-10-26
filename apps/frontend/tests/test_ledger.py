@@ -7,7 +7,7 @@ from live_data import get,grid_row,ledger_sample,open_page
 
 
 def open_sample(page,server,project):
-    open_page(page,server,'ledger','付款流水与欠款统计')
+    open_page(page,server,'debt','欠款台账')
     pick_option(page,'选择项目',project['disp'])
     expect(page.get_by_role('region',name='辅材欠款台账',exact=True)).to_be_visible()
 

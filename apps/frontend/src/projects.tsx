@@ -80,6 +80,8 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const [inlineSaving, setInlineSaving] = useState(0), [dragged, setDragged] = useState<number | null>(null), [previewOrder, setPreviewOrder] = useState<number[] | null>(null);
   const lock = useRef(false), mounted = useRef(true), dragging = useRef<number | null>(null);
   const rowElements = useRef(new Map<number, HTMLTableRowElement>()), rowTops = useRef(new Map<number, number>());
+  const rowAnimations = useRef(new Map<number, Animation>());
+  useEffect(() => () => { rowAnimations.current.forEach(animation => animation.cancel()); rowAnimations.current.clear(); }, []);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const projects = useQuery({ queryKey: ['project-archive'], enabled: !blocked, queryFn: ({ signal }) => archiveProjects(signal) });
   const pending = useQuery({ queryKey: ['project-promote-pending'], enabled: !blocked, queryFn: async ({ signal }) => object<PendingList>(await requestJson('/api/m01/promote-pending', { signal }), x => Array.isArray(x.items) && record(x.source)) });
@@ -94,9 +96,17 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   useLayoutEffect(() => {
     const next = new Map<number, number>();
     rowElements.current.forEach((element, id) => {
-      const top = element.getBoundingClientRect().top, before = rowTops.current.get(id);
-      next.set(id, top);
-      if (before !== undefined && before !== top && dragged !== null && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) element.animate([{ transform: `translateY(${before - top}px)` }, { transform: 'translateY(0)' }], { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' });
+      const running = rowAnimations.current.get(id), before = rowTops.current.get(id);
+      const offset = running ? new DOMMatrixReadOnly(getComputedStyle(element).transform).m42 : 0;
+      running?.cancel(); rowAnimations.current.delete(id);
+      const top = element.getBoundingClientRect().top; next.set(id, top);
+      // A new drag target continues from the visible position instead of stacking transforms.
+      const delta = before === undefined ? 0 : before + offset - top;
+      if (delta && dragged !== null && id !== dragged && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const animation = element.animate([{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }], { duration: 140, easing: 'cubic-bezier(.2,.8,.2,1)' });
+        rowAnimations.current.set(id, animation);
+        animation.onfinish = () => { if (rowAnimations.current.get(id) === animation) rowAnimations.current.delete(id); };
+      }
     });
     rowTops.current = next;
   }, [rowOrder, dragged]);
