@@ -51,7 +51,7 @@
 .workspace .notices-page .notice-association-trigger.ant-btn:not(:disabled):hover{color:var(--pri-d);background:var(--pri-l);border-color:var(--pri-bd)}
 .workspace .notices-page .notice-association-trigger small{font-size:calc(12px * var(--fscale));color:var(--tx2);font-weight:400}
 .workspace .notices-page .notice-grid .ag-cell.money input:not([class*="ant-"]){border:.5px solid var(--bd3);border-radius:var(--radius-input);background:var(--sf2);color:var(--tx);min-height:var(--control-sm);font-variant-numeric:tabular-nums}
-.workspace .notices-page .notice-grid .ag-cell[col-id=pay_amount] input{border-color:var(--pri-bd);background:var(--pri-l);font-weight:500}
+.workspace .notices-page .notice-grid .ag-cell.money[col-id=pay_amount] input{border-color:var(--pri-bd);background:var(--pri-l);font-weight:500}
 .workspace .notices-page .notice-grid .ag-cell.money input:not(:disabled):hover{border-color:var(--pri)}
 .workspace .notices-page .notice-grid .ag-cell.money input:focus{background:var(--sf);border-color:var(--pri);outline:2px solid var(--pri);outline-offset:-2px}
 .workspace .notices-page .notice-grid .ag-cell.money input:disabled{color:var(--tx2);background:var(--sf2);cursor:not-allowed}
