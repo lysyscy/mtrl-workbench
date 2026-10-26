@@ -1,28 +1,10 @@
 import Button from 'antd/es/button';
 import { BusinessModal } from './business-modal';
 import { useEffect, useRef, useState } from 'react';
-import { archiveLabel, money } from './notices-api';
+import { archiveLabel, money, matchNoticeCodes } from './notices-api';
 import type { NoticeRow } from './notices-api';
 import { DialogContents, useDialogClose } from './dialog-close';
 
-export function matchNoticeCodes(raw: string, rows: NoticeRow[]) {
-  const tokens = raw.split(/[\s,，;；、]+/).filter(Boolean), counts = new Map<string,number>(), byCode = new Map<string,NoticeRow[]>();
-  const result = { total: tokens.length, ids: [] as number[], invalid: [] as string[], missing: [] as string[], ambiguous: [] as string[], duplicates: [] as string[], paid: [] as string[], blocked: [] as NoticeRow[] };
-  for (const token of tokens) {
-    const code = token.replace(/^["“](.+)["”]$/, '$1').toUpperCase();
-    if (!/^FKTZS\d{4}(?:0[1-9]|1[0-2])\d{4}$/.test(code)) result.invalid.push(token);
-    else counts.set(code, (counts.get(code) ?? 0) + 1);
-  }
-  for (const row of rows) { const code = row.bill_no.trim().toUpperCase(); byCode.set(code, [...(byCode.get(code) ?? []), row]); }
-  for (const [code,count] of counts) {
-    if (count > 1) result.duplicates.push(`${code}（${count}次）`);
-    const hits = byCode.get(code) ?? [];
-    if (!hits.length) result.missing.push(code);
-    else if (hits.length > 1) { result.ambiguous.push(`${code}（系统${hits.length}条）`); result.blocked.push(...hits.filter(row => row.is_excluded || row.is_revoked)); }
-    else { const row = hits[0]!; if (row.is_excluded || row.is_revoked) result.blocked.push(row); else { result.ids.push(row.notice_id); if (row.pay_status === '已付清') result.paid.push(code); } }
-  }
-  return result;
-}
 export function NoticePaste({ open, blocked, close, read, apply, process }: { open: boolean; blocked: boolean; close: () => void; read: () => Promise<NoticeRow[]>; apply: (ids: number[]) => void; process: (ids: number[]) => void }) {
   const [raw,setRaw] = useState(''), [report,setReport] = useState<ReturnType<typeof matchNoticeCodes> | null>(null), [busy,setBusy] = useState(false), [error,setError] = useState('');
   const lock = useRef(false), alive = useRef(true), paused = useRef(blocked), initial = useRef(raw);

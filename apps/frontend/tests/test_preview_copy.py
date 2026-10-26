@@ -1,4 +1,4 @@
-"""Only synthetic schemas: copy consistency, credential stripping and external route denial."""
+"""DB-only copy contracts and in-process route guards; no browser or HTTP server."""
 import os
 from pathlib import Path
 import pytest
@@ -54,3 +54,53 @@ def test_copy_preview_blocks_external_and_unrelated_writes():
         assert calls==[]
         assert client.post('/api/m05/history/save').status_code==200
         assert calls==['local']
+
+
+def test_old_revision_copy_then_target_upgrade_preserves_rows():
+    """DB-only contract; neither synthetic schema is ever served to a browser."""
+    from tools.dev.frontend_preview import migrate
+    from tools.dev.frontend_preview_copy import schema_fingerprints
+    import subprocess, sys
+    source_path=Path(os.environ['MTRL_PREVIEW_SOURCE_ENV'])
+    with isolated_database(source_path) as src_env, isolated_database(source_path) as dst_env:
+        for env in [src_env,dst_env]:
+            subprocess.run([sys.executable,'-B','-X','utf8','-m','alembic','downgrade','c432261023'],
+                           cwd=Path(__file__).resolve().parents[3]/'backend',env=env,check=True)
+        ss=src_env['PGOPTIONS'].split('search_path=',1)[1]
+        ds=dst_env['PGOPTIONS'].split('search_path=',1)[1]
+        se=create_engine(src_env['DATABASE_URL'],connect_args={'options':src_env['PGOPTIONS']},isolation_level='REPEATABLE READ',hide_parameters=True)
+        de=create_engine(dst_env['DATABASE_URL'],connect_args={'options':dst_env['PGOPTIONS']},hide_parameters=True)
+        try:
+            with se.connect() as source, source.begin(), de.begin() as target:
+                source.exec_driver_sql('SET TRANSACTION READ ONLY')
+                receipt=copy_snapshot(source,target,ss,ds)
+                assert receipt['tables']['project']['rows']==3
+            before=schema_fingerprints(dst_env['DATABASE_URL'],ds)
+            migrate(dst_env,'head')
+            assert schema_fingerprints(dst_env['DATABASE_URL'],ds,tables=before.keys())==before
+            with se.connect() as source:
+                assert source.exec_driver_sql('SELECT version_num FROM alembic_version').scalar_one()=='c432261023'
+            with se.connect() as source, source.begin(), de.begin() as target:
+                source.exec_driver_sql('SET TRANSACTION READ ONLY')
+                with pytest.raises(RuntimeError,match='table sets differ'):
+                    copy_snapshot(source,target,ss,ds)
+        finally:
+            se.dispose();de.dispose()
+
+
+def test_full_app_copy_keeps_local_routes_and_blocks_all_existing_external_actions():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    app=FastAPI();calls=[]
+    paths=['/api/m11/fetch','/api/m11/auto-link-preview','/api/m11/auto-link',
+           '/api/m07/fetch','/api/m08/fetch','/api/m06/workbench/i8-fetch','/api/m03/notices/fetch',
+           '/api/m03/notices/warehouse-check','/api/m03/batch','/api/m02/fetch/run']
+    for path in paths:
+        app.add_api_route(path,lambda:calls.append('external'),methods=['POST'])
+    @app.post('/api/m11/export')
+    def local_export():calls.append('local');return {'ok':True}
+    restrict_copy_preview(app,full_app=True)
+    with TestClient(app) as client:
+        for path in paths:assert client.post(path).status_code==403
+        assert calls==[]
+        assert client.post('/api/m11/export').status_code==200 and calls==['local']

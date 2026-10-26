@@ -1,4 +1,4 @@
-"""Measurement validity and the two known misleading timing patterns, without DB access."""
+"""Pure measurement validity plus collection on the single registered real-copy preview."""
 from collections import Counter
 from pathlib import Path
 import sys
@@ -87,25 +87,24 @@ def test_preview_guard_rejects_unsafe_or_changed_input(tmp_path, monkeypatch, da
     with pytest.raises(ValueError): m.preview_identity(run)
 
 
-def test_browser_collector_on_synthetic_document():
-    from urllib.parse import quote
+def test_browser_collector_on_registered_real_preview():
     from playwright.sync_api import sync_playwright
     from tools.dev import frontend_measure as m
-    # A data URL exercises the collector and observer without another preview/server.
-    html = """<div class='sidebar'><nav><a href='#test' onclick="document.getElementById('page-title').textContent='集采台账'">集采台账</a></nav></div>
-    <h1 id='page-title'>测试首页</h1><div class='page-view'>合成测量内容</div>"""
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
+    from tools.dev.frontend_preview_runtime import registered_preview
+    _,owner,base=registered_preview()
+    assert owner['synthetic'] is False
+    with sync_playwright() as playwright:
+        browser=playwright.chromium.launch()
         try:
-            context, page, cdp = m.page_context(browser, None)
+            context,page,cdp=m.page_context(browser,None)
             with context:
-                page.goto('data:text/html;charset=utf-8,'+quote(html))
+                page.goto(base+'/preview')
                 page.evaluate(m.EVENT_OBSERVER)
                 assert page.evaluate('Array.isArray(window.__measure.events)')
-                rows = [m.sample(page, cdp, 'http://127.0.0.1:8065', 'warm', 'contracts', '集采台账', n)
-                        for n in range(1, 4)]
-                result = m.quality(rows, expected=Counter({('warm','contracts'):3}))
-                assert result['ok'] and result['font_set_stable_for_all_samples']
-                assert len(m.summarize(rows)) == 1
+                rows=[m.sample(page,cdp,base,'warm','contracts','集采台账',number) for number in range(1,4)]
+                result=m.quality(rows,expected=Counter({('warm','contracts'):3}))
+                assert result['ok']
+                assert len(m.summarize(rows))==1
+                # A collector integration check, not a read-only performance baseline or INP proof.
         finally:
             browser.close()

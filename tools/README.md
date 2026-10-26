@@ -5,7 +5,7 @@
 | 用途 | 入口与边界 |
 |---|---|
 | React 性能测量/原件口径检查 | dev/frontend_measure.py；小样筛查后完整84组，复用在用只读预览；见docs/guides/frontend-preview.md的性能测量入口 |
-| React 隔离预览/冻结副本 | dev/frontend_preview.py、frontend_preview_copy.py；操作与目标保护见docs/guides/frontend-preview.md |
+| React 真实副本预览/复制及历史冻结样本 | dev/frontend_preview.py（运行与排他实现在同目录server/runtime模块）、frontend_preview_copy.py；操作与目标保护见docs/guides/frontend-preview.md |
 | 暂存语法、字节与凭据保护 | audit/syntax_audit.py、bytes_guard.py，由真实pre-commit调用 |
 | 旧壳源码与语义读取 | audit/shell_source.py、shell_api.py；共享读取不因index拆件失效 |
 | 运行输出与生命周期 | audit/workspace_paths.py、audit_work.py；只处理本任务拥有产物 |

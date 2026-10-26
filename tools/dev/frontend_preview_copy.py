@@ -143,7 +143,7 @@ def clone_from_source(source_url, target_url, target_schema):
             receipt = copy_snapshot(source, target, 'public', target_schema)
         from tools.audit.workspace_paths import output
         output('preview-copy-verification.json', kind='logs').write_text(json.dumps(receipt, indent=2), encoding='utf-8')
-        print(f"COPY verified tables={len(receipt['tables'])} sequences={receipt['sequences']} ledger_projects={receipt['ledger_projects_verified']}", flush=True)
+        return receipt
     except Exception as error:
         detail = str(error) if type(error) is RuntimeError else type(error).__name__
         raise RuntimeError(f'隔离复制未完成：{detail}；源库未写入') from None
@@ -151,7 +151,7 @@ def clone_from_source(source_url, target_url, target_schema):
         source_engine.dispose(); target_engine.dispose()
 
 
-def restrict_copy_preview(app):
+def restrict_copy_preview(app, *, full_app=False):
     from fastapi.responses import JSONResponse
     reads = {'/healthz', '/app', '/login', '/api/m15/users', '/api/m01/projects', '/api/history/status',
              '/api/m05/ledger', '/api/m05/ledger/export', '/api/m05/debt', '/api/m05/debt/export', '/api/m05/stats', '/api/m05/flows'}
@@ -159,9 +159,63 @@ def restrict_copy_preview(app):
     @app.middleware('http')
     async def local_only(request, call_next):
         path = request.url.path
-        allowed = request.method in {'GET', 'HEAD'} and (path in reads or path.startswith(('/preview/', '/static/')))
-        allowed = allowed or request.method == 'POST' and path in writes
+        if full_app:
+            # Full local business routes, with every existing external action kept off.
+            external = path in {'/api/m11/fetch', '/api/m11/auto-link-preview', '/api/m11/auto-link',
+                '/api/m07/fetch', '/api/m08/fetch', '/api/m06/workbench/i8-fetch',
+                '/api/m03/notices/fetch', '/api/m03/notices/warehouse-check', '/api/m03/batch'}
+            external = external or path.startswith('/api/m02/') and not (
+                request.method in {'GET','HEAD'} and path in {'/api/m02/config','/api/m02/fetch/records'})
+            allowed = not external
+        else:
+            allowed = request.method in {'GET', 'HEAD'} and (path in reads or path.startswith(('/preview/', '/static/')))
+            allowed = allowed or request.method == 'POST' and path in writes
         if not allowed:
-            return JSONResponse(status_code=403, content={'ok': False, 'message': '隔离预览仅开放台账本地操作。'})
+            return JSONResponse(status_code=403, content={'ok': False, 'message': '此副本未授权外部动作。' if full_app else '隔离预览仅开放台账本地操作。'})
         return await call_next(request)
     return app
+
+
+def source_revision(source_url):
+    """Inspect the read-only source before preparing a compatible target."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    engine = create_engine(source_url, isolation_level='REPEATABLE READ', hide_parameters=True)
+    try:
+        with engine.connect() as connection, connection.begin():
+            connection.exec_driver_sql('SET TRANSACTION READ ONLY')
+            if connection.exec_driver_sql('SELECT current_database()').scalar_one() != make_url(source_url).database:
+                raise RuntimeError('Source database identity differs')
+            revision = connection.exec_driver_sql('SELECT version_num FROM public.alembic_version').scalar_one()
+        config = Config(str(root / 'backend/alembic.ini'))
+        config.set_main_option('script_location', str(root / 'backend/alembic'))
+        script = ScriptDirectory.from_config(config)
+        heads = script.get_heads()
+        if len(heads) != 1 or revision not in {node.revision for node in script.iterate_revisions(heads[0], 'base')}:
+            raise RuntimeError('Source migration is unknown or not on the current single migration chain')
+        return revision
+    finally:
+        engine.dispose()
+
+
+def schema_fingerprints(url, schema, *, tables=None):
+    """Private content digests, never business values; compare target migration preservation."""
+    engine = create_engine(url, connect_args={'options': f'-c search_path={schema}'}, hide_parameters=True)
+    try:
+        with engine.connect() as connection, connection.begin():
+            connection.exec_driver_sql('SET TRANSACTION READ ONLY')
+            if connection.exec_driver_sql('SELECT current_schema()').scalar_one() != schema:
+                raise RuntimeError('Fingerprint schema differs')
+            names = tables if tables is not None else set(inspect(connection).get_table_names(schema=schema)) - {'alembic_version'}
+            result = {}
+            for name in sorted(names):
+                table = Table(name, MetaData(), schema=schema, autoload_with=connection, resolve_fks=False)
+                # Stable multiset ordering also covers tables without a primary key.
+                rows = [json.dumps(dict(row), sort_keys=True, ensure_ascii=False, default=str)
+                        for row in connection.execute(select(table)).mappings()]
+                result[name] = {'rows': len(rows), 'sha256': hashlib.sha256(('\n'.join(sorted(rows))+'\n').encode('utf-8')).hexdigest()}
+            return result
+    finally:
+        engine.dispose()

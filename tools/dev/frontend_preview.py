@@ -1,8 +1,7 @@
-"""TAIL-397 local preview: own schema, existing migrations, test accounts, cleanup.
+"""Single full-app real-copy preview CLI; DB-only isolated schemas also support contract tests.
 
-Run with the worktree's Python; source-env is read only for database targets.
-Tests may supply an explicit mtrl_workbench_test DSN without source configuration.
-No credentials are printed or copied to the worktree .env.
+Source configuration is read only for explicit database targets. Browser tests attach
+through the registered runtime and never create synthetic HTTP previews.
 """
 from __future__ import annotations
 
@@ -39,6 +38,10 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
         guard = TestDatabaseGuard.from_sources((source.database_url,), source.test_database_url)
     if not guard.test_url:
         raise RuntimeError('缺少可确认的专用测试库配置')
+    revision = 'head'
+    if copy_source:
+        from tools.dev.frontend_preview_copy import source_revision
+        revision = source_revision(source.database_url)
     engine = create_engine(guard.test_url)
     schema = 'frontend_rewrite_397_' + uuid.uuid4().hex
     owned = False
@@ -65,11 +68,15 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
                    ARTIFACTS_DIR=str(output_dir('work') / schema),
                    LOGS_DIR=str(output_dir('logs') / schema),
                    PYTHONPATH=str(ROOT / 'backend'), PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright')
-        subprocess.run([sys.executable, '-X', 'utf8', '-m', 'alembic', 'upgrade', 'head'],
-                       cwd=ROOT / 'backend', env=env, check=True)
+        migrate(env, revision)
         if copy_source:
-            from tools.dev.frontend_preview_copy import clone_from_source
+            from tools.dev.frontend_preview_copy import clone_from_source, schema_fingerprints
             clone_from_source(source.database_url, guard.test_url, schema)
+            before = schema_fingerprints(guard.test_url, schema)
+            migrate(env, 'head')
+            after = schema_fingerprints(guard.test_url, schema, tables=before.keys())
+            if before != after:
+                raise RuntimeError('目标升级改变了已复制业务数据；保留失败证据')
         scoped = create_engine(guard.test_url, connect_args={'options': env['PGOPTIONS']})
         try:
             from app.mod15_user.models import UserAccount
@@ -130,50 +137,25 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
         engine.dispose()
 
 
-def create_preview_app():
-    # Cookies ignore ports: keep preview logins away from the normal workbench.
-    from app.core import session
-    session.COOKIE_NAME = 'mw_preview_397'
-    from app.report_export import service as exports
-    export_dir = Path(os.environ['MTRL_PREVIEW_EXPORT_DIR']).resolve()
-    if not export_dir.is_relative_to(ROOT / '.artifacts/active'):
-        raise RuntimeError('预览导出目录不在本轮隔离产物内')
-    exports.EXPORT_ROOT = export_dir
-    from app.main import create_app
-    app = create_app()
-    from app.core.db import get_engine
-    from sqlalchemy import text
-    from sqlalchemy.engine import make_url
-    expected_schema = os.environ['PGOPTIONS'].split('search_path=', 1)[1]
-    expected_database = make_url(os.environ['TEST_DATABASE_URL']).database
-    with get_engine().connect() as connection:
-        database, schema, search_path = connection.execute(text("SELECT current_database(),current_schema(),current_setting('search_path')")).one()
-        if (database, schema, search_path) != (expected_database, expected_schema, expected_schema):
-            raise RuntimeError('实际后端连接未限定本次测试schema')
-    print(f'ISOLATION backend verified database={database} schema={schema}', flush=True)
-    if os.environ.get('MTRL_PREVIEW_COPY_SOURCE') == '1':
-        from tools.dev.frontend_preview_copy import restrict_copy_preview
-        app = restrict_copy_preview(app)
-    return app
+def migrate(env, revision):
+    subprocess.run([sys.executable, '-B', '-X', 'utf8', '-m', 'alembic', 'upgrade', revision],
+                   cwd=ROOT / 'backend', env=env, check=True)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source-env', type=Path, required=True)
-    parser.add_argument('--port', type=int, default=8037)
-    parser.add_argument('--copy-source', action='store_true', help='只读一致快照复制业务数据到本次测试schema')
-    args = parser.parse_args()
-    # Reserve/check before any DB mutation. Uvicorn owns this same socket.
-    with socket.socket() as listener:
-        listener.bind(('127.0.0.1', args.port))
-        with isolated_database(args.source_env, copy_source=args.copy_source) as env:
-            os.environ.update(env)
-            from app.core.config import get_settings
-            get_settings.cache_clear()
-            import uvicorn
-            app = create_preview_app()
-            print(f'PREVIEW http://127.0.0.1:{args.port}/preview/projects', flush=True)
-            uvicorn.Server(uvicorn.Config(app, log_level='warning')).run(sockets=[listener])
+    from tools.dev.frontend_preview_runtime import exclusive_preview
+    from tools.dev.frontend_preview_server import run, arguments
+    args = arguments()
+    if args.stop:
+        from tools.dev.frontend_preview_runtime import request_stop
+        request_stop()
+        return
+    if args.prepare_build:
+        from tools.dev.frontend_preview_server import prepare_build
+        prepare_build(args)
+        return
+    with exclusive_preview():
+        run(args)
 
 
 if __name__ == '__main__':

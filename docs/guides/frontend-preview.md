@@ -1,180 +1,61 @@
-# React 隔离前端预览
+# React 真实副本预览
 
-> 读者：开发和验收前端的人。回答：如何构建、验证、启动和停止隔离预览。操作 TAIL-397 及后续前端票时读取；业务范围回共同规格与原票。
+用于构建、启动、更新、核验和退出预览。业务定义回需求分册，界面约束回[前端设计](frontend-design.md)，自动验证回[开发与验证](development-and-verification.md)。正式 `/app` 的切换另按[部署](deployment.md)授权；开放 `/preview` 不表示上线。
 
-现用系统仍由 `backend/app/web/` 提供。React 组件位于 `apps/frontend/`，源码和测试分别在其 `src/`、`tests/`；单包声明、pnpm 锁和包管理策略同放组件根，通常产物写其 `dist/`；已有验收实例正在读取该目录时，构建必须使用本轮`.artifacts/active/<effort>/<run>/work/dist`独立输出，并使新隔离进程的`FRONTEND_PREVIEW_DIR`指向它，不替换在用验收资源。构建时不复制现用资源，不要求生产常驻 Node。
+## 先确定当前实例和数据用途
 
-## 构建与定向验证
+除用户明确要求单独查看另一预览外，同一时间仅一个最新产品代码与真实数据库副本的预览，自动 HTTP 测试和换端口也适用。当前入口、进程、schema、修订、构建、读写及数据保留归唯一运行 owner；[当前证据](../../.scratch/frontend-vue-rewrite/evidence.md)只给来源指针。
 
-使用组件声明固定的 Node/pnpm 版本。若 corepack 缓存已经准备，复用现有 `COREPACK_HOME`；不重新全局安装。
+统一入口为 `tools/dev/frontend_preview.py`，排他与进程身份实现为同目录 runtime 模块，完整应用装配为 server 模块。主检出 `var/state/react-writable-preview/current.json` 指向当前 run 的 `reports/real_owner.json`；锁覆盖同仓各工作树和端口，持锁服务PID直接运行uvicorn。异常退出由OS释放锁，残留记录仍核实际PID、创建时间和命令，不能只凭文件存在或旧stopped_at判断。
 
-```powershell
-Set-Location apps/frontend
-corepack pnpm install --frozen-lockfile
-corepack pnpm typecheck
-corepack pnpm build
+| 用途 | 操作边界 |
+|---|---|
+| 新建验证副本 | 显式 `--copy-source --disposable`；来源只读一致快照，目标先匹配来源版本，核复制计数/内容/序列，再只升级目标。退出只清其自建schema。 |
+| 现有用户试用副本 | `--existing`只接受已登记可写副本；需要时显式目标升级，先保恢复点并核已有表数据不丢。停止保留schema、私有状态和用户修改，禁止重拷正式库覆盖。 |
+| 冻结历史性能样本 | 保既定版本、数据指纹和离线原件；无额外常驻服务，不为最新产品迁移原样本。获准测量时再按唯一实例安排符合条件的只读副本。 |
+
+新副本账号经去凭据/停用投影，再建专用本地验看账号，配置、操作历史与运行记录按复制工具的明确边界处理；不打印或复制来源凭据到工作树.env。验证副本保持所有既有i8/物理打印外呼入口阻断，本地读写和Excel导出完整开放。已有业务试用实例保其明确授权的绑定及私有会话，读取配置不代表认证成功或新外部动作授权。
+
+## 离线构建
+
+依赖及最低版本读 `apps/frontend/package.json`（Node范围）与锁文件（pnpm精确版本）；复用已准备环境。仓根运行，`<run>`为本次 `.artifacts/active/<effort>/<run>`，构建目录必须是该run/work下不存在的新目录：
+
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --run <run> --prepare-build <run>/work/<new-build>
 ```
 
-每条分别核原始退出码；构建不代替类型检查。`/static/theme.css` 由同源 FastAPI 按账号返回，Vite 的构建期资源提示是保留运行时 URL。Vite 开发代理仅指向回环 8037；生产形态验收使用下面的 FastAPI 入口。
+入口依次执行现有typecheck/build，保存日志与version清单，核HTML入口、src/public、依赖/构建配置输入及完整资源散列。可在旧实例运行时离线构建；待用清单不会改变旧owner的实际身份。最新产品还核后端/迁移与预览工具输入，纯文档提交不触发重建。运行时theme链接保留，不能把index中的运行期链接改成相对构建资源。
 
-在仓根运行隔离回归。可由受控进程传入 `MTRL_PREVIEW_TEST_DATABASE_URL`：仅接受明确的 `mtrl_workbench_test` DSN，并禁止来源复制；不把DSN写进源码、命令示例或日志。也可沿既有 `MTRL_PREVIEW_SOURCE_ENV` 指向当次获准读取的配置，只消费其原库/测试库目标。两者均缺失直接失败，不回退真实库；直接DSN仅用于测试夹具，不改变下方CLI入口。
+## 启动、更新与切换
 
-```powershell
-$env:MTRL_PREVIEW_SOURCE_ENV='<已授权配置文件绝对路径>'
-$env:PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright'
-$env:MTRL_EFFORT='frontend-vue-rewrite'
-backend/.venv/Scripts/python.exe -X utf8 -m pytest apps/frontend/tests/test_preview.py -q --tb=short
+先离线准备。核旧owner后正常退出，再开放新实例；统一入口在任何副本持久写入前取得排他锁及目标端口。未知来源修订、迁移分叉、数据库身份或search_path不符均拒绝，不stamp、不回退public、不改来源结构。参数中的配置只用于明确来源和专用测试目标。
+
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --stop
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --source-env <正式检出的.env> --run <run> --copy-source --disposable --port 8065
 ```
 
-自选隔离构建统一通过 `MTRL_PREVIEW_TEST_BUILD` 传入绝对路径；`tests/conftest.py` 的 `make_preview_seed` 工厂为默认及各模块种子接线，`preview_session` 集中核对独占 schema。业务造数仍归各测试模块。antd 下拉选择复用 `tests/preview_select.py`，只匹配打开的弹层并处理虚拟滚动；普通原生控件继续用原生选择。
+已有用户试用副本使用原run和owner，不经过自建schema的finally清理：
 
-浏览器进程只在同一测试模块内复用，每例创建独立context，Cookie、storage、路由和视口互不继承；pageerror断言失败也在finally关闭context，模块结束关闭浏览器。后端临时数据位于本轮work的schema目录，日志及服务stdout按schema留在本轮logs，结束按workspace_paths生命周期释放/选留。
-
-测试创建独占 schema、运行现有 Alembic 迁移，以真实后端验证 Cookie/身份/读取、历史编辑与撤销、拒绝和导出；只有加载/403/500 与迟到错误的浏览器分支使用定向替身。截图和服务日志由现有 workspace_paths 归档到本机 `.artifacts/archive/`，最长保留30天。模拟回包不能证明真实权限，另有普通用户真实管理动作被拒且账号数不变的检查。
-
-## 启动与退出
-
-构建完成后从仓根启动；端口先绑定，冲突会在任何数据库写入之前失败。
-
-```powershell
-backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_preview.py --source-env '<已授权配置文件绝对路径>' --port 8037
+```text
+backend/.venv/Scripts/python.exe -B -X utf8 tools/dev/frontend_preview.py --source-env <正式检出的.env> --run <原试用run> --existing --port 8065
 ```
 
-实际入口：`http://127.0.0.1:8037/preview/projects`。测试账号 `preview-admin`、`preview-user` 均为空密码，仅存在本次构造数据中；后者预设深色与“大一点”。未登录沿现行语义只读，登录表单、身份和项目均复用现行后端实现。预览 Cookie 名为 `mw_preview_397`，签名密钥每次运行生成，不覆盖现用 Cookie 或写回 `.env`。
+确需升级该副本时增加 `--upgrade-existing --pg-bin <现场匹配PG/bin>`。升级只作用登记目标，schema恢复点使用现有pg_dump/pg_restore目录校验；原表数据摘要前后核对。恢复点留在原run/recovery，风险窗口关闭后按既有生命周期处置。正式服务不在预览停止/升级范围。
 
-启动器先用 TestDatabaseGuard 核对专用测试库与原库不同，再创建随机 `frontend_rewrite_397_` schema。所有子进程连接限定其 search_path，禁止 public 回退；不存在的表会报错。迁移和测试数据仅落该 schema，不使用建表 API 修改共享表；不携带 i8、打印等现场凭据。
+## 实际核验与退出
 
-正常退出用当前终端 Ctrl+C。停止服务后启动器检查自有 schema 所有者并删除该 schema，打印 `ISOLATION cleaned`；测试夹具在服务子进程退出后同样清理。硬杀进程/机器掉电不会保证 finally 执行；如未见清理回执，保留准确 schema 名并核归属，禁止按前缀批量删除。不要把会话隔离或 pytest 保存点当成另一后端进程的写入保护。
+从当前工作树现有解释器调用 `tools.dev.frontend_preview_runtime.registered_preview()`，核固定进程身份、HTTP `/visual-version`的实际schema/revision、产品输入、完整构建及实际HTML。再由入口导航检查登录、权限、受影响读取/正常保存读回或实际下载；不从健康200推完整业务正确。独立Cookie、精确search_path、导出目录及配置/i8缓存/导入状态都由原run隔离。
 
-## 公共接合与接续
+停止仍用统一CLI `--stop`。它按当前owner的真实进程和HTTP身份请求正常退出，不依赖可能已替换的待用version清单；停止后核端口及拥有者状态。用户试用schema和私有状态保留，可丢弃验证schema由创建者清理。需要临时写验证时先停并保留试用实例，验证后恢复原试用入口；试用修改不作为测试重置材料。
 
-- 后端仅新增可选配置 `FRONTEND_PREVIEW_DIR`：未配置时无 `/preview` 入口；配置完整 dist 后由 FastAPI 提供索引与版本化 assets。索引每次重验证，缺失 asset 返回404。`/app` 和现行 JSON/表单接口保持原主人。
-- 请求出口为 `apps/frontend/src/api.ts`：同源 Cookie、AbortSignal、运行时响应校验、401/403与业务失败；查询不自动重试。数据与页面状态位于账号 key 对应的组件树和独立 QueryClient 中。初次身份读取失败只提供重试；已知身份的暂时核验失败保留该组件树和筛选，隐藏数据并用inert暂停操作，取消/暂停查询；重试确认同账号后恢复原上下文并重新读取。只有确认换号或会话失效才清缓存并重建账号树，不能把网络失败当退出。历史台账的草稿、保存队列及操作历史查询沿用该账号子树；草稿身份含账号、项目、查询范围、行记录和原所属月份；页面沿旧版自动末月范围，同账号导航往返保留台账上下文，离页暂停查询与后续写入，换号或失效时一并退出。
-- 主题继续从 `/static/theme.css` 获取；React 字体使用官方本地 MiSans unicode 分片，官方未覆盖码位按需取原完整字库兜底，来源/散列与覆盖归 `backend/app/web/fonts/misans-web/manifest.json`，更新工具为 `tools/dev/sync_misans_web.py`。旧壳、Excel/打印字体契约保留；界面倍率取身份响应 `ui_scale_css`，不要复制主题色值。
-- 历史台账入口为 `/preview/ledger`，源码 `apps/frontend/src/ledger.tsx`、严格响应边界 `apps/frontend/src/ledger-api.ts`。AG Grid Community 36.2.0 只使用基础能力；直接输入、合计与虚拟窗口由单一网格承载，不引入企业版。pnpm受管补丁仅修正该版两处声明的undefined兼容，保留TS7全部严格选项；升级包时应先验证补丁是否可移除。复杂报表由399在同一Community网格及共享主题上验证；合并布局用语义HTML表格，实际证据与选择结论回399原票。
-- 保存离格立即发起，同记录后续修改等待新凭据，其他格的草稿继续保留；正常读回不替换活动输入，结束连续编辑后更新表格/合计。只推进自己已确认成功版本的基线，外部变更仍拒绝覆盖。账号核验暂停期间不发新写入，恢复同账号保留草稿；换号/失效重建树，取消旧请求的迟到401不清新账号。中断HTTP并不证明服务端没有完成原保存，重新进入后须读回核对。
-- 旧版并行变更由父任务对共同调查点及每批交付 SHA 的后续差异按迁移面核对；不能把一次基线 clean 或某批通过当作未来无差异证明。
+## 性能测量
 
+`tools/dev/frontend_measure.py`只消费已存在的只读真实副本，保留owner、读写身份、schema、版本与构建保护。当前可写业务预览不能冒充冻结性能条件；采集器集成检查也不等于重跑性能基线。
 
-## 398预览操作与未验边界
-
-上轮人工主预览及其schema已正常清理，A批未创建常驻真实副本。后续明确获准的人工预览可使用业务副本；自动写入回归仍用默认合成模式，禁止在真实副本运行破坏性测试。测试登录身份和方式见上文“启动与退出”，仅在本机查阅，不转录密码/会话信息；原账号在副本中改为停用别名，三项登录/i8凭据在读取投影中直接清空，不携带生产登录能力。每次重启签名密钥改变，需要重新登录预览。
-
-只有取得现有数据库复制授权后，才从仓根启动以下模式；不生成或改源库备份，不复制真实.env：
-
-```powershell
-$env:MTRL_EFFORT='frontend-vue-rewrite'
-backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_preview.py --source-env '<已授权配置文件绝对路径>' --copy-source --port 8037
+```text
+backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_measure.py check --samples <samples.jsonl> --interactions <interactions.json>
+backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_measure.py run --preview-run <只读run> --baseline-summary <summary.json> --label <新label> --stage screen
 ```
 
-源库以REPEATABLE READ、READ ONLY事务取同一快照。目标由原TestDatabaseGuard确认本机独立测试库，新建随机schema并跑现有Alembic；版本、表列和约束不匹配即停止。按外键顺序复制（含自引用项目次序），核逐表计数/内容散列、序列和全部非壳项目的后端台账行/金额；成功后才开放HTTP。source只读、target只指当前schema，无public回退；应用实际连接池启动时再核库名/schema/search_path。
-
-业务数据仅进入本机PostgreSQL副本，不落原始dump、不上传、不进Git；本轮回执preview-copy-verification.json只留表计数和散列。app_setting、app_setting_log、operation_history、run_record四类运行/配置历史不带入；副本配置和旧撤销历史重新初始化，本次新操作仍可撤销。复制结束即断开源库，之后自动读取、编辑和导出只访问副本，不同步生产。现有原账号保留ID以维持关系，改别名并停用、清凭据；两个预览测试身份仅在副本新增。
-
-副本模式只开放静态页面、登录及台账读取/编辑/撤销/导出的明确本地路由。其余读写先返回403，i8、打印、取数、配置写入等能力不可触发；不靠用户避免点按钮。导出只进本轮.artifacts，不能将真实项目文件、业务截图或明细贴到云端对话。合成测试截图可用于布局验证，真实副本仅做本机布尔/计数核验。
-
-访问 `/preview/ledger`，默认查看首个非壳项目，点“项目”旁按钮切换，归档标记仍显示；数据月份按副本自动末月，不增加截止月份控件。正文只保留标题、金额/月度摘要和操作状态，不常驻堆说明。
-
-1. 连续改历史结算、Tab到付款，再用鼠标和中文输入法改备注；核焦点和后续草稿不被前一格回包打断。
-2. 改历史行月份使其重排，再填下一格；切项目及同账号导航往返，核记录身份与未保存输入。
-3. 辅材摘要旁新增历史行应聚焦新行月份。正常月份金额只读、备注可改可清；非法金额、空金额和显式0语义分开。
-4. 右上角、账号区左侧的撤销/重做是业务操作；输入框内Ctrl+Z仍由输入框处理。业务撤销仍受账号与版本限制。
-5. 卡头“逐月台账导出…”与“总欠款汇总导出…”各自打开独立弹窗，多选范围和顺序互不影响；先选项目，再在同一弹窗确认排序/上移下移，最后保存。取消保留选择，空选或缺仓库键不提交；草稿阻止与导出失败在弹窗内显示。逐月一项目一本三表、多项目ZIP、报告月取北京时间上月；总欠款是实时汇总，确认清单顺序即行序，无欠款数据的项目不出行。身份、忙碌、读取失败或操作结果待核实时，入口就地显示原因；可靠恢复后可继续。
-
-常驻“刷新台账”已取消。原按钮是手动强制重读，用于外部变动、读取失败或冲突恢复，并非保存的必要步骤；保存一直在离格时立即提交。现在进入、切项目、返回页面/账号核实恢复及保存成功均自动读取副本；没有定时轮询。失败或冲突时才显示“重新加载”，读取不会丢弃未保存草稿，也不会自动重投已保存请求；撤销/重做写请求发出后，只有明确成功正文才算确认；200正文截断、缺少确认或任何结果未确认均进入同账号历史锁，切项目仍保留，按钮与Ctrl+Z/Ctrl+Y均禁止再次操作。解除前必须可靠读回台账和操作历史；历史读取损坏不会提前复位，避免把重复撤销落到前一项。冲突须核对后决定保留/放弃输入。
-
-当前仍为综合付款页的局部预览；双导出与隔离出口已按A批内部核验，证据回398原票。其他概览、付款统计、流水与完整组页继续归405；导航提示不构成最终布局验收。字体主题与核心网格沿已验证机制；说明可按用户本次授权精简，不要求逐像素复刻。398与405完整组页后再交人工确认，A/B不单独邀验；父任务已审A/B无阻断，仅放行399技术验证，不表示398人工通过。
-
-关闭必须由当前归属终端Ctrl+C，收到准确schema的ISOLATION cleaned回执，再只读核schema消失和8037关闭。为人工验收获准保留实例时，记录准确终端/进程/schema和负责关闭的人，不因工具调用结束自动关闭；不得删除用户既有数据库或文件。预览导出沿workspace_paths归档，无用临时work由该轮正常退出清理。
-
-## 机械报表读取与明细编辑（399/407）
-
-隔离入口为 `/preview/mechanical`，月份沿旧版默认北京时间上月。顶部依次为月份、公司汇总/零租/包月/核对四页签、显示项目和录入预览。显示名单及顺序在独立弹窗保存，空名单保持为空；“导出预览”另选本次报送项目，不改显示名单。采用后按同一月份/有序清单连续显示四张表，下载继续使用同次快照令牌。
-
-公司汇总沿原AG Grid与金额点击跳明细，月份/页签/预览/取消筛选清临时范围；金额完整格式化，内租输入保持原数字文本。周材项目值读取现有summary/history，不用导出模板的空列抹掉来源；本月周材合计沿旧口径。明细恢复同一张表中的项目分组与合价/净额列内合计，操作列右固定；待补筛选只筛显示，合计始终取项目全部明细。草稿按项目/月/类别保留，保存只写明细，采用月值另逐格确认；原版本、来源及失败后重读保护继续有效。JSON录入归408，不恢复废弃通用导入。
-
-409已恢复：抓取/更新按钮直接调用现有i8-fetch，完整来源默认勾选，单项目更新默认仅该项目但仍列全项目；确认后才走i8-confirm，来源不齐禁用，减少须核实并给依据。强踢只显示已有提醒，不增加选择或强踢请求。累计差额及单据差额分别忽略/撤销，依据/i6/复制摘要、跟进保存/完成及本轮变化核实各守原接口；摘要只复制、不发送。合成隔离回归使用外部响应替身；当时8060真实副本以HTTP和PG只读屏障阻断业务写入、i8、导出和打印（现已按用户指令关闭）。当前运行身份与证据回docs/status及现有handoff，不将源码功能存在等同真实外部执行通过。
-
-预览与下载按同一月份和有序项目清单，下载始终带快照令牌；已保存内容有变化时后端拒绝，重新预览后才能下载。读取失败、范围变化、账号待核实、台账草稿或操作结果不确定时不放行下载；切月、离页或换号会取消并拒绝迟到文件。机械出口复用 `report_export.service.EXPORT_ROOT`，默认正式目录不变，隔离进程仅写本轮`.artifacts`。本票自动验证只用合成独占schema，不用真实副本，不留下常驻预览；证据和已知既有失败回399原票。
-
-## i8 接入结果与执行记录
-
-入口 `/preview/i8` 只读取 `/api/m02/fetch/records`，显示六类来源的最近结果及执行记录；默认最近50条，可选100/200条并按动作筛选。成功、部分成功、失败及执行中分别显示语义状态，长原因可展开。记录旧操作人未保存时显示未记录；耗时消费服务端记录，不把界面等待当执行耗时。
-
-接入页不提供地址配置、个人绑定或抓取执行。i8 使用既定生效地址；付款通知书抓取留在MOD03，仓库/常用项目同步留在项目档案，各页保其现有确认与结果核对边界。强踢冲突只提醒，不在接入页增加选择。旧400执行/419地址编辑切片不作为当前页面功能清单；后端契约回[i8参考](../reference/i8-contract.md)。
-
-本轮C样式验看使用真实前端构建与合成只读记录，不登录i8、不抓取、不写业务库；主题字号仅为合成主机内存偏好。真实链路及安全测试配置边界仍按[开发与验证](development-and-verification.md)处理。
-
-## 416 集采合同维护
-
-入口 `/preview/contracts`，实现位于 `contracts.tsx`、`contracts-api.ts`、`contract-dialog.tsx` 与 `contract-tools.tsx`。账期及付款方式沿[集采共享契约](../reference/jc-payment-contract.md)，保存仅提交改变的既有字段；无新增并发版本协议。通知书当前关联可跳到 `?contract=<id>`，清除排除筛选后定位主表对应行；账期、付款方式和收发登记在行内编辑，材料名保行上小窗，不设独立维护按钮。各合同草稿以稳定ID保留，同账号切页保留、刷新重置。非当前编辑器保留状态并卸载弹窗视图，避免遮罩影响当前页。损坏/缺成功回执进入待核实，重读不自动重投。
-
-抓取使用现有配置/确认接口，查询配置不触发抓取；实际验证须替换外部边界。417/418已接双侧发票和手工付款增删、普通导出及独立打印版。子表工作区按合同ID留在账号树，主合同先保存仍可处理子表草稿；删除/拒绝保留其他输入，未知回执须重读并人工核对后解锁。引用付款保来源及通知书回看，不提供通用删除。普通导出取当前筛选排序的完整ID，空范围明确为空；打印版复用项目选择记忆和现有模板。历史汇总由新增合同中的专用选项建立，保存后定位子表，语义回集采需求；备注行内悬停显示全文，双击打开较大编辑窗；保存沿原逐字段队列，失败留稿并在窗内提示，取消有变化须确认放弃，历史标记及截至日继续保留。真实后端回归入口 `apps/frontend/tests/test_contracts.py`，必须使用上文授权测试配置；本票当前验证、阻塞与人工验收状态回[416原票](../../.scratch/tails/issues/TAIL-416-采购合同主流程.md)。
-
-## 410 过程资料与库存定位
-
-入口 `/preview/process`，由 `process.tsx`、`process-api.ts` 和 `process-export.tsx` 消费现有过程矩阵、机械有效值及模板导出。按旧壳实际加载布局，卡头批量导出、独立项目筛选、三个页签依次排列；原始/调整后表为单层17列表头，展示全部已存月份，逐列合计及入库/出库/机械/不含税四段总求和紧接末行。机械保存仍逐格提交，材料保持只读；不再提供多余常驻重读、补录和机械明细跳转按钮。草稿按仓库、月、机械列留在账号内存；保存后读回不覆盖后续输入，明确拒绝留在所属项目，结果不明或已写成后重读失败需重读并核对后继续。明细确认格沿原 `source-manual` 确认切换，保留金额；不在此采用未确认明细。
-
-差异页按稳定库存行ID进入 `/preview/inventory?row=<id>`；定位只覆盖可见行，库存原期间、项目、方向、列筛选及其他状态保留。清除定位仅移除row参数，原筛选重新生效；找不到行明确提示，不猜配替代行。文件出口继续以所选项目和当前原始/调整后/差异表生成；差异页是单据明细，差异文件仍为逐月逐列差额矩阵。技术验证与真实DB/完整人工验收边界回[410原票](../../.scratch/tails/issues/TAIL-410-过程报表维护与导出.md)。
-
-## 首页待办（421）
-
-`/preview`（侧栏「工作台 · 首页」）从既有 `GET /api/m03/notice-list` 复用 `['notices']` 查询显示三类待办：归属待指定（有效且未归属）、集采未关联合同（有效集采未关联且未付清）、撤单但有牵涉（有效且 i8 已撤单）；判定与列表页同源，进入页面即重读，不用本地缓存旧计数。点击待办进入 `/preview/notices?todo=<kind>`：jc 以普通筛选（集采/未关联/未付清）落位，另两类以可清除的「只看待指定归属/撤单有牵涉」范围chip落位，跳转会重置冲突的旧筛选与搜索，落位行集与卡片计数一致。技术验证与边界回[421原票](../../.scratch/tails/issues/TAIL-421-首页待办与跨模块导航.md)。
-
-## 材料与报表公共入口
-
-`/preview/settlement`、`/preview/inventory`、`/preview/fees`、`/preview/big` 与上文过程资料同属材料与报表组；均在当前账号树内保活，离页暂停请求与待发写入，换号清理。大表合计直接消费既有后端合计，不在页面重算另一套。费用主表按年读取 `/api/m09/fee/year`，往年＋所选年12个月组成累计；同名展示汇总、原始明细不合并，点击项名或月份金额进入原有逐月明细增改删及批量入口。单月读写API及月报表导出保持原能力；费用无独立导出，仍随逐月欠款台账的特殊费用工作表导出；库存导出单月全项目原源缓存，不叠加页面筛选或人工调整。原票保各自真实DB及人工未验边界，当前集成证据见[共同证据](../../.scratch/frontend-vue-rewrite/spec.md#阶段5ab串行整合)。
-
-## 报表高度与列宽
-
-收发结存、焊材/气体年度提取和月度会大表按结果行数自然增高，合计紧接末行；年度表显示当前状态筛选下全部真实结果，表内无上下滚动，长页面由整页滚动承接。金额按完整格式化值预算列宽，大表沿旧版项目3/辅材4/机械7/产值3列分组及独立列分界；按实际等宽数字排版度量；已渲染合计未命中的新格式保守估宽，字体就绪、数据更新及隐藏页返回/字号变化后校正预算，表头与项目名允许换行。大表正文页边距局部收紧、非金额/率列允许多行；空金额输入聚焦时只放宽当前列，离开后恢复正常预算，编辑中不逐键重建列；窄视口保留必要横向可达性，不裁数字、不缩字号。库存常驻重读入口移除，读取失败重试及正常操作后的查询刷新保留，现有列筛选不变。
-
-## 422累计候选与全站人工关口
-
-本轮核验、48故事映射、最终命令/回执、已知性能退化及人工清单归[422验收材料](../../.scratch/frontend-vue-rewrite/evidence.md)。独占8061候选全部为合成数据，单独Cookie与schema；8060原真实只读副本不动。手工通知书和合同新增结果未知时禁止重投；通知书需读回后显式核对关闭草稿。机械撤销/重做已统一到全局历史控制器，未知结果锁跨页保留；快照过期可重新预览。
-
-用户随后明确“本票签done”，422首次累计基线按本次指令签收；不表示性能退化已修或允许正式切换。实体IME/宿主200%和真实外部/物理打印仍未验。441已另获用户验看签收；用户随后要求关闭8060/8061，两个旧预览现均退出，8000不动。真实副本保留情况、构建hash与退出证据见验收材料运行回执。
-
-## 442–444库存行高、保活与动效
-
-库存文字沿 `inventory-rows.tsx` 保留完整自然换行。只测已渲染单元格，将所有内容高度读取与行高写入分开批量执行，再统一通知网格；不使用每格原生autoHeight。数据/筛选、列宽/视口、字号、字体就绪及隐藏页返回后重新测量，网格销毁或容器无宽时跳过。长内容不以省略/展开门槛换速度，金额与编辑器沿既有契约。回归须实际覆盖超长中文/连续Latin、窄宽视口/最大字号、筛选清除及滚到末端。
-
-页面注册表使用普通React.memo，项目prop只供台账；历史上下文值按真实依赖稳定。router/context/query仍正常更新，离页保留账号内草稿，换号沿原身份边界重建。库存筛选枚举在打开弹层时按依赖计算，筛选条件预编译，空筛选复用原数组与合计。`ledgerExportGuard`仍传给所有页面，机械报表是实际消费者；台账草稿或未知回执不能因切页绕过下载保护。
-
-切页只对标题做130ms短反馈，库存计数做局部反馈，不给大表整体位移/逐行入场，也不等待动画再操作。减少动效偏好实时更新，CSS与始终存在的公共 `@rc-component/motion` Provider共同处理；避免动态修改AntD motion token插入Provider、重建账号树而丢失弹窗/草稿。公共Provider是既有传递依赖的直接声明，无额外动画库。自动回归在弹窗输入后切换偏好，核原草稿、取消确认与焦点；视觉暂停截图只用于合成布局检查，不作为性能计时。
-
-本轮同条件报告与剩余卡顿边界归[共同证据](../../.scratch/frontend-vue-rewrite/evidence.md#442444流畅度实施与同条件对照)。最终产品不是整页淡入的中间候选，不以中间较优个别数字替代最终样本。
-
-## 性能测量入口
-
-对已获准的真实只读预览使用 `tools/dev/frontend_measure.py`，不再复制final/r1/r2测量脚本。该工具只复用在用实例，核本工作树active内的运行身份、测试库/schema、非8000回环端口、未插桩构建逐文件hash及在线index；不启动/停止服务，不写业务数据，也不改变账号外观。Cookie只保存在浏览器内存。
-
-先指定旧对照的summary文件；相邻同名environment及real_owner必须存在，浏览器/视口/字号条件、正常字体方法和库/schema/revision需匹配。历史默认主题/standard字号对照要求当前偏好也为默认/standard；不一致即退出，不自动重置用户偏好。schema身份不等于内容指纹，复测前仍按既有副本约定确认数据未刷新/改变。
-
-```powershell
-$env:PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright'
-backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_measure.py run --preview-run '<当前只读run绝对路径>' --baseline-summary '<对照run的reports/summary文件绝对路径>' --label 'candidate'
-```
-
-默认先全14页预热，再对付款/集采/库存各3次热切换、库存输入/清筛选各5次筛查；`--stage screen`只做此步。脚本/HTTP/资源失败、缺样或重复样本禁止进入完整阶段。相对同条件旧中位，ready或主线程同时增加超过25%及50ms时，记录筛查告警并以2退出，保留原件；这是发现明显退化的便宜反馈，不是正式性能目标或统计显著性证明。小样只轮换3页，与完整14页轮换顺序不同，不能将它替代最终对照。没有告警才用独立contexts继续原方法的14页×3冷×3热84组。
-
-字体字符check不代表整个FontFaceSet稳定；loading样本保留并在quality标注，`font_set_stable_for_all_samples=false`，不自动删掉或伪称全部稳定。导航不再输出包含测试端response.body的“下一帧”耗时；热ready仍是历史document idle/fonts/2rAF代理，不称INP。输入仅收集EventTiming16ms及长任务，缺entry不当作0，脚本insertText不代表实体IME。
-
-新run按workspace_paths自动分配，报告保存产品版本、测量入口摘要、环境/外观、对照摘要、screen原始样本/交互/quality；完整阶段另存samples.jsonl/summary/quality。字段/JSON或启动失败以1退出，质量/退化告警以2退出；字体状态与旧导航口径为可见警告，退出0也须读quality的限制。正常退出自动归档至`.artifacts/archive/frontend-measure/`（如父任务显式设置effort/run，沿父任务并由父任务收尾）。输出用独占创建，拒绝覆盖已有证据；原始基线、旧脚本和当前验看构建保持各自消费者，不由新工具清理。
-
-只读复查已有完整84组及可选旧交互，不启动浏览器、不改原件：
-
-```powershell
-backend/.venv/Scripts/python.exe -X utf8 tools/dev/frontend_measure.py check --samples '<原samples.jsonl>' --interactions '<原interactions.json>'
-backend/.venv/Scripts/python.exe -X utf8 -m pytest --noconftest backend/tests/test_frontend_measure.py -q
-```
-
-工具回归覆盖纯逻辑/输入边界及合成data文档的实际浏览器采集，不启动另一预览，不需要应用conftest或数据库。最终报告仍须分别说明口径检查、真实浏览器执行与人工验看；只检测历史原件不能称新版本性能重测通过。
-
-## 明确授权的可写业务验看
-
-2026-10-25用户另行授权新建可写隔离副本、管理账号admin空密码与真实i8，当前实例身份回[status](../status.md)及[运行证据](../../.scratch/frontend-vue-rewrite/evidence.md#可写admin与真实i8业务预览)。它用正常后端认证/权限与业务路由，不加原只读HTTP屏障；数据库每次连接仍精确限定本轮测试库/schema，无public兜底，Cookie与8000隔离。配置修改只写本轮私有配置/新副本，导出/缓存归本轮，i8会话保存在被Git忽略的私有var/state；不归档凭据。
-
-8065可写副本与正式库仍为c432261023。用户已明确删除额外三处操作人字段扩容及合并迁移，相关模型/副本保持原varchar64。2026-10-26按用户确认的大表分月名单新增迁移bmonth261026，仅在新独占合成schema实升；它不表示8065或正式库已迁移。后续业务副本接入先核目标与已有试用数据，再按授权迁移该目标，不能把当前源码直接加载到旧schema。原c2冻结性能副本是固定历史证据，保持原件，不能按现行head重迁移来改写基线。
-
-当前可写实例停止脚本先核PID/创建时间/命令，仅停8065并保留schema和用户试用改动；用户明确结束并决定保留或丢弃数据后再退出其运行目录、私有会话与缓存。原只读性能副本/构建/样本仍按已有消费者保留；性能测量入口会拒绝本可写实例，后续同条件比较继续使用原固定数据。
+先小样筛查；有明确完整对照用途才用 `--stage all`。原始输入、版本、数据、浏览器/视口/字号及冷/热条件必须对应，较差样本和未验边界保留。ready为标题/networkidle/fonts/双rAF代理，不是现场INP、热SPA LCP或Lighthouse TBT；自动输入和导航传输开销分别解释，`fonts.ready`后新触发加载不伪称字体全稳定。现有纯计算、输出保护与真实页采集器检查入口见开发指南。

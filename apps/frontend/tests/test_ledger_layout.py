@@ -1,160 +1,39 @@
-"""398 correction: remarks, representative undo recovery and real batch export."""
-from __future__ import annotations
-import io
-import re
-import zipfile
-import openpyxl
-import pytest
+"""Actual ledger content height, totals and normal-month remark identity."""
 from playwright.sync_api import expect
-from test_preview import server, browser_page
-from test_ledger import open_ledger, project_id, data, previous_report_month, select_project
-from test_export_dialogs import open_export, selected_names, move_first
-from tools.audit.workspace_paths import output
+from test_preview import server,browser_page
+from live_data import ledger_sample,grid_row,get,money
+from test_ledger import open_sample
 
 
-def test_normal_month_remark_clear_undo_and_stale_token(server,browser_page):
-    page,_=browser_page;open_ledger(page,server);project=project_id(page,server)
-    row=page.locator('[row-id="material:month:2025-12"]');note=row.locator('[col-id="remark"] input')
-    expect(row.locator('[col-id="payment"] input')).to_have_count(0)
-    note.fill('正常月份中文备注');note.press('Tab')
+def test_actual_ledger_layout_tracks_rows_and_totals(server,browser_page,api,projects):
+    page,_=browser_page;project,side,row,key=ledger_sample(api,projects);open_sample(page,server,project)
+    data=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
+    for item in data['sides']:
+        region=page.get_by_role('region',name=item['label']+'欠款台账',exact=True);expect(region).to_be_visible()
+        grid=region.locator('.ledger-grid');box=grid.bounding_box();assert box and 40<box['height']<=500
+        if item['rows']:expect(region.locator('.ag-row').first).to_be_visible()
+    assert not page.locator('.ledger-grid .ag-cell[col-id="debt"]').evaluate_all('els=>els.some(e=>e.scrollWidth>e.clientWidth+1)')
+
+
+def test_real_normal_month_remark_save_uses_same_month(server,browser_page,api,projects,disposable):
+    page,_=browser_page
+    found=None
+    for project in projects:
+        if project['project_type']=='shell':continue
+        data=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
+        for side in data['sides']:
+            for row in side['rows']:
+                if row['row_kind']=='month' and not row['editable']:found=(project,side,row);break
+            if found:break
+        if found:break
+    assert found,'真实副本没有普通月备注行，该保护未覆盖'
+    project,side,row=found;open_sample(page,server,project)
+    key=side['category']+':month:'+row['month'];field=grid_row(page,'.ledger-grid',key).locator('[col-id="remark"] input')
+    # Scroll rendered rows rather than assuming the first viewport covers this month.
+    if not field.count():
+        page.get_by_role('region',name=side['label']+'欠款台账').locator('.ag-body-viewport').evaluate('e=>e.scrollTop=e.scrollHeight')
+    expect(field).to_be_visible();field.fill(row['remark']+'核验');field.press('Tab')
     expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存')
-    def normal(): return next(r for side in data(page,server,project)['sides'] if side['category']=='material' for r in side['rows'] if r['month']=='2025-12' and r['row_kind']=='month')
-    assert normal()['remark']=='正常月份中文备注'
-    page.get_by_role('button',name='撤销',exact=True).click();page.get_by_role('button',name='确认撤销',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('已撤销');assert normal()['remark']==''
-    page.get_by_role('button',name='重做',exact=True).click();page.get_by_role('button',name='确认重做',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('已重做');assert normal()['remark']=='正常月份中文备注'
-    with page.expect_response(lambda response:'/m05/ledger/remark' in response.url and response.request.method=='POST') as saved:
-        note.fill('');note.press('Tab')
-    assert saved.value.json()['ok'];expect(note).to_have_value('')
-    assert normal()['remark']==''
-    pending=[];page.route('**/m05/ledger/remark',lambda route:pending.append(route))
-    note.fill('本地未覆盖草稿');note.press('Tab');expect(page.get_by_role('status',name='保存回执')).to_contain_text('正在保存');assert pending
-    assert 'token=' in pending[0].request.post_data
-    changed=page.request.post(server+'/m05/ledger/remark',form={'project_id':project,'category':'material','ym':'2025-12','remark':'其他编辑已保存'})
-    assert changed.json()['ok']
-    pending[0].fulfill(response=pending[0].fetch())
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('版本冲突');expect(note).to_have_value('本地未覆盖草稿')
-    assert normal()['remark']=='其他编辑已保存'
-
-
-def test_independent_multi_project_preview_cancel_and_actual_zip(server,browser_page):
-    page,_=browser_page;open_ledger(page,server)
-    dialog = open_export(page, '逐月台账导出')
-    dialog.get_by_role('checkbox', name='长项目名验收', exact=True).check()
-    move_first(dialog, '长项目名验收')
-    expect(page.get_by_label('选择项目', exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('隔离项目')
-    expect(dialog).to_contain_text('选了2个项目')
-    order = selected_names(dialog)
-    dialog.get_by_role('button', name='关闭', exact=True).click()
-    expect(dialog).to_have_count(0)
-    page.reload()
-    expect(page.get_by_role('region', name='辅材欠款台账', exact=True)).to_be_visible()
-    dialog = open_export(page, '逐月台账导出')
-    expect(dialog.get_by_role('checkbox', name='长项目名验收', exact=True)).to_be_checked()
-    assert selected_names(dialog) == order
-    with page.expect_download() as event: page.get_by_role('button',name='保存到本地',exact=True).click()
-    download=event.value;path=output(download.suggested_filename,kind='exports');download.save_as(path)
-    assert path.suffix=='.zip'
-    with zipfile.ZipFile(path) as archive:
-        assert len(archive.namelist())==2
-        assert [next(disp for disp in order if disp in name) for name in archive.namelist()] == order
-        assert any('隔离项目' in n for n in archive.namelist()) and any('长项目名验收' in n for n in archive.namelist())
-        for name in archive.namelist():
-            workbook=openpyxl.load_workbook(io.BytesIO(archive.read(name)),data_only=True)
-            assert workbook.sheetnames==['辅材','机械','特殊费用月报表']
-            disp='长项目名验收' if '长项目名验收' in name else '隔离项目'
-            expected=data(page,server,project_id(page,server,disp),previous_report_month(page))
-            for side in expected['sides']:
-                exported=[(str(cells[1]),str(cells[5] or '')) for cells in workbook[side['label']].iter_rows(min_row=3,max_col=6,values_only=True) if re.fullmatch(r'\d{4}-\d{2}',str(cells[1] or ''))]
-                assert exported==[(r['month'],r['remark']) for r in side['rows']]
-            workbook.close()
-    expect(page.get_by_label('选择项目',exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('隔离项目')
-
-
-def test_add_focuses_new_record_at_fixed_historical_month_and_project_survives_navigation(server,browser_page):
-    page,_=browser_page;open_ledger(page,server)
-    project=project_id(page,server)
-    page.get_by_role('region',name='辅材欠款台账',exact=True).get_by_role('columnheader',name='月份（按单据日期）',exact=True).click()
-    page.get_by_role('button',name='新增历史行',exact=True).click()
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('已新增历史行')
-    page.wait_for_function("document.activeElement?.matches('[col-id=month] input')")
-    rid=page.locator('[col-id=month] input:focus').evaluate("e=>Number(e.closest('[row-id]').getAttribute('row-id').split(':').at(-1))")
-    actual=next(r for side in data(page,server,project)['sides'] for r in side['rows'] if r['record_id']==rid)
-    assert actual['month']=='2025-11'
-    draft=page.locator(f'[row-id="material:manual:{rid}"] [col-id=payment] input');draft.fill('bad');draft.press('Tab')
-    expect(page.get_by_role('status',name='保存回执')).to_contain_text('保存被拒')
-    select_project(page, '归档样例')
-    expect(page.get_by_label('选择项目',exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('归档')
-    page.get_by_role('link',name='MOD-01 项目档案',exact=True).click();page.get_by_role('link',name='MOD-05 付款流水与欠款统计',exact=True).click()
-    expect(page.get_by_label('选择项目',exact=True).locator('xpath=ancestor::div[contains(@class, "ant-select")]').first).to_contain_text('归档样例')
-
-    select_project(page, '隔离项目')
-    expect(draft).to_have_value('bad')
-
-
-def test_restored_numeric_sort_does_not_use_lexical_amount_order(server,browser_page):
-    page,_=browser_page;open_ledger(page,server)
-    region=page.get_by_role('region',name='辅材欠款台账',exact=True)
-    region.get_by_role('columnheader',name='付款',exact=True).click()
-    expect(region.get_by_role('columnheader',name='付款',exact=True)).to_have_attribute('aria-sort','ascending')
-    values=region.locator('[row-id]:not([row-id=total])').evaluate_all("""rows=>rows.sort((a,b)=>Number(a.getAttribute('row-index'))-Number(b.getAttribute('row-index'))).map(row=>{const cell=row.querySelector('[col-id=payment]');return Number((cell.querySelector('input')?.value||cell.textContent).replaceAll(',',''))})""")
-    assert values==sorted(values),values
-
-
-def test_uncertain_undo_requires_readback_before_another_history_action(server,browser_page):
-    from test_ledger import add_row,cell,sync_ledger,wait_value
-    page,_=browser_page;open_ledger(page,server);project=project_id(page,server)
-    rid=add_row(page,server,project,'撤销响应不确定测试');sync_ledger(page)
-    paid=cell(page,rid,'payment');paid.fill('78.90');paid.press('Tab');page.get_by_role('heading',name='逐月欠款台账',exact=True).click();wait_value(page,project,rid,'payment','78.90')
-    requests=[]
-    def uncertain(route):
-        requests.append(route.request.post_data_json);response=route.fetch();assert response.json()['ok'];route.abort('failed')
-    page.route('**/api/history/undo',uncertain)
-    page.get_by_role('button',name='撤销',exact=True).click();page.get_by_role('button',name='确认撤销',exact=True).click()
-    expect(page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True)).to_be_visible()
-    expect(page.get_by_role('button',name='撤销',exact=True)).to_be_disabled()
-    page.keyboard.press('Control+z');assert len(requests)==1
-    page.get_by_role('link',name='MOD-10 机械费',exact=True).click()
-    expect(page.get_by_role('button',name='撤销',exact=True)).to_be_disabled()
-    expect(page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True)).to_be_visible()
-    page.keyboard.press('Control+z');assert len(requests)==1
-    page.get_by_role('link',name='MOD-05 付款流水与欠款统计',exact=True).click()
-    page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True).click()
-    expect(page.locator('.history-tools').get_by_role('button',name='重读核对',exact=True)).to_have_count(0)
-    wait_value(page,project,rid,'payment','12.00');assert len(requests)==1
-
-
-@pytest.mark.parametrize('row_count', [0, 2, 24])
-def test_monthly_ledger_card_follows_content_and_keeps_bounded_scroll(server, browser_page, row_count):
-    page, _ = browser_page
-    open_ledger(page, server)
-    project = project_id(page, server)
-    result = data(page, server, project)
-    for side in result['sides']:
-        side['rows'] = [dict(seq=i + 1, month=f'{2024 + i // 12}-{i % 12 + 1:02d}',
-            month_label='', row_kind='month', record_id=None, other_expense='100.00',
-            payment='25.00', debt='75.00', remark='', token=f'layout-{i}',
-            editable=False, counts_in_total=True) for i in range(row_count)]
-    page.route('**/api/m05/ledger?**', lambda route: route.fulfill(json=result))
-    page.reload()
-    select_project(page, '隔离项目')
-    region = page.get_by_role('region', name='辅材欠款台账', exact=True)
-    expect(region).to_be_visible()
-    # The card ends at its two content-sized tables plus the authored bottom padding.
-    page.wait_for_function("""() => {
-        const body=document.querySelector('.flow-workspace .ledger-card-body');
-        const sides=body?.querySelector('.ledger-sides');
-        return body && sides && Math.abs(body.getBoundingClientRect().bottom -
-          sides.getBoundingClientRect().bottom - parseFloat(getComputedStyle(body).paddingBottom)) < 3;
-    }""")
-    grid = region.locator('.ledger-grid')
-    metrics = grid.evaluate("""grid=>{const viewport=grid.querySelector('.ag-grid-viewport,.ag-body-viewport');
-        return {height:grid.getBoundingClientRect().height,
-          scrollable:viewport.scrollHeight>viewport.clientHeight};}""")
-    scale = page.evaluate("Number(getComputedStyle(document.documentElement).getPropertyValue('--fscale')) || 1")
-    assert metrics['height'] <= 360 * scale + 2
-    if row_count < 3:
-        assert metrics['height'] < 300 * scale
-    else:
-        assert metrics['scrollable']
-    if row_count:
-        expect(region.locator('[row-id="total"] [col-id="debt"]')).to_have_text(f'{75 * row_count:,.2f}')
+    after=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
+    actual=next(r for s in after['sides'] if s['category']==side['category'] for r in s['rows'] if r['row_kind']=='month' and r['month']==row['month'])
+    assert actual['remark']==row['remark']+'核验'

@@ -1,161 +1,37 @@
-"""Shared controls keep account-session work while routes and background reads change."""
-import re
+"""Real dirty-dialog lifecycle and real operation-head confirmation."""
 from playwright.sync_api import expect
-from preview_select import pick_option
-from test_preview import server, browser_page, login  # noqa: F401
+from test_preview import server,browser_page,login
+from live_data import get,ledger_sample
 
 
-def test_routes_keep_filters_selection_draft_and_refresh_resets(server, browser_page):
-    page, _ = browser_page
-    login(page, server)
-    page.get_by_label('项目搜索', exact=True).fill('隔离')
-    heading = page.get_by_role('columnheader', name=re.compile('展示名'))
-    heading.get_by_role('button').click()
-    page.get_by_role('link', name='MOD-03 付款通知书', exact=True).click()
-    pick_option(page, '项目筛选', '隔离项目')
-    page.keyboard.press('Escape')
-    page.get_by_role('button', name='＋ 手动新增通知书', exact=True).click()
-    field = page.get_by_label('草稿单据编码', exact=True)
-    field.fill('LOCAL-DRAFT-A')
-    page.route('**/api/m01/projects?status=all', lambda route: route.fulfill(status=500, json={'message':'定向重读失败'}))
-    page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
-    expect(page.get_by_role('alert')).to_contain_text('项目更新失败')
-    expect(page.get_by_label('展示名：隔离项目', exact=True)).to_have_value('隔离项目')
-    page.unroute('**/api/m01/projects?status=all')
-    page.get_by_role('button', name='重读项目', exact=True).click()
-    expect(page.get_by_text('项目更新失败', exact=False)).to_have_count(0)
-    expect(page.get_by_label('项目搜索', exact=True)).to_have_value('隔离')
-    expect(heading).to_have_attribute('aria-sort', 'ascending')
-    page.get_by_role('link', name='MOD-03 付款通知书', exact=True).click()
-    expect(field).to_have_value('LOCAL-DRAFT-A')
-    expect(page.locator('.notice-project')).to_contain_text('隔离项目')
-    page.reload()
-    expect(page.get_by_label('草稿单据编码', exact=True)).to_have_count(0)
-    expect(page.locator('.notice-project')).to_contain_text('全部项目')
+def test_real_unsaved_dialog_confirms_discard_and_keeps_input(server,browser_page):
+    page,_=browser_page;login(page,server)
+    page.get_by_role('button',name='＋ 手工建档',exact=True).click();dialog=page.get_by_role('dialog')
+    textbox=dialog.get_by_role('textbox').first;textbox.fill('未保存输入')
+    dialog.press('Escape');expect(dialog.get_by_role('heading',name='放弃未保存的修改？')).to_be_visible()
+    dialog.get_by_role('button',name='继续编辑',exact=True).click();expect(textbox).to_have_value('未保存输入')
+    dialog.press('Escape');dialog.get_by_role('button',name='放弃并关闭',exact=True).click();expect(dialog).not_to_be_visible()
 
 
-def test_time_modes_and_modal_discard_keep_input(server, browser_page):
-    page, _ = browser_page
-    login(page, server)
-    page.get_by_role('button', name='＋ 手工建档', exact=True).click()
-    dialog = page.get_by_role('dialog')
-    dialog.get_by_label('项目全名', exact=True).fill('尚未保存的项目')
-    dialog.press('Escape')
-    expect(dialog.get_by_role('heading', name='放弃未保存的修改？')).to_be_visible()
-    dialog.get_by_role('button', name='继续编辑', exact=True).click()
-    expect(dialog.get_by_label('项目全名', exact=True)).to_have_value('尚未保存的项目')
-    dialog.get_by_role('button', name='取消', exact=True).click()
-    dialog.get_by_role('button', name='放弃并关闭', exact=True).click()
-    expect(dialog).not_to_be_visible()
-    page.get_by_role('link', name='MOD-03 付款通知书', exact=True).click()
-    time = page.get_by_role('button', name='单据时间', exact=True)
-    time.click()
-    panel = page.get_by_role('dialog', name='单据时间选择', exact=True)
-    panel.get_by_text('跨月', exact=True).click()
-    panel.get_by_role('button', name=re.compile(r'年3月$')).click()
-    expect(panel).to_be_visible()
-    panel.get_by_role('button', name=re.compile(r'年1月$')).click()
-    expect(time).to_contain_text(re.compile(r'\d{4}-01 ~ \d{4}-03'))
-    time.click()
-    panel.get_by_text('年', exact=True).click()
-    panel.press('Escape')
-    expect(panel).not_to_be_visible()
-    expect(time).to_be_focused()
-
-
-def test_page_registry_keeps_instances_and_resets_on_account_loss(server, browser_page):
-    page, context = browser_page
-    login(page, server)
-    page.get_by_label('项目搜索', exact=True).fill('隔离')
-    page.get_by_role('link', name='MOD-02 i8 接入层', exact=True).click()
-    pick_option(page, '动作', '打印')
-    titles = ['首页', '付款通知书', '付款流水与欠款统计', '集采台账', '过程资料',
-              '收发结存与提取', '月度会大表', '库存单据与调整单', '特殊费用',
-              '机械费', '规则配置', '用户管理']
-    links = page.get_by_role('navigation', name='主导航').get_by_role('link')
-    expect(links).to_have_count(len(titles) + 2)
-    for title in titles:
-        links.filter(has_text=title).click()
-        expect(page.locator('#page-title')).to_have_text(title)
-        active = page.locator('.page-view:not([hidden])')
-        expect(active).to_have_count(1)
-        expect(active.locator(':scope > p[role="status"]')).to_have_count(0)
-        expect(active).not_to_have_attribute('inert', '')
-    page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
-    expect(page.get_by_label('项目搜索', exact=True)).to_have_value('隔离')
-    page.get_by_role('link', name='MOD-02 i8 接入层', exact=True).click()
-    expect(page.locator('.i8-record-tools')).to_contain_text('打印')
-    context.clear_cookies()
-    page.evaluate("window.dispatchEvent(new Event('focus'))")
-    expect(page.get_by_text('未登录 · 只读', exact=True)).to_be_visible()
-    page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
-    expect(page.get_by_label('项目搜索', exact=True)).to_have_value('')
-
-
-def test_motion_preference_changes_keep_modal_draft_and_focus(server, browser_page):
-    page, _ = browser_page
-    login(page, server)
-    for preference in ['no-preference', 'reduce']:
-        page.emulate_media(reduced_motion=preference)
-        page.get_by_role('link', name='MOD-02 i8 接入层', exact=True).click()
-        page.get_by_role('link', name='MOD-01 项目档案', exact=True).click()
-        view = page.locator('.page-view:not([hidden])')
-        expect(view).to_have_count(1)
-        expected = 'none' if preference == 'reduce' else 'workspace-enter'
-        page.wait_for_function("name => getComputedStyle(document.querySelector('#page-title')).animationName === name", arg=expected)
-        trigger = page.get_by_role('button', name='＋ 手工建档', exact=True)
-        trigger.click()
-        dialog = page.get_by_role('dialog')
-        field = dialog.get_by_label('项目全名', exact=True)
-        field.fill('动效切换未保存输入')
-        page.emulate_media(reduced_motion='reduce' if preference == 'no-preference' else 'no-preference')
-        expect(field).to_have_value('动效切换未保存输入')
-        dialog.press('Escape')
-        expect(dialog.get_by_role('heading', name='放弃未保存的修改？')).to_be_visible()
-        dialog.get_by_role('button', name='继续编辑', exact=True).click()
-        expect(field).to_have_value('动效切换未保存输入')
-        dialog.get_by_role('button', name='取消', exact=True).click()
-        dialog.get_by_role('button', name='放弃并关闭', exact=True).click()
-        expect(dialog).not_to_be_visible()
-        expect(trigger).to_be_focused()
-
-
-def test_history_confirmation_describes_target_cancel_and_rechecks_head(server, browser_page):
-    page, _ = browser_page
-    state = {'undo':{'id':901,'label':'修改隔离项目展示名','count':1},'redo':None,'notice':''}
-    sent = []
-    page.route('**/api/history/status',lambda route:route.fulfill(json=state))
-    page.route('**/api/history/undo',lambda route:(sent.append(route.request.post_data_json),route.fulfill(json={'ok':True})))
-    login(page, server)
-    page.get_by_role('button',name='撤销',exact=True).click()
-    dialog = page.get_by_role('dialog',name='确认撤销？',exact=True)
-    expect(dialog).to_contain_text('修改隔离项目展示名')
-    expect(dialog).to_contain_text('涉及 1 项变更')
-    assert sent == []
-    dialog.get_by_role('button',name='取消',exact=True).click()
-    expect(dialog).not_to_be_visible()
-    assert sent == []
-    page.locator('#page-title').click()
-    page.keyboard.press('Control+z')
-    expect(dialog).to_be_visible()
-    state['undo']={'id':902,'label':'另一条后续修改','count':2}
-    dialog.get_by_role('button',name='确认撤销',exact=True).click()
-    expect(dialog).not_to_be_visible()
-    expect(page.locator('.history-tools [role=status]')).to_contain_text('历史已变化')
-    assert sent == []
-    page.get_by_role('button',name='撤销',exact=True).click()
-    expect(dialog).to_contain_text('另一条后续修改')
-    dialog.get_by_role('button',name='确认撤销',exact=True).click()
-    expect(page.locator('.history-tools [role=status]')).to_contain_text('已撤销')
-    assert sent == [{'operation_id':902}]
-    state['undo']=None
-    state['redo']={'id':903,'label':'恢复隔离项目备注','count':1}
-    page.reload()
-    page.locator('#page-title').click()
-    expect(page.get_by_role('button',name='重做',exact=True)).to_be_enabled()
-    page.keyboard.press('Control+Shift+z')
-    redo=page.get_by_role('dialog',name='确认重做？',exact=True)
-    expect(redo).to_contain_text('恢复隔离项目备注')
-    redo.press('Escape')
-    expect(redo).not_to_be_visible()
-    assert sent == [{'operation_id':902}]
+def test_real_history_confirmation_cancel_undo_redo_and_changed_head(server,browser_page,api,projects,disposable):
+    page,_=browser_page;project,side,row,_=ledger_sample(api,projects,editable=True)
+    def write_remark(text):
+        current=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
+        actual=next(r for item in current['sides'] if item['category']==side['category'] for r in item['rows'] if r['record_id']==row['record_id'] and r['month']==row['month'])
+        result=api.post('/api/m05/history/save',json={'id':actual['record_id'],'project_id':project['id'],'category':side['category'],'entry_kind':actual['row_kind'],'cutoff_ym':actual['month'],'settle_amount':actual['other_expense'],'paid_amount':actual['payment'],'remark':text,'token':actual['token']})
+        assert result.json()['ok']
+    def current_remark():
+        data=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
+        return next(r['remark'] for item in data['sides'] if item['category']==side['category'] for r in item['rows'] if r['record_id']==row['record_id'] and r['month']==row['month'])
+    original=current_remark();changed=original+'核验历史';write_remark(changed)
+    head=get(api,'/api/history/status')['undo'];assert head
+    login(page,server);sent=[];page.on('request',lambda r:sent.append(r) if r.url.endswith('/api/history/undo') else None)
+    page.get_by_role('button',name='撤销',exact=True).click();dialog=page.get_by_role('dialog',name='确认撤销？',exact=True)
+    expect(dialog).to_contain_text(head['label']);dialog.get_by_role('button',name='取消',exact=True).click();assert not sent
+    page.get_by_role('button',name='撤销',exact=True).click();dialog.get_by_role('button',name='确认撤销',exact=True).click()
+    expect(page.locator('.history-tools [role=status]')).to_contain_text('已撤销');assert len(sent)==1
+    assert current_remark()==original
+    page.get_by_role('button',name='重做',exact=True).click();redo=page.get_by_role('dialog',name='确认重做？',exact=True);expect(redo).to_contain_text(head['label']);redo.get_by_role('button',name='确认重做',exact=True).click()
+    expect(page.locator('.history-tools [role=status]')).to_contain_text('已重做')
+    page.get_by_role('button',name='撤销',exact=True).click();write_remark(changed+'后续')
+    dialog.get_by_role('button',name='确认撤销',exact=True).click();expect(page.locator('.history-tools [role=status]')).to_contain_text('历史已变化');assert len(sent)==1

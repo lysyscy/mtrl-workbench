@@ -1,16 +1,21 @@
-"""Shared preview seed seam; each server owns its schema before seeding."""
-import os
-from contextlib import contextmanager
-
+"""Browser tests attach to the registered real-copy preview; no seeding or server creation."""
+from pathlib import Path
+import sys
+import httpx
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
 from playwright.sync_api import sync_playwright
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope='session')
+def real_preview():
+    from tools.dev.frontend_preview_runtime import registered_preview
+    return registered_preview()
+
+
+@pytest.fixture(scope='session')
 def preview_browser():
-    # Keep Playwright's sync event loop inside its test module.
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -19,38 +24,26 @@ def preview_browser():
             browser.close()
 
 
-@pytest.fixture(scope='module')
-def make_preview_seed():
-    def make(seed=lambda env: None):
-        def run(env):
-            build = os.environ.get('MTRL_PREVIEW_TEST_BUILD')
-            if build:
-                env['FRONTEND_PREVIEW_DIR'] = build
-            seed(env)
-        return run
-    return make
+@pytest.fixture(scope='session')
+def api(real_preview):
+    _, owner, base = real_preview
+    with httpx.Client(base_url=base, timeout=60) as client:
+        assert client.post('/m15/login', data={'account':owner['preview_account'], 'password':''}).status_code == 303
+        me = client.get('/api/m15/users').json()['me']
+        assert me and me['account'] == owner['preview_account']
+        yield client
 
 
-@pytest.fixture(scope='module')
-def preview_seed(make_preview_seed):
-    return make_preview_seed()
+@pytest.fixture
+def disposable(real_preview):
+    from tools.dev.frontend_preview_runtime import registered_preview,assert_same_preview
+    _, current, _=registered_preview()
+    assert_same_preview(real_preview[1],current,disposable=True)
+    return current
 
 
-@pytest.fixture(scope='module')
-def preview_session():
-    @contextmanager
-    def session(env):
-        engine = create_engine(env['TEST_DATABASE_URL'], connect_args={'options': env['PGOPTIONS']})
-        try:
-            with Session(engine) as current:
-                assert current.execute(text('SELECT current_database(),current_schema()')).one() == (
-                    'mtrl_workbench_test', env['PGOPTIONS'].split('search_path=')[1])
-                yield current
-        finally:
-            engine.dispose()
-    return session
-
-
-@pytest.fixture(scope='module')
-def preview_factory():
-    return 'tools.dev.frontend_preview:create_preview_app'
+@pytest.fixture
+def projects(api):
+    result=api.get('/api/m01/projects?status=all');result.raise_for_status();rows=result.json()
+    assert rows,'真实副本没有项目，项目相关路径未覆盖'
+    return rows

@@ -1,267 +1,61 @@
-# TAIL-422 累计工程核验与人工验收材料
+# React 当前验收与复测证据
 
-2026-10-25，执行工作树 `D:/UserData/Documents/Codex/2026-10-22/task/mtrl-workbench`，分支 `codex/react-frontend-rewrite`。交接身份 PH-20261025-tail422-01。固定累计基点 `33a9bb4e7a11c3faed9ead9fa514537812627baa`，开始HEAD `db63af3c08e15c46bf2bdbf8fb39d5f950abf38f`；包含本轮所属dirty及六张435–440规划票，未把它们单独遗漏在高水位之外。
+当前范围、批准与验收归[共同规格](spec.md)，大表分月决定归[当前确认](questions.md#2026-10-26大表分月口径已确认)。本页只保仍供验看/复测消费的结果和来源；本机原始输出不随Git提交，旧通过数不代表最新版本已经验收。
 
-**422签收时结论（2026-10-25历史快照）：422按“本票签done”指令关闭，固定首次累计基线3197ff1。** 下列性能数字及未验事实原样保留，签票不表示退化已修、现场未验已实测或正式切换获准。外观卡片预览/主题重设计另在questions.md澄清准备开票。React425、435–440、423/424均未启动，未推送、未合并master、未部署或迁移生产。
+## 当前真实副本与治理执行
 
-## 422验收时的候选与数据（旧实例已退出）
+用户2026-10-26批准文档生命周期方案及N1–N6，React改造基点`8629a33df9d182669b70c29f7c5ec2deceecd49f`。个人方法最终源`0b251b0286ff8508f18ae1924c00171cb3a3c971`的[精确CI](https://github.com/lysyscy/My-Skills/actions/runs/40256562119)通过；179项本机检查完成（其中4项原平台条件跳过），结构核验通过。官方Manager原位更新、完整本机资源/原ID/标签/Preset/部署集合、更新检测及远端备份均已核验，备份`a2568470cc7090c076cbbc6324166772dcc18d1c`。当前任务已实际读取安装后规则并在原规格采用；其他实体设备及宿主重载未实测，新设备恢复后须按官方Manager update/check校准。包核验原件由主检出本轮`.artifacts/archive/docs-lifecycle/20261026/reports`持有。
 
-- 入口 `http://127.0.0.1:8061/preview`；登录 `preview-admin`，密码留空；普通用户 `preview-user`，密码留空。
-- 数据全部合成：211项目、1503通知书、200流水、4历史行、23库存明细、4合同、11费用项及两项目机械零租/包月明细。包含空、零、历史和长名称样例。可在本schema保存、撤销、下载；不可将样例金额用于业务。
-- 独立Cookie `mw_preview_422`；真实i8抓取/同步、批量打印/PDF外部链及物理打印均由候选中间件拒绝，配置不含i8/打印凭据。未使用8060真实只读副本代替本候选。
-- 原运行所有者、PID/schema/build与停止方式见下文历史运行回执。441签收后用户已要求关闭8060/8061；当前状态及证据去向见本文末尾退出记录。
+唯一用户试用归属为`.artifacts/active/react-writable-preview/20261025-admin-i8`，当前实际进程、端口、schema/revision、前后端输入及构建都查该run的`reports/real_owner.json`、`version.json`和共享current指针；不复制PID或Cookie会话值到本页。用户副本已从c432261023仅目标升级至bmonth261026，升级前后37张原有表内容/行数摘要一致，`reports/target-upgrade.json`保存恢复点目录校验及摘要；未重新复制生产覆盖试用修改。私有配置/i8会话与用户数据在停止时保留。原始准备的33表/32序列与16非壳项目台账核验、初始计数只证明当时快照，不能当用户修改后现值。
 
-## 本轮实际修复
+原8066/8067模拟预览已逐一核PID、创建时间、命令后从原入口正常退出。自动写入验证先停并保留用户实例，在同一8065端口串行使用可丢弃真实来源副本；这些副本停止后只清自己的schema。验证副本均已正常停止并核自有schema删除，原用户试用入口已恢复。恢复后36张非账号原表摘要与升级前一致，账号内容对私有恢复点复核仅正常登录时间字段变化。当前状态以owner与最终回执为准，不能把验证副本误当用户数据或冻结性能条件。8000正式服务不在停止/迁移范围，本轮无新的真实i8或物理打印动作。
 
-1. `api.ts`集中body/cents/decimal/money、确认写回执及unknown分类，notices-api保兼容再导出；big/inventory/settlement/fees调用者收敛，逐端点校验仍在域模块。
-2. 台账三处POST进入ledger-api，保表单/JSON/token/AbortSignal/原队列、焦点和草稿语义。累计审查进一步补齐明确ok/id确认，未知写入重读前阻止重投，放弃草稿不解除待核实锁。
-3. 全局历史区分明确拒绝、结果未知和已写成后重读失败。机械页删除第二套撤销出口，沿统一历史控制器并登记机械草稿/进行中/待读保护，避免跨页绕锁。
-4. 付款先确认成功再清勾选/进入结果；坏200、空回执及500保守按未知；合同和通知书非幂等新增同样禁止盲目重投。通知书保草稿，可靠读回后需显式核对关闭。
-5. 账号确定变化时集中切断原账号网络生命周期，与各请求原signal合并；旧金融POST迟到401不发布给新账号。取消客户端等待不等于撤回服务器已经发生的写入。
-6. 修复BusinessModal实际可访问名称；机械快照过期后补重新预览入口。
-7. MOD05/MOD06经已有导出注册表和项目service接合，原layering守卫保持；静态挂载使用已声明的fastapi入口。
-8. 原414遗留的异常物料性质导出问题经真实成品复现：缓存追加改在sharedItems闭合点，保fieldGroup后缀；未知组不重复计方向小计。缓存、原始明细、显示区三路对账及原守卫未放宽。
+### 本次验证与覆盖边界
 
-## 验证账本
+本轮原件在`.artifacts/archive/frontend-vue-rewrite/docs-lifecycle-20261026`。最终类型/完整构建日志归用户run的`logs/{typecheck,build}.log`，产品输入和完整资源清单归version；纯文档提交不要求重建。预览工具守卫/复制合同13项通过，覆盖跨进程/跨端口排他、异常释放、旧factory退役、缓存写入授权不能跟随新实例、HTML输入、待用构建不阻止正常停止、只读一致复制/投影/序列及旧结构复制后仅升级目标、已知全部i8/物理打印入口阻断。
 
-验证运行原为 `.artifacts/active/react-tail422/20261025-01`；选留证据归 `.artifacts/archive/react-tail422/20261025-01`，保留至2026-11-24；该验证run的work与active已退出（关闭回执见归档reports）。所有DB验证先确认 `current_database/current_schema/search_path`，仅专用测试库独占schema，无public回退。来源 `.env`只读目标配置，不复制凭据/业务数据。
+最终真实浏览器41项与纯算法1项共42项通过（0失败/错误/跳过，203.209秒）；真实页采集器及其纯/保护检查13项通过（6.481秒），不等同完整84组。结果由`reports/real-release.xml`与`logs/real-release.log`持有。最初真实浏览器40项为29过/10失败/1连带路由错误，定向修复11项后8过/3失败；下一轮41项37过/4失败，原非零日志及XML均保留，不能概括一直全绿。费用同月同名多记录代表随后定向2项通过（26.21秒）；首次指定旧浏览器路径的2个装配错误及复用现有浏览器后的通过原件均保留。失败分别按实际接口包装、控件定位、页内导航、异步就绪与请求缓存归因，必要独立运行链问题另修并保反例。
 
-| 动作 | 实际入口/选集 | 结果与失败处理 |
-|---|---|---|
-| 类型 | apps/frontend：corepack pnpm typecheck | candidate-final-typecheck.log，退出0 |
-| 构建 | corepack pnpm build --outDir 本轮work/final-build | candidate-final-build.log，退出0；非Vite dev |
-| 前端全套（审查前） | backend/.venv Python -X utf8 -m pytest apps/frontend/tests -q | 115通过，退出0，432.79s；没有用它冒充审查后全部通过 |
-| 前端定向（审查后） | test_write_receipts + ledger_layout + mechanical_reports | 17通过，退出0，80.56s；新增两项随后由最终全套承接 |
-| 前端最终全套 | 同上完整apps/frontend/tests | 124通过/0失败/0跳过，退出0，594.49s；最后按真实字符串row_id修正成功校验后，最终固定构建再跑9项金融回执（含正常清稿）全过，40.88s。没有将两次重复用例相加 |
-| 后端首次全量 | work/backend-all.py tests，原鉴权/DB/分层守卫 | 首次继承loopback白名单导致ASGI虚拟testclient403，保留非零日志；修测试进程环境后2067项：2040通过/27失败，退出1 |
-| 后端失败处理 | 全部失败所属21模块185项，再剩余3模块21项 | 182通过/3失败后21全过；旧UI、字段契约及夹具按现行需求修正，原金额/事务/权限/导出守卫未删 |
-| 导出/分层（新增修复） | test_tail04_export + test_tail43_display + test_layering | 38通过，退出0；先有XML ParseError红灯，再有独立显示区对账红灯，修根因后通过 |
-| 后端最终全量 | work/backend-all.py tests | 2068通过/0失败/0错误/0跳过，退出0，761.11s（含新导出回归） |
-| 公共金额自检 | Node --experimental-transform-types work/api-check.mts | 退出0；大整数/负小数/空零缺失/明确拒绝与unknown分类 |
-| 生产接线/回退 | release_drill.py；三版同schema与会话 | 最终固定构建三阶段全部通过，退出0；HTML/入口资源字节hash、304/404、会话、主题no-cache、真实XLSX、正常写入保留及清除Cookie均核验 |
-| 设计检测 | impeccable detect --json apps/frontend/src | 初轮退出0、输出[]；后续是独立审查指出的保护修复 |
-
-完整命令、JUnit、首次失败及原始测量保留在本轮logs/reports。最终回归没有skip。FastAPI的现行会话不按服务器时间过期（2026-10-12裁定）；验证缺失/损坏/清除Cookie后的只读及拒写，不虚构TTL。Starlette TestClient弃用提示原样保留，不改锁或新增依赖。
-
-## 同数据同环境性能：签收基线保留的已知退化
-
-实际master `e55ff04822c78338d130e0fd914835ce60deaa2b`的22件公共静态资源只读快照与新React生产构建，连接同一FastAPI、同一合成schema、同一账号、1920×1080、DPR1、同一Chromium、无CPU/网络节流。不是拿8060 Lighthouse或另一套数据作比较。最终构建index SHA256 `cfa44d699913a59290f77bf51d61921f53ab810456e3a9aef512ea107e5ee698`。全量测试退出后才测量，无测试并发负载。三轮交替顺序；冷轮用全新浏览器context，热轮复用同context。输入计时含自动化调用开销，旧版行内输入与新版先开编辑窗的交互不同，输入值未落库且前后项目API字节一致。
-
-| 项目（中位数） | 旧版 | 新版 |
-|---|---:|---:|
-| 冷进入项目页 | 898.4ms | 1571.1ms |
-| 从项目首次进入通知书 | 209.2ms | 2167.1ms |
-| 通知书本地搜索 | 199.1ms | 215.6ms |
-| 通知书热返回 | 146.1ms | 113.4ms |
-| 项目全名输入 | 78.0ms | 140.6ms |
-| 等读取/字体完成后的相同真实滚轮450px×10、间隔至少120ms，rAF p95 | 16.8ms | 83.3ms |
-
-完整遍历整表的额外压力测量也保留（两版行高/总距离不同，不作为公平日常滚动主结论）。正常滚轮三轮新版均有约10个>50ms帧间隔，旧版均0，属于明显退化。不得用已建435–440规划票自动豁免422原验收第13项/规格190行。用户在收到此退化数据后明确“本票签done”，按指令签收首次累计基线；性能事实继续进入后续具体打磨及上线前候选复核，不把签票写成性能已修。按本轮边界未提前实施下游性能票，正式切换仍需独立授权。
-
-## 48故事逐项核对
-
-“代表路径通过”指表列源码与自动化/实际成品证据；不是用户全站签收。未验项独立列明，不把旧入口已退出误记为漏迁移。
-
-| 故事 | 当前含义 | 证据/实现落点 | 边界 |
-|---:|---|---|---|
-|1|旧系统继续使用|独占工作树/测试schema；8060原页面指纹核对|未触碰正式运行|
-|2|代码/依赖/构建隔离|apps/frontend独立锁与本轮生产构建；preview原有opt-in|工程核验|
-|3|独立预览|8061合成候选；独立Cookie/schema/进程|人工验收入口|
-|4|现行职责入口|test_shared_controls实际遍历14入口；411撤回|代表路径通过|
-|5|身份与权限|test_preview/test_users；后端鉴权/角色全量|代表路径通过|
-|6|换号清理|test_preview换号迟到读；test_write_receipts迟到付款401|代表路径通过|
-|7|字体主题/颜色|主题同源；test_users/后端theme；字体实际加载|现场视觉待验|
-|8|加载/空/错/成功|read_ui与各域异常/空结果回归|代表路径通过|
-|9|原因与下一步|明确拒绝、unknown、成功后重读失败分别反馈|代表路径通过|
-|10|项目维护/指认|源功能核对；项目筛选/状态实际保存；后端项目全量|完整人工待验|
-|11|人工i8/顶号|原400/409等裁定与外部边界替身；本预览屏蔽执行|真实外部未验|
-|12|执行记录|现行i8结果/记录页；后端记录契约回归|完整人工待验|
-|13|通知书筛选定位|acceptance_b、home；稳定ID跳转|代表路径通过|
-|14|勾选/批量/合计|acceptance_b虚拟窗口、粘贴替换与顺序|代表路径通过|
-|15|分类/归属/维护|源出口核对、后端动作与手工新增未知回执回归|完整人工待验|
-|16|付款限制/影响/结果|后端整批事务/幂等；真实部分付款后坏JSON/空对象/500|代表路径通过|
-|17|PDF/打印/设置|现行源码/原402证据及后端批任务/缓存回归|真实i8/PDF外部链及物理打印未验|
-|18|流水/欠款/统计金额|ledger、ledger_layout与后端各金额/统计回归|代表路径通过|
-|19|相邻格连续编辑|ledger真实保存/Tab/鼠标和后续草稿|代表路径通过|
-|20|立即保存/合计刷新|ledger写队列与真实读回|代表路径通过|
-|21|写成后读回失败|ledger及各域已保存/读取失败保护|代表路径通过|
-|22|拒绝保稿|ledger金额拒绝、冲突/空非零|代表路径通过|
-|23|旧响应不覆盖|各域范围切换；全局账号请求生命周期|代表路径通过|
-|24|草稿归属|ledger/contract/account树按稳定项目/月/记录归属|代表路径通过|
-|25|写后新鲜度|真实保存→跨域/历史读回；query失效链|代表路径通过|
-|26|撤销/重做/冲突/账号|后端事务全量；真实历史冲突与未知跨机械锁|代表路径通过|
-|27|过程报表/机械有效值|test_process实际保存/拒绝/导出；后端过程矩阵|代表路径通过|
-|28|收发结存/提取/大表|test_settlement/test_big含空零、金额、顺序/文件|代表路径通过|
-|29|库存调整/撤销/导出|test_inventory真实HTTP与成品；本轮补未知性质缓存/小计|代表路径通过|
-|30|特殊费用范围/保存/合计|test_fees实际HTTP；年度/逐月与后端费用回归|代表路径通过|
-|31|机械多项目/汇总明细|mechanical_reports虚拟滚动/冻结列/同名项目ID跳转|代表路径通过|
-|32|明细草稿/保存/有效值|机械workbench源码与后端保存/确认回归|完整人工待验|
-|33|来源/冲突/跟进|原409范围与后端机械事务回归；外部替身|真实外部未验|
-|34|四页同快照|mechanical_reports真实4表/公式/缓存/顺序/过期拒绝及重新预览|代表路径通过|
-|35|合同/发票/付款/欠款|contracts/invoices/contract_export；真实主子表与文件|代表路径通过|
-|36|JSON录入|408只JSON，原通用/机械Excel入口撤回；后端机械JSON回归|完整人工待验|
-|37|规则/历史影响|test_rules与后端规则；不声称自动重算历史|代表路径通过|
-|38|账号管理/外观权限|test_users及后端账号/身份回归|代表路径通过|
-|39|下载范围/金额/顺序|实际XLSX/ZIP解包openpyxl，机械公式/缓存、合同打印版|Excel桌面外观待验|
-|40|冻结/合计/长表滚动|ledger/mechanical/big等实际渲染；普通滚轮专项|功能通过；性能门未通过|
-|41|中文/Tab/弹窗焦点|真实浏览器合成composition、Tab、关闭/焦点归还|实体IME待人工|
-|42|1080P/窄屏/缩放|各现有代表视口/应用字号回归及截图|宿主浏览器200%待人工|
-|43|隔离真实后端/文件|独占mtrl_workbench_test schema；真实HTTP/事务/成品|工程核验|
-|44|依赖/类型/生产构建|既有锁未变；Node24.22.1/pnpm12.15.0；分别typecheck/build|工程核验|
-|45|生产形态登录/资源/刷新/下载|FastAPI真实dist，回退演练及全量浏览器|工程核验|
-|46|吸收旧系统后续修正|原合并记录与现行共享付款契约；425重号保身份|工程核验|
-|47|仅前端回退保业务写入|同schema/session跨三版；正常历史写入4321.09/123.45仍在|隔离演练，非生产操作|
-|48|人工确认后退出旧版/临时服务|423/424及React425/435–440后续门保留|未授权/未实施；本预览待人工后关闭|
-
-## 425双身份与下游依赖
-
-React425 = 通用导入后端退役清理，前置422；435/437/440直接依赖此React425，436依赖435、438依赖435、439依赖438。423须在422、React425、相关打磨后的固定候选回归/累计审查/人工与正式切换授权满足后考虑；424仍另守旧版退役门。
-
-master425 = MiniApp骨架，master426依赖425，427依赖426，428/429/430依赖427，431依赖425–430。两者是不同项目工作流身份，保双方标题、规格与依赖，不静默合并或改号。本轮只记映射，公共高水位440与六张规划原票同批保存，不对master实施。
-
-## Standards
-
-独立审查者在累计固定基点到完整候选（含所属dirty/new）识别3类实质问题：机械历史旁路、台账回执/unknown、付款与非幂等新增unknown。修复delta复核为0项仍未关闭的实质发现，无需额外重构气味。核过完整路径清单、后端累计hunk/迁移、前端API/账号/历史/写入链、隔离与有效测试调整；未逐行深审801项历史删除、全部CSS及全部前端测试体，未独立运行测试。
-
-## Spec
-
-另一独立审查者按48故事追链，初审3类：未知金融回执误判、旧账号金融POST迟到401、机械跨页绕全局历史锁。修复delta复核均关闭；没有发现411/408范围漏迁、435–440提前实施或425静默合并。执行证据复核不冒称独立运行；未逐行重审全部累计路径。初审时尚待性能取舍与全站人工签收；随后由用户明确“本票签done”关闭，不是凭源码复核代签。
-
-## 全站人工检查（建议一轮办理）
-
-1. 登录两种账号，打开14入口；看身份/菜单、主题字号、长名称、1080P与常用窄屏。额外检查宿主浏览器200%及实体中文输入法。
-2. 项目查找、编辑与归档；通知书筛选/勾选、手工草稿；用合成记录试一次部分付款，核流水、欠款和撤销/重做。真实i8/对外/物理打印不在此候选办理。
-3. 台账连续改相邻格并切页返回；看金额/合计、拒绝保稿、全站操作历史。留意任何“待核实”都先读回，不能当成未保存。
-4. 过程资料→库存定位/调整；收发结存/提取/大表/费用；核样例月份、零/空、保存与跨页刷新。
-5. 机械汇总→零租/包月/工作核对；保存明细与确认月值分开。预览四页后下载，另试内容变化后重新预览。合同→发票/付款及普通/打印版导出，实际打开文件核范围和外观。
-6. 按日常节奏进入、搜索、编辑、滚动，明确是否接受上述具体性能取舍，或在进入下游前调整实施顺序；最后给出全站结论和发现。未保存草稿属浏览器内存，刷新/换号/回退前先保存或明确放弃。
-
-## 正式接线与回退操作边界
-
-本轮只在隔离环境演练。正式执行须走423并另获授权：先让用户处理各页未保存编辑，记录后端/数据与两个完整构建的身份，保持同源会话；停止接流量后指向完整资源目录并一致启动，先核HTML及版本资源hash、缺失资源404/深链/真实下载。不要逐文件覆盖运行中的assets。
-
-回退先保持当前数据库与正常写入，恢复上一套完整前端资源/入口并让页面刷新；不得用旧数据库备份撤回已发生的正常业务。旧/app沿完整主线静态快照可读取。本轮current→previous-react→current的构建演练保留新写入历史行4321.09/123.45及原会话，恢复后当前index hash完全一致；它证明隔离接线，不是生产切换成功。
-
-## 运行回执与保存状态
-
-- 人工运行 `.artifacts/archive/react-tail422/20261025-human`，PID `29076`，端口8061，schema `frontend_rewrite_397_eaf2872bd448424fbde95d3d8365e799`，准确身份见 `reports/preview-owner.json`。单独Cookie `mw_preview_422`；build逐文件48项SHA256在 `reports/build-manifest.json`，index hash同上。
-- 人工工作进程由本会话保留；本会话负责收到验收/关闭指令后，在该运行 `work/STOP-PREVIEW` 写停止标记，等待准确 `ISOLATION cleaned schema=...`，再核端口关闭和本schema消失。不按端口杀未知进程，不清理8060或其他schema。
-- 最终FastAPI实际打开14入口、逐一核标题，无pageerror；首页/通知书/机械截图已实际查看。8个外部执行端点实发后全为403，原8060仍200且SHA256 `8f1204a8f9f5a3b43a77c64445309c0c8863d8c0fd36c72948ea05d39d91d7fd`。
-- 本轮各临时验证schema均退出，验证run无在用构建；当时仅上述人工运行保留明确消费者，现该消费者已结束并按末尾记录退出。422已签收；整个前端effort尚有后续工作，未运行整个effort的closed检查冒称重做/上线已完成。
-- 原始失败/最终JUnit、必要截图及合成成品有限归档30天；本轮一次性脚本、源快照、评审patch和重复构建在保存后清理。
-
-最终本地源码提交由本轮回复给出，真实钩子不绕过。没有push、合并master、生产重启/迁移、真实外部写入、物理打印或人工代签。
-
-
-### 2026-10-25 旧预览按用户指令退出
-
-441验看签done并清理其一次性资源后，用户明确要求关闭8060/8061。8061以STOP-PREVIEW优雅退出，收到准确schema清理回执，测试库只读查询确认其合成schema已不存在；8060核PID/命令后停止，两个端口不可连接，8000仍可用。8060真实数据只读副本schema仍保留，旧运行所有者已标stopped-schema-preserved；未重复制、迁移或删除该副本，未建立新基线，也未开始435–440。
-
-8061人工运行work/构建/截图及无消费者日志已释放；reports与最终退出日志归.artifacts/archive/react-tail422/20261025-human，沿既有retention.json保留至2026-11-24。上文原人工入口、运行PID与构建信息仅为422验收时的记录，当前不能用于访问在用预览或恢复包含441的候选。
-
-
-## 完整425441优化前性能基线（2026-10-25）
-
-本轮用户只授权完整构建、隔离真实数据只读副本、优化前测量与一个保留验看实例；不启动435–440、最终候选复核或423/424，不动8000。固定源码`98d2d665475be7d7f214de2e740f8b049c1e5deb`（含425/441），开工dirty为空；Node24.22.1/pnpm12.15.0，typecheck与生产build退出码均0。产品源码未改。
-
-构建index SHA256=`bb2d734a60afd358c617ac4b38bfc4b8f83e6eefc4a68c42d3f0b52935a8d840`；完整清单SHA256=`dd60831310cae73cebe22cb4e44e452857578cccb3ac969551478601bf7eca34`。本地唯一运行目录`.artifacts/active/react-performance-baseline/20261025-full-98d2d66/`；详细口径/全14页结果在`reports/baseline.md`，原始`reports/samples.jsonl`、`summary.json`、`api-direct.json`、`environment.json`与`resource-sizes.json`。本机证据不提交真实业务内容或截图，停止验看后最小原始证据有限保留至2026-11-24。
-
-重新用实际连接核旧副本`mtrl_workbench_test.frontend_rewrite_397_68b8838c875e4985a8656faeaca9b205`，owner=mtrl、search_path仅自身且事务只读，修订`c2a261023`与本源码相符，账号脱敏检查0异常。复用旧快照，不声称与当日正式数据同步；未连来源库、复制刷新、迁移或改账号。38表前后内容指纹完全一致。规模：项目19、通知书1193、合同265、库存18198、收发结存1839。
-
-Chromium156.0.8078.4/headless，1350×940/DPR1、zh-CN/Asia-Shanghai，本机回环无人工限速，默认主题/标准缩放。14入口各3次新context禁HTTP缓存冷启动、全站预热后3次热切换，共84组，无pageerror/失败响应/失败请求；字体正常加载，没有屏蔽、替换或隐藏内容。冷启动另记FCP/LCP；就绪代理等待document networkidle、fonts.ready和双rAF，冷测通常含500ms安静期，热切换document级networkidle可能已经满足，不是SPA LCP/INP。主线程CDP窗口另含约100ms观察排空，不能混作Lighthouse模拟TBT；热切换同时保留全部位移，不能用输入排除后的CLS=0宣称完全稳定。
-
-|重点入口|冷就绪代理中位ms|冷CLS中位|冷主线程中位ms|热主线程中位ms|
-|---|---:|---:|---:|---:|
-|项目档案|1090|0.380|426|447|
-|付款通知书|1225|0.229|803|605|
-|流水欠款|1873|0.339|807|546|
-|集采台账|1472|0.069|887|727|
-|库存|1649|0.081|923|753|
-|月度会大表|1123|0.234|678|518|
-
-三份完整MiSans共14,835,204bytes（14.15MiB）；全构建JS2,592,167bytes，离线gzip合计795,508bytes。规则页冷CLS中位0.409；合同冷CLS0.006–0.216且热首轮仍有大位移，原始范围保留。浏览器自然请求：欠款3次846/853/953ms、库存5次505/548/565ms（最小/中位/最大）；独立顺序HTTP各5次中位495/362ms。浏览器并发读取与独立identity编码回环总耗时分开解释，未据差值归因到SQL或前端。
-
-唯一验看入口`http://127.0.0.1:8064/preview`，已打开本聊天IAB并登录preview-user（空密码）。应用PID13620、venv父PID28492，启动身份及命令见`reports/real_owner.json`与`process-identity.json`；Cookie名`mw_real_preview_8064`，值与签名密钥不落盘。隔离层复用旧只读主机并在本run适配441八主题真源；8主题/4缩放进程内读回均通过，不落库。业务写入/撤销/导出/i8/打印/旧app均403，外部HTTP另阻断。停止用本run的`work/stop_preview.ps1`，先核命令与创建时间，仅停当前PID并保留schema；`-WhatIf`只核目标。8000只读连接正常、服务运行，未启停/部署/迁移。
-
-未验：移动/慢CPU/限速、管理员业务、32套外观组合性能、全部筛选/编辑/滚动/弹窗与导出成品、生产发布缓存、旧新版同条件对照；真实业务写入、i8及实体打印仍不执行。全站入口冒烟与性能基线不代替功能/最终候选验收。自查足够：本轮无产品变更，运行隔离有连接只读检查、拒绝路由断言与全表指纹证据，未启动新一轮累计双轴。当前run因用户验看/必要复测仍在用，非已结束run；只保留当前预览、构建、可复测脚本与必要原始证据，普通测量进程和自动化contexts已退出。停在用户验看关口，不自动开始性能增强。
-
-
-## 435–440性能优化同条件对照
-
-用户验看完整425/441基线后明确授权按依赖从435推进性能优化；本轮累计起点`d9a59e365bc9eadbabd9d973fc00d3ea71bd5166`，产品固定`5dc133e794fbde6916659b25d817f987ed1fe655`，本地提交未push。435字体官方原样分片、436首paint前列宽、437异步付款区占位、438通知书首paint前行高、439减少重复表格工作、440欠款7列窄投影已技术完成；按既有代验收授权回原票done，不代本次用户最终验看。
-
-完整可运行预览为 http://127.0.0.1:8065/preview ，仅一个实例，登录`preview-user`空密码；Cookie名`mw_real_preview_8065`，业务写入、i8、打印、导出和旧/app均阻断，八主题四档偏好只在进程内存。原8064停止、原完整基线构建及84样本按用户指令保留；8000服务/进程/创建时间与原记录一致，未重启、部署、迁移或写真实业务。423/424及最终上线前候选复核均未启动。
-
-本机本轮目录：`D:/UserData/Documents/Codex/2026-10-22/task/mtrl-workbench/.artifacts/active/react-performance-polish/20261025-435-440`。完整报告`reports/delivery.md`；原始`reports/samples-final.jsonl`、`summary-final.json`、`environment-final.json`、`comparison-final.json`、`api-final.json`、`version.json`；进程与停止方式`reports/process-identity.json`及`work/stop_preview.ps1`（干跑WhatIf通过）。原基线同工作树`.artifacts/active/react-performance-baseline/20261025-full-98d2d66`不变。最终index SHA256 `250bf8addaa047a5786b49591767c7d9d8423d5556d7af23ef31fa6cf9a85037`，全文件摘要见version.json。
-
-固定Chromium156.0.8078.4、1350×940/DPR1、正常MiSans、无人工限速；脚本沿原14入口3冷3热共84组，缓存/等待/时窗不改。真实只读历史副本38表hash/行数与原基线相同，19项目/1193通知书/265合同/18198库存；不声称当前生产新鲜度。全部84组无脚本、HTTP或资源失败。三次冷CLS中位项目.380→接近0、通知.229→.002、付款.339→.015；热ready中位通知649→470、合同680→501、库存653→518ms。独立顺序5次HTTP欠款495→153ms，库存362→410ms未改善；两个响应字节及SHA与原基线相同。
-
-不能只报收益：多数冷ready上升，例如通知1225→1621、库存1649→2095ms；规则冷CLS中位.227、最大.342（原.409），合同冷.069→.082；最终整站热仍有合同203ms/库存201ms单次长任务，冷合同235–285ms。439独立两轮轨迹194/74、143/84、59/140ms是定向证据，不表示所有任务均<200ms。字体字节约下降58–60%，但全角加号等仍触发完整Regular，约6MB，不是纯小分片/1MB目标。库存mapping实验更慢已撤回；不以缓存、少行、隐藏内容或改金额制造收益。ready只是诊断代理，主线程额外100ms observer排空，不冒称真实INP/SPA LCP。
-
-最终typecheck/build通过；分票有效回归及失败后定向复验回原票，本次440共51有效PG/语义/分层项（首轮新fixture字段错误已纠正定向通过，原失败日志保留）。三表滚动末端、固定列、编辑/焦点/草稿覆盖通过。`shared-final.json`补32套实际项目字号/字重CDP字体、全14入口标准/最大两档42次检查（标准重复，28独立组合），数字金额不裁切、无文档横溢；`long-names-final.json`补标准/最大字号完整title与横滚可达（3次，标准重复）。原长名仍按已采用设计省略并用title给全文。合成库存/合同截图实看通过，Impeccable一次机械扫描0项。累计独立Standards/Spec源码及最终文档增量复核均通过，各0项发现。
-
-未做本次人工全站业务验看、最终全站Lighthouse、实体IME/操作系统200%缩放、真实i8/付款外发/物理打印、生产写入/上线。435仅保留字体影响所需9次定向Lighthouse，不把它当最终候选复核。当前run仍被8065验看与复测消费，仅保在用最终构建/运行器/复测脚本和最小原始证据，中间build及无消费者临时工具退出；用户验看后再停实例归档，不自动推进下一轮性能增强。
-
-
-### 435–440用户签收与后续研究
-
-2026-10-25用户在收到435–440完整预览、同条件84样本、收益/退化和未验边界后明确“你先签done吧”，按本次指令记录本轮签收；原票已done，不重复关闭或重开。该签收不补造额外人工全项验看，也不表示冷启动、规则CLS、库存响应或残余长任务已全部解决。原产品固定5dc133e7及原始基线继续保留，不修改历史测量。
-
-用户随后调用research要求调查成熟解决方案，目标为实际操作更流畅及合理动效，并纠正字体/虚拟滚动只是举例、不是研究重点。调查先从现有调用栈、保活与读取/渲染链路排序，不预设换字体、再套虚拟列表或添加动画就是主因修复。已完成的[研究结论](research.md)单文件持有一手依据、实测热点、分阶段取舍及下一轮验收建议；新诊断原件归`.artifacts/archive/react-smoothness-research/20261025-diagnosis`，保留至2026-11-24；源码实施、下一轮开票、上线复核及423/424不由研究自动启动。8065继续作为只读研究/对照消费者保留，8000不动。
-
-## 442–444流畅度实施与同条件对照
-
-用户明确授权按研究开票并依P0→保活→动效推进；React整合者在相关工作树高水位441后串行分配442–444。累计起点`2758b889c032a083ac1b5f336f0c507889094c5d`、开工clean；442批量库存自然行高、443保活更新边界及库存依赖复用、444标题/局部短反馈与动态减少动效完成。最终产品源码`0969780854be21389163de4947811672ac321f7b`，本地保存未push。按既有用户agent代验收授权签技术done，不代本次用户实看。423/424、最终上线候选复核与额外增强未启动。
-
-唯一保留预览 http://127.0.0.1:8065/preview ，`preview-user`空密码，Cookie名`mw_real_preview_8065`（不保存会话值）。旧5dc133e7预览进程已核身份退出，旧构建与原98d2d66完整基线均保留未改；当前8065指向本轮完整生产构建。运行目录 `.artifacts/active/react-smoothness-implementation/20261025-442-444`：`reports/delivery.md`为详细交付，`version.json`含源码/逐文件hash；index SHA256 `89ad45e8b928320d90f39e5196b54fa1c61566511c9c8383c05d43d0430d2c18`，manifest摘要 `6f519b0fe7298e27731757e070ff262534a041c41b46c348aeb077a0d53f0ede`。当前PID19416的命令/创建时间、8000身份/只读健康检查与TCP端口核验回 `reports/process-identity.json`；仅停当前实例的 `work/stop_preview.ps1 -WhatIf`干跑通过。8000服务PID8688及子进程8728/8836、创建时间与原记录一致，未重启/部署/迁移。
-
-同一历史副本 `mtrl_workbench_test.frontend_rewrite_397_68b8838c875e4985a8656faeaca9b205`，revision c2a261023，19项目/1193通知书/265合同/18198库存，38表hash/行数与两旧基线和本轮前后共7份指纹相同（`data-unchanged.json`）。连接只读且精确search_path，无public兜底；来源库未刷新/写入，副本非当前生产新鲜度承诺。业务写入/撤销、i8、打印/导出与外部调用被隔离层阻断，八主题四字号偏好只在内存，403/readback证据 `isolation-http-final-r2.json`。自动写入验证使用另造合成独占schema，结束清理。
-
-测量沿原Chromium156.0.8078.4、1350×940/DPR1、正常MiSans400/500/600、无人工限速/资源阻断；14页各3冷3热共84组，原始 `samples-final-r2.jsonl`、`summary-final-r2.json`、`environment-final-r2.json` 与三版本 `comparison-final-r2.json`。冷新context/禁HTTP缓存、热全站预热，DB/OS缓存不清。84组无脚本/HTTP/资源失败，字符加载检查均true；warm ledger/big/rules各第1次采样FontFaceSet仍loading，其余81条loaded。采样前fonts.ready之后仍可能新触发字体，保留3条、不称84/84全字体稳定，热ready及资源归因受此限制。ready是标题+document networkidle/fonts/2rAF代理，主线程多100ms observer排空，非现场INP/热SPA LCP。
-
-10次输入/清筛选事件中位分别148→96ms（128–248→72–136）、240→164ms（208–264→112–224）；对应每样本最长任务中位120→62.5、207.5→109ms，均无API。交互40条原件 `interactions-before-clean.json`/`interactions-final-r2.json`，EventTiming阈值16ms、脚本insertText非实体IME，不等同RUM p75；导航交互next_two_frames含11MB response.body自动化传输，不能作为用户切页耗时，切页以84组ready为准。热ready中位项目302→218、通知470→357、合同501→444、库存518→385、规则386→239ms；付款417→453ms、主线程418→514ms未改善，库存热356–713ms仍有离群。冷库存ready2095→1910、主线程856→694ms；其他冷页并非都更快。规则冷CLS中位.218/最大.342、付款冷.052（原.015）、合同冷约.082仍留，热全部位移与CLS分别记录避免近期输入排除造成误解。
-
-接口单独顺序5次：欠款153→132ms、库存410→417ms；字节/SHA与原相同（19348/11361071bytes），本轮未改后端，不把耗时波动称后端优化。字体保持现有MiSans，完整Regular回退约6MB仍存在。中间442/443/整页动效r1及较差样本完整留存；最终不采用整页位移淡入，仅标题/局部反馈。阶段443插桩计数显示部分无关页6→0、过程/费用10→1，但流水9→12，必要router/context/query工作仍在；计数/CPU诊断/暂停视觉截图不混入正常计时。
-
-最终typecheck/build通过；442有效库存6项、443共享/库存9项、444共享/合同/台账/身份/回执12项通过，标题动效最终增量再核偏好切换/草稿/焦点。动态AntD token实测会重建账号树，新回归先红后改稳定MotionProvider通过。独立Standards初审发现1项P1：443误漏机械页exportGuard；已恢复所有消费者，新draft/unknown跨页两支旧版分别红、修复版2通过，既有机械失败/迟到用例通过。Spec初审未识别此项，后续明确更正、复核修复。修复与最终标题动效两轴当前均0；最终文档增量两轴均0未解决，回执final-review.json；不能把初审写成一直0。完整文本/金额/编辑体验定向覆盖：合成超长中英、窄宽视口/最大字号、筛选清除；3表末端/横向/固定列；32套实际项目字号/字重、14入口标准/最大两档42次检查（标准重复，28独立组合）；长名3次（标准重复），既有省略项保完整title；动效合成三图实看、减少动效无活动动画。本批Impeccable机械扫描一次[]。
-
-未做本次人工全站业务验看、实体IME/操作系统200%缩放、现场长期帧率/RUM INP、最终全站Lighthouse、真实外部动作/打印/生产业务写入。当前run仍由8065验看与复测消费；保留在用最终构建/运行器/最少脚本和原始报告，清理无消费者中间构建及诊断插件，记录 `lifecycle-final.json`。停在用户验看关口，不自动推进下一轮。
-
-## 可写admin与真实i8业务预览
-
-2026-10-25用户要求管理账号admin空密码、解除业务只读并接真实i8，明确选择新建可写隔离副本、正式库不变。新运行`.artifacts/active/react-writable-preview/20261025-admin-i8`持有相同完整React构建（前端09697808/index89ad45e8）与正常业务后端，唯一 http://127.0.0.1:8065/preview/inventory 已登录admin。Cookie `mw_writable_preview_8065`，当前PID/创建时间/启动命令见reports/real_owner.json/process-identity.json；停止脚本先核身份，仅停8065、保留schema及用户试用改动。
-
-用户明确否决三处额外操作人字段扩容，已恢复run_record.triggered_by、app_setting.updated_by、app_setting_log.operator为varchar64并删除c400/c419/c2三份迁移；React head、正式库和新可写副本均c432261023，370列定义逐项相同，见schema-comparison.json。回退先核无超长值，未截断；回退前后37数据表指纹/行数一致（revert-extra-fields.json）。首次直接downgrade到c432只去掉合并标记、留下c419分支，检查当即发现，随后在同一目标事务中执行原两份downgrade函数并移除已回退分支标记；保留实际失败，不报首次即成功。正式库未迁移/写入，8000服务及子进程/创建时间不变。
-
-此前准备新副本时，直接复制因版本不同被正确拒绝；最终先按正式c432结构，以只读一致快照复制33保留表/32序列，16非壳项目台账相等，再曾升级新副本到c2；该额外扩容现已按用户指令撤回。初始19项目/1193通知书/18198库存/265合同，不是后续用户修改后的计数。新schema `frontend_writable_61e11b3fd1fb471483b8131cb0e762e7`，精确search_path、transaction_read_only=off，无public兜底；来源快照与新副本对应回logs/preview-copy-verification.json及preparation.json。
-
-正常账号admin密码空、role=admin，自检正常登录及持久主题写入读回恢复通过。配置/导出/来源缓存限本轮，私有配置与i8会话在忽略的var/state，不入Git/归档。i8配置接口原来误把空密码当未配置，现与既有http_login允许空串的行为一致，认证仍由i8负责；新回归在旧1265端点先红，当前新回归/账号变化/非强踢保护3项绿。
-
-i8按用户指定账号的已有匹配绑定接入，密码确为空。最初提取/复制缓存被自动审批拒绝；用户随后明确批准，缓存只读请求401。用户再明确批准一次登录、遇冲突停止且不强踢：既有http_login调用1次成功、无冲突、allow_kick=false，随后只读仓库接口200返回1条。新Cookie仅存新预览私有目录，未输出或提交凭据、未写来源会话文件；没有代用户执行抓取导入、付款外发或物理打印，证据i8-connection.json/i8-login-verification.json。
-
-原只读8065已停，冻结副本仍保留；frozen-baseline-final.json重核38表hash/计数与原件一致，旧c2修订仅属该固定历史现场，不在本次改写。两套基线及442–444样本保留，新可写副本不作固定性能对照，本轮未重跑84组。423/424及最终上线复核未开始。当前run由用户业务验看消费，运行器/构建/创建证据、schema及私有状态留到用户明确处置，不能自动删除其改动。
-
-## 445–448界面与交互打磨
-
-2026-10-26用户睡前清单实施，累计起点`f15d4b8d33ff63485bfc2295e31fdc89499a3a8e`，开工独立React工作树干净。本批明确事项技术完成，445–448记ready-for-human，未代本轮用户实看；原8000/8065及用户副本数据不动。master原有status/高水位及`--full-page`保持，不向主线写本批UI。单票验收/边界回原票，不重开422或推进423/424。
-
-运行与证据：本工作树`.artifacts/active/frontend-vue-rewrite/ui-polish-20261026`。当前[8066合成候选](http://127.0.0.1:8066/preview)账号`preview-admin`空密码；数据来自独占`mtrl_workbench_test`新schema和合成seed，不复制来源业务数据，不携i8凭据。来源.env仅由既有TestDatabaseGuard确认测试目标，所有写入验证限本轮独占schema，禁止public回退。原[8065可写业务预览](http://127.0.0.1:8065/preview)继续使用其原版本/用户数据；本批新界面尚未加载到8065。
-
-| 验证 | 实际结果与适用范围 |
+| 退役的固定样例组合 | 当前有效保护与本轮取舍 |
 |---|---|
-| 最终类型与独立构建 | 直接本地Node tsc --noEmit / Vite build至work/dist-delivery，退出0；不自动装包。原>500KB分包警告保留，不作本批性能达标证明；最终仅flow.css移除多余EOF空行，不改产出语义。logs/final-{typecheck,build}.log |
-| 受影响浏览器A | preview/shared_controls/big/contracts/ledger/ledger_layout/settlement/read_ui首轮57过5失败（ui-regression-a.log），失败与修复保留；Big聚焦列宽确有缺陷，改initialWidth保已拟合宽；3个layout用例改实际AG Grid viewport定位；settlement迟到结果改显式等待实际行，原断言不放宽。5项修复复验过，Big完整7过1失败为旧用例隐含前序9项目状态，显式独立设9项目后该例单独通过。Big 8例有效覆盖来自这些实际运行，未虚称一次全绿 |
-| 受影响浏览器B | 费用/库存/共用导出首轮19项全部通过，ui-regression-b.log。费用复核后的最终全文件9项全部通过（28.16s），fees-review-fix-final.log；首次新增安文费用例定位器失败保留，按实际AG Grid行定位后全文件通过 |
-| 项目修复最终验证 | 原生drag_to经过整行预览、2行相邻动画、真实ord PUT＋GET与归档组不变；失败输入跨筛选保留；响应丢失/坏回执后Esc不解锁、GET失败不解锁；未送达请求读回旧值保稿并可再保存。最终dist-delivery定向5项全部通过10.32s，reports/project-delivery-final.log；两轮真实红灯保留project-draft-uncertain-red.log、project-undelivered-readback-red.log |
-| 集采统一搜索最终验证 | 合同全文件7项通过30.91s，logs/contracts-review-fix-final.log；代表档案号、合同/寄回日期、横线/斜线、裸金额/中英千分位与清空。早期缺测试环境在建schema前被guard拒绝，不算通过 |
-| 后端离线 | 原test_acc_fee_mon/test_wired_m09共35项通过；先读FakeSession确认无数据库，--noconftest，backend-fee-offline.log。一次试图将来源业务DSN覆盖隔离环境的命令被自动审批拒绝、未运行，改用该安全离线路径；不称后端全套已重跑 |
-| 设计与实看 | Impeccable机械检测当时完成源码范围退出0/[]；独立IAB实际查看项目/同步确认、大表/选择排序、费用和i8/收发结存窄幅。最终8066合成Big保存100后确认撤销还原，确认弹窗实显操作名/影响数量；截图在本会话visualizations目录ui-polish-{i8,undo}-final.png。实体IME、全8主题/4字号、200%宿主缩放及真人业务试用未穷举 |
-| 独立双轴 | Standards初3项P2（项目筛选丢稿、未知结果Esc解除、费用同名自动额隐藏），Spec初2项P2（搜索漏列、连续Add未成行）。修复后Standards追加可靠GET旧值丢稿P2，亦修复并以未送达红灯/最终用例证明。原两审查者定向核源码/测试，全部关闭；静态独立复核不冒称独立重跑浏览器 |
+| 历史台账金额、归属、同月多行及token组合 | `test_historical_balances.py`等域/事务保护仍在；真实浏览器保连续保存/焦点、未知回执、普通月备注、实际撤销/重做与下载范围。 |
+| 集采金额/日期/重复付款/关联组合 | `test_acc_jc_domain.py`、`test_acc_jc_pay_link.py`、`test_jc_payment_terms.py`及`test_jc_exports.py`承担对应域/接口/文件组合；真实浏览器保字段与子表写读、子表未知、草稿往返、精确筛选排序ID及真实XLSX。 |
+| 大表派生金额和模板组合 | `test_acc_rpt_big.py`、`test_big_export.py`及分月操作历史保护仍在；真实浏览器保宽度、按月固定/继承/POST导出，以及暂停和丢响应时历史/名单保护。 |
+| 库存筛选、金额与调整原值组合 | `test_acc_inv.py`域保护仍在；真实浏览器保本地筛选及同一稳定行的调整保存/读回/撤销，原始金额不改。真实源XLSX缓存导出未验单列，不能由表行证明缓存存在。 |
+| 费用月度金额和用户管理组合 | `test_acc_fee_mon.py`、`test_acc_usr_mgmt.py`、`test_acc_usr_admin.py`、`test_react_appearance.py`保其实际纯/域/进程内部分；旧壳ui_page断言不冒充React。真实浏览器保原费用记录ID/月份/其他记录不变、权限及账号外观隔离。 |
+| 粘贴编码例外 | 原匹配函数原样移入既有notices-api，纯计算直接执行真实函数覆盖非法月份/部分号/重号/重复/已付清/剔除/撤单；Vite不监听HTTP、不渲染页面。浏览器保真实单据正常勾选。 |
 
-最终源文件与构建hash、基点及PID/schema归`reports/delivery-version.json`；运行创建时间/命令归`reports/visual-preview-delivery-owner.json`，最终本批源码提交归Git。构建后的合同/费用未再变源码，项目最终修复另用dist-delivery复验；此前未变范围复用原有效证据，不重复整站或性能矩阵。真实提交钩子及保存回执归logs/local-commit.log。
+未用合成业务数据补场景：真实能力探测核32个项目年度范围（2025/2026）：未见同展示名不同仓库机械跳转及年度费用同名自动/手填非零并存；同月同名多记录实际存在，费用代表已优先选用。正式来源确有10份库存XLSX缓存，本轮未复制缓存并核其浏览器导出，故该文件链仍未复验；手动通知书/合同新增、费用新增和外观未知回执等独立状态机本轮未新增真实浏览器复验，不称被字段保存等效覆盖。实体IME、全主题/字号与200%宿主缩放、实体打印、真实i8/生产业务写入和用户全站试用仍未验。本次不重跑84组性能矩阵。
 
-当前资源仍供用户验看，保留work/dist-delivery、work/start_visual_preview.py及独占合成schema。正常退出：先对owner登记PID、创建时间和命令核身份，再写同run `work/stop-visual-preview.request`；脚本监测后正常停uvicorn并由isolated_database清理仅它拥有的schema。中途dist-reviewed预览已按此方式退出并得到cleaned日志；首次8066进程退出后也核该独占schema已不存在，见visual-first-cleanup.log。硬停不可假设清库完成；只核本批合成schema和所有者后处理。用户验看结束后释放本run work，必要证据按30天规则归archive；不停止仍被使用的8065或整个React effort。
+## 445–448界面与分月增量
 
-未决业务范围：大表六手填值现已按月＋项目独立，未录月继续显式标源月带入；项目集合/排序仍全表共享。“分月保存”是否还要求集合/顺序分月、未录月全空，留[后续确认](questions.md#2026-10-26大表分月口径已确认)，不据此改历史口径。没有真实i8/付款/打印、生产业务写入、正式服务加载、合并或React推送。
+UI批累计起点`f15d4b8d33ff63485bfc2295e31fdc89499a3a8e`；445–448技术实现/技术验证和当前人工验收分别回原票。原UI候选的合成结果仅为历史证据，按最新真实副本约定不再开放其HTTP样例。用户已确认447名单/排序分月、继承/固定/归档边界，原全局名单只作基线；当前业务唯一正文在材料报表需求，不再保“待裁定”旧结论。
 
-本批无消费者的dist/dist-final/dist-reviewed及测试runtime已核路径后退出，只保留在用dist-delivery。workspace_check active实际退出1：唯一错误为本批之前已存在的`.scratch/frontend-vue-rewrite/architecture-repair.md`不在检查器允许的任务文件名集合（完整日志workspace-active-final.log；首个调用缺check参数的日志另存）。该历史回执仍被既有status/规格消费，本批未授权迁移该资料，未为凑绿删除或放宽检查。将其保留为共享effort目录收尾缺口，不冒称生命周期全绿，也不阻塞本批UI候选验看；整个React effort并未退出。原8000 `/app`及8065 `/preview`仍HTTP200，原PID/启动命令仍在，主线既有3件dirty未动，见protected-runtime-final.json。
+历史UI原件在`.artifacts/archive/frontend-vue-rewrite/ui-polish-20261026`：A首轮57过5失败及修复复测，B19过、费用最终9过；项目丢稿/Esc未知解除/可靠GET旧值丢稿、自动费用同名额隐藏、搜索漏列和新增行未成行的红灯→修复→定向通过保原日志与原两轴发现。不把多次有效覆盖相加伪称单次全过；最终项目5项10.32s、合同7项30.91s及费用离线35项只对应当时固定输入，当前真实验证另计。
+
+月度增量原件在`.artifacts/archive/frontend-vue-rewrite/big-month-selection-20261026`：独立类型/构建通过，分月读写、继承/固定和POST导出、丢回执/暂停保护按各次修复后选择有效结果；`reports/backend-execution-receipt.md`区分早期67项工具输出与持久原件，`logs/backend-output-isolation-final.log`及对应XML才是最终21项原始通过记录。旧版→新版→降级→再升级的原名单/手填保全回原迁移回执，不外推为正式库已升级。
+
+旧workspace active曾因architecture-repair文件名退出1，原`ui-polish-20261026/logs/workspace-active-final.log`及月度run的`reports/workspace-active.log`保留；本次知识归位并修消费者后才处理原文，不改检查器/白名单把旧失败说成通过。
+
+## 历史性能复测来源
+
+这些版本/数据身份用于已接受退化的追溯和最终候选复测，均为历史，不说明现在有额外服务。冻结原副本保持原修订与38表指纹；真实业务副本升级不改它。原始证据保留窗口仍按已有2026-11-24约定，不因整理整棵续期。
+
+| 固定历史输入 | 原件及限制 |
+|---|---|
+| 422签收3197ff1 | `.artifacts/archive/react-tail422/20261025-01/reports`。旧主线e55ff048与React在同合成schema/账号/Chromium、1920×1080/DPR1、交替三轮比较；index cfa44d699913a59290f77bf51d61921f53ab810456e3a9aef512ea107e5ee698。新版冷项目/首次通知与滚轮帧明显退化，用户收到结果后签done；不代表性能修复或正式切换。该旧合成条件不再作为可开放预览。 |
+| 98d2d66完整基线 | `.artifacts/active/react-performance-baseline/20261025-full-98d2d66/reports/{baseline.md,samples.jsonl,summary.json,api-direct.json,environment.json,resource-sizes.json}`。index bb2d734a60afd358c617ac4b38bfc4b8f83e6eefc4a68c42d3f0b52935a8d840；manifest dd60831310cae73cebe22cb4e44e452857578cccb3ac969551478601bf7eca34。固定旧真实副本c2a261023/38表，非当日生产新鲜度承诺。 |
+| 5dc133e7优化后 | `.artifacts/active/react-performance-polish/20261025-435-440/reports/{delivery.md,samples-final.jsonl,summary-final.json,environment-final.json,comparison-final.json,api-final.json,version.json}`。index 250bf8addaa047a5786b49591767c7d9d8423d5556d7af23ef31fa6cf9a85037；原基线未改。 |
+| 09697808流畅度后 | `.artifacts/active/react-smoothness-implementation/20261025-442-444/reports`，delivery/version/data-unchanged及samples/summary/environment/comparison-final-r2。index 89ad45e8b928320d90f39e5196b54fa1c61566511c9c8383c05d43d0430d2c18；manifest 6f519b0fe7298e27731757e070ff262534a041c41b46c348aeb077a0d53f0ede。 |
+
+上述三真实基线同旧副本19项目/1193通知书/265合同/18198库存，38表前后指纹一致。Chromium156.0.8078.4/headless、1350×940/DPR1、zh-CN/Asia-Shanghai、默认主题/标准字号、无人工限速，14入口各3冷3热共84组。就绪是标题/networkidle/fonts/双rAF代理，主线程另含约100ms观察排空，不是现场INP、热SPA LCP或Lighthouse TBT。
+
+09697808的84组无脚本/HTTP/资源失败，但warm ledger/big/rules首条FontFaceSet仍loading，只能称81条loaded；原样保留这3条。40交互原件interactions-before-clean/interactions-final-r2：输入148→96ms、清筛选240→164ms，无API；insertText非实体IME/RUM p75，导航两帧包含约11MB自动化响应体传输，不当用户延迟。热库存518→385ms但仍有356–713ms离群；付款417→453ms未改善，规则冷CLS中位.218/最大.342等残余及较差样本保留。API仅顺序5次，库存410→417ms不称后端优化；普通MiSans完整Regular回退约6MB仍在。最终候选仍需按届时变更补验，不用历史签票覆盖。
+
+## 历史交互诊断
+
+2026-10-25诊断只用于解释442优先级：固定只读历史副本、Chrome156、1350×940，先加载库存。原件`.artifacts/archive/react-smoothness-research/20261025-diagnosis/reports/{interactions.json,interpretation.json}`及traces保留至2026-11-24。仅前4动作窗口有效，后4导航未等接口/懒加载就绪，排除归因。全部期间、输入“钢”、清筛选最长任务254/190/228ms，getElementSize自耗时约133/106/114ms，自动行高链归组130.25/104.42/110.73ms；只见12/24渲染行DOM（含固定副本），有效窗口无API。setupCellAutoHeight→setupAutoHeight→setComp支持该次热点，不外推全站唯一根因。脚本insertText可能interactionId=0，非实体IME或有效INP；少量动作和profiling开销不支持RUM p75或无Profiler绝对耗时承诺，自动两帧不作纯浏览器响应指标。初次observer失败日志保留、不计通过。
+
+## 本轮资料处置
+
+预览指南的独有知识已归现行业务/架构/设计/部署主人，旧外观访谈退出、当前月度确认保留。architecture-repair和research的独有信息/活动引用处理后以Git原路径追溯；原审计156个连续区段已核职责、独有知识和活动消费者，报告已从当前树退出，原文均可从8629a33及原路径恢复，不建关闭索引。独立Standards/Spec两轴对同一累计范围均无实质发现；运行/资源收尾由主Agent另核，不把审查代替现场。旧模拟run与临时真实验证run已退出work，原件移至既有frontend-vue-rewrite归档，沿既有2026-11-21期限，不整体续期；冻结性能原件保持其原2026-11-24用途/条件。用户run仅保当前构建、统一薄启动/停止入口、私有状态/数据及升级恢复点至试用结束裁定。整个React effort仍有用户验看、最终候选、423/424等活动范围，没有冒报已关闭。

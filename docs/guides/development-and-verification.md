@@ -32,3 +32,14 @@ db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/
 工具用途及边界读 tools/README.md。syntax_audit、bytes_guard 和凭据文件名保护在真实 pre-commit 执行，不能跳钩子。票工具用临时 tracker/票目录验证高水位、依赖和失败回滚，干跑不得写入。audit_work 只提示运行产物生命周期；wiring_audit 的 W2 只是候选线索，不能当成业务缺陷或删除授权。
 
 运行产物由 workspace_paths 分到本轮 .artifacts/active/<effort>/<run>/<kind>，父进程收尾；临时脚本放 work/系统临时目录，证据必要才有限保留。异常日志完整保留原始返回码后再读末尾。Windows 用 python -X utf8、显式文件编码与 subprocess encoding；PS1 保 UTF-8 BOM，其余保原行尾。禁止用跨壳字符串拼接处理删除/移动；按绝对路径、对象范围和原件恢复依据操作。
+
+
+## React 浏览器与预览工具验证
+
+构建/启动/更新/退出按[预览指南](frontend-preview.md)。`apps/frontend/tests/conftest.py`只附着登记的真实副本；`test_preview.py`的server、浏览器context和login绑定同一进程/schema/产品身份，不能在测试中透明切换成用户实例。各例关闭自身context与路由；共享下拉定位回`preview_select.py`，真实API选样回`live_data.py`，不再运行浏览器业务seed或自造业务回包。
+
+只读代表可复用当前真实试用实例；写入代表须通过每例重新核验的disposable门，先停并保存用户试用归属，使用唯一可丢弃真实副本，完成后恢复原入口。真实数据缺场景时记录具名覆盖缺口，不构造模拟页面补成全过。按受影响页面选择现有节点；域金额组合、日期/归属和模板由相应后端/文件层承担，React保登录/权限、草稿/焦点、未知回执、实际写读和下载范围代表。
+
+`backend/tests/test_frontend_preview_runtime.py`验证跨进程排他、陈旧身份、实例切换授权、HTML构建输入、旧factory退役及待用构建不阻止正常停止；不监听端口。`apps/frontend/tests/test_preview_copy.py`仅作数据库/进程内合同，显式`MTRL_PREVIEW_SOURCE_ENV`用于确认测试目标，临时数据库样例不开放HTTP。它覆盖凭据投影、内容/序列、旧结构复制后只升目标及所有既有外部动作阻断。
+
+`backend/tests/test_frontend_measure.py`保纯计算与输出/只读保护，采集器集成部分附着唯一真实页；不再呈现合成data URL。它不证明完整84组或本次用户实看。粘贴匹配纯算法通过现有Vite middlewareMode直接装载真实函数，关闭HMR/文件监听，不开HTTP或渲染合成页面。具体当前运行结果与原始失败回当前任务evidence，不在指南追加通过数。
