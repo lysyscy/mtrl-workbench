@@ -34,6 +34,16 @@ export function UiProvider({ children, appearanceKey }: { children: ReactNode; a
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
+  useEffect(() => {
+    const root = document.documentElement;
+    const navigation = new Set(['Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'Enter', 'Escape', 'F2', ' ']);
+    const pointer = () => { root.dataset.gridInput = 'pointer'; };
+    const keyboard = (event: KeyboardEvent) => { if (navigation.has(event.key)) root.dataset.gridInput = 'keyboard'; };
+    // :focus-visible can survive a grid's programmatic focus after a pointer click. Copy shortcuts do not change modality.
+    document.addEventListener('pointerdown', pointer, true);
+    document.addEventListener('keydown', keyboard, true);
+    return () => { document.removeEventListener('pointerdown', pointer, true); document.removeEventListener('keydown', keyboard, true); delete root.dataset.gridInput; };
+  }, []);
   // Keep the provider tree stable when the OS motion preference changes mid-edit.
   return <MotionProvider motion={!reducedMotion}><ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} componentSize="small" theme={{
     algorithm: value.dark ? [theme.darkAlgorithm, theme.compactAlgorithm] : theme.compactAlgorithm,

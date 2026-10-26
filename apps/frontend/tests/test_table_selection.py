@@ -45,3 +45,8 @@ def test_contract_mouse_click_has_no_grid_ring_but_keyboard_does(server,browser_
     expect(focused).to_have_count(1)
     assert focused.evaluate("e=>e.matches(':focus-visible')"),'Keyboard navigation lost its visible focus'
     assert focused.evaluate("e=>getComputedStyle(e).borderTopColor")!='rgba(0, 0, 0, 0)'
+    # Chromium may retain :focus-visible when the grid moves focus programmatically after a pointer click.
+    cell.click()
+    assert cell.evaluate("e=>getComputedStyle(e).borderTopColor")=='rgba(0, 0, 0, 0)'
+    cell.dispatch_event('keydown', {'key':'c','ctrlKey':True})
+    assert cell.evaluate("e=>getComputedStyle(e).borderTopColor")=='rgba(0, 0, 0, 0)'
