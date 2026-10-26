@@ -21,16 +21,20 @@
 .process-cell small{font-size:calc(12px * var(--fscale));line-height:1.3;color:var(--tx2)}
 .process-cell .ant-btn{align-self:flex-end}
 .process-dirty .ant-input,.process-matrix .process-adjusted{background:var(--pri-l)}
-.process-matrix-scroll{max-width:100%;overflow-x:auto;scrollbar-color:var(--bd3) var(--sf2);border-radius:0 0 var(--radius-card) var(--radius-card)}
+.process-page:has(.process-matrix-scroll){display:flex;flex-direction:column;max-height:calc(100dvh - 104px * var(--fscale))}
+.process-page:has(.process-matrix-scroll)>:not(.process-matrix-scroll){flex:none}
+.process-matrix-scroll{flex:1 1 auto;min-height:calc(160px * var(--fscale));max-width:100%;overflow:auto;scrollbar-color:var(--bd3) var(--sf2);border-radius:0 0 var(--radius-card) var(--radius-card)}
 .process-matrix-scroll:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
 .process-matrix{width:100%;min-width:0;font-size:inherit;border-collapse:separate;border-spacing:0}
 .process-matrix :is(th,td){min-width:0;padding:calc(6px * var(--fscale)) calc(8px * var(--fscale));vertical-align:middle;line-height:1.5;white-space:nowrap;overflow-wrap:normal;border-bottom:1px solid var(--bd2)}
-.process-matrix thead th{height:calc(34px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500;text-align:right}
+.process-matrix thead{position:sticky;top:0;z-index:3}
+.process-matrix thead th{position:static;height:calc(34px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500;text-align:right;background:var(--sf2)}
+.process-matrix .process-groups th{height:calc(28px * var(--fscale));padding-block:calc(4px * var(--fscale));text-align:center;font-weight:600;border-bottom:.5px solid var(--bd)}
 .process-matrix tbody tr{height:calc(56px * var(--fscale))}
-.process-matrix :is(th,td):first-child{position:sticky;left:0;z-index:1;min-width:0;white-space:normal;text-align:left;background:var(--sf);font-weight:400}
-.process-matrix thead th:first-child{z-index:2;background:var(--sf2);font-weight:500}
+.process-matrix :is(tbody,tfoot) :is(th,td):first-child{position:sticky;left:0;z-index:1;min-width:0;white-space:normal;text-align:left;background:var(--sf);font-weight:400}
+.process-matrix .process-groups th:first-child{position:sticky;left:0;z-index:4;background:var(--sf2);font-weight:500;text-align:left}
 .process-matrix .money{text-align:right;font-variant-numeric:tabular-nums}
-.process-matrix .process-segment{border-inline-start:2px solid var(--bd3)}
+.process-matrix .process-segment{border-inline-start:.5px solid var(--bd)}
 .process-matrix td:has(.process-cell){min-width:0}
 .process-matrix .process-cell .ant-input{min-width:100%;height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-block:0;font-size:inherit}
 .process-matrix tfoot :is(th,td){height:calc(36px * var(--fscale));background:var(--sf2);font-weight:600;border-top:1px solid var(--bd3)}

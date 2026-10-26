@@ -20,17 +20,21 @@ export function BoundedTable({ columns, children, style, ...props }: ComponentPr
       const em = parseFloat(getComputedStyle(table).fontSize), context = document.createElement('canvas').getContext('2d');
       if (!context) return;
       const measured = columns.map(c => c.min * em);
+      const occupied = columns.map(() => 0);
       for (const row of table.querySelectorAll('thead tr,tbody tr')) {
         let index = 0;
         for (const cell of row.querySelectorAll<HTMLTableCellElement>(':scope > th,:scope > td')) {
+          while (occupied[index]) index++;
           if (cell.colSpan === 1 && columns[index]) {
             const css = getComputedStyle(cell); context.font = css.font;
-            const text = Math.max(...cell.innerText.split('\n').map(line => context.measureText(line.trim()).width));
+            const text = Math.max(...(cell.getAttribute('aria-label') ?? cell.innerText).split('\n').map(line => context.measureText(line.trim()).width));
             const control = Math.max(0, ...[...cell.querySelectorAll('input,select,button')].map(el => el.getBoundingClientRect().width));
             measured[index] = Math.max(measured[index]!, Math.max(text, control) + parseFloat(css.paddingLeft) + parseFloat(css.paddingRight) + 2);
           }
+          for (let i = index; i < index + cell.colSpan; i++) occupied[i] = cell.rowSpan;
           index += cell.colSpan;
         }
+        for (let i = 0; i < occupied.length; i++) occupied[i] = Math.max(0, occupied[i]! - 1);
       }
       const next = tableWidths(columns, measured, available, em);
       setWidths(old => old.length === next.length && old.every((n, i) => Math.abs(n - next[i]!) < .5) ? old : next);

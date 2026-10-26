@@ -39,6 +39,26 @@ def test_real_process_raw_adjusted_rows_and_totals(server,browser_page,api,proje
             expect(table.locator('tfoot tr').last.locator('td').nth(index)).to_contain_text('' if segment['total'] is None else money(segment['total']))
 
 
+def test_real_process_grouped_header_stays_visible(server,browser_page,api,projects):
+    page,_=browser_page;data=get(api,'/api/m06/matrix')
+    candidates=[(p,data['matrices'][p['warehouse_name']]) for p in projects if p['status']=='active' and p['warehouse_name'] in data['matrices']]
+    project,matrix=max(candidates,key=lambda pair:len(pair[1]['adjusted']))
+    assert matrix['adjusted'],'真实副本没有过程月份，表头滚动保护未覆盖'
+    page.set_viewport_size({'width':1761,'height':720});open_page(page,server,'process','过程资料')
+    control=page.get_by_label('过程资料项目',exact=True);control.click();control.fill(project['disp']);pick_popup_option(page,project['disp'])
+    table=page.locator('.process-matrix');expect(table.locator('thead tr')).to_have_count(2)
+    region=page.get_by_role('region',name='过程资料月度表，可横向滚动',exact=True)
+    assert region.evaluate('e=>e.scrollHeight>e.clientHeight'),'真实月份不足以触发滚动，置顶未覆盖'
+    before=table.locator('thead').bounding_box()
+    table.locator('tbody tr').last.scroll_into_view_if_needed()
+    after=table.locator('thead').bounding_box()
+    assert region.evaluate('e=>e.scrollTop')>0
+    assert abs(before['y']-after['y'])<1
+    expect(table.get_by_role('columnheader',name='入库',exact=True)).to_be_visible()
+    expect(table.get_by_role('columnheader',name='出库',exact=True)).to_be_visible()
+    expect(table.get_by_role('columnheader',name='外租包月不含税',exact=True)).to_be_visible()
+
+
 def test_real_process_cell_write_and_later_draft(server,browser_page,api,projects,disposable):
     page,_=browser_page;project,matrix=sample(api,projects);sources=get(api,'/api/m06/mech')['sources'];found=None
     for row in matrix['adjusted']:
