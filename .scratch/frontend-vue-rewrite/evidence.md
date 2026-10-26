@@ -2,6 +2,17 @@
 
 当前范围、批准与验收归[共同规格](spec.md)，大表分月决定归[当前确认](questions.md#2026-10-26大表分月口径已确认)。本页只保仍供验看/复测消费的结果和来源；本机原始输出不随Git提交，旧通过数不代表最新版本已经验收。
 
+## 流水时间与过程资料分区补齐
+
+用户实看指出付款流水仍用旧双控件，且过程资料横向空间不足，授权按i8接入层方式调整。以00dec63a为基点，实现4cee3b55；原8065在用构建为同run `work/layout-followup-final-20261026`，当前产品输入4cee3b55（后续纯文档HEAD不冒充在用产品SHA）。
+
+- 付款时间补singleEntry，复用现有时间面板，不改时间计算。IAB真实选择2026-09、09~10、2026年、全部分别回显51/85/496/497条，最后恢复2026-10及34条；统计周/季度保原能力。Cua直接check原生radio及连续过渡中的点击有未生效/超时观察，按可见模式文字及稳定年份网格重新定位后核回显，不将未生效操作计为通过。
+- 过程原始/调整后表按原四个分组合计纵向展示入库、出库、机械、外租机械不含税，保16个金额字段、全部月份、手填/明细确认、逐列及分组合计；差异表、导出与保存函数保持。与i8一样复用BoundedTable及有界页面，表格分区无嵌套卡片，短分区收窄。初次实际验看发现表宽未展开留下空框，已消除。
+- 1761×1191视口：本轮用户原字号1.12下四表均无横滚；1.4最大字号四表容器/scrollWidth分别1395/1395、1395/1395、1395/1395、866/866，当前机械输入值无内部横向溢出。保窄窗横滚兜底，不宣称穷举全部数据/视口。随后恢复本轮原偏好“松绿 + 大一点（1.12）”，界面回读确认；这反映用户在前轮交付后已更改偏好，未按旧交接强行回1.25。
+- 指定Node24.22.1/pnpm12.15.0最终类型/构建通过。真实只读过程资料测试同步分区定位，保原API独立期望并扩至全部16字段及四个分组合计；首轮对1195与API1195.0作字符串比较失败，改按Decimal金额语义比较，未改产品数据或放宽数值。定向通过9.34s；最终布局输入下再验1项通过10.72s，原件`logs/layout-followup-process-readonly-{initial,final}.log`（中间通过日志无后缀final）。局部可逆、未改业务链，以自查和实际界面检查为准，不冒称独立审查。
+- registered_preview核当前进程、HTTP、产品输入与完整构建；同schema/修订/私有状态保留，38表集合相同、37张非账号表摘要一致，账号表含正常登录和临时字号验证变化。回执`reports/layout-followup-preservation.json`，布局/时间记录`reports/process-layout-metrics.json`，截图`screenshots/{process-grouped,process-grouped-max,flow-period-single-entry}.jpg`。已释放本轮候选构建、工具链shim及不再消费的前轮global-visual构建；当前完整构建保留，无专用快速回退。
+- 本次不新增预览、迁移、业务保存、i8外呼或正式部署；449其余部分仍暂停。其余全站验证复用上节原有效覆盖，既存归档治理非零项未在本次重复维护。
+
 ## 全站视觉收敛、窄边栏与五页列宽
 
 用户已接受通知书试点，并明确授权推广全站、关闭专用快速回退窗口、调整03/06/08/09/10列宽及删除侧栏MOD编号。实施起点`5d400461`，主改动`13948d53`，真实数据反馈修正`eb4a6818`，窄列表头换行`88395cd8`。产品已加载原8065，当前全站改动待用户实看；未恢复449其余加载/字体首帧/全站尺寸链。
@@ -20,7 +31,7 @@
 
 - 指定Node24.22.1/pnpm12.15.0最终typecheck/build退出0，原件`logs/{typecheck,build}.log`。八套主题角色既有纯测试1项通过。真实原8065五项只读浏览器检查首轮3过、2失败及1连带清理错误；修正后受影响2项再验通过（13.70s），日志`logs/global-visual-readonly-tests-{initial,final}.log`。覆盖真实读取/资源/账号、费用记录与合计、关联多供应商取消、库存字段/空调整/合计、过程资料原值/调整/合计；未写试用业务，不新增合成数据。
 - IAB实际查看15个导航入口、五页最大字号与费用深色状态，空机械明细只按真实空态核验，不冒称有非空详情覆盖。首轮Impeccable检查`reports/global-visual-detector.json`空结果、退出0；后续定向修正经类型/构建、真实界面及自查覆盖，不伪称初轮检测覆盖最终全部差异。三个产品提交实际语法/字节/凭据钩子通过；最初混合换行拒绝保留在日志，修复后通过，未绕过。
-- 原run `.artifacts/active/react-writable-preview/20261025-admin-i8`沿同一owner/schema、修订bmonth261026及私有配置原位更新。在用`work/global-visual-20261026-release`产品输入`88395cd8f542b230371e7cf366b112afc3919277`，后续纯文档HEAD不冒充在用SHA。`registered_preview()`已核进程、HTTP、产品输入和完整资源。38表集合一致，37张非账号表摘要一致；user_account含正常登录及外观验证变化。已恢复用户本轮进入时的“松绿 + 更大（1.25）”，并在界面回读。原件`reports/global-visual-preservation.json`与`global-visual-data-before.json`。
+- 原run `.artifacts/active/react-writable-preview/20261025-admin-i8`沿同一owner/schema、修订bmonth261026及私有配置原位更新。该轮在用`work/global-visual-20261026-release`产品输入`88395cd8f542b230371e7cf366b112afc3919277`，后续纯文档HEAD不冒充在用SHA。`registered_preview()`已核进程、HTTP、产品输入和完整资源。38表集合一致，37张非账号表摘要一致；user_account含正常登录及外观验证变化。已恢复用户本轮进入时的“松绿 + 更大（1.25）”，并在界面回读。原件`reports/global-visual-preservation.json`与`global-visual-data-before.json`。
 - 用户关闭回退窗口后，专用recovery脚本/源码副本、旧回退构建及本轮中间构建已删除；普通Git历史保留，当前完整构建与数据库/私有状态保留。静态demo核PID/源码绑定/HTTP摘要后终止，30959已关闭；其无正常关闭API，未把终止写成优雅退出。site/work删除，有限截图、来源/许可与HTTP证据归主检出`.artifacts/archive/notice-visual-trial/20261026`，保留至2026-11-25。原trial说明退出当前树，可从5d400461的原路径追溯；有效设计归前端设计主人。收尾回执`reports/global-visual-retirement.json`。
 - 归档治理保持非全绿：此前React worktree的notice-association归档嵌套/缺retention问题未改；本轮退役检查又扫描到主检出既存notice-dialog-reuse缺retention元数据（退出1，`logs/global-visual-retirement-check.log`）。它们不是本次产品故障，未为过检查改历史材料或检查器。
 - 截图同run `screenshots/global-{fees-preferred,fees-max,mechanical-max,inventory-max,dark-max}.jpg`；当前保留用户偏好、无额外视口覆盖。源码已本地保存，未公共推送、未合并master或正式部署；不触及8000、真实i8或实体打印。全站人工验收及原spec后续关口仍未代办。
