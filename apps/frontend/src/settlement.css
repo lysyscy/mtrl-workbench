@@ -25,8 +25,6 @@
 .settlement-grid .ant-input:hover,.settlement-grid .ant-input:focus{background:var(--sf)}
 .settlement-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .settlement-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
-.settlement-grid .ag-cell-focus:not(:focus-visible){border-color:transparent;outline:none;box-shadow:none}
-.settlement-grid .ag-cell-focus:focus-visible{border-color:var(--pri);outline:none;box-shadow:none}
 .settlement-annual{margin-top:calc(16px * var(--fscale));min-width:0;background:var(--sf);border-radius:var(--radius-card);box-shadow:var(--shadow);overflow:hidden}
 .settlement-annual h2{margin:0;padding:calc(16px * var(--fscale));font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4}
 .settlement-annual .annual-grid{border-radius:0 0 var(--radius-card) var(--radius-card);box-shadow:none}

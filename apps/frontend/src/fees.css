@@ -14,8 +14,6 @@
 .fees-grid .ag-header-cell{padding-inline:calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500}
 .fees-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .fees-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
-.fees-grid .ag-cell-focus:not(:focus-visible){border-color:transparent;outline:none;box-shadow:none}
-.fees-grid .ag-cell-focus:focus-visible{border-color:var(--pri);outline:none;box-shadow:none}
 .fees-grid .money{justify-content:flex-end;font-variant-numeric:tabular-nums;white-space:nowrap}
 .fees-grid .muted{font-size:calc(12px * var(--fscale));color:var(--tx2)}
 .fees-page .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(12px * var(--fscale))}

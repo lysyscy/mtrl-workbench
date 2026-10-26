@@ -28,8 +28,6 @@
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-header-cell{padding-inline:calc(6px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500}
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-header-group-cell{font-size:calc(12px * var(--fscale));font-weight:500}
 :is(.mechanical-grid,.mechanical-detail-grid) .ag-cell.money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;overflow-wrap:normal;word-break:normal}
-:is(.mechanical-grid,.mechanical-detail-grid) .ag-cell-focus:not(:focus-visible){border-color:transparent;outline:none;box-shadow:none}
-:is(.mechanical-grid,.mechanical-detail-grid) .ag-cell-focus:focus-visible{border-color:var(--pri);outline:none;box-shadow:none}
 .mechanical-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .mechanical-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
 .mechanical-grid .mechanical-group-end{border-right:1px solid var(--bd3)}

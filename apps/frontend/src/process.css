@@ -53,7 +53,5 @@
 .process-grid .ag-cell.money{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .process-grid .ag-row-pinned{font-weight:600;background:var(--sf2)}
 .process-grid .ag-row-pinned .ag-cell{border-top:1px solid var(--bd3)}
-.process-grid .ag-cell-focus:not(:focus-visible){border-color:transparent;outline:none;box-shadow:none}
-.process-grid .ag-cell-focus:focus-visible{border-color:var(--pri);outline:none;box-shadow:none}
 
 .process-grid .ag-layout-auto-height :is(.ag-center-cols-container,.ag-center-cols-viewport){min-height:0}

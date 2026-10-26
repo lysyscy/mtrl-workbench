@@ -71,8 +71,6 @@
 .big-grid .big-money { justify-content: flex-end; }
 .big-grid .ag-row-pinned { font-weight: 600; background: var(--sf2); }
 .big-grid .ag-row-pinned .ag-cell { border-top: 1px solid var(--bd3); }
-.big-grid .ag-cell-focus:not(:focus-visible) { border-color: transparent; outline: none; box-shadow: none; }
-.big-grid .ag-cell-focus:focus-visible { border-color: var(--pri); outline: none; box-shadow: none; }
 .big-manual {
   display: flex;
   flex-direction: column;
