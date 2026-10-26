@@ -2,7 +2,7 @@
 
 票源是 `.scratch/tails/issues/TAIL-<编号>-<短名>.md`，一票一文件。普通改动不必建票；需要跨会话状态或已采用 effort 时复用原票。`What to build`、`Blocked by`、`Status`、验收项与必要 `Comments` 持有本票真实状态，规格持有共同范围与累计基点。
 
-TAIL_LAST_ISSUED: 448
+TAIL_LAST_ISSUED: 449
 
 这是唯一发号高水位，编号已分配即不回退、不复用，允许跳号。指定整合者在任务真源工作树串行发号；分配前核相关工作树新增号。行缺失、重复、非法或小于在场票号时工具拒绝，不从历史正文猜号。
 
