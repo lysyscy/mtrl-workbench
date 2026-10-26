@@ -28,7 +28,7 @@
 .process-matrix{width:100%;min-width:0;font-size:inherit;border-collapse:separate;border-spacing:0}
 .process-matrix :is(th,td){min-width:0;padding:calc(6px * var(--fscale)) calc(8px * var(--fscale));vertical-align:middle;line-height:1.5;white-space:nowrap;overflow-wrap:normal;border-bottom:1px solid var(--bd2)}
 .process-matrix thead{position:sticky;top:0;z-index:3}
-.process-matrix thead th{position:static;height:calc(34px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500;text-align:right;background:var(--sf2)}
+.process-matrix thead th{position:static;height:calc(34px * var(--fscale));font-size:calc(12px * var(--fscale));font-weight:500;text-align:center;background:var(--sf2)}
 .process-matrix .process-groups th{height:calc(28px * var(--fscale));padding-block:calc(4px * var(--fscale));text-align:center;font-weight:600;border-bottom:.5px solid var(--bd)}
 .process-matrix tbody tr{height:calc(56px * var(--fscale))}
 .process-matrix :is(tbody,tfoot) :is(th,td):first-child{position:sticky;left:0;z-index:1;min-width:0;white-space:normal;text-align:left;background:var(--sf);font-weight:400}

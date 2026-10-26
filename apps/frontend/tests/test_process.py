@@ -48,7 +48,7 @@ def test_real_process_grouped_header_stays_visible(server,browser_page,api,proje
     control=page.get_by_label('过程资料项目',exact=True);control.click();control.fill(project['disp']);pick_popup_option(page,project['disp'])
     table=page.locator('.process-matrix');expect(table.locator('thead tr')).to_have_count(2)
     region=page.get_by_role('region',name='过程资料月度表，可横向滚动',exact=True)
-    assert region.evaluate('e=>e.scrollHeight>e.clientHeight'),'真实月份不足以触发滚动，置顶未覆盖'
+    assert region.evaluate('e=>e.scrollHeight>e.clientHeight'),'表区未形成纵向滚动，置顶未覆盖'
     before=table.locator('thead').bounding_box()
     table.locator('tbody tr').last.scroll_into_view_if_needed()
     after=table.locator('thead').bounding_box()

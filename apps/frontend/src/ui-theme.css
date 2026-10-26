@@ -78,7 +78,7 @@ html{font-variant-numeric:tabular-nums}
 
 /* Fill the page's remaining space instead of leaving a fixed 62dvh table above unused space. */
 .workspace .page-view :is(.process-page,.inventory-page,.notices-page){display:flex;flex-direction:column;height:100%;min-height:min-content}
-.workspace .page-view :is(.process-page,.inventory-page,.notices-page)>:not(.process-grid):not(.inventory-grid):not(.notice-card){flex-shrink:0}
+.workspace .page-view :is(.process-page,.inventory-page,.notices-page)>:not(.process-grid):not(.process-matrix-scroll):not(.inventory-grid):not(.notice-card){flex-shrink:0}
 .workspace .page-view .notices-page .notice-card{display:flex;flex-direction:column;flex:1;min-height:min-content}
 .workspace .page-view .notice-card>:not(.notice-grid){flex-shrink:0}
 .workspace .page-view :is(.notice-grid,.process-grid,.inventory-grid){flex:1 0 calc(240px * var(--fscale));height:auto;min-height:calc(240px * var(--fscale))}
