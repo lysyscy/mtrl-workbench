@@ -15,7 +15,7 @@ export interface BigRow {
   auto: Record<AutoKey, Amount>; derived: Record<DerivedKey, Amount>;
 }
 export interface BigData {
-  month: string; selected: string[]; candidates: { warehouse: string; display: string }[];
+  month: string; selection: {fixed: boolean; source: string}; selected: string[]; candidates: { warehouse: string; display: string }[];
   rows: BigRow[]; totals: Record<TotalKey, Amount>; mat_available: boolean; empty_text: string;
 }
 const month = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
@@ -25,6 +25,9 @@ export function readBig(value: unknown, ym: string): BigData {
   if (!record(value) || value.month !== ym || !Array.isArray(value.selected) || !value.selected.every(v => typeof v === 'string') ||
       !Array.isArray(value.candidates) || !Array.isArray(value.rows) || !record(value.totals) || !totalKeys.every(k => amount((value.totals as Record<string,unknown>)[k])) ||
       typeof value.mat_available !== 'boolean' || typeof value.empty_text !== 'string' ||
+      !record(value.selection) || typeof value.selection.fixed !== 'boolean' ||
+      !(value.selection.source === 'legacy' || value.selection.source === 'default' || month(value.selection.source) && value.selection.source <= ym) ||
+      (value.selection.fixed && value.selection.source !== ym) ||
       !Array.isArray(value.manual_keys) || value.manual_keys.join(',') !== manualKeys.join(',') ||
       !Array.isArray(value.manual_fmts) || value.manual_fmts.join(',') !== 'ym,money,money,money,money,text') throw invalid();
   for (const c of value.candidates) if (!record(c) || typeof c.warehouse !== 'string' || !c.warehouse || typeof c.display !== 'string') throw invalid();
@@ -49,7 +52,7 @@ export async function saveBigCell(ym: string, warehouse: string, key: ManualKey,
   const result = await requestJson('/api/m07/big/cell', {method:'POST',signal,...body({month:ym,warehouse,key,raw})});
   confirmWrite(record(result) && result.ok === true && 'value' in result, '保存回执未确认，请重读核对，勿重复提交。');
 }
-export async function saveBigSelection(selected: string[], signal: AbortSignal) {
-  const result = await requestJson('/api/m07/big/selection', {method:'POST',signal,...body({selected})});
+export async function saveBigSelection(ym: string, selected: string[], signal: AbortSignal) {
+  const result = await requestJson('/api/m07/big/selection', {method:'POST',signal,...body({month:ym,selected})});
   confirmWrite(record(result) && result.ok === true && Array.isArray(result.selected) && result.selected.every(v => typeof v === 'string'), '选题回执未确认，请重读核对，勿重复提交。');
 }

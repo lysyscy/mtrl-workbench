@@ -3,7 +3,7 @@ from app.core.history import Rule, bind_policies
 from app.mod01_projects.models import Project
 from app.mod03_notice.models import PaymentNotice
 from app.mod05_flow.models import LedgerRemark, OpeningBalance
-from app.mod07_setl.models import AnalysisBigManual, WeldGasBalance
+from app.mod07_setl.models import AnalysisBigManual, AnalysisBigMonthProject, WeldGasBalance
 from app.mod09_fee.models import FeeManualItem
 from app.mod11_jc.models import JcContract
 
@@ -21,6 +21,7 @@ def configure():
     big = Rule(AnalysisBigManual, frozenset({
         'open_ym', 'mech_est', 'contract_price', 'output_cum', 'oil', 'note',
     }), True)
+    big_projects = Rule(AnalysisBigMonthProject, frozenset({'seq'}), True)
     balance = Rule(WeldGasBalance, frozenset({'amount'}), True)
     contract = Rule(JcContract, frozenset({
         'contract_no', 'contract_date', 'contract_date_locked', 'material_name', 'supplier',
@@ -41,7 +42,9 @@ def configure():
         ('POST', '/api/m05/history/delete', '删除历史数据', [historical]),
         ('POST', '/m05/ledger/remark', '修改欠款台账备注', [remark]),
         ('POST', r'/api/m09/fee/(add|name|amount|delete|batch)', '编辑特殊费用', [fee]),
-        ('POST', '/api/m07/big/cell', '编辑月度会大表', [big]),
+        ('POST', '/api/m07/big/cell', '编辑月度会大表', [big, big_projects]),
+        ('POST', r'/api/m07/big/(selection|move)', '调整大表本月项目与顺序', [big_projects]),
+        ('POST', '/api/m07/big/export', '导出并固定大表本月项目', [big_projects]),
         ('POST', '/api/m07/extract/balance', '修改焊材气体历史金额', [balance]),
         ('POST', '/api/m11/tag', '修改集采台账标记', [contract]),
         ('POST', '/api/m11/fields', '编辑集采合同字段', [contract]),

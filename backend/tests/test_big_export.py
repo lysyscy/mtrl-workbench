@@ -266,7 +266,8 @@ def test_big_api_exposes_existing_totals_without_recalculation(monkeypatch):
         yield None
 
     data = payload()
-    data.update(selected=[p['warehouse'] for p in PROJ], candidates=PROJ, mat_available=False)
+    data.update(selected=[p['warehouse'] for p in PROJ], candidates=PROJ, mat_available=False,
+                selection={'fixed': False, 'source': 'default'})
     monkeypatch.setattr(api, 'session_scope', no_database)
     monkeypatch.setattr(api, 'load_manual', lambda s: {})
     monkeypatch.setattr(big_service, 'build_big_data', lambda s, state: data)
@@ -277,3 +278,21 @@ def test_big_api_exposes_existing_totals_without_recalculation(monkeypatch):
     assert result['totals']['mat_cum'] is None
     assert 'use_rate' not in result['totals']
     assert [row['warehouse'] for row in result['rows']] == ['甲仓库', '乙仓库']
+
+
+def test_isolated_big_exports_keep_each_requests_file_and_legacy_location():
+    first = payload(rows=1)
+    second = payload()
+    second['rows'][0]['display'] = '并发请求乙'
+    path_a = EX.export_big_data(first, isolated=True)
+    bytes_a = path_a.read_bytes()
+    path_b = EX.export_big_data(second, isolated=True)
+    legacy = export()
+    assert path_a.parent != path_b.parent
+    assert path_a.parent.parent == path_b.parent.parent == legacy.parent
+    assert path_a.name == path_b.name == legacy.name == BX.file_name(YM)
+    assert path_a.read_bytes() == bytes_a
+    assert read(path_a)[DS - 1][1] == '甲项目'
+    assert read(path_b)[DS - 1][1] == '并发请求乙'
+    assert read(path_b)[DS][1] == '乙项目'
+    assert read(legacy)[DS - 1][1] == '甲项目'

@@ -135,3 +135,5 @@
 .page-view:has(>.big-page){padding-inline:calc(6px * var(--fscale))}
 .big-grid .big-rate-header .ag-header-cell-text{line-height:1.15}
 .big-grid .ag-cell{border-right-color:var(--bd)}
+.big-project-state{display:flex;align-items:center;flex-wrap:wrap;gap:calc(12px * var(--fscale))}
+.big-selection-source{font-size:calc(12px * var(--fscale));color:var(--tx2)}

@@ -117,13 +117,21 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     if(lock.current || controlsDisabled) return false;
     lock.current=true;setBusy(true);setError('');setFeedback('');let written=false;
     try {
-      await saveBigSelection(selected,writeAbort.current.signal);written=true;await reload();await refreshOthers();setFeedback('项目与顺序已保存。');return true;
+      await saveBigSelection(ym,selected,writeAbort.current.signal);written=true;await reload();await refreshOthers();setFeedback('项目与顺序已保存。');return true;
     } catch(e) {
       const message=e instanceof Error ? e.message : '选题保存失败。';
       if(written || uncertainWrite(e)) {state.current.uncertain=true;setUncertain(true);setVerified(false);setError(`${written ? '选题已保存，重读失败。' : '选题结果待核实。'}${message}请重读核对。`);}
       else setError(message);
       return false;
     } finally {lock.current=false;setBusy(false);}
+  }
+  async function reconcileExport() {
+    try { await reload(); await refreshOthers(); return true; }
+    catch (e) {
+      state.current.uncertain=true; setUncertain(true); setVerified(false);
+      setError(`导出结果待核实，请重读核对本月名单。${e instanceof Error ? e.message : ''}`);
+      return false;
+    }
   }
   const scale=Number(me?.ui_scale_css ?? 1);
   const [fontsReady,setFontsReady]=useState(false);
@@ -189,15 +197,15 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>(`[row-id="${CSS.escape(warehouse)}"] [col-id="${key}"] input`)?.focus());
   }
   return <>
-    <div className="big-toolbar"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span><div className="big-export-actions">
+    <div className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单 · 待固定' : query.data.selection.source === 'default' ? '默认项目名单 · 待固定' : `名单沿用 ${query.data.selection.source} · 待固定`}</span>}</div><div className="big-export-actions">
       <Button disabled={controlsDisabled || !!projectsError || !query.data} onClick={()=>setPicking(true)}>选择项目与排序…</Button>
-      <SettlementExport scope={`${ym} 月度会大表`} url={`/api/m07/big/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={controlsDisabled || !query.data?.rows.length}>
+      <SettlementExport method="POST" onSettled={reconcileExport} scope={`${ym} 月度会大表`} url={`/api/m07/big/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={controlsDisabled || !query.data?.rows.length}>
         <p>{ym} · {query.data?.rows.length} 个项目 · 原模板 Excel</p><ol className="big-export-list">{query.data?.rows.map(r=><li key={r.warehouse}>{r.display}</li>)}</ol>
       </SettlementExport>
     </div></div>
     {(busy || feedback) && <p className="big-feedback" role="status">{busy?'正在保存…':feedback}</p>}
     {(error || query.isError || projectsError) && <p className="notice" role="alert">{error || query.error?.message || projectsError}<Button disabled={busy || blocked} onClick={()=>{
-      retryProjects();void reload().then(()=>{setError('');setVerified(true);setFeedback('已重读，未保存输入仍保留。');}).catch(e=>setError(e instanceof Error?e.message:'重读失败。'));
+      retryProjects();void reload().then(async()=>{await refreshOthers();setError('');setVerified(true);setFeedback('已重读，未保存输入仍保留。');}).catch(e=>setError(e instanceof Error?e.message:'重读失败。'));
     }}>重读核对</Button></p>}
     {uncertain && <p className="notice" role="alert">核对刚才的保存结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={()=>{state.current.uncertain=false;setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，继续</Button></p>}
     {Object.entries(drafts).map(([id,d])=><div className="big-draft" key={id}><span>{d.display} · {labels[d.key]}：{d.value || '清空，恢复带入'}{d.error && <span role="alert"> · {d.error}</span>}</span>
@@ -226,11 +234,11 @@ function ProjectOrder({data,projects,busy,disabled,paused,save,close}:{data:BigD
   const closing=useDialogClose({busy,dirty,close,active:!paused});
   function move(index:number,offset:number) {const next=[...order];[next[index],next[index+offset]]=[next[index+offset]!,next[index]!];setOrder(next);setSelected(next.filter(wh=>selected.includes(wh)));}
   const missing=data.candidates.some(c=>!available.some(p=>p.warehouse_name===c.warehouse));
-  return <BusinessModal open={!paused} requestClose={closing.requestClose} titleId="big-order-title" className="big-order-dialog"><DialogContents title="选择项目与排序" titleId="big-order-title" closing={closing}>
+  return <BusinessModal open={!paused} requestClose={closing.requestClose} titleId="big-order-title" className="big-order-dialog"><DialogContents title={`${data.month} · 选择项目与排序`} titleId="big-order-title" closing={closing}>
     <ProjectSelectionOrder projects={ordered} selected={selected.flatMap(wh=>available.filter(p=>p.warehouse_name===wh).map(p=>p.id))} choose={ids=>setSelected(ids.flatMap(id=>{const p=available.find(p=>p.id===id);return p?.warehouse_name?[p.warehouse_name]:[];}))} move={move} disabled={busy || disabled || missing} label="大表项目选择与顺序" />
     <p className="big-order-summary">{selected.length} 个项目 · 页面与导出同序</p>
     {missing && <p className="notice" role="alert">项目档案已变化，请关闭后重读再选。</p>}
     {!selected.length && <p>保存后大表为空；以后可重新选择项目。</p>}
-    <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" loading={busy} disabled={disabled || missing || !dirty} onClick={()=>void save([...selected]).then(ok=>{if(ok)close();})}>保存项目与顺序</Button></div>
+    <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>取消</Button><Button type="primary" loading={busy} disabled={disabled || missing || (!dirty && data.selection.fixed)} onClick={()=>void save([...selected]).then(ok=>{if(ok)close();})}>保存项目与顺序</Button></div>
   </DialogContents></BusinessModal>;
 }

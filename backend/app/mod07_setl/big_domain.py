@@ -280,8 +280,8 @@ def rate_text(value) -> str:
 
 # ============================================================ 项目集合与顺序（§5.7.3）
 
-def candidates(projects) -> list[dict]:
-    """**候选** = 项目档案里**状态 = 在建 · 非壳**（§5.7.3）⇒ `[{"warehouse", "display"}]`。
+def candidates(projects, *, include_archived: bool = False) -> list[dict]:
+    """默认候选 = 在建非壳；固定月读取可包含已选归档项目。
 
     ⭐ 复用 `MOD-01` 的 `build_candidates`（键 = 仓库名 · 显示 = 展示名 · 壳没有仓库 ⇒ 不进候选），
        **不在这里另立一套**项目筛选。
@@ -289,14 +289,14 @@ def candidates(projects) -> list[dict]:
     return [
         {"warehouse": c.key, "display": c.display}
         for c in build_candidates(list(projects or ()))
-        if not c.archived and c.key
+        if (include_archived or not c.archived) and c.key
     ]
 
 
 def normalize_selection(selected, cands) -> list[str]:
     """保存选题结果 → 落库顺序（**只保留仍在候选里的键**，去重、保序）。
 
-    ⚠️ 候选里已消失的（被归档 / 改名）**静默剔除但不新建** —— 大表只显示**真实存在**的项目。
+    候选由本月固定/继承状态决定；失效仓库键剔除，不新建档案。
     """
     keys = [str(c["warehouse"]) for c in (cands or ())]
     seen: list[str] = []

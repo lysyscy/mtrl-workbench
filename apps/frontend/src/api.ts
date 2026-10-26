@@ -44,8 +44,8 @@ export async function requestJson(path: string, init: RequestInit = {}): Promise
   return result;
 }
 
-export async function requestFile(path: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> {
-  const response = await requestResponse(path, signal ? { signal } : {});
+export async function requestFile(path: string, signal?: AbortSignal, method: 'GET' | 'POST' = 'GET'): Promise<{ blob: Blob; filename: string }> {
+  const response = await requestResponse(path, { method, ...(signal ? { signal } : {}) });
   if (!response.ok || response.headers.get('content-type')?.includes('json')) {
     await jsonResult(response);
     throw new ApiError('导出未生成文件，请核对范围后重试。');

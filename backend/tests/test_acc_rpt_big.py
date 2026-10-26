@@ -14,6 +14,8 @@ from __future__ import annotations
 from decimal import Decimal
 from unittest.mock import patch
 
+import pytest
+
 from app.mod07_setl import big_domain as B
 from app.mod07_setl import big_repository as R
 from app.mod07_setl import big_service as S
@@ -172,8 +174,7 @@ def test_主材累计取集采结算额_只计纳入台账(monkeypatch):
 def test_手填值落在本月_编辑一格不连带确认同行其他格():
     """§5.7.2：手填值录入后落在**本月**；**编辑一格不连带确认同行其他格**（其余仍保持带入态）。"""
     s = _session()
-    res = S.save_manual_cell(s, month=YM_NOW, warehouse=WH_B, key="open_ym", raw="2023-05",
-                             cands=_data(s)["candidates"])
+    res = S.save_manual_cell(s, month=YM_NOW, warehouse=WH_B, key="open_ym", raw="2023-05")
     assert res["ok"], res["message"]
     row = _rows(_data(s))[WH_B]
     assert row["manual"]["open_ym"] == {"value": "2023-05", "from": ""}, "本月没录上"
@@ -198,7 +199,7 @@ def test_开工时间只认年月格式_非法拒绝且原值不变():
     s = _session()
     cands = _data(s)["candidates"]
     before = R.load_manual(s)[YM_PREV][WH_A]["open_ym"]
-    res = S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key="open_ym", raw="2026-3", cands=cands)
+    res = S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key="open_ym", raw="2026-3")
     assert not res["ok"] and res["message"] == B.MSG_BAD_YM
     assert R.load_manual(s)[YM_PREV][WH_A]["open_ym"] == before, "非法输入改动了原值"
     assert (R.load_manual(s).get(YM_NOW, {}).get(WH_A, {}) or {}).get("open_ym") is None, "非法输入竟然落库"
@@ -214,7 +215,7 @@ def test_非法金额与负数都被拒绝且原值不变():
     cands = _data(s)["candidates"]
     before = R.load_manual(s)[YM_PREV][WH_A]["mech_est"]
     for bad in ("abc", "-100"):
-        res = S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key="mech_est", raw=bad, cands=cands)
+        res = S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key="mech_est", raw=bad)
         assert not res["ok"] and res["message"] == B.MSG_BAD_MONEY
     assert R.load_manual(s)[YM_PREV][WH_A]["mech_est"] == before, "非法 / 负数输入改动了原值"
 
@@ -263,8 +264,7 @@ def test_带入是只读派生_历史月份录入值不被改写():
     s = _session()
     before = {ym: dict(whs) for ym, whs in R.load_manual(s).items()}
     _data(s)                                            # 渲染 + 装配（包含带入）
-    res = S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key="contract", raw="12345.00",
-                             cands=_data(s)["candidates"])
+    res = S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key="contract", raw="12345.00")
     assert res["ok"]
     after = R.load_manual(s)
     for ym in (YM_PREV, YM_EARLIER):
@@ -313,18 +313,18 @@ def test_项目集合与顺序_候选在建非壳_顺序由大表自己定():
     assert [r["warehouse"] for r in data["rows"]] == list(DEFAULT_ORDER)
     # 勾选 2 个 ⇒ 集合与行序即所设顺序
     s = _session()
-    S.save_selection(s, [WH_C, WH_A], cands=_data(s)["candidates"])
+    S.save_selection(s, [WH_C, WH_A], month=YM_NOW)
     rows = _rows(_data(s))
     assert list(rows) == [WH_C, WH_A], "行序 ≠ 所设顺序"
     # ⭐ **「清空」≠「从未选题」**：清空后表里是 **0 个项目**（不得悄悄回到全部候选）
-    S.save_selection(s, [], cands=_data(s)["candidates"])
+    S.save_selection(s, [], month=YM_NOW)
     assert _rows(_data(s)) == {}, "清空后竟然回到了全部候选（两种状态没分开）"
     # 再选回来（后面的调序测试要用）
-    S.save_selection(s, [WH_C, WH_A], cands=_data(s)["candidates"])
+    S.save_selection(s, [WH_C, WH_A], month=YM_NOW)
     # 逐项调序：丙仓下移
-    S.move_project(s, warehouse=WH_C, direction="down", cands=_data(s)["candidates"])
+    S.move_project(s, month=YM_NOW, warehouse=WH_C, direction="down")
     assert list(_rows(_data(s))) == [WH_A, WH_C], "下移没生效"
-    S.move_project(s, warehouse=WH_C, direction="up", cands=_data(s)["candidates"])
+    S.move_project(s, month=YM_NOW, warehouse=WH_C, direction="up")
     assert list(_rows(_data(s))) == [WH_C, WH_A], "上移没生效"
     # 越界不动（不抛异常、不绕圈）
     assert B.move_in_list([WH_A, WH_C], WH_A, "up") == [WH_A, WH_C]
@@ -338,6 +338,68 @@ def test_项目集合与顺序_候选在建非壳_顺序由大表自己定():
     rows_s2 = _rows(_data(s2))
     assert list(rows_s2) == [WH_B, WH_A], "装配没按大表自己的顺序排"
     assert len(rows_s2) == 2
+
+
+def test_monthly_selection_reads_without_writes_and_inherits_nearest_even_when_empty():
+    from app.mod07_setl.models import AnalysisBigMonthProject, AnalysisBigProject
+
+    s = _session(order=make_order([WH_C, WH_A]))
+    baseline = [(r.id, r.warehouse_name, r.seq) for r in s.by_model[AnalysisBigProject]]
+    assert _data(s)['selection'] == {'fixed': False, 'source': 'legacy'}
+    assert not s.by_model.get(AnalysisBigMonthProject)
+    S.save_selection(s, [WH_A, WH_C], month=YM_PREV)
+    assert _data(s)['selected'] == [WH_A, WH_C]
+    assert _data(s)['selection'] == {'fixed': False, 'source': YM_PREV}
+    S.save_selection(s, [WH_C], month=YM_NOW)
+    S.save_selection(s, [], month=YM_PREV)
+    assert _data(s)['selected'] == [WH_C]
+    assert _data(s, month='2026-09')['selected'] == [WH_C]
+    assert _data(s, month=YM_PREV)['selected'] == []
+    # 未配置的更早月份只读旧基线；未来配置不得倒灌。
+    assert _data(s, month=YM_EARLIER)['selected'] == [WH_C, WH_A]
+    S.save_selection(s, [], month='2026-09')
+    assert _data(s, month='2026-11')['selected'] == []
+    assert _data(s, month='2026-11')['selection'] == {'fixed': False, 'source': '2026-09'}
+    assert [(r.id, r.warehouse_name, r.seq) for r in s.by_model[AnalysisBigProject]] == baseline
+
+
+def test_fixed_month_keeps_archived_and_editable_while_inheritance_excludes_it_and_new_projects():
+    from app.mod01_projects.models import Project, STATUS_ARCHIVED
+
+    s = _session(order=make_order([WH_C, WH_A]))
+    S.save_selection(s, [WH_C, WH_A], month=YM_PREV)
+    next(p for p in s.by_model[Project] if p.warehouse_name == WH_C).status = STATUS_ARCHIVED
+    s.add(Project(id=99, project_type='normal', name_full='新项目', warehouse_name='新仓', disp='新增', ord=1))
+    assert _data(s, month=YM_PREV)['selected'] == [WH_C, WH_A]
+    assert S.save_manual_cell(s, month=YM_PREV, warehouse=WH_C, key='oil', raw='123')['ok']
+    assert _data(s)['selected'] == [WH_A]
+    assert '新仓' in [c['warehouse'] for c in _data(s)['candidates']]
+    assert S.save_selection(s, _data(s)['selected'], month=YM_NOW)['ok']
+    assert _data(s)['selected'] == [WH_A]
+    assert _data(s)['selection'] == {'fixed': True, 'source': YM_NOW}
+    assert _data(s, month=YM_PREV)['selected'] == [WH_C, WH_A]
+
+
+def test_only_valid_month_and_valid_cell_materialize_selection_and_legacy_requests_cannot_guess_month():
+    from app.core.errors import MustReportError
+    from app.mod07_setl.api import CellRequest, MoveRequest, SelectionRequest
+    from pydantic import ValidationError
+
+    s = _session()
+    assert _data(s)['selection'] == {'fixed': False, 'source': 'default'}
+    assert not S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key='oil', raw='-1')['ok']
+    assert not _data(s)['selection']['fixed']
+    assert not S.move_project(s, month=YM_NOW, warehouse=WH_A, direction='sideways')['ok']
+    assert not _data(s)['selection']['fixed']
+    with pytest.raises(MustReportError):
+        S.save_manual_cell(s, month='', warehouse=WH_A, key='oil', raw='1')
+    for model in (CellRequest, MoveRequest, SelectionRequest):
+        with pytest.raises(ValidationError):
+            model()
+    assert S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key='oil', raw='0')['ok']
+    assert _data(s)['selection'] == {'fixed': True, 'source': YM_NOW}
+    assert _rows(_data(s))[WH_A]['manual']['oil'] == {'value': Decimal('0.00'), 'from': ''}
+    assert _rows(_data(s, month=YM_PREV))[WH_A]['manual']['oil']['value'] == Decimal('100.00')
 
 
 # ============================================================ 边界（001-14 / 001-15）
@@ -358,8 +420,7 @@ def test_手填值不参与欠款计算():
     cands = _data(s)["candidates"]
     with patch("app.mod05_flow.repository.sync_stat_paid", _spy):
         for key, raw in (("mech_est", "888.00"), ("oil", "0"), ("note", "手改")):
-            assert S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key=key, raw=raw,
-                                      cands=cands)["ok"]
+            assert S.save_manual_cell(s, month=YM_NOW, warehouse=WH_A, key=key, raw=raw)["ok"]
     assert calls == [], "手填值触发了欠款重算（付款域的重算出口被调用了）"
 
 

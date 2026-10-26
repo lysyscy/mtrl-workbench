@@ -210,9 +210,9 @@ def extract_year_totals(amounts: dict, balances: dict) -> dict:
 def project_references(session, project_id, warehouse, *, lock=False):
     """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
     from app.core.references import project_references as read
-    from .models import SetlDetail, WeldGasBalance, AnalysisBigProject, AnalysisBigManual
+    from .models import SetlDetail, WeldGasBalance, AnalysisBigProject, AnalysisBigMonthProject, AnalysisBigManual
 
-    return read(session, ((SetlDetail, '收发结存'), (WeldGasBalance, '焊材气体结余'), (AnalysisBigProject, '大表项目排序'), (AnalysisBigManual, '大表手录'),), project_id, warehouse, lock=lock)
+    return read(session, ((SetlDetail, '收发结存'), (WeldGasBalance, '焊材气体结余'), (AnalysisBigProject, '大表项目排序'), (AnalysisBigMonthProject, '大表月度项目排序'), (AnalysisBigManual, '大表手录'),), project_id, warehouse, lock=lock)
 
 
 def opening_months(session, warehouses, months):

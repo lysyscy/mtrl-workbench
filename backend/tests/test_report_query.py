@@ -94,7 +94,8 @@ def test_actual_big_and_extract_export_entries(monkeypatch):
     monkeypatch.setattr(setl_api, 'session_scope', lambda: nullcontext(None))
     def big(s, st):
         assert st['month'] == '2026-02' and st['explicit']
-        return {'month': st['month'], 'selected': [], 'candidates': [], 'rows': [], 'totals': {}, 'mat_available': False}
+        return {'month': st['month'], 'selected': [], 'selection': {'fixed': False, 'source': 'default'},
+                'candidates': [], 'rows': [], 'totals': {}, 'mat_available': False}
     monkeypatch.setattr(setl_api.BS, 'build_big_data', big)
     monkeypatch.setattr(setl_api, 'load_manual', lambda s: {})
     assert setl_api.api_big(request('period=2026-02&period=2026-03'))['month'] == '2026-02'

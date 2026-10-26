@@ -262,6 +262,6 @@ i8按用户指定账号的已有匹配绑定接入，密码确为空。最初提
 
 当前资源仍供用户验看，保留work/dist-delivery、work/start_visual_preview.py及独占合成schema。正常退出：先对owner登记PID、创建时间和命令核身份，再写同run `work/stop-visual-preview.request`；脚本监测后正常停uvicorn并由isolated_database清理仅它拥有的schema。中途dist-reviewed预览已按此方式退出并得到cleaned日志；首次8066进程退出后也核该独占schema已不存在，见visual-first-cleanup.log。硬停不可假设清库完成；只核本批合成schema和所有者后处理。用户验看结束后释放本run work，必要证据按30天规则归archive；不停止仍被使用的8065或整个React effort。
 
-未决业务范围：大表六手填值现已按月＋项目独立，未录月继续显式标源月带入；项目集合/排序仍全表共享。“分月保存”是否还要求集合/顺序分月、未录月全空，留[本轮待裁定](questions.md#2026-10-26本轮待裁定)，不据此改历史口径。没有真实i8/付款/打印、生产业务写入、正式服务加载、合并或React推送。
+未决业务范围：大表六手填值现已按月＋项目独立，未录月继续显式标源月带入；项目集合/排序仍全表共享。“分月保存”是否还要求集合/顺序分月、未录月全空，留[后续确认](questions.md#2026-10-26大表分月口径已确认)，不据此改历史口径。没有真实i8/付款/打印、生产业务写入、正式服务加载、合并或React推送。
 
 本批无消费者的dist/dist-final/dist-reviewed及测试runtime已核路径后退出，只保留在用dist-delivery。workspace_check active实际退出1：唯一错误为本批之前已存在的`.scratch/frontend-vue-rewrite/architecture-repair.md`不在检查器允许的任务文件名集合（完整日志workspace-active-final.log；首个调用缺check参数的日志另存）。该历史回执仍被既有status/规格消费，本批未授权迁移该资料，未为凑绿删除或放宽检查。将其保留为共享effort目录收尾缺口，不冒称生命周期全绿，也不阻塞本批UI候选验看；整个React effort并未退出。原8000 `/app`及8065 `/preview`仍HTTP200，原PID/启动命令仍在，主线既有3件dirty未动，见protected-runtime-final.json。

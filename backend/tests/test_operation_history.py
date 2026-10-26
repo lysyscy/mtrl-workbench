@@ -384,6 +384,160 @@ def test_declared_safe_actions_use_real_http_handlers_and_restore_values(data, m
         assert result.status_code == 200 and value() == after, result.text
 
 
+@pytest.mark.parametrize('action', ['selection', 'move', 'cell', 'export'])
+def test_monthly_big_actions_restore_snapshot_and_keep_legacy_baseline(data, monkeypatch, tmp_path, action):
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    from app import history_api
+    from app.core import session as SESS
+    from app.mod07_setl import big_service as BS
+    from app.mod07_setl.models import AnalysisBigManual, AnalysisBigMonthProject, AnalysisBigProject
+    from app.report_export import service as exports
+
+    month = '2091-05'
+    monkeypatch.setattr(SESS, 'secret', lambda: b'test-monthly-big-only')
+    monkeypatch.setattr(history_api, 'active_account', lambda s, identity: object())
+    monkeypatch.setattr(exports, 'EXPORT_ROOT', tmp_path)
+    with session_scope() as s:
+        s.add(Project(project_type='normal', name_full='__monthly_other__', warehouse_name='__monthly_other__', disp='另一项目'))
+        s.add_all([AnalysisBigProject(warehouse_name='__undo__', seq=0),
+                   AnalysisBigProject(warehouse_name='__monthly_other__', seq=1)])
+    def state():
+        with session_scope() as s:
+            return BS.selection_data(s, month), [(r.id, r.warehouse_name, r.seq) for r in s.scalars(select(AnalysisBigProject))]
+    original, baseline = state()
+    assert original['selection'] == {'fixed': False, 'source': 'legacy'}
+    actions = {
+        'selection': ('/api/m07/big/selection', {'month': month, 'selected': ['__monthly_other__', '__undo__']}),
+        'move': ('/api/m07/big/move', {'month': month, 'warehouse': '__undo__', 'direction': 'down'}),
+        'cell': ('/api/m07/big/cell', {'month': month, 'warehouse': '__undo__', 'key': 'oil', 'raw': '0'}),
+        'export': (f'/api/m07/big/export?period={month}', None),
+    }
+    path, body = actions[action]
+    with TestClient(create_app()) as client:
+        assert client.post(path, json=body).status_code == 401
+        client.cookies.set(SESS.COOKIE_NAME, SESS.make('__undo_a__'))
+        response = client.post(path, json=body)
+        assert response.status_code == 200, response.text
+        assert response.headers['X-Operation-History'] == 'recorded'
+        fixed, current_baseline = state()
+        assert fixed['selection'] == {'fixed': True, 'source': month}
+        assert current_baseline == baseline
+        expected = ['__monthly_other__', '__undo__'] if action in ('move', 'selection') else original['selected']
+        assert fixed['selected'] == expected
+        if action == 'export':
+            assert response.content.startswith(b'PK')
+        entry = client.get('/api/history/status').json()['undo']
+        assert client.post('/api/history/undo', json={'operation_id': entry['id']}).status_code == 200
+        assert state() == (original, baseline)
+        with session_scope() as s:
+            assert not s.scalars(select(AnalysisBigMonthProject).where(AnalysisBigMonthProject.ym == month)).all()
+            if action == 'cell':
+                assert not s.scalars(select(AnalysisBigManual).where(AnalysisBigManual.ym == month)).all()
+        assert client.post('/api/history/redo', json={'operation_id': entry['id']}).status_code == 200
+        assert state() == (fixed, baseline)
+        if action == 'cell':
+            with session_scope() as s:
+                assert s.scalar(select(AnalysisBigManual).where(AnalysisBigManual.ym == month)).oil == Decimal('0')
+        if action == 'selection':
+            response = client.post('/api/m07/big/selection', json={'month': month, 'selected': ['__undo__']})
+            assert response.headers['X-Operation-History'] == 'recorded'
+            assert state()[0]['selected'] == ['__undo__']
+            entry = client.get('/api/history/status').json()['undo']
+            assert client.post('/api/history/undo', json={'operation_id': entry['id']}).status_code == 200
+            assert state() == (fixed, baseline)
+            assert client.post('/api/history/redo', json={'operation_id': entry['id']}).status_code == 200
+            assert state()[0]['selected'] == ['__undo__']
+
+
+def test_big_get_export_is_read_only_failed_post_rolls_back_and_month_list_blocks_project_delete(data, monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    from app.core import session as SESS
+    from app.mod01_projects import deletion
+    from app.mod07_setl import big_service as BS
+    from app.report_export import service as exports
+
+    month = '2091-06'
+    monkeypatch.setattr(SESS, 'secret', lambda: b'test-monthly-big-only')
+    monkeypatch.setattr(exports, 'EXPORT_ROOT', tmp_path)
+    with TestClient(create_app()) as client:
+        response = client.get(f'/api/m07/big/export?period={month}')
+        assert response.status_code == 200 and response.content.startswith(b'PK')
+        with session_scope() as s:
+            assert not BS.selection_data(s, month)['selection']['fixed']
+        client.cookies.set(SESS.COOKIE_NAME, SESS.make('__undo_a__'))
+        with monkeypatch.context() as failing:
+            def broken(*args, **kwargs):
+                raise MustReportError('模板损坏')
+            failing.setattr(exports, 'export_big_data', broken)
+            response = client.post(f'/api/m07/big/export?period={month}')
+            assert response.json() == {'ok': False, 'message': '模板损坏'}
+        with session_scope() as s:
+            assert not BS.selection_data(s, month)['selection']['fixed']
+            project = Project(project_type='normal', name_full='__monthly_only__', warehouse_name='__monthly_only__', disp='只被名单引用')
+            s.add(project)
+            s.flush()
+            BS.save_selection(s, [project.warehouse_name], month=month)
+            impact = deletion.impact(s, project.id)
+            assert not impact['can_delete']
+            assert next(g for g in impact['groups'] if g['table'] == 'analysis_big_month_project')['count'] == 1
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_big_post_export_renders_outside_sessions_and_rechecks_intervening_selection(data, monkeypatch, tmp_path, changed):
+    from contextlib import contextmanager
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+    from app.core import session as SESS
+    from app.mod07_setl import api, big_service as BS
+    from app.mod07_setl.models import AnalysisBigProject
+    from app.report_export import service as exports
+
+    month = '2091-07'
+    monkeypatch.setattr(SESS, 'secret', lambda: b'test-monthly-big-only')
+    monkeypatch.setattr(exports, 'EXPORT_ROOT', tmp_path)
+    with session_scope() as s:
+        s.add(Project(project_type='normal', name_full='__render_other__', warehouse_name='__render_other__', disp='渲染并发项目'))
+        s.add_all([AnalysisBigProject(warehouse_name='__undo__', seq=0),
+                   AnalysisBigProject(warehouse_name='__render_other__', seq=1)])
+    sessions = []
+    original_scope = api.session_scope
+    @contextmanager
+    def observed_scope():
+        with original_scope() as s:
+            sessions.append(s)
+            yield s
+    monkeypatch.setattr(api, 'session_scope', observed_scope)
+    render = exports.export_big_data
+    def observed_render(report, *, isolated=False):
+        assert len(sessions) == 1 and not sessions[0].in_transaction()
+        assert isolated is True
+        path = render(report, isolated=isolated)
+        if changed:
+            result, recorded = perform('/api/m07/big/selection',
+                lambda s: BS.save_selection(s, ['__render_other__'], month=month), actor='__other_export_writer__')
+            assert result['ok'] and recorded == 'recorded'
+        return path
+    monkeypatch.setattr(exports, 'export_big_data', observed_render)
+    with TestClient(create_app()) as client:
+        client.cookies.set(SESS.COOKIE_NAME, SESS.make('__undo_a__'))
+        response = client.post(f'/api/m07/big/export?period={month}')
+        assert response.status_code == 200
+        assert len(sessions) == 2 and all(not s.in_transaction() for s in sessions)
+        with session_scope() as s:
+            current = BS.selection_data(s, month)
+        assert current['selection'] == {'fixed': True, 'source': month}
+        if changed:
+            assert response.json()['ok'] is False and '重新导出' in response.json()['message']
+            assert current['selected'] == ['__render_other__']
+            assert response.headers.get('X-Operation-History') != 'recorded'
+        else:
+            assert response.content.startswith(b'PK')
+            assert current['selected'] == ['__undo__', '__render_other__']
+            assert response.headers['X-Operation-History'] == 'recorded'
+
+
 @pytest.fixture
 def committed_data(monkeypatch):
     """真实独立提交；仅清理唯一actor及本用例创建的行。"""

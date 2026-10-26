@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.query import flatten_query
 from app.core.db import session_scope
@@ -130,6 +130,15 @@ def api_extract(year: str = "", status: str = "全部") -> dict:
 
 @router.get("/api/m07/big/export")
 def api_big_export(period: str = ""):
+    return _big_export(period, fix_selection=False)
+
+
+@router.post("/api/m07/big/export")
+def api_big_export_save(period: str):
+    return _big_export(period, fix_selection=True)
+
+
+def _big_export(period: str, *, fix_selection: bool):
     """导出**活动大表成品**（`TAIL-04` 路径① **片 4b**）—— **一份**（全项目一张表 · ⛔ 无 zip）。
 
     ⚠️ 失败（**一行都没有** · 模板缺失/损坏 · **显示区对账不过**）⇒
@@ -144,8 +153,19 @@ def api_big_export(period: str = ""):
     EX = EXP.get("service")
 
     try:
-        with session_scope() as s:
-            path = EX.export_big(s, str(period or ""))
+        if fix_selection:
+            month = BS.require_month(period)
+            with session_scope() as s:
+                data = BS.build_big_data(s, {"month": month})
+            path = EX.export_big_data(data, isolated=True)
+            with session_scope() as s:
+                current = BS.selection_data(s, month)
+                if current["selected"] != data["selected"]:
+                    raise MustReportError("大表项目或顺序已变化，请重读后重新导出；本次未固定")
+                BS.materialize_selection(s, month, current)
+        else:
+            with session_scope() as s:
+                path = EX.export_big(s, str(period or ""))
     except MustReportError as exc:
         return JSONResponse(status_code=200, content={"ok": False, "message": str(exc)})
     return FileResponse(
@@ -178,6 +198,7 @@ def api_big(request: Request) -> dict:
     return {
         "month": data["month"],
         "selected": list(data["selected"]),
+        "selection": data["selection"],
         "candidates": [
             {"warehouse": str(c.get("warehouse") or ""), "display": str(c.get("display") or "")}
             for c in (data["candidates"] or [])
@@ -203,7 +224,7 @@ def api_big(request: Request) -> dict:
 class CellRequest(BaseModel):
     """手填一格（`month` / `warehouse` / 列 `key` / 原始输入 `raw`）。"""
 
-    month: str = ""
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
     warehouse: str = ""
     key: str = ""
     raw: object | None = None
@@ -212,12 +233,14 @@ class CellRequest(BaseModel):
 class SelectionRequest(BaseModel):
     """选题（顺序 = 所设顺序）。"""
 
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
     selected: list[str] = []
 
 
 class MoveRequest(BaseModel):
     """逐项上移 / 下移一格（`direction` ∈ `up` / `down`）。"""
 
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
     warehouse: str = ""
     direction: str = ""
 
@@ -229,13 +252,6 @@ class FetchRequest(BaseModel):
     confirm: bool = False
 
 
-def _cands(s) -> list[dict]:
-    """大表候选（在建 · 非壳）—— 唯一出口 = `big_domain.candidates`。"""
-    from app.mod01_projects import service as P1S
-
-    return B.candidates(P1S.all_projects(s))
-
-
 @router.post("/api/m07/big/cell")
 def api_big_cell(req: CellRequest) -> dict:
     """保存**一格**手填值 —— 校验（金额非负 / 开工时间 `YYYY-MM`）**唯一出口 = `big_service.save_manual_cell`**。
@@ -245,7 +261,7 @@ def api_big_cell(req: CellRequest) -> dict:
     with session_scope() as s:
         return BS.save_manual_cell(
             s, month=req.month, warehouse=req.warehouse, key=req.key,
-            raw=req.raw, cands=_cands(s),
+            raw=req.raw,
         )
 
 
@@ -279,7 +295,7 @@ def api_extract_balance(req: BalanceRequest) -> dict:
 def api_big_selection(req: SelectionRequest) -> dict:
     """保存**选题**（多选）—— 顺序即所设顺序；`normalize_selection` 在服务层（唯一出口）。"""
     with session_scope() as s:
-        return BS.save_selection(s, req.selected, cands=_cands(s))
+        return BS.save_selection(s, req.selected, month=req.month)
 
 
 @router.post("/api/m07/big/move")
@@ -287,7 +303,7 @@ def api_big_move(req: MoveRequest) -> dict:
     """逐项**上移 / 下移**一格 ⇒ 立即落库（未选题时先实体化一次，见 `big_service.move_project`）。"""
     with session_scope() as s:
         return BS.move_project(
-            s, warehouse=req.warehouse, direction=req.direction, cands=_cands(s)
+            s, month=req.month, warehouse=req.warehouse, direction=req.direction
         )
 
 

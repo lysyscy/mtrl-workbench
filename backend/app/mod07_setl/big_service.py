@@ -13,6 +13,7 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
+from app.core.errors import MustReportError
 from app.mod01_projects import service as P1S
 from app.mod07_setl import big_domain as B
 from app.mod07_setl import big_repository as R
@@ -127,13 +128,39 @@ def _amounts(s: Session, warehouses, month: str) -> dict[str, dict]:
 
 # ============================================================ 页面数据
 
+def require_month(month: str) -> str:
+    if B.parse_month(month) != month:
+        raise MustReportError("核算月要填 YYYY-MM；本次未保存")
+    return month
+
+
+def selection_data(s: Session, month: str) -> dict:
+    projects = P1S.all_projects(s)
+    selection = R.load_selection(s, month)
+    active_keys = {c["warehouse"] for c in B.candidates(projects)}
+    # 固定月保留自己已选的归档项目；继承月只取当前在建，且不追加新项目。
+    cands = [c for c in B.candidates(projects, include_archived=True)
+             if c["warehouse"] in active_keys or selection["fixed"] and c["warehouse"] in selection["order"]]
+    order = B.resolve_order(selection["order"], cands, chosen=selection["source"] != "default")
+    return {"selected": order, "candidates": cands,
+            "selection": {"fixed": selection["fixed"], "source": selection["source"]}}
+
+
+def materialize_selection(s: Session, month: str, data: dict | None = None) -> None:
+    require_month(month)
+    data = data if data is not None else selection_data(s, month)
+    if not data["selection"]["fixed"]:
+        R.save_order(s, month, data["selected"])
+
+
 def build_big_data(s: Session, state: dict | None = None) -> dict:
     """页面 / 导出所需的一切（**同一份行装配** ⇒ 两处同序同值，§5.7.3）。"""
     st = dict(state or parse_state())
     month = st["month"]
-    cands = B.candidates(P1S.all_projects(s))
+    selected = selection_data(s, month)
+    cands = selected["candidates"]
     by_key = {c["warehouse"]: c for c in cands}
-    order = B.resolve_order(R.load_order(s), cands, chosen=R.has_choice(s))
+    order = selected["selected"]
     projects = [by_key[w] for w in order if w in by_key]
     amounts = _amounts(s, [p["warehouse"] for p in projects], month)
     rows = B.assemble_rows(projects, amounts, R.load_manual(s), month=month)
@@ -142,6 +169,7 @@ def build_big_data(s: Session, state: dict | None = None) -> dict:
         "month": month,
         "candidates": cands,
         "selected": order,
+        "selection": selected["selection"],
         "rows": rows,
         "totals": B.totals_row(rows),
         "carry_n": B.carry_count(rows),
@@ -153,47 +181,50 @@ def build_big_data(s: Session, state: dict | None = None) -> dict:
 
 # ============================================================ 写动作
 
-def save_manual_cell(s: Session, *, month: str, warehouse: str, key: str, raw,
-                     cands=None) -> dict:
+def save_manual_cell(s: Session, *, month: str, warehouse: str, key: str, raw) -> dict:
     """保存**一格**手填值 → `{"ok", "message", "value"}`。
 
     ⛔ 非法输入（金额非数字 / 负数 · 开工时间不合 `YYYY-MM`）**一律不写库** ⇒ 原值不变（001-07/001-08）。
     ⭐ **只写这一格**：同行其它格保持原样（清空的行仍按带入显示，001-06）。
     """
+    require_month(month)
     if key not in B.MANUAL_COLUMN:
         return {"ok": False, "message": B.MSG_NO_COLUMN, "value": None}
-    keys = {c["warehouse"] for c in (cands or ())} if cands is not None else None
-    if keys is not None and warehouse not in keys:
+    data = selection_data(s, month)
+    if warehouse not in data["selected"]:
         return {"ok": False, "message": B.MSG_NO_PROJECT, "value": None}
     parsed = B.parse_manual(raw, B.MANUAL_FMT[key])
     if not parsed["ok"]:
         return {"ok": False, "message": parsed["message"], "value": None}
+    materialize_selection(s, month, data)
     R.save_cell(s, ym=month, warehouse=warehouse, key=key, value=parsed["value"])
     return {"ok": True,
             "message": B.MSG_SAVED if parsed["value"] is not None else B.MSG_CLEARED,
             "value": parsed["value"]}
 
 
-def save_selection(s: Session, selected, *, cands=None) -> dict:
+def save_selection(s: Session, selected, *, month: str) -> dict:
     """保存选题（多选）结果 —— 顺序即所设顺序（§5.7.3）。"""
-    keys = B.normalize_selection(selected, cands if cands is not None else [])
-    R.save_order(s, keys)
+    require_month(month)
+    keys = B.normalize_selection(selected, selection_data(s, month)["candidates"])
+    R.save_order(s, month, keys)
     return {"ok": True, "selected": keys, "message": f"已保存选题：{len(keys)} 个项目"}
 
 
-def move_project(s: Session, *, warehouse: str, direction: str, cands=None) -> dict:
+def move_project(s: Session, *, month: str, warehouse: str, direction: str) -> dict:
     """逐项**上移 / 下移**一格 ⇒ 立即落库（§5.7.3）。
 
-    ⚠️ **从未选题**时数据库里没有顺序行 ⇒ 先按「默认 = 全部候选」**实体化**一次，再移动
-       （否则动的是幽灵顺序，下次打开又回默认）。
+    未固定月按当前继承结果移动并固定本月，不回写来源月或旧基线。
     """
-    cands = cands if cands is not None else []
-    cur = B.resolve_order(R.load_order(s), cands, chosen=R.has_choice(s))
+    require_month(month)
+    cur = selection_data(s, month)["selected"]
+    if warehouse not in cur or direction not in ("up", "down"):
+        return {"ok": False, "message": "项目或移动方向无效；本次未保存"}
     new = B.move_in_list(cur, warehouse, direction)
-    R.save_order(s, new)
+    R.save_order(s, month, new)
     moved = "已在首位，未移动" if new == cur else "已移动"
     return {"ok": True, "selected": new, "message": moved}
 
 
-__all__ = ["parse_state", "state_query", "build_big_data", "save_manual_cell",
+__all__ = ["parse_state", "state_query", "require_month", "selection_data", "materialize_selection", "build_big_data", "save_manual_cell",
            "save_selection", "move_project", "set_main_material_port", "MAIN_MATERIAL_PORT"]

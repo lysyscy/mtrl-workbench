@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -231,18 +232,25 @@ def export_big(session: Session, month: str = "") -> Path:
     - ⚠️ **一行都没有 ⇒ 拒做**（⛔ 不产出一张只剩表头与合计的空表 —— 那会被读成「本月真的没有在建项目」）。
     """
     from app.mod07_setl import big_service as BS
-    from app.report_export import big_export
-
     state = BS.parse_state({"period": month} if str(month or "").strip() else {})
     data = BS.build_big_data(session, state)
+    return export_big_data(data)
+
+
+def export_big_data(data: dict, *, isolated: bool = False) -> Path:
+    """已装配的报表生成文件；调用者可在事务关闭后渲染。"""
+    from app.report_export import big_export
+
     if not data.get("rows"):
         raise MustReportError(
             "导出活动大表：**一行都没有**（该月没有在建项目，或大表还没选题）⇒ 拒做"
             "（⛔ 不产出一张空表让你以为「本月真的没有项目」）。")
     ym = str(data["month"])
     out_dir = EXPORT_ROOT / big_export.FILE_SUFFIX / period_label(ym)
+    if isolated:
+        out_dir = out_dir / uuid4().hex
     return Path(big_export.build_xlsx(data, out_dir, name=big_export.file_name(ym)))
 
 
 __all__ = ["EXPORT_ROOT", "period_label", "setl_rows", "setl_count", "export_settlement",
-           "export_inventory", "export_extract", "export_ledger", "export_proc", "export_big"]
+           "export_inventory", "export_extract", "export_ledger", "export_proc", "export_big", "export_big_data"]

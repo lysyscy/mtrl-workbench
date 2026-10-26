@@ -94,11 +94,7 @@ class WeldGasBalance(Base):
 
 
 class AnalysisBigProject(Base):
-    """**活动大表自己的项目集合与顺序**（§5.7.3）。
-
-    ⚠️ **与全站项目排序 `ord` 无关**（§2.7.3 的「跟随范围」**不含本页**）⇒ 单独一张表，
-       `seq` = 大表的行序。**库里没有本表任何记录** ⇒ 默认 = 全部候选（按档案顺序）。
-    """
+    """旧全局名单与顺序，只读兼容基线；无真实月份依据，不迁成历史月配置。"""
 
     __tablename__ = "analysis_big_project"
     __table_args__ = (
@@ -108,6 +104,22 @@ class AnalysisBigProject(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     warehouse_name: Mapped[str] = mapped_column(String(128), index=True, default="")   # 键 = 仓库名（§2.7.4）
     seq: Mapped[int] = mapped_column(Integer, default=0)                              # 大表自己的顺序
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class AnalysisBigMonthProject(Base):
+    """按月固定的大表名单；旧全局配置保留在 AnalysisBigProject 作只读基线。"""
+
+    __tablename__ = "analysis_big_month_project"
+    __table_args__ = (
+        UniqueConstraint("ym", "warehouse_name", name="uq_big_month_project_ym_wh"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ym: Mapped[str] = mapped_column(String(7), index=True)
+    warehouse_name: Mapped[str] = mapped_column(String(128))
+    seq: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -145,5 +157,5 @@ class AnalysisBigManual(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
-__all__ = ["SetlDetail", "WeldGasBalance", "AnalysisBigProject", "AnalysisBigManual",
+__all__ = ["SetlDetail", "WeldGasBalance", "AnalysisBigProject", "AnalysisBigMonthProject", "AnalysisBigManual",
            "SOURCE_AUTO", "NUMERIC_COLUMNS"]

@@ -1,6 +1,6 @@
 """`MOD-07` 活动大表的**持久化**（手填 6 列 ＋ 大表自己的项目顺序）。
 
-⚠️ **只碰大表自己的两张表**：自动列（提取 / 机械）与派生列**一律不落库**（现场算）。
+⚠️ 旧全局名单只读；只写本月名单与手填，自动列及派生列一律现场算。
 ⚠️ 列名映射**唯一处** = `big_domain.MANUAL_COLUMN`（本文件不写第二份）。
 ⚠️ **手填值不参与欠款计算**（§5.7.2）：本文件**不调用任何**付款域的重算出口。
 """
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.money import require_non_negative
 from app.mod07_setl import big_domain as B
-from app.mod07_setl.models import AnalysisBigManual, AnalysisBigProject
+from app.mod07_setl.models import AnalysisBigManual, AnalysisBigMonthProject, AnalysisBigProject
 
 
 def load_manual(s: Session) -> dict[str, dict[str, dict]]:
@@ -74,21 +74,32 @@ def save_cell(s: Session, *, ym: str, warehouse: str, key: str,
     return row
 
 
-def save_order(s: Session, warehouses) -> list[str]:
-    """整体保存选题结果（顺序即所设顺序）—— **先清后写**，避免残留旧项。
+def load_selection(s: Session, ym: str) -> dict:
+    """精确月 → 最近更早配置月（含选空）→ 旧全局基线 → 默认候选；读取不落库。"""
+    rows = [r for r in s.execute(select(AnalysisBigMonthProject)).scalars() if r.ym <= ym]
+    source = max((r.ym for r in rows), default="")
+    if source:
+        rows = [r for r in rows if r.ym == source and r.warehouse_name != CHOICE_MARKER]
+        rows.sort(key=lambda r: (r.seq or 0, r.id or 0))
+        return {"fixed": source == ym, "source": source, "order": [r.warehouse_name for r in rows]}
+    return {"fixed": False, "source": "legacy" if has_choice(s) else "default", "order": load_order(s)}
 
-    ⚠️ **中间必须 `flush()`**：SQLAlchemy 的工作单元默认**先 INSERT 后 DELETE**
-       ⇒ 不 flush 就会撞 `uq_big_project_wh`（同一仓库名"先插后删"）。
-    """
+
+def save_order(s: Session, ym: str, warehouses) -> list[str]:
+    """只改指定月；保留共同项目的行身份，让撤销/重做可靠恢复。"""
     seq = [str(w) for w in (warehouses or ()) if str(w or "")]
-    for r in list(s.execute(select(AnalysisBigProject)).scalars()):
-        s.delete(r)
-    s.flush()
-    s.add(AnalysisBigProject(warehouse_name=CHOICE_MARKER, seq=-1))    # 标记行（见常量说明）
-    for i, wh in enumerate(seq):
-        s.add(AnalysisBigProject(warehouse_name=wh, seq=i))
+    wanted = {CHOICE_MARKER: -1, **{wh: i for i, wh in enumerate(seq)}}
+    current = {r.warehouse_name: r for r in s.execute(select(AnalysisBigMonthProject)).scalars() if r.ym == ym}
+    for wh, row in current.items():
+        if wh not in wanted:
+            s.delete(row)
+    for wh, position in wanted.items():
+        if wh in current:
+            current[wh].seq = position
+        else:
+            s.add(AnalysisBigMonthProject(ym=ym, warehouse_name=wh, seq=position))
     s.flush()
     return seq
 
 
-__all__ = ["load_manual", "load_order", "has_choice", "save_cell", "save_order", "CHOICE_MARKER"]
+__all__ = ["load_manual", "load_order", "has_choice", "load_selection", "save_cell", "save_order", "CHOICE_MARKER"]

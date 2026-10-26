@@ -259,7 +259,7 @@ def test_selection_order_dialog_save_reread_and_cancel(server, browser_page):
     open_big(page, server)
     page.get_by_role('button', name='选择项目与排序…', exact=True).click()
     dialog = page.locator('.big-order-dialog')
-    expect(dialog.get_by_role('heading', name='选择项目与排序')).to_be_visible()
+    expect(dialog.get_by_role('heading', name='2026-09 · 选择项目与排序')).to_be_visible()
     expect(dialog.get_by_text('10 个项目 · 页面与导出同序', exact=True)).to_be_visible()
     # Moving writes the big table's own order, independent of the archive order.
     up = dialog.get_by_role('button', name='上移大表验收甲', exact=True)
@@ -317,7 +317,8 @@ def test_export_download_matches_rows_order_and_template(server, browser_page):
     # The server side also kept its copy inside this round's isolated .artifacts exports.
     from tools.audit.workspace_paths import output_dir
     produced = output_dir('exports') / '活动大表' / '2026年9月' / '经济活动分析大表_2026年9月.xlsx'
-    assert produced.exists()
+    matches = list(produced.parent.glob('*/' + produced.name))
+    assert matches and any(item.read_bytes() == path.read_bytes() for item in matches)
     import openpyxl
     workbook = openpyxl.load_workbook(str(path))
     try:
@@ -425,7 +426,7 @@ def test_layout_money_complete_narrow_viewport_and_performance(server, browser_p
     timings['enter_to_first_row'] = round(time.perf_counter() - started, 2)
     choose_month(page, MONTH)
     selected = [wh for wh in big_api(page, server)['selected'] if wh != '大表验收仓库辛']
-    assert page.request.post(server + '/api/m07/big/selection', data={'selected': selected}).json()['ok']
+    assert page.request.post(server + '/api/m07/big/selection', data={'month': MONTH, 'selected': selected}).json()['ok']
     page.reload()
     expect(page.locator('.big-count')).to_have_text('9 个项目')
     # Group boundaries exist on the group starts and the three standalone columns.
@@ -523,3 +524,128 @@ def test_edit_focus_keeps_width_and_saved_months_are_independent(server, browser
     choose_month(page, MONTH)
     expect(cell_input(page, WH_A, 'oil')).to_have_value('123.45')
     expect(page.get_by_label('定位大表项目', exact=True)).to_have_count(0)
+
+
+def test_month_selection_inherits_then_freezes_on_save_and_export(server, browser_page):
+    page, _ = browser_page
+    open_big(page, server)
+    first, second = '2040-01', '2040-02'
+    untouched = big_api(page, server, MONTH)['selected']
+    choose_month(page, first)
+    expect(page.locator('.big-month:not([hidden]) .big-selection-source')).to_contain_text('待固定')
+    assert big_api(page, server, first)['selection']['fixed'] is False
+    # The existing Save can fix the inherited list without manufacturing a change.
+    page.get_by_role('button', name='选择项目与排序…', exact=True).click()
+    dialog = page.locator('.big-order-dialog')
+    expect(dialog.get_by_role('heading', name=first + ' · 选择项目与排序', exact=True)).to_be_visible()
+    save = dialog.get_by_role('button', name='保存项目与顺序', exact=True)
+    expect(save).to_be_enabled()
+    save.click()
+    expect(dialog).not_to_be_visible()
+    assert big_api(page, server, first)['selection'] == {'fixed': True, 'source': first}
+    # Choose/order in this month only; the original month stays unchanged.
+    page.get_by_role('button', name='选择项目与排序…', exact=True).click()
+    dialog.get_by_role('button', name='全不选', exact=True).click()
+    dialog.get_by_role('checkbox', name='大表验收甲', exact=True).check()
+    dialog.get_by_role('checkbox', name='长项目名验收', exact=True).check()
+    dialog.get_by_role('button', name='保存项目与顺序', exact=True).click()
+    expect(dialog).not_to_be_visible()
+    selected = big_api(page, server, first)['selected']
+    assert set(selected) == {WH_A, WH_B}
+    assert big_api(page, server, MONTH)['selected'] == untouched
+    choose_month(page, second)
+    expect(page.locator('.big-month:not([hidden]) .big-selection-source')).to_have_text('名单沿用 ' + first + ' · 待固定')
+    assert big_api(page, server, second)['selected'] == selected
+    # Explicit export is POST and fixes exactly the month shown in its dialog.
+    page.get_by_role('button', name='导出文件…', exact=True).click()
+    with page.expect_request(lambda request: '/api/m07/big/export?' in request.url and request.method == 'POST') as request_event:
+        with page.expect_download() as event:
+            page.locator('.settlement-export-dialog').get_by_role('button', name='保存到本地', exact=True).click()
+    assert 'period=' + second in request_event.value.url
+    assert event.value.suggested_filename == '经济活动分析大表_2040年2月.xlsx'
+    event.value.save_as(str(output('big-month-fixed-export.xlsx', kind='exports')))
+    expect(page.locator('.big-month:not([hidden]) .big-selection-source')).to_have_text(second + ' 名单已固定')
+    fixed = big_api(page, server, second)
+    assert fixed['selection'] == {'fixed': True, 'source': second} and fixed['selected'] == selected
+    choose_month(page, first)
+    page.get_by_role('button', name='选择项目与排序…', exact=True).click()
+    dialog.get_by_role('checkbox', name='长项目名验收', exact=True).uncheck()
+    dialog.get_by_role('button', name='保存项目与顺序', exact=True).click()
+    expect(dialog).not_to_be_visible()
+    assert big_api(page, server, first)['selected'] == [WH_A]
+    choose_month(page, second)
+    expect(page.locator('.big-month:not([hidden]) .big-count')).to_have_text('2 个项目')
+    assert big_api(page, server, second)['selected'] == selected
+    assert big_api(page, server, MONTH)['selected'] == untouched
+
+
+def test_post_export_lost_response_keeps_protection_until_month_readback(server, browser_page):
+    page, _ = browser_page
+    open_big(page, server)
+    ym = '2050-01'
+    choose_month(page, ym)
+    expect(page.locator('.big-month:not([hidden]) .big-selection-source')).to_contain_text('待固定')
+    def lose_download(route):
+        response = route.fetch()
+        assert response.status == 200
+        route.abort()
+    export_url = '**/api/m07/big/export?period=' + ym
+    read_url = '**/api/m07/big?period=' + ym
+    page.route(export_url, lose_download)
+    page.route(read_url, lambda route: route.fulfill(status=503, json={'message': '合成名单读取失败'}))
+    page.get_by_role('button', name='导出文件…', exact=True).click()
+    page.locator('.settlement-export-dialog').get_by_role('button', name='保存到本地', exact=True).click()
+    expect(page.locator('.settlement-export-dialog')).not_to_be_visible()
+    scope = page.locator('.big-month:not([hidden])')
+    expect(scope.get_by_role('alert').first).to_contain_text('导出结果待核实')
+    expect(scope.get_by_role('button', name='选择项目与排序…', exact=True)).to_be_disabled()
+    expect(scope.locator('[col-id="oil"] input').first).to_be_disabled()
+    # The server fixed the list before its download response was lost.
+    assert big_api(page, server, ym)['selection'] == {'fixed': True, 'source': ym}
+    page.unroute(export_url)
+    page.unroute(read_url)
+    scope.get_by_role('button', name='重读核对', exact=True).click()
+    expect(scope.get_by_role('button', name='已核对，继续', exact=True)).to_be_enabled()
+    scope.get_by_role('button', name='已核对，继续', exact=True).click()
+    expect(scope.locator('.big-selection-source')).to_have_text(ym + ' 名单已固定')
+    expect(scope.get_by_role('button', name='选择项目与排序…', exact=True)).to_be_enabled()
+    expect(page.get_by_role('button', name='撤销', exact=True)).to_be_enabled()
+
+
+def test_post_export_keeps_pending_request_across_page_pause(server, browser_page):
+    page, _ = browser_page
+    open_big(page, server)
+    oil = cell_input(page, WH_A, 'oil')
+    oil.fill('888.77')
+    oil.press('Tab')
+    expect(page.locator('.big-month:not([hidden]) .big-feedback')).to_contain_text('工程用油 · 已保存到本月')
+    ym = '2051-01'
+    choose_month(page, ym)
+    pending, downloads = [], []
+    export_url = '**/api/m07/big/export?period=' + ym
+    page.route(export_url, lambda route: pending.append(route))
+    page.on('download', lambda download: downloads.append(download))
+    page.get_by_role('button', name='导出文件…', exact=True).click()
+    page.locator('.settlement-export-dialog').get_by_role('button', name='保存到本地', exact=True).click()
+    assert len(pending) == 1
+    # A client route change while the modal is busy must not abort a POST that can still commit.
+    page.evaluate("document.querySelector('a[href=\"/preview/projects\"]').click()")
+    expect(page.get_by_role('heading', name='项目档案', exact=True)).to_be_visible()
+    history_posts = []
+    page.on('request', lambda request: history_posts.append(request) if request.url.endswith('/api/history/undo') else None)
+    page.get_by_role('button', name='撤销', exact=True).click()
+    expect(page.locator('.history-tools')).to_contain_text('大表文件正在导出，请稍候。')
+    expect(page.locator('.history-confirm-dialog')).to_have_count(0)
+    assert history_posts == []
+    assert big_api(page, server, ym)['selection']['fixed'] is False
+    route = pending.pop()
+    response = route.fetch()
+    assert response.status == 200
+    route.fulfill(response=response)
+    # Reconciliation runs only after this response completes; the departed page never downloads.
+    expect(page.get_by_text(ym + ' 名单已固定', exact=True)).to_have_count(1)
+    assert downloads == []
+    assert big_api(page, server, ym)['selection'] == {'fixed': True, 'source': ym}
+    page.unroute(export_url)
+    page.get_by_role('link', name='MOD-07 月度会大表', exact=True).click()
+    expect(page.locator('.big-month:not([hidden]) .big-selection-source')).to_have_text(ym + ' 名单已固定')
