@@ -37,7 +37,7 @@ export function StatCell({ row, field, drafts, disabled, save }: { row: NoticeRo
   }
   return <input className={row.edited_fields.includes(field) ? 'notice-edited' : ''} aria-label={`${row.bill_no}${field === 'amount_approved' ? '审批金额' : field === 'stat_settle' ? '统计结算金额' : '统计付款金额'}`} title={`${dirty.current ? '尚未保存 · ' : ''}${field === 'amount_approved' ? '手动行审批金额；两个统计金额不得超过它' : `上限 = 审批金额 ${money(row.amount_approved)}`}；保存失败保留输入`} inputMode="decimal" value={value} disabled={disabled} onChange={e => { dirty.current = true;drafts[draftKey] = e.target.value; setValue(e.target.value); }} onBlur={() => void commit()} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void commit(); } if (e.key === 'Escape') { dirty.current = false;delete drafts[draftKey];setValue(row[field]); } }} />;
 }
-export type NoticeDialogState = { kind: 'delete' | 'supplier' | 'match' | 'link' | 'ownership'; row: NoticeRow };
+export type NoticeDialogState = { kind: 'delete' | 'link' | 'ownership'; row: NoticeRow };
 
 function strings(value: unknown): string[] { if (!Array.isArray(value) || !value.every(x => typeof x === 'string')) throw new ApiError('候选读取不完整，请重读。'); return value; }
 function resultObject(value: unknown) { if (!record(value)) throw new ApiError('读取不完整，请重试。'); return value; }
@@ -48,21 +48,19 @@ export function NoticeDialog(props: NoticeDialogProps) {
 function MaintenanceDialog({ state, projects, blocked, close, refresh, announce }: NoticeDialogProps) {
   const { row, kind } = state, lock = useRef(false);
   const [newName,setNewName] = useState(''), [warehouseConsent,setWarehouseConsent] = useState(false), [forceWarehouse,setForceWarehouse] = useState(false), [warehouse,setWarehouse] = useState<{name:string;found:boolean;degraded:boolean;owners:string[];from_cache:boolean;cached_at:string;message:string}|null>(null);
-  const [busy,setBusy] = useState(false), [done,setDone] = useState(false), [error,setError] = useState(''), [value,setValue] = useState(kind === 'supplier' ? row.jc_supplier : ''), [keyword,setKeyword] = useState('');
+  const [busy,setBusy] = useState(false), [done,setDone] = useState(false), [error,setError] = useState(''), [value,setValue] = useState(''), [keyword,setKeyword] = useState('');
   const query = useQuery({ queryKey: ['notice-maintenance',kind,row.notice_id,row.bill_no], enabled: !blocked, staleTime: 0, refetchOnMount: 'always', queryFn: async ({ signal }) => {
-    const path = kind === 'delete' ? '/api/m03/actions/manual-delete-impact' : kind === 'supplier' || kind === 'match' ? '/api/m03/actions/sup-match' : '/api/m01/ownership';
+    const path = kind === 'delete' ? '/api/m03/actions/manual-delete-impact' : '/api/m01/ownership';
     const data = resultObject(await requestJson(path, { method: 'POST', signal, ...body(kind === 'ownership' ? { name_full: row.project_name, doc_name: row.bill_name } : { notice_id: row.notice_id }) }));
-    if (kind === 'supplier' || kind === 'match') { strings(data.pool); strings(data.cands); }
     if (kind === 'ownership' && (!Array.isArray(data.candidates) || !data.candidates.every(x => record(x) && typeof x.key === 'string' && typeof x.display === 'string'))) throw new ApiError('归属候选读取不完整，请重读。');
     if (kind === 'delete' && (typeof data.message !== 'string' || !Array.isArray(data.effects))) throw new ApiError('删除影响读取不完整，请重读。');
     return data;
   } });
-  const data = query.data, pool = data && (kind === 'supplier' || kind === 'match') ? strings(data.pool) : [], cands = data && kind === 'match' ? strings(data.cands) : [];
+  const data = query.data;
   const ownership = kind === 'ownership' && data ? data.candidates as { key: string; display: string; archived: boolean }[] : [];
-  const initialValue = useRef(kind === 'supplier' ? row.jc_supplier : '');
+  const initialValue = useRef('');
   const closing = useDialogClose({ busy, dirty: !done && (value !== initialValue.current || Boolean(newName || keyword || forceWarehouse || warehouseConsent)), close });
-  const unavailable = blocked || busy || done || query.isFetching || (!data && kind !== 'supplier');
-  useEffect(() => { if (kind === 'match' && data && Array.isArray(data.cands) && data.cands.length === 1 && value === initialValue.current) { initialValue.current = String(data.cands[0]); setValue(initialValue.current); } }, [data]);
+  const unavailable = blocked || busy || done || query.isFetching || !data;
   async function write(path: string, payload: unknown) {
     if (blocked || busy || done || lock.current) return;
     lock.current = true; setBusy(true); setError(''); let saved = false;
@@ -87,16 +85,14 @@ function MaintenanceDialog({ state, projects, blocked, close, refresh, announce 
   function submit() {
     if (unavailable) return;
     if (kind === 'delete') void write('/api/m03/actions/manual-delete',{ notice_id: row.notice_id });
-    if (kind === 'supplier' || kind === 'match') void write('/api/m03/actions/jc-supplier',{ notice_id: row.notice_id, supplier: value.trim() });
     if (kind === 'ownership' && value && warehouseReady) void write('/api/m03/notices/ownership-assign',{ doc_name: row.bill_name, keyword, ...(value==='new'?{shell_id:data?.shell_id,new_small_name:newName.trim()}:{small_id:Number(value)}) });
   }
-  const title = { delete: '删除手动通知书', supplier: '集采实际供应商', match: '自动匹配供应商', link: '关联集采合同', ownership: '指定项目归属' }[kind];
+  const title = { delete: '删除手动通知书', link: '关联集采合同', ownership: '指定项目归属' }[kind];
   return <BusinessModal open={!blocked} className={`project-dialog notice-dialog`} titleId="notice-maintenance-title" requestClose={closing.requestClose}><DialogContents title={title} titleId="notice-maintenance-title" closing={closing}><form onSubmit={e => { e.preventDefault();submit(); }}><p>{row.bill_no} · {row.bill_name} · {kind === 'ownership' ? row.project_name : row.project_display}</p>
     {query.isPending && <p role="status">正在读取…</p>}{query.isError && <p className="notice" role="alert">{query.error.message}<Button htmlType="button" onClick={() => void query.refetch()}>重读候选</Button></p>}
     {kind === 'delete' && data && <><p className="danger">{receipt(data)}</p><dl>{[['项目',data.project_name],['单据日期',data.doc_date],['统计结算金额',data.stat_settle],['统计付款金额',data.stat_paid],['已付金额（流水）',data.amount_paid]].map(([label,number]) => <div key={String(label)}><dt>{String(label)}</dt><dd>{String(number)}</dd></div>)}</dl><ul>{(data.effects as string[]).map(effect => <li key={effect}>{effect.replace(/\*\*/g,'')}</li>)}</ul></>}
-    {(kind === 'supplier' || kind === 'match') && <>{kind === 'match' && data && <><p>{String(data.level_name)} · 命中 {cands.length} 家{cands.length > 1 ? '，请选择，不自动取第一家。' : cands.length === 1 ? '，自动匹配 · 待确认，须人工采用。' : '，可手工指定。'}</p>{data.level === 4 && <p className="danger">仅2字片段命中，请核对供应商全名。</p>}{cands.map(name => <label className="notice-choice" key={name}><input type="radio" name="supplier-candidate" value={name} checked={value === name} disabled={busy} onChange={() => setValue(name)} />{name}</label>)}</>}<label>供应商名称<input autoFocus value={value} maxLength={128} disabled={busy || done} onChange={e => setValue(e.target.value)} /></label>{!pool.length && data && <p>本项目暂无集采合同供应商，可直接录入全名。</p>}{pool.filter(name => name.includes(value)).map(name => <Button htmlType="button" className="notice-pool" key={name} disabled={busy || done} onClick={() => setValue(name)}>{name}</Button>)}</>}
     {kind === 'ownership' && data && <><p>{String(data.reason)}。关键词须出现在单据名称里；补完档案后须重新抓取，不改本条既有关系。</p><label>归属小微<select value={value} disabled={busy || done} onChange={e => setValue(e.target.value)}><option value="">请选择</option>{ownership.map(p => <option key={p.key} value={projects.find(project => project.warehouse_name === p.key)?.id ?? ''}>{p.display}{p.archived ? '（归档）' : ''}</option>)}{Boolean(data.shell_id)&&<option value="new">新建具体小微</option>}</select></label>{value==='new'&&<><label>新小微仓库名<input value={newName} disabled={busy||done} onChange={e=>{setNewName(e.target.value);setWarehouse(null);setForceWarehouse(false);setWarehouseConsent(false);}} /></label><Button htmlType="button" disabled={busy||done||!newName.trim()} onClick={()=>setWarehouseConsent(true)}>查询 i8 仓库名单…</Button>{warehouseConsent&&<div><p className="danger">会登录 i8，可能顶掉该账号的在线会话；此次只查名单，不建档。</p><Button htmlType="button" disabled={busy||done} onClick={()=>setWarehouseConsent(false)}>取消查询</Button><Button htmlType="button" disabled={busy||done} onClick={()=>void checkWarehouse()}>确认查询（会顶号）</Button></div>}{warehouse&&<div><p>{warehouse.degraded?'未取到名单，不等于名单里没有。':warehouse.found?`名单中有该仓库，所属项目：${warehouse.owners.join('、')}`:'名单中没有该仓库；将来同步可能重复建档。'}</p>{warehouse.from_cache&&<p>使用上次名单：{warehouse.cached_at||'时间未知'}</p>}{warehouse.found&&!warehouse.owners.includes(row.project_name)&&<p className="danger">该仓库所属项目与本条壳全名不一致，请核对。</p>}<p>{warehouse.message.replace(/<[^>]*>/g,'').replace(/\*\*/g,'')}</p>{(!warehouse.found||warehouse.degraded)&&<label className="notice-choice"><input type="checkbox" disabled={busy||done} checked={forceWarehouse} onChange={e=>setForceWarehouse(e.target.checked)} />已了解上述结果，仍按此名建档</label>}</div>}</>}<label>关键词<input value={keyword} disabled={busy || done} onChange={e => setKeyword(e.target.value)} /></label><Link to={`/projects?notice=${row.notice_id}&bill=${encodeURIComponent(row.bill_no)}`}>到项目档案核对 {row.bill_no}</Link></>}
-    {error && <p className="notice" role="alert">{error}</p>}{busy && <p role="status">正在保存…</p>}<div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>{done ? '关闭' : '取消'}</Button>{!done && <Button htmlType="submit" className={kind === 'delete' ? 'danger' : 'primary'} disabled={unavailable || (['match','link','ownership'].includes(kind) && !value) || (kind === 'ownership' && (!keyword||!warehouseReady||value==='new'&&!newName.trim()))}>{kind === 'delete' ? '确认删除' : kind === 'match' ? '采用' : kind === 'link' ? '确认关联' : kind === 'ownership' ? '确认补充档案' : '保存'}</Button>}</div>
+    {error && <p className="notice" role="alert">{error}</p>}{busy && <p role="status">正在保存…</p>}<div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={closing.requestClose}>{done ? '关闭' : '取消'}</Button>{!done && <Button htmlType="submit" className={kind === 'delete' ? 'danger' : 'primary'} disabled={unavailable || (['link','ownership'].includes(kind) && !value) || (kind === 'ownership' && (!keyword||!warehouseReady||value==='new'&&!newName.trim()))}>{kind === 'delete' ? '确认删除' : kind === 'link' ? '确认关联' : kind === 'ownership' ? '确认补充档案' : '保存'}</Button>}</div>
   </form></DialogContents></BusinessModal>;
 }
 

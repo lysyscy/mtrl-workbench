@@ -75,10 +75,10 @@ def api_list(request: Request) -> dict:
 
 
 @router.get("/api/m11/link-recommendations")
-def api_link_recommendations(notice_id: int) -> dict:
+def api_link_recommendations(notice_id: int, supplier: str | None = None) -> dict:
     """仅供人工选择的候选及发票证据。"""
     with session_scope() as s:
-        data = SV.link_recommendations(s, notice_id)
+        data = SV.link_recommendations(s, notice_id, supplier=supplier)
     if data.get('ok'):
         data['rows'] = [{**_row(row), 'supplier_uninvoiced': _s(row['supplier_uninvoiced']),
                          'trade_uninvoiced': _s(row['trade_uninvoiced']), 'invoices': [{**v, 'amount': _s(v['amount'])} for v in row['invoices']]}

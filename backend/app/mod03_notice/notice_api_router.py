@@ -397,14 +397,20 @@ def api_jc_supplier(req: JcSupplierIn, session: Session = DBSession) -> dict:
        别的分类填了没有意义。⛔ 前端不许再自行判定后"假装成功"。
     ⚠️ 该字段 i8 **不提供** ⇒ 只能是人工值 ⇒ **不受再次导入覆盖**（`merge.PROTECTED`）。
     """
-    from app.mod03_notice.models import PaymentNotice
     from app.mod03_notice.notice_actions import jc_supplier_problem
 
-    row = session.get(PaymentNotice, int(req.notice_id))
+    from app.mod03_notice.service import get_notice
+    from app.mod11_jc.service import links_by_notice
+
+    row = get_notice(session, int(req.notice_id), with_for_update=True, populate_existing=True)
     # ⚠️ 判定**只有一处**（`notice_actions.jc_supplier_problem`）—— 本层只负责"取数 → 判 → 落库 → 回 JSON"
     problem = jc_supplier_problem(row)
     if problem:
         return {"ok": False, "message": problem}
+    if row.excluded or row.i8_revoked:
+        return {"ok": False, "message": "撤单或剔除后不能维护供应商；已有关系仍可查看、解除"}
+    if links_by_notice(session, [int(row.id)]).get(int(row.id)):
+        return {"ok": False, "message": "已关联时供应商由合同确定，请更换合同或先解除关联"}
     row.jc_supplier = str(req.supplier or "").strip()[:128]
     session.flush()
     return {"ok": True, "notice_id": int(row.id), "supplier": row.jc_supplier,

@@ -647,3 +647,14 @@ def links_by_notice(session, notice_ids: list[int] | None = None) -> dict[int, l
         if nid is not None:
             grouped.setdefault(int(nid), []).append(int(cid))
     return grouped
+
+
+def linked_suppliers(session, notice_ids: list[int] | None = None) -> dict[int, str]:
+    """关联后的供应商由合同决定；批量读取，不改写历史通知书。"""
+    if notice_ids is not None and not notice_ids:
+        return {}
+    stmt = select(JcPayment.notice_id, JcContract.supplier).join(
+        JcContract, JcPayment.contract_id == JcContract.id).where(JcPayment.notice_id.is_not(None))
+    if notice_ids is not None:
+        stmt = stmt.where(JcPayment.notice_id.in_(notice_ids))
+    return {int(nid): str(supplier or '') for nid, supplier in session.execute(stmt)}

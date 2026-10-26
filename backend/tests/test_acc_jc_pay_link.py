@@ -142,6 +142,7 @@ def test_两个方向写同一份记录_双向可见():
         p = _project(s)
         c = _contract(s, project_id=p.id)
         n = _notice(s, ph="__自检_ph_关联甲__")
+        n.ownership_id = p.id; s.flush()
 
         # 关联**之前**：两侧都答"没有"
         assert _links_by_notice(s)(n.id) == [], "付款域侧：未关联"
@@ -170,6 +171,7 @@ def test_一对一_换合同先解绑再写新():
         c1 = _contract(s, project_id=p.id, supplier="业祥")
         c2 = _contract(s, project_id=p.id, supplier="尚坤")
         n = _notice(s, ph="__自检_ph_关联乙__")
+        n.ownership_id = p.id; s.flush()
 
         r1 = SV.act_link_notice(s, notice_id=n.id, contract_id=c1.id)
         assert r1["ok"] and r1["contract_id"] == c1.id and r1["moved_from"] is None
@@ -199,11 +201,13 @@ def test_解绑_零金额引用_与非集采分类不许填供应商():
         # ① **零金额也允许引用**：关联是"关系"，不是"录入" ⇒ ⛔ 不受"子表金额必须 > 0"那条约束
         # 统计付款为零也保持零，不回退审批金额。
         n0 = _notice(s, ph="__自检_ph_零额__", paid="0", approved="0")
+        n0.ownership_id = p.id; s.flush()
         r = SV.act_link_notice(s, notice_id=n0.id, contract_id=c.id)
         assert r["ok"] is True, "金额为 0 也必须能关联（金额以后核，关系先建上）"
         assert Decimal(str(R.payment_of_notice(s, n0.id).amount)) == Decimal("0")
         # 审批额有值也不能当成统计付款额
         n1 = _notice(s, ph="__自检_ph_兜底__", paid="0", approved="888")
+        n1.ownership_id = p.id; s.flush()
         SV.act_link_notice(s, notice_id=n1.id, contract_id=c.id)
         assert R.payments_of(s, c.id)[-1]["amount"] == Decimal("0.00")
         SV.act_unlink_notice(s, notice_id=n1.id)
@@ -277,6 +281,7 @@ def test_集采走付款域同一通道_识别方式只认收款单位():
         p = _project(s)
         c = _contract(s, project_id=p.id)
         n = _notice(s, ph="__自检_ph_集采通道__")
+        n.ownership_id = p.id; s.flush()
         assert jc_supplier_problem(n) is None, "集采分类的行要能填「集采实际供应商」"
         r = SV.act_link_notice(s, notice_id=n.id, contract_id=c.id)
         assert r["ok"] is True, f"集采分类的行要能关联集采合同（走的就是付款域那条路）：{r}"

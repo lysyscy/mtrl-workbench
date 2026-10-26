@@ -112,7 +112,7 @@ def notice_payment_effect(s: Session, notice_id: int) -> dict | None:
     return {"contract_id": c.id, "pay_sum": amounts["pay_sum"]}
 
 
-def _link_candidates(s: Session, notice_ids: list[int]):
+def _link_candidates(s: Session, notice_ids: list[int], *, supplier: str | None = None):
     """批量读取候选事实；逐条产出，避免为整批通知书同时复制全部候选。"""
     from app.mod01_projects import service as projects
     from app.mod03_notice import service as notices
@@ -130,20 +130,24 @@ def _link_candidates(s: Session, notice_ids: list[int]):
         key = keys.get(notice.ownership_id, '') if notice else ''
         current = next(iter(links.get(nid, [])), None)
         rows = D.pick_candidates(contracts=contracts, project_key=key,
-                                 supplier=notice.jc_supplier, current_id=current) if notice else []
+                                 supplier=notice.jc_supplier if supplier is None else supplier, current_id=current) if notice else []
         yield {'notice_id': nid, 'notice': notice, 'project_key': key, 'current_contract_id': current,
                'rows': [{**r, 'project_seq': sequences.get(r['id'])} for r in rows]}
 
 
-def link_recommendations(s: Session, notice_id: int) -> dict:
+def link_recommendations(s: Session, notice_id: int, *, supplier: str | None = None) -> dict:
     """按现有候选范围批量带回发票与推荐证据；不选择、不保存关联。"""
     from app.mod03_notice import service as notices
 
-    context = next(_link_candidates(s, [notice_id]))
+    context = next(_link_candidates(s, [notice_id], supplier=supplier))
     notice = context['notice']
-    if notice is None or notice.category != 'jc' or notice.excluded:
+    if notice is None or (notice.category != 'jc' or notice.excluded or notice.i8_revoked) and not context['current_contract_id']:
         return {'ok': False, 'message': '找不到可关联的集采通知书'}
     key, current, rows = context['project_key'], context['current_contract_id'], context['rows']
+    read_only = notice.category != 'jc' or notice.excluded or notice.i8_revoked
+    if read_only:
+        rows = [r for r in rows if r['id'] == current]
+    actual_supplier = next((r['supplier'] for r in rows if r['id'] == current), notice.jc_supplier)
     ids = [r['id'] for r in rows]
     invoices = R.invoices_of_many(s, ids)
     payments = {cid: [p for p in values if p.get('notice_id') != notice_id]
@@ -169,7 +173,7 @@ def link_recommendations(s: Session, notice_id: int) -> dict:
     rows.sort(key=lambda r: (not bool(r['date']), r['date'], r['id']))
     return {'ok': True, 'notice_amount': str(notice.amount_approved), 'current_contract_id': current,
             'notice_title': (notice.fields or {}).get('BillName', ''),
-            'supplier': notice.jc_supplier, 'project_key': key, 'rows': rows}
+            'supplier': actual_supplier, 'read_only': bool(read_only), 'project_key': key, 'rows': rows}
 
 
 def build_detail(s: Session, contract_id: int) -> dict | None:
@@ -359,10 +363,17 @@ def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
     from app.mod03_notice import service as notices
     from app.mod11_jc.models import JcContract
 
-    if notices.get_notice(s, int(notice_id)) is None:
+    s.flush()
+    notice = notices.get_notice(s, int(notice_id), with_for_update=True, populate_existing=True)
+    if notice is None:
         return {"ok": False, "kind": "err", "message": f"找不到付款通知书 {notice_id}"}
-    if s.get(JcContract, int(contract_id)) is None:
+    contract = s.get(JcContract, int(contract_id))
+    if contract is None:
         return {"ok": False, "kind": "err", "message": f"找不到集采合同 {contract_id}"}
+    if notice.category != 'jc' or notice.excluded or notice.i8_revoked:
+        return {"ok": False, "kind": "err", "message": "仅有效集采通知书可新增或更换关联；已有关系仍可查看、解除"}
+    if notice.ownership_id is None or notice.ownership_id != contract.project_id:
+        return {"ok": False, "kind": "err", "message": "只能关联本通知书所属项目的合同，请重读核对项目归属"}
 
     # 1) **一对一**：换合同 ⇒ 先把旧的那条关联记录摘掉（判据 `001-03`「先解绑再写新」）
     old = R.payment_of_notice(s, notice_id)
@@ -379,6 +390,7 @@ def act_link_notice(s: Session, *, notice_id: int, contract_id: int) -> dict:
         return {"ok": False, "kind": "err",
                 "message": "该付款通知书已被引用过（全库去重，不分合同）—— 请刷新后重试"}
 
+    notice.jc_supplier = contract.supplier
     row = R.insert_payment(s, contract_id=int(contract_id), pay_date="",
                            amount=0, source=SRC_NOTICE, notice_id=int(notice_id))
     return {"ok": True, "kind": "ok", "changed": True, "payment_id": int(row.id),
@@ -444,10 +456,16 @@ def act_unlink_notice(s: Session, *, notice_id: int) -> dict:
 
     ⚠️ 解绑后**两侧同时**变回"未关联"（因为只有一份记录）—— 这正是双向可见的另一面。
     """
+    from app.mod03_notice import service as notices
+    s.flush()
+    notice = notices.get_notice(s, int(notice_id), with_for_update=True, populate_existing=True)
     old = R.payment_of_notice(s, notice_id)
     if old is None:
         return {"ok": False, "kind": "err", "message": "这行通知书当前没有关联集采合同"}
     cid = int(old.contract_id)
+    contract = R.contract_of(s, cid)
+    if notice is not None and contract is not None:
+        notice.jc_supplier = contract.supplier
     R.delete_payment(s, old.id)
     return {"ok": True, "kind": "ok", "contract_id": cid,
             "message": f"已取消与集采合同 #{cid} 的关联（两侧同时解除）"}
@@ -568,6 +586,10 @@ __all__ = ["project_references",
 def list_contracts(session, **kw):
     from app.mod11_jc import repository
     return repository.list_contracts(session, **kw)
+
+
+def linked_suppliers(session, notice_ids: list[int] | None = None):
+    return R.linked_suppliers(session, notice_ids)
 
 
 def links_by_notice(session, notice_ids: list[int] | None = None):

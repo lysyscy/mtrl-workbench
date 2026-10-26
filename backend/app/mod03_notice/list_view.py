@@ -186,7 +186,10 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
 
     if flows_of is None:
         flows_of = _flows_by_notice(session)
+    suppliers = {}
     if links_of is None:
+        from app.mod11_jc import service as contracts
+        suppliers = contracts.linked_suppliers(session, notice_ids)
         links_of = _links_by_notice(session)
     if traces_of is None:
         traces_of = _traces_by_notice(session)
@@ -233,7 +236,7 @@ def build_rows(session, *, flows_of=None, links_of=None, traces_of=None, notice_
                 edited_fields=tuple(manual_edited_fields(traces_of(int(n.id)), int(n.id))),
                 # ⛔ **不许漏装**：`list_data._row_dict` 已改为直取本字段（不再 `getattr` 兜空）——
                 #    漏装会当场 `AttributeError` 变红，而不是静默变成空串（那会让「点采用」把值清空）。
-                jc_supplier=str(n.jc_supplier or ""),
+                jc_supplier=suppliers.get(int(n.id), str(n.jc_supplier or "")),
                 planned_pay_method=str(n.planned_pay_method or ""),
             )
         )

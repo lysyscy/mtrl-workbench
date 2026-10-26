@@ -68,7 +68,8 @@ def test_保留跨项目当前关联及缺失重复空输入的原行为(rollbac
         notice = _notice(s, ph='__候选当前__', approved='100.01')
         notice.ownership_id = project.id; notice.jc_supplier = '甲'; notice.approve_status = '已批'
         s.flush()
-        S.act_link_notice(s, notice_id=notice.id, contract_id=current.id)
+        # Historical inconsistent relation remains viewable; new cross-project links are rejected.
+        R.insert_payment(s, contract_id=current.id, pay_date='', amount=0, source='notice', notice_id=notice.id)
         data = S.link_recommendations(s, notice.id)
         assert {row['id'] for row in data['rows']} == {current.id, target.id}
         assert data['current_contract_id'] == current.id
