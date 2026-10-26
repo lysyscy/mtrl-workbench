@@ -2,17 +2,30 @@
 
 当前范围、批准与验收归[共同规格](spec.md)，大表分月决定归[当前确认](questions.md#2026-10-26大表分月口径已确认)。本页只保仍供验看/复测消费的结果和来源；本机原始输出不随Git提交，旧通过数不代表最新版本已经验收。
 
-## 通知书页最小视觉试点
+## 全站视觉收敛、窄边栏与五页列宽
 
-PH-20261026-notice-visual-01已人工恢复；基线`18842da8`，设计文档`193b8b97`，页面`17340172`及金额输入强调修正`e9e47fe4`。已在原8065加载`e9e47fe4`产品，等待用户视觉确认；未推广全站或恢复449。自查范围为基线至当前的通知书样式和展示文案，局部可逆且未改业务逻辑，采用自查与实际浏览器验看，未新增永久测试或冒称独立审查。
+用户已接受通知书试点，并明确授权推广全站、关闭专用快速回退窗口、调整03/06/08/09/10列宽及删除侧栏MOD编号。实施起点`5d400461`，主改动`13948d53`，真实数据反馈修正`eb4a6818`，窄列表头换行`88395cd8`。产品已加载原8065，当前全站改动待用户实看；未恢复449其余加载/字体首帧/全站尺寸链。
 
-- 先写设计文档局部试点，再固定原源码/完整在用构建清单。只改notices.css/tsx，沿原主题角色、MiSans及字号档位，轻边界、小圆角、弱阴影、表头/关联状态12px及精简文案；本次付款输入有主题强调底色和500字重。表格字段/列序、导航、业务入口、关联按钮完整名称与状态及两步弹窗保持，弹窗实现未改。
-- 原run `.artifacts/active/react-writable-preview/20261025-admin-i8`的owner/version为实际运行主人；最终构建`work/notice-visual-20261026-final`，原`work/project-picker-shell-fix`保留。`registered_preview()`已核进程、HTTP、完整资源和产品输入；不新建schema、不seed/重拷/迁移、不触及8000。
-- 指定Node24.22.1、pnpm12.15.0下typecheck/build退出0，原件`logs/{typecheck,build}.log`；首轮误取宿主附带旧工具链虽退出0但有engine警告，保留`logs/notice-visual-{typecheck,build}-initial-toolchain.log`，不作为最终环境证明。初轮Impeccable检测为空、退出0（`reports/notice-visual-detector.json`）；随后仅修正金额样式优先级并通过最终构建和实际computed-style核验，不把初轮检测伪称覆盖最终新增差异。
-- IAB由原根入口、侧栏到通知书，1280×720真实长数据，实际核246条当前列表、全部18列定义、勾选摘要和清空、供应商关联进入第一步/第二步后取消、金额会话内编辑再恢复原值与明确编辑外观；未提交关联/付款/分类/打印/i8动作。深色主题与最大1.4字号查看控件换行、表格/页面滚动后，已恢复原中性浅色/标准字号并重读。截图在同run `screenshots/notice-{before,after,dark,dark-large}.jpg`及`notice-association-step2.jpg`；before/after同视口、主题、字号和筛选，未作性能对比。最后金额强调修正仅在默认主题重验，其他样式未变，复用此前深色/字号观察，不称全主题矩阵或449通过。
-- 换装前后38表集合一致、37张非账号表摘要全部一致。user_account摘要含正常本地登录及临时外观试验，主题/字号已恢复；未把它写成38表逐字节不变。`reports/notice-visual-preservation.json`为最终摘要；原始修改前摘要在`recovery/notice-visual-20261026/data-fingerprints.json`。
-- 快速回退入口及守卫回[交接](handoff.md#当前验看与快速回退)，`logs/notice-visual-rollback-check.log`退出0；只读检查通过，未执行apply完整往返。原构建/最终构建、回退脚本和截图保留供本次用户验看，两个本轮中间构建及临时工具链shim已退出。静态demo保持既有待用户对照用途，本轮未增第三个预览。
-- 目录检查仍有独立未通过项：`workspace_check --effort react-writable-preview --phase active`退出1，扫描到既存`.artifacts/archive/notice-association/20261026/{20261026-final,20261026-validation,20261026-verified}`临时目录分类及缺retention元数据。未改该历史原件或检查器；本次页面/构建/原run检查可复用，**全局归档治理检查保持未通过**。原件`logs/notice-visual-workspace-check.log`；不将它算产品失败或掩盖为全绿。
+- 共享主题沿八套既有色值角色，统一轻边界、小圆角、文字层级和简短文案；保导航分组/顺序、字段/列序、业务入口、关联按钮及两步弹窗。侧栏基准宽238→176px，只显示业务名称，长名称可换行。有效辅助字至少12px；不改正文13.5px和既有字号档位，不照搬demo布局。
+- 五页按完整格式化金额、真实合计及编辑留白定列宽下限，文本按需换行；费用月份不再统一占宽金额列，过程矩阵复用既有BoundedTable。初轮真实浏览器暴露库存空调整值被金额格式器拒绝，已保空值语义修正；过程测试原定位假定目标出现在虚拟候选首屏，改用既有搜索定位，原值/调整/合计断言未放宽。通知书完整长单号、库存调整表头已在最终构建实际核换行。
+- 同1761×1191视口、1.4最大字号、相同真实样本的表区scrollWidth如下。侧栏实际宽333.19→246.39px；剩余密集页保必要横滚，不称所有内容能无滚动塞入。before/after原件为原run `reports/global-widths-{before,after}.json`。
+
+| 页面 | 修改前 | 修改后 |
+|---|---:|---:|
+| 03 付款通知书 | 2977px | 2375px |
+| 06 过程资料 | 2940px | 1912px |
+| 08 库存 | 3021px | 2273px |
+| 09 特殊费用 | 3340px | 1457px（容器1457，无横滚） |
+| 10 机械费汇总 | 2120px | 1679px |
+
+- 指定Node24.22.1/pnpm12.15.0最终typecheck/build退出0，原件`logs/{typecheck,build}.log`。八套主题角色既有纯测试1项通过。真实原8065五项只读浏览器检查首轮3过、2失败及1连带清理错误；修正后受影响2项再验通过（13.70s），日志`logs/global-visual-readonly-tests-{initial,final}.log`。覆盖真实读取/资源/账号、费用记录与合计、关联多供应商取消、库存字段/空调整/合计、过程资料原值/调整/合计；未写试用业务，不新增合成数据。
+- IAB实际查看15个导航入口、五页最大字号与费用深色状态，空机械明细只按真实空态核验，不冒称有非空详情覆盖。首轮Impeccable检查`reports/global-visual-detector.json`空结果、退出0；后续定向修正经类型/构建、真实界面及自查覆盖，不伪称初轮检测覆盖最终全部差异。三个产品提交实际语法/字节/凭据钩子通过；最初混合换行拒绝保留在日志，修复后通过，未绕过。
+- 原run `.artifacts/active/react-writable-preview/20261025-admin-i8`沿同一owner/schema、修订bmonth261026及私有配置原位更新。在用`work/global-visual-20261026-release`产品输入`88395cd8f542b230371e7cf366b112afc3919277`，后续纯文档HEAD不冒充在用SHA。`registered_preview()`已核进程、HTTP、产品输入和完整资源。38表集合一致，37张非账号表摘要一致；user_account含正常登录及外观验证变化。已恢复用户本轮进入时的“松绿 + 更大（1.25）”，并在界面回读。原件`reports/global-visual-preservation.json`与`global-visual-data-before.json`。
+- 用户关闭回退窗口后，专用recovery脚本/源码副本、旧回退构建及本轮中间构建已删除；普通Git历史保留，当前完整构建与数据库/私有状态保留。静态demo核PID/源码绑定/HTTP摘要后终止，30959已关闭；其无正常关闭API，未把终止写成优雅退出。site/work删除，有限截图、来源/许可与HTTP证据归主检出`.artifacts/archive/notice-visual-trial/20261026`，保留至2026-11-25。原trial说明退出当前树，可从5d400461的原路径追溯；有效设计归前端设计主人。收尾回执`reports/global-visual-retirement.json`。
+- 归档治理保持非全绿：此前React worktree的notice-association归档嵌套/缺retention问题未改；本轮退役检查又扫描到主检出既存notice-dialog-reuse缺retention元数据（退出1，`logs/global-visual-retirement-check.log`）。它们不是本次产品故障，未为过检查改历史材料或检查器。
+- 截图同run `screenshots/global-{fees-preferred,fees-max,mechanical-max,inventory-max,dark-max}.jpg`；当前保留用户偏好、无额外视口覆盖。源码已本地保存，未公共推送、未合并master或正式部署；不触及8000、真实i8或实体打印。全站人工验收及原spec后续关口仍未代办。
+
+通知书局部试点历史：18842da8→193b8b97→17340172→e9e47fe4已先在原8065完成技术验看并获用户接受，保留18列、完整关联入口和金额编辑强调；当时的对比、只读回退检查及覆盖边界可从5d400461的本页追溯。本次授权替代其“仅试点/等待推广/保留快速回退”状态。
 
 ## 表格稳定与MOD05拆页
 
