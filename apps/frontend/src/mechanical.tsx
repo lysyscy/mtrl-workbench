@@ -1,13 +1,13 @@
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Checkbox from 'antd/es/checkbox';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, record, requestFile, requestJson } from './api';
 import type { Identity } from './api';
-import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
 import { detailSum, mechanicalMoney as money, readDetail, readMechanicalReport, readWorkbench } from './mechanical-api';
 import { DetailsTable, MechanicalDialog, detailKey, mechanicalNumberWidth } from './mechanical-details';
 import { MechanicalImport } from './mechanical-import';
@@ -18,6 +18,9 @@ import { MechanicalWork } from './mechanical-work';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
 import type { Category, Detail, Effective, Workbench, MechanicalReport, ReportSheet } from './mechanical-api';
+import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
+import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+const summaryRowId = (row: SummaryRow) => row.id;
 
 interface InternalEditing { epoch: number; writable: boolean; value: (id: string,column: string) => string | undefined; change: (id: string,column: string,value: string) => void }
 function InternalCell({ id, column, value, label, editing, epoch }: { id: string; column: string; value: string; label: string; editing: React.RefObject<InternalEditing>; epoch: number }) {
@@ -27,29 +30,25 @@ function InternalCell({ id, column, value, label, editing, epoch }: { id: string
 }
 interface SummaryRow { id: string; [column: string]: string }
 const groupLabels = ['零租', '包月', '周材', '内租（租赁公司）', '内租（工程公司）'];
-function Summary({ scale, report, projectIds, detail, internal, data, warehouses }: { scale: number; data:Workbench; warehouses:string[]; internal: InternalEditing; report: MechanicalReport; projectIds: number[]; detail: (sheet: number, projectId: string) => void }) {
+function Summary({ scale, report, projectIds, detail, internal, data, warehouses, active }: { active: boolean; scale: number; data:Workbench; warehouses:string[]; internal: InternalEditing; report: MechanicalReport; projectIds: number[]; detail: (sheet: number, projectId: string) => void }) {
   const api = useRef<GridApi<SummaryRow> | null>(null);
-  const root = useRef<HTMLDivElement>(null), heightFrame = useRef(0);
+  const root = useRef<HTMLDivElement>(null);
   const fitHeight = useCallback(() => {
-    if (heightFrame.current) return;
-    heightFrame.current = requestAnimationFrame(() => {
-      heightFrame.current = 0;
-      const grid = api.current, element = root.current;
-      if (!grid || grid.isDestroyed() || !element) return;
-      const scale = Number(getComputedStyle(element).getPropertyValue('--fscale')) || 1;
-      const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1);
-      const horizontal = element.querySelector('.ag-body-horizontal-scroll');
-      const natural = (element.querySelector('.ag-header')?.getBoundingClientRect().height ?? 68 * scale)
-        + (last ? (last.rowTop ?? 0) + (last.rowHeight ?? 36 * scale) : 36 * scale)
-        + (element.querySelector('.ag-grid-pinned-bottom-rows')?.getBoundingClientRect().height ?? grid.getPinnedBottomRow(0)?.rowHeight ?? 0)
-        + (horizontal && getComputedStyle(horizontal).visibility !== 'hidden' ? horizontal.getBoundingClientRect().height : 0) + 2;
-      const height = Math.ceil(Math.min(natural, Math.max(200 * scale, window.innerHeight - element.getBoundingClientRect().top - 16 * scale)));
-      if (Math.abs(element.getBoundingClientRect().height - height) > .5) element.style.height = `${height}px`;
-    });
+    const grid = api.current, element = root.current;
+    if (!grid || grid.isDestroyed() || !element) return;
+    const scale = Number(getComputedStyle(element).getPropertyValue('--fscale')) || 1;
+    const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1);
+    const horizontal = element.querySelector('.ag-body-horizontal-scroll');
+    const natural = (element.querySelector('.ag-header')?.getBoundingClientRect().height ?? 68 * scale)
+      + (last ? (last.rowTop ?? 0) + (last.rowHeight ?? 36 * scale) : 36 * scale)
+      + (element.querySelector('.ag-grid-pinned-bottom-rows')?.getBoundingClientRect().height ?? grid.getPinnedBottomRow(0)?.rowHeight ?? 0)
+      + (horizontal && getComputedStyle(horizontal).visibility !== 'hidden' ? horizontal.getBoundingClientRect().height : 0) + 2;
+    const height = Math.ceil(Math.min(natural, Math.max(200 * scale, window.innerHeight - element.getBoundingClientRect().top - 16 * scale)));
+    if (Math.abs(element.getBoundingClientRect().height - height) > .5) element.style.height = `${height}px`;
   }, []);
   useEffect(() => {
     window.addEventListener('resize', fitHeight); void document.fonts.ready.then(fitHeight);
-    return () => { window.removeEventListener('resize', fitHeight); cancelAnimationFrame(heightFrame.current); heightFrame.current = 0; };
+    return () => { window.removeEventListener('resize', fitHeight); };
   }, [fitHeight]);
   const current=useRef(internal);current.current=internal;
   useEffect(()=>{api.current?.refreshCells({force:true});},[internal.epoch,internal.writable]);
@@ -72,10 +71,17 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
     })) })),
     { field: 'c14', headerName: '备注', ...contentWidth(72, 144, scale), wrapText: true, autoHeight: true },
   ], [scale, detail, rows]);
+  const retained = useRetainedGridColumns(columns, root);
+  const gridColumns = useMemo(() => initialLayoutColumns(retained), [retained]);
+  const prepared = useMemo(() => rendererLayoutColumns(gridColumns, undefined, (row, id, pinned) => JSON.stringify([row[id], pinned, internal.writable])), [gridColumns, internal.writable]);
+  const bodyRows = useMemo(() => rows.slice(0, -1), [rows]), total = useMemo(() => rows.slice(-1), [rows]);
+  const scope = `${report.ym}:${warehouses.join('\0')}`;
+  const layout = useTextGridLayout({root, active, rows: bodyRows, totals: total, columns: prepared, rowId: summaryRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope, identity: scope});
+  useLayoutEffect(() => { if (layout.state === 'ready') fitHeight(); }, [layout.state, fitHeight]);
   return <>
-    <div ref={root} className="mechanical-grid" role="region" aria-label="公司汇总">
-      <AgGridReact<SummaryRow> theme={gridTheme} rowData={rows.slice(0, -1)} pinnedBottomRowData={rows.slice(-1)} columnDefs={columns} defaultColDef={{ sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true, autoHeaderHeight: true }} getRowId={params => params.data.id} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder onFirstDataRendered={e => { fitGridColumns(e.api, root.current, true); fitHeight(); }} onGridSizeChanged={e => { fitGridColumns(e.api, root.current); fitHeight(); }} onNewColumnsLoaded={e => fitGridColumns(e.api, root.current, true)} onModelUpdated={fitHeight} onColumnResized={fitHeight} onGridReady={event => {
-        api.current = event.api;
+    <div ref={root} className="mechanical-grid" data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility: layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}} role="region" aria-label="公司汇总">
+      <AgGridReact<SummaryRow> theme={gridTheme} columnDefs={gridColumns} defaultColDef={{ sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true }} getRowId={params => params.data.id} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder onGridSizeChanged={fitHeight} onModelUpdated={fitHeight} onColumnResized={fitHeight} onGridReady={event => {
+        api.current = event.api; layout.attach(event.api);
         // Header wrapping and scrollbar visibility can settle after the first data render.
         const observer = new ResizeObserver(fitHeight);
         for (const selector of ['.ag-header','.ag-body-horizontal-scroll','.ag-grid-pinned-bottom-rows']) {
@@ -85,7 +91,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
         if (scrollbar) visibility.observe(scrollbar, { attributes: true, attributeFilter: ['class','style'] });
         event.api.addEventListener('gridPreDestroyed', () => { observer.disconnect(); visibility.disconnect(); });
       }} />
-    </div>
+    </div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
   </>;
 }
 function Sheet({ sheet, index, target }: { sheet: ReportSheet; index: number; target: string }) {
@@ -217,12 +223,12 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   function previewButtonControl(){return <Button ref={previewButton} disabled={blocked||writing||projects.isPending||state.isPending||Boolean(scopeError)} onClick={()=>openPicker('export')}>导出预览</Button>;}
   useHistoryGuard('mechanical', () => writing ? '机械费正在保存，请稍候。' : needsRead ? '机械费操作结果待核实，请返回重新读取。' : drafts.current.size || internalDrafts.current.size ? '请先保存或撤销机械费未保存修改。' : '');
   const error = projects.error || state.error || report.error;
-  return <section className="mechanical-card" aria-labelledby="page-title"><div className="mechanical-toolbar">
+  return <section className="mechanical-card" aria-labelledby="page-title"><div data-page-chrome className="mechanical-toolbar">
     <div className="mechanical-month"><span>月份</span><TimePicker label="月份" modes={['月']} value={ym} disabled={blocked||writing} onChange={value=>{stopEditors();setMonth(value);}} /></div>
     <div className="mechanical-tabs" role="group" aria-label="机械费报表">{([['summary','表1 公司汇总'],['zero','表2 零租明细'],['monthly','表3 包月明细'],['work','核对工作台']] as const).map(([id,name])=><Button key={id} disabled={writing} aria-pressed={tab===id&&sheet===null} onClick={()=>{stopEditors();setTab(id);setSheet(null);setExportIds(null);setTemporary('');setProblemsOnly(false);}}>{name}</Button>)}</div>
     <div className="mechanical-preview-entry"><Button disabled={blocked||writing||state.isFetching} onClick={()=>openPicker('projects')}>显示项目</Button><Button disabled={!writable||state.isFetching} onClick={()=>{stopEditors();setImportOpen(true);}}>录入预览</Button></div>
     </div>
-    {tab==='summary'&&sheet===null&&<div className="mechanical-summary-tools"><strong>公司汇总</strong><span className="muted">金额单位：元</span><div className="mechanical-project-tools"><Button disabled={!writable||!internalTargets.length} onClick={()=>setInternalConfirmation(internalTargets.map(d=>({...structuredClone(d),effective:state.data!.effective.find(e=>e.warehouse===d.warehouse&&e.ym===d.ym)!})).filter(d=>d.effective))}>确认内租（{internalTargets.length}项）</Button><Button disabled={!writable||!internalTargets.length} onClick={()=>{for(const [key,d] of internalDrafts.current)if(d.ym===ym&&warehouses.includes(d.warehouse))internalDrafts.current.delete(key);setInternalEpoch(n=>n+1);render(n=>n+1);}}>取消内租修改</Button>{previewButtonControl()}</div></div>}
+    {tab==='summary'&&sheet===null&&<div data-page-chrome className="mechanical-summary-tools"><strong>公司汇总</strong><span className="muted">金额单位：元</span><div className="mechanical-project-tools"><Button disabled={!writable||!internalTargets.length} onClick={()=>setInternalConfirmation(internalTargets.map(d=>({...structuredClone(d),effective:state.data!.effective.find(e=>e.warehouse===d.warehouse&&e.ym===d.ym)!})).filter(d=>d.effective))}>确认内租（{internalTargets.length}项）</Button><Button disabled={!writable||!internalTargets.length} onClick={()=>{for(const [key,d] of internalDrafts.current)if(d.ym===ym&&warehouses.includes(d.warehouse))internalDrafts.current.delete(key);setInternalEpoch(n=>n+1);render(n=>n+1);}}>取消内租修改</Button>{previewButtonControl()}</div></div>}
     {needsRead && <p className="notice" role="alert">保存后需要重新读取。<Button onClick={()=>void refresh()}>重新读取</Button></p>}
     {sheet===null && (tab==='zero'||tab==='monthly') && <>
       <div className="mechanical-edit-tools"><strong>{category==='zero'?'零租设备月报':'包月外租设备月报'}</strong>{temporary&&<><span>临时筛选：{label(temporary)}</span><Button onClick={()=>{stopEditors();setTemporary('');}}>取消筛选</Button></>}<label><Checkbox checked={problemsOnly} onChange={e=>{stopEditors();setProblemsOnly(e.target.checked);}} >仅看待补字段</Checkbox></label><span className="mechanical-tools-spacer" /><Button disabled={!writable||writing||state.isFetching} onClick={()=>{setKeywords((state.data?.settings.plate_keywords??[]).join('\n'));setDialog('plate');}}>车牌规则</Button><Button danger disabled={!dirty||writing||!writable} onClick={()=>setDialog('discard')}>撤销未保存修改</Button><Button disabled={!writable||writing||!dirty} onClick={()=>void operate(()=>saveDetails(false))}>仅保存明细</Button><Button type="primary" disabled={!writable||writing||!editingWarehouses.length||state.isFetching||state.isError} onClick={()=>void operate(()=>saveDetails(true))}>保存并确认汇总</Button>{previewButtonControl()}</div>
@@ -231,10 +237,10 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
     </>}
     {sheet===null&&tab==='work'&&state.data&&!state.isError&&<MechanicalWork data={state.data} warehouses={warehouses} label={label} writable={writable} busy={writing} operate={operate} refresh={refresh} added={warehouse=>{const project=candidates.find(p=>p.warehouse_name===warehouse);if(project&&!selected.includes(project.id))setIds([...selected,project.id]);}} />}
     {scopeError && !error && <p className="notice" role="alert">{scopeError}</p>}
-    {error && !needsRead ? <p className="notice" role="alert">{error.message}<Button onClick={() => { void projects.refetch(); void state.refetch(); void report.refetch(); }}>重新读取</Button></p> : state.isPending || projects.isPending || report.isFetching ? <p className="state" role="status">正在读取机械报表…</p> : !ym ? <p className="state" role="status">暂无已保存月份，请在现有工作区保存后再查看。</p> : !warehouses.length ? <p className="state" role="status">请选择项目查看报表。</p> : null}
-    {report.data && !scopeError && !report.isError && !report.isFetching && (sheet===null?warehouses.length:reportWarehouses.length) > 0 && <>
+    {error && !needsRead ? <p className="notice" role="alert">{error.message}<Button onClick={() => { void projects.refetch(); void state.refetch(); void report.refetch(); }}>重新读取</Button></p> : state.isPending || projects.isPending || report.isFetching && !report.data ? <p className="state" role="status">正在读取机械报表…</p> : !ym ? <p className="state" role="status">暂无已保存月份，请在现有工作区保存后再查看。</p> : !warehouses.length ? <p className="state" role="status">请选择项目查看报表。</p> : null}
+    {report.data && !scopeError && !report.isError && (sheet===null?warehouses.length:reportWarehouses.length) > 0 && <>
       {report.data.warnings.length > 0 && <details className="mechanical-warnings"><summary>报表待核对（{report.data.warnings.length}）</summary><ul>{report.data.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details>}
-      {sheet === null ? tab==='summary' ? <Summary scale={Number(me?.ui_scale_css) || 1} key={ym} report={report.data} projectIds={selected} detail={detail} internal={internal} data={state.data!} warehouses={warehouses} /> : null : <>
+      {sheet === null ? tab==='summary' ? <Summary active={active} scale={Number(me?.ui_scale_css) || 1} key={ym} report={report.data} projectIds={selected} detail={detail} internal={internal} data={state.data!} warehouses={warehouses} /> : null : <>
         <div className="mechanical-preview-tools"><strong>报送导出预览，{ym}</strong><Button onClick={() => { setSheet(null); setExportIds(null); setTarget(''); setTemporary(''); requestAnimationFrame(() => previewButton.current?.focus()); }}>返回查看／编辑</Button><Button disabled={blocked || busy || report.isFetching} onClick={() => { setMessage(''); void report.refetch(); }}>重新预览</Button><Button type="primary" disabled={Boolean(unavailable) || busy} title={unavailable || '下载当前预览的四页文件'} onClick={() => void save()}>{busy ? '正在生成…' : '下载四页Excel'}</Button></div>
         {unavailable && <p className="mechanical-feedback" role="status">{unavailable}</p>}
         <div className="mechanical-continuous-preview">{report.data.sheets.map((item,index)=><Sheet key={item.name} sheet={item} index={index} target={target} />)}</div>

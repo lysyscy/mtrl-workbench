@@ -8,7 +8,7 @@ import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity, Project } from './api';
-import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
 import { ProjectSelectionOrder, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { BusinessModal } from './business-modal';
@@ -18,6 +18,10 @@ import { money } from './notices-api';
 import { SettlementExport } from './settlement-export';
 import { getBig, manualKeys, saveBigCell, saveBigSelection } from './big-api';
 import type { AutoKey, BigData, BigRow, DerivedKey, ManualKey, TotalKey } from './big-api';
+import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
+import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+const bigRowId = (row: BigRow) => row.warehouse;
+const emptyBig: BigRow[] = [];
 
 type Props = { me: Identity | null; blocked: boolean; active: boolean };
 const labels: Record<ManualKey,string> = {open_ym:'开工时间',mech_est:'机械费测算',contract:'合同（预估）价',output_cum:'产值累计（含税）',oil:'工程用油',note:'备注'};
@@ -57,7 +61,7 @@ export function BigPage(props: Props) {
   const projects = useQuery({queryKey:['projects','all'],enabled:props.active && !props.blocked,queryFn:async({signal}) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   function choose(value: string) {setYm(value);setVisited(old => old.includes(value) ? old : [...old,value]);}
   return <section className="big-page" aria-label="月度会大表">
-    <div className="big-period"><label>核算月<TimePicker label="大表核算月" value={ym} onChange={choose} modes={['月']} disabled={props.blocked} /></label></div>
+    <div data-page-chrome className="big-period"><label>核算月<TimePicker label="大表核算月" value={ym} onChange={choose} modes={['月']} disabled={props.blocked} /></label></div>
     {visited.map(month => <div className="big-month" key={month} hidden={month !== ym} inert={month !== ym}><BigMonth {...props} ym={month} active={props.active && month === ym} projects={projects.data ?? []} projectsError={projects.error?.message ?? ''} retryProjects={() => void projects.refetch()} /></div>)}
   </section>;
 }
@@ -133,10 +137,6 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     }
   }
   const scale=Number(me?.ui_scale_css ?? 1);
-  const [fontsReady,setFontsReady]=useState(false);
-  const [rendered,setRendered]=useState(0);
-  useEffect(()=>{const frame=requestAnimationFrame(()=>setRendered(n=>n+1));return()=>cancelAnimationFrame(frame);},[scale,active]);
-  useEffect(()=>{let live=true;void document.fonts.ready.then(()=>{if(live)setFontsReady(true);});return()=>{live=false;};},[]);
   const columns=useMemo<(ColDef<BigRow>|ColGroupDef<BigRow>)[]>(() => {
     function value(key: AutoKey|DerivedKey|ManualKey,p: {data:BigRow|undefined;node?:{rowPinned?:string|null|undefined}|null}) {
       if(p.node?.rowPinned) return (p.data as unknown as {totals:BigData['totals']})?.totals[key as TotalKey] ?? null;
@@ -147,15 +147,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     const font = getComputedStyle(document.documentElement);
     if (context) context.font = `600 ${Number(font.getPropertyValue('--font-ui-size')) || 13.5}px ${font.getPropertyValue('--fs')}`;
     const digitWidth=Math.max(...[...'0123456789'].map(char=>context?.measureText(char).width ?? 8.2));
-    const pattern=(text:string)=>text.replace(/[0-9]/g,'0');
-    const measured=new Map<string,number>();
-    for(const cell of root.current?.querySelectorAll<HTMLElement>('.ag-row-pinned .ag-cell-value') ?? []) {
-      const range=document.createRange();range.selectNodeContents(cell);
-      const width=range.getBoundingClientRect().width;
-      const renderedScale=parseFloat(getComputedStyle(cell).fontSize)/(Number(font.getPropertyValue('--font-ui-size')) || 13.5);
-      if(cell.textContent?.trim() && Number.isFinite(width) && width>0 && Math.abs(renderedScale-scale)<.01) measured.set(pattern(cell.textContent.trim()),width / scale);
-    }
-    const textWidth=(text:string)=>measured.get(pattern(text)) ?? [...text].reduce((width,char)=>width+(/\d/.test(char)?digitWidth:context?.measureText(char).width ?? 8.2),0);
+    const textWidth=(text:string)=>[...text].reduce((width,char)=>width+(/\d/.test(char)?digitWidth:context?.measureText(char).width ?? 8.2),0);
     if(context) context.font=`400 ${Number(font.getPropertyValue('--font-ui-size')) || 13.5}px ${font.getPropertyValue('--fs')}`;
     const dateWidth=Math.ceil((context?.measureText('8888-88').width ?? 58) + 10);
     if(context) context.font=`600 ${Number(font.getPropertyValue('--font-ui-size')) || 13.5}px ${font.getPropertyValue('--fs')}`;
@@ -170,15 +162,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     const number=(key:AutoKey|DerivedKey,label:string,tip?:string):ColDef<BigRow> => ({colId:key,headerName:label,headerTooltip:tip ?? label,headerClass:key.endsWith('rate')?'big-rate-header':'',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),valueFormatter:p=>p.value==null?(p.node?.rowPinned?'':'—'):key.endsWith('rate') ? `${(Number(p.value)*100).toFixed(1)}%` : money(String(p.value)),...amountWidth(key)});
     const manual=(key:ManualKey):ColDef<BigRow> => ({colId:key,headerName:labels[key],headerTooltip:key==='open_ym'?'开工时间，YYYY-MM':labels[key],cellClass:key==='note'?'big-manual-cell':'big-manual-cell big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),cellRendererSelector:p=>p.node.rowPinned?undefined:{component:ManualInput},valueFormatter:p=>p.value==null?'':key==='open_ym'||key==='note'?String(p.value):money(String(p.value)),...(key==='note' ? contentWidth(40,240,scale,1) : key==='open_ym' ? contentWidth(dateWidth,112,scale) : amountWidth(key,true))});
     const boundary = (column: ColDef<BigRow>): ColDef<BigRow> => ({...column,headerClass:`${column.headerClass ?? ''} big-group-start`,cellClass:`${column.cellClass ?? ''} big-group-start`});
-    // Initial widths must not reset fitted columns when data/fonts refresh during input.
-    function initialWidths(items: (ColDef<BigRow>|ColGroupDef<BigRow>)[]): (ColDef<BigRow>|ColGroupDef<BigRow>)[] {
-      return items.map(column => {
-        if ('children' in column) return {...column, children:initialWidths(column.children)};
-        const {width,...definition}=column;
-        return width === undefined ? definition : {...definition,initialWidth:width};
-      });
-    }
-    return initialWidths([
+    return initialLayoutColumns([
       {headerName:'项目',marryChildren:true,children:[
         {field:'seq',headerName:'序号',pinned:'left',valueGetter:p=>p.node?.rowPinned?'':p.data?.seq,...fixedWidth(Math.max(18,Math.ceil(textWidth(String(query.data?.rows.length ?? 0)) + 4)),scale)},
         {field:'display',headerName:'项目名称',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(46,180,scale,1)},
@@ -189,14 +173,17 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       {headerName:'产值',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('output_rate','产值完成率','产值累计÷合同（预估）价；零分母留空')),manual('contract'),manual('output_cum')]},
       boundary(number('mat_cum','主材累计（含税）','本项目纳入集采台账的合同结算合计')),boundary(manual('oil')),boundary(manual('note')),
     ]);
-  },[scale,query.data,fontsReady,rendered]);
+  },[scale,query.data]);
   const total=useMemo(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals} as unknown as BigRow] : [],[query.data]);
+  const gridColumns = useRetainedGridColumns(columns, root);
+  const prepared = useMemo(() => rendererLayoutColumns(gridColumns), [gridColumns]);
+  const layout = useTextGridLayout({root, active, rows: query.data?.rows ?? emptyBig, totals: total, columns: prepared, rowId: bigRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: ym, identity: ym});
   function focus(warehouse:string,key:ManualKey) {
     api.current?.ensureColumnVisible(key);
     requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>(`[row-id="${CSS.escape(warehouse)}"] [col-id="${key}"] input`)?.focus());
   }
   return <>
-    <div className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单，待固定' : query.data.selection.source === 'default' ? '默认项目名单，待固定' : `名单沿用 ${query.data.selection.source}，待固定`}</span>}</div><div className="big-export-actions">
+    <div data-page-chrome className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单，待固定' : query.data.selection.source === 'default' ? '默认项目名单，待固定' : `名单沿用 ${query.data.selection.source}，待固定`}</span>}</div><div className="big-export-actions">
       <Button disabled={controlsDisabled || !!projectsError || !query.data} onClick={()=>setPicking(true)}>选择项目与排序…</Button>
       <SettlementExport method="POST" onSettled={reconcileExport} scope={`${ym} 月度会大表`} url={`/api/m07/big/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={controlsDisabled || !query.data?.rows.length}>
         <p>{ym}，{query.data?.rows.length} 个项目，原模板 Excel</p><ol className="big-export-list">{query.data?.rows.map(r=><li key={r.warehouse}>{r.display}</li>)}</ol>
@@ -214,11 +201,11 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       change:(row,key,value)=>{const id=keyOf(row.warehouse,key),old=state.current.drafts[id];const next={...state.current.drafts,[id]:{warehouse:row.warehouse,display:row.display,key,value,original:old?.original??row.manual[key].value??'',error:'',revision:++revision.current}};if(!lock.current && value===next[id]!.original) delete next[id];update(next);},
       cancel:id=>{if(lock.current)return;queue.current=queue.current.filter(k=>k!==id);const next={...state.current.drafts};delete next[id];update(next);}}}>
       {!query.data.mat_available && <p className="notice">主材累计暂不可得，请先核对集采取数。</p>}
-      <div className={`big-grid${query.data.rows.length ? '' : ' is-empty'}`} ref={root}><AgGridReact<BigRow> theme={gridTheme} domLayout="autoHeight" rowData={query.data.rows} columnDefs={columns} pinnedBottomRowData={total}
-        getRowId={p=>p.data.warehouse} defaultColDef={{resizable:false,sortable:false,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement}}
+      <div className={`big-grid${query.data.rows.length ? '' : ' is-empty'}`} ref={root} data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility: layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<BigRow> theme={gridTheme} domLayout="autoHeight" columnDefs={gridColumns}
+        getRowId={p=>p.data.warehouse} defaultColDef={{resizable:false,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement}}
         rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressScrollOnNewData suppressColumnVirtualisation
         overlayNoRowsTemplate={`<span>${query.data.candidates.length ? '未选择项目，请使用“选择项目与排序”。' : '当前没有在建非壳项目，请核对项目档案。'}</span>`}
-        onGridReady={e=>{api.current=e.api;fitGridColumns(e.api,root.current,true);}} onFirstDataRendered={e=>{setRendered(n=>n+1);fitGridColumns(e.api,root.current,true);}} onGridSizeChanged={e=>fitGridColumns(e.api,root.current)} onRowDataUpdated={e=>{setRendered(n=>n+1);fitGridColumns(e.api,root.current,true);}} /></div>
+        onGridReady={e=>{api.current=e.api;layout.attach(e.api);}} /></div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
     </BigCells.Provider>}
     {picking && query.data && <ProjectOrder data={query.data} projects={projects} busy={busy} disabled={controlsDisabled} paused={!active || blocked} save={selection} close={()=>setPicking(false)} />}
   </>;

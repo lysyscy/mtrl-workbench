@@ -1,7 +1,7 @@
 import { createElement, Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import type { ReactNode, RefObject } from 'react';
-import type { ColDef, GridApi, IRowNode } from 'ag-grid-community';
+import type { GridApi, IRowNode } from 'ag-grid-community';
 import { loadElementFonts, loadTextFonts } from './appearance-ready';
 import { tableWidths } from './table-widths';
 
@@ -9,7 +9,7 @@ import { tableWidths } from './table-widths';
 // keeping their real router, appearance and editor context during bounded measurement.
 export interface TextGridColumn<T> {
   id: string;
-  text: (row: T) => string;
+  text: (row: T, pinned?: boolean) => string;
   wrap: boolean;
   className?: string;
   render?: (row: T, pinned: boolean) => ReactNode;
@@ -18,7 +18,7 @@ export interface TextGridColumn<T> {
 
 // React/AG treats a replacement renderer definition as a new component even if
 // row IDs and values are unchanged. Defer that replacement through an input session.
-export function useRetainedGridColumns<T>(columns: ColDef<T>[], root: RefObject<HTMLElement | null>) {
+export function useRetainedGridColumns<T>(columns: T[], root: RefObject<HTMLElement | null>) {
   const [displayed, setDisplayed] = useState(columns);
   useLayoutEffect(() => {
     const node = root.current; let frame = 0;
@@ -54,7 +54,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     const node = root.current;
     if (!api || !node || !active) return;
     const grid = api;
-    if (configured.current !== grid) { grid.setGridOption('getRowHeight', p => p.data ? heights.current.get(rowSize.current.rowId(p.data)) ?? rowSize.current.minimum : rowSize.current.minimum); configured.current = grid; publishedRows.current = null; publishedTotals.current = null; }
+    if (configured.current !== grid) { ready.current = false; setState('preparing'); grid.setGridOption('getRowHeight', p => p.data ? heights.current.get(rowSize.current.rowId(p.data)) ?? rowSize.current.minimum : rowSize.current.minimum); configured.current = grid; publishedRows.current = null; publishedTotals.current = null; }
     let disposed = false, version = 0, frame = 0, anchorFrame = 0, pendingEdit = false, preparing = false;
     const cancelled = (run: number) => disposed || run !== version || grid.isDestroyed();
     const editable = () => grid.getEditingCells().length > 0 || node.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea');
@@ -77,8 +77,8 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
       let host: HTMLDivElement | undefined;
       try {
         const wrapping = columns.filter(c => c.wrap || c.render);
-        const body = [...new Set(wrapping.flatMap(column => rows.map(column.text)))].join('') + '0123456789,.-';
-        const footer = columns.flatMap(column => totals.map(column.text)).join('');
+        const body = [...new Set(wrapping.flatMap(column => rows.map(row => column.text(row))))].join('') + '0123456789,.-';
+        const footer = columns.flatMap(column => totals.map(row => column.text(row, true))).join('');
         await Promise.all([fontRoot?.current ? loadElementFonts(fontRoot.current) : Promise.resolve(), loadTextFonts(body, [400]), loadTextFonts(footer, [600]),
           loadTextFonts(grid.getAllDisplayedColumns().map(c => c.getColDef().headerName ?? '').join(''), [500])]);
         if (cancelled(run) || !node!.clientWidth || editable()) return;
@@ -106,7 +106,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           const preferred = displayed.map(col => {
             const spec = columns.find(c => c.id === col.getColId());
             let width = col.getColDef().minWidth ?? col.getActualWidth();
-            if (spec) for (const text of new Set([...(spec.wrap ? rows : []), ...totals].map(spec.text))) width = Math.max(width, context.measureText(text).width + padding + 2);
+            if (spec) for (const text of new Set([...(spec.wrap ? rows.map(row => spec.text(row)) : []), ...totals.map(row => spec.text(row, true))])) width = Math.max(width, context.measureText(text).width + padding + 2);
             return width;
           });
           plannedWidths = tableWidths(displayed.map(c => ({ min: c.getColDef().minWidth ?? 60, max: c.getColDef().maxWidth ?? 400, flex: c.getColDef().context?.widthFlex ?? 0 })), preferred, available, 1);
@@ -120,7 +120,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const rowCss = getComputedStyle(host), rowBorder = (parseFloat(rowCss.borderTopWidth) || 0) + (parseFloat(rowCss.borderBottomWidth) || 0);
         const jobs = new Map<string, { text: string; column: TextGridColumn<T>; width: number; weight: string; row: T; pinned: boolean }>();
         function cellKey(row: T, column: TextGridColumn<T>, pinned: boolean) {
-          const width = widthById.get(column.id)!, weight = pinned ? '600' : '400', text = column.text(row);
+          const width = widthById.get(column.id)!, weight = pinned ? '600' : '400', text = column.text(row, pinned);
           return { key: `${column.id}\0${weight}\0${column.signature?.(row, pinned) ?? text}`, text, width, weight, column, row, pinned };
         }
         for (const [data, pinned] of [[rows, false], [totals, true]] as const) for (const row of data) for (const column of wrapping) {
@@ -194,6 +194,19 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         if (changed) grid.onRowHeightChanged();
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         if (cancelled(run)) return;
+        // Natural-height reports render the whole known result. A complete row model
+        // can precede React's last row commit; publish after that actual dependency.
+        if (grid.getGridOption('domLayout') === 'autoHeight') {
+          const expected = rows.map(rowId);
+          const mounted = () => {
+            const ids = new Set([...node!.querySelectorAll('.ag-row[row-id]')].map(row => row.getAttribute('row-id')));
+            return grid.isAnimationFrameQueueEmpty() && expected.every(id => ids.has(id));
+          };
+          while (!mounted()) {
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            if (cancelled(run)) return;
+          }
+        }
         if (scope !== appliedScope.current) viewport.scrollTop = 0;
         else if (anchor && (geometryChanged || contentChanged || node!.clientWidth !== appliedWidth.current || node!.clientHeight !== appliedHeight.current)) {
           const restored = grid.getRowNode(anchor.id);

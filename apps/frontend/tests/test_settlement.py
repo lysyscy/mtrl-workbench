@@ -29,3 +29,30 @@ def test_real_extract_annual_rows_follow_status(server,browser_page,api):
             row=rows[0];dom=grid.locator('[row-id]').filter(has=page.get_by_text(row['warehouse'],exact=True)).first
             expect(dom).to_contain_text(row['warehouse'])
             expect(dom.locator('[col-id="total"]')).to_have_text(money(row['total']))
+
+
+def test_annual_first_visible_geometry_is_final_readonly(server,browser_page):
+    """Retained-page tab entry must not paint default widths before the final layout."""
+    page,context=browser_page
+    writes=[]
+    def readonly(route):
+        if route.request.method not in {'GET','HEAD','OPTIONS'} and '/m15/login' not in route.request.url:
+            writes.append(route.request.url);route.abort('blockedbyclient')
+        else:route.continue_()
+    context.route('**/*',readonly)
+    open_page(page,server,'settlement','收发结存与提取')
+    page.evaluate("""window.__annualFrames={};function frame(){
+      for(const section of document.querySelectorAll('.settlement-annual')){
+        const grid=section.querySelector('.annual-grid');
+        if(!grid?.checkVisibility({checkVisibilityCSS:true}) || grid.closest('[hidden]') || !grid.querySelector('.ag-row[row-id]'))continue;
+        const columns=[...grid.querySelectorAll('.ag-header-cell')].map(c=>[c.getAttribute('col-id'),c.getBoundingClientRect().width,c.getBoundingClientRect().height]);
+        const rows=[...grid.querySelectorAll('.ag-row[row-id]')].map(r=>[r.getAttribute('row-id'),r.getBoundingClientRect().height]);
+        (window.__annualFrames[section.getAttribute('aria-label')]??=[]).push(JSON.stringify({columns,rows,height:grid.getBoundingClientRect().height}));
+      } window.__annualFrame=requestAnimationFrame(frame);
+    }requestAnimationFrame(frame);""")
+    page.get_by_text('焊材 / 气体提取',exact=True).click()
+    page.wait_for_function("Object.keys(window.__annualFrames).length===2 && Object.values(window.__annualFrames).every(frames=>frames.length>=30)")
+    samples=page.evaluate('window.__annualFrames')
+    page.evaluate('cancelAnimationFrame(window.__annualFrame)')
+    assert all(len(set(frames))==1 for frames in samples.values()), samples
+    assert not writes,writes

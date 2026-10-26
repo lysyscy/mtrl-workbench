@@ -17,6 +17,13 @@ def test_real_month_rows_and_totals_match_api(server,browser_page,api):
     page,_=browser_page
     data=get(api,'/api/m07/big')
     assert data['rows'],'真实副本没有大表项目，显示代表未覆盖'
+    page.add_init_script("""window.__bigFirstRows=[];function sample(){
+      const grid=document.querySelector('.big-month:not([hidden]) .big-grid');
+      if(grid?.checkVisibility({checkVisibilityCSS:true})&&!grid.inert&&!grid.closest('.page-view')?.inert&&window.__bigFirstRows.length<30){
+        const ids=[...new Set([...grid.querySelectorAll('.ag-row[row-id]')].map(row=>row.getAttribute('row-id')))];
+        if(ids.length)window.__bigFirstRows.push(ids);
+      }window.__bigRowFrame=requestAnimationFrame(sample);
+    }requestAnimationFrame(sample);""")
     open_page(page,server,'big','月度会大表')
     choose_month(page,data['month'])
     row=data['rows'][0]
@@ -26,6 +33,11 @@ def test_real_month_rows_and_totals_match_api(server,browser_page,api):
     expect(dom.locator('[col-id="hw_cum"]')).to_have_text(expected)
     expect(page.get_by_label('定位大表项目',exact=True)).to_have_count(0)
     assert page.locator('.big-month:not([hidden]) .ag-cell[col-id="hw_cum"]').evaluate_all('cells=>cells.every(c=>c.scrollWidth<=c.clientWidth+1)')
+    page.wait_for_function('window.__bigFirstRows.length>=30')
+    samples=page.evaluate('window.__bigFirstRows')
+    page.evaluate('cancelAnimationFrame(window.__bigRowFrame)')
+    expected={r['warehouse'] for r in data['rows']}|{'__total'}
+    assert all(set(ids)==expected for ids in samples),samples
 
 
 def test_real_month_cell_focus_width_and_save_identity(server,browser_page,api,disposable):

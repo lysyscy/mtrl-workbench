@@ -62,3 +62,19 @@ def test_actual_company_summary_layout_and_amounts_readonly(server,browser_page,
     page.wait_for_function("document.querySelector('.mechanical-grid').getBoundingClientRect().height<340")
     header=grid.locator('.ag-header').bounding_box();grid.locator('[row-index="'+str(count-1)+'"]').scroll_into_view_if_needed()
     assert abs(grid.locator('.ag-header').bounding_box()['y']-header['y'])<1
+    # Same-scope reads retain the real internal editor, including its unsaved draft.
+    field=grid.locator('[col-id=c12] input').first
+    field.scroll_into_view_if_needed();field.fill('321.09');field.focus()
+    label=field.get_attribute('aria-label');held=[]
+    page.route('**/api/m06/workbench/preview?*',lambda route:held.append(route))
+    with page.expect_request('**/api/m06/workbench/preview?*'):
+        page.evaluate("window.dispatchEvent(new Event('offline'));window.dispatchEvent(new Event('online'))")
+    try:
+        expect(grid).to_be_visible();expect(field).to_be_focused();expect(field).to_have_value('321.09')
+        assert held
+    finally:
+        for route in held:route.continue_()
+        page.unroute('**/api/m06/workbench/preview?*')
+    page.wait_for_load_state('networkidle')
+    expect(page.get_by_label(label,exact=True)).to_have_value('321.09')
+    expect(page.get_by_label(label,exact=True)).to_be_focused()

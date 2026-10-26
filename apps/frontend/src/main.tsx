@@ -100,7 +100,7 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;
           const Page = entry.component;
-          return <PageSurface key={entry.path} active={active} title={entry.title} independent={entry.path === '/notices' || entry.path === '/debt'}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></PageSurface>;
+          return <PageSurface key={entry.path} active={active} title={entry.title} independent={['/notices','/debt','/mechanical','/settlement','/big'].includes(entry.path)}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></PageSurface>;
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}

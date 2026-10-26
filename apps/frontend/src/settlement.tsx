@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import type { Identity } from './api';
-import { pageGridGeometry, contentWidth, fitGridColumns, fixedWidth, gridTheme } from './grid';
+import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
 import { reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { money } from './notices-api';
@@ -17,12 +17,17 @@ import { useHistoryGuard } from './history';
 import { balanced, getExtract, getSettlement, kinds, saveBalance, settlementTotal } from './settlement-api';
 import type { AnnualRow, ExtractKind, SettlementRow } from './settlement-api';
 import { SettlementExport } from './settlement-export';
+import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
+import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+const settlementRowId = (row: SettlementRow) => row.id;
+const annualRowId = (row: AnnualRow) => row.warehouse;
+const emptySettlement: SettlementRow[] = [];
 
 type Props = { me: Identity | null; blocked: boolean; active: boolean };
 export function SettlementPage(props: Props) {
   const [tab,setTab] = useState('month');
   return <section className={`settlement-page${tab === 'month' ? ' settlement-month-page' : ''}`} aria-label="收发结存与提取">
-    <Segmented className="settlement-tabs" aria-label="收发结存页面" value={tab} options={[{value:'month',label:'收发结存月报'},{value:'extract',label:'焊材 / 气体提取'}]} onChange={setTab} disabled={props.blocked} />
+    <Segmented data-page-chrome className="settlement-tabs" aria-label="收发结存页面" value={tab} options={[{value:'month',label:'收发结存月报'},{value:'extract',label:'焊材 / 气体提取'}]} onChange={setTab} disabled={props.blocked} />
     <div hidden={tab !== 'month'} inert={tab !== 'month'}><Monthly {...props} active={props.active && tab === 'month'} /></div>
     <div hidden={tab !== 'extract'} inert={tab !== 'extract'}><Extract {...props} active={props.active && tab === 'extract'} /></div>
   </section>;
@@ -39,8 +44,11 @@ function Monthly({ me, blocked, active }: Props) {
   ],[scale]);
   const total = useMemo(() => query.data?.rows.length ? [{ id:'__total',name:'合计',rows:query.data.counts.rows,
     begin:settlementTotal(query.data.rows,'begin'),in:settlementTotal(query.data.rows,'in'),out:settlementTotal(query.data.rows,'out'),end:settlementTotal(query.data.rows,'end') }] : [],[query.data]);
+  const gridColumns = useMemo(() => initialLayoutColumns(columns), [columns]);
+  const prepared = useMemo(() => rendererLayoutColumns(gridColumns), [gridColumns]);
+  const layout = useTextGridLayout({root, active, rows: query.data?.rows ?? emptySettlement, totals: total, columns: prepared, rowId: settlementRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: ym, identity: ym});
   return <>
-    <div className="settlement-toolbar"><label>核算月<TimePicker value={ym} onChange={setYm} modes={['月']} label="收发结存核算月" disabled={blocked} /></label>
+    <div data-page-chrome className="settlement-toolbar"><label>核算月<TimePicker value={ym} onChange={setYm} modes={['月']} label="收发结存核算月" disabled={blocked} /></label>
       <SettlementExport scope={`${ym} 收发结存`} url={`/api/m07/settlement/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={!query.data?.rows.length || query.isFetching || query.isError}>
         <p>{query.data?.counts.warehouses} 个分仓库工作簿 ＋ 1 个总表，打包 ZIP。</p>
         <ul className="settlement-export-list">{query.data?.rows.map(row => <li key={row.id}>{row.name}，{row.rows} 行</li>)}</ul>
@@ -49,10 +57,10 @@ function Monthly({ me, blocked, active }: Props) {
     {query.isError && <p className="notice" role="alert">{query.error.message}<Button onClick={() => void query.refetch()} disabled={blocked}>重读</Button></p>}
     {query.isPending ? <p role="status">正在读取收发结存…</p> : query.data && <>
       <p className="settlement-summary">{ym}，{query.data.counts.warehouses} 仓，{query.data.counts.rows} 行，{query.data.counts.files} 个文件{query.data.rows.length > 0 && <Tag className={`status-tag ${query.data.balance_ok ? 'status-positive' : 'status-negative'}`}>{query.data.balance_ok ? '全部对平' : '存在未对平'}</Tag>}</p>
-      <div className={`settlement-grid${query.data.rows.length ? '' : ' is-empty'}`} ref={root}><AgGridReact<SettlementRow> theme={gridTheme} domLayout="autoHeight" rowData={query.data.rows} columnDefs={columns} pinnedBottomRowData={total}
+      <div className={`settlement-grid${query.data.rows.length ? '' : ' is-empty'}`} ref={root} data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility: layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<SettlementRow> theme={gridTheme} domLayout="autoHeight" columnDefs={gridColumns}
         getRowId={p => p.data.id} defaultColDef={{resizable:false,sortable:false,suppressMovable:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight}
         overlayNoRowsTemplate="该核算月没有收发结存数据" suppressColumnVirtualisation suppressScrollOnNewData
-        onGridReady={e => fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e => fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e => fitGridColumns(e.api,root.current)} /></div>
+        onGridReady={e => layout.attach(e.api)} /></div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
     </>}
   </>;
 }
@@ -115,7 +123,7 @@ function Extract({ me, blocked, active }: Props) {
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isError || query.isPending;
   return <>
-    <div className="settlement-toolbar"><div><label>年份<TimePicker value={year} onChange={setYear} modes={['年']} label="提取年份" disabled={blocked} /></label>
+    <div data-page-chrome className="settlement-toolbar"><div><label>年份<TimePicker value={year} onChange={setYear} modes={['年']} label="提取年份" disabled={blocked} /></label>
       <label>项目状态<Select aria-label="提取项目状态" value={status} onChange={setStatus} options={['在建','归档','全部'].map(value => ({value,label:value}))} disabled={blocked} /></label></div>
       <SettlementExport scope={`${year} 焊材 / 气体`} url={`/api/m07/extract/export?${new URLSearchParams({period:year,status})}`} paused={!active || blocked} disabled={!query.data || query.isFetching || query.isError || busy || dirty || uncertain}>
         <p>{year}，{status}，焊材 {query.data?.annual.焊材.rows.length} 仓 / 气体 {query.data?.annual.气体.rows.length} 仓</p>
@@ -133,11 +141,11 @@ function Extract({ me, blocked, active }: Props) {
     {query.isPending ? <p role="status">正在读取库存年度汇总…</p> : query.data && <Cells.Provider value={{drafts,disabled,save,
       change:(kind,warehouse,original,value) => {const key = keyOf(kind,warehouse),old = state.current.drafts[key]; const next = {...state.current.drafts,[key]:{kind,warehouse,original:old?.original ?? original,value,error:''}}; if(value === (old?.original ?? original) && !lock.current) delete next[key];update(next);},
       cancel:key => {if(lock.current) return;const next = {...state.current.drafts};delete next[key];update(next);}}}>
-      {kinds.map(kind => <AnnualTable key={kind} grid={query.data!.annual[kind]} scale={Number(me?.ui_scale_css ?? 1)} />)}
+      {kinds.map(kind => <AnnualTable key={kind} grid={query.data!.annual[kind]} active={active} scale={Number(me?.ui_scale_css ?? 1)} />)}
     </Cells.Provider>}
   </>;
 }
-function AnnualTable({grid,scale}:{grid: import('./settlement-api').AnnualGrid;scale:number}) {
+function AnnualTable({grid,scale,active}:{grid: import('./settlement-api').AnnualGrid;scale:number;active:boolean}) {
   const root = useRef<HTMLDivElement>(null), history = grid.year <= '2025';
   const columns = useMemo<ColDef<AnnualRow>[]>(() => {
     // Use the complete result and its supplied totals, including rows below the viewport.
@@ -153,9 +161,13 @@ function AnnualTable({grid,scale}:{grid: import('./settlement-api').AnnualGrid;s
       ...(history ? [{field:'balance' as const,headerName:'2025-11及之前',cellRenderer:BalanceInput,...amountWidth(grid.rows.map(row => row.balance),148),context:{kind:grid.kind}}] : []),
     ];
   },[grid,history,scale]);
-  const total: AnnualRow[] = [{warehouse:`${grid.kind}合计`,prior:grid.sum_row[0]!,cells:grid.sum_row.slice(1,13),total:grid.sum_row[13]!,balance:null}];
-  return <section className="settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><div ref={root} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`}><AgGridReact<AnnualRow> theme={gridTheme} domLayout="autoHeight" rowData={grid.rows} columnDefs={columns} pinnedBottomRowData={total}
+  const total = useMemo<AnnualRow[]>(() => [{warehouse:`${grid.kind}合计`,prior:grid.sum_row[0]!,cells:grid.sum_row.slice(1,13),total:grid.sum_row[13]!,balance:null}], [grid]);
+  const retained = useRetainedGridColumns(columns, root);
+  const gridColumns = useMemo(() => initialLayoutColumns(retained), [retained]);
+  const prepared = useMemo(() => rendererLayoutColumns(gridColumns), [gridColumns]);
+  const layout = useTextGridLayout({root, active, rows: grid.rows, totals: total, columns: prepared, rowId: annualRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: grid.year, identity: grid.year});
+  return <section className="settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><div ref={root} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`} data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility: layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<AnnualRow> theme={gridTheme} domLayout="autoHeight" columnDefs={gridColumns}
     getRowId={p => p.data.warehouse} defaultColDef={{resizable:true,sortable:false,suppressMovable:true,suppressKeyboardEvent:e => e.event.target instanceof HTMLInputElement}}
     rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} overlayNoRowsTemplate={`当前筛选条件下没有${grid.kind}数据`} suppressScrollOnNewData suppressColumnVirtualisation
-    onGridReady={e => fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e => fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e => fitGridColumns(e.api,root.current)} onRowDataUpdated={e => fitGridColumns(e.api,root.current,true)} /></div></section>;
+    onGridReady={e => layout.attach(e.api)} /></div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}</section>;
 }
