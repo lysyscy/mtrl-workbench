@@ -16,10 +16,6 @@ html{font-variant-numeric:tabular-nums}
 .ant-btn:disabled,.row-button[aria-disabled=true]{cursor:not-allowed}
 .ant-btn.dialog-close-button,.ant-btn.contract-close{box-shadow:none;border:0;transform:none}
 .workspace .status-tag,.workspace .enum-tag,.notices-page .notice-tag,.contract-dialog .contract-state,.workspace .project-type{border-radius:4px;border-width:.5px}
-.business-modal .ant-modal-container{border-radius:var(--radius-card);box-shadow:var(--shadow-md);overflow:hidden}
-.business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
-.business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
-.business-modal .notice-pay-table th,.business-modal .notice-flows-table th{font-size:calc(12px * var(--fscale))}
 
 .notices-page{--control-h:calc(32px * var(--fscale));--control-sm:calc(28px * var(--fscale));--field-short:calc(112px * var(--fscale));--field-medium:calc(144px * var(--fscale));--field-wide:calc(220px * var(--fscale));--field-search:calc(248px * var(--fscale));font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .notices-page .notice-selection{padding:calc(12px * var(--fscale)) calc(16px * var(--fscale));gap:8px 24px;margin-bottom:calc(16px * var(--fscale))}
@@ -43,8 +39,6 @@ html{font-variant-numeric:tabular-nums}
 .notices-page .notice-grid .ag-cell.money input{text-align:right}
 .notices-page .notice-grid input:not([type=checkbox]):not([class*="ant-"]){border-radius:var(--radius-input);background:var(--sf2);padding-inline:4px;box-shadow:none}
 .notices-page .notice-grid input:not([type=checkbox]):not([class*="ant-"]):focus{background:var(--sf);border-color:var(--pri)}
-.business-modal:has(.contract-dialog) .ant-modal-body{overflow:hidden;max-height:none}
-.business-modal .contract-dialog{display:flex;flex-direction:column;height:min(800px,88dvh);max-height:88dvh;overflow:hidden;font-size:calc(var(--font-ui-size) * 1px * var(--fscale));border-radius:var(--radius-card)}
 .contract-dialog .contract-fixed-header{flex:none;border-bottom:1px solid var(--bd);background:var(--sf)}
 .contract-dialog .contract-dialog-heading{padding:16px 24px 12px}
 .contract-dialog .contract-dialog-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
@@ -61,27 +55,12 @@ html{font-variant-numeric:tabular-nums}
 .contract-dialog .contract-selection{flex:none;margin:12px 24px 0;border-radius:var(--radius-inner)}
 .contract-dialog .contract-footer{flex:none;position:static;margin-top:12px;padding:12px 24px}
 .contract-dialog>.notice{flex:none}
-.business-modal .contract-dialog:has(.contract-decision){height:auto;max-width:480px}
 .business-period-popover .ant-popover-container{border-radius:var(--radius-inner);box-shadow:var(--shadow-pop)}
 .business-period-panel .business-period-month.ant-btn{border-radius:var(--radius-input);box-shadow:none;transform:none}
 .business-modal .payment-terms,.business-modal .payment-confirmation{border-radius:var(--radius-inner)}
 @media(max-width:740px){.notices-page .notice-tools .notice-toolbar{margin-left:0}.notices-page .notice-filters>.notice-project{width:100%;max-width:300px}.notices-page .notice-filters>.notice-search-field{flex-basis:100%;max-width:300px}.contract-dialog .contract-candidates,.contract-dialog .contract-dialog-heading,.contract-dialog .contract-footer{padding-inline:16px}.contract-dialog .contract-notice,.contract-dialog .contract-current,.contract-dialog .contract-candidate-note,.contract-dialog .contract-selection{margin-inline:16px}.contract-dialog .contract-candidate{padding:12px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}.ant-btn:hover,.row-button:hover{transform:none!important}}
 
-
-/* Compact whole-page tables: preserve font size, controls and natural multi-line rows. */
-.workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-grid,.mechanical-detail-grid) .ag-cell{padding-block:calc(2px * var(--fscale));line-height:1.5}
-.workspace .page-view :is(.notice-grid,.contracts-grid,.flow-grid,.ledger-grid,.inventory-grid,.process-grid,.settlement-grid,.big-grid,.fees-grid,.mechanical-detail-grid) :is(.ant-input,.ant-select){height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-block:0}
-.workspace .page-view .mechanical-grid .mechanical-internal-input{height:calc(28px * var(--fscale));min-height:0;padding-block:0}
-.workspace .page-view .contracts-grid .ant-btn{padding-block:0}
-.workspace .page-view :is(.projects-page .project-table,.i8-latest,.i8-records,.mechanical-work-table,.mechanical-sheet) :is(th,td){padding-block:calc(4px * var(--fscale))}
-
-/* Fill the page's remaining space instead of leaving a fixed 62dvh table above unused space. */
-.workspace .page-view :is(.process-page,.inventory-page,.notices-page){display:flex;flex-direction:column;height:100%;min-height:min-content}
-.workspace .page-view :is(.process-page,.inventory-page,.notices-page)>:not(.process-grid):not(.process-matrix-scroll):not(.inventory-grid):not(.notice-card){flex-shrink:0}
-.workspace .page-view .notices-page .notice-card{display:flex;flex-direction:column;flex:1;min-height:min-content}
-.workspace .page-view .notice-card>:not(.notice-grid){flex-shrink:0}
-.workspace .page-view :is(.notice-grid,.process-grid,.inventory-grid){flex:1 0 calc(240px * var(--fscale));height:auto;min-height:calc(240px * var(--fscale))}
 
 /* Keep navigation feedback brief and independent of data/operation completion. */
 @media(prefers-reduced-motion:no-preference){

@@ -3,7 +3,6 @@ import type { CSSProperties, KeyboardEvent } from 'react';
 import Button from 'antd/es/button';
 import { record, requestJson } from './api';
 import { useDialogClose } from './dialog-close';
-import './appearance-preferences.css';
 
 type Palette = { name: string; label: string; description: string; scene: string; vars: Record<string, string> };
 type Scale = { key: string; label: string; css: string };

@@ -20,8 +20,6 @@ import { InventoryAdjust } from './inventory-adjust';
 import { InventoryFetch } from './inventory-fetch';
 import { SettlementExport } from './settlement-export';
 import { useHistoryGuard } from './history';
-import './settlement.css';
-import './inventory.css';
 import { InventoryText, measureInventoryRows } from './inventory-rows';
 
 const defaultColumn: ColDef<InventoryRow> = {resizable:true,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true};

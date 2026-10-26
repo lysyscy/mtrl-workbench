@@ -11,7 +11,6 @@ import { Link, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, readProjects, record, requestJson, uncertainWrite } from './api';
 import type { Identity, Project } from './api';
-import './projects.css';
 import { DialogContents, useDialogClose } from './dialog-close';
 
 type ArchiveProject = Project & { parent_shell_id: number | null; match_keywords: string[]; is_placeholder: boolean };

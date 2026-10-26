@@ -1,4 +1,3 @@
-import './ledger.css';
 import { BusinessModal } from './business-modal';
 import { BoundedTable } from './bounded-table';
 import { useEffect, useRef, useState } from 'react';

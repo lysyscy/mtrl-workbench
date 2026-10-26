@@ -6,7 +6,6 @@ import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
-import './users.css';
 
 const plain = (value: string) => value.replace(/\*\*/g, '').replace(/（§[^）]*）/g, '');
 

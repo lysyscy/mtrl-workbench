@@ -3,9 +3,8 @@ import App from 'antd/es/app';
 import ConfigProvider from 'antd/es/config-provider';
 import theme from 'antd/es/theme';
 import zhCN from 'antd/locale/zh_CN';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import './ui.css';
 
 function appearance() {
   const css = getComputedStyle(document.documentElement);
@@ -26,22 +25,14 @@ function appearance() {
   } };
 }
 
-export function UiProvider({ children }: { children: ReactNode }) {
-  const [value, setValue] = useState(appearance);
+export function UiProvider({ children, appearanceKey }: { children: ReactNode; appearanceKey: string }) {
+  const value = useMemo(appearance, [appearanceKey]);
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     const update = () => setReducedMotion(media.matches);
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
-  }, []);
-  useEffect(() => {
-    const update = () => setValue(appearance());
-    const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
-    const stylesheet = document.querySelector('#user-theme');
-    stylesheet?.addEventListener('load', update); update();
-    return () => { observer.disconnect(); stylesheet?.removeEventListener('load', update); };
   }, []);
   // Keep the provider tree stable when the OS motion preference changes mid-edit.
   return <MotionProvider motion={!reducedMotion}><ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} componentSize="small" theme={{

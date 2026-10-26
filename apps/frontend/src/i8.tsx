@@ -3,7 +3,6 @@ import Tag from 'antd/es/tag';
 import Button from 'antd/es/button';
 import { BoundedTable } from './bounded-table';
 import { useState } from 'react';
-import './i8.css';
 import { useQuery } from '@tanstack/react-query';
 import { requestJson } from './api';
 import { duration, readRecords, recordLabel, recordScope, recordSource, sourceNames } from './i8-api';

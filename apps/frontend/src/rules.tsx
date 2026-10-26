@@ -6,7 +6,6 @@ import type { Identity } from './api';
 import { body } from './notices-api';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
-import './rules.css';
 
 const NO_RECOMPUTE = '规则用于后续首次抓入的新单据；已有单据的剔除状态保持不变，再次抓取也不重算。';
 const plain = (value: string) => value.replace(/\*\*/g, '').replace(/（§[^）]*）/g, '').replace(/，§[\d.]+/g, '').replace(/\s*[—-]+\s*§[\d.]+(\s*\/\s*§[\d.]+)*/g, '');

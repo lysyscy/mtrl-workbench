@@ -1,3 +1,19 @@
+/* Shared frame/geometry owner. Page CSS owns only the contents of each task. */
+.business-modal{max-width:calc(100vw - 24px);padding-bottom:0}
+.business-modal .ant-modal-container{padding:0;border-radius:var(--radius-card);box-shadow:var(--shadow-md);overflow:hidden}
+.business-modal .ant-modal-body{max-height:84dvh;overflow:auto;scrollbar-color:var(--bd3) var(--sf2)}
+.business-modal .ant-modal-body>div{margin:0;border:0;border-radius:0;background:transparent;color:var(--tx);box-shadow:none}
+:where(.business-modal .ant-modal-body)>div{max-width:calc(100vw - 24px);max-height:none;overflow:visible}
+.business-modal .project-dialog{width:min(calc(560px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .notice-pay-dialog{width:min(calc(1240px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .notice-contract-dialog,.business-modal .contract-dialog,.business-modal .notice-flows-dialog{width:min(calc(1000px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .ledger-export-dialog{width:min(calc(650px * var(--fscale)),calc(100vw - 24px))}
+.business-modal .flow-revoke{width:min(calc(620px * var(--fscale)),calc(100vw - 24px));padding:1.2rem}
+.business-modal .ant-modal-body>.project-dialog:not(.contract-dialog){padding:calc(20px * var(--fscale)) calc(24px * var(--fscale))}
+.business-modal .dialog-close-heading h2{font-size:calc(18px * var(--fscale));font-weight:600}
+.business-modal .notice-pay-table th,.business-modal .notice-flows-table th{font-size:calc(12px * var(--fscale))}
+.business-modal:has(.contract-dialog) .ant-modal-body{overflow:hidden;max-height:none}
+.business-modal .contract-dialog{display:flex;flex-direction:column;height:min(800px,88dvh);max-height:88dvh;overflow:hidden;font-size:calc(var(--font-ui-size) * 1px * var(--fscale));border-radius:var(--radius-card)}
 /* Decision-only prompts use the compact contract-editor frame, including within large workflows. */
 .business-modal .ant-modal-container .ant-modal-body:has(.dialog-discard,.contract-decision){height:auto;max-height:84dvh;overflow:auto}
 .business-modal .ant-modal-container .ant-modal-body>.project-dialog:has(.dialog-discard,.contract-decision),
@@ -6,3 +22,5 @@
 .business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog) h2{margin:0 0 .75rem;font-size:calc(18px * var(--fscale));font-weight:600;line-height:1.4;outline:0}
 .business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog) p{margin:0 0 1rem;line-height:1.5;overflow-wrap:anywhere}
 .business-modal .ant-modal-container :is(.dialog-discard,.contract-decision,.history-confirm-dialog) .dialog-actions{margin:0;gap:.5rem;justify-content:flex-end}
+
+.business-modal .history-confirm-dialog{line-height:1.55}

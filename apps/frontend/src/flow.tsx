@@ -18,7 +18,6 @@ import { loadFlows, saveBlob } from './flow-api';
 import type { Flow } from './flow-api';
 import { FlowRevoke } from './flow-revoke';
 import { pageGridGeometry, fitGridColumns, contentWidth, gridTheme } from './grid';
-import './flow.css';
 import { TimePicker, timeMatches } from './time-picker';
 interface Bar { key: string; label: string; amount: string }
 interface Debt { project: string; jc: string; material: string; mech: string }

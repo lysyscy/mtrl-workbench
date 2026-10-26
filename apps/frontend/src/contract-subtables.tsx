@@ -16,7 +16,6 @@ import { useHistoryGuard } from './history';
 import { live, money, readNotices } from './notices-api';
 import { draftProblem, emptySubtableDraft, loadSubtables, writeSubtable } from './contract-subtables-api';
 import type { SubtableDraft, SubtableKind } from './contract-subtables-api';
-import './contract-subtables.css';
 
 export interface SubtableState {
   drafts: Record<SubtableKind, SubtableDraft>; busy: boolean; uncertain: boolean; reconciled: boolean; error: string; feedback: string;

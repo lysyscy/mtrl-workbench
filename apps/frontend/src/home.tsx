@@ -3,7 +3,6 @@ import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { requestJson } from './api';
 import { live, readNotices } from './notices-api';
-import './home.css';
 
 // The three home todos are the same backend truth the notices page renders:
 // counts come from /api/m03/notice-list with the shared ['notices'] query, so a

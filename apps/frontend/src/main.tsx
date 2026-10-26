@@ -1,3 +1,6 @@
+import './styles.css';
+import { prepareAppearance, loadTextFonts } from './appearance-ready';
+import { PageSurface } from './page-surface';
 import Button from 'antd/es/button';
 import Dropdown from 'antd/es/dropdown';
 import { UiProvider } from './ui-provider';
@@ -10,8 +13,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readIdentity, setRequestIdentity, requestJson } from './api';
 import type { Identity } from './api';
 import type { ComponentType } from 'react';
-import './style.css';
-import './ui-theme.css';
 import { Projects } from './projects';
 
 type WorkspacePageProps = {
@@ -50,7 +51,7 @@ for (const entry of pages) entry.component = memo(entry.component);
 const loginUrl = '/login?next=%2Fpreview%2Fprojects';
 
 function Notice({ message, retry }: { message: string; retry?: () => void }) {
-  return <div className="notice" role="alert"><span>{message}</span>{retry && <Button htmlType="submit" onClick={retry}>重试</Button>}</div>;
+  return <div className="notice" role="alert"><span>{message}</span>{retry && <Button htmlType="submit" onClick={message.includes('字体加载失败') ? () => window.location.reload() : retry}>{message.includes('字体加载失败') ? '重试字体加载' : '重试'}</Button>}</div>;
 }
 
 function AccountMenu({ me, busy, logout, appearance }: { me: Identity; busy: boolean; logout: () => void; appearance: () => void }) {
@@ -59,7 +60,7 @@ function AccountMenu({ me, busy, logout, appearance }: { me: Identity; busy: boo
   </Dropdown>;
 }
 
-function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved }: { me: Identity | null; blocked: boolean; obscured: boolean; onLogout: () => void; onPreferencesSaved: () => Promise<void> }) {
+function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPreferencesSaved }: { me: Identity | null; blocked: boolean; obscured: boolean; preparing: boolean; onLogout: () => void; onPreferencesSaved: () => Promise<void> }) {
   // A new account gets a new cache and component tree, including future page drafts/history.
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } }));
   const [logoutError, setLogoutError] = useState('');
@@ -78,11 +79,6 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
   const [visited, setVisited] = useState(() => new Set([page]));
   useEffect(() => { setVisited(old => old.has(page) ? old : new Set([...old, page])); }, [page]);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    document.documentElement.style.setProperty('--fscale', me?.ui_scale_css ?? '1');
-    const theme = document.querySelector<HTMLLinkElement>('#user-theme');
-    if (theme) theme.href = `/static/theme.css?surface=react&identity=${encodeURIComponent(me?.account ?? '')}&theme=${encodeURIComponent(me?.theme ?? '')}`;
-  }, [me?.account, me?.theme, me?.ui_scale_css]);
   useEffect(() => () => { void client.cancelQueries(); client.clear(); }, [client]);
   useEffect(() => { if (blocked) void client.cancelQueries(); }, [blocked, client]);
   async function logout() {
@@ -93,7 +89,7 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
       window.location.assign(loginUrl);
     } catch (error) { setLogoutError(error instanceof Error ? error.message : '退出失败，请重试。'); setBusy(false); }
   }
-  return <QueryClientProvider client={client}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked}>
+  return <QueryClientProvider client={client}><HistoryScope><div className="workspace" hidden={obscured} inert={blocked || preparing} style={{ visibility: preparing ? 'hidden' : undefined }}>
     <a className="skip" href="#content">跳到内容</a>
     <aside className="sidebar" inert={appearanceOpen && compactAppearance}><div className="brand">材料工作台</div><p className="preview-label">独立预览</p><nav aria-label="主导航">
       {groups.map(group => <div key={group.id} className="nav-group" role="group" aria-labelledby={`nav-${group.id}`}><h2 id={`nav-${group.id}`}>{group.title}</h2>{pages.filter(entry => entry.group === group.id).map(entry => <NavLink key={entry.path} to={entry.path} end={entry.path === '/'}><span>{entry.title}</span></NavLink>)}</div>)}
@@ -104,7 +100,7 @@ function AccountWorkspace({ me, blocked, obscured, onLogout, onPreferencesSaved 
           const active = page === entry.path;
           if (!active && !visited.has(entry.path)) return null;
           const Page = entry.component;
-          return <div key={entry.path} className="page-view" hidden={!active} inert={!active}><Suspense fallback={<p role="status">{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></div>;
+          return <PageSurface key={entry.path} active={active} title={entry.title}><Suspense fallback={<p role="status" data-page-loading>{entry.loading}</p>}><Page me={me} blocked={blocked || !active} active={active} project={entry.path === '/debt' ? ledgerProject : 0} setProject={setLedgerProject} onExportGuard={setLedgerExportGuard} exportGuard={ledgerExportGuard} /></Suspense></PageSurface>;
         })}</HistoryGate></main>
     </div>
     {appearanceOpen && me && !blocked && <AppearancePreferences compact={compactAppearance} close={() => setAppearanceOpen(false)} saved={onPreferencesSaved} />}
@@ -116,6 +112,7 @@ function App() {
   const [error, setError] = useState('');
   const [expired, setExpired] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [fontsReady, setFontsReady] = useState(false);
   const request = useRef<AbortController | null>(null);
   const knownIdentity = useRef<Identity | null>(null);
   async function check(pause = true) {
@@ -125,12 +122,18 @@ function App() {
     try {
       const next = readIdentity(await requestJson('/api/m15/users', { signal: controller.signal }));
       if (controller.signal.aborted) return;
+      await prepareAppearance(next, controller.signal);
+      if (controller.signal.aborted) return;
       if (next) setExpired(false);
       else if (knownIdentity.current) setExpired(true);
       setRequestIdentity(next ? `${next.id}:${next.account}` : 'anonymous');
       knownIdentity.current = next; setMe(next); setChecking(false);
+      // Mount read queries while shell glyphs load; only first paint waits for those glyphs.
+      await loadTextFonts(pages.map(entry => entry.title).join('') + groups.map(group => group.title).join('') + '材料工作台独立预览管理员外观与字号撤销重做退出登录' + (next?.name ?? next?.account ?? ''));
+      if (!controller.signal.aborted) setFontsReady(true);
     } catch (failure) {
       if (!controller.signal.aborted) {
+        if (!pause) throw failure;
         // A failed check cannot establish an account change; keep local state while access is paused.
         setError(failure instanceof Error ? failure.message : '账号读取失败，请重试。'); setChecking(false);
       }
@@ -144,11 +147,12 @@ function App() {
     return () => { request.current?.abort(); window.removeEventListener('focus', focus); window.removeEventListener('session-lost', lost); };
   }, []);
   if (me === undefined) return <main className="startup">{error ? <Notice message={error} retry={() => void check()} /> : <p role="status">正在识别账号…</p>}</main>;
-  return <>
+  return <UiProvider appearanceKey={`${me?.account}:${me?.theme}:${me?.ui_scale_css}`}>
+    {!fontsReady && !error && <p className="page-loading" role="status">正在准备界面…</p>}
     {expired && <div className="session-notice" role="alert">登录已失效，当前只读。<a href={loginUrl}>重新登录</a></div>}
     {error ? <main className="startup"><Notice message={`账号暂时无法核实，已暂停操作。${error}`} retry={() => void check()} /></main> : null}
-    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} onPreferencesSaved={() => check(false)} onLogout={() => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
-  </>;
+    <AccountWorkspace key={me ? `${me.id}:${me.account}` : 'anonymous'} me={me} blocked={checking || Boolean(error)} obscured={Boolean(error)} preparing={!fontsReady} onPreferencesSaved={() => check(false)} onLogout={() => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(false); setError(''); setChecking(false); }} />
+  </UiProvider>;
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><BrowserRouter basename="/preview"><UiProvider><App /></UiProvider></BrowserRouter></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><BrowserRouter basename="/preview"><App /></BrowserRouter></StrictMode>);

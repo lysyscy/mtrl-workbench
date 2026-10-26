@@ -26,7 +26,6 @@ import { NoticePayment, PayAmountCell, paymentValue } from './notice-payment';
 import type { PayOverride } from './notice-payment';
 import { NoticePrint, PrinterSettings } from './notice-print';
 import { NoticeFlows } from './notice-flows';
-import './notices.css';
 import { TimePicker, timeMatches, timeRange } from './time-picker';
 import { DialogContents, useDialogClose } from './dialog-close';
 interface Filters { period: string; projects: number[]; category: string; approval: string; paid: string; link: string; pending: '' | 'ownership' | 'void' }

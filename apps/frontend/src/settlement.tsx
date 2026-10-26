@@ -17,7 +17,6 @@ import { useHistoryGuard } from './history';
 import { balanced, getExtract, getSettlement, kinds, saveBalance, settlementTotal } from './settlement-api';
 import type { AnnualRow, ExtractKind, SettlementRow } from './settlement-api';
 import { SettlementExport } from './settlement-export';
-import './settlement.css';
 
 type Props = { me: Identity | null; blocked: boolean; active: boolean };
 export function SettlementPage(props: Props) {

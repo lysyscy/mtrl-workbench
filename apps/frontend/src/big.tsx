@@ -18,7 +18,6 @@ import { money } from './notices-api';
 import { SettlementExport } from './settlement-export';
 import { getBig, manualKeys, saveBigCell, saveBigSelection } from './big-api';
 import type { AutoKey, BigData, BigRow, DerivedKey, ManualKey, TotalKey } from './big-api';
-import './big.css';
 
 type Props = { me: Identity | null; blocked: boolean; active: boolean };
 const labels: Record<ManualKey,string> = {open_ym:'开工时间',mech_est:'机械费测算',contract:'合同（预估）价',output_cum:'产值累计（含税）',oil:'工程用油',note:'备注'};

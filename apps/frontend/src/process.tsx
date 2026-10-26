@@ -19,7 +19,6 @@ import { uncertainWrite } from './api';
 import { categories, getProcess, manualProcess, mechKeys, mechLabels, saveProcess, tabLabels } from './process-api';
 import type { Difference, ProcessRow } from './process-api';
 import { ProcessExport } from './process-export';
-import './process.css';
 
 interface Draft { warehouse:string; ym:string; column:string; value:string; revision:number; error:string }
 const keyOf=(warehouse:string,ym:string,column:string)=>JSON.stringify([warehouse,ym,column]);

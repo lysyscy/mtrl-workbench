@@ -6,7 +6,6 @@ import Button from 'antd/es/button';
 import Popover from 'antd/es/popover';
 import Calendar from 'antd/es/calendar';
 import Segmented from 'antd/es/segmented';
-import './business-period.css';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 dayjs.locale('zh-cn');

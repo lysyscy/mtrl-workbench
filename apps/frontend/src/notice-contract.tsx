@@ -10,9 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ApiError, record, requestJson, uncertainWrite } from './api';
 import { body, cents, money, receipt, readNotices } from './notices-api';
 import type { NoticeRow } from './notices-api';
-import './notice-contract.css';
 import { SupplierStep } from './notice-supplier-step';
-import './notice-association.css';
 
 interface Invoice { id: number; kind: string; date: string; amount: string }
 interface Reason { kind: string; text: string; amounts?: string[]; prior_amount?: string; invoice_total?: string; notice_codes?: string[] }

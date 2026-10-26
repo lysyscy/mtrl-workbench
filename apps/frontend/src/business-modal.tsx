@@ -1,5 +1,4 @@
 import Modal from 'antd/es/modal';
-import './business-modal.css';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 

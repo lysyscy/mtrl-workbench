@@ -24,7 +24,6 @@ import { ContractFetch, ContractSettings } from './contract-tools';
 import { ContractExports } from './contract-export';
 import { ContractSubtableDialog, hasSubtableDrafts } from './contract-subtables';
 import type { SubtableWorkspace } from './contract-subtables';
-import './contracts.css';
 
 const defaultColumn: ColDef<ContractRow> = {sortable:true,resizable:true,suppressMovable:true};
 

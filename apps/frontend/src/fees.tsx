@@ -14,7 +14,6 @@ import { useHistoryGuard } from './history';
 import { money } from './notices-api';
 import { feeWrite, getFees, getFeeYear } from './fees-api';
 import type { FeeField, FeeYearRecord, FeeYearRow } from './fees-api';
-import './fees.css';
 
 type RecordRow = FeeYearRecord;
 interface AnnualRow extends FeeYearRow { records: RecordRow[]; automatic: boolean }
