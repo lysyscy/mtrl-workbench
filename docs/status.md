@@ -2,7 +2,7 @@
 
 ## React 前端独立重做
 
-本对话已接手[交接材料](../.scratch/frontend-vue-rewrite/handoff.md)（PH-20261026-react-trial-01）。表格稳定与MOD05拆页已获完整方案确认并实施：左栏「欠款台账」「付款流水」，两页主表占满剩余可用高度，欠款加载占位、普通行动画与拖拽叠加分别处理。原8065用户副本原位更新，试用数据保护、实际验证及用户未验边界回[当前证据](../.scratch/frontend-vue-rewrite/evidence.md#表格稳定与mod05拆页)；未代用户验收。
+当前人工接续入口为[交接材料](../.scratch/frontend-vue-rewrite/handoff.md)（PH-20261026-notice-visual-01）：用户授权先改前端设计文档，再在原8065付款通知书页吸收独立demo的最小视觉优点，保留快速回退；这两步尚未实施，原试用数据保留，449继续暂停。此前已接手PH-20261026-react-trial-01。表格稳定与MOD05拆页已获完整方案确认并实施：左栏「欠款台账」「付款流水」，两页主表占满剩余可用高度，欠款加载占位、普通行动画与拖拽叠加分别处理。原8065用户副本原位更新，试用数据保护、实际验证及用户未验边界回[当前证据](../.scratch/frontend-vue-rewrite/evidence.md#表格稳定与mod05拆页)；未代用户验收。
 
 分支 `codex/react-frontend-rewrite` 未合并 master。445–448界面打磨与447大表分月增量已技术实现，待用户实看；范围及未完成验收回[共同规格](../.scratch/frontend-vue-rewrite/spec.md#2026-10-26界面与交互打磨)、当前[月度确认](../.scratch/frontend-vue-rewrite/questions.md#2026-10-26大表分月口径已确认)和[证据](../.scratch/frontend-vue-rewrite/evidence.md)。本次文档生命周期与唯一真实副本入口整改已完成定向技术验证与独立双轴审查，原用户副本已恢复，原模拟预览已退出；实际运行与试用数据归属只查证据所指owner，不从旧端口/PID流水推当前状态。
 
