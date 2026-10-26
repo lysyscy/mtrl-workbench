@@ -25,8 +25,14 @@ interface Draft { warehouse:string; ym:string; column:string; value:string; revi
 const keyOf=(warehouse:string,ym:string,column:string)=>JSON.stringify([warehouse,ym,column]);
 const show=(value:unknown)=>value==null?'':money(String(value));
 const matrixColumns=[
-  ...['in','out'].flatMap((direction,i)=>categories.map((label,j)=>({field:`${direction}_${label}`,label:`${i?'出库':'入库'}${label}`,segment:j===0}))),
-  ...mechKeys.map((field,i)=>({field,label:mechLabels[i]!,segment:i===0||i===4})),
+  ...['in','out'].flatMap((direction,i)=>categories.map(label=>({field:`${direction}_${label}`,label:`${i?'出库':'入库'}${label}`}))),
+  ...mechKeys.map((field,i)=>({field,label:mechLabels[i]!})),
+];
+const matrixGroups=[
+  {label:'入库',start:0,end:5},
+  {label:'出库',start:5,end:10},
+  {label:'机械',start:10,end:14},
+  {label:'外租机械（不含税）',start:14,end:16},
 ];
 interface Cells { drafts:Record<string,Draft>; warehouse:string; disabled:boolean; source:(ym:string,column:string)=>boolean; change:(ym:string,column:string,value:string)=>void; save:(key:string,retry?:boolean)=>void; switchSource:(ym:string,column:string)=>void }
 const ProcessCells=createContext<Cells|null>(null);
@@ -131,12 +137,17 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
         getRowId={p=>String(p.data.id)} defaultColDef={{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation overlayNoRowsTemplate="当前项目没有调整差异"
         onGridReady={e=>fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e=>fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e=>fitGridColumns(e.api,root.current)} /></div>:
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,switchSource:(ym,column)=>{const signature=query.data?.signatures[warehouse]?.[ym];if(!signature)return;setError('');setSource({warehouse,ym,column,signature,value:matrix[kind].find(r=>r.ym===ym)?.[column]??null});}}}>
-        <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label="过程资料月度表，可横向滚动"><BoundedTable className="process-matrix" aria-label={`${tabLabels[tab]}，金额单位：元`} columns={matrixWidths}>
-          <thead><tr><th scope="col">核算月</th>{matrixColumns.map(column=><th scope="col" key={column.field} className={column.segment?'process-segment':''}>{column.label}</th>)}</tr></thead>
-          <tbody>{matrix[kind].length?matrix[kind].map(row=><tr key={row.ym}><th scope="row">{row.ym}</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}${tab===1&&!column.field.startsWith('mech_')&&matrix.raw.find(raw=>raw.ym===row.ym)?.[column.field]!==row[column.field]?' process-adjusted':''}`}>{column.field.startsWith('mech_')?<MechanicalCell data={row} column={column.field}/>:show(row[column.field])}</td>)}</tr>):<tr><td colSpan={17} className="process-empty">当前项目没有月度记录</td></tr>}</tbody>
-          <tfoot><tr><th scope="row">合计</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}`}>{show(matrix.totals[kind][column.field])}</td>)}</tr>
-            <tr><th scope="row">总求和（本表）</th>{matrix.segments[kind].map((segment,i)=><td key={segment.name} colSpan={[5,5,4,2][i]} className="money process-segment">{['入库合计','出库合计','机械合计','不含税合计'][i]} {show(segment.total)}</td>)}</tr></tfoot>
-        </BoundedTable></div>
+        <div className="process-matrix-groups">{matrixGroups.map((group,index)=>{
+          const columns=matrixColumns.slice(group.start,group.end);
+          return <div key={group.label} role="region" aria-label={group.label} className="process-matrix-group"><h3>{group.label}</h3>
+            <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label={`${group.label}月度表，可横向滚动`}><BoundedTable className="process-matrix" aria-label={`${tabLabels[tab]}，${group.label}，金额单位：元`} columns={[matrixWidths[0]!,...matrixWidths.slice(group.start+1,group.end+1).map(width=>({...width,max:28,flex:1}))]}>
+              <thead><tr><th scope="col">核算月</th>{columns.map(column=><th scope="col" key={column.field}>{column.label}</th>)}</tr></thead>
+              <tbody>{matrix[kind].length?matrix[kind].map(row=><tr key={row.ym}><th scope="row">{row.ym}</th>{columns.map(column=><td key={column.field} className={`money${tab===1&&!column.field.startsWith('mech_')&&matrix.raw.find(raw=>raw.ym===row.ym)?.[column.field]!==row[column.field]?' process-adjusted':''}`}>{column.field.startsWith('mech_')?<MechanicalCell data={row} column={column.field}/>:show(row[column.field])}</td>)}</tr>):<tr><td colSpan={columns.length+1} className="process-empty">当前项目没有月度记录</td></tr>}</tbody>
+              <tfoot><tr><th scope="row">合计</th>{columns.map(column=><td key={column.field} className="money">{show(matrix.totals[kind][column.field])}</td>)}</tr>
+                <tr><th scope="row">分组合计</th><td colSpan={columns.length} className="money">{show(matrix.segments[kind][index]!.total)}</td></tr></tfoot>
+            </BoundedTable></div>
+          </div>;
+        })}</div>
       </ProcessCells.Provider>}
     </>}
     {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title={`切为手填，${mechLabels[mechKeys.indexOf(source.column)]}`} titleId="process-source-title" closing={closing}>
