@@ -3,6 +3,7 @@ import { useHistoryGuard } from './history';
 import Button from 'antd/es/button';
 import Radio from 'antd/es/radio';
 import { BusinessModal } from './business-modal';
+import { DiscardConfirmation } from './dialog-close';
 import { BoundedTable } from './bounded-table';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -45,7 +46,7 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
   const lock = useRef(false), decisionTitle = useRef<HTMLHeadingElement>(null), closeButton = useRef<HTMLButtonElement>(null);
   const [selected,setSelected] = useState<number | null>(null), [decision,setDecision] = useState<'none'|'discard'|'unlink'>('none');
   const [step,setStep] = useState(row.has_link ? 2 : 1), [supplier,setSupplier] = useState(row.jc_supplier);
-  const initialSupplier = useRef(row.jc_supplier), supplierEdited = useRef(false), stepHeading = useRef<HTMLHeadingElement>(null);
+  const initialSupplier = useRef(row.jc_supplier), supplierBaseline = useRef(row.jc_supplier), supplierEdited = useRef(false), stepHeading = useRef<HTMLHeadingElement>(null);
   const [busy,setBusy] = useState(false), [saved,setSaved] = useState(false), [error,setError] = useState('');
   const query = useQuery({ queryKey: ['notice-maintenance','link',row.notice_id,row.bill_no,'all-suppliers'], enabled: !blocked, staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: false, retry: false, queryFn: async ({signal}) => {
     const value = await requestJson(`/api/m11/link-recommendations?notice_id=${row.notice_id}&supplier=`,{signal});
@@ -60,9 +61,11 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
   const data = query.data, current = data?.rows.find(candidate => candidate.id === data.current_contract_id), chosen = data?.rows.find(candidate => candidate.id === selected);
   const readOnly = row.is_revoked || row.is_excluded || row.category !== 'jc' || Boolean(data?.read_only);
   const rows = data?.rows.filter(candidate => candidate.id === data.current_contract_id || !supplier.trim() || candidate.supplier === supplier.trim()) ?? [];
-  const dirty = !saved && (supplier.trim() !== initialSupplier.current || selected !== null && selected !== data?.current_contract_id);
+  const dirty = !saved && (supplier.trim() !== supplierBaseline.current || selected !== null && selected !== data?.current_contract_id);
   useEffect(() => {
-    if (!supplierEdited.current && !initialSupplier.current && matches.data?.cands.length === 1) setSupplier(matches.data.cands[0]!);
+    if (!supplierEdited.current && !initialSupplier.current && matches.data?.cands.length === 1) {
+      supplierBaseline.current=matches.data.cands[0]!;setSupplier(supplierBaseline.current);
+    }
   }, [matches.data]);
   function chooseSupplier(value: string) {
     supplierEdited.current = true;setSupplier(value);
@@ -100,7 +103,7 @@ export function ContractDialog({ row, blocked, close, refresh, announce }: Props
     } catch (failure) { setError(`结果仍待核实，请重读核对。${failure instanceof Error ? failure.message : ''}`); }
     finally {lock.current=false;setBusy(false);}
   }
-  return <BusinessModal open={!blocked} className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>    {decision !== 'none' ? <div className="contract-decision"><h2 ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">{decision === 'discard' ? '放弃本次选择？' : '解除当前合同关联？'}</h2><p>{decision === 'discard' ? '尚未保存，原有关联不会改变。' : current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="submit" disabled={busy} onClick={() => setDecision('none')}>{decision === 'discard' ? '继续选择' : '返回'}</Button><Button htmlType="submit" className={decision === 'discard' ? 'primary' : 'danger'} disabled={busy} onClick={() => decision === 'discard' ? close() : void save('unlink')}>{decision === 'discard' ? '放弃并关闭' : '确认解除'}</Button></div></div> : <>
+  return <BusinessModal open={!blocked} className="project-dialog contract-dialog notice-association-dialog" titleId="contract-dialog-title" requestClose={requestClose}>    {decision === 'discard' ? <DiscardConfirmation titleId="contract-dialog-title" headingRef={decisionTitle} closing={{busy,resume:() => setDecision('none'),discard:close}} /> : decision === 'unlink' ? <div className="contract-decision"><h2 ref={decisionTitle} tabIndex={-1} id="contract-dialog-title">解除当前合同关联？</h2><p>{current ? contractName(current) : '当前合同'}</p><div className="dialog-actions"><Button htmlType="button" disabled={busy} onClick={() => setDecision('none')}>返回</Button><Button htmlType="button" className="danger" disabled={busy} onClick={() => void save('unlink')}>确认解除</Button></div></div> : <>
       <div className="contract-fixed-header"><div className="contract-dialog-heading"><h2 id="contract-dialog-title">供应商与合同关联</h2><Button htmlType="submit" ref={closeButton} className="contract-close" aria-label="关闭合同关联" disabled={busy || saved} onClick={requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></Button></div>
       <nav className="association-steps" aria-label="关联步骤"><span aria-current={step === 1 ? 'step' : undefined}>1 · 确认供应商</span><span aria-current={step === 2 ? 'step' : undefined}>2 · 选择合同</span><small>确认前不会改变现有关联</small></nav>
       {step === 2 && <div className="contract-notice"><div><strong>{row.bill_name || row.bill_no}</strong><span>{row.project_display} · {row.bill_no} · {data?.supplier || row.jc_supplier || '供应商未录入'}</span></div><div className="contract-notice-amount"><span>通知书审批金额</span><strong>{money(data?.notice_amount ?? row.amount_approved)}<small> 元</small></strong></div></div>}
