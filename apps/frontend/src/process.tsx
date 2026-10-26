@@ -8,7 +8,7 @@ import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { Link } from 'react-router';
 import { readProjects, requestJson } from './api';
 import type { Identity, Project } from './api';
-import { pageGridGeometry, contentWidth, fitGridColumns, gridTheme, numberColumnWidth } from './grid';
+import { pageGridGeometry, contentWidth, gridTheme, numberColumnWidth } from './grid';
 import { BoundedTable } from './bounded-table';
 import { ProjectPicker } from './ledger-controls';
 import { useHistoryGuard } from './history';
@@ -19,6 +19,9 @@ import { uncertainWrite } from './api';
 import { categories, getProcess, manualProcess, mechKeys, mechLabels, saveProcess, tabLabels } from './process-api';
 import type { Difference, ProcessRow } from './process-api';
 import { ProcessExport } from './process-export';
+import { useTextGridLayout } from './grid-layout';
+import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+const differenceRowId = (row: Difference) => String(row.id);
 
 interface Draft { warehouse:string; ym:string; column:string; value:string; revision:number; error:string }
 const keyOf=(warehouse:string,ym:string,column:string)=>JSON.stringify([warehouse,ym,column]);
@@ -40,7 +43,7 @@ function MechanicalCell({data,column}:{data:ProcessRow;column:string}) {
 export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolean;active:boolean}) {
   const writeAbort = useRef(new AbortController());
   useEffect(() => { writeAbort.current = new AbortController(); return () => writeAbort.current.abort(); }, []);
-  const client=useQueryClient(),root=useRef<HTMLDivElement>(null),alive=useRef(true),lock=useRef(false),queue=useRef<string[]>([]),revision=useRef(0);
+  const client=useQueryClient(),alive=useRef(true),lock=useRef(false),queue=useRef<string[]>([]),revision=useRef(0);
   const [warehouse,setWarehouse]=useState(''),[tab,setTab]=useState(1);
   const [drafts,setDrafts]=useState<Record<string,Draft>>({}),[busy,setBusy]=useState(false),[uncertain,setUncertain]=useState(false),[verified,setVerified]=useState(false);
   const [error,setError]=useState(''),[feedback,setFeedback]=useState(''),[source,setSource]=useState<{warehouse:string;ym:string;column:string;signature:string;value:string|null}|null>(null);
@@ -126,9 +129,7 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     {currentDrafts.filter(([,d])=>d.error).map(([key,d])=><p key={key} role="alert" className="notice">{d.ym} {mechLabels[mechKeys.indexOf(d.column)]}：{d.error}<Button disabled={disabled||busy} onClick={()=>save(key,true)}>重试保存</Button><Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>{const next={...state.current.drafts};delete next[key];update(next);}}>取消这项修改</Button></p>)}
     {currentDrafts.length>0&&<Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>update(Object.fromEntries(Object.entries(state.current.drafts).filter(([,d])=>d.warehouse!==warehouse)))}>取消本项目修改</Button>}
     {query.isPending?<p role="status">正在读取过程资料…</p>:query.isError&&!matrix?null:!matrix?<p>暂无有数据的项目。</p>:<>
-      {tab===2?<div className="process-grid" ref={root}><AgGridReact<Difference> key="diff" domLayout="autoHeight" theme={gridTheme} rowData={matrix.diffs} columnDefs={diffs} pinnedBottomRowData={[{...matrix.diff_totals,id:-1,doc_no:'合计'} as unknown as Difference]}
-        getRowId={p=>String(p.data.id)} defaultColDef={{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation overlayNoRowsTemplate="当前项目没有调整差异"
-        onGridReady={e=>fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e=>fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e=>fitGridColumns(e.api,root.current)} /></div>:
+      {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,switchSource:(ym,column)=>{const signature=query.data?.signatures[warehouse]?.[ym];if(!signature)return;setError('');setSource({warehouse,ym,column,signature,value:matrix[kind].find(r=>r.ym===ym)?.[column]??null});}}}>
         <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label="过程资料月度表，可横向滚动"><BoundedTable className="process-matrix" aria-label={`${tabLabels[tab]}，金额单位：元`} columns={matrixWidths}>
           <thead><tr className="process-groups"><th scope="col" rowSpan={2}>核算月</th><th scope="colgroup" colSpan={5} className="process-segment">入库</th><th scope="colgroup" colSpan={5} className="process-segment">出库</th><th scope="colgroup" colSpan={4} className="process-segment">机械</th><th scope="colgroup" colSpan={2} className="process-segment">机械（不含税）</th></tr>
@@ -144,4 +145,18 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
       <div className="dialog-actions"><Button disabled={busy} onClick={closing.requestClose}>保留明细来源</Button><Button type="primary" loading={busy} disabled={disabled} onClick={()=>void switchManual()}>确认切为手填</Button></div>
     </DialogContents></BusinessModal>}
   </section>;
+}
+
+function DifferenceGrid({matrix,diffs,warehouse,scale,active}: {
+  matrix: Awaited<ReturnType<typeof getProcess>>['matrices'][string]; diffs: ColDef<Difference>[]; warehouse: string; scale: number; active: boolean;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  const diffRows = matrix.diffs;
+  const diffTotals = useMemo(() => [{...matrix.diff_totals,id:-1,doc_no:'合计'} as unknown as Difference], [matrix]);
+  const diffColumns = useMemo(() => initialLayoutColumns(diffs), [diffs]);
+  const diffPrepared = useMemo(() => rendererLayoutColumns(diffColumns), [diffColumns]);
+  const diffLayout = useTextGridLayout({root,active,rows:diffRows,totals:diffTotals,columns:diffPrepared,rowId:differenceRowId,minimum:pageGridGeometry(scale).rowHeight,headerMinimum:pageGridGeometry(scale).headerHeight,scope:warehouse,identity:warehouse});
+  return <><div className="process-grid" ref={root} data-layout-state={diffLayout.state} data-layout-error={diffLayout.error || undefined} inert={diffLayout.concealed || diffLayout.state === 'preparing' || diffLayout.state === 'error'} style={{visibility:diffLayout.concealed || diffLayout.state === 'preparing' || diffLayout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<Difference> key="diff" domLayout="autoHeight" theme={gridTheme} columnDefs={diffColumns}
+        getRowId={p=>String(p.data.id)} defaultColDef={{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation overlayNoRowsTemplate="当前项目没有调整差异"
+        animateRows={false} onGridReady={e=>diffLayout.attach(e.api)} /></div>{diffLayout.measurement}{diffLayout.state==='error'&&<p role="alert">{diffLayout.error}<Button onClick={diffLayout.retry}>重试表格加载</Button></p>}</>;
 }

@@ -200,7 +200,13 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           const expected = rows.map(rowId);
           const mounted = () => {
             const ids = new Set([...node!.querySelectorAll('.ag-row[row-id]')].map(row => row.getAttribute('row-id')));
-            return grid.isAnimationFrameQueueEmpty() && expected.every(id => ids.has(id));
+            const center = node!.querySelector<HTMLElement>('.ag-body-horizontal-scroll-viewport');
+            const horizontal = node!.querySelector<HTMLElement>('.ag-body-horizontal-scroll');
+            // AG can finish its row queue before its real horizontal scrollbar
+            // takes space. Natural-height reports publish after that dependency too.
+            const needsHorizontal = Boolean(grid.getGridOption('alwaysShowHorizontalScroll')) || Boolean(center && center.scrollWidth > center.clientWidth + 1);
+            const scrollbarReady = !horizontal || Boolean(grid.getGridOption('suppressHorizontalScroll')) || (!needsHorizontal || horizontal.offsetHeight > 0);
+            return scrollbarReady && grid.isAnimationFrameQueueEmpty() && expected.every(id => ids.has(id));
           };
           while (!mounted()) {
             await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));

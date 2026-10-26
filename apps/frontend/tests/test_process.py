@@ -72,3 +72,22 @@ def test_real_process_cell_write_and_later_draft(server,browser_page,api,project
     route=pending.pop();response=route.fetch();assert response.ok;route.fulfill(response=response)
     expect(page.get_by_role('status').filter(has_text=LABELS[keys[0]]+'已保存')).to_be_visible();expect(second).to_have_value('2.50')
     fresh=get(api,'/api/m06/mech');assert Decimal(str(fresh['mech'][project['warehouse_name']][row['ym']][keys[0]]))==value
+
+
+def test_difference_first_visible_frame_has_final_geometry(server,browser_page,api,projects):
+    page,_=browser_page;data=get(api,'/api/m06/matrix')
+    project=next(p for p in projects if p['warehouse_name'] in data['matrices'] and not data['matrices'][p['warehouse_name']]['diffs'])
+    page.set_viewport_size({'width':1280,'height':720})
+    open_page(page,server,'process','过程资料')
+    pick_option(page,'过程资料项目',project['disp'])
+    page.evaluate("""window.__differenceFrames=[];
+      function sample(){const e=document.querySelector('.process-grid');
+        if(e&&e.checkVisibility({checkVisibilityCSS:true}))window.__differenceFrames.push({
+          height:e.offsetHeight,header:e.querySelector('.ag-header')?.offsetHeight,
+          widths:[...e.querySelectorAll('.ag-header-cell')].map(c=>c.offsetWidth)});
+        if(window.__differenceFrames.length<30)requestAnimationFrame(sample);}sample();""")
+    page.locator('.process-tabs label').filter(has_text='差异表').click()
+    page.wait_for_function('window.__differenceFrames.length>=30')
+    frames=page.evaluate('window.__differenceFrames')
+    assert len(frames[0]['widths'])==11,frames
+    assert len({str(frame) for frame in frames})==1,frames

@@ -7,13 +7,16 @@ import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import type { Identity } from './api';
 import { cents, decimal, readProjects, requestJson, uncertainWrite } from './api';
-import { contentWidth, fitGridColumns, gridTheme, pageGridGeometry, numberColumnWidth } from './grid';
+import { contentWidth, gridTheme, pageGridGeometry, numberColumnWidth } from './grid';
 import { ProjectPicker, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { useHistoryGuard } from './history';
 import { money } from './notices-api';
 import { feeWrite, getFees, getFeeYear } from './fees-api';
 import type { FeeField, FeeYearRecord, FeeYearRow } from './fees-api';
+import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
+import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+const annualRowId = (row: AnnualRow) => encodeURIComponent(row.item);
 
 type RecordRow = FeeYearRecord;
 interface AnnualRow extends FeeYearRow { records: RecordRow[]; automatic: boolean }
@@ -21,6 +24,7 @@ interface Draft { row?: RecordRow | undefined; item: string; ym: string; field: 
 const recordKey = (row: RecordRow, field: FeeField) => `${row.id}:${field}`;
 const blankKey = (item: string, ym: string) => JSON.stringify([item,ym]);
 interface Cells {
+  expanded: ReadonlySet<string>; toggle: (item: string, open: boolean) => void;
   drafts: Record<string,Draft>; disabled: boolean; structuralDisabled: boolean; remove: (row:RecordRow) => void;
   change: (key: string, draft: Draft) => void; save: (key: string, retry?: boolean) => void;
 }
@@ -39,7 +43,7 @@ function NameCell({ data, node }: ICellRendererParams<AnnualRow>) {
   const cells = useContext(FeeCells)!;
   if (!data) return null;
   if (node.rowPinned || !data.manual || !data.records.length) return data.item || '未命名';
-  return <details className="fee-record-name-details"><summary>{data.item || '未命名'}<span>各月项名，{data.records.length} 条</span></summary><div className="fee-record-names">{data.records.map(row => <label key={row.id}><span>{row.ym.slice(5)}月</span><FeeEditor row={row} item={data.item} ym={row.ym} field="item" /><Popconfirm title={`删除 ${row.ym}「${row.item || '未命名'}」 ${money(row.amount)} 元？`} okText="删除" cancelText="取消" disabled={cells.structuralDisabled} onConfirm={() => cells.remove(row)}><Button size="small" danger disabled={cells.structuralDisabled} aria-label={`${row.ym} ${row.item || '未命名'}删除 #${row.id}`}>删除</Button></Popconfirm></label>)}</div></details>;
+  return <details className="fee-record-name-details" open={cells.expanded.has(data.item)} onToggle={e=>cells.toggle(data.item,e.currentTarget.open)}><summary>{data.item || '未命名'}<span>各月项名，{data.records.length} 条</span></summary><div className="fee-record-names">{data.records.map(row => <label key={row.id}><span>{row.ym.slice(5)}月</span><FeeEditor row={row} item={data.item} ym={row.ym} field="item" /><Popconfirm title={`删除 ${row.ym}「${row.item || '未命名'}」 ${money(row.amount)} 元？`} okText="删除" cancelText="取消" disabled={cells.structuralDisabled} onConfirm={() => cells.remove(row)}><Button size="small" danger disabled={cells.structuralDisabled} aria-label={`${row.ym} ${row.item || '未命名'}删除 #${row.id}`}>删除</Button></Popconfirm></label>)}</div></details>;
 }
 function AmountCell({ data, node, colDef }: ICellRendererParams<AnnualRow>) {
   if (!data) return null;
@@ -59,6 +63,8 @@ export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked
   const [addMonth,setAddMonth] = useState(reportMonth), [drafts,setDrafts] = useState<Record<string,Draft>>({});
   const [busy,setBusy] = useState(false), [uncertain,setUncertain] = useState(false), [verified,setVerified] = useState(false);
   const [error,setError] = useState(''), [feedback,setFeedback] = useState('');
+  const [expanded,setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (item: string, open: boolean) => setExpanded(previous => { if (previous.has(item) === open) return previous; const next = new Set(previous); if (open) next.add(item); else next.delete(item); return next; });
   const client = useQueryClient(), root = useRef<HTMLDivElement>(null), alive = useRef(true), lock = useRef(false), queue = useRef<string[]>([]);
   const abort = useRef(new AbortController());
   const pendingCreate = useRef<{key:string;ym:string;ids:number[]} | null>(null);
@@ -163,7 +169,11 @@ export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked
     ...Array.from({length:12},(_,i):ColDef<AnnualRow>=>({colId:`month-${i+1}`,headerName:`${i+1}月`,headerTooltip:year,cellClass:'money',autoHeight:true,valueGetter:p=>p.data?.months[i],cellRenderer:AmountCell,...numberColumnWidth([query.data?.months[i],...rows.map(row=>row.months[i]),...rows.flatMap(row=>row.records.filter(record=>record.ym===`${year}-${String(i+1).padStart(2,'0')}`).map(record=>record.amount))].map(value=>value==null?'':money(value)),scale,true)})),
     {field:'total',headerName:'累计',headerTooltip:'往年 + 所选年1至12月',cellClass:'money',valueFormatter:p=>money(p.value),...numberColumnWidth([query.data?.total,...rows.map(row=>row.total)].map(value=>value==null?'':money(value)),scale)},
   ],[year,scale,rows,query.data]);
-  const totals:AnnualRow[]=query.data?[{item:'合计',manual:false,prior:query.data.prior,months:query.data.months,total:query.data.total,periods:[],records:[],automatic:false}]:[];
+  const totals=useMemo<AnnualRow[]>(()=>query.data?[{item:'合计',manual:false,prior:query.data.prior,months:query.data.months,total:query.data.total,periods:[],records:[],automatic:false}]:[],[query.data]);
+  const retained = useRetainedGridColumns(columns,root);
+  const gridColumns = useMemo(()=>initialLayoutColumns(retained),[retained]);
+  const prepared = useMemo(()=>rendererLayoutColumns(gridColumns,undefined,(row,id,pinned)=>JSON.stringify([row,id,pinned,expanded.has(row.item)])),[gridColumns,expanded]);
+  const layout = useTextGridLayout({root,active:active && ready,rows,totals,columns:prepared,rowId:annualRowId,minimum:pageGridGeometry(scale).rowHeight,headerMinimum:pageGridGeometry(scale).headerHeight,scope:year+':'+project,identity:year+':'+project});
   return <section className="fees-page" aria-label="特殊费用">
     <div className="fee-filters"><label>年份<TimePicker label="费用年份" modes={['年']} value={year} onChange={setYear} disabled={paused} /></label>
       <label>项目<ProjectPicker projects={(projects.data ?? []).filter(p=>p.warehouse_name && p.project_type!=='shell')} selected={(projects.data ?? []).filter(p=>p.warehouse_name===project).map(p=>p.id)} pick={ids=>{const next=projects.data?.find(p=>p.id===ids[0])?.warehouse_name;if(next)setProject(next);}} label="费用项目" disabled={paused || projects.isPending} /></label></div>
@@ -173,8 +183,8 @@ export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked
     {uncertain && <p className="notice" role="alert">核对结果后再继续。<Button disabled={!verified || busy} onClick={()=>{pendingCreate.current=null;state.current.uncertain=false;setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).map(([key,d])=><p key={key} className="fee-draft-feedback">{d.ym}，{d.item || '未命名'}，{d.field==='item'?'项名':'金额'}：{d.error || '未保存'} <Button size="small" disabled={busy || blocked || uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>save(key,true)}>保存</Button><Button size="small" disabled={busy || blocked} onMouseDown={e=>e.preventDefault()} onClick={()=>{const next={...state.current.drafts};delete next[key];update(next);}}>取消这项修改</Button></p>)}
     <p className="fee-record-note muted">同月同名的多条记录分别填写，月合计自动相加；项名旁标明所属月份。</p>
-    {query.isPending?<p role="status">正在读取费用…</p>:ready && <FeeCells.Provider value={{drafts,disabled,structuralDisabled:disabled || busy || dirty || query.isFetching,remove,change,save}}><div ref={root} className="fees-grid fees-annual-grid" aria-label="特殊费用年度表"><AgGridReact<AnnualRow> theme={gridTheme} domLayout="autoHeight" rowData={rows} columnDefs={columns} pinnedBottomRowData={totals} getRowId={p=>JSON.stringify(p.data.item)}
-      defaultColDef={{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,autoHeaderHeight:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation
-      onGridReady={e=>fitGridColumns(e.api,root.current,true)} onFirstDataRendered={e=>fitGridColumns(e.api,root.current,true)} onGridSizeChanged={e=>fitGridColumns(e.api,root.current)} /></div></FeeCells.Provider>}
+    {query.isPending?<p role="status">正在读取费用…</p>:ready && <FeeCells.Provider value={{expanded,toggle,drafts,disabled,structuralDisabled:disabled || busy || dirty || query.isFetching,remove,change,save}}><div ref={root} className="fees-grid fees-annual-grid" aria-label="特殊费用年度表" data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility:layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<AnnualRow> theme={gridTheme} domLayout="autoHeight" columnDefs={gridColumns} getRowId={p=>annualRowId(p.data)}
+      defaultColDef={{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation
+      animateRows={false} onGridReady={e=>layout.attach(e.api)} /></div>{layout.measurement}{layout.state==='error'&&<p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}</FeeCells.Provider>}
   </section>;
 }

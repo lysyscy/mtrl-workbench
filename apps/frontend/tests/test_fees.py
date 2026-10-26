@@ -41,6 +41,11 @@ def test_actual_annual_record_ids_and_readonly_totals(server,browser_page,api,pr
     expect(field).to_have_value(row['amount'])
     assert not page.locator('.fees-grid [col-id="prior"] input,.fees-grid [col-id="total"] input').count()
     assert not page.locator('.fee-auto-amount input').count()
+    details=page.locator('.fee-record-name-details').filter(has_text=row['item']).first
+    details.locator('summary').click()
+    expect(details.locator('input').first).to_be_visible()
+    page.wait_for_function("""()=>[...document.querySelectorAll('.fees-grid details[open]')].every(
+      d=>d.getBoundingClientRect().bottom<=d.closest('.ag-row').getBoundingClientRect().bottom+1)""")
 
 
 def test_actual_fee_save_updates_only_original_id(server,browser_page,api,projects,disposable):
