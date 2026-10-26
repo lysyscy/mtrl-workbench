@@ -2,6 +2,18 @@
 
 当前范围、批准与验收归[共同规格](spec.md)，大表分月决定归[当前确认](questions.md#2026-10-26大表分月口径已确认)。本页只保仍供验看/复测消费的结果和来源；本机原始输出不随Git提交，旧通过数不代表最新版本已经验收。
 
+## 通知书页最小视觉试点
+
+PH-20261026-notice-visual-01已人工恢复；基线`18842da8`，设计文档`193b8b97`，页面`17340172`及金额输入强调修正`e9e47fe4`。已在原8065加载`e9e47fe4`产品，等待用户视觉确认；未推广全站或恢复449。自查范围为基线至当前的通知书样式和展示文案，局部可逆且未改业务逻辑，采用自查与实际浏览器验看，未新增永久测试或冒称独立审查。
+
+- 先写设计文档局部试点，再固定原源码/完整在用构建清单。只改notices.css/tsx，沿原主题角色、MiSans及字号档位，轻边界、小圆角、弱阴影、表头/关联状态12px及精简文案；本次付款输入有主题强调底色和500字重。表格字段/列序、导航、业务入口、关联按钮完整名称与状态及两步弹窗保持，弹窗实现未改。
+- 原run `.artifacts/active/react-writable-preview/20261025-admin-i8`的owner/version为实际运行主人；最终构建`work/notice-visual-20261026-final`，原`work/project-picker-shell-fix`保留。`registered_preview()`已核进程、HTTP、完整资源和产品输入；不新建schema、不seed/重拷/迁移、不触及8000。
+- 指定Node24.22.1、pnpm12.15.0下typecheck/build退出0，原件`logs/{typecheck,build}.log`；首轮误取宿主附带旧工具链虽退出0但有engine警告，保留`logs/notice-visual-{typecheck,build}-initial-toolchain.log`，不作为最终环境证明。初轮Impeccable检测为空、退出0（`reports/notice-visual-detector.json`）；随后仅修正金额样式优先级并通过最终构建和实际computed-style核验，不把初轮检测伪称覆盖最终新增差异。
+- IAB由原根入口、侧栏到通知书，1280×720真实长数据，实际核246条当前列表、全部18列定义、勾选摘要和清空、供应商关联进入第一步/第二步后取消、金额会话内编辑再恢复原值与明确编辑外观；未提交关联/付款/分类/打印/i8动作。深色主题与最大1.4字号查看控件换行、表格/页面滚动后，已恢复原中性浅色/标准字号并重读。截图在同run `screenshots/notice-{before,after,dark,dark-large}.jpg`及`notice-association-step2.jpg`；before/after同视口、主题、字号和筛选，未作性能对比。最后金额强调修正仅在默认主题重验，其他样式未变，复用此前深色/字号观察，不称全主题矩阵或449通过。
+- 换装前后38表集合一致、37张非账号表摘要全部一致。user_account摘要含正常本地登录及临时外观试验，主题/字号已恢复；未把它写成38表逐字节不变。`reports/notice-visual-preservation.json`为最终摘要；原始修改前摘要在`recovery/notice-visual-20261026/data-fingerprints.json`。
+- 快速回退入口及守卫回[交接](handoff.md#当前验看与快速回退)，`logs/notice-visual-rollback-check.log`退出0；只读检查通过，未执行apply完整往返。原构建/最终构建、回退脚本和截图保留供本次用户验看，两个本轮中间构建及临时工具链shim已退出。静态demo保持既有待用户对照用途，本轮未增第三个预览。
+- 目录检查仍有独立未通过项：`workspace_check --effort react-writable-preview --phase active`退出1，扫描到既存`.artifacts/archive/notice-association/20261026/{20261026-final,20261026-validation,20261026-verified}`临时目录分类及缺retention元数据。未改该历史原件或检查器；本次页面/构建/原run检查可复用，**全局归档治理检查保持未通过**。原件`logs/notice-visual-workspace-check.log`；不将它算产品失败或掩盖为全绿。
+
 ## 表格稳定与MOD05拆页
 
 本轮实施基点`d927de0e76b84206c2e09c2894fac7c4e1978b02`，用户已确认完整方案及原8065更新授权。已实现并加载，停在用户实看；当前行为回前端设计/付款需求，实际运行仍由下节唯一owner持有。没有新增schema或另一预览，也未执行真实业务保存/撤销、i8外呼或实体打印。
