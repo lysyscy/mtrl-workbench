@@ -39,7 +39,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
       const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1);
       const natural = (element.querySelector('.ag-header')?.getBoundingClientRect().height ?? 68 * scale)
         + (last ? (last.rowTop ?? 0) + (last.rowHeight ?? 36 * scale) : 36 * scale)
-        + (grid.getPinnedBottomRow(0)?.rowHeight ?? 0)
+        + (element.querySelector('.ag-grid-pinned-bottom-rows')?.getBoundingClientRect().height ?? grid.getPinnedBottomRow(0)?.rowHeight ?? 0)
         + (element.querySelector('.ag-body-horizontal-scroll')?.getBoundingClientRect().height ?? 0) + 2;
       const height = Math.ceil(Math.min(natural, Math.max(200 * scale, window.innerHeight - element.getBoundingClientRect().top - 16 * scale)));
       if (Math.abs(element.getBoundingClientRect().height - height) > .5) element.style.height = `${height}px`;

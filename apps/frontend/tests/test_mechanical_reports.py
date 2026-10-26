@@ -41,7 +41,7 @@ def test_actual_company_summary_layout_and_amounts_readonly(server,browser_page,
     page,_=browser_page;page.set_viewport_size({'width':2400,'height':1200})
     open_page(page,server,'mechanical','机械费');grid=page.get_by_role('region',name='公司汇总',exact=True)
     expect(grid).to_be_visible();ym=page.get_by_label('月份',exact=True).input_value()
-    state=get(api,'/api/m06/workbench',ym=ym);warehouses=state['shown'];assert warehouses
+    state=get(api,'/api/m06/workbench',ym=ym);warehouses=state['settings']['shown_projects'];assert warehouses
     preview=get(api,'/api/m06/workbench/preview',ym=ym,projects=json.dumps(warehouses,ensure_ascii=False))
     count=len(preview['sheets'][0]['project_rows']);assert count
     page.wait_for_function("""count=>{const g=document.querySelector('.mechanical-grid');const last=g?.querySelector('[row-index="'+(count-1)+'"]');const total=g?.querySelector('.ag-row-pinned');return last&&total&&Math.abs(total.getBoundingClientRect().top-last.getBoundingClientRect().bottom)<2;}""",arg=count)
