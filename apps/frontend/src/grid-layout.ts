@@ -33,8 +33,8 @@ export function useRetainedGridColumns<T>(columns: ColDef<T>[], root: RefObject<
   return displayed;
 }
 
-export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity }: {
-  root: RefObject<HTMLElement | null>; active: boolean; rows: T[]; totals: T[];
+export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, fontRoot }: {
+  root: RefObject<HTMLElement | null>; fontRoot?: RefObject<HTMLElement | null>; active: boolean; rows: T[]; totals: T[];
   scope: string; identity: string; columns: TextGridColumn<T>[]; rowId: (row: T) => string; minimum: number; headerMinimum: number;
 }) {
   const [measurement, setMeasurement] = useState<ReactNode>(null);
@@ -79,7 +79,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const wrapping = columns.filter(c => c.wrap || c.render);
         const body = [...new Set(wrapping.flatMap(column => rows.map(column.text)))].join('') + '0123456789,.-';
         const footer = columns.flatMap(column => totals.map(column.text)).join('');
-        await Promise.all([loadTextFonts(body, [400]), loadTextFonts(footer, [600]),
+        await Promise.all([fontRoot?.current ? loadElementFonts(fontRoot.current) : Promise.resolve(), loadTextFonts(body, [400]), loadTextFonts(footer, [600]),
           loadTextFonts(grid.getAllDisplayedColumns().map(c => c.getColDef().headerName ?? '').join(''), [500])]);
         if (cancelled(run) || !node!.clientWidth || editable()) return;
         const fontsAt = performance.now();
@@ -262,6 +262,6 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
     node.addEventListener('focusout', afterEdit);
     schedule();
     return () => { disposed = true; cancelAnimationFrame(frame); cancelAnimationFrame(anchorFrame); viewport?.removeEventListener('scroll', scrolled); resize.disconnect(); appearance.disconnect(); grid.removeEventListener('columnResized', resized); node.removeEventListener('focusout', afterEdit); };
-  }, [api, active, root, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, retry]);
+  }, [api, active, root, rows, totals, columns, rowId, minimum, headerMinimum, scope, identity, fontRoot, retry]);
   return { attach, state, error, measurement, concealed: ready.current && appliedIdentity.current !== identity, retry: () => setRetry(n => n + 1) };
 }

@@ -75,7 +75,7 @@ function DeleteCell({ data: row, context, node }: ICellRendererParams<LedgerRow,
   return row?.row_kind === 'manual' && context.actions.current.writable() ? <Button htmlType="submit" className="ledger-delete" disabled={context.actions.current.busy()} title="删除历史行，可撤销" onClick={() => context.actions.current.remove(context.scope, row)}>删除</Button> : node.rowPinned ? null : <span className="muted">—</span>;
 }
 function Side({ active, scale, side, scope, actions, writable, busy, add, focusRecord, focused }: { active: boolean; scale: number; side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
-  const api = useRef<GridApi<LedgerRow> | null>(null); const root = useRef<HTMLDivElement>(null);
+  const api = useRef<GridApi<LedgerRow> | null>(null); const root = useRef<HTMLDivElement>(null), summaryRoot = useRef<HTMLDivElement>(null);
   const context = useMemo(() => ({ scope, actions, api }), [scope, actions]);
   useEffect(() => { if (writable) api.current?.refreshCells({ force: true }); }, [writable, busy]);
   const visible = useMemo(() => side.rows.filter(row => row.row_kind !== 'month' || row.editable || row.other_expense !== '0.00' || row.payment !== '0.00' || row.remark).map((row, index) => ({ ...row, seq: index + 1 })), [side.rows]);
@@ -93,7 +93,7 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
   ], [side.category, scale, upto]);
   const gridColumns = useRetainedGridColumns(columns, root);
   const prepared = useMemo(() => rendererLayoutColumns(gridColumns, context, (row, id, pinned) => JSON.stringify([pinned, row[id as keyof LedgerRow], row.row_kind, row.editable, writable])), [gridColumns,context,writable]);
-  const layout = useTextGridLayout({root, active, rows: visible, totals: total, columns: prepared, rowId: ledgerRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: scope.key, identity: scope.key});
+  const layout = useTextGridLayout({root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns: prepared, rowId: ledgerRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: scope.key, identity: scope.key});
   useEffect(() => {
     if (!focusRecord || !api.current) return;
     const node = api.current.getRowNode(`${side.category}:manual:${focusRecord}`);
@@ -105,8 +105,8 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
     });
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
-    <div className="ledger-summary"><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
-    <div className="ledger-table-scroll"><div className="ledger-grid" data-layout-state={layout.state} data-layout-error={layout.error || undefined} aria-busy={layout.state !== 'ready'}><AgGridReact<LedgerRow> theme={gridTheme} alwaysShowVerticalScroll rowBuffer={2} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
+    <div ref={summaryRoot} className="ledger-summary" inert={layout.state === 'preparing' || layout.state === 'error' || layout.concealed} style={{visibility: layout.state === 'preparing' || layout.state === 'error' || layout.concealed ? 'hidden' : undefined}}><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
+    <div className="ledger-table-scroll"><div className="ledger-grid" inert={layout.state === 'preparing' || layout.state === 'error' || layout.concealed} style={{visibility: layout.state === 'preparing' || layout.state === 'error' || layout.concealed ? 'hidden' : undefined}} data-layout-state={layout.state} data-layout-error={layout.error || undefined} aria-busy={layout.state !== 'ready'}><AgGridReact<LedgerRow> theme={gridTheme} alwaysShowVerticalScroll rowBuffer={2} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
       context={context} columnDefs={gridColumns}
       getRowId={params => params.data.key} defaultColDef={defaultColumn}
       rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={true} suppressScrollOnNewData={true}
@@ -297,9 +297,9 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   return <>
     {active && document.getElementById('ledger-status') && createPortal(status, document.getElementById('ledger-status')!)}
     <section className="ledger-card" aria-labelledby="ledger-title">
-      <div className="ledger-card-head"><h1 id="ledger-title">逐月欠款台账</h1><div className="ledger-exports">{(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => message(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}{exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}</div></div>
+      <div className="ledger-card-head" data-page-chrome><h1 id="ledger-title">逐月欠款台账</h1><div className="ledger-exports">{(['ledger', 'debt'] as const).map(kind => <LedgerExport key={`${owner}:${kind}`} kind={kind} owner={owner} projects={candidates} project={project} unavailable={exportUnavailable} run={(action, ids) => control(scope, action, false, ids)} message={text => message(scope, text)} paused={blocked || !active} valid={() => mounted.current && !current.current.blocked && current.current.active && scope.key === current.current.scope.key} signal={lifetime.current?.signal} />)}{exportUnavailable && <span className="muted" role="status">{exportUnavailable}</span>}</div></div>
       <div className="ledger-card-body">
-        <div className="ledger-view-project"><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked} /></div>
+        <div className="ledger-view-project" data-page-chrome><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked || projects.isPending || projects.isError} /></div>
         {projects.isError && <p role="alert">{projects.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void projects.refetch()}>重试项目</Button></p>}
         <div className="ledger-content" aria-busy={!shown && !query.isError && project > 0}>
         {!shown && <div className="ledger-placeholder" aria-hidden="true"><span/><span/></div>}

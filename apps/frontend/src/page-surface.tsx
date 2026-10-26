@@ -5,7 +5,7 @@ import Button from 'antd/es/button';
 import { loadElementFonts } from './appearance-ready';
 
 // Prepare only the first display. Retained pages, refreshes and editing never hide existing content.
-export function PageSurface({ active, title, children }: { active: boolean; title: string; children: ReactNode }) {
+export function PageSurface({ active, title, independent = false, children }: { active: boolean; title: string; independent?: boolean; children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null), complete = useRef(false);
   const [ready, setReady] = useState(false), [error, setError] = useState('');
   const client = useQueryClient();
@@ -16,19 +16,29 @@ export function PageSurface({ active, title, children }: { active: boolean; titl
     function schedule() { if (!disposed && !preparing && !complete.current) { cancelAnimationFrame(frame); frame = requestAnimationFrame(prepare); } }
     async function prepare() {
       if (disposed || preparing) return;
-      const failed = node!.querySelector<HTMLElement>('[data-layout-state=error]');
+      const failed = independent ? null : node!.querySelector<HTMLElement>('[data-layout-state=error]');
       if (failed) { setError(failed.dataset.layoutError || '表格尺寸准备失败，请重试。'); return; }
-      if (client.isFetching() || node!.querySelector('[data-page-loading],[data-layout-state=preparing]')) return;
+      if (node!.querySelector('[data-page-loading]') || !independent && (client.isFetching() || node!.querySelector('[data-layout-state=preparing]'))) return;
       preparing = true;
-      const text = node!.textContent ?? '';
+      // These pages own their table boundaries; only their existing tool areas
+      // contribute to the page's first font preparation. Data reads stay parallel.
+      const scopes = () => independent ? [...node!.querySelectorAll<HTMLElement>('[data-page-chrome]')] : [node!];
+      const text = () => scopes().map(scope => scope.textContent ?? '').join('');
+      const before = text();
       try {
-        await loadElementFonts(node!);
+        await Promise.all(scopes().map(loadElementFonts));
         if (disposed) return;
+        if (independent) {
+          preparing = false;
+          if (text() !== before) { schedule(); return; }
+          complete.current = true; setReady(true); observer.disconnect(); unsubscribe();
+          return;
+        }
         // Let React/grid layout commit while still mounted at its final width.
         frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => {
           preparing = false;
           if (disposed) return;
-          if (client.isFetching() || node!.textContent !== text) { schedule(); return; }
+          if (client.isFetching() || text() !== before) { schedule(); return; }
           complete.current = true; setReady(true); observer.disconnect(); unsubscribe();
         }); });
       } catch (failure) {
@@ -41,7 +51,7 @@ export function PageSurface({ active, title, children }: { active: boolean; titl
     const unsubscribe = client.getQueryCache().subscribe(schedule);
     schedule();
     return () => { disposed = true; observer.disconnect(); unsubscribe(); cancelAnimationFrame(frame); };
-  }, [active, client]);
+  }, [active, client, independent]);
   return <>
     {active && !ready && <div className="page-loading" role={error ? 'alert' : 'status'}>{error || `正在读取${title}…`}{error && <Button onClick={() => window.location.reload()}>{error.startsWith('表格') ? '重试表格加载' : '重试字体加载'}</Button>}</div>}
     <div ref={root} className="page-view" hidden={!active} inert={!active || !ready} style={{ visibility: ready ? undefined : 'hidden' }}>{children}</div>

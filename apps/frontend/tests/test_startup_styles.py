@@ -23,7 +23,7 @@ def test_first_page_waits_for_fonts_and_return_keeps_page(server, browser_page, 
         const walker=document.createTreeWalker(page,NodeFilter.SHOW_TEXT);let ready=true;
         while(walker.nextNode()){
           const node=walker.currentNode,parent=node.parentElement;
-          if(!parent || !node.textContent.trim() || parent.closest('style,script,[hidden]') || getComputedStyle(parent).display==='none')continue;
+          if(!parent || !node.textContent.trim() || parent.closest('style,script,[hidden]') || !parent.checkVisibility({checkVisibilityCSS:true}))continue;
           ready &&= document.fonts.check(getComputedStyle(parent).fontWeight+' 14px MiSans',node.textContent);
         }
         window.__firstPaint.push({at:performance.now(),ready});
@@ -33,7 +33,7 @@ def test_first_page_waits_for_fonts_and_return_keeps_page(server, browser_page, 
     with page.expect_request('**/api/m03/notice-list?*', timeout=10000):
         page.goto(server + '/preview/notices', wait_until='domcontentloaded')
     assert held, 'Cold-font condition was not exercised'
-    assert not page.locator('.page-view:not([hidden])').is_visible()
+    assert not page.get_by_role('region', name='付款通知书列表', exact=True).is_visible()
     for route in held:
         route.continue_()
     expect(page.get_by_role('region',name='付款通知书列表',exact=True)).to_be_visible()
@@ -67,7 +67,7 @@ def test_font_failure_has_retry_and_theme_is_not_reloaded_after_identity(server,
     page.on('request',lambda request: theme.append(request.url) if '/static/theme.css' in request.url else None)
     context.route('**/static/fonts/**/*.woff2',lambda route:route.abort('failed'))
     page.goto(server + '/preview/notices')
-    expect(page.get_by_role('alert').filter(has_text='字体')).to_be_visible()
+    expect(page.locator('.page-loading[role=alert]')).to_contain_text('字体')
     context.unroute('**/static/fonts/**/*.woff2')
     assert len(theme)==1, theme
     page.get_by_role('button',name='重试字体加载',exact=True).click()
@@ -87,3 +87,55 @@ def test_shared_style_entry_and_first_display_cover_every_route(server, browser_
         expect(page.locator('.page-loading')).to_have_count(0)
         assert page.locator('html').evaluate("e=>getComputedStyle(e).getPropertyValue('--fscale').trim()") == me['ui_scale_css']
     assert not css_requests, css_requests
+
+
+def test_debt_tables_publish_without_waiting_for_the_other_side(server, browser_page):
+    page, _ = browser_page
+    login(page, server)
+    # Hold one real font dependency, without replacing any business response or geometry.
+    page.add_init_script("""const load = document.fonts.load.bind(document.fonts);
+      window.__sideFontHeld = false;
+      const release = new Promise(resolve => { window.__releaseSideFont = resolve; });
+      document.fonts.load = async (font, text) => {
+        if (text?.includes('机械结算金额')) { window.__sideFontHeld = true; await release; }
+        return load(font, text);
+      };""")
+    page.goto(server + '/preview/debt', wait_until='domcontentloaded')
+    page.wait_for_function('window.__sideFontHeld')
+    material = page.locator('[data-ledger-side=material] .ledger-grid')
+    mechanical = page.locator('[data-ledger-side=mechanical] .ledger-grid')
+    expect(material).to_be_visible()
+    expect(mechanical).to_be_hidden()
+    project = page.get_by_role('combobox', name='选择项目', exact=True)
+    project.click()
+    expect(project).to_be_focused()
+    page.keyboard.press('Escape')
+    before = mechanical.bounding_box()
+    page.evaluate('window.__releaseSideFont()')
+    expect(mechanical).to_be_visible()
+    assert mechanical.bounding_box() == before, 'Revealing the side changed its allocated table box'
+    field = mechanical.locator('[col-id=remark] input').first
+    field.click()
+    expect(field).to_be_focused()
+
+
+def test_notice_tools_are_usable_while_first_data_is_pending(server, browser_page):
+    page, _ = browser_page
+    login(page, server)
+    held = []
+    page.route('**/api/m03/notice-list?*', lambda route: held.append(route))
+    page.goto(server + '/preview/notices', wait_until='domcontentloaded')
+    search = page.get_by_role('searchbox', name='通知书搜索', exact=True)
+    search.click()
+    expect(search).to_be_focused()
+    assert held, 'The actual first data request was not held'
+    expect(page.get_by_role('button', name='手动新增', exact=True)).to_be_disabled()
+    expect(page.get_by_role('region', name='付款通知书列表', exact=True)).to_have_count(0)
+    before = page.locator('.notice-grid').bounding_box()
+    for route in held:
+        route.continue_()
+    page.unroute('**/api/m03/notice-list?*')
+    table = page.get_by_role('region', name='付款通知书列表', exact=True)
+    expect(table).to_be_visible()
+    assert table.bounding_box() == before, 'First table publication changed its reserved box'
+    expect(search).to_be_focused()
