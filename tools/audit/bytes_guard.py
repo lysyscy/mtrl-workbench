@@ -41,10 +41,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from tools.audit.git_index import staged_changes, index_bytes
 
 #: 只管**文本件**（二进制件的行尾/编码规则无意义 ⇒ 进来就是噪音）
 TEXT_SUFFIXES = {".py", ".md", ".mdc", ".js", ".html", ".css", ".json", ".sql", ".yml", ".yaml",
-                 ".ps1", ".sh", ".txt", ".cfg", ".ini", ".toml", ".mjs", ".cjs"}
+                 ".ps1", ".sh", ".txt", ".cfg", ".ini", ".toml", ".mjs", ".cjs", ".ts", ".tsx"}
 TEXT_NAMES = {".gitattributes"}
 
 
@@ -84,22 +86,8 @@ def iter_text() -> list[Path]:
 
 
 def staged_text() -> list[Path]:
-    """暂存区里的文本件（`git diff --cached`）—— pre-commit 的输入。
-
-    ⭐ 必须带 `-c core.quotepath=false`（`TAIL-239` 撞过一次：中文路径被转义成八进制 ⇒ 取不到）。
-    """
-    r = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "--cached", "--name-only"],
-                       cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8",
-                       errors="replace")
-    out: list[Path] = []
-    for x in (r.stdout or "").splitlines():
-        name = x.strip().replace("\\", "/")
-        if not name:
-            continue
-        p = ROOT / name
-        if p.is_file() and is_text(p):
-            out.append(p)
-    return out
+    """Git index内新增/修改/重命名目标文本，不要求工作区文件存在。"""
+    return [p for p, status in staged_changes(ROOT).items() if status != 'D' and is_text(p)]
 
 
 def _rel(p: Path) -> str:
@@ -109,11 +97,11 @@ def _rel(p: Path) -> str:
         return str(p)
 
 
-def rule_b1_mixed_eol(files: list[Path]) -> list[str]:
+def rule_b1_mixed_eol(files: list[Path], *, read=Path.read_bytes) -> list[str]:
     """`B1` —— 一件之内不许混 CRLF 与裸 LF。"""
     bad: list[str] = []
     for p in files:
-        b = p.read_bytes()
+        b = read(p)
         crlf = b.count(b"\r\n")
         lf = b.count(b"\n") - crlf
         cr = b.count(b"\r") - crlf
@@ -125,11 +113,11 @@ def rule_b1_mixed_eol(files: list[Path]) -> list[str]:
     return bad
 
 
-def rule_b2_fffd(files: list[Path]) -> list[str]:
+def rule_b2_fffd(files: list[Path], *, read=Path.read_bytes) -> list[str]:
     """`B2` —— 不许有 U+FFFD（坏字符静默落盘）。"""
     bad: list[str] = []
     for p in files:
-        b = p.read_bytes()
+        b = read(p)
         n = b.count(FFFD)
         if n:
             i = b.find(FFFD)
@@ -139,11 +127,11 @@ def rule_b2_fffd(files: list[Path]) -> list[str]:
     return bad
 
 
-def rule_b3_bom(files: list[Path]) -> list[str]:
+def rule_b3_bom(files: list[Path], *, read=Path.read_bytes) -> list[str]:
     """`B3` —— `.ps1` 必须带 BOM；其它文本件**不许**带。"""
     bad: list[str] = []
     for p in files:
-        has = p.read_bytes().startswith(BOM)
+        has = read(p).startswith(BOM)
         need = p.suffix.lower() in BOM_REQUIRED
         if need and not has:
             bad.append(f"{_rel(p)}：`.ps1` **缺 BOM** ⇒ PS 5.1 按 GBK 读中文会解析错"
@@ -154,11 +142,11 @@ def rule_b3_bom(files: list[Path]) -> list[str]:
     return bad
 
 
-def rule_b4_utf8(files: list[Path]) -> list[str]:
+def rule_b4_utf8(files: list[Path], *, read=Path.read_bytes) -> list[str]:
     """`B4` —— 必须能严格按 UTF-8 解码（抓 GBK / UTF-16 落盘）。"""
     bad: list[str] = []
     for p in files:
-        b = p.read_bytes()
+        b = read(p)
         try:
             b.decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -175,14 +163,14 @@ RULES = (
 )
 
 
-def check(files: list[Path], title: str) -> int:
+def check(files: list[Path], title: str, *, read=Path.read_bytes) -> int:
     print("=" * 78)
     print(" 字节哨 · bytes_guard —— 「行尾没混 / 没坏字符 / BOM 装对 / 能按 UTF-8 读」")
     print("=" * 78)
     print(f"（{title}：{len(files)} 件）")
     must = 0
     for code, what, fn in RULES:
-        bad = fn(files)
+        bad = fn(files, read=read)
         must += len(bad)
         print(f"\n─ {code} · {what}")
         if bad:
@@ -211,7 +199,12 @@ def main(argv: list[str]) -> int:
             files.append(p)
         return check(files, '实际改动文本')
     if "--staged" in argv:
-        return check(staged_text(), "本轮暂存")
+        try:
+            blobs = {p: index_bytes(ROOT, p) for p in staged_text()}
+        except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+            print('暂存区读取失败：', (getattr(exc, 'stderr', None) or b'').decode('utf-8', errors='replace') or str(exc))
+            return 1
+        return check(list(blobs), "本轮暂存index", read=blobs.__getitem__)
     return check(iter_text(), "全量 · 仓内文本件")
 
 

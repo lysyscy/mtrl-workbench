@@ -566,3 +566,10 @@ TS7严格检查和提交后构建通过；265列表行/三种实际详情经过�
 
 
 付款产品7f9151f2已通过正常入口加载原8065，registered_preview核fresh；前端资源与2e806908完全一致。主schema/invadj261027、40非账号表及所有列结构不变，此次更新全部表均无差异。仅只读核对两个backend_verify红绿schema均已不存在，8066无监听。红绿原始退出/清理报告有限归档在.artifacts/archive/frontend-architecture/payment-lock-{red,green}-20261028；新主构建和保全摘要在.artifacts/active/frontend-architecture/payment-lock-release-20261028。临时pnpm转发已退出；2e旧构建供当前付款独审回滚、923旧交付恢复点仍按父指定保留，不冒称全部在用资源应立即删除。待原发现者独立复核，不在原库点击付款来证明修复。
+
+
+## Git原生暂存审计与付款独审（2026-10-28）
+
+付款7f9151f2已获原发现者独立复核，无阻断；16项合成隔离关键回归通过，临时schema/连接均零，原报告task-4/backend-architecture-review/independent-fix-review。未重复跑整套付款。
+
+C1工具批将syntax/bytes的--staged真实输入交Git原生index，退出工作区内容冒充暂存、Git失败吞空及无关全仓扫描；保显式全量和原规则，补.ts/.tsx编码覆盖。8项独立临时Git回归及全量776Python/16壳件/原语法selftest通过，四个旧输入反例对8294e125原文确实失败；见[研究第23节](../frontend-architecture/research.md#23-c1提交审计复用git真实index2026-10-28)。无应用/DB/预览副作用，原8065产品7f9151f2不变；真实hook由本次提交验证，不新装共享hook。Flowreader和项目缓存失效仍未实施。

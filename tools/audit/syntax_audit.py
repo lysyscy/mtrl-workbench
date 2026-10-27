@@ -49,10 +49,16 @@ PY_ROOTS = [ROOT / "backend" / "app", ROOT / "backend" / "tests", ROOT / "tools"
 #: 排除目录（虚拟环境 / 缓存 / 产物：不是本仓手写的源码）
 SKIP_DIRS = {".venv", "__pycache__", "node_modules", "var", "data", "exports", "dist", "artifacts", ".git", ".pytest_cache"}
 
-# ⚠️ 2026-09-19（`P4`① 读取点收敛）：壳的件清单来自唯一出口 `shell_source`（顺序 = 浏览器执行顺序）。
-#    `SHELL` 仍指 `index.html` 本体（存在性检查 / 单件模式用）。
-from shell_source import SHELL_PARTS, SHELL_PATH  # noqa: E402  ← `P4`① 读取点收敛
+sys.path.insert(0, str(ROOT))
+from tools.audit.git_index import staged_changes, index_bytes, index_paths
+SHELL_PATH = ROOT / 'backend/app/web/index.html'
 SHELL = SHELL_PATH
+
+
+def shell_parts():
+    # 仅全量模式装配现有工作区壳；staged不能在import时先读工作区。
+    from tools.audit.shell_source import SHELL_PARTS
+    return SHELL_PARTS
 
 
 def iter_py() -> list[Path]:
@@ -67,7 +73,7 @@ def iter_py() -> list[Path]:
     return out
 
 
-def rule_q1(paths: list[Path] | None = None) -> list[str]:
+def rule_q1(paths: list[Path] | None = None, *, read=Path.read_bytes) -> list[str]:
     """`Q1` —— 每个 `.py` 必须能 `compile()`。返回红清单（每条含路径 + 行列 + 出错那几行）。
 
     ⭐⭐ **警告当错**（2026-10-06 加 · `/retro`）：`compile()` 报的 `SyntaxWarning`（最常见 ＝
@@ -80,7 +86,7 @@ def rule_q1(paths: list[Path] | None = None) -> list[str]:
     """
     bad: list[str] = []
     for p in (paths if paths is not None else iter_py()):
-        src = p.read_text(encoding="utf-8", errors="replace")
+        src = read(p).decode("utf-8", errors="replace")
         try:
             rel = p.relative_to(ROOT)
         except ValueError:
@@ -104,7 +110,7 @@ def rule_q1(paths: list[Path] | None = None) -> list[str]:
     return bad
 
 
-def rule_q4(paths: list[Path]) -> list[str]:
+def rule_q4(paths: list[Path], *, read=Path.read_bytes) -> list[str]:
     """`Q4` —— **本轮提交/改动到的 `.py` 必须有模块 docstring**（"守什么"写在第一段）。
 
     ⭐ 为什么只查**改动到的**件（`--staged`）：全仓要求 docstring 会把 `tools/oneoff/` 那批
@@ -117,7 +123,7 @@ def rule_q4(paths: list[Path]) -> list[str]:
     """
     bad: list[str] = []
     for p in paths:
-        src = p.read_text(encoding="utf-8", errors="replace")
+        src = read(p).decode("utf-8", errors="replace")
         try:
             tree = ast.parse(src, str(p))
         except SyntaxError:
@@ -130,15 +136,6 @@ def rule_q4(paths: list[Path]) -> list[str]:
             bad.append(f"{shown}：**模块没有 docstring**"
                        f" ⇒ 下个接手的人不知道它守什么（第一段写「守什么」）")
     return bad
-
-
-def staged_py() -> list[Path]:
-    """暂存区里的 `.py`（`git diff --cached --name-only`）—— `Q4` 的输入。"""
-    r = subprocess.run(["git", "-c", "core.quotepath=false", "diff", "--cached", "--name-only"],
-                       cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8",
-                       errors="replace")
-    return [ROOT / x.strip() for x in (r.stdout or "").splitlines()
-            if x.strip().endswith(".py") and (ROOT / x.strip()).is_file()]
 
 
 def _extract_script(html: str) -> str:
@@ -156,7 +153,7 @@ def _extract_script(html: str) -> str:
     return "\n".join(b for b in blocks if b.strip())
 
 
-def rule_q2(shell: Path | None = None) -> tuple[list[str], str]:
+def rule_q2(shell: Path | None = None, *, parts=None, read=Path.read_bytes) -> tuple[list[str], str]:
     """`Q2` —— 壳的 HTML 内联脚本与 JS 件必须过 `node --check`。
 
     ⚠️ 2026-09-19（`P4`① 读取点收敛）：壳已按 `web/shell/*.js` 拆件 ⇒ **只查 `index.html` 会静默漏掉接线层**
@@ -165,20 +162,23 @@ def rule_q2(shell: Path | None = None) -> tuple[list[str], str]:
 
     返回 `(红清单, 说明)`；无 node ⇒ 红清单为空 ＋ 说明里讲明（⛔ 不是通过）。
     """
+    parts = [shell] if shell is not None else shell_parts() if parts is None else parts
+    if not parts:
+        return [], ""
     node = shutil.which("node")
     if not node:
         return [], "⛔ 机器上没有 `node` ⇒ **跳过 Q2**（⛔ 不是通过 —— 请装 node 或人工跑 `node --check`）"
-    parts = [shell] if shell is not None else SHELL_PARTS
     tmpdir = Path(tempfile.mkdtemp(prefix="syntax_audit_"))
     bad: list[str] = []
     try:
         for target in parts:
             if target.suffix.lower() not in {".html", ".js"}:
                 continue  # CSS belongs to the shell inventory, not the JavaScript parser.
-            if not target.exists():
+            try:
+                text = read(target).decode('utf-8')
+            except (FileNotFoundError, KeyError):
                 bad.append(f"找不到壳的某一件：{target}")
                 continue
-            text = target.read_text(encoding="utf-8")
             js = _extract_script(text) if target.suffix == ".html" else text
             if not js.strip():
                 bad.append(f"{target.name}：{'没找到 `<script>` 块' if target.suffix == '.html' else '是空件'}")
@@ -206,7 +206,7 @@ def rule_q3(web: Path | None = None, parts: list[Path] | None = None) -> list[st
     ⛔ 判的是"**多余的东西**"：备份/散件会让 `grep` 看见第二份源码，而**所有判据都不看它**。
     """
     base = web if web is not None else SHELL_PATH.parent
-    known = {p.resolve() for p in (parts if parts is not None else SHELL_PARTS)}
+    known = {p.resolve() for p in (parts if parts is not None else shell_parts())}
     bad: list[str] = []
     for p in sorted(base.rglob("*")):
         if not p.is_file() or p.resolve() in known:
@@ -226,9 +226,43 @@ def main(argv: list[str]) -> int:
     print(" 语法哨 · syntax_audit —— 「能编译吗 / 能解析吗 / 壳目录干净吗 / 改到的件有主文头吗」")
     print("=" * 78)
 
-    q1 = rule_q1()
-    n_py = len(iter_py())
-    print(f"\n─ Q1 · 每个 `.py` 必须能编译（扫了 {n_py} 个文件：`backend/app` · `backend/tests` · `tools`）")
+    staged = '--staged' in argv
+    if staged:
+        try:
+            changes = staged_changes(ROOT)
+            changed = [p for p, status in changes.items() if status != 'D']
+            sp = [p for p in changed if p.suffix == '.py']
+            blobs = {p: index_bytes(ROOT, p) for p in sp}
+            web = ROOT / 'backend/app/web'
+            parts = []
+            q3 = []
+            if any(p.is_relative_to(web) for p in changes):
+                present = set(index_paths(ROOT, 'backend/app/web'))
+                if present:
+                    manifest = web / 'index.html'
+                    html = index_bytes(ROOT, manifest).decode('utf-8')
+                    parts = [manifest] + [web/'shell'/name for name in re.findall(r'/static/shell/([\w.\-]+)', html)]
+                    known = set(parts)
+                    q3 = [f'{p.relative_to(ROOT)}：暂存区壳清单缺件' for p in known - present]
+                    q3 += [f'{p.relative_to(ROOT)}：不是壳的件' for p in present - known
+                           if p.suffix.lower() in {'.js', '.html', '.bak', '.old', '.orig'} or '.bak' in p.name]
+            targets = [p for p in changed if p in parts and p.suffix.lower() in {'.js', '.html'}]
+            blobs.update({p: index_bytes(ROOT, p) for p in targets})
+            q1 = rule_q1(sp, read=blobs.__getitem__)
+            q2, note = rule_q2(parts=targets, read=blobs.__getitem__)
+            q4 = rule_q4(sp, read=blobs.__getitem__)
+            n_py = len(sp)
+        except (OSError, subprocess.CalledProcessError, UnicodeError, ValueError) as exc:
+            print('暂存区读取失败：', (getattr(exc, 'stderr', None) or b'').decode('utf-8', errors='replace') or str(exc))
+            return 1
+    else:
+        q1 = rule_q1()
+        n_py = len(iter_py())
+        q2, note = rule_q2()
+        q3 = rule_q3()
+        q4 = []
+        parts = shell_parts()
+    print(f"\n─ Q1 · 每个 `.py` 必须能编译（{'暂存index' if staged else '全量'}：{n_py} 件）")
     if q1:
         print(f"   ⛔ {len(q1)} 个文件编译不过（⚠️ 中文串里夹裸英文双引号是这一族的高发款 —— 内层一律用「」）：")
         for x in q1[:12]:
@@ -236,7 +270,6 @@ def main(argv: list[str]) -> int:
     else:
         print("   ✅ 全部通过（⭐ **警告级也当错** —— docstring 里把 Windows 路径写成反斜杠那种逃逸）")
 
-    q2, note = rule_q2()
     print("\n─ Q2 · 壳 `<script>` 必须过 `node --check`（⚠️ 模板串里塞反引号是这一族的高发款）")
     if note:
         print(f"   {note}")
@@ -246,20 +279,16 @@ def main(argv: list[str]) -> int:
     else:
         print("   ✅ 通过")
 
-    q3 = rule_q3()
     print("\n─ Q3 · 壳目录里只许有壳的件（⛔ 备份/散件会让 grep 看见第二份源码）")
     if q3:
         for x in q3:
             print(f"   ⛔ {x}")
     else:
-        print(f"   ✅ 通过（{len(SHELL_PARTS)} 件：{', '.join(p.name for p in SHELL_PARTS)}）")
+        print(f"   ✅ 通过（{len(parts)} 件：{', '.join(p.name for p in parts)}）")
 
     must = len(q1) + len(q2) + len(q3)
 
-    q4: list[str] = []
-    if "--staged" in argv:
-        sp = staged_py()
-        q4 = rule_q4(sp)
+    if staged:
         print(f"\n─ Q4 · **本轮暂存**的 `.py` 必须有模块 docstring（{len(sp)} 件）")
         if q4:
             for x in q4[:12]:

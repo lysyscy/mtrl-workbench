@@ -391,3 +391,16 @@ Valibot1.5.0正式用于contracts-api，非全站校验平台。实际后端buil
 红/绿report及日志分别归payment-lock-red-20261028与payment-lock-green-20261028；两次原始退出1/0、cleanup_completed=true且临时schema已退出，不把红灯记为通过。原动态证据继续在task-4/backend-architecture-review/payment-concurrency，不复制全套报告。待原发现者独立复核此批，不能把前端独审替代资金并发审查。[SQLAlchemy锁选项](https://docs.sqlalchemy.org/en/21/core/selectable.html#sqlalchemy.sql.expression.Select.with_for_update)、[PostgreSQL锁模式/稳定顺序](https://www.postgresql.org/docs/current/explicit-locking.html)。现有其他抓取/事务候选与真实外部路径不在本补丁范围。
 
 产品7f9151f2已正常加载原8065且fresh，前端资源与2e806908逐件相同；全部表/schema/列结构无差异，8066无监听，红绿两个backend_verify临时schema经独立只读查询均不存在。原923恢复构建及刚独审通过的2e合同构建保留为付款独审期间恢复点，当前在用构建为payment-lock-release-20261028/work/release-build；父确认风险窗口结束后才退出恢复点。无临时探针/shim残留，无真实付款/推送/部署。
+
+
+## 23. C1：提交审计复用Git真实index（2026-10-28）
+
+原--staged实际上只取文件名，再读工作区；syntax还无条件全仓Python/旧壳，Git失败会被当空清单。本批用Git原生命令接管输入：--cached --name-status -z --no-renames提供精确NUL路径/状态，重命名由Git表达D+A；cat-file blob :path取stage-0原字节。两个审计只共享三个小的index输入函数，不造Git框架、临时源码镜像或新依赖。Git失败/unmerged缺stage-0均非零；删除无blob不读工作区，前导空格/中文路径不strip或按行拆。每次审计内字节先取为同一份map，各规则读取同一输入。
+
+syntax的staged只编译暂存Python；仅旧web成员有变化（含删除/改名移出）才从index HTML和文件名核壳清单，只对改到的脚本运行Node。完整工作区shell_source装配延到显式全量，不在staged import时读工作区。旧Q1/Node/Q3/docstring及B1–B4保留，bytes文本范围补齐React .ts/.tsx；未新装/重写共享hook或改Git安全配置，真实pre-commit仍调用原入口。
+
+独立临时Git仓的stdlib unittest共8case通过：Python/模块docstring的index坏而工作区修复、index好而工作区损坏双向；TSX非法编码与工作区文件缺失；精确前导空格/中文名、rename/delete；未合并index；真实非仓Git失败；无关README不触全仓编译或Node；旧壳manifest/JS均取index并拒缺件。最初夹具曾在未提交rename/未恢复工作区时正常git rm被拒，按Git正常流程修正夹具，没有force/绕hook；不把它当产品红灯。另从8294e125可达Git原文仅在内存加载旧审计，四个核心输入反例均失败、零夹具错误，持有旧红证据。显式全量776Python/16壳件及原有--selftest通过，不用全量通过替代staged输入证明。
+
+证据在staged-index-20261028的logs/unit-{red,green-final}.log、syntax-full.log、syntax-selftest.log和reports/{red,green}.json；临时Git仓由TemporaryDirectory退出，无DB/8065操作。新回归用stdlib unittest单独运行，不改现有业务pytest/conftest或DB守卫；指南同步入口。安装Git2.56.0.windows.2。[Git diff NUL与cached语义](https://git-scm.com/docs/git-diff)、[Git cat-file blob](https://git-scm.com/docs/git-cat-file)。未改全量职责，不把全仓编译永久取消。
+
+付款7f9151f2原发现者独立代码/合成schema复核通过：16项关键并发/缓存/回滚/既有310保护通过，临时schema/连接均零；原报告task-4/backend-architecture-review/independent-fix-review。它与本任务26case分开，未重复重跑付款，也不替代C1审查。Flow/项目刷新及其余后端候选仍未实施。

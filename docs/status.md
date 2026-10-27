@@ -2,7 +2,7 @@
 
 ## React 前端独立重做
 
-原有跨账号付款竞态已在获准专用测试schema动态证实并最小修复，产品7f9151f2已保原数据加载8065且fresh；26项定向验证通过，待原发现者独立复核，详见[付款证据](../.scratch/frontend-vue-rewrite/evidence.md#付款并发先锁后验修复2026-10-28)。此前ea9b9581原生Node/tsx及2e806908合同Valibot批已定向独审通过，原923c1824阶段独审/15入口整合结论仍按其范围有效。全域扫描实际整改与未实施候选回[研究第21–22节](../.scratch/frontend-architecture/research.md#21-扩大成熟方案复用后的交付与剩余候选2026-10-28)。原业务表/schema/松绿large保留，历史保全manifest仍在原preserved根；当前运行身份查唯一owner。未推送、合并或正式切换。
+原有跨账号付款竞态已在获准专用测试schema动态证实并最小修复，产品7f9151f2已保原数据加载8065且fresh；26项定向验证及原发现者独立16项关键复核通过，详见[付款证据](../.scratch/frontend-vue-rewrite/evidence.md#付款并发先锁后验修复2026-10-28)。此前ea9b9581原生Node/tsx及2e806908合同Valibot批已定向独审通过，原923c1824阶段独审/15入口整合结论仍按其范围有效。全域扫描实际整改与未实施候选回[研究第21–22节](../.scratch/frontend-architecture/research.md#21-扩大成熟方案复用后的交付与剩余候选2026-10-28)。原业务表/schema/松绿large保留，历史保全manifest仍在原preserved根；当前运行身份查唯一owner。未推送、合并或正式切换。
 
 机械报表待核对退役、过程机械金额按同项目同月任何明细确认、成功提示退出、历史月份同行右置、通知书列宽和截图接线已完成，源码34f2e523/c3e443d9已保原数据加载8065，待用户实看；回[本轮证据](../.scratch/frontend-vue-rewrite/evidence.md#机械金额确认与页面反馈调整2026-10-27)。
 
