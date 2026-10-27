@@ -114,7 +114,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
   const editableDisabled = blocked || !me || busy || projects.isError || projects.isPending;
   const unavailable = editableDisabled || inlineSaving > 0;
   async function refresh() {
-    await Promise.all([client.invalidateQueries({ queryKey: ['projects'] }), client.invalidateQueries({ queryKey: ['project-archive'] }), client.invalidateQueries({ queryKey: ['project-promote-pending'] }), client.invalidateQueries({ queryKey: ['project-archive-pending'] }), client.invalidateQueries({ queryKey: ['project-trails'] }), client.invalidateQueries({ queryKey: ['i8-records'] })]);
+    await Promise.all([client.invalidateQueries({ queryKey: ['projects'] }), client.invalidateQueries({ queryKey: ['project-archive'] }), client.invalidateQueries({ queryKey: ['project-promote-pending'] }), client.invalidateQueries({ queryKey: ['project-archive-pending'] }), client.invalidateQueries({ queryKey: ['project-trails'] }), client.invalidateQueries({ queryKey: ['i8-records'] }), client.invalidateQueries({ queryKey: ['history'] })]);
   }
   async function run(action: () => Promise<unknown>, success: string): Promise<boolean> {
     if (blocked || !me || lock.current) return false;
@@ -155,7 +155,7 @@ export function Projects({ me, blocked }: { me: Identity | null; blocked: boolea
       const normalize = (value: string) => field === 'match_keywords' ? [...new Set(value.split('|').map(item => item.trim()).filter(Boolean))].join(' | ') : value.trim();
       const actual = field === 'match_keywords' ? saved.match_keywords.join(' | ') : saved[field];
       changeDraft(project.id, field, normalize(actual) === normalize(draft.value) ? null : { ...draft, pending: false, uncertain: false, error: `已重读核对，当前值为「${actual || '空'}」。本次输入已保留，可继续保存或按 Esc 放弃。` });
-      void client.invalidateQueries({ queryKey: ['projects'] }); void client.invalidateQueries({ queryKey: ['project-trails'] });
+      void client.invalidateQueries({ queryKey: ['projects'] }); void client.invalidateQueries({ queryKey: ['project-trails'] }); void client.invalidateQueries({ queryKey: ['history'] });
     } catch (failure) {
       changeDraft(project.id, field, { ...draft, pending: false, error: `保存结果待核实，输入已保留。${messageOf(failure)}` });
     } finally { if (mounted.current) setInlineSaving(count => count - 1); }
