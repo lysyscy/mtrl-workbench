@@ -62,7 +62,7 @@ function Feedback({ receipt, error }: { receipt: string; error: string }) {
 export function RulesPage({ me, blocked, active }: { me: Identity | null; blocked: boolean; active: boolean }) {
   const enabled = active && !blocked;
   const writable = enabled && Boolean(me);
-  return <section className="rules-page" aria-label="规则配置">
+  return <section className="rules-page" aria-label="规则配置" data-page-chrome>
     <ExclusionRules enabled={enabled} writable={writable} blocked={blocked} />
     <JcIgnore enabled={enabled} writable={writable} />
     <MechMatch enabled={enabled} writable={writable} />
@@ -110,7 +110,7 @@ function ExclusionRules({ enabled, writable, blocked }: { enabled: boolean; writ
       await query.refetch();
     }
   }
-  return <div className="rules-block">
+  return <div className="rules-block" data-page-loading={query.isPending?true:undefined}>
     <div className="rules-head"><h2>剔除规则{data && <span className="rules-count">（{data.rules.length} 条）</span>}</h2>
       <div className="rules-head-tools">{data && <span className="muted">来源：{data.sourceLabel}</span>}
         <Button htmlType="submit" className="primary" disabled={!writable || !data || data.kinds.length === 0}
@@ -185,7 +185,7 @@ function JcIgnore({ enabled, writable }: { enabled: boolean; writable: boolean }
       await query.refetch();
     }
   }
-  return <div className="rules-block">
+  return <div className="rules-block" data-page-loading={query.isPending?true:undefined}>
     <div className="rules-head"><h2>集采项目剔除名单{rows && <span className="rules-count">（{rows.filter(row => row.active).length} 项在用）</span>}</h2></div>
     {query.isError && !rows && <ReadFailed message={query.error instanceof Error ? query.error.message : '集采项目剔除名单读取失败，请重试。'} retry={() => void query.refetch()} />}
     {query.isError && rows && <ReadFailed message={`名单更新失败，保留上次结果。${query.error instanceof Error ? query.error.message : ''}`} retry={() => void query.refetch()} />}
@@ -234,7 +234,7 @@ function MechMatch({ enabled, writable }: { enabled: boolean; writable: boolean 
       setReceipt(''); setErrors(old => ({ ...old, [row.warehouse]: failure instanceof Error ? failure.message : '没能保存，请核对后重试。' }));
     } finally { setBusyRow(''); }
   }
-  return <div className="rules-block">
+  return <div className="rules-block" data-page-loading={query.isPending?true:undefined}>
     <div className="rules-head"><h2>机械报表项目匹配{rows && <span className="rules-count">（{rows.length} 项）</span>}</h2></div>
     {query.isError && !rows && <ReadFailed message={query.error instanceof Error ? query.error.message : '机械报表项目匹配读取失败，请重试。'} retry={() => void query.refetch()} />}
     {query.isError && rows && <ReadFailed message={`匹配规则更新失败，保留上次结果。${query.error instanceof Error ? query.error.message : ''}`} retry={() => void query.refetch()} />}

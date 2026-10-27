@@ -60,7 +60,7 @@ export function UsersPage({ me, blocked, active }: { me: Identity | null; blocke
     }
   }
 
-  return <section className="users-page" aria-label="用户管理">
+  return <section className="users-page" aria-label="用户管理" data-page-chrome data-page-loading={query.isPending?true:undefined}>
     <div className="users-block">
       <div className="users-head"><h2>账号列表{data && <span className="users-count">（在用 {data.counts.active}，停用 {data.counts.disabled}，已删除 {data.counts.deleted}）</span>}</h2>
         <div className="users-head-tools">

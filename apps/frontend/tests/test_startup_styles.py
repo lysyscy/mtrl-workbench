@@ -228,7 +228,7 @@ def test_focus_burst_shares_verification_and_resumes_workspace(server,browser_pa
     expect(page.get_by_role('heading',name='项目档案',exact=True)).to_be_visible()
 
 
-@pytest.mark.parametrize('target,title',[('projects','项目档案'),('','首页'),('i8','i8 接入层')])
+@pytest.mark.parametrize('target,title',[('projects','项目档案'),('','首页'),('i8','i8 接入层'),('ledger','付款流水'),('contracts','集采台账'),('rules','规则配置'),('users','用户管理')])
 def test_local_read_page_does_not_wait_for_unrelated_read(server,browser_page,target,title):
     page,_=browser_page;login(page,server);held=[]
     pattern='**/api/m01/trails?*' if target=='i8' else '**/api/m02/fetch/records*'
@@ -240,6 +240,10 @@ def test_local_read_page_does_not_wait_for_unrelated_read(server,browser_page,ta
         expect(page.locator('.page-view:not([hidden])')).to_be_visible()
         if target=='projects':expect(page.get_by_label('项目搜索',exact=True)).to_be_enabled()
         elif target=='i8':expect(page.get_by_role('region',name='各来源最近结果',exact=True)).to_be_visible()
+        elif target=='ledger':expect(page.get_by_label('流水关键词',exact=True)).to_be_enabled()
+        elif target=='contracts':expect(page.get_by_label('搜索',exact=True)).to_be_enabled()
+        elif target=='rules':expect(page.get_by_role('region',name='剔除规则列表',exact=True)).to_be_visible()
+        elif target=='users':expect(page.get_by_role('region',name='账号列表',exact=True)).to_be_visible()
         else:expect(page.locator('.home-todos')).to_be_visible()
         assert held
     finally:
