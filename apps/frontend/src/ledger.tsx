@@ -4,16 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { LedgerExport, ProjectPicker } from './ledger-controls';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AgGridReact } from 'ag-grid-react';
-import { pageGridGeometry, contentWidth, gridTheme } from './grid';
+import { contentWidth, gridTheme } from './grid';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, uncertainWrite, projectLabel, readProjects, requestJson } from './api';
 import type { Identity } from './api';
 import { addLedgerRow, amount, deleteLedgerRow, editable, loadLedger, same, saveLedgerCell, sum } from './ledger-api';
 import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
 
-import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
-import { rendererLayoutColumns } from './grid-render-layout';
+import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const ledgerRowId = (row: LedgerRow) => row.key;
 const fields: Field[] = ['month', 'other_expense', 'payment', 'remark'];
 const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
@@ -91,9 +89,8 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
     { field: 'remark', headerName: '备注', ...contentWidth(90, 300, scale, 1), wrapText: true, cellRenderer: Cell },
     { colId: 'actions', headerName: '操作', ...contentWidth(52, 78, scale), sortable: false, cellRenderer: DeleteCell },
   ], [side.category, scale, upto]);
-  const gridColumns = useRetainedGridColumns(columns, root);
-  const prepared = useMemo(() => rendererLayoutColumns(gridColumns, context, (row, id, pinned) => JSON.stringify([pinned, row[id as keyof LedgerRow], row.row_kind, row.editable, writable])), [gridColumns,context,writable]);
-  const layout = useTextGridLayout({root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns: prepared, rowId: ledgerRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: scope.key, identity: scope.key});
+  const measurement = useMemo(() => ({signature:(row:LedgerRow,id:string,pinned:boolean)=>JSON.stringify([pinned,row[id as keyof LedgerRow],row.row_kind,row.editable,writable])}), [writable]);
+  const presentation = useGridPresentation({root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns, context, measurement, rowId: ledgerRowId, scale, scope: scope.key, identity: scope.key});
   useEffect(() => {
     if (!focusRecord || !api.current) return;
     const node = api.current.getRowNode(`${side.category}:manual:${focusRecord}`);
@@ -105,14 +102,11 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
     });
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
-    <div ref={summaryRoot} className="ledger-summary" inert={layout.state === 'preparing' || layout.state === 'error' || layout.concealed} style={{visibility: layout.state === 'preparing' || layout.state === 'error' || layout.concealed ? 'hidden' : undefined}}><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
-    <div className="ledger-table-scroll"><div className="ledger-grid" inert={layout.state === 'preparing' || layout.state === 'error' || layout.concealed} style={{visibility: layout.state === 'preparing' || layout.state === 'error' || layout.concealed ? 'hidden' : undefined}} data-layout-state={layout.state} data-layout-error={layout.error || undefined} aria-busy={layout.state !== 'ready'}><AgGridReact<LedgerRow> theme={gridTheme} alwaysShowVerticalScroll rowBuffer={2} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder
-      context={context} columnDefs={gridColumns}
-      getRowId={params => params.data.key} defaultColDef={defaultColumn}
-      rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressCellFocus={true} suppressScrollOnNewData={true}
-      overlayNoRowsTemplate="暂无台账数据。" animateRows={false}
-      onGridReady={event => { api.current = event.api; layout.attach(event.api); }} onFirstDataRendered={event => { if (visible.length) event.api.ensureIndexVisible(visible.length - 1, 'bottom'); }} />
-    </div></div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
+    <div ref={summaryRoot} className="ledger-summary" inert={!presentation.visible} style={{visibility:presentation.visible ? undefined : 'hidden'}}><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
+    <PreparedGrid presentation={presentation} attachRoot={false} scrollClassName="ledger-table-scroll" className="ledger-grid" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,
+      getRowId:params=>params.data.key,defaultColDef:defaultColumn,suppressCellFocus:true,suppressScrollOnNewData:true,
+      overlayNoRowsTemplate:'暂无台账数据。',animateRows:false,onGridReady:event=>{api.current=event.api;},
+      onFirstDataRendered:event=>{if(visible.length)event.api.ensureIndexVisible(visible.length-1,'bottom');}}} />
   </div>;
 }
 export function LedgerPage({ me, blocked, project, setProject, active, onExportGuard }: { me: Identity | null; blocked: boolean; active: boolean; project: number; setProject: (project: number) => void; onExportGuard: (reason: string) => void }) {
@@ -131,7 +125,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   const body = useRef<HTMLDivElement>(null); const [display, setDisplay] = useState<{ key: string; data: Ledger } | null>(null);
   const pendingDisplay = useRef<{ key: string; data: Ledger } | null>(null);
   useEffect(() => { mounted.current = true; lifetime.current = new AbortController(); return () => { mounted.current = false; lifetime.current?.abort(); }; }, []);
-  const projects = useQuery({ queryKey: ['projects', 'all', ''], enabled: !blocked,
+  const projects = useQuery({ queryKey: ['projects', 'all'], enabled: !blocked,
     queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const candidates = useMemo(() => projects.data?.filter(item => item.project_type !== 'shell').sort((a, b) => a.ord - b.ord || projectLabel(a).localeCompare(projectLabel(b), 'zh')) ?? [], [projects.data]);
   useEffect(() => { if (!blocked && projects.data && !candidates.some(item => item.id === project)) setProject(candidates[0]?.id ?? 0); }, [blocked, projects.data, candidates, project, setProject]);

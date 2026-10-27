@@ -16,6 +16,15 @@ from app.mod08_inv.domain import adjustment_problem
 from app.mod08_inv.models import InvAdjustment, InvDetail
 
 
+def _with_adjustment(row: dict, adj: InvAdjustment | None) -> dict:
+    if adj is not None:
+        row["adj_amount"] = adj.amount
+        row["adj_remark"] = adj.remark or ""
+        row["adj_operator"] = adj.operator or ""
+        row["adj_at"] = adj.changed_at.strftime("%Y-%m-%d %H:%M") if adj.changed_at else ""
+    return row
+
+
 def to_row(detail: InvDetail | Row, adj: InvAdjustment | None = None) -> dict:
     """明细或只读投影 → 域内规范行（`domain` 的纯函数一律吃这种 dict）。"""
     row = {
@@ -42,12 +51,7 @@ def to_row(detail: InvDetail | Row, adj: InvAdjustment | None = None) -> dict:
         "wbs_name": detail.wbs_name or "",
         "cbs_name": detail.cbs_name or "",
     }
-    if adj is not None:
-        row["adj_amount"] = adj.amount
-        row["adj_remark"] = adj.remark or ""
-        row["adj_operator"] = adj.operator or ""
-        row["adj_at"] = adj.changed_at.strftime("%Y-%m-%d %H:%M") if adj.changed_at else ""
-    return row
+    return _with_adjustment(row, adj)
 
 
 def list_details(s: Session, *, ym: str | None = None, warehouse: str | None = None, through_ym: str | None = None) -> list[InvDetail]:
@@ -94,6 +98,22 @@ def load_original_inbound(s: Session) -> list[dict]:
     ).where(InvDetail.direction == "入库").order_by(InvDetail.id)
     return [dict(resource_name=d.material_name, warehouse=d.warehouse_name, ym=d.ym,
                  **{"in": d.amount}) for d in s.execute(stmt)]
+
+
+def load_process_rows(s: Session) -> list[dict]:
+    """过程资料归集与差异定位：只读所需九列，保行序、空值及原调整痕迹。"""
+    adjs = adjustments(s)
+    stmt = select(
+        InvDetail.id, InvDetail.ym, InvDetail.warehouse_name, InvDetail.doc_no,
+        InvDetail.seq, InvDetail.direction, InvDetail.material_name,
+        InvDetail.material_property, InvDetail.amount,
+    ).order_by(InvDetail.id)
+    return [_with_adjustment({
+        "id": row_id, "ym": ym or "", "warehouse": warehouse or "",
+        "doc_no": doc_no or "", "seq": seq or "", "direction": direction or "",
+        "material": material or "", "material_property": material_property or "", "amount": amount,
+    }, adjs.get(row_id)) for row_id, ym, warehouse, doc_no, seq, direction, material, material_property, amount
+        in s.execute(stmt)]
 
 
 def save_adjustment(
@@ -196,5 +216,5 @@ def upsert_details(s: Session, *, ym: str, warehouse: str, rows: list[dict]) -> 
     return {"inserted": inserted, "updated": updated, "deleted": deleted, "kept_with_adjustment": kept}
 
 
-__all__ = ["to_row", "list_details", "adjustments", "load_rows", "load_original_inbound",
+__all__ = ["to_row", "list_details", "adjustments", "load_rows", "load_original_inbound", "load_process_rows",
            "save_adjustment", "clear_adjustment", "upsert_details"]

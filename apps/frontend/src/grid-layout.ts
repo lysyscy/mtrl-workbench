@@ -69,6 +69,8 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
       // Immutable row/column inputs plus actual geometry still invalidate on refresh, scale or manual resize.
       const previous = prepared.current;
       if (previous?.grid === grid && previous.rows === rows && previous.totals === totals && previous.columns === columns && previous.rowId === rowId && previous.scope === scope && previous.identity === identity && previous.geometry === geometryStamp()) {
+        const now = performance.now();
+        node!.dataset.layoutTiming = JSON.stringify({started:now,fonts:now,applied:now,measured:0,reused:true,minimum,rows:rows.length,width:node!.clientWidth});
         setState('ready'); setError(''); return;
       }
       if (editable()) { pendingEdit = true; return; }
@@ -91,7 +93,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         const widthKey = `${available}:${minimum}:${getComputedStyle(node!).font}`;
         const context = document.createElement('canvas').getContext('2d')!;
         host = document.createElement('div'); host.className = 'ag-row grid-layout-measure'; host.ariaHidden = 'true'; host.inert = true;
-        Object.assign(host.style, { display: 'block', position: 'fixed', left: '-100000px', top: '0', height: 'auto', width: 'max-content', visibility: 'hidden', pointerEvents: 'none' });
+        Object.assign(host.style, { display: 'block', position: 'fixed', left: '-100000px', top: '0', height: 'auto', width: 'max-content', visibility: 'hidden', pointerEvents: 'none', contain: 'layout style' });
         node!.querySelector('.ag-root')!.append(host);
         const sample = document.createElement('div'); sample.className = 'ag-cell ag-cell-wrap-text'; host.append(sample);
         const css = getComputedStyle(sample);
@@ -123,9 +125,16 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           const width = widthById.get(column.id)!, weight = pinned ? '600' : '400', text = column.text(row, pinned);
           return { key: `${column.id}\0${weight}\0${column.signature?.(row, pinned) ?? text}`, text, width, weight, column, row, pinned };
         }
-        for (const [data, pinned] of [[rows, false], [totals, true]] as const) for (const row of data) for (const column of wrapping) {
-          const cell = cellKey(row, column, pinned);
-          if (!cache.current.has(cell.key)) jobs.set(cell.key, cell);
+        // Compute each domain text/signature once; applying measured heights must
+        // not repeat formatter work across every row and wrapping column.
+        const plannedRows: {id: string; cells: string[]}[] = [];
+        for (const [data, pinned] of [[rows, false], [totals, true]] as const) for (const row of data) {
+          const cells = wrapping.map(column => {
+            const cell = cellKey(row, column, pinned);
+            if (!cache.current.has(cell.key)) jobs.set(cell.key, cell);
+            return cell.key;
+          });
+          plannedRows.push({id:rowId(row),cells});
         }
         // A whole string that fits one actual-font canvas line needs no wrapping DOM.
         // Multiline/long strings still use the browser's real breaking rules below.
@@ -163,10 +172,10 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
           if (cancelled(run)) return;
         }
         const next = new Map<string, number>();
-        for (const [data, pinned] of [[rows, false], [totals, true]] as const) for (const row of data) {
+        for (const row of plannedRows) {
           let height = minimum;
-          for (const column of wrapping) height = Math.max(height, cache.current.get(cellKey(row, column, pinned).key)!);
-          next.set(rowId(row), height);
+          for (const key of row.cells) height = Math.max(height, cache.current.get(key)!);
+          next.set(row.id, height);
         }
         // Header text uses the actual header structure and final width, including sort space.
         const headerKey = `${key}:${headerMinimum}:${displayed.map(c => c.getColDef().headerName ?? '').join('|')}`;
@@ -238,7 +247,7 @@ export function useTextGridLayout<T>({ root, active, rows, totals, columns, rowI
         appliedGeometry.current = key; appliedScope.current = scope; appliedIdentity.current = identity; appliedWidth.current = node!.clientWidth; appliedHeight.current = node!.clientHeight;
         restoredTop.current = viewport.scrollTop;
         cancelAnimationFrame(anchorFrame); if (!anchor || scope !== anchor.scope) anchorFrame = requestAnimationFrame(captureAnchor);
-        node!.dataset.layoutTiming = JSON.stringify({ started, fonts: fontsAt, applied: performance.now(), measured: jobs.size, minimum, rows: rows.length, width: node!.clientWidth, anchor, restored: viewport.scrollTop });
+        node!.dataset.layoutTiming = JSON.stringify({ started, fonts: fontsAt, applied: performance.now(), measured: jobs.size, reused: false, minimum, rows: rows.length, width: node!.clientWidth, anchor, restored: viewport.scrollTop });
         prepared.current = { grid, rows, totals, columns, rowId, geometry: geometryStamp(), scope, identity };
         ready.current = true; setState('ready'); setError('');
       } catch (failure) {

@@ -29,7 +29,8 @@ def selects(s):
 
 
 def seed(s):
-    assert s.get_bind().url.database == 'mtrl_workbench_test'
+    bind = s.get_bind()
+    assert getattr(bind, 'engine', bind).url.database == 'mtrl_workbench_test'
     rows = [InvDetail(ym=ym, warehouse_name='__314__', direction=direction,
                       material_name=name, material_property='辅材', amount=D(amount),
                       qty=D('1.23'), price_excl=D('10.13'), tax_total=D('999.99'),
@@ -117,3 +118,28 @@ def test_original_inbound_four_fields_excludes_outbound_adjustment_and_tax():
         annual = inventory_extract.annual_grid(amounts, '焊材', warehouses=['__314__'], year='2025')
         assert annual['rows'][0]['cells'] == [None] * 11 + [D('0.00')]
         s.rollback()
+
+
+def test_process_projection_preserves_inventory_order_amounts_and_adjustment_trace(rollback_db):
+    with session_scope() as s:
+        ids = seed(s)
+        original = R.load_rows(s)
+        keys = {"id", "ym", "warehouse", "doc_no", "seq", "direction", "material", "material_property", "amount",
+                "adj_amount", "adj_remark", "adj_operator", "adj_at"}
+        expected = [{key: value for key, value in row.items() if key in keys} for row in original]
+        s.expunge_all()
+        with selects(s) as queries:
+            rows = service.load_process_rows(s)
+        assert rows == expected
+        assert [row["id"] for row in rows] == sorted(row["id"] for row in rows)
+        assert len(queries) == 2
+        detail_sql = next(query for query in queries if "FROM inv_detail" in query)
+        assert detail_sql.split("FROM")[0].count("inv_detail.") == 9
+        assert not any(isinstance(obj, InvDetail) for obj in s.identity_map.values())
+        adjusted = next(row for row in rows if row["id"] == ids[0])
+        assert adjusted == {"id": ids[0], "ym": "2025-11", "warehouse": "__314__", "doc_no": "__314_0__",
+                            "seq": "1", "direction": "入库", "material": "焊条", "material_property": "辅材",
+                            "amount": D("10.13"), "adj_amount": D("0.00"), "adj_remark": "调整到零",
+                            "adj_operator": "测试人", "adj_at": "2026-10-12 09:08"}
+        zero = next(row for row in rows if row["id"] == ids[2])
+        assert zero["amount"] == D("0.00") and "adj_amount" not in zero

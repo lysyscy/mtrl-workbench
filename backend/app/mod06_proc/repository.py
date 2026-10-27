@@ -21,13 +21,13 @@ from app.mod06_proc.models import (
 
 
 def load_inv_rows(s: Session) -> list[dict]:
-    """库存单据明细（**已叠加调整单**的规范行）—— 走 `MOD-08` 的**包间出口**（`TAIL-218` 批 3）。
+    """过程资料所需库存金额与差异定位字段，叠加调整并经 `MOD-08` 的包间出口读取。
 
     ⚠️ 原先是**跨包直查对方的表**（`import app.mod08_inv.repository`）⇒ 已改走 `mod08_inv.service`。
     """
     from app.mod08_inv import service as P8S
 
-    return P8S.load_rows(s)
+    return P8S.load_process_rows(s)
 
 
 def mech_sources(row):

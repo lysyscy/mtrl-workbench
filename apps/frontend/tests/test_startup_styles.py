@@ -170,3 +170,21 @@ def test_process_module_does_not_wait_for_retained_i8_read(server,browser_page):
     finally:
         for route in held:route.continue_()
         page.unroute('**/api/m02/fetch/records*')
+
+
+def test_focus_burst_shares_verification_and_resumes_workspace(server,browser_page):
+    page,_=browser_page
+    login(page,server)
+    expect(page.locator('.page-view:not([hidden])')).to_be_visible()
+    held=[]
+    page.route('**/api/m15/users',lambda route:held.append(route))
+    try:
+        with page.expect_request('**/api/m15/users'):
+            page.evaluate("for(let i=0;i<5;i++)window.dispatchEvent(new Event('focus'))")
+        expect(page.locator('.workspace')).to_have_attribute('inert','')
+        assert len(held)==1,'Overlapping focus events started duplicate identity verifications'
+    finally:
+        for route in held:route.continue_()
+        page.unroute('**/api/m15/users')
+    expect(page.locator('.workspace')).not_to_have_attribute('inert','')
+    expect(page.get_by_role('heading',name='项目档案',exact=True)).to_be_visible()

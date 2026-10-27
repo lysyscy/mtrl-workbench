@@ -3,7 +3,6 @@ import Input from 'antd/es/input';
 import Checkbox from 'antd/es/checkbox';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, record, requestFile, requestJson } from './api';
 import type { Identity } from './api';
@@ -18,8 +17,7 @@ import { MechanicalWork } from './mechanical-work';
 import type { Draft } from './mechanical-details';
 import { body } from './notices-api';
 import type { Category, Detail, Effective, Workbench, MechanicalReport, ReportSheet } from './mechanical-api';
-import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
-import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const summaryRowId = (row: SummaryRow) => row.id;
 
 interface InternalEditing { epoch: number; writable: boolean; value: (id: string,column: string) => string | undefined; change: (id: string,column: string,value: string) => void }
@@ -71,17 +69,13 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
     })) })),
     { field: 'c14', headerName: '备注', ...contentWidth(72, 144, scale), wrapText: true, autoHeight: true },
   ], [scale, detail, rows]);
-  const retained = useRetainedGridColumns(columns, root);
-  const gridColumns = useMemo(() => initialLayoutColumns(retained), [retained]);
-  const prepared = useMemo(() => rendererLayoutColumns(gridColumns, undefined, (row, id, pinned) => JSON.stringify([row[id], pinned, internal.writable])), [gridColumns, internal.writable]);
+  const measurement = useMemo(() => ({signature:(row:SummaryRow,id:string,pinned:boolean)=>JSON.stringify([row[id],pinned,internal.writable])}), [internal.writable]);
   const bodyRows = useMemo(() => rows.slice(0, -1), [rows]), total = useMemo(() => rows.slice(-1), [rows]);
   const scope = `${report.ym}:${warehouses.join('\0')}`;
-  const layout = useTextGridLayout({root, active, rows: bodyRows, totals: total, columns: prepared, rowId: summaryRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope, identity: scope});
-  useLayoutEffect(() => { if (layout.state === 'ready') fitHeight(); }, [layout.state, fitHeight]);
-  return <>
-    <div ref={root} className="mechanical-grid" data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility: layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}} role="region" aria-label="公司汇总">
-      <AgGridReact<SummaryRow> theme={gridTheme} columnDefs={gridColumns} defaultColDef={{ sortable: false, resizable: true, suppressMovable: true, wrapHeaderText: true }} getRowId={params => params.data.id} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressColumnVirtualisation enableCellTextSelection ensureDomOrder onGridSizeChanged={fitHeight} onModelUpdated={fitHeight} onColumnResized={fitHeight} onGridReady={event => {
-        api.current = event.api; layout.attach(event.api);
+  const presentation = useGridPresentation({root, active, rows: bodyRows, totals: total, columns, measurement, rowId: summaryRowId, scale, scope, identity: scope});
+  useLayoutEffect(() => { if (presentation.state === 'ready') fitHeight(); }, [presentation.state, fitHeight]);
+  return <PreparedGrid presentation={presentation} className="mechanical-grid" role="region" aria-label="公司汇总" grid={{theme:gridTheme,defaultColDef:{sortable:false,resizable:true,suppressMovable:true,wrapHeaderText:true},getRowId:params=>params.data.id,groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,onGridSizeChanged:fitHeight,onModelUpdated:fitHeight,onColumnResized:fitHeight,onGridReady:event=>{
+        api.current = event.api;
         // Header wrapping and scrollbar visibility can settle after the first data render.
         const observer = new ResizeObserver(fitHeight);
         for (const selector of ['.ag-header','.ag-body-horizontal-scroll','.ag-grid-pinned-bottom-rows']) {
@@ -90,9 +84,7 @@ function Summary({ scale, report, projectIds, detail, internal, data, warehouses
         const visibility = new MutationObserver(fitHeight), scrollbar = root.current?.querySelector('.ag-body-horizontal-scroll');
         if (scrollbar) visibility.observe(scrollbar, { attributes: true, attributeFilter: ['class','style'] });
         event.api.addEventListener('gridPreDestroyed', () => { observer.disconnect(); visibility.disconnect(); });
-      }} />
-    </div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
-  </>;
+      }}} />;
 }
 function Sheet({ sheet, index, target }: { sheet: ReportSheet; index: number; target: string }) {
   const root = useRef<HTMLDivElement>(null);
@@ -117,7 +109,7 @@ export function MechanicalPage({ me, blocked, exportGuard, active }: { me: Ident
   const [sheet, setSheet] = useState<number | null>(null); const [exportIds,setExportIds]=useState<number[]|null>(null); const [pickerIds,setPickerIds]=useState<number[]>([]); const [pickerOrder,setPickerOrder]=useState<number[]>([]); const [target, setTarget] = useState('');
   const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false);
   const download = useRef<AbortController | null>(null); const previewButton = useRef<HTMLButtonElement>(null);
-  const projects = useQuery({ queryKey: ['projects', 'all', ''], enabled: !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
+  const projects = useQuery({ queryKey: ['projects', 'all'], enabled: !blocked, queryFn: async ({ signal }) => readProjects(await requestJson('/api/m01/projects?status=all&keyword=', { signal })) });
   const state = useQuery({ queryKey: ['mechanical-state',month], enabled: !blocked, queryFn: async ({ signal }) => readWorkbench(await requestJson('/api/m06/workbench?ym='+encodeURIComponent(month), { signal })) });
   const candidates = useMemo(() => projects.data?.filter(project => state.data?.warehouses.includes(project.warehouse_name ?? '')) ?? [], [projects.data, state.data]);
   const selected = useMemo(() => ids ?? (state.data?.shown.flatMap(warehouse => candidates.filter(project => project.warehouse_name === warehouse).map(project => project.id)) ?? []), [ids, state.data, candidates]);

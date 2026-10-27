@@ -28,7 +28,8 @@ def sample(api,projects):
 def open_sample(page,server,project,data):
     open_page(page,server,'fees','特殊费用')
     pick_option(page,'费用项目',project['disp'])
-    field=page.get_by_label('费用年份',exact=True);field.fill(data['year']);field.press('Enter')
+    field=page.get_by_label('费用年份',exact=True);field.fill(data['year']);field.press('Enter');field.press('Escape')
+    expect(page.locator('.ant-picker-dropdown:visible')).to_have_count(0)
     expect(page.get_by_label('特殊费用年度表',exact=True)).to_be_visible()
 
 

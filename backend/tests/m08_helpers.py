@@ -16,6 +16,13 @@ from types import SimpleNamespace
 from app.mod08_inv.models import InvAdjustment, InvDetail
 
 
+class _Projection(SimpleNamespace):
+    """SQLAlchemy只读Row同时支持列属性与按投影顺序迭代。"""
+
+    def __iter__(self):
+        return iter(vars(self).values())
+
+
 class _Result:
     def __init__(self, rows: list) -> None:
         self._rows = rows
@@ -57,7 +64,7 @@ class FakeSession:
             # 库存只读列投影的两个等值条件；完整 ORM 桩仍保持刷新用例的既有行为。
             for condition in stmt._where_criteria:
                 rows = [r for r in rows if getattr(r, condition.left.key) == condition.right.value]
-            rows = [SimpleNamespace(**{col["name"]: getattr(r, col["name"])
+            rows = [_Projection(**{col["name"]: getattr(r, col["name"])
                                        for col in stmt.column_descriptions}) for r in rows]
         return _Result(rows)
 

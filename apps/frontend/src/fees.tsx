@@ -3,19 +3,17 @@ import Input from 'antd/es/input';
 import Popconfirm from 'antd/es/popconfirm';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import type { Identity } from './api';
 import { cents, decimal, readProjects, requestJson, uncertainWrite } from './api';
-import { contentWidth, gridTheme, pageGridGeometry, numberColumnWidth } from './grid';
+import { contentWidth, gridTheme, numberColumnWidth } from './grid';
 import { ProjectPicker, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { useHistoryGuard } from './history';
 import { money } from './notices-api';
 import { feeWrite, getFees, getFeeYear } from './fees-api';
 import type { FeeField, FeeYearRecord, FeeYearRow } from './fees-api';
-import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
-import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const annualRowId = (row: AnnualRow) => encodeURIComponent(row.item);
 
 type RecordRow = FeeYearRecord;
@@ -170,10 +168,8 @@ export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked
     {field:'total',headerName:'累计',headerTooltip:'往年 + 所选年1至12月',cellClass:'money',valueFormatter:p=>money(p.value),...numberColumnWidth([query.data?.total,...rows.map(row=>row.total)].map(value=>value==null?'':money(value)),scale)},
   ],[year,scale,rows,query.data]);
   const totals=useMemo<AnnualRow[]>(()=>query.data?[{item:'合计',manual:false,prior:query.data.prior,months:query.data.months,total:query.data.total,periods:[],records:[],automatic:false}]:[],[query.data]);
-  const retained = useRetainedGridColumns(columns,root);
-  const gridColumns = useMemo(()=>initialLayoutColumns(retained),[retained]);
-  const prepared = useMemo(()=>rendererLayoutColumns(gridColumns,undefined,(row,id,pinned)=>JSON.stringify([row,id,pinned,expanded.has(row.item)])),[gridColumns,expanded]);
-  const layout = useTextGridLayout({root,active:active && ready,rows,totals,columns:prepared,rowId:annualRowId,minimum:pageGridGeometry(scale).rowHeight,headerMinimum:pageGridGeometry(scale).headerHeight,scope:year+':'+project,identity:year+':'+project});
+  const measurement = useMemo(()=>({signature:(row:AnnualRow,id:string,pinned:boolean)=>JSON.stringify([row,id,pinned,expanded.has(row.item)])}),[expanded]);
+  const presentation = useGridPresentation({root,active:active && ready,rows,totals,columns,measurement,rowId:annualRowId,scale,scope:year+':'+project,identity:year+':'+project});
   return <section className="fees-page" aria-label="特殊费用">
     <div data-page-chrome className="fee-filters"><label>年份<TimePicker label="费用年份" modes={['年']} value={year} onChange={setYear} disabled={paused} /></label>
       <label>项目<ProjectPicker projects={(projects.data ?? []).filter(p=>p.warehouse_name && p.project_type!=='shell')} selected={(projects.data ?? []).filter(p=>p.warehouse_name===project).map(p=>p.id)} pick={ids=>{const next=projects.data?.find(p=>p.id===ids[0])?.warehouse_name;if(next)setProject(next);}} label="费用项目" disabled={paused || projects.isPending} /></label></div>
@@ -183,8 +179,7 @@ export function FeesPage({ me, blocked, active }: { me: Identity | null; blocked
     {uncertain && <p className="notice" role="alert">核对结果后再继续。<Button disabled={!verified || busy} onClick={()=>{pendingCreate.current=null;state.current.uncertain=false;setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).map(([key,d])=><p key={key} className="fee-draft-feedback">{d.ym}，{d.item || '未命名'}，{d.field==='item'?'项名':'金额'}：{d.error || '未保存'} <Button size="small" disabled={busy || blocked || uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>save(key,true)}>保存</Button><Button size="small" disabled={busy || blocked} onMouseDown={e=>e.preventDefault()} onClick={()=>{const next={...state.current.drafts};delete next[key];update(next);}}>取消这项修改</Button></p>)}
     <p className="fee-record-note muted">同月同名的多条记录分别填写，月合计自动相加；项名旁标明所属月份。</p>
-    {query.isPending?<p role="status">正在读取费用…</p>:ready && <FeeCells.Provider value={{expanded,toggle,drafts,disabled,structuralDisabled:disabled || busy || dirty || query.isFetching,remove,change,save}}><div ref={root} className="fees-grid fees-annual-grid" aria-label="特殊费用年度表" data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility:layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<AnnualRow> theme={gridTheme} domLayout="autoHeight" columnDefs={gridColumns} getRowId={p=>annualRowId(p.data)}
-      defaultColDef={{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation
-      animateRows={false} onGridReady={e=>layout.attach(e.api)} /></div>{layout.measurement}{layout.state==='error'&&<p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}</FeeCells.Provider>}
+    {query.isPending?<p role="status">正在读取费用…</p>:ready && <FeeCells.Provider value={{expanded,toggle,drafts,disabled,structuralDisabled:disabled || busy || dirty || query.isFetching,remove,change,save}}><PreparedGrid presentation={presentation} className="fees-grid fees-annual-grid" aria-label="特殊费用年度表" grid={{theme:gridTheme,domLayout:'autoHeight',getRowId:p=>annualRowId(p.data),
+      defaultColDef:{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},suppressScrollOnNewData:true,suppressColumnVirtualisation:true,animateRows:false}} /></FeeCells.Provider>}
   </section>;
 }

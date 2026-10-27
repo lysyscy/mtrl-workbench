@@ -18,6 +18,7 @@ export function BoundedTable({ columns, children, style, prepareFonts = false, l
     let font = getComputedStyle(table).font;
     const fit = () => {
       frame = 0;
+      const started = performance.now();
       const available = container.clientWidth;
       if (!available) return;
       if (table.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea')) { pending = true; return; }
@@ -43,6 +44,7 @@ export function BoundedTable({ columns, children, style, prepareFonts = false, l
       }
       const next = tableWidths(columns, measured, available, em);
       prepared.current = true; setFitWidth(available);
+      table.dataset.fitTiming = JSON.stringify({started,applied:performance.now(),columns:columns.length,width:available,rows:table.rows.length});
       setWidths(old => old.length === next.length && old.every((n, i) => Math.abs(n - next[i]!) < .5) ? old : next);
     };
     const prepare = async () => {

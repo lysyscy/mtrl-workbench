@@ -3,24 +3,21 @@ import Input from 'antd/es/input';
 import Segmented from 'antd/es/segmented';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { Link } from 'react-router';
 import { readProjects, requestJson } from './api';
 import type { Identity, Project } from './api';
-import { pageGridGeometry, contentWidth, gridTheme, numberColumnWidth } from './grid';
+import { contentWidth, gridTheme, numberColumnWidth } from './grid';
 import { BoundedTable } from './bounded-table';
 import { ProjectPicker } from './ledger-controls';
-import { useHistoryGuard } from './history';
+import { useCellSaveQueue } from './use-cell-save';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { money } from './notices-api';
-import { uncertainWrite } from './api';
 import { categories, getProcess, manualProcess, mechKeys, mechLabels, saveProcess, tabLabels } from './process-api';
 import type { Difference, ProcessRow } from './process-api';
 import { ProcessExport } from './process-export';
-import { useTextGridLayout } from './grid-layout';
-import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const differenceRowId = (row: Difference) => String(row.id);
 
 interface Draft { warehouse:string; ym:string; column:string; value:string; revision:number; error:string }
@@ -41,23 +38,24 @@ function MechanicalCell({data,column}:{data:ProcessRow;column:string}) {
     onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();cells.save(key,true);}}} />{draft&&<small>{draft.error?'未保存':'待保存'}</small>}</div>;
 }
 export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolean;active:boolean}) {
-  const writeAbort = useRef(new AbortController());
-  useEffect(() => { writeAbort.current = new AbortController(); return () => writeAbort.current.abort(); }, []);
-  const client=useQueryClient(),alive=useRef(true),lock=useRef(false),queue=useRef<string[]>([]),revision=useRef(0);
+  const client=useQueryClient(),revision=useRef(0);
   const [warehouse,setWarehouse]=useState(''),[tab,setTab]=useState(1);
-  const [drafts,setDrafts]=useState<Record<string,Draft>>({}),[busy,setBusy]=useState(false),[uncertain,setUncertain]=useState(false),[verified,setVerified]=useState(false);
-  const [error,setError]=useState(''),[feedback,setFeedback]=useState(''),[source,setSource]=useState<{warehouse:string;ym:string;column:string;signature:string;value:string|null}|null>(null);
+  const [source,setSource]=useState<{warehouse:string;ym:string;column:string;signature:string;value:string|null}|null>(null);
   const query=useQuery({queryKey:['process'],enabled:active&&!blocked,queryFn:({signal})=>getProcess(signal)});
   const projects=useQuery({queryKey:['projects','all'],enabled:active&&!blocked,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
   const candidates=useMemo(()=>query.data?.projects.map((key,index):Project=>projects.data?.find(p=>p.warehouse_name===key)??{id:-index-1,disp:`未建档项目 ${index+1}`,name_full:'',warehouse_name:key,project_type:'normal',status:'active',ord:index,phid:''})??[],[query.data,projects.data]);
   useEffect(()=>{if(!warehouse&&query.data?.projects[0])setWarehouse(query.data.projects[0]);},[warehouse,query.data]);
-  useEffect(()=>{alive.current=true;return()=>{alive.current=false;queue.current=[];};},[]);
-  useEffect(()=>{if(!active||blocked)queue.current=[];},[active,blocked]);
-  const state=useRef({drafts,active,blocked,uncertain,warehouse,data:query.data});state.current={drafts,active,blocked,uncertain,warehouse,data:query.data};
-  function update(next:Record<string,Draft>){state.current.drafts=next;setDrafts(next);}
+  const saves=useCellSaveQueue<Draft,Awaited<ReturnType<typeof getProcess>>>({
+    enabled:active&&!blocked&&Boolean(me),canWrite:!query.isError&&!projects.isError,
+    read:reload,write:(draft,signal)=>saveProcess(draft.warehouse,draft.ym,draft.column,draft.value,signal),
+    validate:draft=>query.data?.sources[draft.warehouse]?.[draft.ym]?.[draft.column]?.mode==='detail'?'当前为明细确认，请先切为手填。':'',
+    acknowledge:(current,submitted)=>current.revision===submitted.revision?undefined:current,
+    describe:draft=>`${name(draft.warehouse)}，${draft.ym} `,
+    saved:draft=>warehouse===draft.warehouse?`${name(draft.warehouse)}，${draft.ym} ${mechLabels[mechKeys.indexOf(draft.column)]}已保存`:'',
+  },{key:'process',label:'过程资料'});
+  const {drafts,busy,uncertain,verified,error,feedback}=saves;
   const name=(key:string)=>candidates.find(p=>p.warehouse_name===key)?.disp??'项目';
   const detailSource=(ym:string,column:string)=>query.data?.sources[warehouse]?.[ym]?.[column]?.mode==='detail';
-  useHistoryGuard('process',()=>lock.current?'过程资料正在保存，请稍候。':uncertain?'过程资料结果待核实，请先重读核对。':Object.keys(state.current.drafts).length?'过程资料有未保存输入，请先处理。':'');
   async function reload(){
     await client.cancelQueries({queryKey:['process'],exact:true});
     const data=await client.fetchQuery({queryKey:['process'],staleTime:0,queryFn:({signal})=>getProcess(signal)});
@@ -65,41 +63,14 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   }
   function change(ym:string,column:string,value:string){
     const key=keyOf(warehouse,ym,column);
-    update({...state.current.drafts,[key]:{warehouse,ym,column,value,revision:++revision.current,error:''}});
+    saves.update(drafts=>({...drafts,[key]:{warehouse,ym,column,value,revision:++revision.current,error:''}}));
   }
-  async function drain(){
-    if(lock.current||!state.current.active||state.current.blocked||state.current.uncertain||!me)return;
-    const key=queue.current.shift();if(!key)return;
-    const draft=state.current.drafts[key];if(!draft){void drain();return;}
-    const {warehouse:wh,ym,column,value}=draft;
-    if(state.current.data?.sources[wh]?.[ym]?.[column]?.mode==='detail'){
-      update({...state.current.drafts,[key]:{...draft,error:'当前为明细确认，请先切为手填。'}});void drain();return;
-    }
-    lock.current=true;setBusy(true);setError('');setFeedback('');let written=false;
-    try{
-      await saveProcess(wh,ym,column,value,writeAbort.current.signal);written=true;if(!alive.current)return;
-      const next={...state.current.drafts};if(next[key]?.revision===draft.revision)delete next[key];update(next);
-      await reload();if(alive.current&&state.current.warehouse===wh)setFeedback(`${name(wh)}，${ym} ${mechLabels[mechKeys.indexOf(column)]}已保存`);
-    }catch(e){if(!alive.current)return;const message=e instanceof Error?e.message:'保存失败，请重试。';
-      if(written||uncertainWrite(e)){state.current.uncertain=true;setUncertain(true);setVerified(false);queue.current=[];setError(`${name(wh)}，${ym} ${written?'已保存，重读失败。':'保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
-      else{const next={...state.current.drafts};if(next[key])next[key]={...next[key],error:message};update(next);if(state.current.warehouse===wh)setError(message);}
-    }finally{lock.current=false;if(alive.current){setBusy(false);void drain();}}
-  }
-  function save(key:string,retry=false){
-    const draft=state.current.drafts[key];if(!draft||draft.error&&!retry||state.current.uncertain||state.current.blocked||!state.current.active||query.isError)return;
-    if(!queue.current.includes(key))queue.current.push(key);void drain();
-  }
-  async function reread(){
-    if(lock.current||blocked||!active)return;
-    try{await reload();if(alive.current){setVerified(true);setError('');setFeedback(uncertain?'已重读，请核对刚才的保存结果。':'已重读，未保存输入仍保留。');}}
-    catch(e){if(alive.current)setError(e instanceof Error?e.message:'重读失败。');}
-  }
+  const save=saves.save;
+  const reread=()=>saves.reread(uncertain?'已重读，请核对刚才的保存结果。':'已重读，未保存输入仍保留。');
   async function switchManual(){
-    if(!source||lock.current||disabled)return;
-    lock.current=true;setBusy(true);setError('');let written=false;
-    try{await manualProcess(source.warehouse,source.ym,source.column,source.signature,writeAbort.current.signal);written=true;if(!alive.current)return;await reload();if(alive.current){setSource(null);setFeedback('已切为手填，金额保留。');}}
-    catch(e){if(!alive.current)return;const unknown=written||uncertainWrite(e);state.current.uncertain=unknown;setUncertain(unknown);setVerified(false);setError(`${written?'已切换，重读失败。':''}${e instanceof Error?e.message:'切换失败。'}`);if(unknown)setSource(null);}
-    finally{lock.current=false;if(alive.current)setBusy(false);}
+    if(!source||busy||disabled)return;
+    const outcome=await saves.run(signal=>manualProcess(source.warehouse,source.ym,source.column,source.signature,signal),()=>'已切为手填，金额保留。',`${name(source.warehouse)}，${source.ym} `);
+    if(outcome==='saved'||outcome==='uncertain')setSource(null);
   }
   const disabled=blocked||!active||!me||uncertain||query.isError||projects.isError;
   const paused=blocked||!active;
@@ -121,16 +92,16 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   const currentDrafts=Object.entries(drafts).filter(([,d])=>d.warehouse===warehouse);
   return <section className="process-page" aria-label="过程资料">
     <div data-page-chrome className="process-toolbar"><h2>过程资料</h2><ProcessExport projects={candidates} current={warehouse} tab={tab} paused={paused} reason={reason} /></div>
-    <div data-page-chrome className="process-filters"><span>项目</span><ProjectPicker label="过程资料项目" projects={candidates} selected={candidates.filter(p=>p.warehouse_name===warehouse).map(p=>p.id)} pick={ids=>{const p=candidates.find(p=>p.id===ids[0]);if(p?.warehouse_name){setWarehouse(p.warehouse_name);setError('');setFeedback('');}}} disabled={paused||projects.isPending||projects.isError||query.isPending} /></div>
+    <div data-page-chrome className="process-filters"><span>项目</span><ProjectPicker label="过程资料项目" projects={candidates} selected={candidates.filter(p=>p.warehouse_name===warehouse).map(p=>p.id)} pick={ids=>{const p=candidates.find(p=>p.id===ids[0]);if(p?.warehouse_name){setWarehouse(p.warehouse_name);saves.clearFeedback();}}} disabled={paused||projects.isPending||projects.isError||query.isPending} /></div>
     <div data-page-chrome className="process-tabs"><Segmented aria-label="过程资料表" value={tab} options={tabLabels.map((label,value)=>({label:value===2?<span>{label}{matrix&&<span className="process-diff-count">{matrix.diffs.length}</span>}</span>:label,value}))} onChange={value=>setTab(Number(value))} disabled={paused} />{dirty&&<span>{Object.keys(drafts).length} 项未保存</span>}{query.isFetching&&!query.isPending&&<span role="status">正在重读…</span>}</div>
     {(error||query.isError||projects.isError||uncertain)&&<p className="notice" role="alert">{error||query.error?.message||projects.error?.message}{(error||query.isError||uncertain)&&<Button disabled={paused||busy||query.isFetching} onClick={()=>void reread()}>重读资料</Button>}{projects.isError&&<Button disabled={paused||projects.isFetching} onClick={()=>void projects.refetch()}>重读项目</Button>}</p>}
     {feedback&&<p role="status">{feedback}</p>}
-    {uncertain&&<p className="notice" role="alert">核对结果后再继续。<Button disabled={paused||busy||!verified||query.isFetching||query.isError} onClick={()=>{state.current.uncertain=false;setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，保留输入继续</Button></p>}
-    {currentDrafts.filter(([,d])=>d.error).map(([key,d])=><p key={key} role="alert" className="notice">{d.ym} {mechLabels[mechKeys.indexOf(d.column)]}：{d.error}<Button disabled={disabled||busy} onClick={()=>save(key,true)}>重试保存</Button><Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>{const next={...state.current.drafts};delete next[key];update(next);}}>取消这项修改</Button></p>)}
-    {currentDrafts.length>0&&<Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>update(Object.fromEntries(Object.entries(state.current.drafts).filter(([,d])=>d.warehouse!==warehouse)))}>取消本项目修改</Button>}
+    {uncertain&&<p className="notice" role="alert">核对结果后再继续。<Button disabled={paused||busy||!verified||query.isFetching||query.isError} onClick={()=>{saves.confirm();}}>已核对，保留输入继续</Button></p>}
+    {currentDrafts.filter(([,d])=>d.error).map(([key,d])=><p key={key} role="alert" className="notice">{d.ym} {mechLabels[mechKeys.indexOf(d.column)]}：{d.error}<Button disabled={disabled||busy} onClick={()=>save(key,true)}>重试保存</Button><Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>{saves.update(drafts=>{const next={...drafts};delete next[key];return next;});}}>取消这项修改</Button></p>)}
+    {currentDrafts.length>0&&<Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(drafts=>Object.fromEntries(Object.entries(drafts).filter(([,d])=>d.warehouse!==warehouse)))}>取消本项目修改</Button>}
     {query.isPending?<p role="status" data-page-loading>正在读取过程资料…</p>:query.isError&&!matrix?null:!matrix?<p>暂无有数据的项目。</p>:<>
       {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:
-      <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,switchSource:(ym,column)=>{const signature=query.data?.signatures[warehouse]?.[ym];if(!signature)return;setError('');setSource({warehouse,ym,column,signature,value:matrix[kind].find(r=>r.ym===ym)?.[column]??null});}}}>
+      <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,switchSource:(ym,column)=>{const signature=query.data?.signatures[warehouse]?.[ym];if(!signature)return;saves.clearFeedback();setSource({warehouse,ym,column,signature,value:matrix[kind].find(r=>r.ym===ym)?.[column]??null});}}}>
         <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label="过程资料月度表，可横向滚动"><BoundedTable prepareFonts layoutVersion={matrix[kind]} className="process-matrix" aria-label={`${tabLabels[tab]}，金额单位：元`} columns={matrixWidths}>
           <thead><tr className="process-groups"><th scope="col" rowSpan={2}>核算月</th><th scope="colgroup" colSpan={5} className="process-segment">入库</th><th scope="colgroup" colSpan={5} className="process-segment">出库</th><th scope="colgroup" colSpan={4} className="process-segment">机械</th><th scope="colgroup" colSpan={2} className="process-segment">机械（不含税）</th></tr>
             <tr>{matrixColumns.map(column=><th scope="col" key={column.field} aria-label={column.label} className={column.segment?'process-segment':''}>{column.header}</th>)}</tr></thead>
@@ -153,10 +124,7 @@ function DifferenceGrid({matrix,diffs,warehouse,scale,active}: {
   const root = useRef<HTMLDivElement>(null);
   const diffRows = matrix.diffs;
   const diffTotals = useMemo(() => [{...matrix.diff_totals,id:-1,doc_no:'合计'} as unknown as Difference], [matrix]);
-  const diffColumns = useMemo(() => initialLayoutColumns(diffs), [diffs]);
-  const diffPrepared = useMemo(() => rendererLayoutColumns(diffColumns), [diffColumns]);
-  const diffLayout = useTextGridLayout({root,active,rows:diffRows,totals:diffTotals,columns:diffPrepared,rowId:differenceRowId,minimum:pageGridGeometry(scale).rowHeight,headerMinimum:pageGridGeometry(scale).headerHeight,scope:warehouse,identity:warehouse});
-  return <><div className="process-grid" ref={root} data-layout-state={diffLayout.state} data-layout-error={diffLayout.error || undefined} inert={diffLayout.concealed || diffLayout.state === 'preparing' || diffLayout.state === 'error'} style={{visibility:diffLayout.concealed || diffLayout.state === 'preparing' || diffLayout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<Difference> key="diff" domLayout="autoHeight" theme={gridTheme} columnDefs={diffColumns}
-        getRowId={p=>String(p.data.id)} defaultColDef={{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} suppressScrollOnNewData suppressColumnVirtualisation overlayNoRowsTemplate="当前项目没有调整差异"
-        animateRows={false} onGridReady={e=>diffLayout.attach(e.api)} /></div>{diffLayout.measurement}{diffLayout.state==='error'&&<p role="alert">{diffLayout.error}<Button onClick={diffLayout.retry}>重试表格加载</Button></p>}</>;
+  const presentation = useGridPresentation({root,active,rows:diffRows,totals:diffTotals,columns:diffs,rowId:differenceRowId,scale,scope:warehouse,identity:warehouse});
+  return <PreparedGrid presentation={presentation} className="process-grid" grid={{domLayout:'autoHeight',theme:gridTheme,
+    getRowId:p=>String(p.data.id),defaultColDef:{resizable:true,sortable:false,suppressMovable:true,wrapHeaderText:true},suppressScrollOnNewData:true,suppressColumnVirtualisation:true,overlayNoRowsTemplate:'当前项目没有调整差异',animateRows:false}} />;
 }

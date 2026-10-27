@@ -1,0 +1,62 @@
+import { useMemo } from 'react';
+import type { ComponentProps, RefObject } from 'react';
+import Button from 'antd/es/button';
+import { AgGridReact } from 'ag-grid-react';
+import type { AgGridReactProps } from 'ag-grid-react';
+import type { ColDef, ColGroupDef } from 'ag-grid-community';
+import { pageGridGeometry } from './grid';
+import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
+import type { TextGridColumn } from './grid-layout';
+import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+
+type Measurement<T> = TextGridColumn<T>[] | {
+  signature?: (row: T, column: string, pinned: boolean) => string;
+  textOnly?: readonly string[];
+};
+const details = Symbol('grid-presentation');
+
+// A page supplies business columns and scope; this module owns their rendering,
+// measurement and publication as one lifecycle. Observations support page labels
+// and existing actions without exposing attach/portal/retry ordering to callers.
+export function useGridPresentation<T>({columns, context, measurement, scale, ...layout}: {
+  columns: (ColDef<T> | ColGroupDef<T>)[]; context?: unknown; measurement?: Measurement<T>;
+  root: RefObject<HTMLDivElement | null>; fontRoot?: RefObject<HTMLElement | null>; active: boolean;
+  rows: T[]; totals: T[]; rowId: (row: T) => string; scope: string; identity: string; scale: number;
+}) {
+  const retained = useRetainedGridColumns(columns, layout.root);
+  const definitions = useMemo(() => initialLayoutColumns(retained), [retained]);
+  const prepared = useMemo(() => {
+    if (Array.isArray(measurement)) return measurement;
+    return rendererLayoutColumns(definitions, context, measurement?.signature).map(column => {
+      if (!measurement?.textOnly?.includes(column.id)) return column;
+      const {render: _render, signature: _signature, ...text} = column;
+      return text;
+    });
+  }, [definitions, context, measurement]);
+  const geometry = pageGridGeometry(scale);
+  const preparation = useTextGridLayout({...layout, columns: prepared, minimum: geometry.rowHeight, headerMinimum: geometry.headerHeight});
+  return {state: preparation.state, visible: !preparation.concealed && preparation.state !== 'preparing' && preparation.state !== 'error',
+    [details]: {root: layout.root, definitions, context, geometry, preparation}};
+}
+
+export function PreparedGrid<T>({presentation, grid, errorClassName, scrollClassName, attachRoot = true, ...container}: Omit<ComponentProps<'div'>, 'ref' | 'children'> & {
+  presentation: ReturnType<typeof useGridPresentation<T>>;
+  grid: Omit<AgGridReactProps<T>, 'columnDefs' | 'rowHeight' | 'headerHeight' | 'context'>;
+  errorClassName?: string;
+  scrollClassName?: string;
+  // The ledger measures its existing outer region, including the side heading.
+  attachRoot?: boolean;
+}) {
+  const {visible} = presentation, {root, definitions, context, geometry, preparation} = presentation[details];
+  const {onGridReady, ...options} = grid;
+  const surface = <div {...container} ref={attachRoot ? root : undefined} inert={!visible} style={{...container.style, visibility: visible ? container.style?.visibility : 'hidden'}}
+      data-layout-state={preparation.state} data-layout-error={preparation.error || undefined} aria-busy={preparation.state !== 'ready'}>
+      <AgGridReact<T> {...options} columnDefs={definitions} context={context} rowHeight={geometry.rowHeight} headerHeight={geometry.headerHeight}
+        onGridReady={event => { preparation.attach(event.api); onGridReady?.(event); }} />
+    </div>;
+  return <>
+    {scrollClassName ? <div className={scrollClassName}>{surface}</div> : surface}
+    {preparation.measurement}
+    {preparation.error && <p className={errorClassName} role="alert">{preparation.error}<Button onClick={preparation.retry}>重试表格加载</Button></p>}
+  </>;
+}

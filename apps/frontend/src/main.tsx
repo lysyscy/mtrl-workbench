@@ -107,6 +107,12 @@ function AccountWorkspace({ me, blocked, obscured, preparing, onLogout, onPrefer
   </div></HistoryScope></QueryClientProvider>;
 }
 
+function preserveIdentity(current: Identity | null, incoming: Identity | null) {
+  if (!current || !incoming) return incoming;
+  const keys = Object.keys(incoming) as (keyof Identity)[];
+  return keys.length === Object.keys(current).length && keys.every(key => current[key] === incoming[key]) ? current : incoming;
+}
+
 function App() {
   const [me, setMe] = useState<Identity | null | undefined>(undefined);
   const [error, setError] = useState('');
@@ -114,13 +120,13 @@ function App() {
   const [checking, setChecking] = useState(true);
   const [fontsReady, setFontsReady] = useState(false);
   const request = useRef<AbortController | null>(null);
-  const knownIdentity = useRef<Identity | null>(null);
+  const knownIdentity = useRef<Identity | null>(null), identityPending = useRef(false);
   async function check(pause = true) {
-    request.current?.abort();
+    request.current?.abort(); identityPending.current = true;
     const controller = new AbortController(); request.current = controller;
     if (pause) setChecking(true); setError('');
     try {
-      const next = readIdentity(await requestJson('/api/m15/users', { signal: controller.signal }));
+      const next = preserveIdentity(knownIdentity.current, readIdentity(await requestJson('/api/m15/users', { signal: controller.signal })));
       if (controller.signal.aborted) return;
       await prepareAppearance(next, controller.signal);
       if (controller.signal.aborted) return;
@@ -137,11 +143,12 @@ function App() {
         // A failed check cannot establish an account change; keep local state while access is paused.
         setError(failure instanceof Error ? failure.message : '账号读取失败，请重试。'); setChecking(false);
       }
-    }
+    } finally { if (request.current === controller) identityPending.current = false; }
   }
   useEffect(() => {
     void check();
-    const focus = () => void check();
+    // Deduplicate the same in-flight verification; retain immediate access pause and no stale-account grace period.
+    const focus = () => { if (document.visibilityState === 'visible' && !identityPending.current) void check(); };
     const lost = () => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
     window.addEventListener('focus', focus); window.addEventListener('session-lost', lost);
     return () => { request.current?.abort(); window.removeEventListener('focus', focus); window.removeEventListener('session-lost', lost); };

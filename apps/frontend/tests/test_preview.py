@@ -28,6 +28,7 @@ def browser_page(server, preview_browser):
         page = context.new_page()
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
+        page.on('console', lambda message: errors.append(message.text) if message.type in {'error','warning'} and 'AG Grid' in message.text and ('error #' in message.text or 'missingModule' in message.text) else None)
         yield page, context
         assert not errors, errors
     finally:

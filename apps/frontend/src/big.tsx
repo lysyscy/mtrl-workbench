@@ -1,10 +1,8 @@
-import { uncertainWrite } from './api';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Tag from 'antd/es/tag';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity, Project } from './api';
@@ -13,13 +11,12 @@ import { ProjectSelectionOrder, reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
-import { useHistoryGuard } from './history';
+import { useCellSaveQueue } from './use-cell-save';
 import { money } from './notices-api';
 import { SettlementExport } from './settlement-export';
 import { getBig, manualKeys, saveBigCell, saveBigSelection } from './big-api';
 import type { AutoKey, BigData, BigRow, DerivedKey, ManualKey, TotalKey } from './big-api';
-import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
-import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const bigRowId = (row: BigRow) => row.warehouse;
 const emptyBig: BigRow[] = [];
 
@@ -70,16 +67,16 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
   const root = useRef<HTMLDivElement>(null), api = useRef<GridApi<BigRow> | null>(null), client = useQueryClient();
   const queryKey = ['big',ym];
   const query = useQuery({queryKey,enabled:active && !blocked,queryFn:({signal}) => getBig(ym,signal)});
-  const [drafts,setDrafts] = useState<Record<string,Draft>>({}), [busy,setBusy] = useState(false), [uncertain,setUncertain] = useState(false), [verified,setVerified] = useState(false);
-  const [error,setError] = useState(''), [feedback,setFeedback] = useState(''), [picking,setPicking] = useState(false);
-  const writeAbort = useRef(new AbortController());
-  useEffect(() => { writeAbort.current = new AbortController(); return () => writeAbort.current.abort(); }, []);
-  const lock = useRef(false), queue = useRef<string[]>([]), alive = useRef(true), revision = useRef(0);
-  const state = useRef({drafts,active,blocked,uncertain,me,data:query.data});state.current = {drafts,active,blocked,uncertain,me,data:query.data};
-  const update = (next: Record<string,Draft>) => {state.current.drafts=next;setDrafts(next);};
-  useEffect(() => {alive.current=true;return () => {alive.current=false;queue.current=[];};},[]);
-  useEffect(() => {if(!active || blocked) queue.current=[];},[active,blocked]);
-  useHistoryGuard(`big:${ym}`,() => lock.current ? '大表正在保存，请稍候。' : state.current.uncertain ? '大表保存结果待核实，请先核对。' : Object.keys(state.current.drafts).length || picking ? '大表有未保存输入，请先处理。' : '');
+  const [picking,setPicking]=useState(false),revision=useRef(0);
+  const saves=useCellSaveQueue<Draft,BigData>({
+    enabled:active&&!blocked&&Boolean(me),canWrite:!query.isPending&&!query.isError,stopOnRejection:true,
+    read:async()=>{const data=await reload();await refreshOthers();return data;},
+    write:(draft,signal)=>saveBigCell(ym,draft.warehouse,draft.key,draft.value,signal),
+    validate:draft=>query.data?.rows.some(row=>row.warehouse===draft.warehouse)?'':'项目已不在大表中，请取消此项或重新选题。',
+    acknowledge:(current,submitted)=>current.revision===submitted.revision?undefined:{...current,original:submitted.value},
+    saved:draft=>`${draft.display}，${labels[draft.key]}，${draft.value.trim()?'已保存到本月':'已清空，恢复带入'}`,
+  },{key:`big:${ym}`,label:'大表',pending:picking});
+  const {drafts,busy,uncertain,verified,error,feedback}=saves;
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isPending || query.isError;
   const controlsDisabled = disabled || busy || dirty || query.isFetching;
@@ -88,54 +85,12 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     return client.fetchQuery({queryKey,staleTime:0,queryFn:({signal}) => getBig(ym,signal)});
   }
   async function refreshOthers() {await client.invalidateQueries({predicate:q => q.queryKey[0] !== 'big' || q.queryKey[1] !== ym});}
-  async function drain() {
-    if(lock.current || !state.current.active || state.current.blocked || state.current.uncertain || !state.current.me) return;
-    const id = queue.current.shift();if(!id) return;
-    const draft = state.current.drafts[id];if(!draft || draft.error) {void drain();return;}
-    if(!state.current.data?.rows.some(r => r.warehouse === draft.warehouse)) {update({...state.current.drafts,[id]:{...draft,error:'项目已不在大表中，请取消此项或重新选题。'}});return;}
-    lock.current=true;setBusy(true);setError('');setFeedback('');let written=false;
-    try {
-      await saveBigCell(ym,draft.warehouse,draft.key,draft.value,writeAbort.current.signal);written=true;
-      if(!alive.current) return;
-      const next={...state.current.drafts};
-      if(next[id]?.revision === draft.revision) delete next[id];
-      else if(next[id]) next[id]={...next[id],original:draft.value};
-      update(next);
-      await reload();await refreshOthers();
-      if(alive.current) setFeedback(`${draft.display}，${labels[draft.key]}，${draft.value.trim() ? '已保存到本月' : '已清空，恢复带入'}`);
-    } catch(e) {
-      if(!alive.current) return;
-      const message=e instanceof Error ? e.message : '保存失败，请重试。';
-      if(written || uncertainWrite(e)) {state.current.uncertain=true;setUncertain(true);setVerified(false);queue.current=[];setError(`${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
-      else {queue.current=[];const next={...state.current.drafts};if(next[id]) next[id]={...next[id],error:message};update(next);setError(message);}
-    } finally {lock.current=false;if(alive.current) {setBusy(false);void drain();}}
-  }
-  function save(id: string,retry=false) {
-    const draft=state.current.drafts[id];if(!draft || !active || blocked || uncertain) return;
-    if(draft.error && !retry) return;
-    if(retry) update({...state.current.drafts,[id]:{...draft,error:''}});
-    if(!queue.current.includes(id)) queue.current.push(id);void drain();
-  }
+  const save=saves.save;
   async function selection(selected: string[]) {
-    if(lock.current || controlsDisabled) return false;
-    lock.current=true;setBusy(true);setError('');setFeedback('');let written=false;
-    try {
-      await saveBigSelection(ym,selected,writeAbort.current.signal);written=true;await reload();await refreshOthers();setFeedback('项目与顺序已保存。');return true;
-    } catch(e) {
-      const message=e instanceof Error ? e.message : '选题保存失败。';
-      if(written || uncertainWrite(e)) {state.current.uncertain=true;setUncertain(true);setVerified(false);setError(`${written ? '选题已保存，重读失败。' : '选题结果待核实。'}${message}请重读核对。`);}
-      else setError(message);
-      return false;
-    } finally {lock.current=false;setBusy(false);}
+    if(controlsDisabled)return false;
+    return await saves.run(signal=>saveBigSelection(ym,selected,signal),()=>'项目与顺序已保存。')==='saved';
   }
-  async function reconcileExport() {
-    try { await reload(); await refreshOthers(); return true; }
-    catch (e) {
-      state.current.uncertain=true; setUncertain(true); setVerified(false);
-      setError(`导出结果待核实，请重读核对本月名单。${e instanceof Error ? e.message : ''}`);
-      return false;
-    }
-  }
+  const reconcileExport=()=>saves.reconcile('导出结果待核实，请重读核对本月名单。');
   const scale=Number(me?.ui_scale_css ?? 1);
   const columns=useMemo<(ColDef<BigRow>|ColGroupDef<BigRow>)[]>(() => {
     function value(key: AutoKey|DerivedKey|ManualKey,p: {data:BigRow|undefined;node?:{rowPinned?:string|null|undefined}|null}) {
@@ -162,7 +117,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     const number=(key:AutoKey|DerivedKey,label:string,tip?:string):ColDef<BigRow> => ({colId:key,headerName:label,headerTooltip:tip ?? label,headerClass:key.endsWith('rate')?'big-rate-header':'',cellClass:'big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),valueFormatter:p=>p.value==null?(p.node?.rowPinned?'':'—'):key.endsWith('rate') ? `${(Number(p.value)*100).toFixed(1)}%` : money(String(p.value)),...amountWidth(key)});
     const manual=(key:ManualKey):ColDef<BigRow> => ({colId:key,headerName:labels[key],headerTooltip:key==='open_ym'?'开工时间，YYYY-MM':labels[key],cellClass:key==='note'?'big-manual-cell':'big-manual-cell big-money',wrapText:true,autoHeight:true,valueGetter:p=>value(key,p),cellRendererSelector:p=>p.node.rowPinned?undefined:{component:ManualInput},valueFormatter:p=>p.value==null?'':key==='open_ym'||key==='note'?String(p.value):money(String(p.value)),...(key==='note' ? contentWidth(40,240,scale,1) : key==='open_ym' ? contentWidth(dateWidth,112,scale) : amountWidth(key,true))});
     const boundary = (column: ColDef<BigRow>): ColDef<BigRow> => ({...column,headerClass:`${column.headerClass ?? ''} big-group-start`,cellClass:`${column.cellClass ?? ''} big-group-start`});
-    return initialLayoutColumns([
+    return [
       {headerName:'项目',marryChildren:true,children:[
         {field:'seq',headerName:'序号',pinned:'left',valueGetter:p=>p.node?.rowPinned?'':p.data?.seq,...fixedWidth(Math.max(18,Math.ceil(textWidth(String(query.data?.rows.length ?? 0)) + 4)),scale)},
         {field:'display',headerName:'项目名称',pinned:'left',wrapText:true,autoHeight:true,...contentWidth(46,180,scale,1)},
@@ -172,12 +127,10 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
       {headerName:'机械使用与测算',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('rent_cum','外租机械开工累计','有效零租含税＋包月含税，开工累计')),number('rent_mon','外租机械当月'),number('lease_cum','设备租赁开工累计','有效内租设备，开工累计'),number('lease_mon','设备租赁当月'),number('total_cum','合计','外租机械开工累计＋设备租赁开工累计'),manual('mech_est'),number('use_rate','使用率','合计÷机械费测算；零分母留空')]},
       {headerName:'产值',headerClass:'big-group-start',marryChildren:true,children:[boundary(number('output_rate','产值完成率','产值累计÷合同（预估）价；零分母留空')),manual('contract'),manual('output_cum')]},
       boundary(number('mat_cum','主材累计（含税）','本项目纳入集采台账的合同结算合计')),boundary(manual('oil')),boundary(manual('note')),
-    ]);
+    ];
   },[scale,query.data]);
   const total=useMemo(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals} as unknown as BigRow] : [],[query.data]);
-  const gridColumns = useRetainedGridColumns(columns, root);
-  const prepared = useMemo(() => rendererLayoutColumns(gridColumns), [gridColumns]);
-  const layout = useTextGridLayout({root, active, rows: query.data?.rows ?? emptyBig, totals: total, columns: prepared, rowId: bigRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: ym, identity: ym});
+  const presentation = useGridPresentation({root, active, rows: query.data?.rows ?? emptyBig, totals: total, columns, rowId: bigRowId, scale, scope: ym, identity: ym});
   function focus(warehouse:string,key:ManualKey) {
     api.current?.ensureColumnVisible(key);
     requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>(`[row-id="${CSS.escape(warehouse)}"] [col-id="${key}"] input`)?.focus());
@@ -191,21 +144,21 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     </div></div>
     {(busy || feedback) && <p className="big-feedback" role="status">{busy?'正在保存…':feedback}</p>}
     {(error || query.isError || projectsError) && <p className="notice" role="alert">{error || query.error?.message || projectsError}<Button disabled={busy || blocked} onClick={()=>{
-      retryProjects();void reload().then(async()=>{await refreshOthers();setError('');setVerified(true);setFeedback('已重读，未保存输入仍保留。');}).catch(e=>setError(e instanceof Error?e.message:'重读失败。'));
+      retryProjects();void saves.reread();
     }}>重读核对</Button></p>}
-    {uncertain && <p className="notice" role="alert">核对刚才的保存结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={()=>{state.current.uncertain=false;setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，继续</Button></p>}
+    {uncertain && <p className="notice" role="alert">核对刚才的保存结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={()=>{saves.confirm();}}>已核对，继续</Button></p>}
     {Object.entries(drafts).map(([id,d])=><div className="big-draft" key={id}><span>{d.display}，{labels[d.key]}：{d.value || '清空，恢复带入'}{d.error && <span role="alert">，{d.error}</span>}</span>
       <Button size="small" disabled={disabled || busy} onMouseDown={e=>e.preventDefault()} onClick={()=>save(id,true)}>保存这项</Button>
-      <Button size="small" disabled={busy} onMouseDown={e=>e.preventDefault()} onClick={()=>{queue.current=queue.current.filter(k=>k!==id);const next={...state.current.drafts};delete next[id];update(next);}}>取消修改</Button></div>)}
+      <Button size="small" disabled={busy} onMouseDown={e=>e.preventDefault()} onClick={()=>{saves.update(drafts=>{const next={...drafts};delete next[id];return next;});}}>取消修改</Button></div>)}
     {query.isPending ? <p role="status">正在读取月度会大表…</p> : query.data && <BigCells.Provider value={{drafts,disabled,save,focus,
-      change:(row,key,value)=>{const id=keyOf(row.warehouse,key),old=state.current.drafts[id];const next={...state.current.drafts,[id]:{warehouse:row.warehouse,display:row.display,key,value,original:old?.original??row.manual[key].value??'',error:'',revision:++revision.current}};if(!lock.current && value===next[id]!.original) delete next[id];update(next);},
-      cancel:id=>{if(lock.current)return;queue.current=queue.current.filter(k=>k!==id);const next={...state.current.drafts};delete next[id];update(next);}}}>
+      change:(row,key,value)=>{const id=keyOf(row.warehouse,key);saves.update((drafts,writing)=>{const old=drafts[id],next={...drafts,[id]:{warehouse:row.warehouse,display:row.display,key,value,original:old?.original??row.manual[key].value??'',error:'',revision:++revision.current}};if(!writing&&value===next[id]!.original)delete next[id];return next;});},
+      cancel:id=>saves.update((drafts,writing)=>{if(writing)return drafts;const next={...drafts};delete next[id];return next;})}}>
       {!query.data.mat_available && <p className="notice">主材累计暂不可得，请先核对集采取数。</p>}
-      <div className={`big-grid${query.data.rows.length ? '' : ' is-empty'}`} ref={root} data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility: layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<BigRow> theme={gridTheme} domLayout="autoHeight" columnDefs={gridColumns}
-        getRowId={p=>p.data.warehouse} defaultColDef={{resizable:false,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement}}
-        rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} groupHeaderHeight={pageGridGeometry(scale).groupHeaderHeight} suppressScrollOnNewData suppressColumnVirtualisation
-        overlayNoRowsTemplate={`<span>${query.data.candidates.length ? '未选择项目，请使用“选择项目与排序”。' : '当前没有在建非壳项目，请核对项目档案。'}</span>`}
-        onGridReady={e=>{api.current=e.api;layout.attach(e.api);}} /></div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
+      <PreparedGrid presentation={presentation} className={`big-grid${query.data.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
+        getRowId:p=>p.data.warehouse,defaultColDef:{resizable:false,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},
+        groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressScrollOnNewData:true,suppressColumnVirtualisation:true,
+        overlayNoRowsTemplate:`<span>${query.data.candidates.length ? '未选择项目，请使用“选择项目与排序”。' : '当前没有在建非壳项目，请核对项目档案。'}</span>`,
+        onGridReady:e=>{api.current=e.api;}}} />
     </BigCells.Provider>}
     {picking && query.data && <ProjectOrder data={query.data} projects={projects} busy={busy} disabled={controlsDisabled} paused={!active || blocked} save={selection} close={()=>setPicking(false)} />}
   </>;

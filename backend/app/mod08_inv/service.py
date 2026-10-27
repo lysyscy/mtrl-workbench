@@ -39,6 +39,12 @@ def load_original_inbound(session):
     return R.load_original_inbound(session)
 
 
+def load_process_rows(session):
+    """过程资料所需的库存金额与差异定位字段，叠加同一份调整单。"""
+    from app.mod08_inv import repository as R
+    return R.load_process_rows(session)
+
+
 def parse_state(params: dict | None = None) -> dict:
     """把扁平查询参数解析成**筛选状态**（视图与路由共用同一个出口，不在各处各解一遍）。"""
     p = params or {}
@@ -134,7 +140,7 @@ def build_page_data(s: Session, state: dict | None = None) -> dict:
     }
 
 
-__all__ = ["project_references", "DEFAULT_TABLE", "load_rows", "load_original_details", "load_original_inbound",
+__all__ = ["project_references", "DEFAULT_TABLE", "load_rows", "load_original_details", "load_original_inbound", "load_process_rows",
            "parse_state", "state_to_query", "build_page_data"]
 
 

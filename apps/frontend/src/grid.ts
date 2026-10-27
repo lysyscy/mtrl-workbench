@@ -1,8 +1,18 @@
 import { tableWidths } from './table-widths';
 import type { GridApi } from 'ag-grid-community';
-import { AllCommunityModule, ModuleRegistry, provideGlobalGridOptions, themeQuartz } from 'ag-grid-community';
+import {
+  ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
+  RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
+  LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule,
+  ModuleRegistry, provideGlobalGridOptions, themeQuartz,
+} from 'ag-grid-community';
 
-ModuleRegistry.registerModules([AllCommunityModule]);
+// Register adopted public modules; their dependencies supply sorting and keyboard mechanics.
+ModuleRegistry.registerModules([
+  ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
+  RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
+  LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule,
+]);
 // Ordinary reads and reordering stay still; project drag feedback is handled separately.
 // Native drag selection/copy is shared by every grid; retain virtualisation and keyboard navigation.
 provideGlobalGridOptions({ animateRows: false, enableCellTextSelection: true, ensureDomOrder: true });
@@ -53,6 +63,7 @@ export function fitGridColumns(api: GridApi, root: HTMLElement | null, measure =
       if (api.isDestroyed()) return;
       if (api.getEditingCells().length || (root.contains(document.activeElement) && document.activeElement?.matches('input,select,textarea'))) { pending = true; return; }
       pending = false;
+      const started = performance.now(), measuring = needsMeasure; let measured = 0;
       const columns = api.getAllDisplayedColumns();
       if (!columns.length) return;
       if (needsMeasure) {
@@ -60,6 +71,7 @@ export function fitGridColumns(api: GridApi, root: HTMLElement | null, measure =
         if (context) for (const column of columns) {
           let width = column.getColDef().minWidth ?? 60;
           for (const cell of root.querySelectorAll<HTMLElement>(`[col-id="${CSS.escape(column.getColId())}"]`)) {
+            measured++;
             const css = getComputedStyle(cell); context.font = css.font;
             const text = Math.max(0, ...cell.innerText.split('\n').map(line => context.measureText(line.trim()).width));
             const control = Math.max(0, ...[...cell.querySelectorAll('input,select,button,a.row-button')].map(el => el.getBoundingClientRect().width));
@@ -77,6 +89,7 @@ export function fitGridColumns(api: GridApi, root: HTMLElement | null, measure =
       const widths = tableWidths(specs, columns.map(column => preferred.get(column.getColId()) ?? column.getActualWidth()), available, 1);
       const changed = columns.flatMap((column, i) => Math.abs(column.getActualWidth() - widths[i]!) >= .5 ? [{ key: column, newWidth: widths[i]! }] : []);
       if (changed.length) api.setColumnWidths(changed);
+      root.dataset.fitTiming = JSON.stringify({started,applied:performance.now(),measured,measuring,columns:columns.length,width:available});
     };
     const run = (measure: boolean) => { needsMeasure ||= measure; if (!frame) frame = requestAnimationFrame(fit); };
     const afterEdit = () => { if (pending) run(false); };

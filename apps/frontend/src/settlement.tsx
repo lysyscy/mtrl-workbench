@@ -1,24 +1,21 @@
-import { uncertainWrite } from './api';
 import Button from 'antd/es/button';
 import Input from 'antd/es/input';
 import Segmented from 'antd/es/segmented';
 import Select from 'antd/es/select';
 import Tag from 'antd/es/tag';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import type { Identity } from './api';
-import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
+import { contentWidth, fixedWidth, gridTheme } from './grid';
 import { reportMonth } from './ledger-controls';
 import { TimePicker } from './time-picker';
 import { money } from './notices-api';
-import { useHistoryGuard } from './history';
+import { useCellSaveQueue } from './use-cell-save';
 import { balanced, getExtract, getSettlement, kinds, saveBalance, settlementTotal } from './settlement-api';
 import type { AnnualRow, ExtractKind, SettlementRow } from './settlement-api';
 import { SettlementExport } from './settlement-export';
-import { useRetainedGridColumns, useTextGridLayout } from './grid-layout';
-import { initialLayoutColumns, rendererLayoutColumns } from './grid-render-layout';
+import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const settlementRowId = (row: SettlementRow) => row.id;
 const annualRowId = (row: AnnualRow) => row.warehouse;
 const emptySettlement: SettlementRow[] = [];
@@ -44,9 +41,7 @@ function Monthly({ me, blocked, active }: Props) {
   ],[scale]);
   const total = useMemo(() => query.data?.rows.length ? [{ id:'__total',name:'合计',rows:query.data.counts.rows,
     begin:settlementTotal(query.data.rows,'begin'),in:settlementTotal(query.data.rows,'in'),out:settlementTotal(query.data.rows,'out'),end:settlementTotal(query.data.rows,'end') }] : [],[query.data]);
-  const gridColumns = useMemo(() => initialLayoutColumns(columns), [columns]);
-  const prepared = useMemo(() => rendererLayoutColumns(gridColumns), [gridColumns]);
-  const layout = useTextGridLayout({root, active, rows: query.data?.rows ?? emptySettlement, totals: total, columns: prepared, rowId: settlementRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: ym, identity: ym});
+  const presentation = useGridPresentation({root, active, rows: query.data?.rows ?? emptySettlement, totals: total, columns, rowId: settlementRowId, scale, scope: ym, identity: ym});
   return <>
     <div data-page-chrome className="settlement-toolbar"><label>核算月<TimePicker value={ym} onChange={setYm} modes={['月']} label="收发结存核算月" disabled={blocked} /></label>
       <SettlementExport scope={`${ym} 收发结存`} url={`/api/m07/settlement/export?${new URLSearchParams({period:ym})}`} paused={!active || blocked} disabled={!query.data?.rows.length || query.isFetching || query.isError}>
@@ -57,10 +52,9 @@ function Monthly({ me, blocked, active }: Props) {
     {query.isError && <p className="notice" role="alert">{query.error.message}<Button onClick={() => void query.refetch()} disabled={blocked}>重读</Button></p>}
     {query.isPending ? <p role="status">正在读取收发结存…</p> : query.data && <>
       <p className="settlement-summary">{ym}，{query.data.counts.warehouses} 仓，{query.data.counts.rows} 行，{query.data.counts.files} 个文件{query.data.rows.length > 0 && <Tag className={`status-tag ${query.data.balance_ok ? 'status-positive' : 'status-negative'}`}>{query.data.balance_ok ? '全部对平' : '存在未对平'}</Tag>}</p>
-      <div className={`settlement-grid${query.data.rows.length ? '' : ' is-empty'}`} ref={root} data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility: layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<SettlementRow> theme={gridTheme} domLayout="autoHeight" columnDefs={gridColumns}
-        getRowId={p => p.data.id} defaultColDef={{resizable:false,sortable:false,suppressMovable:true}} rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight}
-        overlayNoRowsTemplate="该核算月没有收发结存数据" suppressColumnVirtualisation suppressScrollOnNewData
-        onGridReady={e => layout.attach(e.api)} /></div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}
+      <PreparedGrid presentation={presentation} className={`settlement-grid${query.data.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
+        getRowId:p=>p.data.id,defaultColDef:{resizable:false,sortable:false,suppressMovable:true},
+        overlayNoRowsTemplate:'该核算月没有收发结存数据',suppressColumnVirtualisation:true,suppressScrollOnNewData:true}} />
     </>}
   </>;
 }
@@ -79,17 +73,16 @@ function BalanceInput({data,node,colDef}: ICellRendererParams<AnnualRow>) {
 }
 function Extract({ me, blocked, active }: Props) {
   const [year,setYear] = useState(() => reportMonth().slice(0,4)), [status,setStatus] = useState('在建');
-  const [drafts,setDrafts] = useState<Record<string,Draft>>({}), [busy,setBusy] = useState(false), [uncertain,setUncertain] = useState(false), [verified,setVerified] = useState(false);
-  const [error,setError] = useState(''), [feedback,setFeedback] = useState('');
-  const request = useRef<AbortController | null>(null);
-  const client = useQueryClient(), lock = useRef(false), queue = useRef<string[]>([]), alive = useRef(true);
-  const queryKey = ['extract',year,status];
-  const query = useQuery({queryKey, enabled:active && !blocked, queryFn:({signal}) => getExtract(year,status,signal)});
-  const state = useRef({drafts,active,blocked,uncertain,me}); state.current = {drafts,active,blocked,uncertain,me};
-  const update = (value: Record<string,Draft>) => {state.current.drafts = value; setDrafts(value);};
-  useEffect(() => {alive.current = true; return () => {alive.current = false; request.current?.abort(); queue.current = [];};},[]);
-  useEffect(() => {if (!active || blocked) queue.current = [];},[active,blocked]);
-  useHistoryGuard('extract-balances',() => lock.current ? '历史结余正在保存，请稍候。' : uncertain ? '历史结余保存结果待核实，请先核对。' : Object.keys(state.current.drafts).length ? '历史结余有未保存输入，请先处理。' : '');
+  const client=useQueryClient();
+  const queryKey=['extract',year,status];
+  const query=useQuery({queryKey,enabled:active&&!blocked,queryFn:({signal})=>getExtract(year,status,signal)});
+  const saves=useCellSaveQueue<Draft,Awaited<ReturnType<typeof getExtract>>>({
+    enabled:active&&!blocked&&Boolean(me),canWrite:!query.isError&&!query.isPending,
+    read:reload,write:(draft,signal)=>saveBalance(draft.kind,draft.warehouse,draft.value,signal),
+    acknowledge:(current,submitted)=>current.value===submitted.value?undefined:current,
+    saved:draft=>`${draft.kind}，${draft.warehouse}，已${draft.value.trim()?'保存':'清空'}`,
+  },{key:'extract-balances',label:'历史结余'});
+  const {drafts,busy,uncertain,verified,error,feedback}=saves;
   async function reload() {
     await client.cancelQueries({queryKey:['extract']});
     const data = await client.fetchQuery({queryKey,staleTime:0,queryFn:({signal}) => getExtract(year,status,signal)});
@@ -97,29 +90,7 @@ function Extract({ me, blocked, active }: Props) {
     await client.invalidateQueries({queryKey:['extract']}, {throwOnError:true});
     return data;
   }
-  async function drain() {
-    if(lock.current || !state.current.active || state.current.blocked || state.current.uncertain || !state.current.me) return;
-    const key = queue.current.shift(); if(!key) return;
-    const draft = state.current.drafts[key]; if(!draft) {void drain(); return;}
-    lock.current = true; setBusy(true); setError(''); setFeedback(''); let written = false;
-    try {
-      const controller = new AbortController(); request.current = controller;
-      await saveBalance(draft.kind,draft.warehouse,draft.value,controller.signal); written = true;
-      if(!alive.current) return;
-      const next = {...state.current.drafts}; if(next[key]?.value === draft.value) delete next[key]; update(next);
-      await reload(); if(alive.current) setFeedback(`${draft.kind}，${draft.warehouse}，已${draft.value.trim() ? '保存' : '清空'}`);
-    } catch(e) {
-      if(!alive.current) return;
-      const message = e instanceof Error ? e.message : '保存失败，请重试。';
-      if(written || uncertainWrite(e)) {state.current.uncertain = true; setUncertain(true); setVerified(false); queue.current = []; setError(`${written ? '已保存，重读失败。' : '保存结果待核实。'}${message}请重读核对，勿重复提交。`);}
-      else {const next = {...state.current.drafts}; if(next[key]) next[key] = {...next[key],error:message}; update(next); setError(message);}
-    } finally {lock.current = false; if(alive.current) {setBusy(false); void drain();}}
-  }
-  function save(key: string) {
-    const draft = state.current.drafts[key];
-    if(!draft || draft.error || !active || blocked || uncertain) return;
-    if(!queue.current.includes(key)) queue.current.push(key); void drain();
-  }
+  const save=saves.save;
   const dirty = Object.keys(drafts).length > 0;
   const disabled = blocked || !active || !me || uncertain || query.isError || query.isPending;
   return <>
@@ -132,15 +103,15 @@ function Extract({ me, blocked, active }: Props) {
     </div>
     {(busy || feedback) && <p role="status">{busy ? '正在保存历史结余…' : feedback}</p>}
     {(error || query.isError) && <p className="notice" role="alert">{error || query.error?.message}<Button disabled={busy || blocked} onClick={() => {
-      void reload().then(() => {setError('');setVerified(true);setFeedback('已重读，未保存输入仍保留。');}).catch(e => setError(e instanceof Error ? e.message : '重读失败。'));
+      void saves.reread();
     }}>重读核对</Button></p>}
-    {uncertain && <p className="notice" role="alert">核对刚才的操作结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={() => {setUncertain(false);setError('');setFeedback('已确认，请核对保留输入后再保存。');}}>已核对，保留输入继续</Button></p>}
+    {uncertain && <p className="notice" role="alert">核对刚才的操作结果后再继续。<Button disabled={!verified || busy || query.isFetching || query.isError} onClick={() => {saves.confirm();}}>已核对，保留输入继续</Button></p>}
     {Object.entries(drafts).map(([key,d]) => <div className="settlement-draft" key={key}><span>{d.kind}，{d.warehouse}，2025-11及之前：{d.value || '清空'}{d.error && <span role="alert">，{d.error}</span>}</span>
-      <Button disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => {const next = {...state.current.drafts}; if(next[key]) next[key] = {...next[key],error:''};update(next);save(key);}}>保存这项</Button>
-      <Button disabled={busy} onMouseDown={e => e.preventDefault()} onClick={() => {const next = {...state.current.drafts};delete next[key];update(next);}}>取消修改</Button></div>)}
+      <Button disabled={disabled || busy} onMouseDown={e => e.preventDefault()} onClick={() => {save(key,true);}}>保存这项</Button>
+      <Button disabled={busy} onMouseDown={e => e.preventDefault()} onClick={() => {saves.update(drafts=>{const next={...drafts};delete next[key];return next;});}}>取消修改</Button></div>)}
     {query.isPending ? <p role="status">正在读取库存年度汇总…</p> : query.data && <Cells.Provider value={{drafts,disabled,save,
-      change:(kind,warehouse,original,value) => {const key = keyOf(kind,warehouse),old = state.current.drafts[key]; const next = {...state.current.drafts,[key]:{kind,warehouse,original:old?.original ?? original,value,error:''}}; if(value === (old?.original ?? original) && !lock.current) delete next[key];update(next);},
-      cancel:key => {if(lock.current) return;const next = {...state.current.drafts};delete next[key];update(next);}}}>
+      change:(kind,warehouse,original,value)=>{const key=keyOf(kind,warehouse);saves.update((drafts,writing)=>{const old=drafts[key],next={...drafts,[key]:{kind,warehouse,original:old?.original??original,value,error:''}};if(value===(old?.original??original)&&!writing)delete next[key];return next;});},
+      cancel:key=>saves.update((drafts,writing)=>{if(writing)return drafts;const next={...drafts};delete next[key];return next;})}}>
       {kinds.map(kind => <AnnualTable key={kind} grid={query.data!.annual[kind]} active={active} scale={Number(me?.ui_scale_css ?? 1)} />)}
     </Cells.Provider>}
   </>;
@@ -162,12 +133,8 @@ function AnnualTable({grid,scale,active}:{grid: import('./settlement-api').Annua
     ];
   },[grid,history,scale]);
   const total = useMemo<AnnualRow[]>(() => [{warehouse:`${grid.kind}合计`,prior:grid.sum_row[0]!,cells:grid.sum_row.slice(1,13),total:grid.sum_row[13]!,balance:null}], [grid]);
-  const retained = useRetainedGridColumns(columns, root);
-  const gridColumns = useMemo(() => initialLayoutColumns(retained), [retained]);
-  const prepared = useMemo(() => rendererLayoutColumns(gridColumns), [gridColumns]);
-  const layout = useTextGridLayout({root, active, rows: grid.rows, totals: total, columns: prepared, rowId: annualRowId, minimum: pageGridGeometry(scale).rowHeight, headerMinimum: pageGridGeometry(scale).headerHeight, scope: grid.year, identity: grid.year});
-  return <section className="settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><div ref={root} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`} data-layout-state={layout.state} data-layout-error={layout.error || undefined} inert={layout.concealed || layout.state === 'preparing' || layout.state === 'error'} style={{visibility: layout.concealed || layout.state === 'preparing' || layout.state === 'error' ? 'hidden' : undefined}}><AgGridReact<AnnualRow> theme={gridTheme} domLayout="autoHeight" columnDefs={gridColumns}
-    getRowId={p => p.data.warehouse} defaultColDef={{resizable:true,sortable:false,suppressMovable:true,suppressKeyboardEvent:e => e.event.target instanceof HTMLInputElement}}
-    rowHeight={pageGridGeometry(scale).rowHeight} headerHeight={pageGridGeometry(scale).headerHeight} overlayNoRowsTemplate={`当前筛选条件下没有${grid.kind}数据`} suppressScrollOnNewData suppressColumnVirtualisation
-    onGridReady={e => layout.attach(e.api)} /></div>{layout.measurement}{layout.error && <p role="alert">{layout.error}<Button onClick={layout.retry}>重试表格加载</Button></p>}</section>;
+  const presentation = useGridPresentation({root, active, rows: grid.rows, totals: total, columns, rowId: annualRowId, scale, scope: grid.year, identity: grid.year});
+  return <section className="settlement-annual" aria-label={`${grid.kind}年度汇总`}><h2>{grid.kind}</h2><PreparedGrid presentation={presentation} className={`settlement-grid annual-grid${grid.rows.length ? '' : ' is-empty'}`} grid={{theme:gridTheme,domLayout:'autoHeight',
+    getRowId:p=>p.data.warehouse,defaultColDef:{resizable:true,sortable:false,suppressMovable:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},
+    overlayNoRowsTemplate:`当前筛选条件下没有${grid.kind}数据`,suppressScrollOnNewData:true,suppressColumnVirtualisation:true}} /></section>;
 }
