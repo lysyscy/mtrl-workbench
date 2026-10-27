@@ -60,3 +60,41 @@ def test_actual_fee_save_updates_only_original_id(server,browser_page,api,projec
     assert set(before)==set(current)
     assert Decimal(current[row['id']]['amount'])==changed and current[row['id']]['ym']==row['ym']
     assert all(current[key]==value for key,value in before.items() if key!=row['id'])
+
+
+def test_new_annual_item_creates_only_entered_month(server,browser_page,api,projects,disposable):
+    from uuid import uuid4
+    page,_=browser_page; project,data=sample(api,projects); open_sample(page,server,project,data)
+    year=data['year']; project_name=project['warehouse_name']; name='验证费用'+uuid4().hex[:10]
+    before=get(api,'/api/m09/fee/year',year=year,pj=project_name)
+    page.get_by_role('button',name='增加手填项').click()
+    field=page.get_by_label('新费用项名称');expect(field).to_be_visible();field.fill(name);field.press('Tab')
+    assert get(api,'/api/m09/fee/year',year=year,pj=project_name)['records']==before['records']
+    amount=page.get_by_label(f'{year}-03 {name}金额',exact=True);expect(amount).to_be_visible();amount.fill('12.34');amount.press('Enter')
+    expect(page.locator('.fees-page').get_by_role('status').filter(has_text='已保存')).to_be_visible(timeout=15000)
+    after=get(api,'/api/m09/fee/year',year=year,pj=project_name)
+    new=[r for r in after['records'] if r['id'] not in {x['id'] for x in before['records']}]
+    assert len(new)==1 and new[0]['item']==name and new[0]['ym']==year+'-03' and Decimal(new[0]['amount'])==Decimal('12.34')
+    page.reload();pick_option(page,'费用项目',project['disp']);year_field=page.get_by_label('费用年份',exact=True);year_field.fill(year);year_field.press('Enter');year_field.press('Escape')
+    expect(page.get_by_label(f'{year}-03 {name}金额 #{new[0]["id"]}',exact=True)).to_have_value('12.34',timeout=15000)
+    assert page.get_by_text('新增核算月',exact=True).count()==0
+
+
+def test_new_annual_item_lost_receipt_reread_does_not_duplicate(server,browser_page,api,projects,disposable):
+    from uuid import uuid4
+    page,_=browser_page;project,data=sample(api,projects);open_sample(page,server,project,data)
+    year=data['year'];project_name=project['warehouse_name'];name='验证失回执'+uuid4().hex[:10];writes=[]
+    before=get(api,'/api/m09/fee/year',year=year,pj=project_name)
+    def lose_receipt(route):
+        response=route.fetch();assert response.ok;writes.append(route.request.post_data_json);route.abort('failed')
+    page.route('**/api/m09/fee/add',lose_receipt)
+    page.get_by_role('button',name='增加手填项').click();field=page.get_by_label('新费用项名称');expect(field).to_be_visible();field.fill(name);field.press('Tab')
+    amount=page.get_by_label(f'{year}-03 {name}金额',exact=True);expect(amount).to_be_visible();amount.fill('5.67');amount.press('Enter')
+    expect(page.get_by_role('alert').filter(has_text='保存结果待核实')).to_be_visible(timeout=15000)
+    page.get_by_role('button',name='重读核对',exact=True).click()
+    expect(page.get_by_role('button',name='已核对，保留输入继续')).to_be_enabled(timeout=15000)
+    after=get(api,'/api/m09/fee/year',year=year,pj=project_name);ids={r['id'] for r in before['records']}
+    new=[r for r in after['records'] if r['id'] not in ids]
+    assert len(writes)==1 and len(new)==1 and new[0]['item']==name and new[0]['ym']==year+'-03' and Decimal(new[0]['amount'])==Decimal('5.67')
+    page.get_by_role('button',name='已核对，保留输入继续').click()
+    assert len(writes)==1
