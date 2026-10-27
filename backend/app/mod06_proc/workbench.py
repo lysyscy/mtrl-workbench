@@ -212,6 +212,7 @@ def detail_view(s, payload, revision, *, keywords=None):
 
 def save_details(s, data):
     wh, ym, cat = monthly_args(s, data)
+    repo.lock_mech_month(s, wh, ym)
     record_key = key('details', wh, ym, cat)
     old, revision = read(s, record_key)
     payload = {**old, 'warehouse': wh, 'ym': ym, 'category': cat, 'rows': normalize_rows(data.get('rows'))}
@@ -257,6 +258,38 @@ def confirm_amounts(s, data, operator=''):
     saved['confirmation_result'] = effective(s, wh, ym)
     write(s, record_key, saved, revision)
     return effective(s, wh, ym)
+
+
+def detail_signatures(s):
+    """Only nonempty saved details trigger the process-page decision, across categories."""
+    grouped = {}
+    for record in s.scalars(select(Record).where(Record.key.like('details:%')).execution_options(populate_existing=True)):
+        payload = record.payload
+        if payload.get('rows'):
+            grouped.setdefault((payload['warehouse'], payload['ym']), []).append([record.key, record.revision])
+    result = {}
+    for (wh, ym), revisions in grouped.items():
+        result.setdefault(wh, {})[ym] = digest(sorted(revisions))
+    return result
+
+
+def save_process_mech(s, *, warehouse, ym, values, confirmed=False, effective_signature='',
+                      detail_signature='', operator=''):
+    """One transaction checks the decision, changes source and saves only edited cells."""
+    current = effective(s, warehouse, ym, lock=True)
+    changed = {column: value for column, value in values.items()
+               if current['values'][column] is None or Decimal(current['values'][column]) != value}
+    if not changed:
+        return
+    details = detail_signatures(s).get(warehouse, {}).get(ym, '')
+    if details or any(current['sources'][column]['mode'] == 'detail' for column in changed):
+        if confirmed is not True:
+            raise MustReportError('同项目同月已有机械明细，请确认后保存手填金额；原明细保留。')
+        check_effective(s, warehouse, ym, effective_signature)
+        if detail_signature != details:
+            raise MustReportError('机械明细已变化，请重读并重新确认金额。')
+        repo.source_manual(s, warehouse=warehouse, ym=ym, columns=list(changed), operator=operator)
+    repo.save_mech(s, warehouse=warehouse, ym=ym, values=changed, project_id=None)
 
 
 def source_manual(s, data, operator=''):
@@ -488,6 +521,8 @@ def import_confirm(s, data, operator=''):
     if preview.result is not None:
         return deepcopy(preview.result)
     resolutions = data.get('resolutions') or {}
+    for wh, ym in sorted({(batch['warehouse'], batch['ym']) for batch in preview.payload['batches']}):
+        repo.lock_mech_month(s, wh, ym)
     # Validate every conflict/revision before writes, keeping the batch atomic.
     for batch in preview.payload['batches']:
         if read(s, batch['key'])[1] != batch['revision']:

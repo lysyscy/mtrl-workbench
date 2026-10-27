@@ -47,3 +47,16 @@ def projects(api):
     result=api.get('/api/m01/projects?status=all');result.raise_for_status();rows=result.json()
     assert rows,'真实副本没有项目，项目相关路径未覆盖'
     return rows
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    result = yield
+    report = result.get_result()
+    setattr(item, 'preview_report_' + report.when, report)
+
+
+@pytest.fixture
+def preview_screenshot(browser_page, server):
+    from tools.dev.frontend_capture import capture_preview
+    return lambda label: capture_preview(browser_page[0], server.owner, label)

@@ -109,6 +109,15 @@ def api_mech() -> dict:
         rows = repo.load_mech(s)                      # 手录（正式段）
         snaps = repo.load_history(s)                  # 快照（历史段的材料 ＋ 机械）
         cutoffs = repo.load_cutoffs(s)                # 每个项目的分界月
+        from app.mod06_proc import workbench
+        details = workbench.detail_signatures(s)
+        existing = {(row['warehouse'], row['ym']) for row in rows}
+        for wh, months in details.items():
+            for ym in months:
+                if (wh, ym) not in existing:
+                    state = workbench.effective(s, wh, ym)
+                    rows.append({'warehouse': wh, 'ym': ym, **state['values'],
+                                 'sources': state['sources'], 'effective_signature': state['signature']})
 
     zeros = [0.0] * len(D.MECH_COLUMNS)
 
@@ -149,12 +158,15 @@ def api_mech() -> dict:
         out.setdefault(wh, {})[ym] = (snap.get((wh, ym), zeros) if from_snapshot
                                       else manual.get((wh, ym), zeros))
         sections.setdefault(wh, {})[ym] = section
-    sources, signatures = {}, {}
+    sources, signatures, effective_values = {}, {}, {}
     for row in rows:
         sources.setdefault(row['warehouse'], {})[row['ym']] = row['sources']
         signatures.setdefault(row['warehouse'], {})[row['ym']] = row['effective_signature']
+        effective_values.setdefault(row['warehouse'], {})[row['ym']] = {
+            column: format(Decimal(str(row[column])), '.2f') if row[column] not in (None, '') else None
+            for column in D.MECH_KEYS}
     return {"mech": out, "count": len(rows), "columns": list(D.MECH_COLUMNS),
-            "sections": sections, "sources": sources, "effective_signatures": signatures}
+            "sections": sections, "sources": sources, "effective_signatures": signatures, "detail_signatures": details, "effective_values": effective_values}
 
 
 class MechSaveRequest(BaseModel):
@@ -163,6 +175,9 @@ class MechSaveRequest(BaseModel):
     warehouse: str = ""
     ym: str = ""
     values: dict[str, Any] = {}
+    confirmed: bool = False
+    effective_signature: str = ''
+    detail_signature: str = ''
 
 
 class MaterialSaveRequest(BaseModel):
@@ -194,6 +209,15 @@ def api_material_save(req: MaterialSaveRequest) -> dict:
 
 @router.post("/api/m06/mech")
 def api_mech_save(req: MechSaveRequest) -> dict:
+    return _save_mech(req, confirm_details=False)
+
+
+@router.post('/api/m06/mech-cell')
+def api_mech_cell_save(req: MechSaveRequest) -> dict:
+    return _save_mech(req, confirm_details=True)
+
+
+def _save_mech(req: MechSaveRequest, *, confirm_details: bool) -> dict:
     """保存实际提交的机械列；任意月份可改，校验失败不写入。"""
     warehouse = str(req.warehouse or "").strip()
     if not warehouse:
@@ -208,9 +232,14 @@ def api_mech_save(req: MechSaveRequest) -> dict:
         raise MustReportError(f"未保存：{exc}") from exc
 
     with session_scope() as s:
-        repo.save_mech(s, ym=ym, warehouse=warehouse,
-                       values={k: Decimal(v) for k, v in values.items()},
-                       project_id=None)
+        parsed = {k: Decimal(v) for k, v in values.items()}
+        if confirm_details:
+            from app.mod06_proc import workbench
+            workbench.save_process_mech(s, ym=ym, warehouse=warehouse, values=parsed,
+                confirmed=req.confirmed, effective_signature=req.effective_signature,
+                detail_signature=req.detail_signature, operator=current_operator())
+        else:
+            repo.save_mech(s, ym=ym, warehouse=warehouse, values=parsed, project_id=None)
     return {
         "ok": True, "ym": ym, "warehouse": warehouse,
         "columns": list(D.MECH_COLUMNS),

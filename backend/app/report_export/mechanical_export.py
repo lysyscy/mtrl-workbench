@@ -126,7 +126,6 @@ def build(data, *, project_rows=None):
     if len(ym) != 7 or not data.get('projects'):
         raise MustReportError('请选择报表月份和至少一个项目')
     wb = load_workbook(require_template(MECHANICAL_TEMPLATE))
-    warnings = []
 
     def mark_project(sheet, warehouse, row):
         if project_rows is not None:
@@ -206,14 +205,9 @@ def build(data, *, project_rows=None):
             for col in (total_col, net_col):
                 sum_formula(sheet, group_row, col, range(group_row + 1, row_no),
                             empty_zero=bool(detail and not rows and numeric(detail['totals'].get('gross')) == 0))
-            if not rows:
-                warnings.append(f'{project["name"]}：{"零租" if category == "zero" else "包月"}明细未取得')
-            if detail and detail.get('issues'):
-                warnings.append(f'{project["name"]}：{len(detail["issues"])}行字段待补')
             effective = amount(data, wh, ym, CATEGORY_COLUMNS[category])
-            if numeric(effective) != numeric(gross):
-                warnings.append(f'{project["name"]}：{"零租" if category == "zero" else "包月"}明细合计与已采用金额不同')
-            elif detail and effective is not None and sheet.cell(group_row, total_col).value.result == numeric(effective):
+            if (detail and effective is not None and numeric(effective) == numeric(gross)
+                    and sheet.cell(group_row, total_col).value.result == numeric(effective)):
                 reference = f"'{sheet.title}'!{get_column_letter(total_col)}{group_row}"
                 set_formula(summary.cell(group_no + 5, 10 if category == 'zero' else 11),
                             Formula(f'={reference}', numeric(effective)))
@@ -234,13 +228,6 @@ def build(data, *, project_rows=None):
         for category, _label in categories:
             source = next((r for r in hist.get('annual_rows', []) if r['category'] == category), {})
             month_values[wh, category] = annual_values(data, wh, hist, source, category)
-            opening = numeric(source.get('cells', {}).get('C'))
-            source_year = source.get('source', {}).get('year') or str(hist.get('base_month') or '')[:4]
-            if opening is not None:
-                archive = sum((v for m, v in month_values[wh, category].items()
-                               if m < f'{int(source_year) - 1}-01'), Decimal(0))
-                if abs(opening - archive) >= Decimal('0.01'):
-                    warnings.append(f'{project["name"]}：原往年合计尚未全部拆到可靠月份，请补齐历史来源')
     months = sorted({m for values in month_values.values() for m in values}) or [ym]
     sum_col = len(months) + 3
     width = sum_col + 5
@@ -273,9 +260,7 @@ def build(data, *, project_rows=None):
             result = sum(values, Decimal(0)) if values else Decimal(0) if known == 0 else None
             set_formula(annual.cell(row_no, sum_col), Formula(
                 f'=SUM({references})' if known == 0 else f'=IF(COUNT({references})=0,"",SUM({references}))', result))
-            if known is not None and (result is None or abs(known - result) >= Decimal('0.01')):
-                warnings.append(f'{project["name"]}：{label}累计与可追溯月份合计不同，请补齐历史月份')
-            elif known is not None:
+            if known is not None and result is not None and abs(known - result) < Decimal('0.01'):
                 col = {'zero': 5, 'monthly': 6, 'internal': 8}.get(category)
                 if col:
                     reference = f"'{annual.title}'!{get_column_letter(sum_col)}{row_no}"
@@ -317,12 +302,12 @@ def build(data, *, project_rows=None):
             cell.border = copy(border)
     for sheet, max_col in zip(wb, (15, 16, 15, width)):
         sheet.print_area = f'A1:{get_column_letter(max_col)}{sheet.max_row}'
-    return wb, warnings
+    return wb
 
 
 def preview(data):
     project_rows = {}
-    wb, warnings = build(data, project_rows=project_rows)
+    wb = build(data, project_rows=project_rows)
     sheets = []
     for sheet in wb.worksheets:
         merged_starts, hidden = {}, set()
@@ -344,9 +329,9 @@ def preview(data):
             rows.append(cells)
         sheets.append({'name': sheet.title, 'rows': rows, 'project_rows': project_rows[sheet.title]})
     wb.close()
-    return {'ok': True, 'ym': data['ym'], 'projects': data['projects'], 'sheets': sheets, 'warnings': warnings}
+    return {'ok': True, 'ym': data['ym'], 'projects': data['projects'], 'sheets': sheets}
 
 
 def export(data, output_dir):
-    wb, _ = build(data)
+    wb = build(data)
     return save_workbook(wb, Path(output_dir) / f'机械费报表-{data["ym"]}-{uuid4().hex[:12]}.xlsx')

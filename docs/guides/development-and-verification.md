@@ -38,7 +38,7 @@ db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/
 
 ## React 浏览器与预览工具验证
 
-构建/启动/更新/退出按[预览指南](frontend-preview.md)。`apps/frontend/tests/conftest.py`只附着登记的真实副本；`test_preview.py`的server、浏览器context和login绑定同一进程/schema/产品身份，不能在测试中透明切换成用户实例。各例关闭自身context与路由；共享下拉定位回`preview_select.py`，真实API选样回`live_data.py`，不再运行浏览器业务seed或自造业务回包。
+构建/启动/更新/退出按[预览指南](frontend-preview.md)。`apps/frontend/tests/conftest.py`只附着登记的真实副本；`test_preview.py`的server、浏览器context和login绑定同一进程/schema/产品身份，不能在测试中透明切换成用户实例。各例关闭自身context与路由；React browser_page在失败或捕获运行错误时、关闭页面前保存截图，按需验看使用preview_screenshot(label)；两者经tools/dev/frontend_capture.py写入本轮screenshots及同名JSON，记录实际预览身份、页面、视口和图像散列，身份核验失败明确标记，不冒称最新页面已验。共享下拉定位回`preview_select.py`，真实API选样回`live_data.py`，不再运行浏览器业务seed或自造业务回包。
 
 只读代表可复用当前真实试用实例；写入代表须通过每例重新核验的disposable门，先停并保存用户试用归属，使用唯一可丢弃真实副本，完成后恢复原入口。真实数据缺场景时记录具名覆盖缺口，不构造模拟页面补成全过。按受影响页面选择现有节点；域金额组合、日期/归属和模板由相应后端/文件层承担，React保登录/权限、草稿/焦点、未知回执、实际写读和下载范围代表。
 

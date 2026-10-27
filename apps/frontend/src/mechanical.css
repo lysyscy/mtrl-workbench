@@ -13,10 +13,8 @@
 .mechanical-tabs button[aria-pressed=true],.mechanical-preview-tools button[aria-pressed=true]{background:var(--pri-l);color:var(--pri-d);border-color:var(--pri-bd)}
 .mechanical-card .ant-btn,.mechanical-dialog .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(12px * var(--fscale))}
 .mechanical-card .ag-cell .ant-btn,.mechanical-detail-head .ant-btn,.mechanical-dialog li .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
-.mechanical-boundary,.mechanical-feedback,.mechanical-warnings{margin:calc(12px * var(--fscale)) calc(16px * var(--fscale));color:var(--tx2);font-size:calc(12px * var(--fscale))}
+.mechanical-boundary,.mechanical-feedback{margin:calc(12px * var(--fscale)) calc(16px * var(--fscale));color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .mechanical-feedback{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale));overflow-wrap:anywhere}
-.mechanical-warnings{max-height:25dvh;overflow:auto}
-.mechanical-warnings summary{cursor:pointer;color:var(--wn-d)}
 .mechanical-locate{display:flex;align-items:center;flex-wrap:wrap;gap:calc(8px * var(--fscale));margin:calc(12px * var(--fscale)) calc(16px * var(--fscale))}
 .mechanical-locate label,.mechanical-edit-tools label{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
 .mechanical-locate .ant-input{width:calc(200px * var(--fscale));max-width:100%;height:calc(32px * var(--fscale));border-radius:var(--radius-input)}

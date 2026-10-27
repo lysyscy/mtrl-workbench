@@ -47,7 +47,16 @@ def mech_effective(row, warehouse, ym):
             'signature': signature, 'source': deepcopy(row.source_batches or {}) if row else {}}
 
 
+def lock_mech_month(s, warehouse, ym):
+    """Serialize detail edits and amount decisions, including previously empty months."""
+    if s.get_bind().dialect.name == 'postgresql':
+        from sqlalchemy import text
+        s.execute(text('SELECT pg_advisory_xact_lock(406, hashtext(:scope))'),
+                  {'scope': json.dumps([warehouse, ym], ensure_ascii=False)})
+
+
 def mech_row(s, warehouse, ym):
+    lock_mech_month(s, warehouse, ym)
     rows = s.execute(select(ProcMechManual).where(
         ProcMechManual.warehouse_name == warehouse, ProcMechManual.ym == ym)
         .with_for_update().execution_options(populate_existing=True)).scalars()

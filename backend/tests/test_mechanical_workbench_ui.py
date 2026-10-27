@@ -107,7 +107,7 @@ vm.runInContext(`(async()=>{
  MW.month='2026-09';calls.length=0;await ACT.mwIgnore({dataset:{pj:'A',relation:'report'}});const ignoreCall=calls.find(c=>c[1].endsWith('/ignore'));assert.equal(ignoreCall[2].revision,8);assert.equal(ignoreCall[2].raw,'0.12');assert.equal(ignoreCall[2].i8_revision,9);
  calls.length=0;await ACT.mwDocument({dataset:{pj:'A',id:'bill',undo:'1'}});const billCall=calls.find(c=>c[1].endsWith('/document-ignore'));assert.equal(billCall[2].fact,'f');assert.equal(billCall[2].undo,true);
  MW.data.details=[];MW.tab='zero';MW.onlyProblems=false;MW.drafts.clear();assert.ok(mwDetails().includes('尚无明细'));ACT.mwAdd({dataset:{pj:'A'}});assert.equal(mwRows('A').length,1);
- MW.preview={sheets:[{name:'表1',rows:[[{value:'<script>bad</script>'}]]}],warnings:['待补'],projects:['A']};assert.ok(mwPreviewView().includes('&lt;script&gt;bad&lt;/script&gt;'));
+ MW.preview={sheets:[{name:'表1',rows:[[{value:'<script>bad</script>'}]]}],projects:['A']};assert.ok(mwPreviewView().includes('&lt;script&gt;bad&lt;/script&gt;'));
  const oldPost=API.post;API.post=async()=>({ok:false,message:'明细已变化，请重新核对'});await ACT.mwSave();assert.equal(MW.drafts.size,1,'保存被拒时保留未保存草稿');assert.ok(notifications.some(message=>message.includes('明细已变化')));API.post=oldPost;
  let completeOld;const currentData=structuredClone(MW.data);API.get=url=>url.includes('2026-09')?new Promise(resolve=>{completeOld=resolve;}):Promise.resolve({...currentData,marker:'new'});
  MW.month='2026-09';const oldRequest=reloadMechanicalWorkbench();MW.month='2026-10';await reloadMechanicalWorkbench();completeOld({...currentData,marker:'old'});await oldRequest;assert.equal(MW.data.marker,'new','旧月份迟到的回包不能覆盖新月份');

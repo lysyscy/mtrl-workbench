@@ -11,7 +11,8 @@ export type Amounts = Record<string,string|null>;
 export type ProcessRow = Amounts & { ym:string; materialEditable:string };
 export interface Difference { id:number; doc_no:string; seq:string; material:string; warehouse:string; before:string|null; after:string|null; delta:string|null; remark:string; operator:string; at:string }
 export interface Matrix { raw:ProcessRow[]; adjusted:ProcessRow[]; totals:{raw:Amounts;adjusted:Amounts}; segments:{raw:{name:string;total:string|null}[];adjusted:{name:string;total:string|null}[]}; diffs:Difference[]; diff_totals:Amounts }
-export interface ProcessData { projects:string[]; matrices:Record<string,Matrix>; sources:Record<string,Record<string,Record<string,{mode:string}>>>; signatures:Record<string,Record<string,string>> }
+export interface Confirmation { confirmed:true; effective_signature:string; detail_signature:string }
+export interface ProcessData { effectiveValues:Record<string,Record<string,Amounts>>; detailSignatures:Record<string,Record<string,string>>; projects:string[]; matrices:Record<string,Matrix>; sources:Record<string,Record<string,Record<string,{mode:string}>>>; signatures:Record<string,Record<string,string>> }
 const invalid = () => new ApiError('过程资料读取不完整，请重读。');
 function amount(value:unknown):string|null {
   if (value === null) return null;
@@ -33,7 +34,7 @@ function rows(value:unknown):ProcessRow[] {
   return result;
 }
 export function readProcess(value:unknown,mechanical:unknown):ProcessData {
-  if(!record(value) || value.ok!==true || !Array.isArray(value.projects) || !value.projects.every(p=>typeof p==='string') || !record(value.matrices) || !record(mechanical) || !record(mechanical.sources) || !record(mechanical.effective_signatures)) throw invalid();
+  if(!record(value) || value.ok!==true || !Array.isArray(value.projects) || !value.projects.every(p=>typeof p==='string') || !record(value.matrices) || !record(mechanical) || !record(mechanical.sources) || !record(mechanical.effective_signatures) || !record(mechanical.detail_signatures) || !record(mechanical.effective_values)) throw invalid();
   const matrices:Record<string,Matrix>={};
   for(const warehouse of value.projects as string[]) {
     const m=value.matrices[warehouse];
@@ -58,21 +59,26 @@ export function readProcess(value:unknown,mechanical:unknown):ProcessData {
       for(const key of mechKeys) if(!record(columns[key]) || typeof columns[key].mode!=='string') throw invalid();
       const signatures=mechanical.effective_signatures[warehouse];
       if(!record(signatures) || typeof signatures[ym]!=='string') throw invalid();
+      const effective=mechanical.effective_values[warehouse];
+      if(!record(effective)) throw invalid();
+      amounts(effective[ym],mechKeys);
     }
   }
-  return {projects:value.projects as string[],matrices,sources:mechanical.sources as ProcessData['sources'],signatures:mechanical.effective_signatures as ProcessData['signatures']};
+  for(const [warehouse,months] of Object.entries(mechanical.detail_signatures)) {
+    if(!record(months)) throw invalid();
+    for(const [ym,signature] of Object.entries(months)) {
+      if(typeof signature!=='string' || !record(mechanical.effective_signatures[warehouse]) || typeof mechanical.effective_signatures[warehouse][ym]!=='string') throw invalid();
+    }
+  }
+  return {effectiveValues:mechanical.effective_values as ProcessData['effectiveValues'],detailSignatures:mechanical.detail_signatures as ProcessData['detailSignatures'],projects:value.projects as string[],matrices,sources:mechanical.sources as ProcessData['sources'],signatures:mechanical.effective_signatures as ProcessData['signatures']};
 }
 export async function getProcess(signal?:AbortSignal) {
   const init=signal ? {signal} : {};
   const [matrix,mechanical]=await Promise.all([requestJson('/api/m06/matrix',init),requestJson('/api/m06/mech',init)]);
   return readProcess(matrix,mechanical);
 }
-export async function saveProcess(warehouse:string,ym:string,column:string,value:string,expected:string|null,signal:AbortSignal) {
+export async function saveProcess(warehouse:string,ym:string,column:string,value:string,expected:string|null,signal:AbortSignal,confirmation?:Confirmation) {
   const material=materialKeys.includes(column);
-  const result=await requestJson(material?'/api/m06/material':'/api/m06/mech',{method:'POST',signal,...body(material?{warehouse,ym,column,value,expected}:{warehouse,ym,values:{[column]:value}})});
+  const result=await requestJson(material?'/api/m06/material':'/api/m06/mech-cell',{method:'POST',signal,...body(material?{warehouse,ym,column,value,expected}:{warehouse,ym,values:{[column]:value},...confirmation})});
   if(!record(result) || result.ok!==true || result.warehouse!==warehouse || result.ym!==ym || material&&result.column!==column) throw new ApiError('保存回执未确认，请重读核对，勿重复提交。',0,'invalid_response');
-}
-export async function manualProcess(warehouse:string,ym:string,column:string,signature:string,signal:AbortSignal) {
-  const result=await requestJson('/api/m06/workbench/source-manual',{method:'POST',signal,...body({warehouse,ym,columns:[column],effective_signature:signature,confirmed:true})});
-  if(!record(result) || result.ok!==true || result.warehouse!==warehouse || result.ym!==ym) throw new ApiError('切换回执未确认，请重读核对，勿重复提交。',0,'invalid_response');
 }

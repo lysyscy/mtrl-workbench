@@ -19,7 +19,7 @@ def server(real_preview):
 
 
 @pytest.fixture
-def browser_page(server, preview_browser):
+def browser_page(server, preview_browser, request):
     from tools.dev.frontend_preview_runtime import registered_preview,assert_same_preview
     assert_same_preview(server.owner,registered_preview()[1])
     context = preview_browser.new_context(viewport={'width':1920, 'height':1080})
@@ -32,7 +32,15 @@ def browser_page(server, preview_browser):
         yield page, context
         assert not errors, errors
     finally:
-        if page is not None and not page.is_closed():page.unroute_all(behavior='wait')
+        if page is not None and not page.is_closed():
+            report=getattr(request.node,'preview_report_call',None)
+            if errors or report is not None and report.failed:
+                try:
+                    from tools.dev.frontend_capture import capture_preview
+                    capture_preview(page, server.owner, request.node.nodeid)
+                except Exception as exc:
+                    request.node.add_report_section('teardown','screenshot',type(exc).__name__)
+            page.unroute_all(behavior='wait')
         context.close()
 
 

@@ -24,7 +24,7 @@ def sample():
 
 def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     data = sample()
-    wb, warnings = export.build(data)
+    wb = export.build(data)
     assert wb.sheetnames == ['工程公司汇总表', '零租设备月报表', '包月外租设备月报', '年度汇总']
     summary, zero, monthly, annual = wb.worksheets
     assert summary['G5'].value == '累计周材费' and summary['L5'].value == '当月周材费'
@@ -39,8 +39,6 @@ def test_four_original_sheets_values_layout_and_missing_state(tmp_path):
     assert zero['I6'].value == Decimal('96.1165048543689')
     assert monthly['O4'].value == '不含税价'
     assert monthly['A6'].value == '合计'
-    assert any('未取得' in message for message in warnings)
-    assert any('不同' in message for message in warnings)
     assert all(str(s.print_area) and s.print_title_rows for s in wb)
     assert all(not s.row_dimensions[row].hidden for s in wb for row in range(5 if s is zero or s is monthly else 2, s.max_row + 1))
     assert str(zero.freeze_panes) == 'C5'
@@ -72,7 +70,7 @@ def test_monthly_hidden_net_column_survives_empty_template_cells():
                             'totals': {'gross': '100.00', 'net': '100.00'}, 'issues': [],
                             'rows': [{'device': '升降平台', 'amount': '100', 'net': '100',
                                       'tax': '普票', 'memo': '原备注', 'date': '8月1日'}]})
-    wb, _ = export.build(data)
+    wb = export.build(data)
     monthly = wb.worksheets[2]
     assert monthly['O6'].value == Decimal('100')
     assert monthly['M6'].value == '原备注'
@@ -93,7 +91,7 @@ def annual_sample(year):
 
 @pytest.mark.parametrize('year', [2025, 2026, 2027])
 def test_annual_columns_follow_real_year_without_relabeling_source_values(year):
-    wb, _ = export.build(annual_sample(year))
+    wb = export.build(annual_sample(year))
     annual = wb['年度汇总']
     months = {c.value: annual.cell(2, c.column).value for c in annual[1]
               if isinstance(c.value, str) and '年' in c.value}
@@ -116,7 +114,7 @@ def test_rollover_older_total_uses_complete_previous_year_and_confirmed_revision
     for month in range(1, 13):
         cells[export.get_column_letter(3 + month)] = str(month)
     data['annual_effective'].append({'warehouse': '甲', 'ym': '2025-01', 'values': {'mech_2': '2'}})
-    wb, _ = export.build(data)
+    wb = export.build(data)
     annual = wb['年度汇总']
     col = next(c.column for c in annual[1] if c.value == '2025年1月')
     assert annual.cell(2, col).value == Decimal('2')
@@ -136,6 +134,6 @@ def test_annual_source_without_reliable_year_is_rejected_before_mislabeling():
 def test_missing_big_table_start_date_does_not_fall_back_to_history():
     data = sample()
     data['summary'][0].update(start_year=None, start_month=None)
-    wb, _ = export.build(data)
+    wb = export.build(data)
     assert wb.worksheets[0]['C6'].value == '' and wb.worksheets[0]['D6'].value == ''
     wb.close()

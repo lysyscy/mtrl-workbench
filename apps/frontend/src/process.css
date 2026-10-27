@@ -6,6 +6,9 @@
 .process-filters .business-project-picker{min-width:calc(180px * var(--fscale));max-width:min(calc(360px * var(--fscale)),100%)}
 .process-page .ant-btn,.process-source-dialog .ant-btn,.process-export-dialog .ant-btn{height:calc(32px * var(--fscale));min-height:calc(32px * var(--fscale));font-size:calc(12px * var(--fscale));padding-inline:calc(12px * var(--fscale))}
 .process-grid .ant-btn{height:calc(28px * var(--fscale));min-height:calc(28px * var(--fscale));padding-inline:calc(8px * var(--fscale))}
+.process-history{display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap;margin-inline-start:auto}
+.process-history label{display:flex;align-items:center;gap:calc(8px * var(--fscale))}
+.process-history .ant-input{width:calc(150px * var(--fscale))}
 .process-filters{padding:calc(16px * var(--fscale));gap:calc(8px * var(--fscale));font-size:calc(12px * var(--fscale));color:var(--tx2)}
 .process-tabs{justify-content:space-between;padding:0 calc(16px * var(--fscale)) calc(12px * var(--fscale));color:var(--tx2);font-size:calc(12px * var(--fscale))}
 .process-diff-count{display:inline-block;margin-inline-start:calc(6px * var(--fscale));padding:0 calc(6px * var(--fscale));border-radius:var(--radius-pill);background:var(--sf2);font-variant-numeric:tabular-nums}

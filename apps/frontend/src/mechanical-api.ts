@@ -20,7 +20,7 @@ export function readDetail(value: unknown): Detail {
 }
 export interface ReportCell { value: string; rowspan: number; colspan: number; column: number }
 export interface ReportSheet { name: string; rows: ReportCell[][]; project_rows: { warehouse: string; row: number }[] }
-export interface MechanicalReport { ym: string; sheets: ReportSheet[]; warnings: string[]; snapshot_token: string }
+export interface MechanicalReport { ym: string; sheets: ReportSheet[]; snapshot_token: string }
 const sheetNames = ['工程公司汇总表', '零租设备月报表', '包月外租设备月报', '年度汇总'];
 const invalid = () => new ApiError('机械报表结果不完整，请重新读取；仍失败请联系维护人员。');
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string');
@@ -71,7 +71,7 @@ export function readWorkbench(value: unknown): Workbench {
   return { months: value.months, shown: value.settings.shown_projects, warehouses, details: value.details.map(readDetail), effective, relations: value.reconciliations as Relation[], billDifferences: value.billDifferences as BillDifference[], discoveries: value.discoveries as Discovery[], matters: value.matters as Matter[], i8: value.i8 as I8Snapshot[], histories: value.histories as Record<string,unknown>[], summary:value.summary as WorkbenchSummary[], settings: { revision: value.settings.revision as number, plate_keywords: value.settings.plate_keywords } };
 }
 export function readMechanicalReport(value: unknown, ym: string, warehouses: string[]): MechanicalReport {
-  if (!record(value) || value.ok !== true || value.ym !== ym || typeof value.snapshot_token !== 'string' || !/^[a-f0-9]{64}$/.test(value.snapshot_token) || !strings(value.warnings) || !Array.isArray(value.projects) || value.projects.length !== warehouses.length || value.projects.some((project: unknown, index: number) => !record(project) || project.warehouse !== warehouses[index]) || !Array.isArray(value.sheets) || value.sheets.length !== 4) throw invalid();
+  if (!record(value) || value.ok !== true || value.ym !== ym || typeof value.snapshot_token !== 'string' || !/^[a-f0-9]{64}$/.test(value.snapshot_token) || !Array.isArray(value.projects) || value.projects.length !== warehouses.length || value.projects.some((project: unknown, index: number) => !record(project) || project.warehouse !== warehouses[index]) || !Array.isArray(value.sheets) || value.sheets.length !== 4) throw invalid();
   const sheets = value.sheets.map((sheet: unknown, index: number): ReportSheet => {
     if (!record(sheet) || typeof sheet.name !== 'string' || sheet.name !== sheetNames[index] || !Array.isArray(sheet.rows) || !Array.isArray(sheet.project_rows) || sheet.project_rows.length !== warehouses.length) throw invalid();
     const rows = sheet.rows.map((row: unknown): ReportCell[] => {
@@ -91,7 +91,7 @@ export function readMechanicalReport(value: unknown, ym: string, warehouses: str
     return { name: sheet.name, rows, project_rows };
   });
   if (sheets[0]!.rows.length !== warehouses.length + 6) throw invalid();
-  return { ym, sheets, warnings: value.warnings, snapshot_token: value.snapshot_token };
+  return { ym, sheets, snapshot_token: value.snapshot_token };
 }
 
 // Match the existing detail editor: preserve source precision, round only the total.

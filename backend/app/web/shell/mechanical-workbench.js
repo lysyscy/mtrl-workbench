@@ -198,7 +198,7 @@ function mwWork() {
 }
 function mwPreviewView() {
   const preview=MW.preview;
-  return `<div class="mw-actions"><strong>报送导出预览 · ${esc(MW.month)}</strong><div class="sp">${mwButton('返回查看／编辑','mwPreviewBack')}${mwButton('下载四页Excel','mwExport','',true)}</div></div><p class="mw-note">采用已保存／已确认版本；未保存修改不进入本次导出。</p>${(preview.warnings||[]).map(w=>`<p class="mw-warning">${esc(typeof w==='string'?w:w.message||w.reason||'存在待核内容')}</p>`).join('')}${(preview.sheets||[]).map(sheet=>`<section class="mw-report"><h4>${esc(sheet.name)}</h4><div class="tw"><table class="dt"><tbody>${(sheet.rows||[]).map(row=>`<tr>${row.map(cell=>`<td ${cell.colspan?'colspan="'+Number(cell.colspan)+'"':''} ${cell.rowspan?'rowspan="'+Number(cell.rowspan)+'"':''}>${esc(cell.formatted??cell.value??'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`).join('')}`;
+  return `<div class="mw-actions"><strong>报送导出预览 · ${esc(MW.month)}</strong><div class="sp">${mwButton('返回查看／编辑','mwPreviewBack')}${mwButton('下载四页Excel','mwExport','',true)}</div></div><p class="mw-note">采用已保存／已确认版本；未保存修改不进入本次导出。</p>${(preview.sheets||[]).map(sheet=>`<section class="mw-report"><h4>${esc(sheet.name)}</h4><div class="tw"><table class="dt"><tbody>${(sheet.rows||[]).map(row=>`<tr>${row.map(cell=>`<td ${cell.colspan?'colspan="'+Number(cell.colspan)+'"':''} ${cell.rowspan?'rowspan="'+Number(cell.rowspan)+'"':''}>${esc(cell.formatted??cell.value??'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`).join('')}`;
 }
 function mechanicalWorkbenchView() {
   const header=mwToolbar(), status=`<div class="mw-status" role="status">${MW.busy?'正在处理，请稍候。':`明细待保存 ${MW.drafts.size}组 · 内租待确认 ${MW.internal.size}项`}</div>`;

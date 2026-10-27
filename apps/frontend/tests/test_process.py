@@ -63,17 +63,24 @@ def test_real_process_grouped_header_stays_visible(server,browser_page,api,proje
 
 
 def test_real_process_cell_write_and_later_draft(server,browser_page,api,projects,disposable):
-    page,_=browser_page;project,matrix=sample(api,projects);sources=get(api,'/api/m06/mech')['sources'];found=None
+    page,_=browser_page;project,matrix=sample(api,projects);mechanical=get(api,'/api/m06/mech');sources=mechanical['sources'];found=None
     for row in matrix['adjusted']:
         keys=[i for i in range(6) if sources.get(project['warehouse_name'],{}).get(row['ym'],{}).get('mech_'+str(i),{}).get('mode')!='detail']
         if len(keys)>=2:found=(row,keys[:2]);break
     assert found,'真实副本缺少两个手填机械格，该交互未覆盖'
     row,keys=found;open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
     first=page.get_by_label(row['ym']+' '+LABELS[keys[0]],exact=True);second=page.get_by_label(row['ym']+' '+LABELS[keys[1]],exact=True)
-    pending=[];page.route('**/api/m06/mech',lambda route:pending.append(route) if route.request.method=='POST' else route.continue_())
-    value=Decimal(str(row['mech_'+str(keys[0])] or 0))+Decimal('1.25');first.fill(str(value));first.blur();second.fill('2.50');assert len(pending)==1
+    pending=[];page.route('**/api/m06/mech-cell',lambda route:pending.append(route) if route.request.method=='POST' else route.continue_())
+    value=Decimal(str(row['mech_'+str(keys[0])] or 0))+Decimal('1.25');first.fill(str(value));first.blur()
+    if row['ym'] in mechanical['detail_signatures'].get(project['warehouse_name'],{}):
+        dialog=page.get_by_role('dialog',name='确认保存机械费',exact=True)
+        expect(dialog).to_be_visible();dialog.get_by_role('button',name='取消',exact=True).click()
+        assert not pending
+        expect(first).to_have_value(str(value));first.focus();first.blur()
+        dialog.get_by_role('button',name='确认保存',exact=True).click()
+    second.fill('2.50');assert len(pending)==1
     route=pending.pop();response=route.fetch();assert response.ok;route.fulfill(response=response)
-    expect(page.get_by_role('status').filter(has_text=LABELS[keys[0]]+'已保存')).to_be_visible();expect(second).to_have_value('2.50')
+    expect(first.locator('..').locator('small')).to_have_count(0);expect(second).to_have_value('2.50')
     fresh=get(api,'/api/m06/mech');assert Decimal(str(fresh['mech'][project['warehouse_name']][row['ym']][keys[0]]))==value
 
 
@@ -90,10 +97,10 @@ def test_history_material_save_readback_keeps_next_draft(server,browser_page,api
     page.route('**/api/m06/material',lambda route:pending.append(route))
     first.fill('-12.34');first.blur();second.fill('22.50');assert len(pending)==1
     route=pending.pop();response=route.fetch();assert response.ok;route.fulfill(response=response)
-    expect(page.get_by_role('status').filter(has_text='入库主辅材已保存')).to_be_visible()
+    expect(first.locator('..').locator('small')).to_have_count(0)
     expect(second).to_have_value('22.50')
     page.unroute('**/api/m06/material');second.press('Enter')
-    expect(page.get_by_role('status').filter(has_text='出库工具已保存')).to_be_visible()
+    expect(second.locator('..').locator('small')).to_have_count(0)
     fresh=get(api,'/api/m06/matrix')['matrices'][project['warehouse_name']]
     for kind in ('raw','adjusted'):
         row=next(row for row in fresh[kind] if row['ym']==ym)
