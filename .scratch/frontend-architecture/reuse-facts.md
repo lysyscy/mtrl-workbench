@@ -241,3 +241,38 @@ Terra完成首批登录态复验并释放源码冻结后，第二批获得唯一
 该试验不与视觉源码或预览取证并行；另开小提交，以隔离副本同范围相同GET/合法重读，或仅测试时的挂载计数/DOM身份记录，比较可避免的挂载、焦点及耗时。后台GET结构共享下若本来没有重建，或只有引用数量变化而无实际净收益，则保留现状，不继续扩大抽象。未知保存、第二草稿、总计、明细按钮、输入/宽度冻结均为停止与回退条件。第二批尚未实施机械重构。
 
 **新运行边界。** 现有test_delayed_real_project_response_preserves_search在本批候选中失败：暂缓首次项目GET时，PageSurface把projects-page/filters设为visibility:hidden，搜索框存在但不能输入。单独有界复现保留相同原因；四个其他只读代表通过。该路径不在本批十个文件差异中，尚未在改前运行该用例，不冒称已证明旧版本同样失败；后续可复核项目页显式就绪和安全本地搜索的最小差额。失败用例缺finally释放暂缓请求，使通用unroute_all(wait)清理等待；本批未改测试框架或为此加防护平台。不要将该失败删去或算作通过。
+
+
+## 12. 中程路线复核（14b7b721，2026-10-28）
+
+父任务确认约6h45m窗口，最后60–90分钟停止扩面；Terra独立复验期间源码/预览冻结。本轮只定点读取第3节覆盖地图的相关主人、调用者及已安装库，未动产品/预览、未安装生成器、未连接数据库。tracked初始干净，两个原有未跟踪目录保留。裁决：**下一产品批优先页面局部就绪；恢复API类型生成的小型实证资格，按收益决定是否接入。机械列身份为第三顺位短试验，不凭引用数量硬做。** 收益可来自维护成本与责任清晰，不要求先发生事故；同时不把工具接入本身当收益。
+
+### 12.1 第一优先：项目页局部就绪，随后同组只读页面
+
+**当前与历史证据。** projects.tsx有四个独立Query：档案、扶正待办、建档待办、留痕；各自已有错误/重试，档案首次pending有“正在读取项目…”并用editableDisabled禁止写/导出，本地筛选表单没有读取依赖。既有test_delayed_real_project_response_preserves_search要求首次读取中仍可输入搜索。外层PageSurface却以全账号isFetching隐藏整页，使本地加载态、筛选、错误重试均随其他请求等待。26c614e3→e41c8edb的main.tsx、page-surface.tsx、test_read_ui.py差异为空；这是路径未改的历史证据，**不是改前浏览器运行证据**。冻结期间不另跑浏览器；实施开工在当前未改基线复现并finally释放route即可建立本批red基线，不必为追旧提交重启预览或搭第二工作树。
+
+判断：让完整结果表等自身读取是合理设计；把本地筛选和现成加载/重试也锁到全账号网络空闲，既与现有用例冲突，也没有业务前置必要。首批只改main.tsx、projects.tsx及test_read_ui/test_startup_styles对应行为：接现有independent，标记现有工具/筛选/状态的字体范围；**不能照搬库存的根级data-page-loading=projects.isPending**，否则搜索仍被藏住。沿本页既有pending分支不挂空表、不显示假0；写入/排序/导出保持原禁用条件，表体继续交BoundedTable的字体/布局边界。公共PageSurface算法、全局状态总线和业务写读不改。
+
+同组可顺接home.tsx与i8.tsx（共加main、三页、相关测试，目标一次有边界的非网格页面批）。Home只有notices自身Query、已有pending/error分支且待办数字仅成功分支显示；I8Page当前实际上只是本地执行记录读取、已有pending/失败保旧与重试，并不承外部抓取表单。二者可用自身Query准备门和已有字体范围退出无关全局fetching等待；无需让自身未加载的业务区域提前出现。先证明保活其他页本地GET延迟不再挡本页，在本页pending/失败时不出现假空数据，字体首帧不闪。若某页仍需新建字体或状态协调层，则仅交付项目页，另页暂停，不为凑三页扩大公共机制。
+
+成熟来源是既有TanStack Query5.104.5的status/data与fetchStatus分工，而非新库：[Query状态](https://tanstack.com/query/latest/docs/framework/react/guides/queries)。实现不把后台isFetching当首次无数据，不把disabled的pending+idle视为正在请求。验收保本地搜索/IME、筛选切出切回、异常重试、首次字体、表格合计/原生列宽；额外同时暂缓项目待办或留痕，证明档案已可用时不被附属读取拖住。只截本地GET，不触发外部i8。原失败用例必须补finally释放route，解决清理等待，不改全局fixture成忽略失败。每页是独立可回退单元；焦点、字体闪烁或写入提前开放即回退该页。余下ledger/contracts/rules/users仍有消费者，**此批不能宣称删除全局QueryCache/DOM后备算法**。
+
+### 12.2 第二优先：恢复只读项目类型生成实证，接入须兑现单一真源
+
+本轮完成一个无服务器/数据库的安装版本实验：读取实际schemas.py的ProjectOut，用AST仅抽取真实list_projects函数及其装饰器，在独立APIRouter中交FastAPI0.143.1 get_openapi；没有调用函数体、造业务响应或手写字段schema。得到GET响应array→ProjectOut，11字段，required仅id/project_type/name_full/disp/phid/status/ord；warehouse_name、parent_shell_id、match_keywords、is_placeholder因默认值未在required中，project_type/status为string。_out实际显式提供全部11字段，接口未设置exclude_none/unset/defaults。Pydantic安装2.14.1。此实验验证当前模型可供成熟生成器消费，**未验证全应用OpenAPI导出/生成器安装、TS7兼容或实际生成产物**。
+
+现有重复点明确：api.ts的Project手列8字段；projects.tsx的ArchiveProject再列父壳/关键词/占位三项，与后端11字段对应。readProjects与archiveProjects承担未知JSON、枚举、整数与扩展字段校验，必须保留。可试从ProjectOut生成wire类型，再让现有Project/ArchiveProject名字成为Pick/Omit加必要的业务窄化，删除被替代手写结构；读写调用继续requestJson身份门。优先openapi-typescript7.x纯类型，不接openapi-fetch/Hey SDK/hooks、不新增运行时验证库。[生成器能力](https://openapi-ts.dev/introduction)、[单schema CLI无需额外配置](https://openapi-ts.dev/cli)、[Node API可直接接收schema对象](https://openapi-ts.dev/node)。官方7.x文档不是精确版本锁，试验时先选并记录确切版本及来源，当前不能称已安装兼容。
+
+给Sol一个**45–60分钟上限的离线试验**，先用临时隔离工具目录固定生成器；不先改项目依赖锁。用真实路由对象的FastAPI schema导出，不把本轮AST抽取技巧变成长期生成平台，不复制Pydantic字段表。仅覆盖m01 projects GET，生成一个类型文件；验证同输入两次结果相同、TS7消费者编译、在临时副本给现有模型加/改一个字段后消费者出现预期编译差异，再撤销该实验。对默认optional与业务必填的差额，可用明确边界上的Required/Pick窄化且保运行reader，但不得靠any/一串断言掩盖；不要为类型漂亮而修改后端响应过滤、默认值、枚举或字段行为。
+
+**接入判据：** 在保reader和传输语义的条件下，现有结构声明实际退出；维护者只改后端schema即可更新前端wire类型；生成命令简单、无需启动服务器/读凭据、未产生第二份手工schema。这样即使删行不多，也得到可验证的跨语言形状同步，值得一个独立提交。若仅替换一个短接口却需要字段映射配置、复杂schema裁剪/启动环境、重复维护optional/enums表或升级TS/依赖，则本晚停止接入，清理临时工具，只在此节记结果。最小试验通过后才评m01现成CandidateOut/TrailOut的真实消费者；不扩到ledger DTO、金额、写回执、权限或全站SDK。仅在通过上述判据后将确切生成器版本固定为开发依赖；普通技术取舍不需要再问用户。
+
+### 12.3 机械与其他领域：明确下一步或保留理由
+
+机械AG React36.2.0安装源码extractGridPropertyChanges按prevProps[key]!==nextProps[key]报告变化；Summary内联defaultColDef、getRowId、onGridReady等确实会随Summary渲染换引用。与之相对，columns/rows及父选项memo、detail useCallback和Query结构共享已存在，不能把同值GET等同columns重建。真正数据或备注改变时rows变化会重造匿名renderer，潜在余量存在，但不承诺可见性能收益。
+
+若前两项与视觉返修后仍有余量，机械限定30–45分钟试验：同范围(1)不变GET、(2)隔离副本只改备注而金额不变的合法读回、(3)未保存输入中重读，记录可见单元格DOM身份/挂载次数、焦点/草稿和既有layoutTiming。计数必须排除测量portal与真实writable切换。仅当(2)产生无必要重挂，才将两类renderer命名稳定、常量defaultColDef/getRowId，并走已有context/ref；不改columns对rows的宽度依赖、fitHeight、测量适配器、useRetainedGridColumns。若只发现对象引用通知但无额外重挂/重测和维护收益，则不改。必要验证仍是汇总/分组/合计、明细按钮、未知保存、下一草稿及列宽/焦点；普通同值GET零重挂也是有效结论。[AG React官方建议](https://www.ag-grid.com/react-data-grid/react-hooks/)。
+
+覆盖地图其他领域没有遗漏成“默认不看”：14个API适配多数已用requestJson/body，剩余projects/ledger的短body helper重复可随触及文件顺手复用，不值得单立批次；object<T>弱校验不能以通用泛型假装替代域reader。BigInt cents的严格两位金额与库存Decimal可变精度职责不同，不能因两库同属数字就合并。保存/未知回执/历史队列已有共享核心，域差额真实存在；React Activity会清Effects，不能作为免费保活升级。旧/app及jslex消费者仍在，工具退役须随旧壳生命周期；6份类型声明补丁没有运行时替代收益。字体、弹层、日期、主题、路由已复用现成能力，继续由视觉证据驱动同类收敛。未发现足以越过上述优先级的另一通用平台替换。
+
+执行串行仍不变：Terra释放→页面就绪产品批并交接→类型实证/可选独立提交→机械短试验或视觉返修。同名文件以外也受产品新鲜度约束，禁止并行写或为比较绕过预览锁；到收尾窗口不再启动新试验。阶段产出是明确替代/保留及退出旧职责的证据，不把全覆盖审视、暂缓或试验未采用称为全站整改完成。
