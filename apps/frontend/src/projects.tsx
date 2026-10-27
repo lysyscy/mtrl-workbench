@@ -61,7 +61,7 @@ function ProjectField({ project, field, disabled, readDisabled, draft, changeDra
     if (field === 'name_full' && !input.trim()) { changeDraft({ ...draft, error: '请填写项目全名。' }); return; }
     void save(project, field, input.trim());
   }
-  return <div className="project-field"><Input aria-label={`${fieldName}：${label(project)}`} aria-describedby={error ? errorId : undefined} aria-invalid={Boolean(error)} value={input} disabled={disabled} readOnly={pending || uncertain} title={field === 'match_keywords' ? '多个关键词用 | 分隔；离开此格保存' : input || '留空取仓库名'} placeholder={field === 'disp' ? '留空取仓库名' : field === 'match_keywords' ? '多个关键词用 | 分隔' : undefined} onChange={e => changeDraft(e.target.value === value ? null : { value: e.target.value, error: '', pending: false, uncertain: false })} onBlur={commit} onKeyDown={e => {
+  return <div className="project-field"><Input className="record-value" aria-label={`${fieldName}：${label(project)}`} aria-describedby={error ? errorId : undefined} aria-invalid={Boolean(error)} value={input} disabled={disabled} readOnly={pending || uncertain} title={field === 'match_keywords' ? '多个关键词用 | 分隔；离开此格保存' : input || '留空取仓库名'} placeholder={field === 'disp' ? '留空取仓库名' : field === 'match_keywords' ? '多个关键词用 | 分隔' : undefined} onChange={e => changeDraft(e.target.value === value ? null : { value: e.target.value, error: '', pending: false, uncertain: false })} onBlur={commit} onKeyDown={e => {
     if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
     if (e.key === 'Escape' && !pending && !uncertain) { e.preventDefault(); changeDraft(null); }

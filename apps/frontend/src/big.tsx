@@ -37,7 +37,7 @@ function ManualInput({data,node,colDef}: ICellRendererParams<BigRow>) {
   return <div className={`big-manual${draft ? ' is-draft' : ''}${draft?.error ? ' has-error' : ''}`}>
     <Input aria-label={`${data.display}，${labels[field]}`} value={draft?.value ?? cell.value ?? ''} disabled={cells.disabled}
       placeholder="待填" status={draft?.error ? 'error' : ''} title={draft?.error || (draft ? '未保存' : cell.from ? `带入自 ${cell.from}；修改保存为本月值，清空恢复带入` : cell.value === null ? '尚未录入' : '本月录入；清空恢复带入')}
-      className={field === 'note' || field === 'open_ym' ? '' : 'big-money-input'}
+      className={`record-value${field === 'note' || field === 'open_ym' ? '' : ' big-money-input'}`}
       onChange={e => cells.change(data,field,e.target.value)} onBlur={() => cells.save(key)} onKeyDown={e => {
         e.stopPropagation(); if(e.nativeEvent.isComposing) return;
         if(e.key === 'Enter') {e.preventDefault();cells.save(key,true);}

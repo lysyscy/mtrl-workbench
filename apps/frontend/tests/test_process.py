@@ -68,7 +68,7 @@ def test_real_process_cell_write_and_later_draft(server,browser_page,api,project
         keys=[i for i in range(6) if sources.get(project['warehouse_name'],{}).get(row['ym'],{}).get('mech_'+str(i),{}).get('mode')!='detail']
         if len(keys)>=2:found=(row,keys[:2]);break
     assert found,'真实副本缺少两个手填机械格，该交互未覆盖'
-    row,keys=found;open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
+    row,keys=found;open_page(page,server,'process','过程资料');control=page.get_by_label('过程资料项目',exact=True);control.click();control.fill(project['disp']);pick_popup_option(page,project['disp'])
     first=page.get_by_label(row['ym']+' '+LABELS[keys[0]],exact=True);second=page.get_by_label(row['ym']+' '+LABELS[keys[1]],exact=True)
     pending=[];page.route('**/api/m06/mech-cell',lambda route:pending.append(route) if route.request.method=='POST' else route.continue_())
     value=Decimal(str(row['mech_'+str(keys[0])] or 0))+Decimal('1.25');first.fill(str(value));first.blur()
@@ -89,7 +89,7 @@ def test_history_material_save_readback_keeps_next_draft(server,browser_page,api
     used={row['ym'] for row in matrix['adjusted']}
     ym=next(f'{year}-{month:02}' for year in range(2025,1999,-1) for month in range(1,13)
             if f'{year}-{month:02}' <= '2025-11' and f'{year}-{month:02}' not in used)
-    open_page(page,server,'process','过程资料');pick_option(page,'过程资料项目',project['disp'])
+    open_page(page,server,'process','过程资料');control=page.get_by_label('过程资料项目',exact=True);control.click();control.fill(project['disp']);pick_popup_option(page,project['disp'])
     page.get_by_label('增加历史月份',exact=True).fill(ym)
     page.get_by_role('button',name='增加月份',exact=True).click()
     first=page.get_by_label(ym+' 入库主辅材',exact=True);second=page.get_by_label(ym+' 出库工具',exact=True)

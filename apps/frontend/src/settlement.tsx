@@ -67,7 +67,7 @@ function BalanceInput({data,node,colDef}: ICellRendererParams<AnnualRow>) {
   const cells = useContext(Cells)!, kind = colDef?.context.kind as ExtractKind;
   if (!data || node.rowPinned) return null;
   const key = keyOf(kind,data.warehouse), draft = cells.drafts[key];
-  return <Input aria-label={`${kind}，${data.warehouse}，2025-11及之前`} value={draft?.value ?? data.balance ?? ''} placeholder="未录入" disabled={cells.disabled}
+  return <Input className="record-value" aria-label={`${kind}，${data.warehouse}，2025-11及之前`} value={draft?.value ?? data.balance ?? ''} placeholder="未录入" disabled={cells.disabled}
     status={draft?.error ? 'error' : ''} onChange={e => cells.change(kind,data.warehouse,data.balance ?? '',e.target.value)} onBlur={() => cells.save(key)}
     onKeyDown={e => { if(e.nativeEvent.isComposing) return; if(e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } if(e.key === 'Escape') {e.stopPropagation(); cells.cancel(key);} }} />;
 }

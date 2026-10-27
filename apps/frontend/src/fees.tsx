@@ -24,7 +24,7 @@ const FeeCells=createContext<Cells | null>(null);
 function Editor({data,field,ym='',original}:{data:FeeYearRow;field:'name'|'amount';ym?:string;original:string}) {
   const cells=useContext(FeeCells)!; const itemId=data.item_id!;const key=keyOf(itemId,field,ym),draft=cells.drafts[key];
   return <Input data-fee-key={key} aria-label={field==='name'?`${data.item}费用项名称`:`${ym} ${data.item}金额`}
-    value={draft?.value ?? original} disabled={cells.disabled} status={draft?.error?'error':''} className={field==='amount'?'fee-money-input':''}
+    value={draft?.value ?? original} disabled={cells.disabled} status={draft?.error?'error':''} className={`record-value${field==='amount'?' fee-money-input':''}`}
     onChange={e=>cells.change({itemId,item:data.item,field,ym,value:e.target.value,original,error:''})}
     onBlur={()=>cells.save(key)} onKeyDown={e=>{e.stopPropagation();if(!e.nativeEvent.isComposing && e.key==='Enter'){e.preventDefault();e.currentTarget.blur();}}} />;
 }
