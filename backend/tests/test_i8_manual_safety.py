@@ -48,17 +48,20 @@ def test_read_routes_do_not_use_external_loaders(rollback_db, monkeypatch):
 
 
 def test_timing_and_operator_belong_to_real_action(rollback_db):
+    from app.mod15_user.models import UserAccount
+    with db.session_scope() as s:
+        s.add(UserAccount(account='__run_record_operator__', name='执行记录测试人'))
     before = session.current_name()
-    session.set_current_name(session.AccountIdentity('preview-admin'))
+    session.set_current_name(session.AccountIdentity('__run_record_operator__'))
     try:
         with db.session_scope() as s:
             start = datetime.now() - timedelta(seconds=4.25)
             row = repository.create_run_record(s, run_type='fetch', target='2026-01', started_at=start)
             repository.finish_run_record(s, row, status='success', success=1, fail=0, detail={})
             out = repository.run_record_out(row)
-            assert out.triggered_by == '预览管理员' and out.duration_seconds >= 4.25
+            assert out.triggered_by == '执行记录测试人' and out.duration_seconds >= 4.25
             second = repository.save_run_record(s, run_type='sync', target='仓库列表', status='success', started_at=start)
-            assert second.triggered_by == '预览管理员'
+            assert second.triggered_by == '执行记录测试人'
     finally:
         session.set_current_name(before)
 

@@ -29,10 +29,10 @@ def test_display_and_revoke_receipt(monkeypatch, rollback_db):
         p = _project(s, '__自检仓_281__')
         c = R.insert_contract(s, project_id=p.id, material_name='281材料')
         R.insert_invoice(s, contract_id=c.id, kind='supplier', invoice_date='2026-10-01', amount=1000)
-        n = PaymentNotice(ph_id='__281__', category='jc', amount_approved=1000, stat_paid=0)
+        n = PaymentNotice(ph_id='__281__', category='jc', ownership_id=p.id, amount_approved=1000, stat_paid=0)
         s.add(n)
         s.flush()
-        S.act_link_notice(s, notice_id=n.id, contract_id=c.id)
+        assert S.act_link_notice(s, notice_id=n.id, contract_id=c.id)['ok']
         link = R.payment_of_notice(s, n.id)
         assert S.build_detail(s, c.id)['payment_display_rows'] == []
         assert n.id in S.build_list(s)['rows'][-1]['notice_ids']

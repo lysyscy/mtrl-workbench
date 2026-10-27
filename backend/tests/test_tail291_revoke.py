@@ -27,9 +27,9 @@ def sample(monkeypatch):
         p = _project(s, '__自检仓_291__')
         c = jc.insert_contract(s, project_id=p.id, material_name='291材料')
         jc.insert_invoice(s, contract_id=c.id, kind='supplier', invoice_date='2026-10-01', amount=1000)
-        n = PaymentNotice(ph_id='__291__', category='jc', amount_approved=1000, stat_paid=0)
+        n = PaymentNotice(ph_id='__291__', category='jc', ownership_id=p.id, amount_approved=1000, stat_paid=0)
         s.add(n); s.flush()
-        jcs.act_link_notice(s, notice_id=n.id, contract_id=c.id)
+        assert jcs.act_link_notice(s, notice_id=n.id, contract_id=c.id)['ok']
         a = flows.create_flow(s, notice_id=n.id, project_id=p.id, amount=300)
         b = flows.create_flow(s, notice_id=n.id, project_id=p.id, amount=200)
         apply_stat_change(s, notice_id=n.id, field='stat_paid', value='450', changed_by='291测试')

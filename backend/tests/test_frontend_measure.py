@@ -1,4 +1,4 @@
-"""Pure measurement validity plus collection on the single registered real-copy preview."""
+"""离线测量判据与预览身份保护；现场采集由 frontend_measure.py run 显式执行。"""
 from collections import Counter
 from pathlib import Path
 import sys
@@ -85,26 +85,3 @@ def test_preview_guard_rejects_unsafe_or_changed_input(tmp_path, monkeypatch, da
     for name, value in [('real_owner', owner), ('version', version)]:
         (run/f'reports/{name}.json').write_text(json.dumps(value), encoding='utf-8')
     with pytest.raises(ValueError): m.preview_identity(run)
-
-
-def test_browser_collector_on_registered_real_preview():
-    from playwright.sync_api import sync_playwright
-    from tools.dev import frontend_measure as m
-    from tools.dev.frontend_preview_runtime import registered_preview
-    _,owner,base=registered_preview()
-    assert owner['synthetic'] is False
-    with sync_playwright() as playwright:
-        browser=playwright.chromium.launch()
-        try:
-            context,page,cdp=m.page_context(browser,None)
-            with context:
-                page.goto(base+'/preview')
-                page.evaluate(m.EVENT_OBSERVER)
-                assert page.evaluate('Array.isArray(window.__measure.events)')
-                rows=[m.sample(page,cdp,base,'warm','contracts','集采台账',number) for number in range(1,4)]
-                result=m.quality(rows,expected=Counter({('warm','contracts'):3}))
-                assert result['ok']
-                assert len(m.summarize(rows))==1
-                # A collector integration check, not a read-only performance baseline or INP proof.
-        finally:
-            browser.close()

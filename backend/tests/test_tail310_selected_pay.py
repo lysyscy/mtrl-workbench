@@ -108,8 +108,10 @@ def test_selected_links_and_default_full_query(sample, monkeypatch):
     s, a, b = sample
     p = _project(s, f'__自检仓_310_{uuid4().hex}__')
     c = jc.insert_contract(s, project_id=p.id, material_name='310材料')
-    a.category = b.category = 'jc'; s.flush()
-    contracts.act_link_notice(s, notice_id=a.id, contract_id=c.id)
+    a.category = b.category = 'jc'
+    a.ownership_id = b.ownership_id = p.id
+    s.flush()
+    assert contracts.act_link_notice(s, notice_id=a.id, contract_id=c.id)['ok']
     assert contracts.links_by_notice(s, [a.id, b.id]) == {a.id: [c.id]}
     assert contracts.links_by_notice(s)[a.id] == [c.id]
     with pytest.raises(MustReportError, match='整批未产生'):

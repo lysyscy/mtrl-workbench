@@ -39,9 +39,10 @@ def test_jc_batch_facts_and_query_count(rollback_db):
         for i in range(4):
             c = jc.insert_contract(s, project_id=project.id, material_name=f'300材料{i}')
             n = PaymentNotice(ph_id=f'__300_{i}__', bill_no=f'__300_{i}__',
+                              category='jc', ownership_id=project.id,
                               amount_approved=1000, stat_paid=Decimal(i*100))
             s.add(n); s.flush()
-            contracts.act_link_notice(s, notice_id=n.id, contract_id=c.id)
+            assert contracts.act_link_notice(s, notice_id=n.id, contract_id=c.id)['ok']
             s.add_all([PaymentFlow(flow_no=f'__300_e{i}__', notice_id=n.id, amount=10,
                                    status='effective', pay_date='2026-08-01'),
                        PaymentFlow(flow_no=f'__300_r{i}__', notice_id=n.id, amount=999,
@@ -94,9 +95,10 @@ def test_jc_stat_reads_database_fact_not_cached_notice(rollback_db):
     with session_scope() as s:
         p=_project(s, '__自检仓_300_cache__')
         c=jc.insert_contract(s, project_id=p.id, material_name='300统计事实')
-        n=PaymentNotice(ph_id='__300_cache__', amount_approved=1000, stat_paid=10)
+        n=PaymentNotice(ph_id='__300_cache__', category='jc', ownership_id=p.id,
+                        amount_approved=1000, stat_paid=10)
         s.add(n); s.flush()
-        contracts.act_link_notice(s, notice_id=n.id, contract_id=c.id)
+        assert contracts.act_link_notice(s, notice_id=n.id, contract_id=c.id)['ok']
         # 保留本会话旧对象，模拟事实已变而identity map仍旧；原标量join必须读到新事实。
         s.execute(update(PaymentNotice).where(PaymentNotice.id==n.id).values(stat_paid=75)
                   .execution_options(synchronize_session=False))
