@@ -218,7 +218,8 @@ def test_focus_burst_shares_verification_and_resumes_workspace(server,browser_pa
     try:
         with page.expect_request('**/api/m15/users'):
             page.evaluate("for(let i=0;i<5;i++)window.dispatchEvent(new Event('focus'))")
-        expect(page.locator('.workspace')).to_have_attribute('inert','')
+        expect(page.locator('.workspace')).not_to_have_attribute('inert','')
+        page.get_by_label('项目搜索',exact=True).fill('本地搜索不等待账号核验')
         assert len(held)==1,'Overlapping focus events started duplicate identity verifications'
     finally:
         for route in held:route.continue_()
