@@ -7,14 +7,14 @@ import {
   ModuleRegistry, provideGlobalGridOptions, themeQuartz,
 } from 'ag-grid-community';
 
-// Register adopted public modules; their dependencies supply sorting and keyboard mechanics.
+// Register adopted public modules; their dependencies supply the grid defaults.
 ModuleRegistry.registerModules([
   ClientSideRowModelModule, ClientSideRowModelApiModule, PinnedRowModule, CellStyleModule, RowStyleModule, CellApiModule,
   RowApiModule, ColumnApiModule, RenderApiModule, EventApiModule, ScrollApiModule, ValueCacheModule,
   LocaleModule, RowAutoHeightModule, TooltipModule, CellSpanModule, CustomEditorModule,
 ]);
 // Ordinary reads and reordering stay still; project drag feedback is handled separately.
-// Native drag selection/copy is shared by every grid; retain virtualisation and keyboard navigation.
+// Native drag selection/copy is shared by every grid; retain virtualisation.
 provideGlobalGridOptions({ animateRows: false, enableCellTextSelection: true, ensureDomOrder: true });
 export const gridTheme = themeQuartz.withParams({ fontFamily: 'var(--fs)', fontSize: 'calc(var(--font-ui-size,13.5) * 1px * var(--fscale))', headerFontSize: 'calc(12px * var(--fscale))',
   backgroundColor: 'var(--sf)', foregroundColor: 'var(--tx)', borderColor: 'var(--bd)',

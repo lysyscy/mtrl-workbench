@@ -84,34 +84,18 @@ export function AppearancePreferences({ close, saved, compact }: { close: () => 
       }
     } finally { inFlight.current = false; if (!controller.signal.aborted) setBusy(''); }
   }
-  function groupKeys(event: KeyboardEvent<HTMLDivElement>, field: 'theme' | 'ui_scale') {
-    if (!options || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    if (inFlight.current || needsReadback) return;
-    const entries = field === 'theme' ? options.palette.map(item => ({ value: item.name, label: item.label })) : options.scales.map(item => ({ value: item.key, label: item.label }));
-    const current = entries.findIndex(item => item.value === options[field]);
-    const index = event.key === 'Home' ? 0 : event.key === 'End' ? entries.length - 1 : (current + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) + entries.length) % entries.length;
-    const next = entries[index];
-    if (!next) return;
-    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=radio]')[index]?.focus();
-    void change(field, next.value, next.label);
-  }
   function panelKeys(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closing.requestClose(); }
-    if (event.key !== 'Tab' || !compact) return;
-    const elements = [...(panel.current?.querySelectorAll<HTMLElement>('button,a[href],[tabindex]') ?? [])].filter(el => el.tabIndex >= 0 && !el.hasAttribute('disabled'));
-    const first = elements[0], last = elements.at(-1);
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+
   }
   const unavailable = Boolean(busy) || needsReadback;
   return <aside ref={panel} className="appearance-dialog appearance-panel" role="dialog" aria-modal={compact} aria-labelledby="appearance-title" aria-busy={Boolean(busy)} onKeyDown={panelKeys}>
     <div className="appearance-heading"><div><h2 id="appearance-title">外观与字号</h2><p>点击即保存，仅影响当前账号</p></div><button type="button" ref={closeButton} className="appearance-close" aria-label="收起外观面板" disabled={Boolean(busy)} onClick={closing.requestClose}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div>
     <div className="appearance-body">
-      {options ? <><div className="appearance-section-title"><h3>配色主题</h3><span>{options.themes.length} 套完整界面</span></div><div className="appearance-theme-choices" role="radiogroup" aria-label="配色主题" onKeyDown={event => groupKeys(event, 'theme')}>
-        {options.palette.map(item => <button type="button" role="radio" aria-label={`${item.label}主题`} aria-checked={options.theme === item.name} aria-disabled={unavailable} tabIndex={options.theme === item.name ? 0 : -1} key={item.name} className={`appearance-choice ${options.theme === item.name ? 'is-selected' : ''}`} onClick={() => void change('theme', item.name, item.label)}><ThemePreview palette={item} /><span className="appearance-choice-title">{item.label}<span className="appearance-check">{options.theme === item.name && <Check />}</span></span><span className="appearance-description">{item.description}</span></button>)}
-      </div><div className="appearance-section-title appearance-size-heading"><h3>界面大小</h3><span>文字、控件和行高一起变化</span></div><div className="appearance-scale-choices" role="radiogroup" aria-label="界面字号" onKeyDown={event => groupKeys(event, 'ui_scale')}>
-        {options.scales.map(item => <button type="button" role="radio" aria-label={`${item.label}字号`} aria-checked={options.ui_scale === item.key} aria-disabled={unavailable} tabIndex={options.ui_scale === item.key ? 0 : -1} key={item.key} style={{ '--sample-scale': item.css } as CSSProperties} className={`appearance-choice appearance-scale-choice ${options.ui_scale === item.key ? 'is-selected' : ''}`} onClick={() => void change('ui_scale', item.key, item.label)}><span className="appearance-choice-title">{item.label}<small>{Number(item.css)}×</small><span className="appearance-check">{options.ui_scale === item.key && <Check />}</span></span><span className="appearance-size-sample"><span>台账</span><span>1,234.56</span></span><span className="appearance-control-sample">查看明细</span></button>)}
+      {options ? <><div className="appearance-section-title"><h3>配色主题</h3><span>{options.themes.length} 套完整界面</span></div><div className="appearance-theme-choices" role="radiogroup" aria-label="配色主题">
+        {options.palette.map(item => <button type="button" role="radio" aria-label={`${item.label}主题`} aria-checked={options.theme === item.name} aria-disabled={unavailable} key={item.name} className={`appearance-choice ${options.theme === item.name ? 'is-selected' : ''}`} onClick={() => void change('theme', item.name, item.label)}><ThemePreview palette={item} /><span className="appearance-choice-title">{item.label}<span className="appearance-check">{options.theme === item.name && <Check />}</span></span><span className="appearance-description">{item.description}</span></button>)}
+      </div><div className="appearance-section-title appearance-size-heading"><h3>界面大小</h3><span>文字、控件和行高一起变化</span></div><div className="appearance-scale-choices" role="radiogroup" aria-label="界面字号">
+        {options.scales.map(item => <button type="button" role="radio" aria-label={`${item.label}字号`} aria-checked={options.ui_scale === item.key} aria-disabled={unavailable} key={item.key} style={{ '--sample-scale': item.css } as CSSProperties} className={`appearance-choice appearance-scale-choice ${options.ui_scale === item.key ? 'is-selected' : ''}`} onClick={() => void change('ui_scale', item.key, item.label)}><span className="appearance-choice-title">{item.label}<small>{Number(item.css)}×</small><span className="appearance-check">{options.ui_scale === item.key && <Check />}</span></span><span className="appearance-size-sample"><span>台账</span><span>1,234.56</span></span><span className="appearance-control-sample">查看明细</span></button>)}
       </div></> : !error && <p role="status">正在读取外观选项…</p>}
     </div>
     <div className="appearance-feedback">{busy ? <p role="status">{busy}</p> : error ? <p role="alert">{error}</p> : <p role="status">{feedback || '选择后立即应用，收起面板可查看完整页面。'}</p>}{!busy && (error || needsReadback) && <Button onClick={() => void reload()}>重新读取</Button>}</div>

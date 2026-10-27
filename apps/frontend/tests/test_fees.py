@@ -52,7 +52,7 @@ def test_actual_fee_save_updates_only_original_id(server,browser_page,api,projec
     page,_=browser_page;project,data=sample(api,projects);open_sample(page,server,project,data)
     row=data['records'][0];month=int(row['ym'][-2:]);page.locator('.fees-grid .ag-body-horizontal-scroll-viewport').evaluate('(e,m)=>e.scrollLeft=Math.max(0,(m-2)*170)',month)
     field=page.get_by_label(f'{row["ym"]} {row["item"]}金额',exact=True)
-    changed=Decimal(row['amount'])+Decimal('1.25');field.fill(str(changed));field.press('Tab')
+    changed=Decimal(row['amount'])+Decimal('1.25');field.fill(str(changed));page.get_by_role('heading',name='特殊费用',exact=True).click()
     expect(page.locator('.fees-page').get_by_role('status').filter(has_text='已保存')).to_be_visible()
     after=get(api,'/api/m09/fee/year',year=data['year'],pj=project['warehouse_name'])
     before={r['id']:r for r in data['records']};current={r['id']:r for r in after['records']}

@@ -33,7 +33,7 @@ def test_real_normal_month_remark_save_uses_same_month(server,browser_page,api,p
     # Scroll rendered rows rather than assuming the first viewport covers this month.
     if not field.count():
         page.get_by_role('region',name=side['label']+'欠款台账').locator('.ag-body-viewport').evaluate('e=>e.scrollTop=e.scrollHeight')
-    expect(field).to_be_visible();field.fill(row['remark']+'核验');field.press('Tab')
+    expect(field).to_be_visible();field.fill(row['remark']+'核验');page.get_by_role('heading',name='欠款台账',exact=True).click()
     expect(page.get_by_role('status',name='保存回执')).to_contain_text('已保存')
     after=get(api,'/api/m05/ledger',project_id=project['id'],end_ym='')
     actual=next(r for s in after['sides'] if s['category']==side['category'] for r in s['rows'] if r['row_kind']=='month' and r['month']==row['month'])

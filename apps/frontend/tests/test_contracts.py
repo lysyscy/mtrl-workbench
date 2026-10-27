@@ -21,7 +21,7 @@ def test_real_contract_field_bad_receipt_locks_until_readback(server,browser_pag
         response=route.fetch();assert response.ok and response.json()['ok'] is True
         writes.append(route.request.post_data);route.fulfill(response=response,body='{')
     page.route('**/api/m11/fields',damaged)
-    term.fill('31天');term.press('Tab')
+    term.fill('31天');page.get_by_role('heading',name='集采台账',exact=True).click()
     expect(page.get_by_role('alert').first).to_contain_text('待核实');expect(term).to_be_disabled();assert len(writes)==1
     assert get(api,'/api/m11/detail',id=row['id'])['data']['payment_term']=='31±0天'
     page.unroute('**/api/m11/fields');page.get_by_role('button',name='重读核对',exact=True).click()

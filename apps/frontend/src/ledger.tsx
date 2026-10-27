@@ -13,7 +13,6 @@ import type { Field, Ledger, LedgerRow, LedgerSide } from './ledger-api';
 
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const ledgerRowId = (row: LedgerRow) => row.key;
-const fields: Field[] = ['month', 'other_expense', 'payment', 'remark'];
 const compareMoney = (a: string, b: string) => { const left = BigInt(a.replace('.', '')); const right = BigInt(b.replace('.', '')); return left < right ? -1 : left > right ? 1 : 0; };
 const labels = { month: '月份', other_expense: '结算', payment: '付款', remark: '备注' };
 const defaultColumn: ColDef<LedgerRow> = { sortable: true, resizable: false, suppressMovable: true, suppressKeyboardEvent: event => event.event.target instanceof HTMLInputElement };
@@ -30,7 +29,7 @@ interface Actions {
   writable(): boolean;
   busy(): boolean;
 }
-interface GridContext { scope: Scope; actions: React.RefObject<Actions>; api: React.RefObject<GridApi<LedgerRow> | null> }
+interface GridContext { scope: Scope; actions: React.RefObject<Actions> }
 
 function Cell(props: ICellRendererParams<LedgerRow, string, GridContext>) {
   const { data: row, context } = props;
@@ -45,20 +44,10 @@ function Cell(props: ICellRendererParams<LedgerRow, string, GridContext>) {
     if (!row) return;
     setText(value); context.actions.current.draft(context.scope, row, field, value, base.current);
   }
-  function tab(event: React.KeyboardEvent<HTMLInputElement>) {
+  function keyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     event.stopPropagation();
     if (event.nativeEvent.isComposing || composing.current) return;
-    if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); return; }
-    if (event.key !== 'Tab' || !row) return;
-    const api = context.api.current; if (!api) return;
-    const cells: { index: number; field: Field; key: string }[] = [];
-    api.forEachNodeAfterFilterAndSort(node => { if (node.data && node.rowIndex !== null) for (const field of fields) if (editable(node.data, field)) cells.push({ index: node.rowIndex, field, key: node.data.key }); });
-    const index = cells.findIndex(cell => cell.key === row.key && cell.field === field);
-    const next = cells[index + (event.shiftKey ? -1 : 1)]; if (!next) return;
-    event.preventDefault();
-    const region = event.currentTarget.closest('[data-ledger-side]');
-    api.ensureIndexVisible(next.index); api.ensureColumnVisible(next.field); api.setFocusedCell(next.index, next.field);
-    requestAnimationFrame(() => region?.querySelector<HTMLInputElement>(`[row-id="${CSS.escape(next.key)}"] [col-id="${next.field}"] input`)?.focus());
+    if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
   }
   return <input className={`ledger-input ${field === 'other_expense' || field === 'payment' ? 'money' : ''}`}
     aria-label={`${row.category === 'material' ? '辅材' : '机械'} ${row.month} ${labels[field]}`}
@@ -66,7 +55,7 @@ function Cell(props: ICellRendererParams<LedgerRow, string, GridContext>) {
     maxLength={field === 'remark' ? 512 : undefined} inputMode={field === 'other_expense' || field === 'payment' ? 'decimal' : undefined}
     value={text} title="离开单元格即保存" onFocus={() => { base.current = row[field]; }}
     onChange={event => change(event.target.value)} onBlur={() => { if (!composing.current) context.actions.current.commit(context.scope, row, field); }}
-    onKeyDown={tab} onCompositionStart={() => { composing.current = true; }}
+    onKeyDown={keyDown} onCompositionStart={() => { composing.current = true; }}
     onCompositionEnd={event => { composing.current = false; change(event.currentTarget.value); if (document.activeElement !== event.currentTarget) context.actions.current.commit(context.scope, row, field); }} />;
 }
 function DeleteCell({ data: row, context, node }: ICellRendererParams<LedgerRow, string, GridContext>) {
@@ -74,7 +63,7 @@ function DeleteCell({ data: row, context, node }: ICellRendererParams<LedgerRow,
 }
 function Side({ active, scale, side, scope, actions, writable, busy, add, focusRecord, focused }: { active: boolean; scale: number; side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
   const api = useRef<GridApi<LedgerRow> | null>(null); const root = useRef<HTMLDivElement>(null), summaryRoot = useRef<HTMLDivElement>(null);
-  const context = useMemo(() => ({ scope, actions, api }), [scope, actions]);
+  const context = useMemo(() => ({ scope, actions }), [scope, actions]);
   useEffect(() => { if (writable) api.current?.refreshCells({ force: true }); }, [writable, busy]);
   const visible = useMemo(() => side.rows.filter(row => row.row_kind !== 'month' || row.editable || row.other_expense !== '0.00' || row.payment !== '0.00' || row.remark).map((row, index) => ({ ...row, seq: index + 1 })), [side.rows]);
   const months = visible.filter(row => row.row_kind === 'month'); const latest = months.at(-1);

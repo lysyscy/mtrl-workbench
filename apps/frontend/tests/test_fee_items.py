@@ -74,7 +74,7 @@ def test_legacy_monthly_add_undo_and_batch(server,api,projects,disposable):
         assert len(matches)==1 and Decimal(matches[0]['amount'])==Decimal(want)
 
 
-def test_next_month_draft_and_focus_survive_previous_save(server,browser_page,api,projects,disposable):
+def test_next_month_mouse_draft_survives_previous_save(server,browser_page,api,projects,disposable):
     page,_=browser_page;project,data=sample(api,projects)
     name='连续录入'+uuid4().hex[:8]
     item=post(api,'/api/m09/fee/item/create',{'project':project['warehouse_name'],'name':name})['row_id']
@@ -87,13 +87,11 @@ def test_next_month_draft_and_focus_survive_previous_save(server,browser_page,ap
         pending.append((route,response))
     page.route('**/api/m09/fee/item/amount',hold)
     try:
-        first.fill('17.25');first.press('Tab')
-        second.fill('23.50')
-        expect(second).to_be_focused()
+        first.fill('17.25');second.click();second.fill('23.50')
         assert len(pending)==1
         route,response=pending.pop();route.fulfill(response=response)
         expect(page.locator('.fees-page').get_by_role('status').filter(has_text='已保存')).to_be_visible(timeout=15000)
-        expect(second).to_have_value('23.50');expect(second).to_be_focused()
+        expect(second).to_have_value('23.50')
         page.unroute('**/api/m09/fee/item/amount',hold)
         second.press('Enter')
         expect(page.locator('.fees-page').get_by_role('status').filter(has_text='已保存')).to_be_visible(timeout=15000)

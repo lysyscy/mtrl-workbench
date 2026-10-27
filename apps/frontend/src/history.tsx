@@ -97,17 +97,6 @@ export function HistoryControls({ me, blocked, guard }: { me: Identity | null; b
       }
     } finally { lock.current = false; if (alive.current) setBusy(false); }
   }
-  const replayRef = useRef(replay); replayRef.current = replay;
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || !(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing) return;
-      if (event.target instanceof Element && event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],[role="combobox"],.ag-custom-component-popup,.ant-dropdown')) return;
-      const key = event.key.toLowerCase(), direction = key === 'z' ? event.shiftKey ? 'redo' : 'undo' : key === 'y' ? 'redo' : null;
-      if (!direction || protectedReason()) return;
-      event.preventDefault(); void replayRef.current(direction);
-    };
-    window.addEventListener('keydown', listener); return () => window.removeEventListener('keydown', listener);
-  }, []);
   return <div className="history-tools">{(['undo', 'redo'] as const).map(direction => <Button key={direction}
     disabled={!me || blocked || busy || uncertain || Boolean(guard) || !history.data?.[direction]}
     title={guard || history.data?.[direction]?.label || history.data?.notice || '当前没有适用操作'}

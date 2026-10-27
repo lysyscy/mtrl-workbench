@@ -3,7 +3,7 @@ import Input from 'antd/es/input';
 import Tag from 'antd/es/tag';
 import { createContext, useContext, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ColDef, ColGroupDef, GridApi, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, ColGroupDef, ICellRendererParams } from 'ag-grid-community';
 import { readProjects, requestJson } from './api';
 import type { Identity, Project } from './api';
 import { pageGridGeometry, contentWidth, fixedWidth, gridTheme } from './grid';
@@ -14,7 +14,7 @@ import { DialogContents, useDialogClose } from './dialog-close';
 import { useCellSaveQueue } from './use-cell-save';
 import { money } from './notices-api';
 import { SettlementExport } from './settlement-export';
-import { getBig, manualKeys, saveBigCell, saveBigSelection } from './big-api';
+import { getBig, saveBigCell, saveBigSelection } from './big-api';
 import type { AutoKey, BigData, BigRow, DerivedKey, ManualKey, TotalKey } from './big-api';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const bigRowId = (row: BigRow) => row.warehouse;
@@ -28,10 +28,9 @@ interface Cells {
   drafts: Record<string,Draft>; disabled: boolean;
   change: (row: BigRow,key: ManualKey,value: string) => void;
   save: (key: string,retry?: boolean) => void; cancel: (key: string) => void;
-  focus: (warehouse: string,key: ManualKey) => void;
 }
 const BigCells = createContext<Cells | null>(null);
-function ManualInput({data,node,colDef,api}: ICellRendererParams<BigRow>) {
+function ManualInput({data,node,colDef}: ICellRendererParams<BigRow>) {
   const cells = useContext(BigCells)!;
   if (!data || node.rowPinned) return null;
   const field = colDef!.colId as ManualKey, key = keyOf(data.warehouse,field), draft = cells.drafts[key], cell = data.manual[field];
@@ -43,11 +42,7 @@ function ManualInput({data,node,colDef,api}: ICellRendererParams<BigRow>) {
         e.stopPropagation(); if(e.nativeEvent.isComposing) return;
         if(e.key === 'Enter') {e.preventDefault();cells.save(key,true);}
         if(e.key === 'Escape') cells.cancel(key);
-        if(e.key === 'Tab') {
-          const index = manualKeys.indexOf(field), nextIndex = index + (e.shiftKey ? -1 : 1);
-          const next = nextIndex >= 0 && nextIndex < manualKeys.length ? node : api.getDisplayedRowAtIndex((node.rowIndex ?? 0) + (e.shiftKey ? -1 : 1));
-          if(next?.data) {e.preventDefault();cells.save(key);api.ensureIndexVisible(next.rowIndex ?? 0);cells.focus(next.data.warehouse,manualKeys[(nextIndex+manualKeys.length)%manualKeys.length]!);}
-        }
+
       }} />
     {draft ? <Tag className="big-origin-tag">{draft.error ? '保存失败' : '未保存'}</Tag> : cell.from ? <Tag className="big-carry-tag" title={`带入自 ${cell.from}`}>{cell.from} 带入</Tag> : cell.value !== null ? <span className="big-origin">本月</span> : null}
   </div>;
@@ -64,7 +59,7 @@ export function BigPage(props: Props) {
 }
 
 function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: Props & {ym:string;projects:Project[];projectsError:string;retryProjects:()=>void}) {
-  const root = useRef<HTMLDivElement>(null), api = useRef<GridApi<BigRow> | null>(null), client = useQueryClient();
+  const root = useRef<HTMLDivElement>(null), client = useQueryClient();
   const queryKey = ['big',ym];
   const query = useQuery({queryKey,enabled:active && !blocked,queryFn:({signal}) => getBig(ym,signal)});
   const [picking,setPicking]=useState(false),revision=useRef(0);
@@ -131,10 +126,6 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
   },[scale,query.data]);
   const total=useMemo(() => query.data?.rows.length ? [{warehouse:'__total',display:'合计',totals:query.data.totals} as unknown as BigRow] : [],[query.data]);
   const presentation = useGridPresentation({root, active, rows: query.data?.rows ?? emptyBig, totals: total, columns, rowId: bigRowId, scale, scope: ym, identity: ym});
-  function focus(warehouse:string,key:ManualKey) {
-    api.current?.ensureColumnVisible(key);
-    requestAnimationFrame(() => root.current?.querySelector<HTMLInputElement>(`[row-id="${CSS.escape(warehouse)}"] [col-id="${key}"] input`)?.focus());
-  }
   return <>
     <div data-page-chrome className="big-toolbar"><div className="big-project-state"><span className="big-count">{query.data ? `${query.data.rows.length} 个项目` : ''}</span>{query.data && <span className="big-selection-source">{query.data.selection.fixed ? `${ym} 名单已固定` : query.data.selection.source === 'legacy' ? '沿用原项目名单，待固定' : query.data.selection.source === 'default' ? '默认项目名单，待固定' : `名单沿用 ${query.data.selection.source}，待固定`}</span>}</div><div className="big-export-actions">
       <Button disabled={controlsDisabled || !!projectsError || !query.data} onClick={()=>setPicking(true)}>选择项目与排序…</Button>
@@ -150,7 +141,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
     {Object.entries(drafts).map(([id,d])=><div className="big-draft" key={id}><span>{d.display}，{labels[d.key]}：{d.value || '清空，恢复带入'}{d.error && <span role="alert">，{d.error}</span>}</span>
       <Button size="small" disabled={disabled || busy} onMouseDown={e=>e.preventDefault()} onClick={()=>save(id,true)}>保存这项</Button>
       <Button size="small" disabled={busy} onMouseDown={e=>e.preventDefault()} onClick={()=>{saves.update(drafts=>{const next={...drafts};delete next[id];return next;});}}>取消修改</Button></div>)}
-    {query.isPending ? <p role="status">正在读取月度会大表…</p> : query.data && <BigCells.Provider value={{drafts,disabled,save,focus,
+    {query.isPending ? <p role="status">正在读取月度会大表…</p> : query.data && <BigCells.Provider value={{drafts,disabled,save,
       change:(row,key,value)=>{const id=keyOf(row.warehouse,key);saves.update((drafts,writing)=>{const old=drafts[id],next={...drafts,[id]:{warehouse:row.warehouse,display:row.display,key,value,original:old?.original??row.manual[key].value??'',error:'',revision:++revision.current}};if(!writing&&value===next[id]!.original)delete next[id];return next;});},
       cancel:id=>saves.update((drafts,writing)=>{if(writing)return drafts;const next={...drafts};delete next[id];return next;})}}>
       {!query.data.mat_available && <p className="notice">主材累计暂不可得，请先核对集采取数。</p>}
@@ -158,7 +149,7 @@ function BigMonth({ym,me,blocked,active,projects,projectsError,retryProjects}: P
         getRowId:p=>p.data.warehouse,defaultColDef:{resizable:false,sortable:false,suppressMovable:true,wrapHeaderText:true,suppressKeyboardEvent:e=>e.event.target instanceof HTMLInputElement},
         groupHeaderHeight:pageGridGeometry(scale).groupHeaderHeight,suppressScrollOnNewData:true,suppressColumnVirtualisation:true,
         overlayNoRowsTemplate:`<span>${query.data.candidates.length ? '未选择项目，请使用“选择项目与排序”。' : '当前没有在建非壳项目，请核对项目档案。'}</span>`,
-        onGridReady:e=>{api.current=e.api;}}} />
+}} />
     </BigCells.Provider>}
     {picking && query.data && <ProjectOrder data={query.data} projects={projects} busy={busy} disabled={controlsDisabled} paused={!active || blocked} save={selection} close={()=>setPicking(false)} />}
   </>;

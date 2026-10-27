@@ -1,4 +1,4 @@
-"""Native text selection and pointer/keyboard focus on actual copied table rows."""
+"""Native text selection and mouse focus on actual copied table rows."""
 import re
 import pytest
 from playwright.sync_api import expect
@@ -31,22 +31,10 @@ def test_native_table_text_can_be_selected(server,browser_page,route,title,grid)
     assert page.evaluate("document.queryCommandEnabled('copy')"), 'The browser has no native copy range'
 
 
-def test_contract_mouse_click_has_no_grid_ring_but_keyboard_does(server,browser_page):
+def test_contract_mouse_click_has_no_grid_ring(server,browser_page):
     page,_=browser_page
     login(page,server)
     page.get_by_role('link',name='集采台账',exact=True).click()
     cell=page.locator('.contracts-grid .ag-row:not(.ag-row-pinned) .ag-cell[col-id=contract_no]').first
-    expect(cell).to_be_visible()
-    cell.click()
-    pointer=cell.evaluate("e=>({focus:e.matches(':focus-visible'),border:getComputedStyle(e).borderTopColor,outline:getComputedStyle(e).outlineStyle})")
-    assert pointer['border']=='rgba(0, 0, 0, 0)',pointer
-    page.keyboard.press('ArrowRight')
-    focused=page.locator('.contracts-grid .ag-cell-focus')
-    expect(focused).to_have_count(1)
-    assert focused.evaluate("e=>e.matches(':focus-visible')"),'Keyboard navigation lost its visible focus'
-    assert focused.evaluate("e=>getComputedStyle(e).borderTopColor")!='rgba(0, 0, 0, 0)'
-    # Chromium may retain :focus-visible when the grid moves focus programmatically after a pointer click.
-    cell.click()
-    assert cell.evaluate("e=>getComputedStyle(e).borderTopColor")=='rgba(0, 0, 0, 0)'
-    cell.dispatch_event('keydown', {'key':'c','ctrlKey':True})
+    expect(cell).to_be_visible();cell.click()
     assert cell.evaluate("e=>getComputedStyle(e).borderTopColor")=='rgba(0, 0, 0, 0)'
