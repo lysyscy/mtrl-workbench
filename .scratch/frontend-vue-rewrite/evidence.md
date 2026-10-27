@@ -170,7 +170,7 @@ UI批累计起点`f15d4b8d33ff63485bfc2295e31fdc89499a3a8e`；445–448技术实
 
 原8065用户run仍为`.artifacts/active/react-writable-preview/20261025-admin-i8`，实际构建`work/notice-association-final`，版本`bmonth261026`；进程/HTTP/产品输入/完整构建经registered_preview核验。恢复后、验看登录前全部38张试用表摘要一致；本次登录只按正常账号逻辑更新登录时间，不向试用副本写测试业务。原schema、用户试用修改和私有i8状态保留。原run/reports/notice-association-verification.json为本机核验回执。
 
-三个一次性真实验证schema均经官方停止后核to_regnamespace为空，已释放其自建构建work，有限报告归本React工作树`.artifacts/archive/notice-association/20261026`。被接受的静态模板30959已退出，work/site释放；模板及最终原8065截图有限保存在主检出`D:/dev/mtrl-workbench/.artifacts/archive/notice-dialog-reuse/20261026/reports`，当前用户浏览器已转向8065正式弹窗。旧在用构建以owner为准，不删除其他任务或用户资源。
+三个一次性真实验证schema均经官方停止后核to_regnamespace为空，已释放其自建构建work，有限报告原归本React工作树`.artifacts/archive/notice-association/20261026`，现按最终保全章节原样外置。被接受的静态模板30959已退出，work/site释放；模板及最终原8065截图有限保存在主检出`D:/dev/mtrl-workbench/.artifacts/archive/notice-dialog-reuse/20261026/reports`，当前用户浏览器已转向8065正式弹窗。旧在用构建以owner为准，不删除其他任务或用户资源。
 
 源码已本地保存，尚未推送：此前自动审批已拒绝将新增业务决定资料发布到公开远端，原因是这部分具体公开内容尚无明确授权；本次不重复发起同一推送。用户正式界面验收、合流、423切换与424退役均未代办。
 
@@ -525,12 +525,21 @@ UTC源为后端快照datetime.now(timezone.utc).isoformat，局部原生Date格�
 
 run=.artifacts/archive/frontend-architecture/final-risk-20261028，reports保risk.xml（6case只计一次）、cross-results.json、original-before/after.json、cleanup-classification.json；完整输出日志归logs/risk-tests.log；本run的run-closed任务scope通过，总体rc1仍为上述5项旧归档。两张新增完整截图含副本业务/专用账号，仅本机私密，不作为用户外发图。源schema/全部列结构/40非账号表不变，临时schema已核不存在；主预览仍923c1824原schema，启动输出归其自身run。未推送/合并/生产切换。
 
-**旧内容分类与待父裁定方案（尚未移动）。** .scratch/perf-review共42件/2,826,855bytes：性能原始JSON、独有脚本、旧42878a3c构建及review；review是前阶段输入，其结论已吸收到架构证据。构建可从可达Git重建，原始测量/未跟踪脚本不能假称可再生。.workbuddy仅memory/2026-10-27.md，5,561bytes，是WorkBuddy项目笔记，非现行规则，亦无Git恢复。当前没有运行命令引用它们（排除本轮检查自身），但这不证明没有外部人工消费者；两目录未删、未提交、未新增ignore。
+**旧内容分类及获准保全（已执行）。** .scratch/perf-review原42件/2,826,855bytes为性能原始JSON、独有脚本、旧构建和review；.workbuddy原1件/5,561bytes为WorkBuddy项目笔记。按父任务明确授权，移动前复核完整清单/散列、停用owner和无进程命令引用；移后原件内容均未改，未提交用户笔记、未执行旧脚本、未新增ignore。
 
-精确可恢复方案：由父确认其旧任务已释放后，先核当前逐件hash仍等于cleanup-classification.json；原样移到D:/UserData/Documents/Codex/preserved/mtrl-workbench/20261028-final/perf-review及workbuddy（目标须不存在，复制清单同存，移动前核两端绝对路径），移后复核42/1件、字节与sha256完全一致。回退沿清单移动回原路径，原位置有新内容则停止，不能覆盖。此为外置保全，不是删除或Git提交，不执行其中旧脚本。
+全部按原相对树保全至D:/UserData/Documents/Codex/preserved/mtrl-workbench/20261028-final/，含.scratch/perf-review、.workbuddy及.artifacts/archive/notice-association/20261026三个旧run，共56件/3,091,819bytes。manifest.json保逐件SHA、字节、源/目标路径和组散列，README.md保恢复步骤；移后逐件核验一致。恢复前先验散列、确认原目标不存在且无活跃消费者，再按原路径整组移回并复核；出现新内容停止，不覆盖。保留至用户确认不再需要，无自动删除。
 
-生命周期旧5异常中，backend-regression-integration/20261027-01/work是空目录；notice-association/20261026下final/validation/verified三目录为13件历史日志/owner/构建指纹（合计259,403bytes），三个owner均stopped-disposable且live=false，旧构建已不存在、8dd15f16源码可达。它们有历史证据价值，非整棵可再生垃圾；另缺该effort retention.json。可由父将三目录按原树整体外置到上述保全根的notice-association/20261026，并修既有引用；空work仅在复核无子项后删除。也可在原归档按reports/logs正规重分类并补有限retention；本轮未替其他任务选路或擅动。旧browser错误标签此前策略阻止恢复/关闭，本轮未重试绕过；本轮新建headless contexts均已关闭。
+旧5异常已退出：backend-regression-integration/20261027-01/work经再次核为空后删除；notice三目录13件历史日志/owner/指纹（259,403bytes）原样外置，空祖先目录退出，旧effort不再留于仓内归档。没有捏造retention或改历史验证结果；这是历史资料保全的治理结果。旧browser错误标签此前策略阻止恢复/关闭，本轮未重试绕过；本轮新建headless contexts均已关闭。
 
 **安全前后图与用户验收文案。** task-10/visual-audit/integration/safe下appearance/inventory/fee的before/after共6张逐张看过像素：外观数字为组件静态示意，库存只有通用说明/按钮，费用是隔离“新项”局部，无真实业务或账号信息。只保本机审阅，不上传Library/第三方；完整nav/warm/机械/本轮综合图仍私密。
 
 可直接向用户说明：本机新版已可验看，15个入口完成架构与视觉审视，原试用数据和松绿/大一点偏好保留。已收敛辅助文字、只读值、弹层操作和长表细节，修复费用末行按钮遮挡；减少无关请求导致的整页等待和机械重复重建。业务保存、草稿、未知回执保护保持，独立代码/实图复验与定向风险验证未发现新阻断。可先按常用流程看项目/通知书/过程/机械，再看外观、库存调整原因和费用按钮。前后局部图可在本机记录中对照；完整业务组合未穷举，当前仅本地保存，尚未合并上线。
+
+
+## 历史资料可恢复保全与工作区清洁（2026-10-28）
+
+父任务明确批准可恢复移出后执行，五组原件总56件/3,091,819bytes，移动前后逐件SHA-256/字节/数量一致，空backend work删除。恢复根为D:/UserData/Documents/Codex/preserved/mtrl-workbench/20261028-final，原相对结构不变，manifest.json及README.md在该根；它们是新增恢复索引，不计入56原件。本机preservation-result.json记录各组完整散列。
+
+本次只整理历史资料，没有修改产品、原8065、数据库/schema或在用构建。此前目录检查非零是当时事实，旧回执原文仍保全；本次run-closed整体及本任务/其他归档均通过。用户笔记/旧报告未入Git，未推送。最新运行归属继续查原主预览owner；browser错误标签策略边界保持。
+
+完整active复核另发现旧table-stability-research.md不符合固定任务文档名；其215行原字节/散列不变地改为本effort的research.md，TAIL-449仅修研究链接，原票状态及历史结论不变。复核结果以preservation-lifecycle-all.json最新输出为准。

@@ -8,7 +8,7 @@
 
 ## 输入与完成范围
 
-基点为 `42878a3cb810d616415e3c7c376495cb7cc10f58`，分支 `codex/react-frontend-rewrite`。用户2026-10-27授权两项架构候选与补充报告全部实施，技术问题自主安排，业务含义或已接受体验的实质取舍再问。补充输入为用户提供的本机 `.scratch/perf-review/review.md`；现行结构回[架构](../../docs/architecture.md)，业务/界面裁决沿原规格。
+基点为 `42878a3cb810d616415e3c7c376495cb7cc10f58`，分支 `codex/react-frontend-rewrite`。用户2026-10-27授权两项架构候选与补充报告全部实施，技术问题自主安排，业务含义或已接受体验的实质取舍再问。补充输入为用户提供的原 `.scratch/perf-review/review.md`（现原样保全于D:/UserData/Documents/Codex/preserved/mtrl-workbench/20261028-final/.scratch/perf-review/review.md）；现行结构回[架构](../../docs/architecture.md)，业务/界面裁决沿原规格。
 
 - `grid-presentation.tsx`集中九页十处的列保留、测量列派生、挂载、首显、portal及局部重试，原生矩阵与集采拟宽算法保持。
 - `cell-save.ts`集中过程资料、大表、历史结余的提交快照、串行、结果分类及未知锁，React/history适配独立；来源预检、草稿身份、ack与可靠读回留在所属域。台账专有续接、费用新增ID恢复和机械批次未纳入。

@@ -28,7 +28,7 @@
 
 **2026-10-26 · 登记与暂停边界。** 用户先要求行业研究与全站通用方案，随后明确“先把关于加载的东西落票，我们来讨论”通知书关联入口。本票仅登记待办，当前不开始实施；ready-for-agent不是继续执行授权。通知书讨论收束后再按用户恢复指令接续，不自动从本票启动。
 
-**方案与证据。** 推荐方案和一手来源见[全站加载研究](../../frontend-vue-rewrite/table-stability-research.md#整合后的推荐方案)。登记时源码基线b6d84804691f096f07add1d735514a3c1207a2f1；逐帧根因与控制实验见[诊断摘要](../../../.artifacts/active/react-writable-preview/20261025-admin-i8/reports/table-geometry-summary.json)，实际复验仍须重新核运行owner与构建。相关旧435–440已按当时范围done，本票承接本次全站尺寸链与加载体验要求，不重开旧票、不将旧结果等同新目标验收。
+**方案与证据。** 推荐方案和一手来源见[全站加载研究](../../frontend-vue-rewrite/research.md#整合后的推荐方案)。登记时源码基线b6d84804691f096f07add1d735514a3c1207a2f1；逐帧根因与控制实验见[诊断摘要](../../../.artifacts/active/react-writable-preview/20261025-admin-i8/reports/table-geometry-summary.json)，实际复验仍须重新核运行owner与构建。相关旧435–440已按当时范围done，本票承接本次全站尺寸链与加载体验要求，不重开旧票、不将旧结果等同新目标验收。
 
 **本票之外。** 付款通知书“统一按钮＋两步弹窗”已完成grill-with-docs确认，行为归[集采需求](../../../docs/requirements/central-procurement.md#通知书关联入口)，确认来源归[讨论记录](../../frontend-vue-rewrite/questions.md#通知书关联入口确认)，统一入口已实现并加载原8065；后续尺寸准备消费其最终采用版本，不重做已完成的入口流程。讨论收束不等于恢复本加载票，本票仍暂停。本票仍不执行加载改造；用户另行授权付款通知书独立静态demo，不接业务逻辑，不修改产品源码或8065。
 
