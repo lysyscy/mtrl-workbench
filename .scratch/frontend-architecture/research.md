@@ -370,10 +370,10 @@ Valibot1.5.0正式用于contracts-api，非全站校验平台。实际后端buil
 | 付款Flow读取形状 | 注入内存坏载荷已实际越过reader，缺date触发TypeError、坏审批金额穿透、缺status影响合计；非真实后端坏响应 | 复用本批Valibot后续小批，先Flow读模型，不改付款/撤销命令；本批未实施 |
 | staged审计真实index | 工具报告指syntax_audit仍全扫、工作区与index混读且Git失败可吞空；尚未由本任务重现实index场景 | 值得Git原生index定向批；须partial staging/失败非零证据，不能为快而关闭门禁 |
 | 纯工具fixture/旧prune职责 | 4纯工具pytest装配全app、约255行prune可能职责退出 | 待消费者/收益确认，保DB守卫；不为删除行数贸然退役 |
-| 跨账号同通知书付款锁序 | 完整链只在后置重算锁定，无前置锁后校验；隔离合成并发验证被拒，尚未动态证实 | 父任务独立持有授权及后端处置；本任务不写后端、不换路径重试 |
+| 跨账号同通知书付款锁序 | 原只读风险随后获用户明确合成写测授权，动态证实审批100并发总200 | 后续已按第22节最小修复，交原发现者独立复验；不涉及真实付款 |
 | 抓取事务所有权/欠款重复组装 | 静态外部等待持账号锁、集采rollback外层；欠款本请求重复读事实 | 父按业务/事务风险另排，不把换库当解法、不真实i8验证 |
 
-保留已审视的旧/app及其jslex消费者、必要声明补丁、业务日期/金额、保存未知/草稿/撤销、i8协议、模板/透视缓存等差额。API生成、Flow、项目刷新、审计和后端候选各自明确未实施，不能因“全域已审视”称“全部整改完毕”。本批交父定向独立审查d79c4285→2e806908；此前独立审查结论不冒用到新增依赖/schema。
+保留已审视的旧/app及其jslex消费者、必要声明补丁、业务日期/金额、保存未知/草稿/撤销、i8协议、模板/透视缓存等差额。本节结束时API生成、Flow、项目刷新、审计和后端候选均未实施；后续付款锁修复见第22节，其余仍未实施，不能因“全域已审视”称“全部整改完毕”。本批交父定向独立审查d79c4285→2e806908；此前独立审查结论不冒用到新增依赖/schema。
 
 原生runner失败退出日志与断言迁移统计有限归档至native-unit-20261028；两旧无消费者run已退出active、临时探针/shim/坏例和副本状态已删除，合同run只留当前在用release-build与必要报告。旧923c1824恢复点仍由父指定保留，原8065用户试用数据保持；所有产物沿当前retention至2026-11-26。未推送、合并或部署。
 
@@ -389,3 +389,5 @@ Valibot1.5.0正式用于contracts-api，非全站校验平台。实际后端buil
 新7case与既有19项合计26项在现有backend_verify临时schema通过（1.74s，不含迁移）：双账号同单、反序双单都一成功一明确拒绝、每单总100且回执保原序；真实等锁后刷新预缓存通知书，额度50/未批/剔除/撤单四种变化均拒绝；HTTP第二条写入异常后整批流水及统计回滚，下一账号可正常取得锁并付款。既有所选范围/缺失ID/集采关联/整批非法/幂等/异常回滚、手改统计/恢复自动及撤销保护继续通过。测试模块硬核current_database与backend_verify_ schema，合成提交不允许落普通测试schema。
 
 红/绿report及日志分别归payment-lock-red-20261028与payment-lock-green-20261028；两次原始退出1/0、cleanup_completed=true且临时schema已退出，不把红灯记为通过。原动态证据继续在task-4/backend-architecture-review/payment-concurrency，不复制全套报告。待原发现者独立复核此批，不能把前端独审替代资金并发审查。[SQLAlchemy锁选项](https://docs.sqlalchemy.org/en/21/core/selectable.html#sqlalchemy.sql.expression.Select.with_for_update)、[PostgreSQL锁模式/稳定顺序](https://www.postgresql.org/docs/current/explicit-locking.html)。现有其他抓取/事务候选与真实外部路径不在本补丁范围。
+
+产品7f9151f2已正常加载原8065且fresh，前端资源与2e806908逐件相同；全部表/schema/列结构无差异，8066无监听，红绿两个backend_verify临时schema经独立只读查询均不存在。原923恢复构建及刚独审通过的2e合同构建保留为付款独审期间恢复点，当前在用构建为payment-lock-release-20261028/work/release-build；父确认风险窗口结束后才退出恢复点。无临时探针/shim残留，无真实付款/推送/部署。

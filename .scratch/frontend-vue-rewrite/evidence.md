@@ -563,3 +563,6 @@ TS7严格检查和提交后构建通过；265列表行/三种实际详情经过�
 全域扫描后的原有资金不变量漏洞已由原发现者真实隔离HTTP并发证实，父任务在用户明确授权合成写测后交本任务最小修复。apply_batch_pay在读余额前复用SQLAlchemy/Postgres原生FOR NO KEY UPDATE锁、按稳定ID预锁刷新整批，原选择顺序、金额判定、统计人工旁路及撤销/账号历史语义不变；无新框架/依赖或schema迁移。新回归未改产品先red，再修复green；新7case与既有19项共26pass，包含实际锁等待、缓存刷新、反序输入、HTTP整批回滚与重取锁。详细事实/锁序依据回[研究第22节](../frontend-architecture/research.md#22-原有付款并发不变量修复2026-10-28)。全部写入只在专用测试库临时schema，红/绿schema均由现有隔离入口清理，待原发现者独立复验；本节不提前宣称主8065已加载该候选。
 
 另父任务回执：ea9b9581/2e806908成熟轮子批定向独审通过，38行原断言一致、4文件7case实际执行、合同1458组内存新旧对照输出/错误分类相同，tsc/diff-check/lock通过。独审环境禁网且Corepack无pnpm缓存，文档pnpm启动未覆盖；同一Node命令直接执行通过。本机22:45已按正式corepack pnpm test:unit执行7pass，未为审查环境另造runner。
+
+
+付款产品7f9151f2已通过正常入口加载原8065，registered_preview核fresh；前端资源与2e806908完全一致。主schema/invadj261027、40非账号表及所有列结构不变，此次更新全部表均无差异。仅只读核对两个backend_verify红绿schema均已不存在，8066无监听。红绿原始退出/清理报告有限归档在.artifacts/archive/frontend-architecture/payment-lock-{red,green}-20261028；新主构建和保全摘要在.artifacts/active/frontend-architecture/payment-lock-release-20261028。临时pnpm转发已退出；2e旧构建供当前付款独审回滚、923旧交付恢复点仍按父指定保留，不冒称全部在用资源应立即删除。待原发现者独立复核，不在原库点击付款来证明修复。
