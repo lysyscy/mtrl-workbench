@@ -1,17 +1,9 @@
-"""Exercise the shared submission interface, without HTTP, DOM or business writes."""
-from pathlib import Path
-import shutil
-import subprocess
-
-
-def test_cell_save_snapshots_and_unknown_result_lock():
-    code = r"""
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createServer} from 'vite';
-const server = await createServer({server:{middlewareMode:true,hmr:false,watch:null},appType:'custom'});
-try {
-  const {CellSaveQueue} = await server.ssrLoadModule('/src/cell-save.ts');
-  const {ApiError} = await server.ssrLoadModule('/src/api.ts');
+import { CellSaveQueue } from '../../src/cell-save.ts';
+import { ApiError } from '../../src/api.ts';
+
+test('cell_save_snapshots_and_unknown_result_lock', async () => {
   const deferred = () => { let resolve, reject; const promise = new Promise((yes,no) => {resolve=yes;reject=no}); return {promise,resolve,reject}; };
   const untilIdle = queue => new Promise(resolve => {
     if (!queue.getSnapshot().busy) return resolve();
@@ -69,10 +61,4 @@ try {
   queue.save('b',true); assert.equal(writes,2);
   queue.dispose();
   console.log('Submission snapshots, rejection, committed/read-failed and lost-reply protection passed');
-} finally { await server.close(); }
-"""
-    node = shutil.which('node')
-    assert node, 'Existing Node is unavailable; submission protection was not run'
-    result = subprocess.run([node, '--input-type=module', '-e', code],
-                            cwd=Path(__file__).resolve().parents[1], capture_output=True, encoding='utf-8')
-    assert result.returncode == 0, result.stdout + result.stderr
+});

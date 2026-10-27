@@ -336,3 +336,12 @@ HTTP503与重试在无关GET暂缓时可见；本页首次主GET门保留，切�
 | 构建/依赖/工具/测试 | 已审视保留现有栈与必要类型补丁、旧/app消费者和其jslex；未引入依赖/SDK/AST/变异平台；工具探针与死计划退出 |
 
 “已审视保留/暂缓”是本轮有效取舍，非自动欠账；后续有新收益证据再立范围。没有把全域盘点、实际整改和抽样验证混成所有业务组合全过。最终6个高风险定向case、两组交叉运行及原生非overlay抽样见既有最终证据；本阶段未改产品源码。
+
+
+## 19. 用户扩大成熟方案复用后：原生测试入口
+
+用户22:03UTC要求继续扩大寻找成熟轮子，Astra独立裁决后先落Node24原生test runner+tsx4.23.15。三个纯算法模块直接import真实TS，退出Python字符串→Node子进程→Vite middleware/SSR→退出码包装；浏览器pytest不合并。原保存19行、身份12行、单据号匹配7行业务assert逐行对照不变，删除的server.httpServer断言只属已退出的Vite装载器。原生三文件3/3通过，临时隔离副本各改一处断言，三项均实际失败且exit1；TS7 typecheck保留并通过。仓内无CI配置，既有开发指南同步唯一test:unit入口，未长期双跑。
+
+固定tsx开发依赖及锁；首次pnpm安装因esbuild0.28.2脚本待审批退出非零，按官方approve-builds只批准该依赖后postinstall通过、frozen-lockfile安装退出0，未忽略或覆盖安全检查。相同基线生成器CLI准备只在pnpm隔离缓存TS5.9.3运行成功，实际19条项目GET形状通过Pydantic严格验证；API生成仍未接入，待与其他成熟方案的维护收益比较，不因此推定支持生成器TS7。
+
+依据：[Node24测试执行模型](https://nodejs.org/docs/latest-v24.x/api/test.html#test-runner-execution-model)、[tsx测试加载](https://tsx.hirok.io/node-enhancement#test-runner)。本批先固定独立提交，后续合同schema另批裁定；认证/业务保存语义未改。
