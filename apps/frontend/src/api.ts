@@ -9,8 +9,38 @@ export function setRequestIdentity(identity: string) {
   identityRequests.abort(); identityRequests = new AbortController(); requestIdentity = identity;
 }
 
+type IdentityCheck = { done: Promise<void>; error: string };
+let identityCheck: IdentityCheck | null = null;
+// Let the first click update local UI while holding network intents until the account is known.
+export function beginIdentityVerification() {
+  let release!: () => void;
+  const check: IdentityCheck = { done: new Promise<void>(resolve => { release = resolve; }), error: '' };
+  identityCheck = check;
+  return (error = '') => {
+    check.error = error;
+    if (identityCheck === check && !error) identityCheck = null;
+    release();
+  };
+}
+
 async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
   const signal = init.signal ? AbortSignal.any([init.signal, identityRequests.signal]) : identityRequests.signal;
+  // Verification itself must be able to pass its own gate. Every other read/write waits.
+  if (!(path === '/api/m15/users' && (!init.method || init.method === 'GET'))) {
+    while (identityCheck) {
+      const check = identityCheck;
+      await new Promise<void>((resolve, reject) => {
+        const abort = () => { signal.removeEventListener('abort', abort); reject(new DOMException('Aborted', 'AbortError')); };
+        signal.addEventListener('abort', abort, {once: true});
+        void check.done.then(() => { signal.removeEventListener('abort', abort); resolve(); });
+        if (signal.aborted) abort();
+      });
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (identityCheck && identityCheck !== check) continue;
+      if (check.error) throw new ApiError(check.error, 403, 'identity_unverified');
+    }
+  }
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
   let response: Response;
   try { response = await fetch(path, { ...init, signal, credentials: 'same-origin', headers: { Accept: 'application/json', ...init.headers } }); }
   catch (error) {

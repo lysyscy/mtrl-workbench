@@ -140,9 +140,13 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
     const input=editable?numberColumnWidth(shown.map(row=>row[key]),1,true).minWidth:0;
     return [key,Math.max(display,input)];
   })) as Record<MoneyKey,number>,[shown,summary]);
+  const identityWidths = useMemo(() => ({
+    date: Math.max(100, numberColumnWidth(shown.map(row => row.doc_date), 1).minWidth),
+    code: Math.max(142, numberColumnWidth(shown.map(row => row.bill_no), 1).minWidth),
+  }), [shown]);
   const columns = useMemo<ColDef<NoticeRow>[]>(() => ([
     { colId: 'pick', headerName: '', pinned: 'left', ...fixedWidth(36, scale), sortable: false, headerComponent: () => { const ids = current.current.shown.filter(selectable).map(r => r.notice_id), count = ids.filter(id => current.current.picked.has(id)).length; return <Checkbox aria-label="全选当前筛选结果" checked={ids.length > 0 && count === ids.length} indeterminate={count > 0 && count < ids.length} disabled={current.current.unavailable || !ids.length} onChange={e => current.current.chooseAll(e.target.checked)} />; }, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : <Checkbox aria-label={`勾选${p.data!.bill_no}`} disabled={current.current.unavailable || !selectable(p.data!)} checked={current.current.picked.has(p.data!.notice_id)} onChange={e => current.current.pick(p.data!.notice_id, e.target.checked)} /> },
-    { field: 'doc_date', headerName: '单据日期', pinned: 'left', ...contentWidth(84, 100, scale), wrapText: true }, { field: 'bill_no', tooltipField: 'bill_no', headerName: '单据编码', pinned: 'left', ...contentWidth(112, 142, scale), wrapText: true },
+    { field: 'doc_date', headerName: '单据日期', pinned: 'left', ...fixedWidth(identityWidths.date, scale), wrapText: false }, { field: 'bill_no', tooltipField: 'bill_no', headerName: '单据编码', pinned: 'left', ...fixedWidth(identityWidths.code, scale), wrapText: false },
     { field: 'project_display', headerName: '付款项目', ...contentWidth(84, 160, scale, 1), tooltipField: 'project_name', wrapText: true, cellRenderer: (p: ICellRendererParams<NoticeRow>) => p.node.rowPinned ? '' : p.data!.ownership_id ? p.data!.project_display : <Button htmlType="submit" className="project-link" disabled={current.current.unavailable} onClick={() => current.current.open('ownership',p.data!)}>待指定归属</Button> },
     { field: 'category_label', headerName: '分类', ...contentWidth(74, 94, scale), wrapText: true, cellRenderer: (p: ICellRendererParams<NoticeRow>) => { if (p.node.rowPinned) return ''; const r = p.data!, label = archiveLabel(r); return label ? <span><span className={`notice-tag ${r.is_excluded ? r.exclude_source : 'revoked'}`} title={r.exclude_rule_hint}>{label}</span>{r.is_revoked && (cents(r.amount_paid) > 0n || r.has_link) && <span className="notice-tag rule notice-revoke-hint">请先撤销付款 / 解绑关联</span>}</span> : <Select className="notice-category-select" aria-label={`${r.bill_no}分类`} value={r.category} disabled={current.current.unavailable} onChange={value => void current.current.action('/api/m03/actions/category', { ids: [r.notice_id], category: value })} options={Object.entries(categories).map(([value,label])=>({value,label}))} popupMatchSelectWidth={false} labelRender={option=><EnumTag kind="category" value={String(option.label)}/>}/>; } },
     ...(['bill_name','biz_type','payee','jc_supplier','input_by'] as const).map((key, index): ColDef<NoticeRow> => ({ field: key, headerName: ['单据名称','业务类型','收款单位','集采实际供应商','录入人'][index]!, ...(index === 3 ? contentWidth(132, 232, scale, 1) : index === 0 ? contentWidth(132, 280, scale, 2) : index === 2 ? contentWidth(96, 208, scale, 1) : contentWidth(index === 4 ? 68 : 72, index === 4 ? 76 : 104, scale)), wrapText: true,
@@ -162,7 +166,7 @@ export function NoticesPage({ me, blocked, active }: { me: Identity | null; bloc
       if (column.colId === 'actions') return <div className="notice-row-actions"><Button htmlType="submit" disabled={current.current.unavailable} onClick={() => void current.current.saveDraft()}>保存</Button><Button htmlType="submit" disabled={current.current.unavailable} onClick={current.current.cancelDraft}>取消</Button></div>;
       const field = mapping[column.field ?? '']; return field ? current.current.draftCell(p.data!,field,column.headerName ?? '') : '—';
     } };
-  }), [scale,moneyWidths,Boolean(draft)]);
+  }), [scale,moneyWidths,identityWidths,Boolean(draft)]);
   const footer = useMemo(() => draft && !draft.row_id ? [{ notice_id: -2 } as NoticeRow,...summary] : summary, [draft,summary]);
   const measurement = useMemo(() => ({signature:(row:NoticeRow,id:string,pinned:boolean) => {
     const fixedInput = ['pay_amount','stat_settle','stat_paid'].includes(id) || id === 'amount_approved' && row.is_manual;

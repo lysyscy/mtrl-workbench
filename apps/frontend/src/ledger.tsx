@@ -63,6 +63,24 @@ function DeleteCell({ data: row, context, node }: ICellRendererParams<LedgerRow,
 }
 function Side({ active, scale, side, scope, actions, writable, busy, add, focusRecord, focused }: { active: boolean; scale: number; side: LedgerSide; scope: Scope; actions: React.RefObject<Actions>; writable: boolean; busy: boolean; add: () => void; focusRecord: number | null; focused: () => void }) {
   const api = useRef<GridApi<LedgerRow> | null>(null); const root = useRef<HTMLDivElement>(null), summaryRoot = useRef<HTMLDivElement>(null);
+  const [tableHeight, setTableHeight] = useState(200 * scale);
+  function sizeTable() {
+    const grid = api.current, node = root.current;
+    if (!grid || grid.isDestroyed() || !node) return;
+    const last = grid.getDisplayedRowAtIndex(grid.getDisplayedRowCount() - 1);
+    const rowsHeight = last ? (last.rowTop ?? 0) + (last.rowHeight ?? 0) : 36 * scale;
+    const header = node.querySelector<HTMLElement>('.ag-header')?.getBoundingClientRect().height ?? 34 * scale;
+    const totals = node.querySelector<HTMLElement>('.ag-grid-pinned-bottom-rows')?.getBoundingClientRect().height ?? grid.getPinnedBottomRow(0)?.rowHeight ?? 0;
+    const scrollbar = node.querySelector<HTMLElement>('.ag-body-horizontal-scroll');
+    const horizontal = scrollbar && getComputedStyle(scrollbar).visibility !== 'hidden' ? scrollbar.getBoundingClientRect().height : 0;
+    const frame = node.querySelector('.ag-root-wrapper');
+    const chrome = frame ? getComputedStyle(frame) : null;
+    const borders = (parseFloat(chrome?.borderTopWidth ?? '') || 0) + (parseFloat(chrome?.borderBottomWidth ?? '') || 0);
+    setTableHeight(previous => {
+      const next = Math.ceil(rowsHeight + header + totals + horizontal + borders);
+      return Math.abs(previous - next) < 1 ? previous : next;
+    });
+  }
   const context = useMemo(() => ({ scope, actions }), [scope, actions]);
   useEffect(() => { if (writable) api.current?.refreshCells({ force: true }); }, [writable, busy]);
   const visible = useMemo(() => side.rows.filter(row => row.row_kind !== 'month' || row.editable || row.other_expense !== '0.00' || row.payment !== '0.00' || row.remark).map((row, index) => ({ ...row, seq: index + 1 })), [side.rows]);
@@ -80,6 +98,7 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
   ], [side.category, scale, upto]);
   const measurement = useMemo(() => ({signature:(row:LedgerRow,id:string,pinned:boolean)=>JSON.stringify([pinned,row[id as keyof LedgerRow],row.row_kind,row.editable,writable])}), [writable]);
   const presentation = useGridPresentation({root, fontRoot: summaryRoot, active, rows: visible, totals: total, columns, context, measurement, rowId: ledgerRowId, scale, scope: scope.key, identity: scope.key});
+  useEffect(() => { if (presentation.state === 'ready') sizeTable(); }, [presentation.state, visible, total, scale]);
   useEffect(() => {
     if (!focusRecord || !api.current) return;
     const node = api.current.getRowNode(`${side.category}:manual:${focusRecord}`);
@@ -92,10 +111,20 @@ function Side({ active, scale, side, scope, actions, writable, busy, add, focusR
   }, [focusRecord, visible, side.category, focused]);
   return <div ref={root} role="region" aria-label={`${side.label}欠款台账`} data-ledger-side={side.category} className="ledger-side">
     <div ref={summaryRoot} className="ledger-summary" inert={!presentation.visible} style={{visibility:presentation.visible ? undefined : 'hidden'}}><h2>{side.label}欠款台账</h2>{side.category === 'material' && <Button htmlType="submit" aria-label="新增历史行" disabled={!writable || busy} onClick={add}>＋ 新增历史行</Button>}</div>
-    <PreparedGrid presentation={presentation} attachRoot={false} scrollClassName="ledger-table-scroll" className="ledger-grid" grid={{theme:gridTheme,alwaysShowVerticalScroll:true,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,
+    <PreparedGrid presentation={presentation} attachRoot={false} scrollClassName="ledger-table-scroll" className="ledger-grid" style={{height:tableHeight,maxHeight:'60dvh'}} grid={{theme:gridTheme,alwaysShowVerticalScroll:false,rowBuffer:2,suppressColumnVirtualisation:true,enableCellTextSelection:true,ensureDomOrder:true,
       getRowId:params=>params.data.key,defaultColDef:defaultColumn,suppressCellFocus:true,suppressScrollOnNewData:true,
-      overlayNoRowsTemplate:'暂无台账数据。',animateRows:false,onGridReady:event=>{api.current=event.api;},
-      onFirstDataRendered:event=>{if(visible.length)event.api.ensureIndexVisible(visible.length-1,'bottom');}}} />
+      overlayNoRowsTemplate:'暂无台账数据。',animateRows:false,onGridReady:event=>{
+        api.current=event.api;
+        const observer=new ResizeObserver(sizeTable);
+        for(const selector of ['.ag-header','.ag-body-horizontal-scroll','.ag-grid-pinned-bottom-rows']) {
+          const element=root.current?.querySelector(selector);if(element)observer.observe(element);
+        }
+        const visibility=new MutationObserver(sizeTable),scrollbar=root.current?.querySelector('.ag-body-horizontal-scroll');
+        if(scrollbar)visibility.observe(scrollbar,{attributes:true,attributeFilter:['class','style']});
+        event.api.addEventListener('gridPreDestroyed',()=>{observer.disconnect();visibility.disconnect();});
+      },
+      onModelUpdated:()=>requestAnimationFrame(sizeTable),onGridSizeChanged:()=>requestAnimationFrame(sizeTable),
+      onFirstDataRendered:event=>{sizeTable();if(visible.length)event.api.ensureIndexVisible(visible.length-1,'bottom');}}} />
   </div>;
 }
 export function LedgerPage({ me, blocked, project, setProject, active, onExportGuard }: { me: Identity | null; blocked: boolean; active: boolean; project: number; setProject: (project: number) => void; onExportGuard: (reason: string) => void }) {
@@ -112,6 +141,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
   const jobs = useRef(new Set<Promise<void>>()); const serial = useRef(0); const acting = useRef(false);
   const pointerDown = useRef(false);
   const body = useRef<HTMLDivElement>(null); const [display, setDisplay] = useState<{ key: string; data: Ledger } | null>(null);
+  const content = useRef<HTMLDivElement>(null), retainedHeight = useRef(0);
   const pendingDisplay = useRef<{ key: string; data: Ledger } | null>(null);
   useEffect(() => { mounted.current = true; lifetime.current = new AbortController(); return () => { mounted.current = false; lifetime.current?.abort(); }; }, []);
   const projects = useQuery({ queryKey: ['projects', 'all'], enabled: !blocked,
@@ -264,6 +294,12 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
     });
   }
   const shown = display?.key === scope.key ? display.data : null;
+  useEffect(() => {
+    if (!shown || !content.current) return;
+    const node = content.current;
+    const observer = new ResizeObserver(() => { retainedHeight.current = node.getBoundingClientRect().height; });
+    observer.observe(node); return () => observer.disconnect();
+  }, [shown]);
   async function reload() {
     if (!me) { void query.refetch(); return; }
     await control(scope, async () => { await refresh(scope); message(scope, '已重新加载；未保存输入仍保留。'); }, true);
@@ -284,7 +320,7 @@ export function LedgerPage({ me, blocked, project, setProject, active, onExportG
       <div className="ledger-card-body">
         <div className="ledger-view-project" data-page-chrome><span className="muted">项目</span><ProjectPicker projects={candidates} selected={[project]} pick={ids => setProject(ids[0] ?? 0)} label="选择项目" disabled={blocked || projects.isPending || projects.isError} /></div>
         {projects.isError && <p role="alert">{projects.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void projects.refetch()}>重试项目</Button></p>}
-        <div className="ledger-content" aria-busy={!shown && !query.isError && project > 0}>
+        <div ref={content} className="ledger-content" style={!shown && retainedHeight.current ? {height:retainedHeight.current,minHeight:retainedHeight.current} : undefined} aria-busy={!shown && !query.isError && project > 0}>
         {!shown && <div className="ledger-placeholder" aria-hidden="true"><span/><span/></div>}
         {project === 0 ? <p className="state">请选择项目查看台账。</p> : query.isError ? <p className="notice" role="alert">{shown ? '页面数据未能刷新，保留上次结果。' : ''}{query.error.message}<Button htmlType="submit" disabled={blocked || controlBusy} onClick={() => void reload()}>重新加载</Button></p> : !shown ? <p className="state" role="status">正在读取台账…</p> : null}
         {shown && <div ref={body} className="ledger-sides" onPointerDownCapture={() => { pointerDown.current = true; }} onPointerCancelCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onClickCapture={() => { pointerDown.current = false; requestAnimationFrame(publish); }} onBlurCapture={() => requestAnimationFrame(publish)}>{shown.sides.map(side => <Side active={active && !blocked} scale={Number(me?.ui_scale_css) || 1} key={`${scope.key}:${side.category}`} side={side} scope={scope} actions={actions} writable={Boolean(me) && !blocked && !historyBusy && !historyUncertain} busy={controlBusy} add={() => void add()} focusRecord={focusRecord} focused={() => setFocusRecord(null)} />)}</div>}

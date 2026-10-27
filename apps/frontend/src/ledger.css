@@ -35,17 +35,17 @@
 .ledger-project-export>div:not([hidden])>:not(.export-project-list){flex-shrink:0}
 .ledger-project-export .export-project-list{flex:0 1 auto;min-height:0}
 
-/* Keep the allocated table space even while a different project's data is loading. */
-.debt-workspace>.ledger-card{display:flex;flex-direction:column;flex:1 0 auto;min-height:min-content}
+/* Short tables end at their total; long tables cap the viewport and retain pinned totals. */
+.debt-workspace>.ledger-card{display:flex;flex-direction:column;flex:none;min-height:min-content}
 .debt-workspace .ledger-card-head,.debt-workspace .ledger-view-project{flex:none}
-.debt-workspace .ledger-card-body,.debt-workspace .ledger-content{display:flex;flex-direction:column;flex:1;min-height:min-content}
-.debt-workspace .ledger-content{min-height:calc(320px * var(--fscale))}
-.debt-workspace .ledger-sides{flex:1;min-height:min-content;grid-auto-rows:minmax(calc(320px * var(--fscale)),1fr)}
+.debt-workspace .ledger-card-body,.debt-workspace .ledger-content{display:flex;flex-direction:column;min-height:min-content}
+.debt-workspace .ledger-content:has(>.ledger-placeholder){min-height:calc(320px * var(--fscale))}
+.debt-workspace .ledger-sides{min-height:min-content;align-items:start}
 .debt-workspace .ledger-side{display:flex;flex-direction:column;min-height:0}
 .debt-workspace .ledger-summary{flex:none;min-height:calc(32px * var(--fscale));align-items:center}
-.debt-workspace .ledger-table-scroll{display:flex;flex:1;min-height:calc(280px * var(--fscale))}
-.debt-workspace .ledger-grid{flex:1;min-height:calc(280px * var(--fscale))}
+.debt-workspace .ledger-table-scroll{display:flex;min-height:0}
+.debt-workspace .ledger-grid{flex:1;min-height:0}
 
 .debt-workspace .ledger-content{position:relative}
-.ledger-placeholder{display:grid;flex:1;grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(640px * var(--fscale))),1fr));grid-auto-rows:minmax(calc(320px * var(--fscale)),1fr);gap:calc(16px * var(--fscale));margin-top:calc(12px * var(--fscale))}
+.ledger-placeholder{display:grid;flex:1;grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(640px * var(--fscale))),1fr));grid-auto-rows:1fr;min-height:0;gap:calc(16px * var(--fscale));margin-top:calc(12px * var(--fscale))}
 .ledger-content:has(>.ledger-placeholder)>:is(.state,.notice){position:absolute;inset:0 0 auto}

@@ -47,3 +47,6 @@ html,body{height:100%}body{display:flex;flex-direction:column}#root{display:flex
 .account-pill{display:flex;align-items:center;gap:.5em;border:1px solid var(--bd);border-radius:var(--radius-input);background:var(--sf2);font-size:calc(12px * var(--fscale));padding:.35em .8em;min-height:0;text-align:left;overflow-wrap:anywhere}.account-dot{width:.55em;height:.55em;flex-shrink:0;border-radius:50%;background:var(--ok)}
 
 .page-loading{position:absolute;z-index:1;padding:calc(20px * var(--fscale));display:flex;align-items:center;gap:1rem;color:var(--tx2)}
+
+/* Bound virtual row invalidation; offscreen sizing portals keep their natural overflow. */
+.workspace .ag-row:not(.grid-layout-measure){contain:paint}

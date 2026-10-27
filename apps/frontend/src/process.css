@@ -1,4 +1,4 @@
-.process-page{width:fit-content;max-width:100%;margin-inline:auto;min-width:0;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
+.process-page{width:100%;max-width:100%;margin-inline:auto;min-width:0;overflow:visible;font-size:calc(var(--font-ui-size) * 1px * var(--fscale))}
 .process-page:has(.process-grid){width:100%}
 .process-toolbar,.process-filters,.process-tabs,.process-export-tools{display:flex;align-items:center;gap:calc(8px * var(--fscale));flex-wrap:wrap}
 .process-toolbar{justify-content:space-between;gap:calc(12px * var(--fscale));padding:calc(16px * var(--fscale));border-bottom:1px solid var(--bd2)}

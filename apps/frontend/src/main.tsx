@@ -10,7 +10,7 @@ import { lazy, memo, StrictMode, Suspense, useEffect, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { readIdentity, setRequestIdentity, requestJson } from './api';
+import { readIdentity, setRequestIdentity, requestJson, beginIdentityVerification } from './api';
 import type { Identity } from './api';
 import type { ComponentType } from 'react';
 import { Projects } from './projects';
@@ -121,9 +121,11 @@ function App() {
   const [fontsReady, setFontsReady] = useState(false);
   const request = useRef<AbortController | null>(null);
   const knownIdentity = useRef<Identity | null>(null), identityPending = useRef(false);
-  async function check(pause = true) {
+  async function check(pause = true, background = false) {
     request.current?.abort(); identityPending.current = true;
     const controller = new AbortController(); request.current = controller;
+    const finishVerification = beginIdentityVerification();
+    let verificationError = '';
     if (pause) setChecking(true); setError('');
     try {
       const next = preserveIdentity(knownIdentity.current, readIdentity(await requestJson('/api/m15/users', { signal: controller.signal })));
@@ -139,16 +141,17 @@ function App() {
       if (!controller.signal.aborted) setFontsReady(true);
     } catch (failure) {
       if (!controller.signal.aborted) {
-        if (!pause) throw failure;
+        verificationError = '账号暂时无法核实，请重试后再操作。';
         // A failed check cannot establish an account change; keep local state while access is paused.
         setError(failure instanceof Error ? failure.message : '账号读取失败，请重试。'); setChecking(false);
+        if (!pause && !background) throw failure;
       }
-    } finally { if (request.current === controller) identityPending.current = false; }
+    } finally { finishVerification(verificationError); if (request.current === controller) identityPending.current = false; }
   }
   useEffect(() => {
     void check();
-    // Deduplicate the same in-flight verification; retain immediate access pause and no stale-account grace period.
-    const focus = () => { if (document.visibilityState === 'visible' && !identityPending.current) void check(); };
+    // Keep local navigation/input responsive; API intents wait at the identity gate.
+    const focus = () => { if (document.visibilityState === 'visible' && !identityPending.current) void check(false, true); };
     const lost = () => { setRequestIdentity('anonymous'); request.current?.abort(); knownIdentity.current = null; setMe(null); setExpired(true); setError(''); setChecking(false); };
     window.addEventListener('focus', focus); window.addEventListener('session-lost', lost);
     return () => { request.current?.abort(); window.removeEventListener('focus', focus); window.removeEventListener('session-lost', lost); };

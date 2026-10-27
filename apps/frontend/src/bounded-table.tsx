@@ -34,7 +34,15 @@ export function BoundedTable({ columns, children, style, prepareFonts = false, l
           if (cell.colSpan === 1 && columns[index]) {
             const css = getComputedStyle(cell); context.font = css.font;
             const text = Math.max(...(cell.getAttribute('aria-label') ?? cell.innerText).split('\n').map(line => context.measureText(line.trim()).width));
-            const control = Math.max(0, ...[...cell.querySelectorAll('input,select,button')].map(el => el.getBoundingClientRect().width));
+            const control = Math.max(0, ...[...cell.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>('input,select,button')].map(el => {
+              if (!(el instanceof HTMLInputElement) || ['checkbox','radio'].includes(el.type)) return el.getBoundingClientRect().width;
+              // A percentage-sized editor describes its allocated cell, not its content.
+              // Measuring that width feeds the previous project's layout into the next fit.
+              const inputCss = getComputedStyle(el); context.font = inputCss.font;
+              return Math.max(parseFloat(inputCss.minWidth) || 0, context.measureText(el.value || el.placeholder || '0.00').width +
+                (parseFloat(inputCss.paddingLeft) || 0) + (parseFloat(inputCss.paddingRight) || 0) +
+                (parseFloat(inputCss.borderLeftWidth) || 0) + (parseFloat(inputCss.borderRightWidth) || 0) + 16);
+            }));
             measured[index] = Math.max(measured[index]!, Math.max(text, control) + parseFloat(css.paddingLeft) + parseFloat(css.paddingRight) + 2);
           }
           for (let i = index; i < index + cell.colSpan; i++) occupied[i] = cell.rowSpan;

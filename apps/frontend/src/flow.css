@@ -54,8 +54,8 @@
 /* Each payment page gives its main table the remaining workspace. */
 .flow-workspace,.debt-workspace{display:flex;flex-direction:column;gap:calc(16px * var(--fscale));height:100%;min-height:min-content}
 .flow-workspace>.payment-stats,.debt-workspace>.debt-overviews{flex:none}
-.debt-overviews .flow-card-body{height:clamp(calc(180px * var(--fscale)),24dvh,calc(300px * var(--fscale)));min-height:0;overflow:auto}
-.debt-overviews .flow-bars{max-height:none}
+.debt-overviews .flow-card-body{height:auto;min-height:0;overflow:visible}
+.debt-overviews .flow-bars{max-height:none;overflow:visible}
 .payment-stats>.flow-card-body{height:clamp(calc(200px * var(--fscale)),27dvh,calc(300px * var(--fscale)));min-height:0;overflow:auto}
 .payment-stat-columns{height:100%;min-height:0}
 .payment-stat-columns>div{display:flex;flex-direction:column;min-height:0}
@@ -64,4 +64,4 @@
 .flow-workspace>.flow-list{display:flex;flex-direction:column;flex:1 0 auto;min-height:min-content}
 .flow-list>:not(.flow-grid){flex:none}
 .flow-list>.flow-grid{flex:1 0 calc(280px * var(--fscale));min-height:calc(280px * var(--fscale))}
-@media(max-width:1000px){.debt-overviews .flow-card-body{height:calc(180px * var(--fscale))}.payment-stat-columns{height:auto}.payment-stat-columns .flow-bars{max-height:calc(180px * var(--fscale))}}
+@media(max-width:1000px){.payment-stat-columns{height:auto}.payment-stat-columns .flow-bars{max-height:calc(180px * var(--fscale))}}
