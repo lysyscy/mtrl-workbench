@@ -283,3 +283,21 @@ Terra完成首批登录态复验并释放源码冻结后，第二批获得唯一
 第12节页面批已实施：72421297使projects/home/i8复用现有independent，项目表体复用BoundedTable字体边界，退出这三页对无关全账号GET的首显等待。原4个失败已red→green；额外冷字体用例定位并修复main中已完成身份/主题核验仍被字体I/O延后释放API门的耦合，保原字体可见门及身份世代。最终8case一起通过，另字体失败恢复与当前focus契约通过。公共PageSurface后备仍服务ledger/contracts/rules/users四页，不宣称全部退出。库存初批不重做。
 
 视觉983c3712及用例契约de3a16b5与页面批串行保存；原数据保全、运行身份、隔离费用/历史结余/库存状态和独立验收入口回[第三批证据](../frontend-vue-rewrite/evidence.md#局部就绪与操作反馈第三批2026-10-28)。新P2为费用自然高短表最后行删除按钮下沿被原生横条覆盖，已有稳定帧和几何证据，尚未修；机械抓取UTC快照时间虽已核来源，完整时间显示无现成契约，原值保留。两者不是API生成或机械身份试验已完成，后续优先处理具体可见问题再用12节的限定试验窗口。未加新依赖/SDK/状态机，未推送。
+
+
+## 14. API消费者实证通过，原项目直接接入暂缓
+
+官方npm registry核openapi-typescript7.13.0、MIT、openapi-ts/openapi-typescript源库及sha512完整性；该版发布2026-02-11，registry最后修改2026-06-15，未核到近月发版，不把已有声誉当持续活跃证明；临时目录安装33包且ignore-scripts/no-audit，原package/lock不变。直接从实际mod01 router选GET routes交安装FastAPI get_openapi，未启动应用/调用路由/读库，成功离线导出；无需将原AST抽取变长期工具。官方纯类型[Node/CLI能力](https://openapi-ts.dev/node)可满足，不需SDK或额外Redocly配置。
+
+同schema生成两次完全一致（3170bytes）；完整src临时副本将Project/ArchiveProject手写结构替为Required/Omit/Pick别名、保两处运行reader及枚举业务联合，使用项目安装TS7.0.2严格配置编译通过。临时副本模块查找最初丢失React/Router声明，正确映射原安装声明入口后通过，未靠skipLibCheck或any。仅将固定schema样本ord类型改string再生成，api返回、ledger算术、process等实际消费者编译失败；生成变更确实传播，恢复原样本。生成器自己的开发依赖未进入产品。
+
+最后依赖复核发现明确接入边界：7.13.0声明peer typescript ^5.x，临时npm树实际装5.9.3；项目根是7.0.2。上述“TS7编译通过”验证的是生成结果消费者，**不是生成器在TS7 peer下兼容**。因此收回直接正式接入建议，本晚暂缓原仓安装；不压低项目TS、不加peer忽略/覆盖，也不为11字段另建TS5子工程。peer不匹配不是已证实运行崩溃，但当前单端点维护收益不足以承担兼容例外，符合本轮停止条件。
+
+精简[实验补丁包](project-types-probe.md)保留真实生成文件、alias和消费者diff，仍未应用。未来有明确支持TS7的版本或已有合适工具包时，可采用固定开发生成器+简单离线生成+一份生成声明/alias，删原两份结构；运行reader/传输不动。ProjectOut11字段4项schema optional，用有来源的Required表达_out全部提供/reader必填的边界；正式批仍须真实HTTP字段/null/默认形状比对。本轮未碰8065执行该HTTP检查，不能用纯TS替代。
+
+费用根因进一步收窄：安装AG36.2 FakeHScrollComp在ag-stack检测浏览器scrollbar宽0时走invisible模式，原生overlay厚度回退16，refreshCompBottom把bottom设为pinnedBottom总高（实测36）；因此横条恰覆盖最后业务行末16，而不是NameCell超出80px行。此前测得button下沿/row下沿均合法；不是列宽、formatter或行高测量少算内容。下一批先在隔离副本试该原生overlay组件在autoHeight费用容器内恢复普通流占位（保native实测高度、事件和列宽）；若必须自测padding/行行补偿则停止。正常/overlay滚动条、合计、行增删与窄窗/最大字号必须实看；现在仍属候选，尚未修复。旧版公开issues不直接证明36.2同因，不引用其补丁当结论。
+
+
+## 15. 费用滚条差额已实施
+
+第14节费用候选在隔离副本证实：position:relative仍会应用原生inline bottom而可能覆盖合计；position:static使native高度自动入流且忽略偏移。9d86f46a仅局部fees.css两行，六组行增删/字号布局与真实横向wheel通过，末行按钮下缘和合计均无覆盖；原8065恢复及40非账号表保全回[费用修复证据](../frontend-vue-rewrite/evidence.md#费用自然高横条末行覆盖修复2026-10-28)。不使用padding魔数或改列宽。API实证必要schema/锁/编译日志保在.artifacts/active/frontend-architecture/api-types-20261028/reports；临时安装/源码副本已删除，正式直接接入因TS peer边界暂缓，HTTP形状尚未比对。

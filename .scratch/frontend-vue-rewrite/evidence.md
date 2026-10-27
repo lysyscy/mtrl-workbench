@@ -474,3 +474,18 @@ Terra首批登录态复验已完成并释放源码；第二批以819a66d3为基�
 run为`.artifacts/active/frontend-visual/batch3-20261028/`：reports保baseline.xml、readiness.xml（初次冷字体失败）、final-readiness.xml、font-error-and-focus.xml（旧断言失败）、focus-contract.xml、disposable.xml、feedback-final.xml、states.json、visual-readonly.json、max-visual.json、fee-clipping-before.json、data-before/after.json、final-version.json及original-preferences.json；screenshots保每种条件最新图与必要改前/失败图。机械时间保留、费用删除下沿未修均明列，未用探针零发现宣称全站完成。临时脚本/转发与未用构建收尾退出；committed-build被主预览使用、recovery依赖前批资源，留给后续复验/恢复窗口。
 
 **交Terra独立验。** 请先核最终原8065的项目首次加载搜索、主错误重试、附属GET不挡本页，首页/i8记录读取及切回；其次看1280/900调整原因和取消回焦点、机械差额按钮。隔离截图核对成功/未知/撤销操作位置、最大字号长留痕。原账号主题不改；需要真实写入或持久设置另用可丢弃副本。费用删除边框裁切与机械时间待定列为下一轮明确对象，不能以本批技术通过代全站或用户验收。API生成与机械renderer身份试验本轮未启动，继续按事实底稿第12节限定窗口串行。
+
+
+## 费用自然高横条末行覆盖修复（2026-10-28）
+
+父任务在第三批Terra复验后释放源码，并明确优先修费用末行覆盖。独立回执确认库存初始原因/取消焦点、机械900单行和项目正常搜索/空态、首页/i8完成态；独立未验延迟/错误态，不能据此替代前批技术证据。Terra临时断网页签进入browser错误页，策略阻止恢复/关闭，清理结果不确定；另一标签确认8065可用。本任务未操作该页签或绕过策略，浏览器清理边界仍留父任务按支持路径处理。
+
+**根因及实际修复。** AG Grid36.2安装源码FakeHScrollComp在ag-stack测出浏览器滚条宽0时使用invisible overlay，厚度回退16，bottom取pinnedBottom总高。隔离真实副本稳定ready帧中，最后费用名/删除控件完全位于其80px行内，但横条覆盖末行后16px，删除下缘命中被横条截获；不是列宽或行内容高度算错。relative流试验虽解除按钮覆盖，却仍受原生inline bottom偏移，不能保证合计；最终仅在fees-annual-grid的ag-scrollbar-invisible横条设position:static，让原生实测高度在流内占位并自然忽略bottom。横条在合计之后，不覆盖末行或合计，无固定padding/新增行高算法、无列宽/业务改动。经典非overlay不匹配该局部选择器，未强制模拟其平台行为。
+
+源码提交`9d86f46acb1f3062fe738cd05e4bde3d9ac094a0`仅fees.css两行（含说明）。隔离候选无注入样式通过0→1→2→1→0行增删、再建1行及900×700最大1.4×，每个删除按钮下缘命中有效，横条位于合计之后；正常1280与最大字后图已实看。实际鼠标横向wheel(700,0)使原生scrollLeft=700，行增删走真实后端并只删除自建费用项。使用前后DOM/命中与真实操作，未为纯CSS增加镜像测试；typecheck/build及提交prepare-build通过，已测候选与提交完整资源逐项一致。
+
+原8065正常恢复到9d86f46a，registered_preview核源码/构建/HTTP新鲜。40非账号业务表摘要、schema/全部列结构/invadj261027不变，仅user_account登录差异；原账号松绿/large保持。两次自建schema正常退出并核不存在，无原业务写入/重置/迁移、i8、打印、推送或部署。
+
+run=`.artifacts/active/frontend-visual/fee-scroll-20261028/`：reports/flow-trial.json持有改前失败和static试验，verified.json持有六组实际候选数据，wheel.json记录真实横滚，final.json与data-before/after.json持有身份/保全；screenshots/fee-one-1280-181152-811947.png、fee-max-900-181157-260272.png及改前图可对照。当前committed-build被8065使用，recovery保原产品入口；未用候选、临时脚本/shim收尾退出。后续Terra若需复验手填行，必须用隔离副本，不能在原库点增加手填项。
+
+同期API消费者类型实证通过，但生成器peer仅TS5、项目TS7，直接正式接入暂缓，**未合入产品**，结果和待复制补丁回[事实底稿第14节](../frontend-architecture/reuse-facts.md#14-api消费者实证通过原项目直接接入暂缓)与其补丁包；真实HTTP形状核对仍是正式批前置。机械时间显示仍待定，renderer身份试验未做；本批不代表全站结束。
