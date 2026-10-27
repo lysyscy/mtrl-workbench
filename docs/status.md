@@ -2,6 +2,8 @@
 
 ## React 前端独立重做
 
+**当前接续入口（2026-10-25）。** 现行React状态与性能/CLS打磨票TAIL-435—440及外观卡片/六主题票TAIL-441由独立`codex/react-frontend-rewrite`工作树的`docs/status.md`、共同规格及原票持有，路径用`git worktree list`定位。先完成421→422→React425，再按具体票进入精细打磨，最终候选复核后另获423授权；421已由所属会话签done。本轮只登记计划、同步公共高水位441，不改421原票/源码/索引/HEAD；主线不复制新票及其状态，React425与下方Mini App同号票分别解释。
+
 [共同规格](../.scratch/frontend-vue-rewrite/spec.md)与 TAIL-397—424 保留原身份、范围、依赖、验收、Comments 和累计基点。开发在独立 codex/react-frontend-rewrite 工作树，不能用主线票的 ready 状态推断其进度。
 
 2026-10-23现场只读核对：用户验收产品为 c348aadd，状态保存 ad59bf0；2A已完成，2B/2C保存于 c07a49a1，2D付款界面技术接入保存于5d7b9626，阶段2人工验收由父统筹。性能C六源码、409与人工evidence/handoff的暂停残差受保护；8037/8041由所属任务管理。本轮只清主线文档，未吸收或发布React，也未授权正式切换/旧版退役。
