@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, false, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, MONEY
@@ -30,7 +30,7 @@ class FeeItem(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 

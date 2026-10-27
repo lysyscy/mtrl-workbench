@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from collections import namedtuple
 
 from app.mod01_projects.models import Project
 from app.mod03_notice.models import PaymentNotice
@@ -20,6 +21,9 @@ class _Result:
 
     def scalars(self) -> "_Result":
         return self
+
+    def __iter__(self):
+        return iter(self._rows)
 
     def all(self) -> list:
         return list(self._rows)
@@ -37,7 +41,15 @@ class FakeSession:
 
     def execute(self, stmt):  # noqa: ANN001
         entity = stmt.column_descriptions[0]["entity"]
-        return _Result(self.by_model.get(entity, []))
+        rows = self.by_model.get(entity, [])
+        columns = stmt.column_descriptions
+        if len(columns) > 1:
+            # 只模拟单模型的字段投影；where/join 的正确性由真实测试库用例保护。
+            assert all(c['entity'] is entity for c in columns) or not rows
+            names = [c['name'] for c in columns]
+            projected = namedtuple('ProjectedRow', names)
+            rows = [projected(*(getattr(row, name) for name in names)) for row in rows]
+        return _Result(rows)
 
     def get(self, model, ident, **kwargs):  # noqa: ANN001
         for row in self.by_model.get(model, []):

@@ -44,4 +44,4 @@ db_guard、test_guard_selftest、test_rollback_db 与有效付款/撤销/权限/
 
 `backend/tests/test_frontend_preview_runtime.py`验证跨进程排他、陈旧身份、实例切换授权、HTML构建输入、旧factory退役及待用构建不阻止正常停止；不监听端口。`apps/frontend/tests/test_preview_copy.py`仅作数据库/进程内合同，显式`MTRL_PREVIEW_SOURCE_ENV`用于确认测试目标，临时数据库样例不开放HTTP。它覆盖凭据投影、内容/序列、旧结构复制后只升目标及所有既有外部动作阻断。
 
-`backend/tests/test_frontend_measure.py`保纯计算与输出/只读保护，采集器集成部分附着唯一真实页；不再呈现合成data URL。它不证明完整84组或本次用户实看。粘贴匹配纯算法通过现有Vite middlewareMode直接装载真实函数，关闭HMR/文件监听，不开HTTP或渲染合成页面。具体当前运行结果与原始失败回当前任务evidence，不在指南追加通过数。
+`backend/tests/test_frontend_measure.py`保纯计算、输出与预览身份保护，不依赖运行中的真实预览。采集器的现场验证由`tools/dev/frontend_measure.py run`在获准的真实副本上显式执行，默认后端回归不承担该验证，也不证明完整84组或本次用户实看。粘贴匹配纯算法通过现有Vite middlewareMode直接装载真实函数，关闭HMR/文件监听，不开HTTP或渲染合成页面。具体当前运行结果与原始失败回当前任务evidence，不在指南追加通过数。
