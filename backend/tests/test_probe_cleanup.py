@@ -13,7 +13,7 @@ from app.core.db import session_scope
 from app.mod01_projects.models import Project, TYPE_NORMAL
 from app.mod07_setl.models import WeldGasBalance
 from app.mod08_inv.models import InvDetail, InvAdjustment
-from app.mod09_fee.models import FeeManualItem
+from app.mod09_fee.models import FeeItem, FeeManualItem
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -49,7 +49,9 @@ def owned_rows(rollback_db):
         s.add_all([project, detail, balance])
         s.flush()
         adjustment = InvAdjustment(row_id=detail.id, before_amount=100, amount=Decimal("101.23"), remark=M08.REMARK)
-        manual = FeeManualItem(ym="2026-08", project_id=project.id, item_name="油卡使用", amount=Decimal("-88.50"))
+        item = FeeItem(project_id=project.id, name='油卡使用')
+        s.add(item); s.flush()
+        manual = FeeManualItem(fee_item_id=item.id,ym="2026-08", project_id=project.id, item_name="油卡使用", amount=Decimal("-88.50"))
         s.add_all([adjustment, manual])
         s.flush()
         return wh, balance.id, detail.id, adjustment.id, manual.id
@@ -91,12 +93,14 @@ def test_m09_cleans_by_id_and_preserves_others(owned_rows, conflict):
     wh, _, _, _, mid = owned_rows
     with session_scope() as s:
         row = s.get(FeeManualItem, mid)
-        other = FeeManualItem(ym=row.ym, project_id=row.project_id, item_name="其他记录", amount=0)
+        item = FeeItem(project_id=row.project_id, name='其他记录')
+        s.add(item); s.flush()
+        other = FeeManualItem(fee_item_id=item.id,ym=row.ym, project_id=row.project_id, item_name="其他记录", amount=0)
         s.add(other)
         s.flush()
         other_id = other.id
         if conflict:
-            row.item_name = "并发修改"
+            s.get(FeeItem, row.fee_item_id).name = "并发修改"
     args = dict(ym="2026-08", project=wh, baseline={}, owned_id=mid,
                 expected={"item": "油卡使用", "amount": "-88.50"})
     if conflict:
@@ -363,3 +367,18 @@ def test_m08_main_cleans_after_committed_write(monkeypatch, failure):
     with pytest.raises(RuntimeError, match="response lost|after create read"):
         M08.main()
     assert client.adjustment is None
+
+
+def test_m09_owned_item_cleanup_removes_only_its_parent(owned_rows):
+    wh,_,_,_,mid=owned_rows
+    with session_scope() as s:
+        row=s.get(FeeManualItem,mid);item=s.get(FeeItem,row.fee_item_id)
+        parent_id=item.id;item.name='__fee_probe_'+uuid.uuid4().hex
+        name=item.name
+        other=FeeItem(project_id=row.project_id,name='其他保留费用')
+        s.add(other);s.flush();other_id=other.id
+    assert M09.cleanup_manual(ym='2026-08',project=wh,baseline={},owned_id=mid,
+        expected={'item':name,'amount':'-88.50'},owned_item=True)
+    with session_scope() as s:
+        assert s.get(FeeManualItem,mid) is None and s.get(FeeItem,parent_id) is None
+        assert s.get(FeeItem,other_id).name=='其他保留费用'

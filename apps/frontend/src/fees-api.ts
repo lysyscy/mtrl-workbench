@@ -29,11 +29,12 @@ export async function getFees(ym: string, project: string, signal?: AbortSignal)
 }
 export async function feeWrite(action: string, payload: unknown, signal: AbortSignal) {
   const data = await requestJson(`/api/m09/fee/${action}`, { method: 'POST', signal, ...body(payload) });
+  if (record(data) && data.ok === false && data.kind === 'err') throw new ApiError(typeof data.message === 'string' ? data.message : '保存失败。', 400);
   confirmWrite(record(data) && data.ok === true && data.kind === 'ok', '保存回执未确认，请重读核对，勿重复提交。');
   return record(data) && typeof data.row_id === 'number' && Number.isSafeInteger(data.row_id) && data.row_id > 0 ? data.row_id : null;
 }
 
-export interface FeeYearRow { item: string; manual: boolean; prior: string | null; months: (string | null)[]; total: string; periods: string[] }
+export interface FeeYearRow { item: string; item_id?: number; manual: boolean; prior: string | null; months: (string | null)[]; total: string; periods: string[] }
 export interface FeeYearRecord { ym: string; id: number; index: number; item: string; amount: string }
 export interface FeeYearData { auto_name: string; records: FeeYearRecord[]; year: string; project: string; project_display: string; can_edit: boolean; rows: FeeYearRow[]; prior: string; months: string[]; total: string }
 export async function getFeeYear(year: string, project: string, signal?: AbortSignal): Promise<FeeYearData> {
@@ -42,7 +43,7 @@ export async function getFeeYear(year: string, project: string, signal?: AbortSi
     (nullable && r.prior === null || moneyText(r.prior)) && moneyText(r.total) && Array.isArray(r.months) && r.months.length === 12 && r.months.every(v => nullable && v === null || moneyText(v));
   if (!record(data) || typeof data.auto_name !== 'string' || data.year !== year || typeof data.project !== 'string' || project && data.project !== project ||
     typeof data.project_display !== 'string' || typeof data.can_edit !== 'boolean' || !amounts(data,false) || !Array.isArray(data.records) || !data.records.every(r => record(r) && typeof r.ym === 'string' && new RegExp(`^${year}-(0[1-9]|1[0-2])$`).test(r.ym) && typeof r.id === 'number' && Number.isSafeInteger(r.id) && r.id > 0 && typeof r.index === 'number' && Number.isSafeInteger(r.index) && r.index >= 0 && typeof r.item === 'string' && moneyText(r.amount)) || new Set(data.records.map(r => r.id)).size !== data.records.length || !Array.isArray(data.rows) ||
-    !data.rows.every(r => record(r) && typeof r.item === 'string' && typeof r.manual === 'boolean' && amounts(r,true) && Array.isArray(r.periods) && r.periods.every(ym => typeof ym === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(ym) && ym <= `${year}-12`)) ||
+    !data.rows.every(r => record(r) && typeof r.item === 'string' && typeof r.manual === 'boolean' && (!r.manual || typeof r.item_id === 'number' && Number.isSafeInteger(r.item_id) && r.item_id > 0) && amounts(r,true) && Array.isArray(r.periods) && r.periods.every(ym => typeof ym === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(ym) && ym <= `${year}-12`)) ||
     new Set(data.rows.map(r => r.item)).size !== data.rows.length) throw new ApiError('费用年度数据读取不完整，请重读。');
   return data as unknown as FeeYearData;
 }

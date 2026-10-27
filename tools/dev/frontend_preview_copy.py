@@ -200,7 +200,22 @@ def source_revision(source_url):
         engine.dispose()
 
 
-def schema_fingerprints(url, schema, *, tables=None):
+def schema_columns(url, schema):
+    """Capture existing table columns so additive migrations compare original facts."""
+    engine = create_engine(url, connect_args={'options': f'-c search_path={schema}'}, hide_parameters=True)
+    try:
+        with engine.connect() as connection, connection.begin():
+            connection.exec_driver_sql('SET TRANSACTION READ ONLY')
+            if connection.exec_driver_sql('SELECT current_schema()').scalar_one() != schema:
+                raise RuntimeError('Column schema differs')
+            inspector = inspect(connection)
+            return {name: [column['name'] for column in inspector.get_columns(name, schema=schema)]
+                    for name in inspector.get_table_names(schema=schema) if name != 'alembic_version'}
+    finally:
+        engine.dispose()
+
+
+def schema_fingerprints(url, schema, *, tables=None, columns=None):
     """Private content digests, never business values; compare target migration preservation."""
     engine = create_engine(url, connect_args={'options': f'-c search_path={schema}'}, hide_parameters=True)
     try:
@@ -213,8 +228,9 @@ def schema_fingerprints(url, schema, *, tables=None):
             for name in sorted(names):
                 table = Table(name, MetaData(), schema=schema, autoload_with=connection, resolve_fks=False)
                 # Stable multiset ordering also covers tables without a primary key.
+                selected = [table.c[name] for name in columns[name]] if columns is not None else list(table.c)
                 rows = [json.dumps(dict(row), sort_keys=True, ensure_ascii=False, default=str)
-                        for row in connection.execute(select(table)).mappings()]
+                        for row in connection.execute(select(*selected)).mappings()]
                 result[name] = {'rows': len(rows), 'sha256': hashlib.sha256(('\n'.join(sorted(rows))+'\n').encode('utf-8')).hexdigest()}
             return result
     finally:

@@ -30,7 +30,7 @@
 .fee-record-names,.fee-record-amounts{display:flex;flex-direction:column;gap:calc(6px * var(--fscale));width:100%;padding-block:calc(6px * var(--fscale))}
 .fee-record-names label{display:flex;align-items:center;gap:calc(6px * var(--fscale));width:100%}
 .fee-record-names label>span{flex:none;font-size:calc(12px * var(--fscale));color:var(--tx2)}
-.fee-record-names .ant-input{flex:1;width:0}
+.fee-record-names .ant-input{flex:none;width:100%}
 .fee-record-names .ant-btn{padding-inline:calc(6px * var(--fscale));height:calc(28px * var(--fscale));min-height:0}
 .fee-record-note,.fee-draft-feedback{margin:calc(8px * var(--fscale)) calc(16px * var(--fscale));line-height:1.55}
 .fee-draft-feedback{overflow-wrap:anywhere}

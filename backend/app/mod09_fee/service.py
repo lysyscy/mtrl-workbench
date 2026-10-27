@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.mod09_fee.models import FeeItem, FeeManualItem
 
 from app.core.query import query_one
 
@@ -78,10 +80,18 @@ def build_year_data(s: Session, *, year: str, project: str) -> dict:
         records.append({"ym": ym, "id": item["id"], "index": index,
                         "item": item["name"], "amount": item["amount"]})
         indexes[ym] = index + 1
+    result = D.annual_rows(year=year, project_key=key, items=items, inv_rows=inv)
+    definitions = [] if pj is None else list(s.execute(select(FeeItem).where(FeeItem.project_id == pj.id, FeeItem.deleted.is_(False)).order_by(FeeItem.id)).scalars())
+    by_name = {row["item"]: row for row in result["rows"]}
+    for item in definitions:
+        if item.name not in by_name:
+            row = {"item": item.name, "manual": True, "prior": None, "months": [None] * 12, "periods": [], "total": D.ZERO}
+            result["rows"].append(row)
+            by_name[item.name] = row
+        by_name[item.name]["item_id"] = item.id
     return {"year": year, "project": key,
             "project_display": next((c.display for c in cands if c.key == key), key),
-            "records": records, "auto_name": D.AUTO_NAME, "can_edit": pj is not None,
-            **D.annual_rows(year=year, project_key=key, items=items, inv_rows=inv)}
+            "records": records, "auto_name": D.AUTO_NAME, "can_edit": pj is not None, **result}
 
 
 # ---------------------------------------------------------------- 写动作（PRG：都返回回执）
@@ -105,10 +115,15 @@ def act_add(s: Session, *, ym: str, project_key: str, name: str = D.DEFAULT_ITEM
     pj, _ = _scope(s, ym=ym, project_key=project_key)
     if pj is None:
         return _flash("err", f"项目「{project_key or '（未选）'}」不在档案里 —— 先建档再录")
+    if str(name).strip() == D.AUTO_NAME:
+        return _flash("err", "自动费用项不能由手填项覆盖")
     problem = D.amount_problem(raw)
     if problem:
         return _flash("err", problem)
-    row = R.add_item(s, ym=ym, project_id=pj.id, name=name, amount=D.parse_amount(raw))
+    try:
+        row = R.add_item(s, ym=ym, project_id=pj.id, name=name, amount=D.parse_amount(raw))
+    except ValueError as exc:
+        return _flash("err", str(exc))
     return {**_flash("ok", f"已在 {_label(ym, project_key)} 增加手填项：**名称可改、金额可填**（§5.5）"), "row_id": row.id}
 
 
@@ -118,7 +133,12 @@ def act_rename(s: Session, *, ym: str, project_key: str, index: int, value: str)
     row = _row_at(s, pj, items, index, ym)
     if row is None:
         return _flash("err", "这一条手填项已经不在了（可能被删或切了月份 / 项目）—— 请刷新后重试")
-    R.set_item_name(s, row, value)
+    if str(value).strip() == D.AUTO_NAME:
+        return _flash("err", "自动费用项不能由手填项覆盖")
+    try:
+        R.set_item_name(s, row, value)
+    except ValueError as exc:
+        return _flash("err", str(exc))
     return _flash("ok", f"已把 {_label(ym, project_key)} 的项名改为「{value or D.UNNAMED}」（§5.5）")
 
 
@@ -142,7 +162,7 @@ def act_delete(s: Session, *, ym: str, project_key: str, index: int) -> dict:
     row = _row_at(s, pj, items, index, ym)
     if row is None:
         return _flash("err", "这一条手填项已经不在了（可能被删或切了月份 / 项目）—— 请刷新后重试")
-    name, before = str(row.item_name or ""), D.money_text(row.amount)
+    name, before = str(items[int(index)]["name"] or ""), D.money_text(row.amount)
     R.delete_item(s, row)
     after = _total_after(s, ym=ym, project_key=project_key, project_id=pj.id)
     return _flash("ok", f"已删除 {_label(ym, project_key)} 的手填项「{name or D.UNNAMED}」（原 {before}）"
@@ -182,6 +202,8 @@ def act_batch(s: Session, *, project_key: str, items: list, months: list) -> dic
     if pj is None:
         return _flash("err", f"项目「{project_key or '（未选）'}」不在档案里 —— 先建档再录")
     names = [str(n or "").strip() for n in (items or [])]
+    if D.AUTO_NAME in [name.strip() for name in names]:
+        return _flash("err", "自动费用项不能由手填项覆盖")
     if not names:
         return _flash("err", "一项都没有 —— 先选一个「项名基准月」或加一列，再来填")
     # ---- 第 1 遍：**全量校验**（⛔ 不落库；任何一格非法 ⇒ 整批退回）
@@ -228,9 +250,62 @@ def project_by_key(session, key):
     return R.project_by_key(session, key)
 
 
+def create_item(s: Session, *, project_key: str, name: str) -> dict:
+    pj = R.project_by_key(s, project_key)
+    name = name.strip()
+    if pj is None or not name or name == D.AUTO_NAME or len(name) > 128:
+        return _flash("err", "请选择项目并填写有效的费用项名称")
+    if s.execute(select(FeeItem.id).where(FeeItem.project_id == pj.id, FeeItem.name == name, FeeItem.deleted.is_(False))).scalar_one_or_none() is not None:
+        return _flash("err", "费用项名称已存在")
+    item = FeeItem(project_id=pj.id, name=name)
+    s.add(item); s.flush()
+    return {**_flash("ok", "已增加费用项"), "row_id": item.id}
+
+
+def item_action(s: Session, *, project_key: str, item_id: int, action: str, value: str = "", ym: str = "") -> dict:
+    pj = R.project_by_key(s, project_key)
+    item = s.execute(select(FeeItem).where(FeeItem.id == item_id).with_for_update()).scalar_one_or_none()
+    if pj is None or item is None or item.deleted or item.project_id != pj.id:
+        return _flash("err", "费用项已不存在或不属于当前项目")
+    if action == "rename":
+        name = value.strip()
+        if not name or name == D.AUTO_NAME or len(name) > 128:
+            return _flash("err", "请填写有效的费用项名称")
+        other = s.execute(select(FeeItem.id).where(FeeItem.project_id == pj.id, FeeItem.name == name, FeeItem.id != item.id, FeeItem.deleted.is_(False))).scalar_one_or_none()
+        if other is not None:
+            return _flash("err", "费用项名称已存在")
+        item.name = name
+        s.flush()
+        return _flash("ok", "费用项名称已修改")
+    if action == "amount":
+        if not D.parse_ym(ym):
+            return _flash("err", "请选择有效的核算月份")
+        if not value.strip():
+            row = s.execute(select(FeeManualItem).where(FeeManualItem.fee_item_id == item.id, FeeManualItem.ym == ym)).scalar_one_or_none()
+            if row is not None:
+                s.delete(row); s.flush()
+            return _flash("ok", "月度金额已清空")
+        problem = D.amount_problem(value)
+        if problem:
+            return _flash("err", problem)
+        row = s.execute(select(FeeManualItem).where(FeeManualItem.fee_item_id == item.id, FeeManualItem.ym == ym)).scalar_one_or_none()
+        if row is None:
+            row = FeeManualItem(fee_item_id=item.id, project_id=pj.id, item_name=item.name, ym=ym, amount=D.parse_amount(value))
+            s.add(row)
+        else:
+            row.amount = D.parse_amount(value)
+        s.flush()
+        return {**_flash("ok", "月度金额已保存"), "row_id": row.id}
+    if action == "delete":
+        item.deleted = True
+        s.flush()
+        return _flash("ok", "费用项及其月度记录已删除")
+    return _flash("err", "不支持的操作")
+
+
 def project_references(session, project_id, warehouse, *, lock=False):
     """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
     from app.core.references import project_references as read
-    from .models import FeeManualItem
+    from .models import FeeItem, FeeManualItem, LegacyFeeManualItem
 
-    return read(session, ((FeeManualItem, '特殊费用'),), project_id, warehouse, lock=lock)
+    return read(session, ((FeeItem, '特殊费用项'), (FeeManualItem, '特殊费用'), (LegacyFeeManualItem, '特殊费用原始记录')), project_id, warehouse, lock=lock)

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import sys
+from uuid import uuid4
 from decimal import Decimal
 from pathlib import Path
 
@@ -36,9 +37,9 @@ def _manual_state(row: dict) -> dict[str, str]:
     return {"item": str(row.get("item") or ""), "amount": format(Decimal(str(amount)), ".2f") if amount is not None else ""}
 
 
-def _db_manual_state(row) -> dict[str, str]:
+def _db_manual_state(row, name) -> dict[str, str]:
     """ORM 手填行转成基线值；Decimal 0.00 不能被当成空值。"""
-    return _manual_state({"item": row.item_name, "amount": row.amount})
+    return _manual_state({"item": name, "amount": row.amount})
 
 
 def manual_snapshot(manuals) -> dict[int, dict[str, str]]:
@@ -55,11 +56,11 @@ def manual_snapshot(manuals) -> dict[int, dict[str, str]]:
 
 
 def cleanup_manual(*, ym: str, project: str, baseline: dict[int, dict[str, str]],
-                   owned_id: int | None, expected: dict[str, str]) -> bool:
+                   owned_id: int | None, expected: dict[str, str], owned_item: bool = False) -> bool:
     """已知 ID 才锁行比较并删除；绝不把变化中的列表下标用于异常清理。"""
     from sqlalchemy import select
     from app.core.db import session_scope
-    from app.mod09_fee.models import FeeManualItem
+    from app.mod09_fee.models import FeeItem, FeeManualItem
     from app.mod09_fee.repository import project_by_key
 
     if owned_id is None:
@@ -68,15 +69,23 @@ def cleanup_manual(*, ym: str, project: str, baseline: dict[int, dict[str, str]]
         raise RuntimeError("拒绝清理基线中已有的手填项")
     with session_scope() as s:
         owner = project_by_key(s, project)
-        row = s.execute(select(FeeManualItem).where(
-            FeeManualItem.id == owned_id,
-        ).with_for_update()).scalars().first()
+        row = s.get(FeeManualItem, owned_id)
         if row is None:
             return False
-        if (owner is None or row.project_id != owner.id or row.ym != ym or
-                _db_manual_state(row) != _manual_state(expected)):
+        item = s.execute(select(FeeItem).where(FeeItem.id == row.fee_item_id).with_for_update()).scalar_one()
+        s.refresh(row, with_for_update=True)
+        if (owner is None or row.project_id != owner.id or row.ym != ym or item.deleted or
+                _db_manual_state(row, item.name) != _manual_state(expected)):
             raise RuntimeError(f"本次手填项 {owned_id} 已被其他值改动，停止清理以免覆盖")
+        if owned_item:
+            # 只允许本探针随机命名的独占定义，不能删共享或后来新增的月份。
+            months = list(s.scalars(select(FeeManualItem.id).where(FeeManualItem.fee_item_id == item.id)))
+            if not item.name.startswith('__fee_probe_') or months != [owned_id]:
+                raise RuntimeError('费用项归属或关联月份已变化，停止清理')
         s.delete(row)
+        if owned_item:
+            s.flush()
+            s.delete(item)
     return True
 
 
@@ -85,23 +94,17 @@ def db_manual_snapshot(ym: str, project: str) -> dict[int, dict[str, str]]:
     from sqlalchemy import select
 
     from app.core.db import session_scope
-    from app.mod09_fee.models import FeeManualItem
+    from app.mod09_fee.models import FeeItem, FeeManualItem
     from app.mod09_fee.repository import project_by_key
 
     with session_scope() as s:
         owner = project_by_key(s, project)
         if owner is None:
             raise RuntimeError(f"项目档案不存在：{project}")
-        rows = s.execute(
-            select(FeeManualItem).where(
-                FeeManualItem.ym == ym,
-                FeeManualItem.project_id == owner.id,
-            )
-        ).scalars().all()
-        return {
-            int(row.id): _db_manual_state(row)
-            for row in rows
-        }
+        rows = s.execute(select(FeeManualItem, FeeItem.name).join(FeeItem, FeeItem.id == FeeManualItem.fee_item_id).where(
+            FeeManualItem.ym == ym, FeeManualItem.project_id == owner.id, FeeItem.deleted.is_(False)))
+        return {int(row.id): _db_manual_state(row, name) for row, name in rows}
+
 
 
 def verify_db_baseline(ym: str, project: str, baseline: dict[int, dict[str, str]]) -> tuple[bool, str]:
@@ -143,10 +146,12 @@ def main() -> int:
 
     owned_id: int | None = None
     expected: dict[str, str] = {}
+    probe_name = '__fee_probe_' + uuid4().hex
+    renamed = probe_name + '_renamed'
     try:
         # ---- ② 新增
         print("② 新增手填项（`POST /api/m09/fee/add`）")
-        response = c.post("/api/m09/fee/add", json={"ym": ym, "project": pj})
+        response = c.post("/api/m09/fee/add", json={"ym": ym, "project": pj, "name": probe_name})
         r = response.json()
         check(r.get("ok") is True, "新增成功", r.get("message", "")[:70])
         if response.status_code != 200 or r.get("ok") is not True:
@@ -168,12 +173,12 @@ def main() -> int:
 
         # ---- ③ 改名
         print("③ 改名（`/fee/name`）")
-        r = c.post("/api/m09/fee/name", json={"ym": ym, "project": pj, "index": idx, "value": "油卡使用"}).json()
+        r = c.post("/api/m09/fee/name", json={"ym": ym, "project": pj, "index": idx, "value": renamed}).json()
         check(r.get("ok") is True, "改名成功", r.get("message", "")[:70])
         if r.get("ok") is True:
-            expected["item"] = "油卡使用"
+            expected["item"] = renamed
         got = c.get("/api/m09/fee", params={"ym": ym, "pj": pj}).json()
-        check(got["manuals"][idx]["item"] == "油卡使用", "回读项名确为「油卡使用」")
+        check(got["manuals"][idx]["item"] == renamed, "回读项名确为本探针改名值")
 
         # ---- ④ 改金额（合法）
         print("④ 改金额（合法 12345.67）")
@@ -213,7 +218,7 @@ def main() -> int:
         try:
             ok = cleanup_manual(
                 ym=ym, project=pj, baseline=baseline,
-                owned_id=owned_id, expected=expected,
+                owned_id=owned_id, expected=expected, owned_item=True,
             )
             check(ok, "本次手填项已删除")
         except Exception as exc:  # noqa: BLE001

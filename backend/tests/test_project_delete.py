@@ -49,6 +49,7 @@ REFERENCES = [
     ('setl_detail', 'warehouse_name'), ('weldgas_balance', 'warehouse_name'),
     ('analysis_big_project', 'warehouse_name'), ('analysis_big_manual', 'warehouse_name'),
     ('inv_detail', 'warehouse_name'), ('fee_manual_item', 'project_id'),
+    ('fee_item', 'project_id'), ('fee_monthly_amount', 'project_id'),
     ('jc_contract', 'project_id'), ('jc_import_batch', 'project_key'),
 ]
 
@@ -67,6 +68,10 @@ def test_each_reference_refuses_without_loss(rollback_db, table, key):
                 continue
             t = c.type.python_type
             values[c.name] = ({str: '__del', int: 0, list: [], dict: {}}.get(t, 0))
+        if table == 'fee_monthly_amount':
+            from app.mod09_fee.models import FeeItem
+            item = FeeItem(project_id=p.id, name='new reference')
+            s.add(item); s.flush(); values['fee_item_id'] = item.id
         row = model(**values)
         s.add(row)
         s.flush()
@@ -81,7 +86,7 @@ def test_each_reference_refuses_without_loss(rollback_db, table, key):
 
 def test_hierarchy_recheck_and_read_failure(rollback_db, monkeypatch):
     from app.mod07_setl import service
-    from app.mod09_fee.models import FeeManualItem
+    from app.mod09_fee.models import FeeItem, FeeManualItem
 
     with session_scope() as s:
         p = project(s, project_type='shell')
@@ -90,7 +95,9 @@ def test_hierarchy_recheck_and_read_failure(rollback_db, monkeypatch):
         assert not D.impact(s, child.id)['can_delete']
         empty = project(s)
         assert D.impact(s, empty.id)['can_delete']
-        row = FeeManualItem(project_id=empty.id, ym='2026-10', item_name='new reference', amount=1)
+        item = FeeItem(project_id=empty.id, name='new reference')
+        s.add(item); s.flush()
+        row = FeeManualItem(fee_item_id=item.id, project_id=empty.id, ym='2026-10', item_name='new reference', amount=1)
         s.add(row)
         s.flush()
         with pytest.raises(MustReportError, match='特殊费用'):

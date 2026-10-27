@@ -70,11 +70,12 @@ def isolated_database(source_env: Path | None = None, *, copy_source: bool = Fal
                    PYTHONPATH=str(ROOT / 'backend'), PLAYWRIGHT_BROWSERS_PATH='C:/ProgramData/ms-playwright')
         migrate(env, revision)
         if copy_source:
-            from tools.dev.frontend_preview_copy import clone_from_source, schema_fingerprints
+            from tools.dev.frontend_preview_copy import clone_from_source, schema_fingerprints, schema_columns
             clone_from_source(source.database_url, guard.test_url, schema)
-            before = schema_fingerprints(guard.test_url, schema)
+            columns = schema_columns(guard.test_url, schema)
+            before = schema_fingerprints(guard.test_url, schema, columns=columns)
             migrate(env, 'head')
-            after = schema_fingerprints(guard.test_url, schema, tables=before.keys())
+            after = schema_fingerprints(guard.test_url, schema, tables=before.keys(), columns=columns)
             if before != after:
                 raise RuntimeError('目标升级改变了已复制业务数据；保留失败证据')
         scoped = create_engine(guard.test_url, connect_args={'options': env['PGOPTIONS']})

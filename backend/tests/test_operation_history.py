@@ -11,7 +11,13 @@ from app.history_bindings import configure
 from app.mod01_projects.models import Project
 from app.mod03_notice.models import PaymentNotice
 from app.mod03_notice.notice_api_router import IdsIn, api_exclude, api_restore
-from app.mod09_fee.models import FeeManualItem
+from app.mod09_fee.models import FeeItem, FeeManualItem
+
+
+def make_fee(s, *, project_id, item_name, **values):
+    item = FeeItem(project_id=project_id, name=item_name)
+    s.add(item); s.flush()
+    return FeeManualItem(project_id=project_id, fee_item_id=item.id, item_name=item_name, **values)
 
 
 @pytest.fixture
@@ -25,7 +31,7 @@ def data(rollback_db):
                                  category='material', doc_date='2026-10-01',
                                  ownership_id=project.id, stat_settle=100, stat_paid=0,
                                  excluded=False, fields={}) for i in range(19)]
-        fee = FeeManualItem(project_id=project.id, ym='2026-10', item_name='原费用', amount=1)
+        fee = make_fee(s, project_id=project.id, ym='2026-10', item_name='原费用', amount=1)
         s.add_all([*notices, fee])
         s.flush()
         return {'ids': [n.id for n in notices], 'fee': fee.id, 'project': project.id}
@@ -167,7 +173,7 @@ def test_unsupported_and_failed_or_unchanged_transactions(data):
 def test_leaf_create_delete_roundtrip(data):
     made = {}
     def create(s):
-        row = FeeManualItem(project_id=data['project'], ym='2026-10', item_name='新费用', amount=Decimal('10.01'))
+        row = make_fee(s, project_id=data['project'], ym='2026-10', item_name='新费用', amount=Decimal('10.01'))
         s.add(row)
         s.flush()
         made['id'] = row.id
@@ -253,7 +259,7 @@ def test_committed_versions_aba_and_concurrent_same_actor_are_safe(monkeypatch):
             project_id = p.id
             n = PaymentNotice(ph_id=actor, bill_no=actor, category='material',
                               ownership_id=p.id, stat_paid=0, stat_settle=100, excluded=False, fields={})
-            fee = FeeManualItem(project_id=p.id, ym='2026-10', item_name=actor, amount=1)
+            fee = make_fee(s, project_id=p.id, ym='2026-10', item_name=actor, amount=1)
             s.add_all([n, fee])
             s.flush()
             notice_id, fee_id = n.id, fee.id
@@ -560,7 +566,7 @@ def committed_data(monkeypatch):
         with factory.begin() as s:
             project = Project(project_type='normal', name_full=actor, warehouse_name=actor, disp='原名')
             s.add(project); s.flush(); project_id = project.id
-            rows = [FeeManualItem(project_id=project_id, ym='2026-10', item_name=actor+str(i), amount=v)
+            rows = [make_fee(s, project_id=project_id, ym='2026-10', item_name=actor+str(i), amount=v)
                     for i,v in enumerate((1,10,100))]
             notice = PaymentNotice(ph_id=actor, bill_no=actor, category='material',
                 ownership_id=project_id, amount_approved=100, planned_pay_method='',

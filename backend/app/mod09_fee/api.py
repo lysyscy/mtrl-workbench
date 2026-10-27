@@ -25,6 +25,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 
 from app.core.query import flatten_query
 from app.core.db import session_scope
@@ -134,6 +135,17 @@ def _flash(f: dict) -> dict:
     return {"ok": f.get("kind") == "ok", "kind": f.get("kind") or "err", "message": f.get("message") or "", **({"row_id": f["row_id"]} if "row_id" in f else {})}
 
 
+def _write(action):
+    try:
+        with session_scope() as s:
+            return _flash(action(s))
+    except IntegrityError as exc:
+        constraint = getattr(getattr(exc.orig, 'diag', None), 'constraint_name', '')
+        if constraint not in {'uq_fee_item_project_name_active', 'uq_fee_item_month'}:
+            raise
+        return _flash({'kind': 'err', 'message': '该费用项或月份已被其他操作保存，请重读核对'})
+
+
 class AddRequest(ScopeRequest):
     name: str = D.DEFAULT_ITEM_NAME
     raw: Any = ""
@@ -142,17 +154,13 @@ class AddRequest(ScopeRequest):
 @router.post("/api/m09/fee/add")
 def api_add(req: AddRequest) -> dict:
     """「＋ 增加手填项」：在该 (月, 项目) 那一份末尾追加一行（初值 = 名称可改、金额 0）。"""
-    with session_scope() as s:
-        return _flash(SV.act_add(s, ym=req.ym, project_key=req.project, name=req.name, raw=req.raw))
+    return _write(lambda s: SV.act_add(s, ym=req.ym, project_key=req.project, name=req.name, raw=req.raw))
 
 
 @router.post("/api/m09/fee/name")
 def api_rename(req: CellRequest) -> dict:
     """改项名（§5.5：手填项**项名也可改**；⛔ 不强制非空）。"""
-    with session_scope() as s:
-        return _flash(
-            SV.act_rename(s, ym=req.ym, project_key=req.project, index=req.index, value=str(req.value or ""))
-        )
+    return _write(lambda s: SV.act_rename(s, ym=req.ym, project_key=req.project, index=req.index, value=str(req.value or "")))
 
 
 @router.post("/api/m09/fee/amount")
@@ -194,13 +202,30 @@ class BatchRequest(BaseModel):
 def api_batch(req: BatchRequest) -> dict:
     """⭐ 一次写「N 个核算月 × M 个项」—— **按 (月, 项目, 项名) 幂等**；**空格外整格跳过**；
     **一格非法 ⇒ 整批不写**（语义与回执见 `service.act_batch`）。"""
-    with session_scope() as s:
-        return _flash(SV.act_batch(
+    return _write(lambda s: SV.act_batch(
             s,
             project_key=req.project,
             items=list(req.items or []),
             months=[{"ym": m.ym, "values": dict(m.values or {})} for m in (req.months or [])],
         ))
+
+
+class ItemRequest(BaseModel):
+    project: str = ""
+    item_id: int = 0
+    name: str = ""
+    value: str = ""
+    ym: str = ""
+
+
+@router.post("/api/m09/fee/item/create")
+def api_item_create(req: ItemRequest) -> dict:
+    return _write(lambda s: SV.create_item(s, project_key=req.project, name=req.name))
+
+
+@router.post("/api/m09/fee/item/{action}")
+def api_item_action(action: str, req: ItemRequest) -> dict:
+    return _write(lambda s: SV.item_action(s, project_key=req.project, item_id=req.item_id, action=action, value=req.value, ym=req.ym))
 
 
 __all__ = ["router"]

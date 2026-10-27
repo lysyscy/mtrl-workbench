@@ -70,7 +70,7 @@ def owned_run(path):
 
 def existing_environment(args, run, source, guard):
     from tools.dev.frontend_preview import migrate
-    from tools.dev.frontend_preview_copy import schema_fingerprints
+    from tools.dev.frontend_preview_copy import schema_fingerprints, schema_columns
     from sqlalchemy import create_engine, text
     from alembic.config import Config
     from alembic.script import ScriptDirectory
@@ -114,9 +114,10 @@ def existing_environment(args, run, source, guard):
                 '--format=custom', '--file', str(recovery)], env=dump_env, check=True, capture_output=True)
             restore = Path(executable).with_name('pg_restore.exe' if sys.platform == 'win32' else 'pg_restore')
             subprocess.run([str(restore), '--list', str(recovery)], check=True, capture_output=True)
-            before = schema_fingerprints(guard.test_url, schema)
+            columns = schema_columns(guard.test_url, schema)
+            before = schema_fingerprints(guard.test_url, schema, columns=columns)
             migrate(env, head)
-            after = schema_fingerprints(guard.test_url, schema, tables=before.keys())
+            after = schema_fingerprints(guard.test_url, schema, tables=before.keys(), columns=columns)
             write_json(run / 'reports/target-upgrade.json', dict(from_revision=revision, to_revision=head,
                 original_tables=before, preserved=before == after, recovery=str(recovery), recovery_sha256=hashlib.sha256(recovery.read_bytes()).hexdigest(), source_written=False))
             if before != after:

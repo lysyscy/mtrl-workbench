@@ -15,7 +15,7 @@ from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
 
 from app.mod01_projects.models import Project
 from app.mod08_inv.models import InvDetail
-from app.mod09_fee.models import FeeManualItem
+from app.mod09_fee.models import FeeItem, FeeManualItem
 from tests.m04_helpers import make_project
 
 
@@ -74,12 +74,48 @@ class M09Session:
     def __init__(self, by_model: dict | None = None) -> None:
         self.by_model: dict = dict(by_model or {})
         self.added: list = []
+        definitions = self.by_model.setdefault(FeeItem, [])
+        for row in self.by_model.get(FeeManualItem, []):
+            if row.fee_item_id is None:
+                item = next((x for x in definitions if x.project_id == row.project_id and x.name == row.item_name), None)
+                if item is None:
+                    item = FeeItem(id=len(definitions)+1, project_id=row.project_id, name=row.item_name, deleted=False)
+                    definitions.append(item)
+                row.fee_item_id = item.id
 
-    def execute(self, stmt):  # noqa: ANN001
-        entity = stmt.column_descriptions[0]["entity"]
+    def execute(self, stmt):
+        descriptions = stmt.column_descriptions
+        entity = descriptions[0]['entity']
         rows = list(self.by_model.get(entity, []))
-        for col, want in _terms(stmt.whereclause):
-            rows = [r for r in rows if getattr(r, col, None) == want]
+        items = {item.id: item for item in self.by_model.get(FeeItem, [])}
+        def value(node, row):
+            if hasattr(node, 'value'):
+                return node.value
+            if str(node) == 'false':
+                return False
+            source = items.get(row.fee_item_id) if entity is FeeManualItem and getattr(node, 'table', None) is FeeItem.__table__ else row
+            if source is None:
+                raise AssertionError('月金额缺少费用项')
+            return getattr(source, node.key)
+        def matches(node, row):
+            if node is None:
+                return True
+            if isinstance(node, BooleanClauseList):
+                assert node.operator.__name__ == 'and_'
+                return all(matches(child, row) for child in node.get_children())
+            if isinstance(node, BinaryExpression):
+                op = node.operator.__name__
+                left, right = value(node.left, row), value(node.right, row)
+                if op == 'eq': return left == right
+                if op == 'ne': return left != right
+                if op == 'le': return left <= right
+                if op == 'is_': return left is right
+            raise AssertionError(f'桩不支持过滤条件：{node!r}')
+        rows = [row for row in rows if matches(stmt.whereclause, row)]
+        if len(descriptions) == 2 and entity is FeeManualItem:
+            return _Result([(row, items[row.fee_item_id].name) for row in rows])
+        if entity is FeeItem and descriptions[0]['expr'] is not entity:
+            return _Result([getattr(row, descriptions[0]['expr'].key) for row in rows])
         return _Result(rows)
 
     def get(self, model, ident):  # noqa: ANN001
@@ -89,6 +125,8 @@ class M09Session:
         rows = self.by_model.setdefault(type(row), [])
         if getattr(row, "id", None) is None:
             row.id = max((getattr(r, "id", 0) or 0) for r in rows) + 1 if rows else 1
+        if isinstance(row, FeeItem) and row.deleted is None:
+            row.deleted = False
         rows.append(row)
         self.added.append(row)
 

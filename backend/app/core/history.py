@@ -9,6 +9,7 @@ import re
 
 from sqlalchemy import DateTime, Integer, JSON, String, event, literal_column, select, update
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.ddl import sort_tables
 
 from app.core.db import Base
 from app.core.errors import MustReportError
@@ -194,6 +195,11 @@ class Tracker:
                 guards.append(parents[identity])
             changes.append({'table': obj.__tablename__, 'id': obj.id, 'before': before,
                             'after': after, 'version': version, 'target_version': before_version, 'parents': guards})
+        # 同事务父项由其完整变更及版本校验，不再作为不变的外部依赖。
+        changed = {(change['table'], change['id']) for change in changes}
+        for change in changes:
+            change['parents'] = [parent for parent in change['parents']
+                                 if (parent['table'], parent['id']) not in changed]
         if not changes and not self.unsupported:
             return
         self.session.connection().execute(update(OperationHistory).where(
@@ -300,20 +306,27 @@ def replay(session, actor, direction, expected_id):
         if (change[source] is None or change[target] is None) and not rule.create_delete:
             raise MustReportError('这项历史不支持新增或删除恢复，未修改数据')
         prepared.append((rule, change))
-    for rule, change in prepared:
-        wanted, current = change[target], change[source]
-        if wanted is None:
-            obj = session.get(rule.model, change['id'])
-            session.delete(obj)
-        elif current is None:
-            session.add(rule.model(**_decode(rule.model.__table__, wanted)))
-        else:
-            obj = session.get(rule.model, change['id'])
-            values = _decode(rule.model.__table__, wanted)
-            for field in rule.fields:
-                if wanted[field] != current[field]:
-                    setattr(obj, field, values[field])
-    session.flush()
+    # 全部校验完成后按真实外键顺序分表 flush；失败仍回滚整个业务事务。
+    tables = list(sort_tables({rule.model.__table__ for rule, _ in prepared}))
+    for table in reversed(tables):
+        for rule, change in prepared:
+            if rule.model.__table__ is table and change[target] is None:
+                session.delete(session.get(rule.model, change['id']))
+        session.flush()
+    for table in tables:
+        for rule, change in prepared:
+            if rule.model.__table__ is not table or change[target] is None:
+                continue
+            wanted, current = change[target], change[source]
+            if current is None:
+                session.add(rule.model(**_decode(table, wanted)))
+            else:
+                obj = session.get(rule.model, change['id'])
+                values = _decode(table, wanted)
+                for field in rule.fields:
+                    if wanted[field] != current[field]:
+                        setattr(obj, field, values[field])
+        session.flush()
     operation.state = 'undone' if direction == 'undo' else 'applied'
     restored = {}
     for rule, change in prepared:
