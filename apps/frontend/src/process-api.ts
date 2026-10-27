@@ -8,7 +8,7 @@ export const materialKeys = ['in','out'].flatMap(direction => categories.map(nam
 export const dataKeys = [...materialKeys,...mechKeys];
 export const tabLabels = ['表① 原始表','表② 调整后表','差异表'];
 export type Amounts = Record<string,string|null>;
-export type ProcessRow = Amounts & { ym:string };
+export type ProcessRow = Amounts & { ym:string; materialEditable:string };
 export interface Difference { id:number; doc_no:string; seq:string; material:string; warehouse:string; before:string|null; after:string|null; delta:string|null; remark:string; operator:string; at:string }
 export interface Matrix { raw:ProcessRow[]; adjusted:ProcessRow[]; totals:{raw:Amounts;adjusted:Amounts}; segments:{raw:{name:string;total:string|null}[];adjusted:{name:string;total:string|null}[]}; diffs:Difference[]; diff_totals:Amounts }
 export interface ProcessData { projects:string[]; matrices:Record<string,Matrix>; sources:Record<string,Record<string,Record<string,{mode:string}>>>; signatures:Record<string,Record<string,string>> }
@@ -26,7 +26,8 @@ function rows(value:unknown):ProcessRow[] {
   if(!Array.isArray(value)) throw invalid();
   const result=value.map(row => {
     if(!record(row) || typeof row.ym !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(row.ym)) throw invalid();
-    return {...amounts(row),ym:row.ym};
+    if(typeof row.material_editable !== 'boolean') throw invalid();
+    return {...amounts(row),ym:row.ym,materialEditable:row.material_editable?'yes':'no'};
   });
   if(new Set(result.map(r=>r.ym)).size!==result.length) throw invalid();
   return result;
@@ -66,9 +67,10 @@ export async function getProcess(signal?:AbortSignal) {
   const [matrix,mechanical]=await Promise.all([requestJson('/api/m06/matrix',init),requestJson('/api/m06/mech',init)]);
   return readProcess(matrix,mechanical);
 }
-export async function saveProcess(warehouse:string,ym:string,column:string,value:string,signal:AbortSignal) {
-  const result=await requestJson('/api/m06/mech',{method:'POST',signal,...body({warehouse,ym,values:{[column]:value}})});
-  if(!record(result) || result.ok!==true || result.warehouse!==warehouse || result.ym!==ym) throw new ApiError('保存回执未确认，请重读核对，勿重复提交。',0,'invalid_response');
+export async function saveProcess(warehouse:string,ym:string,column:string,value:string,expected:string|null,signal:AbortSignal) {
+  const material=materialKeys.includes(column);
+  const result=await requestJson(material?'/api/m06/material':'/api/m06/mech',{method:'POST',signal,...body(material?{warehouse,ym,column,value,expected}:{warehouse,ym,values:{[column]:value}})});
+  if(!record(result) || result.ok!==true || result.warehouse!==warehouse || result.ym!==ym || material&&result.column!==column) throw new ApiError('保存回执未确认，请重读核对，勿重复提交。',0,'invalid_response');
 }
 export async function manualProcess(warehouse:string,ym:string,column:string,signature:string,signal:AbortSignal) {
   const result=await requestJson('/api/m06/workbench/source-manual',{method:'POST',signal,...body({warehouse,ym,columns:[column],effective_signature:signature,confirmed:true})});

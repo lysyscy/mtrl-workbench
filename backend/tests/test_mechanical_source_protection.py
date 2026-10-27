@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import MustReportError
 from app.mod01_projects.models import Project
 from app.mod06_proc import repository as R, workbench as W
-from app.mod06_proc.models import (ProcMechManual, ProcCutoff, ProcHistoryBatch,
+from app.mod06_proc.models import (ProcMechManual, ProcMaterialManual, ProcCutoff, ProcHistoryBatch,
                                    ProcHistorySnapshot, ProcMechImportChange, ProcMechMatchRule)
 from app.mod06_proc.workbench_models import MechanicalWorkbenchRecord, MechanicalWorkbenchPreview
 
@@ -18,7 +18,7 @@ from app.mod06_proc.workbench_models import MechanicalWorkbenchRecord, Mechanica
 def session():
     engine = create_engine('sqlite:///:memory:')
     metadata = MetaData()
-    for model in (Project, ProcMechManual, ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot,
+    for model in (Project, ProcMechManual, ProcMaterialManual, ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot,
                   ProcMechImportChange, ProcMechMatchRule, MechanicalWorkbenchRecord, MechanicalWorkbenchPreview):
         table = model.__table__.to_metadata(metadata)
         for column in table.columns:

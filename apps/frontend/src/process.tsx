@@ -14,13 +14,13 @@ import { useCellSaveQueue } from './use-cell-save';
 import { BusinessModal } from './business-modal';
 import { DialogContents, useDialogClose } from './dialog-close';
 import { money } from './notices-api';
-import { categories, getProcess, manualProcess, mechKeys, mechLabels, saveProcess, tabLabels } from './process-api';
+import { categories, dataKeys, getProcess, manualProcess, mechKeys, mechLabels, saveProcess, tabLabels } from './process-api';
 import type { Difference, ProcessRow } from './process-api';
 import { ProcessExport } from './process-export';
 import { PreparedGrid, useGridPresentation } from './grid-presentation';
 const differenceRowId = (row: Difference) => String(row.id);
 
-interface Draft { warehouse:string; ym:string; column:string; value:string; revision:number; error:string }
+interface Draft { warehouse:string; ym:string; column:string; value:string; expected:string|null; revision:number; error:string }
 const keyOf=(warehouse:string,ym:string,column:string)=>JSON.stringify([warehouse,ym,column]);
 const show=(value:unknown)=>value==null?'':money(String(value));
 const matrixColumns=[
@@ -37,9 +37,18 @@ function MechanicalCell({data,column}:{data:ProcessRow;column:string}) {
     status={draft?.error?'error':''} title={draft?.error||(draft?'未保存':'手填；清空按 0 保存')} onChange={e=>cells.change(data.ym,column,e.target.value)} onBlur={()=>cells.save(key)}
     onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();cells.save(key,true);}}} />{draft&&<small>{draft.error?'未保存':'待保存'}</small>}</div>;
 }
+function MaterialCell({data,column,label}:{data:ProcessRow;column:string;label:string}) {
+  const cells=useContext(ProcessCells)!;
+  const key=keyOf(cells.warehouse,data.ym,column),draft=cells.drafts[key];
+  if(data.materialEditable!=='yes') return <>{show(data[column])}</>;
+  return <div className={`process-cell${draft?' process-dirty':''}`}><Input aria-label={`${data.ym} ${label}`} value={draft?.value??data[column]??''} disabled={cells.disabled}
+    status={draft?.error?'error':''} title={draft?.error||(draft?'未保存':'历史材料手填；清空后留空')} onChange={e=>cells.change(data.ym,column,e.target.value)} onBlur={()=>cells.save(key)}
+    onKeyDown={e=>{e.stopPropagation();if(e.nativeEvent.isComposing)return;if(e.key==='Enter'){e.preventDefault();cells.save(key,true);}}} />{draft&&<small>{draft.error?'未保存':'待保存'}</small>}</div>;
+}
 export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolean;active:boolean}) {
   const client=useQueryClient(),revision=useRef(0);
   const [warehouse,setWarehouse]=useState(''),[tab,setTab]=useState(1);
+  const [newMonth,setNewMonth]=useState(''),[extraMonths,setExtraMonths]=useState<Record<string,string[]>>({});
   const [source,setSource]=useState<{warehouse:string;ym:string;column:string;signature:string;value:string|null}|null>(null);
   const query=useQuery({queryKey:['process'],enabled:active&&!blocked,queryFn:({signal})=>getProcess(signal)});
   const projects=useQuery({queryKey:['projects','all'],enabled:active&&!blocked,queryFn:async({signal})=>readProjects(await requestJson('/api/m01/projects?status=all&keyword=',{signal}))});
@@ -47,11 +56,11 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   useEffect(()=>{if(!warehouse&&query.data?.projects[0])setWarehouse(query.data.projects[0]);},[warehouse,query.data]);
   const saves=useCellSaveQueue<Draft,Awaited<ReturnType<typeof getProcess>>>({
     enabled:active&&!blocked&&Boolean(me),canWrite:!query.isError&&!projects.isError,
-    read:reload,write:(draft,signal)=>saveProcess(draft.warehouse,draft.ym,draft.column,draft.value,signal),
+    read:reload,write:(draft,signal)=>saveProcess(draft.warehouse,draft.ym,draft.column,draft.value,draft.expected,signal),
     validate:draft=>query.data?.sources[draft.warehouse]?.[draft.ym]?.[draft.column]?.mode==='detail'?'当前为明细确认，请先切为手填。':'',
-    acknowledge:(current,submitted)=>current.revision===submitted.revision?undefined:current,
+    acknowledge:(current,submitted)=>current.revision===submitted.revision?undefined:{...current,expected:submitted.value.trim()?submitted.value:null},
     describe:draft=>`${name(draft.warehouse)}，${draft.ym} `,
-    saved:draft=>warehouse===draft.warehouse?`${name(draft.warehouse)}，${draft.ym} ${mechLabels[mechKeys.indexOf(draft.column)]}已保存`:'',
+    saved:draft=>warehouse===draft.warehouse?`${name(draft.warehouse)}，${draft.ym} ${matrixColumns.find(c=>c.field===draft.column)?.label}已保存`:'',
   },{key:'process',label:'过程资料'});
   const {drafts,busy,uncertain,verified,error,feedback}=saves;
   const name=(key:string)=>candidates.find(p=>p.warehouse_name===key)?.disp??'项目';
@@ -63,7 +72,8 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   }
   function change(ym:string,column:string,value:string){
     const key=keyOf(warehouse,ym,column);
-    saves.update(drafts=>({...drafts,[key]:{warehouse,ym,column,value,revision:++revision.current,error:''}}));
+    const expected=query.data?.matrices[warehouse]?.[kind].find(row=>row.ym===ym)?.[column]??null;
+    saves.update(drafts=>({...drafts,[key]:{warehouse,ym,column,value,expected:drafts[key]&&!drafts[key].error?drafts[key].expected:expected,revision:++revision.current,error:''}}));
   }
   const save=saves.save;
   const reread=()=>saves.reread(uncertain?'已重读，请核对刚才的保存结果。':'已重读，未保存输入仍保留。');
@@ -76,14 +86,19 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
   const paused=blocked||!active;
   const closing=useDialogClose({busy,dirty:false,close:()=>setSource(null),active:Boolean(source)&&active});
   const matrix=query.data?.matrices[warehouse],kind=tab===0?'raw':'adjusted',scale=Number(me?.ui_scale_css??1);
+  const displayRows=useMemo(()=>{
+    const rows=matrix?.[kind]??[];
+    const added=(extraMonths[warehouse]??[]).filter(ym=>!rows.some(row=>row.ym===ym)).map(ym=>({...Object.fromEntries(dataKeys.map(key=>[key,null])),ym,materialEditable:'yes'}) as ProcessRow);
+    return [...rows,...added].sort((a,b)=>a.ym.localeCompare(b.ym));
+  },[matrix,kind,extraMonths,warehouse]);
   const matrixWidths=useMemo(()=>{
     if(!matrix)return [];
     const em=(Number(getComputedStyle(document.documentElement).getPropertyValue('--font-ui-size'))||13.5)*scale;
     return [{min:6.5,max:8},...matrixColumns.map(column=>{
-      const width=numberColumnWidth([...matrix[kind].map(row=>show(row[column.field])),show(matrix.totals[kind][column.field])],scale,column.field.startsWith('mech_')).minWidth/em;
+      const width=numberColumnWidth([...matrix[kind].map(row=>show(row[column.field])),show(matrix.totals[kind][column.field])],scale,column.field.startsWith('mech_')||displayRows.some(row=>row.materialEditable==='yes')).minWidth/em;
       return {min:width,max:Math.max(width,12)};
     })];
-  },[matrix,kind,scale]);
+  },[matrix,kind,scale,displayRows]);
   const diffs=useMemo<ColDef<Difference>[]>(()=>[
     ...(['doc_no','seq','material','warehouse','before','after','delta','remark','operator','at'] as const).map((field,i):ColDef<Difference>=>({field,headerName:['单据编号','序号','物料','仓库','原值（i8）','调整后','差额','备注','操作人','时间'][i]!,...(field==='doc_no'?{pinned:'left' as const}:{}),...contentWidth(field==='seq'?52:['before','after','delta'].includes(field)?130:field==='operator'?96:['material','warehouse','at'].includes(field)?128:140,field==='seq'?80:260,scale,field==='remark'?1:0),wrapText:true,autoHeight:true,...(['before','after','delta'].includes(field)?{cellClass:'money',valueFormatter:(p:{value:unknown})=>show(p.value)}:{})})),
     {colId:'locate',headerName:'操作',pinned:'right',...contentWidth(100,130,scale),cellRenderer:(p:ICellRendererParams<Difference>)=>p.data&&!p.node.rowPinned&&<Link className="row-button" to={`/inventory?row=${p.data.id}`}>定位原行</Link>},
@@ -97,19 +112,20 @@ export function ProcessPage({me,blocked,active}:{me:Identity|null;blocked:boolea
     {(error||query.isError||projects.isError||uncertain)&&<p className="notice" role="alert">{error||query.error?.message||projects.error?.message}{(error||query.isError||uncertain)&&<Button disabled={paused||busy||query.isFetching} onClick={()=>void reread()}>重读资料</Button>}{projects.isError&&<Button disabled={paused||projects.isFetching} onClick={()=>void projects.refetch()}>重读项目</Button>}</p>}
     {feedback&&<p role="status">{feedback}</p>}
     {uncertain&&<p className="notice" role="alert">核对结果后再继续。<Button disabled={paused||busy||!verified||query.isFetching||query.isError} onClick={()=>{saves.confirm();}}>已核对，保留输入继续</Button></p>}
-    {currentDrafts.filter(([,d])=>d.error).map(([key,d])=><p key={key} role="alert" className="notice">{d.ym} {mechLabels[mechKeys.indexOf(d.column)]}：{d.error}<Button disabled={disabled||busy} onClick={()=>save(key,true)}>重试保存</Button><Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>{saves.update(drafts=>{const next={...drafts};delete next[key];return next;});}}>取消这项修改</Button></p>)}
+    {currentDrafts.filter(([,d])=>d.error).map(([key,d])=><p key={key} role="alert" className="notice">{d.ym} {matrixColumns.find(c=>c.field===d.column)?.label}：{d.error}<Button disabled={disabled||busy} onClick={()=>save(key,true)}>重试保存</Button><Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>{saves.update(drafts=>{const next={...drafts};delete next[key];return next;});}}>取消这项修改</Button></p>)}
     {currentDrafts.length>0&&<Button disabled={paused||busy||uncertain} onMouseDown={e=>e.preventDefault()} onClick={()=>saves.update(drafts=>Object.fromEntries(Object.entries(drafts).filter(([,d])=>d.warehouse!==warehouse)))}>取消本项目修改</Button>}
     {query.isPending?<p role="status" data-page-loading>正在读取过程资料…</p>:query.isError&&!matrix?null:!matrix?<p>暂无有数据的项目。</p>:<>
-      {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:
+      {tab===2?<DifferenceGrid matrix={matrix} diffs={diffs} warehouse={warehouse} scale={scale} active={active} />:<>
+      <div data-page-chrome className="process-filters"><label>增加历史月份 <Input type="month" aria-label="增加历史月份" max="2025-11" value={newMonth} onChange={e=>setNewMonth(e.target.value)} /></label><Button disabled={disabled||!/^\d{4}-(0[1-9]|1[0-2])$/.test(newMonth)||newMonth>'2025-11'||displayRows.some(row=>row.ym===newMonth)} onClick={()=>{setExtraMonths(current=>({...current,[warehouse]:[...(current[warehouse]??[]),newMonth]}));setNewMonth('');}}>增加月份</Button><span>填写金额后保存月份</span></div>
       <ProcessCells.Provider value={{drafts,warehouse,disabled,source:detailSource,change,save,switchSource:(ym,column)=>{const signature=query.data?.signatures[warehouse]?.[ym];if(!signature)return;saves.clearFeedback();setSource({warehouse,ym,column,signature,value:matrix[kind].find(r=>r.ym===ym)?.[column]??null});}}}>
-        <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label="过程资料月度表，可横向滚动"><BoundedTable prepareFonts layoutVersion={matrix[kind]} className="process-matrix" aria-label={`${tabLabels[tab]}，金额单位：元`} columns={matrixWidths}>
+        <div className="process-matrix-scroll" tabIndex={0} role="region" aria-label="过程资料月度表，可横向滚动"><BoundedTable prepareFonts layoutVersion={displayRows} className="process-matrix" aria-label={`${tabLabels[tab]}，金额单位：元`} columns={matrixWidths}>
           <thead><tr className="process-groups"><th scope="col" rowSpan={2}>核算月</th><th scope="colgroup" colSpan={5} className="process-segment">入库</th><th scope="colgroup" colSpan={5} className="process-segment">出库</th><th scope="colgroup" colSpan={4} className="process-segment">机械</th><th scope="colgroup" colSpan={2} className="process-segment">机械（不含税）</th></tr>
             <tr>{matrixColumns.map(column=><th scope="col" key={column.field} aria-label={column.label} className={column.segment?'process-segment':''}>{column.header}</th>)}</tr></thead>
-          <tbody>{matrix[kind].length?matrix[kind].map(row=><tr key={row.ym}><th scope="row">{row.ym}</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}${tab===1&&!column.field.startsWith('mech_')&&matrix.raw.find(raw=>raw.ym===row.ym)?.[column.field]!==row[column.field]?' process-adjusted':''}`}>{column.field.startsWith('mech_')?<MechanicalCell data={row} column={column.field}/>:show(row[column.field])}</td>)}</tr>):<tr><td colSpan={17} className="process-empty">当前项目没有月度记录</td></tr>}</tbody>
+          <tbody>{displayRows.length?displayRows.map(row=><tr key={row.ym}><th scope="row">{row.ym}</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}${tab===1&&!column.field.startsWith('mech_')&&matrix.raw.find(raw=>raw.ym===row.ym)&&matrix.raw.find(raw=>raw.ym===row.ym)?.[column.field]!==row[column.field]?' process-adjusted':''}`}>{column.field.startsWith('mech_')?<MechanicalCell data={row} column={column.field}/>:<MaterialCell data={row} column={column.field} label={column.label}/>}</td>)}</tr>):<tr><td colSpan={17} className="process-empty">当前项目没有月度记录</td></tr>}</tbody>
           <tfoot><tr><th scope="row">合计</th>{matrixColumns.map(column=><td key={column.field} className={`money${column.segment?' process-segment':''}`}>{show(matrix.totals[kind][column.field])}</td>)}</tr>
             <tr><th scope="row">总求和（本表）</th>{matrix.segments[kind].map((segment,i)=><td key={segment.name} colSpan={[5,5,4,2][i]} className="money process-segment">{['入库合计','出库合计','机械合计','不含税合计'][i]} {show(segment.total)}</td>)}</tr></tfoot>
         </BoundedTable></div>
-      </ProcessCells.Provider>}
+      </ProcessCells.Provider></>}
     </>}
     {source&&<BusinessModal open={active&&!blocked} titleId="process-source-title" requestClose={closing.requestClose} className="process-source-dialog"><DialogContents title={`切为手填，${mechLabels[mechKeys.indexOf(source.column)]}`} titleId="process-source-title" closing={closing}>
       <p>{name(source.warehouse)}，{source.ym}</p><p>当前金额 {show(source.value)} 元。切换后保留金额，该格可手填；之后确认明细可重新采用明细汇总。</p>{error&&<p role="alert" className="notice">{error}</p>}

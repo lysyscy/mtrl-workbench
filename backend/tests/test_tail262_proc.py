@@ -8,14 +8,14 @@ from sqlalchemy.orm import Session
 from app.core.db import Base
 from app.mod01_projects import models as _projects  # noqa: F401
 from app.mod06_proc import domain as D, repository as R
-from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot
+from app.mod06_proc.models import ProcCutoff, ProcHistoryBatch, ProcHistorySnapshot, ProcMaterialManual
 
 
 @pytest.fixture
 def session():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine, tables=[_projects.Project.__table__, ProcCutoff.__table__,
-                                           ProcHistoryBatch.__table__, ProcHistorySnapshot.__table__])
+                                           ProcHistoryBatch.__table__, ProcHistorySnapshot.__table__, ProcMaterialManual.__table__])
     with Session(engine) as s:
         yield s
 

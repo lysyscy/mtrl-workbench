@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, DecimalException
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -163,6 +163,33 @@ class MechSaveRequest(BaseModel):
     warehouse: str = ""
     ym: str = ""
     values: dict[str, Any] = {}
+
+
+class MaterialSaveRequest(BaseModel):
+    warehouse: str
+    ym: str
+    column: str
+    value: Any
+    expected: Any
+
+
+@router.post('/api/m06/material')
+def api_material_save(req: MaterialSaveRequest) -> dict:
+    from app.core.money import MoneyError, to_money
+    warehouse = req.warehouse.strip()
+    ym = D.normalize_ym(req.ym)
+    if not warehouse or not ym or ym > '2025-11' or req.column not in D.MATERIAL_KEYS:
+        raise MustReportError('只能保存 2025-11 及之前的历史材料金额，请核对项目、月份和列。')
+    try:
+        amount = None if req.value is None or isinstance(req.value, str) and not req.value.strip() else to_money(req.value)
+        expected = None if req.expected is None else to_money(req.expected)
+        if amount is not None and abs(amount) >= Decimal('10000000000000000'):
+            raise MoneyError('金额超出可保存范围')
+    except (ValueError, DecimalException) as exc:
+        raise MustReportError('金额无效或超出可保存范围，请核对后重试。') from exc
+    with session_scope() as s:
+        repo.save_material(s, warehouse=warehouse, ym=ym, column=req.column, amount=amount, expected=expected)
+    return {'ok': True, 'warehouse': warehouse, 'ym': ym, 'column': req.column}
 
 
 @router.post("/api/m06/mech")

@@ -121,6 +121,20 @@ class ProcHistorySnapshot(Base):
     mech_5: Mapped[float] = mapped_column(MONEY, default=0, server_default="0")   # 外租包月不含税
 
 
+class ProcMaterialManual(Base):
+    """历史材料逐格手填；不改动导入快照。"""
+
+    __tablename__ = "proc_material_manual"
+    __table_args__ = (UniqueConstraint("warehouse_name", "ym", "column_key", name="uq_proc_material_cell"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    warehouse_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey('project.id', ondelete='SET NULL'), nullable=True, index=True)
+    ym: Mapped[str] = mapped_column(String(7), nullable=False)
+    column_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    amount: Mapped[float | None] = mapped_column(MONEY, nullable=True)
+
+
 class ProcCutoff(Base):
     """**截止核算月**（**一项目一行**；材料与机械本次导入截止；一项目一行）。"""
 
@@ -146,5 +160,5 @@ class ProcMechImportChange(Base):
     before_batch: Mapped[str] = mapped_column(String(64), default="")
 
 
-__all__ = ["ProcMechManual", "ProcHistoryBatch", "ProcHistorySnapshot", "ProcCutoff",
+__all__ = ["ProcMechManual", "ProcMaterialManual", "ProcHistoryBatch", "ProcHistorySnapshot", "ProcCutoff",
            "BATCH_ACTIVE", "BATCH_ROLLED_BACK"]

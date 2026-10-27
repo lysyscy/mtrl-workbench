@@ -229,13 +229,14 @@ def pg_session():
     """复用仓库外层事务/SAVEPOINT配方，仅清隔离库的过程资料表且整体回滚。"""
     from app import models_registry  # noqa: F401
     from app.mod06_proc.models import (ProcMechImportChange, ProcMechManual, ProcHistorySnapshot,
-                                       ProcHistoryBatch, ProcCutoff)
+                                       ProcHistoryBatch, ProcCutoff, ProcMaterialManual)
 
     engine = get_engine()
     assert engine.url.database and engine.url.database.endswith("_test")
     with engine.connect() as connection:
         outer = connection.begin()
         try:
+            ProcMaterialManual.__table__.create(connection, checkfirst=True)
             for model in (ProcMechImportChange, ProcMechManual, ProcHistorySnapshot, ProcHistoryBatch, ProcCutoff):
                 connection.execute(model.__table__.delete())
             with Session(bind=connection, join_transaction_mode="create_savepoint") as session:

@@ -234,6 +234,6 @@ __all__ = ["project_references", "parse_state", "build_page_data", "build_matric
 def project_references(session, project_id, warehouse, *, lock=False):
     """项目安全删除的只读关联明细；包括停用、撤销及恢复记录。"""
     from app.core.references import project_references as read
-    from .models import ProcMechMatchRule, ProcMechManual, ProcHistoryBatch, ProcHistorySnapshot, ProcCutoff, ProcMechImportChange
+    from .models import ProcMechMatchRule, ProcMechManual, ProcMaterialManual, ProcHistoryBatch, ProcHistorySnapshot, ProcCutoff, ProcMechImportChange
 
-    return read(session, ((ProcMechMatchRule, '机械匹配规则'), (ProcMechManual, '机械手录'), (ProcHistoryBatch, '过程资料历史批次'), (ProcHistorySnapshot, '过程资料历史快照'), (ProcCutoff, '过程资料截止月'), (ProcMechImportChange, '机械导入恢复记录'),), project_id, warehouse, lock=lock)
+    return read(session, ((ProcMechMatchRule, '机械匹配规则'), (ProcMechManual, '机械手录'), (ProcMaterialManual, '过程资料历史材料手录'), (ProcHistoryBatch, '过程资料历史批次'), (ProcHistorySnapshot, '过程资料历史快照'), (ProcCutoff, '过程资料截止月'), (ProcMechImportChange, '机械导入恢复记录'),), project_id, warehouse, lock=lock)

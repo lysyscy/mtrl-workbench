@@ -16,6 +16,7 @@ from app.mod06_proc.models import (
     ProcCutoff,
     ProcHistoryBatch,
     ProcHistorySnapshot,
+    ProcMaterialManual,
     ProcMechManual,
 )
 
@@ -179,7 +180,45 @@ def load_history(s: Session, *, active_only: bool = True) -> list[dict]:
                 continue
             row[key] = getattr(r, f"{prefix}_{idx}", 0)
         out.append(row)
+    if active_only:
+        for r in s.execute(select(ProcMaterialManual)).scalars():
+            out.append({'ym': r.ym, 'warehouse': r.warehouse_name,
+                        'material_manual': True, r.column_key: r.amount})
     return out
+
+
+def save_material(s: Session, *, warehouse: str, ym: str, column: str, amount, expected):
+    """Serialize material writes, preserving the imported snapshot and other cells."""
+    s.connection().exec_driver_sql('SELECT pg_advisory_xact_lock(%s, %s)', (406, 1))
+    inventory = load_inv_rows(s)
+    if any(r.get('warehouse') == warehouse and r.get('ym') == ym for r in inventory):
+        from app.core.errors import MustReportError
+        raise MustReportError('该月已有库存数据，请先核对来源，未保存。')
+    from app.mod06_proc.domain import build_matrix
+    current = next((r[column] for r in build_matrix(inv_rows=inventory, history_rows=load_history(s),
+                    warehouse=warehouse, adjusted=False) if r['ym'] == ym), None)
+    if current != expected:
+        from app.core.errors import MustReportError
+        raise MustReportError('该金额已被其他操作修改，请重读核对后重新输入。')
+    row = s.scalar(select(ProcMaterialManual).where(
+        ProcMaterialManual.warehouse_name == warehouse, ProcMaterialManual.ym == ym,
+        ProcMaterialManual.column_key == column).with_for_update())
+    if row is None:
+        from app.mod01_projects import service as projects
+        match = projects.warehouse_index(s).get(warehouse)
+        project_id = None
+        if match is not None:
+            project = projects.get_project(s, match.id, for_update=True)
+            if project is None or project.warehouse_name != warehouse:
+                from app.core.errors import MustReportError
+                raise MustReportError('项目已变化，请重读核对后重新输入。')
+            project_id = project.id
+        row = ProcMaterialManual(warehouse_name=warehouse, project_id=project_id, ym=ym, column_key=column, amount=amount)
+        s.add(row)
+    else:
+        row.amount = amount
+    s.flush()
+    return row
 
 
 def load_batches(s: Session) -> list[ProcHistoryBatch]:

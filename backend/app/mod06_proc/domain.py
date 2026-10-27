@@ -241,6 +241,8 @@ def snapshot_by_month(
     """
     out: dict[str, dict[str, Decimal]] = {}
     for row in snapshot_rows or ():
+        if row.get('material_manual'):
+            continue
         if str(row.get("warehouse") or "") != warehouse:
             continue
         ym = str(row.get("ym") or "")
@@ -266,10 +268,15 @@ def build_matrix(
     formal = material_by_month(inv_rows, warehouse=warehouse, adjusted=adjusted)
     history = snapshot_by_month(history_rows or [], warehouse=warehouse)
     mech = mech_by_month(manual_rows or [], warehouse=warehouse)
+    material_manual = {}
+    for item in history_rows or []:
+        if item.get('material_manual') and item.get('warehouse') == warehouse and item.get('ym', '') <= '2025-11':
+            cells = material_manual.setdefault(item['ym'], {})
+            cells.update({key: None if item[key] is None else to_money(item[key]) for key in MATERIAL_KEYS if key in item})
 
     inv_months = {str(r.get("ym") or "") for r in inv_rows or ()
                   if str(r.get("warehouse") or "") == warehouse and r.get("ym")}
-    months = sorted(inv_months | set(history) | set(mech))
+    months = sorted(inv_months | set(history) | set(mech) | set(material_manual))
     rows: list[dict] = []
     for ym in months:
         section = section_of(ym, cutoff_ym)
@@ -282,11 +289,15 @@ def build_matrix(
         #    那种"**只有机械费、材料一列没填**"的月份会被判成"材料也有数"⇒ 材料列从 `None`（空态）
         #    变成 `0.00`（**凭空多一笔 0**）。这正是"空 ≠ 0"要守的地方。
         has_mat = bool(bucket) and any(k in bucket for k in MATERIAL_KEYS)
-        row: dict = {YM_KEY: ym, "section": section, "material_empty": not has_mat}
+        overrides = material_manual.get(ym, {}) if source != SOURCE_INV else {}
+        row: dict = {YM_KEY: ym, "section": section, "material_empty": not has_mat and not any(v is not None for v in overrides.values()),
+                     "material_editable": ym <= '2025-11' and ym not in inv_months}
         for key in DATA_KEYS:
             if key in MECH_KEYS:
                 idx = int(key.split("_")[1])
                 row[key] = mech.get(ym, [Decimal("0.00")] * len(MECH_COLUMNS))[idx]
+            elif key in overrides:
+                row[key] = overrides[key]
             elif not has_mat:
                 row[key] = None                      # 空态（不臆造 0）
             else:
