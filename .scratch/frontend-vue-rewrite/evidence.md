@@ -582,3 +582,15 @@ C1工具批将syntax/bytes的--staged真实输入交Git原生index，退出工�
 匿名浏览器只改本地GET的响应副本：缺日期、坏审批金额、缺状态均进入既有Query读取错误/重试，重试恢复实际网格，无pageerror；本地关键词空态/清空恢复通过。未登录、不改原账号设置，所有自有route/context/browser已finally退出。原8065产品573252d9 fresh、原schema/invadj261027、全部列结构及40非账号表保持；本次更新和匿名浏览器前后全部表零差异，8066无监听。JS未压缩增加704bytes，非性能收益。
 
 当前run=.artifacts/active/frontend-architecture/flow-schema-20261028，reports/real-shape.json、browser-read.json、release-state.json及original-before/after-browser.json保最小依据，logs保原生红绿/typecheck/build；完整真实响应已删除。临时转发已删。C1证据在.artifacts/archive/frontend-architecture/staged-index-20261028；付款独审通过后2e恢复构建无消费者已释放，合同必要证据归同effort archive/contracts-schema-20261028。保7f为当前Flow风险窗口回退、923为父指定原交付基线。C1与Flow待父定向独审；项目刷新/统计/欠款及其他事务候选仍未实施，未推送、合并或生产部署。
+
+
+## 项目历史头最后批与停止扩面（2026-10-28）
+
+合成展示名写后确认服务端undo存在而头部旧禁用，d8e5dd6f两处沿现有QueryClient失效history修复；0f169606只加强已执行切号夹具的旧响应真实性。全名不在撤销白名单，首轮用全名无undo是设计正常，未改白名单或后端。4个实际隔离浏览器场景通过（17.81s）：确认写/未知可靠读回、拒绝保草稿与历史读错分开、切号旧历史不污染。无全量重取总线；项目自身保存/身份/草稿门保持。覆盖与明确未实施项汇总到[底稿第25节](../frontend-architecture/research.md#25-最后一批与0900验收当前总览2026-10-28)。C1原发现者33CLI与Flow原发现者4native/TS7/合法/金额/坏例对照已独审通过，本批项目变更待父定向独审。
+
+原8065恢复产品d8e5dd6f且fresh，前后全部表/schema/列结构相同，8066无监听，副本schema已核不存在；全部测试写入是合成项目和合成账号，临时脚本/shim/副本私有状态已删除。红报告在.artifacts/archive/frontend-architecture/project-history-red-20261028；绿报告与唯一当前新构建在.artifacts/active/frontend-architecture/project-history-green-20261028。不得从绿run里已停止的副本real_owner冒认当前服务，当前唯一owner仍在原试用run。
+
+已停止新增架构候选，当前仅待本批独审/最终整合清理及用户实看。来源分享稿没有全部实施；统计/欠款/其他reader、i8事务所有权、欠款重复组装、旧工具退役与上游声明补丁仍按各自证据保留/后续，未以盘点完成冒称整改全完。未推送合并部署。
+
+
+用户随后要求本轮收完先研究新前端启用与旧端退役，已查未做项唯一归[TAIL-450](../tails/issues/TAIL-450-架构差额后续实证与深化.md)，needs-triage，不自动全做或重开已否决轮子。正式启用/退役沿已有423/424，不重复开票；本轮仅补已知入口、配置主人和本地分支关系给父，未研究新方案、搬库、合并或正式切换。位置及准确边界回底稿第25节。当前仍是独立分支本地产品与原试用数据；用户最后人工验收/项目批独审与下一阶段启用研究分别记录。

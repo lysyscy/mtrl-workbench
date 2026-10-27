@@ -1,8 +1,8 @@
 # React 分支成熟能力复用：架构事实底稿
 
-第1节固定最初盘点基线；当前机械与四页实施回执见第16–17节，运行归属与后图回既有evidence及其owner。本文由reuse-facts.md按现行任务文档名契约改名，保持同一底稿。
+当前覆盖、实际整改、独审与未实施边界先读第25节。第1–18节是当时版本的调查/裁决与实施快照，第19–25节续接获批扩大范围；历史“未执行/只读/待验”只对其具名阶段有效，不当作当前状态。本文由reuse-facts.md按固定任务文档名改名，始终同一底稿。
 
-供父任务的 Astra high 路线评审与分批整改使用；这是只读调查与建议，不是批准后的架构规则或实施规格。用途结束、有效裁决已归现行主人后沿 Git 退出。项目规则仍以 [AGENTS](../../AGENTS.md)、[workflow](../../docs/agents/workflow.md)、[architecture](../../docs/architecture.md)、[requirements](../../docs/requirements.md) 及活动 React 规格为准。
+供父任务统筹分批复核与当前用户验收使用，只持事实、取舍及证据；业务/架构规则仍归[AGENTS](../../AGENTS.md)、[workflow](../../docs/agents/workflow.md)、[architecture](../../docs/architecture.md)、[requirements](../../docs/requirements.md)和活动React规格。运行身份查唯一owner；验收用途结束、有效知识已归现行主人后其余沿Git退出，不把历史方案另立长期规则。
 
 ## 1. 基线、覆盖与证据强度
 
@@ -366,7 +366,7 @@ Valibot1.5.0正式用于contracts-api，非全站校验平台。实际后端buil
 
 | 剩余候选 | 证据与本轮边界 | 下一步或保留理由 |
 |---|---|---|
-| 项目写后跨域失效/历史头 | 静态6组key清单缺history；写后header旧态尚未浏览器复现，点击前仍有可靠预检 | 值得小批复核；复用QueryClient标脏与现有可靠读回，别全量强制fetch或改未知回执 |
+| 项目写后跨域失效/历史头 | 原遗漏已在合成展示名写后动态证实：服务端新头，页面仍旧禁用；第25节已修 | 已加现有QueryClient精确history失效，两处、4场景通过；待本批独审 |
 | 付款Flow读取形状 | 原内存坏载荷越过reader；后按第24节修复并验证真实508行和浏览器错误重试 | Flow列表已实施；统计/欠款reader仍未覆盖，不改付款/撤销命令 |
 | staged审计真实index | 原工作区混读/吞Git失败已被旧版4个反例证实；第23节以原生index修复 | 已实施，8项临时Git回归、全量兼容及真实hook通过；待工具独审 |
 | 纯工具fixture/旧prune职责 | 4纯工具pytest装配全app、约255行prune可能职责退出 | 待消费者/收益确认，保DB守卫；不为删除行数贸然退役 |
@@ -415,4 +415,31 @@ C1后继续父已批准的一个最小端点：flow-api的loadFlows。原Flow接
 实际GET508条（生效及已撤销）经真实loadFlows全部通过，金额显示消费者可用、有效合计/对象引用/额外字段保持；原始响应只取证临时保本机，交付前退出。正常/失联历史、审批null/0、空日期/方式、负数及旧反例有合成边界覆盖；当前原数据没有null审批，不冒充该条件的真实现场。统计/欠款reader与项目history失效、其他后端事务候选仍未实施。后续构建/页面正常筛选与坏响应错误重试结果见下段，不以TS替代运行验证。
 
 
-573252d9发布构建/typecheck通过并正常加载原8065，fresh；全部JS未压缩相对7f发布增加704bytes，无新依赖/性能提升宣称。匿名新浏览器context仅拦截本地GET，缺日期、坏审批金额、缺状态三种响应各显示正确中文读取错误；点击既有重试后恢复真实网格（各有4个当前可见业务行），无pageerror。搜索不存在关键词进空态、清空恢复通过，finally解除route并关闭全部自有context/browser。更新及浏览器前后所有表/schema/列结构完全相同，8066未启动；未登录/改原账号。真实完整响应原文、临时pnpm转发已退出，只留计数/不变量与原始测试日志。付款独审已完成，2e合同旧恢复构建无消费者后删除并把必要run归档；当前保7f回退构建与父指定923原交付恢复点，当前主构建为flow-schema-20261028/work/release-build。C1/Flow交父定向独审；项目history失效没有动态确认，本轮不贸然改刷新链。
+573252d9发布构建/typecheck通过并正常加载原8065，fresh；全部JS未压缩相对7f发布增加704bytes，无新依赖/性能提升宣称。匿名新浏览器context仅拦截本地GET，缺日期、坏审批金额、缺状态三种响应各显示正确中文读取错误；点击既有重试后恢复真实网格（各有4个当前可见业务行），无pageerror。搜索不存在关键词进空态、清空恢复通过，finally解除route并关闭全部自有context/browser。更新及浏览器前后所有表/schema/列结构完全相同，8066未启动；未登录/改原账号。真实完整响应原文、临时pnpm转发已退出，只留计数/不变量与原始测试日志。付款独审已完成，2e合同旧恢复构建无消费者后删除并把必要run归档；当前保7f回退构建与父指定923原交付恢复点，当前主构建为flow-schema-20261028/work/release-build。C1/Flow交父定向独审；该Flow阶段尚未动态确认项目history；随后的最后有界批见第25节。
+
+
+## 25. 最后一批与09:00验收当前总览（2026-10-28）
+
+**项目历史头确证与修复。** 先核白名单只有Project.disp/ord，首轮全名编辑不产生可撤销记录是正确设计，未修改白名单/后端。改用隔离合成展示名并等待实际PUT确认/项目读回，服务端undo已存在，页面仍禁用并保持“上一步暂不支持撤销”，稳定红灯1case（11.15s）。d8e5dd6f只在原refresh六组中追加history失效，并在未知结果可靠项目读回后追加同一失效；QueryClient已按账号独立，无需新owner键/总线或全量refetch。0f169606只把切号夹具钉到已读取的真正写后旧账号历史，不改产品。
+
+4个隔离浏览器case全部通过（17.81s）：正常确认写后头部立即可撤销；丢回执不重投，可靠项目重读后历史同步；明确409拒绝保草稿/旧头，写成后history503只显示历史读取错误，不伪装项目unknown，既有历史重读可恢复；切到合成账号后，旧账号迟到历史响应不恢复旧头/草稿。只创建合成项目/一个合成账号，全部副作用在支持的唯一可丢弃真实副本；原8065恢复d8e5dd6f并fresh，原全部表/schema/列结构逐项相同，临时schema已核不存在、8066无监听。新test初始全名选择失当不计为产品红灯。红run有限归档project-history-red-20261028，绿run当前release-build仍供主预览；原始测试/保全报告在各自logs/reports。临时脚本、转发和过期副本私有状态实际退出。
+
+| 全域覆盖 | 已实际深化/替代 | 保留、暂缓与验证边界 |
+|---|---|---|
+| 99React源码、15入口及旧14JS/装配资产 | 共享视觉/动效、只读可读性/窄窗/弹层、费用横条、页面显式就绪与旧全局后备退出；机械真实控件备注读回替换28→0 | 列宽原生改良沿并行任务成果复用；富控件测量、行高/编辑冻结为真实差额。Activity/全站错误边界未采用；旧/app仍有消费者，不提前退役 |
+| API适配、状态/保存/草稿/撤销/账号生命周期 | 原生Node/tsx替3层包装；合同与Flow复用Valibot、删双写/强转；项目history精确失效 | 金额/归属/未知回执、第二草稿、真实撤销等业务差额保留。仅两个读域schema，未宣称全端点已统一；其他reader仍有后续候选 |
+| 201后端业务+52迁移、事务/接口/模型关键链 | 原有跨账号付款竞态动态证实并用Postgres/SQLAlchemy原生前置稳定行锁修复，26定向+独立16关键检查 | i8外部请求持事务/集采外层rollback、欠款5/2/2重复组装等仍为后续有界隔离证据批；未改这些路径，不真实i8验证 |
+| 297工具基线Py、ops、构建/六声明补丁、相关测试/技能脚本/delivery参考 | Git原生index替掉工作区混读/吞异常/无关全扫；8自有回归、独立33CLI断言通过 | jslex仍服务旧/app；prune候选需核真实消费者，4纯工具pytest装配可另评，不统一上AST/变异平台。picker上游补丁版超AntD依赖范围且ESM变，未强推升级 |
+| 依赖/生成能力与运行资源 | 复用现有Query/ReactRouter/AntD/AG/CSS及原生Git/Node/Postgres；新依赖固定tsx4.23.15（dev）/Valibot1.5.0（runtime） | openapi-typescript在隔离TS5可生成、TS7可消费已实证；单端点维护收益低于本批schema路线，未接入，不再以隔离绝对不可行为理由。HeyAPI同有TS7运行问题，不绕peer |
+| 认证、i8/Excel/导出/打印与数据 | 已审视保留真实协议、模板/透视缓存和必要定制；本次保护原试用副本/账号外观及历史原件 | 未改认证格式、安全配置/凭据、真实外呼、真实付款/打印、正式库/schema；未合并master、旧版退役或生产切换 |
+
+**独立与当前边界。** 前期独立代码18提交/38文件与Terra15入口/窄窗主题代表仍按各自版本覆盖有效。扩轮子Node/合同有38行断言与1458组对照独审；付款独立16关键隔离例通过；C1独立33 CLI、Flow独立4native/TS7/15合法+26金额对照+3旧坏例/引用及取消保护通过，来源分别task-6/c1-independent-review.md、task-5/architecture-b/flow-review/report.md和task-4/independent-fix-review，不把实现者全量776/真实hook算成独审者跑过。最后项目两处变更待父定向独审；本任务已停止新增候选，随后只整合/修审查发现/回归清理。
+
+全域扫描是结构/接口/依赖与关键链深读，非每行语义审查或所有业务组合穷举；“已审视保留/暂缓”“已改”“自验/独验”“用户验收/部署”分别计。原[分享稿](https://chatgpt.com/c/6ae0ad65-cac0-83e9-a71d-b5870b1aa36d?messageId=dc4d912e-8c7c-56b3-a1f2-9a9ec171d73d)只作候选来源，没有照单全部实施。当前金额、草稿、未知、账号/行键、模板等定制不是未完成的换库指标；下一轮优先证实i8事务所有权和欠款本请求复用，再评其他reader/工具退役，不在交付前赶迁库。
+
+
+**用户后续顺序与唯一接续票。** 用户要求本轮干净收尾后先研究新前端启用/旧端退役；已查未做项按现行协议归一张[TAIL-450](../tails/issues/TAIL-450-架构差额后续实证与深化.md)，needs-triage，分代码风险、待实证收益和保留/暂缓，不把API生成/Activity/补丁升级等无条件列债。相关两worktree高水位已核（master441、本分支449），串行分配450；只保存本地，未建外部issue。启用和退役已有TAIL-423/424主人，保持needs-info，本轮未开展其新研究或正式动作。
+
+**下一任务仅需的既知定位。** React源码/构建在apps/frontend，实际/preview安装由backend/app/core/frontend.py::install_preview负责，backend/app/main.py约469按settings.frontend_preview_dir装配；旧/app仍由main.py约369返回backend/app/web/index.html及web/shell资源。两套页面使用同一API代码，数据目标归后台实例配置；当前8065明确是mtrl_workbench_test中的用户试用schema，不据此前端名称假定正式库搬迁方案。配置键/主人为backend/app/core/config.py的frontend_preview_dir、database_url、test_database_url，服务加载/切换/恢复入口回docs/guides/deployment.md、frontend-preview.md及database-backup.md；本轮未摘录.env值或核正式服务实际DB绑定。曾用的显式源配置位置为D:/dev/mtrl-workbench/.env，仅交位置不交内容。
+
+本地Git关系在0f169606快照核：master=ef13b2503ade607db558882e41b0c2bf620b10bd，共祖290d1e54064bf21641af0f5f2f193cc29f2cb46d，master...分支独有24/215提交；后续仅收尾文档/票会增加分支数。这是本地refs，未fetch/合并，不能当远端最新或启用可行性结论。最终简明状态记录在当前run的reports/activation-known-inputs.json，接续先按现行规则再核实际现场。

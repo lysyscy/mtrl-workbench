@@ -2,7 +2,9 @@
 
 ## React 前端独立重做
 
-产品573252d9已保原数据加载8065且fresh，包含已独审通过的付款先锁后验7f9151f2。扩大成熟方案批的Git原生index审计704b23a4与Flow读模型573252d9已实现验证，待定向独审；8项临时Git、11项原生、TS7/build、508真实流水及三种坏响应错误重试通过。此前Node/tsx与合同schema独审、15入口视觉/整合结论仍按原范围有效。当前版本/证据回[Flow本批](../.scratch/frontend-vue-rewrite/evidence.md#flow读模型单端点与当前预览2026-10-28)，全域实际整改/保留/未实施回[研究第21–24节](../.scratch/frontend-architecture/research.md#21-扩大成熟方案复用后的交付与剩余候选2026-10-28)。原业务/schema/账号偏好及历史保全manifest保持，运行身份查唯一owner；未推送、合并或正式切换。
+用户要求本轮收尾后先研究新前端启用与旧端退役；未做架构项已收敛为[TAIL-450](../.scratch/tails/issues/TAIL-450-架构差额后续实证与深化.md)（needs-triage，非全部必改）。启用/退役复用[423](../.scratch/tails/issues/TAIL-423-正式入口切换与运行核验.md)/[424](../.scratch/tails/issues/TAIL-424-旧前端退役与清理.md)，当前只保存研究交接，尚未正式切换。
+
+产品d8e5dd6f已保原数据加载8065且fresh；最后项目history两处精确失效已实证修复，4个隔离确认/拒绝/未知/切号场景通过，待定向独审。此前Node/tsx、合同/Flow schema、Git原生index及付款行锁批均已独审通过；15入口视觉/整合仍按原覆盖有效。已停止新增候选，转最终整合与清理，覆盖/实际深化/保留和未实施明确见[底稿第25节](../.scratch/frontend-architecture/research.md#25-最后一批与0900验收当前总览2026-10-28)，现场回[项目最后批证据](../.scratch/frontend-vue-rewrite/evidence.md#项目历史头最后批与停止扩面2026-10-28)。原业务/schema/账号偏好及历史保全manifest保持，运行身份查唯一owner；未推送、合并或正式切换。
 
 机械报表待核对退役、过程机械金额按同项目同月任何明细确认、成功提示退出、历史月份同行右置、通知书列宽和截图接线已完成，源码34f2e523/c3e443d9已保原数据加载8065，待用户实看；回[本轮证据](../.scratch/frontend-vue-rewrite/evidence.md#机械金额确认与页面反馈调整2026-10-27)。
 
