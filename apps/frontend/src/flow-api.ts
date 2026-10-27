@@ -1,9 +1,25 @@
+import * as v from 'valibot';
 import { ApiError, record, requestJson } from './api';
 import { cents } from './notices-api';
-export interface Flow { id: number; notice_id: number | null; flow_no: string; doc_no: string; doc_date: string; bill_name: string; project_id: number | null; project_key: string; project_display: string; payee: string; category_label: string; amount_approved: string | null; pay_date: string; amount: string; pay_method: string; remark: string; created_by: string; status: string; status_label: string; revoke_reason: string }
+const nonArrayObject = v.custom<object>(record);
+const positiveId = v.pipe(v.number(), v.safeInteger(), v.minValue(1));
+const flowSchema = v.intersect([v.object({
+  id: positiveId, notice_id: v.nullable(positiveId), project_id: v.nullable(positiveId),
+  flow_no: v.string(), doc_no: v.string(), doc_date: v.string(), bill_name: v.string(),
+  project_key: v.string(), project_display: v.string(), payee: v.string(), category_label: v.string(),
+  amount_approved: v.nullable(v.string()), pay_date: v.string(), amount: v.string(),
+  pay_method: v.string(), remark: v.string(), created_by: v.string(),
+  status: v.picklist(['effective', 'revoked']), status_label: v.string(), revoke_reason: v.string(),
+}), nonArrayObject]);
+const flowsSchema = v.intersect([v.object({ rows: v.array(flowSchema) }), nonArrayObject]);
+export type Flow = v.InferOutput<typeof flowSchema>;
 export async function loadFlows(signal?: AbortSignal): Promise<Flow[]> {
   const data = await requestJson('/api/m05/flows?year_month=', { signal: signal ?? null });
-  if (!record(data) || !Array.isArray(data.rows)) throw new ApiError('付款流水读取不完整，请重试。');
-  return data.rows.map(row => { if (!record(row) || typeof row.id !== 'number' || typeof row.amount !== 'string') throw new ApiError('付款流水读取不完整，请重试。'); cents(row.amount); return row as unknown as Flow; });
+  if (!v.is(flowsSchema, data)) throw new ApiError('付款流水读取不完整，请重试。');
+  return data.rows.map(row => {
+    cents(row.amount);
+    if (row.amount_approved !== null) cents(row.amount_approved);
+    return row;
+  });
 }
 export function saveBlob(blob: Blob, filename: string) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }

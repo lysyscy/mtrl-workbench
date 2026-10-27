@@ -404,3 +404,12 @@ syntax的staged只编译暂存Python；仅旧web成员有变化（含删除/改�
 证据在staged-index-20261028的logs/unit-{red,green-final}.log、syntax-full.log、syntax-selftest.log和reports/{red,green}.json；临时Git仓由TemporaryDirectory退出，无DB/8065操作。新回归用stdlib unittest单独运行，不改现有业务pytest/conftest或DB守卫；指南同步入口。安装Git2.56.0.windows.2。[Git diff NUL与cached语义](https://git-scm.com/docs/git-diff)、[Git cat-file blob](https://git-scm.com/docs/git-cat-file)。未改全量职责，不把全仓编译永久取消。
 
 付款7f9151f2原发现者独立代码/合成schema复核通过：16项关键并发/缓存/回滚/既有310保护通过，临时schema/连接均零；原报告task-4/backend-architecture-review/independent-fix-review。它与本任务26case分开，未重复重跑付款，也不替代C1审查。Flow/项目刷新及其余后端候选仍未实施。
+
+
+## 24. Flow单端点兑现读模型（2026-10-28）
+
+C1后继续父已批准的一个最小端点：flow-api的loadFlows。原Flow接口声称21字段，reader却只验id/amount并强转；缺pay_date、坏amount_approved、缺status已由客户端扫描分别证实越过reader后触发render异常或错误排除有效合计。本批原生4case先跑原产品，3fail/1pass；补全schema后全5文件11case通过，TS7严格通过，无新依赖。Flow类型从Valibot schema推导，旧接口/强转退出，requestJson身份/abort/错误语义及付款/撤销命令不动。
+
+只用纯schema和v.is，非数组对象约束沿现有record；正安全ID、nullable通知书/项目、明确effective/revoked两态在读取层兑现。两态来源为实际models/service常量与当前完整508行真实响应，不混用“已付清/未付清”的通知书付款状态。日期/方式/旧操作人空串照实保留，审批金额null与字符串0区分；不新增ISO日期/付款方式枚举或正数金额限制。金额字符串继续用原cents，非法金额仍“金额读取不完整”，不另写金额解析/默认0或用schema转换。每行仍为原对象、额外字段不剥，返回新rows数组沿旧map语义。
+
+实际GET508条（生效及已撤销）经真实loadFlows全部通过，金额显示消费者可用、有效合计/对象引用/额外字段保持；原始响应只取证临时保本机，交付前退出。正常/失联历史、审批null/0、空日期/方式、负数及旧反例有合成边界覆盖；当前原数据没有null审批，不冒充该条件的真实现场。统计/欠款reader与项目history失效、其他后端事务候选仍未实施。本批需后续构建/页面正常筛选和坏响应错误重试实看，不以TS替代运行验证。
