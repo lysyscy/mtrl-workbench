@@ -79,6 +79,7 @@ def test_old_account_history_read_cannot_restore_old_head_after_switch(server, b
     other='__history_'+uuid4().hex
     assert api.post('/api/m15/actions/create',json={'account':other,'name':'合成切换账号','password':''}).json()['ok']
     row=synthetic(api);page,_=browser_page;login(page,server);expect(undo(page)).to_be_disabled()
+    expect(page.locator('.history-tools [role=status]')).to_contain_text('不支持撤销')
     held=[]
     def hold_first(route):
         if held:
@@ -92,7 +93,7 @@ def test_old_account_history_read_cannot_restore_old_head_after_switch(server, b
         deadline=time.monotonic()+5
         while not held and time.monotonic()<deadline:
             page.wait_for_timeout(10)
-        assert held
+        assert held and held[0][1].json()['undo']
         assert page.request.post(server+'/m15/login',form={'account':other,'password':''},max_redirects=0).status == 303
         page.evaluate("window.dispatchEvent(new Event('focus'))")
         expect(page.locator('.account-pill')).to_contain_text('合成切换账号')
